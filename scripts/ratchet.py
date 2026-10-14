@@ -710,15 +710,15 @@ plus these whole-tree metrics, which are not per-file:
                         scope: `OptSlot::String(*mut *mut c_char)` is a
                         selector and not storage, and it retires with the
                         options table. Phase 32.
-                      ml_get_raw · mbyte_raw · msg_raw · bytes_at  the four
+                      ml_get_raw · mbyte_raw · bytes_at  the three
                         families that hand a raw pointer *back*: a buffer line
                         (`ml_get*`), a multibyte cursor (`utf_ptr2*`, pointer
                         forms only — the `_len` variants are the safe bodies
-                        and are deliberately not matched), a message
-                        (the `msg_*` entry points that still take a
-                        `*const c_char`), and `bytes_at`. Each
-                        has a documented FFI floor rather than a zero. Phase
-                        29.
+                        and are deliberately not matched), and `bytes_at`.
+                        Each has a documented FFI floor rather than a zero.
+                        Phase 29. (A fourth, `msg_raw`, matched the message
+                        entry points by name; it reached 0 and was retired,
+                        since a name list cannot see a new pointer form.)
                       vval_raw · typval_raw_params  the C value model: reads
                         of the `TypVal` union's `vval` arm, and `*mut TypVal`
                         parameters. Both retire when the union becomes an
@@ -1432,21 +1432,6 @@ INSTRUMENTS = {
     # that take a slice's length and are the safe bodies underneath them:
     # `utfc_ptr2len(` matches, `utfc_ptr2len_len(` does not.
     "mbyte_raw": re.compile(r"\butfc?_ptr2(?:char|len|cells)\("),
-    # Upstream's `msg_puts`/`msg_outtrans` family is gone: what took their
-    # place is `msg_str`/`msg_bytes`/`msg_display*`, which take `&CStr` and
-    # `&[u8]`. Spelling the old names kept the number at a flattering zero
-    # while the pointer forms below were still in the tree, so the needle
-    # names the ones that *exist* -- every message entry point whose text
-    # still arrives as a raw C string. A name leaves this list when its
-    # signature stops taking one, which is what makes the number fall.
-    #
-    # `emsg_ptr` is one of them and was missed when the list was drawn up:
-    # it is `emsg` for a caller still holding a pointer, the error channel's
-    # exact counterpart to `msg_ptr`, and leaving it out read the *error*
-    # half of the family as done. `msg_prt_line` left in the commit that
-    # gave it a `&CStr`, and `msg_progress` when its text became `&CStr` too
-    # (its four calls were all that the needle still matched).
-    "msg_raw": re.compile(r"\b(?:e?msg_ptr|msg_(?:keep|trunc|may_trunc|strtrunc))\("),
     "bytes_at": re.compile(r"\bbytes_at\("),
     "vval_raw": re.compile(r"\.vval\."),
     # The declaration, not the reads: what phase 31 retires is a *cell*, and a
@@ -1643,7 +1628,6 @@ INSTRUMENT_KEYS = (
     "raw_cstr_fields",
     "ml_get_raw",
     "mbyte_raw",
-    "msg_raw",
     "bytes_at",
     "vval_raw",
     "typval_raw_params",
@@ -3509,7 +3493,6 @@ WHOLE_TREE_LABEL = {
     "raw_cstr_fields": "raw `c_char` pointers in a struct's fields",
     "ml_get_raw": "pointer-form ml_get* calls",
     "mbyte_raw": "pointer-form multibyte cursor calls",
-    "msg_raw": "pointer-form message calls",
     "bytes_at": "bytes_at() calls",
     "vval_raw": "`.vval.` union reads",
     "typval_raw_params": "raw `TypVal` pointers in a parameter list",
@@ -4557,11 +4540,9 @@ SELF_TEST_INSTRUMENTS = [
             "    ml_get(lnum);\n    ml_get_buf_len(buf, lnum);\n"
             "    buf.line_raw(lnum);\n    buf.line_len_raw(lnum);\n"
             "    get_cursor_pos_ptr();\n    buf.lines().line(lnum);\n"
-            "    msg_keep(s, hl, false, false);\n    msg_ptr(s, hl);\n"
-            "    msg_str(s);\n    msg_bytes(b, hl, false);\n"
             "}\n",
         },
-        {"mbyte_raw": 2, "ml_get_raw": 5, "msg_raw": 2},
+        {"mbyte_raw": 2, "ml_get_raw": 5},
     ),
     # A direct variadic call counts; the checked macro, a method of the same
     # name, the declaration and the macros' own expansion do not.
