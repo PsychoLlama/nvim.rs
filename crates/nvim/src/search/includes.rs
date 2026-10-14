@@ -392,20 +392,25 @@ unsafe fn handle_include(
     } else {
         walk.curr_fname
     };
-    // SAFETY: the 'include' match's spans are offsets into `walk.line`.
-    let start = unsafe { walk.line.add(pats.incl.starts[0].unwrap_or(0)) };
-    let end = unsafe { walk.line.add(pats.incl.ends[0].unwrap_or(0)) };
+    // A copy: the lookup can run 'includeexpr', which may rename the buffer.
+    // SAFETY: a NUL-terminated name, or null.
+    let p_fname = unsafe { cstr::at_opt(p_fname) }.map(XString::from_cstr);
+    let p_fname = p_fname.as_ref().map(XString::as_cstr);
+    // SAFETY: the walk's own NUL-terminated copy of the line, which nothing
+    // the lookup runs can reach.
+    let line = unsafe { cstr::bytes_at(walk.line) };
+    // The 'include' match's spans are offsets into `walk.line`.
+    let start = pats.incl.starts[0].unwrap_or(0);
+    let end = pats.incl.ends[0].unwrap_or(0);
     let flags = FileNameOpts::EXP | FileNameOpts::INCL | FileNameOpts::REL;
-    let raw = if unsafe { include_uses_zs(inc_opt) } {
+    let found = if unsafe { include_uses_zs(inc_opt) } {
         // Use the text from '\zs' to '\ze' (or the end) of 'include'.
-        unsafe {
-            find_file_name_in_path(start, end.offset_from(start) as size_t, flags, 1, p_fname)
-        }
+        find_file_name_in_path(&line[start..end], flags, 1, p_fname)
     } else {
         // Use the text after the match with 'include'.
-        unsafe { file_name_in_line(end, 0, flags, 1, p_fname, ptr::null_mut()) }
+        file_name_in_line(&line[end..], 0, flags, 1, p_fname, None)
     };
-    let mut new_fname = if raw.is_null() { None } else { Some(Name(raw)) };
+    let mut new_fname = found.map(|name| Name(name.into_raw()));
 
     let mut already_searched = false;
     if let Some(name) = &new_fname

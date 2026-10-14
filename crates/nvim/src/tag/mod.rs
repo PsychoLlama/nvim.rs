@@ -19,9 +19,7 @@ use crate::eval::vars::set_vim_var_string;
 use crate::eval::{callback_call, list2fpos, set_ref_in_callback};
 use crate::ex_cmds::{getfile, prepare_tagpreview};
 use crate::ex_docmd::{do_cmdline_cmd, set_no_hlsearch};
-use crate::file_search::{
-    vim_findfile, vim_findfile_cleanup, vim_findfile_init, vim_findfile_stopdir,
-};
+use crate::file_search::{FindContext, split_stop_directories};
 use crate::fileio::vim_fgets;
 use crate::fold::fold_open_cursor;
 use crate::garray::free_string_array;
@@ -46,7 +44,7 @@ use crate::option::vars::{
     P_IC, P_SCS, P_WS, fdo_flags, jop_flags, p_enc, p_ic, p_scs, p_sft, p_tbs, p_tgst, p_tl, p_tr,
     p_verbose, p_ws, swb_flags, tc_flags,
 };
-use crate::option::{callback_from_option, copy_option_part, install_callback, magic_isset};
+use crate::option::{callback_from_option, install_callback, magic_isset};
 use crate::options::{
     kOptFdoFlagTag, kOptJopFlagView, kOptSwbFlagNewtab, kOptSwbFlagUseopen, kOptSwbFlagUsetab,
     kOptSwbFlagVsplit,

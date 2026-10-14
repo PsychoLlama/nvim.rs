@@ -40,7 +40,7 @@ use crate::getchar::state::{KeyStuffed, KeyTyped, langmap_mapchar, vgetc_busy};
 use crate::getchar::{plain_vgetc, typeahead};
 use crate::guard::Keys;
 use crate::mapping::langmap_adjust_mb;
-use crate::memory::{xmemdupz, xstrlcat, xstrlcpy};
+use crate::memory::{XString, xmemdupz, xstrlcat, xstrlcpy};
 use crate::message::{e_buffer_nr_not_found, e_cmdwin, e_noalt};
 use crate::message_fmt::emsg_text;
 use crate::normal::{
@@ -726,8 +726,7 @@ fn text_or_buffer_locked() -> bool {
 /// The file name under the cursor, `prenum1` names in from it, with the line
 /// number that follows it written to `lnum`.
 fn grab_filename(prenum1: c_int, lnum: &mut LineNr) -> *mut c_char {
-    // SAFETY: reads the current line, and writes only through `lnum`.
-    unsafe { grab_file_name(prenum1, lnum) }
+    grab_file_name(prenum1, Some(lnum)).map_or(::core::ptr::null_mut(), XString::into_raw)
 }
 
 /// `do_ecmd()`: edit file `name` in the current window, keeping the alternate.

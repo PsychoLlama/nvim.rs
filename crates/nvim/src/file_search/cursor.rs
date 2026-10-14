@@ -7,69 +7,63 @@
 //! along `'path'`, applying `'includeexpr'` when asked to or when the plain
 //! lookup failed.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
-use crate::cstr;
+use crate::charset::getdigits_at;
+use crate::charset::skip;
 use crate::guard::Script;
-use crate::memory::{ThinCString, XString};
-use crate::message_fmt::c_str;
+use crate::mbyte::{c_cluster_len, head_off};
+use crate::memline::Lines;
+use crate::memory::XString;
+use crate::message_fmt::msg_bytes;
 use crate::normal::visual_active;
 use crate::optionstr::OptString;
 use crate::semsg;
 use crate::strings::has_char;
 use crate::types::{OptionSetFlags, Vv};
 use crate::winlayer::{Buf, Win};
-use core::ffi::{c_char, c_int, c_long};
-use core::ptr;
-use std::ffi::CStr;
+use core::ffi::{c_int, c_long};
+
+/// The current buffer's full name, copied: the name is looked up after
+/// `'includeexpr'` has run, and that may rename the buffer.
+fn own_buffer_name() -> Option<XString> {
+    Buf::current().name.full().map(XString::from_cstr)
+}
 
 /// The file name at the cursor, or the Visual selection when there is one.
 ///
-/// Returns the name in allocated memory, NULL for failure.
-///
-/// # Safety
-///
-/// `file_lnum` must point at a writable line number the caller owns.
-pub(crate) unsafe fn grab_file_name(count: c_int, file_lnum: *mut LineNr) -> *mut c_char {
+/// The line number written after the name goes to `file_lnum`, when given.
+pub(crate) fn grab_file_name(count: c_int, file_lnum: Option<&mut LineNr>) -> Option<XString> {
     let options = FileNameOpts::MESS | FileNameOpts::EXP | FileNameOpts::REL | FileNameOpts::UNESC;
     if !visual_active() {
-        return unsafe { file_name_at_cursor(options | FileNameOpts::HYP, count, file_lnum) };
+        return file_name_at_cursor(options | FileNameOpts::HYP, count, file_lnum);
     }
 
-    let Some(selection) = get_visual_text(None) else {
-        return ptr::null_mut();
-    };
-    let (text, len) = (selection.to_end_of_line(), selection.len());
-    let rest = text.to_bytes();
+    let selection = get_visual_text(None)?;
+    let (text, len) = (selection.to_end_of_line().to_bytes(), selection.len());
     // Only recognize ":123" here. The bytes looked at are past the
     // selection but still on its line, which is why the selection carries
     // the rest of the line with it.
-    if !file_lnum.is_null()
-        && cstr::byte_at(rest, len) == b':'
-        && cstr::byte_at(rest, len + 1).is_ascii_digit()
+    if let Some(file_lnum) = file_lnum
+        && cstr::byte_at(text, len) == b':'
+        && cstr::byte_at(text, len + 1).is_ascii_digit()
     {
-        // SAFETY: a position inside the copy, which is NUL-terminated.
-        let mut p = unsafe { text.as_ptr().cast_mut().add(len + 1) };
-        unsafe { *file_lnum = getdigits_int32(&raw mut p, false, 0) as LineNr };
+        *file_lnum = getdigits_at(text, len + 1, false, 0).0 as LineNr;
     }
-    unsafe {
-        find_file_name_in_path(
-            text.as_ptr().cast_mut(),
-            len,
-            options,
-            count as c_long,
-            Buf::current().name.full_ptr(),
-        )
-    }
+    let rel_fname = own_buffer_name();
+    find_file_name_in_path(
+        &text[..len],
+        options,
+        c_long::from(count),
+        rel_fname.as_ref().map(XString::as_cstr),
+    )
 }
 
 /// The file name under or after the cursor.
 ///
-/// `'path'` is searched when the name is not absolute. The string returned
-/// has been allocated and should be freed by the caller; NULL is returned
-/// if the file name or the file is not found.
+/// `'path'` is searched when the name is not absolute. `None` when the file
+/// name or the file is not found.
 ///
 /// options:
 /// - `FileNameOpts::MESS`  give error messages
@@ -77,68 +71,70 @@ pub(crate) unsafe fn grab_file_name(count: c_int, file_lnum: *mut LineNr) -> *mu
 /// - `FileNameOpts::HYP`   check for hypertext link
 /// - `FileNameOpts::INCL`  apply `'includeexpr'`
 ///
-/// # Safety
-///
-/// `file_lnum` must point at a writable line number the caller owns.
-pub(crate) unsafe fn file_name_at_cursor(
+/// The line number written after the name goes to `file_lnum`, when given.
+pub(crate) fn file_name_at_cursor(
     options: FileNameOpts,
     count: c_int,
-    file_lnum: *mut LineNr,
-) -> *mut c_char {
-    unsafe {
-        file_name_in_line(
-            get_cursor_line_ptr(),
-            Win::current().w_cursor.col as c_int,
+    file_lnum: Option<&mut LineNr>,
+) -> Option<XString> {
+    let cursor = Win::current().w_cursor;
+    // The name is copied out of the line before anything can run that
+    // might change the buffer.
+    let name = {
+        let mut lines = Lines::current();
+        let line = lines.line(cursor.lnum);
+        name_in_line(
+            line,
+            usize::try_from(cursor.col).unwrap_or(0),
             options,
-            count,
-            Buf::current().name.full_ptr(),
             file_lnum,
-        )
-    }
+        )?
+    };
+    let rel_fname = own_buffer_name();
+    find_file_name_in_path(
+        &name,
+        options,
+        c_long::from(count),
+        rel_fname.as_ref().map(XString::as_cstr),
+    )
 }
 
-/// [`file_name_at_cursor`], owned, with no line number wanted.
-pub(crate) fn file_name_at_cursor_owned(
-    options: FileNameOpts,
-    count: c_int,
-) -> Option<ThinCString> {
-    // SAFETY: no line-number slot; the answer is a fresh block or null.
-    unsafe { ThinCString::from_raw(file_name_at_cursor(options, count, ptr::null_mut())) }
+/// Is the `":/"` (or `":\"`) that separates a URL's scheme from its path at
+/// `line[at]`? [`path_is_url`] over a line.
+fn url_at(line: &[u8], at: usize) -> bool {
+    let rest = line.get(at..).unwrap_or_default();
+    rest.starts_with(b":/") || rest.starts_with(b":\\")
 }
 
-/// The start of the file name around `line[col]`, or NULL when the rest of
+/// Where the file name around `line[col]` starts, or `None` when the rest of
 /// the line holds no `'isfname'` character at all.
 ///
 /// Goes one character back to the `":"` before `"//"`, or to the drive letter
 /// before `":\"`, even when `":"` is not in `'isfname'`.
-///
-/// # Safety
-///
-/// `line` must point at a NUL-terminated string, unaliased for the call.
-unsafe fn name_start(line: *mut c_char, col: c_int, options: FileNameOpts) -> *mut c_char {
+fn name_start(line: &[u8], col: usize, options: FileNameOpts) -> Option<usize> {
     // Search forward for what could be the start of a file name.
-    let mut ptr = unsafe { line.offset(col as isize) };
-    while unsafe { *ptr } != 0 && !unsafe { vim_isfilec(*ptr as u8 as c_int) } {
-        ptr = unsafe { ptr.offset(utfc_ptr2len(ptr) as isize) };
+    let mut at = col;
+    while cstr::byte_at(line, at) != 0 && !vim_isfilec(c_int::from(line[at])) {
+        at += c_cluster_len(&line[at..]);
     }
-    if unsafe { *ptr } == 0 {
-        return ptr::null_mut();
+    if cstr::byte_at(line, at) == 0 {
+        return None;
     }
 
     // Search backward for the first character of the file name.
-    while ptr > line {
-        let head_off = unsafe { utf_head_off(line, ptr.sub(1)) } as usize;
-        if head_off > 0 {
-            ptr = unsafe { ptr.sub(head_off + 1) };
-        } else if unsafe { vim_isfilec(*ptr.sub(1) as u8 as c_int) }
-            || (options.has(FileNameOpts::HYP) && unsafe { path_is_url(cstr::at(ptr.sub(1))) } != 0)
+    while at > 0 {
+        let back = head_off(line, at - 1);
+        if back > 0 {
+            at -= back + 1;
+        } else if vim_isfilec(c_int::from(line[at - 1]))
+            || (options.has(FileNameOpts::HYP) && url_at(line, at - 1))
         {
-            ptr = unsafe { ptr.sub(1) };
+            at -= 1;
         } else {
             break;
         }
     }
-    ptr
+    Some(at)
 }
 
 /// How many bytes of `name` belong to the file name that starts there.
@@ -146,33 +142,25 @@ unsafe fn name_start(line: *mut c_char, col: c_int, options: FileNameOpts) -> *m
 /// `":"`, `"?"`, `"&"` and `"="` join the name once a `type://` prefix has
 /// been seen, so that `http://google.com:8080?q=this&that=ok` comes out
 /// whole. `"\ "` is an escaped space and counts as two.
-///
-/// # Safety
-///
-/// `name` must point at a NUL-terminated string.
-unsafe fn name_length(name: *const c_char, options: FileNameOpts) -> usize {
+fn name_length(name: &[u8], options: FileNameOpts) -> usize {
     let hyp = options.has(FileNameOpts::HYP);
+    let at = |i: usize| cstr::byte_at(name, i);
     // TODO(justinmk): Check for driveletter "x:/" at start, regardless of
     // 'isfname'.
-    let mut len = if path_has_drive_letter(unsafe { cstr::bytes_at(name) }) {
-        2
-    } else {
-        0
-    };
+    let mut len = if path_has_drive_letter(name) { 2 } else { 0 };
     let mut in_type = true;
     let mut is_url = false;
     loop {
-        let at = |i: usize| unsafe { *name.add(i) } as u8;
         let escaped_space = at(len) == b'\\' && at(len + 1) == b' ';
-        if !(vim_isfilec(at(len) as c_int)
+        if !(vim_isfilec(c_int::from(at(len)))
             || escaped_space
-            || (hyp && unsafe { path_is_url(cstr::at(name.add(len))) } != 0)
-            || (is_url && has_char(c":?&=", at(len) as c_int)))
+            || (hyp && url_at(name, len))
+            || (is_url && has_char(c":?&=", c_int::from(at(len)))))
         {
             break;
         }
         if at(len).is_ascii_alphabetic() {
-            if in_type && unsafe { path_is_url(cstr::at(name.add(len + 1))) } != 0 {
+            if in_type && url_at(name, len + 1) {
                 is_url = true;
             }
         } else {
@@ -181,15 +169,12 @@ unsafe fn name_length(name: *const c_char, options: FileNameOpts) -> usize {
         if escaped_space {
             len += 1; // skip over the "\" in "\ "
         }
-        len += unsafe { utfc_ptr2len(name.add(len)) } as usize;
+        len += c_cluster_len(&name[len..]);
     }
 
     // If there is trailing punctuation, remove it. But don't remove "..",
     // which could be a directory name.
-    if len > 2
-        && has_char(c".,:;!", unsafe { *name.add(len - 1) } as u8 as c_int)
-        && unsafe { *name.add(len - 2) } != b'.' as c_char
-    {
+    if len > 2 && has_char(c".,:;!", c_int::from(name[len - 1])) && name[len - 2] != b'.' {
         len -= 1;
     }
     len
@@ -198,213 +183,164 @@ unsafe fn name_length(name: *const c_char, options: FileNameOpts) -> usize {
 /// The line number written after a file name, as `" line 99"` or after any
 /// single separator character. Both the English spelling and the translated
 /// one are accepted, as `last_set_msg()` writes the latter.
-///
-/// # Safety
-///
-/// `after_name` must point at a NUL-terminated string.
-unsafe fn trailing_line_number(after_name: *const c_char) -> Option<c_long> {
-    let english = c" line ";
-    let localized = unsafe { CStr::from_ptr(gettext(line_msg).as_ptr()) };
+fn trailing_line_number(after_name: &[u8]) -> Option<c_long> {
+    let english: &[u8] = b" line ";
+    let localized = gettext(line_msg).to_bytes();
 
-    let mut p = after_name.cast_mut();
-    if unsafe { cstr::prefix_eq(p, english.as_ptr(), english.count_bytes()) } {
-        p = unsafe { p.add(english.count_bytes()) };
-    } else if unsafe { cstr::prefix_eq(p, localized.as_ptr(), localized.count_bytes()) } {
-        p = unsafe { p.add(localized.count_bytes()) };
+    let mut p = if after_name.starts_with(english) {
+        english.len()
+    } else if after_name.starts_with(localized) {
+        localized.len()
     } else {
-        p = unsafe { skipwhite(p) };
-    }
+        skip::white(after_name)
+    };
 
-    if unsafe { *p } == 0 {
+    if cstr::byte_at(after_name, p) == 0 {
         return None;
     }
-    if !(unsafe { *p } as u8).is_ascii_digit() {
-        p = unsafe { p.add(1) }; // skip the separator
+    if !after_name[p].is_ascii_digit() {
+        p += 1; // skip the separator
     }
-    p = unsafe { skipwhite(p) };
-    (unsafe { *p } as u8)
+    p += skip::white(&after_name[p..]);
+    cstr::byte_at(after_name, p)
         .is_ascii_digit()
-        .then(|| unsafe { getdigits_long(&raw mut p, false, 0) })
+        .then(|| getdigits_at(after_name, p, false, 0).0)
+}
+
+/// The name of the file under or after `line[col]`, copied out of the line,
+/// with the line number written after it going to `file_lnum` when given.
+/// `None`, said when `options` asks for messages, when there is none.
+fn name_in_line(
+    line: &[u8],
+    col: usize,
+    options: FileNameOpts,
+    file_lnum: Option<&mut LineNr>,
+) -> Option<Vec<u8>> {
+    let Some(start) = name_start(line, col, options) else {
+        if options.has(FileNameOpts::MESS) {
+            emsg(gettext(c"E446: No file name under cursor"));
+        }
+        return None;
+    };
+
+    let name = &line[start..];
+    let len = name_length(name, options);
+    if let Some(file_lnum) = file_lnum
+        && let Some(lnum) = trailing_line_number(&name[len..])
+    {
+        *file_lnum = lnum as LineNr;
+    }
+    Some(name[..len].to_vec())
 }
 
 /// The name of the file under or after `line[col]`, looked up in `'path'`.
 ///
-/// @param rel_fname  file we are searching relative to
-/// @param file_lnum  line number after the file name
+/// `rel_fname` is the file we are searching relative to, and the line
+/// number written after the name goes to `file_lnum`, when given. `line`
+/// must be the caller's own: the lookup can run user code.
 ///
 /// Otherwise like [`file_name_at_cursor`].
-///
-/// # Safety
-///
-/// `line` must point at a NUL-terminated string, unaliased for the call.
-/// `rel_fname` must point at a NUL-terminated string, unaliased for the call.
-/// `file_lnum` must point at a writable line number the caller owns.
-pub(crate) unsafe fn file_name_in_line(
-    line: *mut c_char,
-    col: c_int,
+pub(crate) fn file_name_in_line(
+    line: &[u8],
+    col: usize,
     options: FileNameOpts,
     count: c_int,
-    rel_fname: *mut c_char,
-    file_lnum: *mut LineNr,
-) -> *mut c_char {
-    let ptr = unsafe { name_start(line, col, options) };
-    if ptr.is_null() {
-        if options.has(FileNameOpts::MESS) {
-            emsg(gettext(c"E446: No file name under cursor"));
-        }
-        return ptr::null_mut();
-    }
-
-    let len = unsafe { name_length(ptr, options) };
-    if !file_lnum.is_null()
-        && let Some(lnum) = unsafe { trailing_line_number(ptr.add(len)) }
-    {
-        unsafe { *file_lnum = lnum as LineNr };
-    }
-
-    unsafe { find_file_name_in_path(ptr, len, options, count as c_long, rel_fname) }
+    rel_fname: Option<&CStr>,
+    file_lnum: Option<&mut LineNr>,
+) -> Option<XString> {
+    let name = name_in_line(line, col, options, file_lnum)?;
+    find_file_name_in_path(&name, options, c_long::from(count), rel_fname)
 }
 
-/// Run `'includeexpr'` over `ptr[len]`, with the name in `v:fname`.
-///
-/// # Safety
-///
-/// `name` must point at `len` readable bytes.
-pub(crate) unsafe fn eval_includeexpr(name: *const c_char, len: size_t) -> *mut c_char {
-    // SAFETY: the caller's obligation -- `len` readable bytes.
-    set_vim_var_string(Vv::Fname, Some(unsafe { cstr::slice_at(name, len) }));
+/// Run `'includeexpr'` over `name`, with the name in `v:fname`.
+pub(crate) fn eval_includeexpr(name: &[u8]) -> Option<XString> {
+    set_vim_var_string(Vv::Fname, Some(name));
     // Errors go against the script that set `'includeexpr'`.
     let script_ctx = Script::context(Buf::current().b_p_script_ctx[kBufOptIncludeexpr as usize]);
 
     // A copy: the expression may set the option and free its text.
     let expr = Buf::current().b_p_inex.get();
     let sandbox = was_set_insecurely(Win::current(), kOptIncludeexpr, OptionSetFlags::LOCAL);
-    let res = eval_to_string_safe(&expr, sandbox, true).map_or(ptr::null_mut(), XString::into_raw);
+    let res = eval_to_string_safe(&expr, sandbox, true);
 
     set_vim_var_string(Vv::Fname, None);
     drop(script_ctx);
     res
 }
 
-/// The name of the file `ptr[len]` in `'path'`.
+/// The name of the file `name` in `'path'`.
 ///
-/// Otherwise like [`file_name_at_cursor`].
-///
-/// @param rel_fname  file we are searching relative to
-///
-/// # Safety
-///
-/// `name` must point at `len` bytes the caller owns, readable and writable,
-/// unaliased for the call. `rel_fname` must point at a NUL-terminated string,
-/// unaliased for the call.
-pub(crate) unsafe fn find_file_name_in_path(
-    name: *mut c_char,
-    len: size_t,
+/// Otherwise like [`file_name_at_cursor`]. `rel_fname` is the file we are
+/// searching relative to; it and `name` must be the caller's own, as
+/// `'includeexpr'` and the search can run user code.
+pub(crate) fn find_file_name_in_path(
+    name: &[u8],
     options: FileNameOpts,
     count: c_long,
-    rel_fname: *mut c_char,
-) -> *mut c_char {
-    let mut name = name;
-    let mut len = len;
-    let mut count = count;
-    if len == 0 {
-        return ptr::null_mut();
+    rel_fname: Option<&CStr>,
+) -> Option<XString> {
+    if name.is_empty() {
+        return None;
     }
 
     // "file:/name" and "file://name" both name "/name"; a drive letter
     // after "file:/" keeps the slash.
+    let mut name = name;
     if options.has(FileNameOpts::HYP)
-        && len > 6
-        && unsafe { cstr::starts_with(name, b"file:/") }
-        && !vim_ispathsep(unsafe { *name.add(6) } as c_int)
+        && name.len() > 6
+        && name.starts_with(b"file:/")
+        && !vim_ispathsep(c_int::from(name[6]))
     {
-        let off = if path_has_drive_letter(unsafe { &cstr::bytes_at(name.add(6))[..len - 6] }) {
+        let off = if path_has_drive_letter(&name[6..]) {
             6
         } else {
             5
         };
-        name = unsafe { name.add(off) };
-        len -= off;
+        name = &name[off..];
     }
 
-    let mut tofree: *mut c_char = ptr::null_mut();
+    // What 'includeexpr' made of the name, when it ran.
+    let mut included: Option<XString> = None;
     if options.has(FileNameOpts::INCL) && Buf::current().b_p_inex.first_byte() != 0 {
-        tofree = unsafe { eval_includeexpr(name, len) };
-        if !tofree.is_null() {
-            name = tofree;
-            len = unsafe { cstr::bytes_at(name) }.len();
-        }
+        included = eval_includeexpr(name);
     }
 
-    let mut file_name: *mut c_char;
-    if options.has(FileNameOpts::EXP) {
-        let mut file_to_find: *mut c_char = ptr::null_mut();
-        let mut search_ctx: *mut c_char = ptr::null_mut();
-        let quiet = options.without(FileNameOpts::MESS);
-        let mut look = |name, len, first| unsafe {
-            find_file_in_path(
-                name,
-                len,
-                quiet,
-                first,
-                rel_fname,
-                &raw mut file_to_find,
-                &raw mut search_ctx,
-            )
-        };
-        file_name = look(name, len, true);
-
-        // If the file could not be found in a normal way, try applying
-        // 'includeexpr' (unless done already).
-        if file_name.is_null()
-            && !options.has(FileNameOpts::INCL)
-            && Buf::current().b_p_inex.first_byte() != 0
-        {
-            tofree = unsafe { eval_includeexpr(name, len) };
-            if !tofree.is_null() {
-                name = tofree;
-                len = unsafe { cstr::bytes_at(name) }.len();
-                file_name = look(name, len, true);
-            }
-        }
-        if file_name.is_null() && options.has(FileNameOpts::MESS) {
-            let c = unsafe { *name.add(len) };
-            unsafe { *name.add(len) = 0 };
-            // SAFETY: the byte past the name was just replaced by a NUL.
-            let shown = unsafe { c_str(name) };
-            semsg!("E447: Can't find file \"{shown}\" in path");
-            unsafe { *name.add(len) = c };
-        }
-
-        // Repeat finding the file "count" times. This matters when it
-        // appears several times in the path.
-        //
-        // Note the repeats pass `options` unmasked, so FileNameOpts::MESS reaches
-        // find_file_in_path and its "No more file" message. Upstream.
-        while !file_name.is_null() && {
-            count -= 1;
-            count > 0
-        } {
-            unsafe { xfree(file_name.cast()) };
-            file_name = unsafe {
-                find_file_in_path(
-                    name,
-                    len,
-                    options,
-                    false,
-                    rel_fname,
-                    &raw mut file_to_find,
-                    &raw mut search_ctx,
-                )
-            };
-        }
-
-        unsafe { xfree(file_to_find.cast()) };
-        unsafe { vim_findfile_cleanup(search_ctx.cast()) };
-    } else {
-        file_name = unsafe { xstrnsave(name, len) };
+    if !options.has(FileNameOpts::EXP) {
+        return Some(included.unwrap_or_else(|| XString::from_bytes(name)));
     }
 
-    unsafe { xfree(tofree.cast()) };
+    let mut walk = PathWalk::new();
+    let quiet = options.without(FileNameOpts::MESS);
+    let current = included.as_deref().unwrap_or(name);
+    let mut file_name = find_file_in_path(&mut walk, current, quiet, rel_fname);
+
+    // If the file could not be found in a normal way, try applying
+    // 'includeexpr' (unless done already).
+    if file_name.is_none()
+        && !options.has(FileNameOpts::INCL)
+        && Buf::current().b_p_inex.first_byte() != 0
+        && let Some(expr) = eval_includeexpr(name)
+    {
+        let current = included.insert(expr);
+        file_name = find_file_in_path(&mut walk, current, quiet, rel_fname);
+    }
+    let name = included.as_deref().unwrap_or(name);
+    if file_name.is_none() && options.has(FileNameOpts::MESS) {
+        let shown = msg_bytes(name);
+        semsg!("E447: Can't find file \"{shown}\" in path");
+    }
+
+    // Repeat finding the file "count" times. This matters when it appears
+    // several times in the path.
+    //
+    // Note the repeats pass `options` unmasked, so FileNameOpts::MESS
+    // reaches the walk and its "No more file" message. Upstream.
+    let mut count = count;
+    while file_name.is_some() && {
+        count -= 1;
+        count > 0
+    } {
+        file_name = walk.next(options);
+    }
     file_name
 }

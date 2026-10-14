@@ -19,7 +19,8 @@
 use super::*;
 use crate::cmdexpand::{WildMode, WildOpts};
 use crate::cstr;
-use crate::file_search::Name;
+use crate::file_search::{FIND_LEVEL, Name};
+use crate::option::split_option_part;
 use crate::option::vars::{P_HF, P_TAGS};
 use crate::optionstr::{OptString, local_or_global};
 use crate::path::tail_index;
@@ -29,9 +30,6 @@ use crate::types::{DoInRuntimepathCBFn, ExpandContext, MAXPATHL};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
-
-/// How deep [`vim_findfile`] may descend under a `'tags'` entry.
-const FIND_LEVEL: c_int = 100;
 
 /// The tags files that apply to the current buffer, in the order they are
 /// searched.
@@ -65,23 +63,16 @@ struct HelpTags {
     at: usize,
 }
 
-/// A [`vim_findfile`] context, freed when the walk ends.
+/// A [`FindContext`], dropped when the walk ends.
 ///
-/// The same context is handed back to [`vim_findfile_init`] for each new
+/// The same context is handed back to [`FindContext::start`] for each new
 /// `'tags'` entry, which is what keeps one entry from answering a file an
 /// earlier entry already did.
 #[derive(Default)]
 struct Search {
-    ctx: *mut c_void,
+    ctx: Option<FindContext>,
     /// Whether `ctx` is set up for an entry and can be stepped.
     open: bool,
-}
-
-impl Drop for Search {
-    fn drop(&mut self) {
-        // SAFETY: `ctx` came from `vim_findfile_init`, or is NULL.
-        unsafe { vim_findfile_cleanup(self.ctx) };
-    }
 }
 
 impl TagFiles {
@@ -93,7 +84,7 @@ impl TagFiles {
         let tags = (!help).then(|| local_or_global(&Buf::current().b_p_tags, P_TAGS).get());
         TagFiles {
             help: help.then(HelpTags::collect),
-            tags: tags.map(|tags| unsafe { Name::from_ptr(tags.as_ptr().cast_mut()) }),
+            tags: tags.map(|tags| Name::from_bytes(&tags)),
             at: 0,
             search: Search::default(),
         }
@@ -102,7 +93,7 @@ impl TagFiles {
     /// The next tags file to read, or `None` when there are no more.
     ///
     /// The name is not checked for existence in a help buffer; elsewhere
-    /// it is one [`vim_findfile`] just found.
+    /// it is one [`FindContext::next_match`] just found.
     pub(crate) fn next(&mut self) -> Option<Name> {
         match &mut self.help {
             Some(help) => help.next(),
@@ -112,22 +103,15 @@ impl TagFiles {
 
     /// The next name from `'tags'`.
     fn next_listed(&mut self) -> Option<Name> {
-        // SAFETY: the context came from `vim_findfile_init`, and what
-        // `vim_findfile` answers is an allocated NUL-terminated name that
-        // becomes ours.
         loop {
             if !self.search.open {
                 self.open_next_entry()?;
                 continue;
             }
-            let found = unsafe { vim_findfile(self.search.ctx) };
-            if found.is_null() {
-                self.search.open = false;
-                continue;
+            match self.search.ctx.as_mut().and_then(FindContext::next_match) {
+                Some(found) => return Some(Name::from_bytes(&found)),
+                None => self.search.open = false,
             }
-            let name = unsafe { Name::from_ptr(found) };
-            unsafe { xfree(found.cast()) };
-            return Some(name);
         }
     }
 
@@ -142,37 +126,24 @@ impl TagFiles {
             return None;
         }
 
-        let mut entry = Entry::split(tags, &mut self.at);
-        let file_len = entry.file.len();
-        let stop = entry
-            .stop
-            .as_mut()
-            .map_or(ptr::null_mut(), Name::as_mut_ptr);
-        // SAFETY: `entry` owns three NUL-terminated names that outlive the
-        // call, and the context is either NULL or one this walk made.
-        // `vim_findfile_init` takes ownership of it either way.
-        self.search.ctx = unsafe {
-            vim_findfile_init(
-                entry.dir.as_mut_ptr(),
-                entry.file.as_mut_ptr(),
-                file_len,
-                stop,
-                FIND_LEVEL,
-                // Keep the visited list: an entry must not answer a file
-                // an earlier entry already did.
-                false,
-                FINDFILE_FILE.cast_signed(),
-                self.search.ctx,
-                true,
-                Buf::current().name.full_ptr(),
-            )
-        };
-        self.search.open = !self.search.ctx.is_null();
+        let entry = Entry::split(tags, &mut self.at);
+        let buffer = Buf::current();
+        self.search.ctx = FindContext::start(
+            self.search.ctx.take(),
+            entry.dir.bytes(),
+            entry.file.bytes(),
+            entry.stop.as_ref().map(Name::bytes),
+            FIND_LEVEL,
+            FINDFILE_FILE.cast_signed(),
+            true,
+            buffer.name.full(),
+        );
+        self.search.open = self.search.ctx.is_some();
         Some(())
     }
 }
 
-/// One `'tags'` entry, split into what [`vim_findfile_init`] wants.
+/// One `'tags'` entry, split into what [`FindContext::start`] wants.
 struct Entry {
     /// Where to start looking, wildcards and all.
     dir: Name,
@@ -185,29 +156,20 @@ struct Entry {
 impl Entry {
     /// Take the next entry out of `tags`, advancing `at` past it.
     fn split(tags: &Name, at: &mut usize) -> Self {
-        // The entry is copied into a fixed buffer first, because
-        // `copy_option_part` truncates there and `vim_findfile_stopdir`
-        // rewrites in place.
-        let mut buf = vec![0 as c_char; MAXPATHL as usize];
-        // SAFETY: `at` indexes into `tags`, which is NUL-terminated, and
-        // `buf` is `MAXPATHL` writable bytes that both calls terminate.
-        let mut read = unsafe { tags.as_ptr().add(*at) }.cast_mut();
-        let option2 = &raw mut read;
-        let maxlen = MAXPATHL as usize - 1;
-        let sep_chars = c" ,".as_ptr().cast_mut();
-        unsafe { copy_option_part(option2, buf.as_mut_ptr(), maxlen, sep_chars) };
-        *at = unsafe { read.offset_from(tags.as_ptr()) }.cast_unsigned();
-        let stop = unsafe { vim_findfile_stopdir(buf.as_mut_ptr()) };
-        let stop = (!stop.is_null()).then(|| unsafe { Name::from_ptr(stop) });
+        // Cut where upstream's `copy_option_part` into a `MAXPATHL` buffer
+        // cuts it.
+        let rest = &tags.bytes()[*at..];
+        let (entry, after) = split_option_part(rest, MAXPATHL as usize - 1, b" ,");
+        *at = tags.len() - after.len();
+        let (entry, stop) = split_stop_directories(&entry);
 
-        // What is left in the buffer is the directory to search and,
-        // as its last component, the name to look for.
-        let entry = unsafe { CStr::from_ptr(buf.as_ptr()) }.to_bytes();
-        let tail = tail_index(entry);
+        // What is left is the directory to search and, as its last
+        // component, the name to look for.
+        let tail = tail_index(&entry);
         Entry {
             dir: Name::from_bytes(&entry[..tail]),
             file: Name::from_bytes(&entry[tail..]),
-            stop,
+            stop: stop.map(Name::from_bytes),
         }
     }
 }
@@ -267,7 +229,7 @@ unsafe fn found_tagfile_cb(
     let found = unsafe { &mut *cookie.cast::<Vec<Name>>() };
     let count = usize::try_from(num_fnames).expect("the caller counts the names");
     for i in 0..count {
-        let mut name = unsafe { Name::from_ptr(*fnames.add(i)) };
+        let mut name = Name::from_bytes(unsafe { cstr::bytes_at(*fnames.add(i)) });
         name.simplify();
         found.push(name);
         if !all {

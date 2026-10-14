@@ -621,7 +621,7 @@ unsafe fn write_session(out: SessionFile, fname: *mut c_char) -> bool {
     let to_globaldir =
         known && ssop_flags.get() & kOptSsopFlagCurdir != 0 && !globaldir.get().is_null();
     if to_sesdir {
-        if unsafe { vim_chdirfile(fname, flag::kCdCauseOther) }.is_ok() {
+        if vim_chdirfile(unsafe { cstr::at(fname) }, flag::kCdCauseOther).is_ok() {
             shorten_fnames(1);
         }
     } else if to_globaldir && unsafe { os_chdir(cstr::at(globaldir.get())) } == 0 {

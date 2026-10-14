@@ -203,6 +203,54 @@ fn the_file_name_under_the_cursor() {
     restore(&fx);
 }
 
+/// The reader walks the line by characters: a multibyte or composed name is
+/// found from any byte of it, a URL keeps its `:`, `?`, `&` and `=`, and
+/// `" line N"` after a name is a line number for `gF`. `gf` falls back to
+/// `'includeexpr'` when the name as written is not found.
+#[test]
+fn the_cursor_reader_walks_characters_urls_and_includeexpr() {
+    let sandbox = tree("file_search_cfile_chars");
+    sandbox.mkdir("root/ñandú");
+    sandbox.write("root/ñandú/été.txt", b"x\n");
+    sandbox.write("root/four.txt", b"1\n2\n3\n4\n");
+    let fx = Probe::new(sandbox.editor());
+    fx.run(concat!(
+        "call setline(1, ['voir root/ñandú/été.txt, fin', \"e\\u0301x/y.txt\", ",
+        "'see http://example.com:8080/a?q=1&b=2. end', 'go root/four.txt line 3', ",
+        "'at target.txt', 'at four'])",
+    ));
+    for (line, col, want) in [
+        ("1", "6", "'root/ñandú/été.txt'"),
+        // Inside a two-byte character, and on the second byte of one.
+        ("1", "14", "'root/ñandú/été.txt'"),
+        ("1", "17", "'root/ñandú/été.txt'"),
+        ("1", "30", "'fin'"),
+        // On the combining accent.
+        ("2", "2", "'e\u{301}x/y.txt'"),
+        ("3", "8", "'http://example.com:8080/a?q=1&b=2'"),
+        ("3", "30", "'q=1'"),
+    ] {
+        fx.run(&format!("call cursor({line}, {col})"));
+        fx.check("expand('<cfile>')", want);
+    }
+    fx.run("set path=,");
+    fx.run("call cursor(4, 4)");
+    fx.check_error("normal! gF", "none");
+    fx.check("[bufname(), line('.')]", "['root/four.txt', 3]");
+    fx.run("buffer 1");
+    fx.run("set includeexpr='root/'..v:fname");
+    fx.run("call cursor(5, 4)");
+    fx.check_error("normal! gf", "none");
+    fx.check("bufname()", "'root/target.txt'");
+    fx.run("buffer 1");
+    fx.run("set includeexpr=v:fname..'.txt' path=root");
+    fx.run("call cursor(6, 4)");
+    fx.check_error("normal! gf", "none");
+    fx.check("bufname()", "'root/four.txt'");
+    fx.run("set includeexpr&");
+    restore(&fx);
+}
+
 #[test]
 fn completion_lists_the_names_the_path_reaches() {
     let sandbox = tree("file_search_complete");

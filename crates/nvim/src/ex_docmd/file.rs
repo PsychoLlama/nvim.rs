@@ -11,6 +11,7 @@ use crate::guard::Allow;
 use crate::memfile::buf_swap_name;
 use crate::memline::MlFlags;
 use crate::memline::ml_get_len;
+use crate::memory::ThinCString;
 use crate::memory::XString;
 use crate::message::msg;
 use crate::message_fmt::msg_bytes;
@@ -227,7 +228,7 @@ pub(crate) fn ex_find(excmd: &mut ExArg) {
         findfunc_find_file(excmd.line.arg(), count)
     } else {
         let nth = if excmd.addr_count > 0 { excmd.line2 } else { 1 };
-        find_nth_file_in_path(excmd.line.arg(), FileNameOpts::MESS, nth)
+        find_nth_file_in_path(excmd.line.arg(), FileNameOpts::MESS, nth).map(ThinCString::from)
     };
     let Some(fname) = fname else {
         return;

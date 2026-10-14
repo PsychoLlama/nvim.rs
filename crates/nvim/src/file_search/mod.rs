@@ -1,9 +1,8 @@
 //! Searching for a file along `'path'`, `'tags'` and `'cdpath'`.
 //!
-//! A caller builds a search context with [`vim_findfile_init`], then calls
-//! [`vim_findfile`] until it answers NULL, then hands the context to
-//! [`vim_findfile_cleanup`]. Re-initialising an existing context keeps its
-//! list of directories already visited, which is what lets a `'tags'`
+//! A caller builds a search context with [`FindContext::start`], then calls
+//! [`FindContext::next_match`] until it answers `None`. Re-initialising an
+//! existing context keeps its list of directories already visited, which is what lets a `'tags'`
 //! setting like `"./**/tags,./**/TAGS,**/tags"` share work between its three
 //! searches.
 //!
@@ -12,21 +11,19 @@
 //! search to be restarted one directory higher until a stop directory is
 //! reached, and `**N` limits how far down `**` descends.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::autocmd::{apply_autocmds, has_event};
-use crate::charset::{getdigits_int32, getdigits_long, skipwhite, vim_isfilec};
+use crate::autocmd::{fire_autocmds_for, has_event};
+use crate::charset::vim_isfilec;
 use crate::cstr;
-use crate::cursor::get_cursor_line_ptr;
 use crate::eval::vars::set_vim_var_string;
 use crate::eval::{eval_to_string_safe, get_v_event, restore_v_event};
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
-use crate::mbyte::{mb_tolower, utf_head_off, utf_ptr2char, utfc_ptr2len};
-use crate::memory::{xfree, xmemdupz};
+use crate::mbyte::mb_tolower;
+use crate::memory::XString;
 use crate::message::emsg;
 use crate::message::state::line_msg;
 use crate::message::{
@@ -35,29 +32,21 @@ use crate::message::{
 };
 use crate::normal::get_visual_text;
 use crate::option::vars::p_fic;
-use crate::option::{copy_option_part, was_set_insecurely};
+use crate::option::{option_parts, was_set_insecurely};
 use crate::options::kOptIncludeexpr;
-use crate::optionstr::OptString;
+use crate::optionstr::OptStringRef;
 use crate::os::cshim::gettext;
-use crate::os::env::expand_env_esc;
-use crate::os::fs::{
-    dir_exists, dirname_within, os_chdir, os_dirname, os_fileid, os_fileid_equal, os_isdir,
-    os_path_exists,
-};
+use crate::os::fs::{dir_exists, dirname_within, os_chdir, path_exists};
 use crate::os::input::os_breakcheck;
 use crate::path::{
     ExpandFlags, after_pathsep, expand_wildcards, full_name_save, path_fnamecmp, path_fnamencmp,
-    path_has_drive_letter, path_is_url, path_with_url, pathcmp, shorten_index, simplify_filename,
-    tail_index, tail_with_sep_index, vim_is_abs_name, vim_ispathsep,
+    path_has_drive_letter, path_with_url, pathcmp, shorten_index, simplify_filename, tail_index,
+    tail_with_sep_index, vim_is_abs_name, vim_ispathsep,
 };
-use crate::strings::xstrnsave;
 use crate::types::AutoEvent;
-use crate::types::{BoolVarValue, CdCause, CdScope, FileID, LineNr, MAXPATHL, SaveVEvent, size_t};
-use crate::vim_snprintf;
+use crate::types::{BoolVarValue, CdCause, CdScope, FileID, LineNr, MAXPATHL, SaveVEvent};
 use crate::winlayer::Buf;
-use ::libc::{abort, strcpy};
-use core::ffi::{c_char, c_int, c_void};
-use core::{ptr, slice};
+use core::ffi::{c_char, c_int};
 use std::ffi::CStr;
 
 mod chdir;
@@ -110,13 +99,17 @@ const LITERAL_DIR: ExpandFlags = ExpandFlags::DIR
     .or(ExpandFlags::SILENT)
     .or(ExpandFlags::NOTWILD);
 
+/// How deep a search descends under one entry of `'path'`, `'cdpath'` or
+/// `'tags'`, whatever its `**` allows.
+pub(crate) const FIND_LEVEL: c_int = 100;
+
 /// How far `**` descends when the pattern does not say.
 pub(crate) const FF_MAX_STAR_STAR_EXPAND: u8 = 30;
 
 /// An owned NUL-terminated byte string.
 ///
-/// The searcher hands nearly every name it builds to a C function, so the
-/// terminator is part of the value; [`len`](Name::len) and
+/// The searcher hands nearly every name it builds to the file system as a
+/// `&CStr`, so the terminator is part of the value; [`len`](Name::len) and
 /// [`bytes`](Name::bytes) count only what comes before it.
 #[derive(Clone, Default)]
 pub(crate) struct Name(Vec<u8>);
@@ -127,13 +120,6 @@ impl Name {
         owned.extend_from_slice(bytes);
         owned.push(0);
         Name(owned)
-    }
-
-    /// # Safety
-    /// `p` must point at a NUL-terminated string.
-    pub(crate) unsafe fn from_ptr(p: *const c_char) -> Self {
-        // SAFETY: the caller's promise.
-        Self::from_bytes(unsafe { CStr::from_ptr(p) }.to_bytes())
     }
 
     /// The name as it is written, without the terminator.
@@ -163,6 +149,8 @@ impl Name {
         cstr::in_bytes(&self.0)
     }
 
+    /// For the callers outside the searcher (tags) that still hand a name to
+    /// a C reader.
     pub(crate) fn as_ptr(&self) -> *const c_char {
         self.0.as_ptr().cast()
     }
@@ -171,6 +159,13 @@ impl Name {
     /// shorten it, so [`truncate`](Name::truncate) puts the length back.
     pub(crate) fn as_mut_ptr(&mut self) -> *mut c_char {
         self.0.as_mut_ptr().cast()
+    }
+
+    /// Append `bytes`.
+    pub(crate) fn extend(&mut self, bytes: &[u8]) {
+        self.0.pop();
+        self.0.extend_from_slice(bytes);
+        self.0.push(0);
     }
 
     /// Forget everything from `at` on.
@@ -199,7 +194,6 @@ impl Name {
 /// The state of one file search: what is left to look at, and where it has
 /// already been.
 ///
-/// Callers hold this as an opaque pointer.
 pub(crate) struct FindContext {
     /// Directories still to search, deepest last.
     pub(crate) stack: Vec<StackFrame>,
@@ -263,9 +257,8 @@ impl FindContext {
 /// The path being built, and handed to the caller when it turns out to name
 /// the file we want.
 ///
-/// A fixed `MAXPATHL` buffer that never moves: `expand_wildcards` is given a
-/// pointer into it before the name is finished, and `copy_option_part`
-/// writes `'suffixesadd'` parts straight into its tail.
+/// A fixed `MAXPATHL` buffer, as upstream's: a name that does not fit gives
+/// the search up rather than being truncated.
 pub(crate) struct Candidate {
     buf: Vec<u8>,
     len: usize,
@@ -293,48 +286,35 @@ impl Candidate {
         cstr::in_bytes(&self.buf)
     }
 
-    fn as_ptr(&self) -> *const c_char {
-        self.buf.as_ptr().cast()
+    /// The name so far.
+    fn bytes(&self) -> &[u8] {
+        &self.buf[..self.len]
     }
 
-    fn as_mut_ptr(&mut self) -> *mut c_char {
-        self.buf.as_mut_ptr().cast()
-    }
-
-    /// Write `parts` one after another at `at`, and answer where the whole
-    /// name would have ended — which may be past `MAXPATHL`, and every
-    /// caller tests it, because that is how the search gives up.
-    ///
-    /// # Safety
-    /// Each part must be a NUL-terminated string, and `at` must be no
-    /// greater than `MAXPATHL`.
-    unsafe fn write_at(&mut self, at: usize, parts: [*const c_char; 3]) -> usize {
-        // SAFETY: the caller's promise; `MAXPATHL - at` is the room left.
-        at + unsafe {
-            vim_snprintf!(
-                self.as_mut_ptr().add(at),
-                MAXPATHL as usize - at,
-                c"%s%s%s".as_ptr(),
-                parts[0],
-                parts[1],
-                parts[2],
-            )
-        } as usize
+    /// Write `parts` one after another at `at` — as much of them as fits,
+    /// terminated — and answer where the whole name would have ended, which
+    /// may be past `MAXPATHL`: every caller tests that, because it is how
+    /// the search gives up. Upstream's `snprintf("%s%s%s")`.
+    fn write_at(&mut self, at: usize, parts: [&[u8]; 3]) -> usize {
+        let mut end = at;
+        for part in parts {
+            let room = (MAXPATHL as usize - 1).saturating_sub(end);
+            let fits = part.len().min(room);
+            if fits > 0 {
+                self.buf[end..end + fits].copy_from_slice(&part[..fits]);
+            }
+            end += part.len();
+        }
+        self.buf[end.min(MAXPATHL as usize - 1)] = 0;
+        end
     }
 
     /// A path separator, unless `part` already ends in one.
-    ///
-    /// # Safety
-    /// `part` must hold `partlen` readable bytes.
-    unsafe fn separator(part: *const c_char, partlen: usize) -> *const c_char {
-        // SAFETY: the caller's promise.
-        if !after_pathsep(
-            unsafe { slice::from_raw_parts(part.cast::<u8>(), partlen) },
-            partlen,
-        ) {
-            c"/".as_ptr()
+    fn separator(part: &[u8]) -> &'static [u8] {
+        if after_pathsep(part, part.len()) {
+            b""
         } else {
-            c"".as_ptr()
+            b"/"
         }
     }
 
@@ -351,10 +331,9 @@ impl Candidate {
         self.buf[self.len] = 0;
     }
 
-    /// A copy of the name, for the caller to own and free.
-    fn take(&self) -> *mut c_char {
-        // SAFETY: `self.len` bytes of `self.buf` are initialised.
-        unsafe { xmemdupz(self.buf.as_ptr().cast(), self.len) }.cast()
+    /// A copy of the name, for the caller to own.
+    fn take(&self) -> XString {
+        XString::from_bytes(self.bytes())
     }
 }
 
@@ -384,16 +363,14 @@ impl FindContext {
             if start_dir.len() + 1 >= MAXPATHL as usize {
                 return Err(TooLong);
             }
-            file_path.len = unsafe {
-                file_path.write_at(
-                    0,
-                    [
-                        start_dir.as_ptr(),
-                        Candidate::separator(start_dir.as_ptr(), start_dir.len()),
-                        c"".as_ptr(),
-                    ],
-                )
-            };
+            file_path.len = file_path.write_at(
+                0,
+                [
+                    start_dir.bytes(),
+                    Candidate::separator(start_dir.bytes()),
+                    b"",
+                ],
+            );
             if file_path.len >= MAXPATHL as usize {
                 return Err(TooLong);
             }
@@ -404,16 +381,14 @@ impl FindContext {
         if file_path.len + fix_path.len() + 1 >= MAXPATHL as usize {
             return Err(TooLong);
         }
-        file_path.len = unsafe {
-            file_path.write_at(
-                file_path.len,
-                [
-                    fix_path.as_ptr(),
-                    Candidate::separator(fix_path.as_ptr(), fix_path.len()),
-                    c"".as_ptr(),
-                ],
-            )
-        };
+        file_path.len = file_path.write_at(
+            file_path.len,
+            [
+                fix_path.bytes(),
+                Candidate::separator(fix_path.bytes()),
+                b"",
+            ],
+        );
         if file_path.len >= MAXPATHL as usize {
             return Err(TooLong);
         }
@@ -461,7 +436,7 @@ impl FindContext {
         // Expand wildcards like "*" and "$VAR". If the path is a URL
         // don't try this.
         let files = if path_with_url(file_path.as_cstr()) != 0 {
-            FileList::of_one(&file_path.buf[..file_path.len])
+            FileList::of_one(file_path.bytes())
         } else {
             let mut patterns = vec![file_path.as_cstr()];
             if expand_empty {
@@ -485,6 +460,14 @@ impl FindContext {
         frame: &StackFrame,
         file_path: &mut Candidate,
     ) -> Result<Option<usize>, TooLong> {
+        // Borrowed for the call: nothing below runs user code that could
+        // set the option.
+        let buffer = Buf::current();
+        let suffixes: &[u8] = if self.tagfile {
+            b""
+        } else {
+            buffer.b_p_sua.bytes()
+        };
         let files = frame.files();
         for i in frame.files_cur..files.len() {
             let dir = files.get(i);
@@ -492,15 +475,11 @@ impl FindContext {
                 continue; // not a directory
             }
             // Prepare the filename to be checked for existence below.
-            let dirlen = dir.len();
-            let dir = dir.as_ptr();
             let wanted = &self.file_to_search;
-            if dirlen + 1 + wanted.len() >= MAXPATHL as usize {
+            if dir.len() + 1 + wanted.len() >= MAXPATHL as usize {
                 return Err(TooLong);
             }
-            file_path.len = unsafe {
-                file_path.write_at(0, [dir, Candidate::separator(dir, dirlen), wanted.as_ptr()])
-            };
+            file_path.len = file_path.write_at(0, [dir, Candidate::separator(dir), wanted.bytes()]);
             if file_path.len >= MAXPATHL as usize {
                 return Err(TooLong);
             }
@@ -508,24 +487,15 @@ impl FindContext {
             // Try without extra suffix and then with suffixes from
             // 'suffixesadd'.
             let stem = file_path.len;
-            let mut suffix = if self.tagfile {
-                c"".as_ptr().cast_mut()
-            } else {
-                Buf::current().b_p_sua.value_ptr()
-            };
+            let mut suffixes = option_parts(suffixes);
             loop {
                 let exists = path_with_url(file_path.as_cstr()) != 0
-                    || (unsafe { os_path_exists(file_path.as_ptr()) }
+                    || (path_exists(file_path.as_cstr())
                         && (self.find_what == FINDFILE_BOTH
                             || (self.find_what == FINDFILE_DIR)
-                                == unsafe { os_isdir(file_path.as_ptr()) }));
+                                == dir_exists(file_path.as_cstr())));
                 // If the file exists and we didn't already find it.
-                if exists
-                    && self
-                        .visited
-                        .current()
-                        .add(&file_path.buf[..file_path.len], b"")
-                {
+                if exists && self.visited.current().add(file_path.bytes(), b"") {
                     if path_with_url(file_path.as_cstr()) == 0 {
                         file_path.len = simplify_filename(&mut file_path.buf);
                     }
@@ -534,21 +504,14 @@ impl FindContext {
                 }
 
                 // Not found or found already, try next suffix.
-                if unsafe { *suffix } == 0 {
+                let Some(suffix) = suffixes.next() else {
                     break;
-                }
-                debug_assert!(stem <= MAXPATHL as usize);
-                // `copy_option_part` answers what it wrote, which is at
-                // most MAXPATHL - stem - 1.
-                file_path.len = stem
-                    + unsafe {
-                        copy_option_part(
-                            &raw mut suffix,
-                            file_path.as_mut_ptr().add(stem),
-                            MAXPATHL as usize - stem,
-                            c",".as_ptr().cast_mut(),
-                        )
-                    };
+                };
+                // Cut where upstream's `copy_option_part` into the rest of
+                // the buffer cuts it.
+                let room = MAXPATHL as usize - 1 - stem;
+                file_path.len =
+                    file_path.write_at(stem, [&suffix[..suffix.len().min(room)], b"", b""]);
             }
         }
         Ok(None)
@@ -734,22 +697,20 @@ impl FindContext {
             return Err(TooLong);
         }
 
-        file_path.len = unsafe {
-            file_path.write_at(
-                0,
-                [
-                    start_dir.as_ptr(),
-                    Candidate::separator(start_dir.as_ptr(), start_dir.len()),
-                    self.fix_path.as_ptr(),
-                ],
-            )
-        };
+        file_path.len = file_path.write_at(
+            0,
+            [
+                start_dir.bytes(),
+                Candidate::separator(start_dir.bytes()),
+                self.fix_path.bytes(),
+            ],
+        );
         if file_path.len >= MAXPATHL as usize {
             return Err(TooLong);
         }
 
         // Create a new stack entry.
-        let fix_path = Name::from_bytes(&file_path.buf[..file_path.len]);
+        let fix_path = Name::from_bytes(file_path.bytes());
         let wc_path = self.wc_path.clone().unwrap_or_default();
         self.stack
             .push(StackFrame::new(fix_path, wc_path, self.level, false));
@@ -757,46 +718,36 @@ impl FindContext {
     }
 }
 
-/// Find a file in a search context, built by [`vim_findfile_init`].
-///
-/// To get all matching files call this until it answers NULL. If the passed
-/// search context is NULL, NULL is answered.
-///
-/// The search algorithm is depth first. To change this replace the stack
-/// with a list (don't forget to leave partly searched directories on the top
-/// of the list).
-///
-/// @return  a pointer to an allocated file name, or NULL if nothing found.
-///
-/// # Safety
-///
-/// `search_ctx_arg` must be null, or a context `vim_findfile_init` answered
-/// with that `vim_findfile_cleanup` has not yet freed.
-pub(crate) unsafe fn vim_findfile(search_ctx_arg: *mut c_void) -> *mut c_char {
-    if search_ctx_arg.is_null() {
-        return ptr::null_mut();
-    }
-    let ctx = unsafe { &mut *search_ctx_arg.cast::<FindContext>() };
-    let mut file_path = Candidate::new();
+impl FindContext {
+    /// The next file this search finds, or `None` when there are no more.
+    ///
+    /// The context is built by [`FindContext::start`]; to get all matching
+    /// files call this until it answers `None`.
+    ///
+    /// The search algorithm is depth first. To change this replace the
+    /// stack with a list (don't forget to leave partly searched directories
+    /// on the top of the list).
+    pub(crate) fn next_match(&mut self) -> Option<XString> {
+        let mut file_path = Candidate::new();
 
-    // Where the start dir ends -- needed for the upward search.
-    let mut path_end = ctx.start_dir.as_ref().map_or(0, Name::len);
+        // Where the start dir ends -- needed for the upward search.
+        let mut path_end = self.start_dir.as_ref().map_or(0, Name::len);
 
-    loop {
-        match ctx.search_downwards(&mut file_path) {
-            Down::Found => return file_path.take(),
-            Down::TooLong => break,
-            Down::Exhausted => {}
-        }
+        loop {
+            match self.search_downwards(&mut file_path) {
+                Down::Found => return Some(file_path.take()),
+                Down::TooLong => return None,
+                Down::Exhausted => {}
+            }
 
-        // We didn't find anything downwards. Should we search upwards?
-        if ctx.start_dir.is_none() || ctx.stopdirs.is_none() || got_int.get() {
-            break;
-        }
-        match ctx.step_up(&mut path_end, &mut file_path) {
-            Ok(true) => {}
-            Ok(false) | Err(TooLong) => break,
+            // We didn't find anything downwards. Should we search upwards?
+            if self.start_dir.is_none() || self.stopdirs.is_none() || got_int.get() {
+                return None;
+            }
+            match self.step_up(&mut path_end, &mut file_path) {
+                Ok(true) => {}
+                Ok(false) | Err(TooLong) => return None,
+            }
         }
     }
-    ptr::null_mut()
 }

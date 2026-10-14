@@ -23,7 +23,7 @@
     clippy::ptr_as_ptr
 )]
 
-use core::ffi::{c_char, c_int, c_long};
+use core::ffi::{c_char, c_int};
 
 use super::display::{foldcase, mirror_ascii, trans_characters_in, transstr_into, transstr_owned};
 use super::{
@@ -279,15 +279,6 @@ fn narrow(number: intmax_t, strict: bool, def: c_int) -> c_int {
 /// `*cursor` must be a NUL-terminated string.
 pub unsafe fn getdigits_int32(cursor: *mut *mut c_char, strict: bool, def: int32_t) -> int32_t {
     unsafe { getdigits_int(cursor, strict, def) }
-}
-
-/// [`getdigits`] narrowed to a `long`. Note that unlike the `int` forms this
-/// does not range-check, because on this platform it cannot fail.
-///
-/// # Safety
-/// `*cursor` must be a NUL-terminated string.
-pub(crate) unsafe fn getdigits_long(cursor: *mut *mut c_char, strict: bool, def: c_long) -> c_long {
-    unsafe { getdigits(cursor, strict, intmax_t::from(def)) }
 }
 
 /// Whether the character at `p` belongs to a word in the current buffer.

@@ -214,7 +214,7 @@ fn find_file(arg: &[u8], count: c_int) -> Option<ThinCString> {
     if !get_findfunc().is_empty() {
         return findfunc_find_file(arg, count);
     }
-    find_nth_file_in_path(arg, FileNameOpts::MESS, 1)
+    find_nth_file_in_path(arg, FileNameOpts::MESS, 1).map(ThinCString::from)
 }
 
 /// The `:tabedit`/`:tabfind`/`:tabnew` half of [`splitview`].

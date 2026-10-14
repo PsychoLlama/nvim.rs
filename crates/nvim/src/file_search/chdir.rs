@@ -5,8 +5,7 @@
 //! [`do_autocmd_dirchanged`] fires `DirChangedPre`/`DirChanged` with the
 //! `v:event` dictionary those events promise.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 #![deny(
@@ -19,12 +18,12 @@
 
 use super::*;
 use crate::cstr;
+use crate::memory::XString;
 use crate::types::{
     Failed, MAXPATHL, kCdScopeGlobal, kCdScopeInvalid, kCdScopeTabpage, kCdScopeWindow,
 };
 use crate::winlayer::Buf;
-use core::ffi::{c_char, c_int};
-use core::ptr;
+use core::ffi::c_int;
 use std::ffi::CStr;
 
 /// Fire `DirChangedPre` (`pre`) or `DirChanged` for a move to `new_dir`.
@@ -54,13 +53,13 @@ pub(crate) fn do_autocmd_dirchanged(new_dir: &CStr, scope: CdScope, cause: CdCau
         kCdScopeWindow => c"window",
         // "Should never happen." Any other value falls through upstream's
         // switch, leaving the buffer it would have named unwritten.
-        kCdScopeInvalid => unsafe { abort() },
+        kCdScopeInvalid => std::process::abort(),
         _ => c"",
     };
     let pattern: &CStr = match cause {
         kCdCauseAuto => c"auto",
-        kCdCauseOther => unsafe { abort() }, // "Should never happen."
-        _ => scope_name,                     // manual, or following a window change
+        kCdCauseOther => std::process::abort(), // "Should never happen."
+        _ => scope_name,                        // manual, or following a window change
     };
 
     let mut saved = SaveVEvent::default();
@@ -74,15 +73,14 @@ pub(crate) fn do_autocmd_dirchanged(new_dir: &CStr, scope: CdScope, cause: CdCau
     );
     dict.edit().set_keys_readonly();
 
-    unsafe {
-        apply_autocmds(
-            event,
-            pattern.as_ptr().cast_mut(),
-            new_dir.as_ptr().cast_mut(),
-            false,
-            Buf::current_or_none(),
-        )
-    };
+    fire_autocmds_for(
+        event,
+        Some(pattern),
+        Some(new_dir),
+        false,
+        Buf::current_or_none(),
+        None,
+    );
 
     restore_v_event(dict, &mut saved);
     RECURSIVE.set(false);
@@ -91,14 +89,8 @@ pub(crate) fn do_autocmd_dirchanged(new_dir: &CStr, scope: CdScope, cause: CdCau
 /// Change to the directory holding `fname`.
 ///
 /// Caller must call `shorten_fnames()`.
-///
-/// @return  `Ok` or `Err`
-///
-/// # Safety
-///
-/// `fname` must point at a NUL-terminated string, unaliased for the call.
-pub(crate) unsafe fn vim_chdirfile(fname: *mut c_char, cause: CdCause) -> Result<(), Failed> {
-    let name = unsafe { cstr::bytes_at(fname) };
+pub(crate) fn vim_chdirfile(fname: &CStr, cause: CdCause) -> Result<(), Failed> {
+    let name = fname.to_bytes();
     let mut dir = name[..name.len().min(MAXPATHL as usize - 1)].to_vec();
     dir.truncate(tail_with_sep_index(&dir));
     let dir = cstr::owned(&dir);
@@ -123,33 +115,11 @@ pub(crate) unsafe fn vim_chdirfile(fname: *mut c_char, cause: CdCause) -> Result
 
 /// Change directory to `new_dir`, searching `'cdpath'` for a relative name.
 pub(crate) fn vim_chdir(new_dir: &CStr) -> c_int {
-    let mut file_to_find: *mut c_char = ptr::null_mut();
-    let mut search_ctx: *mut c_char = ptr::null_mut();
-    // A copy: the search terminates the name in place, and puts the byte
-    // back.
-    let mut name = new_dir.to_bytes_with_nul().to_vec();
-    let dir_len = name.len() - 1;
-    // SAFETY: a NUL-terminated copy of this frame's own, the current
-    // buffer's name, and the search's two slots, freed below.
-    let dir_name = unsafe {
-        find_directory_in_path(
-            name.as_mut_ptr().cast(),
-            dir_len,
-            FileNameOpts::MESS,
-            Buf::current().name.full_ptr(),
-            &raw mut file_to_find,
-            &raw mut search_ctx,
-        )
-    };
-    // SAFETY: what the search allocated, or null.
-    unsafe { xfree(file_to_find.cast()) };
-    unsafe { vim_findfile_cleanup(search_ctx.cast()) };
-
-    if dir_name.is_null() {
-        return -1;
+    // A copy: the search can run user code, which may rename the buffer.
+    let rel_fname = Buf::current().name.full().map(XString::from_cstr);
+    let rel_fname = rel_fname.as_ref().map(XString::as_cstr);
+    match find_directory_in_path(new_dir.to_bytes(), FileNameOpts::MESS, rel_fname) {
+        Some(dir_name) => os_chdir(dir_name.as_cstr()),
+        None => -1,
     }
-    // SAFETY: an allocated NUL-terminated name, freed once read.
-    let r = unsafe { os_chdir(cstr::at(dir_name)) };
-    unsafe { xfree(dir_name.cast()) };
-    r
 }

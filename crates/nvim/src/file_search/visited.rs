@@ -5,11 +5,10 @@
 //! and self-referencing directories cannot make it loop.
 //! [`VisitedList::add`] is the test: it compares by file id rather than by
 //! name, and treats two entries as the same only when their wildcard tails
-//! agree as well ([`ff_wc_equal`], which ignores the counter byte behind a
+//! agree as well ([`wildcards_equal`], which ignores the counter byte behind a
 //! `**`).
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -19,10 +18,11 @@
 )]
 
 use super::*;
+use crate::mbyte::{c_cluster_len, char_at};
 use crate::memory::XString;
+use crate::os::fs::file_id;
 use crate::path::ExpandFlags;
-use core::ffi::{c_char, c_int};
-use core::slice;
+use core::ffi::c_int;
 
 /// The names one directory's wildcard expansion produced.
 pub(crate) struct FileList {
@@ -129,30 +129,27 @@ impl VisitedList {
     /// A file it cannot identify counts as already seen, which is how
     /// upstream keeps an unreadable name out of the results.
     pub(crate) fn add(&mut self, fname: &[u8], wc_path: &[u8]) -> bool {
-        // Owned copies first: the comparisons below walk to a
-        // terminator, which a borrowed slice does not have.
+        // An owned copy first: the file system wants a terminated name.
         let fname = Name::from_bytes(fname);
-        let wc_path = Name::from_bytes(wc_path);
         // For a URL we only compare the name, otherwise the
         // device/inode.
         let url = path_with_url(fname.as_cstr()) != 0;
-        let file_id = if url {
+        let id = if url {
             None
         } else {
-            let mut file_id = FileID::default();
-            if !unsafe { os_fileid(fname.as_ptr(), &raw mut file_id) } {
+            let Some(id) = file_id(fname.as_cstr()) else {
                 return false;
-            }
-            Some(file_id)
+            };
+            Some(id)
         };
 
         let known = self.entries.iter().any(|seen| {
-            let same = match (&seen.file_id, &file_id) {
-                (Some(seen_id), Some(id)) => unsafe { os_fileid_equal(seen_id, id) },
+            let same = match (&seen.file_id, &id) {
+                (Some(seen_id), Some(id)) => seen_id == id,
                 (None, None) => path_fnamecmp(seen.fname.bytes(), fname.bytes()) == 0,
                 _ => false,
             };
-            same && unsafe { ff_wc_equal(seen.wc_path.as_ptr(), wc_path.as_ptr()) }
+            same && wildcards_equal(seen.wc_path.bytes(), wc_path)
         });
         if known {
             return false;
@@ -160,8 +157,8 @@ impl VisitedList {
 
         // New file/dir. Add it to the list of visited files/dirs.
         self.entries.push(Visited {
-            wc_path,
-            file_id,
+            wc_path: Name::from_bytes(wc_path),
+            file_id: id,
             fname: if url { fname } else { Name::default() },
         });
         true
@@ -183,19 +180,14 @@ pub(crate) struct VisitedLists {
 impl VisitedLists {
     /// Use the list for `filename`, creating it if this is the first search
     /// for that name.
-    ///
-    /// # Safety
-    /// `filename` must hold `filenamelen` readable bytes.
-    pub(crate) unsafe fn select(&mut self, filename: *const c_char, filenamelen: usize) {
-        let filename =
-            Name::from_bytes(unsafe { slice::from_raw_parts(filename.cast::<u8>(), filenamelen) });
+    pub(crate) fn select(&mut self, filename: &[u8]) {
         let found = self
             .lists
             .iter()
-            .position(|list| path_fnamecmp(filename.bytes(), list.filename.bytes()) == 0);
+            .position(|list| path_fnamecmp(filename, list.filename.bytes()) == 0);
         self.at = found.unwrap_or_else(|| {
             self.lists.push(VisitedList {
-                filename,
+                filename: Name::from_bytes(filename),
                 entries: Vec::new(),
             });
             self.lists.len() - 1
@@ -228,32 +220,27 @@ impl VisitedLists {
 /// `**\24`. The two characters remembered are `s1`'s, which is how one
 /// mismatch is let through once `s1` has shown `**`.
 ///
-/// # Safety
-/// Both must be NUL-terminated strings.
-pub(crate) unsafe fn ff_wc_equal(s1: *const c_char, s2: *const c_char) -> bool {
-    if s1 == s2 {
-        return true;
-    }
+/// Upstream's `ff_wc_equal` walks two C strings; a NUL inside either slice
+/// ends it the same way.
+pub(crate) fn wildcards_equal(s1: &[u8], s2: &[u8]) -> bool {
     let ignorecase = p_fic();
     let fold = |c: c_int| if ignorecase { mb_tolower(c) } else { c };
 
     let (mut i, mut j) = (0usize, 0usize);
     let mut prev1 = 0;
     let mut prev2 = 0;
-    while unsafe { *s1.add(i) } != 0 && unsafe { *s2.add(j) } != 0 {
-        let c1 = unsafe { utf_ptr2char(s1.add(i)) };
-        let c2 = unsafe { utf_ptr2char(s2.add(j)) };
-        if fold(c1) != fold(c2) && (prev1 != '*' as c_int || prev2 != '*' as c_int) {
+    while cstr::byte_at(s1, i) != 0 && cstr::byte_at(s2, j) != 0 {
+        let c1 = char_at(&s1[i..]);
+        let c2 = char_at(&s2[j..]);
+        if fold(c1) != fold(c2) && (prev1 != c_int::from(b'*') || prev2 != c_int::from(b'*')) {
             return false;
         }
         prev2 = prev1;
         prev1 = c1;
-        let len1 = unsafe { utfc_ptr2len(s1.add(i)) };
-        i += usize::try_from(len1).expect("a character length is never negative");
-        let len2 = unsafe { utfc_ptr2len(s2.add(j)) };
-        j += usize::try_from(len2).expect("a character length is never negative");
+        i += c_cluster_len(&s1[i..]);
+        j += c_cluster_len(&s2[j..]);
     }
-    unsafe { *s1.add(i) == *s2.add(j) }
+    cstr::byte_at(s1, i) == cstr::byte_at(s2, j)
 }
 
 /// Is `path`, for its first `path_len` bytes, at or below one of the stop

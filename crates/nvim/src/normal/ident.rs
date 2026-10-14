@@ -506,12 +506,10 @@ pub(crate) fn nv_gotofile(cmd_arg: &mut CmdArg) {
     }
     // `gF` also takes a line number off the end of the name.
     let mut lnum: LineNr = -1;
-    // SAFETY: `lnum` is this frame's own out-parameter.
-    let name = unsafe { grab_file_name(cmd_arg.count1, &raw mut lnum) };
-    if name.is_null() {
+    let Some(name) = grab_file_name(cmd_arg.count1, Some(&mut lnum)) else {
         clear_op(cmd_arg.op());
         return;
-    }
+    };
     // Leaving the only window on a changed buffer that cannot be hidden
     // means writing it first.
     let must_write =
@@ -524,22 +522,10 @@ pub(crate) fn nv_gotofile(cmd_arg: &mut CmdArg) {
     let hide = EcmdFlags::HIDE.when(hidden);
     let last = newlnum::LAST as LineNr;
     let win = Some(Win::current().id());
-    // SAFETY: `name` is this call's own NUL-terminated file name, freed
-    // after the edit.
-    let opened = do_ecmd(
-        0,
-        Some(unsafe { cstr::at(name) }),
-        None,
-        None,
-        last,
-        hide,
-        win,
-    );
+    let opened = do_ecmd(0, Some(name.as_cstr()), None, None, last, hide, win);
     if opened.is_ok() && cmd_arg.nchar == 'F' as c_int && lnum >= 0 {
         Win::current().w_cursor.lnum = lnum;
         check_cursor_lnum(Win::current());
         beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
     }
-    // SAFETY: `name` came from `grab_file_name`.
-    unsafe { xfree(name as *mut c_void) };
 }

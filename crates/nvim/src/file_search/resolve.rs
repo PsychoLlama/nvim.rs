@@ -1,14 +1,13 @@
 //! Looking a name up along `'path'` or `'cdpath'`.
 //!
-//! [`find_file_in_path_option`] is the loop over the option's entries: it
-//! expands environment variables in the name, decides whether the name is
-//! absolute enough to skip the option entirely, and otherwise drives
-//! [`vim_findfile`](super::vim_findfile) once per entry, remembering where
-//! it got to so that a repeat call answers the next match.
-//! `'suffixesadd'` is tried at every candidate.
+//! [`PathWalk`] is the loop over the option's entries: it expands
+//! environment variables in the name, decides whether the name is absolute
+//! enough to skip the option entirely, and otherwise drives a
+//! [`FindContext`] once per entry, remembering where it got to so that a
+//! repeat call answers the next match. `'suffixesadd'` is tried at every
+//! candidate.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -18,19 +17,18 @@
 )]
 
 use super::*;
-use crate::cstr;
-use crate::memory::{ThinCString, XString};
-use crate::message_fmt::{c_str, emsg_text};
-use crate::narrow::len_as_int;
+use crate::memory::XString;
+use crate::message_fmt::{emsg_text, msg_cstr};
 use crate::option::vars::P_CDPATH;
+use crate::option::{option_parts, split_option_part};
 use crate::optionstr::OptString;
+use crate::os::env::expand_env_esc_of;
+use crate::os::fs::path_exists;
 use crate::path::buffer_path;
 use crate::tr_c;
 use crate::types::MAXPATHL;
-use crate::vim_snprintf;
 use crate::winlayer::Buf;
-use core::ffi::{c_char, c_int};
-use core::{ptr, slice};
+use core::ffi::c_int;
 
 /// The `nth` match (from 1) for `name` along `'path'`, relative to the
 /// current buffer's file; reported when there is none and `options` asks
@@ -39,592 +37,314 @@ pub(crate) fn find_nth_file_in_path(
     name: &[u8],
     options: FileNameOpts,
     nth: LineNr,
-) -> Option<ThinCString> {
-    // A copy with room for the terminator the search writes after the name,
-    // and puts back.
-    let mut copy = name.to_vec();
-    copy.push(0);
-    let (mut file_to_find, mut search_ctx) = (ptr::null_mut(), ptr::null_mut());
-    let mut find = |name: *mut c_char, len: usize, first: bool| {
-        let from = Buf::current().name.full_ptr();
-        // SAFETY: `name` is null or `len` writable bytes and a terminator,
-        // the relative name is the current buffer's, and the two slots are
-        // this frame's, null or what the last call left in them.
-        let found = unsafe {
-            find_file_in_path(
-                name,
-                len,
-                options,
-                first,
-                from,
-                &raw mut file_to_find,
-                &raw mut search_ctx,
-            )
-        };
-        // SAFETY: an allocated NUL-terminated name, or null, handed over.
-        unsafe { ThinCString::from_raw(found) }
-    };
-    let mut found = find(copy.as_mut_ptr().cast(), name.len(), true);
+) -> Option<XString> {
+    let mut walk = PathWalk::new();
+    // A copy: the search can run user code, which may rename the buffer.
+    let rel_fname = Buf::current().name.full().map(XString::from_cstr);
+    let rel_fname = rel_fname.as_ref().map(XString::as_cstr);
+    let mut found = find_file_in_path(&mut walk, name, options, rel_fname);
     let mut n = nth;
     while found.is_some() && {
         n -= 1;
         n > 0
     } {
-        found = find(ptr::null_mut(), 0, false);
-    }
-    // SAFETY: both are null or what the search allocated, freed once.
-    unsafe {
-        xfree(file_to_find.cast());
-        vim_findfile_cleanup(search_ctx.cast());
+        found = walk.next(options);
     }
     found
 }
 
-/// Find the file `ptr[len]` in `'path'`. Also finds directory names.
+/// Start `walk` on the file `name` in `'path'`, answering the first match.
+/// Also finds directory names. [`PathWalk::next`] answers the others.
 ///
-/// On the first call set `first` to true to initialize the search, false for
-/// repeating calls. Repeating calls return other files called `ptr[len]`
-/// from the path; only on the first call are `name` and `len` used.
+/// If nothing is found, `FileNameOpts::MESS` issues
+/// `Can't find file "<file>" in path`.
 ///
-/// If nothing is found on the first call, `FileNameOpts::MESS` issues
-/// `Can't find file "<file>" in path`; on repeating calls,
-/// `No more file "<file>" found in path`.
-///
-/// @param ptr  file name
-/// @param len  length of file name
-/// @param first  use count'th matching file name
-/// @param rel_fname  file name searching relative to
-/// @param[in,out] file_to_find  modified copy of file name
-/// @param[in,out] search_ctx  state of the search
-///
-/// @return  an allocated string for the file name. NULL for error.
-///
-/// # Safety
-///
-/// `name` must point at `len` bytes the caller owns, readable and writable,
-/// unaliased for the call. `rel_fname` must point at a NUL-terminated string,
-/// unaliased for the call. `file_to_find` must point at a writable `*mut
-/// c_char` slot the caller owns for the call. `search_ctx` must point at a
-/// writable `*mut c_char` slot the caller owns for the call.
-pub(crate) unsafe fn find_file_in_path(
-    name: *mut c_char,
-    len: size_t,
+/// `rel_fname` is the file the search is relative to.
+pub(crate) fn find_file_in_path(
+    walk: &mut PathWalk,
+    name: &[u8],
     options: FileNameOpts,
-    first: bool,
-    rel_fname: *mut c_char,
-    file_to_find: *mut *mut c_char,
-    search_ctx: *mut *mut c_char,
-) -> *mut c_char {
-    unsafe {
-        find_file_in_path_option(
-            name,
-            len,
-            options,
-            first,
-            buffer_path(),
-            FINDFILE_BOTH as c_int,
-            rel_fname,
-            Buf::current().b_p_sua.value_ptr(),
-            file_to_find,
-            search_ctx,
-        )
-    }
+    rel_fname: Option<&CStr>,
+) -> Option<XString> {
+    let suffixes = Buf::current().b_p_sua.get();
+    walk.start(
+        name,
+        options,
+        buffer_path(),
+        FINDFILE_BOTH,
+        rel_fname,
+        suffixes.as_cstr(),
+    )
 }
 
-/// Find the directory name `ptr[len]` in `'cdpath'`.
+/// Find the directory name `name` in `'cdpath'`.
 ///
 /// options:
 /// - `FileNameOpts::MESS`   give error message when not found
 /// - `FileNameOpts::UNESC`  unescape backslashes
 ///
-/// @param ptr  file name
-/// @param len  length of file name
-/// @param rel_fname  file name searching relative to
-/// @param[in,out] file_to_find  modified copy of file name
-/// @param[in,out] search_ctx  state of the search
-///
-/// @return  an allocated string for the file name. NULL for error.
-///
-/// # Safety
-///
-/// `name` must point at `len` bytes the caller owns, readable and writable,
-/// unaliased for the call. `rel_fname` must point at a NUL-terminated string,
-/// unaliased for the call. `file_to_find` must point at a writable `*mut
-/// c_char` slot the caller owns for the call. `search_ctx` must point at a
-/// writable `*mut c_char` slot the caller owns for the call.
-pub(crate) unsafe fn find_directory_in_path(
-    name: *mut c_char,
-    len: size_t,
+/// `rel_fname` is the file the search is relative to.
+pub(crate) fn find_directory_in_path(
+    name: &[u8],
     options: FileNameOpts,
-    rel_fname: *mut c_char,
-    file_to_find: *mut *mut c_char,
-    search_ctx: *mut *mut c_char,
-) -> *mut c_char {
-    unsafe {
-        find_file_in_path_option(
-            name,
-            len,
-            options,
-            true,
-            P_CDPATH.value_ptr(),
-            FINDFILE_DIR as c_int,
-            rel_fname,
-            c"".as_ptr().cast_mut(),
-            file_to_find,
-            search_ctx,
-        )
-    }
+    rel_fname: Option<&CStr>,
+) -> Option<XString> {
+    PathWalk::new().start(name, options, P_CDPATH.get(), FINDFILE_DIR, rel_fname, c"")
 }
 
-/// Replace `*file_to_find` with `ptr[len]`, environment variables expanded.
+/// `name` with environment variables expanded.
 ///
-/// With `FileNameOpts::UNESC` every `"\ "` in the result becomes a plain space, so
-/// that a name escaped for the command line reaches the file system whole.
-///
-/// # Safety
-///
-/// `name` must point at `len` bytes the caller owns, readable and writable,
-/// unaliased for the call. `file_to_find` must point at a writable `*mut
-/// c_char` slot the caller owns for the call.
-unsafe fn prepare_name(
-    name: *mut c_char,
-    len: size_t,
-    options: FileNameOpts,
-    file_to_find: *mut *mut c_char,
-) {
-    let mut expanded = [0 as c_char; MAXPATHL as usize];
-    // expand_env_esc wants a NUL-terminated name, and the caller's is a
-    // slice of a longer line.
-    let save_char = unsafe { *name.add(len) };
-    unsafe { *name.add(len) = 0 };
-    let name_buff = expanded.as_mut_ptr();
-    let written = unsafe {
-        expand_env_esc(
-            name,
-            name_buff,
-            MAXPATHL as c_int,
-            false,
-            true,
-            ptr::null_mut(),
-        )
-    };
-    unsafe { *name.add(len) = save_char };
-
-    unsafe { xfree((*file_to_find).cast()) };
-    let name_buff = unsafe { slice::from_raw_parts(name_buff.cast::<u8>(), written) };
-    let mut name = name_buff.to_vec();
-    if options.has(FileNameOpts::UNESC) {
-        // Change all "\ " to " ".
-        let mut out = 0;
-        let mut at = 0;
-        while at < name.len() {
-            if name[at] == b'\\' && name.get(at + 1) == Some(&b' ') {
-                at += 1;
-            }
-            name[out] = name[at];
-            out += 1;
+/// With `FileNameOpts::UNESC` every `"\ "` in the result becomes a plain
+/// space, so that a name escaped for the command line reaches the file
+/// system whole.
+fn prepare_name(name: &[u8], options: FileNameOpts) -> XString {
+    let expanded = cstr::with_terminated(name, |name| expand_env_esc_of(name, false, true, None));
+    if !options.has(FileNameOpts::UNESC) {
+        return expanded;
+    }
+    // Change all "\ " to " ".
+    let mut name = expanded.to_vec();
+    let mut out = 0;
+    let mut at = 0;
+    while at < name.len() {
+        if name[at] == b'\\' && name.get(at + 1) == Some(&b' ') {
             at += 1;
         }
-        name.truncate(out);
+        name[out] = name[at];
+        out += 1;
+        at += 1;
     }
-    unsafe { *file_to_find = xmemdupz(name.as_ptr().cast(), name.len()).cast() };
+    name.truncate(out);
+    XString::from_vec(name)
 }
 
 /// Is `name` `"."`, `".."`, or something below one of them? Such a name is
 /// meant relative to the current directory and never looked for in `'path'`.
-///
-/// # Safety
-///
-/// `name` must point at a NUL-terminated string.
-unsafe fn rel_to_curdir(name: *const c_char) -> bool {
-    let at = |i: usize| unsafe { *name.add(i) }.cast_unsigned();
+fn rel_to_curdir(name: &[u8]) -> bool {
+    let at = |i: usize| cstr::byte_at(name, i);
     let ends_component = |i: usize| at(i) == 0 || vim_ispathsep(c_int::from(at(i)));
     at(0) == b'.' && (ends_component(1) || (at(1) == b'.' && ends_component(2)))
 }
 
-/// Try `name`, then `name` with each part of `'suffixesadd'` appended, and
+/// Does `name` need no `'path'` at all? An absolute name means itself, and
+/// "..", "../path", "." and "./path" mean the current directory.
+fn needs_no_path(name: &XString) -> bool {
+    vim_is_abs_name(name.as_cstr()) || rel_to_curdir(name)
+}
+
+/// Try `stem`, then `stem` with each part of `'suffixesadd'` appended, and
 /// answer the first that exists and is of the wanted kind.
-///
-/// The candidate is built in `name_buff`, which already holds the name for
-/// `namelen` bytes.
-///
-/// # Safety
-///
-/// `suffixes` must point at a NUL-terminated string, unaliased for the call.
-unsafe fn try_suffixes(
-    name_buff: &mut [c_char; MAXPATHL as usize],
-    namelen: size_t,
-    find_what: c_int,
-    suffixes: *mut c_char,
-) -> *mut c_char {
-    let name_buff = name_buff.as_mut_ptr();
-    let mut len = namelen;
-    let mut suffix = suffixes;
+fn try_suffixes(stem: &[u8], find_what: c_int, suffixes: &[u8]) -> Option<XString> {
+    let mut candidate = Name::from_bytes(stem);
+    let mut suffixes = option_parts(suffixes);
     loop {
-        if unsafe { os_path_exists(name_buff) }
-            && (find_what == FINDFILE_BOTH as c_int
-                || (find_what == FINDFILE_DIR as c_int) == unsafe { os_isdir(name_buff) })
+        if path_exists(candidate.as_cstr())
+            && (find_what == FINDFILE_BOTH
+                || (find_what == FINDFILE_DIR) == dir_exists(candidate.as_cstr()))
         {
-            return unsafe { xmemdupz(name_buff.cast(), len) }.cast();
+            return Some(XString::from_bytes(candidate.bytes()));
         }
-        if unsafe { *suffix } == 0 {
-            return ptr::null_mut();
-        }
-        debug_assert!(namelen <= MAXPATHL as usize);
-        // `copy_option_part` answers what it wrote, which is at most
-        // MAXPATHL - namelen - 1.
-        len = namelen
-            + unsafe {
-                copy_option_part(
-                    &raw mut suffix,
-                    name_buff.add(namelen),
-                    MAXPATHL as usize - namelen,
-                    c",".as_ptr().cast_mut(),
-                )
-            };
+        let suffix = suffixes.next()?;
+        // Cut where upstream's `copy_option_part` into the rest of a
+        // `MAXPATHL` buffer cuts it.
+        let room = (MAXPATHL as usize - 1).saturating_sub(stem.len());
+        candidate.truncate(stem.len());
+        candidate.extend(&suffix[..suffix.len().min(room)]);
     }
 }
 
 /// Look for a name that needs no `'path'`: absolute, or relative to the
 /// current directory.
 ///
-/// `FileNameOpts::REL` asks for the directory of `rel_fname` to be tried first; the
-/// current directory is the second and last try.
-///
-/// # Safety
-///
-/// `file_to_find` must point at a NUL-terminated string. `rel_fname` must
-/// point at a NUL-terminated string. `suffixes` must point at a NUL-
-/// terminated string, unaliased for the call.
-unsafe fn find_without_path(
-    file_to_find: *const c_char,
-    file_to_findlen: size_t,
+/// `FileNameOpts::REL` asks for the directory of `rel_fname` to be tried
+/// first; the current directory is the second and last try.
+fn find_without_path(
+    name: &XString,
     options: FileNameOpts,
     find_what: c_int,
-    rel_fname: *const c_char,
-    suffixes: *mut c_char,
-) -> *mut c_char {
-    // The candidate being tried. Upstream shares `NameBuff` between this
-    // and `try_suffixes`, which appends to it.
-    let mut candidate = [0 as c_char; MAXPATHL as usize];
-    if unsafe { path_with_url(cstr::at(file_to_find)) } != 0 {
-        return unsafe { xmemdupz(file_to_find.cast(), file_to_findlen) }.cast();
+    rel_fname: Option<&CStr>,
+    suffixes: &[u8],
+) -> Option<XString> {
+    if path_with_url(name.as_cstr()) != 0 {
+        return Some(name.clone());
     }
-
-    let name_buff = candidate.as_mut_ptr();
-    let rel_fnamelen = if rel_fname.is_null() {
-        0
-    } else {
-        unsafe { cstr::bytes_at(rel_fname) }.len()
-    };
-    let relative = unsafe { rel_to_curdir(file_to_find) }
-        && options.has(FileNameOpts::REL)
-        && !rel_fname.is_null()
-        && rel_fnamelen + file_to_findlen < MAXPATHL as usize;
 
     // Run 1 is relative to "rel_fname"'s directory, run 2 is relative to
     // the current directory. Only run 2 happens when the first does not
     // apply.
-    for run in 1..=2 {
-        let len = if run == 1 && relative {
-            let written = unsafe {
-                vim_snprintf!(
-                    name_buff,
-                    MAXPATHL as usize,
-                    c"%.*s%s".as_ptr(),
-                    len_as_int(tail_index(cstr::bytes_at(rel_fname))),
-                    rel_fname,
-                    file_to_find,
-                )
-            };
-            let len =
-                usize::try_from(written).expect("vim_snprintf never answers a negative length");
-            debug_assert!(len < MAXPATHL as usize);
-            len
-        } else if run == 1 {
-            continue;
-        } else {
-            unsafe { strcpy(name_buff, file_to_find) };
-            file_to_findlen
-        };
-
-        let found = unsafe { try_suffixes(&mut candidate, len, find_what, suffixes) };
-        if !found.is_null() {
-            return found;
+    if let Some(rel_fname) = rel_fname
+        && rel_to_curdir(name)
+        && options.has(FileNameOpts::REL)
+        && rel_fname.count_bytes() + name.len() < MAXPATHL as usize
+    {
+        let rel_fname = rel_fname.to_bytes();
+        let stem = [&rel_fname[..tail_index(rel_fname)], &name[..]].concat();
+        if let Some(found) = try_suffixes(&stem, find_what, suffixes) {
+            return Some(found);
         }
     }
-    ptr::null_mut()
+    try_suffixes(name, find_what, suffixes)
 }
 
-/// Drive `vim_findfile` over the entries of `'path'` or `'cdpath'`, one
-/// entry at a time, answering the next match each call.
-///
-/// The position in the option and the half-finished search context are the
-/// state a repeating call resumes from — upstream keeps them in statics, so
-/// there is one such walk in the whole editor.
-///
-/// # Safety
-///
-/// `path_option` must point at a NUL-terminated string, unaliased for the
-/// call. `rel_fname` must point at a NUL-terminated string, unaliased for the
-/// call. `file_to_find` must point at a NUL-terminated string. `search_ctx`
-/// must point at a writable `*mut FindContext` slot the caller owns for the
-/// call.
-unsafe fn find_along_option(
-    first: bool,
-    path_option: *mut c_char,
-    find_what: c_int,
-    rel_fname: *mut c_char,
-    file_to_find: *const c_char,
-    file_to_findlen: size_t,
-    search_ctx: *mut *mut FindContext,
-) -> *mut c_char {
-    // A copy of the option, and how far into it the last call had got: the
-    // walk outlives the call, and the option's own value may not.
-    static DIR: GlobalCell<Option<(XString, usize)>> = GlobalCell::new(None);
-    // Whether `*search_ctx` is a context a `vim_findfile` may resume.
-    static INITIALIZED: GlobalCell<bool> = GlobalCell::new(false);
-
-    if first {
-        // vim_findfile_free_visited can handle a possible NULL pointer
-        unsafe { vim_findfile_free_visited((*search_ctx).cast()) };
-        // SAFETY: the caller's NUL-terminated option value.
-        let value = (!path_option.is_null())
-            .then(|| XString::from_cstr(unsafe { CStr::from_ptr(path_option) }));
-        DIR.set(value.map(|value| (value, 0)));
-        INITIALIZED.set(false);
-    }
-
-    loop {
-        if INITIALIZED.get() {
-            let file_name = unsafe { vim_findfile((*search_ctx).cast()) };
-            if !file_name.is_null() {
-                return file_name;
-            }
-            INITIALIZED.set(false);
-            continue;
-        }
-
-        let rest = DIR.with(|dir| {
-            let (value, at) = dir.as_ref()?;
-            (*at < value.len()).then(|| value[*at..].as_ptr())
-        });
-        let Some(rest) = rest else {
-            // We searched all paths of the option, now we can free the
-            // search context.
-            unsafe { vim_findfile_cleanup((*search_ctx).cast()) };
-            unsafe { *search_ctx = ptr::null_mut() };
-            return ptr::null_mut();
-        };
-
-        let mut buf = vec![0 as c_char; MAXPATHL as usize];
-        let mut dir = rest.cast::<c_char>().cast_mut();
-        unsafe {
-            copy_option_part(
-                &raw mut dir,
-                buf.as_mut_ptr(),
-                MAXPATHL as usize,
-                c" ,".as_ptr().cast_mut(),
-            )
-        };
-        // `copy_option_part` only reads the option, and only advances `dir`.
-        let advanced = dir.addr() - rest.addr();
-        DIR.with_mut(|dir| {
-            if let Some((_, at)) = dir {
-                *at += advanced;
-            }
-        });
-        // Splits the entry at an unescaped ';', leaving the entry in
-        // `buf` and answering the stop directories after it.
-        let stopdirs = unsafe { vim_findfile_stopdir(buf.as_mut_ptr()) };
-        unsafe {
-            *search_ctx = vim_findfile_init(
-                buf.as_mut_ptr(),
-                file_to_find.cast_mut(),
-                file_to_findlen,
-                stopdirs,
-                100,
-                false,
-                find_what,
-                (*search_ctx).cast(),
-                false,
-                rel_fname,
-            )
-            .cast()
-        };
-        if !unsafe { *search_ctx }.is_null() {
-            INITIALIZED.set(true);
-        }
-    }
-}
-
-/// One name's walk along a search option, resumed once per match: what
-/// `findfile()` and `finddir()` drive. Dropping it ends the walk.
-///
-/// Every string [`find_file_in_path_option`] is handed is a copy the walk
-/// makes for the call, so that nothing it writes in place -- the NUL it puts
-/// after the name -- can land in the caller's storage.
-pub(crate) struct PathWalk {
-    file_to_find: *mut c_char,
-    search_ctx: *mut c_char,
-    started: bool,
-}
-
-impl PathWalk {
-    pub(crate) const fn new() -> Self {
-        Self {
-            file_to_find: ptr::null_mut(),
-            search_ctx: ptr::null_mut(),
-            started: false,
-        }
-    }
-
-    /// The next match of `name` along `path_option`, or `None` when there
-    /// are no more. Only the first call reads `name`.
-    pub(crate) fn next(
-        &mut self,
-        name: &[u8],
-        options: FileNameOpts,
-        path_option: &CStr,
-        find_what: c_int,
-        rel_fname: Option<&CStr>,
-        suffixes: &CStr,
-    ) -> Option<XString> {
-        let first = !self.started;
-        self.started = true;
-        let mut name = first.then(|| [name, &[0][..]].concat());
-        let len = name.as_ref().map_or(0, |name| name.len() - 1);
-        let mut path = path_option.to_bytes_with_nul().to_vec();
-        let mut rel = rel_fname.map(|rel| rel.to_bytes_with_nul().to_vec());
-        let mut suffixes = suffixes.to_bytes_with_nul().to_vec();
-        let raw =
-            |text: Option<&mut Vec<u8>>| text.map_or(ptr::null_mut(), |t| t.as_mut_ptr().cast());
-        // SAFETY: every string is a NUL-terminated copy this frame owns and
-        // the callee may write; the name has `len` bytes before its NUL; and
-        // the two slots are the walk's own, null or what the previous call
-        // left in them. The answer is null or an allocated string, adopted.
-        unsafe {
-            let found = find_file_in_path_option(
-                raw(name.as_mut()),
-                len,
-                options,
-                first,
-                raw(Some(&mut path)),
-                find_what,
-                raw(rel.as_mut()),
-                raw(Some(&mut suffixes)),
-                &raw mut self.file_to_find,
-                &raw mut self.search_ctx,
-            );
-            (!found.is_null()).then(|| XString::from_raw(found))
-        }
-    }
-}
-
-impl Drop for PathWalk {
-    fn drop(&mut self) {
-        // SAFETY: the name copy and the context the callee left in the two
-        // slots, each null or the walk's own, released once.
-        unsafe {
-            xfree(self.file_to_find.cast());
-            vim_findfile_cleanup(self.search_ctx.cast());
-        }
-    }
-}
-
-/// Say that `file_to_find` is not there, in the wording the caller earned:
-/// a first call has not found it at all, a repeat call has run out.
-///
-/// # Safety
-///
-/// `file_to_find` must point at a NUL-terminated string.
-unsafe fn report_missing(first: bool, find_what: c_int, file_to_find: *const c_char) {
-    let message = match (first, find_what == FINDFILE_DIR as c_int) {
+/// Say that `name` is not there, in the wording the caller earned: a first
+/// call has not found it at all, a repeat call has run out.
+fn report_missing(first: bool, find_what: c_int, name: &CStr) {
+    let message = match (first, find_what == FINDFILE_DIR) {
         (true, true) => e_cant_find_directory_str_in_cdpath,
         (true, false) => e_cant_find_file_str_in_path,
         (false, true) => e_no_more_directory_str_found_in_cdpath,
         (false, false) => e_no_more_file_str_found_in_path,
     };
-    // SAFETY: the caller's NUL-terminated name.
-    let file_to_find = unsafe { c_str(file_to_find) };
-    emsg_text(tr_c!(message, file_to_find));
+    let name = msg_cstr(name);
+    emsg_text(tr_c!(message, name));
 }
 
-/// @param ptr  file name
-/// @param len  length of file name
-/// @param first  use count'th matching file name
-/// @param path_option  `'path'` or `'cdpath'`
-/// @param find_what  `FINDFILE_FILE`, `_DIR` or `_BOTH`
-/// @param rel_fname  file name we are looking relative to
-/// @param suffixes  list of suffixes, `'suffixesadd'` option
-/// @param[in,out] file_to_find  modified copy of file name
-/// @param[in,out] search_ctx_arg  state of the search
-///
-/// # Safety
-///
-/// `name` must point at `len` bytes the caller owns, readable and writable,
-/// unaliased for the call. `path_option` must point at a NUL-terminated
-/// string, unaliased for the call. `rel_fname` must point at a NUL-terminated
-/// string, unaliased for the call. `suffixes` must point at a NUL-terminated
-/// string, unaliased for the call. `file_to_find` must point at a writable
-/// `*mut c_char` slot the caller owns for the call. `search_ctx_arg` must
-/// point at a writable `*mut c_char` slot the caller owns for the call.
-pub(crate) unsafe fn find_file_in_path_option(
-    name: *mut c_char,
-    len: size_t,
-    options: FileNameOpts,
-    first: bool,
-    path_option: *mut c_char,
-    find_what: c_int,
-    rel_fname: *mut c_char,
-    suffixes: *mut c_char,
-    file_to_find: *mut *mut c_char,
-    search_ctx_arg: *mut *mut c_char,
-) -> *mut c_char {
-    let search_ctx = search_ctx_arg.cast::<*mut FindContext>();
-    // Do not attempt to search "relative" to a URL. #6009
-    let rel_fname = if !rel_fname.is_null() && unsafe { path_with_url(cstr::at(rel_fname)) } != 0 {
-        ptr::null_mut()
-    } else {
-        rel_fname
-    };
+/// The walk over the entries of `'path'` or `'cdpath'`: the search running
+/// over one entry, and where in the option the next entry starts.
+#[derive(Default)]
+struct OptionWalk {
+    /// A copy of the option, and how far into it the walk has got: the walk
+    /// outlives the call that started it, and the option's own value may
+    /// not.
+    entries: Option<(XString, usize)>,
+    /// The search over the current entry. It is handed on from entry to
+    /// entry, which keeps one entry from answering a file an earlier one
+    /// already did.
+    search: Option<FindContext>,
+    /// Whether `search` is set up for an entry and may be resumed.
+    searching: bool,
+}
 
-    if first {
-        if len == 0 {
-            return ptr::null_mut();
+impl OptionWalk {
+    /// Start over on `option`, forgetting everything visited.
+    fn restart(&mut self, option: XString) {
+        if let Some(search) = &mut self.search {
+            search.forget_visited();
         }
-        unsafe { prepare_name(name, len, options, file_to_find) };
+        self.entries = Some((option, 0));
+        self.searching = false;
     }
-    let name = unsafe { *file_to_find };
-    let namelen = unsafe { cstr::bytes_at(name) }.len();
 
-    // "..", "../path", "." and "./path" mean the current directory just
-    // as an absolute name means itself: neither uses `path_option`.
-    let file_name = if unsafe { vim_is_abs_name(cstr::at(name)) } || unsafe { rel_to_curdir(name) }
-    {
-        // If this is not a first call, return NULL: we already returned
-        // a filename on the first call.
-        if first {
-            unsafe { find_without_path(name, namelen, options, find_what, rel_fname, suffixes) }
-        } else {
-            ptr::null_mut()
-        }
-    } else {
-        unsafe {
-            find_along_option(
-                first,
-                path_option,
-                find_what,
-                rel_fname,
+    /// The next match for `name`, one entry of the option at a time.
+    fn next(&mut self, name: &[u8], find_what: c_int, rel_fname: Option<&CStr>) -> Option<XString> {
+        loop {
+            if self.searching {
+                if let Some(found) = self.search.as_mut().and_then(FindContext::next_match) {
+                    return Some(found);
+                }
+                self.searching = false;
+                continue;
+            }
+
+            let entry = self.entries.as_mut().and_then(|(value, at)| {
+                let rest = value.get(*at..).filter(|rest| !rest.is_empty())?;
+                let (entry, after) = split_option_part(rest, MAXPATHL as usize, b" ,");
+                *at = value.len() - after.len();
+                Some(entry)
+            });
+            let Some(entry) = entry else {
+                // We searched all entries of the option, now we can free
+                // the search context.
+                self.search = None;
+                return None;
+            };
+            // Split the entry at an unescaped ';' into the directory and
+            // the stop directories after it.
+            let (dir, stopdirs) = split_stop_directories(&entry);
+            self.search = FindContext::start(
+                self.search.take(),
+                &dir,
                 name,
-                namelen,
-                search_ctx,
-            )
+                stopdirs,
+                FIND_LEVEL,
+                find_what,
+                false,
+                rel_fname,
+            );
+            self.searching = self.search.is_some();
         }
-    };
-
-    if file_name.is_null() && options.has(FileNameOpts::MESS) {
-        unsafe { report_missing(first, find_what, name) };
     }
-    file_name
+}
+
+/// One name's walk along a search option, resumed once per match: what
+/// `findfile()`, `finddir()`, `gf` and `:find` drive. Dropping it ends the
+/// walk.
+///
+/// Everything a later match is looked for with is the walk's own copy,
+/// taken when it starts, so no option value or buffer name is held across
+/// the calls in between -- which can run user code. For the same reason
+/// every string handed to it must be the caller's own, never a borrow of an
+/// option or a buffer: the search itself can reach user code.
+#[derive(Default)]
+pub(crate) struct PathWalk {
+    /// The name looked for, environment variables expanded; `None` until a
+    /// start that had a name.
+    name: Option<XString>,
+    /// `FINDFILE_FILE`, `_DIR` or `_BOTH`.
+    find_what: c_int,
+    /// The file the search is relative to; never a URL.
+    rel_fname: Option<XString>,
+    option: OptionWalk,
+}
+
+impl PathWalk {
+    pub(crate) fn new() -> Self {
+        Self::default()
+    }
+
+    /// Start looking for `name` along `path_option` (`'path'` or
+    /// `'cdpath'`), answering the first match.
+    ///
+    /// `find_what` is `FINDFILE_FILE`, `_DIR` or `_BOTH`; `rel_fname` the
+    /// file the search is relative to, and `suffixes` `'suffixesadd'`. A
+    /// walk that was already started starts over.
+    pub(crate) fn start(
+        &mut self,
+        name: &[u8],
+        options: FileNameOpts,
+        path_option: XString,
+        find_what: c_int,
+        rel_fname: Option<&CStr>,
+        suffixes: &CStr,
+    ) -> Option<XString> {
+        // Do not attempt to search "relative" to a URL. #6009
+        self.rel_fname = rel_fname
+            .filter(|rel| path_with_url(rel) == 0)
+            .map(XString::from_cstr);
+        self.find_what = find_what;
+        if name.is_empty() {
+            return None;
+        }
+        let name = self.name.insert(prepare_name(name, options));
+        let rel_fname = self.rel_fname.as_ref().map(XString::as_cstr);
+
+        let found = if needs_no_path(name) {
+            find_without_path(name, options, find_what, rel_fname, suffixes.to_bytes())
+        } else {
+            self.option.restart(path_option);
+            self.option.next(name, find_what, rel_fname)
+        };
+        if found.is_none() && options.has(FileNameOpts::MESS) {
+            report_missing(true, find_what, name.as_cstr());
+        }
+        found
+    }
+
+    /// The next match of the name the walk started on, or `None` when there
+    /// are no more -- reported when `options` asks for it.
+    pub(crate) fn next(&mut self, options: FileNameOpts) -> Option<XString> {
+        let name = self.name.as_ref()?;
+        // A name that needs no path answered its one match on the first
+        // call.
+        let found = if needs_no_path(name) {
+            None
+        } else {
+            let rel_fname = self.rel_fname.as_ref().map(XString::as_cstr);
+            self.option.next(name, self.find_what, rel_fname)
+        };
+        if found.is_none() && options.has(FileNameOpts::MESS) {
+            report_missing(false, self.find_what, name.as_cstr());
+        }
+        found
+    }
 }

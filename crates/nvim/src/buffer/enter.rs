@@ -30,6 +30,7 @@ use crate::eval::typval::DictEntry;
 use crate::hashtab::hash_add;
 
 use crate::channel::channel_job_running;
+use crate::cstr;
 use crate::diff::diff_buf_add;
 use crate::digraph::keymap_init;
 use crate::drawscreen::UPD_NOT_VALID;
@@ -171,7 +172,7 @@ fn job_running(buffer: Buf) -> bool {
 /// Change to the directory of `fname`.
 fn chdir_to_file(fname: *mut c_char) -> Result<(), Failed> {
     // SAFETY: a NUL-terminated file name.
-    unsafe { vim_chdirfile(fname, kCdCauseAuto) }
+    vim_chdirfile(unsafe { cstr::at(fname) }, kCdCauseAuto)
 }
 
 /// Recompute every buffer's short file name against the new directory.

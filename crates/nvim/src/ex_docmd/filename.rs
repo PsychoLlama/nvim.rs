@@ -32,7 +32,7 @@ use crate::ex_docmd::{
     e_no_line_number_to_use_for_sflnum, e_no_line_number_to_use_for_slnum,
     e_no_script_file_name_to_substitute_for_script, e_no_source_file_name_to_substitute_for_sfile,
 };
-use crate::file_search::{FileNameOpts, file_name_at_cursor_owned};
+use crate::file_search::{FileNameOpts, file_name_at_cursor};
 use crate::message::{e_usingsid, emsg, msg_make};
 use crate::normal::ident_under_cursor;
 use crate::option::vars::{P_GP, P_MP, p_wic};
@@ -437,7 +437,7 @@ pub(crate) fn eval_vars(
                 }
             }
         }
-        SPEC_CFILE => match file_name_at_cursor_owned(FileNameOpts::MESS | FileNameOpts::HYP, 1) {
+        SPEC_CFILE => match file_name_at_cursor(FileNameOpts::MESS | FileNameOpts::HYP, 1, None) {
             None => return Expansion::Refused(QUIET),
             Some(name) => name.as_cstr().to_owned(),
         },

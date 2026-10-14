@@ -150,24 +150,15 @@ fn findfilendir(args: &[TypVal], result: &mut TypVal, find_what: c_int) {
 
     let path = path.unwrap_or_else(|| local_or_global(&Buf::current().b_p_path, P_PATH).get());
     let sua = suffixes(find_what);
+    // A copy: the walk can run user code, which may rename the buffer.
+    let rel = Buf::current().name.full().map(XString::from_cstr);
+    // `findfile()` is quiet and takes the name as written: no message, no
+    // `'includeexpr'`, no relative-path preference.
+    let quiet = FileNameOpts::NONE;
     let mut walk = PathWalk::new();
-    let mut found;
+    let rel = rel.as_ref().map(XString::as_cstr);
+    let mut found = walk.start(fname.to_bytes(), quiet, path, find_what, rel, sua.as_cstr());
     loop {
-        let buffer = Buf::current();
-        // `findfile()` is quiet and takes the name as written: no message,
-        // no `'includeexpr'`, no relative-path preference.
-        let quiet = FileNameOpts::NONE;
-        // Only the first round reads the name; the ones after it continue
-        // the walk.
-        let rel = buffer.name.full();
-        found = walk.next(
-            fname.to_bytes(),
-            quiet,
-            path.as_cstr(),
-            find_what,
-            rel,
-            sua.as_cstr(),
-        );
         if let Some(name) = &found
             && let Some(list) = result.list_mut()
         {
@@ -180,6 +171,8 @@ fn findfilendir(args: &[TypVal], result: &mut TypVal, find_what: c_int) {
         if !more || found.is_none() {
             break;
         }
+        // The rounds after the first continue the walk.
+        found = walk.next(quiet);
     }
     drop(walk);
 

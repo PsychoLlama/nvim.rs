@@ -1,41 +1,33 @@
 //! Setting up a downward-and-upward file search.
 //!
-//! [`vim_findfile_init`] takes one entry of `'path'`, `'tags'` or
+//! [`FindContext::start`] takes one entry of `'path'`, `'tags'` or
 //! `'cdpath'` apart into the fixed leading part, the wildcard tail, and the
 //! directory the search starts from, then pushes the first directory onto
-//! the context's stack for [`vim_findfile`](super::vim_findfile) to walk.
-//! The `**` wildcard's depth limiter is parsed here — `**3` is stored as
-//! `**` followed by a byte holding 3 — and so is the `;` that asks for the
-//! upward search ([`vim_findfile_stopdir`]).
+//! the context's stack for [`FindContext::next_match`] to walk. The `**`
+//! wildcard's depth limiter is parsed here — `**3` is stored as `**`
+//! followed by a byte holding 3 — and so is the `;` that asks for the
+//! upward search ([`split_stop_directories`]).
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
+use crate::charset::skip;
 use crate::cstr;
 use crate::option::cpo_has;
 use crate::semsg;
-use crate::strings::vim_strchr;
 use crate::types::{CpoFlag, MAXPATHL};
-use ::libc::strtol;
-use core::ffi::{c_char, c_int, c_void};
-use core::{ptr, slice};
-
-/// A name held for `len` bytes at `p`.
-///
-/// # Safety
-/// `p` must hold `len` readable bytes.
-unsafe fn name_of(p: *const c_char, len: usize) -> Name {
-    // SAFETY: the caller's promise.
-    Name::from_bytes(unsafe { slice::from_raw_parts(p.cast::<u8>(), len) })
-}
+use core::ffi::c_int;
 
 /// `full_name_save`'s answer, owned.
-///
-/// # Safety
-/// `p` must be a NUL-terminated string.
-unsafe fn full_name_of(p: *const c_char, force: bool) -> Name {
-    Name::from_bytes(&full_name_save(unsafe { cstr::at(p) }, force))
+fn full_name_of(name: &CStr, force: bool) -> Name {
+    Name::from_bytes(&full_name_save(name, force))
 }
 
 /// Does `name` need a path separator adding before something else goes
@@ -52,91 +44,81 @@ fn needs_separator(name: &Name) -> bool {
 /// directory worked out later, from its fixed part.
 ///
 /// Answers where the path proper begins, which is past the `"./"`.
-///
-/// # Safety
-/// `path` and `rel_fname` must be NUL-terminated strings, `rel_fname` may be
-/// NULL.
-unsafe fn starting_dir(
+fn starting_dir(
     ctx: &mut FindContext,
-    path: *mut c_char,
-    rel_fname: *const c_char,
+    path: &CStr,
+    rel_fname: Option<&CStr>,
     tagfile: bool,
-) -> Result<*mut c_char, ()> {
-    let dot_slash = unsafe { *path } == b'.' as c_char
-        && (vim_ispathsep(unsafe { *path.add(1) } as c_int) || unsafe { *path.add(1) } == 0);
-    if dot_slash && (!tagfile || !cpo_has(CpoFlag::DOTTAG)) && !rel_fname.is_null() {
-        let len = tail_index(unsafe { cstr::bytes_at(rel_fname) });
+) -> Result<usize, ()> {
+    let bytes = path.to_bytes();
+    let second = cstr::byte_at(bytes, 1);
+    let dot_slash =
+        bytes.first() == Some(&b'.') && (vim_ispathsep(c_int::from(second)) || second == 0);
+    if dot_slash
+        && (!tagfile || !cpo_has(CpoFlag::DOTTAG))
+        && let Some(rel_fname) = rel_fname
+    {
+        let len = tail_index(rel_fname.to_bytes());
+        let dir = Name::from_bytes(&rel_fname.to_bytes()[..len]);
         ctx.start_dir = Some(
-            if !unsafe { vim_is_abs_name(cstr::at(rel_fname)) } && len + 1 < MAXPATHL as usize {
+            if !vim_is_abs_name(rel_fname) && len + 1 < MAXPATHL as usize {
                 // Make the start dir an absolute path name.
-                unsafe { full_name_of(name_of(rel_fname, len).as_ptr(), false) }
+                full_name_of(dir.as_cstr(), false)
             } else {
-                unsafe { name_of(rel_fname, len) }
+                dir
             },
         );
         // Step over the "." and the separator after it, if any.
-        let path = unsafe { path.add(1) };
-        return Ok(if unsafe { *path } != 0 {
-            unsafe { path.add(1) }
-        } else {
-            path
-        });
+        return Ok(if second != 0 { 2 } else { 1 });
     }
 
-    if unsafe { *path } == 0 || !unsafe { vim_is_abs_name(cstr::at(path)) } {
-        let mut curdir = [0 as c_char; MAXPATHL as usize];
-        if unsafe { os_dirname(curdir.as_mut_ptr(), MAXPATHL as usize) }.is_err() {
+    if bytes.is_empty() || !vim_is_abs_name(path) {
+        let Ok(curdir) = dirname_within(MAXPATHL as usize) else {
             return Err(());
-        }
-        ctx.start_dir = Some(unsafe { Name::from_ptr(curdir.as_ptr()) });
+        };
+        ctx.start_dir = Some(Name::from_bytes(&curdir));
     }
-    Ok(path)
+    Ok(0)
 }
 
 /// Split `stopdirs` into the directories the upward search stops at.
 ///
 /// An empty entry means "ascend to the top of the directory tree", which is
 /// why `";"` and `""` both give an unlimited upward search.
-///
-/// # Safety
-/// `stopdirs` must be a NUL-terminated string.
-unsafe fn stop_directories(stopdirs: *mut c_char) -> Vec<Name> {
-    let mut walker = stopdirs;
-    while unsafe { *walker } == b';' as c_char {
-        walker = unsafe { walker.add(1) };
-    }
+fn stop_directories(stopdirs: &[u8]) -> Vec<Name> {
+    // Terminated, for the name tests below, which read to the end of the
+    // string rather than of the entry.
+    let stopdirs = Name::from_bytes(stopdirs);
+    let bytes = stopdirs.bytes();
+    let mut entry = bytes.iter().take_while(|&&b| b == b';').count();
 
     let mut dirs = Vec::new();
     loop {
-        let entry = walker;
-        let next = unsafe { vim_strchr(walker, c_int::from(b';')) };
-        let len = if next.is_null() {
-            unsafe { cstr::bytes_at(entry) }.len()
-        } else {
-            unsafe { next.offset_from(entry) as usize }
-        };
+        let next = bytes[entry..]
+            .iter()
+            .position(|&b| b == b';')
+            .map(|at| entry + at);
+        let len = next.unwrap_or(bytes.len()) - entry;
+        let rest = cstr::suffix(stopdirs.as_cstr(), entry);
 
         dirs.push(
-            if unsafe { *entry } != 0
-                && !unsafe { vim_is_abs_name(cstr::at(entry)) }
-                && len + 1 < MAXPATHL as usize
-            {
+            if !rest.is_empty() && !vim_is_abs_name(rest) && len + 1 < MAXPATHL as usize {
                 // Upstream copies the entry into a scratch buffer and then
                 // resolves `entry` instead, which is not NUL-terminated at
                 // the ';': a relative stop directory with another after it
                 // resolves the whole rest of the string. It also passes the
                 // entry's length where `force` goes. Preserved — this is
                 // what the option means today.
-                unsafe { full_name_of(entry, len != 0) }
+                full_name_of(rest, len != 0)
             } else {
-                unsafe { name_of(entry, len) }
+                Name::from_bytes(&bytes[entry..entry + len])
             },
         );
 
-        let Some(next) = (!next.is_null()).then(|| unsafe { next.add(1) }) else {
+        let Some(next) = next else {
             return dirs;
         };
-        walker = next;
+        entry = next + 1;
     }
 }
 
@@ -147,38 +129,34 @@ unsafe fn stop_directories(stopdirs: *mut c_char) -> Vec<Name> {
 /// removes the `**` altogether, and no number at all means
 /// [`FF_MAX_STAR_STAR_EXPAND`]. Because of this technique the path looks
 /// awful if you print it as a string.
-///
-/// # Safety
-/// `wc_part` must be a NUL-terminated string.
-unsafe fn wildcard_tail(wc_part: *mut c_char) -> Result<Name, ()> {
+fn wildcard_tail(wc_part: &[u8]) -> Result<Name, ()> {
     let mut tail = Vec::<u8>::new();
-    let mut at = wc_part;
-    while unsafe { *at } != 0 {
+    let mut at = 0;
+    while at < wc_part.len() {
         if tail.len() + 5 >= MAXPATHL as usize {
             emsg(gettext(c"E854: Path too long for completion"));
             break;
         }
-        if !(unsafe { *at } == b'*' as c_char && unsafe { *at.add(1) } == b'*' as c_char) {
-            tail.push(unsafe { *at } as u8);
-            at = unsafe { at.add(1) };
+        if !wc_part[at..].starts_with(b"**") {
+            tail.push(wc_part[at]);
+            at += 1;
             continue;
         }
 
         tail.extend_from_slice(b"**");
-        at = unsafe { at.add(2) };
-        let mut errpt: *mut c_char = ptr::null_mut();
-        let limit = unsafe { strtol(at, &raw mut errpt, 10) };
-        if errpt != at && limit > 0 && limit < 255 {
-            tail.push(limit as u8);
-        } else if errpt != at && limit == 0 {
+        at += 2;
+        // Read as `strtol` reads it: blanks and a sign before the digits,
+        // nothing taken when there are none.
+        let (limit, used, _) = skip::decimal(&wc_part[at..]);
+        match u8::try_from(limit) {
+            Ok(limit @ 1..=254) if used != 0 => tail.push(limit),
             // A restrict of 0: remove the '**' already added.
-            tail.truncate(tail.len() - 2);
-        } else {
-            tail.push(FF_MAX_STAR_STAR_EXPAND);
+            Ok(0) if used != 0 => tail.truncate(tail.len() - 2),
+            _ => tail.push(FF_MAX_STAR_STAR_EXPAND),
         }
 
-        at = errpt;
-        if unsafe { *at } != 0 && !vim_ispathsep(unsafe { *at } as c_int) {
+        at += used;
+        if at < wc_part.len() && !vim_ispathsep(c_int::from(wc_part[at])) {
             let arg0 = "/";
             semsg!(
                 "E343: Invalid path: '**[number]' must be at the end of the path or be followed by '{arg0}'."
@@ -210,7 +188,7 @@ fn first_frame(ctx: &mut FindContext) -> Result<Name, ()> {
 
     let mut whole = dir.clone();
     whole.extend_from_slice(ctx.fix_path.bytes());
-    if unsafe { os_isdir(Name::from_bytes(&whole).as_ptr()) } {
+    if dir_exists(Name::from_bytes(&whole).as_cstr()) {
         if !ctx.fix_path.is_empty() {
             dir.extend_from_slice(ctx.fix_path.bytes());
             if needs_separator(&ctx.fix_path) {
@@ -248,206 +226,122 @@ fn first_frame(ctx: &mut FindContext) -> Result<Name, ()> {
     Ok(Name::from_bytes(&dir))
 }
 
-/// Create or reinitialise a search context for [`vim_findfile`].
-///
-/// Don't forget to clean up by calling [`vim_findfile_cleanup`] when you are
-/// done with the search context.
-///
-/// Find the file `filename` in the directory `path`. `path` may contain
-/// wildcards; if so only search `level` directories deep. `level` is the
-/// absolute maximum and is not related to the restriction given to the `**`
-/// wildcard: with a level of 100 and a `**200`, the search still stops after
-/// 100 levels.
-///
-/// `filename` cannot contain wildcards. It is used as-is, with no
-/// backslashes to escape special characters.
-///
-/// If `stopdirs` is not NULL and nothing is found downward, the search is
-/// restarted on the next higher directory level, repeatedly, until the
-/// starting directory of a search is contained in `stopdirs`. `stopdirs` has
-/// the format `";*<dirname>*\(;<dirname>\)*;\=$"`.
-///
-/// If `path` is relative, the search starts in Vim's current directory, or
-/// in the current file's directory when it starts with `"./"`. If `path` is
-/// absolute, the search starts at the part of it before the first wildcard.
-/// Upward search is only done on the starting dir.
-///
-/// If `free_visited` is true the list of already visited files and
-/// directories is cleared. Set it false if you just want to search from
-/// another directory but want to be sure no directory from a previous search
-/// is searched again — useful when looking for a file in several places.
-///
-/// A search context returned by a previous call can be passed in
-/// `search_ctx_arg`; it is reused and reinitialised, and its list of
-/// already visited directories is only deleted when `free_visited` is true.
-/// Be aware that `search_ctx_arg` is freed if the reinitialisation fails. If
-/// you don't have a search context from a previous call it must be NULL.
-///
-/// This function silently ignores a few errors; [`vim_findfile`] will have
-/// limited functionality then.
-///
-/// @param tagfile  expanding names of tags files
-/// @param rel_fname  file name to use for "."
-///
-/// @return  the newly allocated search context, or NULL if an error occurred.
-///
-/// # Safety
-///
-/// `path`, `stopdirs` and `rel_fname` must be null or point at NUL-terminated
-/// strings, and `filename` at `filenamelen` readable bytes. `search_ctx_arg`
-/// must be null, or a context `vim_findfile_init` answered with that
-/// `vim_findfile_cleanup` has not yet freed.
-#[allow(clippy::too_many_arguments)]
-pub(crate) unsafe fn vim_findfile_init(
-    path: *mut c_char,
-    filename: *mut c_char,
-    filenamelen: size_t,
-    stopdirs: *mut c_char,
-    level: c_int,
-    free_visited: bool,
-    find_what: c_int,
-    search_ctx_arg: *mut c_void,
-    tagfile: bool,
-    rel_fname: *mut c_char,
-) -> *mut c_void {
-    // If a search context is given by the caller, reuse it, else make a
-    // new one.
-    let mut ctx = if search_ctx_arg.is_null() {
-        Box::new(FindContext::default())
-    } else {
-        unsafe { Box::from_raw(search_ctx_arg.cast::<FindContext>()) }
-    };
-    ctx.find_what = find_what;
-    ctx.tagfile = tagfile;
-    // Clear the search context, but NOT the visited lists.
-    ctx.reset();
+impl FindContext {
+    /// Create or reinitialise a search context for [`next_match`].
+    ///
+    /// Find the file `filename` in the directory `path`. `path` may contain
+    /// wildcards; if so only search `level` directories deep. `level` is the
+    /// absolute maximum and is not related to the restriction given to the
+    /// `**` wildcard: with a level of 100 and a `**200`, the search still
+    /// stops after 100 levels.
+    ///
+    /// `filename` cannot contain wildcards. It is used as-is, with no
+    /// backslashes to escape special characters.
+    ///
+    /// If `stopdirs` is given and nothing is found downward, the search is
+    /// restarted on the next higher directory level, repeatedly, until the
+    /// starting directory of a search is contained in `stopdirs`. `stopdirs`
+    /// has the format `";*<dirname>*\(;<dirname>\)*;\=$"`.
+    ///
+    /// If `path` is relative, the search starts in Vim's current directory,
+    /// or in the directory of `rel_fname` when it starts with `"./"`. If
+    /// `path` is absolute, the search starts at the part of it before the
+    /// first wildcard. Upward search is only done on the starting dir.
+    ///
+    /// A context answered by a previous call can be passed as `reuse`: its
+    /// lists of files and directories already visited are kept, one per name
+    /// searched for, so that a directory searched for this name before is
+    /// not searched again — useful when looking for a file in several
+    /// places. It is dropped if the reinitialisation fails, which answers
+    /// `None`.
+    ///
+    /// A few errors are silently ignored; [`next_match`] has limited
+    /// functionality then.
+    ///
+    /// `tagfile` says the names are those of tags files.
+    ///
+    /// [`next_match`]: FindContext::next_match
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn start(
+        reuse: Option<FindContext>,
+        path: &[u8],
+        filename: &[u8],
+        stopdirs: Option<&[u8]>,
+        level: c_int,
+        find_what: c_int,
+        tagfile: bool,
+        rel_fname: Option<&CStr>,
+    ) -> Option<FindContext> {
+        let mut ctx = reuse.unwrap_or_default();
+        ctx.find_what = find_what;
+        ctx.tagfile = tagfile;
+        // Clear the search context, but NOT the visited lists.
+        ctx.reset();
 
-    if free_visited {
-        ctx.visited.clear();
-        ctx.dir_visited.clear();
-    } else {
-        // Reuse the old visited lists: get the list for the given
-        // filename, creating one if none exists yet.
-        unsafe { ctx.visited.select(filename, filenamelen) };
-        unsafe { ctx.dir_visited.select(filename, filenamelen) };
+        // Reuse the old visited lists: get the list for the given filename,
+        // creating one if none exists yet.
+        ctx.visited.select(filename);
+        ctx.dir_visited.select(filename);
+
+        // Store information on the starting dir now if the path is
+        // relative. If it is absolute we do that below, from the fixed part.
+        let path = Name::from_bytes(path);
+        let start = starting_dir(&mut ctx, path.as_cstr(), rel_fname, tagfile).ok()?;
+        let path = &path.bytes()[start..];
+
+        // If stopdirs are given, split them into an array. If a stop
+        // directory is not recognized there is no upward search at all;
+        // see ff_path_in_stoplist() for the details.
+        ctx.stopdirs = stopdirs.map(stop_directories);
+
+        ctx.level = level;
+
+        // Split into the fixed part and the wildcard part.
+        match path.iter().position(|&b| b == b'*') {
+            None => ctx.fix_path = Name::from_bytes(path),
+            Some(wc_part) => {
+                ctx.fix_path = Name::from_bytes(&path[..wc_part]);
+                ctx.wc_path = Some(wildcard_tail(&path[wc_part..]).ok()?);
+            }
+        }
+
+        if ctx.start_dir.is_none() {
+            // Store the fixed part as the starting dir. This is needed when
+            // the given path is fully qualified.
+            ctx.start_dir = Some(ctx.fix_path.clone());
+            ctx.fix_path.clear();
+        }
+
+        let fix_path = first_frame(&mut ctx).ok()?;
+        let wc_path = ctx.wc_path.clone().unwrap_or_default();
+        ctx.stack
+            .push(StackFrame::new(fix_path, wc_path, level, false));
+        ctx.file_to_search = Name::from_bytes(filename);
+        Some(ctx)
     }
 
-    // Store information on the starting dir now if the path is relative.
-    // If it is absolute we do that below, from the fixed part.
-    let start = unsafe { starting_dir(&mut ctx, path, rel_fname, tagfile) };
-    let Ok(path) = start else {
-        return ptr::null_mut();
-    };
-
-    // If stopdirs are given, split them into an array. If a stop
-    // directory is not recognized there is no upward search at all;
-    // see ff_path_in_stoplist() for the details.
-    if !stopdirs.is_null() {
-        ctx.stopdirs = Some(unsafe { stop_directories(stopdirs) });
+    /// Forget the files and directories already visited, for every name.
+    pub(crate) fn forget_visited(&mut self) {
+        self.visited.clear();
+        self.dir_visited.clear();
     }
-
-    ctx.level = level;
-
-    // Split into the fixed part and the wildcard part.
-    let wc_part = unsafe { vim_strchr(path, c_int::from(b'*')) };
-    if wc_part.is_null() {
-        ctx.fix_path = unsafe { Name::from_ptr(path) };
-    } else {
-        ctx.fix_path = unsafe { name_of(path, wc_part.offset_from(path) as usize) };
-        let tail = unsafe { wildcard_tail(wc_part) };
-        let Ok(tail) = tail else {
-            return ptr::null_mut();
-        };
-        ctx.wc_path = Some(tail);
-    }
-
-    if ctx.start_dir.is_none() {
-        // Store the fixed part as the starting dir. This is needed when
-        // the given path is fully qualified.
-        ctx.start_dir = Some(ctx.fix_path.clone());
-        ctx.fix_path.clear();
-    }
-
-    let frame = first_frame(&mut ctx);
-    let Ok(fix_path) = frame else {
-        return ptr::null_mut();
-    };
-    let wc_path = ctx.wc_path.clone().unwrap_or_default();
-    ctx.stack
-        .push(StackFrame::new(fix_path, wc_path, level, false));
-    ctx.file_to_search = unsafe { name_of(filename, filenamelen) };
-    Box::into_raw(ctx).cast()
 }
 
-/// Split a `'path'` entry at its first unescaped `;`, answering the stop
-/// directories after it — or NULL when there are none.
-///
-/// The entry itself is left in `buf`, NUL-terminated at the `;` and with
-/// every `"\;"` in it collapsed to a plain `;`.
-///
-/// # Safety
-/// `buf` must be a writable NUL-terminated string.
-pub(crate) unsafe fn vim_findfile_stopdir(buf: *mut c_char) -> *mut c_char {
-    let at = |i: usize| unsafe { *buf.add(i) };
-    // Nothing before the first escape needs moving.
+/// Split a `'path'` entry at its first unescaped `;`: the entry, with every
+/// `"\;"` before that collapsed to a plain `;`, and the stop directories
+/// after it — `None` when there is no `;`.
+pub(crate) fn split_stop_directories(entry: &[u8]) -> (Vec<u8>, Option<&[u8]>) {
+    let mut dir = Vec::with_capacity(entry.len());
     let mut read = 0;
-    while at(read) != 0
-        && at(read) != b';' as c_char
-        && !(at(read) == b'\\' as c_char && at(read + 1) == b';' as c_char)
-    {
-        read += 1;
-    }
-
-    // From here every "\;" loses its backslash, so the entry shortens
-    // as it is copied over itself.
-    let mut write = read;
-    while at(read) != 0 && at(read) != b';' as c_char {
-        if at(read) == b'\\' as c_char && at(read + 1) == b';' as c_char {
-            unsafe { *buf.add(write) = b';' as c_char };
+    while read < entry.len() && entry[read] != b';' {
+        if entry[read] == b'\\' && entry.get(read + 1) == Some(&b';') {
+            dir.push(b';');
             read += 2;
         } else {
-            unsafe { *buf.add(write) = at(read) };
+            dir.push(entry[read]);
             read += 1;
         }
-        write += 1;
     }
-
-    let ends_at_semicolon = at(read) == b';' as c_char;
-    if write < read {
-        unsafe { *buf.add(write) = 0 };
-    }
-    if ends_at_semicolon {
-        unsafe { *buf.add(read) = 0 };
-        return unsafe { buf.add(read + 1) };
-    }
-    ptr::null_mut()
-}
-
-/// Free the lists of visited files and directories. Can handle a NULL
-/// pointer.
-///
-/// # Safety
-/// `ctx` must be a search context, or NULL.
-pub(crate) unsafe fn vim_findfile_free_visited(ctx: *mut c_void) {
-    if ctx.is_null() {
-        return;
-    }
-    // SAFETY: the caller's context came from `vim_findfile_init`.
-    let ctx = unsafe { &mut *ctx.cast::<FindContext>() };
-    ctx.visited.clear();
-    ctx.dir_visited.clear();
-}
-
-/// Clean up the given search context. Can handle a NULL pointer.
-///
-/// # Safety
-///
-/// `ctx` must be null, or a context `vim_findfile_init` answered with that
-/// nothing has freed yet; it is freed here.
-pub(crate) unsafe fn vim_findfile_cleanup(ctx: *mut c_void) {
-    if ctx.is_null() {
-        return;
-    }
-    // SAFETY: the caller's context came from `vim_findfile_init`.
-    drop(unsafe { Box::from_raw(ctx.cast::<FindContext>()) });
+    let stopdirs = (read < entry.len()).then(|| &entry[read + 1..]);
+    (dir, stopdirs)
 }

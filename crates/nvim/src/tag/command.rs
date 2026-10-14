@@ -610,7 +610,7 @@ impl DoTag {
         // SAFETY: the caller's promise.
         if self.use_tagstack {
             // A copy: `'tagfunc'` may rewrite the stack under us.
-            let owned = unsafe { Name::from_ptr(self.current().tagname) };
+            let owned = Name::from_bytes(unsafe { cstr::bytes_at(self.current().tagname) });
             self.owned_name = Some(owned);
             self.owned_name.as_mut().unwrap().as_mut_ptr()
         } else if g_do_tagpreview.get() != 0 {

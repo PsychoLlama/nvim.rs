@@ -29,7 +29,7 @@ use crate::optionstr::{OptString, local_or_global};
 use crate::os::env::expand_env_save_opt_of;
 use crate::os::fs::dirname_text;
 use crate::winlayer::Buf;
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 use std::ffi::CStr;
 
 use super::*;
@@ -124,7 +124,7 @@ pub(crate) fn expand_in_path(
     let path_option = if flags.has(ExpandFlags::CDPATH) {
         P_CDPATH.get()
     } else {
-        buffer_path_value()
+        buffer_path()
     };
     let path_dirs = expand_path_option(&curdir, &path_option);
     if path_dirs.is_empty() {
@@ -155,17 +155,8 @@ pub(crate) fn expand_in_path(
 }
 
 /// The `'path'` in force: the buffer's own, or the global one when it is
-/// empty.
-///
-/// The option's own buffer, not a copy: `find_file_in_path_option` keeps its
-/// position in a static and resumes it on a later call. See
-/// [`OptString::value_ptr`].
-pub(crate) fn buffer_path() -> *mut c_char {
-    local_or_global(&Buf::current().b_p_path, P_PATH).value_ptr()
-}
-
-/// [`buffer_path`], copied: a value that outlives the next option write.
-fn buffer_path_value() -> XString {
+/// empty. A copy: a value that outlives the next option write.
+pub(crate) fn buffer_path() -> XString {
     local_or_global(&Buf::current().b_p_path, P_PATH).get()
 }
 
@@ -316,7 +307,7 @@ pub fn gen_expand_wildcards(
             // be used -- which during `set_init_1` (expanding a `~` in
             // $CDPATH) is before 'path' has a value. Taken here, it is read
             // only where a 'path' search has already happened.
-            let path_option = buffer_path_value();
+            let path_option = buffer_path();
             uniquefy_paths(&mut names, p, &path_option);
             RECURSIVE.set(true);
         }

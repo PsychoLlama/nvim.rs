@@ -174,9 +174,8 @@ pub unsafe fn get_spec_reg(
         Ctrl_F | Ctrl_P if errmsg => {
             let opts =
                 FileNameOpts::MESS | FileNameOpts::HYP | FileNameOpts::EXP.when(regname == Ctrl_P);
-            // SAFETY: main thread, with a cursor on a line of the buffer; a
-            // null `count` is how it is told there is no count to report.
-            value = unsafe { file_name_at_cursor(opts, 1, ::core::ptr::null_mut()) };
+            value = file_name_at_cursor(opts, 1, None)
+                .map_or(::core::ptr::null_mut(), XString::into_raw);
             owned = true;
             true
         }
