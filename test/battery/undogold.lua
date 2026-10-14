@@ -262,7 +262,7 @@ local function wundo(name)
   index = index + 1
   local out = ('%s/%02d-%s.un~'):format(cases, index, name)
   run('wundo', 'wundo! ' .. vim.fn.fnameescape(out))
-  keep(('%02d-%s.un~'):format(index, name), out)
+  keep(('%02d-%s.un~'):format(index, name), out); spew(('%s/%02d-%s.txt'):format(art, index, name), table.concat(vim.api.nvim_buf_get_lines(0, 0, -1, true), '\n') .. '\n') -- the text the tree hashes, for readbase
   return out
 end
 
@@ -635,7 +635,7 @@ case('autowrite', function()
   emit('  undofile() |', scrub(vim.fn.undofile(file)))
   snapshot('after')
   index = index + 1
-  keep(('%02d-autowrite.un~'):format(index), vim.fn.undofile(file))
+  keep(('%02d-autowrite.un~'):format(index), vim.fn.undofile(file)); spew(('%s/%02d-autowrite.txt'):format(art, index), table.concat(vim.api.nvim_buf_get_lines(0, 0, -1, true), '\n') .. '\n')
 end)
 
 -- 20. The round trip: write, throw the buffer away, read it back with

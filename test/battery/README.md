@@ -106,6 +106,27 @@ its children through `scr`'s harness (the functional suite's `testnvim` +
 | `msg`    | `message/` — echo/emsg/`shortmess`, truncation, prompts, history, capture, `confirm()`        |
 | probe    | `startprobe.py`: ~200 nvim _processes_ — argv, `$XDG_*`, `-l`/`-S`/`--api-info`, the log file |
 
+## The `readbase` row: reading a fixed binary's files
+
+`pers` and `undo` compare what the binary under test _writes_, and read back
+only the files it just wrote, so a reader and a writer that moved together pass
+both. `readbase` reads files a **fixed** binary wrote: `readbase.sh --record
+<nvim> <vimruntime> <goldens>` runs the two sweeps once with that binary, keeps
+their scrubbed `.swp`, `.shada` and `.un~` (plus the text each undo tree hashes)
+and writes `<goldens>/expected.txt` — the same binary's `:recover`, `:rshada!`
+(then a tokenised `:wshada!`) and `:rundo` + `:undo N` walk over them. Every
+later binary is compared against that file:
+
+```sh
+test/battery/readbase.sh --record path/to/old/nvim runtime ~/goldens   # once
+just battery '' ~/goldens          # or: test/battery/readbaseverify.sh ~/goldens
+```
+
+The goldens are a recording, not a function of the tree, so nothing about them
+is committed and their baseline is not cut from `BASE`; without the directory
+argument the battery skips the row. A `MANIFEST` of hashes guards them against
+being edited after recording. ~2 s.
+
 Every `*verify.sh` and `*sweep.sh` carries a long header explaining what its row
 paid for. Read it before touching the row; several of them record a hazard that
 cost a whole slice to find.

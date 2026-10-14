@@ -155,9 +155,15 @@
 # marks, :lockmarks/:keepjumps/:keepmarks, and a shada round trip),
 # baselined at 070c9cfc00.  It costs ~1 s.  Buffer HANDLES appear in
 # neither artifact: the driver prints filenames.
-# Usage: battery.sh <label>
+# Usage: battery.sh <label> [goldens]
+#
+# `goldens` is a directory `readbase.sh --record` wrote: the `readbase`
+# row reads its swap/ShaDa/undo artifacts with this tree's binary.  The
+# goldens are a recording, not part of the tree, so without the argument
+# that row is skipped (and says so).
 set -u
 LABEL="${1:?label}"
+GOLDENS="${2:-}"
 # Everything is resolved from this script's own directory, so the harness
 # travels with the checkout: $T is test/battery, $REPO its grandparent.
 T=$(cd "$(dirname "$0")" && pwd)
@@ -270,6 +276,13 @@ run inssweep   "$T/insverify.sh"
 run contsweep  "$T/contverify.sh"
 run exprsweep  "$T/exprverify.sh"
 run msgsweep   "$T/msgverify.sh"
+# Reads on-disk artifacts a FIXED binary wrote (readbaseverify.sh); the
+# rows above only read back what the binary under test wrote.  ~2 s.
+if [ -n "$GOLDENS" ]; then
+  run readbase "$T/readbaseverify.sh" "$GOLDENS"
+else
+  printf '%-10s skipped (no goldens directory given)\n' readbase
+fi
 
 echo "=== startup probe (paired)"
 # The probe's baseline, like every row's, is CUT from the binary

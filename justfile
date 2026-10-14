@@ -137,11 +137,13 @@ bench-ab bench *args:
 # (~1 min) and then runs every row twice, ~14 min; a warm one is ~7 min.
 #
 # `label` names the log set under target/battery-logs (default: short HEAD), so
-# two runs can be diffed line for line.
+# two runs can be diffed line for line. `goldens` is a directory recorded by
+# `test/battery/readbase.sh --record`; given one, the `readbase` row reads its
+# swap/ShaDa/undo files with this binary (skipped otherwise).
 #
 # Run the differential battery over the built binary.
-battery label='':
-  test/battery/battery.sh "{{ if label == '' { '$(git rev-parse --short HEAD)' } else { label } }}"
+battery label='' goldens='':
+  test/battery/battery.sh "{{ if label == '' { '$(git rev-parse --short HEAD)' } else { label } }}" "{{ goldens }}"
 
 # Run clippy over the two generators (tools/apigen, tools/ffigen). They carry
 # their own workspace and lockfile on purpose — membership would make every
