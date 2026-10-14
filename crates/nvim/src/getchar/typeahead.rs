@@ -815,9 +815,19 @@ mod tests {
         let long: Vec<u8> = (0..300u16)
             .map(|i| b'A' + u8::try_from(i % 26).expect("small"))
             .collect();
+        // Every offset, and a delete every third byte, natively; under Miri
+        // (where the full matrix alone ran about an hour of the lane) the
+        // two ends, their neighbours and the middle, and a sparser walk of
+        // deletes -- the boundaries are where the bookkeeping differs.
+        let offsets: Vec<usize> = if cfg!(miri) {
+            vec![0, 1, base.len() / 2, base.len() - 1, base.len()]
+        } else {
+            (0..=base.len()).collect()
+        };
+        let delete_step = if cfg!(miri) { 29 } else { 3 };
         for insert in [&b"XYZ"[..], &long] {
             for noremap in [REMAP_YES, REMAP_NONE, REMAP_SCRIPT, REMAP_SKIP, 2] {
-                for offset in 0..=base.len() {
+                for &offset in &offsets {
                     flush_typebuf(false);
                     ins_typebuf(base, REMAP_YES, 0, false, false).unwrap();
                     let at = c_int::try_from(offset).expect("small");
@@ -840,7 +850,7 @@ mod tests {
                         del_typebuf(2, c_int::try_from(from).expect("small"));
                         model.drain(from..from + 2);
                         assert_eq!(flagged(), model, "delete at {from}");
-                        from += 3;
+                        from += delete_step;
                     }
                 }
             }
