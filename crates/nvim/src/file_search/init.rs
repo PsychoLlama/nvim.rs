@@ -35,17 +35,13 @@ unsafe fn name_of(p: *const c_char, len: usize) -> Name {
 /// # Safety
 /// `p` must be a NUL-terminated string.
 unsafe fn full_name_of(p: *const c_char, force: bool) -> Name {
-    let full = unsafe { full_name_save(p, force) };
-    let name = unsafe { Name::from_ptr(full) };
-    unsafe { xfree(full.cast()) };
-    name
+    Name::from_bytes(&full_name_save(unsafe { cstr::at(p) }, force))
 }
 
 /// Does `name` need a path separator adding before something else goes
 /// after it?
 fn needs_separator(name: &Name) -> bool {
-    // SAFETY: a `Name` holds `len()` bytes and a terminator.
-    unsafe { after_pathsep(name.as_ptr(), name.as_ptr().add(name.len())) == 0 }
+    !after_pathsep(name.bytes(), name.len())
 }
 
 /// Where the search should start when the given path is relative.
@@ -69,8 +65,7 @@ unsafe fn starting_dir(
     let dot_slash = unsafe { *path } == b'.' as c_char
         && (vim_ispathsep(unsafe { *path.add(1) } as c_int) || unsafe { *path.add(1) } == 0);
     if dot_slash && (!tagfile || !cpo_has(CpoFlag::DOTTAG)) && !rel_fname.is_null() {
-        // SAFETY: `path_tail` answers a pointer into `rel_fname` itself.
-        let len = unsafe { path_tail(rel_fname.cast_mut()).offset_from(rel_fname) } as usize;
+        let len = tail_index(unsafe { cstr::bytes_at(rel_fname) });
         ctx.start_dir = Some(
             if !unsafe { vim_is_abs_name(cstr::at(rel_fname)) } && len + 1 < MAXPATHL as usize {
                 // Make the start dir an absolute path name.
@@ -226,11 +221,11 @@ fn first_frame(ctx: &mut FindContext) -> Result<Name, ()> {
     }
 
     // The fixed part's last component is a name, not a directory.
-    let tail = unsafe { path_tail(ctx.fix_path.as_ptr().cast_mut()) };
+    let tail = tail_index(ctx.fix_path.bytes());
     let mut kept = ctx.fix_path.len();
-    if tail.cast_const() > ctx.fix_path.as_ptr() {
+    if tail > 0 {
         // Do not add '..' to the path and start upwards searching.
-        kept = unsafe { tail.offset_from(ctx.fix_path.as_ptr()) } as usize - 1;
+        kept = tail - 1;
         if kept >= 2
             && ctx.fix_path.bytes().starts_with(b"..")
             && (kept == 2 || ctx.fix_path.at(2) == b'/')

@@ -34,7 +34,7 @@ use crate::option::vars::p_fs;
 use crate::os::cshim::gettext;
 use crate::os::fileio::WriteFile;
 use crate::os::fs::os_strerror;
-use crate::path::full_name_of;
+use crate::path::full_name_save;
 use crate::runtime::script_is_lua;
 use crate::runtime::state::current_sctx;
 use crate::tr_c;
@@ -179,7 +179,7 @@ fn in_lua_script() -> bool {
 /// Register `delete({fname})` to run when the calling function returns --
 /// the `D` flag.
 fn defer_delete(fname: &CStr) {
-    let full = ThinCString::from(full_name_of(fname, false));
+    let full = ThinCString::from(full_name_save(fname, false));
     let mut tv = TypVal::string(Some(full));
     // The callee takes the argument's contents over.
     add_defer(c"delete", ::core::slice::from_mut(&mut tv));

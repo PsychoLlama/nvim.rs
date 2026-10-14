@@ -39,7 +39,7 @@ use crate::message::{e_invarg, e_invargNval, e_invexpr2, e_mkdir};
 use crate::message_fmt::{emsg_text, msg_cstr, msg_cstr_opt};
 use crate::os::cshim::gettext;
 use crate::os::fs::{current_dir, link_info, mkdir_recurse, os_remove, os_rmdir};
-use crate::path::{full_name_of, tail_index};
+use crate::path::{full_name_save, tail_index};
 use crate::tr_c;
 use crate::types::{
     CdScope, EvalFuncData, FAIL, MAXPATHL, OK, TypVal, VAR_NUMBER, VAR_STRING, VarNumber,
@@ -434,7 +434,7 @@ pub fn f_mkdir(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
     // The "D" and "R" flags: deferred deletion of the created directory.
     if status == OK as VarNumber && created.is_none() && (defer || defer_recurse) {
-        created = Some(ThinCString::from(full_name_of(&dir, false)));
+        created = Some(ThinCString::from(full_name_save(&dir, false)));
     }
     if let Some(created) = created {
         defer_delete(created, defer_recurse);

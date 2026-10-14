@@ -99,7 +99,7 @@ fn is_empty_name(p: *const c_char) -> bool {
 
 fn names_equal(a: *const c_char, b: *const c_char) -> bool {
     // SAFETY: two NUL-terminated paths, both non-null by the tests above.
-    unsafe { path_fnamecmp(cstr::at(a), cstr::at(b)) == 0 }
+    unsafe { path_fnamecmp(cstr::bytes_at(a), cstr::bytes_at(b)) == 0 }
 }
 
 fn current_win() -> Win {
@@ -424,5 +424,5 @@ pub unsafe fn fname_expand(ffname: *mut *mut c_char, sfname: *mut *mut c_char) {
         *sfname = *ffname;
     }
     // SAFETY: a NUL-terminated name.
-    *ffname = unsafe { fix_fname(*ffname) };
+    *ffname = fix_fname(unsafe { cstr::at(*ffname) }).into_raw();
 }

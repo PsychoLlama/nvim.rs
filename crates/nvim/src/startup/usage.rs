@@ -105,7 +105,7 @@ pub(crate) unsafe fn print_mainerr(msg1: *const c_char, msg2: *const c_char, msg
     // set before any caller can reach this.
     let (prgname, text) = unsafe {
         (
-            path_tail(argv0.get().map_or(ptr::null(), CStr::as_ptr)),
+            argv0.get().map_or(c"", path_tail).as_ptr(),
             gettext_ptr(msg1).as_ptr(),
         )
     };

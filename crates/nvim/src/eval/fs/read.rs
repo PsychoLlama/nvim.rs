@@ -28,7 +28,7 @@ use crate::memory::ThinCString;
 use crate::message::{e_cant_read_file_str, e_isadir2, e_notopen};
 use crate::message_fmt::{emsg_text, msg_cstr};
 use crate::os::cshim::gettext;
-use crate::os::fs::os_isdir_of;
+use crate::os::fs::dir_exists;
 use crate::pos::MAXLNUM;
 use crate::tr_c;
 use crate::types::{
@@ -387,7 +387,7 @@ fn read_file_or_blob(args: &[TypVal], result: &mut TypVal, always_blob: bool) {
     }
 
     let fname = str_arg(args, 0, &mut numbuf3);
-    if os_isdir_of(fname) {
+    if dir_exists(fname) {
         err_path(e_isadir2, fname);
         return;
     }

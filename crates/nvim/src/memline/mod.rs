@@ -60,15 +60,15 @@ use crate::os::cshim::{gettext, strncasecmp};
 use crate::os::env::{expand_env, home_replace, home_replace_save, os_get_hostname, os_get_pid};
 use crate::os::fs::{
     os_fileinfo, os_fileinfo_inode, os_fileinfo_link, os_fileinfo_size, os_isdir, os_mkdir_recurse,
-    os_open, os_path_exists, os_remove, os_set_cloexec,
+    os_open, os_path_exists, os_remove, os_set_cloexec, path_exists,
 };
 use crate::os::input::{line_breakcheck, os_char_avail};
 use crate::os::proc::os_proc_running;
 use crate::os::time::{os_ctime_r, os_time};
 use crate::os::users::{os_get_uname, os_get_username};
 use crate::path::{
-    after_pathsep, concat_fnames, expand_wildcards, fix_fname, free_wild, path_fnamecmp,
-    path_full_compare, path_is_absolute, path_tail, same_directory, shorten_dir, vim_full_name,
+    after_pathsep, concat_fnames, expand_wildcards, fix_fname, path_fnamecmp, path_full_compare,
+    path_is_absolute, path_tail, same_directory, shorten_dir, tail_index, vim_full_name,
     vim_ispathsep,
 };
 use crate::pos::MAXLNUM;

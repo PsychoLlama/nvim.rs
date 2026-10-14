@@ -85,27 +85,24 @@ impl PackWork {
 /// # Safety
 /// `fname` must be a writable NUL-terminated path.
 unsafe fn package_root(fname: *mut c_char) -> *mut c_char {
-    // SAFETY: `fname` is a NUL-terminated path this walk stays inside.
-    let mut p1 = unsafe { get_past_head(fname) };
+    // SAFETY: `fname` is a NUL-terminated path.
+    let name = unsafe { cstr::bytes_at(fname) };
+    let mut p1 = past_head_index(name);
     let (mut p2, mut p3, mut p4) = (p1, p1, p1);
     let mut p = p1;
-    while unsafe { *p } != 0 {
-        if vim_ispathsep_nocolon(unsafe { *p } as c_int) {
+    while p < name.len() {
+        if vim_ispathsep_nocolon(c_int::from(name[p])) {
             p4 = p3;
             p3 = p2;
             p2 = p1;
             p1 = p;
         }
-        p = unsafe { p.add(utfc_ptr2len(p) as usize) };
+        p += cluster_len(&name[p..]);
     }
     // Cut *after* the separator, so `fix_fname` is asked about a directory
     // and expands its symlink.
-    let cut = unsafe { p4.add(1) };
-    let c = unsafe { *cut };
-    unsafe { *cut = 0 };
-    let ffname = unsafe { fix_fname(fname) };
-    unsafe { *cut = c };
-    ffname
+    let cut = (p4 + 1).min(name.len());
+    fix_fname(&cstr::owned(&name[..cut])).into_raw()
 }
 
 /// Where in 'runtimepath' a package and its `after/` directory belong.
@@ -137,7 +134,7 @@ unsafe fn find_insert_points(
     ffname: *const c_char,
     fname_len: size_t,
 ) -> Option<InsertPoints> {
-    let mut buf = [0 as c_char; MAXPATHL as usize];
+    let mut buf = [0u8; MAXPATHL as usize];
     let mut insp: *const c_char = ptr::null();
     let mut after_insp: *const c_char = ptr::null();
     let mut entry: *const c_char = rtp.as_ptr();
@@ -149,7 +146,7 @@ unsafe fn find_insert_points(
         unsafe {
             copy_option_part(
                 &raw mut entry as *mut *mut c_char,
-                buf.as_mut_ptr(),
+                buf.as_mut_ptr().cast(),
                 MAXPATHL as size_t,
                 c",".as_ptr().cast_mut(),
             )
@@ -157,9 +154,9 @@ unsafe fn find_insert_points(
         // SAFETY: `buf` is NUL-terminated; the `p[5]` reads are inside it
         // because `strstr` found five bytes of "after" there.
         let is_after = unsafe {
-            let p = strstr(buf.as_mut_ptr(), c"after".as_ptr());
+            let p = strstr(buf.as_mut_ptr().cast(), c"after".as_ptr());
             !p.is_null()
-                && p > buf.as_mut_ptr()
+                && p > buf.as_mut_ptr().cast()
                 && vim_ispathsep(*p.sub(1) as c_int)
                 && (vim_ispathsep(*p.add(5) as c_int)
                     || *p.add(5) == 0
@@ -177,18 +174,13 @@ unsafe fn find_insert_points(
         if !insp.is_null() {
             continue;
         }
-        // SAFETY: `buf` has room for the separator (`copy_option_part` stopped
-        // short of `MAXPATHL`), and `fix_fname` answers an owned string.
-        unsafe { add_pathsep(buf.as_mut_ptr()) };
-        let rtp_ffname = unsafe { fix_fname(buf.as_mut_ptr()) };
-        if rtp_ffname.is_null() {
-            return None;
-        }
-        if unsafe { path_fnamencmp(cstr::at(rtp_ffname), cstr::at(ffname), fname_len) } == 0 {
+        add_pathsep_in(&mut buf);
+        let rtp_ffname = fix_fname(cstr::in_bytes(&buf));
+        // SAFETY: the caller's NUL-terminated name.
+        if path_fnamencmp(&rtp_ffname, unsafe { cstr::bytes_at(ffname) }, fname_len) == 0 {
             // Insert after this entry, and its comma.
             insp = entry;
         }
-        unsafe { xfree(rtp_ffname.cast()) };
     }
 
     if insp.is_null() {
@@ -416,7 +408,7 @@ unsafe fn add_pack_dir_to_rtp(fname: *mut c_char, is_pack: bool) -> Result<(), F
     if let Some(points) = points {
         // SAFETY: `fname` is NUL-terminated; `afterdir` is owned and freed
         // below.
-        afterdir = unsafe { concat_fnames(fname, c"after".as_ptr(), true) };
+        afterdir = concat_fnames(unsafe { cstr::bytes_at(fname) }, b"after", true).into_raw();
         // Does `{fname}/after` exist — and, for a bundle, hold anything?
         let has_after = if is_pack {
             unsafe { pack_has_entries(afterdir) }
@@ -483,9 +475,7 @@ const FTDETECT_GLOB: &[u8] = b"/ftdetect/*";
 unsafe fn load_pack_plugin(opt: bool, fname: *mut c_char) -> Result<(), Failed> {
     // SAFETY: `fname` is the caller's path; `ffname` is owned and freed
     // below.
-    let ffname = unsafe { fix_fname(fname) };
-    // SAFETY: `fix_fname` answers a NUL-terminated path.
-    let dir = unsafe { cstr::bytes_at(ffname) }.to_vec();
+    let dir = fix_fname(unsafe { cstr::at(fname) }).to_vec();
     let visitor = Visitor {
         callback: Some(source_callback_vim_lua as DoInRuntimepathCBFn),
         cookie: ptr::null_mut(),
@@ -495,23 +485,18 @@ unsafe fn load_pack_plugin(opt: bool, fname: *mut c_char) -> Result<(), Failed> 
     let glob = |suffix: &[u8]| cstr::owned(&[&dir[..], suffix].concat());
 
     let pat = glob(PLUGIN_GLOB);
-    let mut at = pat.as_ptr().cast_mut();
-    // SAFETY: an array of one live pattern.
-    let _ =
-        unsafe { gen_expand_wildcards_and_cb(1, &raw mut at, ExpandFlags::FILE, true, visitor) };
+    // SAFETY: a live pattern, and the callback's own cookie.
+    let _ = unsafe { gen_expand_wildcards_and_cb(&pat, ExpandFlags::FILE, true, visitor) };
 
     // When runtime/filetype.lua has not been loaded yet, these scripts
     // are found when it is.
     if opt && eval_to_number(b"g:did_load_filetypes", false) > 0 {
         let _ = do_cmdline_cmd(c"augroup filetypedetect");
         let pat = glob(FTDETECT_GLOB);
-        let mut at = pat.as_ptr().cast_mut();
-        let patp = &raw mut at;
         // SAFETY: as above.
-        let _ = unsafe { gen_expand_wildcards_and_cb(1, patp, ExpandFlags::FILE, true, visitor) };
+        let _ = unsafe { gen_expand_wildcards_and_cb(&pat, ExpandFlags::FILE, true, visitor) };
         let _ = do_cmdline_cmd(c"augroup END");
     }
-    unsafe { xfree(ffname.cast()) };
     Ok(())
 }
 
@@ -535,7 +520,7 @@ unsafe fn rtp_has_entry(fname: *mut c_char) -> bool {
                 c",".as_ptr().cast_mut(),
             )
         };
-        if unsafe { path_fnamecmp(cstr::at(buf.as_mut_ptr()), cstr::at(fname)) } == 0 {
+        if unsafe { path_fnamecmp(cstr::as_bytes(&buf), cstr::bytes_at(fname)) } == 0 {
             return true;
         }
     }
@@ -638,24 +623,9 @@ pub fn add_pack_start_dirs() {
 /// # Safety
 /// `buf` must be a NUL-terminated pattern.
 unsafe fn pack_has_entries(buf: *mut c_char) -> bool {
-    let mut num_files: c_int = 0;
-    let mut files: *mut *mut c_char = ptr::null_mut();
-    let mut pat = [buf];
-    // SAFETY: a one-element pattern array; the matches are ours to free.
-    if unsafe {
-        gen_expand_wildcards(
-            1,
-            pat.as_mut_ptr(),
-            &raw mut num_files,
-            &raw mut files,
-            ExpandFlags::DIR,
-        )
-    }
-    .is_ok()
-    {
-        unsafe { free_wild(num_files, files) };
-    }
-    num_files > 0
+    // SAFETY: the caller's NUL-terminated pattern.
+    gen_expand_wildcards(&[unsafe { cstr::at(buf) }], ExpandFlags::DIR)
+        .is_ok_and(|found| !found.is_empty())
 }
 
 /// The two shapes a 'packpath' entry's `start` packages can take.

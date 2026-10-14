@@ -199,7 +199,7 @@ unsafe fn load_spl(
         // SAFETY: as above.
         unsafe {
             (*lp).sl_add = has_bytes(
-                cstr::at(path_tail(fname.as_ptr())),
+                path_tail(cstr::at(fname.as_ptr())),
                 SPL_FNAME_ADD.to_bytes(),
             )
         };
@@ -390,7 +390,7 @@ pub fn suggest_load_files() {
         // SAFETY: `sl_fname` is this language's own NUL-terminated path.
         let dotp = unsafe { strrchr(slang.sl_fname, b'.' as c_int) };
         // SAFETY: as above; `path_fnamecmp` reads two C strings.
-        if dotp.is_null() || unsafe { path_fnamecmp(cstr::at(dotp), c".spl") } != 0 {
+        if dotp.is_null() || unsafe { path_fnamecmp(cstr::bytes_at(dotp), b".spl") } != 0 {
             continue;
         }
         // SAFETY: `dotp` points at ".spl" inside `sl_fname`, so the copy
@@ -712,8 +712,7 @@ pub(super) fn spell_reload_one(fname: &CStr, added_word: bool) {
     // and only walked here.
     let mut didit = false;
     for slang in languages() {
-        if unsafe { path_full_compare(fname.as_ptr().cast_mut(), (*slang).sl_fname, false, true) }
-            as c_uint
+        if unsafe { path_full_compare(fname, cstr::at((*slang).sl_fname), false, true) } as c_uint
             == kEqualFiles as c_uint
         {
             unsafe { slang_clear(slang) };

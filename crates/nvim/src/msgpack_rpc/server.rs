@@ -12,6 +12,7 @@
 //! `serverstart()` and `$NVIM_LISTEN_ADDRESS` open, and the channels that
 //! come out of them.
 
+use crate::cstr;
 use crate::snprintf;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
@@ -105,7 +106,7 @@ pub unsafe fn server_init(
     }
 
     // SAFETY: `listen_addr` is null or NUL-terminated either way.
-    let rv = server_start(unsafe { crate::cstr::at_opt(listen_addr) });
+    let rv = server_start(unsafe { cstr::at_opt(listen_addr) });
 
     // SAFETY: a static name, and a message with no arguments.
     if unsafe { os_env_exists(c"__NVIM_TEST_LOG".as_ptr(), false) } {
@@ -165,7 +166,7 @@ fn set_vservername() {
         None => core::ptr::null_mut(),
     });
     // SAFETY: the address is either null or the watcher's own string.
-    let default_server = unsafe { crate::cstr::at_opt(default_server) };
+    let default_server = unsafe { cstr::at_opt(default_server) };
     set_vim_var_string(Vv::Servername, default_server.map(CStr::to_bytes));
 }
 
@@ -223,7 +224,7 @@ pub unsafe fn server_address_new(name: *const c_char) -> *mut c_char {
     if truncated {
         // SAFETY: `address` is this frame's NUL-terminated buffer; `%.40s`
         // printed at most its first 40 bytes, which is what the slice is.
-        let head = unsafe { crate::cstr::bytes_at(address.as_ptr()) };
+        let head = unsafe { cstr::bytes_at(address.as_ptr()) };
         let head = msg_bytes(&head[..head.len().min(40)]);
         logmsg!(
             LOGLVL_ERR,
@@ -244,20 +245,15 @@ pub unsafe fn server_address_new(name: *const c_char) -> *mut c_char {
 /// # Safety
 /// `address` is a NUL-terminated string.
 pub unsafe fn server_owns_pipe_address(address: *const c_char) -> bool {
-    // SAFETY: the caller's address; `fix_fname` answers an owned string.
-    let path = unsafe { fix_fname(address) };
-    let owned = WATCHERS.with(|watchers| {
+    // SAFETY: the caller's NUL-terminated address.
+    let path = fix_fname(unsafe { cstr::at(address) });
+    WATCHERS.with(|watchers| {
         watchers.iter().any(|&watcher| {
-            // SAFETY: a live watcher, and two owned strings.
-            let addr = unsafe { fix_fname(watcher_addr(watcher)) };
-            let same = unsafe { strequal(path, addr) };
-            unsafe { xfree(addr.cast::<c_void>()) };
-            same
+            // SAFETY: a live watcher's NUL-terminated address.
+            let addr = fix_fname(unsafe { cstr::at(watcher_addr(watcher)) });
+            path == addr
         })
-    });
-    // SAFETY: the string `fix_fname` handed over.
-    unsafe { xfree(path.cast::<c_void>()) };
-    owned
+    })
 }
 
 /// Starts listening on `addr`.
@@ -393,8 +389,8 @@ pub fn server_stop(endpoint: &CStr, keep_vservername: bool) -> bool {
 
     // SAFETY: the list owned the watcher and `free_server` releases it.
     unsafe { socket_watcher_close(watcher, Some(free_server)) };
-    let renamed = !keep_vservername
-        && with_vim_var_str(Vv::Servername, |name| name == crate::cstr::in_chars(&addr));
+    let renamed =
+        !keep_vservername && with_vim_var_str(Vv::Servername, |name| name == cstr::in_chars(&addr));
     if renamed {
         set_vservername();
     }

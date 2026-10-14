@@ -4,21 +4,30 @@
 //! command-line completion: it expands environment variables, hands
 //! backticked patterns to the shell ([`expand_backtick`]), searches `'path'`
 //! when the caller asked for that ([`expand_path_option`]), and otherwise
-//! falls through to the file-system walk in [`glob`](super::glob). The `EW_*`
-//! flags say which of those apply.
+//! falls through to the file-system walk in [`glob`](super::glob). The
+//! [`ExpandFlags`] say which of those apply.
+//!
+//! Every expansion answers the names it found as strings the caller owns.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
+use crate::charset::backslash_halved;
 use crate::cmdexpand::WildOpts;
 use crate::cstr;
 use crate::ex_docmd::Expansion;
-use crate::garray::ga_append_owned;
-use crate::memory::ThinCString;
 use crate::memory::XString;
+use crate::option::split_option_part;
 use crate::option::vars::{P_CDPATH, P_PATH, P_WIG};
 use crate::optionstr::{OptString, local_or_global};
-use crate::strings::has_char;
+use crate::os::env::expand_env_save_opt_of;
+use crate::os::fs::dirname_text;
 use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
 use std::ffi::CStr;
@@ -34,7 +43,7 @@ use crate::types::{Failed, MAXPATHL};
 static RECURSIVE: GlobalCell<bool> = GlobalCell::new(false);
 
 /// Expand every entry of `path_option` — a `'path'` or `'cdpath'` — into the
-/// directory it names, and add each to `gap`.
+/// directory it names.
 ///
 /// An entry of `"."` means the current buffer's directory, an empty entry
 /// means `curdir`, and a relative entry is taken from `curdir`. A URL, or an
@@ -42,121 +51,92 @@ static RECURSIVE: GlobalCell<bool> = GlobalCell::new(false);
 ///
 /// TODO(vim): handle upward search (`;`) and the path limiter (`**N`) by
 /// expanding each into the paths it stands for.
-///
-/// # Safety
-/// `curdir` and `path_option` must be NUL-terminated strings, and `gap` an
-/// initialised array of allocated strings.
-pub(crate) unsafe fn expand_path_option(
-    curdir: *mut c_char,
-    mut path_option: *mut c_char,
-    gap: *mut GArray,
-) {
-    let mut buf = vec![0 as c_char; MAXPATHL as usize];
-    let buf = buf.as_mut_ptr();
-    let mut curdirlen = 0;
-    while unsafe { *path_option } != 0 {
-        let mut buflen = unsafe {
-            copy_option_part(
-                &raw mut path_option,
-                buf,
-                MAXPATHL as size_t,
-                c" ,".as_ptr().cast_mut(),
-            )
-        };
+pub(crate) fn expand_path_option(curdir: &[u8], path_option: &[u8]) -> Vec<XString> {
+    let mut dirs = Vec::new();
+    let mut rest = path_option;
+    while !rest.is_empty() {
+        let (mut buf, after) = split_option_part(rest, MAXPATHL as usize, b" ,");
+        rest = after;
 
         // Do not expand backticks: this could have been set by a modeline.
-        if has_char(unsafe { cstr::at(buf) }, c_int::from(b'`')) {
+        if buf.contains(&b'`') {
             continue;
         }
 
-        if unsafe { *buf } == b'.' as c_char
-            && (unsafe { *buf.add(1) } == 0 || vim_ispathsep(unsafe { *buf.add(1) } as c_int))
-        {
+        if buf.first() == Some(&b'.') && buf.get(1).is_none_or(|&b| vim_ispathsep(c_int::from(b))) {
             // Relative to the current buffer:
             //     "/path/file" + "."        -> "/path/"
             //     "/path/file" + "./subdir" -> "/path/subdir"
-            let ffname = Buf::current().name.full_ptr();
-            if ffname.is_null() {
+            let Some(ffname) = Buf::current()
+                .name
+                .full()
+                .map(|name| name.to_bytes().to_vec())
+            else {
+                continue;
+            };
+            let plen = tail_index(&ffname);
+            if plen + buf.len() >= MAXPATHL as usize {
                 continue;
             }
-            // SAFETY: `path_tail` answers a pointer into `ffname`.
-            let plen = unsafe { path_tail(ffname).offset_from(ffname) } as usize;
-            if plen + buflen >= MAXPATHL as usize {
-                continue;
-            }
-            if unsafe { *buf.add(1) } == 0 {
-                unsafe { *buf.add(plen) = 0 };
-            } else {
-                // The entry past its ".", and the NUL with it.
-                unsafe { core::ptr::copy(buf.add(2), buf.add(plen), buflen - 2 + 1) };
-            }
-            unsafe { core::ptr::copy(ffname, buf, plen) };
-            buflen = unsafe { simplify_filename(buf) } as usize;
-        } else if unsafe { *buf } == 0 {
+            let entry_rest = if buf.len() == 1 { &[][..] } else { &buf[2..] };
+            let mut joined = ffname[..plen].to_vec();
+            joined.extend_from_slice(entry_rest);
+            joined.push(0);
+            let len = simplify_filename(&mut joined);
+            joined.truncate(len);
+            buf = joined;
+        } else if buf.is_empty() {
             // Relative to the current directory.
-            if curdirlen == 0 {
-                curdirlen = unsafe { CStr::from_ptr(curdir) }.to_bytes().len();
-            }
-            unsafe { core::ptr::copy_nonoverlapping(curdir, buf, curdirlen + 1) };
-            buflen = curdirlen;
-        } else if unsafe { path_with_url(cstr::at(buf)) } != 0 {
+            buf = cstr::until_nul(curdir).to_vec();
+        } else if path_with_url(&cstr::owned(&buf)) != 0 {
             continue; // a URL can't be used here
-        } else if !unsafe { path_is_absolute(cstr::at(buf)) } {
+        } else if !path_is_absolute(&cstr::owned(&buf)) {
             // Expand a relative path to its full equivalent.
-            if curdirlen == 0 {
-                curdirlen = unsafe { CStr::from_ptr(curdir) }.to_bytes().len();
-            }
+            let curdir = cstr::until_nul(curdir);
             // The directory, the separator, the entry, and the NUL.
-            if curdirlen + buflen + 3 > MAXPATHL as usize {
+            if curdir.len() + buf.len() + 3 > MAXPATHL as usize {
                 continue;
             }
-            unsafe { core::ptr::copy(buf, buf.add(curdirlen + 1), buflen + 1) };
-            unsafe { core::ptr::copy_nonoverlapping(curdir, buf, curdirlen) };
-            unsafe { *buf.add(curdirlen) = PATHSEP as c_char };
-            buflen = unsafe { simplify_filename(buf) } as usize;
+            let mut joined = curdir.to_vec();
+            joined.push(PATHSEP_BYTE);
+            joined.extend_from_slice(&buf);
+            joined.push(0);
+            let len = simplify_filename(&mut joined);
+            joined.truncate(len);
+            buf = joined;
         }
-
-        unsafe { ga_grow(gap, 1) };
-        unsafe {
-            *(*gap)
-                .ga_data
-                .cast::<*mut c_char>()
-                .add((*gap).ga_len as usize) = xmemdupz(buf.cast(), buflen as size_t).cast()
-        };
-        unsafe { (*gap).ga_len += 1 };
+        dirs.push(XString::from_bytes(cstr::until_nul(&buf)));
     }
+    dirs
 }
 
 /// Expand `pattern` under every directory the `'path'` (or, for
-/// [`ExpandFlags::CDPATH`], the `'cdpath'`) names, adding the matches to `gap`.
+/// [`ExpandFlags::CDPATH`], the `'cdpath'`) names, adding the matches to
+/// `names`.
 ///
-/// Answers how many names `gap` holds in total.
-///
-/// # Safety
-/// `pattern` must be a NUL-terminated string and `gap` an initialised array
-/// of allocated strings.
-pub(crate) unsafe fn expand_in_path(
-    gap: *mut GArray,
-    pattern: *mut c_char,
+/// Answers how many names `names` holds in total.
+pub(crate) fn expand_in_path(
+    names: &mut Vec<XString>,
+    pattern: &CStr,
     flags: ExpandFlags,
-) -> c_int {
-    let mut curdir = vec![0 as c_char; MAXPATHL as usize];
-    let _ = unsafe { os_dirname(curdir.as_mut_ptr(), MAXPATHL as size_t) };
-
-    let mut path_ga = GArray::default();
-    unsafe { ga_init(&raw mut path_ga, size_of::<*mut c_char>() as c_int, 1) };
+) -> usize {
+    let curdir = dirname_text();
     let path_option = if flags.has(ExpandFlags::CDPATH) {
-        P_CDPATH.value_ptr()
+        P_CDPATH.get()
     } else {
-        buffer_path()
+        buffer_path_value()
     };
-    unsafe { expand_path_option(curdir.as_mut_ptr(), path_option, &raw mut path_ga) };
-    if path_ga.ga_len <= 0 {
+    let path_dirs = expand_path_option(&curdir, &path_option);
+    if path_dirs.is_empty() {
         return 0;
     }
-
-    let paths = unsafe { ga_concat_strings(&raw mut path_ga, c",".as_ptr()) };
-    unsafe { ga_clear_strings(&raw mut path_ga) };
+    let mut paths = Vec::new();
+    for (i, dir) in path_dirs.iter().enumerate() {
+        if i > 0 {
+            paths.push(b',');
+        }
+        paths.extend_from_slice(dir);
+    }
 
     let mut glob_flags = WildOpts::NONE;
     if flags.has(ExpandFlags::ICASE) {
@@ -165,20 +145,13 @@ pub(crate) unsafe fn expand_in_path(
     if flags.has(ExpandFlags::ADDSLASH) {
         glob_flags |= WildOpts::ADD_SLASH;
     }
-    // SAFETY: two NUL-terminated strings, and the caller's array of owned
-    // names, which takes the matches over.
-    unsafe {
-        let found = globpath(
-            cstr::at(paths),
-            cstr::at(pattern),
-            glob_flags,
-            flags.has(ExpandFlags::CDPATH),
-        );
-        ga_append_owned(gap, found);
-    };
-    unsafe { xfree(paths.cast()) };
-
-    unsafe { (*gap).ga_len }
+    names.extend(globpath(
+        &cstr::owned(&paths),
+        pattern,
+        glob_flags,
+        flags.has(ExpandFlags::CDPATH),
+    ));
+    names.len()
 }
 
 /// The `'path'` in force: the buffer's own, or the global one when it is
@@ -191,14 +164,14 @@ pub(crate) fn buffer_path() -> *mut c_char {
     local_or_global(&Buf::current().b_p_path, P_PATH).value_ptr()
 }
 
+/// [`buffer_path`], copied: a value that outlives the next option write.
+fn buffer_path_value() -> XString {
+    local_or_global(&Buf::current().b_p_path, P_PATH).get()
+}
+
 /// Does `p` hold what looks like an environment variable? A backslash
 /// escapes the character after it.
-///
-/// # Safety
-/// `p` must be a NUL-terminated string.
-pub(crate) unsafe fn has_env_var(p: *mut c_char) -> bool {
-    // SAFETY: the caller's promise.
-    let p = unsafe { CStr::from_ptr(p) }.to_bytes();
+fn has_env_var(p: &[u8]) -> bool {
     let mut at = 0;
     while at < p.len() {
         if p[at] == b'\\' && at + 1 < p.len() {
@@ -212,409 +185,200 @@ pub(crate) unsafe fn has_env_var(p: *mut c_char) -> bool {
     false
 }
 
+/// Either of the two flags that send the expansion looking down a search
+/// list rather than the pattern's own directory.
+const SEARCH_LIST: ExpandFlags = ExpandFlags::PATH.or(ExpandFlags::CDPATH);
+
 /// Should `p` be looked for along the `'path'` rather than from here?
 ///
 /// Only when the caller asked for a path search at all, and the pattern is
 /// not one that already says where to look: an absolute name, or one
 /// starting `"./"` or `"../"`.
-///
-/// # Safety
-/// `p` must be a NUL-terminated string.
-/// Either of the two flags that send the expansion looking down a search
-/// list rather than the pattern's own directory.
-const SEARCH_LIST: ExpandFlags = ExpandFlags::PATH.or(ExpandFlags::CDPATH);
-
-/// # Safety
-///
-/// `p` must point at a NUL-terminated string.
-unsafe fn wants_path_search(p: *const c_char, flags: ExpandFlags) -> bool {
-    if !flags.has(SEARCH_LIST) || unsafe { path_is_absolute(cstr::at(p)) } {
+fn wants_path_search(p: &CStr, flags: ExpandFlags) -> bool {
+    if !flags.has(SEARCH_LIST) || path_is_absolute(p) {
         return false;
     }
-    let here = unsafe { *p } == b'.' as c_char
-        && (vim_ispathsep(unsafe { *p.add(1) } as c_int)
-            || unsafe { *p.add(1) } == b'.' as c_char
-                && vim_ispathsep(unsafe { *p.add(2) } as c_int));
+    let p = p.to_bytes();
+    let at = |i: usize| cstr::byte_at(p, i);
+    let here = at(0) == b'.'
+        && (vim_ispathsep(c_int::from(at(1)))
+            || at(1) == b'.' && vim_ispathsep(c_int::from(at(2))));
     !here
 }
 
-/// Expand the `num_pat` patterns in `pat` into `file`, and how many are
-/// there into `num_file`.
+/// Expand `patterns` into the names they match.
 ///
 /// A character that should not be expanded must have a backslash before it,
-/// as in `"/path\\ with\\ spaces/my\\*star*"`. `flags` is the `EW_*` set
+/// as in `"/path\\ with\\ spaces/my\\*star*"`. `flags` is the set
 /// [`expand_wildcards`] documents.
 ///
-/// Answers `Ok` when names were found, and `Err` otherwise — in which case
-/// `num_file` and `file` are either untouched or set to zero and NULL. What
-/// lands in `file` is the caller's, to be freed with [`free_wild`].
+/// Answers `Err` when no names were found, unless
+/// [`ExpandFlags::EMPTYOK`] asks for an empty answer instead.
 ///
-/// # Safety
-/// `pat` must hold `num_pat` NUL-terminated strings, and `num_file` and
-/// `file` must be writable.
-pub unsafe fn gen_expand_wildcards(
-    num_pat: c_int,
-    pat: *mut *mut c_char,
-    num_file: *mut c_int,
-    file: *mut *mut *mut c_char,
+/// The patterns are the caller's own: nothing here frees them, so a pattern
+/// borrowed from a value that user code can replace -- an option, a buffer
+/// line -- must be copied first. Backticks and `os_breakcheck` can run user
+/// code mid-expansion.
+pub fn gen_expand_wildcards(
+    patterns: &[&CStr],
     flags: ExpandFlags,
-) -> Result<(), Failed> {
+) -> Result<Vec<XString>, Failed> {
     // `expand_env` is called below to expand things like "~user". If
     // that fails it calls `expand_one`, which brings us back here; go
     // straight to the machine-specific expansion in that case.
     if RECURSIVE.get() {
-        return unsafe { os_expand_wildcards(num_pat, pat, num_file, file, flags) };
+        return expand_by_shell(patterns, flags);
     }
 
     // One pattern the shell has to handle sends them all to the shell,
     // so it is started once rather than once per pattern. A `=expr` is
     // ours to evaluate, though.
-    for i in 0..num_pat {
-        let p = unsafe { *pat.add(i as usize) };
-        if unsafe { has_special_wildchar(p, flags) }
-            && !(unsafe { vim_backtick(p) } && unsafe { *p.add(1) } == b'=' as c_char)
-        {
-            return unsafe { os_expand_wildcards(num_pat, pat, num_file, file, flags) };
-        }
+    if patterns.iter().any(|p| {
+        let p = p.to_bytes();
+        has_special_wildchar(p, flags) && !(vim_backtick(p) && p[1] == b'=')
+    }) {
+        return expand_by_shell(patterns, flags);
     }
 
     RECURSIVE.set(true);
-    let mut ga = GArray::default();
-    unsafe { ga_init(&raw mut ga, size_of::<*mut c_char>() as c_int, 30) };
+    let mut names = Vec::with_capacity(30);
 
     // Upstream never clears this: once one pattern has been looked for
     // along the 'path', every later one is uniquefied too.
     let mut did_expand_in_path = false;
-    let mut i = 0;
-    while i < num_pat && !got_int.get() {
-        // How many names this pattern added, or -1 when nothing tried.
-        let mut add_pat = -1;
-        let mut p = unsafe { *pat.add(i as usize) };
+    for pattern in patterns {
+        if got_int.get() {
+            break;
+        }
+        // How many names this pattern added, or `None` when nothing tried.
+        let mut added = None;
+        // The pattern with its environment variables expanded, when it
+        // has any.
+        let mut expanded: Option<XString> = None;
 
-        if unsafe { vim_backtick(p) } {
-            add_pat = unsafe { expand_backtick(&raw mut ga, p, flags) };
-            if add_pat == -1 {
+        if vim_backtick(pattern.to_bytes()) {
+            added = expand_backtick(&mut names, pattern.to_bytes(), flags);
+            if added.is_none() {
                 RECURSIVE.set(false);
-                unsafe { ga_clear_strings(&raw mut ga) };
-                unsafe { *num_file = 0 };
-                unsafe { *file = core::ptr::null_mut() };
                 return Err(Failed);
             }
         } else {
             // Environment variables, "~/" and "~user/" first.
-            if unsafe { has_env_var(p) } && !flags.has(ExpandFlags::NOTENV)
-                || unsafe { *p } == b'~' as c_char
+            let bytes = pattern.to_bytes();
+            if has_env_var(bytes) && !flags.has(ExpandFlags::NOTENV) || bytes.first() == Some(&b'~')
             {
-                let expanded = unsafe { expand_env_save_opt(p, true) };
-                if !expanded.is_null() {
-                    if unsafe { has_env_var(expanded) } || unsafe { *expanded } == b'~' as c_char {
-                        // What `expand_env` could not expand, the shell
-                        // can. Throw away what has been found so far and
-                        // start over.
-                        unsafe { xfree(expanded.cast()) };
-                        unsafe { ga_clear_strings(&raw mut ga) };
-                        let ret = unsafe {
-                            os_expand_wildcards(
-                                num_pat,
-                                pat,
-                                num_file,
-                                file,
-                                flags | ExpandFlags::KEEPDOLLAR,
-                            )
-                        };
-                        RECURSIVE.set(false);
-                        return ret;
-                    }
-                    p = expanded;
+                let env = expand_env_save_opt_of(pattern, true);
+                if has_env_var(&env) || env.first() == Some(&b'~') {
+                    // What `expand_env` could not expand, the shell can.
+                    // Throw away what has been found so far and start over.
+                    drop(names);
+                    let ret = expand_by_shell(patterns, flags | ExpandFlags::KEEPDOLLAR);
+                    RECURSIVE.set(false);
+                    return ret;
                 }
+                expanded = Some(env);
             }
+            let p = expanded.as_ref().map_or(*pattern, XString::as_cstr);
 
-            if unsafe { path_has_exp_wildcard(p) } || flags.has(ExpandFlags::ICASE) {
+            if has_exp_wildcard(p.to_bytes()) || flags.has(ExpandFlags::ICASE) {
                 // A recursive `gen_expand_wildcards` can only happen from
                 // an event handler in `os_breakcheck`, where it is fine.
                 RECURSIVE.set(false);
-                if unsafe { wants_path_search(p, flags) } {
+                if wants_path_search(p, flags) {
                     // `:find` completion, where 'path' is used.
-                    add_pat = unsafe { expand_in_path(&raw mut ga, p, flags) };
+                    added = Some(expand_in_path(&mut names, p, flags));
                     did_expand_in_path = true;
                 } else {
-                    let found = unsafe { path_expand(&raw mut ga, p, flags) };
-                    debug_assert!(found <= c_int::MAX as usize, "path: too many matches");
-                    add_pat = found as c_int;
+                    added = Some(path_expand(&mut names, p.to_bytes(), flags));
                 }
                 RECURSIVE.set(true);
             }
         }
+        let p = expanded.as_ref().map_or(*pattern, XString::as_cstr);
 
-        if add_pat == -1 || add_pat == 0 && flags.has(ExpandFlags::NOTFOUND) {
-            let t = unsafe { backslash_halve_save(p) };
-            // With ExpandFlags::NOTFOUND always add files and directories: that is
-            // what makes "vim c:/" work.
+        if added.is_none() || added == Some(0) && flags.has(ExpandFlags::NOTFOUND) {
+            let t = cstr::owned(&backslash_halved(p.to_bytes()));
+            // With ExpandFlags::NOTFOUND always add files and directories:
+            // that is what makes "vim c:/" work.
             if flags.has(ExpandFlags::NOTFOUND) {
-                unsafe { addfile(&raw mut ga, t, flags | ExpandFlags::DIR | ExpandFlags::FILE) };
+                addfile(&mut names, &t, flags | ExpandFlags::DIR | ExpandFlags::FILE);
             } else {
-                unsafe { addfile(&raw mut ga, t, flags) };
-            }
-            if t != p {
-                unsafe { xfree(t.cast()) };
+                addfile(&mut names, &t, flags);
             }
         }
 
-        if did_expand_in_path && ga.ga_len > 0 && flags.has(SEARCH_LIST) {
+        if did_expand_in_path && !names.is_empty() && flags.has(SEARCH_LIST) {
             RECURSIVE.set(false);
             // Upstream takes 'path' once, up front, whether or not it will
             // be used -- which during `set_init_1` (expanding a `~` in
             // $CDPATH) is before 'path' has a value. Taken here, it is read
             // only where a 'path' search has already happened.
-            let path_option = buffer_path();
-            unsafe { uniquefy_paths(&raw mut ga, p, path_option) };
+            let path_option = buffer_path_value();
+            uniquefy_paths(&mut names, p, &path_option);
             RECURSIVE.set(true);
         }
-        if p != unsafe { *pat.add(i as usize) } {
-            unsafe { xfree(p.cast()) };
-        }
-        i += 1;
     }
 
-    unsafe { *num_file = ga.ga_len };
-    unsafe { *file = ga.ga_data.cast() };
     RECURSIVE.set(false);
-
-    if flags.has(ExpandFlags::EMPTYOK) || !ga.ga_data.is_null() {
-        Ok(())
+    if flags.has(ExpandFlags::EMPTYOK) || !names.is_empty() {
+        Ok(names)
     } else {
         Err(Failed)
     }
 }
 
-/// [`gen_expand_wildcards`] of one pattern, into names the caller owns.
-/// `None` when the expansion failed; an empty list when it found nothing.
-pub(crate) fn expand_wildcards_list(pattern: &CStr, flags: ExpandFlags) -> Option<Vec<XString>> {
-    // A copy the expansion may write to.
-    let mut owned = pattern.to_bytes_with_nul().to_vec();
-    let mut pat: *mut c_char = owned.as_mut_ptr().cast();
-    let mut count: c_int = 0;
-    let mut files: *mut *mut c_char = ::core::ptr::null_mut();
-    // SAFETY: one NUL-terminated pattern, and two locals to fill in.
-    let expanded =
-        unsafe { gen_expand_wildcards(1, &raw mut pat, &raw mut count, &raw mut files, flags) };
-    if expanded.is_err() {
-        return None;
-    }
-    let names = (0..usize::try_from(count).unwrap_or(0))
-        // SAFETY: `count` NUL-terminated names in the array just answered.
-        .map(|at| XString::from_cstr(unsafe { CStr::from_ptr(*files.add(at)) }))
-        .collect();
-    // SAFETY: the array and names the expansion answered, given back once.
-    unsafe { free_wild(count, files) };
-    Some(names)
-}
-
-/// Take the `count` names an expansion answered as owned strings, giving the
-/// array and the names back.
-///
-/// # Safety
-/// `files` must be NULL, or an allocated array of `count` allocated,
-/// NUL-terminated strings, which nothing else will free.
-pub(crate) unsafe fn take_wild(count: c_int, files: *mut *mut c_char) -> Vec<XString> {
-    if files.is_null() {
-        return Vec::new();
-    }
-    let names = (0..usize::try_from(count).unwrap_or(0))
-        // SAFETY: the caller's `count` NUL-terminated names.
-        .map(|at| XString::from_cstr(unsafe { CStr::from_ptr(*files.add(at)) }))
-        .collect();
-    // SAFETY: the caller's array and names, given back once.
-    unsafe { free_wild(count, files) };
-    names
-}
-
-/// [`expand_wildcards`] of one pattern, into names the caller owns.
-pub(crate) fn expand_wildcards_one(
-    pattern: &CStr,
-    flags: ExpandFlags,
-) -> Result<Vec<XString>, Failed> {
-    // A copy the expansion may write to.
-    let mut owned = pattern.to_bytes_with_nul().to_vec();
-    let mut pat: *mut c_char = owned.as_mut_ptr().cast();
-    let mut count: c_int = 0;
-    let mut files: *mut *mut c_char = ::core::ptr::null_mut();
-    // SAFETY: one NUL-terminated pattern and two locals to fill in; what the
-    // expansion answered is taken over once.
-    unsafe {
-        expand_wildcards(1, &raw mut pat, &raw mut count, &raw mut files, flags)?;
-        Ok(take_wild(count, files))
-    }
-}
-
-/// One of the two expansions over several patterns.
-type ExpandFn = unsafe fn(
-    c_int,
-    *mut *mut c_char,
-    *mut c_int,
-    *mut *mut *mut c_char,
-    ExpandFlags,
-) -> Result<(), Failed>;
-
-/// `expand` of several patterns, into names the caller owns. The patterns
-/// are the caller's to give: the expansion may write into them.
-fn expand_patterns(
-    expand: ExpandFn,
-    mut patterns: Vec<XString>,
-    flags: ExpandFlags,
-) -> Result<Vec<XString>, Failed> {
-    let mut pats: Vec<*mut c_char> = patterns.iter_mut().map(XString::as_mut_ptr).collect();
-    let num_pat = c_int::try_from(pats.len()).unwrap_or(c_int::MAX);
-    let mut count: c_int = 0;
-    let mut files: *mut *mut c_char = ::core::ptr::null_mut();
-    // SAFETY: `num_pat` NUL-terminated patterns this frame owns, written only
-    // inside their bytes; two locals to fill in; what the expansion answered
-    // is taken over once.
-    unsafe {
-        let expanded = expand(
-            num_pat,
-            pats.as_mut_ptr(),
-            &raw mut count,
-            &raw mut files,
-            flags,
-        );
-        let names = take_wild(count, files);
-        expanded.map(|()| names)
-    }
-}
-
-/// [`gen_expand_wildcards`] of several patterns the caller gives, into names
-/// the caller owns.
-pub(crate) fn gen_expand_wildcards_of(
-    patterns: Vec<XString>,
-    flags: ExpandFlags,
-) -> Result<Vec<XString>, Failed> {
-    expand_patterns(gen_expand_wildcards, patterns, flags)
-}
-
-/// [`expand_wildcards`] -- 'wildignore' and 'suffixes' applied -- of several
-/// patterns the caller gives, into names the caller owns.
-pub(crate) fn expand_wildcards_of(
-    patterns: Vec<XString>,
-    flags: ExpandFlags,
-) -> Result<Vec<XString>, Failed> {
-    expand_patterns(expand_wildcards, patterns, flags)
-}
-
-/// [`expand_wildcards_eval`] of one pattern, into names the caller owns.
-pub(crate) fn expand_wildcards_eval_list(
-    pattern: &CStr,
-    flags: ExpandFlags,
-) -> Result<Vec<XString>, Failed> {
-    // A copy the expansion may write to.
-    let mut owned = pattern.to_bytes_with_nul().to_vec();
-    let mut pat: *mut c_char = owned.as_mut_ptr().cast();
-    let mut count: c_int = 0;
-    let mut files: *mut *mut c_char = ::core::ptr::null_mut();
-    // SAFETY: as [`expand_wildcards_one`].
-    unsafe {
-        expand_wildcards_eval(&raw mut pat, &raw mut count, &raw mut files, flags)?;
-        Ok(take_wild(count, files))
-    }
-}
-
-/// [`match_suffix`] of a name the caller owns.
-pub(crate) fn match_suffix_name(fname: &CStr) -> bool {
-    // A copy, for the pointer the walk takes.
-    let mut owned = fname.to_bytes_with_nul().to_vec();
-    // SAFETY: a NUL-terminated copy this call owns.
-    unsafe { match_suffix(owned.as_mut_ptr().cast()) }
-}
-
-/// Free the `count` names [`expand_wildcards`] and its neighbours answer.
-///
-/// # Safety
-/// `files` must be NULL, or an allocated array of `count` allocated strings.
-pub unsafe fn free_wild(count: c_int, files: *mut *mut c_char) {
-    if count <= 0 || files.is_null() {
-        return;
-    }
-    for i in (0..count as usize).rev() {
-        unsafe { xfree((*files.add(i)).cast()) };
-    }
-    unsafe { xfree(files.cast()) };
+/// [`os_expand_wildcards`] of the caller's patterns.
+fn expand_by_shell(patterns: &[&CStr], flags: ExpandFlags) -> Result<Vec<XString>, Failed> {
+    let patterns: Vec<XString> = patterns.iter().copied().map(XString::from_cstr).collect();
+    os_expand_wildcards(&patterns, flags)
 }
 
 /// Is `p` a whole backticked command, `` `cmd` ``?
-///
-/// # Safety
-/// `p` must be a NUL-terminated string.
-pub(crate) unsafe fn vim_backtick(p: *mut c_char) -> bool {
-    // SAFETY: the caller's promise.
-    let p = unsafe { CStr::from_ptr(p) }.to_bytes();
+fn vim_backtick(p: &[u8]) -> bool {
     p.len() > 1 && p[0] == b'`' && p[p.len() - 1] == b'`'
 }
 
-/// Run the command in `` `pat` `` and add each line it prints to `gap`, or
-/// evaluate it as an expression when it starts with `=`.
+/// Run the command in `` `pat` `` and add each line it prints to `names`,
+/// or evaluate it as an expression when it starts with `=`.
 ///
-/// Answers how many names were added, or -1 when the command failed.
-///
-/// # Safety
-/// `pat` must be a NUL-terminated string of at least two characters, and
-/// `gap` an initialised array of allocated strings.
-pub(crate) unsafe fn expand_backtick(
-    gap: *mut GArray,
-    pat: *mut c_char,
-    flags: ExpandFlags,
-) -> c_int {
+/// Answers how many names were added, or `None` when the command failed.
+fn expand_backtick(names: &mut Vec<XString>, pat: &[u8], flags: ExpandFlags) -> Option<usize> {
     // The command is the pattern without its backticks.
-    let quoted = unsafe { CStr::from_ptr(pat) }.to_bytes();
-    let cmd: *mut c_char =
-        unsafe { xmemdupz(pat.add(1).cast(), (quoted.len() - 2) as size_t) }.cast();
-    let buffer = if unsafe { *cmd } == b'=' as c_char {
+    let cmd = &pat[1..pat.len() - 1];
+    let buffer = if let Some(expr) = cmd.strip_prefix(b"=") {
         // `={expr}`: expand an expression.
-        // SAFETY: `cmd` is this frame's own NUL-terminated copy.
-        let expr = unsafe { cstr::bytes_at(cmd.add(1)) };
-        eval_to_string(expr, true, false).map_or(core::ptr::null_mut(), XString::into_raw)
+        eval_to_string(expr, true, false)
     } else {
         let opts = if flags.has(ExpandFlags::SILENT) {
             ShellOpts::SILENT
         } else {
             ShellOpts::NONE
         };
-        unsafe { get_cmd_output(cmd, core::ptr::null_mut(), opts, core::ptr::null_mut()) }
-    };
-    unsafe { xfree(cmd.cast()) };
-    if buffer.is_null() {
-        return -1;
-    }
+        get_cmd_output(&cstr::owned(cmd), opts)
+    }?;
 
     // One name per line, and a line with nothing but white space on it
     // is not a name.
-    let mut cnt = 0;
-    let mut cmd = buffer;
-    while unsafe { *cmd } != 0 {
-        cmd = unsafe { skipwhite(cmd) };
-        let mut end = cmd;
-        while unsafe { *end } != 0
-            && unsafe { *end } != b'\r' as c_char
-            && unsafe { *end } != b'\n' as c_char
-        {
-            end = unsafe { end.add(1) };
+    let text = cstr::until_nul(&buffer);
+    let mut count = 0;
+    let mut at = 0;
+    while at < text.len() {
+        while matches!(text.get(at), Some(b' ' | b'\t')) {
+            at += 1;
         }
-        if end > cmd {
-            // The name is terminated in place for the call, as upstream
-            // does — the buffer is this function's own.
-            let saved = unsafe { *end };
-            unsafe { *end = 0 };
-            unsafe { addfile(gap, cmd, flags) };
-            unsafe { *end = saved };
-            cnt += 1;
+        let start = at;
+        while at < text.len() && text[at] != b'\r' && text[at] != b'\n' {
+            at += 1;
         }
-        cmd = end;
-        while unsafe { *cmd } == b'\r' as c_char || unsafe { *cmd } == b'\n' as c_char {
-            cmd = unsafe { cmd.add(1) };
+        if at > start {
+            addfile(names, &cstr::owned(&text[start..at]), flags);
+            count += 1;
+        }
+        while matches!(text.get(at), Some(b'\r' | b'\n')) {
+            at += 1;
         }
     }
-
-    unsafe { xfree(buffer.cast()) };
-    cnt
+    Some(count)
 }
 
 /// [`expand_wildcards`] for one pattern that may start with `%`, `#` or
@@ -623,133 +387,67 @@ pub(crate) unsafe fn expand_backtick(
 /// A `%` or `#` that names no existing file still answers the name, without
 /// the `*` that followed it, so that this works for remote files and for
 /// buffers that are not files at all.
-///
-/// # Safety
-/// `pat` must name a NUL-terminated string, and `num_file` and `file` must
-/// be writable.
-pub unsafe fn expand_wildcards_eval(
-    pat: *mut *mut c_char,
-    num_file: *mut c_int,
-    file: *mut *mut *mut c_char,
-    flags: ExpandFlags,
-) -> Result<(), Failed> {
-    let mut ret = Err(Failed);
-    let mut eval_pat = core::ptr::null_mut();
-    let mut exp_pat = unsafe { *pat };
-    let mut usedlen: usize = 0;
-    let is_cur_alt_file =
-        unsafe { *exp_pat } == b'%' as c_char || unsafe { *exp_pat } == b'#' as c_char;
-    let mut star_follows = false;
+pub fn expand_wildcards_eval(pat: &CStr, flags: ExpandFlags) -> Result<Vec<XString>, Failed> {
+    let bytes = pat.to_bytes();
+    let is_cur_alt_file = matches!(bytes.first(), Some(b'%' | b'#'));
+    let mut evaluated: Option<(Vec<u8>, bool)> = None;
+    let mut exp_pat = XString::from_cstr(pat);
 
-    if is_cur_alt_file || unsafe { *exp_pat } == b'<' as c_char {
+    if is_cur_alt_file || bytes.first() == Some(&b'<') {
         let no_emsg = Suppress::emsg();
-        if let Expansion::Text { text, used, .. } =
-            eval_vars(unsafe { CStr::from_ptr(exp_pat) }, 0, None, true)
-        {
-            eval_pat = ThinCString::from_vec(text).into_raw();
-            usedlen = used;
-        }
+        let expansion = eval_vars(pat, 0, None, true);
         drop(no_emsg);
-        if !eval_pat.is_null() {
-            let rest = unsafe { exp_pat.add(usedlen) };
-            star_follows = unsafe { cstr::eq_bytes(rest, b"*") };
-            exp_pat = unsafe { concat(cstr::bytes_at(eval_pat), cstr::bytes_at(rest)) }.into_raw();
+        if let Expansion::Text { text, used, .. } = expansion {
+            let text = cstr::until_nul(&text).to_vec();
+            let rest = &bytes[used..];
+            let star_follows = rest == b"*";
+            exp_pat = XString::from_bytes(&text);
+            exp_pat.push_bytes(rest);
+            evaluated = Some((text, star_follows));
         }
     }
 
-    if !exp_pat.is_null() {
-        ret = unsafe { expand_wildcards(1, &raw mut exp_pat, num_file, file, flags) };
-    }
-
-    if !eval_pat.is_null() {
-        if unsafe { *num_file } == 0 && is_cur_alt_file && star_follows {
-            unsafe { *file = xmalloc(size_of::<*mut c_char>()).cast() };
-            unsafe { **file = eval_pat };
-            eval_pat = core::ptr::null_mut();
-            unsafe { *num_file = 1 };
-            ret = Ok(());
+    let ret = expand_wildcards(&[exp_pat.as_cstr()], flags);
+    match evaluated {
+        // Nothing found for "%*" or "#*": the name itself, without the star.
+        Some((text, true))
+            if is_cur_alt_file && !ret.as_ref().is_ok_and(|names| !names.is_empty()) =>
+        {
+            Ok(vec![XString::from_vec(text)])
         }
-        unsafe { xfree(exp_pat.cast()) };
-        unsafe { xfree(eval_pat.cast()) };
+        _ => ret,
     }
-    ret
 }
 
 /// [`gen_expand_wildcards`], then drop the names `'wildignore'` matches and
 /// move the ones `'suffixes'` matches to the end.
 ///
-/// Answers `Ok` when `file` is set to an allocated array of matches and
-/// `num_file` to how many there are, and `Err` otherwise — in which case
-/// `num_file` and `file` are either untouched or set to zero and NULL.
-///
-/// # Safety
-/// `pat` must hold `num_pat` NUL-terminated strings, and `num_files` and
-/// `files` must be writable.
-pub unsafe fn expand_wildcards(
-    num_pat: c_int,
-    pat: *mut *mut c_char,
-    num_files: *mut c_int,
-    files: *mut *mut *mut c_char,
-    flags: ExpandFlags,
-) -> Result<(), Failed> {
-    let retval = unsafe { gen_expand_wildcards(num_pat, pat, num_files, files, flags) };
-    if flags.has(ExpandFlags::KEEPALL) || retval.is_err() {
-        return retval;
+/// Answers `Err` when nothing is left.
+pub fn expand_wildcards(patterns: &[&CStr], flags: ExpandFlags) -> Result<Vec<XString>, Failed> {
+    let mut names = gen_expand_wildcards(patterns, flags)?;
+    if flags.has(ExpandFlags::KEEPALL) {
+        return Ok(names);
     }
 
     // Remove the names that match 'wildignore'.
     if P_WIG.first_byte() != 0 {
-        debug_assert!(
-            unsafe { *num_files } == 0 || !unsafe { *files }.is_null(),
-            "path: matches without an array to hold them"
-        );
-        let mut kept = 0;
-        for i in 0..unsafe { *num_files } as usize {
-            let name = unsafe { *(*files).add(i) };
-            debug_assert!(!name.is_null(), "path: a match with no name");
-            let ffname = unsafe { full_name_save(name, false) };
-            debug_assert!(!ffname.is_null(), "path: a match with no full name");
-            if p_wig(|value| unsafe { match_file_list(value.as_ptr().cast_mut(), name, ffname) }) {
-                unsafe { xfree(name.cast()) };
-            } else {
-                unsafe { *(*files).add(kept) = name };
-                kept += 1;
-            }
-            unsafe { xfree(ffname.cast()) };
-        }
-        unsafe { *num_files = kept as c_int };
+        names.retain(|name| {
+            let ffname = full_name_save(name.as_cstr(), false);
+            !p_wig(|value| match_file_list(value, name.as_cstr(), ffname.as_cstr()))
+        });
     }
 
     // Move the names where 'suffixes' match to the end. Skip it when
     // interrupted: the result probably won't be used.
-    debug_assert!(
-        unsafe { *num_files } == 0 || !unsafe { *files }.is_null(),
-        "path: matches without an array to hold them"
-    );
-    if unsafe { *num_files } > 1 && !got_int.get() {
-        // How many names without a matching suffix are at the front.
-        let mut non_suf_match = 0;
-        for i in 0..unsafe { *num_files } as usize {
-            if unsafe { match_suffix(*(*files).add(i)) } {
-                continue;
-            }
-            let name = unsafe { *(*files).add(i) };
-            unsafe {
-                core::ptr::copy(
-                    (*files).add(non_suf_match),
-                    (*files).add(non_suf_match + 1),
-                    i - non_suf_match,
-                )
-            };
-            unsafe { *(*files).add(non_suf_match) = name };
-            non_suf_match += 1;
-        }
+    if names.len() > 1 && !got_int.get() {
+        let (plain, suffixed): (Vec<XString>, Vec<XString>) =
+            names.into_iter().partition(|name| !match_suffix(name));
+        names = plain;
+        names.extend(suffixed);
     }
 
-    if unsafe { *num_files } == 0 {
-        unsafe { xfree((*files).cast()) };
-        unsafe { *files = core::ptr::null_mut() };
+    if names.is_empty() {
         return Err(Failed);
     }
-    retval
+    Ok(names)
 }

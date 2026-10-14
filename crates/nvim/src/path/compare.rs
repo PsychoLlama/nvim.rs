@@ -9,92 +9,59 @@
 //! file system actually uses, which is what makes completion look right on a
 //! case-insensitive volume.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr;
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 use std::ffi::CStr;
 
 use super::*;
+use crate::os::env::expand_env_into;
+use crate::os::fs::{file_id, link_info};
 use crate::types::{MAXPATHL, NUL};
-
-/// [`path_full_compare`] of two names the caller holds. Neither is written:
-/// the walk copies `s1` before expanding it and only reads `s2`.
-pub(crate) fn path_full_compare_of(
-    s1: &CStr,
-    s2: &CStr,
-    checkname: bool,
-    expandenv: bool,
-) -> FileComparison {
-    // SAFETY: two NUL-terminated names, read only.
-    unsafe {
-        path_full_compare(
-            s1.as_ptr().cast_mut(),
-            s2.as_ptr().cast_mut(),
-            checkname,
-            expandenv,
-        )
-    }
-}
 
 /// Compare two file names, by identity where the file system can say and by
 /// name where it cannot.
 ///
 /// Answers [`kEqualFiles`], [`kDifferentFiles`], [`kOneFileMissing`],
 /// [`kBothFilesMissing`], or — when neither file exists, `checkname` is set
-/// and their full paths agree — [`kEqualFileNames`].
-///
-/// # Safety
-/// Both names must be NUL-terminated strings. With `expandenv`, `s1` also
-/// has its environment variables expanded.
-pub unsafe fn path_full_compare(
-    s1: *mut c_char,
-    s2: *mut c_char,
-    checkname: bool,
-    expandenv: bool,
-) -> FileComparison {
-    let mut expanded1 = [0 as c_char; MAXPATHL as usize];
-    if expandenv {
-        unsafe { expand_env(s1, expanded1.as_mut_ptr(), MAXPATHL) };
+/// and their full paths agree — [`kEqualFileNames`]. With `expandenv`, `s1`
+/// has its environment variables expanded first.
+pub fn path_full_compare(s1: &CStr, s2: &CStr, checkname: bool, expandenv: bool) -> FileComparison {
+    let expanded1 = if expandenv {
+        // Upstream's buffer is `MAXPATHL` bytes and so is its bound.
+        expand_env_into(s1, MAXPATHL as usize + 1)
     } else {
-        unsafe { xstrlcpy(expanded1.as_mut_ptr(), s1, MAXPATHL as size_t) };
-    }
+        let s1 = s1.to_bytes();
+        s1[..s1.len().min(MAXPATHL as usize - 1)].to_vec()
+    };
+    let expanded1 = cstr::owned(&expanded1);
 
-    let mut file_id_1 = FileID::default();
-    let mut file_id_2 = FileID::default();
-    let id_ok_1 = unsafe { os_fileid(expanded1.as_mut_ptr(), &raw mut file_id_1) };
-    let id_ok_2 = unsafe { os_fileid(s2, &raw mut file_id_2) };
-
-    if !id_ok_1 && !id_ok_2 {
-        // With no id from the file system the names are all there is.
-        if checkname {
-            let mut full1 = [0 as c_char; MAXPATHL as usize];
-            let mut full2 = [0 as c_char; MAXPATHL as usize];
-            let _ = unsafe {
-                vim_full_name(
-                    expanded1.as_mut_ptr(),
-                    full1.as_mut_ptr(),
-                    MAXPATHL as size_t,
-                    false,
-                )
-            };
-            let _ = unsafe { vim_full_name(s2, full2.as_mut_ptr(), MAXPATHL as size_t, false) };
-            if unsafe { path_fnamecmp(cstr::at(full1.as_mut_ptr()), cstr::at(full2.as_mut_ptr())) }
-                == 0
-            {
-                return kEqualFileNames;
+    let id1 = file_id(&expanded1);
+    let id2 = file_id(s2);
+    match (id1, id2) {
+        (None, None) => {
+            // With no id from the file system the names are all there is.
+            if checkname {
+                let full = |name: &CStr| {
+                    vim_full_name(name, MAXPATHL as usize, false).unwrap_or_else(|name| name)
+                };
+                if path_fnamecmp(&full(&expanded1), &full(s2)) == 0 {
+                    return kEqualFileNames;
+                }
             }
+            kBothFilesMissing
         }
-        return kBothFilesMissing;
-    }
-    if !id_ok_1 || !id_ok_2 {
-        return kOneFileMissing;
-    }
-    if unsafe { os_fileid_equal(&raw const file_id_1, &raw const file_id_2) } {
-        kEqualFiles
-    } else {
-        kDifferentFiles
+        (Some(id1), Some(id2)) if id1 == id2 => kEqualFiles,
+        (Some(_), Some(_)) => kDifferentFiles,
+        _ => kOneFileMissing,
     }
 }
 
@@ -104,71 +71,45 @@ pub unsafe fn path_full_compare(
 /// Nothing happens unless a directory entry matches case-insensitively, is
 /// the same byte length — a longer name would not fit where this one is —
 /// and turns out to be the same file.
-///
-/// # Safety
-/// `name` must be a writable NUL-terminated string: its directory part is
-/// terminated in place while the directory is opened, as upstream does.
-pub unsafe fn path_fix_case(name: *mut c_char) {
-    let mut file_info = FileInfo::default();
-    if !unsafe { os_fileinfo_link(name, &raw mut file_info) } {
+pub fn path_fix_case(name: &mut [u8]) {
+    let Some(file_info) = cstr::with_terminated(name, link_info) else {
         return;
-    }
+    };
 
     // Open the directory the file is in.
     let mut dir = Directory::default();
-    let at = unsafe { CStr::from_ptr(name) }
-        .to_bytes()
-        .iter()
-        .rposition(|&b| b == b'/');
-    let tail = match at {
+    let head = match name.iter().rposition(|&b| b == b'/') {
         None => {
             if !os_scandir(&mut dir, c".") {
                 return;
             }
-            name
+            0
         }
         Some(at) => {
-            let slash = unsafe { name.add(at) };
-            unsafe { *slash = 0 };
-            let ok = unsafe { os_scandir(&mut dir, cstr::at(name)) };
-            unsafe { *slash = b'/' as c_char };
-            if !ok {
+            if !cstr::with_terminated(&name[..at], |dir_name| os_scandir(&mut dir, dir_name)) {
                 return;
             }
-            unsafe { slash.add(1) }
+            at + 1
         }
     };
 
-    let head = unsafe { tail.offset_from(name) } as usize;
-    let taillen = unsafe { CStr::from_ptr(tail) }.to_bytes().len();
-    loop {
-        let entry = unsafe { os_scandir_next(&mut dir) };
-        if entry.is_null() {
-            break;
-        }
+    while let Some(entry) = os_scandir_next(&mut dir) {
+        let entry = entry.to_bytes();
         // Only names that differ in case and are the same byte length.
         // TODO(upstream): accept a different length name.
-        if unsafe { strcasecmp(tail, entry) } != 0
-            || taillen != unsafe { CStr::from_ptr(entry) }.to_bytes().len()
-        {
+        if !name[head..].eq_ignore_ascii_case(entry) {
             continue;
         }
         // Then check it really is this file, and not a second one whose
         // name happens to fold to the same thing.
-        let mut newname = [0 as c_char; MAXPATHL as usize + 1];
-        unsafe { xstrlcpy(newname.as_mut_ptr(), name, MAXPATHL as size_t + 1) };
-        unsafe {
-            xstrlcpy(
-                newname.as_mut_ptr().add(head),
-                entry,
-                (MAXPATHL as usize - head + 1) as size_t,
-            )
-        };
-        let mut file_info_new = FileInfo::default();
-        if unsafe { os_fileinfo_link(newname.as_mut_ptr(), &raw mut file_info_new) }
-            && unsafe { os_fileinfo_id_equal(&raw const file_info, &raw const file_info_new) }
-        {
-            unsafe { strcpy(tail, entry) };
+        let mut newname = name[..head].to_vec();
+        newname.extend_from_slice(entry);
+        newname.truncate(MAXPATHL as usize);
+        let same = cstr::with_terminated(&newname, link_info)
+            .is_some_and(|info| info.same_file_as(&file_info));
+        if same {
+            let entry = entry.to_vec();
+            name[head..].copy_from_slice(&entry);
             break;
         }
     }
@@ -177,70 +118,53 @@ pub unsafe fn path_fix_case(name: *mut c_char) {
 
 /// Are `f1` and `f2` in the same directory? `f1` may be a short name; `f2`
 /// must be a full path.
-///
-/// # Safety
-/// Both must be NUL-terminated strings, or NULL for "no".
-pub unsafe fn same_directory(f1: *mut c_char, f2: *mut c_char) -> bool {
-    if f1.is_null() || f2.is_null() {
-        return false;
-    }
-    let mut ffname = [0 as c_char; MAXPATHL as usize];
-    let full = ffname.as_mut_ptr();
-    let _ = unsafe { vim_full_name(f1, full, MAXPATHL as size_t, false) };
-    // SAFETY: each `path_tail_with_sep` answers a pointer into the name it
-    // was given, so the two subtractions stay within one allocation each.
-    let head = unsafe { path_tail_with_sep(full).offset_from(full) };
-    let head2 = unsafe { path_tail_with_sep(f2).offset_from(f2) };
-    head == head2 && unsafe { pathcmp(full, f2, head as c_int) } == 0
+pub fn same_directory(f1: &CStr, f2: &CStr) -> bool {
+    let full = vim_full_name(f1, MAXPATHL as usize, false).unwrap_or_else(|name| name);
+    let head = tail_with_sep_index(&full);
+    let head2 = tail_with_sep_index(f2.to_bytes());
+    head == head2 && pathcmp(&full, f2.to_bytes(), Some(head)) == 0
 }
 
-/// [`pathcmp`] of two whole names the caller holds as strings.
-pub(crate) fn pathcmp_cstr(p: &CStr, q: &CStr) -> c_int {
-    // SAFETY: both NUL-terminated; no length limit.
-    unsafe { pathcmp(p.as_ptr(), q.as_ptr(), -1) }
+/// Which of the two names [`pathcmp`] was still reading when the other ran
+/// out.
+#[derive(PartialEq, Eq)]
+enum Side {
+    Left,
+    Right,
 }
 
-/// Compare the file names `p` and `q`, over at most `maxlen` bytes of each
-/// when `maxlen` is not negative.
+/// Compare the file names `p` and `q`, over at most `maxlen` bytes of each.
+/// Each ends at its end or its first NUL.
 ///
 /// Answers zero when they name the same thing, which includes one of them
 /// having a trailing separator the other lacks. Otherwise the sign says
 /// which sorts first, and a path separator sorts before anything else — so
 /// `"foo/bar"` comes before `"foo-bar"`, and a name that is a prefix of the
 /// other comes first. `'fileignorecase'` folds case.
-///
-/// # Safety
-/// Both must be NUL-terminated strings.
-pub unsafe fn pathcmp(p: *const c_char, q: *const c_char, maxlen: c_int) -> c_int {
+pub fn pathcmp(p: &[u8], q: &[u8], maxlen: Option<usize>) -> c_int {
     let ignorecase = p_fic();
     let fold = |c: c_int| if ignorecase { mb_toupper(c) } else { c };
-    let limit = if maxlen < 0 {
-        usize::MAX
-    } else {
-        maxlen.cast_unsigned() as usize
-    };
-    // SAFETY: the caller's promise. Each scan stops at its own terminator,
-    // so the `maxlen < 0` spelling of "no limit" is the whole name.
-    let (left, right) = unsafe { (cstr::prefix_at(p, limit), cstr::prefix_at(q, limit)) };
+    let limit = maxlen.unwrap_or(usize::MAX);
+    let (left, right) = (prefix_of(p, limit), prefix_of(q, limit));
 
     // The name that still had bytes left when the other ran out: which one
     // it is, and how far into it the leftovers start. `None` means neither
     // ran out -- the comparison reached `maxlen` with both still going.
-    let mut leftover: Option<(*const c_char, &[u8], usize)> = None;
+    let mut leftover: Option<(Side, &[u8], usize)> = None;
     let mut at = 0;
     let mut j = 0;
     while at < limit && j < limit {
-        // The end of a slice is the name's NUL. The other name may still
+        // The end of a slice is the name's end. The other name may still
         // match, if all it has left is a trailing separator.
         if at >= left.len() {
             if j >= right.len() {
                 return 0;
             }
-            leftover = Some((q, right, j));
+            leftover = Some((Side::Right, right, j));
             break;
         }
         if j >= right.len() {
-            leftover = Some((p, left, at));
+            leftover = Some((Side::Left, left, at));
             break;
         }
 
@@ -259,7 +183,7 @@ pub unsafe fn pathcmp(p: *const c_char, q: *const c_char, maxlen: c_int) -> c_in
         j += cluster_len(&right[j..]);
     }
 
-    let Some((base, name, at)) = leftover else {
+    let Some((side, name, at)) = leftover else {
         return 0;
     };
 
@@ -267,10 +191,8 @@ pub unsafe fn pathcmp(p: *const c_char, q: *const c_char, maxlen: c_int) -> c_in
     // separator — but "//" and ":/" are not that.
     let rest = &name[at..];
     let after = char_at(&rest[cluster_len(rest)..]);
-    // SAFETY: `base` is one of the caller's strings and `at` is inside it.
-    let mid_component = unsafe { after_pathsep(base, base.add(at)) } != 0;
-    if after == NUL && at > 0 && !mid_component && char_at(rest) == c_int::from(b'/') {
+    if after == NUL && at > 0 && !after_pathsep(name, at) && char_at(rest) == c_int::from(b'/') {
         return 0;
     }
-    if core::ptr::eq(base, q) { -1 } else { 1 }
+    if side == Side::Right { -1 } else { 1 }
 }

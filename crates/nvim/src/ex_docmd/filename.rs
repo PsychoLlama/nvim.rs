@@ -38,7 +38,7 @@ use crate::normal::ident_under_cursor;
 use crate::option::vars::{P_GP, P_MP, p_wic};
 use crate::os::cshim::gettext;
 use crate::os::env::{expand_env_esc_of, expand_env_save_opt_of};
-use crate::path::{full_name_of, has_wildcard, tail_index, try_shorten_fname};
+use crate::path::{full_name_save, has_wildcard, path_try_shorten_fname, tail_index};
 use crate::quickfix::grep_internal;
 use crate::runtime::estack_sfile_owned;
 use crate::runtime::state::current_sctx;
@@ -447,7 +447,7 @@ pub(crate) fn eval_vars(
             if autocmd_fname.with(Option::is_some) && !autocmd_fname_full.get() {
                 autocmd_fname_full.set(true);
                 let short = autocmd_fname.with(|name| name.clone().unwrap_or_default());
-                let mut name = full_name_of(short.as_cstr(), false);
+                let mut name = full_name_save(short.as_cstr(), false);
                 // Cut as upstream's `xstrlcpy` into the MAXPATHL buffer.
                 name.truncate(MAXPATHL as usize - 1);
                 autocmd_fname.set(Some(name));
@@ -459,7 +459,7 @@ pub(crate) fn eval_vars(
                     e_no_autocommand_file_name_to_substitute_for_afile,
                 ));
             };
-            try_shorten_fname(&name).to_owned()
+            path_try_shorten_fname(&name).to_owned()
         }
         SPEC_ABUF => {
             if autocmd_bufnr.get() <= 0 {

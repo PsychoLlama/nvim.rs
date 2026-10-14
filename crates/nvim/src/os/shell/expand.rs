@@ -13,21 +13,20 @@
 
 use super::*;
 use crate::ascii::ascii_iswhite;
-use crate::charset::backslash_halve;
+use crate::charset::backslash_halved;
 use crate::cstr;
 use crate::drawscreen::state::cmdline_row;
-use crate::fileio::vim_tempname;
+use crate::fileio::temp_name;
 use crate::guard::{sandbox, secure};
-use crate::memory::{xfree, xmalloc, xstrdup};
+use crate::memory::XString;
 use crate::message::{e_notmp, e_wildexpand};
 use crate::message::{emsg, msg, msg_putchar, msg_start};
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_cstr;
 use crate::os::cshim::gettext;
-use crate::os::fs::{os_can_exe, os_isdir, os_path_exists, os_remove};
+use crate::os::fs::{can_execute, dir_exists, os_remove, path_exists};
 use crate::os::time::os_delay;
-use crate::path::{ExpandFlags, add_pathsep, invocation_path_tail, path_has_wildcard, path_tail};
+use crate::path::{ExpandFlags, add_pathsep, has_wildcard, invocation_path_tail, path_tail};
 use crate::semsg;
-use crate::strings::has_char;
 use crate::types::{Failed, READBIN};
 use crate::ui::state::Rows;
 use core::ops::Range;
@@ -76,57 +75,32 @@ enum Separator {
 
 /// Copy the patterns through unexpanded — what happens when there is nothing
 /// to expand, and what [`ExpandFlags::NOTFOUND`] asks for when the expansion
-/// finds
-/// nothing.
-///
-/// # Safety
-/// `pat[0..num_pat]` must be NUL-terminated strings, and `num_file`/`file`
-/// writable.
-unsafe fn save_patterns(
-    num_pat: c_int,
-    pat: *mut *mut c_char,
-    num_file: *mut c_int,
-    file: *mut *mut *mut c_char,
-) {
-    // SAFETY: the caller's contract.
-    unsafe {
-        *file = xmalloc(num_pat as usize * size_of::<*mut c_char>()) as *mut *mut c_char;
-        for i in 0..num_pat as isize {
-            let s = xstrdup(*pat.offset(i));
-            // Be compatible with `expand_filename()`: halve the backslashes.
-            backslash_halve(s);
-            *(*file).offset(i) = s;
-        }
-        *num_file = num_pat;
-    }
+/// finds nothing. The backslashes are halved, to be compatible with
+/// `expand_filename()`.
+fn save_patterns(patterns: &[XString]) -> Vec<XString> {
+    patterns
+        .iter()
+        .map(|pat| XString::from_vec(backslash_halved(pat)))
+        .collect()
 }
 
-/// # Safety
-/// `file[0..num]` must be NUL-terminated strings.
-unsafe fn have_wildcard(num: c_int, file: *mut *mut c_char) -> bool {
-    // SAFETY: the caller's contract.
-    unsafe { (0..num as isize).any(|i| path_has_wildcard(*file.offset(i))) }
+fn have_wildcard(patterns: &[XString]) -> bool {
+    patterns.iter().any(|pat| has_wildcard(pat))
 }
 
-/// # Safety
-/// `file[0..num]` must be NUL-terminated strings.
-unsafe fn have_dollars(num: c_int, file: *mut *mut c_char) -> bool {
-    // SAFETY: the caller's contract.
-    unsafe { (0..num as isize).any(|i| has_char(cstr::at(*file.offset(i)), '$' as c_int)) }
+fn have_dollars(patterns: &[XString]) -> bool {
+    patterns.iter().any(|pat| pat.contains(&b'$'))
 }
 
 /// Which style the current `'shell'` wants, given the patterns.
-///
-/// # Safety
-/// `pat[0..num_pat]` must be NUL-terminated strings.
-unsafe fn pick_shell_style(num_pat: c_int, pat: *mut *mut c_char) -> ShellStyle {
+fn pick_shell_style(patterns: &[XString]) -> ShellStyle {
     // `cmd` expansion runs the pattern itself.
-    if num_pat == 1 {
-        // SAFETY: the caller's contract.
-        let first = unsafe { CStr::from_ptr(*pat) }.to_bytes();
-        if first.len() > 2 && first.starts_with(b"`") && first.ends_with(b"`") {
-            return ShellStyle::Backtick;
-        }
+    if let [first] = patterns
+        && first.len() > 2
+        && first.starts_with(b"`")
+        && first.ends_with(b"`")
+    {
+        return ShellStyle::Backtick;
     }
     p_sh(|sh| {
         let bytes = sh.to_bytes();
@@ -136,9 +110,7 @@ unsafe fn pick_shell_style(num_pat: c_int, pat: *mut *mut c_char) -> ShellStyle 
         if bytes.ends_with(b"zsh") {
             return ShellStyle::Print;
         }
-        // SAFETY: an option value is NUL-terminated, and `path_tail`
-        // answers a position inside it.
-        let tail = unsafe { CStr::from_ptr(path_tail(sh.as_ptr().cast_mut())) }.to_bytes();
+        let tail = path_tail(sh).to_bytes();
         if contains(tail, b"bash") {
             ShellStyle::GlobStar
         } else if contains(tail, b"sh") {
@@ -156,16 +128,7 @@ fn contains(haystack: &[u8], needle: &[u8]) -> bool {
 
 /// Whether `'shell'` is fish, which needs `begin; … end` rather than `( … )`.
 fn is_fish_shell() -> bool {
-    // SAFETY: `p_sh` is a NUL-terminated option value, and
-    // `invocation_path_tail` answers a pointer inside it.
-    p_sh(|sh| unsafe {
-        CStr::from_ptr(invocation_path_tail(
-            sh.as_ptr().cast_mut(),
-            ptr::null_mut(),
-        ))
-        .to_bytes()
-        .starts_with(b"fish")
-    })
+    p_sh(|sh| invocation_path_tail(sh).to_bytes().starts_with(b"fish"))
 }
 
 /// Escape one pattern into the shell command, backslashing
@@ -203,13 +166,9 @@ fn push_escaped_pattern(command: &mut Vec<u8>, pat: &[u8], flags: ExpandFlags) {
 
 /// The shell command that writes the expansion into `tempname`, and whether
 /// it ends in a `&` that has to be moved after the redirection.
-///
-/// # Safety
-/// `pat[0..num_pat]` must be NUL-terminated strings.
-unsafe fn build_command(
+fn build_command(
     style: ShellStyle,
-    num_pat: c_int,
-    pat: *mut *mut c_char,
+    patterns: &[XString],
     tempname: &[u8],
     flags: ExpandFlags,
 ) -> (Vec<u8>, bool) {
@@ -219,8 +178,7 @@ unsafe fn build_command(
 
     if style == ShellStyle::Backtick {
         // Turn "`command; command& `" into "(command; command )".
-        // SAFETY: the caller's contract.
-        let inner = unsafe { CStr::from_ptr(*pat) }.to_bytes();
+        let inner: &[u8] = &patterns[0];
         command.extend_from_slice(if fish { b"begin; " } else { b"(" });
         // Exclude the leading backtick; the trailing one is overwritten.
         command.extend_from_slice(&inner[1..]);
@@ -268,10 +226,8 @@ unsafe fn build_command(
     command.extend_from_slice(tempname);
 
     if style != ShellStyle::Backtick {
-        for i in 0..num_pat as isize {
+        for pat in patterns {
             command.push(b' ');
-            // SAFETY: the caller's contract.
-            let pat = unsafe { CStr::from_ptr(*pat.offset(i)) }.to_bytes();
             push_escaped_pattern(&mut command, pat, flags);
         }
     }
@@ -345,205 +301,163 @@ fn split_entries(buffer: &[u8], sep: &Separator, check_spaces: bool) -> Vec<Rang
 /// file names have to keep working.
 static did_find_nul: GlobalCell<bool> = GlobalCell::new(false);
 
-/// Expand `pat[0..num_pat]` through the shell.
+/// Expand `patterns` through the shell, into the names it answers.
 ///
-/// `num_file` and `file` receive the count and a newly allocated array of
-/// newly allocated names; whatever `*file` held is not freed. `flags` is a
-/// combination of `EW_*` as `expand_wildcards()` uses them — when matching
-/// fails but [`ExpandFlags::NOTFOUND`] is set, or there was nothing to expand,
-/// the
-/// patterns themselves are copied through instead.
-///
-/// Answers `Ok` or `Err`; on `Err`, `*file` is NULL.
-///
-/// # Safety
-/// `pat[0..num_pat]` must be NUL-terminated strings; `num_file` and `file`
-/// must be non-NULL and writable.
-pub unsafe fn os_expand_wildcards(
-    num_pat: c_int,
-    pat: *mut *mut c_char,
-    num_file: *mut c_int,
-    file: *mut *mut *mut c_char,
+/// `flags` is the set `expand_wildcards()` takes — when matching fails but
+/// [`ExpandFlags::NOTFOUND`] is set, or there was nothing to expand, the
+/// patterns themselves are answered instead.
+pub fn os_expand_wildcards(
+    patterns: &[XString],
     flags: ExpandFlags,
-) -> Result<(), Failed> {
+) -> Result<Vec<XString>, Failed> {
     // Whether an executable may be looked for along `$PATH`: not when this
     // is `expand_shellcmd` doing the looking.
     let use_path = !flags.has(ExpandFlags::SHELLCMD);
-    // SAFETY: the caller's contract, for the whole body. Every pattern is
-    // read as a `CStr`, and every pointer written out is freshly allocated.
-    unsafe {
-        // Default: no files found.
-        *num_file = 0;
-        *file = ptr::null_mut();
 
-        // With no wildcards, copy the names across rather than starting a
-        // shell — that saves a great deal of time.
-        if !have_wildcard(num_pat, pat) {
-            save_patterns(num_pat, pat, num_file, file);
-            return Ok(());
-        }
-
-        // No shell command inside the sandbox, and no backticks in `secure`.
-        if sandbox.get() != 0 && check_secure() {
-            return Err(Failed);
-        }
-        if secure.get() != 0 {
-            for i in 0..num_pat as isize {
-                if has_char(cstr::at(*pat.offset(i)), '`' as c_int) && check_secure() {
-                    return Err(Failed);
-                }
-            }
-        }
-
-        let tempname = vim_tempname();
-        if tempname.is_null() {
-            emsg(gettext(e_notmp));
-            return Err(Failed);
-        }
-        let style = pick_shell_style(num_pat, pat);
-        let (command, ampersand) = build_command(
-            style,
-            num_pat,
-            pat,
-            CStr::from_ptr(tempname).to_bytes(),
-            flags,
-        );
-        let command = CString::new(command).expect("no interior NUL in a shell command");
-
-        let mut shellopts = ShellOpts::EXPAND | ShellOpts::SILENT;
-        if flags.has(ExpandFlags::SILENT) {
-            shellopts |= ShellOpts::HIDE_MESS;
-        }
-        // With zsh -G a pattern that matches nothing is dropped from the
-        // argument list; otherwise zsh errors out and expands nothing else.
-        // With csh -f the shell variables from .cshrc are not expanded, so it
-        // is only usable when no pattern holds a `$`.
-        let extra_shell_arg = match style {
-            ShellStyle::Print => c"-G".as_ptr().cast_mut(),
-            ShellStyle::Glob if !have_dollars(num_pat, pat) => c"-f".as_ptr().cast_mut(),
-            _ => ptr::null_mut(),
-        };
-
-        let failed = call_shell(command.as_ptr().cast_mut(), shellopts, extra_shell_arg) != 0;
-        // A backgrounded command needs a moment to create the temp file, but
-        // is not waited for.
-        if ampersand {
-            os_delay(10, true);
-        }
-
-        if failed {
-            os_remove(cstr::at(tempname));
-            xfree(tempname.cast());
-            // With interactive completion the message is not printed.
-            if !flags.has(ExpandFlags::SILENT) {
-                msg_putchar('\n' as c_int); // clear the bottom line quickly
-                cmdline_row.set(Rows.get() - 1); // continue on the last line
-                msg(gettext(e_wildexpand), 0);
-                msg_start(); // do not overwrite this message
-            }
-            // A failed `cmd` expansion must not list `cmd` as a match, even
-            // under NOTFOUND.
-            if style == ShellStyle::Backtick {
-                return Err(Failed);
-            }
-            return not_found(num_pat, pat, num_file, file, flags);
-        }
-
-        let mut buffer = match read_temp_file(tempname, flags) {
-            Read::Content(buffer) => buffer,
-            Read::NotFound => return not_found(num_pat, pat, num_file, file, flags),
-            Read::Failed => return Err(Failed),
-        };
-        xfree(tempname.cast());
-
-        // Upstream writes a sentinel one past the content; the vector carries
-        // the room for it.
-        let len = buffer.len();
-        buffer.push(0);
-
-        let mut check_spaces = false;
-        let mut content = len;
-        match style.separator() {
-            Separator::Space => buffer[len] = b'\n',
-            Separator::Newline => buffer[len] = 0,
-            Separator::Nul => {
-                if style == ShellStyle::Print && !did_find_nul.get() {
-                    // A NUL anywhere in the output proves this zsh uses them.
-                    if len != 0
-                        && CStr::from_bytes_until_nul(&buffer).is_ok_and(|s| s.count_bytes() < len)
-                    {
-                        did_find_nul.set(true);
-                    } else {
-                        check_spaces = true;
-                    }
-                }
-                // STYLE_PRINT already ends in a NUL; STYLE_GLOB needs one.
-                if len != 0 && buffer[len - 1] == 0 {
-                    content = len - 1;
-                }
-            }
-        }
-
-        let entries = split_entries(&buffer[..content], &style.separator(), check_spaces);
-        if entries.is_empty() {
-            // Happens with /bin/sh and `:e $NO_SUCH_VAR<Tab>`: it expands to
-            // nothing rather than reporting an error.
-            return not_found(num_pat, pat, num_file, file, flags);
-        }
-
-        // Terminate every entry in place, as upstream does by overwriting the
-        // separators — each range is then a C string inside `buffer`.
-        for entry in &entries {
-            buffer[entry.end] = 0;
-        }
-
-        let out = xmalloc(entries.len() * size_of::<*mut c_char>()) as *mut *mut c_char;
-        let mut kept = 0isize;
-        for entry in &entries {
-            let name = buffer[entry.start..].as_ptr().cast::<c_char>();
-
-            // Require the file to exist; helps when using /bin/sh.
-            if !flags.has(ExpandFlags::NOTFOUND) && !os_path_exists(name) {
-                continue;
-            }
-            let dir = os_isdir(name);
-            if (dir && !flags.has(ExpandFlags::DIR)) || (!dir && !flags.has(ExpandFlags::FILE)) {
-                continue;
-            }
-            // Skip what is not executable, when that is being checked for.
-            if !dir
-                && flags.has(ExpandFlags::EXEC)
-                && !os_can_exe(cstr::at(name), ptr::null_mut(), use_path)
-            {
-                continue;
-            }
-
-            let p = xmalloc(cstr::bytes_at(name).len() + 1 + dir as usize) as *mut c_char;
-            strcpy(p, name);
-            if dir {
-                // A directory name gets a trailing '/'.
-                add_pathsep(p);
-            }
-            *out.offset(kept) = p;
-            kept += 1;
-        }
-
-        if kept == 0 {
-            // Every entry was rejected.
-            xfree(out.cast());
-            return not_found(num_pat, pat, num_file, file, flags);
-        }
-        *num_file = kept as c_int;
-        *file = out;
-        Ok(())
+    // With no wildcards, copy the names across rather than starting a
+    // shell — that saves a great deal of time.
+    if !have_wildcard(patterns) {
+        return Ok(save_patterns(patterns));
     }
+
+    // No shell command inside the sandbox, and no backticks in `secure`.
+    if sandbox.get() != 0 && check_secure() {
+        return Err(Failed);
+    }
+    if secure.get() != 0 && patterns.iter().any(|pat| pat.contains(&b'`')) && check_secure() {
+        return Err(Failed);
+    }
+
+    let Some(tempname) = temp_name() else {
+        emsg(gettext(e_notmp));
+        return Err(Failed);
+    };
+    let style = pick_shell_style(patterns);
+    let (command, ampersand) = build_command(style, patterns, &tempname, flags);
+    let command = CString::new(command).expect("no interior NUL in a shell command");
+
+    let mut shellopts = ShellOpts::EXPAND | ShellOpts::SILENT;
+    if flags.has(ExpandFlags::SILENT) {
+        shellopts |= ShellOpts::HIDE_MESS;
+    }
+    // With zsh -G a pattern that matches nothing is dropped from the
+    // argument list; otherwise zsh errors out and expands nothing else.
+    // With csh -f the shell variables from .cshrc are not expanded, so it
+    // is only usable when no pattern holds a `$`.
+    let extra_shell_arg = match style {
+        ShellStyle::Print => c"-G".as_ptr().cast_mut(),
+        ShellStyle::Glob if !have_dollars(patterns) => c"-f".as_ptr().cast_mut(),
+        _ => ptr::null_mut(),
+    };
+
+    // SAFETY: a NUL-terminated command this frame owns, and a static extra
+    // argument or none.
+    let failed =
+        unsafe { call_shell(command.as_ptr().cast_mut(), shellopts, extra_shell_arg) } != 0;
+    // A backgrounded command needs a moment to create the temp file, but
+    // is not waited for.
+    if ampersand {
+        os_delay(10, true);
+    }
+
+    if failed {
+        os_remove(tempname.as_cstr());
+        // With interactive completion the message is not printed.
+        if !flags.has(ExpandFlags::SILENT) {
+            msg_putchar('\n' as c_int); // clear the bottom line quickly
+            cmdline_row.set(Rows.get() - 1); // continue on the last line
+            msg(gettext(e_wildexpand), 0);
+            msg_start(); // do not overwrite this message
+        }
+        // A failed `cmd` expansion must not list `cmd` as a match, even
+        // under NOTFOUND.
+        if style == ShellStyle::Backtick {
+            return Err(Failed);
+        }
+        return not_found(patterns, flags);
+    }
+
+    let mut buffer = match read_temp_file(tempname.as_cstr(), flags) {
+        Read::Content(buffer) => buffer,
+        Read::NotFound => return not_found(patterns, flags),
+        Read::Failed => return Err(Failed),
+    };
+    drop(tempname);
+
+    // Upstream writes a sentinel one past the content; the vector carries
+    // the room for it.
+    let len = buffer.len();
+    buffer.push(0);
+
+    let mut check_spaces = false;
+    let mut content = len;
+    match style.separator() {
+        Separator::Space => buffer[len] = b'\n',
+        Separator::Newline => buffer[len] = 0,
+        Separator::Nul => {
+            if style == ShellStyle::Print && !did_find_nul.get() {
+                // A NUL anywhere in the output proves this zsh uses them.
+                if len != 0
+                    && CStr::from_bytes_until_nul(&buffer).is_ok_and(|s| s.count_bytes() < len)
+                {
+                    did_find_nul.set(true);
+                } else {
+                    check_spaces = true;
+                }
+            }
+            // STYLE_PRINT already ends in a NUL; STYLE_GLOB needs one.
+            if len != 0 && buffer[len - 1] == 0 {
+                content = len - 1;
+            }
+        }
+    }
+
+    let entries = split_entries(&buffer[..content], &style.separator(), check_spaces);
+    if entries.is_empty() {
+        // Happens with /bin/sh and `:e $NO_SUCH_VAR<Tab>`: it expands to
+        // nothing rather than reporting an error.
+        return not_found(patterns, flags);
+    }
+
+    let mut found = Vec::with_capacity(entries.len());
+    for entry in entries {
+        // Each entry ends at its separator, which upstream overwrites with
+        // a NUL; a NUL inside it ends it early, as it did there.
+        let mut name = cstr::until_nul(&buffer[entry]).to_vec();
+        let name_cstr = cstr::owned(&name);
+
+        // Require the file to exist; helps when using /bin/sh.
+        if !flags.has(ExpandFlags::NOTFOUND) && !path_exists(&name_cstr) {
+            continue;
+        }
+        let dir = dir_exists(&name_cstr);
+        if (dir && !flags.has(ExpandFlags::DIR)) || (!dir && !flags.has(ExpandFlags::FILE)) {
+            continue;
+        }
+        // Skip what is not executable, when that is being checked for.
+        if !dir && flags.has(ExpandFlags::EXEC) && !can_execute(&name_cstr, use_path) {
+            continue;
+        }
+
+        if dir {
+            // A directory name gets a trailing '/'.
+            add_pathsep(&mut name);
+        }
+        found.push(XString::from_vec(name));
+    }
+
+    if found.is_empty() {
+        // Every entry was rejected.
+        return not_found(patterns, flags);
+    }
+    Ok(found)
 }
 
 /// How reading the shell's temp file turned out. The two failures are not
 /// interchangeable: a file that would not open falls back to the patterns
 /// under [`ExpandFlags::NOTFOUND`], while one that would not seek or read is a
 /// hard
-/// `FAIL`. `tempname` is freed on every path but the successful one.
+/// `FAIL`.
 enum Read {
     Content(Vec<u8>),
     NotFound,
@@ -551,13 +465,10 @@ enum Read {
 }
 
 /// Read the temp file the shell wrote into, reporting whatever went wrong.
-///
-/// # Safety
-/// `tempname` must be a NUL-terminated path this owns nothing of.
-unsafe fn read_temp_file(tempname: *mut c_char, flags: ExpandFlags) -> Read {
-    // SAFETY: the caller's contract; `fd` is closed on every path out.
+fn read_temp_file(tempname: &CStr, flags: ExpandFlags) -> Read {
+    // SAFETY: a NUL-terminated name; `fd` is closed on every path out.
     unsafe {
-        let fd = fopen(tempname, READBIN.as_ptr());
+        let fd = fopen(tempname.as_ptr(), READBIN.as_ptr());
         if fd.is_null() {
             // Something went wrong — perhaps a file name with a special
             // character in it.
@@ -565,17 +476,14 @@ unsafe fn read_temp_file(tempname: *mut c_char, flags: ExpandFlags) -> Read {
                 msg(gettext(e_wildexpand), 0);
                 msg_start(); // do not overwrite this message
             }
-            xfree(tempname.cast());
             return Read::NotFound;
         }
         if fseek(fd, 0, SEEK_END) < 0 {
-            xfree(tempname.cast());
             fclose(fd);
             return Read::Failed;
         }
         let templen = ftell(fd);
         if templen < 0 {
-            xfree(tempname.cast());
             fclose(fd);
             return Read::Failed;
         }
@@ -585,32 +493,20 @@ unsafe fn read_temp_file(tempname: *mut c_char, flags: ExpandFlags) -> Read {
         let mut buffer: Vec<u8> = vec![0; len];
         let readlen = fread(buffer.as_mut_ptr().cast(), 1, len, fd);
         fclose(fd);
-        os_remove(cstr::at(tempname));
+        os_remove(tempname);
         if readlen as usize != len {
-            semsg!("E485: Can't read file {}", c_str(tempname));
-            xfree(tempname.cast());
+            semsg!("E485: Can't read file {}", msg_cstr(tempname));
             return Read::Failed;
         }
         Read::Content(buffer)
     }
 }
 
-/// Upstream's `notfound:` label: under `ExpandFlags::NOTFOUND` the patterns themselves
-/// become the answer.
-///
-/// # Safety
-/// As [`os_expand_wildcards`].
-unsafe fn not_found(
-    num_pat: c_int,
-    pat: *mut *mut c_char,
-    num_file: *mut c_int,
-    file: *mut *mut *mut c_char,
-    flags: ExpandFlags,
-) -> Result<(), Failed> {
+/// Upstream's `notfound:` label: under `ExpandFlags::NOTFOUND` the patterns
+/// themselves become the answer.
+fn not_found(patterns: &[XString], flags: ExpandFlags) -> Result<Vec<XString>, Failed> {
     if !flags.has(ExpandFlags::NOTFOUND) {
         return Err(Failed);
     }
-    // SAFETY: the caller's contract.
-    unsafe { save_patterns(num_pat, pat, num_file, file) };
-    Ok(())
+    Ok(save_patterns(patterns))
 }

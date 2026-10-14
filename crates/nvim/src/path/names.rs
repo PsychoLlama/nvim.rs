@@ -1,7 +1,7 @@
 //! Taking a file name apart, and putting one together.
 //!
 //! Everything here is about the *text* of a name: which byte the last
-//! component starts at ([`path_tail`] and its neighbours), whether a byte is
+//! component starts at ([`tail_index`] and its neighbours), whether a byte is
 //! a path separator, how to join a directory to a name ([`concat_fnames`]),
 //! and whether a name is really a URL ([`path_with_url`]) or an absolute
 //! path. Nothing here touches the file system — except
@@ -13,21 +13,29 @@
 //! byte after it is a continuation byte, and none of `/`, `:`, `.` or a
 //! space is one.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr;
-use core::ffi::{c_char, c_int};
+use crate::mbyte::{strcmp_ic_in, strnicmp_in};
+use crate::memory::XString;
+use core::ffi::c_int;
 use std::ffi::CStr;
 
 use super::*;
 use crate::types::MAXPATHL;
 
-/// Where the last component of `name` starts — what [`path_tail`] answers,
-/// as an index. Leading separators are the head of the path rather than part
-/// of a component, so `"/foo"` has its tail at `foo`.
+/// Where the last component of `name` starts — upstream's `path_tail`, as an
+/// index. Leading separators are the head of the path rather than part of a
+/// component, so `"/foo"` has its tail at `foo`.
 pub(crate) fn tail_index(name: &[u8]) -> usize {
-    let head = name.iter().position(|&b| b != b'/').unwrap_or(name.len());
+    let head = past_head_index(name);
     name[head..]
         .iter()
         .rposition(|&b| b == b'/')
@@ -36,98 +44,56 @@ pub(crate) fn tail_index(name: &[u8]) -> usize {
 
 /// The tail of `fname`: everything past its last path separator, so
 /// `"dir/file.txt"` gives `"file.txt"` and `"dir/"` gives `""`.
-///
-/// # Safety
-/// `fname` must be a NUL-terminated string, or NULL for `""`.
-pub unsafe fn path_tail(fname: *const c_char) -> *mut c_char {
-    if fname.is_null() {
-        return c"".as_ptr().cast_mut();
-    }
-    let at = tail_index(unsafe { CStr::from_ptr(fname) }.to_bytes());
-    unsafe { fname.add(at) }.cast_mut()
+pub fn path_tail(fname: &CStr) -> &CStr {
+    cstr::suffix(fname, tail_index(fname.to_bytes()))
 }
 
-/// The tail of `fname` *with* its leading path separators, so
-/// `"dir///file.txt"` gives `"///file.txt"`. Never past the head of the
-/// path: `"/file"` keeps its one separator.
-///
-/// # Safety
-/// `fname` must be a NUL-terminated string.
-pub unsafe fn path_tail_with_sep(fname: *mut c_char) -> *mut c_char {
-    let past_head = unsafe { get_past_head(fname) };
-    let mut tail = unsafe { path_tail(fname) };
-    while tail > past_head && unsafe { after_pathsep(fname, tail) } != 0 {
-        tail = unsafe { tail.sub(1) };
+/// Where the tail of `name` starts *with* its leading path separators, so
+/// `"dir///file.txt"` gives the index of `"///file.txt"`. Never past the head
+/// of the path: `"/file"` keeps its one separator.
+pub fn tail_with_sep_index(name: &[u8]) -> usize {
+    let past_head = past_head_index(name);
+    let mut tail = tail_index(name);
+    while tail > past_head && after_pathsep(name, tail) {
+        tail -= 1;
     }
     tail
 }
 
-/// The executable in a `"path/to/exe [args]"` invocation, and — through
-/// `len`, if it is not NULL — how long its name is.
-///
-/// # Safety
-/// `invocation` must be a NUL-terminated string and `len` writable or NULL.
-pub unsafe fn invocation_path_tail(invocation: *const c_char, len: *mut size_t) -> *const c_char {
-    let past_head = unsafe { get_past_head(invocation) }.cast_const();
-    let bytes = unsafe { CStr::from_ptr(past_head) }.to_bytes();
+/// The program name in a `"path/to/exe [args]"` invocation: everything from
+/// the tail of the program's path on, its arguments included.
+pub fn invocation_path_tail(invocation: &CStr) -> &CStr {
+    let bytes = invocation.to_bytes();
+    let past_head = past_head_index(bytes);
+    let rest = &bytes[past_head..];
     // The arguments are not part of the name.
-    let exe = bytes.split(|&b| b == b' ').next().unwrap_or(bytes);
+    let exe = rest.split(|&b| b == b' ').next().unwrap_or(rest);
     let at = exe.iter().rposition(|&b| b == b'/').map_or(0, |at| at + 1);
-    if !len.is_null() {
-        unsafe { *len = (exe.len() - at) as size_t };
-    }
-    unsafe { past_head.add(at) }
+    cstr::suffix(invocation, past_head + at)
 }
 
-/// [`invocation_path_tail`] of an invocation the caller holds: everything
-/// from the program name's tail on.
-pub(crate) fn invocation_path_tail_of(invocation: &CStr) -> &[u8] {
-    // SAFETY: a NUL-terminated string; the tail answered is inside it, and
-    // no length is asked for.
-    unsafe {
-        CStr::from_ptr(invocation_path_tail(
-            invocation.as_ptr(),
-            core::ptr::null_mut(),
-        ))
-    }
-    .to_bytes()
-}
-
-/// What is left of `fname` after its first path component: the byte past the
-/// first separator, or the NUL when there is none.
-///
-/// # Safety
-/// `fname` must be a NUL-terminated string.
-pub unsafe fn path_next_component(fname: *const c_char) -> *const c_char {
-    let bytes = unsafe { CStr::from_ptr(fname) }.to_bytes();
-    let at = bytes
-        .iter()
+/// Where what is left of `name` after its first path component starts: the
+/// byte past the first separator, or the end when there is none.
+pub fn next_component_index(name: &[u8]) -> usize {
+    name.iter()
         .position(|&b| b == b'/')
-        .map_or(bytes.len(), |at| at + 1);
-    unsafe { fname.add(at) }
+        .map_or(name.len(), |at| at + 1)
 }
 
 /// How long the head of a path is here: 1, where Windows would say 3.
-pub fn path_head_length() -> c_int {
+pub fn path_head_length() -> usize {
     1
 }
 
 /// Does `path` begin with the head of a path — `/` here, `D:` on Windows?
-pub fn is_path_head(path: &CStr) -> bool {
-    path.to_bytes()
-        .first()
-        .is_some_and(|&b| vim_ispathsep(c_int::from(b)))
+pub fn is_path_head(path: &[u8]) -> bool {
+    path.first().is_some_and(|&b| vim_ispathsep(c_int::from(b)))
 }
 
-/// One byte past the head of `path`: after its leading separators, which on
-/// Windows would also mean after `c:`. `path` itself when it has no head.
-///
-/// # Safety
-/// `path` must be a NUL-terminated string.
-pub unsafe fn get_past_head(path: *const c_char) -> *mut c_char {
-    let bytes = unsafe { CStr::from_ptr(path) }.to_bytes();
-    let head = bytes.iter().position(|&b| b != b'/').unwrap_or(bytes.len());
-    unsafe { path.add(head) }.cast_mut()
+/// Where `path` goes past its head: after its leading separators, which on
+/// Windows would also mean after `c:`. Zero when it has no head.
+pub(crate) fn past_head_index(path: &[u8]) -> usize {
+    path.iter().position(|&b| b != b'/').unwrap_or(path.len())
 }
 
 /// Is `c` a path separator? On Windows this includes the colon, which is why
@@ -148,128 +114,83 @@ pub fn vim_ispathlistsep(c: c_int) -> bool {
 
 /// Does the directory `fname` names exist? A name with no directory part
 /// counts as existing.
-///
-/// # Safety
-/// `fname` must be a writable NUL-terminated string: the directory part is
-/// terminated in place for the question, as upstream does.
-pub unsafe fn dir_of_file_exists(fname: *mut c_char) -> bool {
-    let tail = unsafe { path_tail_with_sep(fname) };
-    if tail == fname {
+pub fn dir_of_file_exists(fname: &[u8]) -> bool {
+    let tail = tail_with_sep_index(fname);
+    if tail == 0 {
         return true;
     }
-    let saved = unsafe { *tail };
-    unsafe { *tail = 0 };
-    let exists = unsafe { os_isdir(fname) };
-    unsafe { *tail = saved };
-    exists
+    cstr::with_terminated(&fname[..tail], dir_exists)
 }
 
-/// Compare two file names, honouring `'fileignorecase'`.
+/// Compare two file names, honouring `'fileignorecase'`. Each ends at its
+/// end or its first NUL.
 ///
 /// Not exact — it knows nothing about maximum name lengths or `"../dir"`,
 /// and the file system may fold case by some other rule.
-pub fn path_fnamecmp(fname1: &CStr, fname2: &CStr) -> c_int {
-    // SAFETY: both are NUL-terminated and outlive the call.
-    unsafe { mb_strcmp_ic(p_fic(), fname1.as_ptr(), fname2.as_ptr()) }
+pub fn path_fnamecmp(fname1: &[u8], fname2: &[u8]) -> c_int {
+    strcmp_ic_in(p_fic(), cstr::until_nul(fname1), cstr::until_nul(fname2))
 }
 
-/// [`path_fnamecmp`] over at most `len` bytes.
-pub fn path_fnamencmp(fname1: &CStr, fname2: &CStr, len: size_t) -> c_int {
-    let (a, b) = (fname1.as_ptr(), fname2.as_ptr());
-    // SAFETY: both are NUL-terminated, and both callees stop at the NUL.
+/// [`path_fnamecmp`] over at most `len` bytes of each.
+pub fn path_fnamencmp(fname1: &[u8], fname2: &[u8], len: usize) -> c_int {
+    let (a, b) = (prefix_of(fname1, len), prefix_of(fname2, len));
     if p_fic() {
-        unsafe { mb_strnicmp(a, b, len) }
+        strnicmp_in(a, b)
     } else {
-        unsafe { cstr::prefix_cmp(a, b, len) as c_int }
+        a.cmp(b) as c_int
     }
 }
 
-/// Append `fname2` to the `len1` bytes already in `fname1`, with a path
-/// separator between them if `sep` is set and there is not one there
-/// already. Answers `fname1`.
-///
-/// # Safety
-/// `fname1` must hold `len1` bytes and have room for `len2 + 2` more;
-/// `fname2` must hold `len2` bytes and a NUL.
-pub(crate) unsafe fn do_concat_fnames(
-    fname1: *mut c_char,
-    len1: size_t,
-    fname2: *const c_char,
-    len2: size_t,
-    sep: bool,
-) -> *mut c_char {
-    let mut at = len1;
-    if sep && unsafe { *fname1 } != 0 && unsafe { after_pathsep(fname1, fname1.add(at)) } == 0 {
-        unsafe { *fname1.add(at) = PATHSEP as c_char };
-        at += 1;
-    }
-    // The NUL comes across with the name.
-    unsafe { core::ptr::copy(fname2, fname1.add(at), len2 + 1) };
-    fname1
+/// At most `len` bytes of `name`, which ends at its first NUL.
+pub(crate) fn prefix_of(name: &[u8], len: usize) -> &[u8] {
+    let name = cstr::until_nul(name);
+    &name[..len.min(name.len())]
 }
 
 /// Join `fname1` and `fname2`, with a path separator between them if `sep`
 /// is set and one is needed.
-///
-/// # Safety
-/// Both must be NUL-terminated strings. The result is the caller's to free.
-pub unsafe fn concat_fnames(
-    fname1: *const c_char,
-    fname2: *const c_char,
-    sep: bool,
-) -> *mut c_char {
-    let len1 = unsafe { CStr::from_ptr(fname1) }.to_bytes().len();
-    let len2 = unsafe { CStr::from_ptr(fname2) }.to_bytes().len();
-    // Room for both names, the separator, and the NUL.
-    let dest: *mut c_char = unsafe { xmalloc(len1 + len2 + 3) }.cast();
-    unsafe { core::ptr::copy_nonoverlapping(fname1, dest, len1 + 1) };
-    unsafe { do_concat_fnames(dest, len1 as size_t, fname2, len2 as size_t, sep) }
-}
-
-/// [`concat_fnames`] into a string the caller owns.
-pub(crate) fn join_fnames(fname1: &CStr, fname2: &CStr, sep: bool) -> crate::memory::XString {
-    // SAFETY: two NUL-terminated names; the answer is a fresh `xmalloc`
-    // block, which the string adopts.
-    unsafe {
-        let joined = concat_fnames(fname1.as_ptr(), fname2.as_ptr(), sep);
-        crate::memory::XString::from_raw(joined)
+pub fn concat_fnames(fname1: &[u8], fname2: &[u8], sep: bool) -> XString {
+    let mut joined = XString::with_capacity(fname1.len() + fname2.len() + 1);
+    joined.push_bytes(fname1);
+    if sep && !fname1.is_empty() && !after_pathsep(fname1, fname1.len()) {
+        joined.push_byte(PATHSEP_BYTE);
     }
+    joined.push_bytes(fname2);
+    joined
 }
 
-/// [`concat_fnames`], but growing `fname1` in place rather than allocating.
-///
-/// # Safety
-/// `fname1` must be an allocated NUL-terminated string, and is consumed;
-/// `fname2` must be a NUL-terminated string.
-pub unsafe fn concat_fnames_realloc(
-    fname1: *mut c_char,
-    fname2: *const c_char,
-    sep: bool,
-) -> *mut c_char {
-    let len1 = unsafe { CStr::from_ptr(fname1) }.to_bytes().len();
-    let len2 = unsafe { CStr::from_ptr(fname2) }.to_bytes().len();
-    let dest: *mut c_char = unsafe { xrealloc(fname1.cast(), len1 + len2 + 3) }.cast();
-    unsafe { do_concat_fnames(dest, len1 as size_t, fname2, len2 as size_t, sep) }
-}
+/// The path separator, as a byte.
+pub(crate) const PATHSEP_BYTE: u8 = b'/';
 
-/// Add a path separator to `p` unless it ends in one already.
+/// Add a path separator to `name` unless it ends in one already.
 ///
 /// Answers false, having done nothing, only when there is no room for the
 /// separator within [`MAXPATHL`].
-///
-/// # Safety
-/// `p` must be a NUL-terminated string in a buffer of [`MAXPATHL`] bytes.
-pub unsafe fn add_pathsep(p: *mut c_char) -> bool {
-    let len = unsafe { CStr::from_ptr(p) }.to_bytes().len();
-    if len == 0 || unsafe { after_pathsep(p, p.add(len)) } != 0 {
+pub fn add_pathsep(name: &mut Vec<u8>) -> bool {
+    if name.is_empty() || after_pathsep(name, name.len()) {
         return true;
     }
     // The separator and the NUL after it.
-    if len + 2 > MAXPATHL as usize {
+    if name.len() + 2 > MAXPATHL as usize {
         return false;
     }
-    unsafe { *p.add(len) = PATHSEP as c_char };
-    unsafe { *p.add(len + 1) = 0 };
+    name.push(PATHSEP_BYTE);
+    true
+}
+
+/// [`add_pathsep`] for a name in a buffer of its own, NUL-terminated: the
+/// separator goes in when the buffer — and [`MAXPATHL`] — has room for it
+/// and its NUL.
+pub(crate) fn add_pathsep_in(buf: &mut [u8]) -> bool {
+    let len = cstr::until_nul(buf).len();
+    if len == 0 || after_pathsep(buf, len) {
+        return true;
+    }
+    if len + 2 > MAXPATHL as usize || len + 2 > buf.len() {
+        return false;
+    }
+    buf[len] = PATHSEP_BYTE;
+    buf[len + 1] = 0;
     true
 }
 
@@ -290,9 +211,9 @@ pub fn path_has_drive_letter(p: &[u8]) -> bool {
 pub fn path_is_url(p: &CStr) -> c_int {
     let p = p.to_bytes();
     if p.starts_with(b":/") {
-        URL_SLASH as c_int
+        URL_SLASH
     } else if p.starts_with(br":\\") {
-        URL_BACKSLASH as c_int
+        URL_BACKSLASH
     } else {
         0
     }
@@ -317,9 +238,7 @@ pub fn path_with_url(fname: &CStr) -> c_int {
     if matches!(bytes[end - 1], b'+' | b'-' | b'.') {
         return 0;
     }
-    // `end` indexes `fname`'s own bytes, so the tail past it is the same
-    // string and carries the same terminator.
-    path_is_url(cstr::in_bytes(&fname.to_bytes_with_nul()[end..]))
+    path_is_url(cstr::suffix(fname, end))
 }
 
 /// Does `path` end in `extension`, ignoring the dot and honouring
@@ -329,9 +248,7 @@ pub fn path_with_extension(path: &CStr, extension: &CStr) -> bool {
     let Some(dot) = bytes.iter().rposition(|&b| b == b'.') else {
         return false;
     };
-    // SAFETY: `dot` indexes `path`'s own bytes, so the byte after it starts
-    // the tail of the same NUL-terminated string; `extension` is one too.
-    unsafe { mb_strcmp_ic(p_fic(), path.as_ptr().add(dot + 1), extension.as_ptr()) == 0 }
+    strcmp_ic_in(p_fic(), &bytes[dot + 1..], extension.to_bytes()) == 0
 }
 
 /// Is `name` a full (absolute) path name, or a URL?
@@ -339,16 +256,14 @@ pub fn vim_is_abs_name(name: &CStr) -> bool {
     path_with_url(name) != 0 || path_is_absolute(name)
 }
 
-/// Is `p` just past a path separator? `b` must be the start of the name, so
-/// that a separator byte inside a multibyte character can be told apart from
-/// a real one.
+/// Is `at` just past a path separator in `name`?
 ///
-/// # Safety
-/// `b` and `p` must point into the same string, with `b` no later than `p`.
-pub unsafe fn after_pathsep(b: *const c_char, p: *const c_char) -> c_int {
-    (p > b
-        && vim_ispathsep(unsafe { *p.sub(1) } as c_int)
-        && unsafe { utf_head_off(b, p.sub(1)) } == 0) as c_int
+/// Upstream also asks that the separator start a character, so that a
+/// separator byte inside a multibyte character is not taken for one — but a
+/// `/` is ASCII, which never continues a character, so the byte alone
+/// answers.
+pub fn after_pathsep(name: &[u8], at: usize) -> bool {
+    at > 0 && vim_ispathsep(c_int::from(name[at - 1]))
 }
 
 /// Is `fname` an absolute path? `~` counts: it names the home directory.

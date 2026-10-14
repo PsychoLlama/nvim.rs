@@ -232,10 +232,8 @@ pub fn readdir_core(
         return Err(Failed);
     }
 
-    // SAFETY: a `Directory` `os_scandir` succeeded on; the name is null or
-    // NUL-terminated, and copied before the next step of the walk.
-    let next =
-        |dir: &mut Directory| unsafe { cstr::at_opt(os_scandir_next(dir)) }.map(CString::from);
+    // Copied before the next step of the walk.
+    let next = |dir: &mut Directory| os_scandir_next(dir).map(CString::from);
     while let Some(name) = next(&mut dir) {
         let bytes = name.as_bytes();
         let mut ignore = bytes == b"." || bytes == b"..";
@@ -381,15 +379,8 @@ pub fn vim_gettempdir() -> *mut c_char {
 ///
 /// `tempdir` must point at a NUL-terminated string.
 unsafe fn vim_settempdir(tempdir: *const c_char) -> bool {
-    // Not `xmalloc`: running out of memory here is survivable, we just
-    // fall through to the next candidate directory.
-    let buf = unsafe { verbose_try_malloc(MAXPATHL as usize + 2) }.cast::<c_char>();
-    if buf.is_null() {
-        return false;
-    }
-    let _ = unsafe { vim_full_name(tempdir, buf, MAXPATHL as size_t, false) };
-    let mut full = unsafe { CStr::from_ptr(buf) }.to_bytes().to_vec();
-    unsafe { xfree(buf.cast()) };
+    let mut full = vim_full_name(unsafe { cstr::at(tempdir) }, MAXPATHL as usize, false)
+        .unwrap_or_else(|name| name);
 
     if !full.ends_with(b"/") {
         full.push(b'/');

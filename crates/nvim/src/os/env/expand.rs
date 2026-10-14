@@ -305,7 +305,7 @@ pub unsafe fn expand_env_esc(
                         dstlen -= c as c_int;
                         // If the value ends in a path separator and the tail
                         // starts with one, drop one of them.
-                        if after_pathsep(dst, dst.add(c)) != 0 && vim_ispathsep(*tail as c_int) {
+                        if after_pathsep(cstr::bytes_at(dst), c) && vim_ispathsep(*tail as c_int) {
                             tail = tail.add(1);
                         }
                         dst = dst.add(c);

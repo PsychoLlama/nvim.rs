@@ -46,7 +46,7 @@ use crate::os::env::{env_exists, getenv_owned, vim_getenv_owned};
 use crate::os::lang::{lang_init, mess_lang_of};
 use crate::os::stdpaths::stdpaths_user_state_subpath_of;
 use crate::os::users::os_getuid;
-use crate::path::{invocation_path_tail_of, path_fnamecmp, vim_ispathlistsep};
+use crate::path::{invocation_path_tail, path_fnamecmp, vim_ispathlistsep};
 use crate::runtime::runtimepath_default_of;
 use crate::runtime::state::current_sctx;
 use crate::spell::init_spell_chartab;
@@ -383,11 +383,15 @@ pub(crate) fn set_init_3() {
 
     // The program's own name: its tail, without the arguments.
     let shell = p_sh(|value| {
-        let tail = invocation_path_tail_of(value);
+        let tail = invocation_path_tail(value).to_bytes();
         let name = tail.split(|&b| b == b' ').next().unwrap_or_default();
         XString::from_bytes(name)
     });
-    let named = |names: &[&CStr]| names.iter().any(|n| path_fnamecmp(shell.as_cstr(), n) == 0);
+    let named = |names: &[&CStr]| {
+        names
+            .iter()
+            .any(|n| path_fnamecmp(&shell, n.to_bytes()) == 0)
+    };
     let is_csh = named(&CSH_LIKE);
 
     if is_csh || named(&POSIX_LIKE) {

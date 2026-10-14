@@ -36,8 +36,8 @@ use crate::eval::typval::NumBuf;
 use crate::mbyte::{cluster_len, head_off};
 use crate::memory::XString;
 use crate::os::env::{expand_env_save_opt_of, home_replace_in};
-use crate::os::fs::{dirname_text, os_isdir_of};
-use crate::path::{full_name_of, path_fnamencmp, tail_index, vim_is_abs_name};
+use crate::os::fs::{dir_exists, dirname_text};
+use crate::path::{full_name_save, path_fnamencmp, tail_index, vim_is_abs_name};
 use crate::strings::find_char;
 use crate::strings::shellescape;
 use crate::types::{EvalFuncData, MAXPATHL, TypVal};
@@ -179,12 +179,12 @@ fn full_path_stage(f: &mut Fname<'_>, tilde_file: bool) {
     }
     let has_dot = at(b, i) != 0;
     if has_dot || !vim_is_abs_name(f.cstr()) {
-        let full = full_name_of(f.cstr(), has_dot);
+        let full = full_name_save(f.cstr(), has_dot);
         f.adopt(full);
     }
 
     // A directory answers with a trailing separator, room permitting.
-    if os_isdir_of(f.cstr()) {
+    if dir_exists(f.cstr()) {
         let mut dir = f.cstr().to_bytes().to_vec();
         let len = dir.len();
         if len != 0 && !after_sep(&dir, 0, len) && len + 2 <= MAXPATHL as usize {
@@ -216,7 +216,7 @@ fn home_stages(
             Some(if f.byte(0) == b'~' {
                 expand_env_save_opt_of(f.cstr(), false)
             } else {
-                full_name_of(f.cstr(), false)
+                full_name_save(f.cstr(), false)
             })
         } else {
             None
@@ -232,7 +232,7 @@ fn home_stages(
             let namelen = dirname.len();
             // Not `shorten_fname`: that removes the prefix even when the path
             // does not have one.
-            if path_fnamencmp(p, dirname.as_cstr(), namelen) == 0 {
+            if path_fnamencmp(p.to_bytes(), &dirname, namelen) == 0 {
                 let rest = p.to_bytes().get(namelen..).unwrap_or_default();
                 if is_sep(rest, 0) {
                     let skip = (0..).take_while(|&i| is_sep(rest, i)).count();

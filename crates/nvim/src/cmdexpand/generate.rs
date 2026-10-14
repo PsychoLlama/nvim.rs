@@ -25,7 +25,7 @@ use crate::menu::{get_menu_name, get_menu_names};
 use crate::os::env::get_env_name;
 use crate::os::lang::{get_lang_arg, get_locales};
 use crate::os::users::get_users;
-use crate::path::{ExpandFlags, expand_wildcards_eval_list};
+use crate::path::{ExpandFlags, expand_wildcards_eval};
 use crate::profile::get_profile_name;
 use crate::runtime::{script_display_name, script_id_valid};
 use crate::sign::get_sign_name;
@@ -109,7 +109,7 @@ pub(crate) fn expand_files_and_dirs(
         flags |= ExpandFlags::ICASE;
     }
     // Expand wildcards, supporting %:h and the like.
-    expand_wildcards_eval_list(pat, flags)
+    expand_wildcards_eval(pat, flags)
 }
 
 /// Answer `list[idx]`, or `None` when `idx` is out of range.

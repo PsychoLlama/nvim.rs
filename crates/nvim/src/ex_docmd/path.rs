@@ -18,7 +18,7 @@ use crate::optionstr::did_set_optexpr;
 use crate::os::cshim::gettext;
 use crate::os::env::expand_env_save_opt_of;
 use crate::os::fs::current_dir;
-use crate::path::pathcmp_cstr;
+use crate::path::pathcmp;
 use crate::semsg;
 use crate::smsg;
 use crate::types::CmdIdx;
@@ -291,7 +291,7 @@ pub(crate) fn change_dir(new_dir: &CStr, scope: CdScope) -> bool {
 
     let dir_differs = pdir
         .as_ref()
-        .is_none_or(|pdir| pathcmp_cstr(pdir.as_cstr(), new_dir.as_cstr()) != 0);
+        .is_none_or(|pdir| pathcmp(pdir, &new_dir, None) != 0);
     if dir_differs {
         do_autocmd_dirchanged(new_dir.as_cstr(), scope, kCdCauseManual, true);
         if vim_chdir(new_dir.as_cstr()) != 0 {

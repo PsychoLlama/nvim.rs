@@ -70,9 +70,9 @@ pub(crate) unsafe fn mf_free_fnames(mfp: *mut MemFile) {
 /// point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn mf_set_fnames(mfp: *mut MemFile, fname: *mut c_char) {
     unsafe {
-        let full = full_name_save(fname, false);
+        let full = full_name_save(cstr::at(fname), false);
         (*mfp).fname = Some(take_cstring(fname));
-        (*mfp).ffname = (!full.is_null()).then(|| take_cstring(full));
+        (*mfp).ffname = Some(take_cstring(full.into_raw()));
     }
 }
 

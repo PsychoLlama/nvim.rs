@@ -202,7 +202,7 @@ pub(crate) unsafe fn open_source(
         // A name ending in a path separator can't be opened. Check it
         // here, because reading may actually work but then creating
         // the swap file would destroy it.
-        if unsafe { after_pathsep(fname, fname.add(fnamelen)) } != 0 {
+        if unsafe { after_pathsep(cstr::bytes_at(fname), fnamelen) } {
             if !silent {
                 filemess_note(fname, msg_is_a_directory);
             }
@@ -313,7 +313,7 @@ pub(crate) unsafe fn open_source(
                 }
             }
             if !silent {
-                let note = if unsafe { dir_of_file_exists(fname) } {
+                let note = if unsafe { dir_of_file_exists(cstr::bytes_at(fname)) } {
                     c"[New]"
                 } else {
                     c"[New DIRECTORY]"

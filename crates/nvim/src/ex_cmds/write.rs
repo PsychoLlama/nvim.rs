@@ -48,8 +48,8 @@ use crate::option::vars::{P_DIR, p_confirm, p_dir, p_wa, p_write};
 use crate::option::{cpo_has, option_part, shortmess};
 use crate::optionstr::OptString;
 use crate::os::cshim::gettext;
-use crate::os::fs::{file_mkdir, os_file_is_writable, os_isdir_of, os_nodetype, path_exists};
-use crate::path::fixed_fname;
+use crate::os::fs::{dir_exists, file_mkdir, os_file_is_writable, os_nodetype, path_exists};
+use crate::path::fix_fname;
 use crate::semsg;
 use crate::startup::{exiting, getout};
 use crate::types::AutoEvent;
@@ -221,9 +221,7 @@ pub fn do_write(args: &mut ExArg) -> Result<(), Failed> {
     } else {
         Some(CString::new(args.line.arg()).expect("an argument stops at its NUL"))
     };
-    let full: Option<XString> = typed
-        .as_deref()
-        .map(|typed| fixed_fname(typed).unwrap_or_else(|| XString::from_cstr(typed)));
+    let full: Option<XString> = typed.as_deref().map(fix_fname);
     let other = full.as_ref().is_some_and(|full| otherfile(full.as_cstr()));
 
     // If we have a new file, put its name in the list of alternate file names.
@@ -451,7 +449,7 @@ pub fn check_overwrite(
     }
 
     if !args.forceit && !args.append {
-        if os_isdir_of(ffname) {
+        if dir_exists(ffname) {
             let ffname = msg_cstr(ffname);
             semsg!("E17: \"{ffname}\" is a directory");
             return Err(Failed);
@@ -716,7 +714,7 @@ pub fn getfile(
         // make ffname full path, set sfname
         if let Some(name) = ffname_arg {
             sfname = sfname.or(Some(name));
-            full = fixed_fname(name);
+            full = Some(fix_fname(name));
         }
         otherfile(full.as_ref().map_or(c"", XString::as_cstr))
     } else {

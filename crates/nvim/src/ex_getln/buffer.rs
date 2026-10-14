@@ -626,7 +626,7 @@ pub(crate) fn fnameescape(fname: &CStr, what: ::core::ffi::c_int) -> XString {
 }
 
 /// If `orig_pat` starts with `~/`, put the home directory back as `~` in
-/// each of `files`: [`tilde_replace`] over owned names.
+/// each of `files`.
 pub(crate) fn tilde_replace_matches(orig_pat: &[u8], files: &mut [XString]) {
     if orig_pat.first() != Some(&b'~')
         || !vim_ispathsep(::core::ffi::c_int::from(
@@ -639,32 +639,5 @@ pub(crate) fn tilde_replace_matches(orig_pat: &[u8], files: &mut [XString]) {
         // A name is at most as long as its expansion, plus the `~/`.
         let room = file.len() + 3;
         *file = crate::os::env::home_replace_in(None, file.as_cstr(), room, true);
-    }
-}
-
-/// For each name in `files[..num_files]`: if `orig_pat` starts with `~/`,
-/// put the home directory back as `~`.
-///
-/// # Safety
-///
-/// `orig_pat` must point at a NUL-terminated string, unaliased for the call.
-/// `files` must point at a writable `*mut c_char` slot the caller owns for
-/// the call.
-pub unsafe fn tilde_replace(
-    orig_pat: *mut ::core::ffi::c_char,
-    num_files: ::core::ffi::c_int,
-    files: *mut *mut ::core::ffi::c_char,
-) {
-    if byte(orig_pat) != '~' as ::core::ffi::c_int || !vim_ispathsep(byte(orig_pat.wrapping_add(1)))
-    {
-        return;
-    }
-    let n = num_files.max(0) as usize;
-    // SAFETY: the caller's promise -- `num_files` names.
-    for file in unsafe { ::core::slice::from_raw_parts_mut(files, n) } {
-        // SAFETY: an allocated file name.
-        let p = unsafe { home_replace_save(None, *file) };
-        free(*file);
-        *file = p;
     }
 }

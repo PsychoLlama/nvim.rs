@@ -19,9 +19,11 @@ use crate::memory::XString;
 use crate::memory::xmemrchr;
 use crate::option::vars::{P_HF, p_hf};
 use crate::os::cshim::strchr;
-use crate::os::fs::os_isdir;
+use crate::os::fs::dir_exists;
 use crate::os::state::{didset_vim, didset_vimruntime};
-use crate::path::{after_pathsep, append_path, concat_fnames, path_fnamencmp, path_tail_with_sep};
+use crate::path::{
+    after_pathsep, append_path, concat_fnames, path_fnamencmp, tail_index, tail_with_sep_index,
+};
 use crate::strings::has_char;
 use crate::types::{MAXPATHL, Vv};
 use crate::winlayer::Buf;
@@ -39,11 +41,10 @@ unsafe fn vim_runtime_dir(vimdir: *const c_char) -> *mut c_char {
         if vimdir.is_null() || *vimdir == 0 {
             return ptr::null_mut();
         }
-        let p = concat_fnames(vimdir, RUNTIME_DIRNAME.as_ptr(), true);
-        if os_isdir(p) {
-            return p;
+        let p = concat_fnames(cstr::bytes_at(vimdir), RUNTIME_DIRNAME.to_bytes(), true);
+        if dir_exists(p.as_cstr()) {
+            return p.into_raw();
         }
-        xfree(p.cast());
         ptr::null_mut()
     }
 }
@@ -69,8 +70,9 @@ unsafe fn remove_tail(path: *mut c_char, pend: *mut c_char, dirname: *const c_ch
         let len = cstr::bytes_at(dirname).len();
         let new_tail = pend.sub(len + 1);
         if new_tail >= path
-            && path_fnamencmp(cstr::at(new_tail), cstr::at(dirname), len) == 0
-            && (new_tail == path || after_pathsep(path, new_tail) != 0)
+            && path_fnamencmp(cstr::bytes_at(new_tail), cstr::bytes_at(dirname), len) == 0
+            && (new_tail == path
+                || after_pathsep(cstr::bytes_at(path), new_tail.offset_from(path) as usize))
         {
             return new_tail;
         }
@@ -144,20 +146,15 @@ pub unsafe fn vim_env_iter_rev(
 }
 
 /// The install prefix nvim was run from: `v:progpath` with the executable and
-/// its `bin/` removed.
-///
-/// # Safety
-/// `exe_name` must be writable for `MAXPATHL` bytes.
-pub unsafe fn vim_get_prefix_from_exepath(exe_name: *mut c_char) {
+/// its `bin/` removed, as a `MAXPATHL` buffer would hold it.
+pub fn vim_get_prefix_from_exepath() -> Vec<u8> {
     let progpath = vim_var_string(Vv::Progpath).unwrap_or_else(ThinCString::empty);
-    // SAFETY: the caller's contract; `path_tail*` answer pointers inside the
-    // buffer they are given.
-    unsafe {
-        xstrlcpy(exe_name, progpath.as_ptr(), MAXPATHL as usize);
-        // Remove the trailing "nvim", then the trailing "bin/".
-        *path_tail_with_sep(exe_name) = 0;
-        *path_tail(exe_name) = 0;
-    }
+    let progpath = progpath.as_cstr().to_bytes();
+    let mut prefix = progpath[..progpath.len().min(MAXPATHL as usize - 1)].to_vec();
+    // Remove the trailing "nvim", then the trailing "bin/".
+    prefix.truncate(tail_with_sep_index(&prefix));
+    prefix.truncate(tail_index(&prefix));
+    prefix
 }
 
 /// `getenv()` with nvim's special handling of `$VIM` and `$VIMRUNTIME`, which
@@ -212,14 +209,11 @@ pub unsafe fn vim_getenv(name: *const c_char) -> *mut c_char {
                 vim_path = P_HF.value_ptr();
             } else {
                 // ../share/nvim/runtime, relative to the binary.
-                vim_get_prefix_from_exepath(exe_name.as_mut_ptr());
-                if append_path(
-                    exe_name.as_mut_ptr(),
-                    c"share/nvim/runtime/".as_ptr(),
-                    MAXPATHL as usize,
-                )
-                .is_ok()
-                {
+                let mut prefix = vim_get_prefix_from_exepath();
+                if append_path(&mut prefix, b"share/nvim/runtime/", MAXPATHL as usize).is_ok() {
+                    for (slot, &byte) in exe_name.iter_mut().zip(&prefix) {
+                        *slot = byte as c_char;
+                    }
                     vim_path = exe_name.as_mut_ptr();
                 }
             }
@@ -227,7 +221,7 @@ pub unsafe fn vim_getenv(name: *const c_char) -> *mut c_char {
             if !vim_path.is_null() {
                 // Drop the file name, then the directory that names what this
                 // is: "doc/" for 'helpfile', "runtime/" when $VIM is wanted.
-                let mut vim_path_end = path_tail(vim_path);
+                let mut vim_path_end = vim_path.add(tail_index(cstr::bytes_at(vim_path)));
                 if from_helpfile {
                     vim_path_end = remove_tail(vim_path, vim_path_end, c"doc".as_ptr());
                 }
@@ -235,7 +229,12 @@ pub unsafe fn vim_getenv(name: *const c_char) -> *mut c_char {
                     vim_path_end = remove_tail(vim_path, vim_path_end, RUNTIME_DIRNAME.as_ptr());
                 }
                 // And the trailing path separator.
-                if vim_path_end > vim_path && after_pathsep(vim_path, vim_path_end) != 0 {
+                if vim_path_end > vim_path
+                    && after_pathsep(
+                        cstr::bytes_at(vim_path),
+                        vim_path_end.offset_from(vim_path) as usize,
+                    )
+                {
                     vim_path_end = vim_path_end.sub(1);
                 }
                 debug_assert!(vim_path_end >= vim_path);
@@ -245,7 +244,7 @@ pub unsafe fn vim_getenv(name: *const c_char) -> *mut c_char {
                 ) as *mut c_char;
 
                 // Whatever came out has to be a directory.
-                if !os_isdir(vim_path) {
+                if !dir_exists(cstr::at(vim_path)) {
                     xfree(vim_path.cast());
                     vim_path = ptr::null_mut();
                 }
@@ -317,7 +316,7 @@ pub unsafe fn home_replace(
             return 0;
         }
         if buffer.is_some_and(|b| b.b_help) {
-            let dlen = xstrlcpy(dst, path_tail(src), dstlen);
+            let dlen = xstrlcpy(dst, path_tail(cstr::at(src)).as_ptr(), dstlen);
             return dlen.min(dstlen - 1);
         }
 
@@ -361,7 +360,7 @@ pub unsafe fn home_replace(
             let mut len = dirlen;
             loop {
                 if len != 0
-                    && path_fnamencmp(cstr::at(src), cstr::at(p), len) == 0
+                    && path_fnamencmp(cstr::bytes_at(src), cstr::bytes_at(p), len) == 0
                     && (vim_ispathsep(*src.add(len) as c_int)
                         || (!one
                             && (*src.add(len) == b',' as c_char

@@ -485,7 +485,7 @@ impl Definition<'_, '_> {
         let slen = sourcing_name.len();
         slen > plen
             && cstr::with_terminated(&sourcing_name[slen - plen..], |tail| {
-                path_fnamecmp(suffix, tail) == 0
+                path_fnamecmp(suffix.to_bytes(), tail.to_bytes()) == 0
             })
     }
 

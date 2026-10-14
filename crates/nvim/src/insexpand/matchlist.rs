@@ -15,9 +15,9 @@
 #![allow(unsafe_code)]
 
 use super::*;
+use crate::garray::take_string_array;
 use crate::mbyte::{char_at, cluster_len};
 use crate::memory::XString;
-use crate::path::take_wild;
 use crate::types::{FAIL, Failed, OK, VarLock};
 use crate::winlayer::Win;
 use core::cmp::Ordering;
@@ -560,7 +560,7 @@ pub(crate) unsafe fn ins_compl_add_matches(
     icase: c_int,
 ) {
     // SAFETY: the caller hands the array over.
-    let matches = unsafe { take_wild(num_matches, matches) };
+    let matches = unsafe { take_string_array(num_matches, matches) };
     ins_compl_add_match_list(&matches, icase != 0);
 }
 

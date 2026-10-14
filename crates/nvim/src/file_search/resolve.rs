@@ -332,7 +332,7 @@ unsafe fn find_without_path(
                     name_buff,
                     MAXPATHL as usize,
                     c"%.*s%s".as_ptr(),
-                    len_as_int(path_tail(rel_fname).offset_from_unsigned(rel_fname)),
+                    len_as_int(tail_index(cstr::bytes_at(rel_fname))),
                     rel_fname,
                     file_to_find,
                 )

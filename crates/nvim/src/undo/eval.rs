@@ -137,7 +137,7 @@ pub fn f_undofile(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     }
     // SAFETY: a NUL-terminated name.
-    let ffname: *mut c_char = unsafe { full_name_save(fname.as_ptr(), true) };
+    let ffname: *mut c_char = full_name_save(fname, true).into_raw();
     if !ffname.is_null() {
         // SAFETY: a NUL-terminated absolute path; the undo file's name is an
         // allocation of its own, or NULL, which the answer takes over.

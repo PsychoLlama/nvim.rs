@@ -26,6 +26,7 @@ use core::ffi::{CStr, c_int};
 use super::*;
 use crate::api::private::helpers::cstr_to_string;
 use crate::charset::{ptr2cells, vim_strsize};
+use crate::cstr;
 use crate::drawscreen::state::redraw_tabline;
 use crate::grid::{default_grid_ref, default_gridview, schar_from_ascii};
 use crate::highlight_group::{HLF_T, HLF_TP, HLF_TPF, HLF_TPS};
@@ -283,10 +284,12 @@ fn paint_bufname(
 ) -> c_int {
     // SAFETY: `name` holds a NUL-terminated path, and every walk below
     // stops at that terminator.
-    let mut len = unsafe {
-        shorten_dir(name.as_mut_ptr());
-        vim_strsize(name.as_ptr())
-    };
+    let mut shortened = cstr::as_bytes(name).to_vec();
+    shorten_dir(&mut shortened);
+    for (slot, &byte) in name.iter_mut().zip(&shortened) {
+        *slot = byte as c_char;
+    }
+    let mut len = unsafe { vim_strsize(name.as_ptr()) };
     let mut at = 0;
     while len > room {
         // SAFETY: `at` is a character boundary inside the path, and the

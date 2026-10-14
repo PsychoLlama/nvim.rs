@@ -699,7 +699,7 @@ fn fill_icon(dst: &mut [c_char; IOSIZE as usize]) {
         // SAFETY: a NUL-terminated file name, or null, which `path_tail`
         // does not accept -- `buf_spname` answered null, so `b_fname` is
         // set, and `b_ffname` with it.
-        name = unsafe { path_tail(buf.name.full_ptr()) };
+        name = buf.name.full().map_or(c"", path_tail).as_ptr().cast_mut();
     }
     // SAFETY: a NUL-terminated name.
     let mut namelen = unsafe { cstr::bytes_at(name) }.len() as c_int;

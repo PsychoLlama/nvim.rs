@@ -40,7 +40,7 @@ use crate::option::vars::P_RTP;
 use crate::os::cshim::gettext;
 use crate::os::fs::dir_exists;
 use crate::os::input::line_breakcheck;
-use crate::path::{ExpandFlags, expand_wildcards_list, path_full_compare_of};
+use crate::path::{ExpandFlags, gen_expand_wildcards, path_full_compare};
 use crate::runtime::{RuntimeOpts, do_in_path_visit};
 use crate::semsg;
 use crate::types::{ExArg, Expand, ExpandContext, IOSIZE, MAXPATHL};
@@ -186,7 +186,9 @@ fn help_file_lang(name: &[u8]) -> Option<[u8; 2]> {
 fn expand_help_files(pattern: &[u8]) -> Option<Vec<XString>> {
     let pattern = XString::from_bytes(pattern);
     let flags = ExpandFlags::FILE | ExpandFlags::SILENT;
-    expand_wildcards_list(pattern.as_cstr(), flags).filter(|files| !files.is_empty())
+    gen_expand_wildcards(&[pattern.as_cstr()], flags)
+        .ok()
+        .filter(|files| !files.is_empty())
 }
 
 /// A path as the file system takes it.
@@ -244,7 +246,7 @@ fn helptags_one(
     let mut tags: Vec<Vec<u8>> = Vec::new();
     let dir_name = XString::from_bytes(dir);
     if add_help_tags
-        || path_full_compare_of(c"$VIMRUNTIME/doc", dir_name.as_cstr(), false, true) == kEqualFiles
+        || path_full_compare(c"$VIMRUNTIME/doc", dir_name.as_cstr(), false, true) == kEqualFiles
     {
         tags.push([b"help-tags\t", tagfname, b"\t1\n"].concat());
     }

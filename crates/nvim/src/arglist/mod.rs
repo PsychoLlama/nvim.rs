@@ -46,8 +46,8 @@ use crate::option::magic_isset;
 use crate::option::vars::{P_EA, p_ea, p_fic, p_tpm};
 use crate::os::input::os_breakcheck;
 use crate::path::{
-    ExpandFlags, expand_wildcards_of, fixed_fname, full_name_of, gen_expand_wildcards_of,
-    path_fnamecmp, path_full_compare_of,
+    ExpandFlags, expand_wildcards, fix_fname, full_name_save, gen_expand_wildcards, path_fnamecmp,
+    path_full_compare,
 };
 use crate::regexp::{OwnedMatch, RE_MAGIC, vim_regexec};
 use crate::types::{Failed, *};
@@ -206,7 +206,7 @@ fn set_cur_arg_idx(idx: c_int) {
 /// Do `name` and `fname` resolve to the same file? A buffer with no name of
 /// its own (`fname` `None`) matches nothing.
 fn same_file(name: &CStr, fname: Option<&CStr>) -> bool {
-    fname.is_some_and(|fname| path_full_compare_of(name, fname, true, true) & EQUAL_FILES != 0)
+    fname.is_some_and(|fname| path_full_compare(name, fname, true, true) & EQUAL_FILES != 0)
 }
 
 /// Is `buffer` the file `entry` names -- by number, or by resolving both
@@ -407,10 +407,11 @@ pub(crate) fn expand_arglist(text: &[u8], wildignore: bool) -> Result<Vec<XStrin
         .or(ExpandFlags::NOTFOUND)
         .or(ExpandFlags::NOTWILD);
     let args = split_arglist(text, true);
+    let args: Vec<&CStr> = args.iter().map(XString::as_cstr).collect();
     if wildignore {
-        expand_wildcards_of(args, EXPAND)
+        expand_wildcards(&args, EXPAND)
     } else {
-        gen_expand_wildcards_of(args, EXPAND)
+        gen_expand_wildcards(&args, EXPAND)
     }
 }
 
@@ -537,7 +538,8 @@ fn do_arglist(arg: &[u8], op: ArgListOp, after: c_int, will_edit: bool) -> bool 
     if op == ArgListOp::Delete {
         arglist_del_files(&new_args);
     } else {
-        let files = match expand_wildcards_of(new_args, ANY_NAME) {
+        let patterns: Vec<&CStr> = new_args.iter().map(XString::as_cstr).collect();
+        let files = match expand_wildcards(&patterns, ANY_NAME) {
             Ok(files) if !files.is_empty() => files,
             _ => {
                 crate::semsg!("E479: No match");

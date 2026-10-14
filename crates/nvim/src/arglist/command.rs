@@ -124,7 +124,7 @@ fn can_leave_curbuf(argn: c_int, forceit: bool) -> bool {
     if buf_hide(Buf::current()) {
         // A copy: the name is resolved and compared, and the buffer may go.
         if let Some(name) = arg_name(cur_alist(), argn) {
-            let full = fixed_fname(name.as_cstr()).unwrap_or(name);
+            let full = fix_fname(name.as_cstr());
             other = otherfile(full.as_cstr());
         }
         if other {
@@ -237,13 +237,13 @@ pub fn ex_argdedupe(_excmd: &mut ExArg) {
     })
     .unwrap_or_default()
     .iter()
-    .map(|name| full_name_of(name.as_cstr(), false))
+    .map(|name| full_name_save(name.as_cstr(), false))
     .collect();
     let mut i = 0;
     while i < full.len() {
         let mut j = i + 1;
         while j < full.len() {
-            if path_fnamecmp(full[i].as_cstr(), full[j].as_cstr()) != 0 {
+            if path_fnamecmp(&full[i], &full[j]) != 0 {
                 j += 1;
                 continue;
             }

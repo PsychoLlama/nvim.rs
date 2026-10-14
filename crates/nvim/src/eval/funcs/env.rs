@@ -20,7 +20,7 @@ use crate::option::vars::{p_verbose, p_wic};
 use crate::os::env::{os_copy_fullenv, vim_getenv_owned, vim_setenv_named, vim_unsetenv_named};
 use crate::os::fs::os_setperm;
 use crate::os::stdpaths::{get_appname, xdg_home, xdg_var};
-use crate::path::join_fnames;
+use crate::path::concat_fnames;
 use crate::semsg;
 use crate::types::CmdIdx;
 use crate::types::CmdLine;
@@ -217,7 +217,7 @@ fn get_xdg_var_list(xdg: XDGVarType, result: &mut TypVal) {
     // An empty entry names no directory.
     for dir in dirs.as_bytes().split(|&byte| byte == ENV_SEPCHAR as u8) {
         if !dir.is_empty() {
-            let path = join_fnames(&ThinCString::from_bytes(dir), &appname, true);
+            let path = concat_fnames(dir, appname.to_bytes(), true);
             list.push(TypVal::string(Some(ThinCString::from(path))));
         }
     }

@@ -506,7 +506,7 @@ fn fix_current_dir() {
 /// it actually differs from `cwd` and `'autochdir'` is off.
 fn chdir_to(dir: *mut c_char, scope: CdScope, cwd: *const c_char) {
     // SAFETY: two NUL-terminated paths; -1 means "compare all of both".
-    let differs = unsafe { pathcmp(dir, cwd, -1) } != 0;
+    let differs = unsafe { pathcmp(cstr::bytes_at(dir), cstr::bytes_at(cwd), None) } != 0;
     let announce = !p_acd() && differs;
     if announce {
         dirchanged(dir, scope, true);

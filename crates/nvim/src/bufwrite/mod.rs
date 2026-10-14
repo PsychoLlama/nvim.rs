@@ -54,7 +54,7 @@ use crate::os::fs::{
     os_path_exists, os_remove, os_set_acl, os_setperm,
 };
 use crate::os::input::os_breakcheck;
-use crate::path::{after_pathsep, path_fnamecmp, path_tail};
+use crate::path::{after_pathsep, path_fnamecmp, tail_index};
 use crate::sha256::Sha256;
 use crate::startup::exiting;
 use crate::types::{
@@ -392,7 +392,7 @@ pub(crate) fn buf_write(
 
     // Writing over the file the buffer came from?
     let overwriting = !b.name.full().is_none()
-        && unsafe { path_fnamecmp(cstr::at(ffname), cstr::at(b.name.full_ptr())) } == 0;
+        && unsafe { path_fnamecmp(cstr::bytes_at(ffname), cstr::bytes_at(b.name.full_ptr())) } == 0;
     no_wait_return.set(no_wait_return.get() + 1); // don't wait for return yet
 
     let orig = OpMarks {
@@ -496,7 +496,7 @@ pub(crate) fn buf_write(
             if dobackup
                 && P_BSK.first_byte() != 0
                 && p_bsk(|value| unsafe {
-                    match_file_list(value.as_ptr().cast_mut(), sfname, ffname)
+                    match_file_list(value, cstr::at(sfname), cstr::at(ffname))
                 })
             {
                 dobackup = false;

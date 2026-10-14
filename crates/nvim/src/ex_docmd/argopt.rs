@@ -37,7 +37,7 @@ use crate::option::vars::p_confirm;
 use crate::optionstr::{check_ff_value, get_fileformat_name};
 use crate::os::cshim::ngettext;
 
-use crate::os::fs::{CFile, os_isdir_of, os_mkdir, os_strerror, path_exists};
+use crate::os::fs::{CFile, dir_exists, os_mkdir, os_strerror, path_exists};
 
 use crate::types::regexp::RegMatch;
 use crate::types::{
@@ -452,7 +452,7 @@ pub fn vim_mkdir_emsg(name: &CStr, prot: c_int) -> Result<(), Failed> {
 /// Appending is always allowed; creating over an existing file needs the
 /// command's `!`.
 pub fn open_exfile(fname: &CStr, forceit: c_int, mode: &CStr) -> Option<CFile> {
-    if os_isdir_of(fname) {
+    if dir_exists(fname) {
         let fname = msg_cstr(fname);
         semsg!("E17: \"{fname}\" is a directory");
         return None;

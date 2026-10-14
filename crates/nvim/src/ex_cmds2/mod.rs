@@ -70,7 +70,7 @@ use crate::message_fmt::msg_bytes;
 use crate::message_fmt::msg_cstr_opt;
 use crate::option::vars::{p_aw, p_awa, p_confirm, p_write};
 use crate::os::cshim::gettext;
-use crate::path::full_name_into;
+use crate::path::vim_full_name;
 use crate::runtime::{RuntimeOpts, source_runtime_vim_lua_of};
 use crate::semsg;
 use crate::startup::exiting;
@@ -194,11 +194,12 @@ fn script_host_execute_file(name: &CStr, excmd: &mut ExArg) {
     if excmd.skip {
         return;
     }
-    let full = full_name_into(
+    let full = vim_full_name(
         excmd.line.cstr_from(excmd.line.arg),
         MAXPATHL as usize,
         false,
-    );
+    )
+    .unwrap_or_else(|name| name);
     let full = std::ffi::CString::new(full).expect("a name stops at its NUL");
 
     let argv = tv_list_alloc(3 as ptrdiff_t);

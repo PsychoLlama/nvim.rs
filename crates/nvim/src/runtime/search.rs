@@ -330,11 +330,9 @@ pub(crate) unsafe fn expand_name_patterns(
             smsg!(0, "Searching for \"{buf}\"");
             verbose_leave();
         }
-        let mut pats = [buf];
-        // SAFETY: a one-element pattern array; `gen_expand_wildcards` only
-        // reads it.
+        // SAFETY: `buf` is NUL-terminated, and the expansion only reads it.
         *did_one |=
-            unsafe { gen_expand_wildcards_and_cb(1, pats.as_mut_ptr(), ew_flags, do_all, visitor) }
+            unsafe { gen_expand_wildcards_and_cb(cstr::at(buf), ew_flags, do_all, visitor) }
                 .is_ok();
     }
 }
@@ -481,7 +479,10 @@ pub unsafe fn do_in_path(
         // SAFETY: the length test above proves the directory, its separator
         // and the prefix fit, so `tail` lands inside `buf`.
         let tail = unsafe {
-            add_pathsep(buf);
+            add_pathsep_in(slice::from_raw_parts_mut(
+                buf.cast::<u8>(),
+                MAXPATHL as usize,
+            ));
             strcat(buf, prefix);
             buf.add(cstr::bytes_at(buf).len())
         };
@@ -854,29 +855,24 @@ pub unsafe fn source_in_path_vim_lua(
     }
 }
 
-/// Expand the wildcards in `pats` and invoke `callback` for the matches.
+/// Expand the wildcards in `pattern` and invoke `callback` for the matches.
 ///
 /// Answers `Ok` when files were found, `Err` otherwise.  `all` is passed through
 /// to the callback, which decides whether to act on more than the first.
 ///
 /// # Safety
-/// `pats` must hold `num_pat` NUL-terminated patterns.
+/// The visitor's callback must accept the names and its cookie.
 pub(crate) unsafe fn gen_expand_wildcards_and_cb(
-    num_pat: c_int,
-    pats: *mut *mut c_char,
+    pattern: &CStr,
     flags: ExpandFlags,
     all: bool,
     visitor: Visitor,
 ) -> Result<(), Failed> {
-    let mut num_files: c_int = 0;
-    let mut files: *mut *mut c_char = ptr::null_mut();
-    // SAFETY: the caller's patterns; the two out-parameters are ours.
-    if unsafe { gen_expand_wildcards(num_pat, pats, &raw mut num_files, &raw mut files, flags) }
-        .is_err()
-    {
-        return Err(Failed);
-    }
-    unsafe { visitor.invoke(num_files, files, all) };
-    unsafe { free_wild(num_files, files) };
+    let mut found = gen_expand_wildcards(&[pattern], flags)?;
+    // The callback still takes the names as a `char **`; they stay this
+    // frame's, alive across whatever it runs.
+    let mut names: Vec<*mut c_char> = found.iter_mut().map(XString::as_mut_ptr).collect();
+    let count = c_int::try_from(names.len()).unwrap_or(c_int::MAX);
+    unsafe { visitor.invoke(count, names.as_mut_ptr(), all) };
     Ok(())
 }

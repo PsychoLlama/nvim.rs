@@ -105,9 +105,9 @@ fn shada_get_default_file() -> *const c_char {
     if default_shada_file.with(Option::is_none) {
         // SAFETY: both helpers answer an owned NUL-terminated string.
         let shada_dir = unsafe { stdpaths_user_state_subpath(c"shada".as_ptr(), 0, false) };
-        let full = unsafe { concat_fnames_realloc(shada_dir, c"main.shada".as_ptr(), true) };
-        default_shada_file.set(Some(unsafe { CStr::from_ptr(full) }.to_owned()));
-        unsafe { xfree(full.cast::<c_void>()) };
+        let full = concat_fnames(unsafe { cstr::bytes_at(shada_dir) }, b"main.shada", true);
+        unsafe { xfree(shada_dir.cast::<c_void>()) };
+        default_shada_file.set(Some(full.as_cstr().to_owned()));
     }
     // The cell is written once and never replaced, so the string it owns
     // stays where it is for as long as the editor runs.
@@ -314,21 +314,20 @@ unsafe fn open_temp_writer(
 ///
 /// `sd_writer` must point at an open file descriptor, unaliased for the call.
 unsafe fn open_direct_writer(sd_writer: *mut FileDescriptor, fname: &CStr) -> Result<bool, ()> {
-    // `path_tail_with_sep` points at the file name; NUL it out to get the
-    // directory, then put the byte back.
+    // Everything before the file name is the directory. (Upstream cuts the
+    // name short in place; the caller's name is borrowed, so this copies.)
+    let tail = tail_with_sep_index(fname.to_bytes());
     let fname = fname.as_ptr().cast_mut();
-    let tail = unsafe { path_tail_with_sep(fname) };
-    if tail != fname {
-        let tail_save = unsafe { *tail };
-        unsafe { *tail = NUL as c_char };
-        let missing = !unsafe { os_isdir(fname) };
+    if tail != 0 {
+        let dir = unsafe { cstr::slice_at(fname, tail) };
+        let dir = cstr::owned(dir);
+        let missing = !unsafe { os_isdir(dir.as_ptr()) };
         let mut failed_dir = ptr::null_mut::<c_char>();
         let ret = if missing {
-            unsafe { os_mkdir_recurse(fname, 0o700, &raw mut failed_dir, ptr::null_mut()) }
+            unsafe { os_mkdir_recurse(dir.as_ptr(), 0o700, &raw mut failed_dir, ptr::null_mut()) }
         } else {
             0
         };
-        unsafe { *tail = tail_save };
         if ret != 0 {
             shada_file_error2(
                 c"E886: Failed to create directory %s for writing ShaDa file: %s",

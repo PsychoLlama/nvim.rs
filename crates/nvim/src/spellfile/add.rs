@@ -53,7 +53,7 @@ use crate::os::cshim::gettext;
 use crate::os::env::home_replace;
 use crate::os::fs::{os_fopen, os_mkdir, os_mkdir_recurse};
 use crate::os::stdpaths::get_xdg_home;
-use crate::path::{dir_of_file_exists, path_tail, path_tail_with_sep, vim_ispathsep};
+use crate::path::{dir_of_file_exists, path_tail, tail_with_sep_index, vim_ispathsep};
 use crate::spell::{int_wordlist, spell_enc};
 use crate::types::{
     FILE, LangP, MAXPATHL, NUL, OptVal, OptionSetFlags, SpellAddType, int32_t, size_t, uint8_t,
@@ -174,8 +174,8 @@ pub unsafe fn spell_add_word(
             // 'spellfile' was just given its default and the file will
             // not open: the "spell" directory may not exist yet.
             // init_spellfile() already checked the parent is writable.
-            let p = unsafe { path_tail_with_sep(fname) };
-            if !unsafe { dir_of_file_exists(fname) } && p != fname {
+            let p = unsafe { fname.add(tail_with_sep_index(cstr::bytes_at(fname))) };
+            if !unsafe { dir_of_file_exists(cstr::bytes_at(fname)) } && p != fname {
                 let c = unsafe { *p };
                 unsafe { *p = NUL as c_char };
                 unsafe { os_mkdir(cstr::at(fname), 0o755 as int32_t) };
@@ -362,7 +362,7 @@ fn init_spellfile() {
         unsafe { (*(*((*Win::current().w_s).b_langp.ga_data as *mut LangP)).lp_slang).sl_fname };
     let encoding = spell_enc();
     let enc_suffix =
-        if !fname.is_null() && has_bytes(unsafe { cstr::at(path_tail(fname)) }, b".ascii.") {
+        if !fname.is_null() && has_bytes(unsafe { path_tail(cstr::at(fname)) }, b".ascii.") {
             c"ascii".as_ptr()
         } else {
             encoding.as_ptr()

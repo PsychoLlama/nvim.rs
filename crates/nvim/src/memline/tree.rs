@@ -11,7 +11,8 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::message_fmt::c_str;
+use crate::cstr;
+use crate::message_fmt::msg_cstr;
 use crate::siemsg;
 use crate::types::MAXPATHL;
 use core::ffi::{c_char, c_int, c_uint};
@@ -177,10 +178,10 @@ pub(crate) unsafe fn ml_get_buf_impl(buffer: Buf, lnum: LineNr, will_change: boo
                 // was half of what a scroll through a highlighted file cost.
                 let mut name = [0 as c_char; MAXPATHL as usize];
                 get_trans_bufname(buffer, &mut name);
-                unsafe { shorten_dir(name.as_mut_ptr()) };
+                let mut name = cstr::as_bytes(&name).to_vec();
+                shorten_dir(&mut name);
                 // The missing space before "in buffer" is upstream's.
-                // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                let name = unsafe { c_str(name.as_ptr()) };
+                let name = msg_cstr(cstr::in_bytes(&name));
                 siemsg!(
                     "E316: ml_get: Cannot find line {}in buffer {} {name}",
                     lnum as int64_t,

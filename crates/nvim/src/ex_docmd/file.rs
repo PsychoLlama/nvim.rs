@@ -91,7 +91,7 @@ pub(crate) fn is_other_file(fnum: c_int, ffname: Option<&CStr>) -> bool {
         && let Some(short) = Buf::current().name.short()
         && !short.is_empty()
     {
-        return path_fnamecmp(ffname, short) != 0;
+        return path_fnamecmp(ffname.to_bytes(), short.to_bytes()) != 0;
     }
     otherfile(ffname)
 }

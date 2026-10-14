@@ -623,8 +623,11 @@ unsafe fn attach_terminal(chan: *mut Channel, cwd: *const c_char, cmd: *const c_
     // which is what each of these three re-tests is for.
     if unsafe { terminal_live(chan) } {
         // Name the buffer `term://{cwd}//{pid}:{cmd}`.
-        let _ = unsafe { vim_full_name(cwd, name.as_mut_ptr(), MAXPATHL as usize, false) };
-        let (src, dst) = (name.as_mut_ptr(), shortened.as_mut_ptr());
+        // SAFETY: the job's NUL-terminated working directory.
+        let full = vim_full_name(unsafe { cstr::at(cwd) }, MAXPATHL as usize, false)
+            .unwrap_or_else(|name| name);
+        let full = cstr::owned(&full);
+        let (src, dst) = (full.as_ptr(), shortened.as_mut_ptr());
         let len = unsafe { home_replace(None, src, dst, IOSIZE as usize, true) };
         // Drop a trailing separator, but keep `/` itself meaningful by
         // spelling it `/.`.

@@ -24,13 +24,13 @@ use crate::cstr;
 use crate::eval::vars::{set_vim_var_string, vim_var_string};
 use crate::global_cell::GlobalCell;
 use crate::memory::ThinCString;
-use crate::memory::{xfree, xstrlcpy};
+
 use crate::message_fmt::{c_str, msg_cstr};
 use crate::option::{PROJECT_NAME, set_helplang_default};
 use crate::os::cshim::{bindtextdomain, bump_catalogue_epoch, textdomain};
 use crate::os::env::os_setenv;
 use crate::os::shell::{ShellOpts, get_cmd_output};
-use crate::path::{path_tail, path_tail_with_sep};
+use crate::path::{tail_index, tail_with_sep_index};
 use crate::profile::time_msg_at;
 use crate::semsg;
 use crate::smsg;
@@ -160,13 +160,16 @@ pub fn init_locale() {
 
         // `$prefix/bin/nvim` -> `$prefix/share/locale`: drop the executable,
         // then overwrite the directory it sat in.
-        let base = localepath.as_mut_ptr();
-        xstrlcpy(base, progpath.as_ptr(), MAXPATHL as usize);
-        *path_tail_with_sep(base) = 0;
-        let tail = path_tail(base);
-        let used = tail.offset_from(base) as usize;
-        xstrlcpy(tail, c"share/locale".as_ptr(), MAXPATHL as usize - used);
-        bindtextdomain(PROJECT_NAME.as_ptr(), base);
+        let progpath = progpath.as_cstr().to_bytes();
+        let mut path = progpath[..progpath.len().min(MAXPATHL as usize - 1)].to_vec();
+        path.truncate(tail_with_sep_index(&path));
+        path.truncate(tail_index(&path));
+        path.extend_from_slice(b"share/locale");
+        path.truncate(MAXPATHL as usize - 1);
+        for (slot, &byte) in localepath.iter_mut().zip(&path) {
+            *slot = byte as c_char;
+        }
+        bindtextdomain(PROJECT_NAME.as_ptr(), localepath.as_ptr());
         textdomain(PROJECT_NAME.as_ptr());
     }
 
@@ -311,23 +314,7 @@ static DID_INIT_LOCALES: GlobalCell<bool> = GlobalCell::new(false);
 /// Run `locale -a` and split its output. `None` when the command could not be
 /// run, which just means there is no locale completion.
 fn find_locales() -> Option<&'static [CString]> {
-    // SAFETY: a static command line, no input file and no length wanted. The
-    // buffer that comes back is NUL-terminated and ours to free; nothing
-    // refers to it past the `xfree`, because `text` owns a copy.
-    let text = unsafe {
-        let out = get_cmd_output(
-            c"locale -a".as_ptr().cast_mut(),
-            ptr::null_mut(),
-            ShellOpts::SILENT,
-            ptr::null_mut(),
-        );
-        if out.is_null() {
-            return None;
-        }
-        let text = CStr::from_ptr(out).to_bytes().to_vec();
-        xfree(out.cast());
-        text
-    };
+    let text = get_cmd_output(c"locale -a", ShellOpts::SILENT)?;
 
     let locales: Vec<CString> = text
         .split(|&b| b == b'\n')

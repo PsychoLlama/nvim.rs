@@ -53,7 +53,8 @@ use crate::getchar::state::got_int;
 use crate::global_cell::{GlobalCell, SharedCell};
 use crate::keycodes::Ctrl_V;
 use crate::lua::executor::{nlua_exec, nlua_exec_file, nlua_exec_lines, nlua_is_deferred_safe};
-use crate::mbyte::{utf_head_off, utfc_ptr2len};
+use crate::mbyte::cluster_len;
+use crate::mbyte::utf_head_off;
 use crate::memline::ml_get;
 use crate::memory::{try_malloc, xfree, xmalloc, xmallocz, xstrdup, xstrlcat, xstrlcpy};
 use crate::message::state::msg_col;
@@ -74,8 +75,8 @@ use crate::os::fs::{os_file_is_readable, os_isdir, os_open, os_set_cloexec};
 use crate::os::input::line_breakcheck;
 use crate::os::stdpaths::{get_appname, stdpaths_get_xdg_var};
 use crate::path::{
-    add_pathsep, append_path, concat_fnames, fix_fname, free_wild, gen_expand_wildcards,
-    get_past_head, path_fnamecmp, path_fnamencmp, path_tail, path_with_extension, vim_ispathsep,
+    add_pathsep_in, append_path, concat_fnames, fix_fname, gen_expand_wildcards, past_head_index,
+    path_fnamecmp, path_fnamencmp, path_with_extension, tail_index, vim_ispathsep,
     vim_ispathsep_nocolon,
 };
 use crate::profile::{do_profiling, startup_timing};

@@ -426,6 +426,7 @@
 {"path":"neovim::path::kEqualFileNames","kind":"const","file":"crates/nvim/src/path/mod.rs","tests":["crates/nvim/tests/unit/path.rs"]}
 {"path":"neovim::path::kEqualFiles","kind":"const","file":"crates/nvim/src/path/mod.rs","tests":["crates/nvim/tests/unit/path.rs"]}
 {"path":"neovim::path::kOneFileMissing","kind":"const","file":"crates/nvim/src/path/mod.rs","tests":["crates/nvim/tests/unit/path.rs"]}
+{"path":"neovim::path::next_component_index","kind":"fn","file":"crates/nvim/src/path/names.rs","tests":["crates/nvim/tests/unit/path.rs"]}
 {"path":"neovim::path::path_fix_case","kind":"fn","file":"crates/nvim/src/path/compare.rs","tests":["crates/nvim/tests/unit/path.rs"]}
 {"path":"neovim::path::path_fnamecmp","kind":"fn","file":"crates/nvim/src/path/names.rs","tests":["crates/nvim/tests/unit/path.rs"]}
 {"path":"neovim::path::path_fnamencmp","kind":"fn","file":"crates/nvim/src/path/names.rs","tests":["crates/nvim/tests/unit/path.rs"]}
@@ -433,15 +434,14 @@
 {"path":"neovim::path::path_full_dir_name","kind":"fn","file":"crates/nvim/src/path/mod.rs","tests":["crates/nvim/tests/unit/path.rs"]}
 {"path":"neovim::path::path_guess_exepath","kind":"fn","file":"crates/nvim/src/path/mod.rs","tests":["crates/nvim/tests/unit/path.rs"]}
 {"path":"neovim::path::path_is_absolute","kind":"fn","file":"crates/nvim/src/path/names.rs","tests":["crates/nvim/tests/unit/path.rs"]}
-{"path":"neovim::path::path_next_component","kind":"fn","file":"crates/nvim/src/path/names.rs","tests":["crates/nvim/tests/unit/path.rs"]}
 {"path":"neovim::path::path_shorten_fname","kind":"fn","file":"crates/nvim/src/path/unique.rs","tests":["crates/nvim/tests/unit/path.rs"]}
 {"path":"neovim::path::path_tail","kind":"fn","file":"crates/nvim/src/path/names.rs","tests":["crates/nvim/tests/unit/path.rs"]}
-{"path":"neovim::path::path_tail_with_sep","kind":"fn","file":"crates/nvim/src/path/names.rs","tests":["crates/nvim/tests/unit/path.rs"]}
 {"path":"neovim::path::path_try_shorten_fname","kind":"fn","file":"crates/nvim/src/path/unique.rs","tests":["crates/nvim/tests/unit/path.rs"]}
 {"path":"neovim::path::path_with_extension","kind":"fn","file":"crates/nvim/src/path/names.rs","tests":["crates/nvim/tests/unit/path.rs"]}
 {"path":"neovim::path::path_with_url","kind":"fn","file":"crates/nvim/src/path/names.rs","tests":["crates/nvim/tests/unit/path.rs"]}
 {"path":"neovim::path::pathcmp","kind":"fn","file":"crates/nvim/src/path/compare.rs","tests":["crates/nvim/tests/unit/path.rs"]}
-{"path":"neovim::path::shorten_dir_len","kind":"fn","file":"crates/nvim/src/path/unique.rs","tests":["crates/nvim/tests/unit/path.rs"]}
+{"path":"neovim::path::shorten_dir_name","kind":"fn","file":"crates/nvim/src/path/unique.rs","tests":["crates/nvim/tests/unit/path.rs"]}
+{"path":"neovim::path::tail_with_sep_index","kind":"fn","file":"crates/nvim/src/path/names.rs","tests":["crates/nvim/tests/unit/path.rs"]}
 {"path":"neovim::path::vim_full_name","kind":"fn","file":"crates/nvim/src/path/mod.rs","tests":["crates/nvim/tests/unit/path.rs"]}
 {"path":"neovim::pos::MAXCOL","kind":"const","file":"crates/nvim/src/pos.rs","tests":["crates/nvim/tests/unit/cursor.rs"]}
 {"path":"neovim::pos::MAXLNUM","kind":"const","file":"crates/nvim/src/pos.rs","tests":["crates/nvim/tests/unit/fold.rs"]}

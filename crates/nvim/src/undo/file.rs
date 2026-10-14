@@ -94,7 +94,9 @@ pub unsafe fn u_get_undo_file_name(buf_ffname: *const c_char, reading: bool) -> 
                 }
                 // SAFETY: two NUL-terminated names; the result is a fresh
                 // allocation.
-                undo_file_name = unsafe { concat_fnames(dir_name.as_mut_ptr(), munged, true) };
+                let dir = cstr::in_chars(&dir_name).to_bytes();
+                undo_file_name =
+                    concat_fnames(dir, unsafe { cstr::bytes_at(munged) }, true).into_raw();
             }
         }
         // SAFETY: a NUL-terminated name, built just above.
@@ -117,11 +119,8 @@ pub unsafe fn u_get_undo_file_name(buf_ffname: *const c_char, reading: bool) -> 
 /// `ffname` is a NUL-terminated path.
 unsafe fn hidden_sibling(ffname: *const c_char) -> *mut c_char {
     // SAFETY: a NUL-terminated path, by the contract above.
-    let (whole, tail_at) = unsafe {
-        let whole = CStr::from_ptr(ffname).to_bytes();
-        let tail = path_tail(ffname.cast_mut());
-        (whole, tail.offset_from(ffname).unsigned_abs())
-    };
+    let whole = unsafe { CStr::from_ptr(ffname) }.to_bytes();
+    let tail_at = tail_index(whole);
     let mut name = Vec::with_capacity(whole.len() + 6);
     name.extend_from_slice(&whole[..tail_at]);
     name.push(b'.');

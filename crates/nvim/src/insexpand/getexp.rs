@@ -11,6 +11,7 @@
 use super::*;
 use crate::cmdexpand::Expanded;
 use crate::cstr;
+use crate::ex_getln::tilde_replace_matches;
 use crate::memory::XString;
 use crate::option::next_option_part;
 use crate::option::vars::{P_DICT, P_TSR, P_TSRFU};
@@ -361,11 +362,8 @@ pub(crate) fn get_next_tag_completion() {
 
 /// File names matching `compl_pattern`, fuzzily when `'completeopt'` asks.
 pub(crate) fn get_next_filename_completion() {
-    let mut matches: *mut *mut c_char = ptr::null_mut();
-    let mut num_matches = 0;
     let mut leader = ins_compl_leader();
-    let mut leader_len = ins_compl_leader_len();
-    let mut in_fuzzy_collect = cot_fuzzy() && leader_len > 0;
+    let mut in_fuzzy_collect = cot_fuzzy() && ins_compl_leader_len() > 0;
     let need_collect_bests = in_fuzzy_collect && compl_get_longest.get();
     let mut max_score = 0;
     let mut dir = compl_direction.get();
@@ -391,44 +389,31 @@ pub(crate) fn get_next_filename_completion() {
             compl_pattern().set_string(with_wildcard);
             // Restrict the leader to the file-name part.
             leader = unsafe { last_sep.offset(1) };
-            leader_len -= path_len;
         }
     }
 
-    // `expand_wildcards` takes an *array* of patterns, hence a `char **`,
-    // and only ever reads through it — so a local copy of the two words
-    // gives it the address it wants without handing it the global.
-    let mut pattern_data = compl_pattern().data();
-    if unsafe {
-        expand_wildcards(
-            1,
-            &raw mut pattern_data,
-            &raw mut num_matches,
-            &raw mut matches,
-            ExpandFlags::FILE | ExpandFlags::DIR | ExpandFlags::ADDSLASH | ExpandFlags::SILENT,
-        )
-    }
-    .is_err()
-    {
+    // A copy: the expansion can run user code, which may complete again.
+    // SAFETY: the running completion's NUL-terminated pattern.
+    let pattern = XString::from_cstr(unsafe { cstr::at(compl_pattern().data()) });
+    let flags = ExpandFlags::FILE | ExpandFlags::DIR | ExpandFlags::ADDSLASH | ExpandFlags::SILENT;
+    let Ok(mut matches) = expand_wildcards(&[pattern.as_cstr()], flags) else {
         return;
-    }
+    };
 
     // Expand `~/` so the completion shows the shortened name.
-    unsafe { tilde_replace(compl_pattern().data(), num_matches, matches) };
+    tilde_replace_matches(&pattern, &mut matches);
 
     if in_fuzzy_collect {
         // The score of every candidate that matched, by its index, and the
         // indices that matched.
-        let mut scores = vec![FUZZY_SCORE_NONE; num_matches as usize];
+        let mut scores = vec![FUZZY_SCORE_NONE; matches.len()];
         let mut fuzzy_indices: Vec<c_int> = Vec::new();
-        for i in 0..num_matches {
-            // SAFETY: `matches` holds `num_matches` NUL-terminated strings,
-            // and `leader` is NUL-terminated.
-            let candidate = unsafe { cstr::at(*matches.offset(i as isize)) };
-            let score = fuzzy_match_str(candidate, unsafe { cstr::at(leader) });
+        for (i, candidate) in matches.iter().enumerate() {
+            // SAFETY: `leader` is NUL-terminated.
+            let score = fuzzy_match_str(candidate.as_cstr(), unsafe { cstr::at(leader) });
             if score != FUZZY_SCORE_NONE {
-                fuzzy_indices.push(i);
-                scores[i as usize] = score;
+                fuzzy_indices.push(i as c_int);
+                scores[i] = score;
             }
         }
 
@@ -436,9 +421,7 @@ pub(crate) fn get_next_filename_completion() {
             sort_by_fuzzy_score(&scores, &mut fuzzy_indices);
             for (i, &idx) in fuzzy_indices.iter().enumerate() {
                 let current_score = scores[idx as usize];
-                // SAFETY: `matches` holds `num_matches` NUL-terminated
-                // strings, and `idx` is one of their indices.
-                let text = unsafe { cstr::bytes_at(*matches.offset(idx as isize)) };
+                let text: &[u8] = &matches[idx as usize];
                 let flags = CP_FAST | if p_fic() || p_wic() { CP_ICASE } else { 0 };
                 let (none, score) = (NO_EXTRA, current_score);
                 if ins_compl_add(text, None, none, None, dir, flags, false, NO_HL, score) == OK {
@@ -449,9 +432,6 @@ pub(crate) fn get_next_filename_completion() {
                     max_score = current_score;
                 }
             }
-            unsafe { free_wild(num_matches, matches) };
-        } else if leader_len > 0 {
-            unsafe { free_wild(num_matches, matches) };
         }
 
         if compl_num_bests.get() > 0 && compl_get_longest.get() {
@@ -460,8 +440,8 @@ pub(crate) fn get_next_filename_completion() {
         return;
     }
 
-    if num_matches > 0 {
-        unsafe { ins_compl_add_matches(num_matches, matches, c_int::from(p_fic() || p_wic())) };
+    if !matches.is_empty() {
+        ins_compl_add_match_list(&matches, p_fic() || p_wic());
     }
 }
 

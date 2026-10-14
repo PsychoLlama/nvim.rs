@@ -20,7 +20,7 @@ use crate::message_fmt::msg_bytes;
 use crate::option::SavedCpo;
 use crate::option::next_option_part;
 use crate::option::vars::P_RTP;
-use crate::path::{ExpandFlags, expand_wildcards_list, vim_ispathsep};
+use crate::path::{ExpandFlags, gen_expand_wildcards, vim_ispathsep};
 use crate::regexp::{OwnedProg, RE_MAGIC, RE_STRING};
 use crate::semsg;
 use crate::types::CmdIdx;
@@ -124,9 +124,11 @@ fn hgr_search_files_in_dir(qfl: Qfl, dir: &[u8], prog: &mut OwnedProg, lang: Opt
     pattern.extend_from_slice(HELP_FILES);
     let pattern = XString::from_bytes(&pattern);
 
-    let Some(fnames) =
-        expand_wildcards_list(pattern.as_cstr(), ExpandFlags::FILE | ExpandFlags::SILENT)
-    else {
+    let Some(fnames) = gen_expand_wildcards(
+        &[pattern.as_cstr()],
+        ExpandFlags::FILE | ExpandFlags::SILENT,
+    )
+    .ok() else {
         return;
     };
     for fname in &fnames {

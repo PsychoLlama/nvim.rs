@@ -53,7 +53,7 @@ use crate::os::cshim::gettext;
 use crate::os::fs::os_remove;
 use crate::os::input::os_breakcheck;
 use crate::os::shell::{ShellOpts, call_shell_text};
-use crate::path::invocation_path_tail_of;
+use crate::path::invocation_path_tail;
 use crate::pos::MAXLNUM;
 use crate::semsg;
 use crate::startup::silent_mode;
@@ -542,7 +542,7 @@ enum Shell {
 
 /// Classify 'shell' by the tail of its invocation path.
 fn shell_kind() -> Shell {
-    let tail = p_sh(|value| invocation_path_tail_of(value).to_vec());
+    let tail = p_sh(|value| invocation_path_tail(value).to_bytes().to_vec());
     if tail.starts_with(b"fish") {
         Shell::Fish
     } else if tail.starts_with(b"pwsh") || tail.starts_with(b"powershell") {

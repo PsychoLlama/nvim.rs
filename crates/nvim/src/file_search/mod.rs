@@ -26,7 +26,7 @@ use crate::eval::{eval_to_string_safe, get_v_event, restore_v_event};
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
 use crate::mbyte::{mb_tolower, utf_head_off, utf_ptr2char, utfc_ptr2len};
-use crate::memory::{xfree, xmemdupz, xstrlcpy};
+use crate::memory::{xfree, xmemdupz};
 use crate::message::emsg;
 use crate::message::state::line_msg;
 use crate::message::{
@@ -40,12 +40,15 @@ use crate::options::kOptIncludeexpr;
 use crate::optionstr::OptString;
 use crate::os::cshim::gettext;
 use crate::os::env::expand_env_esc;
-use crate::os::fs::{os_chdir, os_dirname, os_fileid, os_fileid_equal, os_isdir, os_path_exists};
+use crate::os::fs::{
+    dir_exists, dirname_within, os_chdir, os_dirname, os_fileid, os_fileid_equal, os_isdir,
+    os_path_exists,
+};
 use crate::os::input::os_breakcheck;
 use crate::path::{
-    ExpandFlags, after_pathsep, expand_wildcards, free_wild, full_name_save, path_fnamecmp,
-    path_fnamencmp, path_has_drive_letter, path_is_url, path_shorten_fname, path_tail,
-    path_tail_with_sep, path_with_url, pathcmp, simplify_filename, vim_is_abs_name, vim_ispathsep,
+    ExpandFlags, after_pathsep, expand_wildcards, full_name_save, path_fnamecmp, path_fnamencmp,
+    path_has_drive_letter, path_is_url, path_with_url, pathcmp, shorten_index, simplify_filename,
+    tail_index, tail_with_sep_index, vim_is_abs_name, vim_ispathsep,
 };
 use crate::strings::xstrnsave;
 use crate::types::AutoEvent;
@@ -54,7 +57,7 @@ use crate::vim_snprintf;
 use crate::winlayer::Buf;
 use ::libc::{abort, strcpy};
 use core::ffi::{c_char, c_int, c_void};
-use core::ptr;
+use core::{ptr, slice};
 use std::ffi::CStr;
 
 mod chdir;
@@ -178,6 +181,13 @@ impl Name {
 
     pub(crate) fn clear(&mut self) {
         self.truncate(0);
+    }
+
+    /// [`simplify_filename`] in place: the name it simplifies to, at the
+    /// length upstream's answer gives it.
+    pub(crate) fn simplify(&mut self) {
+        let len = simplify_filename(&mut self.0);
+        self.truncate(len);
     }
 
     /// Forget the first `n` bytes, keeping the terminator.
@@ -318,7 +328,10 @@ impl Candidate {
     /// `part` must hold `partlen` readable bytes.
     unsafe fn separator(part: *const c_char, partlen: usize) -> *const c_char {
         // SAFETY: the caller's promise.
-        if unsafe { after_pathsep(part, part.add(partlen)) } == 0 {
+        if !after_pathsep(
+            unsafe { slice::from_raw_parts(part.cast::<u8>(), partlen) },
+            partlen,
+        ) {
             c"/".as_ptr()
         } else {
             c"".as_ptr()
@@ -446,27 +459,15 @@ impl FindContext {
         }
 
         // Expand wildcards like "*" and "$VAR". If the path is a URL
-        // don't try this. The pointers are taken last: everything above
-        // writes through `file_path`, which would invalidate one taken
-        // earlier.
-        let mut dirptrs: [*mut c_char; 2] = [
-            file_path.as_mut_ptr(),
-            if expand_empty {
-                frame.fix_path.as_ptr().cast_mut()
-            } else {
-                ptr::null_mut()
-            },
-        ];
-        let files = if unsafe { path_with_url(cstr::at(dirptrs[0])) } != 0 {
-            unsafe { FileList::of_one(dirptrs[0], file_path.len) }
+        // don't try this.
+        let files = if path_with_url(file_path.as_cstr()) != 0 {
+            FileList::of_one(&file_path.buf[..file_path.len])
         } else {
-            unsafe {
-                FileList::expand(
-                    if dirptrs[1].is_null() { 1 } else { 2 },
-                    dirptrs.as_mut_ptr(),
-                    LITERAL_DIR,
-                )
+            let mut patterns = vec![file_path.as_cstr()];
+            if expand_empty {
+                patterns.push(frame.fix_path.as_cstr());
             }
+            FileList::expand(&patterns, LITERAL_DIR)
         };
         frame.files = Some(files);
         frame.files_cur = 0;
@@ -486,12 +487,13 @@ impl FindContext {
     ) -> Result<Option<usize>, TooLong> {
         let files = frame.files();
         for i in frame.files_cur..files.len() {
-            let dir = unsafe { files.get(i) };
-            if unsafe { path_with_url(cstr::at(dir)) } == 0 && !unsafe { os_isdir(dir) } {
+            let dir = files.get(i);
+            if path_with_url(dir.as_cstr()) == 0 && !dir_exists(dir.as_cstr()) {
                 continue; // not a directory
             }
             // Prepare the filename to be checked for existence below.
-            let dirlen = unsafe { cstr::bytes_at(dir) }.len();
+            let dirlen = dir.len();
+            let dir = dir.as_ptr();
             let wanted = &self.file_to_search;
             if dirlen + 1 + wanted.len() >= MAXPATHL as usize {
                 return Err(TooLong);
@@ -525,9 +527,9 @@ impl FindContext {
                         .add(&file_path.buf[..file_path.len], b"")
                 {
                     if path_with_url(file_path.as_cstr()) == 0 {
-                        file_path.len = unsafe { simplify_filename(file_path.as_mut_ptr()) };
+                        file_path.len = simplify_filename(&mut file_path.buf);
                     }
-                    unsafe { self.shorten(file_path) };
+                    self.shorten(file_path);
                     return Ok(Some(i));
                 }
 
@@ -554,22 +556,13 @@ impl FindContext {
 
     /// Drop the current directory's prefix from the answer, so that a hit
     /// below the working directory reads as a relative name.
-    ///
-    /// # Safety
-    /// `file_path` must hold a NUL-terminated name.
-    unsafe fn shorten(&self, file_path: &mut Candidate) {
-        let mut curdir = [0 as c_char; MAXPATHL as usize];
-        if unsafe { os_dirname(curdir.as_mut_ptr(), MAXPATHL as usize) }.is_err() {
+    fn shorten(&self, file_path: &mut Candidate) {
+        let Ok(curdir) = dirname_within(MAXPATHL as usize) else {
             return;
-        }
-        let base = file_path.as_mut_ptr();
-        let short = unsafe { path_shorten_fname(base, curdir.as_mut_ptr()) };
-        if short.is_null() {
+        };
+        let Some(at) = shorten_index(file_path.as_cstr().to_bytes(), &curdir) else {
             return;
-        }
-        // Measured against the pointer `path_shorten_fname` was handed,
-        // so that neither is re-derived through `file_path` first.
-        let at = unsafe { short.offset_from(base) } as usize;
+        };
         file_path.buf.copy_within(at..file_path.len + 1, 0);
         file_path.len -= at;
     }
@@ -579,12 +572,12 @@ impl FindContext {
     fn push_subdirs(&mut self, frame: &StackFrame, rest: usize) {
         let files = frame.files();
         for i in frame.files_cur..files.len() {
-            let dir = unsafe { files.get(i) };
-            if !unsafe { os_isdir(dir) } {
+            let dir = files.get(i);
+            if !dir_exists(dir.as_cstr()) {
                 continue; // not a directory
             }
             self.stack.push(StackFrame::new(
-                unsafe { Name::from_ptr(dir) },
+                Name::from_bytes(dir),
                 Name::from_bytes(&frame.wc_path.bytes()[rest..]),
                 frame.level - 1,
                 false,
@@ -597,15 +590,15 @@ impl FindContext {
     fn push_descent(&mut self, frame: &StackFrame) {
         let files = frame.files();
         for i in frame.files_cur..files.len() {
-            let dir = unsafe { files.get(i) };
-            if unsafe { path_fnamecmp(cstr::at(dir), frame.fix_path.as_cstr()) } == 0 {
+            let dir = files.get(i);
+            if path_fnamecmp(dir, frame.fix_path.bytes()) == 0 {
                 continue; // don't repush the same directory
             }
-            if !unsafe { os_isdir(dir) } {
+            if !dir_exists(dir.as_cstr()) {
                 continue; // not a directory
             }
             self.stack.push(StackFrame::new(
-                unsafe { Name::from_ptr(dir) },
+                Name::from_bytes(dir),
                 frame.wc_path.clone(),
                 frame.level - 1,
                 true,

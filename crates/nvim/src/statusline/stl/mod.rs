@@ -79,7 +79,7 @@ use crate::options::kOptInvalid;
 use crate::optionstr::OptString;
 use crate::os::cshim::{gettext, gettext_ptr};
 use crate::os::env::home_replace;
-use crate::path::path_tail;
+use crate::path::tail_index;
 use crate::quickfix::{msg_loclist, msg_qflist};
 use crate::sign::push_sign_text;
 use crate::state::MODE_INSERT;
@@ -208,14 +208,7 @@ impl Env {
         {
             let nb = &mut buf;
             let bytes = cstr::in_chars(nb).to_bytes();
-            let from = if tail {
-                // SAFETY: `nb` was just NUL-terminated by the fill above;
-                // `path_tail` answers a position inside it.
-                let p = unsafe { path_tail(nb.as_ptr()) };
-                (p as usize).saturating_sub(nb.as_ptr() as usize)
-            } else {
-                0
-            };
+            let from = if tail { tail_index(bytes) } else { 0 };
             text.extend_from_slice(&bytes[from.min(bytes.len())..]);
         }
     }

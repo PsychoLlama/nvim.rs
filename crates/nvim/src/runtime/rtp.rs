@@ -194,18 +194,9 @@ pub fn get_lib_dir() -> *mut c_char {
     {
         return unsafe { xstrdup(default_lib_dir.get()) };
     }
-    let mut exe_name = [0 as c_char; MAXPATHL as usize];
-    unsafe { vim_get_prefix_from_exepath(exe_name.as_mut_ptr()) };
-    if unsafe {
-        append_path(
-            exe_name.as_mut_ptr(),
-            c"lib/nvim".as_ptr(),
-            MAXPATHL as size_t,
-        )
-    }
-    .is_ok()
-    {
-        return unsafe { xstrdup(exe_name.as_ptr()) };
+    let mut exe_name = vim_get_prefix_from_exepath();
+    if append_path(&mut exe_name, b"lib/nvim", MAXPATHL as usize).is_ok() {
+        return XString::from_vec(exe_name).into_raw();
     }
     ptr::null_mut()
 }

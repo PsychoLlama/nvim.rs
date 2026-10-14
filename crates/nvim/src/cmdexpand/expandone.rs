@@ -21,7 +21,7 @@ use crate::message_fmt::msg_cstr;
 use crate::option::vars::{p_fic, p_wic, p_wmnu};
 use crate::options::kOptBoFlagWildmode;
 use crate::os::cshim::gettext;
-use crate::path::match_suffix_name;
+use crate::path::match_suffix;
 use crate::popupmenu::state::pum_want;
 use crate::popupmenu::{pum_clear, pum_get_height};
 use crate::semsg;
@@ -346,7 +346,7 @@ fn expand_one_start(
         // the first two need looking at.
         non_suf_match = matches[..2]
             .iter()
-            .filter(|name| match_suffix_name(name.as_cstr()))
+            .filter(|name| match_suffix(name))
             .count();
     }
     if non_suf_match != 1 {

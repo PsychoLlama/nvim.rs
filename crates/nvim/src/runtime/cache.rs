@@ -202,7 +202,7 @@ pub(crate) unsafe fn do_in_cached_path(
     }
 
     let visitor = Visitor { callback, cookie };
-    let mut buf = [0 as c_char; MAXPATHL as usize];
+    let mut buf = [0u8; MAXPATHL as usize];
     // `borrow` is this frame's token, released below.
     let (path, borrow) = runtime_search_path_get_cached();
     let do_all = flags.has(RuntimeOpts::ALL);
@@ -227,16 +227,16 @@ pub(crate) unsafe fn do_in_cached_path(
         }
         // SAFETY: the length test above proves the directory and its separator
         // fit, so `tail` lands inside `buf`.
-        let tail = unsafe {
-            xstrlcpy(buf.as_mut_ptr(), item.path, MAXPATHL as usize);
-            add_pathsep(buf.as_mut_ptr());
-            buf.as_mut_ptr().add(cstr::bytes_at(buf.as_ptr()).len())
-        };
-        // SAFETY: as documented on `expand_name_patterns`.
+        unsafe { xstrlcpy(buf.as_mut_ptr().cast(), item.path, MAXPATHL as usize) };
+        add_pathsep_in(&mut buf);
+        let tail_at = cstr::until_nul(&buf).len();
+        let buf = buf.as_mut_ptr().cast::<c_char>();
+        // SAFETY: as documented on `expand_name_patterns`; `tail_at` is
+        // inside `buf`.
         unsafe {
             expand_name_patterns(
-                buf.as_mut_ptr(),
-                tail,
+                buf,
+                buf.add(tail_at),
                 name,
                 ew_flags,
                 do_all,
@@ -325,31 +325,17 @@ unsafe fn expand_rtp_entry(
         unsafe { push_path(search_path, rtp_used, entry, after, pos_in_rtp) };
     }
 
-    let mut num_files: c_int = 0;
-    let mut files: *mut *mut c_char = ptr::null_mut();
-    let mut pat = [entry];
-    // SAFETY: a one-element pattern array; the matches are ours until
-    // `free_wild`.
-    if unsafe {
-        gen_expand_wildcards(
-            1,
-            pat.as_mut_ptr(),
-            &raw mut num_files,
-            &raw mut files,
-            ExpandFlags::DIR | ExpandFlags::NOBREAK,
-        )
-    }
-    .is_err()
-    {
+    // SAFETY: the caller's NUL-terminated entry.
+    let pattern = unsafe { cstr::at(entry) };
+    let Ok(mut found) = gen_expand_wildcards(&[pattern], ExpandFlags::DIR | ExpandFlags::NOBREAK)
+    else {
         return;
-    }
-    let found = usize::try_from(num_files).expect("`expand_wildcards` answers a count");
-    for i in 0..found {
+    };
+    for name in &mut found {
         // Reusing the position is fine: it only has to be monotonic, not
         // strictly increasing.
-        unsafe { push_path(search_path, rtp_used, *files.add(i), after, pos_in_rtp) };
+        unsafe { push_path(search_path, rtp_used, name.as_mut_ptr(), after, pos_in_rtp) };
     }
-    unsafe { free_wild(num_files, files) };
 }
 
 /// The two shapes a 'packpath' entry's `start` packages can take.

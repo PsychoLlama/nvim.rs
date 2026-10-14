@@ -25,7 +25,7 @@ use crate::option::vars::{
 use crate::options::*;
 use crate::optionstr::{OptStringRef, empty_option};
 use crate::os::env::{env_set, vim_getenv_owned};
-use crate::path::{full_name_of, tail_index};
+use crate::path::{full_name_save, tail_index};
 use crate::regexp::state::{OPTION_MAGIC_OFF, OPTION_MAGIC_ON};
 use crate::search::state::magic_overruled;
 use crate::state::mode::State;
@@ -72,7 +72,7 @@ pub(crate) fn vimrc_found(fname: &CStr, envname: &CStr) {
     if vim_getenv_owned(envname).is_some() {
         return;
     }
-    let _ = env_set(envname, full_name_of(fname, false).as_cstr());
+    let _ = env_set(envname, full_name_save(fname, false).as_cstr());
 }
 
 /// What a 'cursorlineopt' value asks for, as `w_p_culopt_flags` bits, or

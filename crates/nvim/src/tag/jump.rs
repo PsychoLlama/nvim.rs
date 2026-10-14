@@ -260,7 +260,8 @@ pub(crate) unsafe fn test_for_current(
     let saved = unsafe { *fname_end };
     unsafe { *fname_end = 0 };
     let fullname = unsafe { expand_tag_fname(fname, tag_fname, true) };
-    let same = unsafe { path_full_compare(fullname, buf_ffname, true, true) } as c_uint
+    let same = unsafe { path_full_compare(cstr::at(fullname), cstr::at(buf_ffname), true, true) }
+        as c_uint
         & kEqualFiles as c_uint;
     unsafe { xfree(fullname.cast()) };
     unsafe { *fname_end = saved };
@@ -521,7 +522,7 @@ impl Jump {
         if Win::current().w_onebuf_opt.wo_pvw == 0 {
             // Entering a reused window may change directory
             // (autocommands), so make the name absolute first.
-            self.full_fname = unsafe { full_name_save(self.fname(), false) };
+            self.full_fname = unsafe { full_name_save(cstr::at(self.fname()), false) }.into_raw();
             prepare_tagpreview(true);
         }
     }

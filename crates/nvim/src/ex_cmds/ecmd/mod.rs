@@ -65,7 +65,7 @@ use crate::option::vars::{p_awa, p_sol, p_ur, p_verbose};
 use crate::option::{ScrollMargin, ScrollOff, shortmess};
 use crate::optionstr::OptString;
 use crate::os::time::os_time_raw;
-use crate::path::fixed_fname;
+use crate::path::fix_fname;
 use crate::plines::plines_m_win_fill;
 use crate::pos::equalpos;
 use crate::spell::parse_spelllang;
@@ -484,9 +484,7 @@ fn resolve_target(
     }
     // may expand to full path name
     let name = ffname.as_deref().unwrap_or_default();
-    if let Some(full) = fixed_fname(name) {
-        *ffname = Some(full.as_cstr().to_owned());
-    }
+    *ffname = Some(fix_fname(name).as_cstr().to_owned());
     Target::Editing(otherfile(ffname.as_deref().unwrap_or_default()))
 }
 

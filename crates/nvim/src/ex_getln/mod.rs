@@ -104,7 +104,6 @@ use crate::options::{
     kOptWimFlagFull, kOptWimFlagLastused, kOptWimFlagList, kOptWimFlagLongest, kOptWimFlagNoselect,
 };
 use crate::os::cshim::{gettext, strncasecmp, strncmp};
-use crate::os::env::home_replace_save;
 use crate::os::input::line_breakcheck;
 use crate::path::vim_ispathsep;
 use crate::popupmenu::state::pum_want;

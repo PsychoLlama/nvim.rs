@@ -118,7 +118,9 @@ impl FileStack {
     /// `name` must be a NUL-terminated path.
     unsafe fn already_searched(&self, name: *mut c_char) -> Option<bool> {
         for file in self.open.iter().chain(self.done.iter().rev()) {
-            if unsafe { path_full_compare(name, file.name.as_ptr(), true, true) } as c_uint
+            if unsafe {
+                path_full_compare(cstr::at(name), cstr::at(file.name.as_ptr()), true, true)
+            } as c_uint
                 & kEqualFiles as c_uint
                 != 0
             {

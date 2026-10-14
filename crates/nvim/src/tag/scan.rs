@@ -878,6 +878,6 @@ pub(crate) fn find_help_tag_matches(
         })
         .collect();
     // SAFETY: the array and the matches the search answered, given back once.
-    unsafe { free_wild(count, matches) };
+    unsafe { free_string_array(count, matches) };
     Ok(taken)
 }

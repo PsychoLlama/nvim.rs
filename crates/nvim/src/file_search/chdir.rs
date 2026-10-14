@@ -98,28 +98,25 @@ pub(crate) fn do_autocmd_dirchanged(new_dir: &CStr, scope: CdScope, cause: CdCau
 ///
 /// `fname` must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn vim_chdirfile(fname: *mut c_char, cause: CdCause) -> Result<(), Failed> {
-    let mut cwd = [0 as c_char; MAXPATHL as usize];
-    let mut dir = [0 as c_char; MAXPATHL as usize];
-    unsafe { xstrlcpy(dir.as_mut_ptr(), fname, MAXPATHL as usize) };
-    unsafe { *path_tail_with_sep(dir.as_mut_ptr()) = 0 };
+    let name = unsafe { cstr::bytes_at(fname) };
+    let mut dir = name[..name.len().min(MAXPATHL as usize - 1)].to_vec();
+    dir.truncate(tail_with_sep_index(&dir));
+    let dir = cstr::owned(&dir);
 
-    let name_buff = cwd.as_mut_ptr();
-    if unsafe { os_dirname(name_buff, MAXPATHL as usize) }.is_err() {
-        unsafe { *name_buff = 0 };
-    }
-    if unsafe { pathcmp(dir.as_ptr(), name_buff, -1) } == 0 {
+    let cwd = dirname_within(MAXPATHL as usize).unwrap_or_default();
+    if pathcmp(dir.to_bytes(), &cwd, None) == 0 {
         return Ok(()); // nothing to do
     }
 
     let announce = cause != kCdCauseOther;
     if announce {
-        do_autocmd_dirchanged(cstr::in_chars(&dir), kCdScopeWindow, cause, true);
+        do_autocmd_dirchanged(&dir, kCdScopeWindow, cause, true);
     }
-    if os_chdir(cstr::in_chars(&dir)) != 0 {
+    if os_chdir(&dir) != 0 {
         return Err(Failed);
     }
     if announce {
-        do_autocmd_dirchanged(cstr::in_chars(&dir), kCdScopeWindow, cause, false);
+        do_autocmd_dirchanged(&dir, kCdScopeWindow, cause, false);
     }
     Ok(())
 }

@@ -19,7 +19,7 @@
 
 use super::*;
 use crate::memory::XString;
-use crate::path::{fixed_fname, try_shorten_fname};
+use crate::path::{fix_fname, path_try_shorten_fname};
 use crate::types::VAR_UNKNOWN;
 use core::ffi::{CStr, c_char, c_int};
 
@@ -191,11 +191,11 @@ pub(crate) fn qf_add_entry(mut qfl: Qfl, new: &NewEntry) {
     // The entry shows a shortened name only when it differs from the
     // buffer's own, which is what the quickfix window would print.
     if let Some(fname) = new.fname
-        && let Some(full) = fixed_fname(fname)
+        && let full = fix_fname(fname)
         && let Some(buf_ffname) = buf.and_then(|buf| buf.name.full().map(CStr::to_owned))
-        && path_fnamecmp(full.as_cstr(), &buf_ffname) != 0
+        && path_fnamecmp(&full, buf_ffname.to_bytes()) != 0
     {
-        entry.fname = Some(XString::from_cstr(try_shorten_fname(full.as_cstr())));
+        entry.fname = Some(XString::from_cstr(path_try_shorten_fname(full.as_cstr())));
     }
 
     let has_user_data = new

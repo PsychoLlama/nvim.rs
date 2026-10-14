@@ -213,7 +213,7 @@ pub(crate) unsafe fn buf_get_backup_name(
 
     let mut backup = core::ptr::null_mut();
     if dir_len > 1
-        && unsafe { after_pathsep(iobuff, p) } != 0
+        && unsafe { after_pathsep(cstr::bytes_at(iobuff), p.offset_from(iobuff) as usize) }
         && unsafe { *p.offset(-1) } == unsafe { *p.offset(-2) }
     {
         // The entry ends with '//': encode the file's full path into the
@@ -271,7 +271,7 @@ unsafe fn want_backup_copy(
     // Can we create a file here and give it the original's owner and
     // group? Find a name that does not exist yet (some arbitrary
     // numbers) and try it out.
-    let dirlen = unsafe { path_tail(fname).offset_from(fname) } as usize;
+    let dirlen = tail_index(unsafe { cstr::bytes_at(fname) });
     debug_assert!(dirlen < MAXPATHL as usize);
     let mut tmp_fname = [0 as c_char; MAXPATHL as usize];
     let into = tmp_fname.as_mut_ptr().cast();

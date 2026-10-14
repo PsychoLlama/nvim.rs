@@ -743,15 +743,10 @@ pub(crate) fn buflist_getfpos() {
 ///
 /// `fname` must point at a NUL-terminated string, unaliased for the call.
 pub unsafe fn buflist_findname_exp(fname: *mut c_char) -> Option<Buf> {
-    // SAFETY: a NUL-terminated name; the answer is an allocation or null.
-    let ffname = unsafe { full_name_save(fname, true) };
-    if ffname.is_null() {
-        return None;
-    }
+    // SAFETY: a NUL-terminated name, or null, which has no full name.
+    let mut ffname = full_name_save(unsafe { cstr::at_opt(fname) }?, true);
     // SAFETY: the full name just built.
-    let buf = unsafe { buflist_findname(ffname) };
-    free(ffname);
-    buf
+    unsafe { buflist_findname(ffname.as_mut_ptr()) }
 }
 
 /// [`buflist_findname_exp`] for a name the caller holds.

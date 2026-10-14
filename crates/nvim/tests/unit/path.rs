@@ -13,64 +13,29 @@
 
 #![cfg(not(miri))]
 
-use std::ffi::{CStr, c_char, c_int};
+use std::ffi::{CStr, c_int};
 use std::path::Path;
-use std::ptr;
 
 use neovim::option::vars::P_FIC;
 use neovim::path::{
     append_path, invocation_path_tail, kBothFilesMissing, kDifferentFiles, kEqualFileNames,
-    kEqualFiles, kOneFileMissing, path_fix_case, path_fnamecmp, path_fnamencmp, path_full_compare,
-    path_full_dir_name, path_guess_exepath, path_is_absolute, path_next_component,
-    path_shorten_fname, path_tail, path_tail_with_sep, path_try_shorten_fname, path_with_extension,
-    path_with_url, pathcmp, shorten_dir_len, vim_full_name,
+    kEqualFiles, kOneFileMissing, next_component_index, path_fix_case, path_fnamecmp,
+    path_fnamencmp, path_full_compare, path_full_dir_name, path_guess_exepath, path_is_absolute,
+    path_shorten_fname, path_tail, path_try_shorten_fname, path_with_extension, path_with_url,
+    pathcmp, shorten_dir_name, tail_with_sep_index, vim_full_name,
 };
 use neovim::types::Failed;
 
 use crate::support::{Sandbox, cstr};
 
-/// A buffer for an entry point that writes a path into one, read back as the
-/// NUL-terminated string it left there.
-struct Buffer(Vec<c_char>);
-
-impl Buffer {
-    fn new(len: usize) -> Buffer {
-        Buffer(vec![0; len])
-    }
-
-    fn as_mut_ptr(&mut self) -> *mut c_char {
-        self.0.as_mut_ptr()
-    }
-
-    fn len(&self) -> usize {
-        self.0.len()
-    }
-
-    fn text(&self) -> String {
-        let end = self.0.iter().position(|&b| b == 0).expect("terminated");
-        String::from_utf8(self.0[..end].iter().map(|&b| b as u8).collect())
-            .expect("the fixtures are text")
-    }
+/// Bytes an entry point answered, as the text the fixtures are.
+fn text(bytes: &[u8]) -> String {
+    String::from_utf8(bytes.to_vec()).expect("the fixtures are text")
 }
 
-/// A NUL-terminated, writable copy of `s` — several entry points below take
-/// `*mut c_char` even when they only read it, and `path_fix_case` really does
-/// write through it.
-fn writable(s: &str) -> Vec<c_char> {
-    s.bytes()
-        .map(|b| b as c_char)
-        .chain(std::iter::once(0))
-        .collect()
-}
-
-/// The NUL-terminated string at `p`, which must be inside something alive.
-///
-/// # Safety
-/// `p` must be a live NUL-terminated string.
-unsafe fn borrowed(p: *const c_char) -> String {
-    assert!(!p.is_null(), "the answer is never NULL here");
-    // SAFETY: the caller's contract.
-    unsafe { CStr::from_ptr(p) }.to_string_lossy().into_owned()
+/// A borrowed C string, as text.
+fn borrowed(s: &CStr) -> String {
+    s.to_string_lossy().into_owned()
 }
 
 #[test]
@@ -80,15 +45,12 @@ fn a_directory_name_is_resolved_against_the_working_directory() {
     std::os::unix::fs::symlink(&real, sandbox.path("unit-test-symlink")).expect("a link");
 
     let resolve = |directory: &str| {
-        let mut name = writable(directory);
-        let mut buf = Buffer::new(sandbox.as_str().len() + 64);
-        // SAFETY: both buffers are this frame's and `buf` is `len` bytes.
-        let result = unsafe { path_full_dir_name(name.as_mut_ptr(), buf.as_mut_ptr(), buf.len()) };
-        (result, buf.text())
+        let result = path_full_dir_name(&cstr(directory), sandbox.as_str().len() + 64);
+        result.map(|name| text(&name))
     };
 
     // The empty name is the working directory.
-    assert_eq!(resolve(""), (Ok(()), sandbox.as_str().to_string()));
+    assert_eq!(resolve(""), Ok(sandbox.as_str().to_string()));
 
     let parent = sandbox
         .root()
@@ -97,7 +59,7 @@ fn a_directory_name_is_resolved_against_the_working_directory() {
         .to_str()
         .expect("text")
         .to_string();
-    assert_eq!(resolve(".."), (Ok(()), parent));
+    assert_eq!(resolve(".."), Ok(parent));
 
     // A link is resolved, absolutely or relatively; a name that does not
     // exist is still made absolute.
@@ -108,15 +70,15 @@ fn a_directory_name_is_resolved_against_the_working_directory() {
         real.to_str().expect("text"),
         sandbox.path("unit-test-symlink").to_str().expect("text"),
     ] {
-        assert_eq!(resolve(name), (Ok(()), expected.clone()), "{name}");
+        assert_eq!(resolve(name), Ok(expected.clone()), "{name}");
     }
     assert_eq!(
         resolve("does-not-exist"),
-        (Ok(()), format!("{}/does-not-exist", sandbox.as_str()))
+        Ok(format!("{}/does-not-exist", sandbox.as_str()))
     );
 
     // ...but an absolute name that does not exist cannot be resolved at all.
-    assert_eq!(resolve("/does_not_exist").0, Err(Failed));
+    assert_eq!(resolve("/does_not_exist"), Err(Failed));
 }
 
 /// `#28786`: an absolute directory still resolves when the process is
@@ -135,11 +97,8 @@ fn an_absolute_directory_resolves_from_a_working_directory_that_is_gone() {
         real.to_str().expect("text"),
         sandbox.path("unit-test-symlink").to_str().expect("text"),
     ] {
-        let mut name = writable(name);
-        let mut buf = Buffer::new(sandbox.as_str().len() + 64);
-        // SAFETY: both buffers are this frame's.
-        let result = unsafe { path_full_dir_name(name.as_mut_ptr(), buf.as_mut_ptr(), buf.len()) };
-        assert_eq!((result, buf.text()), (Ok(()), expected.clone()));
+        let result = path_full_dir_name(&cstr(name), sandbox.as_str().len() + 64);
+        assert_eq!(result.map(|name| text(&name)), Ok(expected.clone()));
     }
 }
 
@@ -151,11 +110,8 @@ fn comparing_two_names_says_which_of_the_five_relations_holds() {
     sandbox.touch("f1.o");
     sandbox.touch("f2.o");
 
-    let compare = |a: &str, b: &str, checkname: bool| {
-        let (mut a, mut b) = (writable(a), writable(b));
-        // SAFETY: both names are this frame's and NUL-terminated.
-        unsafe { path_full_compare(a.as_mut_ptr(), b.as_mut_ptr(), checkname, true) }
-    };
+    let compare =
+        |a: &str, b: &str, checkname: bool| path_full_compare(&cstr(a), &cstr(b), checkname, true);
 
     assert_eq!(compare("f1.o", "f1.o", false), kEqualFiles);
     assert_eq!(compare("f1.o", "f2.o", false), kDifferentFiles);
@@ -172,19 +128,11 @@ fn comparing_two_names_says_which_of_the_five_relations_holds() {
 #[test]
 fn the_tail_of_a_name_is_what_follows_its_last_separator() {
     let _sandbox = Sandbox::dir("path-tails");
-    let tail = |s: &str| {
-        let name = writable(s);
-        // SAFETY: `name` outlives the borrow, and the answer points into it.
-        unsafe { borrowed(path_tail(name.as_ptr())) }
-    };
+    let tail = |s: &str| borrowed(path_tail(&cstr(s)));
     assert_eq!(tail("directory/file.txt"), "file.txt");
     assert_eq!(tail("directory/"), "", "a trailing separator has no tail");
 
-    let with_sep = |s: &str| {
-        let mut name = writable(s);
-        // SAFETY: as above.
-        unsafe { borrowed(path_tail_with_sep(name.as_mut_ptr())) }
-    };
+    let with_sep = |s: &str| s[tail_with_sep_index(s.as_bytes())..].to_string();
     assert_eq!(with_sep("directory///file.txt"), "///file.txt");
     assert_eq!(with_sep(""), "");
     assert_eq!(with_sep("some/directory/"), "/");
@@ -192,11 +140,7 @@ fn the_tail_of_a_name_is_what_follows_its_last_separator() {
     assert_eq!(with_sep("/"), "");
     assert_eq!(with_sep("file.txt"), "file.txt");
 
-    let next = |s: &str| {
-        let name = writable(s);
-        // SAFETY: as above.
-        unsafe { borrowed(path_next_component(name.as_ptr())) }
-    };
+    let next = |s: &str| s[next_component_index(s.as_bytes())..].to_string();
     assert_eq!(next("some/directory/file.txt"), "directory/file.txt");
     assert_eq!(next("file.txt"), "", "nothing follows a name with no sep");
 }
@@ -207,48 +151,29 @@ fn the_tail_of_a_name_is_what_follows_its_last_separator() {
 #[test]
 fn an_invocations_tail_stops_at_the_first_space() {
     let _sandbox = Sandbox::dir("path-invocation");
-    let split = |s: &str| {
-        let invocation = writable(s);
-        let mut len: usize = 0;
-        // SAFETY: `invocation` outlives both calls, and `len` is this
-        // frame's; a null `len` is the documented "do not report it".
-        unsafe {
-            let with_len = invocation_path_tail(invocation.as_ptr(), &raw mut len);
-            let without = invocation_path_tail(invocation.as_ptr(), ptr::null_mut());
-            assert_eq!(
-                borrowed(with_len),
-                borrowed(without),
-                "the answer does not depend on being asked for the length"
-            );
-            (borrowed(with_len), len)
-        }
-    };
+    let split = |s: &str| borrowed(invocation_path_tail(&cstr(s)));
 
-    assert_eq!(split("directory/exe a b c"), ("exe a b c".to_string(), 3));
-    assert_eq!(split("/usr/bin/z a b"), ("z a b".to_string(), 1));
+    assert_eq!(split("directory/exe a b c"), "exe a b c");
+    assert_eq!(split("/usr/bin/z a b"), "z a b");
     assert_eq!(
         split("exe a/b\\c"),
-        ("exe a/b\\c".to_string(), 3),
+        "exe a/b\\c",
         "a separator in the arguments is not the executable's"
     );
     assert_eq!(
-        split("exe-a+b_c[]()|#!@$%^&*").0,
+        split("exe-a+b_c[]()|#!@$%^&*"),
         "exe-a+b_c[]()|#!@$%^&*",
         "only whitespace terminates the name"
     );
 
     // The two agree exactly when the arguments hold no separator.
-    let name = writable("a/b/c x y z");
-    // SAFETY: `name` outlives the borrow.
     assert_eq!(
-        unsafe { borrowed(path_tail(name.as_ptr())) },
-        split("a/b/c x y z").0
+        borrowed(path_tail(&cstr("a/b/c x y z"))),
+        split("a/b/c x y z")
     );
-    let name = writable("a/b/c x y/z");
-    // SAFETY: as above.
     assert_ne!(
-        unsafe { borrowed(path_tail(name.as_ptr())) },
-        split("a/b/c x y/z").0
+        borrowed(path_tail(&cstr("a/b/c x y/z"))),
+        split("a/b/c x y/z")
     );
 }
 
@@ -258,14 +183,8 @@ fn an_invocations_tail_stops_at_the_first_space() {
 fn a_name_shortens_against_a_directory_it_is_under_and_nothing_else() {
     let _sandbox = Sandbox::dir("path-shorten");
     let shorten = |full: Option<&str>, dir: &str| {
-        let mut full = full.map(writable);
-        let mut dir = writable(dir);
-        let full_ptr = full.as_mut().map_or(ptr::null_mut(), Vec::as_mut_ptr);
-        // SAFETY: both are this frame's; the answer points into `full`.
-        unsafe {
-            let short = path_shorten_fname(full_ptr, dir.as_mut_ptr());
-            (!short.is_null()).then(|| borrowed(short))
-        }
+        let full = cstr(full?);
+        path_shorten_fname(&full, dir.as_bytes()).map(borrowed)
     };
 
     assert_eq!(shorten(None, "some/directory/file.txt"), None);
@@ -295,14 +214,8 @@ fn a_name_under_the_working_directory_shortens_against_it() {
     std::env::set_current_dir(&inside).expect("standing inside");
 
     let try_shorten = |full: Option<&str>| {
-        let mut full = full.map(writable);
-        let ptr = full.as_mut().map_or(ptr::null_mut(), Vec::as_mut_ptr);
-        // SAFETY: `full` is this frame's; the answer points into it or is
-        // NULL, which is what a NULL argument answers.
-        unsafe {
-            let short = path_try_shorten_fname(ptr);
-            (!short.is_null()).then(|| borrowed(short))
-        }
+        let full = cstr(full?);
+        Some(borrowed(path_try_shorten_fname(&full)))
     };
 
     let under = format!("{}/subdir/file.txt", inside.to_str().expect("text"));
@@ -323,13 +236,7 @@ fn a_name_under_the_working_directory_shortens_against_it() {
 #[test]
 fn an_executable_name_is_guessed_from_the_working_directory_or_the_path() {
     let mut sandbox = Sandbox::dir("path-guess-exepath");
-    let guess = |name: &str| {
-        let name = writable(name);
-        let mut buf = Buffer::new(255);
-        // SAFETY: `name` is this frame's and `buf` is 255 bytes.
-        unsafe { path_guess_exepath(name.as_ptr(), buf.as_mut_ptr(), buf.len()) };
-        buf.text()
-    };
+    let guess = |name: &str| text(&path_guess_exepath(&cstr(name), 255));
 
     for name in ["./nvim", ".nvim", "foo/nvim"] {
         assert_eq!(
@@ -367,17 +274,15 @@ fn a_file_name_is_made_absolute_or_handed_back_with_a_failure() {
     sandbox.touch("unit-test-directory/test.file");
 
     let full = |name: Option<&str>, len: usize, force: bool| {
-        let name = name.map(writable);
-        let name_ptr = name.as_ref().map_or(ptr::null(), |n| n.as_ptr());
-        let mut buf = Buffer::new(len);
-        // SAFETY: `name` is this frame's or NULL, and `buf` is `len` bytes.
-        let result = unsafe { vim_full_name(name_ptr, buf.as_mut_ptr(), len, force) };
-        (result, buf.text())
+        // The name the buffer is left with either way, and whether it is
+        // a full path.
+        match vim_full_name(&cstr(name.unwrap_or_default()), len, force) {
+            Ok(name) => (Ok(()), text(&name)),
+            Err(name) => (Err(Failed), text(&name)),
+        }
     };
     let room = |a: &str, b: &str| a.len().max(b.len()) + 1;
     let here = sandbox.as_str().to_string();
-
-    assert_eq!(full(None, 10, true).0, Err(Failed), "no name, no path");
 
     // `#5737`: a buffer too short gets a truncated, terminated copy.
     let long = "foo/bar/bazzzzzzz/buz/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/a";
@@ -455,17 +360,15 @@ fn a_file_name_is_made_absolute_or_handed_back_with_a_failure() {
         (Ok(()), absolute.to_string())
     );
 
-    // And the name itself is never written through.
-    let name = writable("unit-test-directory/test.file");
+    // A buffer exactly the length of the answer is room enough.
     let expected = format!("{here}/unit-test-directory/test.file");
-    let mut buf = Buffer::new(expected.len() + 1);
-    // SAFETY: `name` is this frame's, and `buf` holds `expected.len() + 1`.
-    let result = unsafe { vim_full_name(name.as_ptr(), buf.as_mut_ptr(), buf.len(), true) };
-    assert_eq!((result, buf.text()), (Ok(()), expected));
-    // SAFETY: `name` is still alive and NUL-terminated.
     assert_eq!(
-        unsafe { borrowed(name.as_ptr()) },
-        "unit-test-directory/test.file"
+        full(
+            Some("unit-test-directory/test.file"),
+            expected.len() + 1,
+            true
+        ),
+        (Ok(()), expected)
     );
 }
 
@@ -477,11 +380,9 @@ fn fixing_the_case_of_a_name_does_nothing_on_a_case_sensitive_system() {
     let sandbox = Sandbox::dir("path-fix-case");
     sandbox.mkdir("CamelCase");
     for name in ["camelcase", "cAMELcASE", "CamelCase"] {
-        let mut buf = writable(name);
-        // SAFETY: `buf` is this frame's, NUL-terminated and writable.
-        unsafe { path_fix_case(buf.as_mut_ptr()) };
-        // SAFETY: as above.
-        assert_eq!(unsafe { borrowed(buf.as_ptr()) }, name);
+        let mut buf = name.as_bytes().to_vec();
+        path_fix_case(&mut buf);
+        assert_eq!(text(&buf), name);
     }
 }
 
@@ -491,16 +392,9 @@ fn fixing_the_case_of_a_name_does_nothing_on_a_case_sensitive_system() {
 fn appending_to_a_path_adds_a_separator_only_where_one_is_missing() {
     let _sandbox = Sandbox::dir("path-append");
     let join = |head: &str, tail: &str, room: usize| {
-        let mut path = vec![0 as c_char; room];
-        for (slot, byte) in path.iter_mut().zip(head.bytes()) {
-            *slot = byte as c_char;
-        }
-        let tail = writable(tail);
-        // SAFETY: `path` is `room` bytes and NUL-terminated, `tail` is this
-        // frame's.
-        let result = unsafe { append_path(path.as_mut_ptr(), tail.as_ptr(), room) };
-        // SAFETY: as above.
-        (result, unsafe { borrowed(path.as_ptr()) })
+        let mut path = head.as_bytes().to_vec();
+        let result = append_path(&mut path, tail.as_bytes(), room);
+        (result, text(&path))
     };
 
     assert_eq!(
@@ -640,7 +534,7 @@ fn a_scheme_makes_a_name_a_url_and_says_which_separator_follows_it() {
 #[test]
 fn comparing_two_file_names_reads_them_whole_and_folds_case_by_the_option() {
     let _sandbox = Sandbox::globals();
-    let cmp = |a: &str, b: &str| path_fnamecmp(&cstr(a), &cstr(b)).signum();
+    let cmp = |a: &str, b: &str| path_fnamecmp(a.as_bytes(), b.as_bytes()).signum();
 
     let saved = P_FIC.get();
     P_FIC.set(false);
@@ -659,9 +553,9 @@ fn comparing_two_file_names_reads_them_whole_and_folds_case_by_the_option() {
     P_FIC.set(saved);
 
     // The bounded form stops at `len`, or at either name's NUL first.
-    assert_eq!(path_fnamencmp(&cstr("a/bcd"), &cstr("a/bzz"), 3), 0);
-    assert_eq!(path_fnamencmp(&cstr("a/b"), &cstr("a/bzz"), 9).signum(), -1);
-    assert_eq!(path_fnamencmp(&cstr(""), &cstr(""), 4), 0);
+    assert_eq!(path_fnamencmp(b"a/bcd", b"a/bzz", 3), 0);
+    assert_eq!(path_fnamencmp(b"a/b", b"a/bzz", 9).signum(), -1);
+    assert_eq!(path_fnamencmp(b"", b"", 4), 0);
 }
 
 /// `pathcmp` is the text-only comparison that sorts names and decides
@@ -676,9 +570,8 @@ fn comparing_names_sorts_a_separator_first_and_ignores_a_trailing_one() {
     let _sandbox = Sandbox::globals();
     #[track_caller]
     fn cmp(a: &str, b: &str, maxlen: c_int) -> c_int {
-        let (a, b) = (cstr(a), cstr(b));
-        // SAFETY: both are NUL-terminated for the call.
-        unsafe { pathcmp(a.as_ptr(), b.as_ptr(), maxlen) }.signum()
+        let maxlen = usize::try_from(maxlen).ok();
+        pathcmp(a.as_bytes(), b.as_bytes(), maxlen).signum()
     }
 
     assert_eq!(cmp("a/b", "a/b", -1), 0);
@@ -711,17 +604,9 @@ fn shortening_a_directory_keeps_the_first_characters_of_each_component() {
     let _sandbox = Sandbox::globals();
     #[track_caller]
     fn shorten(name: &str, trim_len: c_int) -> String {
-        let mut buf: Vec<c_char> = cstr(name)
-            .as_bytes_with_nul()
-            .iter()
-            .map(|&b| b as c_char)
-            .collect();
-        // SAFETY: `buf` is a writable NUL-terminated string, and the
-        // shortening only ever moves bytes towards its start.
-        unsafe {
-            shorten_dir_len(buf.as_mut_ptr(), trim_len);
-            CStr::from_ptr(buf.as_ptr()).to_string_lossy().into_owned()
-        }
+        let mut buf = cstr(name).into_bytes_with_nul();
+        shorten_dir_name(&mut buf, trim_len);
+        borrowed(CStr::from_bytes_until_nul(&buf).expect("terminated"))
     }
 
     assert_eq!(shorten("~/foo/../.bar/fname", 1), "~/f/../.b/fname");

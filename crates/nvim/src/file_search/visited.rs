@@ -19,68 +19,39 @@
 )]
 
 use super::*;
-use crate::memory::xmalloc;
+use crate::memory::XString;
 use crate::path::ExpandFlags;
 use core::ffi::{c_char, c_int};
-use core::{ptr, slice};
+use core::slice;
 
 /// The names one directory's wildcard expansion produced.
-///
-/// Owns the array `expand_wildcards` handed back; `free_wild` is the only way
-/// to give it back, so the list frees itself when its stack frame is
-/// dropped.
 pub(crate) struct FileList {
-    names: *mut *mut c_char,
-    len: c_int,
+    names: Vec<XString>,
 }
 
 impl FileList {
-    /// Expand `num_pat` patterns into the names they match.
-    ///
-    /// # Safety
-    /// `pat` must hold `num_pat` NUL-terminated strings.
-    pub(crate) unsafe fn expand(num_pat: c_int, pat: *mut *mut c_char, flags: ExpandFlags) -> Self {
-        let mut list = FileList {
-            names: ptr::null_mut(),
-            len: 0,
-        };
-        // Upstream ignores the answer: on failure the two out-parameters are
-        // left as they are, which is the empty list.
-        // SAFETY: the caller's promise.
-        let (lenp, namesp) = (&raw mut list.len, &raw mut list.names);
-        let _ = unsafe { expand_wildcards(num_pat, pat, lenp, namesp, flags) };
-        list
+    /// Expand `patterns` into the names they match. Upstream ignores a
+    /// failure, which leaves the list empty.
+    pub(crate) fn expand(patterns: &[&CStr], flags: ExpandFlags) -> Self {
+        FileList {
+            names: expand_wildcards(patterns, flags).unwrap_or_default(),
+        }
     }
 
     /// The one-entry list a URL expands to — there is no file system to ask.
-    ///
-    /// # Safety
-    /// `name` must hold `namelen` readable bytes.
-    pub(crate) unsafe fn of_one(name: *const c_char, namelen: usize) -> Self {
-        // SAFETY: the caller's promise. `free_wild` frees the entry and then
-        // the array, so both are taken from the allocator it gives them to.
-        let names = unsafe { xmalloc(size_of::<*mut c_char>()) }.cast::<*mut c_char>();
-        unsafe { *names = xmemdupz(name.cast(), namelen).cast() };
-        FileList { names, len: 1 }
+    pub(crate) fn of_one(name: &[u8]) -> Self {
+        FileList {
+            names: vec![XString::from_bytes(name)],
+        }
     }
 
     pub(crate) fn len(&self) -> usize {
-        usize::try_from(self.len).unwrap_or(0)
+        self.names.len()
     }
 
-    /// # Safety
-    /// `at` must be less than [`len`](Self::len).
-    pub(crate) unsafe fn get(&self, at: usize) -> *mut c_char {
-        // SAFETY: the caller's promise.
-        unsafe { *self.names.add(at) }
-    }
-}
-
-impl Drop for FileList {
-    fn drop(&mut self) {
-        // SAFETY: the array and its entries are ours, and nothing else holds
-        // them.
-        unsafe { free_wild(self.len, self.names) };
+    /// Name `at`, which must be less than [`len`](Self::len).
+    pub(crate) fn get(&self, at: usize) -> &XString {
+        &self.names[at]
     }
 }
 
@@ -178,7 +149,7 @@ impl VisitedList {
         let known = self.entries.iter().any(|seen| {
             let same = match (&seen.file_id, &file_id) {
                 (Some(seen_id), Some(id)) => unsafe { os_fileid_equal(seen_id, id) },
-                (None, None) => path_fnamecmp(seen.fname.as_cstr(), fname.as_cstr()) == 0,
+                (None, None) => path_fnamecmp(seen.fname.bytes(), fname.bytes()) == 0,
                 _ => false,
             };
             same && unsafe { ff_wc_equal(seen.wc_path.as_ptr(), wc_path.as_ptr()) }
@@ -221,7 +192,7 @@ impl VisitedLists {
         let found = self
             .lists
             .iter()
-            .position(|list| path_fnamecmp(filename.as_cstr(), list.filename.as_cstr()) == 0);
+            .position(|list| path_fnamecmp(filename.bytes(), list.filename.bytes()) == 0);
         self.at = found.unwrap_or_else(|| {
             self.lists.push(VisitedList {
                 filename,
@@ -303,7 +274,7 @@ pub(crate) fn ff_path_in_stoplist(path: &Name, path_len: usize, stopdirs: &[Name
     }
 
     stopdirs.iter().any(|stop| {
-        path_fnamencmp(stop.as_cstr(), path.as_cstr(), path_len) == 0
+        path_fnamencmp(stop.bytes(), path.bytes(), path_len) == 0
             && (stop.len() <= path_len || vim_ispathsep(c_int::from(stop.at(path_len))))
     })
 }

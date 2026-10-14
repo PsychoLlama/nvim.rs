@@ -247,7 +247,7 @@ impl HelpTags {
         // held back for "tags"; the truncation is kept.
         let hf = &hf[..hf.len().min(MAXPATHL as usize - c"tags".count_bytes() - 1)];
         let mut name = Name::from_bytes(&[&hf[..tail_index(hf)], b"tags".as_slice()].concat());
-        simplify(&mut name);
+        name.simplify();
         // Avoid answering a name 'runtimepath' already gave us.
         (!self.found.iter().any(|f| f.bytes() == name.bytes())).then_some(name)
     }
@@ -268,21 +268,13 @@ unsafe fn found_tagfile_cb(
     let count = usize::try_from(num_fnames).expect("the caller counts the names");
     for i in 0..count {
         let mut name = unsafe { Name::from_ptr(*fnames.add(i)) };
-        simplify(&mut name);
+        name.simplify();
         found.push(name);
         if !all {
             break;
         }
     }
     num_fnames > 0
-}
-
-/// [`simplify_filename`] over an owned name.
-fn simplify(name: &mut Name) {
-    // SAFETY: the name is writable and NUL-terminated, and
-    // `simplify_filename` only ever shortens it.
-    let len = unsafe { simplify_filename(name.as_mut_ptr()) };
-    name.truncate(len);
 }
 
 /// The name of the file a tags file's entry points at, as the editor can
@@ -309,7 +301,7 @@ pub(crate) unsafe fn expand_tag_fname(
     // commands. This is not needed for tags file names themselves.
     let mut expanded = ptr::null_mut::<c_char>();
     if expand
-        && unsafe { path_has_wildcard(fname) }
+        && has_wildcard(unsafe { cstr::bytes_at(fname) })
         && !has_char(unsafe { cstr::at(fname) }, '`' as c_int)
     {
         let mut xpc = Expand::new();
@@ -339,7 +331,7 @@ pub(crate) unsafe fn expand_tag_fname(
             .concat(),
         );
         // Translate names like "src/a/../b/file.c" into "src/b/file.c".
-        simplify(&mut joined);
+        joined.simplify();
         unsafe { xstrdup(joined.as_ptr()) }
     } else {
         unsafe { xstrdup(fname) }

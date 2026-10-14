@@ -51,7 +51,7 @@ pub(crate) unsafe fn ins_compl_dictionaries(
         }
     }
 
-    let mut buf = unsafe { xmalloc(LSIZE as size_t) }.cast::<c_char>();
+    let buf = unsafe { xmalloc(LSIZE as size_t) }.cast::<c_char>();
     // So that we can leave through 'theend.
     let mut regmatch = RegMatch::new(ptr::null_mut(), false);
 
@@ -92,6 +92,9 @@ pub(crate) unsafe fn ins_compl_dictionaries(
             // them either assigns first or is guarded by `count > 0`.
             let mut files: *mut *mut c_char = ptr::null_mut();
             let mut count = 0;
+            // What the expansion found, and the `char **` view the scan reads.
+            let mut expanded: Vec<XString>;
+            let mut expanded_names: Vec<*mut c_char>;
             if flags == DICT_EXACT {
                 count = 1;
                 files = &raw mut dict;
@@ -111,11 +114,18 @@ pub(crate) unsafe fn ins_compl_dictionaries(
                     let backtick = has_char(unsafe { cstr::at(buf) }, '`' as c_int);
                     let failed = !backtick && {
                         let flags = ExpandFlags::FILE | ExpandFlags::SILENT;
-                        let (n, out) = (&raw mut count, &raw mut files);
-                        // SAFETY: `buf` is one NUL-terminated pattern, and
-                        // the two out-parameters are this frame's locals.
-                        let ok = unsafe { expand_wildcards(1, &raw mut buf, n, out, flags) };
-                        ok.is_err()
+                        // SAFETY: `buf` is one NUL-terminated pattern.
+                        match expand_wildcards(&[unsafe { cstr::at(buf) }], flags) {
+                            Ok(found) => {
+                                expanded = found;
+                                expanded_names =
+                                    expanded.iter_mut().map(XString::as_mut_ptr).collect();
+                                count = c_int::try_from(expanded_names.len()).unwrap_or(c_int::MAX);
+                                files = expanded_names.as_mut_ptr();
+                                false
+                            }
+                            Err(Failed) => true,
+                        }
                     };
                     if backtick || failed {
                         count = 0;
@@ -140,9 +150,6 @@ pub(crate) unsafe fn ins_compl_dictionaries(
                 unsafe {
                     ins_compl_files(count, files, thesaurus, flags, &mut regmatch, buf, &mut dir)
                 };
-                if flags != DICT_EXACT {
-                    unsafe { free_wild(count, files) };
-                }
             }
             if flags != 0 {
                 break;

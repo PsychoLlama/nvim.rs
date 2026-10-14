@@ -24,6 +24,7 @@ use crate::file_search::{
 };
 use crate::fileio::vim_fgets;
 use crate::fold::fold_open_cursor;
+use crate::garray::free_string_array;
 use crate::getchar::state::{KeyTyped, got_int};
 use crate::global_cell::GlobalCell;
 use crate::guard::secure;
@@ -53,10 +54,7 @@ use crate::options::{
 use crate::os::cshim::gettext;
 use crate::os::fs::{os_fopen, os_path_exists};
 use crate::os::input::{fast_breakcheck, line_breakcheck, os_breakcheck};
-use crate::path::{
-    free_wild, full_name_save, path_full_compare, path_has_wildcard, simplify_filename,
-    vim_is_abs_name,
-};
+use crate::path::{full_name_save, has_wildcard, path_full_compare, vim_is_abs_name};
 use crate::pos::MAXLNUM;
 use crate::quickfix::set_errorlist;
 use crate::regexp::{skip_regexp, vim_regcomp, vim_regexec, vim_regfree};

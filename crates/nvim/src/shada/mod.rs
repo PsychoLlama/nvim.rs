@@ -44,9 +44,7 @@ use crate::os::fileio::{
 use crate::os::fs::{os_fchown, os_fileinfo, os_getperm, os_isdir, os_mkdir_recurse, os_remove};
 use crate::os::stdpaths::stdpaths_user_state_subpath;
 use crate::os::time::os_time;
-use crate::path::{
-    concat_fnames_realloc, path_fnamecmp, path_tail_with_sep, path_try_shorten_fname,
-};
+use crate::path::{concat_fnames, path_fnamecmp, path_try_shorten_fname, tail_with_sep_index};
 use crate::pos::MAXLNUM;
 use crate::register::{op_global_reg_iter, op_reg_get, op_reg_index, op_reg_set};
 use crate::registry::{IdMap, IdSet, SlotTable, id_map, id_set};

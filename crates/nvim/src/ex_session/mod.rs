@@ -331,17 +331,17 @@ fn ses_arglist(out: SessionFile, cmd: &CStr, names: &[XString], fullname: bool) 
     }
     // SAFETY: each name is a NUL-terminated copy, only read.
     for name in names {
+        let full_name;
         let mut name = name.as_ptr().cast_mut();
-        let mut full = ptr::null_mut::<c_char>();
         if fullname {
-            full = unsafe { xmalloc(MAXPATHL as size_t) }.cast::<c_char>();
-            let _ = unsafe { vim_full_name(name, full, MAXPATHL as size_t, false) };
-            name = full;
+            let full = vim_full_name(unsafe { cstr::at(name) }, MAXPATHL as usize, false)
+                .unwrap_or_else(|name| name);
+            full_name = cstr::owned(&full);
+            name = full_name.as_ptr().cast_mut();
         }
         let escaped = unsafe { ses_escape_fname(name) };
         let ok = out.puts(c"$argadd ") && unsafe { out.bytes(escaped) } && out.eol();
         unsafe { xfree(escaped.cast::<c_void>()) };
-        unsafe { xfree(full.cast::<c_void>()) };
         if !ok {
             return false;
         }
@@ -415,13 +415,8 @@ unsafe fn get_view_file(c: c_char) -> *mut c_char {
     let mut view = XString::from_bytes(p_vdir(|value| unsafe {
         cstr::bytes_at(value.as_ptr().cast_mut())
     }));
-    // `add_pathsep`, over the buffer just built: a separator that is the
-    // trailing byte of a multibyte character does not count as one.
-    // SAFETY: the two addresses are this string's own ends.
-    let terminated = unsafe {
-        let start = view.as_ptr();
-        after_pathsep(start, start.add(view.len())) != 0
-    };
+    // `add_pathsep`, over the buffer just built.
+    let terminated = after_pathsep(&view, view.len());
     if !view.is_empty() && !terminated {
         view.push_cstr(PATHSEPSTR);
     }
@@ -520,15 +515,10 @@ pub(crate) fn ex_mkrc(excmd: &mut ExArg) {
             emsg(gettext(e_write));
         } else if cmdidx == CmdIdx::mksession {
             // A successful session write sets v:this_session.
-            let full = unsafe { xmalloc(MAXPATHL as size_t) }.cast::<c_char>();
-            if unsafe { vim_full_name(fname, full, MAXPATHL as size_t, false) }.is_ok() {
-                // SAFETY: `vim_full_name` terminated what it wrote.
-                set_vim_var_string(
-                    Vv::ThisSession,
-                    unsafe { cstr::at_opt(full) }.map(CStr::to_bytes),
-                );
+            // SAFETY: the session file's NUL-terminated name.
+            if let Ok(full) = vim_full_name(unsafe { cstr::at(fname) }, MAXPATHL as usize, false) {
+                set_vim_var_string(Vv::ThisSession, Some(&full));
             }
-            unsafe { xfree(full.cast::<c_void>()) };
         }
     }
     unsafe { xfree(view_file.cast::<c_void>()) };

@@ -401,11 +401,8 @@ unsafe fn source_name(
             if expanded.is_null() {
                 return Err(FAIL);
             }
-            let name = fix_fname(expanded);
+            let name = fix_fname(cstr::at(expanded)).into_raw();
             xfree(expanded.cast());
-            if name.is_null() {
-                return Err(FAIL);
-            }
             if !os_isdir(name) {
                 return Ok(name);
             }
@@ -460,7 +457,7 @@ unsafe fn open_script(cookie: &mut SourceCookie, fname_exp: *mut c_char, check_o
         return;
     }
     // SAFETY: as above; `path_tail` answers a pointer inside `fname_exp`.
-    let tail = unsafe { path_tail(fname_exp) };
+    let tail = unsafe { fname_exp.add(tail_index(cstr::bytes_at(fname_exp))) };
     let leader = unsafe { *tail } as c_int;
     if (leader == '.' as c_int || leader == '_' as c_int)
         && (unsafe { strcasecmp(tail.add(1), c"nvimrc".as_ptr()) } == 0

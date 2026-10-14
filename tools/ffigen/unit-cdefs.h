@@ -3285,6 +3285,7 @@ static const int PASTE_MIDDLE = 2;
 static const int PASTE_NONE = 0;
 static const int PASTE_ONLY = -1;
 static const int PATHSEP = 47;
+static const int PATHSEP_BYTE = 47;
 static const int PAYLOAD_INTS = 6;
 static const int PERTURB_SHIFT = 5;
 static const int PFD_NOPREFIX = 255;

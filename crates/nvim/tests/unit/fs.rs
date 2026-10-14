@@ -192,17 +192,13 @@ fn an_executable_is_found_by_path_or_relative_to_here() {
 
     let can_exe = |name: &str| {
         let name = cname(name);
-        let mut resolved: *mut c_char = ptr::null_mut();
-        // SAFETY: `name` is this frame's; `resolved` receives an owned
-        // string, or is left null.
-        unsafe {
-            if os_can_exe(&name, &raw mut resolved, true) {
-                assert!(!resolved.is_null(), "a true answer must set the path");
-                Some(internalize(resolved))
-            } else {
-                assert!(resolved.is_null(), "a false answer must not set one");
-                None
-            }
+        let mut resolved = None;
+        if os_can_exe(&name, Some(&mut resolved), true) {
+            let resolved = resolved.expect("a true answer must set the path");
+            Some(resolved.as_cstr().to_string_lossy().into_owned())
+        } else {
+            assert!(resolved.is_none(), "a false answer must not set one");
+            None
         }
     };
 

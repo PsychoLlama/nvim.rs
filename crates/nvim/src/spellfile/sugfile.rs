@@ -73,7 +73,12 @@ pub(super) fn spell_make_sugfile(spin: &mut SpellInfo, wfname: &CStr) {
         .into_iter()
         .find(|&slang| {
             let cmp = unsafe {
-                path_full_compare(wfname.as_ptr().cast_mut(), (*slang).sl_fname, false, true)
+                path_full_compare(
+                    cstr::at(wfname.as_ptr()),
+                    cstr::at((*slang).sl_fname),
+                    false,
+                    true,
+                )
             };
             cmp as c_uint == kEqualFiles as c_uint
         })

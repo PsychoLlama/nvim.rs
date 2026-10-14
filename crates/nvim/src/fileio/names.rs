@@ -17,7 +17,8 @@ use crate::memory::XString;
 use core::ffi::{c_char, c_int, c_void};
 use std::ffi::CStr;
 
-use crate::os::fs::link_info;
+use crate::option::split_option_part;
+use crate::os::fs::{dirname_within, link_info};
 use crate::path::tail_index;
 
 use super::*;
@@ -53,15 +54,16 @@ pub unsafe fn shorten_buf_fname(mut buffer: Buf, dirname: *mut c_char, force: c_
         return;
     }
     buffer.name.drop_own_short();
-    // SAFETY: the buffer's own file name and the caller's directory name.
-    let p = unsafe { path_shorten_fname(buffer.name.full_ptr(), dirname) };
-    if p.is_null() {
+    // SAFETY: the caller's NUL-terminated directory name.
+    let dirname = unsafe { cstr::bytes_at(dirname) };
+    let short = buffer
+        .name
+        .full()
+        .and_then(|full| path_shorten_fname(full, dirname));
+    match short.map(XString::from_cstr) {
         // The one place in the tree that shows the *full* name.
-        buffer.name.show_full();
-    } else {
-        // SAFETY: `p` points into the buffer's NUL-terminated full name.
-        let short = XString::from_cstr(unsafe { cstr::at(p) });
-        buffer.name.set_short(Some(short));
+        None => buffer.name.show_full(),
+        Some(short) => buffer.name.set_short(Some(short)),
     }
 }
 
@@ -107,20 +109,20 @@ pub fn shorten_fnames(force: c_int) {
 pub unsafe fn modname(fname: *const c_char, ext: *const c_char, prepend_dot: bool) -> *mut c_char {
     let ext = unsafe { CStr::from_ptr(ext) }.to_bytes();
     let mut prepend_dot = prepend_dot;
-    // Room for `os_dirname`'s MAXPATHL plus the separator below.
-    let mut cwd = [0 as c_char; MAXPATHL as usize + 2];
-
+    let cwd;
     let name: &[u8] = if fname.is_null() || unsafe { *fname } == 0 {
         // With no file name we need the name of the current directory —
         // in full, in case `:cd` is used.
-        if unsafe { os_dirname(cwd.as_mut_ptr(), MAXPATHL as size_t) }.is_err()
-            || unsafe { CStr::from_ptr(cwd.as_ptr()) }.is_empty()
-        {
+        let Some(mut dir) = dirname_within(MAXPATHL as usize)
+            .ok()
+            .filter(|dir| !dir.is_empty())
+        else {
             return ptr::null_mut();
-        }
-        unsafe { add_pathsep(cwd.as_mut_ptr()) };
+        };
+        add_pathsep(&mut dir);
         prepend_dot = false; // nothing to prepend a dot to
-        unsafe { CStr::from_ptr(cwd.as_ptr()) }.to_bytes()
+        cwd = dir;
+        &cwd
     } else {
         unsafe { CStr::from_ptr(fname) }.to_bytes()
     };
@@ -245,8 +247,8 @@ pub unsafe fn vim_rename(from: *const c_char, to: *const c_char) -> c_int {
     // When the names are identical there is nothing to do. When they refer
     // to the same file but the spelling differs we have to go through a
     // temp file.
-    if unsafe { path_fnamecmp(cstr::at(from), cstr::at(to)) } == 0 {
-        if p_fic() && !unsafe { cstr::eq(path_tail(from), path_tail(to)) } {
+    if unsafe { path_fnamecmp(cstr::bytes_at(from), cstr::bytes_at(to)) } == 0 {
+        if p_fic() && unsafe { path_tail(cstr::at(from)) != path_tail(cstr::at(to)) } {
             use_tmp_file = true;
         } else {
             return 0;
@@ -394,29 +396,43 @@ pub unsafe fn match_file_pat(
 /// @param list    comma-separated list of patterns, like `'wildignore'`
 /// @param sfname  short file name
 /// @param ffname  full file name
-///
-/// # Safety
-///
-/// `list` must point at a NUL-terminated string, unaliased for the call.
-/// `sfname` must point at a NUL-terminated string, unaliased for the call.
-/// `ffname` must point at a NUL-terminated string, unaliased for the call.
-pub unsafe fn match_file_list(list: *mut c_char, sfname: *mut c_char, ffname: *mut c_char) -> bool {
-    let tail = unsafe { path_tail(sfname) };
-    let mut p = list;
-    while unsafe { *p } != 0 {
-        let mut buf = [0 as c_char; MAXPATHL as usize];
-        let (at, into, room) = (&raw mut p, buf.as_mut_ptr(), buf.len());
-        unsafe { copy_option_part(at, into, room, c",".as_ptr().cast_mut()) };
+pub fn match_file_list(list: &CStr, sfname: &CStr, ffname: &CStr) -> bool {
+    let tail = path_tail(sfname);
+    let mut rest = list.to_bytes();
+    while !rest.is_empty() {
+        let (part, after) = split_option_part(rest, MAXPATHL as usize, b",");
+        rest = after;
+        let part = cstr::owned(&part);
         let mut allow_dirs: c_char = 0;
-        let dirs = &raw mut allow_dirs;
-        let regpat =
-            unsafe { file_pat_to_reg_pat(buf.as_ptr(), ptr::null(), dirs, false as c_int) };
+        // SAFETY: a NUL-terminated pattern of this frame's, and a local for
+        // the flag; the answer is null or an allocation of its own.
+        let regpat = unsafe {
+            file_pat_to_reg_pat(
+                part.as_ptr(),
+                ptr::null(),
+                &raw mut allow_dirs,
+                false as c_int,
+            )
+        };
         if regpat.is_null() {
             break;
         }
-        let (no_prog, dirs) = (ptr::null_mut(), allow_dirs as c_int);
-        let matched = unsafe { match_file_pat(regpat, no_prog, ffname, sfname, tail, dirs) };
-        unsafe { xfree(regpat.cast()) };
+        let (no_prog, dirs) = (ptr::null_mut(), c_int::from(allow_dirs));
+        let (ffname, sfname) = (ffname.as_ptr().cast_mut(), sfname.as_ptr().cast_mut());
+        // SAFETY: the pattern just made, freed once; three NUL-terminated
+        // names the matcher only reads.
+        let matched = unsafe {
+            let matched = match_file_pat(
+                regpat,
+                no_prog,
+                ffname,
+                sfname,
+                tail.as_ptr().cast_mut(),
+                dirs,
+            );
+            xfree(regpat.cast());
+            matched
+        };
         if matched {
             return true;
         }

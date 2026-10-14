@@ -54,7 +54,7 @@ use crate::message::e_invarg;
 use crate::option::vars::{P_ENC, p_enc};
 use crate::option::{copy_option_part, split_option_part, valid_name};
 use crate::os::fs::os_remove;
-use crate::path::{path_fnamecmp, path_full_compare, path_tail};
+use crate::path::{path_fnamecmp, path_full_compare, path_tail, tail_index};
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regfree};
 use crate::spellfile::spell_load_file;
 use crate::startup::starting;
@@ -303,13 +303,13 @@ pub fn parse_spelllang(mut window: Win) -> Result<(), OptError> {
             continue;
         }
 
-        let filename = len > 4
-            && unsafe { path_fnamecmp(cstr::at(lang.as_ptr().offset(len as isize - 4)), c".spl") }
-                == 0;
+        let filename =
+            len > 4 && path_fnamecmp(&cstr::as_bytes(&lang)[len as usize - 4..], b".spl") == 0;
         if filename {
             // The name is a file name; a region in it is pulled out.
 
-            let p = unsafe { vim_strchr(path_tail(lang.as_mut_ptr()), '_' as c_int) };
+            let tail = tail_index(cstr::in_chars(&lang).to_bytes());
+            let p = unsafe { vim_strchr(lang.as_mut_ptr().add(tail), '_' as c_int) };
             if !p.is_null()
                 && ascii_isalpha(unsafe { *p.offset(1) } as c_int)
                 && ascii_isalpha(unsafe { *p.offset(2) } as c_int)
@@ -336,7 +336,12 @@ pub fn parse_spelllang(mut window: Win) -> Result<(), OptError> {
             .find(|&slang| {
                 if filename {
                     let cmp = unsafe {
-                        path_full_compare(lang.as_mut_ptr(), (*slang).sl_fname, false, true)
+                        path_full_compare(
+                            cstr::in_chars(&lang),
+                            cstr::at((*slang).sl_fname),
+                            false,
+                            true,
+                        )
                     };
                     cmp == kEqualFiles
                 } else {
@@ -374,7 +379,9 @@ pub fn parse_spelllang(mut window: Win) -> Result<(), OptError> {
         for slang in languages() {
             let matches = if filename {
                 let fname = unsafe { (*slang).sl_fname };
-                let cmp = unsafe { path_full_compare(lang.as_mut_ptr(), fname, false, true) };
+                let cmp = unsafe {
+                    path_full_compare(cstr::in_chars(&lang), cstr::at(fname), false, true)
+                };
                 cmp == kEqualFiles
             } else {
                 unsafe { strcasecmp(lang.as_ptr(), (*slang).sl_name) == 0 }
@@ -441,8 +448,9 @@ pub fn parse_spelllang(mut window: Win) -> Result<(), OptError> {
                     let entry = ga.ga_data as *mut LangP;
                     let p = unsafe { (*(*entry.offset(c as isize)).lp_slang).sl_fname };
                     if !p.is_null()
-                        && unsafe { path_full_compare(spf_name.as_mut_ptr(), p, false, true) }
-                            == kEqualFiles
+                        && unsafe {
+                            path_full_compare(cstr::in_chars(&spf_name), cstr::at(p), false, true)
+                        } == kEqualFiles
                     {
                         break;
                     }
@@ -458,8 +466,8 @@ pub fn parse_spelllang(mut window: Win) -> Result<(), OptError> {
                 .into_iter()
                 .find(|&slang| {
                     let fname = unsafe { (*slang).sl_fname };
-                    let name = spf_name.as_mut_ptr();
-                    let cmp = unsafe { path_full_compare(name, fname, false, true) };
+                    let name = cstr::in_chars(&spf_name);
+                    let cmp = unsafe { path_full_compare(name, cstr::at(fname), false, true) };
                     cmp == kEqualFiles
                 })
                 .unwrap_or(core::ptr::null_mut());
@@ -472,7 +480,7 @@ pub fn parse_spelllang(mut window: Win) -> Result<(), OptError> {
                     let (into, name) = (lang.as_mut_ptr(), c"internal wordlist");
                     unsafe { xstrlcpy(into, name.as_ptr(), MAXWLEN + 1) };
                 } else {
-                    let tail = unsafe { path_tail(spf_name.as_mut_ptr()) };
+                    let tail = path_tail(cstr::in_chars(&spf_name)).as_ptr();
                     unsafe { xstrlcpy(lang.as_mut_ptr(), tail, MAXWLEN + 1) };
                     let p = unsafe { vim_strchr(lang.as_mut_ptr(), '.' as c_int) };
                     if !p.is_null() {

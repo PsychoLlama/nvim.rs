@@ -506,7 +506,7 @@ pub unsafe fn mkspell(
         // SAFETY: the caller promises the paths.
         (wfname, incount) = unsafe { output_name(fnames, fcount, spin.si_ascii != 0, incount) };
         // SAFETY: `wfname` is NUL-terminated, so its tail is too.
-        let tail = unsafe { cstr::at(path_tail(wfname.as_ptr())) };
+        let tail = unsafe { path_tail(cstr::at(wfname.as_ptr())) };
         if has_bytes(tail, SPL_FNAME_ASCII.to_bytes()) {
             spin.si_ascii = 1;
         }
@@ -633,7 +633,7 @@ fn output_is_writable(wfname: &CStr, incount: ::core::ffi::c_int, over_write: bo
     if incount <= 0 {
         emsg(gettext(e_invarg));
     } else if has_char(
-        unsafe { cstr::at(path_tail(wfname.as_ptr())) },
+        unsafe { path_tail(cstr::at(wfname.as_ptr())) },
         '_' as ::core::ffi::c_int,
     ) {
         emsg(gettext(c"E751: Output file name must not have region name"));
@@ -675,7 +675,7 @@ unsafe fn read_region_names(
     for i in 0..incount as usize {
         let name = unsafe { *innames.add(i) };
         let len = unsafe { cstr::bytes_at(name) }.len();
-        if unsafe { cstr::bytes_at(path_tail(name)) }.len() < 5
+        if unsafe { path_tail(cstr::at(name)).to_bytes() }.len() < 5
             || unsafe { *name.add(len - 3) } != b'_' as ::core::ffi::c_char
         {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.

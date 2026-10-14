@@ -20,7 +20,7 @@ use crate::fuzzy::{FUZZY_SCORE_NONE, fuzzy_match_str};
 use crate::lua::executor::nlua_call_user_expand_func;
 use crate::option::next_option_part;
 use crate::os::env::vim_getenv_owned;
-use crate::path::{ExpandFlags, expand_wildcards_one, path_is_absolute, vim_ispathsep};
+use crate::path::{ExpandFlags, expand_wildcards, path_is_absolute, vim_ispathsep};
 use crate::regexp::vim_regexec;
 use crate::runtime::state::current_sctx;
 use crate::types::{ExpandContext, Failed, MAXPATHL, RegMatch, TypVal, VarNumber};
@@ -47,7 +47,7 @@ fn expand_shellcmd_onedir(
     seen: &mut HashSet<Vec<u8>>,
     found: &mut Vec<XString>,
 ) {
-    let Ok(names) = expand_wildcards_one(pathed, flags) else {
+    let Ok(names) = expand_wildcards(&[pathed], flags) else {
         return;
     };
     for name in names {

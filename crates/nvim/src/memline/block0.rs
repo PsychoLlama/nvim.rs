@@ -226,11 +226,12 @@ pub(crate) unsafe fn set_b0_fname(b0p: *mut ZeroBlock, buffer: Buf) {
 ///
 /// `b0p` must point at a live `ZeroBlock`, unaliased for the call.
 pub(crate) unsafe fn set_b0_dir_flag(b0p: *mut ZeroBlock, buffer: Buf) {
-    let same = unsafe {
-        same_directory(
-            mf_fname(buffer.b_ml.ml_mfp).cast_mut(),
-            buffer.name.full_ptr(),
-        )
+    // SAFETY: the buffer's live memfile, whose name is NUL-terminated or
+    // null.
+    let swap_name = unsafe { cstr::at_opt(mf_fname(buffer.b_ml.ml_mfp)) };
+    let same = match (swap_name, buffer.name.full()) {
+        (Some(swap_name), Some(full)) => same_directory(swap_name, full),
+        _ => false,
     };
     unsafe { (*b0p).set_flag(B0_SAME_DIR, same) };
 }
@@ -492,9 +493,10 @@ pub(crate) unsafe fn swapfile_is_for_other_file(buffer: Buf, fname: *mut c_char)
         let stored = cstr::as_bytes(&b0.b0_fname);
         let stored_tail = cstr::in_bytes(&stored[tail_index(stored)..]);
         if b0.flags() & B0_SAME_DIR == 0
-            || unsafe { path_fnamecmp(cstr::at(path_tail(buffer.name.full_ptr())), stored_tail) }
-                != 0
-            || !unsafe { same_directory(fname, buffer.name.full_ptr()) }
+            || buffer.name.full().is_none_or(|full| {
+                path_fnamecmp(path_tail(full).to_bytes(), stored_tail.to_bytes()) != 0
+                    || !same_directory(unsafe { cstr::at(fname) }, full)
+            })
         {
             // The name in the swap file may be "~user/path/file".
             // Symlinks can point at the same file under two names, so the
@@ -557,14 +559,16 @@ pub(crate) unsafe fn files_differ(
 
     // One of the inodes is unknown: force a full path for each and
     // compare those instead.
-    let mut buf_c: [c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
-    let mut buf_s: [c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
-    let ok_c =
-        unsafe { vim_full_name(fname_c, buf_c.as_mut_ptr(), MAXPATHL as size_t, true) }.is_ok();
-    let ok_s =
-        unsafe { vim_full_name(fname_s, buf_s.as_mut_ptr(), MAXPATHL as size_t, true) }.is_ok();
-    if ok_c && ok_s {
-        return !unsafe { cstr::eq(buf_c.as_ptr(), buf_s.as_ptr()) };
+    // A missing name has no full path either.
+    let full = |name: Option<&CStr>| match name {
+        Some(name) => vim_full_name(name, MAXPATHL as usize, true),
+        None => Err(Vec::new()),
+    };
+    // SAFETY: the caller's two names, NUL-terminated or null.
+    let (full_c, full_s) = unsafe { (full(cstr::at_opt(fname_c)), full(cstr::at_opt(fname_s))) };
+    let (ok_c, ok_s) = (full_c.is_ok(), full_s.is_ok());
+    if let (Ok(full_c), Ok(full_s)) = (&full_c, &full_s) {
+        return full_c != full_s;
     }
 
     // Neither inodes nor full paths. If neither file appears to exist,

@@ -33,7 +33,7 @@ use crate::message::fit_middle;
 use crate::message_fmt::msg_bytes;
 use crate::optionstr::OptString;
 use crate::os::fs::current_dir;
-use crate::path::try_shorten_fname;
+use crate::path::path_try_shorten_fname;
 use crate::regexp::{OwnedProg, RE_MAGIC};
 use crate::search::last_pattern_owned;
 use crate::semsg;
@@ -353,7 +353,7 @@ fn process_files(
         if got_int.get() || search.tomatch <= 0 {
             break;
         }
-        let fname = XString::from_cstr(try_shorten_fname(file.as_cstr()));
+        let fname = XString::from_cstr(path_try_shorten_fname(file.as_cstr()));
         // Print the file name every second, so that a slow search shows
         // progress without flooding the message area.
         if now() > seconds {

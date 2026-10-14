@@ -65,7 +65,7 @@ use crate::message::state::{
 };
 use crate::message_fmt::msg_bytes;
 use crate::os::env::{expand_env_save_opt_of, home_replace_in};
-use crate::path::fixed_fname;
+use crate::path::fix_fname;
 use crate::regexp::{OwnedProg, RE_MAGIC, RE_STRING};
 use crate::runtime::{estack_sfile_owned, sourcing_lnum};
 use crate::semsg;
@@ -404,7 +404,7 @@ fn dbg_parsearg(arg: &[u8], list: BreakList) -> Result<Breakpoint, Failed> {
         if twice.first() == Some(&b'*') {
             twice
         } else {
-            fixed_fname(twice.as_cstr()).ok_or(Failed)?
+            fix_fname(twice.as_cstr())
         }
     };
     Ok(Breakpoint {

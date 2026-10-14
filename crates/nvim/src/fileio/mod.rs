@@ -56,8 +56,8 @@ use crate::message::{
 use crate::r#move::update_topline;
 use crate::option::vars::{P_FFS, p_ar, p_enc, p_fencs, p_ffs, p_fic, p_ur, p_verbose};
 use crate::option::{
-    copy_option_part, default_fileformat, get_fileformat, get_fileformat_force, set_fileformat,
-    set_option_direct, set_options_bin, shortmess,
+    default_fileformat, get_fileformat, get_fileformat_force, set_fileformat, set_option_direct,
+    set_options_bin, shortmess,
 };
 use crate::options::kOptFileencoding;
 use crate::optionstr::OptString;

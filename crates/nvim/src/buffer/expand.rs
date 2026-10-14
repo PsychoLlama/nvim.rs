@@ -20,8 +20,8 @@
 )]
 
 use crate::cmdexpand::{BUF_DIFF_FILTER, WildOpts};
+use crate::garray::take_string_array;
 use crate::memory::XString;
-use crate::path::take_wild;
 use core::ffi::{c_char, c_int, c_void};
 use core::{ptr, slice};
 
@@ -328,7 +328,7 @@ pub(crate) fn buf_name_matches(pat: &CStr, options: WildOpts) -> Result<Vec<XStr
             &raw mut files,
             options,
         )?;
-        Ok(take_wild(count, files))
+        Ok(take_string_array(count, files))
     }
 }
 

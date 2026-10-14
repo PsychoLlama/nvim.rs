@@ -12,47 +12,39 @@
 //! file-system walk of one pattern, and [`expand`] the list-level expansion
 //! a command line asks for.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use crate::cstr;
-use crate::strings::has_char;
-use core::ffi::{c_char, c_int};
+use crate::memory::XString;
+use core::ffi::c_int;
 use std::ffi::CStr;
 
-use crate::charset::{backslash_halve, backslash_halve_save, rem_backslash, skipwhite};
 use crate::cmdexpand::globpath;
 use crate::eval::eval_to_string;
 use crate::ex_docmd::eval_vars;
-use crate::fileio::{file_pat_to_reg_pat, match_file_list};
-use crate::garray::{
-    ga_clear_strings, ga_concat_strings, ga_grow, ga_init, ga_remove_duplicate_strings,
-};
+use crate::fileio::match_file_list;
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
-use crate::mbyte::{
-    char_at, cluster_len, mb_isalpha, mb_strcmp_ic, mb_strnicmp, mb_toupper, utf_head_off,
-};
-use crate::memory::{xfree, xmalloc, xmemcpyz, xmemdupz, xrealloc, xstrdup, xstrlcat, xstrlcpy};
-use crate::option::copy_option_part;
+use crate::mbyte::{char_at, cluster_len, head_off, mb_isalpha, mb_toupper};
 use crate::option::vars::{p_fic, p_wig};
-use crate::os::env::{expand_env, expand_env_save_opt, os_getenv, vim_env_iter};
+use crate::os::env::getenv_owned;
 use crate::os::fs::{
-    os_can_exe, os_closedir, os_dirname, os_file_is_readable, os_fileid, os_fileid_equal,
-    os_fileinfo, os_fileinfo_id_equal, os_fileinfo_link, os_isdir, os_path_exists, os_realpath,
-    os_scandir, os_scandir_next,
+    can_execute, dir_exists, dirname_within, file_info, link_info, os_closedir,
+    os_file_is_readable, os_scandir, os_scandir_next, realpath,
 };
 use crate::os::input::os_breakcheck;
 use crate::os::shell::{get_cmd_output, os_expand_wildcards};
-use crate::regexp::{vim_regcomp, vim_regexec, vim_regfree};
-use crate::strings::concat;
-use crate::types::{
-    Directory, Failed, FileComparison, FileID, FileInfo, GArray, MAXPATHL, PATHSEPSTR, RegMatch,
-    size_t,
-};
-use ::libc::{qsort, strcasecmp, strcpy};
+use crate::regexp::vim_regexec;
+use crate::types::{Directory, Failed, FileComparison, MAXPATHL, PATHSEPSTR};
 
 // The carve of the transpiled module; see each child's docs.
 mod names;
@@ -116,48 +108,28 @@ pub const kOneFileMissing: FileComparison = 6;
 pub const kBothFilesMissing: FileComparison = 4;
 pub const kDifferentFiles: FileComparison = 2;
 pub const kEqualFiles: FileComparison = 1;
-pub const URL_BACKSLASH: ::core::ffi::c_uint = 2;
-pub const URL_SLASH: ::core::ffi::c_uint = 1;
+pub const URL_BACKSLASH: c_int = 2;
+pub const URL_SLASH: c_int = 1;
 pub const PATHSEP: c_int = '/' as c_int;
 pub const MAXSUFLEN: c_int = 30;
-pub const ENV_SEPCHAR: c_int = ':' as c_int;
+pub const ENV_SEPCHAR: u8 = b':';
 
-/// The full path of `fname`, in a string the caller owns.
-///
-/// Answers a copy of `fname` itself when it cannot be made absolute, and
-/// NULL only for a NULL `fname`.
-///
-/// # Safety
-/// `fname` must be a NUL-terminated string, or NULL.
-pub unsafe fn full_name_save(fname: *const c_char, force: bool) -> *mut c_char {
-    if fname.is_null() {
-        return core::ptr::null_mut();
+/// The full path of `fname`, in a string the caller owns — or a copy of
+/// `fname` itself when it cannot be made absolute.
+pub fn full_name_save(fname: &CStr, force: bool) -> XString {
+    match vim_full_name(fname, MAXPATHL as usize, force) {
+        Ok(full) => XString::from_vec(full),
+        Err(_) => XString::from_cstr(fname),
     }
-    let buf: *mut c_char = unsafe { xmalloc(MAXPATHL as size_t) }.cast();
-    if unsafe { vim_full_name(fname, buf, MAXPATHL as size_t, force) }.is_err() {
-        unsafe { xfree(buf.cast()) };
-        return unsafe { xstrdup(fname) };
-    }
-    buf
-}
-
-/// [`full_name_save`] of a name the caller holds, owned.
-pub(crate) fn full_name_of(name: &CStr, force: bool) -> crate::memory::XString {
-    // SAFETY: `name` is NUL-terminated, so the answer is an allocation of
-    // its own, taken over once.
-    unsafe { crate::memory::XString::from_raw(full_name_save(name.as_ptr(), force)) }
 }
 
 /// [`full_name_save`] for a name that may already be absolute, in which case
 /// it is only copied.
-///
-/// # Safety
-/// `name` must be a NUL-terminated string.
-pub unsafe fn save_abs_path(name: *const c_char) -> *mut c_char {
-    if unsafe { path_is_absolute(cstr::at(name)) } {
-        unsafe { xstrdup(name) }
+pub fn save_abs_path(name: &CStr) -> XString {
+    if path_is_absolute(name) {
+        XString::from_cstr(name)
     } else {
-        unsafe { full_name_save(name, true) }
+        full_name_save(name, true)
     }
 }
 
@@ -200,15 +172,12 @@ impl Simplify<'_> {
     }
 
     /// Handle the `".."` at `p`, answering where to carry on from.
-    ///
-    /// # Safety
-    /// `p` must index the `".."`.
-    unsafe fn strip_parent(&mut self, mut p: usize) -> usize {
+    fn strip_parent(&mut self, mut p: usize) -> usize {
         // Past the ".." and any separators after it.
         let mut tail = self.past_separators(p + 2);
 
         if self.components > 0 {
-            if unsafe { self.can_strip(&mut p, tail) } {
+            if self.can_strip(&mut p, tail) {
                 // Strip the component before it. If that would leave
                 // nothing and there is no trailing separator, leave a
                 // single "." instead.
@@ -249,35 +218,28 @@ impl Simplify<'_> {
         p
     }
 
-    /// May the component before `p` be stripped by a `".."`? Moves `p` back
-    /// to the start of that component either way.
-    ///
-    /// # Safety
-    /// `p` must index a `".."` that a component and a separator precede, and
-    /// `tail` must index past it.
-    unsafe fn can_strip(&mut self, p: &mut usize, tail: usize) -> bool {
+    /// May the component before the `".."` at `p` be stripped by it? Moves
+    /// `p` back to the start of that component either way. A component and
+    /// a separator precede the `".."`, and `tail` indexes past it.
+    fn can_strip(&mut self, p: &mut usize, tail: usize) -> bool {
         if self.stripping_disabled {
             return false;
         }
-        let filename: *mut c_char = self.name.as_mut_ptr().cast();
-        let mut file_info = FileInfo::default();
 
         // A component that does not exist is stripped without further
         // thought — and a symlink to a name that does not exist counts
         // as not existing.
-        let exists = self.terminated_at(*p - 1, |name| unsafe {
-            os_fileinfo_link(name, &raw mut file_info)
-        });
+        let file_info = self.terminated_at(*p - 1, link_info);
 
         // Back to the start of the component being stripped.
         *p -= 1;
-        while *p > self.start && unsafe { after_pathsep(filename, filename.add(*p)) } == 0 {
+        while *p > self.start && !after_pathsep(self.name, *p) {
             // MB_PTR_BACK: to the head of the character before this one.
-            *p -= unsafe { utf_head_off(filename, filename.add(*p - 1)) } as usize + 1;
+            *p -= head_off(self.name, *p - 1) + 1;
         }
-        if !exists {
+        let Some(_) = file_info else {
             return true;
-        }
+        };
 
         // The component does exist. Stripping it may still change what
         // the name means, so ask the file system about the unstripped
@@ -285,58 +247,47 @@ impl Simplify<'_> {
         // directory — a regular file, say — since the trailing "/.."
         // cannot be applied then; the name is wrong, and later
         // components are left alone too.
-        if !self.terminated_at(tail, |name| unsafe {
-            os_fileinfo(name, &raw mut file_info)
-        }) {
+        let Some(file_info) = self.terminated_at(tail, file_info_of) else {
             self.stripping_disabled = true;
             return false;
-        }
+        };
 
         // That test passes for a symlink to a searchable directory too,
         // and then the directory's parent must be the same file as the
         // stripped name — which does exist, being the component's own
         // parent.
-        let mut new_file_info = FileInfo::default();
-        if *p == self.start && self.relative {
-            unsafe { os_fileinfo(c".".as_ptr(), &raw mut new_file_info) };
+        let new_file_info = if *p == self.start && self.relative {
+            file_info_of(c".")
         } else {
-            self.terminated_at(*p, |name| unsafe {
-                os_fileinfo(name, &raw mut new_file_info)
-            });
-        }
-        unsafe { os_fileinfo_id_equal(&raw mut file_info, &raw mut new_file_info) }
+            self.terminated_at(*p, file_info_of)
+        };
+        new_file_info.unwrap_or_default().same_file_as(&file_info)
     }
 
     /// Ask `question` about the name cut short at `at`, which is put back
     /// afterwards.
-    fn terminated_at(&mut self, at: usize, question: impl FnOnce(*const c_char) -> bool) -> bool {
+    fn terminated_at<T>(&mut self, at: usize, question: impl FnOnce(&CStr) -> T) -> T {
         let saved = core::mem::replace(&mut self.name[at], 0);
-        let answer = question(self.name.as_ptr().cast());
+        let answer = question(cstr::in_bytes(self.name));
         self.name[at] = saved;
         answer
     }
 }
 
-/// Reduce `filename` to its simplest form, in place: no `"."` components, no
-/// duplicate separators, and no `".."` that the file system agrees may come
-/// off. The result is never longer than what it started as.
-///
-/// Answers how long it is now.
-///
-/// # Safety
-/// `filename` must be a writable NUL-terminated string.
-pub unsafe fn simplify_filename(filename: *mut c_char) -> size_t {
-    let len = unsafe { CStr::from_ptr(filename) }.to_bytes().len();
-    simplify_name(unsafe { core::slice::from_raw_parts_mut(filename.cast::<u8>(), len + 1) })
-        as size_t
+/// [`file_info`], as [`Simplify::terminated_at`] asks it.
+fn file_info_of(name: &CStr) -> Option<crate::types::FileInfo> {
+    file_info(name)
 }
 
-/// [`simplify_filename`] of a name the caller holds: `name` is the string
-/// with its NUL, and the answer is upstream's length -- where the NUL is
-/// now, except for a name that simplifies to `"."`, which answers the length
-/// it had before. Read the result up to its first NUL; nothing after that
-/// NUL is meaningful any more.
-pub(crate) fn simplify_name(name: &mut [u8]) -> usize {
+/// Reduce a file name to its simplest form, in place: no `"."` components,
+/// no duplicate separators, and no `".."` that the file system agrees may
+/// come off. The result is never longer than what it started as.
+///
+/// `name` is the string with its NUL, and the answer is upstream's length --
+/// where the NUL is now, except for a name that simplifies to `"."`, which
+/// answers the length it had before. Read the result up to its first NUL;
+/// nothing after that NUL is meaningful any more.
+pub fn simplify_filename(name: &mut [u8]) -> usize {
     let len = name
         .iter()
         .position(|&b| b == 0)
@@ -351,9 +302,9 @@ pub(crate) fn simplify_name(name: &mut [u8]) -> usize {
     };
 
     let mut p = 0;
-    if vim_ispathsep(s.name[0] as c_int) {
+    if vim_ispathsep(c_int::from(s.name[0])) {
         s.relative = false;
-        while vim_ispathsep(s.name[p] as c_int) {
+        while vim_ispathsep(c_int::from(s.name[p])) {
             p += 1;
         }
     }
@@ -369,11 +320,11 @@ pub(crate) fn simplify_name(name: &mut [u8]) -> usize {
     loop {
         // `p` is now at the character after a single separator, or at
         // the start of the path.
-        if vim_ispathsep(s.name[p] as c_int) {
+        let at = |i: usize| c_int::from(cstr::byte_at(s.name, i));
+        if vim_ispathsep(at(p)) {
             // A duplicate separator.
             s.remove(p, p + 1);
-        } else if s.name[p] == b'.' && (vim_ispathsep(s.name[p + 1] as c_int) || s.name[p + 1] == 0)
-        {
+        } else if s.name[p] == b'.' && (vim_ispathsep(at(p + 1)) || s.name[p + 1] == 0) {
             if p == s.start && s.relative {
                 // Keep a single "." or a leading "./".
                 p += 1 + usize::from(s.name[p + 1] != 0);
@@ -391,18 +342,13 @@ pub(crate) fn simplify_name(name: &mut [u8]) -> usize {
             }
         } else if s.name[p] == b'.'
             && s.name[p + 1] == b'.'
-            && (vim_ispathsep(s.name[p + 2] as c_int) || s.name[p + 2] == 0)
+            && (vim_ispathsep(at(p + 2)) || s.name[p + 2] == 0)
         {
-            p = unsafe { s.strip_parent(p) };
+            p = s.strip_parent(p);
         } else {
             // A simple path component: on past the separator after it.
-            // Everything here works through `s.name`; `filename` itself
-            // is not touched again, so the borrow stays whole.
             s.components += 1;
-            let base = s.name.as_ptr().cast::<c_char>();
-            // SAFETY: `p` is within `s.name`, and `path_next_component`
-            // answers a pointer into the same name.
-            p = unsafe { path_next_component(base.add(p)).offset_from(base) } as usize;
+            p += next_component_index(cstr::until_nul(&s.name[p..]));
         }
         if s.name[p] == 0 {
             break;
@@ -411,265 +357,165 @@ pub(crate) fn simplify_name(name: &mut [u8]) -> usize {
     s.end
 }
 
-/// [`vim_full_name`] of a name the caller holds, into a `len`-byte buffer
-/// of its own: what that buffer holds afterwards -- the absolute path, or
-/// the name itself (cut to fit) when it cannot be made absolute.
-pub(crate) fn full_name_into(fname: &CStr, len: usize, force: bool) -> Vec<u8> {
-    let mut buf = vec![0u8; len.max(1)];
-    // SAFETY: `buf` is `len` writable bytes (one at least, for the
-    // terminator the callee always writes), `fname` NUL-terminated.
-    let _ = unsafe { vim_full_name(fname.as_ptr(), buf.as_mut_ptr().cast(), len.max(1), force) };
-    buf.truncate(buf.iter().position(|&b| b == 0).unwrap_or(buf.len()));
-    buf
+/// `bytes` cut to fit a `size`-byte buffer with its NUL — what `xstrlcpy`
+/// leaves there.
+fn truncated(bytes: &[u8], size: usize) -> &[u8] {
+    &bytes[..bytes.len().min(size.saturating_sub(1))]
 }
 
-/// Put the full path of `fname` in `buf`, which holds `len` bytes.
+/// Append `bytes` to `buf`, as far as a `size`-byte buffer with its NUL has
+/// room — what `xstrlcat` leaves there.
+fn push_truncated(buf: &mut Vec<u8>, bytes: &[u8], size: usize) {
+    let room = size.saturating_sub(1).saturating_sub(buf.len());
+    buf.extend_from_slice(&bytes[..bytes.len().min(room)]);
+}
+
+/// The full path of `fname`, made to fit a buffer of `len` bytes.
 ///
-/// `buf` gets `fname` truncated when it does not fit, `fname` unchanged when
-/// it is a URL or cannot be made absolute, and the absolute path otherwise.
-/// `force` asks for the expansion even when `fname` is already absolute.
-///
-/// Answers `Err` when `buf` holds anything but a full path.
-///
-/// # Safety
-/// `buf` must be writable for `len` bytes; `fname` must be a NUL-terminated
-/// string, or NULL.
-pub unsafe fn vim_full_name(
-    fname: *const c_char,
-    buf: *mut c_char,
-    len: size_t,
-    force: bool,
-) -> Result<(), Failed> {
-    unsafe { *buf = 0 };
-    if fname.is_null() {
-        return Err(Failed);
+/// `Ok` holds the absolute path — or `fname` unchanged when it is a URL.
+/// `Err` holds what upstream's buffer is left with when there is no full
+/// path: `fname` itself, cut to fit. `force` asks for the expansion even
+/// when `fname` is already absolute.
+pub fn vim_full_name(fname: &CStr, len: usize, force: bool) -> Result<Vec<u8>, Vec<u8>> {
+    let name = fname.to_bytes();
+    if name.len() > len.saturating_sub(1) {
+        return Err(truncated(name, len).to_vec());
     }
-    if unsafe { cstr::bytes_at(fname) }.len() > len.wrapping_sub(1) {
-        unsafe { xstrlcpy(buf, fname, len) }; // truncate
-        return Err(Failed);
+    if path_with_url(fname) != 0 {
+        return Ok(name.to_vec());
     }
-    if unsafe { path_with_url(cstr::at(fname)) } != 0 {
-        unsafe { xstrlcpy(buf, fname, len) };
-        return Ok(());
-    }
-    let rv = unsafe { path_to_absolute(fname, buf, len, force) };
-    if rv.is_err() {
-        unsafe { xstrlcpy(buf, fname, len) }; // something failed; use the file name
-    }
-    rv
+    // Something failed: use the file name.
+    path_to_absolute(name, len, force).map_err(|Failed| name.to_vec())
 }
 
 /// The full resolved path of `fname`, in a string the caller owns.
 ///
 /// A name that looks absolute may still hold a `"dir/../subdir"`, a symlink
 /// or a doubled separator; this resolves all of those.
-///
-/// # Safety
-/// `fname` must be a NUL-terminated string, or NULL.
-pub unsafe fn fix_fname(fname: *const c_char) -> *mut c_char {
-    unsafe { full_name_save(fname, true) }
+pub fn fix_fname(fname: &CStr) -> XString {
+    full_name_save(fname, true)
 }
 
-/// [`fix_fname`] into a string the caller owns; `None` when the name cannot
-/// be resolved.
-pub(crate) fn fixed_fname(fname: &CStr) -> Option<crate::memory::XString> {
-    // SAFETY: a NUL-terminated name; the answer is a fresh allocation or
-    // null.
-    let fixed = unsafe { fix_fname(fname.as_ptr()) };
-    // SAFETY: a fresh `xmalloc` block, which the string adopts.
-    (!fixed.is_null()).then(|| unsafe { crate::memory::XString::from_raw(fixed) })
-}
-
-/// Put the absolute name of the directory `directory` — relative to the
-/// current one — in `buffer`, which holds `len` bytes.
-///
-/// # Safety
-/// `directory` must be a NUL-terminated string and `buffer` writable for
-/// `len` bytes.
-pub unsafe fn path_full_dir_name(
-    directory: *mut c_char,
-    buffer: *mut c_char,
-    len: size_t,
-) -> Result<(), Failed> {
-    if unsafe { *directory } == 0 {
-        return unsafe { os_dirname(buffer, len) };
+/// The absolute name of the directory `directory` — relative to the current
+/// one — made to fit a buffer of `len` bytes.
+pub fn path_full_dir_name(directory: &CStr, len: usize) -> Result<Vec<u8>, Failed> {
+    if directory.is_empty() {
+        return dirname_within(len).map_err(|_| Failed);
     }
-    if !unsafe { os_realpath(cstr::at(directory), buffer, len) }.is_null() {
-        return Ok(());
+    if let Some(real) = realpath(directory) {
+        return Ok(truncated(&real, len).to_vec());
     }
     // The path does not exist (yet). An absolute one fails, and the
     // caller uses it as it is.
-    if unsafe { path_is_absolute(cstr::at(directory)) } {
+    if path_is_absolute(directory) {
         return Err(Failed);
     }
     // A relative one is taken from the current directory.
-    let mut old_dir = [0 as c_char; MAXPATHL as usize];
-    unsafe { os_dirname(old_dir.as_mut_ptr(), MAXPATHL as size_t) }?;
-    unsafe { xstrlcpy(buffer, old_dir.as_ptr(), len) };
-    unsafe { append_path(buffer, directory, len) }
+    let old_dir = dirname_within(MAXPATHL as usize).map_err(|_| Failed)?;
+    let mut buffer = truncated(&old_dir, len).to_vec();
+    append_path(&mut buffer, directory.to_bytes(), len)?;
+    Ok(buffer)
 }
 
 /// Append `to_append` to `path`, with a separator between them, answering
-/// `Err` when `max_len` bytes are not enough for the result.
-///
-/// # Safety
-/// `path` must be a NUL-terminated string writable for `max_len` bytes, and
-/// `to_append` a NUL-terminated string.
-pub unsafe fn append_path(
-    path: *mut c_char,
-    to_append: *const c_char,
-    max_len: size_t,
-) -> Result<(), Failed> {
-    let mut current_length = unsafe { CStr::from_ptr(path) }.to_bytes().len();
-    let to_append_length = unsafe { CStr::from_ptr(to_append) }.to_bytes().len();
-    // The separator, without its NUL.
-    let sep_len = PATHSEPSTR.count_bytes();
-
+/// `Err` when a buffer of `max_len` bytes is not enough for the result and
+/// its NUL.
+pub fn append_path(path: &mut Vec<u8>, to_append: &[u8], max_len: usize) -> Result<(), Failed> {
     // Do not append an empty string, or a dot.
-    if to_append_length == 0 || unsafe { cstr::eq_bytes(to_append, b".") } {
+    if to_append.is_empty() || to_append == b"." {
         return Ok(());
     }
 
     // Join them with a separator, when there is not one there already.
-    if current_length > 0
-        && !vim_ispathsep_nocolon(unsafe { *path.add(current_length - 1) } as c_int)
+    if path
+        .last()
+        .is_some_and(|&last| !vim_ispathsep_nocolon(c_int::from(last)))
     {
         // The separator and the NUL at the end.
-        if current_length + sep_len + 1 > max_len {
+        if path.len() + PATHSEPSTR.count_bytes() + 1 > max_len {
             return Err(Failed);
         }
-        unsafe {
-            xstrlcpy(
-                path.add(current_length),
-                PATHSEPSTR.as_ptr(),
-                (max_len - current_length) as size_t,
-            )
-        };
-        current_length += sep_len;
+        path.extend_from_slice(PATHSEPSTR.to_bytes());
     }
 
     // The name and the NUL at the end.
-    if current_length + to_append_length + 1 > max_len {
+    if path.len() + to_append.len() + 1 > max_len {
         return Err(Failed);
     }
-    unsafe {
-        xstrlcpy(
-            path.add(current_length),
-            to_append,
-            (max_len - current_length) as size_t,
-        )
-    };
+    path.extend_from_slice(to_append);
     Ok(())
 }
 
-/// Put the full path of `fname` in `buf`, which holds `len` bytes. What
+/// The full path of `fname`, made to fit a buffer of `len` bytes. What
 /// [`vim_full_name`] and [`fix_fname`] are built on: it resolves the
 /// directory part and appends the name to it.
 ///
 /// `force` asks for the expansion even when `fname` is already absolute.
-///
-/// # Safety
-/// `fname` must be a NUL-terminated string no longer than `len - 1`, and
-/// `buf` writable for `len` bytes.
-unsafe fn path_to_absolute(
-    fname: *const c_char,
-    buf: *mut c_char,
-    len: size_t,
-    force: bool,
-) -> Result<(), Failed> {
-    unsafe { *buf = 0 };
-    let name = unsafe { CStr::from_ptr(fname) }.to_bytes();
-    // What the name is relative to: everything up to and including its
-    // last separator. One byte longer than upstream's, which writes its
-    // NUL one past the end for a name of exactly `len - 1` bytes ending
-    // in "/..".
-    let mut relative_directory = vec![0 as c_char; len + 1];
-    let mut end_of_path = fname;
+/// `fname` is no longer than `len - 1`.
+fn path_to_absolute(fname: &[u8], len: usize, force: bool) -> Result<Vec<u8>, Failed> {
+    let mut buf = Vec::new();
+    // Where the part appended to the directory starts.
+    let mut end_of_path = 0;
 
     // Expand it if forced, or if it is not an absolute path.
-    if force || !unsafe { path_is_absolute(cstr::at(fname)) } {
-        let mut sep = name.iter().rposition(|&b| b == b'/');
-        if sep.is_none() && name == b".." {
+    if force || !matches!(fname.first(), Some(b'/' | b'~')) {
+        let mut sep = fname.iter().rposition(|&b| b == b'/');
+        if sep.is_none() && fname == b".." {
             // A ".." with no separator in it names a directory too.
             sep = Some(2);
         }
+        // What the name is relative to: everything up to and including its
+        // last separator.
+        let mut relative_directory: &[u8] = b"";
         if let Some(mut at) = sep {
-            if vim_ispathsep(unsafe { *fname.add(at) } as c_int) && name[at + 1..] == *b".." {
+            let at_sep = |at: usize| vim_ispathsep(c_int::from(cstr::byte_at(fname, at)));
+            if at_sep(at) && fname[at + 1..] == *b".." {
                 // For "/path/dir/.." include the "/..".
                 at += 3;
             }
-            unsafe {
-                core::ptr::copy_nonoverlapping(fname, relative_directory.as_mut_ptr(), at + 1)
-            };
-            relative_directory[at + 1] = 0;
-            end_of_path = if vim_ispathsep(unsafe { *fname.add(at) } as c_int) {
-                unsafe { fname.add(at + 1) }
-            } else {
-                unsafe { fname.add(at) }
-            };
+            relative_directory = &fname[..(at + 1).min(fname.len())];
+            end_of_path = if at_sep(at) { at + 1 } else { at };
         }
-
-        unsafe { path_full_dir_name(relative_directory.as_mut_ptr(), buf, len) }?;
+        buf = path_full_dir_name(&cstr::owned(relative_directory), len)?;
     }
-    unsafe { append_path(buf, end_of_path, len) }
+    append_path(&mut buf, &fname[end_of_path.min(fname.len())..], len)?;
+    Ok(buf)
 }
 
 /// Guess the full path Nvim was started from, given the `argv0` it was
-/// invoked by, and put it in `buf`.
+/// invoked by, cut to fit a buffer of `bufsize` bytes.
 ///
 /// An absolute name is taken as it is, one holding a separator is taken from
 /// the current directory, and a bare name is looked for along `$PATH`.
-///
-/// # Safety
-/// `argv0` must be a NUL-terminated string and `buf` writable for `bufsize`
-/// bytes.
-pub unsafe fn path_guess_exepath(argv0: *const c_char, buf: *mut c_char, bufsize: size_t) {
-    let mut candidate = [0 as c_char; MAXPATHL as usize];
-    let path = unsafe { os_getenv(c"PATH".as_ptr()) };
-    if path.is_null() || unsafe { path_is_absolute(cstr::at(argv0)) } {
-        unsafe { xstrlcpy(buf, argv0, bufsize) };
-    } else if unsafe { *argv0 } == b'.' as c_char || has_char(unsafe { cstr::at(argv0) }, PATHSEP) {
+pub fn path_guess_exepath(argv0: &CStr, bufsize: usize) -> Vec<u8> {
+    let name = argv0.to_bytes();
+    let path = getenv_owned(c"PATH");
+    let Some(path) = path.filter(|_| !path_is_absolute(argv0)) else {
+        return truncated(name, bufsize).to_vec();
+    };
+    if name.first() == Some(&b'.') || name.contains(&b'/') {
         // Relative to the current directory.
-        if unsafe { os_dirname(buf, MAXPATHL as size_t) }.is_err() {
-            unsafe { *buf = 0 };
-        }
-        unsafe { xstrlcat(buf, PATHSEPSTR.as_ptr(), bufsize) };
-        unsafe { xstrlcat(buf, argv0, bufsize) };
-    } else {
-        // Search $PATH for a plausible location.
-        let name = candidate.as_mut_ptr();
-        let size = candidate.len();
-        let mut iter: *const core::ffi::c_void = core::ptr::null();
-        loop {
-            let mut dir: *const c_char = core::ptr::null();
-            let mut dir_len: size_t = 0;
-            iter = unsafe {
-                vim_env_iter(
-                    ENV_SEPCHAR as c_char,
-                    path,
-                    iter,
-                    &raw mut dir,
-                    &raw mut dir_len,
-                )
-            };
-            if dir.is_null() || dir_len == 0 {
-                break;
-            }
-            if (dir_len as usize) < size {
-                unsafe { xmemcpyz(name.cast(), dir.cast(), dir_len) };
-                unsafe { xstrlcat(name, PATHSEPSTR.as_ptr(), size) };
-                unsafe { xstrlcat(name, argv0, size) };
-                if unsafe { os_can_exe(cstr::at(name), core::ptr::null_mut(), false) } {
-                    unsafe { xstrlcpy(buf, name, bufsize) };
-                    return;
-                }
-            }
-            if iter.is_null() {
-                break;
-            }
-        }
-        // Not found in $PATH; fall back on argv0.
-        unsafe { xstrlcpy(buf, argv0, bufsize) };
+        let mut buf = dirname_within(MAXPATHL as usize)
+            .map(|dir| truncated(&dir, bufsize).to_vec())
+            .unwrap_or_default();
+        push_truncated(&mut buf, PATHSEPSTR.to_bytes(), bufsize);
+        push_truncated(&mut buf, name, bufsize);
+        return buf;
     }
-    unsafe { xfree(path.cast()) };
+    // Search $PATH for a plausible location.
+    for dir in path.split(|&b| b == ENV_SEPCHAR) {
+        if dir.is_empty() {
+            break;
+        }
+        if dir.len() < MAXPATHL as usize {
+            let mut candidate = dir.to_vec();
+            push_truncated(&mut candidate, PATHSEPSTR.to_bytes(), MAXPATHL as usize);
+            push_truncated(&mut candidate, name, MAXPATHL as usize);
+            if can_execute(&cstr::owned(&candidate), false) {
+                return truncated(&candidate, bufsize).to_vec();
+            }
+        }
+    }
+    // Not found in $PATH; fall back on argv0.
+    truncated(name, bufsize).to_vec()
 }

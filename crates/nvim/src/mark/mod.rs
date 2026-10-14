@@ -480,7 +480,9 @@ pub(super) unsafe fn fname2fnum(fm: *mut XFileMark) {
         unsafe { xstrlcpy(name_buf, fname, MAXPATHL as size_t) };
     }
     let _ = unsafe { os_dirname(dir_buf, IOSIZE as size_t) };
-    let short = unsafe { path_shorten_fname(name_buf, dir_buf) };
+    // SAFETY: both buffers were just filled with NUL-terminated names.
+    let short = unsafe { path_shorten_fname(cstr::at(name_buf), cstr::bytes_at(dir_buf)) };
+    let short = short.map_or(ptr::null_mut(), |short| short.as_ptr().cast_mut());
     unsafe { buflist_new(name_buf, short, 1, 0) };
 }
 
@@ -513,7 +515,7 @@ unsafe fn fmarks_check_one(fm: Xfmark, name: *mut c_char, buffer: Buf) {
     // SAFETY: both names are NUL-terminated strings.
     if fm.fmark().fnum() != 0
         || fname.is_null()
-        || unsafe { path_fnamecmp(cstr::at(name), cstr::at(fname)) } != 0
+        || unsafe { path_fnamecmp(cstr::bytes_at(name), cstr::bytes_at(fname)) } != 0
     {
         return;
     }

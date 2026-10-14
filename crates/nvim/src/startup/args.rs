@@ -615,9 +615,10 @@ impl Scan {
         let first = arg_name(ArgListId::GLOBAL, 0);
         if self.parm.diff_mode != 0
             && unsafe { os_isdir(path) }
-            && let Some(first) = first.filter(|first| !crate::os::fs::os_isdir_of(first.as_cstr()))
+            && let Some(first) = first.filter(|first| !crate::os::fs::dir_exists(first.as_cstr()))
         {
-            let joined = unsafe { concat_fnames(path, path_tail(first.as_ptr()), true) };
+            let tail = path_tail(first.as_cstr()).to_bytes();
+            let joined = concat_fnames(unsafe { cstr::bytes_at(path) }, tail, true).into_raw();
             unsafe { xfree(path as *mut c_void) };
             path = joined;
         }
@@ -774,12 +775,15 @@ pub(crate) unsafe fn init_path(exename: *const c_char) {
     // SAFETY: `exename` is NUL-terminated; `exepath` is `MAXPATHL` bytes.
     let mut exepath: [c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
     let mut exepathlen: size_t = MAXPATHL as size_t;
-    if unsafe { os_exepath(exepath.as_mut_ptr(), &raw mut exepathlen) } != 0 {
-        unsafe { path_guess_exepath(exename, exepath.as_mut_ptr(), size_of_val(&exepath)) };
-    }
-    set_vim_var_string(Vv::Progpath, Some(cstr::in_chars(&exepath).to_bytes()));
-    let progname = unsafe { cstr::at_opt(path_tail(exename)) };
-    set_vim_var_string(Vv::Progname, progname.map(CStr::to_bytes));
+    let exename = unsafe { cstr::at_opt(exename) };
+    let progpath = if unsafe { os_exepath(exepath.as_mut_ptr(), &raw mut exepathlen) } != 0 {
+        path_guess_exepath(exename.unwrap_or(c""), size_of_val(&exepath))
+    } else {
+        cstr::in_chars(&exepath).to_bytes().to_vec()
+    };
+    set_vim_var_string(Vv::Progpath, Some(&progpath));
+    let progname = exename.map_or(c"", path_tail);
+    set_vim_var_string(Vv::Progname, Some(progname.to_bytes()));
 }
 
 /// `-d` with no `-o`/`-O` splits the way 'diffopt' asks.

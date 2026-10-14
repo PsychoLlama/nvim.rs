@@ -40,8 +40,8 @@ use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::os::fileio::FileOpenFlags;
 use crate::os::fs::{
-    can_execute, executable_path, file_info, link_info, os_file_is_readable, os_file_is_writable,
-    os_isdir_of,
+    can_execute, dir_exists, executable_path, file_info, link_info, os_file_is_readable,
+    os_file_is_writable,
 };
 use crate::path::{tail_index, vim_ispathsep};
 use crate::types::{Direction, EvalFuncData, FileInfo, TypVal, VAR_STRING, VarNumber, uint64_t};
@@ -195,7 +195,7 @@ fn exe_path(p: &CStr) -> Option<ThinCString> {
 }
 
 fn is_dir(p: &CStr) -> bool {
-    os_isdir_of(p)
+    dir_exists(p)
 }
 
 /// The permission bits of `p` -- the whole `st_mode`, as upstream's

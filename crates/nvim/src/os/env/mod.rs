@@ -43,10 +43,10 @@ use crate::memory::{xfree, xmalloc, xmemcpyz, xmemdupz, xstrdup, xstrlcat, xstrl
 use crate::message::internal_error;
 use crate::message_fmt::c_str;
 use crate::os::cshim::{environ, strchr};
-use crate::os::fs::{os_dirname, os_realpath};
+use crate::os::fs::{dirname_within, realpath};
 use crate::os::state::{didset_vim, didset_vimruntime};
 use crate::os::uv_error::{UV_EINVAL, UV_ENOBUFS, UV_ENOENT, UV_UNKNOWN};
-use crate::path::{path_is_absolute, path_tail, path_tail_with_sep, vim_ispathsep};
+use crate::path::{path_is_absolute, path_tail, tail_with_sep_index, vim_ispathsep};
 use crate::startup::nvim_testing;
 use crate::strings::striequal;
 use crate::types::{Candidate, Expand, IOSIZE, MAXPATHL, int64_t, size_t};
@@ -405,35 +405,33 @@ pub(crate) static homedir: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_m
 /// 3. the path each of those resolves to through its links,
 /// 4. and, failing all of that, the current working directory.
 pub fn init_homedir() {
+    // In case this is a second call.
+    // SAFETY: the cell holds null or the allocation the last call made.
+    unsafe { xfree(homedir.get().cast()) };
+    homedir.set(ptr::null_mut());
+
     let mut uv_home = env_buf();
-    let mut resolved = [0 as c_char; IOSIZE as usize];
-    let mut cwd = env_buf();
-    let buf = resolved.as_mut_ptr();
-    // SAFETY: every path below is a NUL-terminated string, and each of the
-    // three buffers is as long as the call filling it is told it is.
-    unsafe {
-        // In case this is a second call.
-        xfree(homedir.get().cast());
-        homedir.set(ptr::null_mut());
-
-        let mut var = os_getenv(c"HOME".as_ptr());
-        let tofree = var;
-
-        if var.is_null() {
-            var = os_uv_homedir(&mut uv_home);
+    let home = getenv_owned(c"HOME").map(|home| home.to_vec()).or_else(|| {
+        let home = os_uv_homedir(&mut uv_home);
+        // SAFETY: null, or the NUL-terminated name libuv left in `uv_home`.
+        unsafe { cstr::at_opt(home) }.map(|home| home.to_bytes().to_vec())
+    });
+    // Resolve links, so the answer is the "real" directory -- cut to fit, as
+    // upstream's `IOSIZE` buffer cuts it.
+    let home = home.map(|home| match realpath(&cstr::owned(&home)) {
+        Some(mut real) => {
+            real.truncate(IOSIZE as usize - 1);
+            real
         }
-        // Resolve links, so the answer is the "real" directory.
-        if !var.is_null() && !os_realpath(cstr::at(var), buf, IOSIZE as usize).is_null() {
-            var = resolved.as_mut_ptr();
-        }
-        // Last resort: wherever nvim was started.
-        if (var.is_null() || *var == 0) && os_dirname(cwd.as_mut_ptr(), MAXPATHL as usize).is_ok() {
-            var = cwd.as_mut_ptr();
-        }
-        if !var.is_null() {
-            homedir.set(xstrdup(var));
-        }
-        xfree(tofree.cast());
+        None => home,
+    });
+    // Last resort: wherever nvim was started.
+    let home = match home {
+        Some(home) if !home.is_empty() => Some(home),
+        other => dirname_within(MAXPATHL as usize).ok().or(other),
+    };
+    if let Some(home) = home {
+        homedir.set(XString::from_vec(home).into_raw());
     }
 }
 
@@ -493,9 +491,8 @@ pub unsafe fn os_setenv_append_path(fname: *const c_char) -> bool {
             internal_error(c"os_setenv_append_path()");
             return false;
         }
-        let tail = path_tail_with_sep(fname.cast_mut());
-        let dirlen = tail.offset_from(fname) as size_t;
-        debug_assert!(tail >= fname.cast_mut() && dirlen + 1 < MAXPATHL as usize);
+        let dirlen = tail_with_sep_index(cstr::bytes_at(fname));
+        debug_assert!(dirlen + 1 < MAXPATHL as usize);
         xmemcpyz(dir.as_mut_ptr().cast(), fname.cast(), dirlen);
 
         let path = os_getenv(c"PATH".as_ptr());
@@ -540,12 +537,12 @@ pub unsafe fn os_shell_is_cmdexe(sh: *const c_char) -> bool {
         }
         if striequal(sh, c"$COMSPEC".as_ptr()) {
             let comspec = os_getenv_into(c"COMSPEC".as_ptr(), &mut comspec_buf);
-            return striequal(c"cmd.exe".as_ptr(), path_tail(comspec));
+            return striequal(c"cmd.exe".as_ptr(), path_tail(cstr::at(comspec)).as_ptr());
         }
         if striequal(sh, c"cmd.exe".as_ptr()) || striequal(sh, c"cmd".as_ptr()) {
             return true;
         }
-        striequal(c"cmd.exe".as_ptr(), path_tail(sh))
+        striequal(c"cmd.exe".as_ptr(), path_tail(cstr::at(sh)).as_ptr())
     }
 }
 

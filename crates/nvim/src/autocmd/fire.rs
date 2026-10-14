@@ -33,6 +33,7 @@
 )]
 
 use super::*;
+use crate::cstr;
 use crate::ex_docmd::{DoCmdOpts, LineSource};
 use crate::getchar::KeyBuffer;
 use crate::guard::{Depth, Script, Suppress};
@@ -423,7 +424,7 @@ pub unsafe fn apply_autocmds_group(
                 // Don't expand it later either.
                 autocmd_fname_full.set(true);
             } else {
-                fname = unsafe { full_name_save(fname, false) };
+                fname = unsafe { full_name_save(cstr::at(fname), false) }.into_raw();
             }
         }
         if fname.is_null() {
@@ -479,7 +480,10 @@ pub unsafe fn apply_autocmds_group(
             Buf::current().b_did_filetype = true;
         }
 
-        let tail = unsafe { path_tail(fname) };
+        let tail = unsafe { cstr::at_opt(fname) }
+            .map_or(c"", path_tail)
+            .as_ptr()
+            .cast_mut();
 
         // The walk's cursor.  This is a *stack local* whose address is
         // published on `active_apc_list` below; see the module docs.

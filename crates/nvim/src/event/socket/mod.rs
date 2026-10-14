@@ -50,7 +50,7 @@ use crate::log::{LOGLVL_ERR, LOGLVL_INF, LOGLVL_WRN, logmsg};
 use crate::memory::{xfree, xstrdup, xstrlcpy};
 use crate::os::cshim::gettext;
 use crate::os::fs::{os_path_exists, os_remove};
-use crate::path::path_tail;
+use crate::path::tail_index;
 use crate::startup::main_loop;
 use crate::types::{
     Loop, RStream, SocketWatcher, Stream, addrinfo, intmax_t, sa_family_t, socket_cb,
@@ -328,7 +328,7 @@ pub unsafe fn socket_watcher_start(
         // libuv reports a missing parent directory as EACCES, for Windows
         // compatibility. ENOENT is the more useful answer.
         // SAFETY: the watcher's own NUL-terminated address buffer.
-        unsafe { *path_tail(addr) = 0 };
+        unsafe { *addr.add(tail_index(cstr::bytes_at(addr))) = 0 };
         // SAFETY: as above.
         if !unsafe { os_path_exists(addr) } {
             result = UV_ENOENT;

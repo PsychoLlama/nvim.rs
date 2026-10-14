@@ -30,7 +30,7 @@ use crate::memory::XString;
 use crate::option::boolean_optval;
 use crate::option::vars::P_PEX;
 use crate::os::cshim::gettext_ptr;
-use crate::path::full_name_of;
+use crate::path::full_name_save;
 use crate::strings::has_char;
 use crate::types::CmdIdx;
 use crate::types::{Failed, MAXPATHL, NUL, OptionSetFlags};
@@ -78,7 +78,7 @@ pub fn ex_diffpatch(excmd: &mut ExArg) {
     if !(tmp_orig.is_null() || tmp_new.is_null()) && write_orig(tmp_orig).is_ok() {
         // Owned: the command's line is replaced before the name is done
         // with. A name that cannot be made absolute comes back as itself.
-        fullname = full_name_of(excmd.line.cstr_from(excmd.line.arg), false).into_raw();
+        fullname = full_name_save(excmd.line.cstr_from(excmd.line.arg), false).into_raw();
         let name = fullname;
         // SAFETY: a NUL-terminated file name.
         esc_name = shellescape(unsafe { cstr::bytes_at(name) }, true, true).into_raw();

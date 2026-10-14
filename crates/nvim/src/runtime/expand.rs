@@ -19,8 +19,8 @@ use super::*;
 use crate::cmdexpand::WildOpts;
 use crate::cstr;
 use crate::garray::ga_append_owned;
+use crate::garray::take_string_array;
 use crate::memory::XString;
-use crate::path::take_wild;
 use crate::snprintf;
 
 use crate::types::Failed;
@@ -358,9 +358,14 @@ pub unsafe fn expand_packadd_dir(
 
     // Offer the package name, not the path it was found at.
     for &matched in unsafe { ga_strings(&raw mut ga) } {
-        let tail = unsafe { path_tail(matched) };
+        let tail = unsafe { tail_index(cstr::bytes_at(matched)) };
         let into = matched.cast::<u8>();
-        unsafe { into.copy_from(tail.cast(), cstr::bytes_at(tail).len() + 1) };
+        unsafe {
+            into.copy_from(
+                matched.add(tail).cast(),
+                cstr::bytes_at(matched.add(tail)).len() + 1,
+            )
+        };
     }
 
     if ga.ga_len <= 0 {
@@ -393,7 +398,7 @@ pub(crate) fn runtime_dir_matches(
             &raw mut files,
             dirnames.as_mut_ptr(),
         )?;
-        Ok(take_wild(count, files))
+        Ok(take_string_array(count, files))
     }
 }
 
@@ -405,7 +410,7 @@ pub(crate) fn packadd_dir_matches(pat: &CStr) -> Result<Vec<XString>, Failed> {
     // SAFETY: a NUL-terminated copy and two locals to fill in.
     unsafe {
         expand_packadd_dir(owned.as_mut_ptr().cast(), &raw mut count, &raw mut files)?;
-        Ok(take_wild(count, files))
+        Ok(take_string_array(count, files))
     }
 }
 
@@ -417,6 +422,6 @@ pub(crate) fn runtime_cmd_matches(pat: &CStr) -> Result<Vec<XString>, Failed> {
     // SAFETY: a NUL-terminated copy and two locals to fill in.
     unsafe {
         expand_runtime_cmd(owned.as_mut_ptr().cast(), &raw mut count, &raw mut files)?;
-        Ok(take_wild(count, files))
+        Ok(take_string_array(count, files))
     }
 }

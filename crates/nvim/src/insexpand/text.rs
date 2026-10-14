@@ -215,13 +215,12 @@ pub(crate) fn get_next_bufname_token() {
         }
         // SAFETY: a live buffer from the editor's own list, whose short name
         // is a NUL-terminated string.
-        let tail = unsafe { path_tail(b.name.short_ptr()) };
+        let tail = unsafe { path_tail(cstr::at(b.name.short_ptr())) };
         let (orig_data, orig_len) = compl_orig_text().parts();
-        if unsafe { cstr::prefix_eq(tail, orig_data, orig_len) } {
+        if unsafe { cstr::prefix_eq(tail.as_ptr(), orig_data, orig_len) } {
             let flags = if p_ic() { CP_ICASE } else { 0 };
             let (dir, score) = (kDirectionNotSet, FUZZY_SCORE_NONE);
-            // SAFETY: `tail` is a NUL-terminated buffer name.
-            let tail = unsafe { cstr::bytes_at(tail) };
+            let tail = tail.to_bytes();
             ins_compl_add(tail, None, NO_EXTRA, None, dir, flags, false, NO_HL, score);
         }
     }

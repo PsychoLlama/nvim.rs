@@ -27,7 +27,7 @@ use crate::eval::typval::NumBuf;
 use crate::eval::typval::tv_get_number;
 use crate::fileio::file_pat_to_regpat;
 use crate::memory::ThinCString;
-use crate::path::{path_is_absolute, shorten_dir_name, simplify_name, tail_index};
+use crate::path::{path_is_absolute, shorten_dir_name, simplify_filename, tail_index};
 use crate::types::{EvalFuncData, MAXPATHL, TypVal, VAR_STRING, VarNumber};
 use core::ffi::{CStr, c_int};
 use std::ffi::OsStr;
@@ -71,7 +71,7 @@ fn simplify(name: &[u8]) -> ThinCString {
     let mut text = Vec::with_capacity(name.len() + 1);
     text.extend_from_slice(name);
     text.push(0);
-    let len = simplify_name(&mut text);
+    let len = simplify_filename(&mut text);
     // Up to the NUL, which a name that became "." has before `len`.
     let end = text[..len].iter().position(|&b| b == 0).unwrap_or(len);
     text.truncate(end);

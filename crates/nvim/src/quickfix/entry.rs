@@ -25,7 +25,7 @@ use crate::buffer::{BufRef, buflist_add_name};
 use crate::file_search::Name;
 use crate::memory::XString;
 use crate::os::fs::{dir_exists, path_exists};
-use crate::path::join_fnames;
+use crate::path::concat_fnames;
 use crate::types::CmdIdx;
 use core::ffi::{CStr, c_int};
 
@@ -68,13 +68,15 @@ pub(crate) fn qf_get_fnum(qfl: Qfl, directory: Option<&CStr>, fname: Option<&CSt
     let joined;
     let bufname = match directory {
         Some(dir) if !vim_is_abs_name(fname) => {
-            let mut path = join_fnames(dir, fname, true);
+            let mut path = concat_fnames(dir.to_bytes(), fname.to_bytes(), true);
             // The file should be there. If it is not, `make` changed
             // directory without a "leaving directory" message and the
             // directory stack has to be re-guessed.
             if !path_exists(path.as_cstr()) {
                 path = match qf_guess_filepath(qfl, fname) {
-                    Some(guess) => join_fnames(guess.as_cstr(), fname, true),
+                    Some(guess) => {
+                        concat_fnames(guess.as_cstr().to_bytes(), fname.to_bytes(), true)
+                    }
                     None => XString::from_cstr(fname),
                 };
             }
@@ -124,7 +126,7 @@ pub(crate) fn qf_push_dir(dirbuf: &CStr, stack: &mut DirStack, is_file_stack: bo
     // Look for a directory on the stack that `dirbuf` is under.
     let mut joined = None;
     let found = stack.keep_matching(|dir| {
-        let path = join_fnames(dir.as_cstr(), dirbuf, true);
+        let path = concat_fnames(dir.as_cstr().to_bytes(), dirbuf.to_bytes(), true);
         let isdir = dir_exists(path.as_cstr());
         joined = Some(path);
         isdir
@@ -158,7 +160,7 @@ pub(crate) fn qf_guess_filepath(mut qfl: Qfl, filename: &CStr) -> Option<Name> {
         return None;
     }
     let found = stack.keep_matching(|dir| {
-        let path = join_fnames(dir.as_cstr(), filename, true);
+        let path = concat_fnames(dir.as_cstr().to_bytes(), filename.to_bytes(), true);
         path_exists(path.as_cstr())
     })?;
     Some(stack.dirs[found].clone())

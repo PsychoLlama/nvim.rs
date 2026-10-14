@@ -10,9 +10,9 @@
 
 use super::*;
 use crate::cstr;
+use crate::garray::{free_string_array, take_string_array};
 use crate::memory::XString;
 use crate::message_fmt::c_str;
-use crate::path::{free_wild, take_wild};
 use crate::pos::MAXCOL;
 use crate::smsg;
 use crate::types::{Failed, MAXPATHL};
@@ -83,7 +83,7 @@ pub(crate) fn tag_matches(tagnames: bool, pat: &CStr) -> Result<Vec<XString>, Fa
     }?;
     if tagnames {
         // SAFETY: what the search answered, taken over once.
-        return Ok(unsafe { take_wild(count, files) });
+        return Ok(unsafe { take_string_array(count, files) });
     }
     let mut found = Vec::with_capacity(usize::try_from(count).unwrap_or(0));
     for at in 0..usize::try_from(count).unwrap_or(0) {
@@ -103,7 +103,7 @@ pub(crate) fn tag_matches(tagnames: bool, pat: &CStr) -> Result<Vec<XString>, Fa
         found.push(text);
     }
     // SAFETY: the array and its matches, given back once.
-    unsafe { free_wild(count, files) };
+    unsafe { free_string_array(count, files) };
     Ok(found)
 }
 

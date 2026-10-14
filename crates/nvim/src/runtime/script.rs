@@ -125,7 +125,10 @@ pub fn find_script_by_name(name: &CStr) -> c_int {
         items.iter().rposition(|&si| {
             // SAFETY: a registry slot always holds a live `ScriptItem`, and
             // `path_fnamecmp` only reads the two NUL-terminated names.
-            unsafe { !(*si).sn_name.is_null() && path_fnamecmp(cstr::at((*si).sn_name), name) == 0 }
+            unsafe {
+                !(*si).sn_name.is_null()
+                    && path_fnamecmp(cstr::bytes_at((*si).sn_name), name.to_bytes()) == 0
+            }
         })
     });
     found.map_or(-1, |idx| idx as c_int + 1)

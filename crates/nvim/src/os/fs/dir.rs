@@ -23,8 +23,8 @@ use core::ptr;
 use std::ffi::CString;
 
 use super::{
-    LIBUV_SUCCESS, NO_LOOP, PATHSEP, TEMP_FILE_PATH_MAXLEN, UV_STAT_T_INIT, fs_ok, fs_request,
-    fs_result, os_isdir, os_stat,
+    LIBUV_SUCCESS, NO_LOOP, PATHSEP, TEMP_FILE_PATH_MAXLEN, UV_STAT_T_INIT, dir_exists, fs_ok,
+    fs_request, fs_result, os_stat,
 };
 use crate::cstr;
 use crate::event::libuv::{
@@ -37,7 +37,7 @@ use crate::message::emsg;
 use crate::message_fmt::c_str;
 use crate::os::cshim::gettext;
 use crate::path::{
-    dir_of_file_exists, full_name_save, get_past_head, path_tail_with_sep, vim_ispathsep,
+    dir_of_file_exists, full_name_save, past_head_index, tail_with_sep_index, vim_ispathsep,
 };
 use crate::semsg;
 use crate::types::{Directory, int32_t, size_t};
@@ -93,24 +93,13 @@ pub unsafe fn os_mkdir_recurse(
     let mut curdir: Vec<u8> = unsafe { CStr::from_ptr(dir) }.to_bytes_with_nul().to_vec();
     let real_end = curdir.len() - 1;
     // Where the walk back has to stop: "/" on Unix, "c:/" on Windows.
-    // SAFETY: `curdir` is a NUL-terminated string this frame owns, and
-    // `get_past_head` answers a pointer inside it.
-    let past_head = unsafe {
-        get_past_head(curdir.as_ptr().cast()).offset_from(curdir.as_ptr().cast::<c_char>())
-    }
-    .cast_unsigned();
+    let past_head = past_head_index(cstr::until_nul(&curdir));
     let past_head_save = curdir[past_head];
 
     let mut e = real_end;
-    // SAFETY: `curdir` is NUL-terminated throughout, and
-    // `path_tail_with_sep` answers a pointer inside it.
-    while !unsafe { os_isdir(curdir.as_ptr().cast()) } {
-        // SAFETY: as above.
-        e = unsafe {
-            path_tail_with_sep(curdir.as_mut_ptr().cast())
-                .offset_from(curdir.as_ptr().cast::<c_char>())
-        }
-        .cast_unsigned();
+    // `curdir` is NUL-terminated throughout.
+    while !dir_exists(cstr::in_bytes(&curdir)) {
+        e = tail_with_sep_index(cstr::until_nul(&curdir));
         if e <= past_head {
             curdir[past_head] = 0;
             break;
@@ -150,7 +139,7 @@ pub unsafe fn os_mkdir_recurse(
         // SAFETY: the caller's out-parameter, checked non-null.
         if !created.is_null() && unsafe { (*created).is_null() } {
             // SAFETY: same; it takes the allocation over.
-            unsafe { *created = full_name_save(curdir.as_ptr().cast(), false) };
+            unsafe { *created = full_name_save(cstr::in_bytes(&curdir), false).into_raw() };
         }
     }
     0
@@ -167,10 +156,10 @@ pub unsafe fn os_file_mkdir(fname: *mut c_char, mode: int32_t) -> c_int {
     // SAFETY: the caller's writable NUL-terminated file name. The tail is
     // cut off with a NUL for the duration and put back before returning.
     unsafe {
-        if dir_of_file_exists(fname) {
+        if dir_of_file_exists(cstr::bytes_at(fname)) {
             return 0;
         }
-        let tail = path_tail_with_sep(fname);
+        let tail = fname.add(tail_with_sep_index(cstr::bytes_at(fname)));
         // `tail` is past `fname`'s start here (`dir_of_file_exists`
         // answers true when they are equal), so the byte before it exists
         // even when the tail itself is empty — which is the case upstream's
@@ -244,19 +233,16 @@ pub fn os_scandir(dir: &mut Directory, path: &CStr) -> bool {
     r >= 0
 }
 
-/// The next entry's name, or null when the walk is over. The name lives in
-/// `dir`'s request until the next call.
-///
-/// # Safety
-/// `dir` must be a `Directory` [`os_scandir`] succeeded on.
-pub unsafe fn os_scandir_next(dir: &mut Directory) -> *const c_char {
-    // SAFETY: the caller's open `Directory`; the name lives in its request.
+/// The next entry's name, or `None` when the walk is over. The name lives
+/// in `dir`'s request until the next call, which the borrow says.
+pub fn os_scandir_next(dir: &mut Directory) -> Option<&CStr> {
+    // SAFETY: the request is `dir`'s own; a walk that was never started, or
+    // has ended, answers `UV_EOF` and touches nothing.
     let err = unsafe { uv_fs_scandir_next(&raw mut dir.request, &raw mut dir.ent) };
-    if err != UV_EOF {
-        dir.ent.name
-    } else {
-        ptr::null()
-    }
+    // SAFETY: on success `ent.name` is libuv's NUL-terminated name, alive
+    // in the request until the next call -- which needs `dir` mutably, so
+    // it cannot happen while the answer is borrowed.
+    (err != UV_EOF).then(|| unsafe { CStr::from_ptr(dir.ent.name) })
 }
 
 /// Releases what [`os_scandir`] allocated.

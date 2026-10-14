@@ -423,6 +423,12 @@ pub unsafe fn os_fileid(path: *const c_char, file_id: *mut FileID) -> bool {
     true
 }
 
+/// The (device, inode) pair for `path`, or `None` when it cannot be read:
+/// [`os_fileid`] of a name the caller holds.
+pub(crate) fn file_id(path: &CStr) -> Option<FileID> {
+    file_info(path).map(|info| info.id())
+}
+
 /// Whether two `FileID`s name the same file.
 ///
 /// # Safety

@@ -432,7 +432,9 @@ fn apply_buffer_list(mut entry: ShadaEntry) {
     let list = entry.data.buffer_list();
     for i in 0..list.size {
         let item = unsafe { list.buffers.add(i) };
-        let sfname = unsafe { path_try_shorten_fname((*item).fname) };
+        let sfname = unsafe { path_try_shorten_fname(cstr::at((*item).fname)) }
+            .as_ptr()
+            .cast_mut();
         let buf = unsafe { buflist_new((*item).fname, sfname, 0, BLN_LISTED as c_int) };
         let Some(mut buf) = buf else {
             continue;
@@ -473,7 +475,8 @@ unsafe fn buffer_for_fname(fname_bufs: &mut FnameBufs, fname: *const c_char) -> 
     for buf in buffers() {
         // SAFETY: `fname` and the buffer's own name are both C strings.
         if !buf.name.full().is_none()
-            && unsafe { path_fnamecmp(cstr::at(fname), cstr::at(buf.name.full_ptr())) } == 0
+            && unsafe { path_fnamecmp(cstr::bytes_at(fname), cstr::bytes_at(buf.name.full_ptr())) }
+                == 0
         {
             found = Some(buf);
             break;

@@ -77,7 +77,7 @@ impl PtagEntry {
 }
 
 /// The matches of the tag last looked up: the array `find_tags` answered,
-/// which this owns and `free_wild`s when it is replaced or dropped. An entry
+/// which this owns and `free_string_array`s when it is replaced or dropped. An entry
 /// is not one C string but several fields with NULs between them, which is
 /// why it stays the array `parse_match` reads rather than a `Vec` of strings.
 struct TagMatches {
@@ -103,7 +103,7 @@ impl TagMatches {
 impl Drop for TagMatches {
     fn drop(&mut self) {
         // SAFETY: `find_tags`' array of `len` allocations, owned by this.
-        unsafe { free_wild(self.len, self.list) };
+        unsafe { free_string_array(self.len, self.list) };
     }
 }
 
@@ -683,7 +683,7 @@ impl DoTag {
         // the one we started with.
         if self.tagstack != (unsafe { &raw mut (*Win::current_raw()).w_tagstack }).cast() {
             tag_emsg(c"E1299: Window unexpectedly closed while searching for tags");
-            unsafe { free_wild(new_num_matches, new_matches) };
+            unsafe { free_string_array(new_num_matches, new_matches) };
             return false;
         }
 

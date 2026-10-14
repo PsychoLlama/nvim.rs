@@ -255,8 +255,7 @@ unsafe fn source_init_pair(
     if unsafe { do_source(init_vim, true, DOSO_VIMRC as c_int, ptr::null_mut()) } != FAIL {
         let mut do_exrc = p_exrc();
         if do_exrc && check_exrc_is_same {
-            let vimrc = VIMRC_FILE.as_ptr() as *mut c_char;
-            let same = unsafe { path_full_compare(vimrc, init_vim, false, true) };
+            let same = unsafe { path_full_compare(VIMRC_FILE, cstr::at(init_vim), false, true) };
             do_exrc = same != kEqualFiles;
         }
         return Some(do_exrc);

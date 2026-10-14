@@ -23,7 +23,7 @@ use crate::cstr;
 use crate::fileio::vim_gettempdir;
 use crate::memory::{ThinCString, XString, xfree, xmemdupz, xstrdup};
 use crate::os::env::{env_buf, expand_env_save, os_env_exists, os_getenv, os_getenv_into};
-use crate::path::{concat_fnames_realloc, join_fnames, path_fnamecmp, path_is_absolute};
+use crate::path::{concat_fnames, path_fnamecmp, path_is_absolute};
 use crate::types::{IOSIZE, XDGVarType, size_t};
 use core::ffi::{CStr, c_char};
 use core::ptr;
@@ -117,7 +117,9 @@ fn contains(haystack: &[u8], needle: &[u8]) -> bool {
 fn remove_duplicate_dirs(list: &CStr, sep: u8) -> Option<CString> {
     // `path_fnamecmp` rather than a byte compare: it honors
     // 'fileignorecase' and the platform's path-separator equivalences.
-    dedup_dirs(list, sep, |a, b| path_fnamecmp(a, b) == 0)
+    dedup_dirs(list, sep, |a, b| {
+        path_fnamecmp(a.to_bytes(), b.to_bytes()) == 0
+    })
 }
 
 /// [`remove_duplicate_dirs`] with the "same directory" test injected.
@@ -201,7 +203,11 @@ pub fn xdg_home(idx: XDGVarType) -> Option<XString> {
     // needed for that in `IObuff` is asserted on every platform.
     let iosize = usize::try_from(IOSIZE).expect("the scratch buffer has a positive size");
     debug_assert!(appname.count_bytes() < iosize - c"-data".count_bytes() - 1);
-    Some(join_fnames(&dir?, &appname, true))
+    Some(concat_fnames(
+        dir?.as_cstr().to_bytes(),
+        appname.to_bytes(),
+        true,
+    ))
 }
 
 /// [`xdg_home`], or NULL when the directory is unset. The caller owns the
@@ -216,8 +222,9 @@ pub fn get_xdg_home(idx: XDGVarType) -> *mut c_char {
 ///
 /// `fname` is NUL-terminated.
 pub unsafe fn stdpaths_user_conf_subpath(fname: *const c_char) -> *mut c_char {
-    // SAFETY: the caller's name, and an owned directory `concat` consumes.
-    unsafe { concat_fnames_realloc(get_xdg_home(kXDGConfigHome), fname, true) }
+    let home = xdg_home(kXDGConfigHome).expect("the config home has a default");
+    // SAFETY: the caller's NUL-terminated name.
+    concat_fnames(&home, unsafe { cstr::bytes_at(fname) }, true).into_raw()
 }
 
 /// [`stdpaths_user_state_subpath`] of a name the caller holds, owned.
@@ -252,7 +259,8 @@ pub unsafe fn stdpaths_user_state_subpath(
 ) -> *mut c_char {
     // SAFETY: the caller's name; `ret` is owned here and NUL-terminated,
     // and the borrow of it ends before it is freed.
-    let ret = unsafe { concat_fnames_realloc(get_xdg_home(kXDGStateHome), fname, true) };
+    let home = xdg_home(kXDGStateHome).expect("the state home has a default");
+    let ret = concat_fnames(&home, unsafe { cstr::bytes_at(fname) }, true).into_raw();
     let path = unsafe { CStr::from_ptr(ret) }.to_bytes();
     let commas = if escape_commas {
         path.iter().filter(|&&b| b == b',').count()

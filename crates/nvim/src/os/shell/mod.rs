@@ -38,7 +38,7 @@ use crate::charset::skipwhite;
 use crate::eval::vars::set_vim_var_nr;
 use crate::event::multiqueue::multiqueue_put_event;
 use crate::ex_cmds::{check_secure, make_filter_cmd};
-use crate::fileio::vim_tempname;
+use crate::fileio::temp_name;
 use crate::global_cell::GlobalCell;
 use crate::kvec::Kvec;
 use crate::memline::ml_append;
@@ -48,7 +48,7 @@ use crate::message::{e_notmp, e_shellempty};
 use crate::message::{
     emsg, msg_ext_set_kind, msg_outnum, msg_putchar, msg_str, verbose_enter, verbose_leave,
 };
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, msg_cstr};
 use crate::option::vars::{P_SH, P_SHCF, P_SXE, P_SXQ, p_sh, p_verbose};
 use crate::os::cshim::gettext;
 use crate::os::fs::{os_fopen, os_remove};
@@ -66,7 +66,7 @@ use crate::types::{
 };
 use crate::ui::{ui_flush, ui_has};
 use crate::winlayer::Buf;
-use ::libc::{fclose, fopen, fread, fseek, ftell, strcpy};
+use ::libc::{fclose, fopen, fread, fseek, ftell};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};
 use std::ffi::CString;
@@ -410,102 +410,73 @@ pub unsafe fn call_shell(cmd: *mut c_char, opts: ShellOpts, extra_shell_arg: *mu
     }
 }
 
-/// The stdout of an external command, newly allocated, or NULL on error.
-///
-/// When `ret_len` is NULL every NUL byte in the output becomes SOH, because
-/// the answer is used as a C string; when it is not NULL the length goes
-/// there and the bytes come back untouched.
-///
-/// # Safety
-/// `cmd` and `infile` must be NUL-terminated strings or NULL, and `ret_len`
-/// writable or NULL.
-pub unsafe fn get_cmd_output(
-    cmd: *mut c_char,
-    infile: *mut c_char,
-    flags: ShellOpts,
-    ret_len: *mut size_t,
-) -> *mut c_char {
-    // SAFETY: the caller's contract; `tempname` and `command` are owned here
-    // and freed on every path out.
-    unsafe {
-        if check_secure() {
-            return ptr::null_mut();
-        }
-        let tempname = vim_tempname();
-        if tempname.is_null() {
-            emsg(gettext(e_notmp));
-            return ptr::null_mut();
-        }
+/// The stdout of an external command, or `None` on error. Every NUL byte in
+/// the output becomes SOH, because the answer is used as a C string.
+pub(crate) fn get_cmd_output(cmd: &CStr, flags: ShellOpts) -> Option<XString> {
+    if check_secure() {
+        return None;
+    }
+    let Some(tempname) = temp_name() else {
+        emsg(gettext(e_notmp));
+        return None;
+    };
 
-        // Add the redirection, and run it. Errors are ignored, and timestamps
-        // deliberately not checked.
-        let command = make_filter_cmd(
-            cstr::at(cmd),
-            (!infile.is_null()).then(|| cstr::at(infile)),
-            Some(cstr::at(tempname)),
-            false,
-        );
-        let unchecked = Suppress::timestamp_checks();
+    // Add the redirection, and run it. Errors are ignored, and timestamps
+    // deliberately not checked.
+    let command = make_filter_cmd(cmd, None, Some(tempname.as_cstr()), false);
+    let unchecked = Suppress::timestamp_checks();
+    // SAFETY: a NUL-terminated command this frame owns, and no extra
+    // argument.
+    unsafe {
         call_shell(
             command.as_ptr().cast_mut(),
             ShellOpts::DO_OUT | ShellOpts::EXPAND | flags,
             ptr::null_mut(),
-        );
-        drop(unchecked);
-        drop(command);
+        )
+    };
+    drop(unchecked);
+    drop(command);
 
-        let buffer = read_output(tempname, ret_len);
-        xfree(tempname.cast());
-        buffer
+    let mut buffer = read_output(tempname.as_cstr())?;
+    // A NUL would truncate the string, so it becomes SOH instead.
+    for b in &mut buffer {
+        if *b == 0 {
+            *b = 1;
+        }
     }
+    Some(XString::from_vec(buffer))
 }
 
 /// Read back what [`get_cmd_output`]'s command redirected into `tempname`.
-///
-/// # Safety
-/// `tempname` must be a NUL-terminated path and `ret_len` writable or NULL.
-unsafe fn read_output(tempname: *mut c_char, ret_len: *mut size_t) -> *mut c_char {
-    // SAFETY: the caller's contract; `fd` is closed on every path out.
+fn read_output(tempname: &CStr) -> Option<Vec<u8>> {
+    // SAFETY: a NUL-terminated name; `fd` is closed on every path out.
     unsafe {
         // Not being able to seek means the file cannot be read.
-        let fd = os_fopen(tempname, READBIN.as_ptr());
+        let fd = os_fopen(tempname.as_ptr(), READBIN.as_ptr());
         if fd.is_null() || fseek(fd, 0, SEEK_END) == -1 {
-            semsg!("E282: Cannot read from \"{}\"", c_str(tempname));
+            semsg!("E282: Cannot read from \"{}\"", msg_cstr(tempname));
             if !fd.is_null() {
                 fclose(fd);
             }
-            return ptr::null_mut();
+            return None;
         }
         let len_l = ftell(fd);
         if len_l == -1 || fseek(fd, 0, SEEK_SET) == -1 {
-            semsg!("E282: Cannot read from \"{}\"", c_str(tempname));
+            semsg!("E282: Cannot read from \"{}\"", msg_cstr(tempname));
             fclose(fd);
-            return ptr::null_mut();
+            return None;
         }
 
         let len = len_l as usize;
-        let buffer = xmalloc(len + 1) as *mut c_char;
-        let read = fread(buffer.cast(), 1, len, fd);
+        let mut buffer = vec![0u8; len];
+        let read = fread(buffer.as_mut_ptr().cast(), 1, len, fd);
         fclose(fd);
-        os_remove(cstr::at(tempname));
+        os_remove(tempname);
         if read as usize != len {
-            semsg!("E485: Can't read file {}", c_str(tempname));
-            xfree(buffer.cast());
-            return ptr::null_mut();
+            semsg!("E485: Can't read file {}", msg_cstr(tempname));
+            return None;
         }
-        if ret_len.is_null() {
-            // A NUL would truncate the string, so it becomes SOH instead.
-            let bytes = slice::from_raw_parts_mut(buffer.cast::<u8>(), len);
-            for b in bytes.iter_mut() {
-                if *b == 0 {
-                    *b = 1;
-                }
-            }
-            *buffer.add(len) = 0;
-        } else {
-            *ret_len = len;
-        }
-        buffer
+        Some(buffer)
     }
 }
 

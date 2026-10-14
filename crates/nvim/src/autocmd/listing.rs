@@ -241,14 +241,13 @@ pub unsafe fn has_autocmd(
     sfname: *mut ::core::ffi::c_char,
     buffer: Option<Buf>,
 ) -> bool {
-    // SAFETY: `sfname` is the caller's NUL-terminated file name.  `path_tail`
-    // answers a position inside it, and `full_name_save` an allocation this
-    // owns and frees below (or null, when it could not make one).
-    let tail = unsafe { path_tail(sfname) };
-    let fname = unsafe { full_name_save(sfname, false) };
-    if fname.is_null() {
+    // SAFETY: `sfname` is the caller's NUL-terminated file name, or null.
+    let Some(name) = (unsafe { cstr::at_opt(sfname) }) else {
         return false;
-    }
+    };
+    let tail = path_tail(name).as_ptr().cast_mut();
+    let mut fname = full_name_save(name, false);
+    let fname = fname.as_mut_ptr();
 
     let acs = au_event_vec(event);
     let mut retval = false;
@@ -286,8 +285,6 @@ pub unsafe fn has_autocmd(
         i = i.wrapping_add(1);
     }
 
-    // SAFETY: `full_name_save` allocated it and nothing else took it.
-    unsafe { xfree(fname.cast::<::core::ffi::c_void>()) };
     retval
 }
 
@@ -440,7 +437,9 @@ pub fn au_exists(arg: &::core::ffi::CStr) -> bool {
                 && (group == AUGROUP_ALL || unsafe { (*ap).group } == group)
                 && (pattern.is_null()
                     || if buflocal_buf.is_null() {
-                        unsafe { path_fnamecmp(cstr::at((*ap).pat), cstr::at(pattern)) == 0 }
+                        unsafe {
+                            path_fnamecmp(cstr::bytes_at((*ap).pat), cstr::bytes_at(pattern)) == 0
+                        }
                     } else {
                         unsafe { (*ap).buflocal_nr == (*buflocal_buf).handle }
                     })

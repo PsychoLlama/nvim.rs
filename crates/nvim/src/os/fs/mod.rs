@@ -48,11 +48,11 @@ use crate::event::libuv::{
 };
 use crate::log::g_stats;
 use crate::log::{LOGLVL_ERR, logmsg};
-use crate::memory::{xfree, xmalloc, xstrlcpy};
+use crate::memory::xstrlcpy;
 use crate::message::{verbose_enter, verbose_leave};
 use crate::message_fmt::{c_str, msg_cstr};
 use crate::option::vars::p_verbose;
-use crate::os::env::os_getenv;
+use crate::os::env::getenv_owned;
 use crate::path::{append_path, gettail_dir, save_abs_path};
 use crate::smsg;
 use crate::startup::stdin_fd;
@@ -288,29 +288,31 @@ pub unsafe fn os_dirname(buf: *mut c_char, mut len: size_t) -> Result<(), Failed
     }
 }
 
-/// The name of the current directory, or `None` when the system will not
-/// say: [`os_dirname`] into a buffer of its own.
-pub(crate) fn current_dir() -> Option<crate::memory::XString> {
-    let mut buf = vec![0 as c_char; crate::types::MAXPATHL as usize];
+/// The name of the current directory, when it fits a buffer of `room`
+/// bytes with its NUL: [`os_dirname`] into a buffer of its own. `Err`
+/// holds what that buffer is left with instead, libuv's error message.
+pub(crate) fn dirname_within(room: usize) -> Result<Vec<u8>, Vec<u8>> {
+    let mut buf = vec![0 as c_char; room.max(1)];
     // SAFETY: the buffer holds exactly the length passed.
     let ok = unsafe { os_dirname(buf.as_mut_ptr(), buf.len()) }.is_ok();
-    ok.then(|| crate::memory::XString::from_cstr(cstr::in_chars(&buf)))
+    let text = cstr::in_chars(&buf).to_bytes().to_vec();
+    if ok { Ok(text) } else { Err(text) }
+}
+
+/// The name of the current directory, or `None` when the system will not
+/// say.
+pub(crate) fn current_dir() -> Option<crate::memory::XString> {
+    dirname_within(crate::types::MAXPATHL as usize)
+        .ok()
+        .map(crate::memory::XString::from_vec)
 }
 
 /// What [`os_dirname`] leaves in a `MAXPATHL` buffer: the name of the
 /// current directory or, when the system will not say, the error message.
 /// The reader that ignores the failure and goes on with the buffer.
 pub(crate) fn dirname_text() -> crate::memory::XString {
-    let mut buf = vec![0 as c_char; crate::types::MAXPATHL as usize];
-    // SAFETY: the buffer holds exactly the length passed.
-    let _ = unsafe { os_dirname(buf.as_mut_ptr(), buf.len()) };
-    crate::memory::XString::from_cstr(cstr::in_chars(&buf))
-}
-
-/// [`os_isdir`] of a name the caller holds.
-pub(crate) fn os_isdir_of(name: &CStr) -> bool {
-    // SAFETY: `name` is NUL-terminated.
-    unsafe { os_isdir(name.as_ptr()) }
+    let text = dirname_within(crate::types::MAXPATHL as usize).unwrap_or_else(|message| message);
+    crate::memory::XString::from_vec(text)
 }
 
 /// libuv's text for the error code `error` -- upstream's `os_strerror`.
@@ -331,20 +333,15 @@ pub(crate) fn os_err_name(error: c_int) -> &'static CStr {
 
 /// [`os_can_exe`] asking only whether `name` is executable.
 pub(crate) fn can_execute(name: &CStr, use_path: bool) -> bool {
-    // SAFETY: a null out-parameter asks for no path.
-    unsafe { os_can_exe(name, ptr::null_mut(), use_path) }
+    os_can_exe(name, None, use_path)
 }
 
 /// [`os_can_exe`] answering where the executable `name` was found, or
 /// `None` when it is not one.
 pub(crate) fn executable_path(name: &CStr, use_path: bool) -> Option<crate::memory::XString> {
-    let mut path = ptr::null_mut();
-    // SAFETY: `path` is this frame's own; the callee leaves it null or an
-    // allocated NUL-terminated string, adopted here.
-    unsafe {
-        os_can_exe(name, &raw mut path, use_path);
-        (!path.is_null()).then(|| crate::memory::XString::from_raw(path))
-    }
+    let mut path = None;
+    os_can_exe(name, Some(&mut path), use_path);
+    path
 }
 
 /// Whether `name` is a directory and *not* a symlink to one.
@@ -400,29 +397,24 @@ pub unsafe fn os_exepath(buffer: *mut c_char, size: *mut size_t) -> c_int {
 
 /// Whether `name` is an executable file — found in `$PATH` when `use_path`
 /// is set and `name` carries no directory, and otherwise resolved as given.
-/// A non-null `abspath` receives the resolved path, allocated.
-///
-/// # Safety
-/// `abspath` must be null or writable.
-pub unsafe fn os_can_exe(name: &CStr, abspath: *mut *mut c_char, use_path: bool) -> bool {
-    // SAFETY: the caller's contract, passed straight through.
-    unsafe {
-        let has_dir = gettail_dir(name.as_ptr()) != name.as_ptr();
-        if !use_path || has_dir {
-            // A bare name has to come from `$PATH`: files in the current
-            // directory are not executable by name.
-            return (use_path || has_dir) && is_executable(name, abspath);
-        }
-        is_executable_in_path(name, abspath)
+/// An `abspath` receives the resolved path.
+pub fn os_can_exe(
+    name: &CStr,
+    abspath: Option<&mut Option<crate::memory::XString>>,
+    use_path: bool,
+) -> bool {
+    let has_dir = gettail_dir(name.to_bytes()) != 0;
+    if !use_path || has_dir {
+        // A bare name has to come from `$PATH`: files in the current
+        // directory are not executable by name.
+        return (use_path || has_dir) && is_executable(name, abspath);
     }
+    is_executable_in_path(name, abspath)
 }
 
 /// Whether `name` is a regular file the process may execute, storing its
-/// resolved absolute path through a non-null `abspath`.
-///
-/// # Safety
-/// `abspath` must be null or writable.
-unsafe fn is_executable(name: &CStr, abspath: *mut *mut c_char) -> bool {
+/// resolved absolute path in `abspath`.
+fn is_executable(name: &CStr, abspath: Option<&mut Option<crate::memory::XString>>) -> bool {
     // SAFETY: `name` is NUL-terminated and outlives the call.
     let mode = unsafe { os_getperm(name.as_ptr()) };
     if mode < 0 {
@@ -432,51 +424,36 @@ unsafe fn is_executable(name: &CStr, abspath: *mut *mut c_char) -> bool {
     let ok = mode as u64 & S_IFMT == S_IFREG
         // SAFETY: as above.
         && fs_result(|req| unsafe { uv_fs_access(NO_LOOP, req, name.as_ptr(), X_OK, None) }) == 0;
-    if ok && !abspath.is_null() {
-        // SAFETY: the caller's out-parameter, checked non-null; it takes
-        // ownership of the allocation.
-        unsafe { *abspath = save_abs_path(name.as_ptr()) };
+    if ok && let Some(abspath) = abspath {
+        *abspath = Some(save_abs_path(name));
     }
     ok
 }
 
 /// Whether any `$PATH` entry holds an executable called `name`, in the
 /// order `$PATH` lists them.
-///
-/// # Safety
-/// `abspath` must be null or writable.
-unsafe fn is_executable_in_path(name: &CStr, abspath: *mut *mut c_char) -> bool {
-    // SAFETY: `os_getenv` answers an owned NUL-terminated string or null.
-    let path_env = unsafe { os_getenv(c"PATH".as_ptr()) };
-    if path_env.is_null() {
+fn is_executable_in_path(
+    name: &CStr,
+    mut abspath: Option<&mut Option<crate::memory::XString>>,
+) -> bool {
+    // Copied out because `is_executable` below can reach code that reads
+    // `$PATH`.
+    let Some(path) = getenv_owned(c"PATH") else {
         return false;
-    }
-    // SAFETY: non-null, and `os_getenv`'s answer is NUL-terminated. Copied
-    // out because `is_executable` below can reach code that reads `$PATH`.
-    let path = unsafe { CStr::from_ptr(path_env) }.to_bytes().to_vec();
-    let name_len = name.to_bytes().len();
+    };
     // Longest case: the whole of `$PATH` as one entry, a separator, `name`
     // and the NUL.
-    let mut buf = vec![0u8; name_len + path.len() + 2];
-    let mut rv = false;
+    let room = name.to_bytes().len() + path.len() + 2;
     // `xstrchrnul` stops at the NUL, so the walk visits every entry
     // including the empty ones and ends with the last.
     for entry in path.split(|&b| b == ENV_SEPCHAR) {
-        buf[..entry.len()].copy_from_slice(entry);
-        buf[entry.len()] = 0;
-        // SAFETY: `buf` is NUL-terminated at `entry.len()` and holds the
-        // length passed, which is long enough for any entry plus `name`.
-        let _ = unsafe { append_path(buf.as_mut_ptr().cast(), name.as_ptr(), buf.len()) };
-        // SAFETY: `buf` is NUL-terminated at or before its end, and
-        // `abspath` is the caller's.
-        if unsafe { is_executable(cstr::in_bytes(&buf), abspath) } {
-            rv = true;
-            break;
+        let mut candidate = entry.to_vec();
+        let _ = append_path(&mut candidate, name.to_bytes(), room);
+        if is_executable(&cstr::owned(&candidate), abspath.as_deref_mut()) {
+            return true;
         }
     }
-    // SAFETY: `os_getenv` handed ownership of `path_env` over.
-    unsafe { xfree(path_env.cast()) };
-    rv
+    false
 }
 
 /// Opens or creates `path`, answering the new descriptor or a negative
@@ -887,29 +864,18 @@ pub unsafe fn os_fsync(fd: c_int) -> c_int {
     r
 }
 
-/// Resolves `name` to a real path, into `buf` if that is non-null and into
-/// a fresh `len`-byte allocation otherwise. Answers null on failure.
-///
-/// # Safety
-/// `buf` must be null or address `len` writable bytes.
-pub unsafe fn os_realpath(name: &CStr, mut buf: *mut c_char, len: size_t) -> *mut c_char {
+/// `name` resolved to a real path, or `None` when it cannot be.
+pub(crate) fn realpath(name: &CStr) -> Option<Vec<u8>> {
     // `request.ptr` is the resolved path and `uv_fs_req_cleanup` frees
     // it, so the copy has to happen inside the read.
     fs_request(
         // SAFETY: `name` is NUL-terminated and outlives the call.
         |request| unsafe { uv_fs_realpath(NO_LOOP, request, name.as_ptr(), None) },
         |result, request| {
-            if result != LIBUV_SUCCESS {
-                return ptr::null_mut();
-            }
-            if buf.is_null() {
-                // SAFETY: `len` is what the caller asked the answer to fit.
-                buf = unsafe { xmalloc(len) }.cast();
-            }
             // SAFETY: `request.ptr` is libuv's NUL-terminated answer, alive
-            // until cleanup, and `buf` holds `len` bytes.
-            unsafe { xstrlcpy(buf, request.ptr.cast(), len) };
-            buf
+            // until cleanup.
+            (result == LIBUV_SUCCESS)
+                .then(|| unsafe { cstr::bytes_at(request.ptr.cast()) }.to_vec())
         },
     )
 }

@@ -45,7 +45,6 @@ use crate::eval::vars::set_vim_var_dict;
 use crate::eval::{callback_call, get_v_event, restore_v_event, set_ref_in_callback};
 use crate::ex_docmd::state::{ex_normal_busy, global_busy};
 use crate::ex_eval::aborting;
-use crate::ex_getln::tilde_replace;
 use crate::extmark::{extmark_apply_undo, extmark_splice_delete};
 use crate::fileio::vim_fgets;
 use crate::fuzzy::fuzzy_match_str;
@@ -87,7 +86,7 @@ use crate::os::cshim::{gettext, strncasecmp};
 use crate::os::fs::os_fopen;
 use crate::os::input::{fast_breakcheck, line_breakcheck, os_breakcheck};
 use crate::os::time::{os_delay, os_hrtime};
-use crate::path::{expand_wildcards, free_wild, path_tail, vim_ispathsep};
+use crate::path::{expand_wildcards, path_tail, vim_ispathsep};
 use crate::popupmenu::state::pum_want;
 use crate::popupmenu::{
     pum_clear, pum_display, pum_get_height, pum_set_event_info, pum_undisplay, pum_visible,

@@ -98,12 +98,10 @@ pub unsafe fn nlua_set_sctx(current: *mut ScriptCtx) {
                 level += 1;
             }
 
-            let source_path = fix_fname((*info).source.add(1));
-            let mut sid = find_script_by_name(cstr::at(source_path));
-            if sid > 0 {
-                xfree(source_path.cast::<c_void>());
-            } else {
-                let si = new_script_item(source_path, &raw mut sid);
+            let source_path = fix_fname(cstr::at((*info).source.add(1)));
+            let mut sid = find_script_by_name(source_path.as_cstr());
+            if sid <= 0 {
+                let si = new_script_item(source_path.into_raw(), &raw mut sid);
                 (*si).sn_lua = true;
             }
             (*current).sc_sid = sid as ScriptId;
