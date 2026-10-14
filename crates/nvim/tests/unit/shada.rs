@@ -183,7 +183,10 @@ fn entries(bytes: &[u8]) -> Vec<(u64, Vec<String>)> {
         };
         let len = usize::try_from(len).expect("small");
         let payload = r.take(len).to_vec();
-        let mut lines = vec![format!("type={typ} {} len={}", head[1], head[2])];
+        // The header's length follows its version string and pid, which are
+        // masked inside it, so it is masked too.
+        let len_text = if typ == 1 { "<LEN>" } else { &head[2] };
+        let mut lines = vec![format!("type={typ} {} len={len_text}", head[1])];
         tokenise(
             &mut Reader {
                 buf: &payload,
@@ -233,7 +236,7 @@ fn the_header_names_its_writer() {
     assert_eq!(
         got.join("\n").lines().collect::<Vec<_>>(),
         [
-            "type=1 masked <TS> len=fixint 91",
+            "type=1 masked <TS> len=<LEN>",
             "  fixmap {5}",
             "    fixstr 'generator'",
             "    bin8 'nvim'",
