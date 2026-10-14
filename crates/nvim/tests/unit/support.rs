@@ -91,14 +91,29 @@ pub(crate) fn editor_lock() -> Editor {
 ///
 /// Messages still reach stdout (nothing is attached to consume them), which
 /// is exactly what the Lua lane did too.
+///
+/// The temporary-directory variables are hidden from `early_init`, so that
+/// the defaults built from them (`'backupskip'`) are the same in a shell
+/// that sets `$TMPDIR` (`nix develop` does) as in one that does not; the
+/// option oracles list an option only when it differs from its default.
 #[cfg(not(miri))]
 fn init_editor() {
+    const TEMP_VARS: [&str; 3] = ["TMPDIR", "TEMP", "TMP"];
     static ONCE: std::sync::Once = std::sync::Once::new();
     // SAFETY: the caller holds the editor lock, and `Once` makes this the
     // only initialisation.
     ONCE.call_once(|| unsafe {
+        let saved = TEMP_VARS.map(|name| (name, std::env::var_os(name)));
+        for name in TEMP_VARS {
+            std::env::remove_var(name);
+        }
         neovim::startup::event_init();
         neovim::startup::early_init(std::ptr::null_mut());
+        for (name, value) in saved {
+            if let Some(value) = value {
+                std::env::set_var(name, value);
+            }
+        }
         neovim::lua::executor::nlua_init(std::ptr::null_mut(), 0, -1);
         neovim::drawscreen::default_grid_alloc();
     });
@@ -156,8 +171,15 @@ impl Sandbox {
     /// `name` distinguishes this case's directory from every other case's;
     /// pass the test function's own name.
     pub(crate) fn dir(name: &str) -> Sandbox {
+        Sandbox::dir_in(&std::env::temp_dir(), name)
+    }
+
+    /// [`Sandbox::dir`], made inside `parent` rather than the temp
+    /// directory, for a case whose answers name the directories above its
+    /// own and so cannot depend on what `$TMPDIR` is called.
+    pub(crate) fn dir_in(parent: &Path, name: &str) -> Sandbox {
         let mut sandbox = Sandbox::globals();
-        let dir = std::env::temp_dir().join(format!("nvim-unit-{name}"));
+        let dir = parent.join(format!("nvim-unit-{name}"));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("a private sandbox");
         let dir = dir.canonicalize().expect("the sandbox resolves");

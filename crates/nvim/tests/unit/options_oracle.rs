@@ -200,15 +200,20 @@ const SHAPES: &[&str] = &[
     "breakat",
 ];
 
-/// What the option and the last command say now.
+/// What the option and the last command say now, with the home directory
+/// written out: `'dictionary'` expands a leading `~`.
 fn state(fx: &Probe, name: &str) -> String {
-    format!(
+    let text = format!(
         "{}|{}|{}|{}",
         fx.eval(&format!("&{name}")),
         fx.eval(&format!("&l:{name}")),
         fx.eval("v:errmsg"),
         fx.output(&format!("silent! set {name}?"))
-    )
+    );
+    match std::env::var("HOME") {
+        Ok(home) if !home.is_empty() => text.replace(&home, "<H>"),
+        _ => text,
+    }
 }
 
 #[test]
@@ -301,11 +306,13 @@ const LISTINGS: [u64; 14] = [
     17_717_685_146_253_658_485,
 ];
 
-/// Recorded before an option value owned its string.
+/// Recorded before an option value owned its string. `'dictionary'`'s was
+/// re-cut when the home directory was written out of the answers, from the
+/// same answers: the old digest held on the home it was recorded under.
 const OPERATORS: [u64; 5] = [
     17_641_244_318_484_148_716,
     7_872_315_180_379_759_583,
-    13_827_189_906_950_396_205,
+    13_586_010_553_937_603_543,
     6_950_669_116_562_947_449,
     9_401_097_154_406_692_227,
 ];

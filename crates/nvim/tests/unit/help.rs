@@ -83,7 +83,7 @@ fn helptags_writes_a_sorted_tags_file_per_language() {
     sandbox.write("doc/dup.txt", b"*demo-intro* again\n");
     fx.check_error(
         &format!("helptags {root}/doc"),
-        "E154: Duplicate tag \"demo-intro\" in file /tmp/nvim-unit-help_tags/doc/dup.txt",
+        &format!("E154: Duplicate tag \"demo-intro\" in file {root}/doc/dup.txt"),
     );
     sandbox.write("doc/dup.txt", b"no tags here\n");
     for (cmd, err) in [
@@ -97,7 +97,7 @@ fn helptags_writes_a_sorted_tags_file_per_language() {
     sandbox.mkdir("empty");
     fx.check_error(
         &format!("helptags {root}/empty"),
-        "E151: No match: /tmp/nvim-unit-help_tags/empty/**",
+        &format!("E151: No match: {root}/empty/**"),
     );
     fx.check("readdir('empty')", "[]");
     fx.run("set runtimepath&");

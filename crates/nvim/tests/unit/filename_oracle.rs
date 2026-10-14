@@ -18,6 +18,7 @@
 
 use crate::support::corpus::Digest;
 use crate::support::{Probe, Sandbox};
+use std::path::Path;
 
 /// Buffer names a file argument has to survive: separators at both ends,
 /// dots in every position, the characters `expand_filename` escapes or
@@ -170,7 +171,10 @@ endfunction
 
 #[test]
 fn filename_expansion() {
-    let sandbox = Sandbox::dir("filename_oracle");
+    // `:p:h:h:t:r` reaches the sandbox's parent, which was `/tmp` when the
+    // digest was recorded; keep it a `tmp` wherever `$TMPDIR` points.
+    let parent = std::env::temp_dir().join("nvim-unit-filename_oracle-root/tmp");
+    let sandbox = Sandbox::dir_in(&parent, "filename_oracle");
     for file in [
         "a.txt",
         "b.txt",
@@ -180,7 +184,7 @@ fn filename_expansion() {
         "sub/c.txt",
         "sub/d.vim",
     ] {
-        if let Some(dir) = std::path::Path::new(file).parent() {
+        if let Some(dir) = Path::new(file).parent() {
             sandbox.mkdir(&dir.to_string_lossy());
         }
         sandbox.touch(file);
@@ -213,10 +217,14 @@ fn filename_expansion() {
     probe.run("setlocal swapfile<");
     probe.home();
 
+    // The home directory, and the name `~:p:h:t` answers for it.
     let home = std::env::var("HOME").unwrap_or_default();
     let mut text = out.replace(sandbox.as_str(), "<D>");
     if !home.is_empty() {
         text = text.replace(&home, "<H>");
+    }
+    if let Some(name) = Path::new(&home).file_name().and_then(|name| name.to_str()) {
+        text = text.replace(name, "<h>");
     }
     let text = script_ids_out(&text);
     // `FILENAME_ORACLE_DUMP=path` writes the answers out, for a diff
@@ -231,9 +239,11 @@ fn filename_expansion() {
     );
     let mut d = Digest::new();
     d.bytes(text.as_bytes());
+    // Re-cut when the home directory's name was written out: the answers
+    // are the recorded ones with that name read `<h>`.
     assert_eq!(
         d.value(),
-        0x9dea_7fd7_ae57_d562,
+        0x6925_5bc7_0f00_11a4,
         "filename expansion:\n{}",
         &text[..text.len().min(2000)]
     );
