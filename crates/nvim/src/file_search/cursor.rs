@@ -10,8 +10,8 @@
 #![forbid(unsafe_code)]
 
 use super::*;
-use crate::charset::getdigits_at;
 use crate::charset::skip;
+use crate::charset::{getdigits_at, getdigits_int_at};
 use crate::guard::Script;
 use crate::mbyte::{c_cluster_len, head_off};
 use crate::memline::Lines;
@@ -49,7 +49,7 @@ pub(crate) fn grab_file_name(count: c_int, file_lnum: Option<&mut LineNr>) -> Op
         && cstr::byte_at(text, len) == b':'
         && cstr::byte_at(text, len + 1).is_ascii_digit()
     {
-        *file_lnum = getdigits_at(text, len + 1, false, 0).0 as LineNr;
+        *file_lnum = getdigits_int_at(text, len + 1, false, 0).0;
     }
     let rel_fname = own_buffer_name();
     find_file_name_in_path(
