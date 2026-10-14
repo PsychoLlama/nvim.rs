@@ -357,6 +357,9 @@ plus these whole-tree metrics, which are not per-file:
                         them, and counting them would penalise the interim.
                       const_c_int     `pub const NAME: c_int`/`c_uint` — the
                         integer constant families that want to be enums.
+                        The type may be path-qualified (`::core::ffi::`,
+                        `std::ffi::`, `libc::`): c2rust wrote most of them
+                        that way, and a bare-name needle missed 760.
                       const_int_alias the same debt worn under a different
                         name: `pub const NAME: Alias`, where `Alias` is one of
                         the tree's *own* integer type aliases. c2rust rendered
@@ -1189,7 +1192,9 @@ VOCABULARY = {
         r"\b(?:str(?:len|cmp|ncmp|cpy|cat|chr|str)"
         r"|mem(?:cpy|move|set|cmp))\("
     ),
-    "const_c_int": re.compile(r"\bpub const [A-Z_][A-Z0-9_]*: c_u?int\b"),
+    "const_c_int": re.compile(
+        r"\bpub const [A-Z_][A-Z0-9_]*: (?:(?:::)?(?:core|std)::ffi::|libc::)?c_u?int\b"
+    ),
     "unions": re.compile(r"\bunion\s+[A-Za-z_]"),
     # A derive list holds no `)`, so `[^)]*` cannot run past the attribute.
     # The item must be a *braced* struct/union: see the doc block for why an
@@ -4292,8 +4297,13 @@ SELF_TEST_VOCABULARY = [
             "pub const C: c_uint = 2;\n"
             "const D: c_int = 3;\n"
             "pub const E: usize = 4;\n"
+            # c2rust spelled most of them path-qualified.
+            "pub const F: ::core::ffi::c_int = 5;\n"
+            "pub const G: core::ffi::c_uint = 6;\n"
+            "pub const H: libc::c_int = 7;\n"
+            "pub const I: ::core::ffi::c_long = 8;\n"
         },
-        {"const_c_int": 2},
+        {"const_c_int": 5},
     ),
     (
         # The alias set is whole-tree: `auto_event` is declared in one file

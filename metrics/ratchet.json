@@ -11,7 +11,7 @@
   "semsg_c": 43,
   "raw_cstr": 2172,
   "libc_strings": 56,
-  "const_c_int": 402,
+  "const_c_int": 1162,
   "const_int_alias": 2211,
   "unions": 28,
   "repr_c_ffi_types": 97,
