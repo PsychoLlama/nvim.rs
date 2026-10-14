@@ -219,8 +219,29 @@ fn written(
         .into_iter()
         .map(|(typ, lines)| (typ, lines.join("\n")))
         .filter(|(typ, text)| keep(*typ, text))
-        .map(|(_, text)| text.replace(sandbox.as_str(), "<DIR>"))
+        .map(|(_, text)| mask_dir(&text, sandbox.as_str()))
         .collect()
+}
+
+/// `text` with the sandbox directory written `<DIR>` -- and, since the
+/// entry's length counts the directory's bytes, its `len=fixint N` written
+/// `len=<DIR>+M` with the directory taken out, so the answer does not
+/// depend on what `$TMPDIR` is called.
+fn mask_dir(text: &str, dir: &str) -> String {
+    let uses = text.matches(dir).count();
+    let mut masked = text.replace(dir, "<DIR>");
+    if uses > 0
+        && let Some(at) = masked.find("len=fixint ")
+    {
+        let start = at + "len=fixint ".len();
+        let end = masked[start..]
+            .find(|c: char| !c.is_ascii_digit())
+            .map_or(masked.len(), |n| start + n);
+        let len: usize = masked[start..end].parse().expect("a length");
+        let rest = len - uses * dir.len();
+        masked.replace_range(at..end, &format!("len=<DIR>+{rest}"));
+    }
+    masked
 }
 
 fn restore(fx: &Probe) {
@@ -446,7 +467,7 @@ fn marks_name_their_file_and_position() {
     assert_eq!(
         got.join("\n").lines().collect::<Vec<_>>(),
         [
-            "type=7 masked <TS> len=fixint 60",
+            "type=7 masked <TS> len=<DIR>+17",
             "  fixmap {3}",
             "    fixstr 'f'",
             "    bin8 '<DIR>/f.txt'",
@@ -454,7 +475,7 @@ fn marks_name_their_file_and_position() {
             "    fixint 2",
             "    fixstr 'n'",
             "    fixint 81",
-            "type=7 masked <TS> len=fixint 60",
+            "type=7 masked <TS> len=<DIR>+17",
             "  fixmap {3}",
             "    fixstr 'f'",
             "    bin8 '<DIR>/f.txt'",
@@ -462,7 +483,7 @@ fn marks_name_their_file_and_position() {
             "    fixint 3",
             "    fixstr 'n'",
             "    fixint 48",
-            "type=10 masked <TS> len=fixint 60",
+            "type=10 masked <TS> len=<DIR>+17",
             "  fixmap {3}",
             "    fixstr 'f'",
             "    bin8 '<DIR>/f.txt'",
@@ -470,7 +491,7 @@ fn marks_name_their_file_and_position() {
             "    fixint 3",
             "    fixstr 'n'",
             "    fixint 97",
-            "type=10 masked <TS> len=fixint 57",
+            "type=10 masked <TS> len=<DIR>+14",
             "  fixmap {2}",
             "    fixstr 'f'",
             "    bin8 '<DIR>/f.txt'",
