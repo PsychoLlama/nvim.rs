@@ -111,6 +111,7 @@ fn edits_from_autocommands_and_local_lists() {
 
 /// The script: every case resets to one window on buffer 1 with an empty
 /// global list.
+#[cfg(not(miri))]
 const SCRIPT: &str = "let g:out = []\n\
 func Log(label, ...)\n\
   call add(g:out, a:label . ': ' . string(a:0 ? a:1 : '') . ' args=' . string(argv()) . ' idx=' . argidx() . ' id=' . arglistid() . ' buf=' . fnamemodify(bufname(), ':t') . ' err=' . v:errmsg)\n\
@@ -437,6 +438,7 @@ call Reset()\n\
 ";
 
 /// Upstream's log of [`SCRIPT`].
+#[cfg(not(miri))]
 const EXPECTED: &str = "all-local: 1 E1156: Cannot change the argument list recursively ['a']0\n\
 argdo-del: ['a', 'b'] args=['a', 'b'] idx=1 id=0 buf=b err=\n\
 all-local: 1 E1156: Cannot change the argument list recursively ['a']0\n\
