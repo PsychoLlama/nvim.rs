@@ -228,8 +228,8 @@ pub(crate) unsafe fn do_in_cached_path(
         // SAFETY: the length test above proves the directory and its separator
         // fit, so `tail` lands inside `buf`.
         unsafe { xstrlcpy(buf.as_mut_ptr().cast(), item.path, MAXPATHL as usize) };
-        add_pathsep_in(&mut buf);
-        let tail_at = cstr::until_nul(&buf).len();
+        // The length test above proves nothing was cut.
+        let tail_at = add_pathsep_at(&mut buf, buflen);
         let buf = buf.as_mut_ptr().cast::<c_char>();
         // SAFETY: as documented on `expand_name_patterns`; `tail_at` is
         // inside `buf`.

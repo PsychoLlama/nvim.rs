@@ -241,7 +241,9 @@ pub fn gen_expand_wildcards(
     }
 
     RECURSIVE.set(true);
-    let mut names = Vec::with_capacity(30);
+    // Allocated with the first name, as upstream's array is: most runtime
+    // searches find nothing.
+    let mut names = Vec::new();
 
     // Upstream never clears this: once one pattern has been looked for
     // along the 'path', every later one is uniquefied too.
@@ -297,13 +299,14 @@ pub fn gen_expand_wildcards(
         let p = expanded.as_ref().map_or(*pattern, XString::as_cstr);
 
         if added.is_none() || added == Some(0) && flags.has(ExpandFlags::NOTFOUND) {
-            let t = cstr::owned(&backslash_halved(p.to_bytes()));
+            let t = XString::from_vec(backslash_halved(p.to_bytes()));
+            let t = t.as_cstr();
             // With ExpandFlags::NOTFOUND always add files and directories:
             // that is what makes "vim c:/" work.
             if flags.has(ExpandFlags::NOTFOUND) {
-                addfile(&mut names, &t, flags | ExpandFlags::DIR | ExpandFlags::FILE);
+                addfile(&mut names, t, flags | ExpandFlags::DIR | ExpandFlags::FILE);
             } else {
-                addfile(&mut names, &t, flags);
+                addfile(&mut names, t, flags);
             }
         }
 

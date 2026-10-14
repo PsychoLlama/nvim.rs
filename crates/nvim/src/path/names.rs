@@ -183,15 +183,18 @@ pub fn add_pathsep(name: &mut Vec<u8>) -> bool {
 /// and its NUL.
 pub(crate) fn add_pathsep_in(buf: &mut [u8]) -> bool {
     let len = cstr::until_nul(buf).len();
-    if len == 0 || after_pathsep(buf, len) {
-        return true;
-    }
-    if len + 2 > MAXPATHL as usize || len + 2 > buf.len() {
-        return false;
+    add_pathsep_at(buf, len) > len || len == 0 || after_pathsep(buf, len)
+}
+
+/// [`add_pathsep_in`] for a name already known to be `len` bytes long:
+/// answers how long it is now.
+pub(crate) fn add_pathsep_at(buf: &mut [u8], len: usize) -> usize {
+    if len == 0 || after_pathsep(buf, len) || len + 2 > MAXPATHL as usize || len + 2 > buf.len() {
+        return len;
     }
     buf[len] = PATHSEP_BYTE;
     buf[len + 1] = 0;
-    true
+    len + 1
 }
 
 /// Does `p` start with a Windows drive letter (`"C:/"`)?

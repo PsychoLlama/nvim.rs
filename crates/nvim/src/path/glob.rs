@@ -49,9 +49,10 @@ pub(crate) fn has_wildcard(p: &[u8]) -> bool {
 }
 
 /// Does `p` hold a character [`do_path_expand`] itself can expand? `~` and
-/// `$` are not among them: those are the shell's and `expand_env`'s.
+/// `$` are not among them: those are the shell's and `expand_env`'s. `p`
+/// is a name's bytes, without a NUL.
 pub(crate) fn has_exp_wildcard(p: &[u8]) -> bool {
-    has_any_of(cstr::until_nul(p), b"*?[{", false)
+    has_any_of(p, b"*?[{", false)
 }
 
 /// Does `p` hold one of `wildcards`, or — when `tilde` is set — a `~` that
@@ -390,8 +391,10 @@ fn name_matches(
 ///
 /// A brace needs one when non-existing names are wanted, since only the
 /// shell invents those; a backtick or quote needs one when it is matched.
+///
+/// `p` is a pattern's bytes, without a NUL.
 pub(crate) fn has_special_wildchar(p: &[u8], flags: ExpandFlags) -> bool {
-    let bytes = cstr::until_nul(p);
+    let bytes = p;
     let mut at = 0;
     while at < bytes.len() {
         let c = bytes[at];
