@@ -23,13 +23,16 @@ use crate::event::socket::address::is_bare_server_name;
 use crate::event::socket::{socket_watcher_close, socket_watcher_init, socket_watcher_start};
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_ERR, LOGLVL_WRN, logmsg};
+use crate::memory::XString;
 use crate::memory::{strequal, xcalloc, xfree, xmalloc, xstrdup};
 use crate::message_fmt::{c_str, msg_bytes};
-use crate::os::env::{os_env_exists, os_get_pid, os_getenv, os_unsetenv};
+use crate::os::env::{env_exists, env_unset, getenv_owned, os_get_pid};
+use crate::os::fs::os_strerror;
 use crate::os::stdpaths::{get_appname, stdpaths_get_xdg_var};
 use crate::path::fix_fname;
 use crate::startup::main_loop;
 use crate::types::{IOSIZE, SocketWatcher, Vv, size_t, uint32_t};
+use std::ffi::CString;
 
 use crate::event::socket::address::SOCKET_ADDR_LEN;
 
@@ -71,80 +74,61 @@ enum ListenSource {
 
 /// Opens the start-up listening socket, if there is to be one.
 ///
-/// Returns whether that succeeded, leaving the reason in `reason` when it
-/// did not. An address the user did not ask for is generated, and failing
-/// to listen on *that* is not an error — the editor runs fine without a
-/// server. Upstream leaves the reason in the shared `IObuff` instead.
-///
-/// # Safety
-/// `listen_addr` is either null or a NUL-terminated string.
-pub unsafe fn server_init(
-    listen_addr: *const c_char,
-    reason: &mut [c_char; IOSIZE as usize],
-) -> bool {
-    let mut listen_addr = listen_addr;
-    let mut must_free = false;
+/// Answers why not when that failed. An address the user did not ask for is
+/// generated, and failing to listen on *that* is not an error — the editor
+/// runs fine without a server. Upstream leaves the reason in the shared
+/// `IObuff` instead.
+pub fn server_init(listen_addr: Option<&CStr>) -> Result<(), CString> {
     // Which of the three sources the address came from, in the order they
-    // are consulted.
-    let mut source = ListenSource::Argument;
-
-    // SAFETY: the caller's address, and the environment, which is this
-    // process's own.
-    let empty = listen_addr.is_null() || unsafe { *listen_addr == 0 };
-    if empty {
-        // SAFETY: `ENV_LISTEN` is a static string.
-        if unsafe { os_env_exists(ENV_LISTEN.as_ptr(), true) } {
-            source = ListenSource::Environment;
-            // SAFETY: as above.
-            listen_addr = unsafe { os_getenv(ENV_LISTEN.as_ptr()) };
-        } else {
-            source = ListenSource::Generated;
-            // SAFETY: a null name means "use the editor's own".
-            listen_addr = unsafe { server_address_new(core::ptr::null()) };
+    // are consulted, and the address itself when this call made it.
+    let given = listen_addr.filter(|addr| !addr.is_empty());
+    let (source, made) = match given {
+        Some(_) => (ListenSource::Argument, None),
+        None if env_exists(ENV_LISTEN, true) => {
+            (ListenSource::Environment, getenv_owned(ENV_LISTEN))
         }
-        must_free = true;
-    }
+        None => {
+            // SAFETY: a null name means "use the editor's own"; the answer
+            // is a fresh allocation, taken over here.
+            let generated = unsafe { XString::from_raw(server_address_new(core::ptr::null())) };
+            (ListenSource::Generated, Some(generated))
+        }
+    };
+    let listen_addr = given.or(made.as_ref().map(XString::as_cstr));
 
-    // SAFETY: `listen_addr` is null or NUL-terminated either way.
-    let rv = server_start(unsafe { cstr::at_opt(listen_addr) });
+    let rv = server_start(listen_addr);
 
-    // SAFETY: a static name, and a message with no arguments.
-    if unsafe { os_env_exists(c"__NVIM_TEST_LOG".as_ptr(), false) } {
+    if env_exists(c"__NVIM_TEST_LOG", false) {
         logmsg!(LOGLVL_ERR, c"server_init", 58, "test log message");
     }
 
-    let mut ok = true;
+    let mut result = Ok(());
     if rv != 0 && source != ListenSource::Generated {
-        let fmt = if source == ListenSource::Argument {
-            c"Failed to --listen: %s: \"%s\""
+        let what: &[u8] = if source == ListenSource::Argument {
+            b"Failed to --listen"
         } else {
-            c"Failed $NVIM_LISTEN_ADDRESS: %s: \"%s\""
+            b"Failed $NVIM_LISTEN_ADDRESS"
         };
-        // SAFETY: `uv_strerror` answers a static string for any code, and
-        // `reason` is `IOSIZE` writable bytes; both verbs take a string.
         let text = if rv < 0 {
-            unsafe { uv_strerror(rv) }
+            os_strerror(rv)
         } else if rv == 1 {
-            c"empty address".as_ptr()
+            c"empty address"
         } else {
-            c"?".as_ptr()
+            c"?"
         };
-        let out = reason.as_mut_ptr();
-        unsafe { snprintf!(out, IOSIZE as usize, fmt.as_ptr(), text, listen_addr) };
-        ok = false;
+        let addr = listen_addr.map_or(&b"(null)"[..], CStr::to_bytes);
+        let mut reason = [what, b": ", text.to_bytes(), b": \"", addr, b"\""].concat();
+        // Upstream formats into `IObuff`, which cuts the reason short.
+        reason.truncate(IOSIZE as usize - 1);
+        result = Err(CString::new(reason).expect("an address and a message hold no NUL"));
     }
 
     // The variable exists to tell *this* process where to listen; child
     // processes must not inherit it.
-    // SAFETY: a static name, and an address this function owns when
-    // `must_free` says so.
-    if unsafe { os_env_exists(ENV_LISTEN.as_ptr(), false) } {
-        unsafe { os_unsetenv(ENV_LISTEN.as_ptr()) };
+    if env_exists(ENV_LISTEN, false) {
+        env_unset(ENV_LISTEN);
     }
-    if must_free {
-        unsafe { xfree(listen_addr.cast_mut().cast::<c_void>()) };
-    }
-    ok
+    result
 }
 
 /// A watcher's address, as the NUL-terminated string it stores.

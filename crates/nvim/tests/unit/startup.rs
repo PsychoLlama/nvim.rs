@@ -475,7 +475,7 @@ fn attached_values_and_conflicts() {
 }
 
 #[test]
-fn a_bare_lua_interpreter() {
+fn a_bare_lua_interpreter_and_odd_bytes() {
     let book = Book::default();
     let sandbox = files("startup_ll");
     let dir = sandbox.root();
@@ -488,4 +488,19 @@ fn a_bare_lua_interpreter() {
         (run.code, run.report),
         (Some(4), "s.lua,x,--y false".to_owned()),
     );
+    // A file name that is not UTF-8 is still a file name.
+    use std::os::unix::ffi::OsStrExt;
+    let odd = std::ffi::OsStr::from_bytes(b"odd\xff.txt");
+    let args: Vec<&std::ffi::OsStr> = ["--headless", "-u", "NONE", "-i", "NONE", "-c"]
+        .iter()
+        .map(std::ffi::OsStr::new)
+        .chain([
+            std::ffi::OsStr::new("call writefile([len(bufname())], 'report')"),
+            std::ffi::OsStr::new("-c"),
+            std::ffi::OsStr::new("qa!"),
+            odd,
+        ])
+        .collect();
+    let run = nvim(dir, &args, None);
+    book.eq((run.code, run.report), (Some(0), "8".to_owned()));
 }

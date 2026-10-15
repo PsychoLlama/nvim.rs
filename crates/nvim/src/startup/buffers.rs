@@ -8,8 +8,7 @@
 //! answering "quit" to it is the reason so many of them end in
 //! [`quit_on_swap_exists`].
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::cstr;
 use crate::ex_cmds::EcmdFlags;
@@ -18,9 +17,8 @@ use crate::guard::Suppress;
 use crate::memory::XString;
 use crate::semsg;
 use crate::types::ArgListId;
-use crate::vim_snprintf;
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
+use core::ffi::{CStr, c_int};
+use std::ffi::CString;
 
 use crate::arglist::state::ARG_HAD_LAST;
 use crate::arglist::{alist_count, arg_name, with_arg_names};
@@ -28,19 +26,18 @@ use crate::buffer::state::{
     BLN_LISTED, SEA_DIALOG, SEA_NONE, SEA_QUIT, swap_exists_action, swap_exists_did_quit,
 };
 use crate::buffer::{
-    buf_is_empty, buflist_new, do_modelines, handle_swap_exists, open_buffer, set_buflisted,
+    buf_is_empty, buflist_add_name, do_modelines, handle_swap_exists, open_buffer, set_buflisted,
     set_curbuf, setfname,
 };
 use crate::eval::typval::{list_set_lock, tv_list_alloc};
 use crate::eval::vars::set_vim_var_list;
 use crate::ex_cmds::do_ecmd;
 use crate::ex_docmd::do_cmdline_cmd;
-use crate::fileio::readfile;
+use crate::fileio::readfile_named;
 use crate::fileio::state::{READ_NEW, READ_STDIN};
 use crate::getchar::state::got_int;
 use crate::getchar::vgetc;
 use crate::memline::ml_recover;
-use crate::memory::{xfree, xstrdup};
 use crate::message::msg_putchar;
 use crate::message::state::{did_emsg, msg_didany, msg_scroll, no_wait_return};
 use crate::option::vars::{P_EF, P_EFM, P_MENC, p_ef, p_fdls, p_shm};
@@ -55,8 +52,8 @@ use crate::startup::{
     EDIT_QF, MainParams, WIN_HOR, WIN_TABS, WIN_VER, kOptErrorfile, kOptShortmess, recoverymode,
 };
 use crate::types::{
-    ExArg, Handle, IOSIZE, Integer, LineNr, MAXPATHL, OptInt, OptVal, OptionSetFlags, VarLock, Vv,
-    kListLenMayKnow, ptrdiff_t, size_t,
+    Handle, IOSIZE, Integer, LineNr, MAXPATHL, OptInt, OptVal, OptionSetFlags, VarLock, Vv,
+    kListLenMayKnow, ptrdiff_t,
 };
 use crate::ui::ui_call_error_exit;
 use crate::window::{
@@ -66,7 +63,7 @@ use crate::window::{
 
 use crate::pos::MAXLNUM;
 use crate::startup::exit::os_exit;
-use crate::winlayer::{Buf, Live, TabPage, Win, first_window};
+use crate::winlayer::{Buf, TabPage, Win, first_window};
 
 /// The user answered "quit" to the swap-file ATTENTION prompt: leave with
 /// status 1.
@@ -76,7 +73,6 @@ use crate::winlayer::{Buf, Live, TabPage, Win, first_window};
 /// the one caller that does *not* want that -- it has just printed something
 /// worth reading.
 fn quit_on_swap_exists(clear_hit_enter: bool) -> ! {
-    // SAFETY: clears one flag and leaves; `getout` does not return.
     if clear_hit_enter {
         did_emsg.set(0);
     }
@@ -86,35 +82,27 @@ fn quit_on_swap_exists(clear_hit_enter: bool) -> ! {
 
 /// Set `v:argf` to the full paths of the file arguments.
 pub(crate) fn set_argf_var() {
-    let held = tv_list_alloc(kListLenMayKnow as c_int as ptrdiff_t);
-    let list = held.as_ptr();
+    let mut list = tv_list_alloc(kListLenMayKnow as c_int as ptrdiff_t);
     // Inside the list's borrow: resolving a name runs no user code.
     with_arg_names(ArgListId::GLOBAL, |fname| {
         let full = vim_full_name(fname, MAXPATHL as usize, false).unwrap_or_else(|name| name);
-        unsafe { (*list).push_str(Some(&cstr::owned(&full))) };
+        list.push_str(Some(&cstr::owned(&full)));
     });
-    list_set_lock(unsafe { list.as_mut() }, VarLock::Fixed);
-    set_vim_var_list(Vv::Argf, Some(held));
+    list_set_lock(Some(&mut list), VarLock::Fixed);
+    set_vim_var_list(Vv::Argf, Some(list));
 }
 
 /// `-q`: read the errorfile and set up the quickfix list.
 ///
 /// A quickfix list that cannot be built is fatal, with status 3.
-///
-/// # Safety
-///
-/// `paramp` must point at the startup parameters.
-pub(crate) unsafe fn handle_quickfix(paramp: *mut MainParams) {
-    // SAFETY: `paramp` is the caller's live parameter block.
-    let parm = unsafe { Mp::new(paramp) };
+pub(crate) fn handle_quickfix(parm: &MainParams) {
     if parm.edit_type != EDIT_QF as c_int {
         return;
     }
-    if !parm.use_ef.is_null() {
+    if let Some(ef) = parm.use_ef.as_deref() {
         set_option_direct(
             kOptErrorfile,
-            // SAFETY: NUL-terminated; the value is a copy.
-            OptVal::from_cstr(unsafe { CStr::from_ptr(parm.use_ef) }),
+            OptVal::from_cstr(ef),
             OptionSetFlags::NONE,
             SID_CARG,
         );
@@ -134,21 +122,15 @@ pub(crate) unsafe fn handle_quickfix(paramp: *mut MainParams) {
 }
 
 /// `-t`: jump to a tag instead of opening a file.
-///
-/// # Safety
-///
-/// `tagname` must point at a NUL-terminated string, unaliased for the call.
-pub(crate) unsafe fn handle_tag(tagname: *mut c_char) {
-    let mut cmd = [0 as c_char; IOSIZE as usize];
-    // SAFETY: `tagname`, when non-null, points into argv.
-    if tagname.is_null() {
+pub(crate) fn handle_tag(tagname: Option<&CStr>) {
+    let Some(tagname) = tagname else {
         return;
-    }
+    };
     swap_exists_did_quit.set(false);
-    let into = cmd.as_mut_ptr();
-    unsafe { vim_snprintf!(into, IOSIZE as size_t, c"ta %s".as_ptr(), tagname) };
-    // SAFETY: `vim_snprintf` terminated the buffer above.
-    let _ = do_cmdline_cmd(unsafe { cstr::at(cmd.as_ptr()) });
+    let mut cmd = [&b"ta "[..], tagname.to_bytes()].concat();
+    // Upstream formats it into an `IOSIZE` buffer.
+    cmd.truncate(IOSIZE as usize - 1);
+    let _ = do_cmdline_cmd(&cstr::owned(&cmd));
     time_msg_at(c"jumping to tag");
     if swap_exists_did_quit.get() {
         quit_on_swap_exists(false);
@@ -161,28 +143,21 @@ pub(crate) unsafe fn handle_tag(tagname: *mut c_char) {
 /// buffer of its own and the file argument's is restored underneath it -- and
 /// the stdin buffer is wiped again if nothing came down the pipe (#8561).
 pub(crate) fn read_stdin() {
-    // SAFETY: creates and switches buffers, all of which are live for the
-    // duration.
     // Use a dialog for the ATTENTION prompt, not a message.
     swap_exists_action.set(SEA_DIALOG);
     no_wait_return.set(1);
     let save_msg_didany = msg_didany.get();
 
     if !Buf::current().name.full().is_none() {
-        let stdin_buf =
-            unsafe { buflist_new(ptr::null_mut(), ptr::null_mut(), 0, BLN_LISTED as c_int) };
-        if stdin_buf.is_none() {
+        let Some(stdin_buf) = buflist_add_name(None, 0, BLN_LISTED as c_int) else {
             semsg!("Failed to create buffer for stdin");
             return;
-        }
+        };
         let initial_buf_handle: Handle = Buf::current().handle;
-        set_curbuf(stdin_buf.expect("a live handle"), 0, false);
-        let last = MAXLNUM as LineNr;
-        let _null_ea = ptr::null_mut::<ExArg>();
+        set_curbuf(stdin_buf, 0, false);
         let flags = READ_NEW as c_int + READ_STDIN as c_int;
-        let (no_fname, no_sfname) = (ptr::null_mut(), ptr::null_mut());
-        let _ = unsafe { readfile(no_fname, no_sfname, 0, 0, last, None, flags, true) };
-        let stdin_buf_handle: Handle = stdin_buf.map_or(0, |b| b.handle);
+        let _ = readfile_named(None, None, 0, 0, MAXLNUM, None, flags, true);
+        let stdin_buf_handle: Handle = stdin_buf.handle;
         let stdin_buf_empty = buf_is_empty(Buf::current());
 
         // Done as commands rather than calls so the autocommands and the
@@ -213,20 +188,12 @@ pub(crate) fn read_stdin() {
 /// keep it going forever.
 const MAX_WINDOW_PASSES: c_int = 1000;
 
-/// The parameter block `main` filled in, which outlives every call here.
-type Mp = Live<MainParams>;
-
 /// Make the windows and tab pages the command line asked for, and give every
 /// one of them a buffer.
 ///
-/// # Safety
-///
-/// `parmp` must point at the startup parameters.
-pub(crate) unsafe fn create_windows(parmp: *mut MainParams) {
-    // SAFETY: `parmp` is the caller's live parameter block; the window and
-    // buffer lists are global and may be rearranged by the autocommands the
-    // buffer loading fires.
-    let mut parm = unsafe { Mp::new(parmp) };
+/// The window and buffer lists are global and may be rearranged by the
+/// autocommands the buffer loading fires.
+pub(crate) fn create_windows(parm: &mut MainParams) {
     if parm.window_count == -1 {
         // Not set: one window.
         parm.window_count = 1;
@@ -340,13 +307,9 @@ pub(crate) unsafe fn create_windows(parmp: *mut MainParams) {
 /// Load the remaining file arguments into the windows [`create_windows`]
 /// made, and leave the cursor in the first non-preview one.
 ///
-/// # Safety
-///
-/// `parmp` must point at the startup parameters.
-pub(crate) unsafe fn edit_buffers(parmp: *mut MainParams) {
-    // SAFETY: `parmp` is the caller's live parameter block; the window list
-    // is global and `do_ecmd` may close windows through autocommands.
-    let parm = unsafe { Mp::new(parmp) };
+/// The window list is global and `do_ecmd` may close windows through
+/// autocommands.
+pub(crate) fn edit_buffers(parm: &MainParams) {
     let no_enter = Suppress::win_enter_autocmds();
     let no_leave = Suppress::win_leave_autocmds();
 
@@ -359,7 +322,7 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut MainParams) {
 
     // 'shortmess' with F added, saved for restoring after the tab pages
     // are filled: the per-file messages are noise when there are many.
-    let mut p_shm_save: *mut c_char = ptr::null_mut();
+    let mut p_shm_save: Option<CString> = None;
 
     let mut arg_idx: c_int = 1;
     for i in 1..parm.window_count {
@@ -377,13 +340,10 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut MainParams) {
                 }
                 goto_tabpage(0);
                 if i == 1 {
-                    p_shm_save = p_shm(|value| unsafe { xstrdup(value.as_ptr().cast_mut()) });
+                    p_shm_save = Some(p_shm(CStr::to_owned));
                     let mut shm = b"F".to_vec();
                     p_shm(|value| shm.extend_from_slice(value.to_bytes()));
-                    let shm = cstr::owned(&shm);
-                    // SAFETY: a NUL-terminated string that outlives the
-                    // call, which copies it.
-                    unsafe { set_shortmess(shm.as_ptr().cast_mut()) };
+                    set_shortmess(&cstr::owned(&shm));
                 }
             } else {
                 let Some(next) = Win::current().next() else {
@@ -425,9 +385,8 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut MainParams) {
         }
     }
 
-    if !p_shm_save.is_null() {
-        unsafe { set_shortmess(p_shm_save) };
-        unsafe { xfree(p_shm_save as *mut c_void) };
+    if let Some(saved) = p_shm_save {
+        set_shortmess(&saved);
     }
 
     if parm.window_layout == WIN_TABS as c_int {
@@ -456,15 +415,10 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut MainParams) {
 }
 
 /// Set 'shortmess' to `value`, reporting an error the way `:set` would.
-///
-/// # Safety
-///
-/// `value` must point at a NUL-terminated string, unaliased for the call.
-unsafe fn set_shortmess(value: *mut c_char) {
-    // SAFETY: `value` is a NUL-terminated string; the value is a copy.
+fn set_shortmess(value: &CStr) {
     set_option_value_give_err(
         kOptShortmess,
-        OptVal::from_cstr(unsafe { CStr::from_ptr(value) }),
+        OptVal::from_cstr(value),
         OptionSetFlags::NONE,
     );
 }

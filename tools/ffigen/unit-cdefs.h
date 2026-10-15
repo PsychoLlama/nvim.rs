@@ -13,7 +13,6 @@ typedef struct DictItem DictItem;
 typedef struct Expand Expand;
 typedef struct ExtmarkUndoObject ExtmarkUndoObject;
 typedef struct List List;
-typedef struct MainParams MainParams;
 typedef struct MultiQueue MultiQueue;
 typedef struct OptSet OptSet;
 typedef struct Partial Partial;
@@ -5685,7 +5684,7 @@ extern const uint8_t utf8len_tab[256];
 extern char vterm_primary_device_attr[9];
 
 void block_autocmds(void);
-void early_init(MainParams *);
+void early_init(bool);
 void event_init(void);
 ScreenCell *getcell(const VTermScreen *, int, int);
 size_t schar_get(char *, ScreenChar);

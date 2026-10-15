@@ -108,13 +108,13 @@ fn init_editor() {
             std::env::remove_var(name);
         }
         neovim::startup::event_init();
-        neovim::startup::early_init(std::ptr::null_mut());
+        neovim::startup::early_init(false);
         for (name, value) in saved {
             if let Some(value) = value {
                 std::env::set_var(name, value);
             }
         }
-        neovim::lua::executor::nlua_init(std::ptr::null_mut(), 0, -1);
+        neovim::lua::executor::nlua_init(&[], -1);
         neovim::drawscreen::default_grid_alloc();
     });
 }

@@ -384,15 +384,18 @@ pub fn os_nodetype(name: &CStr) -> c_int {
     }
 }
 
-/// The absolute path of the running executable, into `buffer`, whose size
-/// goes in and whose used length comes out through `size`. May fail when
-/// procfs is missing (#6734).
-///
-/// # Safety
-/// `buffer` must address `*size` writable bytes.
-pub unsafe fn os_exepath(buffer: *mut c_char, size: *mut size_t) -> c_int {
-    // SAFETY: the caller's buffer and its length, both non-null.
-    unsafe { uv_exepath(buffer, size) }
+/// The absolute path of the running executable, at most `MAXPATHL` bytes,
+/// or `None` when libuv cannot say -- procfs missing, say (#6734).
+pub(crate) fn os_exepath() -> Option<Vec<u8>> {
+    let mut buffer = vec![0u8; crate::types::MAXPATHL as usize];
+    let mut size: size_t = buffer.len();
+    // SAFETY: `buffer` is `size` writable bytes, and libuv writes back how
+    // many it used, NUL not counted.
+    if unsafe { uv_exepath(buffer.as_mut_ptr().cast(), &raw mut size) } != 0 {
+        return None;
+    }
+    buffer.truncate(size);
+    Some(buffer)
 }
 
 /// Whether `name` is an executable file — found in `$PATH` when `use_path`
@@ -823,6 +826,12 @@ pub unsafe fn os_write(
     }
     // SAFETY: the caller promises `size` readable bytes at `buf`.
     let bytes = unsafe { slice::from_raw_parts(buf.cast::<u8>(), size) };
+    write_bytes(fd, bytes, non_blocking)
+}
+
+/// [`os_write`] of a slice the caller holds.
+pub(crate) fn write_bytes(fd: c_int, bytes: &[u8], non_blocking: bool) -> ptrdiff_t {
+    let size = bytes.len();
     let mut written_bytes: size_t = 0;
     while written_bytes != size {
         let rest = &bytes[written_bytes..];

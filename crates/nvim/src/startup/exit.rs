@@ -6,20 +6,16 @@
 //! already too broken to do either properly -- it is reachable from a deadly
 //! signal handler and from the allocator, so it does as little as it can.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::autocmd::fire_autocmds;
-use crate::cstr;
-use crate::fprintf;
-use crate::types::AutoEvent;
+use crate::autocmd::{fire_autocmds, fire_autocmds_for};
+use crate::types::{AutoEvent, String_0};
 use core::ffi::CStr;
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
-use crate::api::private::helpers::cstr_to_string;
-use crate::autocmd::{apply_autocmds, block_autocmds, is_autocmd_blocked, unblock_autocmds};
+use crate::autocmd::{block_autocmds, is_autocmd_blocked, unblock_autocmds};
 use crate::buffer::{BufRef, buf_get_changedtick, buf_set_changedtick};
 use crate::eval::garbage_collect;
 use crate::eval::gc::garbage_collect_at_exit;
@@ -28,12 +24,12 @@ use crate::eval::vars::{set_vim_var_nr, set_vim_var_string, set_vim_var_type, wi
 use crate::event::stream::stream_set_blocking;
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_INF, logmsg};
-use crate::memfile::mf_fname;
 use crate::memline::{ml_close_all, ml_close_notmod, ml_sync_all};
 use crate::message::state::{did_emsg, no_wait_return};
 use crate::message::wait_return;
 use crate::option::vars::{P_SHADA, P_TITLEOLD, p_title, p_titleold};
-use crate::os::cshim::stderr;
+use crate::os::cshim::write_c_stderr;
+use crate::os::input::tty_drain;
 use crate::os::signal::signal_reject_deadly;
 use crate::profile::{profile_dump, time_finish};
 use crate::shada::shada_write_file;
@@ -44,10 +40,9 @@ use crate::startup::{
 };
 use crate::state::mode::exmode_active;
 use crate::types::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
-use crate::types::{NUL, VAR_NUMBER, VarNumber, Vv};
+use crate::types::{VAR_NUMBER, VarNumber, Vv};
 use crate::ui::{ui_call_set_title, ui_call_stop, ui_flush};
 use crate::ui_client::ui_client_stop;
-use ::libc::{exit, tcdrain};
 
 use crate::winlayer::{Buf, WinId, buffers, first_buffer, first_tab, first_window};
 /// Shut the process down. Every exit path ends here, including the ones that
@@ -58,8 +53,6 @@ use crate::winlayer::{Buf, WinId, buffers, first_buffer, first_tab, first_window
 pub fn os_exit(mut r: c_int) -> ! {
     exiting.set(true);
 
-    // SAFETY: shuts down the singleton UI, event loop and memfiles, in that
-    // order, and never returns.
     if ui_client_channel_id.get() != 0 {
         ui_client_stop();
         if r == 0 {
@@ -80,10 +73,10 @@ pub fn os_exit(mut r: c_int) -> ! {
         // FreeBSD). Drain it, after `event_teardown`, since libuv events
         // may still have written to stderr.
         if stdout_isatty.get() {
-            unsafe { tcdrain(STDOUT_FILENO) };
+            tty_drain(STDOUT_FILENO);
         }
         if stderr_isatty.get() {
-            unsafe { tcdrain(STDERR_FILENO) };
+            tty_drain(STDERR_FILENO);
         }
     } else {
         ml_close_all(true);
@@ -96,7 +89,7 @@ pub fn os_exit(mut r: c_int) -> ! {
 
     logmsg!(LOGLVL_INF, c"os_exit", 737, "Nvim exit: {r}");
 
-    unsafe { exit(r) };
+    std::process::exit(r);
 }
 
 /// Exit properly: the only path that lets the user's autocommands see it
@@ -149,9 +142,10 @@ pub fn getout(mut exitval: c_int) -> ! {
                 let live = wp.surviving_buffer();
                 if let Some(buffer) = live.filter(|b| buf_get_changedtick(*b) != -1) {
                     let bufref = BufRef::of(buffer);
-                    let fname = buffer.name.shown_ptr();
-                    let event = AutoEvent::BufWinLeave;
-                    unsafe { apply_autocmds(event, fname, fname, false, Some(buffer)) };
+                    // A copy: the autocommands may rename the buffer.
+                    let fname = buffer.name.shown().map(CStr::to_owned);
+                    let (fname, event) = (fname.as_deref(), AutoEvent::BufWinLeave);
+                    fire_autocmds_for(event, fname, fname, false, Some(buffer), None);
                     // The event may have wiped it; ask again before writing.
                     if let Some(buffer) = bufref.get() {
                         buf_set_changedtick(buffer, -1);
@@ -171,8 +165,10 @@ pub fn getout(mut exitval: c_int) -> ! {
         while let Some(buf) = cur {
             if !buf.b_ml.ml_mfp.is_null() {
                 let bufref = BufRef::of(buf);
-                let (name, some) = (buf.name.shown_ptr(), Some(buf));
-                unsafe { apply_autocmds(AutoEvent::BufUnload, name, name, false, some) };
+                // A copy, as above.
+                let name = buf.name.shown().map(CStr::to_owned);
+                let (name, some) = (name.as_deref(), Some(buf));
+                fire_autocmds_for(AutoEvent::BufUnload, name, name, false, some, None);
                 if !bufref.valid() {
                     // An autocommand deleted the buffer we were standing
                     // on, so the `b_next` link is gone with it.
@@ -205,9 +201,7 @@ pub fn getout(mut exitval: c_int) -> ! {
     }
 
     if p_title() && P_TITLEOLD.first_byte() != 0 {
-        ui_call_set_title(p_titleold(|value| unsafe {
-            cstr_to_string(value.as_ptr().cast_mut())
-        }));
+        ui_call_set_title(p_titleold(String_0::from_cstr));
     }
 
     if garbage_collect_at_exit.get() {
@@ -223,13 +217,11 @@ pub fn getout(mut exitval: c_int) -> ! {
 /// `deathtrap()` blocks autocommands on the way in, but `VimLeavePre` and
 /// `VimLeave` are exactly the two the user still expects to see.
 fn with_autocmds_unblocked(event: AutoEvent) {
-    // SAFETY: the block counter and the autocommand tables are global.
     let blocked = is_autocmd_blocked();
     if blocked {
         unblock_autocmds();
     }
-    let __hoisted_1 = Buf::current_or_none();
-    fire_autocmds(event, false, __hoisted_1);
+    fire_autocmds(event, false, Buf::current_or_none());
     if blocked {
         block_autocmds();
     }
@@ -241,24 +233,18 @@ fn with_autocmds_unblocked(event: AutoEvent) {
 /// memory, so it must not allocate and must survive being called twice: the
 /// second call exits 2 without touching anything.
 ///
-/// A null `errmsg` means "say nothing", which is how the process-teardown
-/// path reaches it.
-///
-/// # Safety
-///
-/// `errmsg` must point at a NUL-terminated string.
-pub unsafe fn preserve_exit(errmsg: *const c_char) -> ! {
+/// `None` means "say nothing", which is how the process-teardown path
+/// reaches it.
+pub fn preserve_exit(errmsg: Option<&CStr>) -> ! {
     /// Set once we are certain we are going down, e.g. after a deadly signal.
     static really_exiting: GlobalCell<bool> = GlobalCell::new(false);
 
-    // SAFETY: `errmsg`, when non-null, is a NUL-terminated string that
-    // outlives the call; the buffer list is global.
     if really_exiting.get() {
         if used_stdin.get() {
             // Put the stream back the way we found it (#2598).
             stream_set_blocking(STDIN_FILENO, true);
         }
-        unsafe { exit(2) };
+        std::process::exit(2);
     }
     really_exiting.set(true);
 
@@ -270,14 +256,11 @@ pub unsafe fn preserve_exit(errmsg: *const c_char) -> ! {
         ui_client_stop();
     }
 
-    if !errmsg.is_null() && unsafe { *errmsg } as c_int != NUL {
-        let has_eol = unsafe { *errmsg.add(cstr::bytes_at(errmsg).len() - 1) } as u8 == b'\n';
-        let fmt = if has_eol {
-            c"%s".as_ptr()
-        } else {
-            c"%s\n".as_ptr()
-        };
-        unsafe { fprintf!(stderr, fmt, errmsg) };
+    if let Some(text) = errmsg.map(CStr::to_bytes).filter(|text| !text.is_empty()) {
+        write_c_stderr(text);
+        if !text.ends_with(b"\n") {
+            write_c_stderr(b"\n");
+        }
     }
 
     if ui_client_channel_id.get() != 0 {
@@ -287,24 +270,20 @@ pub unsafe fn preserve_exit(errmsg: *const c_char) -> ! {
 
     ml_close_notmod();
 
-    for buf in buffers() {
-        let memfile = buf.b_ml.ml_mfp;
-        if !memfile.is_null() && !unsafe { mf_fname(memfile) }.is_null() {
-            if !errmsg.is_null() {
-                unsafe { fprintf!(stderr, c"Nvim: preserving files...\n".as_ptr()) };
-            }
-            // One sync writes every swap file, so stop at the first
-            // buffer that has one.
-            ml_sync_all(0, 0, true);
-            break;
+    // One sync writes every swap file, so stop at the first buffer that has
+    // one.
+    if buffers().any(Buf::has_swap_file) {
+        if errmsg.is_some() {
+            write_c_stderr(b"Nvim: preserving files...\n");
         }
+        ml_sync_all(0, 0, true);
     }
 
     // Close the memfiles without deleting them.
     ml_close_all(false);
 
-    if !errmsg.is_null() {
-        unsafe { fprintf!(stderr, c"Nvim: Finished.\n".as_ptr()) };
+    if errmsg.is_some() {
+        write_c_stderr(b"Nvim: Finished.\n");
     }
 
     getout(1);

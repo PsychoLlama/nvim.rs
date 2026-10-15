@@ -62,7 +62,8 @@ pub struct EventLoop(*mut Loop);
 impl EventLoop {
     /// # Safety
     /// `uv_loop` is a live loop, through [`loop_init`] and not yet through
-    /// [`loop_close`], that outlives every use of this handle.
+    /// [`main_loop_close`] (the only loop that is ever closed), that outlives
+    /// every use of this handle.
     pub unsafe fn new(uv_loop: *mut Loop) -> Self {
         debug_assert!(!uv_loop.is_null());
         EventLoop(uv_loop)
@@ -149,7 +150,7 @@ impl DerefMut for EventLoop {
 /// state this guards. A panic inside `body` leaves the mutex locked, exactly
 /// as the C's early `return` would have.
 fn with_mutex<T>(uv_loop: EventLoop, body: impl FnOnce() -> T) -> T {
-    // SAFETY: the mutex is live from `loop_init` until `loop_close`.
+    // SAFETY: the mutex is live from `loop_init` until `main_loop_close`.
     unsafe { uv_mutex_lock(uv_loop.mutex()) };
     let rv = body();
     // SAFETY: as above, and this thread holds the lock.
@@ -198,14 +199,42 @@ pub unsafe fn loop_init(uv_loop: *mut Loop) {
     uv_loop.poll_timer.data = Box::into_raw(Box::new(false)).cast();
 }
 
-/// Close every handle and release the queues. `wait` gives libuv up to two
-/// seconds to finish; returns false if it did not.
+/// The editor's own loop, as the functions here take it. It is a static, so
+/// it lives for the process and never moves.
+pub(crate) fn main_loop_raw() -> *mut Loop {
+    crate::startup::main_loop.ptr()
+}
+
+/// [`loop_init`] of the editor's own loop. Once, at startup.
+pub(crate) fn main_loop_init() {
+    // SAFETY: the static loop, which does not move and is initialised here
+    // once, before anything else uses it.
+    unsafe { loop_init(main_loop_raw()) };
+}
+
+/// Whether [`main_loop_init`] has run: the loop's queues exist.
+pub(crate) fn main_loop_is_up() -> bool {
+    // SAFETY: the static loop; reading one field of it.
+    !unsafe { (*main_loop_raw()).events }.is_null()
+}
+
+/// Run what is already queued on the editor's loop, then poll it once
+/// without waiting -- the drain before the loop is taken down.
+pub(crate) fn main_loop_drain() {
+    // SAFETY: the static loop, up (the caller checked [`main_loop_is_up`]),
+    // and its own queue.
+    unsafe { multiqueue_process_events((*main_loop_raw()).events) };
+    // SAFETY: as above.
+    unsafe { loop_poll_events(main_loop_raw(), 0) };
+}
+
+/// Close every handle of the editor's loop and release its queues. `wait`
+/// gives libuv up to two seconds to finish; returns false if it did not.
 ///
-/// # Safety
-/// `uv_loop` is live and nothing is still using it.
-pub unsafe fn loop_close(uv_loop: *mut Loop, wait: bool) -> bool {
-    // SAFETY: the caller's loop.
-    let mut uv_loop = unsafe { EventLoop::new(uv_loop) };
+/// Once, on the way out: nothing may use the loop afterwards.
+pub(crate) fn main_loop_close(wait: bool) -> bool {
+    // SAFETY: the static loop, up and no longer in use.
+    let mut uv_loop = unsafe { EventLoop::new(main_loop_raw()) };
     uv_loop.closing = true;
     // SAFETY: the loop's own mutex and handles, each still open.
     unsafe {
@@ -510,7 +539,7 @@ pub(crate) fn schedule_deferred_job(job: Box<dyn FnOnce() + Send>) {
     let event = Event::new(Some(run_deferred_job), [job]);
     // SAFETY: the editor's own main loop, which lives for the process; the
     // handler takes back the job packed just above.
-    unsafe { loop_schedule_deferred(crate::startup::main_loop.ptr(), event) };
+    unsafe { loop_schedule_deferred(main_loop_raw(), event) };
 }
 
 /// The deferred queue reached a [`schedule_deferred_job`] event: run it.

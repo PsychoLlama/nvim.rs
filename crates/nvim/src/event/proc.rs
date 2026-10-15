@@ -353,16 +353,15 @@ pub unsafe fn proc_spawn(proc: *mut Proc, has_in: bool, has_out: bool, has_err: 
 /// Stop every child and wait for the loop to be free of them.
 ///
 /// Detached and pty children are not killed — their handles are closed and
-/// they are left to run — but everything else is asked to terminate.
-///
-/// # Safety
-/// `uv_loop` is a live loop that has been through `loop_init`.
-pub unsafe fn proc_teardown(uv_loop: *mut Loop) {
+/// they are left to run — but everything else is asked to terminate. The
+/// editor's own loop, once, on the way out.
+pub(crate) fn proc_teardown() {
+    let uv_loop = crate::event::r#loop::main_loop_raw();
     PROC_IS_TEARING_DOWN.set(true);
     // Re-read the list each pass: closing a child's handles can run its exit
     // callback inline, which unlinks it from this very list.
     let mut i = 0;
-    // SAFETY: the caller's loop.
+    // SAFETY: the editor's own loop, which outlives the process's children.
     while let Some(child) = unsafe { nth_child(uv_loop, i) } {
         if child.detach || child.is_pty() {
             let arg = child.as_ptr().cast();
@@ -376,10 +375,10 @@ pub unsafe fn proc_teardown(uv_loop: *mut Loop) {
     }
 
     let drained = || {
-        // SAFETY: the caller's loop.
+        // SAFETY: the editor's own loop, which outlives the process's children.
         unsafe { (*loop_children(uv_loop)).is_empty() && multiqueue_empty((*uv_loop).events) }
     };
-    // SAFETY: the caller's loop.
+    // SAFETY: the editor's own loop, which outlives the process's children.
     unsafe { process_events_until(uv_loop, (*uv_loop).events, -1, drained) };
     // SAFETY: as above.
     unsafe { pty_proc_teardown(uv_loop) };
@@ -797,8 +796,7 @@ unsafe extern "C" fn exit_event(argv: *mut *mut c_void) {
         } else {
             // The only other caller is `rpc_close`, which passes 0.
             debug_assert!(status == 0);
-            // SAFETY: as above.
-            unsafe { preserve_exit(ptr::null()) };
+            preserve_exit(None);
         }
     }
 }

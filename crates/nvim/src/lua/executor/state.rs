@@ -16,7 +16,8 @@
     clippy::ptr_as_ptr
 )]
 
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
+use std::ffi::CString;
 
 use super::{
     active_lstate, global_lstate, in_script, luv_set_thread_cb, main_thread, nlua_call,
@@ -40,33 +41,31 @@ use crate::profile::startup_timing;
 use crate::runtime::runtime_search_path_validate;
 use crate::startup::os_exit;
 use crate::types::{NluaRefState, lua_Integer, lua_State, uv_thread_t};
-use ::libc::{exit, fprintf};
+use ::libc::fprintf;
 
 /// Populate the global `arg` table from the command line, with `arg[0]` the
-/// script's own name.
+/// script's own name: `argv[lua_arg0 - 1]`, then everything after it. A
+/// `lua_arg0` of -1 (no script) leaves the table empty.
 ///
 /// # Safety
-/// `argv` must hold `argc` NUL-terminated strings.
-unsafe fn nlua_init_argv(
-    lstate: *mut lua_State,
-    argv: *mut *mut c_char,
-    argc: c_int,
-    lua_arg0: c_int,
-) -> c_int {
+/// `lstate` must be a live Lua state.
+unsafe fn nlua_init_argv(lstate: *mut lua_State, argv: &[CString], lua_arg0: c_int) {
+    // SAFETY: the caller's state; every string pushed is a NUL-terminated
+    // argument, copied by Lua.
     unsafe {
-        let mut i: c_int = 0;
         lua_newtable(lstate);
-        if lua_arg0 > 0 {
-            lua_pushstring(lstate, *argv.offset((lua_arg0 - 1) as isize));
+        if let Some(script) = usize::try_from(lua_arg0 - 1)
+            .ok()
+            .filter(|&at| at < argv.len())
+        {
+            lua_pushstring(lstate, argv[script].as_ptr());
             lua_rawseti(lstate, -2, 0);
-            while i + lua_arg0 < argc {
-                lua_pushstring(lstate, *argv.offset((i + lua_arg0) as isize));
-                lua_rawseti(lstate, -2, i + 1);
-                i += 1;
+            for (n, arg) in (1..).zip(&argv[script + 1..]) {
+                lua_pushstring(lstate, arg.as_ptr());
+                lua_rawseti(lstate, -2, n);
             }
         }
         lua_setglobal(lstate, c"arg".as_ptr());
-        i
     }
 }
 
@@ -124,11 +123,13 @@ unsafe fn nlua_state_init(lstate: *mut lua_State) -> bool {
     }
 }
 
-/// Open the editor's Lua state. Fatal if it cannot be built.
+/// Open the editor's Lua state, with `arg` from `argv` (see
+/// [`nlua_init_argv`]). Fatal if it cannot be built.
 ///
-/// # Safety
-/// Called once, from `main()`.
-pub unsafe fn nlua_init(argv: *mut *mut c_char, argc: c_int, lua_arg0: c_int) {
+/// Once, from `main()`; `--version` calls it with no arguments.
+pub fn nlua_init(argv: &[CString], lua_arg0: c_int) {
+    // SAFETY: a fresh state, built and published here before anything else
+    // can reach it.
     unsafe {
         let lstate = luaL_newstate();
         if lstate.is_null() {
@@ -151,23 +152,26 @@ pub unsafe fn nlua_init(argv: *mut *mut c_char, argc: c_int, lua_arg0: c_int) {
         global_lstate.set(lstate);
         active_lstate.set(lstate);
         main_thread.set(uv_thread_self());
-        nlua_init_argv(lstate, argv, argc, lua_arg0);
+        nlua_init_argv(lstate, argv, lua_arg0);
     }
 }
 
-/// `nvim -l script.lua`: run the script and leave, with no editor at all.
+/// `nvim -ll script.lua`: run the script and leave, with no editor at all.
+/// `argv[lua_arg0 - 1]` is the script.
 ///
-/// # Safety
-/// Called once, from `main()`, instead of [`nlua_init`].
-pub unsafe fn nlua_run_script(argv: *mut *mut c_char, argc: c_int, lua_arg0: c_int) -> ! {
+/// Once, from `main()`, instead of [`nlua_init`].
+pub fn nlua_run_script(argv: &[CString], lua_arg0: c_int) -> ! {
+    // SAFETY: a fresh state, built and published here before anything else
+    // can reach it.
     unsafe {
         in_script.set(true);
         global_lstate.set(nlua_init_state(false));
         luv_set_thread_cb(Some(nlua_thread_acquire_vm), Some(nlua_common_free_all_mem));
-        nlua_init_argv(global_lstate.get(), argv, argc, lua_arg0);
-        let lua_ok = nlua_exec_file(crate::cstr::at(*argv.offset((lua_arg0 - 1) as isize)));
-        exit(if lua_ok { 0 } else { 1 });
+        nlua_init_argv(global_lstate.get(), argv, lua_arg0);
     }
+    let script = usize::try_from(lua_arg0 - 1).expect("the script follows `-ll`");
+    let lua_ok = nlua_exec_file(&argv[script]);
+    std::process::exit(if lua_ok { 0 } else { 1 });
 }
 
 /// A state for a luv thread, or for a `-l` script.

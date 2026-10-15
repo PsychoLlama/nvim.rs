@@ -285,19 +285,19 @@ unsafe fn start_job_streams(
 }
 
 /// Connects to a socket (or, for an address this process is itself listening
-/// on, to itself) and returns the channel id, or 0 on failure.
+/// on, to itself) and answers the channel id, or why it could not.
 ///
-/// # Safety
-/// The event loop exists; `address` is a C string and `error` is writable.
-pub unsafe fn channel_connect(
+/// The event loop must be up, which it is from `main()` on.
+pub fn channel_connect(
     tcp: bool,
-    address: *const c_char,
+    address: &CStr,
     rpc: bool,
     on_output: CallbackReader,
     timeout: c_int,
-    error: *mut *const c_char,
-) -> uint64_t {
-    // SAFETY: the caller's promise.
+) -> Result<uint64_t, &'static CStr> {
+    let address = address.as_ptr();
+    // SAFETY: the editor's loop is up; `address` is NUL-terminated and
+    // copied by whatever keeps it.
     // Talking to our own listening socket would deadlock: the reply cannot
     // be read while this process is blocked writing the request. An
     // internal channel short-circuits the transport instead.
@@ -306,14 +306,17 @@ pub unsafe fn channel_connect(
         unsafe { (*channel_internal(channel)).cb = LUA_NOREF as LuaRef };
         unsafe { rpc_start(channel) };
         unsafe { channel_create_event(channel, address) };
-        return unsafe { (*channel).id };
+        return Ok(unsafe { (*channel).id });
     }
 
     let channel = unsafe { channel_alloc(kChannelStreamSocket) };
     let socket = unsafe { &raw mut (*channel).stream.socket };
-    if !unsafe { socket_connect(main_loop_ptr(), socket, tcp, address, timeout, error) } {
+    let mut error: *const c_char = ptr::null();
+    let at_error = &raw mut error;
+    if !unsafe { socket_connect(main_loop_ptr(), socket, tcp, address, timeout, at_error) } {
         unsafe { channel_decref(channel) };
-        return 0;
+        // SAFETY: `socket_connect` names every failure with a static string.
+        return Err(unsafe { crate::cstr::at(error) });
     }
     unsafe { attach_socket(channel) };
     if rpc {
@@ -324,7 +327,7 @@ pub unsafe fn channel_connect(
         unsafe { rstream_start(socket, Some(on_channel_data), channel.cast()) };
     }
     unsafe { channel_create_event(channel, address) };
-    unsafe { (*channel).id }
+    Ok(unsafe { (*channel).id })
 }
 
 /// Takes over an accepted connection from a listening socket. Always RPC.
@@ -355,15 +358,10 @@ unsafe fn attach_socket(channel: *mut Channel) {
 
 /// Wires a channel to this process's own stdin and stdout.
 ///
-/// Only one may exist, and only when nothing else is using the terminal.
-///
-/// # Safety
-/// The event loop exists and `error` is writable.
-pub unsafe fn channel_from_stdio(
-    rpc: bool,
-    on_output: CallbackReader,
-    error: *mut *const c_char,
-) -> uint64_t {
+/// Only one may exist, and only when nothing else is using the terminal;
+/// answers the channel id, or why not. The event loop must be up, which it
+/// is from `main()` on.
+pub fn channel_from_stdio(rpc: bool, on_output: CallbackReader) -> Result<uint64_t, &'static CStr> {
     let refusal = if !headless_mode.get() && !embedded_mode.get() {
         Some(c"can only be opened in headless mode")
     } else if did_stdio.get() {
@@ -372,13 +370,12 @@ pub unsafe fn channel_from_stdio(
         None
     };
     if let Some(msg) = refusal {
-        // SAFETY: the caller's writable out-parameter.
-        unsafe { *error = gettext(msg).as_ptr() };
-        return 0;
+        return Err(gettext(msg));
     }
     did_stdio.set(true);
 
-    // SAFETY: the caller's promise; the descriptors below are this process's.
+    // SAFETY: the editor's loop is up; the descriptors below are this
+    // process's.
     let channel = unsafe { channel_alloc(kChannelStreamStdio) };
     let (stdin_fd, stdout_fd) = if embedded_mode.get() {
         // The embedder owns fds 0 and 1; move them aside and point what is
@@ -408,7 +405,7 @@ pub unsafe fn channel_from_stdio(
         unsafe { callback_reader_start(&raw mut (*channel).on_data, c"stdin".as_ptr()) };
         unsafe { rstream_start(in_0, Some(on_channel_data), channel.cast()) };
     }
-    unsafe { (*channel).id }
+    Ok(unsafe { (*channel).id })
 }
 
 // -------------------------------------------------------------------------

@@ -12,20 +12,18 @@
 #![allow(unsafe_code)]
 
 use crate::event::multiqueue::ChildQueue;
-use crate::fprintf;
 use crate::memory::ThinCString;
 use crate::types::ArgListId;
 use crate::types::AutoEvent;
 use crate::winlayer::Buf;
-use core::ffi::{c_char, c_int, c_uint};
-use core::ptr;
+use core::ffi::{CStr, c_int, c_uint};
+use std::ffi::CString;
 
 use crate::api::ui::remote_ui_wait_for_attach;
 use crate::arglist::alist_count;
-use crate::autocmd::{apply_autocmds, autocmd_init};
+use crate::autocmd::{autocmd_init, fire_autocmds};
 use crate::buffer::do_autochdir;
 use crate::channel::{channel_from_stdio, channel_init, channel_teardown};
-use crate::cstr;
 use crate::debugger::state::debug_break_level;
 use crate::diff::diff_win_options;
 use crate::drawscreen::state::{RedrawingDisabled, cmdline_row};
@@ -38,8 +36,7 @@ use crate::eval::vars::{
     vim_var_string,
 };
 use crate::eval::{eval_has_provider, eval_init, set_argv_var, timer_teardown};
-use crate::event::r#loop::{loop_close, loop_init, loop_poll_events};
-use crate::event::multiqueue::multiqueue_process_events;
+use crate::event::r#loop::{main_loop_close, main_loop_drain, main_loop_init, main_loop_is_up};
 use crate::event::proc::proc_teardown;
 use crate::ex_docmd::{filetype_maybe_enable, filetype_plugin_enable};
 use crate::ex_getln::cmdline_init;
@@ -52,8 +49,7 @@ use crate::keycodes::KE_NOP;
 use crate::log::{LOGLVL_DBG, LOGLVL_INF, log_init, logmsg};
 use crate::lua::executor::{nlua_exec_file, nlua_init, nlua_init_defaults, nlua_run_script};
 use crate::mark::setpcmark;
-use crate::memline::recover_names;
-use crate::memory::strequal;
+use crate::memline::list_swap_files;
 use crate::message::msg_putchar;
 use crate::message::state::{msg_didout, msg_row, msg_scroll, no_wait_return};
 use crate::mouse::setmouse;
@@ -62,7 +58,7 @@ use crate::msgpack_rpc::server::{server_init, server_teardown};
 use crate::normal::{check_scrollbind, normal_enter};
 use crate::option::vars::{P_LPL, P_SHADA, P_UC, P_UT, cb_flags, p_ch};
 use crate::option::{set_init_1, set_init_2, set_init_3, set_init_tablocal};
-use crate::os::cshim::{gettext, stderr, stdout};
+use crate::os::cshim::{gettext, unbuffer_c_stdout, write_c_stderr};
 use crate::os::env::{env_init, init_homedir, os_hint_priority};
 use crate::os::fs::CFile;
 use crate::os::input::{input_start, input_stop};
@@ -76,7 +72,7 @@ use crate::register::get_default_register_name;
 use crate::runtime::{estack_init, load_plugins};
 use crate::shada::shada_read_everything;
 use crate::startup::args::{
-    check_and_set_isatty, command_line_scan, edit_stdin, init_params, init_path, init_startuptime,
+    check_and_set_isatty, command_line_scan, edit_stdin, init_path, init_startuptime,
     set_window_layout,
 };
 use crate::startup::buffers::{
@@ -89,28 +85,26 @@ use crate::startup::usage::{mainerr, print_mainerr};
 use crate::startup::{
     APPENDBIN, EDIT_QF, EDIT_STDIN, MainParams, NO_BUFFERS, WRITEBIN, argv0, embedded_mode,
     err_arg_missing, full_screen, headless_mode, kOptCbFlagUnnamed, kOptCbFlagUnnamedplus,
-    main_loop, recoverymode, silent_mode, starting, stderr_isatty, stdin_isatty, stdout_isatty,
+    recoverymode, silent_mode, starting, stderr_isatty, stdin_isatty, stdout_isatty,
     ui_client_channel_id, ui_client_forward_stdin,
 };
 use crate::state::mode::{exmode_active, restart_edit};
 use crate::syntax::syn_maybe_enable;
 use crate::terminal::{terminal_init, terminal_teardown};
-use crate::types::{CallbackReader, IOSIZE, LineNr, List, OptInt, VarNumber, Vv, int64_t};
+use crate::types::{CallbackReader, LineNr, OptInt, VarNumber, Vv};
 use crate::ui::state::{Rows, resize_events};
 use crate::ui::{do_autocmd_uienter_all, ui_init};
 use crate::ui_client::{ui_client_run, ui_client_start_server};
 use crate::ui_compositor::ui_comp_syn_init;
 use crate::window::{win_alloc_first, win_init_size, win_new_screensize};
 use crate::winlayer::{Win, first_window, windows};
-use ::libc::{abort, exit, setbuf, strcasecmp};
 
 /// Bring up the event loop and everything that hangs off it.
 ///
 /// Exported: the unit tests build an editor without a `main`.
 #[unsafe(no_mangle)]
 pub extern "C" fn event_init() {
-    // SAFETY: initialises the singleton main loop and its subsystems, once.
-    unsafe { loop_init(main_loop.ptr()) };
+    main_loop_init();
     env_init();
     resize_events.set(Some(ChildQueue::of_main_loop()));
     autocmd_init();
@@ -126,45 +120,37 @@ pub extern "C" fn event_init() {
 /// Answers whether it came down cleanly; [`os_exit`] turns a `false` into a
 /// non-zero exit status.
 pub(crate) fn event_teardown() -> bool {
-    // SAFETY: shuts down the singleton main loop and its subsystems.
-    if unsafe { (*main_loop.ptr()).events }.is_null() {
+    if !main_loop_is_up() {
         // Never came up; there is nothing to drain.
         input_stop();
         return true;
     }
     // Drain what is already queued before pulling the loop out.
-    unsafe { multiqueue_process_events((*main_loop.ptr()).events) };
-    unsafe { loop_poll_events(main_loop.ptr(), 0 as int64_t) };
+    main_loop_drain();
     input_stop();
     server_teardown();
     channel_teardown();
-    unsafe { proc_teardown(main_loop.ptr()) };
+    proc_teardown();
     timer_teardown();
     signal_teardown();
     terminal_teardown();
-    unsafe { loop_close(main_loop.ptr(), true) }
+    main_loop_close(true)
 }
 
 /// The initialisation that has to happen before the command line is even
 /// looked at: the option defaults, the first window, the runtime paths.
+/// `clean` is `--clean`, which has to be known before any config is read.
 ///
 /// Exported: the unit tests build an editor without a `main`.
-///
-/// # Safety
-///
-/// `paramp` must point at the startup parameters.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn early_init(paramp: *mut MainParams) {
-    // SAFETY: `paramp` is null when the unit tests call this; every use of
-    // it below is guarded.
+pub extern "C" fn early_init(clean: bool) {
     os_hint_priority();
     estack_init();
     cmdline_init();
     eval_init();
     set_vim_var_nr(Vv::Starttime, os_realtime());
 
-    let exename = argv0.get().unwrap_or(c"nvim").as_ptr();
-    unsafe { init_path(exename) };
+    init_path(argv0.get().unwrap_or(c"nvim"));
     highlight_init();
     time_msg_at(c"early init");
 
@@ -174,7 +160,7 @@ pub unsafe extern "C" fn early_init(paramp: *mut MainParams) {
     time_msg_at(c"init first window");
 
     init_homedir();
-    set_init_1(!paramp.is_null() && unsafe { (*paramp).clean });
+    set_init_1(clean);
     log_init();
     time_msg_at(c"inits 1");
 
@@ -182,74 +168,55 @@ pub unsafe extern "C" fn early_init(paramp: *mut MainParams) {
     qf_init_stack();
 }
 
-/// The startup, in order.
+/// The startup, in order, over the process's command line.
 ///
 /// Never returns: it ends in `normal_enter`, which is the editor's main
 /// loop, or in one of the exits along the way.
-///
-/// # Safety
-///
-/// `argv` must point at a writable `*mut c_char` slot the caller owns for the
-/// call.
-pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
-    // Why `server_init` gave up, when it does. Upstream leaves it in the
-    // shared `IObuff`.
-    let mut reason = [0 as c_char; IOSIZE as usize];
-    // SAFETY: `argv[0..argc]` are the process arguments and live for the
-    // whole process; `params` lives for the whole of this function, which
-    // never returns while anything still holds a pointer into it.
-    argv0.set(unsafe { cstr::at_opt(*argv) });
+pub(crate) fn main_0(argv: Vec<CString>) -> c_int {
+    // `argv[0]` is asked for by the error messages until the process ends.
+    let name = argv
+        .first()
+        .map(|name| &*Box::leak(name.clone().into_boxed_c_str()));
+    argv0.set(name);
     if !appname_is_valid() {
-        let msg = c"$NVIM_APPNAME must be a name or relative path.\n".as_ptr();
-        unsafe { fprintf!(stderr, msg) };
-        unsafe { exit(1) };
+        write_c_stderr(b"$NVIM_APPNAME must be a name or relative path.\n");
+        std::process::exit(1);
     }
 
     // `-ll` is handled before anything else: it is a bare Lua
     // interpreter with none of the editor behind it.
-    if argc > 1 && unsafe { strcasecmp(*argv.offset(1), c"-ll".as_ptr()) } == 0 {
-        if argc == 2 {
-            unsafe { print_mainerr(err_arg_missing.as_ptr(), *argv.offset(1), ptr::null()) };
-            unsafe { exit(1) };
+    if argv
+        .get(1)
+        .is_some_and(|arg| arg.to_bytes().eq_ignore_ascii_case(b"-ll"))
+    {
+        if argv.len() == 2 {
+            print_mainerr(err_arg_missing, Some(&argv[1]), None);
+            std::process::exit(1);
         }
-        unsafe { nlua_run_script(argv, argc, 3) };
+        nlua_run_script(&argv, 3);
     }
 
-    // All-zero is the "nothing given" state for everything except the
-    // handful of fields `init_params` sets.
-    let mut params: MainParams = unsafe { core::mem::zeroed() };
-    unsafe { init_params(&raw mut params, argc, argv) };
-    unsafe { init_startuptime(&raw mut params) };
+    let mut params = MainParams::new(argv);
+    init_startuptime(&params);
 
     // `--clean` has to be known before `early_init` reads any config.
-    for i in 1..params.argc {
-        if unsafe { strcasecmp(*params.argv.offset(i as isize), c"--clean".as_ptr()) } == 0 {
-            params.clean = true;
-            break;
-        }
-    }
+    let clean = |arg: &CString| arg.to_bytes().eq_ignore_ascii_case(b"--clean");
+    params.clean = params.argv.iter().skip(1).any(clean);
 
     event_init();
-    unsafe { early_init(&raw mut params) };
-    // SAFETY: the process's `argc` NUL-terminated arguments.
-    let args: Vec<&::core::ffi::CStr> = (0..argc)
-        .map(|i| unsafe { ::core::ffi::CStr::from_ptr(*argv.offset(i as isize)) })
-        .collect();
+    early_init(params.clean);
+    let args: Vec<&CStr> = params.argv.iter().map(CString::as_c_str).collect();
     set_argv_var(&args);
-    check_and_set_isatty(&raw mut params);
-    unsafe { command_line_scan(&raw mut params) };
+    check_and_set_isatty();
+    command_line_scan(&mut params);
     set_argf_var();
 
-    unsafe { nlua_init(argv, argc, params.lua_arg0) };
+    nlua_init(&params.argv, params.lua_arg0);
     time_msg_at(c"init lua interpreter");
 
-    if embedded_mode.get() {
-        // stdin/stdout become the RPC channel.
-        let mut err: *const c_char = ptr::null();
-        let reader = CallbackReader::none();
-        if unsafe { channel_from_stdio(true, reader, &raw mut err) } == 0 {
-            unsafe { abort() };
-        }
+    if embedded_mode.get() && channel_from_stdio(true, CallbackReader::none()).is_err() {
+        // stdin/stdout were to become the RPC channel.
+        std::process::abort();
     }
 
     // The first file argument decides whether `-r` lists the swap files or
@@ -265,9 +232,8 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
         has_term && !headless_mode.get() && !embedded_mode.get() && !silent_mode.get();
 
     if params.remote != 0 {
-        let (at, addr) = (params.remote, params.server_addr);
-        let parmp = &raw mut params;
-        unsafe { remote_request(parmp, at, addr, argc, argv, use_builtin_ui) };
+        let at = params.remote;
+        remote_request(&mut params, at, use_builtin_ui);
     }
 
     // A `--remote-ui` handled above already has a channel; otherwise the
@@ -276,10 +242,9 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     if use_builtin_ui && !remote_ui {
         ui_client_forward_stdin.set(!stdin_isatty.get());
         let progpath = vim_var_string(Vv::Progpath).unwrap_or_else(ThinCString::empty);
-        let chan =
-            unsafe { ui_client_start_server(progpath.as_ptr(), params.argc as usize, params.argv) };
+        let chan = ui_client_start_server(progpath.as_cstr(), &params.argv);
         if chan == 0 {
-            unsafe { fprintf!(stderr, c"Failed to start Nvim server!\n".as_ptr()) };
+            write_c_stderr(b"Failed to start Nvim server!\n");
             os_exit(1);
         }
         ui_client_channel_id.set(chan);
@@ -293,22 +258,22 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
         "a UI client reached the editor startup"
     );
 
-    if !unsafe { server_init(params.listen_addr, &mut reason) } {
-        unsafe { mainerr(reason.as_mut_ptr(), ptr::null(), ptr::null()) };
+    if let Err(reason) = server_init(params.listen_addr.as_deref()) {
+        mainerr(&reason, None, None);
     }
     time_msg_at(c"expanding arguments");
 
-    if params.diff_mode != 0 && params.window_count == -1 {
+    if params.diff_mode && params.window_count == -1 {
         // Diff mode wants one window per file.
         params.window_count = 0;
     }
 
     RedrawingDisabled.set(RedrawingDisabled.get() + 1);
-    unsafe { setbuf(stdout, ptr::null_mut()) };
+    unbuffer_c_stdout();
     full_screen.set(!silent_mode.get());
 
     win_init_size();
-    if params.diff_mode != 0 {
+    if params.diff_mode {
         diff_win_options(first_win(), false);
     }
 
@@ -354,24 +319,24 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     win_new_screensize();
     time_msg_at(c"clear screen");
 
-    if unsafe { edit_stdin(&raw mut params) } {
+    if edit_stdin(&params) {
         params.edit_type = EDIT_STDIN as c_int;
     }
-    if !params.scriptin.is_null() && !open_scriptin(unsafe { cstr::at(params.scriptin) }) {
+    if let Some(scriptin) = params.scriptin.as_deref()
+        && !open_scriptin(scriptin)
+    {
         os_exit(2);
     }
-    if !params.scriptout.is_null() {
+    if let Some(name) = params.scriptout.as_deref() {
         let mode = if params.scriptout_append {
             APPENDBIN
         } else {
             WRITEBIN
         };
-        // SAFETY: an argument from the command line, NUL-terminated.
-        scriptout.set(CFile::open(unsafe { cstr::at(params.scriptout) }, mode));
+        scriptout.set(CFile::open(name, mode));
         if scriptout.with(Option::is_none) {
-            let fmt = gettext(c"Cannot open for script output: \"");
-            unsafe { fprintf!(stderr, fmt.as_ptr()) };
-            unsafe { fprintf!(stderr, c"%s\"\n".as_ptr(), params.scriptout) };
+            let what = gettext(c"Cannot open for script output: \"").to_bytes();
+            write_c_stderr(&[what, name.to_bytes(), b"\"\n"].concat());
             os_exit(2);
         }
     }
@@ -381,16 +346,16 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
 
     // `-u NONE` also turns the plugins off, unless `--clean` asked for
     // the defaults.
-    let vimrc_none = unsafe { strequal(params.use_vimrc, c"NONE".as_ptr()) };
+    let vimrc_none = params.use_vimrc.as_deref() == Some(c"NONE");
     if vimrc_none {
         P_LPL.set(params.clean);
     }
 
-    unsafe { exe_pre_commands(&raw mut params) };
+    exe_pre_commands(&params);
     if !vimrc_none || params.clean {
         filetype_plugin_enable();
     }
-    unsafe { source_startup_scripts(&raw mut params) };
+    source_startup_scripts(&params);
     if !vimrc_none || params.clean {
         filetype_maybe_enable();
         syn_maybe_enable();
@@ -398,19 +363,18 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
 
     set_vim_var_nr(Vv::VimDidInit, 1 as VarNumber);
     load_plugins();
-    unsafe { set_window_layout(&raw mut params) };
+    set_window_layout(&mut params);
 
     if recoverymode.get() && !has_fname {
         // `-r` with no file: list the swap files and leave.
-        let (no_name, no_list) = (ptr::null_mut(), ptr::null_mut::<List>());
-        unsafe { recover_names(no_name, true, no_list, 0, ptr::null_mut()) };
+        list_swap_files(None);
         os_exit(0);
     }
 
     set_init_3();
     time_msg_at(c"inits 3");
 
-    if params.no_swap_file != 0 {
+    if params.no_swap_file {
         P_UC.set(0 as OptInt);
     }
     if silent_mode.get() {
@@ -425,7 +389,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
         set_vim_var_list(Vv::Oldfiles, Some(tv_list_alloc(0)));
     }
 
-    unsafe { handle_quickfix(&raw mut params) };
+    handle_quickfix(&params);
 
     starting.set(NO_BUFFERS);
     no_wait_return.set(0);
@@ -441,7 +405,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     redraw_later(Win::current(), UPD_VALID);
     no_wait_return.set(1);
 
-    unsafe { create_windows(&raw mut params) };
+    create_windows(&mut params);
     time_msg_at(c"opening buffers");
 
     // The swap command has served its purpose; the ATTENTION prompts
@@ -451,9 +415,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     if exmode_active.get() {
         Win::current().w_cursor.lnum = Buf::current().b_ml.ml_line_count;
     }
-    let (no_fname, no_fname_io) = (ptr::null_mut(), ptr::null_mut());
-    let event = AutoEvent::BufEnter;
-    unsafe { apply_autocmds(event, no_fname, no_fname_io, false, Buf::current_or_none()) };
+    fire_autocmds(AutoEvent::BufEnter, false, Buf::current_or_none());
     time_msg_at(c"BufEnter autocommands");
     setpcmark();
 
@@ -462,9 +424,9 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
         time_msg_at(c"jump to first error");
     }
 
-    unsafe { edit_buffers(&raw mut params) };
+    edit_buffers(&params);
 
-    if params.diff_mode != 0 {
+    if params.diff_mode {
         for wp in windows() {
             if !wp.w_arg_idx_invalid {
                 diff_win_options(wp, true);
@@ -473,9 +435,9 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     }
 
     shorten_fnames(0);
-    unsafe { handle_tag(params.tagname) };
-    if params.n_commands > 0 {
-        unsafe { exe_commands(&raw mut params) };
+    handle_tag(params.tagname.as_deref());
+    if !params.commands.is_empty() {
+        exe_commands(&params);
     }
 
     starting.set(0);
@@ -485,9 +447,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     do_autochdir();
 
     set_vim_var_nr(Vv::VimDidEnter, 1 as VarNumber);
-    let (no_fname, no_fname_io) = (ptr::null_mut(), ptr::null_mut());
-    let event = AutoEvent::VimEnter;
-    unsafe { apply_autocmds(event, no_fname, no_fname_io, false, Buf::current_or_none()) };
+    fire_autocmds(AutoEvent::VimEnter, false, Buf::current_or_none());
     time_msg_at(c"VimEnter autocommands");
     if use_remote_ui {
         do_autocmd_uienter_all();
@@ -513,11 +473,11 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
         eval_has_provider(c"clipboard", false);
     }
 
-    if !params.luaf.is_null() {
+    if let Some(luaf) = params.luaf.as_deref() {
         // `-l`: run the script and leave, with its status.
         msg_scroll.set(1);
         logmsg!(LOGLVL_DBG, c"main", 678, "executing Lua -l script");
-        let lua_ok = nlua_exec_file(unsafe { cstr::at(params.luaf) });
+        let lua_ok = nlua_exec_file(luaf);
         time_msg_at(c"executing Lua -l script");
         if msg_didout.get() {
             msg_putchar('\n' as c_int);
@@ -534,27 +494,17 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     0
 }
 
-/// The process entry point.
+/// The process entry point: the command line, owned, handed to [`main_0`],
+/// which does not return.
 ///
-/// Turns Rust's `args()` into the `argc`/`argv` pair the startup expects and
-/// hands over to [`main_0`], which does not return.
+/// The words are the operating system's bytes, whatever their encoding: a
+/// file name need not be UTF-8.
 pub fn main() {
-    let mut args: Vec<Vec<u8>> = ::std::env::args()
-        .map(|arg| {
-            ::std::ffi::CString::new(arg)
-                .expect("Failed to convert argument into CString.")
-                .into_bytes_with_nul()
-        })
+    use std::os::unix::ffi::OsStringExt;
+    let argv: Vec<CString> = std::env::args_os()
+        .map(|arg| CString::new(arg.into_vec()).expect("an argument holds no NUL"))
         .collect();
-    // argv is NUL-terminated, as C requires; argc does not count that entry.
-    let mut argv: Vec<*mut c_char> = args
-        .iter_mut()
-        .map(|arg| arg.as_mut_ptr() as *mut c_char)
-        .chain(::core::iter::once(ptr::null_mut()))
-        .collect();
-
-    // SAFETY: `args` outlives the call, and `main_0` never returns.
-    unsafe { ::std::process::exit(main_0((argv.len() - 1) as c_int, argv.as_mut_ptr()) as i32) }
+    std::process::exit(main_0(argv));
 }
 
 /// The first window of the current tab page, which exists from the moment

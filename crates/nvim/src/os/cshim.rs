@@ -720,6 +720,14 @@ pub(crate) fn write_c_stderr(bytes: &[u8]) {
     unsafe { ::libc::fwrite(bytes.as_ptr().cast(), 1, bytes.len(), stderr) };
 }
 
+/// Turn off the C library's buffering of `stdout`, so whatever is written to
+/// it from here on goes out at once -- `setbuf(stdout, NULL)`.
+pub(crate) fn unbuffer_c_stdout() {
+    // SAFETY: the process's own stream, before anything has been read or
+    // written through the buffer being dropped.
+    unsafe { ::libc::setbuf(stdout, ::core::ptr::null_mut()) };
+}
+
 /// The C library's `islower()` of `byte`, under the current locale -- which
 /// in a non-C locale covers more than `a`-`z`.
 pub(crate) fn is_lower_in_locale(byte: u8) -> bool {

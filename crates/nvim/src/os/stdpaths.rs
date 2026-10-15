@@ -216,15 +216,10 @@ pub fn get_xdg_home(idx: XDGVarType) -> *mut c_char {
     xdg_home(idx).map_or(ptr::null_mut(), XString::into_raw)
 }
 
-/// `$XDG_CONFIG_HOME/$NVIM_APPNAME/{fname}`. The caller owns the result.
-///
-/// # Safety
-///
-/// `fname` is NUL-terminated.
-pub unsafe fn stdpaths_user_conf_subpath(fname: *const c_char) -> *mut c_char {
+/// `$XDG_CONFIG_HOME/$NVIM_APPNAME/{fname}`.
+pub(crate) fn stdpaths_user_conf_subpath(fname: &[u8]) -> XString {
     let home = xdg_home(kXDGConfigHome).expect("the config home has a default");
-    // SAFETY: the caller's NUL-terminated name.
-    concat_fnames(&home, unsafe { cstr::bytes_at(fname) }, true).into_raw()
+    concat_fnames(&home, fname, true)
 }
 
 /// [`stdpaths_user_state_subpath`] of a name the caller holds, owned.

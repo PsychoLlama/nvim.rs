@@ -6,27 +6,20 @@
 //! this process should do next -- print something, open some tab pages, or
 //! exit.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::fprintf;
-use crate::printf;
-use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
+use core::ffi::{CStr, c_int};
 
-use crate::api::private::helpers::cstr_to_string;
 use crate::channel::channel_connect;
+use crate::cstr;
 use crate::event::socket::socket_address_is_tcp;
-use crate::lua::executor::nlua_exec;
+use crate::lua::executor::nlua_exec_cstr;
 use crate::lua::state::kRetObject;
-use crate::memory::strequal;
-use crate::os::cshim::stderr;
-use crate::os::env::{env_buf, os_getenv_into};
+use crate::os::cshim::{write_c_stderr, write_c_stdout};
+use crate::os::env::env_get_bounded;
 use crate::startup::exit::os_exit;
 use crate::startup::{MainParams, WIN_TABS, ui_client_channel_id};
-use crate::types::{
-    ApiDict, Array, CallbackReader, Error, Integer, Object, String_0, size_t, uint64_t,
-};
+use crate::types::{ApiDict, Array, CallbackReader, Integer, Object, String_0, size_t, uint64_t};
 
 /// How long to wait for the server to answer the connection, in ms.
 const CONNECT_TIMEOUT_MS: c_int = 500;
@@ -34,47 +27,26 @@ const CONNECT_TIMEOUT_MS: c_int = 500;
 /// The Lua entry point that does the actual work, in the *server*.
 const CS_REMOTE: &CStr = c"return vim._cs_remote(...)";
 
-/// Open a channel to `server_addr`.
-///
-/// Answers 0 and fills `errmsg` on failure; the message is owned by the
-/// channel layer and outlives the call.
-///
-/// # Safety
-///
-/// `server_addr` must point at a NUL-terminated string, unaliased for the
-/// call. `errmsg` must point at a writable `*const c_char` slot the caller
-/// owns for the call.
-pub(crate) unsafe fn server_connect(
-    server_addr: *mut c_char,
-    errmsg: *mut *const c_char,
-) -> uint64_t {
-    // SAFETY: `errmsg` is a live out-parameter; `server_addr`, when non-null,
-    // is a NUL-terminated address.
-    if server_addr.is_null() {
-        unsafe { *errmsg = c"no address specified".as_ptr() };
-        return 0;
-    }
-
+/// Open a channel to `server_addr`, or say why not.
+pub(crate) fn server_connect(server_addr: Option<&CStr>) -> Result<uint64_t, &'static CStr> {
+    let server_addr = server_addr.ok_or(c"no address specified")?;
     // Nothing reads from this channel; the reply comes back through the
     // request itself.
     let on_data = CallbackReader::none();
+    let is_tcp = socket_address_is_tcp(server_addr);
+    channel_connect(is_tcp, server_addr, true, on_data, CONNECT_TIMEOUT_MS)
+}
 
-    let is_tcp = socket_address_is_tcp(unsafe { CStr::from_ptr(server_addr) });
-    let mut error: *const c_char = ptr::null();
-    let (timeout, at_error) = (CONNECT_TIMEOUT_MS, &raw mut error);
-    let chan = unsafe { channel_connect(is_tcp, server_addr, true, on_data, timeout, at_error) };
-    if !error.is_null() {
-        unsafe { *errmsg = error };
-        return 0;
-    }
-    chan
+/// Write `parts` to stderr as one message, and exit with `status`.
+fn fail(parts: &[&[u8]], status: c_int) -> ! {
+    write_c_stderr(&parts.concat());
+    os_exit(status)
 }
 
 /// Complain that `vim._cs_remote` answered with the wrong shape, and exit 2.
 fn bad_reply_type(key: &CStr) -> ! {
-    let fmt = c"vim._cs_remote returned an unexpected type for '%s'\n".as_ptr();
-    unsafe { fprintf!(stderr, fmt, key.as_ptr()) };
-    os_exit(2)
+    let what = b"vim._cs_remote returned an unexpected type for '";
+    fail(&[what, key.to_bytes(), b"'\n"], 2)
 }
 
 /// Read one key of the reply dict, checking its type first.
@@ -83,10 +55,15 @@ fn field(dict: &ApiDict, index: size_t) -> (&CStr, &Object) {
     (pair.key.as_c_str(), &pair.value)
 }
 
+/// An API string's text, up to its first NUL -- what `printf("%s")` wrote.
+fn text_of(text: &String_0) -> &[u8] {
+    cstr::until_nul(text.as_bytes())
+}
+
 /// Hand the rest of the command line to the server named by `--server`.
 ///
 /// `remote_args` is the index of the `--remote*` argument itself, so
-/// `argv[remote_args..argc]` is what gets forwarded.
+/// `argv[remote_args..]` is what gets forwarded.
 ///
 /// `ui_only` says this is the pass that runs before the built-in UI starts,
 /// and only `--remote-ui` is allowed to do anything in it -- everything else
@@ -94,85 +71,60 @@ fn field(dict: &ApiDict, index: size_t) -> (&CStr, &Object) {
 ///
 /// Returns only when the process should carry on starting up; the server's
 /// answer may instead exit.
-///
-/// # Safety
-///
-/// `params` must point at the startup parameters. `server_addr` must point at
-/// a NUL-terminated string, unaliased for the call. `argv` must point at a
-/// writable `*mut c_char` slot the caller owns for the call.
-pub(crate) unsafe fn remote_request(
-    params: *mut MainParams,
-    remote_args: c_int,
-    server_addr: *mut c_char,
-    argc: c_int,
-    argv: *mut *mut c_char,
-    ui_only: bool,
-) {
-    let mut env = env_buf();
-    // SAFETY: `argv[0..argc]` are the process arguments and `params` is the
-    // caller's live parameter block.
-    let is_ui = unsafe { strequal(*argv.offset(remote_args as isize), c"--remote-ui".as_ptr()) };
+pub(crate) fn remote_request(parm: &mut MainParams, remote_args: usize, ui_only: bool) {
+    let is_ui = parm.argv[remote_args].as_c_str() == c"--remote-ui";
     if ui_only && !is_ui {
         return;
     }
 
-    let mut connect_error: *const c_char = ptr::null();
-    let chan = unsafe { server_connect(server_addr, &raw mut connect_error) };
+    let server_addr = parm.server_addr.as_deref();
+    let connected = server_connect(server_addr);
 
     if is_ui {
-        if chan == 0 {
-            let fmt = c"Remote ui failed to start: %s\n".as_ptr();
-            unsafe { fprintf!(stderr, fmt, connect_error) };
-            os_exit(1);
-        } else if unsafe { strequal(server_addr, os_getenv_into(c"NVIM".as_ptr(), &mut env)) } {
-            // $NVIM in a `:terminal` child names its own parent, and a UI
-            // attached to that is a loop.
-            let why = c"Cannot attach UI of :terminal child to its parent. ".as_ptr();
-            unsafe { fprintf!(stderr, c"%s".as_ptr(), why) };
-            let hint = c"(Unset $NVIM to skip this check)".as_ptr();
-            unsafe { fprintf!(stderr, c"%s\n".as_ptr(), hint) };
-            os_exit(1);
+        match connected {
+            Err(why) => fail(&[b"Remote ui failed to start: ", why.to_bytes(), b"\n"], 1),
+            Ok(chan) => {
+                let addr = server_addr.expect("a connection had an address").to_bytes();
+                if addr == env_get_bounded(c"NVIM") {
+                    // $NVIM in a `:terminal` child names its own parent, and
+                    // a UI attached to that is a loop.
+                    let why = b"Cannot attach UI of :terminal child to its parent. ";
+                    fail(&[why, b"(Unset $NVIM to skip this check)\n"], 1);
+                }
+                ui_client_channel_id.set(chan);
+                return;
+            }
         }
-        ui_client_channel_id.set(chan);
-        return;
     }
 
     // The forwarded arguments, as an API Array of strings.
-    let mut args = Array::with_capacity((argc - remote_args) as size_t);
-    for i in remote_args..argc {
-        // SAFETY: the command line's own NUL-terminated words.
-        let word = unsafe { cstr_to_string(*argv.offset(i as isize)) };
-        args.push(Object::string(word));
+    let forwarded = &parm.argv[remote_args..];
+    let mut args = Array::with_capacity(forwarded.len());
+    for word in forwarded {
+        args.push(Object::string(String_0::from_cstr(word)));
     }
 
-    // `vim._cs_remote(channel, address, connect_error, args)`.
-    // SAFETY: the two addresses are NUL-terminated strings of this process.
+    // `vim._cs_remote(channel, address, connect_error, args)`. A missing
+    // address or error is a null string, as upstream's NULL `char *` was.
+    let string =
+        |text: Option<&CStr>| Object::string(text.map_or(String_0::NULL, String_0::from_cstr));
+    let (chan, connect_error) = match connected {
+        Ok(chan) => (chan, None),
+        Err(why) => (0, Some(why)),
+    };
     let call_args = Array::from(vec![
-        Object::Integer(chan as c_int as Integer),
-        Object::string(unsafe { cstr_to_string(server_addr) }),
-        Object::string(unsafe { cstr_to_string(connect_error) }),
+        Object::Integer(Integer::from(chan as c_int)),
+        string(server_addr),
+        string(connect_error),
         Object::array(args),
     ]);
 
-    let mut err = Error::none();
-    let script = String_0::from_cstr(CS_REMOTE);
-    let ran = unsafe { nlua_exec(&script, ptr::null(), call_args, kRetObject) };
-    let reply = match ran {
+    let reply = match nlua_exec_cstr(CS_REMOTE, call_args, kRetObject) {
         Ok(value) => value,
-        Err(e) => {
-            err = e;
-            Object::Nil
-        }
+        Err(err) => fail(&[err.message_or_empty().to_bytes(), b"\n"], 2),
     };
-
-    if err.is_set() {
-        unsafe { fprintf!(stderr, c"%s\n".as_ptr(), err.message_or_empty().as_ptr()) };
-        os_exit(2);
-    }
     let Some(dict) = reply.as_dict() else {
-        let msg = c"vim._cs_remote returned unexpected value\n".as_ptr();
-        unsafe { fprintf!(stderr, msg) };
-        os_exit(2);
+        fail(&[b"vim._cs_remote returned unexpected value\n"], 2);
     };
 
     // `should_exit` and `tabbed` are three-state so that "the server did
@@ -186,14 +138,13 @@ pub(crate) unsafe fn remote_request(
                 let Some(text) = value.as_string() else {
                     bad_reply_type(c"errmsg");
                 };
-                unsafe { fprintf!(stderr, c"%s\n".as_ptr(), text.data()) };
-                os_exit(2);
+                fail(&[text_of(text), b"\n"], 2);
             }
             b"result" => {
                 let Some(text) = value.as_string() else {
                     bad_reply_type(c"result");
                 };
-                unsafe { printf!(c"%s".as_ptr(), text.data()) };
+                write_c_stdout(text_of(text));
             }
             b"tabbed" => {
                 let Some(flag) = value.as_boolean() else {
@@ -212,10 +163,8 @@ pub(crate) unsafe fn remote_request(
     }
 
     if should_exit.is_none() || tabbed.is_none() {
-        let msg =
-            c"vim._cs_remote didn't return a value for should_exit or tabbed, bailing\n".as_ptr();
-        unsafe { fprintf!(stderr, msg) };
-        os_exit(2);
+        let msg = b"vim._cs_remote didn't return a value for should_exit or tabbed, bailing\n";
+        fail(&[msg], 2);
     }
 
     drop(reply);
@@ -226,7 +175,8 @@ pub(crate) unsafe fn remote_request(
     if tabbed == Some(true) {
         // One tab page per file the server was asked to open, less the
         // `--remote*` argument itself.
-        unsafe { (*params).window_count = argc - remote_args - 1 };
-        unsafe { (*params).window_layout = WIN_TABS as c_int };
+        let files = parm.argv.len() - remote_args - 1;
+        parm.window_count = c_int::try_from(files).expect("an argv count");
+        parm.window_layout = WIN_TABS as c_int;
     }
 }

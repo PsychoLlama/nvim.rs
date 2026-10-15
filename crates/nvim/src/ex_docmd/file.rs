@@ -428,7 +428,7 @@ pub(crate) fn ex_read(excmd: &mut ExArg) {
             excmd.line2,
             0,
             MAXLNUM,
-            excmd,
+            Some(excmd),
             0,
             false,
         )
@@ -440,7 +440,16 @@ pub(crate) fn ex_read(excmd: &mut ExArg) {
         }
         // A copy, as `ex_edit`'s: `readfile` takes the command too.
         let name = excmd.line.cstr_from(excmd.line.arg).to_owned();
-        readfile_named(Some(&name), None, excmd.line2, 0, MAXLNUM, excmd, 0, false)
+        readfile_named(
+            Some(&name),
+            None,
+            excmd.line2,
+            0,
+            MAXLNUM,
+            Some(excmd),
+            0,
+            false,
+        )
     };
 
     if read.is_err() {

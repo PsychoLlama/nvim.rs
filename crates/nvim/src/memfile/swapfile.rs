@@ -147,6 +147,14 @@ pub(super) fn perror_msg(message: &'static CStr) {
 }
 
 impl Buf {
+    /// Whether the buffer has a memfile with a swap file name. Allocates
+    /// nothing, so the out-of-memory exit may ask.
+    pub(crate) fn has_swap_file(self) -> bool {
+        let mfp = self.b_ml.ml_mfp;
+        // SAFETY: the buffer's own live memfile, when it has one.
+        !mfp.is_null() && unsafe { (*mfp).fname.is_some() }
+    }
+
     /// The name of the buffer's swap file, if it has a memfile with one.
     pub(crate) fn swap_file_name(self) -> Option<CString> {
         let mfp = self.b_ml.ml_mfp;

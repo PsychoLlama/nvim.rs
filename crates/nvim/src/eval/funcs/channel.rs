@@ -478,7 +478,7 @@ pub fn f_sockconnect(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     }
 
     let mode = numbuf.bytes(&args[0]);
-    let address = numbuf2.string(&args[1]).as_ptr();
+    let address = numbuf2.string(&args[1]);
     let tcp = if mode == b"tcp" {
         true
     } else if mode == b"pipe" {
@@ -506,13 +506,11 @@ pub fn f_sockconnect(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         }
     }
 
-    let mut error = ptr::null::<c_char>();
-    let id = unsafe { channel_connect(tcp, address, rpc, on_data, 50, &raw mut error) };
-    if !error.is_null() {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let error = unsafe { c_str(error) };
+    let id = channel_connect(tcp, address, rpc, on_data, 50).unwrap_or_else(|error| {
+        let error = msg_cstr(error);
         semsg!("connection failed: {error}");
-    }
+        0
+    });
     result.write_number(id as VarNumber);
 }
 
@@ -544,12 +542,10 @@ pub fn f_stdioopen(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         on_stdin.self_0 = opts;
     }
 
-    let mut error = ptr::null::<c_char>();
-    let id = unsafe { channel_from_stdio(rpc, on_stdin, &raw mut error) };
-    if id == 0 {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let error = unsafe { c_str(error) };
+    let id = channel_from_stdio(rpc, on_stdin).unwrap_or_else(|error| {
+        let error = msg_cstr(error);
         semsg!("E905: Couldn't open stdio channel: {error}");
-    }
+        0
+    });
     result.write_number(id as VarNumber);
 }

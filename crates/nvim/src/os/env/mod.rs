@@ -605,6 +605,13 @@ pub fn env_set(name: &CStr, value: &CStr) -> bool {
     unsafe { os_setenv(name.as_ptr(), value.as_ptr(), 1) == 0 }
 }
 
+/// [`os_unsetenv`] of a name the caller holds as a string. Answers whether
+/// the variable is gone.
+pub(crate) fn env_unset(name: &CStr) -> bool {
+    // SAFETY: a NUL-terminated name.
+    unsafe { os_unsetenv(name.as_ptr()) == 0 }
+}
+
 /// [`os_getenv_buf`] into a buffer this call owns: the value, cut to
 /// [`EnvBuf`]'s length, and empty when the variable is unset or empty.
 pub fn env_get_bounded(name: &CStr) -> Vec<u8> {

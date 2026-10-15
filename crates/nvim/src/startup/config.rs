@@ -6,29 +6,23 @@
 //! then `exrc`, and the `-c` commands last of all -- after the first file has
 //! been loaded, which is why they are not in this module.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::cstr;
-use crate::fprintf;
-use crate::message_fmt::c_str;
+use crate::memory::XString;
+use crate::message_fmt::msg_cstr;
 use crate::semsg;
-use crate::winlayer::{Live, Win};
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
+use crate::winlayer::Win;
+use core::ffi::{CStr, c_int};
+use std::ffi::CString;
 
 use crate::ex_docmd::do_cmdline_cmd;
-use crate::lua::executor::{get_global_lstate, nlua_pcall};
-use crate::lua::ffi::{lua_getfield, lua_pushstring, lua_tolstring};
-use crate::lua::state::LUA_GLOBALSINDEX;
-use crate::memory::{strequal, xfree, xmalloc};
+use crate::lua::executor::nlua_require_module;
 use crate::message::state::msg_scroll;
 use crate::option::vars::p_exrc;
-use crate::os::cshim::{gettext, stderr};
-use crate::os::env::vim_env_iter;
-use crate::os::fs::os_path_exists;
+use crate::os::cshim::{gettext, write_c_stderr};
+use crate::os::fs::path_exists;
 use crate::os::state::{kEqualFiles, kXDGConfigDirs};
-use crate::os::stdpaths::{get_appname, stdpaths_get_xdg_var, stdpaths_user_conf_subpath};
+use crate::os::stdpaths::{get_appname, stdpaths_user_conf_subpath, xdg_var};
 use crate::path::PATHSEP;
 use crate::path::path_full_compare;
 use crate::profile::time_msg_at;
@@ -40,24 +34,13 @@ use crate::runtime::{do_source, estack_pop, estack_push};
 use crate::startup::args::execute_env;
 use crate::startup::{EDIT_QF, MainParams, SYS_VIMRC_FILE, VIMRC_FILE, silent_mode};
 use crate::state::mode::exmode_active;
-use crate::types::{FAIL, OK, ScriptId, lua_State, size_t};
-
-/// The parameter block `main` filled in, which outlives every call here.
-type Mp = Live<MainParams>;
+use crate::types::{FAIL, OK, ScriptId};
 
 /// Run the `--cmd` commands, which come before any config.
-///
-/// # Safety
-///
-/// `parmp` must point at the startup parameters.
-pub(crate) unsafe fn exe_pre_commands(parmp: *mut MainParams) {
-    // SAFETY: `parmp` is the caller's live parameter block; the commands it
-    // holds point into argv.
-    let count = unsafe { (*parmp).n_pre_commands };
-    if count <= 0 {
+pub(crate) fn exe_pre_commands(parm: &MainParams) {
+    if parm.pre_commands.is_empty() {
         return;
     }
-    let cmds = unsafe { &raw mut (*parmp).pre_commands } as *mut *mut c_char;
 
     // Line 0 says "no line yet", so that a `--cmd` that moves the cursor
     // is not immediately overridden by the first file's position.
@@ -68,9 +51,8 @@ pub(crate) unsafe fn exe_pre_commands(parmp: *mut MainParams) {
         0,
     );
     current_sctx.set(current_sctx.get().with_sid(SID_CMDARG as ScriptId));
-    for i in 0..count {
-        // SAFETY: the caller's array of `count` NUL-terminated commands.
-        let _ = do_cmdline_cmd(unsafe { cstr::at(*cmds.offset(i as isize)) });
+    for cmd in &parm.pre_commands {
+        let _ = do_cmdline_cmd(cmd);
     }
     estack_pop();
     current_sctx.set(current_sctx.get().with_sid(0));
@@ -80,15 +62,9 @@ pub(crate) unsafe fn exe_pre_commands(parmp: *mut MainParams) {
 
 /// Run the `-c` and `+cmd` commands, which come after the config and the
 /// first file.
-///
-/// # Safety
-///
-/// `parmp` must point at the startup parameters.
-pub(crate) unsafe fn exe_commands(parmp: *mut MainParams) {
-    // SAFETY: `parmp` is the caller's live parameter block.
-    let parm = unsafe { Mp::new(parmp) };
+pub(crate) fn exe_commands(parm: &MainParams) {
     msg_scroll.set(1);
-    if parm.tagname.is_null() && Win::current().w_cursor.lnum <= 1 {
+    if parm.tagname.is_none() && Win::current().w_cursor.lnum <= 1 {
         // As in `exe_pre_commands`: let the commands decide the line.
         Win::current().w_cursor.lnum = 0;
     }
@@ -105,13 +81,8 @@ pub(crate) unsafe fn exe_commands(parmp: *mut MainParams) {
             .with_sid(SID_CARG as ScriptId)
             .with_seq(0),
     );
-    for i in 0..parm.n_commands {
-        let cmd = parm.commands[i as usize];
-        // SAFETY: a NUL-terminated command out of the argument vector.
-        let _ = do_cmdline_cmd(unsafe { cstr::at(cmd) });
-        if parm.cmds_tofree[i as usize] != 0 {
-            unsafe { xfree(cmd as *mut c_void) };
-        }
+    for cmd in &parm.commands {
+        let _ = do_cmdline_cmd(cmd);
     }
     estack_pop();
     current_sctx.set(current_sctx.get().with_sid(0));
@@ -130,97 +101,49 @@ pub(crate) unsafe fn exe_commands(parmp: *mut MainParams) {
     time_msg_at(c"executing command arguments");
 }
 
-/// `<dir>/<appname><suffix>`, freshly allocated.
+/// `<dir>/<appname><suffix>`.
 ///
-/// `suffix` carries its own leading separator (`/sysinit.vim`), and the NUL
-/// comes with it.
+/// `suffix` carries its own leading separator (`/sysinit.vim`).
 ///
 /// `dedup_sep` is the system path's rule and *not* the user path's: an
 /// `$XDG_CONFIG_DIRS` entry that already ends in a separator would otherwise
 /// produce a doubled one. Upstream only does this on the system side, so
 /// this does too.
-///
-/// # Safety
-///
-/// `dir` must point at a NUL-terminated string. `appname` must point at a
-/// NUL-terminated string.
-unsafe fn config_subpath(
-    dir: *const c_char,
-    dir_len: size_t,
-    appname: *const c_char,
-    appname_len: size_t,
-    suffix: &CStr,
-    dedup_sep: bool,
-) -> *mut c_char {
-    let tail = suffix.to_bytes_with_nul();
-    // SAFETY: `dir[0..dir_len]` and `appname[0..appname_len]` are readable,
-    // and the allocation below is large enough for the worst case (a `dir`
-    // that does not end in a separator).
-    let path = unsafe { xmalloc(dir_len + 1 + appname_len + tail.len()) } as *mut c_char;
-    let into = path.cast::<u8>();
-    unsafe { into.copy_from_nonoverlapping(dir.cast(), dir_len) };
-    let mut at = dir_len;
-    if !dedup_sep || unsafe { *path.add(at - 1) } as c_int != PATHSEP {
-        unsafe { *path.add(at) = PATHSEP as c_char };
-        at += 1;
+fn config_subpath(dir: &[u8], appname: &[u8], suffix: &[u8], dedup_sep: bool) -> CString {
+    let sep = PATHSEP as u8;
+    let mut path = dir.to_vec();
+    if !dedup_sep || dir.last() != Some(&sep) {
+        path.push(sep);
     }
-    let into = unsafe { path.add(at) } as *mut c_void;
-    let into = into.cast::<u8>();
-    unsafe { into.copy_from_nonoverlapping(appname.cast(), appname_len) };
-    at += appname_len;
-    let into = unsafe { path.add(at) } as *mut c_void;
-    let into = into.cast::<u8>();
-    unsafe { into.copy_from_nonoverlapping(tail.as_ptr().cast(), tail.len()) };
-    path
+    path.extend_from_slice(appname);
+    path.extend_from_slice(suffix);
+    CString::new(path).expect("an environment value and an app name hold no NUL")
 }
 
-/// Walk `$XDG_CONFIG_DIRS`, calling `visit` with each entry.
+/// Walk `$XDG_CONFIG_DIRS`, calling `visit` with each entry, up to the first
+/// empty one.
 ///
 /// `visit` answers `true` to stop the walk. Answers whether it did.
-fn for_each_config_dir(mut visit: impl FnMut(*const c_char, size_t) -> bool) -> bool {
-    // SAFETY: `stdpaths_get_xdg_var` hands over an owned string, and
-    // `vim_env_iter` hands back slices of it.
-    let config_dirs = stdpaths_get_xdg_var(kXDGConfigDirs);
-    if config_dirs.is_null() {
+fn for_each_config_dir(visit: impl FnMut(&[u8]) -> bool) -> bool {
+    let Some(config_dirs) = xdg_var(kXDGConfigDirs) else {
         return false;
-    }
-    let mut iter: *const c_void = ptr::null();
-    let mut stopped = false;
-    loop {
-        let mut dir: *const c_char = ptr::null();
-        let mut dir_len: size_t = 0;
-        let (at, len) = (&raw mut dir, &raw mut dir_len);
-        iter = unsafe { vim_env_iter(':' as c_char, config_dirs, iter, at, len) };
-        if dir.is_null() || dir_len == 0 {
-            break;
-        }
-        if visit(dir, dir_len) {
-            stopped = true;
-            break;
-        }
-        if iter.is_null() {
-            break;
-        }
-    }
-    unsafe { xfree(config_dirs as *mut c_void) };
-    stopped
+    };
+    config_dirs
+        .as_bytes()
+        .split(|&b| b == b':')
+        .take_while(|dir| !dir.is_empty())
+        .any(visit)
 }
 
 /// Source the system-wide vimrc: the first `<config dir>/<appname>/sysinit.vim`
 /// that exists, or the compiled-in path if none do.
 pub(crate) fn do_system_initialization() {
     let appname = get_appname(false);
-    let appname_len = appname.count_bytes();
-    // SAFETY: sources at most one file; `appname` outlives the walk.
-    let appname = appname.as_ptr();
-    let sourced = unsafe {
-        for_each_config_dir(|dir, dir_len| {
-            let vimrc = config_subpath(dir, dir_len, appname, appname_len, c"/sysinit.vim", true);
-            let ok = do_source(cstr::at(vimrc), false, DOSO_NONE as c_int, None) != FAIL;
-            xfree(vimrc as *mut c_void);
-            ok
-        })
-    };
+    let appname = appname.to_bytes();
+    let sourced = for_each_config_dir(|dir| {
+        let vimrc = config_subpath(dir, appname, b"/sysinit.vim", true);
+        do_source(&vimrc, false, DOSO_NONE as c_int, None) != FAIL
+    });
     if sourced {
         return;
     }
@@ -232,44 +155,19 @@ pub(crate) fn do_system_initialization() {
 /// Answers `Some(do_exrc)` when one of them was sourced, and `None` when
 /// neither was: `do_exrc` is off when the file that was sourced *is* the
 /// `exrc` the working directory would offer, so it is not read twice.
-///
-/// # Safety
-///
-/// `init_lua` must point at a NUL-terminated string, unaliased for the call.
-/// `init_vim` must point at a NUL-terminated string, unaliased for the call.
-unsafe fn source_init_pair(
-    init_lua: *mut c_char,
-    init_vim: *mut c_char,
-    check_exrc_is_same: bool,
-) -> Option<bool> {
-    // SAFETY: both paths are owned NUL-terminated strings; freeing them is
-    // the caller's job.
-    if unsafe { os_path_exists(init_lua) }
-        && do_source(
-            unsafe { cstr::at(init_lua) },
-            true,
-            DOSO_VIMRC as c_int,
-            None,
-        ) != 0
-    {
+fn source_init_pair(init_lua: &CStr, init_vim: &CStr, check_exrc_is_same: bool) -> Option<bool> {
+    if path_exists(init_lua) && do_source(init_lua, true, DOSO_VIMRC as c_int, None) != 0 {
         // Both present: the Lua one won, and the user should know.
-        if unsafe { os_path_exists(init_vim) } {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-            let (init_lua, init_vim) = unsafe { (c_str(init_lua), c_str(init_vim)) };
+        if path_exists(init_vim) {
+            let (init_lua, init_vim) = (msg_cstr(init_lua), msg_cstr(init_vim));
             semsg!("E5422: Conflicting configs: \"{init_lua}\" \"{init_vim}\"");
         }
         return Some(p_exrc());
     }
-    if do_source(
-        unsafe { cstr::at(init_vim) },
-        true,
-        DOSO_VIMRC as c_int,
-        None,
-    ) != FAIL
-    {
+    if do_source(init_vim, true, DOSO_VIMRC as c_int, None) != FAIL {
         let mut do_exrc = p_exrc();
         if do_exrc && check_exrc_is_same {
-            let same = unsafe { path_full_compare(VIMRC_FILE, cstr::at(init_vim), false, true) };
+            let same = path_full_compare(VIMRC_FILE, init_vim, false, true);
             do_exrc = same != kEqualFiles;
         }
         return Some(do_exrc);
@@ -284,8 +182,6 @@ unsafe fn source_init_pair(
 /// `$XDG_CONFIG_HOME/<appname>/init.{lua,vim}`, then the same pair under each
 /// `$XDG_CONFIG_DIRS` entry, then `$EXINIT`.
 pub(crate) fn do_user_initialization() -> bool {
-    // SAFETY: sources at most one config; every path built here is freed on
-    // every way out.
     // Read before anything is sourced: the fall-through at the bottom
     // answers with *this*, not with what a half-sourced config left
     // behind.
@@ -295,29 +191,21 @@ pub(crate) fn do_user_initialization() -> bool {
         return p_exrc();
     }
 
-    let init_lua_path = unsafe { stdpaths_user_conf_subpath(c"init.lua".as_ptr()) };
-    let user_vimrc = unsafe { stdpaths_user_conf_subpath(c"init.vim".as_ptr()) };
-    let home = unsafe { source_init_pair(init_lua_path, user_vimrc, true) };
-    unsafe { xfree(init_lua_path as *mut c_void) };
-    unsafe { xfree(user_vimrc as *mut c_void) };
-    if let Some(do_exrc) = home {
+    let init_lua: XString = stdpaths_user_conf_subpath(b"init.lua");
+    let init_vim: XString = stdpaths_user_conf_subpath(b"init.vim");
+    if let Some(do_exrc) = source_init_pair(init_lua.as_cstr(), init_vim.as_cstr(), true) {
         return do_exrc;
     }
 
     let appname = get_appname(false);
-    let appname_len = appname.count_bytes();
-    let appname = appname.as_ptr();
+    let appname = appname.to_bytes();
     let mut from_dirs: Option<bool> = None;
-    unsafe {
-        for_each_config_dir(|dir, dir_len| {
-            let init_lua = config_subpath(dir, dir_len, appname, appname_len, c"/init.lua", false);
-            let init_vim = config_subpath(dir, dir_len, appname, appname_len, c"/init.vim", false);
-            from_dirs = source_init_pair(init_lua, init_vim, true);
-            xfree(init_lua as *mut c_void);
-            xfree(init_vim as *mut c_void);
-            from_dirs.is_some()
-        })
-    };
+    for_each_config_dir(|dir| {
+        let init_lua = config_subpath(dir, appname, b"/init.lua", false);
+        let init_vim = config_subpath(dir, appname, b"/init.vim", false);
+        from_dirs = source_init_pair(&init_lua, &init_vim, true);
+        from_dirs.is_some()
+    });
     if let Some(do_exrc) = from_dirs {
         return do_exrc;
     }
@@ -330,17 +218,10 @@ pub(crate) fn do_user_initialization() -> bool {
 
 /// Read the working directory's `exrc`, which is Lua's job.
 pub(crate) fn do_exrc_initialization() {
-    // SAFETY: the Lua state exists by now -- `nlua_init` ran in `main_0`.
-    let lstate: *mut lua_State = get_global_lstate();
-    // Deliberately a hard failure, not a `debug_assert!`: every line
-    // below dereferences `lstate`, so a release build that carried on
-    // would fault instead of saying what went wrong.
-    assert!(!lstate.is_null(), "the Lua state is not initialised");
-    unsafe { lua_getfield(lstate, LUA_GLOBALSINDEX, c"require".as_ptr()) };
-    unsafe { lua_pushstring(lstate, c"vim._core.exrc".as_ptr()) };
-    if unsafe { nlua_pcall(lstate, 1, 0) } != 0 {
-        let msg = unsafe { lua_tolstring(lstate, -1, ptr::null_mut::<size_t>()) };
-        unsafe { fprintf!(stderr, c"%s\n".as_ptr(), msg) };
+    if let Err(text) = nlua_require_module(c"vim._core.exrc") {
+        // What `fprintf("%s\n")` printed, a null string included.
+        let text = text.unwrap_or_else(|| b"(null)".to_vec());
+        write_c_stderr(&[&text[..], b"\n"].concat());
     }
 }
 
@@ -349,21 +230,11 @@ pub(crate) fn do_exrc_initialization() {
 ///
 /// `-u NONE` and `-u NORC` name no file at all and source nothing; silent
 /// (batch) mode skips the standard sources too.
-///
-/// # Safety
-///
-/// `parmp` must point at the startup parameters.
-pub(crate) unsafe fn source_startup_scripts(parmp: *const MainParams) {
-    // SAFETY: `parmp` is the caller's live parameter block.
-    if !unsafe { (*parmp).use_vimrc }.is_null() {
-        let named_none = unsafe { strequal((*parmp).use_vimrc, c"NONE".as_ptr()) }
-            || unsafe { strequal((*parmp).use_vimrc, c"NORC".as_ptr()) };
-        let vimrc = unsafe { (*parmp).use_vimrc };
-        if !named_none
-            && do_source(unsafe { cstr::at(vimrc) }, false, DOSO_NONE as c_int, None) != OK
-        {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let vimrc = unsafe { c_str(vimrc) };
+pub(crate) fn source_startup_scripts(parm: &MainParams) {
+    if let Some(vimrc) = parm.use_vimrc.as_deref() {
+        let named_none = vimrc == c"NONE" || vimrc == c"NORC";
+        if !named_none && do_source(vimrc, false, DOSO_NONE as c_int, None) != OK {
+            let vimrc = msg_cstr(vimrc);
             semsg!("E282: Cannot read from \"{vimrc}\"");
         }
     } else if !silent_mode.get() {

@@ -689,13 +689,16 @@ fn expanded(patterns: &[&CStr]) -> Result<Vec<XString>, Failed> {
     expand_wildcards(patterns, how)
 }
 
-/// [`recover_names`] of every swap file in 'directory', collected into
-/// `list` -- what `swapfilelist()` answers.
-pub(crate) fn list_swap_files(list: &mut List) {
+/// [`recover_names`] of every swap file in 'directory': collected into
+/// `list` -- what `swapfilelist()` answers -- or, with no list, listed on
+/// the screen, which is what `nvim -r` with no file shows.
+pub(crate) fn list_swap_files(list: Option<&mut List>) {
+    let do_list = list.is_none();
+    let list = list.map_or(core::ptr::null_mut(), core::ptr::from_mut);
     let (fname, fname_out) = (core::ptr::null_mut(), core::ptr::null_mut());
     // SAFETY: no file name and no n'th name are asked for, and `list` is a
-    // live list, borrowed for the call.
-    unsafe { recover_names(fname, false, list, 0, fname_out) };
+    // live list borrowed for the call, or null.
+    unsafe { recover_names(fname, do_list, list, 0, fname_out) };
 }
 
 /// Find the swap files in the current directory and in every directory of

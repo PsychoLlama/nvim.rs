@@ -385,7 +385,7 @@ fn do_filter(
                     line2,
                     0,
                     MAXLNUM,
-                    args,
+                    Some(args),
                     READ_FILTER as c_int,
                     false,
                 );

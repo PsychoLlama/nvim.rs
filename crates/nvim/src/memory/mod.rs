@@ -189,7 +189,7 @@ pub unsafe extern "C" fn xmalloc(size: usize) -> *mut c_void {
     unsafe {
         let ret = try_malloc(size);
         if ret.is_null() {
-            preserve_exit(e_outofmem.as_ptr());
+            preserve_exit(Some(e_outofmem));
         }
         ret
     }
@@ -249,7 +249,7 @@ unsafe fn xcalloc_retry(count: usize, size: usize) -> *mut c_void {
     unsafe { try_to_free_memory() };
     let ret = unsafe { seam_calloc(count, size) };
     if ret.is_null() {
-        unsafe { preserve_exit(e_outofmem.as_ptr()) };
+        preserve_exit(Some(e_outofmem));
     }
     ret
 }
@@ -271,7 +271,7 @@ pub unsafe extern "C" fn xrealloc(ptr: *mut c_void, size: usize) -> *mut c_void 
     unsafe { try_to_free_memory() };
     let ret = unsafe { seam_realloc(ptr, allocated_size) };
     if ret.is_null() {
-        unsafe { preserve_exit(e_outofmem.as_ptr()) };
+        preserve_exit(Some(e_outofmem));
     }
     ret
 }
@@ -289,7 +289,7 @@ pub unsafe fn xmallocz(size: usize) -> *mut c_void {
     unsafe {
         if total_size < size {
             let too_big = c"Nvim: Data too large to fit into virtual memory space\n";
-            preserve_exit(gettext(too_big).as_ptr());
+            preserve_exit(Some(gettext(too_big)));
         }
         let ret = xmalloc(total_size);
         *ret.cast::<u8>().add(size) = 0;

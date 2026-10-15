@@ -34,7 +34,7 @@ use crate::event::socket::socket_address_is_tcp;
 use crate::global_cell::GlobalCell;
 use crate::highlight::{HLATTRS_INIT, dict2hlattrs};
 use crate::log::{LOGLVL_ERR, LOGLVL_INF, logmsg};
-use crate::memory::{strequal, xfree, xmalloc, xmemdupz, xstrdup};
+use crate::memory::{xfree, xmemdupz};
 use crate::message_fmt::{c_str, msg_cstr};
 use crate::msgpack_rpc::channel::rpc_send_event;
 use crate::os::env::{os_env_exists, os_get_pid};
@@ -68,6 +68,7 @@ use crate::types::{
 use crate::ui::state::t_colors;
 use ::libc::{close, dup};
 use core::ffi::{CStr, c_char, c_int, c_void};
+use std::ffi::CString;
 
 /// The descriptor the client hands the server as `stdin_fd` when the user
 /// piped something in: stdin has been moved there so that the terminal can
@@ -121,22 +122,23 @@ fn no_reader() -> CallbackReader {
 /// The server gets this process's own argv with `--embed` inserted, so
 /// that every option the user typed reaches the process that will act on
 /// it.
-///
-/// # Safety
-///
-/// `argv` must have `argc` valid C strings, and `exepath` must be one.
-pub(crate) unsafe fn ui_client_start_server(
-    exepath: *const c_char,
-    argc: usize,
-    argv: *mut *mut c_char,
-) -> u64 {
-    let args = unsafe { xmalloc((argc + 2) * size_of::<*mut c_char>()) }.cast::<*mut c_char>();
-    unsafe { *args = xstrdup(*argv) };
-    unsafe { *args.add(1) = xstrdup(c"--embed".as_ptr()) };
-    for i in 1..argc {
-        unsafe { *args.add(i + 1) = xstrdup(*argv.add(i)) };
-    }
-    unsafe { *args.add(argc + 1) = core::ptr::null_mut() };
+pub(crate) fn ui_client_start_server(exepath: &CStr, argv: &[CString]) -> u64 {
+    // The NULL-terminated vector the job takes over: a copy of `argv[0]`,
+    // `--embed`, then of the rest.
+    let words = argv.iter().map(CString::as_c_str);
+    let words = words
+        .clone()
+        .take(1)
+        .chain([c"--embed"])
+        .chain(words.skip(1));
+    let vector: Vec<*mut c_char> = words
+        .map(|word| crate::memory::ThinCString::from_cstr(word).into_raw())
+        .chain([core::ptr::null_mut()])
+        .collect();
+    // The global allocator is `malloc`, so the boxed slice is a block the
+    // vector's eventual `xfree` releases.
+    let args = Box::into_raw(vector.into_boxed_slice()).cast::<*mut c_char>();
+    let exepath = exepath.as_ptr();
 
     // The server's stderr is forwarded so that a Lua error at startup
     // is seen even though this process owns the terminal.
@@ -801,32 +803,26 @@ pub(crate) unsafe fn ui_client_event_connect(mut args: Array) {
 /// `argv[0]` must be an owned C string.
 unsafe extern "C" fn channel_connect_event(argv: *mut *mut c_void) {
     let server_addr = unsafe { *argv }.cast::<c_char>();
-    let mut err = c"".as_ptr();
-    let is_tcp = socket_address_is_tcp(unsafe { CStr::from_ptr(server_addr) });
-    let chan = unsafe {
-        channel_connect(
-            is_tcp,
-            server_addr,
-            true,
-            no_reader(),
-            UI_CONNECT_TIMEOUT_MS,
-            &raw mut err,
-        )
+    let address = unsafe { CStr::from_ptr(server_addr) };
+    let is_tcp = socket_address_is_tcp(address);
+    let connected = channel_connect(is_tcp, address, true, no_reader(), UI_CONNECT_TIMEOUT_MS);
+    let chan = match connected {
+        Ok(chan) => chan,
+        Err(err) => {
+            let line = line!() as c_int;
+            logmsg!(
+                LOGLVL_ERR,
+                c"channel_connect_event",
+                line,
+                "Cannot connect to server {}: {}",
+                msg_cstr(address),
+                msg_cstr(err)
+            );
+            unsafe { xfree(server_addr.cast()) };
+            ui_client_exit_status.set(1);
+            os_exit(1);
+        }
     };
-    if !unsafe { strequal(err, c"".as_ptr()) } {
-        let line = line!() as c_int;
-        logmsg!(
-            LOGLVL_ERR,
-            c"channel_connect_event",
-            line,
-            "Cannot connect to server {}: {}",
-            unsafe { c_str(server_addr) },
-            unsafe { c_str(err) }
-        );
-        unsafe { xfree(server_addr.cast()) };
-        ui_client_exit_status.set(1);
-        os_exit(1);
-    }
     ui_client_channel_id.set(chan);
     ui_client_reattach();
     let line = line!() as c_int;
@@ -899,39 +895,34 @@ pub(crate) fn ui_client_attach_to_restarted_server() {
                 .as_string()
                 .expect("`take_arg` checked the tag")
                 .data();
-            let mut err = c"".as_ptr();
-            let chan_id = unsafe {
-                channel_connect(
-                    socket_address_is_tcp(CStr::from_ptr(listen_addr)),
-                    listen_addr,
-                    true,
-                    no_reader(),
-                    UI_CONNECT_TIMEOUT_MS,
-                    &raw mut err,
-                )
-            };
-            if !unsafe { strequal(err, c"".as_ptr()) } {
-                let line = line!() as c_int;
-                logmsg!(
-                    LOGLVL_ERR,
-                    c"ui_client_attach_to_restarted_server",
-                    line,
-                    "cannot connect to server {}: {}",
-                    unsafe { c_str(listen_addr) },
-                    unsafe { c_str(err) }
-                );
-            } else {
-                ui_client_channel_id.set(chan_id);
-                ui_client_reattach();
-                let line = line!() as c_int;
-                logmsg!(
-                    LOGLVL_INF,
-                    c"ui_client_attach_to_restarted_server",
-                    line,
-                    "restarted server address={} id={}",
-                    unsafe { c_str(listen_addr) },
-                    chan_id
-                );
+            let address = unsafe { CStr::from_ptr(listen_addr) };
+            let tcp = socket_address_is_tcp(address);
+            let connected = channel_connect(tcp, address, true, no_reader(), UI_CONNECT_TIMEOUT_MS);
+            match connected {
+                Err(err) => {
+                    let line = line!() as c_int;
+                    logmsg!(
+                        LOGLVL_ERR,
+                        c"ui_client_attach_to_restarted_server",
+                        line,
+                        "cannot connect to server {}: {}",
+                        msg_cstr(address),
+                        msg_cstr(err)
+                    );
+                }
+                Ok(chan_id) => {
+                    ui_client_channel_id.set(chan_id);
+                    ui_client_reattach();
+                    let line = line!() as c_int;
+                    logmsg!(
+                        LOGLVL_INF,
+                        c"ui_client_attach_to_restarted_server",
+                        line,
+                        "restarted server address={} id={}",
+                        msg_cstr(address),
+                        chan_id
+                    );
+                }
             }
         }
     }

@@ -99,10 +99,10 @@ change/	change/open_line/mod.rs	1	49	6	36	deref:11 compound:1	str:6 other:1	str:
 change/	change/open_line/smart.rs	1	2	1	2	-	str:1	-	bytes_at:1
 change/	change/splice.rs	1	5	0	3	deref:1 ref:1	-	-	.copy_from:1 free_fmark:1
 change/	change/text.rs	1	25	4	22	deref:2 expr:1	str:7	-	ml_replace:4 .offset:2 from_raw_parts:2 utf_composinglike:2 win_chartabsize:2 getvcol:1 ml_add_deleted_len:1 showmatch:1
-channel/	*	5	299	50	149	deref:116 expr:28 ref:3 compound:1	other:42 str:11 void:10 pp_str:6 pp:4 value:1	other:10 str:3	multiqueue_put_event:6 rpc_start:5 rstream_may_close:4 rstream_start:4 xfree:4 rstream_init:3 DictRef::owning:2 bytes_at:2
+channel/	*	5	299	48	150	deref:115 expr:28 ref:3 compound:1	other:42 str:10 void:10 pp:4 pp_str:4 value:1	other:10 str:3	multiqueue_put_event:6 rpc_start:5 rstream_may_close:4 rstream_start:4 xfree:4 rstream_init:3 DictRef::owning:2 bytes_at:2
 channel/	channel/info.rs	1	28	4	13	deref:13 expr:1 ref:1	other:2 pp:1 pp_str:1 str:1	-	cstr_to_string:2 DictRef::retained:1 multiqueue_put_event:1 terminal_buf:1 xfree:1
 channel/	channel/mod.rs	1	91	19	43	deref:34 expr:11 compound:1	other:16 pp_str:2 str:2 pp:1 void:1	other:9 str:3	rstream_may_close:4 multiqueue_put_event:2 stream_may_close:2 xfree:2 zeroed:2 Box::from_raw:1 api_free_luaref:1 callback_free:1
-channel/	channel/open.rs	1	100	8	56	deref:37 expr:7	other:6 pp_str:3 str:3 void:2 value:1	other:1	rpc_start:5 rstream_start:4 rstream_init:3 DictRef::owning:2 dup2:2 fcntl:2 wstream_init:2 proc_spawn:1
+channel/	channel/open.rs	1	100	6	57	deref:36 expr:7	other:6 str:2 void:2 pp_str:1 value:1	other:1	rpc_start:5 rstream_start:4 rstream_init:3 DictRef::owning:2 dup2:2 fcntl:2 wstream_init:2 at:1
 channel/	channel/reader.rs	1	54	12	24	deref:23 expr:5 ref:2	other:17 str:4 void:2 pp:1	-	bytes_at:2 callback_call:1 dict_find:1 from_raw_parts:1 multiqueue_put_event:1 terminal_receive:1
 channel/	channel/term.rs	1	26	7	13	deref:9 expr:4	void:5 other:1 pp:1 str:1	-	multiqueue_put_event:2 proc_stop:1 pty_proc_resize:1 pty_proc_resume:1 rstream_start_inner:1 rstream_stop_inner:1 terminal_destroy:1 wstream_write:1
 charset/	*	1	49	25	30	deref:10 expr:2 compound:1	str:24 other:6 pp_str:4	str:10	bytes_at:5 from_raw_parts_mut:3 prefix_at:3 from_raw_parts:2 slice_at:2 utf_ptr2cells:1
@@ -169,9 +169,9 @@ edit/	edit/replace.rs	1	11	1	8	deref:3	str:1	-	win_chartabsize:2 .add:1 getvcol:
 edit/	edit/state.rs	1	17	2	8	deref:4 ref:2 expr:1	other:2	-	.offset:1 ModeState::insert:1 change_warning:1 ins_compl_addleader:1 linetabsize_str:1 tabstop_at:1 utfc_ptr2len:1 xfree:1
 edit/	edit/tab.rs	1	39	0	31	deref:6 expr:2	other:1	-	.offset:11 getvcol:2 init_charsize_arg:2 tabstop_padding:2 win_charsize:2 xfree:2 .copy_from:1 .offset_from:1
 edit/	edit/undo.rs	1	10	4	5	deref:5	other:4	-	apply_autocmds:1 linetabsize_str:1
-eval/	*	6	248	22	160	deref:43 expr:21 ref:16 compound:2	other:10 value:8 void:4 str:3	value:8 other:2	c_str:13 xfree:9 .as_ref:8 time_watcher_start:4 time_watcher_stop:4 Box::from_raw:3 channel_decref:3 time_watcher_close:3
+eval/	*	6	244	22	156	deref:43 expr:21 ref:16 compound:2	other:10 value:8 void:4 str:3	value:8 other:2	c_str:11 xfree:9 .as_ref:8 time_watcher_start:4 time_watcher_stop:4 Box::from_raw:3 channel_decref:3 time_watcher_close:3
 eval/	eval/collect.rs	1	18	1	11	deref:4 ref:2 expr:1	other:1	-	.as_ref:2
-eval/	eval/funcs/channel.rs	1	43	1	38	deref:3 expr:1 ref:1	-	-	c_str:10 .as_ref:4 xfree:4 server_address_list:2 ThinCString::from_raw:1 arena_mem_free:1 at_opt:1 channel_close:1
+eval/	eval/funcs/channel.rs	1	39	1	34	deref:3 expr:1 ref:1	-	-	c_str:8 .as_ref:4 xfree:4 server_address_list:2 ThinCString::from_raw:1 arena_mem_free:1 at_opt:1 channel_close:1
 eval/	eval/funcs/job.rs	1	66	3	47	deref:16 ref:2 expr:1	str:3 other:2 value:1	value:1	c_str:3 channel_decref:3 .as_ref:2 apply_autocmds:2 channel_create_event:2 channel_incref:2 multiqueue_process_events:2 multiqueue_replace_parent:2
 eval/	eval/funcs/timer.rs	1	28	2	15	deref:11 expr:1 ref:1	other:2 void:2	-	time_watcher_stop:3 time_watcher_close:2 time_watcher_start:2 process_events_until:1 time:1 time_watcher_init:1 xfree:1 xmalloc:1
 eval/	eval/timer.rs	1	28	5	21	deref:5 expr:1 ref:1	other:5 void:2	other:2	time_watcher_start:2 multiqueue_free:1 time_watcher_close:1 time_watcher_init:1 time_watcher_stop:1 xfree:1
@@ -323,13 +323,13 @@ mpack/	mpack/conv.rs	1	5	0	0	expr:5	str:1	-	-
 mpack/	mpack/mpack_core.rs	1	29	5	6	deref:19 expr:2 ref:2	other:9 pp_str:3	-	from_raw_parts:3 .write:1 from_raw_parts_mut:1
 mpack/	mpack/object.rs	1	72	9	8	deref:56 expr:4	other:15 pp_str:2	other:3	.sub:1
 mpack/	mpack/rpc.rs	1	52	12	14	deref:26 expr:6 ref:3	other:24 pp_str:5	-	from_raw_parts_mut:1
-msgpack_rpc/	*	9	393	63	187	deref:102 expr:26 compound:15 ref:12	other:44 str:29 pp_str:8 value:4 pp:3 void:3	str:6 other:4 pp_str:1	c_str:7 arena_mem_free:6 channel_decref:6 multiqueue_put_event:6 xfree:5 snprintf:4 socket_watcher_close:4 .add:3
+msgpack_rpc/	*	9	383	62	178	deref:101 expr:26 compound:15 ref:12	other:44 str:28 pp_str:8 value:4 pp:3 void:3	str:6 other:4 pp_str:1	c_str:7 arena_mem_free:6 channel_decref:6 multiqueue_put_event:6 socket_watcher_close:4 xfree:4 .add:3 abort:3
 msgpack_rpc/	msgpack_rpc/channel/envelope.rs	1	27	8	21	deref:4 expr:1 ref:1	other:5 str:1 value:1	other:1	alloc_block:1 bytes_at:1 free_block:1 from_raw_parts_mut:1 remote_ui_flush_pending_data:1
 msgpack_rpc/	msgpack_rpc/channel/mod.rs	1	69	14	47	deref:10 ref:3 compound:2 expr:2	other:8 str:5 pp:2	other:1 str:1	channel_decref:4 wstream_release_wbuffer:3 arena_mem_free:2 channel_incref:2 multiqueue_put_event:2 CStr::from_ptr:1 arena_finish:1 at_opt:1
 msgpack_rpc/	msgpack_rpc/channel/receive.rs	1	45	3	30	deref:5 compound:2 expr:2	str:2 other:1 pp:1 void:1	-	multiqueue_put_event:4 arena_mem_free:3 channel_decref:2 snprintf:2 at:1 c_str_len:1 channel_incref:1 handler:1
 msgpack_rpc/	msgpack_rpc/channel/trace.rs	1	1	1	1	-	str:1	-	c_str:1
 msgpack_rpc/	msgpack_rpc/packer/mod.rs	1	25	8	14	expr:4 ref:3 compound:1 deref:1	str:14 value:3 other:1	str:1	.add:1 .copy_from_nonoverlapping:1 Vec::from_raw_parts:1 api_free_luaref:1 hook:1 xmalloc:1 xrealloc:1
-msgpack_rpc/	msgpack_rpc/server.rs	1	57	7	34	deref:5 expr:3 compound:2	other:4 str:3 void:2	str:2 pp_str:1	c_str:5 socket_watcher_close:4 os_env_exists:3 xfree:3 at:2 at_opt:2 strequal:2 CStr::from_ptr:1
+msgpack_rpc/	msgpack_rpc/server.rs	1	47	6	25	deref:4 expr:3 compound:2	other:4 str:2 void:2	str:2 pp_str:1	c_str:5 socket_watcher_close:4 at:2 strequal:2 xfree:2 CStr::from_ptr:1 XString::from_raw:1 at_opt:1
 msgpack_rpc/	msgpack_rpc/unpacker/keydict.rs	1	57	10	18	deref:29 compound:3	other:11 pp_str:8 str:1	str:1	zeroed:2 from_raw_parts:1 mpack_parse:1 mpack_parser_init:1 mpack_rtoken:1 printf_string:1
 msgpack_rpc/	msgpack_rpc/unpacker/mod.rs	1	96	10	18	deref:48 expr:10 compound:3 ref:3	other:13 str:1	-	.add:2 abort:2 mpack_tokbuf_init:2 String_0::from_owned_parts:1 arena_mem_free:1 mpack_parse:1 mpack_parser_init:1 mpack_read:1
 msgpack_rpc/	msgpack_rpc/unpacker/redraw.rs	1	16	2	4	expr:4 compound:2 ref:2	other:1 str:1	other:2 str:1	abort:1 from_raw_parts:1 ui_client_get_redraw_handler:1
@@ -474,15 +474,9 @@ spellsuggest/	spellsuggest/walk/node.rs	1	59	4	32	deref:16 expr:5 compound:1	str
 spellsuggest/	spellsuggest/walk/rep.rs	1	8	1	2	deref:4 expr:2	-	-	-
 spellsuggest/	spellsuggest/walk/split.rs	1	28	0	10	deref:16 compound:1	-	-	byte_in_str:1 can_compound:1 copy_nonoverlapping:1 match_compoundrule:1 mb_charlen:1 skipwhite:1 spell_iswordp_nmw:1 utfc_ptr2len:1
 spellsuggest/	spellsuggest/walk/transpose.rs	1	4	0	4	-	-	-	spell_iswordp:4
-startup/	*	8	255	26	185	deref:50 expr:10	str:21 other:16 pp_str:5	str:3	fprintf:22 at:10 strequal:8 xfree:7 CStr::from_ptr:5 apply_autocmds:4 bytes_at:4 cstr_to_string:4
-startup/	startup/args.rs	1	95	9	54	deref:36 expr:5	other:8 str:5 pp_str:2	str:2	bytes_at:4 .offset:3 strequal:3 CStr::from_ptr:2 strcasecmp:2 xfree:2 XString::from_raw:1 at:1
-startup/	startup/buffers.rs	1	15	5	14	deref:1	other:3 str:2	-	CStr::from_ptr:2 .as_mut:1 at:1 buflist_new:1 readfile:1 vim_snprintf:1 xfree:1 xstrdup:1
-startup/	startup/config.rs	1	50	5	33	deref:5 expr:2	str:5 other:3	str:1	at:5 xfree:4 .copy_from_nonoverlapping:3 .add:2 os_path_exists:2 stdpaths_user_conf_subpath:2 strequal:2 c_str:1
-startup/	startup/entry.rs	1	50	2	46	deref:2 expr:2	other:1 pp_str:1	-	fprintf:4 at:3 apply_autocmds:2 exit:2 strcasecmp:2 abort:1 at_opt:1 channel_from_stdio:1
-startup/	startup/exit.rs	1	13	1	11	deref:2	str:1	-	fprintf:3 apply_autocmds:2 exit:2 tcdrain:2 cstr_to_string:1 mf_fname:1
+startup/	*	2	0	0	0	-	-	-	-
+startup/	startup/entry.rs	1	0	0	0	-	-	-	-
 startup/	startup/mod.rs	1	0	0	0	-	-	-	-
-startup/	startup/remote.rs	1	22	2	18	deref:4	pp_str:2 str:2 other:1	-	fprintf:8 cstr_to_string:3 strequal:2 CStr::from_ptr:1 channel_connect:1 nlua_exec:1 printf:1
-startup/	startup/usage.rs	1	10	2	9	expr:1	str:6	-	fprintf:5 printf:2 nlua_init:1
 state.rs	*	1	14	4	14	-	other:4	-	apply_autocmds:2 c_str:1 command_line_check:1 command_line_execute:1 handler:1 insert_check:1 insert_execute:1 multiqueue_empty:1
 state.rs	state.rs	1	14	4	14	-	other:4	-	apply_autocmds:2 c_str:1 command_line_check:1 command_line_execute:1 handler:1 insert_check:1 insert_execute:1 multiqueue_empty:1
 statusline/	*	5	91	11	69	deref:12 expr:5 compound:2	str:6 other:5	str:3 other:2	CStr::from_ptr:7 xfree:6 from_raw_parts_mut:3 vim_snprintf:3 vim_strsize:3 atoi:2 cstr_to_string:2 get_rel_pos:2
@@ -524,8 +518,8 @@ ui/	ui/callbacks.rs	1	8	2	7	expr:1	str:2 other:1	-	api_free_luaref:2 CStr::from_
 ui/	ui/mod.rs	1	36	4	14	deref:19 ref:3	other:9 pp:1	other:2 str:1	cstr_to_string:3 arena_mem_free:1 bytes_at:1 from_raw_parts:1 multiqueue_put_event:1 remote_ui_option_set:1 ui_comp_attach:1 ui_comp_detach:1
 ui/	ui/mouse.rs	1	4	0	2	deref:2	-	-	.add:1 at:1
 ui/	ui/sinks.rs	1	8	3	7	expr:1	other:7	-	remote_ui_chdir:1 remote_ui_raw_line:1 remote_ui_set_title:1 ui_comp_msg_set_pos:1 ui_comp_raw_line:1
-ui_client.rs	*	1	56	13	38	deref:10 expr:3 compound:2	str:3 other:1 pp:1 pp_str:1	-	c_str:6 rpc_send_event:4 channel_connect:2 strequal:2 xfree:2 CStr::from_ptr:1 channel_job_start:1 cstr_to_string:1
-ui_client.rs	ui_client.rs	1	56	13	38	deref:10 expr:3 compound:2	str:3 other:1 pp:1 pp_str:1	-	c_str:6 rpc_send_event:4 channel_connect:2 strequal:2 xfree:2 CStr::from_ptr:1 channel_job_start:1 cstr_to_string:1
+ui_client.rs	*	1	43	12	29	deref:6 expr:3 compound:2	str:2 other:1 pp:1	-	rpc_send_event:4 CStr::from_ptr:2 xfree:2 c_str:1 channel_job_start:1 cstr_to_string:1 dict2hlattrs:1 from_raw_parts:1
+ui_client.rs	ui_client.rs	1	43	12	29	deref:6 expr:3 compound:2	str:2 other:1 pp:1	-	rpc_send_event:4 CStr::from_ptr:2 xfree:2 c_str:1 channel_job_start:1 cstr_to_string:1 dict2hlattrs:1 from_raw_parts:1
 ui_compositor/	*	1	11	6	6	deref:3 compound:1	other:5	other:1	GridRef::new:2 ui_composed_call_raw_line:2 from_raw_parts:1 schar_from_buf:1
 ui_compositor/	ui_compositor/mod.rs	1	11	6	6	deref:3 compound:1	other:5	other:1	GridRef::new:2 ui_composed_call_raw_line:2 from_raw_parts:1 schar_from_buf:1
 undo/	*	10	329	45	193	deref:109 expr:12 ref:7 compound:2	str:27 other:25 value:2	other:8 str:6	xfree:23 c_str:13 bytes_at:5 change_warning:4 from_raw_parts:4 xmalloc:3 .offset:2 CStr::from_ptr:2

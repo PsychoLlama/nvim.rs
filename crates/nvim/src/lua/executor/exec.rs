@@ -25,8 +25,8 @@ use crate::lua::converter::{
     kNluaPushSpecial, nlua_pop_object, nlua_pop_typval, nlua_push_object, nlua_push_typval,
 };
 use crate::lua::ffi::{
-    LUA_MULTRET, LUA_TNIL, lua_gettop, lua_pop, lua_pushinteger, lua_pushnil, lua_pushstring,
-    lua_toboolean, lua_tolstring, lua_type, luaL_loadbuffer,
+    LUA_GLOBALSINDEX, LUA_MULTRET, LUA_TNIL, lua_getfield, lua_gettop, lua_pop, lua_pushinteger,
+    lua_pushnil, lua_pushstring, lua_toboolean, lua_tolstring, lua_type, luaL_loadbuffer,
 };
 use crate::memory::{xfree, xmalloc};
 use crate::message_fmt::c_str_len;
@@ -154,6 +154,29 @@ pub fn nlua_call_user_expand_func(
         // A refusal has reported itself; the answer is then the zero
         // upstream left in the caller's slot.
         nlua_pop_typval(lstate).unwrap_or(TypVal::Number(0))
+    }
+}
+
+/// `require(module)` in the editor's state, through [`nlua_pcall`] so that a
+/// failure carries its traceback.
+///
+/// Answers the error's text when it fails -- `None` for an error object that
+/// is not a string -- and leaves the error on the stack, as upstream does.
+pub(crate) fn nlua_require_module(module: &CStr) -> Result<(), Option<Vec<u8>>> {
+    let lstate = get_global_lstate();
+    // A hard failure, not a `debug_assert!`: every call below dereferences
+    // the state.
+    assert!(!lstate.is_null(), "the Lua state is not initialised");
+    // SAFETY: the editor's live state; `module` is NUL-terminated and
+    // copied by Lua, and the error text is copied before anything can pop it.
+    unsafe {
+        lua_getfield(lstate, LUA_GLOBALSINDEX, c"require".as_ptr());
+        lua_pushstring(lstate, module.as_ptr());
+        if nlua_pcall(lstate, 1, 0) == 0 {
+            return Ok(());
+        }
+        let text = lua_tolstring(lstate, -1, ptr::null_mut());
+        Err(crate::cstr::at_opt(text).map(|text| text.to_bytes().to_vec()))
     }
 }
 

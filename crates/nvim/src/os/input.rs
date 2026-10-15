@@ -409,6 +409,13 @@ pub fn os_isatty(fd: c_int) -> bool {
     unsafe { uv_guess_handle(fd) == UV_TTY }
 }
 
+/// Wait until everything written to the terminal on `fd` has gone out --
+/// `tcdrain()`. Nothing to do for a descriptor that is not a terminal.
+pub(crate) fn tty_drain(fd: c_int) {
+    // SAFETY: `tcdrain` takes a descriptor and dereferences nothing.
+    unsafe { ::libc::tcdrain(fd) };
+}
+
 /// How many bytes are buffered and unread.
 pub fn input_available() -> size_t {
     (input_write_pos.get() - input_read_pos.get()) as size_t
@@ -890,14 +897,11 @@ pub unsafe fn os_input_ready(events: *mut MultiQueue) -> bool {
 
 /// Exit because of an input read error.
 fn read_error_exit() -> ! {
-    // SAFETY: a static message, and neither exit path returns.
-    unsafe {
-        if silent_mode.get() {
-            // The normal way out for `nvim -es`.
-            getout(0);
-        }
-        preserve_exit(gettext(c"Nvim: Error reading input, exiting...\n").as_ptr())
+    if silent_mode.get() {
+        // The normal way out for `nvim -es`.
+        getout(0);
     }
+    preserve_exit(Some(gettext(c"Nvim: Error reading input, exiting...\n")))
 }
 
 /// # Safety

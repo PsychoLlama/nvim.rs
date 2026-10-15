@@ -225,7 +225,7 @@ fn deadly_signal(signum: c_int) -> ! {
             autowrite_all();
         }
         // Preserve files and exit.
-        preserve_exit(dying.as_ptr())
+        preserve_exit(Some(crate::cstr::in_chars(&dying)))
     }
 }
 

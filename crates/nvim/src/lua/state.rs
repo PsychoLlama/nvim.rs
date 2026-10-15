@@ -17,10 +17,8 @@
 
 use crate::global_cell::{GlobalCell, SharedCell};
 use crate::types::{LuaRetMode, NluaRefState, uint64_t};
-use core::ffi::c_int;
 
 pub(crate) const kRetObject: LuaRetMode = 0;
-pub(crate) const LUA_GLOBALSINDEX: c_int = -10002 as c_int;
 pub(crate) static nlua_global_refs: GlobalCell<*mut NluaRefState> =
     GlobalCell::new(::core::ptr::null_mut::<NluaRefState>());
 pub(crate) static nlua_disable_preload: SharedCell<bool> = SharedCell::new(false);

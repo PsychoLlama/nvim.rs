@@ -78,7 +78,7 @@ pub(crate) fn read_dummy_file(fname: &CStr) -> Result<Loaded, Failed> {
     }
 }
 
-/// [`readfile`] of names the caller holds as strings, for a command.
+/// [`readfile`] of names the caller holds as strings, for a command or none.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn readfile_named(
     fname: Option<&CStr>,
@@ -86,7 +86,7 @@ pub(crate) fn readfile_named(
     from: LineNr,
     lines_to_skip: LineNr,
     lines_to_read: LineNr,
-    excmd: &mut ExArg,
+    excmd: Option<&mut ExArg>,
     flags: c_int,
     silent: bool,
 ) -> Result<Loaded, Failed> {
@@ -101,7 +101,7 @@ pub(crate) fn readfile_named(
             from,
             lines_to_skip,
             lines_to_read,
-            Some(excmd),
+            excmd,
             flags,
             silent,
         )

@@ -251,7 +251,7 @@ pub fn f_stdpath(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `swapfilelist()` — every swap file in 'directory'.
 pub fn f_swapfilelist(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    list_swap_files(tv_list_alloc_ret(result, kListLenUnknown as isize));
+    list_swap_files(Some(tv_list_alloc_ret(result, kListLenUnknown as isize)));
 }
 
 /// `swapinfo({fname})` — what a swap file says about its buffer.

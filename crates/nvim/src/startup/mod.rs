@@ -39,7 +39,8 @@ use crate::options::{
     kOptShadafile, kOptShortmess, kOptVerbosefile, kOptWindow,
 };
 use crate::types::uint64_t;
-use core::ffi::{CStr, c_char, c_int, c_uint};
+use core::ffi::{CStr, c_int, c_uint};
+use std::ffi::CString;
 
 mod args;
 mod buffers;
@@ -54,36 +55,93 @@ pub use self::entry::*;
 pub use self::eventloop::main_loop;
 pub use self::exit::*;
 
-#[derive(Clone)] // not `Copy`: it owns several of its strings
-pub struct MainParams {
-    pub argc: c_int,
-    pub argv: *mut *mut c_char,
-    pub use_vimrc: *mut c_char,
-    pub clean: bool,
-    pub n_commands: c_int,
-    pub commands: [*mut c_char; 10],
-    pub cmds_tofree: [c_char; 10],
-    pub n_pre_commands: c_int,
-    pub pre_commands: [*mut c_char; 10],
-    pub luaf: *mut c_char,
-    pub lua_arg0: c_int,
-    pub edit_type: c_int,
-    pub tagname: *mut c_char,
-    pub use_ef: *mut c_char,
-    pub input_istext: bool,
-    pub no_swap_file: c_int,
-    pub use_debug_break_level: c_int,
-    pub window_count: c_int,
-    pub window_layout: c_int,
-    pub diff_mode: c_int,
-    pub listen_addr: *mut c_char,
-    pub remote: c_int,
-    pub server_addr: *mut c_char,
-    pub scriptin: *mut c_char,
-    pub scriptout: *mut c_char,
-    pub scriptout_append: bool,
-    pub had_stdin_file: bool,
+/// The parsed command line: what `main` was asked to do.
+///
+/// It owns its words. `argv` is the command line as the process got it, and
+/// every string field is a copy of (a tail of) one of them, so nothing here
+/// borrows from the process's own argument block.
+pub(crate) struct MainParams {
+    /// The command line, `argv[0]` included.
+    pub(crate) argv: Vec<CString>,
+    /// `-u {vimrc}`; `NONE` for `--clean` and `-l`.
+    pub(crate) use_vimrc: Option<CString>,
+    /// `--clean`.
+    pub(crate) clean: bool,
+    /// `+cmd`, `-c cmd` and `-S`, run in order after the first file loads.
+    pub(crate) commands: Vec<CString>,
+    /// `--cmd cmd`, run in order before any config.
+    pub(crate) pre_commands: Vec<CString>,
+    /// `-l {script}`.
+    pub(crate) luaf: Option<CString>,
+    /// Where in `argv` the `-l` script's own arguments start (one past the
+    /// script), or -1 for no script.
+    pub(crate) lua_arg0: c_int,
+    /// What the process is editing: one of the `EDIT_*` answers.
+    pub(crate) edit_type: c_int,
+    /// `-t {tag}`.
+    pub(crate) tagname: Option<CString>,
+    /// `-q {errorfile}`.
+    pub(crate) use_ef: Option<CString>,
+    /// `-E`: Ex mode reads its input as text.
+    pub(crate) input_istext: bool,
+    /// `-n`, `-es`, `-l` and the like: no swap file.
+    pub(crate) no_swap_file: bool,
+    /// `-D`, or -1.
+    pub(crate) use_debug_break_level: c_int,
+    /// `-o[N]`/`-O[N]`/`-p[N]`'s count: -1 when not given, 0 for "one per
+    /// file".
+    pub(crate) window_count: c_int,
+    /// One of the `WIN_*` answers, or 0 when not given.
+    pub(crate) window_layout: c_int,
+    /// `-d`.
+    pub(crate) diff_mode: bool,
+    /// `--listen {address}`.
+    pub(crate) listen_addr: Option<CString>,
+    /// Where in `argv` the `--remote*` argument is; 0 for none.
+    pub(crate) remote: usize,
+    /// `--server {address}`.
+    pub(crate) server_addr: Option<CString>,
+    /// `-s {scriptin}`.
+    pub(crate) scriptin: Option<CString>,
+    /// `-w`/`-W {scriptout}`.
+    pub(crate) scriptout: Option<CString>,
+    /// `-w` (append) rather than `-W` (overwrite).
+    pub(crate) scriptout_append: bool,
+    /// A `-` argument asked for standard input.
+    pub(crate) had_stdin_file: bool,
 }
+
+impl MainParams {
+    /// Nothing parsed yet: every field "not given".
+    pub(crate) fn new(argv: Vec<CString>) -> Self {
+        Self {
+            argv,
+            use_vimrc: None,
+            clean: false,
+            commands: Vec::new(),
+            pre_commands: Vec::new(),
+            luaf: None,
+            lua_arg0: -1,
+            edit_type: EDIT_NONE as c_int,
+            tagname: None,
+            use_ef: None,
+            input_istext: false,
+            no_swap_file: false,
+            use_debug_break_level: -1,
+            window_count: -1,
+            window_layout: 0,
+            diff_mode: false,
+            listen_addr: None,
+            remote: 0,
+            server_addr: None,
+            scriptin: None,
+            scriptout: None,
+            scriptout_append: false,
+            had_stdin_file: false,
+        }
+    }
+}
+
 pub(crate) const EDIT_QF: c_uint = 4;
 pub(crate) const WIN_TABS: c_uint = 3;
 pub(crate) const WIN_VER: c_uint = 2;
@@ -112,8 +170,8 @@ pub static recoverymode: GlobalCell<bool> = GlobalCell::new(false);
 pub static vim_ignored: GlobalCell<c_int> = GlobalCell::new(0);
 pub static embedded_mode: GlobalCell<bool> = GlobalCell::new(false);
 pub static headless_mode: GlobalCell<bool> = GlobalCell::new(false);
-/// The name the process was started by: `argv[0]`, which lives as long as
-/// the process does.
+/// The name the process was started by: a copy of `argv[0]`, kept for the
+/// life of the process.
 static argv0: GlobalCell<Option<&'static CStr>> = GlobalCell::new(None);
 // The five wordings `mainerr` prints when the command line does not parse.
 // Nothing writes them, so they are constants rather than cells; they are
@@ -125,7 +183,7 @@ const err_opt_unknown: &CStr = c"Unknown option argument";
 const err_too_many_args: &CStr = c"Too many edit arguments";
 const err_extra_cmd: &CStr =
     c"Too many \"+command\", \"-c command\" or \"--cmd command\" arguments";
-pub(crate) const MAX_ARG_CMDS: c_int = 10 as c_int;
+pub(crate) const MAX_ARG_CMDS: usize = 10;
 pub static used_stdin: GlobalCell<bool> = GlobalCell::new(false);
 pub static nvim_testing: GlobalCell<bool> = GlobalCell::new(false);
 pub static ui_client_channel_id: GlobalCell<uint64_t> = GlobalCell::new(0 as uint64_t);
