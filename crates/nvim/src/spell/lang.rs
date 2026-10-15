@@ -196,45 +196,38 @@ unsafe fn spell_load_lang(lang: *mut c_char) {
     Buf::current().b_locked -= 1;
 }
 
-/// `do_in_runtimepath` with [`spell_load_cb`] as the callback.
+/// `do_in_runtimepath_visit` with [`spell_load_cb`] as the visit.
 ///
 /// # Safety
 ///
-/// `name` must point at a NUL-terminated string, unaliased for the call. `sl`
-/// must point at a live `SpellLoad`, unaliased for the call.
+/// `name` must point at a NUL-terminated string. `sl` must point at a live
+/// `SpellLoad`, unaliased for the call.
 unsafe fn do_in_runtimepath_cb(
     name: *mut c_char,
     flags: RuntimeOpts,
     sl: *mut SpellLoad,
 ) -> Result<(), Failed> {
-    unsafe {
-        crate::runtime::do_in_runtimepath(name, flags, Some(spell_load_cb), sl as *mut c_void)
-    }
+    // A copy: loading a spell file can run autocommands.
+    let name = unsafe { cstr::at(name) }.to_owned();
+    crate::runtime::do_in_runtimepath_visit(&name, flags, &mut |fnames, all| unsafe {
+        spell_load_cb(fnames, all, sl)
+    })
 }
 
-/// Load the spell files `do_in_runtimepath` found, keeping the last one in
-/// the cookie.
+/// Load the spell files the search found, keeping the last one in `slp`.
 ///
 /// NOBREAK is sticky in both directions: a `.add` file inherits it from the
 /// base language, and a base language that declares it passes it on.
 ///
 /// # Safety
 ///
-/// As `do_in_runtimepath`'s callback: `fnames` must point at `num_fnames`
-/// NUL-terminated file names, and `cookie` at the `SpellLoad` it was
-/// registered with, live for the call.
-unsafe fn spell_load_cb(
-    num_fnames: c_int,
-    fnames: *mut *mut c_char,
-    all: bool,
-    cookie: *mut c_void,
-) -> bool {
-    let slp = cookie as *mut SpellLoad;
-    for i in 0..num_fnames {
-        let fname = unsafe { *fnames.offset(i as isize) };
+/// `slp` must point at the `SpellLoad` the search was started with, live for
+/// the call.
+unsafe fn spell_load_cb(fnames: &[&CStr], all: bool, slp: *mut SpellLoad) -> bool {
+    for &fname in fnames {
         let lang = unsafe { (*slp).sl_lang.as_mut_ptr() };
         let none = core::ptr::null_mut();
-        let slang = unsafe { spell_load_file(cstr::at(fname), lang, none, false) };
+        let slang = unsafe { spell_load_file(fname, lang, none, false) };
         if slang.is_null() {
             continue;
         }
@@ -252,7 +245,7 @@ unsafe fn spell_load_cb(
         }
     }
 
-    num_fnames > 0
+    !fnames.is_empty()
 }
 
 /// Guard against re-entering [`parse_spelllang`]: a `SpellFileMissing`

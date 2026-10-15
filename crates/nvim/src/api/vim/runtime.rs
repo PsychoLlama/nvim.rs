@@ -50,61 +50,22 @@ pub fn nvim__runtime_inspect() -> Array {
 /// The files matching `name` under 'runtimepath': the first, or with `all`
 /// every one.
 pub fn nvim_get_runtime_file(name: String_0, all: Boolean) -> Result<Array, Error> {
-    let mut cookie = RuntimeCookie { rv: Array::EMPTY };
+    let mut rv = Array::EMPTY;
     let flags = RuntimeOpts::DIRFILE | RuntimeOpts::ALL.when(all);
-    let pat = if name.is_empty() {
-        c"".as_ptr().cast_mut()
-    } else {
-        name.data()
-    };
-    let found = Some(
-        find_runtime_cb
-            as unsafe fn(
-                ::core::ffi::c_int,
-                *mut *mut ::core::ffi::c_char,
-                bool,
-                *mut ::core::ffi::c_void,
-            ) -> bool,
-    );
     api_try(|| {
-        let cookie = (&raw mut cookie).cast::<::core::ffi::c_void>();
-        // SAFETY: `pat` is NUL-terminated and `cookie` is this frame's own,
-        // live for the whole walk.
-        let _ = unsafe { do_in_runtimepath(pat, flags, found, cookie) };
+        // The name is this call's own, which no script the walk runs can
+        // reach.
+        let _ = do_in_runtimepath_visit(name.as_cstr(), flags, &mut |fnames, all| {
+            for fname in fnames {
+                rv.push(Object::string(String_0::from_cstr(fname)));
+                if !all {
+                    return true;
+                }
+            }
+            !fnames.is_empty()
+        });
     })?;
-    Ok(cookie.rv)
-}
-
-/// # Safety
-///
-/// `fnames` must point at `num_fnames` NUL-terminated names, and `c` at the
-/// `CollectCookie` this callback was registered with -- `do_in_runtimepath`
-/// passes back exactly what it was handed.
-unsafe fn find_runtime_cb(
-    num_fnames: ::core::ffi::c_int,
-    fnames: *mut *mut ::core::ffi::c_char,
-    all: bool,
-    c: *mut ::core::ffi::c_void,
-) -> bool {
-    let cookie: *mut RuntimeCookie = c as *mut RuntimeCookie;
-    let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i < num_fnames {
-        // SAFETY: `fnames` names `num_fnames` C strings, and `cookie` is the
-        // `RuntimeCookie` this walk was started with.
-        let name = unsafe {
-            let found = cstr_to_string(*fnames.offset(i as isize));
-            Object::string(found.clone())
-        };
-        // SAFETY: as above. The borrow ends with the push.
-        let rv = unsafe { &mut (*cookie).rv };
-        // `kv_push`, whose growth step c2rust expanded inline.
-        rv.push(name);
-        if !all {
-            return true;
-        }
-        i += 1;
-    }
-    num_fnames > 0 as ::core::ffi::c_int
+    Ok(rv)
 }
 
 // `nvim__get_lib_dir` is an API method's own name, published over msgpack-RPC.
@@ -137,8 +98,8 @@ pub fn nvim__get_runtime(
                 .as_string()
                 .expect("`runtime_get_named` answers an array of Strings");
             let none = DOSO_NONE as ::core::ffi::c_int;
-            // SAFETY: sourcing a file frees nothing the array holds.
-            unsafe { do_source(name.data(), false, none, ::core::ptr::null_mut()) };
+            // Sourcing a file frees nothing the array holds.
+            do_source(name.as_cstr(), false, none, None);
         }
     }
     res.reported(error)

@@ -82,8 +82,8 @@ use crate::os::proc::os_proc_children;
 use crate::popupmenu::{pum_ext_select_item, pum_set_info};
 use crate::register::{do_put, finish_yankreg_from_object, prepare_yankreg_from_object};
 use crate::runtime::{
-    RuntimeOpts, do_in_runtimepath, do_source, get_lib_dir, runtime_get_named, runtime_inspect,
-    script_autoload,
+    RuntimeOpts, do_in_runtimepath_visit, do_source, get_lib_dir, runtime_get_named,
+    runtime_inspect, script_autoload,
 };
 use crate::search::{BACKWARD, FORWARD};
 use crate::state::get_mode;
@@ -151,10 +151,6 @@ pub const REPTERM_DO_LT: ::core::ffi::c_uint = 2;
 pub const REPTERM_FROM_PART: ::core::ffi::c_uint = 1;
 pub const kRetNilBool: LuaRetMode = 1;
 pub const kRetObject: LuaRetMode = 0;
-/// What `nvim_get_runtime_file`'s walk collects into.
-pub struct RuntimeCookie {
-    pub rv: Array,
-}
 pub const DOSO_NONE: ::core::ffi::c_uint = 0;
 pub const DOBUF_FIRST: DoBufStart = 1;
 pub const DOBUF_GOTO: DoBufAction = 0;

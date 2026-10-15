@@ -73,7 +73,7 @@ use crate::os::time::os_realtime;
 use crate::profile::time_msg_at;
 use crate::quickfix::{qf_init_stack, qf_jump_to_current};
 use crate::register::get_default_register_name;
-use crate::runtime::{estack_init, load_plugins, runtime_init};
+use crate::runtime::{estack_init, load_plugins};
 use crate::shada::shada_read_everything;
 use crate::startup::args::{
     check_and_set_isatty, command_line_scan, edit_stdin, init_params, init_path, init_startuptime,
@@ -165,7 +165,6 @@ pub unsafe extern "C" fn early_init(paramp: *mut MainParams) {
 
     let exename = argv0.get().unwrap_or(c"nvim").as_ptr();
     unsafe { init_path(exename) };
-    runtime_init();
     highlight_init();
     time_msg_at(c"early init");
 

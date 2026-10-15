@@ -569,15 +569,15 @@ pub(crate) fn load_colors(name: &CStr) -> Result<(), Failed> {
     let fname = buffer.name.shown_ptr();
     // SAFETY: the current buffer, and a NUL-terminated colour scheme name.
     unsafe { apply_autocmds(AutoEvent::ColorSchemePre, name, fname, false, Some(buffer)) };
-    let mut pattern = [
+    let pattern = [
         b"colors/",
         unsafe { CStr::from_ptr(name) }.to_bytes(),
-        b".*\0",
+        b".*",
     ]
     .concat();
-    let pattern = pattern.as_mut_ptr().cast();
-    // SAFETY: a NUL-terminated pattern this frame owns.
-    let retval = unsafe { source_runtime_vim_lua(pattern, RuntimeOpts::START | RuntimeOpts::OPT) };
+    // A NUL-terminated pattern this frame owns.
+    let pattern = crate::cstr::owned(&pattern);
+    let retval = source_runtime_vim_lua(&pattern, RuntimeOpts::START | RuntimeOpts::OPT);
     if retval.is_ok() {
         let buffer = Buf::current();
         let fname = buffer.name.shown_ptr();

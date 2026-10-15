@@ -986,7 +986,6 @@ CELL_PTR_ALLOW = {
     # has none today, and `cell_ptr` still counts it.
     "WATCHERS": "uv_signal_t array whose addresses are registered with uv",
     "REFRESH_TIMER": "TimeWatcher — a uv timer handle",
-    "runtime_search_path_mutex": "uv_mutex_t",
     "main_thread": "uv_thread_t, compared with uv_thread_equal",
     "TERMIOS_DEFAULT": "struct termios handed to tcsetattr",
 }
@@ -1022,11 +1021,9 @@ CELL_COPY_OWNER = (
     # `compl_orig_extmarks` in S6 behind `ComplOrigExtmarks`. Each is now
     # reached only through the single owner of its buffer, so no site copies
     # the words out of the cell to get at the allocation.
-    # runtime — the search-path buffers. `script_items` and `ga_loaded` left
-    # the list in phase 22's S16: both are `Vec`s now, so neither is `Copy`
-    # and there is no `get` on either to count.
-    "runtime_search_path",
-    "runtime_search_path_thread",
+    # runtime is done: `script_items` and `ga_loaded` left the list in
+    # phase 22's S16, and the two search-path buffers when the cache became
+    # an `Rc<Vec<_>>` and the thread copy a `Mutex<Vec<_>>`: none is `Copy`.
     # getchar is done: the five `buffheader_T` cells and `typebuf` left the
     # list in phase 22's S7. `KeyBuffer` and `TypeAhead` are not `Copy` at
     # all now, so there is no `get` on either to count.
@@ -3929,7 +3926,7 @@ SELF_TEST_PUB_ITEMS = [
 # matched — receiver-blind `.ptr()`/`.as_raw()`, with the receiver pinned.
 SELF_TEST_CELL_PTR_ALLOW = [
     ("fn f() {\n    main_loop.ptr();\n}\n", 1),
-    ("fn f() {\n    runtime_search_path_mutex.as_raw();\n}\n", 1),
+    ("fn f() {\n    REFRESH_TIMER.as_raw();\n}\n", 1),
     # Spacing rustfmt never writes is not matched either — the subtraction
     # has to stay a subset of what `cell_ptr`'s substring needle counted.
     ("fn f() {\n    main_loop . ptr();\n}\n", 0),
@@ -3996,12 +3993,12 @@ SELF_TEST_CELL_PTR_CHECK = [
 # (source, expected cell_copy_owner)
 SELF_TEST_CELL_COPY_OWNER = [
     ("fn f() {\n    rex.get();\n}\n", 1),
-    ("fn f() {\n    let n = runtime_search_path.get().data;\n}\n", 1),
+    ("fn f() {\n    let n = rsm.get().data;\n}\n", 1),
     # Only `get`: the other accessors do not hand out a second owner.
     ("fn f() {\n    rex.set(x);\n}\n", 0),
     ("fn f() {\n    rex.with(|s| s);\n}\n", 0),
     # rustfmt wraps a long chain, and the copy still happens.
-    ("fn f() {\n    *runtime_search_path\n        .get()\n}\n", 1),
+    ("fn f() {\n    *rsm\n        .get()\n}\n", 1),
     # A global that is not on the list.
     ("fn f() {\n    p_ai.get();\n}\n", 0),
     # A longer name ending in a listed one is not it.

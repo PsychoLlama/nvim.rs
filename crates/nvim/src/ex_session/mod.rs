@@ -381,7 +381,7 @@ pub(crate) fn ex_loadview(excmd: &mut ExArg) {
     if fname.is_null() {
         return;
     }
-    if unsafe { do_source(fname, false, DOSO_NONE, ptr::null_mut()) } == FAIL {
+    if do_source(unsafe { cstr::at(fname) }, false, DOSO_NONE, None) == FAIL {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let fname = unsafe { c_str(fname) };
         semsg!("E484: Can't open file {fname}");

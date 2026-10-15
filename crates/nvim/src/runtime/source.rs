@@ -80,7 +80,8 @@ fn cmd_source(fname: &CStr, excmd: Option<&mut ExArg>) {
         false
     };
     // SAFETY: the caller's NUL-terminated name.
-    if !sourced && unsafe { do_source(fname, false, DOSO_NONE, ptr::null_mut()) } == FAIL {
+    // SAFETY: the caller's NUL-terminated name.
+    if !sourced && do_source(unsafe { cstr::at(fname) }, false, DOSO_NONE, None) == FAIL {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let fname = unsafe { c_str(fname) };
         semsg!("E484: Can't open file {fname}");
@@ -847,19 +848,20 @@ fn do_source_ext(req: &SourceRequest) -> c_int {
 /// uses.  `check_other` also tries the other init-file name; `is_vimrc` is a
 /// `DOSO_` value.
 ///
-/// # Safety
-/// `fname` is NUL-terminated and `ret_sid` is null or writable.
-pub unsafe fn do_source(
-    fname: *mut c_char,
+/// `fname` is borrowed for the whole run of the script, which can run
+/// anything: hand in a copy of your own, never an option's value or a
+/// buffer's line.
+pub fn do_source(
+    fname: &CStr,
     check_other: bool,
     is_vimrc: c_int,
-    ret_sid: *mut c_int,
+    ret_sid: Option<&mut c_int>,
 ) -> c_int {
     let req = SourceRequest {
         check_other,
         is_vimrc,
-        ret_sid,
-        ..SourceRequest::new(fname, ptr::null(), None, false)
+        ret_sid: ret_sid.map_or(ptr::null_mut(), |sid| sid),
+        ..SourceRequest::new(fname.as_ptr().cast_mut(), ptr::null(), None, false)
     };
     do_source_ext(&req)
 }

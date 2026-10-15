@@ -908,17 +908,12 @@ pub unsafe fn script_autoload(name: *const c_char, name_len: size_t, reload: boo
     // `ret_sid` cookie keeps `source_callback` from loading the same script
     // twice.
     let mut ret_sid: c_int = 0;
-    // SAFETY: `scriptname` outlives the search, and `source_callback` takes
-    // its cookie as the `int *` we pass.
-    let ret = unsafe {
-        do_in_runtimepath(
-            scriptname,
-            RuntimeOpts::START,
-            Some(source_callback as DoInRuntimepathCBFn),
-            (&raw mut ret_sid).cast::<c_void>(),
-        )
-        .is_ok()
-    };
+    // SAFETY: `scriptname` is this frame's, alive across the search.
+    let name = unsafe { CStr::from_ptr(scriptname) };
+    let ret = do_in_runtimepath_visit(name, RuntimeOpts::START, &mut |found, all| {
+        source_found(found, all, Some(&mut ret_sid))
+    })
+    .is_ok();
 
     // SAFETY: still ours -- `ga_loaded` keeps its own copy of the path.
     unsafe { xfree(scriptname.cast::<c_void>()) };

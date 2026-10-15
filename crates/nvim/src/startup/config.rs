@@ -212,7 +212,7 @@ pub(crate) fn do_system_initialization() {
     let sourced = unsafe {
         for_each_config_dir(|dir, dir_len| {
             let vimrc = config_subpath(dir, dir_len, appname, appname_len, c"/sysinit.vim", true);
-            let ok = do_source(vimrc, false, DOSO_NONE as c_int, ptr::null_mut()) != FAIL;
+            let ok = do_source(cstr::at(vimrc), false, DOSO_NONE as c_int, None) != FAIL;
             xfree(vimrc as *mut c_void);
             ok
         })
@@ -220,8 +220,7 @@ pub(crate) fn do_system_initialization() {
     if sourced {
         return;
     }
-    let sys_vimrc = SYS_VIMRC_FILE.as_ptr() as *mut c_char;
-    unsafe { do_source(sys_vimrc, false, DOSO_NONE as c_int, ptr::null_mut()) };
+    do_source(SYS_VIMRC_FILE, false, DOSO_NONE as c_int, None);
 }
 
 /// Try `init.lua` and then `init.vim` in one directory.
@@ -242,7 +241,12 @@ unsafe fn source_init_pair(
     // SAFETY: both paths are owned NUL-terminated strings; freeing them is
     // the caller's job.
     if unsafe { os_path_exists(init_lua) }
-        && unsafe { do_source(init_lua, true, DOSO_VIMRC as c_int, ptr::null_mut()) } != 0
+        && do_source(
+            unsafe { cstr::at(init_lua) },
+            true,
+            DOSO_VIMRC as c_int,
+            None,
+        ) != 0
     {
         // Both present: the Lua one won, and the user should know.
         if unsafe { os_path_exists(init_vim) } {
@@ -252,7 +256,13 @@ unsafe fn source_init_pair(
         }
         return Some(p_exrc());
     }
-    if unsafe { do_source(init_vim, true, DOSO_VIMRC as c_int, ptr::null_mut()) } != FAIL {
+    if do_source(
+        unsafe { cstr::at(init_vim) },
+        true,
+        DOSO_VIMRC as c_int,
+        None,
+    ) != FAIL
+    {
         let mut do_exrc = p_exrc();
         if do_exrc && check_exrc_is_same {
             let same = unsafe { path_full_compare(VIMRC_FILE, cstr::at(init_vim), false, true) };
@@ -346,7 +356,7 @@ pub(crate) unsafe fn source_startup_scripts(parmp: *const MainParams) {
             || unsafe { strequal((*parmp).use_vimrc, c"NORC".as_ptr()) };
         let vimrc = unsafe { (*parmp).use_vimrc };
         if !named_none
-            && unsafe { do_source(vimrc, false, DOSO_NONE as c_int, ptr::null_mut()) } != OK
+            && do_source(unsafe { cstr::at(vimrc) }, false, DOSO_NONE as c_int, None) != OK
         {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let vimrc = unsafe { c_str(vimrc) };

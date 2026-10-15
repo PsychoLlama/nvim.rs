@@ -9,22 +9,20 @@
 //!
 //! There are two copies.  The main one is invalidated by
 //! [`did_set_runtimepackpath`] and rebuilt lazily by
-//! [`runtime_search_path_validate`]; the second is a refcounted snapshot taken
-//! under a mutex for the *thread* that serves `nvim_get_runtime_file` off the
-//! main loop, which is why [`copy_runtime_search_path`] and
-//! [`runtime_search_path_unref`] exist at all.
+//! [`runtime_search_path_validate`]; the second is a snapshot behind a mutex
+//! for the *thread* that serves `nvim_get_runtime_file` off the main loop,
+//! refreshed by [`update_runtime_search_path_thread`].
 //!
-//! # The refcount
+//! # Sharing
 //!
-//! `runtime_search_path_owner` is a single borrow slot, not a count: the
-//! first reader of an unowned cache gets a fresh borrow number, parks it
-//! there and becomes the owner.  A rebuild while somebody owns the cache leaves the old
-//! copy alone and gives the new readers a fresh one, and whoever owns it frees
-//! it on the way out ([`runtime_search_path_unref`]).  That is what lets
-//! `do_in_cached_path` source files that themselves change 'runtimepath'.
+//! The cache is an [`Rc`]: a walk takes a clone ([`runtime_search_path_get_cached`])
+//! and holds it for as long as it reads. A rebuild while somebody walks only
+//! replaces the cell's handle, so the walker keeps the old path and frees it
+//! when it lets go -- which is what lets `do_in_cached_path` source files that
+//! themselves change 'runtimepath'. Upstream spells the same thing as a
+//! single owner slot holding the address of the first borrower's local.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -35,237 +33,106 @@
 
 use super::*;
 use crate::cstr;
-use crate::memory::xstrlcpy;
-use crate::message_fmt::c_str;
+use crate::memory::XString;
+use crate::message_fmt::msg_cstr;
+use crate::option::split_option_part;
 use crate::option::vars::P_PP;
 use crate::option::vars::P_RTP;
-use crate::path::ExpandFlags;
+use crate::path::{ExpandFlags, add_pathsep};
 use crate::semsg;
 use crate::smsg;
 
-use crate::types::{FAIL, MAXPATHL, OK, OptError};
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
-use core::slice;
-
-/// The mutex guarding [`runtime_search_path_thread`], named once so the raw
-/// handle has a single spelling.
-///
-/// A [`SharedCell`], so this is *not* a main-thread-only accessor: the whole
-/// point of the snapshot is that a worker thread reads it.
-pub(crate) fn search_path_mutex() -> *mut uv_mutex_t {
-    runtime_search_path_mutex.ptr()
-}
-
-/// Initialise the runtime family's process-wide state.
-pub fn runtime_init() {
-    // SAFETY: called once at startup, before any thread can reach the mutex.
-    unsafe { uv_mutex_init(search_path_mutex()) };
-}
-
-impl RuntimeSearchPath {
-    /// Hand a built path over to the cache.
-    ///
-    /// The three fields *are* a `Vec`'s: the struct stays because the cache
-    /// is shared by a hand-rolled borrow slot and by a second copy the
-    /// worker threads read, neither of which a `Vec` can express. Everything
-    /// that builds or walks one goes through here.
-    ///
-    /// An empty `Vec`'s pointer is dangling rather than heap, so an empty
-    /// path is stored as the null [`runtime_search_path_free`] accepts.
-    pub(crate) fn from_vec(path: Vec<SearchPathItem>) -> Self {
-        if path.capacity() == 0 {
-            return RuntimeSearchPath {
-                size: 0,
-                capacity: 0,
-                items: ptr::null_mut(),
-            };
-        }
-        let mut path = core::mem::ManuallyDrop::new(path);
-        RuntimeSearchPath {
-            size: path.len(),
-            capacity: path.capacity(),
-            items: path.as_mut_ptr(),
-        }
-    }
-
-    /// The path's items, as a slice.
-    ///
-    /// # Safety
-    /// The path must be the live cache or a copy nothing has freed.
-    pub(crate) unsafe fn as_slice<'a>(&self) -> &'a [SearchPathItem] {
-        if self.items.is_null() {
-            // `from_raw_parts` rejects a null base even for an empty slice.
-            return &[];
-        }
-        // SAFETY: the caller's path, `size` items long.
-        unsafe { slice::from_raw_parts(self.items, self.size) }
-    }
-
-    /// Take a path back, to grow or to free it.
-    ///
-    /// # Safety
-    /// Nothing else may still be walking this path -- the borrow slot in
-    /// [`runtime_search_path_get_cached`] is what decides that.
-    pub(crate) unsafe fn into_vec(self) -> Vec<SearchPathItem> {
-        if self.items.is_null() {
-            return Vec::new();
-        }
-        // SAFETY: the caller's path, which only `from_vec` above ever
-        // filled, so the three fields are a `Vec`'s own.
-        unsafe { Vec::from_raw_parts(self.items, self.size, self.capacity) }
-    }
-}
+use crate::types::{FAIL, OK, OptError};
+use core::ffi::{CStr, c_int};
+use std::rc::Rc;
+use std::sync::PoisonError;
 
 /// Borrow the cached search path, validating it first.
 ///
-/// The second answer is the caller's borrow token -- `Some` when this
-/// borrow took ownership of the cache -- and must be handed back to
-/// [`runtime_search_path_unref`] with the path.
-pub(crate) fn runtime_search_path_get_cached() -> (RuntimeSearchPath, Option<u64>) {
+/// The clone *is* the borrow: a rebuild while it is held leaves this copy to
+/// the caller, which frees it on drop.
+pub(crate) fn runtime_search_path_get_cached() -> Rc<Vec<SearchPathItem>> {
     runtime_search_path_validate();
-
-    let token = runtime_search_path_owner.with_mut(|slot| {
-        if slot.owner.is_some() {
-            return None;
-        }
-        // The cache was unreferenced: take it, so a rebuild underneath us
-        // does not free what we are about to walk.
-        slot.issued += 1;
-        slot.owner = Some(slot.issued);
-        slot.owner
-    });
-    (runtime_search_path.get(), token)
+    RUNTIME_SEARCH_PATH
+        .with(|path| path.clone())
+        .unwrap_or_default()
 }
 
-/// A deep copy of `src`, paths included.
-fn copy_runtime_search_path(src: RuntimeSearchPath) -> RuntimeSearchPath {
-    // SAFETY: the caller's live path.
-    let src = unsafe { src.as_slice() };
-    let mut dst = Vec::with_capacity(src.len());
-    for &item in src {
-        // SAFETY: each item owns its own NUL-terminated directory.
-        dst.push(SearchPathItem {
-            path: unsafe { xstrdup(item.path) },
-            ..item
-        });
-    }
-    RuntimeSearchPath::from_vec(dst)
+/// The cached search path as it stands, without validating it -- what
+/// `nvim__runtime_inspect()` reports.
+pub(crate) fn runtime_search_path_as_is() -> Rc<Vec<SearchPathItem>> {
+    RUNTIME_SEARCH_PATH
+        .with(|path| path.clone())
+        .unwrap_or_default()
 }
 
-/// Release a borrow taken by [`runtime_search_path_get_cached`], freeing the
-/// path when this borrow outlived a rebuild.
+/// Find the file `name` in the cached search path and hand `visit` each
+/// match.  `name` may contain wildcards; `None` hands over every directory.
 ///
-/// # Safety
-/// `path` and `token` must be the pair the matching `get_cached` handed out.
-pub(crate) unsafe fn runtime_search_path_unref(path: RuntimeSearchPath, token: Option<u64>) {
-    let Some(token) = token else {
-        return;
-    };
-    let still_owner = runtime_search_path_owner.with_mut(|slot| {
-        let mine = slot.owner == Some(token);
-        if mine {
-            slot.owner = None;
-        }
-        mine
-    });
-    if still_owner {
-        // Still the live cache: it is unowned again.
-    } else {
-        // A rebuild replaced it while we were reading; this copy is ours.
-        // SAFETY: nothing else refers to it any more.
-        unsafe { runtime_search_path_free(path) };
-    }
-}
-
-/// Find the file `name` in the cached search path and invoke `callback` for
-/// each match.  `name` may contain wildcards.
-///
-/// `RuntimeOpts::ALL` visits every match, `RuntimeOpts::DIR` looks for directories, `RuntimeOpts::ERR`
-/// turns "nothing found" into an error message.  Answers OK when something
-/// was found.
-///
-/// # Safety
-/// `name` may be null; `callback` must accept `cookie`.
-pub(crate) unsafe fn do_in_cached_path(
-    name: *mut c_char,
+/// `RuntimeOpts::ALL` visits every match, `RuntimeOpts::DIR` looks for
+/// directories, `RuntimeOpts::ERR` turns "nothing found" into an error
+/// message.  Answers OK when something was found -- which, as upstream, a
+/// walk over the directories alone never says.
+pub(crate) fn do_in_cached_path(
+    name: Option<&CStr>,
     flags: RuntimeOpts,
-    callback: DoInRuntimepathCB,
-    cookie: *mut c_void,
+    visit: &mut Visit,
 ) -> c_int {
-    if p_verbose() > 10 && !name.is_null() {
+    if p_verbose() > 10
+        && let Some(name) = name
+    {
         verbose_enter();
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let name = unsafe { c_str(name) };
+        let name = msg_cstr(name);
         smsg!(0, "Searching for \"{name}\" in runtime path");
         verbose_leave();
     }
 
-    let visitor = Visitor { callback, cookie };
-    let mut buf = [0u8; MAXPATHL as usize];
-    // `borrow` is this frame's token, released below.
-    let (path, borrow) = runtime_search_path_get_cached();
+    let path = runtime_search_path_get_cached();
     let do_all = flags.has(RuntimeOpts::ALL);
     let ew_flags = wildcard_flags(flags) | ExpandFlags::NOBREAK;
     let mut did_one = false;
+    // One buffer for the whole walk, as upstream's stack buffer.
+    let mut buf = Vec::with_capacity(PATH_ROOM);
 
-    for j in 0..path.size {
-        // SAFETY: `path` holds `size` live items with NUL-terminated paths.
-        let item = unsafe { *path.items.add(j) };
+    for item in path.iter() {
         if skips_entry(flags, item.after) {
             continue;
         }
-        if name.is_null() {
-            // SAFETY: the entry's own NUL-terminated directory.
-            unsafe { visitor.invoke_one(item.path, do_all) };
+        let Some(name) = name else {
+            visit(&[item.path.as_cstr()], do_all);
             continue;
-        }
-        // SAFETY: both are NUL-terminated.
-        let buflen = unsafe { cstr::bytes_at(item.path) }.len();
-        if buflen + unsafe { cstr::bytes_at(name) }.len() + 2 >= MAXPATHL as size_t {
-            continue;
-        }
-        // SAFETY: the length test above proves the directory and its separator
-        // fit, so `tail` lands inside `buf`.
-        unsafe { xstrlcpy(buf.as_mut_ptr().cast(), item.path, MAXPATHL as usize) };
-        // The length test above proves nothing was cut.
-        let tail_at = add_pathsep_at(&mut buf, buflen);
-        let buf = buf.as_mut_ptr().cast::<c_char>();
-        // SAFETY: as documented on `expand_name_patterns`; `tail_at` is
-        // inside `buf`.
-        unsafe {
-            expand_name_patterns(
-                buf,
-                buf.add(tail_at),
-                name,
-                ew_flags,
-                do_all,
-                &mut did_one,
-                visitor,
-            )
         };
+        if item.path.len() + name.count_bytes() + 2 >= PATH_ROOM {
+            continue;
+        }
+        buf.clear();
+        buf.extend_from_slice(&item.path);
+        // The length test above proves the separator fits.
+        add_pathsep(&mut buf);
+        expand_name_patterns(
+            &mut buf,
+            name.to_bytes(),
+            ew_flags,
+            do_all,
+            &mut did_one,
+            visit,
+        );
     }
 
-    if !did_one && !name.is_null() {
-        // SAFETY: `name` is the caller's NUL-terminated pattern.
+    if !did_one && let Some(name) = name {
+        let name = msg_cstr(name);
         if flags.has(RuntimeOpts::ERR) {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let name = unsafe { c_str(name) };
             semsg!(
                 "E919: Directory not found in '{}': \"{name}\"",
                 "runtime path"
             );
         } else if p_verbose() > 1 {
             verbose_enter();
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let name = unsafe { c_str(name) };
             smsg!(0, "not found in runtime path: \"{name}\"");
             verbose_leave();
         }
     }
 
-    // SAFETY: the token this frame took above.
-    unsafe { runtime_search_path_unref(path, borrow) };
     if did_one { OK } else { FAIL }
 }
 
@@ -274,126 +141,80 @@ pub(crate) unsafe fn do_in_cached_path(
 type PathSet = IdSet<Box<[u8]>>;
 
 /// Add `entry` to the search path unless it is already there.
-///
-/// The set holds a copy of the directory only to answer "already seen";
-/// the item's `path` is its own allocation, which the caller frees with
-/// [`runtime_search_path_free`].
-///
-/// # Safety
-/// `entry` must be NUL-terminated and `search_path` must be live.
-unsafe fn push_path(
+fn push_path(
     search_path: &mut Vec<SearchPathItem>,
     rtp_used: &mut PathSet,
-    entry: *mut c_char,
+    entry: &[u8],
     after: bool,
-    pos_in_rtp: size_t,
-) -> bool {
-    // SAFETY: the caller's NUL-terminated entry.
-    let key: Box<[u8]> = unsafe { CStr::from_ptr(entry) }.to_bytes().into();
-    if !rtp_used.insert(key) {
-        return false;
+    pos_in_rtp: usize,
+) {
+    if rtp_used.insert(entry.into()) {
+        search_path.push(SearchPathItem::new(
+            XString::from_bytes(entry),
+            after,
+            pos_in_rtp,
+        ));
     }
-    // SAFETY: as above.
-    let path = unsafe { xstrdup(entry) };
-    search_path.push(SearchPathItem {
-        path,
-        after,
-        pack_inserted: false,
-        has_lua: None,
-        pos_in_rtp,
-    });
-    true
 }
 
 /// Expand one 'runtimepath' entry — which may hold wildcards — and add every
 /// directory it names to the search path.
-///
-/// # Safety
-/// As [`push_path`].
-unsafe fn expand_rtp_entry(
+fn expand_rtp_entry(
     search_path: &mut Vec<SearchPathItem>,
     rtp_used: &mut PathSet,
-    entry: *mut c_char,
+    entry: &[u8],
     after: bool,
-    pos_in_rtp: size_t,
+    pos_in_rtp: usize,
 ) {
-    // SAFETY: the caller's NUL-terminated entry.
-    if rtp_used.contains(unsafe { CStr::from_ptr(entry) }.to_bytes()) {
+    if rtp_used.contains(entry) {
         return;
     }
-    if unsafe { *entry } == 0 {
-        unsafe { push_path(search_path, rtp_used, entry, after, pos_in_rtp) };
+    if entry.is_empty() {
+        push_path(search_path, rtp_used, entry, after, pos_in_rtp);
     }
-
-    // SAFETY: the caller's NUL-terminated entry.
-    let pattern = unsafe { cstr::at(entry) };
-    let Ok(mut found) = gen_expand_wildcards(&[pattern], ExpandFlags::DIR | ExpandFlags::NOBREAK)
-    else {
-        return;
-    };
-    for name in &mut found {
+    let found = cstr::with_terminated(entry, |pattern| {
+        gen_expand_wildcards(&[pattern], ExpandFlags::DIR | ExpandFlags::NOBREAK)
+    });
+    for name in found.iter().flatten() {
         // Reusing the position is fine: it only has to be monotonic, not
         // strictly increasing.
-        unsafe { push_path(search_path, rtp_used, name.as_mut_ptr(), after, pos_in_rtp) };
+        push_path(search_path, rtp_used, name, after, pos_in_rtp);
     }
 }
 
 /// The two shapes a 'packpath' entry's `start` packages can take.
-const START_PATTERNS: [&CStr; 2] = [c"/pack/*/start/*", c"/start/*"];
+const START_PATTERNS: [&[u8]; 2] = [b"/pack/*/start/*", b"/start/*"];
 
 /// Add one 'packpath' entry's `start` packages to the search path, and queue
 /// their `after/` directories for the end of the build.
-///
-/// # Safety
-/// `pack_entry` must be NUL-terminated and `pack_entry_len` its length; the
-/// three vectors must be live.
-unsafe fn expand_pack_entry(
+fn expand_pack_entry(
     search_path: &mut Vec<SearchPathItem>,
     rtp_used: &mut PathSet,
     after_path: &mut Vec<Vec<u8>>,
-    pack_entry: *mut c_char,
-    pack_entry_len: size_t,
-    pos_in_rtp: size_t,
+    pack_entry: &[u8],
+    pos_in_rtp: usize,
 ) {
-    let mut buf = [0 as c_char; MAXPATHL as usize];
     for start_pat in START_PATTERNS {
-        if pack_entry_len + start_pat.count_bytes() + 1 > buf.len() {
+        if pack_entry.len() + start_pat.len() + 1 > PATH_ROOM {
             continue;
         }
-        // SAFETY: the length test above proves both halves fit in `buf`, and
-        // `xstrlcpy` NUL-terminates within the size it is given.
-        unsafe { xstrlcpy(buf.as_mut_ptr(), pack_entry, buf.len()) };
-        unsafe {
-            xstrlcpy(
-                buf.as_mut_ptr().add(pack_entry_len),
-                start_pat.as_ptr(),
-                buf.len() - pack_entry_len,
-            )
-        };
-        unsafe { expand_rtp_entry(search_path, rtp_used, buf.as_mut_ptr(), false, pos_in_rtp) };
+        let pattern = [pack_entry, start_pat].concat();
+        expand_rtp_entry(search_path, rtp_used, &pattern, false, pos_in_rtp);
 
         // The `after/` directories go in one block at the end of the
         // build, so they sort behind every non-`after` entry.
-        // SAFETY: `buf` was NUL-terminated by the two copies above.
-        let mut after = unsafe { cstr::bytes_at(buf.as_ptr()) }.to_vec();
-        after.extend_from_slice(b"/after\0");
-        after_path.push(after);
+        after_path.push([&pattern[..], b"/after"].concat());
     }
 }
 
-/// Whether `buf` names an `after/` directory.
+/// Whether `dir` names an `after/` directory.
 ///
 /// Only a component spelled exactly `after` counts.  Vim 8 treats `foo/bar_after`
 /// and `Xafter` as `after` directories in some code paths but not all; this is
 /// the strict reading.
-///
-/// # Safety
-/// `buf` must hold `buflen` readable bytes plus a terminator.
-pub(crate) unsafe fn path_is_after(buf: *mut c_char, buflen: size_t) -> bool {
-    // SAFETY: the caller's buffer, indexed inside the length just tested.
-    buflen >= 5
-        && (buflen < 6 || vim_ispathsep(c_int::from(unsafe { *buf.add(buflen - 6) })))
-        && unsafe { cstr::eq_bytes(buf.add(buflen - 5), b"after") }
+pub(crate) fn path_is_after(dir: &[u8]) -> bool {
+    let len = dir.len();
+    len >= 5 && (len < 6 || vim_ispathsep(c_int::from(dir[len - 6]))) && dir.ends_with(b"after")
 }
 
 /// Build the ordered search path from 'runtimepath' and 'packpath'.
@@ -412,175 +233,104 @@ pub(crate) unsafe fn path_is_after(buf: *mut c_char, buflen: size_t) -> bool {
 /// directory here; entries that were not spelled in 'runtimepath' share the
 /// offset of the comma before its `after/` tail, which keeps the sequence
 /// monotonic. [`add_pack_dir_to_rtp`] splices new entries by comparing it.
-fn runtime_search_path_build() -> RuntimeSearchPath {
-    let mut pack_entries: Vec<String_0> = Vec::new();
+fn runtime_search_path_build() -> Vec<SearchPathItem> {
+    let mut pack_entries: Vec<&[u8]> = Vec::new();
     let mut pack_used: IdMap<Box<[u8]>, c_int> = id_map();
     let mut rtp_used: PathSet = id_set();
     let mut search_path: Vec<SearchPathItem> = Vec::new();
     let mut after_path: Vec<Vec<u8>> = Vec::new();
-    let mut buf = [0 as c_char; MAXPATHL as usize];
 
     // 'packpath' first, only to record which entries exist: they are matched
     // against 'runtimepath' below, and whatever is left over is appended.
-    // Note that the recorded strings point into 'packpath' itself.
-    // A copy: the cursor below walks past the end of a projection's borrow.
+    // As upstream, an entry is recorded as the option's own bytes, as many
+    // as the separated part has -- the same text unless it escaped a comma.
     let pp = P_PP.get();
-    let mut entry = pp.as_ptr().cast_mut();
-    // SAFETY: `entry` walks 'packpath'; `buf` has `MAXPATHL` writable bytes.
-    while unsafe { *entry } != 0 {
-        let cur_entry = entry;
-        // SAFETY: as above.
-        let buflen = unsafe {
-            copy_option_part(
-                &raw mut entry,
-                buf.as_mut_ptr(),
-                MAXPATHL as size_t,
-                c",".as_ptr().cast_mut(),
-            )
-        };
-        // SAFETY: `copy_option_part` filled `buflen` bytes of the buffer
-        // `cur_entry` points into.
-        let the_entry = unsafe { String_0::from_raw_bytes(cur_entry, buflen) };
-        pack_used.insert(the_entry.as_bytes().into(), 0);
+    let mut rest: &[u8] = &pp;
+    while !rest.is_empty() {
+        let (part, after) = split_option_part(rest, PATH_ROOM, b",");
+        let the_entry = &rest[..part.len()];
+        rest = after;
+        pack_used.insert(the_entry.into(), 0);
         pack_entries.push(the_entry);
     }
 
     // 'runtimepath' up to its first `after/` entry.
-    // A copy: the cursor below walks past the end of a projection's borrow.
     let rtp = P_RTP.get();
-    let mut rtp_entry = rtp.as_ptr().cast_mut();
-    // SAFETY: `rtp_entry` walks 'runtimepath'.
-    while unsafe { *rtp_entry } != 0 {
-        let cur_entry = rtp_entry;
-        // SAFETY: as above.
-        let buflen = unsafe {
-            copy_option_part(
-                &raw mut rtp_entry,
-                buf.as_mut_ptr(),
-                MAXPATHL as size_t,
-                c",".as_ptr().cast_mut(),
-            )
-        };
-        // SAFETY: `buf` holds `buflen` bytes plus a terminator.
-        if unsafe { path_is_after(buf.as_mut_ptr(), buflen) } {
+    let rtp: &[u8] = &rtp;
+    let mut rest = rtp;
+    while !rest.is_empty() {
+        let pos_in_rtp = rtp.len() - rest.len();
+        let (entry, after) = split_option_part(rest, PATH_ROOM, b",");
+        if path_is_after(&entry) {
             // Leave it for the tail loop below, entry and all.
-            rtp_entry = cur_entry;
             break;
         }
-        // SAFETY: `cur_entry` points into the copy `rtp_entry` walks.
-        let pos_in_rtp = unsafe { cur_entry.offset_from(rtp.as_ptr()) }.cast_unsigned();
+        rest = after;
         // Fact: 'runtimepath' entries can contain wildcards.
-        // SAFETY: the frame's own vectors, and `buf` is NUL-terminated.
-        unsafe {
-            expand_rtp_entry(
-                &mut search_path,
-                &mut rtp_used,
-                buf.as_mut_ptr(),
-                false,
-                pos_in_rtp,
-            )
-        };
-        // SAFETY: `buf` is NUL-terminated.
-        let seen = pack_used.get_mut(unsafe { CStr::from_ptr(buf.as_ptr()) }.to_bytes());
-        if let Some(seen) = seen {
+        expand_rtp_entry(&mut search_path, &mut rtp_used, &entry, false, pos_in_rtp);
+        if let Some(seen) = pack_used.get_mut(&entry[..]) {
             // Mark this 'packpath' entry as already covered.
             *seen += 1;
-            unsafe {
-                expand_pack_entry(
-                    &mut search_path,
-                    &mut rtp_used,
-                    &mut after_path,
-                    buf.as_mut_ptr(),
-                    buflen,
-                    pos_in_rtp,
-                )
-            };
+            expand_pack_entry(
+                &mut search_path,
+                &mut rtp_used,
+                &mut after_path,
+                &entry,
+                pos_in_rtp,
+            );
         }
     }
 
     // What follows was not spelled in 'runtimepath'.  Keeping `pos_in_rtp`
     // monotonic means giving it the comma between the two halves.
-    // SAFETY: `rtp_entry` points into the copy it walks.
-    let mut sentinel_pos_in_rtp = unsafe { rtp_entry.offset_from(rtp.as_ptr()) }.cast_unsigned();
+    let mut sentinel_pos_in_rtp = rtp.len() - rest.len();
     sentinel_pos_in_rtp -= usize::from(sentinel_pos_in_rtp > 0);
 
-    for item in &pack_entries {
-        if pack_used.get(item.as_bytes()).copied().unwrap_or(0) == 0 {
-            unsafe {
-                expand_pack_entry(
-                    &mut search_path,
-                    &mut rtp_used,
-                    &mut after_path,
-                    item.data(),
-                    item.len(),
-                    sentinel_pos_in_rtp,
-                )
-            };
+    for &item in &pack_entries {
+        if pack_used.get(item).copied().unwrap_or(0) == 0 {
+            expand_pack_entry(
+                &mut search_path,
+                &mut rtp_used,
+                &mut after_path,
+                item,
+                sentinel_pos_in_rtp,
+            );
         }
     }
 
     // The packages' `after/` directories.
-    for dir in &mut after_path {
-        // SAFETY: each entry is this frame's own NUL-terminated buffer.
-        unsafe {
-            expand_rtp_entry(
-                &mut search_path,
-                &mut rtp_used,
-                dir.as_mut_ptr().cast(),
-                true,
-                sentinel_pos_in_rtp,
-            )
-        };
+    for dir in &after_path {
+        expand_rtp_entry(
+            &mut search_path,
+            &mut rtp_used,
+            dir,
+            true,
+            sentinel_pos_in_rtp,
+        );
     }
 
     // The `after/` tail of 'runtimepath'.
-    // SAFETY: `rtp_entry` walks the rest of 'runtimepath'.
-    while unsafe { *rtp_entry } != 0 {
-        let cur_entry = rtp_entry;
-        // SAFETY: as above.
-        let buflen = unsafe {
-            copy_option_part(
-                &raw mut rtp_entry,
-                buf.as_mut_ptr(),
-                MAXPATHL as size_t,
-                c",".as_ptr().cast_mut(),
-            )
-        };
-        // SAFETY: as above.
-        let pos_in_rtp = unsafe { cur_entry.offset_from(rtp.as_ptr()) }.cast_unsigned();
-        unsafe {
-            expand_rtp_entry(
-                &mut search_path,
-                &mut rtp_used,
-                buf.as_mut_ptr(),
-                path_is_after(buf.as_mut_ptr(), buflen),
-                pos_in_rtp,
-            )
-        };
+    while !rest.is_empty() {
+        let pos_in_rtp = rtp.len() - rest.len();
+        let (entry, after) = split_option_part(rest, PATH_ROOM, b",");
+        rest = after;
+        let is_after = path_is_after(&entry);
+        expand_rtp_entry(
+            &mut search_path,
+            &mut rtp_used,
+            &entry,
+            is_after,
+            pos_in_rtp,
+        );
     }
 
-    // The strings in `pack_entries` are not owned, the `after_path` ones go
-    // with the frame, and the two tables hold only copies
-    // -- `search_path`'s items own theirs, which is what the caller gets.
-    RuntimeSearchPath::from_vec(search_path)
+    search_path
 }
 
 /// `'runtimepath'`/`'packpath'` changed: the cache no longer describes them.
 pub fn did_set_runtimepackpath(_args: &mut OptSet) -> Result<(), OptError> {
-    runtime_search_path_valid.set(false);
+    SEARCH_PATH_VALID.set(false);
     Ok(())
-}
-
-/// Free a search path and every string in it.
-///
-/// # Safety
-/// Nothing may still refer to `path`.
-unsafe fn runtime_search_path_free(path: RuntimeSearchPath) {
-    // SAFETY: the caller's contract; the vector is dropped with the frame.
-    for item in unsafe { path.into_vec() } {
-        // SAFETY: each item owns its own string.
-        unsafe { xfree(item.path.cast()) };
-    }
 }
 
 /// Rebuild the cached search path if it has been invalidated.
@@ -589,17 +339,20 @@ pub fn runtime_search_path_validate() {
     // itself asynchronously from sync code in the same plugin, so the lua or
     // autoload module it is looking for is almost certainly in the cached path
     // already: a stale cache beats an error here.
-    if !nlua_is_deferred_safe() || runtime_search_path_valid.get() {
+    if !nlua_is_deferred_safe() || SEARCH_PATH_VALID.get() {
         return;
     }
-    if runtime_search_path_owner.with(|slot| slot.owner.is_none()) {
+    // Nobody walking the old path: it goes with the rebuild, and the UI is
+    // flushed first so that its callbacks cannot recurse into a half-freed
+    // cache.
+    if RUNTIME_SEARCH_PATH.with(|path| path.as_ref().is_none_or(|path| Rc::strong_count(path) == 1))
+    {
         msg_ext_ui_flush();
-        unsafe { runtime_search_path_free(runtime_search_path.get()) };
     }
-    runtime_search_path.set(runtime_search_path_build());
-    runtime_search_path_valid.set(true);
-    // Initially unowned.
-    runtime_search_path_owner.with_mut(|slot| slot.owner = None);
+    let built = Rc::new(runtime_search_path_build());
+    let old = RUNTIME_SEARCH_PATH.with_mut(|path| path.replace(built));
+    drop(old);
+    SEARCH_PATH_VALID.set(true);
     update_runtime_search_path_thread(true);
 }
 
@@ -609,14 +362,17 @@ pub fn runtime_search_path_validate() {
 /// snapshot is not — that is, it is the cheap "catch up if you are behind"
 /// call the `:packadd` family makes.
 pub fn update_runtime_search_path_thread(force: bool) {
-    if !force && !(runtime_search_path_valid.get() && !runtime_search_path_valid_thread.get()) {
+    if !force && !(SEARCH_PATH_VALID.get() && !THREAD_SEARCH_PATH_VALID.get()) {
         return;
     }
-    // SAFETY: the mutex is the only thing standing between this and the worker
-    // threads' reads; nothing between lock and unlock can block on them.
-    unsafe { uv_mutex_lock(search_path_mutex()) };
-    unsafe { runtime_search_path_free(runtime_search_path_thread.get()) };
-    runtime_search_path_thread.set(copy_runtime_search_path(runtime_search_path.get()));
-    unsafe { uv_mutex_unlock(search_path_mutex()) };
-    runtime_search_path_valid_thread.set(true);
+    let copy = Vec::clone(&runtime_search_path_as_is());
+    let old = {
+        let mut snapshot = THREAD_SEARCH_PATH
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        core::mem::replace(&mut *snapshot, copy)
+    };
+    // Freed outside the lock.
+    drop(old);
+    THREAD_SEARCH_PATH_VALID.set(true);
 }

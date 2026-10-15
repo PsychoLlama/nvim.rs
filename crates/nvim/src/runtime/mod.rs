@@ -18,19 +18,18 @@
 //! | `script_items` | [`source`] as it registers a script | [`script`], [`source`], and ~20 files outside the family |
 //! | `ga_loaded` | [`script`]'s `script_autoload`, once per autoload file | [`script`] — nothing else touches it |
 //! | `last_current_SID_seq` | [`source`] | [`source`] |
-//! | `runtime_search_path` | [`cache`] | [`cache`], via [`search`]'s `do_in_runtimepath` |
-//! | `runtime_search_path_valid` | [`cache`]'s invalidate/validate pair | [`cache`] |
-//! | `runtime_search_path_thread` + `_mutex` | [`cache`], for the off-main-loop reader | [`cache`], [`search`] — **`SharedCell`, see below** |
-//! | `runtime_search_path_valid_thread` | [`cache`], [`pack`] | [`cache`] |
+//! | `RUNTIME_SEARCH_PATH` | [`cache`], and [`pack`]'s splice | [`cache`], via [`search`]'s `do_in_runtimepath_visit` |
+//! | `SEARCH_PATH_VALID` | [`cache`]'s invalidate/validate pair, [`pack`] | [`cache`], [`pack`] |
+//! | `THREAD_SEARCH_PATH` | [`cache`], for the off-main-loop reader | [`search`] — **a `Mutex`, see below** |
+//! | `THREAD_SEARCH_PATH_VALID` | [`cache`], [`pack`] | [`cache`] |
 //! | `runtime_expand_flags` | [`search`]'s `set_context_in_runtime_cmd` | [`expand`]'s `expand_runtime_cmd` |
 #![deny(unsafe_op_in_unsafe_fn)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 pub(crate) mod state;
-use crate::api::private::helpers::cstr_to_string;
 use crate::autocmd::{apply_autocmds, has_autocmd};
-use crate::charset::{skip_to_newline, skiptowhite, skiptowhite_esc, skipwhite, skipwhite_len};
+use crate::charset::{skip_to_newline, skipwhite, skipwhite_len};
 use crate::cmdexpand::globpath;
 use crate::debugger::state::{debug_break_level, debug_tick};
 use crate::debugger::{dbg_breakpoint, dbg_find_breakpoint_named, profiling_forced};
@@ -41,7 +40,6 @@ use crate::eval::typval::{
 use crate::eval::userfunc::{CallStackAside, all_funcs};
 use crate::eval::vars::new_script_vars;
 use crate::eval::{eval_to_number, get_copy_id};
-use crate::event::libuv::{uv_mutex_init, uv_mutex_lock, uv_mutex_unlock};
 use crate::ex_docmd::state::{cmdmod, ex_nesting_level, global_busy, listcmd_busy};
 use crate::ex_docmd::{do_cmdline, do_cmdline_cmd, do_exedit};
 use crate::ex_eval::{
@@ -50,13 +48,14 @@ use crate::ex_eval::{
 use crate::garray::{ga_grow, ga_init, ga_remove_duplicate_strings};
 use crate::getchar::openscript;
 use crate::getchar::state::got_int;
-use crate::global_cell::{GlobalCell, SharedCell};
+use crate::global_cell::GlobalCell;
 use crate::keycodes::Ctrl_V;
 use crate::lua::executor::{nlua_exec, nlua_exec_file, nlua_exec_lines, nlua_is_deferred_safe};
 use crate::mbyte::cluster_len;
 use crate::mbyte::utf_head_off;
 use crate::memline::ml_get;
-use crate::memory::{try_malloc, xfree, xmalloc, xmallocz, xstrdup, xstrlcat, xstrlcpy};
+use crate::memory::XString;
+use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::state::msg_col;
 use crate::message::{e_argreq, e_interr, e_invarg, e_norange};
 use crate::message::{
@@ -64,7 +63,7 @@ use crate::message::{
     verbose_enter, verbose_leave,
 };
 use crate::option::vars::{p_enc, p_ic, p_lpl, p_pp, p_rtp, p_verbose};
-use crate::option::{copy_option_part, set_option_value_give_err, vimrc_found};
+use crate::option::{set_option_value_give_err, vimrc_found};
 use crate::options::kOptRuntimepath;
 use crate::os::cshim::{gettext, strncasecmp};
 use crate::os::env::{
@@ -75,9 +74,8 @@ use crate::os::fs::{os_file_is_readable, os_isdir, os_open, os_set_cloexec};
 use crate::os::input::line_breakcheck;
 use crate::os::stdpaths::{get_appname, stdpaths_get_xdg_var};
 use crate::path::{
-    add_pathsep_at, add_pathsep_in, append_path, concat_fnames, fix_fname, gen_expand_wildcards,
-    past_head_index, path_fnamecmp, path_fnamencmp, path_with_extension, tail_index, vim_ispathsep,
-    vim_ispathsep_nocolon,
+    append_path, concat_fnames, fix_fname, gen_expand_wildcards, past_head_index, path_fnamecmp,
+    path_fnamencmp, path_with_extension, tail_index, vim_ispathsep, vim_ispathsep_nocolon,
 };
 use crate::profile::{do_profiling, startup_timing};
 use crate::profile::{
@@ -90,14 +88,17 @@ use crate::registry::{IdMap, IdSet, id_map, id_set};
 use crate::runtime::state::{current_sctx, did_source_packages};
 use crate::types::AutoEvent;
 use crate::types::{
-    ApiDict, Array, BoolVarValue, CONV_NONE, Dict, DoInRuntimepathCB, DoInRuntimepathCBFn, EStack,
-    EStackArg, EStackType, Error, EstackInfo, EvalFuncData, ExArg, Expand, FILE, GArray, Integer,
-    LineNr, List, LuaRetMode, Object, OptSet, OptVal, ProfTime, RegMatch, ScriptCtx, ScriptId,
-    ScriptItem, String_0, TypVal, UV_MUTEX_INIT, UserFunc, VAR_DICT, VarLock, VarNumber, VimConv,
-    XDGVarType, int64_t, kBoolVarFalse, ptrdiff_t, size_t, uv_mutex_t,
+    ApiDict, Array, BoolVarValue, CONV_NONE, Dict, EStack, EStackArg, EStackType, Error,
+    EstackInfo, EvalFuncData, ExArg, Expand, FILE, GArray, Integer, LineNr, List, LuaRetMode,
+    Object, OptSet, OptVal, ProfTime, RegMatch, ScriptCtx, ScriptId, ScriptItem, String_0, TypVal,
+    UserFunc, VAR_DICT, VarLock, VarNumber, VimConv, XDGVarType, int64_t, kBoolVarFalse, ptrdiff_t,
+    size_t,
 };
-use ::libc::{__errno_location, fclose, fdopen, fgets, strcasecmp, strcat};
+use ::libc::{__errno_location, fclose, fdopen, fgets, strcasecmp};
+use core::cell::Cell;
 use std::ffi::CString;
+use std::rc::Rc;
+use std::sync::Mutex;
 
 // The carve of the transpiled module; see each child's docs.
 mod cache;
@@ -118,6 +119,8 @@ pub use self::script::*;
 pub use self::search::*;
 pub use self::source::*;
 
+/// The room upstream's `MAXPATHL` buffers had, terminator included.
+const PATH_ROOM: usize = crate::types::MAXPATHL as usize;
 /// `:finish` as a pending control-flow reason, for `report_pending`.
 pub const CSTP_FINISH: ::core::ffi::c_int = 32;
 /// `globpath` flags.
@@ -216,19 +219,31 @@ impl Default for SourceCookie {
         Self::new()
     }
 }
-#[derive(Copy, Clone)]
-pub struct RuntimeSearchPath {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut SearchPathItem,
-}
-#[derive(Copy, Clone)]
+/// One directory of the cached search path -- see [`cache`].
+#[derive(Clone)]
 pub struct SearchPathItem {
-    pub path: *mut ::core::ffi::c_char,
+    pub path: XString,
+    /// Whether it is an `after/` directory.
     pub after: bool,
+    /// Whether `:packadd` spliced it in rather than a rebuild finding it.
     pub pack_inserted: bool,
-    pub has_lua: Option<bool>,
-    pub pos_in_rtp: size_t,
+    /// Whether it has a `lua/` subdirectory, once something asked.
+    pub has_lua: Cell<Option<bool>>,
+    /// The byte offset in 'runtimepath' of the entry that put it here.
+    pub pos_in_rtp: usize,
+}
+
+impl SearchPathItem {
+    /// A directory a rebuild found.
+    pub(crate) fn new(path: XString, after: bool, pos_in_rtp: usize) -> Self {
+        SearchPathItem {
+            path,
+            after,
+            pack_inserted: false,
+            has_lua: Cell::new(None),
+            pos_in_rtp,
+        }
+    }
 }
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
@@ -270,40 +285,21 @@ pub static script_items: GlobalCell<Vec<*mut ScriptItem>> = GlobalCell::new(Vec:
 static ga_loaded: GlobalCell<Vec<Vec<u8>>> = GlobalCell::new(Vec::new());
 static last_current_SID_seq: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(0 as ::core::ffi::c_int);
-static runtime_search_path_valid: GlobalCell<bool> = GlobalCell::new(false);
-static runtime_search_path_valid_thread: GlobalCell<bool> = GlobalCell::new(false);
-/// Who owns the cached search path: see [`cache::runtime_search_path_get_cached`].
-struct SearchPathOwner {
-    /// The number of the borrow that owns the cache; `None` while unowned.
-    owner: Option<u64>,
-    /// How many owning borrows have been numbered.
-    issued: u64,
-}
-
-static runtime_search_path_owner: GlobalCell<SearchPathOwner> = GlobalCell::new(SearchPathOwner {
-    owner: None,
-    issued: 0,
-});
-static runtime_search_path: GlobalCell<RuntimeSearchPath> = GlobalCell::new(RuntimeSearchPath {
-    size: 0,
-    capacity: 0,
-    items: ::core::ptr::null_mut::<SearchPathItem>(),
-});
-/// The snapshot the worker threads read, and the mutex that guards it.
+/// Whether [`RUNTIME_SEARCH_PATH`] still describes 'runtimepath' and
+/// 'packpath'.
+static SEARCH_PATH_VALID: GlobalCell<bool> = GlobalCell::new(false);
+/// Whether [`THREAD_SEARCH_PATH`] is a copy of the valid cache.
+static THREAD_SEARCH_PATH_VALID: GlobalCell<bool> = GlobalCell::new(false);
+/// The cached search path; a walk holds a clone of the [`Rc`] for as long as
+/// it reads, which is what lets a rebuild run underneath it.
+static RUNTIME_SEARCH_PATH: GlobalCell<Option<Rc<Vec<SearchPathItem>>>> = GlobalCell::new(None);
+/// The snapshot the worker threads read.
 ///
-/// These two are [`SharedCell`]s rather than [`GlobalCell`]s because
-/// `runtime_get_named_thread` really does run off the main thread — it is
-/// `vim._get_runtime` as a `vim.uv.new_thread` state sees it, and every
-/// `require()` in such a thread reaches it. `GlobalCell`'s debug main-thread
-/// assertion would abort there; the mutex is the coordination, exactly as it
-/// is in C.
-static runtime_search_path_thread: SharedCell<RuntimeSearchPath> =
-    SharedCell::new(RuntimeSearchPath {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<SearchPathItem>(),
-    });
-static runtime_search_path_mutex: SharedCell<uv_mutex_t> = SharedCell::new(UV_MUTEX_INIT);
+/// A `Mutex` rather than a [`GlobalCell`] because `runtime_get_named_thread`
+/// really does run off the main thread — it is `vim._get_runtime` as a
+/// `vim.uv.new_thread` state sees it, and every `require()` in such a thread
+/// reaches it.
+static THREAD_SEARCH_PATH: Mutex<Vec<SearchPathItem>> = Mutex::new(Vec::new());
 static runtime_expand_flags: GlobalCell<RuntimeOpts> = GlobalCell::new(RuntimeOpts::NONE);
 pub const EINTR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const ENV_SEPCHAR: ::core::ffi::c_int = ':' as ::core::ffi::c_int;

@@ -71,7 +71,7 @@ use crate::message_fmt::msg_cstr_opt;
 use crate::option::vars::{p_aw, p_awa, p_confirm, p_write};
 use crate::os::cshim::gettext;
 use crate::path::vim_full_name;
-use crate::runtime::{RuntimeOpts, source_runtime_vim_lua_of};
+use crate::runtime::{RuntimeOpts, source_runtime_vim_lua};
 use crate::semsg;
 use crate::startup::exiting;
 use crate::types::CmdIdx;
@@ -600,7 +600,7 @@ pub(crate) fn ex_compiler(excmd: &mut ExArg) {
     pattern.extend_from_slice(excmd.line.arg());
     pattern.extend_from_slice(b".*\0");
     let pattern = CStr::from_bytes_with_nul(&pattern).expect("one terminator, at the end");
-    if source_runtime_vim_lua_of(pattern, RuntimeOpts::ALL).is_err() {
+    if source_runtime_vim_lua(pattern, RuntimeOpts::ALL).is_err() {
         let arg = msg_bytes(excmd.line.arg());
         semsg!("E666: Compiler not supported: {arg}");
     }

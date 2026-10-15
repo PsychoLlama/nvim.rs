@@ -1,38 +1,58 @@
 //! Finding and sourcing files along 'runtimepath' -- `:runtime` and everything
 //! built on it.
 //!
-//! [`do_in_path`] is the primitive: split a path list on commas, glob each
-//! entry against a pattern, and hand every match to a callback, optionally
-//! stopping at the first.  [`do_in_path_and_pp`] adds 'packpath''s
+//! [`do_in_path_visit`] is the primitive: split a path list on commas, glob
+//! each entry against a pattern, and hand every match to a closure, optionally
+//! stopping at the first.  `do_in_path_and_pp` adds 'packpath''s
 //! `pack/*/start` and `pack/*/opt` trees for the `RuntimeOpts::START`/`RuntimeOpts::OPT` flags,
-//! and [`do_in_runtimepath`] is the 'runtimepath' entry point that prefers the
-//! cached search path when there is one (see [`super::cache`]).  The
-//! `source_runtime*` wrappers pick the callback that sources what was found,
-//! with the Vim-then-Lua ordering `:runtime` promises; [`runtime_get_named`]
-//! and [`runtime_inspect`] are the API's read-only views of the same search.
+//! and [`do_in_runtimepath_visit`] is the 'runtimepath' entry point that
+//! prefers the cached search path when there is one (see [`super::cache`]).
+//! The `source_runtime*` wrappers pick the closure that sources what was
+//! found, with the Vim-then-Lua ordering `:runtime` promises;
+//! [`runtime_get_named`] and [`runtime_inspect`] are the API's read-only views
+//! of the same search.
 //!
 //! The pattern walk itself lives in [`expand_name_patterns`], which the cached
 //! path shares: the two searches differ in where the directory list comes from
 //! and in one `ExpandFlags::NOBREAK`, not in what they do with `{name}`.
+//!
+//! Every name handed to a visit lives in the walk's own buffers for the call,
+//! so a visit may run anything -- source a script that rewrites
+//! 'runtimepath', say -- without the names moving under it. The name being
+//! searched for is the caller's, borrowed for the whole walk: callers hand in
+//! a copy of their own, never an option's value or a buffer's line.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::charset::skip;
 use crate::cstr;
 use crate::memory::XString;
-use crate::message_fmt::{c_str, msg_cstr};
+use crate::message_fmt::msg_cstr;
+use crate::option::split_option_part;
+use crate::option::split_option_part_with;
 use crate::option::vars::P_PP;
 use crate::option::vars::P_RTP;
-use crate::path::ExpandFlags;
+use crate::os::fs::dir_exists;
+use crate::path::{ExpandFlags, add_pathsep};
 use crate::semsg;
 use crate::smsg;
-use crate::snprintf;
 
-use crate::types::{ExpandContext, FAIL, Failed, MAXPATHL, OK};
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::{ptr, slice};
+use crate::types::{ExpandContext, FAIL, Failed, OK};
+use core::ffi::{CStr, c_int};
+use std::sync::PoisonError;
+
+/// What a search does with what it finds: handed each batch of names and
+/// whether the search wants every match, it answers whether it used one.
+/// The names live in the search's own buffers for the call.
+pub(crate) type Visit<'v> = dyn FnMut(&[&CStr], bool) -> bool + 'v;
 
 /// The `[where]` qualifiers `:runtime` accepts, and the `DIP_*` set each one
 /// selects.  Upstream sums the flags; they are disjoint bits, so this is the
@@ -49,30 +69,11 @@ const WHERE_FLAGS: [(&CStr, RuntimeOpts); 4] = [
     (c"ALL", RuntimeOpts::START.or(RuntimeOpts::OPT)),
 ];
 
-/// Get the `DIP_*` flags from the `[where]` argument of a `:runtime` command,
-/// advancing `*argp` past it.
+/// What the `[where]` word, the first `where_len` bytes of `arg`, names, and
+/// where the name after it starts -- 0 when it names nothing.
 ///
 /// The comparison is `strncmp` over `where_len` bytes, so a *prefix* of a
 /// qualifier selects it: `:runtime STA foo` really does mean `START`.
-///
-/// # Safety
-/// `*argp` must be a NUL-terminated string with at least `where_len` bytes
-/// before its terminator.
-unsafe fn get_runtime_cmd_flags(argp: *mut *mut c_char, where_len: size_t) -> RuntimeOpts {
-    // SAFETY: the caller's out-parameter holds the argument to look at.
-    let arg = unsafe { *argp };
-    // SAFETY: the caller's NUL-terminated argument.
-    let (flags, skip) = runtime_cmd_flags(unsafe { cstr::bytes_at(arg) }, where_len);
-    if skip > 0 {
-        // SAFETY: `skip` is inside the argument.
-        unsafe { *argp = arg.add(skip) };
-    }
-    flags
-}
-
-/// [`get_runtime_cmd_flags`] over a slice: what the `[where]` word, the
-/// first `where_len` bytes of `arg`, names, and where the name after it
-/// starts -- 0 when it names nothing.
 fn runtime_cmd_flags(arg: &[u8], where_len: usize) -> (RuntimeOpts, usize) {
     if where_len == 0 {
         return (RuntimeOpts::NONE, 0);
@@ -107,55 +108,51 @@ pub fn ex_runtime(excmd: &mut ExArg) {
 /// past the first argument [`runtime_expand_flags`] is forced non-zero so
 /// [`expand_runtime_cmd`] stops proposing the qualifiers.
 pub fn set_context_in_runtime_cmd(expand: &mut Expand, arg: usize) {
-    let mut arg = expand.line_ptr_at(arg);
-    // SAFETY: a position in the completion's NUL-terminated line, which the
-    // walks below stay inside and only read, and which is not replaced
-    // while they run.
-    unsafe {
-        let mut p = skiptowhite(arg);
-        runtime_expand_flags.set(if *p != 0 {
-            get_runtime_cmd_flags(&raw mut arg, p.offset_from(arg) as size_t)
-        } else {
-            RuntimeOpts::NONE
-        });
-        // Skip to the last argument.
-        loop {
-            p = skiptowhite_esc(arg);
-            if *p == 0 {
-                break;
-            }
-            if runtime_expand_flags.get() == RuntimeOpts::NONE {
-                // With multiple arguments and no [where], an unrelated
-                // non-zero flag keeps [where] out of the completion.
-                runtime_expand_flags.set(RuntimeOpts::ALL);
-            }
-            arg = skipwhite(p);
-        }
+    let line = expand.line_cstr().to_bytes();
+    let rest = |at: usize| line.get(at..).unwrap_or_default();
+    let mut arg = arg;
+    let first_word = skip::to_white(rest(arg));
+    let mut flags = RuntimeOpts::NONE;
+    if arg + first_word < line.len() {
+        let (where_flags, skip) = runtime_cmd_flags(rest(arg), first_word);
+        flags = where_flags;
+        arg += skip;
     }
+    // Skip to the last argument.
+    loop {
+        let p = arg + skip::to_white_esc(rest(arg));
+        if p >= line.len() {
+            break;
+        }
+        if flags == RuntimeOpts::NONE {
+            // With multiple arguments and no [where], an unrelated non-zero
+            // flag keeps [where] out of the completion.
+            flags = RuntimeOpts::ALL;
+        }
+        arg = p + skip::white(rest(p));
+    }
+    runtime_expand_flags.set(flags);
     expand.context = ExpandContext::Runtime;
-    expand.set_pattern_at(arg);
+    expand.pattern = arg;
 }
 
 /// Source every name `accept` picks out, stopping after the first unless
 /// `all`.  Answers whether anything was sourced.
 ///
-/// # Safety
-/// `fnames` must hold live NUL-terminated file names, and `cookie` must be
-/// what [`do_source`] takes as its `ret_sid` out-parameter.
-unsafe fn source_matching(
-    fnames: &[*mut c_char],
+/// `ret_sid` is [`do_source`]'s: when set, a script already loaded is not
+/// sourced again.
+fn source_matching(
+    fnames: &[&CStr],
     all: bool,
-    cookie: *mut c_void,
-    accept: impl Fn(*mut c_char) -> bool,
+    ret_sid: &mut Option<&mut c_int>,
+    accept: impl Fn(&CStr) -> bool,
 ) -> bool {
     let mut did_one = false;
     for &fname in fnames {
         if !accept(fname) {
             continue;
         }
-        // SAFETY: `fname` is one of the caller's file names; `cookie` is its
-        // `int *ret_sid`.
-        unsafe { do_source(fname, false, DOSO_NONE, cookie.cast::<c_int>()) };
+        do_source(fname, false, DOSO_NONE, ret_sid.as_deref_mut());
         did_one = true;
         if !all {
             break;
@@ -164,102 +161,34 @@ unsafe fn source_matching(
     did_one
 }
 
-/// Whether `fname` ends in `.{ext}`.
-fn has_extension(fname: *mut c_char, ext: &CStr) -> bool {
-    // SAFETY: `fname` and `ext` are NUL-terminated.
-    unsafe { path_with_extension(cstr::at(fname), ext) }
-}
-
-/// The matches as a slice.
-///
-/// # Safety
-/// `fnames` must hold `num_fnames` entries and stay put for the borrow.
-pub(crate) unsafe fn matches<'a>(num_fnames: c_int, fnames: *mut *mut c_char) -> &'a [*mut c_char] {
-    if fnames.is_null() || num_fnames <= 0 {
-        return &[];
-    }
-    // SAFETY: the caller's array, `num_fnames` long.
-    unsafe { slice::from_raw_parts(fnames, num_fnames as usize) }
-}
-
 /// Source all `.vim` and `.lua` files in `fnames`, `.vim` files first.
-///
-/// # Safety
-/// As [`source_matching`].
-pub(crate) unsafe fn source_callback_vim_lua(
-    num_fnames: c_int,
-    fnames: *mut *mut c_char,
+pub(crate) fn source_found_vim_lua(
+    fnames: &[&CStr],
     all: bool,
-    cookie: *mut c_void,
+    mut ret_sid: Option<&mut c_int>,
 ) -> bool {
-    // SAFETY: the callback contract: `fnames` holds `num_fnames` names.
-    let fnames = unsafe { matches(num_fnames, fnames) };
-    // SAFETY: as above.
-    let did_one = unsafe { source_matching(fnames, all, cookie, |f| has_extension(f, c"vim")) };
+    let did_one = source_matching(fnames, all, &mut ret_sid, |f| {
+        path_with_extension(f, c"vim")
+    });
     if !all && did_one {
         return true;
     }
-    // SAFETY: as above.
-    did_one | unsafe { source_matching(fnames, all, cookie, |f| has_extension(f, c"lua")) }
+    did_one
+        | source_matching(fnames, all, &mut ret_sid, |f| {
+            path_with_extension(f, c"lua")
+        })
 }
 
 /// Source all files in `fnames`: `.vim` first, then `.lua`, then the rest.
-///
-/// # Safety
-/// As [`source_matching`].
-pub(crate) unsafe fn source_callback(
-    num_fnames: c_int,
-    fnames: *mut *mut c_char,
-    all: bool,
-    cookie: *mut c_void,
-) -> bool {
-    // SAFETY: the callback contract, as in `source_callback_vim_lua`.
-    let did_one = unsafe { source_callback_vim_lua(num_fnames, fnames, all, cookie) };
+pub(crate) fn source_found(fnames: &[&CStr], all: bool, mut ret_sid: Option<&mut c_int>) -> bool {
+    let did_one = source_found_vim_lua(fnames, all, ret_sid.as_deref_mut());
     if !all && did_one {
         return true;
     }
-    // SAFETY: as above.
-    let fnames = unsafe { matches(num_fnames, fnames) };
-    // SAFETY: as above.
     did_one
-        | unsafe {
-            source_matching(fnames, all, cookie, |f| {
-                !has_extension(f, c"vim") && !has_extension(f, c"lua")
-            })
-        }
-}
-
-/// What a search does with what it finds: the callback and the cookie handed
-/// to it, which never travel apart.
-#[derive(Clone, Copy)]
-pub(crate) struct Visitor {
-    pub(crate) callback: DoInRuntimepathCB,
-    pub(crate) cookie: *mut c_void,
-}
-
-impl Visitor {
-    /// Hand `files` over.
-    ///
-    /// The callback is never `None` at any call site — upstream's parameter is
-    /// a bare function pointer, and c2rust wrapped it.
-    ///
-    /// # Safety
-    /// `files` must hold `num_files` names the callback may read.
-    unsafe fn invoke(self, num_files: c_int, files: *mut *mut c_char, all: bool) -> bool {
-        let callback = self.callback.expect("do_in_path callback");
-        // SAFETY: the caller's array, matched to the callback's contract.
-        unsafe { callback(num_files, files, all, self.cookie) }
-    }
-
-    /// Hand over a single name.
-    ///
-    /// # Safety
-    /// `fname` must be NUL-terminated.
-    pub(crate) unsafe fn invoke_one(self, fname: *mut c_char, all: bool) -> bool {
-        let mut one = [fname];
-        // SAFETY: a one-element name array, which is what the callback reads.
-        unsafe { self.invoke(1, one.as_mut_ptr(), all) }
-    }
+        | source_matching(fnames, all, &mut ret_sid, |f| {
+            !path_with_extension(f, c"vim") && !path_with_extension(f, c"lua")
+        })
 }
 
 /// The [`ExpandFlags`] a `DIP_*` set asks a wildcard expansion for.
@@ -283,239 +212,129 @@ pub(crate) fn skips_entry(flags: RuntimeOpts, is_after: bool) -> bool {
             || !is_after && flags.has(RuntimeOpts::AFTER))
 }
 
-/// Expand each whitespace-separated pattern of `name` in turn at `tail` and
-/// invoke `callback` for the matches.
+/// Expand each whitespace-separated pattern of `name` in turn after the
+/// directory in `buf`, and hand `visit` the matches.
 ///
-/// `buf` holds one directory, path separator and prefix included, up to
-/// `tail`; the patterns are written there one after another.  Stops at the
-/// first pattern that matched unless `do_all`, and folds what it finds into
-/// the caller's running `did_one` — which is also what its own loop tests, so
-/// a match found for an earlier directory ends the walk here too.
-///
-/// # Safety
-/// `buf` must be writable for `MAXPATHL` bytes, `tail` must point into it, and
-/// `name` must be a NUL-terminated `\t `-separated pattern list.
-pub(crate) unsafe fn expand_name_patterns(
-    buf: *mut c_char,
-    tail: *mut c_char,
-    name: *mut c_char,
+/// `buf` holds one directory, path separator and prefix included; the
+/// patterns are appended there one after another, each cut to the room
+/// upstream's `MAXPATHL` buffer had left, and `buf` is put back as it came.
+/// Stops at the first pattern that matched unless `do_all`, and folds what it
+/// finds into the caller's running `did_one` — which is also what its own
+/// loop tests, so a match found for an earlier directory ends the walk here
+/// too. A match counts whatever `visit` answers, as upstream.
+pub(crate) fn expand_name_patterns(
+    buf: &mut Vec<u8>,
+    name: &[u8],
     ew_flags: ExpandFlags,
     do_all: bool,
     did_one: &mut bool,
-    visitor: Visitor,
+    visit: &mut Visit,
 ) {
-    let mut np = name;
-    // SAFETY: `np` walks the caller's NUL-terminated pattern list, and `tail`
-    // points into `buf`, so the room left there is the difference.
-    while unsafe { *np } != 0 && (do_all || !*did_one) {
-        let used = unsafe { tail.offset_from(buf) };
-        debug_assert!(
-            (0..=MAXPATHL as isize).contains(&used),
-            "MAXPATHL >= tail - buf"
-        );
-        // SAFETY: `copy_option_part` writes at most the room it is given and
-        // NUL-terminates within it.
-        unsafe {
-            copy_option_part(
-                &raw mut np,
-                tail,
-                (MAXPATHL as isize - used) as size_t,
-                c"\t ".as_ptr().cast_mut(),
-            )
-        };
+    let tail = buf.len();
+    debug_assert!(tail <= PATH_ROOM, "MAXPATHL >= tail - buf");
+    let mut rest = name;
+    while !rest.is_empty() && (do_all || !*did_one) {
+        buf.truncate(tail);
+        rest = split_option_part_with(rest, PATH_ROOM - tail, b"\t ", |run| {
+            buf.extend_from_slice(run);
+        });
+        buf.push(0);
+        let pattern = cstr::in_bytes(buf);
         if p_verbose() > 10 {
             verbose_enter();
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let buf = unsafe { c_str(buf) };
-            smsg!(0, "Searching for \"{buf}\"");
+            let pattern = msg_cstr(pattern);
+            smsg!(0, "Searching for \"{pattern}\"");
             verbose_leave();
         }
-        // SAFETY: `buf` is NUL-terminated, and the expansion only reads it.
-        *did_one |=
-            unsafe { gen_expand_wildcards_and_cb(cstr::at(buf), ew_flags, do_all, visitor) }
-                .is_ok();
+        *did_one |= expand_and_visit(pattern, ew_flags, do_all, visit).is_ok();
     }
+    buf.truncate(tail);
 }
 
 /// The `p_verbose > 10` announcement `do_in_path` makes before it starts.
-///
-/// # Safety
-/// All three must be NUL-terminated; `prefix` may be empty but not null.
-unsafe fn announce_search(name: *mut c_char, prefix: *const c_char, path: *const c_char) {
+fn announce_search(name: &CStr, prefix: &CStr, path: &CStr) {
     verbose_enter();
-    if unsafe { *prefix } != 0 {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-        let (name, prefix, path) = unsafe { (c_str(name), c_str(prefix), c_str(path)) };
+    let (name, path) = (msg_cstr(name), msg_cstr(path));
+    if prefix.is_empty() {
+        smsg!(0, "Searching for \"{name}\" in \"{path}\"");
+    } else {
+        let prefix = msg_cstr(prefix);
         smsg!(
             0,
             "Searching for \"{name}\" under \"{prefix}\" in \"{path}\""
         );
-    } else {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-        let (name, path) = unsafe { (c_str(name), c_str(path)) };
-        smsg!(0, "Searching for \"{name}\" in \"{path}\"");
     }
     verbose_leave();
 }
 
-/// The callback the closure fronts hand the walk: the cookie is the
-/// `&mut dyn FnMut` they were given.
+/// Find the patterns in `name` in all directories in `path` and hand `visit`
+/// each match.  `prefix` is prepended to each pattern; with `name` `None`
+/// `visit` is handed every directory instead.
 ///
-/// # Safety
-/// `cookie` is a `&mut &mut dyn FnMut(&[&CStr], bool) -> bool`, and `fnames`
-/// holds `num_fnames` NUL-terminated names.
-unsafe fn visit_trampoline(
-    num_fnames: c_int,
-    fnames: *mut *mut c_char,
-    all: bool,
-    cookie: *mut c_void,
-) -> bool {
-    // SAFETY: the caller's contract.
-    let visit = unsafe { &mut *cookie.cast::<&mut dyn FnMut(&[&CStr], bool) -> bool>() };
-    let names: Vec<&CStr> = unsafe { matches(num_fnames, fnames) }
-        .iter()
-        .map(|&name| unsafe { CStr::from_ptr(name) })
-        .collect();
-    visit(&names, all)
-}
-
-/// [`do_in_path`] with a closure for the callback: `visit` is handed each
-/// batch of names the walk finds and whether the walk wants every match, and
-/// answers whether it used one. The names live in the walk's own buffers for
-/// the call.
+/// `RuntimeOpts::ALL` visits every match rather than stopping at the first,
+/// `RuntimeOpts::DIR` looks for directories, and `RuntimeOpts::ERR` turns
+/// "nothing found" into an error message rather than a verbose note.
+///
+/// Answers OK when something was found, FAIL otherwise.
+///
+/// `path` is the list to walk, which the caller has already copied out of
+/// whichever option it came from -- a visit may set that option -- and
+/// `path_name` is the option it names, for the "not found" message.
+/// Upstream recovered that name by comparing `path` against `p_rtp`'s
+/// *address*, which a copied list cannot answer.
 pub(crate) fn do_in_path_visit(
     path: XString,
     path_name: &'static CStr,
     prefix: &CStr,
     name: Option<&CStr>,
     flags: RuntimeOpts,
-    mut visit: &mut dyn FnMut(&[&CStr], bool) -> bool,
+    visit: &mut Visit,
 ) -> c_int {
-    // A copy: the walk takes the name as a writable string.
-    let mut name = name.map(|name| name.to_bytes_with_nul().to_vec());
-    let name = name
-        .as_mut()
-        .map_or(ptr::null_mut(), |name| name.as_mut_ptr().cast());
-    let cookie = (&raw mut visit).cast::<c_void>();
-    // SAFETY: `prefix` and `name` are NUL-terminated (or null), and the
-    // cookie is the closure the trampoline expects, alive for the walk.
-    unsafe {
-        do_in_path(
-            path,
-            path_name,
-            prefix.as_ptr(),
-            name,
-            flags,
-            Some(visit_trampoline),
-            cookie,
-        )
-    }
-}
-
-/// Find the patterns in `name` in all directories in `path` and invoke
-/// `callback` for each match.  `prefix` is prepended to each pattern.
-///
-/// `RuntimeOpts::ALL` visits every match rather than stopping at the first, `RuntimeOpts::DIR`
-/// looks for directories, and `RuntimeOpts::ERR` turns "nothing found" into an error
-/// message rather than a verbose note.
-///
-/// Answers OK when something was found, FAIL otherwise.
-///
-/// `path` is the list to walk, which the caller has already copied out of
-/// whichever option it came from -- invoking the callback may set that
-/// option -- and `path_name` is the option it names, for the "not found"
-/// message. Upstream recovered that name by comparing `path` against
-/// `p_rtp`'s *address*, which a copied list cannot answer.
-///
-/// # Safety
-/// `prefix` must be NUL-terminated (it may be empty), `name` may be null, and
-/// `callback` must accept `cookie`.
-pub unsafe fn do_in_path(
-    mut path: XString,
-    path_name: &'static CStr,
-    prefix: *const c_char,
-    name: *mut c_char,
-    flags: RuntimeOpts,
-    callback: DoInRuntimepathCB,
-    cookie: *mut c_void,
-) -> c_int {
-    let visitor = Visitor { callback, cookie };
-    let buf = unsafe { xmallocz(MAXPATHL as size_t) }.cast::<c_char>();
-
-    if p_verbose() > 10 && !name.is_null() {
-        // SAFETY: the caller's strings.
-        unsafe { announce_search(name, prefix, path.as_ptr()) };
+    if p_verbose() > 10
+        && let Some(name) = name
+    {
+        announce_search(name, prefix, path.as_cstr());
     }
 
     let do_all = flags.has(RuntimeOpts::ALL);
     let mut did_one = false;
-    let mut rtp = path.as_mut_ptr();
-    // SAFETY: `rtp` walks the copy; `buf` has `MAXPATHL` writable bytes.
-    while unsafe { *rtp } != 0 && (do_all || !did_one) {
-        // SAFETY: as above.
-        let buflen = unsafe {
-            copy_option_part(
-                &raw mut rtp,
-                buf,
-                MAXPATHL as size_t,
-                c",".as_ptr().cast_mut(),
-            )
-        };
-        // SAFETY: `buf` holds `buflen` bytes plus a terminator.
-        if skips_entry(flags, unsafe { path_is_after(buf, buflen) }) {
+    let mut rest: &[u8] = &path;
+    let mut buf = Vec::with_capacity(PATH_ROOM);
+    while !rest.is_empty() && (do_all || !did_one) {
+        let (dir, after) = split_option_part(rest, PATH_ROOM, b",");
+        rest = after;
+        if skips_entry(flags, path_is_after(&dir)) {
             continue;
         }
-        if name.is_null() {
-            // SAFETY: `buf` holds the directory, NUL-terminated.
-            unsafe { visitor.invoke_one(buf, do_all) };
+        let Some(name) = name else {
+            cstr::with_terminated(&dir, |dir| visit(&[dir], do_all));
             did_one = true;
             continue;
-        }
-        // SAFETY: the three strings are NUL-terminated.
-        let (prefix_len, name_len) =
-            unsafe { (cstr::bytes_at(prefix).len(), cstr::bytes_at(name).len()) };
-        let room_needed = buflen + 2 + prefix_len + name_len < MAXPATHL as size_t;
-        if !room_needed {
+        };
+        if dir.len() + 2 + prefix.count_bytes() + name.count_bytes() >= PATH_ROOM {
             continue;
         }
-        // SAFETY: the length test above proves the directory, its separator
-        // and the prefix fit, so `tail` lands inside `buf`.
-        let tail = unsafe {
-            add_pathsep_in(slice::from_raw_parts_mut(
-                buf.cast::<u8>(),
-                MAXPATHL as usize,
-            ));
-            strcat(buf, prefix);
-            buf.add(cstr::bytes_at(buf).len())
-        };
-        // SAFETY: as documented on `expand_name_patterns`.
-        unsafe {
-            expand_name_patterns(
-                buf,
-                tail,
-                name,
-                wildcard_flags(flags),
-                do_all,
-                &mut did_one,
-                visitor,
-            )
-        };
+        buf.clear();
+        buf.extend_from_slice(&dir);
+        // The length test above proves the separator and the prefix fit.
+        add_pathsep(&mut buf);
+        buf.extend_from_slice(prefix.to_bytes());
+        expand_name_patterns(
+            &mut buf,
+            name.to_bytes(),
+            wildcard_flags(flags),
+            do_all,
+            &mut did_one,
+            visit,
+        );
     }
 
-    // SAFETY: both were allocated above and are no longer referenced.
-    unsafe { xfree(buf.cast()) };
-
-    if !did_one && !name.is_null() {
-        let basepath = path_name;
-        // SAFETY: `basepath` is a literal and `name` the caller's pattern.
+    if !did_one && let Some(name) = name {
+        let (basepath, name) = (msg_cstr(path_name), msg_cstr(name));
         if flags.has(RuntimeOpts::ERR) {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-            let (basepath, name) = unsafe { (msg_cstr(basepath), c_str(name)) };
             semsg!("E919: Directory not found in '{basepath}': \"{name}\"");
         } else if p_verbose() > 1 {
             verbose_enter();
-            // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-            let (basepath, name) = unsafe { (msg_cstr(basepath), c_str(name)) };
             smsg!(0, "not found in '{basepath}': \"{name}\"");
             verbose_leave();
         }
@@ -549,24 +368,25 @@ fn dict_obj(dict: ApiDict) -> Object {
 /// The strings are copies: the answer owns its whole tree and outlives the
 /// cache it was read out of.
 pub fn runtime_inspect() -> Array {
-    let path = runtime_search_path.get();
-    let mut rv = Array::with_capacity(path.size);
-    for i in 0..path.size {
-        // SAFETY: `path` holds `size` live items.
-        let item = unsafe { *path.items.add(i) };
+    let path = runtime_search_path_as_is();
+    let mut rv = Array::with_capacity(path.len());
+    for item in path.iter() {
         let mut entry = ApiDict::with_capacity(5);
-        // SAFETY: `item.path` is the entry's own NUL-terminated directory.
-        entry.insert(c"path", string_obj(unsafe { cstr_to_string(item.path) }));
+        entry.insert(
+            c"path",
+            string_obj(String_0::from_cstr(item.path.as_cstr())),
+        );
         if item.after {
             entry.insert(c"after", boolean_obj(true));
         }
         if item.pack_inserted {
             entry.insert(c"pack_inserted", boolean_obj(true));
         }
-        if let Some(has_lua) = item.has_lua {
+        if let Some(has_lua) = item.has_lua.get() {
             entry.insert(c"has_lua", boolean_obj(has_lua));
         }
-        entry.insert(c"pos_in_rtp", integer_obj(item.pos_in_rtp as Integer));
+        let pos_in_rtp = Integer::try_from(item.pos_in_rtp).unwrap_or(Integer::MAX);
+        entry.insert(c"pos_in_rtp", integer_obj(pos_in_rtp));
         rv.push(dict_obj(entry));
     }
     rv
@@ -575,86 +395,64 @@ pub fn runtime_inspect() -> Array {
 /// `nvim__get_runtime()`: the readable files named by `pat` along the cached
 /// search path.
 pub fn runtime_get_named(lua: bool, pat: &Array, all: bool) -> Array {
-    // The borrow is released below, before this frame ends.
-    let (path, borrow) = runtime_search_path_get_cached();
-    let mut buf = [0 as c_char; MAXPATHL as usize];
-    let rv = runtime_get_named_common(lua, pat, all, path, &mut buf);
-    unsafe { runtime_search_path_unref(path, borrow) };
-    rv
+    let path = runtime_search_path_get_cached();
+    runtime_get_named_common(lua, pat, all, &path)
 }
 
 /// [`runtime_get_named`] for a worker thread, against the snapshot
 /// [`update_runtime_search_path_thread`] keeps for exactly this.
 pub fn runtime_get_named_thread(lua: bool, pat: &Array, all: bool) -> Array {
     // TODO(bfredl): avoid contention between multiple worker threads?
-    // SAFETY: the mutex is initialised by `runtime_init` before any thread
-    // exists, and guards every access to the snapshot on both sides.
-    unsafe { uv_mutex_lock(search_path_mutex()) };
-    let mut buf = [0 as c_char; MAXPATHL as usize];
-    let rv = runtime_get_named_common(lua, pat, all, runtime_search_path_thread.get(), &mut buf);
-    unsafe { uv_mutex_unlock(search_path_mutex()) };
-    rv
+    let path = THREAD_SEARCH_PATH
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner);
+    runtime_get_named_common(lua, pat, all, &path)
 }
 
 /// Whether this search-path entry has a `lua/` subdirectory.
 ///
-/// The answer is cached in the entry, which is why it is written through a
-/// pointer: the array belongs to the process-wide search path (or to the
-/// thread snapshot), not to this call.
-///
-/// # Safety
-/// `item` must be a live entry of one of those arrays, and `buf` is scratch.
-unsafe fn dir_has_lua(item: *mut SearchPathItem, buf: &mut [c_char]) -> bool {
-    // SAFETY: the caller's live entry; `snprintf` NUL-terminates within `buf`.
-    if unsafe { (*item).has_lua }.is_none() {
-        let size = unsafe {
-            snprintf!(
-                buf.as_mut_ptr(),
-                buf.len(),
-                c"%s/lua/".as_ptr(),
-                (*item).path,
-            )
-        } as size_t;
-        unsafe { (*item).has_lua = Some(size < buf.len() && os_isdir(buf.as_mut_ptr())) };
+/// The answer is cached in the entry, which is why it is a `Cell`: the
+/// entry belongs to the shared search path (or to the thread snapshot), not
+/// to this call.
+fn dir_has_lua(item: &SearchPathItem, buf: &mut Vec<u8>) -> bool {
+    if item.has_lua.get().is_none() {
+        buf.clear();
+        buf.extend_from_slice(&item.path);
+        buf.extend_from_slice(b"/lua/");
+        let fits = buf.len() < PATH_ROOM;
+        buf.push(0);
+        item.has_lua
+            .set(Some(fits && dir_exists(cstr::in_bytes(buf))));
     }
-    unsafe { (*item).has_lua != Some(false) }
+    item.has_lua.get() != Some(false)
 }
 
 /// The shared body of [`runtime_get_named`] and its thread variant.
-fn runtime_get_named_common(
-    lua: bool,
-    pat: &Array,
-    all: bool,
-    path: RuntimeSearchPath,
-    buf: &mut [c_char],
-) -> Array {
-    let mut rv = Array::with_capacity(path.size.wrapping_mul(pat.len()));
-    for i in 0..path.size {
-        // SAFETY: `path` holds `size` live items.
-        let item = unsafe { path.items.add(i) };
-        // SAFETY: as above.
-        if lua && !unsafe { dir_has_lua(item, buf) } {
+fn runtime_get_named_common(lua: bool, pat: &Array, all: bool, path: &[SearchPathItem]) -> Array {
+    let mut rv = Array::with_capacity(path.len().wrapping_mul(pat.len()));
+    let mut buf = Vec::with_capacity(PATH_ROOM);
+    for item in path {
+        if lua && !dir_has_lua(item, &mut buf) {
             continue;
         }
         for pat_item in pat {
             let Object::String(pattern) = pat_item else {
                 continue;
             };
-            // SAFETY: `buf` is NUL-terminated by `snprintf` within its length.
-            let size = unsafe {
-                snprintf!(
-                    buf.as_mut_ptr(),
-                    buf.len(),
-                    c"%s/%s".as_ptr(),
-                    (*item).path,
-                    pattern.data(),
-                )
-            } as size_t;
-            if size >= buf.len() || !unsafe { os_file_is_readable(cstr::at(buf.as_mut_ptr())) } {
+            buf.clear();
+            buf.extend_from_slice(&item.path);
+            buf.push(b'/');
+            // `%s`: the pattern as far as its first NUL.
+            buf.extend_from_slice(cstr::until_nul(pattern.as_bytes()));
+            if buf.len() >= PATH_ROOM {
                 continue;
             }
-            // SAFETY: `buf` is NUL-terminated, as the test above checked.
-            rv.push(string_obj(unsafe { cstr_to_string(buf.as_ptr()) }));
+            buf.push(0);
+            let found = cstr::in_bytes(&buf);
+            if !os_file_is_readable(found) {
+                continue;
+            }
+            rv.push(string_obj(String_0::from_cstr(found)));
             if !all {
                 return rv;
             }
@@ -664,44 +462,19 @@ fn runtime_get_named_common(
 }
 
 /// Find `name` in `path`, and then — for `RuntimeOpts::START`/`RuntimeOpts::OPT` — in
-/// 'packpath''s package trees, invoking `callback` for each match.
+/// 'packpath''s package trees, handing `visit` each match.
 ///
-/// Answers OK when at least one match was found.  With `name` null the
-/// callback is invoked once per directory instead.
-///
-/// # Safety
-/// As [`do_in_path`].
-pub unsafe fn do_in_path_and_pp(
-    path: XString,
-    name: *mut c_char,
-    flags: RuntimeOpts,
-    callback: DoInRuntimepathCB,
-    cookie: *mut c_void,
-) -> c_int {
-    // An empty `name` means "every directory", which `do_in_path` spells NULL.
-    // SAFETY: `name` is null or NUL-terminated.
-    let dirs_only = if !name.is_null() && unsafe { *name } == 0 {
-        ptr::null_mut()
-    } else {
-        name
-    };
+/// Answers OK when at least one match was found.  With `name` empty `visit`
+/// is handed each 'runtimepath' directory instead.
+fn do_in_path_and_pp(path: XString, name: &CStr, flags: RuntimeOpts, visit: &mut Visit) -> c_int {
     let mut done = FAIL;
     // Each round is skipped once something has been found, unless RuntimeOpts::ALL.
     let wants_more = |done: c_int| done == FAIL || flags.has(RuntimeOpts::ALL);
 
     if !flags.has(RuntimeOpts::NORTP) {
-        // SAFETY: the caller's strings and callback.
-        done |= unsafe {
-            do_in_path(
-                path,
-                c"runtimepath",
-                c"".as_ptr(),
-                dirs_only,
-                flags,
-                callback,
-                cookie,
-            )
-        };
+        // An empty `name` means "every directory".
+        let dirs_only = (!name.is_empty()).then_some(name);
+        done |= do_in_path_visit(path, c"runtimepath", c"", dirs_only, flags, visit);
     }
 
     if wants_more(done) && flags.has(RuntimeOpts::START) {
@@ -721,18 +494,14 @@ pub unsafe fn do_in_path_and_pp(
                 c"start/*/"
             },
         ] {
-            // SAFETY: as above.
-            done |= unsafe {
-                do_in_path(
-                    P_PP.get(),
-                    c"packpath",
-                    prefix.as_ptr(),
-                    name,
-                    start_flags,
-                    callback,
-                    cookie,
-                )
-            };
+            done |= do_in_path_visit(
+                P_PP.get(),
+                c"packpath",
+                prefix,
+                Some(name),
+                start_flags,
+                visit,
+            );
             if !wants_more(done) {
                 break;
             }
@@ -741,17 +510,7 @@ pub unsafe fn do_in_path_and_pp(
 
     if wants_more(done) && flags.has(RuntimeOpts::OPT) {
         for prefix in [c"pack/*/opt/*/", c"opt/*/"] {
-            done |= unsafe {
-                do_in_path(
-                    P_PP.get(),
-                    c"packpath",
-                    prefix.as_ptr(),
-                    name,
-                    flags,
-                    callback,
-                    cookie,
-                )
-            };
+            done |= do_in_path_visit(P_PP.get(), c"packpath", prefix, Some(name), flags, visit);
             if !wants_more(done) {
                 break;
             }
@@ -761,27 +520,19 @@ pub unsafe fn do_in_path_and_pp(
     done
 }
 
-/// [`do_in_path_and_pp`] over 'runtimepath', preferring the cached search
-/// path.
-///
-/// # Safety
-/// As [`do_in_path`].
-pub unsafe fn do_in_runtimepath(
-    name: *mut c_char,
+/// Find `name` along 'runtimepath' -- the cached search path, then the
+/// package trees `RuntimeOpts::START`/`RuntimeOpts::OPT` ask for -- and hand
+/// `visit` each match. `name` may contain wildcards; an empty `name` hands
+/// over the directories themselves.
+pub(crate) fn do_in_runtimepath_visit(
+    name: &CStr,
     mut flags: RuntimeOpts,
-    callback: DoInRuntimepathCB,
-    cookie: *mut c_void,
+    visit: &mut Visit,
 ) -> Result<(), Failed> {
     let mut success = FAIL;
     if !flags.has(RuntimeOpts::NORTP) {
-        // SAFETY: `name` is null or NUL-terminated.
-        let dirs_only = if !name.is_null() && unsafe { *name } == 0 {
-            ptr::null_mut()
-        } else {
-            name
-        };
-        // SAFETY: the caller's callback and cookie.
-        success |= unsafe { do_in_cached_path(dirs_only, flags, callback, cookie) };
+        let dirs_only = (!name.is_empty()).then_some(name);
+        success |= do_in_cached_path(dirs_only, flags, visit);
         // The cached path already covers 'runtimepath' and the `start`
         // packages spliced into it.
         flags = flags.without(RuntimeOpts::START) | RuntimeOpts::NORTP;
@@ -791,112 +542,48 @@ pub unsafe fn do_in_runtimepath(
     if flags.has(RuntimeOpts::START | RuntimeOpts::OPT)
         && (success == FAIL || flags.has(RuntimeOpts::ALL))
     {
-        // SAFETY: as above.
-        success |= unsafe { do_in_path_and_pp(P_RTP.get(), name, flags, callback, cookie) };
+        success |= do_in_path_and_pp(P_RTP.get(), name, flags, visit);
     }
     if success == FAIL { Err(Failed) } else { Ok(()) }
-}
-
-/// [`do_in_runtimepath`] with a closure for the callback, as
-/// [`do_in_path_visit`] is to [`do_in_path`].
-pub(crate) fn do_in_runtimepath_visit(
-    name: &CStr,
-    flags: RuntimeOpts,
-    mut visit: &mut dyn FnMut(&[&CStr], bool) -> bool,
-) -> Result<(), Failed> {
-    // A copy: the walk takes the name as a writable string.
-    let mut name = name.to_bytes_with_nul().to_vec();
-    let cookie = (&raw mut visit).cast::<c_void>();
-    // SAFETY: a NUL-terminated name, and the cookie is the closure the
-    // trampoline expects, alive for the walk.
-    unsafe {
-        do_in_runtimepath(
-            name.as_mut_ptr().cast(),
-            flags,
-            Some(visit_trampoline),
-            cookie,
-        )
-    }
 }
 
 /// Source the file `name` from all directories in 'runtimepath'.  `name` may
 /// contain wildcards; `RuntimeOpts::ALL` sources every match rather than the first.
 pub fn source_runtime(name: &CStr, flags: RuntimeOpts) -> Result<(), Failed> {
-    // SAFETY: a NUL-terminated name; `source_callback` takes a null cookie.
-    unsafe {
-        do_in_runtimepath(
-            name.as_ptr().cast_mut(),
-            flags,
-            Some(source_callback as DoInRuntimepathCBFn),
-            ptr::null_mut(),
-        )
-    }
-}
-
-/// [`source_runtime_vim_lua`] of a name the caller holds; the walk is
-/// handed a writable copy.
-pub(crate) fn source_runtime_vim_lua_of(name: &CStr, flags: RuntimeOpts) -> Result<(), Failed> {
-    let mut copy = name.to_bytes_with_nul().to_vec();
-    // SAFETY: a NUL-terminated copy of our own, alive for the call.
-    unsafe { source_runtime_vim_lua(copy.as_mut_ptr().cast(), flags) }
+    do_in_runtimepath_visit(name, flags, &mut |found, all| {
+        source_found(found, all, None)
+    })
 }
 
 /// [`source_runtime`], but only `.vim` and `.lua` files.
-///
-/// # Safety
-/// As [`source_runtime`].
-pub unsafe fn source_runtime_vim_lua(name: *mut c_char, flags: RuntimeOpts) -> Result<(), Failed> {
-    // SAFETY: as `source_runtime`.
-    unsafe {
-        do_in_runtimepath(
-            name,
-            flags,
-            Some(source_callback_vim_lua as DoInRuntimepathCBFn),
-            ptr::null_mut(),
-        )
-    }
+pub(crate) fn source_runtime_vim_lua(name: &CStr, flags: RuntimeOpts) -> Result<(), Failed> {
+    do_in_runtimepath_visit(name, flags, &mut |found, all| {
+        source_found_vim_lua(found, all, None)
+    })
 }
 
 /// [`source_runtime`] over `path` instead of 'runtimepath', and only `.vim`
 /// and `.lua` files.
-///
-/// # Safety
-/// Both must be NUL-terminated.
-pub unsafe fn source_in_path_vim_lua(
-    path: XString,
-    name: *mut c_char,
-    flags: RuntimeOpts,
-) -> c_int {
-    // SAFETY: as `source_runtime`.
-    unsafe {
-        do_in_path_and_pp(
-            path,
-            name,
-            flags,
-            Some(source_callback_vim_lua as DoInRuntimepathCBFn),
-            ptr::null_mut(),
-        )
-    }
+pub(crate) fn source_in_path_vim_lua(path: XString, name: &CStr, flags: RuntimeOpts) -> c_int {
+    do_in_path_and_pp(path, name, flags, &mut |found, all| {
+        source_found_vim_lua(found, all, None)
+    })
 }
 
-/// Expand the wildcards in `pattern` and invoke `callback` for the matches.
+/// Expand the wildcards in `pattern` and hand `visit` the matches.
 ///
-/// Answers `Ok` when files were found, `Err` otherwise.  `all` is passed through
-/// to the callback, which decides whether to act on more than the first.
-///
-/// # Safety
-/// The visitor's callback must accept the names and its cookie.
-pub(crate) unsafe fn gen_expand_wildcards_and_cb(
+/// Answers `Ok` when files were found, `Err` otherwise, whatever `visit`
+/// makes of them.  `all` is passed through to `visit`, which decides whether
+/// to act on more than the first. The matches are this frame's, alive across
+/// whatever `visit` runs.
+pub(crate) fn expand_and_visit(
     pattern: &CStr,
     flags: ExpandFlags,
     all: bool,
-    visitor: Visitor,
+    visit: &mut Visit,
 ) -> Result<(), Failed> {
-    let mut found = gen_expand_wildcards(&[pattern], flags)?;
-    // The callback still takes the names as a `char **`; they stay this
-    // frame's, alive across whatever it runs.
-    let mut names: Vec<*mut c_char> = found.iter_mut().map(XString::as_mut_ptr).collect();
-    let count = c_int::try_from(names.len()).unwrap_or(c_int::MAX);
-    unsafe { visitor.invoke(count, names.as_mut_ptr(), all) };
+    let found = gen_expand_wildcards(&[pattern], flags)?;
+    let names: Vec<&CStr> = found.iter().map(XString::as_cstr).collect();
+    visit(&names, all);
     Ok(())
 }

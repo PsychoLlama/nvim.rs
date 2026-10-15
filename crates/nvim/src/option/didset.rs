@@ -55,7 +55,7 @@ use crate::optionstr::{OptString, OptStringRef, check_window_signcolumn};
 use crate::os::cshim::gettext;
 use crate::popupmenu::{pum_drawn, pum_redraw};
 use crate::quickfix::qf_resize_stack;
-use crate::runtime::{RuntimeOpts, source_runtime_vim_lua_of};
+use crate::runtime::{RuntimeOpts, source_runtime_vim_lua};
 use crate::spell::parse_spelllang;
 use crate::startup::{full_screen, readonlymode, starting};
 use crate::terminal::on_scrollback_changed_in;
@@ -736,5 +736,5 @@ pub(crate) fn do_spelllang_source(win: Win) {
     let mut fname = [&b"spell/"[..], &rest[..name_len], b".*"].concat();
     fname.truncate(199);
     let fname = XString::from_vec(fname);
-    let _ = source_runtime_vim_lua_of(fname.as_cstr(), RuntimeOpts::ALL);
+    let _ = source_runtime_vim_lua(fname.as_cstr(), RuntimeOpts::ALL);
 }

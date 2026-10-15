@@ -93,12 +93,10 @@ pub(crate) fn syn_cmd_include(args: &mut ExArg, _syncing: c_int) {
     cur_syn_block().b_syn_topgrp = sgl_id;
 
     let arg = args.line.cstr_from(args.line.arg);
-    let none = ::core::ptr::null_mut();
+    // The command's own line, which nothing the script runs can reach.
     let failed = if source {
-        // SAFETY: sourcing the file the user named.
-        unsafe { do_source(arg.as_ptr().cast_mut(), false, DOSO_NONE as c_int, none) == FAIL }
+        do_source(arg, false, DOSO_NONE as c_int, None) == FAIL
     } else {
-        // SAFETY: as above -- the name is NUL-terminated and only read.
         source_runtime(arg, RuntimeOpts::ALL).is_err()
     };
     if failed {
