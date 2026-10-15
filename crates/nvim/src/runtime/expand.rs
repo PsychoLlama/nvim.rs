@@ -1,122 +1,84 @@
 //! Command-line completion for the runtime commands.
 //!
-//! [`expand_runtime_dir`] completes a file name against a set of 'runtimepath'
-//! subdirectories -- what `:colorscheme`, `:compiler`, `:runtime` and friends
-//! offer -- and [`expand_packadd_dir`] does the same for `:packadd` against
-//! 'packpath'.  [`expand_runtime_cmd`] is `:runtime`'s own two-stage
-//! completion, where the first word may be one of the `START`/`OPT`/`PACK`/
-//! `ALL` qualifiers and everything after it is a path.
+//! [`runtime_dir_matches`] completes a file name against a set of
+//! 'runtimepath' subdirectories -- what `:colorscheme`, `:compiler`,
+//! `:runtime` and friends offer -- and [`packadd_dir_matches`] does the same
+//! for `:packadd` against 'packpath'.  [`runtime_cmd_matches`] is `:runtime`'s
+//! own two-stage completion, where the first word may be one of the
+//! `START`/`OPT`/`PACK`/`ALL` qualifiers and everything after it is a path.
 //!
 //! Every match is offered as a *bare* name: the directory the search started
 //! from and the `.vim`/`.lua` extension are trimmed back off again, keeping
 //! only as many path components as the pattern itself spelled
 //! ([`trim_match`]).
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::cmdexpand::WildOpts;
 use crate::cstr;
-use crate::garray::ga_append_owned;
-use crate::garray::take_string_array;
-use crate::memory::XString;
-use crate::snprintf;
+use crate::mbyte::head_off;
+use crate::option::vars::{P_PP, P_RTP};
+use crate::path::remove_duplicate_names;
 
 use crate::types::Failed;
-use core::ffi::{CStr, c_char, c_int};
-use core::{ptr, slice};
+use core::ffi::{CStr, c_int};
+use std::ffi::CString;
 
 /// What a completion round looks for: script files, or — on the second round,
 /// where a directory name is being completed — anything.
-const SCRIPTS: &CStr = c"*.{vim,lua}";
-const ANYTHING: &CStr = c"*";
+const SCRIPTS: &[u8] = b"*.{vim,lua}";
+const ANYTHING: &[u8] = b"*";
 
-/// Write `{prefix}{dir}/{pat}{suffix}` into `buf`, dropping the directory and
-/// its separator when `dir` is empty.
-///
-/// # Safety
-/// `buf` must be writable for `buf_len` bytes; `dir` and `pat` must be
-/// NUL-terminated.
-unsafe fn build_pattern(
-    buf: *mut c_char,
-    buf_len: size_t,
-    prefix: &CStr,
-    dir: *mut c_char,
-    pat: *mut c_char,
-    suffix: &CStr,
-) {
-    // SAFETY: the caller's buffer and strings; `snprintf` truncates within
-    // `buf_len` and NUL-terminates.
-    let (dir, sep) = if unsafe { *dir } != 0 {
-        (dir.cast_const(), c"/".as_ptr())
-    } else {
-        (c"".as_ptr(), c"".as_ptr())
-    };
-    unsafe {
-        snprintf!(
-            buf,
-            buf_len,
-            c"%s%s%s%s%s".as_ptr(),
-            prefix.as_ptr(),
-            dir,
-            sep,
-            pat,
-            suffix.as_ptr(),
-        )
-    };
+/// `{prefix}{dir}/{pat}{suffix}`, dropping the directory and its separator
+/// when `dir` is empty.
+fn build_pattern(prefix: &[u8], dir: &[u8], pat: &[u8], suffix: &[u8]) -> CString {
+    let sep: &[u8] = if dir.is_empty() { b"" } else { b"/" };
+    cstr::owned(&[prefix, dir, sep, pat, suffix].concat())
 }
 
 /// Glob `pat` under `dir` in 'runtimepath' and in 'packpath''s package trees,
-/// collecting the matches in `gap`.
+/// collecting the matches in `found`.
 ///
 /// When `dir` is empty this runs twice: once for script files, once more with
-/// `WildOpts::ADD_SLASH` for directories, which is what makes `:runtime` complete a
-/// subdirectory name.
+/// `WildOpts::ADD_SLASH` for directories, which is what makes `:runtime`
+/// complete a subdirectory name.
 ///
-/// # Safety
-/// `buf` must be writable for `buf_len` bytes; `dir`, `pat` must be
-/// NUL-terminated and `gap` an initialised array of allocated strings.
-unsafe fn glob_rounds(
-    pat: *mut c_char,
-    buf: *mut c_char,
-    buf_len: size_t,
-    dir: *mut c_char,
-    flags: RuntimeOpts,
-    gap: *mut GArray,
-) {
+/// The two options are copied: the expansion can run user code.
+fn glob_rounds(pat: &[u8], dir: &[u8], flags: RuntimeOpts, found: &mut Vec<XString>) {
+    let (rtp, pp) = (P_RTP.get(), P_PP.get());
     let mut glob_flags = WildOpts::NONE;
     let mut expand_dirs = false;
-    // SAFETY: the caller's buffer and strings, and `globpath` only appends.
-    unsafe { build_pattern(buf, buf_len, c"", dir, pat, SCRIPTS) };
+    let mut buf = build_pattern(b"", dir, pat, SCRIPTS);
     loop {
         if !flags.has(RuntimeOpts::NORTP) {
-            p_rtp(|value| unsafe {
-                ga_append_owned(gap, globpath(value, cstr::at(buf), glob_flags, expand_dirs))
-            });
+            found.extend(globpath(rtp.as_cstr(), &buf, glob_flags, expand_dirs));
         }
         let suffix = if expand_dirs { ANYTHING } else { SCRIPTS };
         if flags.has(RuntimeOpts::START) {
-            for prefix in [c"pack/*/start/*/", c"start/*/"] {
-                unsafe { build_pattern(buf, buf_len, prefix, dir, pat, suffix) };
-                p_pp(|value| unsafe {
-                    ga_append_owned(gap, globpath(value, cstr::at(buf), glob_flags, expand_dirs))
-                });
+            for prefix in [&b"pack/*/start/*/"[..], b"start/*/"] {
+                buf = build_pattern(prefix, dir, pat, suffix);
+                found.extend(globpath(pp.as_cstr(), &buf, glob_flags, expand_dirs));
             }
         }
         if flags.has(RuntimeOpts::OPT) {
-            for prefix in [c"pack/*/opt/*/", c"opt/*/"] {
-                unsafe { build_pattern(buf, buf_len, prefix, dir, pat, suffix) };
-                p_pp(|value| unsafe {
-                    ga_append_owned(gap, globpath(value, cstr::at(buf), glob_flags, expand_dirs))
-                });
+            for prefix in [&b"pack/*/opt/*/"[..], b"opt/*/"] {
+                buf = build_pattern(prefix, dir, pat, suffix);
+                found.extend(globpath(pp.as_cstr(), &buf, glob_flags, expand_dirs));
             }
         }
         // Second round, for directories.
-        if unsafe { *dir } != 0 || expand_dirs {
+        if !dir.is_empty() || expand_dirs {
             return;
         }
-        unsafe { snprintf!(buf, buf_len, c"%s*".as_ptr(), pat) };
+        buf = cstr::owned(&[pat, b"*"].concat());
         glob_flags = WildOpts::ADD_SLASH;
         expand_dirs = true;
     }
@@ -124,304 +86,133 @@ unsafe fn glob_rounds(
 
 /// Cut a match back to the name the user is completing: no `.vim`/`.lua`
 /// extension, and no more leading path components than the pattern spelled.
-///
-/// Rewrites the string in place, which is what the garray holds.
-///
-/// # Safety
-/// `matched` must be a NUL-terminated allocated string.
-unsafe fn trim_match(matched: *mut c_char, keep_ext: bool, pat_pathsep_cnt: c_int) {
-    // SAFETY: `matched` is NUL-terminated, and every walk below stays between
-    // its first byte and its terminator.
-    let mut e = unsafe { matched.add(cstr::bytes_at(matched).len()) };
-    if unsafe { e.offset_from(matched) } > 4
-        && !keep_ext
-        && (unsafe { strncasecmp(e.sub(4), c".vim".as_ptr(), 4) } == 0
-            || unsafe { strncasecmp(e.sub(4), c".lua".as_ptr(), 4) } == 0)
-    {
-        e = unsafe { e.sub(4) };
-        unsafe { *e = 0 };
+fn trim_match(matched: &XString, keep_ext: bool, pat_pathsep_cnt: usize) -> XString {
+    let mut text: &[u8] = matched;
+    if text.len() > 4 && !keep_ext {
+        let ext = &text[text.len() - 4..];
+        if ext.eq_ignore_ascii_case(b".vim") || ext.eq_ignore_ascii_case(b".lua") {
+            text = &text[..text.len() - 4];
+        }
     }
+    let e = text.len();
 
     // A trailing slash is a component the pattern did not have to spell.
-    let mut match_pathsep_cnt = if e > matched && unsafe { *e.sub(1) } == b'/' as c_char {
-        -1
-    } else {
-        0
-    };
+    let mut match_pathsep_cnt: isize = if text.last() == Some(&b'/') { -1 } else { 0 };
+    let pat_pathsep_cnt = isize::try_from(pat_pathsep_cnt).unwrap_or(isize::MAX);
+    // Walk back a character at a time from the terminator; upstream reads
+    // the byte at the walk's position, which starts at the terminator.
     let mut s = e;
-    while s > matched {
-        if vim_ispathsep(unsafe { *s } as c_int) {
+    while s > 0 {
+        if vim_ispathsep(c_int::from(cstr::byte_at(text, s))) {
             match_pathsep_cnt += 1;
             if match_pathsep_cnt > pat_pathsep_cnt {
                 break;
             }
         }
-        s = unsafe { s.sub(utf_head_off(matched, s.sub(1)) as usize + 1) };
+        s -= head_off(text, s - 1) + 1;
     }
-    s = unsafe { s.add(1) };
-    if s != matched {
-        debug_assert!(unsafe { e.offset_from(s) } + 1 >= 0, "(e - s) + 1 >= 0");
-        let into = matched.cast::<u8>();
-        unsafe { into.copy_from(s.cast(), (e.offset_from(s) as size_t) + 1) };
-    }
+    // An empty match leaves the walk at its start, and upstream's copy of
+    // nothing leaves it empty.
+    XString::from_bytes(&text[(s + 1).min(e)..e])
 }
 
-/// The garray's strings as a slice.
-///
-/// # Safety
-/// `gap` must be an initialised array of `char *`.
-unsafe fn ga_strings<'a>(gap: *mut GArray) -> &'a [*mut c_char] {
-    // SAFETY: the caller's garray, `ga_len` entries long.
-    if unsafe { (*gap).ga_len } <= 0 {
-        return &[];
-    }
-    unsafe { slice::from_raw_parts((*gap).ga_data.cast::<*mut c_char>(), (*gap).ga_len as usize) }
-}
-
-/// Collect the completion matches for `pat` under each of `dirnames`.
-///
-/// # Safety
-/// `pat` must be NUL-terminated with length `pat_len`, `gap` an initialised
-/// array of allocated strings, and `dirnames` a NULL-terminated array of
-/// NUL-terminated directory names.
-unsafe fn collect_runtime_matches(
-    pat: *mut c_char,
-    pat_len: size_t,
+/// Collect the completion matches for `pat` under each of `dirnames`, trimmed,
+/// sorted and without duplicates.
+fn collect_runtime_matches(
+    pat: &[u8],
     flags: RuntimeOpts,
     keep_ext: bool,
-    gap: *mut GArray,
-    dirnames: *mut *mut c_char,
-) {
+    dirnames: &[&CStr],
+) -> Vec<XString> {
     // TODO(bfredl): this is bullshit, expandpath should not reinvent path
     // logic.
-    let mut i = 0;
-    // SAFETY: `dirnames` is NULL-terminated.
-    while !unsafe { *dirnames.add(i) }.is_null() {
-        // SAFETY: as above; `buf` is sized for the longest pattern built into
-        // it (the longest prefix is fifteen bytes, the longest suffix eleven).
-        let dir = unsafe { *dirnames.add(i) };
-        let buf_len = unsafe { cstr::bytes_at(dir) }.len() + pat_len + 64;
-        let buf = unsafe { xmalloc(buf_len) }.cast::<c_char>();
-        unsafe { glob_rounds(pat, buf, buf_len, dir, flags, gap) };
-        unsafe { xfree(buf.cast()) };
-        i += 1;
+    let mut found = Vec::new();
+    for dir in dirnames {
+        glob_rounds(pat, dir.to_bytes(), flags, &mut found);
     }
 
-    // SAFETY: `pat` has `pat_len` readable bytes.
-    let pat_pathsep_cnt = unsafe { slice::from_raw_parts(pat, pat_len) }
+    let pat_pathsep_cnt = pat
         .iter()
-        .filter(|&&b| vim_ispathsep(b as c_int))
-        .count() as c_int;
+        .filter(|&&b| vim_ispathsep(c_int::from(b)))
+        .count();
+    let mut found: Vec<XString> = found
+        .iter()
+        .map(|matched| trim_match(matched, keep_ext, pat_pathsep_cnt))
+        .collect();
 
-    // SAFETY: the garray holds `ga_len` allocated strings.
-    for &matched in unsafe { ga_strings(gap) } {
-        // SAFETY: as above.
-        unsafe { trim_match(matched, keep_ext, pat_pathsep_cnt) };
-    }
-
-    // SAFETY: as above.
-    if unsafe { (*gap).ga_len } > 0 {
+    if !found.is_empty() {
         // Sort and remove the duplicates that several `dirnames` produce.
-        // SAFETY: as above.
-        unsafe { ga_remove_duplicate_strings(gap) };
+        remove_duplicate_names(&mut found);
     }
+    found
 }
 
-/// A garray of `char *` with room for ten.
-fn new_string_garray() -> GArray {
-    let mut ga = GArray::default();
-    // SAFETY: `ga` is a fresh local, and `ga_init` only writes its fields.
-    unsafe { ga_init(&raw mut ga, size_of::<*mut c_char>() as c_int, 10) };
-    ga
-}
-
-/// Hand a completed garray to an out-parameter pair, or answer `Err` when it
-/// is empty.
-///
-/// # Safety
-/// Both out-parameters must be writable, and `ga` must own its strings.
-unsafe fn take_matches(
-    ga: GArray,
-    num_file: *mut c_int,
-    file: *mut *mut *mut c_char,
-) -> Result<(), Failed> {
-    if ga.ga_len <= 0 {
-        return Err(Failed);
+/// The matches, or `Err` when there are none.
+fn some(found: Vec<XString>) -> Result<Vec<XString>, Failed> {
+    if found.is_empty() {
+        Err(Failed)
+    } else {
+        Ok(found)
     }
-    // SAFETY: the caller's out-parameters; the garray's buffer is handed over.
-    unsafe { *file = ga.ga_data.cast() };
-    unsafe { *num_file = ga.ga_len };
-    Ok(())
 }
 
 /// Expand color scheme, compiler or filetype names.
 ///
-/// Searches `{runtimepath}/{dirnames}/{pat}.{vim,lua}`; `RuntimeOpts::START` adds
-/// `{packpath}/pack/*/start/*/{dirnames}/...` and `RuntimeOpts::OPT` the `opt`
-/// equivalent.  `dirnames` is an array of one or more directory names.
-///
-/// # Safety
-/// As [`collect_runtime_matches`]; both out-parameters must be writable.
-pub unsafe fn expand_runtime_dir(
-    pat: *mut c_char,
-    flags: RuntimeOpts,
-    num_file: *mut c_int,
-    file: *mut *mut *mut c_char,
-    dirnames: *mut *mut c_char,
-) -> Result<(), Failed> {
-    // SAFETY: the caller's out-parameters and strings.
-    unsafe { *num_file = 0 };
-    unsafe { *file = ptr::null_mut() };
-    let mut ga = new_string_garray();
-    let pat_len = unsafe { cstr::bytes_at(pat) }.len();
-    unsafe { collect_runtime_matches(pat, pat_len, flags, false, &raw mut ga, dirnames) };
-    unsafe { take_matches(ga, num_file, file) }
-}
-
-/// The `[where]` qualifiers `:runtime` completion offers.
-///
-/// Deliberately a second copy of the words `get_runtime_cmd_flags` parses:
-/// what completion proposes and what the command accepts are separate
-/// questions, and upstream spells them separately too.
-const WHERE_VALUES: [&CStr; 4] = [c"START", c"OPT", c"PACK", c"ALL"];
-
-/// Command-line completion for the `:runtime` command.
-///
-/// # Safety
-/// `pat` must be NUL-terminated and both out-parameters writable.
-pub unsafe fn expand_runtime_cmd(
-    pat: *mut c_char,
-    num_matches: *mut c_int,
-    matches: *mut *mut *mut c_char,
-) -> Result<(), Failed> {
-    // SAFETY: the caller's out-parameters and pattern.
-    unsafe { *num_matches = 0 };
-    unsafe { *matches = ptr::null_mut() };
-    let mut ga = new_string_garray();
-    let pat_len = unsafe { cstr::bytes_at(pat) }.len();
-    let mut dirnames = [c"".as_ptr().cast_mut(), ptr::null_mut()];
-    unsafe {
-        collect_runtime_matches(
-            pat,
-            pat_len,
-            runtime_expand_flags.get(),
-            true,
-            &raw mut ga,
-            dirnames.as_mut_ptr(),
-        )
-    };
-
-    // Complete the [where] argument too, when none was given.
-    if runtime_expand_flags.get() == RuntimeOpts::NONE {
-        for value in WHERE_VALUES {
-            if unsafe { cstr::prefix_eq(pat, value.as_ptr(), pat_len) } {
-                unsafe { ga_grow(&raw mut ga, 1) };
-                unsafe {
-                    *ga.ga_data.cast::<*mut c_char>().offset(ga.ga_len as isize) =
-                        xstrdup(value.as_ptr())
-                };
-                ga.ga_len += 1;
-            }
-        }
-    }
-
-    unsafe { take_matches(ga, num_matches, matches) }
-}
-
-/// Expand `:packadd` names: `{packpath}/pack/*/opt/{pat}`.
-///
-/// # Safety
-/// `pat` must be NUL-terminated and both out-parameters writable.
-pub unsafe fn expand_packadd_dir(
-    pat: *mut c_char,
-    num_file: *mut c_int,
-    file: *mut *mut *mut c_char,
-) -> Result<(), Failed> {
-    // SAFETY: the caller's out-parameters and pattern; `s` is owned and freed
-    // below.
-    unsafe { *num_file = 0 };
-    unsafe { *file = ptr::null_mut() };
-    let mut ga = new_string_garray();
-
-    let buflen = unsafe { cstr::bytes_at(pat) }.len() + 26;
-    let s = unsafe { xmalloc(buflen) }.cast::<c_char>();
-    for fmt in [c"pack/*/opt/%s*", c"opt/%s*"] {
-        unsafe { snprintf!(s, buflen, fmt.as_ptr(), pat) };
-        p_pp(|value| unsafe {
-            ga_append_owned(
-                &raw mut ga,
-                globpath(value, cstr::at(s), WildOpts::NONE, true),
-            )
-        });
-    }
-    unsafe { xfree(s.cast()) };
-
-    // Offer the package name, not the path it was found at.
-    for &matched in unsafe { ga_strings(&raw mut ga) } {
-        let tail = unsafe { tail_index(cstr::bytes_at(matched)) };
-        let into = matched.cast::<u8>();
-        unsafe {
-            into.copy_from(
-                matched.add(tail).cast(),
-                cstr::bytes_at(matched.add(tail)).len() + 1,
-            )
-        };
-    }
-
-    if ga.ga_len <= 0 {
-        return Err(Failed);
-    }
-    // Sort and remove the duplicates the two patterns can produce.
-    unsafe { ga_remove_duplicate_strings(&raw mut ga) };
-    unsafe { take_matches(ga, num_file, file) }
-}
-
-/// The files under `dirs` in the runtime path `pat` matches, owned:
-/// [`expand_runtime_dir`] for the command line.
+/// Searches `{runtimepath}/{dirs}/{pat}.{vim,lua}`; `RuntimeOpts::START` adds
+/// `{packpath}/pack/*/start/*/{dirs}/...` and `RuntimeOpts::OPT` the `opt`
+/// equivalent.  `dirs` holds one or more directory names.
 pub(crate) fn runtime_dir_matches(
     pat: &CStr,
     flags: RuntimeOpts,
     dirs: &[&CStr],
 ) -> Result<Vec<XString>, Failed> {
-    let mut owned = pat.to_bytes_with_nul().to_vec();
-    let mut dirnames: Vec<*mut c_char> = dirs.iter().map(|d| d.as_ptr().cast_mut()).collect();
-    dirnames.push(ptr::null_mut());
-    let mut count: c_int = 0;
-    let mut files: *mut *mut c_char = ptr::null_mut();
-    // SAFETY: a NUL-terminated copy, a NULL-terminated array of names the
-    // walk only reads, and two locals to fill in.
-    unsafe {
-        expand_runtime_dir(
-            owned.as_mut_ptr().cast(),
-            flags,
-            &raw mut count,
-            &raw mut files,
-            dirnames.as_mut_ptr(),
-        )?;
-        Ok(take_string_array(count, files))
-    }
+    some(collect_runtime_matches(pat.to_bytes(), flags, false, dirs))
 }
 
-/// The packages `pat` matches, owned: [`expand_packadd_dir`].
-pub(crate) fn packadd_dir_matches(pat: &CStr) -> Result<Vec<XString>, Failed> {
-    let mut owned = pat.to_bytes_with_nul().to_vec();
-    let mut count: c_int = 0;
-    let mut files: *mut *mut c_char = ptr::null_mut();
-    // SAFETY: a NUL-terminated copy and two locals to fill in.
-    unsafe {
-        expand_packadd_dir(owned.as_mut_ptr().cast(), &raw mut count, &raw mut files)?;
-        Ok(take_string_array(count, files))
-    }
-}
+/// The `[where]` qualifiers `:runtime` completion offers.
+///
+/// Deliberately a second copy of the words `runtime_cmd_flags` parses:
+/// what completion proposes and what the command accepts are separate
+/// questions, and upstream spells them separately too.
+const WHERE_VALUES: [&CStr; 4] = [c"START", c"OPT", c"PACK", c"ALL"];
 
-/// The `:runtime` arguments `pat` matches, owned: [`expand_runtime_cmd`].
+/// Command-line completion for the `:runtime` command.
 pub(crate) fn runtime_cmd_matches(pat: &CStr) -> Result<Vec<XString>, Failed> {
-    let mut owned = pat.to_bytes_with_nul().to_vec();
-    let mut count: c_int = 0;
-    let mut files: *mut *mut c_char = ptr::null_mut();
-    // SAFETY: a NUL-terminated copy and two locals to fill in.
-    unsafe {
-        expand_runtime_cmd(owned.as_mut_ptr().cast(), &raw mut count, &raw mut files)?;
-        Ok(take_string_array(count, files))
+    let pat = pat.to_bytes();
+    let flags = RUNTIME_EXPAND_FLAGS.get();
+    let mut found = collect_runtime_matches(pat, flags, true, &[c""]);
+
+    // Complete the [where] argument too, when none was given.
+    if flags == RuntimeOpts::NONE {
+        for value in WHERE_VALUES {
+            // `strncmp` over the pattern's length: the word starts with it.
+            if value.to_bytes().starts_with(pat) {
+                found.push(XString::from_cstr(value));
+            }
+        }
     }
+    some(found)
+}
+
+/// Expand `:packadd` names: `{packpath}/pack/*/opt/{pat}`.
+pub(crate) fn packadd_dir_matches(pat: &CStr) -> Result<Vec<XString>, Failed> {
+    let pp = P_PP.get();
+    let mut found = Vec::new();
+    for prefix in [&b"pack/*/opt/"[..], b"opt/"] {
+        let glob = cstr::owned(&[prefix, pat.to_bytes(), b"*"].concat());
+        found.extend(globpath(pp.as_cstr(), &glob, WildOpts::NONE, true));
+    }
+
+    // Offer the package name, not the path it was found at.
+    let mut found: Vec<XString> = found
+        .iter()
+        .map(|matched| XString::from_bytes(&matched[tail_index(matched)..]))
+        .collect();
+
+    if found.is_empty() {
+        return Err(Failed);
+    }
+    // Sort and remove the duplicates the two patterns can produce.
+    remove_duplicate_names(&mut found);
+    Ok(found)
 }

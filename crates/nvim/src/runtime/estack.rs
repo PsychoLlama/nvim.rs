@@ -1,7 +1,7 @@
 //! The execution stack -- what `<sfile>`, `<stack>` and every error message's
 //! "line N of ..." prefix are read from.
 //!
-//! `exestack` is a stack of [`EStack`] entries, one per nested thing being
+//! `EXESTACK` is a stack of [`EStack`] entries, one per nested thing being
 //! executed: a sourced script, a user function, an autocommand.  [`estack_push`]
 //! and [`estack_pop`] bracket each of them, and [`estack_sfile`] renders the
 //! stack the three ways vimscript can ask for it -- `<sfile>` (the innermost
@@ -46,13 +46,13 @@ fn entry_for(es_type: EStackType, name: FrameName, lnum: LineNr) -> EStack {
 
 /// Append `entry` to the execution stack.
 fn push_entry(entry: EStack) {
-    exestack.with_mut(|stack| stack.push(entry));
+    EXESTACK.with_mut(|stack| stack.push(entry));
 }
 
 /// Push the bottom frame, the one that stands for "not executing anything".
 pub fn estack_init() {
     // Ten frames of nesting are the common case; upstream pre-grows for it.
-    exestack.with_mut(|stack| stack.reserve(10));
+    EXESTACK.with_mut(|stack| stack.reserve(10));
     push_entry(entry_for(ETYPE_TOP, FrameName::None, 0));
 }
 
@@ -83,7 +83,7 @@ pub(crate) fn sourcing_name_bytes() -> Option<Vec<u8>> {
 
 /// Take an item off of the execution stack. The bottom frame stays.
 pub fn estack_pop() {
-    let popped = exestack.with_mut(|stack| if stack.len() > 1 { stack.pop() } else { None });
+    let popped = EXESTACK.with_mut(|stack| if stack.len() > 1 { stack.pop() } else { None });
     // The frame's name and function go outside the borrow.
     drop(popped);
 }
@@ -95,7 +95,7 @@ pub fn estack_pop() {
 /// [`estack_init`] having run. Eight files each had their own copy of that
 /// index before the stack became a `Vec`.
 pub fn innermost() -> Option<EStack> {
-    exestack.with(|stack| stack.last().cloned())
+    EXESTACK.with(|stack| stack.last().cloned())
 }
 
 /// The frame being executed, copied, for the callers that cannot express
@@ -123,7 +123,7 @@ pub fn innermost_frame() -> EStack {
 /// for why there always is.
 #[track_caller]
 pub fn with_innermost(f: impl FnOnce(&mut EStack)) {
-    exestack.with_mut(|stack| match stack.last_mut() {
+    EXESTACK.with_mut(|stack| match stack.last_mut() {
         Some(entry) => f(entry),
         None => debug_assert!(false, "the execution stack has no frame"),
     });
@@ -132,7 +132,7 @@ pub fn with_innermost(f: impl FnOnce(&mut EStack)) {
 /// Rename the innermost frame -- an autocommand frame moving on to its next
 /// pattern. The old name is dropped once the stack's borrow is released.
 pub(crate) fn set_sourcing_name(name: FrameName) {
-    let old = exestack.with_mut(|stack| {
+    let old = EXESTACK.with_mut(|stack| {
         stack
             .last_mut()
             .map(|entry| core::mem::replace(&mut entry.es_name, name))
@@ -142,7 +142,7 @@ pub(crate) fn set_sourcing_name(name: FrameName) {
 
 /// The line number the innermost frame is on -- upstream's `SOURCING_LNUM`.
 pub(crate) fn sourcing_lnum() -> LineNr {
-    exestack.with(|stack| stack.last().map_or(0, |entry| entry.es_lnum))
+    EXESTACK.with(|stack| stack.last().map_or(0, |entry| entry.es_lnum))
 }
 
 /// Whether the innermost frame has a name -- upstream's
@@ -164,12 +164,12 @@ pub(crate) fn sourcing_name_copy() -> Option<Vec<u8>> {
 /// `f` must not push onto or pop the execution stack: the stack is borrowed
 /// for the call, and the cell catches a nested borrow.
 pub(crate) fn with_sourcing_name<R>(f: impl FnOnce(Option<&[u8]>) -> R) -> R {
-    exestack.with(|stack| f(stack.last().and_then(EStack::name).map(CStr::to_bytes)))
+    EXESTACK.with(|stack| f(stack.last().and_then(EStack::name).map(CStr::to_bytes)))
 }
 
 /// Move the innermost frame to `lnum`.
 pub(crate) fn set_sourcing_lnum(lnum: LineNr) {
-    exestack.with_mut(|stack| {
+    EXESTACK.with_mut(|stack| {
         if let Some(entry) = stack.last_mut() {
             entry.es_lnum = lnum;
         }
@@ -185,7 +185,7 @@ pub(crate) fn estack_sfile(which: EStackArg) -> Option<XString> {
     // Nothing reached from inside the borrow pushes onto the stack, which is
     // what makes holding it across these calls sound -- and `with` is now the
     // thing that would catch it if that ever stopped being true.
-    exestack.with(|stack| {
+    EXESTACK.with(|stack| {
         let innermost = stack.last()?;
 
         if which == ESTACK_SFILE && innermost.es_type != ETYPE_UFUNC {
@@ -313,7 +313,7 @@ fn stacktrace_push_item(
 pub fn stacktrace_create() -> Option<ListRef> {
     // A copy of the stack, because building the dicts below runs arbitrary
     // allocation and it is not worth holding the cell's borrow across it.
-    let stack = exestack.with(|stack| stack.clone());
+    let stack = EXESTACK.with(|stack| stack.clone());
     let list = tv_list_alloc(stack.len().cast_signed());
 
     for entry in &stack {

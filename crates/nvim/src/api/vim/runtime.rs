@@ -71,7 +71,7 @@ pub fn nvim_get_runtime_file(name: String_0, all: Boolean) -> Result<Array, Erro
 // `nvim__get_lib_dir` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
 pub fn nvim__get_lib_dir() -> String_0 {
-    unsafe { cstr_to_string(get_lib_dir()) }
+    get_lib_dir().map_or(String_0::NULL, |dir| String_0::from_cstr(dir.as_cstr()))
 }
 
 // `nvim__get_runtime` is an API method's own name, published over msgpack-RPC.

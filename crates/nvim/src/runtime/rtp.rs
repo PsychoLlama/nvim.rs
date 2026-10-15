@@ -6,16 +6,15 @@
 //! one comma-separated option value with every embedded comma and backslash
 //! escaped.
 //!
-//! Everything but reading the environment and handing the result back as
-//! `xmalloc`ed memory happens in [`RtpParts::build`], which is safe code over
-//! byte slices and is what the tests at the bottom of this file exercise.
+//! Everything but reading the environment happens in [`RtpParts::build`],
+//! which works over byte slices and is what the tests at the bottom of this
+//! file exercise.
 //! The C built the same string in two passes -- one to compute the exact
 //! length, one to fill a buffer of it -- and asserted afterwards that the two
 //! agreed; a growable `Vec` needs only the second, so the whole of
 //! `compute_double_env_sep_len` and the arithmetic beside it is gone.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -25,12 +24,12 @@
 )]
 
 use super::*;
-use crate::cstr;
-use crate::memory::XString;
+use crate::memory::ThinCString;
+use crate::os::env::{DEFAULT_LIB_DIR, vim_getenv_owned};
+use crate::os::fs::dir_exists;
+use crate::os::stdpaths::xdg_var;
 
 use crate::types::MAXPATHL;
-use core::ffi::{CStr, c_char};
-use core::ptr;
 
 /// The suffix under a data directory that holds installed-by-hand runtime
 /// files, as opposed to the user's own.
@@ -167,16 +166,9 @@ fn push_comma_escaped(out: &mut Vec<u8>, src: &[u8]) {
     }
 }
 
-/// A possibly-null C string as bytes, without its terminator.
-///
-/// # Safety
-/// `s` is null or NUL-terminated, and stays valid for the borrow.
-unsafe fn bytes_of<'a>(s: *const c_char) -> &'a [u8] {
-    if s.is_null() {
-        return &[];
-    }
-    // SAFETY: the caller's contract.
-    unsafe { CStr::from_ptr(s) }.to_bytes()
+/// An unset variable's bytes: none, as an empty one's.
+fn bytes(value: &Option<ThinCString>) -> &[u8] {
+    value.as_ref().map_or(&b""[..], ThinCString::as_bytes)
 }
 
 /// Where nvim's Lua runtime files were installed.
@@ -184,86 +176,59 @@ unsafe fn bytes_of<'a>(s: *const c_char) -> &'a [u8] {
 /// The configured path when it exists, else `lib/nvim` beside the binary's
 /// install prefix -- which is what makes a relocated or AppImage build find
 /// its own files.
-pub fn get_lib_dir() -> *mut c_char {
-    // SAFETY: `default_lib_dir` is a NUL-terminated build-time constant, and
-    // `exe_name` is `MAXPATHL` bytes for the two calls that fill it.
+pub fn get_lib_dir() -> Option<XString> {
     // TODO(bfredl): too fragile? Ideally default_lib_dir would be made
     // empty in an appimage build.
-    if !unsafe { cstr::bytes_at(default_lib_dir.get()) }.is_empty()
-        && unsafe { os_isdir(default_lib_dir.get()) }
-    {
-        return unsafe { xstrdup(default_lib_dir.get()) };
+    if !DEFAULT_LIB_DIR.is_empty() && dir_exists(DEFAULT_LIB_DIR) {
+        return Some(XString::from_cstr(DEFAULT_LIB_DIR));
     }
     let mut exe_name = vim_get_prefix_from_exepath();
-    if append_path(&mut exe_name, b"lib/nvim", MAXPATHL as usize).is_ok() {
-        return XString::from_vec(exe_name).into_raw();
-    }
-    ptr::null_mut()
-}
-
-/// [`runtimepath_default`], owned: `None` when nothing contributed a
-/// directory.
-pub(crate) fn runtimepath_default_of(clean_arg: bool) -> Option<XString> {
-    // SAFETY: startup runs on the main thread; the answer is an allocation
-    // of its own or null, taken over once.
-    let value = unsafe { runtimepath_default(clean_arg) };
-    (!value.is_null()).then(|| unsafe { XString::from_raw(value) })
+    append_path(&mut exe_name, b"lib/nvim", MAXPATHL as usize).ok()?;
+    Some(XString::from_vec(exe_name))
 }
 
 /// The startup value of 'runtimepath'.
 ///
-/// Answers null when nothing contributed a directory -- no XDG variables, no
+/// `None` when nothing contributed a directory -- no XDG variables, no
 /// `$VIMRUNTIME` and no library directory -- which is what the option code
 /// reads as "leave the built-in default alone".
 ///
-/// # Safety
 /// Reads the environment; must run on the main thread, like every other
-/// caller of `stdpaths_get_xdg_var`.
-pub unsafe fn runtimepath_default(clean_arg: bool) -> *mut c_char {
+/// reader of the XDG variables.
+///
+/// An unset variable and an empty one contribute the same nothing.
+pub(crate) fn runtimepath_default(clean_arg: bool) -> Option<XString> {
     let appname = get_appname(false);
-    // SAFETY: every pointer below is either null or an owned NUL-terminated
-    // string, freed once at the end and not borrowed past that point.
-    // `--clean` starts from the packaged runtime only: no user config,
-    // no user data.
+    // `--clean` starts from the packaged runtime only: no user config, no
+    // user data.
     let data_home = if clean_arg {
-        ptr::null_mut()
+        None
     } else {
-        stdpaths_get_xdg_var(kXDGDataHome)
+        xdg_var(kXDGDataHome)
     };
     let config_home = if clean_arg {
-        ptr::null_mut()
+        None
     } else {
-        stdpaths_get_xdg_var(kXDGConfigHome)
+        xdg_var(kXDGConfigHome)
     };
-    let vimruntime = unsafe { vim_getenv(c"VIMRUNTIME".as_ptr()) };
+    let vimruntime = vim_getenv_owned(c"VIMRUNTIME");
     let libdir = get_lib_dir();
-    let data_dirs = stdpaths_get_xdg_var(kXDGDataDirs);
-    let config_dirs = stdpaths_get_xdg_var(kXDGConfigDirs);
+    let data_dirs = xdg_var(kXDGDataDirs);
+    let config_dirs = xdg_var(kXDGConfigDirs);
 
-    let rtp = RtpParts {
+    let mut rtp = RtpParts {
         appname: appname.to_bytes(),
-        config_home: unsafe { bytes_of(config_home) },
-        config_dirs: unsafe { bytes_of(config_dirs) },
-        data_home: unsafe { bytes_of(data_home) },
-        data_dirs: unsafe { bytes_of(data_dirs) },
-        vimruntime: unsafe { bytes_of(vimruntime) },
-        libdir: unsafe { bytes_of(libdir) },
+        config_home: bytes(&config_home),
+        config_dirs: bytes(&config_dirs),
+        data_home: bytes(&data_home),
+        data_dirs: bytes(&data_dirs),
+        vimruntime: vimruntime.as_deref().unwrap_or_default(),
+        libdir: libdir.as_deref().unwrap_or_default(),
     }
     .build();
 
-    unsafe { xfree(data_dirs.cast()) };
-    unsafe { xfree(config_dirs.cast()) };
-    unsafe { xfree(data_home.cast()) };
-    unsafe { xfree(config_home.cast()) };
-    unsafe { xfree(vimruntime.cast()) };
-    unsafe { xfree(libdir.cast()) };
-
-    if rtp.is_empty() {
-        return ptr::null_mut();
-    }
-    let out = unsafe { xmalloc(rtp.len()) }.cast::<c_char>();
-    unsafe { ptr::copy_nonoverlapping(rtp.as_ptr(), out.cast(), rtp.len()) };
-    out
+    // The value ends in the terminator `build` wrote over the last comma.
+    (rtp.pop() == Some(0)).then(|| XString::from_vec(rtp))
 }
 
 #[cfg(test)]

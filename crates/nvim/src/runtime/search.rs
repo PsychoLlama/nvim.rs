@@ -105,7 +105,7 @@ pub fn ex_runtime(excmd: &mut ExArg) {
 /// starts at `arg` in the completion's line.
 ///
 /// The `[where]` qualifier is only offered for a single-argument command line;
-/// past the first argument [`runtime_expand_flags`] is forced non-zero so
+/// past the first argument [`RUNTIME_EXPAND_FLAGS`] is forced non-zero so
 /// [`expand_runtime_cmd`] stops proposing the qualifiers.
 pub fn set_context_in_runtime_cmd(expand: &mut Expand, arg: usize) {
     let line = expand.line_cstr().to_bytes();
@@ -131,7 +131,7 @@ pub fn set_context_in_runtime_cmd(expand: &mut Expand, arg: usize) {
         }
         arg = p + skip::white(rest(p));
     }
-    runtime_expand_flags.set(flags);
+    RUNTIME_EXPAND_FLAGS.set(flags);
     expand.context = ExpandContext::Runtime;
     expand.pattern = arg;
 }

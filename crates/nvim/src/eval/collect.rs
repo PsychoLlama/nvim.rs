@@ -63,7 +63,7 @@ use crate::option::vars::p_verbose;
 use crate::os::cshim::gettext;
 use crate::quickfix::set_ref_in_quickfix;
 use crate::registry::SlotTable;
-use crate::runtime::exestack;
+use crate::runtime::EXESTACK;
 use crate::tag::set_ref_in_tagfunc;
 use crate::types::{
     CONV_NONE, Callback, CallbackReader, Channel, Failed, List, OptInt, PartialRef, Timer, TypVal,
@@ -244,7 +244,7 @@ pub fn garbage_collect(testing: bool) -> bool {
 /// upstream's and are kept: this runs after every garbage-collection pass, and
 /// shrinking a stack that is about to grow again is what they avoid.
 fn trim_exestack() {
-    exestack.with_mut(|stack| {
+    EXESTACK.with_mut(|stack| {
         let len = stack.len();
         if stack.capacity() - len <= EXESTACK_SLACK {
             return;

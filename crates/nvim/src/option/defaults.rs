@@ -47,7 +47,7 @@ use crate::os::lang::{lang_init, mess_lang_of};
 use crate::os::stdpaths::stdpaths_user_state_subpath_of;
 use crate::os::users::os_getuid;
 use crate::path::{invocation_path_tail, path_fnamecmp, vim_ispathlistsep};
-use crate::runtime::runtimepath_default_of;
+use crate::runtime::runtimepath_default;
 use crate::runtime::state::current_sctx;
 use crate::spell::init_spell_chartab;
 use crate::types::{OptIndex, OptInt, OptVal, OptionSetFlags, PATHSEPSTR, uint32_t};
@@ -234,7 +234,7 @@ pub(crate) fn set_init_1(clean_arg: bool) {
         change_option_default(opt_idx, OptVal::from_xstring(dir));
     }
 
-    if let Some(rtp) = runtimepath_default_of(clean_arg) {
+    if let Some(rtp) = runtimepath_default(clean_arg) {
         // 'packpath' gets its own copy.
         change_option_default(kOptPackpath, OptVal::from_xstring(rtp.clone()));
         change_option_default(kOptRuntimepath, OptVal::from_xstring(rtp));

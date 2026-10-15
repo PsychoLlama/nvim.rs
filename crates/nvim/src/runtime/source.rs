@@ -11,8 +11,6 @@
 //! into.
 
 #![forbid(unsafe_code)]
-// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use super::*;
 use crate::autocmd::fire_autocmds_for;
@@ -521,8 +519,8 @@ fn source_bracket(
     let script_ctx = Script::saved();
 
     // Always use a new sequence number.
-    let seq = last_current_SID_seq.get() + 1;
-    last_current_SID_seq.set(seq);
+    let seq = LAST_SCRIPT_SEQ.get() + 1;
+    LAST_SCRIPT_SEQ.set(seq);
     current_sctx.with_mut(|sctx| sctx.sc_seq = seq);
 
     let item = register_script(req, &mut sid, &fname_exp);

@@ -71,9 +71,13 @@ pub static default_vim_dir: GlobalCell<*mut c_char> =
 pub static default_vimruntime_dir: GlobalCell<*mut c_char> = GlobalCell::new(
     concat!(env!("NVIM_DEFAULT_VIMRUNTIME_DIR"), "\0").as_ptr() as *const c_char as *mut c_char,
 );
-pub static default_lib_dir: GlobalCell<*mut c_char> = GlobalCell::new(
-    concat!(env!("NVIM_DEFAULT_LIB_DIR"), "\0").as_ptr() as *const c_char as *mut c_char,
-);
+/// Where the build installed nvim's Lua runtime files; empty when it did not
+/// say.
+pub(crate) const DEFAULT_LIB_DIR: &CStr =
+    match CStr::from_bytes_with_nul(concat!(env!("NVIM_DEFAULT_LIB_DIR"), "\0").as_bytes()) {
+        Ok(dir) => dir,
+        Err(_) => panic!("NVIM_DEFAULT_LIB_DIR holds a NUL"),
+    };
 
 pub fn env_init() {
     // SAFETY: a static name.

@@ -132,7 +132,6 @@ binary as well as the default one.
 
 ## `os`
 
-- `neovim::os::env::default_lib_dir`
 - `neovim::os::env::default_vim_dir`
 - `neovim::os::env::default_vimruntime_dir`
 - `neovim::os::input::blocking`
@@ -151,7 +150,6 @@ binary as well as the default one.
 
 ## `runtime`
 
-- `neovim::runtime::exestack`
 - `neovim::runtime::state::current_sctx`
 
 ## `search`

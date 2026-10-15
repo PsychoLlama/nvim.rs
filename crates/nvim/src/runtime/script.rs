@@ -458,7 +458,8 @@ pub(crate) fn script_autoload_named(name: &[u8], reload: bool) -> bool {
 
     let scriptname = autoload_name_of(name);
     let path: &[u8] = &scriptname;
-    let known = ga_loaded.with(|loaded| loaded.iter().any(|entry| same_autoload(entry, path)));
+    let known =
+        LOADED_AUTOLOADS.with(|loaded| loaded.iter().any(|entry| same_autoload(entry, path)));
 
     // Was it loaded already?
     if !reload && known {
@@ -467,7 +468,7 @@ pub(crate) fn script_autoload_named(name: &[u8], reload: bool) -> bool {
 
     // Remember the name if it wasn't loaded already.
     if !known {
-        ga_loaded.with_mut(|loaded| loaded.push(path.to_vec()));
+        LOADED_AUTOLOADS.with_mut(|loaded| loaded.push(path.to_vec()));
     }
 
     // Try loading the package from `$VIMRUNTIME/autoload/<name>.vim`.  The

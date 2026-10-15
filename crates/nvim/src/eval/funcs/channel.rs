@@ -33,7 +33,7 @@ use crate::msgpack_rpc::server::{
     server_address_list, server_address_new, server_start, server_stop,
 };
 use crate::os::cshim::gettext;
-use crate::runtime::exestack;
+use crate::runtime::EXESTACK;
 use crate::runtime::state::current_sctx;
 use crate::semsg;
 use crate::semsg_multiline;
@@ -225,7 +225,7 @@ impl ProviderScope {
         };
 
         // The scope is *read*, field by field, and nothing here writes it
-        // back -- `exestack` is a different cell and `set_current_funccal`
+        // back -- `EXESTACK` is a different cell and `set_current_funccal`
         // touches neither -- so a shared borrow reaches every field and the
         // cell's address is not needed.
         provider_caller_scope.with(|scope| {
@@ -233,7 +233,7 @@ impl ProviderScope {
             // Push the caller's execution-stack entry so that any message
             // names the caller's script, not the provider's.
             let entry = scope.es_entry.clone();
-            exestack.with_mut(|stack| stack.push(entry));
+            EXESTACK.with_mut(|stack| stack.push(entry));
             autocmd_fname.set(scope.autocmd_fname.clone());
             autocmd_match.set(scope.autocmd_match.clone());
             autocmd_fname_full.set(scope.autocmd_fname_full);
@@ -249,7 +249,7 @@ impl ProviderScope {
     unsafe fn leave(self) {
         // SAFETY throughout: the caller's obligation.
         current_sctx.set(self.sctx);
-        exestack.with_mut(|stack| {
+        EXESTACK.with_mut(|stack| {
             stack.pop();
         });
         autocmd_fname.set(self.autocmd_fname);

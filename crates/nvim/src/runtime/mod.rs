@@ -1,12 +1,13 @@
 //! The runtime: where the editor looks for the files it is made of, and what
 //! it remembers about the ones it has run.
 //!
-//! Eight children, one per question asked of it — see each one's own docs:
+//! Nine children, one per question asked of it — see each one's own docs:
 //! [`estack`] (where am I executing), [`search`] (where does a file along
 //! 'runtimepath' live), [`cache`] (the precomputed form of that search),
 //! [`pack`] (what a package adds), [`expand`] (what completion offers),
 //! [`rtp`] (how the default 'runtimepath' is built), [`source`] (running a
-//! script) and [`script`] (the registry of the ones already run).
+//! script), [`reader`] (reading one) and [`script`] (the registry of the ones
+//! already run).
 //!
 //! This file keeps what they share: the flag constants, the struct layouts,
 //! and the family's process-wide state. That last part is the reason the
@@ -14,17 +15,17 @@
 //!
 //! | cell | written by | read by |
 //! | ---- | ---------- | ------- |
-//! | `exestack` | [`estack`]'s push/pop | `estack`, `script`, and every error message's prefix |
+//! | `EXESTACK` | [`estack`]'s push/pop, and the provider's saved frame | `estack`, the garbage collector's trim, and every error message's prefix |
 //! | `SCRIPT_ITEMS` | [`script`]'s `new_script_item` | [`script`]'s `with_script_item` and the readers beside it, which ~20 files outside the family call |
-//! | `ga_loaded` | [`script`]'s `script_autoload`, once per autoload file | [`script`] — nothing else touches it |
-//! | `last_current_SID_seq` | [`source`] | [`source`] |
+//! | `LOADED_AUTOLOADS` | [`script`]'s `script_autoload`, once per autoload file | [`script`] — nothing else touches it |
+//! | `LAST_SCRIPT_SEQ` | [`source`] | [`source`] |
 //! | `RUNTIME_SEARCH_PATH` | [`cache`], and [`pack`]'s splice | [`cache`], via [`search`]'s `do_in_runtimepath_visit` |
 //! | `SEARCH_PATH_VALID` | [`cache`]'s invalidate/validate pair, [`pack`] | [`cache`], [`pack`] |
 //! | `THREAD_SEARCH_PATH` | [`cache`], for the off-main-loop reader | [`search`] — **a `Mutex`, see below** |
 //! | `THREAD_SEARCH_PATH_VALID` | [`cache`], [`pack`] | [`cache`] |
-//! | `runtime_expand_flags` | [`search`]'s `set_context_in_runtime_cmd` | [`expand`]'s `expand_runtime_cmd` |
-#![deny(unsafe_op_in_unsafe_fn)]
-// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
+//! | `RUNTIME_EXPAND_FLAGS` | [`search`]'s `set_context_in_runtime_cmd` | [`expand`]'s `runtime_cmd_matches` |
+#![forbid(unsafe_code)]
+// The constants here keep upstream's spelling (`kXDG*`, `kRet*`).
 #![allow(non_upper_case_globals)]
 
 pub(crate) mod state;
@@ -44,30 +45,27 @@ use crate::ex_docmd::{do_cmdline, do_cmdline_cmd, do_exedit};
 use crate::ex_eval::{
     PendingAction, PendingValue, aborting, cleanup_conditionals, cond_stack_of, report_pending,
 };
-use crate::garray::{ga_grow, ga_init, ga_remove_duplicate_strings};
 use crate::getchar::openscript;
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
 use crate::keycodes::Ctrl_V;
 use crate::lua::executor::{nlua_exec_file, nlua_exec_lines, nlua_is_deferred_safe};
 use crate::mbyte::cluster_len;
-use crate::mbyte::utf_head_off;
 use crate::memory::XString;
-use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::state::msg_col;
 use crate::message::{e_argreq, e_interr, e_invarg, e_norange};
 use crate::message::{
     emsg, message_filtered, msg_display, msg_ext_set_kind, msg_ext_ui_flush, msg_putchar,
     verbose_enter, verbose_leave,
 };
-use crate::option::vars::{p_enc, p_ic, p_lpl, p_pp, p_rtp, p_verbose};
+use crate::option::vars::{p_enc, p_ic, p_lpl, p_verbose};
 use crate::option::{set_option_value_give_err, vimrc_found};
 use crate::options::kOptRuntimepath;
-use crate::os::cshim::{gettext, strncasecmp};
-use crate::os::env::{default_lib_dir, vim_get_prefix_from_exepath, vim_getenv};
-use crate::os::fs::{os_file_is_readable, os_isdir};
+use crate::os::cshim::gettext;
+use crate::os::env::vim_get_prefix_from_exepath;
+use crate::os::fs::os_file_is_readable;
 use crate::os::input::line_breakcheck;
-use crate::os::stdpaths::{get_appname, stdpaths_get_xdg_var};
+use crate::os::stdpaths::get_appname;
 use crate::path::{
     append_path, concat_fnames, fix_fname, gen_expand_wildcards, past_head_index, path_fnamecmp,
     path_fnamencmp, path_with_extension, tail_index, vim_ispathsep, vim_ispathsep_nocolon,
@@ -84,9 +82,9 @@ use crate::runtime::state::{current_sctx, did_source_packages};
 use crate::types::AutoEvent;
 use crate::types::{
     ApiDict, Array, CONV_NONE, EStack, EStackArg, EStackType, EstackInfo, EvalFuncData, ExArg,
-    Expand, FrameName, GArray, Integer, LineNr, LuaRetMode, Object, OptSet, OptVal, ProfTime,
-    ScriptCtx, ScriptId, ScriptItem, String_0, TypVal, UserFunc, VAR_DICT, VarLock, VarNumber,
-    VimConv, XDGVarType, int64_t, kBoolVarFalse, ptrdiff_t, size_t,
+    Expand, FrameName, Integer, LineNr, LuaRetMode, Object, OptSet, OptVal, ProfTime, ScriptCtx,
+    ScriptId, ScriptItem, String_0, TypVal, UserFunc, VAR_DICT, VarLock, VarNumber, VimConv,
+    XDGVarType, int64_t, kBoolVarFalse, ptrdiff_t,
 };
 use core::cell::Cell;
 use std::rc::Rc;
@@ -105,7 +103,7 @@ mod source;
 
 pub use self::cache::*;
 pub use self::estack::*;
-pub use self::expand::*;
+pub(crate) use self::expand::*;
 pub use self::pack::*;
 pub(crate) use self::reader::*;
 pub use self::rtp::*;
@@ -217,7 +215,7 @@ pub const SID_STR: ::core::ffi::c_int = -10;
 /// element type is fixed, and every walk over it is then a checked one.
 /// Reach it through [`GlobalCell::with`]/[`GlobalCell::with_mut`], which also
 /// catch a push made while a walk holds a borrow.
-pub static exestack: GlobalCell<Vec<EStack>> = GlobalCell::new(Vec::new());
+pub(crate) static EXESTACK: GlobalCell<Vec<EStack>> = GlobalCell::new(Vec::new());
 /// The script registry, script 1 at index 0 -- see [`script`].
 ///
 /// The items are the vector's own: ids are never reused so it only ever
@@ -229,9 +227,8 @@ pub(crate) static SCRIPT_ITEMS: GlobalCell<Vec<ScriptItem>> = GlobalCell::new(Ve
 ///
 /// A `Vec`, not a `GArray` of owned `char *`: the list is private to
 /// [`script`], is only ever appended to and scanned, and never freed.
-static ga_loaded: GlobalCell<Vec<Vec<u8>>> = GlobalCell::new(Vec::new());
-static last_current_SID_seq: GlobalCell<::core::ffi::c_int> =
-    GlobalCell::new(0 as ::core::ffi::c_int);
+static LOADED_AUTOLOADS: GlobalCell<Vec<Vec<u8>>> = GlobalCell::new(Vec::new());
+static LAST_SCRIPT_SEQ: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 /// Whether [`RUNTIME_SEARCH_PATH`] still describes 'runtimepath' and
 /// 'packpath'.
 static SEARCH_PATH_VALID: GlobalCell<bool> = GlobalCell::new(false);
@@ -247,6 +244,5 @@ static RUNTIME_SEARCH_PATH: GlobalCell<Option<Rc<Vec<SearchPathItem>>>> = Global
 /// `vim.uv.new_thread` state sees it, and every `require()` in such a thread
 /// reaches it.
 static THREAD_SEARCH_PATH: Mutex<Vec<SearchPathItem>> = Mutex::new(Vec::new());
-static runtime_expand_flags: GlobalCell<RuntimeOpts> = GlobalCell::new(RuntimeOpts::NONE);
-pub const EINTR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
+static RUNTIME_EXPAND_FLAGS: GlobalCell<RuntimeOpts> = GlobalCell::new(RuntimeOpts::NONE);
 pub const ENV_SEPCHAR: ::core::ffi::c_int = ':' as ::core::ffi::c_int;
