@@ -45,7 +45,11 @@ struct Run {
 
 /// Start `nvim` in `dir` with `args`, `stdin` on its standard input, and
 /// wait at most ten seconds for it.
-fn nvim(dir: &Path, args: &[&str], stdin: Option<&[u8]>) -> Run {
+fn nvim<A: AsRef<std::ffi::OsStr> + std::fmt::Debug>(
+    dir: &Path,
+    args: &[A],
+    stdin: Option<&[u8]>,
+) -> Run {
     let _ = std::fs::remove_file(dir.join("report"));
     let runtime = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../runtime");
     let mut child = Command::new(env!("CARGO_BIN_EXE_nvim"))
@@ -369,5 +373,119 @@ fn startuptime_logs_the_phases() {
             "editing files in windows",
             "--- NVIM STARTED ---",
         ],
+    );
+}
+
+#[test]
+fn script_files_and_sessions() {
+    let book = Book::default();
+    let sandbox = files("startup_scripts");
+    let dir = sandbox.root();
+    sandbox.write("Session.vim", b"let g:order = ['default']\n");
+    sandbox.write("s.vim", b"let g:order = ['named']\n");
+    sandbox.write("keys.vim", b"");
+    let order = |args: &[&str]| field(&report(dir, args), "order");
+    // `-S` before another option, or last, is the default session.
+    book.eq(order(&["-S"]).as_deref(), Some("['default']"));
+    book.eq(order(&["-S", "s.vim"]).as_deref(), Some("['named']"));
+    let fail = |args: &[&str]| {
+        let run = nvim(dir, args, None);
+        format!("{:?} {}", run.code, run.stderr.trim_end())
+    };
+    book.eq(
+        fail(&["--headless", "-s", "keys.vim", "-s", "keys.vim", "+q"]),
+        "Some(2) Attempt to open script file again: \"-s keys.vim\"",
+    );
+    book.eq(
+        fail(&["--headless", "-w", "out.log", "-W", "out2.log", "+q"]),
+        "Some(2) Attempt to open script file again: \"-W out2.log\"",
+    );
+    // `-w` with digits is a 'window' height, in the word or the next one.
+    let window = |args: &[&str]| {
+        let mut argv = vec!["--headless", "-u", "NONE", "-i", "NONE"];
+        argv.extend_from_slice(args);
+        argv.extend_from_slice(&["-c", "call writefile([&window], 'report')", "-c", "qa!"]);
+        nvim(dir, &argv, None).report
+    };
+    book.eq(window(&["-w12"]), "12");
+    book.eq(window(&["-w", "7"]), "7");
+    // An unwritable `-w` file stops the startup.
+    book.eq(
+        fail(&["--headless", "-u", "NONE", "-W", "nodir/out.log", "+q"]),
+        "Some(2) Cannot open for script output: \"nodir/out.log\"",
+    );
+}
+
+#[test]
+fn attached_values_and_conflicts() {
+    let book = Book::default();
+    let sandbox = files("startup_attached");
+    let dir = sandbox.root();
+    sandbox.write("errors.txt", b"a.txt:4:needle here\n");
+    sandbox.write("tags", b"needle\ta.txt\t4\n");
+    let qf = |args: &[&str]| {
+        let got = report(dir, args);
+        format!("{:?} {:?}", field(&got, "buf"), field(&got, "line"))
+    };
+    book.eq(qf(&["-qerrors.txt"]), "Some(\"'a.txt'\") Some(\"4\")");
+    book.eq(qf(&["-q", "errors.txt"]), "Some(\"'a.txt'\") Some(\"4\")");
+    book.eq(qf(&["-tneedle"]), "Some(\"'a.txt'\") Some(\"4\")");
+    book.eq(qf(&["-t", "needle"]), "Some(\"'a.txt'\") Some(\"4\")");
+    let fail = |args: &[&str]| {
+        let run = nvim(dir, args, None);
+        format!("{:?} {}", run.code, run.stderr.trim_end())
+    };
+    book.eq(
+        fail(&["--embed", "-es"]),
+        "Some(1) nvim: --embed conflicts with -es/-Es/-l\nMore info with \"nvim -h\"",
+    );
+    book.eq(
+        fail(&["--headless", "-t", "needle", "-q", "errors.txt"]),
+        "Some(1) nvim: Too many edit arguments: \"-q\"\nMore info with \"nvim -h\"",
+    );
+    // `-ll` is only the bare interpreter as the first argument.
+    book.eq(
+        fail(&["-ll"]),
+        "Some(1) nvim: Argument missing after: \"-ll\"\nMore info with \"nvim -h\"",
+    );
+    book.eq(
+        fail(&["--headless", "-u", "NONE", "-c", "qa!", "-ll"]),
+        "Some(1) nvim: Garbage after option argument: \"-ll\"\nMore info with \"nvim -h\"",
+    );
+    // `-d file dir` diffs `file` against `dir/file`.
+    std::fs::create_dir_all(dir.join("sub")).expect("a directory");
+    sandbox.write("sub/b.txt", b"b1\nb2\n");
+    let argv = [
+        "--headless",
+        "-u",
+        "NONE",
+        "-i",
+        "NONE",
+        "-d",
+        "b.txt",
+        "sub",
+    ];
+    let write = "call writefile([join(argv(), '|')], 'report')";
+    let run = nvim(
+        dir,
+        &[&argv[..], &["-c", write, "-c", "qa!"]].concat(),
+        None,
+    );
+    book.eq(run.report, "b.txt|sub/b.txt");
+}
+
+#[test]
+fn a_bare_lua_interpreter() {
+    let book = Book::default();
+    let sandbox = files("startup_ll");
+    let dir = sandbox.root();
+    sandbox.write(
+        "s.lua",
+        b"io.open('report', 'w'):write(table.concat(arg, ',', 0) .. ' ' .. tostring(vim == nil))\nos.exit(4)\n",
+    );
+    let run = nvim(dir, &["-ll", "s.lua", "x", "--y"], None);
+    book.eq(
+        (run.code, run.report),
+        (Some(4), "s.lua,x,--y false".to_owned()),
     );
 }
