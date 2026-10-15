@@ -6,28 +6,40 @@
 //! marks are not to be written at all — the ones on removable media, per
 //! `'shada'`'s `r` entries — which several of the others consult.
 //!
-//! Nothing here owns what it gathers: an entry built by this file points
-//! straight into the editor's own structures, and says so with
-//! `can_free_entry: false`.
+//! Every entry built here holds copies of what it gathers, so the merge may
+//! drop or replace any of them.
 //!
 //! The `shada_encode_*` entry points at the end pack one kind into a string
-//! rather than into a file; the msgpack API uses them.
+//! rather than into a file; the context stack uses them.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::message_fmt::msg_addr;
-use crate::siemsg;
-use crate::winlayer::Buf;
-use crate::winlayer::Win;
-use core::ffi::{c_char, c_int, c_void};
-
+use crate::buffer::{buf_is_quickfix, buf_is_terminal, find_buf};
 use crate::cmdhist::{HIST_DEBUG, HIST_EXPR, HIST_INPUT};
-
-use super::*;
+use crate::eval::typval::{TV_INITIAL_VALUE, tv_copy};
+use crate::eval::{var_flavour, vars::globvar_dict};
+use crate::mark::{ShadaMark, cleanup_jumplist, setpcmark, shada_jumps};
+use crate::memory::XString;
+use crate::message_fmt::msg_addr;
+use crate::os::time::os_time;
+use crate::register::{op_reg_index, shada_registers};
+use crate::search::shada_pattern;
+use crate::siemsg;
 use crate::types::{
-    NUL, VAR_FLAVOUR_DEFAULT, VAR_FLAVOUR_SESSION, VAR_FLAVOUR_SHADA, VAR_FUNC, VAR_PARTIAL,
+    KeyDict__shada_search_pat, String_0, TypVal, VAR_FLAVOUR_DEFAULT, VAR_FLAVOUR_SESSION,
+    VAR_FLAVOUR_SHADA, VAR_FUNC, VAR_PARTIAL, VarFlavour,
 };
+use crate::winlayer::{Buf, Win, buffers};
+use core::ffi::{c_char, c_int};
+
+use super::file::{get_shada_parameter, shada_removable};
+use super::pack::{Packer, pack_entry};
+use super::{
+    DEFAULT_SEARCH_PATTERN, JUMPLISTSIZE, MOTION_BLOCKWISE, RemovableBufs, ShadaBufferListItem,
+    ShadaEntry, ShadaEntryData, ShadaFileMark, ShadaGlobalVar, ShadaRegister, WriteMergerState,
+    WriteStatus,
+};
+use crate::cmdhist::{HIST_CMD, HIST_SEARCH};
 
 /// Whether a buffer's marks are not worth remembering: it has no file name,
 /// it was unlisted on purpose, it is a quickfix or terminal buffer, or its
@@ -46,9 +58,7 @@ pub(crate) fn ignore_buf(buffer: Option<Buf>, removable_bufs: &RemovableBufs) ->
 /// Collect the buffers whose files are on removable media.
 pub(crate) fn find_removable_bufs(removable_bufs: &mut RemovableBufs) {
     for buf in buffers() {
-        // SAFETY: a live buffer from the editor's own list, whose name is
-        // only read, and the caller's set.
-        if !buf.name.full().is_none() && unsafe { shada_removable(buf.name.full_ptr()) } {
+        if buf.name.full().is_some_and(shada_removable) {
             removable_bufs.insert(buf.raw().cast_const());
         }
     }
@@ -60,40 +70,25 @@ pub(crate) fn find_removable_bufs(removable_bufs: &mut RemovableBufs) {
 /// `'shada'`'s `%` entry caps how many are kept; a negative cap means all
 /// of them.
 pub(crate) fn shada_get_buflist(removable_bufs: &RemovableBufs) -> ShadaEntry {
-    let max_bufs = get_shada_parameter('%' as c_int);
+    let max_bufs = get_shada_parameter(c_int::from(b'%'));
     let mut wanted = Vec::new();
     for buf in buffers() {
         if !ignore_buf(Some(buf), removable_bufs)
             && buf.b_p_bl != 0
             && (max_bufs < 0 || wanted.len() < max_bufs as usize)
+            && let Some(fname) = buf.name.full()
         {
             wanted.push(ShadaBufferListItem {
                 pos: buf.b_last_cursor.mark,
-                fname: buf.name.full_ptr(),
-                additional_data: buf
-                    .additional_data
-                    .as_ref()
-                    .map_or(core::ptr::null_mut(), ShadaExtra::as_ptr),
+                fname: XString::from_cstr(fname),
+                extra: buf.additional_data.clone(),
             });
         }
     }
-
-    // The array is `xmalloc`ed because the caller releases it with
-    // `xfree`, as it does for a buffer list that came off the wire.
-    let buffers = unsafe { xmalloc(size_of_val(&wanted[..])) }.cast::<ShadaBufferListItem>();
-    unsafe { buffers.copy_from_nonoverlapping(wanted.as_ptr(), wanted.len()) };
-    ShadaEntry {
-        can_free_entry: false,
-        timestamp: os_time(),
-        data: ShadaEntryData::BufferList(ShadaBufferList {
-            size: wanted.len(),
-            buffers,
-        }),
-        additional_data: core::ptr::null_mut(),
-    }
+    ShadaEntry::new(os_time(), ShadaEntryData::BufferList(wanted))
 }
 
-/// One search pattern, as an entry.
+/// One search pattern, as an entry, or `None` when there is none.
 ///
 /// The same function serves the last search pattern and the last
 /// `:substitute` pattern; `is_substitute_pattern` picks which, and decides
@@ -102,105 +97,66 @@ pub(crate) fn shada_get_buflist(removable_bufs: &RemovableBufs) -> ShadaEntry {
 ///
 /// `search_last_used` says which of the two was used most recently, so
 /// exactly one of the pair is written with `is_last_used` set.
-///
-/// # Safety
-///
-/// `ret_pse` must point at an initialized ShaDa entry, unaliased for the
-/// call. `get_pattern` must be an initialized `SearchPatternGetter` whose
-/// pointer fields point at live data for the call.
-pub(crate) unsafe fn add_search_pattern(
-    ret_pse: *mut ShadaEntry,
-    get_pattern: SearchPatternGetter,
+pub(crate) fn search_pattern_entry(
     is_substitute_pattern: bool,
     search_last_used: bool,
     search_highlighted: bool,
-) {
+) -> Option<ShadaEntry> {
     let defaults = DEFAULT_SEARCH_PATTERN;
-    let mut pat: SearchPattern = unsafe { core::mem::zeroed() };
-    unsafe { get_pattern.expect("non-null function pointer")(&raw mut pat) };
-    if pat.pat.is_null() {
-        return;
-    }
+    let pat = shada_pattern(is_substitute_pattern)?;
     let last_used = is_substitute_pattern != search_last_used;
-    let entry = ShadaEntry {
-        can_free_entry: false,
+    // Every key is named here, so the entry a collector builds reads the
+    // same way as one the parser filled in over its defaults.
+    let data = ShadaEntryData::SearchPattern(KeyDict__shada_search_pat {
+        magic: Some(pat.magic),
+        smartcase: Some(!pat.no_scs),
+        has_line_offset: Some(!is_substitute_pattern && pat.off.line),
+        place_cursor_at_end: Some(!is_substitute_pattern && pat.off.end),
+        is_last_used: Some(last_used),
+        is_substitute_pattern: Some(is_substitute_pattern),
+        highlighted: Some(last_used && search_highlighted),
+        search_backward: Some(!is_substitute_pattern && pat.off.dir == b'?' as c_char),
+        offset: if is_substitute_pattern {
+            defaults.offset
+        } else {
+            Some(pat.off.off)
+        },
+        pat: Some(pat.pat),
+    });
+    Some(ShadaEntry {
         timestamp: pat.timestamp,
-        // Every key is named here, so the entry a collector builds reads
-        // the same way as one the parser filled in over its defaults.
-        data: ShadaEntryData::SearchPattern(KeyDict__shada_search_pat {
-            magic: Some(pat.magic),
-            smartcase: Some(!pat.no_scs),
-            has_line_offset: Some(!is_substitute_pattern && pat.off.line),
-            place_cursor_at_end: Some(!is_substitute_pattern && pat.off.end),
-            is_last_used: Some(last_used),
-            is_substitute_pattern: Some(is_substitute_pattern),
-            highlighted: Some(last_used && search_highlighted),
-            search_backward: Some(!is_substitute_pattern && pat.off.dir as c_int == '?' as c_int),
-            offset: if is_substitute_pattern {
-                defaults.offset
-            } else {
-                Some(pat.off.off as Integer)
-            },
-            pat: Some(unsafe { cstr_to_string(pat.pat) }),
-        }),
-        additional_data: pat.additional_data,
-    };
-    unsafe { *ret_pse = entry };
-    // The two substitute-pattern defaults are `false`, which is what the
-    // `!is_substitute_pattern &&` above produces; assert it rather than
-    // spelling the branch out twice.
-    debug_assert!(
-        defaults.has_line_offset == Some(false) && defaults.place_cursor_at_end == Some(false),
-        "shada: a search pattern's offset defaults are not false"
-    );
+        data,
+        extra: pat.extra,
+    })
 }
 
-/// Every global register that has anything in it, as entries.
+/// Every global register that has anything in it, into `wms`.
 ///
 /// `max_reg_lines` is `'shada'`'s `<` (or `"`) entry: a register with more
 /// lines than that is not remembered at all. A negative value means no
 /// limit.
-///
-/// # Safety
-///
-/// `wms` must point at a live `WriteMergerState`, unaliased for the call.
-pub(crate) unsafe fn shada_initialize_registers(wms: *mut WriteMergerState, max_reg_lines: c_int) {
-    let mut reg_iter = core::ptr::null::<c_void>();
-    loop {
-        let mut reg: YankReg = unsafe { core::mem::zeroed() };
-        let mut name: c_char = NUL as c_char;
-        let mut is_unnamed = false;
-        reg_iter = unsafe {
-            op_global_reg_iter(reg_iter, &raw mut name, &raw mut reg, &raw mut is_unnamed)
+pub(crate) fn shada_initialize_registers(wms: &mut WriteMergerState, max_reg_lines: c_int) {
+    let limit = usize::try_from(max_reg_lines).ok();
+    for (name, is_unnamed, yank) in shada_registers(limit) {
+        let entry = ShadaEntry {
+            timestamp: yank.timestamp,
+            data: ShadaEntryData::Register(ShadaRegister {
+                name,
+                motion: yank.motion,
+                contents: yank.contents,
+                is_unnamed,
+                // Only a blockwise register has a width.
+                width: if yank.motion == MOTION_BLOCKWISE {
+                    yank.width as usize
+                } else {
+                    0
+                },
+            }),
+            extra: yank.extra,
         };
-        if name as c_int == NUL {
-            return;
-        }
-        let too_long = max_reg_lines >= 0 && reg.y_size > max_reg_lines as size_t;
-        if !too_long {
-            let entry = ShadaEntry {
-                can_free_entry: false,
-                timestamp: reg.timestamp,
-                data: ShadaEntryData::Register(ShadaRegister {
-                    name,
-                    type_0: reg.y_type,
-                    contents: reg.y_array,
-                    is_unnamed,
-                    contents_size: reg.y_size,
-                    // Only a blockwise register has a width.
-                    width: if reg.y_type == kMTBlockWise {
-                        reg.y_width as size_t
-                    } else {
-                        0
-                    },
-                }),
-                additional_data: reg.additional_data,
-            };
-            unsafe { (*wms).registers[op_reg_index(name as c_int) as usize] = entry };
-        }
-        if reg_iter.is_null() {
-            return;
-        }
+        let idx = usize::try_from(op_reg_index(c_int::from(name)))
+            .expect("a register the store answered has a slot");
+        wms.registers[idx] = entry;
     }
 }
 
@@ -209,87 +165,69 @@ pub(crate) unsafe fn shada_initialize_registers(wms: *mut WriteMergerState, max_
 ///
 /// The ten numbered marks are just the ten most recent, so their *names*
 /// are their positions in the list: moving one renames all of them.
-///
-/// # Safety
-///
-/// `wms` must point at a live `WriteMergerState`, unaliased for the call.
-/// `entry` must be an initialized `ShadaEntry` whose pointer fields point at
-/// live data for the call.
-pub(crate) unsafe fn replace_numbered_mark(
-    wms: *mut WriteMergerState,
-    idx: size_t,
-    entry: ShadaEntry,
-) {
-    let marks = unsafe { &mut (*wms).numbered_marks };
+pub(crate) fn replace_numbered_mark(wms: &mut WriteMergerState, idx: usize, mut entry: ShadaEntry) {
+    let marks = &mut wms.numbered_marks;
     let last = marks.len() - 1;
-    unsafe { shada_free_shada_entry(&raw mut marks[last]) };
     for (i, mark) in marks.iter_mut().enumerate().take(last).skip(idx) {
         if let ShadaEntryData::GlobalMark(mark) = &mut mark.data {
             mark.name = (b'0' + i as u8 + 1) as c_char;
         }
     }
-    shift_within(marks, idx..last, idx + 1);
+    super::merge::shift_within(marks, idx..last, idx + 1);
+    entry.data.filemark_mut().name = (b'0' + idx as u8) as c_char;
     marks[idx] = entry;
-    marks[idx].data.filemark_mut().name = (b'0' + idx as u8) as c_char;
 }
 
 /// The character `:history` names a history type by.
 pub(crate) fn hist_type2char(type_0: c_int) -> c_int {
-    match type_0 {
-        HIST_CMD => ':' as c_int,
-        HIST_SEARCH => '/' as c_int,
-        HIST_EXPR => '=' as c_int,
-        HIST_INPUT => '@' as c_int,
-        HIST_DEBUG => '>' as c_int,
+    let c = match type_0 {
+        HIST_CMD => b':',
+        HIST_SEARCH => b'/',
+        HIST_EXPR => b'=',
+        HIST_INPUT => b'@',
+        HIST_DEBUG => b'>',
         _ => unreachable!("shada: history type {type_0} has no character"),
+    };
+    c_int::from(c)
+}
+
+/// The global variables whose names `'shada'` says to remember, walked in
+/// the table's slot order.
+///
+/// A slot *index* rather than an item: the walk's position comes round again
+/// between steps, and a pointer would not survive a mutation of the table.
+pub(crate) struct VarWalk {
+    next: usize,
+    flavour: VarFlavour,
+}
+
+impl VarWalk {
+    pub(crate) fn new(flavour: VarFlavour) -> VarWalk {
+        VarWalk { next: 0, flavour }
     }
 }
 
-/// Walk the global variables whose names `'shada'` says to remember.
-///
-/// Answers what to pass in next, or null when the walk is over; `name` is
-/// set to null at the end. `result` gets a copy of the value, which the
-/// caller clears.
-///
-/// # Safety
-/// No global variable may be added or removed while a walk is in progress.
-pub(crate) unsafe fn var_shada_iter(
-    iter: Option<usize>,
-    name: *mut *const c_char,
-    result: &mut TypVal,
-    flavour: VarFlavour,
-) -> Option<usize> {
-    let globals = globvar_dict();
-    let count = globals.dv_hashtab.size();
-    // The walk's position is a slot *index*: it is handed back to the caller
-    // and comes round again, and the table's small run lives inside the
-    // table, so a pointer would not survive a mutation of it.
-    let wanted = |idx: usize| {
-        globals
-            .item_at(idx)
-            .is_some_and(|item| var_flavour(item.di_key.bytes()) & flavour != 0)
-    };
+impl Iterator for VarWalk {
+    /// The variable's name and a copy of its value.
+    type Item = (XString, TypVal);
 
-    unsafe { *name = core::ptr::null() };
-    let mut idx = match iter {
-        Some(idx) => idx,
-        None => (0..count).find(|&idx| wanted(idx))?,
-    };
-
-    let item = globals.item_at(idx).expect("the walk answers kept slots");
-    // The key lives with the item, which the caller's promise keeps.
-    unsafe { *name = item.di_key.as_ptr() };
-    tv_copy(&item.di_tv, result);
-
-    // Answer where the *next* one is, so the caller knows to stop.
-    loop {
-        idx += 1;
-        if idx >= count {
-            return None;
+    fn next(&mut self) -> Option<(XString, TypVal)> {
+        let globals = globvar_dict();
+        let count = globals.dv_hashtab.size();
+        while self.next < count {
+            let idx = self.next;
+            self.next += 1;
+            let Some(item) = globals.item_at(idx) else {
+                continue;
+            };
+            if var_flavour(item.di_key.bytes()) & self.flavour == 0 {
+                continue;
+            }
+            let mut value = TV_INITIAL_VALUE;
+            tv_copy(&item.di_tv, &mut value);
+            return Some((XString::from_bytes(item.di_key.bytes()), value));
         }
-        if wanted(idx) {
-            return Some(idx);
-        }
+        None
     }
 }
 
@@ -297,168 +235,141 @@ pub(crate) unsafe fn var_shada_iter(
 ///
 /// The current position is pushed onto the jump list first, so that where
 /// Nvim was when it exited is remembered too.
-///
-/// # Safety
-///
-/// `jumps` must point at `JUMPLISTSIZE` initialized ShaDa entries the caller
-/// owns, unaliased for the call: the answer says how many of them were
-/// written.
-pub(crate) unsafe fn shada_init_jumps(
-    jumps: *mut ShadaEntry,
+pub(crate) fn shada_init_jumps(
+    jumps: &mut [ShadaEntry; JUMPLISTSIZE],
     removable_bufs: &RemovableBufs,
-) -> size_t {
-    let mut jumps_size: size_t = 0;
-    let mut jump_iter = core::ptr::null::<c_void>();
+) -> usize {
     setpcmark();
     cleanup_jumplist(Win::current(), false);
-    loop {
-        let mut fm: XFileMark = unsafe { core::mem::zeroed() };
-        jump_iter = unsafe { mark_jumplist_iter(jump_iter, Win::current(), &raw mut fm) };
-
-        if let Some(fname) = unsafe { jump_target(&fm, jump_iter, removable_bufs) } {
-            let entry = ShadaEntry {
-                can_free_entry: false,
-                timestamp: fm.fmark.timestamp,
-                data: ShadaEntryData::Jump(ShadaFileMark {
-                    name: NUL as c_char,
-                    mark: fm.fmark.mark,
-                    fname: fname.cast_mut(),
-                }),
-                additional_data: fm.fmark.additional_data,
-            };
-            unsafe { *jumps.add(jumps_size) = entry };
-            jumps_size += 1;
-        }
-        if jump_iter.is_null() {
-            return jumps_size;
-        }
+    let list = shada_jumps(Win::current());
+    if list.is_empty() {
+        // The iterator answers one unset mark for an empty list.
+        mark_lnum_zero(0, 0);
     }
+    let mut jumps_size = 0;
+    let len = list.len();
+    for (i, fm) in list.into_iter().enumerate() {
+        if fm.mark.lnum == 0 {
+            mark_lnum_zero(i + 1, len);
+            continue;
+        }
+        let Some(fname) = jump_target(&fm, removable_bufs) else {
+            continue;
+        };
+        jumps[jumps_size] = ShadaEntry {
+            timestamp: fm.timestamp,
+            data: ShadaEntryData::Jump(ShadaFileMark {
+                name: 0,
+                mark: fm.mark,
+                fname,
+            }),
+            extra: fm.extra,
+        };
+        jumps_size += 1;
+    }
+    jumps_size
+}
+
+/// The internal error a jump with no line number raises: `next` is where
+/// the walk would have resumed, as upstream's iterator token named it.
+fn mark_lnum_zero(next: usize, len: usize) {
+    let win = Win::current();
+    let list = win.w_jumplist.as_ptr();
+    let iter = if next < len {
+        list.wrapping_add(next)
+    } else {
+        core::ptr::null()
+    };
+    siemsg!(
+        "ShaDa: mark lnum zero (ji:{}, js:{}, len:{})",
+        msg_addr(iter),
+        msg_addr(list),
+        win.w_jumplistlen,
+    );
 }
 
 /// The file name to remember one jump under, or `None` if it is not worth
-/// remembering: no line number, a buffer whose marks are ignored, a buffer
-/// number that names no buffer, or no file name at all.
-///
-/// # Safety
-///
-/// `jump_iter` is only reported as an address and need not point at anything;
-/// `fm.fname`, when it is set, must point at a NUL-terminated name that
-/// outlives the answer, which borrows it.
-unsafe fn jump_target(
-    fm: &XFileMark,
-    jump_iter: *const c_void,
-    removable_bufs: &RemovableBufs,
-) -> Option<*const c_char> {
-    if fm.fmark.mark.lnum == 0 {
-        // SAFETY: the caller's contract -- `curwin` is the editor's own.
-        unsafe {
-            siemsg!(
-                "ShaDa: mark lnum zero (ji:{}, js:{}, len:{})",
-                msg_addr(jump_iter),
-                msg_addr(&raw const (*Win::current_raw()).w_jumplist),
-                Win::current().w_jumplistlen,
-            )
-        };
-        return None;
-    }
-    if fm.fmark.fnum == 0 {
+/// remembering: a buffer whose marks are ignored, a buffer number that names
+/// no buffer, or no file name at all.
+fn jump_target(fm: &ShadaMark, removable_bufs: &RemovableBufs) -> Option<XString> {
+    if fm.fnum == 0 {
         // Not in a loaded buffer: the entry carries the name itself.
-        return (!fm.fname.is_null()).then_some(fm.fname as *const c_char);
+        return fm.fname.clone();
     }
-    let buf = find_buf(fm.fmark.fnum);
-    if ignore_buf(buf, removable_bufs) || buf.is_none_or(|b| b.name.full().is_none()) {
+    let buf = find_buf(fm.fnum);
+    if ignore_buf(buf, removable_bufs) {
         return None;
     }
-    let buf = buf.expect("`ignore_buf` answered true for a buffer that is not there");
-    Some(buf.name.full_ptr())
+    buf?.name.full().map(XString::from_cstr)
+}
+
+/// The packed entries as the API string the context stack keeps.
+fn packed_string(out: &Packer) -> String_0 {
+    String_0::from_bytes(out.bytes())
 }
 
 /// Every register, as msgpack.
 pub fn shada_encode_regs() -> String_0 {
-    let wms = shada_heap(WriteMergerState::EMPTY);
-    unsafe { shada_initialize_registers(wms, -1) };
-    let mut packer = packer_string_buffer();
-    for i in 0..unsafe { (*wms).registers.len() } {
-        if !unsafe { (*wms).registers[i].data.is_missing() } {
-            let written =
-                unsafe { shada_pack_pfreed_entry(&raw mut packer, &mut (*wms).registers[i], 0) };
-            assert!(written != kSDWriteFailed, "shada: cannot pack a register");
-        }
+    let mut wms = WriteMergerState::new();
+    shada_initialize_registers(&mut wms, -1);
+    let mut out = Packer::default();
+    for reg in wms.registers.iter().filter(|reg| !reg.is_missing()) {
+        let written = pack_entry(&mut out, reg, 0);
+        assert!(
+            written != WriteStatus::Error,
+            "shada: cannot pack a register"
+        );
     }
-    unsafe { xfree(wms.cast::<c_void>()) };
-    unsafe { packer_take_string(&packer) }
+    packed_string(&out)
 }
 
 /// The jump list, as msgpack.
 pub fn shada_encode_jumps() -> String_0 {
-    let mut removable_bufs = id_set();
+    let mut removable_bufs = crate::registry::id_set();
     find_removable_bufs(&mut removable_bufs);
-    let mut jumps = [ShadaEntry::MISSING; JUMPLISTSIZE as usize];
-    let jumps_size = unsafe { shada_init_jumps(jumps.as_mut_ptr(), &removable_bufs) };
-    let mut packer = packer_string_buffer();
-    for jump in &mut jumps[..jumps_size] {
-        let written = unsafe { shada_pack_pfreed_entry(&raw mut packer, jump, 0) };
-        assert!(written != kSDWriteFailed, "shada: cannot pack a jump");
+    let mut jumps = [const { ShadaEntry::MISSING }; JUMPLISTSIZE];
+    let jumps_size = shada_init_jumps(&mut jumps, &removable_bufs);
+    let mut out = Packer::default();
+    for jump in &jumps[..jumps_size] {
+        let written = pack_entry(&mut out, jump, 0);
+        assert!(written != WriteStatus::Error, "shada: cannot pack a jump");
     }
-    unsafe { packer_take_string(&packer) }
+    packed_string(&out)
 }
 
 /// The buffer list, as msgpack.
 pub fn shada_encode_buflist() -> String_0 {
-    let mut removable_bufs = id_set();
+    let mut removable_bufs = crate::registry::id_set();
     find_removable_bufs(&mut removable_bufs);
     let buflist_entry = shada_get_buflist(&removable_bufs);
-    let mut packer = packer_string_buffer();
-    let written = unsafe { shada_pack_entry(&raw mut packer, &buflist_entry, 0) };
+    let mut out = Packer::default();
+    let written = pack_entry(&mut out, &buflist_entry, 0);
     assert!(
-        written != kSDWriteFailed,
+        written != WriteStatus::Error,
         "shada: cannot pack the buffer list"
     );
-    unsafe { xfree(buflist_entry.data.buffer_list().buffers.cast::<c_void>()) };
-    unsafe { packer_take_string(&packer) }
+    packed_string(&out)
 }
 
 /// Every global variable `'shada'` says to remember, as msgpack.
 pub fn shada_encode_gvars() -> String_0 {
-    let mut packer = packer_string_buffer();
-    let mut var_iter: Option<usize> = None;
+    let mut out = Packer::default();
     let cur_timestamp = os_time();
-    loop {
-        let mut vartv = TV_INITIAL_VALUE;
-        let mut name = core::ptr::null::<c_char>();
-        var_iter = unsafe {
-            var_shada_iter(
-                var_iter,
-                &raw mut name,
-                &mut vartv,
-                VAR_FLAVOUR_DEFAULT | VAR_FLAVOUR_SESSION | VAR_FLAVOUR_SHADA,
-            )
-        };
-        if name.is_null() {
-            return unsafe { packer_take_string(&packer) };
-        }
+    let flavour = VAR_FLAVOUR_DEFAULT | VAR_FLAVOUR_SESSION | VAR_FLAVOUR_SHADA;
+    for (name, value) in VarWalk::new(flavour) {
         // A function reference cannot be written to a file.
-        if vartv.v_type() != VAR_FUNC && vartv.v_type() != VAR_PARTIAL {
-            // The entry owns the copy it is built around; the value the
-            // iterator handed over stays this function's to release.
-            let mut tgttv = TV_INITIAL_VALUE;
-            tv_copy(&vartv, &mut tgttv);
-            let mut entry = ShadaEntry {
-                can_free_entry: false,
-                timestamp: cur_timestamp,
-                data: ShadaEntryData::Variable(ShadaGlobalVar {
-                    name: name.cast_mut(),
-                    value: tgttv,
-                }),
-                additional_data: core::ptr::null_mut(),
-            };
-            let written = unsafe { shada_pack_entry(&raw mut packer, &entry, 0) };
-            assert!(written != kSDWriteFailed, "shada: cannot pack a variable");
-            tv_clear(&mut entry.data.variable_mut().value);
+        if value.v_type() == VAR_FUNC || value.v_type() == VAR_PARTIAL {
+            continue;
         }
-        tv_clear(&mut vartv);
-        if var_iter.is_none() {
-            return unsafe { packer_take_string(&packer) };
-        }
+        let entry = ShadaEntry::new(
+            cur_timestamp,
+            ShadaEntryData::Variable(ShadaGlobalVar { name, value }),
+        );
+        let written = pack_entry(&mut out, &entry, 0);
+        assert!(
+            written != WriteStatus::Error,
+            "shada: cannot pack a variable"
+        );
     }
+    packed_string(&out)
 }

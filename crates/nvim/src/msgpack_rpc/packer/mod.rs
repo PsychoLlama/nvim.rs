@@ -24,8 +24,8 @@ use core::ffi::{c_char, c_double, c_int, c_void};
 use crate::lua::executor::api_free_luaref;
 use crate::memory::{xmalloc, xrealloc};
 use crate::types::{
-    Array, Handle, Integer, KeyValuePair, LuaRef, Object, String_0, int8_t, int64_t, size_t,
-    uint32_t, uint64_t,
+    Array, Handle, Integer, KeyValuePair, LuaRef, Object, int8_t, int64_t, size_t, uint32_t,
+    uint64_t,
 };
 
 pub mod format;
@@ -535,23 +535,6 @@ unsafe fn flush_string_buffer(buffer: *mut PackerBuffer) {
     // SAFETY: `xrealloc` moved the packed bytes into a block of
     // `new_capacity`, which the same hook goes on owning.
     unsafe { buffer.moved_to(grown, new_capacity) };
-}
-
-/// Takes ownership of everything written to a [`packer_string_buffer`].
-///
-/// # Safety
-///
-/// The buffer must be a [`packer_string_buffer`]'s, whose block is an
-/// `xmalloc`ed one with room for the terminator this writes; nothing may
-/// write to it afterwards.
-pub unsafe fn packer_take_string(buffer: &PackerBuffer) -> String_0 {
-    let used = buffer.used();
-    // SAFETY: the caller's promise -- the block has room past `used`, which
-    // `mpack_check_buffer` keeps by never filling a buffer to its last byte.
-    unsafe {
-        *buffer.start().add(used) = 0;
-        String_0::from_owned_parts(buffer.start(), used)
-    }
 }
 
 /// Pack with `pack` into a fresh [`packer_string_buffer`] and answer the

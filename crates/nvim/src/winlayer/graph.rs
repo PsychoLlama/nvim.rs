@@ -403,7 +403,8 @@ pub(crate) fn alloc_unregistered_buffer() -> Owned<Buffer> {
     // positions, the buffer's syntax block (`init_synblock`, and its two
     // keyword tables, whose zero bytes are a valid empty table only by
     // the accident of the enum's layout), what the memline owns, the two
-    // extmark tables, the string options and the file name. The unit case
+    // extmark tables, the ShaDa extra data (a vector inside an `Option`),
+    // the string options and the file name. The unit case
     // `buffer::a_fresh_buffer_holds_valid_owners` reads each of them back.
     // SAFETY: all are inside the block just allocated, nothing has read or
     // dropped them, and `write` does not drop what was there.
@@ -416,6 +417,7 @@ pub(crate) fn alloc_unregistered_buffer() -> Owned<Buffer> {
     unsafe { (&raw mut (*at).b_ml).write(MemLine::closed()) };
     unsafe { (&raw mut (*at).b_marktree).write(MarkTree::EMPTY) };
     unsafe { (&raw mut (*at).b_extmark_ns).write(id_map()) };
+    unsafe { (&raw mut (*at).additional_data).write(None) };
     // ... and the string options, which are `Option<XString>`s.
     for field in BUF_STRING_OPTIONS {
         let slot = at.wrapping_byte_add(field.field_offset());

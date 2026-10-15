@@ -23,7 +23,8 @@ use crate::optionstr::OptString;
 use crate::os::cshim::gettext_ptr;
 use crate::regexp::{RE_BOTH, RE_LAST, RE_MAGIC, RE_SEARCH, RE_SUBST};
 use crate::search::{SEARCH_HIS, SEARCH_KEEP, SEARCH_START};
-use crate::types::{CmdModFlags, FAIL, Failed, NUL, Vv};
+use crate::shada::ShadaExtra;
+use crate::types::{CmdModFlags, FAIL, Failed, NUL, String_0, Timestamp, Vv};
 use crate::winlayer::{Buf, Win};
 use core::ffi::CStr;
 use core::ffi::{c_char, c_int, c_void};
@@ -755,43 +756,71 @@ pub(crate) unsafe fn is_zero_width(
     result
 }
 
-/// Get the last search pattern, for ShaDa.
-///
-/// # Safety
-/// `pat` must be writable. The answer borrows the live slot's string.
-pub unsafe fn get_search_pattern(pat: *mut SearchPattern) {
-    unsafe { *pat = spat(RE_SEARCH) }
+/// One remembered pattern as ShaDa reads and writes it, owned.
+pub(crate) struct ShadaPattern {
+    pub(crate) pat: String_0,
+    pub(crate) magic: bool,
+    pub(crate) no_scs: bool,
+    pub(crate) timestamp: Timestamp,
+    pub(crate) off: SearchOffset,
+    pub(crate) extra: Option<ShadaExtra>,
 }
 
-/// Get the last substitute pattern, for ShaDa. Its offset is not part of
-/// what ShaDa stores.
-///
-/// # Safety
-/// `pat` must be writable. The answer borrows the live slot's string.
-pub unsafe fn get_substitute_pattern(pat: *mut SearchPattern) {
-    unsafe { *pat = spat(RE_SUBST) };
-    unsafe { (*pat).off = NO_OFFSET };
+/// The slot ShaDa means: the substitute pattern or the search pattern.
+fn shada_slot(is_substitute: bool) -> c_int {
+    if is_substitute { RE_SUBST } else { RE_SEARCH }
 }
 
-/// Set the last search pattern, taking `pat`'s allocations over.
-///
-/// # Safety
-/// `pat.pat` and `pat.additional_data` must be owned allocations or null.
-pub unsafe fn set_search_pattern(pat: SearchPattern) {
-    unsafe { free_spat(&spat(RE_SEARCH)) };
-    put_spat(RE_SEARCH, pat);
-    set_vv_searchforward();
+/// A copy of the last search (or, with `is_substitute`, substitute)
+/// pattern, or `None` when there is none. The text is copied up to its
+/// first NUL, as ShaDa has always taken it; a substitute pattern's offset is
+/// not part of what ShaDa stores.
+pub(crate) fn shada_pattern(is_substitute: bool) -> Option<ShadaPattern> {
+    let slot = spat(shada_slot(is_substitute));
+    // SAFETY: the slot owns `pat` (null or NUL-terminated) and its extra
+    // data, both only read here.
+    let text = unsafe { cstr::at_opt(slot.pat) }?;
+    Some(ShadaPattern {
+        pat: String_0::from_bytes(text.to_bytes()),
+        magic: slot.magic,
+        no_scs: slot.no_scs,
+        timestamp: slot.timestamp,
+        off: if is_substitute { NO_OFFSET } else { slot.off },
+        extra: unsafe { crate::mark::extra_copy_raw(slot.additional_data) },
+    })
 }
 
-/// Set the last substitute pattern, taking `pat`'s allocations over. Its
-/// offset is not part of what ShaDa stores.
-///
-/// # Safety
-/// `pat.pat` and `pat.additional_data` must be owned allocations or null.
-pub unsafe fn set_substitute_pattern(mut pat: SearchPattern) {
-    unsafe { free_spat(&spat(RE_SUBST)) };
-    pat.off = NO_OFFSET;
-    put_spat(RE_SUBST, pat);
+/// When the last search (or substitute) pattern was set, or `None` when
+/// there is none.
+pub(crate) fn shada_pattern_timestamp(is_substitute: bool) -> Option<Timestamp> {
+    let slot = spat(shada_slot(is_substitute));
+    (!slot.pat.is_null()).then_some(slot.timestamp)
+}
+
+/// Make `pattern` the last search (or substitute) pattern, taking it over.
+pub(crate) fn shada_set_pattern(is_substitute: bool, pattern: ShadaPattern) {
+    let idx = shada_slot(is_substitute);
+    let patlen = pattern.pat.len();
+    let spat_new = SearchPattern {
+        pat: pattern.pat.into_raw(),
+        patlen,
+        magic: pattern.magic,
+        no_scs: pattern.no_scs,
+        timestamp: pattern.timestamp,
+        off: if is_substitute {
+            NO_OFFSET
+        } else {
+            pattern.off
+        },
+        additional_data: crate::mark::extra_into_raw(pattern.extra),
+    };
+    // SAFETY: the slot owns its `pat` and extra data, released before the
+    // new pattern is written over them.
+    unsafe { free_spat(&spat(idx)) };
+    put_spat(idx, spat_new);
+    if !is_substitute {
+        set_vv_searchforward();
+    }
 }
 
 /// Record which of the two patterns was used last.

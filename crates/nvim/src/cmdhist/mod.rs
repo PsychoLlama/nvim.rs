@@ -40,11 +40,11 @@ use crate::os::time::os_time;
 use crate::regexp::{OwnedMatch, RE_MAGIC, RE_STRING, vim_regexec};
 use crate::shada::ShadaExtra;
 use crate::types::{
-    AdditionalData, CmdModFlags, EvalFuncData, ExArg, Expand, Failed, HistoryType, IOSIZE, OptInt,
-    Timestamp, TypVal, VAR_NUMBER, VarNumber,
+    CmdModFlags, EvalFuncData, ExArg, Expand, Failed, HistoryType, IOSIZE, OptInt, Timestamp,
+    TypVal, VAR_NUMBER, VarNumber,
 };
 use crate::ui::state::Columns;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 
 pub const HIST_DEFAULT: HistoryType = -2;
 pub const HIST_INVALID: HistoryType = -1;
@@ -502,17 +502,13 @@ pub fn get_history_arg(_expand: &Expand, idx: usize) -> Option<Candidate> {
     (i == HIST_COUNT).then_some(Candidate::Borrowed(c"all"))
 }
 
-/// One history entry lent to, or taken by, the shada writer and merger.
-pub struct HistShadaEntry {
-    /// NUL-terminated text. Borrowed from the ring for
-    /// [`hist_shada_view`]; a malloc-family allocation owned by the holder
-    /// for [`hist_shada_take`].
-    pub text: *mut c_char,
+/// One history entry copied for, or taken by, the shada writer and merger.
+pub(crate) struct HistShadaEntry {
+    pub text: CString,
     /// Separator character (search history only; NUL elsewhere).
-    pub sep: c_char,
+    pub sep: u8,
     pub timestamp: Timestamp,
-    /// Opaque extra payload; ownership follows `text`.
-    pub additional_data: *mut AdditionalData,
+    pub extra: Option<ShadaExtra>,
 }
 
 /// One entry of the merged history the shada reader hands back, owned.
@@ -524,17 +520,12 @@ pub(crate) struct HistRestored {
     pub extra: Option<ShadaExtra>,
 }
 
-fn shada_sep(histype: c_int, sep: u8) -> c_char {
-    if histype == HIST_SEARCH {
-        c_char::from_ne_bytes([sep])
-    } else {
-        0
-    }
+fn shada_sep(histype: c_int, sep: u8) -> u8 {
+    if histype == HIST_SEARCH { sep } else { 0 }
 }
 
-/// Borrow the entries of `histype` for writing shada, oldest first. The
-/// text pointers stay valid until the ring is next mutated.
-pub fn hist_shada_view(histype: c_int) -> Vec<HistShadaEntry> {
+/// Copies of the entries of `histype` for writing shada, oldest first.
+pub(crate) fn hist_shada_view(histype: c_int) -> Vec<HistShadaEntry> {
     HISTORY.with(|h| {
         let ring = &h[histype as usize];
         ring.oldest_first_indices()
@@ -542,13 +533,10 @@ pub fn hist_shada_view(histype: c_int) -> Vec<HistShadaEntry> {
             .map(|i| {
                 let e = ring.get(i).expect("index of occupied slot");
                 HistShadaEntry {
-                    text: e.cstr().as_ptr().cast_mut(),
+                    text: e.text.clone(),
                     sep: shada_sep(histype, e.sep),
                     timestamp: e.timestamp,
-                    additional_data: e
-                        .extra
-                        .as_ref()
-                        .map_or(core::ptr::null_mut(), ShadaExtra::as_ptr),
+                    extra: e.extra.clone(),
                 }
             })
             .collect()
@@ -556,31 +544,20 @@ pub fn hist_shada_view(histype: c_int) -> Vec<HistShadaEntry> {
 }
 
 /// Move the entries of `histype` out for the shada read-merge, oldest
-/// first, leaving the ring empty. The caller owns the returned text and
-/// additional-data allocations.
-pub fn hist_shada_take(histype: c_int) -> Vec<HistShadaEntry> {
+/// first, leaving the ring empty.
+pub(crate) fn hist_shada_take(histype: c_int) -> Vec<HistShadaEntry> {
     HISTORY.with_mut(|h| {
         let ring = &mut h[histype as usize];
         let taken: Vec<HistShadaEntry> = ring
             .oldest_first_indices()
             .into_iter()
             .map(|i| {
-                let mut e = ring.entries[i as usize].take().expect("occupied slot");
-                // Same allocation shape the C code kept: text, NUL, then
-                // the separator byte.
-                let bytes = e.text.as_bytes();
-                let mut buf = Vec::with_capacity(bytes.len() + 2);
-                buf.extend_from_slice(bytes);
-                buf.push(0);
-                buf.push(e.sep);
+                let e = ring.entries[i as usize].take().expect("occupied slot");
                 HistShadaEntry {
-                    text: Box::into_raw(buf.into_boxed_slice()).cast::<c_char>(),
+                    text: e.text,
                     sep: shada_sep(histype, e.sep),
                     timestamp: e.timestamp,
-                    additional_data: e
-                        .extra
-                        .take()
-                        .map_or(core::ptr::null_mut(), ShadaExtra::into_raw),
+                    extra: e.extra,
                 }
             })
             .collect();

@@ -22,12 +22,6 @@ pub struct CmdParseMagic {
     pub file: bool,
     pub bar: bool,
 }
-#[derive(Copy, Clone)]
-pub struct SubReplacementString {
-    pub sub: *mut ::core::ffi::c_char,
-    pub timestamp: Timestamp,
-    pub additional_data: *mut AdditionalData,
-}
 /// What an Ex command's range counts -- upstream's `ADDR_*`, the value
 /// `ExArg::addr_type`, `CommandDefinition::cmd_addr_type` and
 /// `UserCmd::addr_type` carry.

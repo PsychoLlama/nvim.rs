@@ -322,9 +322,7 @@
 {"path":"neovim::message::last_message","kind":"fn","file":"crates/nvim/src/message/history.rs","tests":["crates/nvim/tests/unit/support.rs"]}
 {"path":"neovim::message::special_keys_text","kind":"fn","file":"crates/nvim/src/message/outtrans.rs","tests":["crates/nvim/tests/unit/message_oracle.rs"]}
 {"path":"neovim::msgpack_rpc::packer::mpack_object","kind":"fn","file":"crates/nvim/src/msgpack_rpc/packer/mod.rs","tests":["crates/nvim/tests/unit/packer.rs"]}
-{"path":"neovim::msgpack_rpc::packer::pack_to_bytes","kind":"fn","file":"crates/nvim/src/msgpack_rpc/packer/mod.rs","tests":["crates/nvim/tests/unit/encode_sinks.rs"]}
-{"path":"neovim::msgpack_rpc::packer::packer_string_buffer","kind":"fn","file":"crates/nvim/src/msgpack_rpc/packer/mod.rs","tests":["crates/nvim/tests/unit/packer.rs"]}
-{"path":"neovim::msgpack_rpc::packer::packer_take_string","kind":"fn","file":"crates/nvim/src/msgpack_rpc/packer/mod.rs","tests":["crates/nvim/tests/unit/packer.rs"]}
+{"path":"neovim::msgpack_rpc::packer::pack_to_bytes","kind":"fn","file":"crates/nvim/src/msgpack_rpc/packer/mod.rs","tests":["crates/nvim/tests/unit/encode_sinks.rs","crates/nvim/tests/unit/packer.rs"]}
 {"path":"neovim::msgpack_rpc::packer::format","kind":"mod","file":"crates/nvim/src/msgpack_rpc/packer/format.rs","tests":["crates/nvim/tests/unit/packer.rs"]}
 {"path":"neovim::msgpack_rpc::unpacker::unpack","kind":"fn","file":"crates/nvim/src/msgpack_rpc/unpacker/mod.rs","tests":["crates/nvim/tests/unit/unpacker.rs"]}
 {"path":"neovim::msgpack_rpc::unpacker::unpacker_advance","kind":"fn","file":"crates/nvim/src/msgpack_rpc/unpacker/mod.rs","tests":["crates/nvim/tests/unit/msgpack.rs"]}
@@ -624,7 +622,6 @@
 {"path":"neovim::types::OK","kind":"const","file":"crates/nvim/src/types/vim.rs","tests":["crates/nvim/tests/unit/fs.rs"]}
 {"path":"neovim::types::Object","kind":"enum","file":"crates/nvim/src/types/api.rs","tests":["crates/nvim/tests/unit/api_converter.rs","crates/nvim/tests/unit/options.rs","crates/nvim/tests/unit/packer.rs","crates/nvim/tests/unit/support/tv.rs","crates/nvim/tests/unit/unpacker.rs"]}
 {"path":"neovim::types::OptInt","kind":"type","file":"crates/nvim/src/types/types.rs","tests":["crates/nvim/tests/unit/indent.rs"]}
-{"path":"neovim::types::PackerBuffer","kind":"struct","file":"crates/nvim/src/msgpack_rpc/packer/mod.rs","tests":["crates/nvim/tests/unit/packer.rs"]}
 {"path":"neovim::types::ParserPosition","kind":"struct","file":"crates/nvim/src/types/parser.rs","tests":["crates/nvim/tests/unit/expressions.rs","crates/nvim/tests/unit/parser.rs"]}
 {"path":"neovim::types::ParserState","kind":"struct","file":"crates/nvim/src/types/parser.rs","tests":["crates/nvim/tests/unit/expressions.rs","crates/nvim/tests/unit/parser.rs"]}
 {"path":"neovim::types::Partial","kind":"struct","file":"crates/nvim/src/types/typval.rs","tests":["crates/nvim/tests/unit/support/tv.rs"]}

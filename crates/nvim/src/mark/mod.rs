@@ -64,8 +64,7 @@ pub use adjust::{mark_adjust, mark_adjust_buf, mark_adjust_nofold, mark_col_adju
 pub use builtins::{get_buf_local_marks, get_global_marks};
 pub use jumplist::{
     checkpcmark, cleanup_jumplist, copy_jumplist, ex_changes, ex_clearjumps, ex_jumps,
-    free_jumplist, get_changelist, get_jumplist, mark_jumplist_forget_file, mark_jumplist_iter,
-    setpcmark,
+    free_jumplist, get_changelist, get_jumplist, mark_jumplist_forget_file, setpcmark,
 };
 pub(crate) use lookup::{
     current_mark, current_visual_mark, mark_checked, mark_lookup, move_to_mark,
@@ -74,8 +73,12 @@ pub use lookup::{
     getnextmark, mark_get, mark_get_global, mark_get_local, mark_get_motion, mark_get_visual,
     mark_move_to,
 };
-pub(crate) use shada::global_mark_timestamp;
-pub use shada::{mark_buffer_iter, mark_global_iter, mark_set_global, mark_set_local};
+pub(crate) use shada::{
+    ShadaMark, extra_copy_raw, extra_into_raw, global_mark_timestamp, shada_buffer_marks,
+    shada_changes, shada_global_marks, shada_insert_change, shada_insert_jump, shada_jumps,
+    shada_local_mark_timestamp, shada_restore_last_cursor, shada_set_global_mark,
+    shada_set_local_mark,
+};
 pub use show::{ex_delmarks, ex_marks, fm_getname};
 
 use store::{Fmark, GlobalMarks, NO_VIEW, NUL_BYTE, Xfmark, mark_name};

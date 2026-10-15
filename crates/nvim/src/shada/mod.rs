@@ -1,276 +1,249 @@
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
-// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
+//! ShaDa: the file that carries registers, marks, histories, variables and
+//! the buffer list from one Nvim session to the next.
+//!
+//! The children split the work by direction. `unpack` reads entries off the
+//! wire and `parse` turns each payload into a [`ShadaEntry`]; `read` applies
+//! them to the editor. `collect` gathers the editor's state into entries,
+//! `merge` decides between those and what the old file holds, `write` drives
+//! the pass and `pack` turns entries back into msgpack. `file` is the file
+//! itself: where it lives, and the temporary-then-rename dance a write does.
+//!
+//! Every entry owns what it holds. One read from a file owns the strings it
+//! was parsed into; one collected from the editor holds copies, so a merge
+//! can drop, replace or move any entry without asking where it came from.
 
-use crate::api::private::helpers::cstr_to_string;
-use crate::ascii::ascii_isdigit;
-use crate::buffer::{buf_is_quickfix, buf_is_terminal, buflist_new, buflist_setfpos, find_buf};
-use crate::cmdhist::{HistRestored, hist_shada_replace, hist_shada_take, hist_shada_view};
-use crate::eval::decode::{decode_string, unpack_typval};
-use crate::eval::encode::encode_vim_to_msgpack;
-use crate::eval::typval::TV_INITIAL_VALUE;
-use crate::eval::typval::{list_len, tv_clear, tv_copy, tv_list_alloc};
-use crate::eval::vars::{get_vim_var_list_handle, globvar_dict, set_vim_var_list};
-use crate::eval::{
-    get_copy_id, set_ref_in_dict_items, set_ref_in_list_items, var_flavour, var_set_global,
-};
-use crate::event::libuv::uv_strerror;
-use crate::ex_cmds::{sub_get_replacement, sub_restore_replacement};
-use crate::ex_docmd::set_no_hlsearch;
-use crate::fileio::{modname, rename_file};
-use crate::global_cell::GlobalCell;
-use crate::mark::{
-    cleanup_jumplist, free_fmark, free_xfmark, mark_buffer_iter, mark_get, mark_global_iter,
-    mark_jumplist_iter, mark_set_global, mark_set_local, set_last_cursor, setpcmark,
-};
-use crate::mbyte::mb_strnicmp;
-use crate::memory::{XString, xcalloc, xfree, xmalloc, xmemdup, xmemdupz, xrealloc, xstrdup};
-use crate::message::{verbose_enter, verbose_leave};
-use crate::msgpack_rpc::packer::{
-    mpack_array, mpack_bin, mpack_bool, mpack_check_buffer, mpack_integer, mpack_map, mpack_raw,
-    mpack_remaining, mpack_str, mpack_uint, mpack_uint64, packer_string_buffer, packer_take_string,
-};
-use crate::msgpack_rpc::unpacker::{
-    push_additional_data, unpack_array, unpack_integer, unpack_keydict, unpack_skip, unpack_string,
-};
-use crate::option::copy_option_part;
-use crate::option::vars::{p_enc, p_fs, p_hi, p_shadafile, p_verbose};
-use crate::os::env::{expand_env, home_replace, home_replace_save, os_get_pid};
-use crate::os::fileio::{
-    FileOpenFlags, file_close, file_flush, file_open, file_open_buffer, file_read, file_skip,
-    file_try_read_buffered,
-};
-use crate::os::fs::{os_fchown, os_fileinfo, os_getperm, os_isdir, os_mkdir_recurse, os_remove};
-use crate::os::stdpaths::stdpaths_user_state_subpath;
-use crate::os::time::os_time;
-use crate::path::{concat_fnames, path_fnamecmp, path_try_shorten_fname, tail_with_sep_index};
-use crate::pos::MAXLNUM;
-use crate::register::{op_global_reg_iter, op_reg_get, op_reg_index, op_reg_set};
-use crate::registry::{IdMap, IdSet, SlotTable, id_map, id_set};
-use crate::search::state::no_hlsearch;
-use crate::search::{
-    get_search_pattern, get_substitute_pattern, search_was_last_used, set_last_used_pattern,
-    set_search_pattern, set_substitute_pattern,
-};
+#![forbid(unsafe_code)]
+
+use crate::memory::XString;
+use crate::registry::{IdMap, IdSet, id_map, id_set};
+use crate::types::Buffer;
 use crate::types::{
-    AdditionalData, AdditionalDataBuilder, ApiDict, BlnFlags, Buffer, ColNr, FileDescriptor,
-    FileInfo, FileMark, FileMarkView, HistoryType, Integer, KeyDict__shada_buflist_item,
-    KeyDict__shada_mark, KeyDict__shada_register, KeyDict__shada_search_pat, LineNr, List, MarkGet,
-    MotionType, PackerBuffer, Pos, SearchOffset, SearchPattern, String_0, StringArray, Timestamp,
-    TypVal, VarFlavour, XFileMark, YankReg, int64_t, ptrdiff_t, size_t, ssize_t, uid_t, uint8_t,
-    uint32_t, uint64_t, uintmax_t, uv_gid_t, uv_uid_t,
+    ApiDict, KeyDict__shada_search_pat, MotionType, Pos, String_0, Timestamp, TypVal,
 };
-use crate::version::LONG_VERSION;
-use crate::winlayer::{buffers, tab_windows};
-use ::libc::{atoi, getgid, getuid, qsort};
+use core::ffi::c_char;
+use std::collections::VecDeque;
+use std::ffi::CString;
 
-/// A ShaDa entry's extra data, owned: the fields of an entry this version
-/// does not know, kept by whatever record the entry restored so that the
-/// next write can put them back verbatim. Freed when the record lets go.
-pub(crate) struct ShadaExtra(core::ptr::NonNull<AdditionalData>);
-
-impl ShadaExtra {
-    /// Take over `raw`; `None` for null.
-    ///
-    /// # Safety
-    /// `raw` must be null or a live `xmalloc` block of extra data that
-    /// nothing else will free.
-    pub(crate) unsafe fn from_raw(raw: *mut AdditionalData) -> Option<ShadaExtra> {
-        core::ptr::NonNull::new(raw).map(ShadaExtra)
-    }
-
-    /// The block, borrowed for an entry that is written and not freed.
-    pub(crate) fn as_ptr(&self) -> *mut AdditionalData {
-        self.0.as_ptr()
-    }
-
-    /// Give the block up to a holder that frees it with `xfree`.
-    pub(crate) fn into_raw(self) -> *mut AdditionalData {
-        let raw = self.0.as_ptr();
-        core::mem::forget(self);
-        raw
-    }
-}
-
-impl Drop for ShadaExtra {
-    fn drop(&mut self) {
-        // SAFETY: the block this holder took over, freed once.
-        unsafe { xfree(self.0.as_ptr().cast()) };
-    }
-}
-
-// The carve of the transpiled module; see each child's docs.
 mod file;
 pub use self::file::*;
-mod pack;
-pub(crate) use self::pack::*;
-mod parse;
-pub(crate) use self::parse::*;
-mod unpack;
-pub(crate) use self::unpack::*;
 mod merge;
-pub(crate) use self::merge::*;
+mod pack;
+mod parse;
+mod unpack;
+pub(crate) use self::merge::marklist_insert;
 mod collect;
-pub use self::collect::*;
+pub use self::collect::{
+    shada_encode_buflist, shada_encode_gvars, shada_encode_jumps, shada_encode_regs,
+};
 mod read;
-pub use self::read::*;
+pub use self::read::shada_read_string;
 mod write;
-pub(crate) use self::write::*;
-pub const kMarkBufLocal: MarkGet = 0;
-pub const BLN_LISTED: BlnFlags = 2;
-pub const HIST_SEARCH: HistoryType = 1;
-pub const HIST_CMD: HistoryType = 0;
-pub const HIST_COUNT: ::core::ffi::c_uint = 5;
-pub const kMTBlockWise: MotionType = 2;
-pub const kMTLineWise: MotionType = 1;
-pub const kMTCharWise: MotionType = 0;
-pub const kFileTruncate: FileOpenFlags = 32;
-pub const kFileCreateOnly: FileOpenFlags = 16;
-pub const kFileNoSymlink: FileOpenFlags = 8;
-pub const kFileCreate: FileOpenFlags = 2;
-pub const kFileReadOnly: FileOpenFlags = 1;
-pub const kShaDaMissingError: ::core::ffi::c_uint = 16;
-pub const kShaDaGetOldfiles: ::core::ffi::c_uint = 8;
-pub const kShaDaForceit: ::core::ffi::c_uint = 4;
-pub const kShaDaWantMarks: ::core::ffi::c_uint = 2;
-pub const kShaDaWantInfo: ::core::ffi::c_uint = 1;
-pub const kSDWriteReadNotShada: ShaDaWriteResult = 1;
-pub type ShaDaWriteResult = ::core::ffi::c_uint;
-pub const kSDWriteIgnError: ShaDaWriteResult = 3;
-pub const kSDWriteFailed: ShaDaWriteResult = 2;
-pub const kSDWriteSuccessful: ShaDaWriteResult = 0;
-pub struct WriteMergerState {
-    pub hms: [HistoryMergerState; 5],
-    pub global_marks: [ShadaEntry; 26],
-    pub numbered_marks: [ShadaEntry; 10],
-    pub registers: [ShadaEntry; 37],
-    pub jumps: [ShadaEntry; 100],
-    pub jumps_size: size_t,
-    pub search_pattern: ShadaEntry,
-    pub sub_search_pattern: ShadaEntry,
-    pub replacement: ShadaEntry,
-    /// The names of the variables already written. Membership only.
-    pub(crate) dumped_variables: IdSet<Box<[u8]>>,
-    /// One file's marks, filed under its name.
-    ///
-    /// A [`SlotTable`], not a map: [`Writing::pack_file_marks`] collects the
-    /// values in this table's order and `qsort`s them by timestamp. `qsort`
-    /// is unstable, so it -- not this order -- is what decides between the
-    /// files whose newest mark shares a timestamp (every file marked in the
-    /// same second). What this order still fixes is the *input permutation*
-    /// `qsort` is handed, which is what the tie then falls out of, and which
-    /// the `'N` cut takes the front of. khash was insertion-ordered; matching
-    /// it is what keeps the port's input the same array upstream sorts.
-    ///
-    /// The values stay raw pointers: [`Writing::file_marks_for`] hands one
-    /// out and the caller writes through it while the table is unborrowed.
-    ///
-    /// [`Writing::pack_file_marks`]: write::Writing::pack_file_marks
-    /// [`Writing::file_marks_for`]: write::Writing::file_marks_for
-    pub(crate) file_marks: SlotTable<Box<[u8]>, *mut FileMarks>,
+
+/// A ShaDa entry's extra data: the map keys or array elements of an entry
+/// that this Nvim has no field for, kept as the msgpack they arrived as so
+/// that the next write can put them back verbatim.
+///
+/// `items` counts the keys (each with its value) or elements; `bytes` is
+/// their encodings, back to back.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ShadaExtra {
+    items: u32,
+    bytes: Vec<u8>,
 }
+
+impl ShadaExtra {
+    /// Extra data of `items` items encoded as `bytes`.
+    pub(crate) fn from_parts(items: u32, bytes: Vec<u8>) -> ShadaExtra {
+        ShadaExtra { items, bytes }
+    }
+
+    /// How many keys or elements this holds.
+    pub(crate) fn items(&self) -> u32 {
+        self.items
+    }
+
+    /// Their encodings, back to back.
+    pub(crate) fn bytes(&self) -> &[u8] {
+        &self.bytes
+    }
+
+    /// Append one more item's encoding, starting the extra data on the
+    /// first one.
+    pub(crate) fn push(extra: &mut Option<ShadaExtra>, item: &[u8]) {
+        let extra = extra.get_or_insert_with(|| ShadaExtra::from_parts(0, Vec::new()));
+        extra.items += 1;
+        extra.bytes.extend_from_slice(item);
+    }
+}
+
+/// What a ShaDa file holds, by the number the format writes for each kind.
+pub(crate) mod kind {
+    pub(crate) const HEADER: u64 = 1;
+    pub(crate) const SEARCH_PATTERN: u64 = 2;
+    pub(crate) const SUB_STRING: u64 = 3;
+    pub(crate) const HISTORY_ENTRY: u64 = 4;
+    pub(crate) const REGISTER: u64 = 5;
+    pub(crate) const VARIABLE: u64 = 6;
+    pub(crate) const GLOBAL_MARK: u64 = 7;
+    pub(crate) const JUMP: u64 = 8;
+    pub(crate) const BUFFER_LIST: u64 = 9;
+    pub(crate) const LOCAL_MARK: u64 = 10;
+    pub(crate) const CHANGE: u64 = 11;
+    /// The largest kind this Nvim knows. Anything above it is an unknown
+    /// entry, kept only to be written back out.
+    pub(crate) const LAST: u64 = CHANGE;
+}
+
+/// Which kinds of entry a read wants, one bit per kind (`1 << kind`), plus
+/// one for the kinds this Nvim does not know.
+pub(crate) type ReadKinds = u32;
+
+/// The bit for one known kind.
+pub(crate) const fn want(kind: u64) -> ReadKinds {
+    1 << kind
+}
+
+/// Entries of a kind this Nvim does not know.
+pub(crate) const WANT_UNKNOWN: ReadKinds = 1 << 12;
+/// The kinds no `'shada'` setting turns off: the two patterns and the jump
+/// list.
+pub(crate) const WANT_ALWAYS: ReadKinds =
+    want(kind::SEARCH_PATTERN) | want(kind::SUB_STRING) | want(kind::JUMP);
+
+/// What a read asked for, in the `flags` [`shada_read_everything`] builds.
+pub(crate) mod read_flags {
+    pub(crate) const INFO: u32 = 1;
+    pub(crate) const MARKS: u32 = 2;
+    pub(crate) const FORCE: u32 = 4;
+    pub(crate) const OLDFILES: u32 = 8;
+    pub(crate) const MISSING_ERROR: u32 = 16;
+}
+
+/// How reading one entry went.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum ReadStatus {
+    /// The end of the file.
+    Finished,
+    /// The file could not be read.
+    ReadError,
+    /// The file is not ShaDa at all.
+    NotShada,
+    /// One entry was malformed; the rest may still be good.
+    Malformed,
+}
+
+/// How writing went.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum WriteStatus {
+    Successful,
+    /// The old file turned out not to be ShaDa, so it is left alone.
+    ReadNotShada,
+    /// The file could not be written.
+    Error,
+    /// One entry could not be written; the rest of the file is still good.
+    IgnError,
+}
+
+/// The number of history types.
+pub(crate) const HIST_COUNT: usize = 5;
+/// The search history's number: the only one with a separator.
+pub(crate) const HIST_SEARCH: u8 = 1;
+
+/// The three motion types a register can have.
+pub(crate) const MOTION_CHARWISE: MotionType = 0;
+pub(crate) const MOTION_LINEWISE: MotionType = 1;
+pub(crate) const MOTION_BLOCKWISE: MotionType = 2;
+
+/// The lettered marks of one buffer.
+pub(crate) const NMARKS: usize = 26;
+/// The most entries a jump list or a change list holds.
+pub(crate) const JUMPLISTSIZE: usize = 100;
+
+/// One ShaDa entry: when it was made, what it holds, and the extra data it
+/// carried that this Nvim has no field for.
 pub struct ShadaEntry {
-    pub can_free_entry: bool,
-    pub timestamp: Timestamp,
-    pub data: ShadaEntryData,
-    pub additional_data: *mut AdditionalData,
+    pub(crate) timestamp: Timestamp,
+    pub(crate) data: ShadaEntryData,
+    pub(crate) extra: Option<ShadaExtra>,
 }
 
 impl ShadaEntry {
-    /// An empty slot: what a merger's arrays are filled with, and what an
-    /// entry that failed to read is left as.
+    /// An empty slot: what a merger's arrays are filled with.
     pub(crate) const MISSING: ShadaEntry = ShadaEntry {
-        can_free_entry: false,
         timestamp: 0,
         data: ShadaEntryData::Missing,
-        additional_data: ::core::ptr::null_mut(),
+        extra: None,
     };
 
+    /// An entry with no extra data.
+    pub(crate) fn new(timestamp: Timestamp, data: ShadaEntryData) -> ShadaEntry {
+        ShadaEntry {
+            timestamp,
+            data,
+            extra: None,
+        }
+    }
+
     /// Which kind of entry this is — the number the format writes for it.
-    pub(crate) fn kind(&self) -> ShadaEntryType {
+    /// An unknown entry answers the kind it arrived as.
+    pub(crate) fn kind(&self) -> u64 {
         self.data.kind()
+    }
+
+    /// Whether this is an empty slot.
+    pub(crate) fn is_missing(&self) -> bool {
+        matches!(self.data, ShadaEntryData::Missing)
     }
 }
 
 /// One entry's payload, and by which variant it is, the kind of entry.
-///
-/// Upstream this is an untagged union beside a separate `type` field; the
-/// two are never written apart, so they are one value here and the reads
-/// that used to have to trust the tag are `match` arms.
 pub enum ShadaEntryData {
-    /// No entry at all. An empty slot in a merger's arrays, and what a
-    /// malformed entry is reduced to.
+    /// No entry at all: an empty slot in a merger's arrays.
     Missing,
     Header(ApiDict),
     SearchPattern(KeyDict__shada_search_pat),
-    SubString(ShadaSubString),
+    /// The last `:substitute` replacement string.
+    SubString(XString),
     HistoryEntry(ShadaHistoryItem),
     Register(ShadaRegister),
     Variable(ShadaGlobalVar),
     GlobalMark(ShadaFileMark),
     Jump(ShadaFileMark),
-    BufferList(ShadaBufferList),
+    BufferList(Vec<ShadaBufferListItem>),
     LocalMark(ShadaFileMark),
     Change(ShadaFileMark),
-    /// An entry of a type this Nvim does not know, kept byte for byte so
+    /// An entry of a kind this Nvim does not know, kept byte for byte so
     /// that writing the file back does not lose it.
     Unknown(ShadaUnknownItem),
 }
 
 impl ShadaEntryData {
-    /// The number the format writes for this kind of entry. An unknown
-    /// entry answers [`kSDItemUnknown`], not the type it arrived with.
-    pub(crate) fn kind(&self) -> ShadaEntryType {
+    /// The number the format writes for this kind of entry.
+    pub(crate) fn kind(&self) -> u64 {
         match self {
-            ShadaEntryData::Missing => kSDItemMissing,
-            ShadaEntryData::Header(_) => kSDItemHeader,
-            ShadaEntryData::SearchPattern(_) => kSDItemSearchPattern,
-            ShadaEntryData::SubString(_) => kSDItemSubString,
-            ShadaEntryData::HistoryEntry(_) => kSDItemHistoryEntry,
-            ShadaEntryData::Register(_) => kSDItemRegister,
-            ShadaEntryData::Variable(_) => kSDItemVariable,
-            ShadaEntryData::GlobalMark(_) => kSDItemGlobalMark,
-            ShadaEntryData::Jump(_) => kSDItemJump,
-            ShadaEntryData::BufferList(_) => kSDItemBufferList,
-            ShadaEntryData::LocalMark(_) => kSDItemLocalMark,
-            ShadaEntryData::Change(_) => kSDItemChange,
-            ShadaEntryData::Unknown(_) => kSDItemUnknown,
-        }
-    }
-
-    /// Whether this is an empty slot.
-    pub(crate) fn is_missing(&self) -> bool {
-        matches!(self, ShadaEntryData::Missing)
-    }
-
-    /// What the entry's fields default to when the file leaves them out.
-    /// Both sides of the format agree on these, which is what lets a
-    /// writer omit them.
-    pub(crate) fn default_for(kind: ShadaEntryType) -> ShadaEntryData {
-        match kind {
-            kSDItemHeader => ShadaEntryData::Header(EMPTY_DICT),
-            kSDItemSearchPattern => ShadaEntryData::SearchPattern(DEFAULT_SEARCH_PATTERN),
-            kSDItemSubString => ShadaEntryData::SubString(DEFAULT_SUB_STRING),
-            kSDItemHistoryEntry => ShadaEntryData::HistoryEntry(DEFAULT_HISTORY_ITEM),
-            kSDItemRegister => ShadaEntryData::Register(DEFAULT_REGISTER),
-            kSDItemVariable => ShadaEntryData::Variable(DEFAULT_VARIABLE),
-            kSDItemGlobalMark => ShadaEntryData::GlobalMark(default_filemark(kind)),
-            kSDItemJump => ShadaEntryData::Jump(default_filemark(kind)),
-            kSDItemBufferList => ShadaEntryData::BufferList(DEFAULT_BUFFER_LIST),
-            kSDItemLocalMark => ShadaEntryData::LocalMark(default_filemark(kind)),
-            kSDItemChange => ShadaEntryData::Change(default_filemark(kind)),
-            _ => ShadaEntryData::Missing,
+            ShadaEntryData::Missing => 0,
+            ShadaEntryData::Header(_) => kind::HEADER,
+            ShadaEntryData::SearchPattern(_) => kind::SEARCH_PATTERN,
+            ShadaEntryData::SubString(_) => kind::SUB_STRING,
+            ShadaEntryData::HistoryEntry(_) => kind::HISTORY_ENTRY,
+            ShadaEntryData::Register(_) => kind::REGISTER,
+            ShadaEntryData::Variable(_) => kind::VARIABLE,
+            ShadaEntryData::GlobalMark(_) => kind::GLOBAL_MARK,
+            ShadaEntryData::Jump(_) => kind::JUMP,
+            ShadaEntryData::BufferList(_) => kind::BUFFER_LIST,
+            ShadaEntryData::LocalMark(_) => kind::LOCAL_MARK,
+            ShadaEntryData::Change(_) => kind::CHANGE,
+            ShadaEntryData::Unknown(item) => item.kind,
         }
     }
 
     /// The mark a global mark, local mark, jump or change entry carries.
-    pub(crate) fn filemark(&self) -> ShadaFileMark {
+    pub(crate) fn filemark(&self) -> &ShadaFileMark {
         match self {
             ShadaEntryData::GlobalMark(mark)
             | ShadaEntryData::Jump(mark)
             | ShadaEntryData::LocalMark(mark)
-            | ShadaEntryData::Change(mark) => *mark,
+            | ShadaEntryData::Change(mark) => mark,
             other => unreachable!("shada: entry type {} carries no mark", other.kind()),
         }
     }
@@ -286,349 +259,193 @@ impl ShadaEntryData {
         }
     }
 
-    /// The search or substitute pattern a search-pattern entry carries.
-    pub(crate) fn search_pattern_mut(&mut self) -> &mut KeyDict__shada_search_pat {
-        match self {
-            ShadaEntryData::SearchPattern(pattern) => pattern,
-            other => unreachable!("shada: entry type {} is not a search pattern", other.kind()),
-        }
-    }
-
     /// The line a history entry carries.
-    pub(crate) fn history(&self) -> ShadaHistoryItem {
-        match self {
-            ShadaEntryData::HistoryEntry(item) => *item,
-            other => unreachable!("shada: entry type {} is not a history entry", other.kind()),
-        }
-    }
-
-    /// [`Self::history`], to write to.
-    pub(crate) fn history_mut(&mut self) -> &mut ShadaHistoryItem {
+    pub(crate) fn history(&self) -> &ShadaHistoryItem {
         match self {
             ShadaEntryData::HistoryEntry(item) => item,
             other => unreachable!("shada: entry type {} is not a history entry", other.kind()),
         }
     }
-
-    /// The register a register entry carries.
-    pub(crate) fn register_mut(&mut self) -> &mut ShadaRegister {
-        match self {
-            ShadaEntryData::Register(reg) => reg,
-            other => unreachable!("shada: entry type {} is not a register", other.kind()),
-        }
-    }
-
-    /// The variable a variable entry carries.
-    pub(crate) fn variable_mut(&mut self) -> &mut ShadaGlobalVar {
-        match self {
-            ShadaEntryData::Variable(var) => var,
-            other => unreachable!("shada: entry type {} is not a variable", other.kind()),
-        }
-    }
-
-    /// The replacement string a sub-string entry carries.
-    pub(crate) fn sub_string_mut(&mut self) -> &mut ShadaSubString {
-        match self {
-            ShadaEntryData::SubString(sub) => sub,
-            other => unreachable!("shada: entry type {} is not a sub string", other.kind()),
-        }
-    }
-
-    /// The buffer list a buffer-list entry carries.
-    pub(crate) fn buffer_list(&self) -> ShadaBufferList {
-        match self {
-            ShadaEntryData::BufferList(list) => *list,
-            other => unreachable!("shada: entry type {} is not a buffer list", other.kind()),
-        }
-    }
-
-    /// [`Self::buffer_list`], to write to.
-    pub(crate) fn buffer_list_mut(&mut self) -> &mut ShadaBufferList {
-        match self {
-            ShadaEntryData::BufferList(list) => list,
-            other => unreachable!("shada: entry type {} is not a buffer list", other.kind()),
-        }
-    }
-
-    /// The bytes an entry of an unrecognised type arrived as.
-    pub(crate) fn unknown_mut(&mut self) -> &mut ShadaUnknownItem {
-        match self {
-            ShadaEntryData::Unknown(item) => item,
-            other => unreachable!("shada: entry type {} is a known one", other.kind()),
-        }
-    }
 }
-#[derive(Copy, Clone)]
-pub struct ShadaBufferList {
-    pub size: size_t,
-    pub buffers: *mut ShadaBufferListItem,
-}
-#[derive(Copy, Clone)]
+
+/// One buffer of the buffer list: its file and where its cursor was.
 pub struct ShadaBufferListItem {
-    pub pos: Pos,
-    pub fname: *mut ::core::ffi::c_char,
-    pub additional_data: *mut AdditionalData,
+    pub(crate) pos: Pos,
+    pub(crate) fname: XString,
+    pub(crate) extra: Option<ShadaExtra>,
 }
-#[derive(Copy, Clone)]
-pub struct ShadaSubString {
-    pub sub: *mut ::core::ffi::c_char,
-}
-#[derive(Copy, Clone)]
+
+/// An entry of a kind this Nvim does not know.
 pub struct ShadaUnknownItem {
-    pub type_0: uint64_t,
-    pub contents: *mut ::core::ffi::c_char,
-    pub size: size_t,
+    /// The kind it arrived as.
+    pub(crate) kind: u64,
+    /// Its payload, as it arrived.
+    pub(crate) contents: Vec<u8>,
 }
+
+/// One global variable.
 pub struct ShadaGlobalVar {
-    pub name: *mut ::core::ffi::c_char,
-    pub value: TypVal,
+    pub(crate) name: XString,
+    pub(crate) value: TypVal,
 }
-#[derive(Copy, Clone)]
+
+/// One register: its name, how it is put back, and its lines.
 pub struct ShadaRegister {
-    pub name: ::core::ffi::c_char,
-    pub type_0: MotionType,
-    pub contents: *mut String_0,
-    pub is_unnamed: bool,
-    pub contents_size: size_t,
-    pub width: size_t,
+    pub(crate) name: c_char,
+    pub(crate) motion: MotionType,
+    pub(crate) contents: Vec<String_0>,
+    pub(crate) is_unnamed: bool,
+    /// The width of a blockwise register; 0 for the other two.
+    pub(crate) width: usize,
 }
-#[derive(Copy, Clone)]
+
+/// One history line.
 pub struct ShadaHistoryItem {
-    pub histtype: uint8_t,
-    pub string: *mut ::core::ffi::c_char,
-    pub sep: ::core::ffi::c_char,
+    pub(crate) histtype: u8,
+    pub(crate) text: CString,
+    /// The character the search was started with; search history only.
+    pub(crate) sep: u8,
 }
-#[derive(Copy, Clone)]
+
+/// A global mark, local mark, jump or change.
 pub struct ShadaFileMark {
-    pub name: ::core::ffi::c_char,
-    pub mark: Pos,
-    pub fname: *mut ::core::ffi::c_char,
-}
-pub type ShadaEntryType = ::core::ffi::c_int;
-pub const kSDItemChange: ShadaEntryType = 11;
-pub const kSDItemLocalMark: ShadaEntryType = 10;
-pub const kSDItemBufferList: ShadaEntryType = 9;
-pub const kSDItemJump: ShadaEntryType = 8;
-pub const kSDItemGlobalMark: ShadaEntryType = 7;
-pub const kSDItemVariable: ShadaEntryType = 6;
-pub const kSDItemRegister: ShadaEntryType = 5;
-pub const kSDItemHistoryEntry: ShadaEntryType = 4;
-pub const kSDItemSubString: ShadaEntryType = 3;
-pub const kSDItemSearchPattern: ShadaEntryType = 2;
-pub const kSDItemHeader: ShadaEntryType = 1;
-pub const kSDItemMissing: ShadaEntryType = 0;
-pub const kSDItemUnknown: ShadaEntryType = -1;
-pub struct HistoryMergerState {
-    pub hmll: HMLList,
-    pub do_merge: bool,
-    pub reading: bool,
-    /// Snapshot of neovim's own history (oldest first), taken at
-    /// [`hms_init`] time and drained by [`hms_insert`] /
-    /// [`hms_insert_whole_neovim_history`]. Boxed slice owned by this
-    /// struct; freed in [`hms_dealloc`].
-    pub pending: *mut ShadaEntry,
-    pub pending_len: size_t,
-    pub pending_pos: size_t,
-    pub history_type: uint8_t,
-}
-pub struct HMLList {
-    pub entries: *mut HMLListEntry,
-    pub first: *mut HMLListEntry,
-    pub last: *mut HMLListEntry,
-    pub free_entry: *mut HMLListEntry,
-    pub last_free_entry: *mut HMLListEntry,
-    pub size: size_t,
-    pub num_entries: size_t,
-    /// The ring entry holding each history string. Asked, never walked.
-    pub(crate) contained_entries: IdMap<Box<[u8]>, *mut HMLListEntry>,
+    /// The mark's letter; NUL for a jump or a change.
+    pub(crate) name: c_char,
+    pub(crate) mark: Pos,
+    pub(crate) fname: XString,
 }
 
-impl HMLList {
-    /// A ring with no array yet: what a merger holds before `hmll_init`.
-    const EMPTY: HMLList = HMLList {
-        entries: ::core::ptr::null_mut(),
-        first: ::core::ptr::null_mut(),
-        last: ::core::ptr::null_mut(),
-        free_entry: ::core::ptr::null_mut(),
-        last_free_entry: ::core::ptr::null_mut(),
-        size: 0,
-        num_entries: 0,
-        contained_entries: id_map(),
-    };
+/// Merging one history type: a ring of the newest entries, and the part of
+/// Nvim's own history not yet folded in.
+pub(crate) struct HistoryMergerState {
+    pub(crate) hmll: merge::HistoryRing,
+    /// Nvim's own history (oldest first), taken when the merger started and
+    /// drained as the file's entries interleave with it.
+    pub(crate) pending: VecDeque<ShadaEntry>,
+    pub(crate) history_type: u8,
 }
 
-impl HistoryMergerState {
-    /// A merger that has not been started. `hms_init` makes a usable one.
-    const EMPTY: HistoryMergerState = HistoryMergerState {
-        hmll: HMLList::EMPTY,
-        do_merge: false,
-        reading: false,
-        pending: ::core::ptr::null_mut(),
-        pending_len: 0,
-        pending_pos: 0,
-        history_type: 0,
-    };
-}
-
-impl WriteMergerState {
-    /// Nothing collected yet. Every slot is [`ShadaEntry::MISSING`], which
-    /// is what marks one as empty.
-    pub(crate) const EMPTY: WriteMergerState = WriteMergerState {
-        hms: [HistoryMergerState::EMPTY; 5],
-        global_marks: [ShadaEntry::MISSING; 26],
-        numbered_marks: [ShadaEntry::MISSING; 10],
-        registers: [ShadaEntry::MISSING; 37],
-        jumps: [ShadaEntry::MISSING; 100],
-        jumps_size: 0,
-        search_pattern: ShadaEntry::MISSING,
-        sub_search_pattern: ShadaEntry::MISSING,
-        replacement: ShadaEntry::MISSING,
-        dumped_variables: id_set(),
-        file_marks: SlotTable::new(),
-    };
-}
-
-impl WriteMergerState {
-    /// The slot one file's marks collect into, made on first use. The table
-    /// owns both the name and the slot.
+/// Everything collected for one write, and what the merge decides between.
+pub(crate) struct WriteMergerState {
+    pub(crate) hms: [Option<HistoryMergerState>; HIST_COUNT],
+    pub(crate) global_marks: [ShadaEntry; 26],
+    pub(crate) numbered_marks: [ShadaEntry; 10],
+    pub(crate) registers: [ShadaEntry; 37],
+    /// The jump list, oldest first; `jumps_size` of them are real.
+    pub(crate) jumps: [ShadaEntry; JUMPLISTSIZE],
+    pub(crate) jumps_size: usize,
+    pub(crate) search_pattern: ShadaEntry,
+    pub(crate) sub_search_pattern: ShadaEntry,
+    pub(crate) replacement: ShadaEntry,
+    /// The names of the variables already written. Membership only.
+    pub(crate) dumped_variables: IdSet<Box<[u8]>>,
+    /// Where in `file_marks` each file's marks are, by file name.
+    pub(crate) file_marks_index: IdMap<Box<[u8]>, usize>,
+    /// One file's marks per entry, in the order the files were first seen.
     ///
-    /// # Safety
-    /// `fname` is null or a NUL-terminated string.
-    pub(crate) unsafe fn file_marks_for(
-        &mut self,
-        fname: *const ::core::ffi::c_char,
-    ) -> *mut FileMarks {
-        // SAFETY: the caller's file name.
-        let key = unsafe { shada_key(fname) };
-        if let Some(marks) = self.file_marks.get(key) {
-            return marks;
-        }
-        let marks = shada_heap(FileMarks::EMPTY);
-        self.file_marks.insert(key.into(), marks);
-        marks
+    /// That order is the input permutation `qsort` is handed when the files
+    /// are ordered by their newest mark, and `qsort` is unstable: it is what
+    /// decides between files whose newest marks share a timestamp, and the
+    /// `'N` cut takes the front of the result. khash was insertion-ordered;
+    /// keeping this order is what keeps the port's input the array upstream
+    /// sorts.
+    pub(crate) file_marks: Vec<Box<FileMarks>>,
+}
+
+impl WriteMergerState {
+    /// Nothing collected yet.
+    pub(crate) fn new() -> Box<WriteMergerState> {
+        Box::new(WriteMergerState {
+            hms: [const { None }; HIST_COUNT],
+            global_marks: [const { ShadaEntry::MISSING }; 26],
+            numbered_marks: [const { ShadaEntry::MISSING }; 10],
+            registers: [const { ShadaEntry::MISSING }; 37],
+            jumps: [const { ShadaEntry::MISSING }; JUMPLISTSIZE],
+            jumps_size: 0,
+            search_pattern: ShadaEntry::MISSING,
+            sub_search_pattern: ShadaEntry::MISSING,
+            replacement: ShadaEntry::MISSING,
+            dumped_variables: id_set(),
+            file_marks_index: id_map(),
+            file_marks: Vec::new(),
+        })
+    }
+
+    /// The slot one file's marks collect into, made on first use.
+    pub(crate) fn file_marks_for(&mut self, fname: &[u8]) -> &mut FileMarks {
+        let at = match self.file_marks_index.get(fname) {
+            Some(&at) => at,
+            None => {
+                let at = self.file_marks.len();
+                self.file_marks.push(FileMarks::new());
+                self.file_marks_index.insert(fname.into(), at);
+                at
+            }
+        };
+        &mut self.file_marks[at]
     }
 }
 
-/// One `value` on the heap, for the aggregates the merge allocates.
-///
-/// `xmalloc` rather than `Box` because these are released with `xfree`, and
-/// written whole rather than `xcalloc`ed because an all-zero
-/// [`ShadaEntryData`] is not a value of it — [`ShadaEntry::MISSING`] is.
-fn shada_heap<T>(value: T) -> *mut T {
-    // SAFETY: fresh storage of exactly `T`'s size, written before it is read.
-    let ptr = unsafe { xmalloc(size_of::<T>()) }.cast::<T>();
-    unsafe { ptr.write(value) };
-    ptr
-}
-
-pub struct HMLListEntry {
-    pub data: ShadaEntry,
-    pub next: *mut HMLListEntry,
-    pub prev: *mut HMLListEntry,
-}
-pub struct FileMarks {
-    pub marks: [ShadaEntry; 29],
-    pub changes: [ShadaEntry; 100],
-    pub changes_size: size_t,
-    pub additional_marks: *mut ShadaEntry,
-    pub additional_marks_size: size_t,
-    pub greatest_timestamp: Timestamp,
+/// One file's marks, as the merge collects them.
+pub(crate) struct FileMarks {
+    /// `a`-`z`, then `"`, `^` and `.`.
+    pub(crate) marks: [ShadaEntry; 29],
+    /// The change list, oldest first; `changes_size` of them are real.
+    pub(crate) changes: [ShadaEntry; JUMPLISTSIZE],
+    pub(crate) changes_size: usize,
+    /// Marks the old file had for this file under names this Nvim does not
+    /// know, kept to be written back.
+    pub(crate) additional_marks: Vec<ShadaEntry>,
+    pub(crate) greatest_timestamp: Timestamp,
 }
 
 impl FileMarks {
     /// One file's marks before any have been collected.
-    pub(crate) const EMPTY: FileMarks = FileMarks {
-        marks: [ShadaEntry::MISSING; 29],
-        changes: [ShadaEntry::MISSING; 100],
-        changes_size: 0,
-        additional_marks: ::core::ptr::null_mut(),
-        additional_marks_size: 0,
-        greatest_timestamp: 0,
-    };
+    fn new() -> Box<FileMarks> {
+        Box::new(FileMarks {
+            marks: [const { ShadaEntry::MISSING }; 29],
+            changes: [const { ShadaEntry::MISSING }; JUMPLISTSIZE],
+            changes_size: 0,
+            additional_marks: Vec::new(),
+            greatest_timestamp: 0,
+        })
+    }
 }
 
-pub const kSDReadChanges: SRNIFlags = 2048;
-pub const kSDReadLocalMarks: SRNIFlags = 1024;
-pub const kSDReadGlobalMarks: SRNIFlags = 128;
-pub const kSDReadVariables: SRNIFlags = 64;
-pub const kSDReadRegisters: SRNIFlags = 32;
-pub const kSDReadHistory: SRNIFlags = 16;
-pub const kSDReadUnknown: SRNIFlags = 4096;
-pub const kSDReadUndisableableData: SRNIFlags = 268;
-pub const kSDReadStatusMalformed: ShaDaReadResult = 4;
-pub const kSDReadStatusReadError: ShaDaReadResult = 2;
-pub const kSDReadStatusNotShaDa: ShaDaReadResult = 3;
-pub const kSDReadStatusFinished: ShaDaReadResult = 1;
-pub const kSDReadStatusSuccess: ShaDaReadResult = 0;
-pub type ShaDaReadResult = ::core::ffi::c_uint;
-pub type SearchPatternGetter = Option<unsafe fn(*mut SearchPattern) -> ()>;
-pub const kSDReadBufferList: SRNIFlags = 512;
-pub type SRNIFlags = ::core::ffi::c_uint;
-pub const PTRDIFF_MAX: ::core::ffi::c_long = 9223372036854775807 as ::core::ffi::c_long;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const ARENA_BLOCK_SIZE: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
-pub const ROOT_UID: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const KV_INITIAL_VALUE: AdditionalDataBuilder = AdditionalDataBuilder {
-    size: 0 as size_t,
-    capacity: 0 as size_t,
-    items: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-};
 /// The buffers a ShaDa write keeps no marks for: those on a removable
 /// medium (`'shada'`'s `r` prefixes) and the scratch kinds. Membership only,
 /// keyed by address, as the khash set it replaced was.
 pub(crate) type RemovableBufs = IdSet<*const Buffer>;
 
-/// The table key for the C string `name`: its bytes plus the terminator.
-///
-/// A **null** pointer answers the empty slice, which no non-null string can
-/// produce -- and that is exactly what khash made of it here, where the key
-/// type was `cstr_t` and the comparison was `strequal`, under which null
-/// equals null and nothing else.
-///
-/// # Safety
-/// `name` is null or a NUL-terminated string, live for `'a`.
-unsafe fn shada_key<'a>(name: *const ::core::ffi::c_char) -> &'a [u8] {
-    if name.is_null() {
-        return &[];
-    }
-    // SAFETY: the caller's NUL-terminated string.
-    unsafe { ::core::ffi::CStr::from_ptr(name) }.to_bytes_with_nul()
-}
-
-pub const NMARKS: ::core::ffi::c_int =
-    'z' as ::core::ffi::c_int - 'a' as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
-pub const JUMPLISTSIZE: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
-pub const MPACK_ITEM_SIZE: ::core::ffi::c_int = 9 as ::core::ffi::c_int;
-#[inline]
 /// Where a global mark's letter lives in `namedfm`: `A`-`Z` first, then the
-/// ten numbered marks. −1 for a name that is neither.
-fn mark_global_index(name: ::core::ffi::c_char) -> ::core::ffi::c_int {
+/// ten numbered marks. `None` for a name that is neither.
+fn mark_global_index(name: c_char) -> Option<usize> {
     match name as u8 {
-        b'A'..=b'Z' => name as ::core::ffi::c_int - 'A' as ::core::ffi::c_int,
-        b'0'..=b'9' => NMARKS + (name as ::core::ffi::c_int - '0' as ::core::ffi::c_int),
-        _ => -1,
+        letter @ b'A'..=b'Z' => Some(usize::from(letter - b'A')),
+        digit @ b'0'..=b'9' => Some(NMARKS + usize::from(digit - b'0')),
+        _ => None,
     }
 }
 
 /// Where a buffer-local mark's name lives in a buffer's mark array: `a`-`z`
-/// first, then the three special ones. −1 for a name that is none of them.
-fn mark_local_index(name: ::core::ffi::c_char) -> ::core::ffi::c_int {
+/// first, then the three special ones. `None` for a name that is none of
+/// them.
+fn mark_local_index(name: c_char) -> Option<usize> {
     match name as u8 {
-        b'a'..=b'z' => name as ::core::ffi::c_int - 'a' as ::core::ffi::c_int,
-        b'"' => NMARKS,
-        b'^' => NMARKS + 1,
-        b'.' => NMARKS + 2,
-        _ => -1,
+        letter @ b'a'..=b'z' => Some(usize::from(letter - b'a')),
+        b'"' => Some(NMARKS),
+        b'^' => Some(NMARKS + 1),
+        b'.' => Some(NMARKS + 2),
+        _ => None,
     }
 }
 
-pub const DEFAULT_POS: Pos = Pos {
-    lnum: 1 as LineNr,
-    col: 0 as ColNr,
-    coladd: 0 as ColNr,
+/// Where a mark the file does not place sits: line 1, column 0.
+pub(crate) const DEFAULT_POS: Pos = Pos {
+    lnum: 1,
+    col: 0,
+    coladd: 0,
 };
-/// The empty dictionary a header entry starts as.
-const EMPTY_DICT: ApiDict = ApiDict::EMPTY;
 
 /// What a search-pattern entry's fields default to. A pattern is magic and
 /// was the last one used unless the file says otherwise. Only `pat` starts
@@ -643,56 +460,25 @@ const DEFAULT_SEARCH_PATTERN: KeyDict__shada_search_pat = KeyDict__shada_search_
     is_substitute_pattern: Some(false),
     highlighted: Some(false),
     search_backward: Some(false),
-    offset: Some(0 as Integer),
+    offset: Some(0),
     pat: None,
-};
-
-/// What a sub-string entry defaults to.
-const DEFAULT_SUB_STRING: ShadaSubString = ShadaSubString {
-    sub: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-};
-
-/// What a history entry defaults to: the command-line history, no separator.
-const DEFAULT_HISTORY_ITEM: ShadaHistoryItem = ShadaHistoryItem {
-    histtype: HIST_CMD as uint8_t,
-    string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    sep: 0,
 };
 
 /// What a register entry defaults to: charwise, unnamed, no width.
 const DEFAULT_REGISTER: ShadaRegister = ShadaRegister {
     name: 0,
-    type_0: kMTCharWise,
-    contents: ::core::ptr::null_mut::<String_0>(),
+    motion: MOTION_CHARWISE,
+    contents: Vec::new(),
     is_unnamed: false,
-    contents_size: 0 as size_t,
-    width: 0 as size_t,
+    width: 0,
 };
 
-/// What a variable entry defaults to.
-const DEFAULT_VARIABLE: ShadaGlobalVar = ShadaGlobalVar {
-    name: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    value: TV_INITIAL_VALUE,
-};
-
-/// What a buffer-list entry defaults to.
-const DEFAULT_BUFFER_LIST: ShadaBufferList = ShadaBufferList {
-    size: 0 as size_t,
-    buffers: ::core::ptr::null_mut::<ShadaBufferListItem>(),
-};
-
-/// What a mark entry's fields default to. Only the name differs between the
-/// kinds: a jump and a change have none, while a mark the file does not name
-/// is the `"` one.
-const fn default_filemark(kind: ShadaEntryType) -> ShadaFileMark {
-    ShadaFileMark {
-        name: match kind {
-            kSDItemGlobalMark | kSDItemLocalMark => b'"' as ::core::ffi::c_char,
-            _ => 0,
-        },
-        mark: DEFAULT_POS,
-        fname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+/// The name a mark entry of this kind has when the file does not give one:
+/// a jump and a change have none, while a global or local mark the file does
+/// not name is the `"` one.
+const fn default_mark_name(kind: u64) -> c_char {
+    match kind {
+        kind::GLOBAL_MARK | kind::LOCAL_MARK => b'"' as c_char,
+        _ => 0,
     }
 }
-
-pub const __S_IFMT: ::core::ffi::c_int = 0o170000 as ::core::ffi::c_int;

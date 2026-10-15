@@ -1,10 +1,15 @@
-//! The iterator and setter surface the shada reader and writer drive.
+//! The surface the shada reader and writer drive, over owned values.
 //!
-//! Both iterators are C-shaped: the caller passes null to start and gets back
-//! an opaque token that is really the address of the record just answered.
-//! That token is what a subsequent call resumes from, which is why nothing may
-//! edit a store while an iteration is in progress — the position is the
-//! pointer, not an index the container could re-derive.
+//! The stores keep their marks as `FileMark`/`XFileMark` records whose file
+//! name and ShaDa extra data are raw allocations the store owns. ShaDa's
+//! entries own theirs, so everything here copies on the way out and takes
+//! over on the way in: [`shada_global_marks`], [`shada_buffer_marks`],
+//! [`shada_jumps`] and [`shada_changes`] answer copies, and the setters and
+//! inserters take a [`ShadaMark`] by value and turn it into the store's
+//! record. The raw end of the extra data -- `AdditionalData`, an `xmalloc`
+//! block of a count, a length and the bytes -- is [`extra_into_raw`],
+//! and [`extra_copy_raw`], which the register and search
+//! stores use too.
 //!
 //! The two setters are the merge half. Neither overwrites a record that is
 //! *newer* than the one being merged in, which is what `update` selects; the
@@ -20,173 +25,184 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::winlayer::Buf;
-use core::ffi::{c_char, c_int, c_void};
+use crate::memory::{XString, xmalloc};
+use crate::os::time::os_time;
+use crate::shada::{ShadaExtra, marklist_insert};
+use crate::types::{AdditionalData, FileMark, FileMarkView, Pos, Timestamp, XFileMark};
+use crate::winlayer::{Buf, Win};
+use core::ffi::{c_char, c_int};
 use core::ptr;
 
-use super::lookup::*;
-use super::store::{Fmark, GlobalMarks, NUL_BYTE, mark_name};
+use super::lookup::mark_global_index;
+use super::store::{Fmark, GlobalMarks, mark_name};
 use super::*;
 use crate::ascii::ascii_islower;
 
-/// Iterate over global marks
-///
-/// @warning No mark-editing functions must be called while iteration is in
-///          progress.
-///
-/// `iter` — Iterator. Pass NULL to start iteration.
-/// `name` — Mark name.
-/// `fm` — Mark definition.
-///
-/// Returns pointer that needs to be passed to next `mark_global_iter` call or
-///         NULL if iteration is over.
+/// One mark as ShaDa reads and writes it: where it is, in which buffer (or
+/// file, when no buffer holds it), when it was set, and the extra data the
+/// file gave it.
+pub(crate) struct ShadaMark {
+    pub(crate) mark: Pos,
+    /// The buffer's number; 0 when the mark names a file instead.
+    pub(crate) fnum: c_int,
+    pub(crate) timestamp: Timestamp,
+    /// The file a mark with no buffer names.
+    pub(crate) fname: Option<XString>,
+    pub(crate) extra: Option<ShadaExtra>,
+}
+
+impl ShadaMark {
+    /// A copy of a store's record.
+    fn of(fm: &FileMark, fname: Option<XString>) -> ShadaMark {
+        ShadaMark {
+            mark: fm.mark,
+            fnum: fm.fnum,
+            timestamp: fm.timestamp,
+            fname,
+            // SAFETY: a record in place owns its extra data, null or a live
+            // block, which is only read here.
+            extra: unsafe { extra_copy_raw(fm.additional_data) },
+        }
+    }
+
+    /// The store's record for it, taking the extra data over.
+    fn into_fmark(self) -> (FileMark, Option<XString>) {
+        let fm = FileMark {
+            mark: self.mark,
+            fnum: self.fnum,
+            timestamp: self.timestamp,
+            // Nothing is known about where the window was scrolled to.
+            view: FileMarkView::NONE,
+            additional_data: extra_into_raw(self.extra),
+        };
+        (fm, self.fname)
+    }
+
+    /// The store's record with a file name, taking both over.
+    fn into_xfmark(self) -> XFileMark {
+        let (fmark, fname) = self.into_fmark();
+        XFileMark {
+            fmark,
+            fname: fname.map_or(ptr::null_mut(), XString::into_raw),
+        }
+    }
+}
+
+/// The extra data as the stores hold it: an `xmalloc` block, or null for
+/// none. The block is the caller's to free.
+pub(crate) fn extra_into_raw(extra: Option<ShadaExtra>) -> *mut AdditionalData {
+    let Some(extra) = extra else {
+        return ptr::null_mut();
+    };
+    let bytes = extra.bytes();
+    let header = AdditionalData {
+        nitems: extra.items(),
+        // One entry's extra data cannot be 4 GiB long: saturating is the safe
+        // reading of upstream's bare `(uint32_t)`, and unreachable either way.
+        nbytes: u32::try_from(bytes.len()).unwrap_or(u32::MAX),
+        data: [],
+    };
+    // SAFETY: a fresh block of the header's size plus the bytes, both
+    // written before anything reads it.
+    unsafe {
+        let block = xmalloc(size_of::<AdditionalData>() + bytes.len()).cast::<AdditionalData>();
+        block.write(header);
+        (&raw mut (*block).data)
+            .cast::<u8>()
+            .copy_from_nonoverlapping(bytes.as_ptr(), bytes.len());
+        block
+    }
+}
+
+/// A copy of the extra data a store holds, which keeps its block.
 ///
 /// # Safety
-/// `name` and `fm` must point at live, writable storage, and `iter` must be
-/// null or a value a previous call answered.
-pub unsafe fn mark_global_iter(
-    iter: *const c_void,
-    name: *mut c_char,
-    fm: *mut XFileMark,
-) -> *const c_void {
-    // SAFETY: the caller promised writable out-parameters.
-    unsafe { *name = NUL_BYTE };
-    // The token is the address of a slot; turn it back into its index.
-    let from = if iter.is_null() {
-        0
-    } else {
-        GlobalMarks::index_of(iter.cast())
-    };
-    let Some(at) = set_global_at_or_after(from) else {
-        return ptr::null();
-    };
-    // `'A`-`'Z` occupy `0..NMARKS` and `'0`-`'9` the rest — the inverse of
-    // `mark_global_index`, and the fourth place the formula is written out.
-    // SAFETY: as above.
+/// `raw` is null or a live block [`extra_into_raw`] (or the shada reader
+/// before it) made.
+pub(crate) unsafe fn extra_copy_raw(raw: *const AdditionalData) -> Option<ShadaExtra> {
+    if raw.is_null() {
+        return None;
+    }
+    // SAFETY: the caller's live block: a header and `nbytes` bytes after it.
     unsafe {
-        *name = mark_name(if at < NMARKS {
+        let bytes = core::slice::from_raw_parts(
+            (&raw const (*raw).data).cast::<u8>(),
+            (*raw).nbytes as usize,
+        );
+        Some(ShadaExtra::from_parts((*raw).nitems, bytes.to_vec()))
+    }
+}
+
+/// Every set global mark with its name, `'A`-`'Z` then `'0`-`'9`, copied.
+pub(crate) fn shada_global_marks() -> Vec<(c_char, ShadaMark)> {
+    let mut found = Vec::new();
+    for (at, slot) in GlobalMarks::indexed() {
+        if !slot.fmark().is_set() {
+            continue;
+        }
+        // `'A`-`'Z` occupy `0..NMARKS` and `'0`-`'9` the rest.
+        let name = mark_name(if at < NMARKS {
             'A' as c_int + at
         } else {
             '0' as c_int + at - NMARKS
+        });
+        let xfm = slot.read();
+        let fname = xfm.file_name().map(XString::from_cstr);
+        found.push((name, ShadaMark::of(&xfm.fmark, fname)));
+    }
+    found
+}
+
+/// Every set mark of `buffer` with its name, `'"`, `'^`, `'.` then
+/// `'a`-`'z`, copied.
+pub(crate) fn shada_buffer_marks(buffer: Buf) -> Vec<(c_char, ShadaMark)> {
+    let special = [
+        (b'"', buffer.last_cursor()),
+        (b'^', buffer.last_insert()),
+        (b'.', buffer.last_change()),
+    ];
+    let named = (0..NMARKS).map(|i| {
+        let name = u8::try_from(i).map_or(0, |i| b'a' + i);
+        (name, buffer.named_mark(i))
+    });
+    special
+        .into_iter()
+        .chain(named)
+        .filter(|(_, mark)| mark.is_set())
+        .map(|(name, mark)| {
+            (
+                mark_name(c_int::from(name)),
+                ShadaMark::of(&mark.read(), None),
+            )
         })
-    };
-    unsafe { *fm = GlobalMarks::at(at).read() };
-    match set_global_at_or_after(at + 1) {
-        Some(next) => GlobalMarks::at(next).raw().cast(),
-        None => ptr::null(),
-    }
+        .collect()
 }
 
-/// The first global slot at or after `from` that holds a mark, if any.
-fn set_global_at_or_after(from: c_int) -> Option<c_int> {
-    (from..NGLOBALMARKS).find(|&i| GlobalMarks::at(i).fmark().is_set())
+/// The jump list of `win`, oldest first, copied.
+pub(crate) fn shada_jumps(win: Win) -> Vec<ShadaMark> {
+    win.jumps()
+        .map(|jump| {
+            let xfm = jump.read();
+            let fname = xfm.file_name().map(XString::from_cstr);
+            ShadaMark::of(&xfm.fmark, fname)
+        })
+        .collect()
 }
 
-/// The buffer mark after the one called `mark_name`, and its name.
-///
-/// The order is `'"`, `'^`, `'.`, then `'a`-`'z`; `NUL` starts it and `'z`
-/// ends it. `mark_name` is both the cursor and the answer, because the
-/// iterator token the caller holds is an address and the three tick marks are
-/// separate fields rather than entries of an array.
-///
-/// # Safety
-/// `buffer` must be a live buffer and `mark_name` must point at live, writable
-/// storage holding one of the names above.
-#[inline]
-pub(super) unsafe fn next_buffer_mark(buffer: Buf, mark_name: *mut c_char) -> *const FileMark {
-    // SAFETY: the caller promised a live cursor.
-    let here = unsafe { *mark_name };
-    let (next, mark): (c_char, Fmark) = match c_int::from(here) {
-        NUL => ('"' as c_char, buffer.last_cursor()),
-        34 => ('^' as c_char, buffer.last_insert()),
-        94 => ('.' as c_char, buffer.last_change()),
-        46 => ('a' as c_char, buffer.named_mark(0)),
-        122 => return ptr::null(),
-        _ => {
-            let next = here + 1;
-            (next, buffer.named_mark(c_int::from(next) - 'a' as c_int))
-        }
-    };
-    // SAFETY: as above.
-    unsafe { *mark_name = next };
-    mark.raw()
+/// The change list of `buffer`, oldest first, copied.
+pub(crate) fn shada_changes(buffer: Buf) -> Vec<ShadaMark> {
+    buffer
+        .changes()
+        .map(|change| ShadaMark::of(&change.read(), None))
+        .collect()
 }
 
-/// Iterate over buffer marks
+/// Set global mark `name` to `fm`, which the table takes over; answers
+/// whether it did.
 ///
-/// @warning No mark-editing functions must be called while iteration is in
-///          progress.
-///
-/// `iter` — Iterator. Pass NULL to start iteration.
-/// `buffer` — Buffer.
-/// `name` — Mark name.
-/// `fm` — Mark definition.
-///
-/// Returns pointer that needs to be passed to next `mark_buffer_iter` call or
-///         NULL if iteration is over.
-///
-/// # Safety
-/// `buffer` must be a live buffer, `name` and `fm` must point at live, writable
-/// storage, and `iter` must be null or a value a previous call answered for
-/// the same buffer.
-pub unsafe fn mark_buffer_iter(
-    iter: *const c_void,
-    buffer: Buf,
-    name: *mut c_char,
-    fm: *mut FileMark,
-) -> *const c_void {
-    let bufh = buffer;
-    // SAFETY: as above.
-    unsafe { *name = NUL_BYTE };
-    // Turn the token back into the name it stands for. The last arm reads
-    // "how far into `b_namedm` this is, as a letter": upstream spells it as
-    // an `offset('a')` before the `offset_from`, which is the same sum.
-    let mut at: c_char = if iter.is_null() {
-        NUL_BYTE
-    } else if ptr::eq(iter.cast(), bufh.last_cursor().raw()) {
-        '"' as c_char
-    } else if ptr::eq(iter.cast(), bufh.last_insert().raw()) {
-        '^' as c_char
-    } else if ptr::eq(iter.cast(), bufh.last_change().raw()) {
-        '.' as c_char
-    } else {
-        let base = bufh.named_mark(0).raw().addr();
-        let bytes = iter.cast::<FileMark>().addr().wrapping_sub(base);
-        let idx = bytes.wrapping_div(size_of::<FileMark>());
-        mark_name(c_int::try_from(idx).unwrap_or(0) + 'a' as c_int)
-    };
-    // SAFETY: `buffer` is live and `mark_name` is on this stack.
-    let mut iter_mark = unsafe { next_buffer_mark(buffer, &raw mut at) };
-    while !iter_mark.is_null() {
-        // SAFETY: every non-null answer names a live record of `buffer`.
-        if unsafe { Fmark::new(iter_mark.cast_mut()) }.is_set() {
-            break;
-        }
-        // SAFETY: as above.
-        iter_mark = unsafe { next_buffer_mark(buffer, &raw mut at) };
-    }
-    if iter_mark.is_null() {
-        return ptr::null();
-    }
-    // SAFETY: writable out-parameters, and a live record.
-    unsafe { *name = at };
-    unsafe { *fm = (*iter_mark).clone() };
-    iter_mark.cast()
-}
-
-/// Set global mark
-///
-/// `name` — Mark name.
-/// `fm` — Mark to be set.
-/// `update` — If true then only set global mark if it was created
-///                     later then existing one.
-///
-/// Returns true on success, false on failure.
-///
-/// # Safety
-/// The editor's globals must be live, and `fm`'s allocations must be handed
-/// over to the table.
-pub unsafe fn mark_set_global(name: c_char, fm: XFileMark, update: bool) -> bool {
+/// With `update`, a mark is only set if it was made later than the one
+/// already there.
+pub(crate) fn shada_set_global_mark(name: c_char, fm: ShadaMark, update: bool) -> bool {
     let idx = mark_global_index(name);
     if idx == -1 {
         return false;
@@ -194,7 +210,7 @@ pub unsafe fn mark_set_global(name: c_char, fm: XFileMark, update: bool) -> bool
     let tgt = GlobalMarks::at(idx);
     // A merge never overwrites a record the editor made more recently than
     // the one the shada file carries; a plain set (`update` false) always does.
-    if update && fm.fmark.timestamp <= tgt.fmark().timestamp() {
+    if update && fm.timestamp <= tgt.fmark().timestamp() {
         return false;
     }
     if tgt.fmark().is_set() {
@@ -202,36 +218,32 @@ pub unsafe fn mark_set_global(name: c_char, fm: XFileMark, update: bool) -> bool
         // about to be overwritten.
         unsafe { free_xfmark(tgt.read()) };
     }
-    tgt.write(fm);
+    tgt.write(fm.into_xfmark());
     true
 }
 
-/// Set local mark
-///
-/// `name` — Mark name.
-/// `buffer` — Pointer to the buffer to set mark in.
-/// `fm` — Mark to be set.
-/// `update` — If true then only set global mark if it was created
-///                     later then existing one.
-///
-/// Returns true on success, false on failure.
-///
-/// # Safety
-/// `buffer` must be a live buffer, and `fm`'s allocations must be handed over to
-/// the store.
-pub unsafe fn mark_set_local(name: c_char, bufh: Buf, fm: FileMark, update: bool) -> bool {
+/// The store `name` names in `buffer`, if it is one shada sets.
+fn local_store(name: c_char, buffer: Buf) -> Option<Fmark> {
     let name = c_int::from(name);
-    let tgt: Fmark = if ascii_islower(name) {
-        bufh.named_mark(name - 'a' as c_int)
+    Some(if ascii_islower(name) {
+        buffer.named_mark(name - 'a' as c_int)
     } else if name == '"' as c_int {
-        bufh.last_cursor()
+        buffer.last_cursor()
     } else if name == '^' as c_int {
-        bufh.last_insert()
+        buffer.last_insert()
     } else if name == ':' as c_int {
-        bufh.prompt_start()
+        buffer.prompt_start()
     } else if name == '.' as c_int {
-        bufh.last_change()
+        buffer.last_change()
     } else {
+        return None;
+    })
+}
+
+/// Set `buffer`'s mark `name` to `fm`, which the store takes over; answers
+/// whether it did. `update` as [`shada_set_global_mark`].
+pub(crate) fn shada_set_local_mark(name: c_char, buffer: Buf, fm: ShadaMark, update: bool) -> bool {
+    let Some(tgt) = local_store(name, buffer) else {
         return false;
     };
     if update && fm.timestamp <= tgt.timestamp() {
@@ -242,8 +254,118 @@ pub unsafe fn mark_set_local(name: c_char, bufh: Buf, fm: FileMark, update: bool
         // about to be overwritten.
         unsafe { free_fmark(tgt.read()) };
     }
-    tgt.write(fm);
+    tgt.write(fm.into_fmark().0);
     true
+}
+
+/// When `buffer`'s mark `name` was set, as [`mark_get`] resolves it; 0 for
+/// one it does not.
+pub(crate) fn shada_local_mark_timestamp(buffer: Buf, win: Win, name: c_int) -> Timestamp {
+    let mut fm = FileMark::UNSET;
+    // SAFETY: `fm` is this frame's record and outlives the call; only its
+    // timestamp is read back.
+    unsafe { mark_get(buffer, win, &raw mut fm, kMarkBufLocal, name) };
+    fm.timestamp
+}
+
+/// The `"` mark the buffer list restores: `pos`, stamped now, releasing
+/// what the store held.
+pub(crate) fn shada_restore_last_cursor(buffer: Buf, pos: Pos) {
+    let store = buffer.last_cursor();
+    // SAFETY: the record in place owns its extra data.
+    unsafe { free_fmark(store.read()) };
+    store.write(FileMark {
+        mark: pos,
+        fnum: 0,
+        timestamp: os_time(),
+        view: FileMarkView::NONE,
+        additional_data: ptr::null_mut(),
+    });
+}
+
+/// Put a jump read from a file into the current window's jump list, which
+/// is kept oldest first.
+///
+/// A jump the list already holds — same position, same file — is dropped
+/// rather than inserted twice, and so is one older than a list that is
+/// already full. A jump with a file name (no loaded buffer holds the file)
+/// is compared by name, one without by buffer number.
+pub(crate) fn shada_insert_jump(fm: ShadaMark) {
+    let mut win = Win::current();
+    let mut i = win.w_jumplistlen;
+    while i > 0 {
+        let existing = &win.w_jumplist[list_index(i - 1)];
+        if existing.fmark.timestamp <= fm.timestamp {
+            let same_file = match &fm.fname {
+                Some(fname) => existing.file_name() == Some(fname.as_cstr()),
+                None => fm.fnum == existing.fmark.fnum,
+            };
+            if marks_equal(existing.fmark.mark, fm.mark) && same_file {
+                i = -1;
+            }
+            break;
+        }
+        i -= 1;
+    }
+    if i > 0 && win.w_jumplistlen == JUMPLISTSIZE {
+        // SAFETY: the oldest jump is about to be overwritten, so what it
+        // holds is this call's to release.
+        unsafe { free_xfmark(win.w_jumplist[0].clone()) };
+    }
+    let len = win.w_jumplistlen;
+    let i = marklist_insert(&mut win.w_jumplist, len, i);
+    if i == -1 {
+        return;
+    }
+    win.w_jumplist[list_index(i)] = fm.into_xfmark();
+    if win.w_jumplistlen < JUMPLISTSIZE {
+        win.w_jumplistlen += 1;
+    }
+    // Keep the cursor into the list pointing at the same jump.
+    if win.w_jumplistidx >= i && win.w_jumplistidx < win.w_jumplistlen {
+        win.w_jumplistidx += 1;
+    }
+}
+
+/// [`shada_insert_jump`] for a buffer's change list, which needs no file
+/// name to compare on because every entry in it is in this buffer.
+pub(crate) fn shada_insert_change(mut buffer: Buf, fm: ShadaMark) {
+    let mut i = buffer.b_changelistlen;
+    while i > 0 {
+        let existing = &buffer.b_changelist[list_index(i - 1)];
+        if existing.timestamp <= fm.timestamp {
+            if marks_equal(existing.mark, fm.mark) {
+                i = -1;
+            }
+            break;
+        }
+        i -= 1;
+    }
+    if i > 0 && buffer.b_changelistlen == JUMPLISTSIZE {
+        // SAFETY: the oldest change is about to be overwritten, so what it
+        // holds is this call's to release.
+        unsafe { free_fmark(buffer.b_changelist[0].clone()) };
+    }
+    let len = buffer.b_changelistlen;
+    let i = marklist_insert(&mut buffer.b_changelist, len, i);
+    if i == -1 {
+        return;
+    }
+    buffer.b_changelist[list_index(i)] = fm.into_fmark().0;
+    if buffer.b_changelistlen < JUMPLISTSIZE {
+        buffer.b_changelistlen += 1;
+    }
+}
+
+/// A position in a jump or change list, which the walks above keep as a
+/// `c_int` that is only negative as a "not at all" answer checked first.
+fn list_index(i: c_int) -> usize {
+    usize::try_from(i).expect("a position in the list")
+}
+
+/// Whether two marks are at the same place.
+fn marks_equal(a: Pos, b: Pos) -> bool {
+    a.lnum == b.lnum && a.col == b.col
 }
 
 /// The timestamp of global mark `idx` — `'A`-`'Z` then `'0`-`'9`.

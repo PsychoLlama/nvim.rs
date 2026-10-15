@@ -32,13 +32,10 @@ use crate::os::time::os_time;
 use crate::regexp::{RE_LAST, RE_SUBST, regtilde_owned};
 use crate::search::save_re_pat_text;
 use crate::shada::ShadaExtra;
-use crate::types::{
-    AdditionalData, CmdLine, ExArg, Failed, LineNr, NUL, SubReplacementString, Timestamp, size_t,
-};
+use crate::types::{CmdLine, ExArg, Failed, LineNr, NUL, Timestamp, size_t};
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use core::ffi::c_int;
-use core::ptr;
 
 /// The previous `:s` replacement: what a bare `:s` repeats and what `~`
 /// stands for, and the one ShaDa saves and restores with whatever extra
@@ -74,21 +71,13 @@ pub(crate) static SUB_FLAGS: GlobalCell<SubFlags> = GlobalCell::new(SubFlags {
 /// cursor on the first non-blank once the whole command is done.
 pub(crate) static GLOBAL_NEED_BEGINLINE: GlobalCell<bool> = GlobalCell::new(false);
 
-/// The previous replacement as ShaDa writes it out: the text, its
-/// timestamp and its extra data, borrowed from the store. The two pointers
-/// are null when there is nothing, and live until the next
-/// [`sub_set_replacement`] or [`sub_restore_replacement`].
-pub fn sub_get_replacement() -> SubReplacementString {
-    OLD_SUB.with(|last| SubReplacementString {
-        sub: last
-            .text
-            .as_ref()
-            .map_or(ptr::null_mut(), |text| text.as_ptr().cast_mut()),
-        timestamp: last.timestamp,
-        additional_data: last
-            .extra
-            .as_ref()
-            .map_or(ptr::null_mut::<AdditionalData>(), ShadaExtra::as_ptr),
+/// The previous replacement as ShaDa writes it out: the text, its timestamp
+/// and its extra data, copied. `None` when there is nothing.
+pub(crate) fn shada_replacement() -> Option<(XString, Timestamp, Option<ShadaExtra>)> {
+    OLD_SUB.with(|last| {
+        last.text
+            .clone()
+            .map(|text| (text, last.timestamp, last.extra.clone()))
     })
 }
 

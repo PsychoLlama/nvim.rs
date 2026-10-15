@@ -36,11 +36,10 @@ use crate::os::input::os_breakcheck;
 use crate::pos::equalpos;
 use crate::snprintf;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{c_char, c_int, c_uint, c_void};
+use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;
 
 use super::show::*;
-use super::store::{UNSET_XFMARK, Xfmark};
 use super::*;
 use crate::highlight_group::HLF_D;
 use crate::types::CmdModFlags;
@@ -445,48 +444,4 @@ pub fn ex_changes(_excmd: &mut ExArg) {
     if win.w_changelistidx == buf.b_changelistlen {
         msg_str(c"\n>");
     }
-}
-
-/// Iterate over jumplist items
-///
-/// @warning No jumplist-editing functions must be called while iteration is in
-///          progress.
-///
-/// `iter` — Iterator. Pass NULL to start iteration.
-/// `win` — Window for which jump list is processed.
-/// `fm` — Item definition.
-///
-/// Returns pointer that needs to be passed to next `mark_jumplist_iter` call or
-///         NULL if iteration is over.
-///
-/// # Safety
-/// `win` must be a live window, `fm` must point at a live, writable
-/// `XFileMark`, and `iter` must be null or a value a previous call answered for
-/// the same window.
-pub unsafe fn mark_jumplist_iter(
-    iter: *const c_void,
-    win: Win,
-    fm: *mut XFileMark,
-) -> *const c_void {
-    // SAFETY: the caller promised a live out-parameter.
-    let out = unsafe { Xfmark::new(fm) };
-    if iter.is_null() && win.w_jumplistlen == 0 {
-        out.write(UNSET_XFMARK);
-        return ptr::null();
-    }
-    // SAFETY: `iter` is null or an entry of this window's list.
-    let entry = unsafe {
-        if iter.is_null() {
-            win.jump(0)
-        } else {
-            Xfmark::new(iter.cast_mut().cast())
-        }
-    };
-    out.write(entry.read());
-    if entry == win.jump(win.w_jumplistlen - 1) {
-        return ptr::null();
-    }
-    // The entry after this one; the test above has already established that
-    // it is inside the list.
-    entry.raw().wrapping_add(1).cast()
 }

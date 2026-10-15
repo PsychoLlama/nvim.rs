@@ -106,6 +106,11 @@ impl StringArray {
     pub fn push(&mut self, str: String_0) {
         self.0.push(str);
     }
+
+    /// The strings, as the vector they are kept in.
+    pub fn into_vec(self) -> Vec<String_0> {
+        self.0
+    }
 }
 
 impl From<Vec<String_0>> for StringArray {

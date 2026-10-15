@@ -72,6 +72,7 @@ pub(super) const NO_VIEW: FileMarkView = FileMarkView::NONE;
 pub(super) const UNSET_FMARK: FileMark = FileMark::UNSET;
 
 /// An `XFileMark` that is not set.
+#[cfg(test)]
 pub(super) const UNSET_XFMARK: XFileMark = XFileMark {
     fmark: UNSET_FMARK,
     fname: ptr::null_mut(),
@@ -364,17 +365,6 @@ impl GlobalMarks {
     /// into a mark name.
     pub(super) fn indexed() -> impl Iterator<Item = (c_int, Xfmark)> {
         (0..NGLOBALMARKS).map(|i| (i, Self::at(i)))
-    }
-
-    /// Which slot `at` names. The shada iterator's opaque token is the
-    /// address of a slot, and this is how it resumes from one.
-    pub(super) fn index_of(at: *const XFileMark) -> c_int {
-        let bytes = at.addr().wrapping_sub(Self::at(0).raw().addr());
-        let idx = bytes.wrapping_div(size_of::<XFileMark>());
-        c_int::try_from(idx)
-            .ok()
-            .filter(|i| (0..NGLOBALMARKS).contains(i))
-            .expect("global mark token in range")
     }
 }
 

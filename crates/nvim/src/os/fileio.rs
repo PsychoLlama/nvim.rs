@@ -212,28 +212,6 @@ pub unsafe fn file_open_stdin(file: *mut FileDescriptor) -> c_int {
     }
 }
 
-/// Wrap an in-memory buffer for reading. `data` is borrowed, not owned:
-/// there is no block to free, and `file_close` is a no-op on the result
-/// (`fd` is -1).
-///
-/// # Safety
-///
-/// `ret_fp` points to writable `FileDescriptor` storage, and `data` is
-/// readable for `len` bytes and outlives the descriptor.
-pub unsafe fn file_open_buffer(ret_fp: *mut FileDescriptor, data: *mut c_char, len: size_t) {
-    // SAFETY: the caller's storage, written before anything reads it.
-    let fp = unsafe { &mut *ret_fp };
-    fp.wr = false;
-    fp.non_blocking = false;
-    fp.fd = -1;
-    fp.eof = true;
-    fp.buffer = ptr::null_mut();
-    fp.read_pos = data;
-    // SAFETY: the caller's `len` readable bytes end here.
-    fp.write_pos = unsafe { data.add(len) };
-    fp.bytes_read = 0;
-}
-
 /// Flush, close, and release the block. A close error outranks a flush
 /// error.
 ///
@@ -410,25 +388,6 @@ pub unsafe fn file_read(
     as_signed(size - read_remaining)
 }
 
-/// Hand out `size` already-buffered bytes in place, or NULL when the block
-/// does not hold that many. The pointer dies at the next [`file_read`].
-///
-/// # Safety
-///
-/// `file` points to a live read-side `FileDescriptor`.
-pub unsafe fn file_try_read_buffered(file: *mut FileDescriptor, size: size_t) -> *mut c_char {
-    // SAFETY: the caller's descriptor; the advance stays inside the live
-    // region the test above just measured.
-    let file = unsafe { &mut *file };
-    if buffered_len(file) < size {
-        return ptr::null_mut();
-    }
-    let ret = file.read_pos;
-    file.read_pos = unsafe { file.read_pos.add(size) };
-    file.bytes_read += as_u64(size);
-    ret
-}
-
 /// Write `size` bytes of `buf`, buffering them when they fit. Returns the
 /// number of bytes accepted or a libuv error code.
 ///
@@ -563,6 +522,17 @@ impl WriteFile {
         unsafe { file_write(&raw mut self.0, data.as_ptr().cast(), data.len()) }
     }
 
+    /// Give the open file to `owner` and `group`; zero or a libuv error
+    /// code.
+    pub(crate) fn fchown(
+        &self,
+        owner: crate::types::uv_uid_t,
+        group: crate::types::uv_gid_t,
+    ) -> c_int {
+        // SAFETY: the descriptor this value opened and still holds.
+        unsafe { crate::os::fs::os_fchown(self.0.fd, owner, group) }
+    }
+
     /// Write out whatever is pending; zero or a libuv error code.
     pub(crate) fn flush(&mut self) -> c_int {
         // SAFETY: a descriptor `file_open` set up.
@@ -633,6 +603,51 @@ impl ReadFile {
         // SAFETY: a descriptor `file_open_fd` set up for reading, and a live
         // slice that is not inside its block.
         unsafe { file_read(&raw mut self.0, buf.as_mut_ptr().cast(), buf.len()) }
+    }
+
+    /// Discard `size` bytes: how many went (fewer only at EOF, or on a
+    /// non-blocking file), or a negative libuv error code.
+    pub(crate) fn skip(&mut self, size: usize) -> ptrdiff_t {
+        // SAFETY: a descriptor `file_open_fd` set up for reading.
+        unsafe { file_skip(&raw mut self.0, size) }
+    }
+
+    /// `size` bytes the block already holds, handed out in place and
+    /// consumed, or `None` when it holds fewer. The borrow ends before the
+    /// next read can refill the block.
+    pub(crate) fn try_read_buffered(&mut self, size: usize) -> Option<&[u8]> {
+        let file = &mut self.0;
+        if buffered_len(file) < size {
+            return None;
+        }
+        let at = file.read_pos;
+        // SAFETY: `read_pos..write_pos` is live input inside the descriptor's
+        // own block, and `size` bytes of it were just measured; the advance
+        // stays inside that region.
+        file.read_pos = unsafe { file.read_pos.add(size) };
+        file.bytes_read += as_u64(size);
+        Some(if size == 0 {
+            &[]
+        } else {
+            // SAFETY: as above; the block is not written again until the
+            // next read, which needs `&mut self` and so ends this borrow.
+            unsafe { slice::from_raw_parts(at.cast::<u8>(), size) }
+        })
+    }
+
+    /// How many bytes the block holds that have not been read yet.
+    pub(crate) fn buffered(&self) -> usize {
+        buffered_len(&self.0)
+    }
+
+    /// Whether everything the file holds has been read.
+    pub(crate) fn at_eof(&self) -> bool {
+        self.0.eof && self.0.read_pos == self.0.write_pos
+    }
+
+    /// How many bytes reading and skipping have consumed so far.
+    pub(crate) fn bytes_read(&self) -> u64 {
+        self.0.bytes_read
     }
 
     /// Close, or the libuv error code saying what went wrong.

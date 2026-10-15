@@ -16,15 +16,17 @@
 //! (`YREG_PASTE`, `YREG_YANK`, `YREG_PUT`), an unnamed request may be
 //! redirected to the clipboard by 'clipboard', a `"*`/`"+` read has to ask the
 //! provider first, and an unnamed *paste* reads whatever was last written
-//! rather than slot 0. [`op_reg_iter`] and [`op_reg_set`] are shada's view of
-//! the same array.
+//! rather than slot 0. [`shada_registers`] and [`shada_set_register`] are
+//! shada's view of the same array.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::shada::ShadaExtra;
 use crate::strings::has_char;
+use crate::types::{ColNr, MotionType, Timestamp};
 use core::ffi::{c_char, c_int, c_void};
 
 use super::*;
@@ -82,97 +84,86 @@ pub fn get_default_register_name() -> c_int {
     name
 }
 
-/// Iterate over the non-empty registers of `regs`.
-///
-/// Pass a null `iter` to start; the answer is what to pass next, or null when
-/// the iteration is over. Only the shada-saved slots (below `"*`) are walked.
-///
-/// # Safety
-/// `regs` must point at an array of at least `NUM_SAVED_REGISTERS` registers;
-/// `name`, `reg` and `is_unnamed` must be writable.
-pub unsafe fn op_reg_iter(
-    iter: *const c_void,
-    regs: *const YankReg,
-    name: *mut c_char,
-    reg: *mut YankReg,
-    is_unnamed: *mut bool,
-) -> *const c_void {
-    unsafe { *name = NUL as c_char };
-    let mut iter_reg = if iter.is_null() {
-        regs
-    } else {
-        iter as *const YankReg
-    };
-    while unsafe { iter_reg.offset_from(regs) } < NUM_SAVED_REGISTERS as isize
-        && unsafe { reg_empty(iter_reg) }
-    {
-        iter_reg = unsafe { iter_reg.add(1) };
-    }
-    if unsafe { iter_reg.offset_from(regs) } == NUM_SAVED_REGISTERS as isize
-        || unsafe { reg_empty(iter_reg) }
-    {
-        return ::core::ptr::null();
-    }
-
-    unsafe { *name = get_register_name(iter_reg.offset_from(regs) as c_int) as c_char };
-    unsafe { *reg = *iter_reg };
-    unsafe { *is_unnamed = core::ptr::eq(iter_reg, get_y_previous()) };
-
-    // Look ahead for the next non-empty one, which is what the caller
-    // passes back in.
-    loop {
-        iter_reg = unsafe { iter_reg.add(1) };
-        if unsafe { iter_reg.offset_from(regs) } >= NUM_SAVED_REGISTERS as isize {
-            return ::core::ptr::null();
-        }
-        if !unsafe { reg_empty(iter_reg) } {
-            return iter_reg as *const c_void;
-        }
-    }
+/// One register as ShaDa reads and writes it: its lines, how it is put
+/// back, when it was set, and the extra data the file gave it.
+pub(crate) struct ShadaYank {
+    pub(crate) contents: Vec<String_0>,
+    pub(crate) motion: MotionType,
+    pub(crate) width: ColNr,
+    pub(crate) timestamp: Timestamp,
+    pub(crate) extra: Option<ShadaExtra>,
 }
 
-/// [`op_reg_iter`] over the global register array.
-///
-/// # Safety
-/// `name`, `reg` and `is_unnamed` must be writable.
-pub unsafe fn op_global_reg_iter(
-    iter: *const c_void,
-    name: *mut c_char,
-    reg: *mut YankReg,
-    is_unnamed: *mut bool,
-) -> *const c_void {
-    unsafe { op_reg_iter(iter, get_y_register(0), name, reg, is_unnamed) }
+/// A copy of every non-empty register shada saves (those below `"*`), with
+/// its name and whether `""` points at it, in slot order. A register of
+/// more than `max_lines` lines is left out.
+pub(crate) fn shada_registers(max_lines: Option<usize>) -> Vec<(c_char, bool, ShadaYank)> {
+    let mut found = Vec::new();
+    for i in 0..NUM_SAVED_REGISTERS {
+        let reg = get_y_register(i);
+        // SAFETY: a slot of the register array, which owns `y_size` strings
+        // at `y_array` and its extra data; both are only read here.
+        unsafe {
+            if reg_empty(reg) || max_lines.is_some_and(|max| (*reg).y_size > max) {
+                continue;
+            }
+            let contents = core::slice::from_raw_parts((*reg).y_array, (*reg).y_size).to_vec();
+            let yank = ShadaYank {
+                contents,
+                motion: (*reg).y_type,
+                width: (*reg).y_width,
+                timestamp: (*reg).timestamp,
+                extra: crate::mark::extra_copy_raw((*reg).additional_data),
+            };
+            let name = get_register_name(i) as c_char;
+            found.push((name, core::ptr::eq(reg, get_y_previous()), yank));
+        }
+    }
+    found
 }
 
-/// Put `reg` in the register named `name`, freeing whatever was there.
-///
-/// Answers false for a name with no slot.
-///
-/// # Safety
-/// `reg` must own its `y_array` and additional data; the store takes them.
-pub unsafe fn op_reg_set(name: c_char, reg: YankReg, is_unnamed: bool) -> bool {
+/// When the register named `name` was set, or `None` for a name with no
+/// slot.
+pub(crate) fn shada_register_timestamp(name: c_char) -> Option<Timestamp> {
+    let i = op_reg_index(c_int::from(name));
+    // SAFETY: a slot of the register array, read.
+    (i != -1).then(|| unsafe { (*get_y_register(i)).timestamp })
+}
+
+/// Put `yank` in the register named `name`, freeing whatever was there, and
+/// point `""` at it when `is_unnamed`. Answers false for a name with no
+/// slot.
+pub(crate) fn shada_set_register(name: c_char, yank: ShadaYank, is_unnamed: bool) -> bool {
     let i = op_reg_index(c_int::from(name));
     if i == -1 {
         return false;
     }
+    let size = yank.contents.len();
+    // SAFETY: an `xmalloc` array of exactly `size` strings, each written
+    // before the register can read it; the register owns it and the extra
+    // data from here, and frees both in `free_register`.
+    let reg = unsafe {
+        let array = xmalloc(size * size_of::<String_0>()).cast::<String_0>();
+        for (at, line) in yank.contents.into_iter().enumerate() {
+            array.add(at).write(line);
+        }
+        YankReg {
+            y_array: array,
+            y_size: size,
+            y_type: yank.motion,
+            y_width: yank.width,
+            timestamp: yank.timestamp,
+            additional_data: crate::mark::extra_into_raw(yank.extra),
+        }
+    };
+    // SAFETY: the slot owns its array and extra data, released before the
+    // new register is written over it.
     unsafe { free_register(get_y_register(i)) };
     unsafe { *get_y_register(i) = reg };
     if is_unnamed {
         y_previous.set(Some(i));
     }
     true
-}
-
-/// The contents of the register named `name`, or null for a name with no slot.
-///
-/// # Safety
-/// Reads the register store; main thread only.
-pub unsafe fn op_reg_get(name: c_char) -> *const YankReg {
-    let i = op_reg_index(c_int::from(name));
-    if i == -1 {
-        return ::core::ptr::null();
-    }
-    get_y_register(i)
 }
 
 /// Point `""` at the register named `name`.

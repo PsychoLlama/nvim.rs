@@ -10,27 +10,55 @@
 //! the old file is read over it so that the newer of each pair wins, and
 //! only then is the result written out.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::winlayer::{Buf, Win};
-use core::ffi::{c_char, c_int, c_uint, c_void};
-
-use super::*;
+use crate::ascii::ascii_isdigit;
+use crate::buffer::find_buf;
+use crate::eval::{get_copy_id, set_ref_in_dict_items, set_ref_in_list_items};
+use crate::ex_cmds::shada_replacement;
+use crate::mark::{set_last_cursor, shada_buffer_marks, shada_changes, shada_global_marks};
+use crate::memory::{XString, qsort_by};
+use crate::option::vars::{p_enc, p_hi};
+use crate::os::env::os_get_pid;
+use crate::os::fileio::WriteFile;
+use crate::os::time::os_time;
+use crate::search::{search_was_last_used, state::no_hlsearch};
 use crate::types::builders::DictBuf;
-use crate::types::{NUL, Object, VAR_DICT, VAR_FLAVOUR_SHADA, VAR_FUNC, VAR_LIST, VAR_PARTIAL};
+use crate::types::{
+    Integer, Object, String_0, TypVal, VAR_DICT, VAR_FLAVOUR_SHADA, VAR_FUNC, VAR_LIST, VAR_PARTIAL,
+};
+use crate::version::LONG_VERSION;
+use crate::winlayer::{Buf, Win, buffers, tab_windows};
+use core::ffi::{c_char, c_int};
+
+use super::collect::{
+    VarWalk, find_removable_bufs, hist_type2char, ignore_buf, replace_numbered_mark,
+    search_pattern_entry, shada_get_buflist, shada_init_jumps, shada_initialize_registers,
+};
+use super::file::{find_shada_parameter, get_shada_parameter, shada_removable};
+use super::merge::{compare_file_marks, read_when_writing};
+use super::pack::{Packer, pack_entry};
+use super::unpack::Source;
+use super::{
+    HIST_COUNT, HIST_SEARCH, HistoryMergerState, ReadKinds, RemovableBufs, ShadaEntry,
+    ShadaEntryData, ShadaFileMark, ShadaGlobalVar, WANT_ALWAYS, WANT_UNKNOWN, WriteMergerState,
+    WriteStatus, kind, mark_global_index, mark_local_index, want,
+};
+
+/// How much packed output is kept before it is handed to the file.
+const FLUSH_AT: usize = 64 * 1024;
 
 /// What the `'shada'` option allows a write to contain.
 struct Limits {
     /// `s`: entries whose payload is bigger than this many kilobytes are
     /// dropped. Zero means nothing is written at all.
-    max_kbyte: size_t,
+    max_kbyte: usize,
     /// `<`, or `"` when `<` is absent: how many lines of a register are
     /// kept. Zero means no registers.
     max_reg_lines: c_int,
     /// `'`: how many files' local marks are kept. Zero also turns off the
     /// jump list and the change lists.
-    num_marked_files: size_t,
+    num_marked_files: usize,
     /// `!`: whether global variables are written.
     global_vars: bool,
     /// `f`: whether global and numbered marks are written.
@@ -40,7 +68,7 @@ struct Limits {
 impl Limits {
     /// Read `'shada'`. `None` when `s0` says the file may hold nothing.
     fn from_shada_option() -> Option<Limits> {
-        let mut max_kbyte_i = get_shada_parameter('s' as c_int);
+        let mut max_kbyte_i = get_shada_parameter(c_int::from(b's'));
         if max_kbyte_i < 0 {
             // Not given: the format's own default.
             max_kbyte_i = 10;
@@ -48,16 +76,16 @@ impl Limits {
         if max_kbyte_i == 0 {
             return None;
         }
-        let mut max_reg_lines = get_shada_parameter('<' as c_int);
+        let mut max_reg_lines = get_shada_parameter(c_int::from(b'<'));
         if max_reg_lines < 0 {
-            max_reg_lines = get_shada_parameter('"' as c_int);
+            max_reg_lines = get_shada_parameter(c_int::from(b'"'));
         }
         Some(Limits {
-            max_kbyte: max_kbyte_i as size_t,
+            max_kbyte: max_kbyte_i as usize,
             max_reg_lines,
-            num_marked_files: get_shada_parameter('\'' as c_int) as size_t,
-            global_vars: find_shada_parameter('!' as c_int).is_some(),
-            global_marks: get_shada_parameter('f' as c_int) != 0,
+            num_marked_files: get_shada_parameter(c_int::from(b'\'')) as usize,
+            global_vars: find_shada_parameter(c_int::from(b'!')).is_some(),
+            global_marks: get_shada_parameter(c_int::from(b'f')) != 0,
         })
     }
 
@@ -68,43 +96,36 @@ impl Limits {
 }
 
 /// One ShaDa write in progress.
-struct Writing {
+struct Writing<'a> {
     /// Everything collected so far, and what the merge decides between.
-    /// Heap-allocated because it is some 60 KiB of mark and jump slots.
-    wms: *mut WriteMergerState,
-    /// Buffers whose file is somewhere marks are not kept for — a removable
-    /// medium, or `'viewdir'`-style scratch.
+    /// Boxed because it is some hundreds of KiB of mark and jump slots.
+    wms: Box<WriteMergerState>,
+    /// Buffers whose file is somewhere marks are not kept for.
     removable_bufs: RemovableBufs,
-    /// The output, buffered in the file's own write buffer.
-    packer: PackerBuffer,
+    /// Packed output not yet handed to the file.
+    out: Packer,
+    file: &'a mut WriteFile,
     limits: Limits,
     /// Which history types are being written.
-    histories: [bool; HIST_COUNT as usize],
+    histories: [bool; HIST_COUNT],
 }
 
-/// Write a ShaDa file, merging `sd_reader`'s contents into it when there is
-/// an old file to merge.
-///
-/// # Safety
-///
-/// `sd_writer` must point at an open file descriptor, unaliased for the call.
-/// `sd_reader` must point at an open file descriptor, unaliased for the call.
-pub(crate) unsafe fn shada_write(
-    sd_writer: *mut FileDescriptor,
-    sd_reader: *mut FileDescriptor,
-) -> ShaDaWriteResult {
+/// Write a ShaDa file to `writer`, merging `reader`'s contents into it when
+/// there is an old file to merge.
+pub(crate) fn shada_write(writer: &mut WriteFile, reader: Option<&mut Source>) -> WriteStatus {
     let Some(limits) = Limits::from_shada_option() else {
-        return kSDWriteSuccessful;
+        return WriteStatus::Successful;
     };
 
-    let wms = Box::into_raw(Box::new(WriteMergerState::EMPTY));
-    let histories = unsafe { init_histories(wms, !sd_reader.is_null()) };
-    let srni_flags = wanted_kinds(&limits, &histories);
+    let mut wms = WriteMergerState::new();
+    let histories = init_histories(&mut wms);
+    let kinds = wanted_kinds(&limits, &histories);
 
     let mut writing = Writing {
         wms,
-        removable_bufs: id_set(),
-        packer: unsafe { packer_buffer_for_file(sd_writer) },
+        removable_bufs: crate::registry::id_set(),
+        out: Packer::default(),
+        file: writer,
         limits,
         histories,
     };
@@ -117,19 +138,18 @@ pub(crate) unsafe fn shada_write(
     }
     find_removable_bufs(&mut writing.removable_bufs);
 
-    let ret = unsafe { writing.run(sd_reader, srni_flags) };
-    writing.finish();
+    let ret = writing.run(reader, kinds);
+    // Whatever is left goes out however the write went; an error here is
+    // the close's to report.
+    let rest = writing.out.take();
+    let _ = writing.file.write(&rest);
     ret
 }
 
 /// Start a history merger for each history type `'shada'` keeps something
 /// of, and answer which those are.
-///
-/// # Safety
-///
-/// `wms` must point at a live `WriteMergerState`, unaliased for the call.
-unsafe fn init_histories(wms: *mut WriteMergerState, merging: bool) -> [bool; HIST_COUNT as usize] {
-    let mut wanted = [false; HIST_COUNT as usize];
+fn init_histories(wms: &mut WriteMergerState) -> [bool; HIST_COUNT] {
+    let mut wanted = [false; HIST_COUNT];
     for (i, wanted) in wanted.iter_mut().enumerate() {
         let mut num_saved = get_shada_parameter(hist_type2char(i as c_int));
         if num_saved == -1 {
@@ -137,9 +157,7 @@ unsafe fn init_histories(wms: *mut WriteMergerState, merging: bool) -> [bool; HI
         }
         if num_saved > 0 {
             *wanted = true;
-            let hms = unsafe { &raw mut (*wms).hms[i] };
-            let num_saved = num_saved as size_t;
-            unsafe { hms_init(hms, i as uint8_t, num_saved, merging, false) };
+            wms.hms[i] = Some(HistoryMergerState::new(i as u8, num_saved as usize, false));
         }
     }
     wanted
@@ -147,83 +165,97 @@ unsafe fn init_histories(wms: *mut WriteMergerState, merging: bool) -> [bool; HI
 
 /// The kinds of entry the merging read wants out of the old file. What is
 /// not asked for is copied straight through rather than merged.
-fn wanted_kinds(limits: &Limits, histories: &[bool; HIST_COUNT as usize]) -> c_uint {
-    let mut kinds = kSDReadUndisableableData | kSDReadUnknown;
+fn wanted_kinds(limits: &Limits, histories: &[bool; HIST_COUNT]) -> ReadKinds {
+    let mut kinds = WANT_ALWAYS | WANT_UNKNOWN;
     if histories.contains(&true) {
-        kinds |= kSDReadHistory;
+        kinds |= want(kind::HISTORY_ENTRY);
     }
     if limits.registers() {
-        kinds |= kSDReadRegisters;
+        kinds |= want(kind::REGISTER);
     }
     if limits.global_vars {
-        kinds |= kSDReadVariables;
+        kinds |= want(kind::VARIABLE);
     }
     if limits.global_marks {
-        kinds |= kSDReadGlobalMarks;
+        kinds |= want(kind::GLOBAL_MARK);
     }
     if limits.num_marked_files != 0 {
-        kinds |= kSDReadLocalMarks | kSDReadChanges;
+        kinds |= want(kind::LOCAL_MARK) | want(kind::CHANGE);
     }
     kinds
 }
 
-impl Writing {
-    /// Collect, merge and pack. A failure to write stops the pass; the
-    /// caller still tears everything down.
-    ///
-    /// # Safety
-    ///
-    /// `sd_reader` must point at an open file descriptor, unaliased for the call.
-    unsafe fn run(
-        &mut self,
-        sd_reader: *mut FileDescriptor,
-        srni_flags: c_uint,
-    ) -> ShaDaWriteResult {
-        if self.write_header() == kSDWriteFailed {
-            return kSDWriteFailed;
+impl Writing<'_> {
+    /// Collect, merge and pack. A failure to write stops the pass.
+    fn run(&mut self, reader: Option<&mut Source>, kinds: ReadKinds) -> WriteStatus {
+        if self.write_header() == WriteStatus::Error {
+            return WriteStatus::Error;
         }
-        if find_shada_parameter('%' as c_int).is_some() && self.write_buflist() == kSDWriteFailed {
-            return kSDWriteFailed;
+        if find_shada_parameter(c_int::from(b'%')).is_some()
+            && self.write_buflist() == WriteStatus::Error
+        {
+            return WriteStatus::Error;
         }
         // Variables go out as they are found rather than into `wms`;
         // only their names are kept, so that the merge knows which of
         // the old file's variables have already been written.
-        if self.limits.global_vars && self.dump_variables() == kSDWriteFailed {
-            return kSDWriteFailed;
+        if self.limits.global_vars && self.dump_variables() == WriteStatus::Error {
+            return WriteStatus::Error;
         }
 
         self.collect_jumps();
         self.collect_search_patterns();
         self.collect_global_marks();
         if self.limits.registers() {
-            unsafe { shada_initialize_registers(self.wms, self.limits.max_reg_lines) };
+            shada_initialize_registers(&mut self.wms, self.limits.max_reg_lines);
         }
         self.collect_buffer_marks();
 
         // Whatever the old file holds that this Nvim has no opinion
         // about, or a staler one.
-        let mut ret = kSDWriteSuccessful;
-        if !sd_reader.is_null() {
+        let mut ret = WriteStatus::Successful;
+        if let Some(reader) = reader {
             let max_kbyte = self.limits.max_kbyte;
-            let wms = self.wms;
-            let packer = &raw mut self.packer;
-            let srww_ret =
-                unsafe { shada_read_when_writing(sd_reader, srni_flags, max_kbyte, wms, packer) };
-            if srww_ret != kSDWriteSuccessful {
-                ret = srww_ret;
+            let read = read_when_writing(reader, kinds, max_kbyte, &mut self.wms, &mut self.out);
+            if read != WriteStatus::Successful {
+                ret = read;
+            }
+            if self.flush() == WriteStatus::Error {
+                return WriteStatus::Error;
             }
         }
 
         self.update_numbered_marks();
-        if self.pack_everything() == kSDWriteFailed {
-            return kSDWriteFailed;
+        if self.pack_everything() == WriteStatus::Error {
+            return WriteStatus::Error;
+        }
+        ret
+    }
+
+    /// Hand the packed output to the file once there is enough of it.
+    fn flush(&mut self) -> WriteStatus {
+        if self.out.bytes().len() < FLUSH_AT {
+            return WriteStatus::Successful;
+        }
+        let bytes = self.out.take();
+        if self.file.write(&bytes) < 0 {
+            return WriteStatus::Error;
+        }
+        WriteStatus::Successful
+    }
+
+    /// Write one entry, dropping one bigger than `max_kbyte`.
+    fn pack(&mut self, entry: &ShadaEntry, max_kbyte: usize) -> WriteStatus {
+        let ret = pack_entry(&mut self.out, entry, max_kbyte);
+        if self.flush() == WriteStatus::Error {
+            return WriteStatus::Error;
         }
         ret
     }
 
     /// What this Nvim was. Nothing ever reads it back; it is there for
     /// anyone looking at the file by hand.
-    fn write_header(&mut self) -> ShaDaWriteResult {
+    fn write_header(&mut self) -> WriteStatus {
         let mut header = DictBuf::<5>::new();
         header
             .insert(c"generator", Object::string(String_0::from_cstr(c"nvim")))
@@ -238,135 +270,77 @@ impl Writing {
             .insert(c"pid", Object::integer(os_get_pid()))
             .insert(
                 c"encoding",
-                Object::string(p_enc(|value| unsafe {
-                    cstr_to_string(value.as_ptr().cast_mut())
-                })),
+                Object::string(p_enc(|value| String_0::from_bytes(value.to_bytes()))),
             );
-        let entry = ShadaEntry {
-            can_free_entry: false,
-            timestamp: os_time(),
-            data: ShadaEntryData::Header(header.dict()),
-            additional_data: core::ptr::null_mut(),
-        };
+        let entry = ShadaEntry::new(os_time(), ShadaEntryData::Header(header.dict()));
         self.pack(&entry, 0)
     }
 
     /// The list of files this Nvim has buffers for, so that a later start
     /// can reopen them.
-    fn write_buflist(&mut self) -> ShaDaWriteResult {
+    fn write_buflist(&mut self) -> WriteStatus {
         let entry = shada_get_buflist(&self.removable_bufs);
-        let ret = self.pack(&entry, 0);
-        unsafe { xfree(entry.data.buffer_list().buffers.cast()) };
-        ret
+        self.pack(&entry, 0)
     }
 
     /// Every global variable `'shada'` says to keep, written as it is found.
     ///
     /// A container that turns out to be part of a cycle is skipped: the
     /// encoder would not terminate on it.
-    fn dump_variables(&mut self) -> ShaDaWriteResult {
-        let mut var_iter: Option<usize> = None;
+    fn dump_variables(&mut self) -> WriteStatus {
         let timestamp = os_time();
-        loop {
-            let mut vartv = TV_INITIAL_VALUE;
-            let mut name: *const c_char = core::ptr::null();
-            var_iter =
-                unsafe { var_shada_iter(var_iter, &raw mut name, &mut vartv, VAR_FLAVOUR_SHADA) };
-            if name.is_null() {
-                return kSDWriteSuccessful;
-            }
-
-            if !writable_value(&vartv) {
-                tv_clear(&mut vartv);
-                if var_iter.is_none() {
-                    return kSDWriteSuccessful;
-                }
+        for (name, value) in VarWalk::new(VAR_FLAVOUR_SHADA) {
+            if !writable_value(&value) {
                 continue;
             }
-
-            // The entry owns the copy it is built around; the value the
-            // iterator handed over is this function's to release.
-            let mut tgttv = TV_INITIAL_VALUE;
-            tv_copy(&vartv, &mut tgttv);
-            let mut entry = ShadaEntry {
-                can_free_entry: false,
+            let entry = ShadaEntry::new(
                 timestamp,
-                data: ShadaEntryData::Variable(ShadaGlobalVar {
-                    name: name.cast_mut(),
-                    value: tgttv,
-                }),
-                additional_data: core::ptr::null_mut(),
-            };
+                ShadaEntryData::Variable(ShadaGlobalVar { name, value }),
+            );
             let ret = self.pack(&entry, self.limits.max_kbyte);
-            tv_clear(&mut vartv);
-            tv_clear(&mut entry.data.variable_mut().value);
-            if ret == kSDWriteFailed {
-                return kSDWriteFailed;
+            if ret == WriteStatus::Error {
+                return WriteStatus::Error;
             }
-            if ret == kSDWriteSuccessful {
-                // SAFETY: `self.wms` is this write's own merger and `name`
-                // the variable's NUL-terminated name.
-                let key = unsafe { shada_key(name) };
-                unsafe { &mut (*self.wms).dumped_variables }.insert(key.into());
-            }
-            if var_iter.is_none() {
-                return kSDWriteSuccessful;
+            if ret == WriteStatus::Successful {
+                let ShadaEntryData::Variable(var) = &entry.data else {
+                    unreachable!("the entry just built");
+                };
+                let key = var.name.as_cstr().to_bytes();
+                self.wms.dumped_variables.insert(key.into());
             }
         }
+        WriteStatus::Successful
     }
 
     /// The jump list, as far back as `'shada'` keeps files' marks.
     fn collect_jumps(&mut self) {
         if self.limits.num_marked_files > 0 {
-            unsafe {
-                (*self.wms).jumps_size = shada_init_jumps(
-                    (&raw mut (*self.wms).jumps).cast::<ShadaEntry>(),
-                    &self.removable_bufs,
-                )
-            };
+            self.wms.jumps_size = shada_init_jumps(&mut self.wms.jumps, &self.removable_bufs);
         }
     }
 
     /// The last search and substitute patterns, and the last `:substitute`
     /// replacement string. All three ride on the search history's setting.
     fn collect_search_patterns(&mut self) {
-        if !self.histories[HIST_SEARCH as usize] {
+        if !self.histories[usize::from(HIST_SEARCH)] {
             return;
         }
-        let highlighted = !(no_hlsearch.get() || find_shada_parameter('h' as c_int).is_some());
+        let highlighted = !(no_hlsearch.get() || find_shada_parameter(c_int::from(b'h')).is_some());
         let last_used = search_was_last_used();
 
-        let slot = unsafe { &raw mut (*self.wms).search_pattern };
-        unsafe {
-            add_search_pattern(
-                slot,
-                Some(get_search_pattern),
-                false,
-                last_used,
-                highlighted,
-            )
-        };
-        let slot = unsafe { &raw mut (*self.wms).sub_search_pattern };
-        unsafe {
-            add_search_pattern(
-                slot,
-                Some(get_substitute_pattern),
-                true,
-                last_used,
-                highlighted,
-            )
-        };
-
-        let sub = sub_get_replacement();
+        if let Some(entry) = search_pattern_entry(false, last_used, highlighted) {
+            self.wms.search_pattern = entry;
+        }
+        if let Some(entry) = search_pattern_entry(true, last_used, highlighted) {
+            self.wms.sub_search_pattern = entry;
+        }
         // An empty replacement string is not worth storing.
-        if !sub.sub.is_null() {
-            let entry = ShadaEntry {
-                can_free_entry: false,
-                timestamp: sub.timestamp,
-                data: ShadaEntryData::SubString(ShadaSubString { sub: sub.sub }),
-                additional_data: sub.additional_data,
+        if let Some((sub, timestamp, extra)) = shada_replacement() {
+            self.wms.replacement = ShadaEntry {
+                timestamp,
+                data: ShadaEntryData::SubString(sub),
+                extra,
             };
-            unsafe { (*self.wms).replacement = entry };
         }
     }
 
@@ -378,58 +352,43 @@ impl Writing {
         if !self.limits.global_marks {
             return;
         }
-        let mut mark_iter: *const c_void = core::ptr::null();
         let mut digit_mark_idx = 0;
-        loop {
-            let mut name: c_char = NUL as c_char;
-            let mut fm: XFileMark = unsafe { core::mem::zeroed() };
-            mark_iter = unsafe { mark_global_iter(mark_iter, &raw mut name, &raw mut fm) };
-            if name as c_int == NUL {
-                return;
-            }
-
-            if let Some(fname) = self.mark_fname(&fm) {
-                let entry = ShadaEntry {
-                    can_free_entry: false,
-                    timestamp: fm.fmark.timestamp,
-                    data: ShadaEntryData::GlobalMark(ShadaFileMark {
-                        name,
-                        mark: fm.fmark.mark,
-                        fname: fname.cast_mut(),
-                    }),
-                    additional_data: fm.fmark.additional_data,
-                };
-                // The ten numbered marks are simply the ten most
-                // recent; their names are assigned on the way out.
-                if ascii_isdigit(name as c_int) {
-                    unsafe { replace_numbered_mark(self.wms, digit_mark_idx, entry) };
-                    digit_mark_idx += 1;
-                } else {
-                    unsafe { (*self.wms).global_marks[mark_global_index(name) as usize] = entry };
-                }
-            }
-
-            if mark_iter.is_null() {
-                return;
+        for (name, fm) in shada_global_marks() {
+            let Some(fname) = self.mark_fname(fm.fnum, fm.fname) else {
+                continue;
+            };
+            let entry = ShadaEntry {
+                timestamp: fm.timestamp,
+                data: ShadaEntryData::GlobalMark(ShadaFileMark {
+                    name,
+                    mark: fm.mark,
+                    fname,
+                }),
+                extra: fm.extra,
+            };
+            // The ten numbered marks are simply the ten most recent; their
+            // names are assigned on the way out.
+            if ascii_isdigit(c_int::from(name)) {
+                replace_numbered_mark(&mut self.wms, digit_mark_idx, entry);
+                digit_mark_idx += 1;
+            } else if let Some(idx) = mark_global_index(name) {
+                self.wms.global_marks[idx] = entry;
             }
         }
     }
 
     /// The file name to record a global mark against, or `None` when the
     /// mark is not worth keeping.
-    fn mark_fname(&mut self, fm: &XFileMark) -> Option<*const c_char> {
-        if fm.fmark.fnum == 0 {
-            debug_assert!(!fm.fname.is_null(), "shada: a mark with no buffer or file");
-            return (!unsafe { shada_removable(fm.fname) }).then_some(fm.fname);
+    fn mark_fname(&self, fnum: c_int, fname: Option<XString>) -> Option<XString> {
+        if fnum == 0 {
+            debug_assert!(fname.is_some(), "shada: a mark with no buffer or file");
+            return fname.filter(|fname| !shada_removable(fname.as_cstr()));
         }
-        let buf = find_buf(fm.fmark.fnum).map_or(core::ptr::null_mut(), |b| b.raw());
-        if buf.is_null()
-            || unsafe { (*buf).name.full().is_none() }
-            || self.removable_bufs.contains(&buf.cast_const())
-        {
+        let buf = find_buf(fnum)?;
+        if self.removable_bufs.contains(&buf.raw().cast_const()) {
             return None;
         }
-        Some(unsafe { (*buf).name.full_ptr() })
+        buf.name.full().map(XString::from_cstr)
     }
 
     /// Every buffer's local marks and change list, keyed by file name so
@@ -446,66 +405,39 @@ impl Writing {
     }
 
     fn collect_one_buffer(&mut self, buffer: Buf) {
-        let fname = buffer.name.full_ptr();
-        let filemarks = unsafe { self.file_marks_for(fname) };
+        let fname = XString::from_cstr(buffer.name.full().expect("an ignored buffer has a name"));
+        let filemarks = self.wms.file_marks_for(fname.as_cstr().to_bytes());
 
-        let mut mark_iter: *const c_void = core::ptr::null();
-        loop {
-            let mut fm: FileMark = unsafe { core::mem::zeroed() };
-            let mut name: c_char = NUL as c_char;
-            mark_iter = unsafe { mark_buffer_iter(mark_iter, buffer, &raw mut name, &raw mut fm) };
-            if name as c_int == NUL {
-                break;
-            }
-            let entry = ShadaEntry {
-                can_free_entry: false,
+        for (name, fm) in shada_buffer_marks(buffer) {
+            filemarks.greatest_timestamp = filemarks.greatest_timestamp.max(fm.timestamp);
+            let Some(idx) = mark_local_index(name) else {
+                continue;
+            };
+            filemarks.marks[idx] = ShadaEntry {
                 timestamp: fm.timestamp,
                 data: ShadaEntryData::LocalMark(ShadaFileMark {
                     name,
                     mark: fm.mark,
-                    fname,
+                    fname: fname.clone(),
                 }),
-                additional_data: fm.additional_data,
+                extra: fm.extra,
             };
-            unsafe { (*filemarks).marks[mark_local_index(name) as usize] = entry };
-            unsafe {
-                (*filemarks).greatest_timestamp = (*filemarks).greatest_timestamp.max(fm.timestamp)
-            };
-            if mark_iter.is_null() {
-                break;
-            }
         }
 
-        for i in 0..buffer.b_changelistlen as usize {
-            let fm = buffer.b_changelist[i].clone();
-            let entry = ShadaEntry {
-                can_free_entry: false,
+        let changes = shada_changes(buffer);
+        filemarks.changes_size = changes.len();
+        for (slot, fm) in filemarks.changes.iter_mut().zip(changes) {
+            filemarks.greatest_timestamp = filemarks.greatest_timestamp.max(fm.timestamp);
+            *slot = ShadaEntry {
                 timestamp: fm.timestamp,
                 data: ShadaEntryData::Change(ShadaFileMark {
                     name: 0,
                     mark: fm.mark,
-                    fname,
+                    fname: fname.clone(),
                 }),
-                additional_data: fm.additional_data,
-            };
-            unsafe { (*filemarks).changes[i] = entry };
-            unsafe {
-                (*filemarks).greatest_timestamp = (*filemarks).greatest_timestamp.max(fm.timestamp)
+                extra: fm.extra,
             };
         }
-        unsafe { (*filemarks).changes_size = buffer.b_changelistlen as size_t };
-    }
-
-    /// The slot one file's marks are collected into, made on first use.
-    /// The table owns both its keys and its values.
-    ///
-    /// # Safety
-    ///
-    /// `fname` must point at a NUL-terminated string.
-    unsafe fn file_marks_for(&mut self, fname: *const c_char) -> *mut FileMarks {
-        // SAFETY: `self.wms` is this write's own merger and `fname` a
-        // NUL-terminated name.
-        unsafe { (*self.wms).file_marks_for(fname) }
     }
 
     /// Put the cursor's position in at `'0`, shifting the other numbered
@@ -517,179 +449,109 @@ impl Writing {
         {
             return;
         }
-        let entry = ShadaEntry {
-            can_free_entry: false,
-            timestamp: os_time(),
-            data: ShadaEntryData::GlobalMark(ShadaFileMark {
-                name: '0' as c_char,
+        let fname = Buf::current().name.full().map(XString::from_cstr);
+        let entry = ShadaEntry::new(
+            os_time(),
+            ShadaEntryData::GlobalMark(ShadaFileMark {
+                name: b'0' as c_char,
                 mark: Win::current().w_cursor,
-                fname: Buf::current().name.full_ptr(),
+                fname: fname.expect("an ignored buffer has a name"),
             }),
-            additional_data: core::ptr::null_mut(),
-        };
-        unsafe { replace_numbered_mark(self.wms, 0, entry) };
+        );
+        replace_numbered_mark(&mut self.wms, 0, entry);
     }
 
     /// Write everything the merge left in `wms`, in the order the format
-    /// wants it.
-    fn pack_everything(&mut self) -> ShaDaWriteResult {
-        let wms = self.wms;
-        if unsafe { self.pack_sparse(&raw mut (*wms).global_marks) } == kSDWriteFailed
-            || unsafe { self.pack_sparse(&raw mut (*wms).numbered_marks) } == kSDWriteFailed
-            || unsafe { self.pack_sparse(&raw mut (*wms).registers) } == kSDWriteFailed
-            || unsafe { self.pack_dense((&raw mut (*wms).jumps).cast(), (*wms).jumps_size) }
-                == kSDWriteFailed
-        {
-            return kSDWriteFailed;
-        }
-        for entry in [
-            unsafe { &raw mut (*wms).search_pattern },
-            unsafe { &raw mut (*wms).sub_search_pattern },
-            unsafe { &raw mut (*wms).replacement },
-        ] {
-            let entry = unsafe { &mut *entry };
-            if !entry.data.is_missing() && self.pack_freeing(entry) == kSDWriteFailed {
-                return kSDWriteFailed;
+    /// wants it, and release it as it goes.
+    fn pack_everything(&mut self) -> WriteStatus {
+        let max_kbyte = self.limits.max_kbyte;
+        let mut lists: Vec<Vec<ShadaEntry>> = Vec::new();
+        let wms = &mut self.wms;
+        lists.push(take_all(&mut wms.global_marks));
+        lists.push(take_all(&mut wms.numbered_marks));
+        lists.push(take_all(&mut wms.registers));
+        let jumps_size = wms.jumps_size;
+        lists.push(take_all(&mut wms.jumps[..jumps_size]));
+        lists.push(vec![
+            core::mem::replace(&mut wms.search_pattern, ShadaEntry::MISSING),
+            core::mem::replace(&mut wms.sub_search_pattern, ShadaEntry::MISSING),
+            core::mem::replace(&mut wms.replacement, ShadaEntry::MISSING),
+        ]);
+        for entry in lists.iter().flatten().filter(|entry| !entry.is_missing()) {
+            if self.pack(entry, max_kbyte) == WriteStatus::Error {
+                return WriteStatus::Error;
             }
         }
-        if self.pack_file_marks() == kSDWriteFailed {
-            return kSDWriteFailed;
+        drop(lists);
+        if self.pack_file_marks() == WriteStatus::Error {
+            return WriteStatus::Error;
         }
         self.pack_histories()
     }
 
     /// Every file's marks, most recently touched file first, as many files
     /// as `'shada'` keeps.
-    fn pack_file_marks(&mut self) -> ShaDaWriteResult {
+    fn pack_file_marks(&mut self) -> WriteStatus {
+        let max_kbyte = self.limits.max_kbyte;
+        let files = core::mem::take(&mut self.wms.file_marks);
         // The table's own order, which is the order the files were first
         // marked in. `qsort` is unstable, so it is what decides between the
         // files whose newest mark shares a timestamp -- and the `'N` cut
-        // below takes the front of the result.
-        let mut all: Vec<*mut FileMarks> = unsafe { &(*self.wms).file_marks }.snapshot_values();
-        unsafe {
-            qsort(
-                all.as_mut_ptr().cast(),
-                all.len(),
-                size_of::<*mut FileMarks>(),
-                Some(compare_file_marks),
-            )
-        };
+        // below takes the front of the result. The slots are sorted as
+        // pointer-sized indices, as upstream sorted pointers.
+        let mut order: Vec<usize> = (0..files.len()).collect();
+        qsort_by(&mut order, |&a, &b| {
+            compare_file_marks(files[a].greatest_timestamp, files[b].greatest_timestamp)
+        });
 
-        let to_dump = all.len().min(self.limits.num_marked_files);
-        for &file in &all[..to_dump] {
-            if unsafe { self.pack_sparse(&raw mut (*file).marks) } == kSDWriteFailed
-                || unsafe {
-                    self.pack_dense((&raw mut (*file).changes).cast(), (*file).changes_size)
-                } == kSDWriteFailed
-            {
-                return kSDWriteFailed;
+        let to_dump = order.len().min(self.limits.num_marked_files);
+        for &at in &order[..to_dump] {
+            let file = &files[at];
+            let marks = file.marks.iter().filter(|entry| !entry.is_missing());
+            let changes = file.changes[..file.changes_size].iter();
+            for entry in marks.chain(changes) {
+                if self.pack(entry, max_kbyte) == WriteStatus::Error {
+                    return WriteStatus::Error;
+                }
             }
             // Marks the old file had for this file that this Nvim has
-            // nowhere to put. They are owned here, so they are freed
-            // whether or not writing them worked.
-            let mut ret = kSDWriteSuccessful;
-            for i in 0..unsafe { (*file).additional_marks_size } {
-                let entry = unsafe { (*file).additional_marks.add(i) };
-                if ret != kSDWriteFailed {
-                    ret = unsafe { shada_pack_entry(&raw mut self.packer, &*entry, 0) };
+            // nowhere to put.
+            for entry in &file.additional_marks {
+                if self.pack(entry, 0) == WriteStatus::Error {
+                    return WriteStatus::Error;
                 }
-                unsafe { shada_free_shada_entry(entry) };
-            }
-            unsafe { xfree((*file).additional_marks.cast()) };
-            if ret == kSDWriteFailed {
-                return kSDWriteFailed;
             }
         }
-        kSDWriteSuccessful
+        WriteStatus::Successful
     }
 
     /// The merged histories, oldest entry first.
-    fn pack_histories(&mut self) -> ShaDaWriteResult {
-        for i in 0..HIST_COUNT as usize {
+    fn pack_histories(&mut self) -> WriteStatus {
+        let max_kbyte = self.limits.max_kbyte;
+        for i in 0..HIST_COUNT {
             if !self.histories[i] {
                 continue;
             }
-            unsafe { hms_insert_whole_neovim_history(&raw mut (*self.wms).hms[i]) };
-            let mut cur = unsafe { (*self.wms).hms[i].hmll.first };
-            while !cur.is_null() {
-                if unsafe { self.pack_freeing(&mut (*cur).data) } == kSDWriteFailed {
-                    return kSDWriteFailed;
+            let Some(mut hms) = self.wms.hms[i].take() else {
+                continue;
+            };
+            hms.insert_whole_neovim_history();
+            for entry in hms.hmll.drain() {
+                if self.pack(&entry, max_kbyte) == WriteStatus::Error {
+                    return WriteStatus::Error;
                 }
-                cur = unsafe { (*cur).next };
             }
         }
-        kSDWriteSuccessful
+        WriteStatus::Successful
     }
+}
 
-    /// Write a slot-per-name array — the marks and the registers — whose
-    /// empty slots are skipped.
-    ///
-    /// Takes the array by pointer: `&(*wms).field[..]` would be an autoref
-    /// through a raw pointer, and the entries are freed as they go.
-    ///
-    /// # Safety
-    ///
-    /// `entries` must point at `N` initialized ShaDa entries the caller owns;
-    /// every one that is not missing is written and freed.
-    unsafe fn pack_sparse<const N: usize>(
-        &mut self,
-        entries: *mut [ShadaEntry; N],
-    ) -> ShaDaWriteResult {
-        let entries = entries.cast::<ShadaEntry>();
-        for i in 0..N {
-            let entry = unsafe { &mut *entries.add(i) };
-            if !entry.data.is_missing() && self.pack_freeing(entry) == kSDWriteFailed {
-                return kSDWriteFailed;
-            }
-        }
-        kSDWriteSuccessful
-    }
-
-    /// Write a filled-from-the-front array — the jumps and the changes —
-    /// every entry of which is a real one.
-    ///
-    /// # Safety
-    ///
-    /// `entries` must point at `len` consecutive values, each initialized ShaDa
-    /// entry.
-    unsafe fn pack_dense(&mut self, entries: *mut ShadaEntry, len: size_t) -> ShaDaWriteResult {
-        for i in 0..len {
-            if unsafe { self.pack_freeing(&mut *entries.add(i)) } == kSDWriteFailed {
-                return kSDWriteFailed;
-            }
-        }
-        kSDWriteSuccessful
-    }
-
-    /// Write one entry that `wms` owns, and release it.
-    fn pack_freeing(&mut self, entry: &mut ShadaEntry) -> ShaDaWriteResult {
-        unsafe { shada_pack_pfreed_entry(&raw mut self.packer, entry, self.limits.max_kbyte) }
-    }
-
-    /// Write one entry that belongs to the caller.
-    fn pack(&mut self, entry: &ShadaEntry, max_kbyte: size_t) -> ShaDaWriteResult {
-        unsafe { shada_pack_entry(&raw mut self.packer, entry, max_kbyte) }
-    }
-
-    /// Flush the output and release everything, however the write went.
-    fn finish(&mut self) {
-        // SAFETY: everything here was allocated by this write.
-        for i in 0..HIST_COUNT as usize {
-            if self.histories[i] {
-                unsafe { hms_dealloc(&raw mut (*self.wms).hms[i]) };
-            }
-        }
-        // The table owns its names; the `FileMarks` it points at are this
-        // module's own `shada_heap` allocations.
-        for &marks in &unsafe { &(*self.wms).file_marks }.snapshot_values() {
-            unsafe { xfree(marks.cast()) };
-        }
-        unsafe { self.packer.packer_flush.expect("shada: no flush")(&raw mut self.packer) };
-        // The merger's own drop takes the two tables with it -- only the
-        // variables' *names* were copied into `dumped_variables`; the
-        // variables themselves went out as they were found.
-        drop(unsafe { Box::from_raw(self.wms) });
-    }
+/// The entries of a slot array, taken out and left missing.
+fn take_all(slots: &mut [ShadaEntry]) -> Vec<ShadaEntry> {
+    slots
+        .iter_mut()
+        .map(|slot| core::mem::replace(slot, ShadaEntry::MISSING))
+        .collect()
 }
 
 /// Whether a variable's value can be written at all.

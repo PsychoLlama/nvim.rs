@@ -42,12 +42,8 @@ use crate::types::{
 use crate::ui_client::handle_ui_client_redraw;
 use ::libc::abort;
 
-pub mod keydict;
 pub mod protocol;
 pub mod redraw;
-
-pub(crate) use keydict::unpack_keydict;
-pub use keydict::{push_additional_data, unpack_array, unpack_integer, unpack_skip, unpack_string};
 
 use redraw::unpacker_parse_redraw;
 

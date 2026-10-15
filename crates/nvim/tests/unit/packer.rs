@@ -6,8 +6,8 @@
 //! plus the boundaries where this implementation deliberately differs from
 //! it, and the object walker is checked end to end through a string buffer.
 
-use neovim::msgpack_rpc::packer::{format, mpack_object, packer_string_buffer, packer_take_string};
-use neovim::types::{ApiDict, Array, DictKey, KeyValuePair, Object, PackerBuffer, String_0};
+use neovim::msgpack_rpc::packer::{format, mpack_object, pack_to_bytes};
+use neovim::types::{ApiDict, Array, DictKey, KeyValuePair, Object, String_0};
 
 #[test]
 fn booleans_are_one_byte() {
@@ -193,11 +193,8 @@ fn a_large_negative_handle_is_rejected() {
 
 /// Packs one object through a heap-backed buffer and returns the bytes.
 fn pack(object: &mut Object) -> Vec<u8> {
-    let mut buffer: PackerBuffer = packer_string_buffer();
-    unsafe { mpack_object(object, &mut buffer) };
-    // SAFETY: the buffer is this call's own `packer_string_buffer`.
-    let packed: String_0 = unsafe { packer_take_string(&buffer) };
-    packed.as_bytes().to_vec()
+    // SAFETY: the object is the caller's, live for the call.
+    pack_to_bytes(|buffer| unsafe { mpack_object(object, buffer) })
 }
 
 fn string(text: &[u8]) -> Object {

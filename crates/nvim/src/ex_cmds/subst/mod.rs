@@ -22,5 +22,5 @@ mod replace;
 mod report;
 
 pub(crate) use self::exec::*;
-pub use self::parse::*;
+pub(crate) use self::parse::*;
 pub use self::report::*;

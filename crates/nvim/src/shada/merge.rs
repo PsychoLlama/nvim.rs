@@ -6,411 +6,288 @@
 //! by timestamp — the newer of the two wins, and where there is room for
 //! several (histories, jumps, changes) the newest N are kept.
 //!
-//! Two structures do that. [`HMLList`] is a fixed-size ring of history
-//! entries in a doubly linked list, so an entry can be dropped from the
-//! middle in constant time; [`HistoryMergerState`] wraps one per history
-//! type and remembers how much of Nvim's own history has been folded in.
-//! File marks and jumps use plain arrays kept sorted by timestamp, which
+//! Two structures do that. [`HistoryRing`] is a fixed-size list of history
+//! entries in timestamp order, linked through slot indices so an entry can be
+//! dropped from the middle in constant time; [`HistoryMergerState`] wraps one
+//! per history type with what of Nvim's own history is still to be folded
+//! in. File marks and jumps use plain arrays kept sorted by timestamp, which
 //! [`marklist_insert`] makes room in.
 //!
-//! [`shada_read_when_writing`] is the pass over the existing file that feeds
-//! all of them.
+//! [`read_when_writing`] is the pass over the existing file that feeds all
+//! of them.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
-// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
+#![forbid(unsafe_code)]
 
-use crate::cstr;
-use crate::winlayer::Win;
+use crate::ascii::ascii_isdigit;
+use crate::cmdhist::{
+    HistRestored, HistShadaEntry, hist_shada_replace, hist_shada_take, hist_shada_view,
+};
+use crate::mark::{global_mark_timestamp, shada_local_mark_timestamp};
+use crate::path::path_fnamecmp;
+use crate::register::op_reg_index;
+use crate::registry::{IdMap, id_map};
+use crate::types::{Pos, Timestamp};
+use crate::winlayer::{Win, buffers};
 use core::cmp::Ordering;
-use core::ffi::{CStr, c_int, c_uint, c_void};
+use core::ffi::c_int;
+use std::collections::VecDeque;
 
-use super::*;
-use crate::mark::global_mark_timestamp;
+use super::collect::replace_numbered_mark;
+use super::file::shada_removable;
+use super::pack::{Packer, pack_entry};
+use super::unpack::Source;
+use super::{
+    FileMarks, HIST_COUNT, HistoryMergerState, JUMPLISTSIZE, ReadKinds, ReadStatus, ShadaEntry,
+    ShadaEntryData, ShadaHistoryItem, WriteMergerState, WriteStatus, mark_global_index,
+    mark_local_index,
+};
 
-/// Start a ring that holds at most `size` history entries.
-///
-/// The entries live in one array — `entries` — handed out from the front
-/// (`last_free_entry`) until it is full; after that a removal leaves exactly
-/// one hole, which `free_entry` remembers. The array stays a raw allocation
-/// rather than a `Box<[_]>` because the ring is initialised through a
-/// `*mut HMLList` into a merger that is not dropped: [`hmll_dealloc`]
-/// `xfree`s it, and nothing runs a destructor on the list.
-///
-/// # Safety
-///
-/// `hmll` must point at a live `HMLList`, unaliased for the call.
-pub(crate) unsafe fn hmll_init(hmll: *mut HMLList, size: size_t) {
-    let entries = unsafe { xcalloc(size, size_of::<HMLListEntry>()) }.cast::<HMLListEntry>();
-    let empty = HMLList {
-        entries,
-        first: core::ptr::null_mut(),
-        last: core::ptr::null_mut(),
-        free_entry: core::ptr::null_mut(),
-        last_free_entry: entries,
-        size,
-        num_entries: 0,
-        contained_entries: id_map(),
-    };
-    unsafe { hmll.write(empty) };
+/// One slot of a [`HistoryRing`]: an entry and its neighbours in timestamp
+/// order.
+pub(crate) struct RingSlot {
+    pub(crate) data: ShadaEntry,
+    next: Option<usize>,
+    prev: Option<usize>,
 }
 
-/// Take one entry out of the ring, freeing what it holds.
+/// At most `size` history entries, oldest first, linked through slot
+/// indices.
 ///
-/// # Safety
-///
-/// `hmll` must point at a live `HMLList`, unaliased for the call.
-/// `hmll_entry` must point at a live `HMLListEntry`, unaliased for the call.
-pub(crate) unsafe fn hmll_remove(hmll: *mut HMLList, hmll_entry: *mut HMLListEntry) {
-    // Removing the slot that was handed out last just gives it back;
-    // anything else leaves the one hole `free_entry` holds.
-    if hmll_entry == unsafe { (*hmll).last_free_entry.sub(1) } {
-        unsafe { (*hmll).last_free_entry = (*hmll).last_free_entry.sub(1) };
-    } else {
-        debug_assert!(
-            unsafe { (*hmll).free_entry.is_null() },
-            "shada: two holes in the ring"
-        );
-        unsafe { (*hmll).free_entry = hmll_entry };
-    }
-
-    // SAFETY: the entry's history string is NUL-terminated.
-    let key = unsafe { shada_key((*hmll_entry).data.data.history().string) };
-    let removed = unsafe { &mut (*hmll).contained_entries }.remove(key);
-    debug_assert!(removed.is_some(), "shada: ring entry was not in the map");
-
-    if unsafe { (*hmll_entry).next.is_null() } {
-        unsafe { (*hmll).last = (*hmll_entry).prev };
-    } else {
-        unsafe { (*(*hmll_entry).next).prev = (*hmll_entry).prev };
-    }
-    if unsafe { (*hmll_entry).prev.is_null() } {
-        unsafe { (*hmll).first = (*hmll_entry).next };
-    } else {
-        unsafe { (*(*hmll_entry).prev).next = (*hmll_entry).next };
-    }
-    unsafe { (*hmll).num_entries -= 1 };
-    unsafe { shada_free_shada_entry(&raw mut (*hmll_entry).data) };
+/// Slots are handed out from the front until `size` have been; after that a
+/// removal leaves exactly one hole, which `hole` remembers and the next
+/// insertion fills. Removing the slot handed out last gives it back instead.
+pub(crate) struct HistoryRing {
+    slots: Vec<RingSlot>,
+    first: Option<usize>,
+    last: Option<usize>,
+    hole: Option<usize>,
+    size: usize,
+    num_entries: usize,
+    /// The slot holding each history text. Asked, never walked.
+    contained_entries: IdMap<Box<[u8]>, usize>,
 }
 
-/// Put `data` into the ring, just after `after` (or at the front when that
-/// is null). A full ring drops its oldest entry first.
-///
-/// # Safety
-///
-/// `hmll` must point at a live `HMLList`, unaliased for the call. `after`
-/// must point at a live `HMLListEntry`, unaliased for the call. `data` must
-/// be an initialized `ShadaEntry` whose pointer fields point at live data for
-/// the call.
-pub(crate) unsafe fn hmll_insert(
-    hmll: *mut HMLList,
-    mut after: *mut HMLListEntry,
-    data: ShadaEntry,
-) {
-    if unsafe { (*hmll).num_entries } == unsafe { (*hmll).size } {
-        // The entry being inserted after may be the one about to go.
-        if after == unsafe { (*hmll).first } {
-            after = core::ptr::null_mut();
-        }
-        debug_assert!(
-            !unsafe { (*hmll).first.is_null() },
-            "shada: a full ring is not empty"
-        );
-        unsafe { hmll_remove(hmll, (*hmll).first) };
-    }
-
-    let target = if unsafe { (*hmll).free_entry.is_null() } {
-        debug_assert_eq!(
-            unsafe {
-                (*hmll)
-                    .last_free_entry
-                    .offset_from_unsigned((*hmll).entries)
-            },
-            unsafe { (*hmll).num_entries },
-            "shada: the ring's free slot is not where it should be"
-        );
-        let target = unsafe { (*hmll).last_free_entry };
-        unsafe { (*hmll).last_free_entry = target.add(1) };
-        target
-    } else {
-        debug_assert_eq!(
-            unsafe {
-                (*hmll)
-                    .last_free_entry
-                    .offset_from_unsigned((*hmll).entries)
-            } - 1,
-            unsafe { (*hmll).num_entries },
-            "shada: the ring's hole is not where it should be"
-        );
-        let target = unsafe { (*hmll).free_entry };
-        unsafe { (*hmll).free_entry = core::ptr::null_mut() };
-        target
-    };
-
-    // SAFETY: the entry's history string is NUL-terminated. Only a key that
-    // was not there takes the new slot, which is what `map_put_ref` plus the
-    // `new_item` guard did.  Read before the entry moves into the slot; the
-    // string it names belongs to the entry either way.
-    let key = unsafe { shada_key(data.data.history().string) };
-    unsafe { (*target).data = data };
-    unsafe { &mut (*hmll).contained_entries }
-        .entry(key.into())
-        .or_insert(target);
-    unsafe { (*hmll).num_entries += 1 };
-
-    unsafe { (*target).prev = after };
-    if after.is_null() {
-        unsafe { (*target).next = (*hmll).first };
-        unsafe { (*hmll).first = target };
-    } else {
-        unsafe { (*target).next = (*after).next };
-        unsafe { (*after).next = target };
-    }
-    if unsafe { (*target).next.is_null() } {
-        unsafe { (*hmll).last = target };
-    } else {
-        unsafe { (*(*target).next).prev = target };
-    }
-}
-
-/// Release the ring. Whatever the entries in it hold has been given away by
-/// now — to Nvim's history, or to the file.
-///
-/// # Safety
-///
-/// `hmll` must point at a live `HMLList`, unaliased for the call.
-pub(crate) unsafe fn hmll_dealloc(hmll: *mut HMLList) {
-    // The table owns its keys and nothing else; what the entries held has
-    // been given away, and the ring's array is this module's own.
-    unsafe { &mut (*hmll).contained_entries }.clear();
-    unsafe { xfree((*hmll).entries.cast::<c_void>()) };
-}
-
-/// Take a snapshot of Nvim's own history for this merger to fold in.
-///
-/// On the reading path the entries are taken out of the history table (the
-/// merger will put the merged result back); on the writing path they are
-/// only borrowed, so nothing here owns their strings.
-///
-/// # Safety
-///
-/// `hms_p` must point at a live `HistoryMergerState`, unaliased for the call.
-pub(crate) unsafe fn hms_load_pending(hms_p: *mut HistoryMergerState) {
-    let history_type = unsafe { (*hms_p).history_type };
-    let entries = if unsafe { (*hms_p).reading } {
-        hist_shada_take(history_type as c_int)
-    } else {
-        hist_shada_view(history_type as c_int)
-    };
-    let pending: Box<[ShadaEntry]> = entries
-        .into_iter()
-        .map(|he| ShadaEntry {
-            can_free_entry: unsafe { (*hms_p).reading },
-            timestamp: he.timestamp,
-            data: ShadaEntryData::HistoryEntry(ShadaHistoryItem {
-                histtype: history_type,
-                string: he.text,
-                sep: he.sep,
-            }),
-            additional_data: he.additional_data,
-        })
-        .collect();
-    unsafe { (*hms_p).pending_len = pending.len() };
-    unsafe { (*hms_p).pending_pos = 0 };
-    unsafe { (*hms_p).pending = Box::into_raw(pending).cast::<ShadaEntry>() };
-}
-
-/// When Nvim's next own history entry was recorded, if one is still
-/// waiting to be merged.
-///
-/// # Safety
-///
-/// `hms_p` must point at a live `HistoryMergerState`, unaliased for the call.
-unsafe fn pending_timestamp(hms_p: *mut HistoryMergerState) -> Option<Timestamp> {
-    let pos = unsafe { (*hms_p).pending_pos };
-    (pos < unsafe { (*hms_p).pending_len })
-        .then(|| unsafe { (*(*hms_p).pending.add(pos)).timestamp })
-}
-
-/// Take Nvim's next own history entry out of the snapshot, if one is still
-/// waiting to be merged.  The slot is left missing: the entry is the
-/// caller's now, and dropping the snapshot must not touch it again.
-///
-/// # Safety
-///
-/// `hms_p` must point at a live `HistoryMergerState`, unaliased for the call.
-unsafe fn take_pending(hms_p: *mut HistoryMergerState) -> Option<ShadaEntry> {
-    let pos = unsafe { (*hms_p).pending_pos };
-    (pos < unsafe { (*hms_p).pending_len }).then(|| {
-        unsafe { (*hms_p).pending_pos = pos + 1 };
-        let slot = unsafe { &mut *(*hms_p).pending.add(pos) };
-        core::mem::replace(slot, ShadaEntry::MISSING)
-    })
-}
-
-/// Insert one history entry, keeping the ring ordered by timestamp.
-///
-/// An entry whose text is already in the ring replaces it only if it is
-/// newer — or, for one of Nvim's own entries, if it is as new: a tie goes to
-/// the running session.
-///
-/// `do_iter` says the entry came from the file rather than from Nvim's own
-/// history, in which case everything of Nvim's that is older is folded in
-/// first, so that the two sequences interleave by timestamp.
-///
-/// # Safety
-///
-/// `hms_p` must point at a live `HistoryMergerState`, unaliased for the call.
-/// `entry` must be an initialized `ShadaEntry` whose pointer fields point at
-/// live data for the call.
-pub(crate) unsafe fn hms_insert(hms_p: *mut HistoryMergerState, entry: ShadaEntry, do_iter: bool) {
-    if do_iter {
-        while let Some(timestamp) = unsafe { pending_timestamp(hms_p) } {
-            if timestamp >= entry.timestamp {
-                break;
-            }
-            let next = unsafe { take_pending(hms_p) }.expect("the entry just looked at");
-            unsafe { hms_insert(hms_p, next, false) };
+impl HistoryRing {
+    /// A ring that holds at most `size` entries.
+    fn new(size: usize) -> HistoryRing {
+        HistoryRing {
+            slots: Vec::new(),
+            first: None,
+            last: None,
+            hole: None,
+            size,
+            num_entries: 0,
+            contained_entries: id_map(),
         }
     }
 
-    let hmll = unsafe { &raw mut (*hms_p).hmll };
-    // SAFETY: the entry's history string is NUL-terminated.
-    let key = unsafe { shada_key(entry.data.history().string) };
-    let val = unsafe { &(*hmll).contained_entries }.get(key).copied();
-    if let Some(existing) = val {
-        if entry.timestamp > unsafe { (*existing).data.timestamp } {
-            unsafe { hmll_remove(hmll, existing) };
-        } else if !do_iter && entry.timestamp == unsafe { (*existing).data.timestamp } {
-            unsafe { shada_free_shada_entry(&raw mut (*existing).data) };
-            unsafe { (*existing).data = entry };
-            // The key is the table's own copy of the same bytes now, so
-            // nothing has to be re-pointed at the new entry's string --
-            // which is what khash's borrowed `cstr_t` key needed.
-            return;
+    /// The text an entry is filed under.
+    fn key(entry: &ShadaEntry) -> &[u8] {
+        entry.data.history().text.as_bytes()
+    }
+
+    /// Take the entry in slot `at` out of the ring, dropping it.
+    fn remove(&mut self, at: usize) {
+        let removed = self
+            .contained_entries
+            .remove(Self::key(&self.slots[at].data));
+        debug_assert!(removed.is_some(), "shada: ring entry was not in the map");
+
+        let (next, prev) = (self.slots[at].next, self.slots[at].prev);
+        match next {
+            None => self.last = prev,
+            Some(next) => self.slots[next].prev = prev,
+        }
+        match prev {
+            None => self.first = next,
+            Some(prev) => self.slots[prev].next = next,
+        }
+        self.num_entries -= 1;
+
+        if at == self.slots.len() - 1 {
+            self.slots.pop();
         } else {
-            return;
+            debug_assert!(self.hole.is_none(), "shada: two holes in the ring");
+            self.hole = Some(at);
+            self.slots[at].data = ShadaEntry::MISSING;
         }
     }
 
-    // Walk back from the newest to the first entry no newer than this
-    // one; that is what the new entry goes after.
-    let mut after = unsafe { (*hmll).last };
-    while !after.is_null() && unsafe { (*after).data.timestamp } > entry.timestamp {
-        after = unsafe { (*after).prev };
-    }
-    unsafe { hmll_insert(hmll, after, entry) };
-}
+    /// Put `data` into the ring just after `after` (or at the front when
+    /// that is `None`). A full ring drops its oldest entry first.
+    fn insert(&mut self, mut after: Option<usize>, data: ShadaEntry) {
+        if self.num_entries == self.size {
+            let first = self.first.expect("shada: a full ring is not empty");
+            // The entry being inserted after may be the one about to go.
+            if after == Some(first) {
+                after = None;
+            }
+            self.remove(first);
+        }
 
-/// Start a merger for one history type, holding at most `num_elements`.
-///
-/// # Safety
-///
-/// `hms_p` must point at a live `HistoryMergerState`, unaliased for the call.
-pub(crate) unsafe fn hms_init(
-    hms_p: *mut HistoryMergerState,
-    history_type: uint8_t,
-    num_elements: size_t,
-    do_merge: bool,
-    reading: bool,
-) {
-    unsafe { hmll_init(&raw mut (*hms_p).hmll, num_elements) };
-    unsafe { (*hms_p).do_merge = do_merge };
-    unsafe { (*hms_p).reading = reading };
-    unsafe { (*hms_p).history_type = history_type };
-    unsafe { hms_load_pending(hms_p) };
-}
-
-/// Fold in everything of Nvim's own history that is left.
-///
-/// # Safety
-///
-/// `hms_p` must point at a live `HistoryMergerState`, unaliased for the call.
-pub(crate) unsafe fn hms_insert_whole_neovim_history(hms_p: *mut HistoryMergerState) {
-    while let Some(next) = unsafe { take_pending(hms_p) } {
-        unsafe { hms_insert(hms_p, next, false) };
-    }
-}
-
-/// Make the merged ring Nvim's history for this type.
-///
-/// # Safety
-///
-/// `hms_p` must point at a live `HistoryMergerState`.
-pub(crate) unsafe fn hms_to_history(hms_p: *const HistoryMergerState) {
-    let mut merged: Vec<HistRestored> = Vec::new();
-    let mut cur = unsafe { (*hms_p).hmll.first };
-    while !cur.is_null() {
-        let entry = unsafe { &(*cur).data };
-        let item = entry.data.history();
-        // SAFETY: the merged ring owns each entry's string and extra data,
-        // and gives both up here: the history copies the text and takes the
-        // extra data over, and nothing frees either after this.
-        let (text, extra) = unsafe {
-            let text = CStr::from_ptr(item.string).to_owned();
-            xfree(item.string.cast());
-            (text, ShadaExtra::from_raw(entry.additional_data))
+        let key: Box<[u8]> = Self::key(&data).into();
+        let slot = RingSlot {
+            data,
+            next: None,
+            prev: after,
         };
-        merged.push(HistRestored {
-            text,
-            sep: item.sep.to_ne_bytes()[0],
-            timestamp: entry.timestamp,
-            extra,
-        });
-        cur = unsafe { (*cur).next };
+        let target = match self.hole.take() {
+            Some(hole) => {
+                debug_assert_eq!(self.slots.len() - 1, self.num_entries);
+                self.slots[hole] = slot;
+                hole
+            }
+            None => {
+                debug_assert_eq!(self.slots.len(), self.num_entries);
+                self.slots.push(slot);
+                self.slots.len() - 1
+            }
+        };
+        // Only a key that was not there takes the new slot.
+        self.contained_entries.entry(key).or_insert(target);
+        self.num_entries += 1;
+
+        let next = match after {
+            None => self.first.replace(target),
+            Some(after) => self.slots[after].next.replace(target),
+        };
+        self.slots[target].next = next;
+        match next {
+            None => self.last = Some(target),
+            Some(next) => self.slots[next].prev = Some(target),
+        }
     }
-    hist_shada_replace(unsafe { (*hms_p).history_type } as c_int, merged);
+
+    /// The entries, oldest first, taken out of the ring.
+    pub(crate) fn drain(&mut self) -> Vec<ShadaEntry> {
+        let mut out = Vec::with_capacity(self.num_entries);
+        let mut cur = self.first;
+        while let Some(at) = cur {
+            cur = self.slots[at].next;
+            out.push(core::mem::replace(
+                &mut self.slots[at].data,
+                ShadaEntry::MISSING,
+            ));
+        }
+        *self = HistoryRing::new(self.size);
+        out
+    }
+
+    /// Whether this ring keeps anything at all.
+    pub(crate) fn keeps_nothing(&self) -> bool {
+        self.size == 0
+    }
 }
 
-/// Release the merger.
-///
-/// # Safety
-///
-/// `hms_p` must point at a live `HistoryMergerState`, unaliased for the call.
-pub(crate) unsafe fn hms_dealloc(hms_p: *mut HistoryMergerState) {
-    // Free whatever part of the snapshot was never merged; it is only
-    // owned on the reading path, and `shada_free_shada_entry` checks
-    // `can_free_entry` itself.
-    while let Some(mut entry) = unsafe { take_pending(hms_p) } {
-        unsafe { shada_free_shada_entry(&raw mut entry) };
+impl HistoryMergerState {
+    /// A merger for one history type, holding at most `num_elements`, with a
+    /// snapshot of Nvim's own history for it to fold in: taken out of the
+    /// history table when `reading` (the merger will put the merged result
+    /// back), copied when writing.
+    pub(crate) fn new(history_type: u8, num_elements: usize, reading: bool) -> HistoryMergerState {
+        let entries = if reading {
+            hist_shada_take(c_int::from(history_type))
+        } else {
+            hist_shada_view(c_int::from(history_type))
+        };
+        let pending = entries
+            .into_iter()
+            .map(|he: HistShadaEntry| ShadaEntry {
+                timestamp: he.timestamp,
+                data: ShadaEntryData::HistoryEntry(ShadaHistoryItem {
+                    histtype: history_type,
+                    text: he.text,
+                    sep: he.sep,
+                }),
+                extra: he.extra,
+            })
+            .collect();
+        HistoryMergerState {
+            hmll: HistoryRing::new(num_elements),
+            pending,
+            history_type,
+        }
     }
-    if !unsafe { (*hms_p).pending.is_null() } {
-        drop(unsafe {
-            Box::from_raw(core::ptr::slice_from_raw_parts_mut(
-                (*hms_p).pending,
-                (*hms_p).pending_len,
-            ))
-        });
-        unsafe { (*hms_p).pending = core::ptr::null_mut() };
-        unsafe { (*hms_p).pending_len = 0 };
+
+    /// Insert one history entry, keeping the ring ordered by timestamp.
+    ///
+    /// An entry whose text is already in the ring replaces it only if it is
+    /// newer — or, for one of Nvim's own entries, if it is as new: a tie goes
+    /// to the running session.
+    ///
+    /// `from_file` says the entry came from the file rather than from Nvim's
+    /// own history, in which case everything of Nvim's that is older is
+    /// folded in first, so that the two sequences interleave by timestamp.
+    pub(crate) fn insert(&mut self, entry: ShadaEntry, from_file: bool) {
+        if from_file {
+            while self
+                .pending
+                .front()
+                .is_some_and(|next| next.timestamp < entry.timestamp)
+            {
+                let next = self.pending.pop_front().expect("the entry just looked at");
+                self.insert(next, false);
+            }
+        }
+
+        let ring = &mut self.hmll;
+        if let Some(&existing) = ring.contained_entries.get(HistoryRing::key(&entry)) {
+            let held = ring.slots[existing].data.timestamp;
+            if entry.timestamp > held {
+                ring.remove(existing);
+            } else {
+                if !from_file && entry.timestamp == held {
+                    // The text is the same, so the map's key still names it.
+                    ring.slots[existing].data = entry;
+                }
+                return;
+            }
+        }
+
+        // Walk back from the newest to the first entry no newer than this
+        // one; that is what the new entry goes after.
+        let mut after = ring.last;
+        while let Some(at) = after
+            && ring.slots[at].data.timestamp > entry.timestamp
+        {
+            after = ring.slots[at].prev;
+        }
+        ring.insert(after, entry);
     }
-    unsafe { hmll_dealloc(&raw mut (*hms_p).hmll) };
+
+    /// Fold in everything of Nvim's own history that is left.
+    pub(crate) fn insert_whole_neovim_history(&mut self) {
+        while let Some(next) = self.pending.pop_front() {
+            self.insert(next, false);
+        }
+    }
+
+    /// Make the merged ring Nvim's history for this type.
+    pub(crate) fn into_history(mut self) {
+        let merged: Vec<HistRestored> = self
+            .hmll
+            .drain()
+            .into_iter()
+            .map(|entry| {
+                let ShadaEntryData::HistoryEntry(item) = entry.data else {
+                    unreachable!("shada: the history ring holds history entries");
+                };
+                HistRestored {
+                    text: item.text,
+                    sep: item.sep,
+                    timestamp: entry.timestamp,
+                    extra: entry.extra,
+                }
+            })
+            .collect();
+        hist_shada_replace(c_int::from(self.history_type), merged);
+        self.pending = VecDeque::new();
+    }
 }
 
 /// Whether two marks are at the same place.
-#[inline]
 pub(crate) fn marks_equal(a: Pos, b: Pos) -> bool {
     a.lnum == b.lnum && a.col == b.col
-}
-
-/// Order one file's marks by timestamp, newest first — the reverse of the
-/// usual sense, so that the files with the freshest marks come first when
-/// only so many of them fit. Signature for `qsort`.
-///
-/// # Safety
-///
-/// As `qsort`'s comparator over an array of `*const FileMarks`: `a` and `b`
-/// must each point at one of those elements, and the `FileMarks` it holds
-/// must be live for the call.
-pub(crate) unsafe extern "C" fn compare_file_marks(a: *const c_void, b: *const c_void) -> c_int {
-    let a = unsafe { *a.cast::<*const FileMarks>() };
-    let b = unsafe { *b.cast::<*const FileMarks>() };
-    match unsafe { (*a).greatest_timestamp.cmp(&(*b).greatest_timestamp) } {
-        Ordering::Equal => 0,
-        Ordering::Greater => -1,
-        Ordering::Less => 1,
-    }
 }
 
 /// Make room in `list` for an item that belongs just before index `i` (or
@@ -421,17 +298,15 @@ pub(crate) unsafe extern "C" fn compare_file_marks(a: *const c_void, b: *const c
 /// nowhere for it to go and this answers −1. So does an `i` of −1, which is
 /// how a caller says the item is one the list already holds.
 ///
-/// The items are *moved* within the list, not duplicated: a mark owns its
-/// ShaDa extra data, and the slot a shift vacates is written over by the
-/// caller. [`shift_within`] is `slice::copy_within` for a type that owns
-/// what it holds, and so is neither `Copy` nor `Clone`.
+/// The items are *moved* within the list, not duplicated: what is left in
+/// the slot answered is whatever the caller is about to write over.
 pub(crate) fn marklist_insert<T>(list: &mut [T], len: c_int, i: c_int) -> c_int {
     let len = len as usize;
     match i.cmp(&0) {
         Ordering::Less => -1,
         Ordering::Greater => {
             let mut at = i as usize;
-            if len == JUMPLISTSIZE as usize {
+            if len == JUMPLISTSIZE {
                 at -= 1;
                 if at > 0 {
                     shift_within(list, 1..at + 1, 0); // the oldest item goes
@@ -442,7 +317,7 @@ pub(crate) fn marklist_insert<T>(list: &mut [T], len: c_int, i: c_int) -> c_int 
             at as c_int
         }
         Ordering::Equal => {
-            if len == JUMPLISTSIZE as usize {
+            if len == JUMPLISTSIZE {
                 -1 // older than the whole list
             } else {
                 if len > 0 {
@@ -456,9 +331,7 @@ pub(crate) fn marklist_insert<T>(list: &mut [T], len: c_int, i: c_int) -> c_int 
 
 /// `slice::copy_within` without the `Copy` bound: the elements are swapped
 /// in whichever direction keeps the source intact until it is read, which
-/// is what a `memmove` of the same range does.  Swapping rather than
-/// overwriting means every element is still somewhere afterwards -- what is
-/// left in the hole is whatever the caller is about to write over.
+/// is what a `memmove` of the same range does.
 pub(crate) fn shift_within<T>(list: &mut [T], src: core::ops::Range<usize>, dest: usize) {
     if dest <= src.start {
         for (n, at) in src.enumerate() {
@@ -476,8 +349,8 @@ pub(crate) fn shift_within<T>(list: &mut [T], src: core::ops::Range<usize>, dest
 /// holds, which is then not inserted at all.
 fn insert_mark_list(
     list: &mut [ShadaEntry],
-    size: &mut size_t,
-    mut entry: ShadaEntry,
+    size: &mut usize,
+    entry: ShadaEntry,
     same: impl Fn(&ShadaEntry) -> bool,
 ) {
     // Walk back to the first entry no newer than this one.
@@ -492,341 +365,232 @@ fn insert_mark_list(
         }
         i -= 1;
     }
-    if i > 0 && *size == JUMPLISTSIZE as size_t {
-        unsafe { shada_free_shada_entry(&raw mut list[0]) };
-    }
     let i = marklist_insert(list, *size as c_int, i);
     if i == -1 {
-        unsafe { shada_free_shada_entry(&raw mut entry) };
         return;
     }
     list[i as usize] = entry;
-    if *size < JUMPLISTSIZE as size_t {
+    if *size < JUMPLISTSIZE {
         *size += 1;
     }
 }
 
 /// Keep the newer of the entry already in `slot` and the one just read,
-/// freeing the other. A tie goes to the one already there, which is the
+/// dropping the other. A tie goes to the one already there, which is the
 /// running Nvim's.
-///
-/// # Safety
-///
-/// `slot` must point at an initialized ShaDa entry, unaliased for the call.
-/// `entry` must be an initialized `ShadaEntry` whose pointer fields point at
-/// live data for the call.
-unsafe fn keep_newer(slot: *mut ShadaEntry, mut entry: ShadaEntry) {
-    if !unsafe { (*slot).data.is_missing() } {
-        if unsafe { (*slot).timestamp } >= entry.timestamp {
-            unsafe { shada_free_shada_entry(&raw mut entry) };
-            return;
-        }
-        unsafe { shada_free_shada_entry(slot) };
+fn keep_newer(slot: &mut ShadaEntry, entry: ShadaEntry) {
+    if !slot.is_missing() && slot.timestamp >= entry.timestamp {
+        return;
     }
-    unsafe { *slot = entry };
+    *slot = entry;
 }
 
 /// Read the existing ShaDa file and merge it into `wms`.
 ///
 /// Entries this Nvim has nowhere to put — an unknown type, a history it
 /// does not keep, a register or mark name it does not know — go straight to
-/// `packer`, so that writing the file does not lose them.
-///
-/// # Safety
-///
-/// `sd_reader` must point at an open file descriptor, unaliased for the call.
-/// `wms` must point at a live `WriteMergerState`, unaliased for the call.
-/// `packer` must point at a live `PackerBuffer`, unaliased for the call.
-pub(crate) unsafe fn shada_read_when_writing(
-    sd_reader: *mut FileDescriptor,
-    srni_flags: c_uint,
-    max_kbyte: size_t,
-    wms: *mut WriteMergerState,
-    packer: *mut PackerBuffer,
-) -> ShaDaWriteResult {
-    let mut ret = kSDWriteSuccessful;
+/// `out`, so that writing the file does not lose them.
+pub(crate) fn read_when_writing(
+    source: &mut Source,
+    kinds: ReadKinds,
+    max_kbyte: usize,
+    wms: &mut WriteMergerState,
+    out: &mut Packer,
+) -> WriteStatus {
+    let mut ret = WriteStatus::Successful;
     loop {
-        let mut entry = ShadaEntry::MISSING;
-        match unsafe { shada_read_next_item(sd_reader, &raw mut entry, srni_flags, max_kbyte) } {
-            kSDReadStatusSuccess => {}
-            kSDReadStatusFinished => return ret,
-            kSDReadStatusMalformed => continue,
+        let entry = match source.next_entry(kinds, max_kbyte) {
+            Ok(entry) => entry,
+            Err(ReadStatus::Finished) => return ret,
+            Err(ReadStatus::Malformed) => continue,
             // Whatever has been merged so far is still worth writing.
-            kSDReadStatusNotShaDa => return kSDWriteReadNotShada,
-            _ => return ret,
-        }
+            Err(ReadStatus::NotShada) => return WriteStatus::ReadNotShada,
+            Err(_) => return ret,
+        };
 
-        match entry.data {
+        match &entry.data {
             ShadaEntryData::Missing => {}
             ShadaEntryData::Header(_) | ShadaEntryData::BufferList(_) => {
                 unreachable!("shada: entry type {} is never merged", entry.kind())
             }
-            ShadaEntryData::Unknown(_) => {
-                ret = unsafe { shada_pack_entry(packer, &entry, 0) };
-                unsafe { shada_free_shada_entry(&raw mut entry) };
-            }
-            ShadaEntryData::SearchPattern(ref pattern) => {
+            ShadaEntryData::Unknown(_) => ret = pack_entry(out, &entry, 0),
+            ShadaEntryData::SearchPattern(pattern) => {
                 let slot = if pattern.is_substitute_pattern.unwrap_or(false) {
-                    unsafe { &raw mut (*wms).sub_search_pattern }
+                    &mut wms.sub_search_pattern
                 } else {
-                    unsafe { &raw mut (*wms).search_pattern }
+                    &mut wms.search_pattern
                 };
-                unsafe { keep_newer(slot, entry) };
+                keep_newer(slot, entry);
             }
-            ShadaEntryData::SubString(_) => unsafe {
-                keep_newer(&raw mut (*wms).replacement, entry)
-            },
+            ShadaEntryData::SubString(_) => keep_newer(&mut wms.replacement, entry),
             ShadaEntryData::HistoryEntry(item) => {
-                ret = unsafe { merge_history(wms, entry, item, packer, ret) };
+                let histtype = usize::from(item.histtype);
+                if histtype >= HIST_COUNT {
+                    ret = pack_entry(out, &entry, 0);
+                } else if let Some(hms) = &mut wms.hms[histtype]
+                    && !hms.hmll.keeps_nothing()
+                {
+                    hms.insert(entry, true);
+                }
             }
             ShadaEntryData::Register(reg) => {
-                let idx = op_reg_index(reg.name as c_int);
-                if idx < 0 {
-                    ret = unsafe { shada_pack_entry(packer, &entry, 0) };
-                    unsafe { shada_free_shada_entry(&raw mut entry) };
-                } else {
-                    unsafe { keep_newer(&raw mut (*wms).registers[idx as usize], entry) };
+                match usize::try_from(op_reg_index(c_int::from(reg.name))) {
+                    Ok(idx) => keep_newer(&mut wms.registers[idx], entry),
+                    Err(_) => ret = pack_entry(out, &entry, 0),
                 }
             }
-            ShadaEntryData::Variable(_) => {
+            ShadaEntryData::Variable(var) => {
                 // A variable this session has already written wins.
-                // SAFETY: a variable's name is NUL-terminated.
-                let name = unsafe { shada_key(entry.data.variable_mut().name) };
-                if !unsafe { &(*wms).dumped_variables }.contains(name) {
-                    ret = unsafe { shada_pack_entry(packer, &entry, 0) };
+                if !wms.dumped_variables.contains(var.name.as_cstr().to_bytes()) {
+                    ret = pack_entry(out, &entry, 0);
                 }
-                unsafe { shada_free_shada_entry(&raw mut entry) };
             }
-            ShadaEntryData::GlobalMark(mark) => {
-                ret = unsafe { merge_global_mark(wms, entry, mark, packer, ret) };
+            ShadaEntryData::GlobalMark(_) => {
+                if let Some(status) = merge_global_mark(wms, entry, out) {
+                    ret = status;
+                }
             }
-            ShadaEntryData::Change(_) | ShadaEntryData::LocalMark(_) => unsafe {
-                merge_file_mark(wms, entry)
-            },
+            ShadaEntryData::Change(_) | ShadaEntryData::LocalMark(_) => {
+                merge_file_mark(wms, entry);
+            }
             ShadaEntryData::Jump(jump) => {
-                let (mark, fname) = (jump.mark, jump.fname);
-                let jumps = unsafe { &mut (*wms).jumps };
-                let jumps_size = unsafe { &mut (*wms).jumps_size };
-                unsafe {
-                    insert_mark_list(jumps, jumps_size, entry, |existing| {
-                        marks_equal(existing.data.filemark().mark, mark)
-                            && cstr::eq(existing.data.filemark().fname, fname)
-                    })
-                };
+                let mark = jump.mark;
+                let fname = jump.fname.as_cstr().to_bytes().to_vec();
+                insert_mark_list(&mut wms.jumps, &mut wms.jumps_size, entry, |existing| {
+                    let held = existing.data.filemark();
+                    marks_equal(held.mark, mark) && held.fname.as_cstr().to_bytes() == fname
+                });
             }
         }
     }
 }
 
-/// One history entry from the file. A history this Nvim does not have goes
-/// straight through; one it has but is keeping nothing of is dropped.
-///
-/// # Safety
-///
-/// `wms` must point at a live `WriteMergerState`, unaliased for the call.
-/// `entry` must be an initialized `ShadaEntry` whose pointer fields point at
-/// live data for the call. `item` must be an initialized `ShadaHistoryItem`
-/// whose pointer fields point at live data for the call. `packer` must point
-/// at a live `PackerBuffer`, unaliased for the call.
-unsafe fn merge_history(
-    wms: *mut WriteMergerState,
-    mut entry: ShadaEntry,
-    item: ShadaHistoryItem,
-    packer: *mut PackerBuffer,
-    ret: ShaDaWriteResult,
-) -> ShaDaWriteResult {
-    let histtype = item.histtype as c_uint;
-    if histtype >= HIST_COUNT {
-        let ret = unsafe { shada_pack_entry(packer, &entry, 0) };
-        unsafe { shada_free_shada_entry(&raw mut entry) };
-        return ret;
-    }
-    let hms = unsafe { &raw mut (*wms).hms[histtype as usize] };
-    if unsafe { (*hms).hmll.size } != 0 {
-        unsafe { hms_insert(hms, entry, true) };
-    } else {
-        unsafe { shada_free_shada_entry(&raw mut entry) };
-    }
-    ret
-}
-
-/// One global mark from the file.
+/// One global mark from the file: `Some` with the status of writing it
+/// straight through, when it has a name this Nvim does not know.
 ///
 /// A numbered mark has no name to match on — the ten of them are simply the
 /// ten most recent, so it is placed by timestamp. A lettered mark goes in
 /// its own slot, and has to beat whatever this Nvim holds for that letter.
-///
-/// # Safety
-///
-/// `wms` must point at a live `WriteMergerState`, unaliased for the call.
-/// `entry` must be an initialized `ShadaEntry` whose pointer fields point at
-/// live data for the call. `mark` must be an initialized `ShadaFileMark`
-/// whose pointer fields point at live data for the call. `packer` must point
-/// at a live `PackerBuffer`, unaliased for the call.
-unsafe fn merge_global_mark(
-    wms: *mut WriteMergerState,
-    mut entry: ShadaEntry,
-    mark: ShadaFileMark,
-    packer: *mut PackerBuffer,
-    ret: ShaDaWriteResult,
-) -> ShaDaWriteResult {
-    if ascii_isdigit(mark.name as c_int) {
-        unsafe { merge_numbered_mark(wms, entry) };
-        return ret;
+fn merge_global_mark(
+    wms: &mut WriteMergerState,
+    entry: ShadaEntry,
+    out: &mut Packer,
+) -> Option<WriteStatus> {
+    let name = entry.data.filemark().name;
+    if ascii_isdigit(c_int::from(name)) {
+        merge_numbered_mark(wms, entry);
+        return None;
     }
-
-    let idx = mark_global_index(mark.name);
-    if idx < 0 {
-        let ret = unsafe { shada_pack_entry(packer, &entry, 0) };
-        unsafe { shada_free_shada_entry(&raw mut entry) };
-        return ret;
-    }
-    let slot = if idx < 26 {
-        unsafe { &raw mut (*wms).global_marks[idx as usize] }
-    } else {
-        unsafe { &raw mut (*wms).numbered_marks[idx as usize - 26] }
+    let Some(idx) = mark_global_index(name) else {
+        return Some(pack_entry(out, &entry, 0));
     };
-    // Nothing has claimed the slot yet, so what the file entry has to
-    // beat is the mark this Nvim holds.
-    if unsafe { (*slot).data.is_missing() } && global_mark_timestamp(idx) >= entry.timestamp {
-        unsafe { shada_free_shada_entry(&raw mut entry) };
-        return ret;
+    let slot = if idx < 26 {
+        &mut wms.global_marks[idx]
+    } else {
+        &mut wms.numbered_marks[idx - 26]
+    };
+    // Nothing has claimed the slot yet, so what the file entry has to beat
+    // is the mark this Nvim holds.
+    if slot.is_missing() && global_mark_timestamp(idx as c_int) >= entry.timestamp {
+        return None;
     }
-    unsafe { keep_newer(slot, entry) };
-    ret
+    keep_newer(slot, entry);
+    None
 }
 
 /// A numbered global mark: kept in a list of the ten most recent, with the
 /// mark names ignored entirely.
-///
-/// # Safety
-///
-/// `wms` must point at a live `WriteMergerState`, unaliased for the call.
-/// `entry` must be an initialized `ShadaEntry` whose pointer fields point at
-/// live data for the call.
-unsafe fn merge_numbered_mark(wms: *mut WriteMergerState, mut entry: ShadaEntry) {
-    let marks = unsafe { &(*wms).numbered_marks };
-    for i in (1..=marks.len()).rev() {
-        let existing = &marks[i - 1];
+fn merge_numbered_mark(wms: &mut WriteMergerState, entry: ShadaEntry) {
+    let len = wms.numbered_marks.len();
+    for i in (1..=len).rev() {
+        let existing = &wms.numbered_marks[i - 1];
         if !matches!(existing.data, ShadaEntryData::GlobalMark(_)) {
             continue;
         }
         // The same mark written twice: keep the one already here.
+        let (held, read) = (existing.data.filemark(), entry.data.filemark());
         if existing.timestamp == entry.timestamp
-            && existing.additional_data.is_null()
-            && entry.additional_data.is_null()
-            && marks_equal(existing.data.filemark().mark, entry.data.filemark().mark)
-            && unsafe { cstr::eq(existing.data.filemark().fname, entry.data.filemark().fname) }
+            && existing.extra.is_none()
+            && entry.extra.is_none()
+            && marks_equal(held.mark, read.mark)
+            && held.fname.as_cstr() == read.fname.as_cstr()
         {
-            unsafe { shada_free_shada_entry(&raw mut entry) };
             return;
         }
         if existing.timestamp >= entry.timestamp {
-            if i < marks.len() {
-                unsafe { replace_numbered_mark(wms, i, entry) };
-            } else {
-                // Older than all ten of them.
-                unsafe { shada_free_shada_entry(&raw mut entry) };
+            if i < len {
+                replace_numbered_mark(wms, i, entry);
             }
+            // Otherwise it is older than all ten of them.
             return;
         }
     }
-    unsafe { replace_numbered_mark(wms, 0, entry) };
+    replace_numbered_mark(wms, 0, entry);
 }
 
 /// A buffer-local mark or change-list entry from the file, filed under the
 /// name of the file it belongs to.
-///
-/// # Safety
-///
-/// `wms` must point at a live `WriteMergerState`, unaliased for the call.
-/// `entry` must be an initialized `ShadaEntry` whose pointer fields point at
-/// live data for the call.
-unsafe fn merge_file_mark(wms: *mut WriteMergerState, mut entry: ShadaEntry) {
-    let fname = entry.data.filemark().fname;
-    if unsafe { shada_removable(fname) } {
-        unsafe { shada_free_shada_entry(&raw mut entry) };
+fn merge_file_mark(wms: &mut WriteMergerState, entry: ShadaEntry) {
+    let fname = entry.data.filemark().fname.clone();
+    if shada_removable(fname.as_cstr()) {
         return;
     }
 
-    // SAFETY: `wms` is the caller's live merger and `fname` its entry's
-    // NUL-terminated name.
-    let filemarks = unsafe { (*wms).file_marks_for(fname) };
-    if entry.timestamp > unsafe { (*filemarks).greatest_timestamp } {
-        unsafe { (*filemarks).greatest_timestamp = entry.timestamp };
+    let filemarks: &mut FileMarks = wms.file_marks_for(fname.as_cstr().to_bytes());
+    if entry.timestamp > filemarks.greatest_timestamp {
+        filemarks.greatest_timestamp = entry.timestamp;
     }
 
-    if let ShadaEntryData::Change(change) = entry.data {
+    if let ShadaEntryData::Change(change) = &entry.data {
         let mark = change.mark;
-        let changes = unsafe { &mut (*filemarks).changes };
-        let changes_size = unsafe { &mut (*filemarks).changes_size };
-        insert_mark_list(changes, changes_size, entry, |existing| {
-            marks_equal(existing.data.filemark().mark, mark)
-        });
+        insert_mark_list(
+            &mut filemarks.changes,
+            &mut filemarks.changes_size,
+            entry,
+            |existing| marks_equal(existing.data.filemark().mark, mark),
+        );
         return;
     }
 
-    let idx = mark_local_index(entry.data.filemark().name);
-    if idx < 0 {
+    let Some(idx) = mark_local_index(entry.data.filemark().name) else {
         // A mark name this Nvim does not know: keep it to write back.
-        unsafe { (*filemarks).additional_marks_size += 1 };
-        unsafe {
-            (*filemarks).additional_marks = xrealloc(
-                (*filemarks).additional_marks.cast::<c_void>(),
-                (*filemarks).additional_marks_size * size_of::<ShadaEntry>(),
-            )
-            .cast::<ShadaEntry>()
-        };
-        // The slot is `xrealloc`'s, so the entry is *written* into it: a
-        // plain assignment would release whatever the allocator left there.
-        unsafe {
-            (*filemarks)
-                .additional_marks
-                .add((*filemarks).additional_marks_size - 1)
-                .write(entry)
-        };
+        filemarks.additional_marks.push(entry);
         return;
-    }
-
-    let slot = unsafe { &raw mut (*filemarks).marks[idx as usize] };
-    if !unsafe { (*slot).data.is_missing() } {
-        if unsafe { (*slot).timestamp } >= entry.timestamp {
-            unsafe { shada_free_shada_entry(&raw mut entry) };
+    };
+    let slot = &mut filemarks.marks[idx];
+    if !slot.is_missing() {
+        if slot.timestamp >= entry.timestamp {
             return;
         }
-        if unsafe { (*slot).can_free_entry } {
-            // The table's key used to be borrowed from whichever entry
-            // first named the file, so it had to be re-pointed before this
-            // free. It is an owned copy now, and this is just the free.
-            unsafe { shada_free_shada_entry(slot) };
-        }
     } else if beaten_by_a_loaded_buffer(&entry) {
-        unsafe { shada_free_shada_entry(&raw mut entry) };
         return;
     }
-    unsafe { *slot = entry };
+    *slot = entry;
 }
 
 /// Whether a buffer Nvim has open on this file already holds a newer value
 /// for the mark. Nothing has claimed the slot, so this is the comparison
 /// [`keep_newer`] would otherwise make.
 fn beaten_by_a_loaded_buffer(entry: &ShadaEntry) -> bool {
-    let name = entry.data.filemark().fname;
+    let mark = entry.data.filemark();
+    let name = mark.fname.as_cstr().to_bytes();
     for buf in buffers() {
-        // SAFETY: the entry's own NUL-terminated file name, and a live
-        // buffer's from the editor's own list.
-        if !buf.name.full().is_none()
-            && unsafe { path_fnamecmp(cstr::bytes_at(name), cstr::bytes_at(buf.name.full_ptr())) }
-                == 0
+        let Some(full) = buf.name.full() else {
+            continue;
+        };
+        if path_fnamecmp(name, full.to_bytes()) == 0
+            && shada_local_mark_timestamp(buf, Win::current(), c_int::from(mark.name))
+                >= entry.timestamp
         {
-            let mut fm: FileMark = FileMark::UNSET;
-            let name = entry.data.filemark().name as c_int;
-            let win = Win::current();
-            unsafe { mark_get(buf, win, &raw mut fm, kMarkBufLocal, name) };
-            if fm.timestamp >= entry.timestamp {
-                return true;
-            }
+            return true;
         }
     }
     false
+}
+
+/// Order one file's marks by timestamp, newest first — the reverse of the
+/// usual sense, so that the files with the freshest marks come first when
+/// only so many of them fit.
+pub(crate) fn compare_file_marks(a: Timestamp, b: Timestamp) -> Ordering {
+    b.cmp(&a)
 }
