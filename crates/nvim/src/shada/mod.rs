@@ -37,6 +37,8 @@ pub use self::collect::{
 };
 mod read;
 pub use self::read::shada_read_string;
+#[cfg(test)]
+mod tests;
 mod write;
 
 /// A ShaDa entry's extra data: the map keys or array elements of an entry
