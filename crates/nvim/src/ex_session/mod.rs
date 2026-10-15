@@ -25,52 +25,44 @@
 //! [`SessionOpts`] names that choice instead, so nothing here needs the
 //! address of an option word.
 //!
-//! [`SessionFile`] is the other half of the same idea. Every function here
-//! writes to one `FILE *` and answers "did the write succeed"; wrapping the
-//! handle once, with the contract stated at [`SessionFile::new`], makes the
-//! hundred-odd `fprintf` sites safe calls. Only the ones that write *bytes
-//! from the editor* -- a file name, a tag, an option value -- stay unsafe
-//! and go through `fputs`, because those are not necessarily UTF-8 and Rust
-//! formatting would replace what is not.
+//! [`SessionFile`] is the other half of the same idea: the file being
+//! written, buffered, and every writer here answers "did the write succeed"
+//! through it. Text from the editor -- a file name, a tag, an option value --
+//! goes out as bytes, because it is not necessarily UTF-8; only the numbers
+//! go through Rust formatting.
 //!
 //! Original: `src/nvim/ex_session.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 mod session;
 mod view;
 
-use crate::ascii::ascii_isdigit;
-use crate::autocmd::apply_autocmds;
+use crate::autocmd::fire_autocmds;
 use crate::buffer::{buf_is_help, buf_is_nofilename, buf_is_terminal};
-use crate::cstr;
 use crate::eval::vars::set_vim_var_string;
-use crate::ex_docmd::{open_exfile, vim_mkdir_emsg};
-use crate::ex_getln::vim_strsave_fnameescape;
+use crate::ex_docmd::{create_exfile, vim_mkdir_emsg};
+use crate::ex_getln::fnameescape;
 use crate::file_search::vim_chdirfile;
 use crate::fileio::shorten_fnames;
-use crate::fprintf;
 use crate::global_cell::GlobalCell;
 use crate::mapping::makemap;
-use crate::mbyte::utfc_ptr2len;
+use crate::mbyte::cluster_len;
 use crate::memory::XString;
-use crate::memory::{xfree, xmalloc};
 use crate::message::emsg;
 use crate::message::{e_noname, e_prev_dir, e_write};
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_cstr;
 use crate::option::makeset;
-use crate::option::vars::{P_VDIR, p_acd, p_hls, p_vdir, ssop_flags, vop_flags};
+use crate::option::vars::{P_VDIR, p_acd, p_hls, ssop_flags, vop_flags};
 use crate::options::{
     OptSsopFlags, kOptSsopFlagBlank, kOptSsopFlagCurdir, kOptSsopFlagHelp, kOptSsopFlagOptions,
     kOptSsopFlagSesdir, kOptSsopFlagSkiprtp, kOptSsopFlagTerminal,
 };
-use crate::os::cshim::{gettext, putc};
-use crate::os::env::home_replace_save;
-use crate::os::fs::{os_chdir, os_dirname, os_isdir};
-use crate::os::state::globaldir;
+use crate::os::cshim::gettext;
+use crate::os::env::home_replace_in;
+use crate::os::fs::{dir_exists, dirname_within, os_chdir};
 use crate::path::{after_pathsep, vim_full_name, vim_ispathsep};
 use crate::runtime::do_source;
 use crate::search::state::no_hlsearch;
@@ -78,19 +70,21 @@ use crate::semsg;
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use crate::types::PATHSEPSTR;
-use crate::types::{CdCause, ExArg, FAIL, FILE, Failed, MAXPATHL, NUL, OptionSetFlags, Vv, size_t};
+use crate::types::{CdCause, ExArg, FAIL, MAXPATHL, OptionSetFlags, Vv};
+use crate::window::{DirOwner, own_dir};
 use crate::winlayer::Win;
 use crate::winlayer::{Buf, TabPage};
-use ::libc::fputs;
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::{fmt, ptr};
+use core::ffi::{CStr, c_int};
+use core::fmt;
+use std::fs::File;
+use std::io::{BufWriter, Write};
 
 use session::makeopens;
 use view::put_view;
 
 /// Constants the transpiler copied in from the headers this module includes.
 mod flag {
-    use super::{CdCause, c_char, c_int};
+    use super::{CdCause, c_int};
 
     /// `vim_chdirfile`'s reason code: not a `:cd`, so no autocommand.
     pub(super) const kCdCauseOther: CdCause = -1;
@@ -100,8 +94,8 @@ mod flag {
     pub(super) const DOSO_NONE: c_int = 0;
 
     /// Frame layouts.
-    pub(super) const FR_LEAF: c_char = 0;
-    pub(super) const FR_COL: c_char = 2;
+    pub(super) const FR_LEAF: core::ffi::c_char = 0;
+    pub(super) const FR_COL: core::ffi::c_char = 2;
 }
 
 use flag::{DOSO_NONE, VSE_NONE};
@@ -156,108 +150,63 @@ impl SessionOpts {
 
 // -- The file being written ------------------------------------------------
 
-/// The session file, and the one place its `FILE *` is dereferenced.
+/// The session file, buffered.
 ///
 /// Every method answers `true` when the write succeeded, which is the
-/// `OK`/`FAIL` of the C inverted into the shape `?`-free code wants.
-#[derive(Clone, Copy)]
-pub(crate) struct SessionFile(*mut FILE);
+/// `OK`/`FAIL` of the C inverted into the shape `?`-free code wants. A write
+/// error the buffer holds back surfaces at the next write that reaches the
+/// file, or at [`SessionFile::finish`].
+pub(crate) struct SessionFile(BufWriter<File>);
 
 impl SessionFile {
-    /// # Safety
-    /// `fd` must be a stream open for writing that outlives this value.
-    /// Nothing else may write to it meanwhile.
-    pub(crate) unsafe fn new(fd: *mut FILE) -> Self {
-        Self(fd)
+    /// Write into `file`.
+    fn new(file: File) -> Self {
+        Self(BufWriter::new(file))
     }
 
-    /// The raw handle, for the writers that live in other modules
-    /// (`makemap`, `makeset`, `put_folds`).
-    pub(crate) fn raw(self) -> *mut FILE {
-        self.0
+    /// Flush what is buffered and close the file: whether everything
+    /// reached it -- the error `fclose` answered upstream.
+    fn finish(self) -> bool {
+        self.0.into_inner().is_ok()
     }
 
     /// Write `s` and a newline: C's `put_line`.
-    pub(crate) fn line(self, s: &CStr) -> bool {
+    pub(crate) fn line(&mut self, s: &CStr) -> bool {
         self.puts(s) && self.eol()
     }
 
     /// Write a newline: C's `put_eol`.
-    pub(crate) fn eol(self) -> bool {
-        // SAFETY: the handle is open for writing, per `new`.
-        unsafe { putc(b'\n' as c_int, self.0) >= 0 }
+    pub(crate) fn eol(&mut self) -> bool {
+        self.put_bytes(b"\n")
     }
 
     /// Write a literal's bytes.
-    pub(crate) fn puts(self, s: &CStr) -> bool {
-        // SAFETY: as above; `s` is NUL-terminated by construction.
-        unsafe { fputs(s.as_ptr(), self.0) >= 0 }
+    pub(crate) fn puts(&mut self, s: &CStr) -> bool {
+        self.put_bytes(s.to_bytes())
     }
 
     /// Write formatted text. Every call site formats numbers into a literal
-    /// template, so the result is ASCII and holds no interior NUL; anything
-    /// carrying editor bytes uses [`Self::bytes`] instead.
-    pub(crate) fn write(self, args: fmt::Arguments<'_>) -> bool {
-        let mut text = args.to_string();
-        text.push('\0');
-        // SAFETY: as above; `text` is NUL-terminated and outlives the call.
-        unsafe { fputs(text.as_ptr().cast::<c_char>(), self.0) >= 0 }
+    /// template, so the result is ASCII; anything carrying editor bytes uses
+    /// [`Self::put_bytes`] instead.
+    pub(crate) fn write(&mut self, args: fmt::Arguments<'_>) -> bool {
+        self.0.write_fmt(args).is_ok()
     }
 
-    /// Write `bytes` verbatim -- the [`std::io::Write`] the option writers
-    /// render into.
-    pub(crate) fn put_bytes(self, bytes: &[u8]) -> bool {
-        // SAFETY: as above; `bytes` is live for the call, and `fwrite` reads
-        // exactly its length.
-        unsafe { ::libc::fwrite(bytes.as_ptr().cast(), 1, bytes.len(), self.0) == bytes.len() }
-    }
-
-    /// Write a C string's bytes verbatim.
-    ///
-    /// # Safety
-    /// `p` must be NUL-terminated.
-    pub(crate) unsafe fn bytes(self, p: *const c_char) -> bool {
-        // SAFETY: as above, plus the caller's contract on `p`.
-        unsafe { fputs(p, self.0) >= 0 }
+    /// Write `bytes` verbatim.
+    pub(crate) fn put_bytes(&mut self, bytes: &[u8]) -> bool {
+        self.0.write_all(bytes).is_ok()
     }
 }
 
-impl std::io::Write for SessionFile {
+/// The [`std::io::Write`] the option, mapping and fold writers render into.
+impl Write for SessionFile {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        if self.put_bytes(buf) {
-            Ok(buf.len())
-        } else {
-            Err(std::io::Error::other("write to the session file failed"))
-        }
+        self.0.write(buf)
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
-        Ok(())
+        self.0.flush()
     }
-}
-
-/// `put_eol()`, for the fold writer, which still takes a raw handle.
-///
-/// # Safety
-/// `fd` is open for writing.
-pub(crate) unsafe fn put_eol(fd: *mut FILE) -> Result<(), Failed> {
-    // SAFETY: caller contract.
-    if unsafe { putc(b'\n' as c_int, fd) } < 0 {
-        return Err(Failed);
-    }
-    Ok(())
-}
-
-/// `put_line()`: `s` followed by a newline.
-///
-/// # Safety
-/// `fd` is open for writing and `s` NUL-terminated.
-pub(crate) unsafe fn put_line(fd: *mut FILE, s: *mut c_char) -> Result<(), Failed> {
-    // SAFETY: caller contract.
-    if unsafe { fprintf!(fd, c"%s\n".as_ptr(), s) } < 0 {
-        return Err(Failed);
-    }
-    Ok(())
 }
 
 // -- File names ------------------------------------------------------------
@@ -267,82 +216,67 @@ pub(crate) unsafe fn put_line(fd: *mut FILE, s: *mut c_char) -> Result<(), Faile
 /// The short name is only usable when the working directory at the moment
 /// the session is sourced is known -- so not for a view, not under 'acd',
 /// and not once a `:lcd` has been written.
-fn ses_get_fname(buffer: Buf, opts: SessionOpts) -> *mut c_char {
-    if !buffer.name.short().is_none()
+fn ses_get_fname(buffer: Buf, opts: SessionOpts) -> Option<XString> {
+    let short = buffer.name.short();
+    let name = if short.is_some()
         && opts.is_session()
         && opts.has(kOptSsopFlagCurdir | kOptSsopFlagSesdir)
         && !p_acd()
         && !did_lcd.get()
     {
-        return buffer.name.short_ptr();
-    }
-    buffer.name.full_ptr()
+        short
+    } else {
+        buffer.name.full()
+    };
+    name.map(XString::from_cstr)
 }
 
 /// Write `buffer`'s name, and a newline when `add_eol`.
-fn ses_fname(out: SessionFile, buffer: Buf, opts: SessionOpts, add_eol: bool) -> bool {
-    let name = ses_get_fname(buffer, opts);
-    let put = unsafe { ses_put_fname(out, name) };
-    put && (!add_eol || out.eol())
+fn ses_fname(out: &mut SessionFile, buffer: Buf, opts: SessionOpts, add_eol: bool) -> bool {
+    let name = ses_get_fname(buffer, opts).unwrap_or_default();
+    ses_put_fname(out, name.as_cstr()) && (!add_eol || out.eol())
 }
 
 /// `name` with `$HOME` shortened to `~`, backslashes turned into forward
 /// slashes (the legacy `slash` flag is always on) and the characters a
-/// command line would eat escaped. Owned by the caller.
-///
-/// # Safety
-/// `name` is NUL-terminated.
-unsafe fn ses_escape_fname(name: *mut c_char) -> *mut c_char {
-    // SAFETY: caller contract; `home_replace_save` answers an owned,
-    // NUL-terminated copy, and `utfc_ptr2len` advances by a whole character
-    // so the scan never lands inside one.
-    let sname = unsafe { home_replace_save(None, name) };
-    let mut p = sname;
-    while unsafe { *p } != NUL as c_char {
-        if unsafe { *p } == b'\\' as c_char {
-            unsafe { *p = b'/' as c_char };
+/// command line would eat escaped.
+fn ses_escape_fname(name: &CStr) -> XString {
+    // Room for the name and "~/", as `home_replace_save` sized it.
+    let sname = home_replace_in(None, name, name.count_bytes() + 3, true);
+    let mut text = sname.to_vec();
+    // A character at a time, so the scan never lands inside one.
+    let mut at = 0;
+    while at < text.len() {
+        if text[at] == b'\\' {
+            text[at] = b'/';
         }
-        p = unsafe { p.offset(utfc_ptr2len(p) as isize) };
+        at += cluster_len(&text[at..]).max(1);
     }
-    let escaped = unsafe { vim_strsave_fnameescape(sname, VSE_NONE) };
-    unsafe { xfree(sname.cast::<c_void>()) };
-    escaped
+    let text = XString::from_vec(text);
+    fnameescape(text.as_cstr(), VSE_NONE)
 }
 
 /// Write `name` as an escaped file name.
-///
-/// # Safety
-/// `name` is NUL-terminated.
-unsafe fn ses_put_fname(out: SessionFile, name: *mut c_char) -> bool {
-    // SAFETY: caller contract; the escaped copy is NUL-terminated and freed
-    // here.
-    let p = unsafe { ses_escape_fname(name) };
-    let ok = unsafe { out.bytes(p) };
-    unsafe { xfree(p.cast::<c_void>()) };
-    ok
+fn ses_put_fname(out: &mut SessionFile, name: &CStr) -> bool {
+    out.put_bytes(&ses_escape_fname(name))
 }
 
 /// Write an argument list: the `cmd` that selects which one, `%argdel` to
-/// empty it, then one `$argadd` per entry. Entries with no name are skipped
-/// (which only happens out of memory).
-fn ses_arglist(out: SessionFile, cmd: &CStr, names: &[XString], fullname: bool) -> bool {
+/// empty it, then one `$argadd` per entry.
+fn ses_arglist(out: &mut SessionFile, cmd: &CStr, names: &[XString], fullname: bool) -> bool {
     if !out.puts(cmd) || !out.eol() || !out.line(c"%argdel") {
         return false;
     }
-    // SAFETY: each name is a NUL-terminated copy, only read.
     for name in names {
         let full_name;
-        let mut name = name.as_ptr().cast_mut();
+        let mut name = name.as_cstr();
         if fullname {
-            let full = vim_full_name(unsafe { cstr::at(name) }, MAXPATHL as usize, false)
-                .unwrap_or_else(|name| name);
-            full_name = cstr::owned(&full);
-            name = full_name.as_ptr().cast_mut();
+            let full = vim_full_name(name, MAXPATHL as usize, false).unwrap_or_else(|name| name);
+            full_name = XString::from_vec(full);
+            name = full_name.as_cstr();
         }
-        let escaped = unsafe { ses_escape_fname(name) };
-        let ok = out.puts(c"$argadd ") && unsafe { out.bytes(escaped) } && out.eol();
-        unsafe { xfree(escaped.cast::<c_void>()) };
-        if !ok {
+        let escaped = ses_escape_fname(name);
+        if !(out.puts(c"$argadd ") && out.put_bytes(&escaped) && out.eol()) {
             return false;
         }
     }
@@ -376,17 +310,14 @@ pub(crate) fn ses_do_win(win: Win) -> bool {
 
 /// `:loadview [nr]`.
 pub(crate) fn ex_loadview(excmd: &mut ExArg) {
-    // SAFETY: caller contract; `fname` is owned and NUL-terminated.
-    let fname = unsafe { get_view_file(excmd.line.byte_at(excmd.line.arg).cast_signed()) };
-    if fname.is_null() {
+    let Some(fname) = get_view_file(excmd.line.byte_at(excmd.line.arg)) else {
         return;
-    }
-    if do_source(unsafe { cstr::at(fname) }, false, DOSO_NONE, None) == FAIL {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let fname = unsafe { c_str(fname) };
+    };
+    // The name is this frame's own, which the view cannot reach.
+    if do_source(fname.as_cstr(), false, DOSO_NONE, None) == FAIL {
+        let fname = msg_cstr(fname.as_cstr());
         semsg!("E484: Can't open file {fname}");
     }
-    unsafe { xfree(fname.cast::<c_void>()) };
 }
 
 /// The name of the view file for the current buffer, in 'viewdir'.
@@ -398,23 +329,16 @@ pub(crate) fn ex_loadview(excmd: &mut ExArg) {
 /// **`.vim` lands past the terminator when `c` is NUL**, so the name on disk
 /// ends in `=`. Upstream does exactly this and `:loadview` calls the same
 /// function, so views round-trip; do not "fix" it, every existing 'viewdir'
-/// depends on it.
-///
-/// # Safety
-/// Main thread; `curbuf` is live.
-unsafe fn get_view_file(c: c_char) -> *mut c_char {
-    if Buf::current().name.full().is_none() {
+/// depends on it. The answer keeps those bytes; its C string stops at the
+/// NUL.
+fn get_view_file(c: u8) -> Option<XString> {
+    let Some(full) = Buf::current().name.full().map(XString::from_cstr) else {
         emsg(gettext(e_noname));
-        return ptr::null_mut();
-    }
-    // SAFETY: the current buffer's own file name, and `home_replace_save`
-    // answers an owned NUL-terminated string.
-    let sname = unsafe { home_replace_save(None, Buf::current().name.full_ptr()) };
+        return None;
+    };
+    let sname = home_replace_in(None, full.as_cstr(), full.len() + 3, true);
 
-    // SAFETY: 'viewdir' is a NUL-terminated option value.
-    let mut view = XString::from_bytes(p_vdir(|value| unsafe {
-        cstr::bytes_at(value.as_ptr().cast_mut())
-    }));
+    let mut view = XString::from_bytes(&P_VDIR.get());
     // `add_pathsep`, over the buffer just built.
     let terminated = after_pathsep(&view, view.len());
     if !view.is_empty() && !terminated {
@@ -423,8 +347,7 @@ unsafe fn get_view_file(c: c_char) -> *mut c_char {
 
     // Each `=` and each path separator doubles, so that the flattened name
     // can be turned back into a path.
-    // SAFETY: `sname` is the NUL-terminated name just built.
-    for &byte in unsafe { cstr::bytes_at(sname) } {
+    for &byte in sname.iter() {
         if byte == b'=' {
             view.push_str("==");
         } else if vim_ispathsep(c_int::from(byte)) {
@@ -434,17 +357,9 @@ unsafe fn get_view_file(c: c_char) -> *mut c_char {
         }
     }
     view.push_byte(b'=');
-    view.push_byte(byte_of(c));
+    view.push_byte(c);
     view.push_str(".vim");
-
-    // SAFETY: `sname`'s own allocation, released once.
-    unsafe { xfree(sname.cast::<c_void>()) };
-    view.into_raw()
-}
-
-/// A `c_char` as the byte it holds, whichever sign the platform gives it.
-fn byte_of(c: c_char) -> u8 {
-    c.cast_unsigned()
+    Some(view)
 }
 
 // -- `:mkexrc`, `:mkvimrc`, `:mkview`, `:mksession` ------------------------
@@ -454,7 +369,6 @@ fn byte_of(c: c_char) -> u8 {
 /// Two legacy 'sessionoptions'/'viewoptions' flags are always on: line
 /// endings are LF, and file names are written with `/`.
 pub(crate) fn ex_mkrc(excmd: &mut ExArg) {
-    // SAFETY: caller contract.
     let cmdidx = excmd.cmdidx;
     // `:mkview` and `:mksession` write a *state*; the other two write only
     // mappings and options.
@@ -464,82 +378,61 @@ pub(crate) fn ex_mkrc(excmd: &mut ExArg) {
     // not used when 'acd' is set, which is checked separately.
     did_lcd.set(false);
 
-    // ":mkview" or ":mkview 9": the name comes from 'viewdir'.
-    let mut view_file = ptr::null_mut::<c_char>();
     // A copy of the name: the command is lent on to the writer with it.
-    let mut name = excmd.line.arg().to_vec();
-    name.push(0);
-    // SAFETY: `arg` is that NUL-terminated copy, alive to the end of the
-    // command.
-    let fname = unsafe {
-        let arg = name.as_mut_ptr().cast::<c_char>();
-        if cmdidx == CmdIdx::mkview
-            && (*arg == NUL as c_char
-                || (ascii_isdigit(*arg as c_int) && *arg.offset(1) == NUL as c_char))
-        {
-            excmd.forceit = true;
-            view_file = get_view_file(*arg);
-            if view_file.is_null() {
-                return;
-            }
-            // The 'viewdir' may still need creating.
-            let vdir = P_VDIR.get();
-            if !os_isdir(vdir.as_ptr().cast_mut()) {
-                let _ = vim_mkdir_emsg(vdir.as_cstr(), 0o755);
-            }
-            view_file
-        } else if *arg != NUL as c_char {
-            arg
-        } else if cmdidx == CmdIdx::mkvimrc {
-            VIMRC_FILE.as_ptr().cast_mut()
-        } else if cmdidx == CmdIdx::mksession {
-            SESSION_FILE.as_ptr().cast_mut()
-        } else {
-            EXRC_FILE.as_ptr().cast_mut()
+    let arg = excmd.line.arg().to_vec();
+    let first = arg.first().copied().unwrap_or(0);
+    // ":mkview" or ":mkview 9": the name comes from 'viewdir'.
+    let using_vdir =
+        cmdidx == CmdIdx::mkview && (arg.is_empty() || (first.is_ascii_digit() && arg.len() == 1));
+    let fname = if using_vdir {
+        excmd.forceit = true;
+        let Some(view_file) = get_view_file(first) else {
+            return;
+        };
+        // The 'viewdir' may still need creating.
+        let vdir = P_VDIR.get();
+        if !dir_exists(vdir.as_cstr()) {
+            let _ = vim_mkdir_emsg(vdir.as_cstr(), 0o755);
         }
+        view_file
+    } else if !arg.is_empty() {
+        XString::from_vec(arg)
+    } else if cmdidx == CmdIdx::mkvimrc {
+        XString::from_cstr(VIMRC_FILE)
+    } else if cmdidx == CmdIdx::mksession {
+        XString::from_cstr(SESSION_FILE)
+    } else {
+        XString::from_cstr(EXRC_FILE)
     };
-    let using_vdir = !view_file.is_null();
+    let fname = fname.as_cstr();
 
-    // SAFETY: `fname` is NUL-terminated, and `fd` is used only while open.
-    if let Some(file) = open_exfile(
-        unsafe { CStr::from_ptr(fname) },
-        c_int::from(excmd.forceit),
-        c"wb",
-    ) {
-        let out = unsafe { SessionFile::new(file.as_ptr()) };
-        let failed = unsafe { write_rc(out, excmd, fname, view_session, using_vdir) };
+    if let Some(file) = create_exfile(fname, excmd.forceit) {
+        let mut out = SessionFile::new(file);
+        let failed = write_rc(&mut out, excmd, fname, view_session, using_vdir);
         // The close answers a write error the buffering hid, and must run
         // whether or not anything failed above.
-        let close_failed = !file.close();
+        let close_failed = !out.finish();
         if failed || close_failed {
             emsg(gettext(e_write));
         } else if cmdidx == CmdIdx::mksession {
             // A successful session write sets v:this_session.
-            // SAFETY: the session file's NUL-terminated name.
-            if let Ok(full) = vim_full_name(unsafe { cstr::at(fname) }, MAXPATHL as usize, false) {
+            if let Ok(full) = vim_full_name(fname, MAXPATHL as usize, false) {
                 set_vim_var_string(Vv::ThisSession, Some(&full));
             }
         }
     }
-    unsafe { xfree(view_file.cast::<c_void>()) };
-    let (none, post) = (ptr::null_mut(), AutoEvent::SessionWritePost);
-    unsafe { apply_autocmds(post, none, none, false, Buf::current_or_none()) };
+    fire_autocmds(AutoEvent::SessionWritePost, false, Buf::current_or_none());
 }
 
 /// The body of [`ex_mkrc`] once the file is open: answers whether anything
 /// failed. The trailing modeline is written either way, as upstream does.
-///
-/// # Safety
-/// `excmd` is the current Ex command and `fname` the name `out` was opened
-/// under.
-unsafe fn write_rc(
-    out: SessionFile,
+fn write_rc(
+    out: &mut SessionFile,
     excmd: &mut ExArg,
-    fname: *mut c_char,
+    fname: &CStr,
     view_session: bool,
     using_vdir: bool,
 ) -> bool {
-    // SAFETY: caller contract.
     let cmdidx = excmd.cmdidx;
     let opts = if cmdidx == CmdIdx::mkview {
         SessionOpts::View
@@ -563,8 +456,7 @@ unsafe fn write_rc(
         if cmdidx == CmdIdx::mksession && opts.has(kOptSsopFlagSkiprtp) {
             flags |= OptionSetFlags::SKIPRTP;
         }
-        let mut writer = out;
-        failed |= makemap(&mut writer, None).is_err() || makeset(&mut writer, flags, 0).is_err();
+        failed |= makemap(out, None).is_err() || makeset(out, flags, 0).is_err();
     }
 
     if !failed && view_session {
@@ -574,8 +466,7 @@ unsafe fn write_rc(
             failed = true;
         }
         if cmdidx == CmdIdx::mksession {
-            // SAFETY: `fname` is NUL-terminated.
-            failed |= unsafe { !write_session(out, fname) };
+            failed |= !write_session(out, fname);
         } else {
             let (win, tab) = (Win::current(), TabPage::current());
             failed |= !put_view(out, win, tab, !using_vdir, opts, -1);
@@ -604,39 +495,36 @@ unsafe fn write_rc(
 
 /// `:mksession`'s body: change to whatever directory the file names should
 /// be relative to, write the session, and change back.
-///
-/// # Safety
-/// `fname` is the NUL-terminated name of the session file.
-unsafe fn write_session(out: SessionFile, fname: *mut c_char) -> bool {
-    // SAFETY: `dirnow` is our own MAXPATHL buffer, and `fname` is the
-    // caller's.
-    let dirnow = unsafe { xmalloc(MAXPATHL as size_t) }.cast::<c_char>();
-    if unsafe { os_dirname(dirnow, MAXPATHL as size_t) }.is_err()
-        || unsafe { os_chdir(cstr::at(dirnow)) } != 0
-    {
-        unsafe { *dirnow = NUL as c_char };
-    }
-    let known = unsafe { *dirnow } != NUL as c_char;
+fn write_session(out: &mut SessionFile, fname: &CStr) -> bool {
+    // The directory to come back to; empty when it cannot be known (or
+    // cannot be gone back to).
+    let dirnow = dirname_within(MAXPATHL as usize)
+        .ok()
+        .filter(|dir| crate::cstr::with_terminated(dir, os_chdir) == 0)
+        .map_or_else(XString::new, XString::from_vec);
+    let known = !dirnow.is_empty();
+    let globaldir = own_dir(DirOwner::Global);
     let to_sesdir = known && ssop_flags.get() & kOptSsopFlagSesdir != 0;
-    let to_globaldir =
-        known && ssop_flags.get() & kOptSsopFlagCurdir != 0 && !globaldir.get().is_null();
+    let to_globaldir = known && ssop_flags.get() & kOptSsopFlagCurdir != 0 && globaldir.is_some();
     if to_sesdir {
-        if vim_chdirfile(unsafe { cstr::at(fname) }, flag::kCdCauseOther).is_ok() {
+        if vim_chdirfile(fname, flag::kCdCauseOther).is_ok() {
             shorten_fnames(1);
         }
-    } else if to_globaldir && unsafe { os_chdir(cstr::at(globaldir.get())) } == 0 {
+    } else if to_globaldir
+        && let Some(dir) = &globaldir
+        && os_chdir(dir.as_cstr()) == 0
+    {
         shorten_fnames(1);
     }
 
-    let ok = unsafe { makeopens(out, dirnow) };
+    let ok = makeopens(out, &dirnow);
 
     // Restore the original directory.
     if to_sesdir || to_globaldir {
-        if unsafe { os_chdir(cstr::at(dirnow)) } != 0 {
+        if os_chdir(dirnow.as_cstr()) != 0 {
             emsg(gettext(e_prev_dir));
         }
         shorten_fnames(1);
     }
-    unsafe { xfree(dirnow.cast::<c_void>()) };
     ok
 }

@@ -22,8 +22,7 @@
 //!
 //! Original: `src/nvim/ex_session.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::flag::{FR_COL, FR_LEAF};
 use super::view::put_view;
@@ -31,20 +30,19 @@ use super::{
     SessionFile, SessionOpts, did_lcd, ses_arglist, ses_do_win, ses_escape_fname, ses_fname,
     ses_put_fname,
 };
+use crate::buffer::first_wininfo_lnum;
 use crate::buffer::{buf_is_help, buf_is_nofilename, buf_is_terminal};
 use crate::eval::typval::NumBuf;
 use crate::eval::var_flavour;
 use crate::eval::vars::globvar_dict;
-use crate::fprintf;
-use crate::memory::{XString, xfree};
+use crate::memory::XString;
 use crate::option::vars::{p_shm, p_stal, p_wh, p_wiw};
 use crate::options::{
     kOptSsopFlagBuffers, kOptSsopFlagCurdir, kOptSsopFlagGlobals, kOptSsopFlagHelp,
     kOptSsopFlagOptions, kOptSsopFlagResize, kOptSsopFlagSesdir, kOptSsopFlagTabpages,
     kOptSsopFlagTerminal, kOptSsopFlagWinsize,
 };
-use crate::os::env::home_replace_save;
-use crate::os::state::globaldir;
+use crate::os::env::home_replace_in;
 use crate::strings::escaped_bytes;
 use crate::types::ArgListId;
 use crate::types::{
@@ -52,22 +50,19 @@ use crate::types::{
 };
 use crate::ui::state::{Columns, Rows};
 use crate::window::tab_index;
+use crate::window::{DirOwner, own_dir};
 use crate::winlayer::graph::firstwin;
 use crate::winlayer::{
     FrameRef, TabPage, Win, WinId, buffers, current_topframe, first_tab, tabs, windows_in_tab,
 };
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::CStr;
 use core::ptr;
 
 /// Write everything that restores the current editor state.
 ///
 /// `dirnow` is the working directory as it was before [`super::ex_mkrc`]
-/// changed into the session file's own directory.
-///
-/// # Safety
-/// Main thread; the buffer, window and tab page lists are live. `dirnow` is
-/// NUL-terminated.
-pub(crate) unsafe fn makeopens(out: SessionFile, dirnow: *mut c_char) -> bool {
+/// changed into the session file's own directory, empty when unknown.
+pub(crate) fn makeopens(out: &mut SessionFile, dirnow: &XString) -> bool {
     let opts = SessionOpts::Session;
     // "buffers" means save every buffer, not only the ones in a window.
     let only_save_windows = !opts.has(kOptSsopFlagBuffers);
@@ -77,7 +72,6 @@ pub(crate) unsafe fn makeopens(out: SessionFile, dirnow: *mut c_char) -> bool {
     {
         return false;
     }
-    // SAFETY: the global variable dict is live on the main thread.
     if opts.has(kOptSsopFlagGlobals) && !store_session_globals(out) {
         return false;
     }
@@ -91,8 +85,7 @@ pub(crate) unsafe fn makeopens(out: SessionFile, dirnow: *mut c_char) -> bool {
     }
 
     // Then a :cd to the session directory or to the current one.
-    // SAFETY: `dirnow` and `globaldir` are NUL-terminated.
-    if !unsafe { put_cd(out, dirnow) } {
+    if !put_cd(out, dirnow) {
         return false;
     }
 
@@ -113,7 +106,6 @@ pub(crate) unsafe fn makeopens(out: SessionFile, dirnow: *mut c_char) -> bool {
 
     // Put every buffer into the buffer list, very early, so that loading the
     // session cannot disturb their order.
-    // SAFETY: the buffer list is live.
     if !put_buffer_list(out, only_save_windows) {
         return false;
     }
@@ -143,8 +135,8 @@ pub(crate) unsafe fn makeopens(out: SessionFile, dirnow: *mut c_char) -> bool {
     // Whether the tab pass pinned 'winminheight'/'winminwidth', which the
     // epilogue then has to put back.
     let mut restore_height_width = false;
-    // SAFETY: the tab page and window lists are live; `put_tabs` runs no
-    // Vimscript, so nothing can change them under it.
+    // `put_tabs` runs no Vimscript, so nothing can change the tab page and
+    // window lists under it.
     if !put_tabs(out, &mut restore_height_width) {
         return false;
     }
@@ -177,10 +169,9 @@ pub(crate) unsafe fn makeopens(out: SessionFile, dirnow: *mut c_char) -> bool {
 
     // Restore 'shortmess'.
     if opts.has(kOptSsopFlagOptions) {
-        // SAFETY: 'shortmess' is a NUL-terminated option string, and its
-        // bytes go out verbatim.
+        // 'shortmess''s bytes go out verbatim.
         if !out.puts(c"set shortmess=")
-            || !p_shm(|value| unsafe { out.bytes(value.as_ptr().cast_mut()) })
+            || !p_shm(|value| out.put_bytes(value.to_bytes()))
             || !out.eol()
         {
             return false;
@@ -203,10 +194,7 @@ pub(crate) unsafe fn makeopens(out: SessionFile, dirnow: *mut c_char) -> bool {
 }
 
 /// The `:cd` that fixes what relative file names below are relative to.
-///
-/// # Safety
-/// `dirnow` is NUL-terminated.
-unsafe fn put_cd(out: SessionFile, dirnow: *mut c_char) -> bool {
+fn put_cd(out: &mut SessionFile, dirnow: &XString) -> bool {
     let opts = SessionOpts::Session;
     if opts.has(kOptSsopFlagSesdir) {
         return out.line(c"exe \"cd \" . escape(expand(\"<sfile>:p:h\"), ' ')");
@@ -214,24 +202,16 @@ unsafe fn put_cd(out: SessionFile, dirnow: *mut c_char) -> bool {
     if !opts.has(kOptSsopFlagCurdir) {
         return true;
     }
-    // SAFETY: caller contract; both copies are owned and freed here.
-    let dir = if globaldir.get().is_null() {
-        dirnow
-    } else {
-        globaldir.get()
-    };
-    let sname = unsafe { home_replace_save(None, dir) };
-    let fname_esc = unsafe { ses_escape_fname(sname) };
-    let ok = out.puts(c"cd ") && unsafe { out.bytes(fname_esc) } && out.eol();
-    unsafe { xfree(fname_esc.cast::<c_void>()) };
-    unsafe { xfree(sname.cast::<c_void>()) };
-    ok
+    let globaldir = own_dir(DirOwner::Global);
+    let dir: &CStr = globaldir.as_ref().unwrap_or(dirnow).as_cstr();
+    let sname = home_replace_in(None, dir, dir.count_bytes() + 3, true);
+    let fname_esc = ses_escape_fname(sname.as_cstr());
+    out.puts(c"cd ") && out.put_bytes(&fname_esc) && out.eol()
 }
 
 /// One `badd +<lnum> <name>` per buffer worth restoring.
-fn put_buffer_list(out: SessionFile, only_save_windows: bool) -> bool {
+fn put_buffer_list(out: &mut SessionFile, only_save_windows: bool) -> bool {
     let opts = SessionOpts::Session;
-    // SAFETY: caller contract; each buffer's window info is its own kvec.
     for buf in buffers() {
         let wanted = !(only_save_windows && buf.b_nwindows == 0)
             && !(buf.b_help && !opts.has(kOptSsopFlagHelp))
@@ -239,11 +219,7 @@ fn put_buffer_list(out: SessionFile, only_save_windows: bool) -> bool {
             && !buf.name.is_unnamed()
             && buf.b_p_bl != 0;
         if wanted {
-            let lnum = if buf.b_wininfo.size == 0 {
-                1 as int64_t
-            } else {
-                unsafe { (**buf.b_wininfo.items).wi_mark.mark.lnum as int64_t }
-            };
+            let lnum = first_wininfo_lnum(buf).map_or(1, int64_t::from);
             if !out.write(format_args!("badd +{lnum} ")) || !ses_fname(out, buf, opts, true) {
                 return false;
             }
@@ -255,7 +231,7 @@ fn put_buffer_list(out: SessionFile, only_save_windows: bool) -> bool {
 /// The per-tab-page pass: the window layout, the sizes, and one
 /// [`put_view`] per window. When "tabpages" is not in 'sessionoptions' this
 /// does the current tab page only.
-fn put_tabs(out: SessionFile, restore_height_width: &mut bool) -> bool {
+fn put_tabs(out: &mut SessionFile, restore_height_width: &mut bool) -> bool {
     let opts = SessionOpts::Session;
     let with_tabs = opts.has(kOptSsopFlagTabpages);
 
@@ -281,8 +257,8 @@ fn put_tabs(out: SessionFile, restore_height_width: &mut bool) -> bool {
     // `put_view` need not do it again.
     let mut edited_win = ptr::null_mut::<Window>();
 
-    // SAFETY: caller contract; nothing here runs Vimscript, so the lists
-    // cannot change under the walk.
+    // Nothing here runs Vimscript, so the lists cannot change under the
+    // walk.
     let mut next = first_tab();
     while let Some(mut tab) = next {
         let mut need_tabnext = false;
@@ -383,8 +359,10 @@ fn put_tabs(out: SessionFile, restore_height_width: &mut bool) -> bool {
 
         // The tab-local working directory goes before the windows, so a
         // window-local one can override it.
-        if opts.has(kOptSsopFlagCurdir) && !tab.tp_localdir.is_null() {
-            if !out.puts(c"tcd ") || !unsafe { ses_put_fname(out, tab.tp_localdir) } || !out.eol() {
+        if opts.has(kOptSsopFlagCurdir)
+            && let Some(localdir) = own_dir(DirOwner::TabPage(tab))
+        {
+            if !out.puts(c"tcd ") || !ses_put_fname(out, localdir.as_cstr()) || !out.eol() {
                 return false;
             }
             did_lcd.set(true);
@@ -436,7 +414,7 @@ fn put_tabs(out: SessionFile, restore_height_width: &mut bool) -> bool {
 /// The window sizes for one tab page, as arithmetic against `&lines` and
 /// `&columns`. When a window was omitted the numbers would not add up, so
 /// the sizes are just equalised instead.
-fn ses_winsizes(out: SessionFile, restore_size: bool, tab: TabPage) -> bool {
+fn ses_winsizes(out: &mut SessionFile, restore_size: bool, tab: TabPage) -> bool {
     if !restore_size || !SessionOpts::Session.has(kOptSsopFlagWinsize) {
         return out.line(c"wincmd =");
     }
@@ -475,7 +453,7 @@ fn ses_winsizes(out: SessionFile, restore_size: bool, tab: TabPage) -> bool {
 
 /// Write the splits that recreate the windows of frame `fr`, recursively.
 /// Afterwards the last window in the frame is the current one.
-fn ses_win_rec(out: SessionFile, fr: FrameRef) -> bool {
+fn ses_win_rec(out: &mut SessionFile, fr: FrameRef) -> bool {
     if fr.fr_layout == FR_LEAF {
         return true;
     }
@@ -540,29 +518,22 @@ fn ses_do_frame(fr: FrameRef) -> bool {
 /// Write the `g:` variables 'sessionoptions' calls sessionable: the Number,
 /// String and Float ones whose name says they belong in a session (an
 /// uppercase first letter and a lowercase one after it).
-fn store_session_globals(out: SessionFile) -> bool {
+fn store_session_globals(out: &mut SessionFile) -> bool {
     let globals = globvar_dict();
     for item in globals.edit().items_mut() {
-        let key = item.di_key.as_ptr();
+        let key = item.di_key.bytes();
         let kind = item.di_tv.v_type();
-        let sessionable = var_flavour(item.di_key.bytes()) == VAR_FLAVOUR_SESSION;
+        let sessionable = var_flavour(key) == VAR_FLAVOUR_SESSION;
         if (kind == VAR_NUMBER || kind == VAR_STRING) && sessionable {
-            // SAFETY: the session file, and the item's own key and value.
-            if !unsafe { put_session_global(out, key, kind, &mut item.di_tv) } {
+            if !put_session_global(out, key, kind, &mut item.di_tv) {
                 return false;
             }
         } else if kind == VAR_FLOAT && sessionable {
             let f = item.di_tv.float_or_zero();
-            let sign = if f < 0.0 { b'-' } else { b' ' } as c_int;
-            if unsafe {
-                fprintf!(
-                    out.raw(),
-                    c"let %s = %c%f".as_ptr(),
-                    key,
-                    sign,
-                    if f < 0.0 { -f } else { f },
-                )
-            } < 0
+            let (sign, magnitude) = if f < 0.0 { ('-', -f) } else { (' ', f) };
+            if !out.puts(c"let ")
+                || !out.put_bytes(key)
+                || !out.write(format_args!(" = {sign}{}", printf_f(magnitude)))
                 || !out.eol()
             {
                 return false;
@@ -572,18 +543,27 @@ fn store_session_globals(out: SessionFile) -> bool {
     true
 }
 
+/// `value` as C's `printf("%f")` writes it: six decimals, and `inf` and
+/// `nan` spelled in lower case, with the sign a negative NaN carries.
+fn printf_f(value: f64) -> String {
+    if value.is_nan() {
+        return if value.is_sign_negative() {
+            "-nan"
+        } else {
+            "nan"
+        }
+        .to_owned();
+    }
+    if value.is_infinite() {
+        return if value < 0.0 { "-inf" } else { "inf" }.to_owned();
+    }
+    format!("{value:.6}")
+}
+
 /// `let <name> = <value>` for one Number or String global. The value is
 /// escaped so that the script reads it back unchanged: backslash, quote, and
 /// a literal LF or CR turned into `\n`/`\r`.
-///
-/// # Safety
-/// `key` is NUL-terminated and `tv` a Number or String.
-unsafe fn put_session_global(
-    out: SessionFile,
-    key: *const c_char,
-    kind: VarType,
-    tv: &mut TypVal,
-) -> bool {
+fn put_session_global(out: &mut SessionFile, key: &[u8], kind: VarType, tv: &mut TypVal) -> bool {
     let mut numbuf = NumBuf::new();
     let mut escaped = escaped_bytes(numbuf.string(tv).to_bytes(), b"\\\"\n\r").into_vec();
     escaped.pop(); // the terminator
@@ -594,15 +574,13 @@ unsafe fn put_session_global(
             _ => {}
         }
     }
-    let escaped = XString::from_vec(escaped);
     // A String is quoted; a Number is surrounded by spaces instead.
     let quote = if kind == VAR_STRING { c"\"" } else { c" " };
-    let ok = out.puts(c"let ")
-        && unsafe { out.bytes(key) }
+    out.puts(c"let ")
+        && out.put_bytes(key)
         && out.puts(c" = ")
         && out.puts(quote)
-        && out.puts(escaped.as_cstr())
+        && out.put_bytes(&escaped)
         && out.puts(quote)
-        && out.eol();
-    ok
+        && out.eol()
 }

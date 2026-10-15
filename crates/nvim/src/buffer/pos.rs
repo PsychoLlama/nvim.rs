@@ -407,6 +407,16 @@ pub fn get_winopts(mut buffer: Buf) {
     didset_options(cur);
 }
 
+/// The line of `buffer`'s most recently remembered position -- the front of
+/// its window list, whichever window that was -- or `None` when no window
+/// remembers one. What `:mksession`'s `badd +N` writes.
+pub(crate) fn first_wininfo_lnum(mut buffer: Buf) -> Option<LineNr> {
+    WinInfos::of(&mut buffer)
+        .entries()
+        .first()
+        .map(|entry| entry.wi_mark.mark.lnum)
+}
+
 /// The mark for `buffer` in the current window, or a pointer to `no_position`
 /// when there is none.
 /// Where [`buflist_findfmark`] says `buffer` was last left in the current

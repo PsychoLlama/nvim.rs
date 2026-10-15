@@ -191,10 +191,6 @@ ex_getln/	ex_getln/incsearch.rs	1	32	3	14	deref:11 ref:2 compound:1	-	-	vim_strc
 ex_getln/	ex_getln/prompt.rs	1	10	0	8	-	-	-	bytes_at:2 .as_ref:1 .offset:1 ThinCString::from_raw:1 dict_get_callback:1 slice_at:1 strrchr:1
 ex_getln/	ex_getln/uiext.rs	1	12	0	10	deref:1 expr:1	-	-	cstr_to_string:4 .add:1 .copy_from_nonoverlapping:1 .offset:1 String_0::from_owned_parts:1 from_raw_parts:1 xmallocz:1
 ex_getln/	ex_getln/wildchar.rs	1	31	1	3	deref:27 expr:1	other:1	-	.offset:2 Cls::new:1
-ex_session/	*	3	82	12	53	deref:9 expr:6 compound:1	str:9 other:3	str:3 other:1	xfree:10 at:4 fprintf:3 home_replace_save:3 os_chdir:3 bytes_at:2 .offset:1 CStr::from_ptr:1
-ex_session/	ex_session/mod.rs	1	59	9	36	expr:6 deref:5 compound:1	str:6 other:3	str:3 other:1	xfree:7 at:4 os_chdir:3 bytes_at:2 home_replace_save:2 .offset:1 CStr::from_ptr:1 apply_autocmds:1
-ex_session/	ex_session/session.rs	1	14	3	11	deref:1	str:3	-	xfree:2 fprintf:1 home_replace_save:1
-ex_session/	ex_session/view.rs	1	9	0	6	deref:3	-	-	fprintf:1 put_folds:1 xfree:1
 extmark/	*	2	9	1	3	ref:3 expr:2 deref:1	other:5	other:1	decor_free:1 marktree_clear:1 xrealloc:1
 extmark/	extmark/mod.rs	1	9	0	3	ref:3 expr:2 deref:1	other:3	other:1	decor_free:1 marktree_clear:1 xrealloc:1
 extmark/	extmark/undo.rs	1	0	1	0	-	other:2	-	-
@@ -209,7 +205,7 @@ fileio/	fileio/read/tail.rs	1	3	2	3	-	str:2	-	apply_autocmds:1 apply_autocmds_ex
 fileio/	fileio/report.rs	1	9	1	9	-	str:5	-	.offset:2 snprintf:2 at:1 bytes_at:1
 fileio/	fileio/tempfile.rs	1	16	1	15	expr:1	str:1	str:4	os_isdir:3 memchrsub:2 umask:2 CStr::from_ptr:1 at:1 expand_env:1 os_env_exists:1 os_get_username:1
 fileio/	fileio/timestamp.rs	1	26	3	22	expr:4	other:1	-	apply_autocmds:2 c_str:2 snprintf:2 CStr::from_ptr:1 aucmd_prepbuf:1 aucmd_restbuf:1 buflist_new:1 bytes_at:1
-fold/	*	9	168	18	96	deref:44 expr:7 compound:3 ref:2	other:11 str:2	other:4 str:1	ga_grow:7 bytes_at:6 copy:6 fprintf:4 put_eol:4 ga_init:3 put_line:3 ml_replace_buf_len:2
+fold/	*	8	149	14	79	deref:44 expr:7 compound:3 ref:2	other:7 str:2	other:4 str:1	ga_grow:7 bytes_at:6 copy:6 ga_init:3 ml_replace_buf_len:2 slice_at:2 utfc_ptr2len:2 xfree:2
 fold/	fold/adjust.rs	1	16	5	15	ref:1	other:1	-	ga_grow:3 copy:1 ga_init:1 swap:1
 fold/	fold/builtins.rs	1	12	0	10	expr:2	-	-	bytes_at:2 XString::from_raw:1 clear_virttext:1 next_virt_text_chunk:1 snprintf:1
 fold/	fold/level.rs	1	9	0	8	expr:1	-	-	-
@@ -217,7 +213,6 @@ fold/	fold/list.rs	1	33	2	2	deref:31	other:2	other:4	-
 fold/	fold/marker.rs	1	29	0	11	deref:8 expr:3	-	-	bytes_at:3 ml_replace_buf_len:2 slice_at:2 .offset_from:1 skip_comment:1 vim_strchr:1
 fold/	fold/mod.rs	1	21	3	15	compound:1 expr:1 ref:1	other:3	-	copy:3 ga_grow:2 ga_clear:1 ga_init:1 xfree:1
 fold/	fold/open_close.rs	1	9	2	8	deref:1	-	-	copy:2 ga_grow:2 ga_init:1
-fold/	fold/session.rs	1	19	4	17	-	other:4	-	fprintf:4 put_eol:4 put_line:3
 fold/	fold/text.rs	1	20	2	10	deref:4 compound:2	str:2 other:1	str:1	utfc_ptr2len:2 bytes_at:1 prefix_eq:1 ptr2cells:1 skipwhite:1 strstr:1 transstr:1 vim_isprintc:1
 garray.rs	*	1	42	16	29	ref:11 deref:1 expr:1	other:11 str:4 pp_str:2	str:2 void:1	xfree:5 CStr::from_ptr:2 from_raw_parts_mut:2 copy_nonoverlapping:1 from_raw_parts:1 path_fnamecmp:1 sort_strings:1 write_bytes:1
 garray.rs	garray.rs	1	42	16	29	ref:11 deref:1 expr:1	other:11 str:4 pp_str:2	str:2 void:1	xfree:5 CStr::from_ptr:2 from_raw_parts_mut:2 copy_nonoverlapping:1 from_raw_parts:1 path_fnamecmp:1 sort_strings:1 write_bytes:1

@@ -447,25 +447,55 @@ pub fn vim_mkdir_emsg(name: &CStr, prot: c_int) -> Result<(), Failed> {
     Ok(())
 }
 
-/// Open the file `:mkvimrc` and friends are about to write.
+/// Whether `:mkvimrc` and friends may write `fname`: not a directory, and
+/// -- unless appending, or with the command's `!` -- not a file that exists.
+/// Says why not.
+fn exfile_writable(fname: &CStr, forceit: bool, appending: bool) -> bool {
+    if dir_exists(fname) {
+        let fname = msg_cstr(fname);
+        semsg!("E17: \"{fname}\" is a directory");
+        return false;
+    }
+    if !forceit && !appending && path_exists(fname) {
+        let fname = msg_cstr(fname);
+        semsg!("E189: \"{fname}\" exists (add ! to override)");
+        return false;
+    }
+    true
+}
+
+/// "E190", for a file that would not open.
+fn cannot_open_exfile(fname: &CStr) {
+    let fname = msg_cstr(fname);
+    semsg!("E190: Cannot open \"{fname}\" for writing");
+}
+
+/// Open the file `:redir` is about to write.
 ///
 /// Appending is always allowed; creating over an existing file needs the
 /// command's `!`.
 pub fn open_exfile(fname: &CStr, forceit: c_int, mode: &CStr) -> Option<CFile> {
-    if dir_exists(fname) {
-        let fname = msg_cstr(fname);
-        semsg!("E17: \"{fname}\" is a directory");
-        return None;
-    }
-    if forceit == 0 && mode.to_bytes().first() != Some(&b'a') && path_exists(fname) {
-        let fname = msg_cstr(fname);
-        semsg!("E189: \"{fname}\" exists (add ! to override)");
+    if !exfile_writable(fname, forceit != 0, mode.to_bytes().first() == Some(&b'a')) {
         return None;
     }
     let file = CFile::open(fname, mode);
     if file.is_none() {
-        let fname = msg_cstr(fname);
-        semsg!("E190: Cannot open \"{fname}\" for writing");
+        cannot_open_exfile(fname);
+    }
+    file
+}
+
+/// Create the file `:mkvimrc`, `:mkview` and `:mksession` write, truncating
+/// one that exists (which needs the command's `!`) -- upstream's
+/// `open_exfile(.., "wb")`.
+pub(crate) fn create_exfile(fname: &CStr, forceit: bool) -> Option<std::fs::File> {
+    if !exfile_writable(fname, forceit, false) {
+        return None;
+    }
+    use std::os::unix::ffi::OsStrExt;
+    let file = std::fs::File::create(std::ffi::OsStr::from_bytes(fname.to_bytes())).ok();
+    if file.is_none() {
+        cannot_open_exfile(fname);
     }
     file
 }
