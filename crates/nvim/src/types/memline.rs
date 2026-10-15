@@ -388,7 +388,7 @@ impl MemLine {
     /// # Panics
     /// When the memline is closed: every caller has just checked.
     #[inline]
-    pub(crate) fn mfp(&mut self) -> &mut MemFile {
+    pub(crate) fn memfile(&mut self) -> &mut MemFile {
         self.ml_mfp.as_deref_mut().expect("an open memline")
     }
 
@@ -480,20 +480,19 @@ impl MemLine {
         self.ml_line.offset = offset;
     }
 
-    /// Cache a line that lives *inside* data block `id`, `start` bytes in,
-    /// so nothing here owns it.
-    pub(crate) fn cache_block_line(
-        &mut self,
-        id: BlockId,
-        start: u32,
-        textlen: ColNr,
-        lnum: LineNr,
-    ) {
+    /// Cache line `idx` of data block `id` as line `lnum`: a line that
+    /// lives *inside* the block, so nothing here owns it.
+    pub(crate) fn cache_block_line(&mut self, id: BlockId, idx: usize, lnum: LineNr) {
         let page = self
             .ml_mfp
             .as_deref_mut()
             .expect("an open memline")
             .page_mut(id);
+        let data = crate::memline::DataBlock(&*page);
+        let start = data.line_start(idx);
+        // The text ends where the previous line starts; the first line of
+        // the block ends at the end of the block.
+        let textlen = data.line_end(idx).wrapping_sub(start).cast_signed();
         let text = page[start as usize..].as_mut_ptr().cast();
         self.ml_line.lnum = lnum;
         self.ml_line.text = CachedText::Block { id, start, text };
@@ -859,10 +858,15 @@ mod tests {
     fn a_block_line_is_not_owned_and_a_replacement_is() {
         let mut ml = MemLine::closed();
         ml.ml_mfp = Some(MemFile::in_memory());
-        let id = ml.mfp().new_block(false, 1);
-        ml.mfp().page_mut(id)[100..106].copy_from_slice(b"hello\0");
+        let id = ml.memfile().new_block(false, 1);
+        // One line, "hello", at offset 100 of a data block that ends at 106.
+        let mut data = crate::memline::DataBlock(ml.memfile().page_mut(id));
+        data.init();
+        data.set_txt_end(106);
+        data.set_index(0, 100);
+        data.write(100, b"hello\0");
 
-        ml.cache_block_line(id, 100, 6, 3);
+        ml.cache_block_line(id, 0, 3);
         assert_eq!(ml.cached_lnum(), 3);
         assert_eq!(ml.cached_bytes(), b"hello");
         assert_eq!(ml.cached_len(), 6);
@@ -870,7 +874,10 @@ mod tests {
         assert!(ml.take_replacement().is_none());
         // The pointer form reads the same bytes, in the page.
         let text = ml.cached_text();
-        assert_eq!(text.cast::<u8>(), ml.mfp().page_mut(id)[100..].as_mut_ptr());
+        assert_eq!(
+            text.cast::<u8>(),
+            ml.memfile().page_mut(id)[100..].as_mut_ptr()
+        );
 
         ml.cache_replacement(b"bye\0".to_vec(), 3);
         assert!(ml.line_is_dirty());

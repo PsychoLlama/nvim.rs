@@ -157,11 +157,11 @@ pub(crate) fn ml_append_int(
 fn ml_insert_in_block(mut b: Buf, id: BlockId, at: InsertAt, new: &NewLine, space_needed: int64_t) {
     let InsertAt { db_idx, line_count } = at;
     let len = new.len();
-    let mut dp = DataBlock(b.b_ml.page_mut(id));
-    let txt_start = dp.txt_start().wrapping_sub(len);
-    dp.set_txt_start(txt_start);
-    dp.set_free(dp.free().wrapping_sub(space_needed as c_uint));
-    dp.set_line_count(dp.line_count() + 1);
+    let mut data = DataBlock(b.b_ml.page_mut(id));
+    let txt_start = data.txt_start().wrapping_sub(len);
+    data.set_txt_start(txt_start);
+    data.set_free(data.free().wrapping_sub(space_needed as c_uint));
+    data.set_line_count(data.line_count() + 1);
 
     // Where the new line's index entry goes.
     let slot = (db_idx + 1) as usize;
@@ -170,25 +170,25 @@ fn ml_insert_in_block(mut b: Buf, id: BlockId, at: InsertAt, new: &NewLine, spac
         // shift their index entries up one slot. `offset` is the start of
         // the previous line, which becomes the byte just past the new one.
         let offset = if db_idx < 0 {
-            dp.txt_end()
+            data.txt_end()
         } else {
-            dp.line_start(db_idx as usize)
+            data.line_start(db_idx as usize)
         };
         let start = txt_start as usize;
         let n = (offset as usize).wrapping_sub(start + len as usize);
-        dp.move_bytes(start + len as usize, start, n);
+        data.move_bytes(start + len as usize, start, n);
         let following = (line_count - db_idx - 1) as usize;
-        dp.move_index(slot, slot + 1, following, len.wrapping_neg());
-        dp.set_index(slot, offset.wrapping_sub(len));
+        data.move_index(slot, slot + 1, following, len.wrapping_neg());
+        data.set_index(slot, offset.wrapping_sub(len));
     } else {
         // Add at the end, which is the start of the text.
-        dp.set_index(slot, txt_start);
+        data.set_index(slot, txt_start);
     }
 
-    let to = dp.index(slot) as usize;
-    dp.write(to, new.text);
+    let to = data.index(slot) as usize;
+    data.write(to, new.text);
     if new.marked() {
-        dp.set_marked(slot, true);
+        data.set_marked(slot, true);
     }
 
     b.b_ml.locked_is_dirty();
@@ -197,18 +197,18 @@ fn ml_insert_in_block(mut b: Buf, id: BlockId, at: InsertAt, new: &NewLine, spac
     }
 }
 
-/// Put `new` into the data block `dp` as its line `slot`, at the front of
+/// Put `new` into the data block `data` as its line `slot`, at the front of
 /// its text, which has room for it.
-fn add_new_line(dp: &mut DataBlock<&mut [u8]>, slot: usize, new: &NewLine) {
-    let start = dp.txt_start().wrapping_sub(new.len());
-    dp.set_txt_start(start);
-    let room = dp.free().wrapping_sub(new.len() + INDEX_SIZE as c_uint);
-    dp.set_free(room);
-    dp.set_index(slot, start);
+fn add_new_line(data: &mut DataBlock<&mut [u8]>, slot: usize, new: &NewLine) {
+    let start = data.txt_start().wrapping_sub(new.len());
+    data.set_txt_start(start);
+    let room = data.free().wrapping_sub(new.len() + INDEX_SIZE as c_uint);
+    data.set_free(room);
+    data.set_index(slot, start);
     if new.marked() {
-        dp.set_marked(slot, true);
+        data.set_marked(slot, true);
     }
-    dp.write(start as usize, new.text);
+    data.write(start as usize, new.text);
 }
 
 /// There is no room: allocate a second data block and share the lines
@@ -233,7 +233,7 @@ fn ml_split_data_block(
     space_needed_arg: int64_t,
 ) -> SplitBlocks {
     let InsertAt { db_idx, line_count } = at;
-    let page_size = int64_t::from(buffer.b_ml.mfp().mf_page_size);
+    let page_size = int64_t::from(buffer.b_ml.memfile().mf_page_size);
     let mut space_needed = space_needed_arg;
 
     let mut data_moved = 0;
@@ -250,10 +250,12 @@ fn ml_split_data_block(
         if lines_moved == 0 {
             in_left = false; // put the new line in the right block
         } else {
-            let dp = DataBlock(buffer.b_ml.page(id));
-            data_moved = dp.line_start(db_idx as usize).wrapping_sub(dp.txt_start()) as c_int;
+            let data = DataBlock(buffer.b_ml.page(id));
+            data_moved = data
+                .line_start(db_idx as usize)
+                .wrapping_sub(data.txt_start()) as c_int;
             total_moved = data_moved + lines_moved * INDEX_SIZE as c_int;
-            if int64_t::from(dp.free()) + int64_t::from(total_moved) >= space_needed {
+            if int64_t::from(data.free()) + int64_t::from(total_moved) >= space_needed {
                 in_left = true;
                 space_needed = int64_t::from(total_moved);
             } else {
@@ -265,57 +267,57 @@ fn ml_split_data_block(
 
     let page_count = (space_needed + HEADER_SIZE as int64_t + page_size - 1) / page_size;
     let negative = new.flags & ML_APPEND_NEW != 0;
-    let id_new = ml_new_data(buffer.b_ml.mfp(), negative, page_count);
+    let new_id = ml_new_data(buffer.b_ml.memfile(), negative, page_count);
 
     let (id_left, id_right, mut line_count_left, mut line_count_right) = if db_idx < 0 {
-        (id_new, id, 0, line_count)
+        (new_id, id, 0, line_count)
     } else {
-        (id, id_new, line_count, 0)
+        (id, new_id, line_count, 0)
     };
-    let mfp = buffer.b_ml.mfp();
-    let (bnum_left, bnum_right) = (mfp.block_nr(id_left), mfp.block_nr(id_right));
-    let page_count_left = mfp.page_count(id_left) as c_int;
-    let page_count_right = mfp.page_count(id_right) as c_int;
+    let memfile = buffer.b_ml.memfile();
+    let (bnum_left, bnum_right) = (memfile.block_nr(id_left), memfile.block_nr(id_right));
+    let page_count_left = memfile.page_count(id_left) as c_int;
+    let page_count_right = memfile.page_count(id_right) as c_int;
 
     {
-        let (left, right) = mfp.pages_mut(id_left, id_right);
-        let (mut dp_left, mut dp_right) = (DataBlock(left), DataBlock(right));
+        let (left_page, right_page) = memfile.pages_mut(id_left, id_right);
+        let (mut left, mut right) = (DataBlock(left_page), DataBlock(right_page));
 
         // The new line may go into the right/new block.
         if !in_left {
-            add_new_line(&mut dp_right, 0, new);
+            add_new_line(&mut right, 0, new);
             line_count_right += 1;
         }
 
         // Lines after the insertion point move from the left/old block to
         // the right/new one.
         if lines_moved != 0 {
-            let room = dp_right.txt_start().wrapping_sub(data_moved as c_uint);
-            dp_right.set_txt_start(room);
-            dp_right.set_free(dp_right.free().wrapping_sub(total_moved as c_uint));
-            let (from, to) = (dp_left.txt_start() as usize, dp_right.txt_start() as usize);
+            let room = right.txt_start().wrapping_sub(data_moved as c_uint);
+            right.set_txt_start(room);
+            right.set_free(right.free().wrapping_sub(total_moved as c_uint));
+            let (from, to) = (left.txt_start() as usize, right.txt_start() as usize);
             let n = data_moved as usize;
-            dp_right.raw_mut()[to..to + n].copy_from_slice(&dp_left.raw_mut()[from..from + n]);
+            right.raw_mut()[to..to + n].copy_from_slice(&left.raw_mut()[from..from + n]);
             // How far the text shifted, and so how much every index entry
             // that came with it has to shift.
-            let offset = dp_right.txt_start().wrapping_sub(dp_left.txt_start());
-            dp_left.set_txt_start(dp_left.txt_start().wrapping_add(data_moved as c_uint));
-            dp_left.set_free(dp_left.free().wrapping_add(total_moved as c_uint));
+            let offset = right.txt_start().wrapping_sub(left.txt_start());
+            left.set_txt_start(left.txt_start().wrapping_add(data_moved as c_uint));
+            left.set_free(left.free().wrapping_add(total_moved as c_uint));
 
             let (from, to) = ((db_idx + 1) as usize, line_count_right as usize);
-            dp_right.copy_index_from(&dp_left, from, to, lines_moved as usize, offset);
+            right.copy_index_from(&left, from, to, lines_moved as usize, offset);
             line_count_right += lines_moved;
             line_count_left -= lines_moved;
         }
 
         // The new line may go into the left (old or new) block.
         if in_left {
-            add_new_line(&mut dp_left, line_count_left as usize, new);
+            add_new_line(&mut left, line_count_left as usize, new);
             line_count_left += 1;
         }
 
-        dp_left.set_line_count(c_long::from(line_count_left));
-        dp_right.set_line_count(c_long::from(line_count_right));
+        left.set_line_count(c_long::from(line_count_left));
+        right.set_line_count(c_long::from(line_count_right));
     }
 
     let (lnum_left, lnum_right) = if db_idx < 0 {
@@ -336,7 +338,7 @@ fn ml_split_data_block(
     if new.flags & ML_APPEND_NEW == 0 && db_idx >= 0 && in_left {
         buffer.b_ml.locked_has_moved();
     }
-    buffer.b_ml.put(id_new, true);
+    buffer.b_ml.put(new_id, true);
 
     // Flush the old data block. The lines it owes the pointer blocks
     // above it go with it, because they are about to be paid by hand.
@@ -367,72 +369,72 @@ fn ml_insert_pointer(mut buffer: Buf, split: &mut SplitBlocks) -> bool {
     while stack_idx >= 0 {
         let ip = buffer.b_ml.stack_at(stack_idx as usize);
         let pb_idx = ip.ip_index;
-        let Some(mut id) = buffer.b_ml.mfp().get(ip.ip_bnum, 1) else {
+        let Some(mut id) = buffer.b_ml.memfile().get(ip.ip_bnum, 1) else {
             return false;
         };
-        let pp = PointerBlock(buffer.b_ml.page(id));
-        if !pp.is_pointer() {
+        let pointers = PointerBlock(buffer.b_ml.page(id));
+        if !pointers.is_pointer() {
             iemsg(gettext(c"E317: Pointer block id wrong 3"));
             buffer.b_ml.put(id, false);
             return false;
         }
 
-        if pp.count() < pp.count_max() {
+        if pointers.count() < pointers.count_max() {
             ml_pointer_add_entry(buffer, id, pb_idx as usize, split, stack_idx as usize);
             return true;
         }
 
         // The pointer block is full: split it, and go round again to give
         // *its* parent the two halves.
-        let id_new = ml_split_pointer_block(buffer, &mut id, &mut stack_idx);
+        let new_id = ml_split_pointer_block(buffer, &mut id, &mut stack_idx);
 
         // Move the entries after the current one into the new block; if
         // there are none, the new entry itself goes there.
         let pb_idx = pb_idx as usize;
-        let mfp = buffer.b_ml.mfp();
-        let (page, page_new) = mfp.pages_mut(id, id_new);
-        let (mut pp, mut pp_new) = (PointerBlock(page), PointerBlock(page_new));
-        let total_moved = usize::from(pp.count()) - pb_idx - 1;
+        let memfile = buffer.b_ml.memfile();
+        let (page, page_new) = memfile.pages_mut(id, new_id);
+        let (mut pointers, mut new_pointers) = (PointerBlock(page), PointerBlock(page_new));
+        let total_moved = usize::from(pointers.count()) - pb_idx - 1;
         if total_moved != 0 {
-            pp_new.write_entries(0, pp.entry_bytes(pb_idx + 1, total_moved));
-            pp_new.set_count(total_moved as u16);
-            pp.set_count(pp.count() - (total_moved as u16 - 1));
+            new_pointers.write_entries(0, pointers.entry_bytes(pb_idx + 1, total_moved));
+            new_pointers.set_count(total_moved as u16);
+            pointers.set_count(pointers.count() - (total_moved as u16 - 1));
             let (bnum, lines, pages) = (
                 split.bnum_right,
                 split.line_count_right,
                 split.page_count_right,
             );
-            pp.set_child(pb_idx + 1, bnum, lines, pages, split.lnum_right);
+            pointers.set_child(pb_idx + 1, bnum, lines, pages, split.lnum_right);
         } else {
-            pp_new.set_count(1);
-            pp_new.set_child(
+            new_pointers.set_count(1);
+            new_pointers.set_child(
                 0,
                 split.bnum_right,
                 split.line_count_right,
                 split.page_count_right,
                 0,
             );
-            pp_new.set_old_lnum(0, split.lnum_right);
+            new_pointers.set_old_lnum(0, split.lnum_right);
         }
         let (bnum, lines, pages) = (
             split.bnum_left,
             split.line_count_left,
             split.page_count_left,
         );
-        pp.set_child(pb_idx, bnum, lines, pages, split.lnum_left);
+        pointers.set_child(pb_idx, bnum, lines, pages, split.lnum_left);
         split.lnum_left = 0;
         split.lnum_right = 0;
 
         // The two pointer blocks are now the pair the level above has to
         // describe, so recount their lines.
-        split.line_count_right = pp_new.line_total();
-        split.line_count_left = pp.line_total();
-        split.bnum_left = mfp.block_nr(id);
-        split.bnum_right = mfp.block_nr(id_new);
+        split.line_count_right = new_pointers.line_total();
+        split.line_count_left = pointers.line_total();
+        split.bnum_left = memfile.block_nr(id);
+        split.bnum_right = memfile.block_nr(new_id);
         split.page_count_left = 1;
         split.page_count_right = 1;
-        mfp.put(id, true, false);
-        mfp.put(id_new, true, false);
+        memfile.put(id, true, false);
+        memfile.put(new_id, true, false);
         stack_idx -= 1;
     }
 
@@ -451,25 +453,25 @@ fn ml_pointer_add_entry(
     split: &SplitBlocks,
     stack_idx: usize,
 ) {
-    let mut pp = PointerBlock(buffer.b_ml.page_mut(id));
-    let count = usize::from(pp.count());
+    let mut pointers = PointerBlock(buffer.b_ml.page_mut(id));
+    let count = usize::from(pointers.count());
     if pb_idx + 1 < count {
-        pp.move_entries(pb_idx + 1, pb_idx + 2, count - pb_idx - 1);
+        pointers.move_entries(pb_idx + 1, pb_idx + 2, count - pb_idx - 1);
     }
-    pp.set_count(pp.count().wrapping_add(1));
+    pointers.set_count(pointers.count().wrapping_add(1));
 
     let (bnum, lines, pages) = (
         split.bnum_left,
         split.line_count_left,
         split.page_count_left,
     );
-    pp.set_child(pb_idx, bnum, lines, pages, split.lnum_left);
+    pointers.set_child(pb_idx, bnum, lines, pages, split.lnum_left);
     let (bnum, lines, pages) = (
         split.bnum_right,
         split.line_count_right,
         split.page_count_right,
     );
-    pp.set_child(pb_idx + 1, bnum, lines, pages, split.lnum_right);
+    pointers.set_child(pb_idx + 1, bnum, lines, pages, split.lnum_right);
 
     buffer.b_ml.put(id, true);
     buffer.b_ml.stack_truncate(stack_idx + 1); // truncate the stack
@@ -494,29 +496,29 @@ fn ml_split_pointer_block(mut buffer: Buf, id: &mut BlockId, stack_idx: &mut c_i
     // Where `*id`'s own stack entry is; `stack_idx` moves below.
     let ip = *stack_idx as usize;
     loop {
-        let id_new = ml_new_ptr(buffer.b_ml.mfp());
-        let mfp = buffer.b_ml.mfp();
-        if mfp.block_nr(*id) != 1 {
-            return id_new;
+        let new_id = ml_new_ptr(buffer.b_ml.memfile());
+        let memfile = buffer.b_ml.memfile();
+        if memfile.block_nr(*id) != 1 {
+            return new_id;
         }
 
         // Both blocks are whole pages of the same size, and the new one
         // cannot be block 1.
-        let bnum_new = mfp.block_nr(id_new);
-        let (root, page_new) = mfp.pages_mut(*id, id_new);
-        page_new.copy_from_slice(root);
-        let mut root = PointerBlock(root);
+        let bnum_new = memfile.block_nr(new_id);
+        let (root_page, new_page) = memfile.pages_mut(*id, new_id);
+        new_page.copy_from_slice(root_page);
+        let mut root = PointerBlock(root_page);
         root.set_count(1);
         // Block 1 now holds exactly one entry, and this is it.
         let line_count = buffer.b_ml.ml_line_count;
-        let mfp = buffer.b_ml.mfp();
-        let mut root = PointerBlock(mfp.page_mut(*id));
+        let memfile = buffer.b_ml.memfile();
+        let mut root = PointerBlock(memfile.page_mut(*id));
         root.set_bnum(0, bnum_new);
         root.set_line_count(0, line_count);
         root.set_old_lnum(0, 1);
         root.set_page_count(0, 1);
-        mfp.put(*id, true, false); // release block 1
-        *id = id_new; // the new block is the one to split
+        memfile.put(*id, true, false); // release block 1
+        *id = new_id; // the new block is the one to split
         buffer.b_ml.stack_set_index(ip, 0);
         *stack_idx += 1; // do block 1 again later
     }
@@ -560,16 +562,16 @@ pub(crate) fn ml_delete_int(mut buffer: Buf, lnum: LineNr, flags: c_int) -> Resu
     }
     buffer.b_ml.ml_line_count -= 1;
 
-    let dp = DataBlock(buffer.b_ml.page(id));
-    let line_start = dp.line_start(idx);
+    let data = DataBlock(buffer.b_ml.page(id));
+    let line_start = data.line_start(idx);
     // The text runs to where the line before it in the block starts, or
     // to the end of the block for its first line.
-    let line_size = dp.line_end(idx).wrapping_sub(line_start) as c_int;
+    let line_size = data.line_end(idx).wrapping_sub(line_start) as c_int;
 
     // A line always holds its terminating NL internally, as a NUL, even
     // with 'noeol'.
     debug_assert!(line_size >= 1);
-    let text = dp.text(
+    let text = data.text(
         line_start as usize,
         (line_start as usize + line_size as usize) - 1,
     );
@@ -585,19 +587,19 @@ pub(crate) fn ml_delete_int(mut buffer: Buf, lnum: LineNr, flags: c_int) -> Resu
     } else {
         // Move the text of the following lines forward over the deleted
         // one, and their index entries back over its entry.
-        let mut dp = DataBlock(buffer.b_ml.page_mut(id));
-        let text_start = dp.txt_start();
+        let mut data = DataBlock(buffer.b_ml.page_mut(id));
+        let text_start = data.txt_start();
         let size = line_size as c_uint;
-        dp.move_bytes(
+        data.move_bytes(
             text_start as usize,
             (text_start + size) as usize,
             (line_start - text_start) as usize,
         );
-        dp.move_index(idx + 1, idx, count - 1 - idx, size);
+        data.move_index(idx + 1, idx, count - 1 - idx, size);
 
-        dp.set_free(dp.free().wrapping_add(size + INDEX_SIZE as c_uint));
-        dp.set_txt_start(text_start.wrapping_add(size));
-        dp.set_line_count(dp.line_count() - 1);
+        data.set_free(data.free().wrapping_add(size + INDEX_SIZE as c_uint));
+        data.set_txt_start(text_start.wrapping_add(size));
+        data.set_line_count(data.line_count() - 1);
 
         // Mark the block dirty, and make sure it reaches the file so a
         // recovery sees the delete.
@@ -615,7 +617,7 @@ pub(crate) fn ml_delete_int(mut buffer: Buf, lnum: LineNr, flags: c_int) -> Resu
 fn ml_free_data_block(mut buffer: Buf, id: BlockId) -> bool {
     // Free the data block; the lines it owes the pointer blocks above it
     // survive it, and are paid below.
-    buffer.b_ml.mfp().free_block(id);
+    buffer.b_ml.memfile().free_block(id);
     let locked_lineadd = buffer.b_ml.forget_locked();
 
     // The stack is invalid until one of the pointer blocks on it survives
@@ -628,29 +630,29 @@ fn ml_free_data_block(mut buffer: Buf, id: BlockId) -> bool {
         stack_idx -= 1;
         let ip = buffer.b_ml.stack_at(stack_idx);
         let idx = ip.ip_index as usize;
-        let Some(id) = buffer.b_ml.mfp().get(ip.ip_bnum, 1) else {
+        let Some(id) = buffer.b_ml.memfile().get(ip.ip_bnum, 1) else {
             buffer.b_ml.stack_clear();
             return false;
         };
-        let mut pp = PointerBlock(buffer.b_ml.page_mut(id));
-        if !pp.is_pointer() {
+        let mut pointers = PointerBlock(buffer.b_ml.page_mut(id));
+        if !pointers.is_pointer() {
             iemsg(gettext(c"E317: Pointer block id wrong 4"));
             buffer.b_ml.put(id, false);
             buffer.b_ml.stack_clear();
             return false;
         }
-        let count = pp.count().wrapping_sub(1);
-        pp.set_count(count);
+        let count = pointers.count().wrapping_sub(1);
+        pointers.set_count(count);
         let count = usize::from(count);
         if count == 0 {
             // This pointer block is empty now too.
-            buffer.b_ml.mfp().free_block(id);
+            buffer.b_ml.memfile().free_block(id);
             continue;
         }
 
         if count != idx {
             // Move the entries after the deleted one down.
-            pp.move_entries(idx + 1, idx, count - idx);
+            pointers.move_entries(idx + 1, idx, count - idx);
         }
         buffer.b_ml.put(id, true);
 

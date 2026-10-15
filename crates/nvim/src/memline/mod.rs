@@ -217,8 +217,8 @@ pub fn ml_open(mut buffer: Buf) -> Result<(), Failed> {
     if ml_open_blocks(buffer).is_ok() {
         return Ok(());
     }
-    if let Some(mfp) = buffer.b_ml.ml_mfp.take() {
-        mfp.close(true); // also frees the swap file's name
+    if let Some(memfile) = buffer.b_ml.ml_mfp.take() {
+        memfile.close(true); // also frees the swap file's name
     }
     Err(Failed)
 }
@@ -226,15 +226,15 @@ pub fn ml_open(mut buffer: Buf) -> Result<(), Failed> {
 /// Fill in the three blocks a fresh memline starts with.
 fn ml_open_blocks(mut buffer: Buf) -> Result<(), Failed> {
     // Block zero: the header that says what the rest of the file means.
-    let mfp = buffer.b_ml.mfp();
-    let id = mfp.new_block(false, 1);
-    if mfp.block_nr(id) != 0 {
+    let memfile = buffer.b_ml.memfile();
+    let id = memfile.new_block(false, 1);
+    if memfile.block_nr(id) != 0 {
         iemsg(gettext(c"E298: Didn't get block nr 0?"));
-        mfp.put(id, false, false);
+        memfile.put(id, false, false);
         return Err(Failed);
     }
-    let page_size = ::core::ffi::c_long::from(mfp.mf_page_size);
-    let mut b0 = ZeroBlock(mfp.page_mut(id));
+    let page_size = ::core::ffi::c_long::from(memfile.mf_page_size);
+    let mut b0 = ZeroBlock(memfile.page_mut(id));
     b0.set_identity();
     // "VIM " and a five-byte version name, terminated, in the ten bytes.
     let version = b0.version_mut();
@@ -275,37 +275,37 @@ fn ml_open_blocks(mut buffer: Buf) -> Result<(), Failed> {
     buffer.b_ml.put(id, true);
     if !buffer.b_help && !buffer.b_spell {
         // Best effort; there may not be a swap file yet.
-        let _ = buffer.b_ml.mfp().sync(0);
+        let _ = buffer.b_ml.memfile().sync(0);
     }
 
     // Block one: the root pointer block, pointing at the one data block.
-    let mfp = buffer.b_ml.mfp();
-    let id = ml_new_ptr(mfp);
-    if mfp.block_nr(id) != 1 {
+    let memfile = buffer.b_ml.memfile();
+    let id = ml_new_ptr(memfile);
+    if memfile.block_nr(id) != 1 {
         iemsg(gettext(c"E298: Didn't get block nr 1?"));
-        mfp.put(id, false, false);
+        memfile.put(id, false, false);
         return Err(Failed);
     }
-    let mut pp = PointerBlock(mfp.page_mut(id));
-    pp.set_count(1);
+    let mut pointers = PointerBlock(memfile.page_mut(id));
+    pointers.set_count(1);
     // Line count after the insertion below.
-    pp.set_child(0, 2, 1, 1, 1);
-    mfp.put(id, true, false);
+    pointers.set_child(0, 2, 1, 1, 1);
+    memfile.put(id, true, false);
 
     // Block two: the first data block, holding one empty line.
-    let id = ml_new_data(mfp, false, 1);
-    if mfp.block_nr(id) != 2 {
+    let id = ml_new_data(memfile, false, 1);
+    if memfile.block_nr(id) != 2 {
         iemsg(gettext(c"E298: Didn't get block nr 2?"));
-        mfp.put(id, false, false);
+        memfile.put(id, false, false);
         return Err(Failed);
     }
-    let mut dp = DataBlock(mfp.page_mut(id));
-    let start = dp.txt_start() - 1; // at the end of the block
-    dp.set_txt_start(start);
-    dp.set_index(0, start);
-    dp.set_free(dp.free() - 1 - INDEX_SIZE as ::core::ffi::c_uint);
-    dp.set_line_count(1);
-    dp.write(start as usize, &[0]);
+    let mut data = DataBlock(memfile.page_mut(id));
+    let start = data.txt_start() - 1; // at the end of the block
+    data.set_txt_start(start);
+    data.set_index(0, start);
+    data.set_free(data.free() - 1 - INDEX_SIZE as ::core::ffi::c_uint);
+    data.set_line_count(1);
+    data.write(start as usize, &[0]);
     Ok(())
 }
 
@@ -323,7 +323,11 @@ pub fn ml_open_files() {
 /// If no usable file name can be found the memfile keeps no name and
 /// remains memory-only, with no recovery possible.
 pub fn ml_open_file(mut buffer: Buf) {
-    if buffer.b_ml.ml_mfp.as_ref().is_none_or(|mfp| mfp.mf_fd >= 0)
+    if buffer
+        .b_ml
+        .ml_mfp
+        .as_ref()
+        .is_none_or(|memfile| memfile.mf_fd >= 0)
         || buffer.b_p_swf == 0
         || cmdmod_has(CmdModFlags::NOSWAPFILE)
         || !buffer.terminal.is_null()
@@ -335,7 +339,7 @@ pub fn ml_open_file(mut buffer: Buf) {
     if buffer.b_spell {
         if let Some(fname) = temp_name() {
             // A spell buffer keeps working without a swap file.
-            let _ = buffer.b_ml.mfp().open_file(fname.as_cstr().to_owned());
+            let _ = buffer.b_ml.memfile().open_file(fname.as_cstr().to_owned());
         }
         buffer.b_may_swap = false;
         return;
@@ -364,27 +368,27 @@ pub fn ml_open_file(mut buffer: Buf) {
         };
         if buffer
             .b_ml
-            .mfp()
+            .memfile()
             .open_file(fname.as_cstr().to_owned())
             .is_err()
         {
             continue;
         }
-        buffer.b_ml.mfp().mf_dirty = MfDirty::YesNoSync; // don't sync yet in ml_sync_all
+        buffer.b_ml.memfile().mf_dirty = MfDirty::YesNoSync; // don't sync yet in ml_sync_all
         ml_upd_block0(buffer, UB_SAME_DIR);
 
         // Flush block zero, so others can read it.
-        if buffer.b_ml.mfp().sync(MFS_ZERO).is_ok() {
+        if buffer.b_ml.memfile().sync(MFS_ZERO).is_ok() {
             // Mark every block that belongs in the swap file dirty, for
             // when 'swapfile' was reset (deleting the file) and set again.
-            buffer.b_ml.mfp().set_dirty();
+            buffer.b_ml.memfile().set_dirty();
             break;
         }
         // Writing block zero failed: close it and try another directory.
         mf_close_file(buffer, false);
     }
 
-    if P_DIR.first_byte() != 0 && buffer.b_ml.mfp().fname().is_none() {
+    if P_DIR.first_byte() != 0 && buffer.b_ml.memfile().fname().is_none() {
         need_wait_return.set(true); // call wait_return() later
         let _no_prompt = Suppress::wait_return();
         let arg0 = msg_cstr_opt(buf_spname(&buffer).or(buffer.name.shown()));
@@ -407,12 +411,12 @@ pub fn check_need_swap(newfile: bool) {
 
 /// Close `buffer`'s memline, deleting the swap file if `del_file`.
 pub fn ml_close(mut buffer: Buf, del_file: ::core::ffi::c_int) {
-    let Some(mfp) = buffer.b_ml.ml_mfp.take() else {
+    let Some(memfile) = buffer.b_ml.ml_mfp.take() else {
         return; // not open
     };
     // Nothing is held any more: the memfile goes, and every block in it.
     buffer.b_ml.ml_locked = None;
-    mfp.close(del_file != 0); // closes the .swp file
+    memfile.close(del_file != 0); // closes the .swp file
     // The cached line, whatever it was: an owned one is dropped here.
     buffer.b_ml.clear_cache();
     buffer.b_ml.stack_free();

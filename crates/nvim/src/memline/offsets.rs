@@ -137,12 +137,12 @@ fn ml_chunk_addline(mut b: Buf, line: LineNr, curline: LineNr, curix: usize) -> 
                 b.b_ml.ml_chunks.switch_off();
                 return false;
             };
-            let dp = DataBlock(b.b_ml.page(id));
-            let rest = if dp.line_count() == 1 {
-                dp.txt_end().wrapping_sub(dp.txt_start()) as c_int
+            let data = DataBlock(b.b_ml.page(id));
+            let rest = if data.line_count() == 1 {
+                data.txt_end().wrapping_sub(data.txt_start()) as c_int
             } else {
-                let last_but_one = (dp.line_count() - 2) as usize;
-                dp.line_start(last_but_one) as c_int - dp.txt_start() as c_int
+                let last_but_one = (data.line_count() - 2) as usize;
+                data.line_start(last_but_one) as c_int - data.txt_start() as c_int
             };
             b.b_ml.ml_chunks.set(curix + 1, 1, rest);
             b.b_ml.ml_chunks.add_size(curix, -rest);
@@ -189,9 +189,9 @@ fn ml_chunk_split(mut b: Buf, curix: usize, curline_arg: LineNr) -> bool {
         };
 
         // First line in the block has its text at the end of it.
-        let dp = DataBlock(b.b_ml.page(id));
-        let text_end = dp.line_end(idx as usize) as c_int;
-        size += text_end - dp.line_start(end_idx as usize) as c_int;
+        let data = DataBlock(b.b_ml.page(id));
+        let text_end = data.line_end(idx as usize) as c_int;
+        size += text_end - data.line_start(end_idx as usize) as c_int;
     }
 
     b.b_ml.ml_chunks.add_lines(curix + 1, -linecnt);
@@ -294,10 +294,12 @@ pub fn ml_find_line_or_offset(
         let start_idx = curline - b.b_ml.locked_low();
         let mut idx = start_idx;
         let page = buffer.b_ml.page(id);
-        let dp = DataBlock(page);
-        let start_of = |idx: LineNr| Wide::from(dp.line_start(idx as usize));
+        let data = DataBlock(page);
+        let starts = data.index_entries(count as usize);
+        let start_of =
+            |idx: LineNr| Wide::from(u32::from_ne_bytes(starts[idx as usize]) & DB_INDEX_MASK);
         // First line in the block has its text at the end of it.
-        let text_end = Wide::from(dp.line_end(idx as usize));
+        let text_end = Wide::from(data.line_end(idx as usize));
 
         // Index of the last line of this block to account for.
         if lnum != 0 {

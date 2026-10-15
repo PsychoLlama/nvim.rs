@@ -125,11 +125,11 @@ pub fn ml_recover(checkext: bool) {
         buf.b_ml.ml_flags = MlFlags::NONE;
 
         // Open the memfile on the old swap file.
-        let Some(mfp) = MemFile::open(fname_used.clone(), O_RDONLY) else {
+        let Some(memfile) = MemFile::open(fname_used.clone(), O_RDONLY) else {
             semsg!("E306: Cannot open {}", shown(&fname_used));
             break 'theend;
         };
-        buf.b_ml.ml_mfp = Some(mfp);
+        buf.b_ml.ml_mfp = Some(memfile);
 
         let Some(recorded) = read_block_zero(buf, directly) else {
             break 'theend;
@@ -147,7 +147,7 @@ pub fn ml_recover(checkext: bool) {
 
         msg_ext_set_kind(c"wmsg");
         msg_ext_skip_flush.set(true);
-        let swap_name = buf.b_ml.mfp().fname().unwrap_or(c"").to_owned();
+        let swap_name = buf.b_ml.memfile().fname().unwrap_or(c"").to_owned();
         let path = home_replace_in(None, &swap_name, MAXPATHL as usize, true);
         smsg!(0, "Using swap file \"{}\"", shown(path.as_cstr()));
         let path = match buf_spname(&Buf::current()) {
@@ -258,8 +258,8 @@ pub fn ml_recover(checkext: bool) {
         if let Some(locked) = buf.b_ml.unlock() {
             buf.b_ml.put(locked.id, false);
         }
-        if let Some(mfp) = buf.b_ml.ml_mfp.take() {
-            mfp.close(false);
+        if let Some(memfile) = buf.b_ml.ml_mfp.take() {
+            memfile.close(false);
         }
     }
     // The free: `Buffer`'s destructor runs, taking the block stack with
@@ -285,17 +285,17 @@ pub fn ml_recover(checkext: bool) {
 /// `directly`: the user named the swap file itself, so its recorded file
 /// name is wanted.
 fn read_block_zero(mut recovery: Buf, directly: bool) -> Option<Recorded> {
-    let swap_name = recovery.b_ml.mfp().fname().unwrap_or(c"").to_owned();
+    let swap_name = recovery.b_ml.memfile().fname().unwrap_or(c"").to_owned();
 
     // The page size `MemFile::open` picked need not be the one the swap
     // file was written with; the real one is in block zero. Reading
     // block zero needs *a* page size, so use the smallest one a swap
     // file can have, and correct it below.
-    recovery.b_ml.mfp().mf_page_size = MIN_SWAP_PAGE_SIZE;
+    recovery.b_ml.memfile().mf_page_size = MIN_SWAP_PAGE_SIZE;
 
     let hl_id = HLF_E;
     msg_ext_set_kind(c"emsg");
-    let Some(id) = recovery.b_ml.mfp().get(0, 1) else {
+    let Some(id) = recovery.b_ml.memfile().get(0, 1) else {
         msg_start();
         note(c"Unable to read block 0 from ", hl_id);
         msg_display(&swap_name, hl_id, true);
@@ -354,11 +354,11 @@ fn check_block_zero(
     // The guessed page size was wrong, so the highest block number
     // in the file has to be worked out again.
     let recorded_page_size = b0.page_size() as c_uint;
-    let mfp = recovery.b_ml.mfp();
-    if mfp.mf_page_size != recorded_page_size {
-        let previous_page_size = mfp.mf_page_size;
-        mfp.set_page_size(recorded_page_size);
-        if mfp.mf_page_size < previous_page_size {
+    let memfile = recovery.b_ml.memfile();
+    if memfile.mf_page_size != recorded_page_size {
+        let previous_page_size = memfile.mf_page_size;
+        memfile.set_page_size(recorded_page_size);
+        if memfile.mf_page_size < previous_page_size {
             msg_start();
             msg_display(swap_name, hl_id, true);
             note(
@@ -368,17 +368,17 @@ fn check_block_zero(
             msg_end();
             return None;
         }
-        let size = mfp.file_size();
+        let size = memfile.file_size();
         // Zero means no file, or an empty one.
-        mfp.mf_blocknr_max = if size <= 0 {
+        memfile.mf_blocknr_max = if size <= 0 {
             0
         } else {
-            size / FileOffset::from(mfp.mf_page_size)
+            size / FileOffset::from(memfile.mf_page_size)
         };
-        mfp.mf_infile_count = mfp.mf_blocknr_max;
+        memfile.mf_infile_count = memfile.mf_blocknr_max;
 
         // Block zero's own page was read at the guessed size.
-        mfp.resize_page(id, mfp.mf_page_size as usize);
+        memfile.resize_page(id, memfile.mf_page_size as usize);
     }
 
     let b0 = ZeroBlock(recovery.b_ml.page(id));
@@ -462,7 +462,7 @@ fn recover_lines(mut buffer: Buf) -> Result<(LineNr, c_int), ()> {
     let mut idx: usize = 0; // start with the first index in block 1
     let mut error = 0;
     buffer.b_ml.stack_clear();
-    let swap_name = buffer.b_ml.mfp().fname().unwrap_or(c"").to_owned();
+    let swap_name = buffer.b_ml.memfile().fname().unwrap_or(c"").to_owned();
 
     // Without a file to fall back on, a data block whose number went
     // negative (never written to the swap file) is simply lost.
@@ -481,7 +481,7 @@ fn recover_lines(mut buffer: Buf) -> Result<(LineNr, c_int), ()> {
             if let Some(held) = buffer.b_ml.unlock() {
                 buffer.b_ml.put(held.id, false); // release the previous block
             }
-            let block = buffer.b_ml.mfp().get(bnum, page_count);
+            let block = buffer.b_ml.memfile().get(bnum, page_count);
             if let Some(id) = block {
                 buffer.b_ml.lock(id, 0, 0);
             }
@@ -497,28 +497,28 @@ fn recover_lines(mut buffer: Buf) -> Result<(LineNr, c_int), ()> {
             {
                 // The counts in the header have to fit the page size this
                 // build uses, or the entries cannot be walked at all.
-                let page_size = buffer.b_ml.mfp().mf_page_size;
+                let page_size = buffer.b_ml.memfile().mf_page_size;
                 let count_max = PointerBlock::<&[u8]>::count_max_for(page_size);
-                let mut pp = PointerBlock(buffer.b_ml.page_mut(id));
+                let mut pointers = PointerBlock(buffer.b_ml.page_mut(id));
                 let mut ptr_block_error = false;
-                if pp.count_max() != count_max {
+                if pointers.count_max() != count_max {
                     ptr_block_error = true;
-                    pp.set_count_max(count_max);
+                    pointers.set_count_max(count_max);
                 }
-                if pp.count() > pp.count_max() {
+                if pointers.count() > pointers.count_max() {
                     ptr_block_error = true;
-                    pp.set_count(pp.count_max());
+                    pointers.set_count(pointers.count_max());
                 }
                 if ptr_block_error {
                     complain(c"E1364: Warning: Pointer block corrupted");
                 }
 
-                let pp = PointerBlock(buffer.b_ml.page(id));
-                let count = usize::from(pp.count());
+                let pointers = PointerBlock(buffer.b_ml.page(id));
+                let count = usize::from(pointers.count());
                 // The first time down this block, its entries should
                 // account for exactly the line count promised above it.
                 if idx == 0 && line_count != 0 {
-                    line_count -= pp.line_total();
+                    line_count -= pointers.line_total();
                     if line_count != 0 {
                         error += 1;
                         append_note(&mut lnum, c"???LINE COUNT WRONG");
@@ -574,7 +574,7 @@ fn recover_lines(mut buffer: Buf) -> Result<(LineNr, c_int), ()> {
                     // bogus value (0x40000000, say) would ask for gigabytes.
                     // It must be at least one page, and the block must lie
                     // inside the file.
-                    let blocknr_max = buffer.b_ml.mfp().mf_blocknr_max;
+                    let blocknr_max = buffer.b_ml.memfile().mf_blocknr_max;
                     if page_count < 1 || bnum + BlockNr::from(page_count) > blocknr_max + 1 {
                         error += 1;
                         append_note(&mut lnum, c"???ILLEGAL BLOCK NUMBER");
@@ -605,25 +605,25 @@ fn recover_lines(mut buffer: Buf) -> Result<(LineNr, c_int), ()> {
             } else if let Some(id) = block {
                 // A data block: append every line in it.
                 let mut has_error = false;
-                let page_size = buffer.b_ml.mfp().mf_page_size;
-                let mut dp = DataBlock(buffer.b_ml.page_mut(id));
+                let page_size = buffer.b_ml.memfile().mf_page_size;
+                let mut data = DataBlock(buffer.b_ml.page_mut(id));
 
                 // The block's length has to match the page count the
                 // pointer block promised; if it does not, trust the
                 // pointer block.
                 let end = page_count.wrapping_mul(page_size);
-                let txt_end_wrong = end != dp.txt_end();
+                let txt_end_wrong = end != data.txt_end();
                 if txt_end_wrong {
-                    dp.set_txt_end(end);
+                    data.set_txt_end(end);
                 }
 
                 // Make sure the block ends in a NUL, so that copying the
                 // last line out of it cannot run past the end.
-                let last = dp.txt_end() as usize - 1;
-                dp.write(last, &[0]);
+                let last = data.txt_end() as usize - 1;
+                data.write(last, &[0]);
 
-                let block_lines = dp.line_count();
-                let (txt_start, txt_end) = (dp.txt_start() as usize, dp.txt_end() as usize);
+                let block_lines = data.line_count();
+                let (txt_start, txt_end) = (data.txt_start() as usize, data.txt_end() as usize);
                 if txt_end_wrong {
                     append_note(
                         &mut lnum,
@@ -652,8 +652,8 @@ fn recover_lines(mut buffer: Buf) -> Result<(LineNr, c_int), ()> {
                         append_note(&mut lnum, c"??? lines may be missing");
                         break;
                     }
-                    let dp = DataBlock(buffer.b_ml.page(id));
-                    let start = dp.line_start(i) as usize;
+                    let data = DataBlock(buffer.b_ml.page(id));
+                    let start = data.line_start(i) as usize;
                     if start <= HEADER_SIZE || start >= txt_end {
                         error += 1;
                         // One "???" for a run of them is enough.
@@ -666,7 +666,7 @@ fn recover_lines(mut buffer: Buf) -> Result<(LineNr, c_int), ()> {
                         did_questions = false;
                         // The data block's own NUL-terminated line, ended
                         // at the latest by the NUL written above.
-                        let text = dp.text(start, txt_end);
+                        let text = data.text(start, txt_end);
                         let len = text.iter().position(|&b| b == 0).unwrap_or(text.len() - 1);
                         let line = text[..=len].to_vec();
                         append(&mut lnum, &line);
@@ -753,7 +753,7 @@ pub fn ml_sync_all(check_file: c_int, check_char: c_int, do_fsync: bool) {
             .b_ml
             .ml_mfp
             .as_ref()
-            .is_none_or(|mfp| mfp.fname().is_none())
+            .is_none_or(|memfile| memfile.fname().is_none())
         {
             continue;
         }
@@ -762,7 +762,7 @@ pub fn ml_sync_all(check_file: c_int, check_char: c_int, do_fsync: bool) {
 
         if buf_is_changed(buf)
             && check_file != 0
-            && buf.b_ml.mfp().need_trans()
+            && buf.b_ml.memfile().need_trans()
             && let Some(full) = buf.name.full()
         {
             // If the original file is gone or has changed, preserve
@@ -779,7 +779,7 @@ pub fn ml_sync_all(check_file: c_int, check_char: c_int, do_fsync: bool) {
             }
         }
 
-        if buf.b_ml.mfp().mf_dirty == MfDirty::Yes {
+        if buf.b_ml.memfile().mf_dirty == MfDirty::Yes {
             // Best effort: `ml_sync_all` writes what it can and leaves
             // the rest dirty.
             let stop = if check_char != 0 { MFS_STOP } else { 0 };
@@ -788,7 +788,7 @@ pub fn ml_sync_all(check_file: c_int, check_char: c_int, do_fsync: bool) {
             } else {
                 0
             };
-            let _ = buf.b_ml.mfp().sync(stop | flush);
+            let _ = buf.b_ml.memfile().sync(stop | flush);
             if check_char != 0 && os_char_avail() {
                 break; // a character is available now
             }
@@ -806,7 +806,7 @@ pub fn ml_preserve(mut buffer: Buf, message: bool, do_fsync: bool) {
         .b_ml
         .ml_mfp
         .as_ref()
-        .is_none_or(|mfp| mfp.fname().is_none())
+        .is_none_or(|memfile| memfile.fname().is_none())
     {
         if message {
             complain(c"E313: Cannot preserve, there is no swap file");
@@ -823,7 +823,7 @@ pub fn ml_preserve(mut buffer: Buf, message: bool, do_fsync: bool) {
     let sync_flags = MFS_ALL | if do_fsync { MFS_FLUSH } else { 0 };
     // `ml_preserve` still answers OK/FAIL to its own callers, so the
     // memfile's result is converted here and again below.
-    let mut status = buffer.b_ml.mfp().sync(sync_flags).map_or(FAIL, |()| OK);
+    let mut status = buffer.b_ml.memfile().sync(sync_flags).map_or(FAIL, |()| OK);
     buffer.b_ml.stack_clear(); // the stack is invalid after MFS_ALL
 
     // Some data blocks may have gone from a negative to a positive block
@@ -834,9 +834,9 @@ pub fn ml_preserve(mut buffer: Buf, message: bool, do_fsync: bool) {
     // a full file system, say). `ml_find_line` does the work, translating
     // the negative numbers as it fetches each block's first line.
     'theend: {
-        if buffer.b_ml.mfp().need_trans() && !got_int.get() {
+        if buffer.b_ml.memfile().need_trans() && !got_int.get() {
             let mut lnum: LineNr = 1;
-            while buffer.b_ml.mfp().need_trans() && lnum <= buffer.b_ml.ml_line_count {
+            while buffer.b_ml.memfile().need_trans() && lnum <= buffer.b_ml.ml_line_count {
                 if ml_find_line(buffer, lnum, ML_FIND).is_none() {
                     status = FAIL;
                     break 'theend;
@@ -845,7 +845,7 @@ pub fn ml_preserve(mut buffer: Buf, message: bool, do_fsync: bool) {
             }
             let _ = ml_find_line(buffer, 0, ML_FLUSH); // flush the locked block
             // Sync the pointer blocks that were just updated.
-            if buffer.b_ml.mfp().sync(sync_flags).is_err() {
+            if buffer.b_ml.memfile().sync(sync_flags).is_err() {
                 status = FAIL;
             }
             buffer.b_ml.stack_clear(); // the stack is invalid now

@@ -135,33 +135,36 @@ impl Buf {
         self.b_ml
             .ml_mfp
             .as_ref()
-            .is_some_and(|mfp| mfp.fname.is_some())
+            .is_some_and(|memfile| memfile.fname.is_some())
     }
 
     /// Make the swap file's name absolute, if the buffer has one: before a
     /// `:cd` makes the relative one mean something else.
     pub(crate) fn make_swap_name_full(mut self) {
-        if let Some(mfp) = self.b_ml.ml_mfp.as_deref_mut() {
-            mfp.make_name_full();
+        if let Some(memfile) = self.b_ml.ml_mfp.as_deref_mut() {
+            memfile.make_name_full();
         }
     }
 
     /// The memfile's dirty state, `None` when the buffer has no memfile.
     pub(crate) fn memfile_dirty(self) -> Option<MfDirty> {
-        self.b_ml.ml_mfp.as_ref().map(|mfp| mfp.mf_dirty)
+        self.b_ml.ml_mfp.as_ref().map(|memfile| memfile.mf_dirty)
     }
 
     /// Set the memfile's dirty state, when the buffer has a memfile.
     pub(crate) fn set_memfile_dirty(mut self, state: MfDirty) {
-        if let Some(mfp) = self.b_ml.ml_mfp.as_deref_mut() {
-            mfp.mf_dirty = state;
+        if let Some(memfile) = self.b_ml.ml_mfp.as_deref_mut() {
+            memfile.mf_dirty = state;
         }
     }
 
     /// Whether the buffer has no swap file open: no memfile, or one with no
     /// descriptor.
     pub(crate) fn swap_file_closed(self) -> bool {
-        self.b_ml.ml_mfp.as_ref().is_none_or(|mfp| mfp.mf_fd < 0)
+        self.b_ml
+            .ml_mfp
+            .as_ref()
+            .is_none_or(|memfile| memfile.mf_fd < 0)
     }
 
     /// Give the buffer's swap file the group `gid`: whether that worked.
@@ -171,7 +174,7 @@ impl Buf {
         self.b_ml
             .ml_mfp
             .as_ref()
-            .is_some_and(|mfp| unsafe { os_fchown(mfp.mf_fd, u32::MAX, gid) } != -1)
+            .is_some_and(|memfile| unsafe { os_fchown(memfile.mf_fd, u32::MAX, gid) } != -1)
     }
 
     /// The name of the buffer's swap file, if it has a memfile with one.

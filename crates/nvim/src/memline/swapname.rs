@@ -56,7 +56,7 @@ fn directory_entries(dir: &[u8]) -> impl Iterator<Item = (Vec<u8>, bool)> + '_ {
 /// has to follow the file. Failing that, the swap file is at least reopened
 /// under its old name — losing it entirely is worse than a stale name.
 pub fn ml_setname(mut buffer: Buf) {
-    if buffer.b_ml.mfp().mf_fd < 0 {
+    if buffer.b_ml.memfile().mf_fd < 0 {
         // There is no swap file yet: with `'updatecount'` zero and
         // `'noswapfile'` there never was one. Help files get one now.
         if p_uc() != 0 && !cmdmod_has(CmdModFlags::NOSWAPFILE) {
@@ -74,7 +74,7 @@ pub fn ml_setname(mut buffer: Buf) {
     for (dir_name, last) in directory_entries(&dir) {
         // A copy of the name the swap file has now: finding a new one can
         // run autocommands.
-        let old = buffer.b_ml.mfp().fname().map(CStr::to_owned);
+        let old = buffer.b_ml.memfile().fname().map(CStr::to_owned);
         let found = findswapname(
             buffer,
             &dir_name,
@@ -93,19 +93,19 @@ pub fn ml_setname(mut buffer: Buf) {
             break;
         }
         // The swap file has to be closed before it can be renamed.
-        buffer.b_ml.mfp().close_fd();
+        buffer.b_ml.memfile().close_fd();
         if rename_file(&old, fname.as_cstr()) {
             success = true;
-            let mfp = buffer.b_ml.mfp();
-            mfp.free_fnames();
-            mfp.set_fnames(fname.as_cstr().to_owned());
+            let memfile = buffer.b_ml.memfile();
+            memfile.free_fnames();
+            memfile.set_fnames(fname.as_cstr().to_owned());
             ml_upd_block0(buffer, UB_SAME_DIR);
             break;
         }
         // This name did not work, try another.
     }
 
-    if buffer.b_ml.mfp().mf_fd == -1 && !buffer.b_ml.mfp().reopen() {
+    if buffer.b_ml.memfile().mf_fd == -1 && !buffer.b_ml.memfile().reopen() {
         // Could not reopen the swap file. Nothing can be done.
         complain(c"E301: Oops, lost the swap file!!!");
         return;
@@ -688,7 +688,7 @@ pub fn recover_names(
             .b_ml
             .ml_mfp
             .as_ref()
-            .and_then(|mfp| mfp.fname().map(CStr::to_owned));
+            .and_then(|memfile| memfile.fname().map(CStr::to_owned));
         if let Some(mine) = mine
             && ret_list.is_none()
         {

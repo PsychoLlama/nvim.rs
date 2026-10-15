@@ -520,12 +520,12 @@ fn clear_marks(first: bool) -> LineNr {
             return 0;
         };
         let (low, high) = (buffer.b_ml.locked_low(), buffer.b_ml.locked_high());
-        let mut dp = DataBlock(buffer.b_ml.page_mut(id));
+        let mut data = DataBlock(buffer.b_ml.page_mut(id));
         let mut found = None;
         while lnum <= high {
             let idx = (lnum - low) as usize;
-            if dp.is_marked(idx) {
-                dp.set_marked(idx, false);
+            if data.is_marked(idx) {
+                data.set_marked(idx, false);
                 found = Some(lnum);
                 if first {
                     break;

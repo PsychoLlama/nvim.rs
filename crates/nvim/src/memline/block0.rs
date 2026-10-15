@@ -76,10 +76,10 @@ pub(crate) fn ml_check_b0_strings<P: AsRef<[u8]>>(b0: &ZeroBlock<P>) -> bool {
 /// timestamp ([`UB_FNAME`]), or the "swap file is beside the file" flag
 /// ([`UB_SAME_DIR`]).
 pub(crate) fn ml_upd_block0(mut buffer: Buf, what: UpdBlock0) {
-    let Some(mfp) = buffer.b_ml.ml_mfp.as_deref_mut() else {
+    let Some(memfile) = buffer.b_ml.ml_mfp.as_deref_mut() else {
         return;
     };
-    let Some(id) = mfp.get(0, 1) else {
+    let Some(id) = memfile.get(0, 1) else {
         return;
     };
 
@@ -175,7 +175,7 @@ pub(crate) fn set_b0_dir_flag(mut buffer: Buf, id: BlockId) {
         .b_ml
         .ml_mfp
         .as_ref()
-        .and_then(|mfp| mfp.fname())
+        .and_then(|memfile| memfile.fname())
         .map(CStr::to_owned);
     let same = match (swap_name, buffer.name.full()) {
         (Some(swap_name), Some(full)) => same_directory(&swap_name, full),
@@ -477,7 +477,12 @@ pub(crate) fn files_differ(
 pub fn ml_setflags(mut buffer: Buf) {
     // Only if block zero is already in memory; there is nothing here
     // worth a read for.
-    let Some(id) = buffer.b_ml.ml_mfp.as_ref().and_then(|mfp| mfp.find(0)) else {
+    let Some(id) = buffer
+        .b_ml
+        .ml_mfp
+        .as_ref()
+        .and_then(|memfile| memfile.find(0))
+    else {
         return;
     };
 
@@ -489,9 +494,9 @@ pub fn ml_setflags(mut buffer: Buf) {
     let flags = b0.flags() & !B0_FF_MASK | fileformat;
     b0.set_flags(flags);
     add_b0_fenc(&mut b0, &fenc);
-    let mfp = buffer.b_ml.mfp();
-    mfp.mark_dirty(id);
+    let memfile = buffer.b_ml.memfile();
+    memfile.mark_dirty(id);
     // Best effort: a swap file that cannot take block zero is reported
     // where it is created, and there is nothing to do about it here.
-    let _ = mfp.sync(MFS_ZERO);
+    let _ = memfile.sync(MFS_ZERO);
 }

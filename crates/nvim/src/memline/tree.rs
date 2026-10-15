@@ -43,12 +43,12 @@ impl MemLine {
     /// Block `id`'s bytes, writable.
     #[inline]
     pub(crate) fn page_mut(&mut self, id: BlockId) -> &mut [u8] {
-        self.mfp().page_mut(id)
+        self.memfile().page_mut(id)
     }
 
     /// Give block `id` back to the memfile.
     pub(crate) fn put(&mut self, id: BlockId, dirty: bool) {
-        self.mfp().put(id, dirty, false);
+        self.memfile().put(id, dirty, false);
     }
 }
 
@@ -85,37 +85,39 @@ pub(crate) fn fetch_line(mut buffer: Buf, lnum: LineNr, will_change: bool) {
     // If it is the line handed out last time, it is already unpacked;
     // otherwise the one that was may need flushing first.
     if buffer.b_ml.cached_lnum() != lnum {
+        // The common case, a run of reads through one block: the line is in
+        // the block already locked and nothing is waiting to be written
+        // back, so the flush below would only forget the cached line and
+        // the walk would only answer the locked block. Both are done here
+        // without the two calls.
+        if !buffer.b_ml.line_is_dirty()
+            && let Some(id) = buffer.b_ml.locked_id()
+            && buffer.b_ml.locked_low() <= lnum
+            && lnum <= buffer.b_ml.locked_high()
+        {
+            if buffer.b_ml.cached_lnum() != 0 {
+                buffer.b_ml.clear_cache();
+            }
+            let idx = (lnum - buffer.b_ml.locked_low()) as usize;
+            buffer.b_ml.cache_block_line(id, idx, lnum);
+            if will_change {
+                buffer.b_ml.locked_has_moved();
+                let text = buffer.b_ml.cached_bytes();
+                ml_add_deleted_len_buf(buffer, text, text.len());
+            }
+            return;
+        }
         ml_flush_line(buffer);
 
         // Find the data block holding the line. This also fills the
         // stack with the blocks from the root down and releases any
         // block that was locked.
         let Some(id) = ml_find_line(buffer, lnum, ML_FIND) else {
-            if ml_get_recursive.get() == 0 {
-                ml_get_recursive.set(1);
-                let mut name = trans_bufname(buffer);
-                shorten_dir(&mut name);
-                // The missing space before "in buffer" is upstream's.
-                let name = cstr::owned(&name);
-                let name = msg_cstr(&name);
-                siemsg!(
-                    "E316: ml_get: Cannot find line {}in buffer {} {name}",
-                    int64_t::from(lnum),
-                    buffer.handle
-                );
-                ml_get_recursive.set(0);
-            }
-            buffer.b_ml.cache_placeholder(c"???", lnum);
+            line_not_found(buffer, lnum);
             return;
         };
-
         let idx = (lnum - buffer.b_ml.locked_low()) as usize;
-        let dp = DataBlock(buffer.b_ml.page(id));
-        let start = dp.line_start(idx);
-        // The text ends where the previous line starts; the first line
-        // of the block ends at the end of the block.
-        let len = dp.line_end(idx).wrapping_sub(start) as ColNr;
-        buffer.b_ml.cache_block_line(id, start, len, lnum);
+        buffer.b_ml.cache_block_line(id, idx, lnum);
     }
 
     if will_change {
@@ -123,6 +125,28 @@ pub(crate) fn fetch_line(mut buffer: Buf, lnum: LineNr, will_change: bool) {
         let text = buffer.b_ml.cached_bytes();
         ml_add_deleted_len_buf(buffer, text, text.len());
     }
+}
+
+/// The tree has no block for line `lnum`, which the line count says it
+/// has: complain (once, not again from the redraw the complaint causes) and
+/// cache the `???` placeholder.
+#[cold]
+fn line_not_found(mut buffer: Buf, lnum: LineNr) {
+    if ml_get_recursive.get() == 0 {
+        ml_get_recursive.set(1);
+        let mut name = trans_bufname(buffer);
+        shorten_dir(&mut name);
+        // The missing space before "in buffer" is upstream's.
+        let name = cstr::owned(&name);
+        let name = msg_cstr(&name);
+        siemsg!(
+            "E316: ml_get: Cannot find line {}in buffer {} {name}",
+            int64_t::from(lnum),
+            buffer.handle
+        );
+        ml_get_recursive.set(0);
+    }
+    buffer.b_ml.cache_placeholder(c"???", lnum);
 }
 
 /// Line `lnum` of `buffer` as a NUL-terminated pointer into the data block
@@ -185,11 +209,11 @@ fn ml_write_line(buffer: Buf, lnum: LineNr, new_line: &[u8]) {
 fn ml_store_line(mut buffer: Buf, id: BlockId, lnum: LineNr, new_line: &[u8]) {
     let idx = (lnum - buffer.b_ml.locked_low()) as usize;
     let count = (buffer.b_ml.locked_high() - buffer.b_ml.locked_low() + 1) as usize;
-    let dp = DataBlock(buffer.b_ml.page(id));
-    let start = dp.line_start(idx);
+    let data = DataBlock(buffer.b_ml.page(id));
+    let start = data.line_start(idx);
     // The text of the previous line follows it, or the block ends.
-    let old_len = dp.line_end(idx) as c_int - start as c_int;
-    let (free, txt_start, marked) = (dp.free(), dp.txt_start(), dp.is_marked(idx));
+    let old_len = data.line_end(idx) as c_int - start as c_int;
+    let (free, txt_start, marked) = (data.free(), data.txt_start(), data.is_marked(idx));
     let new_len = c_int::try_from(new_line.len()).expect("a line shorter than INT_MAX");
     // Negative if the line got smaller.
     let extra = new_len - old_len;
@@ -206,19 +230,19 @@ fn ml_store_line(mut buffer: Buf, id: BlockId, lnum: LineNr, new_line: &[u8]) {
     }
 
     let shift = extra as c_uint;
-    let mut dp = DataBlock(buffer.b_ml.page_mut(id));
+    let mut data = DataBlock(buffer.b_ml.page_mut(id));
     if extra != 0 && idx + 1 < count {
         // Move the text of the lines that follow, and adjust their
         // offsets. (Lines are stored back to front, so "following"
         // lines sit at *lower* offsets.)
         let to = (txt_start as isize - extra as isize) as usize;
-        dp.move_bytes(txt_start as usize, to, (start - txt_start) as usize);
-        dp.shift_index(idx + 1, count, shift.wrapping_neg());
+        data.move_bytes(txt_start as usize, to, (start - txt_start) as usize);
+        data.shift_index(idx + 1, count, shift.wrapping_neg());
     }
-    dp.set_index(idx, dp.index(idx).wrapping_sub(shift));
-    dp.set_free(free.wrapping_sub(shift));
-    dp.set_txt_start(txt_start.wrapping_sub(shift));
-    dp.write((start as isize - extra as isize) as usize, new_line);
+    data.set_index(idx, data.index(idx).wrapping_sub(shift));
+    data.set_free(free.wrapping_sub(shift));
+    data.set_txt_start(txt_start.wrapping_sub(shift));
+    data.write((start as isize - extra as isize) as usize, new_line);
 
     buffer.b_ml.locked_has_moved();
     // The `extra == 0` case is already covered by the insert and delete.
@@ -281,7 +305,10 @@ pub(crate) fn ml_find_line(mut buffer: Buf, lnum: LineNr, action: c_int) -> Opti
         // then repair the line counts in the pointer blocks above: lines
         // were added or deleted in it and they were never told.
         if let Some(locked) = buffer.b_ml.unlock() {
-            buffer.b_ml.mfp().put(locked.id, locked.dirty, locked.moved);
+            buffer
+                .b_ml
+                .memfile()
+                .put(locked.id, locked.dirty, locked.moved);
             if locked.lineadd != 0 {
                 ml_lineadd(buffer, locked.lineadd);
             }
@@ -323,7 +350,7 @@ pub(crate) fn ml_find_line(mut buffer: Buf, lnum: LineNr, action: c_int) -> Opti
     }
 
     // Search downwards until a data block is found.
-    while let Some(id) = buffer.b_ml.mfp().get(bnum, page_count as c_uint) {
+    while let Some(id) = buffer.b_ml.memfile().get(bnum, page_count as c_uint) {
         if action == ML_INSERT {
             high += 1;
         } else if action == ML_DELETE {
@@ -352,10 +379,10 @@ pub(crate) fn ml_find_line(mut buffer: Buf, lnum: LineNr, action: c_int) -> Opti
         buffer.b_ml.stack_set(top, frame);
 
         let mut dirty = false;
-        let pp = PointerBlock(buffer.b_ml.page(id));
-        let count = usize::from(pp.count());
+        let pointers = PointerBlock(buffer.b_ml.page(id));
+        let count = usize::from(pointers.count());
         let mut idx = 0;
-        for t in pp.line_counts() {
+        for t in pointers.line_counts() {
             low += t;
             if low > lnum {
                 break;
@@ -377,7 +404,7 @@ pub(crate) fn ml_find_line(mut buffer: Buf, lnum: LineNr, action: c_int) -> Opti
             break;
         }
 
-        let entry = pp.entry(idx);
+        let entry = pointers.entry(idx);
         buffer.b_ml.stack_set_index(top, idx as c_int);
         bnum = entry.pe_bnum;
         page_count = entry.pe_page_count;
@@ -387,9 +414,9 @@ pub(crate) fn ml_find_line(mut buffer: Buf, lnum: LineNr, action: c_int) -> Opti
         // A negative block number is one that has not been written yet;
         // it may since have been given a real one.
         if bnum < 0 {
-            let bnum2 = buffer.b_ml.mfp().trans_del(bnum);
-            if bnum != bnum2 {
-                bnum = bnum2;
+            let renumbered = buffer.b_ml.memfile().trans_del(bnum);
+            if bnum != renumbered {
+                bnum = renumbered;
                 PointerBlock(buffer.b_ml.page_mut(id)).set_bnum(idx, bnum);
                 dirty = true;
             }
@@ -447,17 +474,17 @@ pub(crate) fn ml_lineadd_depth(mut b: Buf, count: c_int, depth: usize) {
     while idx > 0 {
         idx -= 1;
         let ip = b.b_ml.stack_at(idx);
-        let Some(id) = b.b_ml.mfp().get(ip.ip_bnum, 1) else {
+        let Some(id) = b.b_ml.memfile().get(ip.ip_bnum, 1) else {
             break;
         };
         // Must be a pointer block: it is on the stack.
-        let mut pp = PointerBlock(b.b_ml.page_mut(id));
-        if !pp.is_pointer() {
+        let mut pointers = PointerBlock(b.b_ml.page_mut(id));
+        if !pointers.is_pointer() {
             b.b_ml.put(id, false);
             iemsg(gettext(c"E317: Pointer block id wrong 2"));
             break;
         }
-        pp.add_line_count(ip.ip_index as usize, count);
+        pointers.add_line_count(ip.ip_index as usize, count);
         b.b_ml.stack_add_high(idx, count);
         b.b_ml.put(id, true);
     }

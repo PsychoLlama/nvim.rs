@@ -265,6 +265,15 @@ impl<P: AsRef<[u8]>> DataBlock<P> {
         }
     }
 
+    /// The first `count` index entries, for a walk that reads many: one
+    /// bounds check for the slice, then each entry is a plain index.
+    #[inline]
+    pub(crate) fn index_entries(&self, count: usize) -> &[[u8; INDEX_SIZE]] {
+        self.bytes()[HEADER_SIZE..Self::index_at(count)]
+            .as_chunks::<INDEX_SIZE>()
+            .0
+    }
+
     pub(crate) fn is_marked(&self, i: usize) -> bool {
         self.index(i) & DB_MARKED != 0
     }

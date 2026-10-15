@@ -233,8 +233,8 @@ impl MemFile {
     /// Open an existing swap file, or create one, as upstream's `mf_open`
     /// with a name: `None` when it cannot be opened.
     pub(crate) fn open(fname: CString, flags: c_int) -> Option<Box<MemFile>> {
-        let mut mfp = MemFile::in_memory();
-        if !mfp.do_open(fname, flags) {
+        let mut memfile = MemFile::in_memory();
+        if !memfile.do_open(fname, flags) {
             return None;
         }
 
@@ -243,24 +243,24 @@ impl MemFile {
         // SAFETY: a plain-old-data out-parameter of this frame, and the
         // memfile's own descriptor.
         let mut file_info: FileInfo = unsafe { core::mem::zeroed() };
-        if mfp.mf_fd >= 0 && unsafe { os_fileinfo_fd(mfp.mf_fd, &raw mut file_info) } {
+        if memfile.mf_fd >= 0 && unsafe { os_fileinfo_fd(memfile.mf_fd, &raw mut file_info) } {
             let blocksize = file_info.stat.st_blksize;
             if (MIN_SWAP_PAGE_SIZE..=MAX_SWAP_PAGE_SIZE).contains(&blocksize) {
-                mfp.mf_page_size = blocksize as c_uint;
+                memfile.mf_page_size = blocksize as c_uint;
             }
         }
 
         // When recovering, the real page size comes out of block zero later
         // (`ml_recover` calls `set_page_size`), so the size used here may
         // be too small and the block count is rounded up.
-        let size = if mfp.mf_fd < 0 || flags & (O_TRUNC | O_EXCL) != 0 {
+        let size = if memfile.mf_fd < 0 || flags & (O_TRUNC | O_EXCL) != 0 {
             0
         } else {
-            mfp.file_size()
+            memfile.file_size()
         };
-        mfp.mf_blocknr_max = pages_in_file(size, mfp.mf_page_size);
-        mfp.mf_infile_count = mfp.mf_blocknr_max;
-        Some(mfp)
+        memfile.mf_blocknr_max = pages_in_file(size, memfile.mf_page_size);
+        memfile.mf_infile_count = memfile.mf_blocknr_max;
+        Some(memfile)
     }
 
     /// How long the swap file is, or −1 when it cannot be told.
@@ -774,7 +774,12 @@ fn pages_in_file(size: FileOffset, page_size: c_uint) -> BlockNr {
 /// `getlines` first pulls every line into memory — clumsy, but the blocks
 /// still in the file are about to become unreachable.
 pub(crate) fn mf_close_file(mut buffer: Buf, getlines: bool) {
-    if buffer.b_ml.ml_mfp.as_ref().is_none_or(|mfp| mfp.mf_fd < 0) {
+    if buffer
+        .b_ml
+        .ml_mfp
+        .as_ref()
+        .is_none_or(|memfile| memfile.mf_fd < 0)
+    {
         return;
     }
 
@@ -784,18 +789,18 @@ pub(crate) fn mf_close_file(mut buffer: Buf, getlines: bool) {
         }
     }
 
-    let Some(mfp) = buffer.b_ml.ml_mfp.as_deref_mut() else {
+    let Some(memfile) = buffer.b_ml.ml_mfp.as_deref_mut() else {
         return;
     };
     // SAFETY: the memfile's own descriptor, closed once and forgotten.
-    if unsafe { close(mfp.mf_fd) } < 0 {
+    if unsafe { close(memfile.mf_fd) } < 0 {
         emsg(gettext(e_swapclose));
     }
-    mfp.mf_fd = -1;
+    memfile.mf_fd = -1;
 
-    if let Some(fname) = mfp.fname() {
+    if let Some(fname) = memfile.fname() {
         os_remove(fname);
-        mfp.free_fnames();
+        memfile.free_fnames();
     }
 }
 
@@ -804,15 +809,15 @@ pub(crate) fn mf_close_file(mut buffer: Buf, getlines: bool) {
 pub(crate) fn mf_release_all() -> bool {
     let mut released = false;
     for mut buf in buffers() {
-        let Some(mfp) = buf.b_ml.ml_mfp.as_deref() else {
+        let Some(memfile) = buf.b_ml.ml_mfp.as_deref() else {
             continue;
         };
         // Nothing can be released without somewhere to put it.
-        if mfp.mf_fd < 0 && buf.b_may_swap {
+        if memfile.mf_fd < 0 && buf.b_may_swap {
             ml_open_file(buf);
         }
-        if let Some(mfp) = buf.b_ml.ml_mfp.as_deref_mut() {
-            released |= mfp.release_unlocked();
+        if let Some(memfile) = buf.b_ml.ml_mfp.as_deref_mut() {
+            released |= memfile.release_unlocked();
         }
     }
     released
@@ -825,13 +830,13 @@ mod tests {
 
     #[test]
     fn a_memory_only_memfile_releases_nothing() {
-        let mut mfp = MemFile::in_memory();
-        let id = mfp.new_block(false, 1);
-        mfp.put(id, true, false);
+        let mut memfile = MemFile::in_memory();
+        let id = memfile.new_block(false, 1);
+        memfile.put(id, true, false);
         // Nowhere to write it, so it has to stay.
-        assert!(!mfp.release_unlocked());
-        assert_eq!(mfp.find(0), Some(id));
-        mfp.close(false);
+        assert!(!memfile.release_unlocked());
+        assert_eq!(memfile.find(0), Some(id));
+        memfile.close(false);
     }
 
     #[test]
@@ -842,37 +847,37 @@ mod tests {
         std::fs::create_dir_all(&dir).expect("a scratch directory");
         let path = dir.join("x.swp");
         let name = CString::new(path.as_os_str().as_bytes()).expect("a path without NUL");
-        let mut mfp = MemFile::open(name, O_RDWR | O_CREAT | O_EXCL).expect("a swap file");
+        let mut memfile = MemFile::open(name, O_RDWR | O_CREAT | O_EXCL).expect("a swap file");
 
         // Three blocks, numbered 0, 1 and 2; the middle one stays held, as
         // the memline's locked data block does while a line is cached.
         let ids: Vec<BlockId> = (0..3u8)
             .map(|n| {
-                let id = mfp.new_block(false, 1);
-                mfp.page_mut(id)[0] = n + 1;
+                let id = memfile.new_block(false, 1);
+                memfile.page_mut(id)[0] = n + 1;
                 id
             })
             .collect();
-        mfp.put(ids[0], true, false);
-        mfp.put(ids[2], true, false);
+        memfile.put(ids[0], true, false);
+        memfile.put(ids[2], true, false);
         let held = ids[1];
-        mfp.page_mut(held)[1] = 42;
+        memfile.page_mut(held)[1] = 42;
 
-        assert!(mfp.release_unlocked());
+        assert!(memfile.release_unlocked());
         // The held block, its handle and its bytes all survive.
-        assert_eq!(mfp.find(1), Some(held));
-        assert_eq!(&mfp.page(held)[..2], &[2, 42]);
+        assert_eq!(memfile.find(1), Some(held));
+        assert_eq!(&memfile.page(held)[..2], &[2, 42]);
         // The others went to the file and out of memory ...
-        assert!(mfp.find(0).is_none());
-        assert!(mfp.find(2).is_none());
+        assert!(memfile.find(0).is_none());
+        assert!(memfile.find(2).is_none());
         // ... and come back from it.
-        let back = mfp.get(2, 1).expect("block 2 from the file");
-        assert_eq!(mfp.page(back)[0], 3);
+        let back = memfile.get(2, 1).expect("block 2 from the file");
+        assert_eq!(memfile.page(back)[0], 3);
         assert_ne!(back, ids[2], "a released handle names nothing");
-        mfp.put(back, false, false);
-        mfp.put(held, false, false);
+        memfile.put(back, false, false);
+        memfile.put(held, false, false);
 
-        mfp.close(true);
+        memfile.close(true);
         assert!(
             !path.exists(),
             "closing with `del_file` removes the swap file"
