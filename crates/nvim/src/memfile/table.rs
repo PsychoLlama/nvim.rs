@@ -58,6 +58,16 @@ pub(crate) struct BlockHdr {
 }
 
 impl BlockHdr {
+    /// What a vacant slot holds: no pages, and nothing allocated.
+    fn vacant() -> BlockHdr {
+        BlockHdr {
+            bnum: 0,
+            data: Box::new([]),
+            page_count: 0,
+            flags: 0,
+        }
+    }
+
     /// A block of `page_count` pages, zeroed.
     ///
     /// The zeroing is not just hygiene: a page written to the swap file
@@ -85,8 +95,12 @@ fn position(at: usize) -> u32 {
 }
 
 struct Slot {
-    block: Option<BlockHdr>,
-    /// Bumped every time the slot is vacated, so a stale handle misses.
+    /// The block, or an empty stand-in while the slot is vacant.
+    block: BlockHdr,
+    /// Even while the slot holds a block, odd while it is vacant, and
+    /// bumped at every change between the two: a handle carries the even
+    /// value it was issued under, so one to a vacant slot -- or to a slot
+    /// that has been emptied and filled again since -- never matches.
     generation: u32,
     /// Where the block is in `order`.
     order_at: u32,
@@ -125,6 +139,7 @@ impl BlockTable {
         })
     }
 
+    #[inline]
     fn slot(&self, id: BlockId) -> &Slot {
         let slot = &self.slots[id.slot as usize];
         assert!(
@@ -134,6 +149,7 @@ impl BlockTable {
         slot
     }
 
+    #[inline]
     fn slot_mut(&mut self, id: BlockId) -> &mut Slot {
         let slot = &mut self.slots[id.slot as usize];
         assert!(
@@ -145,18 +161,12 @@ impl BlockTable {
 
     #[inline]
     pub(super) fn block(&self, id: BlockId) -> &BlockHdr {
-        self.slot(id)
-            .block
-            .as_ref()
-            .expect("memfile: an empty slot")
+        &self.slot(id).block
     }
 
     #[inline]
     pub(super) fn block_mut(&mut self, id: BlockId) -> &mut BlockHdr {
-        self.slot_mut(id)
-            .block
-            .as_mut()
-            .expect("memfile: an empty slot")
+        &mut self.slot_mut(id).block
     }
 
     /// Two different blocks, both writable.
@@ -170,10 +180,7 @@ impl BlockTable {
             .slots
             .get_disjoint_mut([a.slot as usize, b.slot as usize])
             .expect("memfile: two different blocks");
-        (
-            a.block.as_mut().expect("memfile: an empty slot"),
-            b.block.as_mut().expect("memfile: an empty slot"),
-        )
+        (&mut a.block, &mut b.block)
     }
 
     /// File `block` under its own number, at the end of the order.
@@ -183,13 +190,14 @@ impl BlockTable {
         let slot = match self.vacant.pop() {
             Some(slot) => {
                 let entry = &mut self.slots[slot as usize];
-                entry.block = Some(block);
+                entry.block = block;
+                entry.generation = entry.generation.wrapping_add(1);
                 entry.order_at = order_at;
                 slot
             }
             None => {
                 self.slots.push(Slot {
-                    block: Some(block),
+                    block,
                     generation: 0,
                     order_at,
                 });
@@ -238,7 +246,7 @@ impl BlockTable {
         let _ = self.slot(id);
         self.unorder(id.slot);
         let entry = &mut self.slots[id.slot as usize];
-        let block = entry.block.take().expect("memfile: an empty slot");
+        let block = core::mem::replace(&mut entry.block, BlockHdr::vacant());
         entry.generation = entry.generation.wrapping_add(1);
         self.vacant.push(id.slot);
         self.index.remove(&block.bnum);

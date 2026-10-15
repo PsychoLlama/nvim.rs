@@ -216,7 +216,17 @@ pub(crate) enum CachedText {
     /// necessarily the block that is locked now -- a walk for a line
     /// elsewhere can lock another one under a cached line -- which is why
     /// the block is named.
-    Block { id: BlockId, start: u32 },
+    ///
+    /// `text` is the same place as the pointer form answers it, taken when
+    /// the line was unpacked: a page never moves while its block is in
+    /// memory, so handing it out again costs no lookup. Only
+    /// [`MemLine::cached_text`] reads it, and only to answer it; the bytes
+    /// themselves are always reached through `id`.
+    Block {
+        id: BlockId,
+        start: u32,
+        text: *mut ::core::ffi::c_char,
+    },
     /// A replacement the memline owns, waiting for `ml_flush_line` to write
     /// it back: the bytes, the NUL among them.
     Owned(Vec<u8>),
@@ -397,14 +407,7 @@ impl MemLine {
             CachedText::None => ::core::ptr::null_mut(),
             CachedText::Owned(text) => text.as_mut_ptr().cast(),
             CachedText::Placeholder(text) => text.as_ptr().cast_mut(),
-            &mut CachedText::Block { id, start } => {
-                let page = self
-                    .ml_mfp
-                    .as_deref_mut()
-                    .expect("an open memline")
-                    .page_mut(id);
-                page[start as usize..].as_mut_ptr().cast()
-            }
+            CachedText::Block { text, .. } => *text,
         }
     }
 
@@ -416,7 +419,7 @@ impl MemLine {
             CachedText::None => &[],
             CachedText::Owned(text) => &text[..len],
             CachedText::Placeholder(text) => text.to_bytes(),
-            &CachedText::Block { id, start } => {
+            &CachedText::Block { id, start, .. } => {
                 let page = self.ml_mfp.as_deref().expect("an open memline").page(id);
                 &page[start as usize..start as usize + len]
             }
@@ -430,7 +433,7 @@ impl MemLine {
             CachedText::None => b"\0",
             CachedText::Owned(text) => &text[..len],
             CachedText::Placeholder(text) => text.to_bytes_with_nul(),
-            &CachedText::Block { id, start } => {
+            &CachedText::Block { id, start, .. } => {
                 let page = self.ml_mfp.as_deref().expect("an open memline").page(id);
                 &page[start as usize..start as usize + len]
             }
@@ -443,7 +446,7 @@ impl MemLine {
         match &mut self.ml_line.text {
             CachedText::None | CachedText::Placeholder(_) => &mut [],
             CachedText::Owned(text) => &mut text[..len],
-            &mut CachedText::Block { id, start } => {
+            &mut CachedText::Block { id, start, .. } => {
                 let page = self
                     .ml_mfp
                     .as_deref_mut()
@@ -486,8 +489,14 @@ impl MemLine {
         textlen: ColNr,
         lnum: LineNr,
     ) {
+        let page = self
+            .ml_mfp
+            .as_deref_mut()
+            .expect("an open memline")
+            .page_mut(id);
+        let text = page[start as usize..].as_mut_ptr().cast();
         self.ml_line.lnum = lnum;
-        self.ml_line.text = CachedText::Block { id, start };
+        self.ml_line.text = CachedText::Block { id, start, text };
         self.ml_line.textlen = textlen;
     }
 

@@ -213,9 +213,7 @@ fn ml_store_line(mut buffer: Buf, id: BlockId, lnum: LineNr, new_line: &[u8]) {
         // lines sit at *lower* offsets.)
         let to = (txt_start as isize - extra as isize) as usize;
         dp.move_bytes(txt_start as usize, to, (start - txt_start) as usize);
-        for i in idx + 1..count {
-            dp.set_index(i, dp.index(i).wrapping_sub(shift));
-        }
+        dp.shift_index(idx + 1, count, shift.wrapping_neg());
     }
     dp.set_index(idx, dp.index(idx).wrapping_sub(shift));
     dp.set_free(free.wrapping_sub(shift));
@@ -357,8 +355,7 @@ pub(crate) fn ml_find_line(mut buffer: Buf, lnum: LineNr, action: c_int) -> Opti
         let pp = PointerBlock(buffer.b_ml.page(id));
         let count = usize::from(pp.count());
         let mut idx = 0;
-        while idx < count {
-            let t = pp.line_count(idx);
+        for t in pp.line_counts() {
             low += t;
             if low > lnum {
                 break;

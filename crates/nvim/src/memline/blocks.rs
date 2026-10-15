@@ -334,6 +334,48 @@ impl<P: AsRef<[u8]> + AsMut<[u8]>> DataBlock<P> {
         set_u32(self.bytes_mut(), Self::index_at(i), value);
     }
 
+    /// Index entries `from..to`, as bytes.
+    fn index_bytes_mut(&mut self, from: usize, to: usize) -> &mut [u8] {
+        let (lo, hi) = (Self::index_at(from), Self::index_at(to));
+        &mut self.bytes_mut()[lo..hi]
+    }
+
+    /// Add `delta` (wrapping, as the C arithmetic did) to index entries
+    /// `from..to`: the lines whose text moved by that much. The mark bit
+    /// rides along, as it did.
+    pub(crate) fn shift_index(&mut self, from: usize, to: usize, delta: c_uint) {
+        let (entries, _) = self.index_bytes_mut(from, to).as_chunks_mut::<INDEX_SIZE>();
+        for entry in entries {
+            *entry = u32::from_ne_bytes(*entry).wrapping_add(delta).to_ne_bytes();
+        }
+    }
+
+    /// Move `count` index entries from `from` to `to` (the ranges may
+    /// overlap), adding `delta` to each as it lands.
+    pub(crate) fn move_index(&mut self, from: usize, to: usize, count: usize, delta: c_uint) {
+        let (src, dst) = (Self::index_at(from), Self::index_at(to));
+        self.bytes_mut()
+            .copy_within(src..src + count * INDEX_SIZE, dst);
+        self.shift_index(to, to + count, delta);
+    }
+
+    /// Copy `count` index entries from `other`'s `from` to this block's
+    /// `to`, adding `delta` to each.
+    pub(crate) fn copy_index_from<Q: AsRef<[u8]>>(
+        &mut self,
+        other: &DataBlock<Q>,
+        from: usize,
+        to: usize,
+        count: usize,
+        delta: c_uint,
+    ) {
+        let src = DataBlock::<Q>::index_at(from);
+        let entries = &other.0.as_ref()[src..src + count * INDEX_SIZE];
+        self.index_bytes_mut(to, to + count)
+            .copy_from_slice(entries);
+        self.shift_index(to, to + count, delta);
+    }
+
     pub(crate) fn set_marked(&mut self, i: usize, marked: bool) {
         let entry = self.index(i);
         let entry = if marked {
@@ -425,11 +467,20 @@ impl<P: AsRef<[u8]>> PointerBlock<P> {
         )
     }
 
+    /// The line count of every entry, in order: what a walk down the tree
+    /// adds up to find the child holding a line. One bounds check for the
+    /// lot rather than one per entry.
+    #[inline]
+    pub(crate) fn line_counts(&self) -> impl Iterator<Item = LineNr> + '_ {
+        let count = usize::from(self.count());
+        let at = offset_of!(PointerEntry, pe_line_count);
+        let (entries, _) = self.bytes()[PE_AT..Self::entry_at(count)].as_chunks::<PE_SIZE>();
+        entries.iter().map(move |entry| get_i32(entry, at))
+    }
+
     /// The lines every entry accounts for, added up.
     pub(crate) fn line_total(&self) -> c_int {
-        (0..usize::from(self.count()))
-            .map(|i| self.line_count(i))
-            .sum()
+        self.line_counts().sum()
     }
 
     /// The bytes of entries `from..from + count`, for copying them into
@@ -752,6 +803,32 @@ mod tests {
         let start = block.txt_start() as usize;
         block.move_bytes(start, start - 2, 10);
         assert_eq!(&block.0[start - 2..start + 4], b"three\0");
+    }
+
+    #[test]
+    fn index_entries_move_and_shift_in_bulk() {
+        let mut block = DataBlock(page());
+        for i in 0..5 {
+            block.set_index(i, 100 * (u32::try_from(i).unwrap() + 1));
+        }
+        block.set_marked(2, true);
+        // Up one slot, as an insert makes room: overlapping, back to front.
+        block.move_index(1, 2, 4, 10u32.wrapping_neg());
+        let starts: Vec<c_uint> = (0..6).map(|i| block.line_start(i)).collect();
+        assert_eq!(starts, [100, 200, 190, 290, 390, 490]);
+        assert!(block.is_marked(3), "the mark moves with its entry");
+        // Back down, as a delete closes the gap.
+        block.move_index(2, 1, 4, 10);
+        assert_eq!(block.line_start(1), 200);
+        assert_eq!(block.line_start(4), 500);
+        let mut other = DataBlock(page());
+        other.copy_index_from(&block, 3, 0, 2, 1);
+        assert_eq!((other.line_start(0), other.line_start(1)), (401, 501));
+        assert_eq!(
+            PointerBlock(page()).line_counts().count(),
+            0,
+            "an empty pointer block has no entries"
+        );
     }
 
     #[test]

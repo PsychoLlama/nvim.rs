@@ -177,12 +177,8 @@ fn ml_insert_in_block(mut b: Buf, id: BlockId, at: InsertAt, new: &NewLine, spac
         let start = txt_start as usize;
         let n = (offset as usize).wrapping_sub(start + len as usize);
         dp.move_bytes(start + len as usize, start, n);
-        let mut i = line_count - 1;
-        while i > db_idx {
-            let entry = dp.index(i as usize).wrapping_sub(len);
-            dp.set_index((i + 1) as usize, entry);
-            i -= 1;
-        }
+        let following = (line_count - db_idx - 1) as usize;
+        dp.move_index(slot, slot + 1, following, len.wrapping_neg());
         dp.set_index(slot, offset.wrapping_sub(len));
     } else {
         // Add at the end, which is the start of the text.
@@ -306,10 +302,8 @@ fn ml_split_data_block(
             dp_left.set_txt_start(dp_left.txt_start().wrapping_add(data_moved as c_uint));
             dp_left.set_free(dp_left.free().wrapping_add(total_moved as c_uint));
 
-            let moved = (db_idx + 1) as usize..line_count_left as usize;
-            for (to, from) in (line_count_right as usize..).zip(moved) {
-                dp_right.set_index(to, dp_left.index(from).wrapping_add(offset));
-            }
+            let (from, to) = ((db_idx + 1) as usize, line_count_right as usize);
+            dp_right.copy_index_from(&dp_left, from, to, lines_moved as usize, offset);
             line_count_right += lines_moved;
             line_count_left -= lines_moved;
         }
@@ -599,9 +593,7 @@ pub(crate) fn ml_delete_int(mut buffer: Buf, lnum: LineNr, flags: c_int) -> Resu
             (text_start + size) as usize,
             (line_start - text_start) as usize,
         );
-        for i in idx..count - 1 {
-            dp.set_index(i, dp.index(i + 1).wrapping_add(size));
-        }
+        dp.move_index(idx + 1, idx, count - 1 - idx, size);
 
         dp.set_free(dp.free().wrapping_add(size + INDEX_SIZE as c_uint));
         dp.set_txt_start(text_start.wrapping_add(size));
