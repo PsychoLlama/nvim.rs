@@ -514,7 +514,11 @@ pub fn ml_setmarked(lnum: LineNr) {
 /// answer 0 once all are clear.
 fn clear_marks(first: bool) -> LineNr {
     let mut buffer = Buf::current();
-    let mut lnum = lowest_marked.get();
+    // Nothing marked yet leaves `lowest_marked` at 0, and line 0 is line
+    // 1's block. Upstream starts there anyway and reads index entry -1 --
+    // the top half of the block's line count, which is never marked -- so
+    // starting at line 1 skips only a read that could find nothing.
+    let mut lnum = lowest_marked.get().max(1);
     while lnum <= buffer.b_ml.ml_line_count {
         let Some(id) = ml_find_line(buffer, lnum, ML_FIND) else {
             return 0;

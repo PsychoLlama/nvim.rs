@@ -804,3 +804,28 @@ fn a_swap_file_with_a_wrong_magic_or_page_size_is_refused() {
     fx.run("set directory& swapfile&");
     fx.home();
 }
+
+/// `:global` marks lines in their data blocks (`ml_setmarked`), then walks
+/// the marks back out (`ml_firstmarked`) while it deletes, across block
+/// boundaries; and a `:g` that matches nothing still clears the marks from
+/// the start of the buffer.
+#[test]
+fn global_marks_lines_across_blocks() {
+    let sandbox = Sandbox::dir("memline-global-marks");
+    let fx = Probe::new(sandbox.editor());
+    scratch(&fx);
+    let lines = numbered(300, 60, 'G');
+    fx.run(&format!("call setline(1, {})", rendered(&lines)));
+    // Nothing marked yet: the walk starts from line 0's block.
+    fx.run("silent! g/nothing matches this/d");
+    holds(&fx, &lines);
+    // A '7' then a letter is the last digit of every tenth number.
+    fx.run("silent! g/7[a-z]/d");
+    let want: Vec<String> = lines
+        .iter()
+        .filter(|l| l.as_bytes()[5] != b'7')
+        .cloned()
+        .collect();
+    holds(&fx, &want);
+    unscratch(&fx);
+}

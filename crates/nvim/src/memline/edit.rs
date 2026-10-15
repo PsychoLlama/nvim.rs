@@ -545,7 +545,9 @@ pub(crate) fn ml_delete_int(mut buffer: Buf, lnum: LineNr, flags: c_int) -> Resu
 
     // Find the data block holding the line. This also fills the stack
     // with the blocks from the root down, and releases any locked block.
-    if !buffer.b_ml.is_open() {
+    // Line 0 is line 1's block, where upstream went on to delete whatever
+    // index entry -1 -- the block's own header -- said; it is refused.
+    if !buffer.b_ml.is_open() || lnum < 1 {
         return Err(Failed);
     }
     let Some(id) = ml_find_line(buffer, lnum, ML_DELETE) else {
