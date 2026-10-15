@@ -399,3 +399,33 @@ fn an_existing_file_is_kept_without_a_bang() {
     );
     restore(&fx);
 }
+
+#[test]
+fn float_globals_are_written_as_printf_writes_them() {
+    let sandbox = sources("ex_session_floats");
+    let fx = Probe::new(sandbox.editor());
+    restore(&fx);
+    fx.run("set sessionoptions=globals");
+    fx.run("let g:FltNeg = -1.5 | let g:FltPos = 2.0e10 | let g:FltTiny = 1.0e-7");
+    fx.run("let g:FltInf = 1.0 / 0 | let g:FltNinf = -1.0 / 0 | let g:FltNan = str2float('nan')");
+    fx.run("let g:FltKey_é = 3");
+    let mut got: Vec<String> = script(&fx, &sandbox, "mksession")
+        .into_iter()
+        .filter(|line| line.starts_with("let Flt"))
+        .collect();
+    got.sort();
+    assert_eq!(
+        got,
+        [
+            "let FltInf =  inf",
+            "let FltNan =  nan",
+            "let FltNeg = -1.500000",
+            "let FltNinf = -inf",
+            "let FltPos =  20000000000.000000",
+            "let FltTiny =  0.000000",
+        ]
+    );
+    fx.run("unlet g:FltNeg g:FltPos g:FltTiny g:FltInf g:FltNinf g:FltNan");
+    fx.run("unlet! g:FltKey_é");
+    restore(&fx);
+}

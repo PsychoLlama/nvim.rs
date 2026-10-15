@@ -75,6 +75,7 @@ mod path;
 mod printf_oracle;
 mod profile;
 mod regexp;
+mod runtime;
 mod search;
 mod sha256;
 mod shada;
