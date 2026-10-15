@@ -60,7 +60,7 @@ const fn no_pattern(magic: bool, dir: c_char) -> SearchPattern {
 /// `pat` and `additional_data` are owned allocations; [`free_spat`] is
 /// what releases them. The pair is also the interchange with ShaDa, which
 /// hands a slot's ownership over wholesale
-/// ([`set_search_pattern`]/[`set_substitute_pattern`]).
+/// ([`shada_set_pattern`]).
 pub(crate) static spats: GlobalCell<[SearchPattern; 2]> =
     GlobalCell::new([no_pattern(true, b'/' as c_char); 2]);
 

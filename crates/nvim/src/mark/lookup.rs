@@ -526,7 +526,7 @@ pub(super) unsafe fn switch_to_mark_buf(fm: *mut FileMark, pcmark_on_switch: boo
 /// `0..NMARKS` and `'0`-`'9` above them, `-1` for any other name.
 ///
 /// The same arithmetic is written out at four other sites (`setmark_pos`,
-/// `ex_delmarks`, and its inverse in `ex_marks` and `mark_global_iter`);
+/// `ex_delmarks`, and its inverse in `ex_marks` and `shada_global_marks`);
 /// `1787242636-jmarkmutate.py`'s `mark-digit-slot` is the anchor on all of
 /// them at once. Consolidating them means replacing the fixed array with a
 /// keyed map, which is a later phase's change.

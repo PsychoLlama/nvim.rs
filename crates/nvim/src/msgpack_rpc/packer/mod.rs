@@ -520,7 +520,7 @@ pub fn packer_string_buffer() -> PackerBuffer {
     let alloc = unsafe { xmalloc(INITIAL_SIZE) }.cast::<c_char>();
     // SAFETY: `xmalloc` never returns null and hands back `INITIAL_SIZE`
     // bytes nothing else names; `flush_string_buffer` owns them from here
-    // and `packer_take_string` gives them away.
+    // and `pack_to_bytes` gives them away.
     unsafe { PackerBuffer::new(alloc, INITIAL_SIZE, Some(flush_string_buffer)) }
 }
 
