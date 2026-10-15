@@ -6,14 +6,14 @@
 //! [`find_tags`](super::find_tags) will read it back in, and drops it if
 //! an equal one is already there.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 
-/// A help match's language and the NUL after it: `{name}@{lang}NUL`.
-const ML_EXTRA: usize = 3;
+/// The room upstream gave a help match's score: ten bytes, less the
+/// terminator.
+const SCORE_ROOM: usize = 10;
 
 impl FindTags {
     /// Convert the line just read from the tags file's own encoding.
@@ -21,28 +21,21 @@ impl FindTags {
     /// Converting the pattern the other way does not work, because the
     /// characters would not be recognised.
     pub(crate) fn convert_line(&mut self) {
-        let line = crate::cstr::in_chars(&self.lbuf).to_bytes();
-        let Some(mut converted) = self.vimconv.convert(line) else {
+        let Some(mut converted) = self.vimconv.convert(self.line()) else {
             return;
         };
         // What a C reader of the converted string sees, terminated.
-        converted.truncate(
-            converted
-                .iter()
-                .position(|&b| b == 0)
-                .unwrap_or(converted.len()),
-        );
+        converted.truncate(crate::cstr::until_nul(&converted).len());
+        self.line_len = converted.len();
         converted.push(0);
         if converted.len() > self.lbuf.len() {
             // Upstream sizes the buffer to exactly the converted line,
             // which leaves its last-but-one byte non-NUL — so the
             // caller reads that as "the line did not fit" and reads it
             // again into a buffer twice as big. Preserved.
-            self.lbuf = converted.iter().map(|&b| b as c_char).collect();
+            self.lbuf = converted;
         } else {
-            for (at, &byte) in converted.iter().enumerate() {
-                self.lbuf[at] = byte as c_char;
-            }
+            self.lbuf[..converted.len()].copy_from_slice(&converted);
         }
     }
 
@@ -52,131 +45,82 @@ impl FindTags {
         &mut self,
         tagp: &TagParts,
         margs: &MatchArgs,
-        buf_ffname: *mut c_char,
+        buf_ffname: Option<&CStr>,
     ) {
         let name_only = self.flags & TAG_NAMES as c_int != 0;
-        // SAFETY: `tagp`'s pointers bracket the fields of the line in the
-        // buffer, and `tag_fname` is NUL-terminated. The NUL written over
-        // `tagname_end` is put back before returning.
-        let is_current = unsafe {
-            test_for_current(
-                tagp.fname,
-                tagp.fname_end,
-                self.tag_fname.as_ptr().cast_mut(),
-                buf_ffname,
-            )
-        };
-        let is_static = unsafe { test_for_static(tagp) };
+        let line = self.line();
+        let is_current = test_for_current(tagp.fname.of(line), self.tag_fname.bytes(), buf_ffname);
+        let is_static = test_for_static(line, tagp);
         let bucket = self.bucket(is_static, is_current, margs);
 
-        let mfp = if self.help_only {
-            Some(unsafe { self.help_match(tagp, margs) })
+        let found = if self.help_only {
+            Some(self.help_match(tagp, margs, bucket))
         } else if name_only && self.get_searchpat {
+            let key = search_pattern_match(line, tagp);
             self.get_searchpat = false;
-            self.search_pattern_match(tagp)
+            key.map(|key| Found::new(key, bucket))
         } else if name_only {
+            let key = tagp.tagname.of(line).to_vec();
             // If wanted, read the line again to get the long form too.
             if State.get() & MODE_INSERT != 0 {
                 self.get_searchpat = p_sft();
             }
-            Some(name_match(tagp))
+            Some(Found::new(key, bucket))
         } else {
             Some(self.whole_match(bucket))
         };
 
-        if let Some(mfp) = mfp {
-            self.record(bucket, mfp);
+        if let Some(found) = found {
+            self.record(bucket, found);
         }
     }
 
-    /// A help match: `{name}@{lang}NUL{heuristic}NUL`.
-    ///
-    /// The heuristic is what orders the matches later; it is deliberately
-    /// past the NUL, so that it takes no part in finding duplicates.
-    ///
-    /// # Safety
-    /// `tagp`'s name must lie in the line buffer, ending at a TAB.
-    unsafe fn help_match(&self, tagp: &TagParts, margs: &MatchArgs) -> Match {
-        // SAFETY: the caller's promise; the TAB is put back below.
-        unsafe { *tagp.tagname_end = 0 };
-        let name = unsafe { CStr::from_ptr(tagp.tagname) }.to_bytes();
-        let len = name.len();
-
-        // One byte for the '@', ten for the number and its NUL, and
-        // `ML_EXTRA` for the language and the NUL after it.
-        let mut mfp = Match::zeroed(1 + len + 10 + ML_EXTRA + 1);
-        let out = mfp.bytes();
-        out[..len].copy_from_slice(name);
-        out[len] = b'@';
-        out[len + 1..len + 3].copy_from_slice(&self.help_lang);
+    /// A help match: `{name}@{lang}`, and the heuristic score that orders
+    /// the matches later — which takes no part in finding duplicates.
+    fn help_match(&self, tagp: &TagParts, margs: &MatchArgs, bucket: usize) -> Found {
+        let name = tagp.tagname.of(self.line());
+        let mut key = Vec::with_capacity(name.len() + 3);
+        key.extend_from_slice(name);
+        key.push(b'@');
+        key.extend_from_slice(&self.help_lang);
 
         let offset = if margs.match_re { margs.matchoff } else { 0 };
         let score = help_heuristic(name, offset, !margs.match_no_ic) + self.help_pri;
-        let at = len + 1 + ML_EXTRA;
-        let printed = format!("{score:06}");
-        // What `snprintf` would have had room for: everything left in
-        // the buffer, less its terminator.
-        let out = mfp.bytes();
-        let room = out.len() - at - 1;
-        let printed = &printed.as_bytes()[..printed.len().min(room)];
-        out[at..at + printed.len()].copy_from_slice(printed);
+        let mut score = format!("{score:06}").into_bytes();
+        // What `snprintf` had room for.
+        score.truncate(SCORE_ROOM);
 
-        unsafe { *tagp.tagname_end = TAB as c_char };
-        mfp
-    }
-
-    /// `'showfulltag'`: the search pattern of the line, without the `/^`
-    /// that opens it and the `$/` that may close it.
-    ///
-    /// Answers `None` when there is no pattern to take, which is how a
-    /// line addressed by number reads.
-    fn search_pattern_match(&self, tagp: &TagParts) -> Option<Match> {
-        // SAFETY: the caller's promise; the walk stops at the line's NUL.
-        let mut end = tagp.command;
-        if unsafe { *end } == b'/' as c_char {
-            while !matches!(unsafe { *end } as u8, 0 | b'\r' | b'\n' | b'$') {
-                end = unsafe { end.add(1) };
-            }
-        }
-        if unsafe { tagp.command.add(2) } >= end {
-            return None;
-        }
-        let len = unsafe { end.offset_from(tagp.command) } as usize - 2;
-        let mut mfp = Match::zeroed(len + 2);
-        mfp.bytes()[..len].copy_from_slice(unsafe {
-            core::slice::from_raw_parts(tagp.command.add(2).cast(), len)
-        });
-        Some(mfp)
+        let mut found = Found::new(key, bucket);
+        found.score = score;
+        found
     }
 
     /// The whole line, for a caller that wants to jump to the tag:
-    /// `<bucket><tags file><sep><line>NUL`.
-    ///
-    /// The fields are separated by 0x02 rather than NUL because the key
-    /// duplicates are found by ends at the first NUL; the caller puts them
-    /// back. The bucket is stored one higher so that it is never a NUL.
-    fn whole_match(&self, bucket: usize) -> Match {
-        // SAFETY: the caller's promise.
-        let line = unsafe { CStr::from_ptr(self.lbuf.as_ptr()) }.to_bytes();
+    /// `<tags file>NUL<line>`.
+    fn whole_match(&self, bucket: usize) -> Found {
+        let line = self.line();
         let fname = self.tag_fname.bytes();
-
-        let mut mfp = Match::zeroed(fname.len() + line.len() + 5);
-        let out = mfp.bytes();
-        out[0] = bucket as u8 + 1;
-        out[1..=fname.len()].copy_from_slice(fname);
-        out[fname.len() + 1] = TAG_SEP as u8;
-        let at = fname.len() + 2;
-        out[at..at + line.len()].copy_from_slice(line);
-        mfp
+        let mut key = Vec::with_capacity(fname.len() + 1 + line.len() + 1);
+        key.extend_from_slice(fname);
+        key.push(0);
+        key.extend_from_slice(line);
+        Found::new(key, bucket)
     }
 }
 
-/// Just the tag's name, for a caller that only wants the names.
-fn name_match(tagp: &TagParts) -> Match {
-    // SAFETY: the caller's promise.
-    let len = unsafe { tagp.tagname_end.offset_from(tagp.tagname) } as usize;
-    let mut mfp = Match::zeroed(len + 2);
-    mfp.bytes()[..len]
-        .copy_from_slice(unsafe { core::slice::from_raw_parts(tagp.tagname.cast(), len) });
-    mfp
+/// `'showfulltag'`: the search pattern of the line, without the `/^`
+/// that opens it and the `$/` that may close it.
+///
+/// Answers `None` when there is no pattern to take, which is how a line
+/// addressed by number reads.
+fn search_pattern_match(line: &[u8], tagp: &TagParts) -> Option<Vec<u8>> {
+    let command = &line[tagp.command..];
+    let mut end = 0;
+    if command.first() == Some(&b'/') {
+        end = command
+            .iter()
+            .position(|b| matches!(b, b'\r' | b'\n' | b'$'))
+            .unwrap_or(command.len());
+    }
+    (end > 2).then(|| command[2..end].to_vec())
 }

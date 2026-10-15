@@ -46,7 +46,7 @@ use crate::path::{
 use crate::types::AutoEvent;
 use crate::types::{BoolVarValue, CdCause, CdScope, FileID, LineNr, MAXPATHL, SaveVEvent};
 use crate::winlayer::Buf;
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 use std::ffi::CStr;
 
 mod chdir;
@@ -147,18 +147,6 @@ impl Name {
     /// The name as the NUL-terminated string it is stored as.
     pub(crate) fn as_cstr(&self) -> &CStr {
         cstr::in_bytes(&self.0)
-    }
-
-    /// For the callers outside the searcher (tags) that still hand a name to
-    /// a C reader.
-    pub(crate) fn as_ptr(&self) -> *const c_char {
-        self.0.as_ptr().cast()
-    }
-
-    /// For the C functions that rewrite a name in place. They only ever
-    /// shorten it, so [`truncate`](Name::truncate) puts the length back.
-    pub(crate) fn as_mut_ptr(&mut self) -> *mut c_char {
-        self.0.as_mut_ptr().cast()
     }
 
     /// Append `bytes`.

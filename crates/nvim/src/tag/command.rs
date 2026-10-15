@@ -8,110 +8,36 @@
 //! The matches of the last tag looked up are remembered between calls, so
 //! that `:tnext` does not have to read the tags files again.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use super::Jumped;
 use super::*;
-use crate::cstr;
-use crate::file_search::Name;
+use crate::formatted;
 use crate::highlight_group::HLF_W;
-use crate::memory::XString;
+use crate::memory::{ThinCString, XString};
 use crate::message::{MSG_IOBUFF_LEN, msg};
-use crate::message_fmt::{c_str, msg_cstr, to_message};
+use crate::message_fmt::{msg_cstr, to_message};
 use crate::pos::MAXCOL;
 use crate::semsg;
 use crate::types::{IOSIZE, Vv};
-use crate::vim_snprintf_safelen;
-use crate::winlayer::{Buf, Win};
+use crate::winlayer::{Buf, Win, WinId};
 use crate::{smsg, tr};
-use core::ffi::{CStr, c_char, c_int, c_uint};
-use core::ptr;
+use core::ffi::{CStr, c_int, c_uint};
 
-/// The preview window's stand-in for a tag stack.
-///
-/// A window carries a whole `Taggy` stack; `:ptag` has this one entry
-/// instead, and the handle *names* it rather than borrowing it, so it
-/// survives the `'tagfunc'` call and the autocommands a jump runs.
-#[derive(Clone, Copy)]
-pub(super) struct PtagEntry(*mut Taggy);
-
-/// The one place the preview entry's address is taken.
-pub(super) fn ptag_entry_handle() -> PtagEntry {
-    PtagEntry(ptag_entry.ptr())
-}
-
-impl PtagEntry {
-    /// The match the preview window is showing, and the buffer it came from.
-    pub(super) fn position(self) -> (c_int, c_int) {
-        // SAFETY: the only constructor names a `static`.
-        unsafe { ((*self.0).cur_match, (*self.0).cur_fnum) }
-    }
-
-    /// Remember where the preview window got to.
-    fn set_position(self, cur_match: c_int, cur_fnum: c_int) {
-        // SAFETY: as `position`.
-        unsafe { (*self.0).cur_match = cur_match };
-        // SAFETY: as `position`.
-        unsafe { (*self.0).cur_fnum = cur_fnum };
-    }
-
-    /// The tag being previewed, or NULL when there is none.
-    fn tagname(self) -> *mut c_char {
-        // SAFETY: as `position`.
-        unsafe { (*self.0).tagname }
-    }
-
-    /// Forget the previous preview tag and take a copy of `tag`.
-    ///
-    /// # Safety
-    /// `tag` must be NUL-terminated.
-    unsafe fn restart(self, tag: *const c_char) {
-        // SAFETY: as `position`; the entry owns its name.
-        unsafe { tagstack_clear_entry(&mut *self.0) };
-        // SAFETY: the caller's NUL-terminated string.
-        unsafe { (*self.0).tagname = xstrdup(tag) };
-    }
-}
-
-/// The matches of the tag last looked up: the array `find_tags` answered,
-/// which this owns and `free_string_array`s when it is replaced or dropped. An entry
-/// is not one C string but several fields with NULs between them, which is
-/// why it stays the array `parse_match` reads rather than a `Vec` of strings.
-struct TagMatches {
-    list: *mut *mut c_char,
-    len: c_int,
-}
-
-impl TagMatches {
-    const NONE: Self = Self {
-        list: ptr::null_mut(),
-        len: 0,
-    };
-
-    /// Match `i`, which must be one of them.
-    fn entry(&self, i: c_int) -> *mut c_char {
-        let i = usize::try_from(i).expect("a match index");
-        assert!(i < self.len as usize, "a match index");
-        // SAFETY: `list` holds `len` entries, and `i` is below it.
-        unsafe { *self.list.add(i) }
-    }
-}
-
-impl Drop for TagMatches {
-    fn drop(&mut self) {
-        // SAFETY: `find_tags`' array of `len` allocations, owned by this.
-        unsafe { free_string_array(self.len, self.list) };
-    }
-}
-
-static TAG_MATCHES: GlobalCell<TagMatches> = GlobalCell::new(TagMatches::NONE);
+/// The matches of the tag last looked up, in the order they are numbered.
+static TAG_MATCHES: GlobalCell<Vec<TagMatch>> = GlobalCell::new(Vec::new());
 
 /// How many matches there are.
 fn match_count() -> c_int {
-    TAG_MATCHES.with(|found| found.len)
+    TAG_MATCHES.with(|found| c_int::try_from(found.len()).unwrap_or(c_int::MAX))
+}
+
+/// A copy of match `i`, which must be one of them.
+fn match_at(i: c_int) -> TagMatch {
+    let i = usize::try_from(i).expect("a match index");
+    TAG_MATCHES.with(|found| found[i].clone())
 }
 
 /// The limit the last search used. `MAXCOL` means every match was found,
@@ -129,15 +55,35 @@ const NO_VIEW: FileMarkView = FileMarkView {
     skipcol: 0,
 };
 
+/// The preview window's entry: the match it shows, and the buffer it came
+/// from.
+fn ptag_position() -> (c_int, c_int) {
+    ptag_entry.with(|entry| (entry.cur_match, entry.cur_fnum))
+}
+
+/// Remember where the preview window got to.
+fn set_ptag_position(cur_match: c_int, cur_fnum: c_int) {
+    ptag_entry.with_mut(|entry| {
+        entry.cur_match = cur_match;
+        entry.cur_fnum = cur_fnum;
+    });
+}
+
+/// Forget the previous preview tag and remember `tag` instead.
+fn restart_ptag(tag: &XString) {
+    ptag_entry.with_mut(|entry| {
+        tagstack_clear_entry(entry);
+        entry.tagname = Some(ThinCString::from_bytes(tag));
+    });
+}
+
 /// Jump to a tag, or move about the tag stack.
 ///
 /// `tag` is the tag or pattern, empty for the forms that take none.
 /// `kind` is one of the `DT_*` constants, `count` the command's count,
 /// `forceit` its `!`, and `verbose` asks for "tag not found" to be
 /// reported.
-///
 pub fn do_tag(tag: &CStr, kind: c_int, count: c_int, forceit: c_int, verbose: bool) {
-    // SAFETY: the caller's promise; the globals are live.
     if tfu_in_use.get() {
         // The stack is what `'tagfunc'` is being asked to describe.
         tag_emsg(c"E986: Cannot modify the tag stack within tagfunc");
@@ -147,7 +93,7 @@ pub fn do_tag(tag: &CStr, kind: c_int, count: c_int, forceit: c_int, verbose: bo
         return;
     }
 
-    let mut cmd = unsafe { DoTag::new(tag.as_ptr().cast_mut(), kind, count, forceit, verbose) };
+    let mut cmd = DoTag::new(tag, kind, count, forceit, verbose);
     if cmd.prepare() {
         cmd.set_priority_buffer();
         cmd.run();
@@ -158,7 +104,7 @@ pub fn do_tag(tag: &CStr, kind: c_int, count: c_int, forceit: c_int, verbose: bo
 /// One `:tag`-family command in progress.
 struct DoTag {
     /// The tag or pattern given, empty for the argument-less forms.
-    tag: *mut c_char,
+    tag: XString,
     /// Which `DT_*` command this is. `DT_HELP` becomes `DT_TAG`, and a
     /// retry after a missing file becomes `DT_NEXT`.
     kind: c_int,
@@ -166,12 +112,10 @@ struct DoTag {
     forceit: c_int,
     verbose: bool,
 
-    /// The window's tag stack as it was when the command started.
-    ///
-    /// Deliberately a pointer taken once: `'tagfunc'` may close the window
-    /// out from under us, and comparing this against `curwin`'s stack
-    /// afterwards is how that is noticed.
-    tagstack: *mut Taggy,
+    /// The window whose tag stack the command works on, by identity:
+    /// `'tagfunc'` may close it, and comparing it against the current
+    /// window afterwards is how that is noticed.
+    win: WinId,
     /// Our own copy of the stack index and length, written back at the end.
     idx: c_int,
     len: c_int,
@@ -203,45 +147,30 @@ struct DoTag {
 
     /// Where the cursor was, put back when a `:tselect` is cancelled.
     saved_fmark: FileMark,
-    /// The buffer name matches are prioritised against.
-    buf_ffname: *mut c_char,
-    /// A copy of the stack entry's tag name: `'tagfunc'` may free the
-    /// entry it came from.
-    owned_name: Option<Name>,
+    /// The name of the buffer matches are prioritised against, a copy:
+    /// `'tagfunc'` may rename the buffer.
+    buf_ffname: Option<XString>,
     /// How many matches the previous command found.
     prev_num_matches: c_int,
 }
 
-// The methods below are safe because [`DoTag::new`] is where the promise is
-// paid: it records the window's tag stack and the editor's globals as they
-// were when the command started, and `run` re-checks the window before
-// touching the stack again. What each of these used to ask of its caller —
-// "the globals must be live" — is now this type's own invariant.
 impl DoTag {
-    /// # Safety
-    /// `curwin` and `curbuf` must be live, and `tag` NUL-terminated.
-    unsafe fn new(
-        tag: *mut c_char,
-        kind: c_int,
-        count: c_int,
-        forceit: c_int,
-        verbose: bool,
-    ) -> Self {
-        let win = Win::current_raw();
+    fn new(tag: &CStr, kind: c_int, count: c_int, forceit: c_int, verbose: bool) -> Self {
+        let win = Win::current();
         // `:help` tags are literal, and 'tagfunc' has no business
         // answering for them.
         let help = kind == DT_HELP as c_int;
-        let idx = unsafe { (*win).w_tagstackidx };
+        let idx = win.w_tagstackidx;
 
         let cmd = DoTag {
-            tag,
+            tag: XString::from_cstr(tag),
             kind: if help { DT_TAG as c_int } else { kind },
             count,
             forceit,
             verbose,
-            tagstack: (unsafe { &raw mut (*win).w_tagstack }).cast(),
+            win: win.id(),
             idx,
-            len: unsafe { (*win).w_tagstacklen },
+            len: win.w_tagstacklen,
             old_idx: idx,
             prev_idx: idx,
             cur_match: 0,
@@ -258,34 +187,28 @@ impl DoTag {
                 fnum: 0,
                 timestamp: 0,
                 view: NO_VIEW,
-                additional_data: ptr::null_mut(),
+                additional_data: core::ptr::null_mut(),
             },
-            buf_ffname: Buf::current().name.full_ptr(),
-            owned_name: None,
+            buf_ffname: Buf::current().name.full().map(XString::from_cstr),
             prev_num_matches: match_count(),
         };
         drop(nofile_fname.take());
         cmd
     }
 
-    /// One entry of the tag stack.
+    /// Work on stack entry `at` of the window the command started in.
     ///
-    /// # Safety
-    /// `at` must be within the stack, and the window must not have been
-    /// closed since the command started.
-    unsafe fn entry(&self, at: c_int) -> *mut Taggy {
-        // SAFETY: the caller's promise.
-        unsafe { self.tagstack.offset(at as isize) }
+    /// Answers `None` when that window has gone, or the entry is not one
+    /// the stack has.
+    fn with_entry<R>(&self, at: c_int, f: impl FnOnce(&mut Taggy) -> R) -> Option<R> {
+        let mut win = self.win.get()?;
+        let at = usize::try_from(at).ok()?;
+        win.w_tagstack.get_mut(at).map(f)
     }
 
-    /// The stack entry the command stands on.
-    ///
-    /// A fresh [`Tagg`] per access rather than a borrow held across the
-    /// body: `'tagfunc'` can run between two of these.
-    fn current(&self) -> Tagg {
-        // SAFETY: `idx` is inside the stack the command started on, and
-        // `run` checks the window was not closed before getting here.
-        unsafe { Tagg::new(self.entry(self.idx)) }
+    /// [`with_entry`](Self::with_entry) for the entry the command stands on.
+    fn with_current<R>(&self, f: impl FnOnce(&mut Taggy) -> R) -> Option<R> {
+        self.with_entry(self.idx, f)
     }
 
     /// Work out which tag and which of its matches is wanted, and record
@@ -295,13 +218,12 @@ impl DoTag {
     /// stack, a `:pop` that walked off the end, or a `CTRL-T` that has
     /// already jumped.
     fn prepare(&mut self) -> bool {
-        // SAFETY: the caller's promise.
-        if !p_tgst() && unsafe { *self.tag } != 0 {
+        if !p_tgst() && !self.tag.is_empty() {
             // 'tagstack' is off: jump without recording anything.
             self.use_tagstack = false;
             self.new_tag = true;
             if g_do_tagpreview.get() != 0 {
-                self.start_preview_tag();
+                restart_ptag(&self.tag);
             }
             return true;
         }
@@ -310,7 +232,7 @@ impl DoTag {
         self.use_tagstack = g_do_tagpreview.get() == 0;
 
         let named = matches!(self.kind as c_uint, DT_TAG | DT_SELECT | DT_JUMP | DT_LTAG);
-        if unsafe { *self.tag } != 0 && named {
+        if !self.tag.is_empty() && named {
             self.push_new_tag();
             self.new_tag = true;
         } else if !self.walk_stack() {
@@ -319,7 +241,7 @@ impl DoTag {
 
         if g_do_tagpreview.get() != 0 {
             if !self.selecting() {
-                ptag_entry_handle().set_position(self.cur_match, self.cur_fnum);
+                set_ptag_position(self.cur_match, self.cur_fnum);
             }
         } else {
             self.record_position();
@@ -332,50 +254,45 @@ impl DoTag {
         matches!(self.kind as c_uint, DT_SELECT | DT_JUMP)
     }
 
-    /// Start a fresh preview tag, forgetting the previous one.
-    fn start_preview_tag(&mut self) {
-        // SAFETY: the caller's promise.
-        unsafe { ptag_entry_handle().restart(self.tag) };
-    }
-
     /// A new tag was named: put it on the stack (or on the preview entry).
     fn push_new_tag(&mut self) {
-        // SAFETY: the caller's promise; every entry owns its own name.
         if g_do_tagpreview.get() != 0 {
-            let previous = ptag_entry_handle().tagname();
-            if !previous.is_null() && unsafe { cstr::eq(previous, self.tag) } {
+            let same = ptag_entry.with(|entry| {
+                entry
+                    .tagname
+                    .as_ref()
+                    .is_some_and(|previous| previous.as_bytes() == &self.tag[..])
+            });
+            if same {
                 // Jumping to the same tag again: keep the current
                 // match, so that the CursorHold example works.
-                (self.cur_match, self.cur_fnum) = ptag_entry_handle().position();
+                (self.cur_match, self.cur_fnum) = ptag_position();
             } else {
-                self.start_preview_tag();
+                restart_ptag(&self.tag);
             }
             return;
         }
 
+        let Some(mut win) = self.win.get() else {
+            return;
+        };
+        let stack = &mut win.w_tagstack;
         // Anything above the entry last used is now unreachable.
         while self.idx < self.len {
             self.len -= 1;
-            unsafe { tagstack_clear_entry(&mut *self.entry(self.len)) };
+            tagstack_clear_entry(&mut stack[stack_index(self.len)]);
         }
 
         self.len += 1;
         if self.len > TAGSTACKSIZE {
             // Full: drop the oldest entry and shift the rest down.
             self.len = TAGSTACKSIZE;
-            unsafe { tagstack_clear_entry(&mut *self.entry(0)) };
-            for i in 1..self.len {
-                unsafe { *self.entry(i - 1) = (*self.entry(i)).clone() };
-            }
+            drop_oldest(&mut stack[..stack_index(self.len)]);
             self.idx -= 1;
-            // The name moved down with the entry; the user data is
-            // about to be replaced, and must not be freed twice.
-            self.current().user_data = ptr::null_mut();
         }
 
-        // SAFETY: `tag` is the NUL-terminated name the command was given.
-        self.current().tagname = unsafe { xstrdup(self.tag) };
-        Win::current().w_tagstacklen = self.len;
+        stack[stack_index(self.idx)].tagname = Some(ThinCString::from_bytes(&self.tag));
+        win.w_tagstacklen = self.len;
         // Worth remembering where the cursor was.
         self.save_pos = true;
     }
@@ -386,7 +303,7 @@ impl DoTag {
     /// or a `:pop` has already done the jump.
     fn walk_stack(&mut self) -> bool {
         let empty = if g_do_tagpreview.get() != 0 {
-            ptag_entry_handle().tagname().is_null()
+            ptag_entry.with(|entry| entry.tagname.is_none())
         } else {
             self.len == 0
         };
@@ -412,8 +329,6 @@ impl DoTag {
     ///
     /// This does the whole jump itself, so it always answers `false`.
     fn pop_older(&mut self) -> bool {
-        // SAFETY: the caller's promise; the index is checked against the
-        // stack before any entry is read.
         // Opening the file resets it.
         let old_key_typed = KeyTyped.get();
 
@@ -435,8 +350,10 @@ impl DoTag {
 
         // A copy: autocommands may invalidate the stack before it is
         // used.
-        self.saved_fmark = self.current().fmark.clone();
-        let mark = self.saved_fmark.clone();
+        let Some(mark) = self.with_current(|entry| entry.fmark.clone()) else {
+            return false;
+        };
+        self.saved_fmark = mark.clone();
         if mark.fnum != Buf::current().handle {
             // Another file. If it cannot be opened (it may have
             // changed) keep the original position on the stack.
@@ -461,7 +378,7 @@ impl DoTag {
         Win::current().w_cursor.col = mark.mark.col;
         Win::current().w_set_curswant = true;
         if jop_flags.get() & kOptJopFlagView as c_uint != 0 {
-            unsafe { mark_view_restore(&raw mut self.saved_fmark) };
+            mark_view_restore(Some(&self.saved_fmark));
         }
         check_cursor(Win::current());
         if fdo_flags.get() & kOptFdoFlagTag as c_uint != 0 && old_key_typed {
@@ -470,7 +387,7 @@ impl DoTag {
 
         // The remembered matches are for a tag we have left.
         forget_matches();
-        unsafe { tag_freematch() };
+        tag_freematch();
         false
     }
 
@@ -479,7 +396,7 @@ impl DoTag {
     /// Answers `false` when the command is finished.
     fn go_newer(&mut self) -> bool {
         if g_do_tagpreview.get() != 0 {
-            (self.cur_match, self.cur_fnum) = ptag_entry_handle().position();
+            (self.cur_match, self.cur_fnum) = ptag_position();
             return true;
         }
 
@@ -497,23 +414,24 @@ impl DoTag {
             self.idx = 0;
             return false;
         }
-        self.cur_match = self.current().cur_match;
-        self.cur_fnum = self.current().cur_fnum;
+        if let Some(position) = self.with_current(|entry| (entry.cur_match, entry.cur_fnum)) {
+            (self.cur_match, self.cur_fnum) = position;
+        }
         true
     }
 
     /// `:tnext` and friends: another match of the tag already on the stack.
     fn go_other_match(&mut self) {
-        // SAFETY: the caller's promise.
         // Where to go back to if the selection is cancelled.
         self.prev_idx = self.idx;
 
         if g_do_tagpreview.get() != 0 {
-            (self.cur_match, self.cur_fnum) = ptag_entry_handle().position();
+            (self.cur_match, self.cur_fnum) = ptag_position();
         } else {
             self.idx = (self.idx - 1).max(0);
-            self.cur_match = self.current().cur_match;
-            self.cur_fnum = self.current().cur_fnum;
+            if let Some(position) = self.with_current(|entry| (entry.cur_match, entry.cur_fnum)) {
+                (self.cur_match, self.cur_fnum) = position;
+            }
         }
 
         match self.kind as c_uint {
@@ -535,26 +453,32 @@ impl DoTag {
 
     /// Remember on the stack where the jump is starting from.
     fn record_position(&mut self) {
-        self.saved_fmark = self.current().fmark.clone();
-        if self.save_pos {
-            let cursor = Win::current().w_cursor;
-            self.current().fmark.mark = cursor;
-            self.current().fmark.fnum = Buf::current().handle;
-            self.current().fmark.view = mark_view_make(Win::current(), cursor);
+        let save_pos = self.save_pos;
+        let selecting = self.selecting();
+        let (cur_match, cur_fnum) = (self.cur_match, self.cur_fnum);
+        let cursor = Win::current().w_cursor;
+        let view = mark_view_make(Win::current(), cursor);
+        let handle = Buf::current().handle;
+        let saved = self.with_current(|entry| {
+            let saved = entry.fmark.clone();
+            if save_pos {
+                entry.fmark.mark = cursor;
+                entry.fmark.fnum = handle;
+                entry.fmark.view = view;
+            }
+            if !selecting {
+                entry.cur_match = cur_match;
+                entry.cur_fnum = cur_fnum;
+            }
+            saved
+        });
+        if let Some(saved) = saved {
+            self.saved_fmark = saved;
         }
 
         // `curwin` changes in `jumpto_tag` for `:stag`, or when an
         // autocommand jumps to another window, so store the index now.
         Win::current().w_tagstackidx = self.idx;
-        if !self.selecting() {
-            let entry = unsafe {
-                (&raw mut (*Win::current_raw()).w_tagstack)
-                    .cast::<Taggy>()
-                    .offset(self.idx as isize)
-            };
-            unsafe { (*entry).cur_match = self.cur_match };
-            unsafe { (*entry).cur_fnum = self.cur_fnum };
-        }
     }
 
     /// Prioritise matches against the buffer `cur_fnum` names.
@@ -566,72 +490,72 @@ impl DoTag {
             return;
         }
         if let Some(buf) = find_buf(self.cur_fnum) {
-            self.buf_ffname = buf.name.full_ptr();
+            self.buf_ffname = buf.name.full().map(XString::from_cstr);
         }
     }
 
     /// Find the matches, choose one, and jump to it — retrying with the
     /// next match when the file a match names does not exist.
     fn run(&mut self) {
-        // SAFETY: the caller's promise; `name` points either into a copy
-        // this loop owns or into a global that outlives it.
         loop {
             let mut name = self.tag_name();
             // Whether the remembered matches are for a different tag.
-            // Read before `search` replaces the remembered name, and
-            // before a leading '/' is stepped over.
-            let other = unsafe { self.other_name(name) };
+            // Read before `search` replaces the remembered name.
+            let other = tagmatchname.with(|remembered| {
+                remembered
+                    .as_ref()
+                    .is_none_or(|remembered| remembered != &name)
+            });
             if (self.new_tag
                 || (self.cur_match >= match_count() && max_num_matches.get() != MAXCOL as c_int)
                 || other)
-                && !unsafe { self.search(&mut name, other) }
+                && !self.search(&mut name, other)
             {
                 return;
             }
 
             if match_count() <= 0 {
                 if self.verbose {
-                    // SAFETY: the message macros expand to a `vim_snprintf` over // the format literal above and the editor's message buffers.
-                    let name = unsafe { c_str(name) };
+                    let name = msg_cstr(name.as_cstr());
                     semsg!("E426: Tag not found: {name}");
                 }
                 g_do_tagpreview.set(0);
                 return;
             }
-            if !self.choose() || !unsafe { self.jump(name) } {
+            if !self.choose() || !self.jump(&name) {
                 return;
             }
         }
     }
 
-    /// The name to look up: the stack entry's, the preview entry's, or the
-    /// command's own argument.
-    fn tag_name(&mut self) -> *mut c_char {
-        // SAFETY: the caller's promise.
+    /// The name to look up — the stack entry's, the preview entry's, or the
+    /// command's own argument — as a copy: `'tagfunc'` may rewrite the
+    /// stack under us.
+    fn tag_name(&self) -> XString {
+        let from_entry = |entry: &Taggy| {
+            entry
+                .tagname
+                .as_ref()
+                .map_or_else(XString::new, |name| XString::from_bytes(name.as_bytes()))
+        };
         if self.use_tagstack {
-            // A copy: `'tagfunc'` may rewrite the stack under us.
-            let owned = Name::from_bytes(unsafe { cstr::bytes_at(self.current().tagname) });
-            self.owned_name = Some(owned);
-            self.owned_name.as_mut().unwrap().as_mut_ptr()
+            self.with_current(|entry| from_entry(entry))
+                .unwrap_or_default()
         } else if g_do_tagpreview.get() != 0 {
-            ptag_entry_handle().tagname()
+            ptag_entry.with(from_entry)
         } else {
-            self.tag
+            self.tag.clone()
         }
     }
 
-    /// Read the tags files (or ask `'tagfunc'`) for `name`.
+    /// Read the tags files (or ask `'tagfunc'`) for `name`, stepping it
+    /// past the `/` that makes it a regexp: what the messages after this
+    /// name is the pattern.
     ///
     /// Answers `false` when the window went away while searching.
-    ///
-    /// # Safety
-    /// `name` must be NUL-terminated; it is advanced past a leading `/`.
-    unsafe fn search(&mut self, name: &mut *mut c_char, other: bool) -> bool {
-        // SAFETY: the caller's promise; `find_tags` fills both locals and
-        // the matches it answers become ours.
+    fn search(&mut self, name: &mut XString, other: bool) -> bool {
         if other {
-            // SAFETY: `find_tags` filled `name` with a NUL-terminated tag.
-            tagmatchname.set(Some(unsafe { XString::from_cstr(CStr::from_ptr(*name)) }));
+            tagmatchname.set(Some(name.clone()));
         }
 
         if matches!(self.kind as c_uint, DT_SELECT | DT_JUMP | DT_LTAG) {
@@ -646,11 +570,12 @@ impl DoTag {
 
         // An argument starting with '/' is a regexp; anything else is
         // a literal name, and case is then not folded.
-        let mut flags = if !self.no_regexp && unsafe { **name } == b'/' as c_char {
-            *name = unsafe { name.add(1) };
-            TAG_REGEXP as c_int
-        } else {
-            TAG_NOIC as c_int
+        let mut flags = match &name[..] {
+            [b'/', rest @ ..] if !self.no_regexp => {
+                *name = XString::from_bytes(rest);
+                TAG_REGEXP as c_int
+            }
+            _ => TAG_NOIC as c_int,
         };
         if self.verbose {
             flags |= TAG_VERBOSE as c_int;
@@ -659,54 +584,32 @@ impl DoTag {
             flags |= TAG_NO_TAGFUNC as c_int;
         }
 
-        let mut new_num_matches = 0;
-        let mut new_matches = ptr::null_mut::<*mut c_char>();
-        if unsafe {
-            find_tags(
-                *name,
-                &raw mut new_num_matches,
-                &raw mut new_matches,
-                flags,
-                max_num_matches.get(),
-                self.buf_ffname,
-            )
-        }
-        .is_ok()
-            && new_num_matches < max_num_matches.get()
-        {
-            // Fewer than the limit: that is all of them.
-            max_num_matches.set(MAXCOL as c_int);
-        }
+        let buf_ffname = self.buf_ffname.as_ref().map(XString::as_cstr);
+        let found = find_tags(name, flags, max_num_matches.get(), buf_ffname);
+        let mut new_matches = match found {
+            Ok(found) => {
+                if c_int::try_from(found.len()).is_ok_and(|n| n < max_num_matches.get()) {
+                    // Fewer than the limit: that is all of them.
+                    max_num_matches.set(MAXCOL as c_int);
+                }
+                found
+            }
+            Err(_) => Vec::new(),
+        };
 
         // A tag function may do anything, which may make all sorts of
-        // things invalid. At least check that the tag stack is still
-        // the one we started with.
-        if self.tagstack != (unsafe { &raw mut (*Win::current_raw()).w_tagstack }).cast() {
+        // things invalid. At least check that the window whose stack we
+        // are working on is still the current one.
+        if Win::current().id() != self.win {
             tag_emsg(c"E1299: Window unexpectedly closed while searching for tags");
-            unsafe { free_string_array(new_num_matches, new_matches) };
             return false;
         }
 
         if !self.new_tag && !other {
-            unsafe { reorder_matches(new_matches, new_num_matches) };
+            TAG_MATCHES.with(|old| reorder_matches(old, &mut new_matches));
         }
-        TAG_MATCHES.set(TagMatches {
-            list: new_matches,
-            len: new_num_matches,
-        });
+        TAG_MATCHES.set(new_matches);
         true
-    }
-
-    /// Whether `name` is not the tag the remembered matches are for.
-    ///
-    /// # Safety
-    /// `name` must be NUL-terminated.
-    unsafe fn other_name(&self, name: *const c_char) -> bool {
-        // SAFETY: the caller's promise.
-        tagmatchname.with(|remembered| match remembered {
-            None => true,
-            Some(remembered) => !unsafe { cstr::eq(remembered.as_ptr(), name) },
-        })
     }
 
     /// Settle on which match to jump to, listing them and asking when the
@@ -714,25 +617,17 @@ impl DoTag {
     fn choose(&mut self) -> bool {
         let found = match_count();
         let mut ask = false;
-        if self.kind == DT_TAG as c_int && unsafe { *self.tag } != 0 {
+        if self.kind == DT_TAG as c_int && !self.tag.is_empty() {
             // A count on ":tag <name>" picks that match.
             self.cur_match = (self.count - 1).max(0);
         } else if self.kind == DT_SELECT as c_int || (self.kind == DT_JUMP as c_int && found > 1) {
-            unsafe {
-                print_tag_list(
-                    self.new_tag,
-                    self.use_tagstack,
-                    found,
-                    TAG_MATCHES.with(|found| found.list),
-                )
-            };
+            // A copy: the listing may be interrupted by anything.
+            let matches = TAG_MATCHES.with(Clone::clone);
+            print_tag_list(self.new_tag, self.use_tagstack, &matches);
             ask = true;
         } else if self.kind == DT_LTAG as c_int {
-            if unsafe { add_llist_tags(self.tag, found, TAG_MATCHES.with(|found| found.list)) }
-                .is_err()
-            {
-                return false;
-            }
+            let matches = TAG_MATCHES.with(Clone::clone);
+            add_llist_tags(&self.tag, &matches);
             // Jump to the first tag.
             self.cur_match = 0;
         }
@@ -742,7 +637,8 @@ impl DoTag {
             if chosen <= 0 || chosen > found || got_int.get() {
                 // No valid choice: change nothing.
                 if self.use_tagstack {
-                    self.current().fmark = self.saved_fmark.clone();
+                    let saved = self.saved_fmark.clone();
+                    self.with_current(|entry| entry.fmark = saved);
                     self.idx = self.prev_idx;
                 }
                 return false;
@@ -771,7 +667,7 @@ impl DoTag {
             self.record_choice();
             self.idx += 1;
         } else if g_do_tagpreview.get() != 0 {
-            ptag_entry_handle().set_position(self.cur_match, self.cur_fnum);
+            set_ptag_position(self.cur_match, self.cur_fnum);
         }
         true
     }
@@ -779,65 +675,50 @@ impl DoTag {
     /// Record which match was taken on the stack entry, with whatever
     /// `'tagfunc'` attached to it.
     fn record_choice(&mut self) {
-        // SAFETY: the caller's promise; the match outlives the copy taken
-        // out of it.
-        let entry = unsafe { self.entry(self.idx) };
-        unsafe { (*entry).cur_match = self.cur_match };
-        unsafe { (*entry).cur_fnum = self.cur_fnum };
-
-        if !self.use_tfu {
-            return;
-        }
-        let mut tp = TagParts::default();
-        if !unsafe {
-            parse_match(
-                TAG_MATCHES.with(|found| found.entry(self.cur_match)),
-                &mut tp,
-            )
-        } || tp.user_data.is_null()
-        {
-            return;
-        }
-        unsafe { xfree((*entry).user_data.cast()) };
-        let len = unsafe { tp.user_data_end.offset_from(tp.user_data) } as size_t;
-        unsafe { (*entry).user_data = xmemdupz(tp.user_data.cast(), len).cast() };
+        let (cur_match, cur_fnum) = (self.cur_match, self.cur_fnum);
+        let user_data = if self.use_tfu {
+            let found = match_at(self.cur_match);
+            match found.parse() {
+                (tp, true) => tp
+                    .user_data
+                    .map(|span| ThinCString::from_bytes(span.of(found.line()))),
+                (_, false) => None,
+            }
+        } else {
+            None
+        };
+        self.with_current(|entry| {
+            entry.cur_match = cur_match;
+            entry.cur_fnum = cur_fnum;
+            if user_data.is_some() {
+                entry.user_data = user_data;
+            }
+        });
     }
 
     /// Jump to the chosen match.
     ///
     /// Answers `true` when the file it named did not exist and the next
     /// match is worth trying.
-    ///
-    /// # Safety
-    /// `name` must be NUL-terminated and the globals live.
-    unsafe fn jump(&mut self, name: *mut c_char) -> bool {
-        // `v:swapcommand` is read by a SwapExists autocommand, which can
-        // format anything it likes; the text is this frame's.
-        // `v:swapcommand` is read by a SwapExists autocommand, which can
-        // format anything it likes; the text is this frame's.
-        let mut swapcmd = [0 as c_char; IOSIZE as usize];
-        // SAFETY: the caller's promise.
+    fn jump(&mut self, name: &XString) -> bool {
         // Only when about to try the next match: otherwise E429 below
         // reports it.
         if self.error_cur_match != self.cur_match
             && let Some(missing) = nofile_fname.with(Clone::clone)
         {
-            // SAFETY: the message macros expand to a `vim_snprintf` over
-            // the format literal above and the editor's message buffers.
             let arg0 = msg_cstr(missing.as_cstr());
             smsg!(0, "File \"{arg0}\" does not exist");
         }
 
-        let entry = TAG_MATCHES.with(|found| found.entry(self.cur_match));
-        let ignored_case = unsafe { *entry } as c_int & MT_IC_OFF as c_int != 0;
+        let found = match_at(self.cur_match);
+        let ignored_case = usize::from(found.priority) & MT_IC_OFF as usize != 0;
         self.report_count(ignored_case);
 
-        // Let the SwapExists event know what tag is being jumped to.
-        let str_m = IOSIZE as size_t;
-        let fmt = c":ta %s\r".as_ptr();
-        let len = unsafe { vim_snprintf_safelen!(swapcmd.as_mut_ptr(), str_m, fmt, name) };
-        set_vim_var_string(Vv::Swapcommand, Some(&cstr::as_bytes(&swapcmd)[..len]));
-        let result = unsafe { jumpto_tag(entry, self.forceit, true) };
+        // Let the SwapExists event know what tag is being jumped to, cut
+        // where upstream's `IOSIZE` scratch cut it.
+        let swapcmd = formatted!(IOSIZE as usize, b":ta %s\r", &name[..]);
+        set_vim_var_string(Vv::Swapcommand, Some(&swapcmd));
+        let result = jumpto_tag(found, self.forceit, true);
         set_vim_var_string(Vv::Swapcommand, None);
 
         if result != Ok(Jumped::NoSuchFile) {
@@ -857,8 +738,6 @@ impl DoTag {
                     || self.cur_match < match_count() - 1));
         if !more {
             let missing = nofile_fname.with(Clone::clone).unwrap_or_default();
-            // SAFETY: the message macros expand to a `vim_snprintf` over
-            // the format literal above and the editor's message buffers.
             let arg0 = msg_cstr(missing.as_cstr());
             semsg!("E429: File \"{arg0}\" does not exist");
             return false;
@@ -911,7 +790,6 @@ impl DoTag {
 
     /// Write the stack index back, and clear the one-command flags.
     fn finish(&mut self) {
-        // SAFETY: the caller's promise.
         // Only when using the tag stack, and only when the index is
         // one this window still has.
         if self.use_tagstack && self.idx <= Win::current().w_tagstacklen {
@@ -923,38 +801,27 @@ impl DoTag {
     }
 }
 
+/// A stack position as an index; the command keeps them in range.
+fn stack_index(at: c_int) -> usize {
+    usize::try_from(at).expect("a tag stack index")
+}
+
 /// Move the matches we already had to the front of the new list.
 ///
 /// Keeps the order from changing when `:tnext` jumps to another file,
-/// which would otherwise re-prioritise everything.
-///
-/// # Safety
-/// Both lists must hold their stated number of matches.
-unsafe fn reorder_matches(new_matches: *mut *mut c_char, new_num_matches: c_int) {
-    // SAFETY: the caller's promise; every match outlives the `TagParts`
-    // taken from it.
+/// which would otherwise re-prioritise everything. Two matches are the
+/// same when their lines are.
+fn reorder_matches(old: &[TagMatch], new: &mut [TagMatch]) {
     let mut at = 0;
-    let mut old = TagParts::default();
-    let mut new = TagParts::default();
-    for j in 0..match_count() {
-        unsafe { parse_match(TAG_MATCHES.with(|found| found.entry(j)), &mut old) };
-        for i in at..new_num_matches {
-            unsafe { parse_match(*new_matches.offset(i as isize), &mut new) };
-            if !unsafe { cstr::eq(old.tagname, new.tagname) } {
-                continue;
-            }
-            let found = unsafe { *new_matches.offset(i as isize) };
-            for k in (at + 1..=i).rev() {
-                unsafe { *new_matches.offset(k as isize) = *new_matches.offset(k as isize - 1) };
-            }
-            unsafe { *new_matches.offset(at as isize) = found };
+    for previous in old {
+        if let Some(i) = (at..new.len()).find(|&i| new[i].line() == previous.line()) {
+            new[at..=i].rotate_right(1);
             at += 1;
-            break;
         }
     }
 }
 
-/// Throw the remembered matches away. Nothing may still be reading one.
+/// Throw the remembered matches away.
 pub(crate) fn forget_matches() {
-    TAG_MATCHES.set(TagMatches::NONE);
+    TAG_MATCHES.set(Vec::new());
 }

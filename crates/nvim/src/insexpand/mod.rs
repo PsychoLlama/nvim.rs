@@ -107,7 +107,7 @@ use crate::state::mode::{
     edit_submode_highl, edit_submode_pre,
 };
 use crate::state::{MODE_INSERT, REPLACE_FLAG, may_trigger_modechanged};
-use crate::tag::find_tags;
+use crate::tag::find_tag_names;
 use crate::tag::state::g_tag_at_cursor;
 use crate::textformat::auto_format;
 use crate::types::{

@@ -476,15 +476,13 @@ pub(crate) unsafe fn replace_last_used_pattern(s: *const c_char) {
 /// # Safety
 /// `pat` must be a NUL-terminated string.
 pub unsafe fn ignorecase(pat: *mut c_char) -> bool {
-    unsafe { ignorecase_opt(pat, p_ic(), p_scs()) }
+    // SAFETY: the caller's NUL-terminated pattern.
+    ignorecase_opt(unsafe { CStr::from_ptr(pat) }, p_ic(), p_scs())
 }
 
-/// [`ignorecase`] of a pattern the caller owns.
+/// [`ignorecase`] of a pattern the caller holds.
 pub(crate) fn ignorecase_of(pat: &CStr) -> bool {
-    // A copy, for the pointer the walk takes.
-    let mut owned = pat.to_bytes_with_nul().to_vec();
-    // SAFETY: a NUL-terminated copy this call owns.
-    unsafe { ignorecase(owned.as_mut_ptr().cast()) }
+    ignorecase_opt(pat, p_ic(), p_scs())
 }
 
 /// [`pat_has_uppercase`] of a pattern the caller owns.
@@ -497,19 +495,17 @@ pub(crate) fn pat_has_uppercase_of(pat: &CStr) -> bool {
 
 /// As [`ignorecase`] but with the `'ignorecase'`/`'smartcase'` values
 /// passed in.
-///
-/// # Safety
-/// `pat` must be a NUL-terminated string.
-pub unsafe fn ignorecase_opt(pat: *mut c_char, ic_in: bool, scs: bool) -> bool {
+pub fn ignorecase_opt(pat: &CStr, ic_in: bool, scs: bool) -> bool {
     let mut ic = ic_in;
     // 'infercase' completion does its own case handling.
-    // SAFETY: the caller's NUL-terminated pattern.
     if ic
         && !no_smartcase.get()
         && scs
         && !(ctrl_x_mode_not_default() && Buf::current().b_p_inf != 0)
     {
-        ic = !unsafe { pat_has_uppercase(pat) };
+        // SAFETY: a NUL-terminated pattern, which the walk only reads (it is
+        // given no slot to rewrite the pattern into).
+        ic = !unsafe { pat_has_uppercase(pat.as_ptr().cast_mut()) };
     }
     no_smartcase.set(false);
     ic

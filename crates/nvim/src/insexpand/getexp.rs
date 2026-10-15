@@ -339,21 +339,18 @@ pub(crate) fn get_next_tag_completion() {
     P_IC.set(unsafe { ignorecase(compl_pattern().data()) });
     g_tag_at_cursor.set(true);
 
-    let mut matches: *mut *mut c_char = ptr::null_mut();
-    let mut num_matches = 0;
     // Bounded to TAG_MANY, which is what stops an empty pattern finding
     // an enormous number of matches.
-    let mut flags = TAG_REGEXP | TAG_NAMES | TAG_NOIC | TAG_INS_COMP;
+    let mut flags = TAG_REGEXP | TAG_NOIC | TAG_INS_COMP;
     if ctrl_x_mode_not_default() {
         flags |= TAG_VERBOSE;
     }
-    let (pat, fname) = (compl_pattern().data(), Buf::current().name.full_ptr());
-    let (count, out) = (&raw mut num_matches, &raw mut matches);
-    // SAFETY: `pat` is the running completion's NUL-terminated pattern, and
-    // the two out-parameters are this frame's own locals.
-    let found = unsafe { find_tags(pat, count, out, flags, TAG_MANY, fname) };
-    if found.is_ok() && num_matches > 0 {
-        unsafe { ins_compl_add_matches(num_matches, matches, c_int::from(p_ic())) };
+    // Copies: the search checks for typed keys and may call 'tagfunc'.
+    let pattern = compl_pattern().to_owned();
+    let fname = Buf::current().name.full().map(XString::from_cstr);
+    let fname = fname.as_ref().map(XString::as_cstr);
+    if let Ok(matches) = find_tag_names(pattern.as_bytes(), flags, TAG_MANY, fname) {
+        ins_compl_add_match_list(&matches, p_ic());
     }
 
     g_tag_at_cursor.set(false);

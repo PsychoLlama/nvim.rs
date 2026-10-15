@@ -490,7 +490,7 @@ pub unsafe fn mark_move_to(mut fm: *mut FileMark, flags: MarkMove) -> MarkMoveRe
     }
     if flags as c_uint & kMarkSetView as c_uint != 0 {
         // SAFETY: as above.
-        unsafe { mark_view_restore(fm) };
+        mark_view_restore(unsafe { fm.as_ref() });
     }
     if res & (kMarkSwitchedBuf | kMarkChangedCursor) != 0 {
         check_cursor(win);

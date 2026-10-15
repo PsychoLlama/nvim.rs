@@ -681,7 +681,7 @@ pub fn buflist_getfile(
     }
     if jop_flags.get() & kOptJopFlagView as c_int as u32 != 0 && restore_view {
         // SAFETY: the mark read above, which is still live.
-        unsafe { mark_view_restore(fm) };
+        mark_view_restore(unsafe { fm.as_ref() });
     }
     Ok(())
 }
@@ -730,7 +730,7 @@ pub(crate) fn buflist_getfpos() {
     }
     if jop_flags.get() & kOptJopFlagView as c_int as u32 != 0 {
         // SAFETY: the mark read above, which is still live.
-        unsafe { mark_view_restore(fm) };
+        mark_view_restore(unsafe { fm.as_ref() });
     }
 }
 

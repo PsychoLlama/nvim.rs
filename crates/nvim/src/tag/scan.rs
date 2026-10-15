@@ -5,11 +5,10 @@
 //! each one, and hands back the matching lines grouped by how good a match
 //! they are. [`FindTags`] is the state it threads through the readers in
 //! [`parse`](super::parse) and [`collect`](super::collect).
+//! [`find_tag_names`] and [`find_help_tag_matches`] are the same search for
+//! the two callers that want something other than whole lines.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
-// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::cstr;
@@ -22,15 +21,14 @@ use crate::options::{
 };
 use crate::optionstr::OptString;
 use crate::pos::MAXCOL;
-use crate::regexp::RE_MAGIC;
+use crate::regexp::{OwnedMatch, RE_MAGIC};
+use crate::search::ignorecase_opt;
 use crate::semsg;
 use crate::smsg;
-use crate::strings::has_char;
-use crate::strings::vim_strchr;
-use crate::types::{CONV_NONE, CONV_NONE_INIT, Failed, NUL, OK};
+use crate::types::{CONV_NONE, CONV_NONE_INIT, FAIL, Failed, OK};
 use crate::winlayer::Buf;
-use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
+use core::ffi::{CStr, c_int};
+use core::hash::{Hash, Hasher};
 use std::collections::HashSet;
 
 /// How many priority buckets a match can land in: four kinds of match,
@@ -69,71 +67,65 @@ pub(crate) enum Reading {
     StepForward,
 }
 
-/// The tag pattern, as the caller gave it and as it is searched for.
+/// The tag pattern, as it is searched for.
 pub(crate) struct Pattern {
-    /// What to look for. Points either at the caller's pattern or at the
-    /// copy [`find_tags`] made when it stripped an `@xx` help language off
-    /// the end.
-    pub(crate) pat: *mut c_char,
+    /// What to look for: the caller's pattern, less the `@xx` help
+    /// language [`find_tags`] stripped off the end.
+    pub(crate) pat: XString,
     /// How much of `pat` counts, after `'taglength'` has had its say.
-    pub(crate) len: c_int,
-    /// The leading part of `pat` that holds no regexp metacharacter — the
-    /// prefix a sorted tags file can be bisected on.
-    pub(crate) head: *mut c_char,
-    /// How much of `head` counts; zero when there is no usable prefix, in
+    pub(crate) len: usize,
+    /// Where the leading part of `pat` that holds no regexp metacharacter
+    /// starts — the prefix a sorted tags file can be bisected on.
+    head_at: usize,
+    /// How much of the head counts; zero when there is no usable prefix, in
     /// which case the file has to be read line by line.
-    pub(crate) headlen: c_int,
-    /// The compiled pattern, when the caller asked for a regexp.
-    pub(crate) regmatch: RegMatch,
-}
-
-impl Drop for Pattern {
-    fn drop(&mut self) {
-        // SAFETY: `regprog` came from `vim_regcomp`, or is NULL.
-        unsafe { vim_regfree(self.regmatch.regprog) };
-    }
+    pub(crate) headlen: usize,
+    /// The compiled pattern when the caller asked for a regexp. Its
+    /// `rm_ic` is the search's "ignore case" whether or not there is one.
+    pub(crate) regmatch: OwnedMatch,
 }
 
 impl Pattern {
+    /// The pattern from its head on.
+    pub(crate) fn head(&self) -> &[u8] {
+        &self.pat[self.head_at..]
+    }
+
     /// Take the pattern apart: what a bisection can compare on, and the
     /// compiled regexp when one was asked for.
     fn prepare(&mut self, has_re: bool) {
-        self.head = self.pat;
+        self.head_at = 0;
         self.headlen = self.len;
         if !has_re {
-            self.regmatch.regprog = ptr::null_mut();
             return;
         }
-        // SAFETY: `pat` is the caller's NUL-terminated pattern.
         // A pattern anchored with `^` or `\<` still has a plain head
         // after the anchor, which is what keeps bisection possible.
-        if unsafe { *self.pat } == b'^' as c_char {
-            self.head = unsafe { self.pat.add(1) };
-        } else if unsafe { *self.pat } == b'\\' as c_char
-            && unsafe { *self.pat.add(1) } == b'<' as c_char
-        {
-            self.head = unsafe { self.pat.add(2) };
+        let pat: &[u8] = &self.pat;
+        if pat.first() == Some(&b'^') {
+            self.head_at = 1;
+        } else if pat.starts_with(b"\\<") {
+            self.head_at = 2;
         }
-        if self.head == self.pat {
-            self.headlen = 0;
+        self.headlen = if self.head_at == 0 {
+            0
         } else {
             // The head ends at the first metacharacter.
-            let meta = if magic_isset() { c".[~*\\$" } else { c"\\$" };
-            self.headlen = 0;
-            loop {
-                let at = unsafe { *self.head.offset(self.headlen as isize) } as u8;
-                if at == 0 || has_char(meta, at as c_int) {
-                    break;
-                }
-                self.headlen += 1;
-            }
+            let meta: &[u8] = if magic_isset() { b".[~*\\$" } else { b"\\$" };
+            pat[self.head_at..]
+                .iter()
+                .position(|b| meta.contains(b))
+                .unwrap_or(pat.len() - self.head_at)
+        };
+        if let Ok(limit) = usize::try_from(p_tl())
+            && limit != 0
+            && self.headlen > limit
+        {
+            self.headlen = limit;
         }
-        if p_tl() != 0 && self.headlen as OptInt > p_tl() {
-            self.headlen = p_tl() as c_int;
-        }
-        // SAFETY: the pattern this scan was built with, NUL-terminated.
-        let pat = unsafe { cstr::at(self.pat) };
-        self.regmatch.regprog = vim_regcomp(pat, if magic_isset() { RE_MAGIC } else { 0 });
+        let flags = if magic_isset() { RE_MAGIC } else { 0 };
+        self.regmatch =
+            OwnedMatch::compile(self.pat.as_cstr(), flags, false).unwrap_or_else(OwnedMatch::none);
     }
 }
 
@@ -189,89 +181,101 @@ impl MatchArgs {
     }
 }
 
-/// One match, in the form [`find_tags`] hands it to its caller: an
-/// allocation the caller will `xfree`.
+/// One match, as the search keeps it until it hands the list over.
 ///
-/// Everything up to the first NUL is the key duplicates are found by; a
-/// help match carries its sort heuristic after that NUL, and every kind
-/// leaves a byte or two of slack at the end, as upstream does — the
-/// consumers write into it.
-pub(crate) struct Match {
-    at: *mut u8,
-    len: usize,
+/// Two matches are the same match when their keys are equal; the score
+/// and the order found take no part in that.
+pub(crate) struct Found {
+    /// When it was found, which orders a bucket.
+    seq: usize,
+    /// The match itself: `<tags file>NUL<line>` for a whole line, the name
+    /// (or a `'showfulltag'` pattern) alone, or `<name>@<lang>` for help.
+    pub(crate) key: Vec<u8>,
+    /// A help match's heuristic score, which orders the help listing.
+    pub(crate) score: Vec<u8>,
+    /// The `MT_*` priority the caller is told: the bucket, except for a
+    /// `'tagfunc'` answer, which carries its own.
+    pub(crate) priority: u8,
 }
 
-impl Match {
-    /// Room for `len` bytes, all zero.
-    #[inline]
-    pub(crate) fn zeroed(len: usize) -> Self {
-        // SAFETY: `len` bytes are allocated and immediately zeroed.
-        let at = unsafe { xmalloc(len) }.cast::<u8>();
-        unsafe { at.write_bytes(0, len) };
-        Match { at, len }
-    }
-
-    /// The whole allocation, slack included.
-    #[inline]
-    pub(crate) fn bytes(&mut self) -> &mut [u8] {
-        // SAFETY: `len` bytes were allocated and zeroed at construction.
-        unsafe { core::slice::from_raw_parts_mut(self.at, self.len) }
-    }
-
-    /// Where the match's own bytes are, for a [`Key`] into it.
-    fn at(&self) -> *const u8 {
-        self.at
-    }
-
-    /// Hand the allocation over to the caller of [`find_tags`].
-    fn into_raw(self) -> *mut c_char {
-        let at = self.at;
-        core::mem::forget(self);
-        at.cast()
+impl Found {
+    pub(crate) fn new(key: Vec<u8>, priority: usize) -> Self {
+        Found {
+            seq: 0,
+            key,
+            score: Vec::new(),
+            priority: u8::try_from(priority).expect("an MT_* bucket"),
+        }
     }
 }
 
-impl Drop for Match {
-    fn drop(&mut self) {
-        // SAFETY: the allocation came from `xmalloc` and is dropped once.
-        unsafe { xfree(self.at.cast()) };
+impl Hash for Found {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.key.hash(state);
     }
 }
 
-/// What two matches are compared on: the bytes of a [`Match`] before its
-/// first NUL.
-///
-/// This borrows rather than copies. The buffer belongs to a `Match` in the
-/// same bucket and is a heap allocation, so it does not move when the
-/// vector holding that `Match` grows; the set and the vector are emptied
-/// together.
-#[derive(Clone, Copy)]
-struct Key(*const u8);
-
-impl Key {
-    fn bytes(&self) -> &[u8] {
-        // SAFETY: every `Match` is NUL-terminated within what it wrote,
-        // and outlives the key pointing at it.
-        unsafe { CStr::from_ptr(self.0.cast()) }.to_bytes()
-    }
-}
-
-impl core::hash::Hash for Key {
-    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
-        self.bytes().hash(state);
-    }
-}
-
-impl PartialEq for Key {
+impl PartialEq for Found {
     fn eq(&self, other: &Self) -> bool {
-        self.bytes() == other.bytes()
+        self.key == other.key
     }
 }
 
-impl Eq for Key {}
+impl Eq for Found {}
 
-/// The keys of the matches in one bucket.
-type Seen = HashSet<Key>;
+/// A match [`find_tags`] answered: one line of a tags file — or a
+/// `'tagfunc'` answer in that shape — and the file it came from.
+#[derive(Clone)]
+pub(crate) struct TagMatch {
+    /// The `MT_*` priority it was filed under.
+    pub(crate) priority: u8,
+    /// `<tags file name>NUL<line>NUL`.
+    text: Vec<u8>,
+    /// Where the line starts in `text`.
+    line_at: usize,
+}
+
+impl TagMatch {
+    fn new(priority: u8, mut text: Vec<u8>) -> Self {
+        let line_at = cstr::until_nul(&text).len() + 1;
+        // The list upstream hands back separates the two parts with 0x02
+        // and turns *every* 0x02 back into a NUL, so a line reads only up
+        // to the first one it holds.
+        if let Some(sep) = text[line_at..].iter().position(|&b| b == TAG_SEP as u8) {
+            text.truncate(line_at + sep);
+        }
+        text.push(0);
+        TagMatch {
+            priority,
+            text,
+            line_at,
+        }
+    }
+
+    /// The name of the tags file the line came from; empty for a
+    /// `'tagfunc'` answer.
+    pub(crate) fn tag_fname(&self) -> &[u8] {
+        &self.text[..self.line_at - 1]
+    }
+
+    /// The line, without its terminator.
+    pub(crate) fn line(&self) -> &[u8] {
+        &self.text[self.line_at..self.text.len() - 1]
+    }
+
+    /// The line and its terminator, for the readers that walk to it.
+    pub(crate) fn line_nul(&self) -> &[u8] {
+        &self.text[self.line_at..]
+    }
+
+    /// The line's fields; see [`parse_match`].
+    pub(crate) fn parse(&self) -> (TagParts, bool) {
+        parse_match(self.line_nul())
+    }
+}
+
+/// The matches in one bucket.
+type Seen = HashSet<Found>;
 
 /// The state one [`find_tags`] call threads through the readers.
 pub(crate) struct FindTags {
@@ -282,18 +286,19 @@ pub(crate) struct FindTags {
     pub(crate) stop_searching: bool,
     /// What is being looked for.
     pub(crate) orgpat: Pattern,
-    /// The line last read from the tags file. Its length is the buffer
-    /// size `vim_fgets` is given, and it doubles whenever a line does not
-    /// fit.
-    pub(crate) lbuf: Vec<c_char>,
+    /// The buffer the last line was read into. Its length is the size the
+    /// reader is given, and it doubles whenever a line does not fit.
+    pub(crate) lbuf: Vec<u8>,
+    /// How long the line in `lbuf` is, up to its terminator.
+    pub(crate) line_len: usize,
     /// The name of the tags file being read.
     pub(crate) tag_fname: Name,
     /// The tags file being read.
-    pub(crate) fp: *mut FILE,
+    pub(crate) reader: Option<TagReader>,
     /// The `TAG_*` flags the caller passed.
     pub(crate) flags: c_int,
     /// The `!_TAG_FILE_SORTED` value, NUL when the file had no header.
-    pub(crate) tag_file_sorted: c_int,
+    pub(crate) tag_file_sorted: u8,
     /// `'showfulltag'`: read the line already in the buffer again, this
     /// time for its search command rather than its name.
     pub(crate) get_searchpat: bool,
@@ -313,42 +318,39 @@ pub(crate) struct FindTags {
     /// help matches.
     pub(crate) help_pri: c_int,
     /// The language the pattern's `@xx` suffix asked for, if any.
-    help_lang_find: *const c_char,
+    help_lang_find: Option<[u8; 2]>,
     /// The current buffer is a `.txt` help file, whose language is "en".
     is_txt: bool,
     /// How many matches have been found, over every bucket.
     pub(crate) match_count: c_int,
-    /// The matches, one bucket per priority, in the order found.
-    found: [Vec<Match>; MT_COUNT],
-    /// The keys already in `found`, so a duplicate can be dropped.
-    seen: [Seen; MT_COUNT],
+    /// The matches, one set per priority.
+    found: [Seen; MT_COUNT],
+    /// What `'tagfunc'` answered: every one kept, in order, none of them
+    /// looked at for duplicates.
+    from_tagfunc: Vec<Found>,
+    /// How many matches have been offered so far, which orders a bucket.
+    seq: usize,
 }
 
 impl FindTags {
     /// The state for one search for `pat`.
-    ///
-    /// # Safety
-    ///
-    /// `pat` must point at a NUL-terminated pattern that outlives the
-    /// search. It is measured here and then kept as `orgpat.pat`, which the
-    /// readers walk through *safe* methods -- so the promise cannot be
-    /// checked anywhere below this point.
-    unsafe fn new(pat: *mut c_char, flags: c_int, mincount: c_int) -> Self {
+    fn new(pat: XString, flags: c_int, mincount: c_int) -> Self {
         FindTags {
             state: Reading::Start,
             stop_searching: false,
             orgpat: Pattern {
+                len: pat.len(),
                 pat,
-                len: unsafe { CStr::from_ptr(pat) }.count_bytes() as c_int,
-                head: ptr::null_mut(),
+                head_at: 0,
                 headlen: 0,
-                regmatch: RegMatch::default(),
+                regmatch: OwnedMatch::none(),
             },
             lbuf: vec![0; LSIZE],
+            line_len: 0,
             tag_fname: Name::default(),
-            fp: ptr::null_mut(),
+            reader: None,
             flags,
-            tag_file_sorted: NUL,
+            tag_file_sorted: 0,
             get_searchpat: false,
             help_only: flags & TAG_HELP as c_int != 0,
             did_open: false,
@@ -362,20 +364,21 @@ impl FindTags {
             },
             help_lang: *b"\0\0",
             help_pri: 0,
-            help_lang_find: ptr::null(),
+            help_lang_find: None,
             is_txt: false,
             match_count: 0,
-            found: [const { Vec::new() }; MT_COUNT],
-            seen: core::array::from_fn(|_| Seen::default()),
+            found: core::array::from_fn(|_| Seen::default()),
+            from_tagfunc: Vec::new(),
+            seq: 0,
         }
     }
 
-    /// File `mfp` under `bucket`, unless one with the same key is already
-    /// there.
+    /// File `found` under `bucket`, unless an equal one is already there.
     #[inline]
-    pub(crate) fn record(&mut self, bucket: usize, mfp: Match) {
-        if self.seen[bucket].insert(Key(mfp.at())) {
-            self.found[bucket].push(mfp);
+    pub(crate) fn record(&mut self, bucket: usize, mut found: Found) {
+        found.seq = self.seq;
+        self.seq += 1;
+        if self.found[bucket].insert(found) {
             self.match_count += 1;
         }
     }
@@ -401,8 +404,6 @@ impl FindTags {
     /// Work out the language and priority of the help tags file about to
     /// be read, answering false to skip the file entirely.
     fn in_help_init(&mut self) -> bool {
-        // SAFETY: `tag_fname`, the current buffer's name and `'helplang'`
-        // are all NUL-terminated.
         // "doc/tags-xx" names its language; anything else, and a
         // ".txt" help file, is English.
         self.help_lang = match self.tag_fname.bytes() {
@@ -412,26 +413,23 @@ impl FindTags {
         };
 
         // When a language was asked for, skip every other one.
-        if !self.help_lang_find.is_null()
-            && !unsafe { lang_is(self.help_lang_find, self.help_lang, true) }
+        if let Some(wanted) = self.help_lang_find
+            && !wanted.eq_ignore_ascii_case(&self.help_lang)
         {
             return false;
         }
 
         // For CTRL-] in a help file prefer a match in the same
         // language: a help file for language xx is named "*.xxx".
-        let fname = Buf::current().name.shown_ptr();
-        let flen = if fname.is_null() {
-            0
-        } else {
-            unsafe { CStr::from_ptr(fname) }.count_bytes()
-        };
+        let buffer = Buf::current();
+        let fname = buffer.name.shown().map_or(&[][..], CStr::to_bytes);
+        let flen = fname.len();
         if self.flags & TAG_KEEP_LANG as c_int != 0
-            && self.help_lang_find.is_null()
+            && self.help_lang_find.is_none()
             && flen > 4
-            && unsafe { *fname.add(flen - 1) } == b'x' as c_char
-            && unsafe { *fname.add(flen - 4) } == b'.' as c_char
-            && unsafe { lang_is(fname.add(flen - 3), self.help_lang, false) }
+            && fname[flen - 1] == b'x'
+            && fname[flen - 4] == b'.'
+            && lang_is(&fname[flen - 3..], self.help_lang)
         {
             self.help_pri = 0;
             return true;
@@ -439,21 +437,19 @@ impl FindTags {
 
         // Otherwise the position in 'helplang' is the priority.
         self.help_pri = 1;
-        // A copy: the cursor below walks past the end of a projection's borrow.
         let hlg = P_HLG.get();
-        let mut s = hlg.as_ptr().cast_mut();
-        while unsafe { *s } != 0 {
-            if unsafe { lang_is(s, self.help_lang, false) } {
+        let hlg: &[u8] = &hlg;
+        let mut at = Some(0);
+        while let Some(entry) = at.and_then(|at| hlg.get(at..)).filter(|e| !e.is_empty()) {
+            if lang_is(entry, self.help_lang) {
                 break;
             }
             self.help_pri += 1;
-            s = unsafe { vim_strchr(s, b',' as c_int) };
-            if s.is_null() {
-                break;
-            }
-            s = unsafe { s.add(1) };
+            at = at
+                .zip(entry.iter().position(|&b| b == b','))
+                .map(|(at, comma)| at + comma + 1);
         }
-        if s.is_null() || unsafe { *s } == 0 {
+        if at.is_none_or(|at| at >= hlg.len()) {
             // Not in 'helplang': sort last, but prefer English.
             self.help_pri += 1;
             if !self.help_lang.eq_ignore_ascii_case(b"en") {
@@ -466,10 +462,8 @@ impl FindTags {
     /// Let `'tagfunc'` answer instead of reading any tags file.
     ///
     /// Answers `NOTDONE` when there is no usable `'tagfunc'`, `OK` when it
-    /// found at least one tag and `FAIL` otherwise.
-    fn apply_tagfunc(&mut self, pat: *mut c_char, buf_ffname: *mut c_char) -> c_int {
-        // SAFETY: `'tagfunc'` is a NUL-terminated buffer-local option, and
-        // the growarray holds the allocated matches the callback made.
+    /// answered and `FAIL` otherwise.
+    fn apply_tagfunc(&mut self, pat: &CStr, buf_ffname: Option<&CStr>) -> c_int {
         if self.flags & TAG_NO_TAGFUNC as c_int != 0
             || tfu_in_use.get()
             || Buf::current().b_p_tfu.first_byte() == 0
@@ -478,26 +472,26 @@ impl FindTags {
         }
         tfu_in_use.set(true);
         // `'tagfunc'` does its own filtering, so every answer is kept
-        // and none of them is looked at for duplicates. Which bucket
-        // they land in never reaches the caller: each one carries its
-        // own priority in its first byte.
-        let found2 = &mut self.found[MT_ST_CUR];
-        let match_count2 = &mut self.match_count;
-        let flags2 = self.flags;
-        let retval = unsafe { find_tagfunc_tags(pat, found2, match_count2, flags2, buf_ffname) };
+        // and none of them is looked at for duplicates.
+        let answer = find_tagfunc_tags(pat, self.flags, buf_ffname);
         tfu_in_use.set(false);
-        retval
+        match answer {
+            TagfuncAnswer::Declined => NOTDONE,
+            TagfuncAnswer::Unusable => FAIL,
+            TagfuncAnswer::Tags(tags) => {
+                self.match_count = c_int::try_from(tags.len()).unwrap_or(c_int::MAX);
+                self.from_tagfunc = tags;
+                OK
+            }
+        }
     }
 
     /// Read every matching tag out of the file named by `tag_fname`.
-    fn in_file(&mut self, buf_ffname: *mut c_char) {
+    fn in_file(&mut self, buf_ffname: Option<&CStr>) {
         self.vimconv.vc_type = CONV_NONE;
-        self.tag_file_sorted = NUL;
-        self.fp = ptr::null_mut();
+        self.tag_file_sorted = 0;
         let mut margs = MatchArgs::new(self.flags);
 
-        // SAFETY: `tag_fname` is NUL-terminated, and the file this opens
-        // is closed before the block ends.
         // A help tags file for another language is skipped entirely.
         if Buf::current().b_help && !self.in_help_init() {
             return;
@@ -505,13 +499,12 @@ impl FindTags {
 
         // A file that does not exist is silently ignored; E433 is
         // given further on, and only when not one was found.
-        self.fp = unsafe { os_fopen(self.tag_fname.as_ptr(), c"r".as_ptr()) };
-        if self.fp.is_null() {
+        self.reader = TagReader::open(self.tag_fname.as_cstr());
+        if self.reader.is_none() {
             return;
         }
         if p_verbose() >= 5 {
             verbose_enter();
-            // SAFETY: the message macros expand to a `vim_snprintf` over // the format literal above and the editor's message buffers.
             let tag_fname = msg_cstr(self.tag_fname.as_cstr());
             smsg!(0, "Searching tags file {tag_fname}");
             verbose_leave();
@@ -521,13 +514,11 @@ impl FindTags {
 
         self.get_all_tags(&mut margs, buf_ffname);
 
-        unsafe { fclose(self.fp) };
-        self.fp = ptr::null_mut();
+        self.reader = None;
         if self.vimconv.vc_type != CONV_NONE {
             self.vimconv = CONV_NONE_INIT;
         }
         if margs.sort_error {
-            // SAFETY: the message macros expand to a `vim_snprintf` over // the format literal above and the editor's message buffers.
             let tag_fname = msg_cstr(self.tag_fname.as_cstr());
             semsg!("E432: Tags file not sorted: {tag_fname}");
         }
@@ -539,10 +530,7 @@ impl FindTags {
     }
 
     /// Read and parse the lines of the open tags file, one by one.
-    fn get_all_tags(&mut self, margs: &mut MatchArgs, buf_ffname: *mut c_char) {
-        // SAFETY: `fp` is open for the whole loop. Every pointer `tagp`
-        // holds points into `lbuf`, which is only replaced at the two
-        // points below where nothing holds one.
+    fn get_all_tags(&mut self, margs: &mut MatchArgs, buf_ffname: Option<&CStr>) {
         let mut tagp = TagParts::default();
         let mut sinfo = SearchInfo::default();
 
@@ -587,11 +575,12 @@ impl FindTags {
             // A line that did not fit leaves the NUL somewhere other
             // than the last-but-one byte (see `vim_fgets`). Reported
             // for Mozilla JS, which has extremely long names.
-            if self.lbuf[self.lbuf.len() - 2] != NUL as c_char {
+            if self.lbuf[self.lbuf.len() - 2] != 0 {
                 self.lbuf = vec![0; self.lbuf.len() * 2];
+                self.line_len = 0;
                 if matches!(self.state, Reading::StepForward | Reading::Linear) {
                     // Seek back to read the same line again.
-                    vim_ignored.set(unsafe { fseeko(self.fp, sinfo.curr_offset, SEEK_SET) });
+                    self.seek(sinfo.curr_offset);
                 }
                 // The offset has to differ, or the retry reads the
                 // same line into the same too-small buffer.
@@ -600,19 +589,17 @@ impl FindTags {
             }
 
             match self.parse_line(&mut tagp, margs, &mut sinfo) {
-                TagMatch::Next => continue,
-                TagMatch::Stop => break,
-                TagMatch::Fail => {
-                    // SAFETY: the message macros expand to a `vim_snprintf` over // the format literal above and the editor's message buffers.
+                Verdict::Next => continue,
+                Verdict::Stop => break,
+                Verdict::Fail => {
                     let tag_fname = msg_cstr(self.tag_fname.as_cstr());
                     semsg!("E431: Format error in tags file \"{tag_fname}\"");
-                    // SAFETY: `self.fp` is the tag file this scan holds open.
-                    let at = unsafe { ftello(self.fp) } as int64_t;
+                    let at = self.tell();
                     semsg!("Before byte {at}");
                     self.stop_searching = true;
                     return;
                 }
-                TagMatch::Success => {}
+                Verdict::Success => {}
             }
 
             if self.match_tag(&tagp, margs) {
@@ -621,75 +608,30 @@ impl FindTags {
         }
     }
 
-    /// Hand the matches to the caller, best priority first.
-    ///
-    /// Answers how many there are; `matchesp` is left NULL when there are
-    /// none.
-    ///
-    /// # Safety
-    /// `matchesp` must be writable; the array and its entries become the
-    /// caller's to free.
-    unsafe fn into_matches(mut self, matchesp: *mut *mut *mut c_char) -> c_int {
-        let name_only = self.flags & TAG_NAMES as c_int != 0;
-        // The keys point into the matches, so they go first.
-        self.seen = core::array::from_fn(|_| Seen::default());
-        // SAFETY: `matches` is `match_count` pointers and every one of
-        // them is filled before the array is handed over.
-        if self.match_count <= 0 {
-            unsafe { *matchesp = ptr::null_mut() };
-            return 0;
+    /// Hand the matches over, best priority first and in the order found
+    /// within a priority.
+    fn into_found(self) -> Vec<Found> {
+        let mut out = self.from_tagfunc;
+        out.reserve(usize::try_from(self.match_count).unwrap_or(0));
+        for bucket in self.found {
+            let start = out.len();
+            out.extend(bucket);
+            out[start..].sort_unstable_by_key(|found| found.seq);
         }
-        let matches = unsafe { xmalloc(self.match_count as usize * size_of::<*mut c_char>()) }
-            .cast::<*mut c_char>();
-        let mut at = 0;
-        for bucket in core::mem::take(&mut self.found) {
-            for mut mfp in bucket {
-                if !name_only {
-                    // Put the bucket number back the way the readers
-                    // want it, and the field separators back to NUL.
-                    // The walk stops at the match's own terminator,
-                    // short of the slack after it.
-                    let bytes = mfp.bytes();
-                    bytes[0] -= 1;
-                    for byte in &mut bytes[1..] {
-                        match *byte {
-                            0 => break,
-                            b if b == TAG_SEP as u8 => *byte = NUL as u8,
-                            _ => {}
-                        }
-                    }
-                }
-                unsafe { *matches.add(at) = mfp.into_raw() };
-                at += 1;
-            }
-        }
-        debug_assert_eq!(at, self.match_count as usize);
-        unsafe { *matchesp = matches };
-        self.match_count
+        out
     }
 }
 
-/// Whether the NUL-terminated `at` names `lang`.
-///
-/// With `whole`, `at` must be exactly the two letters, which is how the
-/// pattern's `@xx` suffix is compared; otherwise only the two letters have
-/// to line up, which is how a file name's suffix and a `'helplang'` entry
-/// are.
-///
-/// # Safety
-/// `at` must be NUL-terminated.
-unsafe fn lang_is(at: *const c_char, lang: [u8; 2], whole: bool) -> bool {
-    // SAFETY: the second byte is only read once the first has proved not
-    // to be the terminator — `lang` never holds one.
-    (unsafe { *at } as u8).eq_ignore_ascii_case(&lang[0])
-        && (unsafe { *at.add(1) } as u8).eq_ignore_ascii_case(&lang[1])
-        && (!whole || unsafe { *at.add(2) } == 0)
+/// Whether `at` starts with the two letters of `lang`, ignoring case.
+fn lang_is(at: &[u8], lang: [u8; 2]) -> bool {
+    cstr::byte_at(at, 0).eq_ignore_ascii_case(&lang[0])
+        && cstr::byte_at(at, 1).eq_ignore_ascii_case(&lang[1])
 }
 
-/// Search the tags files that apply for tags matching `pat`.
+/// Search the tags files that apply for tags matching `pat`, answering the
+/// matches in the shape `flags` asks for.
 ///
-/// Answers `Err` if the search failed completely — `num_matches` is then
-/// zero and `matchesp` NULL — and `Ok` otherwise.
+/// Answers `Err` if the search failed completely, and `Ok` otherwise.
 ///
 /// There is a priority in which a kind of match is recognised:
 ///
@@ -706,26 +648,21 @@ unsafe fn lang_is(at: *const c_char, lang: [u8; 2], whole: bool) -> bool {
 /// `TAG_NO_TAGFUNC` (do not call `'tagfunc'`).
 ///
 /// `mincount` is `MAXCOL` to find every match, otherwise how many are
-/// enough. `buf_ffname` is the buffer whose matches take priority.
-///
-/// # Safety
-/// `pat` must be NUL-terminated and the two out-parameters writable.
-pub unsafe fn find_tags(
-    pat: *mut c_char,
-    num_matches: *mut c_int,
-    matchesp: *mut *mut *mut c_char,
+/// enough. `buf_ffname` is the buffer whose matches take priority; it is the
+/// caller's own copy, because `'tagfunc'` may rename the buffer.
+fn search(
+    pat: &[u8],
     flags: c_int,
     mincount: c_int,
-    buf_ffname: *mut c_char,
-) -> Result<(), Failed> {
-    // SAFETY: the caller's pattern outlives the search, and `saved_pat` is
-    // declared before the state that points into it, so it is dropped
-    // after it.
+    buf_ffname: Option<&CStr>,
+) -> Result<Vec<Found>, Failed> {
     // Find every match when the caller wants them all, and also for
     // completion, where the count is only a cut-off.
     let findall = mincount == MAXCOL as c_int || mincount == TAG_MANY as c_int;
     let has_re = flags & TAG_REGEXP as c_int != 0;
     let noic = flags & TAG_NOIC as c_int != 0;
+    // The pattern as the caller gave it, for 'tagcase' and 'tagfunc'.
+    let pattern = XString::from_bytes(cstr::until_nul(pat));
 
     let save_p_ic = p_ic();
     // 'tagcase' decides how case is treated for this search.
@@ -737,38 +674,38 @@ pub unsafe fn find_tags(
         kOptTcFlagFollowic => {}
         kOptTcFlagIgnore => P_IC.set(true),
         kOptTcFlagMatch => P_IC.set(false),
-        kOptTcFlagFollowscs => P_IC.set(unsafe { ignorecase(pat) }),
-        kOptTcFlagSmart => P_IC.set(unsafe { ignorecase_opt(pat, true, true) }),
-        _ => unsafe { abort() },
+        kOptTcFlagFollowscs => P_IC.set(ignorecase_opt(pattern.as_cstr(), p_ic(), p_scs())),
+        kOptTcFlagSmart => P_IC.set(ignorecase_opt(pattern.as_cstr(), true, true)),
+        _ => unreachable!("'tagcase' is one of its five values"),
     }
 
     let help_save = Buf::current().b_help;
-
-    // SAFETY: the caller's promise -- `pat` is a NUL-terminated pattern
-    // that outlives the search.
-    let mut st = unsafe { FindTags::new(pat, flags, mincount) };
-    if st.help_only {
+    if flags & TAG_HELP as c_int != 0 {
         Buf::current().b_help = true;
     }
 
     // In a help buffer a trailing "@xx" names the language wanted.
-    let bytes = unsafe { CStr::from_ptr(pat) }.to_bytes();
-    let saved_pat: Option<Name> = if Buf::current().b_help
+    let bytes: &[u8] = &pattern;
+    let (searched, help_lang_find) = if Buf::current().b_help
         && let [.., b'@', a, b] = bytes
         && a.is_ascii_alphabetic()
         && b.is_ascii_alphabetic()
     {
-        let stripped = Name::from_bytes(&bytes[..bytes.len() - 3]);
-        st.help_lang_find = unsafe { pat.add(bytes.len() - 2) };
-        st.orgpat.pat = stripped.as_ptr().cast_mut();
-        st.orgpat.len -= 3;
-        Some(stripped)
+        (
+            XString::from_bytes(&bytes[..bytes.len() - 3]),
+            Some([*a, *b]),
+        )
     } else {
-        None
+        (pattern.clone(), None)
     };
+    let mut st = FindTags::new(searched, flags, mincount);
+    st.help_lang_find = help_lang_find;
 
-    if p_tl() != 0 && st.orgpat.len as OptInt > p_tl() {
-        st.orgpat.len = p_tl() as c_int;
+    if let Ok(limit) = usize::try_from(p_tl())
+        && limit != 0
+        && st.orgpat.len > limit
+    {
+        st.orgpat.len = limit;
     }
 
     // A pattern that does not compile is the caller's problem, not a
@@ -781,18 +718,15 @@ pub unsafe fn find_tags(
     if !(has_re && st.orgpat.regmatch.regprog.is_null()) {
         // `apply_tagfunc` still answers the C's three statuses; `NOTDONE`
         // means there is no 'tagfunc' and the tag files are searched below.
-        let tagfunc = st.apply_tagfunc(pat, buf_ffname);
+        let tagfunc = st.apply_tagfunc(pattern.as_cstr(), buf_ffname);
         retval = if tagfunc == OK { Ok(()) } else { Err(Failed) };
         if tagfunc == NOTDONE {
             // A ".txt" help file keeps "en" as its language.
-            let fname = Buf::current().name.shown_ptr();
-            if flags & TAG_KEEP_LANG as c_int != 0
-                && st.help_lang_find.is_null()
-                && !fname.is_null()
-            {
-                let len = unsafe { CStr::from_ptr(fname) }.count_bytes();
-                st.is_txt = len > 4
-                    && unsafe { strcasecmp(fname.add(len - 4), c".txt".as_ptr().cast_mut()) } == 0;
+            if flags & TAG_KEEP_LANG as c_int != 0 && st.help_lang_find.is_none() {
+                let buffer = Buf::current();
+                let fname = buffer.name.shown().map_or(&[][..], CStr::to_bytes);
+                st.is_txt =
+                    fname.len() > 4 && fname[fname.len() - 4..].eq_ignore_ascii_case(b".txt");
             }
 
             // Ignoring case rules out bisection, so a search that may
@@ -829,55 +763,63 @@ pub unsafe fn find_tags(
         }
     }
 
-    if retval.is_err() {
-        st.match_count = 0;
-    }
-    unsafe { *num_matches = st.into_matches(matchesp) };
+    let found = if retval.is_ok() {
+        st.into_found()
+    } else {
+        Vec::new()
+    };
 
     Buf::current().b_help = help_save;
     P_IC.set(save_p_ic);
-    drop(saved_pat);
-    retval
+    retval.map(|()| found)
+}
+
+/// Search the tags files that apply for tags matching `pat`: the lines
+/// that matched, best first. See [`search`] for the order and the flags;
+/// `TAG_NAMES` and `TAG_HELP` have callers of their own.
+pub(crate) fn find_tags(
+    pat: &[u8],
+    flags: c_int,
+    mincount: c_int,
+    buf_ffname: Option<&CStr>,
+) -> Result<Vec<TagMatch>, Failed> {
+    debug_assert_eq!(flags & (TAG_NAMES | TAG_HELP) as c_int, 0);
+    let found = search(pat, flags, mincount, buf_ffname)?;
+    Ok(found
+        .into_iter()
+        .map(|found| TagMatch::new(found.priority, found.key))
+        .collect())
+}
+
+/// [`find_tags`] for the names alone — and, with `'showfulltag'` during
+/// insert-mode completion, each name's search pattern after it.
+pub(crate) fn find_tag_names(
+    pat: &[u8],
+    flags: c_int,
+    mincount: c_int,
+    buf_ffname: Option<&CStr>,
+) -> Result<Vec<XString>, Failed> {
+    let found = search(pat, flags | TAG_NAMES as c_int, mincount, buf_ffname)?;
+    Ok(found
+        .into_iter()
+        .map(|found| XString::from_vec(found.key))
+        .collect())
 }
 
 /// A help match's two fields: the tag as offered (`{name}@{lang}`) and the
-/// heuristic score `find_tags` wrote after its NUL.
+/// heuristic score that orders the listing.
 pub(crate) type HelpTagMatch = (Vec<u8>, Vec<u8>);
 
-/// [`find_tags`] of a help pattern the caller holds, each match taken over as
-/// its two fields.
+/// [`find_tags`] of a help pattern: each match as its two fields.
 pub(crate) fn find_help_tag_matches(
     pat: &CStr,
     flags: c_int,
     mincount: c_int,
 ) -> Result<Vec<HelpTagMatch>, Failed> {
-    // A copy: the search takes the pattern as a writable string.
-    let mut pat = pat.to_bytes_with_nul().to_vec();
-    let mut count: c_int = 0;
-    let mut matches: *mut *mut c_char = ptr::null_mut();
-    let no_buf = ptr::null_mut();
-    // SAFETY: a NUL-terminated pattern and two locals to fill in.
-    let found = unsafe {
-        find_tags(
-            pat.as_mut_ptr().cast(),
-            &raw mut count,
-            &raw mut matches,
-            flags,
-            mincount,
-            no_buf,
-        )
-    };
-    found?;
-    let taken = (0..usize::try_from(count).unwrap_or(0))
-        .map(|at| {
-            // SAFETY: every help match is a name and a score, each
-            // NUL-terminated, the second right after the first.
-            let tag = unsafe { CStr::from_ptr(*matches.add(at)) }.to_bytes();
-            let score = unsafe { CStr::from_ptr(matches.add(at).read().add(tag.len() + 1)) };
-            (tag.to_vec(), score.to_bytes().to_vec())
-        })
-        .collect();
-    // SAFETY: the array and the matches the search answered, given back once.
-    unsafe { free_string_array(count, matches) };
-    Ok(taken)
+    debug_assert_ne!(flags & TAG_HELP as c_int, 0);
+    let found = search(pat.to_bytes(), flags, mincount, None)?;
+    Ok(found
+        .into_iter()
+        .map(|found| (found.key, found.score))
+        .collect())
 }

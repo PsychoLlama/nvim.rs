@@ -6,8 +6,7 @@
 //! [`expand_tag_fname`] is the other half of `'tagrelative'`: it turns a
 //! file name a tags file mentions into one the editor can open.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -24,12 +23,10 @@ use crate::option::split_option_part;
 use crate::option::vars::{P_HF, P_TAGS};
 use crate::optionstr::{OptString, local_or_global};
 use crate::path::tail_index;
-use crate::runtime::RuntimeOpts;
-use crate::strings::has_char;
-use crate::types::{DoInRuntimepathCBFn, ExpandContext, MAXPATHL};
+use crate::runtime::{RuntimeOpts, do_in_runtimepath_visit};
+use crate::types::{ExpandContext, MAXPATHL};
 use crate::winlayer::Buf;
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
+use core::ffi::CStr;
 
 /// The tags files that apply to the current buffer, in the order they are
 /// searched.
@@ -178,13 +175,21 @@ impl HelpTags {
     /// Find every `doc/tags` and `doc/tags-??` in `'runtimepath'`.
     fn collect() -> Self {
         let mut found: Vec<Name> = Vec::new();
-        // SAFETY: the callback is handed `found` as its cookie and does
-        // not outlive this call.
-        let name2 = c"doc/tags doc/tags-??".as_ptr().cast_mut();
-        let flags = RuntimeOpts::ALL;
-        let callback2 = Some(found_tagfile_cb as DoInRuntimepathCBFn);
-        let cookie2 = (&raw mut found).cast();
-        let _ = unsafe { do_in_runtimepath(name2, flags, callback2, cookie2) };
+        let _ = do_in_runtimepath_visit(
+            c"doc/tags doc/tags-??",
+            RuntimeOpts::ALL,
+            &mut |fnames: &[&CStr], all: bool| {
+                for name in fnames {
+                    let mut name = Name::from_bytes(name.to_bytes());
+                    name.simplify();
+                    found.push(name);
+                    if !all {
+                        break;
+                    }
+                }
+                !fnames.is_empty()
+            },
+        );
         HelpTags { found, at: 0 }
     }
 
@@ -215,30 +220,6 @@ impl HelpTags {
     }
 }
 
-/// [`do_in_runtimepath`] callback: collect the `doc/tags` files it found.
-///
-/// # Safety
-/// `cookie` must be the `Vec<Name>` [`HelpTags::collect`] passed in, and
-/// `fnames` must hold `num_fnames` NUL-terminated names.
-unsafe fn found_tagfile_cb(
-    num_fnames: c_int,
-    fnames: *mut *mut c_char,
-    all: bool,
-    cookie: *mut c_void,
-) -> bool {
-    let found = unsafe { &mut *cookie.cast::<Vec<Name>>() };
-    let count = usize::try_from(num_fnames).expect("the caller counts the names");
-    for i in 0..count {
-        let mut name = Name::from_bytes(unsafe { cstr::bytes_at(*fnames.add(i)) });
-        name.simplify();
-        found.push(name);
-        if !all {
-            break;
-        }
-    }
-    num_fnames > 0
-}
-
 /// The name of the file a tags file's entry points at, as the editor can
 /// open it.
 ///
@@ -247,58 +228,45 @@ unsafe fn found_tagfile_cb(
 /// With `'tagrelative'` set (and always in a help buffer), a relative name
 /// is taken relative to the tags file's own directory rather than to the
 /// current one.
-///
-/// The answer is allocated; the caller frees it.
-///
-/// # Safety
-/// Both names must be NUL-terminated. (B11-8: the three callers are still
-/// transpiled, which is why this answers a raw pointer.)
-pub(crate) unsafe fn expand_tag_fname(
-    fname: *mut c_char,
-    tag_fname: *mut c_char,
-    expand: bool,
-) -> *mut c_char {
+pub(crate) fn expand_tag_fname(fname: &[u8], tag_fname: &[u8], expand: bool) -> XString {
     // Expand the file name (for environment variables) when needed.
     // Backticks are disallowed: they could run arbitrary shell
     // commands. This is not needed for tags file names themselves.
-    let mut expanded = ptr::null_mut::<c_char>();
-    if expand
-        && has_wildcard(unsafe { cstr::bytes_at(fname) })
-        && !has_char(unsafe { cstr::at(fname) }, '`' as c_int)
-    {
+    let expanded = if expand && has_wildcard(fname) && !fname.contains(&b'`') {
         let mut xpc = Expand::new();
         xpc.context = ExpandContext::Files;
         let options = WildOpts::LIST_NOTFOUND | WildOpts::SILENT;
-        // SAFETY: the caller's NUL-terminated name.
-        let pattern = unsafe { CStr::from_ptr(fname) };
-        expanded = expand_one(&mut xpc, Some(pattern), None, options, WildMode::ExpandFree)
-            .map_or(ptr::null_mut(), XString::into_raw);
-    }
-    let fname = if expanded.is_null() { fname } else { expanded };
+        let pattern = cstr::owned(fname);
+        expand_one(
+            &mut xpc,
+            Some(&pattern),
+            None,
+            options,
+            WildMode::ExpandFree,
+        )
+    } else {
+        None
+    };
+    let fname = expanded.as_deref().unwrap_or(fname);
 
     // The tags file's own directory, empty when it has none.
-    let dir = unsafe { CStr::from_ptr(tag_fname) }.to_bytes();
-    let dir = &dir[..tail_index(dir)];
+    let dir = &tag_fname[..tail_index(tag_fname)];
 
-    let retval = if (p_tr() || Buf::current().b_help)
-        && !unsafe { vim_is_abs_name(cstr::at(fname)) }
+    if (p_tr() || Buf::current().b_help)
+        && !cstr::with_terminated(fname, vim_is_abs_name)
         && !dir.is_empty()
     {
-        let name = unsafe { CStr::from_ptr(fname) }.to_bytes();
         let mut joined = Name::from_bytes(
             &[
                 dir,
-                &name[..name.len().min(MAXPATHL as usize - dir.len() - 1)],
+                &fname[..fname.len().min(MAXPATHL as usize - dir.len() - 1)],
             ]
             .concat(),
         );
         // Translate names like "src/a/../b/file.c" into "src/b/file.c".
         joined.simplify();
-        unsafe { xstrdup(joined.as_ptr()) }
+        XString::from_bytes(joined.bytes())
     } else {
-        unsafe { xstrdup(fname) }
-    };
-
-    unsafe { xfree(expanded.cast()) };
-    retval
+        XString::from_bytes(fname)
+    }
 }

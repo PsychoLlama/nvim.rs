@@ -343,23 +343,16 @@ pub fn mark_forget_file(mut window: Win, fnum: c_int) {
             continue;
         }
         let at = usize::try_from(i).expect("tag stack index in range");
-        // SAFETY: `i` is inside the tag stack, whose entries are live.
-        unsafe { tagstack_clear_entry(&mut (*window.raw()).w_tagstack[at]) };
+        let len = usize::try_from(window.w_tagstacklen).expect("tag stack length in range");
         if window.w_tagstackidx > i {
             window.w_tagstackidx -= 1;
         }
         window.w_tagstacklen -= 1;
-        // SAFETY: source and destination are inside `[Taggy; 20]` and the
-        // length is what is left above `i`, so the move stays in the array.
-        let stack = unsafe { &raw mut (*window.raw()).w_tagstack }.cast::<Taggy>();
-        unsafe {
-            (stack.offset(i as isize)).cast::<u8>().copy_from(
-                (stack.offset(i as isize + 1)).cast(),
-                size_t::try_from(window.w_tagstacklen - i)
-                    .unwrap_or(0)
-                    .wrapping_mul(size_of::<Taggy>()),
-            )
-        };
+        // Close the gap: the entries above move down one, and the cleared
+        // one goes to the top, past the end of what is in use.
+        let stack = &mut window.w_tagstack[at..len];
+        tagstack_clear_entry(&mut stack[0]);
+        stack.rotate_left(1);
     }
 }
 
@@ -397,14 +390,11 @@ pub unsafe fn pos_to_mark(buffer: Buf, fmp: *mut FileMark, pos: Pos) -> *mut Fil
 /// @note  Assumes the mark has been checked, is valid.
 /// `fm` — the named mark.
 ///
-/// # Safety
-/// `fm` must be null or point at a live `FileMark`.
-pub unsafe fn mark_view_restore(fmp: *mut FileMark) {
-    if fmp.is_null() {
+/// `None` restores nothing.
+pub fn mark_view_restore(fm: Option<&FileMark>) {
+    let Some(fm) = fm else {
         return;
-    }
-    // SAFETY: the caller promised a live record.
-    let fm = unsafe { Fmark::new(fmp) }.read();
+    };
     if fm.view.topline_offset < 0 {
         return;
     }
@@ -420,8 +410,7 @@ pub unsafe fn mark_view_restore(fmp: *mut FileMark) {
     // `skipcol` is re-read after the scroll rather than snapshotted with
     // `topline_offset` above, because that is the order upstream reads the
     // two fields in.
-    // SAFETY: `win` is live and the two calls read only it and the buffer.
-    let skipcol = unsafe { Fmark::new(fmp) }.read().view.skipcol;
+    let skipcol = fm.view.skipcol;
     let keep = skipcol > 0
         && !has_folding(win, topline, None, None)
         && skipcol < linetabsize_eol(win, topline);

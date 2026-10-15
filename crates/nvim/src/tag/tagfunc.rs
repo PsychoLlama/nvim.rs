@@ -5,33 +5,22 @@
 //! least `name`, `filename` and `cmd` — and writes each one out in the
 //! same shape a tags file line would have had.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use super::*;
-use crate::cstr;
+use crate::eval::typval::CallFrame;
 use crate::eval::typval::TV_INITIAL_VALUE;
-use crate::eval::typval::{CallFrame, DictRef, list_iter};
 use crate::optionstr::OptString;
 use crate::types::TypVal;
-use crate::types::{
-    FAIL, OK, OptError, OptionSetFlags, VAR_DICT, VAR_LIST, VarLock, kSpecialVarNull,
-};
+use crate::types::{OptError, OptionSetFlags, VAR_DICT, VAR_LIST, VarLock, kSpecialVarNull};
 use crate::winlayer::{Buf, Win};
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 
 /// The global `'tagfunc'` callback. A buffer-local one lives in
 /// `b_tfu_cb`.
 static tfu_cb: GlobalCell<Callback> = GlobalCell::new(Callback::None);
-
-/// The address, because every operation the tree has on a callback —
-/// parsing an option into it, marking it for the collector, copying it,
-/// calling it — takes a `*mut Callback`.
-fn global_tagfunc() -> *mut Callback {
-    tfu_cb.ptr()
-}
 
 /// Whether a `'tagfunc'` call is in progress.
 ///
@@ -47,8 +36,6 @@ const E_INVALID_RETURN: &CStr = c"E987: Invalid return value from tagfunc";
 /// The value can be a function name, `function(<name>)`, `funcref(<name>)`
 /// or a lambda. Answers NULL, or the error message for an invalid one.
 pub fn did_set_tagfunc(args: &mut OptSet) -> Result<(), OptError> {
-    // SAFETY: the caller's promise; the new value is a NUL-terminated
-    // option string and `os_buf` is the buffer it applies to.
     let mut buf = args.os_buf;
     let value = args
         .os_newval
@@ -61,8 +48,7 @@ pub fn did_set_tagfunc(args: &mut OptSet) -> Result<(), OptError> {
     let retval = if args.os_flags.has(OptionSetFlags::LOCAL) {
         cb.map(|cb| install_callback(&mut buf.b_tfu_cb, cb))
     } else {
-        // SAFETY: the global slot, which nothing borrows across this.
-        let retval = cb.map(|cb| install_callback(unsafe { &mut *global_tagfunc() }, cb));
+        let retval = cb.map(|cb| tfu_cb.with_mut(|slot| install_callback(slot, cb)));
         if retval.is_ok() && !args.os_flags.has(OptionSetFlags::GLOBAL) {
             // `:set` without a scope sets the buffer-local copy too.
             set_buflocal_tfu_callback(buf);
@@ -78,8 +64,7 @@ pub fn did_set_tagfunc(args: &mut OptSet) -> Result<(), OptError> {
 
 /// Mark the global `'tagfunc'` callback so the collector keeps it.
 pub fn set_ref_in_tagfunc(copy_id: c_int) -> bool {
-    // SAFETY: the global callback slot is live.
-    set_ref_in_callback(unsafe { &*global_tagfunc() }, copy_id, None, None)
+    tfu_cb.with(|cb| set_ref_in_callback(cb, copy_id, None, None))
 }
 
 /// Copy the global `'tagfunc'` callback into `buffer`'s local one.
@@ -88,160 +73,143 @@ pub fn set_ref_in_tagfunc(copy_id: c_int) -> bool {
 /// lives in a static.
 pub fn set_buflocal_tfu_callback(mut buffer: Buf) {
     callback_free(&mut buffer.b_tfu_cb);
-    // SAFETY: `global_tagfunc` answers the address of a static.
-    if unsafe { &*global_tagfunc() }.is_set() {
-        callback_copy(&mut buffer.b_tfu_cb, unsafe { &*global_tagfunc() });
-    }
+    tfu_cb.with(|global| {
+        if global.is_set() {
+            callback_copy(&mut buffer.b_tfu_cb, global);
+        }
+    });
+}
+
+/// What `'tagfunc'` said.
+pub(crate) enum TagfuncAnswer {
+    /// It answered `v:null`: read the tags files after all.
+    Declined,
+    /// There is no usable function, or the call failed.
+    Unusable,
+    /// The tags it found, up to the first malformed one.
+    Tags(Vec<Found>),
 }
 
 /// Ask `'tagfunc'` for the tags matching `pat`, instead of reading a file.
 ///
-/// Every answer is kept: filtering is the function's own job. Answers `OK`
-/// when the call succeeded, `NOTDONE` when the function returned
-/// `v:null` (meaning "read the tags files after all"), and `FAIL`
-/// otherwise.
-///
-/// # Safety
-/// `pat` must be NUL-terminated, `buf_ffname` NULL or NUL-terminated, and
-/// `curbuf`/`curwin` must be live.
-pub(crate) unsafe fn find_tagfunc_tags(
-    pat: *mut c_char,
-    found: &mut Vec<Match>,
-    match_count: &mut c_int,
+/// Every answer is kept: filtering is the function's own job. `buf_ffname`
+/// is the caller's copy of the buffer name the function is told about.
+pub(crate) fn find_tagfunc_tags(
+    pat: &CStr,
     flags: c_int,
-    buf_ffname: *mut c_char,
-) -> c_int {
-    // SAFETY: the caller's promise. `info` outlives the call it is an
-    // argument to, and the list the callback answers is
-    // cleared before returning.
-    // The tag stack entry the jump came from, whose `user_data` the
-    // function may want. One past the top means nothing was popped, so
-    // the newest entry is the interesting one.
-    let win = Win::current();
-    let from = if win.w_tagstacklen > 0 {
-        let at = win.w_tagstackidx;
-        let at = if at == win.w_tagstacklen { at - 1 } else { at };
-        win.w_tagstack.get(at as usize)
-    } else {
-        None
-    };
-
+    buf_ffname: Option<&CStr>,
+) -> TagfuncAnswer {
     if Buf::current().b_p_tfu.first_byte() == 0 || !Buf::current().b_tfu_cb.is_set() {
-        return FAIL;
+        return TagfuncAnswer::Unusable;
     }
 
     // Which of "c" (the tag is at the cursor), "i" (insert-mode
     // completion) and "r" (the pattern is a regexp) apply.
-    let mut flag_string = [0u8; 3];
-    let mut at = 0;
+    let mut flag_string = Vec::with_capacity(3);
     for (wanted, flag) in [
         (g_tag_at_cursor.get(), b'c'),
         (flags & TAG_INS_COMP as c_int != 0, b'i'),
         (flags & TAG_REGEXP as c_int != 0, b'r'),
     ] {
         if wanted {
-            flag_string[at] = flag;
-            at += 1;
+            flag_string.push(flag);
         }
     }
 
-    let info_held = tv_dict_alloc_lock(VarLock::Fixed);
-    let info = info_held.as_ptr();
-    if flags & TAG_INS_COMP as c_int == 0
-        && let Some(from) = from
-        && !from.user_data.is_null()
-    {
-        unsafe { add_str(info, c"user_data", from.user_data) };
+    let info = tv_dict_alloc_lock(VarLock::Fixed);
+    if flags & TAG_INS_COMP as c_int == 0 {
+        // The tag stack entry the jump came from, whose `user_data` the
+        // function may want. One past the top means nothing was popped,
+        // so the newest entry is the interesting one.
+        let win = Win::current();
+        let at = match win.w_tagstackidx {
+            at if at == win.w_tagstacklen => at - 1,
+            at => at,
+        };
+        let user_data = (win.w_tagstacklen > 0)
+            .then(|| usize::try_from(at).ok())
+            .flatten()
+            .and_then(|at| win.w_tagstack.get(at))
+            .and_then(|from| from.user_data.as_ref());
+        if let Some(user_data) = user_data {
+            let _ = info.edit().add_str(b"user_data", Some(user_data.as_cstr()));
+        }
     }
-    if !buf_ffname.is_null() {
-        unsafe { add_str(info, c"buf_ffname", buf_ffname) };
+    if let Some(buf_ffname) = buf_ffname {
+        let _ = info.edit().add_str(b"buf_ffname", Some(buf_ffname));
     }
-    // Copies of the pattern and the flags, which the frame owns and
-    // releases, and the dictionary allocated above, which it only names,
-    // so the handle outlives it.
-    // SAFETY: the dictionary this body owns, live for the call.
-    let named = unsafe { DictRef::owning(info) };
+    // Copies of the pattern and the flags and a reference to the
+    // dictionary, all of which the frame releases.
     let mut args = CallFrame::<3>::new();
-    args.push_owned(TypVal::string_from(unsafe { cstr::bytes_at(pat) }));
-    args.push_owned(TypVal::string_from(&flag_string[..at]));
-    args.push_naming(TypVal::dict(named));
+    args.push_owned(TypVal::string_from(pat.to_bytes()));
+    args.push_owned(TypVal::string_from(&flag_string));
+    args.push_owned(TypVal::dict(Some(info.clone())));
 
     let mut rettv = TV_INITIAL_VALUE;
     let save_pos = Win::current().w_cursor;
-    let mut result =
-        unsafe { callback_call(&(*Buf::current_raw()).b_tfu_cb, args.args(), &mut rettv) } as c_int;
+    // A copy: the function may set 'tagfunc' again.
+    let mut callback = Buf::current().b_tfu_cb.duplicate();
+    let called = callback_call(&callback, args.args(), &mut rettv);
+    callback_free(&mut callback);
     // The function may have moved the cursor, or left it somewhere
     // that no longer exists.
     Win::current().w_cursor = save_pos;
     check_cursor(Win::current());
-    // The one reference the allocator handed out; upstream released the
-    // count without freeing and left the collector to notice.
-    drop(info_held);
+    drop(args);
+    drop(info);
 
-    if result == FAIL {
-        return FAIL;
+    if !called {
+        return TagfuncAnswer::Unusable;
     }
     if rettv.as_special() == Some(kSpecialVarNull) {
         // "Read the tags files after all."
         tv_clear(&mut rettv);
-        return NOTDONE;
+        return TagfuncAnswer::Declined;
     }
-    if rettv.v_type() != VAR_LIST || rettv.list_or_null().is_null() {
+    let Some(list) = rettv.list_handle().filter(|_| rettv.v_type() == VAR_LIST) else {
         tv_clear(&mut rettv);
         tag_emsg(E_INVALID_RETURN);
-        return FAIL;
-    }
+        return TagfuncAnswer::Unusable;
+    };
 
-    let mut ntags = 0;
-    for li in list_iter(unsafe { rettv.list_or_null().as_ref() }) {
-        if li.li_tv.v_type() != VAR_DICT {
-            tag_emsg(E_INVALID_RETURN);
-            break;
-        }
-        let parsed = unsafe { tag_of(li.li_tv.dict_or_null(), flags) };
-        let Some(mfp) = parsed else {
+    let mut tags = Vec::new();
+    for li in list.items() {
+        let parsed = (li.li_tv.v_type() == VAR_DICT)
+            .then(|| li.li_tv.dict_handle())
+            .flatten()
+            .and_then(|d| tag_of(&d, flags));
+        let Some(found) = parsed else {
             tag_emsg(E_INVALID_RETURN);
             break;
         };
         // Every match is kept, and none is offered to the duplicate
         // set: `'tagfunc'` does its own filtering.
-        found.push(mfp);
-        ntags += 1;
-        result = OK;
+        tags.push(found);
     }
 
+    drop(list);
     tv_clear(&mut rettv);
-    *match_count = ntags;
-    result
+    TagfuncAnswer::Tags(tags)
 }
 
 /// Write one result dictionary out as a match.
 ///
 /// The shape is the one a tags file line would have had, with the tags
-/// file name empty: `<priority><TAG_SEP>name<TAB>file<TAB>cmd`, and then
-/// `;"` and the remaining fields when there are any.
+/// file name empty: `name<TAB>file<TAB>cmd`, and then `;"` and the
+/// remaining fields when there are any. A `'tagfunc'` match is always a
+/// global match in another file.
 ///
 /// Answers `None` when the dictionary is missing `name`, `filename` or
 /// `cmd`.
-///
-/// # Safety
-/// `d` must be a live dictionary.
-unsafe fn tag_of(d: *mut Dict, flags: c_int) -> Option<Match> {
-    // SAFETY: the caller's promise; every field borrows the dictionary,
-    // which outlives the walk.
-    let fields = string_fields(unsafe { &*d });
+fn tag_of(d: &Dict, flags: c_int) -> Option<Found> {
+    let fields = string_fields(d);
     let mut name = None;
     let mut fname = None;
     let mut cmd = None;
     let mut kind = None;
     let mut has_extra = false;
 
-    // Upstream's own sizing: two for the leading bytes, then a
-    // separator and the text of every value, plus each extra field's
-    // key and colon, plus two for the `;"`.
-    let mut len = 2;
     for field in &fields {
-        len += field.value.count_bytes() + 1;
         match field.key {
             b"name" => name = Some(field.value),
             b"filename" => fname = Some(field.value),
@@ -250,14 +218,8 @@ unsafe fn tag_of(d: *mut Dict, flags: c_int) -> Option<Match> {
                 has_extra = true;
                 kind = Some(field.value);
             }
-            key => {
-                has_extra = true;
-                len += key.len() + 1;
-            }
+            _ => has_extra = true,
         }
-    }
-    if has_extra {
-        len += 2;
     }
     let (Some(name), Some(fname), Some(cmd)) = (name, fname, cmd) else {
         return None;
@@ -265,17 +227,11 @@ unsafe fn tag_of(d: *mut Dict, flags: c_int) -> Option<Match> {
 
     if flags & TAG_NAMES as c_int != 0 {
         // Only the name is wanted.
-        let bytes = name.to_bytes_with_nul();
-        let mut mfp = Match::zeroed(bytes.len());
-        mfp.bytes().copy_from_slice(bytes);
-        return Some(mfp);
+        return Some(Found::new(name.to_bytes().to_vec(), MT_GL_OTH as usize));
     }
 
-    let mut out = Vec::with_capacity(len);
-    // A `'tagfunc'` match is always a global match in another file,
-    // and it names no tags file.
-    out.push(MT_GL_OTH as u8 + 1);
-    out.push(TAG_SEP as u8);
+    // An empty tags file name, and the line.
+    let mut out = vec![0];
     out.extend_from_slice(name.to_bytes());
     out.push(b'\t');
     out.extend_from_slice(fname.to_bytes());
@@ -297,12 +253,7 @@ unsafe fn tag_of(d: *mut Dict, flags: c_int) -> Option<Match> {
             out.extend_from_slice(field.value.to_bytes());
         }
     }
-    out.push(0);
-
-    // Two bytes of slack past the text, as upstream leaves.
-    let mut mfp = Match::zeroed(len + 2);
-    mfp.bytes()[..out.len()].copy_from_slice(&out);
-    Some(mfp)
+    Some(Found::new(out, MT_GL_OTH as usize))
 }
 
 /// One string-valued entry of a `'tagfunc'` result dictionary, borrowed
@@ -314,9 +265,9 @@ struct Field<'a> {
 
 /// The string-valued entries of a dictionary, in hash order.
 ///
-/// Collected once because upstream walks the same table twice — first to
-/// size the match, then to write it — and both walks skip anything that is
-/// not a string.
+/// Collected once because the match is written in two walks over the
+/// same table — the three fields every match has, then the rest — and both
+/// skip anything that is not a string.
 fn string_fields(d: &Dict) -> Vec<Field<'_>> {
     d.items()
         .filter_map(|item| {
@@ -326,13 +277,4 @@ fn string_fields(d: &Dict) -> Vec<Field<'_>> {
             })
         })
         .collect()
-}
-
-/// [`tv_dict_add_str`] with the key's length taken from the literal.
-///
-/// # Safety
-/// `d` must be live and `val` NUL-terminated.
-unsafe fn add_str(d: *mut Dict, key: &CStr, val: *const c_char) {
-    // SAFETY: the caller's promise.
-    let _ = unsafe { (*d).add_str(key.to_bytes(), cstr::at_opt(val)) };
 }

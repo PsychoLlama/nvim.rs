@@ -188,16 +188,15 @@ fn put_edit(out: SessionFile, window: Win, opts: SessionOpts) -> Option<bool> {
 /// re-use both it and the window, which sets the options a help buffer needs
 /// even when "options" is not in 'sessionoptions'.
 fn put_help_edit(out: SessionFile, window: Win) -> bool {
-    // SAFETY: caller contract; a tag stack entry's name is NUL-terminated.
     let curtag = if 0 < window.w_tagstackidx && window.w_tagstackidx <= window.w_tagstacklen {
-        window.w_tagstack[(window.w_tagstackidx - 1) as usize].tagname
+        window.w_tagstack[(window.w_tagstackidx - 1) as usize]
+            .tagname
+            .as_ref()
+            .map_or(&b""[..], |tagname| tagname.as_bytes())
     } else {
-        c"".as_ptr().cast_mut()
+        b""
     };
-    out.line(c"enew | setl bt=help")
-        && out.puts(c"help ")
-        && unsafe { out.bytes(curtag) }
-        && out.eol()
+    out.line(c"enew | setl bt=help") && out.puts(c"help ") && out.put_bytes(curtag) && out.eol()
 }
 
 /// Write `balt` for the window's alternate file, when a session is being

@@ -358,6 +358,27 @@ unsafe fn announce_search(name: *mut c_char, prefix: *const c_char, path: *const
     verbose_leave();
 }
 
+/// The callback the closure fronts hand the walk: the cookie is the
+/// `&mut dyn FnMut` they were given.
+///
+/// # Safety
+/// `cookie` is a `&mut &mut dyn FnMut(&[&CStr], bool) -> bool`, and `fnames`
+/// holds `num_fnames` NUL-terminated names.
+unsafe fn visit_trampoline(
+    num_fnames: c_int,
+    fnames: *mut *mut c_char,
+    all: bool,
+    cookie: *mut c_void,
+) -> bool {
+    // SAFETY: the caller's contract.
+    let visit = unsafe { &mut *cookie.cast::<&mut dyn FnMut(&[&CStr], bool) -> bool>() };
+    let names: Vec<&CStr> = unsafe { matches(num_fnames, fnames) }
+        .iter()
+        .map(|&name| unsafe { CStr::from_ptr(name) })
+        .collect();
+    visit(&names, all)
+}
+
 /// [`do_in_path`] with a closure for the callback: `visit` is handed each
 /// batch of names the walk finds and whether the walk wants every match, and
 /// answers whether it used one. The names live in the walk's own buffers for
@@ -370,25 +391,6 @@ pub(crate) fn do_in_path_visit(
     flags: RuntimeOpts,
     mut visit: &mut dyn FnMut(&[&CStr], bool) -> bool,
 ) -> c_int {
-    /// The callback: the cookie is `visit`.
-    ///
-    /// # Safety
-    /// `cookie` is the `&mut dyn FnMut` below and `fnames` holds `num_fnames`
-    /// NUL-terminated names.
-    unsafe fn trampoline(
-        num_fnames: c_int,
-        fnames: *mut *mut c_char,
-        all: bool,
-        cookie: *mut c_void,
-    ) -> bool {
-        // SAFETY: the caller's contract.
-        let visit = unsafe { &mut *cookie.cast::<&mut dyn FnMut(&[&CStr], bool) -> bool>() };
-        let names: Vec<&CStr> = unsafe { matches(num_fnames, fnames) }
-            .iter()
-            .map(|&name| unsafe { CStr::from_ptr(name) })
-            .collect();
-        visit(&names, all)
-    }
     // A copy: the walk takes the name as a writable string.
     let mut name = name.map(|name| name.to_bytes_with_nul().to_vec());
     let name = name
@@ -404,7 +406,7 @@ pub(crate) fn do_in_path_visit(
             prefix.as_ptr(),
             name,
             flags,
-            Some(trampoline),
+            Some(visit_trampoline),
             cookie,
         )
     }
@@ -793,6 +795,28 @@ pub unsafe fn do_in_runtimepath(
         success |= unsafe { do_in_path_and_pp(P_RTP.get(), name, flags, callback, cookie) };
     }
     if success == FAIL { Err(Failed) } else { Ok(()) }
+}
+
+/// [`do_in_runtimepath`] with a closure for the callback, as
+/// [`do_in_path_visit`] is to [`do_in_path`].
+pub(crate) fn do_in_runtimepath_visit(
+    name: &CStr,
+    flags: RuntimeOpts,
+    mut visit: &mut dyn FnMut(&[&CStr], bool) -> bool,
+) -> Result<(), Failed> {
+    // A copy: the walk takes the name as a writable string.
+    let mut name = name.to_bytes_with_nul().to_vec();
+    let cookie = (&raw mut visit).cast::<c_void>();
+    // SAFETY: a NUL-terminated name, and the cookie is the closure the
+    // trampoline expects, alive for the walk.
+    unsafe {
+        do_in_runtimepath(
+            name.as_mut_ptr().cast(),
+            flags,
+            Some(visit_trampoline),
+            cookie,
+        )
+    }
 }
 
 /// Source the file `name` from all directories in 'runtimepath'.  `name` may

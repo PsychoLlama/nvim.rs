@@ -15,7 +15,7 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 use crate::buffer::BufFlags;
-use crate::memory::XString;
+use crate::memory::{ThinCString, XString};
 use crate::registry::IdMap;
 use crate::syntax::{SynCluster, SynPat};
 use core::ffi::{CStr, c_char};
@@ -786,14 +786,20 @@ pub struct SynBlock {
     pub b_syn_chartab: [uint8_t; 32],
     pub b_syn_isk: Option<XString>,
 }
-/// Not `Copy`: `tagname` and `user_data` are owned strings.
+/// One entry of a window's tag stack. A clone copies both strings.
+///
+/// The strings are [`ThinCString`]s rather than `XString`s because a window
+/// is allocated zeroed, and all-zero bytes are `None` only for an `Option`
+/// of a non-null pointer: an `Option<XString>`'s niche is its capacity.
 #[derive(Clone)]
 pub struct Taggy {
-    pub tagname: *mut ::core::ffi::c_char,
+    /// The tag that was jumped to; `None` in a slot no jump has used.
+    pub tagname: Option<ThinCString>,
     pub fmark: FileMark,
     pub cur_match: ::core::ffi::c_int,
     pub cur_fnum: ::core::ffi::c_int,
-    pub user_data: *mut ::core::ffi::c_char,
+    /// What `'tagfunc'` attached to the match, if anything.
+    pub user_data: Option<ThinCString>,
 }
 
 impl BufferRef {

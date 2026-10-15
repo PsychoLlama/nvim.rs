@@ -7,14 +7,20 @@
 //! file name and search command — and, during a bisection, says which way
 //! to go next — while [`FindTags::match_tag`] decides whether the name it
 //! found is the one being looked for.
+//!
+//! [`TagReader`] is the file under all of it: `fgets`, `ftello` and
+//! `fseeko` as the bisection used them, over a [`File`].
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::cstr;
-use crate::strings::vim_strchr;
-use core::ffi::{CStr, c_char, c_int};
+use crate::mbyte::strnicmp_in;
+use core::ffi::{CStr, c_int};
+use std::ffi::OsStr;
+use std::fs::File;
+use std::io::{BufRead, BufReader, ErrorKind, Read, Seek, SeekFrom};
+use std::os::unix::ffi::OsStrExt;
 
 /// What reading the next line produced.
 pub(crate) enum Line {
@@ -27,7 +33,7 @@ pub(crate) enum Line {
 }
 
 /// What a line means for the search.
-pub(crate) enum TagMatch {
+pub(crate) enum Verdict {
     /// The line was parsed and may be the tag wanted.
     Success,
     /// The line is malformed.
@@ -38,19 +44,135 @@ pub(crate) enum TagMatch {
     Next,
 }
 
-/// Compare two tag names for at most `len` bytes with case folded to
-/// upper, the way `sort -f` orders them.
+/// How many bytes `vim_fgets` throws a too-long line's rest away in.
+const DISCARD_CHUNK: usize = 200;
+
+/// A tags file open for reading.
 ///
-/// # Safety
-/// Both names must be NUL-terminated.
-unsafe fn tag_strnicmp(s1: *const c_char, s2: *const c_char, len: usize) -> c_int {
-    // SAFETY: neither walk passes the terminator of `s1`; `s2` is the
-    // pattern head, which is at least as long as the comparison runs.
+/// The bisection's probing is defined by what C's `fgets`, `ftello` and
+/// `fseeko` did — where a read stops, which offset it reports, what a
+/// line too long for the buffer leaves behind — so this reads with exactly
+/// those answers. Where the next byte comes from is tracked here rather
+/// than asked of the file.
+pub(crate) struct TagReader {
+    file: BufReader<File>,
+    /// The offset of the next byte a read answers.
+    pos: u64,
+    /// What one bounded read collected, before it is copied out.
+    scratch: Vec<u8>,
+}
+
+impl TagReader {
+    /// Open the tags file `name`, or `None` when it cannot be opened.
+    pub(crate) fn open(name: &CStr) -> Option<TagReader> {
+        let file = File::open(OsStr::from_bytes(name.to_bytes())).ok()?;
+        Some(TagReader {
+            file: BufReader::new(file),
+            pos: 0,
+            scratch: Vec::with_capacity(LSIZE as usize),
+        })
+    }
+
+    /// `fgets(3)` of at most `room` bytes into the scratch vector: up to and
+    /// including a newline, or `room` bytes, or what is left of the file.
+    fn read_bounded(&mut self, room: usize) -> usize {
+        self.scratch.clear();
+        let limit = u64::try_from(room).unwrap_or(u64::MAX);
+        loop {
+            // `read_until` finds the newline with `memchr`.
+            match (&mut self.file)
+                .take(limit)
+                .read_until(b'\n', &mut self.scratch)
+            {
+                Err(err) if err.kind() == ErrorKind::Interrupted => {}
+                // A read error ends the line where it struck, as the end of
+                // the file would.
+                _ => break,
+            }
+        }
+        let got = self.scratch.len();
+        self.pos += got as u64;
+        got
+    }
+
+    /// `vim_fgets`: read one line into `buf`, whose length is the buffer
+    /// size. Answers true at the end of the file.
+    ///
+    /// A line that does not fit is cut at `buf.len() - 1` bytes and the rest
+    /// of it thrown away. What tells the caller so is the last-but-one
+    /// byte: `fgets` leaves it NUL unless the line reached it.
+    pub(crate) fn fgets(&mut self, buf: &mut [u8]) -> bool {
+        let size = buf.len();
+        buf[size - 2] = 0;
+        let got = self.read_bounded(size - 1);
+        if got == 0 {
+            // `fgets` leaves the buffer alone at the end of the file.
+            return true;
+        }
+        buf[..got].copy_from_slice(&self.scratch);
+        buf[got] = 0;
+
+        let filled = |byte: u8| byte != 0 && byte != b'\n';
+        if filled(buf[size - 2]) {
+            buf[size - 1] = 0;
+            // Throw the rest of the line away, a chunk at a time. A chunk
+            // that ends the file answers "end of file", as `fgets`
+            // returning NULL there did.
+            loop {
+                let got = self.read_bounded(DISCARD_CHUNK - 1);
+                if got == 0 {
+                    return true;
+                }
+                if got < DISCARD_CHUNK - 1 || !filled(self.scratch[got - 1]) {
+                    break;
+                }
+            }
+        }
+        false
+    }
+
+    /// `ftello`: the offset of the next byte a read answers.
+    pub(crate) fn tell(&self) -> FileOffset {
+        FileOffset::try_from(self.pos).unwrap_or(FileOffset::MAX)
+    }
+
+    /// `fseeko(SEEK_SET)`, answering whether it moved. A negative offset
+    /// does not.
+    pub(crate) fn seek(&mut self, offset: FileOffset) -> bool {
+        let Ok(target) = u64::try_from(offset) else {
+            return false;
+        };
+        // Relative, so a target still inside the buffer keeps it — as
+        // `fseeko` does on a stream opened for reading.
+        let delta =
+            i64::try_from(target).unwrap_or(i64::MAX) - i64::try_from(self.pos).unwrap_or(i64::MAX);
+        if self.file.seek_relative(delta).is_err() {
+            return false;
+        }
+        self.pos = target;
+        true
+    }
+
+    /// `fseeko(SEEK_END)` then `ftello`: the size of the file, or `None`
+    /// when it cannot be sought. The position is left at the end.
+    pub(crate) fn seek_end(&mut self) -> Option<FileOffset> {
+        let end = self.file.seek(SeekFrom::End(0)).ok()?;
+        self.pos = end;
+        Some(self.tell())
+    }
+}
+
+/// The byte `at` of a C string's bytes, NUL past the end.
+fn byte(s: &[u8], at: usize) -> u8 {
+    cstr::byte_at(s, at)
+}
+
+/// `strncmp(s1, s2, len)` over the bytes of two C strings.
+fn prefix_cmp(s1: &[u8], s2: &[u8], len: usize) -> c_int {
     for at in 0..len {
-        let a = (unsafe { *s1.add(at) } as u8).to_ascii_uppercase();
-        let b = (unsafe { *s2.add(at) } as u8).to_ascii_uppercase();
+        let (a, b) = (byte(s1, at), byte(s2, at));
         if a != b {
-            return a as c_int - b as c_int;
+            return c_int::from(a) - c_int::from(b);
         }
         if a == 0 {
             break;
@@ -59,28 +181,74 @@ unsafe fn tag_strnicmp(s1: *const c_char, s2: *const c_char, len: usize) -> c_in
     0
 }
 
+/// Compare two tag names for at most `len` bytes with case folded to
+/// upper, the way `sort -f` orders them.
+fn tag_strnicmp(s1: &[u8], s2: &[u8], len: usize) -> c_int {
+    for at in 0..len {
+        let a = byte(s1, at).to_ascii_uppercase();
+        let b = byte(s2, at).to_ascii_uppercase();
+        if a != b {
+            return c_int::from(a) - c_int::from(b);
+        }
+        if a == 0 {
+            break;
+        }
+    }
+    0
+}
+
+/// `mb_strnicmp(s1, s2, len)` over the bytes of two C strings.
+pub(crate) fn strnicmp_prefix(s1: &[u8], s2: &[u8], len: usize) -> c_int {
+    strnicmp_in(&s1[..len.min(s1.len())], &s2[..len.min(s2.len())])
+}
+
+/// Where the first TAB at or after `from` is in `line`.
+pub(crate) fn find_tab(line: &[u8], from: usize) -> Option<usize> {
+    line.get(from..)?
+        .iter()
+        .position(|&b| b == TAB as u8)
+        .map(|at| from + at)
+}
+
 impl FindTags {
     /// Read a line into the buffer, answering true at end of file.
     #[inline(always)]
     fn fgets(&mut self) -> bool {
-        let size = self.lbuf.len() as c_int;
-        let fp = self.fp;
-        let buf = self.lbuf.as_mut_ptr();
-        // SAFETY: `buf` holds `size` writable bytes and `fp` is open.
-        unsafe { vim_fgets(buf, size, fp) }
+        let Some(reader) = self.reader.as_mut() else {
+            return true;
+        };
+        let eof = reader.fgets(&mut self.lbuf);
+        if !eof {
+            self.line_len = cstr::until_nul(&self.lbuf).len();
+        }
+        eof
+    }
+
+    /// The line in the buffer, up to its terminator.
+    #[inline(always)]
+    pub(crate) fn line(&self) -> &[u8] {
+        &self.lbuf[..self.line_len]
     }
 
     /// Whether the line just read holds nothing but white space.
     #[inline(always)]
     fn blank_line(&self) -> bool {
-        is_blank_line(cstr::in_chars(&self.lbuf).to_bytes())
+        is_blank_line(self.line())
     }
 
     /// Where the file is being read from now.
     #[inline(always)]
-    fn tell(&self) -> FileOffset {
-        // SAFETY: `fp` is open.
-        unsafe { ftello(self.fp) }
+    pub(crate) fn tell(&self) -> FileOffset {
+        self.reader.as_ref().map_or(0, TagReader::tell)
+    }
+
+    /// Move to `offset`; where a seek fails, the reading goes on from
+    /// where it was, as an `fseeko` whose answer was ignored.
+    #[inline(always)]
+    pub(crate) fn seek(&mut self, offset: FileOffset) {
+        if let Some(reader) = self.reader.as_mut() {
+            reader.seek(offset);
+        }
     }
 
     /// Read the next line of the tags file into the buffer.
@@ -89,7 +257,6 @@ impl FindTags {
     /// seeks there and reads past whatever partial line it landed in.
     #[inline]
     pub(crate) fn next_line(&mut self, sinfo: &mut SearchInfo) -> Line {
-        // SAFETY: `fp` is open and the buffer is what `fgets` fills.
         match self.state {
             Reading::Binary => {
                 // Halve the range that is left.
@@ -102,10 +269,10 @@ impl FindTags {
             }
             Reading::SkipBack => {
                 // Step back over roughly two lines' worth of file.
-                sinfo.curr_offset -= (self.lbuf.len() * 2) as FileOffset;
+                sinfo.curr_offset -= FileOffset::try_from(self.lbuf.len() * 2).unwrap_or(0);
                 if sinfo.curr_offset < 0 {
                     sinfo.curr_offset = 0;
-                    vim_ignored.set(unsafe { fseeko(self.fp, 0, SEEK_SET) });
+                    self.seek(0);
                     self.state = Reading::StepForward;
                 }
             }
@@ -124,13 +291,13 @@ impl FindTags {
         // Landing at an offset lands in the middle of a line, so the
         // first read is thrown away and the one after it is the line.
         sinfo.curr_offset_used = sinfo.curr_offset;
-        vim_ignored.set(unsafe { fseeko(self.fp, sinfo.curr_offset, SEEK_SET) });
+        self.seek(sinfo.curr_offset);
         let mut eof = self.fgets();
         if !eof && sinfo.curr_offset != 0 {
             sinfo.curr_offset = self.tell();
             if sinfo.curr_offset == sinfo.high_offset {
                 // Went a bit too far; try from the low offset.
-                vim_ignored.set(unsafe { fseeko(self.fp, sinfo.low_offset, SEEK_SET) });
+                self.seek(sinfo.low_offset);
                 sinfo.curr_offset = sinfo.low_offset;
             }
             eof = self.fgets();
@@ -152,29 +319,26 @@ impl FindTags {
     /// Read one header line, answering true if it is not a header after
     /// all and should be parsed as a tag.
     fn hdr_parse(&mut self) -> bool {
-        // SAFETY: the buffer is NUL-terminated, and every prefix compared
-        // below is checked before anything past it is read.
-        let line = self.lbuf.as_mut_ptr();
+        let line = &self.lbuf[..self.line_len];
         // A header line starts with "!_TAG_"; anything else here is a
         // non-header item before the header, e.g. "!" on its own.
-        if !(unsafe { cstr::prefix_eq(line, c"!_TAG_".as_ptr().cast_mut(), 6) }) {
+        if !line.starts_with(b"!_TAG_") {
             return true;
         }
-        if unsafe { cstr::prefix_eq(line, c"!_TAG_FILE_SORTED\t".as_ptr().cast_mut(), 18) } {
-            self.tag_file_sorted = unsafe { *line.add(18) } as u8 as c_int;
+        if line.starts_with(b"!_TAG_FILE_SORTED\t") {
+            self.tag_file_sorted = byte(line, 18);
         }
-        if unsafe { cstr::prefix_eq(line, c"!_TAG_FILE_ENCODING\t".as_ptr().cast_mut(), 20) } {
+        if line.starts_with(b"!_TAG_FILE_ENCODING\t") {
             // Prepare to convert every line from that encoding to
             // 'encoding'. The name ends at the first byte that is not
-            // printable ASCII, which is cut off in place.
-            let mut end = 20;
-            while unsafe { *line.add(end) } as u8 > b' ' && (unsafe { *line.add(end) } as u8) < 127
-            {
-                end += 1;
-            }
-            unsafe { *line.add(end) = 0 };
-            let name = unsafe { CStr::from_ptr(line.add(20)) };
-            let _ = p_enc(|value| self.vimconv.setup(Some(name), Some(value)));
+            // printable ASCII.
+            let rest = &line[20..];
+            let end = rest
+                .iter()
+                .position(|&b| !(b > b' ' && b < 127))
+                .unwrap_or(rest.len());
+            let name = cstr::owned(&rest[..end]);
+            let _ = p_enc(|value| self.vimconv.setup(Some(&name), Some(value)));
         }
         // Read the next line; an unrecognised flag is ignored.
         false
@@ -187,11 +351,11 @@ impl FindTags {
     pub(crate) fn start_state(&mut self, margs: &mut MatchArgs, sinfo: &mut SearchInfo) -> bool {
         let noic = self.flags & TAG_NOIC as c_int != 0;
 
-        // SAFETY: the buffer is NUL-terminated and `fp` is open.
         // The header ends at the first line that sorts below "!_TAG_".
         // With case folded, a lower-case letter sorts before "_".
-        if unsafe { cstr::prefix_at(self.lbuf.as_ptr(), 6) } <= b"!_TAG_".as_slice()
-            || (self.lbuf[0] == b'!' as c_char && (self.lbuf[1] as u8).is_ascii_lowercase())
+        let line = self.line();
+        if &line[..line.len().min(6)] <= b"!_TAG_".as_slice()
+            || (byte(line, 0) == b'!' && byte(line, 1).is_ascii_lowercase())
         {
             return self.hdr_parse();
         }
@@ -200,7 +364,7 @@ impl FindTags {
         // has to be read line by line. Without a `!_TAG_FILE_SORTED`
         // header, assume it is sorted: if it is not, the second round
         // reads it linearly anyway.
-        self.state = match self.tag_file_sorted as u8 {
+        self.state = match self.tag_file_sorted {
             _ if self.linear => Reading::Linear,
             0 | b'1' => Reading::Binary,
             b'2' => {
@@ -224,15 +388,12 @@ impl FindTags {
 
         // Starting a bisection: the range is the whole file, and the
         // first read is from the middle of it.
-        if unsafe { fseeko(self.fp, 0, SEEK_END) } != 0 {
+        let Some(filesize) = self.reader.as_mut().and_then(TagReader::seek_end) else {
             // Cannot seek, so cannot bisect.
             self.state = Reading::Linear;
             return true;
-        }
-        // Don't use lseek(); it does not work properly on macOS
-        // Catalina.
-        let filesize = self.tell();
-        vim_ignored.set(unsafe { fseeko(self.fp, 0, SEEK_SET) });
+        };
+        self.seek(0);
         *sinfo = SearchInfo {
             low_offset: 0,
             low_char: 0,
@@ -256,39 +417,44 @@ impl FindTags {
         tagp: &mut TagParts,
         margs: &mut MatchArgs,
         sinfo: &mut SearchInfo,
-    ) -> TagMatch {
-        // SAFETY: the buffer is NUL-terminated, `fp` is open, and every
-        // pointer written into `tagp` points into the buffer.
+    ) -> Verdict {
+        let line = &self.lbuf[..self.line_len];
         if self.orgpat.headlen == 0 {
             // No head to compare: take the line apart the slow way.
-            return match unsafe { parse_tag_line(self.lbuf.as_mut_ptr(), tagp) } {
-                true => TagMatch::Success,
-                false => TagMatch::Fail,
+            return match parse_tag_line(line) {
+                Some(parts) => {
+                    *tagp = parts;
+                    Verdict::Success
+                }
+                None => Verdict::Fail,
             };
         }
 
         *tagp = TagParts::default();
-        tagp.tagname = self.lbuf.as_mut_ptr();
-        tagp.tagname_end = unsafe { vim_strchr(tagp.tagname, TAB) };
-        if tagp.tagname_end.is_null() {
+        let Some(name_end) = find_tab(line, 0) else {
             // Corrupted tag line.
-            return TagMatch::Fail;
-        }
+            return Verdict::Fail;
+        };
+        tagp.tagname = Span {
+            start: 0,
+            end: name_end,
+        };
 
         // How much of the two names to compare.
-        let mut cmplen = unsafe { tagp.tagname_end.offset_from(tagp.tagname) } as c_int;
-        if p_tl() != 0 && cmplen as OptInt > p_tl() {
-            cmplen = p_tl() as c_int;
+        let mut cmplen = name_end;
+        if let Ok(limit) = usize::try_from(p_tl())
+            && limit != 0
+            && cmplen > limit
+        {
+            cmplen = limit;
         }
         if margs.has_re && self.orgpat.headlen < cmplen {
             cmplen = self.orgpat.headlen;
         } else if self.state == Reading::Linear && self.orgpat.headlen != cmplen {
             // A different length and no regexp: it cannot match.
-            return TagMatch::Next;
+            return Verdict::Next;
         }
-        let head = self.orgpat.head;
-        debug_assert!(cmplen >= 0);
-        let cmplen = cmplen as usize;
+        let head = self.orgpat.head();
 
         match self.state {
             Reading::Binary => {
@@ -297,27 +463,28 @@ impl FindTags {
                 // Upstream folds case through a *signed* `char`, so a
                 // byte above 0x7f reads negative here and unsigned in
                 // the branch below it. Preserved.
-                let signed = unsafe { *tagp.tagname } as c_int;
+                let first = byte(line, 0);
+                let signed = c_int::from(first.cast_signed());
                 let sort_key = if !margs.sortic {
-                    unsafe { *tagp.tagname as u8 as c_int }
-                } else if !(b'a' as c_int..=b'z' as c_int).contains(&signed) {
-                    signed
+                    c_int::from(first)
+                } else if first.is_ascii_lowercase() {
+                    signed - c_int::from(b'a' - b'A')
                 } else {
-                    signed - (b'a' - b'A') as c_int
+                    signed
                 };
                 if sort_key < sinfo.low_char || sort_key > sinfo.high_char {
                     margs.sort_error = true;
                 }
 
                 let mut tagcmp = if margs.sortic {
-                    unsafe { tag_strnicmp(tagp.tagname, head, cmplen) }
+                    tag_strnicmp(line, head, cmplen)
                 } else {
-                    unsafe { cstr::prefix_cmp(tagp.tagname, head, cmplen) as c_int }
+                    prefix_cmp(line, head, cmplen)
                 };
                 // A match on a shorter tag means to search forward, on
                 // a longer one to search backward.
                 if tagcmp == 0 {
-                    tagcmp = (cmplen as c_int).cmp(&self.orgpat.headlen) as c_int;
+                    tagcmp = cmplen.cmp(&self.orgpat.headlen) as c_int;
                 }
 
                 if tagcmp == 0 {
@@ -325,26 +492,26 @@ impl FindTags {
                     // on the first tag that matches.
                     self.state = Reading::SkipBack;
                     sinfo.match_offset = sinfo.curr_offset;
-                    return TagMatch::Next;
+                    return Verdict::Next;
                 }
                 if tagcmp < 0 {
                     sinfo.curr_offset = self.tell();
                     if sinfo.curr_offset < sinfo.high_offset {
                         sinfo.low_offset = sinfo.curr_offset;
                         sinfo.low_char = sort_key;
-                        return TagMatch::Next;
+                        return Verdict::Next;
                     }
                 }
                 if tagcmp > 0 && sinfo.curr_offset != sinfo.high_offset {
                     sinfo.high_offset = sinfo.curr_offset;
                     sinfo.high_char = sort_key;
-                    return TagMatch::Next;
+                    return Verdict::Next;
                 }
                 // No match, and the range is exhausted.
-                return TagMatch::Stop;
+                return Verdict::Stop;
             }
             Reading::SkipBack => {
-                if unsafe { mb_strnicmp(tagp.tagname, head, cmplen) } != 0 {
+                if strnicmp_prefix(line, head, cmplen) != 0 {
                     self.state = Reading::StepForward;
                 } else {
                     // Have to skip back further. Put the offset the
@@ -352,34 +519,37 @@ impl FindTags {
                     // the walk stuck on it.
                     sinfo.curr_offset = sinfo.curr_offset_used;
                 }
-                return TagMatch::Next;
+                return Verdict::Next;
             }
             Reading::StepForward => {
-                if unsafe { mb_strnicmp(tagp.tagname, head, cmplen) } != 0 {
+                if strnicmp_prefix(line, head, cmplen) != 0 {
                     return if self.tell() > sinfo.match_offset {
                         // Past the last match.
-                        TagMatch::Stop
+                        Verdict::Stop
                     } else {
                         // Not yet at the first one.
-                        TagMatch::Next
+                        Verdict::Next
                     };
                 }
             }
             _ => {
-                if unsafe { mb_strnicmp(tagp.tagname, head, cmplen) } != 0 {
-                    return TagMatch::Next;
+                if strnicmp_prefix(line, head, cmplen) != 0 {
+                    return Verdict::Next;
                 }
             }
         }
 
         // Could be the tag wanted: isolate the file name and command.
-        tagp.fname = unsafe { tagp.tagname_end.add(1) };
-        tagp.fname_end = unsafe { vim_strchr(tagp.fname, TAB) };
-        if tagp.fname_end.is_null() {
-            return TagMatch::Fail;
-        }
-        tagp.command = unsafe { tagp.fname_end.add(1) };
-        TagMatch::Success
+        let fname = name_end + 1;
+        let Some(fname_end) = find_tab(line, fname) else {
+            return Verdict::Fail;
+        };
+        tagp.fname = Span {
+            start: fname,
+            end: fname_end,
+        };
+        tagp.command = fname_end + 1;
+        Verdict::Success
     }
 
     /// Whether the tag name the line holds is the one being looked for.
@@ -389,50 +559,52 @@ impl FindTags {
     /// how good the match was.
     #[inline]
     pub(crate) fn match_tag(&mut self, tagp: &TagParts, margs: &mut MatchArgs) -> bool {
-        // SAFETY: `tagname` and `tagname_end` bracket the name inside the
-        // line buffer; the terminator written over `tagname_end` for the
-        // regexp is put back before returning.
-        let mut cmplen = unsafe { tagp.tagname_end.offset_from(tagp.tagname) } as c_int;
-        if p_tl() != 0 && cmplen as OptInt > p_tl() {
-            cmplen = p_tl() as c_int;
+        let mut cmplen = tagp.tagname.len();
+        if let Ok(limit) = usize::try_from(p_tl())
+            && limit != 0
+            && cmplen > limit
+        {
+            cmplen = limit;
         }
-        debug_assert!(cmplen >= 0);
-        let len = cmplen as usize;
-        let pat = self.orgpat.pat;
+        let name = &self.lbuf[tagp.tagname.start..self.line_len];
+        let pat: &[u8] = &self.orgpat.pat;
 
         // A name of a different length cannot match literally.
         let mut matched = self.orgpat.len == cmplen && {
             if self.orgpat.regmatch.rm_ic {
-                let same = unsafe { mb_strnicmp(tagp.tagname, pat, len) } == 0;
+                let same = strnicmp_prefix(name, pat, cmplen) == 0;
                 if same {
-                    margs.match_no_ic = unsafe { cstr::prefix_eq(tagp.tagname, pat, len) };
+                    margs.match_no_ic = prefix_cmp(name, pat, cmplen) == 0;
                 }
                 same
             } else {
-                unsafe { cstr::prefix_eq(tagp.tagname, pat, len) }
+                prefix_cmp(name, pat, cmplen) == 0
             }
         };
 
         // With a regexp, also find the tags it matches.
         margs.match_re = false;
         if !matched && !self.orgpat.regmatch.regprog.is_null() {
-            let saved = unsafe { *tagp.tagname_end };
-            unsafe { *tagp.tagname_end = 0 };
-            // SAFETY: the name is NUL-terminated for the length of the
-            // match, by the byte just written.
-            let name = unsafe { cstr::at(tagp.tagname) };
-            matched = vim_regexec(&mut self.orgpat.regmatch, name, 0);
+            // The name is terminated in the buffer for the regexp, and the
+            // TAB put back after.
+            let end = tagp.tagname.end;
+            let saved = self.lbuf[end];
+            self.lbuf[end] = 0;
+            let name = cstr::in_bytes(&self.lbuf[tagp.tagname.start..=end]);
+            let regmatch = &mut self.orgpat.regmatch;
+            matched = vim_regexec(regmatch, name, 0);
             if matched {
-                margs.matchoff = self.orgpat.regmatch.starts[0].unwrap_or(0) as c_int;
-                if self.orgpat.regmatch.rm_ic {
+                margs.matchoff =
+                    regmatch.starts[0].map_or(0, |at| c_int::try_from(at).unwrap_or(0));
+                if regmatch.rm_ic {
                     // Ask again with case, to find out how good the
                     // match is.
-                    self.orgpat.regmatch.rm_ic = false;
-                    margs.match_no_ic = vim_regexec(&mut self.orgpat.regmatch, name, 0);
-                    self.orgpat.regmatch.rm_ic = true;
+                    regmatch.rm_ic = false;
+                    margs.match_no_ic = vim_regexec(regmatch, name, 0);
+                    regmatch.rm_ic = true;
                 }
             }
-            unsafe { *tagp.tagname_end = saved };
+            self.lbuf[end] = saved;
             margs.match_re = true;
         }
 

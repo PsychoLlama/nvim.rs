@@ -1,13 +1,12 @@
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 pub(crate) mod state;
-use crate::ascii::{ascii_isdigit, ascii_isspace, ascii_iswhite};
+use crate::ascii::{ascii_isspace, ascii_iswhite};
 use crate::autocmd::has_autocmd;
-use crate::buffer::{buf_is_help, buflist_findname_exp, buflist_getfile, find_buf};
-use crate::charset::{is_blank_line, ptr2cells, skipdigits};
+use crate::buffer::{buf_is_help, buflist_getfile, find_buf};
+use crate::charset::is_blank_line;
 use crate::cmdexpand::expand_one;
 use crate::cursor::check_cursor;
 use crate::drawscreen::{UPD_VALID, redraw_later};
@@ -20,9 +19,7 @@ use crate::eval::{callback_call, list2fpos, set_ref_in_callback};
 use crate::ex_cmds::{getfile, prepare_tagpreview};
 use crate::ex_docmd::{do_cmdline_cmd, set_no_hlsearch};
 use crate::file_search::{FindContext, split_stop_directories};
-use crate::fileio::vim_fgets;
 use crate::fold::fold_open_cursor;
-use crate::garray::free_string_array;
 use crate::getchar::state::{KeyTyped, got_int};
 use crate::global_cell::GlobalCell;
 use crate::guard::secure;
@@ -30,8 +27,7 @@ use crate::help::help_heuristic;
 use crate::input::prompt_for_input;
 use crate::insexpand::{ins_compl_check_keys, ins_compl_interrupted};
 use crate::mark::{fm_getname, mark_view_make, mark_view_restore, setpcmark};
-use crate::mbyte::{mb_strnicmp, utfc_ptr2len};
-use crate::memory::{XString, xfree, xmalloc, xmemdupz, xstrdup};
+use crate::memory::XString;
 use crate::message::state::{msg_col, msg_didout, msg_scroll, msg_scrolled, msg_silent};
 use crate::message::{e_invarg, e_listreq};
 use crate::message::{
@@ -50,16 +46,12 @@ use crate::options::{
     kOptSwbFlagVsplit,
 };
 use crate::os::cshim::gettext;
-use crate::os::fs::{os_fopen, os_path_exists};
 use crate::os::input::{fast_breakcheck, line_breakcheck, os_breakcheck};
 use crate::path::{full_name_save, has_wildcard, path_full_compare, vim_is_abs_name};
 use crate::pos::MAXLNUM;
 use crate::quickfix::set_errorlist;
-use crate::regexp::{skip_regexp, vim_regcomp, vim_regexec, vim_regfree};
-use crate::runtime::do_in_runtimepath;
+use crate::regexp::vim_regexec;
 use crate::search::state::{magic_overruled, no_hlsearch};
-use crate::search::{do_search, ignorecase, ignorecase_opt};
-use crate::startup::vim_ignored;
 use crate::state::MODE_INSERT;
 use crate::state::mode::State;
 use crate::tag::state::{
@@ -69,9 +61,9 @@ use crate::types::AutoEvent;
 use crate::types::TAB;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    AdditionalData, Callback, ColNr, Dict, ExArg, Expand, FILE, FileComparison, FileMark,
-    FileMarkView, FileOffset, GetFileFlags, GetFileRet, LineNr, List, OptInt, OptMagic, OptSet,
-    Pos, RegMatch, Taggy, Timestamp, VarNumber, VimConv, int64_t, size_t,
+    AdditionalData, Callback, ColNr, Dict, ExArg, Expand, FileComparison, FileMark, FileMarkView,
+    FileOffset, GetFileFlags, GetFileRet, LineNr, List, OptMagic, OptSet, Pos, Taggy, Timestamp,
+    VarNumber, VimConv,
 };
 use crate::ui::state::Columns;
 use crate::ui::ui_has;
@@ -79,11 +71,10 @@ use crate::window::{
     check_can_set_curbuf_forceit, swbuf_goto_win_with_buf, win_close, win_enter, win_split,
     win_valid,
 };
-use ::libc::{abort, atoi, fclose, fseeko, ftello, strcasecmp};
 
 // The carve of the transpiled module; see each child's docs.
 mod scan;
-pub use self::scan::*;
+pub(crate) use self::scan::*;
 mod parse;
 pub(crate) use self::parse::*;
 mod collect;
@@ -127,25 +118,39 @@ pub const TAG_NOIC: ::core::ffi::c_uint = 8;
 pub const TAG_REGEXP: ::core::ffi::c_uint = 4;
 pub const TAG_NAMES: ::core::ffi::c_uint = 2;
 pub const TAG_HELP: ::core::ffi::c_uint = 1;
-/// The parts of one tags-file line, as pointers into the buffer holding it.
+/// Where one field of a line starts and ends, as byte offsets into it.
+#[derive(Clone, Default, Debug, PartialEq, Eq)]
+pub(crate) struct Span {
+    pub(crate) start: usize,
+    pub(crate) end: usize,
+}
+
+impl Span {
+    /// The field's bytes in `line`, the line it was taken from.
+    pub(crate) fn of<'a>(&self, line: &'a [u8]) -> &'a [u8] {
+        &line[self.start..self.end]
+    }
+
+    pub(crate) fn len(&self) -> usize {
+        self.end - self.start
+    }
+}
+
+/// The parts of one tags-file line, as offsets into the line.
 ///
-/// Each field is bracketed by a start and an `_end` pointer; the parts a
-/// line need not have (the kind, the user data) are NULL when absent. The
-/// buffer is the caller's, and outlives every `TagParts` taken from it.
-#[derive(Default)]
-pub struct TagParts {
-    pub tagname: *mut ::core::ffi::c_char,
-    pub tagname_end: *mut ::core::ffi::c_char,
-    pub fname: *mut ::core::ffi::c_char,
-    pub fname_end: *mut ::core::ffi::c_char,
-    pub command: *mut ::core::ffi::c_char,
-    pub command_end: *mut ::core::ffi::c_char,
-    pub tag_fname: *mut ::core::ffi::c_char,
-    pub tagkind: *mut ::core::ffi::c_char,
-    pub tagkind_end: *mut ::core::ffi::c_char,
-    pub user_data: *mut ::core::ffi::c_char,
-    pub user_data_end: *mut ::core::ffi::c_char,
-    pub tagline: LineNr,
+/// The name and the file name are bracketed; the command runs from
+/// `command` to the end of the line, or to `command_end` when extension
+/// fields follow it. The parts a line need not have — the kind, the user
+/// data — are `None` when absent.
+#[derive(Clone, Default)]
+pub(crate) struct TagParts {
+    pub(crate) tagname: Span,
+    pub(crate) fname: Span,
+    pub(crate) command: usize,
+    pub(crate) command_end: Option<usize>,
+    pub(crate) tagkind: Option<Span>,
+    pub(crate) user_data: Option<Span>,
+    pub(crate) tagline: LineNr,
 }
 pub const MT_IC_OFF: ::core::ffi::c_uint = 4;
 pub const MT_MASK: ::core::ffi::c_uint = 7;
@@ -155,13 +160,9 @@ pub const MT_GL_CUR: ::core::ffi::c_uint = 1;
 pub const MT_ST_OTH: ::core::ffi::c_uint = 3;
 pub const MT_ST_CUR: ::core::ffi::c_uint = 0;
 pub const MT_RE_OFF: ::core::ffi::c_uint = 8;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const CMDBUFFSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int;
 pub const NOTDONE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const TAGSTACKSIZE: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
-pub const SEEK_SET: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const SEEK_END: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const NOTAGFILE: ::core::ffi::c_int = 99 as ::core::ffi::c_int;
 
 /// What [`jumpto_tag`](crate::tag::jumpto_tag) did.
 ///
@@ -182,8 +183,9 @@ static nofile_fname: GlobalCell<Option<XString>> = GlobalCell::new(None);
 /// The tag the remembered matches were found for, so that a `:tnext` can
 /// tell whether it is still walking the same search.
 static tagmatchname: GlobalCell<Option<XString>> = GlobalCell::new(None);
+/// The preview window's stand-in for a tag stack: `:ptag` keeps one entry.
 static ptag_entry: GlobalCell<Taggy> = GlobalCell::new(Taggy {
-    tagname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+    tagname: None,
     fmark: FileMark {
         mark: Pos {
             lnum: 0 as LineNr,
@@ -200,14 +202,10 @@ static ptag_entry: GlobalCell<Taggy> = GlobalCell::new(Taggy {
     },
     cur_match: 0 as ::core::ffi::c_int,
     cur_fnum: 0 as ::core::ffi::c_int,
-    user_data: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+    user_data: None,
 });
 pub const TAG_SEP: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
 /// Forget which tag the remembered matches are for.
-///
-/// # Safety
-/// Must not be called while a match is still being read.
-pub unsafe fn tag_freematch() {
+pub fn tag_freematch() {
     drop(tagmatchname.take());
 }
-pub const ML_EXTRA: ::core::ffi::c_int = 3 as ::core::ffi::c_int;

@@ -25,7 +25,7 @@ use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
 use crate::mbyte::utfc_ptr2len;
 use crate::memline::ml_get;
-use crate::memory::{xfree, xstrdup};
+use crate::memory::{XString, xfree, xstrdup};
 use crate::message::{e_argreq, e_invarg};
 use crate::message::{
     emsg, message_filtered, msg, msg_display, msg_ext_set_kind, msg_putchar, msg_title,
@@ -100,8 +100,15 @@ pub fn ex_marks(excmd: &mut ExArg) {
     // file lends the name it still carries, which must not be freed.
     for (i, mark) in GlobalMarks::indexed() {
         let fnum = mark.fmark().fnum();
+        let owned = if fnum != 0 {
+            fm_getname(&mark.fmark().read(), 15)
+        } else {
+            None
+        };
         let name = if fnum != 0 {
-            unsafe { fm_getname(mark.fmark().raw(), 15) }
+            owned
+                .as_ref()
+                .map_or(ptr::null_mut(), |name| name.as_ptr().cast_mut())
         } else {
             mark.fname()
         };
@@ -115,9 +122,6 @@ pub fn ex_marks(excmd: &mut ExArg) {
         };
         let current = c_int::from(fnum == buf.handle);
         unsafe { show_one_mark(c, arg, mark.fmark().pos(), name, current) };
-        if fnum != 0 {
-            unsafe { xfree(name.cast()) };
-        }
     }
     for (c, pos) in ticks.into_iter().chain(prompt).chain(visual) {
         unsafe { show_one_mark(c, arg, pos, ptr::null_mut(), 1) };
@@ -434,19 +438,15 @@ pub(super) unsafe fn mark_line(pos: Pos, lead_len: c_int) -> *mut c_char {
     s
 }
 
-/// Get name of file from a filemark.
-/// When it's in the current buffer, return the text at the mark.
-/// Returns an allocated string.
-///
-/// # Safety
-/// `fmark` must point at a live `FileMark` and the editor's globals must be
-/// live.
-pub unsafe fn fm_getname(fmark: *mut FileMark, lead_len: c_int) -> *mut c_char {
-    // SAFETY: the caller promised a live record; `curbuf` is live.
-    let (fm, buf) = unsafe { (Fmark::new(fmark), Buf::current()) };
-    if fm.fnum() == buf.handle {
-        // SAFETY: `curbuf` is live.
-        return unsafe { mark_line(fm.pos(), lead_len) };
+/// The name of the file a filemark is in — or, when it is in the current
+/// buffer, the text at the mark. `None` when its buffer is gone.
+pub fn fm_getname(fm: &FileMark, lead_len: c_int) -> Option<XString> {
+    if fm.fnum == Buf::current().handle {
+        // SAFETY: `curbuf` is live; `mark_line` answers an allocation that
+        // is ours.
+        return Some(unsafe { XString::from_raw(mark_line(fm.mark, lead_len)) });
     }
-    buflist_nr2name(fm.fnum(), 0, 1)
+    let name = buflist_nr2name(fm.fnum, 0, 1);
+    // SAFETY: a fresh allocation, or null.
+    (!name.is_null()).then(|| unsafe { XString::from_raw(name) })
 }

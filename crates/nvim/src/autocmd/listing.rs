@@ -228,23 +228,11 @@ pub(crate) unsafe fn au_show_for_event(
     }
 }
 
-/// Whether any autocommand for `event` would match the file `sfname`
+/// Whether any autocommand for `event` would match the file `name`
 /// opened in `buffer`.
-///
-/// # Safety
-///
-/// `event` must be an initialized `AutoEvent` whose pointer fields point at
-/// live data for the call. `sfname` must point at a NUL-terminated string,
-/// unaliased for the call.
-pub unsafe fn has_autocmd(
-    event: AutoEvent,
-    sfname: *mut ::core::ffi::c_char,
-    buffer: Option<Buf>,
-) -> bool {
-    // SAFETY: `sfname` is the caller's NUL-terminated file name, or null.
-    let Some(name) = (unsafe { cstr::at_opt(sfname) }) else {
-        return false;
-    };
+pub fn has_autocmd(event: AutoEvent, name: &::core::ffi::CStr, buffer: Option<Buf>) -> bool {
+    // The matcher takes writable pointers but only reads through them.
+    let sfname = name.as_ptr().cast_mut();
     let tail = path_tail(name).as_ptr().cast_mut();
     let mut fname = full_name_save(name, false);
     let fname = fname.as_mut_ptr();

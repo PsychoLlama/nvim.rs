@@ -424,7 +424,7 @@ unsafe fn source_autocmds(fname_exp: *mut c_char) -> Option<c_int> {
     let sourced = Buf::current_or_none();
     // SAFETY: the caller's contract; the handlers may run arbitrary script,
     // which is why nothing is borrowed across them.
-    if unsafe { has_autocmd(AutoEvent::SourceCmd, fname_exp, None) }
+    if has_autocmd(AutoEvent::SourceCmd, unsafe { cstr::at(fname_exp) }, None)
         && unsafe { apply_autocmds(AutoEvent::SourceCmd, fname_exp, fname_exp, false, sourced) }
     {
         let retval = if aborting() { FAIL } else { OK };

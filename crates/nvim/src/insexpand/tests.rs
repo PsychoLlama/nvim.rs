@@ -13,7 +13,6 @@
 use super::*;
 use crate::eval::typval::dict_find;
 use crate::global_cell::{editor_state::Held, editor_state_lock};
-use crate::memory::xstrdup;
 use crate::options::kOptCotFlagNearest;
 use crate::os::input::reset_breakcheck_count;
 use crate::types::{FAIL, OK};
@@ -280,17 +279,8 @@ fn an_expansion_takes_its_direction_once() {
     let _f = Fixture::new(0);
     compl_direction.set(BACKWARD);
     start("y");
-    let words = ["y1", "y2", "y3"];
-    // SAFETY: an `xmalloc`ed array of `xstrdup`ed strings, which the add
-    // takes over and frees.
-    unsafe {
-        let array = xmalloc(words.len() * size_of::<*mut c_char>()).cast::<*mut c_char>();
-        for (i, word) in words.iter().enumerate() {
-            let word = CString::new(*word).expect("no NUL");
-            *array.add(i) = xstrdup(word.as_ptr());
-        }
-        ins_compl_add_matches(words.len() as c_int, array, 0);
-    }
+    let words = ["y1", "y2", "y3"].map(|word| XString::from_bytes(word.as_bytes()));
+    ins_compl_add_match_list(&words, false);
     // The first goes before the original, the rest follow it.
     assert_eq!(texts(), ["y1", "y2", "y3", "<o>"]);
 }

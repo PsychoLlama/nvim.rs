@@ -5,28 +5,18 @@
 //! are in use and which one the walk stands on. [`do_tags`] prints it,
 //! [`get_tagstack`] and [`set_tagstack`] are the Vimscript views.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::cstr;
+use crate::formatted;
 use crate::highlight_group::HLF_D;
 use crate::memory::ThinCString;
 use crate::os::cshim::gettext;
 use crate::pos::MAXCOL;
 use crate::types::{Failed, IOSIZE, ListRef, VAR_LIST};
-use crate::vim_snprintf;
-use crate::winlayer::{Buf, Live, Win};
-use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
-
-/// One entry of a window's tag stack, whose caller has promised it outlives
-/// the value.
-///
-/// The tag code passes `*mut Taggy` around because `'tagfunc'` can close
-/// the window the entries live in, so no borrow may outlive one field
-/// access — which is what [`Live`]'s `Deref` gives.
-pub(crate) type Tagg = Live<Taggy>;
+use crate::winlayer::{Buf, Win};
+use core::ffi::{CStr, c_int};
 
 /// `emsg(_(msg))`: report one of this family's messages.
 ///
@@ -57,8 +47,8 @@ pub(crate) struct TagStack {
 
 /// A new entry for [`TagStack::push`].
 pub(crate) struct Push {
-    /// The tag being jumped to. The entry takes ownership.
-    pub(crate) tagname: *mut c_char,
+    /// The tag being jumped to.
+    pub(crate) tagname: ThinCString,
     /// The buffer the jump landed in, or 0 when that is not known yet.
     pub(crate) cur_fnum: c_int,
     /// Which of the matches was taken, counted from zero.
@@ -66,9 +56,8 @@ pub(crate) struct Push {
     /// Where the cursor was before the jump, and in which buffer.
     pub(crate) mark: Pos,
     pub(crate) fnum: c_int,
-    /// Whatever `'tagfunc'` attached to the match. The entry takes
-    /// ownership.
-    pub(crate) user_data: *mut c_char,
+    /// Whatever `'tagfunc'` attached to the match.
+    pub(crate) user_data: Option<ThinCString>,
 }
 
 impl TagStack {
@@ -121,9 +110,7 @@ impl TagStack {
 
     /// Drop the oldest entry, shifting the rest down to free the top.
     fn shift(&mut self) {
-        let entries = self.entries();
-        tagstack_clear_entry(&mut entries[0]);
-        entries.rotate_left(1);
+        drop_oldest(self.entries());
         // The count was at least one.
         self.win.w_tagstacklen -= 1;
     }
@@ -139,7 +126,7 @@ impl TagStack {
         // Field by field, not a whole `Taggy`: the timestamp and the
         // additional data of the slot are deliberately left as they were.
         let entry = &mut self.entries()[idx];
-        entry.tagname = item.tagname;
+        entry.tagname = Some(item.tagname);
         entry.cur_fnum = item.cur_fnum;
         // A match number below zero would index the wrong way on the way
         // back out.
@@ -180,13 +167,12 @@ impl TagStack {
                 mark.col -= 1;
             }
             self.push(Push {
-                tagname: tagname.into_raw(),
+                tagname,
                 cur_fnum: number(&item, b"bufnr"),
                 cur_match: number(&item, b"matchnr") - 1,
                 mark,
                 fnum,
-                user_data: dict_get_string_alloc(Some(&*item), b"user_data")
-                    .map_or(ptr::null_mut(), ThinCString::into_raw),
+                user_data: dict_get_string_alloc(Some(&*item), b"user_data"),
             });
         }
     }
@@ -194,64 +180,65 @@ impl TagStack {
 
 /// Free what one stack entry owns, and forget it.
 pub fn tagstack_clear_entry(item: &mut Taggy) {
-    // SAFETY: the caller promises both fields are ours to free.
-    unsafe { xfree(item.tagname.cast()) };
-    unsafe { xfree(item.user_data.cast()) };
-    item.tagname = ptr::null_mut();
-    item.user_data = ptr::null_mut();
+    item.tagname = None;
+    item.user_data = None;
+}
+
+/// Drop the oldest of `entries`, shifting the rest down to free the top.
+///
+/// Upstream copies each entry down over the one before it, so the top slot
+/// keeps a copy of the entry now below it — its mark and match, though not
+/// its strings, which the slot's new owner replaces.
+pub(crate) fn drop_oldest(entries: &mut [Taggy]) {
+    tagstack_clear_entry(&mut entries[0]);
+    entries.rotate_left(1);
+    if let [.., below, top] = entries {
+        top.fmark = below.fmark.clone();
+        top.cur_match = below.cur_match;
+        top.cur_fnum = below.cur_fnum;
+    }
 }
 
 /// `:tags` — print the tag stack of the current window.
 pub fn do_tags(_excmd: &mut ExArg) {
-    let mut row = [0 as c_char; IOSIZE as usize];
     let mut stack = TagStack::of(Win::current());
     let curidx = stack.curidx();
     let len = stack.len();
 
     msg_title(gettext(c"\n  # TO tag         FROM line  in file/text"));
-    for (i, item) in stack.entries().iter_mut().enumerate() {
-        if item.tagname.is_null() {
+    for (i, item) in stack.entries().iter().enumerate() {
+        let Some(tagname) = &item.tagname else {
             continue;
-        }
-        let name = unsafe { fm_getname(&raw mut item.fmark, 30) };
-        if name.is_null() {
+        };
+        let Some(name) = fm_getname(&item.fmark, 30) else {
             // The file the jump came from is gone.
             continue;
-        }
+        };
         msg_putchar('\n' as c_int);
         // Formatted rather than built up: a tag name longer than the
-        // buffer is truncated, as upstream truncates it.
-        let str_m = IOSIZE as size_t;
-        // Two trailing spaces: the file name that follows is a separate
-        // `msg_display`, and the gap is part of this format.
-        let fmt = c"%c%2d %2d %-15s %5d  ".as_ptr();
-        let args = if i as c_int == curidx { '>' } else { ' ' } as c_int;
-        let arg5 = i as c_int + 1;
-        let arg6 = item.cur_match + 1;
-        let tagname2 = item.tagname;
-        let lnum2 = item.fmark.mark.lnum;
-        unsafe {
-            vim_snprintf!(
-                row.as_mut_ptr(),
-                str_m,
-                fmt,
-                args,
-                arg5,
-                arg6,
-                tagname2,
-                lnum2,
-            )
-        };
-        msg_display(cstr::in_chars(&row), 0, false);
+        // buffer is truncated, as upstream truncates it. Two trailing
+        // spaces: the file name that follows is a separate `msg_display`,
+        // and the gap is part of this format.
+        let number = c_int::try_from(i).unwrap_or(c_int::MAX);
+        let mut row = formatted!(
+            IOSIZE as usize,
+            b"%c%2d %2d %-15s %5d  ",
+            c_int::from(if number == curidx { b'>' } else { b' ' }),
+            number + 1,
+            item.cur_match + 1,
+            tagname.as_bytes(),
+            item.fmark.mark.lnum,
+        );
+        row.push(0);
+        msg_display(cstr::in_bytes(&row), 0, false);
         let hl = if item.fmark.fnum == Buf::current().handle {
             HLF_D
         } else {
             0
         };
-        msg_display(unsafe { cstr::at(name) }, hl, false);
-        unsafe { xfree(name.cast()) };
+        msg_display(name.as_cstr(), hl, false);
     }
-    if curidx as usize == len {
+    if usize::try_from(curidx).is_ok_and(|curidx| curidx == len) {
         // Nothing has been popped: show where the next CTRL-T lands.
         msg_str(c"\n>");
     }
@@ -348,11 +335,12 @@ pub fn set_tagstack(window: Win, d: &Dict, action: c_int) -> Result<(), Failed> 
     Ok(())
 }
 
-/// A stack entry's `tagname` and `user_data`, either of which may be null.
+/// A stack entry's `tagname` and `user_data`, either of which may be absent.
 fn entry_strings(tag: &Taggy) -> (Option<&CStr>, Option<&CStr>) {
-    // SAFETY: an entry's strings are null or NUL-terminated allocations the
-    // entry owns, which live as long as the borrow of it.
-    unsafe { (cstr::at_opt(tag.tagname), cstr::at_opt(tag.user_data)) }
+    (
+        tag.tagname.as_ref().map(ThinCString::as_cstr),
+        tag.user_data.as_ref().map(ThinCString::as_cstr),
+    )
 }
 
 /// A number field of a dict, zero when it is missing.

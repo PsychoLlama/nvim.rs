@@ -5,19 +5,18 @@
 //! out in columns. [`add_llist_tags`] is the same information as a location
 //! list for `:ltag`.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
+use crate::charset::ptr2cells_at;
 use crate::cstr;
-use crate::file_search::Name;
+use crate::debugger::atoi;
+use crate::formatted;
 use crate::highlight_group::{HLF_CM, HLF_D, HLF_T};
 use crate::pos::MAXCOL;
-use crate::snprintf;
-use crate::types::{Failed, IOSIZE, MAXPATHL};
-use crate::vim_snprintf;
+use crate::types::{IOSIZE, MAXPATHL};
 use crate::winlayer::Win;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::c_int;
 
 /// The column the kind, name and command text line up at.
 const INFO_COLUMN: c_int = 15;
@@ -34,34 +33,26 @@ const CMDBUFFSIZE: usize = super::CMDBUFFSIZE as usize;
 /// How a match was found, in the order the match's bucket byte numbers
 /// them: F(ull, not a partial match) / S(tatic, local to its file) /
 /// C(ase matched).
-const PRIORITY: [&CStr; 8] = [
-    c"FSC", c"F C", c"F  ", c"FS ", c" SC", c"  C", c"   ", c" S ",
+const PRIORITY: [&[u8]; 8] = [
+    b"FSC", b"F C", b"F  ", b"FS ", b" SC", b"  C", b"   ", b" S ",
 ];
+
+/// The byte `at` of a C string's bytes, NUL past the end.
+fn byte(s: &[u8], at: usize) -> u8 {
+    cstr::byte_at(s, at)
+}
 
 /// The `:tselect` listing: every match, one entry each.
 ///
 /// `new_tag` says this is a fresh listing rather than a re-listing of the
 /// matches already jumped into, in which case one entry is marked as the
 /// current one — taken from the preview tag, or from the tag stack when
-/// `use_tagstack`.
-///
-/// # Safety
-/// `matches` must hold `num_matches` matches [`find_tags`] answered, and
-/// there must be at least one.
-pub(crate) unsafe fn print_tag_list(
-    new_tag: bool,
-    use_tagstack: bool,
-    num_matches: c_int,
-    matches: *mut *mut c_char,
-) {
-    // SAFETY: the caller's promise; `curwin` is live, and each match
-    // outlives the `TagParts` taken from it.
-    let mut tagp = TagParts::default();
-
+/// `use_tagstack`. There must be at least one match.
+pub(crate) fn print_tag_list(new_tag: bool, use_tagstack: bool, matches: &[TagMatch]) {
     // Take the first match for how wide the names are, and line the
     // file names up at that.
-    unsafe { parse_match(*matches, &mut tagp) };
-    let name_width = unsafe { tagp.tagname_end.offset_from(tagp.tagname) } as c_int + 2;
+    let (first, _) = matches[0].parse();
+    let name_width = c_int::try_from(first.tagname.len()).unwrap_or(c_int::MAX - 2) + 2;
     let mut taglen = name_width.max(MIN_TAG_WIDTH);
     if taglen > Columns.get() - 25 {
         // Too wide to line up: every file name goes on its own line.
@@ -79,15 +70,17 @@ pub(crate) unsafe fn print_tag_list(
     advance_to_files(taglen);
     msg_str_hl(gettext(c"file\n"), HLF_T, false);
 
-    'each: for i in 0..num_matches {
+    let count = matches.len();
+    for (i, found) in matches.iter().enumerate() {
         if got_int.get() {
             break;
         }
-        let entry = unsafe { *matches.offset(i as isize) };
-        unsafe { parse_match(entry, &mut tagp) };
+        let (tagp, _) = found.parse();
+        let line = found.line_nul();
+        let number = c_int::try_from(i).unwrap_or(c_int::MAX);
 
-        let current = !new_tag && is_current(i, use_tagstack);
-        unsafe { print_entry_head(i, entry, &tagp, current, taglen) };
+        let current = !new_tag && is_current(number, use_tagstack);
+        print_entry_head(number, found, &tagp, current, taglen);
         if msg_col.get() > 0 {
             msg_putchar('\n' as c_int);
         }
@@ -97,19 +90,20 @@ pub(crate) unsafe fn print_tag_list(
         msg_advance(INFO_COLUMN);
 
         // Where the command stops and the extra fields begin.
-        let command_end = if tagp.command_end.is_null() {
-            unsafe { command_text_end(tagp.command) }
-        } else {
-            if !print_extra_fields(&tagp) {
-                break 'each;
+        let command_end = match tagp.command_end {
+            None => command_text_end(line, tagp.command),
+            Some(end) => {
+                if !print_extra_fields(line, end, &tagp) {
+                    break;
+                }
+                end
             }
-            tagp.command_end
         };
-        unsafe { print_command(&tagp, command_end) };
+        print_command(line, tagp.command, command_end);
 
         // The last entry needs no line ending of its own when the UI
         // draws the messages itself.
-        if msg_col.get() != 0 && (!ui_has(kUIMessages) || i < num_matches - 1) {
+        if msg_col.get() != 0 && (!ui_has(kUIMessages) || i + 1 < count) {
             msg_putchar('\n' as c_int);
         }
         os_breakcheck();
@@ -122,7 +116,7 @@ pub(crate) unsafe fn print_tag_list(
 
 /// Whether entry `i` is the match currently jumped to.
 fn is_current(i: c_int, use_tagstack: bool) -> bool {
-    if g_do_tagpreview.get() != 0 && i == ptag_entry_handle().position().0 {
+    if g_do_tagpreview.get() != 0 && i == ptag_entry.with(|entry| entry.cur_match) {
         return true;
     }
     if !use_tagstack {
@@ -130,106 +124,81 @@ fn is_current(i: c_int, use_tagstack: bool) -> bool {
     }
     // The index is one past the end when nothing has been popped;
     // upstream reads that slot anyway.
-    let win = Win::current_raw();
-    let at = unsafe { (*win).w_tagstackidx } as usize;
-    unsafe { (*win).w_tagstack.get(at) }.is_some_and(|entry| i == entry.cur_match)
+    let win = Win::current();
+    let at = usize::try_from(win.w_tagstackidx).unwrap_or(usize::MAX);
+    win.w_tagstack
+        .get(at)
+        .is_some_and(|entry| i == entry.cur_match)
 }
 
 /// Print the number, priority, kind, name and file of one match.
-///
-/// # Safety
-/// `entry` must be the match `tagp` was parsed from.
-unsafe fn print_entry_head(
-    i: c_int,
-    entry: *const c_char,
-    tagp: &TagParts,
-    current: bool,
-    taglen: c_int,
-) {
-    let mut head = [0 as c_char; IOSIZE as usize];
-    // SAFETY: the caller's promise. The number and priority are formatted
-    // into `head`, which truncates them where upstream truncates them.
-    let buf = head.as_mut_ptr();
-    unsafe { *buf = if current { b'>' } else { b' ' } as c_char };
-    unsafe {
-        vim_snprintf!(
-            buf.add(1),
-            (IOSIZE - 1) as size_t,
-            c"%2d %s ".as_ptr(),
-            i + 1,
-            PRIORITY[(*entry as c_int & MT_MASK as c_int) as usize].as_ptr(),
-        )
-    };
-    msg_str(unsafe { cstr::at(buf) });
+fn print_entry_head(i: c_int, found: &TagMatch, tagp: &TagParts, current: bool, taglen: c_int) {
+    let line = found.line();
+    let mut head = vec![if current { b'>' } else { b' ' }];
+    // Cut where upstream's `IOSIZE` scratch cut it.
+    let priority = PRIORITY[usize::from(found.priority) & MT_MASK as usize];
+    head.extend(formatted!(IOSIZE as usize - 1, b"%2d %s ", i + 1, priority));
+    head.push(0);
+    msg_str(cstr::in_bytes(&head));
 
-    if !tagp.tagkind.is_null() {
-        // SAFETY: `tagkind_end` points into the same line as `tagkind`.
-        let len = unsafe { tagp.tagkind_end.offset_from(tagp.tagkind) }.cast_unsigned();
-        // SAFETY: as above.
-        msg_display_bytes(unsafe { cstr::slice_at(tagp.tagkind, len) }, 0, false);
+    if let Some(kind) = &tagp.tagkind {
+        msg_display_bytes(kind.of(line), 0, false);
     }
     msg_advance(13);
-    // SAFETY: `tagname_end` points into the same line as `tagname`.
-    let len = unsafe { tagp.tagname_end.offset_from(tagp.tagname) }.cast_unsigned();
-    // SAFETY: as above.
-    msg_display_bytes(unsafe { cstr::slice_at(tagp.tagname, len) }, HLF_T, false);
+    msg_display_bytes(tagp.tagname.of(line), HLF_T, false);
     msg_putchar(' ' as c_int);
     advance_to_files(taglen);
 
-    let fname = unsafe { tag_full_fname(tagp) };
-    if !fname.is_null() {
-        msg_display(unsafe { cstr::at(fname) }, HLF_D, false);
-        unsafe { xfree(fname.cast()) };
-    }
+    let fname = tag_full_fname(found, tagp);
+    msg_display(fname.as_cstr(), HLF_D, false);
 }
 
-/// Print the `field:value` pairs after a tag's command.
+/// Print the `field:value` pairs after a tag's command, which ends at
+/// `command_end` in the NUL-terminated `line`.
 ///
 /// Answers `false` when the user interrupted, which ends the listing.
-fn print_extra_fields(tagp: &TagParts) -> bool {
-    // SAFETY: the caller's promise; every scan stops at a line ending or
-    // the terminator.
+fn print_extra_fields(line: &[u8], command_end: usize, tagp: &TagParts) -> bool {
+    let kind_start = tagp.tagkind.as_ref().map(|kind| kind.start);
     // Past the `;"` and the separator after it.
-    let mut p: *const c_char = tagp.command_end.wrapping_add(3);
-    while !matches!(unsafe { *p } as u8, 0 | b'\r' | b'\n') {
-        while unsafe { *p } == TAB as c_char {
-            p = unsafe { p.add(1) };
+    let mut p = command_end + 3;
+    while !matches!(byte(line, p), 0 | b'\r' | b'\n') {
+        while byte(line, p) == TAB as u8 {
+            p += 1;
         }
 
         // Skip "file:" with no value: that is the static-tag marker,
         // and the priority column already says so.
-        if unsafe { cstr::starts_with(p, b"file:") } && ascii_isspace(unsafe { *p.add(5) } as c_int)
-        {
-            p = unsafe { p.add(5) };
+        if line[p..].starts_with(b"file:") && ascii_isspace(c_int::from(byte(line, p + 5))) {
+            p += 5;
             continue;
         }
         // Skip "kind:<kind>" and a bare "<kind>": the kind has its own
         // column.
-        if p == tagp.tagkind
-            || (p.wrapping_add(5) == tagp.tagkind && unsafe { cstr::starts_with(p, b"kind:") })
+        if let Some(kind) = &tagp.tagkind
+            && (Some(p) == kind_start
+                || (Some(p + 5) == kind_start && line[p..].starts_with(b"kind:")))
         {
-            p = tagp.tagkind_end;
+            p = kind.end;
             continue;
         }
 
         // Everything else is printed, the field name highlighted up to
         // its colon.
         let mut hl_id = HLF_CM;
-        while !matches!(unsafe { *p } as u8, 0 | b'\r' | b'\n') {
-            if msg_col.get() + unsafe { ptr2cells(p) } >= Columns.get() {
+        while !matches!(byte(line, p), 0 | b'\r' | b'\n') {
+            if msg_col.get() + ptr2cells_at(&line[p..]) >= Columns.get() {
                 msg_putchar('\n' as c_int);
                 if got_int.get() {
                     break;
                 }
                 msg_advance(INFO_COLUMN);
             }
-            // SAFETY: `p` walks a NUL-terminated field.
-            p = unsafe { p.add(msg_display_char(cstr::bytes_at(p), hl_id, false)) };
-            if unsafe { *p } == TAB as c_char {
+            p += msg_display_char(cstr::until_nul(&line[p..]), hl_id, false);
+            if byte(line, p) == TAB as u8 {
                 msg_str_hl(c" ", hl_id, false);
                 break;
             }
-            if unsafe { *p } == b':' as c_char {
+            if byte(line, p) == b':' {
                 hl_id = 0;
             }
         }
@@ -244,34 +213,30 @@ fn print_extra_fields(tagp: &TagParts) -> bool {
     true
 }
 
-/// Print the command that locates the tag, at [`INFO_COLUMN`].
+/// Print the command that locates the tag, at [`INFO_COLUMN`]: the bytes
+/// of the NUL-terminated `line` from `command` to `command_end`.
 ///
 /// The `/^` or `?^` a search pattern opens with, and the `$/;"` it closes
 /// with, are punctuation rather than part of the line, and are not shown.
-///
-/// # Safety
-/// `tagp.command` must be NUL-terminated, and `command_end` must point
-/// into it.
-unsafe fn print_command(tagp: &TagParts, command_end: *const c_char) {
-    // SAFETY: the caller's promise; the walk stops at `command_end`.
-    let delim = unsafe { *tagp.command };
-    let mut p: *const c_char = tagp.command;
-    if matches!(delim as u8, b'/' | b'?') {
-        p = unsafe { p.add(1) };
-        if unsafe { *p } == b'^' as c_char {
-            p = unsafe { p.add(1) };
+fn print_command(line: &[u8], command: usize, command_end: usize) {
+    let delim = byte(line, command);
+    let mut p = command;
+    if matches!(delim, b'/' | b'?') {
+        p += 1;
+        if byte(line, p) == b'^' {
+            p += 1;
         }
     }
     // Leading whitespace in the pattern is not worth a column.
-    while p != command_end && ascii_isspace(unsafe { *p } as c_int) {
-        p = unsafe { p.add(1) };
+    while p != command_end && ascii_isspace(c_int::from(byte(line, p))) {
+        p += 1;
     }
 
     while p != command_end {
-        let width = if unsafe { *p } == TAB as c_char {
+        let width = if byte(line, p) == TAB as u8 {
             1
         } else {
-            unsafe { ptr2cells(p) }
+            ptr2cells_at(&line[p..])
         };
         if msg_col.get() + width > Columns.get() {
             msg_putchar('\n' as c_int);
@@ -283,44 +248,39 @@ unsafe fn print_command(tagp: &TagParts, command_end: *const c_char) {
 
         // A backslash escaping the delimiter or another backslash is
         // punctuation too.
-        if unsafe { *p } == b'\\' as c_char
-            && (unsafe { *p.add(1) } == delim || unsafe { *p.add(1) } == b'\\' as c_char)
-        {
-            p = unsafe { p.add(1) };
+        if byte(line, p) == b'\\' && (byte(line, p + 1) == delim || byte(line, p + 1) == b'\\') {
+            p += 1;
         }
-        if unsafe { *p } == TAB as c_char {
+        if byte(line, p) == TAB as u8 {
             msg_putchar(' ' as c_int);
-            p = unsafe { p.add(1) };
+            p += 1;
         } else {
-            // SAFETY: `p` walks the command, which is NUL-terminated.
-            p = unsafe { p.add(msg_display_char(cstr::bytes_at(p), 0, false)) };
+            p += msg_display_char(cstr::until_nul(&line[p..]), 0, false);
         }
 
         // Stop before the `$/` or `$?` that closes an anchored pattern.
-        if p == command_end.wrapping_sub(2)
-            && unsafe { *p } == b'$' as c_char
-            && unsafe { *p.add(1) } == delim
+        if Some(p) == command_end.checked_sub(2)
+            && byte(line, p) == b'$'
+            && byte(line, p + 1) == delim
         {
             break;
         }
         // ... or before the closing delimiter on its own.
-        if p == command_end.wrapping_sub(1)
-            && unsafe { *p } == delim
-            && matches!(delim as u8, b'/' | b'?')
+        if Some(p) == command_end.checked_sub(1)
+            && byte(line, p) == delim
+            && matches!(delim, b'/' | b'?')
         {
             break;
         }
     }
 }
 
-/// Where a command with no extra fields after it ends.
-///
-/// # Safety
-/// `command` must be NUL-terminated.
-unsafe fn command_text_end(command: *const c_char) -> *const c_char {
+/// Where a command with no extra fields after it ends: at a line ending or
+/// the terminator.
+fn command_text_end(line: &[u8], command: usize) -> usize {
     let mut p = command;
-    while !matches!(unsafe { *p } as u8, 0 | b'\r' | b'\n') {
-        p = unsafe { p.add(1) };
+    while !matches!(byte(line, p), 0 | b'\r' | b'\n') {
+        p += 1;
     }
     p
 }
@@ -342,147 +302,104 @@ fn advance_to_files(taglen: c_int) {
 ///
 /// Each entry carries the tag's name, its file, and either the line number
 /// or a very-nomagic form of the search pattern that finds it.
-///
-/// # Safety
-/// `tag` must be NUL-terminated and `matches` must hold `num_matches`
-/// matches [`find_tags`] answered.
-pub(crate) unsafe fn add_llist_tags(
-    tag: *mut c_char,
-    num_matches: c_int,
-    matches: *mut *mut c_char,
-) -> Result<(), Failed> {
-    // The list's title outlives `set_errorlist`, so it is this frame's.
-    let mut title = [0 as c_char; IOSIZE as usize];
+pub(crate) fn add_llist_tags(tag: &[u8], matches: &[TagMatch]) {
     let held = tv_list_alloc(0);
-    let list = held.as_ptr();
-    let mut tagp = TagParts::default();
 
-    for i in 0..num_matches {
-        unsafe { parse_match(*matches.offset(i as isize), &mut tagp) };
+    for found in matches {
+        let (tagp, _) = found.parse();
+        let line = found.line_nul();
 
-        let name_len =
-            (unsafe { tagp.tagname_end.offset_from(tagp.tagname) } as usize).min(MAX_LTAG_NAME);
-        let name = Name::from_bytes(unsafe {
-            core::slice::from_raw_parts(tagp.tagname.cast::<u8>(), name_len)
-        });
+        let name = tagp.tagname.of(line);
+        let name = cstr::owned(&name[..name.len().min(MAX_LTAG_NAME)]);
 
-        let full_fname = unsafe { tag_full_fname(&tagp) };
-        if full_fname.is_null() {
-            continue;
-        }
         // Upstream copies it into a `MAXPATHL` buffer; the truncation
         // is kept.
-        let bytes = unsafe { CStr::from_ptr(full_fname) }.to_bytes();
-        let fname = Name::from_bytes(&bytes[..bytes.len().min(MAXPATHL as usize - 1)]);
-        unsafe { xfree(full_fname.cast()) };
+        let full_fname = tag_full_fname(found, &tagp);
+        let full_fname: &[u8] = &full_fname;
+        let fname = cstr::owned(&full_fname[..full_fname.len().min(MAXPATHL as usize - 1)]);
 
         // A command that starts with a digit is a line number;
         // anything else is a search pattern.
-        let lnum = if ascii_isdigit(unsafe { *tagp.command } as u8 as c_int) {
-            unsafe { atoi(tagp.command) as LineNr }
+        let lnum = if byte(line, tagp.command).is_ascii_digit() {
+            atoi(&line[tagp.command..])
         } else {
             0
         };
-        let pattern = (lnum == 0).then(|| unsafe { search_pattern(&tagp) });
 
-        let dict_held = tv_dict_alloc();
-
-        let dict = dict_held.as_ptr();
-        unsafe { (*list).push_dict(Some(dict_held)) };
-        unsafe { add_str(dict, c"text", name.as_ptr()) };
-        unsafe { add_str(dict, c"filename", fname.as_ptr()) };
-        let _ = unsafe { (*dict).add_number(b"lnum", lnum as VarNumber) };
-        if let Some(pattern) = &pattern {
-            unsafe { add_str(dict, c"pattern", pattern.as_ptr()) };
+        let dict = tv_dict_alloc();
+        let entry = dict.edit();
+        let _ = entry.add_str(b"text", Some(&name));
+        let _ = entry.add_str(b"filename", Some(&fname));
+        let _ = entry.add_number(b"lnum", VarNumber::from(lnum));
+        if lnum == 0 {
+            let _ = entry.add_str_len(b"pattern", Some(&search_pattern(line, &tagp)));
         }
+        held.edit().push_dict(Some(dict));
     }
 
-    unsafe {
-        vim_snprintf!(
-            title.as_mut_ptr(),
-            IOSIZE as size_t,
-            c"ltag %s".as_ptr(),
-            tag,
-        )
-    };
+    // The list's title, cut where upstream's `IOSIZE` scratch cut it.
+    let mut title = formatted!(IOSIZE as usize, b"ltag %s", tag);
+    title.push(0);
     // Answers `Ok` for a plain entry list; upstream discarded it too.
     let _ = set_errorlist(
         Win::current_or_none(),
         Some(held),
         b' ',
-        cstr::in_chars(&title),
+        cstr::in_bytes(&title),
         None,
     );
-    Ok(())
 }
 
 /// The location-list pattern that finds one tag: its search command, made
-/// very nomagic so that nothing in it is read as a regexp.
-///
-/// # Safety
-/// `tagp.command` must be NUL-terminated.
-unsafe fn search_pattern(tagp: &TagParts) -> Name {
-    // SAFETY: the caller's promise; the buffer is `CMDBUFFSIZE + 1` bytes
-    // and every write into it is bounded.
+/// very nomagic so that nothing in it is read as a regexp. `line` is
+/// NUL-terminated.
+fn search_pattern(line: &[u8], tagp: &TagParts) -> Vec<u8> {
     let mut start = tagp.command;
     // Upstream steps back one from the end of the command, so this is
-    // its *last* character rather than the one after.
-    let mut end = unsafe {
-        if tagp.command_end.is_null() {
-            command_text_end(tagp.command)
-        } else {
-            tagp.command_end
-        }
-        .sub(1)
-    };
+    // its *last* character rather than the one after; for an empty
+    // command that is the TAB before it.
+    let mut end = tagp
+        .command_end
+        .unwrap_or_else(|| command_text_end(line, tagp.command))
+        - 1;
 
     // Drop the delimiters a search pattern is wrapped in.
-    if matches!(unsafe { *start } as u8, b'/' | b'?') {
-        start = unsafe { start.add(1) };
+    if matches!(byte(line, start), b'/' | b'?') {
+        start += 1;
     }
-    if matches!(unsafe { *end } as u8, b'/' | b'?') {
-        end = unsafe { end.sub(1) };
+    if matches!(byte(line, end), b'/' | b'?') {
+        end -= 1;
     }
 
-    let mut cmd = vec![0 as c_char; CMDBUFFSIZE + 1];
-    let mut len = 0;
+    let mut cmd = Vec::with_capacity(CMDBUFFSIZE);
     // A leading anchor has to stay in front of the \V.
-    if unsafe { *start } == b'^' as c_char {
-        cmd[len] = b'^' as c_char;
-        len += 1;
-        start = unsafe { start.add(1) };
+    if byte(line, start) == b'^' {
+        cmd.push(b'^');
+        start += 1;
     }
-    cmd[len] = b'\\' as c_char;
-    cmd[len + 1] = b'V' as c_char;
-    len += 2;
+    cmd.extend_from_slice(b"\\V");
 
-    let text_len = (unsafe { end.offset_from(start) } as c_int + 1).min(CMDBUFFSIZE as c_int - 5);
-    unsafe {
-        snprintf!(
-            cmd.as_mut_ptr().add(len),
-            (CMDBUFFSIZE + 1 - len) as size_t,
-            c"%.*s".as_ptr(),
-            text_len,
-            start,
-        )
-    };
-    len += text_len as usize;
+    // The text between the delimiters, at most `CMDBUFFSIZE - 5` bytes. A
+    // command that is a lone delimiter has its last byte *before* its
+    // first: upstream adds that negative length to the pattern's, which
+    // leaves just the backslash of the `\V`.
+    let text_len = (end + 1).cast_signed() - start.cast_signed();
+    match usize::try_from(text_len) {
+        Ok(len) => {
+            let len = len.min(CMDBUFFSIZE - 5);
+            cmd.extend_from_slice(&line[start..start + len]);
+        }
+        Err(_) => {
+            let keep = cmd.len().checked_add_signed(text_len).unwrap_or(0);
+            cmd.truncate(keep);
+        }
+    }
 
-    if cmd[len - 1] == b'$' as c_char {
+    if cmd.last() == Some(&b'$') {
         // A trailing '$' would anchor the pattern at the end of the
         // line, which the tags file did not ask for.
-        cmd[len - 1] = b'\\' as c_char;
-        cmd[len] = b'$' as c_char;
-        len += 1;
+        cmd.pop();
+        cmd.extend_from_slice(b"\\$");
     }
-    Name::from_bytes(unsafe { core::slice::from_raw_parts(cmd.as_ptr().cast::<u8>(), len) })
-}
-
-/// [`tv_dict_add_str`] with the key's length taken from the literal.
-///
-/// # Safety
-/// `d` must be live and `val` NUL-terminated.
-unsafe fn add_str(d: *mut Dict, key: &CStr, val: *const c_char) {
-    // SAFETY: the caller's promise.
-    let _ = unsafe { (*d).add_str(key.to_bytes(), cstr::at_opt(val)) };
+    cmd
 }

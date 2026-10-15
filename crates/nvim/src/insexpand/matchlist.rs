@@ -15,7 +15,6 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::garray::take_string_array;
 use crate::mbyte::{char_at, cluster_len};
 use crate::memory::XString;
 use crate::types::{FAIL, Failed, OK, VarLock};
@@ -550,22 +549,8 @@ pub(crate) fn ins_compl_longest_match(m: MatchId) {
     compl_used_match.set(false);
 }
 
-/// Add every string of an expansion's `matches` array, then free the array.
-///
-/// # Safety
-/// `matches` is `num_matches` NUL-terminated strings this call takes over.
-pub(crate) unsafe fn ins_compl_add_matches(
-    num_matches: c_int,
-    matches: *mut *mut c_char,
-    icase: c_int,
-) {
-    // SAFETY: the caller hands the array over.
-    let matches = unsafe { take_string_array(num_matches, matches) };
-    ins_compl_add_match_list(&matches, icase != 0);
-}
-
-/// [`ins_compl_add_matches`] over owned matches: add each in turn, the
-/// first in the completion's direction and the rest forwards.
+/// Add each of `matches` in turn, the first in the completion's direction
+/// and the rest forwards.
 pub(crate) fn ins_compl_add_match_list(matches: &[XString], icase: bool) {
     let mut dir = compl_direction.get();
     let flags = CP_FAST | if icase { CP_ICASE } else { 0 };

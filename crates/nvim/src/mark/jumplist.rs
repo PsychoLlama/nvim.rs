@@ -26,7 +26,7 @@ use crate::cstr;
 use crate::ex_docmd::cmdmod_has;
 use crate::ex_docmd::state::{global_busy, listcmd_busy};
 use crate::getchar::state::got_int;
-use crate::memory::{xfree, xstrdup};
+use crate::memory::{XString, xfree, xstrdup};
 use crate::message::{
     message_filtered, msg_display, msg_ext_set_kind, msg_putchar, msg_str, msg_title,
 };
@@ -348,22 +348,15 @@ pub fn ex_jumps(_excmd: &mut ExArg) {
     while i < win.w_jumplistlen && !got_int.get() {
         let jump = win.jump(i);
         if jump.fmark().lnum() != 0 {
-            // SAFETY: the entry is live; `fm_getname` answers an allocation.
-            let mut name = unsafe { fm_getname(jump.fmark().raw(), 16) };
             // The entry the index stands on is shown even when its file has
             // gone, so `:jumps` never silently loses the `>` row.
-            if name.is_null() && i == win.w_jumplistidx {
-                // SAFETY: a `'static` C string.
-                name = unsafe { xstrdup(c"-invalid-".as_ptr()) };
-            }
-            // SAFETY: `name` is a NUL-terminated allocation or null, owned
-            // here; every path below frees it exactly once.
-            if name.is_null() || message_filtered(unsafe { cstr::at(name) }) {
-                unsafe { xfree(name.cast()) };
-            } else {
+            let name = fm_getname(&jump.fmark().read(), 16)
+                .or_else(|| (i == win.w_jumplistidx).then(|| XString::from_cstr(c"-invalid-")));
+            if let Some(name) = name
+                && !message_filtered(name.as_cstr())
+            {
                 msg_putchar('\n' as c_int);
                 if got_int.get() {
-                    unsafe { xfree(name.cast()) };
                     break;
                 }
                 let here = Buf::current().handle;
@@ -388,8 +381,7 @@ pub fn ex_jumps(_excmd: &mut ExArg) {
                 } else {
                     0
                 };
-                msg_display(unsafe { cstr::at(name) }, attr, false);
-                unsafe { xfree(name.cast()) };
+                msg_display(name.as_cstr(), attr, false);
                 os_breakcheck();
             }
         }

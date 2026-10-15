@@ -454,7 +454,8 @@ unsafe fn resolve_swapfile_clash(
     // the question to the user.
     if choice == SEA_CHOICE_NONE
         && swap_exists_action.get() != SEA_NONE
-        && unsafe { has_autocmd(AutoEvent::SwapExists, buf_fname, Some(buffer)) }
+        && unsafe { cstr::at_opt(buf_fname) }
+            .is_some_and(|name| has_autocmd(AutoEvent::SwapExists, name, Some(buffer)))
     {
         choice = unsafe { do_swapexists(buffer, fname) };
     }

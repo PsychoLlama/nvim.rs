@@ -6,311 +6,237 @@
 //! the two line formats, and [`find_extra`] finds the optional
 //! `;"<Tab>field:value` fields at the end of a line.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::Jumped;
 use super::*;
+use crate::buffer::find_buffer_by_name;
 use crate::cstr;
+use crate::debugger::atoi;
 use crate::ex_docmd::{cmdmod_add_split, cmdmod_set_tab, cmdmod_tab};
 use crate::guard::{Lock, Suppress};
+use crate::mbyte::c_cluster_len;
 use crate::memory::XString;
 use crate::option::cpo_has;
-use crate::os::cshim::strstr;
-use crate::search::SEARCH_KEEP;
-use crate::snprintf;
-use crate::strings::vim_strchr;
+use crate::os::fs::path_exists;
+use crate::regexp::skip_regexp_at;
+use crate::search::{SEARCH_KEEP, do_search_in};
+use crate::strings::{FmtArg, find_bytes, format_into};
 use crate::types::{CpoFlag, FAIL, Failed, OK};
 use crate::window::WSP_VERT;
 use crate::window::tab_index;
 use crate::winlayer::TabPage;
 use crate::winlayer::{Buf, Win, WinId};
-use core::ffi::{CStr, c_char, c_int, c_uint};
-use core::ptr;
+use core::ffi::{CStr, c_int, c_uint};
 
 /// The buffer a tag's command is copied into, in bytes.
 ///
 /// A command longer than this is truncated, as upstream truncates it.
 const LSIZE: usize = super::LSIZE as usize;
 
+/// The byte `at` of a C string's bytes, NUL past the end.
+fn byte(s: &[u8], at: usize) -> u8 {
+    cstr::byte_at(s, at)
+}
+
 /// Split a tags-file line into name, file name and command.
 ///
 /// The three are separated by TABs and the command runs to the end of the
-/// line. Answers `false` for a line that is not of that shape, leaving
-/// `tagp` part-filled.
-///
-/// # Safety
-/// `lbuf` must be NUL-terminated, and must outlive `tagp`.
+/// line. Answers `None` for a line that is not of that shape.
 #[inline]
-pub(crate) unsafe fn parse_tag_line(lbuf: *mut c_char, tagp: &mut TagParts) -> bool {
-    // SAFETY: the caller's promise; `vim_strchr` stops at the terminator,
-    // and every pointer stored stays inside the line.
-    // Through locals rather than back through `tagp`: this runs once
-    // per line of every tags file read without a usable head.
-    tagp.tagname = lbuf;
-    let name_end = unsafe { field_end(lbuf) };
-    let Some(name_end) = name_end else {
-        return false;
-    };
-    tagp.tagname_end = name_end;
+pub(crate) fn parse_tag_line(line: &[u8]) -> Option<TagParts> {
+    let (parts, complete) = split_fields(line)?;
+    complete.then_some(parts)
+}
 
-    let fname = unsafe { skip_tab(name_end) };
-    tagp.fname = fname;
-    let fname_end = unsafe { field_end(fname) };
-    let Some(fname_end) = fname_end else {
-        return false;
+/// The name, file name and command of `line`, and whether there is a
+/// command at all; `None` when the line lacks either TAB.
+#[inline]
+fn split_fields(line: &[u8]) -> Option<(TagParts, bool)> {
+    let name_end = find_tab(line, 0)?;
+    let fname = name_end + 1;
+    let fname_end = find_tab(line, fname)?;
+    let command = fname_end + 1;
+    let parts = TagParts {
+        tagname: Span {
+            start: 0,
+            end: name_end,
+        },
+        fname: Span {
+            start: fname,
+            end: fname_end,
+        },
+        command,
+        ..TagParts::default()
     };
-    tagp.fname_end = fname_end;
-
-    let command = unsafe { skip_tab(fname_end) };
-    tagp.command = command;
     // A line that stops after the file name has no command at all.
-    unsafe { *command != 0 }
-}
-
-/// Where the TAB after a field is, or `None` when there is no TAB left.
-///
-/// # Safety
-/// `p` must be NUL-terminated.
-#[inline]
-unsafe fn field_end(p: *mut c_char) -> Option<*mut c_char> {
-    // SAFETY: the caller's promise.
-    let end = unsafe { vim_strchr(p, TAB) };
-    (!end.is_null()).then_some(end)
-}
-
-/// Step over a field separator, unless the line ended there.
-///
-/// # Safety
-/// `p` must be readable and NUL-terminated.
-#[inline]
-unsafe fn skip_tab(p: *mut c_char) -> *mut c_char {
-    // SAFETY: the caller's promise.
-    unsafe { if *p != 0 { p.add(1) } else { p } }
+    Some((parts, command < line.len()))
 }
 
 /// Whether the line marks the tag as local to its file — a `file:` field.
-///
-/// # Safety
-/// `tagp.command` must be NUL-terminated.
-pub(crate) unsafe fn test_for_static(tagp: &TagParts) -> bool {
-    // SAFETY: the caller's promise; every step stays before the
-    // terminator.
-    let mut p = tagp.command;
-    loop {
-        p = unsafe { vim_strchr(p, TAB) };
-        if p.is_null() {
-            return false;
-        }
-        p = unsafe { p.add(1) };
-        if unsafe { cstr::starts_with(p, b"file:") } {
+pub(crate) fn test_for_static(line: &[u8], tagp: &TagParts) -> bool {
+    let mut at = tagp.command;
+    while let Some(tab) = find_tab(line, at) {
+        at = tab + 1;
+        if line[at..].starts_with(b"file:") {
             return true;
         }
     }
+    false
 }
 
-/// How long a stored match is, not counting its terminator.
-///
-/// A match is `<bucket byte><tags file name>NUL<line>NUL`, so its length is
-/// not one `strlen`.
-///
-/// # Safety
-/// `lbuf` must point at a match of that shape.
-pub(crate) unsafe fn matching_line_len(lbuf: *const c_char) -> size_t {
-    // SAFETY: the caller's promise.
-    let name = unsafe { lbuf.add(1) };
-    let line = unsafe { name.add(cstr::bytes_at(name).len() + 1) };
-    (unsafe { line.offset_from(lbuf) } as size_t) + unsafe { cstr::bytes_at(line) }.len()
-}
-
-/// Split a stored match into its parts.
+/// Split a stored match's line into its parts.
 ///
 /// On top of what [`parse_tag_line`] finds, this picks the optional
 /// `kind:`, `user_data:` and `line:` fields out of the extra fields at the
-/// end. Answers `false` for a line that is not a tag line.
+/// end. `line` is the match's line *with* its terminator.
 ///
-/// # Safety
-/// `lbuf` must point at a match as [`matching_line_len`] describes, and
-/// must outlive `tagp`.
-pub(crate) unsafe fn parse_match(lbuf: *mut c_char, tagp: &mut TagParts) -> bool {
-    // SAFETY: the caller's promise. Every pointer written into `tagp`
-    // points into the match, which the caller keeps alive.
-    tagp.tag_fname = unsafe { lbuf.add(1) };
-    let line = unsafe { lbuf.add(cstr::bytes_at(tagp.tag_fname).len() + 2) };
-
-    let parsed = unsafe { parse_tag_line(line, tagp) };
-    tagp.tagkind = ptr::null_mut();
-    tagp.user_data = ptr::null_mut();
-    tagp.tagline = 0;
-    tagp.command_end = ptr::null_mut();
-    if !parsed {
-        return false;
+/// The flag is false for a line that is not a whole tag line. The parts
+/// are still the ones the line has — a line with an empty command still
+/// has its name and file name, which the listings show — and the default
+/// for one without its two TABs.
+pub(crate) fn parse_match(line: &[u8]) -> (TagParts, bool) {
+    let text = &line[..line.len() - 1];
+    let Some((mut tagp, complete)) = split_fields(text) else {
+        return (TagParts::default(), false);
+    };
+    if !complete {
+        return (tagp, false);
     }
 
-    if let Some(extra) = unsafe { find_extra(tagp.command) } {
+    let mut kind_at = None;
+    let mut user_data_at = None;
+    if let Some(extra) = find_extra(line, tagp.command) {
         // The command ends where the extra fields begin, less the '|'
         // an ex-command address is terminated with.
-        tagp.command_end = if extra > tagp.command && unsafe { *extra.sub(1) } == b'|' as c_char {
-            unsafe { extra.sub(1) }
+        tagp.command_end = Some(if extra > tagp.command && line[extra - 1] == b'|' {
+            extra - 1
         } else {
             extra
-        };
+        });
         // Past the `;"`; the fields themselves follow a TAB.
-        let after = unsafe { extra.add(2) };
-        if unsafe { *after } == TAB as c_char {
-            unsafe { read_extra_fields(tagp, after.add(1)) };
+        let after = extra + 2;
+        if byte(line, after) == TAB as u8 {
+            read_extra_fields(text, after + 1, &mut tagp, &mut kind_at, &mut user_data_at);
         }
     }
 
-    if !tagp.tagkind.is_null() {
-        tagp.tagkind_end = unsafe { field_text_end(tagp.tagkind) };
-    }
-    if !tagp.user_data.is_null() {
-        tagp.user_data_end = unsafe { field_text_end(tagp.user_data) };
-    }
-    true
+    tagp.tagkind = kind_at.map(|start| Span {
+        start,
+        end: field_text_end(text, start),
+    });
+    tagp.user_data = user_data_at.map(|start| Span {
+        start,
+        end: field_text_end(text, start),
+    });
+    (tagp, true)
 }
 
-/// Read the `field:value` pairs after a tag's command.
+/// Read the `field:value` pairs after a tag's command, from `at`.
 ///
 /// Only `kind:`, `user_data:` and `line:` are wanted. A field with no
 /// colon before the next TAB is the kind written in its short form.
-///
-/// # Safety
-/// `p` must be NUL-terminated.
-unsafe fn read_extra_fields(tagp: &mut TagParts, mut p: *mut c_char) {
-    // SAFETY: the caller's promise; every step stops at the terminator.
+fn read_extra_fields(
+    line: &[u8],
+    mut at: usize,
+    tagp: &mut TagParts,
+    kind: &mut Option<usize>,
+    user_data: &mut Option<usize>,
+) {
     // Field names are ASCII letters, and any multibyte character is
     // taken for one too: the loop ends at the first byte that is
     // neither.
-    while (unsafe { *p } as c_uint).wrapping_sub('A' as c_uint) < 26
-        || (unsafe { *p } as c_uint).wrapping_sub('a' as c_uint) < 26
-        || unsafe { utfc_ptr2len(p) } > 1
-    {
-        if unsafe { cstr::starts_with(p, b"kind:") } {
-            tagp.tagkind = unsafe { p.add(5) };
-        } else if unsafe { cstr::starts_with(p, b"user_data:") } {
-            tagp.user_data = unsafe { p.add(10) };
-        } else if unsafe { cstr::starts_with(p, b"line:") } {
-            tagp.tagline = unsafe { atoi(p.add(5)) } as LineNr;
+    while byte(line, at).is_ascii_alphabetic() || c_cluster_len(&line[at..]) > 1 {
+        let field = &line[at..];
+        if field.starts_with(b"kind:") {
+            *kind = Some(at + 5);
+        } else if field.starts_with(b"user_data:") {
+            *user_data = Some(at + 10);
+        } else if field.starts_with(b"line:") {
+            tagp.tagline = atoi(&field[5..]);
         }
-        if !tagp.tagkind.is_null() && !tagp.user_data.is_null() {
+        if kind.is_some() && user_data.is_some() {
             // Nothing else is read from here.
             return;
         }
 
-        let colon = unsafe { vim_strchr(p, ':' as c_int) };
-        let tab = unsafe { vim_strchr(p, TAB) };
-        if colon.is_null() || (!tab.is_null() && colon > tab) {
+        let colon = field.iter().position(|&b| b == b':');
+        let tab = find_tab(field, 0);
+        if colon.is_none() || tab.is_some_and(|tab| colon > Some(tab)) {
             // No colon in this field: it is the kind on its own.
-            tagp.tagkind = p;
+            *kind = Some(at);
         }
-        if tab.is_null() {
+        let Some(tab) = tab else {
             return;
-        }
-        p = unsafe { tab.add(utfc_ptr2len(tab) as usize) };
+        };
+        at += tab + c_cluster_len(&field[tab..]);
     }
 }
 
-/// Where a field's value ends: at a TAB, a line ending or the terminator.
-///
-/// # Safety
-/// `p` must be NUL-terminated.
-unsafe fn field_text_end(mut p: *mut c_char) -> *mut c_char {
-    // SAFETY: the caller's promise.
-    while !matches!(unsafe { *p } as u8, 0 | b'\t' | b'\r' | b'\n') {
-        p = unsafe { p.add(utfc_ptr2len(p) as usize) };
+/// Where a field's value ends: at a TAB, a line ending or the end.
+fn field_text_end(line: &[u8], mut at: usize) -> usize {
+    while !matches!(byte(line, at), 0 | b'\t' | b'\r' | b'\n') {
+        at += c_cluster_len(&line[at..]);
     }
-    p
+    at
 }
 
 /// The name of the file a match points at, as the editor can open it.
-///
-/// The answer is allocated; the caller frees it.
-///
-/// # Safety
-/// `tagp` must describe a live match.
-pub(crate) unsafe fn tag_full_fname(tagp: &TagParts) -> *mut c_char {
-    // SAFETY: the caller's promise. The byte written over the file name's
-    // end, so that it reads as a string, is put back before returning.
-    let saved = unsafe { *tagp.fname_end };
-    unsafe { *tagp.fname_end = 0 };
-    let fullname = unsafe { expand_tag_fname(tagp.fname, tagp.tag_fname, false) };
-    unsafe { *tagp.fname_end = saved };
-    fullname
+pub(crate) fn tag_full_fname(found: &TagMatch, tagp: &TagParts) -> XString {
+    expand_tag_fname(tagp.fname.of(found.line()), found.tag_fname(), false)
 }
 
-/// Whether a match names the file the search started in.
-///
-/// # Safety
-/// `fname` and `tag_fname` must be NUL-terminated, `buf_ffname` NULL or
-/// NUL-terminated, and `fname_end` must point into `fname`'s buffer.
-pub(crate) unsafe fn test_for_current(
-    fname: *mut c_char,
-    fname_end: *mut c_char,
-    tag_fname: *mut c_char,
-    buf_ffname: *mut c_char,
-) -> bool {
-    if buf_ffname.is_null() {
+/// Whether a match's file name, `fname` in the tags file `tag_fname`, names
+/// the file the search started in.
+pub(crate) fn test_for_current(fname: &[u8], tag_fname: &[u8], buf_ffname: Option<&CStr>) -> bool {
+    let Some(buf_ffname) = buf_ffname else {
         // Nothing to compare against.
         return false;
-    }
-    // SAFETY: the caller's promise. The byte written over the file name's
-    // end is put back before returning.
-    let saved = unsafe { *fname_end };
-    unsafe { *fname_end = 0 };
-    let fullname = unsafe { expand_tag_fname(fname, tag_fname, true) };
-    let same = unsafe { path_full_compare(cstr::at(fullname), cstr::at(buf_ffname), true, true) }
-        as c_uint
-        & kEqualFiles as c_uint;
-    unsafe { xfree(fullname.cast()) };
-    unsafe { *fname_end = saved };
-    same != 0
+    };
+    let fullname = expand_tag_fname(fname, tag_fname, true);
+    path_full_compare(fullname.as_cstr(), buf_ffname, true, true) as c_uint & kEqualFiles as c_uint
+        != 0
 }
 
 /// Find the `;"` that ends a tag's command, skipping over the command.
 ///
 /// A command is a line number, a `/pattern/` or a `?pattern?`, optionally
-/// chained with `;`. Answers where the `;"` starts, or `None` when the
-/// line has no extra fields.
-///
-/// # Safety
-/// `start` must be NUL-terminated.
-pub(crate) unsafe fn find_extra(start: *mut c_char) -> Option<*mut c_char> {
-    // SAFETY: the caller's promise; every scan stops at the terminator.
-    let mut p = start;
-    let mut first_char = unsafe { *start };
+/// chained with `;`. `text` is NUL-terminated and the command starts at
+/// `start`. Answers where the `;"` starts, or `None` when the line has no
+/// extra fields.
+pub(crate) fn find_extra(text: &[u8], start: usize) -> Option<usize> {
+    let mut at = start;
+    let mut first_char = byte(text, start);
     loop {
-        if ascii_isdigit(unsafe { *p } as c_int) {
-            p = unsafe { skipdigits(p.add(1)) };
-        } else if matches!(unsafe { *p } as u8, b'/' | b'?') {
-            p = unsafe { skip_regexp(p.add(1), *p as c_int, 0) };
-            if unsafe { *p } != first_char {
+        let here = byte(text, at);
+        if here.is_ascii_digit() {
+            at += 1;
+            while byte(text, at).is_ascii_digit() {
+                at += 1;
+            }
+        } else if matches!(here, b'/' | b'?') {
+            at += 1 + skip_regexp_at(&text[at + 1..], c_int::from(here), 0);
+            if byte(text, at) != first_char {
                 // The pattern was never closed.
                 return None;
             }
-            p = unsafe { p.add(1) };
+            at += 1;
         } else {
             // Not a command we know: look for the fields directly.
             // The '|' is what an ex-command address ends with.
-            p = unsafe { strstr(p, c"|;\"".as_ptr()) };
-            if p.is_null() {
-                return None;
-            }
-            p = unsafe { p.add(1) };
+            let rest = cstr::until_nul(&text[at..]);
+            at += find_bytes(rest, b"|;\"")? + 1;
             break;
         }
         // A ';' chains a second command onto the first.
-        if unsafe { *p } != b';' as c_char
-            || !(ascii_isdigit(unsafe { *p.add(1) } as c_int)
-                || matches!(unsafe { *p.add(1) } as u8, b'/' | b'?'))
-        {
+        let next = byte(text, at + 1);
+        if byte(text, at) != b';' || !(next.is_ascii_digit() || matches!(next, b'/' | b'?')) {
             break;
         }
-        p = unsafe { p.add(1) };
-        first_char = unsafe { *p };
+        at += 1;
+        first_char = byte(text, at);
     }
-    (unsafe { cstr::starts_with(p, b";\"") }).then_some(p)
+    text[at..].starts_with(b";\"").then_some(at)
 }
 
 /// Jump to the tag one stored match describes.
@@ -319,44 +245,33 @@ pub(crate) unsafe fn find_extra(start: *mut c_char) -> Option<*mut c_char> {
 /// not exist — the caller reports that one, reading [`nofile_fname`].
 ///
 /// With `keep_help` the destination keeps the help-buffer flag of wherever
-/// the jump came from; `forceit` is the `!` of `:tag!`.
-///
-/// # Safety
-/// `lbuf_arg` must point at a stored match.
-pub(crate) unsafe fn jumpto_tag(
-    lbuf_arg: *const c_char,
+/// the jump came from; `forceit` is the `!` of `:tag!`. The match is a copy
+/// of its own: opening the file may replace the list it came from.
+pub(crate) fn jumpto_tag(
+    found: TagMatch,
     forceit: c_int,
     keep_help: bool,
 ) -> Result<Jumped, Failed> {
-    // SAFETY: the caller's promise. `lbuf` is our own copy of the match and
-    // outlives every pointer `parse_match` takes into it.
     if postponed_split.get() == 0 && !check_can_set_curbuf_forceit(forceit) {
         return Err(Failed);
     }
 
-    // Our own copy: the jump writes terminators into it, and opening
-    // the file may free the caller's.
-    let len = unsafe { matching_line_len(lbuf_arg) } + 1;
-    let mut lbuf = vec![0 as c_char; len];
-    unsafe { ptr::copy_nonoverlapping(lbuf_arg, lbuf.as_mut_ptr(), len) };
-
-    let mut tagp = TagParts::default();
-    let retval = if unsafe { parse_match(lbuf.as_mut_ptr(), &mut tagp) } {
-        // Truncate the file name, so that it reads as a string.
-        unsafe { *tagp.fname_end = 0 };
-        Jump {
-            pattern: Pattern::of_command(&tagp),
-            expanded: unsafe { expand_tag_fname(tagp.fname, tagp.tag_fname, true) },
-            full_fname: ptr::null_mut(),
-            preview: g_do_tagpreview.get() != 0,
-            saved_win: None,
-            reused_window: false,
-            // Opening the file may reset it.
-            key_typed: KeyTyped.get(),
+    let retval = match found.parse() {
+        (tagp, true) => {
+            let line = found.line_nul();
+            Jump {
+                pattern: Pattern::of_command(line, &tagp),
+                expanded: expand_tag_fname(tagp.fname.of(line), found.tag_fname(), true),
+                full_fname: None,
+                preview: g_do_tagpreview.get() != 0,
+                saved_win: None,
+                reused_window: false,
+                // Opening the file may reset it.
+                key_typed: KeyTyped.get(),
+            }
+            .run(line, &tagp, forceit, keep_help)
         }
-        .run(&tagp, forceit, keep_help)
-    } else {
-        Err(Failed)
+        (_, false) => Err(Failed),
     };
 
     // For next time.
@@ -364,16 +279,16 @@ pub(crate) unsafe fn jumpto_tag(
     retval
 }
 
-/// One jump in progress, and the two names it has to give back.
+/// One jump in progress.
 struct Jump {
     /// The tag's command, as a search pattern or an ex command.
     pattern: Pattern,
-    /// The expanded name of the file the tag is in. Owned.
-    expanded: *mut c_char,
+    /// The expanded name of the file the tag is in.
+    expanded: XString,
     /// Its absolute form, made when a preview window is reused, because
-    /// entering that window may change directory. Owned; once it exists it
-    /// is what gets opened.
-    full_fname: *mut c_char,
+    /// entering that window may change directory. Once it exists it is
+    /// what gets opened.
+    full_fname: Option<XString>,
     /// Whether this is a `:ptag`, landing in the preview window.
     preview: bool,
     /// The window to go back to afterwards, for a preview jump. By
@@ -388,40 +303,25 @@ struct Jump {
     key_typed: bool,
 }
 
-impl Drop for Jump {
-    fn drop(&mut self) {
-        // SAFETY: both names are ours to free, or NULL.
-        unsafe { xfree(self.expanded.cast()) };
-        unsafe { xfree(self.full_fname.cast()) };
-    }
-}
-
-// As `DoTag`: building a [`Jump`] is the unsafe step, and the methods below
-// work only through what it recorded, so they are ordinary safe code.
 impl Jump {
     /// The name to open: the absolute form once a preview window made one.
-    fn fname(&self) -> *mut c_char {
-        if self.full_fname.is_null() {
-            self.expanded
-        } else {
-            self.full_fname
-        }
+    fn fname(&self) -> &CStr {
+        self.full_fname.as_ref().unwrap_or(&self.expanded).as_cstr()
     }
 
     /// Open the file and run the tag's command in it.
-    fn run(&mut self, tagp: &TagParts, forceit: c_int, keep_help: bool) -> Result<Jumped, Failed> {
-        // SAFETY: the caller's promise; the globals are live, and the file
-        // name is NUL-terminated.
+    fn run(
+        &mut self,
+        line: &[u8],
+        tagp: &TagParts,
+        forceit: c_int,
+        keep_help: bool,
+    ) -> Result<Jumped, Failed> {
         // Check the file exists before abandoning the current one. A
         // name a BufReadCmd autocommand claims (say "http://sys/file")
         // counts as existing.
-        if !unsafe { os_path_exists(self.fname()) }
-            && !unsafe { has_autocmd(AutoEvent::BufReadCmd, self.fname(), None) }
-        {
-            // SAFETY: the match's file name is NUL-terminated.
-            nofile_fname.set(Some(unsafe {
-                XString::from_cstr(CStr::from_ptr(self.fname()))
-            }));
+        if !path_exists(self.fname()) && !has_autocmd(AutoEvent::BufReadCmd, self.fname(), None) {
+            nofile_fname.set(Some(XString::from_cstr(self.fname())));
             return Ok(Jumped::NoSuchFile);
         }
 
@@ -451,11 +351,8 @@ impl Jump {
             GETFILE_SAME_FILE as c_int
         } else {
             // Careful: this may trigger autocommands, which can call
-            // `jumpto_tag` recursively.
-            // SAFETY: one of this jump's own NUL-terminated names, alive
-            // until it returns.
-            let fname = unsafe { cstr::at(self.fname()) };
-            getfile(0, Some(fname), None, true, 0, forceit != 0)
+            // `jumpto_tag` recursively. The name is this jump's own.
+            getfile(0, Some(self.fname()), None, true, 0, forceit != 0)
         };
         keep_help_flag.set(false);
 
@@ -471,7 +368,7 @@ impl Jump {
 
         Win::current().w_set_curswant = true;
         postponed_split.set(0);
-        let mut retval = if self.run_command(tagp) == OK {
+        let mut retval = if self.run_command(line, tagp) == OK {
             Ok(Jumped::Done)
         } else {
             Err(Failed)
@@ -515,14 +412,13 @@ impl Jump {
         if !self.preview {
             return;
         }
-        // SAFETY: the caller's promise.
         // Don't split again below.
         postponed_split.set(0);
         self.saved_win = Some(Win::current().id());
         if Win::current().w_onebuf_opt.wo_pvw == 0 {
             // Entering a reused window may change directory
             // (autocommands), so make the name absolute first.
-            self.full_fname = unsafe { full_name_save(cstr::at(self.fname()), false) }.into_raw();
+            self.full_fname = Some(full_name_save(self.fname(), false));
             prepare_tagpreview(true);
         }
     }
@@ -533,17 +429,13 @@ impl Jump {
     /// unless `'switchbuf'` says to go to one that already holds the file.
     /// Answers `false` when a split was wanted and failed.
     fn open_window(&mut self) -> bool {
-        // SAFETY: the caller's promise.
         let switchbuf = swb_flags.get();
         if postponed_split.get() != 0
             && switchbuf & (kOptSwbFlagUseopen | kOptSwbFlagUsetab) as c_uint != 0
+            && let Some(existing) = find_buffer_by_name(self.fname())
+            && !swbuf_goto_win_with_buf(Some(existing)).is_none()
         {
-            let existing = unsafe { buflist_findname_exp(self.fname()) };
-            if let Some(existing) = existing
-                && !swbuf_goto_win_with_buf(Some(existing)).is_none()
-            {
-                self.reused_window = true;
-            }
+            self.reused_window = true;
         }
         if self.reused_window || (postponed_split.get() == 0 && cmdmod_tab() == 0) {
             return true;
@@ -567,8 +459,7 @@ impl Jump {
     }
 
     /// Run the tag's command: a search, or an ex command in the sandbox.
-    fn run_command(&mut self, tagp: &TagParts) -> c_int {
-        // SAFETY: the caller's promise; the globals are live.
+    fn run_command(&mut self, line: &[u8], tagp: &TagParts) -> c_int {
         // Tag commands always run with 'nomagic'.
         let save_magic = magic_overruled.get();
         magic_overruled.set(OPTION_MAGIC_OFF);
@@ -584,7 +475,7 @@ impl Jump {
         };
 
         let retval = if self.pattern.is_whole_search() {
-            self.search(tagp, search_options)
+            self.search(line, tagp, search_options)
         } else {
             self.pattern.execute();
             OK
@@ -598,8 +489,7 @@ impl Jump {
     }
 
     /// Search for the tag's pattern, guessing at it if it is not there.
-    fn search(&mut self, tagp: &TagParts, search_options: c_int) -> c_int {
-        // SAFETY: the caller's promise; the globals are live.
+    fn search(&mut self, line: &[u8], tagp: &TagParts, search_options: c_int) -> c_int {
         let save_p_ws = p_ws();
         let save_p_ic = p_ic();
         let save_p_scs = p_scs();
@@ -622,7 +512,7 @@ impl Jump {
             if self.pattern.search(search_options) {
                 Found::IgnoringCase
             } else {
-                self.guess(tagp, search_options)
+                self.guess(tagp.tagname.of(line), search_options)
             }
         };
 
@@ -659,31 +549,15 @@ impl Jump {
     }
 
     /// The pattern was not in the file: search for what a declaration of
-    /// the tag would look like instead.
-    fn guess(&mut self, tagp: &TagParts, search_options: c_int) -> Found {
-        // SAFETY: the caller's promise. The byte written over the tag
-        // name's end is put back before returning.
-        //
-        // (Upstream calls `test_for_static` here and drops the answer; it
-        // has no side effects, so it is not repeated.)
-        let saved = unsafe { *tagp.tagname_end };
-        unsafe { *tagp.tagname_end = 0 };
+    /// the tag `name` would look like instead.
+    ///
+    /// (Upstream calls `test_for_static` here and drops the answer; it
+    /// has no side effects, so it is not repeated.)
+    fn guess(&mut self, name: &[u8], search_options: c_int) -> Found {
         // "^func  ("
-        let mut found = unsafe {
-            self.pattern
-                .search_for(c"^%s\\s\\*(", tagp.tagname, search_options)
-        };
-        if !found {
+        let found = self.pattern.search_for(b"^%s\\s\\*(", name, search_options)
             // "^char * \<func  ("
-            found = unsafe {
-                self.pattern.search_for(
-                    c"^\\[#a-zA-Z_]\\.\\*\\<%s\\s\\*(",
-                    tagp.tagname,
-                    search_options,
-                )
-            };
-        }
-        unsafe { *tagp.tagname_end = saved };
+            || self.pattern.search_for(b"^\\[#a-zA-Z_]\\.\\*\\<%s\\s\\*(", name, search_options);
         if found {
             Found::Guessing
         } else {
@@ -708,88 +582,59 @@ enum Found {
 struct Pattern {
     /// `LSIZE` bytes, whatever the command's length: the guesses are
     /// formatted straight into it.
-    buf: Vec<c_char>,
+    buf: Vec<u8>,
     /// How much of it the command uses, not counting the terminator.
     len: usize,
 }
 
-// The buffer a [`Pattern`] holds is its own, so searching with it asks
-// nothing of the caller.
 impl Pattern {
     /// Copy a tag's command out of its match, dropping any trailing CR/NL
     /// and the `;"<Tab>field:value` stuff, which is of no use here.
-    fn of_command(tagp: &TagParts) -> Self {
-        let mut buf = vec![0 as c_char; LSIZE];
-        let mut len = 0;
-        // SAFETY: the caller's promise, and the copy stops one short of
-        // the buffer's end so that the terminator always fits.
-        let mut str = tagp.command;
-        while !matches!(unsafe { *str } as u8, 0 | b'\n' | b'\r') {
-            buf[len] = unsafe { *str };
-            len += 1;
-            str = unsafe { str.add(1) };
-            if len + 1 >= LSIZE {
-                break;
-            }
-        }
-        buf[len] = 0;
+    fn of_command(line: &[u8], tagp: &TagParts) -> Self {
+        let mut buf = vec![0; LSIZE];
+        let command = &line[tagp.command..];
+        // The copy stops one short of the buffer's end so that the
+        // terminator always fits.
+        let mut len = command
+            .iter()
+            .position(|b| matches!(b, 0 | b'\n' | b'\r'))
+            .unwrap_or(command.len())
+            .min(LSIZE - 1);
+        buf[..len].copy_from_slice(&command[..len]);
 
-        if let Some(extra) = unsafe { find_extra(buf.as_mut_ptr()) } {
-            len = unsafe { extra.offset_from(buf.as_ptr()) } as usize;
+        if let Some(extra) = find_extra(&buf, 0) {
+            len = extra;
             buf[len] = 0;
         }
         Pattern { buf, len }
     }
 
     /// Whether the command is a whole search command with nothing after
-    /// it, which is the only form worth handing to [`do_search`].
+    /// it, which is the only form worth handing to `do_search`.
     fn is_whole_search(&self) -> bool {
-        // SAFETY: the caller's promise; `skip_regexp` stops at the
-        // terminator.
-        let start = self.buf.as_ptr().cast_mut();
-        let after = if matches!(unsafe { *start } as u8, b'/' | b'?') {
-            unsafe { skip_regexp(start.add(1), *start as c_int, 0).add(1) }
+        let delim = self.buf[0];
+        let past = if matches!(delim, b'/' | b'?') {
+            skip_regexp_at(&self.buf[1..], c_int::from(delim), 0) + 2
         } else {
-            start
+            0
         };
-        // SAFETY: `after` is derived from `start`, so both are in one object.
-        let past = unsafe { after.offset_from(start) } as usize;
         past >= self.len
     }
 
     /// Run the command as a search, its first byte the delimiter.
     fn search(&mut self, options: c_int) -> bool {
-        // SAFETY: the caller's promise. The length may wrap for an empty
-        // command, exactly as the `size_t` subtraction upstream does.
-        let delim = self.buf[0] as c_int;
-        let pat = self.buf.as_mut_ptr().wrapping_add(1);
-        let len = self.len.wrapping_sub(1);
-        let no_op = ptr::null_mut();
-        let no_arg = ptr::null_mut();
-        // SAFETY: `pat` is the command's own text, NUL-terminated.
-        let found = unsafe { do_search(no_op, delim, delim, pat, len, 1, options, no_arg) };
-        found != 0
+        let delim = c_int::from(self.buf[0]);
+        do_search_in(&mut self.buf[1..], delim, delim, options) != 0
     }
 
     /// Format a guess into the buffer and search for that instead.
     ///
-    /// # Safety
-    /// `name` must be NUL-terminated.
-    unsafe fn search_for(&mut self, fmt: &CStr, name: *const c_char, options: c_int) -> bool {
-        // SAFETY: the caller's promise; `snprintf` never writes past
-        // `LSIZE`. Its answer is the length it *would* have needed, which
-        // is what upstream hands to `do_search` — kept as it is.
-        self.len = unsafe { snprintf!(self.buf.as_mut_ptr(), LSIZE as size_t, fmt.as_ptr(), name) }
-            as usize;
-        let slash = '/' as c_int;
-        let pat = self.buf.as_mut_ptr();
-        let len = self.len;
-        let no_op = ptr::null_mut();
-        let no_arg = ptr::null_mut();
-        // SAFETY: `pat` is the guess just formatted into this frame's
-        // buffer, which `snprintf` NUL-terminated.
-        let found = unsafe { do_search(no_op, slash, slash, pat, len, 1, options, no_arg) };
-        found != 0
+    /// The guess is cut where the buffer ends, as upstream's `snprintf`
+    /// cut it.
+    fn search_for(&mut self, fmt: &[u8], name: &[u8], options: c_int) -> bool {
+        self.len = format_into(&mut self.buf, fmt, &[FmtArg::Str(name)]);
+        let slash = c_int::from(b'/');
+        do_search_in(&mut self.buf, slash, slash, options) != 0
     }
 
     /// Run the command as an ex command, in the sandbox: it came out of a
@@ -809,8 +654,7 @@ impl Pattern {
             col: 0,
             coladd: 0,
         };
-        // SAFETY: the buffer the tag search command was formatted into.
-        let _ = do_cmdline_cmd(unsafe { cstr::at(self.buf.as_ptr()) });
+        let _ = do_cmdline_cmd(cstr::in_bytes(&self.buf));
 
         // When the command did something that is not allowed, make
         // sure the error message can be seen.
