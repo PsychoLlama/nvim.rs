@@ -1,6 +1,6 @@
 //! Process entry, and the order the startup does things in.
 //!
-//! [`main_0`] is the sequence itself. It reads as a list of phases because
+//! [`run`] is the sequence itself. It reads as a list of phases because
 //! that is what it is, and the ordering between them is load-bearing:
 //! options before buffers, buffers before windows, windows before the UI,
 //! the UI before `VimEnter`. The `time_msg_at` calls between the phases are
@@ -172,7 +172,7 @@ pub extern "C" fn early_init(clean: bool) {
 ///
 /// Never returns: it ends in `normal_enter`, which is the editor's main
 /// loop, or in one of the exits along the way.
-pub(crate) fn main_0(argv: Vec<CString>) -> c_int {
+pub(crate) fn run(argv: Vec<CString>) -> c_int {
     // `argv[0]` is asked for by the error messages until the process ends.
     let name = argv
         .first()
@@ -211,7 +211,7 @@ pub(crate) fn main_0(argv: Vec<CString>) -> c_int {
     command_line_scan(&mut params);
     set_argf_var();
 
-    nlua_init(&params.argv, params.lua_arg0);
+    nlua_init(&params.argv, params.script_args_at);
     time_msg_at(c"init lua interpreter");
 
     if embedded_mode.get() && channel_from_stdio(true, CallbackReader::none()).is_err() {
@@ -231,8 +231,8 @@ pub(crate) fn main_0(argv: Vec<CString>) -> c_int {
     let use_builtin_ui =
         has_term && !headless_mode.get() && !embedded_mode.get() && !silent_mode.get();
 
-    if params.remote != 0 {
-        let at = params.remote;
+    if params.remote_at != 0 {
+        let at = params.remote_at;
         remote_request(&mut params, at, use_builtin_ui);
     }
 
@@ -296,11 +296,11 @@ pub(crate) fn main_0(argv: Vec<CString>) -> c_int {
     ui_comp_syn_init();
     time_msg_at(c"init highlight");
 
-    debug_break_level.set(params.use_debug_break_level);
+    debug_break_level.set(params.debug_break_at);
 
     // `-es` with a pipe: start reading it now, so the Ex commands are
     // there when the loop asks.
-    if !stdin_isatty.get() && !params.input_istext && silent_mode.get() && exmode_active.get() {
+    if !stdin_isatty.get() && !params.input_is_text && silent_mode.get() && exmode_active.get() {
         input_start();
     }
 
@@ -346,7 +346,7 @@ pub(crate) fn main_0(argv: Vec<CString>) -> c_int {
 
     // `-u NONE` also turns the plugins off, unless `--clean` asked for
     // the defaults.
-    let vimrc_none = params.use_vimrc.as_deref() == Some(c"NONE");
+    let vimrc_none = params.vimrc.as_deref() == Some(c"NONE");
     if vimrc_none {
         P_LPL.set(params.clean);
     }
@@ -435,7 +435,7 @@ pub(crate) fn main_0(argv: Vec<CString>) -> c_int {
     }
 
     shorten_fnames(0);
-    handle_tag(params.tagname.as_deref());
+    handle_tag(params.tag.as_deref());
     if !params.commands.is_empty() {
         exe_commands(&params);
     }
@@ -473,11 +473,11 @@ pub(crate) fn main_0(argv: Vec<CString>) -> c_int {
         eval_has_provider(c"clipboard", false);
     }
 
-    if let Some(luaf) = params.luaf.as_deref() {
+    if let Some(lua_script) = params.lua_script.as_deref() {
         // `-l`: run the script and leave, with its status.
         msg_scroll.set(1);
         logmsg!(LOGLVL_DBG, c"main", 678, "executing Lua -l script");
-        let lua_ok = nlua_exec_file(luaf);
+        let lua_ok = nlua_exec_file(lua_script);
         time_msg_at(c"executing Lua -l script");
         if msg_didout.get() {
             msg_putchar('\n' as c_int);
@@ -494,7 +494,7 @@ pub(crate) fn main_0(argv: Vec<CString>) -> c_int {
     0
 }
 
-/// The process entry point: the command line, owned, handed to [`main_0`],
+/// The process entry point: the command line, owned, handed to [`run`],
 /// which does not return.
 ///
 /// The words are the operating system's bytes, whatever their encoding: a
@@ -504,7 +504,7 @@ pub fn main() {
     let argv: Vec<CString> = std::env::args_os()
         .map(|arg| CString::new(arg.into_vec()).expect("an argument holds no NUL"))
         .collect();
-    std::process::exit(main_0(argv));
+    std::process::exit(run(argv));
 }
 
 /// The first window of the current tab page, which exists from the moment

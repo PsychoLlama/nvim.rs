@@ -118,11 +118,11 @@ pub(crate) fn get_number_arg(word: &[u8], idx: &mut usize, def: c_int) -> c_int 
 pub(crate) fn edit_stdin(parm: &MainParams) -> bool {
     let implicit = !headless_mode.get()
         && !(embedded_mode.get() && stdin_fd.get() <= 0)
-        && (!exmode_active.get() || parm.input_istext)
+        && (!exmode_active.get() || parm.input_is_text)
         && !stdin_isatty.get()
         && parm.edit_type <= EDIT_STDIN as c_int
         && parm.scriptin.is_none();
-    parm.had_stdin_file || implicit
+    parm.dash_for_stdin || implicit
 }
 
 /// The walking cursor over argv.
@@ -248,7 +248,7 @@ impl<'a> Scan<'a> {
         } else if self.tail_starts_with(c"remote") {
             // Where in argv this was: everything from here on is forwarded
             // to the server verbatim.
-            self.parm.remote = self.at;
+            self.parm.remote_at = self.at;
         } else if self.tail_starts_with(c"server") {
             self.skip(6);
             return true;
@@ -263,7 +263,7 @@ impl<'a> Scan<'a> {
             self.skip(11);
             return true;
         } else if self.tail_starts_with(c"clean") {
-            self.parm.use_vimrc = Some(c"NONE".to_owned());
+            self.parm.vimrc = Some(c"NONE".to_owned());
             self.parm.clean = true;
             set_opt(kOptShadafile, OptVal::from_cstr(c"NONE"));
         } else if self.tail_starts_with(c"luamod-dev") {
@@ -298,7 +298,7 @@ impl<'a> Scan<'a> {
                     if self.parm.edit_type > EDIT_STDIN as c_int {
                         mainerr(err_too_many_args, Some(self.arg()), None);
                     }
-                    self.parm.had_stdin_file = true;
+                    self.parm.dash_for_stdin = true;
                     self.parm.edit_type = EDIT_STDIN as c_int;
                 }
                 self.idx = None;
@@ -317,12 +317,12 @@ impl<'a> Scan<'a> {
                 set_options_bin(Buf::current().b_p_bin != 0, true, OptionSetFlags::NONE);
                 Buf::current().b_p_bin = 1;
             }
-            b'D' => self.parm.use_debug_break_level = DEBUG_BREAK_ALL,
+            b'D' => self.parm.debug_break_at = DEBUG_BREAK_ALL,
             b'd' => self.parm.diff_mode = true,
             b'e' => exmode_active.set(true),
             b'E' => {
                 exmode_active.set(true);
-                self.parm.input_istext = true;
+                self.parm.input_is_text = true;
             }
             // `-f` meant "GUI: run in the foreground"; there is no GUI.
             b'f' => {}
@@ -358,7 +358,7 @@ impl<'a> Scan<'a> {
                 self.claim_edit_type(EDIT_QF as c_int);
                 if self.has_tail() {
                     // `-q{errorfile}`
-                    self.parm.use_ef = Some(self.tail().to_owned());
+                    self.parm.errorfile = Some(self.tail().to_owned());
                     self.idx = None;
                 } else if self.left() > 1 {
                     // `-q {errorfile}`. A trailing `-q` with nothing
@@ -388,7 +388,7 @@ impl<'a> Scan<'a> {
                 self.claim_edit_type(EDIT_TAG as c_int);
                 if self.has_tail() {
                     // `-t{tag}`
-                    self.parm.tagname = Some(self.tail().to_owned());
+                    self.parm.tag = Some(self.tail().to_owned());
                     self.idx = None;
                 } else {
                     // `-t {tag}`
@@ -494,7 +494,7 @@ impl<'a> Scan<'a> {
                 }
                 // `--startuptime <file>` was handled before the scan.
             }
-            b'q' => self.parm.use_ef = Some(self.arg().to_owned()),
+            b'q' => self.parm.errorfile = Some(self.arg().to_owned()),
             b'i' => set_opt(kOptShadafile, OptVal::from_cstr(self.arg())),
             b'l' => {
                 // `-l {script}`: a batch Lua run. Everything after the
@@ -503,12 +503,12 @@ impl<'a> Scan<'a> {
                 silent_mode.set(true);
                 P_VERBOSE.set(1);
                 self.parm.no_swap_file = true;
-                if self.parm.use_vimrc.is_none() {
-                    self.parm.use_vimrc = Some(c"NONE".to_owned());
+                if self.parm.vimrc.is_none() {
+                    self.parm.vimrc = Some(c"NONE".to_owned());
                 }
                 suppress_shada();
-                self.parm.luaf = Some(self.arg().to_owned());
-                self.parm.lua_arg0 = c_int::try_from(self.at + 1).expect("an argv index");
+                self.parm.lua_script = Some(self.arg().to_owned());
+                self.parm.script_args_at = c_int::try_from(self.at + 1).expect("an argv index");
                 // Stop the scan: the rest is the script's own argv.
                 self.at = self.argv.len();
             }
@@ -518,8 +518,8 @@ impl<'a> Scan<'a> {
                 }
                 self.parm.scriptin = Some(self.arg().to_owned());
             }
-            b't' => self.parm.tagname = Some(self.arg().to_owned()),
-            b'u' => self.parm.use_vimrc = Some(self.arg().to_owned()),
+            b't' => self.parm.tag = Some(self.arg().to_owned()),
+            b'u' => self.parm.vimrc = Some(self.arg().to_owned()),
             // `-U {gvimrc}`: there is no GUI.
             b'U' => {}
             b'w' | b'W' => {
@@ -622,7 +622,7 @@ pub(crate) fn command_line_scan(parm: &mut MainParams) {
     }
     parm.argv = argv;
 
-    if embedded_mode.get() && (silent_mode.get() || parm.luaf.is_some()) {
+    if embedded_mode.get() && (silent_mode.get() || parm.lua_script.is_some()) {
         mainerr(gettext(c"--embed conflicts with -es/-Es/-l"), None, None);
     }
 

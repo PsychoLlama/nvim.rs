@@ -64,7 +64,7 @@ pub(crate) struct MainParams {
     /// The command line, `argv[0]` included.
     pub(crate) argv: Vec<CString>,
     /// `-u {vimrc}`; `NONE` for `--clean` and `-l`.
-    pub(crate) use_vimrc: Option<CString>,
+    pub(crate) vimrc: Option<CString>,
     /// `--clean`.
     pub(crate) clean: bool,
     /// `+cmd`, `-c cmd` and `-S`, run in order after the first file loads.
@@ -72,22 +72,22 @@ pub(crate) struct MainParams {
     /// `--cmd cmd`, run in order before any config.
     pub(crate) pre_commands: Vec<CString>,
     /// `-l {script}`.
-    pub(crate) luaf: Option<CString>,
+    pub(crate) lua_script: Option<CString>,
     /// Where in `argv` the `-l` script's own arguments start (one past the
     /// script), or -1 for no script.
-    pub(crate) lua_arg0: c_int,
+    pub(crate) script_args_at: c_int,
     /// What the process is editing: one of the `EDIT_*` answers.
     pub(crate) edit_type: c_int,
     /// `-t {tag}`.
-    pub(crate) tagname: Option<CString>,
+    pub(crate) tag: Option<CString>,
     /// `-q {errorfile}`.
-    pub(crate) use_ef: Option<CString>,
+    pub(crate) errorfile: Option<CString>,
     /// `-E`: Ex mode reads its input as text.
-    pub(crate) input_istext: bool,
+    pub(crate) input_is_text: bool,
     /// `-n`, `-es`, `-l` and the like: no swap file.
     pub(crate) no_swap_file: bool,
     /// `-D`, or -1.
-    pub(crate) use_debug_break_level: c_int,
+    pub(crate) debug_break_at: c_int,
     /// `-o[N]`/`-O[N]`/`-p[N]`'s count: -1 when not given, 0 for "one per
     /// file".
     pub(crate) window_count: c_int,
@@ -98,7 +98,7 @@ pub(crate) struct MainParams {
     /// `--listen {address}`.
     pub(crate) listen_addr: Option<CString>,
     /// Where in `argv` the `--remote*` argument is; 0 for none.
-    pub(crate) remote: usize,
+    pub(crate) remote_at: usize,
     /// `--server {address}`.
     pub(crate) server_addr: Option<CString>,
     /// `-s {scriptin}`.
@@ -108,7 +108,7 @@ pub(crate) struct MainParams {
     /// `-w` (append) rather than `-W` (overwrite).
     pub(crate) scriptout_append: bool,
     /// A `-` argument asked for standard input.
-    pub(crate) had_stdin_file: bool,
+    pub(crate) dash_for_stdin: bool,
 }
 
 impl MainParams {
@@ -116,28 +116,28 @@ impl MainParams {
     pub(crate) fn new(argv: Vec<CString>) -> Self {
         Self {
             argv,
-            use_vimrc: None,
+            vimrc: None,
             clean: false,
             commands: Vec::new(),
             pre_commands: Vec::new(),
-            luaf: None,
-            lua_arg0: -1,
+            lua_script: None,
+            script_args_at: -1,
             edit_type: EDIT_NONE as c_int,
-            tagname: None,
-            use_ef: None,
-            input_istext: false,
+            tag: None,
+            errorfile: None,
+            input_is_text: false,
             no_swap_file: false,
-            use_debug_break_level: -1,
+            debug_break_at: -1,
             window_count: -1,
             window_layout: 0,
             diff_mode: false,
             listen_addr: None,
-            remote: 0,
+            remote_at: 0,
             server_addr: None,
             scriptin: None,
             scriptout: None,
             scriptout_append: false,
-            had_stdin_file: false,
+            dash_for_stdin: false,
         }
     }
 }

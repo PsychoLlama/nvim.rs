@@ -99,7 +99,7 @@ pub(crate) fn handle_quickfix(parm: &MainParams) {
     if parm.edit_type != EDIT_QF as c_int {
         return;
     }
-    if let Some(ef) = parm.use_ef.as_deref() {
+    if let Some(ef) = parm.errorfile.as_deref() {
         set_option_direct(
             kOptErrorfile,
             OptVal::from_cstr(ef),
@@ -122,12 +122,12 @@ pub(crate) fn handle_quickfix(parm: &MainParams) {
 }
 
 /// `-t`: jump to a tag instead of opening a file.
-pub(crate) fn handle_tag(tagname: Option<&CStr>) {
-    let Some(tagname) = tagname else {
+pub(crate) fn handle_tag(tag: Option<&CStr>) {
+    let Some(tag) = tag else {
         return;
     };
     swap_exists_did_quit.set(false);
-    let mut cmd = [&b"ta "[..], tagname.to_bytes()].concat();
+    let mut cmd = [&b"ta "[..], tag.to_bytes()].concat();
     // Upstream formats it into an `IOSIZE` buffer.
     cmd.truncate(IOSIZE as usize - 1);
     let _ = do_cmdline_cmd(&cstr::owned(&cmd));

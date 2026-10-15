@@ -64,7 +64,7 @@ pub(crate) fn exe_pre_commands(parm: &MainParams) {
 /// first file.
 pub(crate) fn exe_commands(parm: &MainParams) {
     msg_scroll.set(1);
-    if parm.tagname.is_none() && Win::current().w_cursor.lnum <= 1 {
+    if parm.tag.is_none() && Win::current().w_cursor.lnum <= 1 {
         // As in `exe_pre_commands`: let the commands decide the line.
         Win::current().w_cursor.lnum = 0;
     }
@@ -231,7 +231,7 @@ pub(crate) fn do_exrc_initialization() {
 /// `-u NONE` and `-u NORC` name no file at all and source nothing; silent
 /// (batch) mode skips the standard sources too.
 pub(crate) fn source_startup_scripts(parm: &MainParams) {
-    if let Some(vimrc) = parm.use_vimrc.as_deref() {
+    if let Some(vimrc) = parm.vimrc.as_deref() {
         let named_none = vimrc == c"NONE" || vimrc == c"NORC";
         if !named_none && do_source(vimrc, false, DOSO_NONE as c_int, None) != OK {
             let vimrc = msg_cstr(vimrc);
