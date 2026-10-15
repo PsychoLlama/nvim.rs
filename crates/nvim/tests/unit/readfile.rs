@@ -84,10 +84,21 @@ fn collapse(text: &str) -> String {
 /// Read `name` into a fresh buffer with `opts` (`++enc=…` and the like),
 /// answering what the read printed. A buffer an earlier read left for the
 /// same name is wiped first: `:edit` would only switch to it.
+///
+/// The read lands in a buffer of its own, never buffer 1: `:enew` and
+/// `:edit` would reuse an empty unnamed buffer 1 and name it, and wiping
+/// it then would move every later case's buffer numbers.
 fn read(fx: &Probe, opts: &str, name: &str) -> String {
-    fx.run("enew!");
-    fx.run(&format!("silent! bwipeout! {name}"));
+    fresh_buffer(fx, name);
     fx.output(&format!("edit! {opts} {name}"))
+}
+
+/// Wipe what an earlier read left for `name`, and stand in a new empty
+/// buffer in the only window.
+fn fresh_buffer(fx: &Probe, name: &str) {
+    fx.run(&format!("silent! bwipeout! {name}"));
+    fx.run("new");
+    fx.run("only!");
 }
 
 fn restore(fx: &Probe) {
@@ -205,8 +216,7 @@ fn fileencodings_falls_back_to_latin1() {
     seen.eval("[getline(1, '$'), &fileencoding]");
     // An empty 'fileencodings' takes the buffer's own 'fileencoding'.
     fx.run("set fileencodings=");
-    fx.run("enew!");
-    fx.run("silent! bwipeout! f.txt");
+    fresh_buffer(&fx, "f.txt");
     fx.run("setlocal fileencoding=latin1");
     seen.note("empty fencs", &fx.output("edit! f.txt"));
     seen.eval("[getline(1, '$'), &fileencoding]");
