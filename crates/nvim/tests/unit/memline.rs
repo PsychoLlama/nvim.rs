@@ -499,3 +499,298 @@ fn the_terminated_views_carry_the_line_s_own_nul() {
     assert_eq!(lines.line(last), text.as_bytes());
     assert_eq!(&*other, LINES[0].as_bytes());
 }
+
+// ---------------------------------------------------------------------------
+// The block tree under edits, and a swap file read back.
+//
+// The cases below drive the editor through commands, so they read the tree
+// only through what a user can see: the lines, their byte offsets, and what
+// `:recover` makes of a swap file. Each sets 'directory' to its own sandbox
+// so a swap file never lands in the user's state directory, and puts it back
+// on the way out.
+
+use crate::support::Probe;
+
+/// `count` lines `width` bytes long, each starting with its own number so a
+/// line that moved shows up as the wrong number in the wrong place.
+fn numbered(count: usize, width: usize, tag: char) -> Vec<String> {
+    (0..count)
+        .map(|i| {
+            let mut line = format!("{tag}{i:05}");
+            while line.len() < width {
+                line.push(char::from(b'a' + (line.len() % 26) as u8));
+            }
+            line
+        })
+        .collect()
+}
+
+/// `lines` as `string(getline(1, '$'))` renders them.
+fn rendered(lines: &[String]) -> String {
+    let quoted: Vec<String> = lines.iter().map(|l| format!("'{l}'")).collect();
+    format!("[{}]", quoted.join(", "))
+}
+
+/// The byte offset of every line and of the line past the end, as
+/// `line2byte()` answers them for `lines`.
+fn offsets(lines: &[String]) -> String {
+    let mut at = 1;
+    let mut all = Vec::with_capacity(lines.len() + 1);
+    for line in lines {
+        all.push(at.to_string());
+        at += line.len() + 1;
+    }
+    all.push(at.to_string());
+    format!("[{}]", all.join(", "))
+}
+
+/// Replace the current buffer's text with `lines`, one append at a time --
+/// what fills a data block to the brim before the next one starts.
+fn fill(fx: &Probe, lines: &[String]) {
+    fx.run("silent! %delete _");
+    for (n, line) in lines.iter().enumerate() {
+        fx.run(&format!("call append({n}, '{line}')"));
+    }
+    fx.run(&format!("silent! {}delete _", lines.len() + 1));
+}
+
+/// `expr` evaluates to `want`; on a mismatch, say where the two part rather
+/// than printing a buffer's worth of text twice.
+#[track_caller]
+fn same(fx: &Probe, expr: &str, want: &str) {
+    let got = fx.eval(expr);
+    if got != want {
+        let at = got
+            .bytes()
+            .zip(want.bytes())
+            .take_while(|(a, b)| a == b)
+            .count();
+        let from = at.saturating_sub(60);
+        panic!(
+            "{expr}: differs at byte {at} (lengths {} and {})\n got: {:?}\nwant: {:?}",
+            got.len(),
+            want.len(),
+            &got[from..(at + 60).min(got.len())],
+            &want[from..(at + 60).min(want.len())],
+        );
+    }
+}
+
+/// The buffer holds `lines`, and every offset is where the lines say.
+#[track_caller]
+fn holds(fx: &Probe, lines: &[String]) {
+    same(fx, "getline(1, '$')", &rendered(lines));
+    same(
+        fx,
+        "map(range(1, line('$') + 1), 'line2byte(v:val)')",
+        &offsets(lines),
+    );
+}
+
+/// A scratch buffer the case owns, with 'directory' pointed at the sandbox.
+fn scratch(fx: &Probe) {
+    fx.run("set directory=. swapfile");
+    fx.run("new");
+    fx.run("only!");
+}
+
+fn unscratch(fx: &Probe) {
+    fx.run("silent! bwipeout!");
+    fx.run("set directory& swapfile&");
+    fx.home();
+}
+
+/// Insert one line at every position of a data block that is already full,
+/// in front of the first line through after the last: each insert splits it,
+/// and the lines that follow the insertion point move into the new block (or
+/// the new line goes there alone, when it is the last).
+#[test]
+fn inserting_at_every_line_of_a_full_data_block() {
+    let sandbox = Sandbox::dir("memline-split-every-line");
+    let fx = Probe::new(sandbox.editor());
+    scratch(&fx);
+    // A 4 KiB page holds 38 of these, so the first block is full and the
+    // rest spill into a second and third.
+    let lines = numbered(80, 100, 'L');
+    for at in 0..=40 {
+        fill(&fx, &lines);
+        let new = format!("N{at:05}{}", "z".repeat(150));
+        fx.run(&format!("call append({at}, '{new}')"));
+        let mut want = lines.clone();
+        want.insert(at, new);
+        holds(&fx, &want);
+    }
+    unscratch(&fx);
+}
+
+/// Enough lines that one pointer block cannot point at all their data
+/// blocks: the root fills, the tree grows a level, and then deletes empty
+/// whole data blocks and shrink the pointer blocks again.
+#[test]
+fn a_pointer_block_splits_and_shrinks() {
+    let sandbox = Sandbox::dir("memline-pointer-split");
+    let fx = Probe::new(sandbox.editor());
+    scratch(&fx);
+    // One line per data block: 400 blocks, more than the 170 entries a
+    // 4 KiB pointer block holds.
+    let mut lines = numbered(400, 3000, 'P');
+    fill(&fx, &lines);
+    holds(&fx, &lines);
+
+    // Inserts in the middle of the tree, each into a block of its own.
+    for at in [1, 170, 171, 200, 341] {
+        let new = format!("I{at:05}{}", "y".repeat(2500));
+        fx.run(&format!("call append({at}, '{new}')"));
+        lines.insert(at, new);
+    }
+    holds(&fx, &lines);
+
+    // Delete every other line from the back, freeing every other data
+    // block, then a run from the front that empties whole pointer blocks.
+    let mut n = lines.len();
+    while n > 1 {
+        fx.run(&format!("silent! {n}delete _"));
+        lines.remove(n - 1);
+        n -= 2;
+    }
+    fx.run("silent! 1,150delete _");
+    lines.drain(..150);
+    holds(&fx, &lines);
+    unscratch(&fx);
+}
+
+/// Many short lines: past `MLCS_MAXL` so the chunk index that `line2byte`
+/// and `byte2line` skip by splits, and edits at both ends of a chunk that
+/// merge it again.
+#[test]
+fn byte_offsets_across_the_chunk_index() {
+    let sandbox = Sandbox::dir("memline-chunks");
+    let fx = Probe::new(sandbox.editor());
+    scratch(&fx);
+    let mut lines = numbered(2000, 12, 'C');
+    fx.run(&format!("call setline(1, {})", rendered(&lines)));
+    holds(&fx, &lines);
+    for at in [0, 399, 400, 401, 799, 800, 1999] {
+        let new = format!("X{at:05}");
+        fx.run(&format!("call append({at}, '{new}')"));
+        lines.insert(at, new);
+    }
+    fx.run("silent! 300,900delete _");
+    lines.drain(299..900);
+    holds(&fx, &lines);
+    // `byte2line` of the first byte of every 97th line.
+    let probe: Vec<usize> = (1..=lines.len()).step_by(97).collect();
+    let mut want = Vec::new();
+    let mut at = 1;
+    for (i, line) in lines.iter().enumerate() {
+        if probe.contains(&(i + 1)) {
+            want.push(format!("{}", i + 1));
+            let _ = at;
+        }
+        at += line.len() + 1;
+    }
+    let exprs: Vec<String> = probe
+        .iter()
+        .map(|l| format!("byte2line(line2byte({l}))"))
+        .collect();
+    fx.check(
+        &format!("[{}]", exprs.join(", ")),
+        &format!("[{}]", want.join(", ")),
+    );
+    unscratch(&fx);
+}
+
+/// Edit a file of many blocks, change it, `:preserve`, and read the swap
+/// file back with `:recover`: the recovered buffer holds the changed lines,
+/// in order, across every data block.
+#[test]
+fn preserve_then_recover_a_multi_block_file() {
+    let sandbox = Sandbox::dir("memline-preserve-recover");
+    let fx = Probe::new(sandbox.editor());
+    let swap = preserved(&fx, &sandbox);
+    let want = changed_lines();
+
+    std::fs::write(sandbox.path(".f.txt.swp"), &swap).expect("the swap file back");
+    fx.run("new");
+    fx.run("only!");
+    fx.run("silent! recover f.txt");
+    same(&fx, "getline(1, '$')", &rendered(&want));
+    fx.check("&modified", "1");
+    fx.run("silent! bwipeout!");
+    let _ = std::fs::remove_file(sandbox.path(".f.txt.swp"));
+    fx.run("set directory& swapfile&");
+    fx.home();
+}
+
+/// The lines `preserved` leaves in the buffer.
+fn changed_lines() -> Vec<String> {
+    let mut lines = numbered(300, 60, 'F');
+    lines.insert(10, "inserted".into());
+    lines.remove(201);
+    lines[151] = "replaced".into();
+    lines
+}
+
+/// Edit `f.txt` (300 lines), change it, `:preserve`, and answer the swap
+/// file's bytes. The buffer is wiped, which deletes the swap file.
+fn preserved(fx: &Probe, sandbox: &Sandbox) -> Vec<u8> {
+    let original = numbered(300, 60, 'F');
+    sandbox.write("f.txt", (original.join("\n") + "\n").as_bytes());
+    fx.run("set directory=. swapfile");
+    fx.run("badd f.txt");
+    fx.run("buffer f.txt");
+    fx.run("call append(10, 'inserted')");
+    fx.run("silent! 202delete _");
+    fx.run("call setline(152, 'replaced')");
+    fx.run("preserve");
+    let swap = std::fs::read(sandbox.path(".f.txt.swp")).expect("`:preserve` wrote a swap file");
+    fx.run("silent! bwipeout! f.txt");
+    swap
+}
+
+/// A swap file that block zero says was written by another build, or that
+/// claims a page smaller than any swap file can have, is refused with the
+/// message that says why, and the buffer is left as it was.
+#[test]
+fn a_swap_file_with_a_wrong_magic_or_page_size_is_refused() {
+    let sandbox = Sandbox::dir("memline-bad-block-zero");
+    let fx = Probe::new(sandbox.editor());
+    let swap = preserved(&fx, &sandbox);
+
+    let magic = offset_of!(ZeroBlock, b0_magic_long);
+    let page = offset_of!(ZeroBlock, b0_page_size);
+    let id = offset_of!(ZeroBlock, b0_id);
+    let cases: [(&str, Box<dyn Fn(&mut Vec<u8>)>, &str); 3] = [
+        (
+            "magic",
+            Box::new(move |b: &mut Vec<u8>| b[magic] ^= 0xff),
+            "cannot be used on this computer",
+        ),
+        (
+            "page size",
+            Box::new(move |b: &mut Vec<u8>| {
+                b[page..page + 4].copy_from_slice(&512u32.to_le_bytes())
+            }),
+            "has been damaged (page size is smaller than minimum value)",
+        ),
+        (
+            "id",
+            Box::new(move |b: &mut Vec<u8>| b[id] = b'x'),
+            "does not look like a Nvim swap file",
+        ),
+    ];
+    for (what, corrupt, said) in cases {
+        let mut bytes = swap.clone();
+        corrupt(&mut bytes);
+        std::fs::write(sandbox.path(".f.txt.swp"), &bytes).expect("the swap file back");
+        fx.run("new");
+        fx.run("only!");
+        let out = fx.output("silent! recover f.txt") + &fx.eval("v:errmsg");
+        assert!(out.contains(said), "{what}: {out:?}");
+        fx.check("line('$')", "1");
+        fx.run("silent! bwipeout!");
+        let _ = std::fs::remove_file(sandbox.path(".f.txt.swp"));
+    }
+    fx.run("set directory& swapfile&");
+    fx.home();
+}
