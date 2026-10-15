@@ -508,13 +508,13 @@ fn write_session(out: &mut SessionFile, fname: &CStr) -> bool {
     let to_globaldir = known && ssop_flags.get() & kOptSsopFlagCurdir != 0 && globaldir.is_some();
     if to_sesdir {
         if vim_chdirfile(fname, flag::kCdCauseOther).is_ok() {
-            shorten_fnames(1);
+            shorten_fnames(true);
         }
     } else if to_globaldir
         && let Some(dir) = &globaldir
         && os_chdir(dir.as_cstr()) == 0
     {
-        shorten_fnames(1);
+        shorten_fnames(true);
     }
 
     let ok = makeopens(out, &dirnow);
@@ -524,7 +524,7 @@ fn write_session(out: &mut SessionFile, fname: &CStr) -> bool {
         if os_chdir(dirnow.as_cstr()) != 0 {
             emsg(gettext(e_prev_dir));
         }
-        shorten_fnames(1);
+        shorten_fnames(true);
     }
     ok
 }

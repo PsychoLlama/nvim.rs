@@ -257,7 +257,7 @@ pub(crate) fn post_chdir(scope: CdScope, trigger_dirchanged: bool) {
         _ => unreachable!("post_chdir with an invalid scope"),
     }
     last_chdir_reason.set(None);
-    shorten_fnames(!cpo_has(CpoFlag::NOSYMLINKS) as c_int);
+    shorten_fnames(!cpo_has(CpoFlag::NOSYMLINKS));
     if trigger_dirchanged {
         do_autocmd_dirchanged(cwd.as_cstr(), scope, kCdCauseManual, false);
     }

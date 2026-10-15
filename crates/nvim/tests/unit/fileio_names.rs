@@ -5,42 +5,29 @@
 //! user-visible in three places at once.
 //!
 //! Ported from `test/unit/fileio_spec.lua`, whose sixteen cases all called
-//! it with a NULL `pat_end` and a NULL `allow_dirs` and only ever looked at
-//! the returned string. The out-parameter, the explicit end and the two
-//! brace errors are covered here for the first time.
-
-use std::ffi::{c_char, c_int};
+//! it with no explicit end and no `allow_dirs` and only ever looked at the
+//! returned string. The second answer, the explicit end and the two brace
+//! errors are covered here for the first time.
 
 use neovim::fileio::file_pat_to_reg_pat;
 
-use crate::support::{cstr, internalize};
+/// The regexp for the first `end` bytes of `pat`, and whether it says a path
+/// separator has to match; `None` when it does not compile.
+fn compile(pat: &str, end: usize) -> Option<(String, bool)> {
+    file_pat_to_reg_pat(pat.as_bytes(), end)
+        .map(|(reg, dirs)| (String::from_utf8_lossy(&reg).into_owned(), dirs))
+}
 
-/// The regexp for `pat`, with `allow_dirs` and the pattern's end left to the
-/// defaults the spec used.
+/// The regexp for `pat`, the whole of it.
 #[track_caller]
 fn reg_pat(pat: &str) -> String {
-    let owned = cstr(pat);
-    let compiled =
-        unsafe { file_pat_to_reg_pat(owned.as_ptr(), std::ptr::null(), std::ptr::null_mut(), 0) };
-    assert!(!compiled.is_null(), "{pat:?} did not compile");
-    unsafe { internalize(compiled) }
+    reg_pat_dirs(pat).0
 }
 
 /// The regexp for `pat`, plus whether it says a path separator has to match.
 #[track_caller]
 fn reg_pat_dirs(pat: &str) -> (String, bool) {
-    let owned = cstr(pat);
-    let mut allow_dirs: c_char = 0;
-    let compiled = unsafe {
-        file_pat_to_reg_pat(
-            owned.as_ptr(),
-            std::ptr::null(),
-            &raw mut allow_dirs,
-            0 as c_int,
-        )
-    };
-    assert!(!compiled.is_null(), "{pat:?} did not compile");
-    (unsafe { internalize(compiled) }, allow_dirs != 0)
+    compile(pat, pat.len()).unwrap_or_else(|| panic!("{pat:?} did not compile"))
 }
 
 #[test]
@@ -163,23 +150,13 @@ fn allow_dirs_is_set_by_a_path_separator_and_nothing_else() {
 /// feeds one comma-separated entry at a time without copying it out.
 #[test]
 fn an_explicit_end_stops_before_the_nul() {
-    let owned = cstr("foo/bar");
-    let mut allow_dirs: c_char = 1;
-    let compiled = unsafe {
-        file_pat_to_reg_pat(
-            owned.as_ptr(),
-            owned.as_ptr().add(3),
-            &raw mut allow_dirs,
-            0 as c_int,
-        )
-    };
-    assert_eq!(unsafe { internalize(compiled) }, "^foo$");
-    assert_eq!(allow_dirs, 0, "the `/` is past the end");
-
+    assert_eq!(
+        compile("foo/bar", 3),
+        Some(("^foo$".into(), false)),
+        "the `/` is past the end"
+    );
     // A zero-length span is the empty pattern, not the whole string.
-    let empty =
-        unsafe { file_pat_to_reg_pat(owned.as_ptr(), owned.as_ptr(), std::ptr::null_mut(), 0) };
-    assert_eq!(unsafe { internalize(empty) }, "^$");
+    assert_eq!(compile("foo/bar", 0), Some(("^$".into(), false)));
 }
 
 /// Unbalanced braces are the one way this fails: it answers NULL and reports
@@ -195,14 +172,7 @@ fn unbalanced_braces_are_refused_with_a_message() {
         ("foo}bar", "E219: Missing {."),
         ("{{a}", "E220: Missing }."),
     ] {
-        let owned = cstr(pat);
-        let compiled = check_emsg(
-            &editor,
-            || unsafe {
-                file_pat_to_reg_pat(owned.as_ptr(), std::ptr::null(), std::ptr::null_mut(), 0)
-            },
-            Some(msg),
-        );
-        assert!(compiled.is_null(), "{pat:?} should not have compiled");
+        let compiled = check_emsg(&editor, || compile(pat, pat.len()), Some(msg));
+        assert!(compiled.is_none(), "{pat:?} should not have compiled");
     }
 }

@@ -81,7 +81,7 @@ pub fn ml_setname(buffer: Buf) {
             unsafe { close((*mfp).mf_fd) };
             unsafe { (*mfp).mf_fd = -1 };
         }
-        if unsafe { vim_rename(mf_fname(mfp), fname) } == 0 {
+        if unsafe { rename_file(cstr::at(mf_fname(mfp)), cstr::at(fname)) } {
             success = true;
             unsafe { mf_free_fnames(mfp) };
             unsafe { mf_set_fnames(mfp, fname) };
@@ -261,14 +261,16 @@ pub unsafe fn makeswapname(
         let mut r = core::ptr::null_mut();
         let s = unsafe { make_percent_swname(dir_name, end, fname_res) };
         if !s.is_null() {
-            r = unsafe { modname(s, c".swp".as_ptr(), false) };
+            r = unsafe { modname(cstr::at_opt(s), b".swp", false) }
+                .map_or(core::ptr::null_mut(), XString::into_raw);
             unsafe { xfree(s.cast()) };
         }
         return r;
     }
 
     // A swap file in the file's own directory gets a leading '.'.
-    let r = unsafe { modname(fname_res, c".swp".as_ptr(), dir == b".") };
+    let r = unsafe { modname(cstr::at_opt(fname_res), b".swp", dir == b".") }
+        .map_or(core::ptr::null_mut(), XString::into_raw);
     if r.is_null() {
         return core::ptr::null_mut(); // out of memory
     }
@@ -825,10 +827,8 @@ pub unsafe fn recover_names(
             && found.is_empty()
             && !fname.is_null()
         {
-            // SAFETY: a NUL-terminated name; the answer is null or owned,
-            // and adopted once.
-            let swapname = unsafe { cstr::at_opt(modname(fname_res, c".swp".as_ptr(), true)) }
-                .map(|name| unsafe { XString::from_raw(name.as_ptr().cast_mut()) });
+            // SAFETY: a NUL-terminated name.
+            let swapname = modname(unsafe { cstr::at_opt(fname_res) }, b".swp", true);
             if let Some(swapname) = swapname.filter(|name| path_exists(name.as_cstr())) {
                 found.push(swapname);
             }
@@ -936,7 +936,8 @@ unsafe fn recov_file_names(
 ) -> c_int {
     let mut num_names = 0usize;
     if prepend_dot {
-        names[num_names] = unsafe { modname(path, c".sw?".as_ptr(), true) };
+        names[num_names] = unsafe { modname(cstr::at_opt(path), b".sw?", true) }
+            .map_or(core::ptr::null_mut(), XString::into_raw);
         if names[num_names].is_null() {
             return num_names as c_int;
         }

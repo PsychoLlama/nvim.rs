@@ -185,10 +185,7 @@ fn an_iconv_sequence_split_by_the_read_is_carried_over() {
 fn fileencodings_falls_back_to_latin1() {
     let sandbox = Sandbox::dir("readfile_fencs");
     sandbox.write("f.txt", b"caf\xe9\nna\xefve\n");
-    sandbox.write(
-        "hi.txt",
-        &(0x80u8..=0xff).chain([b'\n']).collect::<Vec<_>>(),
-    );
+    sandbox.write("hi.txt", &(0x80u8..=0xff).chain(*b"\n").collect::<Vec<_>>());
     let fx = Probe::new(sandbox.editor());
     fx.run("set shortmess=");
     let mut seen = Seen::new(&fx);

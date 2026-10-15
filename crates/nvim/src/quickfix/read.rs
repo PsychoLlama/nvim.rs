@@ -25,6 +25,7 @@
 
 use super::*;
 use crate::eval::typval::list_items;
+use crate::fileio::Fgets;
 use crate::mbyte::Converter;
 use crate::memory::XString;
 use crate::message_fmt::msg_bytes;
@@ -35,7 +36,6 @@ use crate::types::{IOSIZE, ListRef, VAR_LIST, VAR_STRING};
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 use std::fs::File;
-use std::io::{BufRead, BufReader, ErrorKind};
 use std::os::unix::ffi::OsStrExt;
 
 /// The most of one line that is kept. A longer line is truncated one byte
@@ -48,60 +48,6 @@ const READ_CHUNK: usize = IOSIZE as usize;
 /// How long a list title can be: upstream builds titles in an `IOSIZE`
 /// buffer.
 pub(crate) const QF_TITLE_MAX: usize = IOSIZE as usize - 1;
-
-/// C's `fgets` over a file: the same chunking, so that a long line is cut
-/// where upstream cuts it.
-pub(crate) struct Fgets {
-    reader: BufReader<File>,
-    /// A read failed with something other than an interrupt: `ferror()`.
-    error: bool,
-}
-
-impl Fgets {
-    pub(crate) fn new(file: File) -> Fgets {
-        Fgets {
-            reader: BufReader::new(file),
-            error: false,
-        }
-    }
-
-    /// Read at most `size - 1` bytes, stopping after a newline, into `out`
-    /// (which is cleared first). `false` at the end of the file — or after
-    /// an error — with nothing read, as `fgets` answers NULL.
-    pub(crate) fn fgets(&mut self, out: &mut Vec<u8>, size: usize) -> bool {
-        out.clear();
-        let room = size.saturating_sub(1);
-        while out.len() < room {
-            let available = match self.reader.fill_buf() {
-                Ok(available) => available,
-                Err(err) if err.kind() == ErrorKind::Interrupted => continue,
-                Err(_) => {
-                    self.error = true;
-                    break;
-                }
-            };
-            if available.is_empty() {
-                break;
-            }
-            let want = (room - out.len()).min(available.len());
-            let (take, newline) = match available[..want].iter().position(|&b| b == b'\n') {
-                Some(at) => (at + 1, true),
-                None => (want, false),
-            };
-            out.extend_from_slice(&available[..take]);
-            self.reader.consume(take);
-            if newline {
-                break;
-            }
-        }
-        !out.is_empty()
-    }
-
-    /// Whether reading failed part-way: `ferror()`.
-    pub(crate) fn had_error(&self) -> bool {
-        self.error
-    }
-}
 
 /// The length C's `strlen` gives a line just read: up to the first NUL.
 fn c_len(bytes: &[u8]) -> usize {

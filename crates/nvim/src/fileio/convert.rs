@@ -1,7 +1,7 @@
 //! Turning a file's bytes into the buffer's UTF-8.
 //!
-//! `'fileencodings'` is a list of guesses; [`next_fenc`] walks it and
-//! [`get_fio_flags`] turns each name into the `FIO_*` bits that say whether
+//! `'fileencodings'` is a list of guesses; [`FencList`] walks it and
+//! [`get_fio_flags`] turns each name into the [`FioFlags`] that say whether
 //! Nvim can do the conversion itself. [`need_conversion`] is the cheap test
 //! for "this is already UTF-8, leave it alone", [`check_for_bom`] recognises
 //! a byte-order mark and lets it override the guess, and
@@ -14,216 +14,239 @@
 //! [`with_iconv`](Conv::with_iconv), [`units_to_utf8`](Conv::units_to_utf8)
 //! for the encodings Nvim knows itself, and [`check_utf8`](Conv::check_utf8)
 //! for when there is nothing to convert but the bytes still have to be valid.
+//! All three work on a [`ReadBuf`], in place.
 //!
 //! This is the read side of `bufwrite::convert`.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::cstr;
-use crate::option::vars::P_CCV;
-use crate::strings::has_char;
-use crate::strings::vim_strchr;
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use std::fs::File;
 
 use crate::bufwrite::translate;
-use crate::mbyte::ICONV_EINVAL;
+use crate::cstr;
+use crate::mbyte::{
+    ENC_2BYTE, ENC_2WORD, ENC_4BYTE, ENC_ENDIAN_L, ENC_LATIN1, ENC_UNICODE, ICONV_EINVAL, char_at,
+    encode_char, head_off, open_iconv, promised_char_len,
+};
+use crate::memory::XString;
+use crate::option::vars::P_CCV;
+use crate::os::iconv::Iconv;
+use crate::strings::has_char;
 
 use super::*;
 use crate::types::FAIL;
 
-/// The iconv descriptor value that means "no iconv".
-pub(crate) fn no_iconv() -> iconv_t {
-    ptr::with_exposed_provenance_mut::<c_void>(-1i32 as usize)
+crate::flag_set! {
+    /// What Nvim knows how to convert itself, from an encoding's name:
+    /// upstream's `FIO_*` bits. The empty set means "only iconv can".
+    pub struct FioFlags;
+
+    /// Latin-1, one byte per character.
+    const LATIN1 = 0x01;
+    const UTF8 = 0x02;
+    const UCS2 = 0x04;
+    const UCS4 = 0x08;
+    const UTF16 = 0x10;
+    /// Little-endian, for the UCS and UTF-16 ones.
+    const ENDIAN_L = 0x80;
+    /// "ucs-bom": the first bytes of the file decide.
+    const UCSBOM = 0x4000;
+    /// Every byte-order mark is acceptable, for [`check_for_bom`].
+    const ALL = -1;
 }
 
-/// Find the next `'fileencodings'` entry to try.
+/// How many bytes of a character split across two reads are carried over.
+pub(crate) const CONV_RESTLEN: usize = 30;
+
+/// How much room an iconv conversion is given: the read is cut to this
+/// fraction of the buffer, because there is no knowing how much a character
+/// grows.
+pub(crate) const ICONV_MULT: isize = 8;
+
+/// The guesses `'fileencodings'` lists, handed out one at a time.
 ///
-/// `cursor` is advanced past the entry it returns, and set to NULL once the list
-/// is exhausted — which is reported as an empty name. `alloced` says whether
-/// the result has to be freed.
-///
-/// # Safety
-///
-/// `cursor` must point at a cursor standing inside a NUL-terminated
-/// 'fileencodings' list; it is read through and left past the entry answered,
-/// or null once the list is exhausted.
-pub(crate) unsafe fn next_fenc(cursor: &mut *mut c_char, alloced: &mut bool) -> *mut c_char {
-    *alloced = false;
-    if unsafe { **cursor } == 0 {
-        *cursor = ptr::null_mut();
-        return c"".as_ptr().cast_mut();
+/// A copy of the option, taken when the read starts, so that an autocommand
+/// changing it mid-read does not move the walk.
+pub(crate) struct FencList {
+    list: Vec<u8>,
+    /// Where the next entry starts, or `None` once the list is exhausted.
+    at: Option<usize>,
+}
+
+impl FencList {
+    pub(crate) fn new(list: &[u8]) -> Self {
+        FencList {
+            list: list.to_vec(),
+            at: Some(0),
+        }
     }
-    let comma = unsafe { vim_strchr(*cursor, b',' as c_int) };
-    let r = if comma.is_null() {
-        let r = unsafe { enc_canonize(*cursor) };
-        *cursor = unsafe { (*cursor).add(cstr::bytes_at(*cursor).len()) };
-        r
-    } else {
-        let one = unsafe { xmemdupz(cursor.cast(), comma.offset_from(*cursor) as size_t) }
-            .cast::<c_char>();
-        *cursor = unsafe { comma.add(1) };
-        let r = unsafe { enc_canonize(one) };
-        unsafe { xfree(one.cast()) };
-        r
-    };
-    *alloced = true;
-    r
+
+    /// An empty list: there is nothing to fall back to.
+    pub(crate) fn none() -> Self {
+        FencList {
+            list: Vec::new(),
+            at: None,
+        }
+    }
+
+    /// The next entry, canonical. Once the list runs out this answers the
+    /// empty name -- once -- and the list is exhausted after it.
+    pub(crate) fn next(&mut self) -> XString {
+        let Some(at) = self.at else {
+            return XString::new();
+        };
+        let rest = &self.list[at..];
+        if rest.is_empty() {
+            self.at = None;
+            return XString::new();
+        }
+        let (entry, next) = match cstr::find_byte(rest, b',') {
+            Some(comma) => (&rest[..comma], at + comma + 1),
+            None => (rest, self.list.len()),
+        };
+        let name = canonize(entry);
+        self.at = Some(next);
+        name
+    }
 }
 
 /// Convert a file with the `'charconvert'` expression.
 ///
-/// Closes the file being read, converts it, and opens the result for reading
-/// instead. If anything fails, the original file is re-opened (the caller has
-/// to check for an error) and NULL returned.
+/// Closes the file being read (`input`), converts it, and opens the result
+/// for reading instead. If anything fails, the original file is re-opened
+/// (the caller has to check for an error) and `None` returned.
+///
+/// The expression is user code: it is handed copies of both names and runs
+/// with nothing of the read borrowed.
 ///
 /// @return  the name of the converted file, which the caller deletes after
 ///          reading it.
-///
-/// # Safety
-///
-/// `fname` must point at a NUL-terminated string, unaliased for the call.
-/// `fenc` must point at a NUL-terminated string, unaliased for the call.
-pub(crate) unsafe fn readfile_charconvert(
-    fname: *mut c_char,
-    fenc: *mut c_char,
-    fdp: &mut c_int,
-) -> *mut c_char {
+pub(crate) fn readfile_charconvert(
+    fname: &CStr,
+    fenc: &CStr,
+    input: &mut Option<File>,
+) -> Option<XString> {
     let mut errmsg: Option<&CStr> = None;
-    let mut tmpname = vim_tempname();
-    if tmpname.is_null() {
-        errmsg = Some(translate(c"Can't find temp file for conversion"));
-    } else {
-        unsafe { close(*fdp) }; // close the input file, ignore errors
-        *fdp = -1;
-        // SAFETY: the caller's two NUL-terminated names, and the temp name.
-        let (from, fname, tmpname_c) =
-            unsafe { (cstr::at(fenc), cstr::at(fname), cstr::at(tmpname)) };
-        if eval_charconvert(from, c"utf-8", fname, tmpname_c) == FAIL {
-            errmsg = Some(translate(c"Conversion with 'charconvert' failed"));
-        }
-        if errmsg.is_none() {
-            *fdp = unsafe { os_open(tmpname, O_RDONLY, 0) };
-            if *fdp < 0 {
-                errmsg = Some(translate(c"can't read output of 'charconvert'"));
+    let mut tmpname = temp_name();
+    match &tmpname {
+        None => errmsg = Some(translate(c"Can't find temp file for conversion")),
+        Some(name) => {
+            // Close the input file; errors are ignored.
+            *input = None;
+            if eval_charconvert(fenc, c"utf-8", fname, name.as_cstr()) == FAIL {
+                errmsg = Some(translate(c"Conversion with 'charconvert' failed"));
+            }
+            if errmsg.is_none() {
+                *input = open_for_read(name.as_cstr()).ok();
+                if input.is_none() {
+                    errmsg = Some(translate(c"can't read output of 'charconvert'"));
+                }
             }
         }
     }
 
     if let Some(errmsg) = errmsg {
-        // Not emsg(): that breaks mappings, and the retry with another
-        // type of conversion might still work.
+        // Not emsg(): that breaks mappings, and the retry with another type
+        // of conversion might still work.
         msg(errmsg, 0);
-        if !tmpname.is_null() {
-            unsafe { os_remove(cstr::at(tmpname)) }; // delete converted file
-            unsafe { xfree(tmpname.cast()) };
-            tmpname = ptr::null_mut();
+        if let Some(name) = tmpname.take() {
+            os_remove(name.as_cstr()); // delete the converted file
         }
     }
 
-    // If the input file is closed, open it; the caller checks for an
-    // error.
-    if *fdp < 0 {
-        *fdp = unsafe { os_open(fname, O_RDONLY, 0) };
+    // If the input file is closed, open it; the caller checks for an error.
+    if input.is_none() {
+        *input = open_for_read(fname).ok();
     }
     tmpname
 }
 
+/// Open `name` for reading, as `os_open(name, O_RDONLY, 0)` does: the file,
+/// or the negative `errno` libuv would have answered.
+pub(crate) fn open_for_read(name: &CStr) -> Result<File, c_int> {
+    use std::os::unix::ffi::OsStrExt;
+    let path = std::ffi::OsStr::from_bytes(name.to_bytes());
+    File::open(path).map_err(|err| -err.raw_os_error().unwrap_or(::libc::EIO))
+}
+
 /// Does file encoding `fenc` need converting from or to `'encoding'`?
-///
-/// # Safety
-///
-/// `fenc` must point at a NUL-terminated string.
-pub unsafe fn need_conversion(fenc: *const c_char) -> bool {
+pub fn need_conversion(fenc: &[u8]) -> bool {
     let fenc_flags;
-    let same_encoding = if unsafe { *fenc } == 0
-        || p_enc(|value| unsafe { cstr::eq(value.as_ptr().cast_mut(), fenc) })
-    {
-        fenc_flags = 0;
+    let same_encoding = if fenc.is_empty() || p_enc(|value| value.to_bytes() == fenc) {
+        fenc_flags = FioFlags::NONE;
         true
     } else {
         // Ignore the difference between "ansi" and "latin1", "ucs-4" and
         // "ucs-4be", and so on.
-        let enc_flags = p_enc(|value| unsafe { get_fio_flags(value.as_ptr().cast_mut()) });
-        fenc_flags = unsafe { get_fio_flags(fenc) };
-        enc_flags != 0 && fenc_flags == enc_flags
+        let enc_flags = p_enc(|value| get_fio_flags(value.to_bytes()));
+        fenc_flags = get_fio_flags(fenc);
+        !enc_flags.is_empty() && fenc_flags == enc_flags
     };
     if same_encoding {
         // The file encoding matches 'encoding'.
         return false;
     }
-    // The encodings differ. Conversion is still not needed when
-    // 'encoding' is any Unicode encoding and the file is UTF-8.
-    fenc_flags != FIO_UTF8
+    // The encodings differ. Conversion is still not needed when 'encoding'
+    // is any Unicode encoding and the file is UTF-8.
+    fenc_flags != FioFlags::UTF8
 }
 
-/// The `FIO_*` flags for converting `name` internally, or 0 when only iconv
-/// can do it. An empty name means `'encoding'`.
-///
-/// # Safety
-///
-/// `name` must point at a NUL-terminated string.
-pub unsafe fn get_fio_flags(name: *const c_char) -> c_int {
-    // SAFETY: the caller's string, or `'encoding'`'s own.
-    let name = unsafe { cstr::bytes_at(name) };
+/// The flags for converting `name` internally, or none when only iconv can
+/// do it. An empty name means `'encoding'`.
+pub fn get_fio_flags(name: &[u8]) -> FioFlags {
     let prop = if name.is_empty() {
         p_enc(|enc| canon_props(enc.to_bytes()))
     } else {
         canon_props(name)
     };
-    let little = if prop & ENC_ENDIAN_L as c_int != 0 {
-        FIO_ENDIAN_L
-    } else {
-        0
-    };
-    if prop & ENC_UNICODE as c_int != 0 {
-        if prop & ENC_2BYTE as c_int != 0 {
-            return FIO_UCS2 | little;
+    let little = FioFlags::ENDIAN_L.when(prop & ENC_ENDIAN_L != 0);
+    if prop & ENC_UNICODE != 0 {
+        if prop & ENC_2BYTE != 0 {
+            return FioFlags::UCS2 | little;
         }
-        if prop & ENC_4BYTE as c_int != 0 {
-            return FIO_UCS4 | little;
+        if prop & ENC_4BYTE != 0 {
+            return FioFlags::UCS4 | little;
         }
-        if prop & ENC_2WORD as c_int != 0 {
-            return FIO_UTF16 | little;
+        if prop & ENC_2WORD != 0 {
+            return FioFlags::UTF16 | little;
         }
-        return FIO_UTF8;
+        return FioFlags::UTF8;
     }
-    if prop & ENC_LATIN1 as c_int != 0 {
-        return FIO_LATIN1;
+    if prop & ENC_LATIN1 != 0 {
+        return FioFlags::LATIN1;
     }
     // Must be ENC_DBCS, which requires iconv().
-    0
+    FioFlags::NONE
 }
 
 /// Check for a Unicode byte-order mark at the start of `bytes`.
 ///
-/// `flags` is what the encoding guess allows; `FIO_ALL` accepts any BOM.
+/// `flags` is what the encoding guess allows; [`FioFlags::ALL`] accepts any
+/// BOM.
 ///
 /// @return  the encoding the BOM names and how many bytes it takes, or None.
-pub(crate) fn check_for_bom(bytes: &[u8], flags: c_int) -> Option<(&'static CStr, usize)> {
-    let at = |i: usize| bytes.get(i).copied().unwrap_or(0);
+pub(crate) fn check_for_bom(bytes: &[u8], flags: FioFlags) -> Option<(&'static CStr, usize)> {
+    let at = |i: usize| cstr::byte_at(bytes, i);
     let size = bytes.len();
+    let all = flags == FioFlags::ALL;
+    let le = FioFlags::ENDIAN_L;
 
     if at(0) == 0xef
         && at(1) == 0xbb
         && size >= 3
         && at(2) == 0xbf
-        && (flags == FIO_ALL || flags == FIO_UTF8 || flags == 0)
+        && (all || flags == FioFlags::UTF8 || flags.is_empty())
     {
         return Some((c"utf-8", 3)); // EF BB BF
     }
     if at(0) == 0xff && at(1) == 0xfe {
-        if size >= 4
-            && at(2) == 0
-            && at(3) == 0
-            && (flags == FIO_ALL || flags == FIO_UCS4 | FIO_ENDIAN_L)
-        {
+        if size >= 4 && at(2) == 0 && at(3) == 0 && (all || flags == FioFlags::UCS4 | le) {
             return Some((c"ucs-4le", 4)); // FF FE 00 00
         }
-        if flags == FIO_UCS2 | FIO_ENDIAN_L {
+        if flags == FioFlags::UCS2 | le {
             return Some((c"ucs-2le", 2)); // FF FE
         }
-        if flags == FIO_ALL || flags == FIO_UTF16 | FIO_ENDIAN_L {
+        if all || flags == FioFlags::UTF16 | le {
             // utf-16le is preferred, it also works for ucs-2le text.
             return Some((c"utf-16le", 2)); // FF FE
         }
@@ -231,68 +254,106 @@ pub(crate) fn check_for_bom(bytes: &[u8], flags: c_int) -> Option<(&'static CStr
     }
     if at(0) == 0xfe
         && at(1) == 0xff
-        && (flags == FIO_ALL || flags == FIO_UCS2 || flags == FIO_UTF16)
+        && (all || flags == FioFlags::UCS2 || flags == FioFlags::UTF16)
     {
         // Default to utf-16, it works for ucs-2 text as well.
-        return Some((
-            if flags == FIO_UCS2 {
-                c"ucs-2"
-            } else {
-                c"utf-16"
-            },
-            2,
-        )); // FE FF
+        let name = if flags == FioFlags::UCS2 {
+            c"ucs-2"
+        } else {
+            c"utf-16"
+        };
+        return Some((name, 2)); // FE FF
     }
     if size >= 4
         && at(0) == 0
         && at(1) == 0
         && at(2) == 0xfe
         && at(3) == 0xff
-        && (flags == FIO_ALL || flags == FIO_UCS4)
+        && (all || flags == FioFlags::UCS4)
     {
         return Some((c"ucs-4", 4)); // 00 00 FE FF
     }
     None
 }
 
-/// Where the read buffer currently is, as the conversion steps see it.
+/// The read buffer, and where in it the bytes being worked on are.
 ///
-/// `buffer` is the whole allocation. `ptr`/`size` are the bytes just read,
-/// which conversion rewrites in place or moves within the allocation;
-/// `linerest` bytes of the previous line sit at `buffer` and are moved to
-/// just before the converted bytes, which is where `line_start` ends up.
-pub(crate) struct ConvWindow {
-    pub buffer: *mut c_char,
-    pub ptr: *mut c_char,
-    pub line_start: *mut c_char,
-    pub size: ptrdiff_t,
-    /// The allocation's size; conversion may grow the bytes into it.
-    pub real_size: c_int,
-    pub linerest: ptrdiff_t,
+/// `bytes` is reused from one read to the next. `linerest` bytes of the line
+/// the previous read ended in sit at its start; `ptr`/`size` are the bytes
+/// just read, which conversion rewrites in place or moves further into the
+/// buffer (up to `ptr + real_size`), moving the line's earlier bytes to just
+/// before them -- which is where `line_start` ends up.
+pub(crate) struct ReadBuf {
+    pub bytes: Vec<u8>,
+    pub ptr: usize,
+    pub line_start: usize,
+    /// How many bytes at `ptr` are to be worked on. Negative once the line
+    /// splitting has used them all up.
+    pub size: isize,
+    /// The room after `ptr` the read was given; conversion may grow the
+    /// bytes into it.
+    pub real_size: usize,
+    pub linerest: usize,
 }
 
-impl ConvWindow {
+impl ReadBuf {
+    pub(crate) fn new() -> Self {
+        ReadBuf {
+            bytes: Vec::new(),
+            ptr: 0,
+            line_start: 0,
+            size: 0,
+            real_size: 0,
+            linerest: 0,
+        }
+    }
+
+    /// `size` as a count, for a window that is known to be in use.
+    pub(crate) fn len(&self) -> usize {
+        usize::try_from(self.size).unwrap_or(0)
+    }
+
+    /// The bytes being worked on.
+    pub(crate) fn window(&self) -> &[u8] {
+        &self.bytes[self.ptr..self.ptr + self.len()]
+    }
+
+    /// Make room for `size` new bytes after the `linerest` already held,
+    /// moving those to the front. False when even the smallest buffer could
+    /// not be had.
+    pub(crate) fn make_room(&mut self) -> bool {
+        let from = self.ptr - self.linerest;
+        while self.size >= 10 {
+            let want = self.len() + self.linerest + 1;
+            if want <= self.bytes.len() || try_grow_zeroed(&mut self.bytes, want) {
+                // Copy the characters from the previous read.
+                self.bytes.copy_within(from..from + self.linerest, 0);
+                self.ptr = self.linerest;
+                self.line_start = 0;
+                return true;
+            }
+            self.size /= 2;
+        }
+        false
+    }
+
     /// Move the previous line's tail to just before `at`, and make that the
     /// start of the current line.
-    ///
-    /// # Safety
-    ///
-    /// `at` must point at a NUL-terminated string, unaliased for the call.
-    unsafe fn move_linerest(&mut self, at: *mut c_char) {
-        self.line_start = unsafe { at.offset(-self.linerest) };
-        unsafe { ptr::copy(self.buffer, self.line_start, self.linerest as usize) };
+    fn move_linerest(&mut self, at: usize) {
+        self.line_start = at - self.linerest;
+        self.bytes.copy_within(0..self.linerest, self.line_start);
     }
 }
 
 /// What the conversion knows, carried from one read to the next.
 pub(crate) struct Conv {
-    /// `FIO_*` bits for a conversion Nvim does itself, or 0.
-    pub flags: c_int,
-    /// The iconv descriptor, or [`no_iconv`]; owned.
-    pub iconv: iconv_t,
+    /// What Nvim converts itself, or nothing.
+    pub flags: FioFlags,
+    /// The iconv descriptor, when iconv does the converting.
+    pub iconv: Option<Iconv>,
     /// Bytes of a character split across two reads.
-    rest: [c_char; CONV_RESTLEN as usize],
-    pub restlen: c_int,
+    rest: [u8; CONV_RESTLEN],
+    pub restlen: usize,
     /// `BAD_REPLACE`, `BAD_KEEP`, `BAD_DROP`, or the replacement character.
     pub bad_char: c_int,
     /// Line number of the first conversion error, or 0.
@@ -304,18 +365,12 @@ pub(crate) struct Conv {
     pub can_retry: bool,
 }
 
-impl Drop for Conv {
-    fn drop(&mut self) {
-        self.close_iconv();
-    }
-}
-
 impl Conv {
     pub(crate) fn new(bad_char: c_int) -> Self {
         Conv {
-            flags: 0,
-            iconv: no_iconv(),
-            rest: [0; CONV_RESTLEN as usize],
+            flags: FioFlags::NONE,
+            iconv: None,
+            rest: [0; CONV_RESTLEN],
             restlen: 0,
             bad_char,
             conv_error: 0,
@@ -325,122 +380,115 @@ impl Conv {
     }
 
     pub(crate) fn has_iconv(&self) -> bool {
-        self.iconv != no_iconv()
+        self.iconv.is_some()
     }
 
     /// Close the iconv descriptor, if there is one.
     pub(crate) fn close_iconv(&mut self) {
-        if self.has_iconv() {
-            // SAFETY: the descriptor is ours and is open.
-            unsafe { iconv_close(self.iconv) };
-            self.iconv = no_iconv();
-        }
+        self.iconv = None;
     }
 
     /// Ask iconv to convert `fenc` to UTF-8. False when it cannot.
-    ///
-    /// # Safety
-    ///
-    /// `fenc` must point at a NUL-terminated string, unaliased for the call.
-    pub(crate) unsafe fn open_iconv(&mut self, fenc: *mut c_char) -> bool {
-        let fenc = unsafe { CStr::from_ptr(fenc) };
-        self.iconv = crate::mbyte::open_iconv(c"utf-8", fenc)
-            .map_or_else(no_iconv, crate::os::iconv::Iconv::into_raw);
+    pub(crate) fn open_iconv(&mut self, fenc: &CStr) -> bool {
+        self.iconv = open_iconv(c"utf-8", fenc);
         self.has_iconv()
     }
 
     /// Is anything being converted?
     pub(crate) fn active(&self) -> bool {
-        self.flags != 0 || self.has_iconv()
+        !self.flags.is_empty() || self.has_iconv()
     }
 
-    /// Note a conversion error at the line `at` falls on, if none was noted
+    /// Note a conversion error on the line `text` ends on, if none was noted
     /// yet.
-    ///
-    /// # Safety
-    ///
-    /// `start` must point at a NUL-terminated string. `at` must point at a NUL-
-    /// terminated string.
-    unsafe fn note_error(&mut self, start: *const c_char, at: *const c_char) {
+    fn note_error(&mut self, text: &[u8]) {
         if self.conv_error == 0 {
-            self.conv_error = unsafe { readfile_linenr(self.linecnt, start, at) };
+            self.conv_error = readfile_linenr(self.linecnt, text);
         }
     }
 
-    /// Keep `len` bytes at `from` for the next read.
-    ///
-    /// # Safety
-    ///
-    /// `from` must point at `len` readable bytes.
-    unsafe fn stash(&mut self, from: *const c_char, len: usize) {
-        unsafe { ptr::copy(from, self.rest.as_mut_ptr(), len) };
-        self.restlen = len as c_int;
+    /// Keep `bytes` for the next read.
+    fn stash(&mut self, bytes: &[u8]) {
+        self.rest[..bytes.len()].copy_from_slice(bytes);
+        self.restlen = bytes.len();
     }
 
-    /// Put the held-over bytes at `text`.
+    /// Put the held-over bytes at `at`.
     ///
     /// `restlen` deliberately stays set: the bytes are laid down before the
     /// read so that the read appends to them, and only counted back in once
     /// the read is done.
-    ///
-    /// # Safety
-    ///
-    /// `text` must point at a NUL-terminated string, unaliased for the call.
-    pub(crate) unsafe fn restore(&self, text: *mut c_char) {
-        unsafe { ptr::copy(self.rest.as_ptr(), text, self.restlen as usize) };
+    pub(crate) fn restore(&self, into: &mut [u8]) {
+        into[..self.restlen].copy_from_slice(&self.rest[..self.restlen]);
     }
 
-    /// Convert the bytes in `w` with iconv.
+    /// Convert the bytes in `w` with iconv, into the room after them.
     ///
     /// False means the encoding is wrong and the file should be read again
     /// with the next one.
-    pub(crate) fn with_iconv(&mut self, w: &mut ConvWindow) -> bool {
-        let mut fromp: *const c_char = w.ptr;
-        let mut from_size = w.size as size_t;
+    pub(crate) fn with_iconv(&mut self, w: &mut ReadBuf) -> bool {
+        let Some(iconv) = self.iconv.take() else {
+            return true;
+        };
+        let converted = self.iconv_into(&iconv, w);
+        self.iconv = Some(iconv);
+        converted
+    }
+
+    fn iconv_into(&mut self, iconv: &Iconv, w: &mut ReadBuf) -> bool {
+        let (mut from, from_end) = (w.ptr, w.ptr + w.len());
         // The converted bytes go after the ones being converted.
-        w.ptr = unsafe { w.ptr.offset(w.size) };
-        let mut top = w.ptr;
-        let mut to_size = (w.real_size as ptrdiff_t - w.size) as size_t;
+        let out_start = from_end;
+        let (mut to, to_end) = (out_start, w.ptr + w.real_size);
 
         // On a conversion error, or when there is not enough room, try
-        // another conversion — unless there is no alternative, as for
-        // help files.
-        let src = (&raw mut fromp).cast::<*mut c_char>();
-        let (srclen, dst, dstlen) = (&raw mut from_size, &raw mut top, &raw mut to_size);
-        while unsafe { iconv(self.iconv, src, srclen, dst, dstlen) } == -1i32 as size_t
-            && unsafe { *__errno_location() } != ICONV_EINVAL
-            || from_size > CONV_RESTLEN as size_t
-        {
+        // another conversion -- unless there is no alternative, as for help
+        // files.
+        loop {
+            let (head, tail) = w.bytes.split_at_mut(out_start);
+            let mut input = &head[from..from_end];
+            let mut output = &mut tail[to - out_start..to_end - out_start];
+            let status = iconv.step(&mut input, &mut output);
+            from = from_end - input.len();
+            to = to_end - output.len();
+            let stopped = status.is_err_and(|errno| errno != ICONV_EINVAL);
+            if (!stopped && from_end - from <= CONV_RESTLEN) || from == from_end {
+                break;
+            }
             if self.can_retry {
                 return false;
             }
-            unsafe { self.note_error(w.ptr, top) };
+            self.note_error(&w.bytes[out_start..to]);
 
             // Deal with a bad byte and continue with the next.
-            fromp = unsafe { fromp.add(1) };
-            from_size -= 1;
-            // `dstlen` aliases `to_size`, so the next round's `iconv` reads
-            // these writes; `unused_assignments` only sees direct uses of the
-            // local and calls them dead.
-            #[allow(unused_assignments)]
-            if self.bad_char == BAD_KEEP {
-                unsafe { *top = *fromp.offset(-1) };
-                top = unsafe { top.add(1) };
-                to_size -= 1;
-            } else if self.bad_char != BAD_DROP {
-                unsafe { *top = self.bad_char as c_char };
-                top = unsafe { top.add(1) };
-                to_size -= 1;
+            let bad = w.bytes[from];
+            from += 1;
+            let put = if self.bad_char == BAD_KEEP {
+                Some(bad)
+            } else if self.bad_char == BAD_DROP {
+                None
+            } else {
+                Some(self.bad_char as u8)
+            };
+            // Upstream counts the room down without looking; there is
+            // always some, the read having left seven eighths of the buffer
+            // for the output.
+            if let Some(byte) = put
+                && to < to_end
+            {
+                w.bytes[to] = byte;
+                to += 1;
             }
         }
 
-        if from_size > 0 {
+        if from < from_end {
             // Some characters are left over; keep them for the next round.
-            unsafe { self.stash(fromp, from_size as usize) };
+            self.stash(&w.bytes[from..from_end]);
         }
 
-        unsafe { w.move_linerest(w.ptr) };
-        w.size = unsafe { top.offset_from(w.ptr) };
+        w.move_linerest(out_start);
+        w.ptr = out_start;
+        w.size = (to - out_start) as isize;
         true
     }
 
@@ -449,82 +497,105 @@ impl Conv {
     /// Works from the end of the buffer towards the start, because the number
     /// of bytes may grow. False means "read the file again with the next
     /// encoding".
-    pub(crate) fn units_to_utf8(&mut self, w: &mut ConvWindow) -> bool {
+    pub(crate) fn units_to_utf8(&mut self, w: &mut ReadBuf) -> bool {
         let flags = self.flags;
-        let start: *const u8 = w.ptr.cast();
-        // Where the UTF-8 bytes go, filling the allocation from its end.
-        let mut dest = unsafe { w.ptr.offset(w.real_size as isize) };
-        let mut p: *const u8 = unsafe { start.offset(w.size) };
+        let utf16_pair = FioFlags::UCS2 | FioFlags::UTF16;
+        let start = w.ptr;
+        let data_end = start + w.len();
+        // Where the UTF-8 bytes go, filling the room from its end.
+        let room_end = start + w.real_size;
+        let mut dest = room_end;
+        let mut p = data_end;
         // An incomplete sequence at the end, to be kept for next time.
-        let mut tail: *const u8 = ptr::null();
+        let mut tail: Option<usize> = None;
 
-        if flags == FIO_LATIN1 || flags == FIO_UTF8 {
-            if flags == FIO_UTF8 {
+        if flags == FioFlags::LATIN1 || flags == FioFlags::UTF8 {
+            if flags == FioFlags::UTF8 {
                 // Check for a trailing incomplete UTF-8 sequence.
-                let mut t = unsafe { start.offset(w.size - 1) };
-                while t > start && unsafe { *t } & 0xc0 == 0x80 {
-                    t = unsafe { t.offset(-1) };
+                let mut t = data_end - 1;
+                while t > start && w.bytes[t] & 0xc0 == 0x80 {
+                    t -= 1;
                 }
-                if unsafe { t.add(utf_byte2len(*t as c_int) as usize) }
-                    > unsafe { start.offset(w.size) }
-                {
-                    tail = t;
+                if t + utf_byte2len(c_int::from(w.bytes[t])) as usize > data_end {
+                    tail = Some(t);
                     p = t;
                 }
             }
-        } else if flags & (FIO_UCS2 | FIO_UTF16) != 0 {
+        } else if flags.has(utf16_pair) {
             // Check for a trailing odd byte.
-            p = unsafe { start.offset(w.size & !1) };
-            if w.size & 1 != 0 {
-                tail = p;
+            p = start + (w.len() & !1);
+            if w.len() & 1 != 0 {
+                tail = Some(p);
             }
-            if flags & FIO_UTF16 != 0 && p > start {
+            if flags.has(FioFlags::UTF16) && p > start {
                 // Check for a trailing leading word.
-                let u8c = unsafe { read_word(&mut p, flags) };
+                let u8c = read_word(&w.bytes, &mut p, flags);
                 if (0xd800..=0xdbff).contains(&u8c) {
-                    tail = p;
+                    tail = Some(p);
                 } else {
-                    p = unsafe { p.add(2) };
+                    p += 2;
                 }
             }
         } else {
-            // FIO_UCS4: check for 1, 2 or 3 trailing bytes.
-            p = unsafe { start.offset(w.size & !3) };
-            if w.size & 3 != 0 {
-                tail = p;
+            // UCS-4: check for 1, 2 or 3 trailing bytes.
+            p = start + (w.len() & !3);
+            if w.len() & 3 != 0 {
+                tail = Some(p);
             }
         }
 
-        if !tail.is_null() {
-            let len = unsafe { start.offset(w.size).offset_from(tail) } as usize;
-            unsafe { self.stash(tail.cast(), len) };
-            w.size -= len as ptrdiff_t;
+        if let Some(tail) = tail {
+            self.stash(&w.bytes[tail..data_end]);
+            w.size -= (data_end - tail) as isize;
+        }
+
+        if flags == FioFlags::LATIN1 {
+            // The common case, and a simple one: each byte is a character,
+            // one or two bytes long in UTF-8.
+            let bytes = &mut w.bytes[start..room_end];
+            let mut dest = room_end - start;
+            for p in (0..p - start).rev() {
+                let b = bytes[p];
+                if b < 0x80 {
+                    dest -= 1;
+                    bytes[dest] = b;
+                } else {
+                    dest -= 2;
+                    bytes[dest] = 0xc0 | (b >> 6);
+                    bytes[dest + 1] = 0x80 | (b & 0x3f);
+                }
+            }
+            let dest = start + dest;
+            w.move_linerest(dest);
+            w.size = (room_end - dest) as isize;
+            w.ptr = dest;
+            return true;
         }
 
         while p > start {
             let mut u8c;
-            if flags & FIO_LATIN1 != 0 {
-                p = unsafe { p.offset(-1) };
-                u8c = unsafe { *p } as c_uint;
-            } else if flags & (FIO_UCS2 | FIO_UTF16) != 0 {
-                u8c = unsafe { read_word(&mut p, flags) };
-                if flags & FIO_UTF16 != 0 && (0xdc00..=0xdfff).contains(&u8c) {
+            if flags.has(FioFlags::LATIN1) {
+                p -= 1;
+                u8c = u32::from(w.bytes[p]);
+            } else if flags.has(utf16_pair) {
+                u8c = read_word(&w.bytes, &mut p, flags);
+                if flags.has(FioFlags::UTF16) && (0xdc00..=0xdfff).contains(&u8c) {
                     if p == start {
                         // Missing leading word.
                         if self.can_retry {
                             return false;
                         }
-                        unsafe { self.note_error(start.cast(), p.cast()) };
+                        self.note_error(&w.bytes[start..p]);
                         if self.bad_char == BAD_DROP {
                             continue;
                         }
                         if self.bad_char != BAD_KEEP {
-                            u8c = self.bad_char as c_uint;
+                            u8c = self.bad_char as u32;
                         }
                     }
-                    // The second word of a pair; take the first and put
-                    // them together.
-                    let u16c = unsafe { read_word(&mut p, flags) };
+                    // The second word of a pair; take the first and put them
+                    // together.
+                    let u16c = read_word(&w.bytes, &mut p, flags);
                     u8c = 0x10000 + ((u16c & 0x3ff) << 10) + (u8c & 0x3ff);
 
                     // Check that the first word really was a leading word.
@@ -532,64 +603,65 @@ impl Conv {
                         if self.can_retry {
                             return false;
                         }
-                        unsafe { self.note_error(start.cast(), p.cast()) };
+                        self.note_error(&w.bytes[start..p]);
                         if self.bad_char == BAD_DROP {
                             continue;
                         }
                         if self.bad_char != BAD_KEEP {
-                            u8c = self.bad_char as c_uint;
+                            u8c = self.bad_char as u32;
                         }
                     }
                 }
-            } else if flags & FIO_UCS4 != 0 {
+            } else if flags.has(FioFlags::UCS4) {
                 let mut word = 0u32;
                 for shift in 0..4 {
-                    p = unsafe { p.offset(-1) };
-                    word |= (unsafe { *p } as u32)
-                        << (if flags & FIO_ENDIAN_L != 0 {
-                            24 - 8 * shift
-                        } else {
-                            8 * shift
-                        });
+                    p -= 1;
+                    let at = if flags.has(FioFlags::ENDIAN_L) {
+                        24 - 8 * shift
+                    } else {
+                        8 * shift
+                    };
+                    word |= u32::from(w.bytes[p]) << at;
                 }
                 u8c = word;
                 // Replace characters over INT_MAX with the Unicode
                 // replacement character.
-                if u8c > INT_MAX as c_uint {
+                if u8c > i32::MAX as u32 {
                     u8c = 0xfffd;
                 }
             } else {
                 // UTF-8.
-                p = unsafe { p.offset(-1) };
-                if unsafe { *p } < 0x80 {
-                    u8c = unsafe { *p } as c_uint;
+                p -= 1;
+                if w.bytes[p] < 0x80 {
+                    u8c = u32::from(w.bytes[p]);
                 } else {
-                    let len = unsafe { utf_head_off(start.cast(), p.cast()) };
-                    p = unsafe { p.offset(-(len as isize)) };
-                    u8c = unsafe { utf_ptr2char(p.cast()) } as c_uint;
+                    let len = head_off(&w.bytes[start..data_end], p - start);
+                    p -= len;
+                    u8c = char_at(&w.bytes[p..data_end]) as u32;
                     if len == 0 {
                         // Not a valid UTF-8 character: retry with another
                         // fenc when possible, otherwise report the error.
                         if self.can_retry {
                             return false;
                         }
-                        unsafe { self.note_error(start.cast(), p.cast()) };
+                        self.note_error(&w.bytes[start..p]);
                         if self.bad_char == BAD_DROP {
                             continue;
                         }
                         if self.bad_char != BAD_KEEP {
-                            u8c = self.bad_char as c_uint;
+                            u8c = self.bad_char as u32;
                         }
                     }
                 }
             }
-            debug_assert!(u8c <= INT_MAX as c_uint);
-            dest = unsafe { dest.offset(-(utf_char2len(u8c as c_int) as isize)) };
-            unsafe { utf_char2bytes(u8c as c_int, dest) };
+            debug_assert!(u8c <= i32::MAX as u32);
+            let c = u8c as c_int;
+            dest -= utf_char2len(c) as usize;
+            encode_char(c, &mut w.bytes[dest..room_end]);
         }
 
-        unsafe { w.move_linerest(dest) };
-        w.size = unsafe { w.ptr.offset(w.real_size as isize).offset_from(dest) };
+        w.move_linerest(dest);
+        w.size = (room_end - dest) as isize;
         w.ptr = dest;
         true
     }
@@ -600,102 +672,109 @@ impl Conv {
     /// False means "read the file again with another conversion".
     pub(crate) fn check_utf8(
         &mut self,
-        w: &mut ConvWindow,
+        w: &mut ReadBuf,
         filesize: FileOffset,
         illegal_byte: &mut LineNr,
     ) -> bool {
-        let start: *mut u8 = w.ptr.cast();
+        let start = w.ptr;
         let mut p = start;
         let mut incomplete_tail = false;
         loop {
-            let end = unsafe { start.offset(w.size) };
-            // Skip ASCII bytes quickly, a machine word at a time.
-            while unsafe { end.offset_from(p) } >= size_of::<u64>() as isize {
-                let mut word = 0u64;
-                let into = (&raw mut word).cast::<u8>();
-                unsafe { into.copy_from_nonoverlapping(p.cast(), size_of::<u64>() as size_t) };
-                if word & NONASCII_MASK != 0 {
-                    break;
-                }
-                p = unsafe { p.add(size_of::<u64>()) };
-            }
-            while p < end && unsafe { *p } < 0x80 {
-                p = unsafe { p.add(1) };
-            }
-
-            let todo = unsafe { end.offset_from(p) } as c_int;
-            if todo <= 0 {
+            let end = start + w.len();
+            p = skip_valid_utf8(&w.bytes[..end], p);
+            if p >= end {
                 break;
             }
-            if unsafe { *p } < 0x80 {
-                continue;
-            }
+            let todo = end - p;
 
             // A length of 1 means it is an illegal byte. An incomplete
-            // character at the end is accepted, though: the next read
-            // gets the rest of it and we check it then.
-            let l = unsafe { utf_ptr2len_len(p.cast(), todo) };
+            // character at the end is accepted, though: the next read gets
+            // the rest of it and we check it then.
+            let l = promised_char_len(&w.bytes[p..end]);
             if l > todo && !incomplete_tail {
-                // Avoid retrying with a different encoding when a
-                // truncated file is more likely, or reading the rest of
-                // an incomplete sequence when we already did so.
+                // Avoid retrying with a different encoding when a truncated
+                // file is more likely, or reading the rest of an incomplete
+                // sequence when we already did so.
                 if p > start || filesize > 0 {
                     incomplete_tail = true;
                 }
                 if p > start {
-                    unsafe { self.stash(p.cast(), todo as usize) };
-                    w.size -= todo as ptrdiff_t;
+                    self.stash(&w.bytes[p..end]);
+                    w.size -= todo as isize;
                     break;
                 }
             }
             if l != 1 && l <= todo {
-                p = unsafe { p.offset(l as isize) };
+                p += l;
                 continue;
             }
 
-            // An illegal byte. Try another encoding if we can, unless we
-            // are at end of file, where a truncated file is more likely
-            // than a conversion error.
+            // An illegal byte. Try another encoding if we can, unless we are
+            // at end of file, where a truncated file is more likely than a
+            // conversion error.
             if self.can_retry && !incomplete_tail {
                 break;
             }
             // When we did a conversion, report an error.
             if self.has_iconv() {
-                unsafe { self.note_error(start.cast(), p.cast()) };
+                self.note_error(&w.bytes[start..p]);
             }
             // Remember the first line with an illegal byte.
             if self.conv_error == 0 && *illegal_byte == 0 {
-                *illegal_byte = unsafe { readfile_linenr(self.linecnt, start.cast(), p.cast()) };
+                *illegal_byte = readfile_linenr(self.linecnt, &w.bytes[start..p]);
             }
 
             // Drop, keep or replace the bad byte.
             if self.bad_char == BAD_DROP {
-                unsafe { ptr::copy(p.add(1), p, todo as usize - 1) };
+                w.bytes.copy_within(p + 1..end, p);
                 w.size -= 1;
             } else {
                 if self.bad_char != BAD_KEEP {
-                    unsafe { *p = self.bad_char as u8 };
+                    w.bytes[p] = self.bad_char as u8;
                 }
-                p = unsafe { p.add(1) };
+                p += 1;
             }
         }
         // A UTF-8 error was detected if we stopped short of the end.
-        p >= unsafe { start.offset(w.size) } || incomplete_tail
+        p >= start + w.len() || incomplete_tail
+    }
+}
+
+/// Where the first byte from `p` on that is not part of a whole, valid UTF-8
+/// character is: an illegal byte, a sequence `bytes` cuts short, or the end.
+///
+/// ASCII goes a machine word at a time. This is every byte of every file
+/// read without a conversion, so it keeps the walk to itself.
+fn skip_valid_utf8(bytes: &[u8], mut p: usize) -> usize {
+    const WORD: usize = size_of::<u64>();
+    loop {
+        let (words, _) = bytes[p..].as_chunks::<WORD>();
+        let ascii = words
+            .iter()
+            .position(|word| u64::from_ne_bytes(*word) & NONASCII_MASK != 0)
+            .unwrap_or(words.len());
+        p += ascii * WORD;
+        p += bytes[p..]
+            .iter()
+            .position(|&b| b >= 0x80)
+            .unwrap_or(bytes.len() - p);
+        if p >= bytes.len() {
+            return p;
+        }
+        let l = promised_char_len(&bytes[p..]);
+        if l == 1 || l > bytes.len() - p {
+            return p;
+        }
+        p += l;
     }
 }
 
 /// Read one 16-bit code unit backwards from `p`, in the flags' byte order.
-///
-/// # Safety
-///
-/// `p` must point at a cursor at least two bytes into a readable buffer: it
-/// is stepped back twice and read each time.
-unsafe fn read_word(p: &mut *const u8, flags: c_int) -> c_uint {
-    *p = unsafe { p.offset(-1) };
-    let first = unsafe { **p } as c_uint;
-    *p = unsafe { p.offset(-1) };
-    let second = unsafe { **p } as c_uint;
-    if flags & FIO_ENDIAN_L != 0 {
+fn read_word(bytes: &[u8], p: &mut usize, flags: FioFlags) -> u32 {
+    let first = u32::from(bytes[*p - 1]);
+    let second = u32::from(bytes[*p - 2]);
+    *p -= 2;
+    if flags.has(FioFlags::ENDIAN_L) {
         (first << 8) + second
     } else {
         first + (second << 8)
@@ -716,20 +795,15 @@ pub(crate) struct FormatGuess {
 impl FormatGuess {
     pub(crate) fn from_ffs() -> Self {
         FormatGuess {
-            try_dos: p_ffs(|value| has_char(value, b'd' as c_int)),
-            try_unix: p_ffs(|value| has_char(value, b'x' as c_int)) as c_int,
-            try_mac: p_ffs(|value| has_char(value, b'm' as c_int)) as c_int,
+            try_dos: p_ffs(|value| has_char(value, c_int::from(b'd'))),
+            try_unix: c_int::from(p_ffs(|value| has_char(value, c_int::from(b'x')))),
+            try_mac: c_int::from(p_ffs(|value| has_char(value, c_int::from(b'm')))),
         }
     }
 
     /// Guess the end-of-line format from the first bytes of the file.
-    ///
-    /// # Safety
-    ///
-    /// `data` must point at `size` readable bytes.
-    pub(crate) unsafe fn guess(&mut self, data: *const c_char, size: ptrdiff_t) -> c_int {
-        let start: *const u8 = data.cast();
-        let end = unsafe { start.offset(size) };
+    pub(crate) fn guess(&mut self, data: &[u8]) -> c_int {
+        let (nl, cr) = (NL as u8, CAR as u8);
         let mut fileformat = EOL_UNKNOWN;
 
         // First try finding a NL, for Dos and Unix.
@@ -739,22 +813,21 @@ impl FormatGuess {
                 self.try_mac = 1;
             }
 
-            let mut p = start;
-            while p < end {
-                if unsafe { *p } == NL as u8 {
-                    fileformat = if self.try_unix == 0
-                        || (self.try_dos && p > start && unsafe { *p.offset(-1) } == CAR as u8)
-                    {
-                        EOL_DOS
-                    } else {
-                        EOL_UNIX
-                    };
+            let mut p = 0;
+            while p < data.len() {
+                if data[p] == nl {
+                    fileformat =
+                        if self.try_unix == 0 || (self.try_dos && p > 0 && data[p - 1] == cr) {
+                            EOL_DOS
+                        } else {
+                            EOL_UNIX
+                        };
                     break;
                 }
-                if unsafe { *p } == CAR as u8 && self.try_mac != 0 {
+                if data[p] == cr && self.try_mac != 0 {
                     self.try_mac += 1;
                 }
-                p = unsafe { p.add(1) };
+                p += 1;
             }
 
             // Don't give in to EOL_UNIX if EOL_MAC is more likely.
@@ -762,14 +835,12 @@ impl FormatGuess {
                 // The counters have to be reset when retrying the fenc.
                 self.try_mac = 1;
                 self.try_unix = 1;
-                while p >= start && unsafe { *p } != CAR as u8 {
-                    p = unsafe { p.offset(-1) };
-                }
-                if p >= start {
-                    for p in unsafe { core::slice::from_raw_parts(start, size as usize) } {
-                        if *p == NL as u8 {
+                // Is there a CR at or before the NL?
+                if data[..=p].contains(&cr) {
+                    for &b in data {
+                        if b == nl {
                             self.try_unix += 1;
-                        } else if *p == CAR as u8 {
+                        } else if b == cr {
                             self.try_mac += 1;
                         }
                     }

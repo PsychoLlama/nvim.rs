@@ -33,8 +33,7 @@ use crate::eval::typval::{list_set_lock, tv_list_alloc};
 use crate::eval::vars::set_vim_var_list;
 use crate::ex_cmds::do_ecmd;
 use crate::ex_docmd::do_cmdline_cmd;
-use crate::fileio::readfile_named;
-use crate::fileio::state::{READ_NEW, READ_STDIN};
+use crate::fileio::{ReadFlags, readfile_named};
 use crate::getchar::state::got_int;
 use crate::getchar::vgetc;
 use crate::memline::ml_recover;
@@ -155,7 +154,7 @@ pub(crate) fn read_stdin() {
         };
         let initial_buf_handle: Handle = Buf::current().handle;
         set_curbuf(stdin_buf, 0, false);
-        let flags = READ_NEW as c_int + READ_STDIN as c_int;
+        let flags = ReadFlags::NEW | ReadFlags::STDIN;
         let _ = readfile_named(None, None, 0, 0, MAXLNUM, None, flags, true);
         let stdin_buf_handle: Handle = stdin_buf.handle;
         let stdin_buf_empty = buf_is_empty(Buf::current());

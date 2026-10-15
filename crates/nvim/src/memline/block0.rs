@@ -83,7 +83,9 @@ impl ZeroBlock {
             return Err(NoBlock::CannotOpen);
         }
         let mut b0: Self = unsafe { core::mem::zeroed() };
-        let got = unsafe { read_eintr(fd, (&raw mut b0).cast(), size_of::<Self>()) };
+        let got = read_eintr(fd, unsafe {
+            core::slice::from_raw_parts_mut((&raw mut b0).cast::<u8>(), size_of::<Self>())
+        });
         unsafe { close(fd) };
         if got as usize == size_of::<Self>() {
             Ok(b0)
@@ -198,7 +200,7 @@ pub(crate) unsafe fn set_b0_fname(b0p: *mut ZeroBlock, buffer: Buf) {
             unsafe { b0_store_number(mtime, &mut (*b0p).b0_mtime) };
             let ino = unsafe { os_fileinfo_inode(&raw mut file_info) } as c_long;
             unsafe { b0_store_number(ino, &mut (*b0p).b0_ino) };
-            unsafe { buf_store_file_info(buffer, &raw mut file_info) };
+            buf_store_file_info(buffer, &file_info);
             b.b_mtime_read = b.b_mtime;
             b.b_mtime_read_ns = b.b_mtime_ns;
         } else {

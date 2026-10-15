@@ -179,6 +179,15 @@ pub unsafe fn os_get_username(s: *mut c_char, len: size_t) -> Result<(), Failed>
     unsafe { os_get_uname(libc::getuid(), s, len) }
 }
 
+/// [`os_get_username`] into a buffer of `room` bytes, owned: the name, or
+/// the decimal uid when the user database has none, cut to fit.
+pub(crate) fn username_within(room: usize) -> Vec<u8> {
+    let mut buf = vec![0 as c_char; room.max(1)];
+    // SAFETY: the buffer holds exactly the length passed.
+    let _ = unsafe { os_get_username(buf.as_mut_ptr(), buf.len()) };
+    crate::cstr::in_chars(&buf).to_bytes().to_vec()
+}
+
 /// Write the name of the user owning `uid` into `s` (`len` bytes, always
 /// NUL-terminated). When the database has no name for it, the decimal uid
 /// is written instead and the result is `Err` — a number is not a name.

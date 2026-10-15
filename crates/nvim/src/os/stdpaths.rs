@@ -170,13 +170,9 @@ pub fn stdpaths_get_xdg_var(idx: XDGVarType) -> *mut c_char {
                 // stdpath('run') is whatever vim_mktempdir() decided at
                 // startup, minus its trailing slash.
                 let tmpdir = vim_gettempdir();
-                let tmpdir = if tmpdir.is_null() {
-                    c"/tmp/".as_ptr()
-                } else {
-                    tmpdir
-                };
-                let len = CStr::from_ptr(tmpdir).to_bytes().len();
-                ret = xmemdupz(tmpdir.cast(), len.saturating_sub(1)).cast::<c_char>();
+                let tmpdir = tmpdir.as_deref().unwrap_or(c"/tmp/").to_bytes();
+                let len = tmpdir.len().saturating_sub(1);
+                ret = xmemdupz(tmpdir.as_ptr().cast(), len).cast::<c_char>();
             }
         }
         if ret.is_null() || (idx != kXDGDataDirs && idx != kXDGConfigDirs) {

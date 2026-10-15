@@ -14,7 +14,6 @@
 
 use crate::cstr;
 use crate::memory::XString;
-use crate::vim_snprintf_add;
 use core::ffi::{CStr, c_char, c_int};
 
 use super::*;
@@ -171,7 +170,7 @@ pub(crate) fn write_lines(
     }
     if buffer.b_p_fixeol == 0 && buffer.b_p_eof != 0 {
         // Write the trailing CTRL-Z that 'endoffile' asks for.
-        unsafe { write_eintr(writer.fd, c"\x1a".as_ptr().cast_mut().cast(), 1) };
+        write_eintr(writer.fd, b"\x1a");
     }
 
     Written {
@@ -196,56 +195,55 @@ pub(crate) unsafe fn report_written(
 ) {
     // The report. Upstream assembles it in `IObuff`, which `msg_progress`
     // and `set_keep_msg` write again.
-    let mut report = [0 as c_char; IOSIZE as usize];
     let (lnum, nchars) = (written.lnum, written.nchars as FileOffset);
-    let iobuff = report.as_mut_ptr();
-    unsafe { add_quoted_fname(iobuff, IOSIZE as size_t, buffer, fname) };
-    let note = |text: &'static CStr| {
-        unsafe { xstrlcat(iobuff, translate(text).as_ptr(), IOSIZE as size_t) };
-    };
+    // SAFETY: the caller's NUL-terminated name, or null.
+    let fname = unsafe { cstr::at_opt(fname) };
+    let mut report = Report::quoted_fname(buffer, fname, IOSIZE as usize);
+    let note = |report: &mut Report, text: &'static CStr| report.push(translate(text).to_bytes());
 
     let mut insert_space = notes.conv_error || notes.notconverted || notes.converted;
     if notes.conv_error {
-        note(c" CONVERSION ERROR");
+        note(&mut report, c" CONVERSION ERROR");
         if notes.conv_error_lnum != 0 {
-            let fmt = translate(c" in line %ld;").as_ptr();
-            let lnum = notes.conv_error_lnum as int64_t;
-            unsafe { vim_snprintf_add!(iobuff, IOSIZE as size_t, fmt, lnum) };
+            let fmt = translate(c" in line %ld;");
+            report.push_fmt(fmt, &[(notes.conv_error_lnum as int64_t).into()]);
         }
     } else if notes.notconverted {
-        note(c"[NOT converted]");
+        note(&mut report, c"[NOT converted]");
     } else if notes.converted {
-        note(c"[converted]");
+        note(&mut report, c"[converted]");
     }
 
     if notes.device {
-        note(c"[Device]");
+        note(&mut report, c"[Device]");
         insert_space = true;
     } else if notes.newfile {
-        note(c"[New]");
+        note(&mut report, c"[New]");
         insert_space = true;
     }
     if written.no_eol {
-        note(c"[noeol]");
+        note(&mut report, c"[noeol]");
         insert_space = true;
     }
     // May add [unix/dos/mac].
-    if unsafe { msg_add_fileformat(&mut report, notes.fileformat) } {
+    if msg_add_fileformat(&mut report, notes.fileformat) {
         insert_space = true;
     }
-    unsafe { msg_add_lines(&mut report, insert_space as c_int, lnum, nchars) };
+    msg_add_lines(&mut report, insert_space, lnum, nchars);
 
     if !shortmess(ShmFlag::WRITE) {
         let short = shortmess(ShmFlag::WRI);
-        note(match (append, short) {
-            (true, true) => c" [a]",
-            (true, false) => c" appended",
-            (false, true) => c" [w]",
-            (false, false) => c" written",
-        });
+        note(
+            &mut report,
+            match (append, short) {
+                (true, true) => c" [a]",
+                (true, false) => c" appended",
+                (false, true) => c" [w]",
+                (false, false) => c" written",
+            },
+        );
     }
-    // SAFETY: `iobuff` is this report's NUL-terminated buffer.
-    let text = unsafe { cstr::at(iobuff) };
+    let text = report.as_cstr();
     let shown = XString::from_bytes(&msg_progress(text, c"bufwrite", c"success", 0, true, true));
     set_keep_msg(Some(shown.as_cstr()), 0);
 }

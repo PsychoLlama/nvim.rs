@@ -192,31 +192,30 @@ pub unsafe fn apply_autocmds(
     }
 }
 
-/// [`apply_autocmds`], passing an `ExArg` on so `v:cmdarg` and
-/// `v:cmdbang` are set for the handlers.
+/// [`fire_autocmds_for`] passing an `ExArg` on, so that `v:cmdarg` and
+/// `v:cmdbang` are set for the handlers: fire `event` in every group,
+/// matching the patterns against `pattern` (or the buffer's name, for
+/// `None`) with `afile` as `<afile>`.
 ///
-/// # Safety
-///
-/// `event` must be an initialized `AutoEvent` whose pointer fields point at
-/// live data for the call. `fname` must point at a NUL-terminated string,
-/// unaliased for the call. `fname_io` must point at a NUL-terminated string,
-/// unaliased for the call. `excmd` must point at the command's `ExArg`.
-pub unsafe fn apply_autocmds_exarg(
+/// Both names are the caller's for the whole call, while the handlers run:
+/// a caller naming a buffer hands in a copy of its name.
+pub fn apply_autocmds_exarg(
     event: AutoEvent,
-    fname: *mut ::core::ffi::c_char,
-    fname_io: *mut ::core::ffi::c_char,
+    pattern: Option<&CStr>,
+    afile: Option<&CStr>,
     force: bool,
     buffer: Option<Buf>,
     excmd: Option<&mut ExArg>,
 ) -> bool {
-    // SAFETY: every pointer is the caller's, handed straight on;
-    // `apply_autocmds_group` asks of them exactly what this does, `excmd`
-    // included -- it only reads its `forceit` and its command argument.
+    let name = |s: Option<&CStr>| s.map_or(::core::ptr::null_mut(), |s| s.as_ptr().cast_mut());
+    // SAFETY: two NUL-terminated names or null, which `apply_autocmds_group`
+    // copies before it runs anything and writes to neither; `excmd` is only
+    // read, for its `forceit` and its command argument.
     unsafe {
         apply_autocmds_group(
             event,
-            fname,
-            fname_io,
+            name(pattern),
+            name(afile),
             force,
             AUGROUP_ALL,
             buffer,

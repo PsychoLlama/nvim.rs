@@ -147,9 +147,9 @@
 {"path":"neovim::ex_docmd::state::cmdmod","kind":"static","file":"crates/nvim/src/ex_docmd/state.rs","tests":["crates/nvim/tests/unit/search.rs"]}
 {"path":"neovim::ex_getln::compute_cmdrow","kind":"fn","file":"crates/nvim/src/ex_getln/draw.rs","tests":["crates/nvim/tests/unit/message_oracle.rs"]}
 {"path":"neovim::fileio::file_pat_to_reg_pat","kind":"fn","file":"crates/nvim/src/fileio/names.rs","tests":["crates/nvim/tests/unit/fileio_names.rs"]}
+{"path":"neovim::fileio::temp_name","kind":"fn","file":"crates/nvim/src/fileio/tempfile.rs","tests":["crates/nvim/tests/unit/tempfile.rs"]}
 {"path":"neovim::fileio::vim_deltempdir","kind":"fn","file":"crates/nvim/src/fileio/tempfile.rs","tests":["crates/nvim/tests/unit/tempfile.rs"]}
 {"path":"neovim::fileio::vim_gettempdir","kind":"fn","file":"crates/nvim/src/fileio/tempfile.rs","tests":["crates/nvim/tests/unit/tempfile.rs"]}
-{"path":"neovim::fileio::vim_tempname","kind":"fn","file":"crates/nvim/src/fileio/tempfile.rs","tests":["crates/nvim/tests/unit/tempfile.rs"]}
 {"path":"neovim::fold::Fold","kind":"struct","file":"crates/nvim/src/fold/mod.rs","tests":["crates/nvim/tests/unit/fold.rs"]}
 {"path":"neovim::fold::adjust::fold_mark_adjust_recurse","kind":"fn","file":"crates/nvim/src/fold/adjust.rs","tests":["crates/nvim/tests/unit/fold.rs"]}
 {"path":"neovim::fuzzy::FUZZY_MATCH_MAX_LEN","kind":"const","file":"crates/nvim/src/fuzzy.rs","tests":["crates/nvim/tests/unit/fuzzy.rs"]}

@@ -85,6 +85,13 @@ pub unsafe fn os_getperm(name: *const c_char) -> int32_t {
     }
 }
 
+/// [`os_getperm`] of a name the caller holds: the whole `st_mode`, or a
+/// negative libuv error code.
+pub(crate) fn getperm(name: &CStr) -> int32_t {
+    // SAFETY: a NUL-terminated path.
+    unsafe { os_getperm(name.as_ptr()) }
+}
+
 /// Sets `name`'s permission bits. Answers `OK` or `FAIL`.
 pub fn os_setperm(name: &CStr, perm: c_int) -> c_int {
     // SAFETY: `name` is NUL-terminated and outlives the call.

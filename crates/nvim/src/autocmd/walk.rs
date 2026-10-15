@@ -18,6 +18,7 @@
 #![allow(unsafe_code)]
 
 use super::*;
+use crate::cstr;
 use crate::lua::executor::nlua_call_ref_quiet;
 use crate::memory::XString;
 use crate::message_fmt::c_str;
@@ -84,12 +85,11 @@ pub(crate) unsafe fn aucmd_next(apc: *mut AutoPatCmd) {
             let matched = if unsafe { (*ap).buflocal_nr } == 0 {
                 unsafe {
                     match_file_pat(
-                        ::core::ptr::null_mut(),
-                        &raw mut (*ap).reg_prog,
-                        (*apc).fname,
-                        (*apc).sfname,
-                        (*apc).tail,
-                        (*ap).allow_dirs as ::core::ffi::c_int,
+                        &mut (*ap).reg_prog,
+                        cstr::at((*apc).fname),
+                        cstr::at_opt((*apc).sfname),
+                        cstr::at((*apc).tail),
+                        (*ap).allow_dirs != 0,
                     )
                 }
             } else {

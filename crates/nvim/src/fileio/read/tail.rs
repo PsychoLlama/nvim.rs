@@ -9,8 +9,7 @@
 //! Splitting it off keeps [`readfile`](super::readfile) itself to the loop
 //! that actually reads.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -28,11 +27,8 @@ use crate::optionstr::OptString;
 /// `bad_char` is the conversion's `'fileencoding'` replacement setting; it
 /// only matters for deciding whether an illegal byte makes the buffer
 /// read-only.
-///
-/// # Safety
-/// `sfname` must be the name the read used, or null.
-pub(crate) unsafe fn report_and_place(
-    sfname: *mut c_char,
+pub(crate) fn report_and_place(
+    sfname: Option<&CStr>,
     how: How,
     silent: bool,
     out: &Outcome,
@@ -40,8 +36,7 @@ pub(crate) unsafe fn report_and_place(
     from: LineNr,
 ) {
     if !how.filtering && !how.dummy && !silent {
-        // SAFETY: the caller's file name.
-        unsafe { report_read(sfname, how, out) };
+        report_read(sfname, how, out);
     }
 
     // With errors, writing the file requires ":w!".
@@ -50,7 +45,6 @@ pub(crate) unsafe fn report_and_place(
         Buf::current().b_p_ro = c_int::from(true);
     }
 
-    // SAFETY: the current buffer and window are live.
     u_clearline(Buf::current()); // "U" cannot be used after adding lines
 
     // In Ex mode the cursor goes on the last new line, otherwise on the
@@ -77,12 +71,8 @@ pub(crate) unsafe fn report_and_place(
 /// Answers false when an autocommand aborted script processing, which makes
 /// [`readfile`](super::readfile) answer `FAIL` at once -- skipping the
 /// swap-file sync, as upstream does.
-///
-/// # Safety
-/// `sfname` must be the name the read used, or null, and `excmd` the caller's
-/// command or null.
-pub(crate) unsafe fn run_read_autocmds(
-    sfname: *mut c_char,
+pub(crate) fn run_read_autocmds(
+    sfname: Option<&CStr>,
     excmd: Option<&mut ExArg>,
     how: How,
     set_options: bool,
@@ -101,32 +91,29 @@ pub(crate) unsafe fn run_read_autocmds(
     msg_scroll.set(c_int::from(true));
     // A `BufReadPost` also owes a `FileType` when the buffer already has one
     // and nothing triggered it.
-    let buf_read = !how.filtering && (how.newfile || (how.buffer && !sfname.is_null()));
+    let buf_read = !how.filtering && (how.newfile || (how.buffer && sfname.is_some()));
     let (ev, iofile, buf) = if how.filtering {
-        (
-            AutoEvent::FilterReadPost,
-            ptr::null_mut(),
-            Buf::current_or_none(),
-        )
+        (AutoEvent::FilterReadPost, None, Buf::current_or_none())
     } else if buf_read {
-        (
-            AutoEvent::BufReadPost,
-            ptr::null_mut(),
-            Buf::current_or_none(),
-        )
+        (AutoEvent::BufReadPost, None, Buf::current_or_none())
     } else {
         (AutoEvent::FileReadPost, sfname, None)
     };
-    // SAFETY: the current buffer is live and `excmd` is the caller's command.
-    unsafe { apply_autocmds_exarg(ev, iofile, sfname, false, buf, excmd) };
+    apply_autocmds_exarg(ev, iofile, sfname, false, buf, excmd);
     if buf_read && !Buf::current().b_au_did_filetype && Buf::current().b_p_ft.first_byte() != 0 {
-        let (ft, fname) = (
-            Buf::current().b_p_ft.value_ptr(),
-            Buf::current().name.shown_ptr(),
+        // Copies: the handlers may change both. `curbuf` is re-read because
+        // `BufReadPost` may have moved us.
+        let ft = Buf::current().b_p_ft.get();
+        let fname = Buf::current().name.shown().map(CStr::to_owned);
+        let (ft, fname) = (Some(ft.as_cstr()), fname.as_deref());
+        fire_autocmds_for(
+            AutoEvent::FileType,
+            ft,
+            fname,
+            true,
+            Buf::current_or_none(),
+            None,
         );
-        // SAFETY: the buffer's own option and file name; `curbuf` is re-read
-        // because `BufReadPost` may have moved us.
-        unsafe { apply_autocmds(AutoEvent::FileType, ft, fname, true, Buf::current_or_none()) };
     }
     if msg_scrolled.get() == n {
         msg_scroll.set(m);

@@ -11,14 +11,13 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use crate::cstr;
 use crate::fileio::Loaded;
 use crate::mbyte::canonize;
 use crate::memline::MlFlags;
 use crate::option::vars::{P_CCV, P_FENCS};
 use crate::winlayer::{Buf, Win};
 use core::ffi::CStr;
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use super::*;
 use crate::edit::BeginlineOpts;
@@ -28,6 +27,7 @@ use crate::memfile::MfDirty;
 use crate::option::cpo_has;
 use crate::pos::MAXCOL;
 use crate::types::{CmdModFlags, CpoFlag, Failed, OptionSetFlags};
+use std::io::Read;
 
 mod tail;
 
@@ -59,26 +59,21 @@ pub(crate) struct How {
 /// Read all of `fname` into the current buffer as a new file, for a
 /// buffer that exists only to be searched (`READ_NEW | READ_DUMMY`).
 pub(crate) fn read_dummy_file(fname: &CStr) -> Result<Loaded, Failed> {
-    // A copy: the reader keeps the name it is given as writable.
-    let mut copy = fname.to_bytes_with_nul().to_vec();
-    let flags = c_int::try_from(READ_NEW | READ_DUMMY).expect("two small flags");
-    // SAFETY: a NUL-terminated copy this call owns, no short name and no
-    // command.
-    unsafe {
-        readfile(
-            copy.as_mut_ptr().cast(),
-            ptr::null_mut(),
-            0,
-            0,
-            MAXLNUM,
-            None,
-            flags,
-            false,
-        )
-    }
+    let flags = ReadFlags::NEW | ReadFlags::DUMMY;
+    readfile_named(Some(fname), None, 0, 0, MAXLNUM, None, flags, false)
 }
 
-/// [`readfile`] of names the caller holds as strings, for a command or none.
+/// Read the lines of `fname` into the current buffer, after line `from`.
+///
+/// `fname` may be `None` only with [`ReadFlags::STDIN`]; `sfname` is the short
+/// name to use for it, when there is one. When not recovering,
+/// `lines_to_skip` is 0 and `lines_to_read` is `MAXLNUM`.
+///
+/// The names are the caller's, and autocommands run while they are held:
+/// a caller reading a buffer's own name hands in a copy of it.
+///
+/// Answers [`Loaded::Skipped`] for a directory or a `BufReadCmd` that did
+/// the reading itself, which are not failures.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn readfile_named(
     fname: Option<&CStr>,
@@ -86,63 +81,21 @@ pub(crate) fn readfile_named(
     from: LineNr,
     lines_to_skip: LineNr,
     lines_to_read: LineNr,
-    excmd: Option<&mut ExArg>,
-    flags: c_int,
-    silent: bool,
-) -> Result<Loaded, Failed> {
-    let fname = fname.map_or(ptr::null_mut(), |n| n.as_ptr().cast_mut());
-    let sfname = sfname.map_or(ptr::null_mut(), |n| n.as_ptr().cast_mut());
-    // SAFETY: two NUL-terminated names or null, which the read only reads,
-    // and the caller's command.
-    unsafe {
-        readfile(
-            fname,
-            sfname,
-            from,
-            lines_to_skip,
-            lines_to_read,
-            excmd,
-            flags,
-            silent,
-        )
-    }
-}
-
-/// Read the lines of `fname` into the current buffer, after line `from`.
-///
-/// The caller must check that `fname` is not NULL unless `READ_STDIN` is
-/// used. `excmd` may be NULL. When not recovering, `lines_to_skip` is 0 and
-/// `lines_to_read` is `MAXLNUM`.
-///
-/// Answers [`Loaded::Skipped`] for a directory or a `BufReadCmd` that did
-/// the reading itself, which are not failures.
-///
-/// # Safety
-///
-/// `fname` must point at a NUL-terminated string, unaliased for the call.
-/// `sfname` must point at a NUL-terminated string, unaliased for the call.
-/// `excmd` must point at the command's `ExArg`.
-pub(crate) unsafe fn readfile(
-    fname: *mut c_char,
-    sfname: *mut c_char,
-    from: LineNr,
-    lines_to_skip: LineNr,
-    lines_to_read: LineNr,
     mut excmd: Option<&mut ExArg>,
-    flags: c_int,
+    flags: ReadFlags,
     silent: bool,
 ) -> Result<Loaded, Failed> {
     let mut retval = Err(Failed);
     let how = How {
-        newfile: flags & READ_NEW as c_int != 0,
-        filtering: flags & READ_FILTER as c_int != 0,
-        stdin: flags & READ_STDIN as c_int != 0,
-        buffer: flags & READ_BUFFER as c_int != 0,
-        fifo: flags & READ_FIFO as c_int != 0,
-        dummy: flags & READ_DUMMY as c_int != 0,
-        nofile: flags & READ_NOFILE as c_int != 0,
-        keep_undo: flags & READ_KEEP_UNDO as c_int != 0,
-        set_options: flags & (READ_NEW | READ_BUFFER) as c_int != 0
+        newfile: flags.has(ReadFlags::NEW),
+        filtering: flags.has(ReadFlags::FILTER),
+        stdin: flags.has(ReadFlags::STDIN),
+        buffer: flags.has(ReadFlags::BUFFER),
+        fifo: flags.has(ReadFlags::FIFO),
+        dummy: flags.has(ReadFlags::DUMMY),
+        nofile: flags.has(ReadFlags::NOFILE),
+        keep_undo: flags.has(ReadFlags::KEEP_UNDO),
+        set_options: flags.has(ReadFlags::NEW | ReadFlags::BUFFER)
             || excmd.as_deref().is_some_and(|command| command.read_edit),
     };
     let set_options = how.set_options;
@@ -150,17 +103,10 @@ pub(crate) unsafe fn readfile(
     // Where the next line and character to read from curbuf are, for
     // READ_BUFFER.
     let mut read_buf_lnum: LineNr = 1;
-    let mut read_buf_col: ColNr = 0;
+    let mut read_buf_col: usize = 0;
 
     let mut lnum = from;
-    let mut w = ConvWindow {
-        buffer: ptr::null_mut(),
-        ptr: ptr::null_mut(),
-        line_start: ptr::null_mut(),
-        size: 0,
-        real_size: 0,
-        linerest: 0,
-    };
+    let mut w = ReadBuf::new();
     let mut filesize: FileOffset = 0;
     let mut skip_read = false;
     let mut sha_ctx = Sha256::new();
@@ -180,13 +126,10 @@ pub(crate) unsafe fn readfile(
     // Don't retry when a character doesn't fit in the destination
     // encoding.
     let mut keep_dest_enc = false;
-    let mut tmpname: *mut c_char = ptr::null_mut();
-    let mut fenc: *mut c_char;
-    let mut fenc_alloced = false;
-    let mut fenc_next: *mut c_char = ptr::null_mut();
-    // 'fileencodings' copied out, so the cursor above survives the retry
-    // loop below; empty until the branch that needs it runs.
-    let fencs;
+    // The file 'charconvert' wrote, to be deleted afterwards.
+    let mut tmpname: Option<XString> = None;
+    let mut fenc: XString;
+    let mut fencs = FencList::none();
     let mut advance_fenc = false;
     let mut did_iconv = false; // iconv() failed, try 'charconvert' next
     let mut converted = false;
@@ -206,10 +149,10 @@ pub(crate) unsafe fn readfile(
         // and only when 'cpoptions' contains the 'f' flag.
         if Buf::current().name.full().is_none()
             && !how.filtering
-            && !fname.is_null()
+            && fname.is_some()
             && cpo_has(CpoFlag::FNAMER)
             && !how.dummy
-            && unsafe { set_rw_fname(fname, sfname) }.is_err()
+            && set_rw_fname(fname, sfname).is_err()
         {
             break 'theend;
         }
@@ -217,20 +160,18 @@ pub(crate) unsafe fn readfile(
         let Opened {
             fname,
             sfname,
-            mut fd,
+            mut input,
             perm,
             mut guess,
-        } = match unsafe {
-            open_source(
-                fname,
-                sfname,
-                from,
-                excmd.as_deref_mut(),
-                how,
-                silent,
-                msg_save,
-            )
-        } {
+        } = match open_source(
+            fname,
+            sfname,
+            from,
+            excmd.as_deref_mut(),
+            how,
+            silent,
+            msg_save,
+        ) {
             Ok(opened) => opened,
             Err(early) => {
                 retval = early;
@@ -249,7 +190,7 @@ pub(crate) unsafe fn readfile(
             && !how.stdin
             && !how.buffer
         {
-            unsafe { filemess(Buf::current(), sfname, c"".as_ptr().cast_mut()) };
+            filemess(Buf::current(), sfname, c"");
         }
 
         msg_scroll.set(false as c_int); // overwrite the file message
@@ -278,29 +219,24 @@ pub(crate) unsafe fn readfile(
             let name = command
                 .line
                 .rest_of(command.line.cmd + command.force_enc as usize);
-            fenc = canonize(name).into_raw();
-            fenc_alloced = true;
+            fenc = canonize(name);
             keep_dest_enc = true;
         } else if Buf::current().b_p_bin != 0 {
-            fenc = c"".as_ptr().cast_mut(); // binary: don't convert
-            fenc_alloced = false;
+            fenc = XString::new(); // binary: don't convert
         } else if Buf::current().b_help {
             // Help files are either utf-8 or latin1. Try utf-8 first; if
             // that fails it must be latin1. This is needed when the first
             // line has non-ASCII characters, which happens only in *.??x
             // files.
-            fenc_next = c"latin1".as_ptr().cast_mut();
-            fenc = c"utf-8".as_ptr().cast_mut();
-            fenc_alloced = false;
+            fencs = FencList::new(b"latin1");
+            fenc = XString::from_cstr(c"utf-8");
         } else if p_fencs(CStr::is_empty) {
-            fenc = Buf::current().b_p_fenc.value_ptr(); // use the buffer's encoding
-            fenc_alloced = false;
+            fenc = Buf::current().b_p_fenc.get(); // use the buffer's encoding
         } else {
-            // Try the items in 'fileencodings'; a copy, because the cursor
-            // walks it across the whole retry loop below.
-            fencs = P_FENCS.get();
-            fenc_next = fencs.as_ptr().cast_mut();
-            fenc = unsafe { next_fenc(&mut fenc_next, &mut fenc_alloced) };
+            // Try the items in 'fileencodings'; a copy, because the walk
+            // spans the whole retry loop below.
+            fencs = FencList::new(&P_FENCS.get());
+            fenc = fencs.next();
         }
 
         // The retry loop. Reasons to go round again:
@@ -312,14 +248,14 @@ pub(crate) unsafe fn readfile(
         // moves on to the next "fenc", "skip_read" re-uses the bytes
         // already read (after a BOM), "did_iconv" means iconv() failed and
         // 'charconvert' is next, and "keep_fileformat" keeps the format we
-        // just settled on. A non-null "tmpname" means 'charconvert' made a
-        // file that has to be deleted afterwards.
+        // just settled on. A "tmpname" is a file 'charconvert' made, which
+        // has to be deleted afterwards.
         'retry: loop {
             if file_rewind {
                 if how.buffer {
                     read_buf_lnum = 1;
                     read_buf_col = 0;
-                } else if how.stdin || unsafe { lseek(fd, 0, SEEK_SET) } != 0 {
+                } else if how.stdin || !rewind(input.as_ref()) {
                     // Can't rewind the file, give up.
                     error = true;
                     break 'retry;
@@ -373,53 +309,39 @@ pub(crate) unsafe fn readfile(
                     // read without conversion.
                     notconverted = true;
                     conv.conv_error = 0;
-                    if fenc_alloced {
-                        unsafe { xfree(fenc.cast()) };
-                    }
-                    fenc = c"".as_ptr().cast_mut();
-                    fenc_alloced = false;
+                    fenc = XString::new();
                 } else {
-                    if fenc_alloced {
-                        unsafe { xfree(fenc.cast()) };
-                    }
-                    if fenc_next.is_null() {
-                        fenc = c"".as_ptr().cast_mut();
-                        fenc_alloced = false;
-                    } else {
-                        fenc = unsafe { next_fenc(&mut fenc_next, &mut fenc_alloced) };
-                    }
+                    fenc = fencs.next();
                 }
-                if !tmpname.is_null() {
-                    unsafe { os_remove(cstr::at(tmpname)) }; // delete the converted file
-                    unsafe { xfree(tmpname.cast()) };
-                    tmpname = ptr::null_mut();
+                if let Some(name) = tmpname.take() {
+                    os_remove(name.as_cstr()); // delete the converted file
                 }
             }
 
             // Conversion is needed when the file's encoding differs from
             // 'encoding', or 'encoding' is UTF-16, UCS-2 or UCS-4.
-            conv.flags = 0;
-            converted = unsafe { need_conversion(fenc) };
+            conv.flags = FioFlags::NONE;
+            converted = need_conversion(&fenc);
             if converted {
-                if unsafe { cstr::eq(fenc, ENC_UCSBOM.as_ptr()) } {
+                conv.flags = if fenc.as_cstr() == ENC_UCSBOM {
                     // "ucs-bom" means the first bytes of the file decide.
-                    conv.flags = FIO_UCSBOM;
+                    FioFlags::UCSBOM
                 } else {
                     // Work out whether UCS-2/4 or Latin1 to UTF-8 can be
                     // done here rather than by iconv, which appears not to
                     // handle Unicode to Latin1 correctly. Doing it now
                     // saves parsing the name on every read.
-                    conv.flags = unsafe { get_fio_flags(fenc) };
-                }
+                    get_fio_flags(&fenc)
+                };
 
                 // Try iconv() if we can't convert it ourselves.
-                if conv.flags == 0 && !did_iconv {
-                    unsafe { conv.open_iconv(fenc) };
+                if conv.flags.is_empty() && !did_iconv {
+                    conv.open_iconv(fenc.as_cstr());
                 }
 
                 // Use the 'charconvert' expression when conversion is
                 // needed and neither of the above can do it.
-                if conv.flags == 0
+                if conv.flags.is_empty()
                     && !how.stdin
                     && !how.buffer
                     && P_CCV.first_byte() != 0
@@ -429,12 +351,13 @@ pub(crate) unsafe fn readfile(
                     did_iconv = false;
                     // Skip the conversion when it is already done (a retry
                     // for a wrong "fileformat").
-                    if tmpname.is_null() {
-                        tmpname = unsafe { readfile_charconvert(fname, fenc, &mut fd) };
-                        if tmpname.is_null() {
+                    if tmpname.is_none() {
+                        let name = fname.unwrap_or_default();
+                        tmpname = readfile_charconvert(name, fenc.as_cstr(), &mut input);
+                        if tmpname.is_none() {
                             // Conversion failed. Try another one.
                             advance_fenc = true;
-                            if fd < 0 {
+                            if input.is_none() {
                                 // Re-opening the original file failed!
                                 emsg(gettext(c"E202: Conversion made file unreadable!"));
                                 error = true;
@@ -443,7 +366,7 @@ pub(crate) unsafe fn readfile(
                             continue 'retry;
                         }
                     }
-                } else if conv.flags == 0 && !conv.has_iconv() {
+                } else if conv.flags.is_empty() && !conv.has_iconv() {
                     // Conversion is wanted but we can't do it; try the next
                     // entry in 'fileencodings'.
                     advance_fenc = true;
@@ -454,7 +377,7 @@ pub(crate) unsafe fn readfile(
             // Rewinding the file and trying another "fenc" is possible
             // unless there is no other one to try, or we are reading stdin
             // or a fifo, or the encoding is fixed.
-            conv.can_retry = unsafe { *fenc } != 0 && !how.stdin && !keep_dest_enc && !how.fifo;
+            conv.can_retry = !fenc.is_empty() && !how.stdin && !keep_dest_enc && !how.fifo;
             conv.linecnt = linecnt;
 
             if !skip_read {
@@ -482,45 +405,23 @@ pub(crate) unsafe fn readfile(
                     // the size if the line gets very long, to avoid a lot
                     // of copying. But don't read more than 1 Mbyte at a
                     // time, so that we can be interrupted.
-                    w.size = (0x10000 + w.linerest).min(0x100000);
+                    w.size = (0x10000 + w.linerest as isize).min(0x100000);
                 }
 
-                // Protect against the argument of lalloc() going negative,
-                // and split lines that are too long for ColNr. After this
-                // check we read up to "size" more bytes, and even then the
-                // line length must stay below MAXCOL - 1 (we add 1 for the
-                // NUL when casting to ColNr). If it fires we insert a
-                // newline right away, so linerest does not grow.
-                if w.size < 0
-                    || w.size + w.linerest + 1 < 0
-                    || w.linerest >= MAXCOL as ptrdiff_t - w.size
-                {
+                // Split lines that are too long for ColNr. After this check
+                // we read up to "size" more bytes, and even then the line
+                // length must stay below MAXCOL - 1 (we add 1 for the NUL
+                // when casting to ColNr). If it fires we insert a newline
+                // right away, so linerest does not grow.
+                if w.size < 0 || w.linerest as isize >= MAXCOL as isize - w.size {
                     split += 1;
-                    unsafe { *w.ptr = NL as c_char }; // split the line by inserting a NL
+                    w.bytes[w.ptr] = NL as u8; // split the line by inserting a NL
                     w.size = 1;
                 } else if !skip_read {
-                    let mut new_buffer: *mut c_char = ptr::null_mut();
-                    while w.size >= 10 {
-                        let want = w.size as usize + w.linerest as usize + 1;
-                        new_buffer = unsafe { verbose_try_malloc(want) }.cast();
-                        if !new_buffer.is_null() {
-                            break;
-                        }
-                        w.size /= 2;
-                    }
-                    if new_buffer.is_null() {
+                    if !w.make_room() {
                         error = true;
                         break;
                     }
-                    if w.linerest != 0 {
-                        // Copy the characters from the previous buffer.
-                        let from = unsafe { w.ptr.offset(-w.linerest) };
-                        unsafe { ptr::copy(from, new_buffer, w.linerest as usize) };
-                    }
-                    unsafe { xfree(w.buffer.cast()) };
-                    w.buffer = new_buffer;
-                    w.ptr = unsafe { w.buffer.offset(w.linerest) };
-                    w.line_start = w.buffer;
 
                     // We may need room to translate into. For iconv() we
                     // don't really know how much, so use a factor.
@@ -531,77 +432,37 @@ pub(crate) unsafe fn readfile(
                     // a multiple of 2.
                     // ucs-4 to utf-8: 4 bytes become up to 6, size must be
                     // a multiple of 4.
-                    w.real_size = w.size as c_int;
+                    w.real_size = w.len();
                     if conv.has_iconv() {
-                        w.size /= ICONV_MULT as ptrdiff_t;
-                    } else if conv.flags & FIO_LATIN1 != 0 {
+                        w.size /= ICONV_MULT;
+                    } else if conv.flags.has(FioFlags::LATIN1) {
                         w.size /= 2;
-                    } else if conv.flags & (FIO_UCS2 | FIO_UTF16) != 0 {
+                    } else if conv.flags.has(FioFlags::UCS2 | FioFlags::UTF16) {
                         w.size = (w.size * 2 / 3) & !1;
-                    } else if conv.flags & FIO_UCS4 != 0 {
+                    } else if conv.flags.has(FioFlags::UCS4) {
                         w.size = (w.size * 2 / 3) & !3;
-                    } else if conv.flags == FIO_UCSBOM {
-                        w.size /= ICONV_MULT as ptrdiff_t; // worst case
+                    } else if conv.flags == FioFlags::UCSBOM {
+                        w.size /= ICONV_MULT; // worst case
                     }
 
                     if conv.restlen > 0 {
                         // Put the unconverted bytes from last time first.
-                        unsafe { conv.restore(w.ptr) };
-                        w.ptr = unsafe { w.ptr.offset(conv.restlen as isize) };
-                        w.size -= conv.restlen as ptrdiff_t;
+                        conv.restore(&mut w.bytes[w.ptr..]);
+                        w.ptr += conv.restlen;
+                        w.size -= conv.restlen as isize;
                     }
 
-                    if how.buffer {
+                    w.size = if how.buffer {
                         // Read bytes from curbuf. Used for converting text
                         // read from stdin.
-                        if read_buf_lnum > from {
-                            w.size = 0;
-                        } else {
-                            let mut tlen: ptrdiff_t = 0;
-                            loop {
-                                let line = ml_get(read_buf_lnum);
-                                let p = unsafe { line.add(read_buf_col as usize) }.cast::<u8>();
-                                let whole = ml_get_len(read_buf_lnum) - read_buf_col;
-                                // Filled up to "size"? Then only a part of
-                                // the line fits.
-                                let partial = tlen + whole as ptrdiff_t + 1 > w.size;
-                                let n = if partial {
-                                    (w.size - tlen) as c_int
-                                } else {
-                                    whole
-                                };
-                                // Change NL to NUL to reverse the effect
-                                // done below.
-                                for ni in 0..n as usize {
-                                    let b = unsafe { *p.add(ni) };
-                                    let byte = if b == NL as u8 { 0 } else { b as c_char };
-                                    unsafe { *w.ptr.offset(tlen) = byte };
-                                    tlen += 1;
-                                }
-                                if partial {
-                                    read_buf_col += n;
-                                    break;
-                                }
-                                // Append the whole line and a newline.
-                                unsafe { *w.ptr.offset(tlen) = NL as c_char };
-                                tlen += 1;
-                                read_buf_col = 0;
-                                read_buf_lnum += 1;
-                                if read_buf_lnum > from {
-                                    // When the last line had no
-                                    // end-of-line, don't add one now.
-                                    if Buf::current().b_p_eol == 0 {
-                                        tlen -= 1;
-                                    }
-                                    w.size = tlen;
-                                    break;
-                                }
-                            }
-                        }
+                        read_from_buffer(&mut w, from, &mut read_buf_lnum, &mut read_buf_col)
                     } else {
                         // Read bytes from the file.
-                        w.size = unsafe { read_eintr(fd, w.ptr.cast(), w.size as size_t) };
-                    }
+                        let window = w.ptr..w.ptr + w.len();
+                        input
+                            .as_mut()
+                            .map_or(-1, |file| read_retrying(file, &mut w.bytes[window]))
+                    };
 
                     if w.size <= 0 {
                         if w.size < 0 {
@@ -630,7 +491,7 @@ pub(crate) unsafe fn readfile(
                                 illegal_byte = Buf::current().b_ml.ml_line_count - linecnt + 1;
                             }
                             if conv.bad_char == BAD_DROP {
-                                unsafe { *w.ptr.offset(-(conv.restlen as isize)) = 0 };
+                                w.bytes[w.ptr - conv.restlen] = 0;
                                 conv.restlen = 0;
                             } else {
                                 // Replace the trailing bytes with the
@@ -640,12 +501,12 @@ pub(crate) unsafe fn readfile(
                                 // differently.
                                 if conv.bad_char != BAD_KEEP && conv.active() {
                                     while conv.restlen > 0 {
-                                        w.ptr = unsafe { w.ptr.offset(-1) };
-                                        unsafe { *w.ptr = conv.bad_char as c_char };
+                                        w.ptr -= 1;
+                                        w.bytes[w.ptr] = conv.bad_char as u8;
                                         conv.restlen -= 1;
                                     }
                                 }
-                                conv.flags = 0; // don't convert this
+                                conv.flags = FioFlags::NONE; // don't convert this
                                 conv.close_iconv();
                             }
                         }
@@ -658,49 +519,39 @@ pub(crate) unsafe fn readfile(
                 // other Unicode encodings, but not after converting with
                 // 'charconvert' and not when a BOM was already found.
                 if filesize == 0
-                    && (conv.flags == FIO_UCSBOM
+                    && (conv.flags == FioFlags::UCSBOM
                         || (Buf::current().b_p_bomb == 0
-                            && tmpname.is_null()
-                            && (unsafe { *fenc } == b'u' as c_char || unsafe { *fenc } == 0)))
+                            && tmpname.is_none()
+                            && matches!(fenc.first(), Some(b'u') | None)))
                 {
                     // No BOM detection in a short file or in binary mode.
                     let found = if w.size < 2 || Buf::current().b_p_bin != 0 {
                         None
                     } else {
-                        check_for_bom(
-                            {
-                                let (at, n) = (w.ptr.cast::<u8>(), w.size as usize);
-                                unsafe { core::slice::from_raw_parts(at, n) }
-                            },
-                            if conv.flags == FIO_UCSBOM {
-                                FIO_ALL
-                            } else {
-                                unsafe { get_fio_flags(fenc) }
-                            },
-                        )
+                        let allowed = if conv.flags == FioFlags::UCSBOM {
+                            FioFlags::ALL
+                        } else {
+                            get_fio_flags(&fenc)
+                        };
+                        check_for_bom(w.window(), allowed)
                     };
                     if let Some((_, blen)) = found {
                         // Remove the BOM from the text.
                         filesize += blen as FileOffset;
-                        w.size -= blen as ptrdiff_t;
-                        unsafe { ptr::copy(w.ptr.add(blen), w.ptr, w.size as usize) };
+                        w.size -= blen as isize;
+                        let rest = w.ptr + blen..w.ptr + blen + w.len();
+                        w.bytes.copy_within(rest, w.ptr);
                         if set_options {
                             Buf::current().b_p_bomb = true as c_int;
                             Buf::current().b_start_bomb = true as c_int;
                         }
                     }
 
-                    if conv.flags == FIO_UCSBOM {
+                    if conv.flags == FioFlags::UCSBOM {
                         match found {
                             None => advance_fenc = true, // retry with the next encoding
-                            Some((name, _)) => {
-                                // A BOM was found: set "fenc" and start over.
-                                if fenc_alloced {
-                                    unsafe { xfree(fenc.cast()) };
-                                }
-                                fenc = name.as_ptr().cast_mut();
-                                fenc_alloced = false;
-                            }
+                            // A BOM was found: set "fenc" and start over.
+                            Some((name, _)) => fenc = XString::from_cstr(name),
                         }
                         // Retry without reading new bytes or rewinding.
                         skip_read = true;
@@ -709,8 +560,8 @@ pub(crate) unsafe fn readfile(
                 }
 
                 // Include the bytes that were not converted last time.
-                w.ptr = unsafe { w.ptr.offset(-(conv.restlen as isize)) };
-                w.size += conv.restlen as ptrdiff_t;
+                w.ptr -= conv.restlen;
+                w.size += conv.restlen as isize;
                 conv.restlen = 0;
                 // A read error or end of file.
                 if w.size <= 0 {
@@ -728,7 +579,7 @@ pub(crate) unsafe fn readfile(
                     continue 'retry;
                 }
 
-                if conv.flags != 0 {
+                if !conv.flags.is_empty() {
                     if !conv.units_to_utf8(&mut w) {
                         let had_iconv = conv.has_iconv();
                         conv.close_iconv();
@@ -760,14 +611,14 @@ pub(crate) unsafe fn readfile(
                 // When reading the first part of a file, guess the EOL
                 // type.
                 if fileformat == EOL_UNKNOWN {
-                    fileformat = unsafe { guess.guess(w.ptr, w.size) };
+                    fileformat = guess.guess(w.window());
                     // May set 'fileformat' when editing a new file.
                     if set_options {
                         set_fileformat(fileformat, OptionSetFlags::LOCAL);
                     }
                 }
 
-                let mut about = Lines {
+                let mut sink = LineSplit {
                     lnum,
                     skip_count,
                     read_count,
@@ -779,15 +630,13 @@ pub(crate) unsafe fn readfile(
                     try_unix: guess.try_unix != 0,
                     stdin: how.stdin,
                     from_buffer: how.buffer,
-                    fd,
+                    input: input.as_ref(),
                     set_options,
                 };
-                let split = {
-                    let at = &mut about;
-                    let (l, s, r) = (&mut lnum, &mut skip_count, &mut read_count);
-                    split_lines(&mut w, at, l, s, r, &mut fileformat, &mut ff_error)
-                };
-                match split {
+                let split_as = split_lines(&mut w, &mut sink);
+                (lnum, skip_count, read_count) = (sink.lnum, sink.skip_count, sink.read_count);
+                (fileformat, ff_error) = (sink.fileformat, sink.ff_error);
+                match split_as {
                     Split::Done => {}
                     Split::Stop => error = true,
                     Split::RetryUnix => {
@@ -796,7 +645,7 @@ pub(crate) unsafe fn readfile(
                         continue 'retry;
                     }
                 }
-                w.linerest = unsafe { w.ptr.offset_from(w.line_start) };
+                w.linerest = w.ptr - w.line_start;
                 os_breakcheck();
             }
             break 'retry;
@@ -816,9 +665,9 @@ pub(crate) unsafe fn readfile(
         if w.linerest != 0
             && Buf::current().b_p_bin == 0
             && fileformat == EOL_DOS
-            && unsafe { *w.ptr.offset(-1) } == Ctrl_Z as c_char
+            && w.bytes[w.ptr - 1] == Ctrl_Z as u8
         {
-            w.ptr = unsafe { w.ptr.offset(-1) };
+            w.ptr -= 1;
             w.linerest -= 1;
             if set_options {
                 Buf::current().b_p_eof = true as c_int;
@@ -832,14 +681,13 @@ pub(crate) unsafe fn readfile(
             if set_options {
                 Buf::current().b_p_eol = false as c_int;
             }
-            unsafe { *w.ptr = 0 };
-            let len = (unsafe { w.ptr.offset_from(w.line_start) } + 1) as ColNr;
-            if unsafe { ml_append(lnum, w.line_start, len, how.newfile) }.is_err() {
+            w.bytes[w.ptr] = 0;
+            let line = &w.bytes[w.line_start..=w.ptr];
+            if ml_append_terminated(lnum, line, how.newfile).is_err() {
                 error = true;
             } else {
                 if read_undo_file {
-                    let (at, n) = (w.line_start.cast::<u8>(), len as usize);
-                    sha_ctx.update(unsafe { core::slice::from_raw_parts(at, n) });
+                    sha_ctx.update(line);
                 }
                 lnum += 1;
                 read_no_eol_lnum = lnum;
@@ -851,38 +699,31 @@ pub(crate) unsafe fn readfile(
             save_file_ff(Buf::current());
             // When editing a new file set 'fileencoding' for this buffer.
             // Also for ":read ++edit file".
-            // `fenc` is copied, and freed just below either way.
-            // SAFETY: `fenc` is NUL-terminated.
             set_option_direct(
                 kOptFileencoding,
-                OptVal::from_cstr(unsafe { CStr::from_ptr(fenc) }),
+                OptVal::from_cstr(fenc.as_cstr()),
                 OptionSetFlags::LOCAL,
                 0 as ScriptId,
             );
         }
-        if fenc_alloced {
-            unsafe { xfree(fenc.cast()) };
-        }
         conv.close_iconv();
 
-        if !how.buffer && !how.stdin {
-            unsafe { close(fd) }; // errors are ignored
-        } else {
-            unsafe { os_set_cloexec(fd) };
-        }
-        unsafe { xfree(w.buffer.cast()) };
-
         if how.stdin {
-            unsafe { close(fd) };
+            // Closed; stderr takes its place, which makes shell commands
+            // work.
+            drop(input);
             if stdin_fd.get() < 0 {
-                // Use stderr for stdin, which makes shell commands work.
-                vim_ignored.set(unsafe { dup(2) });
+                vim_ignored.set(reopen_stdin_on_stderr());
             }
+        } else if how.buffer {
+            mark_stdin_cloexec();
+        } else {
+            drop(input); // errors are ignored
         }
+        drop(w);
 
-        if !tmpname.is_null() {
-            unsafe { os_remove(cstr::at(tmpname)) }; // delete the converted file
-            unsafe { xfree(tmpname.cast()) };
+        if let Some(name) = tmpname.take() {
+            os_remove(name.as_cstr()); // delete the converted file
         }
         no_wait_return.set(no_wait_return.get() - 1); // may wait for return now
 
@@ -915,8 +756,7 @@ pub(crate) unsafe fn readfile(
 
             if got_int.get() {
                 if !how.dummy {
-                    let interr = gettext(e_interr).as_ptr().cast_mut();
-                    unsafe { filemess(Buf::current(), sfname, interr) };
+                    filemess(Buf::current(), sfname, gettext(e_interr));
                     if how.newfile {
                         Buf::current().b_p_ro = true as c_int; // must use "w!" now
                     }
@@ -941,8 +781,7 @@ pub(crate) unsafe fn readfile(
                 linecnt,
                 filesize,
             };
-            // SAFETY: the name the read used.
-            unsafe { report_and_place(sfname, how, silent, &out, conv.bad_char, from) };
+            report_and_place(sfname, how, silent, &out, conv.bad_char, from);
         }
         msg_scroll.set(msg_save);
 
@@ -964,15 +803,13 @@ pub(crate) unsafe fn readfile(
         // When opening a new file, locate the undo info and read it.
         if read_undo_file {
             let hash = sha_ctx.finish();
-            // SAFETY: the caller's NUL-terminated name.
-            u_read_undo(None, &hash, unsafe { cstr::at_opt(fname) });
+            u_read_undo(None, &hash, fname);
         }
 
-        // SAFETY: the name the read used, and the caller's command.
         if !how.stdin
             && !how.fifo
-            && (!how.buffer || !sfname.is_null())
-            && !unsafe { run_read_autocmds(sfname, excmd, how, set_options) }
+            && (!how.buffer || sfname.is_some())
+            && !run_read_autocmds(sfname, excmd, how, set_options)
         {
             // Autocommands may abort script processing. Note that this
             // skips the swap-file sync below, as upstream does.
@@ -984,10 +821,68 @@ pub(crate) unsafe fn readfile(
         }
     }
 
-    let mfp = Buf::current().b_ml.ml_mfp;
-    if !mfp.is_null() && unsafe { (*mfp).mf_dirty } == MfDirty::YesNoSync {
+    if Buf::current().memfile_dirty() == Some(MfDirty::YesNoSync) {
         // It is OK to sync the swap file now.
-        unsafe { (*mfp).mf_dirty = MfDirty::Yes };
+        Buf::current().set_memfile_dirty(MfDirty::Yes);
     }
     retval
+}
+
+/// Rewind the file being read to its start: whether that worked.
+fn rewind(input: Option<&File>) -> bool {
+    input.is_some_and(|mut file| file.seek(SeekFrom::Start(0)).is_ok_and(|at| at == 0))
+}
+
+/// One `read()` into `into`, retried when a signal interrupts it (which
+/// `SIGWINCH` makes routine): the count, 0 at the end of the file, or -1.
+fn read_retrying(file: &mut File, into: &mut [u8]) -> isize {
+    loop {
+        match file.read(into) {
+            Ok(n) => return n as isize,
+            Err(err) if err.kind() == ErrorKind::Interrupted => {}
+            Err(_) => return -1,
+        }
+    }
+}
+
+/// Fill the read window from the current buffer's first `last` lines, at
+/// most `w.size` bytes, carrying on where the previous fill stopped. Used to
+/// convert what stdin gave us. Answers how many bytes it put there.
+fn read_from_buffer(w: &mut ReadBuf, last: LineNr, lnum: &mut LineNr, col: &mut usize) -> isize {
+    if *lnum > last {
+        return 0;
+    }
+    let room = w.len();
+    let mut tlen = 0;
+    let mut lines = Buf::current().lines();
+    loop {
+        let line = &lines.line(*lnum)[*col..];
+        // Filled up to "size"? Then only a part of the line fits.
+        let partial = tlen + line.len() + 1 > room;
+        let n = if partial { room - tlen } else { line.len() };
+        // Change NL to NUL to reverse the effect done below.
+        for (to, &b) in w.bytes[w.ptr + tlen..w.ptr + tlen + n]
+            .iter_mut()
+            .zip(&line[..n])
+        {
+            *to = if b == NL as u8 { 0 } else { b };
+        }
+        tlen += n;
+        if partial {
+            *col += n;
+            return tlen as isize;
+        }
+        // Append the whole line and a newline.
+        w.bytes[w.ptr + tlen] = NL as u8;
+        tlen += 1;
+        *col = 0;
+        *lnum += 1;
+        if *lnum > last {
+            // When the last line had no end-of-line, don't add one now.
+            if Buf::current().b_p_eol == 0 {
+                tlen -= 1;
+            }
+            return tlen as isize;
+        }
+    }
 }

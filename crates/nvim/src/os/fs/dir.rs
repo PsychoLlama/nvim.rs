@@ -23,15 +23,15 @@ use core::ptr;
 use std::ffi::CString;
 
 use super::{
-    LIBUV_SUCCESS, NO_LOOP, PATHSEP, TEMP_FILE_PATH_MAXLEN, UV_STAT_T_INIT, dir_exists, fs_ok,
-    fs_request, fs_result, os_stat,
+    LIBUV_SUCCESS, NO_LOOP, PATHSEP, UV_STAT_T_INIT, dir_exists, fs_ok, fs_request, fs_result,
+    os_stat,
 };
 use crate::cstr;
 use crate::event::libuv::{
     uv_fs_mkdir, uv_fs_mkdtemp, uv_fs_rename, uv_fs_req_cleanup, uv_fs_rmdir, uv_fs_scandir,
     uv_fs_scandir_next, uv_fs_unlink, uv_strerror,
 };
-use crate::memory::{xfree, xmemdupz, xstrlcpy};
+use crate::memory::{xfree, xmemdupz};
 use crate::message::e_noname;
 use crate::message::emsg;
 use crate::message_fmt::c_str;
@@ -40,7 +40,7 @@ use crate::path::{
     dir_of_file_exists, full_name_save, past_head_index, tail_with_sep_index, vim_ispathsep,
 };
 use crate::semsg;
-use crate::types::{Directory, int32_t, size_t};
+use crate::types::{Directory, int32_t};
 
 /// Whether `path` names anything at all.
 ///
@@ -193,24 +193,23 @@ pub(crate) fn file_mkdir(fname: &CStr, mode: int32_t) -> bool {
 }
 
 /// Makes a uniquely named temporary directory from `templ`, whose trailing
-/// `XXXXXX` is replaced, and writes its path into `path`.
-///
-/// # Safety
-/// `path` must address [`TEMP_FILE_PATH_MAXLEN`] writable bytes.
-pub unsafe fn os_mkdtemp(templ: &CStr, path: *mut c_char) -> c_int {
+/// `XXXXXX` is replaced: its path, or a libuv error code.
+pub fn os_mkdtemp(templ: &CStr) -> Result<CString, c_int> {
     // `request.path` is the directory libuv made, and cleanup frees it.
-    fs_request(
+    let mut made = None;
+    let result = fs_request(
         // SAFETY: `templ` is NUL-terminated and outlives the call.
         |request| unsafe { uv_fs_mkdtemp(NO_LOOP, request, templ.as_ptr(), None) },
         |result, request| {
             if result == LIBUV_SUCCESS {
                 // SAFETY: `request.path` is libuv's NUL-terminated answer,
-                // alive until cleanup, and `path` is the caller's buffer.
-                unsafe { xstrlcpy(path, request.path, TEMP_FILE_PATH_MAXLEN as size_t) };
+                // alive until cleanup; it is copied out here.
+                made = Some(unsafe { CStr::from_ptr(request.path) }.to_owned());
             }
             result
         },
-    )
+    );
+    made.ok_or(result)
 }
 
 /// Removes an empty directory. Answers 0 or a libuv error code.

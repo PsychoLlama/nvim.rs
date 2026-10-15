@@ -97,7 +97,8 @@ unsafe fn apply_pre(
         return true;
     }
     // SAFETY: the caller's promise -- a NUL-terminated short file name.
-    unsafe { apply_autocmds_exarg(event, sfname, sfname, false, Buf::current_or_none(), excmd) };
+    let sfname = unsafe { cstr::at_opt(sfname) };
+    apply_autocmds_exarg(event, sfname, sfname, false, Buf::current_or_none(), excmd);
     false
 }
 
@@ -137,7 +138,8 @@ pub(crate) fn buf_write_do_autocmds(
     let fire = |event, iofile, excmd| {
         // SAFETY: `iofile` and `sfname` are the caller's names or null, and
         // the current buffer is live.
-        unsafe { apply_autocmds_exarg(event, iofile, sfname, false, Buf::current_or_none(), excmd) }
+        let (iofile, sfname) = unsafe { (cstr::at_opt(iofile), cstr::at_opt(sfname)) };
+        apply_autocmds_exarg(event, iofile, sfname, false, Buf::current_or_none(), excmd)
     };
 
     // Did a "Cmd" autocommand write the file itself?
@@ -315,7 +317,9 @@ pub(crate) unsafe fn buf_write_do_post_autocmds(
     } else {
         fname
     };
-    unsafe { apply_autocmds_exarg(event, afile, fname, false, Buf::current_or_none(), excmd) };
+    // SAFETY: two NUL-terminated names or null.
+    let (afile, fname) = unsafe { (cstr::at_opt(afile), cstr::at_opt(fname)) };
+    apply_autocmds_exarg(event, afile, fname, false, Buf::current_or_none(), excmd);
 
     // Restore curwin/curbuf and a few other things.
     unsafe { aucmd_restbuf(&raw mut aco) };

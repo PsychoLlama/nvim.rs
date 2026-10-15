@@ -51,33 +51,15 @@ fn hgr_get_ll(new_ll: &mut bool) -> Qi {
     new_location_stack(QFLT_LOCATION, 1).stack()
 }
 
-/// `vim_fgets`: one line of at most `IOSIZE - 1` bytes, the rest of a longer
-/// one read and thrown away. `false` at the end of the file.
-fn vim_fgets(file: &mut Fgets, line: &mut Vec<u8>) -> bool {
-    let size = IOSIZE as usize;
-    if !file.fgets(line, size) {
-        return false;
-    }
-    // The last-but-one byte tells whether the line fitted: `fgets` leaves
-    // it alone when the line was shorter than the buffer.
-    let filled = |line: &[u8], at: usize| line.get(at).is_some_and(|&c| c != 0 && c != b'\n');
-    if filled(line, size - 2) {
-        // Throw away the rest of the line.
-        let mut rest = Vec::new();
-        while file.fgets(&mut rest, 200) && filled(&rest, 200 - 2) {}
-    }
-    true
-}
-
 /// Add an entry for every line of one help file that the pattern matches.
 fn hgr_search_file(qfl: Qfl, fname: &CStr, prog: &mut OwnedProg) {
     let Ok(file) = File::open(std::ffi::OsStr::from_bytes(fname.to_bytes())) else {
         return;
     };
-    let mut file = Fgets::new(file);
+    let mut file = crate::fileio::Fgets::new(file);
     let mut line = Vec::new();
     let mut lnum: LineNr = 1;
-    while !got_int.get() && vim_fgets(&mut file, &mut line) {
+    while !got_int.get() && file.line_capped(&mut line, IOSIZE as usize) {
         // As C reads the line: up to its first NUL.
         let end = line.iter().position(|&b| b == 0).unwrap_or(line.len());
         line.truncate(end);

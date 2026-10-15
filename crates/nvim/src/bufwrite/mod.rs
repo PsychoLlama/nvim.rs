@@ -26,16 +26,16 @@ use crate::ex_cmds::check_secure;
 use crate::ex_docmd::state::ex_no_reprint;
 use crate::ex_eval::{aborting, should_abort_err};
 use crate::fileio::{
-    add_quoted_fname, buf_store_file_info, filemess, get_fio_flags, match_file_list, modname,
-    msg_add_fileformat, msg_add_lines, need_conversion, set_rw_fname, time_differs, vim_rename,
-    vim_tempname, write_eintr,
+    Report, buf_store_file_info, filemess, get_fio_flags, match_file_list, modname,
+    msg_add_fileformat, msg_add_lines, need_conversion, rename_file, set_rw_fname, temp_name,
+    time_differs,
 };
 use crate::getchar::state::got_int;
 use crate::highlight_group::HLF_E;
 use crate::input::ask_yesno;
 use crate::mbyte::{utf_ptr2char, utf_ptr2len_len};
 use crate::memline::{get_file_in_dir, make_percent_swname, ml_get_buf, ml_preserve, ml_timestamp};
-use crate::memory::{verbose_try_malloc, xfree, xmemcpyz, xstrlcat};
+use crate::memory::{XString, verbose_try_malloc, xfree, xmemcpyz};
 use crate::message::state::{msg_scroll, msg_silent, no_wait_return};
 use crate::message::{e_empty_buffer, e_fsync, e_interr, e_longname};
 use crate::message::{emsg, msg_progress, msg_str_hl, set_keep_msg};
@@ -47,6 +47,7 @@ use crate::options::{
 };
 use crate::optionstr::OptString;
 use crate::os::cshim::{gettext, gettext_ptr};
+use crate::os::fs::write_eintr;
 use crate::os::fs::{
     os_chown, os_close, os_copy, os_copy_xattr, os_fchown, os_file_is_writable, os_file_settime,
     os_fileinfo, os_fileinfo_hardlinks, os_fileinfo_id_equal, os_fileinfo_link, os_free_acl,
@@ -150,20 +151,19 @@ impl WriteError {
     }
 
     /// Report the error, against the already-quoted file name in `fname`.
-    pub(crate) fn emit(&self, fname: &[::core::ffi::c_char; IOSIZE as usize]) {
+    pub(crate) fn emit(&self, fname: &CStr) {
         let msg = self.msg.as_ptr();
-        let iobuff = fname.as_ptr().cast_mut();
+        let iobuff = msg_cstr(fname);
         match (self.num, self.arg) {
             (Some(num), 0) => {
                 // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-                let (num, iobuff, msg) = unsafe { (msg_cstr(num), c_str(iobuff), c_str(msg)) };
+                let (num, msg) = unsafe { (msg_cstr(num), c_str(msg)) };
                 semsg!("{num}: {iobuff}{msg}");
             }
             (Some(num), arg) => {
                 let why = unsafe { uv_strerror(arg) };
                 // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-                let (num, iobuff, msg, why) =
-                    unsafe { (msg_cstr(num), c_str(iobuff), c_str(msg), c_str(why)) };
+                let (num, msg, why) = unsafe { (msg_cstr(num), c_str(msg), c_str(why)) };
                 semsg!("{num}: {iobuff}{msg}: {why}");
             }
             // The message is deliberately its own format string here.
@@ -334,8 +334,6 @@ pub(crate) fn buf_write(
     });
     // SAFETY: the caller's promise, taken once for the whole body.
     let mut b = buffer;
-    // The quoted file name the failure path reports against.
-    let mut quoted = [0 as ::core::ffi::c_char; IOSIZE as usize];
     let (mut buf, mut start, mut end) = (buffer, start, end);
     let mut retval = Ok(());
     let msg_save = msg_scroll.get();
@@ -377,7 +375,7 @@ pub(crate) fn buf_write(
         && (!req.append || cpo_has(CpoFlag::FNAMEAPP))
         && cpo_has(CpoFlag::FNAMEW)
     {
-        unsafe { set_rw_fname(fname, sfname) }?;
+        unsafe { set_rw_fname(cstr::at_opt(fname), cstr::at_opt(sfname)) }?;
         buf = Buf::current(); // just in case autocmds made "buf" invalid
         // SAFETY: `curbuf` is live; keep the handle in step with the pointer.
         b = buf;
@@ -446,7 +444,7 @@ pub(crate) fn buf_write(
         1
     });
     if !req.filtering {
-        unsafe { filemess(b, fname, c"".as_ptr().cast_mut()) }; // show that we are busy
+        filemess(b, unsafe { cstr::at_opt(fname) }, c""); // show that we are busy
     }
     msg_scroll.set(0); // always overwrite the file message now
 
@@ -594,14 +592,14 @@ pub(crate) fn buf_write(
                 } else {
                     b.b_p_fenc.value_ptr()
                 };
-                let converted = unsafe { need_conversion(fenc) };
+                let converted = need_conversion(unsafe { cstr::bytes_at(fenc) });
 
                 // UTF-8 to UCS-2/UCS-4/UTF-16/Latin1 (and back) is a
                 // conversion the ByteWriter does itself, given the flags
                 // and a buffer to translate into.
                 let mut wb_flags = 0;
                 if converted {
-                    wb_flags = unsafe { get_fio_flags(fenc) };
+                    wb_flags = get_fio_flags(unsafe { cstr::bytes_at(fenc) }).bits();
                     if wb_flags & (FIO_UCS2 | FIO_UCS4 | FIO_UTF16 | FIO_UTF8) != 0 {
                         let mult = if wb_flags & (FIO_UCS2 | FIO_UTF16 | FIO_UTF8) != 0 {
                             2
@@ -621,7 +619,7 @@ pub(crate) fn buf_write(
                             end = 0;
                         }
                     } else if P_CCV.first_byte() != 0 {
-                        wfname = vim_tempname();
+                        wfname = temp_name().map_or(core::ptr::null_mut(), XString::into_raw);
                         if wfname.is_null() {
                             // Can't write without a temp file!
                             err =
@@ -855,8 +853,9 @@ pub(crate) fn buf_write(
 
     if let Some(err) = &err {
         // -100 to save some space for a further error message.
-        unsafe { add_quoted_fname(quoted.as_mut_ptr(), (IOSIZE - 100) as size_t, b, fname) };
-        err.emit(&quoted);
+        // SAFETY: the caller's NUL-terminated name.
+        let quoted = Report::quoted_fname(b, unsafe { cstr::at_opt(fname) }, IOSIZE as usize - 100);
+        err.emit(quoted.as_cstr());
         retval = Err(Failed);
         if end == 0 {
             let hl_id = HLF_E;
@@ -869,7 +868,7 @@ pub(crate) fn buf_write(
             // Update the timestamp to avoid an "overwrite changed file"
             // prompt when writing again.
             if unsafe { os_fileinfo(fname, &raw mut file_info_old) } {
-                unsafe { buf_store_file_info(b, &raw mut file_info_old) };
+                buf_store_file_info(b, &file_info_old);
                 b.b_mtime_read = b.b_mtime;
                 b.b_mtime_read_ns = b.b_mtime_ns;
             }

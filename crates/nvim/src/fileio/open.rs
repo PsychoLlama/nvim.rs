@@ -11,30 +11,26 @@
 //! side of the same question: what the caller has already decided about
 //! `'fileformat'`, `'fileencoding'` and `'binary'`.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
+
+use std::fs::File;
 
 use crate::buffer::BufFlags;
-use crate::cstr;
 use crate::fileio::Loaded;
+use crate::os::fs::{getperm, take_stdin_for_read};
 use crate::os::uv_error::{UV_EFBIG, UV_ENOENT};
 use crate::types::AutoEvent;
 use crate::winlayer::Buf;
-use core::ffi::{c_char, c_int};
+use core::ffi::{CStr, c_int};
 
 use crate::bufwrite::translate;
-use crate::memfile::mf_fname;
-
-use core::ffi::CStr;
 
 use super::*;
 use crate::types::{Failed, MAXPATHL, ShmFlag};
 
 /// `filemess` about the current buffer, with a translated note.
-fn filemess_note(fname: *mut c_char, note: &'static CStr) {
-    let text = translate(note).as_ptr().cast_mut();
-    // SAFETY: the current buffer is live and the note outlives the process.
-    unsafe { filemess(Buf::current(), fname, text) };
+fn filemess_note(fname: Option<&CStr>, note: &'static CStr) {
+    filemess(Buf::current(), fname, translate(note));
 }
 
 /// One of the `*ReadPre`/`*ReadCmd` autocommands, which all take the same
@@ -42,31 +38,27 @@ fn filemess_note(fname: *mut c_char, note: &'static CStr) {
 /// name again as the subject.
 ///
 /// `for_file` picks the `File*` form, which names a file rather than a buffer.
-///
-/// # Safety
-/// `sfname` must be null or the name the read uses, and `excmd` the caller's
-/// command or null.
-unsafe fn read_autocmd(
+fn read_autocmd(
     event: AutoEvent,
-    sfname: *mut c_char,
+    sfname: Option<&CStr>,
     excmd: Option<&mut ExArg>,
     for_file: bool,
 ) -> bool {
     let (iofile, buf) = if for_file {
         (sfname, None)
     } else {
-        (ptr::null_mut(), Buf::current_or_none())
+        (None, Buf::current_or_none())
     };
-    // SAFETY: the current buffer is live and `excmd` is the caller's command.
-    unsafe { apply_autocmds_exarg(event, iofile, sfname, false, buf, excmd) }
+    apply_autocmds_exarg(event, iofile, sfname, false, buf, excmd)
 }
 
 /// The file, open and ready to read.
-pub(crate) struct Opened {
+pub(crate) struct Opened<'a> {
     /// The names, after the short one was substituted for the long one.
-    pub fname: *mut c_char,
-    pub sfname: *mut c_char,
-    pub fd: c_int,
+    pub fname: Option<&'a CStr>,
+    pub sfname: Option<&'a CStr>,
+    /// The file, or standard input; `None` when reading from the buffer.
+    pub input: Option<File>,
     /// The file's mode bits, or a libuv error, or 0 when reading stdin.
     pub perm: c_int,
     /// Which line endings `'fileformats'` allows, read after the `*ReadPre`
@@ -78,46 +70,42 @@ pub(crate) struct Opened {
 ///
 /// `Err` carries the answer `readfile` should give: a failure, or a
 /// directory, or `Ok` when an autocommand did the reading itself.
-///
-/// # Safety
-///
-/// `fname` must point at a NUL-terminated string, unaliased for the call.
-/// `sfname` must point at a NUL-terminated string, unaliased for the call.
-/// `excmd` must point at the command's `ExArg`. `how` must be an initialized
-/// `How` whose pointer fields point at live data for the call.
 #[allow(clippy::too_many_arguments)]
-pub(crate) unsafe fn open_source(
-    fname: *mut c_char,
-    sfname: *mut c_char,
+pub(crate) fn open_source<'a>(
+    fname: Option<&'a CStr>,
+    sfname: Option<&'a CStr>,
     from: LineNr,
     mut excmd: Option<&mut ExArg>,
     how: How,
     silent: bool,
     msg_save: c_int,
-) -> Result<Opened, Result<Loaded, Failed>> {
-    let mut fname = fname;
-    let mut sfname = sfname;
+) -> Result<Opened<'a>, Result<Loaded, Failed>> {
     let set_options = how.set_options;
     let mut retval = Err(Failed);
-    let mut fd = if stdin_fd.get() >= 0 {
-        stdin_fd.get()
-    } else {
-        0
-    };
+    // The file once it is open, or why it could not be opened.
+    let mut input: Result<File, c_int> = Err(0);
     let mut perm = 0;
     let mut swap_mode = -1; // protection bits for the swap file
-    let mut file_info = FileInfo::default();
+    let mut file_info = None;
     let mut orig_start;
     let msg_is_a_directory = c"is a directory";
 
     // Remember the initial values of curbuf, curbuf->b_ffname and
-    // curbuf->b_fname, to detect nasty autocommands altering them.
-    // Also check whether "fname" and "sfname" point at one of them.
+    // curbuf->b_fname, to detect nasty autocommands altering them -- which
+    // matters when "fname" and "sfname" are the buffer's own names.
     let old_curbuf = Buf::current_raw();
     let old_b_ffname = Buf::current().name.full_ptr();
     let old_b_fname = Buf::current().name.shown_ptr();
-    let using_b_ffname = fname == old_b_ffname || sfname == old_b_ffname;
-    let using_b_fname = fname == old_b_fname || sfname == old_b_fname;
+    let is_named = |name: Option<&CStr>, own: Option<&CStr>| name.is_some() && name == own;
+    let current = Buf::current();
+    let using_b_ffname = {
+        let full = current.name.full();
+        is_named(fname, full) || is_named(sfname, full)
+    };
+    let using_b_fname = {
+        let shown = current.name.shown();
+        is_named(fname, shown) || is_named(sfname, shown)
+    };
     let buffer_changed = || {
         Buf::current_raw() != old_curbuf
             || (using_b_ffname && old_b_ffname != Buf::current().name.full_ptr())
@@ -132,10 +120,8 @@ pub(crate) unsafe fn open_source(
 
     // Use the short file name whenever possible: it avoids problems
     // with networks and when directory names change.
-    if sfname.is_null() {
-        sfname = fname;
-    }
-    fname = sfname;
+    let sfname = sfname.or(fname);
+    let fname = sfname;
 
     // The BufReadCmd and FileReadCmd events intercept the reading
     // process by running the associated commands instead.
@@ -148,7 +134,7 @@ pub(crate) unsafe fn open_source(
         Buf::current().b_op_start.col = 0;
 
         if how.newfile {
-            if unsafe { read_autocmd(AutoEvent::BufReadCmd, sfname, excmd.as_deref_mut(), false) } {
+            if read_autocmd(AutoEvent::BufReadCmd, sfname, excmd.as_deref_mut(), false) {
                 retval = if aborting() {
                     Err(Failed)
                 } else {
@@ -163,9 +149,7 @@ pub(crate) unsafe fn open_source(
                 }
                 return Err(retval);
             }
-        } else if unsafe {
-            read_autocmd(AutoEvent::FileReadCmd, sfname, excmd.as_deref_mut(), true)
-        } {
+        } else if read_autocmd(AutoEvent::FileReadCmd, sfname, excmd.as_deref_mut(), true) {
             retval = if aborting() {
                 Err(Failed)
             } else {
@@ -184,16 +168,16 @@ pub(crate) unsafe fn open_source(
         }
     }
 
-    msg_scroll.set(
-        (!((shortmess(ShmFlag::OVER) && msg_listdo_overwrite.get() == 0) || Buf::current().b_help)
-            || p_verbose() != 0) as c_int,
-    );
+    msg_scroll.set(c_int::from(
+        !((shortmess(ShmFlag::OVER) && msg_listdo_overwrite.get() == 0) || Buf::current().b_help)
+            || p_verbose() != 0,
+    ));
 
-    if !fname.is_null() && unsafe { *fname } != 0 {
-        let fnamelen = unsafe { cstr::bytes_at(fname) }.len();
+    if let Some(name) = fname.filter(|name| !name.is_empty()) {
+        let fnamelen = name.count_bytes();
         // If the name is too long we might crash further on, quit
         // here.
-        if fnamelen >= MAXPATHL as size_t {
+        if fnamelen >= MAXPATHL as usize {
             filemess_note(fname, c"Illegal file name");
             msg_end();
             msg_scroll.set(msg_save);
@@ -202,7 +186,7 @@ pub(crate) unsafe fn open_source(
         // A name ending in a path separator can't be opened. Check it
         // here, because reading may actually work but then creating
         // the swap file would destroy it.
-        if unsafe { after_pathsep(cstr::bytes_at(fname), fnamelen) } {
+        if after_pathsep(name.to_bytes(), fnamelen) {
             if !silent {
                 filemess_note(fname, msg_is_a_directory);
             }
@@ -213,15 +197,17 @@ pub(crate) unsafe fn open_source(
         }
     }
 
-    if !how.stdin && !fname.is_null() {
-        perm = unsafe { os_getperm(fname) };
+    if !how.stdin
+        && let Some(name) = fname
+    {
+        perm = getperm(name);
     }
 
     if !how.stdin && !how.buffer && !how.fifo {
-        let kind = perm & __S_IFMT;
+        let kind = perm & S_IFMT;
         if perm >= 0 && kind != 0o100000 && kind != 0o10000 && kind != 0o140000 {
             // On Unix it is possible to read a directory, so check for
-            // one before os_open().
+            // one before opening it.
             if kind == 0o40000 {
                 if !silent {
                     filemess_note(fname, msg_is_a_directory);
@@ -249,8 +235,9 @@ pub(crate) unsafe fn open_source(
 
     if how.newfile && !how.stdin && !how.buffer && !how.fifo {
         // Remember the time of the file.
-        if unsafe { os_fileinfo(fname, &raw mut file_info) } {
-            unsafe { buf_store_file_info(Buf::current(), &raw mut file_info) };
+        file_info = fname.and_then(crate::os::fs::file_info);
+        if let Some(info) = &file_info {
+            buf_store_file_info(Buf::current(), info);
             Buf::current().b_mtime_read = Buf::current().b_mtime;
             Buf::current().b_mtime_read_ns = Buf::current().b_mtime_ns;
             // Use the protection bits of the original file for the
@@ -261,7 +248,7 @@ pub(crate) unsafe fn open_source(
             // and write for the user, or we might not be able to write
             // it ourselves. The bits are set below, after the swap
             // file is created.
-            swap_mode = (file_info.stat.st_mode as c_int & 0o644) | 0o600;
+            swap_mode = (info.stat.st_mode as c_int & 0o644) | 0o600;
         } else {
             Buf::current().b_mtime = 0;
             Buf::current().b_mtime_ns = 0;
@@ -280,17 +267,18 @@ pub(crate) unsafe fn open_source(
     // Check readonly.
     let mut file_readonly = false;
     if !how.buffer && !how.stdin {
-        if !how.newfile
-            || readonlymode.get()
-            || perm & 0o222 == 0
-            || unsafe { os_file_is_writable(cstr::at(fname)) } == 0
+        let name = fname.unwrap_or_default();
+        if !how.newfile || readonlymode.get() || perm & 0o222 == 0 || os_file_is_writable(name) == 0
         {
             file_readonly = true;
         }
-        fd = unsafe { os_open(fname, O_RDONLY, 0) };
+        input = open_named(fname);
     }
 
-    if fd < 0 {
+    if !how.buffer
+        && !how.stdin
+        && let Err(fd) = input
+    {
         // Cannot open at all.
         msg_scroll.set(msg_save);
         if !how.newfile {
@@ -308,17 +296,17 @@ pub(crate) unsafe fn open_source(
                 check_need_swap(how.newfile);
                 // The SwapExists autocommand may mess things up.
                 if buffer_changed() {
-                    emsg(gettext(e_auchangedbuf));
+                    emsg(gettext(E_AUCHANGEDBUF));
                     return Err(retval);
                 }
             }
             if !silent {
-                let note = if unsafe { dir_of_file_exists(cstr::bytes_at(fname)) } {
+                let note = if dir_of_file_exists(fname.unwrap_or_default().to_bytes()) {
                     c"[New]"
                 } else {
                     c"[New DIRECTORY]"
                 };
-                unsafe { filemess(Buf::current(), sfname, translate(note).as_ptr().cast_mut()) };
+                filemess(Buf::current(), sfname, translate(note));
             }
             // Even though this is a new file, it might have been
             // edited before and deleted. Get the old marks.
@@ -327,17 +315,14 @@ pub(crate) unsafe fn open_source(
             if let Some(command) = excmd.as_deref_mut() {
                 set_forced_fenc(command);
             }
-            let event = AutoEvent::BufNewFile;
-            unsafe {
-                apply_autocmds_exarg(
-                    event,
-                    sfname,
-                    sfname,
-                    false,
-                    Buf::current_or_none(),
-                    excmd.as_deref_mut(),
-                )
-            };
+            apply_autocmds_exarg(
+                AutoEvent::BufNewFile,
+                sfname,
+                sfname,
+                false,
+                Buf::current_or_none(),
+                excmd.as_deref_mut(),
+            );
             // Remember the current fileformat.
             save_file_ff(Buf::current());
 
@@ -356,7 +341,7 @@ pub(crate) unsafe fn open_source(
         } else {
             c"[Permission Denied]"
         };
-        unsafe { filemess(Buf::current(), sfname, translate(note).as_ptr().cast_mut()) };
+        filemess(Buf::current(), sfname, translate(note));
         Buf::current().b_p_ro = true as c_int; // must use "w!" now
         return Err(retval);
     }
@@ -385,45 +370,34 @@ pub(crate) unsafe fn open_source(
     if !buf_is_dontwrite(current_buf()) {
         check_need_swap(how.newfile);
         if !how.stdin && buffer_changed() {
-            emsg(gettext(e_auchangedbuf));
-            if !how.buffer {
-                unsafe { close(fd) };
-            }
-            return Err(retval);
+            emsg(gettext(E_AUCHANGEDBUF));
+            return Err(retval); // the file is closed with `input`
         }
         // Set the swap file's protection bits now that it exists.
-        let mfp = Buf::current().b_ml.ml_mfp;
-        if swap_mode > 0 && !mfp.is_null() && !unsafe { mf_fname(mfp) }.is_null() {
-            let swap_fname = unsafe { mf_fname(mfp) };
+        if swap_mode > 0
+            && let Some(swap_fname) = Buf::current().swap_file_name()
+        {
             // If the group-read bit is set but not the world-read bit,
             // the group must equal the group of the original file. If
             // we can't make that happen, reset the group-read bit;
             // that avoids making the swap file readable to more users
             // than the file itself when the user's primary group is
             // too permissive.
-            if swap_mode & 0o44 == 0o40 {
-                let mut swap_info = FileInfo::default();
-                if unsafe { os_fileinfo(swap_fname, &raw mut swap_info) }
-                    && file_info.stat.st_gid != swap_info.stat.st_gid
-                    && {
-                        let gid = file_info.stat.st_gid as uv_gid_t;
-                        // SAFETY: the memfile's own descriptor.
-                        unsafe { os_fchown((*mfp).mf_fd, -1i32 as uv_uid_t, gid) == -1 }
-                    }
-                {
-                    swap_mode &= 0o600;
-                }
+            if swap_mode & 0o44 == 0o40
+                && let Some(info) = &file_info
+                && crate::os::fs::file_info(&swap_fname)
+                    .is_some_and(|swap| info.stat.st_gid != swap.stat.st_gid)
+                && !Buf::current().set_swap_file_group(info.stat.st_gid as uv_gid_t)
+            {
+                swap_mode &= 0o600;
             }
-            unsafe { os_setperm(cstr::at(swap_fname), swap_mode) };
+            os_setperm(&swap_fname, swap_mode);
         }
     }
 
     // If "Quit" was selected at the ATTENTION dialog, don't load it.
     if swap_exists_action.get() == SEA_QUIT {
-        if !how.buffer && !how.stdin {
-            unsafe { close(fd) };
-        }
-        return Err(retval);
+        return Err(retval); // the file is closed with `input`
     }
 
     no_wait_return.set(no_wait_return.get() + 1); // don't wait for return yet
@@ -443,7 +417,7 @@ pub(crate) unsafe fn open_source(
         // The file must be closed again: the autocommands may want to
         // change it before it is read.
         if !how.stdin {
-            unsafe { close(fd) }; // ignore errors
+            input = Err(0); // ignore errors
         }
 
         // The output from the autocommands should neither overwrite
@@ -451,20 +425,18 @@ pub(crate) unsafe fn open_source(
         // if no output was done.
         msg_scroll.set(true as c_int);
         if how.filtering {
-            unsafe {
-                read_autocmd(
-                    AutoEvent::FilterReadPre,
-                    sfname,
-                    excmd.as_deref_mut(),
-                    false,
-                )
-            };
+            read_autocmd(
+                AutoEvent::FilterReadPre,
+                sfname,
+                excmd.as_deref_mut(),
+                false,
+            );
         } else if how.stdin {
-            unsafe { read_autocmd(AutoEvent::StdinReadPre, sfname, excmd.as_deref_mut(), false) };
+            read_autocmd(AutoEvent::StdinReadPre, sfname, excmd.as_deref_mut(), false);
         } else if how.newfile {
-            unsafe { read_autocmd(AutoEvent::BufReadPre, sfname, excmd.as_deref_mut(), false) };
+            read_autocmd(AutoEvent::BufReadPre, sfname, excmd.as_deref_mut(), false);
         } else {
-            unsafe { read_autocmd(AutoEvent::FileReadPre, sfname, excmd, true) };
+            read_autocmd(AutoEvent::FileReadPre, sfname, excmd, true);
         }
 
         // The autocommands may have changed 'fileformats'.
@@ -487,15 +459,15 @@ pub(crate) unsafe fn open_source(
         // and don't allow them to change its name either (a `:cd`, for
         // instance) if that invalidates fname or sfname. Try to
         // re-open the file.
-        if !how.stdin
-            && (buffer_changed() || {
-                fd = unsafe { os_open(fname, O_RDONLY, 0) };
-                fd < 0
-            })
-        {
+        let changed = !how.stdin && buffer_changed();
+        let unreadable = !how.stdin && !changed && {
+            input = open_named(fname);
+            input.is_err()
+        };
+        if changed || unreadable {
             no_wait_return.set(no_wait_return.get() - 1);
             msg_scroll.set(msg_save);
-            let msg = if fd < 0 {
+            let msg = if unreadable {
                 c"E200: *ReadPre autocommands made the file unreadable"
             } else {
                 c"E201: *ReadPre autocommands must not change current buffer"
@@ -506,11 +478,26 @@ pub(crate) unsafe fn open_source(
         }
     }
 
+    // Standard input is taken over only now, when it will be read: every
+    // early return above leaves it open.
+    let input = if how.buffer {
+        None
+    } else if how.stdin {
+        Some(take_stdin_for_read())
+    } else {
+        input.ok()
+    };
     Ok(Opened {
         fname,
         sfname,
-        fd,
+        input,
         perm,
         guess,
     })
+}
+
+/// [`open_for_read`] of a name that may be missing, which libuv refuses as
+/// `EINVAL`.
+fn open_named(name: Option<&CStr>) -> Result<File, c_int> {
+    name.map_or(Err(crate::os::uv_error::UV_EINVAL), open_for_read)
 }

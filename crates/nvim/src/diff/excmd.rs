@@ -73,7 +73,8 @@ pub fn ex_diffpatch(excmd: &mut ExArg) {
     let mut newname: Option<XString> = None;
     let mut esc_name: *mut c_char = ptr::null_mut();
     let mut fullname: *mut c_char = ptr::null_mut();
-    let (tmp_orig, tmp_new) = (vim_tempname(), vim_tempname());
+    let temp = || temp_name().map_or(ptr::null_mut(), XString::into_raw);
+    let (tmp_orig, tmp_new) = (temp(), temp());
 
     if !(tmp_orig.is_null() || tmp_new.is_null()) && write_orig(tmp_orig).is_ok() {
         // Owned: the command's line is replaced before the name is done
@@ -88,14 +89,8 @@ pub fn ex_diffpatch(excmd: &mut ExArg) {
         let saved_dir = save_cwd(&mut dirbuf);
         if saved_dir {
             let tempdir = vim_gettempdir();
-            let tempdir = if tempdir.is_null() {
-                c"/tmp".as_ptr() as *mut c_char
-            } else {
-                tempdir
-            };
-            // SAFETY: a NUL-terminated directory name; the editor exists.
-            unsafe { os_chdir(cstr::at(tempdir)) };
-            shorten_fnames(1);
+            os_chdir(tempdir.as_deref().unwrap_or(c"/tmp"));
+            shorten_fnames(true);
         }
 
         if P_PEX.first_byte() != 0 {
@@ -131,7 +126,7 @@ pub fn ex_diffpatch(excmd: &mut ExArg) {
             if unsafe { os_chdir(cstr::at(dirbuf.as_mut_ptr())) } != 0 {
                 emsg_gettext(e_prev_dir.as_ptr());
             }
-            shorten_fnames(1);
+            shorten_fnames(true);
         }
         remove_suffixed(tmp_new, c".orig");
         remove_suffixed(tmp_new, c".rej");

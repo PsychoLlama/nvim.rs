@@ -18,7 +18,7 @@ use crate::memory::XString;
 use crate::types::AutoEvent;
 use crate::types::BufName;
 use core::ffi::{CStr, c_char, c_int, c_void};
-use core::{ptr, slice};
+use core::ptr;
 
 use super::*;
 use crate::allocator::Owned;
@@ -875,15 +875,13 @@ fn match_pattern(
     diffmode: bool,
     curtab_only: bool,
 ) -> Option<c_int> {
-    // SAFETY: the caller's promise -- a pattern between the two pointers.
-    let pat = unsafe { file_pat_to_reg_pat(pattern, pattern_end, ptr::null_mut(), 0) };
-    if pat.is_null() {
-        return None;
-    }
-    // SAFETY: a NUL-terminated allocation.
-    let patlen = unsafe { cstr::bytes_at(pat) }.len();
-    // SAFETY: `patlen` bytes plus the terminator, all of them writable.
-    let buf = unsafe { slice::from_raw_parts_mut(pat.cast::<u8>(), patlen + 1) };
+    // SAFETY: the caller's promise -- a pattern between the two pointers,
+    // inside a NUL-terminated string.
+    let (text, end) = unsafe { (cstr::bytes_at(pattern), pattern_end.offset_from(pattern)) };
+    let (pat, _) = file_pat_to_reg_pat(text, end.unsigned_abs())?;
+    // The pattern and its terminator, which the attempts below write.
+    let mut buf = pat.into_vec();
+    let patlen = buf.len() - 1;
     // Whether the pattern ends in '$', which attempts 0 and 1 take off.
     let toggledollar = patlen > 1 && buf[patlen - 1] == b'$';
 
@@ -911,7 +909,6 @@ fn match_pattern(
             for b in buffers_back() {
                 if regmatch.regprog.is_null() {
                     // An invalid pattern, possibly after switching engine.
-                    free(pat);
                     return None;
                 }
                 if (b.b_p_bl != 0) != find_listed
@@ -948,7 +945,6 @@ fn match_pattern(
         find_listed = false;
     }
 
-    free(pat);
     Some(matched)
 }
 

@@ -434,7 +434,7 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
         }
     }
 
-    shorten_fnames(0);
+    shorten_fnames(false);
     handle_tag(params.tag.as_deref());
     if !params.commands.is_empty() {
         exe_commands(&params);

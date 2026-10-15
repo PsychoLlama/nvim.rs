@@ -91,7 +91,7 @@ fn ucs2bytes(c: c_uint, flags: c_int) -> ([u8; 4], usize, bool) {
 ///
 /// `name` must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn make_bom(buf: &mut [c_char], name: *mut c_char) -> usize {
-    let flags = unsafe { get_fio_flags(name) };
+    let flags = get_fio_flags(unsafe { cstr::bytes_at(name) }).bits();
     // Can't put a BOM in a non-Unicode file.
     if flags == FIO_LATIN1 || flags == 0 {
         return 0;
@@ -250,7 +250,9 @@ impl<'a> ByteWriter<'a> {
 
         // Skip writing while only checking the conversion.
         if self.fd >= 0
-            && (unsafe { write_eintr(self.fd, out.cast_mut().cast(), outlen as size_t) } as c_int)
+            && (write_eintr(self.fd, unsafe {
+                core::slice::from_raw_parts(out.cast::<u8>(), outlen)
+            }) as c_int)
                 < outlen as c_int
         {
             return false;

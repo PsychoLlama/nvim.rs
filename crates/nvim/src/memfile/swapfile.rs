@@ -10,6 +10,8 @@
 #![allow(unsafe_code)]
 
 use super::*;
+use crate::os::fs::os_fchown;
+use crate::types::uv_gid_t;
 
 /// The swap file's name as it was given, or null when the memfile is memory
 /// only. It stays valid until the name is changed or the memfile closed.
@@ -153,6 +155,38 @@ impl Buf {
         let mfp = self.b_ml.ml_mfp;
         // SAFETY: the buffer's own live memfile, when it has one.
         !mfp.is_null() && unsafe { (*mfp).fname.is_some() }
+    }
+
+    /// Make the swap file's name absolute, if the buffer has one: before a
+    /// `:cd` makes the relative one mean something else.
+    pub(crate) fn make_swap_name_full(self) {
+        // SAFETY: the buffer's own live memfile, or null.
+        unsafe { mf_fullname(self.b_ml.ml_mfp) };
+    }
+
+    /// The memfile's dirty state, `None` when the buffer has no memfile.
+    pub(crate) fn memfile_dirty(self) -> Option<MfDirty> {
+        let mfp = self.b_ml.ml_mfp;
+        // SAFETY: a live buffer's memfile is live.
+        (!mfp.is_null()).then(|| unsafe { (*mfp).mf_dirty })
+    }
+
+    /// Set the memfile's dirty state, when the buffer has a memfile.
+    pub(crate) fn set_memfile_dirty(self, state: MfDirty) {
+        let mfp = self.b_ml.ml_mfp;
+        if !mfp.is_null() {
+            // SAFETY: a live buffer's memfile is live.
+            unsafe { (*mfp).mf_dirty = state };
+        }
+    }
+
+    /// Give the buffer's swap file the group `gid`: whether that worked.
+    /// False too when there is no swap file open.
+    pub(crate) fn set_swap_file_group(self, gid: uv_gid_t) -> bool {
+        let mfp = self.b_ml.ml_mfp;
+        // SAFETY: a live buffer's memfile is live, and its descriptor is
+        // the memfile's own.
+        !mfp.is_null() && unsafe { os_fchown((*mfp).mf_fd, u32::MAX, gid) } != -1
     }
 
     /// The name of the buffer's swap file, if it has a memfile with one.

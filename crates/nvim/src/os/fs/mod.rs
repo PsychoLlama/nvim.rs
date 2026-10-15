@@ -895,6 +895,98 @@ pub fn dir_exists(path: &CStr) -> bool {
     unsafe { os_isdir(path.as_ptr()) }
 }
 
+/// The editor's standard input as a file of the caller's own, for a reader
+/// that names it `-`: [`os_open_stdin_fd`]'s descriptor, which the file
+/// closes when dropped — the saved `--` descriptor included, as upstream's
+/// `fdopen` and `fclose` close it.
+pub(crate) fn stdin_file() -> Option<std::fs::File> {
+    use std::os::fd::FromRawFd;
+    let fd = os_open_stdin_fd();
+    if fd < 0 {
+        return None;
+    }
+    // SAFETY: a descriptor of this process that `os_open_stdin_fd` hands
+    // over to its reader, exactly as upstream's `fdopen` takes it.
+    Some(unsafe { std::fs::File::from_raw_fd(fd) })
+}
+
+/// The descriptor `readfile` reads standard input from: the one `--` saved,
+/// or 0. Unlike [`os_open_stdin_fd`] it is not a duplicate: closing it is
+/// what lets [`reopen_stdin_on_stderr`] put stderr in its place.
+fn stdin_read_fd() -> c_int {
+    stdin_fd.get().max(0)
+}
+
+/// Standard input as the file `readfile` reads it from, owned: dropping it
+/// closes the descriptor itself, as upstream's `close(fd)` after the read
+/// does.
+pub(crate) fn take_stdin_for_read() -> std::fs::File {
+    use std::os::fd::FromRawFd;
+    // SAFETY: a descriptor of this process, which `readfile` is the one
+    // reader of and closes once.
+    unsafe { std::fs::File::from_raw_fd(stdin_read_fd()) }
+}
+
+/// After standard input was read and closed, open stderr in its place --
+/// which, the lowest descriptor being free, lands on 0 -- so that shell
+/// commands have something to read. Answers the new descriptor.
+pub(crate) fn reopen_stdin_on_stderr() -> c_int {
+    // SAFETY: `dup` of this process's stderr.
+    unsafe { ::libc::dup(2) }
+}
+
+/// Mark the descriptor standard input is read from close-on-exec, once a
+/// read converted what was read from it.
+pub(crate) fn mark_stdin_cloexec() {
+    // SAFETY: the descriptor `--` saved, or 0, both this process's.
+    unsafe { os_set_cloexec(stdin_read_fd()) };
+}
+
+/// Whether the call that just failed was interrupted by a signal. `errno`
+/// is left as it is, for the caller's message.
+fn interrupted() -> bool {
+    std::io::Error::last_os_error().raw_os_error() == Some(::libc::EINTR)
+}
+
+/// One `read()` of `fd` into `buf`, retried when a signal interrupts it
+/// (which `SIGWINCH` makes routine): the count, 0 at the end of the file,
+/// or -1 with `errno` set.
+pub(crate) fn read_eintr(fd: c_int, buf: &mut [u8]) -> isize {
+    loop {
+        // SAFETY: `buf` is writable for its length.
+        let ret = unsafe { ::libc::read(fd, buf.as_mut_ptr().cast(), buf.len()) };
+        if ret >= 0 || !interrupted() {
+            return ret;
+        }
+    }
+}
+
+/// `write()` of all of `buf` to `fd`, repeated for as long as it does not
+/// fail for a reason other than being interrupted. Answers how much went
+/// out, which the caller compares against `buf.len()`.
+pub(crate) fn write_eintr(fd: c_int, buf: &[u8]) -> isize {
+    let mut written = 0;
+    while written < buf.len() {
+        let rest = &buf[written..];
+        // SAFETY: `rest` is readable for its length.
+        let wlen = unsafe { ::libc::write(fd, rest.as_ptr().cast(), rest.len()) };
+        if wlen < 0 {
+            if !interrupted() {
+                break;
+            }
+        } else {
+            written += wlen.unsigned_abs();
+        }
+    }
+    written.cast_signed()
+}
+
+/// Set the process's file mode creation mask, answering the old one.
+pub(crate) fn set_umask(mask: ::libc::mode_t) -> ::libc::mode_t {
+    // SAFETY: `umask` only swaps a per-process value; it cannot fail.
+    unsafe { ::libc::umask(mask) }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -919,19 +1011,4 @@ mod tests {
         assert!(!is_dir(S_IFREG | 0o755));
         assert!(!is_dir(0o40000 - 1));
     }
-}
-
-/// The editor's standard input as a file of the caller's own, for a reader
-/// that names it `-`: [`os_open_stdin_fd`]'s descriptor, which the file
-/// closes when dropped — the saved `--` descriptor included, as upstream's
-/// `fdopen` and `fclose` close it.
-pub(crate) fn stdin_file() -> Option<std::fs::File> {
-    use std::os::fd::FromRawFd;
-    let fd = os_open_stdin_fd();
-    if fd < 0 {
-        return None;
-    }
-    // SAFETY: a descriptor of this process that `os_open_stdin_fd` hands
-    // over to its reader, exactly as upstream's `fdopen` takes it.
-    Some(unsafe { std::fs::File::from_raw_fd(fd) })
 }

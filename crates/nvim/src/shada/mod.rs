@@ -18,7 +18,7 @@ use crate::eval::{
 use crate::event::libuv::uv_strerror;
 use crate::ex_cmds::{sub_get_replacement, sub_restore_replacement};
 use crate::ex_docmd::set_no_hlsearch;
-use crate::fileio::{modname, vim_rename};
+use crate::fileio::{modname, rename_file};
 use crate::global_cell::GlobalCell;
 use crate::mark::{
     cleanup_jumplist, free_fmark, free_xfmark, mark_buffer_iter, mark_get, mark_global_iter,

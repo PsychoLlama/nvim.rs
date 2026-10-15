@@ -254,12 +254,11 @@ pub fn has_autocmd(event: AutoEvent, name: &::core::ffi::CStr, buffer: Option<Bu
             let matched = if unsafe { (*ap).buflocal_nr } == 0 {
                 unsafe {
                     match_file_pat(
-                        ::core::ptr::null_mut(),
-                        &raw mut (*ap).reg_prog,
-                        fname,
-                        sfname,
-                        tail,
-                        (*ap).allow_dirs as ::core::ffi::c_int,
+                        &mut (*ap).reg_prog,
+                        cstr::at(fname),
+                        cstr::at_opt(sfname),
+                        cstr::at(tail),
+                        (*ap).allow_dirs != 0,
                     )
                 }
             } else {

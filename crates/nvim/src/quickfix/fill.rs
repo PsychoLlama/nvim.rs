@@ -28,7 +28,6 @@ use crate::eval::list::cstr_of_chk;
 use crate::eval::typval::NumBuf;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{CallFrame, list_items};
-use crate::fileio::shorten_buf_fname_in;
 use crate::guard::Lock;
 use crate::memline::{MlFlags, ml_append_bytes};
 use crate::memory::XString;
@@ -177,7 +176,7 @@ fn qf_buf_line(
                 // Shorten the file name if not done already. For speed,
                 // only for the first entry of each buffer.
                 if first_bufline && errbuf.name.short().is_none_or(path_is_absolute) {
-                    shorten_buf_fname_in(errbuf, dir.get(), false);
+                    crate::fileio::shorten_buf_fname(errbuf, dir.get().to_bytes(), false);
                 }
                 match &entry.fname {
                     Some(own) => out.extend_from_slice(own),

@@ -50,7 +50,7 @@ use crate::eval::vars::{eval_diff, eval_patch};
 use crate::ex_cmds::{append_redir, ex_file};
 use crate::ex_docmd::{do_cmdline_cmd, do_exedit, get_address};
 use crate::extmark::extmark_adjust;
-use crate::fileio::{buf_check_timestamp, shorten_fnames, vim_fgets, vim_gettempdir, vim_tempname};
+use crate::fileio::{buf_check_timestamp, shorten_fnames, temp_name, vim_fgets, vim_gettempdir};
 use crate::fold::{
     fold_update, fold_update_all, foldmethod_is_diff, foldmethod_is_manual, new_fold_level,
 };

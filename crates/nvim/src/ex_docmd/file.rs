@@ -6,7 +6,7 @@ use crate::ex_cmds::EcmdFlags;
 use crate::ex_cmds::do_ecmd;
 use crate::ex_cmds::newlnum;
 use crate::file_search::find_nth_file_in_path;
-use crate::fileio::readfile_named;
+use crate::fileio::{ReadFlags, readfile_named};
 use crate::guard::Allow;
 use crate::memfile::buf_swap_name;
 use crate::memline::MlFlags;
@@ -429,7 +429,7 @@ pub(crate) fn ex_read(excmd: &mut ExArg) {
             0,
             MAXLNUM,
             Some(excmd),
-            0,
+            ReadFlags::NONE,
             false,
         )
     } else {
@@ -447,7 +447,7 @@ pub(crate) fn ex_read(excmd: &mut ExArg) {
             0,
             MAXLNUM,
             Some(excmd),
-            0,
+            ReadFlags::NONE,
             false,
         )
     };

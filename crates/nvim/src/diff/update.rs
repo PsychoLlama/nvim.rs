@@ -327,9 +327,10 @@ unsafe fn diff_try_update(dio: *mut DiffIo, idx_orig: c_int, excmd: Option<&mut 
         if dio.dio_internal != 0 {
             dio.dio_diff.dout_ga.clear();
         } else {
-            dio.dio_orig.din_fname = vim_tempname();
-            dio.dio_new.din_fname = vim_tempname();
-            dio.dio_diff.dout_fname = vim_tempname();
+            let temp = || temp_name().map_or(core::ptr::null_mut(), XString::into_raw);
+            dio.dio_orig.din_fname = temp();
+            dio.dio_new.din_fname = temp();
+            dio.dio_diff.dout_fname = temp();
             if dio.dio_orig.din_fname.is_null()
                 || dio.dio_new.din_fname.is_null()
                 || dio.dio_diff.dout_fname.is_null()

@@ -398,19 +398,16 @@ pub unsafe fn autocmd_register(
             new_pat.reg_prog = ::core::ptr::null_mut();
         } else {
             new_pat.buflocal_nr = 0;
-            let reg_pat = unsafe {
-                file_pat_to_reg_pat(
-                    pat,
-                    pat.offset(patlen as isize),
-                    &raw mut (*ap).allow_dirs,
-                    1,
-                )
-            };
-            if !reg_pat.is_null() {
-                new_pat.reg_prog = vim_regcomp(unsafe { cstr::at(reg_pat) }, RE_MAGIC);
+            // SAFETY: the caller's NUL-terminated pattern, `patlen` bytes of
+            // which are this one.
+            let text = unsafe { cstr::bytes_at(pat) };
+            let reg_pat = file_pat_to_reg_pat(text, patlen as usize);
+            new_pat.allow_dirs = 0;
+            if let Some((reg_pat, allow_dirs)) = &reg_pat {
+                new_pat.allow_dirs = ::core::ffi::c_char::from(*allow_dirs);
+                new_pat.reg_prog = vim_regcomp(reg_pat.as_cstr(), RE_MAGIC);
             }
-            unsafe { xfree(reg_pat.cast::<::core::ffi::c_void>()) };
-            if reg_pat.is_null() || new_pat.reg_prog.is_null() {
+            if reg_pat.is_none() || new_pat.reg_prog.is_null() {
                 unsafe { xfree(ap.cast::<::core::ffi::c_void>()) };
                 return Err(Failed);
             }

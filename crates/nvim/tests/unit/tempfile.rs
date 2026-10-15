@@ -15,23 +15,26 @@
 
 use std::path::{Path, PathBuf};
 
-use neovim::fileio::{vim_deltempdir, vim_gettempdir, vim_tempname};
+use neovim::fileio::{temp_name, vim_deltempdir, vim_gettempdir};
 use neovim::os::fs::os_file_is_writable;
 
-use crate::support::{Sandbox, cstr, internalize};
+use crate::support::{Sandbox, cstr};
 
 /// The temp directory, without its trailing separator.
 fn tempdir() -> PathBuf {
-    let raw = unsafe { std::ffi::CStr::from_ptr(vim_gettempdir()) }
-        .to_str()
-        .expect("a temp path is text");
+    let dir = vim_gettempdir().expect("a temp directory");
+    let raw = dir.to_str().expect("a temp path is text");
     assert!(raw.ends_with('/'), "{raw:?} should end with a separator");
     PathBuf::from(raw.trim_end_matches('/'))
 }
 
 /// A fresh name inside it. The file is not created.
 fn tempname() -> String {
-    unsafe { internalize(vim_tempname()) }
+    let name = temp_name().expect("a temp name");
+    name.as_cstr()
+        .to_str()
+        .expect("a temp path is text")
+        .to_owned()
 }
 
 /// The editor lock plus a promise to leave no directory behind: whatever the

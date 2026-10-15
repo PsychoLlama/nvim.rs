@@ -226,7 +226,7 @@ pub fn qf_list(excmd: &mut ExArg) {
     }
 
     // Shorten all the file names, so that it is easy to read.
-    shorten_fnames(c_int::from(false));
+    shorten_fnames(false);
 
     // The highlighting comes from the qf.vim syntax file.
     qfFile_hl_id.set(syn_name2id(c"qfFileName"));

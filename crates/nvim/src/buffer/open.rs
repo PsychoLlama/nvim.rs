@@ -26,12 +26,13 @@ use crate::memline::MlFlags;
 use crate::types::AutoEvent;
 use core::ffi::{CStr, c_char, c_int};
 use core::{ptr, slice};
+use std::ffi::CString;
 
 use super::*;
 use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};
 use crate::change::{changed, save_file_ff};
 use crate::charset::buf_init_chartab;
-use crate::fileio::{Loaded, prep_exarg, readfile};
+use crate::fileio::{Loaded, ReadFlags, prep_exarg, readfile_named};
 use crate::getchar::state::got_int;
 use crate::help::get_local_additions;
 use crate::indent_c::parse_cino;
@@ -41,7 +42,7 @@ use crate::memory::xrealloc;
 use crate::r#move::WinValid;
 use crate::option::{boolean_optval, cpo_has, set_option_value_give_err};
 use crate::options::{kOptBufhidden, kOptBuftype, kOptSwapfile};
-use crate::os::fs::os_getperm;
+use crate::os::fs::getperm;
 use crate::pos::MAXLNUM;
 use crate::startup::{getout, readonlymode, v_dying};
 use crate::types::{
@@ -60,8 +61,8 @@ use crate::winlayer::buffers;
 /// another buffer current: nothing held survives it.
 #[expect(clippy::too_many_arguments)]
 fn read_file(
-    ffname: *mut c_char,
-    fname: *mut c_char,
+    ffname: Option<&CStr>,
+    fname: Option<&CStr>,
     lnum: LineNr,
     from: LineNr,
     to: LineNr,
@@ -69,19 +70,22 @@ fn read_file(
     flags: c_int,
     silent: bool,
 ) -> Result<Loaded, Failed> {
-    // SAFETY: two NUL-terminated names or nulls, and the caller's own `excmd`.
-    unsafe { readfile(ffname, fname, lnum, from, to, excmd, flags, silent) }
+    let flags = ReadFlags::from_bits(flags);
+    readfile_named(ffname, fname, lnum, from, to, excmd, flags, silent)
+}
+
+/// The buffer's two names, copied: a read fires autocommands that may change
+/// them while the reader holds what it was given.
+fn names_of(buffer: Buf) -> (Option<CString>, Option<CString>) {
+    (
+        buffer.name.full().map(CStr::to_owned),
+        buffer.name.shown().map(CStr::to_owned),
+    )
 }
 
 /// Open the memline (and the swap file) for `buffer`.
 fn open_memline(buffer: Buf) -> Result<(), Failed> {
     ml_open(buffer)
-}
-
-/// The mode bits of `fname`, negative when it cannot be stat'ed.
-fn permissions_of(fname: *mut c_char) -> c_int {
-    // SAFETY: a NUL-terminated file name.
-    unsafe { os_getperm(fname) as c_int }
 }
 
 fn set_changed(buffer: Buf) {
@@ -207,16 +211,13 @@ fn read_buffer(
 
     let line_count = Buf::current().line_count();
     let (ffname, fname) = match read_stdin {
-        true => (ptr::null_mut(), ptr::null_mut()),
-        false => (
-            Buf::current().name.full_ptr(),
-            Buf::current().name.shown_ptr(),
-        ),
+        true => (None, None),
+        false => names_of(Buf::current()),
     };
     let last = MAXLNUM;
     let mut retval = read_file(
-        ffname,
-        fname,
+        ffname.as_deref(),
+        fname.as_deref(),
         line_count,
         0,
         last,
@@ -305,7 +306,7 @@ fn open_buffer_inner(
     }
 
     // Do not sync this buffer yet, may first want to read the file.
-    set_dirty(buf, MfDirty::YesNoSync);
+    buf.set_memfile_dirty(MfDirty::YesNoSync);
 
     // The autocommands in readfile() may change the buffer, but only AFTER
     // reading the file.
@@ -324,7 +325,7 @@ fn open_buffer_inner(
     // Read the file if there is one.
     if !buf.name.full().is_none() {
         let save_bin = buf.b_p_bin;
-        let perm = permissions_of(buf.name.full_ptr());
+        let perm = buf.name.full().map_or(-1, getperm);
         // `S_ISFIFO(perm) || S_ISSOCK(perm)`; the literals stay literals so
         // that ffigen does not export them as new C declarations.
         if perm >= 0 && (perm & __S_IFMT == 0o10000 || perm & __S_IFMT == 0o140000) {
@@ -334,11 +335,11 @@ fn open_buffer_inner(
             buf.b_p_bin = 1;
         }
         let fifo = if read_fifo { READ_FIFO as c_int } else { 0 };
-        let (ffname, fname, last) = (buf.name.full_ptr(), buf.name.shown_ptr(), MAXLNUM);
+        let ((ffname, fname), last) = (names_of(buf), MAXLNUM);
         let read = flags | READ_NEW as c_int | fifo;
         retval = read_file(
-            ffname,
-            fname,
+            ffname.as_deref(),
+            fname.as_deref(),
             0,
             0,
             last,
@@ -365,9 +366,8 @@ fn open_buffer_inner(
         // that same buffer and append at the end.  This makes it possible to
         // retry when 'fileformat' or 'fileencoding' was guessed wrong.
         buf.b_p_bin = 1;
-        let (none, last) = (ptr::null_mut::<c_char>(), MAXLNUM);
         let read = flags | (READ_NEW as c_int + READ_STDIN as c_int);
-        retval = read_file(none, none, 0, 0, last, None, read, silent);
+        retval = read_file(None, None, 0, 0, MAXLNUM, None, read, silent);
         Buf::current().b_p_bin = save_bin;
         if retval == Ok(Loaded::Read) {
             retval = read_buffer(true, excmd, flags);
@@ -376,8 +376,8 @@ fn open_buffer_inner(
 
     // Can now sync this buffer in ml_sync_all().
     let buf = Buf::current();
-    if dirty(buf) == Some(MfDirty::YesNoSync) {
-        set_dirty(buf, MfDirty::Yes);
+    if buf.memfile_dirty() == Some(MfDirty::YesNoSync) {
+        buf.set_memfile_dirty(MfDirty::Yes);
     }
 
     // if first time loading this buffer, init b_chartab[]
@@ -479,21 +479,6 @@ fn no_memfile(old_tw: OptInt) -> Result<(), Failed> {
     Err(Failed)
 }
 
-/// The memfile's dirty state, `None` when the buffer has no memfile.
-fn dirty(buffer: Buf) -> Option<MfDirty> {
-    let mfp = buffer.b_ml.ml_mfp;
-    // SAFETY: a live buffer's memfile is live.
-    (!mfp.is_null()).then(|| unsafe { (*mfp).mf_dirty })
-}
-
-fn set_dirty(buffer: Buf, state: MfDirty) {
-    let mfp = buffer.b_ml.ml_mfp;
-    if !mfp.is_null() {
-        // SAFETY: a live buffer's memfile is live.
-        unsafe { (*mfp).mf_dirty = state };
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Comparing a buffer with the file behind it
 
@@ -516,7 +501,8 @@ pub fn buf_contents_changed(buffer: Buf) -> bool {
     in_buffer(newbuf, || {
         block_autocmds_now();
         let read = READ_NEW as c_int | READ_DUMMY as c_int;
-        let (ffname, fname, last) = (buffer.name.full_ptr(), buffer.name.shown_ptr(), MAXLNUM);
+        let ((ffname, fname), last) = (names_of(buffer), MAXLNUM);
+        let (ffname, fname) = (ffname.as_deref(), fname.as_deref());
         if open_memline(Buf::current()).is_ok()
             && read_file(ffname, fname, 0, 0, last, Some(&mut ea), read, false) == Ok(Loaded::Read)
             && buffer.line_count() == Buf::current().line_count()

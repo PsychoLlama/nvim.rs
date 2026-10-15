@@ -265,15 +265,8 @@ unsafe fn open_temp_writer(
     fname: &CStr,
     perm: c_int,
 ) -> Option<CString> {
-    let tempname = unsafe { modname(fname.as_ptr(), c".tmp.a".as_ptr(), false) };
-    if tempname.is_null() {
-        return None;
-    }
-    let mut tempname = {
-        let owned = unsafe { CStr::from_ptr(tempname) }.to_owned();
-        unsafe { xfree(tempname.cast::<c_void>()) };
-        owned.into_bytes_with_nul()
-    };
+    // The name with its terminator, which `file_open` reads.
+    let mut tempname = modname(Some(fname), b".tmp.a", false)?.into_vec();
     let last = tempname.len() - 2; // before the NUL
 
     loop {
@@ -497,7 +490,7 @@ unsafe fn replace_original(
         }
     }
 
-    if unsafe { vim_rename(tempname.as_ptr(), fname.as_ptr()) } == -1 {
+    if !rename_file(tempname, fname) {
         shada_file_error2(
             c"E136: Can't rename ShaDa file from %s to %s!",
             tempname.as_ptr(),

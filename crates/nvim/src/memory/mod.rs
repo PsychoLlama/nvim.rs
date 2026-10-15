@@ -175,6 +175,35 @@ pub unsafe fn verbose_try_malloc(size: usize) -> *mut c_void {
     }
 }
 
+/// Where the first `needle` in `hay` is: the C library's `memchr`, whose
+/// vectorised search a reader scanning every byte of a file needs -- core's
+/// costs several times as much per byte.
+pub(crate) fn memchr_in(hay: &[u8], needle: u8) -> Option<usize> {
+    // SAFETY: `hay` is readable for its length; the answer is null or a
+    // pointer into it.
+    let needle = ::core::ffi::c_int::from(needle);
+    let found = unsafe { ::libc::memchr(hay.as_ptr().cast(), needle, hay.len()) };
+    (!found.is_null()).then(|| found.addr() - hay.as_ptr().addr())
+}
+
+/// Grow `bytes` to `len` bytes, zero-filling the new ones, the way
+/// [`verbose_try_malloc`] allocates: retried once after asking the editor
+/// for memory back, and reported to the user when even that did not help.
+/// False, with `bytes` unchanged, when the memory could not be had.
+pub(crate) fn try_grow_zeroed(bytes: &mut Vec<u8>, len: usize) -> bool {
+    let more = len.saturating_sub(bytes.len());
+    if bytes.try_reserve_exact(more).is_err() {
+        // SAFETY: an allocation is what is under way, on the main thread.
+        unsafe { try_to_free_memory() };
+        if bytes.try_reserve_exact(more).is_err() {
+            do_outofmem_msg(len);
+            return false;
+        }
+    }
+    bytes.resize(len, 0);
+    true
+}
+
 /// `malloc` that never fails: an allocation that cannot be served ends the
 /// process through `preserve_exit`, which writes the swapfiles out first.
 ///

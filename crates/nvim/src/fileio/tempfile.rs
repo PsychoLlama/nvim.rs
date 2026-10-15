@@ -11,16 +11,17 @@
 //! and [`readdir_core`] are for, though `readdir()`/`delete()` in Vimscript
 //! reach them too.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::cstr;
 use crate::memory::XString;
-use crate::message_fmt::{c_str, msg_bytes, msg_cstr};
+use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::msg_schedule_semsg;
+use crate::os::env::{env_exists, expand_env_into};
+use crate::os::fs::{dir_exists, getperm, os_mkdtemp, os_strerror, set_umask};
+use crate::os::users::username_within;
 use crate::smsg;
 use crate::types::VarNumber;
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::c_int;
 use std::ffi::OsStr;
 use std::ffi::{CStr, CString};
 use std::os::unix::ffi::OsStrExt;
@@ -37,7 +38,7 @@ static VIM_TEMPDIR: GlobalCell<Option<CString>> = GlobalCell::new(None);
 
 /// An open handle on it, holding a shared `flock` so it is not auto-cleaned.
 /// Closing the handle (dropping it) releases the lock.
-static VIM_TEMPDIR_DP: GlobalCell<Option<std::fs::File>> = GlobalCell::new(None);
+static VIM_TEMPDIR_DP: GlobalCell<Option<File>> = GlobalCell::new(None);
 
 /// `DLOG`/`WLOG`/`ELOG` from `log.h`.
 ///
@@ -49,62 +50,41 @@ macro_rules! log_at {
     };
 }
 
-/// A path being assembled a piece at a time, NUL-terminated throughout.
+/// A path being assembled a piece at a time.
 ///
 /// Upstream builds these in a `char[TEMP_FILE_PATH_MAXLEN]` and asserts after
 /// every append that it still fits; the bound is real, because `os_mkdtemp`
-/// copies the template into a buffer of exactly that size. Overflowing it
+/// copied the template into a buffer of exactly that size. Overflowing it
 /// panics here where upstream aborts on the assertion.
-struct Template {
-    buf: [u8; TEMP_FILE_PATH_MAXLEN as usize],
-    len: usize,
-}
+struct Template(Vec<u8>);
 
 impl Template {
-    fn new() -> Self {
-        Template {
-            buf: [0; TEMP_FILE_PATH_MAXLEN as usize],
-            len: 0,
-        }
+    fn new(start: &[u8]) -> Self {
+        let mut tmp = Template(Vec::with_capacity(TEMP_FILE_PATH_MAXLEN as usize));
+        tmp.push(start);
+        tmp
     }
 
-    fn as_ptr(&self) -> *const c_char {
-        self.buf.as_ptr().cast()
-    }
-
-    /// The path as a string. Read from the buffer's own terminator rather
-    /// than from `len`, because `os_mkdtemp` writes the name in without
-    /// telling this type how long it made it.
-    fn as_cstr(&self) -> &CStr {
-        CStr::from_bytes_until_nul(&self.buf).unwrap_or(c"")
-    }
-
-    fn as_mut_ptr(&mut self) -> *mut c_char {
-        self.buf.as_mut_ptr().cast()
-    }
-
-    /// Adopt `len` bytes written into the buffer by someone else.
-    fn set_len(&mut self, len: usize) {
-        assert!(len < self.buf.len());
-        self.len = len;
+    /// The path as a string.
+    fn as_cstr(&self) -> CString {
+        CString::new(self.0.clone()).unwrap_or_default()
     }
 
     fn push(&mut self, bytes: &[u8]) {
-        let end = self.len + bytes.len();
-        assert!(end < self.buf.len(), "temp file path too long");
-        self.buf[self.len..end].copy_from_slice(bytes);
-        self.buf[end] = 0;
-        self.len = end;
+        assert!(
+            self.0.len() + bytes.len() < TEMP_FILE_PATH_MAXLEN as usize,
+            "temp file path too long"
+        );
+        self.0.extend_from_slice(bytes);
     }
 
     /// Drop the last `n` bytes.
     fn shorten(&mut self, n: usize) {
-        self.len -= n;
-        self.buf[self.len] = 0;
+        self.0.truncate(self.0.len() - n);
     }
 
     fn ends_with_sep(&self) -> bool {
-        self.len > 0 && self.buf[self.len - 1] == b'/'
+        self.0.last() == Some(&b'/')
     }
 }
 
@@ -113,31 +93,27 @@ impl Template {
 ///
 /// Only done once; the same directory is used for all temp files.
 fn vim_mktempdir() {
-    let mut user = [0u8; 40];
-    let _ = unsafe { os_get_username(user.as_mut_ptr().cast(), user.len()) };
     // Usernames may contain slashes! #19240
-    let data = user.as_mut_ptr().cast::<c_void>();
-    unsafe { memchrsub(data, b'/' as c_char, b'_' as c_char, user.len()) };
-    unsafe { memchrsub(data, b'\\' as c_char, b'_' as c_char, user.len()) };
-    let user = cstr::in_bytes(&user).to_bytes();
+    let user: Vec<u8> = username_within(40)
+        .into_iter()
+        .map(|b| if b == b'/' || b == b'\\' { b'_' } else { b })
+        .collect();
 
     // Make sure the umask doesn't remove the executable bit. "repl" has
     // been reported to use "0177".
-    let umask_save = unsafe { umask(0o077) };
+    let umask_save = set_umask(0o077);
     for root in TEMP_DIR_NAMES {
-        let mut tmp = Template::new();
         // Leave room for "/tmp/nvim.<user>/XXXXXX/999999999".
-        let at = tmp.as_mut_ptr();
-        let from = root.as_ptr().cast_mut();
-        tmp.set_len(unsafe { expand_env(from, at, TEMP_FILE_PATH_MAXLEN - 64) });
+        let room = TEMP_FILE_PATH_MAXLEN as usize - 63;
+        let mut tmp = Template::new(&expand_env_into(root, room));
 
-        if !unsafe { os_isdir(tmp.as_ptr()) } {
+        if !dir_exists(&tmp.as_cstr()) {
             if root == c"$TMPDIR" {
-                if !unsafe { os_env_exists(c"TMPDIR".as_ptr(), true) } {
+                if !env_exists(c"TMPDIR", true) {
                     log_at!(LOGLVL_DBG, 3323, "$TMPDIR is unset");
                 } else {
-                    // SAFETY: `tmp` is this frame's NUL-terminated path.
-                    let at = msg_cstr(tmp.as_cstr());
+                    let path = tmp.as_cstr();
+                    let at = msg_cstr(&path);
                     log_at!(
                         LOGLVL_WRN,
                         3325,
@@ -153,21 +129,21 @@ fn vim_mktempdir() {
             tmp.push(b"/");
         }
         tmp.push(b"nvim.");
-        tmp.push(user);
-        os_mkdir(tmp.as_cstr(), 0o700); // Always create, to avoid a race.
-        let owned = os_file_owned(tmp.as_cstr());
-        let isdir = unsafe { os_isdir(tmp.as_ptr()) };
+        tmp.push(&user);
+        let path = tmp.as_cstr();
+        os_mkdir(&path, 0o700); // Always create, to avoid a race.
+        let owned = os_file_owned(&path);
+        let isdir = dir_exists(&path);
         // XDG_RUNTIME_DIR must be owned by the user, mode 0700.
-        let perm = unsafe { os_getperm(tmp.as_ptr()) } as c_int;
+        let perm = getperm(&path);
         if isdir && owned && perm & 0o777 == 0o700 {
             if !tmp.ends_with_sep() {
                 tmp.push(b"/");
             }
         } else {
-            // SAFETY: `tmp` is this frame's NUL-terminated path.
-            let at = msg_cstr(tmp.as_cstr());
+            let at = msg_cstr(&path);
             if !owned {
-                let who = msg_bytes(user);
+                let who = msg_bytes(&user);
                 log_at!(
                     LOGLVL_ERR,
                     3355,
@@ -192,25 +168,26 @@ fn vim_mktempdir() {
         // Now try to create "/tmp/nvim.<user>/XXXXXX". "XXXXXX" is the
         // mkdtemp template, replaced with random alphanumeric characters.
         tmp.push(b"XXXXXX");
-        let mut path = Template::new();
-        let r = unsafe { os_mkdtemp(tmp.as_cstr(), path.as_mut_ptr()) };
-        if r != 0 {
-            // SAFETY: libuv's error strings are static; `tmp` is this
-            // frame's NUL-terminated path.
-            let (why, at) = unsafe { (c_str(uv_strerror(r)), msg_cstr(tmp.as_cstr())) };
-            log_at!(LOGLVL_WRN, 3377, "tempdir create failed: {why}: {at}");
-            continue;
-        }
+        let made = match os_mkdtemp(&tmp.as_cstr()) {
+            Ok(made) => made,
+            Err(r) => {
+                let why = msg_cstr(os_strerror(r));
+                let path = tmp.as_cstr();
+                let at = msg_cstr(&path);
+                log_at!(LOGLVL_WRN, 3377, "tempdir create failed: {why}: {at}");
+                continue;
+            }
+        };
 
-        if unsafe { vim_settempdir(path.as_ptr()) } {
+        if vim_settempdir(&made) {
             // Successfully created and set the temporary directory, so
             // stop trying.
             break;
         }
-        // Couldn't set the temp dir to `path`, so remove what we made.
-        os_rmdir(path.as_cstr());
+        // Couldn't set the temp dir to `made`, so remove what we made.
+        os_rmdir(&made);
     }
-    unsafe { umask(umask_save) };
+    set_umask(umask_save);
 }
 
 /// Core part of the `readdir()` function: the names in `path`, sorted.
@@ -308,7 +285,7 @@ fn vim_opentempdir() {
     }
     let dir = VIM_TEMPDIR.with(|dir| {
         let path = OsStr::from_bytes(dir.as_ref()?.to_bytes());
-        std::fs::File::open(path).ok()
+        File::open(path).ok()
     });
     let Some(dir) = dir else {
         return;
@@ -337,13 +314,10 @@ pub fn vim_deltempdir() {
 
 /// Gets the path to Nvim's own temp dir, ending with a slash.
 ///
-/// Creates the directory on the first call.
-pub fn vim_gettempdir() -> *mut c_char {
+/// Creates the directory on the first call. `None` when it cannot be made.
+pub fn vim_gettempdir() -> Option<CString> {
     static NOTFOUND: GlobalCell<c_int> = GlobalCell::new(0);
-    let usable = VIM_TEMPDIR.with(|dir| {
-        dir.as_ref()
-            .is_some_and(|dir| unsafe { os_isdir(dir.as_ptr()) })
-    });
+    let usable = VIM_TEMPDIR.with(|dir| dir.as_deref().is_some_and(dir_exists));
     if !usable {
         if let Some(gone) = VIM_TEMPDIR.with_mut(|dir| dir.take()) {
             let notfound = NOTFOUND.get() + 1;
@@ -363,10 +337,7 @@ pub fn vim_gettempdir() -> *mut c_char {
         }
         vim_mktempdir();
     }
-    VIM_TEMPDIR.with(|dir| match dir {
-        Some(dir) => dir.as_ptr().cast_mut(),
-        None => ptr::null_mut(),
-    })
+    VIM_TEMPDIR.with(Clone::clone)
 }
 
 /// Sets Nvim's own temporary directory name to `tempdir`, which must already
@@ -374,13 +345,8 @@ pub fn vim_gettempdir() -> *mut c_char {
 /// cannot confuse us, and a trailing path separator is added.
 ///
 /// @return  false if we run out of memory.
-///
-/// # Safety
-///
-/// `tempdir` must point at a NUL-terminated string.
-unsafe fn vim_settempdir(tempdir: *const c_char) -> bool {
-    let mut full = vim_full_name(unsafe { cstr::at(tempdir) }, MAXPATHL as usize, false)
-        .unwrap_or_else(|name| name);
+fn vim_settempdir(tempdir: &CStr) -> bool {
+    let mut full = vim_full_name(tempdir, MAXPATHL as usize, false).unwrap_or_else(|name| name);
 
     if !full.ends_with(b"/") {
         full.push(b'/');
@@ -390,31 +356,21 @@ unsafe fn vim_settempdir(tempdir: *const c_char) -> bool {
     true
 }
 
-/// Return a unique name that can be used for a temp file.
+/// A unique name that can be used for a temp file: `None` when Nvim can't
+/// create its temporary directory.
 ///
 /// The file is NOT created. There is no need to check whether it already
 /// exists, because we own the directory and nobody else creates files in it.
-///
-/// @return  the name, or NULL if Nvim can't create its temporary directory.
-pub fn vim_tempname() -> *mut c_char {
-    temp_name().map_or(ptr::null_mut(), XString::into_raw)
-}
-
-/// [`vim_tempname`], owned: `None` when Nvim can't create its temporary
-/// directory.
-pub(crate) fn temp_name() -> Option<XString> {
+pub fn temp_name() -> Option<XString> {
     /// Temp filename counter.
     static TEMP_COUNT: GlobalCell<u64> = GlobalCell::new(0);
-    let tempdir = vim_gettempdir();
-    if tempdir.is_null() {
-        return None;
-    }
+    let tempdir = vim_gettempdir()?;
     let count = TEMP_COUNT.get();
     TEMP_COUNT.set(count.wrapping_add(1));
     // Upstream formats this into a `char[TEMP_FILE_PATH_MAXLEN]` and then
     // copies out the length `snprintf` *would* have needed, which reads
     // off the end of the buffer once the temp dir gets long enough.
-    let mut name = unsafe { CStr::from_ptr(tempdir) }.to_bytes().to_vec();
+    let mut name = tempdir.into_bytes();
     name.extend_from_slice(count.to_string().as_bytes());
-    Some(XString::from_bytes(&name))
+    Some(XString::from_vec(name))
 }

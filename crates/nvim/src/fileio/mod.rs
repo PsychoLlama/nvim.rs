@@ -1,30 +1,35 @@
+//! Reading files into buffers, and the file-level helpers around it.
+//!
+//! [`readfile_named`] is the reader (`read`, `open`, `convert`, `lines`,
+//! `report`); `timestamp` notices a file changing underneath its buffer,
+//! `names` derives and moves file names, `tempfile` owns the temporary
+//! directory, and `stream` holds the byte-level readers binary formats
+//! share. `legacy_stream` is the one child on `allow(unsafe_code)`: the
+//! `FILE *` forms of those readers, kept while `spellfile/` reads through
+//! them. `forbid` would reach it from here, so this file allows nothing and
+//! forbids nothing: the crate's `deny(unsafe_code)` holds.
+
 #![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
-// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 pub(crate) mod state;
-use crate::ascii::ascii_isspace;
 use crate::autocmd::state::autocmd_busy;
 use crate::autocmd::{
-    apply_autocmds, apply_autocmds_exarg, aucmd_prepbuf, aucmd_restbuf, augroup_exists,
-    do_doautocmd,
+    apply_autocmds_exarg, aucmd_prepbuf_in, aucmd_restbuf_in, augroup_exists_of, do_doautocmd,
+    fire_autocmds, fire_autocmds_for,
 };
 use crate::buffer::state::swap_exists_action;
 use crate::buffer::{
     BufFlags, buf_contents_changed, buf_is_dontwrite, buf_is_empty, buf_is_nofilename,
-    buf_is_normal, buflist_new, current_buf, do_modelines, setfname, wipe_buffer,
+    buf_is_normal, buflist_new_named, current_buf, do_modelines, setfname, wipe_buffer,
 };
 use crate::buffer_updates::buf_updates_unload;
 use crate::change::{appended_lines_mark, save_file_ff, unchanged};
-use crate::cstr;
 use crate::cursor::{check_cursor, check_cursor_lnum};
 use crate::diff::diff_invalidate;
 use crate::drawscreen::state::{redraw_cmdline, redraw_tabline};
 use crate::drawscreen::{UPD_NOT_VALID, redraw_curbuf_later, status_redraw_all};
 use crate::edit::beginline;
 use crate::eval::vars::{eval_charconvert, set_vim_var_string, vim_var_bytes};
-use crate::event::libuv::uv_strerror;
 use crate::ex_docmd::state::{ex_no_reprint, global_busy};
 use crate::ex_eval::aborting;
 use crate::fileio::state::{did_check_timestamps, need_check_timestamps, no_check_timestamps};
@@ -34,16 +39,9 @@ use crate::getchar::stuff_empty;
 use crate::global_cell::GlobalCell;
 use crate::guard::allbuf_lock;
 use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_WRN};
-use crate::mbyte::canonize;
-use crate::mbyte::{
-    canon_props, enc_canonize, utf_byte2len, utf_char2bytes, utf_char2len, utf_head_off,
-    utf_ptr2char, utf_ptr2len_len,
-};
-use crate::memfile::mf_fullname;
-use crate::memline::{check_need_swap, ml_append, ml_delete, ml_get, ml_get_len, ml_open};
-use crate::memory::{
-    memchrsub, time_to_bytes, verbose_try_malloc, xfree, xmallocz, xmemdupz, xstrdup, xstrlcat,
-};
+use crate::mbyte::{canon_props, canonize, utf_byte2len, utf_char2len};
+use crate::memline::{check_need_swap, ml_append_terminated, ml_delete, ml_open};
+use crate::memory::{XString, try_grow_zeroed};
 use crate::message::e_interr;
 use crate::message::state::{
     emsg_silent, in_assert_fails, keep_msg, msg_col, msg_listdo_overwrite, msg_scroll,
@@ -53,6 +51,7 @@ use crate::message::{
     do_dialog, emsg, fit_head, msg, msg_check_for_delay, msg_clr_eos, msg_delay, msg_display_bytes,
     msg_end, msg_fit_head, msg_progress, msg_putchar, msg_start, msg_str, msg_str_hl, set_keep_msg,
 };
+use crate::message_fmt::msg_bytes;
 use crate::r#move::update_topline;
 use crate::option::vars::{P_FFS, p_ar, p_enc, p_fencs, p_ffs, p_fic, p_ur, p_verbose};
 use crate::option::{
@@ -61,36 +60,33 @@ use crate::option::{
 };
 use crate::options::kOptFileencoding;
 use crate::optionstr::OptString;
-use crate::os::cshim::{getc, gettext, gettext_ptr, ngettext, putc};
-use crate::os::env::{expand_env, home_replace, home_replace_save, os_env_exists};
+use crate::os::cshim::{gettext, ngettext};
+use crate::os::env::home_replace_in;
 use crate::os::fs::{
-    os_closedir, os_copy, os_dirname, os_fchown, os_file_is_writable, os_file_owned, os_fileinfo,
-    os_fileinfo_id_equal, os_fileinfo_size, os_free_acl, os_get_acl, os_getperm, os_isdir,
-    os_isrealdir, os_mkdir, os_mkdtemp, os_open, os_path_exists, os_remove, os_rename, os_rmdir,
-    os_scandir, os_scandir_next, os_set_acl, os_set_cloexec, os_setperm,
+    dir_exists, mark_stdin_cloexec, os_closedir, os_copy, os_file_is_writable, os_file_owned,
+    os_free_acl, os_get_acl, os_isrealdir, os_mkdir, os_remove, os_rename, os_rmdir, os_scandir,
+    os_scandir_next, os_set_acl, os_setperm, path_exists, reopen_stdin_on_stderr,
 };
 use crate::os::input::os_breakcheck;
-use crate::os::users::os_get_username;
 use crate::path::{
     add_pathsep, after_pathsep, dir_of_file_exists, path_fnamecmp, path_is_absolute,
     path_shorten_fname, path_tail, path_with_url, vim_full_name,
 };
 use crate::pos::MAXLNUM;
-use crate::regexp::{vim_regcomp, vim_regexec, vim_regfree};
+use crate::regexp::vim_regexec;
 use crate::sha256::Sha256;
 use crate::shada::check_marks_read;
-use crate::snprintf;
 use crate::startup::{exiting, readonlymode, recoverymode, stdin_fd, vim_ignored};
 use crate::state::mode::{State, exmode_active, restart_edit};
 use crate::state::{MODE_CMDLINE, MODE_NORMAL_BUSY};
+use crate::strings::{FmtArg, formatted};
 use crate::types::AutoEvent;
 use crate::types::CAR;
 use crate::types::NL;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    AcoSave, BlnFlags, ColNr, Directory, ExArg, FAIL, FILE, Failed, FileInfo, FileOffset, IOSIZE,
-    LineNr, OK, OptInt, OptVal, OptionSetFlags, RegMatch, RegProg, ScriptId, ShmFlag, iconv_t,
-    int64_t, ptrdiff_t, size_t, ssize_t, time_t, uint64_t, uintmax_t, uv_gid_t, uv_uid_t,
+    AcoSave, BlnFlags, Directory, ExArg, Failed, FileInfo, FileOffset, IOSIZE, LineNr, OptInt,
+    OptVal, OptionSetFlags, RegMatch, RegProg, ScriptId, ShmFlag, int64_t, uv_gid_t,
 };
 use crate::ui::{ui_flush, ui_has};
 use crate::undo::{
@@ -98,12 +94,9 @@ use crate::undo::{
     u_read_undo, u_savecommon, u_sync, u_unchanged, u_write_undo,
 };
 use crate::winlayer::Buf;
-use ::libc::{
-    __errno_location, close, dup, feof, ferror, fgets, fwrite, iconv, iconv_close, lseek, memchr,
-    read, readlink, symlink, umask, write,
-};
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
+use core::ffi::{CStr, c_int};
+use std::fs::File;
+use std::io::{ErrorKind, Seek, SeekFrom};
 
 // The carve of the transpiled module; see each child's docs.
 mod convert;
@@ -122,39 +115,50 @@ mod names;
 pub use self::names::*;
 mod tempfile;
 pub use self::tempfile::*;
+mod stream;
+pub(crate) use self::stream::*;
+mod legacy_stream;
+pub use self::legacy_stream::*;
 pub const BLN_DUMMY: BlnFlags = 4;
-pub const ENC_LATIN1: ::core::ffi::c_uint = 512;
-pub const ENC_2WORD: ::core::ffi::c_uint = 256;
-pub const ENC_4BYTE: ::core::ffi::c_uint = 128;
-pub const ENC_2BYTE: ::core::ffi::c_uint = 64;
-pub const ENC_ENDIAN_L: ::core::ffi::c_uint = 32;
-pub const ENC_UNICODE: ::core::ffi::c_uint = 4;
-pub const READ_NOFILE: ::core::ffi::c_uint = 256;
-pub const READ_FIFO: ::core::ffi::c_uint = 64;
-pub const READ_KEEP_UNDO: ::core::ffi::c_uint = 32;
-pub const READ_DUMMY: ::core::ffi::c_uint = 16;
-pub const READ_BUFFER: ::core::ffi::c_uint = 8;
-pub const READ_STDIN: ::core::ffi::c_uint = 4;
-pub const READ_FILTER: ::core::ffi::c_uint = 2;
-pub const READ_NEW: ::core::ffi::c_uint = 1;
-pub const FIO_ALL: ::core::ffi::c_int = -1;
-pub const FIO_UCSBOM: ::core::ffi::c_int = 16384;
-pub const FIO_ENDIAN_L: ::core::ffi::c_int = 128;
-pub const FIO_UTF16: ::core::ffi::c_int = 16;
-pub const FIO_UCS4: ::core::ffi::c_int = 8;
-pub const FIO_UCS2: ::core::ffi::c_int = 4;
-pub const FIO_UTF8: ::core::ffi::c_int = 2;
-pub const FIO_LATIN1: ::core::ffi::c_int = 1;
-pub const CONV_RESTLEN: ::core::ffi::c_uint = 30;
-pub const ICONV_MULT: ::core::ffi::c_uint = 8;
-pub const VIM_WARNING: ::core::ffi::c_uint = 2;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const O_RDONLY: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const EOF: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-pub const SEEK_SET: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const UV_FS_COPYFILE_EXCL: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
-pub const BASENAMELEN: ::core::ffi::c_int = NAME_MAX - 5 as ::core::ffi::c_int;
-pub const NOTDONE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
+pub const BAD_REPLACE: c_int = b'?' as c_int;
+pub const BAD_KEEP: c_int = -1;
+pub const BAD_DROP: c_int = -2;
+pub const FORCE_BIN: c_int = 1;
+pub const FORCE_NOBIN: c_int = 2;
+pub const ENC_UCSBOM: &CStr = c"ucs-bom";
+pub const EOL_UNKNOWN: c_int = -1;
+pub const EOL_UNIX: c_int = 0;
+pub const EOL_DOS: c_int = 1;
+pub const EOL_MAC: c_int = 2;
+const VIM_WARNING: c_int = 2;
+const SEA_QUIT: c_int = 2;
+const EOVERFLOW: c_int = ::libc::EOVERFLOW;
+/// The file-type bits of a mode.
+const S_IFMT: c_int = 0o170000;
+
+crate::flag_set! {
+    /// What [`readfile_named`] is asked to do: upstream's `READ_*` bits.
+    pub struct ReadFlags;
+
+    /// Starting to edit a new buffer.
+    const NEW = 0x01;
+    /// Reading filter output.
+    const FILTER = 0x02;
+    /// Read from stdin.
+    const STDIN = 0x04;
+    /// Read from `curbuf`, to convert what stdin gave us.
+    const BUFFER = 0x08;
+    /// Read into a dummy buffer, to see whether the file changed.
+    const DUMMY = 0x10;
+    /// Don't clear the undo info or read it from a file.
+    const KEEP_UNDO = 0x20;
+    /// Read from a fifo or socket.
+    const FIFO = 0x40;
+    /// Don't trigger `BufWinEnter` (`open_buffer`'s, carried through).
+    const NOWINENTER = 0x80;
+    /// Don't read a file, only trigger `BufReadCmd`.
+    const NOFILE = 0x100;
+}
 
 /// What a read of a file into a buffer came to.
 ///
@@ -176,35 +180,26 @@ pub enum Loaded {
 /// One of the buffer-lifecycle autocommands this file fires about the current
 /// buffer: `apply_autocmds(event, NULL, NULL, false, curbuf)`.
 fn autocmd_for_curbuf(event: AutoEvent) {
-    let (nofile, cb) = (ptr::null_mut(), Buf::current_or_none());
-    // SAFETY: the current buffer is live, and the event takes no file name.
-    unsafe { apply_autocmds(event, nofile, nofile, false, cb) };
+    fire_autocmds(event, false, Buf::current_or_none());
 }
-static e_auchangedbuf: &::core::ffi::CStr = c"E812: Autocommands changed buffer or buffer name";
-pub const NONASCII_MASK: uint64_t = (-1 as ::core::ffi::c_int as uint64_t)
-    .wrapping_div(0xff as uint64_t)
-    .wrapping_mul(0x80 as uint64_t);
-/// Report which file is being read or written, in `IObuff`.
+static E_AUCHANGEDBUF: &CStr = c"E812: Autocommands changed buffer or buffer name";
+/// The top bit of every byte of a word: a word ANDed with it is zero when
+/// all eight bytes are ASCII.
+const NONASCII_MASK: u64 = u64::MAX / 0xff * 0x80;
+/// Report which file is being read or written.
 ///
-/// `s` is the note to append; an empty one means the message is progress on
-/// a write that is still running.
-///
-/// # Safety
-///
-/// `name` must point at a NUL-terminated string, unaliased for the call. `s`
-/// must point at a NUL-terminated string, unaliased for the call.
-pub unsafe fn filemess(buffer: Buf, name: *mut c_char, s: *mut c_char) {
+/// `note` is appended; an empty one means the message is progress on a
+/// write that is still running.
+pub fn filemess(buffer: Buf, name: Option<&CStr>, note: &CStr) {
     // The report. Upstream builds it in `IObuff` and then calls
     // `msg_progress`/`msg_display`, which write it again.
-    let mut report = [0 as c_char; IOSIZE as usize];
     let prev_msg_col = msg_col.get();
     if msg_silent.get() != 0 {
         return;
     }
-    let io = report.as_mut_ptr();
-    unsafe { add_quoted_fname(io, IOSIZE as size_t - 100, buffer, name) };
+    let mut report = Report::quoted_fname(buffer, name, IOSIZE as usize - 100);
     // Avoid an over-long translation causing trouble.
-    unsafe { xstrlcat(io, s, IOSIZE as size_t) };
+    report.push(note.to_bytes());
 
     // For the first message we may have to start a new line. Further ones
     // overwrite the previous one; reset `msg_scroll` before calling this.
@@ -222,14 +217,12 @@ pub unsafe fn filemess(buffer: Buf, name: *mut c_char, s: *mut c_char) {
     }
     msg_start();
     if prev_msg_col != 0 && msg_col.get() == 0 {
-        msg_putchar(b'\r' as c_int); // overwrite any previous message
+        msg_putchar(c_int::from(b'\r')); // overwrite any previous message
     }
     msg_scroll.set(msg_scroll_save);
     msg_scrolled_ign.set(true);
-    // SAFETY: `io` is this frame's report buffer, NUL-terminated by
-    // `xstrlcat`.
-    let text = unsafe { cstr::at(io) };
-    if unsafe { *s } == 0 {
+    let text = report.as_cstr();
+    if note.is_empty() {
         msg_progress(text, c"bufwrite", c"running", 0, false, true);
     } else {
         // May truncate the message to avoid a hit-return prompt.
@@ -238,40 +231,21 @@ pub unsafe fn filemess(buffer: Buf, name: *mut c_char, s: *mut c_char) {
     msg_clr_eos();
     msg_scrolled_ign.set(false);
 }
+
 /// From the buffer's line count before this read and the bytes read since,
 /// estimate the line number we are now on. Used for error messages.
 ///
-/// @param linecnt  the line count before the extra bytes were read
-/// @param p        the start of those bytes
-/// @param endp     the end of them
-///
-/// # Safety
-///
-/// `p` must point at a NUL-terminated string. `endp` must point at a NUL-
-/// terminated string.
-pub(crate) unsafe fn readfile_linenr(
-    linecnt: LineNr,
-    p: *const ::core::ffi::c_char,
-    endp: *const ::core::ffi::c_char,
-) -> LineNr {
-    let mut lnum: LineNr = Buf::current().b_ml.ml_line_count - linecnt + 1 as LineNr;
-    let mut s = p;
-    while s < endp {
-        if unsafe { *s } as ::core::ffi::c_int == '\n' as ::core::ffi::c_int {
-            lnum += 1;
-        }
-        s = unsafe { s.offset(1) };
-    }
-    lnum
+/// @param linecnt  the line count before `text` was read
+pub(crate) fn readfile_linenr(linecnt: LineNr, text: &[u8]) -> LineNr {
+    let newlines = text.iter().filter(|&&b| b == b'\n').count();
+    Buf::current().b_ml.ml_line_count - linecnt + 1 + newlines as LineNr
 }
+
 /// Set the name of the current buffer, for a `:r` or `:w` command with a file
 /// name given for a buffer that has none.
 ///
-/// # Safety
-///
-/// `fname` must point at a NUL-terminated string, unaliased for the call.
-/// `sfname` must point at a NUL-terminated string, unaliased for the call.
-pub unsafe fn set_rw_fname(fname: *mut c_char, sfname: *mut c_char) -> Result<(), Failed> {
+/// The names are the caller's, held across the autocommands this fires.
+pub fn set_rw_fname(fname: Option<&CStr>, sfname: Option<&CStr>) -> Result<(), Failed> {
     let buf = Buf::current_raw();
 
     // It's like the unnamed buffer is deleted...
@@ -285,13 +259,11 @@ pub unsafe fn set_rw_fname(fname: *mut c_char, sfname: *mut c_char) -> Result<()
     }
     if Buf::current_raw() != buf {
         // We are in another buffer now, don't do the renaming.
-        emsg(gettext(e_auchangedbuf));
+        emsg(gettext(E_AUCHANGEDBUF));
         return Err(Failed);
     }
 
-    // SAFETY: the caller's NUL-terminated names.
-    let (name, short) = unsafe { (cstr::at_opt(fname), cstr::at_opt(sfname)) };
-    if setfname(Buf::current(), name, short, false).is_ok() {
+    if setfname(Buf::current(), fname, sfname, false).is_ok() {
         Buf::current().b_flags |= BufFlags::NOTEDITED;
     }
 
@@ -306,8 +278,7 @@ pub unsafe fn set_rw_fname(fname: *mut c_char, sfname: *mut c_char) -> Result<()
 
     // Do filetype detection now if 'filetype' is empty.
     if Buf::current().b_p_ft.first_byte() == 0 {
-        if unsafe { augroup_exists(c"filetypedetect".as_ptr()) } {
-            // SAFETY: nothing to write through.
+        if augroup_exists_of(c"filetypedetect") {
             let _ = do_doautocmd(c"filetypedetect BufRead", false, None);
         }
         do_modelines(OptionSetFlags::NONE);
@@ -315,345 +286,17 @@ pub unsafe fn set_rw_fname(fname: *mut c_char, sfname: *mut c_char) -> Result<()
     Ok(())
 }
 
-/// Put a file name into `ret_buf`, in quotes, with the home directory at the
-/// start replaced by `~`.
-///
-/// # Safety
-///
-/// `ret_buf` must point at a NUL-terminated string, unaliased for the call.
-/// `fname` must point at a NUL-terminated string.
-pub unsafe fn add_quoted_fname(
-    ret_buf: *mut c_char,
-    buf_len: size_t,
-    buffer: Buf,
-    fname: *const c_char,
-) {
-    let fname = if fname.is_null() {
-        c"-stdin-".as_ptr()
-    } else {
-        fname
-    };
-    unsafe { *ret_buf = b'"' as c_char };
-    unsafe { home_replace(Some(buffer), fname, ret_buf.add(1), buf_len - 4, true) };
-    unsafe { xstrlcat(ret_buf, c"\" ".as_ptr(), buf_len) };
-}
-
-/// Append the file format to `IObuff`, unless it is the platform default.
-///
-/// @return  true if something was appended.
-///
-/// # Safety
-///
-/// `report` must hold a NUL-terminated message with room after it: the note
-/// is appended in place, up to the buffer's own size.
-pub(crate) unsafe fn msg_add_fileformat(
-    report: &mut [c_char; IOSIZE as usize],
-    eol_type: c_int,
-) -> bool {
-    let note = match eol_type {
-        EOL_DOS => c"[dos]",
-        EOL_MAC => c"[mac]",
-        // On a platform where CRLF is the default, EOL_UNIX would be
-        // worth noting instead; upstream compiles that in with USE_CRNL.
-        _ => return false,
-    };
-    let io = report.as_mut_ptr();
-    // SAFETY: `report` holds `IOSIZE` bytes and the note is a static
-    // string.
-    unsafe { xstrlcat(io, gettext(note).as_ptr(), IOSIZE as size_t) };
-    true
-}
-
-/// Append the line and character count to `report`.
-///
-/// # Safety
-///
-/// `report` must hold a NUL-terminated message with room after it: the note
-/// is appended in place, up to the buffer's own size.
-pub(crate) unsafe fn msg_add_lines(
-    report: &mut [c_char; IOSIZE as usize],
-    insert_space: c_int,
-    lnum: LineNr,
-    nchars: FileOffset,
-) {
-    let io = report.as_mut_ptr();
-    let mut len = unsafe { cstr::bytes_at(io) }.len();
-    let space = if insert_space != 0 { c" " } else { c"" }.as_ptr();
-
-    if shortmess(ShmFlag::LINES) {
-        // l10n: L as in line, B as in byte.
-        let fmt = c"%s%ldL, %ldB".as_ptr();
-        let (l, b) = (lnum as int64_t, nchars as int64_t);
-        let room = IOSIZE as size_t - len;
-        // SAFETY: `io` holds `IOSIZE` bytes and `len` of them are used; the
-        // three conversions match the three arguments.
-        unsafe { snprintf!(io.add(len), room, gettext_ptr(fmt).as_ptr(), space, l, b) };
-        return;
-    }
-
-    let lines_one = c"%s%ld line, ";
-    let lines_many = c"%s%ld lines, ";
-    let fmt = ngettext(lines_one, lines_many, lnum as core::ffi::c_ulong);
-    let (at, room) = (unsafe { io.add(len) }, IOSIZE as size_t - len);
-    len += unsafe { snprintf!(at, room, fmt.as_ptr(), space, lnum as int64_t) } as size_t;
-    let bytes_one = c"%ld byte";
-    let bytes_many = c"%ld bytes";
-    let fmt = ngettext(bytes_one, bytes_many, nchars as core::ffi::c_ulong);
-    let (at, room) = (unsafe { io.add(len) }, IOSIZE as size_t - len);
-    unsafe { snprintf!(at, room, fmt.as_ptr(), nchars as int64_t) };
-}
-
-/// Like `fgets()`, but a line longer than the buffer is truncated and the rest
-/// of it thrown away.
-///
-/// @return  true for EOF or error
-///
-/// # Safety
-///
-/// `buf` must point at `size` bytes the caller owns, readable and writable,
-/// unaliased for the call. `stream` must point at a live `FILE`, unaliased
-/// for the call.
-pub unsafe fn vim_fgets(buf: *mut c_char, size: c_int, stream: *mut FILE) -> bool {
-    debug_assert!(size > 0);
-    // The last-but-one byte tells us whether the line fitted: `fgets`
-    // leaves it alone if the line was shorter than the buffer.
-    let last = (size - 2) as isize;
-    unsafe { *buf.offset(last) = 0 };
-
-    let mut retval;
-    loop {
-        unsafe { *__errno_location() = 0 };
-        retval = unsafe { fgets(buf, size, stream) };
-        if !(retval.is_null()
-            && unsafe { *__errno_location() } == EINTR
-            && unsafe { ferror(stream) } != 0)
-        {
-            break;
-        }
-    }
-
-    let filled = |c: c_char| c != 0 && c != b'\n' as c_char;
-    if filled(unsafe { *buf.offset(last) }) {
-        // SAFETY: `buf` holds `size` bytes and `last + 1` is inside them.
-        unsafe { buf.offset(last + 1).write(0) }; // truncate the line
-
-        // Now throw away the rest of the line.
-        let mut tbuf = [0 as c_char; 200];
-        let tlast = tbuf.len() - 2;
-        loop {
-            tbuf[tlast] = 0;
-            unsafe { *__errno_location() = 0 };
-            retval = unsafe { fgets(tbuf.as_mut_ptr(), tbuf.len() as c_int, stream) };
-            if retval.is_null()
-                && (unsafe { feof(stream) } != 0 || unsafe { *__errno_location() } != EINTR)
-            {
-                break;
-            }
-            if !filled(tbuf[tlast]) {
-                break;
-            }
-        }
-    }
-    retval.is_null()
-}
-
-/// Read `N` bytes from `fd` and turn them into an integer, most significant
-/// byte first. Returns -1 at end of file.
-///
-/// # Safety
-///
-/// `fd` must point at a live `FILE`, unaliased for the call.
-unsafe fn get_bytes<const N: usize>(fd: *mut FILE) -> Option<u64> {
-    let mut n: u64 = 0;
-    for _ in 0..N {
-        let c = unsafe { getc(fd) };
-        if c == EOF {
-            return None;
-        }
-        n = (n << 8) + c as u64;
-    }
-    Some(n)
-}
-
-/// Read 2 bytes from `fd` and turn them into an int, MSB first.
-///
-/// @return  -1 when encountering EOF.
-///
-/// # Safety
-///
-/// `fd` must point at a live `FILE`, unaliased for the call.
-pub unsafe fn get2c(fd: *mut FILE) -> c_int {
-    unsafe { get_bytes::<2>(fd).map_or(-1, |n| n as c_int) }
-}
-
-/// Read 3 bytes from `fd` and turn them into an int, MSB first.
-///
-/// @return  -1 when encountering EOF.
-///
-/// # Safety
-///
-/// `fd` must point at a live `FILE`, unaliased for the call.
-pub unsafe fn get3c(fd: *mut FILE) -> c_int {
-    unsafe { get_bytes::<3>(fd).map_or(-1, |n| n as c_int) }
-}
-
-/// Read 4 bytes from `fd` and turn them into an int, MSB first.
-///
-/// The result wraps around rather than saturating when the top bit is set,
-/// which is what upstream's unsigned accumulator gives.
-///
-/// @return  -1 when encountering EOF.
-///
-/// # Safety
-///
-/// `fd` must point at a live `FILE`, unaliased for the call.
-pub unsafe fn get4c(fd: *mut FILE) -> c_int {
-    unsafe { get_bytes::<4>(fd).map_or(-1, |n| n as u32 as c_int) }
-}
-
-/// Read 8 bytes from `fd` and turn them into a `time_t`, MSB first.
-///
-/// @return  -1 when encountering EOF.
-///
-/// # Safety
-///
-/// `fd` must point at a live `FILE`, unaliased for the call.
-pub unsafe fn get8ctime(fd: *mut FILE) -> time_t {
-    unsafe { get_bytes::<8>(fd).map_or(-1, |n| n as time_t) }
-}
-
-/// Read a string of length `cnt` from `fd` into allocated memory.
-///
-/// @return  the string, or NULL when unable to read that many bytes.
-///
-/// # Safety
-///
-/// `fd` must point at a live `FILE`, unaliased for the call.
-pub unsafe fn read_string(fd: *mut FILE, cnt: size_t) -> *mut c_char {
-    let str = unsafe { xmallocz(cnt) }.cast::<c_char>();
-    for i in 0..cnt {
-        let c = unsafe { getc(fd) };
-        if c == EOF {
-            unsafe { xfree(str.cast()) };
-            return ptr::null_mut();
-        }
-        unsafe { *str.add(i) = c as c_char };
-    }
-    str
-}
-
-/// Write `number` to `fd` in `len` bytes, most significant byte first.
-///
-/// @return  false in case of an error.
-///
-/// # Safety
-///
-/// `fd` must point at a live `FILE`, unaliased for the call.
-pub unsafe fn put_bytes(fd: *mut FILE, number: uintmax_t, len: size_t) -> bool {
-    debug_assert!(len > 0);
-    for i in (0..len).rev() {
-        if unsafe { putc((number >> (i * 8)) as c_int, fd) } == EOF {
-            return false;
-        }
-    }
-    true
-}
-
-/// Write a `time_t` to `fd` in 8 bytes.
-///
-/// @return  FAIL when the write failed.
-///
-/// # Safety
-///
-/// `fd` must point at a live `FILE`, unaliased for the call.
-pub unsafe fn put_time(fd: *mut FILE, time_: time_t) -> c_int {
-    let mut buf = [0u8; 8];
-    unsafe { time_to_bytes(time_, buf.as_mut_ptr()) };
-    // Upstream compares `fwrite`'s item count against 1 while asking it
-    // for 8 one-byte items, so this always answers FAIL. Both callers
-    // ignore the answer. Preserved.
-    if unsafe { fwrite(buf.as_ptr().cast(), 1, buf.len(), fd) } == 1 {
-        OK
-    } else {
-        FAIL
-    }
-}
-
-/// Version of `read()` that retries when interrupted by a signal, which
-/// `SIGWINCH` makes routine.
-///
-/// # Safety
-///
-/// `buf` must point at `bufsize` writable bytes the caller owns, unaliased
-/// for the call.
-pub unsafe fn read_eintr(fd: c_int, buf: *mut c_void, bufsize: size_t) -> ssize_t {
-    loop {
-        let ret = unsafe { read(fd, buf, bufsize) };
-        if ret >= 0 || unsafe { *__errno_location() } != EINTR {
-            return ret;
-        }
-    }
-}
-
-/// Version of `write()` that retries when interrupted by a signal.
-///
-/// Repeats the write for as long as it doesn't fail for a reason other than
-/// being interrupted; the caller compares the result against `bufsize` to see
-/// whether everything got out.
-///
-/// # Safety
-///
-/// `buf` must point at `bufsize` writable bytes the caller owns, unaliased
-/// for the call.
-pub unsafe fn write_eintr(fd: c_int, buf: *mut c_void, bufsize: size_t) -> ssize_t {
-    let mut written: ssize_t = 0;
-    while (written as size_t) < bufsize {
-        let from = buf.cast::<c_char>().wrapping_offset(written).cast();
-        let left = bufsize - written as size_t;
-        // SAFETY: `buf` holds `bufsize` bytes and `written` of them have
-        // gone out already.
-        let wlen = unsafe { write(fd, from, left) };
-        if wlen < 0 {
-            if unsafe { *__errno_location() } != EINTR {
-                break;
-            }
-        } else {
-            written += wlen;
-        }
-    }
-    written
-}
-pub const SEA_QUIT: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const BAD_REPLACE: ::core::ffi::c_int = '?' as ::core::ffi::c_int;
-pub const BAD_KEEP: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-pub const BAD_DROP: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
-pub const FORCE_BIN: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const FORCE_NOBIN: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const ENC_UCSBOM: &::core::ffi::CStr = c"ucs-bom";
-pub const EOL_UNKNOWN: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-pub const EOL_UNIX: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-pub const EOL_DOS: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const EOL_MAC: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const EOVERFLOW: ::core::ffi::c_int = 75 as ::core::ffi::c_int;
-pub const EINTR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
-pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
-pub const __S_IFMT: ::core::ffi::c_int = 0o170000 as ::core::ffi::c_int;
-pub const NAME_MAX: ::core::ffi::c_int = 255 as ::core::ffi::c_int;
-pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
-
 /// Fill `excmd` so that `'fileencoding'`, `'fileformat'` and `'binary'` are
 /// forced to what buffer `buffer` already has. Used when calling `readfile` to
 /// re-read a buffer that is already open.
 pub fn prep_exarg(excmd: &mut ExArg, buffer: Buf) {
-    // SAFETY: the buffer's own NUL-terminated 'fileencoding'.
-    let fenc = unsafe { cstr::bytes_at(buffer.b_p_fenc.value_ptr()) };
     let mut line = b"e ++enc=".to_vec();
-    line.extend_from_slice(fenc);
+    line.extend_from_slice(&buffer.b_p_fenc.get());
     excmd.set_cmd_text(&line);
     // Where the encoding name starts in that command.
     excmd.force_enc = 8;
     excmd.bad_char = buffer.b_bad_char;
-    excmd.force_ff = buffer.b_p_ff.first_byte() as c_int;
+    excmd.force_ff = c_int::from(buffer.b_p_ff.first_byte());
     excmd.force_bin = if buffer.b_p_bin != 0 {
         FORCE_BIN
     } else {
@@ -690,7 +333,6 @@ pub fn set_file_options(set_options: bool, excmd: Option<&mut ExArg>) {
 
 /// Set the forced `'fileencoding'` from a `++enc=` argument.
 pub fn set_forced_fenc(excmd: &mut ExArg) {
-    // SAFETY: the caller's command, live for the call.
     if excmd.force_enc == 0 {
         return;
     }
@@ -698,15 +340,11 @@ pub fn set_forced_fenc(excmd: &mut ExArg) {
         excmd
             .line
             .rest_of(excmd.line.cmd + excmd.force_enc as usize),
-    )
-    .into_raw();
-    // `fenc` is copied, and freed just below.
-    // SAFETY: `fenc` is NUL-terminated.
+    );
     set_option_direct(
         kOptFileencoding,
-        OptVal::from_cstr(unsafe { CStr::from_ptr(fenc) }),
+        OptVal::from_cstr(fenc.as_cstr()),
         OptionSetFlags::LOCAL,
         0 as ScriptId,
     );
-    unsafe { xfree(fenc.cast()) };
 }

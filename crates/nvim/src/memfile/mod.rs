@@ -59,10 +59,10 @@ use crate::semsg;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::hash::{BuildHasherDefault, Hasher};
+use core::slice;
 use std::collections::HashMap;
 use std::ffi::CString;
 
-use crate::fileio::{read_eintr, write_eintr};
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
 use crate::memline::{ml_get_buf, ml_open_file};
@@ -75,6 +75,7 @@ use crate::os::fs::{
     os_fileinfo_blocksize, os_fileinfo_fd, os_fileinfo_link, os_fsync, os_open, os_remove,
     os_set_cloexec,
 };
+use crate::os::fs::{read_eintr, write_eintr};
 use crate::os::input::{os_breakcheck, os_char_avail};
 use crate::path::full_name_save;
 use crate::startup::main_loop;
@@ -764,7 +765,12 @@ unsafe fn mf_read(mfp: *mut MemFile, hp: &mut BlockHdr) -> Result<(), SwapFailed
             "memfile: block longer than the address space"
         );
         let size = page_size * hp.bh_page_count;
-        if read_eintr((*mfp).mf_fd, hp.bh_data, size as usize) as c_uint != size {
+        if read_eintr(
+            (*mfp).mf_fd,
+            slice::from_raw_parts_mut(hp.bh_data.cast::<u8>(), size as usize),
+        ) as c_uint
+            != size
+        {
             perror_msg(c"E295: Read error in swap file");
             return Err(SwapFailed);
         }
@@ -827,7 +833,12 @@ unsafe fn mf_write(mfp: *mut MemFile, hp: *mut BlockHdr) -> Result<(), SwapFaile
                     } else {
                         (*hp2).bh_data
                     };
-                    if write_eintr((*mfp).mf_fd, data, size as usize) as c_uint == size {
+                    if write_eintr(
+                        (*mfp).mf_fd,
+                        slice::from_raw_parts(data.cast::<u8>(), size as usize),
+                    ) as c_uint
+                        == size
+                    {
                         break;
                     }
                 }

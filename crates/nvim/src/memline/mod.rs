@@ -29,7 +29,7 @@ use crate::event::libuv::{uv_strerror, uv_uptime};
 use crate::ex_docmd::cmdmod_has;
 use crate::fileio::state::{did_check_timestamps, need_check_timestamps};
 use crate::fileio::{
-    buf_store_file_info, modname, read_eintr, readfile, vim_deltempdir, vim_rename, vim_tempname,
+    buf_store_file_info, modname, readfile_named, rename_file, temp_name, vim_deltempdir,
 };
 use crate::getchar::flush_buffers;
 use crate::getchar::state::got_int;
@@ -58,6 +58,7 @@ use crate::option::{copy_option_part, get_fileformat, set_fileformat, set_option
 use crate::options::kOptFileencoding;
 use crate::os::cshim::{gettext, strncasecmp};
 use crate::os::env::{expand_env, home_replace, home_replace_save, os_get_hostname, os_get_pid};
+use crate::os::fs::read_eintr;
 use crate::os::fs::{
     os_fileinfo, os_fileinfo_inode, os_fileinfo_link, os_fileinfo_size, os_isdir, os_mkdir_recurse,
     os_open, os_path_exists, os_remove, os_set_cloexec, path_exists,
@@ -444,7 +445,7 @@ pub fn ml_open_file(buffer: Buf) {
 
     // A spell buffer gets a temp file name.
     if b.b_spell {
-        let fname = vim_tempname();
+        let fname = temp_name().map_or(core::ptr::null_mut(), crate::memory::XString::into_raw);
         if !fname.is_null() {
             // A spell buffer keeps working without a swap file.
             let _ = unsafe { mf_open_file(mfp, fname) }; // consumes fname!

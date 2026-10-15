@@ -214,7 +214,7 @@ pub unsafe fn spell_add_word(
         let mut fname = fname;
         unsafe { mkspell(1, &raw mut fname, false, true, true) };
         if let Some(buf) = bufref.get() {
-            unsafe { buf_reload(buf, buf.b_orig_mode, false) };
+            buf_reload(buf, buf.b_orig_mode, false);
         }
         redraw_all_later(UPD_SOME_VALID);
     }

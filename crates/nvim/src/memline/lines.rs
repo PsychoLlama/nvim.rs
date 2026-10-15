@@ -449,9 +449,20 @@ pub(crate) fn ml_append_text(lnum: LineNr, line: &[u8]) -> Result<(), Failed> {
 /// after line `lnum` of the current buffer, opening its memline if need be.
 /// The memline copies the text, terminator included, and writes nothing.
 pub(crate) fn ml_append_cstr(lnum: LineNr, line: &CStr) -> Result<(), Failed> {
-    let len = ColNr::try_from(line.count_bytes() + 1).expect("a line shorter than INT_MAX");
+    ml_append_terminated(lnum, line.to_bytes_with_nul(), false)
+}
+
+/// [`ml_append`] of a line the caller holds with its terminator: the last
+/// byte of `line` is the NUL the memline counts, and the bytes before it are
+/// the text (a NUL in the text already stored as a newline). Appended after
+/// line `lnum` of the current buffer, opening its memline if need be; the
+/// memline copies the bytes and writes none of them. `newfile` as
+/// [`ml_append`]'s.
+pub(crate) fn ml_append_terminated(lnum: LineNr, line: &[u8], newfile: bool) -> Result<(), Failed> {
+    debug_assert_eq!(line.last(), Some(&0), "the line carries its NUL");
+    let len = ColNr::try_from(line.len()).expect("a line shorter than INT_MAX");
     // SAFETY: `len` readable bytes, the NUL among them; only read.
-    unsafe { ml_append(lnum, line.as_ptr().cast_mut(), len, false) }
+    unsafe { ml_append(lnum, line.as_ptr().cast_mut().cast(), len, newfile) }
 }
 
 /// [`ml_append`] for an arbitrary buffer, which must already have a memline.

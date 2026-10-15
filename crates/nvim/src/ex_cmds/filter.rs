@@ -14,7 +14,7 @@
 #![forbid(unsafe_code)]
 
 use super::say;
-use super::{READ_FILTER, buf_autocmd, check_secure, kExtmarkNOOP};
+use super::{buf_autocmd, check_secure, kExtmarkNOOP};
 use crate::memline::Lines;
 use crate::types::AutoEvent;
 use crate::winlayer::{Buf, Win};
@@ -30,7 +30,7 @@ use crate::ex_docmd::cmdmod_has;
 use crate::ex_docmd::state::{cmdmod, global_busy};
 use crate::ex_eval::aborting;
 use crate::fileio::state::{did_check_timestamps, need_check_timestamps};
-use crate::fileio::{readfile_named, temp_name, write_lnum_adjust};
+use crate::fileio::{ReadFlags, readfile_named, temp_name, write_lnum_adjust};
 use crate::fold::fold_update;
 use crate::getchar::state::{bangredo, got_int};
 use crate::getchar::{append_to_redobuff, append_to_redobuff_literally};
@@ -386,7 +386,7 @@ fn do_filter(
                     0,
                     MAXLNUM,
                     Some(args),
-                    READ_FILTER as c_int,
+                    ReadFlags::FILTER,
                     false,
                 );
                 if read.is_err() {

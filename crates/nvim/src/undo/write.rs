@@ -170,8 +170,7 @@ unsafe fn looks_like_undo_file(file_name: *mut c_char, automatic: bool) -> bool 
         return false;
     }
     let mut magic = [0u8; UF_START_MAGIC.len()];
-    // SAFETY: an open descriptor and a buffer of exactly that many bytes.
-    let len = unsafe { read_eintr(fd, magic.as_mut_ptr().cast(), magic.len()) };
+    let len = read_eintr(fd, &mut magic);
     // SAFETY: our own descriptor.
     unsafe { close(fd) };
     if len == magic.len().cast_signed() && magic == UF_START_MAGIC {

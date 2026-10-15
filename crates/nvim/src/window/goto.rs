@@ -499,7 +499,7 @@ fn fix_current_dir() {
         return;
     }
     last_chdir_reason.set(None);
-    shorten_fnames(1);
+    shorten_fnames(true);
 }
 
 /// `chdir()` to `dir`, firing `DirChangedPre` and `DirChanged` around it when

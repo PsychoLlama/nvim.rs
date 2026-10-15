@@ -9,53 +9,40 @@
 //! run against a name — that is how `'wildignore'`, `'backupskip'` and
 //! autocommand patterns are matched.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
+use crate::ascii::ascii_isspace;
 use crate::cstr;
 use crate::memory::XString;
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::c_int;
 use std::ffi::CStr;
+use std::os::unix::ffi::OsStrExt;
 
 use crate::option::split_option_part;
-use crate::os::fs::{dirname_within, link_info};
+use crate::os::fs::{dirname_within, file_info, link_info, path_exists};
 use crate::path::tail_index;
 
 use super::*;
-use crate::regexp::RE_MAGIC;
+use crate::regexp::{OwnedProg, RE_MAGIC};
 use crate::types::{FAIL, MAXPATHL, OK};
 use crate::winlayer::buffers;
 
 /// `S_IFLNK`: the file type bits of a symbolic link.
 const S_IFLNK: u64 = 0o120000;
 
-/// [`shorten_buf_fname`] against a directory name the caller holds.
-pub(crate) fn shorten_buf_fname_in(buffer: Buf, dirname: &CStr, force: bool) {
-    // A copy: the callee takes the name as writable.
-    let mut copy = dirname.to_bytes_with_nul().to_vec();
-    // SAFETY: a NUL-terminated copy this call owns.
-    unsafe { shorten_buf_fname(buffer, copy.as_mut_ptr().cast(), c_int::from(force)) };
-}
-
 /// Shorten `buffer`'s displayed file name to be relative to `dirname`.
-///
-/// # Safety
-/// `dirname` must be a NUL-terminated directory name.
-pub unsafe fn shorten_buf_fname(mut buffer: Buf, dirname: *mut c_char, force: c_int) {
-    // SAFETY: each name the buffer holds is NUL-terminated; the null check
-    // ahead of `path_is_absolute` guards the name it reads.
+pub fn shorten_buf_fname(mut buffer: Buf, dirname: &[u8], force: bool) {
     if buffer.name.is_unnamed()
         || buf_is_nofilename(Some(buffer))
-        || unsafe { path_with_url(cstr::at(buffer.name.shown_ptr())) } != 0
-        || !(force != 0
-            || buffer.name.short().is_none()
-            || unsafe { path_is_absolute(cstr::at(buffer.name.short_ptr())) })
+        || buffer
+            .name
+            .shown()
+            .is_some_and(|shown| path_with_url(shown) != 0)
+        || !(force || buffer.name.short().is_none_or(path_is_absolute))
     {
         return;
     }
     buffer.name.drop_own_short();
-    // SAFETY: the caller's NUL-terminated directory name.
-    let dirname = unsafe { cstr::bytes_at(dirname) };
     let short = buffer
         .name
         .full()
@@ -68,18 +55,15 @@ pub unsafe fn shorten_buf_fname(mut buffer: Buf, dirname: *mut c_char, force: c_
 }
 
 /// Shorten file names for all buffers.
-pub fn shorten_fnames(force: c_int) {
-    let mut dirname = [0 as c_char; MAXPATHL as usize];
-    // SAFETY: a buffer the caller's stack owns, of the length passed with it.
-    let _ = unsafe { os_dirname(dirname.as_mut_ptr(), MAXPATHL as size_t) };
+pub fn shorten_fnames(force: bool) {
+    // Upstream ignores a failure here too, and works on what the buffer was
+    // left holding.
+    let dirname = dirname_within(MAXPATHL as usize).unwrap_or_else(|left| left);
     for buf in buffers() {
-        // SAFETY: a live buffer from the editor's own list, and the directory
-        // name just filled in.
-        unsafe { shorten_buf_fname(buf, dirname.as_mut_ptr(), force) };
+        shorten_buf_fname(buf, &dirname, force);
         // Always make the swap file name a full path; a "nofile" buffer
         // may also have a swap file.
-        // SAFETY: the buffer's own memfile, or null.
-        unsafe { mf_fullname(buf.b_ml.ml_mfp) };
+        buf.make_swap_name_full();
     }
     status_redraw_all();
     redraw_tabline.set(true);
@@ -87,55 +71,47 @@ pub fn shorten_fnames(force: c_int) {
 
 /// Get a new file name ended by the given extension.
 ///
-/// @param fname        The original file name. If NULL or empty, the current
-///                     directory name is used instead.
+/// @param fname        The original file name. If `None` or empty, the
+///                     current directory name is used instead.
 /// @param ext          The extension to add. 4 characters max if it starts
 ///                     with a dot, 3 otherwise.
 /// @param prepend_dot  Prefix the basename with a dot. Does nothing if it
 ///                     already starts with one, or if `fname` was empty.
 ///
-/// @return \[allocated\] The new name, guaranteed to end with `ext`, to have a
-///                     basename of at most `BASENAMELEN` characters, and to
-///                     differ from `fname` — basename characters are replaced
-///                     with `_` if that is what it takes, and if the whole
-///                     truncated basename was already underscores, the first
-///                     becomes a `v`. NULL only when `fname` was empty and
-///                     the current directory could not be read.
-///
-/// # Safety
-///
-/// `fname` must point at a NUL-terminated string. `ext` must point at a NUL-
-/// terminated string.
-pub unsafe fn modname(fname: *const c_char, ext: *const c_char, prepend_dot: bool) -> *mut c_char {
-    let ext = unsafe { CStr::from_ptr(ext) }.to_bytes();
+/// @return The new name, guaranteed to end with `ext`, to have a basename of
+///         at most `BASENAMELEN` characters, and to differ from `fname` --
+///         basename characters are replaced with `_` if that is what it
+///         takes, and if the whole truncated basename was already
+///         underscores, the first becomes a `v`. `None` only when `fname`
+///         was empty and the current directory could not be read.
+pub fn modname(fname: Option<&CStr>, ext: &[u8], prepend_dot: bool) -> Option<XString> {
+    let fname = fname.map(CStr::to_bytes).filter(|name| !name.is_empty());
     let mut prepend_dot = prepend_dot;
     let cwd;
-    let name: &[u8] = if fname.is_null() || unsafe { *fname } == 0 {
-        // With no file name we need the name of the current directory —
-        // in full, in case `:cd` is used.
-        let Some(mut dir) = dirname_within(MAXPATHL as usize)
-            .ok()
-            .filter(|dir| !dir.is_empty())
-        else {
-            return ptr::null_mut();
-        };
-        add_pathsep(&mut dir);
-        prepend_dot = false; // nothing to prepend a dot to
-        cwd = dir;
-        &cwd
-    } else {
-        unsafe { CStr::from_ptr(fname) }.to_bytes()
+    let name: &[u8] = match fname {
+        Some(name) => name,
+        None => {
+            // With no file name we need the name of the current directory --
+            // in full, in case `:cd` is used.
+            let mut dir = dirname_within(MAXPATHL as usize)
+                .ok()
+                .filter(|dir| !dir.is_empty())?;
+            add_pathsep(&mut dir);
+            prepend_dot = false; // nothing to prepend a dot to
+            cwd = dir;
+            &cwd
+        }
     };
 
-    // Everything after the last path separator is the basename, and it
-    // may keep at most BASENAMELEN characters. Upstream's backwards walk
-    // stops before the first byte, so a name that *is* a separator there
-    // ("/foo") keeps it as part of the basename.
+    // Everything after the last path separator is the basename, and it may
+    // keep at most BASENAMELEN characters. Upstream's backwards walk stops
+    // before the first byte, so a name that *is* a separator there ("/foo")
+    // keeps it as part of the basename.
     let start = name[1..]
         .iter()
         .rposition(|&b| b == b'/')
         .map_or(0, |at| at + 2);
-    let ptrlen = (name.len() - start).min(BASENAMELEN as usize);
+    let ptrlen = (name.len() - start).min(BASENAMELEN);
 
     let mut out = Vec::with_capacity(start + ptrlen + ext.len() + 2);
     out.extend_from_slice(&name[..start + ptrlen]);
@@ -153,7 +129,7 @@ pub unsafe fn modname(fname: *const c_char, ext: *const c_char, prepend_dot: boo
 
     // Check that, after appending the extension, the file name really is
     // different.
-    if !fname.is_null() && unsafe { CStr::from_ptr(fname) }.to_bytes() == out {
+    if fname == Some(&out[..]) {
         // Look backwards through the basename for a character that can be
         // replaced by '_'.
         let mut at = ext_at;
@@ -175,125 +151,104 @@ pub unsafe fn modname(fname: *const c_char, ext: *const c_char, prepend_dot: boo
         }
     }
 
-    unsafe { xmemdupz(out.as_ptr().cast(), out.len()) }.cast()
+    Some(XString::from_vec(out))
 }
 
-/// Rename `from` to `to` via a third name in the same directory.
+/// How long a basename [`modname`] keeps.
+const BASENAMELEN: usize = 255 - 5;
+
+/// Rename `from` to `to` via a third name in the same directory: whether it
+/// worked.
 ///
 /// Needed when the two names refer to the same file but are spelled
 /// differently, which a plain rename would treat as a no-op.
-///
-/// # Safety
-///
-/// `from` must point at a NUL-terminated string. `to` must point at a NUL-
-/// terminated string.
-unsafe fn rename_with_tmp(from: *const c_char, to: *const c_char) -> c_int {
-    let from_len = unsafe { CStr::from_ptr(from) }.to_bytes().len();
-    if from_len >= MAXPATHL as usize - 5 {
-        return -1;
+fn rename_with_tmp(from: &CStr, to: &CStr) -> bool {
+    let from_bytes = from.to_bytes();
+    if from_bytes.len() >= MAXPATHL as usize - 5 {
+        return false;
     }
 
-    let mut tempname = [0 as c_char; MAXPATHL as usize + 1];
-    unsafe { ptr::copy_nonoverlapping(from, tempname.as_mut_ptr(), from_len + 1) };
     // Everything up to the tail stays put; only the last component is
     // replaced with a number.
-    let tail = tail_index(unsafe { CStr::from_ptr(tempname.as_ptr()) }.to_bytes());
+    let tail = tail_index(from_bytes);
+    let mut tempname = from_bytes[..tail].to_vec();
 
     for n in 123..99999 {
-        let digits = n.to_string();
-        let end = tail + digits.len();
-        let (at, len) = (digits.as_ptr().cast::<c_char>(), digits.len());
-        tempname[tail..end].copy_from_slice(unsafe { core::slice::from_raw_parts(at, len) });
-        tempname[end] = 0;
+        tempname.truncate(tail);
+        tempname.extend_from_slice(n.to_string().as_bytes());
+        let temp = cstr::owned(&tempname);
 
-        if unsafe { os_path_exists(tempname.as_ptr()) } {
+        if path_exists(&temp) {
             continue;
         }
-        if unsafe { os_rename(cstr::at(from), cstr::in_chars(&tempname)) } != OK {
+        if os_rename(from, &temp) != OK {
             // If it fails for one temp name it will most likely fail for
             // any temp name, so give up.
-            return -1;
+            return false;
         }
-        if unsafe { os_rename(cstr::in_chars(&tempname), cstr::at(to)) } == OK {
-            return 0;
+        if os_rename(&temp, to) == OK {
+            return true;
         }
         // Strange, the second step failed. Try moving the file back and
         // report the failure.
-        unsafe { os_rename(cstr::in_chars(&tempname), cstr::at(from)) };
-        return -1;
+        os_rename(&temp, from);
+        return false;
     }
-    -1
+    false
 }
 
-/// [`vim_rename`] of two names the caller holds: whether it worked.
-pub(crate) fn rename_file(from: &CStr, to: &CStr) -> bool {
-    // SAFETY: both are NUL-terminated.
-    unsafe { vim_rename(from.as_ptr(), to.as_ptr()) == 0 }
-}
-
-/// Rename `from` to `to`, copying the file across if a rename cannot do it.
+/// Rename `from` to `to`, copying the file across if a rename cannot do it:
+/// whether it worked.
 ///
 /// `os_rename` only works when both names are on the same file system.
-///
-/// @return  -1 for failure, 0 for success
-///
-/// # Safety
-///
-/// `from` must point at a NUL-terminated string. `to` must point at a NUL-
-/// terminated string.
-pub unsafe fn vim_rename(from: *const c_char, to: *const c_char) -> c_int {
+pub(crate) fn rename_file(from: &CStr, to: &CStr) -> bool {
     let mut use_tmp_file = false;
 
     // When the names are identical there is nothing to do. When they refer
     // to the same file but the spelling differs we have to go through a
     // temp file.
-    if unsafe { path_fnamecmp(cstr::bytes_at(from), cstr::bytes_at(to)) } == 0 {
-        if p_fic() && unsafe { path_tail(cstr::at(from)) != path_tail(cstr::at(to)) } {
+    if path_fnamecmp(from.to_bytes(), to.to_bytes()) == 0 {
+        if p_fic() && path_tail(from) != path_tail(to) {
             use_tmp_file = true;
         } else {
-            return 0;
+            return true;
         }
     }
 
     // Fail if the "from" file doesn't exist. Avoids that "to" is deleted.
-    let mut from_info = FileInfo::default();
-    if !unsafe { os_fileinfo(from, &raw mut from_info) } {
-        return -1;
-    }
+    let Some(from_info) = file_info(from) else {
+        return false;
+    };
 
     // It's possible for the source and destination to be the same file.
     // This happens when "from" and "to" differ in case and are on a FAT32
     // filesystem. In that case go through a temp file name.
-    let mut to_info = FileInfo::default();
-    if unsafe { os_fileinfo(to, &raw mut to_info) }
-        && unsafe { os_fileinfo_id_equal(&raw mut from_info, &raw mut to_info) }
-    {
+    if file_info(to).is_some_and(|to_info| from_info.same_file_as(&to_info)) {
         use_tmp_file = true;
     }
 
     if use_tmp_file {
-        return unsafe { rename_with_tmp(from, to) };
+        return rename_with_tmp(from, to);
     }
 
     // Delete the "to" file. This is required on some systems to make the
     // rename work, and on others it makes sure we don't end up with two
     // files when the rename fails.
-    unsafe { os_remove(cstr::at(to)) };
+    os_remove(to);
 
     // First try a normal rename, and return if it works.
-    if unsafe { os_rename(cstr::at(from), cstr::at(to)) } == OK {
-        return 0;
+    if os_rename(from, to) == OK {
+        return true;
     }
 
     // The rename failed, try copying the file.
-    let (from_name, to_name) = unsafe { (cstr::at(from), cstr::at(to)) };
-    if vim_copyfile(from_name, to_name) != OK {
-        return -1;
+    if vim_copyfile(from, to) != OK {
+        return false;
     }
-    if unsafe { os_fileinfo(from, &raw mut from_info) } {
-        unsafe { os_remove(cstr::at(from)) };
+    if file_info(from).is_some() {
+        os_remove(from);
     }
-    0
+    true
 }
 
 /// Copy `from` to `to`, with the same permissions and ACL.
@@ -302,17 +257,18 @@ pub unsafe fn vim_rename(from: *const c_char, to: *const c_char) -> c_int {
 ///
 /// @return  FAIL for failure, OK for success
 pub fn vim_copyfile(from: &CStr, to: &CStr) -> c_int {
-    if link_info(from).is_some_and(|info| info.stat.st_mode & __S_IFMT as u64 == S_IFLNK) {
-        let mut linkbuf = [0 as c_char; MAXPATHL as usize + 1];
-        // SAFETY: a NUL-terminated name, and `MAXPATHL` writable bytes with
-        // room for the terminator after them.
-        let len = unsafe { readlink(from.as_ptr(), linkbuf.as_mut_ptr(), MAXPATHL as size_t) };
-        if len <= 0 {
+    let path = |name: &CStr| std::path::PathBuf::from(std::ffi::OsStr::from_bytes(name.to_bytes()));
+    if link_info(from).is_some_and(|info| info.stat.st_mode & S_IFMT as u64 == S_IFLNK) {
+        // Upstream reads the link into a `MAXPATHL` buffer: a longer target
+        // fails.
+        let target = std::fs::read_link(path(from))
+            .ok()
+            .filter(|target| !target.as_os_str().is_empty())
+            .filter(|target| target.as_os_str().len() <= MAXPATHL as usize);
+        let Some(target) = target else {
             return FAIL;
-        }
-        linkbuf[len as usize] = 0;
-        // SAFETY: two NUL-terminated names.
-        return if unsafe { symlink(linkbuf.as_ptr(), to.as_ptr()) } == 0 {
+        };
+        return if std::os::unix::fs::symlink(target, path(to)).is_ok() {
             OK
         } else {
             FAIL
@@ -330,64 +286,40 @@ pub fn vim_copyfile(from: &CStr, to: &CStr) -> c_int {
     OK
 }
 
-/// Try matching a file name with `pattern`, or with the pre-compiled `prog`
-/// when that avoids recompiling the same pattern over and over.
+/// `uv_fs_copyfile`'s flag: fail if the destination exists.
+const UV_FS_COPYFILE_EXCL: c_int = 0x1;
+
+/// Try matching a file name with the pre-compiled `prog`, which the matcher
+/// may swap for a recompiled one (and so is the caller's to keep).
 ///
-/// Used for autocommands and `'wildignore'`.
+/// Used for autocommands. Ignores case when `'fileignorecase'` is set.
 ///
-/// @param pattern    pattern to match with, when `prog` is NULL
-/// @param prog       pre-compiled regprog, or NULL
 /// @param fname      full path of the file name
-/// @param sfname     short file name, or NULL
+/// @param sfname     short file name, if there is one
 /// @param tail       tail of the path
 /// @param allow_dirs the pattern may match a directory
-///
-/// # Safety
-///
-/// `pattern` must point at a NUL-terminated string, unaliased for the call.
-/// `prog` must point at a writable `*mut RegProg` slot the caller owns for
-/// the call. `fname` must point at a NUL-terminated string, unaliased for the
-/// call. `sfname` must point at a NUL-terminated string, unaliased for the
-/// call. `tail` must point at a NUL-terminated string, unaliased for the
-/// call.
-pub unsafe fn match_file_pat(
-    pattern: *mut c_char,
-    prog: *mut *mut RegProg,
-    fname: *mut c_char,
-    sfname: *mut c_char,
-    tail: *mut c_char,
-    allow_dirs: c_int,
+pub(crate) fn match_file_pat(
+    prog: &mut *mut RegProg,
+    fname: &CStr,
+    sfname: Option<&CStr>,
+    tail: &CStr,
+    allow_dirs: bool,
 ) -> bool {
     let mut regmatch = RegMatch {
-        rm_ic: p_fic(), // ignore case if 'fileignorecase' is set
-        regprog: if prog.is_null() {
-            vim_regcomp(unsafe { cstr::at(pattern) }, RE_MAGIC)
-        } else {
-            unsafe { *prog }
-        },
+        rm_ic: p_fic(),
+        regprog: *prog,
         ..Default::default()
     };
-
-    // Try for a match with the pattern with:
-    // 1. the full file name, when the pattern has a '/'.
-    // 2. the short file name, when the pattern has a '/'.
-    // 3. the tail of the file name, when the pattern has no '/'.
     let result = !regmatch.regprog.is_null()
-        && if allow_dirs != 0 {
-            // Short-circuits: the second `vim_regexec` must not run when the
-            // full name already matched, as it overwrites `regmatch`.
-            let full = vim_regexec(&mut regmatch, unsafe { cstr::at(fname) }, 0);
-            full || (!sfname.is_null()
-                && vim_regexec(&mut regmatch, unsafe { cstr::at(sfname) }, 0))
+        && if allow_dirs {
+            // Short-circuits: the second match must not run when the full
+            // name already matched, as it overwrites `regmatch`.
+            vim_regexec(&mut regmatch, fname, 0)
+                || sfname.is_some_and(|sfname| vim_regexec(&mut regmatch, sfname, 0))
         } else {
-            vim_regexec(&mut regmatch, unsafe { cstr::at(tail) }, 0)
+            vim_regexec(&mut regmatch, tail, 0)
         };
-
-    if prog.is_null() {
-        unsafe { vim_regfree(regmatch.regprog) };
-    } else {
-        unsafe { *prog = regmatch.regprog };
-    }
+    *prog = regmatch.regprog;
     result
 }
 
@@ -398,40 +330,21 @@ pub unsafe fn match_file_pat(
 /// @param ffname  full file name
 pub fn match_file_list(list: &CStr, sfname: &CStr, ffname: &CStr) -> bool {
     let tail = path_tail(sfname);
+    let ic = p_fic();
     let mut rest = list.to_bytes();
     while !rest.is_empty() {
         let (part, after) = split_option_part(rest, MAXPATHL as usize, b",");
         rest = after;
-        let part = cstr::owned(&part);
-        let mut allow_dirs: c_char = 0;
-        // SAFETY: a NUL-terminated pattern of this frame's, and a local for
-        // the flag; the answer is null or an allocation of its own.
-        let regpat = unsafe {
-            file_pat_to_reg_pat(
-                part.as_ptr(),
-                ptr::null(),
-                &raw mut allow_dirs,
-                false as c_int,
-            )
-        };
-        if regpat.is_null() {
+        let Some((regpat, allow_dirs)) = file_pat_to_reg_pat(&part, part.len()) else {
             break;
-        }
-        let (no_prog, dirs) = (ptr::null_mut(), c_int::from(allow_dirs));
-        let (ffname, sfname) = (ffname.as_ptr().cast_mut(), sfname.as_ptr().cast_mut());
-        // SAFETY: the pattern just made, freed once; three NUL-terminated
-        // names the matcher only reads.
-        let matched = unsafe {
-            let matched = match_file_pat(
-                regpat,
-                no_prog,
-                ffname,
-                sfname,
-                tail.as_ptr().cast_mut(),
-                dirs,
-            );
-            xfree(regpat.cast());
-            matched
+        };
+        let Some(mut prog) = OwnedProg::compile(regpat.as_cstr(), RE_MAGIC) else {
+            continue;
+        };
+        let matched = if allow_dirs {
+            prog.exec(ffname, 0, ic).is_some() || prog.exec(sfname, 0, ic).is_some()
+        } else {
+            prog.exec(tail, 0, ic).is_some()
         };
         if matched {
             return true;
@@ -443,54 +356,32 @@ pub fn match_file_list(list: &CStr, sfname: &CStr, ffname: &CStr) -> bool {
 /// [`file_pat_to_reg_pat`] of a whole pattern the caller holds: the regexp,
 /// or `None` when the braces in the pattern do not balance.
 pub(crate) fn file_pat_to_regpat(pat: &CStr) -> Option<XString> {
-    // SAFETY: a NUL-terminated pattern, which is what a null end promises;
-    // the answer is null or an allocated string, adopted here.
-    unsafe {
-        let reg = file_pat_to_reg_pat(pat.as_ptr(), ptr::null(), ptr::null_mut(), 0);
-        (!reg.is_null()).then(|| XString::from_raw(reg))
-    }
+    let pat = pat.to_bytes();
+    file_pat_to_reg_pat(pat, pat.len()).map(|(regpat, _)| regpat)
 }
 
-/// Convert `pat`, which has shell-style wildcards in it, into a regular
-/// expression. Backslashes before special characters, like `\*` and `\ `, are
-/// handled -- webb.
+/// Convert the first `end` bytes of `pat`, which has shell-style wildcards
+/// in it, into a regular expression. Backslashes before special characters,
+/// like `\*` and `\ `, are handled -- webb.
 ///
-/// # Safety
+/// `pat` is the pattern and whatever follows it in the caller's string, up
+/// to that string's end: upstream reads up to two bytes past `end`, each
+/// guarded by the one before it not being NUL, and so may this.
 ///
-/// `pat` must be NUL-terminated at or after `pat_end`: upstream reads up to
-/// two bytes past `pat_end`, each guarded by the one before it not being NUL.
-///
-/// @param pat_end     first char after the pattern, or NULL for its end
-/// @param allow_dirs  set when a directory path separator has to be matched
-/// @param no_bslash   don't use a backward slash as a path separator (only
-///                    makes a difference on Windows, so never here)
-///
-/// @return            \[allocated\] the regexp, or NULL when the braces in the
-///                    pattern do not balance.
-pub unsafe fn file_pat_to_reg_pat(
-    pat: *const c_char,
-    pat_end: *const c_char,
-    allow_dirs: *mut c_char,
-    _no_bslash: c_int,
-) -> *mut c_char {
-    if !allow_dirs.is_null() {
-        unsafe { *allow_dirs = 0 };
-    }
-    let note_dir = |c: u8| {
-        if c == b'/' && !allow_dirs.is_null() {
-            unsafe { *allow_dirs = 1 };
+/// @return  the regexp, and whether a directory path separator has to be
+///          matched; `None` when the braces in the pattern do not balance.
+pub fn file_pat_to_reg_pat(pat: &[u8], end: usize) -> Option<(XString, bool)> {
+    let mut allow_dirs = false;
+    let mut note_dir = |c: u8| {
+        if c == b'/' {
+            allow_dirs = true;
         }
     };
 
-    let end = if pat_end.is_null() {
-        unsafe { CStr::from_ptr(pat) }.to_bytes().len()
-    } else {
-        unsafe { pat_end.offset_from(pat) as usize }
-    };
     if end == 0 {
-        return unsafe { xstrdup(c"^$".as_ptr()) };
+        return Some((XString::from_bytes(b"^$"), false));
     }
-    let at = |i: usize| unsafe { *pat.add(i) } as u8;
+    let at = |i: usize| cstr::byte_at(pat, i);
 
     let mut reg = Vec::<u8>::with_capacity(end * 2 + 3);
 
@@ -593,12 +484,12 @@ pub unsafe fn file_pat_to_reg_pat(
 
     if nested != 0 {
         let unbalanced = if nested < 0 {
-            c"E219: Missing {.".as_ptr()
+            c"E219: Missing {."
         } else {
-            c"E220: Missing }.".as_ptr()
+            c"E220: Missing }."
         };
-        unsafe { emsg(gettext_ptr(unbalanced)) };
-        return ptr::null_mut();
+        emsg(gettext(unbalanced));
+        return None;
     }
-    unsafe { xmemdupz(reg.as_ptr().cast::<c_void>(), reg.len()) }.cast()
+    Some((XString::from_vec(reg), allow_dirs))
 }

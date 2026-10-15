@@ -220,14 +220,23 @@ pub(crate) unsafe fn buf_get_backup_name(
         // backup's name so two files never collide.
         p = unsafe { make_percent_swname(iobuff, p, fname) };
         if !p.is_null() {
-            backup = unsafe { modname(p, backup_ext, no_prepend_dot) };
+            backup =
+                unsafe { modname(cstr::at_opt(p), cstr::bytes_at(backup_ext), no_prepend_dot) }
+                    .map_or(core::ptr::null_mut(), XString::into_raw);
             unsafe { xfree(p.cast()) };
         }
     }
     if backup.is_null() {
         let rootname = unsafe { get_file_in_dir(fname, iobuff) };
         if !rootname.is_null() {
-            backup = unsafe { modname(rootname, backup_ext, no_prepend_dot) };
+            backup = unsafe {
+                modname(
+                    cstr::at_opt(rootname),
+                    cstr::bytes_at(backup_ext),
+                    no_prepend_dot,
+                )
+            }
+            .map_or(core::ptr::null_mut(), XString::into_raw);
             unsafe { xfree(rootname.cast()) };
         }
     }
@@ -551,7 +560,7 @@ unsafe fn backup_by_rename(
         if backup.is_null() {
             continue;
         }
-        if unsafe { vim_rename(fname, backup) } == 0 {
+        if unsafe { rename_file(cstr::at(fname), cstr::at(backup)) } {
             break;
         }
         unsafe { xfree(backup.cast()) }; // don't do the rename below
@@ -587,14 +596,14 @@ pub(crate) unsafe fn restore_backup(
             // move the copy into its place. That may fail, in which case
             // the copy is left where it is.
             if !unsafe { os_path_exists(fname) } {
-                unsafe { vim_rename(backup.path, fname) };
+                unsafe { rename_file(cstr::at(backup.path), cstr::at(fname)) };
             }
             // If the original does exist, throw the copy away.
             if unsafe { os_path_exists(fname) } {
                 unsafe { os_remove(cstr::at(backup.path)) };
             }
         } else {
-            unsafe { vim_rename(backup.path, fname) };
+            unsafe { rename_file(cstr::at(backup.path), cstr::at(fname)) };
         }
     }
     newfile || unsafe { os_path_exists(fname) }
@@ -614,7 +623,7 @@ pub(crate) unsafe fn recover_from_backup(backup: &Backup, fname: *mut c_char) ->
         return false;
     }
     if !backup.copy {
-        return unsafe { vim_rename(backup.path, fname) } == 0;
+        return unsafe { rename_file(cstr::at(backup.path), cstr::at(fname)) };
     }
     // Copying may take a while; if we were interrupted, let the user
     // know the message arrived.
@@ -642,12 +651,13 @@ pub(crate) unsafe fn apply_patchmode(
     perm: c_int,
     file_info_old: &FileInfo,
 ) {
-    let org = p_pm(|value| unsafe { modname(fname, value.as_ptr().cast_mut(), false) });
+    let org = p_pm(|value| unsafe { modname(cstr::at_opt(fname), value.to_bytes(), false) })
+        .map_or(core::ptr::null_mut(), XString::into_raw);
     if !backup.path.is_null() {
         if org.is_null() {
             emsg(translate(c"E205: Patchmode: can't save original file"));
         } else if !unsafe { os_path_exists(org) } {
-            unsafe { vim_rename(backup.path, org) };
+            unsafe { rename_file(cstr::at(backup.path), cstr::at(org)) };
             unsafe { xfree(backup.path.cast()) }; // don't delete the file
             backup.path = core::ptr::null_mut();
             let atime = file_info_old.stat.st_atim.tv_sec as f64;

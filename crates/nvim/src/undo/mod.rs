@@ -33,7 +33,6 @@ use crate::ex_docmd::expr_map_locked;
 use crate::ex_docmd::state::global_busy;
 use crate::ex_getln::{text_locked, text_locked_msg};
 use crate::extmark::{extmark_apply_undo, extmark_splice_cols};
-use crate::fileio::read_eintr;
 use crate::fold::fold_open_cursor;
 use crate::getchar::beep_flush;
 use crate::getchar::state::{KeyTyped, got_int};
@@ -53,6 +52,7 @@ use crate::option::copy_option_part;
 use crate::option::vars::{fdo_flags, p_fs, p_ul, p_verbose};
 use crate::options::kOptFdoFlagUndo;
 use crate::os::cshim::{gettext, ngettext};
+use crate::os::fs::read_eintr;
 use crate::os::fs::{
     os_fchown, os_fileinfo, os_free_acl, os_get_acl, os_getperm, os_isdir, os_mkdir_recurse,
     os_open, os_path_exists, os_remove, os_set_acl, os_setperm,

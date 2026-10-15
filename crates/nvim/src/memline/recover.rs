@@ -16,7 +16,7 @@
 use crate::allocator::Owned;
 use crate::buffer::{BufFlags, alloc_unregistered_buffer};
 use crate::cstr;
-use crate::fileio::Loaded;
+use crate::fileio::{Loaded, ReadFlags};
 use crate::guard::Suppress;
 use crate::message_fmt::c_str;
 use crate::semsg;
@@ -44,9 +44,10 @@ fn read_original(
     lines: LineNr,
     flags: c_int,
 ) -> Result<Loaded, Failed> {
-    let (name, short) = (Buf::current().name.full_ptr(), core::ptr::null_mut());
-    // SAFETY: the name is the buffer's own.
-    unsafe { readfile(name, short, from, skip, lines, None, flags, false) }
+    // A copy: the read's autocommands may rename the buffer.
+    let name = Buf::current().name.full().map(core::ffi::CStr::to_owned);
+    let flags = ReadFlags::from_bits(flags);
+    readfile_named(name.as_deref(), None, from, skip, lines, None, flags, false)
 }
 
 pub fn ml_recover(checkext: bool) {
