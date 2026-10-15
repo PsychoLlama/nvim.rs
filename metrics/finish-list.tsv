@@ -85,12 +85,6 @@ buffer/	buffer/switch.rs	1	3	0	3	-	-	-	c_str:1 terminal_running:1
 buffer/	buffer/type.rs	1	5	0	3	expr:2	str:1	str:4	.as_ref:1 at_opt:1 dict_watcher_notify:1
 buffer_updates.rs	*	1	11	0	9	deref:1 expr:1	-	-	arena_mem_free:2 api_free_luaref:1 buf_collect_lines:1 from_raw_parts:1 ml_flush_deleted_bytes:1 rpc_send_event:1 xfree:1 xrealloc:1
 buffer_updates.rs	buffer_updates.rs	1	11	0	9	deref:1 expr:1	-	-	arena_mem_free:2 api_free_luaref:1 buf_collect_lines:1 from_raw_parts:1 ml_flush_deleted_bytes:1 rpc_send_event:1 xfree:1 xrealloc:1
-bufwrite/	*	5	208	23	160	deref:35 expr:12 ref:1	str:28 other:9	str:5	xfree:16 bytes_at:7 os_fileinfo:6 os_path_exists:6 os_remove:6 os_setperm:6 os_fileinfo_id_equal:5 rename_file:5
-bufwrite/	bufwrite/autocmds.rs	1	19	2	8	deref:9 expr:2	str:2	-	aucmd_prepbuf:2 aucmd_restbuf:2 at_opt:1
-bufwrite/	bufwrite/backup.rs	1	120	15	93	deref:23 expr:3 ref:1	str:21 other:9	str:3	xfree:10 os_path_exists:6 os_fileinfo:5 os_fileinfo_id_equal:5 os_setperm:5 rename_file:5 os_fileinfo_link:4 os_remove:4
-bufwrite/	bufwrite/convert.rs	1	18	4	14	expr:3 deref:1	str:4	str:2	iconv:2 .offset_from:1 CStr::from_ptr:1 bytes_at:1 copy:1 copy_nonoverlapping:1 from_raw_parts:1 iconv_close:1
-bufwrite/	bufwrite/lines.rs	1	5	1	4	deref:1	str:1	-	.add:1 at_opt:1 from_raw_parts:1 ml_get_buf:1
-bufwrite/	bufwrite/mod.rs	1	46	1	41	expr:4 deref:1	-	-	xfree:5 CStr::from_ptr:3 at:3 bytes_at:3 at_opt:2 os_remove:2 from_raw_parts_mut:1 getuid:1
 change/	*	7	180	26	128	deref:44 expr:5 compound:1 ref:1	str:39 pp_str:3 other:1	str:7 pp_str:1	.offset:14 bytes_at:9 ml_replace:8 .add:7 ptr2cells:3 utfc_ptr2len:3 vim_strnsize:3 .offset_from:2
 change/	change/flag.rs	1	7	2	6	expr:1	-	-	gettext_ptr:2 eq:1 xfree:1 xstrdup:1
 change/	change/leader.rs	1	21	4	16	deref:5	str:4 pp_str:3	str:3	.add:1 bytes_at:1 copy_option_part:1 has_char:1 prefix_eq:1 vim_strchr:1
@@ -288,14 +282,14 @@ mbyte/	*	3	78	37	48	deref:9 expr:3 compound:1 ref:1	str:44 other:7	str:2	.offset
 mbyte/	mbyte/utf8/mod.rs	1	77	36	48	deref:8 expr:3 compound:1 ref:1	str:43 other:7	str:2	.offset_from:3 prefix_at:3 .as_mut:2 schar_from_buf:2 slice_at:2 at_opt:1 bytes_at:1 copy_nonoverlapping:1
 mbyte/	mbyte/utf8/tables.rs	1	0	0	0	-	-	-	-
 mbyte/	mbyte/utf8/text.rs	1	1	1	0	deref:1	str:1	-	-
-memline/	*	8	513	55	371	deref:108 expr:13 compound:4 ref:4	str:33 other:21 pp_str:2 value:1	str:8 other:6	mf_put:21 bytes_at:20 Db::new:18 xfree:18 copy:11 Pb::new:10 Pe::new:10 zeroed:10
+memline/	*	8	512	55	370	deref:108 expr:13 compound:4 ref:4	str:33 other:21 pp_str:2 value:1	str:8 other:6	mf_put:21 bytes_at:20 Db::new:18 xfree:18 copy:11 Pb::new:10 Pe::new:10 zeroed:10
 memline/	memline/block0.rs	1	64	8	51	deref:9 expr:3 ref:1	str:7 other:3	-	os_fileinfo:5 zeroed:5 bytes_at:4 os_fileinfo_inode:3 at:1 at_opt:1 close:1 copy_nonoverlapping:1
 memline/	memline/edit.rs	1	85	8	60	deref:21 expr:2	other:7 str:1	other:1	copy:9 mf_put:8 Db::new:6 Pe::new:6 Pb::new:5 mf_free:2 mf_get:2 copy_nonoverlapping:1
 memline/	memline/lines.rs	1	46	14	29	deref:9 compound:3	other:2 str:1	-	Db::new:3 Buf::new:2 bytes_at:2 mb_utflen:1 xfree:1 xmemdupz:1
 memline/	memline/mod.rs	1	52	1	30	deref:20	other:2	-	mf_put:3 mf_close:2 mf_open_file:2 mf_sync:2 Db::new:1 Pb::new:1 Pe::new:1 XString::from_raw:1
 memline/	memline/offsets.rs	1	15	2	12	expr:3	-	-	Db::new:3
 memline/	memline/recover.rs	1	104	4	73	deref:25 ref:3 expr:1	other:3 str:3	str:1	c_str:7 at:5 mf_need_trans:3 mf_put:3 mf_sync:3 os_fileinfo:3 xfree:3 zeroed:3
-memline/	memline/swapname.rs	1	106	11	82	deref:18 expr:3 compound:1	str:20 pp_str:2 other:1 value:1	str:4	bytes_at:13 xfree:11 at_opt:5 at:3 modname:3 xstrlcpy:3 .add:2 copy_option_part:2
+memline/	memline/swapname.rs	1	105	11	81	deref:18 expr:3 compound:1	str:20 pp_str:2 other:1 value:1	str:4	bytes_at:13 xfree:11 at_opt:4 at:3 modname:3 xstrlcpy:3 .add:2 copy_option_part:2
 memline/	memline/tree.rs	1	41	7	34	deref:6 expr:1	other:3 str:1	other:5 str:3	mf_put:6 Db::new:4 Pb::new:3 Pe::new:3 copy:2 mf_get:2 mf_new:2 xfree:2
 message_fmt/	*	1	2	2	2	-	other:1 str:1	str:3	at_opt:1 from_raw_parts:1
 message_fmt/	message_fmt/mod.rs	1	2	2	2	-	other:1 str:1	str:3	at_opt:1 from_raw_parts:1

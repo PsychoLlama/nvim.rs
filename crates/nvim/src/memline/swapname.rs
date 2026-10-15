@@ -122,8 +122,21 @@ pub unsafe fn make_percent_swname(
     dir_end: *mut c_char,
     name: *const c_char,
 ) -> *mut c_char {
-    // SAFETY: the caller's NUL-terminated name, or null.
-    let f = fix_fname(unsafe { cstr::at_opt(name) }.unwrap_or(c""));
+    // SAFETY: the caller's directory name, whose last byte is the extra
+    // separator this is documented to remove, and its NUL-terminated name,
+    // or null.
+    let (dir, name) = unsafe {
+        *dir_end.sub(1) = NUL as c_char;
+        (cstr::bytes_at(dir), cstr::at_opt(name))
+    };
+    percent_swname(dir, name).into_raw()
+}
+
+/// [`make_percent_swname`] over slices: `dir` without its extra separator,
+/// and `name`'s full path with every path separator turned into `%` under
+/// it. `None` is the unnamed buffer's `""`.
+pub(crate) fn percent_swname(dir: &[u8], name: Option<&CStr>) -> XString {
+    let f = fix_fname(name.unwrap_or(c""));
 
     // Every path separator becomes a `%`. Only the lead byte of a character
     // is tested, so the walk steps a whole character at a time.
@@ -135,14 +148,7 @@ pub unsafe fn make_percent_swname(
         }
         i += cluster_len(&mangled[i..]);
     }
-
-    // SAFETY: the caller's directory name, whose last byte is the extra
-    // separator this is documented to remove.
-    let dir = unsafe {
-        *dir_end.sub(1) = NUL as c_char;
-        cstr::bytes_at(dir)
-    };
-    concat_fnames(dir, &mangled, true).into_raw()
+    concat_fnames(dir, &mangled, true)
 }
 
 /// Resolve a symbolic link in the *last* component of a file name, writing
@@ -295,11 +301,16 @@ pub unsafe fn makeswapname(
 pub unsafe fn get_file_in_dir(fname: *mut c_char, dname: *mut c_char) -> *mut c_char {
     // SAFETY: the caller's two NUL-terminated names.
     let (fname, dir) = unsafe { (cstr::bytes_at(fname), cstr::bytes_at(dname)) };
+    file_in_dir(fname, dir).into_raw()
+}
+
+/// [`get_file_in_dir`] over slices.
+pub(crate) fn file_in_dir(fname: &[u8], dir: &[u8]) -> XString {
     let tail_at = tail_index(fname);
     let tail = &fname[tail_at..];
     let relative =
         dir.first() == Some(&b'.') && dir.get(1).is_some_and(|&c| vim_ispathsep(c.into()));
-    let joined = if dir == b"." {
+    if dir == b"." {
         XString::from_bytes(fname)
     } else if relative {
         let rest = &dir[2..];
@@ -312,8 +323,7 @@ pub unsafe fn get_file_in_dir(fname: *mut c_char, dname: *mut c_char) -> *mut c_
         }
     } else {
         concat_fnames(dir, tail, true)
-    };
-    joined.into_raw()
+    }
 }
 
 /// Build the ATTENTION message: what is known about the swap file that is in

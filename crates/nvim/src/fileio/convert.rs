@@ -49,6 +49,9 @@ crate::flag_set! {
     const UTF16 = 0x10;
     /// Little-endian, for the UCS and UTF-16 ones.
     const ENDIAN_L = 0x80;
+    /// Write the staged bytes as they are: a byte-order mark the writer
+    /// already encoded.
+    const NOCONVERT = 0x2000;
     /// "ucs-bom": the first bytes of the file decide.
     const UCSBOM = 0x4000;
     /// Every byte-order mark is acceptable, for `check_for_bom`.

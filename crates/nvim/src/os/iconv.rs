@@ -121,12 +121,31 @@ impl Iconv {
         }
     }
 
-    /// The raw descriptor, for a caller that drives iconv itself and closes
-    /// it with `iconv_close`.
-    pub(crate) fn into_raw(self) -> *mut c_void {
-        let fd = self.0.as_ptr();
-        core::mem::forget(self);
-        fd
+    /// Write the sequence that puts the output in its initial shift state
+    /// into `output`, stepping it past what was written: iconv called with no
+    /// input. Some iconvs (glibc's among them) null the output pointer on
+    /// this call and leave its count meaningless; `output` is then left as
+    /// it was, which is what upstream's workaround does.
+    pub(crate) fn shift_initial(&self, output: &mut &mut [u8]) {
+        let mut to = output.as_mut_ptr().cast::<c_char>();
+        let mut to_left = output.len();
+        // SAFETY: the descriptor is open, a null input asks for the shift
+        // sequence only, and iconv writes at most `to_left` bytes at `to`.
+        unsafe {
+            iconv(
+                self.0.as_ptr(),
+                core::ptr::null_mut(),
+                core::ptr::null_mut(),
+                &raw mut to,
+                &raw mut to_left,
+            )
+        };
+        if to.is_null() || to_left > output.len() {
+            return;
+        }
+        let produced = output.len() - to_left;
+        let rest = core::mem::take(output);
+        *output = &mut rest[produced..];
     }
 }
 

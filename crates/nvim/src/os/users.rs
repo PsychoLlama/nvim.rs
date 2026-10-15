@@ -107,6 +107,12 @@ pub(crate) fn os_getuid() -> libc::uid_t {
     unsafe { libc::getuid() }
 }
 
+/// The process's real group id.
+pub(crate) fn os_getgid() -> libc::gid_t {
+    // SAFETY: `getgid` takes nothing and always succeeds.
+    unsafe { libc::getgid() }
+}
+
 /// Given to `expand_generic()` to obtain user names. NULL past the end.
 pub fn get_users(_expand: &Expand, idx: usize) -> Option<Candidate> {
     init_users();

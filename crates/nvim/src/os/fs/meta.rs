@@ -6,7 +6,7 @@
 //! is the whole stat buffer, the second only the (device, inode) pair that
 //! says two paths are the same file.
 //!
-//! The exception is [`os_copy_xattr`], which is `getxattr`/`setxattr` rather
+//! The exception is [`copy_xattr`], which is `getxattr`/`setxattr` rather
 //! than libuv and is the only thing in this file with a shape of its own.
 
 #![deny(unsafe_op_in_unsafe_fn)]
@@ -32,14 +32,14 @@ use crate::types::{
 };
 use ::libc::{__errno_location, E2BIG, getuid, getxattr, listxattr, setxattr};
 
-/// The `errno` values [`os_copy_xattr`] treats as "this filesystem simply
+/// The `errno` values [`copy_xattr`] treats as "this filesystem simply
 /// does not do that", plus the three it reports.
 const ENOTSUP: c_int = 95;
 const EPERM: c_int = 1;
 const EACCES: c_int = 13;
 const ERANGE: c_int = 34;
 
-/// The three `E15xx` messages [`os_copy_xattr`] reports. Read-only text, so
+/// The three `E15xx` messages [`copy_xattr`] reports. Read-only text, so
 /// `CStr` constants rather than the mutable `[c_char; N]` statics c2rust
 /// transmuted the C string literals into.
 const E_XATTR_ERANGE: &CStr = c"E1506: Buffer too small to copy xattr value or key";
@@ -119,14 +119,10 @@ fn xattr_keys(blob: &[u8]) -> impl Iterator<Item = &CStr> {
 /// A filesystem that does not do xattrs at all answers nothing and is not an
 /// error; the three that are get an `E15xx` message.
 ///
-/// # Safety
-/// Both paths must be null or NUL-terminated strings.
-pub unsafe fn os_copy_xattr(from_file: *const c_char, to_file: *const c_char) {
-    if from_file.is_null() {
-        return;
-    }
-    // SAFETY: the caller's NUL-terminated path; a null list is how the size
-    // is asked for.
+pub fn copy_xattr(from: &CStr, to: &CStr) {
+    let (from_file, to_file) = (from.as_ptr(), to.as_ptr());
+    // SAFETY: a NUL-terminated path; a null list is how the size is asked
+    // for.
     let size = unsafe { listxattr(from_file, ptr::null_mut(), 0) };
     if size <= 0 {
         // Not supported, or no attributes to copy.
@@ -240,6 +236,28 @@ pub fn os_chown(path: &CStr, owner: uv_uid_t, group: uv_gid_t) -> c_int {
 pub unsafe fn os_fchown(fd: c_int, owner: uv_uid_t, group: uv_gid_t) -> c_int {
     // SAFETY: the caller's descriptor.
     fs_result(|req| unsafe { uv_fs_fchown(NO_LOOP, req, fd as uv_file, owner, group, None) })
+}
+
+/// [`os_fsync`](super::os_fsync) of a file the caller holds: `Err` is the
+/// libuv error code.
+pub(crate) fn fsync_file(file: &std::fs::File) -> Result<(), c_int> {
+    use std::os::fd::AsRawFd as _;
+    // SAFETY: the file's own descriptor, open for as long as the borrow.
+    match unsafe { super::os_fsync(file.as_raw_fd()) } {
+        0 => Ok(()),
+        error => Err(error),
+    }
+}
+
+/// Close `file` through libuv: `Err` is the libuv error code the close
+/// failed with, which dropping a `File` would swallow.
+pub(crate) fn close_file(file: std::fs::File) -> Result<(), c_int> {
+    use std::os::fd::IntoRawFd as _;
+    // SAFETY: the descriptor the file owned, handed over and closed once.
+    match unsafe { super::os_close(file.into_raw_fd()) } {
+        0 => Ok(()),
+        error => Err(error),
+    }
 }
 
 /// Sets `path`'s access and modification times, in seconds since the epoch.

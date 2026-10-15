@@ -9,25 +9,34 @@
 //! [`buf_write_make_backup`] then makes the backup that `'backup'`,
 //! `'writebackup'` and `'patchmode'` ask for — either by copying the original
 //! aside or by renaming it out of the way, which `'backupcopy'` chooses
-//! between. [`buf_get_backup_name`] is where `'backupdir'` and `'backupext'`
-//! turn into a path.
+//! between. [`backup_name`] is where `'backupdir'` and `'backupext'` turn
+//! into a path.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
+
+use std::ffi::CString;
+use std::fs::{File, OpenOptions};
+use std::os::unix::fs::OpenOptionsExt as _;
 
 use crate::cstr;
+use crate::memline::{file_in_dir, percent_swname};
+use crate::option::split_option_part;
 use crate::option::vars::{P_BDIR, P_BEX};
+use crate::os::fs::{
+    close_file, copy_xattr, dir_exists, file_info, fsync_file, getperm, link_info, mkdir_recurse,
+    path_exists,
+};
+use crate::os::users::{os_getgid, os_getuid};
 use crate::os::uv_error::UV_ENOTSUP;
 use crate::semsg;
-use crate::snprintf;
-use core::ffi::{c_char, c_int, c_uint};
+use core::ffi::{CStr, c_int, c_uint};
 
 use super::*;
 use crate::highlight_group::HLF_E;
 use crate::message::{emsg, msg};
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_cstr;
 use crate::option::cpo_has;
-use crate::types::{CpoFlag, IOSIZE, MAXPATHL, NUL};
+use crate::types::{CpoFlag, IOSIZE};
 
 /// `st_mode & S_IFMT` for a regular file.
 const S_IFREG: uint64_t = 0o100000;
@@ -57,27 +66,32 @@ pub(crate) struct Backup {
     /// When false the original was renamed to the backup, so putting it
     /// back means renaming it back.
     pub copy: bool,
-    /// Path to the backup, or null when `!` overrode a failure to make one.
-    /// Owned: `buf_write` frees it.
-    pub path: *mut c_char,
+    /// Path to the backup, or `None` when `!` overrode a failure to make
+    /// one.
+    pub path: Option<XString>,
+}
+
+/// Open `path` for writing as `open(2)` would with `flags` beyond the access
+/// mode, creating it with `mode`: libuv's `os_open`, answering the file or
+/// libuv's error code.
+fn open_for_write(path: &CStr, options: &mut OpenOptions, mode: c_int) -> Result<File, c_int> {
+    use std::os::unix::ffi::OsStrExt as _;
+    let path = std::ffi::OsStr::from_bytes(path.to_bytes());
+    options
+        .write(true)
+        .mode(mode.cast_unsigned())
+        .open(path)
+        // libuv's code for an error is the negated `errno` on Unix.
+        .map_err(|err| -err.raw_os_error().unwrap_or(::libc::EIO))
 }
 
 /// Warn about writing over a file that changed on disk since it was read.
 ///
 /// The size is not checked: a tool like `gzip` keeps the timestamp but
 /// cannot keep the size. Returns false if the user answers "no".
-///
-/// # Safety
-///
-/// `file_info` must point at an initialized `FileInfo`, unaliased for the
-/// call.
-unsafe fn check_mtime(buffer: Buf, file_info: *mut FileInfo) -> bool {
+fn check_mtime(buffer: Buf, file_info: &FileInfo) -> bool {
     if buffer.b_mtime_read == 0
-        || !time_differs(
-            unsafe { &*file_info },
-            buffer.b_mtime_read,
-            buffer.b_mtime_read_ns,
-        )
+        || !time_differs(file_info, buffer.b_mtime_read, buffer.b_mtime_read_ns)
     {
         return true;
     }
@@ -97,24 +111,20 @@ unsafe fn check_mtime(buffer: Buf, file_info: *mut FileInfo) -> bool {
 
 /// The Unix half of the pre-flight: stat the target and classify it.
 ///
-/// # Safety
-///
-/// `fname` must point at a NUL-terminated string, unaliased for the call.
-/// `file_info_old` must point at an initialized `FileInfo`, unaliased for the
-/// call.
-unsafe fn get_fileinfo_os(
-    fname: *mut c_char,
-    file_info_old: *mut FileInfo,
-) -> Result<TargetFile, WriteError> {
-    let exists = unsafe { os_fileinfo(fname, file_info_old) };
-    let mode = unsafe { (*file_info_old).stat.st_mode };
+/// `file_info_old` receives the target's stat, or a zeroed one when there is
+/// no target.
+fn get_fileinfo_os(fname: &CStr, file_info_old: &mut FileInfo) -> Result<TargetFile, WriteError> {
+    let found = file_info(fname);
+    let exists = found.is_some();
+    *file_info_old = found.unwrap_or_default();
+    let mode = file_info_old.stat.st_mode;
     let (perm, device, newfile) = if !exists {
         (-1, false, true)
     } else if mode & __S_IFMT as uint64_t == S_IFREG {
         (mode as c_int, false, false)
     } else if mode & __S_IFMT as uint64_t == S_IFDIR {
         return Err(WriteError::numbered(c"E502", c"is a directory"));
-    } else if unsafe { os_nodetype(cstr::at(fname)) } != NODE_WRITABLE {
+    } else if os_nodetype(fname) != NODE_WRITABLE {
         return Err(WriteError::numbered(
             c"E503",
             c"is not a file or writable device",
@@ -137,27 +147,21 @@ unsafe fn get_fileinfo_os(
 ///
 /// `Err(None)` is the user declining the "file has changed since reading it"
 /// prompt — a failure with nothing left to report.
-///
-/// # Safety
-///
-/// `fname` must point at a NUL-terminated string, unaliased for the call.
-/// `file_info_old` must point at an initialized `FileInfo`, unaliased for the
-/// call.
-pub(crate) unsafe fn get_fileinfo(
+pub(crate) fn get_fileinfo(
     buffer: Buf,
-    fname: *mut c_char,
+    fname: &CStr,
     overwriting: bool,
     forceit: bool,
-    file_info_old: *mut FileInfo,
+    file_info_old: &mut FileInfo,
 ) -> Result<TargetFile, Option<WriteError>> {
-    let mut target = unsafe { get_fileinfo_os(fname, file_info_old) }.map_err(Some)?;
+    let mut target = get_fileinfo_os(fname, file_info_old).map_err(Some)?;
     if target.device || target.newfile {
         return Ok(target);
     }
 
     // Check now whether the file is really writable: renaming it to make
     // a backup would otherwise hide the problem until it is too late.
-    target.readonly = unsafe { os_file_is_writable(cstr::at(fname)) } == 0;
+    target.readonly = os_file_is_writable(fname) == 0;
     if !forceit && target.readonly {
         return Err(Some(if cpo_has(CpoFlag::FWRITE) {
             WriteError::numbered(c"E504", E_READONLY_CPO)
@@ -166,96 +170,71 @@ pub(crate) unsafe fn get_fileinfo(
         }));
     }
     // Without `!`, check the timestamp has not changed since the read.
-    if overwriting && !forceit && !unsafe { check_mtime(buffer, file_info_old) } {
+    if overwriting && !forceit && !check_mtime(buffer, file_info_old) {
         return Err(None);
     }
     Ok(target)
 }
 
-/// Build the backup file name for one entry of `'backupdir'`.
-///
-/// `dirp` is advanced past the entry used, so a caller walks the option by
-/// calling this until `**dirp` is NUL. The result is allocated.
-///
-/// # Safety
-///
-/// `fname` and `backup_ext` must point at NUL-terminated strings, and `dirp`
-/// at a cursor standing inside a NUL-terminated 'backupdir' list — it is read
-/// through and left past the entry used.
-pub(crate) unsafe fn buf_get_backup_name(
-    fname: *mut c_char,
-    dirp: &mut *mut c_char,
+/// Build the backup file name for one entry `dir` of `'backupdir'`; `last`
+/// says it is the list's last, which is the one a missing directory is
+/// made for.
+pub(crate) fn backup_name(
+    fname: &CStr,
+    dir: &[u8],
+    last: bool,
     no_prepend_dot: bool,
-    backup_ext: *mut c_char,
-) -> *mut c_char {
-    // The directory entry being tried. Upstream uses the shared `IObuff`,
-    // and the loop raises errors, which run autocommands.
-    let mut entry = [0 as c_char; IOSIZE as usize];
-    let iobuff = entry.as_mut_ptr();
-    // Isolate one directory name from 'backupdir'.
-    let dir_len =
-        unsafe { copy_option_part(dirp, iobuff, IOSIZE as size_t, c",".as_ptr().cast_mut()) };
-    let mut p = unsafe { iobuff.add(dir_len as usize) };
-    if unsafe { **dirp } as c_int == NUL && !unsafe { os_isdir(iobuff) } {
+    backup_ext: &[u8],
+) -> Option<XString> {
+    if last
+        && let Ok(dir_name) = CString::new(dir)
+        && !dir_exists(&dir_name)
+    {
         // That was the last entry, and it names a directory that does not
         // exist yet.
-        let mut failed_dir: *mut c_char = core::ptr::null_mut();
-        let ret =
-            unsafe { os_mkdir_recurse(iobuff, 0o755, &raw mut failed_dir, core::ptr::null_mut()) };
-        if ret != 0 {
-            // SAFETY: the directory `os_mkdir_recurse` stopped at, and what
-            // libuv says about it.
-            let (dir, why) = unsafe { (c_str(failed_dir), c_str(uv_strerror(ret))) };
-            semsg!("E303: Unable to create directory \"{dir}\" for backup file: {why}");
-            unsafe { xfree(failed_dir.cast()) };
+        if let Err(failure) = mkdir_recurse(&dir_name, 0o755) {
+            let failed = failure.dir.as_deref().unwrap_or(c"");
+            let (failed, why) = (msg_cstr(failed), msg_cstr(failure.why));
+            semsg!("E303: Unable to create directory \"{failed}\" for backup file: {why}");
         }
     }
 
-    let mut backup = core::ptr::null_mut();
-    if dir_len > 1
-        && unsafe { after_pathsep(cstr::bytes_at(iobuff), p.offset_from(iobuff) as usize) }
-        && unsafe { *p.offset(-1) } == unsafe { *p.offset(-2) }
-    {
+    let len = dir.len();
+    if len > 1 && after_pathsep(dir, len) && dir[len - 1] == dir[len - 2] {
         // The entry ends with '//': encode the file's full path into the
         // backup's name so two files never collide.
-        p = unsafe { make_percent_swname(iobuff, p, fname) };
-        if !p.is_null() {
-            backup =
-                unsafe { modname(cstr::at_opt(p), cstr::bytes_at(backup_ext), no_prepend_dot) }
-                    .map_or(core::ptr::null_mut(), XString::into_raw);
-            unsafe { xfree(p.cast()) };
+        let mangled = percent_swname(&dir[..len - 1], Some(fname));
+        if let Some(backup) = modname(Some(mangled.as_cstr()), backup_ext, no_prepend_dot) {
+            return Some(backup);
         }
     }
-    if backup.is_null() {
-        let rootname = unsafe { get_file_in_dir(fname, iobuff) };
-        if !rootname.is_null() {
-            backup = unsafe {
-                modname(
-                    cstr::at_opt(rootname),
-                    cstr::bytes_at(backup_ext),
-                    no_prepend_dot,
-                )
-            }
-            .map_or(core::ptr::null_mut(), XString::into_raw);
-            unsafe { xfree(rootname.cast()) };
+    let rootname = file_in_dir(fname.to_bytes(), dir);
+    modname(Some(rootname.as_cstr()), backup_ext, no_prepend_dot)
+}
+
+/// Walk `'backupdir'` (a copy: the walk runs code that may set it), calling
+/// `each` with the backup name each entry gives until it answers true.
+fn each_backup_dir(fname: &CStr, backup_ext: &[u8], mut each: impl FnMut(XString) -> bool) {
+    let bdir = P_BDIR.get();
+    let mut rest: &[u8] = &bdir;
+    while !rest.is_empty() {
+        let (dir, after) = split_option_part(rest, IOSIZE as usize, b",");
+        rest = after;
+        if let Some(backup) = backup_name(fname, &dir, rest.is_empty(), false, backup_ext)
+            && each(backup)
+        {
+            return;
         }
     }
-    backup
 }
 
 /// Should the backup be a copy of the original rather than a rename of it?
 ///
 /// A rename is cheaper, but it changes the original's inode, so it is wrong
 /// for a file that is a link or that we could not recreate in place.
-///
-/// # Safety
-///
-/// `fname` must point at a NUL-terminated string, unaliased for the call.
-/// `file_info_old` must point at an initialized `FileInfo`, unaliased for the
-/// call.
-unsafe fn want_backup_copy(
-    fname: *mut c_char,
-    file_info_old: *mut FileInfo,
+fn want_backup_copy(
+    fname: &CStr,
+    file_info_old: &FileInfo,
     perm: c_int,
     bkc: c_uint,
     append: bool,
@@ -269,10 +248,8 @@ unsafe fn want_backup_copy(
 
     // "auto": don't rename the file when it is a hard link, a symbolic
     // link, or in a directory we have no write permission in.
-    let mut file_info = FileInfo::default();
-    if unsafe { os_fileinfo_hardlinks(file_info_old) } > 1
-        || !unsafe { os_fileinfo_link(fname, &raw mut file_info) }
-        || !unsafe { os_fileinfo_id_equal(&raw mut file_info, file_info_old) }
+    if file_info_old.stat.st_nlink > 1
+        || link_info(fname).is_none_or(|link| !link.same_file_as(file_info_old))
     {
         return true;
     }
@@ -280,37 +257,31 @@ unsafe fn want_backup_copy(
     // Can we create a file here and give it the original's owner and
     // group? Find a name that does not exist yet (some arbitrary
     // numbers) and try it out.
-    let dirlen = tail_index(unsafe { cstr::bytes_at(fname) });
-    debug_assert!(dirlen < MAXPATHL as usize);
-    let mut tmp_fname = [0 as c_char; MAXPATHL as usize];
-    let into = tmp_fname.as_mut_ptr().cast();
-    unsafe { xmemcpyz(into, fname.cast(), dirlen as size_t) };
+    let dir = &fname.to_bytes()[..tail_index(fname.to_bytes())];
     let mut i: c_int = 4913;
-    loop {
-        let at = unsafe { tmp_fname.as_mut_ptr().add(dirlen) };
-        let room = tmp_fname.len() - dirlen;
-        unsafe { snprintf!(at, room, c"%d".as_ptr(), i) };
-        if !unsafe { os_fileinfo_link(tmp_fname.as_mut_ptr(), &raw mut file_info) } {
-            break;
+    let tmp_fname = loop {
+        let mut name = dir.to_vec();
+        name.extend_from_slice(i.to_string().as_bytes());
+        let name = CString::new(name).expect("a file name holds no NUL");
+        if link_info(&name).is_none() {
+            break name;
         }
         i += 123;
-    }
+    };
 
-    let path = tmp_fname.as_mut_ptr();
-    let fd = unsafe { os_open(path, O_CREAT | O_WRONLY | O_EXCL | O_NOFOLLOW, perm) };
-    if fd < 0 {
+    let mut options = OpenOptions::new();
+    options.create_new(true).custom_flags(O_NOFOLLOW);
+    let Ok(file) = open_for_write(&tmp_fname, &mut options, perm) else {
         return true; // can't write in this directory
-    }
-    let uid = unsafe { (*file_info_old).stat.st_uid } as uv_uid_t;
-    let gid = unsafe { (*file_info_old).stat.st_gid } as uv_gid_t;
-    unsafe { os_fchown(fd, uid, gid) };
-    let copy = !unsafe { os_fileinfo(tmp_fname.as_mut_ptr(), &raw mut file_info) }
-        || file_info.stat.st_uid != unsafe { (*file_info_old).stat.st_uid }
-        || file_info.stat.st_gid != unsafe { (*file_info_old).stat.st_gid }
-        || file_info.stat.st_mode as c_int != perm;
+    };
+    let (uid, gid) = (file_info_old.stat.st_uid, file_info_old.stat.st_gid);
+    let _ = std::os::unix::fs::fchown(&file, Some(uid as uv_uid_t), Some(gid as uv_gid_t));
+    let copy = file_info(&tmp_fname).is_none_or(|info| {
+        info.stat.st_uid != uid || info.stat.st_gid != gid || info.stat.st_mode as c_int != perm
+    });
     // Close before removing: on Windows an open file cannot be deleted.
-    unsafe { close(fd) };
-    unsafe { os_remove(cstr::at(tmp_fname.as_mut_ptr())) };
+    drop(file);
+    os_remove(&tmp_fname);
     copy
 }
 
@@ -318,21 +289,15 @@ unsafe fn want_backup_copy(
 ///
 /// Renaming the original out of the way is exactly how that happens, so this
 /// overrides the choice [`want_backup_copy`] made.
-///
-/// # Safety
-///
-/// `fname` must point at a NUL-terminated string, unaliased for the call.
-/// `file_info_old` must point at an initialized `FileInfo`, unaliased for the
-/// call.
-unsafe fn breaks_link(fname: *mut c_char, file_info_old: *mut FileInfo, bkc: c_uint) -> bool {
-    let mut file_info = FileInfo::default();
-    let link_ok = unsafe { os_fileinfo_link(fname, &raw mut file_info) };
-    let symlink = bkc & kOptBkcFlagBreaksymlink as c_uint != 0
-        && link_ok
-        && !unsafe { os_fileinfo_id_equal(&raw mut file_info, file_info_old) };
+fn breaks_link(fname: &CStr, file_info_old: &FileInfo, bkc: c_uint) -> bool {
+    let link = link_info(fname);
+    let same = link
+        .as_ref()
+        .is_some_and(|link| link.same_file_as(file_info_old));
+    let symlink = bkc & kOptBkcFlagBreaksymlink as c_uint != 0 && link.is_some() && !same;
     let hardlink = bkc & kOptBkcFlagBreakhardlink as c_uint != 0
-        && unsafe { os_fileinfo_hardlinks(file_info_old) } > 1
-        && (!link_ok || unsafe { os_fileinfo_id_equal(&raw mut file_info, file_info_old) });
+        && file_info_old.stat.st_nlink > 1
+        && (link.is_none() || same);
     symlink || hardlink
 }
 
@@ -344,50 +309,46 @@ unsafe fn breaks_link(fname: *mut c_char, file_info_old: *mut FileInfo, bkc: c_u
 ///
 /// `stat` receives the stat of the last name tried, because the copy path
 /// reads it afterwards; `None` tests existence only.
-///
-/// # Safety
-///
-/// `backup` must point at a NUL-terminated string, unaliased for the call.
-/// `backup_ext` must point at a NUL-terminated string, unaliased for the
-/// call.
-unsafe fn step_backup_name(
-    backup: *mut c_char,
-    backup_ext: *mut c_char,
+fn step_backup_name(
+    backup: &mut XString,
+    backup_ext: &[u8],
     mut stat: Option<&mut FileInfo>,
 ) -> bool {
     // Upstream computes `backup + strlen(backup) - 1 - strlen(ext)` and
     // clamps it up to `backup`; the clamp is what makes an empty name
     // safe, so do the arithmetic where it cannot go below zero.
-    let at = unsafe { cstr::bytes_at(backup) }
-        .len()
-        .saturating_sub(1 + unsafe { cstr::bytes_at(backup_ext) }.len());
-    let p = unsafe { backup.add(at) };
-    unsafe { *p = b'z' as c_char };
-    while unsafe { *p } > b'a' as c_char
-        && match stat.as_deref_mut() {
-            Some(file_info) => unsafe { os_fileinfo(backup, file_info) },
-            None => unsafe { os_path_exists(backup) },
+    let mut name = core::mem::take(backup).into_vec();
+    let at = (name.len() - 1).saturating_sub(1 + backup_ext.len());
+    name[at] = b'z';
+    while name[at] > b'a' {
+        let path = cstr::in_bytes(&name);
+        let taken = match stat.as_deref_mut() {
+            Some(info) => {
+                let found = file_info(path);
+                let taken = found.is_some();
+                *info = found.unwrap_or_default();
+                taken
+            }
+            None => path_exists(path),
+        };
+        if !taken {
+            break;
         }
-    {
-        unsafe { *p -= 1 };
+        name[at] -= 1;
     }
-    unsafe { *p != b'a' as c_char }
+    let free = name[at] != b'a';
+    name.pop(); // the terminator `into_vec` kept
+    *backup = XString::from_vec(name);
+    free
 }
 
 /// Make the backup file for a write.
 ///
 /// The backup may come back empty: with `!` a failure to make one is not
 /// worth stopping the write for.
-///
-/// # Safety
-///
-/// `fname` must point at a NUL-terminated string, unaliased for the call.
-/// `file_info_old` must point at an initialized `FileInfo`, unaliased for the
-/// call. `acl` must be an initialized `VimAcl` whose pointer fields point at
-/// live data for the call.
-pub(crate) unsafe fn buf_write_make_backup(
-    fname: *mut c_char,
-    file_info_old: *mut FileInfo,
+pub(crate) fn buf_write_make_backup(
+    fname: &CStr,
+    file_info_old: &FileInfo,
     target: &TargetFile,
     acl: VimAcl,
     bkc: c_uint,
@@ -395,9 +356,9 @@ pub(crate) unsafe fn buf_write_make_backup(
     forceit: bool,
 ) -> Result<Backup, WriteError> {
     let perm = target.perm;
-    let mut copy = unsafe { want_backup_copy(fname, file_info_old, perm, bkc, append) };
+    let mut copy = want_backup_copy(fname, file_info_old, perm, bkc, append);
     if bkc & (kOptBkcFlagBreaksymlink as c_uint | kOptBkcFlagBreakhardlink as c_uint) != 0
-        && unsafe { breaks_link(fname, file_info_old, bkc) }
+        && breaks_link(fname, file_info_old, bkc)
     {
         copy = false;
     }
@@ -406,16 +367,12 @@ pub(crate) unsafe fn buf_write_make_backup(
     // the backup below writes a file and may report through the message
     // machinery.
     let bex = P_BEX.get();
-    let backup_ext = if bex.is_empty() {
-        c".bak".as_ptr().cast_mut()
-    } else {
-        bex.as_ptr().cast_mut()
-    };
+    let backup_ext = if bex.is_empty() { &b".bak"[..] } else { &bex };
 
     let path = if copy {
-        unsafe { backup_by_copy(fname, file_info_old, acl, perm, backup_ext, forceit) }?
+        backup_by_copy(fname, file_info_old, acl, perm, backup_ext, forceit)?
     } else {
-        unsafe { backup_by_rename(fname, target, backup_ext, forceit) }?
+        backup_by_rename(fname, target, backup_ext, forceit)?
     };
     Ok(Backup { copy, path })
 }
@@ -426,115 +383,87 @@ pub(crate) unsafe fn buf_write_make_backup(
 /// plain `open(..., O_CREAT)`: the directory may not be writable, the file
 /// may be a symbolic link, it may belong to another user. So the existing
 /// file is truncated and reused, and the backup is a copy.
-///
-/// # Safety
-///
-/// `fname` must point at a NUL-terminated string, unaliased for the call.
-/// `file_info_old` must point at an initialized `FileInfo`, unaliased for the
-/// call. `acl` must be an initialized `VimAcl` whose pointer fields point at
-/// live data for the call. `backup_ext` must point at a NUL-terminated
-/// string, unaliased for the call.
-unsafe fn backup_by_copy(
-    fname: *mut c_char,
-    file_info_old: *mut FileInfo,
+fn backup_by_copy(
+    fname: &CStr,
+    file_info_old: &FileInfo,
     acl: VimAcl,
     perm: c_int,
-    backup_ext: *mut c_char,
+    backup_ext: &[u8],
     forceit: bool,
-) -> Result<*mut c_char, WriteError> {
+) -> Result<Option<XString>, WriteError> {
     let cannot_create =
         || WriteError::plain(c"E509: Cannot create backup file (add ! to override)");
     let mut err = None;
-    let mut backup: *mut c_char = core::ptr::null_mut();
+    let mut made = None;
 
     // Try to make the backup in each directory in 'backupdir'.
-    // A copy: the cursor below walks past the end of a projection's borrow.
-    let bdir = P_BDIR.get();
-    let mut dirp = bdir.as_ptr().cast_mut();
-    while unsafe { *dirp } != 0 {
-        backup = unsafe { buf_get_backup_name(fname, &mut dirp, false, backup_ext) };
-        if backup.is_null() {
-            break; // out of memory
-        }
-
-        // `os_fileinfo` zeroes what it is given even when it fails, so
-        // `file_info_new` is defined below whether or not the backup file
-        // already existed.
+    each_backup_dir(fname, backup_ext, |mut backup| {
+        // A stat that fails leaves `file_info_new` zeroed, so it is defined
+        // below whether or not the backup file already existed.
         let mut file_info_new = FileInfo::default();
-        if unsafe { os_fileinfo(backup, &raw mut file_info_new) } {
-            if unsafe { os_fileinfo_id_equal(&raw mut file_info_new, file_info_old) } {
+        if let Some(found) = file_info(backup.as_cstr()) {
+            if found.same_file_as(file_info_old) {
                 // The backup file *is* the original file: modname() gave
                 // the same name back (a silly link, say). Copying onto it
                 // would ruin the file, and erasing it afterwards would
                 // erase the file.
-                unsafe { xfree(backup.cast()) };
-                backup = core::ptr::null_mut();
-            } else if !p_bk()
-                && !unsafe { step_backup_name(backup, backup_ext, Some(&mut file_info_new)) }
-            {
+                return false;
+            }
+            file_info_new = found;
+            if !p_bk() && !step_backup_name(&mut backup, backup_ext, Some(&mut file_info_new)) {
                 // Not keeping the backup, so an existing one must not be
                 // deleted — and every alternative name is taken too.
-                unsafe { xfree(backup.cast()) };
-                backup = core::ptr::null_mut();
+                return false;
             }
         }
-        if backup.is_null() {
-            continue;
-        }
 
-        unsafe { os_remove(cstr::at(backup)) }; // remove an old backup, if present
-        if unsafe { os_copy(cstr::at(fname), cstr::at(backup), UV_FS_COPYFILE_FICLONE) } != 0 {
+        let path = backup.as_cstr();
+        os_remove(path); // remove an old backup, if present
+        if os_copy(fname, path, UV_FS_COPYFILE_FICLONE) != 0 {
             err = Some(cannot_create());
-            unsafe { xfree(backup.cast()) };
-            backup = core::ptr::null_mut();
-            continue;
+            return false;
         }
 
         // Same protection as the original file, minus the s-bit.
-        unsafe { os_setperm(cstr::at(backup), perm & 0o777) };
+        os_setperm(path, perm & 0o777);
         // Try to give the backup the original's group. Failing that, give
         // the group the same bits as others.
-        let gid = unsafe { (*file_info_old).stat.st_gid };
+        let gid = file_info_old.stat.st_gid;
         if file_info_new.stat.st_gid != gid
-            && unsafe { os_chown(cstr::at(backup), -1i32 as uv_uid_t, gid as uv_gid_t) } != 0
+            && os_chown(path, -1i32 as uv_uid_t, gid as uv_gid_t) != 0
         {
-            unsafe { os_setperm(cstr::at(backup), (perm & 0o707) | ((perm & 0o7) << 3)) };
+            os_setperm(path, (perm & 0o707) | ((perm & 0o7) << 3));
         }
-        let atime = unsafe { (*file_info_old).stat.st_atim.tv_sec } as f64;
-        let mtime = unsafe { (*file_info_old).stat.st_mtim.tv_sec } as f64;
-        unsafe { os_file_settime(cstr::at(backup), atime, mtime) };
-        os_set_acl(backup, acl);
-        unsafe { os_copy_xattr(fname, backup) };
+        let atime = file_info_old.stat.st_atim.tv_sec as f64;
+        let mtime = file_info_old.stat.st_mtim.tv_sec as f64;
+        os_file_settime(path, atime, mtime);
+        os_set_acl(path.as_ptr(), acl);
+        copy_xattr(fname, path);
         err = None;
-        break;
-    }
+        made = Some(backup);
+        true
+    });
 
-    if backup.is_null() && err.is_none() {
+    if made.is_none() && err.is_none() {
         err = Some(cannot_create());
     }
     // Errors are ignored when forceit is true.
     if !forceit && let Some(err) = err {
         return Err(err);
     }
-    Ok(backup)
+    Ok(made)
 }
 
 /// Make the backup by renaming the original out of the way.
 ///
 /// For safety the backup is not removed until the write has finished
 /// successfully — and if 'backup' is set, not even then.
-///
-/// # Safety
-///
-/// `fname` must point at a NUL-terminated string, unaliased for the call.
-/// `backup_ext` must point at a NUL-terminated string, unaliased for the
-/// call.
-unsafe fn backup_by_rename(
-    fname: *mut c_char,
+fn backup_by_rename(
+    fname: &CStr,
     target: &TargetFile,
-    backup_ext: *mut c_char,
+    backup_ext: &[u8],
     forceit: bool,
-) -> Result<*mut c_char, WriteError> {
+) -> Result<Option<XString>, WriteError> {
     // 'cpoptions' "W" means not overwriting a read-only file. A rename
     // may be possible anyway, so it needs its own check here.
     if target.readonly && cpo_has(CpoFlag::FWRITE) {
@@ -543,35 +472,26 @@ unsafe fn backup_by_rename(
 
     // path/fo.o.h becomes path/fo.o.h.bak, in the first directory of
     // 'backupdir' that works.
-    let mut backup: *mut c_char = core::ptr::null_mut();
-    // A copy: the cursor below walks past the end of a projection's borrow.
-    let bdir = P_BDIR.get();
-    let mut dirp = bdir.as_ptr().cast_mut();
-    while unsafe { *dirp } != 0 {
-        backup = unsafe { buf_get_backup_name(fname, &mut dirp, false, backup_ext) };
-        if !backup.is_null()
-            && !p_bk()
-            && unsafe { os_path_exists(backup) }
-            && !unsafe { step_backup_name(backup, backup_ext, None) }
+    let mut made = None;
+    each_backup_dir(fname, backup_ext, |mut backup| {
+        if !p_bk()
+            && path_exists(backup.as_cstr())
+            && !step_backup_name(&mut backup, backup_ext, None)
         {
-            unsafe { xfree(backup.cast()) };
-            backup = core::ptr::null_mut();
+            return false;
         }
-        if backup.is_null() {
-            continue;
+        if rename_file(fname, backup.as_cstr()) {
+            made = Some(backup);
+            return true;
         }
-        if unsafe { rename_file(cstr::at(fname), cstr::at(backup)) } {
-            break;
-        }
-        unsafe { xfree(backup.cast()) }; // don't do the rename below
-        backup = core::ptr::null_mut();
-    }
-    if backup.is_null() && !forceit {
+        false // don't do the rename below
+    });
+    if made.is_none() && !forceit {
         return Err(WriteError::plain(
             c"E510: Can't make backup file (add ! to override)",
         ));
     }
-    Ok(backup)
+    Ok(made)
 }
 
 /// Put the original file back after failing to open it for writing.
@@ -580,33 +500,28 @@ unsafe fn backup_by_rename(
 /// was moved or removed to make it, it goes back first. Returns false when
 /// the original is gone anyway, which makes the write a total loss.
 ///
-/// # Safety
-///
-/// `fname` must point at a NUL-terminated string, unaliased for the call.
-/// `wfname` must point at a NUL-terminated string, unaliased for the call.
-pub(crate) unsafe fn restore_backup(
-    backup: &Backup,
-    fname: *mut c_char,
-    wfname: *mut c_char,
-    newfile: bool,
-) -> bool {
-    if !backup.path.is_null() && wfname == fname {
+/// `direct` says the write went to `fname` itself rather than a temp file.
+pub(crate) fn restore_backup(backup: &Backup, fname: &CStr, direct: bool, newfile: bool) -> bool {
+    if let Some(path) = &backup.path
+        && direct
+    {
+        let path = path.as_cstr();
         if backup.copy {
             // There is a small chance the original was removed; try to
             // move the copy into its place. That may fail, in which case
             // the copy is left where it is.
-            if !unsafe { os_path_exists(fname) } {
-                unsafe { rename_file(cstr::at(backup.path), cstr::at(fname)) };
+            if !path_exists(fname) {
+                rename_file(path, fname);
             }
             // If the original does exist, throw the copy away.
-            if unsafe { os_path_exists(fname) } {
-                unsafe { os_remove(cstr::at(backup.path)) };
+            if path_exists(fname) {
+                os_remove(path);
             }
         } else {
-            unsafe { rename_file(cstr::at(backup.path), cstr::at(fname)) };
+            rename_file(path, fname);
         }
     }
-    newfile || unsafe { os_path_exists(fname) }
+    newfile || path_exists(fname)
 }
 
 /// Put the backup back over the file a failed write left behind.
@@ -614,16 +529,12 @@ pub(crate) unsafe fn restore_backup(
 /// The new file is probably corrupt, and writing again would otherwise make
 /// a backup *of the corrupt file* and lose the original for good. True when
 /// the original is back, which spares the user the extra warning.
-///
-/// # Safety
-///
-/// `fname` must point at a NUL-terminated string, unaliased for the call.
-pub(crate) unsafe fn recover_from_backup(backup: &Backup, fname: *mut c_char) -> bool {
-    if backup.path.is_null() {
+pub(crate) fn recover_from_backup(backup: &Backup, fname: &CStr) -> bool {
+    let Some(path) = &backup.path else {
         return false;
-    }
+    };
     if !backup.copy {
-        return unsafe { rename_file(cstr::at(backup.path), cstr::at(fname)) };
+        return rename_file(path.as_cstr(), fname);
     }
     // Copying may take a while; if we were interrupted, let the user
     // know the message arrived.
@@ -631,9 +542,7 @@ pub(crate) unsafe fn recover_from_backup(backup: &Backup, fname: *mut c_char) ->
         msg(gettext(e_interr), 0);
         ui_flush();
     }
-    // SAFETY: both are the caller's NUL-terminated names.
-    let (from, to) = unsafe { (cstr::at(backup.path), cstr::at(fname)) };
-    os_copy(from, to, UV_FS_COPYFILE_FICLONE) == 0
+    os_copy(path.as_cstr(), fname, UV_FS_COPYFILE_FICLONE) == 0
 }
 
 /// `'patchmode'`: keep the file as it was before the write, under a name of
@@ -641,50 +550,43 @@ pub(crate) unsafe fn recover_from_backup(backup: &Backup, fname: *mut c_char) ->
 ///
 /// The backup already *is* the original, so it only has to be renamed. With
 /// no backup — the file did not exist — an empty file records that.
-///
-/// # Safety
-///
-/// `fname` must point at a NUL-terminated string, unaliased for the call.
-pub(crate) unsafe fn apply_patchmode(
-    fname: *mut c_char,
+pub(crate) fn apply_patchmode(
+    fname: &CStr,
     backup: &mut Backup,
     perm: c_int,
     file_info_old: &FileInfo,
 ) {
-    let org = p_pm(|value| unsafe { modname(cstr::at_opt(fname), value.to_bytes(), false) })
-        .map_or(core::ptr::null_mut(), XString::into_raw);
-    if !backup.path.is_null() {
-        if org.is_null() {
-            emsg(translate(c"E205: Patchmode: can't save original file"));
-        } else if !unsafe { os_path_exists(org) } {
-            unsafe { rename_file(cstr::at(backup.path), cstr::at(org)) };
-            unsafe { xfree(backup.path.cast()) }; // don't delete the file
-            backup.path = core::ptr::null_mut();
-            let atime = file_info_old.stat.st_atim.tv_sec as f64;
-            let mtime = file_info_old.stat.st_mtim.tv_sec as f64;
-            unsafe { os_file_settime(cstr::at(org), atime, mtime) };
+    let org = p_pm(|value| modname(Some(fname), value.to_bytes(), false));
+    if let Some(path) = &backup.path {
+        match &org {
+            None => {
+                emsg(translate(c"E205: Patchmode: can't save original file"));
+            }
+            Some(org) if !path_exists(org.as_cstr()) => {
+                rename_file(path.as_cstr(), org.as_cstr());
+                backup.path = None; // don't delete the file
+                let atime = file_info_old.stat.st_atim.tv_sec as f64;
+                let mtime = file_info_old.stat.st_mtim.tv_sec as f64;
+                os_file_settime(org.as_cstr(), atime, mtime);
+            }
+            Some(_) => {}
         }
     } else {
         // No backup, so remember that a (new) file was created.
-        let empty_fd = if org.is_null() {
-            -1
-        } else {
-            {
-                let mode = if perm < 0 { 0o666 } else { perm & 0o777 };
-                unsafe { os_open(org, O_CREAT | O_EXCL | O_NOFOLLOW, mode) }
-            }
-        };
-        if empty_fd < 0 {
+        let mode = if perm < 0 { 0o666 } else { perm & 0o777 };
+        let touched = org.as_ref().and_then(|org| {
+            let mut options = OpenOptions::new();
+            options.create_new(true).custom_flags(O_NOFOLLOW);
+            open_for_write(org.as_cstr(), &mut options, mode).ok()
+        });
+        if touched.is_none() {
             emsg(translate(
                 c"E206: Patchmode: can't touch empty original file",
             ));
-        } else {
-            unsafe { close(empty_fd) };
         }
     }
-    if !org.is_null() {
-        unsafe { os_setperm(cstr::at(org), os_getperm(fname) as c_int & 0o777) };
-        unsafe { xfree(org.cast()) };
+    if let Some(org) = &org {
+        os_setperm(org.as_cstr(), getperm(fname) & 0o777);
     }
 }
 
@@ -697,32 +599,23 @@ pub(crate) unsafe fn apply_patchmode(
 /// given.
 ///
 /// `None` means giving up, with the reason in `err`.
-///
-/// # Safety
-///
-/// `wfname` must point at a NUL-terminated string, unaliased for the call.
-/// `fname` must point at a NUL-terminated string, unaliased for the call.
-/// `file_info_old` must point at an initialized `FileInfo`, unaliased for the
-/// call. `req` must be an initialized `WriteRequest` whose pointer fields
-/// point at live data for the call.
-pub(crate) unsafe fn open_write_file(
-    wfname: *mut c_char,
-    fname: *mut c_char,
+pub(crate) fn open_write_file(
+    wfname: &CStr,
+    fname: &CStr,
     target: &mut TargetFile,
-    file_info_old: *mut FileInfo,
+    file_info_old: &FileInfo,
     req: WriteRequest,
     err: &mut Option<WriteError>,
-) -> Option<c_int> {
-    let fflags = O_WRONLY
-        | if req.append {
-            if req.forceit {
-                O_APPEND | O_CREAT
-            } else {
-                O_APPEND
-            }
+) -> Option<File> {
+    let options = || {
+        let mut options = OpenOptions::new();
+        if req.append {
+            options.append(true).create(req.forceit);
         } else {
-            O_CREAT | O_TRUNC
-        };
+            options.create(true).truncate(true);
+        }
+        options
+    };
     // Deliberately computed once: the retry below raises `target.perm`
     // for the later chmod, not for this open.
     let mode = if target.perm < 0 {
@@ -731,30 +624,27 @@ pub(crate) unsafe fn open_write_file(
         target.perm & 0o777
     };
     loop {
-        let fd = unsafe { os_open(wfname, fflags, mode) };
-        if fd >= 0 {
-            return Some(fd);
-        }
+        let code = match open_for_write(wfname, &mut options(), mode) {
+            Ok(file) => return Some(file),
+            Err(code) => code,
+        };
         if err.is_some() {
             // The retry failed as well; report why the first try did.
             return None;
         }
 
-        let mut file_info = FileInfo::default();
         // Don't delete the file when it is a hard or symbolic link.
-        if (!target.newfile && unsafe { os_fileinfo_hardlinks(file_info_old) } > 1)
-            || (unsafe { os_fileinfo_link(fname, &raw mut file_info) }
-                && !unsafe { os_fileinfo_id_equal(&raw mut file_info, file_info_old) })
+        if (!target.newfile && file_info_old.stat.st_nlink > 1)
+            || link_info(fname).is_some_and(|link| !link.same_file_as(file_info_old))
         {
             *err = Some(WriteError::plain(
                 c"E166: Can't open linked file for writing",
             ));
             return None;
         }
-        // A failed os_open returns the negated errno.
         *err = Some(WriteError::errno(
             c"E212: Can't open file for writing: %s",
-            fd,
+            code,
         ));
         if !(req.forceit && !cpo_has(CpoFlag::FWRITE) && target.perm >= 0) {
             return None;
@@ -765,34 +655,27 @@ pub(crate) unsafe fn open_write_file(
             target.made_writable = true;
         }
         target.perm |= 0o200;
-        if unsafe { (*file_info_old).stat.st_uid } != unsafe { getuid() } as uint64_t
-            || unsafe { (*file_info_old).stat.st_gid } != unsafe { getgid() } as uint64_t
+        if file_info_old.stat.st_uid != uint64_t::from(os_getuid())
+            || file_info_old.stat.st_gid != uint64_t::from(os_getgid())
         {
             target.perm &= 0o777;
         }
         if !req.append {
-            unsafe { os_remove(cstr::at(wfname)) }; // don't remove when appending
+            os_remove(wfname); // don't remove when appending
         }
     }
 }
 
 /// Sync and close the file just written, and give it the original's
 /// ownership, permissions and ACL.
-///
-/// # Safety
-///
-/// `wfname` must point at a NUL-terminated string, unaliased for the call.
-/// `acl` must be an initialized `VimAcl` whose pointer fields point at live
-/// data for the call. `file_info_old` must point at an initialized
-/// `FileInfo`, unaliased for the call.
-pub(crate) unsafe fn finish_write(
+pub(crate) fn finish_write(
     buffer: Buf,
-    fd: c_int,
-    wfname: *mut c_char,
+    file: File,
+    wfname: &CStr,
     target: &TargetFile,
     backup: &Backup,
     acl: VimAcl,
-    file_info_old: *mut FileInfo,
+    file_info_old: &FileInfo,
 ) -> Option<WriteError> {
     let mut err = None;
     // Many journalling file systems lose both the original and the
@@ -806,30 +689,29 @@ pub(crate) unsafe fn finish_write(
         p_fs()
     };
     if fsync {
-        let error = unsafe { os_fsync(fd) };
         // UV_ENOTSUP is "this storage does not do fsync".
-        if error != 0 && error != UV_ENOTSUP && !target.device {
-            err = Some(unsafe { WriteError::shared(e_fsync.as_ptr(), error) });
+        if let Err(error) = fsync_file(&file)
+            && error != UV_ENOTSUP
+            && !target.device
+        {
+            err = Some(WriteError::shared(e_fsync, error));
         }
     }
 
-    if !backup.copy {
-        unsafe { os_copy_xattr(backup.path, wfname) };
+    if !backup.copy
+        && let Some(path) = &backup.path
+    {
+        copy_xattr(path.as_cstr(), wfname);
     }
-    if !backup.path.is_null() && !backup.copy {
+    if backup.path.is_some() && !backup.copy {
         // The original was renamed away, so this is a new file: give it
         // the original's owner and group. Not when they are already
         // right — some systems drop permission or ACL data over it.
-        let mut file_info = FileInfo::default();
-        if !unsafe { os_fileinfo(wfname, &raw mut file_info) }
-            || file_info.stat.st_uid != unsafe { (*file_info_old).stat.st_uid }
-            || file_info.stat.st_gid != unsafe { (*file_info_old).stat.st_gid }
-        {
-            let uid = unsafe { (*file_info_old).stat.st_uid } as uv_uid_t;
-            let gid = unsafe { (*file_info_old).stat.st_gid } as uv_gid_t;
-            unsafe { os_fchown(fd, uid, gid) };
+        let (uid, gid) = (file_info_old.stat.st_uid, file_info_old.stat.st_gid);
+        if file_info(wfname).is_none_or(|info| info.stat.st_uid != uid || info.stat.st_gid != gid) {
+            let _ = std::os::unix::fs::fchown(&file, Some(uid as uv_uid_t), Some(gid as uv_gid_t));
             if target.perm >= 0 {
-                unsafe { os_setperm(cstr::at(wfname), target.perm) }; // may have changed
+                os_setperm(wfname, target.perm); // may have changed
             }
         }
         buf_set_file_id(buffer);
@@ -837,8 +719,7 @@ pub(crate) unsafe fn finish_write(
         buf_set_file_id(buffer); // the file is new
     }
 
-    let error = unsafe { os_close(fd) };
-    if error != 0 {
+    if let Err(error) = close_file(file) {
         err = Some(WriteError::errno(c"E512: Close failed: %s", error));
     }
 
@@ -847,12 +728,12 @@ pub(crate) unsafe fn finish_write(
         perm &= !0o200; // reset the 'w' bit for security reasons
     }
     if perm >= 0 {
-        unsafe { os_setperm(cstr::at(wfname), perm) }; // same permissions as the old file
+        os_setperm(wfname, perm); // same permissions as the old file
     }
     // The ACL goes on before the user changes: an ACL cannot be set on a
     // file the user does not own.
     if !backup.copy {
-        os_set_acl(wfname, acl);
+        os_set_acl(wfname.as_ptr(), acl);
     }
     err
 }

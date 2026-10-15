@@ -1,7 +1,15 @@
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+//! Writing a buffer's lines to a file: `:write`, `:update`, `:saveas`, the
+//! input of a filter command and the temp files `:diffupdate` hands to an
+//! external program.
+//!
+//! [`buf_write`] is the one entry point. Its children carve it up: the
+//! autocommands that bracket it ([`autocmds`]), the pre-flight, the backup
+//! and the file it writes ([`backup`]), the conversion of the text
+//! ([`convert`]) and the loop over the lines and the report it ends with
+//! ([`lines`]).
 
-use crate::cstr;
+#![forbid(unsafe_code)]
+
 use crate::ex_docmd::cmdmod_has;
 use crate::mbyte::canonize;
 use crate::memline::MlFlags;
@@ -10,62 +18,56 @@ use crate::semsg;
 use crate::tr_plural;
 use crate::types::CAR;
 use crate::types::NL;
-use crate::vim_snprintf;
 use core::ffi::CStr;
 use std::borrow::Cow;
 use std::ffi::CString;
 
-use crate::autocmd::{apply_autocmds_exarg, aucmd_prepbuf, aucmd_restbuf};
+use crate::autocmd::{apply_autocmds_exarg, aucmd_prepbuf_in, aucmd_restbuf_in};
 use crate::buffer::{BufFlags, buf_get_changedtick, buf_is_nofilename, buf_set_file_id};
 use crate::change::unchanged;
 use crate::drawscreen::state::need_maketitle;
 use crate::drawscreen::status_redraw_all;
 use crate::eval::vars::eval_charconvert;
-use crate::event::libuv::uv_strerror;
 use crate::ex_cmds::check_secure;
 use crate::ex_docmd::state::ex_no_reprint;
 use crate::ex_eval::{aborting, should_abort_err};
 use crate::fileio::{
-    Report, buf_store_file_info, filemess, get_fio_flags, match_file_list, modname,
+    FioFlags, Report, buf_store_file_info, filemess, get_fio_flags, match_file_list, modname,
     msg_add_fileformat, msg_add_lines, need_conversion, rename_file, set_rw_fname, temp_name,
     time_differs,
 };
 use crate::getchar::state::got_int;
 use crate::highlight_group::HLF_E;
 use crate::input::ask_yesno;
-use crate::mbyte::{utf_ptr2char, utf_ptr2len_len};
-use crate::memline::{get_file_in_dir, make_percent_swname, ml_get_buf, ml_preserve, ml_timestamp};
-use crate::memory::{XString, verbose_try_malloc, xfree, xmemcpyz};
+use crate::memline::{ml_preserve, ml_timestamp};
+use crate::memory::XString;
 use crate::message::state::{msg_scroll, msg_silent, no_wait_return};
 use crate::message::{e_empty_buffer, e_fsync, e_interr, e_longname};
 use crate::message::{emsg, msg_progress, msg_str_hl, set_keep_msg};
-use crate::message_fmt::{c_str, emsg_text, msg_cstr};
+use crate::message_fmt::{emsg_text, msg_cstr};
 use crate::option::vars::{P_BSK, P_CCV, P_PM, p_bk, p_bsk, p_fs, p_pm, p_wb};
-use crate::option::{copy_option_part, cpo_has, get_bkc_flags, get_fileformat_force, shortmess};
+use crate::option::{cpo_has, get_bkc_flags, get_fileformat_force, shortmess};
 use crate::options::{
     kOptBkcFlagAuto, kOptBkcFlagBreakhardlink, kOptBkcFlagBreaksymlink, kOptBkcFlagYes,
 };
-use crate::optionstr::OptString;
-use crate::os::cshim::{gettext, gettext_ptr};
-use crate::os::fs::write_eintr;
+use crate::os::cshim::gettext;
+use crate::os::fs::os_strerror;
 use crate::os::fs::{
-    os_chown, os_close, os_copy, os_copy_xattr, os_fchown, os_file_is_writable, os_file_settime,
-    os_fileinfo, os_fileinfo_hardlinks, os_fileinfo_id_equal, os_fileinfo_link, os_free_acl,
-    os_fsync, os_get_acl, os_getperm, os_isdir, os_mkdir_recurse, os_nodetype, os_open,
-    os_path_exists, os_remove, os_set_acl, os_setperm,
+    os_chown, os_copy, os_file_is_writable, os_file_settime, os_free_acl, os_get_acl, os_nodetype,
+    os_remove, os_set_acl, os_setperm,
 };
 use crate::os::input::os_breakcheck;
 use crate::path::{after_pathsep, path_fnamecmp, tail_index};
 use crate::sha256::Sha256;
 use crate::startup::exiting;
+use crate::strings::{FmtArg, format_into};
 use crate::types::{
     AcoSave, CmdModFlags, CpoFlag, ExArg, FAIL, Failed, FileInfo, FileOffset, IOSIZE, LineNr,
-    MAXPATHL, Pos, ShmFlag, VimAcl, iconv_t, int64_t, size_t, uint64_t, uv_gid_t, uv_uid_t,
+    MAXPATHL, Pos, ShmFlag, VimAcl, int64_t, uint64_t, uv_gid_t, uv_uid_t,
 };
 use crate::ui::ui_flush;
 use crate::undo::{curbuf_is_changed, u_unchanged, u_update_save_nr, u_write_undo};
 use crate::winlayer::Buf;
-use ::libc::{__errno_location, close, getgid, getuid, iconv, iconv_close};
 
 // The carve of the transpiled module; see each child's docs.
 mod convert;
@@ -94,9 +96,7 @@ pub(crate) struct WriteError {
 
 /// The translated form of a literal message.
 pub(crate) fn translate(msg: &'static CStr) -> &'static CStr {
-    // SAFETY: gettext returns either its own argument or a pointer into the
-    // loaded message catalog. Both outlive the process.
-    unsafe { CStr::from_ptr(gettext(msg).as_ptr()) }
+    gettext(msg)
 }
 
 impl WriteError {
@@ -138,104 +138,61 @@ impl WriteError {
 
     /// A message from one of the shared `e_*` globals rather than from a
     /// literal here, with `arg` as for [`errno`](Self::errno).
-    ///
-    /// # Safety
-    ///
-    /// `msg` must point at a NUL-terminated string that outlives the error.
-    pub(crate) unsafe fn shared(msg: *const ::core::ffi::c_char, arg: ::core::ffi::c_int) -> Self {
+    pub(crate) fn shared(msg: &'static CStr, arg: ::core::ffi::c_int) -> Self {
         WriteError {
             num: None,
-            msg: unsafe { CStr::from_ptr(gettext_ptr(msg).as_ptr()) }.into(),
+            msg: gettext(msg).into(),
             arg,
         }
     }
 
     /// Report the error, against the already-quoted file name in `fname`.
     pub(crate) fn emit(&self, fname: &CStr) {
-        let msg = self.msg.as_ptr();
         let iobuff = msg_cstr(fname);
+        let msg = msg_cstr(&self.msg);
         match (self.num, self.arg) {
             (Some(num), 0) => {
-                // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-                let (num, msg) = unsafe { (msg_cstr(num), c_str(msg)) };
+                let num = msg_cstr(num);
                 semsg!("{num}: {iobuff}{msg}");
             }
             (Some(num), arg) => {
-                let why = unsafe { uv_strerror(arg) };
-                // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-                let (num, msg, why) = unsafe { (msg_cstr(num), c_str(msg), c_str(why)) };
+                let (num, why) = (msg_cstr(num), msg_cstr(os_strerror(arg)));
                 semsg!("{num}: {iobuff}{msg}: {why}");
             }
             // The message is deliberately its own format string here.
             (None, arg) if arg != 0 => {
-                // SAFETY: `msg` is this error's own format, and `uv_strerror`
-                // answers a NUL-terminated string for any code.
-                let (template, why) = unsafe { (gettext_ptr(msg), c_str(uv_strerror(arg))) };
-                emsg_text(tr_plural!(template, why));
+                let why = msg_cstr(os_strerror(arg));
+                emsg_text(tr_plural!(self.msg.as_ref(), why));
             }
             (None, _) => {
-                // SAFETY: `msg` is this error's own NUL-terminated text.
-                emsg(unsafe { cstr::at(msg) });
+                emsg(&self.msg);
             }
         }
     }
 }
 
 /// "conversion failed", naming the line it failed on when one is known.
-///
-/// Upstream allocates 300 bytes for this; a stack buffer plus an owned copy
-/// of what actually landed in it does the same job.
 pub(crate) fn conversion_failed(lnum: LineNr) -> WriteError {
     if lnum == 0 {
         return WriteError::plain(
             c"E513: Write error, conversion failed (make 'fenc' empty to override)",
         );
     }
-    let mut msg = [0 as ::core::ffi::c_char; 300];
-    let (into, size) = (msg.as_mut_ptr(), msg.len() as size_t);
+    // Upstream formats into 300 bytes.
     let fmt = translate(
         c"E513: Write error, conversion failed in line %d (make 'fenc' empty to override)",
-    )
-    .as_ptr();
-    unsafe { vim_snprintf!(into, size, fmt, lnum) };
-    WriteError::formatted(unsafe { CStr::from_ptr(msg.as_ptr()) }.to_owned())
+    );
+    let mut msg = vec![0; 300];
+    let len = format_into(&mut msg, fmt.to_bytes(), &[FmtArg::from(lnum)]).min(299);
+    msg.truncate(len);
+    WriteError::formatted(CString::new(msg).unwrap_or_default())
 }
 
-pub struct BufWriteInfo {
-    pub bw_fd: ::core::ffi::c_int,
-    pub bw_buf: *mut ::core::ffi::c_char,
-    pub bw_len: ::core::ffi::c_int,
-    pub bw_flags: ::core::ffi::c_int,
-    pub bw_first: ::core::ffi::c_int,
-    pub bw_conv_buf: *mut ::core::ffi::c_char,
-    pub bw_conv_buflen: size_t,
-    pub bw_conv_error: ::core::ffi::c_int,
-    pub bw_conv_error_lnum: LineNr,
-    pub bw_start_lnum: LineNr,
-    pub bw_iconv_fd: iconv_t,
-}
-pub const WRITEBUFSIZE: ::core::ffi::c_uint = 8192;
-pub const FIO_LATIN1: ::core::ffi::c_int = 1;
-pub const FIO_ENDIAN_L: ::core::ffi::c_int = 128;
-pub const FIO_UTF16: ::core::ffi::c_int = 16;
-pub const FIO_UCS2: ::core::ffi::c_int = 4;
-pub const FIO_UCS4: ::core::ffi::c_int = 8;
-pub const FIO_NOCONVERT: ::core::ffi::c_int = 8192;
-pub const FIO_UTF8: ::core::ffi::c_int = 2;
-pub const ICONV_MULT: ::core::ffi::c_uint = 8;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const O_WRONLY: ::core::ffi::c_int = 0o1 as ::core::ffi::c_int;
-pub const O_CREAT: ::core::ffi::c_int = 0o100 as ::core::ffi::c_int;
-pub const O_EXCL: ::core::ffi::c_int = 0o200 as ::core::ffi::c_int;
-pub const O_TRUNC: ::core::ffi::c_int = 0o1000 as ::core::ffi::c_int;
-pub const O_APPEND: ::core::ffi::c_int = 0o2000 as ::core::ffi::c_int;
-pub const __O_NOFOLLOW: ::core::ffi::c_int = 0o400000 as ::core::ffi::c_int;
-pub const O_NOFOLLOW: ::core::ffi::c_int = __O_NOFOLLOW;
+pub const O_NOFOLLOW: ::core::ffi::c_int = ::libc::O_NOFOLLOW;
 pub const UV_FS_COPYFILE_FICLONE: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
 pub const NODE_WRITABLE: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 /// `'cpoptions'` "W": refuse to overwrite a read-only file even with `!`.
 pub(crate) const E_READONLY_CPO: &CStr = c"is read-only (cannot override: \"W\" in 'cpoptions')";
-pub const SMALLBUFSIZE: usize = 256;
 
 /// What the caller is asking a write to be.
 #[derive(Copy, Clone)]
@@ -268,10 +225,8 @@ impl WriteRequest {
 /// A name [`buf_write`] writes under.
 ///
 /// The buffer's own names are *named*, not borrowed: the write's
-/// autocommands may rename the buffer, which frees the old name, and the
-/// write tells "the buffer's own name" from another by address so that it
-/// follows such a rename. Each is resolved to the buffer's name of the moment
-/// on entry, which is the address upstream's caller would have passed.
+/// autocommands may rename the buffer, and the write follows such a rename
+/// for a name that was the buffer's own (see [`WriteNameCopy`]).
 #[derive(Clone, Copy)]
 pub(crate) enum WriteName<'a> {
     /// The buffer's full name, `b_ffname`.
@@ -286,21 +241,26 @@ pub(crate) enum WriteName<'a> {
 }
 
 impl WriteName<'_> {
-    /// The name's address, for the pointer walk below: the buffer's own
-    /// storage for its names, or `copy`, filled with a writable copy of a
-    /// caller's name. Null for a buffer name that is not set.
-    fn resolve(self, buffer: Buf, copy: &mut Vec<u8>) -> *mut ::core::ffi::c_char {
+    /// A copy of the name, and the address that tells the buffer's own
+    /// names from a caller's (zero for a caller's, which no name of the
+    /// buffer's has). `None` for a buffer name that is not set.
+    fn resolve(self, buffer: Buf) -> Option<WriteNameCopy> {
+        let own =
+            |name: Option<&CStr>| name.map(|name| WriteNameCopy::new(name, name.as_ptr().addr()));
         match self {
-            WriteName::Full => buffer.name.full_ptr(),
-            WriteName::Short => buffer.name.short_ptr(),
-            WriteName::Shown => buffer.name.shown_ptr(),
-            WriteName::Other(name) => {
-                copy.clear();
-                copy.extend_from_slice(name.to_bytes_with_nul());
-                copy.as_mut_ptr().cast()
-            }
+            WriteName::Full => own(buffer.name.full()),
+            WriteName::Short => own(buffer.name.short()),
+            WriteName::Shown => own(buffer.name.shown()),
+            WriteName::Other(name) => Some(WriteNameCopy::new(name, 0)),
         }
     }
+}
+
+/// Where the text goes: straight into the file, or into a temp file that
+/// `'charconvert'` turns into the file afterwards.
+enum WriteTarget {
+    Direct,
+    Temp(XString),
 }
 
 /// Write lines `start` through `end` of `buf` to `fname`.
@@ -325,14 +285,8 @@ pub(crate) fn buf_write(
     mut excmd: Option<&mut ExArg>,
     req: WriteRequest,
 ) -> Result<(), Failed> {
-    // Writable copies of a caller's names, alive for the whole write: the
-    // walk below holds their addresses.
-    let (mut fname_copy, mut sfname_copy) = (Vec::new(), Vec::new());
-    let fname = fname.resolve(buffer, &mut fname_copy);
-    let sfname = sfname.map_or(::core::ptr::null_mut(), |name| {
-        name.resolve(buffer, &mut sfname_copy)
-    });
-    // SAFETY: the caller's promise, taken once for the whole body.
+    let fname = fname.resolve(buffer);
+    let sfname = sfname.and_then(|name| name.resolve(buffer));
     let mut b = buffer;
     let (mut buf, mut start, mut end) = (buffer, start, end);
     let mut retval = Ok(());
@@ -343,9 +297,9 @@ pub(crate) fn buf_write(
     let mut sha_ctx = Sha256::new();
     let bkc = get_bkc_flags(b);
 
-    if fname.is_null() || unsafe { *fname } == 0 {
+    let Some(fname) = fname.filter(|name| !name.as_cstr().is_empty()) else {
         return Err(Failed); // safety check
-    }
+    };
     if b.b_ml.ml_mfp.is_null() {
         // Can happen during startup, from a stray "w" in the vimrc.
         emsg(gettext(e_empty_buffer));
@@ -354,7 +308,7 @@ pub(crate) fn buf_write(
     if check_secure() {
         return Err(Failed); // writing is disallowed in secure mode
     }
-    if unsafe { cstr::bytes_at(fname) }.len() >= MAXPATHL as size_t {
+    if fname.as_cstr().to_bytes().len() >= MAXPATHL as usize {
         emsg(gettext(e_longname)); // avoid a crash for a long name
         return Err(Failed);
     }
@@ -362,7 +316,6 @@ pub(crate) fn buf_write(
     // After writing, changedtick changes; don't display the line.
     ex_no_reprint.set(true);
 
-    let (mut fname, mut sfname) = (fname, sfname);
     // With no file name yet, take the one being written to. BufFlags::NOTEDITED
     // records that, in case the write fails. Not for a filter command,
     // not when appending, and only when 'cpoptions' contains "F".
@@ -375,22 +328,24 @@ pub(crate) fn buf_write(
         && (!req.append || cpo_has(CpoFlag::FNAMEAPP))
         && cpo_has(CpoFlag::FNAMEW)
     {
-        unsafe { set_rw_fname(cstr::at_opt(fname), cstr::at_opt(sfname)) }?;
+        set_rw_fname(
+            Some(fname.as_cstr()),
+            sfname.as_ref().map(WriteNameCopy::as_cstr),
+        )?;
         buf = Buf::current(); // just in case autocmds made "buf" invalid
-        // SAFETY: `curbuf` is live; keep the handle in step with the pointer.
         b = buf;
-    }
-    if sfname.is_null() {
-        sfname = fname;
     }
     // Unix: use the short file name whenever possible. It avoids
     // problems with networks and with directories that get renamed.
     let ffname = fname; // remember the full fname
-    fname = sfname;
+    let sfname = sfname.unwrap_or_else(|| ffname.clone());
+    let fname = sfname.clone();
 
     // Writing over the file the buffer came from?
-    let overwriting = !b.name.full().is_none()
-        && unsafe { path_fnamecmp(cstr::bytes_at(ffname), cstr::bytes_at(b.name.full_ptr())) } == 0;
+    let overwriting = b
+        .name
+        .full()
+        .is_some_and(|full| path_fnamecmp(ffname.as_cstr().to_bytes(), full.to_bytes()) == 0);
     no_wait_return.set(no_wait_return.get() + 1); // don't wait for return yet
 
     let orig = OpMarks {
@@ -422,15 +377,15 @@ pub(crate) fn buf_write(
         mode,
         orig,
     );
-    // The autocommands may have renamed the buffer out from under them.
-    let WriteNames {
-        fname,
-        sfname,
-        ffname,
-    } = names;
     if let PreWrite::Finished(res) = pre {
         return res;
     }
+    // The autocommands may have renamed the buffer out from under them.
+    let (fname, sfname, ffname) = (
+        names.fname.as_cstr(),
+        names.sfname.as_cstr(),
+        names.ffname.as_cstr(),
+    );
 
     if cmdmod_has(CmdModFlags::LOCKMARKS) {
         // Restore the original '[ and '] positions.
@@ -444,39 +399,26 @@ pub(crate) fn buf_write(
         1
     });
     if !req.filtering {
-        filemess(b, unsafe { cstr::at_opt(fname) }, c""); // show that we are busy
+        filemess(b, Some(fname), c""); // show that we are busy
     }
     msg_scroll.set(0); // always overwrite the file message now
 
-    // The staging buffer. When the big one cannot be had, a small one on
-    // the stack, so that writing still works when out of memory.
-    let big = unsafe { verbose_try_malloc(WRITEBUFSIZE as usize) };
-    let mut smallbuf = [0 as ::core::ffi::c_char; SMALLBUFSIZE];
-    let staging: &mut [::core::ffi::c_char] = if big.is_null() {
-        &mut smallbuf
-    } else {
-        unsafe { core::slice::from_raw_parts_mut(big.cast(), WRITEBUFSIZE as usize) }
-    };
-    let mut writer = ByteWriter::new(staging);
-
+    let mut writer = ByteWriter::new();
     let mut err: Option<WriteError> = None;
     let mut backup = Backup {
         copy: false,
-        path: core::ptr::null_mut(),
+        path: None,
     };
-    let mut fenc_tofree: *mut ::core::ffi::c_char = core::ptr::null_mut();
     let mut file_info_old = FileInfo::default();
     // ACL copied from the original file to the backup or the new file.
-    let mut acl: VimAcl = NULL;
+    let mut acl: VimAcl = core::ptr::null_mut();
     let mut target;
     let mut dobackup;
-    let mut wfname: *mut ::core::ffi::c_char = core::ptr::null_mut();
+    let mut wfname = WriteTarget::Direct;
 
     'cleanup: {
         'failed: {
-            match unsafe {
-                get_fileinfo(buf, fname, overwriting, req.forceit, &raw mut file_info_old)
-            } {
+            match get_fileinfo(buf, fname, overwriting, req.forceit, &mut file_info_old) {
                 Ok(found) => target = found,
                 // Err(None): the user declined; nothing to report.
                 Err(reason) => {
@@ -486,16 +428,14 @@ pub(crate) fn buf_write(
             }
             // For systems that support ACL: take the original's.
             if !target.newfile {
-                acl = os_get_acl(fname);
+                acl = os_get_acl(fname.as_ptr());
             }
 
             // 'backupskip' names files that get no backup.
             dobackup = p_wb() || p_bk() || P_PM.first_byte() != 0;
             if dobackup
                 && P_BSK.first_byte() != 0
-                && p_bsk(|value| unsafe {
-                    match_file_list(value, cstr::at(sfname), cstr::at(ffname))
-                })
+                && p_bsk(|value| match_file_list(value, sfname, ffname))
             {
                 dobackup = false;
             }
@@ -517,11 +457,16 @@ pub(crate) fn buf_write(
                 && target.perm >= 0
                 && dobackup
             {
-                let old = &raw mut file_info_old;
                 let (append, forceit) = (req.append, req.forceit);
-                let made = unsafe {
-                    buf_write_make_backup(fname, old, &target, acl, bkc, append, forceit)
-                };
+                let made = buf_write_make_backup(
+                    fname,
+                    &file_info_old,
+                    &target,
+                    acl,
+                    bkc,
+                    append,
+                    forceit,
+                );
                 match made {
                     Ok(made) => backup = made,
                     Err(e) => {
@@ -536,11 +481,11 @@ pub(crate) fn buf_write(
             if req.forceit
                 && target.perm >= 0
                 && target.perm & 0o200 == 0
-                && file_info_old.stat.st_uid == uint64_t::from(unsafe { getuid() })
+                && file_info_old.stat.st_uid == uint64_t::from(crate::os::users::os_getuid())
                 && !cpo_has(CpoFlag::FWRITE)
             {
                 target.perm |= 0o200;
-                unsafe { os_setperm(cstr::at(fname), target.perm) };
+                os_setperm(fname, target.perm);
                 target.made_writable = true;
             }
             // With ":w!" over the current file, 'readonly' makes no
@@ -556,6 +501,21 @@ pub(crate) fn buf_write(
                 start = end + 1;
             }
 
+            // A copy of the encoding to write in: a forced 'fileencoding'
+            // from a "++opt=val" argument, or the buffer's own.
+            let forced_enc = excmd
+                .as_deref()
+                .filter(|command| command.force_enc != 0)
+                .map(|command| command.line.cmd + command.force_enc as usize);
+            let fenc = if let Some(at) = forced_enc {
+                // `force_enc` is an offset into the command's line.
+                let line = &excmd.as_ref().expect("the command is there").line;
+                canonize(line.rest_of(at))
+            } else {
+                XString::from_bytes(b.b_p_fenc.as_deref().unwrap_or_default())
+            };
+            let fenc = fenc.as_cstr();
+
             'restore_backup: {
                 // Overwriting the original risks crashing in the middle
                 // of the write, so preserve the buffer now: that makes
@@ -565,71 +525,59 @@ pub(crate) fn buf_write(
                 if req.reset_changed
                     && !target.newfile
                     && overwriting
-                    && !(exiting.get() && !backup.path.is_null())
+                    && !(exiting.get() && backup.path.is_some())
                 {
                     let fsync = if b.b_p_fs >= 0 { b.b_p_fs != 0 } else { p_fs() };
                     ml_preserve(buf, false, fsync);
                     if got_int.get() {
-                        err = Some(unsafe { WriteError::shared(e_interr.as_ptr(), 0) });
+                        err = Some(WriteError::shared(e_interr, 0));
                         break 'restore_backup;
                     }
                 }
 
-                // Write the file directly, unless a conversion sends it
-                // through a temp file first.
-                wfname = fname;
-
-                // A forced 'fileencoding' from a "++opt=val" argument.
-                let forced_enc = excmd
-                    .as_deref()
-                    .filter(|command| command.force_enc != 0)
-                    .map(|command| command.line.cmd + command.force_enc as usize);
-                let fenc = if let Some(at) = forced_enc {
-                    // `force_enc` is an offset into the command's line.
-                    let line = &excmd.as_ref().expect("the command is there").line;
-                    fenc_tofree = canonize(line.rest_of(at)).into_raw();
-                    fenc_tofree
-                } else {
-                    b.b_p_fenc.value_ptr()
-                };
-                let converted = need_conversion(unsafe { cstr::bytes_at(fenc) });
+                let converted = need_conversion(fenc.to_bytes());
 
                 // UTF-8 to UCS-2/UCS-4/UTF-16/Latin1 (and back) is a
                 // conversion the ByteWriter does itself, given the flags
                 // and a buffer to translate into.
-                let mut wb_flags = 0;
+                let mut wb_flags = FioFlags::NONE;
                 if converted {
-                    wb_flags = get_fio_flags(unsafe { cstr::bytes_at(fenc) }).bits();
-                    if wb_flags & (FIO_UCS2 | FIO_UCS4 | FIO_UTF16 | FIO_UTF8) != 0 {
-                        let mult = if wb_flags & (FIO_UCS2 | FIO_UTF16 | FIO_UTF8) != 0 {
+                    wb_flags = get_fio_flags(fenc.to_bytes());
+                    let wide = FioFlags::UCS2 | FioFlags::UCS4 | FioFlags::UTF16 | FioFlags::UTF8;
+                    if wb_flags.has(wide) {
+                        let mult = if wb_flags.has(wide.without(FioFlags::UCS4)) {
                             2
                         } else {
-                            4 // FIO_UCS4
+                            4 // FioFlags::UCS4
                         };
                         if !writer.reserve_conv_buf(mult) {
                             end = 0;
                         }
                     }
                 }
-                if converted && wb_flags == 0 {
+                if converted && wb_flags.is_empty() {
                     // Not one of ours: iconv, or failing that a
                     // 'charconvert' pass over a temp file afterwards.
-                    if unsafe { writer.open_iconv(fenc) } {
-                        if !writer.reserve_conv_buf(ICONV_MULT as usize) {
+                    if writer.open_iconv(fenc) {
+                        if !writer.reserve_iconv_buf() {
                             end = 0;
                         }
                     } else if P_CCV.first_byte() != 0 {
-                        wfname = temp_name().map_or(core::ptr::null_mut(), XString::into_raw);
-                        if wfname.is_null() {
+                        let Some(temp) = temp_name() else {
                             // Can't write without a temp file!
                             err =
                                 Some(WriteError::plain(c"E214: Can't find temp file for writing"));
                             break 'restore_backup;
-                        }
+                        };
+                        wfname = WriteTarget::Temp(temp);
                     }
                 }
                 let mut notconverted = false;
-                if converted && wb_flags == 0 && !writer.has_iconv() && wfname == fname {
+                if converted
+                    && wb_flags.is_empty()
+                    && !writer.has_iconv()
+                    && matches!(wfname, WriteTarget::Direct)
+                {
                     if !req.forceit {
                         err = Some(WriteError::plain(
                             c"E213: Cannot convert (add ! to write without conversion)",
@@ -638,13 +586,16 @@ pub(crate) fn buf_write(
                     }
                     notconverted = true;
                 }
+                let wpath = match &wfname {
+                    WriteTarget::Direct => fname,
+                    WriteTarget::Temp(temp) => temp.as_cstr(),
+                };
 
                 // When converting, first pretend to write and check for
                 // conversion errors, then go round again and write for
                 // real. With no conversion this writes for real straight
                 // away.
                 let mut checking_conversion = true;
-                let mut fd;
                 let mut fileformat;
                 let mut written;
                 loop {
@@ -654,19 +605,21 @@ pub(crate) fn buf_write(
                     if !converted || dobackup {
                         checking_conversion = false;
                     }
-                    if checking_conversion {
-                        fd = -1; // make sure nothing is written
+                    writer.file = if checking_conversion {
+                        None // make sure nothing is written
                     } else {
-                        let old = &raw mut file_info_old;
-                        let opened = unsafe {
-                            open_write_file(wfname, fname, &mut target, old, req, &mut err)
-                        };
-                        match opened {
-                            Some(opened) => fd = opened,
+                        match open_write_file(
+                            wpath,
+                            fname,
+                            &mut target,
+                            &file_info_old,
+                            req,
+                            &mut err,
+                        ) {
+                            Some(file) => Some(file),
                             None => break 'restore_backup,
                         }
-                    }
-                    writer.fd = fd;
+                    };
                     err = None;
 
                     // use "++bin", "++nobin" or 'binary'
@@ -681,9 +634,9 @@ pub(crate) fn buf_write(
                     if b.b_p_bomb != 0
                         && !write_bin
                         && (!req.append || target.perm < 0)
-                        && unsafe { writer.stage_bom(fenc) } > 0
+                        && writer.stage_bom(fenc.to_bytes()) > 0
                     {
-                        writer.flags = FIO_NOCONVERT | wb_flags; // don't convert
+                        writer.flags = FioFlags::NOCONVERT | wb_flags; // don't convert
                         if !writer.flush() {
                             end = 0;
                         } else {
@@ -727,25 +680,22 @@ pub(crate) fn buf_write(
 
                 // If we started writing, finish writing — also when an
                 // error was encountered.
-                if !checking_conversion {
-                    let old = &raw mut file_info_old;
-                    let done = unsafe { finish_write(buf, fd, wfname, &target, &backup, acl, old) };
+                if let Some(file) = writer.file.take() {
+                    let done =
+                        finish_write(buf, file, wpath, &target, &backup, acl, &file_info_old);
                     if let Some(e) = done {
                         err = Some(e);
                         end = 0;
                     }
-                    if wfname != fname {
+                    if let WriteTarget::Temp(temp) = &wfname {
                         // The file went to a temp file; 'charconvert'
                         // turns that into the output file.
-                        // SAFETY: three NUL-terminated names, live for the call.
-                        let (enc_to, from, to) =
-                            unsafe { (cstr::at(fenc), cstr::at(wfname), cstr::at(fname)) };
-                        if end != 0 && eval_charconvert(c"utf-8", enc_to, from, to) == FAIL {
+                        let from = temp.as_cstr();
+                        if end != 0 && eval_charconvert(c"utf-8", fenc, from, fname) == FAIL {
                             writer.conv_error = true;
                             end = 0;
                         }
-                        unsafe { os_remove(cstr::at(wfname)) };
-                        unsafe { xfree(wfname.cast()) };
+                        os_remove(from);
                     }
                 }
 
@@ -754,12 +704,12 @@ pub(crate) fn buf_write(
                         err = Some(if writer.conv_error {
                             conversion_failed(writer.conv_error_lnum)
                         } else if got_int.get() {
-                            unsafe { WriteError::shared(e_interr.as_ptr(), 0) }
+                            WriteError::shared(e_interr, 0)
                         } else {
                             WriteError::plain(c"E514: Write error (file system full?)")
                         });
                     }
-                    if unsafe { recover_from_backup(&backup, fname) } {
+                    if recover_from_backup(&backup, fname) {
                         end = 1; // the original is back; no extra warning
                     }
                     break 'failed;
@@ -778,7 +728,7 @@ pub(crate) fn buf_write(
                         newfile: target.newfile,
                         fileformat,
                     };
-                    unsafe { report_written(buf, fname, &written, &notes, req.append) };
+                    report_written(buf, fname, &written, &notes, req.append);
                 }
 
                 // Everything went out correctly: reset 'modified'. Unless
@@ -814,14 +764,14 @@ pub(crate) fn buf_write(
                 }
 
                 if P_PM.first_byte() != 0 && dobackup {
-                    unsafe { apply_patchmode(fname, &mut backup, target.perm, &file_info_old) };
+                    apply_patchmode(fname, &mut backup, target.perm, &file_info_old);
                 }
 
                 // Remove the backup unless 'backup' is set.
                 if !p_bk()
-                    && !backup.path.is_null()
+                    && let Some(path) = &backup.path
                     && !writer.conv_error
-                    && unsafe { os_remove(cstr::at(backup.path)) } != 0
+                    && os_remove(path.as_cstr()) != 0
                 {
                     emsg(translate(c"E207: Can't delete backup file"));
                 }
@@ -830,11 +780,9 @@ pub(crate) fn buf_write(
 
             // Reached by giving up on the write: throw the backup away,
             // and put the original back if it was moved out of the way.
-            if !unsafe { restore_backup(&backup, fname, wfname, target.newfile) } {
+            let direct = matches!(wfname, WriteTarget::Direct);
+            if !restore_backup(&backup, fname, direct, target.newfile) {
                 end = 0; // the original no longer exists either
-            }
-            if wfname != fname {
-                unsafe { xfree(wfname.cast()) };
             }
         }
         no_wait_return.set(no_wait_return.get() - 1); // may wait for return now
@@ -843,31 +791,25 @@ pub(crate) fn buf_write(
     // Done saving; accept changed-buffer warnings again.
     b.b_saving = false;
 
-    unsafe { xfree(backup.path.cast()) };
-    unsafe { xfree(fenc_tofree.cast()) };
     drop(writer); // frees the conversion buffer and closes iconv
-    if !big.is_null() {
-        unsafe { xfree(big) };
-    }
     os_free_acl(acl);
 
     if let Some(err) = &err {
         // -100 to save some space for a further error message.
-        // SAFETY: the caller's NUL-terminated name.
-        let quoted = Report::quoted_fname(b, unsafe { cstr::at_opt(fname) }, IOSIZE as usize - 100);
+        let quoted = Report::quoted_fname(b, Some(fname), IOSIZE as usize - 100);
         err.emit(quoted.as_cstr());
         retval = Err(Failed);
         if end == 0 {
             let hl_id = HLF_E;
-            let warning = translate(c"\nWARNING: Original file may be lost or damaged\n").as_ptr();
-            msg_str_hl(unsafe { cstr::at(warning) }, hl_id, true);
+            let warning = translate(c"\nWARNING: Original file may be lost or damaged\n");
+            msg_str_hl(warning, hl_id, true);
             let advice =
-                translate(c"don't quit the editor until the file is successfully written!")
-                    .as_ptr();
-            msg_str_hl(unsafe { cstr::at(advice) }, hl_id, true);
+                translate(c"don't quit the editor until the file is successfully written!");
+            msg_str_hl(advice, hl_id, true);
             // Update the timestamp to avoid an "overwrite changed file"
             // prompt when writing again.
-            if unsafe { os_fileinfo(fname, &raw mut file_info_old) } {
+            if let Some(info) = crate::os::fs::file_info(fname) {
+                file_info_old = info;
                 buf_store_file_info(b, &file_info_old);
                 b.b_mtime_read = b.b_mtime;
                 b.b_mtime_read_ns = b.b_mtime_ns;
@@ -883,7 +825,7 @@ pub(crate) fn buf_write(
     }
 
     if !should_abort_err(retval) {
-        unsafe { buf_write_do_post_autocmds(buf, fname, excmd, mode) };
+        buf_write_do_post_autocmds(buf, fname, excmd, mode);
         if aborting() {
             retval = Err(Failed); // autocmds may abort script processing
         }

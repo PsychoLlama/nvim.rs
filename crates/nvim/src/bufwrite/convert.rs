@@ -4,34 +4,43 @@
 //! The conversions Nvim knows itself — UCS-2, UCS-4, UTF-16 and Latin1, in
 //! either endianness — go through [`ucs2bytes`] one character at a time;
 //! everything else is handed to iconv. [`ByteWriter`] is the funnel both
-//! sides come out of: text is staged into it a byte at a time, and each
+//! sides come out of: text is staged into it, and each
 //! [`flush`](ByteWriter::flush) converts what is staged, writes it, and
 //! keeps the trailing partial character for next time.
 //!
 //! [`make_bom`] writes the byte-order mark, which is the same encoder
 //! applied to U+FEFF.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use core::ffi::{CStr, c_char, c_int, c_uint};
+use std::fs::File;
+use std::io::Write as _;
+
+use core::ffi::{CStr, c_uint};
 
 use super::*;
+use crate::fileio::FioFlags;
 use crate::mbyte::ICONV_EINVAL;
+use crate::mbyte::{char_at, promised_char_len};
+use crate::memory::try_grow_zeroed;
+use crate::os::iconv::Iconv;
 
-/// The iconv descriptor value that means "no iconv".
-fn no_iconv() -> iconv_t {
-    core::ptr::with_exposed_provenance_mut::<core::ffi::c_void>(-1i32 as usize)
-}
+/// The staging buffer's size, and the one it falls back to when that much
+/// memory cannot be had, so that writing still works when out of memory.
+const WRITEBUFSIZE: usize = 8192;
+const SMALLBUFSIZE: usize = 256;
+
+/// How much room an iconv conversion is given per staged byte.
+const ICONV_MULT: usize = 8;
 
 /// Encode one character for the file.
 ///
 /// Returns the bytes, how many of them there are, and whether the character
 /// could not be represented — in which case a replacement was written
 /// anyway, because upstream keeps writing and reports the error at the end.
-fn ucs2bytes(c: c_uint, flags: c_int) -> ([u8; 4], usize, bool) {
-    let little = flags & FIO_ENDIAN_L != 0;
-    if flags & FIO_UCS4 != 0 {
+fn ucs2bytes(c: c_uint, flags: FioFlags) -> ([u8; 4], usize, bool) {
+    let little = flags.has(FioFlags::ENDIAN_L);
+    if flags.has(FioFlags::UCS4) {
         return (
             if little {
                 c.to_le_bytes()
@@ -52,12 +61,12 @@ fn ucs2bytes(c: c_uint, flags: c_int) -> ([u8; 4], usize, bool) {
         });
     };
 
-    if flags & (FIO_UCS2 | FIO_UTF16) != 0 {
+    if flags.has(FioFlags::UCS2 | FioFlags::UTF16) {
         let mut c = c;
         let mut at = 0;
         let mut error = false;
         if c >= 0x10000 {
-            if flags & FIO_UTF16 != 0 {
+            if flags.has(FioFlags::UTF16) {
                 // Make two words, ten bits of the character in each. The
                 // first is 0xd800-0xdbff, the second 0xdc00-0xdfff.
                 c -= 0x10000;
@@ -86,49 +95,41 @@ fn ucs2bytes(c: c_uint, flags: c_int) -> ([u8; 4], usize, bool) {
 /// Generate the byte-order mark for encoding `name` into `buf`.
 ///
 /// Returns its length, zero when the encoding has no BOM.
-///
-/// # Safety
-///
-/// `name` must point at a NUL-terminated string, unaliased for the call.
-pub(crate) unsafe fn make_bom(buf: &mut [c_char], name: *mut c_char) -> usize {
-    let flags = get_fio_flags(unsafe { cstr::bytes_at(name) }).bits();
+pub(crate) fn make_bom(buf: &mut [u8], name: &[u8]) -> usize {
+    let flags = get_fio_flags(name);
     // Can't put a BOM in a non-Unicode file.
-    if flags == FIO_LATIN1 || flags == 0 {
+    if flags == FioFlags::LATIN1 || flags.is_empty() {
         return 0;
     }
-    if flags == FIO_UTF8 {
-        buf[..3].copy_from_slice(&[0xefu8 as c_char, 0xbbu8 as c_char, 0xbfu8 as c_char]);
+    if flags == FioFlags::UTF8 {
+        buf[..3].copy_from_slice(b"\xef\xbb\xbf");
         return 3;
     }
     let (bytes, len, _) = ucs2bytes(0xfeff, flags);
-    for (at, byte) in bytes[..len].iter().enumerate() {
-        buf[at] = *byte as c_char;
-    }
+    buf[..len].copy_from_slice(&bytes[..len]);
     len
 }
 
 /// The staging buffer between the buffer's lines and the file's bytes.
 ///
 /// Nvim does its own buffering here because `fwrite()` is so slow. Bytes are
-/// [pushed](Self::push) in one at a time and [flushed](Self::flush) whenever
-/// the buffer fills up; the flush is where conversion happens, so a
-/// multi-byte character split across two flushes is carried over rather than
-/// mangled.
-pub(crate) struct ByteWriter<'a> {
-    /// Where the bytes go, or -1 while conversion is only being checked.
-    pub fd: c_int,
-    /// The staging buffer.
-    buf: &'a mut [c_char],
+/// [pushed](Self::push) in and [flushed](Self::flush) whenever the buffer
+/// fills up; the flush is where conversion happens, so a multi-byte character
+/// split across two flushes is carried over rather than mangled.
+pub(crate) struct ByteWriter {
+    /// Where the bytes go; `None` while conversion is only being checked.
+    pub file: Option<File>,
+    /// The staging buffer, all of it in use as room.
+    buf: Vec<u8>,
     /// How much of `buf` is staged.
     len: usize,
-    /// `FIO_*` flags describing the conversion.
-    pub flags: c_int,
-    /// Scratch for a conversion that cannot be done in place. Allocated with
-    /// `verbose_try_malloc`, so it can be null; owned.
-    conv_buf: *mut c_char,
-    conv_buflen: usize,
-    /// The iconv descriptor when iconv is doing the conversion; owned.
-    iconv: iconv_t,
+    /// What the conversion is.
+    pub flags: FioFlags,
+    /// Scratch for a conversion that cannot be done in place; empty until
+    /// [`reserve_conv_buf`](Self::reserve_conv_buf).
+    conv_buf: Vec<u8>,
+    /// iconv, when it is doing the conversion.
+    iconv: Option<Iconv>,
     /// The next iconv call is the first, and must emit the initial shift
     /// state sequence.
     first: bool,
@@ -140,25 +141,21 @@ pub(crate) struct ByteWriter<'a> {
     pub start_lnum: LineNr,
 }
 
-impl Drop for ByteWriter<'_> {
-    fn drop(&mut self) {
-        unsafe { xfree(self.conv_buf.cast()) };
-        if self.iconv != no_iconv() {
-            unsafe { iconv_close(self.iconv) };
+impl ByteWriter {
+    /// A writer with an 8 KiB staging buffer, or a 256-byte one when that
+    /// much memory cannot be had (which has been reported then).
+    pub(crate) fn new() -> Self {
+        let mut buf = Vec::new();
+        if !try_grow_zeroed(&mut buf, WRITEBUFSIZE) {
+            buf = vec![0; SMALLBUFSIZE];
         }
-    }
-}
-
-impl<'a> ByteWriter<'a> {
-    pub(crate) fn new(buf: &'a mut [c_char]) -> Self {
         ByteWriter {
-            fd: 0,
+            file: None,
             buf,
             len: 0,
-            flags: 0,
-            conv_buf: core::ptr::null_mut(),
-            conv_buflen: 0,
-            iconv: no_iconv(),
+            flags: FioFlags::NONE,
+            conv_buf: Vec::new(),
+            iconv: None,
             first: false,
             conv_error: false,
             conv_error_lnum: 0,
@@ -180,40 +177,30 @@ impl<'a> ByteWriter<'a> {
     ///
     /// False when there was not enough memory, which aborts the write.
     pub(crate) fn reserve_conv_buf(&mut self, mult: usize) -> bool {
-        self.conv_buflen = self.buf.len() * mult;
-        self.conv_buf = unsafe { verbose_try_malloc(self.conv_buflen) }.cast();
-        !self.conv_buf.is_null()
+        try_grow_zeroed(&mut self.conv_buf, self.buf.len() * mult)
+    }
+
+    /// Reserve the scratch buffer an iconv conversion needs.
+    pub(crate) fn reserve_iconv_buf(&mut self) -> bool {
+        self.reserve_conv_buf(ICONV_MULT)
     }
 
     /// Is iconv doing the conversion?
     pub(crate) fn has_iconv(&self) -> bool {
-        self.iconv != no_iconv()
+        self.iconv.is_some()
     }
 
     /// Stage the byte-order mark for encoding `fenc`, and return its length.
-    ///
-    /// # Safety
-    ///
-    /// `fenc` must point at a NUL-terminated string, unaliased for the call.
-    pub(crate) unsafe fn stage_bom(&mut self, fenc: *mut c_char) -> usize {
-        self.len = unsafe { make_bom(self.buf, fenc) };
+    pub(crate) fn stage_bom(&mut self, fenc: &[u8]) -> usize {
+        self.len = make_bom(&mut self.buf, fenc);
         self.len
     }
 
     /// Set up iconv to convert to `fenc`. False when iconv cannot do it.
-    ///
-    /// # Safety
-    ///
-    /// `fenc` must point at a NUL-terminated string, unaliased for the call.
-    pub(crate) unsafe fn open_iconv(&mut self, fenc: *mut c_char) -> bool {
-        let fenc = unsafe { CStr::from_ptr(fenc) };
-        self.iconv = crate::mbyte::open_iconv(fenc, c"utf-8")
-            .map_or_else(no_iconv, crate::os::iconv::Iconv::into_raw);
-        if self.iconv == no_iconv() {
-            return false;
-        }
-        self.first = true;
-        true
+    pub(crate) fn open_iconv(&mut self, fenc: &CStr) -> bool {
+        self.iconv = crate::mbyte::open_iconv(fenc, c"utf-8");
+        self.first = self.iconv.is_some();
+        self.first
     }
 
     /// Drop anything staged, without writing it.
@@ -223,10 +210,43 @@ impl<'a> ByteWriter<'a> {
 
     /// Stage one byte. True when the buffer is now full and must be flushed
     /// before anything else is staged.
-    pub(crate) fn push(&mut self, byte: c_char) -> bool {
+    pub(crate) fn push(&mut self, byte: u8) -> bool {
         self.buf[self.len] = byte;
         self.len += 1;
         self.len == self.buf.len()
+    }
+
+    /// Stage as much of `bytes` as fits, translated for the file: a NL (a
+    /// NUL in the buffer's text) becomes a NUL, and with `mac` a CR becomes
+    /// a NL. Answers how many bytes were taken; the buffer is full when
+    /// that is fewer than were offered.
+    pub(crate) fn push_text(&mut self, bytes: &[u8], mac: bool) -> usize {
+        let room = self.buf.len() - self.len;
+        let n = bytes.len().min(room);
+        let staged = &mut self.buf[self.len..self.len + n];
+        staged.copy_from_slice(&bytes[..n]);
+        for byte in staged.iter_mut() {
+            if *byte == NL as u8 {
+                *byte = 0; // replace newlines with NULs
+            } else if mac && *byte == CAR as u8 {
+                *byte = NL as u8; // Mac: replace CRs with NLs
+            }
+        }
+        self.len += n;
+        n
+    }
+
+    /// Whether the staging buffer is full.
+    pub(crate) fn is_full(&self) -> bool {
+        self.len == self.buf.len()
+    }
+
+    /// Write `bytes` to the file, when there is one. False on a write error.
+    pub(crate) fn write_raw(&mut self, bytes: &[u8]) -> bool {
+        match &mut self.file {
+            Some(file) => file.write_all(bytes).is_ok(),
+            None => true,
+        }
     }
 
     /// Convert and write what is staged.
@@ -236,8 +256,8 @@ impl<'a> ByteWriter<'a> {
     pub(crate) fn flush(&mut self) -> bool {
         let staged = self.len;
         // Skip conversion when writing the BOM.
-        let converted = if self.flags & FIO_NOCONVERT != 0 {
-            Some((self.buf.as_ptr(), staged, staged))
+        let converted = if self.flags.has(FioFlags::NOCONVERT) {
+            Some((Out::Staged, staged, staged))
         } else {
             self.convert()
         };
@@ -249,17 +269,17 @@ impl<'a> ByteWriter<'a> {
         self.len = remaining;
 
         // Skip writing while only checking the conversion.
-        if self.fd >= 0
-            && (write_eintr(self.fd, unsafe {
-                core::slice::from_raw_parts(out.cast::<u8>(), outlen)
-            }) as c_int)
-                < outlen as c_int
-        {
-            return false;
+        if let Some(file) = &mut self.file {
+            let bytes = match out {
+                Out::Staged => &self.buf[..outlen],
+                Out::Scratch => &self.conv_buf[..outlen],
+            };
+            if file.write_all(bytes).is_err() {
+                return false;
+            }
         }
         if remaining > 0 {
-            let from = unsafe { self.buf.as_ptr().add(consumed) };
-            unsafe { core::ptr::copy(from, self.buf.as_mut_ptr(), remaining) };
+            self.buf.copy_within(consumed..staged, 0);
         }
         true
     }
@@ -268,45 +288,43 @@ impl<'a> ByteWriter<'a> {
     ///
     /// Returns where the converted bytes are, how many there are, and how
     /// many staged bytes went into them.
-    fn convert(&mut self) -> Option<(*const c_char, usize, usize)> {
+    fn convert(&mut self) -> Option<(Out, usize, usize)> {
         let flags = self.flags;
         let staged = self.len;
-        let mut out = self.buf.as_ptr();
+        let mut out = Out::Staged;
         let mut outlen = staged;
         let mut consumed = staged;
 
-        if flags & (FIO_UCS4 | FIO_UTF16 | FIO_UCS2 | FIO_LATIN1) != 0 {
+        if flags.has(FioFlags::UCS4 | FioFlags::UTF16 | FioFlags::UCS2 | FioFlags::LATIN1) {
             // Convert the UTF-8 in the buffer to UCS-2, UCS-4, UTF-16 or
             // Latin1. Latin1 can only get shorter, so it translates in
             // place; the rest go to the conversion buffer.
-            let latin1 = flags & FIO_LATIN1 != 0;
-            let dest: *mut u8 = if latin1 {
-                self.buf.as_mut_ptr().cast()
-            } else {
-                self.conv_buf.cast()
-            };
+            let latin1 = flags.has(FioFlags::LATIN1);
             let mut at = 0;
             let mut wlen = 0;
             while wlen < staged {
-                let head = unsafe { self.buf.as_ptr().add(wlen) };
-                let n = unsafe { utf_ptr2len_len(head, (staged - wlen) as c_int) } as usize;
-                if n > staged - wlen {
+                let rest = &self.buf[wlen..staged];
+                let n = promised_char_len(rest);
+                if n > rest.len() {
                     // An incomplete byte sequence at the end. It cannot
                     // be converted without the rest of it, so keep the
                     // bytes for the next call.
                     break;
                 }
                 let c = if n > 1 {
-                    unsafe { utf_ptr2char(self.buf.as_ptr().add(wlen)) as c_uint }
+                    char_at(rest) as c_uint
                 } else {
-                    self.buf[wlen] as u8 as c_uint
+                    c_uint::from(rest[0])
                 };
                 let (bytes, need, bad) = ucs2bytes(c, flags);
-                // Check that there is enough space.
-                if !latin1 && at + need > self.conv_buflen {
-                    return None;
+                if latin1 {
+                    // `need` is one, and `at` never passes `wlen`.
+                    self.buf[at] = bytes[0];
+                } else {
+                    // Check that there is enough space.
+                    let dest = self.conv_buf.get_mut(at..at + need)?;
+                    dest.copy_from_slice(&bytes[..need]);
                 }
-                unsafe { core::ptr::copy_nonoverlapping(bytes.as_ptr(), dest.add(at), need) };
                 at += need;
                 if bad && !self.conv_error {
                     self.conv_error = true;
@@ -320,58 +338,48 @@ impl<'a> ByteWriter<'a> {
             consumed = wlen;
             outlen = at;
             if !latin1 {
-                out = self.conv_buf;
+                out = Out::Scratch;
             }
         }
 
-        if self.iconv != no_iconv() {
-            return unsafe { self.convert_with_iconv(out, outlen) };
+        if self.iconv.is_some() {
+            return self.convert_with_iconv(out, outlen);
         }
         Some((out, outlen, consumed))
     }
 
-    /// Hand `inlen` bytes at `input` to iconv.
+    /// Hand the `inlen` bytes `input` names to iconv, into the scratch
+    /// buffer.
     ///
-    /// # Safety
-    ///
-    /// `input` must point at a NUL-terminated string.
-    unsafe fn convert_with_iconv(
-        &mut self,
-        input: *const c_char,
-        inlen: usize,
-    ) -> Option<(*const c_char, usize, usize)> {
-        let mut from = input;
-        let mut fromlen = inlen as size_t;
-        let mut tolen = self.conv_buflen as size_t;
-        let mut to = self.conv_buf;
-
+    /// Only reached with iconv set up and nothing converted before it, so
+    /// the input is always the staged bytes.
+    fn convert_with_iconv(&mut self, input: Out, inlen: usize) -> Option<(Out, usize, usize)> {
+        debug_assert!(matches!(input, Out::Staged));
+        let iconv = self.iconv.as_ref()?;
+        let total = self.conv_buf.len();
+        let mut to: &mut [u8] = &mut self.conv_buf;
         if self.first {
-            let save_len = tolen;
             // Output the initial shift state sequence.
-            let (dst, dstlen) = (&raw mut to, &raw mut tolen);
-            let (no_src, no_srclen) = (core::ptr::null_mut(), core::ptr::null_mut());
-            unsafe { iconv(self.iconv, no_src, no_srclen, dst, dstlen) };
-            // There is a bug in iconv() on Linux (which appears to be
-            // wide-spread) which sets "to" to NULL and messes up "tolen".
-            if to.is_null() {
-                to = self.conv_buf;
-                tolen = save_len;
-            }
+            iconv.shift_initial(&mut to);
             self.first = false;
         }
-
-        let src = (&raw mut from).cast::<*mut c_char>();
-        let (srclen, dst, dstlen) = (&raw mut fromlen, &raw mut to, &raw mut tolen);
-        if unsafe { iconv(self.iconv, src, srclen, dst, dstlen) } == -1i32 as size_t
-            && unsafe { *__errno_location() } != ICONV_EINVAL
+        let mut from = &self.buf[..inlen];
+        if let Err(errno) = iconv.step(&mut from, &mut to)
+            && errno != ICONV_EINVAL
         {
             self.conv_error = true;
             return None;
         }
-        Some((
-            self.conv_buf,
-            unsafe { to.offset_from(self.conv_buf) } as usize,
-            inlen - fromlen as usize,
-        ))
+        let produced = total - to.len();
+        Some((Out::Scratch, produced, inlen - from.len()))
     }
+}
+
+/// Which buffer a conversion left its bytes in.
+#[derive(Clone, Copy)]
+enum Out {
+    /// The staging buffer itself: no conversion, or Latin1 in place.
+    Staged,
+    /// The conversion scratch buffer.
+    Scratch,
 }

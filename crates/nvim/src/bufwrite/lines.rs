@@ -9,15 +9,14 @@
 //! [`report_written`] builds the `"name" 12L, 345B written` message out of
 //! what the write turned out to be.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::cstr;
+use crate::memline::Lines;
 use crate::memory::XString;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 
 use super::*;
-use crate::types::{IOSIZE, NUL, ShmFlag};
+use crate::types::{IOSIZE, ShmFlag};
 
 /// What a pass over the lines produced.
 #[derive(Default)]
@@ -81,31 +80,24 @@ pub(crate) fn write_lines(
     let mut no_eol = false;
     writer.start_lnum = start;
 
+    let mac = fileformat == EOL_MAC;
+    let mut lines = Lines::in_buffer(buffer);
     let mut lnum = start;
     while lnum <= end {
-        let mut ptr = unsafe { ml_get_buf(buffer, lnum) };
+        let text = lines.line(lnum);
         if let Some(sha) = sha.as_deref_mut() {
             // The terminating NUL goes in as the line separator.
-            sha.update(unsafe {
-                core::slice::from_raw_parts(ptr.cast::<u8>(), cstr::bytes_at(ptr).len() + 1)
-            });
+            sha.update(text);
+            sha.update(b"\0");
         }
-        // The next loop runs once for each character written. Keep it
-        // fast!
-        loop {
-            let c = unsafe { *ptr };
-            if c == NUL as c_char {
-                break;
-            }
-            ptr = unsafe { ptr.add(1) };
-            let byte = if c == NL as c_char {
-                NUL as c_char // replace newlines with NULs
-            } else if c == CAR as c_char && fileformat == EOL_MAC {
-                NL as c_char // Mac: replace CRs with NLs
-            } else {
-                c
-            };
-            if writer.push(byte) {
+        // Stage the line a run at a time, flushing whenever the staging
+        // buffer fills. This is the loop that runs over every byte of the
+        // file. Keep it fast!
+        let mut rest = text;
+        while !rest.is_empty() {
+            let taken = writer.push_text(rest, mac);
+            rest = &rest[taken..];
+            if writer.is_full() {
                 if !flush_full(writer, &mut nchars) {
                     end = 0; // write error: break the loop
                     break;
@@ -128,9 +120,9 @@ pub(crate) fn write_lines(
 
         // EOL_MAC and EOL_DOS write a CR; EOL_DOS follows it with an NL.
         let full = if fileformat == EOL_UNIX {
-            writer.push(NL as c_char)
+            writer.push(NL as u8)
         } else {
-            let full = writer.push(CAR as c_char);
+            let full = writer.push(CAR as u8);
             if fileformat != EOL_DOS {
                 full
             } else {
@@ -138,7 +130,7 @@ pub(crate) fn write_lines(
                     end = 0; // write error: break the loop
                     break;
                 }
-                writer.push(NL as c_char)
+                writer.push(NL as u8)
             }
         };
         if full {
@@ -170,7 +162,7 @@ pub(crate) fn write_lines(
     }
     if buffer.b_p_fixeol == 0 && buffer.b_p_eof != 0 {
         // Write the trailing CTRL-Z that 'endoffile' asks for.
-        write_eintr(writer.fd, b"\x1a");
+        writer.write_raw(b"\x1a");
     }
 
     Written {
@@ -182,13 +174,9 @@ pub(crate) fn write_lines(
 }
 
 /// Build and show the message a successful write ends with.
-///
-/// # Safety
-///
-/// `fname` must point at a NUL-terminated string, unaliased for the call.
-pub(crate) unsafe fn report_written(
+pub(crate) fn report_written(
     buffer: Buf,
-    fname: *mut c_char,
+    fname: &CStr,
     written: &Written,
     notes: &WriteNotes,
     append: bool,
@@ -196,9 +184,7 @@ pub(crate) unsafe fn report_written(
     // The report. Upstream assembles it in `IObuff`, which `msg_progress`
     // and `set_keep_msg` write again.
     let (lnum, nchars) = (written.lnum, written.nchars as FileOffset);
-    // SAFETY: the caller's NUL-terminated name, or null.
-    let fname = unsafe { cstr::at_opt(fname) };
-    let mut report = Report::quoted_fname(buffer, fname, IOSIZE as usize);
+    let mut report = Report::quoted_fname(buffer, Some(fname), IOSIZE as usize);
     let note = |report: &mut Report, text: &'static CStr| report.push(translate(text).to_bytes());
 
     let mut insert_space = notes.conv_error || notes.notconverted || notes.converted;

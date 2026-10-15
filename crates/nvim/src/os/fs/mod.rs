@@ -19,7 +19,7 @@
 //!
 //! The exceptions are the calls whose contract *includes* null — `os_stat`,
 //! `os_getperm`, `os_isdir`, `os_path_exists`, `os_open`, `os_fopen`,
-//! `os_fileinfo`, `os_fileinfo_link`, `os_fileid` and `os_copy_xattr` each
+//! `os_fileinfo`, `os_fileinfo_link`, `os_fileid` and `copy_xattr` each
 //! answer "no" for a null name rather than crashing, and their callers pass
 //! buffer names that really can be null. A slice cannot carry that, so they
 //! keep the pointer until their callers stop holding one; [`dir_exists`] is
