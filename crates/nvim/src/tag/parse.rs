@@ -19,7 +19,7 @@ use crate::mbyte::strnicmp_in;
 use core::ffi::{CStr, c_int};
 use std::ffi::OsStr;
 use std::fs::File;
-use std::io::{BufRead, BufReader, ErrorKind, Read, Seek, SeekFrom};
+use std::io::{BufRead, BufReader, ErrorKind, Seek, SeekFrom};
 use std::os::unix::ffi::OsStrExt;
 
 /// What reading the next line produced.
@@ -47,6 +47,50 @@ pub(crate) enum Verdict {
 /// How many bytes `vim_fgets` throws a too-long line's rest away in.
 const DISCARD_CHUNK: usize = 200;
 
+/// Eight copies of `byte`.
+const fn splat(byte: u8) -> u64 {
+    0x0101_0101_0101_0101 * byte as u64
+}
+
+/// The high bit of every byte of `word` that is zero.
+///
+/// A byte above a zero one can come out set as well (the subtraction
+/// borrows through it), but never one below it: the lowest bit set is the
+/// first zero byte, which is all [`find_either`] asks.
+const fn zero_bytes(word: u64) -> u64 {
+    // Integer arithmetic, spelled as a call: the ratchet's pointer-arithmetic
+    // count reads `.wrapping_sub(` as a pointer step.
+    u64::wrapping_sub(word, splat(1)) & !word & splat(0x80)
+}
+
+/// Where the first byte of `hay` that is `a` or `b` is.
+///
+/// Eight bytes at a time: the readers below run this over every byte of a
+/// tags file, and a byte-at-a-time walk costs several times what C's
+/// `memchr` did there.
+fn find_either(hay: &[u8], a: u8, b: u8) -> Option<usize> {
+    let (pa, pb) = (splat(a), splat(b));
+    let (words, rest) = hay.as_chunks::<8>();
+    let mut at = 0;
+    for word in words {
+        let word = u64::from_le_bytes(*word);
+        let found = zero_bytes(word ^ pa) | zero_bytes(word ^ pb);
+        if found != 0 {
+            // Little-endian: the lowest set bit is the first byte.
+            return Some(at + (found.trailing_zeros() / 8) as usize);
+        }
+        at += 8;
+    }
+    rest.iter()
+        .position(|&byte| byte == a || byte == b)
+        .map(|found| at + found)
+}
+
+/// Where the first `needle` in `hay` is; [`find_either`] for one byte.
+pub(crate) fn find_byte(hay: &[u8], needle: u8) -> Option<usize> {
+    find_either(hay, needle, needle)
+}
+
 /// A tags file open for reading.
 ///
 /// The bisection's probing is defined by what C's `fgets`, `ftello` and
@@ -58,8 +102,6 @@ pub(crate) struct TagReader {
     file: BufReader<File>,
     /// The offset of the next byte a read answers.
     pos: u64,
-    /// What one bounded read collected, before it is copied out.
-    scratch: Vec<u8>,
 }
 
 impl TagReader {
@@ -69,47 +111,68 @@ impl TagReader {
         Some(TagReader {
             file: BufReader::new(file),
             pos: 0,
-            scratch: Vec::with_capacity(LSIZE as usize),
         })
     }
 
-    /// `fgets(3)` of at most `room` bytes into the scratch vector: up to and
-    /// including a newline, or `room` bytes, or what is left of the file.
-    fn read_bounded(&mut self, room: usize) -> usize {
-        self.scratch.clear();
-        let limit = u64::try_from(room).unwrap_or(u64::MAX);
-        loop {
-            // `read_until` finds the newline with `memchr`.
-            match (&mut self.file)
-                .take(limit)
-                .read_until(b'\n', &mut self.scratch)
-            {
-                Err(err) if err.kind() == ErrorKind::Interrupted => {}
+    /// `fgets(3)` into `out`: up to and including a newline, or `out.len()`
+    /// bytes, or what is left of the file. Answers how many bytes it read,
+    /// and where the first NUL among them is.
+    fn read_line_into(&mut self, out: &mut [u8]) -> (usize, Option<usize>) {
+        let mut got = 0;
+        let mut nul = None;
+        while got < out.len() {
+            let available = match self.file.fill_buf() {
+                Ok(available) => available,
+                Err(err) if err.kind() == ErrorKind::Interrupted => continue,
                 // A read error ends the line where it struck, as the end of
                 // the file would.
-                _ => break,
+                Err(_) => break,
+            };
+            let room = (out.len() - got).min(available.len());
+            if room == 0 {
+                break;
+            }
+            let chunk = &available[..room];
+            // The newline that ends the line, noting the first NUL on the
+            // way: that is where a C reader of the line stops.
+            let mut from = 0;
+            let end = loop {
+                match find_either(&chunk[from..], b'\n', 0) {
+                    None => break None,
+                    Some(at) if chunk[from + at] == b'\n' => break Some(from + at),
+                    Some(at) => {
+                        nul.get_or_insert(got + from + at);
+                        from += at + 1;
+                    }
+                }
+            };
+            let take = end.map_or(room, |end| end + 1);
+            out[got..got + take].copy_from_slice(&chunk[..take]);
+            self.file.consume(take);
+            got += take;
+            if end.is_some() {
+                break;
             }
         }
-        let got = self.scratch.len();
         self.pos += got as u64;
-        got
+        (got, nul)
     }
 
     /// `vim_fgets`: read one line into `buf`, whose length is the buffer
-    /// size. Answers true at the end of the file.
+    /// size. Answers the length of the line as a C string — up to its first
+    /// NUL — or `None` at the end of the file.
     ///
     /// A line that does not fit is cut at `buf.len() - 1` bytes and the rest
     /// of it thrown away. What tells the caller so is the last-but-one
     /// byte: `fgets` leaves it NUL unless the line reached it.
-    pub(crate) fn fgets(&mut self, buf: &mut [u8]) -> bool {
+    pub(crate) fn fgets(&mut self, buf: &mut [u8]) -> Option<usize> {
         let size = buf.len();
         buf[size - 2] = 0;
-        let got = self.read_bounded(size - 1);
+        let (got, nul) = self.read_line_into(&mut buf[..size - 1]);
         if got == 0 {
             // `fgets` leaves the buffer alone at the end of the file.
-            return true;
+            return None;
         }
-        buf[..got].copy_from_slice(&self.scratch);
         buf[got] = 0;
 
         let filled = |byte: u8| byte != 0 && byte != b'\n';
@@ -118,17 +181,18 @@ impl TagReader {
             // Throw the rest of the line away, a chunk at a time. A chunk
             // that ends the file answers "end of file", as `fgets`
             // returning NULL there did.
+            let mut chunk = [0; DISCARD_CHUNK - 1];
             loop {
-                let got = self.read_bounded(DISCARD_CHUNK - 1);
+                let (got, _) = self.read_line_into(&mut chunk);
                 if got == 0 {
-                    return true;
+                    return None;
                 }
-                if got < DISCARD_CHUNK - 1 || !filled(self.scratch[got - 1]) {
+                if got < chunk.len() || !filled(chunk[got - 1]) {
                     break;
                 }
             }
         }
-        false
+        Some(nul.unwrap_or(got))
     }
 
     /// `ftello`: the offset of the next byte a read answers.
@@ -204,10 +268,7 @@ pub(crate) fn strnicmp_prefix(s1: &[u8], s2: &[u8], len: usize) -> c_int {
 
 /// Where the first TAB at or after `from` is in `line`.
 pub(crate) fn find_tab(line: &[u8], from: usize) -> Option<usize> {
-    line.get(from..)?
-        .iter()
-        .position(|&b| b == TAB as u8)
-        .map(|at| from + at)
+    find_byte(line.get(from..)?, TAB as u8).map(|at| from + at)
 }
 
 impl FindTags {
@@ -217,11 +278,13 @@ impl FindTags {
         let Some(reader) = self.reader.as_mut() else {
             return true;
         };
-        let eof = reader.fgets(&mut self.lbuf);
-        if !eof {
-            self.line_len = cstr::until_nul(&self.lbuf).len();
+        match reader.fgets(&mut self.lbuf) {
+            Some(len) => {
+                self.line_len = len;
+                false
+            }
+            None => true,
         }
-        eof
     }
 
     /// The line in the buffer, up to its terminator.
@@ -609,5 +672,33 @@ impl FindTags {
         }
 
         matched
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The word-at-a-time search answers what a byte walk does, wherever
+    /// the bytes fall against the word boundaries — including a byte above
+    /// 0x80 and a match right after one.
+    #[test]
+    fn find_either_is_a_byte_walk() {
+        let alphabet = [b'a', b'\n', 0, 0x80, 0xff, 0x01, b'\t'];
+        let mut seed: u32 = 36;
+        for len in 0..40 {
+            for _ in 0..50 {
+                let hay: Vec<u8> = (0..len)
+                    .map(|_| {
+                        seed = u32::wrapping_add(seed.wrapping_mul(1_103_515_245), 12_345);
+                        alphabet[(seed >> 16) as usize % alphabet.len()]
+                    })
+                    .collect();
+                for (a, b) in [(b'\n', 0), (b'\t', b'\t'), (0x80, 0xff)] {
+                    let walk = hay.iter().position(|&byte| byte == a || byte == b);
+                    assert_eq!(find_either(&hay, a, b), walk, "{hay:?} {a} {b}");
+                }
+            }
+        }
     }
 }
