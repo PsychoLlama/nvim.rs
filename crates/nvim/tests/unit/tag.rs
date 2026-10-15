@@ -374,6 +374,14 @@ fn tagfunc_answers_and_its_user_data_is_kept() {
         "map(gettagstack().items, {_, i -> [i.tagname, i.user_data]})",
         "[['thing', 'ud-thing']]",
     );
+    // A null dict in the answer is malformed, like any non-dict: E987,
+    // where reading it used to dereference null.
+    fx.run("let &tagfunc = \"{p, f, i -> [v:_null_dict]}\"");
+    fx.check_error(
+        "call taglist('thing')",
+        "E987: Invalid return value from tagfunc",
+    );
+    fx.check("taglist('thing')", "[]");
     fx.run("set tagfunc=");
     fx.run("setlocal tagfunc=");
     restore(&fx);
