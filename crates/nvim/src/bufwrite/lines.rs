@@ -50,12 +50,15 @@ pub(crate) struct WriteNotes {
 }
 
 /// Flush a full staging buffer, adding what went out to `nchars`.
+///
+/// The count is upstream's `int`, which a write past 2 GiB overflows; it
+/// wraps, as C's did, and only the "written" message reads it.
 fn flush_full(writer: &mut ByteWriter, nchars: &mut c_int) -> bool {
     let full = writer.capacity() as c_int;
     if !writer.flush() {
         return false;
     }
-    *nchars += full - writer.staged() as c_int;
+    *nchars = nchars.wrapping_add(full - writer.staged() as c_int);
     true
 }
 
@@ -152,7 +155,7 @@ pub(crate) fn write_lines(
         if !writer.flush() {
             end = 0; // write error
         }
-        nchars += remaining - writer.staged() as c_int;
+        nchars = nchars.wrapping_add(remaining - writer.staged() as c_int);
     }
     // Did everything convert and get written?
     if end != 0 && writer.staged() > 0 {
