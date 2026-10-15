@@ -230,16 +230,20 @@ fn written(
 fn mask_dir(text: &str, dir: &str) -> String {
     let uses = text.matches(dir).count();
     let mut masked = text.replace(dir, "<DIR>");
-    if uses > 0
-        && let Some(at) = masked.find("len=fixint ")
-    {
-        let start = at + "len=fixint ".len();
-        let end = masked[start..]
-            .find(|c: char| !c.is_ascii_digit())
-            .map_or(masked.len(), |n| start + n);
-        let len: usize = masked[start..end].parse().expect("a length");
-        let rest = len - uses * dir.len();
-        masked.replace_range(at..end, &format!("len=<DIR>+{rest}"));
+    if uses > 0 {
+        for token in ["len=fixint ", "len=uint8 ", "len=uint16 "] {
+            let Some(at) = masked.find(token) else {
+                continue;
+            };
+            let start = at + token.len();
+            let end = masked[start..]
+                .find(|c: char| !c.is_ascii_digit())
+                .map_or(masked.len(), |n| start + n);
+            let len: usize = masked[start..end].parse().expect("a length");
+            let rest = len - uses * dir.len();
+            masked.replace_range(at..end, &format!("len=<DIR>+{rest}"));
+            break;
+        }
     }
     masked
 }
@@ -576,5 +580,691 @@ fn reading_a_file_packed_by_hand() {
     fx.run("call setreg('q', [])");
     fx.run("unlet! g:HANDVAR");
     fx.run("call histdel('cmd')");
+    restore(&fx);
+}
+
+/// One entry of a hand-built file: `typ`, the timestamp `ts` as a uint32,
+/// and the payload's length as a fixint, uint8 or uint16.
+fn entry_bytes(typ: u8, ts: u32, payload: &[u8]) -> Vec<u8> {
+    let mut out = vec![typ, 0xce];
+    out.extend_from_slice(&ts.to_be_bytes());
+    let len = payload.len();
+    if len < 0x80 {
+        out.push(u8::try_from(len).expect("checked"));
+    } else if len < 0x100 {
+        out.extend_from_slice(&[0xcc, u8::try_from(len).expect("checked")]);
+    } else {
+        out.push(0xcd);
+        out.extend_from_slice(&u16::try_from(len).expect("short").to_be_bytes());
+    }
+    out.extend_from_slice(payload);
+    out
+}
+
+/// A msgpack bin8 holding `bytes`.
+fn bin(bytes: &[u8]) -> Vec<u8> {
+    let mut out = vec![0xc4, u8::try_from(bytes.len()).expect("short")];
+    out.extend_from_slice(bytes);
+    out
+}
+
+/// A fixmap of `pairs`, each already encoded.
+fn map(pairs: &[(&[u8], Vec<u8>)]) -> Vec<u8> {
+    let mut out = vec![0x80 | u8::try_from(pairs.len()).expect("few")];
+    for (key, value) in pairs {
+        out.push(0xa0 | u8::try_from(key.len()).expect("short"));
+        out.extend_from_slice(key);
+        out.extend_from_slice(value);
+    }
+    out
+}
+
+/// `nvim --headless -u NONE <args>` in `dir`, with `$HOME` and the XDG
+/// directories inside it; waits at most ten seconds and answers stderr.
+fn child(dir: &std::path::Path, args: &[&str]) -> String {
+    use std::process::{Command, Stdio};
+    use std::time::{Duration, Instant};
+    let runtime = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../runtime");
+    let mut argv = vec!["--headless", "-u", "NONE"];
+    argv.extend_from_slice(args);
+    let mut proc = Command::new(env!("CARGO_BIN_EXE_nvim"))
+        .args(&argv)
+        .current_dir(dir)
+        .env_clear()
+        .env("HOME", dir)
+        .env("PATH", "/usr/bin:/bin")
+        .env("VIMRUNTIME", runtime)
+        .env("XDG_CONFIG_HOME", dir.join("config"))
+        .env("XDG_DATA_HOME", dir.join("data"))
+        .env("XDG_STATE_HOME", dir.join("state"))
+        .env("XDG_CACHE_HOME", dir.join("cache"))
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("nvim starts");
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        if proc.try_wait().expect("the child").is_some() {
+            break;
+        }
+        if Instant::now() > deadline {
+            let _ = proc.kill();
+            panic!("nvim {argv:?} did not exit");
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    let mut stderr = String::new();
+    {
+        use std::io::Read;
+        let _ = proc
+            .stderr
+            .take()
+            .expect("a stderr pipe")
+            .read_to_string(&mut stderr);
+    }
+    stderr
+}
+
+/// Every entry of `path` but the header, one string each, the sandbox's
+/// directory written `<DIR>`.
+fn file_entries(path: &std::path::Path, dir: &str) -> Vec<String> {
+    let bytes = std::fs::read(path).expect("the written file");
+    entries(&bytes)
+        .into_iter()
+        .filter(|(typ, _)| *typ != 1)
+        .map(|(_, lines)| mask_dir(&lines.join("\n"), dir))
+        .collect()
+}
+
+/// Every kind of entry that carries a map or an array, each with a key or
+/// element this Nvim has no field for, read at startup and written back:
+/// what reaches the editor's state keeps its extra data, and a variable's
+/// is dropped.
+#[test]
+fn extra_data_rides_along_with_every_kind() {
+    let sandbox = Sandbox::dir("shada_extra");
+    let dir = sandbox.as_str().to_owned();
+    let fname = format!("{dir}/f.txt");
+    sandbox.write("f.txt", b"one\ntwo\nthree\n");
+    let extra = (&b"zz"[..], vec![0x07]);
+    let ts = 1_000_000_000;
+    let mut file = Vec::new();
+    // Buffer list first, so that the local marks below find its buffer.
+    let mut buflist = vec![0x91];
+    buflist.extend(map(&[
+        (b"f", bin(fname.as_bytes())),
+        (b"l", vec![0x02]),
+        extra.clone(),
+    ]));
+    file.extend(entry_bytes(9, ts, &buflist));
+    file.extend(entry_bytes(
+        2,
+        ts,
+        &map(&[(b"sp", bin(b"pat")), (b"sc", vec![0xc3]), extra.clone()]),
+    ));
+    let mut sub = vec![0x92];
+    sub.extend(bin(b"rep"));
+    sub.push(0x07);
+    file.extend(entry_bytes(3, ts, &sub));
+    let mut hist = vec![0x93, 0x00];
+    hist.extend(bin(b"cmdline"));
+    hist.push(0x07);
+    file.extend(entry_bytes(4, ts, &hist));
+    let mut shist = vec![0x94, 0x01];
+    shist.extend(bin(b"spat"));
+    shist.extend([b'?', 0x07]);
+    file.extend(entry_bytes(4, ts, &shist));
+    file.extend(entry_bytes(
+        5,
+        ts,
+        &map(&[
+            (b"n", vec![b'r']),
+            (b"rc", [vec![0x91], bin(b"x")].concat()),
+            extra.clone(),
+        ]),
+    ));
+    let mut var = vec![0x93];
+    var.extend(bin(b"XV"));
+    var.extend([0x05, 0x07]);
+    file.extend(entry_bytes(6, ts, &var));
+    file.extend(entry_bytes(
+        7,
+        ts,
+        &map(&[
+            (b"n", vec![b'G']),
+            (b"f", bin(b"/nonexistent/other")),
+            (b"l", vec![0x02]),
+            extra.clone(),
+        ]),
+    ));
+    file.extend(entry_bytes(
+        8,
+        ts,
+        &map(&[
+            (b"f", bin(b"/nonexistent/other")),
+            (b"l", vec![0x03]),
+            extra.clone(),
+        ]),
+    ));
+    file.extend(entry_bytes(
+        10,
+        ts,
+        &map(&[
+            (b"n", vec![b'b']),
+            (b"f", bin(fname.as_bytes())),
+            (b"l", vec![0x02]),
+            extra.clone(),
+        ]),
+    ));
+    file.extend(entry_bytes(
+        11,
+        ts,
+        &map(&[
+            (b"f", bin(fname.as_bytes())),
+            (b"l", vec![0x03]),
+            (b"c", vec![0x01]),
+            extra.clone(),
+        ]),
+    ));
+    sandbox.write("in.shada", &file);
+    let stderr = child(
+        sandbox.root(),
+        &[
+            "-i",
+            "in.shada",
+            "--cmd",
+            "set shada=%,!,'10,<50,:10,/10,@10,f1,s10",
+            "-c",
+            "wshada! out.shada",
+            "-c",
+            "set shada=",
+            "-c",
+            "qa!",
+        ],
+    );
+    assert_eq!(stderr, "");
+    let got = file_entries(&sandbox.path("out.shada"), &dir);
+    assert_eq!(
+        got.join("\n").lines().collect::<Vec<_>>(),
+        [
+            "type=9 masked <TS> len=<DIR>+19",
+            "  fixarray [1]",
+            "    fixmap {3}",
+            "      fixstr 'f'",
+            "      bin8 '<DIR>/f.txt'",
+            "      fixstr 'l'",
+            "      fixint 2",
+            "      fixstr 'zz'",
+            "      fixint 7",
+            "type=6 masked <TS> len=fixint 6",
+            "  fixarray [2]",
+            "    bin8 'XV'",
+            "    fixint 5",
+            "type=7 masked <TS> len=fixint 33",
+            "  fixmap {4}",
+            "    fixstr 'f'",
+            "    bin8 '/nonexistent/other'",
+            "    fixstr 'l'",
+            "    fixint 2",
+            "    fixstr 'n'",
+            "    fixint 71",
+            "    fixstr 'zz'",
+            "    fixint 7",
+            "type=5 masked <TS> len=fixint 15",
+            "  fixmap {3}",
+            "    fixstr 'rc'",
+            "    fixarray [1]",
+            "      bin8 'x'",
+            "    fixstr 'n'",
+            "    fixint 114",
+            "    fixstr 'zz'",
+            "    fixint 7",
+            "type=8 masked <TS> len=fixint 30",
+            "  fixmap {3}",
+            "    fixstr 'f'",
+            "    bin8 '/nonexistent/other'",
+            "    fixstr 'l'",
+            "    fixint 3",
+            "    fixstr 'zz'",
+            "    fixint 7",
+            "type=2 masked <TS> len=fixint 17",
+            "  fixmap {3}",
+            "    fixstr 'sp'",
+            "    bin8 'pat'",
+            "    fixstr 'sc'",
+            "    true True",
+            "    fixstr 'zz'",
+            "    fixint 7",
+            "type=3 masked <TS> len=fixint 7",
+            "  fixarray [2]",
+            "    bin8 'rep'",
+            "    fixint 7",
+            "type=10 masked <TS> len=<DIR>+21",
+            "  fixmap {4}",
+            "    fixstr 'f'",
+            "    bin8 '<DIR>/f.txt'",
+            "    fixstr 'l'",
+            "    fixint 2",
+            "    fixstr 'n'",
+            "    fixint 98",
+            "    fixstr 'zz'",
+            "    fixint 7",
+            "type=10 masked <TS> len=<DIR>+14",
+            "  fixmap {2}",
+            "    fixstr 'f'",
+            "    bin8 '<DIR>/f.txt'",
+            "    fixstr 'l'",
+            "    fixint 2",
+            "type=11 masked <TS> len=<DIR>+21",
+            "  fixmap {4}",
+            "    fixstr 'f'",
+            "    bin8 '<DIR>/f.txt'",
+            "    fixstr 'l'",
+            "    fixint 3",
+            "    fixstr 'c'",
+            "    fixint 1",
+            "    fixstr 'zz'",
+            "    fixint 7",
+            "type=4 masked <TS> len=fixint 12",
+            "  fixarray [3]",
+            "    fixint 0",
+            "    bin8 'cmdline'",
+            "    fixint 7",
+            "type=4 masked <TS> len=fixint 10",
+            "  fixarray [4]",
+            "    fixint 1",
+            "    bin8 'spat'",
+            "    fixint 63",
+            "    fixint 7"
+        ]
+    );
+}
+
+/// What the merge does with entries this Nvim has no slot for (an unknown
+/// type, a register, mark or history it does not know), with a jump both
+/// sides hold, and with a numbered mark the old file lists twice.
+#[test]
+fn the_merge_keeps_what_it_cannot_place_and_one_of_each_jump() {
+    let sandbox = Sandbox::dir("shada_merge");
+    let dir = sandbox.as_str().to_owned();
+    let fname = format!("{dir}/f.txt");
+    sandbox.write("f.txt", b"one\ntwo\nthree\nfour\n");
+    let old = 1_000_000_000;
+    let future = 4_000_000_000;
+    let mut file = Vec::new();
+    // An entry type this Nvim does not know, kept byte for byte.
+    file.extend(entry_bytes(100, old, &[0x92, 0x01, 0xc4, 0x01, b'u']));
+    file.extend(entry_bytes(
+        5,
+        old,
+        &map(&[
+            (b"n", vec![b'!']),
+            (b"rc", [vec![0x91], bin(b"bang")].concat()),
+        ]),
+    ));
+    file.extend(entry_bytes(
+        7,
+        old,
+        &map(&[(b"n", vec![b'!']), (b"f", bin(b"/nonexistent/g"))]),
+    ));
+    let mut hist = vec![0x92, 0x07];
+    hist.extend(bin(b"seventh"));
+    file.extend(entry_bytes(4, old, &hist));
+    let mut var = vec![0x93];
+    var.extend(bin(b"OLDVAR"));
+    var.extend([0x05, 0x07]);
+    file.extend(entry_bytes(6, old, &var));
+    for _ in 0..2 {
+        file.extend(entry_bytes(
+            7,
+            old,
+            &map(&[
+                (b"n", vec![b'1']),
+                (b"f", bin(b"/nonexistent/n")),
+                (b"l", vec![0x04]),
+            ]),
+        ));
+    }
+    // The jump the editor below also holds: once newer than it, once
+    // older.
+    for ts in [future, old] {
+        file.extend(entry_bytes(
+            8,
+            ts,
+            &map(&[(b"f", bin(fname.as_bytes())), (b"l", vec![0x03])]),
+        ));
+    }
+    file.extend(entry_bytes(
+        10,
+        old,
+        &map(&[
+            (b"n", vec![b'!']),
+            (b"f", bin(fname.as_bytes())),
+            (b"l", vec![0x02]),
+        ]),
+    ));
+    sandbox.write("merge.shada", &file);
+    let stderr = child(
+        sandbox.root(),
+        &[
+            "-i",
+            "NONE",
+            "--cmd",
+            "set shada=!,'10,<50,:10,/0,@0,f1,s10",
+            "f.txt",
+            "-c",
+            "normal! 3G",
+            "-c",
+            "wshada merge.shada",
+            "-c",
+            "qa!",
+        ],
+    );
+    assert_eq!(stderr, "");
+    let got = file_entries(&sandbox.path("merge.shada"), &dir);
+    assert_eq!(
+        got.join("\n").lines().collect::<Vec<_>>(),
+        [
+            "type=100 masked <TS> len=fixint 5",
+            "  fixarray [2]",
+            "    fixint 1",
+            "    bin8 'u'",
+            "type=5 masked <TS> len=fixint 14",
+            "  fixmap {2}",
+            "    fixstr 'rc'",
+            "    fixarray [1]",
+            "      bin8 'bang'",
+            "    fixstr 'n'",
+            "    fixint 33",
+            "type=7 masked <TS> len=fixint 22",
+            "  fixmap {2}",
+            "    fixstr 'f'",
+            "    bin8 '/nonexistent/g'",
+            "    fixstr 'n'",
+            "    fixint 33",
+            "type=4 masked <TS> len=fixint 11",
+            "  fixarray [2]",
+            "    fixint 7",
+            "    bin8 'seventh'",
+            "type=6 masked <TS> len=fixint 11",
+            "  fixarray [3]",
+            "    bin8 'OLDVAR'",
+            "    fixint 5",
+            "    fixint 7",
+            "type=7 masked <TS> len=<DIR>+17",
+            "  fixmap {3}",
+            "    fixstr 'f'",
+            "    bin8 '<DIR>/f.txt'",
+            "    fixstr 'l'",
+            "    fixint 3",
+            "    fixstr 'n'",
+            "    fixint 48",
+            "type=7 masked <TS> len=fixint 25",
+            "  fixmap {3}",
+            "    fixstr 'f'",
+            "    bin8 '/nonexistent/n'",
+            "    fixstr 'l'",
+            "    fixint 4",
+            "    fixstr 'n'",
+            "    fixint 49",
+            "type=8 masked <TS> len=<DIR>+14",
+            "  fixmap {2}",
+            "    fixstr 'f'",
+            "    bin8 '<DIR>/f.txt'",
+            "    fixstr 'l'",
+            "    fixint 3",
+            "type=8 masked <TS> len=<DIR>+11",
+            "  fixmap {1}",
+            "    fixstr 'f'",
+            "    bin8 '<DIR>/f.txt'",
+            "type=8 masked <TS> len=<DIR>+14",
+            "  fixmap {2}",
+            "    fixstr 'f'",
+            "    bin8 '<DIR>/f.txt'",
+            "    fixstr 'l'",
+            "    fixint 3",
+            "type=10 masked <TS> len=<DIR>+14",
+            "  fixmap {2}",
+            "    fixstr 'f'",
+            "    bin8 '<DIR>/f.txt'",
+            "    fixstr 'l'",
+            "    fixint 3",
+            "type=10 masked <TS> len=<DIR>+17",
+            "  fixmap {3}",
+            "    fixstr 'f'",
+            "    bin8 '<DIR>/f.txt'",
+            "    fixstr 'l'",
+            "    fixint 2",
+            "    fixstr 'n'",
+            "    fixint 33"
+        ]
+    );
+}
+
+/// Every motion type, block widths across the fixint/uint8/uint16 cuts,
+/// a line on each side of bin8's 255-byte step, and an array16.
+#[test]
+fn registers_of_every_type_and_width() {
+    let sandbox = Sandbox::dir("shada_reg_widths");
+    let fx = Probe::new(sandbox.editor());
+    fx.run("call setreg('e', ['ab'], 'b')");
+    fx.run("call setreg('f', ['ab'], 'b200')");
+    fx.run("call setreg('g', ['ab'], 'b300')");
+    fx.run("call setreg('h', [repeat('y', 254), repeat('z', 255)], 'l')");
+    fx.run("call setreg('i', map(range(17), 'string(v:val)'), 'c')");
+    let names = [
+        "'n'\n    fixint 101",
+        "'n'\n    fixint 102",
+        "'n'\n    fixint 103",
+        "'n'\n    fixint 104",
+        "'n'\n    fixint 105",
+    ];
+    let got = written(&fx, &sandbox, "'0,<50,f0,:0,/0,@0,s10,h", |typ, text| {
+        typ == 5 && names.iter().any(|n| text.contains(n))
+    });
+    for r in ["e", "f", "g", "h", "i"] {
+        fx.run(&format!("call setreg('{r}', [])"));
+    }
+    assert_eq!(
+        got.join("\n").lines().collect::<Vec<_>>(),
+        [
+            "type=5 masked <TS> len=fixint 20",
+            "  fixmap {4}",
+            "    fixstr 'rc'",
+            "    fixarray [1]",
+            "      bin8 'ab'",
+            "    fixstr 'n'",
+            "    fixint 101",
+            "    fixstr 'rt'",
+            "    fixint 2",
+            "    fixstr 'rw'",
+            "    fixint 1",
+            "type=5 masked <TS> len=fixint 21",
+            "  fixmap {4}",
+            "    fixstr 'rc'",
+            "    fixarray [1]",
+            "      bin8 'ab'",
+            "    fixstr 'n'",
+            "    fixint 102",
+            "    fixstr 'rt'",
+            "    fixint 2",
+            "    fixstr 'rw'",
+            "    uint8 199",
+            "type=5 masked <TS> len=fixint 22",
+            "  fixmap {4}",
+            "    fixstr 'rc'",
+            "    fixarray [1]",
+            "      bin8 'ab'",
+            "    fixstr 'n'",
+            "    fixint 103",
+            "    fixstr 'rt'",
+            "    fixint 2",
+            "    fixstr 'rw'",
+            "    uint16 299",
+            "type=5 masked <TS> len=uint16 526",
+            "  fixmap {3}",
+            "    fixstr 'rc'",
+            "    fixarray [2]",
+            "      bin8 'yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy'",
+            "      bin16 'zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz'",
+            "    fixstr 'n'",
+            "    fixint 104",
+            "    fixstr 'rt'",
+            "    fixint 1",
+            "type=5 masked <TS> len=fixint 68",
+            "  fixmap {2}",
+            "    fixstr 'rc'",
+            "    array16 [17]",
+            "      bin8 '0'",
+            "      bin8 '1'",
+            "      bin8 '2'",
+            "      bin8 '3'",
+            "      bin8 '4'",
+            "      bin8 '5'",
+            "      bin8 '6'",
+            "      bin8 '7'",
+            "      bin8 '8'",
+            "      bin8 '9'",
+            "      bin8 '10'",
+            "      bin8 '11'",
+            "      bin8 '12'",
+            "      bin8 '13'",
+            "      bin8 '14'",
+            "      bin8 '15'",
+            "      bin8 '16'",
+            "    fixstr 'n'",
+            "    fixint 105"
+        ]
+    );
+    restore(&fx);
+}
+
+/// A mark whose file name is not ASCII, and the header's integer widths
+/// past the 28-bit cut the writer keeps for unsigned values.
+#[test]
+fn a_multibyte_file_name_and_a_wide_max_kbyte() {
+    let sandbox = Sandbox::dir("shada_multibyte");
+    sandbox.write("été.txt", b"one\ntwo\n");
+    let fx = Probe::new(sandbox.editor());
+    fx.run("delmarks A-Z");
+    fx.run("badd été.txt");
+    fx.run("buffer été.txt");
+    fx.run("call cursor(2, 1)");
+    fx.run("mark M");
+    let got = written(
+        &fx,
+        &sandbox,
+        "'0,<0,f1,:0,/0,@0,s300000000,h",
+        |typ, text| typ == 1 || (typ == 7 && text.contains("'n'\n    fixint 77")),
+    );
+    fx.run("delmarks M");
+    assert_eq!(
+        got.join("\n").lines().collect::<Vec<_>>(),
+        [
+            "type=1 masked <TS> len=<LEN>",
+            "  fixmap {5}",
+            "    fixstr 'generator'",
+            "    bin8 'nvim'",
+            "    fixstr 'version'",
+            "    masked <VERSION>",
+            "    fixstr 'max_kbyte'",
+            "    uint64 300000000",
+            "    fixstr 'pid'",
+            "    masked <PID>",
+            "    fixstr 'encoding'",
+            "    bin8 'utf-8'",
+            "type=7 masked <TS> len=<DIR>+21",
+            "  fixmap {3}",
+            "    fixstr 'f'",
+            "    bin8 '<DIR>/\\xc3\\xa9t\\xc3\\xa9.txt'",
+            "    fixstr 'l'",
+            "    fixint 2",
+            "    fixstr 'n'",
+            "    fixint 77"
+        ]
+    );
+    restore(&fx);
+}
+
+/// History of each of the five kinds, a search with a `?` separator, and a
+/// line long enough for a bin8 with a uint8 entry length.
+#[test]
+fn history_of_each_kind_with_separators() {
+    let sandbox = Sandbox::dir("shada_history_kinds");
+    let fx = Probe::new(sandbox.editor());
+    for kind in ["cmd", "search", "expr", "input", "debug"] {
+        fx.run(&format!("call histdel('{kind}')"));
+    }
+    fx.run(&format!("call histadd('cmd', '{}')", "c".repeat(140)));
+    fx.run("call histadd('search', 'fwd')");
+    fx.run("call histadd('debug', 'step')");
+    let got = written(&fx, &sandbox, "'0,<0,f0,:10,/10,@10,s10,h", |typ, _| {
+        typ == 4
+    });
+    for kind in ["cmd", "search", "debug"] {
+        fx.run(&format!("call histdel('{kind}')"));
+    }
+    assert_eq!(
+        got.join("\n").lines().collect::<Vec<_>>(),
+        [
+            "type=4 masked <TS> len=uint8 144",
+            "  fixarray [2]",
+            "    fixint 0",
+            "    bin8 'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc'",
+            "type=4 masked <TS> len=fixint 8",
+            "  fixarray [3]",
+            "    fixint 1",
+            "    bin8 'fwd'",
+            "    fixint 0",
+            "type=4 masked <TS> len=fixint 8",
+            "  fixarray [2]",
+            "    fixint 4",
+            "    bin8 'step'"
+        ]
+    );
+    restore(&fx);
+}
+
+/// `:wshada!` and `:wshada` over a file this process may not open: the
+/// open fails and says so, and nothing is renamed over it.
+#[test]
+fn writing_over_an_unreadable_file() {
+    let sandbox = Sandbox::dir("shada_unreadable");
+    let fx = Probe::new(sandbox.editor());
+    let path = sandbox.write("locked.shada", b"");
+    let mut perm = std::fs::metadata(&path).expect("the file").permissions();
+    std::os::unix::fs::PermissionsExt::set_mode(&mut perm, 0o000);
+    std::fs::set_permissions(&path, perm).expect("chmod");
+    fx.run("set shada='0,<0,f0,:0,/0,@0,s10,h");
+    let messages = |cmd: String| {
+        fx.run("messages clear");
+        fx.run(&cmd);
+        fx.output("messages")
+            .trim()
+            .replace(sandbox.as_str(), "<DIR>")
+    };
+    let forced = messages(format!("wshada! {}", path.display()));
+    let merged = messages(format!("wshada {}", path.display()));
+    let left = std::fs::read_dir(sandbox.root())
+        .expect("the sandbox")
+        .map(|e| {
+            e.expect("an entry")
+                .file_name()
+                .into_string()
+                .expect("text")
+        })
+        .collect::<Vec<_>>();
+    let mut perm = std::fs::metadata(&path).expect("the file").permissions();
+    std::os::unix::fs::PermissionsExt::set_mode(&mut perm, 0o600);
+    std::fs::set_permissions(&path, perm).expect("chmod");
+    assert_eq!(
+        [forced, merged],
+        [
+            "E886: System error while opening ShaDa file <DIR>/locked.shada for writing: permission denied",
+            "E886: System error while opening ShaDa file <DIR>/locked.shada for reading to merge before writing it: permission denied\nE886: System error while opening ShaDa file <DIR>/locked.shada for writing: permission denied"
+        ]
+    );
+    assert_eq!(left, ["locked.shada"]);
     restore(&fx);
 }
