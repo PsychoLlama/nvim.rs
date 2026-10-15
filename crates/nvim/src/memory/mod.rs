@@ -159,22 +159,6 @@ pub unsafe fn try_malloc(size: usize) -> *mut c_void {
     unsafe { seam_malloc(allocated_size) }
 }
 
-/// [`try_malloc`], reporting the failure to the user.
-///
-/// # Safety
-///
-/// As [`try_malloc`].
-pub unsafe fn verbose_try_malloc(size: usize) -> *mut c_void {
-    // SAFETY: the caller's promise.
-    unsafe {
-        let ret = try_malloc(size);
-        if ret.is_null() {
-            do_outofmem_msg(size);
-        }
-        ret
-    }
-}
-
 /// Where the first `needle` in `hay` is: the C library's `memchr`, whose
 /// vectorised search a reader scanning every byte of a file needs -- core's
 /// costs several times as much per byte.
@@ -233,7 +217,7 @@ pub(crate) fn qsort_by<T: Copy, F: FnMut(&T, &T) -> core::cmp::Ordering>(
 }
 
 /// Grow `bytes` to `len` bytes, zero-filling the new ones, the way
-/// [`verbose_try_malloc`] allocates: retried once after asking the editor
+/// upstream's `verbose_try_malloc` allocates: retried once after asking the editor
 /// for memory back, and reported to the user when even that did not help.
 /// False, with `bytes` unchanged, when the memory could not be had.
 pub(crate) fn try_grow_zeroed(bytes: &mut Vec<u8>, len: usize) -> bool {

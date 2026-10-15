@@ -379,9 +379,6 @@
 {"path":"neovim::os::fs::os_fchown","kind":"fn","file":"crates/nvim/src/os/fs/meta.rs","tests":["crates/nvim/tests/unit/fs.rs"]}
 {"path":"neovim::os::fs::os_file_is_readable","kind":"fn","file":"crates/nvim/src/os/fs/meta.rs","tests":["crates/nvim/tests/unit/fs.rs"]}
 {"path":"neovim::os::fs::os_file_is_writable","kind":"fn","file":"crates/nvim/src/os/fs/meta.rs","tests":["crates/nvim/tests/unit/fs.rs","crates/nvim/tests/unit/tempfile.rs"]}
-{"path":"neovim::os::fs::os_fileid","kind":"fn","file":"crates/nvim/src/os/fs/meta.rs","tests":["crates/nvim/tests/unit/fs.rs"]}
-{"path":"neovim::os::fs::os_fileid_equal","kind":"fn","file":"crates/nvim/src/os/fs/meta.rs","tests":["crates/nvim/tests/unit/fs.rs"]}
-{"path":"neovim::os::fs::os_fileid_equal_fileinfo","kind":"fn","file":"crates/nvim/src/os/fs/meta.rs","tests":["crates/nvim/tests/unit/fs.rs"]}
 {"path":"neovim::os::fs::os_fileinfo","kind":"fn","file":"crates/nvim/src/os/fs/meta.rs","tests":["crates/nvim/tests/unit/fs.rs"]}
 {"path":"neovim::os::fs::os_fileinfo_blocksize","kind":"fn","file":"crates/nvim/src/os/fs/meta.rs","tests":["crates/nvim/tests/unit/fs.rs"]}
 {"path":"neovim::os::fs::os_fileinfo_fd","kind":"fn","file":"crates/nvim/src/os/fs/meta.rs","tests":["crates/nvim/tests/unit/fs.rs"]}

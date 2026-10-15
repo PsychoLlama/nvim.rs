@@ -524,7 +524,6 @@ count	callee	no_raw	defs	def
 3	os_get_hostname	0	1	crates/nvim/src/os/env/mod.rs
 3	os_get_username	0	1	crates/nvim/src/os/users.rs
 3	os_open	0	1	crates/nvim/src/os/fs/mod.rs
-3	os_stat	0	1	crates/nvim/src/os/fs/meta.rs
 3	os_write	0	1	crates/nvim/src/os/fs/mod.rs
 3	packer_buffer_finish	1	1	crates/nvim/src/msgpack_rpc/channel/envelope.rs
 3	packer_buffer_init	0	1	crates/nvim/src/msgpack_rpc/channel/envelope.rs
@@ -842,6 +841,7 @@ count	callee	no_raw	defs	def
 2	os_getenv_into	0	1	crates/nvim/src/os/env/mod.rs
 2	os_set_cloexec	1	1	crates/nvim/src/os/fs/mod.rs
 2	os_setperm	0	0	
+2	os_stat	0	1	crates/nvim/src/os/fs/meta.rs
 2	pad_line	1	1	crates/nvim/src/cursor/mod.rs
 2	parse_border_style	0	1	crates/nvim/src/api/win_config/border.rs
 2	parse_diffanchors	0	1	crates/nvim/src/diff/opts.rs

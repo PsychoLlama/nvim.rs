@@ -430,51 +430,9 @@ pub unsafe fn os_fileinfo_blocksize(file_info: *const FileInfo) -> uint64_t {
     unsafe { (*file_info).stat.st_blksize }
 }
 
-/// The (device, inode) pair for `path`, answering whether it could be read.
-///
-/// # Safety
-/// `path` must be null or a NUL-terminated string, and `file_id` writable.
-pub unsafe fn os_fileid(path: *const c_char, file_id: *mut FileID) -> bool {
-    let mut statbuf = UV_STAT_T_INIT;
-    // SAFETY: the caller's path; `statbuf` is this frame's.
-    if unsafe { os_stat(path, &raw mut statbuf) } != LIBUV_SUCCESS {
-        return false;
-    }
-    // SAFETY: the caller's out-parameter.
-    unsafe {
-        (*file_id).inode = statbuf.st_ino;
-        (*file_id).device_id = statbuf.st_dev;
-    }
-    true
-}
-
-/// The (device, inode) pair for `path`, or `None` when it cannot be read:
-/// [`os_fileid`] of a name the caller holds.
+/// The (device, inode) pair for `path`, or `None` when it cannot be read.
 pub(crate) fn file_id(path: &CStr) -> Option<FileID> {
     file_info(path).map(|info| info.id())
-}
-
-/// Whether two `FileID`s name the same file.
-///
-/// # Safety
-/// Both must be readable.
-pub unsafe fn os_fileid_equal(file_id_1: *const FileID, file_id_2: *const FileID) -> bool {
-    // SAFETY: the caller's readable `FileID`s.
-    unsafe {
-        (*file_id_1).inode == (*file_id_2).inode && (*file_id_1).device_id == (*file_id_2).device_id
-    }
-}
-
-/// [`os_fileid_equal`] against a `FileInfo` instead of a second `FileID`.
-///
-/// # Safety
-/// Both must be readable.
-pub unsafe fn os_fileid_equal_fileinfo(file_id: *const FileID, file_info: *const FileInfo) -> bool {
-    // SAFETY: the caller's readable structs.
-    unsafe {
-        (*file_id).inode == (*file_info).stat.st_ino
-            && (*file_id).device_id == (*file_info).stat.st_dev
-    }
 }
 
 #[cfg(test)]

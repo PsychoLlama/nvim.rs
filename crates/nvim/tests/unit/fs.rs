@@ -22,11 +22,11 @@ use std::ptr;
 
 use neovim::os::fs::{
     NODE_NORMAL, NODE_WRITABLE, os_can_exe, os_chdir, os_close, os_dirname, os_dup, os_fchown,
-    os_file_is_readable, os_file_is_writable, os_fileid, os_fileid_equal, os_fileid_equal_fileinfo,
-    os_fileinfo, os_fileinfo_blocksize, os_fileinfo_fd, os_fileinfo_hardlinks, os_fileinfo_id,
-    os_fileinfo_id_equal, os_fileinfo_inode, os_fileinfo_link, os_fileinfo_size, os_getperm,
-    os_isdir, os_mkdir, os_mkdir_recurse, os_nodetype, os_open, os_path_exists, os_read, os_readv,
-    os_remove, os_rename, os_rmdir, os_setperm, os_write,
+    os_file_is_readable, os_file_is_writable, os_fileinfo, os_fileinfo_blocksize, os_fileinfo_fd,
+    os_fileinfo_hardlinks, os_fileinfo_id, os_fileinfo_id_equal, os_fileinfo_inode,
+    os_fileinfo_link, os_fileinfo_size, os_getperm, os_isdir, os_mkdir, os_mkdir_recurse,
+    os_nodetype, os_open, os_path_exists, os_read, os_readv, os_remove, os_rename, os_rmdir,
+    os_setperm, os_write,
 };
 use neovim::os::uv_error::{UV_EBADF, UV_EEXIST, UV_ENOENT};
 use neovim::types::{FAIL, Failed, FileID, FileInfo, OK, iovec};
@@ -846,24 +846,20 @@ fn two_names_are_the_same_file_when_their_ids_agree() {
             &raw const info_two
         ));
 
-        let mut id_one = blank_id();
-        let mut id_two = blank_id();
-        let missing = cname("/non-existent");
-        assert!(!os_fileid(missing.as_ptr(), &raw mut id_one));
-        assert!(os_fileid(cpath(&one).as_ptr(), &raw mut id_one));
+        // The id of a name: the stat's (inode, device) pair, as the buffer
+        // list compares names by.
+        let id_of = |name: &std::ffi::CStr| {
+            let mut info = FileInfo::default();
+            os_fileinfo(name.as_ptr(), &raw mut info).then(|| info.id())
+        };
+        assert!(id_of(&cname("/non-existent")).is_none());
+        let id_one = id_of(&cpath(&one)).expect("one exists");
         assert!(id_one.inode > 0 && id_one.device_id > 0);
-        assert!(os_fileid(cpath(&two).as_ptr(), &raw mut id_two));
+        let id_two = id_of(&cpath(&two)).expect("two exists");
 
-        assert!(os_fileid_equal(&raw const id_one, &raw const id_one));
-        assert!(!os_fileid_equal(&raw const id_one, &raw const id_two));
-
-        assert!(os_fileid_equal_fileinfo(
-            &raw const id_one,
-            &raw const info_one
-        ));
-        assert!(!os_fileid_equal_fileinfo(
-            &raw const id_one,
-            &raw const info_two
-        ));
+        assert_eq!(id_one, id_one);
+        assert_ne!(id_one, id_two);
+        assert_eq!(id_one, info_one.id());
+        assert_ne!(id_one, info_two.id());
     }
 }
