@@ -106,7 +106,7 @@ pub fn ex_runtime(excmd: &mut ExArg) {
 ///
 /// The `[where]` qualifier is only offered for a single-argument command line;
 /// past the first argument [`RUNTIME_EXPAND_FLAGS`] is forced non-zero so
-/// [`expand_runtime_cmd`] stops proposing the qualifiers.
+/// [`runtime_cmd_matches`] stops proposing the qualifiers.
 pub fn set_context_in_runtime_cmd(expand: &mut Expand, arg: usize) {
     let line = expand.line_cstr().to_bytes();
     let rest = |at: usize| line.get(at..).unwrap_or_default();

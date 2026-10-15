@@ -140,7 +140,7 @@ pub const DOSO_VIMRC: ::core::ffi::c_int = 1;
 pub const DOSO_NONE: ::core::ffi::c_int = 0;
 crate::flag_set! {
     /// How a runtime-file search should behave -- upstream's `DIP_*`, the
-    /// `flags` argument [`do_in_path`] and everything under it thread:
+    /// `flags` argument [`do_in_path_visit`] and everything under it thread:
     /// which directories to visit, what to match there, and what a miss
     /// means.
     pub struct RuntimeOpts;
