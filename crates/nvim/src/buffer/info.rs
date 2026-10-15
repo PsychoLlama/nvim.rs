@@ -15,24 +15,22 @@
 //!
 //! Original: `src/nvim/buffer.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::cstr;
+use crate::fileio::Report;
+use crate::formatted;
 use crate::memline::MlFlags;
 use crate::strings::has_char;
-use crate::vim_snprintf;
-use crate::vim_snprintf_safelen;
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
+use core::ffi::{CStr, c_char, c_int};
 
 use super::*;
-use crate::charset::{trans_characters, vim_strsize};
+use crate::charset::{strsize, trans_characters_in};
 use crate::drawscreen::redrawing;
 use crate::drawscreen::state::need_maketitle;
 use crate::getchar::state::got_int;
-use crate::mbyte::utf_cp_bounds;
-use crate::memory::{XString, xstrlcpy};
+use crate::mbyte::cp_bounds;
+use crate::memory::XString;
 use crate::message::state::{msg_col, msg_scroll, msg_scrolled, need_wait_return, no_lines_msg};
 use crate::message::{
     message_filtered, msg, msg_display, msg_ext_set_kind, msg_fit_head, msg_putchar, msg_start,
@@ -42,53 +40,26 @@ use crate::r#move::validate_virtcol;
 use crate::option::shortmess;
 use crate::option::vars::{P_ICONSTRING, P_TITLESTRING, p_icon, p_ru, p_title, p_titlelen};
 use crate::options::{kOptIconstring, kOptTitlestring};
-use crate::os::cshim::{gettext_ptr, ngettext};
-use crate::os::env::home_replace;
+use crate::os::cshim::{gettext, ngettext};
+use crate::os::env::home_replace_in;
 use crate::os::input::line_breakcheck;
 use crate::path::path_tail;
 use crate::plines::win_get_fill;
 use crate::state::mode::restart_edit;
 use crate::statusline::state::stl_syntax;
-use crate::statusline::{FmtSource, StlSinks, build_stl_str_hl};
-use crate::terminal::terminal_running;
+use crate::statusline::{FmtSource, build_stl_text};
+use crate::terminal::buf_terminal_running;
 use crate::types::String_0;
 use crate::types::ui::kUIMessages;
 use crate::types::{
     ExArg, IOSIZE, LineNr, MAXPATHL, OptIndex, OptInt, OptionSetFlags, ShmFlag, StlSyntax, int64_t,
-    size_t, time_t,
 };
 use crate::ui::state::Columns;
 use crate::ui::{ui_call_set_icon, ui_call_set_title, ui_has};
-use crate::undo::{buf_is_changed, curbuf_is_changed, undo_fmt_time};
+use crate::undo::{buf_is_changed, curbuf_is_changed, undo_time_text};
 use crate::winlayer::{Buf, Win, buffers, first_buffer};
-use ::libc::{qsort, strcpy};
 
-use super::list::buf_time_compare;
-
-// ---------------------------------------------------------------------------
-// The neighbours, wrapped
-
-/// `_()`.
-fn tr(msg: &CStr) -> *mut c_char {
-    tr_raw(msg.as_ptr())
-}
-
-/// `_()` over a pointer, for the messages `main.rs` holds as byte arrays.
-fn tr_raw(msg: *const c_char) -> *mut c_char {
-    // SAFETY: a NUL-terminated literal or message static.
-    unsafe { gettext_ptr(msg).as_ptr().cast_mut() }
-}
-
-/// `NGETTEXT`: the singular or plural form, by `n`.
-fn tr_n(one: &'static CStr, many: &'static CStr, n: LineNr) -> *mut c_char {
-    ngettext(one, many, n as ::core::ffi::c_ulong)
-        .as_ptr()
-        .cast_mut()
-}
-
-fn current_buf() -> Buf {
-    Buf::current()
-}
+use super::list::sort_by_last_used;
 
 fn current_win() -> Win {
     Win::current()
@@ -101,22 +72,19 @@ fn has_flag(arg: &CStr, c: u8) -> bool {
     has_char(arg, c_int::from(c))
 }
 
-fn buf_changed(buffer: Buf) -> bool {
-    buf_is_changed(buffer)
-}
-
-/// Whether `buffer`'s terminal, if it has one, still has a job attached.
-fn job_running(buffer: Buf) -> bool {
-    // SAFETY: a live terminal, the caller having ruled out null.
-    !buffer.terminal.is_null() && unsafe { terminal_running(buffer.terminal) }
-}
-
-fn special_name(buffer: Buf) -> *mut c_char {
-    buf_spname(buffer)
-}
-
-fn remembered_lnum(buffer: Buf) -> LineNr {
-    buflist_findlnum(buffer)
+/// Copy as much of `text` into `out` as fits with a terminator after it, as
+/// `snprintf` would: answers how many bytes went in. Nothing at all for an
+/// empty `out`.
+fn put_cut(out: &mut [c_char], text: &[u8]) -> usize {
+    let Some(room) = out.len().checked_sub(1) else {
+        return 0;
+    };
+    let len = text.len().min(room);
+    for (to, &from) in out.iter_mut().zip(&text[..len]) {
+        *to = from.cast_signed();
+    }
+    out[len] = 0;
+    len
 }
 
 // ---------------------------------------------------------------------------
@@ -125,15 +93,12 @@ fn remembered_lnum(buffer: Buf) -> LineNr {
 /// List the buffers, one line each, as `:ls` and `:files` do.
 pub fn buflist_list(excmd: &mut ExArg) {
     let arg = excmd.line.cstr_from(excmd.line.arg);
-    // SAFETY: as above.
     let forceit = excmd.forceit;
-    // SAFETY: a NUL-terminated literal naming the message kind.
     msg_ext_set_kind(c"list_cmd");
 
     // With "t", the list is shown most-recently-used first.
     let sorted = has_flag(arg, b't').then(sorted_by_last_used);
     let mut walk = Walk::new(sorted.as_deref());
-    let mut name = [0 as c_char; MAXPATHL as usize];
 
     while let Some(buf) = walk.step() {
         if got_int.get() {
@@ -144,9 +109,9 @@ pub fn buflist_list(excmd: &mut ExArg) {
         }
         // The name to show, then the message filter's verdict on it:
         // `message_filtered` re-enters the regexp engine, and `show` the
-        // message machinery, so the line is this frame's own.
-        fill_name(buf, &mut name);
-        if message_filtered(cstr::in_chars(&name)) {
+        // message machinery, so the name is this frame's own.
+        let name = fill_name(buf);
+        if message_filtered(name.as_cstr()) {
             continue;
         }
         show(buf, has_flag(arg, b't'), &name);
@@ -154,20 +119,9 @@ pub fn buflist_list(excmd: &mut ExArg) {
 }
 
 /// Every buffer, most recently used first.
-///
-/// `qsort` and `buf_time_compare` stay upstream's: two buffers entered in
-/// the same second tie, and a stable Rust sort would order the tie
-/// differently.
 fn sorted_by_last_used() -> Vec<Buf> {
     let mut list: Vec<Buf> = buffers().collect();
-    let (base, n, width) = (
-        list.as_mut_ptr().cast::<c_void>(),
-        list.len(),
-        size_of::<Buf>(),
-    );
-    // SAFETY: `n` initialised elements of this function's own vector, and a
-    // comparison function over two of them, read as the `Buf`s they are.
-    unsafe { qsort(base, n, width, Some(buf_time_compare::<Buf>)) };
+    sort_by_last_used(&mut list);
     list
 }
 
@@ -183,7 +137,7 @@ struct Walk<'a> {
 impl<'a> Walk<'a> {
     fn new(sorted: Option<&'a [Buf]>) -> Self {
         let next = match sorted {
-            Some(list) => nth(list, 0),
+            Some(list) => list.first().copied(),
             None => first_buffer(),
         };
         Walk {
@@ -203,7 +157,7 @@ impl<'a> Walk<'a> {
         self.next = match self.sorted {
             Some(list) => {
                 self.at += 1;
-                nth(list, self.at)
+                list.get(self.at).copied()
             }
             None => buf.next(),
         };
@@ -211,21 +165,16 @@ impl<'a> Walk<'a> {
     }
 }
 
-/// Entry `at` of the sorted array, which holds live buffers.
-fn nth(list: &[Buf], at: usize) -> Option<Buf> {
-    list.get(at).copied()
-}
-
 /// Whether the `:ls` flags in `arg` say to skip this buffer.
 fn skip(buffer: Buf, arg: &CStr, forceit: c_int) -> bool {
     let is_terminal = !buffer.terminal.is_null();
-    let job_running = job_running(buffer);
+    let job_running = buf_terminal_running(buffer);
     let loaded = !buffer.b_ml.ml_mfp.is_null();
     let alt_fnum = current_win().w_alt_fnum;
 
     buffer.b_p_bl == 0 && forceit == 0 && !has_flag(arg, b'u')
         || has_flag(arg, b'u') && buffer.b_p_bl != 0
-        || has_flag(arg, b'+') && (buffer.b_flags.has(BufFlags::READERR) || !buf_changed(buffer))
+        || has_flag(arg, b'+') && (buffer.b_flags.has(BufFlags::READERR) || !buf_is_changed(buffer))
         || has_flag(arg, b'a') && (!loaded || buffer.b_nwindows == 0)
         || has_flag(arg, b'h') && (!loaded || buffer.b_nwindows != 0)
         || has_flag(arg, b'R') && (!is_terminal || !job_running)
@@ -237,25 +186,22 @@ fn skip(buffer: Buf, arg: &CStr, forceit: c_int) -> bool {
         || has_flag(arg, b'#') && (buffer.raw() == Buf::current_raw() || alt_fnum != buffer.handle)
 }
 
-/// Put the name to show for `buffer` into `name`.
-fn fill_name(buffer: Buf, name: &mut [c_char; MAXPATHL as usize]) {
-    let special = special_name(buffer);
-    if !special.is_null() {
-        // SAFETY: a NUL-terminated name into `MAXPATHL` writable bytes.
-        unsafe { xstrlcpy(name.as_mut_ptr(), special, MAXPATHL as usize) };
-        return;
+/// The name to show for `buffer`, as upstream cut it into `NameBuff`.
+fn fill_name(buffer: Buf) -> XString {
+    if let Some(special) = buf_spname(&buffer) {
+        let special = special.to_bytes();
+        return XString::from_bytes(&special[..special.len().min(MAXPATHL as usize - 1)]);
     }
-    let (fname, dst) = (buffer.name.shown_ptr(), name.as_mut_ptr());
-    // SAFETY: a live buffer, its name, and `MAXPATHL` writable bytes.
-    unsafe { home_replace(Some(buffer), fname, dst, MAXPATHL as size_t, true) };
+    let fname = buffer.name.shown().unwrap_or(c"");
+    home_replace_in(Some(buffer), fname, MAXPATHL as usize, true)
 }
 
 /// Print one buffer's line: the number, the flag column, the name padded to
 /// column 40, and the line number or the time it was last used.
-fn show(buffer: Buf, by_time: bool, name: &[c_char; MAXPATHL as usize]) {
+fn show(buffer: Buf, by_time: bool, name: &XString) {
     let changed_char = if buffer.b_flags.has(BufFlags::READERR) {
         b'x'
-    } else if buf_changed(buffer) {
+    } else if buf_is_changed(buffer) {
         b'+'
     } else {
         b' '
@@ -268,7 +214,11 @@ fn show(buffer: Buf, by_time: bool, name: &[c_char; MAXPATHL as usize]) {
         b' '
     };
     if !buffer.terminal.is_null() {
-        ro_char = if job_running(buffer) { b'R' } else { b'F' };
+        ro_char = if buf_terminal_running(buffer) {
+            b'R'
+        } else {
+            b'F'
+        };
     }
 
     if !ui_has(kUIMessages) || msg_col.get() > 0 {
@@ -293,74 +243,35 @@ fn show(buffer: Buf, by_time: bool, name: &[c_char; MAXPATHL as usize]) {
     let lnum = if buffer.raw() == Buf::current_raw() {
         current_win().w_cursor.lnum
     } else {
-        remembered_lnum(buffer)
+        buflist_findlnum(buffer)
     };
     let last_used = buffer.b_last_used;
 
-    let mut io = [0 as c_char; IOSIZE as usize];
-    let flags = [listed, current, state, ro_char, changed_char];
-    let mut len = format_head(&mut io, buffer.handle, flags, name);
-    len = pad_to_column(&mut io, len);
-    if by_time && last_used != 0 {
-        format_time(&mut io, len, last_used);
-    } else {
-        format_lnum(&mut io, len, lnum);
-    }
-    // SAFETY: a NUL-terminated line, just assembled.
-    msg_display(unsafe { cstr::at(io.as_mut_ptr()) }, 0, false);
-    line_breakcheck();
-}
+    // `%3d%c%c%c%c%c "%s"`, cut where upstream's `IOSIZE - 20` bytes cut it.
+    let mut line = format!("{:3}", buffer.handle).into_bytes();
+    line.extend_from_slice(&[listed, current, state, ro_char, changed_char, b' ', b'"']);
+    line.extend_from_slice(name.as_cstr().to_bytes());
+    line.push(b'"');
+    line.truncate(IOSIZE as usize - 21);
 
-/// `%3d%c%c%c%c%c "%s"`: the number, the five flag columns and the name.
-fn format_head(
-    io: &mut [c_char; IOSIZE as usize],
-    handle: c_int,
-    flags: [u8; 5],
-    name: &[c_char; MAXPATHL as usize],
-) -> c_int {
-    let (dst, cap) = (io.as_mut_ptr(), (IOSIZE - 20) as size_t);
-    let fmt = c"%3d%c%c%c%c%c \"%s\"".as_ptr();
-    let [bl, cur, st, ro, ch] = flags.map(c_int::from);
-    let name = name.as_ptr();
-    // SAFETY: `IOSIZE - 20` writable bytes, a format taking a number, five
-    // characters and a string, and `name` holding that string.
-    let len = unsafe { vim_snprintf_safelen!(dst, cap, fmt, handle, bl, cur, st, ro, ch, name) };
-    (len as c_int).min(IOSIZE - 20)
-}
-
-/// Put "line 999" in column 40, or after the file name.
-fn pad_to_column(io: &mut [c_char; IOSIZE as usize], mut len: c_int) -> c_int {
-    // SAFETY: a NUL-terminated line, just assembled.
-    // Put "line 999" in column 40.
-    let mut i = 40 - unsafe { vim_strsize(io.as_ptr()) };
+    // Put "line 999" in column 40, or after the file name.
+    let mut i = 40 - strsize(&line);
     loop {
-        io[len as usize] = b' ' as c_char;
-        len += 1;
+        line.push(b' ');
         i -= 1;
-        if i <= 0 || len >= IOSIZE - 18 {
+        if i <= 0 || line.len() >= IOSIZE as usize - 18 {
             break;
         }
     }
-    len
-}
-
-fn format_time(io: &mut [c_char; IOSIZE as usize], len: c_int, last_used: time_t) {
-    let (dst, cap) = (
-        io.as_mut_ptr().wrapping_add(len as usize),
-        (IOSIZE - len) as size_t,
-    );
-    // SAFETY: the rest of the line, and the time to render into it.
-    unsafe { undo_fmt_time(dst, cap, last_used) };
-}
-
-fn format_lnum(io: &mut [c_char; IOSIZE as usize], len: c_int, lnum: LineNr) {
-    let (dst, cap) = (
-        io.as_mut_ptr().wrapping_add(len as usize),
-        (IOSIZE - len) as size_t,
-    );
-    let fmt = tr(c"line %ld");
-    // SAFETY: the rest of the line, and a format taking one number.
-    unsafe { vim_snprintf!(dst, cap, fmt, lnum as int64_t) };
+    let room = IOSIZE as usize - line.len();
+    let tail = if by_time && last_used != 0 {
+        undo_time_text(last_used, room).into_vec()
+    } else {
+        formatted!(room, gettext(c"line %ld").to_bytes(), lnum as int64_t)
+    };
+    line.extend(tail.into_iter().take_while(|&b| b != 0));
+    msg_display(XString::from_vec(line).as_cstr(), 0, false);
+    line_breakcheck();
 }
 
 // ---------------------------------------------------------------------------
@@ -369,90 +280,99 @@ fn format_lnum(io: &mut [c_char; IOSIZE as usize], len: c_int, lnum: LineNr) {
 /// The message CTRL-G and `:file` print: the name, the flags, where the
 /// cursor is and how far through the file that is.
 pub fn fileinfo(fullname: c_int, shorthelp: c_int, dont_truncate: bool) {
-    let mut out = Msg::new();
-    let buf = current_buf();
+    let mut out = Report::new();
+    let buf = Buf::current();
 
     if fullname > 1 {
         // 2 CTRL-G: include the buffer number.
-        out.put_int(c"buf %d: ", buf.handle);
+        out.push_fmt(c"buf %d: ", &[buf.handle.into()]);
     }
-    out.push(b'"');
+    out.push(b"\"");
 
-    let name = special_name(buf);
-    if !name.is_null() {
-        out.put_str(c"%s", name);
+    if let Some(name) = buf_spname(&buf) {
+        out.push(name.to_bytes());
     } else {
         let name = if fullname == 0 && !buf.name.is_unnamed() {
-            buf.name.shown_ptr()
+            buf.name.shown()
         } else {
-            buf.name.full_ptr()
+            buf.name.full()
         };
         // Only a help buffer's name is shortened against the buffer's own
         // directory; every other name is shortened against `$HOME` alone.
-        out.put_home_replaced((shorthelp != 0).then_some(buf), name);
+        let helpbuf = (shorthelp != 0).then_some(buf);
+        let shown = home_replace_in(helpbuf, name.unwrap_or(c""), out.room(), true);
+        out.push(shown.as_cstr().to_bytes());
     }
 
     let dontwrite = buf_is_dontwrite(Some(buf));
-    let modified = curbuf_changed();
-    out.put_flags([
+    let modified = curbuf_is_changed();
+    let note = |cond: bool, text: &'static CStr| if cond { gettext(text) } else { c"" };
+    let parts: [&CStr; 6] = [
         if modified {
             if shortmess(ShmFlag::MOD) {
-                c" [+]".as_ptr()
+                c" [+]"
             } else {
-                tr(c" [Modified]")
+                gettext(c" [Modified]")
             }
         } else {
-            c" ".as_ptr()
+            c" "
         },
-        if buf.b_flags.has(BufFlags::NOTEDITED) && !dontwrite {
-            tr(c"[Not edited]")
-        } else {
-            c"".as_ptr()
-        },
-        if buf.b_flags.has(BufFlags::NEW) && !dontwrite {
-            tr(c"[New]")
-        } else {
-            c"".as_ptr()
-        },
-        if buf.b_flags.has(BufFlags::READERR) {
-            tr(c"[Read errors]")
-        } else {
-            c"".as_ptr()
-        },
+        note(
+            buf.b_flags.has(BufFlags::NOTEDITED) && !dontwrite,
+            c"[Not edited]",
+        ),
+        note(buf.b_flags.has(BufFlags::NEW) && !dontwrite, c"[New]"),
+        note(buf.b_flags.has(BufFlags::READERR), c"[Read errors]"),
         if buf.b_p_ro != 0 {
             if shortmess(ShmFlag::RO) {
-                tr(c"[RO]")
+                gettext(c"[RO]")
             } else {
-                tr(c"[readonly]")
+                gettext(c"[readonly]")
             }
         } else {
-            c"".as_ptr()
+            c""
         },
         if modified || buf.b_flags.has(BufFlags::WRITE_MASK) || buf.b_p_ro != 0 {
-            c" ".as_ptr()
+            c" "
         } else {
-            c"".as_ptr()
+            c""
         },
-    ]);
+    ];
+    let args = parts.map(Into::into);
+    out.push_fmt(c"\"%s%s%s%s%s%s", &args);
 
     let win = current_win();
     let lines = buf.b_ml.ml_line_count;
     let cursor = win.w_cursor.lnum;
     if buf.b_ml.ml_flags.has(MlFlags::EMPTY) {
-        out.put_str(c"%s", tr_raw(no_lines_msg.as_ptr()));
+        out.push(gettext(no_lines_msg).to_bytes());
     } else if p_ru() {
         // The current line and column are already on the screen -- webb
-        let fmt = tr_n(c"%ld line --%d%%--", c"%ld lines --%d%%--", lines);
-        out.put_lines(fmt, lines, percentage(cursor, lines));
+        let fmt = ngettext(
+            c"%ld line --%d%%--",
+            c"%ld lines --%d%%--",
+            lines as ::core::ffi::c_ulong,
+        );
+        let percent = percentage(cursor, lines);
+        out.push_fmt(fmt, &[(lines as int64_t).into(), percent.into()]);
     } else {
-        let fmt = tr(c"line %ld of %ld --%d%%-- col ");
-        out.put_position(fmt, cursor, lines, percentage(cursor, lines));
-        // SAFETY: a live window.
+        let fmt = gettext(c"line %ld of %ld --%d%%-- col ");
+        let percent = percentage(cursor, lines);
+        out.push_fmt(
+            fmt,
+            &[
+                (cursor as int64_t).into(),
+                (lines as int64_t).into(),
+                percent.into(),
+            ],
+        );
         validate_virtcol(win);
-        out.put_column(win.w_cursor.col as c_int + 1, win.w_virtcol as c_int + 1);
+        out.push(col_text(win.w_cursor.col as c_int + 1, win.w_virtcol as c_int + 1).as_bytes());
     }
 
-    out.put_arg_number(win);
+    if let Some((fmt, idx, count)) = arg_number(win) {
+        out.push_fmt(fmt, &[idx.into(), count.into()]);
+    }
 
     if dont_truncate {
         // Temporarily set msg_scroll to keep the message from being
@@ -473,103 +393,8 @@ pub fn fileinfo(fullname: c_int, shorthelp: c_int, dont_truncate: bool) {
     }
 }
 
-fn curbuf_changed() -> bool {
-    // SAFETY: reads the current buffer's undo state.
-    curbuf_is_changed()
-}
-
 fn percentage(part: LineNr, whole: LineNr) -> c_int {
     calc_percentage(part as int64_t, whole as int64_t)
-}
-
-/// The `IOSIZE` message [`fileinfo`] assembles, and how much of it is used.
-struct Msg {
-    buf: Vec<u8>,
-    len: usize,
-}
-
-impl Msg {
-    fn new() -> Self {
-        Msg {
-            buf: vec![0; IOSIZE as usize],
-            len: 0,
-        }
-    }
-
-    fn push(&mut self, byte: u8) {
-        self.buf[self.len] = byte;
-        self.len += 1;
-    }
-
-    /// The unused tail: where to write, and how much room is left.
-    fn tail(&mut self) -> (*mut c_char, size_t) {
-        let room = IOSIZE as size_t - self.len as size_t;
-        (self.buf[self.len..].as_mut_ptr().cast::<c_char>(), room)
-    }
-
-    /// The message written so far, as the string it is.
-    fn as_cstr(&self) -> &CStr {
-        cstr::in_bytes(&self.buf)
-    }
-
-    fn put_int(&mut self, fmt: &CStr, n: c_int) {
-        let (dst, room) = self.tail();
-        // SAFETY: the buffer's own tail, and a format taking one number.
-        self.len += unsafe { vim_snprintf_safelen!(dst, room, fmt.as_ptr(), n) };
-    }
-
-    fn put_str(&mut self, fmt: &CStr, s: *const c_char) {
-        let (dst, room) = self.tail();
-        // SAFETY: the buffer's own tail, and a format taking one string.
-        self.len += unsafe { vim_snprintf_safelen!(dst, room, fmt.as_ptr(), s) };
-    }
-
-    /// The six-part flag string, `"%s%s%s%s%s%s`.
-    fn put_flags(&mut self, parts: [*const c_char; 6]) {
-        let (dst, room) = self.tail();
-        let fmt = c"\"%s%s%s%s%s%s".as_ptr();
-        let [a, b, c, d, e, f] = parts;
-        // SAFETY: the buffer's own tail, and a format taking six strings.
-        self.len += unsafe { vim_snprintf_safelen!(dst, room, fmt, a, b, c, d, e, f) };
-    }
-
-    fn put_lines(&mut self, fmt: *const c_char, lines: LineNr, percent: c_int) {
-        let (dst, room) = self.tail();
-        let lines = lines as int64_t;
-        // SAFETY: the buffer's own tail, and a format taking a number and a
-        // percentage.
-        self.len += unsafe { vim_snprintf_safelen!(dst, room, fmt, lines, percent) };
-    }
-
-    fn put_position(&mut self, fmt: *const c_char, at: LineNr, of: LineNr, percent: c_int) {
-        let (dst, room) = self.tail();
-        let (at, of) = (at as int64_t, of as int64_t);
-        // SAFETY: the buffer's own tail, and a format taking two numbers and
-        // a percentage.
-        self.len += unsafe { vim_snprintf_safelen!(dst, room, fmt, at, of, percent) };
-    }
-
-    fn put_column(&mut self, col: c_int, vcol: c_int) {
-        let (dst, room) = self.tail();
-        // SAFETY: the buffer's own tail.
-        self.len += unsafe { col_print(dst, room, col, vcol) } as usize;
-    }
-
-    fn put_arg_number(&mut self, win: Win) {
-        let (dst, room) = self.tail();
-        // SAFETY: a live window, and the buffer's own tail.
-        unsafe { append_arg_number(win, dst, room) };
-    }
-
-    /// `home_replace` into the tail, followed by the length it wrote --
-    /// which upstream measures with `strlen` rather than taking the answer.
-    fn put_home_replaced(&mut self, buffer: Option<Buf>, name: *const c_char) {
-        let (dst, room) = self.tail();
-        // SAFETY: a NUL-terminated name, and the buffer's own tail.
-        unsafe { home_replace(buffer, name, dst, room, true) };
-        // SAFETY: what `home_replace` just NUL-terminated.
-        self.len += unsafe { cstr::bytes_at(dst) }.len();
-    }
 }
 
 /// The column indicator: `col` alone when the virtual column agrees with it,
@@ -582,24 +407,10 @@ pub(crate) fn col_text(col: c_int, vcol: c_int) -> String {
     }
 }
 
-/// [`col_text`] written into a caller's buffer, for the two callers that
-/// still assemble their report in one. Answers what was written, which is
-/// the indicator truncated to `buflen`.
-///
-/// # Safety
-///
-/// `buf` must point at a writable buffer of `buflen` bytes, unaliased for
-/// the call, and `buflen` must not be zero.
-pub unsafe fn col_print(buf: *mut c_char, buflen: size_t, col: c_int, vcol: c_int) -> c_int {
-    let text = col_text(col, vcol);
-    let len = text.len().min(buflen - 1);
-    // SAFETY: the caller's buffer holds `buflen` bytes, and `len` is one
-    // less than that at most, so the terminator lands inside it too.
-    unsafe {
-        ptr::copy_nonoverlapping(text.as_ptr(), buf.cast::<u8>(), len);
-        *buf.add(len) = 0;
-    }
-    len as c_int
+/// [`col_text`] written into a caller's buffer, cut to fit with its
+/// terminator. Answers what was written.
+pub fn col_print(buf: &mut [c_char], col: c_int, vcol: c_int) -> c_int {
+    put_cut(buf, col_text(col, vcol).as_bytes()) as c_int
 }
 
 // ---------------------------------------------------------------------------
@@ -622,55 +433,48 @@ pub fn maketitle() {
     }
 
     // Copies: `build_stl` evaluates a statusline expression, which may set
-    // an option, and the two pointers outlive that call either way.
+    // an option.
     let (titlestring, iconstring) = (P_TITLESTRING.get(), P_ICONSTRING.get());
-    let mut title_str: *mut c_char = ptr::null_mut();
+    let mut mustset = false;
     if p_title() {
         let mut maxlen = 0;
         if p_titlelen() > 0 as OptInt {
             maxlen = ((p_titlelen() * Columns.get() as OptInt / 100) as c_int).max(10);
         }
-        if !titlestring.is_empty() {
+        let title = if !titlestring.is_empty() {
             if stl_syntax.get().has(StlSyntax::TITLE) {
-                build_stl(
-                    &mut scratch,
-                    titlestring.as_ptr().cast_mut(),
-                    kOptTitlestring,
-                    maxlen,
-                );
-                title_str = scratch.as_mut_ptr();
+                build_stl(&mut scratch, titlestring.as_cstr(), kOptTitlestring, maxlen);
+                cstr::in_chars(&scratch)
             } else {
-                title_str = titlestring.as_ptr().cast_mut();
+                titlestring.as_cstr()
             }
         } else {
             // Format: "fname + (path) (1 of 2) - Nvim".
             let default = c"%t%( %M%)%( (%{expand('%:p:~:h')})%)%a - Nvim";
-            let default = default.as_ptr().cast_mut();
             build_stl(&mut scratch, default, kOptTitlestring, maxlen);
-            title_str = scratch.as_mut_ptr();
-        }
+            cstr::in_chars(&scratch)
+        };
+        mustset = value_change(Some(title), &lasttitle);
+    } else {
+        value_change(None, &lasttitle);
     }
-    let mut mustset = value_change(title_str, &lasttitle);
 
-    let mut icon_str: *mut c_char = ptr::null_mut();
     if p_icon() {
-        icon_str = scratch.as_mut_ptr();
-        if !iconstring.is_empty() {
+        let icon = if !iconstring.is_empty() {
             if stl_syntax.get().has(StlSyntax::ICON) {
-                build_stl(
-                    &mut scratch,
-                    iconstring.as_ptr().cast_mut(),
-                    kOptIconstring,
-                    0,
-                );
+                build_stl(&mut scratch, iconstring.as_cstr(), kOptIconstring, 0);
+                cstr::in_chars(&scratch)
             } else {
-                icon_str = iconstring.as_ptr().cast_mut();
+                iconstring.as_cstr()
             }
         } else {
             fill_icon(&mut scratch);
-        }
+            cstr::in_chars(&scratch)
+        };
+        mustset |= value_change(Some(icon), &lasticon);
+    } else {
+        mustset |= value_change(None, &lasticon);
     }
-    mustset |= value_change(icon_str, &lasticon);
 
     if mustset {
         resettitle();
@@ -679,49 +483,38 @@ pub fn maketitle() {
 
 /// `build_stl_str_hl` for the title and icon, which want the text and
 /// nothing else it can report.
-fn build_stl(dst: &mut [c_char; IOSIZE as usize], fmt: *mut c_char, opt: OptIndex, maxlen: c_int) {
-    let win = current_win();
+fn build_stl(dst: &mut [c_char; IOSIZE as usize], fmt: &CStr, opt: OptIndex, maxlen: c_int) {
     // The title and icon are global: neither names a scope.
     let from = FmtSource {
         opt_idx: opt,
         opt_scope: OptionSetFlags::NONE,
     };
-    // SAFETY: a live window, a NUL-terminated format, and no sink asked for.
-    unsafe { build_stl_str_hl(win, dst, fmt, from, 0, maxlen, StlSinks::NONE) };
+    build_stl_text(current_win(), dst, fmt, from, maxlen);
 }
 
-/// The default icon text: the buffer's name, truncated to 100 bytes at a
+/// The default icon text: the buffer's name, its last 100 bytes cut at a
 /// character boundary.
 fn fill_icon(dst: &mut [c_char; IOSIZE as usize]) {
-    let buf = current_buf();
-    let mut name = special_name(buf);
-    if name.is_null() {
-        // SAFETY: a NUL-terminated file name, or null, which `path_tail`
-        // does not accept -- `buf_spname` answered null, so `b_fname` is
-        // set, and `b_ffname` with it.
-        name = buf.name.full().map_or(c"", path_tail).as_ptr().cast_mut();
+    let buf = Buf::current();
+    let name = match buf_spname(&buf) {
+        Some(name) => name.to_bytes(),
+        // `buf_spname` answered `None`, so the buffer has a name.
+        None => buf.name.full().map_or(c"", path_tail).to_bytes(),
+    };
+    let mut start = 0;
+    if name.len() > 100 {
+        let cut = name.len() - 100;
+        start = cut + cp_bounds(name, cut).end_off as usize;
     }
-    // SAFETY: a NUL-terminated name.
-    let mut namelen = unsafe { cstr::bytes_at(name) }.len() as c_int;
-    if namelen > 100 {
-        namelen -= 100;
-        // SAFETY: a position inside the name.
-        namelen +=
-            unsafe { utf_cp_bounds(name, name.wrapping_add(namelen as usize)) }.end_off as c_int;
-        name = name.wrapping_add(namelen as usize);
-    }
-    let out = dst.as_mut_ptr();
-    // SAFETY: at most 100 bytes and a NUL into `IOSIZE` writable ones.
-    unsafe { strcpy(out, name) };
-    // SAFETY: the string just copied, and the room it sits in.
-    unsafe { trans_characters(out, IOSIZE) };
+    let mut out = [0u8; IOSIZE as usize];
+    out[..name.len() - start].copy_from_slice(&name[start..]);
+    trans_characters_in(&mut out);
+    put_cut(dst, cstr::until_nul(&out));
 }
 
-/// Whether `str` differs from what the cell holds, replacing it if it does.
+/// Whether `now` differs from what the cell holds, replacing it if it does.
 /// Answers whether [`resettitle`] should be called.
-fn value_change(str: *mut c_char, last: &GlobalCell<Option<XString>>) -> bool {
-    // SAFETY: a NUL-terminated title, or null for "there is none".
-    let now = unsafe { cstr::at_opt(str) };
+fn value_change(now: Option<&CStr>, last: &GlobalCell<Option<XString>>) -> bool {
     if last.with(|old| old.as_deref() == now.map(CStr::to_bytes)) {
         return false;
     }
@@ -748,18 +541,13 @@ pub fn resettitle() {
 // The ruler's two fragments
 
 /// The relative cursor position -- "All", "Top", "Bot" or a percentage --
-/// into `buf`.
-///
-/// # Safety
-///
-/// `buf` must point at a NUL-terminated string, unaliased for the call.
-pub unsafe fn get_rel_pos(window: Win, buf: *mut c_char, buflen: c_int) -> c_int {
+/// into `buf`, cut to fit with its terminator. Answers what was written.
+pub fn get_rel_pos(window: Win, buf: &mut [c_char]) -> c_int {
     // At least three characters are needed to write anything.
-    if buflen < 3 {
+    if buf.len() < 3 {
         return 0;
     }
     let win = window;
-    let room = buflen as size_t;
 
     // The number of lines above the window.
     let fill = win_get_fill(win, win.w_topline);
@@ -772,50 +560,48 @@ pub unsafe fn get_rel_pos(window: Win, buf: *mut c_char, buflen: c_int) -> c_int
     // The number of lines below it.
     let below = win.buffer().b_ml.ml_line_count - win.w_botline + 1;
     if below <= 0 {
-        let all_or_bot = if above == 0 { tr(c"All") } else { tr(c"Bot") };
-        // SAFETY: the caller's buffer, and a format taking one string.
-        return unsafe { vim_snprintf_safelen!(buf, room, c"%s".as_ptr(), all_or_bot) } as c_int;
+        let all_or_bot = if above == 0 {
+            gettext(c"All")
+        } else {
+            gettext(c"Bot")
+        };
+        return put_cut(buf, all_or_bot.to_bytes()) as c_int;
     }
     if above <= 0 {
-        let top = tr(c"Top");
-        // SAFETY: as above.
-        return unsafe { vim_snprintf_safelen!(buf, room, c"%s".as_ptr(), top) } as c_int;
+        return put_cut(buf, gettext(c"Top").to_bytes()) as c_int;
     }
 
+    // The localized percentage value, as an eight-byte buffer held it.
     let perc = percentage(above, above + below);
-    // The localized percentage value.
-    let mut tmp: [c_char; 8] = [0; 8];
-    let (dst, cap, fmt) = (tmp.as_mut_ptr(), tmp.len(), tr(c"%d%%"));
-    // SAFETY: an eight-byte local, and a format taking one number.
-    unsafe { vim_snprintf!(dst, cap, fmt, perc) };
-    let fmt = tr(c"%3s");
-    // SAFETY: the caller's buffer, a format taking one string, and the local
-    // just filled.
-    unsafe { vim_snprintf_safelen!(buf, room, fmt, tmp.as_ptr()) as c_int }
+    let value = formatted!(8, gettext(c"%d%%").to_bytes(), perc);
+    let text = formatted!(buf.len(), gettext(c"%3s").to_bytes(), value.as_slice());
+    put_cut(buf, &text) as c_int
 }
 
-/// Append "(2 of 8)" to `buf`, when more than one file is being edited.
-/// Answers how many characters that took.
-///
-/// # Safety
-///
-/// `buf` must point at a NUL-terminated string, unaliased for the call.
-pub unsafe fn append_arg_number(window: Win, buf: *mut c_char, buflen: size_t) -> c_int {
+/// The "(2 of 8)" format and its two numbers, when more than one file is
+/// being edited.
+fn arg_number(window: Win) -> Option<(&'static CStr, c_int, c_int)> {
     // Upstream asks the CURRENT window for the argument list even when
     // reporting on another one.
-    // SAFETY: the current window's argument list is live.
     let argcount = crate::arglist::wargcount(current_win());
     if argcount <= 1 {
         // Nothing to do.
-        return 0;
+        return None;
     }
-    let win = window;
-    let fmt = if win.w_arg_idx_invalid {
-        tr(c" ((%d) of %d)")
+    let fmt = if window.w_arg_idx_invalid {
+        gettext(c" ((%d) of %d)")
     } else {
-        tr(c" (%d of %d)")
+        gettext(c" (%d of %d)")
     };
-    let idx = win.w_arg_idx + 1;
-    // SAFETY: the caller's buffer, and a format taking two numbers.
-    unsafe { vim_snprintf_safelen!(buf, buflen, fmt, idx, argcount) as c_int }
+    Some((fmt, window.w_arg_idx + 1, argcount))
+}
+
+/// Write "(2 of 8)" into `buf`, cut to fit with its terminator, when more
+/// than one file is being edited. Answers how many characters that took.
+pub fn append_arg_number(window: Win, buf: &mut [c_char]) -> c_int {
+    let Some((fmt, idx, count)) = arg_number(window) else {
+        return 0;
+    };
+    let text = formatted!(buf.len(), fmt.to_bytes(), idx, count);
+    put_cut(buf, &text) as c_int
 }

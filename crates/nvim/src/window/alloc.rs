@@ -15,14 +15,13 @@
 
 use crate::types::ArgListId;
 use core::ffi::{c_char, c_int};
-use core::ptr;
 
 use super::*;
 use crate::arglist::alist_unlink;
 use crate::autocmd::aucmd_wins;
 use crate::autocmd::state::autocmd_busy;
 use crate::autocmd::{block_autocmds, unblock_autocmds};
-use crate::buffer::{WinInfos, buflist_new};
+use crate::buffer::buflist_new;
 use crate::decoration::clear_virttext;
 use crate::eval::vars::{new_var_scope, release_var_scope, vars_clear};
 use crate::fold::{clear_folding, delete_fold_recurse, fold_init_win};
@@ -143,9 +142,7 @@ pub(crate) fn win_alloc_firstwin(oldwin: Option<Win>) -> Result<(), Failed> {
     match oldwin {
         None => {
             // Very first window: make a new empty buffer for it.
-            // SAFETY: a new unnamed listed buffer.
-            let buf =
-                unsafe { buflist_new(ptr::null_mut(), ptr::null_mut(), 1, BLN_LISTED as c_int) };
+            let buf = buflist_new(None, None, 1, BLN_LISTED as c_int);
             let Some(mut buf) = buf else {
                 leave_curbuf();
                 return Err(Failed);
@@ -254,17 +251,13 @@ fn win_tabpage(win: Win) -> Option<TabPage> {
     win_find_tabpage(win.id())
 }
 
-/// # Safety
-///
-/// `wip` must point at a live `WinInfo`, unaliased for the call.
-pub unsafe fn free_wininfo(wip: *mut WinInfo) {
-    // SAFETY: the caller's promise -- a live entry, which this consumes.
-    if unsafe { (*wip).wi_optset } {
-        clear_options(unsafe { &raw mut (*wip).wi_opt });
-        // SAFETY: as above -- the entry's own fold array.
-        unsafe { delete_fold_recurse(&raw mut (*wip).wi_folds) };
+/// Release what a remembered position owns -- the window options and folds
+/// saved with it -- before the entry itself is dropped.
+pub fn free_wininfo(entry: &mut WinInfo) {
+    if entry.wi_optset {
+        clear_winopt(&mut entry.wi_opt);
+        delete_fold_recurse(&mut entry.wi_folds);
     }
-    free(wip);
 }
 
 pub(crate) fn win_free(window: Win, tabpage: Option<TabPage>) {
@@ -347,11 +340,11 @@ pub(crate) fn win_free(window: Win, tabpage: Option<TabPage>) {
 /// ever used again.
 fn forget_wininfo(buffer: Buf, window: Win) {
     let mut buffer = buffer;
-    let mut infos = WinInfos::of(&mut buffer);
-    let len = infos.entries_mut().len();
+    let infos = &mut buffer.b_wininfo;
+    let len = infos.len();
     let mut pos_wip = len;
     let mut pos_null = len;
-    for (i, entry) in infos.entries_mut().iter().enumerate() {
+    for (i, entry) in infos.iter().enumerate() {
         if entry.window() == Some(window) {
             pos_wip = i;
         } else if entry.window().is_none() {
@@ -361,20 +354,17 @@ fn forget_wininfo(buffer: Buf, window: Win) {
     if pos_wip == len {
         return;
     }
-    let entry = &mut infos.entries_mut()[pos_wip];
+    let entry = &mut infos[pos_wip];
     entry.wi_win = None;
     // Discard saved options if the style is minimal.
     if window.w_config.style == kWinStyleMinimal && entry.wi_optset {
-        clear_options(entry.opt());
-        // SAFETY: the entry's own fold array.
-        unsafe { delete_fold_recurse(entry.folds()) };
+        clear_winopt(&mut entry.wi_opt);
+        delete_fold_recurse(&mut entry.wi_folds);
         entry.wi_optset = false;
     }
     if pos_null < len {
-        let pos_delete = pos_null.max(pos_wip);
-        // SAFETY: an entry of this array, which is dropped from it next.
-        unsafe { free_wininfo(infos.entries_mut()[pos_delete].raw()) };
-        infos.remove(pos_delete);
+        let mut gone = infos.remove(pos_null.max(pos_wip));
+        free_wininfo(&mut gone);
     }
 }
 

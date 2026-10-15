@@ -41,8 +41,8 @@ mod listdo;
 
 use crate::arglist::{ex_all, ex_rewind, set_arglist, warg_fnum};
 use crate::buffer::{
-    BufRef, buf_hide, buf_is_dontwrite, buf_set_name_of, buf_spname_owned, find_buf,
-    no_write_message, no_write_message_nobang, set_curbuf,
+    BufRef, buf_hide, buf_is_dontwrite, buf_set_name, buf_spname_owned, find_buf, no_write_message,
+    no_write_message_nobang, set_curbuf,
 };
 use crate::bufwrite::{WriteName, WriteRequest, buf_write};
 use crate::change::unchanged;
@@ -329,7 +329,7 @@ pub(crate) fn dialog_changed(mut buffer: Buf, checkall: bool) {
     if ret == VIM_YES as c_int {
         let empty_bufname = buffer.name.is_unnamed();
         if empty_bufname {
-            buf_set_name_of(buffer.handle as c_int, c"Untitled");
+            buf_set_name(buffer.handle as c_int, c"Untitled");
         }
         let target = buffer;
         if check_overwrite_own(&mut ea, target).is_ok()

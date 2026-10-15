@@ -25,8 +25,8 @@ use std::ffi::CString;
 use crate::autocmd::state::au_new_curbuf;
 use crate::buffer::current_buf;
 use crate::buffer::{
-    BufRef, buf_valid, buflist_altfpos, buflist_findfmark_pos, buflist_new_named, close_buffer,
-    find_buf, get_winopts,
+    BufRef, buf_valid, buflist_altfpos, buflist_findfmark_pos, buflist_new, close_buffer, find_buf,
+    get_winopts,
 };
 use crate::ex_cmds::{BCO_ENTER, BLN_CURBUF, BLN_LISTED, BLN_NOCURWIN, DOBUF_UNLOAD, buf_autocmd};
 use crate::ex_docmd::cmdmod_has;
@@ -93,7 +93,7 @@ pub(super) fn switch_to_other_buffer(
                 tlnum = 1;
             }
         }
-        let newbuf = buflist_new_named(
+        let newbuf = buflist_new(
             ffname,
             sfname,
             tlnum,
@@ -104,7 +104,7 @@ pub(super) fn switch_to_other_buffer(
         }
         return Switch::Abandon;
     } else {
-        buf = buflist_new_named(
+        buf = buflist_new(
             ffname,
             sfname,
             0,

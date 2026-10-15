@@ -36,17 +36,16 @@ use crate::types::NUL;
 /// Safe: `b:prompt_text` is either null or a NUL-terminated string the
 /// buffer owns.
 pub(crate) fn buf_prompt_text(buffer: Buf) -> *mut c_char {
-    if buffer.b_prompt_text.is_null() {
-        return c"% ".as_ptr().cast_mut();
-    }
-    buffer.b_prompt_text
+    buffer
+        .b_prompt_text
+        .as_ref()
+        .map_or(c"% ".as_ptr(), |text| text.as_ptr())
+        .cast_mut()
 }
 
 /// Give `buffer` the prompt `text`, releasing the one it had.
 pub(crate) fn set_buf_prompt_text(mut buffer: Buf, text: crate::memory::ThinCString) {
-    let old = core::mem::replace(&mut buffer.b_prompt_text, text.into_raw());
-    // SAFETY: the buffer's own prompt text, an allocation it alone held.
-    unsafe { xfree(old.cast()) };
+    buffer.b_prompt_text = Some(text);
 }
 
 /// [`buf_prompt_text`], copied.

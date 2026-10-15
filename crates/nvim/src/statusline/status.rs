@@ -114,15 +114,14 @@ pub fn stl_connected(window: Win) -> bool {
 /// Upstream fills the shared `NameBuff` and leaves the readers to find it
 /// there, which is why the fill and each read had to be separate borrows.
 pub(crate) fn get_trans_bufname(buffer: Buf, name: &mut [c_char; MAXPATHL as usize]) {
-    let spname = buf_spname(buffer);
     let (out, room) = (name.as_mut_ptr(), MAXPATHL as size_t);
     // SAFETY: the caller's promise, and `name` is `MAXPATHL` bytes, which
     // each of the three writes below is told.
     unsafe {
-        if spname.is_null() {
-            home_replace(Some(buffer), buffer.name.shown_ptr(), out, room, true);
+        if let Some(spname) = buf_spname(&buffer) {
+            xstrlcpy(out, spname.as_ptr(), room);
         } else {
-            xstrlcpy(out, spname, room);
+            home_replace(Some(buffer), buffer.name.shown_ptr(), out, room, true);
         }
         trans_characters(out, MAXPATHL);
     }

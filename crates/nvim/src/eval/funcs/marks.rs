@@ -3,7 +3,6 @@
 
 use super::tv_get_buf;
 use super::wrappers::{arg_number, dict_alloc_ret};
-use crate::buffer::WinInfos;
 use crate::eval::typval::{
     NumBuf, tv_check_for_dict_arg, tv_check_for_string_arg, tv_dict_alloc, tv_list_alloc,
     tv_list_alloc_ret,
@@ -49,7 +48,7 @@ pub fn f_getchangelist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
         let _no_emsg = Suppress::emsg();
         tv_get_buf(&args[0], 0)
     };
-    let Some(mut buf) = buf else {
+    let Some(buf) = buf else {
         return;
     };
     let entries = tv_list_alloc(buf.b_changelistlen as isize);
@@ -64,8 +63,7 @@ pub fn f_getchangelist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
     } else {
         let here = Win::current_or_none().map(Win::id);
         let changelistlen = buf.b_changelistlen;
-        WinInfos::of(&mut buf)
-            .entries_mut()
+        buf.b_wininfo
             .iter()
             .find(|entry| entry.wi_win == here)
             .map_or(changelistlen, |entry| entry.wi_changelistidx)

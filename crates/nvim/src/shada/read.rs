@@ -435,7 +435,14 @@ fn apply_buffer_list(mut entry: ShadaEntry) {
         let sfname = unsafe { path_try_shorten_fname(cstr::at((*item).fname)) }
             .as_ptr()
             .cast_mut();
-        let buf = unsafe { buflist_new((*item).fname, sfname, 0, BLN_LISTED as c_int) };
+        let buf = unsafe {
+            buflist_new(
+                cstr::at_opt((*item).fname),
+                cstr::at_opt(sfname),
+                0,
+                BLN_LISTED as c_int,
+            )
+        };
         let Some(mut buf) = buf else {
             continue;
         };
@@ -450,8 +457,7 @@ fn apply_buffer_list(mut entry: ShadaEntry) {
         buf.b_last_cursor = cursor;
         let (lnum, col) = (buf.b_last_cursor.mark.lnum, buf.b_last_cursor.mark.col);
         buflist_setfpos(buf, Some(Win::current()), lnum, col, false);
-        unsafe { xfree(buf.additional_data.cast()) };
-        buf.additional_data = unsafe { (*item).additional_data };
+        buf.additional_data = unsafe { ShadaExtra::from_raw((*item).additional_data) };
         unsafe { (*item).additional_data = core::ptr::null_mut() };
     }
     unsafe { shada_free_shada_entry(&raw mut entry) };

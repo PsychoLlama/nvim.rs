@@ -258,16 +258,15 @@ pub fn ex_display(excmd: &mut ExArg) {
     // SAFETY: `arg` is null or the NUL-terminated `:registers` argument.
     let want_alt = arg.is_null() || has_char(unsafe { cstr::at(arg) }, '%' as c_int);
     if want_alt && !got_int.get() {
-        let mut fname: *mut c_char = ::core::ptr::null_mut();
-        let mut dummy: LineNr = 0;
-        // SAFETY: both out-parameters are writable locals.
-        let named = unsafe { buflist_name_nr(0, &raw mut fname, &raw mut dummy) }.is_ok();
-        // SAFETY: on success `fname` is the alternate file's name, which is
-        // NUL-terminated.
-        if named && !message_filtered(unsafe { cstr::at(fname) }) {
-            // SAFETY: a NUL-terminated literal, then the name.
+        // A copy: the filter runs a regexp and the display the message
+        // machinery.
+        let alt = buflist_name_nr(0).and_then(|(alt, _)| alt.name.shown().map(XString::from_cstr));
+        if let Some(fname) = alt
+            && !message_filtered(fname.as_cstr())
+        {
             msg_str(c"\n  c  \"#   ");
-            unsafe { dis_msg(fname, false) };
+            // SAFETY: a NUL-terminated name, this frame's copy.
+            unsafe { dis_msg(fname.as_ptr().cast_mut(), false) };
         }
     }
 

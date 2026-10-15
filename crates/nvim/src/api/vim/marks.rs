@@ -64,21 +64,18 @@ pub fn nvim_get_mark(name: String_0, _opts: &mut KeyDict_empty) -> Result<Array,
     };
     // A mark in a buffer names the buffer; one restored from ShaDa names
     // only the file it was in, and `fname` is the mark's own storage.
-    let mut allocated = fnum != 0;
     let mut bufnr = fnum;
-    let mut filename = if allocated {
-        buflist_nr2name(bufnr, 1, 1)
+    let owned = (fnum != 0).then(|| buflist_nr2name(bufnr, 1, 1)).flatten();
+    let mut filename = if fnum != 0 {
+        owned
+            .as_ref()
+            .map_or(core::ptr::null_mut(), |name| name.as_ptr().cast_mut())
     } else {
         fname
     };
     let mut row: Integer = 0;
     let mut col: Integer = 0;
     if filename.is_null() || pos.lnum <= 0 as LineNr {
-        if allocated {
-            // SAFETY: `buflist_nr2name` handed back an allocation.
-            unsafe { xfree(filename.cast()) };
-            allocated = false;
-        }
         filename = c"".as_ptr().cast_mut();
         bufnr = 0;
     } else {
@@ -92,10 +89,5 @@ pub fn nvim_get_mark(name: String_0, _opts: &mut KeyDict_empty) -> Result<Array,
     rv.push(Object::integer(col));
     rv.push(Object::integer(Integer::from(bufnr)));
     rv.push(path);
-    if allocated {
-        // SAFETY: `filename` is this frame's allocation, and the answer
-        // holds its own copy now.
-        unsafe { xfree(filename.cast()) };
-    }
     Ok(rv)
 }

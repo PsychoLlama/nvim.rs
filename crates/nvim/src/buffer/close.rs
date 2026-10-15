@@ -15,11 +15,10 @@
 //!
 //! Original: `src/nvim/buffer.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::memline::MlFlags;
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_cstr_opt;
 use crate::types::AutoEvent;
 use crate::winlayer::WinId;
 use core::ffi::c_int;
@@ -33,14 +32,12 @@ use crate::buffer_updates::{buf_free_callbacks, buf_updates_unload};
 use crate::change::deleted_lines_mark;
 use crate::diff::{diff_buf_delete, diffopt_hiddenoff};
 use crate::drawscreen::state::updating_screen;
-use crate::eval::typval::DictTab;
-use crate::eval::typval::{callback_free, tv_dict_item_copy};
+use crate::eval::typval::{callback_free, tv_dict_item_copy, unlink_buf_changedtick};
 use crate::eval::vars::{release_var_scope, vars_clear};
 use crate::extmark::extmark_free_all;
-use crate::garray::ga_clear;
-use crate::hashtab::{hash_find, hash_remove};
+use crate::garray::ga_free;
 use crate::mapping::map_clear_mode;
-use crate::mark::{clear_fmark, free_fmark, mark_adjust_buf, mark_forget_file, set_last_cursor};
+use crate::mark::{clear_mark, mark_adjust_buf, mark_forget_file, set_last_cursor};
 use crate::memline::ml_close;
 use crate::message::e_auabort;
 use crate::normal::visual_active;
@@ -49,11 +46,10 @@ use crate::pos::MAXLNUM;
 use crate::semsg;
 use crate::startup::exiting;
 use crate::state::MAP_ALL_MODES;
-use crate::syntax::syntax_clear;
-use crate::terminal::terminal_close;
+use crate::syntax::syntax_clear_in;
+use crate::terminal::close_buf_terminal;
 use crate::types::{
-    Callback, ColNr, FileMark, FileMarkView, GArray, Handle, LineNr, MemFile, Pos, Refcount,
-    SynBlock, Timestamp, WinInfo,
+    Callback, ColNr, FileMark, FileMarkView, Handle, LineNr, MemFile, Pos, Refcount, Timestamp,
 };
 use crate::undo::u_clearallandblockfree;
 use crate::usercmd::{Table, uc_clear};
@@ -139,11 +135,6 @@ fn free_user_commands(buffer: Buf) {
     uc_clear(Table::Buffer(buffer));
 }
 
-fn free_garray(ga: &mut GArray) {
-    // SAFETY: a growable array inside a live buffer.
-    unsafe { ga_clear(ga) };
-}
-
 /// Drop every buffer-local mapping (`abbrev` picks the abbreviation table).
 fn clear_mappings(buffer: Buf, abbrev: bool) {
     map_clear_mode(buffer, MAP_ALL_MODES, true, abbrev);
@@ -151,16 +142,6 @@ fn clear_mappings(buffer: Buf, abbrev: bool) {
 
 fn free_callback(cb: &mut Callback) {
     callback_free(cb);
-}
-
-fn clear_mark(mark: &mut FileMark) {
-    // SAFETY: a mark inside a live buffer; `0` is upstream's timestamp.
-    unsafe { clear_fmark(mark, 0 as Timestamp) };
-}
-
-fn drop_mark(mark: FileMark) {
-    // SAFETY: a mark copied out of a live buffer.
-    unsafe { free_fmark(mark) };
 }
 
 /// Move every mark in `buffer` up by `count` lines from line 1 -- what an
@@ -183,11 +164,6 @@ fn free_undo(buffer: Buf) {
     u_clearallandblockfree(buffer);
 }
 
-fn clear_syntax(syn: &mut SynBlock) {
-    // SAFETY: the syntax block of a live buffer.
-    unsafe { syntax_clear(syn) };
-}
-
 /// Close the memline and delete the swap file.
 fn close_memline(buffer: Buf) {
     ml_close(buffer, 1);
@@ -197,31 +173,13 @@ fn mark_lines_deleted(count: LineNr) {
     deleted_lines_mark(1 as LineNr, count as c_int);
 }
 
-fn free_entry(entry: *mut WinInfo) {
-    // SAFETY: an entry of a live buffer's `b_wininfo`.
-    unsafe { free_wininfo(entry) };
-}
-
-/// `buffer.b_vars->dv_hashtab`.
-fn buf_vars(mut buffer: Buf) -> *mut DictTab {
-    // SAFETY: a live buffer's variable dictionary is live.
-    unsafe { &raw mut (*buffer.b_vars).dv_hashtab }
-}
-
 /// Free every buffer-local variable.
 ///
 /// `b:changedtick` lives in a field of `Buffer` rather than in the dictionary's
-/// own storage, so it is removed from the hash table first: clearing it would
+/// own storage, so it is taken out of the table first: clearing it would
 /// go through `clear_tv()` and zero the counter.
 fn clear_buf_vars(buffer: Buf) {
-    let vars = buf_vars(buffer);
-    // SAFETY: the hash table of a live buffer's variable dictionary; the
-    // `changedtick` entry is put there when the buffer is created.
-    unsafe {
-        let changedtick_hi = hash_find(vars, c"changedtick".as_ptr());
-        debug_assert!(changedtick_hi.is_kept(), "changedtick is in the table");
-        hash_remove(vars, changedtick_hi);
-    }
+    unlink_buf_changedtick(buffer);
     if let Some(dict) = buffer.b_bufvar.di_tv.dict_handle() {
         vars_clear(&dict);
     }
@@ -230,9 +188,10 @@ fn clear_buf_vars(buffer: Buf) {
 /// Hand `b:changedtick` to the dictionary before the buffer goes away, for the
 /// script that is still holding a reference to it.
 fn rescue_changedtick(mut buffer: Buf) {
-    let (vars, di) = (buffer.b_vars, &raw mut buffer.changedtick_di);
-    // SAFETY: a live buffer's dictionary, and its own `changedtick` item.
-    let _ = unsafe { (*vars).add_item(tv_dict_item_copy(&*di)) };
+    let copy = tv_dict_item_copy(&buffer.changedtick_di);
+    if let Some(dict) = buffer.b_bufvar.di_tv.dict_mut() {
+        let _ = dict.add_item(copy);
+    }
 }
 
 fn release_vars(mut buffer: Buf) {
@@ -329,16 +288,13 @@ pub(crate) fn can_unload_buffer(buffer: Buf) -> bool {
 
     if !can_unload {
         let fname = if buffer.name.is_unnamed() {
-            buffer.name.full_ptr()
+            buffer.name.full()
         } else {
-            buffer.name.shown_ptr()
+            buffer.name.shown()
         };
-        // SAFETY: a buffer's own name, NUL-terminated.
-        let name = unsafe { c_str(fname) };
-        let name = if fname.is_null() {
-            "[No Name]".into()
-        } else {
-            name.to_string()
+        let name = match fname {
+            None => "[No Name]".into(),
+            Some(_) => msg_cstr_opt(fname).to_string(),
         };
         semsg!("E937: Attempt to delete a buffer that is in use: {name}");
     }
@@ -346,10 +302,8 @@ pub(crate) fn can_unload_buffer(buffer: Buf) -> bool {
 }
 
 pub fn buf_close_terminal(mut buffer: Buf) {
-    debug_assert!(!buffer.terminal.is_null(), "buf->terminal");
     buffer.b_locked += 1;
-    // SAFETY: a live terminal, the assertion above having ruled out null.
-    unsafe { terminal_close(&raw mut buffer.terminal, -1) };
+    close_buf_terminal(buffer);
     buffer.b_locked -= 1;
 }
 
@@ -721,7 +675,7 @@ pub fn buf_freeall(buffer: Buf, flags: c_int) {
         // free the memory allocated for undo and reset all undo information
         free_undo(buf);
     }
-    clear_syntax(&mut buf.b_s); // reset syntax info
+    syntax_clear_in(&mut buf.b_s); // reset syntax info
     buf.b_flags.clear(BufFlags::READERR); // a read error is no longer relevant
 }
 
@@ -777,26 +731,30 @@ fn free_buffer(mut buffer: Buf) {
     note_buffer_freed();
     // b:changedtick uses an item in Buffer.
     free_buffer_stuff(buffer, kBffClearWinInfo as c_int);
-    // SAFETY: a live buffer's variable dictionary is live.
-    if unsafe { (*buffer.b_vars).dv_refcount } > Refcount::new(DO_NOT_FREE_CNT as c_int) {
+    let shared = buffer
+        .b_bufvar
+        .di_tv
+        .dict_ref()
+        .is_some_and(|dict| dict.dv_refcount > Refcount::new(DO_NOT_FREE_CNT as c_int));
+    if shared {
         rescue_changedtick(buffer);
     }
     release_vars(buffer);
     forget_autocmds(buffer);
-    free(buffer.additional_data);
-    free(buffer.b_prompt_text);
-    destroy_wininfo(buffer);
+    buffer.additional_data = None;
+    buffer.b_prompt_text = None;
+    buffer.b_wininfo = Vec::new();
     free_callback(&mut buffer.b_prompt_callback);
     free_callback(&mut buffer.b_prompt_interrupt);
-    clear_mark(&mut buffer.b_last_cursor);
-    clear_mark(&mut buffer.b_last_insert);
-    clear_mark(&mut buffer.b_last_change);
-    clear_mark(&mut buffer.b_prompt_start);
+    clear_mark(&mut buffer.b_last_cursor, 0);
+    clear_mark(&mut buffer.b_last_insert, 0);
+    clear_mark(&mut buffer.b_last_change, 0);
+    clear_mark(&mut buffer.b_prompt_start, 0);
     for i in 0..NMARKS as usize {
-        drop_mark(buffer.b_namedm[i].clone());
+        clear_mark(&mut buffer.b_namedm[i], 0);
     }
     for i in 0..buffer.b_changelistlen as usize {
-        drop_mark(buffer.b_changelist[i].clone());
+        clear_mark(&mut buffer.b_changelist[i], 0);
     }
     if autocmd_busy.get() {
         // Do not free the buffer structure while autocommands are executing,
@@ -813,23 +771,11 @@ fn free_buffer(mut buffer: Buf) {
     }
 }
 
-/// `kv_destroy(buf->b_wininfo)`.
-fn destroy_wininfo(mut buffer: Buf) {
-    let kv = &mut buffer.b_wininfo;
-    free(kv.items);
-    kv.capacity = 0;
-    kv.size = 0;
-    kv.items = ptr::null_mut::<*mut WinInfo>();
-}
-
 /// Free the `b_wininfo` list for buffer `buffer`.
 pub(crate) fn clear_wininfo(mut buffer: Buf) {
-    let kv = &mut buffer.b_wininfo;
-    for i in 0..kv.size {
-        // SAFETY: the first `size` slots of a kvec hold live entries.
-        free_entry(unsafe { *kv.items.add(i) });
+    for mut entry in buffer.b_wininfo.drain(..) {
+        free_wininfo(&mut entry);
     }
-    kv.size = 0;
 }
 
 /// Free what `:bdel` and a wipe-out drop: the window memory, the local
@@ -838,7 +784,7 @@ pub(crate) fn free_buffer_stuff(mut buffer: Buf, free_flags: c_int) {
     if free_flags & kBffClearWinInfo as c_int != 0 {
         clear_wininfo(buffer); // including window-local options
         free_buf_options(buffer, true);
-        free_garray(&mut buffer.b_s.b_langp);
+        ga_free(&mut buffer.b_s.b_langp);
     }
     clear_buf_vars(buffer); // free all internal variables
     if free_flags & kBffInitChangedtick as c_int != 0 {
@@ -848,7 +794,7 @@ pub(crate) fn free_buffer_stuff(mut buffer: Buf, free_flags: c_int) {
     free_extmarks(buffer); // delete any extmarks
     clear_mappings(buffer, false); // clear local mappings
     clear_mappings(buffer, true); // clear local abbrevs
-    xfree_clear(&mut buffer.b_start_fenc);
+    buffer.b_start_fenc = None;
 
     free_update_callbacks(buffer);
 }

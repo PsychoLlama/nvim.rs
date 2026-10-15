@@ -9,8 +9,7 @@
 //!
 //! Original: `src/nvim/buffer.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -19,8 +18,7 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::cstr;
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
 use super::*;
@@ -29,78 +27,14 @@ use crate::drawscreen::status_redraw_all;
 use crate::ex_docmd::cmdmod_has;
 use crate::mark::fmarks_check_names;
 use crate::memline::{ml_setname, ml_timestamp};
-use crate::memory::{XString, xfree, xstrdup};
+use crate::memory::XString;
 use crate::message::e_noalt;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
-use crate::os::fs::{os_fileid, os_fileid_equal};
+use crate::os::fs::file_id;
 use crate::path::{fix_fname, path_fnamecmp};
-use crate::types::{BufName, CmdModFlags, Failed, FileID, LineNr};
+use crate::types::{CmdModFlags, Failed, FileID, LineNr};
 use crate::winlayer::{Buf, Win, tab_windows};
-
-// ---------------------------------------------------------------------------
-// The neighbours, wrapped
-
-fn free(p: *mut c_char) {
-    // SAFETY: an owned allocation or null.
-    unsafe { xfree(p.cast::<c_void>()) };
-}
-
-fn dup(p: *const c_char) -> *mut c_char {
-    // SAFETY: a NUL-terminated string; upstream passes the short name, which
-    // `fname_expand` has just made non-null.
-    unsafe { xstrdup(p) }
-}
-
-/// Give `name` the pair [`fname_expand`] leaves behind.
-///
-/// `full` is the block `fix_fname` allocated. `short` is null, its own
-/// block, or -- where `fix_fname` answers the very pointer it was given --
-/// `full` itself, which is the case upstream's `b_sfname != b_ffname`
-/// guard exists for.
-///
-/// # Safety
-///
-/// Both pointers are live `xmalloc`-family blocks, or null, that nobody
-/// else will free.
-unsafe fn adopt_names(name: &mut BufName, full: *mut c_char, short: *mut c_char) {
-    // SAFETY: the caller's promise.
-    let owned_full = unsafe { XString::from_raw(full) };
-    if ptr::eq(short, full) {
-        name.set_shared(owned_full);
-    } else {
-        // SAFETY: the caller's promise.
-        let owned_short = (!short.is_null()).then(|| unsafe { XString::from_raw(short) });
-        name.set(owned_full, owned_short);
-    }
-}
-
-/// The file id of `fname`, and whether the file exists at all.
-fn file_id_of(fname: *const c_char) -> (FileID, bool) {
-    let mut file_id = FileID {
-        inode: 0,
-        device_id: 0,
-    };
-    // SAFETY: a NUL-terminated path, and a local to fill in.
-    let valid = unsafe { os_fileid(fname, &raw mut file_id) };
-    (file_id, valid)
-}
-
-fn same_file_id(buffer: &mut Buf, file_id: *mut FileID) -> bool {
-    // SAFETY: the buffer's own file id, and the caller's, both live.
-    buffer.file_id_valid && unsafe { os_fileid_equal(&raw mut buffer.file_id, file_id) }
-}
-
-/// Whether a name slot holds nothing: null or the empty string.
-fn is_empty_name(p: *const c_char) -> bool {
-    // SAFETY: null or a NUL-terminated name.
-    p.is_null() || unsafe { *p } == 0
-}
-
-fn names_equal(a: *const c_char, b: *const c_char) -> bool {
-    // SAFETY: two NUL-terminated paths, both non-null by the tests above.
-    unsafe { path_fnamecmp(cstr::bytes_at(a), cstr::bytes_at(b)) == 0 }
-}
 
 fn current_win() -> Win {
     Win::current()
@@ -109,28 +43,14 @@ fn current_win() -> Win {
 // ---------------------------------------------------------------------------
 // Looking a name up
 
-/// The file name and remembered line number of buffer `fnum`.
-///
-/// # Safety
-///
-/// `fname` must point at a writable `*mut c_char` slot the caller owns for
-/// the call. `lnum` must point at a writable line number the caller owns.
-pub unsafe fn buflist_name_nr(
-    fnum: c_int,
-    fname: *mut *mut c_char,
-    lnum: *mut LineNr,
-) -> Result<(), Failed> {
-    let Some(buf) = find_buf(fnum) else {
-        return Err(Failed);
-    };
+/// The buffer `fnum` names, when it has a name, and the line remembered for
+/// it.
+pub fn buflist_name_nr(fnum: c_int) -> Option<(Buf, LineNr)> {
+    let buf = find_buf(fnum)?;
     if buf.name.is_unnamed() {
-        return Err(Failed);
+        return None;
     }
-    // SAFETY: the caller's promise -- two out-parameters to fill in.
-    let (fname, lnum) = unsafe { (&mut *fname, &mut *lnum) };
-    *fname = buf.name.shown_ptr();
-    *lnum = buflist_findlnum(buf);
-    Ok(())
+    Some((buf, buflist_findlnum(buf)))
 }
 
 // ---------------------------------------------------------------------------
@@ -150,60 +70,44 @@ pub fn setfname(
     message: bool,
 ) -> Result<(), Failed> {
     let mut b = buffer;
-    // The names below this point are locals `fname_expand` replaces with
-    // allocations of its own, which the buffer then adopts; the caller's
-    // bytes are only read, so the `cast_mut` is the C signature's.
-    let mut ffname = ffname_arg.map_or(ptr::null_mut(), |n| n.as_ptr().cast_mut());
-    let mut sfname = sfname_arg.map_or(ptr::null_mut(), |n| n.as_ptr().cast_mut());
-    let mut file_id = FileID {
-        inode: 0,
-        device_id: 0,
-    };
-    let mut file_id_valid = false;
+    let mut file_id = None;
 
-    if is_empty_name(ffname) {
-        // Removing the name. Upstream's three lines here are the
-        // `b_sfname != b_ffname` dance; the name owns its blocks now.
-        b.name.clear();
-    } else {
-        // SAFETY: two locals holding a name each.
-        unsafe { fname_expand(&raw mut ffname, &raw mut sfname) };
-        if ffname.is_null() {
-            // Out of memory.
-            return Err(Failed);
+    match fname_expand(ffname_arg.filter(|name| !name.is_empty()), sfname_arg) {
+        None => {
+            // Removing the name. Upstream's three lines here are the
+            // `b_sfname != b_ffname` dance; the name owns its blocks now.
+            b.name.clear();
         }
-
-        // If the file name is already used in another buffer:
-        // - if the buffer is loaded, fail
-        // - if the buffer is not loaded, delete it from the list
-        (file_id, file_id_valid) = file_id_of(ffname);
-        let obuf = if b.b_flags.has(BufFlags::DUMMY) {
-            None
-        } else {
-            buflist_findname_file_id(ffname, &file_id, file_id_valid)
-        };
-        if let Some(o) = obuf.filter(|&o| o != buffer) {
-            // During startup a window may use a buffer that is not loaded yet.
-            let in_use = tab_windows().any(|win| win.w_buffer == o);
-            if !o.b_ml.ml_mfp.is_null() || in_use {
-                // It is loaded or used in a window: fail.
-                if message {
-                    emsg(gettext(c"E95: Buffer with this name already exists"));
+        Some((ffname, sfname)) => {
+            // If the file name is already used in another buffer:
+            // - if the buffer is loaded, fail
+            // - if the buffer is not loaded, delete it from the list
+            file_id = crate::os::fs::file_id(ffname.as_cstr());
+            let obuf = if b.b_flags.has(BufFlags::DUMMY) {
+                None
+            } else {
+                buflist_findname_file_id(ffname.as_cstr(), file_id.as_ref())
+            };
+            if let Some(o) = obuf.filter(|&o| o != buffer) {
+                // During startup a window may use a buffer that is not
+                // loaded yet.
+                let in_use = tab_windows().any(|win| win.w_buffer == o);
+                if !o.b_ml.ml_mfp.is_null() || in_use {
+                    // It is loaded or used in a window: fail.
+                    if message {
+                        emsg(gettext(c"E95: Buffer with this name already exists"));
+                    }
+                    return Err(Failed);
                 }
-                free(ffname);
-                return Err(Failed);
+                // Delete it from the list: a live, unloaded buffer shown in
+                // no window.
+                close_buffer(None, o, DOBUF_WIPE.cast_signed(), false, false);
             }
-            // Delete it from the list: a live, unloaded buffer shown in no
-            // window.
-            close_buffer(None, o, DOBUF_WIPE.cast_signed(), false, false);
+            b.name.set(ffname, Some(sfname));
         }
-        // SAFETY: `ffname` is the block `fix_fname` just allocated and
-        // `sfname` the copy taken here; the buffer takes over both, and
-        // what it held is released with them.
-        unsafe { adopt_names(&mut b.name, ffname, dup(sfname)) };
     }
-    b.file_id_valid = file_id_valid;
-    if file_id_valid {
+    b.file_id_valid = file_id.is_some();
+    if let Some(file_id) = file_id {
         b.file_id = file_id;
     }
 
@@ -212,32 +116,15 @@ pub fn setfname(
 }
 
 /// A crude way of changing a buffer's name; use with care. The name is
-/// relative to the current directory.
-///
-/// # Safety
-///
-/// `name` must point at a NUL-terminated string, unaliased for the call.
-pub unsafe fn buf_set_name(fnum: c_int, name: *mut c_char) {
+/// relative to the current directory: it becomes the short name, and its
+/// expansion the full one.
+pub(crate) fn buf_set_name(fnum: c_int, name: &CStr) {
     let Some(mut b) = find_buf(fnum) else {
         return;
     };
-
-    // Allocate ffname and expand into a full path. The copy `fname_expand`
-    // is handed becomes the *short* name; the full one is what `fix_fname`
-    // answers.
-    let mut ffname = dup(name);
-    let mut sfname = ptr::null_mut();
-    // SAFETY: two locals holding a name each.
-    unsafe { fname_expand(&raw mut ffname, &raw mut sfname) };
-    // SAFETY: the two blocks `fname_expand` left behind, which nothing
-    // else holds.
-    unsafe { adopt_names(&mut b.name, ffname, sfname) };
-}
-
-/// [`buf_set_name`] of a name the caller holds, which it only copies.
-pub(crate) fn buf_set_name_of(fnum: c_int, name: &CStr) {
-    // SAFETY: a NUL-terminated name; `dup` copies it before anything runs.
-    unsafe { buf_set_name(fnum, name.as_ptr().cast_mut()) };
+    if let Some((ffname, sfname)) = fname_expand(Some(name), None) {
+        b.name.set(ffname, Some(sfname));
+    }
 }
 
 /// What has to happen once a buffer's name has changed.
@@ -258,25 +145,6 @@ pub fn buf_name_changed(b: Buf) {
     ml_timestamp(b);
 }
 
-/// [`buflist_new`](super::buflist_new) for names the caller holds, either or both absent.
-pub(crate) fn buflist_new_named(
-    ffname: Option<&CStr>,
-    sfname: Option<&CStr>,
-    lnum: LineNr,
-    flags: c_int,
-) -> Option<Buf> {
-    let name = |name: Option<&CStr>| name.map_or(ptr::null_mut(), |n| n.as_ptr().cast_mut());
-    // SAFETY: NUL-terminated names or null; `fname_expand` makes the copies
-    // the list keeps before anything can run, and writes to neither.
-    unsafe { buflist_new(name(ffname), name(sfname), lnum, flags) }
-}
-
-/// [`buflist_findname`](super::buflist_findname) for a name the caller holds.
-pub(crate) fn buflist_findname_of(ffname: &CStr) -> Option<Buf> {
-    // SAFETY: a NUL-terminated name, which the lookup only reads.
-    unsafe { buflist_findname(ffname.as_ptr().cast_mut()) }
-}
-
 // ---------------------------------------------------------------------------
 // The alternate file
 
@@ -285,11 +153,7 @@ pub(crate) fn buflist_findname_of(ffname: &CStr) -> Option<Buf> {
 /// `None` for either name is upstream's NULL.
 pub fn setaltfname(ffname: Option<&CStr>, sfname: Option<&CStr>, lnum: LineNr) -> Option<Buf> {
     // Create a buffer; 'buflisted' is not set if it is a new one.
-    // SAFETY: two names to hand over, either of which may be null; the
-    // answer is a live buffer or null.
-    let ffname = ffname.map_or(ptr::null_mut(), |n| n.as_ptr().cast_mut());
-    let sfname = sfname.map_or(ptr::null_mut(), |n| n.as_ptr().cast_mut());
-    let buf = unsafe { buflist_new(ffname, sfname, lnum, 0) };
+    let buf = buflist_new(ffname, sfname, lnum, 0);
     if let Some(buf) = buf
         && !cmdmod_has(CmdModFlags::KEEPALT)
     {
@@ -298,34 +162,18 @@ pub fn setaltfname(ffname: Option<&CStr>, sfname: Option<&CStr>, lnum: LineNr) -
     buf
 }
 
-/// The alternate file name for the current window, null when there is none.
+/// The alternate file's name (the buffer's own storage, so read before
+/// anything runs), null when there is none.
 pub fn getaltfname(errmsg: bool) -> *mut c_char {
-    let mut fname: *mut c_char = ptr::null_mut();
-    let mut dummy: LineNr = 0;
-    // SAFETY: two locals to fill in.
-    if unsafe { buflist_name_nr(0, &raw mut fname, &raw mut dummy) }.is_err() {
-        if errmsg {
-            emsg(gettext(e_noalt));
+    match buflist_name_nr(0) {
+        Some((alt, _)) => alt.name.shown_ptr(),
+        None => {
+            if errmsg {
+                emsg(gettext(e_noalt));
+            }
+            ptr::null_mut()
         }
-        return ptr::null_mut();
     }
-    fname
-}
-
-/// Add a file name to the buffer list and answer its number. Takes
-/// [`buflist_new`]'s flags, except `BLN_DUMMY`.
-///
-/// # Safety
-///
-/// `fname` must point at a NUL-terminated string, unaliased for the call.
-pub unsafe fn buflist_add(fname: *mut c_char, flags: c_int) -> c_int {
-    // SAFETY: a name to hand over, which may be null.
-    let buf = unsafe { buflist_new(fname, ptr::null_mut(), 0 as LineNr, flags) };
-    if buf.is_none() {
-        return 0;
-    }
-    // SAFETY: non-null, hence live.
-    buf.expect("a live handle").handle as c_int
 }
 
 /// Record the alternate cursor position for the current buffer in `win`,
@@ -341,49 +189,36 @@ pub fn buflist_altfpos(win: Win) {
 /// Whether `ffname` (a full path) names a different file from the current
 /// buffer's. The name is only read.
 pub fn otherfile(ffname: &CStr) -> bool {
-    let ffname = ffname.as_ptr().cast_mut();
-    // SAFETY: the current buffer and a NUL-terminated full path, which
-    // `otherfile_buf` only reads.
-    unsafe { otherfile_buf(Buf::current(), ffname, ptr::null_mut(), false) }
+    otherfile_buf(Buf::current(), ffname, None)
 }
 
 /// Whether `ffname` (a full path) names a different file from `buffer`'s.
 ///
-/// `file_id_p` is the caller's already-computed file id for `ffname`, null to
-/// have it looked up here.
-///
-/// # Safety
-///
-/// `ffname` must point at a NUL-terminated string, unaliased for the call.
-/// `file_id_p` must point at a live `FileID`, unaliased for the call.
-pub(crate) unsafe fn otherfile_buf(
-    mut b: Buf,
-    ffname: *mut c_char,
-    file_id_p: *mut FileID,
-    file_id_valid: bool,
-) -> bool {
-    if is_empty_name(ffname) || b.name.full().is_none() {
+/// `file_id` is the caller's already-computed file id for `ffname` (itself
+/// `None` when the file does not exist), or `None` to have it looked up here.
+pub(crate) fn otherfile_buf(b: Buf, ffname: &CStr, file_id: Option<Option<&FileID>>) -> bool {
+    let Some(full) = b.name.full().filter(|_| !ffname.is_empty()) else {
         return true;
-    }
-    if names_equal(ffname, b.name.full_ptr()) {
+    };
+    if path_fnamecmp(ffname.to_bytes(), full.to_bytes()) == 0 {
         return false;
     }
 
-    let mut own;
-    let (file_id_p, file_id_valid) = if file_id_p.is_null() {
-        let (id, valid) = file_id_of(ffname);
-        own = id;
-        (&raw mut own, valid)
-    } else {
-        (file_id_p, file_id_valid)
+    let own;
+    let file_id = match file_id {
+        Some(known) => known,
+        None => {
+            own = crate::os::fs::file_id(ffname);
+            own.as_ref()
+        }
     };
-    if !file_id_valid {
+    let Some(file_id) = file_id else {
         return true;
-    }
+    };
 
-    if same_file_id(&mut b, file_id_p) {
+    if b.file_id_valid && b.file_id == *file_id {
         buf_set_file_id(b);
-        if same_file_id(&mut b, file_id_p) {
+        if b.file_id_valid && b.file_id == *file_id {
             return false;
         }
     }
@@ -392,37 +227,20 @@ pub(crate) unsafe fn otherfile_buf(
 
 /// Record the file id of `buffer`'s file, for recognising it under another name.
 pub fn buf_set_file_id(mut b: Buf) {
-    if b.name.is_unnamed() {
-        b.file_id_valid = false;
-        return;
-    }
-    let (file_id, valid) = file_id_of(b.name.shown_ptr());
-    b.file_id_valid = valid;
-    if valid {
-        b.file_id = file_id;
+    let found = b.name.shown().and_then(file_id);
+    b.file_id_valid = found.is_some();
+    if let Some(found) = found {
+        b.file_id = found;
     }
 }
 
-/// Make `*ffname` a full file name and point `*sfname` at the name given, if
-/// it had none. The value `*ffname` comes back as should be treated as not
-/// allocated.
-///
-/// # Safety
-///
-/// `ffname` must point at a writable `*mut c_char` slot the caller owns for
-/// the call. `sfname` must point at a writable `*mut c_char` slot the caller
-/// owns for the call.
-pub unsafe fn fname_expand(ffname: *mut *mut c_char, sfname: *mut *mut c_char) {
-    // SAFETY: the caller's promise -- two name slots to read and write.
-    let (ffname, sfname) = unsafe { (&mut *ffname, &mut *sfname) };
-    if ffname.is_null() {
-        // No file name given, nothing to do.
-        return;
-    }
-    if sfname.is_null() {
-        // No short file name given, use ffname.
-        *sfname = *ffname;
-    }
-    // SAFETY: a NUL-terminated name.
-    *ffname = fix_fname(unsafe { cstr::at(*ffname) }).into_raw();
+/// The full form of `ffname` and the short form a buffer keeps beside it:
+/// `sfname`, or `ffname` as given when there is no short name. `None` when
+/// no name was given at all.
+pub fn fname_expand(ffname: Option<&CStr>, sfname: Option<&CStr>) -> Option<(XString, XString)> {
+    // No file name given, nothing to do.
+    let ffname = ffname?;
+    // No short file name given, use ffname.
+    let sfname = XString::from_cstr(sfname.unwrap_or(ffname));
+    Some((fix_fname(ffname), sfname))
 }

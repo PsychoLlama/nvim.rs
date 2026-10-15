@@ -186,6 +186,52 @@ pub(crate) fn memchr_in(hay: &[u8], needle: u8) -> Option<usize> {
     (!found.is_null()).then(|| found.addr() - hay.as_ptr().addr())
 }
 
+/// Sort `items` with the C library's `qsort`, ordered by `cmp`.
+///
+/// For the callers whose output shows the order `qsort` leaves equal
+/// elements in -- which a Rust sort, stable or not, does not reproduce.
+/// glibc's `qsort` is its `qsort_r` with no context, so the order is the
+/// same; the context is how the comparison reaches `cmp`.
+pub(crate) fn qsort_by<T: Copy, F: FnMut(&T, &T) -> core::cmp::Ordering>(
+    items: &mut [T],
+    mut cmp: F,
+) {
+    /// # Safety
+    ///
+    /// As `qsort_r`'s comparison: `a` and `b` point at two `T`s of the slice
+    /// being sorted and `context` at the `F` it was given.
+    unsafe extern "C" fn compare<T, F: FnMut(&T, &T) -> core::cmp::Ordering>(
+        a: *const c_void,
+        b: *const c_void,
+        context: *mut c_void,
+    ) -> ::core::ffi::c_int {
+        // SAFETY: `qsort_r` hands back two elements of the slice and the
+        // context it was given, which is the closure below.
+        let (a, b, cmp) = unsafe { (&*a.cast::<T>(), &*b.cast::<T>(), &mut *context.cast::<F>()) };
+        cmp(a, b) as ::core::ffi::c_int
+    }
+    if items.len() < 2 {
+        return;
+    }
+    let (base, len, width) = (
+        items.as_mut_ptr().cast::<c_void>(),
+        items.len(),
+        size_of::<T>(),
+    );
+    // SAFETY: `len` elements of `width` bytes at `base`, which `qsort_r`
+    // moves as bytes -- `T: Copy` makes that a valid move -- and the
+    // comparison over them with its context.
+    unsafe {
+        ::libc::qsort_r(
+            base,
+            len,
+            width,
+            Some(compare::<T, F>),
+            (&raw mut cmp).cast(),
+        )
+    };
+}
+
 /// Grow `bytes` to `len` bytes, zero-filling the new ones, the way
 /// [`verbose_try_malloc`] allocates: retried once after asking the editor
 /// for memory back, and reported to the user when even that did not help.

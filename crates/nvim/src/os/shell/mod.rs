@@ -299,7 +299,15 @@ pub unsafe fn shell_argv_to_str(argv: *mut *mut c_char) -> XString {
 /// # Safety
 /// `cmd` and `extra_args` must be NUL-terminated strings or NULL.
 pub unsafe fn os_call_shell(cmd: *mut c_char, opts: ShellOpts, extra_args: *mut c_char) -> c_int {
-    let mut input = STRINGBUILDER_INIT;
+    let mut input: Vec<u8> = Vec::new();
+    // The child's input, null when there is none.
+    let input_at = |input: &Vec<u8>| {
+        if input.is_empty() {
+            ::core::ptr::null()
+        } else {
+            input.as_ptr().cast::<c_char>()
+        }
+    };
     let mut output: *mut c_char = ptr::null_mut();
     let mut output_ptr: *mut *mut c_char = ptr::null_mut();
     let current_state = State.get();
@@ -316,7 +324,7 @@ pub unsafe fn os_call_shell(cmd: *mut c_char, opts: ShellOpts, extra_args: *mut 
         } else {
             State.set(MODE_EXTERNCMD);
             if opts.has(ShellOpts::WRITE) {
-                read_input(&raw mut input);
+                read_input(&mut input);
             }
             if opts.has(ShellOpts::READ) {
                 output_ptr = &raw mut output;
@@ -330,14 +338,14 @@ pub unsafe fn os_call_shell(cmd: *mut c_char, opts: ShellOpts, extra_args: *mut 
         let mut nread: size_t = 0;
         let exitcode = system::do_os_system(
             shell_build_argv(cmd, extra_args),
-            input.items,
-            input.size,
+            input_at(&input),
+            input.len(),
             output_ptr,
             &raw mut nread,
             emsg_silent.get() != 0,
             forward_output,
         );
-        xfree(input.items.cast());
+        drop(input);
 
         if !output.is_null() {
             write_output(output, nread, true);
@@ -530,19 +538,9 @@ unsafe fn word_length(str: *const c_char) -> usize {
 /// The whole text is copied up front rather than written in `ml_get` chunks,
 /// because reading from the child can trigger a change to the very buffer
 /// still being written from.
-///
-/// # Safety
-/// `buf` must point at a live [`StringBuilder`].
-unsafe fn read_input(buf: *mut StringBuilder) {
-    // SAFETY: the caller's contract; `curbuf` is always live.
-    unsafe {
-        read_buffer_into(
-            Buf::current(),
-            Buf::current().b_op_start.lnum,
-            Buf::current().b_op_end.lnum,
-            buf,
-        );
-    }
+fn read_input(buf: &mut Vec<u8>) {
+    let (start, end) = (Buf::current().b_op_start.lnum, Buf::current().b_op_end.lnum);
+    read_buffer_into(Buf::current(), start, end, buf);
 }
 
 /// Append the child's output to the current buffer, one line per newline.

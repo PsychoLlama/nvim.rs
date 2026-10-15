@@ -139,12 +139,9 @@ pub(crate) fn u_undoredo(undo: bool, do_buf_event: bool) {
     while !uep.is_null() {
         // SAFETY: an entry of a live header, and a live current buffer.
         if !unsafe { apply_entry(buf, curhead, uep, &mut pick, do_buf_event) } {
-            // SAFETY: as above; the entry was left untouched.
-            unsafe {
-                unblock_autocmds();
-                iemsg(gettext(c"E438: u_undo: line numbers wrong"));
-                changed(buf); // don't want UNCHANGED now
-            }
+            unblock_autocmds();
+            iemsg(gettext(c"E438: u_undo: line numbers wrong"));
+            changed(buf); // don't want UNCHANGED now
             return;
         }
         // SAFETY: a live entry, and `newlist` is one or NULL.
@@ -187,8 +184,7 @@ pub(crate) fn u_undoredo(undo: bool, do_buf_event: bool) {
         buf.b_ml.ml_flags |= MlFlags::EMPTY;
     }
     if old_flags & UH_CHANGED != 0 {
-        // SAFETY: a live buffer, which survives the autocommands it may fire.
-        unsafe { changed(buf) };
+        changed(buf);
     } else {
         unchanged(buf, false, true);
     }

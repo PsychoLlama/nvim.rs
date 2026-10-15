@@ -206,7 +206,7 @@ pub(crate) fn process_next_cpt_value(
             }
             if !shortmess(ShmFlag::COMPLETIONSCAN) && !compl_autocomplete.get() {
                 let name = if buf.name.is_unnamed() {
-                    buf_spname(buf)
+                    buf_spname(&buf).map_or(ptr::null_mut(), |n| n.as_ptr().cast_mut())
                 } else if buf.name.short().is_none() {
                     buf.name.shown_ptr()
                 } else {

@@ -68,13 +68,9 @@ pub fn nvim_open_term(buf: BufferHandle, opts: &mut KeyDict_open_term) -> Result
         close_cb: Some(term_close as unsafe fn(*mut ::core::ffi::c_void) -> ()),
         force_crlf: opts.force_crlf.unwrap_or(true),
     };
-    let mut contents: StringBuilder = StringBuilder {
-        size: 0 as size_t,
-        capacity: 0 as size_t,
-        items: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    };
+    let mut contents: Vec<u8> = Vec::new();
     if may_read_buffer {
-        unsafe { read_buffer_into(buffer, 1, buffer.b_ml.ml_line_count, &raw mut contents) };
+        read_buffer_into(buffer, 1, buffer.b_ml.ml_line_count, &mut contents);
     }
     unsafe { channel_incref(chan) };
     unsafe { (*chan).term = terminal_alloc(buffer, topts) };
@@ -83,12 +79,13 @@ pub fn nvim_open_term(buf: BufferHandle, opts: &mut KeyDict_open_term) -> Result
         unsafe { terminal_check_size((*chan).term) };
     }
     unsafe { channel_decref(chan) };
-    if contents.size > 0 as size_t {
+    if !contents.is_empty() {
         let mut error: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-        let (text, len, out) = (contents.items, contents.size, &raw mut error);
+        let (text, len, out) = (contents.as_mut_ptr().cast(), contents.len(), &raw mut error);
         // SAFETY: `chan` is the channel just made, `contents` this frame's
-        // own lines, and `error` its own out-parameter.
-        unsafe { channel_send((*chan).id, text, len, true, out) };
+        // own lines, which the channel copies if it keeps them, and `error`
+        // its own out-parameter.
+        unsafe { channel_send((*chan).id, text, len, false, out) };
         if !error.is_null() {
             // SAFETY: `channel_send` left a NUL-terminated message there.
             slot = Error::from_message(kErrorTypeValidation, unsafe { cstr::at(error) });

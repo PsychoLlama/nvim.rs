@@ -12,7 +12,7 @@
 
 #![cfg(not(miri))]
 
-use std::ffi::{c_char, c_int};
+use std::ffi::c_int;
 
 use neovim::buffer::{
     BLN_LISTED, DOBUF_DEL, DOBUF_UNLOAD, DOBUF_WIPE, buf_valid, buflist_findpat, buflist_new,
@@ -63,22 +63,8 @@ impl Buffers {
     /// The spec passed the same pointer as both the full and the short name,
     /// which is what a caller with a bare relative name does.
     fn open(&self, name: &str) -> *mut Buffer {
-        let mut owned: Vec<c_char> = cstr(name)
-            .as_bytes_with_nul()
-            .iter()
-            .map(|&b| b as c_char)
-            .collect();
-        // SAFETY: `owned` is this frame's, NUL-terminated and writable --
-        // `fname_expand` reads it and may replace the pointer's target with
-        // an allocation of its own, which it owns.
-        let buf = unsafe {
-            buflist_new(
-                owned.as_mut_ptr(),
-                owned.as_mut_ptr(),
-                1,
-                BLN_LISTED as c_int,
-            )
-        };
+        let owned = cstr(name);
+        let buf = buflist_new(Some(&owned), Some(&owned), 1, BLN_LISTED as c_int);
         let buf = buf.expect("buflist_new answers a buffer").raw();
         self.opened.borrow_mut().push(buf);
         buf
@@ -117,9 +103,8 @@ impl Buffers {
     /// `-1` for no match or `-2` for several.
     fn findpat(&self, pattern: &str, unlisted: bool) -> c_int {
         let pattern = cstr(pattern);
-        // SAFETY: `pattern` is this frame's and NUL-terminated; a null end
-        // pointer means "to the terminator", which is the spec's call.
-        unsafe { buflist_findpat(pattern.as_ptr(), std::ptr::null(), unlisted, false, false) }
+        // No length: the whole pattern, the spec's call.
+        buflist_findpat(&pattern, None, unlisted, false, false)
     }
 }
 

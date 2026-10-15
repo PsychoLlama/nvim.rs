@@ -30,6 +30,7 @@ use super::{
 };
 use crate::arglist::check_arg_idx;
 use crate::ex_cmds::say;
+use crate::fileio::ReadFlags;
 use crate::types::AutoEvent;
 use crate::winlayer::WinId;
 use core::ffi::CStr;
@@ -591,7 +592,11 @@ fn enter_new_buffer(
         if flags.has(EcmdFlags::NOWINENTER) {
             state.readfile_flags |= READ_NOWINENTER as c_int;
         }
-        let opened = open_buffer(false, args.excmd.as_deref_mut(), state.readfile_flags);
+        let opened = open_buffer(
+            false,
+            args.excmd.as_deref_mut(),
+            ReadFlags::from_bits(state.readfile_flags),
+        );
         if should_abort_err(opened) {
             *retval = Err(Failed);
         }

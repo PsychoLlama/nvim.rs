@@ -10,19 +10,15 @@
 //!
 //! Original: `src/nvim/buffer.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::cstr;
-use crate::memory::XString;
 use crate::types::AutoEvent;
-use crate::types::BufName;
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_int};
 use core::ptr;
 
 use super::*;
 use crate::allocator::Owned;
-use crate::autocmd::apply_autocmds;
 use crate::cursor::{check_cursor_col, check_cursor_lnum};
 use crate::diff::diff_mode_buf;
 use crate::eval::typval::callback_free;
@@ -33,37 +29,34 @@ use crate::ex_eval::aborting;
 use crate::ex_getln::text_or_buf_locked;
 use crate::fileio::file_pat_to_reg_pat;
 use crate::guard::Suppress;
-use crate::hashtab::hash_init;
-use crate::insexpand::clear_cpt_callbacks;
+use crate::hashtab::hash_reset;
+use crate::indent::replace_tabstop_array;
+use crate::insexpand::clear_buffer_cpt_callbacks;
 use crate::mark::{clrallmarks, fmarks_check_names, mark_view_restore};
-use crate::memory::{xfree, xstrdup};
 use crate::message::e_noalt;
 use crate::message::state::{emsg_silent, in_assert_fails};
 use crate::message::{emsg, msg_delay};
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_cstr;
 use crate::option::vars::{jop_flags, p_sol, swb_flags};
 use crate::option::{buf_copy_options, magic_isset};
 use crate::options::{kOptJopFlagView, kOptSwbFlagNewtab, kOptSwbFlagSplit, kOptSwbFlagVsplit};
-use crate::optionstr::BUF_STRING_OPTIONS;
 use crate::os::cshim::gettext;
-use crate::os::fs::os_fileid;
+use crate::os::fs::file_id;
 use crate::path::full_name_save;
 use crate::pos::MAXLNUM;
-use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regfree};
-use crate::registry::id_map;
+use crate::regexp::{OwnedMatch, RE_MAGIC, free_prog_in};
 use crate::semsg;
-use crate::syntax::init_synblock;
 use crate::types::{
     AdditionalData, Buffer, Callback, ColNr, Failed, FileID, FileMark, FileMarkView, Handle,
-    LineNr, MemLine, OptInt, Pos, RegProg, Timestamp, VAR_SCOPE, int16_t, size_t, uint64_t,
+    LineNr, OptInt, Pos, Timestamp, VAR_SCOPE, WinInfo, int16_t, uint64_t,
 };
 use crate::undo::curbuf_is_changed;
 use crate::window::{WSP_VERT, swbuf_goto_win_with_buf, win_split};
+pub(crate) use crate::winlayer::graph::alloc_unregistered_buffer;
 use crate::winlayer::graph::{firstbuf, lastbuf};
 use crate::winlayer::{Buf, Win, buffers_back, register_buffer, windows};
 
-use super::expand::{NO_REGMATCH, buflist_match, find_buf};
-use super::pos::{Entry, WinInfos};
+use super::expand::buflist_match;
 
 /// `INIT_FMARK`: a mark that has never been set.
 pub(crate) const INIT_FMARK: FileMark = FileMark {
@@ -81,50 +74,8 @@ pub(crate) const INIT_FMARK: FileMark = FileMark {
     additional_data: ptr::null_mut::<AdditionalData>(),
 };
 
-const NO_FILE_ID: FileID = FileID {
-    inode: 0,
-    device_id: 0,
-};
-
 // ---------------------------------------------------------------------------
 // The neighbours, wrapped
-
-fn free(p: *mut c_char) {
-    // SAFETY: an owned allocation or null.
-    unsafe { xfree(p.cast::<c_void>()) };
-}
-
-fn dup(p: *const c_char) -> *mut c_char {
-    // SAFETY: a NUL-terminated name; the one caller has tested it.
-    unsafe { xstrdup(p) }
-}
-
-/// `XFREE_CLEAR` over a slot holding an owned array.
-fn xfree_clear<T>(slot: &mut *mut T) {
-    // SAFETY: an owned allocation or null.
-    unsafe { xfree((*slot).cast::<c_void>()) };
-    *slot = ptr::null_mut();
-}
-
-fn clear_callback(cb: &mut Callback) {
-    callback_free(cb);
-}
-
-fn clear_cpt(callbacks: &mut *mut Callback, count: c_int) {
-    // SAFETY: the buffer's own 'complete' callback array and its length.
-    unsafe { clear_cpt_callbacks(callbacks, count) };
-}
-
-fn free_regprog(prog: &mut *mut RegProg) {
-    // SAFETY: a compiled program or null.
-    unsafe { vim_regfree(*prog) };
-    *prog = ptr::null_mut();
-}
-
-fn regcomp(pat: &[u8], flags: c_int) -> *mut RegProg {
-    // SAFETY: a NUL-terminated pattern; the answer is null on a bad one.
-    vim_regcomp(unsafe { cstr::at(pat.as_ptr().cast::<c_char>()) }, flags)
-}
 
 fn is_diff_mode(buffer: Buf) -> bool {
     diff_mode_buf(buffer)
@@ -144,23 +95,11 @@ fn current_last() -> Option<Buf> {
 }
 
 fn fire_buf_event(event: AutoEvent, buffer: Buf) -> bool {
-    let (none, some) = (ptr::null_mut(), Some(buffer));
-    // SAFETY: a live buffer, and no pattern to match against.
-    unsafe { apply_autocmds(event, none, none, false, some) }
+    fire_autocmds(event, false, Some(buffer))
 }
 
 fn copy_options_into(buffer: Buf, flags: c_int) {
     buf_copy_options(buffer, flags);
-}
-
-fn check_cursor_column(win: Win) {
-    // SAFETY: a live window.
-    check_cursor_col(win);
-}
-
-fn check_cursor_line(win: Win) {
-    // SAFETY: a live window.
-    check_cursor_lnum(win);
 }
 
 // ---------------------------------------------------------------------------
@@ -168,50 +107,36 @@ fn check_cursor_line(win: Win) {
 
 /// [`buflist_new`] for a name the caller holds, or for none: list the file
 /// as `name` with no separate short name.
-///
-/// Listing a buffer fires `BufNew`; the name is copied before anything runs.
 pub(crate) fn buflist_add_name(name: Option<&CStr>, lnum: LineNr, flags: c_int) -> Option<Buf> {
-    let name = name.map_or(ptr::null_mut(), |name| name.as_ptr().cast_mut());
-    // SAFETY: a NUL-terminated name or null; `fname_expand` makes the
-    // copies the list keeps before anything can run, and writes to neither.
-    unsafe { buflist_new(name, ptr::null_mut(), lnum, flags) }
+    buflist_new(name, None, lnum, flags)
 }
 
 /// Add a file to the buffer list, or answer the entry it already has.
 ///
-/// `lnum` is the line to remember for it and `flags` the `BLN_*` set. The
-/// answer is null when an autocommand deleted the buffer under us.
-///
-/// # Safety
-///
-/// `ffname_arg` must point at a NUL-terminated string, unaliased for the
-/// call. `sfname_arg` must point at a NUL-terminated string, unaliased for
-/// the call.
-pub unsafe fn buflist_new(
-    ffname_arg: *mut c_char,
-    sfname_arg: *mut c_char,
+/// `ffname_arg` is the file's name and `sfname_arg` its short form (the name
+/// itself when `None`); `lnum` is the line to remember for it and `flags` the
+/// `BLN_*` set. Both names are copied before anything runs. The answer is
+/// `None` when an autocommand deleted the buffer under us.
+pub fn buflist_new(
+    ffname_arg: Option<&CStr>,
+    sfname_arg: Option<&CStr>,
     lnum: LineNr,
     flags: c_int,
 ) -> Option<Buf> {
-    let mut ffname = ffname_arg;
-    let mut sfname = sfname_arg;
-
-    // Will allocate ffname.
-    // SAFETY: two locals holding a name each.
-    unsafe { fname_expand(&raw mut ffname, &raw mut sfname) };
+    let names = fname_expand(ffname_arg, sfname_arg);
 
     // The file id works better than the name for hard links, when the file
     // exists.
-    let mut file_id = NO_FILE_ID;
-    // SAFETY: a NUL-terminated name, and a local to fill in.
-    let file_id_valid = !sfname.is_null() && unsafe { os_fileid(sfname, &raw mut file_id) };
+    let short = names
+        .as_ref()
+        .map_or(sfname_arg, |(_, short)| Some(short.as_cstr()));
+    let file_id = short.and_then(file_id);
 
     // If the file name is already in the list, update that entry.
-    if !ffname.is_null()
+    if let Some((ffname, _)) = &names
         && flags & (BLN_DUMMY as c_int | BLN_NEW as c_int) == 0
-        && let Some(buf) = buflist_findname_file_id(ffname, &file_id, file_id_valid)
+        && let Some(buf) = buflist_findname_file_id(ffname.as_cstr(), file_id.as_ref())
     {
-        free(ffname);
         return reuse_entry(buf, lnum, flags);
     }
 
@@ -227,7 +152,6 @@ pub unsafe fn buflist_new(
         buf_freeall(cur, BFA_WIPE as c_int | BFA_DEL as c_int);
         if aborting() {
             // Autocommands may abort script processing.
-            free(ffname);
             return None;
         }
         // When the buffer was deleted, allocate a new one instead.
@@ -253,19 +177,12 @@ pub unsafe fn buflist_new(
         }
     };
 
-    if !ffname.is_null() {
-        // `ffname` is the block `fix_fname` allocated above; `sfname` may
-        // still be the caller's own pointer, so the buffer takes a copy.
-        // SAFETY: a live `xmalloc` block nothing else holds, and a
-        // NUL-terminated name.
-        let full = unsafe { XString::from_raw(ffname) };
-        let short = (!sfname.is_null()).then(|| unsafe { XString::from_raw(dup(sfname)) });
-        buf.name.set(full, short);
+    if let Some((full, short)) = names {
+        buf.name.set(full, Some(short));
     }
 
     clear_wininfo(buf);
-    let mut entry = Entry::new();
-    WinInfos::of(&mut buf).push(entry);
+    buf.b_wininfo.push(WinInfo::new(None));
 
     if reused_curbuf {
         // Delete the local variables and the rest.
@@ -283,15 +200,22 @@ pub unsafe fn buflist_new(
         copy_options_into(buf, BCO_ALWAYS as c_int);
     }
 
-    entry.wi_mark = INIT_FMARK;
-    entry.wi_mark.mark.lnum = lnum;
-    entry.wi_win = Some(current_win().id());
+    // The entry pushed above, which nothing since has replaced: the first
+    // `clear_wininfo` emptied the list, and the paths in between only clear
+    // the buffer's variables and options.
+    let mut mark = INIT_FMARK;
+    mark.mark.lnum = lnum;
+    if let Some(entry) = buf.b_wininfo.last_mut() {
+        entry.wi_mark = mark;
+        entry.wi_win = Some(current_win().id());
+    }
 
-    init_hashtabs(buf);
+    hash_reset(&mut buf.b_s.b_keywtab);
+    hash_reset(&mut buf.b_s.b_keywtab_ic);
 
     buf.name.show_short();
-    buf.file_id_valid = file_id_valid;
-    if file_id_valid {
+    buf.file_id_valid = file_id.is_some();
+    if let Some(file_id) = file_id {
         buf.file_id = file_id;
     }
     buf.b_u_synced = true;
@@ -308,7 +232,7 @@ pub unsafe fn buflist_new(
     } else {
         0
     };
-    reset_update_subscribers(&mut buf);
+    reset_update_subscribers(buf);
 
     if flags & BLN_DUMMY as c_int == 0 && !announce_new_buffer(buf, flags) {
         return None;
@@ -316,7 +240,6 @@ pub unsafe fn buflist_new(
 
     buf.b_prompt_callback = Callback::None;
     buf.b_prompt_interrupt = Callback::None;
-    buf.b_prompt_text = ptr::null_mut();
     buf.b_prompt_start = INIT_FMARK;
     // The default prompt is "% ".
     buf.b_prompt_start.mark.col = 2 as ColNr;
@@ -380,61 +303,12 @@ pub(crate) fn bare_buffer() -> Buf {
 }
 
 /// Give back what [`bare_buffer`] made, with the option values a case gave
-/// it: the buffer is freed as a block, which drops none of its fields.
+/// it: dropping the allocation runs `Buffer`'s destructor, which releases
+/// every owning field.
 #[cfg(test)]
 pub(crate) fn free_bare_buffer(buffer: Buf) {
     free_buf_options(buffer, true);
     drop(crate::winlayer::forget_buffer(buffer.handle));
-}
-
-/// A `Buffer` that lives **outside** the handle registry and off the buffer
-/// list: scratch storage whose only real content is a memline.
-///
-/// Two exist, and both are the editor's own business rather than the user's:
-/// `ml_recover`'s, which holds the memline of the swap file being read, and
-/// `open_spellbuf`'s, which backs a `.sug` word list with a swap file so it
-/// need not stay in memory. Neither is given a handle, neither is registered
-/// (so `find_buf`, `nvim_list_bufs` and every `FOR_ALL_BUFFERS` walk
-/// are blind to them, which is the point), and neither goes through
-/// `close_buffer`/`free_buffer` — each is freed by the code that made it.
-///
-/// The constructor is named so that "the registry owns every buffer" has a
-/// stated exception rather than a silent one; see [`new_buffer`] for the
-/// ordinary path.
-///
-/// Most fields stay zero and are *not* valid buffer state: string options
-/// are null, there are no `b:` variables and no undo information. Only what
-/// the caller fills in afterwards may be read.
-pub(crate) fn alloc_unregistered_buffer() -> Owned<Buffer> {
-    let mut storage = Box::<Buffer>::new_zeroed();
-    let at = storage.as_mut_ptr();
-    // The fields a zeroed `Buffer` is *not* a valid value for -- an empty
-    // `Vec` holds a non-null dangling pointer, not a zero one, a `HashMap`
-    // holds a seeded hasher, and an `Option<XString>`'s niche is the
-    // vector's capacity -- are the user-command list, the keymap, the
-    // buffer's syntax block (`init_synblock`), what the memline owns, the
-    // two extmark tables, and the string options.
-    // SAFETY: all are inside the block just allocated, nothing has read or
-    // dropped them, and `write` does not drop what was there.
-    unsafe { (&raw mut (*at).b_ucmds).write(Vec::new()) };
-    unsafe { (&raw mut (*at).b_kmap_ga).write(Vec::new()) };
-    unsafe { init_synblock(&raw mut (*at).b_s) };
-    unsafe { (&raw mut (*at).b_ml).write(MemLine::closed()) };
-    unsafe { (&raw mut (*at).b_marktree).write(MarkTree::EMPTY) };
-    unsafe { (&raw mut (*at).b_extmark_ns).write(id_map()) };
-    // ... and the string options, which are `Option<XString>`s.
-    for field in BUF_STRING_OPTIONS {
-        let slot = at.wrapping_byte_add(field.field_offset());
-        // SAFETY: as above; the selector names one such field of the block.
-        unsafe { slot.cast::<Option<XString>>().write(None) };
-    }
-    // ... and the file name, for the same reason: `BufName` holds two of
-    // those `Option<XString>`s and an enum whose niche is one of them.
-    // SAFETY: as above.
-    unsafe { (&raw mut (*at).name).write(BufName::default()) };
-    // SAFETY: all-zero bytes are otherwise what upstream's
-    // `xcalloc(1, sizeof(Buffer))` hands a fresh buffer.
-    Owned::new(unsafe { storage.assume_init() })
 }
 
 /// Put a new buffer at the end of the buffer list, give it its number and
@@ -478,26 +352,10 @@ fn append_to_list(mut buffer: Buf, owned: Owned<Buffer>) -> Buf {
     buffer
 }
 
-fn init_hashtabs(mut buffer: Buf) {
-    let (keywords, keywords_ic) = (
-        &raw mut buffer.b_s.b_keywtab,
-        &raw mut buffer.b_s.b_keywtab_ic,
-    );
-    // SAFETY: a hash table inside a live buffer.
-    unsafe { hash_init(keywords) };
-    // SAFETY: as above.
-    unsafe { hash_init(keywords_ic) };
-}
-
 /// `kv_destroy` + `kv_init` of the two buffer-update subscriber arrays: a
 /// reused buffer must not keep the old one's subscribers.
-fn reset_update_subscribers(buffer: &mut Buf) {
-    xfree_clear(&mut buffer.update_channels.items);
-    buffer.update_channels.capacity = 0 as size_t;
-    buffer.update_channels.size = 0 as size_t;
-    xfree_clear(&mut buffer.update_callbacks.items);
-    buffer.update_callbacks.capacity = 0 as size_t;
-    buffer.update_callbacks.size = 0 as size_t;
+fn reset_update_subscribers(buffer: Buf) {
+    crate::buffer_updates::reset_subscribers(buffer);
 }
 
 /// Fire `BufNew` and, when the buffer is listed, `BufAdd`. Answers false
@@ -562,9 +420,9 @@ pub fn free_buf_options(mut buffer: Buf, free_p_ff: bool) {
     buffer.b_p_isk = None;
     buffer.b_p_vsts = None;
     buffer.b_p_vsts_nopaste = None;
-    xfree_clear(&mut buffer.b_p_vsts_array);
+    replace_tabstop_array(&mut buffer.b_p_vsts_array, None);
     buffer.b_p_vts = None;
-    xfree_clear(&mut buffer.b_p_vts_array);
+    replace_tabstop_array(&mut buffer.b_p_vts_array, None);
     buffer.b_p_keymap = None;
     buffer.b_kmap_ga = Vec::new();
     buffer.b_p_com = None;
@@ -574,7 +432,7 @@ pub fn free_buf_options(mut buffer: Buf, free_p_ff: bool) {
     buffer.b_s.b_syn_isk = None;
     buffer.b_s.b_p_spc = None;
     buffer.b_s.b_p_spf = None;
-    free_regprog(&mut buffer.b_s.b_cap_prog);
+    free_prog_in(&mut buffer.b_s.b_cap_prog);
     buffer.b_s.b_p_spl = None;
     buffer.b_s.b_p_spo = None;
     buffer.b_p_sua = None;
@@ -587,14 +445,12 @@ pub fn free_buf_options(mut buffer: Buf, free_p_ff: bool) {
     buffer.b_p_cot = None;
     buffer.b_p_cpt = None;
     buffer.b_p_cfu = None;
-    clear_callback(&mut buffer.b_cfu_cb);
+    callback_free(&mut buffer.b_cfu_cb);
     buffer.b_p_ofu = None;
-    clear_callback(&mut buffer.b_ofu_cb);
+    callback_free(&mut buffer.b_ofu_cb);
     buffer.b_p_tsrfu = None;
-    clear_callback(&mut buffer.b_tsrfu_cb);
-    let cpt_count = buffer.b_p_cpt_count;
-    clear_cpt(&mut buffer.b_p_cpt_cb, cpt_count);
-    buffer.b_p_cpt_count = 0;
+    callback_free(&mut buffer.b_tsrfu_cb);
+    clear_buffer_cpt_callbacks(buffer);
     buffer.b_p_gefm = None;
     buffer.b_p_gp = None;
     buffer.b_p_mp = None;
@@ -604,9 +460,9 @@ pub fn free_buf_options(mut buffer: Buf, free_p_ff: bool) {
     buffer.b_p_tags = None;
     buffer.b_p_tc = None;
     buffer.b_p_tfu = None;
-    clear_callback(&mut buffer.b_tfu_cb);
+    callback_free(&mut buffer.b_tfu_cb);
     buffer.b_p_ffu = None;
-    clear_callback(&mut buffer.b_ffu_cb);
+    callback_free(&mut buffer.b_ffu_cb);
     buffer.b_p_dict = None;
     buffer.b_p_dia = None;
     buffer.b_p_tsr = None;
@@ -649,14 +505,11 @@ pub fn buflist_getfile(
     }
 
     let mut col: ColNr = 0;
-    let mut fm: *mut FileMark = ptr::null_mut();
-    let mut restore_view = false;
-    if lnum == 0 as LineNr {
-        // Default line number: where the cursor was left last time.
-        fm = buflist_findfmark(buf);
-        // SAFETY: as above.
-        (lnum, col) = unsafe { ((*fm).mark.lnum, (*fm).mark.col) };
-        restore_view = true;
+    // Default line number: where the cursor was left last time -- a copy,
+    // taken before the switch runs anything.
+    let fm = (lnum == 0 as LineNr).then(|| buflist_findfmark(buf));
+    if let Some(fm) = &fm {
+        (lnum, col) = (fm.mark.lnum, fm.mark.col);
     }
 
     if options & GETF_SWITCH as c_int != 0 && !goto_existing_window(buf) {
@@ -675,13 +528,12 @@ pub fn buflist_getfile(
     if !p_sol() && col != 0 {
         let mut win = current_win();
         win.w_cursor.col = col;
-        check_cursor_column(win);
+        check_cursor_col(win);
         win.w_cursor.coladd = 0 as ColNr;
         win.w_set_curswant = true;
     }
-    if jop_flags.get() & kOptJopFlagView as c_int as u32 != 0 && restore_view {
-        // SAFETY: the mark read above, which is still live.
-        mark_view_restore(unsafe { fm.as_ref() });
+    if jop_flags.get() & kOptJopFlagView as c_int as u32 != 0 && fm.is_some() {
+        mark_view_restore(fm.as_ref());
     }
     Ok(())
 }
@@ -714,23 +566,21 @@ fn goto_existing_window(buffer: Buf) -> bool {
 /// Put the cursor where it was left in the current buffer.
 pub(crate) fn buflist_getfpos() {
     let fm = buflist_findfmark(Buf::current());
-    // SAFETY: a live mark.
-    let (lnum, col) = unsafe { ((*fm).mark.lnum, (*fm).mark.col) };
+    let (lnum, col) = (fm.mark.lnum, fm.mark.col);
 
     let mut win = current_win();
     win.w_cursor.lnum = lnum;
-    check_cursor_line(win);
+    check_cursor_lnum(win);
     if p_sol() {
         win.w_cursor.col = 0 as ColNr;
     } else {
         win.w_cursor.col = col;
-        check_cursor_column(win);
+        check_cursor_col(win);
         win.w_cursor.coladd = 0 as ColNr;
         win.w_set_curswant = true;
     }
     if jop_flags.get() & kOptJopFlagView as c_int as u32 != 0 {
-        // SAFETY: the mark read above, which is still live.
-        mark_view_restore(unsafe { fm.as_ref() });
+        mark_view_restore(Some(&fm));
     }
 }
 
@@ -738,47 +588,21 @@ pub(crate) fn buflist_getfpos() {
 // Finding one by name
 
 /// The buffer for `fname`, resolved to a full path first.
-///
-/// # Safety
-///
-/// `fname` must point at a NUL-terminated string, unaliased for the call.
-pub unsafe fn buflist_findname_exp(fname: *mut c_char) -> Option<Buf> {
-    // SAFETY: a NUL-terminated name, or null, which has no full name.
-    let mut ffname = full_name_save(unsafe { cstr::at_opt(fname) }?, true);
-    // SAFETY: the full name just built.
-    unsafe { buflist_findname(ffname.as_mut_ptr()) }
-}
-
-/// [`buflist_findname_exp`] for a name the caller holds.
 pub(crate) fn find_buffer_by_name(fname: &CStr) -> Option<Buf> {
-    // SAFETY: a NUL-terminated name, which the lookup only reads.
-    unsafe { buflist_findname_exp(fname.as_ptr().cast_mut()) }
+    let ffname = full_name_save(fname, true);
+    buflist_findname(ffname.as_cstr())
 }
 
 /// The buffer whose full name is `ffname`, or whose file id matches it.
-///
-/// # Safety
-///
-/// `ffname` must point at a NUL-terminated string, unaliased for the call.
-pub unsafe fn buflist_findname(ffname: *mut c_char) -> Option<Buf> {
-    let mut file_id = NO_FILE_ID;
-    // SAFETY: the caller's promise -- a NUL-terminated name -- and a local.
-    let file_id_valid = unsafe { os_fileid(ffname, &raw mut file_id) };
-    buflist_findname_file_id(ffname, &file_id, file_id_valid)
+pub fn buflist_findname(ffname: &CStr) -> Option<Buf> {
+    buflist_findname_file_id(ffname, file_id(ffname).as_ref())
 }
 
-/// [`buflist_findname`] with the file id already looked up. Dummy buffers do
-/// not count.
-pub(crate) fn buflist_findname_file_id(
-    ffname: *mut c_char,
-    file_id: &FileID,
-    file_id_valid: bool,
-) -> Option<Buf> {
-    let file_id = (&raw const *file_id).cast_mut();
+/// [`buflist_findname`] with the file id already looked up (`None` when the
+/// file does not exist). Dummy buffers do not count.
+pub(crate) fn buflist_findname_file_id(ffname: &CStr, file_id: Option<&FileID>) -> Option<Buf> {
     buffers_back().find(|buf| {
-        // SAFETY: a live buffer, a NUL-terminated name and a live file id.
-        !buf.b_flags.has(BufFlags::DUMMY)
-            && !unsafe { otherfile_buf(*buf, ffname, file_id, file_id_valid) }
+        !buf.b_flags.has(BufFlags::DUMMY) && !otherfile_buf(*buf, ffname, Some(file_id))
     })
 }
 
@@ -801,39 +625,25 @@ pub(crate) fn buflist_findpat_prefix(
     diffmode: bool,
     curtab_only: bool,
 ) -> c_int {
-    let range = text.to_bytes()[..len].as_ptr_range();
-    // SAFETY: the pattern and its end, inside one terminated string.
-    unsafe {
-        buflist_findpat(
-            range.start.cast(),
-            range.end.cast(),
-            unlisted,
-            diffmode,
-            curtab_only,
-        )
-    }
+    buflist_findpat(text, Some(len), unlisted, diffmode, curtab_only)
 }
 
-/// # Safety
-///
-/// `pattern` must point at a NUL-terminated string. `pattern_end` must point
-/// at a NUL-terminated string.
-pub unsafe fn buflist_findpat(
-    pattern: *const c_char,
-    pattern_end: *const c_char,
+/// The number of the buffer whose name matches the first `len` bytes of
+/// `text` (all of it for `None`); see [`buflist_findpat_prefix`].
+pub fn buflist_findpat(
+    text: &CStr,
+    len: Option<usize>,
     unlisted: bool,
     diffmode: bool,
     curtab_only: bool,
 ) -> c_int {
-    let one_byte = pattern_end == pattern.wrapping_add(1);
-    // SAFETY: a one-byte pattern, which the caller promised is readable.
-    // Upstream reads it behind the same test, in one `&&` chain.
-    let head = if one_byte { unsafe { *pattern } } else { 0 };
-    let shorthand = one_byte && (head == b'%' as c_char || head == b'#' as c_char);
-    let matched = if shorthand {
+    let pattern = text.to_bytes();
+    let len = len.unwrap_or(pattern.len());
+    let head = if len == 1 { pattern[0] } else { 0 };
+    let matched = if head == b'%' || head == b'#' {
         match_shorthand(head, diffmode)
     } else {
-        match match_pattern(pattern, pattern_end, unlisted, diffmode, curtab_only) {
+        match match_pattern(pattern, len, unlisted, diffmode, curtab_only) {
             // An unusable pattern is reported by whoever built it.
             None => return -1,
             Some(matched) => matched,
@@ -841,12 +651,10 @@ pub unsafe fn buflist_findpat(
     };
 
     if matched == -2 {
-        // SAFETY: the caller's NUL-terminated pattern.
-        let pattern = unsafe { c_str(pattern) };
+        let pattern = msg_cstr(text);
         semsg!("E93: More than one match for {pattern}");
     } else if matched < 0 {
-        // SAFETY: the caller's NUL-terminated pattern.
-        let pattern = unsafe { c_str(pattern) };
+        let pattern = msg_cstr(text);
         semsg!("E94: No matching buffer for {pattern}");
     }
     matched
@@ -854,8 +662,8 @@ pub unsafe fn buflist_findpat(
 
 /// `%` (the current buffer) and `#` (the alternate file), which never reach
 /// the regexp.
-fn match_shorthand(head: c_char, diffmode: bool) -> c_int {
-    let matched = if head == b'%' as c_char {
+fn match_shorthand(head: u8, diffmode: bool) -> c_int {
+    let matched = if head == b'%' {
         Buf::current().handle as c_int
     } else {
         current_win().w_alt_fnum
@@ -869,20 +677,12 @@ fn match_shorthand(head: c_char, diffmode: bool) -> c_int {
 /// The four-attempt regexp search. `None` when the pattern could not be
 /// turned into a regexp at all, which upstream reports without a message.
 fn match_pattern(
-    pattern: *const c_char,
-    pattern_end: *const c_char,
+    text: &[u8],
+    end: usize,
     unlisted: bool,
     diffmode: bool,
     curtab_only: bool,
 ) -> Option<c_int> {
-    // SAFETY: the caller's promise -- a pattern between the two pointers,
-    // inside a NUL-terminated string; a null end is the terminator.
-    let text = unsafe { cstr::bytes_at(pattern) };
-    let end = if pattern_end.is_null() {
-        text.len()
-    } else {
-        pattern_end.addr() - pattern.addr()
-    };
     let (pat, _) = file_pat_to_reg_pat(text, end)?;
     // The pattern and its terminator, which the attempts below write.
     let mut buf = pat.into_vec();
@@ -908,8 +708,8 @@ fn match_pattern(
             // Add or remove the '^'.
             let from = usize::from(buf[0] == b'^' && attempt & 1 == 0);
             let flags = if magic_isset() { RE_MAGIC } else { 0 };
-            let mut regmatch = NO_REGMATCH;
-            regmatch.regprog = regcomp(&buf[from..], flags);
+            let mut regmatch = OwnedMatch::compile(cstr::in_bytes(&buf[from..]), flags, false)
+                .unwrap_or_else(OwnedMatch::none);
 
             for b in buffers_back() {
                 if regmatch.regprog.is_null() {
@@ -918,7 +718,7 @@ fn match_pattern(
                 }
                 if (b.b_p_bl != 0) != find_listed
                     || diffmode && !is_diff_mode(b)
-                    || buflist_match(&mut regmatch, b, false).is_null()
+                    || buflist_match(&mut regmatch, b, false).is_none()
                 {
                     continue;
                 }
@@ -936,7 +736,7 @@ fn match_pattern(
                 matched = b.handle as c_int;
             }
 
-            free_regprog(&mut regmatch.regprog);
+            drop(regmatch);
             if matched >= 0 {
                 // Found one match.
                 break;
@@ -956,7 +756,7 @@ fn match_pattern(
 // ---------------------------------------------------------------------------
 // Sorting by last-used time
 
-/// An element of an array `qsort` orders by its buffer's last use.
+/// An element of an array sorted by its buffer's last use.
 pub(crate) trait LastUsed {
     fn last_used_buffer(&self) -> Buf;
 }
@@ -967,28 +767,107 @@ impl LastUsed for Buf {
     }
 }
 
-/// `qsort`'s comparison over two `T`s, most recently used buffer first. Two
-/// buffers entered in the same second tie, and the order of a tie is
-/// whatever `qsort` lands on -- which is why the sorts stay `qsort`.
-///
-/// # Safety
-///
-/// As `qsort`'s comparator: `s1` and `s2` must each point at an element of
-/// an array of `T`, each naming a live buffer.
-pub(crate) unsafe extern "C" fn buf_time_compare<T: LastUsed>(
-    s1: *const c_void,
-    s2: *const c_void,
-) -> c_int {
-    // SAFETY: `qsort` hands back two elements of the array it was given.
-    let (buf1, buf2) = unsafe {
-        (
-            (*s1.cast::<T>()).last_used_buffer(),
-            (*s2.cast::<T>()).last_used_buffer(),
-        )
-    };
-    match buf2.b_last_used.cmp(&buf1.b_last_used) {
-        core::cmp::Ordering::Less => -1,
-        core::cmp::Ordering::Equal => 0,
-        core::cmp::Ordering::Greater => 1,
+/// Sort `items` most recently used buffer first. Two buffers entered in the
+/// same second tie, and the order of a tie is whatever `qsort` lands on --
+/// which is why this is `qsort`.
+pub(crate) fn sort_by_last_used<T: LastUsed + Copy>(items: &mut [T]) {
+    crate::memory::qsort_by(items, |a, b| {
+        let (a, b) = (a.last_used_buffer(), b.last_used_buffer());
+        b.b_last_used.cmp(&a.b_last_used)
+    });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::global_cell::editor_state_lock;
+    use crate::optionstr::BUF_STRING_OPTIONS;
+    use crate::window::{bare_window, free_bare_window};
+
+    /// The zeroed allocators write every field whose all-zero bytes are not
+    /// a valid value. Each is read back here through its own type, which is
+    /// what Miri checks the validity of: a field left zeroed would read as
+    /// `Some` over a null vector, or as a vector with a null pointer.
+    #[test]
+    fn a_fresh_buffer_holds_valid_owners() {
+        let _held = editor_state_lock();
+        let mut buffer = bare_buffer();
+        {
+            let b: &mut Buffer = &mut buffer;
+            for field in BUF_STRING_OPTIONS {
+                assert!(
+                    field.of(b).is_none(),
+                    "string option at {}",
+                    field.field_offset()
+                );
+            }
+            assert!(b.name.full().is_none() && b.name.short().is_none());
+            assert!(b.b_ucmds.is_empty());
+            assert!(b.b_kmap_ga.is_empty());
+            assert!(b.b_wininfo.is_empty());
+            assert!(b.b_s.b_syn_patterns.is_empty());
+            assert!(b.b_s.b_syn_clusters.is_empty());
+            assert!(b.b_s.b_syn_linecont_pat.is_none());
+            assert!(!b.b_s.b_sst.is_allocated());
+            assert_eq!(b.b_s.b_keywtab.items().count(), 0);
+            assert_eq!(b.b_s.b_keywtab_ic.items().count(), 0);
+            assert!(b.b_ml.ml_stack.is_empty());
+            assert_eq!(b.b_ml.ml_chunks.len(), 0);
+            assert!(b.b_ml.ml_locked.is_none());
+            assert!(b.b_marktree.id2node.is_empty());
+            assert!(b.b_extmark_ns.is_empty());
+            assert!(b.b_start_fenc.is_none());
+            assert!(b.b_prompt_text.is_none());
+            assert!(b.additional_data.is_none());
+            assert!(b.b_maps.is_none());
+            assert!(b.b_next.is_none() && b.b_prev.is_none());
+        }
+        free_bare_buffer(buffer);
+    }
+
+    /// [`a_fresh_buffer_holds_valid_owners`] for a window.
+    #[test]
+    fn a_fresh_window_holds_valid_owners() {
+        let _held = editor_state_lock();
+        let window = bare_window();
+        {
+            let w: &crate::types::Window = &window;
+            assert!(w.w_ns_set.is_empty());
+            assert!(!w.w_grid_alloc.is_allocated());
+            assert!(!w.w_grid_alloc.tracks_dirty_cols());
+            for opt in [&w.w_onebuf_opt, &w.w_allbuf_opt] {
+                for value in [
+                    &opt.wo_briopt,
+                    &opt.wo_fdc,
+                    &opt.wo_eiw,
+                    &opt.wo_fdc_save,
+                    &opt.wo_fdi,
+                    &opt.wo_fdm,
+                    &opt.wo_fdm_save,
+                    &opt.wo_fde,
+                    &opt.wo_fdt,
+                    &opt.wo_fmr,
+                    &opt.wo_ve,
+                    &opt.wo_rlc,
+                    &opt.wo_culopt,
+                    &opt.wo_cc,
+                    &opt.wo_sbr,
+                    &opt.wo_stc,
+                    &opt.wo_stl,
+                    &opt.wo_wbr,
+                    &opt.wo_cocu,
+                    &opt.wo_scl,
+                    &opt.wo_winhl,
+                    &opt.wo_lcs,
+                    &opt.wo_fcs,
+                ] {
+                    assert!(value.is_none());
+                }
+            }
+            assert!(w.w_tagstack.iter().all(|tag| tag.tagname.is_none()));
+            assert!(w.w_llist.is_none() && w.w_llist_ref.is_none());
+            assert!(w.w_prev.is_none() && w.w_next.is_none() && w.w_frame.is_none());
+        }
+        free_bare_window(window);
     }
 }

@@ -19,11 +19,11 @@
 )]
 
 use crate::autocmd::fire_autocmds;
-use crate::cstr;
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{c_char, c_int};
 
 use super::*;
-use crate::buffer::BufFlags;
+use crate::buffer::{BufFlags, BufRef};
+use crate::memory::ThinCString;
 use crate::optionstr::{OptString, OptStringRef};
 use crate::os::cshim::gettext_ptr;
 use crate::winlayer::Buf;
@@ -39,16 +39,19 @@ const W_READONLY: *const c_char = c"W10: Warning: Changing a readonly file".as_p
 /// where to put the message, non-zero in Insert mode with 'showmode' on so
 /// that it lands after the mode message.
 ///
-/// # Safety
-/// FileChangedRO may run arbitrary autocommands, which can reload the buffer
-/// and even change `curbuf`; `buffer` is read again after they have run, so it
-/// must survive them.
-pub unsafe fn change_warning(mut buffer: Buf, col: c_int) {
+/// FileChangedRO may run arbitrary autocommands, which can reload the buffer,
+/// change `curbuf` or wipe the buffer: one wiped is not warned about (upstream
+/// read it after it was freed).
+pub fn change_warning(mut buffer: Buf, col: c_int) {
     if buffer.b_did_warn || curbuf_is_changed() || autocmd_busy.get() || buffer.b_p_ro == 0 {
         return;
     }
+    let bufref = BufRef::of(buffer);
     buffer.b_ro_locked += 1;
     fire_autocmds(AutoEvent::FileChangedRO, false, Some(buffer));
+    let Some(mut buffer) = bufref.get() else {
+        return;
+    };
     buffer.b_ro_locked -= 1;
     if buffer.b_p_ro == 0 {
         // An autocommand cleared 'readonly': nothing to warn about.
@@ -88,17 +91,20 @@ pub unsafe fn change_warning(mut buffer: Buf, col: c_int) {
 /// also mark the area of the display to be redrawn. `b:changedtick` is bumped
 /// on *every* call, whether or not the buffer was already modified.
 ///
-/// # Safety
 /// May trigger autocommands that reload the buffer, and notifies the
-/// `b:changedtick` watchers, which can re-enter; `buffer` is used after both, so
-/// it must survive them.
-pub unsafe fn changed(buffer: Buf) {
+/// `b:changedtick` watchers, which can re-enter. A buffer the autocommands
+/// wiped is left alone from there on (upstream went on through the freed
+/// buffer).
+pub fn changed(buffer: Buf) {
+    let bufref = BufRef::of(buffer);
     if buffer.b_changed == 0 {
         let save_msg_scroll = msg_scroll.get();
 
         // May check the file out, and so change `curbuf`.
-        // SAFETY: the caller's promise -- `buffer` survives FileChangedRO.
-        unsafe { change_warning(buffer, 0) };
+        change_warning(buffer, 0);
+        let Some(buffer) = bufref.get() else {
+            return;
+        };
 
         // Create a swap file if that is wanted; not for "nofile" and
         // "nowrite" buffers.
@@ -122,6 +128,10 @@ pub unsafe fn changed(buffer: Buf) {
                 need_wait_return.set(save_need_wait_return);
             }
         }
+        // The swap file's ATTENTION prompt runs `SwapExists`.
+        let Some(buffer) = bufref.get() else {
+            return;
+        };
         changed_internal(buffer);
     }
     buf_inc_changedtick(buffer);
@@ -182,12 +192,14 @@ pub fn save_file_ff(mut buffer: Buf) {
     buffer.b_start_bomb = buffer.b_p_bomb;
 
     // Only free and allocate when the value actually changed.
-    let (recorded, current) = (buffer.b_start_fenc, buffer.b_p_fenc.value_ptr());
-    // SAFETY: both are NUL-terminated option strings, and `b_start_fenc` is
-    // this buffer's own allocation to replace.
-    if recorded.is_null() || !unsafe { cstr::eq(recorded, current) } {
-        unsafe { xfree(recorded.cast::<c_void>()) };
-        buffer.b_start_fenc = unsafe { xstrdup(current) };
+    let fenc = buffer.b_p_fenc.bytes();
+    if buffer
+        .b_start_fenc
+        .as_ref()
+        .is_none_or(|recorded| recorded.as_bytes() != fenc)
+    {
+        let recorded = ThinCString::from_bytes(fenc);
+        buffer.b_start_fenc = Some(recorded);
     }
 }
 
@@ -223,10 +235,8 @@ pub fn file_ff_differs(buffer: Buf, ignore_empty: bool) -> bool {
     if buffer.b_p_bin == 0 && buffer.b_start_bomb != buffer.b_p_bomb {
         return true;
     }
-    let (recorded, current) = (buffer.b_start_fenc, buffer.b_p_fenc.value_ptr());
-    if recorded.is_null() {
-        return !buffer.b_p_fenc.bytes().is_empty();
+    match &buffer.b_start_fenc {
+        None => !buffer.b_p_fenc.bytes().is_empty(),
+        Some(recorded) => recorded.as_bytes() != buffer.b_p_fenc.bytes(),
     }
-    // SAFETY: both are the buffer's own NUL-terminated option strings.
-    unsafe { !cstr::eq(recorded, current) }
 }

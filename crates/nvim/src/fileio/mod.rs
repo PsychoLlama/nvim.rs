@@ -20,7 +20,7 @@ use crate::autocmd::{
 use crate::buffer::state::swap_exists_action;
 use crate::buffer::{
     BufFlags, buf_contents_changed, buf_is_dontwrite, buf_is_empty, buf_is_nofilename,
-    buf_is_normal, buflist_new_named, current_buf, do_modelines, setfname, wipe_buffer,
+    buf_is_normal, buflist_new, current_buf, do_modelines, setfname, wipe_buffer,
 };
 use crate::buffer_updates::buf_updates_unload;
 use crate::change::{appended_lines_mark, save_file_ff, unchanged};

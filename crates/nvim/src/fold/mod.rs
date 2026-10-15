@@ -164,12 +164,12 @@ fn window_folds(mut window: Win) -> FoldList {
 }
 
 /// Copy the folding state from window `wp_from` to window `wp_to`.
-pub fn copy_folding_state(mut wp_from: Win, mut wp_to: Win) {
+pub fn copy_folding_state(wp_from: Win, mut wp_to: Win) {
     wp_to.w_fold_manual = wp_from.w_fold_manual;
     wp_to.w_foldinvalid = wp_from.w_foldinvalid;
-    // SAFETY: the caller's promise about `wp_to`; both fold lists live inside
-    // their own window.
-    unsafe { clone_fold_list(&raw mut wp_from.w_folds, &raw mut wp_to.w_folds) };
+    // The header is copied out, so the two windows may be one.
+    let from = wp_from.w_folds;
+    clone_fold_list(&from, &mut wp_to.w_folds);
 }
 
 /// The fold questions a caller asks *of a window*, as [`Win`] methods.
@@ -432,8 +432,7 @@ pub fn foldmethod_is_diff(window: Win) -> bool {
 /// Remove all folding for window "win".
 ///
 pub fn clear_folding(mut win: Win) {
-    // SAFETY: a live window's `w_folds` is a live fold list.
-    unsafe { delete_fold_recurse(&raw mut win.w_folds) };
+    delete_fold_recurse(&mut win.w_folds);
     win.w_foldinvalid = false;
 }
 
@@ -539,12 +538,21 @@ pub fn find_wl_entry(win: Win, lnum: LineNr) -> c_int {
     -1
 }
 
-/// Will "clone" (i.e deep copy) a GArray of folds.
+/// Will "clone" (i.e deep copy) a GArray of folds into `to`, which is
+/// re-initialised, so anything it held is leaked.
+pub fn clone_fold_list(from: &GArray, to: &mut GArray) {
+    // SAFETY: a fold list (every `GArray` this is handed is one -- a
+    // window's `w_folds` or a remembered entry's `wi_folds`), read only, and
+    // a writable one.
+    unsafe { clone_fold_list_at(::core::ptr::from_ref(from).cast_mut(), to) }
+}
+
+/// [`clone_fold_list`] over the raw arrays the nested folds hold.
 ///
 /// # Safety
 /// `from` must be a live fold list; `to` must be writable and is
 /// re-initialised, so anything it held is leaked.
-pub unsafe fn clone_fold_list(from: *mut GArray, to: *mut GArray) {
+unsafe fn clone_fold_list_at(from: *mut GArray, to: *mut GArray) {
     // SAFETY: the caller's promise; `ga_init` is what makes `to` a fold list.
     let (src, dst) = unsafe {
         ga_init(to, (*from).ga_itemsize, (*from).ga_growsize);
@@ -563,7 +571,7 @@ pub unsafe fn clone_fold_list(from: *mut GArray, to: *mut GArray) {
         copy.set_small(fold.small());
         // SAFETY: the source fold's nested list is live, and the destination
         // entry is the zeroed storage `ga_grow` just handed out.
-        unsafe { clone_fold_list(fold.nested().gap(), copy.nested().gap()) };
+        unsafe { clone_fold_list_at(fold.nested().gap(), copy.nested().gap()) };
         // Grown one at a time so an interrupted clone still frees cleanly.
         dst.set_len(dst.len() + 1);
     }
@@ -605,7 +613,7 @@ unsafe fn delete_fold_entry(folds: FoldList, idx: c_int, recursive: bool) {
     let fold = folds.at(idx);
     if recursive || fold.nested().is_empty() {
         // SAFETY: `fd_nested` of a live fold is a live fold list.
-        unsafe { delete_fold_recurse(fold.nested().gap()) };
+        unsafe { delete_fold_recurse_at(fold.nested().gap()) };
         folds.set_len(folds.len() - 1);
         if idx < folds.len() {
             // SAFETY: the entries above `idx` slide down over the hole, and
@@ -656,17 +664,24 @@ unsafe fn delete_fold_entry(folds: FoldList, idx: c_int, recursive: bool) {
     folds.set_len(folds.len() + moved - 1);
 }
 
-/// Free `gap` and every fold nested inside it.
+/// Free the fold list `gap` and every fold nested inside it. It is left
+/// empty, not freed.
+pub fn delete_fold_recurse(gap: &mut GArray) {
+    // SAFETY: a fold list, as every `GArray` this is handed is.
+    unsafe { delete_fold_recurse_at(gap) }
+}
+
+/// [`delete_fold_recurse`] over the raw arrays the nested folds hold.
 ///
 /// # Safety
 /// `gap` must be a live fold list. It is left empty, not freed.
-pub unsafe fn delete_fold_recurse(gap: *mut GArray) {
+unsafe fn delete_fold_recurse_at(gap: *mut GArray) {
     // SAFETY: the caller's promise.
     let folds = unsafe { FoldList::new(gap) };
     if folds.has_data() {
         for fold in folds.folds() {
             // SAFETY: `fd_nested` of a live fold is a live fold list.
-            unsafe { delete_fold_recurse(fold.nested().gap()) };
+            unsafe { delete_fold_recurse_at(fold.nested().gap()) };
         }
     }
     // SAFETY: the caller's promise.

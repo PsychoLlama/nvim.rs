@@ -343,6 +343,35 @@ pub struct WinInfo {
     pub wi_folds: GArray,
     pub wi_changelistidx: ::core::ffi::c_int,
 }
+
+impl WinInfo {
+    /// A fresh entry for `win`: upstream's `xcalloc(1, sizeof(WinInfo))`,
+    /// with no options saved and no folds.
+    pub(crate) fn new(win: Option<WinId>) -> Self {
+        WinInfo {
+            wi_win: win,
+            wi_mark: FileMark {
+                mark: Pos {
+                    lnum: 0,
+                    col: 0,
+                    coladd: 0,
+                },
+                fnum: 0,
+                timestamp: 0,
+                view: FileMarkView {
+                    topline_offset: 0,
+                    skipcol: 0,
+                },
+                additional_data: ::core::ptr::null_mut(),
+            },
+            wi_optset: false,
+            wi_opt: WinOpt::UNSET,
+            wi_fold_manual: false,
+            wi_folds: GArray::EMPTY,
+            wi_changelistidx: 0,
+        }
+    }
+}
 /// Not `Copy`: the string options in here own their bytes, and
 /// `copy_winopt` exists precisely to duplicate them -- the derived `Clone`
 /// is a deep copy of exactly those, which is why `copy_winopt` can be

@@ -203,8 +203,8 @@ unsafe fn do_ft_buf(
     if filetype.is_null() {
         return (None, Ok(()));
     }
-    // SAFETY: a dummy buffer of no name, which owns everything it holds.
-    let made = unsafe { buflist_new(ptr::null_mut(), ptr::null_mut(), 1 as LineNr, BLN_DUMMY) };
+    // A dummy buffer of no name, which owns everything it holds.
+    let made = buflist_new(None, None, 1 as LineNr, BLN_DUMMY);
     let Some(mut ftbuf) = made else {
         let why = Error::exception(c"Could not create internal buffer");
         return (None, Err(why));

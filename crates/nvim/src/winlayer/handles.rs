@@ -37,7 +37,6 @@
 use core::num::NonZero;
 
 use crate::allocator::Owned;
-use crate::buffer::free;
 use crate::global_cell::GlobalCell;
 use crate::registry::{HandleRegistry, OwnedRegistry, PendingFree};
 use crate::types::{Buffer, Frame, Handle, Tabpage, Window};
@@ -220,7 +219,7 @@ pub(crate) fn free_deferred() {
         drop(buf);
     }
     while let Some(win) = PENDING_FREE_WINDOWS.with_mut(PendingFree::take_next) {
-        free(win);
+        super::graph::free_window_block(win);
     }
 }
 

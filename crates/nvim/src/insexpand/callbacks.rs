@@ -405,6 +405,14 @@ pub fn set_buflocal_ofu_callback(mut buffer: Buf) {
     unsafe { ofu_cb().copy_to_buflocal(&raw mut buffer.b_ofu_cb) }
 }
 
+/// Free `buffer`'s `'complete'` `F{func}` callbacks.
+pub(crate) fn clear_buffer_cpt_callbacks(mut buffer: Buf) {
+    let count = buffer.b_p_cpt_count;
+    // SAFETY: the buffer's own array of `count` callbacks, or null.
+    unsafe { clear_cpt_callbacks(&raw mut buffer.b_p_cpt_cb, count) };
+    buffer.b_p_cpt_count = 0;
+}
+
 /// Free an array of `'complete'` `F{func}` callbacks and null the pointer.
 ///
 /// # Safety
@@ -473,9 +481,7 @@ pub fn set_cpt_callbacks(local: bool) -> Result<(), Failed> {
         return Err(Failed);
     }
 
-    let (buffer, count) = (Buf::current_raw(), Buf::current().b_p_cpt_count);
-    unsafe { clear_cpt_callbacks(&raw mut (*buffer).b_p_cpt_cb, count) };
-    Buf::current().b_p_cpt_count = 0;
+    clear_buffer_cpt_callbacks(Buf::current());
 
     let count = get_cpt_sources_count();
     if count == 0 {

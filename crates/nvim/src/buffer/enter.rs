@@ -16,21 +16,20 @@
 //!
 //! Original: `src/nvim/buffer.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
+use crate::fileio::ReadFlags;
 use crate::semsg;
 use crate::types::AutoEvent;
-use core::ffi::{c_char, c_int};
-use core::ptr;
+use core::ffi::c_int;
 
 use super::*;
 use crate::arglist::check_arg_idx;
-use crate::eval::typval::DictEntry;
-use crate::hashtab::hash_add;
+use crate::eval::typval::link_buf_changedtick;
+use crate::memory::XString;
+use crate::os::time::os_time_raw;
 
 use crate::channel::channel_job_running;
-use crate::cstr;
 use crate::diff::diff_buf_add;
 use crate::digraph::keymap_init;
 use crate::drawscreen::UPD_NOT_VALID;
@@ -53,15 +52,14 @@ use crate::spell::parse_spelllang;
 use crate::startup::starting;
 use crate::state::MODE_INSERT;
 use crate::state::mode::{State, VIsual_reselect};
-use crate::terminal::terminal_check_size;
+use crate::terminal::check_buf_terminal_size;
 use crate::types::{
-    CmdModFlags, ColNr, DictItem, DictKey, Failed, LineNr, NUL, OptInt, ShmFlag, Terminal, TypVal,
-    VarLock, time_t, uint8_t, uint64_t,
+    CmdModFlags, ColNr, DictItem, DictKey, LineNr, NUL, OptInt, ShmFlag, TypVal, VarLock, uint8_t,
+    uint64_t,
 };
 use crate::undo::u_sync;
 use crate::window::get_last_winid;
 use crate::winlayer::window_at;
-use ::libc::time;
 
 // ---------------------------------------------------------------------------
 // The neighbours, wrapped
@@ -106,7 +104,7 @@ fn diff_add(buffer: Buf) {
 /// Load the buffer that has just been made current.
 fn load_current_buffer() {
     // SAFETY: `curbuf` and `curwin` are set; a null `eap` is the no-command form.
-    let _ = open_buffer(false, None, 0);
+    let _ = open_buffer(false, None, ReadFlags::NONE);
 }
 
 /// Warn if the file changed on disk since the buffer was read.
@@ -154,14 +152,7 @@ fn set_spelllang(win: Win) {
 /// Whether the window's `'spelllang'` is set. It lives in the syntax block
 /// the window shares with its buffer.
 fn has_spelllang(win: Win) -> bool {
-    // SAFETY: a live window's syntax block is live, and `'spelllang'` a
-    // NUL-terminated option value.
-    unsafe { (*win.w_s).b_p_spl.first_byte() as c_int != NUL }
-}
-
-fn resize_terminal(term: *mut Terminal) {
-    // SAFETY: a live terminal, the caller having ruled out null.
-    unsafe { terminal_check_size(term) };
+    win.syntax().b_p_spl.first_byte() as c_int != NUL
 }
 
 /// Whether the job behind terminal buffer `buffer` is still running.
@@ -169,31 +160,9 @@ fn job_running(buffer: Buf) -> bool {
     channel_job_running(buffer.b_p_channel as uint64_t)
 }
 
-/// Change to the directory of `fname`.
-fn chdir_to_file(fname: *mut c_char) -> Result<(), Failed> {
-    // SAFETY: a NUL-terminated file name.
-    vim_chdirfile(unsafe { cstr::at(fname) }, kCdCauseAuto)
-}
-
 /// Recompute every buffer's short file name against the new directory.
 fn reshorten_fnames() {
     shorten_fnames(true);
-}
-
-/// The wall clock, for `b_last_used`.
-fn now() -> time_t {
-    // SAFETY: a null argument asks for the answer by value.
-    unsafe { time(ptr::null_mut::<time_t>()) }
-}
-
-/// Add `b:changedtick` to the buffer's variable dictionary.
-fn add_changedtick(mut buffer: Buf) {
-    let (vars, di) = (buffer.b_vars, &raw mut buffer.changedtick_di);
-    // The item is embedded in the buffer, so it goes into the table
-    // directly; `b:` is neither scope the function-name check guards.
-    // SAFETY: a live buffer's dictionary, and its own `changedtick` item,
-    // which outlives the table.
-    let _ = unsafe { hash_add(&raw mut (*vars).dv_hashtab, DictEntry::new(di)) };
 }
 
 // ---------------------------------------------------------------------------
@@ -266,8 +235,8 @@ pub fn set_curbuf(buffer: Buf, action: c_int, update_jumplist: bool) {
         }
     }
 
-    if let Some(prev) = prevbufref.get().filter(|p| !p.terminal.is_null()) {
-        resize_terminal(prev.terminal);
+    if let Some(prev) = prevbufref.get() {
+        check_buf_terminal_size(prev);
     }
 }
 
@@ -424,11 +393,9 @@ pub(crate) fn enter_buffer(mut buffer: Buf) {
     if !buf.b_help && win.w_onebuf_opt.wo_spell != 0 && has_spelllang(win) {
         set_spelllang(win);
     }
-    Buf::current().b_last_used = now();
+    Buf::current().b_last_used = os_time_raw();
 
-    if !Buf::current().terminal.is_null() {
-        resize_terminal(Buf::current().terminal);
-    }
+    check_buf_terminal_size(Buf::current());
 
     win.redraw_later(UPD_NOT_VALID);
 }
@@ -442,8 +409,12 @@ fn do_autochdir_now() {
     if !p_acd() {
         return;
     }
-    let fname = Buf::current().name.full_ptr();
-    if starting.get() == 0 && !fname.is_null() && chdir_to_file(fname).is_ok() {
+    // A copy: changing directory fires `DirChanged`.
+    let fname = Buf::current().name.full().map(XString::from_cstr);
+    if starting.get() == 0
+        && let Some(fname) = fname
+        && vim_chdirfile(fname.as_cstr(), kCdCauseAuto).is_ok()
+    {
         last_chdir_reason.set(Some(c"autochdir"));
         reshorten_fnames();
     }
@@ -495,5 +466,5 @@ pub(crate) fn buf_init_changedtick(mut buffer: Buf) {
         di_flags: (DI_FLAGS_RO as c_int | DI_FLAGS_FIX as c_int) as uint8_t,
         di_key: DictKey::new(b"changedtick"),
     };
-    add_changedtick(buffer);
+    link_buf_changedtick(buffer);
 }

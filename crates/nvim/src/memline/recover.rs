@@ -219,14 +219,8 @@ pub fn ml_recover(checkext: bool) {
         // SAFETY: `home_replace` NUL-terminated `path`.
         let shown = unsafe { c_str(path.as_ptr()) };
         smsg!(0, "Using swap file \"{shown}\"");
-        if !buf_spname(Buf::current()).is_null() {
-            unsafe {
-                xstrlcpy(
-                    path.as_mut_ptr(),
-                    buf_spname(Buf::current()),
-                    MAXPATHL as size_t,
-                )
-            };
+        if let Some(special) = buf_spname(&Buf::current()) {
+            unsafe { xstrlcpy(path.as_mut_ptr(), special.as_ptr(), MAXPATHL as size_t) };
         } else {
             let (out, room) = (path.as_mut_ptr(), MAXPATHL as size_t);
             unsafe { home_replace(None, Buf::current().name.full_ptr(), out, room, true) };

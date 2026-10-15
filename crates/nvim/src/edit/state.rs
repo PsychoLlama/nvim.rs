@@ -158,8 +158,7 @@ fn insert_enter(s: &mut InsertState) {
         s.i = showmode();
     }
     if did_restart_edit.get() == 0 {
-        // SAFETY: the current buffer is live, and survives FileChangedRO.
-        unsafe { change_warning(Buf::current(), if s.i == 0 { 0 } else { s.i + 1 }) };
+        change_warning(Buf::current(), if s.i == 0 { 0 } else { s.i + 1 });
     }
 
     ui_cursor_shape();

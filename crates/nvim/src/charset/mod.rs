@@ -58,7 +58,9 @@ pub use walk::{
     rem_backslash, skipbin, skipdigits, skiphex, skiptowhite, skiptowhite_esc, skipwhite,
     vim_iswordp, vim_iswordp_buf, vim_str2nr,
 };
-pub(crate) use walk::{getdigits_at, getdigits_int_at, getwhitecols_curline, try_getdigits};
+pub(crate) use walk::{
+    getdigits_at, getdigits_int_at, getwhitecols_curline, try_getdigits, try_getdigits_at,
+};
 pub use walk::{
     ptr2cells, rl_mirror_ascii, str_foldcase, trans_characters, transstr, transstr_buf,
 };

@@ -61,7 +61,7 @@ use crate::mark::mark_get_global;
 use crate::mbyte::{mb_string2cells, utfc_ptr2len, utfc_ptr2schar};
 use crate::memline::ml_open;
 use crate::memory::arena_alloc_count;
-use crate::memory::{memchrsub, strequal, xfree};
+use crate::memory::{memchrsub, strequal};
 use crate::message::state::{
     did_emsg, lines_left, msg_didany, msg_no_more, msg_scroll, need_wait_return,
 };
@@ -101,10 +101,10 @@ use crate::types::{
     KeyDict_eval_statusline, KeyDict_get_highlight, KeyDict_get_ns, KeyDict_highlight,
     KeyDict_keymap, KeyDict_open_term, KeyDict_redraw, KeyDict_runtime, LineNr, LuaRef, LuaRetMode,
     MessageData, MessageType, MotionType, NS, Object, OptScope, OptVal, RemapValues, ScreenChar,
-    ScriptId, SignTextAttrs, StatusCol, String_0, StringBuilder, TabpageHandle, TerminalOptions,
-    VarNumber, Vv, Window, WindowHandle, YankReg, int64_t, kCdScopeGlobal, kErrorTypeException,
-    kErrorTypeNone, kErrorTypeValidation, kObjectTypeString, mpack_token_type_t, size_t, uint8_t,
-    uint16_t, uint64_t,
+    ScriptId, SignTextAttrs, StatusCol, String_0, TabpageHandle, TerminalOptions, VarNumber, Vv,
+    Window, WindowHandle, YankReg, int64_t, kCdScopeGlobal, kErrorTypeException, kErrorTypeNone,
+    kErrorTypeValidation, kObjectTypeString, mpack_token_type_t, size_t, uint8_t, uint16_t,
+    uint64_t,
 };
 use crate::ui::state::Columns;
 use crate::ui::{ui_array, ui_call_screenshot, ui_flush};

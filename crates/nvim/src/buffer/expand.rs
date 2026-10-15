@@ -9,8 +9,7 @@
 //!
 //! Original: `src/nvim/buffer.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -20,399 +19,198 @@
 )]
 
 use crate::cmdexpand::{BUF_DIFF_FILTER, WildOpts};
-use crate::garray::take_string_array;
+use crate::cstr;
 use crate::memory::XString;
-use core::ffi::{c_char, c_int, c_void};
-use core::{ptr, slice};
+use core::ffi::c_int;
 
 use super::*;
 use crate::cmdexpand::cmdline_fuzzy_complete;
-use crate::cstr;
 use crate::diff::diff_mode_buf;
 use crate::fuzzy::fuzzy_match_str;
-use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::option::vars::{p_fic, p_wic};
-use crate::os::env::home_replace_save;
-use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regexec, vim_regfree};
-use crate::types::{Failed, FuzMatchStr, RegMatch, RegProg};
+use crate::os::env::home_replace_in;
+use crate::regexp::{OwnedMatch, RE_MAGIC, vim_regexec};
+use crate::types::{Failed, RegMatch};
 use crate::winlayer::{self, Buf, Win, buffers};
-use ::libc::qsort;
-
-/// A `RegMatch` holding no compiled program.
-pub(crate) const NO_REGMATCH: RegMatch = RegMatch::new(ptr::null_mut::<RegProg>(), false);
-
-// ---------------------------------------------------------------------------
-// The neighbours, wrapped
-
-fn free(p: *mut c_char) {
-    // SAFETY: an owned allocation or null.
-    unsafe { xfree(p.cast::<c_void>()) };
-}
-
-fn dup(p: *const c_char) -> *mut c_char {
-    // SAFETY: a NUL-terminated buffer name.
-    unsafe { xstrdup(p) }
-}
-
-/// `xmalloc` of `n` elements, for the arrays this file hands back to the
-/// completion machinery (which frees them with `xfree`).
-fn alloc_array<T>(n: c_int) -> *mut T {
-    let n = usize::try_from(n).expect("a completion count is never negative");
-    // SAFETY: `xmalloc` aborts rather than answering null.
-    unsafe { xmalloc(n * size_of::<T>()) }.cast::<T>()
-}
-
-/// `array[i] = value`, for the three arrays filled in round two. Each index
-/// is below the count round one measured, which is what the array was sized
-/// from.
-fn set_at<T>(array: *mut T, i: c_int, value: T) {
-    let i = usize::try_from(i).expect("a completion index is never negative");
-    // SAFETY: `i` is inside the array `alloc_array` sized for `count`.
-    unsafe { array.add(i).write(value) };
-}
-
-/// Whether the pattern asks for fuzzy matching (`'wildoptions'`).
-fn wants_fuzzy(pat: *const c_char) -> bool {
-    // SAFETY: a NUL-terminated pattern.
-    cmdline_fuzzy_complete(unsafe { cstr::bytes_at(pat) })
-}
-
-/// Sort `fuzmatch` by fuzzy score and hand its strings to `matches`, freeing
-/// `fuzmatch` itself.
-///
-/// # Safety
-/// `fuzmatch` must be an allocated array of `count` entries naming allocated
-/// strings, and `matches` must be writable.
-unsafe fn fuzzymatches_to_strmatches(
-    fuzmatch: *mut FuzMatchStr,
-    matches: *mut *mut *mut c_char,
-    count: c_int,
-) {
-    if count > 0 {
-        let count = usize::try_from(count).expect("the guard above rejected a negative count");
-        // SAFETY: the caller's `count` entries.
-        let found = unsafe { slice::from_raw_parts_mut(fuzmatch, count) };
-        // Best score first, `idx` breaking ties: callers number `idx` as they
-        // fill the array, so no two entries compare equal.
-        found.sort_by(|a, b| b.score.cmp(&a.score).then(a.idx.cmp(&b.idx)));
-        let strings = alloc_array::<*mut c_char>(c_int::try_from(count).unwrap_or(0));
-        for (i, m) in found.iter().enumerate() {
-            // SAFETY: `strings` has room for `count` pointers.
-            unsafe { *strings.add(i) = m.str };
-        }
-        // SAFETY: the caller's writable slot.
-        unsafe { *matches = strings };
-    }
-    // SAFETY: the caller's array, handed over.
-    unsafe { xfree(fuzmatch.cast()) };
-}
-
-fn regcomp(pat: *const c_char, flags: c_int) -> *mut RegProg {
-    // SAFETY: a NUL-terminated pattern; the answer is null on a bad one.
-    vim_regcomp(unsafe { cstr::at(pat) }, flags)
-}
-
-fn regfree(prog: *mut RegProg) {
-    // SAFETY: a compiled program or null.
-    unsafe { vim_regfree(prog) };
-}
-
-fn regexec(rmp: &mut RegMatch, name: &CStr) -> bool {
-    vim_regexec(rmp, name, 0)
-}
-
-/// `home_replace_save`: `name` with `$HOME` written as `~`, freshly
-/// allocated. `buffer` decides whether a help file keeps only its tail.
-fn home_replaced(buffer: Option<Buf>, name: *const c_char) -> *mut c_char {
-    // SAFETY: a live buffer or null, and a NUL-terminated name.
-    unsafe { home_replace_save(buffer, name) }
-}
-
-fn fuzzy_score(name: *const c_char, pat: *const c_char) -> c_int {
-    // An unnamed buffer has neither a short nor a full name. Upstream
-    // answered 0 for a null string — not the sentinel — and left the caller
-    // to reject the candidate on the null pointer instead, which it does.
-    // SAFETY: a NUL-terminated name or null, and a NUL-terminated pattern.
-    let (name, pat) = unsafe { (cstr::at_opt(name), cstr::at(pat)) };
-    name.map_or(0, |name| fuzzy_match_str(name, pat))
-}
-
-fn diff_mode(buffer: Buf) -> bool {
-    // SAFETY: a live buffer.
-    diff_mode_buf(buffer)
-}
 
 fn current_win() -> Win {
     Win::current()
 }
 
+/// `home_replace_save`: `name` with `$HOME` written as `~`, freshly made.
+/// `buffer` decides whether a help file keeps only its tail.
+fn home_replaced(buffer: Option<Buf>, name: &CStr) -> XString {
+    home_replace_in(buffer, name, name.to_bytes().len() + 3, true)
+}
+
 // ---------------------------------------------------------------------------
 // Completing ":buffer"
 
+/// One buffer name `:buffer` completion found, and what orders it.
+struct Found {
+    buf: Buf,
+    name: XString,
+    score: c_int,
+}
+
 /// Every buffer name matching `pat`, for command-line completion of
 /// `:buffer` and `:sbuffer`.
-///
-/// # Safety
-///
-/// `pat` must point at a NUL-terminated string, unaliased for the call.
-/// `num_file` must point at a writable `int` the caller owns. `file` must
-/// point at a writable `*mut *mut c_char` slot the caller owns for the call.
-pub unsafe fn expand_buf_names(
-    pat: *mut c_char,
-    num_file: *mut c_int,
-    file: *mut *mut *mut c_char,
-    options: WildOpts,
-) -> Result<(), Failed> {
-    let mut matches: *mut BufMatch = ptr::null_mut();
-    let mut to_free = false;
-
-    // SAFETY: the caller's promise -- two out-parameters to fill in.
-    let (num_file, file) = unsafe { (&mut *num_file, &mut *file) };
-    // The return values in case of FAIL.
-    *num_file = 0;
-    *file = ptr::null_mut();
-
+pub(crate) fn buf_name_matches(pat: &CStr, options: WildOpts) -> Result<Vec<XString>, Failed> {
     if options.has(BUF_DIFF_FILTER) && current_win().w_onebuf_opt.wo_diff == 0 {
         return Err(Failed);
     }
 
-    let fuzzy = wants_fuzzy(pat);
-    let mut patc: *mut c_char = ptr::null_mut();
-    let mut fuzmatch: *mut FuzMatchStr = ptr::null_mut();
-    let mut regmatch = NO_REGMATCH;
-
-    // Make a copy of "pat" and change "^" to "\(^\|[\/]\)" (when matching
-    // with a regular expression).
+    let fuzzy = cmdline_fuzzy_complete(pat.to_bytes());
+    // A copy of "pat" with a leading "^" taken off (when matching with a
+    // regular expression).
+    let mut regmatch = OwnedMatch::none();
     if !fuzzy {
-        // SAFETY: a NUL-terminated pattern.
-        let anchored = unsafe { *pat } == b'^'.cast_signed();
-        // SAFETY: past a byte that is not the terminator, so there is a
-        // second one -- which is why upstream reads it only here.
-        let next = if anchored { unsafe { *pat.add(1) } } else { 0 };
-        if anchored && next != 0 {
-            patc = dup(pat.wrapping_add(1));
-            to_free = true;
-        } else if anchored {
-            patc = c"".as_ptr().cast_mut();
+        let bytes = pat.to_bytes_with_nul();
+        let patc = if bytes[0] == b'^' { &bytes[1..] } else { bytes };
+        regmatch = OwnedMatch::compile(cstr::in_bytes(patc), RE_MAGIC, false)
+            .unwrap_or_else(OwnedMatch::none);
+    }
+
+    let mut found: Vec<Found> = Vec::new();
+    for buf in buffers() {
+        // Skip unlisted buffers.
+        if buf.b_p_bl == 0 {
+            continue;
+        }
+        if options.has(BUF_DIFF_FILTER) {
+            // Skip buffers not suitable for :diffget or :diffput completion.
+            if buf.raw() == Buf::current_raw() || !diff_mode_buf(buf) {
+                continue;
+            }
+        }
+
+        let mut score = 0;
+        let name = if fuzzy {
+            // First try matching with the short file name, then with the
+            // full path file name. An unnamed buffer has neither.
+            [buf.name.short(), buf.name.full()]
+                .into_iter()
+                .flatten()
+                .find(|name| {
+                    score = fuzzy_match_str(name, pat);
+                    score != FUZZY_SCORE_NONE as c_int
+                })
         } else {
-            patc = pat;
-        }
-        regmatch.regprog = regcomp(patc, RE_MAGIC);
+            if regmatch.regprog.is_null() {
+                // An invalid pattern, possibly after recompiling.
+                return Err(Failed);
+            }
+            match buflist_match(&mut regmatch, buf, p_wic()) {
+                Some(BufNameKind::Short) => buf.name.short(),
+                Some(BufNameKind::Full) => buf.name.full(),
+                None => None,
+            }
+        };
+        let Some(name) = name else {
+            continue;
+        };
+        let name = if options.has(WildOpts::HOME_REPLACE) {
+            home_replaced(Some(buf), name)
+        } else {
+            XString::from_cstr(name)
+        };
+        found.push(Found { buf, name, score });
+    }
+    drop(regmatch);
+    if found.is_empty() {
+        return Err(Failed);
     }
 
-    let mut count = 0;
-    let mut score = 0;
-    // round == 1: count the matches. round == 2: build the array to keep
-    // them in.
-    for round in 1..=2 {
-        count = 0;
-        for buf in buffers() {
-            // Skip unlisted buffers.
-            if buf.b_p_bl == 0 {
-                continue;
-            }
-            if options.has(BUF_DIFF_FILTER) {
-                // Skip buffers not suitable for :diffget or :diffput
-                // completion.
-                if buf.raw() == Buf::current_raw() || !diff_mode(buf) {
-                    continue;
-                }
-            }
-
-            let mut p: *mut c_char = ptr::null_mut();
-            if !fuzzy {
-                if regmatch.regprog.is_null() {
-                    // An invalid pattern, possibly after recompiling.
-                    if to_free {
-                        free(patc);
-                    }
-                    return Err(Failed);
-                }
-                p = buflist_match(&mut regmatch, buf, p_wic());
-            } else {
-                // First try matching with the short file name.
-                score = fuzzy_score(buf.name.short_ptr(), pat);
-                if score != FUZZY_SCORE_NONE as c_int {
-                    p = buf.name.short_ptr();
-                }
-                if p.is_null() {
-                    // Next try matching with the full path file name.
-                    score = fuzzy_score(buf.name.full_ptr(), pat);
-                    if score != FUZZY_SCORE_NONE as c_int {
-                        p = buf.name.full_ptr();
-                    }
-                }
-            }
-
-            if p.is_null() {
-                continue;
-            }
-            if round == 1 {
-                count += 1;
-                continue;
-            }
-
-            p = if options.has(WildOpts::HOME_REPLACE) {
-                home_replaced(Some(buf), p)
-            } else {
-                dup(p)
-            };
-
-            if fuzzy {
-                let entry = FuzMatchStr {
-                    idx: count,
-                    str: p,
-                    score,
-                };
-                set_at(fuzmatch, count, entry);
-            } else if !matches.is_null() {
-                let entry = BufMatch { buf, match_0: p };
-                set_at(matches, count, entry);
-            } else {
-                set_at(*file, count, p);
-            }
-            count += 1;
-        }
-        if count == 0 {
-            // No match found, stop here.
-            break;
-        }
-        if round == 1 {
-            if fuzzy {
-                fuzmatch = alloc_array::<FuzMatchStr>(count);
-            } else {
-                *file = alloc_array::<*mut c_char>(count);
-                if options.has(WildOpts::BUFLASTUSED) {
-                    matches = alloc_array::<BufMatch>(count);
-                }
-            }
-        }
+    if fuzzy {
+        // Best score first; equal scores keep the buffer list's order.
+        found.sort_by_key(|f| core::cmp::Reverse(f.score));
+    } else if options.has(WildOpts::BUFLASTUSED) {
+        return Ok(order_by_last_used(found));
     }
-
-    if !fuzzy {
-        regfree(regmatch.regprog);
-        if to_free {
-            free(patc);
-        }
-        if !matches.is_null() {
-            // SAFETY: the out-parameter holds the `count` slots allocated
-            // above.
-            let n = usize::try_from(count).expect("a match count is never negative");
-            let files = unsafe { slice::from_raw_parts_mut(*file, n) };
-            order_by_last_used(matches, files);
-            // SAFETY: this function's own array.
-            unsafe { xfree(matches.cast::<c_void>()) };
-        }
-    } else {
-        // SAFETY: the array filled above, and the caller's out-parameter.
-        unsafe { fuzzymatches_to_strmatches(fuzmatch, file, count) };
-    }
-
-    *num_file = count;
-    if count == 0 { Err(Failed) } else { Ok(()) }
+    Ok(found.into_iter().map(|f| f.name).collect())
 }
 
-/// The buffer names `pat` matches, owned: [`expand_buf_names`] for the
-/// command line.
-pub(crate) fn buf_name_matches(pat: &CStr, options: WildOpts) -> Result<Vec<XString>, Failed> {
-    // A copy the walk may write to.
-    let mut owned = pat.to_bytes_with_nul().to_vec();
-    let mut count: c_int = 0;
-    let mut files: *mut *mut c_char = ptr::null_mut();
-    // SAFETY: a NUL-terminated copy and two locals to fill in; what the walk
-    // answered is taken over once.
-    unsafe {
-        expand_buf_names(
-            owned.as_mut_ptr().cast(),
-            &raw mut count,
-            &raw mut files,
-            options,
-        )?;
-        Ok(take_string_array(count, files))
-    }
-}
+/// The order `qsort` sorts by: the buffer each name came from.
+#[derive(Clone, Copy)]
+struct ByBuffer(usize, Buf);
 
-impl LastUsed for BufMatch {
+impl LastUsed for ByBuffer {
     fn last_used_buffer(&self) -> Buf {
-        self.buf
+        self.1
     }
 }
 
-/// Sort `matches` by last-used time into `files`, putting the current buffer
-/// last when it would otherwise come first.
+/// The names in `found`, most recently used buffer first -- but with the
+/// current buffer moved last when it would otherwise come first.
 ///
-/// `qsort` and the comparison stay upstream's: `buf_time_compare` answers 0
-/// for two buffers entered in the same second, and a stable Rust sort would
-/// order those ties differently.
-fn order_by_last_used(matches: *mut BufMatch, files: &mut [*mut c_char]) {
-    let count = files.len();
-    if count > 1 {
-        let (base, width) = (matches.cast::<c_void>(), size_of::<BufMatch>());
-        // SAFETY: `count` initialised elements of this function's own array,
-        // and a comparison function over two of them.
-        unsafe { qsort(base, count, width, Some(buf_time_compare::<BufMatch>)) };
-    }
-    if count == 0 {
-        // Unreachable: round two walks the list round one counted, so a
-        // non-null `matches` means at least one entry. Upstream indexes
-        // `matches[0]` and `(*file)[count - 1]` without the test.
-        return;
-    }
-    // SAFETY: `count` initialised elements.
-    let matches = unsafe { slice::from_raw_parts(matches, count) };
-    if Some(matches[0].buf) == Buf::current_or_none() {
+/// `qsort`, because its order of two buffers entered in the same second is
+/// upstream's, and a Rust sort would order those ties differently.
+fn order_by_last_used(found: Vec<Found>) -> Vec<XString> {
+    let mut order: Vec<ByBuffer> = found
+        .iter()
+        .enumerate()
+        .map(|(i, f)| ByBuffer(i, f.buf))
+        .collect();
+    sort_by_last_used(&mut order);
+    let mut names: Vec<Option<XString>> = found.into_iter().map(|f| Some(f.name)).collect();
+    let mut take = |at: &ByBuffer| names[at.0].take().expect("each name is taken once");
+    let mut sorted: Vec<XString> = Vec::with_capacity(order.len());
+    if Some(order[0].1) == Buf::current_or_none() {
         // The current buffer came first: place it at the end.
-        for i in 1..count {
-            files[i - 1] = matches[i].match_0;
-        }
-        files[count - 1] = matches[0].match_0;
+        sorted.extend(order[1..].iter().map(&mut take));
+        sorted.push(take(&order[0]));
     } else {
-        for i in 0..count {
-            files[i] = matches[i].match_0;
-        }
+        sorted.extend(order.iter().map(&mut take));
     }
+    sorted
 }
 
 // ---------------------------------------------------------------------------
 // Matching one buffer
 
-/// Whether `buffer`'s name matches `rmp`: the short file name first, then the
-/// long one. `rmp->regprog` may become null when the regexp engine switches.
-pub(crate) fn buflist_match(rmp: &mut RegMatch, buffer: Buf, ignore_case: bool) -> *mut c_char {
-    let mut matched = fname_match(rmp, buffer.name.short_ptr(), ignore_case);
-    if matched.is_null() && !rmp.regprog.is_null() {
-        matched = fname_match(rmp, buffer.name.full_ptr(), ignore_case);
-    }
-    matched
+/// Which of a buffer's names matched.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum BufNameKind {
+    /// The short name, `b_sfname`.
+    Short,
+    /// The full name, `b_ffname`.
+    Full,
 }
 
-/// `name` when it matches `rmp`, null when it does not. `$HOME` is tried
-/// both as itself and as `~`.
-fn fname_match(rmp: &mut RegMatch, name: *mut c_char, ignore_case: bool) -> *mut c_char {
-    // An extra check for valid arguments.
-    if name.is_null() || rmp.regprog.is_null() {
-        return ptr::null_mut();
+/// Whether `buffer`'s name matches `rmp`: the short file name first, then the
+/// long one. `rmp->regprog` may become null when the regexp engine switches.
+pub(crate) fn buflist_match(
+    rmp: &mut RegMatch,
+    buffer: Buf,
+    ignore_case: bool,
+) -> Option<BufNameKind> {
+    if fname_match(rmp, buffer.name.short(), ignore_case) {
+        return Some(BufNameKind::Short);
     }
+    if !rmp.regprog.is_null() && fname_match(rmp, buffer.name.full(), ignore_case) {
+        return Some(BufNameKind::Full);
+    }
+    None
+}
+
+/// Whether `name` matches `rmp`. `$HOME` is tried both as itself and as `~`.
+fn fname_match(rmp: &mut RegMatch, name: Option<&CStr>, ignore_case: bool) -> bool {
+    // An extra check for valid arguments.
+    let Some(name) = name.filter(|_| !rmp.regprog.is_null()) else {
+        return false;
+    };
 
     // Ignore case when 'fileignorecase' or the argument is set.
     rmp.rm_ic = p_fic() || ignore_case;
-    // SAFETY: the caller's NUL-terminated name.
-    if regexec(rmp, unsafe { cstr::at(name) }) {
-        return name;
+    if vim_regexec(rmp, name, 0) {
+        return true;
     }
     if rmp.regprog.is_null() {
-        return ptr::null_mut();
+        return false;
     }
     // Replace $(HOME) with '~' and try matching again.
     let p = home_replaced(None, name);
-    // SAFETY: `home_replaced` answers a NUL-terminated copy.
-    let matched = if regexec(rmp, unsafe { cstr::at(p) }) {
-        name
-    } else {
-        ptr::null_mut()
-    };
-    free(p);
-    matched
+    vim_regexec(rmp, p.as_cstr(), 0)
 }
 
 // ---------------------------------------------------------------------------
@@ -432,16 +230,15 @@ pub(crate) fn find_buf(nr: c_int) -> Option<Buf> {
     winlayer::buffer(nr)
 }
 
-/// The name of buffer `n`, shortened with `home_replace`, freshly allocated;
-/// null when there is no such buffer.
-pub fn buflist_nr2name(n: c_int, fullname: c_int, helptail: c_int) -> *mut c_char {
-    let Some(buf) = find_buf(n) else {
-        return ptr::null_mut();
-    };
+/// The name of buffer `n`, shortened with `home_replace`; `None` when there
+/// is no such buffer, empty for one with no name.
+pub fn buflist_nr2name(n: c_int, fullname: c_int, helptail: c_int) -> Option<XString> {
+    let buf = find_buf(n)?;
     let name = if fullname != 0 {
-        buf.name.full_ptr()
+        buf.name.full()
     } else {
-        buf.name.shown_ptr()
+        buf.name.shown()
     };
-    home_replaced((helptail != 0).then_some(buf), name)
+    let helptail = (helptail != 0).then_some(buf);
+    Some(name.map_or_else(XString::new, |name| home_replaced(helptail, name)))
 }

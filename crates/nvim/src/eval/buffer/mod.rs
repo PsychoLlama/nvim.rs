@@ -69,7 +69,6 @@ use crate::types::*;
 use crate::undo::u_sync_once;
 use crate::winlayer::graph::cmdwin_buf;
 pub const kExtmarkNoUndo: ExtmarkOp = 2;
-use crate::buffer::WinInfos;
 use crate::memline::ML_DEL_MESSAGE;
 use crate::normal::{set_visual_active, visual_active};
 use crate::undo::{buf_is_changed, u_clearallandblockfree, u_save, u_savesub, u_sync};
@@ -153,9 +152,9 @@ fn find_win_for_curbuf() {
     // The b_wininfo list holds the windows that recently contained the
     // buffer, so walking it is cheaper than walking every window. It can name
     // a window that has moved on, hence the second test.
-    let mut buf = Buf::current();
-    let found = WinInfos::of(&mut buf)
-        .entries_mut()
+    let buf = Buf::current();
+    let found = buf
+        .b_wininfo
         .iter()
         .filter_map(|entry| entry.window())
         .find(|win| win.w_buffer.is_current());

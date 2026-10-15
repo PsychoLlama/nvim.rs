@@ -575,8 +575,14 @@ pub unsafe fn write_reg_contents_ex(
                 }
                 buf
             } else {
-                let end = str.offset(len);
-                find_buf(buflist_findpat(str, end, true, false, false))
+                let len = usize::try_from(len).unwrap_or(0);
+                find_buf(buflist_findpat(
+                    cstr::at(str),
+                    Some(len),
+                    true,
+                    false,
+                    false,
+                ))
             }
         };
         if let Some(buf) = buf {

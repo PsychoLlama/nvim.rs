@@ -13,8 +13,7 @@
 //!
 //! Original: `src/nvim/buffer.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -26,16 +25,14 @@
 #![allow(non_upper_case_globals)]
 
 use crate::narrow::number_as_int;
-use core::ffi::{c_char, c_int};
-use core::slice;
+use core::ffi::c_int;
 
 use super::*;
 use crate::ascii::ascii_isspace;
-use crate::charset::try_getdigits;
+use crate::charset::try_getdigits_at;
 use crate::global_cell::GlobalCell;
 use crate::guard::Depth;
 use crate::guard::secure;
-use crate::memline::{ml_get, ml_get_len};
 use crate::option::do_set;
 use crate::option::vars::p_mls;
 use crate::runtime::state::current_sctx;
@@ -51,27 +48,20 @@ fn current_buf() -> Buf {
     Buf::current()
 }
 
-/// Line `lnum` of the current buffer, including its NUL terminator, so that
-/// the one-past-the-end reads upstream's `s[1]`/`s[2]`/`s[3]` tests make are
-/// in bounds here too.
-fn buffer_line(lnum: LineNr) -> &'static [u8] {
-    // SAFETY: `ml_get` answers a live, NUL-terminated line of `ml_get_len`
-    // bytes; the line stays put for as long as this function's caller runs.
-    let len = usize::try_from(ml_get_len(lnum)).expect("a line length is never negative");
-    unsafe { slice::from_raw_parts(ml_get(lnum).cast::<u8>(), len + 1) }
+/// A copy of line `lnum` of the current buffer, with its NUL terminator, so
+/// that the one-past-the-end reads upstream's `s[1]`/`s[2]`/`s[3]` tests make
+/// are in bounds here too.
+fn buffer_line(lnum: LineNr) -> Vec<u8> {
+    let mut line = current_buf().lines().line(lnum).to_vec();
+    line.push(0);
+    line
 }
 
 /// `try_getdigits`: the decimal number at `line[off]`, and the offset past
 /// it. Answers `None` when the value did not fit, which is upstream's
 /// "this is not a version-guarded modeline after all".
 fn version_at(line: &[u8], off: usize) -> Option<(intmax_t, usize)> {
-    let base = line.as_ptr().cast::<c_char>();
-    let mut p = base.wrapping_add(off).cast_mut();
-    let mut vers: intmax_t = 0;
-    // SAFETY: a position inside a NUL-terminated line, and a local to fill
-    // in; `strtoimax` stops at the terminator.
-    let ok = unsafe { try_getdigits(&raw mut p, &raw mut vers) };
-    ok.then(|| (vers, p as usize - base as usize))
+    try_getdigits_at(line, off)
 }
 
 /// `do_set` over the option list at `text[off..]`, up to its terminator.
@@ -163,7 +153,7 @@ pub fn do_modelines(flags: OptionSetFlags) {
 /// Check one line for a mode string, and apply it. `Err` when an error was
 /// encountered, which stops the whole pass.
 fn chk_modeline(lnum: LineNr, flags: OptionSetFlags) -> Result<(), Failed> {
-    let line = buffer_line(lnum);
+    let line = &buffer_line(lnum)[..];
     // The NUL the slice ends on is not part of the line: `line_end` is where
     // upstream's `ml_get_len` puts it.
     let line_end = line.len() - 1;

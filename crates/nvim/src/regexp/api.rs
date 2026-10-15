@@ -399,6 +399,14 @@ pub(crate) unsafe fn vim_regexec_syntax(
     result
 }
 
+/// Free the program a field owns and empty the field: upstream's
+/// `vim_regfree(p); p = NULL` for a slot that holds its own program.
+pub(crate) fn free_prog_in(slot: &mut *mut RegProg) {
+    // SAFETY: the slot's own program, or null.
+    unsafe { vim_regfree(*slot) };
+    *slot = ptr::null_mut();
+}
+
 /// A compiled pattern its holder owns: freed when dropped, and replaced in
 /// place when the engine falls back to the other one.
 pub(crate) struct OwnedProg(*mut RegProg);

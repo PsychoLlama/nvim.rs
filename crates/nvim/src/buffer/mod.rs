@@ -42,8 +42,7 @@
 //!
 //! Original: `src/nvim/buffer.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -53,10 +52,12 @@ use crate::ex_cmds::EcmdFlags;
 use crate::types::AutoEvent;
 use crate::types::NL;
 use crate::winlayer::BufId;
-use core::ffi::{CStr, c_int, c_void};
+use core::ffi::{CStr, c_int};
 use core::ptr;
 
-use crate::autocmd::{apply_autocmds, apply_autocmds_retval, block_autocmds, unblock_autocmds};
+use crate::autocmd::{
+    apply_autocmds_exarg, block_autocmds, fire_autocmds_retval, unblock_autocmds,
+};
 use crate::change::unchanged;
 use crate::ex_cmds::do_ecmd;
 use crate::ex_docmd::do_cmdline_cmd;
@@ -65,7 +66,7 @@ use crate::fold::{clear_folding, fold_update_all};
 use crate::global_cell::GlobalCell;
 use crate::mark::setpcmark;
 use crate::memline::ml_delete;
-use crate::memory::{XString, xfree};
+use crate::memory::XString;
 use crate::message::emsg;
 use crate::normal::end_visual_mode;
 use crate::option::shortmess;
@@ -73,8 +74,8 @@ use crate::os::cshim::gettext;
 use crate::syntax::reset_synblock;
 use crate::types::{
     AlignTextPos, BfaFlags, BlnFlags, Buffer, BufferRef, CdCause, DoBufAction, DoBufStart,
-    EStackType, ExArg, ExtmarkOp, FAIL, Failed, GetFileFlags, LineNr, MarkAdjustMode, MarkTree,
-    MetaIndex, OK, UndoObjectType, VarNumber, WinSplit, WinStyle, uint32_t,
+    EStackType, ExArg, ExtmarkOp, FAIL, Failed, GetFileFlags, LineNr, MarkAdjustMode, MetaIndex,
+    OK, UndoObjectType, VarNumber, WinSplit, WinStyle, uint32_t,
 };
 use crate::undo::buf_is_changed;
 use crate::window::{check_colorcolumn, close_windows, window_layout_lock, window_layout_unlock};
@@ -376,20 +377,19 @@ pub(crate) fn fire(event: AutoEvent, buffer: Buf) -> bool {
 }
 
 /// `apply_autocmds(event, buf->b_fname, buf->b_fname, false, buf)`, the form
-/// the unload/delete/wipe events take.
+/// the unload/delete/wipe events take -- with a copy of the name, which the
+/// autocommands may free.
 pub(crate) fn fire_named(event: AutoEvent, buffer: Buf) -> bool {
-    let name = buffer.name.shown_ptr();
-    // SAFETY: a live buffer and its own file name.
-    unsafe { apply_autocmds(event, name, name, false, Some(buffer)) }
+    let name = buffer.name.shown().map(XString::from_cstr);
+    let name = name.as_ref().map(XString::as_cstr);
+    apply_autocmds_exarg(event, name, name, false, Some(buffer), None)
 }
 
 /// `apply_autocmds_retval()`: as [`fire`], but the event may turn `retval`
 /// into `FAIL`.
 pub(crate) fn fire_retval<T>(event: AutoEvent, buffer: Buf, retval: &mut Result<T, Failed>) {
-    let none = ptr::null_mut();
     let mut status = if retval.is_ok() { OK } else { FAIL };
-    // SAFETY: a live buffer and a local to report through.
-    unsafe { apply_autocmds_retval(event, none, none, false, buffer, &raw mut status) };
+    fire_autocmds_retval(event, buffer, &mut status);
     // The event can only *lose* the read, never claim one: `FAIL` is the
     // only value `apply_autocmds_retval` writes.
     if status == FAIL {
@@ -408,18 +408,6 @@ pub(crate) fn unblock_autocmds_now() {
 /// Whether an error, interrupt or exception is unwinding the script.
 pub(crate) fn aborting_now() -> bool {
     aborting()
-}
-
-/// `xfree()`.
-pub(crate) fn free<T>(p: *mut T) {
-    // SAFETY: an owned allocation or null.
-    unsafe { xfree(p.cast::<c_void>()) };
-}
-
-/// `XFREE_CLEAR()` over a slot holding an owned allocation.
-pub(crate) fn xfree_clear<T>(slot: &mut *mut T) {
-    free(*slot);
-    *slot = ptr::null_mut();
 }
 
 /// `ml_delete()` on the current buffer.

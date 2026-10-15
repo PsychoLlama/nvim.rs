@@ -36,9 +36,16 @@
 #![allow(non_upper_case_globals)]
 
 use super::{Buf, BufId, FrameId, TabId, TabPage, Win, WinId};
+use crate::allocator::Owned;
 use crate::global_cell::GlobalCell;
-use crate::memory::xcalloc;
-use crate::types::{Buffer, Tabpage, Window};
+use crate::memory::XString;
+use crate::memory::{xcalloc, xfree};
+use crate::optionstr::BUF_STRING_OPTIONS;
+use crate::registry::id_map;
+use crate::syntax::init_synblock;
+use crate::types::HashTab;
+use crate::types::MemLine;
+use crate::types::{BufName, Buffer, MarkTree, Tabpage, Window};
 use core::ffi::c_int;
 
 pub(crate) static firstwin: GlobalCell<Option<WinId>> = GlobalCell::new(None);
@@ -343,6 +350,15 @@ impl Saved {
     }
 }
 
+/// Give back the block [`Win::alloc_zeroed`] allocated for a window the
+/// deferred-free list parked: the window's fields were released when it was
+/// given up, so this is the `xfree` alone.
+pub(crate) fn free_window_block(raw: *mut Window) {
+    // SAFETY: an `xcalloc` block of a window nothing reaches any more, freed
+    // once.
+    unsafe { xfree(raw.cast()) };
+}
+
 impl Win {
     /// A window freshly allocated by `xcalloc`, before the allocator has
     /// given it a handle -- so nothing is read and the handle is zero until
@@ -356,4 +372,61 @@ impl Win {
         init(raw);
         Self::at(raw, 0)
     }
+}
+
+/// A `Buffer` that lives **outside** the handle registry and off the buffer
+/// list: scratch storage whose only real content is a memline.
+///
+/// Two exist, and both are the editor's own business rather than the user's:
+/// `ml_recover`'s, which holds the memline of the swap file being read, and
+/// `open_spellbuf`'s, which backs a `.sug` word list with a swap file so it
+/// need not stay in memory. Neither is given a handle, neither is registered
+/// (so `find_buf`, `nvim_list_bufs` and every `FOR_ALL_BUFFERS` walk
+/// are blind to them, which is the point), and neither goes through
+/// `close_buffer`/`free_buffer` — each is freed by the code that made it.
+///
+/// The constructor is named so that "the registry owns every buffer" has a
+/// stated exception rather than a silent one; `buffer::list::new_buffer` is
+/// the ordinary path, which starts from one of these too.
+///
+/// Most fields stay zero and are *not* valid buffer state: string options
+/// are null, there are no `b:` variables and no undo information. Only what
+/// the caller fills in afterwards may be read.
+pub(crate) fn alloc_unregistered_buffer() -> Owned<Buffer> {
+    let mut storage = Box::<Buffer>::new_zeroed();
+    let at = storage.as_mut_ptr();
+    // The fields a zeroed `Buffer` is *not* a valid value for -- an empty
+    // `Vec` holds a non-null dangling pointer, not a zero one, a `HashMap`
+    // holds a seeded hasher, and an `Option<XString>`'s niche is the
+    // vector's capacity, so all-zero bytes are `Some` of a null vector --
+    // are the user-command list, the keymap, the remembered window
+    // positions, the buffer's syntax block (`init_synblock`, and its two
+    // keyword tables, whose zero bytes are a valid empty table only by
+    // the accident of the enum's layout), what the memline owns, the two
+    // extmark tables, the string options and the file name. The unit case
+    // `buffer::a_fresh_buffer_holds_valid_owners` reads each of them back.
+    // SAFETY: all are inside the block just allocated, nothing has read or
+    // dropped them, and `write` does not drop what was there.
+    unsafe { (&raw mut (*at).b_ucmds).write(Vec::new()) };
+    unsafe { (&raw mut (*at).b_kmap_ga).write(Vec::new()) };
+    unsafe { (&raw mut (*at).b_wininfo).write(Vec::new()) };
+    unsafe { init_synblock(&raw mut (*at).b_s) };
+    unsafe { (&raw mut (*at).b_s.b_keywtab).write(HashTab::init()) };
+    unsafe { (&raw mut (*at).b_s.b_keywtab_ic).write(HashTab::init()) };
+    unsafe { (&raw mut (*at).b_ml).write(MemLine::closed()) };
+    unsafe { (&raw mut (*at).b_marktree).write(MarkTree::EMPTY) };
+    unsafe { (&raw mut (*at).b_extmark_ns).write(id_map()) };
+    // ... and the string options, which are `Option<XString>`s.
+    for field in BUF_STRING_OPTIONS {
+        let slot = at.wrapping_byte_add(field.field_offset());
+        // SAFETY: as above; the selector names one such field of the block.
+        unsafe { slot.cast::<Option<XString>>().write(None) };
+    }
+    // ... and the file name, for the same reason: `BufName` holds two of
+    // those `Option<XString>`s and an enum whose niche is one of them.
+    // SAFETY: as above.
+    unsafe { (&raw mut (*at).name).write(BufName::default()) };
+    // SAFETY: all-zero bytes are otherwise what upstream's
+    // `xcalloc(1, sizeof(Buffer))` hands a fresh buffer.
+    Owned::new(unsafe { storage.assume_init() })
 }

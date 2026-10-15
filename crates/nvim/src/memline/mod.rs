@@ -52,7 +52,7 @@ use crate::message::{
     msg_multiline, msg_outnum, msg_putchar, msg_reset_scroll, msg_start, msg_str, msg_str_hl,
     set_keep_msg, verb_msg,
 };
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_cstr_opt;
 use crate::option::vars::{P_DIR, P_SHM, p_dir, p_uc, p_verbose};
 use crate::option::{copy_option_part, get_fileformat, set_fileformat, set_option_value_give_err};
 use crate::options::kOptFileencoding;
@@ -499,13 +499,7 @@ pub fn ml_open_file(buffer: Buf) {
         need_wait_return.set(true); // call wait_return() later
         let _no_prompt = Suppress::wait_return();
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg0 = unsafe {
-            c_str(if !buf_spname(buffer).is_null() {
-                buf_spname(buffer)
-            } else {
-                b.name.shown_ptr()
-            })
-        };
+        let arg0 = msg_cstr_opt(buf_spname(&buffer).or(b.name.shown()));
         semsg!("E303: Unable to open swap file for \"{arg0}\", recovery impossible");
     }
 

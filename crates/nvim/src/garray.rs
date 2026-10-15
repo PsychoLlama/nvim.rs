@@ -132,6 +132,12 @@ unsafe fn cbytes<'a>(s: *const c_char) -> &'a [u8] {
     unsafe { CStr::from_ptr(s) }.to_bytes()
 }
 
+/// [`ga_clear`] of an array the caller holds: a `GArray` owns its `ga_data`.
+pub(crate) fn ga_free(gap: &mut GArray) {
+    // SAFETY: a live array, whose data is its own allocation or null.
+    unsafe { ga_clear(gap) }
+}
+
 /// Release the array's storage and reset it to empty. The items themselves
 /// are the caller's (see [`ga_clear_strings`] for the `char *` case).
 ///
@@ -357,45 +363,6 @@ pub unsafe fn ga_append_via_ptr(gap: *mut GArray, item_size: usize) -> *mut c_vo
     let mem = unsafe { tail(ga, item_size) };
     ga.ga_len += 1;
     mem.cast::<c_void>()
-}
-
-/// Take the `count` strings of a `char **` array some walk answered as owned
-/// strings, giving the array and the strings back.
-///
-/// # Safety
-/// `strings` must be NULL, or an allocated array of `count` allocated,
-/// NUL-terminated strings, which nothing else will free.
-pub(crate) unsafe fn take_string_array(
-    count: c_int,
-    strings: *mut *mut c_char,
-) -> Vec<crate::memory::XString> {
-    if strings.is_null() {
-        return Vec::new();
-    }
-    let taken = (0..usize::try_from(count).unwrap_or(0))
-        // SAFETY: the caller's `count` NUL-terminated strings.
-        .map(|at| crate::memory::XString::from_cstr(unsafe { CStr::from_ptr(*strings.add(at)) }))
-        .collect();
-    // SAFETY: the caller's array and strings, given back once.
-    unsafe { free_string_array(count, strings) };
-    taken
-}
-
-/// Free a `char **` array of `count` allocated strings, and the strings.
-///
-/// # Safety
-/// `strings` must be NULL, or an allocated array of `count` allocated
-/// strings.
-pub(crate) unsafe fn free_string_array(count: c_int, strings: *mut *mut c_char) {
-    if count <= 0 || strings.is_null() {
-        return;
-    }
-    for i in (0..as_size(count)).rev() {
-        // SAFETY: the caller's array, and each string in it, freed once.
-        unsafe { xfree((*strings.add(i)).cast()) };
-    }
-    // SAFETY: as above.
-    unsafe { xfree(strings.cast()) };
 }
 
 #[cfg(test)]

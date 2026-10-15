@@ -23,6 +23,12 @@ use core::ffi::c_int;
 
 use super::*;
 
+/// [`syntax_clear`] of a block the caller holds.
+pub(crate) fn syntax_clear_in(block: &mut SynBlock) {
+    // SAFETY: a live block, unaliased for the call by its `&mut`.
+    unsafe { syntax_clear(block) }
+}
+
 /// Clear all syntax info for one block.
 ///
 /// # Safety

@@ -550,7 +550,7 @@ pub fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
     let mut bufref = BufRef::NONE;
     if !(buf_is_empty(Buf::current()) || saved.is_err()) {
         // Allocate a buffer without putting it in the buffer list.
-        let savebuf = buflist_new_named(None, None, 1, BLN_DUMMY as c_int);
+        let savebuf = buflist_new(None, None, 1, BLN_DUMMY as c_int);
         bufref = BufRef::of_opt(savebuf);
         if let Some(scratch) = savebuf
             && buffer.raw() == Buf::current_raw()

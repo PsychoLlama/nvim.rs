@@ -164,8 +164,7 @@ pub(crate) fn open_cmdwin() -> ::core::ffi::c_int {
     // Create the empty command-line buffer. Be especially cautious of
     // BufLeave autocommands from do_ecmd(): the cmdwin restrictions do
     // not apply to them.
-    let newbuf_status =
-        unsafe { buf_open_scratch(0, ::core::ptr::null_mut::<::core::ffi::c_char>()) };
+    let newbuf_status = buf_open_scratch(0, None);
     let cmdwin = cmdwin_win.get().and_then(valid_win);
     if newbuf_status.is_err()
         || cmdwin.is_none_or(|w| !w.is_current())

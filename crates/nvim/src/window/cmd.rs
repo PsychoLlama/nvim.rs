@@ -29,7 +29,7 @@ use core::ptr;
 
 use super::*;
 
-use crate::buffer::{buflist_findname_exp, buflist_getfile, find_buf, set_pcmark};
+use crate::buffer::{buflist_getfile, find_buf, set_pcmark};
 use crate::cursor::check_cursor_lnum;
 use crate::edit::{BeginlineOpts, beginline};
 use crate::ex_cmds::do_ecmd;
@@ -704,7 +704,7 @@ fn find_buffer(fnum: c_int) -> Option<Buf> {
 /// The buffer whose name `name` expands to, if there is one.
 fn find_buffer_by_name(name: *mut c_char) -> Option<Buf> {
     // SAFETY: a NUL-terminated file name.
-    unsafe { buflist_findname_exp(name) }
+    crate::buffer::find_buffer_by_name(unsafe { cstr::at(name) })
 }
 
 /// Edit buffer `fnum` in the current window, remembering the alternate file.

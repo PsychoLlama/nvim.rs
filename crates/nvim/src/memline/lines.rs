@@ -72,6 +72,7 @@
 
 use super::*;
 use crate::cstr;
+use crate::fileio::ReadFlags;
 use crate::pos::MAXCOL;
 use crate::types::{Failed, NUL};
 use crate::winlayer::Buf;
@@ -417,7 +418,7 @@ pub unsafe fn ml_append_flags(
     flags: ::core::ffi::c_int,
 ) -> Result<(), Failed> {
     // During startup the memfile may still have to be created.
-    if Buf::current().b_ml.ml_mfp.is_null() && open_buffer(false, None, 0).is_err() {
+    if Buf::current().b_ml.ml_mfp.is_null() && open_buffer(false, None, ReadFlags::NONE).is_err() {
         return Err(Failed);
     }
     unsafe { ml_append_flush(Buf::current(), lnum, line, len, flags) }
@@ -625,7 +626,7 @@ pub unsafe fn ml_replace_buf_len(
     }
     // During startup the memfile may still have to be created.
     if b.b_ml.ml_mfp.is_null() {
-        open_buffer(false, None, 0)?;
+        open_buffer(false, None, ReadFlags::NONE)?;
     }
 
     let line = if copy {

@@ -315,8 +315,7 @@ fn redraw_win_for_change(
 ///
 /// See [`changed_lines`] for the arguments.
 fn changed_common(buffer: Buf, lnum: LineNr, col: ColNr, lnume: LineNr, xtra: LineNr) {
-    // SAFETY: a live buffer.
-    unsafe { changed(buffer) };
+    changed(buffer);
 
     for win in windows() {
         let diffed =

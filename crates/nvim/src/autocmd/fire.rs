@@ -225,6 +225,19 @@ pub fn apply_autocmds_exarg(
     }
 }
 
+/// [`apply_autocmds_retval`] with no names: `buffer`'s event, which may turn
+/// `retval` into `FAIL`.
+pub(crate) fn fire_autocmds_retval(
+    event: AutoEvent,
+    buffer: Buf,
+    retval: &mut ::core::ffi::c_int,
+) -> bool {
+    let none = ::core::ptr::null_mut();
+    // SAFETY: no names, a live buffer and the caller's status to report
+    // through.
+    unsafe { apply_autocmds_retval(event, none, none, false, buffer, retval) }
+}
+
 /// [`apply_autocmds`] threaded through a caller's `OK`/`FAIL`: it does
 /// nothing once that says to abort, and turns it to `FAIL` if a handler
 /// aborted.

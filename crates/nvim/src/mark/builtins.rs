@@ -18,7 +18,6 @@
 
 use crate::buffer::buflist_nr2name;
 use crate::eval::typval::{tv_dict_alloc, tv_list_alloc};
-use crate::memory::xfree;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_int};
 
@@ -106,8 +105,12 @@ pub fn get_global_marks(l: &mut List) {
         // A slot whose buffer is loaded reports the buffer's name (allocated
         // here); one that came out of the shada file reports the name it
         // still carries, which belongs to the slot and must not be freed.
+        let owned;
         let name = if fnum != 0 {
-            buflist_nr2name(fnum, 1, 1)
+            owned = buflist_nr2name(fnum, 1, 1);
+            owned
+                .as_ref()
+                .map_or(ptr::null_mut(), |name| name.as_ptr().cast_mut())
         } else {
             mark.fname()
         };
@@ -125,10 +128,5 @@ pub fn get_global_marks(l: &mut List) {
         // allocated or the slot's own, live for the call.
         let file = unsafe { cstr::at(name) };
         let _ = add_mark(l, mark_text, mark.fmark().pos(), fnum, Some(file));
-        if fnum != 0 {
-            // SAFETY: `buflist_nr2name` answered an allocation nothing else
-            // holds, and `file` is not used past here.
-            unsafe { xfree(name.cast()) };
-        }
     }
 }

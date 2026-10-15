@@ -266,15 +266,10 @@ fn saved_winopts(s: Session) -> Option<*mut WinOpt> {
         // The window went elsewhere; the terminal's buffer kept a copy of
         // the options this window had while it was showing it.
         let buf = s.term.buf()?;
-        let (wininfos, count) = (buf.b_wininfo.items, buf.b_wininfo.size);
-        for i in 0..count {
-            // SAFETY: the buffer's own array of `count` live entries.
-            let wip = unsafe { *wininfos.add(i) };
-            // SAFETY: as above; nothing here frees one.
-            let (win, optset, opts) =
-                unsafe { ((*wip).wi_win, (*wip).wi_optset, &raw mut (*wip).wi_opt) };
-            if win == Some(wp.id()) && optset {
-                return Some(opts);
+        let mut buf = buf;
+        for wip in buf.b_wininfo.iter_mut() {
+            if wip.wi_win == Some(wp.id()) && wip.wi_optset {
+                return Some(&raw mut wip.wi_opt);
             }
         }
         return None;

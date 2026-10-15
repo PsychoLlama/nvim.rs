@@ -408,8 +408,7 @@ fn walk_to_target(
 fn undo_up_to(dest: &UndoDest) {
     while !got_int.get() {
         // The change warning first, for the reason `u_doit` gives.
-        // SAFETY: a live current buffer, by the contract above.
-        unsafe { change_warning(Buf::current(), 0) };
+        change_warning(Buf::current(), 0);
         let mut buf = Buf::current();
         let above = match buf.header(buf.b_u_curhead) {
             Some(curhead) => buf.header(curhead.uh_next),
@@ -435,8 +434,7 @@ fn undo_up_to(dest: &UndoDest) {
 fn redo_down_to(dest: &UndoDest) -> bool {
     let mut did_undo = true;
     while !got_int.get() {
-        // SAFETY: a live current buffer, by the contract above.
-        unsafe { change_warning(Buf::current(), 0) };
+        change_warning(Buf::current(), 0);
         let mut buf = Buf::current();
         let Some(fork) = buf.header(buf.b_u_curhead) else {
             break;

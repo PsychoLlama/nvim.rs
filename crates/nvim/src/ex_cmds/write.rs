@@ -22,7 +22,7 @@ use crate::arglist::do_argfile;
 use crate::autocmd::{augroup_exists_of, do_doautocmd};
 use crate::buffer::{
     BufFlags, BufRef, buf_dontwrite_msg, buf_hide, buf_is_dontwrite, buf_is_nofilename,
-    buf_name_changed, buflist_findname_of, current_buf, do_autochdir, do_modelines, fileinfo,
+    buf_name_changed, buflist_findname, current_buf, do_autochdir, do_modelines, fileinfo,
     no_write_message, no_write_message_buf, otherfile, setaltfname, setfname,
 };
 use crate::bufwrite::{WriteName, WriteRequest, buf_write};
@@ -231,7 +231,7 @@ pub fn do_write(args: &mut ExArg) -> Result<(), Failed> {
         alt_buf = if cpo_has(CpoFlag::ALTWRITE) || args.cmdidx == CmdIdx::saveas {
             setaltfname(full, typed, 1)
         } else {
-            full.and_then(buflist_findname_of)
+            full.and_then(buflist_findname)
         };
         // Overwriting a file that is loaded in another buffer is not a good
         // idea.

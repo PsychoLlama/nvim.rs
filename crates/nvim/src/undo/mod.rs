@@ -42,7 +42,7 @@ use crate::mark::{free_fmark, mark_adjust, setpcmark};
 use crate::mbyte::utfc_ptr2len;
 use crate::memline::MlFlags;
 use crate::memline::{ml_append_flags, ml_delete, ml_replace, resolve_symlink};
-use crate::memory::{xfree, xmalloc, xrealloc, xstrdup};
+use crate::memory::{XString, xfree, xmalloc, xrealloc, xstrdup};
 use crate::message::{e_modifiable, e_sandbox, e_textlock};
 use crate::message::{
     emsg, give_warning, iemsg, internal_error, messaging, msg, msg_end, msg_ext_set_kind,
@@ -292,9 +292,7 @@ pub fn u_savecommon(
             return Err(Failed);
         }
         if ptr::eq(buffer.raw(), Buf::current_raw()) {
-            // SAFETY: the current buffer, which is live and survives
-            // FileChangedRO.
-            unsafe { change_warning(buffer, 0) };
+            change_warning(buffer, 0);
         }
         if bot > b.line_count() + 1 {
             emsg(gettext(c"E881: Line count changed unexpectedly"));
@@ -559,6 +557,14 @@ fn record_entry(
     b.b_u_synced = false;
     undo_undoes.set(false);
     Ok(())
+}
+
+/// [`undo_fmt_time`] as a `room`-byte buffer would hold it, owned.
+pub(crate) fn undo_time_text(tt: time_t, room: usize) -> XString {
+    let room = room.max(1);
+    // SAFETY: `filled` hands over `room` writable bytes, which is what the
+    // formatter is told.
+    XString::filled(room - 1, |buf| unsafe { undo_fmt_time(buf, room, tt) })
 }
 
 /// Writes when `tt` was into `buf`: a clock time for anything older than a

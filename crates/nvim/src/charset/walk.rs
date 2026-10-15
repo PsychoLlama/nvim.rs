@@ -196,6 +196,13 @@ pub(crate) unsafe fn try_getdigits(cursor: *mut *mut c_char, nr: *mut intmax_t) 
     !overflow
 }
 
+/// [`try_getdigits`] over a slice: the number `text[at..]` starts with and
+/// the offset past it, or `None` when the value did not fit.
+pub(crate) fn try_getdigits_at(text: &[u8], at: usize) -> Option<(intmax_t, usize)> {
+    let (number, used, overflow) = skip::decimal(&text[at..]);
+    (!overflow).then_some((number, at + used))
+}
+
 /// [`try_getdigits`], answering `def` when the value did not fit; see
 /// [`getdigits_at`].
 ///

@@ -185,20 +185,6 @@ pub(crate) struct KeymapEntry {
     pub(crate) to: Vec<u8>,
 }
 
-/// Neither `Copy` nor `Clone`, and now the *owner* of what hangs off it.
-/// The registry holds a buffer as an `allocator::Owned<Buffer>`, so this
-/// struct is dropped rather than `xfree`d and a field with a destructor
-/// works: the buffer-local user commands are a `Vec` and every `b_p_*`
-/// string option is an `Option<XString>`. Each raw pointer that is left is
-/// either a borrowed edge into the graph or an allocation this buffer
-/// releases in `free_buffer`, and duplicating one would make a second owner
-/// of all of them.
-///
-/// **The buffer is allocated zeroed** (`buffer::list::alloc_unregistered_buffer`),
-/// and all-zero bytes are `None` for every `Option<XString>` here: that is
-/// upstream's null option variable, which it then replaced with the shared
-/// empty string. `None` is that shared empty string, so a fresh buffer's
-/// options read as `""` with nothing to patch up.
 /// A buffer's file name, in the three forms upstream keeps as three
 /// `char *` fields — and with the aliasing between them stated.
 ///
@@ -361,6 +347,27 @@ impl BufName {
     }
 }
 
+/// Neither `Copy` nor `Clone`, and now the *owner* of what hangs off it.
+/// The registry holds a buffer as an `allocator::Owned<Buffer>`, so this
+/// struct is dropped rather than `xfree`d and a field with a destructor
+/// works: the buffer-local user commands are a `Vec` and every `b_p_*`
+/// string option is an `Option<XString>`. Each raw pointer that is left is
+/// either a borrowed edge into the graph or an allocation this buffer
+/// releases in `free_buffer`, and duplicating one would make a second owner
+/// of all of them.
+///
+/// **The buffer is allocated zeroed** (`winlayer::graph::alloc_unregistered_buffer`),
+/// and all-zero bytes are **not** a valid value for every field here. They
+/// are `None` for an `Option` of a non-null pointer (`Option<Box>`,
+/// `Option<ThinCString>`, a handle over `NonZero`), but an `Option<XString>`'s
+/// niche is the vector's capacity, so all-zero bytes are `Some` of a null
+/// vector -- and a `Vec`, a `HashMap` or a `HashSet` is never valid zeroed.
+/// Every such field is written by the allocator before the block is a
+/// `Buffer`; `None` is then upstream's shared empty string, so a fresh
+/// buffer's options read as `""` with nothing to patch up. A field added
+/// here whose type is not valid zeroed must be added to that allocator, and
+/// to the unit case `buffer::list::tests::a_fresh_buffer_holds_valid_owners`
+/// that reads each one back.
 pub struct Buffer {
     pub handle: Handle,
     pub b_ml: MemLine,
@@ -391,7 +398,9 @@ pub struct Buffer {
     pub b_mod_top: LineNr,
     pub b_mod_bot: LineNr,
     pub b_mod_xlines: LineNr,
-    pub b_wininfo: file_buffer_b_wininfo,
+    /// What each window that has shown this buffer remembers of it, most
+    /// recently used first.
+    pub b_wininfo: Vec<WinInfo>,
     pub b_mod_tick_syn: DispTick,
     pub b_mod_tick_decor: DispTick,
     pub b_mtime: int64_t,
@@ -600,7 +609,8 @@ pub struct Buffer {
     pub b_start_eof: ::core::ffi::c_int,
     pub b_start_eol: ::core::ffi::c_int,
     pub b_start_ffc: ::core::ffi::c_int,
-    pub b_start_fenc: *mut ::core::ffi::c_char,
+    /// The `'fileencoding'` the file was read with, for `file_ff_differs`.
+    pub b_start_fenc: Option<ThinCString>,
     pub b_bad_char: ::core::ffi::c_int,
     pub b_start_bomb: ::core::ffi::c_int,
     pub b_bufvar: ScopeDictItem,
@@ -609,7 +619,8 @@ pub struct Buffer {
     pub b_did_warn: bool,
     pub b_help: bool,
     pub b_spell: bool,
-    pub b_prompt_text: *mut ::core::ffi::c_char,
+    /// `prompt_setprompt()`'s text; `None` is the default `"% "`.
+    pub b_prompt_text: Option<ThinCString>,
     pub b_prompt_callback: Callback,
     pub b_prompt_interrupt: Callback,
     pub b_prompt_append_new_line: bool,
@@ -618,7 +629,8 @@ pub struct Buffer {
     pub b_s: SynBlock,
     pub b_signcols: file_buffer_b_signcols,
     pub terminal: *mut Terminal,
-    pub additional_data: *mut AdditionalData,
+    /// What the ShaDa file carried for this buffer that nvim does not read.
+    pub(crate) additional_data: Option<crate::shada::ShadaExtra>,
     pub b_mapped_ctrl_c: ::core::ffi::c_int,
     /// Where this buffer's extmarks live. Upstream declared it `MarkTree[1]`
     /// so that the name decayed to the pointer every `marktree.h` entry
@@ -642,11 +654,6 @@ pub struct file_buffer_b_signcols {
     pub last_max: ::core::ffi::c_int,
     pub count: [::core::ffi::c_int; 9],
     pub autom: bool,
-}
-pub struct file_buffer_b_wininfo {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut *mut WinInfo,
 }
 pub struct file_buffer_update_callbacks {
     pub size: size_t,

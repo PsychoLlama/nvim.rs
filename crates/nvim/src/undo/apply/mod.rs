@@ -128,8 +128,7 @@ pub(crate) fn u_doit(startcount: c_int, quiet: bool, do_buf_event: bool) {
         // The change warning goes first so that FileChangedRO fires before
         // anything else: it may reload the file, and that moves
         // `b_u_curhead` and more.
-        // SAFETY: a live current buffer.
-        unsafe { change_warning(Buf::current(), 0) };
+        change_warning(Buf::current(), 0);
         let mut buf = Buf::current();
         if undo_undoes.get() {
             if buf.b_u_curhead.is_none() {

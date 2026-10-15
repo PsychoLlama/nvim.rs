@@ -39,7 +39,7 @@ use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int, c_long, c_void};
 
 use crate::buffer::BufRef;
-use crate::buffer::buflist_findname_exp;
+use crate::buffer::find_buffer_by_name;
 use crate::drawscreen::{UPD_SOME_VALID, redraw_all_later};
 use crate::fileio::temp_name;
 use crate::fileio::{buf_reload, vim_fgets};
@@ -146,7 +146,8 @@ pub unsafe fn spell_add_word(
 
         // Refuse to write the file behind the user's back if they are
         // editing it and have unsaved changes.
-        let open = unsafe { buflist_findname_exp(fnamebuf) }.filter(|b| !b.b_ml.ml_mfp.is_null());
+        let open =
+            find_buffer_by_name(unsafe { cstr::at(fnamebuf) }).filter(|b| !b.b_ml.ml_mfp.is_null());
         if open.is_some_and(buf_is_changed) {
             emsg(gettext(e_bufloaded));
             unsafe { xfree(fnamebuf as *mut c_void) };

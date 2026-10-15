@@ -210,8 +210,7 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
     };
     '_theend: {
         if Buf::current().b_changed == 0 {
-            // SAFETY: the current buffer is live.
-            unsafe { change_warning(Buf::current(), 0) };
+            change_warning(Buf::current(), 0);
             // The warning can run autocommands, which can move us.
             if tp.diff_index(Buf::current()) != idx_to {
                 emsg_gettext(c"E787: Buffer changed unexpectedly".as_ptr());

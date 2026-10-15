@@ -446,7 +446,5 @@ pub fn fm_getname(fm: &FileMark, lead_len: c_int) -> Option<XString> {
         // is ours.
         return Some(unsafe { XString::from_raw(mark_line(fm.mark, lead_len)) });
     }
-    let name = buflist_nr2name(fm.fnum, 0, 1);
-    // SAFETY: a fresh allocation, or null.
-    (!name.is_null()).then(|| unsafe { XString::from_raw(name) })
+    buflist_nr2name(fm.fnum, 0, 1)
 }

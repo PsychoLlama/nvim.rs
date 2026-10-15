@@ -608,9 +608,7 @@ pub fn redraw_ruler() {
     // Add a "50%" if there is room for it. On the last line, don't print in
     // the last column: that scrolls the screen up on some terminals.
     let mut rel_pos = [0 as c_char; RULER_BUF_LEN as usize];
-    // SAFETY: `rel_pos` is `RULER_BUF_LEN` bytes of this frame, which
-    // `get_rel_pos` fills and NUL-terminates.
-    let rel_poslen = unsafe { get_rel_pos(win, rel_pos.as_mut_ptr(), RULER_BUF_LEN) };
+    let rel_poslen = get_rel_pos(win, &mut rel_pos);
     // SAFETY: as above.
     let mut n1 = bufferlen + unsafe { vim_strsize(rel_pos.as_ptr()) };
     if win.w_status_height == 0 && !is_stl_global {
@@ -675,13 +673,8 @@ fn ruler_position(win: Win, virtcol: ColNr, buffer: &mut [c_char]) -> c_int {
     // SAFETY: `buffer` is `RULER_BUF_LEN` bytes of the caller's frame, and
     // the format takes exactly the one integer.
     let mut len = unsafe { vim_snprintf!(out, room, fmt.as_ptr(), lnum) };
-    let (at, room) = (
-        &mut buffer[len as usize..],
-        (RULER_BUF_LEN as size_t).wrapping_sub(len as size_t),
-    );
     let col = if empty_line { 0 } else { win.w_cursor.col + 1 };
-    // SAFETY: `room` bytes of `buffer`, which is what is left of it.
-    len += unsafe { col_print(at.as_mut_ptr(), room, col, virtcol + 1) };
+    len += col_print(&mut buffer[len as usize..], col, virtcol + 1);
     len
 }
 

@@ -23,6 +23,16 @@ use crate::types::{IOSIZE, ShmFlag};
 pub(crate) struct Report(XString);
 
 impl Report {
+    /// An empty report.
+    pub(crate) fn new() -> Report {
+        Report(XString::new())
+    }
+
+    /// How much room is left, upstream's `IOSIZE - len`.
+    pub(crate) fn room(&self) -> usize {
+        (IOSIZE as usize).saturating_sub(self.0.len())
+    }
+
     /// The file name in quotes, with the home directory at its start
     /// replaced by `~`, and a space after it -- in at most `room` bytes.
     /// Reading stdin has no name: it is shown as `-stdin-`.

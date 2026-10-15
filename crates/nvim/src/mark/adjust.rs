@@ -386,11 +386,10 @@ pub fn mark_adjust_buf(
 
     // The per-window remembered cursor of every window that has ever shown
     // this buffer, including ones that no longer exist.
-    for i in 0..buffer.b_wininfo.size {
-        // SAFETY: `b_wininfo` is a kvec of `size` live `WinInfo` pointers
-        // owned by the buffer, so the entry and its `wi_mark` are live; the
-        // handle reads and writes one position.
-        let mark = unsafe { Fmark::new(&raw mut (**buffer.b_wininfo.items.add(i)).wi_mark) };
+    for i in 0..buffer.b_wininfo.len() {
+        // SAFETY: an entry of the buffer's own list, so its `wi_mark` is
+        // live; the handle reads and writes one position.
+        let mark = unsafe { Fmark::new(&raw mut buffer.b_wininfo[i].wi_mark) };
         if !by_term || mark.lnum() < buffer.b_ml.ml_line_count {
             let mut pos = mark.pos();
             shift.cursor(&mut pos);

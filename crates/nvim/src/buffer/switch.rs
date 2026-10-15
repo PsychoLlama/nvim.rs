@@ -16,8 +16,7 @@
 //!
 //! Original: `src/nvim/buffer.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::ex_cmds::EcmdFlags;
 use crate::ex_cmds::newlnum;
@@ -25,7 +24,6 @@ use crate::semsg;
 use crate::tr_plural;
 use crate::types::CmdIdx;
 use core::ffi::{CStr, c_int, c_ulong};
-use core::ptr;
 use std::ffi::CString;
 
 use super::*;
@@ -43,13 +41,13 @@ use crate::memline::ml_recover;
 use crate::message::msg_str;
 use crate::message::state::{msg_row, msg_scroll, need_fileinfo};
 use crate::message::{e_cannot_switch_to_a_closing_buffer, e_trailing_arg};
-use crate::message_fmt::{c_str, report_msg};
+use crate::message_fmt::{msg_cstr_opt, report_msg};
 use crate::option::vars::{jop_flags, p_confirm, p_report, p_write};
 use crate::options::kOptJopFlagClean;
 use crate::os::cshim::ngettext;
 use crate::os::input::os_breakcheck;
 use crate::search::FORWARD;
-use crate::terminal::terminal_running;
+use crate::terminal::buf_terminal_running;
 use crate::types::{
     Cleanup, CmdModFlags, ExArg, FAIL, Failed, LineNr, OptInt, OptionSetFlags, int64_t,
 };
@@ -126,8 +124,7 @@ fn ask_about_terminal(buffer: Buf) -> bool {
     dialog_close_terminal(buffer)
 }
 fn terminal_alive(buffer: Buf) -> bool {
-    // SAFETY: a live terminal, the caller having ruled out null.
-    unsafe { terminal_running(buffer.terminal) }
+    buf_terminal_running(buffer)
 }
 fn is_quickfix(buffer: Buf) -> bool {
     buf_is_quickfix(Some(buffer))
@@ -243,8 +240,7 @@ pub(crate) fn handle_swap_exists(old_curbuf: Option<BufRef>) {
                 // Block autocommands here because curwin->w_buffer is NULL.
                 block_autocmds_now();
                 let flags = BLN_CURBUF as c_int | BLN_LISTED as c_int;
-                // SAFETY: two null names ask for a nameless buffer.
-                let buf = unsafe { buflist_new(ptr::null_mut(), ptr::null_mut(), 1, flags) };
+                let buf = buflist_new(None, None, 1, flags);
                 unblock_autocmds_now();
                 buf
             }
@@ -925,8 +921,7 @@ fn walk_neighbours(unloaded: &mut Option<Buf>) -> Option<Buf> {
 
 /// `semsg(fmt, buf->b_fname)`.
 fn err_fname(buffer: Buf) {
-    // SAFETY: a buffer's own name, NUL-terminated.
-    let name = unsafe { c_str(buffer.name.shown_ptr()) };
+    let name = msg_cstr_opt(buffer.name.shown());
     semsg!("E89: {name} will be killed (add ! to override)");
 }
 

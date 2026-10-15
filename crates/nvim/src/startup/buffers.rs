@@ -169,7 +169,7 @@ pub(crate) fn read_stdin() {
         }
     } else {
         set_buflisted(1);
-        let _ = open_buffer(true, None, 0);
+        let _ = open_buffer(true, None, ReadFlags::NONE);
         if buf_is_empty(Buf::current()) && Buf::current().b_next.is_some() {
             let _ = do_cmdline_cmd(c"silent! bnext");
             let _ = do_cmdline_cmd(c"silent! bwipeout 1");
@@ -267,7 +267,7 @@ pub(crate) fn create_windows(parm: &mut MainParams) {
             // Ask, rather than print, if the swap file is in the way.
             swap_exists_action.set(SEA_DIALOG);
             set_buflisted(1);
-            let _ = open_buffer(false, None, 0);
+            let _ = open_buffer(false, None, ReadFlags::NONE);
 
             if swap_exists_action.get() == SEA_QUIT {
                 if got_int.get() || only_one_window() {

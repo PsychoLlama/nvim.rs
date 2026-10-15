@@ -794,6 +794,38 @@ impl Dict {
     }
 }
 
+/// Link `b:changedtick` -- the item embedded in `buffer` itself -- into the
+/// buffer's `b:` dictionary, which only points at it.
+///
+/// The buffer owns both, and [`unlink_buf_changedtick`] takes the item out
+/// of the table before either goes, which is what makes the link sound. `b:`
+/// is neither scope the function-name check guards.
+pub(crate) fn link_buf_changedtick(mut buffer: crate::winlayer::Buf) {
+    let item = &raw mut buffer.changedtick_di;
+    let Some(dict) = buffer.b_bufvar.di_tv.dict_mut() else {
+        return;
+    };
+    // SAFETY: the buffer's own dictionary, and its own item, which outlives
+    // its stay in the table as above.
+    let _ = unsafe { hash_add(&raw mut dict.dv_hashtab, DictEntry::new(item)) };
+}
+
+/// Take `b:changedtick` out of `buffer`'s `b:` table, leaving the item --
+/// and the counter in it -- alone: clearing it would zero the counter.
+pub(crate) fn unlink_buf_changedtick(mut buffer: crate::winlayer::Buf) {
+    let Some(dict) = buffer.b_bufvar.di_tv.dict_mut() else {
+        return;
+    };
+    let slot = dict.slot_of(b"changedtick");
+    debug_assert!(slot.is_some(), "changedtick is in the table");
+    if let Some(slot) = slot {
+        let hi = dict.dv_hashtab.slot(slot);
+        // SAFETY: a kept slot of the dictionary's own table; the item it
+        // names is the buffer's, which this does not touch.
+        unsafe { hash_remove(&raw mut dict.dv_hashtab, hi) };
+    }
+}
+
 impl TypVal {
     /// Duplicate the value's bits, **sharing** whatever it points at.
     ///

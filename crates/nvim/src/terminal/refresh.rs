@@ -33,7 +33,7 @@ use crate::global_cell::GlobalCell;
 use crate::memline::{ml_append_buf, ml_replace_buf};
 use crate::r#move::{curs_columns, set_topline};
 use crate::startup::{exiting, main_loop};
-use crate::types::{ColNr, LineNr, MultiQueue, Terminal, TimeWatcher, WinInfo, uint16_t, uint64_t};
+use crate::types::{ColNr, LineNr, MultiQueue, Terminal, TimeWatcher, uint16_t, uint64_t};
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_mode_info_set};
 use crate::winlayer::{Buf, Win, tab_windows};
 use core::ffi::{c_int, c_void};
@@ -311,11 +311,7 @@ pub(crate) fn adjust_topline_cursor(term: Term, mut buffer: Buf, added: c_int) {
     if ml_end == buffer.b_last_cursor.mark.lnum + added as LineNr {
         buffer.b_last_cursor.mark.lnum = ml_end;
     }
-    let (wininfos, count) = (buffer.b_wininfo.items, buffer.b_wininfo.size);
-    for i in 0..count {
-        // SAFETY: the buffer's own array of `count` live entries, none of
-        // which anything above frees.
-        let wip: &mut WinInfo = unsafe { &mut **wininfos.add(i) };
+    for wip in buffer.b_wininfo.iter_mut() {
         if ml_end == wip.wi_mark.mark.lnum + added as LineNr {
             wip.wi_mark.mark.lnum = ml_end;
         }

@@ -16,14 +16,11 @@
 //!
 //! Original: `src/nvim/buffer.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::autocmd::fire_autocmds;
-use crate::eval::typval::DictRef;
 use crate::types::AutoEvent;
-use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
+use core::ffi::{CStr, c_int};
 
 use super::*;
 use crate::eval::typval::{dict_find, dict_is_watched, dict_watcher_notify};
@@ -32,7 +29,6 @@ use crate::message::emsg;
 use crate::option::vars::p_hid;
 use crate::optionstr::{OptString, OptStringRef};
 use crate::os::cshim::gettext;
-use crate::os::cshim::gettext_ptr;
 use crate::quickfix::qf_stack_get_bufnr;
 use crate::quickfix::{msg_loclist, msg_qflist};
 use crate::types::{CmdModFlags, DictItem, LineNr, TypVal, VAR_NUMBER, VarLock, VarNumber};
@@ -41,19 +37,6 @@ use crate::winlayer::graph::cmdwin_buf;
 
 // ---------------------------------------------------------------------------
 // The neighbours, wrapped
-
-/// `_()` over a pointer: the message catalogue's translation of a string
-/// that is a literal here or was set once at startup.
-fn tr_raw(msg: *const c_char) -> *mut c_char {
-    // SAFETY: every caller passes a NUL-terminated literal or one of the two
-    // quickfix titles, which `qf_init` sets from the catalogue at startup.
-    unsafe { gettext_ptr(msg).as_ptr().cast_mut() }
-}
-
-/// `_()`.
-fn tr(msg: &CStr) -> *mut c_char {
-    tr_raw(msg.as_ptr())
-}
 
 /// The first byte of `'buftype'`, or NUL when there is no buffer. Option
 /// variables are never null, so upstream indexes `b_p_bt` unconditionally.
@@ -168,47 +151,38 @@ pub fn buf_hide(buffer: Buf) -> bool {
 // ---------------------------------------------------------------------------
 // The name a buffer without a file is shown under
 
-/// A copy of [`buf_spname`]: the name a special buffer is shown under, or
-/// `None` for an ordinary one.
+/// A copy of [`buf_spname`], for a caller that runs anything while it holds
+/// the name.
 pub(crate) fn buf_spname_owned(buffer: Buf) -> Option<XString> {
-    // SAFETY: null, or a NUL-terminated name that lives at least as long as
-    // the buffer, copied before anything can rename it.
-    unsafe { crate::cstr::at_opt(buf_spname(buffer)) }.map(XString::from_cstr)
+    buf_spname(&buffer).map(XString::from_cstr)
 }
 
-/// The name to display for a special buffer, or null for an ordinary one.
-pub fn buf_spname(buffer: Buf) -> *mut c_char {
+/// The name to display for a special buffer, or `None` for an ordinary one:
+/// a translated literal, or the buffer's own name, borrowed from the handle.
+pub fn buf_spname(buffer: &Buf) -> Option<&CStr> {
     let b = buffer;
-    if buf_is_quickfix(Some(b)) {
+    if buf_is_quickfix(Some(*b)) {
         if b.handle == qf_stack_get_bufnr() {
-            return tr_raw(msg_qflist.as_ptr().cast_mut());
+            return Some(gettext(msg_qflist));
         }
-        return tr_raw(msg_loclist.as_ptr().cast_mut());
+        return Some(gettext(msg_loclist));
     }
-    if buf_is_nofilename(Some(b)) {
-        if !b.name.is_unnamed() {
-            return b.name.shown_ptr();
+    if buf_is_nofilename(Some(*b)) {
+        if let Some(name) = b.name.shown() {
+            return Some(name);
         }
-        if cmdwin_buf.get() == Some(buffer.id()) {
-            return tr(c"[Command Line]");
+        if cmdwin_buf.get() == Some(b.id()) {
+            return Some(gettext(c"[Command Line]"));
         }
-        if buf_is_prompt(Some(b)) {
-            return tr(c"[Prompt]");
+        if buf_is_prompt(Some(*b)) {
+            return Some(gettext(c"[Prompt]"));
         }
-        return tr(c"[Scratch]");
+        return Some(gettext(c"[Scratch]"));
     }
     if b.name.is_unnamed() {
-        return tr(c"[No Name]");
+        return Some(gettext(c"[No Name]"));
     }
-    ptr::null_mut()
-}
-
-pub fn buf_get_fname(buffer: Buf) -> *mut c_char {
-    let name = buffer.name.shown_ptr();
-    if name.is_null() {
-        return tr(c"[No Name]");
-    }
-    name
+    None
 }
 
 // ---------------------------------------------------------------------------
@@ -250,24 +224,14 @@ pub fn buf_set_changedtick(mut b: Buf, changedtick: VarNumber) {
     let old_val = TypVal::Number(b.changedtick_di.di_tv.number_or_zero());
     check_changedtick_item(b);
     b.changedtick_di.di_tv.write_number(changedtick);
-    // SAFETY: `b_vars` is the buffer's own dictionary, allocated with it.
-    if dict_is_watched(unsafe { (b.b_vars).as_ref() }) {
+    if dict_is_watched(b.b_bufvar.di_tv.dict_ref())
+        && let Some(vars) = b.b_bufvar.di_tv.dict_handle()
+    {
         b.b_locked += 1;
-        let vars = b.b_vars;
-        let key = b.changedtick_di.di_key.as_ptr().cast_mut();
-        let new = &raw mut b.changedtick_di.di_tv;
-        // SAFETY: the buffer's own dictionary and its `changedtick` entry,
-        // plus a local holding the value it had.
-        unsafe {
-            dict_watcher_notify(
-                &::core::mem::ManuallyDrop::new(
-                    DictRef::owning(vars).expect("a watched dictionary"),
-                ),
-                ::core::ffi::CStr::from_ptr(key),
-                Some(&*new),
-                Some(&old_val),
-            )
-        };
+        // The new value as a copy: the watchers run Vimscript, which must
+        // not find the buffer's own item borrowed.
+        let new_val = TypVal::Number(changedtick);
+        dict_watcher_notify(&vars, c"changedtick", Some(&new_val), Some(&old_val));
         b.b_locked -= 1;
     }
 }
@@ -278,10 +242,9 @@ fn check_changedtick_item(buffer: Buf) {
     if !cfg!(debug_assertions) {
         return;
     }
-    let vars = buffer.b_vars;
     let key = c"changedtick";
-    // SAFETY: the buffer's own dictionary.
-    let item = dict_find(unsafe { vars.as_ref() }, key.to_bytes()).expect("changedtick_di != NULL");
+    let vars = buffer.b_bufvar.di_tv.dict_ref();
+    let item = dict_find(vars, key.to_bytes()).expect("changedtick_di != NULL");
     assert!(
         item.di_tv.v_type() == VAR_NUMBER as _,
         "changedtick_di->di_tv.v_type() == VAR_NUMBER"

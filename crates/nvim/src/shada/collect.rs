@@ -70,7 +70,10 @@ pub(crate) fn shada_get_buflist(removable_bufs: &RemovableBufs) -> ShadaEntry {
             wanted.push(ShadaBufferListItem {
                 pos: buf.b_last_cursor.mark,
                 fname: buf.name.full_ptr(),
-                additional_data: buf.additional_data,
+                additional_data: buf
+                    .additional_data
+                    .as_ref()
+                    .map_or(core::ptr::null_mut(), ShadaExtra::as_ptr),
             });
         }
     }

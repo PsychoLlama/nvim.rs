@@ -170,6 +170,13 @@ impl Buf {
     }
 }
 
+/// Drop every subscriber `buffer` has, as a buffer reused for another file
+/// must: `kv_destroy` + `kv_init` of both arrays.
+pub(crate) fn reset_subscribers(mut buffer: Buf) {
+    buffer.channels().destroy();
+    buffer.callbacks().destroy();
+}
+
 // ---------------------------------------------------------------------------
 // The calls out of the module
 

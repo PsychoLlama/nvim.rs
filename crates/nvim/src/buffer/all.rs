@@ -7,8 +7,7 @@
 //!
 //! Original: `src/nvim/buffer.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::types::CmdIdx;
 use core::ffi::c_int;
@@ -39,11 +38,6 @@ use crate::winlayer::{Buf, TabPage, Win, buffers, first_tab, first_window, last_
 
 // ---------------------------------------------------------------------------
 // The neighbours, wrapped
-//
-// window.rs, the mark stack and the exception machinery are all still
-// transpiled `unsafe fn`s over raw pointers; each is reached
-// through one wrapper here rather than through an `unsafe` at every call
-// site.
 
 /// Where `close_superfluous_windows` starts, and restarts: floats live at
 /// the end of the list and are closed first.

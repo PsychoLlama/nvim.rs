@@ -903,6 +903,21 @@ pub(crate) unsafe fn terminal_buf(term: *const Terminal) -> BufferHandle {
     unsafe { (*term).buf_handle as BufferHandle }
 }
 
+/// [`terminal_close`] of `buffer`'s terminal, which must be set.
+pub(crate) fn close_buf_terminal(mut buffer: Buf) {
+    debug_assert!(!buffer.terminal.is_null(), "buf->terminal");
+    // SAFETY: the buffer's own slot, holding its live terminal.
+    unsafe { terminal_close(&raw mut buffer.terminal, -1) };
+}
+
+/// [`terminal_check_size`] of `buffer`'s terminal, when it has one.
+pub(crate) fn check_buf_terminal_size(buffer: Buf) {
+    if !buffer.terminal.is_null() {
+        // SAFETY: a buffer's terminal is live for as long as the buffer.
+        unsafe { terminal_check_size(buffer.terminal) };
+    }
+}
+
 /// # Safety
 ///
 /// `term` must point at a live `Terminal`.

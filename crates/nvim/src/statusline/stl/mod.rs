@@ -182,11 +182,14 @@ impl Env {
     /// otherwise its path with `$HOME` folded away, made printable and
     /// optionally cut down to its last component.
     pub(super) fn file_name(&self, full: bool, tail: bool, text: &mut Vec<u8>) {
-        let name = buf_spname(self.buf);
+        let name = buf_spname(&self.buf);
         let mut buf = [0 as c_char; MAXPATHL as usize];
         {
             let nb = &mut buf;
-            if name.is_null() {
+            if let Some(name) = name {
+                // SAFETY: as above; `name` is NUL-terminated.
+                unsafe { xstrlcpy(nb.as_mut_ptr(), name.as_ptr(), MAXPATHL as size_t) };
+            } else {
                 let path = if full {
                     self.buf.name.full_ptr()
                 } else {
@@ -198,9 +201,6 @@ impl Env {
                 unsafe {
                     home_replace(__hoisted_0, path, nb.as_mut_ptr(), MAXPATHL as size_t, true)
                 };
-            } else {
-                // SAFETY: as above; `name` is NUL-terminated.
-                unsafe { xstrlcpy(nb.as_mut_ptr(), name, MAXPATHL as size_t) };
             }
             // SAFETY: as above.
             unsafe { trans_characters(nb.as_mut_ptr(), MAXPATHL) };
@@ -228,23 +228,16 @@ impl Env {
 
     /// `%P`: the same, but as `Top`/`Bot`/`All` when it has a name.
     pub(super) fn rel_pos(&self, text: &mut Vec<u8>) {
-        let mut buf = [0u8; TMPLEN as usize];
-        // SAFETY: the buffer is this frame's, and its length is what
-        // `get_rel_pos` is told.
-        unsafe { get_rel_pos(self.win, buf.as_mut_ptr().cast::<c_char>(), TMPLEN) };
-        text.extend_from_slice(cstr::in_bytes(&buf).to_bytes());
+        let mut buf = [0 as c_char; TMPLEN as usize];
+        get_rel_pos(self.win, &mut buf);
+        text.extend_from_slice(cstr::in_chars(&buf).to_bytes());
     }
 
     /// `%a`: the argument list position, when there is one.
     pub(super) fn arg_number(&self, text: &mut Vec<u8>) {
-        let mut buf = [0u8; TMPLEN as usize];
-        // SAFETY: as [`Env::rel_pos`]. The buffer starts empty because
-        // `append_arg_number` appends to what is already there.
-        let len = unsafe {
-            append_arg_number(self.win, buf.as_mut_ptr().cast::<c_char>(), TMPLEN as usize)
-        };
-        if len > 0 {
-            text.extend_from_slice(cstr::in_bytes(&buf).to_bytes());
+        let mut buf = [0 as c_char; TMPLEN as usize];
+        if append_arg_number(self.win, &mut buf) > 0 {
+            text.extend_from_slice(cstr::in_chars(&buf).to_bytes());
         }
     }
 
@@ -611,6 +604,31 @@ impl StlSinks {
         tabtab: ptr::null_mut(),
         stcp: ptr::null_mut(),
     };
+}
+
+/// [`build_stl_str_hl`] for a caller that wants the text and nothing else it
+/// can report -- no fill character, no highlight or click records -- from a
+/// format it holds: `'titlestring'` and `'iconstring'`.
+pub(crate) fn build_stl_text(
+    window: Win,
+    out: &mut [c_char],
+    fmt: &CStr,
+    from: FmtSource,
+    maxwidth: c_int,
+) -> c_int {
+    // SAFETY: a NUL-terminated format, which the builder copies before it
+    // runs anything, and no sinks.
+    unsafe {
+        build_stl_str_hl(
+            window,
+            out,
+            fmt.as_ptr().cast_mut(),
+            from,
+            0,
+            maxwidth,
+            StlSinks::NONE,
+        )
+    }
 }
 
 /// Build a string from the status line items in `fmt`, answering its width in

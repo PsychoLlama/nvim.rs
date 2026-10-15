@@ -25,7 +25,7 @@
 
 #![cfg(not(miri))]
 
-use std::ffi::{CString, c_char, c_int, c_long};
+use std::ffi::{CString, c_int, c_long};
 use std::mem::offset_of;
 
 use neovim::buffer::{BLN_LISTED, DOBUF_WIPE, buflist_new, close_buffer};
@@ -117,21 +117,8 @@ impl Swapped {
         let dir = cstr(sandbox.as_str());
         let saved_dir = P_DIR.swap(Some(XString::from_cstr(&dir)));
 
-        let mut owned: Vec<c_char> = cstr(name)
-            .as_bytes_with_nul()
-            .iter()
-            .map(|&b| b as c_char)
-            .collect();
-        // SAFETY: `owned` is this frame's, NUL-terminated and writable, as
-        // `buflist_new`'s other callers pass it.
-        let buf = unsafe {
-            buflist_new(
-                owned.as_mut_ptr(),
-                owned.as_mut_ptr(),
-                1,
-                BLN_LISTED as c_int,
-            )
-        };
+        let owned = cstr(name);
+        let buf = buflist_new(Some(&owned), Some(&owned), 1, BLN_LISTED as c_int);
         let mut buf = buf.expect("a buffer for {name}");
         // SAFETY: a buffer just created, with no memline yet. `b_p_swf` is
         // what `ml_open_file` refuses on, and a buffer made outside the

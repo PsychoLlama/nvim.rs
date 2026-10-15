@@ -191,6 +191,14 @@ pub unsafe fn clear_fmark(fm: *mut FileMark, timestamp: Timestamp) {
     unsafe { Fmark::new(fm) }.clear(timestamp);
 }
 
+/// [`clear_fmark`] of a mark the caller holds in place, which owns the
+/// `additional_data` it carries.
+pub(crate) fn clear_mark(mark: &mut FileMark, timestamp: Timestamp) {
+    // SAFETY: a mark held by `&mut` is live and writable, and a mark in place
+    // owns its `additional_data`.
+    unsafe { Fmark::new(mark) }.clear(timestamp);
+}
+
 /// Put `mark` at `pos` in file `fnum`, stamped now, releasing what it held:
 /// upstream's `RESET_FMARK` for a mark the caller holds in place.
 pub(crate) fn reset_fmark(mark: &mut FileMark, pos: Pos, fnum: c_int, view: FileMarkView) {
@@ -471,8 +479,7 @@ pub(super) unsafe fn fname2fnum(fm: *mut XFileMark) {
     let _ = unsafe { os_dirname(dir_buf, IOSIZE as size_t) };
     // SAFETY: both buffers were just filled with NUL-terminated names.
     let short = unsafe { path_shorten_fname(cstr::at(name_buf), cstr::bytes_at(dir_buf)) };
-    let short = short.map_or(ptr::null_mut(), |short| short.as_ptr().cast_mut());
-    unsafe { buflist_new(name_buf, short, 1, 0) };
+    unsafe { buflist_new(Some(cstr::at(name_buf)), short, 1, 0) };
 }
 
 /// Check all file marks for a name that matches the file name in buf.

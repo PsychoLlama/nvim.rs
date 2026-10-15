@@ -16,29 +16,25 @@
 //!
 //! Original: `src/nvim/buffer.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::cstr;
 use crate::ex_cmds::EcmdFlags;
 use crate::ex_cmds::newlnum;
 use crate::memline::MlFlags;
 use crate::types::AutoEvent;
-use core::ffi::{CStr, c_char, c_int};
-use core::{ptr, slice};
+use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
 use super::*;
-use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};
+use crate::autocmd::{aucmd_prepbuf_in, aucmd_restbuf_in};
 use crate::change::{changed, save_file_ff};
 use crate::charset::buf_init_chartab;
 use crate::fileio::{Loaded, ReadFlags, prep_exarg, readfile_named};
 use crate::getchar::state::got_int;
 use crate::help::get_local_additions;
-use crate::indent_c::parse_cino;
+use crate::indent_c::parse_cino_for;
 use crate::memfile::MfDirty;
-use crate::memline::{ml_get, ml_get_buf, ml_get_buf_len, ml_open};
-use crate::memory::xrealloc;
+use crate::memline::ml_open;
 use crate::r#move::WinValid;
 use crate::option::{boolean_optval, cpo_has, set_option_value_give_err};
 use crate::options::{kOptBufhidden, kOptBuftype, kOptSwapfile};
@@ -47,7 +43,7 @@ use crate::pos::MAXLNUM;
 use crate::startup::{getout, readonlymode, v_dying};
 use crate::types::{
     AcoSave, ColNr, CpoFlag, ExArg, Failed, Handle, LineNr, NUL, OptInt, OptVal, OptionSetFlags,
-    ShmFlag, StringBuilder, VarNumber, int64_t, size_t,
+    ShmFlag, VarNumber, int64_t,
 };
 use crate::winlayer::buffers;
 
@@ -67,10 +63,9 @@ fn read_file(
     from: LineNr,
     to: LineNr,
     excmd: Option<&mut ExArg>,
-    flags: c_int,
+    flags: ReadFlags,
     silent: bool,
 ) -> Result<Loaded, Failed> {
-    let flags = ReadFlags::from_bits(flags);
     readfile_named(ffname, fname, lnum, from, to, excmd, flags, silent)
 }
 
@@ -89,8 +84,7 @@ fn open_memline(buffer: Buf) -> Result<(), Failed> {
 }
 
 fn set_changed(buffer: Buf) {
-    // SAFETY: a live buffer, which survives the autocommands it may fire.
-    unsafe { changed(buffer) };
+    changed(buffer);
 }
 
 /// Remember the file format the buffer was read with.
@@ -103,8 +97,7 @@ fn init_chartab(buffer: Buf) {
 }
 
 fn parse_cindent_options(buffer: Buf) {
-    // SAFETY: a live buffer.
-    unsafe { parse_cino(buffer) };
+    parse_cino_for(buffer);
 }
 
 /// Populate `*local-additions*` in `help.txt`.
@@ -141,21 +134,10 @@ fn set_option_false(id: c_int) {
     set_option_value_give_err(id, boolean_optval(Some(false)), OptionSetFlags::LOCAL);
 }
 
-/// Whether lines `a` and `b` of the two buffers differ.
+/// Whether line `lnum` of `buffer` differs from the current buffer's.
 fn lines_differ(buffer: Buf, lnum: LineNr) -> bool {
-    // SAFETY: two live buffers and a line number inside both, the caller
-    // having compared the line counts.
-    unsafe { !(cstr::eq(ml_get_buf(buffer, lnum), ml_get(lnum))) }
-}
-
-/// Line `lnum` of `buffer` as bytes, its terminating NUL excluded.
-fn line_bytes<'a>(buffer: Buf, lnum: LineNr) -> &'a [u8] {
-    // SAFETY: a live buffer and a line of it; `ml_get_buf` answers that many
-    // readable bytes, and the line stays put until the memline is touched.
-    unsafe {
-        let len = ml_get_buf_len(buffer, lnum) as usize;
-        slice::from_raw_parts(ml_get_buf(buffer, lnum).cast::<u8>(), len)
-    }
+    let (mut theirs, mut ours) = (buffer.lines(), Buf::current().lines());
+    theirs.line(lnum) != ours.line(lnum)
 }
 
 /// Run `f` with `buffer` current and in a window, then restore what was current.
@@ -166,11 +148,9 @@ fn line_bytes<'a>(buffer: Buf, lnum: LineNr) -> &'a [u8] {
 /// would have unwound.
 fn in_buffer<R>(buffer: Buf, f: impl FnOnce() -> R) -> R {
     let mut aco = AcoSave::default();
-    // SAFETY: a local to save into, and a live buffer.
-    unsafe { aucmd_prepbuf(&raw mut aco, buffer) };
+    aucmd_prepbuf_in(&mut aco, buffer);
     let answer = f();
-    // SAFETY: the state `aucmd_prepbuf` has just saved.
-    unsafe { aucmd_restbuf(&raw mut aco) };
+    aucmd_restbuf_in(&mut aco);
     answer
 }
 
@@ -205,7 +185,7 @@ pub fn get_highest_fnum() -> c_int {
 fn read_buffer(
     read_stdin: bool,
     excmd: Option<&mut ExArg>,
-    flags: c_int,
+    flags: ReadFlags,
 ) -> Result<Loaded, Failed> {
     let silent = shortmess(ShmFlag::FILEINFO);
 
@@ -222,7 +202,7 @@ fn read_buffer(
         0,
         last,
         excmd,
-        flags | READ_BUFFER as c_int,
+        flags | ReadFlags::BUFFER,
         silent,
     );
     if retval == Ok(Loaded::Read) {
@@ -264,7 +244,7 @@ pub fn buf_ensure_loaded(buffer: Buf) -> bool {
     }
     // Make sure the buffer is in a window.  `status` can be OK or NOTDONE
     // (which also means ok/done).
-    let status = in_buffer(buffer, || open_buffer_inner(false, None, 0));
+    let status = in_buffer(buffer, || open_buffer_inner(false, None, ReadFlags::NONE));
     status.is_ok()
 }
 
@@ -277,7 +257,7 @@ pub fn buf_ensure_loaded(buffer: Buf) -> bool {
 pub fn open_buffer(
     read_stdin: bool,
     excmd: Option<&mut ExArg>,
-    flags_arg: c_int,
+    flags_arg: ReadFlags,
 ) -> Result<Loaded, Failed> {
     open_buffer_inner(read_stdin, excmd, flags_arg)
 }
@@ -285,7 +265,7 @@ pub fn open_buffer(
 fn open_buffer_inner(
     read_stdin: bool,
     mut excmd: Option<&mut ExArg>,
-    flags_arg: c_int,
+    flags_arg: ReadFlags,
 ) -> Result<Loaded, Failed> {
     let mut flags = flags_arg;
     let mut retval = Ok(Loaded::Read);
@@ -319,7 +299,7 @@ fn open_buffer_inner(
     // A buffer without an actual file should not use the buffer name to read
     // a file.
     if buf_is_nofileread(Some(buf)) {
-        flags |= READ_NOFILE as c_int;
+        flags |= ReadFlags::NOFILE;
     }
 
     // Read the file if there is one.
@@ -334,9 +314,9 @@ fn open_buffer_inner(
         if read_fifo {
             buf.b_p_bin = 1;
         }
-        let fifo = if read_fifo { READ_FIFO as c_int } else { 0 };
+        let fifo = ReadFlags::FIFO.when(read_fifo);
         let ((ffname, fname), last) = (names_of(buf), MAXLNUM);
-        let read = flags | READ_NEW as c_int | fifo;
+        let read = flags | ReadFlags::NEW | fifo;
         retval = read_file(
             ffname.as_deref(),
             fname.as_deref(),
@@ -366,7 +346,7 @@ fn open_buffer_inner(
         // that same buffer and append at the end.  This makes it possible to
         // retry when 'fileformat' or 'fileencoding' was guessed wrong.
         buf.b_p_bin = 1;
-        let read = flags | (READ_NEW as c_int + READ_STDIN as c_int);
+        let read = flags | ReadFlags::NEW | ReadFlags::STDIN;
         retval = read_file(None, None, 0, 0, MAXLNUM, None, read, silent);
         Buf::current().b_p_bin = save_bin;
         if retval == Ok(Loaded::Read) {
@@ -444,7 +424,7 @@ fn open_buffer_inner(
             .b_flags
             .clear(BufFlags::CHECK_RO | BufFlags::NEVERLOADED);
 
-        if flags & READ_NOWINENTER as c_int == 0 {
+        if !flags.has(ReadFlags::NOWINENTER) {
             fire_retval(AutoEvent::BufWinEnter, Buf::current(), &mut retval);
         }
     });
@@ -489,8 +469,7 @@ fn no_memfile(old_tw: OptInt) -> Result<(), Failed> {
 pub fn buf_contents_changed(buffer: Buf) -> bool {
     let mut differ = true;
 
-    // SAFETY: two null names ask for a nameless buffer.
-    let newbuf = unsafe { buflist_new(ptr::null_mut(), ptr::null_mut(), 1, BLN_DUMMY as c_int) };
+    let newbuf = buflist_new(None, None, 1, BLN_DUMMY as c_int);
     if newbuf.is_none() {
         return true;
     }
@@ -500,7 +479,7 @@ pub fn buf_contents_changed(buffer: Buf) -> bool {
     prepare_exarg(&mut ea, buffer);
     in_buffer(newbuf, || {
         block_autocmds_now();
-        let read = READ_NEW as c_int | READ_DUMMY as c_int;
+        let read = ReadFlags::NEW | ReadFlags::DUMMY;
         let ((ffname, fname), last) = (names_of(buffer), MAXLNUM);
         let (ffname, fname) = (ffname.as_deref(), fname.as_deref());
         if open_memline(Buf::current()).is_ok()
@@ -523,23 +502,14 @@ pub fn buf_contents_changed(buffer: Buf) -> bool {
 // The forms with no file behind them
 
 /// Open a scratch buffer (`'buftype'` `nofile`, hidden, no swap file) in the
-/// current window, named `bufname` if that is not null.
-///
-/// # Safety
-/// `bufname` must be null or NUL-terminated, and `curwin` be set.
-pub unsafe fn buf_open_scratch(bufnr: Handle, bufname: *mut c_char) -> Result<(), Failed> {
+/// current window, named `bufname` when given.
+pub fn buf_open_scratch(bufnr: Handle, bufname: Option<&CStr>) -> Result<(), Failed> {
     let one = newlnum::ONE as LineNr;
     let hide = EcmdFlags::HIDE;
     edit_file(bufnr, None, one, hide, Win::current())?;
-    if !bufname.is_null() {
+    if let Some(bufname) = bufname {
         fire(AutoEvent::BufFilePre, Buf::current());
-        // SAFETY: the caller's NUL-terminated name.
-        let _ = setfname(
-            Buf::current(),
-            Some(unsafe { cstr::at(bufname) }),
-            None,
-            true,
-        );
+        let _ = setfname(Buf::current(), Some(bufname), None, true);
         fire(AutoEvent::BufFilePost, Buf::current());
     }
     set_option_string(kOptBufhidden, c"hide");
@@ -551,119 +521,32 @@ pub unsafe fn buf_open_scratch(bufnr: Handle, bufname: *mut c_char) -> Result<()
     Ok(())
 }
 
-/// Read lines `start` to `end` of `buffer` into `sb`, NL-separated, with the
-/// buffer's embedded NULs translated back from newlines.
-///
-/// # Safety
-/// `sb` must be a live `StringBuilder`, and `start` and `end` lines of the
-/// buffer.
-pub unsafe fn read_buffer_into(buffer: Buf, start: LineNr, end: LineNr, sb: *mut StringBuilder) {
-    debug_assert!(!sb.is_null(), "sb");
-    // SAFETY: the caller's promise -- a live builder.
-    let mut out = unsafe { Builder::of(&mut *sb) };
+/// Append lines `start` to `end` of `buffer` to `out`, NL-separated, with the
+/// buffer's embedded NULs translated back from newlines. Line `start` is
+/// read even when it is past `end`.
+pub fn read_buffer_into(buffer: Buf, start: LineNr, end: LineNr, out: &mut Vec<u8>) {
     if buffer.b_ml.ml_flags.has(MlFlags::EMPTY) {
         return;
     }
-
+    let mut lines = buffer.lines();
     let mut lnum = start;
-    let mut line = line_bytes(buffer, lnum);
-    let mut written = 0usize;
     loop {
-        let len = if line.is_empty() {
-            0
-        } else if line[written] == NL as u8 {
-            // NL -> NUL translation
-            out.push(NUL as c_char);
-            1
-        } else {
-            let rest = &line[written..];
-            let len = rest
-                .iter()
-                .position(|&b| b == NL as u8)
-                .unwrap_or(rest.len());
-            out.extend(&rest[..len]);
-            len
-        };
-
-        if len == line.len() - written {
-            // Finished a line, add a NL, unless this line should not have one.
-            if lnum != end
-                || buffer.b_p_bin == 0 && buffer.b_p_fixeol != 0
-                || lnum != buffer.b_no_eol_lnum
-                    && (lnum != buffer.line_count() || buffer.b_p_eol != 0)
-            {
-                out.push(NL as c_char);
-            }
-            lnum += 1;
-            if lnum > end {
-                break;
-            }
-            line = line_bytes(buffer, lnum);
-            written = 0;
-        } else if len > 0 {
-            written += len;
+        // NL -> NUL translation.
+        let line = lines.line(lnum);
+        out.extend(
+            line.iter()
+                .map(|&b| if b == NL as u8 { NUL as u8 } else { b }),
+        );
+        // Finished a line, add a NL, unless this line should not have one.
+        if lnum != end
+            || buffer.b_p_bin == 0 && buffer.b_p_fixeol != 0
+            || lnum != buffer.b_no_eol_lnum && (lnum != buffer.line_count() || buffer.b_p_eol != 0)
+        {
+            out.push(NL as u8);
         }
-    }
-}
-
-/// A `StringBuilder` -- `kvec_t(char)` -- borrowed part by part, so that
-/// appending to it is ordinary code.
-struct Builder<'a> {
-    size: &'a mut size_t,
-    capacity: &'a mut size_t,
-    items: &'a mut *mut c_char,
-}
-
-impl<'a> Builder<'a> {
-    fn of(sb: &'a mut StringBuilder) -> Self {
-        Builder {
-            size: &mut sb.size,
-            capacity: &mut sb.capacity,
-            items: &mut sb.items,
+        lnum += 1;
+        if lnum > end {
+            break;
         }
-    }
-
-    /// `kv_resize` to `capacity` bytes.
-    fn resize(&mut self, capacity: size_t) {
-        *self.capacity = capacity;
-        let old = self.items.cast();
-        // SAFETY: `items` is null or this array's own allocation, and the new
-        // size counts the same element type.
-        *self.items = unsafe { xrealloc(old, size_of::<c_char>() * capacity) }.cast::<c_char>();
-    }
-
-    /// `kv_push`: append one byte, doubling the array when it is full.
-    fn push(&mut self, byte: c_char) {
-        if *self.size == *self.capacity {
-            self.resize(if *self.capacity != 0 {
-                *self.capacity << 1
-            } else {
-                8
-            });
-        }
-        // SAFETY: the array has room for one more byte at `size`.
-        unsafe { *self.items.add(*self.size) = byte };
-        *self.size += 1;
-    }
-
-    /// `kv_concat_len`: append `bytes`, growing to the next power of two.
-    fn extend(&mut self, bytes: &[u8]) {
-        if bytes.is_empty() {
-            return;
-        }
-        if *self.capacity < *self.size + bytes.len() {
-            self.resize((*self.size + bytes.len()).next_power_of_two());
-        }
-        assert!(!self.items.is_null(), "(*sb).items");
-        // SAFETY: the array has just been grown to hold `size + len` bytes,
-        // and `bytes` is a buffer line, which is a different allocation.
-        unsafe {
-            ptr::copy_nonoverlapping(
-                bytes.as_ptr(),
-                self.items.add(*self.size).cast(),
-                bytes.len(),
-            )
-        };
-        *self.size += bytes.len();
     }
 }
