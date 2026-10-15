@@ -1,13 +1,13 @@
 //! Reading files into buffers, and the file-level helpers around it.
 //!
-//! [`readfile_named`] is the reader (`read`, `open`, `convert`, `lines`,
+//! `readfile_named` is the reader (`read`, `open`, `convert`, `lines`,
 //! `report`); `timestamp` notices a file changing underneath its buffer,
 //! `names` derives and moves file names, `tempfile` owns the temporary
-//! directory, and `stream` holds the byte-level readers binary formats
-//! share. `legacy_stream` is the one child on `allow(unsafe_code)`: the
-//! `FILE *` forms of those readers, kept while `spellfile/` reads through
-//! them. `forbid` would reach it from here, so this file allows nothing and
-//! forbids nothing: the crate's `deny(unsafe_code)` holds.
+//! directory, and `stream` holds `Fgets`, the line reader over any
+//! `BufRead`. `legacy_stream` is the one child on `allow(unsafe_code)`:
+//! [`vim_fgets`], the same reader over a C `FILE *`, kept while its callers
+//! hold one. `forbid` would reach it from here, so this file allows nothing
+//! and forbids nothing: the crate's `deny(unsafe_code)` holds.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
@@ -137,7 +137,7 @@ const EOVERFLOW: c_int = ::libc::EOVERFLOW;
 const S_IFMT: c_int = 0o170000;
 
 crate::flag_set! {
-    /// What [`readfile_named`] is asked to do: upstream's `READ_*` bits.
+    /// What `readfile_named` is asked to do: upstream's `READ_*` bits.
     pub struct ReadFlags;
 
     /// Starting to edit a new buffer.

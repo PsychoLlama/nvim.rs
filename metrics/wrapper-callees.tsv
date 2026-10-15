@@ -41,8 +41,8 @@ count	callee	no_raw	defs	def
 24	Box::from_raw	0	10	
 24	nlua_push_array	0	1	crates/nvim/src/lua/converter/push_object.rs
 24	utf_head_off	0	1	crates/nvim/src/mbyte/utf8/mod.rs
-24	xmemdupz	0	1	crates/nvim/src/memory/mod.rs
 23	utf_char2bytes	0	1	crates/nvim/src/mbyte/utf8/mod.rs
+23	xmemdupz	0	1	crates/nvim/src/memory/mod.rs
 22	XString::from_raw	0	1	crates/nvim/src/memory/xstring.rs
 21	abort	0	0	
 21	mf_put	0	1	crates/nvim/src/memfile/mod.rs
@@ -1322,7 +1322,6 @@ count	callee	no_raw	defs	def
 1	get_substitute_pattern	0	1	crates/nvim/src/search/pattern.rs
 1	get_sw_value_pos	0	1	crates/nvim/src/indent/mod.rs
 1	get_user_highlight_attr	0	1	crates/nvim/src/insexpand/callbacks.rs
-1	getc	0	0	
 1	getdigits	0	1	crates/nvim/src/charset/walk.rs
 1	getnextmark	0	1	crates/nvim/src/mark/lookup.rs
 1	getxattr	0	0	
@@ -1602,7 +1601,6 @@ count	callee	no_raw	defs	def
 1	put_virt_lines	1	1	crates/nvim/src/decoration/dict.rs
 1	put_virt_text	1	1	crates/nvim/src/decoration/dict.rs
 1	put_word_end	0	1	crates/nvim/src/spellfile/write.rs
-1	putc	0	0	
 1	quote_meta	0	1	crates/nvim/src/insexpand/text.rs
 1	quoted_span	0	1	crates/nvim/src/textobject/quote.rs
 1	raw_line_legacy	0	1	crates/nvim/src/api/ui/line.rs

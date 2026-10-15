@@ -192,7 +192,7 @@ pub unsafe fn apply_autocmds(
     }
 }
 
-/// [`fire_autocmds_for`] passing an `ExArg` on, so that `v:cmdarg` and
+/// `fire_autocmds_for` passing an `ExArg` on, so that `v:cmdarg` and
 /// `v:cmdbang` are set for the handlers: fire `event` in every group,
 /// matching the patterns against `pattern` (or the buffer's name, for
 /// `None`) with `afile` as `<afile>`.

@@ -3,10 +3,8 @@
 //!
 //! [`Fgets`] is C's `fgets` -- one line, or as much of it as fits -- with
 //! [`Fgets::line_capped`] the editor's `vim_fgets`, which throws the rest of
-//! an over-long line away. [`read_be`]/[`read_counted`] read the big-endian
-//! integers and counted strings the spell and undo files are made of, and
-//! [`write_be`]/[`write_time`] write them. The `FILE *` forms of the same
-//! helpers (`legacy_stream`) are thin shims over these.
+//! an over-long line away. `legacy_stream` keeps `vim_fgets` itself over a
+//! C stream for the readers that still hold one.
 
 #![forbid(unsafe_code)]
 #![deny(
@@ -18,9 +16,7 @@
 )]
 
 use std::fs::File;
-use std::io::{BufRead, BufReader, ErrorKind, Read, Write};
-
-use crate::types::time_t;
+use std::io::{BufRead, BufReader, ErrorKind};
 
 /// C's `fgets` over a reader: the same chunking, so that a long line is cut
 /// where upstream cuts it.
@@ -100,61 +96,9 @@ impl<R: BufRead> Fgets<R> {
     }
 }
 
-/// Read `len` bytes and turn them into an integer, most significant byte
-/// first; `None` at the end of the file.
-pub(crate) fn read_be(reader: &mut impl Read, len: usize) -> Option<u64> {
-    let mut bytes = [0u8; 8];
-    reader.read_exact(&mut bytes[..len]).ok()?;
-    Some(bytes[..len].iter().fold(0, |n, &b| (n << 8) | u64::from(b)))
-}
-
-/// Read a string of `len` bytes; `None` when the file ends first.
-pub(crate) fn read_counted(reader: &mut impl Read, len: usize) -> Option<Vec<u8>> {
-    let mut bytes = vec![0; len];
-    reader.read_exact(&mut bytes).ok()?;
-    Some(bytes)
-}
-
-/// Write `number` in `len` bytes, most significant byte first: whether it
-/// all went out.
-pub(crate) fn write_be(writer: &mut impl Write, number: u64, len: usize) -> bool {
-    debug_assert!((1..=8).contains(&len));
-    writer.write_all(&number.to_be_bytes()[8 - len..]).is_ok()
-}
-
-/// Write a `time_t` in 8 bytes, most significant first: whether it went out.
-pub(crate) fn write_time(writer: &mut impl Write, time: time_t) -> bool {
-    writer.write_all(&time.to_be_bytes()).is_ok()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn integers_are_big_endian_and_stop_at_the_end() {
-        let mut input: &[u8] = &[0x12, 0x34, 0x56, 0x78, 0x9a];
-        assert_eq!(read_be(&mut input, 2), Some(0x1234));
-        assert_eq!(read_be(&mut input, 3), Some(0x56789a));
-        assert_eq!(read_be(&mut input, 1), None);
-
-        let mut out = Vec::new();
-        assert!(write_be(&mut out, 0x0102_0304, 3));
-        assert!(write_time(&mut out, -2));
-        assert_eq!(
-            out,
-            [2, 3, 4, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe]
-        );
-        let mut back: &[u8] = &out[3..];
-        assert_eq!(read_be(&mut back, 8).map(u64::cast_signed), Some(-2));
-    }
-
-    #[test]
-    fn counted_strings_need_every_byte() {
-        let mut input: &[u8] = b"abcde";
-        assert_eq!(read_counted(&mut input, 3).as_deref(), Some(&b"abc"[..]));
-        assert_eq!(read_counted(&mut input, 3), None);
-    }
 
     #[test]
     fn a_capped_line_throws_the_rest_away() {

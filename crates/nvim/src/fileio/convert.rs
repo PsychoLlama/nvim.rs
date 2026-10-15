@@ -51,7 +51,7 @@ crate::flag_set! {
     const ENDIAN_L = 0x80;
     /// "ucs-bom": the first bytes of the file decide.
     const UCSBOM = 0x4000;
-    /// Every byte-order mark is acceptable, for [`check_for_bom`].
+    /// Every byte-order mark is acceptable, for `check_for_bom`.
     const ALL = -1;
 }
 
