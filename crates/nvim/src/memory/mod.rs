@@ -38,7 +38,7 @@
 use crate::global_cell::{GlobalCell, SharedCell};
 use crate::memory::alloc_log::AllocEvent;
 use crate::semsg;
-use core::ffi::{CStr, c_char, c_long, c_ulong, c_void};
+use core::ffi::{CStr, c_char, c_ulong, c_void};
 use core::{ptr, slice};
 
 use crate::memfile::mf_release_all;
@@ -645,16 +645,6 @@ pub unsafe fn strnequal(a: *const c_char, b: *const c_char, n: usize) -> bool {
     }
     // SAFETY: neither is null, so both are the caller's C strings.
     unsafe { eq_upto(cbytes(a), cbytes(b), n) }
-}
-
-/// Big-endian encoding of a timestamp, as shada writes it.
-///
-/// # Safety
-///
-/// `buf` is writable for 8 bytes.
-pub unsafe fn time_to_bytes(time_: c_long, buf: *mut u8) {
-    // SAFETY: the caller's 8 writable bytes.
-    unsafe { *buf.cast::<[u8; 8]>() = time_.cast_unsigned().to_be_bytes() };
 }
 
 pub mod alloc_log;
