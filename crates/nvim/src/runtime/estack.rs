@@ -122,7 +122,7 @@ pub fn innermost_frame() -> EStack {
 /// Run `f` over the innermost frame, if there is one. See [`innermost_frame`]
 /// for why there always is.
 #[track_caller]
-pub fn with_innermost(f: impl FnOnce(&mut EStack)) {
+pub(crate) fn with_innermost(f: impl FnOnce(&mut EStack)) {
     EXESTACK.with_mut(|stack| match stack.last_mut() {
         Some(entry) => f(entry),
         None => debug_assert!(false, "the execution stack has no frame"),

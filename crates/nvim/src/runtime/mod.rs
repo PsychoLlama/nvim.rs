@@ -101,7 +101,7 @@ mod script;
 mod search;
 mod source;
 
-pub use self::cache::*;
+pub(crate) use self::cache::*;
 pub use self::estack::*;
 pub(crate) use self::expand::*;
 pub use self::pack::*;

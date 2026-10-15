@@ -328,13 +328,17 @@ fn runtime_search_path_build() -> Vec<SearchPathItem> {
 }
 
 /// `'runtimepath'`/`'packpath'` changed: the cache no longer describes them.
-pub fn did_set_runtimepackpath(_args: &mut OptSet) -> Result<(), OptError> {
+///
+/// Never inlined: the option table holds it by address, which makes a
+/// call-free leaf shippable cross-crate and would export the cell it sets.
+#[inline(never)]
+pub(crate) fn did_set_runtimepackpath(_args: &mut OptSet) -> Result<(), OptError> {
     SEARCH_PATH_VALID.set(false);
     Ok(())
 }
 
 /// Rebuild the cached search path if it has been invalidated.
-pub fn runtime_search_path_validate() {
+pub(crate) fn runtime_search_path_validate() {
     // The path cannot be rebuilt in an async context. A plugin will invoke
     // itself asynchronously from sync code in the same plugin, so the lua or
     // autoload module it is looking for is almost certainly in the cached path
@@ -361,7 +365,7 @@ pub fn runtime_search_path_validate() {
 /// Without `force` this is a no-op unless the main cache is valid and the
 /// snapshot is not — that is, it is the cheap "catch up if you are behind"
 /// call the `:packadd` family makes.
-pub fn update_runtime_search_path_thread(force: bool) {
+pub(crate) fn update_runtime_search_path_thread(force: bool) {
     if !force && !(SEARCH_PATH_VALID.get() && !THREAD_SEARCH_PATH_VALID.get()) {
         return;
     }
