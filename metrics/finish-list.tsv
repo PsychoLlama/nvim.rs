@@ -474,8 +474,8 @@ ui_client.rs	*	1	43	12	29	deref:6 expr:3 compound:2	str:2 other:1 pp:1	-	rpc_sen
 ui_client.rs	ui_client.rs	1	43	12	29	deref:6 expr:3 compound:2	str:2 other:1 pp:1	-	rpc_send_event:4 CStr::from_ptr:2 xfree:2 c_str:1 channel_job_start:1 cstr_to_string:1 dict2hlattrs:1 from_raw_parts:1
 ui_compositor/	*	1	11	6	6	deref:3 compound:1	other:5	other:1	GridRef::new:2 ui_composed_call_raw_line:2 from_raw_parts:1 schar_from_buf:1
 ui_compositor/	ui_compositor/mod.rs	1	11	6	6	deref:3 compound:1	other:5	other:1	GridRef::new:2 ui_composed_call_raw_line:2 from_raw_parts:1 schar_from_buf:1
-undo/	*	10	321	45	188	deref:109 expr:12 ref:7 compound:1	str:27 other:25 value:2	other:8 str:6	xfree:23 c_str:13 bytes_at:5 from_raw_parts:4 xmalloc:3 .offset:2 CStr::from_ptr:2 ml_replace:2
-undo/	undo/apply/entry.rs	1	20	2	10	deref:7 expr:1	other:2	-	xfree:2 extmark_apply_undo:1 free_fmark:1 ml_replace:1 xmalloc:1
+undo/	*	10	321	45	188	deref:109 expr:12 ref:7 compound:1	str:27 other:25 value:2	other:8 str:6	xfree:23 c_str:13 bytes_at:7 from_raw_parts:4 xmalloc:3 .offset:2 CStr::from_ptr:2 os_fileinfo:2
+undo/	undo/apply/entry.rs	1	20	2	10	deref:7 expr:1	other:2	-	xfree:2 bytes_at:1 extmark_apply_undo:1 free_fmark:1 xmalloc:1
 undo/	undo/apply/mod.rs	1	3	0	3	-	-	-	c_str:1
 undo/	undo/apply/time.rs	1	0	0	0	-	-	-	-
 undo/	undo/eval.rs	1	7	0	4	deref:3	value:2	other:1	CStr::from_ptr:1 ThinCString::from_raw:1 xfree:1
@@ -483,7 +483,7 @@ undo/	undo/file.rs	1	117	20	63	deref:41 expr:9 ref:4	str:14 other:10	str:4 other
 undo/	undo/mod.rs	1	49	2	20	deref:26 compound:1	other:1 str:1	-	time:2 xmalloc:2 strftime:1 vim_snprintf:1 xfree:1
 undo/	undo/read.rs	1	41	6	35	deref:6	str:7 other:2	other:1	c_str:6 xfree:5 os_fileinfo:2 from_raw_parts:1 getuid:1
 undo/	undo/store.rs	1	15	5	8	deref:4 ref:3	other:3	other:3	Box::from_raw:1 drop:1 xfree:1
-undo/	undo/tree.rs	1	45	6	23	deref:22	other:7	str:2 other:1	xfree:7 bytes_at:2 ml_replace:1
+undo/	undo/tree.rs	1	45	6	23	deref:22	other:7	str:2 other:1	xfree:7 bytes_at:3
 undo/	undo/write.rs	1	24	4	22	expr:2	str:5	-	c_str:6 os_open:2 os_setperm:2 close:1 os_getperm:1 os_path_exists:1 os_remove:1 xfree:1
 version/	*	1	14	0	11	deref:2 expr:1	-	-	utfc_ptr2len:3 vim_strsize:3 utf_ptr2char:2 at:1 nlua_exec:1
 version/	version/mod.rs	1	14	0	11	deref:2 expr:1	-	-	utfc_ptr2len:3 vim_strsize:3 utf_ptr2char:2 at:1 nlua_exec:1

@@ -814,6 +814,10 @@ mod tests {
             assert!(b.b_ml.ml_stack.is_empty());
             assert_eq!(b.b_ml.ml_chunks.len(), 0);
             assert!(b.b_ml.ml_locked.is_none());
+            // The memfile and the line cache's owned text, both owners.
+            assert!(b.b_ml.ml_mfp.is_none());
+            assert!(!b.b_ml.line_is_dirty());
+            assert!(b.b_ml.cached_bytes().is_empty());
             assert!(b.b_marktree.id2node.is_empty());
             assert!(b.b_extmark_ns.is_empty());
             assert!(b.b_start_fenc.is_none());

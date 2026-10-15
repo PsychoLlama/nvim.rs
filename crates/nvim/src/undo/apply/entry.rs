@@ -285,8 +285,9 @@ unsafe fn apply_entry(
             // NUL-terminated allocation the entry owns and hands over here.
             let line = unsafe { *(*uep).ue_array.offset(i as isize) };
             if emptied && top + i == 0 {
-                // SAFETY: the dummy line the delete above left behind.
-                let _ = unsafe { ml_replace(1, line, true) };
+                // SAFETY: the entry's NUL-terminated line, which the
+                // memline copies over the dummy line the delete left.
+                let _ = ml_replace_buf_text(Buf::current(), 1, unsafe { cstr::bytes_at(line) });
             } else {
                 // SAFETY: the entry's NUL-terminated line.
                 let _ = ml_append_cstr(top + i, unsafe { cstr::at(line) });

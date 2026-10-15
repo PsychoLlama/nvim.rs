@@ -817,3 +817,66 @@ pub(crate) fn mf_release_all() -> bool {
     }
     released
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::os::unix::ffi::OsStrExt;
+
+    #[test]
+    fn a_memory_only_memfile_releases_nothing() {
+        let mut mfp = MemFile::in_memory();
+        let id = mfp.new_block(false, 1);
+        mfp.put(id, true, false);
+        // Nowhere to write it, so it has to stay.
+        assert!(!mfp.release_unlocked());
+        assert_eq!(mfp.find(0), Some(id));
+        mfp.close(false);
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore = "a real swap file: lseek and fcntl")]
+    fn releasing_memory_keeps_the_locked_block_and_reads_the_rest_back() {
+        let dir = std::env::temp_dir().join(format!("nvim-memfile-release-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("a scratch directory");
+        let path = dir.join("x.swp");
+        let name = CString::new(path.as_os_str().as_bytes()).expect("a path without NUL");
+        let mut mfp = MemFile::open(name, O_RDWR | O_CREAT | O_EXCL).expect("a swap file");
+
+        // Three blocks, numbered 0, 1 and 2; the middle one stays held, as
+        // the memline's locked data block does while a line is cached.
+        let ids: Vec<BlockId> = (0..3u8)
+            .map(|n| {
+                let id = mfp.new_block(false, 1);
+                mfp.page_mut(id)[0] = n + 1;
+                id
+            })
+            .collect();
+        mfp.put(ids[0], true, false);
+        mfp.put(ids[2], true, false);
+        let held = ids[1];
+        mfp.page_mut(held)[1] = 42;
+
+        assert!(mfp.release_unlocked());
+        // The held block, its handle and its bytes all survive.
+        assert_eq!(mfp.find(1), Some(held));
+        assert_eq!(&mfp.page(held)[..2], &[2, 42]);
+        // The others went to the file and out of memory ...
+        assert!(mfp.find(0).is_none());
+        assert!(mfp.find(2).is_none());
+        // ... and come back from it.
+        let back = mfp.get(2, 1).expect("block 2 from the file");
+        assert_eq!(mfp.page(back)[0], 3);
+        assert_ne!(back, ids[2], "a released handle names nothing");
+        mfp.put(back, false, false);
+        mfp.put(held, false, false);
+
+        mfp.close(true);
+        assert!(
+            !path.exists(),
+            "closing with `del_file` removes the swap file"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}

@@ -2,7 +2,7 @@ count	callee	no_raw	defs	def
 265	.offset	0	0	
 252	xfree	0	1	crates/nvim/src/memory/mod.rs
 209	.add	0	0	
-175	bytes_at	0	1	crates/nvim/src/cstr.rs
+177	bytes_at	0	1	crates/nvim/src/cstr.rs
 170	dispatch	0	1	crates/nvim/src/lua/api_wrappers/mod.rs
 141	at	0	2	
 105	CStr::from_ptr	0	1	crates/nvim/src/marktree/node.rs
@@ -60,7 +60,6 @@ count	callee	no_raw	defs	def
 17	Op::new	0	46	
 17	Reader::new	0	1	crates/nvim/src/event/rstream.rs
 17	getdigits_int	0	1	crates/nvim/src/charset/walk.rs
-17	ml_replace	0	1	crates/nvim/src/change/text.rs
 17	nlua_pop_object	0	1	crates/nvim/src/lua/converter/pop_object.rs
 17	starts_with	0	1	crates/nvim/src/cstr.rs
 17	utf_ptr2cells	0	1	crates/nvim/src/mbyte/utf8/mod.rs
@@ -71,6 +70,7 @@ count	callee	no_raw	defs	def
 16	utf_ptr2str_char_info	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 15	copy_nonoverlapping	0	0	
 15	getvcol	0	1	crates/nvim/src/plines/vcol.rs
+15	ml_replace	0	1	crates/nvim/src/change/text.rs
 15	os_fopen	0	1	crates/nvim/src/os/fs/mod.rs
 15	vim_strchr	0	1	crates/nvim/src/strings/raw.rs
 14	NormalStateRef::new	0	1	crates/nvim/src/normal/state.rs

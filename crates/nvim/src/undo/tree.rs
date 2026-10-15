@@ -282,7 +282,8 @@ pub fn u_undoline() {
     }
     let oldp: *mut c_char = unsafe { u_save_line(Buf::current().b_u_line_lnum) };
     let (lnum, line) = (Buf::current().b_u_line_lnum, Buf::current().b_u_line_ptr);
-    let _ = unsafe { ml_replace(lnum, line, true) };
+    // SAFETY: the saved line, NUL-terminated, which the memline copies.
+    let _ = ml_replace_buf_text(Buf::current(), lnum, unsafe { cstr::bytes_at(line) });
     let oldp_len = unsafe { cstr::bytes_at(oldp) }.len();
     let ptr_len = unsafe { cstr::bytes_at(Buf::current().b_u_line_ptr) }.len();
     extmark_splice_cols(
