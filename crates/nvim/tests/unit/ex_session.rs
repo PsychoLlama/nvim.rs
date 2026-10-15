@@ -333,6 +333,9 @@ fn a_view_keeps_folds_and_the_cursor() {
     fx.run("setlocal foldmethod=manual");
     fx.run("3,8fold");
     fx.run("10,20fold");
+    // Open it first: a range inside a closed fold extends to the whole fold,
+    // so `12,14fold` would fold 10-20 a second time instead of nesting.
+    fx.run("normal! zR");
     fx.run("12,14fold");
     fx.run("normal! zR");
     fx.run("12foldclose");
@@ -356,12 +359,12 @@ fn a_view_keeps_folds_and_the_cursor() {
             "setlocal foldenable",
             "silent! normal! zE",
             "sil! 3,8fold",
-            "sil! 10,20fold",
+            "sil! 12,14fold",
             "sil! 10,20fold",
             "let &fdl = &fdl",
             "10",
             "sil! normal! zo",
-            "10",
+            "12",
             "sil! normal! zc",
             "let s:l = 25 - ((24 * winheight(0) + 11) / 22)",
             "if s:l < 1 | let s:l = 1 | endif",
