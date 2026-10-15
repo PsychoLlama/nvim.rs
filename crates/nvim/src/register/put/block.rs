@@ -182,10 +182,7 @@ impl Put {
         let mut lines_appended = 0;
         if Win::current().w_cursor.lnum > Buf::current().b_ml.ml_line_count {
             let last = Buf::current().b_ml.ml_line_count;
-            let empty = c"".as_ptr().cast_mut();
-            // SAFETY: `last` is the buffer's own last line, and the text is a
-            // NUL-terminated literal that `ml_append` copies.
-            if unsafe { ml_append(last, empty, 1, false) }.is_err() {
+            if ml_append_cstr(last, c"").is_err() {
                 return false;
             }
             self.nr_lines += 1;

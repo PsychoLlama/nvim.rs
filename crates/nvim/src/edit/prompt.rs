@@ -109,7 +109,7 @@ pub(crate) fn init_prompt(cmdchar_todo: c_int) {
             // The line holds something else, so the prompt goes on a new
             // last line.
             let lnum = Buf::current().b_ml.ml_line_count;
-            let _ = unsafe { ml_append(lnum, prompt, 0, false) };
+            let _ = ml_append_cstr(lnum, unsafe { cstr::at(prompt) });
             appended_lines_mark(lnum, 1);
             set_start_lnum(Buf::current().b_ml.ml_line_count);
             Buf::current().b_prompt_append_new_line = true;

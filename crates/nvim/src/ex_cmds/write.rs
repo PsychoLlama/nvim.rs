@@ -236,7 +236,7 @@ pub fn do_write(args: &mut ExArg) -> Result<(), Failed> {
         // Overwriting a file that is loaded in another buffer is not a good
         // idea.
         if let Some(alt_buf) = alt_buf
-            && !alt_buf.b_ml.ml_mfp.is_null()
+            && alt_buf.b_ml.ml_mfp.is_some()
         {
             emsg(gettext(e_bufloaded));
             return Err(Failed);

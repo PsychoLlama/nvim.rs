@@ -70,7 +70,7 @@ pub(crate) fn plines_win_nofill(window: Win, lnum: LineNr, limit_winheight: bool
 /// Window lines physical line `lnum` occupies, ignoring folding, 'wrap' and
 /// filler lines.
 pub(crate) fn plines_win_nofold(window: Win, lnum: LineNr) -> c_int {
-    let s = unsafe { ml_get_buf(window.buffer(), lnum) };
+    let s = ml_get_buf(window.buffer(), lnum);
     let mut csarg = CharsizeArg::default();
     let cstype = unsafe { init_charsize_arg(&mut csarg, window, lnum, s) };
     if unsafe { *s } == NUL as c_char && csarg.virt_row < 0 {
@@ -116,7 +116,7 @@ pub(crate) fn plines_win_col(window: Win, lnum: LineNr, mut column: c_long) -> c
         return lines + 1;
     }
 
-    let line = unsafe { ml_get_buf(window.buffer(), lnum) };
+    let line = ml_get_buf(window.buffer(), lnum);
     let mut csarg = CharsizeArg::default();
     let cstype = unsafe { init_charsize_arg(&mut csarg, window, lnum, line) };
 

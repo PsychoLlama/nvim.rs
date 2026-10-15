@@ -11,6 +11,7 @@ use core::ptr;
 
 use super::*;
 use crate::ascii::{ascii_isdigit, ascii_iswhite, ascii_iswhite_or_nul};
+use crate::change::ml_replace;
 use crate::change::{changed_lines, ins_bytes, ins_str};
 use crate::charset::skip;
 use crate::charset::skipwhite;
@@ -27,7 +28,7 @@ use crate::getchar::state::got_int;
 use crate::guard::Suppress;
 use crate::indent_c::in_cinkeys;
 use crate::mbyte::{utf_ptr2str_char_info, utfc_next, utfc_ptr2len};
-use crate::memline::{Lines, ml_get, ml_get_len, ml_replace};
+use crate::memline::{Lines, ml_get, ml_get_len};
 use crate::memory::{xfree, xmalloc, xmallocz, xmemdupz};
 use crate::message::{e_interr, e_modifiable, e_resulting_text_too_long};
 use crate::message::{emsg, msg_progress};
@@ -736,7 +737,7 @@ impl Retab {
         let mut line = new_line;
         if unsafe { ml_replace(scan.lnum, new_line, false) }.is_ok() {
             // `new_line` may have been copied.
-            line = buf.b_ml.cached_text();
+            line = { buf }.b_ml.cached_text();
             let lnum = scan.lnum as c_int - 1;
             let (old, new) = (scan.old_len, new_len - 1);
             extmark_splice_cols(buf, lnum, 0, old, new, kExtmarkUndo);

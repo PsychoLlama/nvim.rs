@@ -233,6 +233,22 @@ pub fn os_ctime_r(clock: time_t, result: &mut [c_char], add_newline: bool) -> *m
     out
 }
 
+/// [`os_ctime_r`] answered owned: `clock` as local time, as a buffer of
+/// `room` bytes would have held it.
+pub(crate) fn ctime_text(clock: time_t, room: usize, add_newline: bool) -> Vec<u8> {
+    let mut buf: Vec<c_char> = vec![0; room.max(2)];
+    os_ctime_r(clock, &mut buf, add_newline);
+    cstr::in_chars(&buf).to_bytes().to_vec()
+}
+
+/// How long the machine has been up, in seconds, or `None` when the system
+/// will not say.
+pub(crate) fn uptime() -> Option<f64> {
+    let mut uptime: f64 = 0.0;
+    // SAFETY: an out-parameter of this frame.
+    (unsafe { crate::event::libuv::uv_uptime(&raw mut uptime) } == 0).then_some(uptime)
+}
+
 /// Parse `str` according to `format` into `tm`. Returns a pointer into `str`
 /// just past the parsed text, or null if the input did not match.
 pub fn os_strptime(str: &CStr, format: &CStr, tm: &mut tm) -> *mut c_char {

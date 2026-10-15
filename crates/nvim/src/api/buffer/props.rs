@@ -124,7 +124,7 @@ pub fn nvim_buf_set_name(buf: BufferHandle, name: String_0) -> Result<(), Error>
 pub fn nvim_buf_is_loaded(buf: BufferHandle) -> Boolean {
     // A handle that names nothing is not an error here, only a `false`.
     let b = find_buffer_by_handle(buf).unwrap_or_default();
-    b.is_some_and(|b| !b.b_ml.ml_mfp.is_null())
+    b.is_some_and(|b| b.b_ml.ml_mfp.is_some())
 }
 
 pub fn nvim_buf_delete(buf: BufferHandle, opts: &mut KeyDict_buf_delete) -> Result<(), Error> {

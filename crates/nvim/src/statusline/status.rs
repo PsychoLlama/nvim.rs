@@ -107,6 +107,23 @@ pub fn stl_connected(window: Win) -> bool {
     false
 }
 
+/// [`get_trans_bufname`], answered owned: the displayable name of `buffer`
+/// as the same `MAXPATHL` buffer would have held it.
+pub(crate) fn trans_bufname(buffer: Buf) -> Vec<u8> {
+    let room = MAXPATHL as usize;
+    let mut name = match buf_spname(&buffer) {
+        Some(special) => special.to_bytes().to_vec(),
+        None => {
+            let shown = buffer.name.shown().unwrap_or(c"");
+            crate::os::env::home_replace_in(Some(buffer), shown, room, true).to_vec()
+        }
+    };
+    name.truncate(room - 1);
+    name.resize(room, 0);
+    crate::charset::trans_characters_in(&mut name);
+    crate::cstr::until_nul(&name).to_vec()
+}
+
 /// Put the displayable name of `buffer` in `name`: its special name if it has
 /// one, else its file name with `$HOME` folded back to `~`, with the
 /// unprintable characters replaced by their display forms.

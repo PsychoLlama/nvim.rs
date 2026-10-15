@@ -92,7 +92,7 @@ pub fn setfname(
                 // During startup a window may use a buffer that is not
                 // loaded yet.
                 let in_use = tab_windows().any(|win| win.w_buffer == o);
-                if !o.b_ml.ml_mfp.is_null() || in_use {
+                if o.b_ml.ml_mfp.is_some() || in_use {
                     // It is loaded or used in a window: fail.
                     if message {
                         emsg(gettext(c"E95: Buffer with this name already exists"));
@@ -129,7 +129,7 @@ pub(crate) fn buf_set_name(fnum: c_int, name: &CStr) {
 
 /// What has to happen once a buffer's name has changed.
 pub fn buf_name_changed(b: Buf) {
-    if !b.b_ml.ml_mfp.is_null() {
+    if b.b_ml.ml_mfp.is_some() {
         // The swap file's name follows the buffer's.
         ml_setname(b);
     }

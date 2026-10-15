@@ -147,7 +147,7 @@ pub unsafe fn spell_add_word(
         // Refuse to write the file behind the user's back if they are
         // editing it and have unsaved changes.
         let open =
-            find_buffer_by_name(unsafe { cstr::at(fnamebuf) }).filter(|b| !b.b_ml.ml_mfp.is_null());
+            find_buffer_by_name(unsafe { cstr::at(fnamebuf) }).filter(|b| b.b_ml.ml_mfp.is_some());
         if open.is_some_and(buf_is_changed) {
             emsg(gettext(e_bufloaded));
             unsafe { xfree(fnamebuf as *mut c_void) };

@@ -42,7 +42,7 @@ use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 
 use crate::getchar::state::got_int;
-use crate::memline::ml_append_buf;
+use crate::memline::ml_append_buf_terminated;
 use crate::memory::XString;
 use crate::message::e_write;
 use crate::message::emsg;
@@ -51,7 +51,7 @@ use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
 use crate::path::path_full_compare;
 use crate::spell::{languages, open_spellbuf, slang_free, spell_soundfold};
-use crate::types::{ColNr, Failed, LineNr, NUL, SpellIdx, SpellLang, int16_t, uint16_t};
+use crate::types::{Failed, LineNr, NUL, SpellIdx, SpellLang, int16_t, uint16_t};
 
 use super::wordtree::{WordNode, tree_add_word, wordtree_alloc, wordtree_compress};
 use super::write::{SplWriter, clear_node, put_node};
@@ -282,9 +282,7 @@ unsafe fn sug_filltable(
         line.push(0);
 
         let at = wordnr as LineNr;
-        let (text, len) = (line.as_mut_ptr().cast::<c_char>(), line.len() as ColNr);
-        // SAFETY: `len` bytes of this line, its NUL among them.
-        if unsafe { ml_append_buf(spellbuf, at, text, len, true) }.is_err() {
+        if ml_append_buf_terminated(spellbuf, at, line, true).is_err() {
             return -1;
         }
         wordnr += 1;

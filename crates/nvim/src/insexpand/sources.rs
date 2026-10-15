@@ -370,7 +370,7 @@ pub(crate) fn ins_compl_next_buf(mut buffer: Buf, flag: c_int) -> Buf {
             let skip_buffer = if flag == 'U' as c_int {
                 buffer.b_p_bl != 0
             } else {
-                buffer.b_p_bl == 0 || buffer.b_ml.ml_mfp.is_null() != (flag == 'u' as c_int)
+                buffer.b_p_bl == 0 || buffer.b_ml.ml_mfp.is_none() != (flag == 'u' as c_int)
             };
             // Stop if we found a buffer that matches our criteria.
             if !skip_buffer && !buffer.b_scanned {

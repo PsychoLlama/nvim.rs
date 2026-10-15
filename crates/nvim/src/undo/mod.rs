@@ -17,6 +17,7 @@
 use crate::autocmd::{block_autocmds, unblock_autocmds};
 use crate::buffer::{buf_is_dontwrite, buf_is_empty, buf_is_prompt};
 use crate::buffer_updates::{buf_updates_changedtick, buf_updates_unload};
+use crate::change::ml_replace;
 use crate::change::{
     change_warning, changed, changed_bytes, changed_lines, file_ff_differs, unchanged,
 };
@@ -41,7 +42,7 @@ use crate::guard::{sandbox, textlock};
 use crate::mark::{free_fmark, mark_adjust, setpcmark};
 use crate::mbyte::utfc_ptr2len;
 use crate::memline::MlFlags;
-use crate::memline::{ml_append_flags, ml_delete, ml_replace, resolve_symlink};
+use crate::memline::{ml_append_cstr, ml_delete, resolve_symlink};
 use crate::memory::{XString, xfree, xmalloc, xrealloc, xstrdup};
 use crate::message::{e_modifiable, e_sandbox, e_textlock};
 use crate::message::{

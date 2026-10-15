@@ -163,7 +163,7 @@ pub fn f_prompt_setprompt(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFunc
     };
     let new_prompt = ThinCString::from_cstr(numbuf.string(&args[1]));
     let new_prompt_len = len_as_int(new_prompt.as_bytes().len());
-    if buf_is_prompt(Some(buf)) && !buf.b_ml.ml_mfp.is_null() {
+    if buf_is_prompt(Some(buf)) && buf.b_ml.ml_mfp.is_some() {
         rewrite_prompt_line(buf, new_prompt.as_bytes());
     }
     set_buf_prompt_text(buf, new_prompt);

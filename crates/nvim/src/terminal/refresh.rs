@@ -30,7 +30,7 @@ use crate::event::time::{
     time_watcher_close, time_watcher_init, time_watcher_start, time_watcher_stop,
 };
 use crate::global_cell::GlobalCell;
-use crate::memline::{ml_append_buf, ml_replace_buf};
+use crate::memline::{ml_append_buf_terminated, ml_replace_buf_text};
 use crate::r#move::{curs_columns, set_topline};
 use crate::startup::{exiting, main_loop};
 use crate::types::{ColNr, LineNr, MultiQueue, Terminal, TimeWatcher, uint16_t, uint64_t};
@@ -245,17 +245,14 @@ pub(crate) fn refresh_screen(mut term: Term, buffer: Buf) {
     for (offset, row) in (term.invalid_start..term.invalid_end).enumerate() {
         let linenr = (first_linenr + offset as c_int) as LineNr;
         fetch_row(term, row, width);
-        let text = term.textbuf.as_mut_ptr();
+        let text = crate::cstr::in_chars(&term.textbuf);
         // Past the end of the buffer means the terminal is still filling
         // out its first screen.
         if linenr <= buffer.line_count() {
-            // SAFETY: a live buffer and a line of it, taking the row this
-            // terminal's own line buffer holds.
-            let _ = unsafe { ml_replace_buf(buffer, linenr, text, true, false) };
+            let _ = ml_replace_buf_text(buffer, linenr, text.to_bytes());
             changed += 1;
         } else {
-            // SAFETY: as above, appending past the last line.
-            let _ = unsafe { ml_append_buf(buffer, linenr - 1, text, 0 as ColNr, false) };
+            let _ = ml_append_buf_terminated(buffer, linenr - 1, text.to_bytes_with_nul(), false);
             added += 1;
         }
     }

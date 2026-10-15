@@ -288,8 +288,8 @@ unsafe fn apply_entry(
                 // SAFETY: the dummy line the delete above left behind.
                 let _ = unsafe { ml_replace(1, line, true) };
             } else {
-                // SAFETY: a line of the buffer, or 0 for "before the first".
-                let _ = unsafe { ml_append_flags(top + i, line, 0, 0) };
+                // SAFETY: the entry's NUL-terminated line.
+                let _ = ml_append_cstr(top + i, unsafe { cstr::at(line) });
             }
             // SAFETY: the entry's own allocation, which the buffer copied.
             unsafe { xfree(line.cast::<c_void>()) };

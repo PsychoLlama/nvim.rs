@@ -293,7 +293,7 @@ fn open_window_for(
     open_wins: &mut c_int,
 ) -> bool {
     // Check whether this buffer needs a window.
-    if !all && buffer.b_ml.ml_mfp.is_null() || buffer.b_p_bl == 0 {
+    if !all && buffer.b_ml.ml_mfp.is_none() || buffer.b_p_bl == 0 {
         return true;
     }
 

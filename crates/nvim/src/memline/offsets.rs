@@ -8,8 +8,7 @@
 //! byte size, so the walk can skip whole runs and only visit blocks inside
 //! the run the answer falls in.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -94,7 +93,7 @@ impl Buf {
         b.b_ml.ml_chunks.add_size(curix, len);
 
         if updtype == ML_CHNK_ADDLINE {
-            if !unsafe { ml_chunk_addline(self, line, curline, curix) } {
+            if !ml_chunk_addline(self, line, curline, curix) {
                 return;
             }
         } else if updtype == ML_CHNK_DELLINE {
@@ -114,14 +113,13 @@ impl Buf {
 /// without caching its position — either the chunk was split (which
 /// invalidates the cache) or the walk failed.
 ///
-/// # Safety
-/// `buffer` must point at a buffer whose chunk index has a chunk `curix`.
-unsafe fn ml_chunk_addline(buffer: Buf, line: LineNr, curline: LineNr, curix: usize) -> bool {
-    let mut b = buffer;
+/// # Panics
+/// When the chunk index has no chunk `curix`.
+fn ml_chunk_addline(mut b: Buf, line: LineNr, curline: LineNr, curix: usize) -> bool {
     b.b_ml.ml_chunks.add_lines(curix, 1);
 
     if b.b_ml.ml_chunks.lines(curix) >= MLCS_MAXL {
-        return unsafe { ml_chunk_split(buffer, curix, curline) };
+        return ml_chunk_split(b, curix, curline);
     }
 
     if b.b_ml.ml_chunks.lines(curix) >= MLCS_MINL
@@ -135,19 +133,16 @@ unsafe fn ml_chunk_addline(buffer: Buf, line: LineNr, curline: LineNr, curix: us
             // The line is just before the last one, so move the last
             // line's size over. This is the common case while loading a
             // file.
-            let hp = unsafe { ml_find_line(buffer, buffer.b_ml.ml_line_count, ML_FIND) };
-            if hp.is_null() {
+            let Some(id) = ml_find_line(b, b.b_ml.ml_line_count, ML_FIND) else {
                 b.b_ml.ml_chunks.switch_off();
                 return false;
-            }
-            let dp = unsafe { Db::new((*hp).bh_data.cast()) };
-            let rest = if dp.db_line_count == 1 {
-                dp.db_txt_end.wrapping_sub(dp.db_txt_start) as c_int
+            };
+            let dp = DataBlock(b.b_ml.page(id));
+            let rest = if dp.line_count() == 1 {
+                dp.txt_end().wrapping_sub(dp.txt_start()) as c_int
             } else {
-                unsafe {
-                    db_line_start(dp, (dp.db_line_count - 2) as c_int) as c_int
-                        - dp.db_txt_start as c_int
-                }
+                let last_but_one = (dp.line_count() - 2) as usize;
+                dp.line_start(last_but_one) as c_int - dp.txt_start() as c_int
             };
             b.b_ml.ml_chunks.set(curix + 1, 1, rest);
             b.b_ml.ml_chunks.add_size(curix, -rest);
@@ -164,10 +159,9 @@ unsafe fn ml_chunk_addline(buffer: Buf, line: LineNr, curline: LineNr, curix: us
 /// Always returns false — either it failed, or it invalidated the cached
 /// position. Both mean the caller returns without caching.
 ///
-/// # Safety
-/// `buffer` must point at a buffer whose chunk index has a chunk `curix`.
-unsafe fn ml_chunk_split(buffer: Buf, curix: usize, curline_arg: LineNr) -> bool {
-    let mut b = buffer;
+/// # Panics
+/// When the chunk index has no chunk `curix`.
+fn ml_chunk_split(mut b: Buf, curix: usize, curline_arg: LineNr) -> bool {
     b.b_ml.ml_chunks.split_at(curix);
 
     // Total size of the first MLCS_MINL lines of the chunk.
@@ -175,12 +169,10 @@ unsafe fn ml_chunk_split(buffer: Buf, curix: usize, curline_arg: LineNr) -> bool
     let mut size = 0;
     let mut linecnt = 0;
     while curline < b.b_ml.ml_line_count && linecnt < MLCS_MINL {
-        let hp = unsafe { ml_find_line(buffer, curline, ML_FIND) };
-        if hp.is_null() {
+        let Some(id) = ml_find_line(b, curline, ML_FIND) else {
             b.b_ml.ml_chunks.switch_off();
             return false;
-        }
-        let dp = unsafe { Db::new((*hp).bh_data.cast()) };
+        };
         let count = b.b_ml.locked_high() - b.b_ml.locked_low() + 1;
         let idx = curline - b.b_ml.locked_low();
         curline = b.b_ml.locked_high() + 1;
@@ -197,12 +189,9 @@ unsafe fn ml_chunk_split(buffer: Buf, curix: usize, curline_arg: LineNr) -> bool
         };
 
         // First line in the block has its text at the end of it.
-        let text_end = if idx == 0 {
-            dp.db_txt_end as c_int
-        } else {
-            unsafe { db_line_start(dp, idx - 1) as c_int }
-        };
-        size += text_end - unsafe { db_line_start(dp, end_idx) } as c_int;
+        let dp = DataBlock(b.b_ml.page(id));
+        let text_end = dp.line_end(idx as usize) as c_int;
+        size += text_end - dp.line_start(end_idx as usize) as c_int;
     }
 
     b.b_ml.ml_chunks.add_lines(curix + 1, -linecnt);
@@ -224,6 +213,13 @@ unsafe fn ml_chunk_split(buffer: Buf, curix: usize, curline_arg: LineNr) -> bool
 /// is what byte tracking wants.
 ///
 /// Returns -1 when there is nothing to answer from.
+///
+/// The running byte count is 64 bits wide. Upstream's is an `int`, which a
+/// buffer past 2 GiB overflows: C wraps (by accident of the compiler) and a
+/// debug build of the port panicked. The walk now counts and compares
+/// without overflowing, and only the answer is cut to the `int` the callers
+/// take — wrapping, as upstream's did, so a file past 2 GiB still answers
+/// what it always answered for the offset of a line beyond that point.
 pub fn ml_find_line_or_offset(
     buffer: Buf,
     lnum: LineNr,
@@ -231,8 +227,8 @@ pub fn ml_find_line_or_offset(
     no_ff: bool,
 ) -> c_int {
     let mut b = buffer;
-    let ffdos = (!no_ff && get_fileformat(b) == EOL_DOS) as c_int;
-    let mut extra = 0;
+    let ffdos = Wide::from(!no_ff && get_fileformat(b) == EOL_DOS);
+    let mut extra: LineNr = 0;
 
     // Take care of the cached line first, and only if it is before the
     // requested line. The value for the cached line is then cached in
@@ -244,7 +240,7 @@ pub fn ml_find_line_or_offset(
     // does invalidate the cache for the time being.
     let can_cache = lnum != 0 && ffdos == 0 && b.b_ml.cached_lnum() == lnum;
     if lnum == 0 || b.b_ml.cached_lnum() < lnum || !no_ff {
-        ml_flush_line(Buf::current(), false);
+        ml_flush_line(Buf::current());
     } else if can_cache && b.b_ml.cached_offset() > 0 {
         return b.b_ml.cached_offset() as c_int;
     }
@@ -252,13 +248,13 @@ pub fn ml_find_line_or_offset(
     if b.b_ml.ml_chunks.is_off() || !b.b_ml.ml_chunks.is_built() || lnum < 0 {
         // The memline is empty. If it is open at all it still behaves as
         // though it held one empty line.
-        if no_ff && !b.b_ml.ml_mfp.is_null() && (lnum == 1 || lnum == 2) {
+        if no_ff && b.b_ml.is_open() && (lnum == 1 || lnum == 2) {
             return lnum - 1;
         }
         return -1;
     }
 
-    let offset = offp.as_deref().copied().unwrap_or(0);
+    let offset = Wide::from(offp.as_deref().copied().unwrap_or(0));
     if lnum == 0 && offset <= 0 {
         // Not a "find offset", and offset 0 must be in line 1.
         return 1;
@@ -266,19 +262,20 @@ pub fn ml_find_line_or_offset(
 
     // Skip whole chunks, up to but not including the one the answer is
     // in. The last chunk is special: it never qualifies.
-    // A read-only borrow of the live buffer's chunks, for the search below.
     let chunks = &buffer.b_ml.ml_chunks;
+    let lines_in = |at: usize| Wide::from(chunks.lines(at));
+    let size_of_chunk = |at: usize| Wide::from(chunks.size(at));
     let mut curline: LineNr = 1;
     let mut curix = 0usize;
-    let mut size = 0;
+    let mut size: Wide = 0;
     while curix + 1 < chunks.len()
         && (lnum != 0 && lnum >= curline + chunks.lines(curix)
-            || offset != 0 && offset > size + chunks.size(curix) + ffdos * chunks.lines(curix))
+            || offset != 0 && offset > size + size_of_chunk(curix) + ffdos * lines_in(curix))
     {
         curline += chunks.lines(curix);
-        size += chunks.size(curix);
+        size += size_of_chunk(curix);
         if offset != 0 && ffdos != 0 {
-            size += chunks.lines(curix);
+            size += lines_in(curix);
         }
         curix += 1;
     }
@@ -290,20 +287,17 @@ pub fn ml_find_line_or_offset(
         if curline > b.b_ml.ml_line_count {
             return -1;
         }
-        let hp = unsafe { ml_find_line(buffer, curline, ML_FIND) };
-        if hp.is_null() {
+        let Some(id) = ml_find_line(buffer, curline, ML_FIND) else {
             return -1;
-        }
-        let dp = unsafe { Db::new((*hp).bh_data.cast()) };
+        };
         let count = b.b_ml.locked_high() - b.b_ml.locked_low() + 1;
         let start_idx = curline - b.b_ml.locked_low();
         let mut idx = start_idx;
+        let page = buffer.b_ml.page(id);
+        let dp = DataBlock(page);
+        let start_of = |idx: LineNr| Wide::from(dp.line_start(idx as usize));
         // First line in the block has its text at the end of it.
-        let text_end = if idx == 0 {
-            dp.db_txt_end as c_int
-        } else {
-            unsafe { db_line_start(dp, idx - 1) as c_int }
-        };
+        let text_end = Wide::from(dp.line_end(idx as usize));
 
         // Index of the last line of this block to account for.
         if lnum != 0 {
@@ -314,7 +308,7 @@ pub fn ml_find_line_or_offset(
             }
         } else {
             extra = 0;
-            while offset >= size + text_end - unsafe { db_line_start(dp, idx) } as c_int + ffdos {
+            while offset >= size + text_end - start_of(idx) + ffdos {
                 if ffdos != 0 {
                     size += 1;
                 }
@@ -327,19 +321,19 @@ pub fn ml_find_line_or_offset(
             }
         }
 
-        let len = text_end - unsafe { db_line_start(dp, idx) } as c_int;
+        let len = text_end - start_of(idx);
         size += len;
         if offset != 0 && size >= offset {
             // A non-zero offset was read through `offp`, so it is there.
             let offp = offp.as_deref_mut().expect("an offset to answer through");
-            if size + ffdos == offset {
-                *offp = 0;
+            // A column inside one line of a block, so it fits.
+            *offp = if size + ffdos == offset {
+                0
             } else if idx == start_idx {
-                *offp = offset - size + len;
+                (offset - size + len) as c_int
             } else {
-                *offp = offset - size + len
-                    - (text_end - unsafe { db_line_start(dp, idx - 1) } as c_int);
-            }
+                (offset - size + len - (text_end - start_of(idx - 1))) as c_int
+            };
             curline += idx - start_idx + extra;
             if curline > b.b_ml.ml_line_count {
                 return -1; // exactly one byte beyond the end
@@ -352,7 +346,7 @@ pub fn ml_find_line_or_offset(
     if lnum != 0 {
         // Count the extra CR characters.
         if ffdos != 0 {
-            size += lnum - 1;
+            size += Wide::from(lnum - 1);
         }
         // Do not count the last line break with 'noeol' and either 'bin'
         // or 'nofixeol'.
@@ -364,13 +358,17 @@ pub fn ml_find_line_or_offset(
     if can_cache && size > 0 {
         b.b_ml.set_cached_offset(size as size_t);
     }
-    size
+    // Cut to the callers' `int`, wrapping as upstream's arithmetic did.
+    size as c_int
 }
+
+/// The byte count [`ml_find_line_or_offset`] keeps while it walks.
+type Wide = i64;
 
 /// Move the cursor to byte `cnt` of the buffer.
 pub fn goto_byte(cnt: c_int) {
     let mut boff = cnt;
-    ml_flush_line(Buf::current(), false); // the cached line may be dirty
+    ml_flush_line(Buf::current()); // the cached line may be dirty
     setpcmark();
     if boff != 0 {
         boff -= 1;

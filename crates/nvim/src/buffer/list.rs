@@ -385,7 +385,7 @@ pub fn curbuf_reusable() -> bool {
     let Some(buf) = current_buf() else {
         return false;
     };
-    let empty = buf.b_ml.ml_mfp.is_null() || buf_is_empty(buf);
+    let empty = buf.b_ml.ml_mfp.is_none() || buf_is_empty(buf);
     buf.name.full().is_none()
         && buf.b_nwindows <= 1
         && buf.terminal.is_null()

@@ -2498,7 +2498,6 @@ static const int HASLOOKBH = 16;
 static const int HASNL = 8;
 static const int HASWIDTH = 1;
 static const int HAS_HOTKEY_LEN = 30;
-static const int HEADER_SIZE = 24;
 static const int HEAD_ROOM = 54;
 static const int HIST_CMD = 0;
 static const int HIST_COUNT = 5;

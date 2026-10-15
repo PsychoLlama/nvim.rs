@@ -16,6 +16,7 @@ use core::ptr;
 
 use super::{get_global_lstate, nlua_error, nlua_pcall, nlua_typval_exec};
 use crate::change::inserted_bytes;
+use crate::change::ml_replace;
 use crate::cursor::check_cursor;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_curbuf_later};
 use crate::ex_getln::script_get;
@@ -24,7 +25,7 @@ use crate::lua::ffi::{
     LUA_TNIL, lua_getglobal, lua_isnil, lua_isstring, lua_pop, lua_pushnumber, lua_pushstring,
     lua_pushvalue, lua_tolstring, lua_type, luaL_loadbuffer,
 };
-use crate::memline::{ml_get_buf, ml_get_buf_len, ml_replace};
+use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::memory::{strequal, xfree, xmalloc, xmallocz, xmemdupz, xrealloc};
 use crate::message::e_argreq;
 use crate::message::emsg;

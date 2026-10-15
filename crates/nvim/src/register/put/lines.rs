@@ -111,7 +111,7 @@ impl Put {
                 first_byte_off = ColNr::try_from(head_off(&newline, end - 1)).unwrap_or(0);
 
                 // SAFETY: a NUL-terminated line the buffer takes ownership of.
-                let _ = unsafe { ml_replace(lnum, newline.into_raw(), false) };
+                let _ = ml_replace_owned(lnum, newline);
 
                 if lnum == Win::current().w_cursor.lnum {
                     // Land the cursor on the last character put, keeping
@@ -160,8 +160,7 @@ impl Put {
         let last = unsafe { (*self.y_array.add(self.y_size.wrapping_sub(1))).as_bytes() };
         let mut appended = XString::from_bytes(last);
         appended.push_bytes(&Buf::current().lines().line(lnum)[col as usize..]);
-        // SAFETY: the line just built, which `ml_append` copies.
-        let _ = unsafe { ml_append(lnum, appended.as_mut_ptr(), 0, false) };
+        let _ = ml_append_cstr(lnum, appended.as_cstr());
 
         // The head of the cursor line keeps the register's *first* line. The
         // line is read again rather than held: `ml_append` above flushed and
@@ -170,8 +169,7 @@ impl Put {
             XString::from_bytes(&Buf::current().lines().line(lnum)[..col as usize]);
         // SAFETY: a charwise register holds at least one line.
         replacement.push_bytes(unsafe { (*self.y_array).as_bytes() });
-        // SAFETY: the line just built, whose block `ml_replace` takes over.
-        let _ = unsafe { ml_replace(lnum, replacement.into_raw(), false) };
+        let _ = ml_replace_owned(lnum, replacement);
     }
 
     /// Reindent line `lnum` the way `]p` wants: keep the *relative* indent of
@@ -320,10 +318,9 @@ impl Put {
                     // second half of the split.
                     if self.y_type != kMTCharWise || i < self.y_size.wrapping_sub(1) {
                         // SAFETY: `i` is below `y_size`, so `y_array`'s `i`th
-                        // string is there and NUL-terminated; `lnum` is a
-                        // line of the buffer, and `ml_append` copies the text.
-                        let text = unsafe { (*self.y_array.add(i)).data() };
-                        if unsafe { ml_append(lnum, text, 0, false) }.is_err() {
+                        // string is there and NUL-terminated.
+                        let text = unsafe { crate::cstr::at((*self.y_array.add(i)).data()) };
+                        if ml_append_cstr(lnum, text).is_err() {
                             break 'error;
                         }
                         new_lnum += 1;

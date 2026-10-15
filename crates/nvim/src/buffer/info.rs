@@ -169,7 +169,7 @@ impl<'a> Walk<'a> {
 fn skip(buffer: Buf, arg: &CStr, forceit: c_int) -> bool {
     let is_terminal = !buffer.terminal.is_null();
     let job_running = buf_terminal_running(buffer);
-    let loaded = !buffer.b_ml.ml_mfp.is_null();
+    let loaded = buffer.b_ml.ml_mfp.is_some();
     let alt_fnum = current_win().w_alt_fnum;
 
     buffer.b_p_bl == 0 && forceit == 0 && !has_flag(arg, b'u')
@@ -233,7 +233,7 @@ fn show(buffer: Buf, by_time: bool, name: &XString) {
     } else {
         b' '
     };
-    let state = if buffer.b_ml.ml_mfp.is_null() {
+    let state = if buffer.b_ml.ml_mfp.is_none() {
         b' '
     } else if buffer.b_nwindows == 0 {
         b'h'

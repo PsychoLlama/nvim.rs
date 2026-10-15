@@ -10,9 +10,9 @@
 //! files already exist for a given file, for `:recover`, `swapfilelist()` and
 //! the ATTENTION message.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
+use crate::autocmd::fire_autocmds_for;
 use crate::buffer::BufFlags;
 use crate::cstr;
 use crate::ex_docmd::cmdmod_has;
@@ -20,26 +20,43 @@ use crate::guard::{Lock, Suppress};
 use crate::mbyte::cluster_len;
 use crate::memory::ThinCString;
 use crate::memory::XString;
-use crate::memory::xstrlcpy;
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_cstr;
+use crate::option::split_option_part;
 use crate::option::vars::P_DIR;
+use crate::os::env::home_replace_in;
+use crate::os::fs::{dir_exists, file_info, link_exists, mkdir_recurse};
 use crate::path::ExpandFlags;
 use crate::semsg;
 use crate::types::TypVal;
 use ::libc::{EINVAL, ENOENT};
-use core::ffi::{CStr, c_char, c_int, c_uint};
+use core::ffi::{CStr, c_int, c_uint};
 
 use super::*;
 use crate::types::{CmdModFlags, Failed, IOSIZE, MAXPATHL, NUL, ShmFlag, Vv};
+
+/// One entry of `'directory'` after another: the entry, and whether it is
+/// the last.
+fn directory_entries(dir: &[u8]) -> impl Iterator<Item = (Vec<u8>, bool)> + '_ {
+    let mut rest = dir;
+    core::iter::from_fn(move || {
+        if rest.is_empty() {
+            return None;
+        }
+        // The rest of the option is the longest one entry can be, so it is
+        // its own bound.
+        let (part, after) = split_option_part(rest, rest.len() + 1, b",");
+        rest = after;
+        Some((part, rest.is_empty()))
+    })
+}
 
 /// Rename the swap file after the buffer's file name changed.
 ///
 /// The name is what identifies the swap file to the next `:recover`, so it
 /// has to follow the file. Failing that, the swap file is at least reopened
 /// under its old name — losing it entirely is worse than a stale name.
-pub fn ml_setname(buffer: Buf) {
-    let mfp = buffer.b_ml.ml_mfp;
-    if unsafe { (*mfp).mf_fd } < 0 {
+pub fn ml_setname(mut buffer: Buf) {
+    if buffer.b_ml.mfp().mf_fd < 0 {
         // There is no swap file yet: with `'updatecount'` zero and
         // `'noswapfile'` there never was one. Help files get one now.
         if p_uc() != 0 && !cmdmod_has(CmdModFlags::NOSWAPFILE) {
@@ -50,91 +67,60 @@ pub fn ml_setname(buffer: Buf) {
 
     // Try every directory in 'directory'.
     let mut success = false;
-    // A copy: the cursor below walks past the end of a projection's borrow.
+    // A copy: the walk outlives a projection's borrow, and the option may
+    // change under the autocommands it runs.
     let dir = P_DIR.get();
-    let mut dirp = dir.as_ptr().cast_mut();
     let mut found_existing_dir = false;
-    while unsafe { *dirp } as c_int != NUL {
-        let fname = unsafe {
-            findswapname(
-                buffer,
-                &raw mut dirp,
-                mf_fname(mfp),
-                &raw mut found_existing_dir,
-            )
-        };
-        if dirp.is_null() {
-            break; // out of memory
-        }
-        if fname.is_null() {
+    for (dir_name, last) in directory_entries(&dir) {
+        // A copy of the name the swap file has now: finding a new one can
+        // run autocommands.
+        let old = buffer.b_ml.mfp().fname().map(CStr::to_owned);
+        let found = findswapname(
+            buffer,
+            &dir_name,
+            last,
+            old.as_deref(),
+            &mut found_existing_dir,
+        );
+        let Some(fname) = found else {
             continue; // no name found for this directory
-        }
+        };
+        let old = old.unwrap_or_default();
 
         // Already called that: nothing to do.
-        if unsafe { path_fnamecmp(cstr::bytes_at(fname), cstr::bytes_at(mf_fname(mfp))) } == 0 {
-            unsafe { xfree(fname.cast()) };
+        if path_fnamecmp(&fname, old.to_bytes()) == 0 {
             success = true;
             break;
         }
         // The swap file has to be closed before it can be renamed.
-        if unsafe { (*mfp).mf_fd } >= 0 {
-            unsafe { close((*mfp).mf_fd) };
-            unsafe { (*mfp).mf_fd = -1 };
-        }
-        if unsafe { rename_file(cstr::at(mf_fname(mfp)), cstr::at(fname)) } {
+        buffer.b_ml.mfp().close_fd();
+        if rename_file(&old, fname.as_cstr()) {
             success = true;
-            unsafe { mf_free_fnames(mfp) };
-            unsafe { mf_set_fnames(mfp, fname) };
+            let mfp = buffer.b_ml.mfp();
+            mfp.free_fnames();
+            mfp.set_fnames(fname.as_cstr().to_owned());
             ml_upd_block0(buffer, UB_SAME_DIR);
             break;
         }
-        unsafe { xfree(fname.cast()) }; // this name did not work, try another
+        // This name did not work, try another.
     }
 
-    if unsafe { (*mfp).mf_fd } == -1 {
-        unsafe { (*mfp).mf_fd = os_open(mf_fname(mfp), O_RDWR, 0) };
-        if unsafe { (*mfp).mf_fd } < 0 {
-            // Could not reopen the swap file. Nothing can be done.
-            complain(c"E301: Oops, lost the swap file!!!");
-            return;
-        }
-        unsafe { os_set_cloexec((*mfp).mf_fd) };
+    if buffer.b_ml.mfp().mf_fd == -1 && !buffer.b_ml.mfp().reopen() {
+        // Could not reopen the swap file. Nothing can be done.
+        complain(c"E301: Oops, lost the swap file!!!");
+        return;
     }
     if !success {
         complain(c"E302: Could not rename swap file");
     }
 }
 
-/// Append `name`'s full path to `dir`, with the path separators turned into
-/// percent signs, so that a `'directory'` entry ending in `//` can hold the
-/// swap files of files from everywhere without their names colliding.
+/// Append `name`'s full path to `dir` (a `'directory'` entry without its
+/// extra separator), with every path separator turned into a `%`, so that an
+/// entry ending in `//` can hold the swap files of files from everywhere
+/// without their names colliding.
 ///
-/// An unnamed buffer is handled as `""`, i.e. `<currentdir>/""`. The last
-/// character of `dir` must be an extra path separator; it is removed.
-///
-/// # Safety
-///
-/// `dir` must point at a NUL-terminated string, unaliased for the call.
-/// `dir_end` must point at a NUL-terminated string, unaliased for the call.
-/// `name` must point at a NUL-terminated string.
-pub unsafe fn make_percent_swname(
-    dir: *mut c_char,
-    dir_end: *mut c_char,
-    name: *const c_char,
-) -> *mut c_char {
-    // SAFETY: the caller's directory name, whose last byte is the extra
-    // separator this is documented to remove, and its NUL-terminated name,
-    // or null.
-    let (dir, name) = unsafe {
-        *dir_end.sub(1) = NUL as c_char;
-        (cstr::bytes_at(dir), cstr::at_opt(name))
-    };
-    percent_swname(dir, name).into_raw()
-}
-
-/// [`make_percent_swname`] over slices: `dir` without its extra separator,
-/// and `name`'s full path with every path separator turned into `%` under
-/// it. `None` is the unnamed buffer's `""`.
+/// `None` is the unnamed buffer's `""`, i.e. `<currentdir>/""`.
 pub(crate) fn percent_swname(dir: &[u8], name: Option<&CStr>) -> XString {
     let f = fix_fname(name.unwrap_or(c""));
 
@@ -143,7 +129,7 @@ pub(crate) fn percent_swname(dir: &[u8], name: Option<&CStr>) -> XString {
     let mut mangled: Vec<u8> = f.to_vec();
     let mut i = 0;
     while i < mangled.len() {
-        if vim_ispathsep(mangled[i] as c_int) {
+        if vim_ispathsep(c_int::from(mangled[i])) {
             mangled[i] = b'%';
         }
         i += cluster_len(&mangled[i..]);
@@ -151,25 +137,19 @@ pub(crate) fn percent_swname(dir: &[u8], name: Option<&CStr>) -> XString {
     concat_fnames(dir, &mangled, true)
 }
 
-/// Resolve a symbolic link in the *last* component of a file name, writing
-/// the result into `buf[MAXPATHL]`.
+/// Resolve a symbolic link in the *last* component of a file name, and
+/// answer the full name it resolves to.
 ///
 /// `resolve()` in Vimscript does this for every part of the path; this does
-/// not. Returns `Ok` when `buf` holds a resolved name, `Err` when the caller
-/// should keep the name it already has.
-///
-/// # Safety
-///
-/// `fname` must point at a NUL-terminated string. `buf` must point at a NUL-
-/// terminated string, unaliased for the call.
-pub unsafe fn resolve_symlink(fname: *const c_char, buf: *mut c_char) -> Result<(), Failed> {
-    if fname.is_null() {
-        return Err(Failed);
-    }
+/// not. `None` when the caller should keep the name it already has: not a
+/// link, a link that could not be read, or a resolved name that could not be
+/// made full.
+pub fn resolve_symlink(fname: &CStr) -> Option<Vec<u8>> {
+    use std::os::unix::ffi::{OsStrExt, OsStringExt};
 
-    // The result so far lives in `tmp`, starting with the original name.
-    let mut tmp: [c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
-    unsafe { xstrlcpy(tmp.as_mut_ptr(), fname, MAXPATHL as size_t) };
+    // The result so far, starting with the original name.
+    let room = MAXPATHL as usize;
+    let mut tmp: Vec<u8> = fname.to_bytes()[..fname.count_bytes().min(room - 1)].to_vec();
 
     let mut depth = 0;
     loop {
@@ -177,54 +157,56 @@ pub unsafe fn resolve_symlink(fname: *const c_char, buf: *mut c_char) -> Result<
         // other.
         depth += 1;
         if depth == 100 {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let fname = unsafe { c_str(fname) };
-            semsg!("E773: Symlink loop for \"{fname}\"");
-            return Err(Failed);
+            semsg!("E773: Symlink loop for \"{}\"", msg_cstr(fname));
+            return None;
         }
 
-        let ret = unsafe { readlink(tmp.as_mut_ptr(), buf, MAXPATHL as size_t - 1) } as c_int;
-        if ret <= 0 {
-            if unsafe { *__errno_location() } != EINVAL && unsafe { *__errno_location() } != ENOENT
-            {
-                // Some other error reading the link: keep the original.
-                return Err(Failed);
+        let path = std::path::Path::new(std::ffi::OsStr::from_bytes(&tmp));
+        let target = match std::fs::read_link(path) {
+            Ok(target) => target.into_os_string().into_vec(),
+            Err(err) => {
+                let errno = err.raw_os_error().unwrap_or(0);
+                if errno != EINVAL && errno != ENOENT {
+                    // Some other error reading the link: keep the original.
+                    return None;
+                }
+                // Not a symlink, or it does not exist, so `tmp` is as
+                // resolved as it gets. At the first level that means
+                // nothing was resolved at all, and the caller keeps its
+                // own name.
+                if depth == 1 {
+                    return None;
+                }
+                break;
             }
-            // Not a symlink, or it does not exist, so `tmp` is as
-            // resolved as it gets. At the first level that means nothing
-            // was resolved at all, and the caller keeps its own name.
+        };
+        // What a `MAXPATHL - 1` buffer would have held of it.
+        let target = &target[..target.len().min(room - 1)];
+        if target.is_empty() {
             if depth == 1 {
-                return Err(Failed);
+                return None;
             }
             break;
         }
-        unsafe { *buf.offset(ret as isize) = NUL as c_char };
+        let target = cstr::until_nul(target);
 
         // A relative link is relative to the directory of the name it
         // was found in, so it replaces only the tail of `tmp`.
-        if unsafe { path_is_absolute(cstr::at(buf)) } {
-            unsafe { xstrlcpy(tmp.as_mut_ptr(), buf, tmp.len()) };
+        if path_is_absolute(&cstr::owned(target)) {
+            tmp = target.to_vec();
         } else {
-            let name = cstr::in_chars(&tmp).to_bytes();
-            let tail = tail_index(name);
-            if name.len() - tail + unsafe { cstr::bytes_at(buf) }.len() >= MAXPATHL as size_t {
-                return Err(Failed);
+            let tail = tail_index(&tmp);
+            if tmp.len() - tail + target.len() >= room {
+                return None;
             }
-            let room = tmp.len() - tail;
-            unsafe { xstrlcpy(tmp.as_mut_ptr().add(tail), buf, room) };
+            tmp.truncate(tail);
+            tmp.extend_from_slice(target);
         }
     }
 
     // Resolve the full name too, so that opening the same relative
     // symlink from two working directories still picks one swap file.
-    let full = vim_full_name(cstr::in_chars(&tmp), MAXPATHL as usize, true);
-    let (Ok(name) | Err(name)) = &full;
-    // SAFETY: the caller's `MAXPATHL` buffer; the name is shorter than that.
-    unsafe {
-        core::ptr::copy_nonoverlapping(name.as_ptr().cast(), buf, name.len());
-        *buf.add(name.len()) = NUL as c_char;
-    }
-    full.map(drop).map_err(|_| Failed)
+    vim_full_name(&cstr::owned(&tmp), room, true).ok()
 }
 
 /// Whether a `'directory'` entry ends in *two* path separators, which is
@@ -236,75 +218,35 @@ fn ends_with_double_sep(dir: &[u8]) -> bool {
     dir.len() > 1 && dir[dir.len() - 1] == dir[dir.len() - 2]
 }
 
-/// The swap file name for `fname` under the `'directory'` entry `dir_name`,
-/// allocated, or null.
+/// The swap file name for `fname` under the `'directory'` entry `dir_name`.
 ///
-/// # Safety
-///
-/// `fname` must point at a NUL-terminated string, unaliased for the call.
-/// `_ffname` must point at a NUL-terminated string, unaliased for the call.
-/// `dir_name` must point at a NUL-terminated string, unaliased for the call.
-pub unsafe fn makeswapname(
-    fname: *mut c_char,
-    _ffname: *mut c_char,
-    _buffer: Option<Buf>,
-    dir_name: *mut c_char,
-) -> *mut c_char {
+/// `None` is an unnamed buffer.
+pub(crate) fn makeswapname(fname: Option<&CStr>, dir_name: &[u8]) -> Option<XString> {
     // Expand a symlink, so that the swap file goes with the actual file
     // rather than with the link.
-    let mut fname_buf: [c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
-    let fname_res = if unsafe { resolve_symlink(fname, fname_buf.as_mut_ptr()) }.is_ok() {
-        fname_buf.as_mut_ptr()
-    } else {
-        fname
-    };
+    let resolved = fname
+        .and_then(resolve_symlink)
+        .map(|name| cstr::owned(&name));
+    let fname_res = resolved.as_deref().or(fname);
 
-    // SAFETY: the caller's NUL-terminated directory name.
-    let dir = unsafe { cstr::bytes_at(dir_name) };
-    let end = unsafe { dir_name.add(dir.len()) };
-    if after_pathsep(dir, dir.len()) && ends_with_double_sep(dir) {
+    if after_pathsep(dir_name, dir_name.len()) && ends_with_double_sep(dir_name) {
         // Ends with "//": the swap file's name encodes the full path.
-        let mut r = core::ptr::null_mut();
-        let s = unsafe { make_percent_swname(dir_name, end, fname_res) };
-        if !s.is_null() {
-            r = unsafe { modname(cstr::at_opt(s), b".swp", false) }
-                .map_or(core::ptr::null_mut(), XString::into_raw);
-            unsafe { xfree(s.cast()) };
-        }
-        return r;
+        let dir = &dir_name[..dir_name.len() - 1];
+        let s = percent_swname(dir, fname_res);
+        return modname(Some(s.as_cstr()), b".swp", false);
     }
 
     // A swap file in the file's own directory gets a leading '.'.
-    let r = unsafe { modname(cstr::at_opt(fname_res), b".swp", dir == b".") }
-        .map_or(core::ptr::null_mut(), XString::into_raw);
-    if r.is_null() {
-        return core::ptr::null_mut(); // out of memory
-    }
-    let s = unsafe { get_file_in_dir(r, dir_name) };
-    unsafe { xfree(r.cast()) };
-    s
+    let r = modname(fname_res, b".swp", dir_name == b".")?;
+    Some(file_in_dir(&r, dir_name))
 }
 
-/// Place `fname` in the directory `dname` names, for a swap or backup file.
+/// Place `fname` in the directory `dir` names, for a swap or backup file.
 ///
-/// - `dname` is `"."`: beside the file, i.e. `fname` itself.
-/// - `dname` starts with `"./"`: relative to the file's own directory, with
-///   the rest of `dname` spliced in before the tail.
-/// - otherwise: in `dname`, under `fname`'s tail.
-///
-/// The result is allocated, and may be null.
-///
-/// # Safety
-///
-/// `fname` must point at a NUL-terminated string, unaliased for the call.
-/// `dname` must point at a NUL-terminated string, unaliased for the call.
-pub unsafe fn get_file_in_dir(fname: *mut c_char, dname: *mut c_char) -> *mut c_char {
-    // SAFETY: the caller's two NUL-terminated names.
-    let (fname, dir) = unsafe { (cstr::bytes_at(fname), cstr::bytes_at(dname)) };
-    file_in_dir(fname, dir).into_raw()
-}
-
-/// [`get_file_in_dir`] over slices.
+/// - `dir` is `"."`: beside the file, i.e. `fname` itself.
+/// - `dir` starts with `"./"`: relative to the file's own directory, with
+///   the rest of `dir` spliced in before the tail.
+/// - otherwise: in `dir`, under `fname`'s tail.
 pub(crate) fn file_in_dir(fname: &[u8], dir: &[u8]) -> XString {
     let tail_at = tail_index(fname);
     let tail = &fname[tail_at..];
@@ -329,41 +271,27 @@ pub(crate) fn file_in_dir(fname: &[u8], dir: &[u8]) -> XString {
 /// Build the ATTENTION message: what is known about the swap file that is in
 /// the way, and what the user can do about it.
 ///
-/// `fhname` is `fname` with the home directory replaced by `~`.
-///
-/// # Safety
-///
-/// `fname` must point at a NUL-terminated string, unaliased for the call.
-/// `fhname` must point at a NUL-terminated string, unaliased for the call.
-unsafe fn attention_message(
-    buffer: Buf,
-    fname: *mut c_char,
-    fhname: *mut c_char,
-    msg: &mut Vec<u8>,
-) {
-    debug_assert!(!buffer.name.is_unnamed());
-
+/// `fhname` is `fname` with the home directory replaced by `~`; `shown` is
+/// the buffer's name.
+fn attention_message(fname: &CStr, fhname: &[u8], shown: &CStr, msg: &mut Vec<u8>) {
     complain(c"E325: ATTENTION");
     push_tr(msg, c"Found a swap file by the name \"");
-    // SAFETY: both names are NUL-terminated strings the caller holds.
-    msg.extend_from_slice(unsafe { cstr::bytes_at(fhname) });
+    msg.extend_from_slice(fhname);
     msg.extend_from_slice(b"\"\n");
-    let swap_mtime = unsafe { swapfile_info(fname, msg) };
+    let swap_mtime = swapfile_info(fname, msg);
     push_tr(msg, c"While opening file \"");
-    msg.extend_from_slice(unsafe { cstr::bytes_at(buffer.name.shown_ptr()) });
+    msg.extend_from_slice(shown.to_bytes());
     msg.extend_from_slice(b"\"\n");
 
-    let mut file_info: FileInfo = unsafe { core::mem::zeroed() };
-    if !unsafe { os_fileinfo(buffer.name.shown_ptr(), &raw mut file_info) } {
-        push_tr(msg, c"      CANNOT BE FOUND");
-    } else {
-        push_tr(msg, c"             dated: ");
-        let x = file_info.stat.st_mtim.tv_sec as time_t;
-        let mut ctime_buf: [c_char; 50] = [0; 50];
-        os_ctime_r(x, &mut ctime_buf, true);
-        msg.extend_from_slice(cstr::in_chars(&ctime_buf).to_bytes());
-        if swap_mtime != 0 && x > swap_mtime {
-            push_tr(msg, c"      NEWER than swap file!\n");
+    match file_info(shown) {
+        None => push_tr(msg, c"      CANNOT BE FOUND"),
+        Some(info) => {
+            push_tr(msg, c"             dated: ");
+            let x = info.stat.st_mtim.tv_sec as time_t;
+            msg.extend_from_slice(&ctime_text(x, 50, true));
+            if swap_mtime != 0 && x > swap_mtime {
+                push_tr(msg, c"      NEWER than swap file!\n");
+            }
         }
     }
 
@@ -377,38 +305,34 @@ unsafe fn attention_message(
         msg,
         c"    If this is the case, use \":recover\" or \"nvim -r ",
     );
-    // SAFETY: the buffer's own name, NUL-terminated.
-    msg.extend_from_slice(unsafe { cstr::bytes_at(buffer.name.shown_ptr()) });
+    msg.extend_from_slice(shown.to_bytes());
     push_tr(
         msg,
         c"\"\n    to recover the changes (see \":help recovery\").\n",
     );
     push_tr(msg, c"    If you did this already, delete the swap file \"");
-    // SAFETY: the caller's swap file name, NUL-terminated.
-    msg.extend_from_slice(unsafe { cstr::bytes_at(fname) });
+    msg.extend_from_slice(fname.to_bytes());
     push_tr(msg, c"\"\n    to avoid this message.\n");
 }
 
 /// Fire the `SwapExists` autocommands and read the choice they left in
 /// `v:swapchoice`.
-///
-/// # Safety
-///
-/// `fname` must point at a NUL-terminated string, unaliased for the call.
-unsafe fn do_swapexists(buffer: Buf, fname: *mut c_char) -> SwapExistsChoice {
-    // SAFETY: the caller's obligation -- a NUL-terminated name.
-    set_vim_var_string(
-        Vv::Swapname,
-        unsafe { cstr::at_opt(fname) }.map(CStr::to_bytes),
-    );
+fn do_swapexists(buffer: Buf, fname: &CStr) -> SwapExistsChoice {
+    set_vim_var_string(Vv::Swapname, Some(fname.to_bytes()));
     set_vim_var_string(Vv::Swapchoice, None);
 
     // `<afile>` is the file being edited. Changing directory is not
     // allowed from here.
     let locked = Lock::all_buffers();
-    let name = buffer.name.shown_ptr();
-    let no_io = core::ptr::null_mut();
-    unsafe { apply_autocmds(AutoEvent::SwapExists, name, no_io, false, None) };
+    let name = buffer.name.shown().map(CStr::to_owned);
+    fire_autocmds_for(
+        AutoEvent::SwapExists,
+        name.as_deref(),
+        None,
+        false,
+        None,
+        None,
+    );
     drop(locked);
 
     set_vim_var_string(Vv::Swapname, None);
@@ -429,19 +353,10 @@ unsafe fn do_swapexists(buffer: Buf, fname: *mut c_char) -> SwapExistsChoice {
 /// put the ATTENTION message in front of the user.
 ///
 /// Returns true when the swap file is gone afterwards, so its name is free.
-///
-/// # Safety
-///
-/// `fname` must point at a NUL-terminated string, unaliased for the call.
-/// `buf_fname` must point at a NUL-terminated string, unaliased for the call.
-unsafe fn resolve_swapfile_clash(
-    mut buffer: Buf,
-    fname: *mut c_char,
-    buf_fname: *mut c_char,
-) -> bool {
+fn resolve_swapfile_clash(mut buffer: Buf, fname: &CStr, buf_fname: &CStr) -> bool {
     // Only worth a word if the swap file belongs to *this* file, the
     // buffer was not already recovered, and 'shortmess' allows it.
-    if unsafe { swapfile_is_for_other_file(buffer, fname) }
+    if swapfile_is_for_other_file(buffer, fname)
         || Buf::current().b_flags.has(BufFlags::RECOVERED)
         || P_SHM.has_byte(ShmFlag::ATTENTION.byte())
     {
@@ -452,7 +367,7 @@ unsafe fn resolve_swapfile_clash(
 
     // Deleting it is safe when the file exists and the swap file records
     // no changes and looks intact.
-    if unsafe { os_path_exists(buffer.name.shown_ptr()) } && unsafe { swapfile_unchanged(fname) } {
+    if path_exists(buf_fname) && swapfile_unchanged(fname) {
         choice = SEA_CHOICE_DELETE;
         if p_verbose() > 0 {
             verb_msg(gettext(
@@ -466,10 +381,9 @@ unsafe fn resolve_swapfile_clash(
     // the question to the user.
     if choice == SEA_CHOICE_NONE
         && swap_exists_action.get() != SEA_NONE
-        && unsafe { cstr::at_opt(buf_fname) }
-            .is_some_and(|name| has_autocmd(AutoEvent::SwapExists, name, Some(buffer)))
+        && has_autocmd(AutoEvent::SwapExists, buf_fname, Some(buffer))
     {
-        choice = unsafe { do_swapexists(buffer, fname) };
+        choice = do_swapexists(buffer, fname);
     }
     if choice == SEA_CHOICE_NONE && swap_exists_action.get() == SEA_READONLY {
         choice = SEA_CHOICE_READONLY;
@@ -478,14 +392,14 @@ unsafe fn resolve_swapfile_clash(
     // Set by attention_message -> swapfile_info, below.
     proc_running.set(0);
     if choice == SEA_CHOICE_NONE {
-        choice = unsafe { ask_about_swapfile(buffer, fname) };
+        choice = ask_about_swapfile(buffer, fname);
     }
 
     match choice {
         SEA_CHOICE_READONLY => buffer.b_p_ro = 1,
         SEA_CHOICE_RECOVER => swap_exists_action.set(SEA_RECOVER),
         SEA_CHOICE_DELETE => {
-            unsafe { os_remove(cstr::at(fname)) };
+            os_remove(fname);
         }
         SEA_CHOICE_QUIT => swap_exists_action.set(SEA_QUIT),
         SEA_CHOICE_ABORT => {
@@ -503,16 +417,12 @@ unsafe fn resolve_swapfile_clash(
     }
 
     // If the swap file was deleted, this name can be used after all.
-    choice != SEA_CHOICE_NONE && !unsafe { os_path_exists(fname) }
+    choice != SEA_CHOICE_NONE && !path_exists(fname)
 }
 
 /// Show the ATTENTION message, as a dialog if the caller can act on an
 /// answer and as a warning otherwise.
-///
-/// # Safety
-///
-/// `fname` must point at a NUL-terminated string, unaliased for the call.
-unsafe fn ask_about_swapfile(buffer: Buf, fname: *mut c_char) -> SwapExistsChoice {
+fn ask_about_swapfile(buffer: Buf, fname: &CStr) -> SwapExistsChoice {
     let mut choice = SEA_CHOICE_NONE;
     let no_prompt = Suppress::wait_return();
 
@@ -520,8 +430,11 @@ unsafe fn ask_about_swapfile(buffer: Buf, fname: *mut c_char) -> SwapExistsChoic
     // reallocation. Only a size hint -- nothing reads the capacity.
     let mut msg: Vec<u8> = Vec::with_capacity(IOSIZE as usize);
 
-    let fhname = unsafe { home_replace_save(None, fname) };
-    unsafe { attention_message(buffer, fname, fhname, &mut msg) };
+    // Room for the name, a `~/` and the terminator, as `home_replace_save`
+    // sized it.
+    let fhname = home_replace_in(None, fname, fname.count_bytes() + 3, true);
+    let shown = buffer.name.shown().unwrap_or(c"").to_owned();
+    attention_message(fname, &fhname, &shown, &mut msg);
 
     // A 'q' typed at the more-prompt must not interrupt loading the
     // file, and a "simalt ~x" in the vimrc must not answer the prompt
@@ -531,8 +444,7 @@ unsafe fn ask_about_swapfile(buffer: Buf, fname: *mut c_char) -> SwapExistsChoic
 
     if swap_exists_action.get() != SEA_NONE {
         push_tr(&mut msg, c"Swap file \"");
-        // SAFETY: the home-replaced name, NUL-terminated.
-        msg.extend_from_slice(unsafe { cstr::bytes_at(fhname) });
+        msg.extend_from_slice(&fhname);
         push_tr(&mut msg, c"\" already exists!");
         // "Delete it" is not offered while the owning process is alive.
         let run_but = gettext(c"&Open Read-Only\n&Edit anyway\n&Recover\n&Quit\n&Abort");
@@ -550,7 +462,7 @@ unsafe fn ask_about_swapfile(buffer: Buf, fname: *mut c_char) -> SwapExistsChoic
         let text = text.as_cstr();
         choice = do_dialog(warn, Some(title), text, buttons, 1, None, false) as SwapExistsChoice;
         // Compensate for the missing "Delete it" button.
-        choice = choice.wrapping_add((running && choice >= 4) as SwapExistsChoice);
+        choice = choice.wrapping_add(SwapExistsChoice::from(running && choice >= 4));
         // Pretend the screen did not scroll; it needs a redraw anyway.
         msg_reset_scroll();
     } else {
@@ -560,95 +472,73 @@ unsafe fn ask_about_swapfile(buffer: Buf, fname: *mut c_char) -> SwapExistsChoic
     }
 
     drop(no_prompt);
-    unsafe { xfree(fhname.cast()) };
     choice
 }
 
-/// Find a name for `buffer`'s swap file under the next entry of `'directory'`.
+/// Find a name for `buffer`'s swap file under the `'directory'` entry
+/// `dir_name`.
 ///
 /// Names are tried in turn until one is free: `".swp"`, then `".swo"`,
-/// `".swn"` and so on down to `".saa"`. The last directory in the option is
-/// created if it does not exist.
+/// `".swn"` and so on down to `".saa"`. The last directory in the option
+/// (`last_dir`) is created if it does not exist.
 ///
-/// May trigger the `SwapExists` autocommand, so pointers may change.
+/// May trigger the `SwapExists` autocommand, so whatever the caller holds
+/// about the buffer may change.
 ///
-/// `dirp` walks the `'directory'` list and is advanced past the entry used.
 /// `old_fname`, when given, is a name this buffer already owns and may keep.
 /// `found_existing_dir` starts out false and is only ever set — once any
 /// directory in the list exists, no new one is created.
-///
-/// Returns the allocated name, or null.
-///
-/// # Safety
-///
-/// `dirp` must point at a writable `*mut c_char` slot the caller owns for the
-/// call. `old_fname` must point at a NUL-terminated string.
-/// `found_existing_dir` must point at a writable `bool` the caller owns.
-pub(crate) unsafe fn findswapname(
+pub(crate) fn findswapname(
     buffer: Buf,
-    dirp: *mut *mut c_char,
-    old_fname: *const c_char,
-    found_existing_dir: *mut bool,
-) -> *mut c_char {
-    let buf_fname = buffer.name.shown_ptr();
+    dir_name: &[u8],
+    last_dir: bool,
+    old_fname: Option<&CStr>,
+    found_existing_dir: &mut bool,
+) -> Option<XString> {
+    // A copy: the autocommands below may rename the buffer.
+    let buf_fname = buffer.name.shown().map(CStr::to_owned);
 
-    // Isolate one directory name out of *dirp. The rest of the option is
-    // the longest one entry can be, so the buffer is its own bound.
-    // SAFETY: `dirp` walks the NUL-terminated `'directory'` value.
-    let dir_len = unsafe { cstr::bytes_at(*dirp) }.len() + 1;
-    let mut dir_buf: Vec<c_char> = vec![0; dir_len];
-    let dir_name = dir_buf.as_mut_ptr();
-    unsafe { copy_option_part(dirp, dir_name, dir_len, c",".as_ptr().cast_mut()) };
-
-    let mut fname =
-        unsafe { makeswapname(buf_fname, buffer.name.full_ptr(), Some(buffer), dir_name) };
-    loop {
-        if fname.is_null() {
-            break; // out of memory
-        }
-        let n = unsafe { cstr::bytes_at(fname) }.len();
-        if n == 0 {
+    let mut fname = makeswapname(buf_fname.as_deref(), dir_name);
+    while let Some(name) = fname.as_mut() {
+        if name.is_empty() {
             // Safety check.
-            unsafe { xfree(fname.cast()) };
-            fname = core::ptr::null_mut();
+            fname = None;
             break;
         }
 
         // Is the name taken? A swap file that is a symbolic link is most
         // likely a symlink attack, so the link itself counts as taken.
-        let mut file_info: FileInfo = unsafe { core::mem::zeroed() };
-        if !unsafe { os_fileinfo_link(fname, &raw mut file_info) } {
+        if !link_exists(name.as_cstr()) {
             break;
         }
         // A name this buffer already owns is free for it to keep.
-        if !old_fname.is_null()
-            && unsafe { path_fnamecmp(cstr::bytes_at(fname), cstr::bytes_at(old_fname)) } == 0
-        {
+        if old_fname.is_some_and(|old| path_fnamecmp(name, old.to_bytes()) == 0) {
             break;
         }
 
         // The last two bytes of the name are the extension being permuted
         // below. Every name `makeswapname` answers ends in ".swp", so there
-        // are always two; upstream reads before the string rather than
-        // saying so.
-        // SAFETY: `fname` is the owned NUL-terminated name, `n` its length.
-        let ext = unsafe { core::slice::from_raw_parts_mut(fname.cast::<u8>(), n) };
-        let Some(ext) = ext.last_chunk_mut::<2>() else {
+        // are always two.
+        let n = name.len();
+        let Some(ext) = name.get(n.saturating_sub(2)..).filter(|ext| ext.len() == 2) else {
             break;
         };
+        let ext = [ext[0], ext[1]];
 
         // The name is taken. On the first try — the plain ".swp" — that
         // means a real swap file, and it is worth telling the user about
         // unless we are recovering, have no file name, are in a help file
         // or in a dummy buffer.
-        if ext == b"wp"
+        if &ext == b"wp"
             && !recoverymode.get()
-            && !buf_fname.is_null()
+            && let Some(buf_fname) = buf_fname.as_deref()
             && !buffer.b_help
             && !buffer.b_flags.has(BufFlags::DUMMY)
-            && unsafe { resolve_swapfile_clash(buffer, fname, buf_fname) }
         {
-            break;
+            let swap = name.as_cstr().to_owned();
+            if resolve_swapfile_clash(buffer, &swap, buf_fname) {
+                break;
+            }
         }
 
         // Permute the extension to find a name nothing is using: first
@@ -656,35 +546,34 @@ pub(crate) unsafe fn findswapname(
         // that runs out the one before it (".svz", ".suz", …). Both can
         // happen with many Nvims editing one file, including "No Name"
         // buffers.
-        if ext[1] == b'a' {
-            if ext[0] == b'a' {
+        let [mut first, mut second] = ext;
+        if second == b'a' {
+            if first == b'a' {
                 // ".saa": tried enough, give up.
                 complain(c"E326: Too many swap files found");
-                unsafe { xfree(fname.cast()) };
-                fname = core::ptr::null_mut();
+                fname = None;
                 break;
             }
-            ext[0] -= 1;
-            ext[1] = b'z' + 1;
+            first -= 1;
+            second = b'z' + 1;
         }
-        ext[1] -= 1;
+        second -= 1;
+        name.truncate(n - 2);
+        name.push_bytes(&[first, second]);
     }
 
-    if unsafe { os_isdir(dir_name) } {
-        unsafe { *found_existing_dir = true };
-    } else if !unsafe { *found_existing_dir } && unsafe { **dirp } as c_int == NUL {
+    let dir = cstr::owned(dir_name);
+    if dir_exists(&dir) {
+        *found_existing_dir = true;
+    } else if !*found_existing_dir && last_dir {
         // The last entry in 'directory' is created on demand.
-        let mut failed_dir = core::ptr::null_mut();
-        let ret = unsafe {
-            os_mkdir_recurse(dir_name, 0o755, &raw mut failed_dir, core::ptr::null_mut())
-        };
-        if ret != 0 {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-            let (shown, why) = unsafe { (c_str(failed_dir), c_str(uv_strerror(ret))) };
+        if let Err(failure) = mkdir_recurse(&dir, 0o755) {
+            let shown = failure.dir.as_deref().unwrap_or(c"");
             semsg!(
-                "E303: Unable to create directory \"{shown}\" for swap file, recovery impossible: {why}"
+                "E303: Unable to create directory \"{}\" for swap file, recovery impossible: {}",
+                msg_cstr(shown),
+                msg_cstr(failure.why)
             );
-            unsafe { xfree(failed_dir.cast()) };
         }
     }
 
@@ -706,11 +595,7 @@ fn expanded(patterns: &[&CStr]) -> Result<Vec<XString>, Failed> {
 /// the screen, which is what `nvim -r` with no file shows.
 pub(crate) fn list_swap_files(list: Option<&mut List>) {
     let do_list = list.is_none();
-    let list = list.map_or(core::ptr::null_mut(), core::ptr::from_mut);
-    let (fname, fname_out) = (core::ptr::null_mut(), core::ptr::null_mut());
-    // SAFETY: no file name and no n'th name are asked for, and `list` is a
-    // live list borrowed for the call, or null.
-    unsafe { recover_names(fname, do_list, list, 0, fname_out) };
+    let _ = recover_names(None, do_list, list, 0);
 }
 
 /// Find the swap files in the current directory and in every directory of
@@ -719,35 +604,24 @@ pub(crate) fn list_swap_files(list: Option<&mut List>) {
 /// Used to list them for `nvim -r`, to count them while recovering, to list
 /// them while recovering, to fill `swapfilelist()`, and to name the n'th one.
 ///
-/// `fname` is the file whose swap files are wanted, or null for all of them.
-/// `do_list` lists the names; `ret_list`, when given, collects them; `nr`,
-/// when non-zero, asks for the n'th name in `fname_out`.
+/// `fname` is the file whose swap files are wanted, or `None` for all of
+/// them. `do_list` lists the names; `ret_list`, when given, collects them;
+/// `nr`, when non-zero, asks for the n'th name.
 ///
-/// Returns the number of swap files found.
-///
-/// # Safety
-///
-/// `fname` must point at a NUL-terminated string, unaliased for the call.
-/// `ret_list` must point at a live list, unaliased for the call. `fname_out`
-/// must point at a writable `*mut c_char` slot the caller owns for the call.
-pub unsafe fn recover_names(
-    fname: *mut c_char,
+/// Answers the number of swap files found, and the n'th name when one was
+/// asked for and found.
+pub fn recover_names(
+    fname: Option<&CStr>,
     do_list: bool,
-    ret_list: *mut List,
+    mut ret_list: Option<&mut List>,
     nr: c_int,
-    fname_out: *mut *mut c_char,
-) -> c_int {
+) -> (c_int, Option<XString>) {
     // Expand a symlink, because the swap file was created against the
     // actual file rather than the link.
-    let mut fname_buf: [c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
-    let mut fname_res: *mut c_char = core::ptr::null_mut();
-    if !fname.is_null() {
-        fname_res = if unsafe { resolve_symlink(fname, fname_buf.as_mut_ptr()) }.is_ok() {
-            fname_buf.as_mut_ptr()
-        } else {
-            fname
-        };
-    }
+    let resolved = fname
+        .and_then(resolve_symlink)
+        .map(|name| cstr::owned(&name));
+    let fname_res: Option<&CStr> = resolved.as_deref().or(fname);
 
     msg_ext_skip_flush.set(true);
     if do_list {
@@ -758,87 +632,51 @@ pub unsafe fn recover_names(
     }
 
     let mut file_count = 0;
-    let mut names: [*mut c_char; 6] = [core::ptr::null_mut(); 6];
-    // One buffer for the directory name, big enough for the longest
-    // entry in 'directory' -- which is why `copy_option_part` can be given
-    // the whole of it as the bound. Upstream passed a 31000 it had reasoned
-    // its way to instead.
-    // SAFETY: `p_dir` is the option's NUL-terminated value.
-    let room = p_dir(CStr::count_bytes) + 1;
-    let mut buf: Vec<c_char> = vec![0; room];
-    let mut dir_len;
-    // A copy: the cursor below walks past the end of a projection's borrow.
-    let dir = P_DIR.get();
-    let mut dirp = dir.as_ptr().cast_mut();
-    while unsafe { *dirp } != 0 {
-        // Isolate one directory name and advance `dirp` past it.
-        dir_len = unsafe {
-            copy_option_part(
-                &raw mut dirp,
-                buf.as_mut_ptr(),
-                room,
-                c",".as_ptr().cast_mut(),
-            )
-        };
-        let dir_name = buf.as_mut_ptr();
-
-        let num_names;
-        let current_dir = cstr::as_bytes(&buf[..dir_len]) == b".";
-        if fname.is_null() {
-            // Every swap file, under whatever name. On unix a leading dot
-            // is special, so the two forms are listed separately.
-            let patterns = [c"*.sw?", c".*.sw?", c".sw?"];
-            for (slot, pattern) in names.iter_mut().zip(patterns) {
-                *slot = if current_dir {
-                    unsafe {
-                        xmemdupz(pattern.as_ptr().cast(), pattern.count_bytes()) as *mut c_char
-                    }
-                } else {
-                    concat_fnames(cstr::as_bytes(&buf[..dir_len]), pattern.to_bytes(), true)
-                        .into_raw()
-                };
+    let mut wanted = None;
+    // A copy: the walk outlives a projection's borrow.
+    let dir_option = P_DIR.get();
+    for (dir, last) in directory_entries(&dir_option) {
+        let current_dir = dir == b".";
+        let names: Vec<XString> = match fname_res {
+            None => {
+                // Every swap file, under whatever name. On unix a leading
+                // dot is special, so the two forms are listed separately.
+                let patterns = [c"*.sw?", c".*.sw?", c".sw?"];
+                patterns
+                    .iter()
+                    .map(|pattern| {
+                        if current_dir {
+                            XString::from_cstr(pattern)
+                        } else {
+                            concat_fnames(&dir, pattern.to_bytes(), true)
+                        }
+                    })
+                    .collect()
             }
-            num_names = 3;
-        } else if current_dir {
-            num_names = unsafe { recov_file_names(&mut names, fname_res, true) };
-        } else {
-            // SAFETY: `dir_name` is `buf`, holding `dir_len` bytes plus the
-            // terminator `copy_option_part` wrote.
-            let end = unsafe { dir_name.add(dir_len) };
-            let dir = cstr::as_bytes(&buf[..dir_len]);
-            let tail = if after_pathsep(dir, dir_len) && ends_with_double_sep(dir) {
-                // Ends with "//": the swap file's name holds the full path.
-                unsafe { make_percent_swname(dir_name, end, fname_res) }
-            } else {
-                let name = unsafe { cstr::at(fname_res) };
-                concat_fnames(dir, path_tail(name).to_bytes(), true).into_raw()
-            };
-            num_names = unsafe { recov_file_names(&mut names, tail, false) };
-            unsafe { xfree(tail.cast()) };
-        }
+            Some(fname_res) if current_dir => recov_file_names(fname_res.to_bytes(), true),
+            Some(fname_res) => {
+                let tail = if after_pathsep(&dir, dir.len()) && ends_with_double_sep(&dir) {
+                    // Ends with "//": the swap file's name holds the full
+                    // path.
+                    percent_swname(&dir[..dir.len() - 1], Some(fname_res))
+                } else {
+                    concat_fnames(&dir, path_tail(fname_res).to_bytes(), true)
+                };
+                recov_file_names(&tail, false)
+            }
+        };
 
-        let patterns: Vec<&CStr> = names[..num_names as usize]
-            .iter()
-            // SAFETY: each pattern just made is an owned NUL-terminated name,
-            // freed at the end of this step of the loop.
-            .map(|&name| unsafe { cstr::at(name) })
-            .collect();
-        let mut found = if num_names == 0 {
+        let patterns: Vec<&CStr> = names.iter().map(XString::as_cstr).collect();
+        let mut found = if patterns.is_empty() {
             Vec::new()
         } else {
             expanded(&patterns).unwrap_or_default()
         };
-        drop(patterns);
 
         // Nothing found may mean the wildcard expansion itself failed
         // (no shell to run, say). Try the plain ".swp" name.
-        if unsafe { *dirp } as c_int == NUL
-            && file_count == 0
-            && found.is_empty()
-            && !fname.is_null()
-        {
-            // SAFETY: a NUL-terminated name.
-            let swapname = modname(unsafe { cstr::at_opt(fname_res) }, b".swp", true);
+        if last && file_count == 0 && found.is_empty() && fname.is_some() {
+            let swapname = modname(fname_res, b".swp", true);
             if let Some(swapname) = swapname.filter(|name| path_exists(name.as_cstr())) {
                 found.push(swapname);
             }
@@ -846,21 +684,20 @@ pub unsafe fn recover_names(
 
         // The current buffer's own swap file is not interesting — except
         // to swapfilelist(), which wants everything.
-        let mine = if Buf::current().b_ml.ml_mfp.is_null() {
-            None
-        } else {
-            // SAFETY: the current buffer's live memfile and its name.
-            unsafe { cstr::at_opt(mf_fname(Buf::current().b_ml.ml_mfp)) }
-        };
+        let mine = Buf::current()
+            .b_ml
+            .ml_mfp
+            .as_ref()
+            .and_then(|mfp| mfp.fname().map(CStr::to_owned));
         if let Some(mine) = mine
-            && ret_list.is_null()
+            && ret_list.is_none()
         {
             // Do not expand wildcards: on Windows that would try to expand
             // the "%tmp%" in "%tmp%file". Upstream's shifting loop runs `i`
             // up to the new count, so the enclosing loop ends with it: only
             // the *first* match is dropped, which is all there can be.
             let hit = found.iter().position(|name| {
-                let how = path_full_compare(mine, name.as_cstr(), true, false);
+                let how = path_full_compare(&mine, name.as_cstr(), true, false);
                 how as c_uint & kEqualFiles as c_uint != 0
             });
             if let Some(hit) = hit {
@@ -872,20 +709,20 @@ pub unsafe fn recover_names(
         if nr > 0 {
             file_count += num_files;
             if nr <= file_count {
-                let wanted = (nr - 1 + num_files - file_count) as usize;
-                unsafe { *fname_out = found[wanted].clone().into_raw() };
-                dirp = c"".as_ptr().cast_mut(); // stop searching
+                let at = (nr - 1 + num_files - file_count) as usize;
+                wanted = Some(found.swap_remove(at));
+                break; // stop searching
             }
         } else if do_list {
             if current_dir {
-                if fname.is_null() {
+                if fname.is_none() {
                     say(c"   In current directory:\n");
                 } else {
                     say(c"   Using specified name:\n");
                 }
             } else {
                 say(c"   In directory ");
-                msg_home_replace(unsafe { cstr::at(dir_name) });
+                msg_home_replace(&cstr::owned(&dir));
                 msg_str(c":\n");
             }
 
@@ -901,75 +738,46 @@ pub unsafe fn recover_names(
 
                     // Upstream's `kv_resize(msg, IOSIZE)`: a size hint.
                     let mut msg_buf: Vec<u8> = Vec::with_capacity(IOSIZE as usize);
-                    unsafe { swapfile_info(name.as_ptr(), &mut msg_buf) };
+                    swapfile_info(name.as_cstr(), &mut msg_buf);
                     let mut need_clear = false;
                     msg_multiline(&msg_buf, 0, false, false, &mut need_clear);
                 }
             }
             ui_flush();
-        } else if !ret_list.is_null() {
-            // SAFETY: the directory name `copy_option_part` just wrote.
-            let dir = unsafe { cstr::bytes_at(dir_name) };
+        } else if let Some(list) = ret_list.as_deref_mut() {
             for name in &found {
-                let joined = concat_fnames(dir, name, true);
+                let joined = concat_fnames(&dir, name, true);
                 let joined = Some(ThinCString::from_vec(joined.to_vec()));
-                // SAFETY: the list is the caller's.
-                unsafe { (*ret_list).push(TypVal::string(joined)) };
+                list.push(TypVal::string(joined));
             }
         } else {
             file_count += num_files;
         }
-
-        for name in names.iter().take(num_names as usize) {
-            unsafe { xfree((*name).cast()) };
-        }
     }
     msg_ext_skip_flush.set(false);
-    file_count
+    (file_count, wanted)
 }
 
-/// Fill `names` with the wildcard patterns that match `path`'s swap files,
-/// returning how many were written.
+/// The wildcard patterns that match `path`'s swap files.
 ///
 /// `prepend_dot` also asks for the hidden form, for a swap file kept in the
 /// same directory as the file itself.
-///
-/// # Safety
-///
-/// `names` must be six empty slots the caller owns and will free: each is
-/// written with an allocation. `path` must point at a NUL-terminated file
-/// name.
-unsafe fn recov_file_names(
-    names: &mut [*mut c_char; 6],
-    path: *mut c_char,
-    prepend_dot: bool,
-) -> c_int {
-    let mut num_names = 0usize;
+fn recov_file_names(path: &[u8], prepend_dot: bool) -> Vec<XString> {
+    let mut names = Vec::with_capacity(2);
     if prepend_dot {
-        names[num_names] = unsafe { modname(cstr::at_opt(path), b".sw?", true) }
-            .map_or(core::ptr::null_mut(), XString::into_raw);
-        if names[num_names].is_null() {
-            return num_names as c_int;
-        }
-        num_names += 1;
+        let Some(dotted) = modname(Some(&cstr::owned(path)), b".sw?", true) else {
+            return names;
+        };
+        names.push(dotted);
     }
 
     // The plain form: the name with ".sw?" appended.
-    names[num_names] = concat_fnames(unsafe { cstr::bytes_at(path) }, b".sw?", false).into_raw();
-    if num_names == 0 {
-        num_names += 1;
-    } else {
-        // Both forms may have come out the same; keep only one. The dotted
-        // form may have been expanded to a full path, so it is the *tail*
-        // that is compared.
-        // SAFETY: both are owned NUL-terminated names.
-        let dotted = unsafe { cstr::bytes_at(names[num_names - 1]) };
-        let plain = unsafe { cstr::bytes_at(names[num_names]) };
-        if dotted.ends_with(plain) {
-            unsafe { xfree(names[num_names].cast()) };
-        } else {
-            num_names += 1;
-        }
+    let plain = concat_fnames(path, b".sw?", false);
+    // Both forms may have come out the same; keep only one. The dotted
+    // form may have been expanded to a full path, so it is the *tail*
+    // that is compared.
+    if !names.last().is_some_and(|dotted| dotted.ends_with(&plain)) {
+        names.push(plain);
     }
-    num_names as c_int
+    names
 }

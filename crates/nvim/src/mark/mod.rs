@@ -639,7 +639,7 @@ pub unsafe fn mark_mb_adjustpos(buffer: Buf, pos: *mut Pos) {
         return;
     }
     // SAFETY: the caller promised a live buffer and a line of it.
-    let p = unsafe { ml_get_buf(buffer, adjusted.lnum) };
+    let p = ml_get_buf(buffer, adjusted.lnum);
     if unsafe { *p } == NUL_BYTE || ml_get_buf_len(buffer, adjusted.lnum) < adjusted.col {
         adjusted.col = 0;
     } else {

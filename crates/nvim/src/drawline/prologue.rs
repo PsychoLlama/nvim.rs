@@ -92,7 +92,7 @@ pub(crate) unsafe fn prepare_line(
     }
 
     s.line = if s.draw_text {
-        unsafe { ml_get_buf(window.buffer(), lnum) }
+        ml_get_buf(window.buffer(), lnum)
     } else {
         c"".as_ptr().cast_mut()
     };
@@ -125,7 +125,7 @@ pub(crate) unsafe fn prepare_line(
         s.decor_provider_end_col =
             decor_providers_setup(endrow - wlv.startrow, s.start_vcol == 0, lnum, at, window);
         // A provider is Lua and may have changed the buffer under us.
-        s.line = unsafe { ml_get_buf(window.buffer(), lnum) };
+        s.line = ml_get_buf(window.buffer(), lnum);
         s.ptr = unsafe { s.line.offset(at as isize) };
     }
 
@@ -588,10 +588,10 @@ impl LineSetup {
         // comment leaders.
         nextline[SPELL_LOOKAHEAD] = 0;
         if lnum < window.w_buffer.b_ml.ml_line_count {
-            let next = unsafe { ml_get_buf(window.buffer(), lnum + 1) };
+            let next = ml_get_buf(window.buffer(), lnum + 1);
             unsafe { spell_cat_line(nextline.as_mut_ptr().add(SPELL_LOOKAHEAD), next, SPWORDLEN) };
         }
-        let line = unsafe { ml_get_buf(window.buffer(), lnum) };
+        let line = ml_get_buf(window.buffer(), lnum);
 
         // An empty line: check the first word of the next one for a
         // capital instead.
@@ -807,7 +807,7 @@ impl LineSetup {
         let len = spell_move_to(window, FORWARD, SMT_ALL, true, Some(&mut spell_hlf));
 
         // `spell_move_to` may call `ml_get` and invalidate "line".
-        self.line = unsafe { ml_get_buf(window.buffer(), lnum) };
+        self.line = ml_get_buf(window.buffer(), lnum);
         self.ptr = unsafe { self.line.offset(linecol as isize) };
 
         if len == 0 || window.w_cursor.col > linecol {

@@ -194,6 +194,23 @@ pub(crate) fn username_within(room: usize) -> Vec<u8> {
     crate::cstr::in_chars(&buf).to_bytes().to_vec()
 }
 
+/// [`os_get_uname`] answered owned, cut to `room - 1` bytes as a buffer of
+/// `room` would cut it: `Ok` with the user's name, `Err` with the decimal
+/// uid when the password database has none for it.
+pub(crate) fn uname_within(uid: uv_uid_t, room: usize) -> Result<Vec<u8>, Vec<u8>> {
+    let mut buf: Vec<c_char> = vec![0; room.max(1)];
+    // SAFETY: the buffer holds exactly the length passed.
+    let named = unsafe { os_get_uname(uid, buf.as_mut_ptr(), buf.len()) };
+    let name = crate::cstr::in_chars(&buf).to_bytes().to_vec();
+    named.map(|()| name.clone()).map_err(|_| name)
+}
+
+/// [`uname_within`] for the user running this process.
+pub(crate) fn username_named_within(room: usize) -> Result<Vec<u8>, Vec<u8>> {
+    // SAFETY: `getuid` cannot fail and touches nothing.
+    uname_within(unsafe { libc::getuid() }, room)
+}
+
 /// Write the name of the user owning `uid` into `s` (`len` bytes, always
 /// NUL-terminated). When the database has no name for it, the decimal uid
 /// is written instead and the result is `Err` — a number is not a name.

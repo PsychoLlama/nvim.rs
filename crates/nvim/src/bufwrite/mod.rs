@@ -300,7 +300,7 @@ pub(crate) fn buf_write(
     let Some(fname) = fname.filter(|name| !name.as_cstr().is_empty()) else {
         return Err(Failed); // safety check
     };
-    if b.b_ml.ml_mfp.is_null() {
+    if b.b_ml.ml_mfp.is_none() {
         // Can happen during startup, from a stray "w" in the vimrc.
         emsg(gettext(e_empty_buffer));
         return Err(Failed);

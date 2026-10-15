@@ -31,6 +31,7 @@
 #![allow(unsafe_code)]
 
 use crate::change::inserted_bytes;
+use crate::change::ml_replace;
 use crate::cstr;
 use crate::cursor::{get_cursor_line_len, get_cursor_line_ptr};
 use crate::drawscreen::state::cmdline_row;
@@ -40,7 +41,6 @@ use crate::getchar::{
 };
 use crate::input::prompt_for_input;
 use crate::mbyte::{utf_head_off, utfc_ptr2len};
-use crate::memline::ml_replace;
 use crate::memory::XString;
 use crate::memory::{xfree, xmalloc};
 use crate::message::e_no_spell;

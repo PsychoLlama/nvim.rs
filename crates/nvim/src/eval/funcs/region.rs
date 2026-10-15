@@ -148,7 +148,7 @@ fn resolve(args: &[TypVal], result: &mut TypVal) -> Option<Region> {
     } else {
         Buf::current_or_none()
     };
-    let loaded = findbuf.filter(|b| !b.b_ml.ml_mfp.is_null());
+    let loaded = findbuf.filter(|b| b.b_ml.ml_mfp.is_some());
     let Some(findbuf) = loaded else {
         emsg(gettext(e_buffer_is_not_loaded));
         return None;

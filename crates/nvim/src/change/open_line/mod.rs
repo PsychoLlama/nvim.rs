@@ -82,8 +82,7 @@ unsafe fn move_prompt_down(p_extra: *mut c_char) -> *mut c_char {
     // Take the prompt off the front of the line.
     let rest = XString::from_bytes(&line[prompt_bytes.len()..]);
     cmdmod_add_flags(CmdModFlags::LOCKMARKS);
-    // SAFETY: our own NUL-terminated line, which the buffer takes over.
-    let _ = unsafe { ml_replace(lnum, rest.into_raw(), false) };
+    let _ = ml_replace_owned(lnum, rest);
     concat(prompt_bytes, unsafe { cstr::bytes_at(p_extra) }).into_raw()
 }
 
@@ -97,7 +96,8 @@ unsafe fn move_prompt_down(p_extra: *mut c_char) -> *mut c_char {
 /// The cursor must be on a valid line and `p_extra` NUL-terminated.
 unsafe fn append_new_line(p_extra: *mut c_char, old_cursor: Pos) -> Option<bool> {
     if State.get() & VREPLACE_FLAG == 0 || old_cursor.lnum >= orig_line_count.get() {
-        if unsafe { ml_append(Win::current().w_cursor.lnum, p_extra, 0, false) }.is_err() {
+        let line = unsafe { cstr::at(p_extra) };
+        if ml_append_cstr(Win::current().w_cursor.lnum, line).is_err() {
             return None;
         }
         // changed_lines() is postponed: calling it here would upset

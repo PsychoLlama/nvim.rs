@@ -32,11 +32,11 @@ use neovim::buffer::{BLN_LISTED, DOBUF_WIPE, buflist_new, close_buffer};
 use neovim::memline::{
     B0_FNAME_SIZE_CRYPT, B0_FNAME_SIZE_NOCRYPT, B0_FNAME_SIZE_ORG, B0_HNAME_SIZE, B0_MAGIC_CHAR,
     B0_MAGIC_INT, B0_MAGIC_LONG, B0_MAGIC_SHORT, B0_UNAME_SIZE, BLOCK0_ID0, BLOCK0_ID1, Lines,
-    ZeroBlock, ml_append_buf, ml_close, ml_get_buf, ml_open, ml_open_file, ml_preserve,
+    ZeroBlockLayout, ml_append_bytes, ml_close, ml_get_buf, ml_open, ml_open_file, ml_preserve,
 };
 use neovim::memory::XString;
 use neovim::option::vars::P_DIR;
-use neovim::types::{Buffer, ColNr, LineNr};
+use neovim::types::{Buffer, LineNr};
 use neovim::winlayer::Buf;
 
 use crate::support::{Sandbox, cstr};
@@ -58,11 +58,11 @@ struct OnDisk {
 }
 
 impl OnDisk {
-    /// Read the first `size_of::<ZeroBlock>()` bytes of a swap file.
+    /// Read the first `size_of::<ZeroBlockLayout>()` bytes of a swap file.
     fn read(path: &std::path::Path) -> OnDisk {
         let bytes = std::fs::read(path).expect("a swap file");
         assert!(
-            bytes.len() >= size_of::<ZeroBlock>(),
+            bytes.len() >= size_of::<ZeroBlockLayout>(),
             "a swap file is at least one page: {} bytes",
             bytes.len()
         );
@@ -126,19 +126,9 @@ impl Swapped {
         buf.b_p_swf = 1;
         ml_open(buf).expect("a memline");
         ml_open_file(buf);
-        // SAFETY: the memline was just opened; appending after line `n`
-        // puts each line at the end in turn.
+        // Appending after line `n` puts each line at the end in turn.
         for (n, line) in LINES.iter().enumerate() {
-            let text = cstr(*line);
-            let appended = unsafe {
-                ml_append_buf(
-                    buf,
-                    n as LineNr,
-                    text.as_ptr().cast_mut(),
-                    line.len() as ColNr + 1,
-                    false,
-                )
-            };
+            let appended = ml_append_bytes(buf, n as LineNr, line.as_bytes());
             assert!(appended.is_ok(), "line {n} was appended");
         }
         // The buffer starts with one empty line, which the appends pushed
@@ -194,24 +184,24 @@ fn block_zero_is_a_contiguous_run_of_fields() {
         assert_eq!(offset, at, "{name} starts where the last field ended");
         at = offset + width;
     };
-    ends_at(offset_of!(ZeroBlock, b0_id), 2, "b0_id");
-    ends_at(offset_of!(ZeroBlock, b0_version), 10, "b0_version");
-    ends_at(offset_of!(ZeroBlock, b0_page_size), 4, "b0_page_size");
-    ends_at(offset_of!(ZeroBlock, b0_mtime), 4, "b0_mtime");
-    ends_at(offset_of!(ZeroBlock, b0_ino), 4, "b0_ino");
-    ends_at(offset_of!(ZeroBlock, b0_pid), 4, "b0_pid");
+    ends_at(offset_of!(ZeroBlockLayout, b0_id), 2, "b0_id");
+    ends_at(offset_of!(ZeroBlockLayout, b0_version), 10, "b0_version");
+    ends_at(offset_of!(ZeroBlockLayout, b0_page_size), 4, "b0_page_size");
+    ends_at(offset_of!(ZeroBlockLayout, b0_mtime), 4, "b0_mtime");
+    ends_at(offset_of!(ZeroBlockLayout, b0_ino), 4, "b0_ino");
+    ends_at(offset_of!(ZeroBlockLayout, b0_pid), 4, "b0_pid");
     ends_at(
-        offset_of!(ZeroBlock, b0_uname),
+        offset_of!(ZeroBlockLayout, b0_uname),
         B0_UNAME_SIZE as usize,
         "b0_uname",
     );
     ends_at(
-        offset_of!(ZeroBlock, b0_hname),
+        offset_of!(ZeroBlockLayout, b0_hname),
         B0_HNAME_SIZE as usize,
         "b0_hname",
     );
     ends_at(
-        offset_of!(ZeroBlock, b0_fname),
+        offset_of!(ZeroBlockLayout, b0_fname),
         B0_FNAME_SIZE_ORG as usize,
         "b0_fname",
     );
@@ -221,14 +211,18 @@ fn block_zero_is_a_contiguous_run_of_fields() {
     // different `long` to disagree about the *value* rather than to read a
     // different field.
     assert_eq!(
-        offset_of!(ZeroBlock, b0_magic_long) % align_of::<c_long>(),
+        offset_of!(ZeroBlockLayout, b0_magic_long) % align_of::<c_long>(),
         0
     );
-    assert!(offset_of!(ZeroBlock, b0_magic_long) >= at);
-    assert!(offset_of!(ZeroBlock, b0_magic_int) > offset_of!(ZeroBlock, b0_magic_long));
-    assert!(offset_of!(ZeroBlock, b0_magic_short) > offset_of!(ZeroBlock, b0_magic_int));
-    assert!(offset_of!(ZeroBlock, b0_magic_char) > offset_of!(ZeroBlock, b0_magic_short));
-    assert!(size_of::<ZeroBlock>() > offset_of!(ZeroBlock, b0_magic_char));
+    assert!(offset_of!(ZeroBlockLayout, b0_magic_long) >= at);
+    assert!(offset_of!(ZeroBlockLayout, b0_magic_int) > offset_of!(ZeroBlockLayout, b0_magic_long));
+    assert!(
+        offset_of!(ZeroBlockLayout, b0_magic_short) > offset_of!(ZeroBlockLayout, b0_magic_int)
+    );
+    assert!(
+        offset_of!(ZeroBlockLayout, b0_magic_char) > offset_of!(ZeroBlockLayout, b0_magic_short)
+    );
+    assert!(size_of::<ZeroBlockLayout>() > offset_of!(ZeroBlockLayout, b0_magic_char));
 
     // The name field is never filled to the brim: its last two bytes are
     // `b0_flags` and `b0_dirty`, and the crypt-era limit leaves eight more
@@ -245,17 +239,17 @@ fn a_fresh_swap_file_identifies_itself() {
     let swapped = Swapped::new("memline-identity");
     let b0 = OnDisk::read(&swapped.swap);
 
-    let id = b0.field(offset_of!(ZeroBlock, b0_id), 2);
-    assert_eq!(id, [BLOCK0_ID0 as u8, BLOCK0_ID1 as u8], "b0");
+    let id = b0.field(offset_of!(ZeroBlockLayout, b0_id), 2);
+    assert_eq!(id, [BLOCK0_ID0, BLOCK0_ID1], "b0");
     // "VIM " and the oldest version that can read this file.
-    let version = b0.text(offset_of!(ZeroBlock, b0_version), 10);
+    let version = b0.text(offset_of!(ZeroBlockLayout, b0_version), 10);
     assert_eq!(version, b"VIM 8.1");
 
     // The page size is what the memfile chose, and it has to be at least
     // big enough to hold the block that names it.
-    let page_size = b0.number(offset_of!(ZeroBlock, b0_page_size));
+    let page_size = b0.number(offset_of!(ZeroBlockLayout, b0_page_size));
     assert!(
-        page_size as usize >= size_of::<ZeroBlock>(),
+        page_size as usize >= size_of::<ZeroBlockLayout>(),
         "a page holds block zero: {page_size}"
     );
     assert_eq!(page_size.count_ones(), 1, "a power of two: {page_size}");
@@ -264,26 +258,32 @@ fn a_fresh_swap_file_identifies_itself() {
     // `long` were a different width would write these in different places,
     // which is the whole reason they exist.
     let long = c_long::from_ne_bytes(
-        b0.field(offset_of!(ZeroBlock, b0_magic_long), size_of::<c_long>())
-            .try_into()
-            .expect("a c_long"),
+        b0.field(
+            offset_of!(ZeroBlockLayout, b0_magic_long),
+            size_of::<c_long>(),
+        )
+        .try_into()
+        .expect("a c_long"),
     );
     assert_eq!(long, B0_MAGIC_LONG as c_long);
     let int = c_int::from_ne_bytes(
-        b0.field(offset_of!(ZeroBlock, b0_magic_int), size_of::<c_int>())
-            .try_into()
-            .expect("a c_int"),
+        b0.field(
+            offset_of!(ZeroBlockLayout, b0_magic_int),
+            size_of::<c_int>(),
+        )
+        .try_into()
+        .expect("a c_int"),
     );
     assert_eq!(int, B0_MAGIC_INT as c_int);
     let short = i16::from_ne_bytes(
-        b0.field(offset_of!(ZeroBlock, b0_magic_short), 2)
+        b0.field(offset_of!(ZeroBlockLayout, b0_magic_short), 2)
             .try_into()
             .expect("an int16_t"),
     );
     assert_eq!(short, B0_MAGIC_SHORT as i16);
     assert_eq!(
-        b0.field(offset_of!(ZeroBlock, b0_magic_char), 1)[0],
-        B0_MAGIC_CHAR as u8
+        b0.field(offset_of!(ZeroBlockLayout, b0_magic_char), 1)[0],
+        B0_MAGIC_CHAR
     );
 }
 
@@ -301,7 +301,7 @@ fn a_fresh_swap_file_names_its_file_and_its_owner() {
     // side, in `swapfile_preserve_recover_spec.lua`, where the file really
     // is under the home directory.
     let name = b0.text(
-        offset_of!(ZeroBlock, b0_fname),
+        offset_of!(ZeroBlockLayout, b0_fname),
         B0_FNAME_SIZE_CRYPT as usize,
     );
     assert_eq!(
@@ -311,25 +311,31 @@ fn a_fresh_swap_file_names_its_file_and_its_owner() {
 
     // The two fields that make the swap file worth reading: this process
     // wrote it, and the file it names has not changed since.
-    let pid = b0.number(offset_of!(ZeroBlock, b0_pid));
+    let pid = b0.number(offset_of!(ZeroBlockLayout, b0_pid));
     assert_eq!(pid, std::process::id() as i32);
 
     let stat = std::fs::metadata(&edited).expect("the edited file");
-    let mtime = b0.number(offset_of!(ZeroBlock, b0_mtime));
+    let mtime = b0.number(offset_of!(ZeroBlockLayout, b0_mtime));
     let expected = std::os::unix::fs::MetadataExt::mtime(&stat) as i32;
     assert_eq!(mtime, expected);
     // The inode is stored in four signed bytes, so a large one is
     // truncated; the reader only ever compares it, so that is fine, but it
     // is why this is not `assert_eq!(ino, stat.ino())`.
-    let ino = b0.number(offset_of!(ZeroBlock, b0_ino));
+    let ino = b0.number(offset_of!(ZeroBlockLayout, b0_ino));
     assert_eq!(ino, std::os::unix::fs::MetadataExt::ino(&stat) as i32);
 
     // Both names are NUL-terminated inside their own field, which is what
     // `ml_check_b0_strings` refuses a file over.
-    let uname = b0.text(offset_of!(ZeroBlock, b0_uname), B0_UNAME_SIZE as usize);
+    let uname = b0.text(
+        offset_of!(ZeroBlockLayout, b0_uname),
+        B0_UNAME_SIZE as usize,
+    );
     assert!(uname.len() < B0_UNAME_SIZE as usize, "b0_uname terminates");
     assert!(!uname.is_empty(), "the process owner has a name");
-    let hname = b0.text(offset_of!(ZeroBlock, b0_hname), B0_HNAME_SIZE as usize);
+    let hname = b0.text(
+        offset_of!(ZeroBlockLayout, b0_hname),
+        B0_HNAME_SIZE as usize,
+    );
     assert!(hname.len() < B0_HNAME_SIZE as usize, "b0_hname terminates");
     assert!(!hname.is_empty(), "the host has a name");
 
@@ -337,7 +343,10 @@ fn a_fresh_swap_file_names_its_file_and_its_owner() {
     // carries the `'fileformat'` and the "beside the file" bit, `b0_dirty`
     // whether the buffer had unsaved changes. Nothing here changed the
     // buffer, so it is clean.
-    let flags = b0.field(offset_of!(ZeroBlock, b0_fname), B0_FNAME_SIZE_ORG as usize);
+    let flags = b0.field(
+        offset_of!(ZeroBlockLayout, b0_fname),
+        B0_FNAME_SIZE_ORG as usize,
+    );
     assert_ne!(
         flags[B0_FNAME_SIZE_ORG as usize - 2],
         0,
@@ -357,7 +366,7 @@ fn a_fresh_swap_file_names_its_file_and_its_owner() {
 #[test]
 fn a_modified_buffer_marks_its_swap_file_dirty() {
     let swapped = Swapped::new("memline-dirty");
-    let dirty_at = offset_of!(ZeroBlock, b0_fname) + B0_FNAME_SIZE_ORG as usize - 1;
+    let dirty_at = offset_of!(ZeroBlockLayout, b0_fname) + B0_FNAME_SIZE_ORG as usize - 1;
     assert_eq!(
         OnDisk::read(&swapped.swap).bytes[dirty_at],
         0,
@@ -757,10 +766,11 @@ fn a_swap_file_with_a_wrong_magic_or_page_size_is_refused() {
     let fx = Probe::new(sandbox.editor());
     let swap = preserved(&fx, &sandbox);
 
-    let magic = offset_of!(ZeroBlock, b0_magic_long);
-    let page = offset_of!(ZeroBlock, b0_page_size);
-    let id = offset_of!(ZeroBlock, b0_id);
-    let cases: [(&str, Box<dyn Fn(&mut Vec<u8>)>, &str); 3] = [
+    let magic = offset_of!(ZeroBlockLayout, b0_magic_long);
+    let page = offset_of!(ZeroBlockLayout, b0_page_size);
+    let id = offset_of!(ZeroBlockLayout, b0_id);
+    type Corruption = Box<dyn Fn(&mut Vec<u8>)>;
+    let cases: [(&str, Corruption, &str); 3] = [
         (
             "magic",
             Box::new(move |b: &mut Vec<u8>| b[magic] ^= 0xff),

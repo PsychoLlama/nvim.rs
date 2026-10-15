@@ -17,7 +17,7 @@ pub(crate) fn api_buf_ensure_loaded(buffer: BufferHandle) -> Result<Option<Buf>,
     let Some(b) = find_buffer_by_handle(buffer)? else {
         return Ok(None);
     };
-    if b.b_ml.ml_mfp.is_null() && !buf_ensure_loaded(b) {
+    if b.b_ml.ml_mfp.is_none() && !buf_ensure_loaded(b) {
         return Err(Error::exception(c"Failed to load buffer"));
     }
     Ok(Some(b))

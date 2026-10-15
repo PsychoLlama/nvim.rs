@@ -303,17 +303,16 @@ fn bs_join_line() -> bool {
         // With `aw` in 'formatoptions' the space at the end of the line
         // has to go too, or auto-formatting would break the line again.
         if has_format_option(FoFlag::AUTO) && has_format_option(FoFlag::WHITE_PAR) {
-            let ptr = unsafe { ml_get_buf(Buf::current(), Win::current().w_cursor.lnum) };
+            let ptr = ml_get_buf(Buf::current(), Win::current().w_cursor.lnum);
             let len = get_cursor_line_len();
             // SAFETY: `ptr` is that line and `len` its length, so its last
             // byte is in bounds, and `xmemdupz` copies that many bytes.
             if len > 0 && unsafe { *ptr.offset((len - 1) as isize) } as c_int == ' ' as c_int {
                 let size = (len - 1) as size_t;
-                let newp = unsafe { xmemdupz(ptr.cast(), size) } as *mut ::core::ffi::c_char;
-                let shorter = Buf::current().b_ml.cached_len() - 1;
-                if let Some(old) = Buf::current().b_ml.swap_cached_text(newp, shorter) {
-                    unsafe { xfree(old.cast()) };
-                }
+                let mut newp =
+                    unsafe { core::slice::from_raw_parts(ptr.cast::<u8>(), size) }.to_vec();
+                newp.push(0);
+                Buf::current().b_ml.swap_cached_text(newp);
             }
         }
 

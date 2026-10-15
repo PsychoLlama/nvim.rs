@@ -22,7 +22,7 @@ pub fn nvim_buf_line_count(buf: BufferHandle) -> Result<Integer, Error> {
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(0 as Integer);
     };
-    if b.b_ml.ml_mfp.is_null() {
+    if b.b_ml.ml_mfp.is_none() {
         return Ok(0 as Integer);
     }
     Ok(b.line_count() as Integer)
@@ -45,7 +45,7 @@ pub unsafe fn nvim_buf_get_lines(
         return Ok(rv);
     };
     // SAFETY: non-null, so the handle named a live buffer.
-    if b.b_ml.ml_mfp.is_null() {
+    if b.b_ml.ml_mfp.is_none() {
         return rv.reported(error);
     }
     let mut oob: bool = false;
@@ -171,10 +171,10 @@ pub fn nvim_buf_set_lines(
                     error = Error::validation(why);
                     break 's_382;
                 } else if {
-                    // SAFETY: `i_1` is below `new_len`.
-                    let line = unsafe { *lines.add(i_1) };
-                    // SAFETY: `b` is the live buffer, `lnum` one of its lines.
-                    unsafe { ml_replace_buf(buffer, lnum as LineNr, line, false, true) }
+                    // SAFETY: `i_1` is below `new_len`, and each line is
+                    // NUL-terminated.
+                    let line = unsafe { cstr::at(*lines.add(i_1)) };
+                    ml_replace_buf_now(buffer, lnum as LineNr, line.to_bytes_with_nul())
                 }
                 .is_err()
                 {
@@ -195,11 +195,11 @@ pub fn nvim_buf_set_lines(
                     error = Error::validation(why);
                     break 's_382;
                 } else if {
-                    // SAFETY: `i_2` is below `new_len`.
-                    let line = unsafe { *lines.add(i_2) };
+                    // SAFETY: `i_2` is below `new_len`, and each line is
+                    // NUL-terminated.
+                    let line = unsafe { cstr::at(*lines.add(i_2)) };
                     let at = lnum_0 as LineNr;
-                    // SAFETY: `b` is the live buffer.
-                    unsafe { ml_append_buf(buffer, at, line, 0 as ColNr, false) }
+                    ml_append_buf_terminated(buffer, at, line.to_bytes_with_nul(), false)
                 }
                 .is_err()
                 {
@@ -291,7 +291,7 @@ pub unsafe fn nvim_buf_get_text(
         return Ok(rv);
     };
     // SAFETY: non-null, so the handle named a live buffer.
-    if b.b_ml.ml_mfp.is_null() {
+    if b.b_ml.ml_mfp.is_none() {
         return rv.reported(error);
     }
     let mut oob: bool = false;
@@ -347,7 +347,7 @@ pub fn nvim_buf_get_offset(buf: BufferHandle, index: Integer) -> Result<Integer,
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(0 as Integer);
     };
-    if b.b_ml.ml_mfp.is_null() {
+    if b.b_ml.ml_mfp.is_none() {
         return (-1 as Integer).reported(error);
     }
     if !(index >= 0 as Integer && index <= b.line_count() as Integer) {
@@ -443,7 +443,7 @@ pub unsafe fn buf_collect_lines(
     let mut i: size_t = 0 as size_t;
     while i < n {
         let lnum: LineNr = start + i as LineNr;
-        let bufstr: *mut ::core::ffi::c_char = unsafe { ml_get_buf(buffer, lnum) };
+        let bufstr: *mut ::core::ffi::c_char = ml_get_buf(buffer, lnum);
         let len: size_t = ml_get_buf_len(buffer, lnum) as size_t;
         let at = start_idx + i as ::core::ffi::c_int;
         // SAFETY: `bufstr` holds `len` bytes, and `l`/`lstate` are the

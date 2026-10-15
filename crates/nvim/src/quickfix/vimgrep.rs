@@ -363,7 +363,7 @@ fn process_files(
 
         // Load the file into a buffer, unless it is already loaded.
         let mut buf = find_buffer_by_name(file.as_cstr());
-        let using_dummy = buf.is_none_or(|buf| buf.b_ml.ml_mfp.is_null());
+        let using_dummy = buf.is_none_or(|buf| buf.b_ml.ml_mfp.is_none());
         if using_dummy {
             duplicate_name = buf.is_some();
             out.redraw_for_dummy = true;

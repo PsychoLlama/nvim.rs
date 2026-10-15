@@ -49,15 +49,9 @@ pub unsafe fn u_get_undo_file_name(buf_ffname: *const c_char, reading: bool) -> 
     if buf_ffname.is_null() {
         return ptr::null_mut();
     }
-    let mut resolved: [c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
-    // SAFETY: a NUL-terminated path, by the contract above, and `MAXPATHL`
-    // bytes for the name it resolves to.
-    let resolved_ok = unsafe { resolve_symlink(buf_ffname, resolved.as_mut_ptr()) }.is_ok();
-    let ffname: *const c_char = if resolved_ok {
-        resolved.as_ptr()
-    } else {
-        buf_ffname
-    };
+    // SAFETY: a NUL-terminated path, by the contract above.
+    let resolved = resolve_symlink(unsafe { cstr::at(buf_ffname) }).map(|name| cstr::owned(&name));
+    let ffname: *const c_char = resolved.as_deref().map_or(buf_ffname, CStr::as_ptr);
 
     // The name under a directory in 'undodir': the whole path with its
     // separators turned into '%', so that two files with the same tail

@@ -64,7 +64,7 @@ use crate::mark::{mark_adjust, setpcmark};
 use crate::mbyte::{
     head_off, mb_get_class_tab, utf_char2bytes, utf_char2len, utf_fold, utf_ptr2char, utfc_ptr2len,
 };
-use crate::memline::{Lines, ml_append, ml_delete};
+use crate::memline::{Lines, ml_append_cstr, ml_delete};
 use crate::memory::{XString, memchrsub, xfree, xmalloc};
 use crate::message::emsg;
 use crate::message::{

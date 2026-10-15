@@ -10,6 +10,7 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
+use crate::memfile::BlockId;
 use crate::memline::MlFlags;
 
 #[derive(Copy, Clone)]
@@ -166,25 +167,29 @@ impl MlChunks {
 /// The data block [`crate::memline::ml_find_line`] is holding, and what has
 /// been done to it since.
 ///
-/// The memfile hands a block out (`mf_get`) and takes it back (`mf_put`), and
-/// the two answers `mf_put` wants -- whether the block changed, and whether
-/// the line *positions* in it changed -- are decided over the whole time it
-/// is held. Upstream kept the six facts in four `MemLine` fields plus two
-/// bits of `ml_flags`; they are one value now, and `ml_locked` is `Some`
-/// exactly while a block is out.
+/// The memfile hands a block out (`MemFile::get`) and takes it back
+/// (`MemFile::put`), and the two answers `put` wants -- whether the block
+/// changed, and whether the line *positions* in it changed -- are decided
+/// over the whole time it is held. Upstream kept the six facts in four
+/// `MemLine` fields plus two bits of `ml_flags`; they are one value now, and
+/// `ml_locked` is `Some` exactly while a block is out.
+///
+/// The block is held by its [`BlockId`], never by its bytes: a memline
+/// call that holds a block may reach the memfile again (another `get`, a
+/// split's `new_block`, a sync) and the handle is what survives that -- the
+/// memfile neither moves nor drops a locked block, and a handle to one that
+/// is gone is refused rather than read.
 ///
 /// It is deliberately **not** a `Drop` guard. The block is held *across*
 /// calls -- a run of reads keeps the same one locked, which is the whole
-/// point of it -- and by the time a `Buffer` is dropped `ml_close` has run
-/// `mf_close`, which freed every `BlockHdr` in the memfile; a `Drop` that put
-/// the block back would be a use-after-free. What makes it a guard is that
-/// there is exactly one acquire (`ml_find_line`'s walk, through
-/// [`MemLine::lock`]) and exactly one release ([`MemLine::unlock`]),
-/// and that the release arguments travel with the block instead of in flag
-/// bits that outlive it.
+/// point of it -- and by the time a `Buffer` is dropped `ml_close` has
+/// closed the memfile. What makes it a guard is that there is exactly one
+/// acquire (`ml_find_line`'s walk, through [`MemLine::lock`]) and exactly one
+/// release ([`MemLine::unlock`]), and that the release arguments travel with
+/// the block instead of in flag bits that outlive it.
 pub(crate) struct LockedBlock {
-    /// What `mf_get` handed out.
-    pub hp: *mut BlockHdr,
+    /// What `MemFile::get` handed out.
+    pub id: BlockId,
     /// The first line the block holds.
     pub low: LineNr,
     /// The last line it holds, *after* the insert or delete the walk that
@@ -201,28 +206,45 @@ pub(crate) struct LockedBlock {
     pub moved: bool,
 }
 
+/// Where the line `ml_get` last handed out lives.
+#[derive(Default)]
+pub(crate) enum CachedText {
+    /// Nothing is cached.
+    #[default]
+    None,
+    /// In a data block: `start` bytes into block `id`'s page. Not
+    /// necessarily the block that is locked now -- a walk for a line
+    /// elsewhere can lock another one under a cached line -- which is why
+    /// the block is named.
+    Block { id: BlockId, start: u32 },
+    /// A replacement the memline owns, waiting for `ml_flush_line` to write
+    /// it back: the bytes, the NUL among them.
+    Owned(Vec<u8>),
+    /// One of the two literals a failed read answers.
+    Placeholder(&'static ::core::ffi::CStr),
+}
+
 /// The one line `ml_get` last handed out, and whether the memline owns the
 /// memory it is in.
 ///
-/// A line read out of a data block is a pointer *into* that block; a line
-/// `ml_replace` put here is the memline's own allocation, waiting for
-/// `ml_flush_line` to write it back. Upstream told the two apart with
-/// `ML_LINE_DIRTY` and `ML_ALLOCATED` in `ml_flags`, so the rule "free
-/// `ml_line_ptr` iff one of these is set" lived in prose next to four loose
-/// fields. It is the type now: the text cannot be set without saying which
-/// kind it is, and the pointer only comes back out of [`Self::take_owned`],
-/// which clears the ownership as it hands it over.
+/// A line read out of a data block lives *in* that block; a line
+/// `ml_replace` put here is the memline's own, waiting for `ml_flush_line`
+/// to write it back. Upstream told the two apart with `ML_LINE_DIRTY` and
+/// `ML_ALLOCATED` in `ml_flags`, so the rule "free `ml_line_ptr` iff one of
+/// these is set" lived in prose next to four loose fields. It is the type
+/// now: an owned line is a `Vec` in [`CachedText::Owned`], dropped when it
+/// is replaced or written back, and a line in a block is a place, not a
+/// pointer.
 ///
-/// There is no `Drop`. `ml_get` hands `ptr` to every caller in the editor,
-/// and the three places that free it (`ml_flush_line`, `ml_replace_buf_len`
-/// and `ml_close`) each do so at a point they have chosen; a destructor
-/// would claim an exclusive ownership the API does not have.
+/// (Upstream's `ML_ALLOCATED` -- a copy taken because the block was about to
+/// be released -- is only ever set under `ML_GET_ALLOC_LINES`, a build-time
+/// debugging switch that is off in every shipped build; it was not ported.)
 #[derive(Default)]
 pub(crate) struct LineCache {
     /// `ml_line_lnum`: which line is cached, or 0 for none.
     lnum: LineNr,
-    /// `ml_line_ptr`: its text, NUL-terminated. Stale whenever `lnum` is 0.
-    ptr: *mut ::core::ffi::c_char,
+    /// `ml_line_ptr`: where its text is. Stale whenever `lnum` is 0.
+    text: CachedText,
     /// `ml_line_textlen`: the text's length *including* the NUL that stands
     /// for the line break.
     textlen: ColNr,
@@ -230,18 +252,6 @@ pub(crate) struct LineCache {
     /// remembered so a run of small edits to one line computes it once.
     /// Zero means "not worked out".
     offset: size_t,
-    /// `ML_LINE_DIRTY`: the text is a *replacement* for what the block
-    /// holds, and has to be written back before it is dropped.
-    dirty: bool,
-    /// `ML_ALLOCATED`: the text is the memline's own copy of what the block
-    /// holds, taken because the block was about to be released.
-    ///
-    /// Nothing sets it. Upstream only does so under `ML_GET_ALLOC_LINES`, a
-    /// build-time debugging switch that is off in every shipped build and
-    /// was not ported; the field is kept because the *reading* half --
-    /// "owned means free it" -- is real, and because a port of that switch
-    /// would have nowhere else to put it.
-    allocated: bool,
 }
 
 #[derive(Copy, Clone)]
@@ -253,7 +263,10 @@ pub struct InfoPtr {
 }
 pub struct MemLine {
     pub ml_line_count: LineNr,
-    pub ml_mfp: *mut MemFile,
+    /// The memfile holding the lines, or `None` while the buffer is not
+    /// loaded. The buffer owns it: [`crate::memline::ml_close`] is where it
+    /// ends.
+    pub ml_mfp: Option<Box<MemFile>>,
     /// The path from the root of the block tree down to the block
     /// [`MemLine::ml_locked`] names, one entry per pointer block, the
     /// root first. Upstream grew this by hand (`ml_stack` plus
@@ -284,7 +297,7 @@ impl MemLine {
     pub fn closed() -> Self {
         MemLine {
             ml_line_count: 0,
-            ml_mfp: ::core::ptr::null_mut(),
+            ml_mfp: None,
             ml_stack: Vec::new(),
             ml_flags: MlFlags::NONE,
             ml_line: LineCache::default(),
@@ -355,15 +368,90 @@ impl MemLine {
         self.ml_stack = Vec::new();
     }
 
+    /// Whether the memline is open: the buffer is loaded.
+    pub fn is_open(&self) -> bool {
+        self.ml_mfp.is_some()
+    }
+
+    /// The memfile, which an open memline has.
+    ///
+    /// # Panics
+    /// When the memline is closed: every caller has just checked.
+    #[inline]
+    pub(crate) fn mfp(&mut self) -> &mut MemFile {
+        self.ml_mfp.as_deref_mut().expect("an open memline")
+    }
+
     /// Which line is cached, or 0 for none: upstream's `ml_line_lnum`.
     pub fn cached_lnum(&self) -> LineNr {
         self.ml_line.lnum
     }
 
-    /// The cached line's text: upstream's `ml_line_ptr`. Stale unless
-    /// [`Self::cached_lnum`] is non-zero.
-    pub fn cached_text(&self) -> *mut ::core::ffi::c_char {
-        self.ml_line.ptr
+    /// The cached line's text, NUL-terminated: upstream's `ml_line_ptr`.
+    /// Null when nothing is cached.
+    ///
+    /// The pointer form, for the callers that still hold a line as one; it
+    /// is good until the next call into the memline.
+    pub fn cached_text(&mut self) -> *mut ::core::ffi::c_char {
+        match &mut self.ml_line.text {
+            CachedText::None => ::core::ptr::null_mut(),
+            CachedText::Owned(text) => text.as_mut_ptr().cast(),
+            CachedText::Placeholder(text) => text.as_ptr().cast_mut(),
+            &mut CachedText::Block { id, start } => {
+                let page = self
+                    .ml_mfp
+                    .as_deref_mut()
+                    .expect("an open memline")
+                    .page_mut(id);
+                page[start as usize..].as_mut_ptr().cast()
+            }
+        }
+    }
+
+    /// The cached line's bytes, its NUL left out. Empty when nothing is
+    /// cached.
+    pub(crate) fn cached_bytes(&self) -> &[u8] {
+        let len = usize::try_from(self.ml_line.textlen - 1).unwrap_or(0);
+        match &self.ml_line.text {
+            CachedText::None => &[],
+            CachedText::Owned(text) => &text[..len],
+            CachedText::Placeholder(text) => text.to_bytes(),
+            &CachedText::Block { id, start } => {
+                let page = self.ml_mfp.as_deref().expect("an open memline").page(id);
+                &page[start as usize..start as usize + len]
+            }
+        }
+    }
+
+    /// [`Self::cached_bytes`] and the NUL after them.
+    pub(crate) fn cached_bytes_with_nul(&self) -> &[u8] {
+        let len = usize::try_from(self.ml_line.textlen).unwrap_or(0).max(1);
+        match &self.ml_line.text {
+            CachedText::None => b"\0",
+            CachedText::Owned(text) => &text[..len],
+            CachedText::Placeholder(text) => text.to_bytes_with_nul(),
+            &CachedText::Block { id, start } => {
+                let page = self.ml_mfp.as_deref().expect("an open memline").page(id);
+                &page[start as usize..start as usize + len]
+            }
+        }
+    }
+
+    /// [`Self::cached_bytes`], writable: only the bytes already there.
+    pub(crate) fn cached_bytes_mut(&mut self) -> &mut [u8] {
+        let len = usize::try_from(self.ml_line.textlen - 1).unwrap_or(0);
+        match &mut self.ml_line.text {
+            CachedText::None | CachedText::Placeholder(_) => &mut [],
+            CachedText::Owned(text) => &mut text[..len],
+            &mut CachedText::Block { id, start } => {
+                let page = self
+                    .ml_mfp
+                    .as_deref_mut()
+                    .expect("an open memline")
+                    .page_mut(id);
+                &mut page[start as usize..start as usize + len]
+            }
+        }
     }
 
     /// The cached line's length, NUL included: upstream's
@@ -372,16 +460,10 @@ impl MemLine {
         self.ml_line.textlen
     }
 
-    /// Say how long the cached line is without touching its text -- the two
-    /// `ml_get` failure paths, which answer a static placeholder, and the
-    /// callers that shorten the text in place.
+    /// Say how long the cached line is without touching its text -- the
+    /// callers that shorten an owned line in place.
     pub fn set_cached_len(&mut self, textlen: ColNr) {
         self.ml_line.textlen = textlen;
-    }
-
-    /// Say which line the placeholder `ml_get` just answered stands for.
-    pub fn set_cached_lnum(&mut self, lnum: LineNr) {
-        self.ml_line.lnum = lnum;
     }
 
     /// The cached line's byte offset in the buffer, or 0 for "not worked
@@ -395,91 +477,80 @@ impl MemLine {
         self.ml_line.offset = offset;
     }
 
-    /// Cache a line that lives *inside* the locked data block, so nothing
-    /// here owns it.
-    pub fn cache_block_line(
+    /// Cache a line that lives *inside* data block `id`, `start` bytes in,
+    /// so nothing here owns it.
+    pub(crate) fn cache_block_line(
         &mut self,
-        text: *mut ::core::ffi::c_char,
+        id: BlockId,
+        start: u32,
         textlen: ColNr,
         lnum: LineNr,
     ) {
-        self.ml_line = LineCache {
-            lnum,
-            ptr: text,
-            textlen,
-            offset: self.ml_line.offset,
-            dirty: false,
-            allocated: false,
-        };
+        self.ml_line.lnum = lnum;
+        self.ml_line.text = CachedText::Block { id, start };
+        self.ml_line.textlen = textlen;
     }
 
-    /// Cache a *replacement* for line `lnum`, in memory the memline now
-    /// owns: the block it came from is stale until the line is flushed, and
-    /// the buffer is no longer the untouched empty one.
-    pub fn cache_replacement(
-        &mut self,
-        text: *mut ::core::ffi::c_char,
-        textlen: ColNr,
-        lnum: LineNr,
-    ) {
-        self.ml_line = LineCache {
-            lnum,
-            ptr: text,
-            textlen,
-            offset: self.ml_line.offset,
-            dirty: true,
-            allocated: false,
-        };
+    /// Answer one of the two literals a failed read hands back, for line
+    /// `lnum`.
+    pub(crate) fn cache_placeholder(&mut self, text: &'static ::core::ffi::CStr, lnum: LineNr) {
+        self.ml_line.lnum = lnum;
+        self.ml_line.text = CachedText::Placeholder(text);
+        self.ml_line.textlen = ColNr::try_from(text.count_bytes() + 1).unwrap_or(ColNr::MAX);
+    }
+
+    /// Cache a *replacement* for line `lnum`, which the memline now owns:
+    /// `text` holds the line and its NUL. The block it came from is stale
+    /// until the line is flushed, and the buffer is no longer the untouched
+    /// empty one.
+    pub(crate) fn cache_replacement(&mut self, text: Vec<u8>, lnum: LineNr) {
+        let textlen = ColNr::try_from(text.len()).expect("a line shorter than INT_MAX");
+        self.ml_line.lnum = lnum;
+        self.ml_line.text = CachedText::Owned(text);
+        self.ml_line.textlen = textlen;
         self.ml_flags.clear(MlFlags::EMPTY);
     }
 
-    /// Swap the cached line's text for `text`, which the memline now owns,
-    /// keeping the line number. Answers the old text if it was owned, for
-    /// the caller to free.
-    #[must_use]
-    pub fn swap_cached_text(
-        &mut self,
-        text: *mut ::core::ffi::c_char,
-        textlen: ColNr,
-    ) -> Option<*mut ::core::ffi::c_char> {
-        let old = self.take_owned();
-        self.ml_line.ptr = text;
+    /// Say that line `lnum`, `textlen` bytes long with its NUL, is about to
+    /// be written straight into its block with no copy cached: the chunk
+    /// index reads the length while it happens.
+    pub(crate) fn cache_pending(&mut self, lnum: LineNr, textlen: ColNr) {
+        self.ml_line.lnum = lnum;
+        self.ml_line.text = CachedText::None;
         self.ml_line.textlen = textlen;
-        self.ml_line.dirty = true;
-        old
+        self.ml_flags.clear(MlFlags::EMPTY);
+    }
+
+    /// Swap the cached line's text for `text` (the line and its NUL), which
+    /// the memline now owns, keeping the line number.
+    pub fn swap_cached_text(&mut self, text: Vec<u8>) {
+        let textlen = ColNr::try_from(text.len()).expect("a line shorter than INT_MAX");
+        self.ml_line.text = CachedText::Owned(text);
+        self.ml_line.textlen = textlen;
+        self.ml_flags.clear(MlFlags::EMPTY);
     }
 
     /// Whether the cached text is a replacement that has to be written back:
     /// `ML_LINE_DIRTY`.
     pub fn line_is_dirty(&self) -> bool {
-        self.ml_line.dirty
+        matches!(self.ml_line.text, CachedText::Owned(_))
     }
 
-    /// Whether the cached text is the memline's own allocation rather than a
-    /// pointer into the locked block, so that dropping it means freeing it.
-    ///
-    /// Either kind says so: a rewritten line is always rebuilt into fresh
-    /// memory, and a copied one was taken out of a block that went away.
-    pub fn line_is_owned(&self) -> bool {
-        self.ml_line.dirty || self.ml_line.allocated
+    /// Take the replacement waiting to be written back, if there is one,
+    /// leaving the line cached with no text.
+    pub(crate) fn take_replacement(&mut self) -> Option<Vec<u8>> {
+        match core::mem::take(&mut self.ml_line.text) {
+            CachedText::Owned(text) => Some(text),
+            other => {
+                self.ml_line.text = other;
+                None
+            }
+        }
     }
 
-    /// Give up the cached text if the memline owns it, so the caller can
-    /// free it. The ownership is cleared either way; the pointer itself
-    /// stays cached, because callers still read it back.
-    #[must_use]
-    pub fn take_owned(&mut self) -> Option<*mut ::core::ffi::c_char> {
-        debug_assert!(!self.line_is_owned() || self.ml_line.lnum != 0);
-        let owned = self.line_is_owned().then_some(self.ml_line.ptr);
-        self.ml_line.dirty = false;
-        self.ml_line.allocated = false;
-        owned
-    }
-
-    /// Forget that the memline owns the cached text -- the caller has freed
-    /// it, or handed the ownership on.
+    /// Forget the cached line, and drop its text if the memline owned it.
     pub fn forget_line(&mut self) {
-        let _ = self.take_owned();
+        self.ml_line.text = CachedText::None;
     }
 
     /// Nothing is cached any more.
@@ -487,12 +558,12 @@ impl MemLine {
         self.ml_line = LineCache::default();
     }
 
-    /// Take a data block: `mf_get` handed `hp` out, and it holds lines `low`
-    /// through `high`. Nothing has changed in it yet, so neither it nor the
-    /// index above it needs writing back.
-    pub fn lock(&mut self, hp: *mut BlockHdr, low: LineNr, high: LineNr) {
+    /// Take a data block: `MemFile::get` handed `id` out, and it holds lines
+    /// `low` through `high`. Nothing has changed in it yet, so neither it nor
+    /// the index above it needs writing back.
+    pub(crate) fn lock(&mut self, id: BlockId, low: LineNr, high: LineNr) {
         self.ml_locked = Some(LockedBlock {
-            hp,
+            id,
             low,
             high,
             lineadd: 0,
@@ -501,9 +572,8 @@ impl MemLine {
         });
     }
 
-    /// Give the block back, and answer what `mf_put` has to be told about
-    /// it. The caller does the `mf_put`: this type knows nothing about the
-    /// memfile.
+    /// Give the block back, and answer what `MemFile::put` has to be told
+    /// about it. The caller does the `put`.
     #[must_use]
     pub(crate) fn unlock(&mut self) -> Option<LockedBlock> {
         self.ml_locked.take()
@@ -523,12 +593,9 @@ impl MemLine {
     }
 
     /// The held block itself, for the one caller that hands the same one
-    /// back out again (`ml_find_line`'s already-locked answer). Null when
-    /// nothing is held, which upstream's `ml_locked` was too.
-    pub fn locked_hp(&self) -> *mut BlockHdr {
-        self.ml_locked
-            .as_ref()
-            .map_or(::core::ptr::null_mut(), |locked| locked.hp)
+    /// back out again (`ml_find_line`'s already-locked answer).
+    pub(crate) fn locked_id(&self) -> Option<BlockId> {
+        self.ml_locked.as_ref().map(|locked| locked.id)
     }
 
     /// The first line of the locked block. Every caller has just had one
@@ -575,13 +642,6 @@ impl MemLine {
             locked.dirty = true;
             locked.moved = true;
         }
-    }
-
-    /// Record that the cached text is a *replacement* for the line it was
-    /// read as, and that the buffer is no longer the untouched empty one.
-    pub fn line_was_replaced(&mut self) {
-        self.ml_line.dirty = true;
-        self.ml_flags.clear(MlFlags::EMPTY);
     }
 }
 
@@ -663,12 +723,12 @@ mod tests {
     fn locking_a_block_starts_it_clean() {
         let mut ml = MemLine::closed();
         assert!(!ml.is_locked());
-        assert!(ml.locked_hp().is_null());
+        assert!(ml.locked_id().is_none());
 
-        let hp = core::ptr::dangling_mut::<BlockHdr>();
-        ml.lock(hp, 10, 20);
+        let id = BlockId::unbacked();
+        ml.lock(id, 10, 20);
         assert!(ml.is_locked());
-        assert_eq!(ml.locked_hp(), hp);
+        assert_eq!(ml.locked_id(), Some(id));
         assert_eq!((ml.locked_low(), ml.locked_high()), (10, 20));
 
         let locked = ml.unlock().expect("just locked");
@@ -681,7 +741,7 @@ mod tests {
     #[test]
     fn shifting_a_locked_block_moves_its_end_and_its_debt() {
         let mut ml = MemLine::closed();
-        ml.lock(core::ptr::dangling_mut::<BlockHdr>(), 1, 5);
+        ml.lock(BlockId::unbacked(), 1, 5);
         ml.shift_locked(1);
         ml.shift_locked(1);
         ml.shift_locked(-1);
@@ -706,7 +766,7 @@ mod tests {
     #[test]
     fn forgetting_a_locked_block_still_answers_its_debt() {
         let mut ml = MemLine::closed();
-        ml.lock(core::ptr::dangling_mut::<BlockHdr>(), 1, 5);
+        ml.lock(BlockId::unbacked(), 1, 5);
         ml.shift_locked(-1);
         ml.locked_has_moved();
         assert_eq!(ml.forget_locked(), -1);
@@ -788,55 +848,62 @@ mod tests {
 
     #[test]
     fn a_block_line_is_not_owned_and_a_replacement_is() {
-        let mut text = *b"hello\0";
-        let ptr = (&raw mut text[0]).cast::<::core::ffi::c_char>();
         let mut ml = MemLine::closed();
+        ml.ml_mfp = Some(MemFile::in_memory());
+        let id = ml.mfp().new_block(false, 1);
+        ml.mfp().page_mut(id)[100..106].copy_from_slice(b"hello\0");
 
-        ml.cache_block_line(ptr, 6, 3);
+        ml.cache_block_line(id, 100, 6, 3);
         assert_eq!(ml.cached_lnum(), 3);
-        assert_eq!(ml.cached_text(), ptr);
+        assert_eq!(ml.cached_bytes(), b"hello");
         assert_eq!(ml.cached_len(), 6);
-        assert!(!ml.line_is_owned());
-        assert!(ml.take_owned().is_none());
+        assert!(!ml.line_is_dirty());
+        assert!(ml.take_replacement().is_none());
+        // The pointer form reads the same bytes, in the page.
+        let text = ml.cached_text();
+        assert_eq!(text.cast::<u8>(), ml.mfp().page_mut(id)[100..].as_mut_ptr());
 
-        ml.cache_replacement(ptr, 6, 3);
+        ml.cache_replacement(b"bye\0".to_vec(), 3);
         assert!(ml.line_is_dirty());
-        assert!(ml.line_is_owned());
-        assert_eq!(ml.take_owned(), Some(ptr));
+        assert_eq!(ml.cached_bytes(), b"bye");
+        assert_eq!(ml.take_replacement().as_deref(), Some(&b"bye\0"[..]));
         // Handed over once only.
-        assert!(ml.take_owned().is_none());
+        assert!(ml.take_replacement().is_none());
     }
 
     #[test]
-    fn swapping_the_text_answers_the_old_one_when_it_was_owned() {
-        let mut first = *b"one\0";
-        let mut second = *b"two\0";
-        let one = (&raw mut first[0]).cast::<::core::ffi::c_char>();
-        let two = (&raw mut second[0]).cast::<::core::ffi::c_char>();
+    fn an_owned_line_can_be_shortened_and_swapped() {
         let mut ml = MemLine::closed();
-
-        // A line read out of a block: swapping it frees nothing.
-        ml.cache_block_line(one, 4, 1);
-        assert!(ml.swap_cached_text(two, 4).is_none());
-        assert_eq!(ml.cached_text(), two);
+        ml.cache_replacement(b"one two\0".to_vec(), 1);
+        ml.cached_bytes_mut()[3] = b'_';
+        ml.set_cached_len(4);
+        assert_eq!(ml.cached_bytes(), b"one");
+        ml.swap_cached_text(b"two\0".to_vec());
+        assert_eq!(ml.cached_bytes(), b"two");
         assert_eq!(ml.cached_lnum(), 1);
         assert!(ml.line_is_dirty());
+    }
 
-        // Now it is the memline's own, so the next swap hands it back.
-        assert_eq!(ml.swap_cached_text(one, 4), Some(two));
+    #[test]
+    fn a_placeholder_reads_as_itself() {
+        let mut ml = MemLine::closed();
+        ml.cache_placeholder(c"???", 9);
+        assert_eq!(ml.cached_bytes(), b"???");
+        assert_eq!(ml.cached_len(), 4);
+        assert!(!ml.line_is_dirty());
+        assert!(ml.cached_bytes_mut().is_empty());
     }
 
     #[test]
     fn clearing_the_cache_forgets_the_line_and_its_offset() {
-        let mut text = *b"x\0";
-        let ptr = (&raw mut text[0]).cast::<::core::ffi::c_char>();
         let mut ml = MemLine::closed();
-        ml.cache_replacement(ptr, 2, 9);
+        ml.cache_replacement(b"x\0".to_vec(), 9);
         ml.set_cached_offset(64);
         assert_eq!(ml.cached_offset(), 64);
         ml.clear_cache();
         assert_eq!(ml.cached_lnum(), 0);
         assert_eq!(ml.cached_offset(), 0);
-        assert!(!ml.line_is_owned());
+        assert!(!ml.line_is_dirty());
+        assert!(ml.cached_text().is_null());
     }
 }

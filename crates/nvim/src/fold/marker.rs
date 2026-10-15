@@ -17,14 +17,14 @@ use crate::cstr;
 use crate::cstr::byte_at;
 use crate::extmark::extmark_splice_cols;
 use crate::mbyte::cluster_len;
-use crate::memline::{Lines, ml_replace_buf_len};
+use crate::memline::{Lines, ml_replace_buf_text};
 use crate::message::e_modifiable;
 use crate::message::emsg;
 use crate::ops::skip_comment;
 use crate::os::cshim::gettext;
 use crate::strings::vim_strchr;
 use crate::undo::u_save;
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use super::*;
 
@@ -106,18 +106,7 @@ pub(super) fn fold_add_marker(buffer: Buf, pos: Pos, marker: &[u8]) {
         }
     };
     new.push(NUL as u8);
-    // SAFETY: a live buffer, a line inside it, and `new` is this frame's
-    // NUL-terminated text, which `copy` says the memline duplicates.
-    let _ = unsafe {
-        ml_replace_buf_len(
-            buffer,
-            lnum,
-            new.as_mut_ptr().cast::<c_char>(),
-            new.len() - 1,
-            true,
-            false,
-        )
-    };
+    let _ = ml_replace_buf_text(buffer, lnum, &new[..new.len() - 1]);
     if added != 0 {
         extmark_splice_cols(
             buffer,
@@ -202,18 +191,7 @@ pub(super) fn fold_del_marker(buffer: Buf, lnum: LineNr, marker: &[u8]) {
     new.extend_from_slice(&text[..start]);
     new.extend_from_slice(&text[start + len..]);
     new.push(NUL as u8);
-    // SAFETY: a live buffer, a line inside it, and `new` is this frame's
-    // NUL-terminated text, which `copy` says the memline duplicates.
-    let _ = unsafe {
-        ml_replace_buf_len(
-            buffer,
-            lnum,
-            new.as_mut_ptr().cast::<c_char>(),
-            new.len() - 1,
-            true,
-            false,
-        )
-    };
+    let _ = ml_replace_buf_text(buffer, lnum, &new[..new.len() - 1]);
     extmark_splice_cols(
         buffer,
         lnum as c_int - 1,

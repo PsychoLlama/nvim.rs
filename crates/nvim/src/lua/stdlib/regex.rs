@@ -95,7 +95,7 @@ fn loaded_buffer(bufnr: Handle) -> Option<Buf> {
     } else {
         Buf::current_or_none()
     };
-    buf.filter(|b| !b.b_ml.ml_mfp.is_null())
+    buf.filter(|b| b.b_ml.ml_mfp.is_some())
 }
 
 /// `regex:match_line(bufnr, rownr[, start[, end]])`.

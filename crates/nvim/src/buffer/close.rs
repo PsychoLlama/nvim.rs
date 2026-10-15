@@ -49,7 +49,7 @@ use crate::state::MAP_ALL_MODES;
 use crate::syntax::syntax_clear_in;
 use crate::terminal::close_buf_terminal;
 use crate::types::{
-    Callback, ColNr, FileMark, FileMarkView, Handle, LineNr, MemFile, Pos, Refcount, Timestamp,
+    Callback, ColNr, FileMark, FileMarkView, Handle, LineNr, Pos, Refcount, Timestamp,
 };
 use crate::undo::u_clearallandblockfree;
 use crate::usercmd::{Table, uc_clear};
@@ -579,7 +579,13 @@ pub fn buf_clear_file(mut buffer: Buf) {
     buffer.b_start_eol = 1;
     buffer.b_p_bomb = 0;
     buffer.b_start_bomb = 0;
-    buffer.b_ml.ml_mfp = ptr::null_mut::<MemFile>();
+    // Every caller has closed the memline already (`buf_freeall`), so there
+    // is no memfile left to drop here.
+    debug_assert!(
+        buffer.b_ml.ml_mfp.is_none(),
+        "a buffer cleared with its memline open"
+    );
+    buffer.b_ml.ml_mfp = None;
     // Upstream's `ml_flags = ML_EMPTY` also dropped the ownership of the
     // cached line, without freeing it; the memfile it pointed into is gone
     // either way.
@@ -697,7 +703,7 @@ fn announce_unload(mut buffer: Buf, flags: c_int) -> Option<Buf> {
     }
     detach_updates(buffer);
 
-    let loaded = !buffer.b_ml.ml_mfp.is_null();
+    let loaded = buffer.b_ml.ml_mfp.is_some();
     if loaded && fire_named(AutoEvent::BufUnload, buffer) && !bufref.valid() {
         // Autocommands deleted the buffer.
         return None;

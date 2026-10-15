@@ -10,29 +10,29 @@
 //! where it cannot, it appends a `???` marker line and keeps going. Getting
 //! *most* of the buffer back is the whole point.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::allocator::Owned;
+use crate::autocmd::fire_autocmds_for;
 use crate::buffer::{BufFlags, alloc_unregistered_buffer};
 use crate::cstr;
 use crate::fileio::{Loaded, ReadFlags};
 use crate::guard::Suppress;
-use crate::message_fmt::c_str;
+use crate::memfile::{BlockId, MemFile};
+use crate::message_fmt::msg_cstr;
+use crate::os::env::{expand_env_into, home_replace_in};
+use crate::os::fs::file_info;
 use crate::semsg;
 use crate::smsg;
-use crate::strings::has_char;
-use core::ffi::{c_char, c_int, c_long, c_uint};
+use crate::types::String_0;
+use core::ffi::{CStr, c_int, c_long, c_uint};
+use std::ffi::CString;
 
 use super::*;
 use crate::highlight_group::HLF_E;
-use crate::types::{FAIL, Failed, MAXPATHL, NUL, OK, OptionSetFlags};
+use crate::types::{FAIL, Failed, MAXPATHL, OK, OptionSetFlags};
 use crate::winlayer::{Buf, Win};
 
-/// Try to recover `curbuf` from its swap file.
-///
-/// `checkext`: whether the buffer's own name may itself be a swap file name,
-/// as it is for `nvim -r file.swp`.
 /// Read the original file into `curbuf`, starting after line `from`.
 ///
 /// Both callers name `curbuf`'s own full path and pass no `:read` command,
@@ -45,50 +45,69 @@ fn read_original(
     flags: c_int,
 ) -> Result<Loaded, Failed> {
     // A copy: the read's autocommands may rename the buffer.
-    let name = Buf::current().name.full().map(core::ffi::CStr::to_owned);
+    let name = Buf::current().name.full().map(CStr::to_owned);
     let flags = ReadFlags::from_bits(flags);
     readfile_named(name.as_deref(), None, from, skip, lines, None, flags, false)
 }
 
-pub fn ml_recover(checkext: bool) {
-    // The recovery report runs autocommands between the calls that fill this,
-    // so it is this frame's rather than the shared `NameBuff`.
-    let mut path = [0 as c_char; MAXPATHL as usize];
-    recoverymode.set(true);
-    let called_from_main = Buf::current().b_ml.ml_mfp.is_null();
+/// `name` as a message argument.
+fn shown(name: &CStr) -> impl core::fmt::Display + '_ {
+    msg_cstr(name)
+}
 
-    let mut buf: Buf;
+/// What a swap file's block zero says about the buffer it belongs to, kept
+/// once the block has gone back to the memfile.
+struct Recorded {
+    /// The edited file's name, as block zero spells it.
+    fname: Vec<u8>,
+    /// `'fileformat'` + 1, or 0 for none.
+    fileformat: c_int,
+    /// `'fileencoding'`, when it was recorded.
+    fileencoding: Option<Vec<u8>>,
+    /// The edited file's modification time, low 32 bits.
+    mtime: c_long,
+    /// The PID of the Nvim that wrote it.
+    pid: c_long,
+    /// The view of block zero `swapfile_proc_running` reads.
+    block: Vec<u8>,
+}
+
+/// Try to recover `curbuf` from its swap file.
+///
+/// `checkext`: whether the buffer's own name may itself be a swap file name,
+/// as it is for `nvim -r file.swp`.
+pub fn ml_recover(checkext: bool) {
+    recoverymode.set(true);
+    let called_from_main = !Buf::current().b_ml.is_open();
+
     // Who owns what `buf` names. The recovery buffer is not in the
     // registry, so this frame is its owner; `buf` is only the handle the
-    // memline code below works through.
+    // memline code below works through. Its memline owns the memfile on
+    // the old swap file, and closing that is this frame's job too.
     let mut owned_buf: Option<Owned<Buffer>> = None;
-    let mut mfp: *mut MemFile = core::ptr::null_mut();
-    let mut hp: *mut BlockHdr = core::ptr::null_mut();
-    let mut fname_used: *mut c_char = core::ptr::null_mut();
+    let mut recovery: Option<Buf> = None;
     // Nothing was recovered yet, so a failure now leaves the buffer with
     // no memline at all.
     let mut serious_error = true;
 
     'theend: {
-        let fname = if Buf::current().name.is_unnamed() {
-            c"".as_ptr().cast_mut()
+        // A copy: the autocommands below may rename the buffer.
+        let fname: CString = if Buf::current().name.is_unnamed() {
+            CString::default()
         } else {
-            Buf::current().name.shown_ptr()
+            Buf::current().name.shown().unwrap_or(c"").to_owned()
         };
         // A name ending in ".s[a-w][a-z]" is taken to be the swap file
         // itself; otherwise its swap files are searched for.
-        let directly = checkext && unsafe { looks_like_swapfile(fname) };
-        fname_used = if directly {
-            unsafe { xstrdup(fname) } // a copy for mf_open(), which consumes it
+        let directly = checkext && looks_like_swapfile(fname.as_bytes());
+        let fname_used: CString = if directly {
+            fname.clone()
         } else {
-            let Some(chosen) = (unsafe { choose_swapfile(fname) }) else {
+            let Some(chosen) = choose_swapfile(&fname) else {
                 break 'theend;
             };
-            chosen
+            chosen.as_cstr().to_owned()
         };
-        if fname_used.is_null() {
-            break 'theend; // the user chose an invalid number
-        }
         // When called from main() the storage structure still needs
         // initialising.
         if called_from_main && ml_open(Buf::current()).is_err() {
@@ -98,175 +117,63 @@ pub fn ml_recover(checkext: bool) {
         // A buffer structure for the swap file being recovered. Only the
         // memline in it is really used, and it is never registered or
         // put on the buffer list -- see `alloc_unregistered_buffer`.
-        buf = Buf::owned_by(owned_buf.insert(alloc_unregistered_buffer()));
+        let mut buf = Buf::owned_by(owned_buf.insert(alloc_unregistered_buffer()));
+        recovery = Some(buf);
         buf.b_ml.stack_clear(); // nothing in the stack
         buf.b_ml.clear_cache(); // no cached line
         buf.b_ml.ml_locked = None; // no locked block
         buf.b_ml.ml_flags = MlFlags::NONE;
 
-        // Open the memfile on the old swap file. `mf_open` consumes the
-        // name, so keep a copy of it for the messages.
-        let kept = unsafe { xstrdup(fname_used) };
-        mfp = unsafe { mf_open(fname_used, O_RDONLY) };
-        fname_used = kept;
-        if mfp.is_null() || unsafe { (*mfp).mf_fd } < 0 {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let fname_used = unsafe { c_str(fname_used) };
-            semsg!("E306: Cannot open {fname_used}");
+        // Open the memfile on the old swap file.
+        let Some(mfp) = MemFile::open(fname_used.clone(), O_RDONLY) else {
+            semsg!("E306: Cannot open {}", shown(&fname_used));
             break 'theend;
-        }
-        buf.b_ml.ml_mfp = mfp;
+        };
+        buf.b_ml.ml_mfp = Some(mfp);
 
-        // The page size `mf_open` picked need not be the one the swap
-        // file was written with; the real one is in block zero. Reading
-        // block zero needs *a* page size, so use the smallest one a swap
-        // file can have, and correct it below.
-        unsafe { (*mfp).mf_page_size = MIN_SWAP_PAGE_SIZE };
-
-        let hl_id = HLF_E;
-        msg_ext_set_kind(c"emsg");
-        hp = unsafe { mf_get(mfp, 0, 1) };
-        if hp.is_null() {
-            msg_start();
-            note(c"Unable to read block 0 from ", hl_id);
-            msg_display(unsafe { cstr::at(mf_fname(mfp)) }, hl_id, true);
-            note(
-                c"\nMaybe no changes were made or Nvim did not update the swap file.",
-                hl_id,
-            );
-            msg_end();
+        let Some(recorded) = read_block_zero(buf, directly) else {
             break 'theend;
-        }
-        let mut b0p = unsafe { (*hp).bh_data } as *mut ZeroBlock;
-        if unsafe { cstr::starts_with((*b0p).b0_version.as_ptr(), b"VIM 3.0") } {
-            msg_start();
-            msg_display(unsafe { cstr::at(mf_fname(mfp)) }, 0, true);
-            note(c" cannot be used with this version of Nvim.\n", 0);
-            note(c"Use Vim version 3.0.\n", 0);
-            msg_end();
-            break 'theend;
-        }
-        if !ml_check_b0_id(unsafe { &*b0p }) {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg0 = unsafe { c_str(mf_fname(mfp)) };
-            semsg!("E307: {arg0} does not look like a Nvim swap file");
-            break 'theend;
-        }
-        if b0_magic_wrong(unsafe { &*b0p }) {
-            msg_start();
-            msg_display(unsafe { cstr::at(mf_fname(mfp)) }, hl_id, true);
-            note(c" cannot be used on this computer.\n", hl_id);
-            note(c"The file was created on ", hl_id);
-            // Terminate the name field, so that printing the host name
-            // cannot run off the end of a corrupted one.
-            unsafe { (*b0p).b0_fname[0] = NUL as c_char };
-            // SAFETY: `b0p` is the live block-zero header.
-            msg_str_hl(cstr::in_chars(unsafe { &(*b0p).b0_hname }), hl_id, true);
-            note(c",\nor the file has been damaged.", hl_id);
-            msg_end();
-            break 'theend;
-        }
-
-        // The guessed page size was wrong, so the highest block number
-        // in the file has to be worked out again.
-        let recorded_page_size = unsafe { b0_read_number(&(*b0p).b0_page_size) } as c_uint;
-        if unsafe { (*mfp).mf_page_size } != recorded_page_size {
-            let previous_page_size = unsafe { (*mfp).mf_page_size };
-            unsafe { mf_new_page_size(mfp, recorded_page_size) };
-            if unsafe { (*mfp).mf_page_size } < previous_page_size {
-                msg_start();
-                msg_display(unsafe { cstr::at(mf_fname(mfp)) }, hl_id, true);
-                note(
-                    c" has been damaged (page size is smaller than minimum value).\n",
-                    hl_id,
-                );
-                msg_end();
-                break 'theend;
-            }
-            let size = unsafe { lseek((*mfp).mf_fd, 0, SEEK_END) };
-            // Zero means no file, or an empty one.
-            unsafe {
-                (*mfp).mf_blocknr_max = if size <= 0 {
-                    0
-                } else {
-                    size / (*mfp).mf_page_size as FileOffset
-                } as BlockNr
-            };
-            unsafe { (*mfp).mf_infile_count = (*mfp).mf_blocknr_max };
-
-            // Block zero's own buffer was allocated at the guessed size.
-            let bigger = unsafe { xmalloc((*mfp).mf_page_size as size_t) };
-            let into = bigger.cast::<u8>();
-            unsafe { into.copy_from((*hp).bh_data.cast(), previous_page_size as size_t) };
-            unsafe { xfree((*hp).bh_data) };
-            unsafe { (*hp).bh_data = bigger };
-            b0p = bigger as *mut ZeroBlock;
-        }
+        };
 
         // Given the swap file's name directly, the buffer takes its name
         // from what the swap file says it belongs to.
         if directly {
-            unsafe { expand_env((*b0p).b0_fname.as_mut_ptr(), path.as_mut_ptr(), MAXPATHL) };
-            if setfname(Buf::current(), Some(cstr::in_chars(&path)), None, true).is_err() {
+            let name = cstr::owned(&recorded.fname);
+            let path = expand_env_into(&name, MAXPATHL as usize);
+            if setfname(Buf::current(), Some(&cstr::owned(&path)), None, true).is_err() {
                 break 'theend;
             }
         }
 
         msg_ext_set_kind(c"wmsg");
         msg_ext_skip_flush.set(true);
-        let (out, room) = (path.as_mut_ptr(), MAXPATHL as size_t);
-        unsafe { home_replace(None, mf_fname(mfp), out, room, true) };
-        // SAFETY: `home_replace` NUL-terminated `path`.
-        let shown = unsafe { c_str(path.as_ptr()) };
-        smsg!(0, "Using swap file \"{shown}\"");
-        if let Some(special) = buf_spname(&Buf::current()) {
-            unsafe { xstrlcpy(path.as_mut_ptr(), special.as_ptr(), MAXPATHL as size_t) };
-        } else {
-            let (out, room) = (path.as_mut_ptr(), MAXPATHL as size_t);
-            unsafe { home_replace(None, Buf::current().name.full_ptr(), out, room, true) };
-        }
+        let swap_name = buf.b_ml.mfp().fname().unwrap_or(c"").to_owned();
+        let path = home_replace_in(None, &swap_name, MAXPATHL as usize, true);
+        smsg!(0, "Using swap file \"{}\"", shown(path.as_cstr()));
+        let path = match buf_spname(&Buf::current()) {
+            Some(special) => XString::from_cstr(special),
+            None => {
+                let full = Buf::current().name.full().unwrap_or(c"").to_owned();
+                home_replace_in(None, &full, MAXPATHL as usize, true)
+            }
+        };
         msg_putchar('\n' as c_int);
-        // SAFETY: the copy above NUL-terminated `path`.
-        let shown = unsafe { c_str(path.as_ptr()) };
-        smsg!(0, "Original file \"{shown}\"");
+        smsg!(0, "Original file \"{}\"", shown(path.as_cstr()));
         msg_putchar('\n' as c_int);
         msg_ext_skip_flush.set(false);
 
         // Compare the dates of the swap file and the original.
-        let mtime = unsafe { b0_read_number(&(*b0p).b0_mtime) } as c_int;
-        let mut org_file_info: FileInfo = unsafe { core::mem::zeroed() };
-        let mut swp_file_info: FileInfo = unsafe { core::mem::zeroed() };
-        if !Buf::current().name.full().is_none()
-            && unsafe { os_fileinfo(Buf::current().name.full_ptr(), &raw mut org_file_info) }
-            && ((unsafe { os_fileinfo(mf_fname(mfp), &raw mut swp_file_info) }
-                && org_file_info.stat.st_mtim.tv_sec > swp_file_info.stat.st_mtim.tv_sec)
-                || org_file_info.stat.st_mtim.tv_sec != mtime as _)
-        {
-            complain(c"E308: Warning: Original file may have been changed");
+        let mtime = recorded.mtime as c_int;
+        let original = Buf::current().name.full().and_then(file_info);
+        if let Some(original) = original {
+            let swap = file_info(&swap_name);
+            let newer =
+                swap.is_some_and(|swap| original.stat.st_mtim.tv_sec > swap.stat.st_mtim.tv_sec);
+            if newer || original.stat.st_mtim.tv_sec != mtime as _ {
+                complain(c"E308: Warning: Original file may have been changed");
+            }
         }
         ui_flush();
-
-        // Take 'fileformat' and 'fileencoding' from block zero. The
-        // encoding sits at the very end of the name field, behind a NUL,
-        // so it is found by scanning back from there.
-        let b0_ff = unsafe { (*b0p).flags() } & B0_FF_MASK;
-        let mut b0_fenc: *mut c_char = core::ptr::null_mut();
-        if unsafe { (*b0p).flags() } & B0_HAS_FENC != 0 {
-            let name = unsafe { (*b0p).b0_fname.as_mut_ptr() };
-            let end = unsafe { name.offset(B0_FNAME_SIZE_NOCRYPT as isize) };
-            let mut p = end;
-            while p > name && unsafe { *p.offset(-1) } as c_int != NUL {
-                p = unsafe { p.offset(-1) };
-            }
-            b0_fenc = unsafe { xstrnsave(p, end.offset_from(p) as size_t) };
-        }
-
-        // Release block zero. `b0p` is still read further down, for the
-        // "process STILL RUNNING" note: `mf_put` only drops the block's
-        // reference, and nothing here can make the memfile hand its page
-        // back out.
-        unsafe { mf_put(mfp, hp, false, false) };
-        hp = core::ptr::null_mut();
 
         // Recovery is going ahead, so the buffer's current contents go.
         while !Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
@@ -277,26 +184,25 @@ pub fn ml_recover(checkext: bool) {
         // and friends. Errors are ignored, and the text itself is not
         // used — except as the "unchanged?" comparison below.
         let mut orig_file_status = Err(Failed);
-        if !Buf::current().name.full().is_none() {
+        if Buf::current().name.full().is_some() {
             orig_file_status = read_original(0, 0, MAXLNUM, READ_NEW as c_int);
         }
 
         // What the swap file recorded wins over what the file suggests.
-        if b0_ff != 0 {
-            set_fileformat(b0_ff - 1, OptionSetFlags::LOCAL);
+        if recorded.fileformat != 0 {
+            set_fileformat(recorded.fileformat - 1, OptionSetFlags::LOCAL);
         }
-        if !b0_fenc.is_null() {
+        if let Some(fenc) = &recorded.fileencoding {
             set_option_value_give_err(
                 kOptFileencoding,
-                OptVal::string(unsafe { cstr_to_string(b0_fenc) }),
+                OptVal::string(String_0::from_bytes(fenc)),
                 OptionSetFlags::LOCAL,
             );
-            unsafe { xfree(b0_fenc.cast()) };
         }
         unchanged(Buf::current(), true, true);
 
         serious_error = false;
-        let Ok((lnum, error)) = (unsafe { recover_lines(buf, mfp, &mut hp) }) else {
+        let Ok((lnum, error)) = recover_lines(buf) else {
             break 'theend;
         };
 
@@ -340,18 +246,21 @@ pub fn ml_recover(checkext: bool) {
 
         msg_ext_skip_flush.set(!got_int.get());
         recoverymode.set(false);
-        unsafe { report_recovery(error, b0p, fname_used) };
+        report_recovery(error, &recorded, &fname_used);
         redraw_curbuf_later(UPD_NOT_VALID);
     }
 
     msg_ext_skip_flush.set(false);
-    unsafe { xfree(fname_used.cast()) };
     recoverymode.set(false);
-    if !mfp.is_null() {
-        if !hp.is_null() {
-            unsafe { mf_put(mfp, hp, false, false) };
+    if let Some(mut buf) = recovery {
+        // Whatever block the walk still held goes back, and the memfile
+        // closes; the swap file stays.
+        if let Some(locked) = buf.b_ml.unlock() {
+            buf.b_ml.put(locked.id, false);
         }
-        unsafe { mf_close(mfp, false) }; // also frees the swap file's name
+        if let Some(mfp) = buf.b_ml.ml_mfp.take() {
+            mfp.close(false);
+        }
     }
     // The free: `Buffer`'s destructor runs, taking the block stack with
     // it, and the memory goes back.
@@ -363,51 +272,163 @@ pub fn ml_recover(checkext: bool) {
         // first one's autocommands may have changed either.
         for event in [AutoEvent::BufReadPost, AutoEvent::BufWinEnter] {
             let current = Buf::current();
-            let (none, name) = (core::ptr::null_mut(), current.name.shown_ptr());
-            unsafe { apply_autocmds(event, none, name, false, Some(current)) };
+            let name = current.name.shown().map(CStr::to_owned);
+            fire_autocmds_for(event, None, name.as_deref(), false, Some(current), None);
         }
     }
+}
+
+/// Read and check block zero of the swap file `buf`'s memfile is open on,
+/// fixing the memfile's page size from it, and answer what it records.
+/// `None`, with the reason said, when the file cannot be recovered from.
+///
+/// `directly`: the user named the swap file itself, so its recorded file
+/// name is wanted.
+fn read_block_zero(mut recovery: Buf, directly: bool) -> Option<Recorded> {
+    let swap_name = recovery.b_ml.mfp().fname().unwrap_or(c"").to_owned();
+
+    // The page size `MemFile::open` picked need not be the one the swap
+    // file was written with; the real one is in block zero. Reading
+    // block zero needs *a* page size, so use the smallest one a swap
+    // file can have, and correct it below.
+    recovery.b_ml.mfp().mf_page_size = MIN_SWAP_PAGE_SIZE;
+
+    let hl_id = HLF_E;
+    msg_ext_set_kind(c"emsg");
+    let Some(id) = recovery.b_ml.mfp().get(0, 1) else {
+        msg_start();
+        note(c"Unable to read block 0 from ", hl_id);
+        msg_display(&swap_name, hl_id, true);
+        note(
+            c"\nMaybe no changes were made or Nvim did not update the swap file.",
+            hl_id,
+        );
+        msg_end();
+        return None;
+    };
+    let recorded = check_block_zero(recovery, id, &swap_name, directly);
+    // Release block zero.
+    recovery.b_ml.put(id, false);
+    recorded
+}
+
+/// [`read_block_zero`] once the block is in memory.
+fn check_block_zero(
+    mut recovery: Buf,
+    id: BlockId,
+    swap_name: &CStr,
+    directly: bool,
+) -> Option<Recorded> {
+    let hl_id = HLF_E;
+    let b0 = ZeroBlock(recovery.b_ml.page(id));
+    if b0.version().starts_with(b"VIM 3.0") {
+        msg_start();
+        msg_display(swap_name, 0, true);
+        note(c" cannot be used with this version of Nvim.\n", 0);
+        note(c"Use Vim version 3.0.\n", 0);
+        msg_end();
+        return None;
+    }
+    if !ml_check_b0_id(&b0) {
+        semsg!(
+            "E307: {} does not look like a Nvim swap file",
+            shown(swap_name)
+        );
+        return None;
+    }
+    if b0_magic_wrong(&b0) {
+        // Only the host name is wanted, and it is terminated inside its own
+        // field so that printing it cannot run off the end of a corrupted
+        // one.
+        let host = cstr::owned(cstr::until_nul(b0.hname()));
+        msg_start();
+        msg_display(swap_name, hl_id, true);
+        note(c" cannot be used on this computer.\n", hl_id);
+        note(c"The file was created on ", hl_id);
+        msg_str_hl(&host, hl_id, true);
+        note(c",\nor the file has been damaged.", hl_id);
+        msg_end();
+        return None;
+    }
+
+    // The guessed page size was wrong, so the highest block number
+    // in the file has to be worked out again.
+    let recorded_page_size = b0.page_size() as c_uint;
+    let mfp = recovery.b_ml.mfp();
+    if mfp.mf_page_size != recorded_page_size {
+        let previous_page_size = mfp.mf_page_size;
+        mfp.set_page_size(recorded_page_size);
+        if mfp.mf_page_size < previous_page_size {
+            msg_start();
+            msg_display(swap_name, hl_id, true);
+            note(
+                c" has been damaged (page size is smaller than minimum value).\n",
+                hl_id,
+            );
+            msg_end();
+            return None;
+        }
+        let size = mfp.file_size();
+        // Zero means no file, or an empty one.
+        mfp.mf_blocknr_max = if size <= 0 {
+            0
+        } else {
+            size / FileOffset::from(mfp.mf_page_size)
+        };
+        mfp.mf_infile_count = mfp.mf_blocknr_max;
+
+        // Block zero's own page was read at the guessed size.
+        mfp.resize_page(id, mfp.mf_page_size as usize);
+    }
+
+    let b0 = ZeroBlock(recovery.b_ml.page(id));
+    // Take 'fileformat' and 'fileencoding' from block zero. The
+    // encoding sits at the very end of the name field, behind a NUL,
+    // so it is found by scanning back from there.
+    let fileencoding = (b0.flags() & B0_HAS_FENC != 0).then(|| {
+        let field = &b0.fname()[..B0_FNAME_SIZE_NOCRYPT as usize];
+        let from = field.iter().rposition(|&b| b == 0).map_or(0, |at| at + 1);
+        field[from..].to_vec()
+    });
+    Some(Recorded {
+        fname: if directly {
+            cstr::until_nul(b0.fname()).to_vec()
+        } else {
+            Vec::new()
+        },
+        fileformat: b0.flags() & B0_FF_MASK,
+        fileencoding,
+        mtime: b0.mtime(),
+        pid: b0.pid(),
+        block: recovery.b_ml.page(id)[..B0_SIZE].to_vec(),
+    })
 }
 
 /// Whether this name is itself a swap file name: it ends in `.s`, a letter
 /// from `a` to `w`, and any letter — the extensions `findswapname` permutes
 /// through.
-///
-/// # Safety
-///
-/// `fname` must point at a NUL-terminated string, unaliased for the call.
-unsafe fn looks_like_swapfile(fname: *mut c_char) -> bool {
-    let len = unsafe { cstr::bytes_at(fname) }.len() as isize;
+fn looks_like_swapfile(fname: &[u8]) -> bool {
+    let len = fname.len();
     len >= 4
-        && unsafe { strncasecmp(fname.offset(len - 4), c".s".as_ptr(), 2) } == 0
-        && has_char(
-            c"abcdefghijklmnopqrstuvw",
-            (unsafe { *fname.offset(len - 2) } as u8).to_ascii_lowercase() as c_int,
-        )
-        && (unsafe { *fname.offset(len - 1) } as u8).is_ascii_alphabetic()
+        && fname[len - 4..len - 2].eq_ignore_ascii_case(b".s")
+        && (b'a'..=b'w').contains(&fname[len - 2].to_ascii_lowercase())
+        && fname[len - 1].is_ascii_alphabetic()
 }
 
 /// Pick which of `fname`'s swap files to recover from: the only one there is,
 /// or the one the user names out of a listing.
 ///
-/// Returns the allocated name, or `None` to give up.
-///
-/// # Safety
-///
-/// `fname` must point at a NUL-terminated string, unaliased for the call.
-unsafe fn choose_swapfile(fname: *mut c_char) -> Option<*mut c_char> {
-    let (dir, out) = (core::ptr::null_mut(), core::ptr::null_mut());
-    let count = unsafe { recover_names(fname, false, dir, 0, out) };
+/// Returns the name, or `None` to give up.
+fn choose_swapfile(fname: &CStr) -> Option<XString> {
+    let (count, _) = recover_names(Some(fname), false, None, 0);
     if count == 0 {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let fname = unsafe { c_str(fname) };
-        semsg!("E305: No swap file found for {fname}");
+        semsg!("E305: No swap file found for {}", shown(fname));
         return None;
     }
     let nr = if count == 1 {
         1
     } else {
-        unsafe { recover_names(fname, true, core::ptr::null_mut(), 0, core::ptr::null_mut()) };
+        let _ = recover_names(Some(fname), true, None, 0);
         if !ui_has(kUIMessages) {
             msg_putchar('\n' as c_int);
         }
@@ -418,101 +439,97 @@ unsafe fn choose_swapfile(fname: *mut c_char) -> Option<*mut c_char> {
         }
         nr
     };
-    let mut fname_used: *mut c_char = core::ptr::null_mut();
-    unsafe { recover_names(fname, false, core::ptr::null_mut(), nr, &raw mut fname_used) };
-    Some(fname_used)
+    recover_names(Some(fname), false, None, nr).1
 }
 
 /// Walk the swap file's block tree and append every line it can find to
 /// `curbuf`, after line 0.
 ///
-/// `buffer` is the scratch buffer whose `ml_stack` records the descent. Nothing
-/// in the file is trusted: a count or a block number that cannot be right
-/// costs a `???` line and the walk carries on. Returns the number of lines
-/// appended and the number of problems found, or `Err` when block 1 itself is
-/// unusable, which leaves nothing to recover.
+/// `buffer` is the scratch buffer whose memline is open on the swap file and
+/// whose `ml_stack` records the descent. Nothing in the file is trusted: a
+/// count or a block number that cannot be right costs a `???` line and the
+/// walk carries on. Returns the number of lines appended and the number of
+/// problems found, or `Err` when block 1 itself is unusable, which leaves
+/// nothing to recover.
 ///
-/// # Safety
-///
-/// `mfp` must point at the recovery memfile, live for the call, and `hp` at a
-/// slot holding the block the walk starts from: it is released and rewritten
-/// as the walk moves.
-unsafe fn recover_lines(
-    mut buffer: Buf,
-    mfp: *mut MemFile,
-    hp: &mut *mut BlockHdr,
-) -> Result<(LineNr, c_int), ()> {
+/// The block the walk is on is the recovery memline's locked block, so that
+/// the caller releases it whichever way the walk ends.
+fn recover_lines(mut buffer: Buf) -> Result<(LineNr, c_int), ()> {
     let mut bnum: BlockNr = 1; // start with block 1
     let mut page_count: c_uint = 1; // which is one page
     let mut lnum: LineNr = 0; // append after line 0 in curbuf
     let mut line_count: LineNr = 0;
-    let mut idx = 0; // start with the first index in block 1
+    let mut idx: usize = 0; // start with the first index in block 1
     let mut error = 0;
     buffer.b_ml.stack_clear();
+    let swap_name = buffer.b_ml.mfp().fname().unwrap_or(c"").to_owned();
 
     // Without a file to fall back on, a data block whose number went
     // negative (never written to the swap file) is simply lost.
     let mut cannot_open = Buf::current().name.full().is_none();
 
-    let append = |lnum: &mut LineNr, text: &::core::ffi::CStr| {
-        // SAFETY: a `CStr` is the NUL-terminated line `ml_append` copies.
-        let _ = unsafe { ml_append(*lnum, text.as_ptr().cast_mut(), 0, true) };
+    let append = |lnum: &mut LineNr, text: &[u8]| {
+        let _ = ml_append_terminated(*lnum, text, true);
         *lnum += 1;
+    };
+    let append_note = |lnum: &mut LineNr, text: &'static CStr| {
+        append(lnum, gettext(text).to_bytes_with_nul());
     };
 
     'walk: while !got_int.get() {
         'step: {
-            if !hp.is_null() {
-                unsafe { mf_put(mfp, *hp, false, false) }; // release the previous block
+            if let Some(held) = buffer.b_ml.unlock() {
+                buffer.b_ml.put(held.id, false); // release the previous block
             }
-            *hp = unsafe { mf_get(mfp, bnum, page_count) };
-            if hp.is_null() {
+            let block = buffer.b_ml.mfp().get(bnum, page_count);
+            if let Some(id) = block {
+                buffer.b_ml.lock(id, 0, 0);
+            }
+            if block.is_none() {
                 if bnum == 1 {
-                    // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                    let arg0 = unsafe { c_str(mf_fname(mfp)) };
-                    semsg!("E309: Unable to read block 1 from {arg0}");
+                    semsg!("E309: Unable to read block 1 from {}", shown(&swap_name));
                     return Err(());
                 }
                 error += 1;
-                append(&mut lnum, gettext(c"???MANY LINES MISSING"));
-            } else if unsafe { (*((**hp).bh_data as *mut PointerBlock)).pb_id }
-                == PTR_ID as uint16_t
+                append_note(&mut lnum, c"???MANY LINES MISSING");
+            } else if let Some(id) = block
+                && PointerBlock(buffer.b_ml.page(id)).is_pointer()
             {
-                let mut pp = unsafe { Pb::new((**hp).bh_data.cast()) };
                 // The counts in the header have to fit the page size this
                 // build uses, or the entries cannot be walked at all.
-                let count_max = PointerBlock::count_max(unsafe { (*mfp).mf_page_size });
+                let page_size = buffer.b_ml.mfp().mf_page_size;
+                let count_max = PointerBlock::<&[u8]>::count_max_for(page_size);
+                let mut pp = PointerBlock(buffer.b_ml.page_mut(id));
                 let mut ptr_block_error = false;
-                if pp.pb_count_max != count_max {
+                if pp.count_max() != count_max {
                     ptr_block_error = true;
-                    pp.pb_count_max = count_max;
+                    pp.set_count_max(count_max);
                 }
-                if pp.pb_count > pp.pb_count_max {
+                if pp.count() > pp.count_max() {
                     ptr_block_error = true;
-                    pp.pb_count = pp.pb_count_max;
+                    pp.set_count(pp.count_max());
                 }
                 if ptr_block_error {
                     complain(c"E1364: Warning: Pointer block corrupted");
                 }
 
+                let pp = PointerBlock(buffer.b_ml.page(id));
+                let count = usize::from(pp.count());
                 // The first time down this block, its entries should
                 // account for exactly the line count promised above it.
                 if idx == 0 && line_count != 0 {
-                    for i in 0..pp.pb_count as usize {
-                        let entry = pb_entries(pp).wrapping_add(i);
-                        line_count -= unsafe { (*entry).pe_line_count };
-                    }
+                    line_count -= pp.line_total();
                     if line_count != 0 {
                         error += 1;
-                        append(&mut lnum, gettext(c"???LINE COUNT WRONG"));
+                        append_note(&mut lnum, c"???LINE COUNT WRONG");
                     }
                 }
 
-                if pp.pb_count == 0 {
-                    append(&mut lnum, gettext(c"???EMPTY BLOCK"));
+                if count == 0 {
+                    append_note(&mut lnum, c"???EMPTY BLOCK");
                     error += 1;
-                } else if idx < pp.pb_count as c_int {
-                    let pe = unsafe { *pb_entries(pp).wrapping_add(idx as usize) };
+                } else if idx < count {
+                    let pe = PointerBlock(buffer.b_ml.page(id)).entry(idx);
                     if pe.pe_bnum < 0 {
                         // A data block whose number is still negative was
                         // never written out, so its lines are only in the
@@ -534,7 +551,7 @@ unsafe fn recover_lines(
                         }
                         if cannot_open {
                             error += 1;
-                            append(&mut lnum, gettext(c"???LINES MISSING"));
+                            append_note(&mut lnum, c"???LINES MISSING");
                         }
                         idx += 1; // same block again, for the next index
                         break 'step;
@@ -546,26 +563,25 @@ unsafe fn recover_lines(
                         ip_bnum: bnum,
                         ip_low: 0,
                         ip_high: 0,
-                        ip_index: idx,
+                        ip_index: idx as c_int,
                     };
                     buffer.b_ml.stack_set(top, frame);
 
                     bnum = pe.pe_bnum;
                     line_count = pe.pe_line_count;
                     page_count = pe.pe_page_count as c_uint;
-                    // `pe_page_count` sizes the allocation `mf_get` makes,
-                    // so a bogus value (0x40000000, say) would ask for
-                    // gigabytes. It must be at least one page, and the
-                    // block must lie inside the file.
-                    if page_count < 1
-                        || bnum + page_count as BlockNr > unsafe { (*mfp).mf_blocknr_max } + 1
-                    {
+                    // `pe_page_count` sizes the allocation `get` makes, so a
+                    // bogus value (0x40000000, say) would ask for gigabytes.
+                    // It must be at least one page, and the block must lie
+                    // inside the file.
+                    let blocknr_max = buffer.b_ml.mfp().mf_blocknr_max;
+                    if page_count < 1 || bnum + BlockNr::from(page_count) > blocknr_max + 1 {
                         error += 1;
-                        append(&mut lnum, gettext(c"???ILLEGAL BLOCK NUMBER"));
+                        append_note(&mut lnum, c"???ILLEGAL BLOCK NUMBER");
                         // Skip this entry and pop back up, to recover
                         // whatever else there is.
                         let ip = buffer.b_ml.stack_at(top);
-                        idx = ip.ip_index + 1;
+                        idx = ip.ip_index as usize + 1;
                         bnum = ip.ip_bnum;
                         page_count = 1;
                         buffer.b_ml.stack_pop();
@@ -574,83 +590,90 @@ unsafe fn recover_lines(
                     idx = 0;
                     break 'step;
                 }
-            } else {
-                let mut dp = unsafe { Db::new((**hp).bh_data.cast()) };
-                if dp.db_id != DATA_ID as uint16_t {
-                    if bnum == 1 {
-                        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                        let arg0 = unsafe { c_str(mf_fname(mfp)) };
-                        semsg!("E310: Block 1 ID wrong ({arg0} not a .swp file?)");
-                        return Err(());
-                    }
+            } else if let Some(id) = block
+                && !DataBlock(buffer.b_ml.page(id)).is_data()
+            {
+                if bnum == 1 {
+                    semsg!(
+                        "E310: Block 1 ID wrong ({} not a .swp file?)",
+                        shown(&swap_name)
+                    );
+                    return Err(());
+                }
+                error += 1;
+                append_note(&mut lnum, c"???BLOCK MISSING");
+            } else if let Some(id) = block {
+                // A data block: append every line in it.
+                let mut has_error = false;
+                let page_size = buffer.b_ml.mfp().mf_page_size;
+                let mut dp = DataBlock(buffer.b_ml.page_mut(id));
+
+                // The block's length has to match the page count the
+                // pointer block promised; if it does not, trust the
+                // pointer block.
+                let end = page_count.wrapping_mul(page_size);
+                let txt_end_wrong = end != dp.txt_end();
+                if txt_end_wrong {
+                    dp.set_txt_end(end);
+                }
+
+                // Make sure the block ends in a NUL, so that copying the
+                // last line out of it cannot run past the end.
+                let last = dp.txt_end() as usize - 1;
+                dp.write(last, &[0]);
+
+                let block_lines = dp.line_count();
+                let (txt_start, txt_end) = (dp.txt_start() as usize, dp.txt_end() as usize);
+                if txt_end_wrong {
+                    append_note(
+                        &mut lnum,
+                        c"??? from here until ???END lines may be messed up",
+                    );
                     error += 1;
-                    append(&mut lnum, gettext(c"???BLOCK MISSING"));
-                } else {
-                    // A data block: append every line in it.
-                    let mut has_error = false;
+                    has_error = true;
+                }
 
-                    // The block's length has to match the page count the
-                    // pointer block promised; if it does not, trust the
-                    // pointer block.
-                    if page_count.wrapping_mul(unsafe { (*mfp).mf_page_size }) != dp.db_txt_end {
-                        append(
-                            &mut lnum,
-                            gettext(c"??? from here until ???END lines may be messed up"),
-                        );
+                // Likewise for the line count.
+                if c_long::from(line_count) != block_lines {
+                    append_note(
+                        &mut lnum,
+                        c"??? from here until ???END lines may have been inserted/deleted",
+                    );
+                    error += 1;
+                    has_error = true;
+                }
+
+                let mut did_questions = false;
+                for i in 0..usize::try_from(block_lines).unwrap_or(0) {
+                    if DataBlock::<&[u8]>::index_at(i) >= txt_start {
+                        // The line count must be wrong: the index array
+                        // has run into the text.
                         error += 1;
-                        has_error = true;
-                        let end = page_count.wrapping_mul(unsafe { (*mfp).mf_page_size });
-                        dp.db_txt_end = end;
+                        append_note(&mut lnum, c"??? lines may be missing");
+                        break;
                     }
-
-                    // Make sure the block ends in a NUL, so that copying
-                    // the last line out of it cannot run past the end.
-                    unsafe { *db_byte(dp, dp.db_txt_end as isize - 1) = NUL as c_char };
-
-                    // Likewise for the line count.
-                    if line_count as c_long != dp.db_line_count {
-                        append(
-                            &mut lnum,
-                            gettext(
-                                c"??? from here until ???END lines may have been inserted/deleted",
-                            ),
-                        );
+                    let dp = DataBlock(buffer.b_ml.page(id));
+                    let start = dp.line_start(i) as usize;
+                    if start <= HEADER_SIZE || start >= txt_end {
                         error += 1;
-                        has_error = true;
-                    }
-
-                    let mut did_questions = false;
-                    for i in 0..dp.db_line_count {
-                        let index = db_index(dp).wrapping_offset(i as isize);
-                        if index as *mut c_char >= db_byte(dp, dp.db_txt_start as isize) {
-                            // The line count must be wrong: the index
-                            // array has run into the text.
-                            error += 1;
-                            append(&mut lnum, gettext(c"??? lines may be missing"));
-                            break;
+                        // One "???" for a run of them is enough.
+                        if did_questions {
+                            continue;
                         }
-                        let txt_start = (unsafe { index.read() } & DB_INDEX_MASK) as c_int;
-                        let text = if txt_start <= HEADER_SIZE as c_int
-                            || txt_start >= dp.db_txt_end as c_int
-                        {
-                            error += 1;
-                            // One "???" for a run of them is enough.
-                            if did_questions {
-                                continue;
-                            }
-                            did_questions = true;
-                            c"???".as_ptr()
-                        } else {
-                            did_questions = false;
-                            db_byte(dp, txt_start as isize)
-                        };
-                        // SAFETY: a `???` literal, or the data block's own
-                        // NUL-terminated line.
-                        append(&mut lnum, unsafe { cstr::at(text) });
+                        did_questions = true;
+                        append(&mut lnum, b"???\0");
+                    } else {
+                        did_questions = false;
+                        // The data block's own NUL-terminated line, ended
+                        // at the latest by the NUL written above.
+                        let text = dp.text(start, txt_end);
+                        let len = text.iter().position(|&b| b == 0).unwrap_or(text.len() - 1);
+                        let line = text[..=len].to_vec();
+                        append(&mut lnum, &line);
                     }
-                    if has_error {
-                        append(&mut lnum, gettext(c"???END"));
-                    }
+                }
+                if has_error {
+                    append_note(&mut lnum, c"???END");
                 }
             }
 
@@ -659,7 +682,7 @@ unsafe fn recover_lines(
                 break 'walk; // finished
             };
             bnum = ip.ip_bnum;
-            idx = ip.ip_index + 1;
+            idx = ip.ip_index as usize + 1;
             page_count = 1;
         }
         line_breakcheck();
@@ -669,12 +692,7 @@ unsafe fn recover_lines(
 }
 
 /// Say how it went, and what the user should do next.
-///
-/// # Safety
-///
-/// `b0p` must point at a live `ZeroBlock`. `fname_used` must point at a NUL-
-/// terminated string.
-unsafe fn report_recovery(error: c_int, b0p: *const ZeroBlock, fname_used: *const c_char) {
+fn report_recovery(error: c_int, recorded: &Recorded, fname_used: &CStr) {
     if got_int.get() {
         complain(c"E311: Recovery Interrupted");
         return;
@@ -712,11 +730,11 @@ unsafe fn report_recovery(error: c_int, b0p: *const ZeroBlock, fname_used: *cons
         );
     }
     say(c"\nYou may want to delete the .swp file now.");
-    if swapfile_proc_running(unsafe { &*b0p }, fname_used) != 0 {
+    if swapfile_proc_running(&ZeroBlock(&recorded.block[..]), fname_used) != 0 {
         // There may be a live Nvim on the same file; the user may want to
         // go and kill it.
         say(c"\nNote: process STILL RUNNING: ");
-        unsafe { msg_outnum((*b0p).pid() as c_int) };
+        msg_outnum(recorded.pid as c_int);
     }
     if !ui_has(kUIMessages) {
         msg_str(c"\n\n");
@@ -730,49 +748,49 @@ unsafe fn report_recovery(error: c_int, b0p: *const ZeroBlock, fname_used: *cons
 /// unchanged. `check_char`: stop as soon as a character is typed, having
 /// synced at least one block.
 pub fn ml_sync_all(check_file: c_int, check_char: c_int, do_fsync: bool) {
-    for buf in buffers() {
-        // SAFETY: a live buffer from the editor's own list, and the memfile
-        // it owns.
-        if !buf.b_ml.ml_mfp.is_null() && !unsafe { mf_fname(buf.b_ml.ml_mfp) }.is_null() {
-            ml_flush_line(buf, false); // flush the buffered line
-            unsafe { ml_find_line(buf, 0, ML_FLUSH as c_int) }; // flush the locked block
+    for mut buf in buffers() {
+        if buf
+            .b_ml
+            .ml_mfp
+            .as_ref()
+            .is_none_or(|mfp| mfp.fname().is_none())
+        {
+            continue;
+        }
+        ml_flush_line(buf); // flush the buffered line
+        let _ = ml_find_line(buf, 0, ML_FLUSH); // flush the locked block
 
-            if buf_is_changed(buf)
-                && check_file != 0
-                && unsafe { mf_need_trans(buf.b_ml.ml_mfp) }
-                && !buf.name.full().is_none()
-            {
-                // If the original file is gone or has changed, preserve
-                // now, to get rid of all the negative numbered blocks.
-                let mut file_info: FileInfo = unsafe { core::mem::zeroed() };
-                if !unsafe { os_fileinfo(buf.name.full_ptr(), &raw mut file_info) }
-                    || file_info.stat.st_mtim.tv_sec != buf.b_mtime_read
-                    || file_info.stat.st_mtim.tv_nsec != buf.b_mtime_read_ns
-                    || unsafe { os_fileinfo_size(&raw mut file_info) } != buf.b_orig_size
-                {
-                    ml_preserve(buf, false, do_fsync);
-                    did_check_timestamps.set(false);
-                    need_check_timestamps.set(true); // give the message later
-                }
+        if buf_is_changed(buf)
+            && check_file != 0
+            && buf.b_ml.mfp().need_trans()
+            && let Some(full) = buf.name.full()
+        {
+            // If the original file is gone or has changed, preserve
+            // now, to get rid of all the negative numbered blocks.
+            let changed = file_info(full).is_none_or(|info| {
+                info.stat.st_mtim.tv_sec != buf.b_mtime_read
+                    || info.stat.st_mtim.tv_nsec != buf.b_mtime_read_ns
+                    || info.stat.st_size != buf.b_orig_size
+            });
+            if changed {
+                ml_preserve(buf, false, do_fsync);
+                did_check_timestamps.set(false);
+                need_check_timestamps.set(true); // give the message later
             }
+        }
 
-            if unsafe { (*buf.b_ml.ml_mfp).mf_dirty } == MfDirty::Yes {
-                // Best effort: `ml_sync_all` writes what it can and
-                // leaves the rest dirty.
-                let stop = if check_char != 0 {
-                    MFS_STOP as c_int
-                } else {
-                    0
-                };
-                let flush = if do_fsync && buf_is_changed(buf) {
-                    MFS_FLUSH as c_int
-                } else {
-                    0
-                };
-                let _ = unsafe { mf_sync(buf.b_ml.ml_mfp, stop | flush) };
-                if check_char != 0 && os_char_avail() {
-                    break; // a character is available now
-                }
+        if buf.b_ml.mfp().mf_dirty == MfDirty::Yes {
+            // Best effort: `ml_sync_all` writes what it can and leaves
+            // the rest dirty.
+            let stop = if check_char != 0 { MFS_STOP } else { 0 };
+            let flush = if do_fsync && buf_is_changed(buf) {
+                MFS_FLUSH
+            } else {
+                0
+            };
+            let _ = buf.b_ml.mfp().sync(stop | flush);
+            if check_char != 0 && os_char_avail() {
+                break; // a character is available now
             }
         }
     }
@@ -784,8 +802,12 @@ pub fn ml_sync_all(check_file: c_int, check_char: c_int, do_fsync: bool) {
 /// This is `:preserve`, and what happens when the original file has been
 /// changed or deleted. `message` reports whether it worked.
 pub fn ml_preserve(mut buffer: Buf, message: bool, do_fsync: bool) {
-    let mfp = buffer.b_ml.ml_mfp;
-    if mfp.is_null() || unsafe { mf_fname(mfp) }.is_null() {
+    if buffer
+        .b_ml
+        .ml_mfp
+        .as_ref()
+        .is_none_or(|mfp| mfp.fname().is_none())
+    {
         if message {
             complain(c"E313: Cannot preserve, there is no swap file");
         }
@@ -796,12 +818,12 @@ pub fn ml_preserve(mut buffer: Buf, message: bool, do_fsync: bool) {
     let got_int_save = got_int.get();
     got_int.set(false);
 
-    ml_flush_line(buffer, false); // flush the buffered line
-    unsafe { ml_find_line(buffer, 0, ML_FLUSH as c_int) }; // flush the locked block
-    let sync_flags = MFS_ALL as c_int | if do_fsync { MFS_FLUSH as c_int } else { 0 };
+    ml_flush_line(buffer); // flush the buffered line
+    let _ = ml_find_line(buffer, 0, ML_FLUSH); // flush the locked block
+    let sync_flags = MFS_ALL | if do_fsync { MFS_FLUSH } else { 0 };
     // `ml_preserve` still answers OK/FAIL to its own callers, so the
     // memfile's result is converted here and again below.
-    let mut status = unsafe { mf_sync(mfp, sync_flags) }.map_or(FAIL, |()| OK);
+    let mut status = buffer.b_ml.mfp().sync(sync_flags).map_or(FAIL, |()| OK);
     buffer.b_ml.stack_clear(); // the stack is invalid after MFS_ALL
 
     // Some data blocks may have gone from a negative to a positive block
@@ -812,18 +834,18 @@ pub fn ml_preserve(mut buffer: Buf, message: bool, do_fsync: bool) {
     // a full file system, say). `ml_find_line` does the work, translating
     // the negative numbers as it fetches each block's first line.
     'theend: {
-        if unsafe { mf_need_trans(mfp) } && !got_int.get() {
+        if buffer.b_ml.mfp().need_trans() && !got_int.get() {
             let mut lnum: LineNr = 1;
-            while unsafe { mf_need_trans(mfp) } && lnum <= buffer.b_ml.ml_line_count {
-                if unsafe { ml_find_line(buffer, lnum, ML_FIND as c_int) }.is_null() {
+            while buffer.b_ml.mfp().need_trans() && lnum <= buffer.b_ml.ml_line_count {
+                if ml_find_line(buffer, lnum, ML_FIND).is_none() {
                     status = FAIL;
                     break 'theend;
                 }
                 lnum = buffer.b_ml.locked_high() + 1;
             }
-            unsafe { ml_find_line(buffer, 0, ML_FLUSH as c_int) }; // flush the locked block
+            let _ = ml_find_line(buffer, 0, ML_FLUSH); // flush the locked block
             // Sync the pointer blocks that were just updated.
-            if unsafe { mf_sync(mfp, sync_flags) }.is_err() {
+            if buffer.b_ml.mfp().sync(sync_flags).is_err() {
                 status = FAIL;
             }
             buffer.b_ml.stack_clear(); // the stack is invalid now

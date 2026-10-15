@@ -32,7 +32,7 @@ pub(crate) fn set_buffer_lines(
     let mut lnum: LineNr = lnum_arg + LineNr::from(append);
     let mut added: c_int = 0;
     let is_curbuf: bool = buffer == Buf::current_or_none();
-    let unloaded = |b: Buf| !is_curbuf && b.b_ml.ml_mfp.is_null();
+    let unloaded = |b: Buf| !is_curbuf && b.b_ml.ml_mfp.is_none();
     let Some(target) = buffer.filter(|&b| !unloaded(b)) else {
         result.write_number(1);
         return;
@@ -151,7 +151,7 @@ fn get_buffer_lines(
 ) {
     result.write_empty(if retlist { VAR_LIST } else { VAR_STRING });
     result.write_string(None);
-    let Some(buffer) = buffer.filter(|b| !b.b_ml.ml_mfp.is_null()) else {
+    let Some(buffer) = buffer.filter(|b| b.b_ml.ml_mfp.is_some()) else {
         if retlist {
             tv_list_alloc_ret(result, 0);
         }
@@ -260,8 +260,8 @@ pub fn f_deletebufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
     } else {
         first
     };
-    let (mfp, count) = (buf.b_ml.ml_mfp, buf.b_ml.ml_line_count);
-    if mfp.is_null() || first < 1 || first > count || last < first {
+    let (loaded, count) = (buf.b_ml.is_open(), buf.b_ml.ml_line_count);
+    if !loaded || first < 1 || first > count || last < first {
         return;
     }
     let is_curbuf = Some(buf) == Buf::current_or_none();

@@ -44,7 +44,7 @@ use std::path::Path;
 
 use crate::drawscreen::{UPD_SOME_VALID, redraw_all_later};
 use crate::getchar::state::got_int;
-use crate::memline::ml_append_buf;
+use crate::memline::ml_append_buf_terminated;
 use crate::memory::handoff::owned_cstr;
 use crate::memory::{xfree, xstrdup};
 use crate::message::{emsg, verbose_enter, verbose_leave};
@@ -58,7 +58,7 @@ use crate::spell::{
     e_format, init_syl_tab, languages, loaded_langs, open_spellbuf, parse_spelllang, slang_alloc,
     slang_clear, slang_clear_sug, slang_free,
 };
-use crate::types::{ColNr, LangP, LineNr, NUL, OptInt, SpellIdx, SpellLang, time_t, uint8_t};
+use crate::types::{LangP, LineNr, NUL, OptInt, SpellIdx, SpellLang, time_t, uint8_t};
 use ::libc::{strcpy, strrchr};
 
 use super::sections::{
@@ -482,10 +482,8 @@ fn read_sug_body(spl: &mut Spl, slang: &mut SpellLang) -> SplResult<()> {
                 break;
             }
         }
-        let (at, len) = (wordnr as LineNr, line.len() as ColNr);
-        // SAFETY: the buffer was just opened and the line is this frame's.
-        let appended =
-            unsafe { ml_append_buf(sugbuf, at, line.as_mut_ptr().cast::<c_char>(), len, true) };
+        let at = wordnr as LineNr;
+        let appended = ml_append_buf_terminated(sugbuf, at, &line, true);
         if appended.is_err() {
             return Err(SpellReadError::Other);
         }

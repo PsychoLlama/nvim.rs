@@ -30,6 +30,7 @@ use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::autocmd::{apply_autocmds, has_event};
 use crate::buffer::{buf_is_empty, buflist_findpat, buflist_name_nr, find_buf, getaltfname};
 use crate::buffer_updates::buf_updates_send_changes;
+use crate::change::ml_replace;
 use crate::change::{changed_bytes, changed_lines, del_chars};
 use crate::charset::{getdigits_int, ptr2cells, skipwhite, transchar};
 use crate::clipboard;
@@ -66,7 +67,7 @@ use crate::mbyte::{
     mb_charlen, mb_string2cells, mb_string2cells_len, mb_tolower, utf_head_off, utf_ptr2cells_len,
     utf_ptr2len_len, utf_ptr2str_char_info, utfc_next, utfc_ptr2len,
 };
-use crate::memline::{decl, ml_append, ml_replace};
+use crate::memline::{decl, ml_append_cstr, ml_replace_owned};
 use crate::memory::XString;
 use crate::memory::{memchrsub, memcnt, xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xrealloc};
 use crate::message::state::{msg_ext_skip_flush, redir_reg};

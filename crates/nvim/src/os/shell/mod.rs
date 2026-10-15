@@ -41,7 +41,7 @@ use crate::ex_cmds::{check_secure, make_filter_cmd};
 use crate::fileio::temp_name;
 use crate::global_cell::GlobalCell;
 use crate::kvec::Kvec;
-use crate::memline::ml_append;
+use crate::memline::{ml_append_cstr, ml_append_terminated};
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::state::emsg_silent;
 use crate::message::{e_notmp, e_shellempty};
@@ -587,7 +587,8 @@ unsafe fn write_output(output: *mut c_char, remaining: size_t, eof: bool) -> siz
             *output.add(off) = 0;
             let lnum = Win::current().w_cursor.lnum;
             Win::current().w_cursor.lnum += 1;
-            let _ = ml_append(lnum, output, off as c_int + 1, false);
+            let line = slice::from_raw_parts(output.cast::<u8>(), off + 1);
+            let _ = ml_append_terminated(lnum, line, false);
             output = output.add(skip);
             remaining -= skip;
             off = 0;
@@ -599,7 +600,7 @@ unsafe fn write_output(output: *mut c_char, remaining: size_t, eof: bool) -> siz
                 // missing.
                 let lnum = Win::current().w_cursor.lnum;
                 Win::current().w_cursor.lnum += 1;
-                let _ = ml_append(lnum, output, 0, false);
+                let _ = ml_append_cstr(lnum, cstr::at(output));
                 Buf::current().b_no_eol_lnum = Win::current().w_cursor.lnum;
                 output = output.add(remaining);
             } else {

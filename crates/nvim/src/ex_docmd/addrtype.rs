@@ -164,13 +164,13 @@ pub(super) fn arglist_len() -> c_int {
 /// The handles of the first and last *loaded* buffers.
 pub(super) fn loaded_buffer_range() -> (LineNr, LineNr) {
     let mut buf = head();
-    while buf.b_ml.ml_mfp.is_null() {
+    while buf.b_ml.ml_mfp.is_none() {
         let Some(next) = buf.next() else { break };
         buf = next;
     }
     let first = buf.handle as LineNr;
     let mut buf = tail();
-    while buf.b_ml.ml_mfp.is_null() {
+    while buf.b_ml.ml_mfp.is_none() {
         let Some(prev) = buf.prev() else { break };
         buf = prev;
     }

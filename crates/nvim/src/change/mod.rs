@@ -57,8 +57,8 @@ use crate::mbyte::{
     utf_ptr2char, utf_ptr2len, utfc_ptr2len,
 };
 use crate::memline::{
-    ml_add_deleted_len, ml_append, ml_delete_flags, ml_line_alloced, ml_open_file, ml_replace,
-    ml_setflags,
+    ml_add_deleted_len, ml_append_cstr, ml_delete_flags, ml_line_alloced, ml_open_file,
+    ml_replace_buf_text, ml_replace_owned, ml_setflags,
 };
 use crate::memory::{xfree, xmalloc, xmemcpyz, xstrdup};
 use crate::message::state::{
@@ -94,7 +94,7 @@ use crate::types::TAB;
 use crate::types::ui::kUIMessages;
 use crate::types::{
     BCount, Buffer, CmdModFlags, ColNr, ExtmarkOp, FileMark, FileMarkView, GraphemeState, LineNr,
-    Pos, Vv, int64_t, size_t, ssize_t,
+    Pos, Vv, int64_t, size_t,
 };
 use crate::ui::state::Rows;
 use crate::ui::{ui_active, ui_has};

@@ -163,7 +163,7 @@ pub fn getout(mut exitval: c_int) -> ! {
         // `BufUnload` for every loaded buffer.
         let mut cur = first_buffer();
         while let Some(buf) = cur {
-            if !buf.b_ml.ml_mfp.is_null() {
+            if buf.b_ml.ml_mfp.is_some() {
                 let bufref = BufRef::of(buf);
                 // A copy, as above.
                 let name = buf.name.shown().map(CStr::to_owned);

@@ -19,10 +19,9 @@
 use crate::change::{appended_lines_buf, deleted_lines_buf};
 use crate::grid::{MAX_SCHAR_SIZE, schar_get_adv};
 use crate::mark::mark_adjust_buf;
-use crate::memline::{ml_append_buf, ml_delete_buf};
+use crate::memline::{ml_append_buf_terminated, ml_delete_buf};
 use crate::types::{
-    ColNr, LineNr, NUL, OptInt, ScreenChar, VTermColor, VTermPos, VTermScreenCell,
-    VTermScreenCellAttrs,
+    LineNr, NUL, OptInt, ScreenChar, VTermColor, VTermPos, VTermScreenCell, VTermScreenCellAttrs,
 };
 use crate::vterm::screen::vterm_screen_get_cell;
 use crate::winlayer::Buf;
@@ -274,10 +273,8 @@ pub(crate) fn refresh_scrollback(mut term: Term, buffer: Buf) {
     while term.sb.pending() > 0 {
         fetch_row(term, -term.sb.pending(), width);
         let at = (buffer.line_count() as c_int - old_height) as LineNr;
-        let text = term.textbuf.as_mut_ptr();
-        // SAFETY: a live buffer, taking the row this terminal's own line
-        // buffer holds.
-        let _ = unsafe { ml_append_buf(buffer, at, text, 0 as ColNr, false) };
+        let text = crate::cstr::in_chars(&term.textbuf).to_bytes_with_nul();
+        let _ = ml_append_buf_terminated(buffer, at, text, false);
         appended_lines_buf(buffer, at, 1 as LineNr);
         term.sb.mark_mirrored();
     }

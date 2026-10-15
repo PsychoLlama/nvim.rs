@@ -437,7 +437,7 @@ pub(crate) unsafe fn diff_find_change_inline_diff(dp: *mut DiffBlock) {
     'done: {
         for (i, map) in linemap.iter_mut().enumerate() {
             dio.dio_diff.dout_ga.clear();
-            let Some(buf) = tp.diffbuf(i).filter(|b| !b.b_ml.ml_mfp.is_null()) else {
+            let Some(buf) = tp.diffbuf(i).filter(|b| b.b_ml.ml_mfp.is_some()) else {
                 continue; // not loaded
             };
             if unsafe { (*dp).df_count[i] } == 0 {

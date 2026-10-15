@@ -33,7 +33,7 @@ pub(crate) fn pbyte(mut pos: Pos, c: c_int) {
     debug_assert!(c <= c_int::from(u8::MAX));
     // SAFETY: the caller's promise -- `pos` names a line of the current
     // buffer, and the column is clamped to that line below before the write.
-    let p = unsafe { ml_get_buf_mut(Buf::current(), pos.lnum) };
+    let p = ml_get_buf_mut(Buf::current(), pos.lnum);
     let len = Buf::current().b_ml.cached_len();
 
     // Safety check: the caller's column may be past the line.
@@ -228,8 +228,9 @@ fn replace_block_line(mut op: Op, bd: &mut BlockDef, c: c_int, had_ctrl_v_cr: bo
     let _ = unsafe { ml_replace(baselnum, newp, false) };
     let splice = Suppress::splice();
     if !after_p.is_null() {
-        let len = after_p_len as ColNr;
-        let _ = unsafe { ml_append(Win::current().w_cursor.lnum, after_p, len, false) };
+        // SAFETY: the `after_p_len` bytes just copied, the NUL among them.
+        let line = unsafe { crate::cstr::slice_at(after_p, after_p_len) };
+        let _ = ml_append_terminated(Win::current().w_cursor.lnum, line, false);
         Win::current().w_cursor.lnum += 1;
         appended_lines_mark(Win::current().w_cursor.lnum, 1);
         op.end.lnum += 1;

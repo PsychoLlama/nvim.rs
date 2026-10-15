@@ -183,7 +183,7 @@ pub(crate) fn process_next_cpt_value(
                 .ins_buf
                 .and_then(BufId::get)
                 .expect("ins_compl_next_buf answered a live buffer");
-            if !buf.b_ml.ml_mfp.is_null() {
+            if buf.b_ml.ml_mfp.is_some() {
                 // Loaded buffer.
                 compl_started.set(true);
                 st.first_match_pos.col = 0;

@@ -44,6 +44,7 @@ use crate::autocmd::{apply_autocmds, aucmd_prepbuf, aucmd_restbuf, has_event};
 use crate::buffer::{
     buf_get_changedtick, buf_is_empty, buf_is_prompt, buf_is_quickfix, buf_meta_total, current_buf,
 };
+use crate::change::ml_replace;
 use crate::change::{
     appended_lines_mark, change_warning, changed_bytes, del_bytes, del_char, get_leader_len,
     ins_bytes_len, ins_char, ins_char_bytes, ins_str, inserted_bytes, open_line,
@@ -122,7 +123,7 @@ use crate::mbyte::{
     mb_adjust_cursor, mb_get_class, utf_char2bytes, utf_char2len, utf_composinglike, utf_head_off,
     utf_ptr2char, utf_ptr2len, utf_ptr2str_char_info, utf8len_tab, utfc_next, utfc_ptr2len,
 };
-use crate::memline::{gchar_pos, ml_append, ml_get, ml_get_buf, ml_get_len, ml_replace};
+use crate::memline::{gchar_pos, ml_append_cstr, ml_get, ml_get_buf, ml_get_len};
 use crate::memory::{strnequal, xfree, xmalloc, xmemdupz};
 use crate::message::state::{emsg_on_display, msg_scroll, msg_silent};
 use crate::message::{e_noinstext, e_sandbox, e_textlock};
@@ -186,7 +187,7 @@ use crate::types::ui::kUIMessages;
 use crate::types::{
     AcoSave, CharsizeArg, CmdModFlags, ColNr, INSCHAR_CTRLV, INSCHAR_FORMAT, INSCHAR_NO_FEX,
     LineNr, MB_MAXBYTES, OptInt, PUT_CURSEND, PUT_FIXINDENT, Pos, ScreenChar, StrCharInfo,
-    String_0, VarNumber, Vv, int32_t, int64_t, ptrdiff_t, size_t, uint8_t,
+    String_0, VarNumber, Vv, int32_t, int64_t, size_t, uint8_t,
 };
 use crate::ui::{ui_cursor_shape, ui_flush, ui_has, vim_beep};
 use crate::undo::u_sync_once;

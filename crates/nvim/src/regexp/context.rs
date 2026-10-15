@@ -117,7 +117,7 @@ pub(crate) fn reg_line(rex: Rex, lnum: LineNr, origin: LineOrigin) -> *mut c_cha
         Located::Past => c"".as_ptr().cast_mut(),
         // SAFETY: `reg_buf` is the buffer being matched and `locate` has
         // established the line is in it.
-        Located::At(lnum) => unsafe { ml_get_buf(rex.reg_buf(), lnum) },
+        Located::At(lnum) => ml_get_buf(rex.reg_buf(), lnum),
     }
 }
 

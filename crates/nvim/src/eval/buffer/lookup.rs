@@ -77,7 +77,7 @@ pub fn f_bufload(args: &[TypVal], _unused: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `bufloaded({buf})`.
 pub fn f_bufloaded(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    let loaded = find_buffer(&args[0]).is_some_and(|b| !b.b_ml.ml_mfp.is_null());
+    let loaded = find_buffer(&args[0]).is_some_and(|b| b.b_ml.ml_mfp.is_some());
     result.write_number(VarNumber::from(loaded));
 }
 

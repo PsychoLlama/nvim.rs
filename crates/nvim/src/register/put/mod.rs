@@ -215,8 +215,8 @@ impl Put {
         let taillen = plen.wrapping_sub(unsafe { p.offset_from(p_orig) } as size_t);
         // SAFETY: `p` points at those `taillen` bytes.
         let tail = unsafe { xmemdupz(p as *const c_void, taillen) } as *mut c_char;
-        // SAFETY: `tail` is NUL-terminated and `ml_append` copies it.
-        let _ = unsafe { ml_append(Win::current().w_cursor.lnum, tail, 0, false) };
+        // SAFETY: `tail` is the NUL-terminated copy just made.
+        let _ = ml_append_cstr(Win::current().w_cursor.lnum, unsafe { cstr::at(tail) });
         // SAFETY: the copy is ours.
         unsafe { xfree(tail as *mut c_void) };
 

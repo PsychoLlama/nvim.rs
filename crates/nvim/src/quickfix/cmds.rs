@@ -142,7 +142,7 @@ fn cbuffer_process_args(excmd: &mut ExArg) -> Option<Buf> {
         qf_emsg(e_invarg);
         return None;
     };
-    if buf.b_ml.ml_mfp.is_null() {
+    if buf.b_ml.ml_mfp.is_none() {
         qf_emsg(e_buffer_is_not_loaded);
         return None;
     }

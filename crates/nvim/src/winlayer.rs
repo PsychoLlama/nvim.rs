@@ -705,14 +705,14 @@ impl Buf {
     /// counted where it is *spent*. Reading text is [`Buf::lines`].
     #[inline(always)]
     pub fn line_raw(self, lnum: LineNr) -> Line {
-        Line(unsafe { ml_get_buf(self, lnum) })
+        Line(ml_get_buf(self, lnum))
     }
 
     /// [`Buf::line_raw`], marking the line dirty so the caller may write to
     /// it.
     #[inline(always)]
     pub fn line_mut_raw(self, lnum: LineNr) -> Line {
-        Line(unsafe { ml_get_buf_mut(self, lnum) })
+        Line(ml_get_buf_mut(self, lnum))
     }
 
     /// Bytes in line `lnum`, the terminating NUL excluded.

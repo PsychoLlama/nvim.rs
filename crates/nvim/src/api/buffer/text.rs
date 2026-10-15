@@ -279,10 +279,8 @@ impl Replacement {
             if lnum >= MAXLNUM as int64_t {
                 return Err(Error::validation(c"Index out of bounds"));
             }
-            let line = self.lines[i].as_mut_ptr().cast();
-            // SAFETY: a loaded buffer and a line that is still in it; the
-            // memline borrows `line` (`noalloc`) and flushes it straight out.
-            if unsafe { ml_replace_buf(b, lnum as LineNr, line, false, true) }.is_err() {
+            // The memline writes the line straight into its block.
+            if ml_replace_buf_now(b, lnum as LineNr, &self.lines[i]).is_err() {
                 return Err(Error::exception(c"Failed to replace line"));
             }
         }
@@ -291,10 +289,7 @@ impl Replacement {
             if lnum >= MAXLNUM as int64_t {
                 return Err(Error::validation(c"Index out of bounds"));
             }
-            let line = self.lines[i].as_mut_ptr().cast();
-            // SAFETY: a loaded buffer; the append copies the NUL-terminated
-            // `line`.
-            if unsafe { ml_append_buf(b, lnum as LineNr, line, 0, false) }.is_err() {
+            if ml_append_buf_terminated(b, lnum as LineNr, &self.lines[i], false).is_err() {
                 return Err(Error::exception(c"Failed to insert line"));
             }
             extra += 1;

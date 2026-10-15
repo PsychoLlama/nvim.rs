@@ -11,9 +11,9 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 
-// `BlockHdr` and `MemFile` own heap state now, so they live with the code
+// `MemFile` owns heap state, so it lives with the code
 // that maintains it.
-pub use crate::memfile::{BlockHdr, MemFile};
+pub use crate::memfile::MemFile;
 
 /// A block number. Non-negative ones are page numbers in the swap file;
 /// negative ones name a block that has never been written.

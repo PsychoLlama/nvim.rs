@@ -76,7 +76,7 @@ pub(crate) fn compute_buffer_local_count(addr_type: CmdAddr, lnum: LineNr, offse
         let Some(next) = step(buf) else { break };
         buf = next;
         if loaded_only {
-            while buf.b_ml.ml_mfp.is_null() {
+            while buf.b_ml.ml_mfp.is_none() {
                 let Some(next) = step(buf) else { break };
                 buf = next;
             }
@@ -86,7 +86,7 @@ pub(crate) fn compute_buffer_local_count(addr_type: CmdAddr, lnum: LineNr, offse
     // gives up at the end of the list. Back out in the *opposite*
     // direction to the one the offset asked for.
     if loaded_only {
-        while buf.b_ml.ml_mfp.is_null() {
+        while buf.b_ml.ml_mfp.is_none() {
             let next = if offset >= 0 { buf.prev() } else { buf.next() };
             let Some(next) = next else { break };
             buf = next;
@@ -731,7 +731,7 @@ pub(crate) fn invalid_range(excmd: &mut ExArg) -> Option<CString> {
         }
         CmdAddr::LoadedBuffers => {
             let mut buf = head();
-            while buf.b_ml.ml_mfp.is_null() {
+            while buf.b_ml.ml_mfp.is_none() {
                 let Some(next) = buf.next() else {
                     return invrange();
                 };
@@ -741,7 +741,7 @@ pub(crate) fn invalid_range(excmd: &mut ExArg) -> Option<CString> {
                 return invrange();
             }
             let mut buf = tail();
-            while buf.b_ml.ml_mfp.is_null() {
+            while buf.b_ml.ml_mfp.is_none() {
                 let Some(prev) = buf.prev() else {
                     return invrange();
                 };

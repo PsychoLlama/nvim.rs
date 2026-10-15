@@ -685,7 +685,7 @@ fn unload_buffer(buffer: Buf, action: c_int, flags: c_int, update_jumplist: &mut
 
     // When unloading or deleting a buffer that's already unloaded and
     // unlisted: fail silently.
-    if action != DOBUF_WIPE as c_int && buffer.b_ml.ml_mfp.is_null() && buffer.b_p_bl == 0 {
+    if action != DOBUF_WIPE as c_int && buffer.b_ml.ml_mfp.is_none() && buffer.b_p_bl == 0 {
         return Unloaded::Done(Err(Failed));
     }
 
@@ -864,7 +864,7 @@ fn walk_jumplist(unloaded: &mut Option<Buf>, update_jumplist: &mut bool) -> Opti
                 || b.b_locked_split != 0
             {
                 buf = None;
-            } else if b.b_ml.ml_mfp.is_null() {
+            } else if b.b_ml.ml_mfp.is_none() {
                 // skip unloaded buf, but may keep it for later
                 unloaded.get_or_insert(b);
                 buf = None;
@@ -910,7 +910,7 @@ fn walk_neighbours(unloaded: &mut Option<Buf>) -> Option<Buf> {
         };
         // in non-help buffer, try to skip help buffers, and vv
         if b.b_help == cur.b_help && b.b_p_bl != 0 && !is_quickfix(b) && b.b_locked_split == 0 {
-            if !b.b_ml.ml_mfp.is_null() {
+            if b.b_ml.ml_mfp.is_some() {
                 return Some(b); // found loaded buffer
             }
             unloaded.get_or_insert(b); // remember unloaded buf for later

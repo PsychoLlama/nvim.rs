@@ -146,7 +146,7 @@ pub(super) fn switch_to_other_buffer(
         Win::current().w_alt_fnum = prev_alt_fnum;
     }
 
-    if buffer.b_ml.ml_mfp.is_null() {
+    if buffer.b_ml.ml_mfp.is_none() {
         // No memfile yet.
         state.oldbuf = false;
     } else {

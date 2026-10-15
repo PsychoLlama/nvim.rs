@@ -22,6 +22,7 @@ use crate::change::{
     appended_lines_mark, changed_bytes, changed_lines, del_bytes, del_char, del_lines,
     get_last_leader_offset, get_leader_len, ins_char, ins_str, truncate_line,
 };
+use crate::change::{ml_replace, ml_replace_len};
 use crate::charset::{getwhitecols_curline, skip, skipwhite, vim_str2nr};
 use crate::cstr::byte_at;
 use crate::cursor::{
@@ -58,8 +59,7 @@ use crate::mbyte::{
     utf_ptr2len, utf_ptr2str_char_info, utfc_next, utfc_ptr2len,
 };
 use crate::memline::{
-    Lines, dec, decl, gchar_pos, inc, ml_append, ml_get, ml_get_buf_mut, ml_get_len, ml_replace,
-    ml_replace_len,
+    Lines, dec, decl, gchar_pos, inc, ml_append_terminated, ml_get, ml_get_buf_mut, ml_get_len,
 };
 use crate::memory::{xcalloc, xfree, xmalloc, xmallocz};
 use crate::message::state::{msg_scroll, no_lines_msg};

@@ -230,11 +230,7 @@ unsafe fn do_ft_buf(
         OptionSetFlags::LOCAL,
         SID_NONE,
     );
-    // SAFETY: `ftbuf` is the live scratch buffer; `ml_open` gave it a memfile.
-    debug_assert!(
-        unsafe { (*ftbuf.b_ml.ml_mfp).mf_fd } < 0,
-        "ftbuf->b_ml.ml_mfp->mf_fd < 0"
-    );
+    debug_assert!(ftbuf.swap_file_closed(), "ftbuf->b_ml.ml_mfp->mf_fd < 0");
     ftbuf.b_p_swf = 0;
     ftbuf.b_p_ml = 0;
     // SAFETY: the caller's NUL-terminated filetype name.

@@ -264,7 +264,7 @@ pub(crate) fn undisplay_dollar() {
 pub(crate) fn get_nolist_virtcol() -> ColNr {
     let mut win = Win::current();
     if win.w_buffer.is_null()
-        || win.buffer().b_ml.ml_mfp.is_null()
+        || win.buffer().b_ml.ml_mfp.is_none()
         || win.w_cursor.lnum > win.buffer().b_ml.ml_line_count
     {
         return 0;

@@ -381,7 +381,7 @@ fn invoke_range_next(
     col_off: ColNr,
 ) -> ::core::ffi::c_int {
     // SAFETY: the caller's window and line; the callbacks re-enter the editor.
-    let line = unsafe { ml_get_buf(window.buffer(), lnum) };
+    let line = ml_get_buf(window.buffer(), lnum);
     let line_len = ml_get_buf_len(window.buffer(), lnum);
     let col_off = col_off.max(1);
 

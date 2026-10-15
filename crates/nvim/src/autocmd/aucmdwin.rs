@@ -351,7 +351,7 @@ pub unsafe fn aucmd_restbuf(aco: *mut AcoSave) {
             if Win::current().handle == unsafe { (*aco).new_curwin_handle }
                 && !new_curbuf.is(Buf::current_or_none())
                 && let Some(new_curbuf) = new_curbuf.get()
-                && !new_curbuf.b_ml.ml_mfp.is_null()
+                && new_curbuf.b_ml.ml_mfp.is_some()
             {
                 if Win::current().w_s == Buf::current().syntax_block() {
                     Win::current().w_s = new_curbuf.syntax_block();

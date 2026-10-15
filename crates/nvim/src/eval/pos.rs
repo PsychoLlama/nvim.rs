@@ -28,7 +28,7 @@ pub fn buf_byteidx_to_charidx(buffer: Option<Buf>, mut lnum: LineNr, byteidx: c_
     let Some(buf) = buffer else {
         return -1;
     };
-    if buf.b_ml.ml_mfp.is_null() {
+    if buf.b_ml.ml_mfp.is_none() {
         return -1;
     }
     if lnum > buf.line_count() {
@@ -64,7 +64,7 @@ pub fn buf_charidx_to_byteidx(buffer: Option<Buf>, mut lnum: LineNr, mut charidx
     let Some(buf) = buffer else {
         return -1;
     };
-    if buf.b_ml.ml_mfp.is_null() {
+    if buf.b_ml.ml_mfp.is_none() {
         return -1;
     }
     if lnum > buf.line_count() {
@@ -264,7 +264,7 @@ pub fn list2fpos(
     }
     if charcol {
         let handle = fnum.map_or(Buf::current().handle as c_int, |fnum| *fnum);
-        let Some(buf) = find_buf(handle).filter(|b| !b.b_ml.ml_mfp.is_null()) else {
+        let Some(buf) = find_buf(handle).filter(|b| b.b_ml.ml_mfp.is_some()) else {
             return Err(Failed);
         };
         let lnum = if pos.lnum == 0 {

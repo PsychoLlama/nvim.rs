@@ -22,13 +22,13 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
 
 use super::*;
+use crate::change::ml_replace;
 use crate::change::{del_char, get_leader_len};
 use crate::cursor::{
     check_cursor, check_cursor_col, coladvance, dec_cursor, gchar_cursor, get_cursor_line_len,
     get_cursor_line_ptr, inc_cursor,
 };
 use crate::global_cell::GlobalCell;
-use crate::memline::ml_replace;
 use crate::pos::MAXCOL;
 use crate::state::MODE_INSERT;
 use crate::state::mode::{State, saved_cursor};

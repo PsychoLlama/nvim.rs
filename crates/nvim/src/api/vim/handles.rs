@@ -129,11 +129,7 @@ fn create_buf(listed: Boolean, scratch: Boolean) -> BufferHandle {
         set_option_direct_for(kOptBufhidden, hide, local, 0, OptionTarget::Buf(b));
         let nofile = string_optval(c"nofile");
         set_option_direct_for(kOptBuftype, nofile, local, 0, OptionTarget::Buf(b));
-        debug_assert!(
-            // SAFETY: a buffer `ml_open` answered for has a memfile.
-            unsafe { (*b.b_ml.ml_mfp).mf_fd } < 0 as ::core::ffi::c_int,
-            "buf->b_ml.ml_mfp->mf_fd < 0"
-        );
+        debug_assert!(b.swap_file_closed(), "buf->b_ml.ml_mfp->mf_fd < 0");
         b.b_p_swf = 0;
         b.b_p_ml = 0;
     }

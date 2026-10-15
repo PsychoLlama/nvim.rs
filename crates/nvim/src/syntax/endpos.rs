@@ -416,7 +416,7 @@ impl SynState {
         if off == 0 {
             return col;
         }
-        let base = unsafe { ml_get_buf(self.buffer, lnum) };
+        let base = ml_get_buf(self.buffer, lnum);
         let mut p = unsafe { base.offset(col as isize) };
         let mut left = off;
         if off > 0 {
@@ -445,7 +445,7 @@ impl SynState {
     pub(crate) fn curline(&self) -> *mut c_char {
         // SAFETY: `buffer` is the buffer the parse was started for, and `lnum`
         // a line of it.
-        unsafe { ml_get_buf(self.buffer, self.lnum) }
+        ml_get_buf(self.buffer, self.lnum)
     }
 
     /// Length of the current line of the syntax buffer.

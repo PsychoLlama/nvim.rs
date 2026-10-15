@@ -340,7 +340,7 @@ pub fn buf_check_timestamp(mut buffer: Buf) -> c_int {
     // being called recursively: ignore this buffer.
     if !buffer.terminal.is_null()
         || buffer.name.full().is_none()
-        || buffer.b_ml.ml_mfp.is_null()
+        || buffer.b_ml.ml_mfp.is_none()
         || !buf_is_normal(Some(buffer))
         || buffer.b_saving
         || BUSY.get()

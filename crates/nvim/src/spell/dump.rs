@@ -42,7 +42,7 @@ use crate::getchar::state::got_int;
 use crate::hashtab::hash_find;
 use crate::insexpand::{ins_compl_add_infercase, ins_compl_check_keys, ins_compl_interrupted};
 use crate::mbyte::{mb_strnicmp, utf_ptr2char, utfc_ptr2len};
-use crate::memline::{ml_append, ml_delete};
+use crate::memline::{ml_append_cstr, ml_delete};
 use crate::memory::xstrlcpy;
 use crate::message::{msg_end, msg_ext_set_kind, msg_putchar, msg_start, msg_str};
 use crate::option::vars::p_ic;
@@ -196,7 +196,7 @@ pub unsafe fn spell_dump_compl(
         let (buf, size) = (header.as_mut_ptr(), IOSIZE as size_t);
         let fmt = c"/regions=%s".as_ptr();
         unsafe { vim_snprintf!(buf, size, fmt, region_names) };
-        let _ = unsafe { ml_append(lnum, header.as_mut_ptr(), 0, false) };
+        let _ = ml_append_cstr(lnum, cstr::in_chars(&header));
         lnum += 1;
     } else {
         do_region = false;
@@ -214,7 +214,7 @@ pub unsafe fn spell_dump_compl(
             let fmt = c"# file: %s".as_ptr();
             let fname = unsafe { (*slang).sl_fname };
             unsafe { vim_snprintf!(buf, size, fmt, fname) };
-            let _ = unsafe { ml_append(lnum, header.as_mut_ptr(), 0, false) };
+            let _ = ml_append_cstr(lnum, cstr::in_chars(&header));
             lnum += 1;
         }
 
@@ -403,7 +403,7 @@ unsafe fn dump_word(
             }
         }
 
-        let _ = unsafe { ml_append(lnum, p, 0, false) };
+        let _ = ml_append_cstr(lnum, unsafe { cstr::at(p) });
     } else {
         let matches = if dumpflags & DUMPFLAG_ICASE != 0 {
             unsafe { mb_strnicmp(p, pat, cstr::bytes_at(pat).len()) == 0 }

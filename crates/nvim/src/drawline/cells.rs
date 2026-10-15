@@ -424,7 +424,7 @@ impl Cells {
     #[inline]
     pub(super) fn refetch_line(&mut self, window: Win, lnum: LineNr, at: ::core::ffi::c_int) {
         // SAFETY: the caller's window and line.
-        self.line = unsafe { ml_get_buf(window.buffer(), lnum) };
+        self.line = ml_get_buf(window.buffer(), lnum);
         self.ptr = unsafe { self.line.offset(at as isize) };
     }
 

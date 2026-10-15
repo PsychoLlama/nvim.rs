@@ -584,7 +584,7 @@ pub(crate) fn did_set_undofile(args: &mut OptSet) -> Result<(), OptError> {
         // A `:setlocal` only reaches its own buffer; `:set` and
         // `:setglobal` reach all of them.
         let reaches = bp == f.buf || f.flags.has(OptionSetFlags::GLOBAL) || f.flags.is_empty();
-        if reaches && !buf_is_changed(bp) && !bp.b_ml.ml_mfp.is_null() {
+        if reaches && !buf_is_changed(bp) && bp.b_ml.ml_mfp.is_some() {
             u_compute_hash(bp, &mut hash);
             u_read_undo(None, &hash, bp.name.shown());
         }

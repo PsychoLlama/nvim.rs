@@ -25,6 +25,7 @@
 use crate::cstr;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
+use core::slice;
 
 use super::*;
 use crate::option::cpo_has;
@@ -282,25 +283,20 @@ fn tab_spaces_to_tabs() {
         if i > 0 {
             if State.get() & VREPLACE_FLAG == 0 {
                 // Rebuild the line without them.
-                let newp_len = Buf::current().b_ml.cached_len() - i;
-                // SAFETY: `newp` is `newp_len` bytes, `col` is how far
-                // `ptr` is into the line, and `i` is the run of spaces being
-                // dropped -- so the head is `col` bytes and the tail the rest
-                // of the line, and the two together fit.
-                let newp = unsafe { xmalloc(newp_len as size_t) } as *mut c_char;
-                let col = unsafe { ptr.offset_from(Buf::current().b_ml.cached_text()) };
-                if col > 0 {
-                    let head = unsafe { ptr.offset(-col) };
-                    unsafe { newp.cast::<u8>().copy_from(head.cast(), col as size_t) };
-                }
-                let tail = unsafe { ptr.offset(i as isize) };
-                let tail_len = (newp_len as ptrdiff_t - col) as size_t;
-                let into = unsafe { newp.offset(col) }.cast::<u8>();
-                unsafe { into.copy_from(tail.cast(), tail_len) };
-                if let Some(old) = Buf::current().b_ml.swap_cached_text(newp, newp_len) {
-                    unsafe { xfree(old.cast()) };
-                }
-                Buf::current().b_ml.line_was_replaced();
+                let newp_len = (Buf::current().b_ml.cached_len() - i) as usize;
+                let col = unsafe { ptr.offset_from(Buf::current().b_ml.cached_text()) } as usize;
+                // SAFETY: `col` is how far `ptr` is into the cached line and
+                // `i` is the run of spaces being dropped -- so the head is
+                // the `col` bytes in front of `ptr`, and the tail the rest of
+                // the line after the spaces, its NUL included.
+                let newp = unsafe {
+                    let mut newp = Vec::with_capacity(newp_len);
+                    newp.extend_from_slice(slice::from_raw_parts(ptr.sub(col).cast::<u8>(), col));
+                    let tail = ptr.add(i as usize).cast::<u8>();
+                    newp.extend_from_slice(slice::from_raw_parts(tail, newp_len - col));
+                    newp
+                };
+                Buf::current().b_ml.swap_cached_text(newp);
                 let old_len = walk_col(&pos, vreplace) - change_col;
                 let new_len = fpos.col - change_col;
                 inserted_bytes(fpos.lnum, change_col, old_len, new_len);

@@ -311,7 +311,7 @@ pub fn f_matchbufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
         }
         return;
     };
-    if buf.b_ml.ml_mfp.is_null() {
+    if buf.b_ml.ml_mfp.is_none() {
         emsg(gettext(e_buffer_is_not_loaded));
         return;
     }

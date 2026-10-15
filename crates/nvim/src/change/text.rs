@@ -186,9 +186,7 @@ pub unsafe fn ins_char_bytes(buf: *mut c_char, charlen: size_t) {
         newline
     };
 
-    // SAFETY: our own NUL-terminated line, which the buffer takes over, and
-    // `lnum` is the cursor line.
-    let _ = unsafe { ml_replace(lnum, newline.into_raw(), false) };
+    let _ = ml_replace_owned(lnum, newline);
     inserted_bytes(lnum, col as ColNr, oldlen as c_int, newlen as c_int);
 
     // In Insert or Replace mode with 'showmatch', briefly show the match
@@ -229,9 +227,7 @@ pub unsafe fn ins_str(s: *mut c_char, slen: size_t) {
         newline.push_bytes(&old[col..]);
         newline
     };
-    // SAFETY: our own NUL-terminated line, which the buffer takes over, and
-    // `lnum` is the cursor line.
-    let _ = unsafe { ml_replace(lnum, newline.into_raw(), false) };
+    let _ = ml_replace_owned(lnum, newline);
     let col = col as ColNr;
     inserted_bytes(lnum, col, 0, slen as c_int);
     Win::current().w_cursor.col += slen as ColNr;
@@ -361,9 +357,8 @@ pub fn del_bytes(mut count: ColNr, fixpos_arg: bool, use_delcombine: bool) -> Re
     if ml_line_alloced() {
         // The cached line is this buffer's own block, `oldlen + 1` bytes of
         // it, so the tail moves up inside it. `movelen` counts the NUL.
+        ml_add_deleted_len(Buf::current().b_ml.cached_bytes(), oldlen as usize);
         let oldp = Buf::current().b_ml.cached_text();
-        // SAFETY: the block the cache is holding, which is allocated.
-        unsafe { ml_add_deleted_len(oldp, oldlen as ssize_t) };
         let from = oldp
             .wrapping_offset(col as isize)
             .wrapping_offset(count as isize);
@@ -378,8 +373,7 @@ pub fn del_bytes(mut count: ColNr, fixpos_arg: bool, use_delcombine: bool) -> Re
             newline.push_bytes(&old[(col + count) as usize..]);
             newline
         };
-        // SAFETY: our own NUL-terminated line, which the buffer takes over.
-        let _ = unsafe { ml_replace(lnum, newline.into_raw(), false) };
+        let _ = ml_replace_owned(lnum, newline);
     }
 
     inserted_bytes(lnum, col, count, 0);
@@ -395,9 +389,7 @@ pub fn truncate_line(fixpos: c_int) {
     let newp = XString::from_bytes(&lines.line(lnum)[..col as usize]);
     let deleted = old_len - col;
 
-    // SAFETY: our own NUL-terminated line, which the buffer takes over, and
-    // `lnum` is the cursor line.
-    let _ = unsafe { ml_replace(lnum, newp.into_raw(), false) };
+    let _ = ml_replace_owned(lnum, newp);
     inserted_bytes(lnum, col, deleted, 0);
 
     // Don't leave the cursor past the end of the line.
@@ -435,4 +427,49 @@ pub fn del_lines(nlines: LineNr, undo: bool) {
     Win::current().w_cursor.col = 0;
     check_cursor_lnum(Win::current());
     deleted_lines_mark(first, n);
+}
+
+/// Line `lnum` of the current buffer becomes `line`: the memline copies it
+/// (`copy`) or takes it over. The pointer form of the memline's replace
+/// ([`ml_replace_buf_text`], [`ml_replace_owned`]), kept here beside most of
+/// the callers that still hold their new line as a pointer, until they hold
+/// it as an owned string.
+///
+/// # Safety
+/// `line` is null or NUL-terminated; unless `copy`, it is an `xmalloc` block
+/// that nobody else frees.
+pub(crate) unsafe fn ml_replace(lnum: LineNr, line: *mut c_char, copy: bool) -> Result<(), Failed> {
+    if line.is_null() {
+        return Err(Failed); // just checking...
+    }
+    // SAFETY: the caller's NUL-terminated line, read for the copy, or the
+    // caller's block, handed over.
+    unsafe {
+        if copy {
+            ml_replace_buf_text(Buf::current(), lnum, cstr::bytes_at(line))
+        } else {
+            ml_replace_owned(lnum, XString::from_raw(line))
+        }
+    }
+}
+
+/// [`ml_replace`] of the first `len` bytes at `line`.
+///
+/// # Safety
+/// `line` holds `len` readable bytes; unless `copy`, it is an `xmalloc`
+/// block that nobody else frees, and this frees it.
+pub(crate) unsafe fn ml_replace_len(
+    lnum: LineNr,
+    line: *mut c_char,
+    len: usize,
+    copy: bool,
+) -> Result<(), Failed> {
+    // SAFETY: the caller's `len` bytes, copied; then its block, freed.
+    unsafe {
+        let replaced = ml_replace_buf_text(Buf::current(), lnum, cstr::slice_at(line, len));
+        if !copy {
+            xfree(line.cast());
+        }
+        replaced
+    }
 }

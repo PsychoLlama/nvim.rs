@@ -133,7 +133,7 @@ pub fn ex_doautoall(excmd: &mut ExArg) {
         // Loaded buffers only, and the current one is done last. The step
         // is at the bottom, on a buffer `bufref` has just proved this pass
         // did not delete -- which is why this is not `buffers()`.
-        if !buf.b_ml.ml_mfp.is_null() && buf.raw() != Buf::current_raw() {
+        if buf.b_ml.ml_mfp.is_some() && buf.raw() != Buf::current_raw() {
             // SAFETY: `aco` is this frame's own storage and `buf` is live.
             unsafe { aucmd_prepbuf(&raw mut aco, buf) };
             let bufref = BufRef::of(buf);

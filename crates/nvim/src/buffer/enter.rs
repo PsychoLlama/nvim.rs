@@ -344,7 +344,7 @@ pub(crate) fn enter_buffer(mut buffer: Buf) {
     win.w_valid = WinValid::NONE;
 
     // Make sure the buffer is loaded.
-    if buffer.b_ml.ml_mfp.is_null() {
+    if buffer.b_ml.ml_mfp.is_none() {
         // need to load the file
         //
         // If there is no filetype, allow for detecting one.  Esp. useful for

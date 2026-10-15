@@ -25,6 +25,7 @@ use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
 use crate::ascii::ascii_iswhite;
+use crate::change::ml_replace;
 use crate::change::{changed_bytes, get_leader_len};
 use crate::charset::{byte2cells, char2cells, getwhitecols_curline, skipwhite};
 use crate::cstr::byte_at;
@@ -32,7 +33,7 @@ use crate::cursor::{get_cursor_line_len, get_cursor_line_ptr};
 use crate::edit::get_nolist_virtcol;
 use crate::extmark::extmark_splice_cols;
 use crate::log::{LOGLVL_ERR, logmsg};
-use crate::memline::{Lines, ml_replace};
+use crate::memline::Lines;
 use crate::memory::{xfree, xmalloc};
 use crate::message::e_positive;
 use crate::message::emsg;

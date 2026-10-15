@@ -149,7 +149,7 @@ pub(crate) fn buf_write_do_autocmds(
 ) -> PreWrite {
     let old_line_count = buffer.b_ml.ml_line_count;
     let msg_save = msg_scroll.get();
-    let empty_memline = buffer.b_ml.ml_mfp.is_null();
+    let empty_memline = buffer.b_ml.ml_mfp.is_none();
     // The short name the events are fired with: a copy, which nothing they
     // run can free.
     let sfname = names.sfname.text.clone();
@@ -228,7 +228,7 @@ pub(crate) fn buf_write_do_autocmds(
     // In three situations the file is not written here: the buffer is
     // gone, script processing was aborted, or one of the "Cmd"
     // autocommands already did it.
-    let unloaded = |b: &Buf| b.b_ml.ml_mfp.is_null() && !empty_memline;
+    let unloaded = |b: &Buf| b.b_ml.ml_mfp.is_none() && !empty_memline;
     if live.is_none_or(|b| unloaded(&b)) || did_cmd || nofile_err || aborting() {
         if let Some(mut b) = live.filter(|_| cmdmod_has(CmdModFlags::LOCKMARKS)) {
             b.b_op_start = orig.start;

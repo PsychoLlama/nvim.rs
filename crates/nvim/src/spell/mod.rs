@@ -49,7 +49,7 @@ use crate::ex_cmds::do_sub_msg;
 use crate::ex_cmds::{SUB_NLINES, SUB_NSUBS};
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
-use crate::memline::ml_replace;
+use crate::memline::ml_replace_owned;
 use crate::message::emsg;
 use crate::option::vars::{P_WS, p_ws};
 use crate::os::cshim::gettext;
@@ -408,8 +408,7 @@ pub fn ex_spellrepall(_excmd: &mut ExArg) {
                 rebuilt.push_bytes(cstr::bytes_at(line.offset(col as isize).add(repl_from_len)));
                 rebuilt
             };
-            // SAFETY: the line just built, whose block `ml_replace` takes on.
-            let _ = unsafe { ml_replace(Win::current().w_cursor.lnum, replaced.into_raw(), false) };
+            let _ = ml_replace_owned(Win::current().w_cursor.lnum, replaced);
             let lnum = Win::current().w_cursor.lnum;
             let (was, now) = (repl_from_len as c_int, repl_to_len as c_int);
             inserted_bytes(lnum, col, was, now);

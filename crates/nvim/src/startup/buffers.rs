@@ -223,7 +223,7 @@ pub(crate) fn create_windows(parm: &mut MainParams) {
     if recoverymode.get() {
         msg_scroll.set(1);
         ml_recover(true);
-        if Buf::current().b_ml.ml_mfp.is_null() {
+        if Buf::current().b_ml.ml_mfp.is_none() {
             // Recovery failed; there is nothing to edit.
             getout(1);
         }
@@ -260,7 +260,7 @@ pub(crate) fn create_windows(parm: &mut MainParams) {
         dorewind = false;
         Win::current().buffer().make_current();
 
-        if Buf::current().b_ml.ml_mfp.is_null() {
+        if Buf::current().b_ml.ml_mfp.is_none() {
             if p_fdls() >= 0 as OptInt {
                 Win::current().w_onebuf_opt.wo_fdl = p_fdls();
             }

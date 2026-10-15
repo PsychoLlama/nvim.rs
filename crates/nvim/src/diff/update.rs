@@ -425,7 +425,7 @@ unsafe fn diff_try_update(dio: *mut DiffIo, idx_orig: c_int, excmd: Option<&mut 
                 break 'theend;
             }
             for idx_new in idx_orig + 1..DB_COUNT as usize {
-                let Some(buf) = tp.diffbuf(idx_new).filter(|b| !b.b_ml.ml_mfp.is_null()) else {
+                let Some(buf) = tp.diffbuf(idx_new).filter(|b| b.b_ml.ml_mfp.is_some()) else {
                     continue;
                 };
                 let (start, end) = segment(idx_new);

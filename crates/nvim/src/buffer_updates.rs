@@ -253,7 +253,7 @@ fn elog_dead_channel(channelid: uint64_t) {
     );
 }
 
-/// What `ml_flush_deleted_bytes` reports through three out-parameters.
+/// What `ml_flush_deleted_bytes` reports.
 struct Deleted {
     bytes: size_t,
     codepoints: size_t,
@@ -261,10 +261,7 @@ struct Deleted {
 }
 
 fn flush_deleted_bytes(buffer: Buf) -> Deleted {
-    let (mut codepoints, mut codeunits) = (0, 0);
-    let (cp, cu) = (&raw mut codepoints, &raw mut codeunits);
-    // SAFETY: a live buffer and two live out-parameters.
-    let bytes = unsafe { ml_flush_deleted_bytes(buffer, cp, cu) };
+    let (bytes, codepoints, codeunits) = ml_flush_deleted_bytes(buffer);
     Deleted {
         bytes,
         codepoints,
@@ -305,7 +302,7 @@ fn register(
     send_buffer: bool,
 ) -> bool {
     // Must fail if the buffer isn't loaded.
-    if buffer.b_ml.ml_mfp.is_null() {
+    if buffer.b_ml.ml_mfp.is_none() {
         return false;
     }
 

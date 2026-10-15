@@ -35,13 +35,13 @@ fn get_buffer_info(buffer: Buf) -> DictRef {
     };
     nr(c"lnum", VarNumber::from(lnum));
     nr(c"linecount", VarNumber::from(buffer.line_count()));
-    nr(c"loaded", VarNumber::from(!buffer.b_ml.ml_mfp.is_null()));
+    nr(c"loaded", VarNumber::from(buffer.b_ml.ml_mfp.is_some()));
     nr(c"listed", VarNumber::from(buffer.b_p_bl));
     nr(c"changed", VarNumber::from(buf_is_changed(buffer)));
     nr(c"changedtick", buf_get_changedtick(buffer));
     nr(
         c"hidden",
-        VarNumber::from(!buffer.b_ml.ml_mfp.is_null() && buffer.b_nwindows == 0),
+        VarNumber::from(buffer.b_ml.ml_mfp.is_some() && buffer.b_nwindows == 0),
     );
     nr(
         c"command",
@@ -115,7 +115,7 @@ impl Filter {
     /// Whether `buffer` fails one of the selectors that is switched on.
     fn rejects(&self, buffer: Buf) -> bool {
         self.on
-            && (self.bufloaded && buffer.b_ml.ml_mfp.is_null()
+            && (self.bufloaded && buffer.b_ml.ml_mfp.is_none()
                 || self.buflisted && buffer.b_p_bl == 0
                 || self.bufmodified && buffer.b_changed == 0)
     }

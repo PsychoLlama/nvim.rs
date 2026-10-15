@@ -238,7 +238,7 @@ fn read_buffer(
 /// Ensure buffer `buffer` is loaded.
 ///
 pub fn buf_ensure_loaded(buffer: Buf) -> bool {
-    if !buffer.b_ml.ml_mfp.is_null() {
+    if buffer.b_ml.ml_mfp.is_some() {
         // already open (common case)
         return true;
     }
@@ -414,7 +414,7 @@ fn open_buffer_inner(
 
     // The autocommands may have changed the current buffer.  Apply the
     // modelines to the correct buffer, if it still exists and is loaded.
-    let Some(old) = old_curbuf.get().filter(|b| !b.b_ml.ml_mfp.is_null()) else {
+    let Some(old) = old_curbuf.get().filter(|b| b.b_ml.ml_mfp.is_some()) else {
         return retval;
     };
     // Go to the buffer that was opened, make sure it is in a window.
@@ -437,7 +437,7 @@ fn no_memfile(old_tw: OptInt) -> Result<(), Failed> {
     close_buffer(None, Buf::current(), 0, false, false);
 
     leave_curbuf();
-    if let Some(buf) = buffers().find(|b| !b.b_ml.ml_mfp.is_null()) {
+    if let Some(buf) = buffers().find(|b| b.b_ml.ml_mfp.is_some()) {
         buf.make_current();
     }
 
