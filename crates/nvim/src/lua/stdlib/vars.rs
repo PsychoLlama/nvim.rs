@@ -37,7 +37,7 @@ use crate::lua::ffi::{
     luaL_error,
 };
 use crate::narrow::number_as_int;
-use crate::runtime::script_autoload;
+use crate::runtime::script_autoload_named;
 use crate::types::{
     BufferHandle, Dict, DictItem, Handle, String_0, TabpageHandle, WindowHandle, lua_State, size_t,
 };
@@ -195,7 +195,7 @@ pub unsafe extern "C-unwind" fn nlua_getvar(lstate: *mut lua_State) -> c_int {
         let name: *const c_char = luaL_checklstring(lstate, 3, &raw mut len);
         let mut di = dict_find(dict.as_ref(), cstr::slice_at(name, len));
         if di.is_none() && dict == globvar_dict().as_ptr() {
-            if !script_autoload(name, len, false) || aborting() {
+            if !script_autoload_named(cstr::slice_at(name, len), false) || aborting() {
                 return 0; // nil
             }
             // The autoload ran arbitrary Vimscript, so the lookup starts

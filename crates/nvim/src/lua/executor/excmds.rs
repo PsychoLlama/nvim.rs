@@ -170,9 +170,7 @@ pub fn ex_luado(excmd: &mut ExArg) {
 
 /// `:luafile {path}`.
 pub fn ex_luafile(excmd: &mut ExArg) {
-    unsafe {
-        nlua_exec_file(excmd.line.cstr_from(excmd.line.arg).as_ptr());
-    }
+    nlua_exec_file(excmd.line.cstr_from(excmd.line.arg));
 }
 
 /// Read the whole of stdin, NUL-terminated. `None` on a read failure or an
@@ -214,10 +212,9 @@ unsafe fn read_stdin() -> Option<*mut c_char> {
 }
 
 /// Run the Lua file at `path`, or stdin for `-`.
-///
-/// # Safety
-/// `path` must be a NUL-terminated path.
-pub unsafe fn nlua_exec_file(path: *const c_char) -> bool {
+pub fn nlua_exec_file(path: &CStr) -> bool {
+    let path = path.as_ptr();
+    // SAFETY: a NUL-terminated path, which `lua_pushstring` copies.
     unsafe {
         let lstate = get_global_lstate();
         if !strequal(path, c"-".as_ptr()) {

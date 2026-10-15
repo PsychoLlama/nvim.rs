@@ -28,7 +28,7 @@ use crate::memory::{xfree, xmalloc};
 use crate::option::vars::p_verbose;
 use crate::os::cshim::gettext;
 use crate::path::fix_fname;
-use crate::runtime::{find_script_by_name, new_script_item, script_is_lua};
+use crate::runtime::{find_script_by_name, new_script_item, script_is_lua, with_script_item};
 use crate::types::{
     CmdModFlags, ExArg, ExArgt, Handle, LineNr, OptInt, ScriptCtx, ScriptId, lua_Integer, size_t,
 };
@@ -101,8 +101,8 @@ pub unsafe fn nlua_set_sctx(current: *mut ScriptCtx) {
             let source_path = fix_fname(cstr::at((*info).source.add(1)));
             let mut sid = find_script_by_name(source_path.as_cstr());
             if sid <= 0 {
-                let si = new_script_item(source_path.into_raw(), &raw mut sid);
-                (*si).sn_lua = true;
+                sid = new_script_item(Some(source_path));
+                with_script_item(sid, |si| si.sn_lua = true);
             }
             (*current).sc_sid = sid as ScriptId;
             (*current).sc_seq = -1;

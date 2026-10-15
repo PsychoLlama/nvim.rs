@@ -51,8 +51,7 @@ pub fn nvim_del_current_line() -> Result<(), Error> {
 pub fn nvim_get_var(name: String_0) -> Result<Object, Error> {
     let mut value = globvar_object(&name);
     if value.is_none() {
-        // SAFETY: the API string names its own `len` bytes.
-        let loaded = unsafe { script_autoload(name.data(), name.len(), false) };
+        let loaded = script_autoload_named(name.as_bytes(), false);
         if !loaded || aborting() {
             return Object::Nil.reported(key_not_found(&name));
         }

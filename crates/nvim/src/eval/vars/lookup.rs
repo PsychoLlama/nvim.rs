@@ -429,7 +429,7 @@ fn script_scope_for_lookup() -> Option<DictRef> {
     nlua_set_sctx_in(&mut sctx);
     if sctx.sc_sid == SID_STR || sctx.sc_sid == SID_LUA {
         // An anonymous chunk has no script item yet.
-        sctx.sc_sid = new_unnamed_script_item();
+        sctx.sc_sid = new_script_item(None);
     }
     current_sctx.set(sctx);
     script_scope_dict(sctx.sc_sid)

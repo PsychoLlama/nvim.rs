@@ -1,4 +1,4 @@
-//! Sourcing a script -- `:source`, `:runtime`'s callback, and `nvim_exec2`.
+//! Sourcing a script -- `:source`, `:runtime`'s visit, and `nvim_exec2`.
 //!
 //! `do_source_ext` is the whole of it, and it reads its lines from one of
 //! three places (see [`Origin`]): a file, the current buffer, or a string the
@@ -6,41 +6,47 @@
 //! find or create the `ScriptItem`, push it on the execution stack, run it,
 //! and unwind all of that whatever happens -- so [`source_bracket`] reads as
 //! that sequence of named stages.  Everything else here is an entry point into
-//! it, or an accessor `do_cmdline` calls back through to ask about the source
-//! it is reading from.
+//! it. The lines themselves are read through the [`SourceCookie`] the run
+//! owns, which holds the file or the lines a buffer or a string was split
+//! into.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use super::*;
+use crate::autocmd::fire_autocmds_for;
 use crate::cstr;
-use crate::memory::ThinCString;
+use crate::formatted;
+use crate::lua::executor::nlua_exec_cstr;
 use crate::memory::XString;
-use crate::message_fmt::to_bytes;
-use crate::message_fmt::{c_str, report_msg};
+use crate::message_fmt::{msg_bytes, msg_cstr, msg_cstr_opt, report_msg, to_bytes};
 use crate::os::env::env_set;
 use crate::semsg;
 use crate::smsg;
-use crate::snprintf;
 use crate::tr_c;
 use crate::usercmd::win_cmd_modifiers;
 use crate::winlayer::Buf;
 
 use crate::ex_docmd::{DoCmdOpts, LineSource};
 use crate::guard::Script;
+use crate::memline::Lines;
 use crate::optionstr::OptStringRef;
 use crate::os::cshim::gettext;
-use crate::types::{CONV_NONE_INIT, FAIL, IOSIZE, NUL, OK, READBIN};
-use core::ffi::{CStr, c_char, c_int};
-use core::{ptr, slice};
-use std::ffi::CString;
+use crate::os::env::expand_env_save_opt_of;
+use crate::os::fs::dir_exists;
+use crate::types::{FAIL, IOSIZE, OK};
+use core::ffi::{CStr, c_int};
+use std::ffi::{CString, OsStr};
+use std::fs::File;
+use std::io::BufReader;
+use std::os::unix::ffi::OsStrExt;
 
 /// `:source` with `fname`, or without it when `fname` is empty.
+///
+/// `fname` is the caller's copy: the script runs with it borrowed.
 fn cmd_source(fname: &CStr, excmd: Option<&mut ExArg>) {
     let named = !fname.is_empty();
-    let fname = fname.as_ptr().cast_mut();
     let forceit = excmd.as_deref().is_some_and(|command| command.forceit);
     if named
         && excmd
@@ -67,11 +73,7 @@ fn cmd_source(fname: &CStr, excmd: Option<&mut ExArg>) {
                 || command
                     .cond_stack
                     .is_some_and(|cond| cond.with(|cs| cs.idx >= 0));
-            // A copy: with `busy` the script's keys run before this
-            // returns, and the name is the caller's command line.
-            // SAFETY: the caller's NUL-terminated name.
-            let name = unsafe { cstr::at(fname) }.to_owned();
-            openscript(&name, busy);
+            openscript(fname, busy);
             true
         } else {
             false
@@ -79,11 +81,8 @@ fn cmd_source(fname: &CStr, excmd: Option<&mut ExArg>) {
     } else {
         false
     };
-    // SAFETY: the caller's NUL-terminated name.
-    // SAFETY: the caller's NUL-terminated name.
-    if !sourced && do_source(unsafe { cstr::at(fname) }, false, DOSO_NONE, None) == FAIL {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let fname = unsafe { c_str(fname) };
+    if !sourced && do_source(fname, false, DOSO_NONE, None) == FAIL {
+        let fname = msg_cstr(fname);
         semsg!("E484: Can't open file {fname}");
     }
 }
@@ -99,178 +98,68 @@ pub fn ex_source(excmd: &mut ExArg) {
 /// `:options`, which is `:source` of the option window script with the
 /// command modifiers passed along in the environment.
 pub fn ex_options(_excmd: &mut ExArg) {
-    let mods = std::ffi::CString::new(cmdmod.with(win_cmd_modifiers)).expect("no NUL in a word");
+    let mods = CString::new(cmdmod.with(win_cmd_modifiers)).expect("no NUL in a word");
     let _ = env_set(c"OPTWIN_CMD", &mods);
     cmd_source(SYS_OPTWIN_FILE, None);
 }
 
-/// `fopen` for reading, with the descriptor kept out of child processes.
-///
-/// # Safety
-/// `filename` is NUL-terminated.
-unsafe fn fopen_noinh_readbin(filename: *mut c_char) -> *mut FILE {
-    // SAFETY: the caller's contract; the descriptor is handed to `fdopen`,
-    // which takes it over.
-    let fd = unsafe { os_open(filename, O_RDONLY, 0) };
-    if fd < 0 {
-        return ptr::null_mut();
-    }
-    unsafe { os_set_cloexec(fd) };
-    unsafe { fdopen(fd, READBIN.as_ptr()) }
+/// Open `name` for reading. std opens every descriptor `O_CLOEXEC`, which is
+/// what upstream's `fopen_noinh_readbin` set by hand.
+fn open_readbin(name: &CStr) -> Option<BufReader<File>> {
+    File::open(OsStr::from_bytes(name.to_bytes()))
+        .ok()
+        .map(BufReader::new)
 }
 
-/// Append the continuation `p` to `text`, answering whether the line was one.
-///
-/// A `"\ ` comment line is *not* a continuation but does not end one either,
-/// so it answers true having appended nothing.
-///
-/// # Safety
-/// `p` names `len` readable bytes.
-pub(crate) unsafe fn concat_continued_line(
-    text: &mut Vec<u8>,
-    p: *const c_char,
-    len: size_t,
-) -> bool {
-    // SAFETY: the caller's contract; `skipwhite_len` stays within `len`.
-    let line = unsafe { skipwhite_len(p, len) };
-    let len = len - unsafe { line.offset_from(p) } as size_t;
-    if len >= 3 && unsafe { cstr::starts_with(line, b"\"\\ ") } {
-        return true;
-    }
-    if len == 0 || unsafe { *line } as c_int != '\\' as c_int {
-        return false;
-    }
-    // The `ga_set_growsize` that used to sit here is gone with the garray:
-    // a `Vec` already doubles, so a line with many continuations reallocates
-    // logarithmically often on its own.
-    // SAFETY: the caller's contract -- `len - 1` bytes past the backslash.
-    text.extend_from_slice(unsafe { slice::from_raw_parts(line.add(1).cast::<u8>(), len - 1) });
-    true
-}
-
-/// Allocate the next script ID and its `ScriptItem`, taking ownership of
-/// `name`.  IDs are never reused, so the registry is grown to cover every ID
-/// up to the new one; the intervening items exist and are empty.
-///
-/// # Safety
-/// `name` is owned memory or null; `sid_out` is null or writable.
-pub unsafe fn new_script_item(name: *mut c_char, sid_out: *mut ScriptId) -> *mut ScriptItem {
-    /// The highest script ID handed out so far.
-    static last_current_SID: GlobalCell<ScriptId> = GlobalCell::new(0);
-
-    let sid = last_current_SID.get() + 1;
-    last_current_SID.set(sid);
-    if !sid_out.is_null() {
-        // SAFETY: the caller's out-parameter.
-        unsafe { *sid_out = sid };
-    }
-    // The registry is grown one id at a time: `new_script_vars` reaches it,
-    // so the push has to be a leaf borrow that has been let go by then.
-    // A registry entry is never freed -- ids are never reused -- so the box
-    // is deliberately leaked into the registry.
-    while script_count() < sid {
-        let item = Box::into_raw(Box::new(ScriptItem::new()));
-        let added = script_items.with_mut(|items| {
-            items.push(item);
-            items.len() as ScriptId
-        });
-        new_script_vars(added);
-    }
-    let si = script_item(sid);
-    // SAFETY: `si` is the item just registered, and it takes `name` over.
-    unsafe { (*si).sn_name = name };
-    si
-}
-
-/// [`new_script_item`] for a chunk with no file of its own -- an anonymous
-/// Lua or `:execute` one -- answering the id it was given.
-pub(crate) fn new_unnamed_script_item() -> ScriptId {
-    let mut sid = 0;
-    // SAFETY: no name to take over, and a local for the id.
-    unsafe { new_script_item(ptr::null_mut(), &raw mut sid) };
-    sid
-}
-
-/// Collect `excmd`'s range of the current buffer into `source`, and answer the name
-/// to show for those lines: the buffer's own file name, or a synthetic
-/// `:source buffer=N` when it has none.
-///
-/// # Safety
-/// `source` is a cookie under construction and `excmd` carries the range.
-unsafe fn do_source_buffer_init(
-    source: &mut SourceCookie,
-    excmd: &ExArg,
-    ex_lua: bool,
-) -> *mut c_char {
-    let buf = Buf::current_raw();
-    if buf.is_null() {
-        return ptr::null_mut();
-    }
-    // SAFETY: `buf` is the current buffer and `excmd` the caller's command.
-    let (ffname, handle, line1, line2) = unsafe {
-        (
-            (*buf).name.full_ptr(),
-            (*buf).handle,
-            excmd.line1,
-            excmd.line2,
-        )
+/// Collect `excmd`'s range of the current buffer into a cookie, and answer
+/// it with the name to show for those lines: the buffer's own file name, or
+/// a synthetic `:source buffer=N` when it has none.
+fn do_source_buffer_init(excmd: &ExArg, ex_lua: bool) -> Option<(SourceCookie, XString)> {
+    let buf = Buf::current_or_none()?;
+    let fname = match buf.name.full() {
+        Some(ffname) => XString::from_cstr(ffname),
+        None => {
+            let fmt: &[u8] = if ex_lua {
+                b":{range}lua buffer=%d"
+            } else {
+                b":source buffer=%d"
+            };
+            XString::from_vec(formatted!(IOSIZE as usize, fmt, buf.handle))
+        }
     };
-    let fname = if ffname.is_null() {
-        let mut name = [0 as c_char; IOSIZE as usize];
-        let fmt = if ex_lua {
-            c":{range}lua buffer=%d"
-        } else {
-            c":source buffer=%d"
-        };
-        // SAFETY: `snprintf` NUL-terminates within `name`.
-        unsafe { snprintf!(name.as_mut_ptr(), IOSIZE as size_t, fmt.as_ptr(), handle) };
-        unsafe { xstrdup(name.as_ptr()) }
-    } else {
-        // SAFETY: the buffer's own file name.
-        unsafe { xstrdup(ffname) }
-    };
-    // SAFETY: every line of the range is readable through `ml_get`, and each
-    // one is copied before the next is asked for.
-    source.buflines = (line1..=line2)
-        .map(|lnum| unsafe { CStr::from_ptr(ml_get(lnum)) }.to_owned())
+    let (line1, line2) = (excmd.line1, excmd.line2);
+    let mut lines = Lines::in_buffer(buf);
+    let copied = (line1..=line2)
+        .map(|lnum| CString::new(lines.line(lnum)).expect("a buffer line holds no NUL"))
         .collect();
-    source.buf_lnum = 0;
-    source.source_from_buf_or_str = true;
+    let mut cookie = SourceCookie::from_lines(copied);
     // The first line the reader hands out is `line1`, so the counter starts
     // one below it.
-    source.sourcing_lnum = line1 - 1;
-    fname
+    cookie.sourcing_lnum = line1 - 1;
+    Some((cookie, fname))
 }
 
-/// Split `str` into lines and collect them into `source`.
-///
-/// # Safety
-/// `source` is a cookie under construction and `str` is NUL-terminated.
-unsafe fn do_source_str_init(source: &mut SourceCookie, mut str: *const c_char) {
-    // SAFETY: `skip_to_newline` stops at the terminator, so every span
-    // copied is within the string.
-    while unsafe { *str } as c_int != NUL {
-        let eol = unsafe { skip_to_newline(str) };
-        let len = unsafe { eol.offset_from(str) } as usize;
-        let line = unsafe { slice::from_raw_parts(str.cast::<u8>(), len) };
-        source
-            .buflines
-            .push(CString::new(line).expect("a sourced line holds no NUL"));
+/// Split `text` into lines for a cookie to read.
+fn do_source_str_init(text: &CStr) -> SourceCookie {
+    let mut lines = Vec::new();
+    let mut rest = text.to_bytes();
+    while !rest.is_empty() {
+        let eol = rest.iter().position(|&b| b == b'\n').unwrap_or(rest.len());
+        lines.push(CString::new(&rest[..eol]).expect("a sourced line holds no NUL"));
         // Step over the newline, unless this was the last line -- which
         // ends at the terminator instead.
-        str = unsafe { eol.add((*eol as c_int != NUL) as usize) };
+        rest = rest.get(eol + 1..).unwrap_or_default();
     }
-    source.buf_lnum = 0;
-    source.source_from_buf_or_str = true;
+    SourceCookie::from_lines(lines)
 }
 
 /// Source the current buffer's lines, as Vimscript or (with `ex_lua`) as Lua.
 pub fn cmd_source_buffer(excmd: &ExArg, ex_lua: bool) {
-    let req = SourceRequest::new(ptr::null_mut(), ptr::null(), Some(excmd), ex_lua);
-    do_source_ext(&req);
+    let mut req = SourceRequest::new(Origin::Buffer { excmd, ex_lua }, None);
+    do_source_ext(&mut req);
 }
 
-/// Source `str` as Vimscript, under `traceback_name`.
+/// Source `text` as Vimscript, under `traceback_name`.
 ///
 /// The name is decorated with where the call came from, so an `nvim_exec2()`
 /// nested inside a script says so.
@@ -278,165 +167,110 @@ pub fn cmd_source_buffer(excmd: &ExArg, ex_lua: bool) {
 /// `text` is copied into the script's lines before any of them runs, and
 /// the name is only ever read, for messages.
 pub fn do_source_str(text: &CStr, traceback_name: &CStr) -> c_int {
-    let mut traceback_name = traceback_name.as_ptr().cast_mut();
-    let mut sname_buf = [0 as c_char; 256];
-    let (name, lnum) = (sourcing_name(), sourcing_lnum());
-    if !name.is_null() {
-        let fmt = c"%s called at %s:%d".as_ptr();
-        // SAFETY: `traceback_name` and `name` are NUL-terminated, and
-        // `sname_buf` outlives the call below.
-        unsafe {
-            snprintf!(
-                sname_buf.as_mut_ptr(),
-                sname_buf.len(),
-                fmt,
-                traceback_name,
-                name,
-                lnum,
-            )
-        };
-        traceback_name = sname_buf.as_mut_ptr();
-    }
-    let req = SourceRequest::new(traceback_name, text.as_ptr(), None, false);
-    do_source_ext(&req)
+    let decorated = sourcing_name_copy().map(|name| {
+        let lnum = sourcing_lnum();
+        let fmt = b"%s called at %s:%d";
+        cstr::owned(&formatted!(256, fmt, traceback_name, &name[..], lnum))
+    });
+    let name = decorated.as_deref().unwrap_or(traceback_name);
+    let mut req = SourceRequest::new(Origin::Str { text }, Some(name));
+    do_source_ext(&mut req)
 }
 
 /// Where a `do_source_ext` call reads its lines from.
 ///
 /// The C asks this with two null checks in seven separate places; naming it
 /// is what makes the stages below readable.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Origin {
-    /// The current buffer, over `eap`'s range.
-    Buffer,
-    /// A string handed in by the API. `fname` is only a traceback name, and
-    /// no `ScriptItem` is allocated.
-    Str,
-    /// A file on disk named by `fname`.
+enum Origin<'a, 'e> {
+    /// The current buffer, over the command's range; `ex_lua` sources it as
+    /// Lua regardless of what it looks like.
+    Buffer { excmd: &'a ExArg<'e>, ex_lua: bool },
+    /// A string handed in by the API. The request's name is only a traceback
+    /// name, and no `ScriptItem` is allocated.
+    Str { text: &'a CStr },
+    /// A file on disk named by the request's name.
     File,
 }
 
 /// One call into [`do_source_ext`], minus the cookie it fills in.
 struct SourceRequest<'a, 'e> {
-    origin: Origin,
+    origin: Origin<'a, 'e>,
     /// The name as the caller spelled it -- messages only; the resolved name
-    /// is the cookie's.
-    fname: *mut c_char,
-    /// The script text, for [`Origin::Str`].
-    str: *const c_char,
+    /// is the run's. `None` for a buffer.
+    fname: Option<&'a CStr>,
     /// Try the other spelling of the init file's name as well.
     check_other: bool,
     /// A `DOSO_` value: whether this is the user's init file.
     is_vimrc: c_int,
     /// Where to report the script ID, if the caller wants it.
-    ret_sid: *mut c_int,
-    /// The command that asked, for [`Origin::Buffer`]'s range.
-    excmd: Option<&'a ExArg<'e>>,
-    /// Source a buffer as Lua regardless of what it looks like.
-    ex_lua: bool,
+    ret_sid: Option<&'a mut c_int>,
 }
 
 impl<'a, 'e> SourceRequest<'a, 'e> {
-    /// The request `fname`/`str` describe, with the init-file fields at their
-    /// defaults; [`do_source`] is the only caller that sets those.
-    fn new(
-        fname: *mut c_char,
-        str: *const c_char,
-        excmd: Option<&'a ExArg<'e>>,
-        ex_lua: bool,
-    ) -> Self {
-        let origin = if fname.is_null() {
-            debug_assert!(str.is_null(), "str == NULL");
-            Origin::Buffer
-        } else if str.is_null() {
-            Origin::File
-        } else {
-            Origin::Str
-        };
+    /// The request `origin` and `fname` describe, with the init-file fields
+    /// at their defaults; [`do_source`] is the only caller that sets those.
+    fn new(origin: Origin<'a, 'e>, fname: Option<&'a CStr>) -> Self {
         SourceRequest {
             origin,
             fname,
-            str,
             check_other: false,
             is_vimrc: DOSO_NONE,
-            ret_sid: ptr::null_mut(),
-            excmd,
-            ex_lua,
+            ret_sid: None,
         }
     }
 
-    fn is(&self, origin: Origin) -> bool {
-        self.origin == origin
+    fn is_str(&self) -> bool {
+        matches!(self.origin, Origin::Str { .. })
     }
 }
 
-/// Fill `cookie` from the buffer or the string, and answer the name this
-/// source will be known by -- owned memory the caller frees.  `Err` is
-/// `do_source_ext`'s whole return value: an empty buffer, a name that would
-/// not expand, or a directory (the one case that reports itself).
-///
-/// # Safety
-/// `cookie` is zeroed and the request's pointers are live.
-unsafe fn source_name(
-    req: &SourceRequest,
-    cookie: &mut SourceCookie,
-) -> Result<*mut c_char, c_int> {
+/// Load a cookie from the buffer or the string, and answer it with the name
+/// this source will be known by.  `Err` is `do_source_ext`'s whole return
+/// value: no current buffer, or a directory (the one case that reports
+/// itself).
+fn source_name(req: &SourceRequest) -> Result<(SourceCookie, XString), c_int> {
     match req.origin {
-        Origin::Buffer => {
-            let command = req
-                .excmd
-                .expect("a buffer source carries the command whose range it is");
-            // SAFETY: the caller's contract.
-            let name = unsafe { do_source_buffer_init(cookie, command, req.ex_lua) };
-            if name.is_null() { Err(FAIL) } else { Ok(name) }
+        Origin::Buffer { excmd, ex_lua } => do_source_buffer_init(excmd, ex_lua).ok_or(FAIL),
+        Origin::Str { text } => {
+            let name = XString::from_cstr(req.fname.unwrap_or(c""));
+            Ok((do_source_str_init(text), name))
         }
-        // SAFETY: the caller's contract.
-        Origin::Str => unsafe {
-            do_source_str_init(cookie, req.str);
-            Ok(xstrdup(req.fname))
-        },
-        // SAFETY: the caller's contract; `expand_env_save` and `fix_fname`
-        // answer owned memory or null.
-        Origin::File => unsafe {
-            let expanded = expand_env_save(req.fname);
-            if expanded.is_null() {
-                return Err(FAIL);
+        Origin::File => {
+            let fname = req.fname.unwrap_or(c"");
+            let expanded = expand_env_save_opt_of(fname, false);
+            let name = fix_fname(expanded.as_cstr());
+            if !dir_exists(name.as_cstr()) {
+                return Ok((SourceCookie::new(), name));
             }
-            let name = fix_fname(cstr::at(expanded)).into_raw();
-            xfree(expanded.cast());
-            if !os_isdir(name) {
-                return Ok(name);
-            }
-            smsg!(0, "Cannot source a directory: \"{}\"", c_str(req.fname));
-            xfree(name.cast());
+            let fname = msg_cstr(fname);
+            smsg!(0, "Cannot source a directory: \"{fname}\"");
             Err(FAIL)
-        },
+        }
     }
+}
+
+/// Fire `event` with the script's name as `<amatch>` and `<afile>`.
+fn fire_source_event(event: AutoEvent, fname_exp: &CStr) -> bool {
+    let name = Some(fname_exp);
+    fire_autocmds_for(event, name, name, false, Buf::current_or_none(), None)
 }
 
 /// Run the `SourceCmd` and `SourcePre` autocommands.
 ///
 /// `Some` when a `SourceCmd` handler took the file over, in which case
 /// nothing else happens: the handler *is* the sourcing.
-///
-/// # Safety
-/// `fname_exp` is the resolved name.
-unsafe fn source_autocmds(fname_exp: *mut c_char) -> Option<c_int> {
-    let sourced = Buf::current_or_none();
-    // SAFETY: the caller's contract; the handlers may run arbitrary script,
-    // which is why nothing is borrowed across them.
-    if has_autocmd(AutoEvent::SourceCmd, unsafe { cstr::at(fname_exp) }, None)
-        && unsafe { apply_autocmds(AutoEvent::SourceCmd, fname_exp, fname_exp, false, sourced) }
+fn source_autocmds(fname_exp: &CStr) -> Option<c_int> {
+    // The handlers may run arbitrary script; the name is the run's own.
+    if has_autocmd(AutoEvent::SourceCmd, fname_exp, None)
+        && fire_source_event(AutoEvent::SourceCmd, fname_exp)
     {
         let retval = if aborting() { FAIL } else { OK };
         if retval == OK {
-            let event = AutoEvent::SourcePost;
-            unsafe { apply_autocmds(event, fname_exp, fname_exp, false, Buf::current_or_none()) };
+            fire_source_event(AutoEvent::SourcePost, fname_exp);
         }
         return Some(retval);
     }
-    let event = AutoEvent::SourcePre;
-    unsafe { apply_autocmds(event, fname_exp, fname_exp, false, Buf::current_or_none()) };
+    fire_source_event(AutoEvent::SourcePre, fname_exp);
     None
 }
 
@@ -444,28 +278,32 @@ unsafe fn source_autocmds(fname_exp: *mut c_char) -> Option<c_int> {
 ///
 /// With `check_other` -- which only the init-file search sets -- a miss is
 /// retried under the other spelling of the leading character, so `.nvimrc`
-/// finds `_nvimrc` and `.exrc` finds `_exrc`.  The retry rewrites the name in
-/// place, so later messages name the file that was actually opened.
-///
-/// # Safety
-/// `fname_exp` is the resolved name, writable when `check_other` is set.
-unsafe fn open_script(cookie: &mut SourceCookie, fname_exp: *mut c_char, check_other: bool) {
-    if !cookie.source_from_buf_or_str {
-        // SAFETY: the caller's contract.
-        cookie.fp = unsafe { fopen_noinh_readbin(fname_exp) };
-    }
-    if !cookie.fp.is_null() || !check_other {
+/// finds `_nvimrc` and `.exrc` finds `_exrc`.  The retry rewrites the name,
+/// so later messages name the file that was actually opened.
+fn open_script(cookie: &mut SourceCookie, fname_exp: &mut XString, check_other: bool) {
+    if !matches!(cookie.lines, ScriptLines::None) {
+        // A buffer or a string: the lines are loaded already.
         return;
     }
-    // SAFETY: as above; `path_tail` answers a pointer inside `fname_exp`.
-    let tail = unsafe { fname_exp.add(tail_index(cstr::bytes_at(fname_exp))) };
-    let leader = unsafe { *tail } as c_int;
-    if (leader == '.' as c_int || leader == '_' as c_int)
-        && (unsafe { strcasecmp(tail.add(1), c"nvimrc".as_ptr()) } == 0
-            || unsafe { strcasecmp(tail.add(1), c"exrc".as_ptr()) } == 0)
+    if let Some(file) = open_readbin(fname_exp.as_cstr()) {
+        cookie.lines = ScriptLines::File(file);
+        return;
+    }
+    if !check_other {
+        return;
+    }
+    let tail = tail_index(fname_exp);
+    let leader = fname_exp.get(tail).copied().unwrap_or(0);
+    let rest = fname_exp.get(tail + 1..).unwrap_or_default();
+    if (leader == b'.' || leader == b'_')
+        && (rest.eq_ignore_ascii_case(b"nvimrc") || rest.eq_ignore_ascii_case(b"exrc"))
     {
-        unsafe { *tail = if leader == '_' as c_int { b'.' } else { b'_' } as c_char };
-        cookie.fp = unsafe { fopen_noinh_readbin(fname_exp) };
+        let mut renamed = fname_exp.to_vec();
+        renamed[tail] = if leader == b'_' { b'.' } else { b'_' };
+        *fname_exp = XString::from_vec(renamed);
+        if let Some(file) = open_readbin(fname_exp.as_cstr()) {
+            cookie.lines = ScriptLines::File(file);
+        }
     }
 }
 
@@ -473,86 +311,76 @@ unsafe fn open_script(cookie: &mut SourceCookie, fname_exp: *mut c_char, check_o
 ///
 /// `plain` is used at the top level and `numbered` -- which takes the line
 /// number first -- when something else is already executing.
-///
-/// # Safety
-/// Both formats take a `%s` for `fname`, and `numbered` a leading `%ld`.
-unsafe fn verbose_source_msg(plain: &'static CStr, numbered: &'static CStr, fname: *const c_char) {
-    let name = sourcing_name();
-    let lnum = sourcing_lnum() as int64_t;
+fn verbose_source_msg(plain: &'static CStr, numbered: &'static CStr, fname: Option<&CStr>) {
+    let named = with_sourcing_name(|name| name.is_some());
+    let lnum = int64_t::from(sourcing_lnum());
     verbose_enter();
-    // SAFETY: the caller's NUL-terminated file name.
-    let fname = unsafe { c_str(fname) };
-    if name.is_null() {
-        let _: bool = report_msg(0, || tr_c!(plain, fname));
-    } else {
+    let fname = msg_cstr_opt(fname);
+    if named {
         let _: bool = report_msg(0, || tr_c!(numbered, lnum, fname));
+    } else {
+        let _: bool = report_msg(0, || tr_c!(plain, fname));
     }
     verbose_leave();
 }
 
-/// Find or create the `ScriptItem` this source runs under.  A brand-new
-/// item takes ownership of `*fname_exp` and the caller gets a copy back,
-/// because the `SourcePost` autocommand at the end still needs a name to fire
-/// with.  Sourcing a string allocates no item at all.
-///
-/// # Safety
-/// `sid` and `fname_exp` are the caller's locals.
-unsafe fn register_script(
-    req: &SourceRequest,
+/// Find or create the `ScriptItem` this source runs under, answering its id.
+/// Sourcing a string allocates no item at all.
+fn register_script(
+    req: &mut SourceRequest,
     sid: &mut c_int,
-    fname_exp: &mut *mut c_char,
-) -> *mut ScriptItem {
+    fname_exp: &XString,
+) -> Option<ScriptId> {
     if *sid > 0 {
         // Loading the same script again.
-        return script_item(*sid);
+        return Some(*sid);
     }
-    if req.is(Origin::Str) {
-        return ptr::null_mut();
+    if req.is_str() {
+        return None;
     }
-    // SAFETY: `new_script_item` takes ownership of the name and answers a
-    // live item; the copy replaces it for the caller.
-    let si = unsafe { new_script_item(*fname_exp, sid) };
-    unsafe { (*si).sn_lua = path_with_extension(cstr::at(*fname_exp), c"lua") };
-    *fname_exp = unsafe { xstrdup((*si).sn_name) };
-    if !req.ret_sid.is_null() {
-        unsafe { *req.ret_sid = *sid };
+    *sid = new_script_item(Some(fname_exp.clone()));
+    let is_lua = path_with_extension(fname_exp.as_cstr(), c"lua");
+    with_script_item(*sid, |si| si.sn_lua = is_lua);
+    if let Some(ret_sid) = req.ret_sid.as_deref_mut() {
+        *ret_sid = *sid;
     }
-    si
+    Some(*sid)
 }
 
-/// Arm and start this script's profile timer.
-///
-/// # Safety
-/// `si` is the script's live registry item.
-unsafe fn profile_script_start(si: *mut ScriptItem) {
-    // SAFETY: the caller's contract; a script's name is NUL-terminated.
-    let forced = (!unsafe { (*si).sn_prof_on })
-        .then(|| profiling_forced(true, unsafe { CStr::from_ptr((*si).sn_name) }))
-        .flatten();
-    if let Some(forceit) = forced {
-        profile_init(unsafe { &mut *si });
-        unsafe { (*si).sn_pr_force = forceit };
-    }
-    if unsafe { (*si).sn_prof_on } {
-        unsafe { (*si).sn_pr_count += 1 };
-        unsafe { (*si).sn_pr_start = profile_start() };
-        unsafe { (*si).sn_pr_children = profile_zero() };
-    }
+/// Arm and start script `sid`'s profile timer.
+fn profile_script_start(sid: ScriptId, fname_exp: &CStr) {
+    // Asked before the item is borrowed: the lists are the debugger's.
+    let forced = if with_script_item(sid, |si| si.sn_prof_on) {
+        None
+    } else {
+        profiling_forced(true, fname_exp)
+    };
+    with_script_item(sid, |si| {
+        if let Some(forceit) = forced {
+            profile_init(si);
+            si.sn_pr_force = forceit;
+        }
+        if si.sn_prof_on {
+            si.sn_pr_count += 1;
+            si.sn_pr_start = profile_start();
+            si.sn_pr_children = profile_zero();
+        }
+    });
 }
 
 /// Fold the elapsed time into the script's profile totals.
 ///
-/// The item is looked up again rather than carried across the run: sourcing
-/// can register more scripts, which reallocates the registry.
+/// The script is the current one, looked up again rather than carried across
+/// the run.
 fn profile_script_stop(wait_start: ProfTime) {
-    let si = script_item(current_sctx.get().sc_sid);
-    if unsafe { (*si).sn_prof_on } {
-        unsafe { (*si).sn_pr_start = profile_end((*si).sn_pr_start) };
-        unsafe { (*si).sn_pr_start = profile_sub_wait(wait_start, (*si).sn_pr_start) };
-        unsafe { (*si).sn_pr_total = profile_add((*si).sn_pr_total, (*si).sn_pr_start) };
-        let children = unsafe { (*si).sn_pr_children };
-        unsafe { (*si).sn_pr_self = profile_self((*si).sn_pr_self, (*si).sn_pr_start, children) };
-    }
+    with_script_item(current_sctx.get().sc_sid, |si| {
+        if si.sn_prof_on {
+            si.sn_pr_start = profile_end(si.sn_pr_start);
+            si.sn_pr_start = profile_sub_wait(wait_start, si.sn_pr_start);
+            si.sn_pr_total = profile_add(si.sn_pr_total, si.sn_pr_start);
+            si.sn_pr_self = profile_self(si.sn_pr_self, si.sn_pr_start, si.sn_pr_children);
+        }
+    });
 }
 
 /// Whether the current buffer is Lua by 'filetype' or by file name.
@@ -560,149 +388,101 @@ fn curbuf_is_lua() -> bool {
     let buf = Buf::current();
     let ft_is_lua = buf.b_p_ft.cstr() == c"lua";
     ft_is_lua
-        || (!buf.name.is_unnamed()
-            && unsafe { path_with_extension(cstr::at(buf.name.shown_ptr()), c"lua") })
+        || buf
+            .name
+            .shown()
+            .is_some_and(|name| path_with_extension(name, c"lua"))
 }
 
 /// Whether treesitter parses `excmd`'s range of the current buffer as Lua --
 /// which is what makes a fenced Lua block inside a help file `:source`able.
-fn range_is_lua(excmd: Option<&ExArg>) -> bool {
-    let Some(command) = excmd else {
-        return false;
-    };
-    let (handle, line1, line2) = (Buf::current().handle, command.line1, command.line2);
-    let excmd = Array::from(vec![
-        integer_obj(handle as Integer),
-        integer_obj(line1 as Integer),
-        integer_obj(line2 as Integer),
+fn range_is_lua(excmd: &ExArg) -> bool {
+    let (handle, line1, line2) = (Buf::current().handle, excmd.line1, excmd.line2);
+    let args = Array::from(vec![
+        integer_obj(Integer::from(handle)),
+        integer_obj(Integer::from(line1)),
+        integer_obj(Integer::from(line2)),
     ]);
-    let mut err = Error::none();
     let src = c"return require('vim._core.util').source_is_lua(...)";
-    let script = String_0::from_cstr(src);
-    // SAFETY: `items` and `err` live on this frame and outlive the call,
-    // which retains neither.
-    let result = match unsafe { nlua_exec(&script, ptr::null(), excmd, kRetNilBool) } {
-        Ok(value) => value,
-        Err(e) => {
-            err = e;
-            Object::Nil
+    match nlua_exec_cstr(src, args, kRetNilBool) {
+        Ok(value) => value.as_boolean() == Some(true),
+        Err(mut err) => {
+            err.clear();
+            false
         }
-    };
-    let is_lua = !err.is_set() && result.as_boolean() == Some(true);
-    err.clear();
-    is_lua
+    }
 }
 
 /// Strip a UTF-8 BOM off the first line, setting up the conversion it implies.
-///
-/// # Safety
-/// `conv` is the cookie's converter and `firstline` is null or owned memory.
-unsafe fn strip_bom(conv: *mut VimConv, firstline: *mut c_char) -> *mut c_char {
-    // SAFETY: the caller's contract; the length check is what makes the
-    // three-byte read in bounds.
-    if firstline.is_null() || unsafe { cstr::bytes_at(firstline) }.len() < 3 {
-        return firstline;
-    }
-    if unsafe { slice::from_raw_parts(firstline.cast::<u8>(), 3) } != b"\xef\xbb\xbf" {
-        return firstline;
-    }
-    let _ = p_enc(|value| unsafe { (*conv).setup(Some(c"utf-8"), Some(value)) });
-    let rest = unsafe { CStr::from_ptr(firstline.add(3)) };
-    let recoded = unsafe { (*conv).convert_cstr(rest) }
-        .unwrap_or_else(|| ThinCString::from_cstr(rest))
-        .into_raw();
-    unsafe { xfree(firstline.cast()) };
-    recoded
+fn strip_bom(conv: &mut VimConv, firstline: Option<XString>) -> Option<XString> {
+    let first = firstline?;
+    let Some(rest) = first.strip_prefix(b"\xef\xbb\xbf") else {
+        return Some(first);
+    };
+    let _ = p_enc(|value| conv.setup(Some(c"utf-8"), Some(value)));
+    let recoded = conv.convert(rest).unwrap_or_else(|| rest.to_vec());
+    Some(XString::from_vec(recoded))
 }
 
-/// Run the script's lines, in whichever language they turn out to be.  Answers
-/// the first line when it was read here -- the Vimscript path reads it up
-/// front so the BOM can be sniffed off it -- for the caller to free.
-///
-/// # Safety
-/// The cookie is loaded, `si` is this script's item or null, and `fname_exp`
-/// is the resolved name.
-unsafe fn execute_source(
+/// Run the script's lines, in whichever language they turn out to be.
+fn execute_source(
     req: &SourceRequest,
     cookie: &mut SourceCookie,
-    si: *mut ScriptItem,
-    fname_exp: *mut c_char,
-) -> *mut c_char {
-    // SAFETY: the caller's contract; both executors read the cookie's lines
-    // or the file, not the cookie itself.
-    if req.is(Origin::Buffer) && (req.ex_lua || curbuf_is_lua() || range_is_lua(req.excmd)) {
-        unsafe { nlua_exec_lines(&cookie.buflines, fname_exp) };
-        return ptr::null_mut();
+    sid: Option<ScriptId>,
+    fname_exp: &CStr,
+) {
+    if let Origin::Buffer { excmd, ex_lua } = req.origin
+        && (ex_lua || curbuf_is_lua() || range_is_lua(excmd))
+    {
+        nlua_exec_lines(cookie.buffered_lines(), fname_exp);
+        return;
     }
-    if !si.is_null() && unsafe { (*si).sn_lua } {
-        unsafe { nlua_exec_file(fname_exp) };
-        return ptr::null_mut();
+    if sid.is_some_and(|sid| with_script_item(sid, |si| si.sn_lua)) {
+        nlua_exec_file(fname_exp);
+        return;
     }
-    let first = getsourceline(cookie, true).map_or(ptr::null_mut(), XString::into_raw);
-    let firstline = unsafe { strip_bom(&raw mut cookie.conv, first) };
+    // The first line is read up front, so a BOM can be sniffed off it.
+    let first = cookie.getsourceline(true);
+    let firstline = strip_bom(&mut cookie.conv, first);
     let flags = DoCmdOpts::VERBOSE | DoCmdOpts::NOWAIT | DoCmdOpts::REPEAT;
-    // SAFETY: null, or the line just read, which this frame owns until
-    // `finish_source` frees it.
-    let first = unsafe { cstr::at_opt(firstline) }.map(CStr::to_bytes);
+    let first = firstline.as_deref();
     let _ = do_cmdline(first, Some(&mut LineSource::Script(cookie)), flags);
-    firstline
-}
-
-/// Release everything the cookie owns.
-///
-/// # Safety
-/// The cookie is done being read from, and `firstline` is null or owned.
-unsafe fn finish_source(cookie: &mut SourceCookie, firstline: *mut c_char) {
-    // SAFETY: the caller's contract.
-    if !cookie.fp.is_null() {
-        unsafe { fclose(cookie.fp) };
-    }
-    cookie.buflines = Vec::new();
-    unsafe { xfree(cookie.nextline.cast()) };
-    unsafe { xfree(firstline.cast()) };
-    cookie.conv = CONV_NONE_INIT;
 }
 
 /// Everything from opening the script to closing it, in the order it has to
 /// come back down: the profile timers, the funccal stack, `current_sctx` and
 /// the execution stack all outlive the run and are restored here.
 ///
-/// # Safety
-/// The cookie is loaded, `fname_exp` names the resolved script (the callee
-/// may replace it with a copy it also owns), and `save_debug_break_level` was
-/// read before any of this ran.
-unsafe fn source_bracket(
-    req: &SourceRequest,
+/// `save_debug_break_level` was read before any of this ran.
+fn source_bracket(
+    req: &mut SourceRequest,
     cookie: &mut SourceCookie,
-    fname_exp: &mut *mut c_char,
+    mut fname_exp: XString,
     save_debug_break_level: c_int,
 ) -> c_int {
-    let mut sid = if req.is(Origin::Str) {
+    let mut sid = if req.is_str() {
         SID_STR
     } else {
-        // SAFETY: the resolved name.
-        unsafe { find_script_by_name(cstr::at(*fname_exp)) }
+        find_script_by_name(fname_exp.as_cstr())
     };
-    if sid > 0 && !req.ret_sid.is_null() {
+    if sid > 0
+        && let Some(ret_sid) = req.ret_sid.as_deref_mut()
+    {
         // Already loaded, and the caller only wanted the ID.
-        // SAFETY: the caller's out-parameter.
-        unsafe { *req.ret_sid = sid };
+        *ret_sid = sid;
         return OK;
     }
-    if !req.is(Origin::Str) {
-        // SAFETY: the resolved name.
-        if let Some(retval) = unsafe { source_autocmds(*fname_exp) } {
-            return retval;
-        }
+    if !req.is_str()
+        && let Some(retval) = source_autocmds(fname_exp.as_cstr())
+    {
+        return retval;
     }
 
-    // SAFETY: as above.
-    unsafe { open_script(cookie, *fname_exp, req.check_other) };
-    if cookie.fp.is_null() && !cookie.source_from_buf_or_str {
+    open_script(cookie, &mut fname_exp, req.check_other);
+    if matches!(cookie.lines, ScriptLines::None) {
         if p_verbose() > 1 {
             let numbered = c"line %ld: could not source \"%s\"";
-            // SAFETY: both formats take the name, `numbered` after the line.
-            unsafe { verbose_source_msg(c"could not source \"%s\"", numbered, req.fname) };
+            verbose_source_msg(c"could not source \"%s\"", numbered, req.fname);
         }
         return FAIL;
     }
@@ -711,17 +491,14 @@ unsafe fn source_bracket(
     // before this function returns.
     if p_verbose() > 1 {
         let numbered = c"line %ld: sourcing \"%s\"";
-        // SAFETY: as above.
-        unsafe { verbose_source_msg(c"sourcing \"%s\"", numbered, req.fname) };
+        verbose_source_msg(c"sourcing \"%s\"", numbered, req.fname);
     }
     if req.is_vimrc == DOSO_VIMRC {
-        // SAFETY: the resolved name.
-        vimrc_found(unsafe { CStr::from_ptr(*fname_exp) }, c"MYVIMRC");
+        vimrc_found(fname_exp.as_cstr(), c"MYVIMRC");
     }
 
-    // SAFETY: as above.
-    cookie.breakpoint = dbg_find_breakpoint_named(true, unsafe { CStr::from_ptr(*fname_exp) }, 0);
-    cookie.fname = *fname_exp;
+    cookie.breakpoint = dbg_find_breakpoint_named(true, fname_exp.as_cstr(), 0);
+    cookie.fname = fname_exp.clone();
     cookie.dbg_tick = debug_tick.get();
     cookie.level = ex_nesting_level.get();
 
@@ -740,40 +517,37 @@ unsafe fn source_bracket(
     last_current_SID_seq.set(seq);
     current_sctx.with_mut(|sctx| sctx.sc_seq = seq);
 
-    // SAFETY: the resolved name, which a new item takes over.
-    let si = unsafe { register_script(req, &mut sid, fname_exp) };
+    let item = register_script(req, &mut sid, &fname_exp);
     debug_assert!(
-        si.is_null() == req.is(Origin::Str),
+        item.is_none() == req.is_str(),
         "(si != NULL) == (str == NULL)"
     );
 
     // Sourcing a string from a Lua script keeps the Lua script's SID, so
     // `:verbose` still names something useful.
-    if !req.is(Origin::Str) || !script_is_lua(current_sctx.get().sc_sid) {
+    if !req.is_str() || !script_is_lua(current_sctx.get().sc_sid) {
         current_sctx.with_mut(|sctx| {
             sctx.sc_sid = sid;
             sctx.sc_lnum = 0;
         });
     }
 
-    // Keep the sourcing name and line number, for recursive calls.
-    // SAFETY: `si` is this script's item, and the name outlives the frame it
-    // is pushed onto.
-    let name = if si.is_null() {
-        *fname_exp
-    } else {
-        unsafe { (*si).sn_name }
-    };
-    estack_push(ETYPE_SCRIPT, name, 0);
-    if profiling && !si.is_null() {
-        unsafe { profile_script_start(si) };
+    // Keep the sourcing name and line number, for recursive calls. A script
+    // sourced again goes by the registry's spelling of its name, which
+    // `find_script_by_name` matched without regard to case or separators.
+    // The name is this frame's, which outlives the stack frame.
+    let frame_name = item
+        .and_then(script_name)
+        .unwrap_or_else(|| fname_exp.clone());
+    estack_push(ETYPE_SCRIPT, frame_name.as_ptr().cast_mut(), 0);
+    if profiling && let Some(sid) = item {
+        profile_script_start(sid, frame_name.as_cstr());
     }
     cookie.conv.vc_type = CONV_NONE;
 
-    // SAFETY: the loaded cookie and this script's item.
-    let firstline = unsafe { execute_source(req, cookie, si, *fname_exp) };
+    execute_source(req, cookie, item, fname_exp.as_cstr());
 
-    if profiling && !si.is_null() {
+    if profiling && item.is_some() {
         profile_script_stop(wait_start);
     }
     if got_int.get() {
@@ -781,22 +555,18 @@ unsafe fn source_bracket(
     }
     estack_pop();
     if p_verbose() > 1 {
-        let resumed = sourcing_name();
+        let resumed = sourcing_name_copy();
         verbose_enter();
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let fname = unsafe { c_str(req.fname) };
+        let fname = msg_cstr_opt(req.fname);
         smsg!(0, "finished sourcing {fname}");
-        if !resumed.is_null() {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let resumed = unsafe { c_str(resumed) };
+        if let Some(resumed) = resumed {
+            let resumed = msg_bytes(&resumed);
             smsg!(0, "continuing in {resumed}");
         }
         verbose_leave();
     }
     if time_log {
-        // SAFETY: `req.fname` is null or NUL-terminated, as for the
-        // verbose message above.
-        let label = format!("sourcing {}", unsafe { c_str(req.fname) });
+        let label = format!("sourcing {}", msg_cstr_opt(req.fname));
         time_msg(&to_bytes(&label), Some(start_time));
         time_pop(rel_time);
     }
@@ -814,11 +584,11 @@ unsafe fn source_bracket(
     if profiling {
         prof_child_exit(wait_start);
     }
-    unsafe { finish_source(cookie, firstline) };
-    if !req.is(Origin::Str) && trigger_source_post {
-        let (name, buf) = (*fname_exp, Buf::current_or_none());
-        // SAFETY: the resolved name, still owned by this frame.
-        unsafe { apply_autocmds(AutoEvent::SourcePost, name, name, false, buf) };
+    // Close the file and drop the lines and the conversion before
+    // `SourcePost` runs, as upstream's cleanup did.
+    *cookie = SourceCookie::new();
+    if !req.is_str() && trigger_source_post {
+        fire_source_event(AutoEvent::SourcePost, fname_exp.as_cstr());
     }
     OK
 }
@@ -828,20 +598,13 @@ unsafe fn source_bracket(
 /// Answers FAIL when the file could not be opened, OK otherwise.  When a
 /// `ScriptItem` was found or created, `ret_sid` -- if given -- gets its ID,
 /// and a script that has one already is *not* run again.
-fn do_source_ext(req: &SourceRequest) -> c_int {
+fn do_source_ext(req: &mut SourceRequest) -> c_int {
     let save_debug_break_level = debug_break_level.get();
-    let mut cookie = SourceCookie::new();
-    // SAFETY: the caller's contract.
-    let mut fname_exp = match unsafe { source_name(req, &mut cookie) } {
-        Ok(name) => name,
+    let (mut cookie, fname_exp) = match source_name(req) {
+        Ok(loaded) => loaded,
         Err(retval) => return retval,
     };
-    // SAFETY: the cookie is loaded and `fname_exp` is owned by this frame.
-
-    let retval =
-        unsafe { source_bracket(req, &mut cookie, &mut fname_exp, save_debug_break_level) };
-    unsafe { xfree(fname_exp.cast()) };
-    retval
+    source_bracket(req, &mut cookie, fname_exp, save_debug_break_level)
 }
 
 /// [`do_source_ext`] for a file: the spelling every caller outside this module
@@ -857,11 +620,11 @@ pub fn do_source(
     is_vimrc: c_int,
     ret_sid: Option<&mut c_int>,
 ) -> c_int {
-    let req = SourceRequest {
+    let mut req = SourceRequest {
         check_other,
         is_vimrc,
-        ret_sid: ret_sid.map_or(ptr::null_mut(), |sid| sid),
-        ..SourceRequest::new(fname.as_ptr().cast_mut(), ptr::null(), None, false)
+        ret_sid,
+        ..SourceRequest::new(Origin::File, Some(fname))
     };
-    do_source_ext(&req)
+    do_source_ext(&mut req)
 }

@@ -24,7 +24,7 @@ use crate::eval::userfunc::get_func_line;
 use crate::eval::vars::set_vim_var_string;
 use crate::getchar::read_cmd_key_line;
 use crate::memory::XString;
-use crate::runtime::{SourceCookie, getsourceline};
+use crate::runtime::SourceCookie;
 use crate::types::{AutoPatCmd, FuncCall};
 
 use crate::ex_cmds::print_line_no_prefix;
@@ -433,7 +433,7 @@ impl ReadLines for LineSource<'_> {
             LineSource::CmdKey => read_cmd_key_line(),
             LineSource::List(walk) => get_list_line(walk),
             LineSource::Function(frame) => get_func_line(frame),
-            LineSource::Script(cookie) => getsourceline(cookie, do_concat),
+            LineSource::Script(cookie) => cookie.getsourceline(do_concat),
             LineSource::Autocmd(walk) => getnextac(walk),
             LineSource::Loop(lines) => lines.next_line(c, indent, do_concat),
         }

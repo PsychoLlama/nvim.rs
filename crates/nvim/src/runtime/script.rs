@@ -1,48 +1,40 @@
 //! What the editor remembers about scripts it has sourced, and how a sourced
-//! script is read and left.
+//! script is left.
 //!
-//! `script_items` is the registry -- one entry per script ever sourced, with
+//! `SCRIPT_ITEMS` is the registry -- one entry per script ever sourced, with
 //! its name, its script-local variables, its `<SID>` and its profiling
-//! counters.  [`scripts`] and [`script_item`] are how the rest of the family
-//! reaches it; [`ex_scriptnames`], [`f_getscriptinfo`], [`get_scriptname`] and
-//! [`find_script_by_name`] are its readers, and [`script_autoload`] is the
-//! lookup that turns `foo#bar()` into an `autoload/foo.vim` to source.
+//! counters, reached by its [`ScriptId`] through [`with_script_item`] and the
+//! readers beside it; [`ex_scriptnames`], [`f_getscriptinfo`],
+//! [`get_scriptname`] and [`find_script_by_name`] are its users, and
+//! [`script_autoload`] is the lookup that turns `foo#bar()` into an
+//! `autoload/foo.vim` to source.
 //!
-//! [`getsourceline`] and `get_one_sourceline` are the reader `do_cmdline` pulls
-//! from while a script runs -- the place `\` continuation lines are joined,
-//! 'scriptencoding' conversion is applied and the debugger gets its per-line
-//! hook.  [`ex_finish`] and [`source_finished`] are how a script stops early.
+//! [`ex_finish`] and [`do_finish`] are how a script stops early; the reader a
+//! running script is pulled through is [`super::reader`]'s.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
+use crate::cstr;
+use crate::eval::typval::NumBuf;
+use crate::ex_docmd::SourceKind;
+use crate::ex_eval::CsFlags;
+use crate::formatted;
 use crate::mbyte::canonize;
 use crate::memory::ThinCString;
-use crate::memory::XString;
-use crate::memory::handoff::owned_cstr;
 use crate::message_fmt::msg_cstr;
 use crate::os::env::expand_env_save_opt_of;
 use crate::os::env::home_replace_in;
+use crate::regexp::OwnedProg;
 use crate::semsg;
-use crate::snprintf;
-use crate::vim_snprintf;
-
-use crate::cstr;
-use crate::eval::typval::NumBuf;
-use crate::ex_docmd::{DebugPos, SourceKind};
-use crate::ex_eval::CsFlags;
-use crate::option::cpo_has;
-use crate::types::{CpoFlag, IOSIZE, ListRef, MAXPATHL};
-use core::cell::Cell;
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::{ptr, slice};
+use crate::types::{IOSIZE, ListRef, MAXPATHL};
+use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
 /// Bytes `autoload_name` puts in front of the name it is given.
 const AUTOLOAD_PREFIX: &[u8] = b"autoload/";
-/// ...and what it puts after the last package separator, NUL included.
-const AUTOLOAD_SUFFIX: &[u8] = b".vim\0";
+/// ...and what it puts after the last package separator.
+const AUTOLOAD_SUFFIX: &[u8] = b".vim";
 
 // ---------------------------------------------------------------------------
 // The registry.
@@ -52,36 +44,22 @@ const AUTOLOAD_SUFFIX: &[u8] = b".vim\0";
 pub(crate) fn script_count() -> c_int {
     // The registry only grows, and an editor that has sourced 2^31 scripts
     // has run out of ids long before it runs out of `c_int`.
-    script_items.with(|items| items.len() as c_int)
-}
-
-/// The registry entry for script `sid` -- upstream's `SCRIPT_ITEM`.
-///
-/// Null for an id outside `1..=`[`script_count`], which upstream's macro
-/// would read past the end for; debug builds fail the assertion instead.
-pub(crate) fn script_item(sid: ScriptId) -> *mut ScriptItem {
-    debug_assert!(script_id_valid(sid), "script id out of range");
-    let idx = usize::try_from(sid - 1).ok();
-    script_items.with(|items| {
-        idx.and_then(|idx| items.get(idx).copied())
-            .unwrap_or(ptr::null_mut())
-    })
+    SCRIPT_ITEMS.with(|items| c_int::try_from(items.len()).unwrap_or(c_int::MAX))
 }
 
 /// Run `f` on the registry entry for script `sid`, which must be a script
-/// the editor has sourced ([`script_id_valid`]).
+/// the editor has sourced ([`script_id_valid`]) -- upstream's `SCRIPT_ITEM`.
 ///
-/// No user code runs inside `f`: it is for reading and updating the entry's
-/// counters, which is all the profiler does with one.
+/// The registry is borrowed for the call: `f` reads and updates the entry's
+/// fields and runs no user code, which is all the profiler and the scope
+/// lookups do with one.
 ///
 /// # Panics
 /// When `sid` names no script.
 pub(crate) fn with_script_item<R>(sid: ScriptId, f: impl FnOnce(&mut ScriptItem) -> R) -> R {
-    let item = script_item(sid);
-    assert!(!item.is_null(), "script id out of range");
-    // SAFETY: a registry entry is boxed and lives as long as the editor, and
-    // `f` runs no user code that could reach it another way meanwhile.
-    f(unsafe { &mut *item })
+    debug_assert!(script_id_valid(sid), "script id out of range");
+    let idx = usize::try_from(sid - 1).expect("script id out of range");
+    SCRIPT_ITEMS.with_mut(|items| f(&mut items[idx]))
 }
 
 /// Is `sid` a script the editor has sourced -- upstream's `SCRIPT_ID_VALID`?
@@ -89,15 +67,42 @@ pub(crate) fn script_id_valid(sid: c_int) -> bool {
     sid > 0 && sid <= script_count()
 }
 
-/// Script `sid`'s file name with the home directory as `~`, cut to `room`
-/// bytes; `None` for an id with no script or a script with no name.
-pub(crate) fn script_display_name(sid: ScriptId, room: usize) -> Option<XString> {
+/// A copy of script `sid`'s file name; `None` for an id with no script or a
+/// script with no name (an anonymous chunk).
+pub(crate) fn script_name(sid: ScriptId) -> Option<XString> {
     if !script_id_valid(sid) {
         return None;
     }
-    // SAFETY: a valid id's item is live, and its name NUL-terminated or null.
-    let name = unsafe { cstr::at_opt((*script_item(sid)).sn_name) }?;
-    Some(home_replace_in(None, name, room, true))
+    with_script_item(sid, |si| si.sn_name.clone())
+}
+
+/// Allocate the next script ID and its `ScriptItem`, named `name`.  IDs are
+/// never reused, so the registry is grown to cover every ID up to the new
+/// one; the intervening items exist and are empty.
+pub(crate) fn new_script_item(name: Option<XString>) -> ScriptId {
+    /// The highest script ID handed out so far.
+    static LAST_CURRENT_SID: GlobalCell<ScriptId> = GlobalCell::new(0);
+
+    let sid = LAST_CURRENT_SID.get() + 1;
+    LAST_CURRENT_SID.set(sid);
+    // The registry is grown one id at a time: `new_script_vars` reaches it,
+    // so the push has to be a borrow that has been let go by then.
+    while script_count() < sid {
+        let added = SCRIPT_ITEMS.with_mut(|items| {
+            items.push(ScriptItem::new());
+            ScriptId::try_from(items.len()).unwrap_or(ScriptId::MAX)
+        });
+        new_script_vars(added);
+    }
+    with_script_item(sid, |si| si.sn_name = name);
+    sid
+}
+
+/// Script `sid`'s file name with the home directory as `~`, cut to `room`
+/// bytes; `None` for an id with no script or a script with no name.
+pub(crate) fn script_display_name(sid: ScriptId, room: usize) -> Option<XString> {
+    let name = script_name(sid)?;
+    Some(home_replace_in(None, name.as_cstr(), room, true))
 }
 
 /// Was script `sid` written in Lua?
@@ -105,11 +110,7 @@ pub fn script_is_lua(sid: ScriptId) -> bool {
     if sid == SID_LUA {
         return true;
     }
-    if !script_id_valid(sid) {
-        return false;
-    }
-    // SAFETY: checked just above.
-    unsafe { (*script_item(sid)).sn_lua }
+    script_id_valid(sid) && with_script_item(sid, |si| si.sn_lua)
 }
 
 /// Find an already loaded script `name`, and return its script ID.
@@ -121,17 +122,14 @@ pub fn script_is_lua(sid: ScriptId) -> bool {
 pub fn find_script_by_name(name: &CStr) -> c_int {
     // Nothing in the closure sources a script, so holding the borrow over the
     // walk is sound.
-    let found = script_items.with(|items| {
-        items.iter().rposition(|&si| {
-            // SAFETY: a registry slot always holds a live `ScriptItem`, and
-            // `path_fnamecmp` only reads the two NUL-terminated names.
-            unsafe {
-                !(*si).sn_name.is_null()
-                    && path_fnamecmp(cstr::bytes_at((*si).sn_name), name.to_bytes()) == 0
-            }
+    let found = SCRIPT_ITEMS.with(|items| {
+        items.iter().rposition(|si| {
+            si.sn_name
+                .as_ref()
+                .is_some_and(|sn_name| path_fnamecmp(sn_name, name.to_bytes()) == 0)
         })
     });
-    found.map_or(-1, |idx| idx as c_int + 1)
+    found.map_or(-1, |idx| c_int::try_from(idx + 1).unwrap_or(c_int::MAX))
 }
 
 // ---------------------------------------------------------------------------
@@ -139,52 +137,33 @@ pub fn find_script_by_name(name: &CStr) -> c_int {
 
 /// `":scriptnames"`, and `":script {id}"` which edits the script instead.
 pub fn ex_scriptnames(excmd: &mut ExArg) {
-    // SAFETY: `excmd` is the command's own argument block.
     let (by_number, has_arg) = (
         excmd.addr_count > 0,
         excmd.line.byte_at(excmd.line.arg) != 0,
     );
     if by_number || has_arg {
-        // SAFETY: same block; `edit_script` only reads it and `do_exedit`.
         edit_script(excmd, by_number);
         return;
     }
 
-    // SAFETY: `msg_ext_set_kind` copies the literal.
     msg_ext_set_kind(c"list_cmd");
-    // The listing pauses for the user, which can run anything; both buffers
-    // are this frame's rather than the shared scratch upstream reuses.
-    let mut shortname = [0 as c_char; MAXPATHL as usize];
-    let mut row = [0 as c_char; IOSIZE as usize];
     let mut sid: ScriptId = 1;
+    // The registry is re-read every round, because the output below can
+    // pause for the user, who can run anything.
     while sid <= script_count() && !got_int.get() {
-        // SAFETY: `sid` is in range, and the registry is re-read every round
-        // because the output below can pause for the user.
-        let name = unsafe { (*script_item(sid)).sn_name };
         let listed = sid;
         sid += 1;
-        if name.is_null() {
+        let Some(name) = script_name(listed) else {
             continue;
-        }
-        // SAFETY: both buffers are sized as the calls below are told, and
-        // outlive every one of them.
-        let namebuff = shortname.as_mut_ptr();
-        unsafe { home_replace(None, name, namebuff, MAXPATHL as size_t, true) };
-        let iobuff = row.as_mut_ptr();
-        unsafe {
-            vim_snprintf!(
-                iobuff,
-                IOSIZE as size_t,
-                c"%3d: %s".as_ptr(),
-                listed,
-                namebuff,
-            )
         };
-        if !message_filtered(unsafe { cstr::at(iobuff) }) {
+        let shortname = home_replace_in(None, name.as_cstr(), MAXPATHL as usize, true);
+        let row = formatted!(IOSIZE as usize, b"%3d: %s", listed, shortname.as_cstr());
+        let row = cstr::owned(&row);
+        if !message_filtered(&row) {
             if msg_col.get() > 0 {
                 msg_putchar('\n' as c_int);
             }
-            msg_display(unsafe { cstr::at(iobuff) }, 0, false);
+            msg_display(&row, 0, false);
             line_breakcheck();
         }
     }
@@ -193,13 +172,12 @@ pub fn ex_scriptnames(excmd: &mut ExArg) {
 /// `":script {id}"` / `":script {file}"`: open the named script in a window.
 fn edit_script(excmd: &mut ExArg, by_number: bool) {
     if by_number {
-        if !script_id_valid(excmd.line2 as c_int) {
+        let sid = ScriptId::try_from(excmd.line2).unwrap_or(0);
+        let Some(name) = script_name(sid) else {
             emsg(gettext(e_invarg));
             return;
-        }
-        // SAFETY: `line2` names a live script, whose name is NUL-terminated.
-        let name = unsafe { cstr::bytes_at((*script_item(excmd.line2 as ScriptId)).sn_name) };
-        excmd.set_arg_text(name);
+        };
+        excmd.set_arg_text(&name);
     } else {
         let expanded = expand_env_save_opt_of(excmd.line.cstr_from(excmd.line.arg), false);
         excmd.set_arg_text(&expanded);
@@ -219,7 +197,6 @@ fn edit_script(excmd: &mut ExArg, by_number: bool) {
 /// for the two contexts it has to format, and a caller holding one of those
 /// across anything that shows a message loses it.
 pub(crate) fn get_scriptname(script_ctx: ScriptCtx, fold_home: bool) -> CString {
-    let mut named = [0 as c_char; IOSIZE as usize];
     let fixed = match script_ctx.sc_sid {
         SID_MODELINE => c"modeline",
         SID_CMDARG => c"--cmd argument",
@@ -230,47 +207,23 @@ pub(crate) fn get_scriptname(script_ctx: ScriptCtx, fold_home: bool) -> CString 
         SID_LUA => c"Lua",
         SID_STR => c"anonymous :source",
         SID_API_CLIENT => {
-            // SAFETY: `named` is `IOSIZE` writable bytes.
-            unsafe {
-                snprintf!(
-                    named.as_mut_ptr(),
-                    IOSIZE as size_t,
-                    gettext(c"API client (channel id %lu)").as_ptr(),
-                    script_ctx.sc_chan,
-                )
-            };
-            return cstr::in_chars(&named).to_owned();
+            let fmt = gettext(c"API client (channel id %lu)").to_bytes();
+            return cstr::owned(&formatted!(IOSIZE as usize, fmt, script_ctx.sc_chan));
         }
-        _ => {
-            // SAFETY: every other `sc_sid` is a registry index.
-            let sname = unsafe { (*script_item(script_ctx.sc_sid)).sn_name };
-            if sname.is_null() {
-                // SAFETY: `named` is `IOSIZE` writable bytes.
-                unsafe {
-                    snprintf!(
-                        named.as_mut_ptr(),
-                        IOSIZE as size_t,
-                        gettext(c"anonymous :source (script id %d)").as_ptr(),
-                        script_ctx.sc_sid,
-                    )
-                };
-                return cstr::in_chars(&named).to_owned();
-            }
-            if !fold_home {
-                // SAFETY: the registry's own NUL-terminated name.
-                return unsafe { CStr::from_ptr(sname) }.to_owned();
-            }
-            // SAFETY: the registry's name, folded into a fresh allocation.
-            return unsafe {
-                let folded = home_replace_save(None, sname);
-                let owned = CStr::from_ptr(folded).to_owned();
-                xfree(folded.cast::<c_void>());
-                owned
+        sid => {
+            // Every other `sc_sid` is a registry index.
+            let Some(sname) = script_name(sid) else {
+                let fmt = gettext(c"anonymous :source (script id %d)").to_bytes();
+                return cstr::owned(&formatted!(IOSIZE as usize, fmt, sid));
             };
+            if !fold_home {
+                return CString::from(sname.as_cstr());
+            }
+            let room = sname.len() + 3;
+            return CString::from(home_replace_in(None, sname.as_cstr(), room, true).as_cstr());
         }
     };
-    // SAFETY: `gettext` returns a pointer into its own catalogue.
-    unsafe { CStr::from_ptr(gettext(fixed).as_ptr()) }.to_owned()
+    gettext(fixed).to_owned()
 }
 
 // ---------------------------------------------------------------------------
@@ -296,54 +249,31 @@ enum ScriptQuery {
     All,
     /// `{'sid': n}`: that one script, with its variables and functions too.
     Sid(VarNumber),
-    /// `{'name': pat}`: the scripts whose path matches the caller's `regmatch`.
-    Matching,
+    /// `{'name': pat}`: the scripts whose path matches the pattern.
+    Matching(OwnedProg),
     /// The argument was rejected; an error is already pending.
     Rejected,
 }
 
 /// `"getscriptinfo()"` function
 pub fn f_getscriptinfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: `result` is the caller's return slot, `args` its arguments.
-    tv_list_alloc_ret(result, script_count() as ptrdiff_t);
+    tv_list_alloc_ret(result, ptrdiff_t::try_from(script_count()).unwrap_or(0));
     if tv_check_for_opt_dict_arg(args, 0).is_err() {
         return;
     }
-    // The pattern's source string is freed on the way out, as upstream does,
-    // even when it did not compile.
-    let mut pat: *mut c_char = ptr::null_mut();
-    // One `RegMatch` for the whole run, not one per script: `vim_regexec`
-    // may swap the compiled program out from under it when the NFA engine
-    // gives up and the backtracker recompiles the pattern.
-    let mut regmatch = empty_regmatch();
-    // SAFETY: as above.
-    let query = unsafe { script_query(args, &mut pat, &mut regmatch) };
-
+    let mut query = script_query(args);
     if !matches!(query, ScriptQuery::Rejected) {
         let list = result.list_handle().expect("the list allocated above");
-        report_scripts(&list, &query, &mut regmatch);
+        report_scripts(&list, &mut query);
     }
-
-    // SAFETY: both were allocated by the call that produced `query`; either
-    // may be null, which both frees accept.
-    unsafe { vim_regfree(regmatch.regprog) };
-    unsafe { xfree(pat.cast::<c_void>()) };
 }
 
 /// Read `getscriptinfo()`'s optional dict argument.
 ///
-/// `pat` receives the raw `name` string so the caller can free it whatever
-/// happens, and `regmatch` its compiled form; a pattern that fails to compile
-/// is not an error, it just filters nothing.
-///
-/// # Safety
-///
-/// `args` must be the builtin's argument vector.
-unsafe fn script_query(
-    args: &[TypVal],
-    pat: *mut *mut c_char,
-    regmatch: &mut RegMatch,
-) -> ScriptQuery {
+/// A `name` pattern that fails to compile is not an error, it just filters
+/// nothing. The pattern matches with the 'ignorecase' of the moment it was
+/// read.
+fn script_query(args: &[TypVal]) -> ScriptQuery {
     let mut numbuf = NumBuf::new();
     let Some(arg) = args.first().filter(|a| a.v_type() == VAR_DICT) else {
         return ScriptQuery::All;
@@ -363,22 +293,13 @@ unsafe fn script_query(
         return ScriptQuery::Sid(sid);
     }
 
-    // SAFETY: the string is allocated for us and handed straight to the caller.
-    unsafe {
-        *pat = dict_get_string_alloc(dict, b"name").map_or(ptr::null_mut(), ThinCString::into_raw)
-    };
-    if !unsafe { *pat }.is_null() {
-        regmatch.regprog = vim_regcomp(unsafe { cstr::at(*pat) }, RE_MAGIC + RE_STRING);
-    }
-    if regmatch.regprog.is_null() {
-        ScriptQuery::All
-    } else {
-        ScriptQuery::Matching
-    }
+    let pat: Option<ThinCString> = dict_get_string_alloc(dict, b"name");
+    pat.and_then(|pat| OwnedProg::compile(pat.as_cstr(), RE_MAGIC + RE_STRING))
+        .map_or(ScriptQuery::All, ScriptQuery::Matching)
 }
 
 /// Append one dict per script `query` selects to `list`.
-fn report_scripts(list: &ListRef, query: &ScriptQuery, regmatch: &mut RegMatch) {
+fn report_scripts(list: &ListRef, query: &mut ScriptQuery) {
     let total = VarNumber::from(script_count());
     // A `sid` query asks about exactly one script, and answers nothing at all
     // when that script does not exist.
@@ -386,360 +307,40 @@ fn report_scripts(list: &ListRef, query: &ScriptQuery, regmatch: &mut RegMatch) 
         ScriptQuery::Sid(sid) => (sid, sid.min(total)),
         _ => (1, total),
     };
+    let ignore_case = p_ic();
 
     for sid in first..=last {
-        // SAFETY: `sid` is in range, and nothing in the body sources a script.
-        let si = script_item(sid as ScriptId);
-        // SAFETY: a registry slot always holds a live `ScriptItem`.
-        let name = unsafe { (*si).sn_name };
-        if name.is_null() {
+        let sid = ScriptId::try_from(sid).unwrap_or(0);
+        let Some(name) = script_name(sid) else {
             continue;
-        }
-        // SAFETY: `name` is NUL-terminated.
-        if matches!(query, ScriptQuery::Matching)
-            && !vim_regexec(regmatch, unsafe { cstr::at(name) }, 0)
+        };
+        if let ScriptQuery::Matching(prog) = query
+            && prog.exec(name.as_cstr(), 0, ignore_case).is_none()
         {
             continue;
         }
 
-        // SAFETY: a fresh dict, handed to the list before anything else sees it.
-        let d_held = tv_dict_alloc();
-        let d = d_held.as_ptr();
-        list.edit().push_dict(Some(d_held));
-        unsafe { dict_add_str(d, c"name", name) };
-        unsafe { dict_add_nr(d, c"sid", sid) };
-        unsafe { dict_add_nr(d, c"version", 1) };
-        // Vim9 autoload script (:h vim9-autoload), not applicable to Nvim.
-        unsafe { dict_add_bool(d, c"autoload", kBoolVarFalse) };
+        let d = tv_dict_alloc();
+        {
+            let dict = d.edit();
+            let _ = dict.add_str(b"name", Some(name.as_cstr()));
+            let _ = dict.add_number(b"sid", VarNumber::from(sid));
+            let _ = dict.add_number(b"version", 1);
+            // Vim9 autoload script (:h vim9-autoload), not applicable to Nvim.
+            let _ = dict.add_bool(b"autoload", kBoolVarFalse);
+        }
 
         // A script ID was specified, so report that script in full.
         if let ScriptQuery::Sid(_) = *query {
-            let sv_dict = crate::eval::vars::script_scope_dict(sid as ScriptId)
+            let sv_dict = crate::eval::vars::script_scope_dict(sid)
                 .expect("a sourced script has an s: scope");
             let vars = dict_copy(None, &sv_dict, true, get_copy_id());
-            let (key, klen) = (c"variables".as_ptr(), c"variables".count_bytes());
-            let _ = unsafe { (*d).add_dict(cstr::slice_at(key, klen), vars) };
-            let funcs = get_script_local_funcs(sid as ScriptId);
-            let (key, klen) = (c"functions".as_ptr(), c"functions".count_bytes());
-            let _ = unsafe { (*d).add_list(cstr::slice_at(key, klen), Some(funcs)) };
+            let _ = d.edit().add_dict(b"variables", vars);
+            let funcs = get_script_local_funcs(sid);
+            let _ = d.edit().add_list(b"functions", Some(funcs));
         }
+        list.edit().push_dict(Some(d));
     }
-}
-
-/// An unprogrammed `RegMatch` carrying the current 'ignorecase'.
-fn empty_regmatch() -> RegMatch {
-    RegMatch::new(ptr::null_mut(), p_ic())
-}
-
-/// `tv_dict_add_*` take the key and its length separately; upstream spells that
-/// pair `S_LEN(key)`.
-///
-/// # Safety
-///
-/// `d` must point at a live dictionary, unaliased for the call. `val` must
-/// point at a NUL-terminated string.
-unsafe fn dict_add_str(d: *mut Dict, key: &CStr, val: *const c_char) {
-    let _ = unsafe { (*d).add_str(key.to_bytes(), cstr::at_opt(val)) };
-}
-
-/// # Safety
-///
-/// `d` must point at a live dictionary, unaliased for the call.
-unsafe fn dict_add_nr(d: *mut Dict, key: &CStr, nr: VarNumber) {
-    let _ = unsafe { (*d).add_number(key.to_bytes(), nr) };
-}
-
-/// # Safety
-///
-/// `d` must point at a live dictionary, unaliased for the call.
-unsafe fn dict_add_bool(d: *mut Dict, key: &CStr, val: BoolVarValue) {
-    let _ = unsafe { (*d).add_bool(key.to_bytes(), val) };
-}
-
-// ---------------------------------------------------------------------------
-// Reading a script.
-
-/// Get one full line from a sourced file, for `do_cmdline()` under
-/// `do_source()`.
-///
-/// The [`Script`](crate::ex_docmd::LineSource::Script) arm of its line
-/// source. Answers the line, or `None` at end of file or on error.
-pub(crate) fn getsourceline(cookie: &mut SourceCookie, do_concat: bool) -> Option<XString> {
-    let sp: *mut SourceCookie = cookie;
-    // SAFETY: the cookie belongs to the script currently being sourced.
-    let from_buf_or_str = unsafe { (*sp).source_from_buf_or_str };
-
-    // If breakpoints have been added or deleted we need to look again.
-    // SAFETY: as above.
-    if unsafe { (*sp).dbg_tick } < debug_tick.get() && !from_buf_or_str {
-        // SAFETY: as above.
-        unsafe { refresh_breakpoint(sp) };
-    }
-    if do_profiling.get() == PROF_YES {
-        script_line_end();
-    }
-    // Set the current sourcing line number.
-    // SAFETY: as above.
-    set_sourcing_lnum(unsafe { (*sp).sourcing_lnum } + 1);
-
-    // SAFETY: as above.
-    let mut line = unsafe { next_line(sp) };
-    if !line.is_null() && do_profiling.get() == PROF_YES {
-        script_line_start();
-    }
-
-    // Only concatenate lines starting with a `\` when 'cpoptions' does not
-    // contain the 'C' flag.
-    // SAFETY: `p_cpo` is the option's own string.
-    if !line.is_null() && do_concat && !cpo_has(CpoFlag::CONCAT) {
-        // SAFETY: as above.
-        line = unsafe { concat_continuations(sp, line) };
-    }
-
-    // Convert the encoding of the script line.
-    // SAFETY: as above; `string_convert` returns fresh memory or null.
-    if !line.is_null() && unsafe { (*sp).conv.vc_type } != CONV_NONE {
-        let converted = unsafe { (*sp).conv.convert_cstr(CStr::from_ptr(line)) };
-        if let Some(converted) = converted {
-            unsafe { xfree(line.cast::<c_void>()) };
-            line = converted.into_raw();
-        }
-    }
-
-    // Did we encounter a breakpoint?
-    // SAFETY: as above.
-    let breakpoint = unsafe { (*sp).breakpoint };
-    if !from_buf_or_str && breakpoint != 0 && breakpoint <= sourcing_lnum() {
-        // SAFETY: as above; `fname` is the script's path.
-        dbg_breakpoint(unsafe { CStr::from_ptr((*sp).fname) }, sourcing_lnum());
-        unsafe { refresh_breakpoint(sp) };
-    }
-
-    // SAFETY: every reader above answers null or an allocated line, which
-    // this takes over once.
-    (!line.is_null()).then(|| unsafe { XString::from_raw(line) })
-}
-
-impl SourceCookie {
-    /// Where the debugger keeps this script's breakpoint, for `do_cmdline`'s
-    /// replay of a loop body.
-    pub(crate) fn debug_pos(&mut self) -> DebugPos<'_> {
-        // SAFETY: `fname` is null or the script's resolved name, which
-        // `do_source` keeps for as long as the script is being read.
-        let name = unsafe { cstr::at_opt(self.fname) }.unwrap_or(c"");
-        DebugPos {
-            name,
-            breakpoint: Cell::from_mut(&mut self.breakpoint),
-            tick: Cell::from_mut(&mut self.dbg_tick),
-        }
-    }
-}
-
-/// Look up the next breakpoint in the script `source` is reading, and remember the
-/// debugger's tick so we only look again when something changed.
-///
-/// # Safety
-///
-/// `source` must be a file-backed source cookie.
-unsafe fn refresh_breakpoint(source: *mut SourceCookie) {
-    unsafe {
-        (*source).breakpoint =
-            dbg_find_breakpoint_named(true, CStr::from_ptr((*source).fname), sourcing_lnum());
-    };
-    unsafe { (*source).dbg_tick = debug_tick.get() };
-}
-
-/// The next line of the script, using the one `getsourceline` read ahead if
-/// there is one.  `source.fp` is null when the source is a string rather than a file.
-///
-/// # Safety
-///
-/// `source` must be the live source cookie.
-unsafe fn next_line(source: *mut SourceCookie) -> *mut c_char {
-    if unsafe { (*source).finished }
-        || (!unsafe { (*source).source_from_buf_or_str } && unsafe { (*source).fp }.is_null())
-    {
-        return ptr::null_mut();
-    }
-    if unsafe { (*source).nextline }.is_null() {
-        return unsafe { get_one_sourceline(source) };
-    }
-    let line = unsafe { (*source).nextline };
-    unsafe { (*source).nextline = ptr::null_mut() };
-    unsafe { (*source).sourcing_lnum += 1 };
-    line
-}
-
-/// Join the `\`-continuation lines that follow `line` onto it.
-///
-/// We always have to read the next line to find out, so it is kept in
-/// `source.nextline`.  A comment between continuation lines (`"\ `) counts as one.
-///
-/// # Safety
-///
-/// `source` must be the live source cookie and `line` its freshly read line.
-unsafe fn concat_continuations(source: *mut SourceCookie, line: *mut c_char) -> *mut c_char {
-    // Compensate for the one line read-ahead.
-    unsafe { (*source).sourcing_lnum -= 1 };
-    unsafe { (*source).nextline = get_one_sourceline(source) };
-    if unsafe { (*source).nextline }.is_null()
-        || !unsafe { starts_continuation(skipwhite((*source).nextline)) }
-    {
-        return line;
-    }
-
-    // SAFETY (this body): `line` and every `nextline` are NUL-terminated
-    // lines this function owns.
-    let mut joined = unsafe { cstr::bytes_at(line) }.to_vec();
-    while !unsafe { (*source).nextline }.is_null()
-        && unsafe {
-            let next = cstr::bytes_at((*source).nextline);
-            concat_continued_line(&mut joined, (*source).nextline, next.len())
-        }
-    {
-        unsafe { xfree((*source).nextline.cast::<c_void>()) };
-        unsafe { (*source).nextline = get_one_sourceline(source) };
-    }
-    unsafe { xfree(line.cast::<c_void>()) };
-    owned_cstr(joined)
-}
-
-/// Does `p` begin a continuation -- a `\`, or the `"\ ` that comments one out?
-///
-/// # Safety
-///
-/// `p` must point into a NUL-terminated line.
-unsafe fn starts_continuation(p: *const c_char) -> bool {
-    unsafe {
-        *p == b'\\' as c_char
-            || (*p == b'"' as c_char && *p.add(1) == b'\\' as c_char && *p.add(2) == b' ' as c_char)
-    }
-}
-
-/// Read one line of the script into fresh memory, or null at end of file.
-///
-/// A line can span several reads: the buffer may be too short for it, and a
-/// newline escaped with an odd run of CTRL-V's does not end it.
-///
-/// # Safety
-///
-/// `source` must be the live source cookie.
-unsafe fn get_one_sourceline(source: *mut SourceCookie) -> *mut c_char {
-    let mut line: Vec<u8> = Vec::new();
-    // SAFETY: `source` is the caller's cookie, throughout.
-    unsafe { (*source).sourcing_lnum += 1 };
-
-    // Loop until there is a finished line (or end-of-file).
-    let mut have_read = false;
-    loop {
-        if unsafe { (*source).source_from_buf_or_str } {
-            if !unsafe { next_buffered_line(source, &mut line) } {
-                break;
-            }
-            // A buffer or string line is handed over whole: it cannot hold a
-            // newline, so neither the continuation test nor the escaped-NL
-            // test below can fire for one.
-            have_read = true;
-        } else {
-            let Some(filled_the_chunk) = (unsafe { read_file_chunk(source, &mut line) }) else {
-                break;
-            };
-            have_read = true;
-            // If the line was longer than the chunk, read more.
-            if filled_the_chunk && line.last() != Some(&b'\n') {
-                continue;
-            }
-            if line.last() == Some(&b'\n') {
-                if escaped_newline(&line) {
-                    unsafe { (*source).sourcing_lnum += 1 };
-                    continue;
-                }
-                // Remove the NL.
-                line.pop();
-            }
-        }
-
-        // Check for CTRL-C here now and then, so a recursive `:so` can be
-        // broken out of.
-        line_breakcheck();
-        break;
-    }
-
-    if have_read {
-        return owned_cstr(line);
-    }
-    ptr::null_mut()
-}
-
-/// Append the next line of the buffer or string being sourced. Answers
-/// whether there was one.
-///
-/// # Safety
-///
-/// `source` must be a buffer- or string-backed source cookie.
-unsafe fn next_buffered_line(source: *mut SourceCookie, line: &mut Vec<u8>) -> bool {
-    // SAFETY: the caller's cookie, whose lines outlive the copy.
-    let Some(next) = unsafe { &(*source).buflines }.get(unsafe { (*source).buf_lnum } as usize)
-    else {
-        return false;
-    };
-    line.extend_from_slice(next.to_bytes());
-    unsafe { (*source).buf_lnum += 1 };
-    true
-}
-
-/// `fgets` one chunk onto the end of `line`, retrying when a signal
-/// interrupts. Answers whether the read used every byte it was offered --
-/// which is how a line longer than one chunk announces itself -- or `None`
-/// at end of file.
-///
-/// # Safety
-///
-/// `source` must be a file-backed source cookie.
-unsafe fn read_file_chunk(source: *mut SourceCookie, line: &mut Vec<u8>) -> Option<bool> {
-    /// How much one `fgets` reads at a time, terminator included: upstream
-    /// grew its buffer by at least this much before every read. Function-
-    /// local so it stays out of the unit lane's generated cdefs, which
-    /// publish every module-level `const`.
-    const SOURCE_CHUNK: usize = 120;
-
-    let filled = line.len();
-    line.reserve(SOURCE_CHUNK);
-    loop {
-        // SAFETY: the reserve above put `SOURCE_CHUNK` writable bytes at
-        // `filled`, which is exactly what `fgets` is allowed to touch (it
-        // writes at most one fewer, plus the terminator). `source`'s file is the
-        // caller's promise.
-        let rest = unsafe {
-            *__errno_location() = 0;
-            let dst = line.as_mut_ptr().add(filled).cast::<c_char>();
-            if fgets(dst, SOURCE_CHUNK as c_int, (*source).fp).is_null() {
-                if *__errno_location() != EINTR {
-                    return None;
-                }
-                continue;
-            }
-            cstr::bytes_at(dst).len()
-        };
-        // SAFETY: `fgets` wrote `rest` bytes plus a terminator, all inside
-        // the reserved room.
-        unsafe { line.set_len(filled + rest) };
-        return Some(rest == SOURCE_CHUNK - 1);
-    }
-}
-
-/// Is the newline at the end of `line` escaped?
-///
-/// It is when an odd number of CTRL-V's precede it.  Upstream compares the
-/// parity of the length against the parity of the index just before that run,
-/// which is faster than counting the run and says the same thing.
-fn escaped_newline(line: &[u8]) -> bool {
-    let len = line.len() as isize;
-    let mut c = len - 2;
-    while c >= 0 && line[c as usize] as c_int == Ctrl_V {
-        c -= 1;
-    }
-    (len & 1) != (c & 1)
 }
 
 // ---------------------------------------------------------------------------
@@ -801,55 +402,29 @@ pub fn do_finish(excmd: &mut ExArg, reanimate: bool) {
 // ---------------------------------------------------------------------------
 // Autoload.
 
-/// The autoload script name for a function or variable name: `#` becomes `/`,
-/// everything after the last `#` is dropped, and `.vim` takes its place.
+/// The autoload script path for a function or variable name: `#` becomes
+/// `/`, everything after the last `#` is dropped, and `.vim` takes its place.
 ///
 /// `foo#bar#baz` becomes `autoload/foo/bar.vim`.  The caller must make sure
-/// `name` contains `AUTOLOAD_CHAR`; the result is `xmalloc`ed.
-///
-/// # Safety
-///
-/// `name` must point at a NUL-terminated string.
-pub unsafe fn autoload_name(name: *const c_char, name_len: size_t) -> *mut c_char {
-    // SAFETY: the caller's `name` is `name_len` readable bytes.
-    let name = unsafe { slice::from_raw_parts(name.cast::<u8>(), name_len) };
-    let mut out = Vec::with_capacity(AUTOLOAD_PREFIX.len() + name_len + AUTOLOAD_SUFFIX.len());
+/// `name` contains `AUTOLOAD_CHAR`.
+pub(crate) fn autoload_name_of(name: &[u8]) -> XString {
+    let mut out =
+        Vec::with_capacity(AUTOLOAD_PREFIX.len() + name.len() + AUTOLOAD_SUFFIX.len() + 1);
     out.extend_from_slice(AUTOLOAD_PREFIX);
     out.extend_from_slice(name);
 
     // Everything from the last separator on is the member name, which the
     // suffix replaces; the separators before it are directories.
-    let cut = out
-        .iter()
-        .rposition(|&b| b == AUTOLOAD_CHAR as u8)
-        .unwrap_or(0);
+    let separator = u8::try_from(AUTOLOAD_CHAR).expect("`#` is a byte");
+    let cut = out.iter().rposition(|&b| b == separator).unwrap_or(0);
     out.truncate(cut);
     for byte in &mut out {
-        if *byte == AUTOLOAD_CHAR as u8 {
+        if *byte == separator {
             *byte = b'/';
         }
     }
     out.extend_from_slice(AUTOLOAD_SUFFIX);
-
-    // The callers free this with `xfree`, so it has to come from `xmalloc`.
-    // SAFETY: `xmalloc` returns `out.len()` writable bytes or does not return.
-    let scriptname = unsafe { xmalloc(out.len()) }.cast::<u8>();
-    unsafe { ptr::copy_nonoverlapping(out.as_ptr(), scriptname, out.len()) };
-    scriptname.cast::<c_char>()
-}
-
-/// The autoload script path for `name` ([`autoload_name`]), owned.
-pub(crate) fn autoload_name_of(name: &[u8]) -> XString {
-    // SAFETY: `name` is `name.len()` readable bytes, and the answer is an
-    // `xmalloc`ed, NUL-terminated string this adopts.
-    unsafe { XString::from_raw(autoload_name(name.as_ptr().cast(), name.len())) }
-}
-
-/// [`script_autoload`] of `name`.
-pub(crate) fn script_autoload_named(name: &[u8], reload: bool) -> bool {
-    // SAFETY: `name` is `name.len()` readable bytes, which is all the
-    // function reads of it.
-    unsafe { script_autoload(name.as_ptr().cast(), name.len(), reload) }
+    XString::from_vec(out)
 }
 
 /// The line number to report for a message raised by a running command.
@@ -872,30 +447,21 @@ pub(crate) fn sourced_lnum_of(excmd: &ExArg) -> LineNr {
 /// Returns true if a package was loaded.  `reload` loads the script again even
 /// when it is already known.
 ///
-/// # Safety
-///
-/// `name` must point at a NUL-terminated string.
-pub unsafe fn script_autoload(name: *const c_char, name_len: size_t, reload: bool) -> bool {
-    // SAFETY: the caller's `name` is `name_len` readable bytes.
-    let bytes = unsafe { slice::from_raw_parts(name.cast::<u8>(), name_len) };
+/// `name` is only read before anything runs: the search is for a path built
+/// from it.
+pub(crate) fn script_autoload_named(name: &[u8], reload: bool) -> bool {
     // If there is no `#` after name[0] there is no package name.
-    if !matches!(
-        bytes.iter().position(|&b| b == AUTOLOAD_CHAR as u8),
-        Some(1..)
-    ) {
+    let separator = u8::try_from(AUTOLOAD_CHAR).expect("`#` is a byte");
+    if !matches!(name.iter().position(|&b| b == separator), Some(1..)) {
         return false;
     }
 
-    // SAFETY: `name` is as the caller described it.
-    let scriptname = unsafe { autoload_name(name, name_len) };
-    // SAFETY: `scriptname` is the freshly built path.
-    let path = unsafe { CStr::from_ptr(scriptname) }.to_bytes();
+    let scriptname = autoload_name_of(name);
+    let path: &[u8] = &scriptname;
     let known = ga_loaded.with(|loaded| loaded.iter().any(|entry| same_autoload(entry, path)));
 
     // Was it loaded already?
     if !reload && known {
-        // SAFETY: ours, and nothing took ownership of it.
-        unsafe { xfree(scriptname.cast::<c_void>()) };
         return false;
     }
 
@@ -905,19 +471,14 @@ pub unsafe fn script_autoload(name: *const c_char, name_len: size_t, reload: boo
     }
 
     // Try loading the package from `$VIMRUNTIME/autoload/<name>.vim`.  The
-    // `ret_sid` cookie keeps `source_callback` from loading the same script
-    // twice.
+    // `ret_sid` keeps `source_found` from loading the same script twice.
     let mut ret_sid: c_int = 0;
-    // SAFETY: `scriptname` is this frame's, alive across the search.
-    let name = unsafe { CStr::from_ptr(scriptname) };
-    let ret = do_in_runtimepath_visit(name, RuntimeOpts::START, &mut |found, all| {
-        source_found(found, all, Some(&mut ret_sid))
-    })
-    .is_ok();
-
-    // SAFETY: still ours -- `ga_loaded` keeps its own copy of the path.
-    unsafe { xfree(scriptname.cast::<c_void>()) };
-    ret
+    do_in_runtimepath_visit(
+        scriptname.as_cstr(),
+        RuntimeOpts::START,
+        &mut |found, all| source_found(found, all, Some(&mut ret_sid)),
+    )
+    .is_ok()
 }
 
 /// Are these the same autoload path? The shared `autoload/` prefix is skipped

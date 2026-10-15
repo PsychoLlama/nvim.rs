@@ -152,8 +152,6 @@ binary as well as the default one.
 ## `runtime`
 
 - `neovim::runtime::exestack`
-- `neovim::runtime::runtime_search_path_valid`
-- `neovim::runtime::script_items`
 - `neovim::runtime::state::current_sctx`
 
 ## `search`

@@ -15,6 +15,7 @@
 
 use super::*;
 use crate::cstr;
+use crate::cstr::{find_byte, find_either};
 use crate::mbyte::strnicmp_in;
 use core::ffi::{CStr, c_int};
 use std::ffi::OsStr;
@@ -46,50 +47,6 @@ pub(crate) enum Verdict {
 
 /// How many bytes `vim_fgets` throws a too-long line's rest away in.
 const DISCARD_CHUNK: usize = 200;
-
-/// Eight copies of `byte`.
-const fn splat(byte: u8) -> u64 {
-    0x0101_0101_0101_0101 * byte as u64
-}
-
-/// The high bit of every byte of `word` that is zero.
-///
-/// A byte above a zero one can come out set as well (the subtraction
-/// borrows through it), but never one below it: the lowest bit set is the
-/// first zero byte, which is all [`find_either`] asks.
-const fn zero_bytes(word: u64) -> u64 {
-    // Integer arithmetic, spelled as a call: the ratchet's pointer-arithmetic
-    // count reads `.wrapping_sub(` as a pointer step.
-    u64::wrapping_sub(word, splat(1)) & !word & splat(0x80)
-}
-
-/// Where the first byte of `hay` that is `a` or `b` is.
-///
-/// Eight bytes at a time: the readers below run this over every byte of a
-/// tags file, and a byte-at-a-time walk costs several times what C's
-/// `memchr` did there.
-fn find_either(hay: &[u8], a: u8, b: u8) -> Option<usize> {
-    let (pa, pb) = (splat(a), splat(b));
-    let (words, rest) = hay.as_chunks::<8>();
-    let mut at = 0;
-    for word in words {
-        let word = u64::from_le_bytes(*word);
-        let found = zero_bytes(word ^ pa) | zero_bytes(word ^ pb);
-        if found != 0 {
-            // Little-endian: the lowest set bit is the first byte.
-            return Some(at + (found.trailing_zeros() / 8) as usize);
-        }
-        at += 8;
-    }
-    rest.iter()
-        .position(|&byte| byte == a || byte == b)
-        .map(|found| at + found)
-}
-
-/// Where the first `needle` in `hay` is; [`find_either`] for one byte.
-pub(crate) fn find_byte(hay: &[u8], needle: u8) -> Option<usize> {
-    find_either(hay, needle, needle)
-}
 
 /// A tags file open for reading.
 ///
@@ -672,33 +629,5 @@ impl FindTags {
         }
 
         matched
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// The word-at-a-time search answers what a byte walk does, wherever
-    /// the bytes fall against the word boundaries — including a byte above
-    /// 0x80 and a match right after one.
-    #[test]
-    fn find_either_is_a_byte_walk() {
-        let alphabet = [b'a', b'\n', 0, 0x80, 0xff, 0x01, b'\t'];
-        let mut seed: u32 = 36;
-        for len in 0..40 {
-            for _ in 0..50 {
-                let hay: Vec<u8> = (0..len)
-                    .map(|_| {
-                        seed = u32::wrapping_add(seed.wrapping_mul(1_103_515_245), 12_345);
-                        alphabet[(seed >> 16) as usize % alphabet.len()]
-                    })
-                    .collect();
-                for (a, b) in [(b'\n', 0), (b'\t', b'\t'), (0x80, 0xff)] {
-                    let walk = hay.iter().position(|&byte| byte == a || byte == b);
-                    assert_eq!(find_either(&hay, a, b), walk, "{hay:?} {a} {b}");
-                }
-            }
-        }
     }
 }

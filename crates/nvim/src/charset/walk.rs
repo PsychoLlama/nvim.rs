@@ -107,15 +107,6 @@ pub unsafe fn skipwhite(p: *const c_char) -> *mut c_char {
     unsafe { Bytes::new(p) }.skip_while(is_white).raw()
 }
 
-/// [`skipwhite`], bounded to `len` bytes.
-///
-/// # Safety
-/// `p` must hold `len` readable bytes.
-pub(crate) unsafe fn skipwhite_len(p: *const c_char, len: size_t) -> *mut c_char {
-    p.wrapping_add(skip::white(unsafe { cstr::slice_at(p, len) }))
-        .cast_mut()
-}
-
 /// The indent of the cursor's line, in bytes.
 pub(crate) fn getwhitecols_curline() -> intptr_t {
     let win = Win::current();
@@ -172,16 +163,6 @@ pub unsafe fn skiptowhite_esc(p: *const c_char) -> *mut c_char {
         let escapes = (byte == b'\\' || c_int::from(byte) == crate::keycodes::Ctrl_V) && next != 0;
         cursor.advance(1 + usize::from(escapes));
     }
-}
-
-/// The next newline in `p`, or its NUL.
-///
-/// # Safety
-/// `p` must be a NUL-terminated string.
-pub(crate) unsafe fn skip_to_newline(p: *const c_char) -> *mut c_char {
-    unsafe { Bytes::new(p) }
-        .skip_while(|byte| byte != b'\n')
-        .raw()
 }
 
 /// The bytes a decimal number at `p` can occupy -- leading white space, a

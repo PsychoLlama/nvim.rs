@@ -517,7 +517,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
         // `-l`: run the script and leave, with its status.
         msg_scroll.set(1);
         logmsg!(LOGLVL_DBG, c"main", 678, "executing Lua -l script");
-        let lua_ok = unsafe { nlua_exec_file(params.luaf) };
+        let lua_ok = nlua_exec_file(unsafe { cstr::at(params.luaf) });
         time_msg_at(c"executing Lua -l script");
         if msg_didout.get() {
             msg_putchar('\n' as c_int);

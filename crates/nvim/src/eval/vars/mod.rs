@@ -61,7 +61,7 @@ use crate::os::cshim::gettext;
 use crate::pos::MAXCOL;
 use crate::runtime::state::current_sctx;
 use crate::runtime::{
-    new_unnamed_script_item, script_autoload_named, script_count, script_id_valid, with_script_item,
+    new_script_item, script_autoload_named, script_count, script_id_valid, with_script_item,
 };
 use crate::search::set_search_direction;
 use crate::search::state::no_hlsearch;

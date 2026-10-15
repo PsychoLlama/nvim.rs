@@ -226,11 +226,8 @@ unsafe fn push_typval_args(lstate: *mut lua_State, args: &[TypVal], special: boo
     }
 }
 
-/// Run a `:lua` heredoc: `lines` joined by newlines.
-///
-/// # Safety
-/// `name` is a NUL-terminated chunk name.
-pub unsafe fn nlua_exec_lines(lines: &[CString], name: *mut c_char) {
+/// Run a `:lua` heredoc: `lines` joined by newlines, as the chunk `name`.
+pub fn nlua_exec_lines(lines: &[CString], name: &CStr) {
     let mut code = Vec::new();
     for (i, line) in lines.iter().enumerate() {
         if i > 0 {
@@ -246,7 +243,7 @@ pub unsafe fn nlua_exec_lines(lines: &[CString], name: *mut c_char) {
         nlua_typval_exec(
             code.as_mut_ptr().cast::<c_char>(),
             len,
-            name,
+            name.as_ptr().cast_mut(),
             &[],
             false,
             None,

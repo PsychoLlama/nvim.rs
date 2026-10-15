@@ -66,7 +66,8 @@ pub(crate) struct SnPrl {
 
 pub struct ScriptItem {
     pub sn_vars: Option<Box<ScriptVar>>,
-    pub sn_name: *mut ::core::ffi::c_char,
+    /// The script's resolved file name; `None` for an anonymous chunk.
+    pub sn_name: Option<crate::memory::XString>,
     pub sn_lua: bool,
     pub sn_prof_on: bool,
     pub sn_pr_force: bool,
@@ -91,7 +92,7 @@ impl ScriptItem {
     pub fn new() -> Self {
         Self {
             sn_vars: None,
-            sn_name: ::core::ptr::null_mut(),
+            sn_name: None,
             sn_lua: false,
             sn_prof_on: false,
             sn_pr_force: false,

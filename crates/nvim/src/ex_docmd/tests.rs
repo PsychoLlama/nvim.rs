@@ -385,12 +385,12 @@ fn the_loop_store_reads_through_stores_and_replays_at_depth() {
     // frame's line number, which the next case would otherwise inherit.
     let name = c"edstore";
     crate::runtime::estack_push(crate::runtime::ETYPE_SCRIPT, name.as_ptr().cast_mut(), 0);
-    let mut cookie = SourceCookie::new();
-    cookie.source_from_buf_or_str = true;
-    cookie.buflines = ["one", "two", "three"]
-        .into_iter()
-        .map(|line| CString::new(line).expect("no NUL"))
-        .collect();
+    let mut cookie = SourceCookie::from_lines(
+        ["one", "two", "three"]
+            .into_iter()
+            .map(|line| CString::new(line).expect("no NUL"))
+            .collect(),
+    );
     let mut base = LineSource::Script(&mut cookie);
     let mut outer: Vec<StoredLine> = Vec::new();
     let mut inner: Vec<StoredLine> = Vec::new();

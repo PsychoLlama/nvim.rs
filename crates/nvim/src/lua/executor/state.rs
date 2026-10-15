@@ -165,7 +165,7 @@ pub unsafe fn nlua_run_script(argv: *mut *mut c_char, argc: c_int, lua_arg0: c_i
         global_lstate.set(nlua_init_state(false));
         luv_set_thread_cb(Some(nlua_thread_acquire_vm), Some(nlua_common_free_all_mem));
         nlua_init_argv(global_lstate.get(), argv, argc, lua_arg0);
-        let lua_ok = nlua_exec_file(*argv.offset((lua_arg0 - 1) as isize));
+        let lua_ok = nlua_exec_file(crate::cstr::at(*argv.offset((lua_arg0 - 1) as isize)));
         exit(if lua_ok { 0 } else { 1 });
     }
 }

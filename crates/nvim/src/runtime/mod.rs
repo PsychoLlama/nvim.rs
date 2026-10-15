@@ -15,7 +15,7 @@
 //! | cell | written by | read by |
 //! | ---- | ---------- | ------- |
 //! | `exestack` | [`estack`]'s push/pop | `estack`, `script`, and every error message's prefix |
-//! | `script_items` | [`source`] as it registers a script | [`script`], [`source`], and ~20 files outside the family |
+//! | `SCRIPT_ITEMS` | [`script`]'s `new_script_item` | [`script`]'s `with_script_item` and the readers beside it, which ~20 files outside the family call |
 //! | `ga_loaded` | [`script`]'s `script_autoload`, once per autoload file | [`script`] — nothing else touches it |
 //! | `last_current_SID_seq` | [`source`] | [`source`] |
 //! | `RUNTIME_SEARCH_PATH` | [`cache`], and [`pack`]'s splice | [`cache`], via [`search`]'s `do_in_runtimepath_visit` |
@@ -28,8 +28,7 @@
 #![allow(non_upper_case_globals)]
 
 pub(crate) mod state;
-use crate::autocmd::{apply_autocmds, has_autocmd};
-use crate::charset::{skip_to_newline, skipwhite, skipwhite_len};
+use crate::autocmd::has_autocmd;
 use crate::cmdexpand::globpath;
 use crate::debugger::state::{debug_break_level, debug_tick};
 use crate::debugger::{dbg_breakpoint, dbg_find_breakpoint_named, profiling_forced};
@@ -50,10 +49,9 @@ use crate::getchar::openscript;
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
 use crate::keycodes::Ctrl_V;
-use crate::lua::executor::{nlua_exec, nlua_exec_file, nlua_exec_lines, nlua_is_deferred_safe};
+use crate::lua::executor::{nlua_exec_file, nlua_exec_lines, nlua_is_deferred_safe};
 use crate::mbyte::cluster_len;
 use crate::mbyte::utf_head_off;
-use crate::memline::ml_get;
 use crate::memory::XString;
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::state::msg_col;
@@ -66,11 +64,8 @@ use crate::option::vars::{p_enc, p_ic, p_lpl, p_pp, p_rtp, p_verbose};
 use crate::option::{set_option_value_give_err, vimrc_found};
 use crate::options::kOptRuntimepath;
 use crate::os::cshim::{gettext, strncasecmp};
-use crate::os::env::{
-    default_lib_dir, expand_env_save, home_replace, home_replace_save, vim_get_prefix_from_exepath,
-    vim_getenv,
-};
-use crate::os::fs::{os_file_is_readable, os_isdir, os_open, os_set_cloexec};
+use crate::os::env::{default_lib_dir, vim_get_prefix_from_exepath, vim_getenv};
+use crate::os::fs::{os_file_is_readable, os_isdir};
 use crate::os::input::line_breakcheck;
 use crate::os::stdpaths::{get_appname, stdpaths_get_xdg_var};
 use crate::path::{
@@ -83,20 +78,17 @@ use crate::profile::{
     profile_start, profile_sub_wait, profile_zero, script_line_end, script_line_start, time_msg,
     time_msg_at, time_pop, time_push,
 };
-use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec, vim_regfree};
+use crate::regexp::{RE_MAGIC, RE_STRING};
 use crate::registry::{IdMap, IdSet, id_map, id_set};
 use crate::runtime::state::{current_sctx, did_source_packages};
 use crate::types::AutoEvent;
 use crate::types::{
-    ApiDict, Array, BoolVarValue, CONV_NONE, Dict, EStack, EStackArg, EStackType, Error,
-    EstackInfo, EvalFuncData, ExArg, Expand, FILE, GArray, Integer, LineNr, List, LuaRetMode,
-    Object, OptSet, OptVal, ProfTime, RegMatch, ScriptCtx, ScriptId, ScriptItem, String_0, TypVal,
-    UserFunc, VAR_DICT, VarLock, VarNumber, VimConv, XDGVarType, int64_t, kBoolVarFalse, ptrdiff_t,
-    size_t,
+    ApiDict, Array, CONV_NONE, Dict, EStack, EStackArg, EStackType, EstackInfo, EvalFuncData,
+    ExArg, Expand, GArray, Integer, LineNr, List, LuaRetMode, Object, OptSet, OptVal, ProfTime,
+    ScriptCtx, ScriptId, ScriptItem, String_0, TypVal, UserFunc, VAR_DICT, VarLock, VarNumber,
+    VimConv, XDGVarType, int64_t, kBoolVarFalse, ptrdiff_t, size_t,
 };
-use ::libc::{__errno_location, fclose, fdopen, fgets, strcasecmp};
 use core::cell::Cell;
-use std::ffi::CString;
 use std::rc::Rc;
 use std::sync::Mutex;
 
@@ -105,6 +97,7 @@ mod cache;
 mod estack;
 mod expand;
 mod pack;
+mod reader;
 mod rtp;
 mod script;
 mod search;
@@ -114,6 +107,7 @@ pub use self::cache::*;
 pub use self::estack::*;
 pub use self::expand::*;
 pub use self::pack::*;
+pub(crate) use self::reader::*;
 pub use self::rtp::*;
 pub use self::script::*;
 pub use self::search::*;
@@ -173,52 +167,6 @@ crate::flag_set! {
     /// Look for both directories and files.
     const DIRFILE = 512;
 }
-pub struct SourceCookie {
-    pub fp: *mut FILE,
-    pub nextline: *mut ::core::ffi::c_char,
-    pub sourcing_lnum: LineNr,
-    pub finished: bool,
-    pub source_from_buf_or_str: bool,
-    pub buf_lnum: ::core::ffi::c_int,
-    pub buflines: Vec<CString>,
-    pub breakpoint: LineNr,
-    pub fname: *mut ::core::ffi::c_char,
-    pub dbg_tick: ::core::ffi::c_int,
-    pub level: ::core::ffi::c_int,
-    pub conv: VimConv,
-}
-
-impl SourceCookie {
-    /// A cookie nothing has been loaded into yet -- what upstream's
-    /// `CLEAR_FIELD` left behind.
-    pub fn new() -> Self {
-        Self {
-            fp: ::core::ptr::null_mut(),
-            nextline: ::core::ptr::null_mut(),
-            sourcing_lnum: 0,
-            finished: false,
-            source_from_buf_or_str: false,
-            buf_lnum: 0,
-            buflines: Vec::new(),
-            breakpoint: 0,
-            fname: ::core::ptr::null_mut(),
-            dbg_tick: 0,
-            level: 0,
-            conv: VimConv {
-                vc_type: 0,
-                vc_factor: 0,
-                vc_fd: None,
-                vc_fail: false,
-            },
-        }
-    }
-}
-
-impl Default for SourceCookie {
-    fn default() -> Self {
-        Self::new()
-    }
-}
 /// One directory of the cached search path -- see [`cache`].
 #[derive(Clone)]
 pub struct SearchPathItem {
@@ -272,12 +220,11 @@ pub const SID_STR: ::core::ffi::c_int = -10;
 pub static exestack: GlobalCell<Vec<EStack>> = GlobalCell::new(Vec::new());
 /// The script registry, script 1 at index 0 -- see [`script`].
 ///
-/// A `Vec`, not a `GArray`: the element type is fixed, ids are never
-/// reused so the vector only ever grows, and [`script::script_item`] can then
-/// be a *safe* bounds-checked lookup instead of an offset off `ga_data`.
-/// Reach it through [`script::script_item`], [`script::script_count`] and
-/// [`script::script_id_valid`], never directly.
-pub static script_items: GlobalCell<Vec<*mut ScriptItem>> = GlobalCell::new(Vec::new());
+/// The items are the vector's own: ids are never reused so it only ever
+/// grows, and an item is reached by its id, borrowed for one call at a time
+/// through [`script::with_script_item`] -- or copied out by
+/// [`script::script_name`] -- never held.
+pub(crate) static SCRIPT_ITEMS: GlobalCell<Vec<ScriptItem>> = GlobalCell::new(Vec::new());
 /// Every autoload script `script_autoload` has already run, by path.
 ///
 /// A `Vec`, not a `GArray` of owned `char *`: the list is private to

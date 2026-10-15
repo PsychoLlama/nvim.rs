@@ -3606,6 +3606,7 @@ static const int SOCKET_ADDR_LEN = 256;
 static const int SOCK_STREAM = 1;
 static const int SOS = 10;
 static const int SOUND_VOWEL = 42;
+static const int SOURCE_CHUNK = 120;
 static const int SPACE = 32;
 static const int SPAN = 202;
 static const int SPARES = 16;

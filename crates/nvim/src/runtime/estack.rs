@@ -253,8 +253,9 @@ unsafe fn defining_script(stack: &[EStack]) -> *mut c_char {
                 if def_ctx.sc_sid <= 0 {
                     return ptr::null_mut();
                 }
-                // SAFETY: a positive `sc_sid` is an index into `script_items`.
-                return unsafe { xstrdup((*script_item(def_ctx.sc_sid)).sn_name) };
+                // A positive `sc_sid` is a registry id; an anonymous chunk's
+                // item has no name.
+                return script_name(def_ctx.sc_sid).map_or(ptr::null_mut(), XString::into_raw);
             }
             // SAFETY: a script frame's `es_name` is its path.
             ETYPE_SCRIPT => return unsafe { xstrdup(entry.es_name) },

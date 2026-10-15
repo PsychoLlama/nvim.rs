@@ -83,7 +83,7 @@ use crate::popupmenu::{pum_ext_select_item, pum_set_info};
 use crate::register::{do_put, finish_yankreg_from_object, prepare_yankreg_from_object};
 use crate::runtime::{
     RuntimeOpts, do_in_runtimepath_visit, do_source, get_lib_dir, runtime_get_named,
-    runtime_inspect, script_autoload,
+    runtime_inspect, script_autoload_named,
 };
 use crate::search::{BACKWARD, FORWARD};
 use crate::state::get_mode;
