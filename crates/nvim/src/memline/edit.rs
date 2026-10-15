@@ -158,10 +158,12 @@ fn ml_insert_in_block(mut b: Buf, id: BlockId, at: InsertAt, new: &NewLine, spac
     let InsertAt { db_idx, line_count } = at;
     let len = new.len();
     let mut data = DataBlock(b.b_ml.page_mut(id));
-    let txt_start = data.txt_start().wrapping_sub(len);
-    data.set_txt_start(txt_start);
-    data.set_free(data.free().wrapping_sub(space_needed as c_uint));
-    data.set_line_count(data.line_count() + 1);
+    let mut header = data.header();
+    let txt_start = header.txt_start.wrapping_sub(len);
+    header.txt_start = txt_start;
+    header.free = header.free.wrapping_sub(space_needed as c_uint);
+    header.line_count += 1;
+    data.set_header(&header);
 
     // Where the new line's index entry goes.
     let slot = (db_idx + 1) as usize;
@@ -170,7 +172,7 @@ fn ml_insert_in_block(mut b: Buf, id: BlockId, at: InsertAt, new: &NewLine, spac
         // shift their index entries up one slot. `offset` is the start of
         // the previous line, which becomes the byte just past the new one.
         let offset = if db_idx < 0 {
-            data.txt_end()
+            header.txt_end
         } else {
             data.line_start(db_idx as usize)
         };
@@ -590,7 +592,8 @@ pub(crate) fn ml_delete_int(mut buffer: Buf, lnum: LineNr, flags: c_int) -> Resu
         // Move the text of the following lines forward over the deleted
         // one, and their index entries back over its entry.
         let mut data = DataBlock(buffer.b_ml.page_mut(id));
-        let text_start = data.txt_start();
+        let mut header = data.header();
+        let text_start = header.txt_start;
         let size = line_size as c_uint;
         data.move_bytes(
             text_start as usize,
@@ -599,9 +602,10 @@ pub(crate) fn ml_delete_int(mut buffer: Buf, lnum: LineNr, flags: c_int) -> Resu
         );
         data.move_index(idx + 1, idx, count - 1 - idx, size);
 
-        data.set_free(data.free().wrapping_add(size + INDEX_SIZE as c_uint));
-        data.set_txt_start(text_start.wrapping_add(size));
-        data.set_line_count(data.line_count() - 1);
+        header.free = header.free.wrapping_add(size + INDEX_SIZE as c_uint);
+        header.txt_start = text_start.wrapping_add(size);
+        header.line_count -= 1;
+        data.set_header(&header);
 
         // Mark the block dirty, and make sure it reaches the file so a
         // recovery sees the delete.

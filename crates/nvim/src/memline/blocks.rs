@@ -196,6 +196,44 @@ pub(crate) fn b0_read_number(src: &[u8; 4]) -> c_long {
     c_long::from(u32::from_le_bytes(*src))
 }
 
+/// The four numbers of a data block's header that an edit changes, read
+/// and written together: one bounds check for the lot.
+pub(crate) struct DataHeader {
+    pub(crate) free: c_uint,
+    pub(crate) txt_start: c_uint,
+    pub(crate) txt_end: c_uint,
+    pub(crate) line_count: c_long,
+}
+
+/// Field `$field` of the header array `$header`, as a `$ty`: a fixed range
+/// of a fixed-size array, so nothing is checked at run time.
+macro_rules! header_field {
+    ($header:expr, $field:ident, $ty:ty) => {{
+        const AT: usize = offset_of!(DataBlockLayout, $field);
+        <$ty>::from_ne_bytes(
+            $header[AT..AT + size_of::<$ty>()]
+                .try_into()
+                .expect("a field inside the header"),
+        )
+    }};
+}
+
+/// Store `$value` in field `$field` of the header array `$header`.
+macro_rules! set_header_field {
+    ($header:expr, $field:ident, $value:expr) => {{
+        const AT: usize = offset_of!(DataBlockLayout, $field);
+        let bytes = $value.to_ne_bytes();
+        $header[AT..AT + bytes.len()].copy_from_slice(&bytes);
+    }};
+}
+
+/// Index entry `entry` moved by `delta` bytes, wrapping as the C
+/// arithmetic did; the mark bit rides along.
+#[inline]
+fn shifted(entry: [u8; INDEX_SIZE], delta: c_uint) -> [u8; INDEX_SIZE] {
+    u32::from_ne_bytes(entry).wrapping_add(delta).to_ne_bytes()
+}
+
 /// A data block, over its page.
 pub(crate) struct DataBlock<P>(pub(crate) P);
 
@@ -233,6 +271,18 @@ impl<P: AsRef<[u8]>> DataBlock<P> {
 
     pub(crate) fn line_count(&self) -> c_long {
         get_i64(self.bytes(), offset_of!(DataBlockLayout, db_line_count))
+    }
+
+    /// [`DataHeader`]'s four fields at once.
+    #[inline]
+    pub(crate) fn header(&self) -> DataHeader {
+        let header: &[u8; HEADER_SIZE] = field(self.bytes(), 0);
+        DataHeader {
+            free: header_field!(header, db_free, c_uint),
+            txt_start: header_field!(header, db_txt_start, c_uint),
+            txt_end: header_field!(header, db_txt_end, c_uint),
+            line_count: header_field!(header, db_line_count, c_long),
+        }
     }
 
     /// Where index entry `i` is.
@@ -306,6 +356,16 @@ impl<P: AsRef<[u8]> + AsMut<[u8]>> DataBlock<P> {
         self.set_line_count(0);
     }
 
+    /// Write [`DataHeader`]'s four fields at once; the id is left alone.
+    #[inline]
+    pub(crate) fn set_header(&mut self, h: &DataHeader) {
+        let header: &mut [u8; HEADER_SIZE] = field_mut(self.bytes_mut(), 0);
+        set_header_field!(header, db_free, h.free);
+        set_header_field!(header, db_txt_start, h.txt_start);
+        set_header_field!(header, db_txt_end, h.txt_end);
+        set_header_field!(header, db_line_count, h.line_count);
+    }
+
     pub(crate) fn set_free(&mut self, value: c_uint) {
         set_u32(
             self.bytes_mut(),
@@ -355,12 +415,14 @@ impl<P: AsRef<[u8]> + AsMut<[u8]>> DataBlock<P> {
     pub(crate) fn shift_index(&mut self, from: usize, to: usize, delta: c_uint) {
         let (entries, _) = self.index_bytes_mut(from, to).as_chunks_mut::<INDEX_SIZE>();
         for entry in entries {
-            *entry = u32::from_ne_bytes(*entry).wrapping_add(delta).to_ne_bytes();
+            *entry = shifted(*entry, delta);
         }
     }
 
     /// Move `count` index entries from `from` to `to` (the ranges may
-    /// overlap), adding `delta` to each as it lands.
+    /// overlap), adding `delta` to each as it lands: a `memmove` and then one
+    /// pass over the moved entries. (A single pass in the safe spelling
+    /// keeps a bounds check per entry and measured twice as long.)
     pub(crate) fn move_index(&mut self, from: usize, to: usize, count: usize, delta: c_uint) {
         let (src, dst) = (Self::index_at(from), Self::index_at(to));
         self.bytes_mut()
@@ -812,6 +874,25 @@ mod tests {
         let start = block.txt_start() as usize;
         block.move_bytes(start, start - 2, 10);
         assert_eq!(&block.0[start - 2..start + 4], b"three\0");
+    }
+
+    #[test]
+    fn the_header_reads_and_writes_as_one() {
+        let mut block = DataBlock(page());
+        block.init();
+        let mut h = block.header();
+        assert_eq!(
+            (h.free, h.txt_start, h.txt_end, h.line_count),
+            (4072, 4096, 4096, 0)
+        );
+        h.txt_start -= 10;
+        h.free -= 14;
+        h.line_count += 1;
+        block.set_header(&h);
+        assert_eq!(block.txt_start(), 4086);
+        assert_eq!(block.free(), 4058);
+        assert_eq!(block.line_count(), 1);
+        assert!(block.is_data(), "the id is not part of it");
     }
 
     #[test]
