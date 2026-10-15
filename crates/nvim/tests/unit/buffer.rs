@@ -21,7 +21,7 @@ use neovim::buffer::{
 use neovim::types::Buffer;
 use neovim::winlayer::{Buf, BufId};
 
-use crate::support::{Sandbox, cstr};
+use crate::support::{Probe, Sandbox, cstr};
 
 /// The three names every `buflist_findpat` case below is written against.
 /// Each contains all three of `test`, `file` and `path`, in a different
@@ -275,4 +275,217 @@ fn a_listed_buffer_beats_a_better_unlisted_match() {
     bufs.close(buf2, DOBUF_DEL as c_int);
     assert_eq!(bufs.findpat("test", ALLOW_UNLISTED), handle1);
     assert_eq!(bufs.findpat("test", ONLY_LISTED), -1);
+}
+
+// ---------------------------------------------------------------------------
+// :ls, CTRL-G and the ruler's fragments, through the editor
+
+/// What `cmd` prints with what depends on the case's order masked: a buffer
+/// number (`:ls`'s `%3d` column keeps its width as `NNN`, CTRL-G's as `N`),
+/// the sandbox's path, and `:ls t`'s times.
+fn masked(fx: &Probe, sandbox: &Sandbox, cmd: &str) -> String {
+    let quoted = cmd.replace('\'', "''");
+    let expr = format!(
+        "substitute(substitute(substitute(execute('{quoted}'), \
+         '\\n\\zs[ 0-9]\\{{3}}', 'NNN', 'g'), 'buf \\d\\+:', 'buf N:', 'g'), \
+         '\\d\\+ seconds\\? ago', 'N ago', 'g')"
+    );
+    let text = fx.eval(&expr);
+    format!("{cmd} => {}", text.replace(sandbox.as_str(), "<root>"))
+}
+
+#[track_caller]
+fn verify(rows: &[String], want: &str) {
+    let got = rows.join("\n");
+    if let Some(dir) = std::env::var_os("NVIM_UNIT_RECORD") {
+        let name = std::thread::current()
+            .name()
+            .unwrap_or("case")
+            .replace("::", "-");
+        std::fs::write(std::path::Path::new(&dir).join(name), &got).expect("recording");
+        return;
+    }
+    assert_eq!(got, want.trim_matches('\n'), "\n{got}\n");
+}
+
+/// `:ls` with each flag column set, each filter, a name long enough to push
+/// the line number out of column 40, and the most-recently-used order.
+#[test]
+fn ls_shows_every_flag_column_and_filter() {
+    let sandbox = Sandbox::dir("buffer-ls");
+    let fx = Probe::new(sandbox.editor());
+    fx.home();
+    let long = "a_name_long_enough_to_reach_past_column_forty.txt";
+    for cmd in [
+        "set hidden",
+        "badd a.txt",
+        "badd b.txt",
+        "badd c.txt",
+        "badd u.txt",
+        &format!("badd {long}"),
+        "buffer a.txt",
+        "call setline(1, ['x', 'y', 'z'])",
+        "3",
+        "buffer b.txt",
+        "setlocal nomodifiable",
+        "split",
+        "buffer c.txt",
+        "setlocal readonly",
+        "bdelete u.txt",
+    ] {
+        fx.run(cmd);
+    }
+    let rows: Vec<String> = [
+        "ls",
+        "ls!",
+        "ls +",
+        "ls h",
+        "ls a",
+        "ls -",
+        "ls =",
+        "ls u",
+        "ls %",
+        "ls #",
+        "ls x",
+        "ls R",
+        "ls F",
+        "ls a+",
+        "filter /b\\.txt/ ls",
+        "filter! /\\.txt/ ls!",
+        "ls t%",
+    ]
+    .iter()
+    .map(|cmd| masked(&fx, &sandbox, cmd))
+    .collect();
+    verify(
+        &rows,
+        r#"
+ls => '
+NNN  h   "[No Name]"                    line 1
+NNN  h + "a.txt"                        line 3
+NNN #a-  "b.txt"                        line 1
+NNN %a=  "c.txt"                        line 1
+NNN      "a_name_long_enough_to_reach_past_column_forty.txt" line 0'
+ls! => '
+NNN  h   "[No Name]"                    line 1
+NNN  h + "a.txt"                        line 3
+NNN #a-  "b.txt"                        line 1
+NNN %a=  "c.txt"                        line 1
+NNNu     "u.txt"                        line 1
+NNN      "a_name_long_enough_to_reach_past_column_forty.txt" line 0'
+ls + => '
+NNN  h + "a.txt"                        line 3'
+ls h => '
+NNN  h   "[No Name]"                    line 1
+NNN  h + "a.txt"                        line 3'
+ls a => '
+NNN #a-  "b.txt"                        line 1
+NNN %a=  "c.txt"                        line 1'
+ls - => '
+NNN #a-  "b.txt"                        line 1'
+ls = => '
+NNN %a=  "c.txt"                        line 1'
+ls u => '
+NNNu     "u.txt"                        line 1'
+ls % => '
+NNN %a=  "c.txt"                        line 1'
+ls # => '
+NNN #a-  "b.txt"                        line 1'
+ls x => ''
+ls R => ''
+ls F => ''
+ls a+ => ''
+filter /b\.txt/ ls => '
+NNN #a-  "b.txt"                        line 1'
+filter! /\.txt/ ls! => '
+NNN  h   "[No Name]"                    line 1'
+ls t% => '
+NNN %a=  "c.txt"                        N ago'
+"#,
+    );
+    fx.run("set hidden&");
+    fx.home();
+}
+
+/// CTRL-G / `:file`: the name, the flag notes, the position with and without
+/// 'ruler', the column pair, the argument number and the buffer number.
+#[test]
+fn file_info_message() {
+    let sandbox = Sandbox::dir("buffer-fileinfo");
+    sandbox.write("f.txt", b"one\n\ttwo\nthree\nfour\n");
+    let fx = Probe::new(sandbox.editor());
+    fx.home();
+    let mut rows = Vec::new();
+    for setup in [
+        "badd f.txt | buffer f.txt",
+        "set noruler",
+        "2 | normal! $",
+        "call setline(1, 'changed')",
+        "set shortmess+=m",
+        "setlocal readonly",
+        "set shortmess+=r",
+        "set shortmess-=m shortmess-=r ruler | setlocal noreadonly",
+        "file renamed.txt",
+        "enew | file missing.txt",
+        "arglocal f.txt g.txt | argument 1",
+    ] {
+        fx.run(setup);
+        rows.push(format!("{setup}: {}", masked(&fx, &sandbox, "file")));
+    }
+    rows.push(masked(&fx, &sandbox, "normal! 2\x07"));
+    rows.push(masked(&fx, &sandbox, "normal! \x07"));
+    verify(
+        &rows,
+        r#"
+badd f.txt | buffer f.txt: file => '
+"f.txt" 4 lines --25%--'
+set noruler: file => '
+"f.txt" line 1 of 4 --25%-- col 1'
+2 | normal! $: file => '
+"f.txt" line 2 of 4 --50%-- col 4-11'
+call setline(1, 'changed'): file => '
+"f.txt" [Modified] line 2 of 4 --50%-- col 4-11'
+set shortmess+=m: file => '
+"f.txt" [+] line 2 of 4 --50%-- col 4-11'
+setlocal readonly: file => '
+"f.txt" [+][readonly] line 2 of 4 --50%-- col 4-11'
+set shortmess+=r: file => '
+"f.txt" [+][RO] line 2 of 4 --50%-- col 4-11'
+set shortmess-=m shortmess-=r ruler | setlocal noreadonly: file => '
+"f.txt" [Modified] 4 lines --50%--'
+file renamed.txt: file => '
+"renamed.txt" [Modified][Not edited] 4 lines --50%--'
+enew | file missing.txt: file => '
+"missing.txt" [Not edited] --No lines in buffer--'
+arglocal f.txt g.txt | argument 1: file => '
+"f.txt" 4 lines --50%-- (1 of 2)'
+normal! 2 => '
+
+buf N: "<root>/f.txt" 4 lines --50%-- (1 of 2)'
+normal!  => '
+
+"f.txt" 4 lines --50%-- (1 of 2)'
+"#,
+    );
+    fx.run("argglobal | set ruler& shortmess&");
+    fx.home();
+}
+
+/// The ruler's `All`/`Top`/`Bot`/percentage and its column pair.
+#[test]
+fn ruler_position_fragments() {
+    let sandbox = Sandbox::dir("buffer-relpos");
+    let fx = Probe::new(sandbox.editor());
+    fx.home();
+    fx.run("resize 10 | resize 22");
+    let at = |cmd: &str, want: &str| {
+        fx.run(cmd);
+        fx.check("nvim_eval_statusline('%P %c%V %l', {})['str']", want);
+    };
+    at("call setline(1, ['a'])", "'All 1 1'");
+    at("call setline(1, map(range(1, 100), 'v:val'))", "'Top 1 1'");
+    at("normal! 50Gzt", "'38% 1 50'");
+    at("normal! G", "'72% 1 100'");
+    at("call setline(100, \"\\tx\") | normal! G$", "'Bot 2-1 100'");
+    fx.home();
 }
