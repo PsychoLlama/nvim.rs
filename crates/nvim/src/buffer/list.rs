@@ -876,9 +876,14 @@ fn match_pattern(
     curtab_only: bool,
 ) -> Option<c_int> {
     // SAFETY: the caller's promise -- a pattern between the two pointers,
-    // inside a NUL-terminated string.
-    let (text, end) = unsafe { (cstr::bytes_at(pattern), pattern_end.offset_from(pattern)) };
-    let (pat, _) = file_pat_to_reg_pat(text, end.unsigned_abs())?;
+    // inside a NUL-terminated string; a null end is the terminator.
+    let text = unsafe { cstr::bytes_at(pattern) };
+    let end = if pattern_end.is_null() {
+        text.len()
+    } else {
+        pattern_end.addr() - pattern.addr()
+    };
+    let (pat, _) = file_pat_to_reg_pat(text, end)?;
     // The pattern and its terminator, which the attempts below write.
     let mut buf = pat.into_vec();
     let patlen = buf.len() - 1;

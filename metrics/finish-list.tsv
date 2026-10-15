@@ -69,13 +69,13 @@ autocmd/	autocmd/groups.rs	1	32	7	23	deref:8 expr:1	-	-	CStr::from_ptr:2 strcase
 autocmd/	autocmd/listing.rs	1	71	2	36	deref:34 expr:1	-	-	at:7 .add:5 snprintf:2 strchr:2 xfree:2 .offset:1 bytes_at:1 last_set_msg:1
 autocmd/	autocmd/trigger.rs	1	43	3	23	deref:15 ref:1	value:1	-	xfree:4 multiqueue_put_event:2 .read:1 ascii_iswhite:1 ends_excmd:1 skipwhite:1 xmalloc:1 xstrdup:1
 autocmd/	autocmd/walk.rs	1	53	2	12	deref:36 expr:3	other:3	-	.read:1 CStr::from_ptr:1 abort:1 c_str:1 cstr_to_string:1 match_file_pat:1 snprintf:1 xfree:1
-buffer/	*	13	178	18	126	expr:23 deref:13 ref:7 compound:4	str:46 other:21 pp_str:5 void:2 value:1	str:17 other:8	vim_snprintf_safelen:8 xfree:7 XString::from_raw:4 c_str:4 .as_ref:3 at_opt:3 bytes_at:3 from_raw_parts:3
+buffer/	*	13	178	18	127	expr:22 deref:13 ref:7 compound:4	str:46 other:21 pp_str:5 void:2 value:1	str:17 other:8	vim_snprintf_safelen:8 xfree:7 XString::from_raw:4 bytes_at:4 c_str:4 .as_ref:3 at_opt:3 from_raw_parts:3
 buffer/	buffer/all.rs	1	0	0	0	-	-	-	-
 buffer/	buffer/close.rs	1	14	0	7	deref:3 compound:1 expr:1	other:1	other:1	c_str:1 clear_fmark:1 free_fmark:1 free_wininfo:1 ga_clear:1 syntax_clear:1 terminal_close:1
 buffer/	buffer/enter.rs	1	5	0	4	deref:1	other:1 str:1	-	hash_add:1 terminal_check_size:1 time:1
 buffer/	buffer/expand.rs	1	25	2	16	deref:4 expr:2 compound:1 ref:1	str:10 other:5 pp_str:2	str:5 other:2	xfree:3 from_raw_parts_mut:2 bytes_at:1 from_raw_parts:1 home_replace_save:1 qsort:1 vim_regfree:1 xmalloc:1
 buffer/	buffer/info.rs	1	32	3	27	expr:3 compound:1	str:11	str:5	vim_snprintf_safelen:8 bytes_at:2 home_replace:2 vim_snprintf:2 at_opt:1 build_stl_str_hl:1 qsort:1 strcpy:1
-buffer/	buffer/list.rs	1	38	5	26	expr:11 deref:1	str:11 other:2 void:2 value:1	other:1 str:1	.as_ref:2 XString::from_raw:2 c_str:2 hash_init:2 os_fileid:2 xfree:2 .assume_init:1 apply_autocmds:1
+buffer/	buffer/list.rs	1	38	5	27	expr:10 deref:1	str:11 other:2 void:2 value:1	other:1 str:1	.as_ref:2 XString::from_raw:2 c_str:2 hash_init:2 os_fileid:2 xfree:2 .assume_init:1 apply_autocmds:1
 buffer/	buffer/mod.rs	1	3	0	3	-	other:2	-	apply_autocmds:1 apply_autocmds_retval:1 xfree:1
 buffer/	buffer/modeline.rs	1	2	0	2	-	-	-	from_raw_parts:1 try_getdigits:1
 buffer/	buffer/name.rs	1	22	6	18	ref:2 deref:1 expr:1	str:11 other:3 pp_str:3	str:2	XString::from_raw:2 os_fileid:1 os_fileid_equal:1 xfree:1 xstrdup:1

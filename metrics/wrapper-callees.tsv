@@ -2,7 +2,7 @@ count	callee	no_raw	defs	def
 331	xfree	0	1	crates/nvim/src/memory/mod.rs
 270	.offset	0	0	
 219	.add	0	0	
-207	bytes_at	0	1	crates/nvim/src/cstr.rs
+208	bytes_at	0	1	crates/nvim/src/cstr.rs
 170	dispatch	0	1	crates/nvim/src/lua/api_wrappers/mod.rs
 151	at	0	2	
 112	CStr::from_ptr	0	1	crates/nvim/src/marktree/node.rs
