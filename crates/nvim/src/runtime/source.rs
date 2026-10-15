@@ -167,10 +167,18 @@ pub fn cmd_source_buffer(excmd: &ExArg, ex_lua: bool) {
 /// `text` is copied into the script's lines before any of them runs, and
 /// the name is only ever read, for messages.
 pub fn do_source_str(text: &CStr, traceback_name: &CStr) -> c_int {
+    // Upstream's `snprintf` into 256 bytes of "%s called at %s:%d", spelled
+    // out: this runs for every `nvim_exec2()` from inside a script.
     let decorated = sourcing_name_copy().map(|name| {
-        let lnum = sourcing_lnum();
-        let fmt = b"%s called at %s:%d";
-        cstr::owned(&formatted!(256, fmt, traceback_name, &name[..], lnum))
+        let lnum = sourcing_lnum().to_string();
+        let mut text = Vec::with_capacity(256);
+        text.extend_from_slice(traceback_name.to_bytes());
+        text.extend_from_slice(b" called at ");
+        text.extend_from_slice(&name);
+        text.push(b':');
+        text.extend_from_slice(lnum.as_bytes());
+        text.truncate(255);
+        cstr::owned(&text)
     });
     let name = decorated.as_deref().unwrap_or(traceback_name);
     let mut req = SourceRequest::new(Origin::Str { text }, Some(name));
@@ -535,11 +543,10 @@ fn source_bracket(
     // Keep the sourcing name and line number, for recursive calls. A script
     // sourced again goes by the registry's spelling of its name, which
     // `find_script_by_name` matched without regard to case or separators.
-    // The name is this frame's, which outlives the stack frame.
     let frame_name = item
         .and_then(script_name)
         .unwrap_or_else(|| fname_exp.clone());
-    estack_push(ETYPE_SCRIPT, frame_name.as_ptr().cast_mut(), 0);
+    estack_push(ETYPE_SCRIPT, FrameName::Owned(frame_name.clone()), 0);
     if profiling && let Some(sid) = item {
         profile_script_start(sid, frame_name.as_cstr());
     }

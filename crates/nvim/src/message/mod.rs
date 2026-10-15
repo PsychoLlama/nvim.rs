@@ -150,9 +150,9 @@ use crate::types::NL;
 use crate::types::TAB;
 use crate::types::ui::{kUIMessages, kUIMultigrid};
 use crate::types::{
-    Array, EStack, EStackArg, ExArg, FlushBuffers, GridView, HlMessage, HlMessageChunk, IOSIZE,
-    Integer, KeyDict_echo_opts, MessageData, Object, OptInt, ScreenAttr, ScreenChar, ShmFlag,
-    String_0, TypVal, Vv, int64_t, size_t, uint64_t,
+    Array, EStackArg, ExArg, FlushBuffers, GridView, HlMessage, HlMessageChunk, IOSIZE, Integer,
+    KeyDict_echo_opts, MessageData, Object, OptInt, ScreenAttr, ScreenChar, ShmFlag, String_0,
+    TypVal, Vv, int64_t, size_t, uint64_t,
 };
 use crate::ui::state::{Columns, Rows, resize_events};
 use crate::ui::{
@@ -226,12 +226,6 @@ fn clear_msg_area(top: c_int, bot: c_int, left: c_int, right: c_int) {
     let grid = msg_grid_view();
     let attr = hl_attr(HLF_MSG as c_int);
     grid_clear(grid, top, bot, left, right, attr);
-}
-
-/// The innermost entry of the `:source`/function call stack, which is what
-/// C's `SOURCING_NAME` and `SOURCING_LNUM` read.
-fn sourcing_top() -> EStack {
-    crate::runtime::innermost_frame()
 }
 
 /// An [`Array`] owning nothing, C's `ARRAY_DICT_INIT`.

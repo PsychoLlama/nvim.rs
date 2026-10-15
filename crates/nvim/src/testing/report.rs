@@ -24,7 +24,7 @@ use crate::eval::typval::{tv_dict_alloc, tv_equal};
 use crate::eval::vars::assert_error;
 use crate::mbyte::{char_at, char_len};
 use crate::memory::ThinCString;
-use crate::runtime::estack_sfile_owned;
+use crate::runtime::estack_sfile;
 use crate::types::{LineNr, TypVal};
 
 use super::{AssertType, ESTACK_NONE};
@@ -36,13 +36,13 @@ pub(super) fn push_lit(message: &mut Vec<u8>, text: &'static CStr) {
 
 /// Line number being sourced or executed: the top of the exestack.
 pub(super) fn sourcing_lnum() -> LineNr {
-    crate::runtime::innermost_frame().es_lnum
+    crate::runtime::sourcing_lnum()
 }
 
 /// A fresh message, opened with the sourcing position: `script line N: `.
 pub(super) fn prepare_assert_error() -> Vec<u8> {
     let mut message = Vec::new();
-    let source = estack_sfile_owned(ESTACK_NONE);
+    let source = estack_sfile(ESTACK_NONE);
     let lnum = sourcing_lnum();
     if let Some(source) = &source {
         message.extend_from_slice(source.as_cstr().to_bytes());

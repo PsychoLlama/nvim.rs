@@ -22,7 +22,6 @@ use crate::eval::skip_expr;
 use crate::eval::typval::{NumBuf, list_find_str};
 use crate::eval::vars::get_vim_var_list_handle;
 use crate::ex_docmd::scan::skip_grep_pat;
-use crate::ex_docmd::sourcing_entry;
 use crate::ex_docmd::state::ESCAPE_CHARS;
 use crate::ex_docmd::{
     ESTACK_SCRIPT, ESTACK_SFILE, ESTACK_STACK, FIND_EVAL, FIND_IDENT, FIND_STRING, VALID_HEAD,
@@ -40,7 +39,7 @@ use crate::os::cshim::gettext;
 use crate::os::env::{expand_env_esc_of, expand_env_save_opt_of};
 use crate::path::{full_name_save, has_wildcard, path_try_shorten_fname, tail_index};
 use crate::quickfix::grep_internal;
-use crate::runtime::estack_sfile_owned;
+use crate::runtime::estack_sfile;
 use crate::runtime::state::current_sctx;
 use crate::strings::{escaped_bytes, replaced_all};
 use crate::types::{CmdLine, ExArg, ExArgt, Expand, ExpandContext, Failed, LineNr, MAXPATHL, Vv};
@@ -488,22 +487,22 @@ pub(crate) fn eval_vars(
                     e_no_script_file_name_to_substitute_for_script,
                 ),
             };
-            match estack_sfile_owned(which) {
+            match estack_sfile(which) {
                 None => return Expansion::Refused(gettext(msg)),
                 Some(name) => name.as_cstr().to_owned(),
             }
         }
         SPEC_SLNUM => {
-            let entry = &sourcing_entry();
-            if entry.es_name.is_null() || entry.es_lnum == 0 {
+            let lnum = crate::runtime::sourcing_lnum();
+            if !crate::runtime::has_sourcing_name() || lnum == 0 {
                 return Expansion::Refused(gettext(e_no_line_number_to_use_for_slnum));
             }
-            number(entry.es_lnum)
+            number(lnum)
         }
         SPEC_SFLNUM => {
             // The line the *script* is on, which is the script's own
             // offset plus the line inside it.
-            let lnum = current_sctx.get().sc_lnum + sourcing_entry().es_lnum;
+            let lnum = current_sctx.get().sc_lnum + crate::runtime::sourcing_lnum();
             if lnum == 0 {
                 return Expansion::Refused(gettext(e_no_line_number_to_use_for_sflnum));
             }

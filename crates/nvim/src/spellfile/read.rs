@@ -209,7 +209,11 @@ unsafe fn load_spl(
     };
     *lpp = lp;
 
-    estack_push(ETYPE_SPELL, fname.as_ptr().cast_mut(), 0 as LineNr);
+    estack_push(
+        ETYPE_SPELL,
+        crate::types::FrameName::owned(fname),
+        0 as LineNr,
+    );
     *did_estack_push = true;
 
     // SAFETY: `lp` is either this frame's allocation or the caller's

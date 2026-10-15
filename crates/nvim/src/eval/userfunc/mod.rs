@@ -69,9 +69,9 @@ use crate::runtime::{estack_pop, estack_push_ufunc, script_id_valid};
 use crate::search::{restore_search_patterns, save_search_patterns};
 use crate::types::ui::kUICmdline;
 use crate::types::{
-    Callback, Dict, DictItem, EStack, ExArg, Expand, FcId, FuncBody, FuncCall, LineNr, ListItem,
-    LuaRef, OptInt, Partial, SaveRedo, TypVal, UserFunc, VAR_DEF_SCOPE, VAR_FUNC, VAR_NUMBER,
-    VAR_SCOPE, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, size_t,
+    Callback, Dict, DictItem, ExArg, Expand, FcId, FuncBody, FuncCall, LineNr, ListItem, LuaRef,
+    OptInt, Partial, SaveRedo, TypVal, UserFunc, VAR_DEF_SCOPE, VAR_FUNC, VAR_NUMBER, VAR_SCOPE,
+    VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, size_t,
 };
 use crate::ui::state::Rows;
 use crate::ui::ui_has;
@@ -200,13 +200,7 @@ crate::flag_set! {
     const LUAREF = 0x800;
 }
 
-/// The innermost entry of the `:source`/function call stack: what C's
-/// `SOURCING_LNUM` and `SOURCING_NAME` macros read.
-pub(crate) fn sourcing_entry() -> EStack {
-    crate::runtime::innermost_frame()
-}
-
 /// The line number the innermost exec-stack entry is on.
 pub(crate) fn sourcing_lnum() -> LineNr {
-    sourcing_entry().es_lnum
+    crate::runtime::sourcing_lnum()
 }

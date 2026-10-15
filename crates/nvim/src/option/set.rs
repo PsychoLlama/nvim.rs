@@ -82,7 +82,7 @@ pub(crate) fn set_option_sctx(
     if !opt_flags.has(OptionSetFlags::MODELINE) {
         // The execution stack always has the frame being sourced on top
         // while anything can set an option.
-        script_ctx.sc_lnum += crate::runtime::innermost_frame().es_lnum;
+        script_ctx.sc_lnum += crate::runtime::sourcing_lnum();
     }
     nlua_set_sctx_in(&mut script_ctx);
 

@@ -33,7 +33,7 @@ use crate::ex_docmd::source::{
     LineSource, LoopLines, ReadLines, SourceKind, StoredLine, do_cmdline_end, do_cmdline_start,
     handle_did_throw, msg_verbose_cmd, restore_dbg_stuff, save_dbg_stuff,
 };
-use crate::ex_docmd::{DoCmdOpts, sourcing_entry, sourcing_lnum};
+use crate::ex_docmd::{DoCmdOpts, sourcing_lnum};
 
 use crate::ex_docmd::{PROF_YES, SavedDebugState};
 use crate::ex_eval::flag::{CSTP_ERROR, CSTP_INTERRUPT, CSTP_THROW};
@@ -708,7 +708,7 @@ impl Run {
         }
         self.count += 1;
 
-        if p_verbose() >= 15 && !sourcing_entry().es_name.is_null() || p_verbose() >= 16 as OptInt {
+        if p_verbose() >= 15 && crate::runtime::has_sourcing_name() || p_verbose() >= 16 as OptInt {
             let line = self
                 .pending
                 .as_ref()

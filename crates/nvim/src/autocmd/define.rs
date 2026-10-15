@@ -503,7 +503,7 @@ pub unsafe fn autocmd_register(
     }
     ac.script_ctx = current_sctx.get();
     // `SOURCING_LNUM`: the line of the innermost execution-stack frame.
-    ac.script_ctx.sc_lnum += crate::runtime::innermost_frame().es_lnum;
+    ac.script_ctx.sc_lnum += crate::runtime::sourcing_lnum();
     unsafe { nlua_set_sctx(&raw mut (*ac.raw()).script_ctx) };
     ac.once = once;
     ac.nested = nested;

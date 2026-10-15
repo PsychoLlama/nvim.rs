@@ -64,7 +64,7 @@ pub(crate) unsafe fn exe_pre_commands(parmp: *mut MainParams) {
     Win::current().w_cursor.lnum = 0;
     estack_push(
         ETYPE_ARGS,
-        gettext(c"pre-vimrc command line").as_ptr().cast_mut(),
+        crate::types::FrameName::Static(gettext(c"pre-vimrc command line")),
         0,
     );
     current_sctx.set(current_sctx.get().with_sid(SID_CMDARG as ScriptId));
@@ -94,7 +94,11 @@ pub(crate) unsafe fn exe_commands(parmp: *mut MainParams) {
     }
 
     // NB: not translated, unlike the pre-vimrc one above.
-    estack_push(ETYPE_ARGS, c"command line".as_ptr() as *mut c_char, 0);
+    estack_push(
+        ETYPE_ARGS,
+        crate::types::FrameName::Static(c"command line"),
+        0,
+    );
     current_sctx.set(
         current_sctx
             .get()
@@ -287,7 +291,7 @@ pub(crate) fn do_user_initialization() -> bool {
     // behind.
     let do_exrc = p_exrc();
 
-    if unsafe { execute_env(c"VIMINIT".as_ptr() as *mut c_char) }.is_ok() {
+    if execute_env(c"VIMINIT").is_ok() {
         return p_exrc();
     }
 
@@ -318,7 +322,7 @@ pub(crate) fn do_user_initialization() -> bool {
         return do_exrc;
     }
 
-    if unsafe { execute_env(c"EXINIT".as_ptr() as *mut c_char) }.is_ok() {
+    if execute_env(c"EXINIT").is_ok() {
         return p_exrc();
     }
     do_exrc

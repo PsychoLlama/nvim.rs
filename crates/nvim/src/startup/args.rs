@@ -819,18 +819,15 @@ fn env_script() -> SavedSctx {
 /// Answers `Ok` when the variable existed -- which is what makes it count as
 /// a config source, whether or not the commands in it worked.
 ///
-/// # Safety
-///
-/// `env` must point at a NUL-terminated string, unaliased for the call.
-pub(crate) unsafe fn execute_env(env: *mut c_char) -> Result<(), Failed> {
+pub(crate) fn execute_env(env: &'static CStr) -> Result<(), Failed> {
     // SAFETY: `env` names an environment variable; `os_getenv` hands over an
     // owned copy of its value.
-    let initstr = unsafe { os_getenv(env) };
+    let initstr = unsafe { os_getenv(env.as_ptr()) };
     if initstr.is_null() {
         return Err(Failed);
     }
 
-    estack_push(ETYPE_ENV, env, 0 as LineNr);
+    estack_push(ETYPE_ENV, crate::types::FrameName::Static(env), 0 as LineNr);
     let sctx = env_script();
 
     // SAFETY: the environment variable's own NUL-terminated value.

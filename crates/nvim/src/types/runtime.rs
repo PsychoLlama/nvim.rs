@@ -11,12 +11,51 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 
-#[derive(Copy, Clone)]
+/// One frame of the execution stack -- see `runtime::estack`.
+#[derive(Clone)]
 pub struct EStack {
     pub es_lnum: LineNr,
-    pub es_name: *mut ::core::ffi::c_char,
+    pub(crate) es_name: FrameName,
     pub es_type: EStackType,
     pub es_info: EstackInfo,
+}
+
+impl EStack {
+    /// The frame's name: what `<sfile>` and every "line N of ..." prefix
+    /// read. A function's frame is named by its function.
+    pub(crate) fn name(&self) -> Option<&::core::ffi::CStr> {
+        match &self.es_name {
+            FrameName::None => None,
+            FrameName::Static(name) => Some(name),
+            FrameName::Owned(name) => Some(name.as_cstr()),
+            FrameName::Function => match &self.es_info {
+                EstackInfo::UserFunction(func) => Some(func.printable_name().as_cstr()),
+                _ => None,
+            },
+        }
+    }
+}
+
+/// What a frame is called, owned by the frame -- upstream's `es_name`, a
+/// pointer into whatever the pusher kept alive.
+#[derive(Clone, Default)]
+pub(crate) enum FrameName {
+    /// No name: the bottom frame, an autocommand frame between commands.
+    #[default]
+    None,
+    /// A literal: `modelines`, `command line`.
+    Static(&'static ::core::ffi::CStr),
+    /// A copy: a script's path, an autocommand's description.
+    Owned(crate::memory::XString),
+    /// The name of the function in [`EstackInfo::UserFunction`].
+    Function,
+}
+
+impl FrameName {
+    /// A frame named by a copy of `name`.
+    pub(crate) fn owned(name: &::core::ffi::CStr) -> Self {
+        FrameName::Owned(crate::memory::XString::from_cstr(name))
+    }
 }
 
 /// What an execution-stack frame is running, for the two kinds of frame
@@ -25,30 +64,32 @@ pub struct EStack {
 /// Upstream is a four-armed union keyed by `es_type`; only these two arms
 /// were ever read, and an autocommand frame whose walk has run out holds
 /// [`EstackInfo::None`] rather than a null pointer under an `aucmd` tag.
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub enum EstackInfo {
     /// Nothing beyond the frame's name: the bottom frame, a script, a
     /// modeline, an exception, `--cmd` arguments, and so on.
     None,
-    /// A user function -- the frame's `es_name` is its name.
-    UserFunction(*const UserFunc),
-    /// The autocommand walk this frame is running.
-    Autocommand(*mut AutoPatCmd),
+    /// A user function, held for as long as the frame is.
+    UserFunction(::std::rc::Rc<UserFunc>),
+    /// An autocommand walk: the script context of the command it is
+    /// running, which the walk updates as it moves from one to the next.
+    Autocommand(ScriptCtx),
 }
 
 impl EstackInfo {
     /// The user function this frame is running, if it is running one.
-    pub fn user_function(self) -> Option<*const UserFunc> {
+    pub fn user_function(&self) -> Option<&::std::rc::Rc<UserFunc>> {
         match self {
             EstackInfo::UserFunction(ufunc) => Some(ufunc),
             _ => None,
         }
     }
 
-    /// The autocommand walk this frame is running, if it is running one.
-    pub fn autocommand(self) -> Option<*mut AutoPatCmd> {
+    /// The script context of the autocommand this frame is running, if it
+    /// is running one.
+    pub fn autocommand(&self) -> Option<ScriptCtx> {
         match self {
-            EstackInfo::Autocommand(aucmd) => Some(aucmd),
+            EstackInfo::Autocommand(sctx) => Some(*sctx),
             _ => None,
         }
     }

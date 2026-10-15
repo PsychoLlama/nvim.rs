@@ -31,7 +31,7 @@ use crate::event::r#loop::schedule_deferred_job;
 use crate::guard::Suppress;
 use crate::log::logmsg;
 use crate::message_fmt::{msg_bytes as text_arg, msg_cstr};
-use crate::runtime::{estack_sfile_owned, sourcing_lnum, sourcing_name_copy, with_sourcing_name};
+use crate::runtime::{estack_sfile, sourcing_lnum, sourcing_name_copy, with_sourcing_name};
 use crate::strings::has_char;
 use core::ffi::{CStr, c_int, c_long};
 use std::ffi::CString;
@@ -62,7 +62,7 @@ fn emsg_source_line() -> Option<CString> {
     if !other_sourcing_name() {
         return None;
     }
-    let sname = match estack_sfile_owned(ESTACK_NONE) {
+    let sname = match estack_sfile(ESTACK_NONE) {
         Some(stack) => stack.as_cstr().to_bytes().to_vec(),
         None => sourcing_name_text()?,
     };

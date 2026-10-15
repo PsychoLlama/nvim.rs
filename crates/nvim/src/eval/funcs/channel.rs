@@ -232,7 +232,8 @@ impl ProviderScope {
             current_sctx.set(scope.script_ctx);
             // Push the caller's execution-stack entry so that any message
             // names the caller's script, not the provider's.
-            exestack.with_mut(|stack| stack.push(scope.es_entry));
+            let entry = scope.es_entry.clone();
+            exestack.with_mut(|stack| stack.push(entry));
             autocmd_fname.set(scope.autocmd_fname.clone());
             autocmd_match.set(scope.autocmd_match.clone());
             autocmd_fname_full.set(scope.autocmd_fname_full);

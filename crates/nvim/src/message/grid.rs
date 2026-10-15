@@ -298,7 +298,7 @@ pub(crate) fn inc_msg_scrolled() {
             Some(name) => {
                 // Upstream sizes the buffer for the name and forty bytes.
                 let room = name.len() + 40;
-                let lnum = int64_t::from(sourcing_top().es_lnum);
+                let lnum = int64_t::from(crate::runtime::sourcing_lnum());
                 crate::formatted!(room, gettext(c"%s line %ld").to_bytes(), &name[..], lnum)
             }
         };

@@ -66,7 +66,7 @@ use crate::message_fmt::{msg_bytes, msg_cstr, report_msg};
 use crate::option::vars::p_verbose;
 use crate::option::vars::p_vfile;
 use crate::os::cshim::gettext;
-use crate::runtime::{estack_sfile_owned, sourcing_lnum, stacktrace_create};
+use crate::runtime::{estack_sfile, sourcing_lnum, stacktrace_create};
 use crate::tr;
 use crate::types::{
     CondId, ErrorMsg, ErrorMsgs, ExcId, ExceptType, Exception, ExceptionState, Failed, IOSIZE,
@@ -177,7 +177,7 @@ fn append_msg(mesg: &[u8], multiline: bool, concat: bool, severe: bool) {
     // `do_errthrow` runs.
     let entry = ErrorMsg {
         msg: XString::from_bytes(mesg),
-        sfile: estack_sfile_owned(ESTACK_NONE),
+        sfile: estack_sfile(ESTACK_NONE),
         slnum: sourcing_lnum(),
         multiline,
     };
@@ -418,7 +418,7 @@ pub(super) fn throw_exception(thrown: Thrown, cmdname: Option<&CStr>) -> Result<
             (name, head.slnum)
         }
         _ => {
-            let name = estack_sfile_owned(ESTACK_NONE).unwrap_or_else(|| XString::from_bytes(b""));
+            let name = estack_sfile(ESTACK_NONE).unwrap_or_else(|| XString::from_bytes(b""));
             (name, sourcing_lnum())
         }
     };

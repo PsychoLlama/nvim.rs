@@ -74,7 +74,7 @@ use crate::syntax::{ex_ownsyntax, ex_syntax, ex_syntime};
 use crate::tag::do_tags;
 use crate::types::ExcId;
 use crate::types::{
-    Callback, CdCause, ChannelPart, CmdAddr, Direction, DoBufAction, DoBufStart, EStack, EStackArg,
+    Callback, CdCause, ChannelPart, CmdAddr, Direction, DoBufAction, DoBufStart, EStackArg,
     EStackType, ExArg, ExArgt, Handle, LineNr, LuaRetMode, MarkGet, MotionType, OptMagic,
     RemapValues, uint8_t, uint16_t,
 };
@@ -163,13 +163,6 @@ crate::flag_set! {
     const KEEPLINE = 32;
 }
 
-/// The top of the execution stack: the script or function whose line is
-/// running. `SOURCING_LNUM`/`SOURCING_NAME` in the C, where they are macros
-/// over `exestack`'s last entry.
-pub(crate) fn sourcing_entry() -> EStack {
-    crate::runtime::innermost_frame()
-}
-
 /// The next line `excmd`'s source answers -- upstream's
 /// `eap->ea_getline(c, eap->cookie, indent, do_concat)` -- or `None` at the
 /// end of the input, or when the command was given no source.
@@ -184,7 +177,7 @@ pub(crate) fn exarg_getline(
 
 /// The line number the message and breakpoint machinery reports.
 pub(crate) fn sourcing_lnum() -> LineNr {
-    crate::runtime::innermost_frame().es_lnum
+    crate::runtime::sourcing_lnum()
 }
 
 /// A command handler. A plain safe `fn`, not `extern "C"`: nothing outside

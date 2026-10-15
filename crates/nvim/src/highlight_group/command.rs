@@ -33,7 +33,7 @@ use crate::os::cshim::gettext;
 use crate::runtime::state::current_sctx;
 use crate::startup::starting;
 use crate::types::ui::kUILinegrid;
-use crate::types::{EStack, OptVal, OptionSetFlags};
+use crate::types::{OptVal, OptionSetFlags};
 use crate::ui::state::t_colors;
 use crate::ui::{ui_default_colors_set, ui_has, ui_refresh, ui_rgb_attached};
 
@@ -252,15 +252,9 @@ pub(crate) fn do_highlight(text: &CStr, forceit: bool, init: bool) {
     }
 }
 
-/// The innermost `EStack`, which is what `SOURCING_LNUM`/`SOURCING_NAME`
-/// read.
-fn sourcing() -> EStack {
-    crate::runtime::innermost_frame()
-}
-
 /// `SOURCING_LNUM`: the line of the script being sourced.
 pub(crate) fn sourcing_lnum() -> c_int {
-    sourcing().es_lnum
+    crate::runtime::sourcing_lnum()
 }
 
 /// `:highlight [default] link {from} {to}`.
@@ -333,7 +327,7 @@ fn highlight_link(line: &mut Line, forceit: bool, init: bool, dodefault: bool) {
 
 /// `SOURCING_NAME == NULL`: whether the innermost entry names a script.
 fn sourcing_name_is_null() -> bool {
-    sourcing().es_name.is_null()
+    !crate::runtime::has_sourcing_name()
 }
 
 /// The `key=value` pairs of one `:highlight {group} ...` command.

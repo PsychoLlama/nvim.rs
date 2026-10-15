@@ -23,7 +23,7 @@ use crate::memory::XString;
 use crate::message_fmt::c_str;
 use crate::smsg;
 use crate::snprintf;
-use crate::types::EstackInfo;
+use crate::types::{EstackInfo, FrameName};
 
 /// The buffer number `apc`'s `<buffer=N>` patterns match: its own until
 /// the walk is running, then the running walks' slot, which
@@ -108,32 +108,31 @@ pub(crate) unsafe fn aucmd_next(apc: *mut AutoPatCmd) {
                     .wrapping_add((*ap).patlen as size_t)
                     .wrapping_add(1)
             };
-            let namep = unsafe { xmalloc(sourcing_name_len) }.cast::<::core::ffi::c_char>();
-            unsafe {
+            // SAFETY: `snprintf` writes at most `sourcing_name_len` bytes,
+            // the room `filled` makes, from the row's own NUL-terminated
+            // pattern.
+            let namep = XString::filled(sourcing_name_len - 1, |namep| unsafe {
                 snprintf!(
                     namep,
                     sourcing_name_len,
                     s.as_ptr(),
                     name.as_ptr(),
-                    (*ap).pat,
-                )
-            };
+                    (*ap).pat
+                );
+            });
             if p_verbose() >= 8 {
                 verbose_enter();
-                // SAFETY: `namep` is the NUL-terminated name just built.
-                let namep = unsafe { c_str(namep) };
+                let namep = crate::message_fmt::msg_cstr(namep.as_cstr());
                 smsg!(0, "Executing {namep}");
                 verbose_leave();
             }
 
-            // Point the execution stack at this autocommand.
-            //
-            // SAFETY: the stack takes `namep`, and hands back the name it
-            // held, which is this walk's own to free.
-            unsafe {
-                xfree(crate::runtime::replace_sourcing_name(namep).cast::<::core::ffi::c_void>());
-            };
-            crate::runtime::with_innermost(|entry| entry.es_info = EstackInfo::Autocommand(apc));
+            // Point the execution stack at this autocommand, and at the
+            // script context of the command the walk is on.
+            crate::runtime::set_sourcing_name(FrameName::Owned(namep));
+            // SAFETY: `apc` is the caller's live cursor.
+            let sctx = unsafe { (*apc).script_ctx };
+            crate::runtime::with_innermost(|entry| entry.es_info = EstackInfo::Autocommand(sctx));
         }
 
         // SAFETY: `apc` is the caller's live cursor.
@@ -146,13 +145,7 @@ pub(crate) unsafe fn aucmd_next(apc: *mut AutoPatCmd) {
 
     // Nothing left: clear the ETYPE_AUCMD stack entry.
     //
-    // SAFETY: as above -- the name the stack gives back is ours to free.
-    unsafe {
-        xfree(
-            crate::runtime::replace_sourcing_name(::core::ptr::null_mut())
-                .cast::<::core::ffi::c_void>(),
-        );
-    };
+    crate::runtime::set_sourcing_name(FrameName::None);
     crate::runtime::with_innermost(|entry| entry.es_info = EstackInfo::None);
 
     // SAFETY: `apc` is the caller's live cursor.
@@ -272,6 +265,13 @@ pub fn getnextac(walk: &mut AutoPatCmd) -> Option<XString> {
     autocmd_nested.set(unsafe { (*ac).nested });
     current_sctx.set(unsafe { (*ac).script_ctx });
     unsafe { (*apc).script_ctx = current_sctx.get() };
+    // The stack frame carries the context of the command now running.
+    let sctx = current_sctx.get();
+    crate::runtime::with_innermost(|entry| {
+        if let EstackInfo::Autocommand(running) = &mut entry.es_info {
+            *running = sctx;
+        }
+    });
 
     let retval;
     if unsafe { (*ac).handler_cmd }.is_null() {

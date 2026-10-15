@@ -10,7 +10,7 @@ use crate::guard::Depth;
 use crate::memory::ThinCString;
 use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::semsg;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 use core::ptr::null_mut;
 use std::ffi::CString;
 
@@ -48,7 +48,7 @@ pub(crate) static provider_caller_scope: GlobalCell<CallerScope> = GlobalCell::n
     script_ctx: ScriptCtx::NONE,
     es_entry: EStack {
         es_lnum: 0,
-        es_name: ::core::ptr::null_mut::<c_char>(),
+        es_name: crate::types::FrameName::None,
         es_type: ETYPE_TOP,
         es_info: EstackInfo::None,
     },

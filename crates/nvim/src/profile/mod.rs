@@ -591,7 +591,7 @@ fn with_current_script(f: impl FnOnce(&mut ScriptItem)) {
 
 /// Line number being sourced/executed: the top of the exestack.
 fn sourcing_lnum() -> LineNr {
-    crate::runtime::innermost_frame().es_lnum
+    crate::runtime::sourcing_lnum()
 }
 
 /// All functions in the global function table with profiling data, in the

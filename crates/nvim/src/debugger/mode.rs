@@ -123,7 +123,7 @@ fn show_debug_banner(cmd: &CStr) {
         let _: bool = report_msg(0, || tr_c!(label, shown));
     }
 
-    if let Some(sname) = estack_sfile_owned(ESTACK_NONE) {
+    if let Some(sname) = estack_sfile(ESTACK_NONE) {
         msg(sname.as_cstr(), 0);
     }
     show_debug_line(cmd);
@@ -377,7 +377,7 @@ fn do_checkbacktracelevel() {
         smsg!(0, "frame is zero");
         return;
     }
-    let sname = estack_sfile_owned(ESTACK_NONE);
+    let sname = estack_sfile(ESTACK_NONE);
     let max = get_maxbacktrace_level(sname.as_deref());
     if debug_backtrace_level.get() > max {
         debug_backtrace_level.set(max);
@@ -388,7 +388,7 @@ fn do_checkbacktracelevel() {
 /// `>backtrace`: the execution stack, innermost last, with `->` on the frame
 /// `>up`/`>down` have selected.
 fn do_showbacktrace(cmd: &CStr) {
-    let sname = estack_sfile_owned(ESTACK_NONE);
+    let sname = estack_sfile(ESTACK_NONE);
     let max = get_maxbacktrace_level(sname.as_deref());
     if let Some(sname) = sname {
         // The frames are one string joined by "..": each is printed up to

@@ -265,9 +265,12 @@ pub fn handle_did_throw() {
     });
 
     // Report against where the exception was thrown, not where it was
-    // caught. The frame names `throw_name` by pointer, and this frame holds
-    // the name until the frame is popped.
-    estack_push(ETYPE_EXCEPT, throw_name.as_ptr().cast_mut(), throw_lnum);
+    // caught. The frame takes the name.
+    estack_push(
+        ETYPE_EXCEPT,
+        crate::types::FrameName::Owned(throw_name),
+        throw_lnum,
+    );
     discard_current_exception();
 
     // `:silent!` makes even an uncaught exception non-fatal.
@@ -285,7 +288,6 @@ pub fn handle_did_throw() {
     }
 
     estack_pop();
-    drop(throw_name);
 }
 
 // ---------------------------------------------------------------------------

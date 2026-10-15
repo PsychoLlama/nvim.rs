@@ -444,7 +444,7 @@ pub unsafe fn apply_autocmds_group(
         let redraw_off = Suppress::redraw();
 
         // `es_name` and `es_lnum` are filled in by `aucmd_next`.
-        estack_push(ETYPE_AUCMD, ::core::ptr::null_mut(), 0);
+        estack_push(ETYPE_AUCMD, crate::types::FrameName::None, 0);
 
         // Restored below, in the run of teardown before the call stack is;
         // the handlers this fires each point it at themselves.
@@ -574,14 +574,7 @@ pub unsafe fn apply_autocmds_group(
         autocmd_busy.set(save_autocmd_busy);
         filechangeshell_busy.set(false);
         autocmd_nested.set(save_autocmd_nested);
-        // `SOURCING_NAME`: `aucmd_next` left the last one here.
-        unsafe {
-            xfree(
-                crate::runtime::innermost_frame()
-                    .es_name
-                    .cast::<::core::ffi::c_void>(),
-            )
-        };
+        // The frame takes the name `aucmd_next` left there with it.
         estack_pop();
         unsafe { xfree(afile_orig.cast::<::core::ffi::c_void>()) };
         autocmd_fname.set(save_autocmd_fname);
