@@ -1,6 +1,4 @@
 #![forbid(unsafe_code)]
-// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 pub(crate) mod state;
 use crate::ascii::{ascii_isspace, ascii_iswhite};
@@ -61,9 +59,9 @@ use crate::types::AutoEvent;
 use crate::types::TAB;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    AdditionalData, Callback, ColNr, Dict, ExArg, Expand, FileComparison, FileMark, FileMarkView,
-    FileOffset, GetFileFlags, GetFileRet, LineNr, List, OptMagic, OptSet, Pos, Taggy, Timestamp,
-    VarNumber, VimConv,
+    AdditionalData, Callback, ColNr, Dict, ExArg, Expand, FileMark, FileMarkView, FileOffset,
+    GetFileFlags, GetFileRet, LineNr, List, OptMagic, OptSet, Pos, Taggy, Timestamp, VarNumber,
+    VimConv,
 };
 use crate::ui::state::Columns;
 use crate::ui::ui_has;
@@ -98,7 +96,6 @@ pub const GETF_SETMARK: GetFileFlags = 1;
 pub const GETFILE_OPEN_OTHER: GetFileRet = -1;
 pub const GETFILE_SAME_FILE: GetFileRet = 0;
 pub const FINDFILE_FILE: ::core::ffi::c_uint = 0;
-pub const kEqualFiles: FileComparison = 1;
 pub const LSIZE: ::core::ffi::c_uint = 512;
 pub const DT_LTAG: ::core::ffi::c_uint = 11;
 pub const DT_JUMP: ::core::ffi::c_uint = 9;
@@ -179,12 +176,12 @@ pub enum Jumped {
 }
 /// The name of a file a match pointed at that does not exist, kept so that
 /// the E429 report can name it. `None` is "every match's file was there".
-static nofile_fname: GlobalCell<Option<XString>> = GlobalCell::new(None);
+static MISSING_FILE: GlobalCell<Option<XString>> = GlobalCell::new(None);
 /// The tag the remembered matches were found for, so that a `:tnext` can
 /// tell whether it is still walking the same search.
-static tagmatchname: GlobalCell<Option<XString>> = GlobalCell::new(None);
+static MATCHES_ARE_FOR: GlobalCell<Option<XString>> = GlobalCell::new(None);
 /// The preview window's stand-in for a tag stack: `:ptag` keeps one entry.
-static ptag_entry: GlobalCell<Taggy> = GlobalCell::new(Taggy {
+static PREVIEW_ENTRY: GlobalCell<Taggy> = GlobalCell::new(Taggy {
     tagname: None,
     fmark: FileMark {
         mark: Pos {
@@ -207,5 +204,5 @@ static ptag_entry: GlobalCell<Taggy> = GlobalCell::new(Taggy {
 pub const TAG_SEP: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
 /// Forget which tag the remembered matches are for.
 pub fn tag_freematch() {
-    drop(tagmatchname.take());
+    drop(MATCHES_ARE_FOR.take());
 }

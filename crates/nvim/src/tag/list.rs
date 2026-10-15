@@ -116,7 +116,7 @@ pub(crate) fn print_tag_list(new_tag: bool, use_tagstack: bool, matches: &[TagMa
 
 /// Whether entry `i` is the match currently jumped to.
 fn is_current(i: c_int, use_tagstack: bool) -> bool {
-    if g_do_tagpreview.get() != 0 && i == ptag_entry.with(|entry| entry.cur_match) {
+    if g_do_tagpreview.get() != 0 && i == PREVIEW_ENTRY.with(|entry| entry.cur_match) {
         return true;
     }
     if !use_tagstack {

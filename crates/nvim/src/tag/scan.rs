@@ -465,16 +465,16 @@ impl FindTags {
     /// answered and `FAIL` otherwise.
     fn apply_tagfunc(&mut self, pat: &CStr, buf_ffname: Option<&CStr>) -> c_int {
         if self.flags & TAG_NO_TAGFUNC as c_int != 0
-            || tfu_in_use.get()
+            || TAGFUNC_RUNNING.get()
             || Buf::current().b_p_tfu.first_byte() == 0
         {
             return NOTDONE;
         }
-        tfu_in_use.set(true);
+        TAGFUNC_RUNNING.set(true);
         // `'tagfunc'` does its own filtering, so every answer is kept
         // and none of them is looked at for duplicates.
         let answer = find_tagfunc_tags(pat, self.flags, buf_ffname);
-        tfu_in_use.set(false);
+        TAGFUNC_RUNNING.set(false);
         match answer {
             TagfuncAnswer::Declined => NOTDONE,
             TagfuncAnswer::Unusable => FAIL,
@@ -670,13 +670,19 @@ fn search(
         0 => tc_flags.get(),
         local => local,
     };
-    match tagcase {
-        kOptTcFlagFollowic => {}
-        kOptTcFlagIgnore => P_IC.set(true),
-        kOptTcFlagMatch => P_IC.set(false),
-        kOptTcFlagFollowscs => P_IC.set(ignorecase_opt(pattern.as_cstr(), p_ic(), p_scs())),
-        kOptTcFlagSmart => P_IC.set(ignorecase_opt(pattern.as_cstr(), true, true)),
-        _ => unreachable!("'tagcase' is one of its five values"),
+    if tagcase == kOptTcFlagIgnore {
+        P_IC.set(true);
+    } else if tagcase == kOptTcFlagMatch {
+        P_IC.set(false);
+    } else if tagcase == kOptTcFlagFollowscs {
+        P_IC.set(ignorecase_opt(pattern.as_cstr(), p_ic(), p_scs()));
+    } else if tagcase == kOptTcFlagSmart {
+        P_IC.set(ignorecase_opt(pattern.as_cstr(), true, true));
+    } else {
+        assert_eq!(
+            tagcase, kOptTcFlagFollowic,
+            "'tagcase' is one of its five values"
+        );
     }
 
     let help_save = Buf::current().b_help;

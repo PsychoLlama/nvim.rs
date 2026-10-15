@@ -6,8 +6,6 @@
 //! same shape a tags file line would have had.
 
 #![forbid(unsafe_code)]
-// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use super::*;
 use crate::eval::typval::CallFrame;
@@ -20,13 +18,13 @@ use core::ffi::{CStr, c_int};
 
 /// The global `'tagfunc'` callback. A buffer-local one lives in
 /// `b_tfu_cb`.
-static tfu_cb: GlobalCell<Callback> = GlobalCell::new(Callback::None);
+static GLOBAL_TAGFUNC: GlobalCell<Callback> = GlobalCell::new(Callback::None);
 
 /// Whether a `'tagfunc'` call is in progress.
 ///
 /// It must not start another, and it must not be allowed to rewrite the
 /// tag stack it is being asked to fill.
-pub(crate) static tfu_in_use: GlobalCell<bool> = GlobalCell::new(false);
+pub(crate) static TAGFUNC_RUNNING: GlobalCell<bool> = GlobalCell::new(false);
 
 /// The error every malformed `'tagfunc'` answer is reported with.
 const E_INVALID_RETURN: &CStr = c"E987: Invalid return value from tagfunc";
@@ -48,7 +46,7 @@ pub fn did_set_tagfunc(args: &mut OptSet) -> Result<(), OptError> {
     let retval = if args.os_flags.has(OptionSetFlags::LOCAL) {
         cb.map(|cb| install_callback(&mut buf.b_tfu_cb, cb))
     } else {
-        let retval = cb.map(|cb| tfu_cb.with_mut(|slot| install_callback(slot, cb)));
+        let retval = cb.map(|cb| GLOBAL_TAGFUNC.with_mut(|slot| install_callback(slot, cb)));
         if retval.is_ok() && !args.os_flags.has(OptionSetFlags::GLOBAL) {
             // `:set` without a scope sets the buffer-local copy too.
             set_buflocal_tfu_callback(buf);
@@ -64,7 +62,7 @@ pub fn did_set_tagfunc(args: &mut OptSet) -> Result<(), OptError> {
 
 /// Mark the global `'tagfunc'` callback so the collector keeps it.
 pub fn set_ref_in_tagfunc(copy_id: c_int) -> bool {
-    tfu_cb.with(|cb| set_ref_in_callback(cb, copy_id, None, None))
+    GLOBAL_TAGFUNC.with(|cb| set_ref_in_callback(cb, copy_id, None, None))
 }
 
 /// Copy the global `'tagfunc'` callback into `buffer`'s local one.
@@ -73,7 +71,7 @@ pub fn set_ref_in_tagfunc(copy_id: c_int) -> bool {
 /// lives in a static.
 pub fn set_buflocal_tfu_callback(mut buffer: Buf) {
     callback_free(&mut buffer.b_tfu_cb);
-    tfu_cb.with(|global| {
+    GLOBAL_TAGFUNC.with(|global| {
         if global.is_set() {
             callback_copy(&mut buffer.b_tfu_cb, global);
         }

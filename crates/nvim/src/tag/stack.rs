@@ -295,7 +295,7 @@ pub fn get_tagstack(window: Win, retdict: &mut Dict) {
 /// `action` is `'a'` to append, `'r'` to replace and `'t'` to truncate.
 /// Answers `Err` with the error already reported.
 pub fn set_tagstack(window: Win, d: &Dict, action: c_int) -> Result<(), Failed> {
-    if tfu_in_use.get() {
+    if TAGFUNC_RUNNING.get() {
         // 'tagfunc' is running: it is the tag stack's own contents
         // that are being computed.
         tag_emsg(c"E986: Cannot modify the tag stack within tagfunc");

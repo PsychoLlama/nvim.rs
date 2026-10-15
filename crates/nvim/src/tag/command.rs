@@ -9,8 +9,6 @@
 //! that `:tnext` does not have to read the tags files again.
 
 #![forbid(unsafe_code)]
-// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use super::Jumped;
 use super::*;
@@ -42,7 +40,7 @@ fn match_at(i: c_int) -> TagMatch {
 
 /// The limit the last search used. `MAXCOL` means every match was found,
 /// so there is no point looking again for a later one.
-static max_num_matches: GlobalCell<c_int> = GlobalCell::new(0);
+static MATCH_LIMIT: GlobalCell<c_int> = GlobalCell::new(0);
 
 /// `:tlast`. The parent's `DT_*` family is the transpile's, which left
 /// this one out; it is used here and nowhere else in the module.
@@ -58,12 +56,12 @@ const NO_VIEW: FileMarkView = FileMarkView {
 /// The preview window's entry: the match it shows, and the buffer it came
 /// from.
 fn ptag_position() -> (c_int, c_int) {
-    ptag_entry.with(|entry| (entry.cur_match, entry.cur_fnum))
+    PREVIEW_ENTRY.with(|entry| (entry.cur_match, entry.cur_fnum))
 }
 
 /// Remember where the preview window got to.
 fn set_ptag_position(cur_match: c_int, cur_fnum: c_int) {
-    ptag_entry.with_mut(|entry| {
+    PREVIEW_ENTRY.with_mut(|entry| {
         entry.cur_match = cur_match;
         entry.cur_fnum = cur_fnum;
     });
@@ -71,7 +69,7 @@ fn set_ptag_position(cur_match: c_int, cur_fnum: c_int) {
 
 /// Forget the previous preview tag and remember `tag` instead.
 fn restart_ptag(tag: &XString) {
-    ptag_entry.with_mut(|entry| {
+    PREVIEW_ENTRY.with_mut(|entry| {
         tagstack_clear_entry(entry);
         entry.tagname = Some(ThinCString::from_bytes(tag));
     });
@@ -84,7 +82,7 @@ fn restart_ptag(tag: &XString) {
 /// `forceit` its `!`, and `verbose` asks for "tag not found" to be
 /// reported.
 pub fn do_tag(tag: &CStr, kind: c_int, count: c_int, forceit: c_int, verbose: bool) {
-    if tfu_in_use.get() {
+    if TAGFUNC_RUNNING.get() {
         // The stack is what `'tagfunc'` is being asked to describe.
         tag_emsg(c"E986: Cannot modify the tag stack within tagfunc");
         return;
@@ -192,7 +190,7 @@ impl DoTag {
             buf_ffname: Buf::current().name.full().map(XString::from_cstr),
             prev_num_matches: match_count(),
         };
-        drop(nofile_fname.take());
+        drop(MISSING_FILE.take());
         cmd
     }
 
@@ -257,7 +255,7 @@ impl DoTag {
     /// A new tag was named: put it on the stack (or on the preview entry).
     fn push_new_tag(&mut self) {
         if g_do_tagpreview.get() != 0 {
-            let same = ptag_entry.with(|entry| {
+            let same = PREVIEW_ENTRY.with(|entry| {
                 entry
                     .tagname
                     .as_ref()
@@ -303,7 +301,7 @@ impl DoTag {
     /// or a `:pop` has already done the jump.
     fn walk_stack(&mut self) -> bool {
         let empty = if g_do_tagpreview.get() != 0 {
-            ptag_entry.with(|entry| entry.tagname.is_none())
+            PREVIEW_ENTRY.with(|entry| entry.tagname.is_none())
         } else {
             self.len == 0
         };
@@ -501,13 +499,13 @@ impl DoTag {
             let mut name = self.tag_name();
             // Whether the remembered matches are for a different tag.
             // Read before `search` replaces the remembered name.
-            let other = tagmatchname.with(|remembered| {
+            let other = MATCHES_ARE_FOR.with(|remembered| {
                 remembered
                     .as_ref()
                     .is_none_or(|remembered| remembered != &name)
             });
             if (self.new_tag
-                || (self.cur_match >= match_count() && max_num_matches.get() != MAXCOL as c_int)
+                || (self.cur_match >= match_count() && MATCH_LIMIT.get() != MAXCOL as c_int)
                 || other)
                 && !self.search(&mut name, other)
             {
@@ -542,7 +540,7 @@ impl DoTag {
             self.with_current(|entry| from_entry(entry))
                 .unwrap_or_default()
         } else if g_do_tagpreview.get() != 0 {
-            ptag_entry.with(from_entry)
+            PREVIEW_ENTRY.with(from_entry)
         } else {
             self.tag.clone()
         }
@@ -555,14 +553,14 @@ impl DoTag {
     /// Answers `false` when the window went away while searching.
     fn search(&mut self, name: &mut XString, other: bool) -> bool {
         if other {
-            tagmatchname.set(Some(name.clone()));
+            MATCHES_ARE_FOR.set(Some(name.clone()));
         }
 
         if matches!(self.kind as c_uint, DT_SELECT | DT_JUMP | DT_LTAG) {
             // Every match is wanted, to list them.
             self.cur_match = MAXCOL as c_int - 1;
         }
-        max_num_matches.set(if self.kind == DT_TAG as c_int {
+        MATCH_LIMIT.set(if self.kind == DT_TAG as c_int {
             MAXCOL as c_int
         } else {
             self.cur_match + 1
@@ -585,12 +583,12 @@ impl DoTag {
         }
 
         let buf_ffname = self.buf_ffname.as_ref().map(XString::as_cstr);
-        let found = find_tags(name, flags, max_num_matches.get(), buf_ffname);
+        let found = find_tags(name, flags, MATCH_LIMIT.get(), buf_ffname);
         let mut new_matches = match found {
             Ok(found) => {
-                if c_int::try_from(found.len()).is_ok_and(|n| n < max_num_matches.get()) {
+                if c_int::try_from(found.len()).is_ok_and(|n| n < MATCH_LIMIT.get()) {
                     // Fewer than the limit: that is all of them.
-                    max_num_matches.set(MAXCOL as c_int);
+                    MATCH_LIMIT.set(MAXCOL as c_int);
                 }
                 found
             }
@@ -651,7 +649,7 @@ impl DoTag {
             // are looking for a match in another file that was not
             // found either: E429 says so below.
             if matches!(self.kind as c_uint, DT_NEXT | DT_FIRST)
-                && nofile_fname.with(Option::is_none)
+                && MISSING_FILE.with(Option::is_none)
             {
                 tag_emsg(if found == 1 {
                     c"E427: There is only one matching tag"
@@ -704,7 +702,7 @@ impl DoTag {
         // Only when about to try the next match: otherwise E429 below
         // reports it.
         if self.error_cur_match != self.cur_match
-            && let Some(missing) = nofile_fname.with(Clone::clone)
+            && let Some(missing) = MISSING_FILE.with(Clone::clone)
         {
             let arg0 = msg_cstr(missing.as_cstr());
             smsg!(0, "File \"{arg0}\" does not exist");
@@ -734,10 +732,9 @@ impl DoTag {
         // can be one.
         let more = (self.kind == DT_PREV as c_int && self.cur_match > 0)
             || (matches!(self.kind as c_uint, DT_TAG | DT_NEXT | DT_FIRST)
-                && (max_num_matches.get() != MAXCOL as c_int
-                    || self.cur_match < match_count() - 1));
+                && (MATCH_LIMIT.get() != MAXCOL as c_int || self.cur_match < match_count() - 1));
         if !more {
-            let missing = nofile_fname.with(Clone::clone).unwrap_or_default();
+            let missing = MISSING_FILE.with(Clone::clone).unwrap_or_default();
             let arg0 = msg_cstr(missing.as_cstr());
             semsg!("E429: File \"{arg0}\" does not exist");
             return false;
@@ -765,7 +762,7 @@ impl DoTag {
         {
             return;
         }
-        let more = if max_num_matches.get() != MAXCOL as c_int {
+        let more = if MATCH_LIMIT.get() != MAXCOL as c_int {
             tr!(" or more")
         } else {
             String::new()

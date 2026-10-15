@@ -194,7 +194,8 @@ pub(crate) fn test_for_current(fname: &[u8], tag_fname: &[u8], buf_ffname: Optio
         return false;
     };
     let fullname = expand_tag_fname(fname, tag_fname, true);
-    path_full_compare(fullname.as_cstr(), buf_ffname, true, true) as c_uint & kEqualFiles as c_uint
+    path_full_compare(fullname.as_cstr(), buf_ffname, true, true) as c_uint
+        & crate::path::kEqualFiles as c_uint
         != 0
 }
 
@@ -242,7 +243,7 @@ pub(crate) fn find_extra(text: &[u8], start: usize) -> Option<usize> {
 /// Jump to the tag one stored match describes.
 ///
 /// Answers [`Jumped::NoSuchFile`] when the file the match names does
-/// not exist — the caller reports that one, reading [`nofile_fname`].
+/// not exist — the caller reports that one, reading [`MISSING_FILE`].
 ///
 /// With `keep_help` the destination keeps the help-buffer flag of wherever
 /// the jump came from; `forceit` is the `!` of `:tag!`. The match is a copy
@@ -321,7 +322,7 @@ impl Jump {
         // name a BufReadCmd autocommand claims (say "http://sys/file")
         // counts as existing.
         if !path_exists(self.fname()) && !has_autocmd(AutoEvent::BufReadCmd, self.fname(), None) {
-            nofile_fname.set(Some(XString::from_cstr(self.fname())));
+            MISSING_FILE.set(Some(XString::from_cstr(self.fname())));
             return Ok(Jumped::NoSuchFile);
         }
 
