@@ -14,11 +14,13 @@ use crate::shada::ShadaExtra;
 use crate::types::Timestamp;
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
+use std::rc::Rc;
 
 /// One history entry.
 pub struct HistEntry {
     pub(super) number: c_int,
-    pub(super) text: CString,
+    /// Shared, so that the ShaDa writer can hold the text without a copy.
+    pub(super) text: Rc<CStr>,
     pub(super) sep: u8,
     pub(super) timestamp: Timestamp,
     pub(super) extra: Option<ShadaExtra>,
@@ -32,7 +34,7 @@ impl HistEntry {
 
     /// Entry text without terminator.
     pub fn text(&self) -> &[u8] {
-        self.text.as_bytes()
+        self.text.to_bytes()
     }
 
     /// Separator character (search history only; NUL elsewhere).
@@ -159,7 +161,7 @@ impl Ring {
         self.num += 1;
         self.entries[self.idx as usize] = Some(HistEntry {
             number: self.num,
-            text: to_cstring(text),
+            text: Rc::from(to_cstring(text)),
             sep,
             timestamp: now,
             extra: None,
@@ -181,7 +183,7 @@ impl Ring {
             match self.entries[i as usize].as_ref() {
                 None => return false,
                 Some(e) => {
-                    if e.text.as_bytes() == text && sep.is_none_or(|s| s == e.sep) {
+                    if e.text.to_bytes() == text && sep.is_none_or(|s| s == e.sep) {
                         break i;
                     }
                 }

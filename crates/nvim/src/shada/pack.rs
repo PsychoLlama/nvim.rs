@@ -35,6 +35,9 @@ use super::{
 #[derive(Default)]
 pub(crate) struct Packer {
     out: Vec<u8>,
+    /// Where one entry's payload is packed before its length is known,
+    /// kept between entries so that its room is reused.
+    scratch: Vec<u8>,
 }
 
 impl Packer {
@@ -46,6 +49,11 @@ impl Packer {
     /// Take what has been packed, leaving the packer empty.
     pub(crate) fn take(&mut self) -> Vec<u8> {
         core::mem::take(&mut self.out)
+    }
+
+    /// Forget what has been packed, keeping the room.
+    pub(crate) fn clear(&mut self) {
+        self.out.clear();
     }
 
     fn uint(&mut self, value: u32) {
@@ -125,15 +133,39 @@ fn count(len: usize) -> u32 {
 /// than that many kilobytes — quietly, since the file is still valid
 /// without it.
 pub(crate) fn pack_entry(out: &mut Packer, entry: &ShadaEntry, max_kbyte: usize) -> WriteStatus {
-    let mut payload = Packer::default();
+    let mut scratch = core::mem::take(&mut out.scratch);
+    scratch.clear();
+    let mut payload = Packer {
+        out: scratch,
+        scratch: Vec::new(),
+    };
+    let ret = pack_payload(entry, &mut payload);
+    if ret == WriteStatus::Successful {
+        let packed = payload.bytes();
+        // Too big to keep is not an error: the file is still valid without it.
+        if max_kbyte == 0 || packed.len() <= max_kbyte * 1024 {
+            out.uint64(entry.kind());
+            out.uint64(entry.timestamp);
+            if !packed.is_empty() {
+                out.uint64(packed.len() as u64);
+                out.raw(packed);
+            }
+        }
+    }
+    out.scratch = payload.out;
+    ret
+}
+
+/// Pack `entry`'s payload into `payload`.
+fn pack_payload(entry: &ShadaEntry, payload: &mut Packer) -> WriteStatus {
     let extra = &entry.extra;
     match &entry.data {
         ShadaEntryData::Missing => unreachable!("shada: a missing entry is never written"),
         ShadaEntryData::Unknown(item) => payload.raw(&item.contents),
-        ShadaEntryData::Header(header) => pack_header(header, &mut payload),
-        ShadaEntryData::HistoryEntry(history) => pack_history(history, extra, &mut payload),
+        ShadaEntryData::Header(header) => pack_header(header, payload),
+        ShadaEntryData::HistoryEntry(history) => pack_history(history, extra, payload),
         ShadaEntryData::Variable(var) => {
-            if let Err(ignorable) = pack_variable(var, extra, &mut payload) {
+            if let Err(ignorable) = pack_variable(var, extra, payload) {
                 return ignorable;
             }
         }
@@ -143,26 +175,16 @@ pub(crate) fn pack_entry(out: &mut Packer, entry: &ShadaEntry, max_kbyte: usize)
             payload.extra(extra);
         }
         ShadaEntryData::SearchPattern(pattern) => {
-            pack_search_pattern(pattern, extra, &mut payload);
+            pack_search_pattern(pattern, extra, payload);
         }
         ShadaEntryData::GlobalMark(mark)
         | ShadaEntryData::LocalMark(mark)
         | ShadaEntryData::Jump(mark)
-        | ShadaEntryData::Change(mark) => pack_mark(entry.kind(), mark, extra, &mut payload),
-        ShadaEntryData::Register(reg) => pack_register(reg, extra, &mut payload),
-        ShadaEntryData::BufferList(list) => pack_buffer_list(list, &mut payload),
+        | ShadaEntryData::Change(mark) => pack_mark(entry.kind(), mark, extra, payload),
+        ShadaEntryData::Register(reg) => pack_register(reg, extra, payload),
+        ShadaEntryData::BufferList(list) => pack_buffer_list(list, payload),
     }
 
-    let packed = payload.bytes();
-    if max_kbyte != 0 && packed.len() > max_kbyte * 1024 {
-        return WriteStatus::Successful; // too big to keep; not an error
-    }
-    out.uint64(entry.kind());
-    out.uint64(entry.timestamp);
-    if !packed.is_empty() {
-        out.uint64(packed.len() as u64);
-        out.raw(packed);
-    }
     WriteStatus::Successful
 }
 
@@ -187,7 +209,7 @@ fn pack_history(history: &ShadaHistoryItem, extra: &Option<ShadaExtra>, out: &mu
     let is_search = history.histtype == HIST_SEARCH;
     out.array(2 + u32::from(is_search) + extra_len(extra));
     out.uint(u32::from(history.histtype));
-    out.bin(history.text.as_bytes());
+    out.bin(history.text.to_bytes());
     if is_search {
         out.uint(u32::from(history.sep));
     }

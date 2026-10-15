@@ -237,8 +237,9 @@ impl Writing<'_> {
         if self.out.bytes().len() < FLUSH_AT {
             return WriteStatus::Successful;
         }
-        let bytes = self.out.take();
-        if self.file.write(&bytes) < 0 {
+        let written = self.file.write(self.out.bytes());
+        self.out.clear();
+        if written < 0 {
             return WriteStatus::Error;
         }
         WriteStatus::Successful
@@ -536,8 +537,8 @@ impl Writing<'_> {
                 continue;
             };
             hms.insert_whole_neovim_history();
-            for entry in hms.hmll.drain() {
-                if self.pack(&entry, max_kbyte) == WriteStatus::Error {
+            for entry in hms.hmll.iter() {
+                if self.pack(entry, max_kbyte) == WriteStatus::Error {
                     return WriteStatus::Error;
                 }
             }

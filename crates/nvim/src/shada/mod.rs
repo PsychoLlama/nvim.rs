@@ -20,9 +20,9 @@ use crate::types::Buffer;
 use crate::types::{
     ApiDict, KeyDict__shada_search_pat, MotionType, Pos, String_0, Timestamp, TypVal,
 };
-use core::ffi::c_char;
+use core::ffi::{CStr, c_char};
 use std::collections::VecDeque;
-use std::ffi::CString;
+use std::rc::Rc;
 
 mod file;
 pub use self::file::*;
@@ -302,7 +302,8 @@ pub struct ShadaRegister {
 /// One history line.
 pub struct ShadaHistoryItem {
     pub(crate) histtype: u8,
-    pub(crate) text: CString,
+    /// Shared with the history table when the line is the editor's own.
+    pub(crate) text: Rc<CStr>,
     /// The character the search was started with; search history only.
     pub(crate) sep: u8,
 }

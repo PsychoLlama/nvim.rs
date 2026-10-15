@@ -29,8 +29,9 @@ use crate::registry::{IdMap, id_map};
 use crate::types::{Pos, Timestamp};
 use crate::winlayer::{Win, buffers};
 use core::cmp::Ordering;
-use core::ffi::c_int;
+use core::ffi::{CStr, c_int};
 use std::collections::VecDeque;
+use std::rc::Rc;
 
 use super::collect::replace_numbered_mark;
 use super::file::shada_removable;
@@ -63,15 +64,16 @@ pub(crate) struct HistoryRing {
     hole: Option<usize>,
     size: usize,
     num_entries: usize,
-    /// The slot holding each history text. Asked, never walked.
-    contained_entries: IdMap<Box<[u8]>, usize>,
+    /// The slot holding each history text, keyed by the slot's own shared
+    /// text. Asked, never walked.
+    contained_entries: IdMap<Rc<CStr>, usize>,
 }
 
 impl HistoryRing {
     /// A ring that holds at most `size` entries.
-    fn new(size: usize) -> HistoryRing {
+    pub(crate) fn new(size: usize) -> HistoryRing {
         HistoryRing {
-            slots: Vec::new(),
+            slots: Vec::with_capacity(size),
             first: None,
             last: None,
             hole: None,
@@ -82,8 +84,8 @@ impl HistoryRing {
     }
 
     /// The text an entry is filed under.
-    fn key(entry: &ShadaEntry) -> &[u8] {
-        entry.data.history().text.as_bytes()
+    fn key(entry: &ShadaEntry) -> &Rc<CStr> {
+        &entry.data.history().text
     }
 
     /// Take the entry in slot `at` out of the ring, dropping it.
@@ -125,7 +127,7 @@ impl HistoryRing {
             self.remove(first);
         }
 
-        let key: Box<[u8]> = Self::key(&data).into();
+        let key = Rc::clone(Self::key(&data));
         let slot = RingSlot {
             data,
             next: None,
@@ -158,6 +160,16 @@ impl HistoryRing {
         }
     }
 
+    /// The entries, oldest first.
+    pub(crate) fn iter(&self) -> impl Iterator<Item = &ShadaEntry> {
+        let mut cur = self.first;
+        core::iter::from_fn(move || {
+            let at = cur?;
+            cur = self.slots[at].next;
+            Some(&self.slots[at].data)
+        })
+    }
+
     /// The entries, oldest first, taken out of the ring.
     pub(crate) fn drain(&mut self) -> Vec<ShadaEntry> {
         let mut out = Vec::with_capacity(self.num_entries);
@@ -169,7 +181,12 @@ impl HistoryRing {
                 ShadaEntry::MISSING,
             ));
         }
-        *self = HistoryRing::new(self.size);
+        self.slots.clear();
+        self.first = None;
+        self.last = None;
+        self.hole = None;
+        self.num_entries = 0;
+        self.contained_entries.clear();
         out
     }
 
@@ -201,9 +218,13 @@ impl HistoryMergerState {
                 }),
                 extra: he.extra,
             })
-            .collect();
+            .collect::<VecDeque<_>>();
+        let mut hmll = HistoryRing::new(num_elements);
+        // Nvim's own lines all go in; the file's may add some.
+        hmll.contained_entries
+            .reserve(num_elements.min(pending.len()));
         HistoryMergerState {
-            hmll: HistoryRing::new(num_elements),
+            hmll,
             pending,
             history_type,
         }
@@ -231,7 +252,7 @@ impl HistoryMergerState {
         }
 
         let ring = &mut self.hmll;
-        if let Some(&existing) = ring.contained_entries.get(HistoryRing::key(&entry)) {
+        if let Some(&existing) = ring.contained_entries.get(&**HistoryRing::key(&entry)) {
             let held = ring.slots[existing].data.timestamp;
             if entry.timestamp > held {
                 ring.remove(existing);

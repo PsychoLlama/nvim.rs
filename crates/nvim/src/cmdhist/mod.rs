@@ -22,6 +22,7 @@ use crate::types::Candidate;
 use ring::EMPTY_RING;
 pub use ring::{HistEntry, Ring};
 use std::ffi::CString;
+use std::rc::Rc;
 
 use crate::charset::strsize;
 use crate::eval::typval::{NumBuf, tv_get_number, tv_get_number_chk};
@@ -105,7 +106,7 @@ pub fn hist_entry_text(histype: c_int, idx: c_int) -> Option<HistEntryText> {
     }
     HISTORY.with(|h| {
         h[histype as usize].get(idx).map(|e| HistEntryText {
-            text: e.text.clone(),
+            text: CString::from(&*e.text),
             sep: e.sep,
         })
     })
@@ -504,7 +505,7 @@ pub fn get_history_arg(_expand: &Expand, idx: usize) -> Option<Candidate> {
 
 /// One history entry copied for, or taken by, the shada writer and merger.
 pub(crate) struct HistShadaEntry {
-    pub text: CString,
+    pub text: Rc<CStr>,
     /// Separator character (search history only; NUL elsewhere).
     pub sep: u8,
     pub timestamp: Timestamp,
@@ -513,7 +514,7 @@ pub(crate) struct HistShadaEntry {
 
 /// One entry of the merged history the shada reader hands back, owned.
 pub(crate) struct HistRestored {
-    pub text: CString,
+    pub text: Rc<CStr>,
     /// Separator character (search history only; NUL elsewhere).
     pub sep: u8,
     pub timestamp: Timestamp,

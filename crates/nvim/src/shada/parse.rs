@@ -19,6 +19,7 @@ use crate::types::{
 };
 use core::ffi::{CStr, c_char};
 use std::ffi::CString;
+use std::rc::Rc;
 
 use super::unpack::{Cursor, Header, Parsed};
 use super::{
@@ -221,7 +222,7 @@ fn parse_history(pos: u64, cursor: &mut Cursor) -> Parsed2 {
         malformed_entry(c"E575: Error while reading ShaDa file: history entry at position %lu has wrong history string type", pos);
         return Err(Malformed);
     };
-    let Ok(text) = CString::new(text) else {
+    let Ok(text) = CString::new(text).map(Rc::<CStr>::from) else {
         malformed_entry(c"E575: Error while reading ShaDa file: history entry at position %lu contains string with zero byte inside", pos);
         return Err(Malformed);
     };
