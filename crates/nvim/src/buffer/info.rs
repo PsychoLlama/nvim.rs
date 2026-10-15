@@ -571,10 +571,18 @@ pub fn get_rel_pos(window: Win, buf: &mut [c_char]) -> c_int {
         return put_cut(buf, gettext(c"Top").to_bytes()) as c_int;
     }
 
-    // The localized percentage value, as an eight-byte buffer held it.
+    // The localized percentage value, as an eight-byte buffer held it. Read
+    // on every ruler redraw: the untranslated templates are formatted
+    // directly, which the printf emulator costs several times over.
     let perc = percentage(above, above + below);
-    let value = formatted!(8, gettext(c"%d%%").to_bytes(), perc);
-    let text = formatted!(buf.len(), gettext(c"%3s").to_bytes(), value.as_slice());
+    static PERCENT: &CStr = c"%d%%";
+    static PADDED: &CStr = c"%3s";
+    let (percent, padded) = (gettext(PERCENT), gettext(PADDED));
+    if ptr::eq(percent, PERCENT) && ptr::eq(padded, PADDED) {
+        return put_cut(buf, format!("{perc:>2}%").as_bytes()) as c_int;
+    }
+    let value = formatted!(8, percent.to_bytes(), perc);
+    let text = formatted!(buf.len(), padded.to_bytes(), value.as_slice());
     put_cut(buf, &text) as c_int
 }
 
