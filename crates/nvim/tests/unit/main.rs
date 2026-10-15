@@ -74,6 +74,7 @@ mod parser;
 mod path;
 mod printf_oracle;
 mod profile;
+mod readfile;
 mod regexp;
 mod runtime;
 mod search;
