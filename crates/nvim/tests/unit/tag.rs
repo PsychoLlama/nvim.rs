@@ -329,9 +329,13 @@ same\tsrc/b.c\t3\n\
 same\tsrc/c.c\t/^a $ and \\/ a\\\\b/\n",
     );
     let fx = Probe::new(sandbox.editor());
+    restore(&fx);
     fx.run("set tags=tags");
-    fx.run("badd src/b.c");
-    fx.run("buffer src/b.c");
+    fx.check_error("badd src/b.c", "none");
+    fx.check_error("buffer src/b.c", "none");
+    // The "current file" flag compares the tags file's `src/b.c` against
+    // the current buffer's full name: it has to be this sandbox's file.
+    fx.check("expand('%:p') ==# fnamemodify('src/b.c', ':p')", "1");
     fx.run("ltag same");
     fx.check(
         "map(getloclist(0), {_, e -> [bufname(e.bufnr), e.lnum, e.pattern, e.text]})",

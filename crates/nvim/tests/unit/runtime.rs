@@ -372,6 +372,13 @@ fn runtime_walks_the_cached_path_in_order() {
         ]
     );
 
+    // `pos_in_rtp` is a byte offset into 'runtimepath', so it moves with
+    // the sandbox's path: `<DIR>/a,` is `dir.len() + 3` bytes. Entries
+    // 'runtimepath' does not spell sit on the comma before its `after/` tail.
+    let b = dir.len() + 3;
+    let after = 2 * b;
+    let pack = after - 1;
+    let positions = format!("[0, {b}, {pack}, {pack}, {after}]");
     table(
         &fx,
         &sandbox,
@@ -407,7 +414,7 @@ fn runtime_walks_the_cached_path_in_order() {
             ),
             (
                 "map(nvim__runtime_inspect(), {_, e -> e.pos_in_rtp})",
-                "[0, 32, 63, 63, 64]",
+                &positions,
             ),
             (
                 "nvim__get_runtime(['plugin/a1.vim', 'plugin/b2.lua'], v:true, {})",
@@ -450,6 +457,22 @@ fn packadd_splices_the_package_into_both_paths() {
     fx.run("call nvim_get_runtime_file('plugin/a1.vim', v:false)");
     fx.run("let g:rt_order = []");
     fx.check_error("packadd o", "none");
+    // The splice shifts the byte offsets of everything after it by the two
+    // entries it wrote into 'runtimepath', commas included; see the sibling
+    // test for why they are computed.
+    let b = dir.len() + 3;
+    let opt = 2 * b;
+    let pack = opt - 1;
+    let opt_after = opt + dir.len() + "/pp/pack/p/opt/o,".len();
+    let after = opt_after + dir.len() + "/pp/pack/p/opt/o/after,".len();
+    let inspected = format!(
+        "[['<DIR>/a', v:false, v:false, 0], ['<DIR>/b', v:false, v:false, {b}], \
+         ['<DIR>/pp/pack/p/start/s', v:false, v:false, {pack}], \
+         ['<DIR>/pp/pack/p/start/s/after', v:true, v:false, {pack}], \
+         ['<DIR>/pp/pack/p/opt/o', v:false, v:true, {opt}], \
+         ['<DIR>/pp/pack/p/opt/o/after', v:true, v:true, {opt_after}], \
+         ['<DIR>/a/after', v:true, v:false, {after}]]"
+    );
     table(
         &fx,
         &sandbox,
@@ -461,7 +484,7 @@ fn packadd_splices_the_package_into_both_paths() {
             ("g:rt_order", "['o1']"),
             (
                 "map(nvim__runtime_inspect(), {_, e -> [e.path, get(e, 'after', v:false), get(e, 'pack_inserted', v:false), e.pos_in_rtp]})",
-                "[['<DIR>/a', v:false, v:false, 0], ['<DIR>/b', v:false, v:false, 33], ['<DIR>/pp/pack/p/start/s', v:false, v:false, 65], ['<DIR>/pp/pack/p/start/s/after', v:true, v:false, 65], ['<DIR>/pp/pack/p/opt/o', v:false, v:true, 66], ['<DIR>/pp/pack/p/opt/o/after', v:true, v:true, 113], ['<DIR>/a/after', v:true, v:false, 166]]",
+                &inspected,
             ),
             (
                 "nvim_get_runtime_file('plugin/*.vim', v:true)",
