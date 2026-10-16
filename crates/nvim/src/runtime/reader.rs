@@ -20,7 +20,7 @@
 use super::*;
 use crate::charset::skip;
 use crate::cstr;
-use crate::ex_docmd::DebugPos;
+use crate::ex_docmd::{DebugName, DebugPos};
 use crate::option::cpo_has;
 use crate::types::CpoFlag;
 use core::cell::Cell;
@@ -110,7 +110,7 @@ impl SourceCookie {
     /// replay of a loop body.
     pub(crate) fn debug_pos(&mut self) -> DebugPos<'_> {
         DebugPos {
-            name: self.fname.as_cstr(),
+            name: DebugName::Script(&self.fname),
             breakpoint: Cell::from_mut(&mut self.breakpoint),
             tick: Cell::from_mut(&mut self.dbg_tick),
         }

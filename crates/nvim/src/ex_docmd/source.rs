@@ -23,7 +23,7 @@ use crate::eval::funcs::{ListLines, get_list_line};
 use crate::eval::userfunc::get_func_line;
 use crate::eval::vars::set_vim_var_string;
 use crate::getchar::read_cmd_key_line;
-use crate::memory::XString;
+use crate::memory::{ThinCString, XString};
 use crate::runtime::SourceCookie;
 use crate::types::{AutoPatCmd, FuncCall};
 
@@ -321,9 +321,29 @@ pub(crate) enum SourceKind {
 /// or the script's cookie, so a lookup made through it is the frame's own.
 pub(crate) struct DebugPos<'s> {
     /// The function's or the script's name, which a breakpoint names.
-    pub(crate) name: &'s CStr,
+    pub(crate) name: DebugName<'s>,
     pub(crate) breakpoint: &'s Cell<LineNr>,
     pub(crate) tick: &'s Cell<c_int>,
+}
+
+/// A [`DebugPos`]'s name, measured only when a breakpoint is looked up.
+///
+/// Every line a function or a script runs asks for its [`DebugPos`] to
+/// compare the ticks, and measuring a script's path for each of those was
+/// over 1 % of a sourced script's instructions.
+#[derive(Clone, Copy)]
+pub(crate) enum DebugName<'s> {
+    Function(&'s ThinCString),
+    Script(&'s XString),
+}
+
+impl<'s> DebugName<'s> {
+    pub(crate) fn as_cstr(self) -> &'s CStr {
+        match self {
+            DebugName::Function(name) => name.as_cstr(),
+            DebugName::Script(name) => name.as_cstr(),
+        }
+    }
 }
 
 /// A line source, as a running command and a `:while` around it hold it.
@@ -485,7 +505,7 @@ impl ReadLines for LineSource<'_> {
     fn debug(&mut self) -> Option<DebugPos<'_>> {
         match self {
             LineSource::Function(frame) => Some(DebugPos {
-                name: frame.func.name().as_cstr(),
+                name: DebugName::Function(frame.func.name()),
                 breakpoint: &frame.breakpoint,
                 tick: &frame.dbg_tick,
             }),

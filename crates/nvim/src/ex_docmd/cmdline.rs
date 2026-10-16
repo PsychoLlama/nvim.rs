@@ -148,8 +148,11 @@ impl Source<'_, '_> {
     fn read_breakpoint(&mut self, after: LineNr) {
         let is_script = self.is_script();
         if let Some(pos) = self.lines.debug() {
-            pos.breakpoint
-                .set(dbg_find_breakpoint_named(is_script, pos.name, after));
+            pos.breakpoint.set(dbg_find_breakpoint_named(
+                is_script,
+                pos.name.as_cstr(),
+                after,
+            ));
             pos.tick.set(debug_tick.get());
         }
     }
@@ -157,7 +160,7 @@ impl Source<'_, '_> {
     /// Stop at the breakpoint due at `lnum`, and look up the next one.
     fn stop_at_breakpoint(&mut self, lnum: LineNr) {
         if let Some(pos) = self.lines.debug() {
-            dbg_breakpoint(pos.name, lnum);
+            dbg_breakpoint(pos.name.as_cstr(), lnum);
         }
         self.read_breakpoint(lnum);
     }
