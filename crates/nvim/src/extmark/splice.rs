@@ -29,14 +29,13 @@ use core::ffi::c_int;
 
 use super::undo::splice_delete;
 use super::{
-    Buf, Extent, kExtmarkUndo, last_splice, line_offset, push_undo, send_splice,
-    signcols_count_range, splice_pending, tree_move_region, tree_splice, undo_marks,
+    Buf, Extent, kExtmarkUndo, last_splice, line_offset, send_splice, signcols_count_range,
+    splice_pending, tree_move_region, tree_splice, undo_header, with_undo_marks,
 };
 use crate::decoration::SignCountHalf;
 use crate::pos::MAXLNUM;
 use crate::types::{
     BCount, ColNr, ExtmarkMove, ExtmarkOp, ExtmarkSplice, ExtmarkUndoObject, LineNr, MTPos,
-    extmark_undo_vec_t,
 };
 
 /// [`extmark_adjust`](super::extmark_adjust) for the callers that already
@@ -137,7 +136,7 @@ pub(crate) fn splice_impl(
         // the merge below).
         let end_row = start.row + old.row;
         let end_col = (if old.row != 0 { 0 } else { start.col }) + old.col;
-        let uvp = undo_marks(buffer);
+        let header = undo_header(buffer);
         let lo = MTPos {
             row: start.row,
             col: start.col,
@@ -146,7 +145,15 @@ pub(crate) fn splice_impl(
             row: end_row,
             col: end_col,
         };
-        splice_delete(buffer, lo, hi, uvp, false, undo);
+        // The marks it saves are gathered here and appended after: the walk
+        // runs with no undo header borrowed.
+        let mut saved = Vec::new();
+        splice_delete(buffer, lo, hi, header.map(|_| &mut saved), false, undo);
+        if let Some(link) = header
+            && !saved.is_empty()
+        {
+            with_undo_marks(buffer, link, |list| list.append(&mut saved));
+        }
     }
 
     // Take the signs inside the edited region out of `b_signcols.count`; they
@@ -179,17 +186,17 @@ pub(crate) fn splice_impl(
     }
 
     if undo == kExtmarkUndo {
-        let uvp = undo_marks(buffer);
-        if uvp.is_null() {
+        let Some(link) = undo_header(buffer) else {
             return;
-        }
-
-        // TODO(bfredl): this is quite rudimentary. Small (within line)
-        // inserts merge with each other and small deletes with each other;
-        // add a full merge algorithm later.
-        let merged = old.row == 0 && new.row == 0 && merge_into_last(uvp, start, old, new);
-
-        if !merged {
+        };
+        with_undo_marks(buffer, link, |list| {
+            // TODO(bfredl): this is quite rudimentary. Small (within line)
+            // inserts merge with each other and small deletes with each
+            // other; add a full merge algorithm later.
+            let merged = old.row == 0 && new.row == 0 && merge_into_last(list, start, old, new);
+            if merged {
+                return;
+            }
             let splice = ExtmarkSplice {
                 start_row: start.row,
                 start_col: start.col,
@@ -201,15 +208,20 @@ pub(crate) fn splice_impl(
                 old_byte: old.byte,
                 new_byte: new.byte,
             };
-            push_undo(uvp, ExtmarkUndoObject::Splice(splice));
-        }
+            list.push(ExtmarkUndoObject::Splice(splice));
+        });
     }
 }
 
 /// Fold this splice into the undo header's last entry, when both are
 /// single-line edits that abut. Answers whether it merged.
-fn merge_into_last(uvp: *mut extmark_undo_vec_t, start: Extent, old: Extent, new: Extent) -> bool {
-    let Some(splice) = last_splice(uvp) else {
+fn merge_into_last(
+    list: &mut [ExtmarkUndoObject],
+    start: Extent,
+    old: Extent,
+    new: Extent,
+) -> bool {
+    let Some(splice) = last_splice(list) else {
         return false;
     };
     if splice.start_row != start.row || splice.old_row != 0 || splice.new_row != 0 {
@@ -273,10 +285,9 @@ pub(crate) fn move_region(
     send_splice(buffer, new, Extent::default(), extent);
 
     if undo == kExtmarkUndo {
-        let uvp = undo_marks(buffer);
-        if uvp.is_null() {
+        let Some(link) = undo_header(buffer) else {
             return;
-        }
+        };
 
         let move_0 = ExtmarkMove {
             start_row: start.row,
@@ -289,6 +300,8 @@ pub(crate) fn move_region(
             extent_byte: extent.byte,
             new_byte: new.byte,
         };
-        push_undo(uvp, ExtmarkUndoObject::Move(move_0));
+        with_undo_marks(buffer, link, |list| {
+            list.push(ExtmarkUndoObject::Move(move_0))
+        });
     }
 }

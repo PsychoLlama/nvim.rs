@@ -202,6 +202,15 @@ pub(crate) fn clear_mark(mark: &mut FileMark, timestamp: Timestamp) {
     unsafe { Fmark::new(mark) }.clear(timestamp);
 }
 
+/// Release the ShaDa payload a mark the caller holds in place carries, and
+/// leave it carrying none; the position stays.
+pub(crate) fn drop_mark_extra(mark: &mut FileMark) {
+    // SAFETY: a mark held by `&mut` in place owns its `additional_data`,
+    // which is nulled right after it is freed.
+    unsafe { xfree(mark.additional_data.cast()) };
+    mark.additional_data = ptr::null_mut();
+}
+
 /// Put `mark` at `pos` in file `fnum`, stamped now, releasing what it held:
 /// upstream's `RESET_FMARK` for a mark the caller holds in place.
 pub(crate) fn reset_fmark(mark: &mut FileMark, pos: Pos, fnum: c_int, view: FileMarkView) {

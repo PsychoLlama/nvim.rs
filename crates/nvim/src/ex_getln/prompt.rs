@@ -25,10 +25,10 @@ use crate::types::{ExArgt, ExpandContext, NUL, VAR_DICT};
 ///
 /// Answers the script, or `None` when skipping and on error; it shows no
 /// messages of its own.
-pub fn script_get(excmd: &mut ExArg) -> Option<crate::memory::XString> {
+pub fn script_get(excmd: &mut ExArg) -> Option<XString> {
     let arg = excmd.line.arg();
     if !arg.starts_with(b"<<") || excmd.source.is_none() {
-        return (!excmd.skip).then(|| crate::memory::XString::from_bytes(arg));
+        return (!excmd.skip).then(|| XString::from_bytes(arg));
     }
 
     let at = excmd.line.arg + 2;
@@ -43,7 +43,7 @@ pub fn script_get(excmd: &mut ExArg) -> Option<crate::memory::XString> {
         text.extend_from_slice(numbuf.bytes(&li.li_tv));
         text.push(b'\n');
     }
-    Some(crate::memory::XString::from_vec(text))
+    Some(XString::from_vec(text))
 }
 
 /// The `cancelreturn` entry of an `{opts}` dictionary, if it has one.

@@ -823,6 +823,10 @@ mod tests {
             assert!(b.b_start_fenc.is_none());
             assert!(b.b_prompt_text.is_none());
             assert!(b.additional_data.is_none());
+            // The undo store (a `Box`, so `None` at zero) and the `U` line
+            // (an `Option<XString>`, which the allocator writes).
+            assert!(b.b_u_store.is_none());
+            assert!(b.b_u_line.is_none());
             assert!(b.b_maps.is_none());
             assert!(b.b_next.is_none() && b.b_prev.is_none());
         }

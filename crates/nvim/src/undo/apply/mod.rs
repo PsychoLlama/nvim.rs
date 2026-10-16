@@ -13,12 +13,10 @@
 //! - [`u_undo_end`] reports what happened.
 //!
 //! Every header is named by an [`UndoLink`] and reached through the buffer's
-//! store ([`Buf::header`](crate::winlayer::Buf::header)); a
-//! [`Header`](super::store::Header) is the borrow that lookup hands back,
-//! never an owner.
+//! store ([`Buf::header`](crate::winlayer::Buf::header)), looked up afresh
+//! at each step.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 mod entry;
 mod time;
@@ -26,7 +24,8 @@ mod time;
 use super::*;
 use crate::drawscreen::UPD_NOT_VALID;
 use crate::memline::MlFlags;
-use crate::message_fmt::c_str;
+use crate::memory::XString;
+use crate::message_fmt::msg_cstr;
 use crate::normal::{visual_active, with_visual_anchor};
 use crate::option::cpo_has;
 use crate::smsg_keep;
@@ -69,32 +68,45 @@ pub fn u_undo_and_forget(count: c_int, do_buf_event: bool) -> bool {
     u_doit(count, true, do_buf_event);
 
     let mut buf = Buf::current();
-    let Some(mut forgotten) = buf.header(buf.b_u_curhead) else {
+    let forgotten = buf.b_u_curhead;
+    if !buf.has_header(forgotten) {
         return false; // nothing was undone
-    };
+    }
 
     // Drop the header just undone and put the next alternate branch, if there
     // is one, in its place; without one the tree is back at a leaf.
-    buf.b_u_newhead = forgotten.uh_next;
-    buf.b_u_curhead = forgotten.uh_alt_next;
-    if let Some(mut curhead) = buf.header(buf.b_u_curhead) {
-        forgotten.uh_alt_next = UndoLink::NONE;
-        curhead.uh_alt_prev = forgotten.uh_alt_prev;
-        buf.b_u_seq_cur = buf.header(curhead.uh_next).map_or(0, |uh| uh.uh_seq);
-    } else if let Some(newhead) = buf.header(buf.b_u_newhead) {
-        buf.b_u_seq_cur = newhead.uh_seq;
+    buf.b_u_newhead = buf.header_link(forgotten, |uh| uh.next);
+    buf.b_u_curhead = buf.header_link(forgotten, |uh| uh.alt_next);
+    let curhead = buf.b_u_curhead;
+    if buf.has_header(curhead) {
+        if let Some(uh) = buf.header_mut(forgotten) {
+            uh.alt_next = UndoLink::NONE;
+        }
+        let alt_prev = buf.header_link(forgotten, |uh| uh.alt_prev);
+        if let Some(uh) = buf.header_mut(curhead) {
+            uh.alt_prev = alt_prev;
+        }
+        let above = buf.header_link(curhead, |uh| uh.next);
+        buf.b_u_seq_cur = buf.header(above).map_or(0, |uh| uh.seq);
+    } else if let Some(seq) = buf.header(buf.b_u_newhead).map(|uh| uh.seq) {
+        buf.b_u_seq_cur = seq;
     }
-    if let Some(mut alt_prev) = buf.header(forgotten.uh_alt_prev) {
-        alt_prev.uh_alt_next = buf.b_u_curhead;
+    let alt_prev = buf.header_link(forgotten, |uh| uh.alt_prev);
+    if let Some(uh) = buf.header_mut(alt_prev) {
+        uh.alt_next = curhead;
     }
-    if let Some(mut newhead) = buf.header(buf.b_u_newhead) {
-        newhead.uh_prev = buf.b_u_curhead;
+    let newhead = buf.b_u_newhead;
+    if let Some(uh) = buf.header_mut(newhead) {
+        uh.prev = curhead;
     }
-    if buf.b_u_seq_last == forgotten.uh_seq {
+    if buf
+        .header(forgotten)
+        .is_some_and(|uh| uh.seq == buf.b_u_seq_last)
+    {
         buf.b_u_seq_last -= 1;
     }
-    // SAFETY: a header the buffer owns, and no link still names it.
-    unsafe { u_freebranch(buf, forgotten.raw(), ptr::null_mut()) };
+    // No link still names it.
+    u_freebranch(buf, forgotten, None);
     true
 }
 
@@ -118,7 +130,6 @@ pub(crate) fn u_doit(startcount: c_int, quiet: bool, do_buf_event: bool) {
     u_newcount.set(0);
     let empty = Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY);
     u_oldcount.set(if empty { -1 } else { 0 });
-    // SAFETY: a NUL-terminated literal.
     msg_ext_set_kind(c"undo");
 
     let mut count = startcount;
@@ -135,15 +146,11 @@ pub(crate) fn u_doit(startcount: c_int, quiet: bool, do_buf_event: bool) {
                 buf.b_u_curhead = buf.b_u_newhead; // the first undo
             } else if get_undolevel(buf) > 0 {
                 // Multi-level undo: on to the next one.
-                let next = buf
-                    .header(buf.b_u_curhead)
-                    .map_or(UndoLink::NONE, |uh| uh.uh_next);
-                buf.b_u_curhead = next;
+                buf.b_u_curhead = buf.header_link(buf.b_u_curhead, |uh| uh.next);
             }
             if buf.b_u_numhead == 0 || buf.b_u_curhead.is_none() {
                 // Nothing to undo: park `b_u_curhead` at the end.
                 buf.b_u_curhead = buf.b_u_oldhead;
-                // SAFETY: nothing here holds a borrow of editor state.
                 beep_flush();
                 if first {
                     msg(gettext(c"Already at oldest change"), 0);
@@ -154,7 +161,6 @@ pub(crate) fn u_doit(startcount: c_int, quiet: bool, do_buf_event: bool) {
             u_undoredo(true, do_buf_event);
         } else {
             if buf.b_u_curhead.is_none() || get_undolevel(buf) <= 0 {
-                // SAFETY: nothing here holds a borrow of editor state.
                 beep_flush();
                 if first {
                     msg(gettext(c"Already at newest change"), 0);
@@ -165,11 +171,11 @@ pub(crate) fn u_doit(startcount: c_int, quiet: bool, do_buf_event: bool) {
             u_undoredo(false, do_buf_event);
             // Advance for the next redo, and mark the end of the redoable
             // changes with `b_u_newhead`.
-            if let Some(curhead) = buf.header(buf.b_u_curhead) {
-                if curhead.uh_prev.is_none() {
+            if let Some(prev) = buf.header(buf.b_u_curhead).map(|uh| uh.prev) {
+                if prev.is_none() {
                     buf.b_u_newhead = buf.b_u_curhead;
                 }
-                buf.b_u_curhead = curhead.uh_prev;
+                buf.b_u_curhead = prev;
             }
         }
         first = false;
@@ -215,20 +221,20 @@ pub(crate) fn u_undo_end(did_undo: bool, absolute: bool, quiet: bool) {
 
     // Which header's timestamp and sequence number to name. For ":undo N" an
     // "after #N" message reads better than a "before" one.
-    let (target, did_undo) = match buf.header(buf.b_u_curhead) {
-        Some(curhead) if absolute && curhead.uh_next.is_some() => {
-            (buf.header(curhead.uh_next), false)
-        }
-        Some(curhead) if did_undo => (Some(curhead), true),
-        Some(curhead) => (buf.header(curhead.uh_next), did_undo),
-        None => (buf.header(buf.b_u_newhead), did_undo),
+    let curhead = buf.b_u_curhead;
+    let above = buf.header_link(curhead, |uh| uh.next);
+    let (target, did_undo) = if !buf.has_header(curhead) {
+        (buf.b_u_newhead, did_undo)
+    } else if absolute && above.is_some() {
+        (above, false)
+    } else if did_undo {
+        (curhead, true)
+    } else {
+        (above, did_undo)
     };
+    let target = buf.header(target).map(|uh| (uh.seq, uh.time));
     // Already the empty string when there is no header to date.
-    let mut when: [c_char; 80] = [0; 80];
-    if let Some(uhp) = target {
-        // SAFETY: an 80-byte buffer, and its length says so.
-        unsafe { undo_fmt_time(when.as_mut_ptr(), when.len(), uhp.uh_time) };
-    }
+    let when = target.map_or_else(XString::new, |(_, time)| undo_time_text(time, 80));
 
     // What is concealed may have changed, so every window on this buffer with
     // 'conceallevel' set has to be redrawn in full.
@@ -245,9 +251,8 @@ pub(crate) fn u_undo_end(did_undo: bool, absolute: bool, quiet: bool) {
     let what = gettext(what).to_string_lossy();
     let which = if did_undo { c"before" } else { c"after" };
     let side = gettext(which).to_string_lossy();
-    let seq = target.map_or(0, |uhp| int64_t::from(uhp.uh_seq));
-    // SAFETY: `when` was filled by `undo_fmt_time`, which terminates it.
-    let when = unsafe { c_str(when.as_mut_ptr()) };
+    let seq = target.map_or(0, |(seq, _)| int64_t::from(seq));
+    let when = msg_cstr(when.as_cstr());
     smsg_keep!(0, "{amount} {what}; {side} #{seq}  {when}");
 }
 

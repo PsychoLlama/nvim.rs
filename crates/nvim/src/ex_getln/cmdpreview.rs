@@ -123,7 +123,7 @@ pub(crate) fn cmdpreview_close_win() {
 }
 
 /// Save `buffer`'s whole undo state, so the preview's edits can be taken back.
-pub(crate) fn cmdpreview_save_undo(cp_undoinfo: &mut CpUndoInfo, buffer: Buf) {
+pub(crate) fn cmdpreview_save_undo(cp_undoinfo: &mut CpUndoInfo, mut buffer: Buf) {
     cp_undoinfo.save_b_u_synced = buffer.b_u_synced;
     cp_undoinfo.save_b_u_oldhead = buffer.b_u_oldhead;
     cp_undoinfo.save_b_u_newhead = buffer.b_u_newhead;
@@ -134,13 +134,15 @@ pub(crate) fn cmdpreview_save_undo(cp_undoinfo: &mut CpUndoInfo, buffer: Buf) {
     cp_undoinfo.save_b_u_seq_cur = buffer.b_u_seq_cur;
     cp_undoinfo.save_b_u_time_cur = buffer.b_u_time_cur;
     cp_undoinfo.save_b_u_save_nr_cur = buffer.b_u_save_nr_cur;
-    cp_undoinfo.save_b_u_line_ptr = buffer.b_u_line_ptr;
+    // Taken, not copied: the preview's `u_clearall` leaves the buffer none,
+    // and the restore hands this one back.
+    cp_undoinfo.save_b_u_line = buffer.b_u_line.take();
     cp_undoinfo.save_b_u_line_lnum = buffer.b_u_line_lnum;
     cp_undoinfo.save_b_u_line_colnr = buffer.b_u_line_colnr;
 }
 
 /// Put back the undo state [`cmdpreview_save_undo`] recorded.
-pub(crate) fn cmdpreview_restore_undo(cp_undoinfo: &CpUndoInfo, mut buffer: Buf) {
+pub(crate) fn cmdpreview_restore_undo(cp_undoinfo: CpUndoInfo, mut buffer: Buf) {
     buffer.b_u_oldhead = cp_undoinfo.save_b_u_oldhead;
     buffer.b_u_newhead = cp_undoinfo.save_b_u_newhead;
     buffer.b_u_curhead = cp_undoinfo.save_b_u_curhead;
@@ -150,7 +152,7 @@ pub(crate) fn cmdpreview_restore_undo(cp_undoinfo: &CpUndoInfo, mut buffer: Buf)
     buffer.b_u_seq_cur = cp_undoinfo.save_b_u_seq_cur;
     buffer.b_u_time_cur = cp_undoinfo.save_b_u_time_cur;
     buffer.b_u_save_nr_cur = cp_undoinfo.save_b_u_save_nr_cur;
-    buffer.b_u_line_ptr = cp_undoinfo.save_b_u_line_ptr;
+    buffer.b_u_line = cp_undoinfo.save_b_u_line;
     buffer.b_u_line_lnum = cp_undoinfo.save_b_u_line_lnum;
     buffer.b_u_line_colnr = cp_undoinfo.save_b_u_line_colnr;
     if buffer.b_u_curhead.is_none() {
@@ -249,7 +251,7 @@ pub(crate) fn cmdpreview_restore_state(mut cpinfo: Cp) {
             } else {
                 buf.b_u_newhead
             };
-            let chain = header_chain(buf, start, |uh| uh.uh_next);
+            let chain = header_chain(buf, start, |uh| uh.next);
             let count = chain.count() as ::core::ffi::c_int;
 
             let mut aco = AcoSave::default();
@@ -269,7 +271,7 @@ pub(crate) fn cmdpreview_restore_state(mut cpinfo: Cp) {
         }
 
         u_blockfree(buf);
-        cmdpreview_restore_undo(&cp_bufinfo.undo_info, buf);
+        cmdpreview_restore_undo(cp_bufinfo.undo_info, buf);
 
         buf.b_op_start = cp_bufinfo.save_b_op_start;
         buf.b_op_end = cp_bufinfo.save_b_op_end;

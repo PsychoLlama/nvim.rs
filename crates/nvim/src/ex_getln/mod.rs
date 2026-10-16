@@ -71,7 +71,7 @@ use crate::mbyte::{
     utfc_ptr2len,
 };
 use crate::memline::{decl, incl, ml_append_cstr};
-use crate::memory::{xfree, xmalloc, xmallocz, xstrdup};
+use crate::memory::{XString, xfree, xmalloc, xmallocz, xstrdup};
 use crate::message::state::{
     cmd_silent, cmdmsg_rl, did_emsg, emsg_on_display, lines_left, msg_col, msg_didout, msg_no_more,
     msg_row, msg_scroll, msg_scrolled, need_wait_return, quit_more, redir_off,
@@ -347,7 +347,7 @@ pub struct CpInfo {
     pub save_cmdmod: CmdMod,
     pub save_view: Vec<::core::ffi::c_int>,
 }
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct CpBufInfo {
     /// The buffer saved. An id: the preview runs the command's Lua
     /// `preview` callback between the save and the restore.
@@ -360,7 +360,7 @@ pub struct CpBufInfo {
     pub save_changedtick: VarNumber,
     pub undo_info: CpUndoInfo,
 }
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct CpUndoInfo {
     pub save_b_u_oldhead: UndoLink,
     pub save_b_u_newhead: UndoLink,
@@ -372,7 +372,7 @@ pub struct CpUndoInfo {
     pub save_b_u_seq_cur: ::core::ffi::c_int,
     pub save_b_u_time_cur: time_t,
     pub save_b_u_save_nr_cur: ::core::ffi::c_int,
-    pub save_b_u_line_ptr: *mut ::core::ffi::c_char,
+    pub save_b_u_line: Option<XString>,
     pub save_b_u_line_lnum: LineNr,
     pub save_b_u_line_colnr: ColNr,
 }
@@ -543,7 +543,7 @@ pub(crate) const CP_UNDO_INFO_INIT: CpUndoInfo = CpUndoInfo {
     save_b_u_seq_cur: 0,
     save_b_u_time_cur: 0,
     save_b_u_save_nr_cur: 0,
-    save_b_u_line_ptr: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+    save_b_u_line: None,
     save_b_u_line_lnum: 0,
     save_b_u_line_colnr: 0,
 };

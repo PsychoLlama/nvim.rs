@@ -30,7 +30,7 @@ use crate::os::env::{env_buf, os_getenv_into};
 use crate::os::input::os_input_ready;
 use crate::startup::main_loop;
 use crate::types::{Timestamp, UV_CLOCK_REALTIME, time_t, tm, uv_timespec64_t};
-use ::libc::{localtime_r, strftime, strptime, time};
+use ::libc::{localtime_r, strftime, strptime};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -279,8 +279,17 @@ pub fn os_time() -> Timestamp {
     os_time_raw().cast_unsigned()
 }
 
-/// Seconds since the UNIX epoch, as the C library counts them.
+/// Seconds since the UNIX epoch, as the C library's `time(NULL)` counts
+/// them: whole seconds of the real-time clock, rounded towards the past.
 pub(crate) fn os_time_raw() -> time_t {
-    // SAFETY: `time` accepts a null out-parameter.
-    unsafe { time(ptr::null_mut()) }
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let seconds = |d: std::time::Duration| time_t::try_from(d.as_secs()).unwrap_or(time_t::MAX);
+    match SystemTime::now().duration_since(UNIX_EPOCH) {
+        Ok(after) => seconds(after),
+        // Before the epoch: `time` floors, so a part second is one more.
+        Err(before) => {
+            let before = before.duration();
+            -seconds(before) - time_t::from(before.subsec_nanos() > 0)
+        }
+    }
 }

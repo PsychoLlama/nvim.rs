@@ -111,9 +111,9 @@ use crate::tag::find_tag_names;
 use crate::tag::state::g_tag_at_cursor;
 use crate::textformat::auto_format;
 use crate::types::{
-    BoolVarValue, Callback, ColNr, Dict, Direction, EvalFuncData, Expand, ExtmarkOp, HashTab,
-    LineNr, List, MB_MAXCHAR, OptInt, OptSet, Pos, PumItem, RegMatch, SaveVEvent, String_0, TypVal,
-    VarNumber, Vv, extmark_undo_vec_t, ptrdiff_t, size_t, uint64_t,
+    BoolVarValue, Callback, ColNr, Dict, Direction, EvalFuncData, Expand, ExtmarkOp,
+    ExtmarkUndoObject, HashTab, LineNr, List, MB_MAXCHAR, OptInt, OptSet, Pos, PumItem, RegMatch,
+    SaveVEvent, String_0, TypVal, VarNumber, Vv, ptrdiff_t, size_t, uint64_t,
 };
 use crate::ui::{ui_flush, vim_beep};
 use crate::undo::undo_allowed;
@@ -329,12 +329,6 @@ pub(crate) const POS_T_INIT: Pos = Pos {
 pub(crate) const SAVE_V_EVENT_INIT: SaveVEvent = SaveVEvent {
     sve_did_save: false,
     sve_hashtab: HashTab::new(),
-};
-/// A zeroed `extmark_undo_vec_t`, which is what C's `kv_destroy` leaves.
-pub(crate) const EXTMARK_UNDO_VEC_INIT: extmark_undo_vec_t = extmark_undo_vec_t {
-    size: 0,
-    capacity: 0,
-    items: ptr::null_mut(),
 };
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NOTDONE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
@@ -800,7 +794,7 @@ state_record! {
     /// See [`compl_orig_text`].
     COMPL_ORIG_TEXT: String_0 = String_0::NULL;
     /// See [`ComplOrigExtmarks`].
-    COMPL_ORIG_EXTMARKS: extmark_undo_vec_t = EXTMARK_UNDO_VEC_INIT;
+    COMPL_ORIG_EXTMARKS: Vec<ExtmarkUndoObject> = Vec::new();
     /// The CTRL-X mode a continued completion continues.
     compl_cont_mode: c_int = 0;
     /// CTRL-X CTRL-V's expansion context, kept between working out the

@@ -276,12 +276,12 @@ pub fn vim_copyfile(from: &CStr, to: &CStr) -> c_int {
     }
 
     // For systems that support ACL: get the ACL from the original file.
-    let acl = os_get_acl(from.as_ptr());
+    let acl = os_get_acl(from);
     if os_copy(from, to, UV_FS_COPYFILE_EXCL) != 0 {
         os_free_acl(acl);
         return FAIL;
     }
-    os_set_acl(to.as_ptr(), acl);
+    os_set_acl(to, acl);
     os_free_acl(acl);
     OK
 }

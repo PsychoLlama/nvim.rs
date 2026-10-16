@@ -48,7 +48,6 @@
 )]
 
 use core::ffi::{c_int, c_void};
-use core::ptr;
 
 use crate::buffer_updates::buf_updates_send_splice;
 use crate::decoration::{
@@ -67,8 +66,8 @@ use crate::memory::xrealloc;
 use crate::types::buffer::ExtmarkNs;
 use crate::types::{
     BCount, ColNr, DecorInline, ExtmarkInfoArray, ExtmarkOp, ExtmarkSplice, ExtmarkType,
-    ExtmarkUndoObject, LineNr, MTKey, MTPair, MTPos, MarkTree, MarkTreeIter, UndoHeader,
-    UndoObjectType, extmark_undo_vec_t, int32_t, size_t, uint16_t, uint32_t, uint64_t,
+    ExtmarkUndoObject, LineNr, MTKey, MTPair, MTPos, MarkTree, MarkTreeIter, UndoLink,
+    UndoObjectType, int32_t, size_t, uint16_t, uint32_t, uint64_t,
 };
 use crate::undo::u_force_get_undo_header;
 use crate::winlayer::Buf;
@@ -313,16 +312,21 @@ fn line_offset(buffer: Buf, lnum: LineNr) -> c_int {
     ml_find_line_or_offset(buffer, lnum, None, true)
 }
 
-/// `u_force_get_undo_header(buf)`, and then the extmark list on it. NULL when
-/// the change is not undoable.
-fn undo_marks(buffer: Buf) -> *mut extmark_undo_vec_t {
-    let uhp: *mut UndoHeader = u_force_get_undo_header(buffer);
-    if uhp.is_null() {
-        return ptr::null_mut();
-    }
-    // SAFETY: a non-NULL undo header the editor owns; the list is a field of
-    // it, and the borrow it hands back is the caller's to keep momentary.
-    unsafe { &raw mut (*uhp).uh_extmark }
+/// The undo header a change to `buffer` is recorded against, made if need
+/// be (`u_force_get_undo_header`). `None` when the change is not undoable.
+fn undo_header(buffer: Buf) -> Option<UndoLink> {
+    u_force_get_undo_header(buffer)
+}
+
+/// The extmark list of the header `link` names in `buffer`, handed to `f`.
+/// The borrow is the closure's: the list is looked up through the buffer
+/// each time.
+fn with_undo_marks<R>(
+    mut buffer: Buf,
+    link: UndoLink,
+    f: impl FnOnce(&mut Vec<ExtmarkUndoObject>) -> R,
+) -> Option<R> {
+    buffer.header_mut(link).map(|uh| f(&mut uh.extmarks))
 }
 
 /// `curbuf_splice_pending`: a `:global` or similar is batching its own
@@ -353,9 +357,9 @@ fn send_splice(buffer: Buf, start: Extent, old: Extent, new: Extent) {
 
 /// `kv_push`, over a vector's three fields.
 ///
-/// The family pushes to two of them -- [`get`]'s answer array and the undo
-/// header's `uh_extmark` -- and does nothing else with either, so this is the
-/// whole of klib's growable vector that is needed here.
+/// [`get`]'s answer array is the one the family still pushes to this way,
+/// and it does nothing else with it, so this is the whole of klib's growable
+/// vector that is needed here.
 fn kv_push<T>(size: &mut size_t, capacity: &mut size_t, items: &mut *mut T, value: T) {
     if *size == *capacity {
         *capacity = if *capacity != 0 { *capacity << 1 } else { 8 };
@@ -371,28 +375,11 @@ fn kv_push<T>(size: &mut size_t, capacity: &mut size_t, items: &mut *mut T, valu
     unsafe { *items.add(end) = value };
 }
 
-/// `kv_push(*uvp, undo)`, onto an undo header's extmark list.
-fn push_undo(uvp: *mut extmark_undo_vec_t, undo: ExtmarkUndoObject) {
-    // SAFETY: the caller's promise -- an undo header's own list, which
-    // [`undo_marks`] answered or the caller was handed.
-    let uvp = unsafe { &mut *uvp };
-    kv_push(&mut uvp.size, &mut uvp.capacity, &mut uvp.items, undo);
-}
-
 /// The `ExtmarkSplice` of the list's last entry, if it has one and it is a
 /// splice -- `&kv_A(v, kv_size(v) - 1).data.splice`, guarded as upstream
-/// guards it. The borrow is unbounded and must not outlive the header: the
-/// one caller drops it before the next push.
-fn last_splice<'a>(uvp: *mut extmark_undo_vec_t) -> Option<&'a mut ExtmarkSplice> {
-    // SAFETY: as [`push_undo`].
-    let uvp = unsafe { &mut *uvp };
-    if uvp.size == 0 {
-        return None;
-    }
-    // SAFETY: `size - 1` is the last slot pushed, and the vector's element
-    // type is what was pushed into it.
-    let item = unsafe { &mut *uvp.items.add(uvp.size - 1) };
-    match item {
+/// guards it.
+fn last_splice(list: &mut [ExtmarkUndoObject]) -> Option<&mut ExtmarkSplice> {
+    match list.last_mut()? {
         ExtmarkUndoObject::Splice(splice) => Some(splice),
         _ => None,
     }

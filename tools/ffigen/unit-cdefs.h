@@ -11,7 +11,6 @@ typedef struct DecorVirtText DecorVirtText;
 typedef struct Dict Dict;
 typedef struct DictItem DictItem;
 typedef struct Expand Expand;
-typedef struct ExtmarkUndoObject ExtmarkUndoObject;
 typedef struct List List;
 typedef struct MultiQueue MultiQueue;
 typedef struct OptSet OptSet;
@@ -184,7 +183,6 @@ typedef struct VTermStringFragment VTermStringFragment;
 typedef union VTermValue VTermValue;
 typedef struct WordCount WordCount;
 typedef struct addrinfo addrinfo;
-typedef struct extmark_undo_vec_t extmark_undo_vec_t;
 typedef struct luaL_Buffer luaL_Buffer;
 typedef struct luaL_Reg luaL_Reg;
 typedef union mpack_data_t mpack_data_t;
@@ -1370,11 +1368,6 @@ struct addrinfo {
   char *ai_canonname;
   addrinfo *ai_next;
 };
-struct extmark_undo_vec_t {
-  size_t size;
-  size_t capacity;
-  ExtmarkUndoObject *items;
-};
 struct luaL_Buffer {
   char *p;
   int lvl;
@@ -2260,6 +2253,7 @@ static const int ENC_UTF8 = 0;
 static const int END = 0;
 static const int END_OF_FILE_PENALTY = 21;
 static const int ENOTSUP = 95;
+static const int ENTRY_LINES_RESERVED = 1024;
 static const int ENVELOPE_MAX = 16;
 static const int ENV_SEP = 58;
 static const int ENV_SEPCHAR = 58;

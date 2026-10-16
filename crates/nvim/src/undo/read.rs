@@ -6,8 +6,7 @@
 //! Here each step is its own function answering `Option`, and the caller
 //! that owns an allocation is the one that frees it.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -16,79 +15,67 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::message_fmt::c_str;
+use crate::memory::XString;
+use crate::message_fmt::msg_cstr;
+use crate::os::fs::file_info;
+use crate::os::users::os_getuid;
 use crate::semsg;
 use crate::smsg;
 use crate::winlayer::Buf;
 use core::ffi::CStr;
-use core::ptr;
 use std::collections::HashSet;
 
 use super::file::*;
 use super::format::*;
 use super::store::header_adopt;
-use super::tree::*;
 use super::*;
 
 /// Reads an undo file into the current buffer's tree.
 ///
-/// `name` is the file the user named (`:rundo`), or NULL to let `'undodir'`
-/// pick one for `orig_name`. `hash` is the current buffer's content hash: a
-/// file whose hash disagrees describes text this buffer no longer holds and
-/// is refused rather than applied.
-///
-/// `None` for `name` is "pick the name out of 'undodir'".
+/// `name` is the file the user named (`:rundo`), or `None` to let
+/// `'undodir'` pick one for `orig_name`. `hash` is the current buffer's
+/// content hash: a file whose hash disagrees describes text this buffer no
+/// longer holds and is refused rather than applied.
 pub fn u_read_undo(
     name: Option<&CStr>,
     hash: &[u8; UNDO_HASH_SIZE as usize],
     orig_name: Option<&CStr>,
 ) {
-    let hash = hash.as_ptr();
-    let name = name.map_or(ptr::null_mut(), |name| name.as_ptr().cast_mut());
-    let orig_name = orig_name.map_or(ptr::null(), CStr::as_ptr);
-    // SAFETY: a live current buffer and NUL-terminated names, by the above.
-    let file_name: *mut c_char = if name.is_null() {
-        let picked = unsafe { u_get_undo_file_name(Buf::current().name.full_ptr(), true) };
-        if picked.is_null() {
-            return;
+    let picked;
+    let file_name: &CStr = match name {
+        Some(name) => name,
+        None => {
+            let full = Buf::current().name.full().map(XString::from_cstr);
+            let Some(found) = u_get_undo_file_name(full.as_ref().map(XString::as_cstr), true)
+            else {
+                return;
+            };
+            // Upstream returns here without freeing the name it just built.
+            if !owner_matches(found.as_cstr(), orig_name) {
+                return;
+            }
+            picked = found;
+            picked.as_cstr()
         }
-        if !unsafe { owner_matches(picked, orig_name) } {
-            // Upstream returns here without freeing the name it just
-            // built; there is nothing to be gained by keeping the leak.
-            unsafe { xfree(picked.cast()) };
-            return;
-        }
-        picked
-    } else {
-        name
     };
 
     // Always under 'verbose', even when the user named the file.
     verbosely(true, || {
-        // SAFETY: the message macros expand to a `vim_snprintf` over // the format literal above and the editor's message buffers.
-        let file_name = unsafe { c_str(file_name) };
+        let file_name = msg_cstr(file_name);
         smsg!(0, "Reading undo file: {file_name}");
     });
-    // SAFETY: a NUL-terminated path.
-    let path = <std::ffi::OsStr as std::os::unix::ffi::OsStrExt>::from_bytes(
-        unsafe { cstr::at(file_name) }.to_bytes(),
-    );
+    let path = <std::ffi::OsStr as std::os::unix::ffi::OsStrExt>::from_bytes(file_name.to_bytes());
     match std::fs::File::open(path) {
         Err(_) => {
-            if !name.is_null() || p_verbose() > 0 {
-                // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                let file_name = unsafe { c_str(file_name) };
+            if name.is_some() || p_verbose() > 0 {
+                let file_name = msg_cstr(file_name);
                 semsg!("E822: Cannot open undo file for reading: {file_name}");
             }
         }
         Ok(file) => {
             let mut bi = BufInfo::reader(Buf::current(), file);
-            // SAFETY: the caller's name and hash.
-            unsafe { read_undo_file(&mut bi, file_name, name.is_null(), hash) };
+            read_undo_file(&mut bi, file_name, name.is_none(), hash);
         }
-    }
-    if !ptr::eq(file_name, name) {
-        unsafe { xfree(file_name.cast()) };
     }
 }
 
@@ -96,23 +83,21 @@ pub fn u_read_undo(
 /// the same user as the edited file, or it belongs to us.
 ///
 /// Says why not, under `'verbose'`.
-///
-/// # Safety
-///
-/// Both names are NUL-terminated.
-unsafe fn owner_matches(file_name: *const c_char, orig_name: *const c_char) -> bool {
-    let mut edited = FileInfo::default();
-    let mut undo = FileInfo::default();
-    if !(unsafe { os_fileinfo(orig_name, &raw mut edited) }
-        && unsafe { os_fileinfo(file_name, &raw mut undo) }
-        && edited.stat.st_uid != undo.stat.st_uid
-        && undo.stat.st_uid != uint64_t::from(unsafe { getuid() }))
-    {
+fn owner_matches(file_name: &CStr, orig_name: Option<&CStr>) -> bool {
+    let edited = orig_name.and_then(file_info);
+    let undo = file_info(file_name);
+    let foreign = match (edited, undo) {
+        (Some(edited), Some(undo)) => {
+            edited.stat.st_uid != undo.stat.st_uid
+                && undo.stat.st_uid != uint64_t::from(os_getuid())
+        }
+        _ => false,
+    };
+    if !foreign {
         return true;
     }
     verbosely(true, || {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let file_name = unsafe { c_str(file_name) };
+        let file_name = msg_cstr(file_name);
         smsg!(0, "Not reading undo file, owner differs: {file_name}");
     });
     false
@@ -120,41 +105,32 @@ unsafe fn owner_matches(file_name: *const c_char, orig_name: *const c_char) -> b
 
 /// Reads the whole of an open undo file and grafts it onto the current
 /// buffer. Every failure has already said what was wrong with the file.
-///
-/// # Safety
-///
-/// `file_name` is NUL-terminated and `hash` points at [`UNDO_HASH_SIZE`]
-/// readable bytes.
-unsafe fn read_undo_file(
+fn read_undo_file(
     bi: &mut BufInfo,
-    file_name: *const c_char,
+    file_name: &CStr,
     automatic: bool,
-    hash: *const uint8_t,
+    hash: &[u8; UNDO_HASH_SIZE as usize],
 ) {
     let mut magic = [0u8; UF_START_MAGIC.len()];
     if !bi.read(&mut magic) || magic != UF_START_MAGIC {
-        // SAFETY: the message macros expand to a `vim_snprintf` over // the format literal above and the editor's message buffers.
-        let file_name = unsafe { c_str(file_name) };
+        let file_name = msg_cstr(file_name);
         semsg!("E823: Not an undo file: {file_name}");
         return;
     }
     if bi.read_2c() != UF_VERSION {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let file_name = unsafe { c_str(file_name) };
+        let file_name = msg_cstr(file_name);
         semsg!("E824: Incompatible undo file: {file_name}");
         return;
     }
     let mut read_hash = [0u8; UNDO_HASH_SIZE as usize];
     if !bi.read(&mut read_hash) {
-        unsafe { corruption_error(c"hash".as_ptr(), file_name) };
+        corruption_error(c"hash", file_name);
         return;
     }
     let line_count = bi.read_4c() as LineNr;
     // The tree describes text; a buffer holding different text cannot
     // have it applied.
-    if unsafe { core::slice::from_raw_parts(hash, read_hash.len()) } != read_hash
-        || line_count != Buf::current().b_ml.ml_line_count
-    {
+    if *hash != read_hash || line_count != Buf::current().b_ml.ml_line_count {
         verbosely(automatic, || {
             let mesg = gettext(c"File contents changed, cannot use undo info");
             give_warning(mesg, true, true);
@@ -162,30 +138,25 @@ unsafe fn read_undo_file(
         return;
     }
 
-    let Some(header) = (unsafe { read_file_header(bi, file_name) }) else {
+    let Some(header) = read_file_header(bi, file_name) else {
         return;
     };
-    let Some(headers) = (unsafe { read_headers(bi, file_name, header.num_head) }) else {
-        unsafe { xfree(header.line_ptr.cast()) };
+    let Some(headers) = read_headers(bi, file_name, header.num_head) else {
         return;
     };
-    if !unsafe { graft(&headers, &header, file_name) } {
-        unsafe { free_headers(&headers) };
-        unsafe { xfree(header.line_ptr.cast()) };
+    if !graft(headers, header, file_name) {
         return;
     }
     if !automatic {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let file_name = unsafe { c_str(file_name) };
+        let file_name = msg_cstr(file_name);
         smsg!(0, "Finished reading undo file {file_name}");
     }
 }
 
 /// Everything the undo file says before its first header record.
 struct FileHeader {
-    /// The `U` shadow line, and where it came from. Owned: whoever holds a
-    /// `FileHeader` and gives up on it frees this.
-    line_ptr: *mut c_char,
+    /// The `U` shadow line, and where it came from.
+    line: Option<XString>,
     line_lnum: LineNr,
     line_colnr: ColNr,
     /// The three tree heads, still as the sequence numbers the file spells
@@ -205,29 +176,24 @@ struct FileHeader {
 /// about, or one whose shadow-line length is not a length at all — which
 /// upstream rejects silently, and so does this.
 ///
-/// # Safety
-///
-/// `bi` is open for reading and positioned at the shadow-line length.
-unsafe fn read_file_header(bi: &mut BufInfo, file_name: *const c_char) -> Option<FileHeader> {
-    let str_len = bi.read_4c();
-    if str_len < 0 {
-        return None;
-    }
-    let line_ptr = if str_len > 0 {
-        let len = usize::try_from(str_len).expect("the branch above proves it positive");
-        undo_read_string(bi, len)
+/// `bi` is positioned at the shadow-line length.
+fn read_file_header(bi: &mut BufInfo, file_name: &CStr) -> Option<FileHeader> {
+    let str_len = usize::try_from(bi.read_4c()).ok()?;
+    // A line the file ran out in the middle of is no line, as upstream's
+    // NULL from `read_string_decrypt` was.
+    let line = if str_len > 0 {
+        undo_read_string(bi, str_len)
     } else {
-        ptr::null_mut()
+        None
     };
     let line_lnum = bi.read_4c() as LineNr;
     let line_colnr = bi.read_4c();
     if line_lnum < 0 || line_colnr < 0 {
-        unsafe { corruption_error(c"line lnum/col".as_ptr(), file_name) };
-        unsafe { xfree(line_ptr.cast()) };
+        corruption_error(c"line lnum/col", file_name);
         return None;
     }
     let mut header = FileHeader {
-        line_ptr,
+        line,
         line_lnum,
         line_colnr,
         old_head: bi.read_4c(),
@@ -255,54 +221,28 @@ unsafe fn read_file_header(bi: &mut BufInfo, file_name: *const c_char) -> Option
 /// numbers the file carried and still have to be checked against the headers
 /// that actually turned up. On failure nothing survives.
 ///
-/// # Safety
-///
-/// `bi` is open for reading and positioned at the first header record.
-unsafe fn read_headers(
-    bi: &mut BufInfo,
-    file_name: *const c_char,
-    num_head: c_int,
-) -> Option<Vec<*mut UndoHeader>> {
-    let mut headers: Vec<*mut UndoHeader> = Vec::new();
-    // SAFETY: an open undo file, by the contract above.
+/// `bi` is positioned at the first header record.
+fn read_headers(bi: &mut BufInfo, file_name: &CStr, num_head: c_int) -> Option<Vec<UndoHeader>> {
+    let mut headers: Vec<UndoHeader> = Vec::new();
     loop {
         let c = bi.read_2c();
         if c != UF_HEADER_MAGIC {
             // The file claims a count of its own; a run that stops short
             // of it, or an end marker that is not one, is corruption.
             if headers.len() != usize::try_from(num_head).unwrap_or(usize::MAX) {
-                unsafe { corruption_error(c"num_head".as_ptr(), file_name) };
+                corruption_error(c"num_head", file_name);
             } else if c != UF_HEADER_END_MAGIC {
-                unsafe { corruption_error(c"end marker".as_ptr(), file_name) };
+                corruption_error(c"end marker", file_name);
             } else {
                 return Some(headers);
             }
-            unsafe { free_headers(&headers) };
             return None;
         }
         if headers.len() >= usize::try_from(num_head).unwrap_or(0) {
-            unsafe { corruption_error(c"num_head too small".as_ptr(), file_name) };
-            unsafe { free_headers(&headers) };
+            corruption_error(c"num_head too small", file_name);
             return None;
         }
-        let uhp = unsafe { unserialize_uhp(bi, file_name) };
-        if uhp.is_null() {
-            unsafe { free_headers(&headers) };
-            return None;
-        }
-        headers.push(uhp);
-    }
-}
-
-/// Frees headers that never made it into a buffer's store.
-///
-/// # Safety
-///
-/// Every pointer is a live header nothing else owns.
-unsafe fn free_headers(headers: &[*mut UndoHeader]) {
-    for &uhp in headers {
-        // SAFETY: a live header nobody else owns, by the contract above.
-        unsafe { u_free_uhp(uhp) };
+        headers.push(unserialize_uhp(bi, file_name)?);
     }
 }
 
@@ -310,19 +250,11 @@ unsafe fn free_headers(headers: &[*mut UndoHeader]) {
 ///
 /// Answers whether it took: a file naming one header twice describes a tree
 /// with two headers of the same name, which is not a tree.
-///
-/// # Safety
-///
-/// A live current buffer, and every header is live and owned by nobody else.
-unsafe fn graft(
-    headers: &[*mut UndoHeader],
-    header: &FileHeader,
-    file_name: *const c_char,
-) -> bool {
+fn graft(mut headers: Vec<UndoHeader>, header: FileHeader, file_name: &CStr) -> bool {
     let mut seqs: HashSet<c_int> = HashSet::with_capacity(headers.len());
-    for &uhp in headers {
-        if !seqs.insert(unsafe { (*uhp).uh_seq }) {
-            unsafe { corruption_error(c"duplicate uh_seq".as_ptr(), file_name) };
+    for uh in &headers {
+        if !seqs.insert(uh.seq) {
+            corruption_error(c"duplicate uh_seq", file_name);
             return false;
         }
     }
@@ -338,20 +270,20 @@ unsafe fn graft(
             link
         }
     };
-    for &uhp in headers {
-        let seq = unsafe { (*uhp).uh_seq };
-        unsafe { (*uhp).uh_next = resolve(seq, (*uhp).uh_next) };
-        unsafe { (*uhp).uh_prev = resolve(seq, (*uhp).uh_prev) };
-        unsafe { (*uhp).uh_alt_next = resolve(seq, (*uhp).uh_alt_next) };
-        unsafe { (*uhp).uh_alt_prev = resolve(seq, (*uhp).uh_alt_prev) };
+    for uh in &mut headers {
+        let seq = uh.seq;
+        uh.next = resolve(seq, uh.next);
+        uh.prev = resolve(seq, uh.prev);
+        uh.alt_next = resolve(seq, uh.alt_next);
+        uh.alt_prev = resolve(seq, uh.alt_prev);
     }
 
     let mut buf = Buf::current();
     u_blockfree(buf);
     // The links already name these headers; the store is what turns a
     // name back into one.
-    for &uhp in headers {
-        unsafe { header_adopt(buf, uhp) };
+    for uh in headers {
+        header_adopt(buf, Box::new(uh));
     }
     // `unserialize_uhp` refuses a header whose sequence number is not
     // positive, so a number the set holds is always a usable link.
@@ -365,7 +297,7 @@ unsafe fn graft(
     buf.b_u_oldhead = head(header.old_head);
     buf.b_u_newhead = head(header.new_head);
     buf.b_u_curhead = head(header.cur_head);
-    buf.b_u_line_ptr = header.line_ptr;
+    buf.b_u_line = header.line;
     buf.b_u_line_lnum = header.line_lnum;
     buf.b_u_line_colnr = header.line_colnr;
     buf.b_u_numhead = header.num_head;

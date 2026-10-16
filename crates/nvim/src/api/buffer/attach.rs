@@ -117,7 +117,7 @@ pub fn nvim__buf_stats(buf: BufferHandle) -> Result<ApiDict, Error> {
         .header(tip.b_u_curhead)
         .or_else(|| tip.header(tip.b_u_newhead))
     {
-        let d_uhp_extmark_size = Object::integer(uhp.uh_extmark.size as Integer);
+        let d_uhp_extmark_size = Object::integer(uhp.extmarks.len() as Integer);
         rv.insert(c"uhp_extmark_size", d_uhp_extmark_size);
     }
     Ok(rv)

@@ -451,9 +451,9 @@ pub(crate) fn ex_undo(excmd: &mut ExArg) {
     };
     let mut count = 0;
     let mut reached = None;
-    for header in header_chain(Buf::current(), start, |uh| uh.uh_next) {
-        if header.uh_seq as LineNr <= step {
-            reached = Some(header.uh_seq as LineNr);
+    for link in header_chain(Buf::current(), start, |uh| uh.next) {
+        if link.seq() as LineNr <= step {
+            reached = Some(link.seq() as LineNr);
             break;
         }
         count += 1;

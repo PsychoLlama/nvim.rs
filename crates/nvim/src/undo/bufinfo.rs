@@ -68,6 +68,19 @@ impl BufInfo {
         self.write(&encode_be(nr, len)[..len])
     }
 
+    /// Writes a C `int` field as its low `len` bytes, big-endian: what
+    /// upstream's `undo_write_bytes(bi, (uintmax_t)nr, len)` put down for a
+    /// negative one too.
+    pub(crate) fn write_int(&mut self, nr: c_int, len: usize) -> bool {
+        self.write_bytes(u64::from(nr.cast_unsigned()), len)
+    }
+
+    /// Writes a length as a four-byte field: its low 32 bits, as upstream's
+    /// cast through `uintmax_t` truncated it.
+    pub(crate) fn write_len(&mut self, len: usize) -> bool {
+        self.write_bytes(u64::try_from(len).unwrap_or(u64::MAX), 4)
+    }
+
     /// Writes one link as the four big-endian bytes of the sequence number
     /// it already holds -- 0 for a link to nothing, which is what the reader
     /// takes it back as.

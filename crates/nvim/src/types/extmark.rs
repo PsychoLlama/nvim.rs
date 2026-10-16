@@ -49,13 +49,6 @@ pub struct ExtmarkSplice {
 pub type ExtmarkType = ::core::ffi::c_uint;
 pub type UndoObjectType = ::core::ffi::c_uint;
 pub type BCount = ptrdiff_t;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct extmark_undo_vec_t {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut ExtmarkUndoObject,
-}
 /// One recorded extmark operation, as a buffer's undo list holds it.
 ///
 /// Upstream is a `type` tag beside an untagged union. The tag's numbers are

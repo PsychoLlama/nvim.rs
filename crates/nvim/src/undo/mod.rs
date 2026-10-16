@@ -9,8 +9,7 @@
 //!
 //! Original: `src/nvim/undo.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -20,7 +19,6 @@ use crate::buffer_updates::{buf_updates_changedtick, buf_updates_unload};
 use crate::change::{
     change_warning, changed, changed_bytes, changed_lines, file_ff_differs, unchanged,
 };
-use crate::cstr;
 use crate::cursor::{
     check_cursor, check_cursor_col, check_cursor_lnum, check_pos, coladvance, getviscol,
 };
@@ -28,37 +26,32 @@ use crate::drawscreen::redraw_win_line;
 use crate::edit::beginline;
 use crate::eval::funcs::get_buf_arg;
 use crate::eval::typval::{tv_dict_alloc, tv_dict_alloc_ret, tv_list_alloc};
-use crate::event::libuv::uv_strerror;
 use crate::ex_docmd::expr_map_locked;
 use crate::ex_docmd::state::global_busy;
 use crate::ex_getln::{text_locked, text_locked_msg};
 use crate::extmark::{extmark_apply_undo, extmark_splice_cols};
 use crate::fold::fold_open_cursor;
+use crate::formatted;
 use crate::getchar::beep_flush;
 use crate::getchar::state::{KeyTyped, got_int};
 use crate::global_cell::GlobalCell;
 use crate::guard::{sandbox, textlock};
-use crate::mark::{free_fmark, mark_adjust, setpcmark};
-use crate::mbyte::utfc_ptr2len;
+use crate::mark::{drop_mark_extra, mark_adjust, setpcmark};
+use crate::mbyte::c_cluster_len;
 use crate::memline::MlFlags;
-use crate::memline::{ml_append_cstr, ml_delete, ml_replace_buf_text, resolve_symlink};
-use crate::memory::{XString, xfree, xmalloc, xrealloc, xstrdup};
+use crate::memline::{ml_delete, resolve_symlink};
+use crate::memory::XString;
 use crate::message::{e_modifiable, e_sandbox, e_textlock};
 use crate::message::{
     emsg, give_warning, iemsg, internal_error, messaging, msg, msg_end, msg_ext_set_kind,
     msg_putchar, msg_start, msg_str, msg_str_hl, verb_msg, verbose_enter, verbose_leave,
 };
-use crate::option::copy_option_part;
 use crate::option::vars::{fdo_flags, p_fs, p_ul, p_verbose};
 use crate::options::kOptFdoFlagUndo;
 use crate::os::cshim::{gettext, ngettext};
-use crate::os::fs::read_eintr;
-use crate::os::fs::{
-    os_fchown, os_fileinfo, os_free_acl, os_get_acl, os_getperm, os_isdir, os_mkdir_recurse,
-    os_open, os_path_exists, os_remove, os_set_acl, os_setperm,
-};
+use crate::os::fs::{os_free_acl, os_get_acl, os_remove, os_set_acl};
 use crate::os::input::fast_breakcheck;
-use crate::os::time::{os_localtime_r, os_time, tm_zeroed};
+use crate::os::time::{os_localtime_r, os_strftime, os_time, os_time_raw, tm_zeroed};
 use crate::path::{concat_fnames, full_name_save, tail_index, vim_ispathsep};
 use crate::pos::clearpos;
 use crate::sha256::Sha256;
@@ -66,28 +59,18 @@ use crate::spell::spell_check_window;
 use crate::state::virtual_active;
 use crate::types::Failed;
 use crate::types::*;
-use crate::vim_snprintf;
 use crate::winlayer::Win;
-use ::libc::{close, getuid, strftime, time};
-use core::ffi::{c_char, c_int, c_uint, c_ulong, c_void};
+use core::ffi::{c_int, c_uint, c_ulong};
 use core::ptr;
 
 /// Constants the transpiler copied in from the headers this module includes.
 mod header {
-    use super::{ExtmarkOp, UndoObjectType, c_int, c_ulong};
+    use super::{ExtmarkOp, UndoObjectType, c_int};
 
     pub(super) const EOF: c_int = -1;
-    pub(super) const SIZE_MAX: c_ulong = 18446744073709551615;
     pub(super) const NMARKS: c_int = 26;
 
-    /// `open` flags.
-    pub(super) const O_RDONLY: c_int = 0;
-    pub(super) const O_WRONLY: c_int = 0o1;
-    pub(super) const O_CREAT: c_int = 0o100;
-    pub(super) const O_EXCL: c_int = 0o200;
-    pub(super) const O_NOFOLLOW: c_int = 0o400000;
-
-    /// The `UndoHeader::uh_flags` bits.
+    /// The `UndoHeader::flags` bits.
     pub(super) const UH_CHANGED: c_int = 1;
     pub(super) const UH_EMPTYBUF: c_int = 2;
     pub(super) const UH_RELOAD: c_int = 4;
@@ -110,7 +93,7 @@ mod tree;
 mod write;
 
 use crate::winlayer::{Buf, buffers};
-use store::{Header, header_adopt, header_chain};
+use store::{header_adopt, header_chain};
 use tree::*;
 
 pub use apply::{u_redo, u_undo, u_undo_and_forget, undo_time};
@@ -172,7 +155,6 @@ impl From<Failed> for UndoFailed {
 /// Safe: as [`u_save`], over the cursor's line.
 pub fn u_save_cursor() -> Result<(), Failed> {
     let cur: LineNr = Win::current().w_cursor.lnum;
-    // SAFETY: a live current buffer, by the contract above.
     u_save((cur - 1).max(0), cur + 1)
 }
 
@@ -261,14 +243,11 @@ fn get_undolevel(buffer: Buf) -> OptInt {
 /// Drops the shada payload hanging off a buffer's named marks.
 ///
 /// The undo header takes a *copy* of the marks, and two owners of one
-/// `additional_data` allocation is one too many; the header's copies are the
-/// ones that keep it, so the buffer's give it up.
+/// `additional_data` allocation is one too many; neither copy keeps it.
 #[inline]
 fn zero_fmark_additional_data(fmarks: &mut [FileMark; NMARKS as usize]) {
     for mark in fmarks {
-        // SAFETY: this module's own allocation, dropped exactly once.
-        unsafe { xfree(mark.additional_data.cast()) };
-        mark.additional_data = ptr::null_mut();
+        drop_mark_extra(mark);
     }
 }
 
@@ -323,103 +302,109 @@ pub fn u_savecommon(
 /// Answers whether there is a header now: undo turned off for this buffer
 /// makes none, and the branch the cursor was on goes instead.
 fn start_new_header(mut b: Buf) -> bool {
-    let buf = b;
     b.b_new_change = true;
 
     // The sequence number is the header's name, so it has to be handed out
     // and the header handed to the store *before* anything can link to it.
-    // The transpiled code did this at the end, when a link was a pointer and
-    // the number was only for the undo file.
-    let fresh = if get_undolevel(buf) >= 0 {
+    let fresh = if get_undolevel(b) >= 0 {
         // `.max(0)`: a sequence number is a header's name and 0 means "no
         // link", so it has to be positive. `b_u_seq_last` comes out of the
         // undo file unvalidated and a corrupt one can make it negative.
         b.b_u_seq_last = b.b_u_seq_last.max(0) + 1;
-        // SAFETY: a fresh allocation, written before anything reads it, and
-        // handed straight to the store that owns it from here on.
-        let uhp: *mut UndoHeader = unsafe { xmalloc(size_of::<UndoHeader>()) }.cast();
-        unsafe {
-            uhp.write(UndoHeader {
-                uh_seq: b.b_u_seq_last,
-                ..Default::default()
-            })
-        };
-        let link = unsafe { header_adopt(buf, uhp) };
-        unsafe { Header::new(uhp) }.map(|uh| (uh, link))
+        let header = Box::new(UndoHeader {
+            seq: b.b_u_seq_last,
+            ..Default::default()
+        });
+        Some(header_adopt(b, header)).filter(|link| link.is_some())
     } else {
         None
     };
 
     let mut old_curhead = b.b_u_curhead;
-    if let Some(old_cur) = b.header(old_curhead) {
+    if let Some(next) = b.header(old_curhead).map(|uh| uh.next) {
         // We were somewhere up the branch; the change forks from here.
-        b.b_u_newhead = old_cur.uh_next;
+        b.b_u_newhead = next;
         b.b_u_curhead = UndoLink::NONE;
     }
-    // SAFETY: every header freed here is one the tree still holds;
-    // `old_curhead` is cleared for us if it goes.
-    while OptInt::from(b.b_u_numhead) > get_undolevel(buf) {
-        let Some(oldest) = b.header(b.b_u_oldhead) else {
+    // Every header freed here is one the tree still holds; `old_curhead` is
+    // cleared for us if it goes.
+    while OptInt::from(b.b_u_numhead) > get_undolevel(b) {
+        let oldest = b.b_u_oldhead;
+        let Some(alt_next) = b.header(oldest).map(|uh| uh.alt_next) else {
             break;
         };
-        if b.b_u_oldhead == old_curhead {
-            unsafe { u_freebranch(buf, oldest.raw(), &raw mut old_curhead) };
-        } else if oldest.uh_alt_next.is_none() {
-            unsafe { u_freeheader(buf, oldest.raw(), &raw mut old_curhead) };
+        if oldest == old_curhead {
+            u_freebranch(b, oldest, Some(&mut old_curhead));
+        } else if alt_next.is_none() {
+            u_freeheader(b, oldest, Some(&mut old_curhead));
         } else {
             // The far end of the oldest header's alternate chain.
-            let far = header_chain(buf, b.b_u_oldhead, |uh| uh.uh_alt_next).last();
-            unsafe { u_freebranch(buf, far.unwrap_or(oldest).raw(), &raw mut old_curhead) };
+            let far = header_chain(b, oldest, |uh| uh.alt_next)
+                .last()
+                .unwrap_or(oldest);
+            u_freebranch(b, far, Some(&mut old_curhead));
         }
     }
 
-    let Some((mut uhp, link)) = fresh else {
+    let Some(link) = fresh else {
         // Undo is off for this buffer, so the branch we forked from has
         // nothing left to lead back to.
-        if let Some(old_cur) = b.header(old_curhead) {
-            // SAFETY: a live buffer and a header the tree holds.
-            unsafe { u_freebranch(buf, old_cur.raw(), ptr::null_mut()) };
+        if b.has_header(old_curhead) {
+            u_freebranch(b, old_curhead, None);
         }
         b.b_u_synced = false;
         return false;
     };
 
-    uhp.uh_next = b.b_u_newhead;
-    uhp.uh_alt_next = old_curhead;
-    if let Some(mut old_cur) = b.header(old_curhead) {
+    let next = b.b_u_newhead;
+    let mut alt_prev = UndoLink::NONE;
+    if let Some(old_cur) = b.header(old_curhead) {
         // The new header joins the run of alternates in front of the one we
         // forked from.
-        uhp.uh_alt_prev = old_cur.uh_alt_prev;
-        if let Some(mut alt_prev) = b.header(uhp.uh_alt_prev) {
-            alt_prev.uh_alt_next = link;
+        alt_prev = old_cur.alt_prev;
+        if let Some(before) = b.header_mut(alt_prev) {
+            before.alt_next = link;
         }
-        old_cur.uh_alt_prev = link;
+        if let Some(old_cur) = b.header_mut(old_curhead) {
+            old_cur.alt_prev = link;
+        }
         if b.b_u_oldhead == old_curhead {
             b.b_u_oldhead = link;
         }
     }
-    if let Some(mut newhead) = b.header(b.b_u_newhead) {
-        newhead.uh_prev = link;
+    if let Some(newhead) = b.header_mut(next) {
+        newhead.prev = link;
     }
-    b.b_u_seq_cur = uhp.uh_seq;
-    // SAFETY: the C clock, and a live current window.
-    uhp.uh_time = unsafe { time(ptr::null_mut()) };
-    uhp.uh_cursor = Win::current().w_cursor;
-    uhp.uh_cursor_vcol = if virtual_active(Win::current()) && Win::current().w_cursor.coladd > 0 {
+    let seq = b.b_u_seq_last;
+    b.b_u_seq_cur = seq;
+    let win = Win::current();
+    let now = os_time_raw();
+    let cursor_vcol = if virtual_active(win) && win.w_cursor.coladd > 0 {
         getviscol()
     } else {
         -1
     };
-    b.b_u_time_cur = uhp.uh_time + 1;
-    uhp.uh_flags = if b.b_changed != 0 { UH_CHANGED } else { 0 }
+    b.b_u_time_cur = now + 1;
+    let flags = if b.b_changed != 0 { UH_CHANGED } else { 0 }
         | if b.b_ml.ml_flags.has(MlFlags::EMPTY) {
             UH_EMPTYBUF
         } else {
             0
         };
     zero_fmark_additional_data(&mut b.b_namedm);
-    uhp.uh_namedm = b.b_namedm.clone();
-    uhp.uh_visual = b.b_visual;
+    let named_marks = b.b_namedm.clone();
+    let visual = b.b_visual;
+    if let Some(uh) = b.header_mut(link) {
+        uh.next = next;
+        uh.alt_next = old_curhead;
+        uh.alt_prev = alt_prev;
+        uh.time = now;
+        uh.cursor = win.w_cursor;
+        uh.cursor_vcol = cursor_vcol;
+        uh.flags = flags;
+        uh.named_marks = named_marks;
+        uh.visual = visual;
+    }
     b.b_u_newhead = link;
     if b.b_u_oldhead.is_none() {
         b.b_u_oldhead = link;
@@ -434,83 +419,89 @@ fn start_new_header(mut b: Buf) -> bool {
 /// Only the ten newest entries are looked at: this is a fast path for typing,
 /// not a search.
 fn extend_last_entry(mut b: Buf, top: LineNr, bot: LineNr, newbot: LineNr) -> bool {
-    let mut uep = u_get_headentry(b);
-    let Some(mut newhead) = b.header(b.b_u_newhead) else {
+    if !u_get_headentry(b) {
+        return false;
+    }
+    let newhead = b.b_u_newhead;
+    let line_count = b.line_count();
+    let Some(uh) = b.header(newhead) else {
         return false;
     };
-    let mut prev_uep: *mut UndoEntry = ptr::null_mut();
-    // SAFETY: every entry here belongs to the newest header's list, which
-    // this walks one node at a time and does not free.
-    for i in 0..10 {
-        if uep.is_null() {
-            return false;
-        }
+    let count = uh.entries.len();
+    // Newest first: the end of the vector is the head of upstream's list.
+    for (i, at) in (0..count).rev().take(10).enumerate() {
+        let entry = &uh.entries[at];
         // The entry has to still describe the buffer as it stands.
-        let stale = if newhead.uh_getbot_entry == uep {
-            unsafe { (*uep).ue_lcount != b.line_count() }
+        let stale = if uh.getbot == Some(at) {
+            entry.lcount != line_count
         } else {
-            let below = if unsafe { (*uep).ue_bot } == 0 {
-                b.line_count() + 1
+            let below = if entry.bot == 0 {
+                line_count + 1
             } else {
-                unsafe { (*uep).ue_bot }
+                entry.bot
             };
-            (unsafe { (*uep).ue_top }) + unsafe { (*uep).ue_size } + 1 != below
+            entry.top + entry.size() + 1 != below
         };
         // ... and the line must not already be inside a multi-line entry.
-        let covered = unsafe { (*uep).ue_size } > 1
-            && top >= unsafe { (*uep).ue_top }
-            && top + 2 <= unsafe { (*uep).ue_top } + unsafe { (*uep).ue_size } + 1;
+        let covered =
+            entry.size() > 1 && top >= entry.top && top + 2 <= entry.top + entry.size() + 1;
         if stale || covered {
             return false;
         }
-        if unsafe { (*uep).ue_size } == 1 && unsafe { (*uep).ue_top } == top {
+        if entry.size() == 1 && entry.top == top {
+            let mut at = at;
             if i > 0 {
                 // Move it to the front of the list, so the next change to
                 // the same line finds it first.
                 u_getbot(b);
                 b.b_u_synced = false;
-                unsafe { (*prev_uep).ue_next = (*uep).ue_next };
-                unsafe { (*uep).ue_next = newhead.uh_entry };
-                newhead.uh_entry = uep;
+                if let Some(uh) = b.header_mut(newhead) {
+                    let moved = uh.entries.remove(at);
+                    uh.entries.push(moved);
+                    uh.getbot = uh.getbot.map(|g| match g {
+                        g if g == at => uh.entries.len() - 1,
+                        g if g > at => g - 1,
+                        g => g,
+                    });
+                    at = uh.entries.len() - 1;
+                }
             }
-            unsafe { set_entry_bottom(b, &mut newhead, uep, bot, newbot) };
+            set_entry_bottom(b, newhead, at, bot, newbot);
             return true;
         }
-        prev_uep = uep;
-        uep = unsafe { (*uep).ue_next };
     }
     false
 }
 
-/// Records where the change leaves the bottom of the entry's region: the
+/// Records where the change leaves the bottom of entry `at`'s region: the
 /// line the caller named, the "to the end of the buffer" sentinel, or a
 /// promise to work it out in `u_getbot`.
-///
-/// # Safety
-///
-/// `uep` points at a live entry of `newhead`'s list.
-unsafe fn set_entry_bottom(
-    b: Buf,
-    newhead: &mut Header,
-    uep: *mut UndoEntry,
-    bot: LineNr,
-    newbot: LineNr,
-) {
-    // SAFETY: a live entry, by the contract above.
+fn set_entry_bottom(mut b: Buf, link: UndoLink, at: usize, bot: LineNr, newbot: LineNr) {
+    let line_count = b.line_count();
+    let Some(uh) = b.header_mut(link) else {
+        return;
+    };
+    let Some(entry) = uh.entries.get_mut(at) else {
+        return;
+    };
     if newbot != 0 {
-        unsafe { (*uep).ue_bot = newbot };
-    } else if bot > b.line_count() {
-        // The change reaches the end of the buffer, and `ue_bot` is the
+        entry.bot = newbot;
+    } else if bot > line_count {
+        // The change reaches the end of the buffer, and `bot` is the
         // sentinel for that rather than a line number.
-        unsafe { (*uep).ue_bot = 0 };
+        entry.bot = 0;
     } else {
-        unsafe { (*uep).ue_lcount = b.line_count() };
-        newhead.uh_getbot_entry = uep;
+        entry.lcount = line_count;
+        uh.getbot = Some(at);
     }
 }
 
 /// Builds the entry that holds the saved lines and hangs it off the newest
 /// header.
+///
+/// The lines are copied before the entry joins the header, so a CTRL-C
+/// during the copy leaves the header as it was; upstream had already pointed
+/// `uh_getbot_entry` at the entry it then freed.
 fn record_entry(
     mut b: Buf,
     top: LineNr,
@@ -519,91 +510,60 @@ fn record_entry(
     newbot: LineNr,
     reload: bool,
 ) -> Result<(), Failed> {
-    let mut newhead = b
-        .header(b.b_u_newhead)
-        .expect("the newest header is the one this change is recorded against");
-    // SAFETY: a fresh allocation, written before anything reads it.
-    let uep: *mut UndoEntry = unsafe {
-        let uep: *mut UndoEntry = xmalloc(size_of::<UndoEntry>()).cast();
-        uep.write(UndoEntry {
-            ue_size: size,
-            ue_top: top,
-            ..Default::default()
-        });
-        uep
-    };
-    // SAFETY: the entry just built, and its own array.
-    unsafe { set_entry_bottom(b, &mut newhead, uep, bot, newbot) };
-    if size > 0 {
-        let count = usize::try_from(size).expect("the branch above proves it positive");
-        let array: *mut *mut c_char = unsafe { xmalloc(size_of::<*mut c_char>() * count) }.cast();
-        unsafe { (*uep).ue_array = array };
-        for i in 0..size {
-            fast_breakcheck();
-            if got_int.get() {
-                // Only the lines already copied are there to free.
-                unsafe { u_freeentry(uep, i) };
-                return Err(Failed);
-            }
-            let at = usize::try_from(i).expect("the loop counts up from zero");
-            unsafe { *array.add(at) = u_save_line_buf(b, top + 1 + i) };
+    let newhead = b.b_u_newhead;
+    let mut lines = Vec::with_capacity(usize::try_from(size).unwrap_or(0));
+    for i in 0..size {
+        fast_breakcheck();
+        if got_int.get() {
+            return Err(Failed);
         }
+        lines.push(line_copy(b, top + 1 + i));
     }
-    unsafe { (*uep).ue_next = newhead.uh_entry };
-    newhead.uh_entry = uep;
+    let entry = UndoEntry {
+        top,
+        lines,
+        ..Default::default()
+    };
+    let uh = b
+        .header_mut(newhead)
+        .expect("the newest header is the one this change is recorded against");
+    uh.entries.push(entry);
     if reload {
-        newhead.uh_flags |= UH_RELOAD;
+        uh.flags |= UH_RELOAD;
     }
+    let at = uh.entries.len() - 1;
+    set_entry_bottom(b, newhead, at, bot, newbot);
     b.b_u_synced = false;
     undo_undoes.set(false);
     Ok(())
 }
 
-/// [`undo_fmt_time`] as a `room`-byte buffer would hold it, owned.
+/// When `tt` was, as a `room`-byte buffer would hold it: a clock time for
+/// anything older than a hundred seconds, and "N seconds ago" for the rest.
+/// Empty when the clock time does not fit, as `strftime` answers it.
 pub(crate) fn undo_time_text(tt: time_t, room: usize) -> XString {
-    let room = room.max(1);
-    // SAFETY: `filled` hands over `room` writable bytes, which is what the
-    // formatter is told.
-    XString::filled(room - 1, |buf| unsafe { undo_fmt_time(buf, room, tt) })
-}
-
-/// Writes when `tt` was into `buf`: a clock time for anything older than a
-/// hundred seconds, and "N seconds ago" for the rest.
-///
-/// # Safety
-///
-/// `buf` points at `buflen` writable bytes.
-pub unsafe fn undo_fmt_time(buf: *mut c_char, buflen: size_t, tt: time_t) {
-    // SAFETY: `buflen` writable bytes and NUL-terminated format literals, by
-    // the contract above.
-    let age = unsafe { time(ptr::null_mut()) } - tt;
+    let age = os_time_raw() - tt;
     if age < 100 {
         let seconds = int64_t::from(age);
-        unsafe {
-            vim_snprintf!(
-                buf,
-                buflen,
-                ngettext(
-                    c"%ld second ago",
-                    c"%ld seconds ago",
-                    c_ulong::try_from(seconds).expect("an age in seconds is never negative"),
-                )
-                .as_ptr(),
-                seconds,
-            )
-        };
-        return;
+        // A time in the future (a clock that moved back, an undo file from
+        // a skewed machine) is a negative age, which upstream's `unsigned
+        // long` cast wraps into a plural.
+        let count: c_ulong = seconds.cast_unsigned();
+        let template = ngettext(c"%ld second ago", c"%ld seconds ago", count);
+        return XString::from_vec(formatted!(room, template.to_bytes(), seconds));
     }
     let mut when: tm = tm_zeroed();
     os_localtime_r(tt, &mut when);
     let format = if age < 60 * 60 * 12 {
-        c"%H:%M:%S".as_ptr()
+        c"%H:%M:%S"
     } else {
-        c"%Y/%m/%d %H:%M:%S".as_ptr()
+        c"%Y/%m/%d %H:%M:%S"
     };
-    if unsafe { strftime(buf, buflen, format, &raw mut when) } == 0 {
-        unsafe { *buf = 0 };
+    let text = os_strftime(format, &when);
+    if text.len() >= room {
+        return XString::new();
     }
+    XString::from_vec(text)
 }
 
 /// Closes the current undo header, so that the next change starts a new one.
@@ -643,60 +603,66 @@ pub fn ex_undojoin(_excmd: &mut ExArg) {
 
 /// Marks the whole tree as describing an unchanged buffer, which is what
 /// writing the file out makes true.
-///
-/// Safe: nothing in the walk frees a header.
 pub fn u_unchanged(mut buffer: Buf) {
-    // SAFETY: nothing here frees a header the walk has visited.
-    unsafe { u_unch_branch(buffer, buffer.b_u_oldhead) };
+    u_unch_branch(buffer, buffer.b_u_oldhead);
     buffer.b_did_warn = false;
 }
 
 /// Moves the newest header's cursor to the first line that actually differs
 /// from what it saved, so that undoing lands where the change was.
-///
-/// Safe: `curbuf` is set from startup to exit.
 pub fn u_find_first_changed() {
-    let b = Buf::current();
-    let Some(mut uhp) = b.header(b.b_u_newhead).filter(|_| b.b_u_curhead.is_none()) else {
-        return;
-    };
-    let uep: *mut UndoEntry = uhp.uh_entry;
-    // SAFETY: the newest header's own entry list, and its saved lines.
-    if unsafe { (*uep).ue_top } != 0 || unsafe { (*uep).ue_bot } != 0 {
-        // Not a whole-buffer entry: there is nothing to line up against.
+    let mut b = Buf::current();
+    let newhead = b.b_u_newhead;
+    if b.b_u_curhead.is_some() {
         return;
     }
+    // The head of upstream's entry list: the newest entry.
+    let Some(size) = b
+        .header(newhead)
+        .and_then(|uh| uh.entries.last())
+        .filter(|entry| entry.top == 0 && entry.bot == 0)
+        .map(UndoEntry::size)
+    else {
+        // No entry, or not a whole-buffer one: nothing to line up against.
+        return;
+    };
     let mut lnum: LineNr = 1;
-    while lnum < b.line_count() && lnum <= unsafe { (*uep).ue_size } {
-        let saved = unsafe { *(*uep).ue_array.offset((lnum - 1) as isize) };
-        // SAFETY: the entry's own saved line, NUL-terminated.
-        if b.lines().line(lnum) != unsafe { cstr::at(saved) }.to_bytes() {
-            clearpos(&mut uhp.uh_cursor);
-            uhp.uh_cursor.lnum = lnum;
-            return;
+    let mut found = false;
+    while lnum < b.line_count() && lnum <= size {
+        let at = usize::try_from(lnum - 1).expect("the loop counts up from one");
+        let mut lines = b.lines();
+        let differs = b
+            .header(newhead)
+            .and_then(|uh| uh.entries.last())
+            .is_some_and(|entry| *lines.line(lnum) != *entry.lines[at]);
+        if differs {
+            found = true;
+            break;
         }
         lnum += 1;
     }
-    if b.line_count() != unsafe { (*uep).ue_size } {
-        clearpos(&mut uhp.uh_cursor);
-        uhp.uh_cursor.lnum = lnum;
+    if (found || b.line_count() != size)
+        && let Some(uh) = b.header_mut(newhead)
+    {
+        clearpos(&mut uh.cursor);
+        uh.cursor.lnum = lnum;
     }
 }
 
 /// Numbers the change the buffer currently sits on as the Nth file write, so
 /// that `:earlier 1f` can find it again.
-///
-/// Safe: a [`Buf`] carries the whole of the promise this needs.
 pub fn u_update_save_nr(buffer: Buf) {
     let mut b = buffer;
     b.b_u_save_nr_last += 1;
     b.b_u_save_nr_cur = b.b_u_save_nr_last;
-    let above = match b.header(b.b_u_curhead) {
-        Some(curhead) => b.header(curhead.uh_next),
-        None => b.header(b.b_u_newhead),
+    let above = if b.has_header(b.b_u_curhead) {
+        b.header_link(b.b_u_curhead, |uh| uh.next)
+    } else {
+        b.b_u_newhead
     };
-    if let Some(mut uhp) = above {
-        uhp.uh_save_nr = b.b_u_save_nr_last;
+    let save_nr = b.b_u_save_nr_last;
+    if let Some(uh) = b.header_mut(above) {
+        uh.save_nr = save_nr;
     }
 }
 
@@ -722,4 +688,23 @@ pub fn any_buf_is_changed() -> bool {
 /// Safe: as [`buf_is_changed`], over the current buffer.
 pub fn curbuf_is_changed() -> bool {
     buf_is_changed(Buf::current())
+}
+
+#[cfg(all(test, not(miri)))]
+mod tests {
+    use super::*;
+
+    /// A timestamp from the future is a negative age, said as such, not a
+    /// panic.
+    #[test]
+    fn a_time_in_the_future_is_a_negative_age() {
+        let text = undo_time_text(os_time_raw() + 50, 80);
+        let text = String::from_utf8(text.to_vec()).expect("ASCII");
+        assert!(
+            text.ends_with(" seconds ago") && text.starts_with('-'),
+            "{text}"
+        );
+        // And a room too small for the clock time leaves nothing.
+        assert!(undo_time_text(0, 5).is_empty());
+    }
 }

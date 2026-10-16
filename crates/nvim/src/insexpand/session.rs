@@ -545,7 +545,7 @@ pub(crate) fn ins_compl_start() -> Result<(), Failed> {
     compl_orig_text().clear();
     compl_orig_extmarks().clear();
     compl_orig_text().set(compl_text_from_line());
-    unsafe { compl_orig_extmarks().save() };
+    compl_orig_extmarks().save();
     let mut flags = CP_ORIGINAL_TEXT;
     if p_ic() {
         flags |= CP_ICASE;

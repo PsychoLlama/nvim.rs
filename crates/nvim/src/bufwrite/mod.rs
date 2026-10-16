@@ -428,7 +428,7 @@ pub(crate) fn buf_write(
             }
             // For systems that support ACL: take the original's.
             if !target.newfile {
-                acl = os_get_acl(fname.as_ptr());
+                acl = os_get_acl(fname);
             }
 
             // 'backupskip' names files that get no backup.

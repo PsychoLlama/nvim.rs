@@ -27,32 +27,25 @@ use super::set::extmark_setraw;
 use super::splice::{move_region, splice_impl};
 use super::{
     Buf, Extent, current_buf, decor_remove, itr_current, itr_get, itr_next, itr_rawkey,
-    kExtmarkNoUndo, kExtmarkUndo, push_undo, tree_get_altpos, tree_revise_meta,
+    kExtmarkNoUndo, kExtmarkUndo, tree_get_altpos, tree_revise_meta,
 };
 use crate::marktree::key::{
     MtFlags, mt_decor, mt_end, mt_invalid, mt_invalidate, mt_lookup_key, mt_no_undo, mt_paired,
     mt_right,
 };
-use crate::types::{
-    ColNr, ExtmarkOp, ExtmarkSavePos, ExtmarkUndoObject, MTPos, MarkTreeIter, extmark_undo_vec_t,
-};
+use crate::types::{ColNr, ExtmarkOp, ExtmarkSavePos, ExtmarkUndoObject, MTPos, MarkTreeIter};
 
 /// Invalidate the marks inside a range being deleted, and copy the ones the
-/// change cannot simply be reversed for into the undo header.
+/// change cannot simply be reversed for into `saved`.
 ///
 /// Copying does nothing on redo; it enforces the right position on undo.
-///
-/// # Safety
-///
-/// `uvp` must be null, or point at a live `extmark_undo_vec_t` the caller
-/// owns — the marks the splice removes are appended to it.
-pub unsafe fn extmark_splice_delete(
+pub fn extmark_splice_delete(
     buffer: Buf,
     l_row: c_int,
     l_col: ColNr,
     u_row: c_int,
     u_col: ColNr,
-    uvp: *mut extmark_undo_vec_t,
+    saved: Option<&mut Vec<ExtmarkUndoObject>>,
     only_copy: bool,
     op: ExtmarkOp,
 ) {
@@ -64,7 +57,7 @@ pub unsafe fn extmark_splice_delete(
         row: u_row,
         col: u_col,
     };
-    splice_delete(buffer, lo, hi, uvp, only_copy, op);
+    splice_delete(buffer, lo, hi, saved, only_copy, op);
 }
 
 /// [`extmark_splice_delete`] for the callers that already hold a [`Buf`].
@@ -72,7 +65,7 @@ pub(crate) fn splice_delete(
     mut buffer: Buf,
     lo: MTPos,
     hi: MTPos,
-    uvp: *mut extmark_undo_vec_t,
+    mut saved: Option<&mut Vec<ExtmarkUndoObject>>,
     only_copy: bool,
     op: ExtmarkOp,
 ) {
@@ -130,18 +123,21 @@ pub(crate) fn splice_delete(
             }
         }
 
-        // Push the mark to the undo header. Note that upstream dereferences
-        // `uvp` for the `only_copy` half without testing it -- the one caller
-        // that passes `only_copy` (`save_orig_extmarks`) always passes its own
-        // list, so the NULL case is unreachable rather than guarded.
-        if copy && (only_copy || (!uvp.is_null() && op == kExtmarkUndo && !mt_no_undo(mark))) {
+        // Push the mark to the undo list. Upstream dereferences the list for
+        // the `only_copy` half without testing it -- the one caller that
+        // passes `only_copy` (`save_orig_extmarks`) always passes its own
+        // list, so the missing case is unreachable rather than guarded.
+        if copy
+            && (only_copy || (op == kExtmarkUndo && !mt_no_undo(mark)))
+            && let Some(saved) = saved.as_deref_mut()
+        {
             let pos = ExtmarkSavePos {
                 mark: mt_lookup_key(mark),
                 old_row: mark.pos.row,
                 old_col: mark.pos.col,
                 invalidated,
             };
-            push_undo(uvp, ExtmarkUndoObject::SavePos(pos));
+            saved.push(ExtmarkUndoObject::SavePos(pos));
         }
 
         itr_next(buffer.marktree(), &mut itr);

@@ -156,6 +156,13 @@ impl XString {
         self.0
     }
 
+    /// The whole buffer, terminator included: the payload and the NUL after
+    /// it, for a callee that takes a terminated slice. Measured by the
+    /// vector, not by a scan.
+    pub fn as_bytes_with_nul(&self) -> &[u8] {
+        &self.0
+    }
+
     /// The string as a C string, stopping at the first NUL.
     ///
     /// Never fails: the buffer always ends with a terminator. With an

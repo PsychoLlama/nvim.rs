@@ -9,10 +9,9 @@
 //! still want with one mark and the dead ends with another, and then follows
 //! that trail up and back down.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use super::super::store::{Header, Marks, header_chain};
+use super::super::store::{Marks, header_chain};
 use super::super::*;
 use super::{u_undo_end, u_undoredo};
 use crate::memline::MlFlags;
@@ -41,11 +40,11 @@ impl Aim {
     /// The header's value in the unit this aim measures in.
     fn value_of(self, uh: &UndoHeader) -> c_int {
         if self.sec {
-            uh.uh_time as c_int
+            uh.time as c_int
         } else if self.file {
-            uh.uh_save_nr
+            uh.save_nr
         } else {
-            uh.uh_seq
+            uh.seq
         }
     }
 }
@@ -176,6 +175,16 @@ pub fn undo_time(step: c_int, sec: bool, file: bool, absolute: bool) {
     u_undo_end(did_undo, absolute, false);
 }
 
+/// The change just above the one the buffer sits on: what the next undo
+/// would undo.
+fn above_current(buffer: Buf) -> UndoLink {
+    if buffer.has_header(buffer.b_u_curhead) {
+        buffer.header_link(buffer.b_u_curhead, |uh| uh.next)
+    } else {
+        buffer.b_u_newhead
+    }
+}
+
 /// Reads the counters off the buffer and turns `step` into an aim.
 fn undo_aim(buffer: Buf, step: c_int, sec: bool, file: bool, absolute: bool) -> (Aim, c_int) {
     let counters = UndoCounters {
@@ -187,18 +196,10 @@ fn undo_aim(buffer: Buf, step: c_int, sec: bool, file: bool, absolute: bool) -> 
     };
     // ":earlier 1f" needs to know whether the change just above the current
     // one is itself a file write.
-    let above = match buffer.header(buffer.b_u_curhead) {
-        Some(curhead) => buffer.header(curhead.uh_next),
-        None => buffer.header(buffer.b_u_newhead),
-    };
-    aim_for(
-        counters,
-        step,
-        sec,
-        file,
-        absolute,
-        above.is_some_and(|uh| uh.uh_save_nr != 0),
-    )
+    let saved_above = buffer
+        .header(above_current(buffer))
+        .is_some_and(|uh| uh.save_nr != 0);
+    aim_for(counters, step, sec, file, absolute, saved_above)
 }
 
 /// Turns a step into the value the tree search should aim at, and the
@@ -389,15 +390,19 @@ fn walk_to_target(
         .tree_walk(start, marks)
         .stopping_above(buffer.b_u_curhead)
     {
-        let uhp = visit.header;
-        let val = aim.value_of(&uhp);
+        let Some((val, seq)) = buffer
+            .header(visit.link)
+            .map(|uh| (aim.value_of(uh), uh.seq))
+        else {
+            continue;
+        };
         if scoring {
-            closest.consider(*aim, val, uhp.uh_seq, step, buffer.b_u_seq_cur);
+            closest.consider(*aim, val, seq, step, buffer.b_u_seq_cur);
         }
         // Stop on a match — but a timestamp match keeps looking, because the
         // best sequence number carrying that timestamp may be further on.
         if aim.target == val && !aim.sec {
-            aim.target = uhp.uh_seq;
+            aim.target = seq;
             return true;
         }
     }
@@ -410,20 +415,19 @@ fn undo_up_to(dest: &UndoDest) {
         // The change warning first, for the reason `u_doit` gives.
         change_warning(Buf::current(), 0);
         let mut buf = Buf::current();
-        let above = match buf.header(buf.b_u_curhead) {
-            Some(curhead) => buf.header(curhead.uh_next),
-            None => buf.header(buf.b_u_newhead),
+        let above = above_current(buf);
+        let Some((walk, seq)) = buf.header(above).map(|uh| (uh.walk, uh.seq)) else {
+            break;
         };
-        let Some(mut uhp) = above else { break };
-        if (dest.target > 0 && uhp.uh_walk != dest.marks.mark)
-            || (uhp.uh_seq == dest.target && !dest.above)
-        {
+        if (dest.target > 0 && walk != dest.marks.mark) || (seq == dest.target && !dest.above) {
             break;
         }
-        buf.b_u_curhead = uhp.link();
+        buf.b_u_curhead = above;
         u_undoredo(true, true);
-        if dest.target > 0 {
-            uhp.uh_walk = dest.marks.nomark; // don't come back down here
+        if dest.target > 0
+            && let Some(uh) = buf.header_mut(above)
+        {
+            uh.walk = dest.marks.nomark; // don't come back down here
         }
     }
 }
@@ -436,16 +440,19 @@ fn redo_down_to(dest: &UndoDest) -> bool {
     while !got_int.get() {
         change_warning(Buf::current(), 0);
         let mut buf = Buf::current();
-        let Some(fork) = buf.header(buf.b_u_curhead) else {
+        let fork = buf.b_u_curhead;
+        if !buf.has_header(fork) {
+            break;
+        }
+        let branch = take_marked_branch(buf, fork, dest.marks.mark);
+        buf.b_u_curhead = branch;
+        let Some((walk, seq)) = buf.header(branch).map(|uh| (uh.walk, uh.seq)) else {
             break;
         };
-        let uhp = take_marked_branch(buf, fork, dest.marks.mark);
-
-        buf.b_u_curhead = uhp.link();
-        if uhp.uh_walk != dest.marks.mark {
+        if walk != dest.marks.mark {
             break; // must have reached the target
         }
-        if uhp.uh_seq == dest.target && dest.above {
+        if seq == dest.target && dest.above {
             // Going backwards in time, and this is not the exact header we
             // wanted: stop above it.
             buf.b_u_seq_cur = dest.target - 1;
@@ -454,20 +461,20 @@ fn redo_down_to(dest: &UndoDest) -> bool {
         u_undoredo(false, true);
         // Advance below the header just used; nothing below it means this
         // leaf is the new head.
-        if uhp.uh_prev.is_none() {
-            buf.b_u_newhead = uhp.link();
+        let prev = buf.header_link(branch, |uh| uh.prev);
+        if prev.is_none() {
+            buf.b_u_newhead = branch;
         }
-        buf.b_u_curhead = uhp.uh_prev;
+        buf.b_u_curhead = prev;
         did_undo = false;
-        if uhp.uh_seq == dest.target {
+        if seq == dest.target {
             break; // found it
         }
         if !buf
-            .header(uhp.uh_prev)
-            .is_some_and(|prev| prev.uh_walk == dest.marks.mark)
+            .header(prev)
+            .is_some_and(|uh| uh.walk == dest.marks.mark)
         {
             // More to redo, but the marked path has come apart.
-            // SAFETY: a NUL-terminated literal.
             internal_error(c"undo_time()");
             break;
         }
@@ -479,55 +486,65 @@ fn redo_down_to(dest: &UndoDest) -> bool {
 /// moves it to the front of the list, so that a later `u` and CTRL-R take it
 /// too. Answers the branch to take, which is `fork` itself when the marked
 /// run is only that.
-fn take_marked_branch(mut buffer: Buf, fork: Header, mark: c_int) -> Header {
+fn take_marked_branch(mut buffer: Buf, fork: UndoLink, mark: c_int) -> UndoLink {
     // The search marks a run of consecutive alternates; the far end of that
-    // run along `uh_alt_next` is the branch it wants.
-    let head = furthest_marked(buffer, fork, mark, |uh| uh.uh_alt_prev);
-    let mut last = furthest_marked(buffer, head, mark, |uh| uh.uh_alt_next);
+    // run along `alt_next` is the branch it wants.
+    let head = furthest_marked(buffer, fork, mark, |uh| uh.alt_prev);
+    let last = furthest_marked(buffer, head, mark, |uh| uh.alt_next);
     if last == head {
         return head;
     }
     // The whole list of alternates may start further back than the marked
     // run does, and that head is where the branch has to end up.
-    let mut first = header_chain(buffer, head.link(), |uh| uh.uh_alt_prev)
+    let first = header_chain(buffer, head, |uh| uh.alt_prev)
         .last()
         .unwrap_or(head);
+    let Some((after, before, next)) = buffer
+        .header(last)
+        .map(|uh| (uh.alt_next, uh.alt_prev, uh.next))
+    else {
+        return head;
+    };
     // Unlink it from where it sits... (`last != head` means it was reached
-    // along `uh_alt_next`, so it has a predecessor; the C dereferences that
+    // along `alt_next`, so it has a predecessor; the C dereferences that
     // without asking.)
-    if let Some(mut after) = buffer.header(last.uh_alt_next) {
-        after.uh_alt_prev = last.uh_alt_prev;
+    if let Some(uh) = buffer.header_mut(after) {
+        uh.alt_prev = before;
     }
-    if let Some(mut before) = buffer.header(last.uh_alt_prev) {
-        before.uh_alt_next = last.uh_alt_next;
+    if let Some(uh) = buffer.header_mut(before) {
+        uh.alt_next = after;
     }
     // ...and splice it in at the front.
-    last.uh_alt_prev = UndoLink::NONE;
-    last.uh_alt_next = first.link();
-    first.uh_alt_prev = last.link();
-    if buffer.b_u_oldhead == first.link() {
-        buffer.b_u_oldhead = last.link();
+    if let Some(uh) = buffer.header_mut(last) {
+        uh.alt_prev = UndoLink::NONE;
+        uh.alt_next = first;
     }
-    if let Some(mut next) = buffer.header(last.uh_next) {
-        next.uh_prev = last.link();
+    if let Some(uh) = buffer.header_mut(first) {
+        uh.alt_prev = last;
+    }
+    if buffer.b_u_oldhead == first {
+        buffer.b_u_oldhead = last;
+    }
+    if let Some(uh) = buffer.header_mut(next) {
+        uh.prev = last;
     }
     last
 }
 
-/// Follows `step` from `uhp` for as long as the next header carries `mark`,
-/// and answers the last header of that run.
+/// Follows `step` from `start` for as long as the next header carries
+/// `mark`, and answers the last header of that run.
 fn furthest_marked(
     buffer: Buf,
-    uhp: Header,
+    start: UndoLink,
     mark: c_int,
     step: fn(&UndoHeader) -> UndoLink,
-) -> Header {
+) -> UndoLink {
     // The chain always yields its start; every further hop has to be marked.
-    header_chain(buffer, uhp.link(), step)
+    header_chain(buffer, start, step)
         .skip(1)
-        .take_while(|uh| uh.uh_walk == mark)
+        .take_while(|&link| buffer.header(link).is_some_and(|uh| uh.walk == mark))
         .last()
-        .unwrap_or(uhp)
+        .unwrap_or(start)
 }
 
 #[cfg(test)]

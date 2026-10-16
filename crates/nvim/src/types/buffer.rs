@@ -435,9 +435,9 @@ pub struct Buffer {
     pub b_keep_filetype: bool,
     pub b_au_did_filetype: bool,
     /// Owns every header the three links below (and the tree they hang off)
-    /// name; NULL until the buffer's first undoable change. See
+    /// name; `None` until the buffer's first undoable change. See
     /// [`crate::undo::store`].
-    pub b_u_store: *mut UndoStore,
+    pub b_u_store: Option<Box<UndoStore>>,
     pub b_u_oldhead: UndoLink,
     pub b_u_newhead: UndoLink,
     pub b_u_curhead: UndoLink,
@@ -448,7 +448,10 @@ pub struct Buffer {
     pub b_u_seq_cur: ::core::ffi::c_int,
     pub b_u_time_cur: time_t,
     pub b_u_save_nr_cur: ::core::ffi::c_int,
-    pub b_u_line_ptr: *mut ::core::ffi::c_char,
+    /// The line `U` puts back, as it was before the changes to it began.
+    /// The zeroed allocator writes it: an `Option<XString>` is `Some` at
+    /// all-zero bytes.
+    pub b_u_line: Option<XString>,
     pub b_u_line_lnum: LineNr,
     pub b_u_line_colnr: ColNr,
     pub b_scanned: bool,

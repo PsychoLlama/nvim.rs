@@ -112,7 +112,7 @@ mod write {
     use std::os::unix::fs::{MetadataExt, PermissionsExt};
     use std::path::PathBuf;
 
-    use neovim::memory::{XString, xfree};
+    use neovim::memory::XString;
     use neovim::option::vars::P_UDIR;
     use neovim::optionstr::BUF_STRING_OPTIONS;
     use neovim::types::{BufName, Buffer};
@@ -158,13 +158,14 @@ mod write {
                 // SAFETY: all-zero bytes are what upstream's `xcalloc` hands
                 // a fresh buffer, except for `b_ucmds`, whose empty `Vec`
                 // holds a non-null dangling pointer, and the string
-                // options, whose `Option<XString>` reads as a `Some` over a
-                // null pointer when zeroed. Both are written before
+                // options and the `U` line, whose `Option<XString>` reads as
+                // a `Some` over a null pointer when zeroed. Both are written before
                 // anything can read or drop them -- and this fixture's
                 // buffer *is* dropped, so a garbage `Some` would be freed.
                 unsafe {
                     (&raw mut (*storage.as_mut_ptr()).b_ucmds).write(Vec::new());
                     (&raw mut (*storage.as_mut_ptr()).name).write(BufName::default());
+                    (&raw mut (*storage.as_mut_ptr()).b_u_line).write(None);
                     for field in BUF_STRING_OPTIONS {
                         let at = storage.as_mut_ptr().wrapping_byte_add(field.field_offset());
                         at.cast::<Option<XString>>().write(None);
@@ -215,14 +216,9 @@ mod write {
 
         /// Where `u_write_undo(NULL, ..)` puts this buffer's undo file.
         fn undo_file_name(&self) -> PathBuf {
-            // SAFETY: `b_ffname` is this fixture's own NUL-terminated name.
-            let name = unsafe { u_get_undo_file_name(self.buf.name.full_ptr(), false) };
-            assert!(!name.is_null(), "no undo file name for the buffer");
-            // SAFETY: an `xmalloc`ed NUL-terminated string, ours to free.
-            let owned = unsafe { std::ffi::CStr::from_ptr(name).to_bytes().to_vec() };
-            // SAFETY: as above.
-            unsafe { xfree(name.cast()) };
-            PathBuf::from(String::from_utf8(owned).unwrap())
+            let name = u_get_undo_file_name(self.buf.name.full(), false)
+                .expect("no undo file name for the buffer");
+            PathBuf::from(String::from_utf8(name.to_vec()).unwrap())
         }
 
         /// `u_write_undo(name, forceit, buf, hash)`.

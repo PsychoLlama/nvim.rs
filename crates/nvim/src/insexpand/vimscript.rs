@@ -186,13 +186,8 @@ pub(crate) unsafe fn ins_compl_add_dict(dict: *mut Dict) {
 /// The extmarks that were sitting on `compl_orig_text`, kept so they can go
 /// back when the completion is cancelled or the original text is completed.
 ///
-/// The list is a `kvec` -- `extmark_splice_delete` pushes onto it through
-/// `xrealloc`, so it stays C-shaped -- but the allocation is the
-/// completion's own, and upstream frees it by hand at three sites with
-/// `kv_destroy` written out.  `ComplOrigExtmarks` names the cell rather than
-/// pointing into it, so it is `Copy`, needs no `unsafe` to make, and is the
-/// single owner of the buffer: the address is produced only inside
-/// [`save`](Self::save), and only for the length of that one call.
+/// `ComplOrigExtmarks` names the cell rather than pointing into it, so it is
+/// `Copy` and needs no `unsafe` to make.
 #[derive(Clone, Copy)]
 pub(crate) struct ComplOrigExtmarks(());
 
@@ -205,44 +200,36 @@ impl ComplOrigExtmarks {
     /// Save the extmarks over the text `compl_col`/`compl_length` covers,
     /// invalidating them in the buffer.
     ///
-    /// # Safety
-    /// The cursor's line must be live, and `compl_col`/`compl_length` must
-    /// describe a range inside it.
-    pub(crate) unsafe fn save(self) {
-        // The list is handed over by address because `kv_push` reallocates
-        // it; a local stands in for the cell so nothing else can see it
-        // half-grown, and `splice_delete` runs no editor code that could
-        // look.
-        let mut saved = COMPL_ORIG_EXTMARKS.get();
-        // SAFETY: the caller's promise; `saved` is a live vector.
+    /// The list is taken out of the cell for the walk and put back after it:
+    /// `splice_delete` runs no editor code that could look, and nothing
+    /// sees it half-grown.
+    pub(crate) fn save(self) {
         let lnum = Win::current().w_cursor.lnum as c_int - 1;
         let buf = Buf::current();
         let (start, end) = (compl_col.get(), compl_col.get() + compl_length.get());
-        let list = &raw mut saved;
-        // SAFETY: the caller's promise -- `start .. end` is a range of the
-        // cursor line -- and `list` is the local standing in for the cell.
-        unsafe { extmark_splice_delete(buf, lnum, start, lnum, end, list, true, kExtmarkUndo) };
-        COMPL_ORIG_EXTMARKS.set(saved);
+        COMPL_ORIG_EXTMARKS.update(|saved| {
+            extmark_splice_delete(buf, lnum, start, lnum, end, Some(saved), true, kExtmarkUndo);
+        });
     }
 
     /// Put the saved extmarks back, newest first.
     pub(crate) fn restore(self) {
-        // The count is read once and the buffer once per step, exactly as
+        // The count is read once and the list once per step, exactly as
         // upstream's `for (i = kv_size(v); i > 0; i--) kv_A(v, i - 1)` did:
         // `extmark_apply_undo` re-enters the marktree, and nothing there
         // pushes onto this list, but nothing here assumes that either.
-        for i in (0..COMPL_ORIG_EXTMARKS.get().size as isize).rev() {
-            // SAFETY: `i` is within the list's own `size` undo objects, and
-            // the buffer they name is still current (the caller's promise).
-            unsafe { extmark_apply_undo(*COMPL_ORIG_EXTMARKS.get().items.offset(i), true) };
+        let count = COMPL_ORIG_EXTMARKS.with(Vec::len);
+        for i in (0..count).rev() {
+            let Some(mark) = COMPL_ORIG_EXTMARKS.with(|saved| saved.get(i).copied()) else {
+                continue;
+            };
+            extmark_apply_undo(mark, true);
         }
     }
 
     /// C's `kv_destroy(compl_orig_extmarks)`.
     pub(crate) fn clear(self) {
-        let saved = COMPL_ORIG_EXTMARKS.replace(EXTMARK_UNDO_VEC_INIT);
-        // SAFETY: the buffer is this owner's own, and `xfree` takes null.
-        unsafe { xfree(saved.items.cast::<c_void>()) };
+        drop(COMPL_ORIG_EXTMARKS.take());
     }
 }
 
@@ -275,7 +262,7 @@ pub(crate) unsafe fn set_completion(mut startcol: ColNr, list: *mut List) {
     compl_length.set(Win::current().w_cursor.col - startcol);
     // compl_pattern doesn't need to be set.
     compl_orig_text().set(compl_text_from_line());
-    unsafe { compl_orig_extmarks().save() };
+    compl_orig_extmarks().save();
 
     let mut flags = CP_ORIGINAL_TEXT;
     if p_ic() {

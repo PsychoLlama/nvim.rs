@@ -10,34 +10,32 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
+use crate::memory::XString;
 
-/// One undo entry: the lines a change replaced.
+/// One undo entry: the lines a change replaced, and where they went.
 ///
-/// Not `Copy`: `ue_array` and every string in it are owned, and
-/// `u_freeentry` releases them.
-#[derive(Clone)]
+/// The entry says "lines `top + 1 .. bot - 1` of the buffer used to be
+/// `lines`". Applying it swaps the two, so the same entry put back moves the
+/// buffer forward again.
+#[derive(Clone, Default)]
 pub struct UndoEntry {
-    pub ue_next: *mut UndoEntry,
-    pub ue_top: LineNr,
-    pub ue_bot: LineNr,
-    pub ue_lcount: LineNr,
-    pub ue_array: *mut *mut ::core::ffi::c_char,
-    pub ue_size: LineNr,
+    /// The line above the change; 0 for a change at the top of the buffer.
+    pub top: LineNr,
+    /// The line below the change, or 0 for "the end of the buffer" -- a
+    /// sentinel `u_savecommon` writes when the change ran past the last line,
+    /// resolved against the buffer as it stands when the entry is applied.
+    pub bot: LineNr,
+    /// The buffer's line count when the bottom was left to be worked out:
+    /// what `u_getbot` measures the change's growth against.
+    pub lcount: LineNr,
+    /// The saved lines, oldest-first, each its own copy.
+    pub lines: Vec<XString>,
 }
 
-impl Default for UndoEntry {
-    /// An entry holding no lines and linked to nothing — what `xmalloc` plus
-    /// a `memset` left behind, spelled out so that getting one does not mean
-    /// writing zeroes through a pointer.
-    fn default() -> Self {
-        Self {
-            ue_next: ::core::ptr::null_mut(),
-            ue_top: 0,
-            ue_bot: 0,
-            ue_lcount: 0,
-            ue_array: ::core::ptr::null_mut(),
-            ue_size: 0,
-        }
+impl UndoEntry {
+    /// How many lines the entry holds, in the unit the line numbers use.
+    pub fn size(&self) -> LineNr {
+        LineNr::try_from(self.lines.len()).unwrap_or(LineNr::MAX)
     }
 }
 
@@ -92,30 +90,58 @@ impl UndoLink {
     }
 }
 
+/// One change: the entries it saved, where the cursor was, and how it sits
+/// in the tree.
+///
+/// Owned by the buffer's [`UndoStore`](crate::undo::store::UndoStore), which
+/// a [`UndoLink`] names it through. Dropping one drops everything it saved.
 #[derive(Clone)]
 pub struct UndoHeader {
-    pub uh_next: UndoLink,
-    pub uh_prev: UndoLink,
-    pub uh_alt_next: UndoLink,
-    pub uh_alt_prev: UndoLink,
-    pub uh_seq: ::core::ffi::c_int,
-    pub uh_walk: ::core::ffi::c_int,
-    pub uh_entry: *mut UndoEntry,
-    pub uh_getbot_entry: *mut UndoEntry,
-    pub uh_cursor: Pos,
-    pub uh_cursor_vcol: ColNr,
-    pub uh_flags: ::core::ffi::c_int,
-    pub uh_namedm: [FileMark; 26],
-    pub uh_extmark: extmark_undo_vec_t,
-    pub uh_visual: VisualInfo,
-    pub uh_time: time_t,
-    pub uh_save_nr: ::core::ffi::c_int,
+    /// The change before this one on the same branch (older).
+    pub next: UndoLink,
+    /// The change after this one on the same branch (newer).
+    pub prev: UndoLink,
+    /// The next alternate branch forking at the same place.
+    pub alt_next: UndoLink,
+    /// The previous alternate branch forking at the same place.
+    pub alt_prev: UndoLink,
+    /// The header's name: its sequence number, which [`UndoLink`] is.
+    pub seq: ::core::ffi::c_int,
+    /// The stamp the last tree walk left; see `store::Marks`.
+    pub walk: ::core::ffi::c_int,
+    /// The entries, **newest last**: upstream's list pushed at its head, and
+    /// the end of a vector is where a push costs nothing, so the list's
+    /// order is this vector read backwards.
+    pub entries: Vec<UndoEntry>,
+    /// The index in `entries` of the one whose `bot` `u_getbot` has yet to
+    /// work out, if any.
+    pub getbot: Option<usize>,
+    pub cursor: Pos,
+    pub cursor_vcol: ColNr,
+    pub flags: ::core::ffi::c_int,
+    pub named_marks: [FileMark; 26],
+    /// What the change did to extmarks, in the order it did it.
+    pub extmarks: Vec<ExtmarkUndoObject>,
+    pub visual: VisualInfo,
+    pub time: time_t,
+    pub save_nr: ::core::ffi::c_int,
+}
+
+impl UndoHeader {
+    /// The link that names this header.
+    pub fn link(&self) -> UndoLink {
+        UndoLink::to_seq(self.seq)
+    }
+
+    /// The entries in upstream's list order: newest first.
+    pub fn entries_newest_first(&self) -> impl Iterator<Item = &UndoEntry> {
+        self.entries.iter().rev()
+    }
 }
 
 impl Default for UndoHeader {
-    /// A header linked to nothing, with every other field zero — what
-    /// `xmalloc` plus a `memset` left behind, spelled out so that getting
-    /// one does not mean writing zeroes through a pointer.
+    /// A header linked to nothing, holding nothing, with every other field
+    /// zero.
     fn default() -> Self {
         // A `const`, not a `let`: `FileMark` is not `Copy`, and only a
         // constant may be repeated into an array without it.
@@ -134,31 +160,27 @@ impl Default for UndoHeader {
             additional_data: ::core::ptr::null_mut(),
         };
         Self {
-            uh_next: UndoLink::NONE,
-            uh_prev: UndoLink::NONE,
-            uh_alt_next: UndoLink::NONE,
-            uh_alt_prev: UndoLink::NONE,
-            uh_seq: 0,
-            uh_walk: 0,
-            uh_entry: ::core::ptr::null_mut(),
-            uh_getbot_entry: ::core::ptr::null_mut(),
-            uh_cursor: Pos::default(),
-            uh_cursor_vcol: 0,
-            uh_flags: 0,
-            uh_namedm: [UNSET_MARK; 26],
-            uh_extmark: extmark_undo_vec_t {
-                size: 0,
-                capacity: 0,
-                items: ::core::ptr::null_mut(),
-            },
-            uh_visual: VisualInfo {
+            next: UndoLink::NONE,
+            prev: UndoLink::NONE,
+            alt_next: UndoLink::NONE,
+            alt_prev: UndoLink::NONE,
+            seq: 0,
+            walk: 0,
+            entries: Vec::new(),
+            getbot: None,
+            cursor: Pos::default(),
+            cursor_vcol: 0,
+            flags: 0,
+            named_marks: [UNSET_MARK; 26],
+            extmarks: Vec::new(),
+            visual: VisualInfo {
                 vi_start: Pos::default(),
                 vi_end: Pos::default(),
                 vi_mode: 0,
                 vi_curswant: 0,
             },
-            uh_time: 0,
-            uh_save_nr: 0,
+            time: 0,
+            save_nr: 0,
         }
     }
 }

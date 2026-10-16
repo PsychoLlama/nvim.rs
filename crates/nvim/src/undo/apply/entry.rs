@@ -6,8 +6,7 @@
 //! the very same header applied again moves back, which is what makes undo
 //! and redo one function.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -16,11 +15,10 @@
     clippy::ptr_as_ptr
 )]
 
-use super::super::store::Header;
 use super::super::*;
-use crate::cstr;
 use crate::edit::BeginlineOpts;
-use crate::memline::MlFlags;
+use crate::memline::{MlFlags, ml_append_flags, ml_replace_buf_owned};
+use crate::memory::XString;
 use crate::pos::MAXLNUM;
 use crate::winlayer::{Buf, Win};
 
@@ -42,23 +40,22 @@ impl CursorPick {
     /// Decides where the cursor should end up from what this entry is about
     /// to change. Nothing moves yet — the lines are not there.
     ///
-    /// # Safety
-    ///
-    /// A live current buffer, and `uep` an entry of `curhead` whose
-    /// `ue_array` holds `newsize` lines.
-    unsafe fn consider(
+    /// `saved_cursor` is the header's own; `last` says the entry is the
+    /// last of the header's list, the one applied last.
+    fn consider(
         &mut self,
-        curhead: Header,
-        uep: *mut UndoEntry,
+        saved_cursor: Pos,
+        saved: &[XString],
+        last: bool,
         top: LineNr,
         oldsize: LineNr,
         newsize: LineNr,
     ) {
         // If the header's saved cursor falls inside this entry it wins: that
         // is what puts the cursor back where it was after a "gwap".
-        let saved = curhead.uh_cursor.lnum;
-        if saved >= top && saved <= top + newsize + 1 {
-            self.pos = curhead.uh_cursor;
+        let saved_line = saved_cursor.lnum;
+        if saved_line >= top && saved_line <= top + newsize + 1 {
+            self.pos = saved_cursor;
             self.line = -1;
             return;
         }
@@ -68,21 +65,18 @@ impl CursorPick {
         // Otherwise the first line that really differs, so that undoing an
         // auto-format does not land on the line before it.
         let mut same: LineNr = 0;
-        while same < newsize && same < oldsize {
-            // SAFETY: a live entry with `newsize` lines, by the contract
-            // above.
-            let was = unsafe { *(*uep).ue_array.offset(same as isize) };
-            // SAFETY: as above -- a NUL-terminated saved line.
-            if unsafe { cstr::at(was) }.to_bytes() != Buf::current().lines().line(top + 1 + same) {
+        let mut lines = Buf::current().lines();
+        for (was, lnum) in saved
+            .iter()
+            .zip(top + 1..)
+            .take(usize::try_from(oldsize).unwrap_or(0))
+        {
+            if **was != *lines.line(lnum) {
                 break;
             }
             same += 1;
         }
-        if same == newsize
-            && self.line == MAXLNUM
-            // SAFETY: a live entry, by the contract above.
-            && unsafe { (*uep).ue_next }.is_null()
-        {
+        if same == newsize && self.line == MAXLNUM && last {
             self.line = top;
         } else if same < newsize {
             self.line = top + same;
@@ -96,17 +90,26 @@ impl CursorPick {
 /// Applies the header at `b_u_curhead`: every entry's saved lines replace the
 /// buffer lines they cover, and those lines take their place in the entry, so
 /// that applying the same header again moves back.
+///
+/// The entries are taken out of the header while they are applied and put
+/// back afterwards: the memline calls in between reach buffer-update
+/// callbacks, and nothing of the store is borrowed across them. The header
+/// is looked up by its link again at every step after.
 pub(crate) fn u_undoredo(undo: bool, do_buf_event: bool) {
     let mut buf = Buf::current();
-    let Some(mut curhead) = buf.header(buf.b_u_curhead) else {
+    let link = buf.b_u_curhead;
+    let Some(curhead) = buf.header_mut(link) else {
         return;
     };
+    let old_flags = curhead.flags;
+    let saved_cursor = curhead.cursor;
+    let mut entries = core::mem::take(&mut curhead.entries);
+    let getbot = curhead.getbot.take();
 
     // Autocommands must not see the undo structures: they are inconsistent
     // until the end.
     block_autocmds();
 
-    let old_flags = curhead.uh_flags;
     let new_flags = (if buf.b_changed != 0 { UH_CHANGED } else { 0 })
         | (if buf.b_ml.ml_flags.has(MlFlags::EMPTY) {
             UH_EMPTYBUF
@@ -114,7 +117,6 @@ pub(crate) fn u_undoredo(undo: bool, do_buf_event: bool) {
             0
         })
         | (old_flags & UH_RELOAD);
-    // SAFETY: a live current buffer and window.
     setpcmark();
 
     // The marks and visual area from before the move; they go into the header
@@ -127,30 +129,43 @@ pub(crate) fn u_undoredo(undo: bool, do_buf_event: bool) {
     buf.b_op_end.lnum = 0;
     buf.b_op_end.col = 0;
 
-    // SAFETY: a live current window.
     let mut pick = CursorPick {
         line: MAXLNUM,
         pos: Win::current().w_cursor,
     };
-    // The entries come back in the reverse of the order they are applied,
-    // which is the order the next move wants them in.
-    let mut newlist: *mut UndoEntry = ptr::null_mut();
-    let mut uep = curhead.uh_entry;
-    while !uep.is_null() {
-        // SAFETY: an entry of a live header, and a live current buffer.
-        if !unsafe { apply_entry(buf, curhead, uep, &mut pick, do_buf_event) } {
+    // Newest first, which is the end of the vector; the list comes back in
+    // the reverse of the order it is applied, which is the order the next
+    // move wants it in.
+    let count = entries.len();
+    for (applied, at) in (0..count).rev().enumerate() {
+        if !apply_entry(
+            buf,
+            saved_cursor,
+            &mut entries[at],
+            at == 0,
+            &mut pick,
+            do_buf_event,
+        ) {
+            // Upstream had relinked the entries it applied into a list of
+            // their own by now, and the header kept only the first of them
+            // -- or all of them, when the first one was the bad one.
+            if let Some(curhead) = buf.header_mut(link) {
+                if applied == 0 {
+                    curhead.entries = entries;
+                    curhead.getbot = getbot;
+                } else {
+                    curhead.getbot = getbot.filter(|&g| g == count - 1).map(|_| 0);
+                    curhead.entries = entries.drain(count - 1..).collect();
+                }
+            }
             unblock_autocmds();
             iemsg(gettext(c"E438: u_undo: line numbers wrong"));
             changed(buf); // don't want UNCHANGED now
             return;
         }
-        // SAFETY: a live entry, and `newlist` is one or NULL.
-        let next = unsafe { (*uep).ue_next };
-        // SAFETY: as above.
-        unsafe { (*uep).ue_next = newlist };
-        newlist = uep;
-        uep = next;
     }
+    entries.reverse();
+    let getbot = getbot.map(|g| count - 1 - g);
 
     // Keep the '[ and '] marks inside the buffer.
     let last_line = buf.b_ml.ml_line_count;
@@ -158,15 +173,29 @@ pub(crate) fn u_undoredo(undo: bool, do_buf_event: bool) {
     buf.b_op_end.lnum = buf.b_op_end.lnum.min(last_line);
 
     // Undo replays the header's extmark moves backwards; redo replays them in
-    // the order they were recorded. `extmark_apply_undo` never touches the
-    // header's own vector, so its length is read once.
-    let marks = curhead.uh_extmark;
-    for i in 0..marks.size {
-        let i = if undo { marks.size - 1 - i } else { i };
-        // SAFETY: `i` is in bounds of a vector the header owns.
-        unsafe { extmark_apply_undo(*marks.items.add(i), undo) };
+    // the order they were recorded. The list is taken out for the replay,
+    // which records nothing (`kExtmarkNoUndo`), and put back after it.
+    let marks = buf
+        .header_mut(link)
+        .map(|uh| core::mem::take(&mut uh.extmarks))
+        .unwrap_or_default();
+    if undo {
+        marks
+            .iter()
+            .rev()
+            .for_each(|&mark| extmark_apply_undo(mark, true));
+    } else {
+        marks
+            .iter()
+            .for_each(|&mark| extmark_apply_undo(mark, false));
     }
-    if curhead.uh_flags & UH_RELOAD != 0 {
+    let reload = old_flags & UH_RELOAD != 0;
+    if let Some(curhead) = buf.header_mut(link) {
+        let mut marks = marks;
+        marks.append(&mut curhead.extmarks);
+        curhead.extmarks = marks;
+    }
+    if reload {
         // Upstream TODO(bfredl): crude. With 'undoreload' there is enough
         // information to send a buffer-reloading on_lines/on_bytes event.
         buf_updates_unload(buf, true);
@@ -175,11 +204,13 @@ pub(crate) fn u_undoredo(undo: bool, do_buf_event: bool) {
     // The cursor goes where the entries decided; check the line exists.
     let mut win = Win::current();
     win.w_cursor = pick.pos;
-    // SAFETY: a live window.
     check_cursor_lnum(win);
 
-    curhead.uh_entry = newlist;
-    curhead.uh_flags = new_flags;
+    if let Some(curhead) = buf.header_mut(link) {
+        curhead.entries = entries;
+        curhead.getbot = getbot;
+        curhead.flags = new_flags;
+    }
     if old_flags & UH_EMPTYBUF != 0 && buf_is_empty(buf) {
         buf.b_ml.ml_flags |= MlFlags::EMPTY;
     }
@@ -194,51 +225,48 @@ pub(crate) fn u_undoredo(undo: bool, do_buf_event: bool) {
         buf_updates_changedtick(buf);
     }
 
-    swap_marks(buf, curhead, &saved_marks);
-    if curhead.uh_visual.vi_start.lnum != 0 {
-        buf.b_visual = curhead.uh_visual;
-        curhead.uh_visual = saved_visual;
+    swap_marks(buf, link, &saved_marks, saved_visual);
+    if let Some((cursor, cursor_vcol)) = buf.header(link).map(|uh| (uh.cursor, uh.cursor_vcol)) {
+        place_cursor(buf, win, cursor, cursor_vcol);
     }
-    place_cursor(buf, win, curhead);
 
     // Where "g-" and ":earlier 10s" resume from. After an undo we are below
     // the change just undone, but it is recorded as just *above* it so that
     // ":earlier 1s" works.
+    let Some((seq, next, save_nr, time)) = buf
+        .header(link)
+        .map(|uh| (uh.seq, uh.next, uh.save_nr, uh.time))
+    else {
+        unblock_autocmds();
+        return;
+    };
     buf.b_u_seq_cur = if undo {
-        buf.header(curhead.uh_next).map_or(0, |uh| uh.uh_seq)
+        buf.header(next).map_or(0, |uh| uh.seq)
     } else {
-        curhead.uh_seq
+        seq
     };
     // Where ":earlier 1f" and ":later 1f" resume from.
-    if curhead.uh_save_nr != 0 {
-        buf.b_u_save_nr_cur = if undo {
-            curhead.uh_save_nr - 1
-        } else {
-            curhead.uh_save_nr
-        };
+    if save_nr != 0 {
+        buf.b_u_save_nr_cur = if undo { save_nr - 1 } else { save_nr };
     }
     // Several changes can share a timestamp; the one that moved wins.
-    buf.b_u_time_cur = curhead.uh_time;
+    buf.b_u_time_cur = time;
     unblock_autocmds();
 }
 
 /// Swaps one entry's saved lines with the buffer lines it covers.
 ///
 /// Answers `false` — having changed nothing — when the entry's line numbers
-/// do not fit the buffer.
-///
-/// # Safety
-///
-/// A live current buffer and window, and `uep` an entry of `curhead`.
-unsafe fn apply_entry(
+/// do not fit the buffer. The entry is the caller's own, out of its header.
+fn apply_entry(
     mut buffer: Buf,
-    curhead: Header,
-    uep: *mut UndoEntry,
+    saved_cursor: Pos,
+    entry: &mut UndoEntry,
+    last: bool,
     pick: &mut CursorPick,
     do_buf_event: bool,
 ) -> bool {
-    // SAFETY: a live entry, by the contract above.
-    let (top, saved_bot, newsize) = unsafe { ((*uep).ue_top, (*uep).ue_bot, (*uep).ue_size) };
+    let (top, saved_bot, newsize) = (entry.top, entry.bot, entry.size());
     // Zero is the sentinel for "to the end of the buffer" — `u_savecommon`
     // writes it whenever the change ran past the last line — and it is
     // resolved here, against the buffer as it stands now.
@@ -252,57 +280,37 @@ unsafe fn apply_entry(
     }
     let oldsize = bot - top - 1; // lines the entry covers now
 
-    // SAFETY: a live entry of a live header, and a live current buffer.
-    unsafe { pick.consider(curhead, uep, top, oldsize, newsize) };
+    pick.consider(saved_cursor, &entry.lines, last, top, oldsize, newsize);
 
     // Take the covered lines out, backwards: cheaper in most cases.
     let mut emptied = false;
-    let mut taken: *mut *mut c_char = ptr::null_mut();
-    if oldsize > 0 {
-        let count = usize::try_from(oldsize).expect("the branch above proves it positive");
-        let bytes = size_of::<*mut c_char>() * count;
-        // SAFETY: an allocation of `oldsize` pointers.
-        taken = unsafe { xmalloc(bytes) }.cast::<*mut c_char>();
-        for i in (0..oldsize).rev() {
-            // SAFETY: `taken` is `oldsize` slots long, and every line between
-            // `top + 1` and `bot - 1` exists, by the bounds check above.
-            unsafe { *taken.offset(i as isize) = u_save_line(top + 1 + i) };
-            // Deleting the buffer's last line leaves a dummy empty one
-            // behind, which the insert below has to replace.
-            if buffer.b_ml.ml_line_count == 1 {
-                emptied = true;
-            }
-            let _ = ml_delete(top + 1 + i);
+    let mut taken: Vec<XString> = Vec::with_capacity(usize::try_from(oldsize).unwrap_or(0));
+    for i in (0..oldsize).rev() {
+        taken.push(line_copy(Buf::current(), top + 1 + i));
+        // Deleting the buffer's last line leaves a dummy empty one behind,
+        // which the insert below has to replace.
+        if buffer.b_ml.ml_line_count == 1 {
+            emptied = true;
         }
+        let _ = ml_delete(top + 1 + i);
     }
+    taken.reverse();
     // Make sure the cursor is on a line that still exists.
     check_cursor_lnum(Win::current());
 
     // Put the entry's saved lines in between top and bot.
-    if newsize != 0 {
-        for i in 0..newsize {
-            // SAFETY: `ue_array` is `newsize` lines long, and each is a
-            // NUL-terminated allocation the entry owns and hands over here.
-            let line = unsafe { *(*uep).ue_array.offset(i as isize) };
-            if emptied && top + i == 0 {
-                // SAFETY: the entry's NUL-terminated line, which the
-                // memline copies over the dummy line the delete left.
-                let _ = ml_replace_buf_text(Buf::current(), 1, unsafe { cstr::bytes_at(line) });
-            } else {
-                // SAFETY: the entry's NUL-terminated line.
-                let _ = ml_append_cstr(top + i, unsafe { cstr::at(line) });
-            }
-            // SAFETY: the entry's own allocation, which the buffer copied.
-            unsafe { xfree(line.cast::<c_void>()) };
+    for (line, i) in core::mem::take(&mut entry.lines).into_iter().zip(0..) {
+        if emptied && top + i == 0 {
+            // Over the dummy line the delete left, without a copy.
+            let _ = ml_replace_buf_owned(Buf::current(), 1, line);
+        } else {
+            let _ = ml_append_flags(top + i, line.as_bytes_with_nul(), 0);
         }
-        // SAFETY: the array the entry is giving up here.
-        unsafe { xfree((*uep).ue_array.cast::<c_void>()) };
     }
 
     if oldsize != newsize {
         let delta = newsize - oldsize;
-        let maxlnum = MAXLNUM;
-        mark_adjust(top + 1, top + oldsize, maxlnum, delta, kExtmarkNOOP);
+        mark_adjust(top + 1, top + oldsize, MAXLNUM, delta, kExtmarkNOOP);
         if buffer.b_op_start.lnum > top + oldsize {
             buffer.b_op_start.lnum += delta;
         }
@@ -311,7 +319,6 @@ unsafe fn apply_entry(
         }
     }
     if oldsize > 0 || newsize > 0 {
-        // SAFETY: a live buffer and window.
         changed_lines(buffer, top + 1, 0, bot, newsize - oldsize, do_buf_event);
         // The next line's start may have gained or lost a SpellCap, so
         // schedule it for redrawing just in case.
@@ -331,40 +338,54 @@ unsafe fn apply_entry(
     u_oldcount.set(u_oldcount.get() + oldsize);
 
     // The entry now describes the lines it displaced, ready to put them back.
-    // SAFETY: a live entry, which has just given up its old array.
-    unsafe {
-        (*uep).ue_size = oldsize;
-        (*uep).ue_array = taken;
-        (*uep).ue_bot = top + newsize + 1;
-    }
+    entry.lines = taken;
+    entry.bot = top + newsize + 1;
     true
 }
 
-/// Gives the buffer the named marks the header was carrying, and the header
-/// the ones the buffer had, so that it can put them back on the next move.
-fn swap_marks(mut buffer: Buf, mut curhead: Header, saved: &[FileMark; NMARKS as usize]) {
+/// Gives the buffer the named marks (and Visual area) the header was
+/// carrying, and the header the ones the buffer had, so that it can put them
+/// back on the next move.
+fn swap_marks(
+    mut buffer: Buf,
+    link: UndoLink,
+    saved: &[FileMark; NMARKS as usize],
+    saved_visual: VisualInfo,
+) {
+    let b: &mut Buffer = &mut buffer;
+    let Some(curhead) = b
+        .b_u_store
+        .as_deref_mut()
+        .and_then(|store| store.get_mut(link))
+    else {
+        return;
+    };
     for (i, saved) in saved.iter().enumerate() {
-        if curhead.uh_namedm[i].mark.lnum != 0 {
-            // SAFETY: a mark the buffer owns and is about to drop.
-            unsafe { free_fmark(buffer.b_namedm[i].clone()) };
-            buffer.b_namedm[i] = curhead.uh_namedm[i].clone();
+        if curhead.named_marks[i].mark.lnum != 0 {
+            // The buffer's mark is about to be replaced: its payload goes.
+            drop_mark_extra(&mut b.b_namedm[i]);
+            b.b_namedm[i] = curhead.named_marks[i].clone();
         }
         if saved.mark.lnum != 0 {
-            curhead.uh_namedm[i] = saved.clone();
+            curhead.named_marks[i] = saved.clone();
         } else {
             // Only the line number is cleared, as the C clears it: the rest
             // of the mark is left as it was.
-            curhead.uh_namedm[i].mark.lnum = 0;
+            curhead.named_marks[i].mark.lnum = 0;
         }
+    }
+    if curhead.visual.vi_start.lnum != 0 {
+        b.b_visual = curhead.visual;
+        curhead.visual = saved_visual;
     }
 }
 
 /// Puts the cursor where the header says it was, or on the first line the
 /// move actually changed.
-fn place_cursor(buffer: Buf, mut win: Win, curhead: Header) {
+fn place_cursor(buffer: Buf, mut win: Win, cursor: Pos, cursor_vcol: ColNr) {
     // Off by exactly one line: put it back where the change started, which is
     // what the "o" command wants. Otherwise it goes to the first undone line.
-    if curhead.uh_cursor.lnum + 1 == win.w_cursor.lnum && win.w_cursor.lnum > 1 {
+    if cursor.lnum + 1 == win.w_cursor.lnum && win.w_cursor.lnum > 1 {
         win.w_cursor.lnum -= 1;
     }
     if win.w_cursor.lnum > buffer.b_ml.ml_line_count {
@@ -373,10 +394,10 @@ fn place_cursor(buffer: Buf, mut win: Win, curhead: Header) {
         // that is left is to put it in the first column.
         win.w_cursor.col = 0;
         win.w_cursor.coladd = 0;
-    } else if curhead.uh_cursor.lnum == win.w_cursor.lnum {
-        win.w_cursor.col = curhead.uh_cursor.col;
-        if virtual_active(win) && curhead.uh_cursor_vcol >= 0 {
-            coladvance(win, curhead.uh_cursor_vcol);
+    } else if cursor.lnum == win.w_cursor.lnum {
+        win.w_cursor.col = cursor.col;
+        if virtual_active(win) && cursor_vcol >= 0 {
+            coladvance(win, cursor_vcol);
         } else {
             win.w_cursor.coladd = 0;
         }

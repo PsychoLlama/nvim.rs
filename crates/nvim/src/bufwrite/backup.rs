@@ -437,7 +437,7 @@ fn backup_by_copy(
         let atime = file_info_old.stat.st_atim.tv_sec as f64;
         let mtime = file_info_old.stat.st_mtim.tv_sec as f64;
         os_file_settime(path, atime, mtime);
-        os_set_acl(path.as_ptr(), acl);
+        os_set_acl(path, acl);
         copy_xattr(fname, path);
         err = None;
         made = Some(backup);
@@ -733,7 +733,7 @@ pub(crate) fn finish_write(
     // The ACL goes on before the user changes: an ACL cannot be set on a
     // file the user does not own.
     if !backup.copy {
-        os_set_acl(wfname.as_ptr(), acl);
+        os_set_acl(wfname, acl);
     }
     err
 }

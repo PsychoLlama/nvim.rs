@@ -196,11 +196,11 @@ pub fn copy_xattr(from: &CStr, to: &CStr) {
 /// upstream's `os_get_acl` answers NULL and the other two are `if (aclent
 /// == NULL) return;` followed by nothing. Kept because `fileio.c` calls all
 /// three around every write.
-pub fn os_get_acl(_fname: *const c_char) -> VimAcl {
+pub fn os_get_acl(_fname: &CStr) -> VimAcl {
     ptr::null_mut()
 }
 
-pub fn os_set_acl(_fname: *const c_char, _aclent: VimAcl) {}
+pub fn os_set_acl(_fname: &CStr, _aclent: VimAcl) {}
 
 pub fn os_free_acl(_aclent: VimAcl) {}
 
