@@ -378,3 +378,347 @@ mod write {
         assert!(!written.exists(), "{} was written", written.display());
     }
 }
+
+// ---------------------------------------------------------------- the tree
+//
+// These drive the editor through commands and read the tree back only
+// through what a user can see: the text, `undotree()`, and what `:rundo`
+// says about a file. Every expectation was recorded on the build before the
+// entry chain and the header store were retyped.
+
+#[cfg(not(miri))]
+mod tree {
+    use crate::support::{Probe, Sandbox};
+
+    /// A scratch buffer of the case's own, with no swap file, and every
+    /// change its own undo step.
+    fn scratch(fx: &Probe) {
+        fx.run("new");
+        fx.run("only!");
+        fx.run("setlocal noswapfile undolevels=1000");
+    }
+
+    fn unscratch(fx: &Probe) {
+        fx.run("silent! bwipeout!");
+        fx.home();
+    }
+
+    /// Close the undo step: setting 'undolevels' syncs, whatever the value.
+    fn sync(fx: &Probe) {
+        fx.run("let &l:undolevels = &l:undolevels");
+    }
+
+    /// The offset of the first header's first entry's line count in an undo
+    /// file, worked out from the layout `serialize_header`/`serialize_uhp`
+    /// write: the file header (with its `U` line), the header magic, and the
+    /// header's fixed fields up to its first entry.
+    fn first_entry_size_at(file: &[u8]) -> usize {
+        let u_line_len = u32::from_be_bytes(file[47..51].try_into().unwrap()) as usize;
+        // lnum, col, three heads, numhead, seq_last, seq_cur (4 each), the
+        // time (8) and the optional-field trailer (7).
+        let header_magic = 51 + u_line_len + 8 * 4 + 8 + 7;
+        assert_eq!(&file[header_magic..header_magic + 2], &[0x5f, 0xd0]);
+        // Links (16), seq (4), cursor (12), vcol (4), flags (2), 26 marks
+        // (312), Visual (32), time (8), trailer (7).
+        let entry_magic = header_magic + 2 + 16 + 4 + 12 + 4 + 2 + 312 + 32 + 8 + 7;
+        assert_eq!(&file[entry_magic..entry_magic + 2], &[0xf5, 0x18]);
+        // top, bot, lcount, then the size.
+        entry_magic + 2 + 12
+    }
+
+    /// `undotree()` without the clock: every `time` and `time_cur` masked.
+    const TREE: &str =
+        "substitute(string(undotree()), '\\(time\\(_cur\\)\\=\\)'': \\d\\+', '\\1'': T', 'g')";
+
+    /// A branch built, written out, read back into a fresh load of the same
+    /// text, and walked with `g-`/`g+`: the tree survives the round trip
+    /// whole, alternates included.
+    #[test]
+    fn a_branch_survives_wundo_and_rundo() {
+        let sandbox = Sandbox::dir("undo-branch-roundtrip");
+        let fx = Probe::new(sandbox.editor());
+        scratch(&fx);
+        fx.run("call setline(1, 'one')");
+        sync(&fx);
+        fx.run("call setline(1, 'two')");
+        sync(&fx);
+        fx.run("undo");
+        fx.run("call setline(1, 'three')");
+        sync(&fx);
+        fx.run("call append(1, 'h\u{e9}llo w\u{f6}rld')");
+        sync(&fx);
+        fx.run("silent write Xbranch");
+        let before = fx.eval(TREE);
+        fx.run("wundo Xbranch.un");
+        fx.run("silent edit! Xbranch");
+        fx.run("silent rundo Xbranch.un");
+        fx.check(TREE, &before);
+        fx.check("getline(1, '$')", "['three', 'h\u{e9}llo w\u{f6}rld']");
+        for (step, want) in [
+            ("g-", "['g-', ['three'], 3]"),
+            ("g-", "['g-', ['two'], 2]"),
+            ("g-", "['g-', ['one'], 1]"),
+            ("g-", "['g-', [''], 0]"),
+            ("g+", "['g+', ['one'], 1]"),
+            ("g+", "['g+', ['two'], 2]"),
+            ("g+", "['g+', ['three'], 3]"),
+            ("g+", "['g+', ['three', 'h\u{e9}llo w\u{f6}rld'], 4]"),
+            ("g+", "['g+', ['three', 'h\u{e9}llo w\u{f6}rld'], 4]"),
+        ] {
+            fx.run(&format!("silent normal! {step}"));
+            fx.check(&format!("[{step:?}, getline(1, '$'), changenr()]"), want);
+        }
+        unscratch(&fx);
+    }
+
+    /// `U` keeps its line in the undo file too: read back, it puts the line
+    /// back as it was before the changes to it began.
+    #[test]
+    fn the_u_line_survives_wundo_and_rundo() {
+        let sandbox = Sandbox::dir("undo-uline-roundtrip");
+        let fx = Probe::new(sandbox.editor());
+        scratch(&fx);
+        fx.run("call setline(1, ['first', 'second'])");
+        sync(&fx);
+        fx.run("silent write Xuline");
+        fx.run("normal! 2Gx");
+        fx.run("normal! x");
+        fx.check("getline(1, '$')", "['first', 'cond']");
+        fx.run("normal! U");
+        fx.check("getline(1, '$')", "['first', 'second']");
+        fx.run("normal! U");
+        fx.check("getline(1, '$')", "['first', 'cond']");
+        fx.run("silent write");
+        fx.run("wundo Xuline.un");
+        fx.run("silent edit! Xuline");
+        fx.run("silent rundo Xuline.un");
+        fx.run("normal! 2G");
+        fx.run("normal! U");
+        fx.check("getline(1, '$')", "['first', 'second']");
+        unscratch(&fx);
+    }
+
+    /// 'undolevels' at -1 records nothing and drops the tree; set back, the
+    /// next change starts a fresh one.
+    #[test]
+    fn undolevels_off_then_back_on() {
+        let sandbox = Sandbox::dir("undo-levels-off");
+        let fx = Probe::new(sandbox.editor());
+        scratch(&fx);
+        fx.run("call setline(1, 'a')");
+        sync(&fx);
+        fx.run("call setline(1, 'b')");
+        sync(&fx);
+        fx.run("setlocal undolevels=-1");
+        fx.run("call setline(1, 'c')");
+        fx.check(
+            TREE,
+            "'{''seq_last'': 2, ''entries'': [], ''time_cur'': T, ''save_last'': 0, ''synced'': 0, \
+             ''save_cur'': 0, ''seq_cur'': 2}'",
+        );
+        fx.run("setlocal undolevels=1000");
+        fx.run("call setline(1, 'd')");
+        sync(&fx);
+        fx.check(
+            TREE,
+            "'{''seq_last'': 3, ''entries'': [{''seq'': 3, ''time'': T, ''newhead'': 1}], \
+             ''time_cur'': T, ''save_last'': 0, ''synced'': 1, ''save_cur'': 0, ''seq_cur'': 3}'",
+        );
+        fx.run("silent undo");
+        fx.check("getline(1)", "'c'");
+        fx.run("silent undo");
+        fx.check("getline(1)", "'c'");
+        unscratch(&fx);
+    }
+
+    /// The undo file's own checks: text that no longer hashes the same, a
+    /// file that stops in the middle of an entry, and a version from the
+    /// future are each refused with their own message, and the tree the
+    /// buffer had is left alone.
+    #[test]
+    fn a_bad_undo_file_is_refused() {
+        let sandbox = Sandbox::dir("undo-bad-file");
+        let fx = Probe::new(sandbox.editor());
+        scratch(&fx);
+        fx.run("call setline(1, ['alpha', 'beta', 'gamma'])");
+        sync(&fx);
+        fx.run("call setline(2, 'BETA')");
+        sync(&fx);
+        fx.run("silent write Xbad");
+        fx.run("wundo Xbad.un");
+        let good = std::fs::read(sandbox.path("Xbad.un")).expect("the undo file");
+
+        // Different text: the hash moved.
+        fx.run("call setline(3, 'GAMMA')");
+        // The warning goes to the screen, not to `execute()`.
+        fx.check_output("rundo Xbad.un", "");
+        fx.run("silent undo");
+
+        // Cut in the middle of the last header's entries.
+        sandbox.write("Xcut.un", &good[..good.len() - 40]);
+        fx.check_error(
+            "rundo Xcut.un",
+            "E825: Corrupted undo file (extmark truncated): Xcut.un",
+        );
+        // Cut inside the file header.
+        sandbox.write("Xshort.un", &good[..50]);
+        // Silently: upstream rejects a shadow-line length it cannot read
+        // without a word.
+        fx.check_error("rundo Xshort.un", "none");
+        // A version this build does not know.
+        let mut future = good.clone();
+        future[9..11].copy_from_slice(&[0, 4]);
+        sandbox.write("Xfuture.un", &future);
+        fx.check_error(
+            "rundo Xfuture.un",
+            "E824: Incompatible undo file: Xfuture.un",
+        );
+        // Not an undo file at all.
+        sandbox.write("Xnot.un", b"not an undo file");
+        fx.check_error("rundo Xnot.un", "E823: Not an undo file: Xnot.un");
+        // A negative size on the first header's first entry.
+        let mut negative = good.clone();
+        let size_at = first_entry_size_at(&good);
+        negative[size_at..size_at + 4].copy_from_slice(&[0xff, 0xff, 0xff, 0xff]);
+        sandbox.write("Xneg.un", &negative);
+        fx.check_error(
+            "rundo Xneg.un",
+            "E825: Corrupted undo file (entry size): Xneg.un",
+        );
+        // That entry holds no lines, so what follows its size is the next
+        // record's marker: break it.
+        let mut broken = good.clone();
+        broken[size_at + 4..size_at + 8].copy_from_slice(&[0x7f, 0xff, 0xff, 0xff]);
+        sandbox.write("Xbroken.un", &broken);
+        fx.check_error(
+            "rundo Xbroken.un",
+            "E825: Corrupted undo file (entry end): Xbroken.un",
+        );
+        // An extmark record's payload edited past what a change could make
+        // (the last record of the file is the last header's extmark).
+        let mut wild = good.clone();
+        let mark = good
+            .windows(2)
+            .rposition(|w| w == [0xf5, 0x18])
+            .expect("an entry magic");
+        wild[mark + 14..mark + 18].copy_from_slice(&[0xff, 0xff, 0xff, 0xff]);
+        sandbox.write("Xwild.un", &wild);
+        fx.check_error(
+            "rundo Xwild.un",
+            "E825: Corrupted undo file (extmark splice): Xwild.un",
+        );
+        // The good one still reads, after all of that.
+        fx.check_error("rundo Xbad.un", "none");
+        fx.check(
+            TREE,
+            "'{''seq_last'': 2, ''entries'': [{''seq'': 1, ''time'': T}, {''save'': 1, ''seq'': 2, \
+             ''time'': T, ''newhead'': 1}], ''time_cur'': T, ''save_last'': 1, ''synced'': 1, \
+             ''save_cur'': 1, ''seq_cur'': 2}'",
+        );
+        unscratch(&fx);
+    }
+
+    /// `:earlier 1f` and `:later 1f` move by file write.
+    #[test]
+    fn earlier_and_later_by_file_write() {
+        let sandbox = Sandbox::dir("undo-earlier-file");
+        let fx = Probe::new(sandbox.editor());
+        scratch(&fx);
+        fx.run("call setline(1, 'zero')");
+        sync(&fx);
+        fx.run("silent write Xfw");
+        fx.run("call setline(1, 'one')");
+        sync(&fx);
+        fx.run("call setline(1, 'one more')");
+        sync(&fx);
+        fx.run("silent write");
+        fx.run("call setline(1, 'two')");
+        sync(&fx);
+        fx.run("silent write");
+        fx.run("call setline(1, 'unsaved')");
+        sync(&fx);
+        for (cmd, want) in [
+            ("earlier 1f", "['earlier 1f', 'two', 4]"),
+            ("earlier 1f", "['earlier 1f', 'one more', 3]"),
+            ("earlier 1f", "['earlier 1f', 'zero', 1]"),
+            ("earlier 1f", "['earlier 1f', '', 0]"),
+            ("later 1f", "['later 1f', 'zero', 1]"),
+            ("later 1f", "['later 1f', 'one more', 3]"),
+            ("later 1f", "['later 1f', 'two', 4]"),
+            ("later 1f", "['later 1f', 'unsaved', 5]"),
+        ] {
+            fx.run(&format!("silent {cmd}"));
+            fx.check(&format!("[{cmd:?}, getline(1), changenr()]"), want);
+        }
+        fx.check(
+            TREE,
+            "'{''seq_last'': 5, ''entries'': [{''save'': 1, ''seq'': 1, ''time'': T}, {''seq'': 2, \
+             ''time'': T}, {''save'': 2, ''seq'': 3, ''time'': T}, {''save'': 3, ''seq'': 4, \
+             ''time'': T}, {''seq'': 5, ''time'': T, ''newhead'': 1}], ''time_cur'': T, \
+             ''save_last'': 3, ''synced'': 1, ''save_cur'': 3, ''seq_cur'': 5}'",
+        );
+        unscratch(&fx);
+    }
+
+    /// A change refused before anything was saved (the buffer is not
+    /// modifiable) leaves the undo step open for `:undojoin` to fold the
+    /// next change into, and one undo then takes both back.
+    #[test]
+    fn undojoin_after_a_refused_change() {
+        let sandbox = Sandbox::dir("undo-join-refused");
+        let fx = Probe::new(sandbox.editor());
+        scratch(&fx);
+        fx.run("call setline(1, 'base')");
+        sync(&fx);
+        fx.run("call setline(1, 'first')");
+        fx.run("setlocal nomodifiable");
+        fx.check_error(
+            "normal! x",
+            "E21: Cannot make changes, ''modifiable'' is off",
+        );
+        fx.run("setlocal modifiable");
+        fx.run("undojoin | call setline(1, 'joined')");
+        sync(&fx);
+        fx.run("silent undo");
+        fx.check("getline(1)", "'base'");
+        // And after an undo `:undojoin` is refused outright.
+        fx.check_error("undojoin", "E790: undojoin is not allowed after undo");
+        fx.check(
+            TREE,
+            "'{''seq_last'': 2, ''entries'': [{''seq'': 1, ''time'': T}, {''curhead'': 1, ''seq'': 2, \
+             ''time'': T, ''newhead'': 1}], ''time_cur'': T, ''save_last'': 0, ''synced'': 1, \
+             ''save_cur'': 0, ''seq_cur'': 1}'",
+        );
+        unscratch(&fx);
+    }
+
+    /// One-line changes to the same line fold into one entry, and a change
+    /// to another line between them moves the first to the front: undo puts
+    /// both lines back however they interleaved.
+    #[test]
+    fn interleaved_line_changes_undo_together() {
+        let sandbox = Sandbox::dir("undo-interleaved");
+        let fx = Probe::new(sandbox.editor());
+        scratch(&fx);
+        fx.run("call setline(1, ['l1', 'l2', 'l3', 'l\u{e9}4'])");
+        sync(&fx);
+        for (line, text) in [
+            (1, "a"),
+            (3, "b"),
+            (1, "c"),
+            (4, "d\u{fc}"),
+            (3, "e"),
+            (1, "f"),
+        ] {
+            fx.run(&format!("call setline({line}, '{text}')"));
+        }
+        fx.check("getline(1, '$')", "['f', 'l2', 'e', 'd\u{fc}']");
+        sync(&fx);
+        fx.run("silent undo");
+        fx.check("getline(1, '$')", "['l1', 'l2', 'l3', 'l\u{e9}4']");
+        fx.run("silent redo");
+        fx.check("getline(1, '$')", "['f', 'l2', 'e', 'd\u{fc}']");
+        fx.check("undotree().seq_last", "2");
+        unscratch(&fx);
+    }
+}
