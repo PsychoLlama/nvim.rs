@@ -7,6 +7,27 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Rewrote the file system and on-disk formats over data they own: path and
+  wildcard expansion, `:find`/`gf`, tags, `:source` and the runtime path,
+  sessions and views, the startup command line, reading and writing files,
+  the buffer list, the swap file, undo and ShaDa. Swap, undo and ShaDa files
+  are byte-for-byte what they were. An autocommand that wipes or renames
+  the buffer being read, written or checked for changes, or a timer that
+  closes the window a `:tselect` prompt jumps from, no longer leaves the
+  editor working on freed memory.
+
+### Fixed
+
+- A `'tagfunc'` returning `[v:_null_dict]` crashed the editor; it is E987.
+- A corrupt ShaDa file whose string length ran past its entry was read past
+  the end of the entry.
+- Interrupting the undo save of a large change with CTRL-C, then changing
+  the buffer again, wrote to freed memory.
+- A file argument that is not valid UTF-8 aborted startup, and `:undolist`
+  aborted on a change stamped in the future (a clock set back).
+
 ## [2026.10.14-6a52875728]
 
 ### Changed
