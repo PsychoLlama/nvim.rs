@@ -447,6 +447,45 @@ impl<P: AsRef<[u8]> + AsMut<[u8]>> DataBlock<P> {
         self.move_index_bulk(from, to, count, delta);
     }
 
+    /// Open index slot `slot` for a new line: the `following` entries from
+    /// it move up one, `delta` added to each (their text moved by that
+    /// much), and `entry` goes in the slot. One bounds check for the whole
+    /// run when it is short, which on a file read it always is (the one
+    /// empty line the buffer started with).
+    #[inline(always)]
+    pub(crate) fn insert_index(
+        &mut self,
+        slot: usize,
+        following: usize,
+        delta: c_uint,
+        entry: c_uint,
+    ) {
+        if following > SHORT_INDEX_MOVE {
+            self.move_index_bulk(slot, slot + 1, following, delta);
+            self.set_index(slot, entry);
+            return;
+        }
+        let (lo, hi) = (Self::index_at(slot), Self::index_at(slot + following + 1));
+        let (entries, _) = self.bytes_mut()[lo..hi].as_chunks_mut::<INDEX_SIZE>();
+        // Front to back, each cell handing the entry it held on to the next:
+        // the cell past the last (free index space) takes the last one.
+        let mut carried = entry.to_ne_bytes();
+        for cell in entries {
+            carried = shifted(core::mem::replace(cell, carried), delta);
+        }
+    }
+
+    /// Put `text` in so that it ends at `end`, moving the text in front of
+    /// it down by its length: `start` is the block's new text start,
+    /// `text.len()` below the old one. One bounds check for the run.
+    #[inline]
+    pub(crate) fn insert_text(&mut self, start: usize, end: usize, text: &[u8]) {
+        let run = &mut self.bytes_mut()[start..end];
+        let at = run.len() - text.len();
+        run.copy_within(text.len().., 0);
+        run[at..].copy_from_slice(text);
+    }
+
     #[inline(never)]
     fn move_index_bulk(&mut self, from: usize, to: usize, count: usize, delta: c_uint) {
         let (src, dst) = (Self::index_at(from), Self::index_at(to));
@@ -965,6 +1004,29 @@ mod tests {
                 assert_eq!(got, expect, "count {count}, {from} -> {to}");
             }
         }
+    }
+
+    #[test]
+    fn an_insert_opens_a_slot_as_a_move_would() {
+        // Every run on both sides of the entry-by-entry cut, the empty one
+        // (a line added at the front of the text) included.
+        for following in 0..=2 * SHORT_INDEX_MOVE {
+            let mut block = DataBlock(page());
+            for i in 0..following + 3 {
+                block.set_index(i, 1000 + u32::try_from(i).unwrap());
+            }
+            let mut expect = DataBlock(block.0.clone());
+            expect.move_index(1, 2, following, 7u32.wrapping_neg());
+            expect.set_index(1, 42 | DB_MARKED);
+            block.insert_index(1, following, 7u32.wrapping_neg(), 42 | DB_MARKED);
+            assert_eq!(block.0, expect.0, "{following} following");
+        }
+
+        // The text in front of the new line moves down by its length.
+        let mut block = DataBlock(page());
+        block.write(10, b"abc\0");
+        block.insert_text(7, 14, b"xy\0");
+        assert_eq!(&block.0[7..14], b"abc\0xy\0");
     }
 
     #[test]

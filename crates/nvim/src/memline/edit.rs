@@ -16,7 +16,7 @@ use core::ffi::{c_int, c_long, c_uint};
 
 use super::*;
 use crate::memfile::BlockId;
-use crate::types::Failed;
+use crate::types::{Failed, MemLine};
 
 /// How a data block split came out, in the terms the pointer block above it
 /// has to be told: two blocks side by side, each with a block number, a line
@@ -49,11 +49,18 @@ struct NewLine<'a> {
     text: &'a [u8],
     /// [`ML_APPEND_MARK`] and [`ML_APPEND_NEW`].
     flags: c_int,
+    /// `text.len()`, measured once.
+    len: c_uint,
 }
 
-impl NewLine<'_> {
+impl<'a> NewLine<'a> {
+    fn new(text: &'a [u8], flags: c_int) -> Self {
+        let len = c_uint::try_from(text.len()).expect("a line shorter than 4 GiB");
+        NewLine { text, flags, len }
+    }
+
     fn len(&self) -> c_uint {
-        c_uint::try_from(self.text.len()).expect("a line shorter than 4 GiB")
+        self.len
     }
 
     fn marked(&self) -> bool {
@@ -89,10 +96,74 @@ pub(crate) fn ml_append_int(
         lowest_marked.set(lnum + 1);
     }
 
-    let new = NewLine { text: line, flags };
+    let new = NewLine::new(line, flags);
     // Space needed for the text, and then for its index entry too.
     let space_needed = int64_t::from(new.len()) + INDEX_SIZE as int64_t;
 
+    if !append_to_locked(&mut buffer.b_ml, lnum, &new, space_needed) {
+        return append_by_walk(buffer, lnum, &new, space_needed);
+    }
+    buffer.b_ml.ml_flags.clear(MlFlags::EMPTY);
+    count_new_line(buffer);
+    // The line was inserted below `lnum`.
+    buffer.update_line_chunks(lnum + 1, new.len() as c_int, ML_CHNK_ADDLINE);
+    Ok(())
+}
+
+/// The buffer holds one more line.
+fn count_new_line(mut buffer: Buf) {
+    if buffer.b_prev_line_count == 0 {
+        buffer.b_prev_line_count = buffer.b_ml.ml_line_count;
+    }
+    buffer.b_ml.ml_line_count += 1;
+}
+
+/// The append nearly every line of a file read makes: into the block that
+/// is already locked, which has room for it. This is `ml_find_line`'s
+/// locked-block answer and the insert without a split in one, with the
+/// page looked up once. Answers false, having changed nothing, when the
+/// walk is needed.
+#[inline]
+fn append_to_locked(ml: &mut MemLine, lnum: LineNr, new: &NewLine, space_needed: int64_t) -> bool {
+    let (Some(locked), Some(memfile)) = (ml.ml_locked.as_mut(), ml.ml_mfp.as_deref_mut()) else {
+        return false;
+    };
+    // The line `ml_find_line` would be asked for.
+    let wanted = if lnum == 0 { 1 } else { lnum };
+    if wanted < locked.low || wanted > locked.high {
+        return false;
+    }
+    let mut data = DataBlock(memfile.page_mut(locked.id));
+    let header = data.header();
+    if int64_t::from(header.free) < space_needed {
+        return false;
+    }
+    let at = InsertAt {
+        db_idx: if lnum == 0 { -1 } else { lnum - locked.low },
+        line_count: locked.high + 1 - locked.low,
+    };
+    insert_line(&mut data, header, at, new, space_needed);
+    // What `ml_find_line`'s answer and the insert tell the locked block.
+    locked.lineadd += 1;
+    locked.high += 1;
+    locked.dirty = true;
+    if new.flags & ML_APPEND_NEW == 0 {
+        locked.moved = true;
+    }
+    true
+}
+
+/// [`ml_append_int`] the long way: find the block through the tree, and
+/// split it when it has no room. Out of line, so that the common case stays
+/// a short function.
+#[cold]
+#[inline(never)]
+fn append_by_walk(
+    mut buffer: Buf,
+    lnum: LineNr,
+    new: &NewLine,
+    space_needed: int64_t,
+) -> Result<(), Failed> {
     // Find the data block holding the previous line. This also fills the
     // stack with the blocks from the root down, and releases any block
     // that was locked.
@@ -132,16 +203,19 @@ pub(crate) fn ml_append_int(
         free = DataBlock(buffer.b_ml.page(id)).free();
     }
 
-    if buffer.b_prev_line_count == 0 {
-        buffer.b_prev_line_count = buffer.b_ml.ml_line_count;
-    }
-    buffer.b_ml.ml_line_count += 1;
+    count_new_line(buffer);
 
     let at = InsertAt { db_idx, line_count };
     if int64_t::from(free) >= space_needed {
-        ml_insert_in_block(buffer, id, at, &new, space_needed);
+        let mut data = DataBlock(buffer.b_ml.page_mut(id));
+        let header = data.header();
+        insert_line(&mut data, header, at, new, space_needed);
+        buffer.b_ml.locked_is_dirty();
+        if new.flags & ML_APPEND_NEW == 0 {
+            buffer.b_ml.locked_has_moved();
+        }
     } else {
-        let mut split = ml_split_data_block(buffer, id, at, lnum, &new, space_needed);
+        let mut split = ml_split_data_block(buffer, id, at, lnum, new, space_needed);
         if !ml_insert_pointer(buffer, &mut split) {
             return Err(Failed);
         }
@@ -152,51 +226,46 @@ pub(crate) fn ml_append_int(
     Ok(())
 }
 
-/// Put the new line into data block `id`, which has room for it, shifting
-/// the lines that follow (which live at *lower* offsets) down by its length.
-fn ml_insert_in_block(mut b: Buf, id: BlockId, at: InsertAt, new: &NewLine, space_needed: int64_t) {
+/// Put the new line into the data block `data`, whose header is `header`
+/// and which has room for it, shifting the lines that follow (which live
+/// at *lower* offsets) down by its length.
+#[inline(always)]
+fn insert_line(
+    data: &mut DataBlock<&mut [u8]>,
+    mut header: DataHeader,
+    at: InsertAt,
+    new: &NewLine,
+    space_needed: int64_t,
+) {
     let InsertAt { db_idx, line_count } = at;
     let len = new.len();
-    let mut data = DataBlock(b.b_ml.page_mut(id));
-    let mut header = data.header();
-    let txt_start = header.txt_start.wrapping_sub(len);
-    header.txt_start = txt_start;
+    let old_start = header.txt_start;
+    header.txt_start = old_start.wrapping_sub(len);
     header.free = header.free.wrapping_sub(space_needed as c_uint);
     header.line_count += 1;
     data.set_header(&header);
 
-    // Where the new line's index entry goes.
-    let slot = (db_idx + 1) as usize;
-    if line_count > db_idx + 1 {
-        // There are following lines: move their text to the front and
-        // shift their index entries up one slot. `offset` is the start of
-        // the previous line, which becomes the byte just past the new one.
-        let offset = if db_idx < 0 {
-            header.txt_end
-        } else {
-            data.line_start(db_idx as usize)
-        };
-        let start = txt_start as usize;
-        let n = (offset as usize).wrapping_sub(start + len as usize);
-        data.move_bytes(start + len as usize, start, n);
-        let following = (line_count - db_idx - 1) as usize;
-        data.move_index(slot, slot + 1, following, len.wrapping_neg());
-        data.set_index(slot, offset.wrapping_sub(len));
+    // The lines after the new one, whose text moves to the front and whose
+    // index entries shift up one slot.
+    let following = (line_count - db_idx - 1).max(0) as usize;
+    // The new line ends where the line it follows starts — the end of the
+    // text for the block's first line — or, with no line after it, at the
+    // old start of the text.
+    let end = if following == 0 {
+        old_start
+    } else if db_idx < 0 {
+        header.txt_end
     } else {
-        // Add at the end, which is the start of the text.
-        data.set_index(slot, txt_start);
-    }
-
-    let to = data.index(slot) as usize;
-    data.write(to, new.text);
-    if new.marked() {
-        data.set_marked(slot, true);
-    }
-
-    b.b_ml.locked_is_dirty();
-    if new.flags & ML_APPEND_NEW == 0 {
-        b.b_ml.locked_has_moved();
-    }
+        data.line_start(db_idx as usize)
+    };
+    data.insert_text(header.txt_start as usize, end as usize, new.text);
+    let start = end.wrapping_sub(len);
+    let entry = if new.marked() {
+        start | DB_MARKED
+    } else {
+        start
+    };
+    data.insert_index((db_idx + 1) as usize, following, len.wrapping_neg(), entry);
 }
 
 /// Put `new` into the data block `data` as its line `slot`, at the front of
