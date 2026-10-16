@@ -5,8 +5,7 @@
 //! here. Everything in this module reads state the rest of the family produced;
 //! nothing here parses.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::charset::skip;
 use core::ffi::{CStr, c_int};
