@@ -449,24 +449,28 @@ fn extend_last_entry(mut b: Buf, top: LineNr, bot: LineNr, newbot: LineNr) -> bo
             return false;
         }
         if entry.size() == 1 && entry.top == top {
-            let mut at = at;
             if i > 0 {
                 // Move it to the front of the list, so the next change to
                 // the same line finds it first.
                 u_getbot(b);
                 b.b_u_synced = false;
-                if let Some(uh) = b.header_mut(newhead) {
-                    let moved = uh.entries.remove(at);
-                    uh.entries.push(moved);
-                    uh.getbot = uh.getbot.map(|g| match g {
-                        g if g == at => uh.entries.len() - 1,
-                        g if g > at => g - 1,
-                        g => g,
-                    });
-                    at = uh.entries.len() - 1;
-                }
             }
-            set_entry_bottom(b, newhead, at, bot, newbot);
+            let Some(uh) = b.header_mut(newhead) else {
+                return true;
+            };
+            let mut at = at;
+            if i > 0 {
+                let moved = uh.entries.remove(at);
+                uh.entries.push(moved);
+                let last = uh.entries.len() - 1;
+                uh.getbot = uh.getbot.map(|g| match g {
+                    g if g == at => last,
+                    g if g > at => g - 1,
+                    g => g,
+                });
+                at = last;
+            }
+            set_entry_bottom(uh, at, line_count, bot, newbot);
             return true;
         }
     }
@@ -475,12 +479,14 @@ fn extend_last_entry(mut b: Buf, top: LineNr, bot: LineNr, newbot: LineNr) -> bo
 
 /// Records where the change leaves the bottom of entry `at`'s region: the
 /// line the caller named, the "to the end of the buffer" sentinel, or a
-/// promise to work it out in `u_getbot`.
-fn set_entry_bottom(mut b: Buf, link: UndoLink, at: usize, bot: LineNr, newbot: LineNr) {
-    let line_count = b.line_count();
-    let Some(uh) = b.header_mut(link) else {
-        return;
-    };
+/// promise to work it out in `u_getbot`. `line_count` is the buffer's.
+fn set_entry_bottom(
+    uh: &mut UndoHeader,
+    at: usize,
+    line_count: LineNr,
+    bot: LineNr,
+    newbot: LineNr,
+) {
     let Some(entry) = uh.entries.get_mut(at) else {
         return;
     };
@@ -524,6 +530,7 @@ fn record_entry(
         lines,
         ..Default::default()
     };
+    let line_count = b.line_count();
     let uh = b
         .header_mut(newhead)
         .expect("the newest header is the one this change is recorded against");
@@ -532,7 +539,7 @@ fn record_entry(
         uh.flags |= UH_RELOAD;
     }
     let at = uh.entries.len() - 1;
-    set_entry_bottom(b, newhead, at, bot, newbot);
+    set_entry_bottom(uh, at, line_count, bot, newbot);
     b.b_u_synced = false;
     undo_undoes.set(false);
     Ok(())

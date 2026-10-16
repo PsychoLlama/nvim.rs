@@ -758,7 +758,7 @@
     "crates/nvim/src/os/shell/throttle.rs": {"cell_ptr": 1, "extern_abi": 1, "unsafe_stmts": 23},
     "crates/nvim/src/os/signal.rs": {"cell_ptr": 2, "pub_items": 19, "unsafe_stmts": 30},
     "crates/nvim/src/os/stdpaths.rs": {"pub_items": 12, "unsafe_stmts": 21},
-    "crates/nvim/src/os/time.rs": {"cell_ptr": 3, "pub_items": 11, "unsafe_stmts": 27},
+    "crates/nvim/src/os/time.rs": {"cell_ptr": 3, "pub_items": 11, "unsafe_stmts": 28},
     "crates/nvim/src/os/users.rs": {"pub_items": 7, "unsafe_stmts": 28},
     "crates/nvim/src/os/uv_error.rs": {"pub_items": 22},
     "crates/nvim/src/path/compare.rs": {"pub_items": 4},

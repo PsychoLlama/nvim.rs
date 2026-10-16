@@ -279,14 +279,23 @@ pub fn os_time() -> Timestamp {
     os_time_raw().cast_unsigned()
 }
 
-/// Seconds since the UNIX epoch, as the C library's `time(NULL)` counts
-/// them: whole seconds of the real-time clock, rounded towards the past.
+/// Seconds since the UNIX epoch, as the C library counts them.
+#[cfg(not(miri))]
+pub(crate) fn os_time_raw() -> time_t {
+    // SAFETY: `time` accepts a null out-parameter.
+    unsafe { ::libc::time(ptr::null_mut()) }
+}
+
+/// [`os_time_raw`] where the C library cannot be called (Miri): whole
+/// seconds of the real-time clock, floored as `time(NULL)` floors them.
+/// The C call stays the shipped one: it is a vDSO read, and this is several
+/// times its cost on the undo path, which stamps every change.
+#[cfg(miri)]
 pub(crate) fn os_time_raw() -> time_t {
     use std::time::{SystemTime, UNIX_EPOCH};
     let seconds = |d: std::time::Duration| time_t::try_from(d.as_secs()).unwrap_or(time_t::MAX);
     match SystemTime::now().duration_since(UNIX_EPOCH) {
         Ok(after) => seconds(after),
-        // Before the epoch: `time` floors, so a part second is one more.
         Err(before) => {
             let before = before.duration();
             -seconds(before) - time_t::from(before.subsec_nanos() > 0)

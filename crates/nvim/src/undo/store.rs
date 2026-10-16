@@ -40,8 +40,8 @@
 )]
 
 use core::ffi::c_int;
-use std::collections::HashMap;
 
+use crate::registry::{IdMap, id_map};
 use crate::types::{UndoHeader, UndoLink};
 use crate::winlayer::Buf;
 
@@ -53,17 +53,25 @@ use super::lastmark;
 /// `prev` and friends does not free it, and a header the tree has dropped
 /// (`u_clearall` does exactly that for a command preview) stays here until
 /// something asks for it to go.
-#[derive(Default)]
+///
+/// Keyed through [`IdMap`]: sequence numbers are small and consecutive, and
+/// every link followed is a lookup, so SipHash would be most of its cost.
+/// Upstream matched a file's links by scanning every pair; a file crafted to
+/// collide costs no more here than that did.
 pub struct UndoStore {
-    headers: HashMap<c_int, Box<UndoHeader>>,
+    headers: IdMap<c_int, Box<UndoHeader>>,
+}
+
+impl Default for UndoStore {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl UndoStore {
     /// An empty store.
     pub fn new() -> Self {
-        Self {
-            headers: HashMap::new(),
-        }
+        Self { headers: id_map() }
     }
 
     /// How many headers the store holds. Not `b_u_numhead`, which counts the
