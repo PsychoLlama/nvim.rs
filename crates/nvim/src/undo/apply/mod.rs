@@ -77,27 +77,27 @@ pub fn u_undo_and_forget(count: c_int, do_buf_event: bool) -> bool {
     // is one, in its place; without one the tree is back at a leaf.
     buf.b_u_newhead = buf.header_link(forgotten, |uh| uh.next);
     buf.b_u_curhead = buf.header_link(forgotten, |uh| uh.alt_next);
-    let curhead = buf.b_u_curhead;
-    if buf.has_header(curhead) {
+    let current = buf.b_u_curhead;
+    if buf.has_header(current) {
         if let Some(uh) = buf.header_mut(forgotten) {
             uh.alt_next = UndoLink::NONE;
         }
         let alt_prev = buf.header_link(forgotten, |uh| uh.alt_prev);
-        if let Some(uh) = buf.header_mut(curhead) {
+        if let Some(uh) = buf.header_mut(current) {
             uh.alt_prev = alt_prev;
         }
-        let above = buf.header_link(curhead, |uh| uh.next);
+        let above = buf.header_link(current, |uh| uh.next);
         buf.b_u_seq_cur = buf.header(above).map_or(0, |uh| uh.seq);
     } else if let Some(seq) = buf.header(buf.b_u_newhead).map(|uh| uh.seq) {
         buf.b_u_seq_cur = seq;
     }
     let alt_prev = buf.header_link(forgotten, |uh| uh.alt_prev);
     if let Some(uh) = buf.header_mut(alt_prev) {
-        uh.alt_next = curhead;
+        uh.alt_next = current;
     }
     let newhead = buf.b_u_newhead;
     if let Some(uh) = buf.header_mut(newhead) {
-        uh.prev = curhead;
+        uh.prev = current;
     }
     if buf
         .header(forgotten)
@@ -221,14 +221,14 @@ pub(crate) fn u_undo_end(did_undo: bool, absolute: bool, quiet: bool) {
 
     // Which header's timestamp and sequence number to name. For ":undo N" an
     // "after #N" message reads better than a "before" one.
-    let curhead = buf.b_u_curhead;
-    let above = buf.header_link(curhead, |uh| uh.next);
-    let (target, did_undo) = if !buf.has_header(curhead) {
+    let current = buf.b_u_curhead;
+    let above = buf.header_link(current, |uh| uh.next);
+    let (target, did_undo) = if !buf.has_header(current) {
         (buf.b_u_newhead, did_undo)
     } else if absolute && above.is_some() {
         (above, false)
     } else if did_undo {
-        (curhead, true)
+        (current, true)
     } else {
         (above, did_undo)
     };

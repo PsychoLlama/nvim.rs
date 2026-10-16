@@ -98,13 +98,13 @@ impl CursorPick {
 pub(crate) fn u_undoredo(undo: bool, do_buf_event: bool) {
     let mut buf = Buf::current();
     let link = buf.b_u_curhead;
-    let Some(curhead) = buf.header_mut(link) else {
+    let Some(header) = buf.header_mut(link) else {
         return;
     };
-    let old_flags = curhead.flags;
-    let saved_cursor = curhead.cursor;
-    let mut entries = core::mem::take(&mut curhead.entries);
-    let getbot = curhead.getbot.take();
+    let old_flags = header.flags;
+    let saved_cursor = header.cursor;
+    let mut entries = core::mem::take(&mut header.entries);
+    let getbot = header.getbot.take();
 
     // Autocommands must not see the undo structures: they are inconsistent
     // until the end.
@@ -149,13 +149,13 @@ pub(crate) fn u_undoredo(undo: bool, do_buf_event: bool) {
             // Upstream had relinked the entries it applied into a list of
             // their own by now, and the header kept only the first of them
             // -- or all of them, when the first one was the bad one.
-            if let Some(curhead) = buf.header_mut(link) {
+            if let Some(header) = buf.header_mut(link) {
                 if applied == 0 {
-                    curhead.entries = entries;
-                    curhead.getbot = getbot;
+                    header.entries = entries;
+                    header.getbot = getbot;
                 } else {
-                    curhead.getbot = getbot.filter(|&g| g == count - 1).map(|_| 0);
-                    curhead.entries = entries.drain(count - 1..).collect();
+                    header.getbot = getbot.filter(|&g| g == count - 1).map(|_| 0);
+                    header.entries = entries.drain(count - 1..).collect();
                 }
             }
             unblock_autocmds();
@@ -190,10 +190,10 @@ pub(crate) fn u_undoredo(undo: bool, do_buf_event: bool) {
             .for_each(|&mark| extmark_apply_undo(mark, false));
     }
     let reload = old_flags & UH_RELOAD != 0;
-    if let Some(curhead) = buf.header_mut(link) {
+    if let Some(header) = buf.header_mut(link) {
         let mut marks = marks;
-        marks.append(&mut curhead.extmarks);
-        curhead.extmarks = marks;
+        marks.append(&mut header.extmarks);
+        header.extmarks = marks;
     }
     if reload {
         // Upstream TODO(bfredl): crude. With 'undoreload' there is enough
@@ -206,10 +206,10 @@ pub(crate) fn u_undoredo(undo: bool, do_buf_event: bool) {
     win.w_cursor = pick.pos;
     check_cursor_lnum(win);
 
-    if let Some(curhead) = buf.header_mut(link) {
-        curhead.entries = entries;
-        curhead.getbot = getbot;
-        curhead.flags = new_flags;
+    if let Some(header) = buf.header_mut(link) {
+        header.entries = entries;
+        header.getbot = getbot;
+        header.flags = new_flags;
     }
     if old_flags & UH_EMPTYBUF != 0 && buf_is_empty(buf) {
         buf.b_ml.ml_flags |= MlFlags::EMPTY;
@@ -353,7 +353,7 @@ fn swap_marks(
     saved_visual: VisualInfo,
 ) {
     let b: &mut Buffer = &mut buffer;
-    let Some(curhead) = b
+    let Some(header) = b
         .b_u_store
         .as_deref_mut()
         .and_then(|store| store.get_mut(link))
@@ -361,22 +361,22 @@ fn swap_marks(
         return;
     };
     for (i, saved) in saved.iter().enumerate() {
-        if curhead.named_marks[i].mark.lnum != 0 {
+        if header.named_marks[i].mark.lnum != 0 {
             // The buffer's mark is about to be replaced: its payload goes.
             drop_mark_extra(&mut b.b_namedm[i]);
-            b.b_namedm[i] = curhead.named_marks[i].clone();
+            b.b_namedm[i] = header.named_marks[i].clone();
         }
         if saved.mark.lnum != 0 {
-            curhead.named_marks[i] = saved.clone();
+            header.named_marks[i] = saved.clone();
         } else {
             // Only the line number is cleared, as the C clears it: the rest
             // of the mark is left as it was.
-            curhead.named_marks[i].mark.lnum = 0;
+            header.named_marks[i].mark.lnum = 0;
         }
     }
-    if curhead.visual.vi_start.lnum != 0 {
-        b.b_visual = curhead.visual;
-        curhead.visual = saved_visual;
+    if header.visual.vi_start.lnum != 0 {
+        b.b_visual = header.visual;
+        header.visual = saved_visual;
     }
 }
 

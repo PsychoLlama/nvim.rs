@@ -355,7 +355,7 @@ fn unserialize_extmarks(bi: &mut BufInfo, uh: &mut UndoHeader, file_name: &CStr)
 pub(crate) fn serialize_extmark(bi: &mut BufInfo, extup: ExtmarkUndoObject) -> bool {
     let image = match &extup {
         ExtmarkUndoObject::Splice(splice) => encode_splice(splice),
-        ExtmarkUndoObject::Move(move_0) => encode_move(move_0),
+        ExtmarkUndoObject::Move(region) => encode_move(region),
         ExtmarkUndoObject::SavePos(_) => return true,
     };
     bi.write_bytes(UF_ENTRY_MAGIC as uintmax_t, 2);
@@ -375,9 +375,9 @@ pub(crate) fn serialize_extmark(bi: &mut BufInfo, extup: ExtmarkUndoObject) -> b
 ///
 /// `bi` is positioned just after the entry magic.
 pub(crate) fn unserialize_extmark(bi: &mut BufInfo, file_name: &CStr) -> Option<ExtmarkUndoObject> {
-    let type_0: UndoObjectType = bi.read_4c().cast_unsigned();
+    let kind: UndoObjectType = bi.read_4c().cast_unsigned();
     let mut image = [0u8; EXTMARK_PAYLOAD_LEN];
-    let decoded = if type_0 == kExtmarkSplice {
+    let decoded = if kind == kExtmarkSplice {
         if !bi.read(&mut image) {
             corruption_error(c"extmark truncated", file_name);
             return None;
@@ -385,7 +385,7 @@ pub(crate) fn unserialize_extmark(bi: &mut BufInfo, file_name: &CStr) -> Option<
         decode_splice(&image)
             .map(ExtmarkUndoObject::Splice)
             .ok_or(c"extmark splice")
-    } else if type_0 == kExtmarkMove {
+    } else if kind == kExtmarkMove {
         if !bi.read(&mut image) {
             corruption_error(c"extmark truncated", file_name);
             return None;
