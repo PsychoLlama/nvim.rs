@@ -426,8 +426,11 @@ plus these whole-tree metrics, which are not per-file:
                         when `map/` can be deleted. It is lumpy — most of it is
                         the two files that declare the monomorphs — and that is
                         the point: a table converts, its type goes with it.
-                      ptr_arith       `.offset`/`.add`/`.sub`/
-                        `.wrapping_add`/`.wrapping_sub`/`.offset_from`.
+                      ptr_arith       `.offset`/`.add`/`.sub`/`.offset_from`,
+                        and `.wrapping_add`/`.wrapping_sub` on a receiver
+                        `PointerArith` infers is a raw pointer -- most
+                        `wrapping_*` calls are integer methods, which are not
+                        this debt.
                       t_suffix_types  *distinct* names ending in `_T` that
                         some `struct`/`enum`/`union`/`type` item declares —
                         a set over the whole tree, so moving a type between
@@ -1161,6 +1164,304 @@ WINLAYER = {
     "crates/nvim/src/winlayer/": "the same, split out by family",
 }
 
+
+class PointerArith:
+    """The `ptr_arith` needle: pointer-arithmetic method calls.
+
+    `.offset(`/`.add(`/`.sub(`/`.offset_from(` are counted wherever they are
+    written, as they always were: an integer `.add(` is `ops::Add` spelled out,
+    which nothing here does. `.wrapping_add(`/`.wrapping_sub(` are different --
+    nine in ten of them are *integer* methods, `len.wrapping_sub(1)` -- so
+    those two count only when the receiver is a pointer, which a text needle
+    has to infer. The receiver is a pointer when it is
+
+    - a cast to `*mut`/`*const`, or a call of a method that only answers a
+      pointer (`as_ptr`, `cast`, `wrapping_offset`, ...), or pointer
+      arithmetic whose own receiver is one;
+    - a call of a function whose every definition with that many arguments
+      returns a pointer (the file's own definition first, then the tree's);
+    - a field whose declarations (the file's own structs first) include a
+      pointer and no bare path -- an integer, or any named type, which has
+      no `wrapping_add` either; `.0` reads the file's tuple structs;
+    - a local whose nearest declaration above the site -- a parameter, a
+      closure parameter, a typed `let` -- has a pointer type, or whose `let`
+      initialiser is itself a pointer by these rules.
+
+    It is an inference, not a type check: a shadowed name, a field name two
+    structs type differently, or a pointer that only arrives through a
+    generic is missed, and is booked as integer. The probe that introduced it
+    found 61 of the tree's 471 `wrapping_*` calls on pointers.
+
+    An object rather than a regex because the fields and return types are a
+    property of the whole tree: `vocabulary` primes it before counting, and
+    `findall` keeps the shape every other needle has.
+    """
+
+    ALWAYS = re.compile(r"\.(?:offset_from|offset|add|sub)\(")
+    WRAPPING = re.compile(r"\.(?:wrapping_add|wrapping_sub)\(")
+    PTR_TYPE = re.compile(r"(?:&\s*(?:mut\s+)?)?\*\s*(?:mut|const)\b")
+    BARE_TYPE = re.compile(
+        r"(?:::)?(?:[A-Za-z_][A-Za-z0-9_]*\s*::\s*)*[A-Za-z_][A-Za-z0-9_]*\s*$"
+    )
+    CAST = re.compile(r"\bas\s+\*\s*(?:mut|const)\s+[A-Za-z0-9_:<>\s]*$")
+    NULL = re.compile(r"\bnull(?:_mut)?\s*(?:::\s*<.*>)?\s*\(\s*\)$", re.S)
+    TAIL = re.compile(r"([A-Za-z0-9_]+)\s*$")
+    POINTER_METHODS = frozenset(
+        (
+            "as_ptr",
+            "as_mut_ptr",
+            "cast",
+            "cast_mut",
+            "cast_const",
+            "ptr",
+            "wrapping_offset",
+            "with_addr",
+            "map_addr",
+            "byte_offset",
+            "byte_add",
+            "byte_sub",
+        )
+    )
+    ARITH = frozenset(("add", "sub", "offset", "wrapping_add", "wrapping_sub"))
+    FIELD_DECL = re.compile(
+        r"(?:^|[,{(])\s*(?:pub(?:\s*\([^)]*\))?\s+)?([a-z_][A-Za-z0-9_]*)\s*:(?!:)"
+        r"\s*([^,\n]*)"
+    )
+    TUPLE_STRUCT = re.compile(
+        r"\bstruct\s+[A-Za-z_][A-Za-z0-9_]*\s*(?:<[^>]*>)?\s*\(\s*"
+        r"(?:pub(?:\s*\([^)]*\))?\s+)?([^,)]*)"
+    )
+
+    def __init__(self):
+        self.returns = {}
+        self.fields = {}
+        self.primed = None
+
+    def prime(self, tree):
+        """Learn the tree's return and field types; once per tree."""
+        if self.primed is tree:
+            return
+        returns, fields = {}, {}
+        for masked in tree.values():
+            for sig in fn_signatures(masked):
+                key = (sig.name, call_arity(sig.params, True))
+                returns.setdefault(key, []).append(sig.returns.strip())
+            for body in struct_bodies(masked):
+                for m in self.FIELD_DECL.finditer(body):
+                    fields.setdefault(m.group(1), []).append(m.group(2).strip())
+        self.returns = {k: self.verdict(v) for k, v in returns.items()}
+        self.fields = {k: self.verdict(v) for k, v in fields.items()}
+        self.primed = tree
+
+    def verdict(self, types):
+        """Some declaration is a pointer and none is a bare path."""
+        return any(self.PTR_TYPE.match(t) for t in types) and not any(
+            self.BARE_TYPE.match(t) for t in types
+        )
+
+    def findall(self, masked):
+        found = [m.start() for m in self.ALWAYS.finditer(masked)]
+        found += [
+            m.start()
+            for m in self.WRAPPING.finditer(masked)
+            if self.pointer(masked, receiver_start(masked, m.start()), m.start(), 0)
+        ]
+        return found
+
+    def pointer(self, text, start, end, depth):
+        """Is `text[start:end]`, an expression, a raw pointer?"""
+        span = text[start:end]
+        expr = span.strip()
+        if depth > 4 or not expr:
+            return False
+        lead = start + len(span) - len(span.lstrip())
+        if expr.startswith("unsafe") and expr.endswith("}"):
+            inner = lead + expr.index("{") + 1
+            return self.pointer(text, inner, lead + len(expr) - 1, depth + 1)
+        if self.CAST.search(expr):
+            return True
+        if expr.startswith("&"):
+            return False
+        if expr.startswith("*"):
+            name = re.fullmatch(r"\*\s*([A-Za-z_][A-Za-z0-9_]*)", expr)
+            return bool(name) and self.pointer_to_pointer(text, name.group(1))
+        if expr.endswith(")"):
+            open_at = backward_opener(expr, len(expr) - 1)
+            if open_at == 0:
+                return self.pointer(text, lead + 1, lead + len(expr) - 1, depth + 1)
+            head = re.sub(r"::\s*<.*>$", "", expr[:open_at].rstrip(), flags=re.S)
+            name = self.TAIL.search(head.rstrip())
+            if not name:
+                return False
+            method = name.group(1)
+            before = head[: name.start()].rstrip()
+            if before.endswith(".") and not before.endswith(".."):
+                if method in self.POINTER_METHODS:
+                    return True
+                if method in self.ARITH:
+                    return self.pointer(text, lead, lead + len(before) - 1, depth + 1)
+            if self.NULL.search(expr):
+                return True
+            key = (method, call_arity(expr[open_at:], False))
+            here = [
+                sig.returns.strip()
+                for sig in fn_signatures(text)
+                if (sig.name, call_arity(sig.params, True)) == key
+            ]
+            return self.verdict(here) if here else self.returns.get(key, False)
+        name = self.TAIL.search(expr)
+        if not name:
+            return False
+        ident = name.group(1)
+        if re.search(r"\.\s*" + re.escape(ident) + r"$", expr):
+            if ident.isdigit():
+                firsts = [m.group(1).strip() for m in self.TUPLE_STRUCT.finditer(text)]
+                return bool(firsts) and self.verdict(firsts)
+            here = [
+                m.group(2).strip()
+                for body in struct_bodies(text)
+                for m in self.FIELD_DECL.finditer(body)
+                if m.group(1) == ident
+            ]
+            return self.verdict(here) if here else self.fields.get(ident, False)
+        if ident[0].isdigit():
+            return False
+        return self.local(text, ident, start, depth)
+
+    def pointer_to_pointer(self, text, name):
+        return (
+            re.search(
+                r"\b" + re.escape(name) + r"\s*:\s*(?:&\s*(?:mut\s+)?)?"
+                r"\*\s*(?:mut|const)\s+\*\s*(?:mut|const)\b",
+                text,
+            )
+            is not None
+        )
+
+    def local(self, text, ident, at, depth):
+        """The nearest declaration of `ident` above `at` decides."""
+        name = re.escape(ident)
+        decl = re.compile(
+            r"\b"
+            + name
+            + r"\s*:(?!:)\s*|\blet\s+(?:mut\s+)?"
+            + name
+            + r"\b\s*(?::[^=;]*)?=\s*"
+        )
+        nearest = None
+        for m in decl.finditer(text, 0, at):
+            nearest = m
+        if nearest is None:
+            return False
+        if nearest.group(0).startswith("let"):
+            typed = re.search(r":\s*(.*?)\s*=\s*$", nearest.group(0), re.S)
+            if typed:
+                return bool(self.PTR_TYPE.match(typed.group(1)))
+            stop = statement_end(text, nearest.end())
+            return self.pointer(text, nearest.end(), stop, depth + 1)
+        return bool(self.PTR_TYPE.match(text, nearest.end()))
+
+
+def call_arity(params, declaration):
+    """Top-level arguments in a parenthesised list; a declaration's `self`
+    does not count, so a method and its call agree."""
+    parts, depth, current = [], 0, []
+    for c in params.strip()[1:-1]:
+        if c in "([{<":
+            depth += 1
+        elif c in ")]}>":
+            depth -= 1
+        if c == "," and depth == 0:
+            parts.append("".join(current))
+            current = []
+        else:
+            current.append(c)
+    parts = [p for p in [*parts, "".join(current)] if p.strip()]
+    if (
+        declaration
+        and parts
+        and re.match(r"\s*(?:&\s*(?:'\w+\s+)?(?:mut\s+)?)?(?:mut\s+)?self\b", parts[0])
+    ):
+        parts = parts[1:]
+    return len(parts)
+
+
+def backward_opener(text, close_at):
+    """The index of the bracket that `text[close_at]` closes."""
+    close = text[close_at]
+    open_ = {")": "(", "]": "["}[close]
+    depth = 0
+    for i in range(close_at, -1, -1):
+        if text[i] == close:
+            depth += 1
+        elif text[i] == open_:
+            depth -= 1
+            if depth == 0:
+                return i
+    return 0
+
+
+def statement_end(text, at):
+    """The `;` (or unmatched closer) ending the expression at `at`."""
+    depth = 0
+    for i in range(at, len(text)):
+        c = text[i]
+        if c in "([{":
+            depth += 1
+        elif c in ")]}":
+            if depth == 0:
+                return i
+            depth -= 1
+        elif c == ";" and depth == 0:
+            return i
+    return len(text)
+
+
+def receiver_start(text, dot):
+    """Where the postfix expression ending just before `text[dot]` begins:
+    identifiers, `.`/`::` paths, calls, indexing and turbofish."""
+    word = re.compile(r"[A-Za-z0-9_]")
+    i = dot - 1
+    while True:
+        while i >= 0 and text[i].isspace():
+            i -= 1
+        if i < 0:
+            return 0
+        if text[i] in ")]":
+            i = backward_opener(text, i) - 1
+            j = i
+            while j >= 0 and text[j].isspace():
+                j -= 1
+            if j >= 0 and text[j] == ">" and text[j - 1 : j + 1] != "->":
+                depth = 0
+                for k in range(j, -1, -1):
+                    depth += {">": 1, "<": -1}.get(text[k], 0)
+                    if depth == 0:
+                        break
+                j = k - 1
+                while j >= 0 and text[j] in ": ":
+                    j -= 1
+            if j >= 0 and word.match(text[j]):
+                i = j
+            else:
+                return i + 1
+        while i >= 0 and word.match(text[i]):
+            i -= 1
+        j = i
+        while j >= 0 and text[j].isspace():
+            j -= 1
+        if j >= 0 and text[j] == "." and text[j - 1 : j + 1] != "..":
+            i = j - 1
+            continue
+        if j >= 1 and text[j - 1 : j + 1] == "::":
+            i = j - 2
+            continue
+        return i + 1
+
+
+PTR_ARITH = PointerArith()
+
+
 # The C-vocabulary dimensions: whole-tree needle counts, one per dialect the
 # migration is retiring. See "the C vocabulary" in the doc block for what each
 # measures and, where the idiom and its replacement look alike, why the needle
@@ -1209,9 +1510,8 @@ VOCABULARY = {
     # `kv_...` (there are none today) would not be mistaken for a call.
     "kvec_sites": re.compile(r"\bkv_[a-z_0-9]+[!(]|\b(?:InitVec|Kvec)::new\("),
     "khash_sites": re.compile(r"\b(?:Map|Set)_[A-Za-z0-9_]+\b"),
-    "ptr_arith": re.compile(
-        r"\.(?:offset_from|offset|add|sub|wrapping_add|wrapping_sub)\("
-    ),
+    # Not a regex: see `PointerArith` for how `wrapping_*` is told apart.
+    "ptr_arith": PTR_ARITH,
 }
 # `#[repr(C)]`, shared by the two halves below so that they cannot drift
 # apart: every match lands in exactly one of them.
@@ -3109,6 +3409,7 @@ def vocabulary(tree):
     counts = dict.fromkeys(
         (*VOCABULARY, *VOCABULARY_OUTSIDE, *VOCABULARY_INSIDE, *VOCABULARY_PARAMS), 0
     )
+    PTR_ARITH.prime(tree)
     for file, masked in tree.items():
         for name, needle in VOCABULARY.items():
             counts[name] += len(needle.findall(masked))
@@ -4372,12 +4673,23 @@ SELF_TEST_VOCABULARY = [
     ),
     (
         {
-            "crates/nvim/src/a.rs": "fn f() {\n"
+            "crates/nvim/src/a.rs": "struct S {\n    at: *mut u8,\n    n: usize,\n}\n"
+            "fn f(p: *mut u8, n: usize, s: &S) {\n"
             "    p.offset(1);\n    p.add(2);\n    p.sub(3);\n"
             "    p.wrapping_add(4);\n    p.wrapping_sub(5);\n"
-            "    p.offset_from(q);\n    p.addr();\n}\n"
+            "    p.offset_from(q);\n    p.addr();\n"
+            # Integer `wrapping_*` are not pointer arithmetic: a parameter,
+            # a field, a length.
+            "    n.wrapping_add(1);\n    s.n.wrapping_sub(1);\n"
+            "    v.len().wrapping_sub(1);\n"
+            # ... and a pointer reached through a field, a `let`, a cast,
+            # a method that answers one, and a function that returns one.
+            "    s.at.wrapping_add(1);\n    let q = p;\n    q.wrapping_add(1);\n"
+            "    (n as *const u8).wrapping_add(1);\n"
+            "    v.as_ptr().wrapping_add(1);\n    g().wrapping_sub(1);\n}\n"
+            "fn g() -> *mut u8 {\n    h()\n}\n"
         },
-        {"ptr_arith": 6},
+        {"ptr_arith": 11},
     ),
     (
         # A name is counted once however many files declare or mention it.
