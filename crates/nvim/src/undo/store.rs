@@ -260,8 +260,10 @@ pub(crate) struct Visit {
 /// pass finite is the pair of stamps in [`Marks`] — `mark` on arrival,
 /// `nomark` on the way back out — which is why the walk owns them.
 ///
-/// The walk holds the link it is at, not the header: the caller is free to
-/// look headers up (and change them) between steps.
+/// The walk holds the link it is at and that header's four links as they
+/// were on arrival, not the header: the caller is free to look headers up
+/// (and change their contents) between steps. No caller relinks headers
+/// mid-walk; one that did would be steered by the links it arrived through.
 pub(crate) struct TreeWalk {
     buf: Buf,
     marks: Marks,
@@ -270,9 +272,18 @@ pub(crate) struct TreeWalk {
     depth: c_int,
 }
 
+/// Where a walk stands: the header it arrived at last, and its links.
+struct Arrived {
+    link: UndoLink,
+    prev: UndoLink,
+    alt_next: UndoLink,
+    alt_prev: UndoLink,
+    next: UndoLink,
+}
+
 enum WalkState {
     Start(UndoLink),
-    At(UndoLink),
+    At(Arrived),
     Done,
 }
 
@@ -297,37 +308,33 @@ impl TreeWalk {
 
     /// Where the walk goes after `here`, stamping it with `nomark` when it is
     /// backing out of it rather than descending further.
-    fn advance(&mut self, here: UndoLink) -> UndoLink {
-        let Some(uh) = self.buf.header(here) else {
-            return UndoLink::NONE;
-        };
-        let (prev, alt_next, alt_prev, next) = (uh.prev, uh.alt_next, uh.alt_prev, uh.next);
-        if let Some(down) = self.marks.unwalked(self.buf, prev) {
+    fn advance(&mut self, here: Arrived) -> UndoLink {
+        if let Some(down) = self.marks.unwalked(self.buf, here.prev) {
             // Down into the branch.
             self.depth += 1;
             return down;
         }
-        if let Some(across) = self.marks.unwalked(self.buf, alt_next) {
+        if let Some(across) = self.marks.unwalked(self.buf, here.alt_next) {
             // Or across into an alternate branch, at the same depth.
             return across;
         }
-        if alt_prev.is_none()
-            && let Some(up) = self.marks.unwalked(self.buf, next)
+        if here.alt_prev.is_none()
+            && let Some(up) = self.marks.unwalked(self.buf, here.next)
         {
             // Or up, but only from the start of a run of alternates.
-            if here == self.stop_above {
-                self.stamp(here, self.marks.nomark);
+            if here.link == self.stop_above {
+                self.stamp(here.link, self.marks.nomark);
             }
             self.depth -= 1;
             return up;
         }
         // A dead end: stamp it finished and back out.
-        self.stamp(here, self.marks.nomark);
-        if alt_prev.is_some() {
-            return alt_prev;
+        self.stamp(here.link, self.marks.nomark);
+        if here.alt_prev.is_some() {
+            return here.alt_prev;
         }
         self.depth -= 1;
-        next
+        here.next
     }
 }
 
@@ -335,21 +342,25 @@ impl Iterator for TreeWalk {
     type Item = Visit;
 
     fn next(&mut self) -> Option<Visit> {
-        let here = match self.state {
+        let here = match core::mem::replace(&mut self.state, WalkState::Done) {
             WalkState::Done => return None,
             WalkState::Start(link) => link,
             // The step is taken here rather than after the last header was
             // handed out, so that a caller who stops early leaves the tree
             // stamped exactly as far as it walked.
-            WalkState::At(link) => self.advance(link),
+            WalkState::At(arrived) => self.advance(arrived),
         };
-        let Some(uh) = self.buf.header(here) else {
-            self.state = WalkState::Done;
-            return None;
-        };
-        let first = self.marks.unstamped(uh);
-        self.stamp(here, self.marks.mark);
-        self.state = WalkState::At(here);
+        let marks = self.marks;
+        let uh = self.buf.header_mut(here)?;
+        let first = marks.unstamped(uh);
+        uh.walk = marks.mark;
+        self.state = WalkState::At(Arrived {
+            link: here,
+            prev: uh.prev,
+            alt_next: uh.alt_next,
+            alt_prev: uh.alt_prev,
+            next: uh.next,
+        });
         Some(Visit {
             link: here,
             first,
