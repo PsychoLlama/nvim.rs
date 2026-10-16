@@ -9,7 +9,7 @@
 //! two reads, so each conversion keeps the leftover bytes.
 
 #![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::fileio::Loaded;
 use crate::mbyte::canonize;

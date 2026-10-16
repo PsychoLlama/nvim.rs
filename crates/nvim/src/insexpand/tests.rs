@@ -8,7 +8,7 @@
 //! breakcheck count reset, and `'completeopt'` is the global value, which is
 //! what [`completeopt_flags`] answers with no current buffer.
 
-#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::eval::typval::dict_find;
