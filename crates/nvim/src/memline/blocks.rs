@@ -229,6 +229,9 @@ macro_rules! set_header_field {
 
 /// Index entry `entry` moved by `delta` bytes, wrapping as the C
 /// arithmetic did; the mark bit rides along.
+/// The longest index move [`DataBlock::move_index`] makes entry by entry.
+const SHORT_INDEX_MOVE: usize = 8;
+
 #[inline]
 fn shifted(entry: [u8; INDEX_SIZE], delta: c_uint) -> [u8; INDEX_SIZE] {
     u32::from_ne_bytes(entry).wrapping_add(delta).to_ne_bytes()
@@ -423,7 +426,29 @@ impl<P: AsRef<[u8]> + AsMut<[u8]>> DataBlock<P> {
     /// overlap), adding `delta` to each as it lands: a `memmove` and then one
     /// pass over the moved entries. (A single pass in the safe spelling
     /// keeps a bounds check per entry and measured twice as long.)
+    #[inline]
     pub(crate) fn move_index(&mut self, from: usize, to: usize, count: usize, delta: c_uint) {
+        // A line inserted into a block moves the entries after it, and when
+        // a file is read that is the one empty line the buffer started
+        // with: for a handful, entry by entry costs a fraction of the
+        // `memmove` call and the pass (+19 % of a plain read's Ir).
+        if count <= SHORT_INDEX_MOVE {
+            let mut move_one = |i: usize| {
+                let entry = self.index(from + i);
+                self.set_index(to + i, c_uint::wrapping_add(entry, delta));
+            };
+            if to > from {
+                (0..count).rev().for_each(&mut move_one);
+            } else {
+                (0..count).for_each(&mut move_one);
+            }
+            return;
+        }
+        self.move_index_bulk(from, to, count, delta);
+    }
+
+    #[inline(never)]
+    fn move_index_bulk(&mut self, from: usize, to: usize, count: usize, delta: c_uint) {
         let (src, dst) = (Self::index_at(from), Self::index_at(to));
         self.bytes_mut()
             .copy_within(src..src + count * INDEX_SIZE, dst);
@@ -919,6 +944,27 @@ mod tests {
             0,
             "an empty pointer block has no entries"
         );
+    }
+
+    #[test]
+    fn short_and_long_index_moves_agree() {
+        // Every count on both sides of the entry-by-entry cut, both ways.
+        for count in 1..=2 * SHORT_INDEX_MOVE {
+            for (from, to) in [(1, 2), (2, 1), (1, 4), (4, 1)] {
+                let mut block = DataBlock(page());
+                for i in 0..count + 5 {
+                    block.set_index(i, 1000 + u32::try_from(i).unwrap());
+                }
+                let mut expect: Vec<c_uint> = (0..count + 5).map(|i| block.index(i)).collect();
+                let moved: Vec<c_uint> = expect[from..from + count].to_vec();
+                for (k, entry) in moved.into_iter().enumerate() {
+                    expect[to + k] = c_uint::wrapping_add(entry, 7);
+                }
+                block.move_index(from, to, count, 7);
+                let got: Vec<c_uint> = (0..count + 5).map(|i| block.index(i)).collect();
+                assert_eq!(got, expect, "count {count}, {from} -> {to}");
+            }
+        }
     }
 
     #[test]

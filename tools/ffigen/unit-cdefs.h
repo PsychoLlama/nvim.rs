@@ -3531,6 +3531,7 @@ static const int SHAPE_IDX_VE = 8;
 static const int SHAPE_MOUSE = 1;
 static const int SHAPE_VER = 2;
 static const int SHARED_MASK = 134217728;
+static const int SHORT_INDEX_MOVE = 8;
 static const int SHOWCMD_BUFLEN = 41;
 static const int SHOWCMD_COLS = 10;
 static const int SID_API_CLIENT = -9;
