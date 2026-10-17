@@ -51,6 +51,8 @@ impl SynState {
         }
         self.changedtick = changedtick;
         self.win = Some(window.id());
+        // A change since the last call may have left the line copy behind.
+        self.line_changed_since(changedtick);
 
         self.stack_alloc();
         let mut block = self.block();
@@ -300,6 +302,7 @@ impl SynState {
         self.stack_valid = false;
         self.next_list = IdList::NONE;
         self.keepend_level = -1;
+        self.forget_line();
     }
 
     /// Mark the state valid and ready to be pushed onto. A stack that is

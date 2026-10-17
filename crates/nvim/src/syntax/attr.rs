@@ -17,7 +17,6 @@ use core::ffi::c_int;
 use super::*;
 use crate::charset::{is_word_at, vim_iswordc_buf};
 use crate::mbyte::head_off;
-use crate::memline::Lines;
 use crate::pos::MAXCOL;
 
 /// Highlight attributes for the character at `col`.
@@ -134,6 +133,7 @@ impl SynState {
 
         // No character, no attributes -- past end of line? Do try matching an
         // empty line, which could be the start of a region.
+        self.sync_line();
         let (at_end, next_at_end) = self.line_ends_at(self.col);
         if at_end && self.col != 0 {
             // If we found a match after the last column, use it.
@@ -294,9 +294,9 @@ impl SynState {
     /// keyword or no keyword matches there.
     fn try_keyword(&mut self, cur_si: Option<c_int>) -> Option<c_int> {
         // Only on a keyword character that follows a non-keyword one.
+        self.curline();
         let buffer = self.buffer;
-        let mut lines = Lines::in_buffer(buffer);
-        let line = lines.line(self.lnum);
+        let line = self.line_bytes();
         let col = self.col as usize;
         if !word_char_at(line, col, buffer) {
             return None;

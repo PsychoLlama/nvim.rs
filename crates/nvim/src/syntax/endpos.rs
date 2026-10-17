@@ -438,27 +438,22 @@ impl SynState {
         at as ColNr
     }
 
-    /// Length of the current line of the syntax buffer.
-    pub(crate) fn curline_len(&self) -> ColNr {
-        ml_get_buf_len(self.buffer, self.lnum)
+    /// Length of the line being parsed.
+    #[inline]
+    pub(crate) fn curline_len(&mut self) -> ColNr {
+        ColNr::try_from(self.curline().len()).unwrap_or(ColNr::MAX)
     }
 
     /// The byte at `col` of the line being parsed, NUL at and past its end.
-    ///
-    /// The buffer is the one the entry point resolved for this call, which the
-    /// per-column path reads rather than asking the registry per character.
-    pub(crate) fn curline_byte(&self, col: ColNr) -> u8 {
-        cstr::byte_at(Lines::in_buffer(self.buffer).line(self.lnum), col as usize)
+    pub(crate) fn curline_byte(&mut self, col: ColNr) -> u8 {
+        cstr::byte_at(self.curline(), col as usize)
     }
 
     /// Whether `col`, and `col + 1`, are at or past the end of the line
-    /// being parsed: upstream's tests for the NUL there, which a memline
-    /// line holds only at its end (it stores a NUL byte as an `NL`).
-    ///
-    /// The per-column step asks this of every cell, so it reads the line's
-    /// length and not its bytes.
+    /// being parsed: upstream's tests for the NUL there, which a line holds
+    /// only at its end (the memline stores a NUL byte as an `NL`).
     #[inline]
-    pub(crate) fn line_ends_at(&self, col: ColNr) -> (bool, bool) {
+    pub(crate) fn line_ends_at(&mut self, col: ColNr) -> (bool, bool) {
         let len = self.curline_len();
         (col >= len, col + 1 >= len)
     }

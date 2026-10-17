@@ -35,8 +35,10 @@ use core::ffi::c_int;
 
 use super::IdList;
 use super::{ExtMatchRef, StateItem, SynBlockRef, SynFlags};
+use crate::buffer::buf_get_changedtick;
 use crate::global_cell::GlobalCell;
-use crate::types::{ColNr, LPos, LineNr, ProfTime, VarNumber};
+use crate::memline::Lines;
+use crate::types::{ColNr, Handle, LPos, LineNr, ProfTime, VarNumber};
 use crate::winlayer::{Buf, BufId, WinId};
 
 /// The match [`SynState::current_attr`] found ahead of the current column and
@@ -92,6 +94,30 @@ impl CurrentAttr {
 }
 
 /// The syntax parser.
+/// The line being parsed, copied out of the memline: see
+/// [`SynState::curline`].
+pub(crate) struct ParsedLine {
+    /// Which line of which buffer at which change the copy is of; line 0
+    /// is no line. The buffer by its number, not its address: a buffer
+    /// freed and another allocated in its place would compare equal.
+    buffer: Handle,
+    lnum: LineNr,
+    changedtick: VarNumber,
+    /// The line's bytes, without the NUL.
+    bytes: Vec<u8>,
+}
+
+impl ParsedLine {
+    const fn none() -> ParsedLine {
+        ParsedLine {
+            buffer: 0,
+            lnum: 0,
+            changedtick: 0,
+            bytes: Vec::new(),
+        }
+    }
+}
+
 pub(crate) struct SynState {
     // --------------------------------------------------- what is parsed
     /// The window being parsed for. An identity, not an address: it outlives
@@ -144,6 +170,8 @@ pub(crate) struct SynState {
     pub(crate) next_list: IdList,
     /// The `skipwhite`/`skipnl`/`skipempty` flags that came with it.
     pub(crate) next_flags: SynFlags,
+    /// A copy of line `lnum`, which the per-column step reads.
+    pub(crate) line: ParsedLine,
 
     // --------------------------------------------------- what it found
     /// The match found ahead of the current column.
@@ -153,6 +181,70 @@ pub(crate) struct SynState {
     pub(crate) try_next_column: bool,
     /// What the last attribute walk decided.
     pub(crate) current: CurrentAttr,
+}
+
+impl SynState {
+    /// The line being parsed, without its NUL.
+    ///
+    /// A copy, made once per line: the per-column step reads the line
+    /// several times per cell, and asking the memline each time cost more
+    /// than the copy (the memline's own one-line cache is also evicted by
+    /// every pattern match that reads another line). The copy follows the
+    /// parser's buffer and line number here; a *change* to the line is
+    /// caught by [`SynState::sync_line`], which the entry of every cell
+    /// ([`SynState::current_attr`]) and of every line ([`SynState::start`])
+    /// runs.
+    #[inline]
+    pub(crate) fn curline(&mut self) -> &[u8] {
+        if self.line.lnum != self.lnum || self.line.buffer != self.buffer.handle() {
+            self.reload_line(buf_get_changedtick(self.buffer));
+        }
+        &self.line.bytes
+    }
+
+    /// [`SynState::curline`]'s check, and also whether the buffer changed
+    /// since the copy was made.
+    #[inline]
+    pub(crate) fn sync_line(&mut self) {
+        let changedtick = buf_get_changedtick(self.buffer);
+        let line = &self.line;
+        if line.lnum != self.lnum
+            || line.buffer != self.buffer.handle()
+            || line.changedtick != changedtick
+        {
+            self.reload_line(changedtick);
+        }
+    }
+
+    /// Forget the line copy, so the next read fetches the line.
+    pub(crate) fn forget_line(&mut self) {
+        self.line.lnum = 0;
+    }
+
+    /// Forget the line copy if it was made before change `changedtick`.
+    pub(crate) fn line_changed_since(&mut self, changedtick: VarNumber) {
+        if self.line.changedtick != changedtick {
+            self.line.lnum = 0;
+        }
+    }
+
+    #[inline(never)]
+    fn reload_line(&mut self, changedtick: VarNumber) {
+        let mut lines = Lines::in_buffer(self.buffer);
+        let text = lines.line(self.lnum);
+        let line = &mut self.line;
+        line.bytes.clear();
+        line.bytes.extend_from_slice(text);
+        line.buffer = self.buffer.handle();
+        line.lnum = self.lnum;
+        line.changedtick = changedtick;
+    }
+
+    /// The copy [`SynState::curline`] last made, without checking it.
+    #[inline]
+    pub(crate) fn line_bytes(&self) -> &[u8] {
+        &self.line.bytes
+    }
 }
 
 impl SynState {
@@ -176,6 +268,7 @@ impl SynState {
             keepend_level: -1,
             next_seqnr: 1,
             next_list: IdList::NONE,
+            line: ParsedLine::none(),
             next_flags: SynFlags::NONE,
             next_match: NextMatch {
                 idx: 0,
