@@ -32,7 +32,6 @@ use crate::memory::XString;
 use crate::spell::WordFlags;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int};
-use core::mem;
 
 use crate::charset::{skip, skipbin, skipdigits, skiphex};
 use crate::cursor::get_cursor_line_ptr;
@@ -146,7 +145,7 @@ pub unsafe fn spell_check(
 
         if !capcol.is_null()
             && unsafe { *capcol } == 0
-            && !unsafe { (*window.w_s).b_cap_prog }.is_null()
+            && unsafe { (*window.w_s).b_cap_prog.is_some() }
         {
             // This word should have started with a capital.
             if !is_upper(unsafe { utf_ptr2char(text) }) {
@@ -231,14 +230,12 @@ pub unsafe fn spell_check(
         } else if !unsafe { spell_iswordp_nmw(text, window) } {
             // Sitting on a non-word character is not an error; step over
             // it and look for a word after it.
-            if !capcol.is_null() && !unsafe { (*window.w_s).b_cap_prog }.is_null() {
+            if !capcol.is_null() && unsafe { (*window.w_s).b_cap_prog.is_some() } {
                 // Did a sentence end here?
-                let mut regmatch: RegMatch = unsafe { mem::zeroed() };
-                regmatch.regprog = unsafe { (*window.w_s).b_cap_prog };
-                regmatch.rm_ic = false;
+                let mut regmatch = RegMatch::new(unsafe { (*window.w_s).b_cap_prog.take() }, false);
                 // SAFETY: the caller's NUL-terminated text.
                 let r = vim_regexec(&mut regmatch, unsafe { cstr::at(text) }, 0);
-                unsafe { (*window.w_s).b_cap_prog = regmatch.regprog };
+                unsafe { (*window.w_s).b_cap_prog = regmatch.regprog.take() };
                 if let Some(end) = regmatch.ends[0]
                     && r
                 {
@@ -395,7 +392,7 @@ pub fn no_spell_checking(window: Win) -> bool {
 /// a line that means looking at the previous line, with a space standing
 /// in for the line break.
 pub fn check_need_cap(mut window: Win, lnum: LineNr, col: ColNr) -> bool {
-    if unsafe { (*window.w_s).b_cap_prog }.is_null() {
+    if unsafe { (*window.w_s).b_cap_prog.is_none() } {
         return false;
     }
 
@@ -420,9 +417,7 @@ pub fn check_need_cap(mut window: Win, lnum: LineNr, col: ColNr) -> bool {
 
     // Does a sentence end before the word?
     let mut need_cap = false;
-    let mut regmatch: RegMatch = unsafe { mem::zeroed() };
-    regmatch.regprog = unsafe { (*window.w_s).b_cap_prog };
-    regmatch.rm_ic = false;
+    let mut regmatch = RegMatch::new(unsafe { (*window.w_s).b_cap_prog.take() }, false);
     // `text` is this frame's own NUL-terminated buffer, and `at` stays
     // inside it: the walk starts at `endcol` and only ever moves back.
     let base = text.as_mut_ptr().cast::<c_char>();
@@ -441,7 +436,7 @@ pub fn check_need_cap(mut window: Win, lnum: LineNr, col: ColNr) -> bool {
             break;
         }
     }
-    unsafe { (*window.w_s).b_cap_prog = regmatch.regprog };
+    unsafe { (*window.w_s).b_cap_prog = regmatch.regprog.take() };
     need_cap
 }
 

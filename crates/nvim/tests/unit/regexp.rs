@@ -38,9 +38,7 @@ use std::time::{Duration, Instant};
 
 use neovim::eval::eval_to_string;
 use neovim::ex_docmd::do_cmdline_cmd;
-use neovim::regexp::{
-    RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec, vim_regexec_multi, vim_regfree,
-};
+use neovim::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec, vim_regexec_multi};
 use neovim::types::{RegMMatch, RegMatch};
 use neovim::winlayer::Buf;
 
@@ -67,7 +65,7 @@ fn run(engine: &str, pat: impl AsRef<[u8]>, line: impl AsRef<[u8]>, ic: bool) ->
     let pattern =
         CString::new([engine.as_bytes(), pat.as_ref()].concat()).expect("a pattern holds no NUL");
     let prog = vim_regcomp(&pattern, RE_MAGIC | RE_STRING);
-    if prog.is_null() {
+    if prog.is_none() {
         return "compile-error".to_string();
     }
     let mut rm = RegMatch {
@@ -77,7 +75,7 @@ fn run(engine: &str, pat: impl AsRef<[u8]>, line: impl AsRef<[u8]>, ic: bool) ->
     };
     let text = CString::new(line.as_ref().to_vec()).expect("a subject holds no NUL");
     let hit = vim_regexec(&mut rm, &text, 0);
-    let answer = if hit {
+    if hit {
         let whole = rm.group(0).expect("a hit fills group zero");
         let mut answer = format!("{}-{}", whole.start, whole.end);
         for i in 1..10 {
@@ -88,11 +86,7 @@ fn run(engine: &str, pat: impl AsRef<[u8]>, line: impl AsRef<[u8]>, ic: bool) ->
         answer
     } else {
         "nomatch".to_string()
-    };
-    // SAFETY: `regprog` is what the match left behind -- possibly a
-    // recompile of the program above, which is why it is read back.
-    unsafe { vim_regfree(rm.regprog) };
-    answer
+    }
 }
 
 /// Describes a case the way it should appear in a failure message: the
@@ -784,9 +778,8 @@ fn a_program_can_be_freed_without_ever_matching() {
     let pat = CString::new(r"\(a\+\)\(b\|c\)\{2,5}").expect("a pattern holds no NUL");
     for _ in 0..100 {
         let prog = vim_regcomp(&pat, RE_MAGIC);
-        assert!(!prog.is_null(), "compile failed");
-        // SAFETY: the program this loop just compiled, freed once.
-        unsafe { vim_regfree(prog) };
+        assert!(prog.is_some(), "compile failed");
+        drop(prog);
     }
 }
 
@@ -1510,20 +1503,17 @@ fn random_patterns_are_rejected_or_matched_but_never_hang() {
 fn run_at(pat: &str, line: &str, col: usize) -> String {
     let pattern = CString::new(pat).expect("a pattern holds no NUL");
     let prog = vim_regcomp(&pattern, RE_MAGIC | RE_STRING);
-    assert!(!prog.is_null(), "/{pat}/ did not compile");
+    assert!(prog.is_some(), "/{pat}/ did not compile");
     let mut rm = RegMatch {
         regprog: prog,
         ..Default::default()
     };
     let text = CString::new(line).expect("a subject holds no NUL");
     let hit = vim_regexec(&mut rm, &text, col);
-    let answer = match rm.group(0).filter(|_| hit) {
+    match rm.group(0).filter(|_| hit) {
         Some(span) => format!("{}-{}", span.start, span.end),
         None => "nomatch".to_string(),
-    };
-    // SAFETY: `regprog` is what the match left behind.
-    unsafe { vim_regfree(rm.regprog) };
-    answer
+    }
 }
 
 #[test]
@@ -1560,7 +1550,7 @@ fn a_multi_line_match_spans_the_lines_it_reads_out_of_the_buffer() {
 
     let pattern = CString::new(r"beta\ngamma").expect("a pattern holds no NUL");
     let prog = vim_regcomp(&pattern, RE_MAGIC);
-    assert!(!prog.is_null(), "the pattern compiles");
+    assert!(prog.is_some(), "the pattern compiles");
     let mut rmm = RegMMatch {
         regprog: prog,
         ..Default::default()
@@ -1568,19 +1558,9 @@ fn a_multi_line_match_spans_the_lines_it_reads_out_of_the_buffer() {
     // The match has to *start* on the line it is given: this entry point
     // tries one starting line, and it is `do_search`'s loop that walks the
     // buffer. Line 2 is where `beta` is.
-    // SAFETY: `rmm` holds a live program and is this frame's own; no time
-    // limit and no timeout slot, which is what every plain caller passes.
-    let spanned = unsafe {
-        vim_regexec_multi(
-            &raw mut rmm,
-            None,
-            Buf::current(),
-            2,
-            0,
-            std::ptr::null_mut(),
-            std::ptr::null_mut(),
-        )
-    };
+    // No time limit and no timeout slot, which is what every plain caller
+    // passes.
+    let spanned = vim_regexec_multi(&mut rmm, None, Buf::current(), 2, 0, None, None);
     // The answer is how many lines the match covers: it starts on line 2
     // and ends on line 3, so two.
     assert_eq!(spanned, 2, "a two-line match");
@@ -1591,21 +1571,8 @@ fn a_multi_line_match_spans_the_lines_it_reads_out_of_the_buffer() {
 
     // A start line the pattern does not begin on does not match, and one
     // whose continuation runs off the end of the buffer does not either.
-    // SAFETY: as above.
-    let missing = unsafe {
-        vim_regexec_multi(
-            &raw mut rmm,
-            None,
-            Buf::current(),
-            3,
-            0,
-            std::ptr::null_mut(),
-            std::ptr::null_mut(),
-        )
-    };
+    let missing = vim_regexec_multi(&mut rmm, None, Buf::current(), 3, 0, None, None);
     assert_eq!(missing, 0, "no match from line 3");
-    // SAFETY: `regprog` is what the last match left behind.
-    unsafe { vim_regfree(rmm.regprog) };
     put("silent! keepjumps keepmarks %delete _");
 }
 
@@ -1655,7 +1622,7 @@ fn a_match_reports_spans_that_are_read_back_against_the_line() {
     let subject = cstr("foobar");
     let pattern = cstr(r"foo\(bar\)\|\(xxx\)");
     let prog = vim_regcomp(&pattern, RE_MAGIC | RE_STRING);
-    assert!(!prog.is_null(), "the pattern compiles");
+    assert!(prog.is_some(), "the pattern compiles");
     let mut rm = RegMatch::new(prog, false);
 
     assert!(vim_regexec(&mut rm, &subject, 0));
@@ -1672,9 +1639,6 @@ fn a_match_reports_spans_that_are_read_back_against_the_line() {
     assert!(!vim_regexec(&mut rm, &other, 0));
     assert_eq!(rm.group(0), None);
     assert_eq!(rm.group(1), None);
-
-    // SAFETY: `regprog` is what the last match left behind.
-    unsafe { vim_regfree(rm.regprog) };
 }
 
 /// `substitute()` is the string half of the substitution: it runs
@@ -1733,11 +1697,7 @@ fn an_engine_prefix_with_nothing_after_it_is_an_error_rather_than_a_read_past_th
     let _sandbox = Sandbox::globals();
     for pat in [r"\%#=", r"\%#", r"\%", r"\%#=9", r"\%#=1"] {
         let pattern = cstr(pat);
-        let prog = vim_regcomp(&pattern, RE_MAGIC | RE_STRING);
-        if !prog.is_null() {
-            // SAFETY: what `vim_regcomp` just answered, freed once.
-            unsafe { vim_regfree(prog) };
-        }
+        drop(vim_regcomp(&pattern, RE_MAGIC | RE_STRING));
     }
 }
 

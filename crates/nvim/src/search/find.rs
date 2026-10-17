@@ -83,17 +83,23 @@ impl Searcher {
     /// Run the pattern against line `lnum` from column `col`.
     #[inline(always)]
     fn exec(&mut self, lnum: LineNr, col: ColNr) -> c_int {
-        unsafe {
-            vim_regexec_multi(
-                &raw mut self.regmatch,
-                self.win,
-                self.buf,
-                lnum,
-                col,
-                self.tm,
-                self.timed_out,
-            )
+        let mut timed_out = false;
+        // SAFETY: `tm` is null or points into the caller's `SearchItArg`.
+        let tm = unsafe { self.tm.as_ref() };
+        let lines = vim_regexec_multi(
+            &mut self.regmatch,
+            self.win,
+            self.buf,
+            lnum,
+            col,
+            tm,
+            Some(&mut timed_out),
+        );
+        if timed_out && !self.timed_out.is_null() {
+            // SAFETY: as `tm`, the caller's flag.
+            unsafe { *self.timed_out = 1 };
         }
+        lines
     }
 
     /// The match `exec` just reported.
@@ -222,7 +228,7 @@ impl Searcher {
             if *nmatched == 0 {
                 return false;
             }
-            if self.regmatch.regprog.is_null() {
+            if self.regmatch.regprog.is_none() {
                 return true;
             }
             *found = self.found();
@@ -286,7 +292,7 @@ impl Searcher {
                 }
                 break;
             }
-            if self.regmatch.regprog.is_null() {
+            if self.regmatch.regprog.is_none() {
                 break;
             }
         }
@@ -550,7 +556,7 @@ pub unsafe fn searchit(
                 };
                 let mut nmatched = s.exec(lnum, col);
                 // vim_regexec_multi() may clear "regprog".
-                if s.regmatch.regprog.is_null() {
+                if s.regmatch.regprog.is_none() {
                     break 'lines;
                 }
                 // Abort searching on an error (e.g., out of stack).
@@ -613,7 +619,7 @@ pub unsafe fn searchit(
             at_first_line = false;
 
             // vim_regexec_multi() may clear "regprog".
-            if s.regmatch.regprog.is_null() {
+            if s.regmatch.regprog.is_none() {
                 break;
             }
 
@@ -663,7 +669,7 @@ pub unsafe fn searchit(
         }
     }
 
-    unsafe { vim_regfree(s.regmatch.regprog) };
+    s.regmatch.regprog = None;
 
     if found == 0 {
         if got_int.get() {

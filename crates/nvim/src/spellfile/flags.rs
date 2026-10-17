@@ -47,7 +47,7 @@ use ::libc::{strcat, strcpy};
 
 use super::{
     AFT_CAPLONG, AFT_CHAR, AFT_LONG, AFT_NUM, AffEntry, AffFile, AffHeader, CompItem, SpellInfo,
-    ZERO_FLAG, vim_regfree,
+    ZERO_FLAG,
 };
 
 /// Decode one flag and advance `cursor` past it. Returns 0 when there is none.
@@ -317,7 +317,7 @@ pub(super) unsafe fn spell_free_aff(aff: &mut AffFile) {
             let ah = unsafe { AffHeader::of_key(hi.hi_key) };
             let mut ae = unsafe { (*ah).ah_first };
             while !ae.is_null() {
-                unsafe { vim_regfree((*ae).ae_prog) };
+                unsafe { (*ae).ae_prog = None };
                 ae = unsafe { (*ae).ae_next };
             }
         }

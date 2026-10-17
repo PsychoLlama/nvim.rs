@@ -53,7 +53,7 @@ pub(crate) unsafe fn ins_compl_dictionaries(
 
     let buf = unsafe { xmalloc(LSIZE as size_t) }.cast::<c_char>();
     // So that we can leave through 'theend.
-    let mut regmatch = RegMatch::new(ptr::null_mut(), false);
+    let mut regmatch = RegMatch::new(None, false);
 
     // If 'infercase' is set, don't use 'smartcase' here.
     let save_p_scs = p_scs();
@@ -79,7 +79,7 @@ pub(crate) unsafe fn ins_compl_dictionaries(
                 unsafe { cstr::at(pat) },
                 if magic_isset() { RE_MAGIC } else { 0 },
             );
-            if regmatch.regprog.is_null() {
+            if regmatch.regprog.is_none() {
                 break 'theend;
             }
         }
@@ -158,7 +158,7 @@ pub(crate) unsafe fn ins_compl_dictionaries(
     }
 
     P_SCS.set(save_p_scs);
-    unsafe { vim_regfree(regmatch.regprog) };
+    drop(regmatch);
     unsafe { xfree(buf.cast::<c_void>()) };
 }
 

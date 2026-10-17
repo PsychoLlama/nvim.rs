@@ -380,9 +380,8 @@ fn at_word_end(rex: Rex) -> bool {
 fn collection_matches(rex: Rex, prog: States, start: &NfaState, curc: c_int, clen: c_int) -> bool {
     // A negated collection accepts exactly what its members reject.
     let member_wins = start.c == NfaOp::StartColl.code();
-    let mut state = start.out;
+    let mut member = prog.state(start.out);
     loop {
-        let member = prog.state(state);
         let c = member.c;
         if c == NfaOp::Composing.code() {
             // A member that is a whole grapheme.
@@ -394,8 +393,9 @@ fn collection_matches(rex: Rex, prog: States, start: &NfaState, curc: c_int, cle
         }
         if c == NfaOp::RangeMin.code() {
             let mut lo = member.val;
-            state = member.out;
-            let hi = prog.val(state);
+            // The range's other end is the next state.
+            member = prog.state(member.out);
+            let hi = member.val;
             if (lo..=hi).contains(&curc) {
                 return member_wins;
             }
@@ -420,7 +420,7 @@ fn collection_matches(rex: Rex, prog: States, start: &NfaState, curc: c_int, cle
                 return member_wins;
             }
         }
-        state = prog.out(state);
+        member = prog.state(member.out);
     }
 }
 

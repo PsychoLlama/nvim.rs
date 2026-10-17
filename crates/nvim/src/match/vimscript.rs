@@ -112,7 +112,7 @@ pub(crate) fn f_getmatches(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
     while !cur.is_null() {
         let dict_held = tv_dict_alloc();
         let dict = dict_held.as_ptr();
-        if unsafe { (*cur).mit_match.regprog }.is_null() {
+        if unsafe { (*cur).mit_match.regprog.is_none() } {
             // Added with matchaddpos(): one `posN` key per position.
             for i in 0..unsafe { (*cur).mit_pos_count } {
                 let llpos = unsafe { (*cur).mit_pos_array.offset(i as isize) };

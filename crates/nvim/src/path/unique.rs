@@ -27,7 +27,8 @@ use super::*;
 use crate::fileio::file_pat_to_regpat;
 use crate::mbyte::{cluster_len, head_off};
 use crate::os::fs::{current_dir, dirname_text};
-use crate::regexp::{OwnedMatch, RE_MAGIC, RE_STRING};
+use crate::regexp::{RE_MAGIC, RE_STRING};
+use crate::types::RegMatch;
 
 /// Shorten the directory part of a name in place, keeping `trim_len`
 /// characters of each component: `"~/foo/../.bar/fname"` with a `trim_len`
@@ -168,7 +169,7 @@ pub(crate) fn uniquefy_paths(names: &mut Vec<XString>, pattern: &CStr, path_opti
         return;
     };
     // Always ignoring case.
-    let Some(mut regmatch) = OwnedMatch::compile(pat.as_cstr(), RE_MAGIC + RE_STRING, true) else {
+    let Some(mut regmatch) = RegMatch::compile(pat.as_cstr(), RE_MAGIC + RE_STRING, true) else {
         return;
     };
     drop(pat);

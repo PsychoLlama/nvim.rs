@@ -190,7 +190,7 @@ impl Walk<'_> {
         // the validity of what it reads.
         !self.soundfold
             && !unsafe { (*self.slang).sl_nocompoundsugs }
-            && !unsafe { (*self.slang).sl_compprog }.is_null()
+            && unsafe { (*self.slang).sl_compprog.is_some() }
             && (flags.bits() as u32) >> 24 != 0
             && this_word_len >= unsafe { (*self.slang).sl_compminlen }
             && (unsafe { (*self.slang).sl_compminlen } == 0

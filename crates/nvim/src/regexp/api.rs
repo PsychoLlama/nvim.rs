@@ -9,12 +9,10 @@
 //! layer's stack — so a `\=` expression that starts a match of its own gets
 //! a context of its own — and reads back what the engine left in it.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::cstr;
 use crate::global_cell::GlobalCell;
-use crate::memory::XString;
 use crate::regexp::RegCompiler;
 use crate::regexp::bt_regcomp;
 use crate::regexp::nfa_regcomp;
@@ -22,22 +20,20 @@ use crate::regexp::{ExtMatch, ExtMatchIo, ExtMatchRef};
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use core::cell::Cell;
-use core::ffi::{CStr, c_int};
-use core::ptr;
+use core::ffi::{CStr, c_int, c_uint};
+use std::ffi::CString;
 
 use super::{
-    AUTOMATIC_ENGINE, BACKTRACKING_ENGINE, BtRegProg, E_RECURSIVE, GroupSlots, MatchSetup,
-    NFA_ENGINE, NFA_TOO_EXPENSIVE, NfaRegProg, RE_NOBREAK, REX_ALL, RegExec, Rex, bt_regexec,
-    nfa_regexec,
+    AUTOMATIC_ENGINE, BACKTRACKING_ENGINE, BtRegProg, GroupSlots, MatchSetup, NFA_ENGINE,
+    NFA_TOO_EXPENSIVE, NfaRegProg, RE_NOBREAK, REGMAGIC, REX_ALL, RF_HAD_EOL, RF_HASNL, RegExec,
+    Rex, bt_regexec, nfa_regexec,
 };
 use crate::message::state::called_emsg;
 use crate::message::{emsg, msg_str, verbose_enter, verbose_leave};
 use crate::option::vars::{P_RE, p_re, p_verbose};
 use crate::os::cshim::gettext;
 use crate::regexp::RE_AUTO;
-use crate::types::{
-    ColNr, LPos, LineNr, OptInt, ProfTime, RE_GROUPS, RegMMatch, RegMatch, RegProg,
-};
+use crate::types::{ColNr, LPos, LineNr, OptInt, ProfTime, RE_GROUPS, RegMMatch, RegMatch};
 
 /// The first line of the last buffer match, which upstream's `rex` kept
 /// after the match was over: a string match never set it, so `\%'m` in one
@@ -67,29 +63,147 @@ pub(crate) fn in_match_scope<R>(first: Option<LineNr>, f: impl FnOnce(LineNr) ->
     result
 }
 
-/// Run `prog` over the match `rex` is set up for, from column `col`: the
-/// engine the program came from decides which engine runs it.
-///
-/// # Safety
-///
-/// `prog` must be a live program [`vim_regcomp`] answered.
-unsafe fn run_engine(prog: *mut RegProg, rex: Rex, col: ColNr) -> c_int {
-    // SAFETY: the caller's live program, whose engine field says which shape
-    // it is; a backtracking program is a `BtRegProg` (see `bt_regcomp`).
-    if unsafe { (*prog).engine.cast_const() } == &raw const super::bt_regengine {
-        bt_regexec(rex, unsafe { &*prog.cast::<BtRegProg>() }, col)
-    } else {
-        nfa_regexec(rex, unsafe { &*prog.cast::<NfaRegProg>() }, col)
-    }
+/// One engine's program.
+#[derive(Clone)]
+pub(crate) enum Program {
+    Bt(BtRegProg),
+    Nfa(NfaRegProg),
 }
 
-/// Was `prog` compiled with `RE_NOBREAK`?
+/// A compiled pattern: the engine's program, and what [`vim_regcomp`]
+/// recorded about how it was asked for.
+#[derive(Clone)]
+struct Compiled {
+    /// The engine 'regexpengine' or a `\%#=` named: automatic, backtracking
+    /// or NFA. An automatic one may hand the pattern over mid-match.
+    engine: c_uint,
+    /// The `RE_*` flags the pattern was compiled with, which a recompile for
+    /// the other engine repeats.
+    re_flags: c_int,
+    program: Program,
+}
+
+/// A compiled pattern, owned: dropped when its holder lets go, and replaced
+/// in place when the NFA engine hands a pattern to the backtracking one.
 ///
-/// # Safety
+/// Upstream shares a `regprog_T *` between whoever compiled it and whoever
+/// matches with it, and a match may free it and put a recompiled program in
+/// the caller's `regmatch_T`. Here the program is a box with one owner: a
+/// match borrows it `&mut` from wherever it lives — a [`RegMatch`], a
+/// [`RegMMatch`], a field of its own — and a recompile replaces it there,
+/// so the owner gets the new program back through the same place.
 ///
-/// `prog` must be a live program.
-unsafe fn nobreak(prog: *mut RegProg) -> bool {
-    (unsafe { (*prog).re_flags } & RE_NOBREAK as u32) != 0
+/// `Clone` is a deep copy, for the one holder that needs a private program
+/// per redraw (a window's match list).
+#[derive(Clone)]
+pub struct OwnedProg(Box<Compiled>);
+
+impl OwnedProg {
+    /// [`vim_regcomp`]: `None` when the pattern does not compile.
+    pub fn compile(expr: &CStr, re_flags: c_int) -> Option<OwnedProg> {
+        vim_regcomp(expr, re_flags)
+    }
+
+    /// The `RF_*` flags the compiler found.
+    fn regflags(&self) -> c_uint {
+        match &self.0.program {
+            Program::Bt(bt) => bt.regflags,
+            Program::Nfa(nfa) => nfa.regflags,
+        }
+    }
+
+    /// Can the pattern match across a line break?
+    pub fn is_multiline(&self) -> bool {
+        self.regflags() & RF_HASNL as c_uint != 0
+    }
+
+    /// Did the pattern end with a `\n` that a search should treat as
+    /// "match at end of line"? Read by the syntax code right after a compile.
+    pub(crate) fn had_eol(&self) -> bool {
+        self.regflags() & RF_HAD_EOL != 0
+    }
+
+    /// Does the program belong to the backtracking engine, and has its magic
+    /// number not survived? Only that engine's programs carry one. Reports so
+    /// when it has not.
+    pub(crate) fn magic_wrong(&self) -> bool {
+        let wrong = matches!(&self.0.program, Program::Bt(bt) if bt.program[0] != REGMAGIC as u8);
+        if wrong {
+            emsg(gettext(crate::message::e_re_corr));
+        }
+        wrong
+    }
+
+    /// Do both programs belong to the same engine? A recompile for the
+    /// backtracking engine is what makes two copies of a pattern differ.
+    pub(crate) fn same_engine(&self, other: &OwnedProg) -> bool {
+        matches!(
+            (&self.0.program, &other.0.program),
+            (Program::Bt(_), Program::Bt(_)) | (Program::Nfa(_), Program::Nfa(_))
+        )
+    }
+
+    /// Was it compiled with `RE_NOBREAK`?
+    fn nobreak(&self) -> bool {
+        self.0.re_flags & RE_NOBREAK != 0
+    }
+
+    /// May the NFA engine give the pattern up for the backtracking one?
+    fn automatic(&self) -> bool {
+        self.0.engine == AUTOMATIC_ENGINE
+    }
+
+    /// Run the program over the match `rex` is set up for, from column
+    /// `col`: the engine the program came from runs it.
+    #[inline(always)]
+    fn run(&self, rex: Rex, col: ColNr) -> c_int {
+        match &self.0.program {
+            Program::Bt(bt) => bt_regexec(rex, bt, col),
+            Program::Nfa(nfa) => nfa_regexec(rex, nfa, col),
+        }
+    }
+
+    /// [`vim_regexec`] of this pattern over `line` from byte `col`: the
+    /// match (holding no program), or `None`.
+    pub(crate) fn exec(&mut self, line: &CStr, col: usize, ignore_case: bool) -> Option<RegMatch> {
+        let mut matches = RegMatch::new(None, ignore_case);
+        regexec_string(self, &mut matches, line, col, false).then_some(matches)
+    }
+
+    /// [`vim_regexec_nl`] of this pattern over `line` from byte `col`: as
+    /// [`OwnedProg::exec`], with a newline in `line` matched as one.
+    pub(crate) fn exec_nl(
+        &mut self,
+        line: &CStr,
+        col: usize,
+        ignore_case: bool,
+    ) -> Option<RegMatch> {
+        let mut matches = RegMatch::new(None, ignore_case);
+        regexec_string(self, &mut matches, line, col, true).then_some(matches)
+    }
+
+    /// [`vim_regexec_multi`] of this pattern over `buffer` from line `lnum`,
+    /// column `col`, with `rmp`'s other settings (its own program, if it has
+    /// one, is not the one run). Answers the number of lines the match spans
+    /// plus one, or 0.
+    pub(crate) fn exec_multi(
+        &mut self,
+        rmp: &mut RegMMatch,
+        win: Option<Win>,
+        buffer: Buf,
+        lnum: LineNr,
+        col: ColNr,
+    ) -> c_int {
+        let run = MultiRun {
+            buffer: &buffer,
+            win,
+            lnum,
+            col,
+            deadline: None,
+            ext_in: None,
+        };
+        run.exec(self, rmp, None, &mut None)
+    }
 }
 
 /// Compile `expr` into a program. A leading `\%#=0`, `\%#=1` or `\%#=2`
@@ -97,9 +211,8 @@ unsafe fn nobreak(prog: *mut RegProg) -> bool {
 /// the NFA engine is tried first and a failure that reported no error
 /// falls back to the backtracking one.
 ///
-/// Answers null when the pattern does not parse, having reported why;
-/// otherwise the caller owns the program and frees it with [`vim_regfree`].
-pub fn vim_regcomp(expr_arg: &CStr, re_flags: c_int) -> *mut RegProg {
+/// Answers `None` when the pattern does not parse, having reported why.
+pub fn vim_regcomp(expr_arg: &CStr, re_flags: c_int) -> Option<OwnedProg> {
     vim_regcomp_ext(expr_arg, re_flags, 0)
 }
 
@@ -107,7 +220,11 @@ pub fn vim_regcomp(expr_arg: &CStr, re_flags: c_int) -> *mut RegProg {
 /// specials it may use -- `REX_SET` for a region's start pattern, which
 /// defines `\z(` groups, `REX_USE` for its skip and end patterns, which
 /// match them with `\z1`..`\z9`.
-pub(crate) fn vim_regcomp_ext(expr_arg: &CStr, re_flags: c_int, extmatch: c_int) -> *mut RegProg {
+pub(crate) fn vim_regcomp_ext(
+    expr_arg: &CStr,
+    re_flags: c_int,
+    extmatch: c_int,
+) -> Option<OwnedProg> {
     let mut expr = expr_arg;
     let mut engine = p_re() as c_int;
     if expr.to_bytes().starts_with(b"\\%#=") {
@@ -133,19 +250,22 @@ pub(crate) fn vim_regcomp_ext(expr_arg: &CStr, re_flags: c_int, extmatch: c_int)
     let buf = Buf::current();
 
     let called_emsg_before = called_emsg.get();
-    let mut prog = if engine != BACKTRACKING_ENGINE as c_int {
+    let mut program = if engine != BACKTRACKING_ENGINE as c_int {
         let auto = if engine == AUTOMATIC_ENGINE as c_int {
             RE_AUTO
         } else {
             0
         };
-        nfa_regcomp(&mut RegCompiler::new(expr, re_flags + auto, buf, extmatch))
+        nfa_regcomp(&mut RegCompiler::new(expr, re_flags + auto, buf, extmatch)).map(|mut nfa| {
+            nfa.automatic = engine == AUTOMATIC_ENGINE as c_int;
+            Program::Nfa(nfa)
+        })
     } else {
-        bt_regcomp(&mut RegCompiler::new(expr, re_flags, buf, extmatch))
+        bt_regcomp(&mut RegCompiler::new(expr, re_flags, buf, extmatch)).map(Program::Bt)
     };
     // Only retry when the NFA engine declined quietly: an error means the
     // pattern is bad, not merely too much for that engine.
-    if prog.is_null()
+    if program.is_none()
         && engine == AUTOMATIC_ENGINE as c_int
         && called_emsg.get() == called_emsg_before
     {
@@ -158,45 +278,25 @@ pub(crate) fn vim_regcomp_ext(expr_arg: &CStr, re_flags: c_int, extmatch: c_int)
             msg_str(expr);
             verbose_leave();
         }
-        prog = bt_regcomp(&mut RegCompiler::new(expr, re_flags, buf, extmatch));
+        program = bt_regcomp(&mut RegCompiler::new(expr, re_flags, buf, extmatch)).map(Program::Bt);
     }
-    if !prog.is_null() {
-        // SAFETY: a program one of the engines just built.
-        unsafe { (*prog).re_engine = engine as u32 };
-        unsafe { (*prog).re_flags = re_flags as u32 };
-    }
-    prog
-}
-
-/// Release a program [`vim_regcomp`] answered. Null is a no-op.
-///
-/// # Safety
-/// `prog` must be null, or a program from [`vim_regcomp`] that has not been
-/// freed and that nothing still points at — a match may have *replaced* the
-/// program in its [`RegMatch`], so free what the match left behind rather
-/// than what was put in.
-pub unsafe fn vim_regfree(prog: *mut RegProg) {
-    // SAFETY: `prog` is null or a program one of the engines produced.
-    if !prog.is_null() {
-        unsafe {
-            (*(*prog).engine)
-                .regfree
-                .expect("non-null function pointer")(prog)
-        };
-    }
+    let engine = c_uint::try_from(engine).unwrap_or(AUTOMATIC_ENGINE);
+    program.map(|program| {
+        OwnedProg(Box::new(Compiled {
+            engine,
+            re_flags,
+            program,
+        }))
+    })
 }
 
 /// Recompile the NFA program `prog` for the backtracking engine, which is
-/// what a `NFA_TOO_EXPENSIVE` result asks for. The pattern text is copied
-/// out first because compiling frees the program that holds it.
-///
-/// # Safety
-///
-/// `prog` must point at a live `RegProg`, unaliased for the call.
-unsafe fn recompile_backtracking(prog: *mut RegProg, extmatch: bool) -> *mut RegProg {
-    // SAFETY: `prog` is a live NFA program, so it carries a pattern.
-    let re_flags = unsafe { (*prog).re_flags } as c_int;
-    let pat = XString::from_cstr(unsafe { &(*prog.cast::<NfaRegProg>()).pattern });
+/// what a `NFA_TOO_EXPENSIVE` result asks for.
+fn recompile_backtracking(prog: &OwnedProg, extmatch: bool) -> Option<OwnedProg> {
+    let Program::Nfa(nfa) = &prog.0.program else {
+        return None;
+    };
+    let pat: CString = nfa.pattern.clone();
     let save_p_re = p_re();
     P_RE.set(BACKTRACKING_ENGINE as c_int as OptInt);
     if p_verbose() > 0 as OptInt {
@@ -204,18 +304,19 @@ unsafe fn recompile_backtracking(prog: *mut RegProg, extmatch: bool) -> *mut Reg
         msg_str(gettext(
             c"Switching to backtracking RE engine for pattern: ",
         ));
-        msg_str(pat.as_cstr());
+        msg_str(&pat);
         verbose_leave();
     }
     // A buffer match may be a syntax match, whose `\z(` groups have to
     // survive the recompile.
-    let new = vim_regcomp_ext(pat.as_cstr(), re_flags, if extmatch { REX_ALL } else { 0 });
+    let new = vim_regcomp_ext(&pat, prog.0.re_flags, if extmatch { REX_ALL } else { 0 });
     P_RE.set(save_p_re);
     new
 }
 
-/// Run `matches`'s program over the whole of `line`, starting at byte
-/// `col`. `nl` allows a `$` to match at the end of the string.
+/// Run `prog` over the whole of `line`, starting at byte `col`, leaving the
+/// groups in `matches` (whose own program is not the one run). `nl` allows
+/// a `$` to match at the end of the string.
 ///
 /// The line is a `&CStr` and not a `&[u8]` on purpose. Both engines treat
 /// the terminator as a *position* rather than a bound — `$` matches there,
@@ -223,20 +324,19 @@ unsafe fn recompile_backtracking(prog: *mut RegProg, extmatch: bool) -> *mut Reg
 /// deciding it has run out — so a length alone would not tell them where
 /// the line ends. Taking the terminated string says that, and hands the
 /// callers a type they can hold.
-fn vim_regexec_string(matches: &mut RegMatch, line: &CStr, col: usize, nl: bool) -> bool {
+fn regexec_string(
+    prog: &mut OwnedProg,
+    matches: &mut RegMatch,
+    line: &CStr,
+    col: usize,
+    nl: bool,
+) -> bool {
     debug_assert!(col <= line.count_bytes(), "col past the end of the line");
     let col = ColNr::try_from(col).unwrap_or(ColNr::MAX);
     let text = line.to_bytes_with_nul();
     // A string match has no buffer of its own, but `\k` and friends still
     // need an 'iskeyword' to read.
     let buf = Buf::current();
-    // SAFETY: the caller's match structure holds a live program, or none.
-    // A program cannot match against itself: `\=` calling back into the
-    // same pattern would reuse the program's own state.
-    if unsafe { (*matches.regprog).re_in_use } {
-        emsg(gettext(E_RECURSIVE));
-        return false;
-    }
     let run = StringRun {
         buffer: &buf,
         text,
@@ -244,11 +344,9 @@ fn vim_regexec_string(matches: &mut RegMatch, line: &CStr, col: usize, nl: bool)
         nl,
     };
     let result = in_match_scope(None, |firstlnum| {
-        let result = run.once(matches, firstlnum);
-        if result == NFA_TOO_EXPENSIVE
-            && unsafe { (*matches.regprog).re_engine } == AUTOMATIC_ENGINE
-        {
-            run.again_backtracking(matches, firstlnum)
+        let result = run.once(prog, matches, firstlnum);
+        if result == NFA_TOO_EXPENSIVE && prog.automatic() {
+            run.again_backtracking(prog, matches, firstlnum)
         } else {
             result
         }
@@ -267,26 +365,21 @@ struct StringRun<'a> {
 }
 
 impl StringRun<'_> {
-    /// Run `matches`'s program once, leaving its groups (as offsets into
-    /// the string) on a hit and clearing them on a miss. A match structure
-    /// holds a live program from `vim_regcomp`, which every holder keeps so.
+    /// Run `prog` once, leaving its groups in `matches` (as offsets into the
+    /// string) on a hit and clearing them on a miss.
     #[inline(always)]
-    fn once(&self, matches: &mut RegMatch, firstlnum: LineNr) -> LineNr {
-        let prog = matches.regprog;
-        // SAFETY: a live program, marked in use for the run.
-        unsafe { (*prog).re_in_use = true };
+    fn once(&self, prog: &OwnedProg, matches: &mut RegMatch, firstlnum: LineNr) -> LineNr {
         let setup = MatchSetup {
             buf: self.buffer,
             win: None,
             ic: matches.rm_ic,
-            nobreak: unsafe { nobreak(prog) },
+            nobreak: prog.nobreak(),
             deadline: None,
             ext_in: None,
         };
         let slots = GroupSlots::new();
         let ctx = RegExec::for_string(setup, self.text, self.nl, firstlnum, &slots);
-        let result = unsafe { run_engine(prog, ctx.rex(), self.col) };
-        unsafe { (*prog).re_in_use = false };
+        let result = prog.run(ctx.rex(), self.col);
         if let Some(col) = ctx.matchcol() {
             matches.rm_matchcol = col;
         }
@@ -299,17 +392,21 @@ impl StringRun<'_> {
     }
 
     /// The NFA engine gave up on the pattern: recompile it for the
-    /// backtracking one, in `matches`, and run that.
+    /// backtracking one, in place, and run that. A failed recompile keeps
+    /// the old program and reports no match.
     #[cold]
     #[inline(never)]
-    fn again_backtracking(&self, matches: &mut RegMatch, firstlnum: LineNr) -> LineNr {
-        let prev = matches.regprog;
-        matches.regprog = unsafe { recompile_backtracking(prev, false) };
-        unsafe { vim_regfree(prev) };
-        if matches.regprog.is_null() {
+    fn again_backtracking(
+        &self,
+        prog: &mut OwnedProg,
+        matches: &mut RegMatch,
+        firstlnum: LineNr,
+    ) -> LineNr {
+        let Some(new) = recompile_backtracking(prog, false) else {
             return NFA_TOO_EXPENSIVE;
-        }
-        self.once(matches, firstlnum)
+        };
+        *prog = new;
+        self.once(prog, matches, firstlnum)
     }
 }
 
@@ -325,63 +422,72 @@ fn record_groups(matches: &mut RegMatch, starts: &[LPos; RE_GROUPS], ends: &[LPo
     }
 }
 
-/// [`vim_regexec`] against a program the caller owns, so that the fall back
-/// to the backtracking engine can replace it.
-pub fn vim_regexec_prog(
-    prog: &mut *mut RegProg,
-    ignore_case: bool,
-    line: &CStr,
-    col: usize,
-) -> bool {
-    let mut regex_match = RegMatch::new(*prog, ignore_case);
-    let matched = vim_regexec_string(&mut regex_match, line, col, false);
-    *prog = regex_match.regprog;
-    matched
-}
-
 /// Run `matches`'s program over `line`, starting at byte `col`.
 ///
 /// On a hit `matches`'s groups are byte offsets into `line`; on a miss they
-/// are all unset. This re-enters the editor — a `\=` expression can start a
-/// match of its own — so nothing may be held across it.
+/// are all unset, and so they are when `matches` holds no program. This
+/// re-enters the editor — a `\=` expression can start a match of its own —
+/// so nothing may be held across it.
 pub fn vim_regexec(matches: &mut RegMatch, line: &CStr, col: usize) -> bool {
-    vim_regexec_string(matches, line, col, false)
+    regexec_holder(matches, line, col, false)
 }
 
 /// [`vim_regexec`] with `$` allowed to match at the end of the string.
 pub fn vim_regexec_nl(matches: &mut RegMatch, line: &CStr, col: usize) -> bool {
-    vim_regexec_string(matches, line, col, true)
+    regexec_holder(matches, line, col, true)
+}
+
+/// [`regexec_string`] of the program `matches` holds, which is taken out for
+/// the match and put back -- recompiled, it may be.
+fn regexec_holder(matches: &mut RegMatch, line: &CStr, col: usize, nl: bool) -> bool {
+    let Some(mut prog) = matches.regprog.take() else {
+        matches.clear_groups();
+        return false;
+    };
+    let matched = regexec_string(&mut prog, matches, line, col, nl);
+    matches.regprog = Some(prog);
+    matched
+}
+
+/// [`vim_regexec`] against a program the caller keeps in a slot of its own,
+/// which the fall back to the backtracking engine replaces in place. No
+/// program, no match.
+pub fn vim_regexec_prog(
+    prog: &mut Option<OwnedProg>,
+    ignore_case: bool,
+    line: &CStr,
+    col: usize,
+) -> bool {
+    let Some(prog) = prog else {
+        return false;
+    };
+    let mut matches = RegMatch::new(None, ignore_case);
+    regexec_string(prog, &mut matches, line, col, false)
 }
 
 /// Run `rmp`'s program over `buffer` starting at line `lnum`, column `col`.
-/// Returns the number of lines the match spans plus one, or 0 for no
-/// match; `tm`/`timed_out` bound how long the NFA engine may spend.
-///
-/// # Safety
-///
-/// `rmp` must point at a live `RegMMatch`, unaliased for the call. `tm` must
-/// point at a live `ProfTime`, unaliased for the call. `timed_out` must point
-/// at a writable `int` the caller owns.
+/// Returns the number of lines the match spans plus one, or 0 for no match
+/// (and for no program). `tm` bounds how long the NFA engine may spend; a
+/// match that runs out of it sets `timed_out`.
 // Kept out of line: inlined into `searchit` and `next_search_hl` (as the
 // optimizer chose on its own once unrelated code moved), the body below
 // leaves its closure as a call of its own and costs those loops ~0.8 % of
 // the memline benchmark's instructions and ~1.3 % of its time.
 #[inline(never)]
-pub unsafe fn vim_regexec_multi(
-    rmp: *mut RegMMatch,
+pub fn vim_regexec_multi(
+    rmp: &mut RegMMatch,
     win: Option<Win>,
     buffer: Buf,
     lnum: LineNr,
     col: ColNr,
-    tm: *mut ProfTime,
-    timed_out: *mut c_int,
+    tm: Option<&ProfTime>,
+    timed_out: Option<&mut bool>,
 ) -> c_int {
     let io = ExtMatchIo {
         input: None,
         output: None,
     };
-    // SAFETY: the caller's promises.
-    unsafe { regexec_multi_io(rmp, win, buffer, lnum, col, tm, timed_out, io) }
+    regexec_multi_io(rmp, win, buffer, lnum, col, tm, timed_out, io)
 }
 
 #[allow(
@@ -389,46 +495,31 @@ pub unsafe fn vim_regexec_multi(
     reason = "vim_regexec_multi's, and the `\\z` traffic"
 )]
 /// [`vim_regexec_multi`] with a syntax match's `\z` traffic.
-///
-/// # Safety
-///
-/// As for [`vim_regexec_multi`].
-unsafe fn regexec_multi_io(
-    rmp: *mut RegMMatch,
+fn regexec_multi_io(
+    rmp: &mut RegMMatch,
     win: Option<Win>,
     buffer: Buf,
     lnum: LineNr,
     col: ColNr,
-    tm: *mut ProfTime,
-    timed_out: *mut c_int,
+    tm: Option<&ProfTime>,
+    timed_out: Option<&mut bool>,
     io: ExtMatchIo<'_>,
 ) -> c_int {
-    // SAFETY: the caller's match structure, borrowed for the call; `tm` and
-    // `timed_out` are null or the caller's.
-    let rmm = unsafe { &mut *rmp };
-    if unsafe { (*rmm.regprog).re_in_use } {
-        emsg(gettext(E_RECURSIVE));
+    let Some(mut prog) = rmp.regprog.take() else {
         return 0;
-    }
+    };
     let run = MultiRun {
         buffer: &buffer,
         win,
         lnum,
         col,
-        deadline: unsafe { tm.as_ref() }.copied(),
-        timed_out,
+        deadline: tm.copied(),
         ext_in: io.input,
     };
     let mut ext_out = io.output;
-    let result = in_match_scope(Some(lnum), |_| {
-        let result = run.once(rmm, &mut ext_out);
-        if result == NFA_TOO_EXPENSIVE && unsafe { (*rmm.regprog).re_engine } == AUTOMATIC_ENGINE {
-            run.again_backtracking(rmm, &mut ext_out)
-        } else {
-            result
-        }
-    });
-    result.max(0)
+    let result = run.exec(&mut prog, rmp, timed_out, &mut ext_out);
+    rmp.regprog = Some(prog);
+    result
 }
 
 /// What one buffer match runs with, whichever program runs it.
@@ -438,24 +529,44 @@ struct MultiRun<'a> {
     lnum: LineNr,
     col: ColNr,
     deadline: Option<ProfTime>,
-    timed_out: *mut c_int,
     ext_in: Option<&'a ExtMatch>,
 }
 
 impl MultiRun<'_> {
-    /// Run `rmm`'s program once. A match structure holds a live program,
-    /// and `timed_out` is null or the caller's flag, as `vim_regexec_multi`
-    /// was promised.
+    /// Run `prog` with `rmm`'s settings, into `rmm`'s slots, falling back to
+    /// the backtracking engine when the NFA one gives up.
+    fn exec(
+        &self,
+        prog: &mut OwnedProg,
+        rmm: &mut RegMMatch,
+        mut timed_out: Option<&mut bool>,
+        ext_out: &mut Option<&mut Option<ExtMatchRef>>,
+    ) -> c_int {
+        let result = in_match_scope(Some(self.lnum), |_| {
+            let result = self.once(prog, rmm, &mut timed_out, ext_out);
+            if result == NFA_TOO_EXPENSIVE && prog.automatic() {
+                self.again_backtracking(prog, rmm, &mut timed_out, ext_out)
+            } else {
+                result
+            }
+        });
+        result.max(0)
+    }
+
+    /// Run `prog` once.
     #[inline(always)]
-    fn once(&self, rmm: &mut RegMMatch, ext_out: &mut Option<&mut Option<ExtMatchRef>>) -> LineNr {
-        let prog = rmm.regprog;
-        // SAFETY: a live program, marked in use for the run.
-        unsafe { (*prog).re_in_use = true };
+    fn once(
+        &self,
+        prog: &OwnedProg,
+        rmm: &mut RegMMatch,
+        timed_out: &mut Option<&mut bool>,
+        ext_out: &mut Option<&mut Option<ExtMatchRef>>,
+    ) -> LineNr {
         let setup = MatchSetup {
             buf: self.buffer,
             win: self.win,
             ic: rmm.rmm_ic != 0,
-            nobreak: unsafe { nobreak(prog) },
+            nobreak: prog.nobreak(),
             deadline: self.deadline,
             ext_in: self.ext_in,
         };
@@ -466,16 +577,14 @@ impl MultiRun<'_> {
             Cell::from_mut(&mut rmm.endpos),
         );
         let ctx = RegExec::for_buffer(setup, self.lnum, maxcol, starts, ends);
-        let result = unsafe { run_engine(prog, ctx.rex(), self.col) };
-        unsafe { (*prog).re_in_use = false };
+        let result = prog.run(ctx.rex(), self.col);
         let (matchcol, did_time_out, captures) =
             (ctx.matchcol(), ctx.timed_out(), ctx.take_ext_out());
         if let Some(col) = matchcol {
             rmm.rmm_matchcol = col;
         }
-        if did_time_out && !self.timed_out.is_null() {
-            // SAFETY: the caller's flag.
-            unsafe { *self.timed_out = 1 };
+        if did_time_out && let Some(flag) = timed_out.as_deref_mut() {
+            *flag = true;
         }
         if let (Some(out), Some(captures)) = (ext_out.as_deref_mut(), captures) {
             *out = captures;
@@ -484,24 +593,22 @@ impl MultiRun<'_> {
     }
 
     /// The NFA engine gave up on the pattern: recompile it for the
-    /// backtracking one and run that. Unlike the string case, a failed
-    /// recompile keeps the old program rather than leaving the caller
-    /// without one.
+    /// backtracking one, in place, and run that. A failed recompile keeps
+    /// the old program rather than leaving the caller without one.
     #[cold]
     #[inline(never)]
     fn again_backtracking(
         &self,
+        prog: &mut OwnedProg,
         rmm: &mut RegMMatch,
+        timed_out: &mut Option<&mut bool>,
         ext_out: &mut Option<&mut Option<ExtMatchRef>>,
     ) -> LineNr {
-        let prev = rmm.regprog;
-        let new = unsafe { recompile_backtracking(prev, true) };
-        if new.is_null() {
+        let Some(new) = recompile_backtracking(prog, true) else {
             return NFA_TOO_EXPENSIVE;
-        }
-        rmm.regprog = new;
-        unsafe { vim_regfree(prev) };
-        self.once(rmm, ext_out)
+        };
+        *prog = new;
+        self.once(prog, rmm, timed_out, ext_out)
     }
 }
 
@@ -512,235 +619,41 @@ impl MultiRun<'_> {
 /// [`vim_regexec_multi`] for a syntax pattern: `io.input` is what `\z1`..
 /// `\z9` match, and a successful match leaves its own `\z(` captures in
 /// `io.output` (or `None` when it has none).
-///
-/// # Safety
-///
-/// As for [`vim_regexec_multi`].
-pub(crate) unsafe fn vim_regexec_syntax(
-    rmp: *mut RegMMatch,
+pub(crate) fn vim_regexec_syntax(
+    rmp: &mut RegMMatch,
     win: Option<Win>,
     buffer: Buf,
     lnum: LineNr,
     col: ColNr,
-    tm: *mut ProfTime,
-    timed_out: *mut c_int,
+    tm: Option<&ProfTime>,
+    timed_out: Option<&mut bool>,
     io: ExtMatchIo<'_>,
 ) -> LineNr {
-    // SAFETY: the caller's promises.
-    unsafe { regexec_multi_io(rmp, win, buffer, lnum, col, tm, timed_out, io) }
+    regexec_multi_io(rmp, win, buffer, lnum, col, tm, timed_out, io)
 }
 
-/// Did `prog`'s pattern end with a `\n` that a search should treat as
-/// "match at end of line"? False for a null program. Read by the syntax
-/// code right after a compile.
-pub(crate) fn vim_regcomp_had_eol(prog: *const RegProg) -> bool {
-    // SAFETY: a program `vim_regcomp` answered, or null.
-    !prog.is_null() && unsafe { (*prog).regflags } & super::RF_HAD_EOL != 0
-}
-
-/// Release a backtracking program: the box `bt_regcomp` handed over.
-///
-/// # Safety
-///
-/// `prog` must be a program `bt_regcomp` answered, not yet freed.
-pub(crate) unsafe fn bt_regfree(prog: *mut RegProg) {
-    // SAFETY: the caller's promise -- the box `bt_regcomp` leaked.
-    drop(unsafe { Box::from_raw(prog.cast::<BtRegProg>()) });
-}
-
-/// Does `prog` belong to the backtracking engine, and has its magic number
-/// not survived? Only that engine's programs carry one. Reports so and
-/// answers 1 when it has not.
-pub(crate) fn prog_magic_wrong(prog: *mut RegProg) -> c_int {
-    // SAFETY: a live program `vim_regcomp` answered, whose engine field says
-    // which shape it is.
-    let bt = unsafe { (*prog).engine.cast_const() } == &raw const super::bt_regengine;
-    if bt && unsafe { &*prog.cast::<BtRegProg>() }.program[0] != super::REGMAGIC as u8 {
-        emsg(gettext(crate::message::e_re_corr));
-        return 1;
-    }
-    0
-}
-
-/// Can `prog`'s pattern match across a line break?
-///
-/// # Safety
-///
-/// `prog` must point at a live `RegProg`.
-pub unsafe fn re_multiline(prog: *const RegProg) -> bool {
-    (unsafe { (*prog).regflags } & super::RF_HASNL as u32) != 0
-}
-
-/// Free the program a field owns and empty the field: upstream's
-/// `vim_regfree(p); p = NULL` for a slot that holds its own program.
-pub(crate) fn free_prog_in(slot: &mut *mut RegProg) {
-    // SAFETY: the slot's own program, or null.
-    unsafe { vim_regfree(*slot) };
-    *slot = ptr::null_mut();
-}
-
-/// A compiled pattern its holder owns: freed when dropped, and replaced in
-/// place when the engine falls back to the other one.
-pub(crate) struct OwnedProg(*mut RegProg);
-
-impl OwnedProg {
-    /// [`vim_regcomp`], owned. `None` when the pattern does not compile.
-    pub(crate) fn compile(expr: &CStr, re_flags: c_int) -> Option<OwnedProg> {
-        let prog = vim_regcomp(expr, re_flags);
-        (!prog.is_null()).then_some(OwnedProg(prog))
-    }
-
-    /// [`vim_regexec`] of this pattern over `line` from byte `col`: the
-    /// match, or `None`.
-    pub(crate) fn exec(&mut self, line: &CStr, col: usize, ignore_case: bool) -> Option<RegMatch> {
-        if self.0.is_null() {
-            return None;
-        }
-        let mut matches = RegMatch::new(self.0, ignore_case);
-        let matched = vim_regexec_string(&mut matches, line, col, false);
-        self.0 = matches.regprog;
-        matched.then_some(matches)
-    }
-
-    /// [`vim_regexec_nl`] of this pattern over `line` from byte `col`: as
-    /// [`OwnedProg::exec`], with a newline in `line` matched as one.
-    pub(crate) fn exec_nl(
-        &mut self,
-        line: &CStr,
-        col: usize,
-        ignore_case: bool,
-    ) -> Option<RegMatch> {
-        if self.0.is_null() {
-            return None;
-        }
-        let mut matches = RegMatch::new(self.0, ignore_case);
-        let matched = vim_regexec_nl(&mut matches, line, col);
-        self.0 = matches.regprog;
-        matched.then_some(matches)
-    }
-
-    /// [`vim_regexec_multi`] of this pattern over `buffer` from line `lnum`,
-    /// column `col`, with `rmp`'s other settings. Answers the number of
-    /// lines the match spans plus one, or 0.
-    pub(crate) fn exec_multi(
-        &mut self,
-        rmp: &mut RegMMatch,
-        win: Option<Win>,
-        buffer: Buf,
-        lnum: LineNr,
-        col: ColNr,
-    ) -> c_int {
-        if self.0.is_null() {
-            return 0;
-        }
-        rmp.regprog = self.0;
-        // SAFETY: a match record of the caller's own holding this live
-        // program, and no time limit.
-        let lines = unsafe {
-            vim_regexec_multi(
-                rmp,
-                win,
-                buffer,
-                lnum,
-                col,
-                ptr::null_mut(),
-                ptr::null_mut(),
-            )
-        };
-        self.0 = rmp.regprog;
-        lines
-    }
-}
-
-impl Drop for OwnedProg {
-    fn drop(&mut self) {
-        // SAFETY: this holder's own program, or null.
-        unsafe { vim_regfree(self.0) };
-    }
-}
-
-/// A [`RegMatch`] that owns its program: compiled on the way in, freed when
-/// it goes. For a caller that hands the match structure itself on, as the
-/// completion generators take it.
-pub(crate) struct OwnedMatch(RegMatch);
-
-impl OwnedMatch {
+impl RegMatch {
     /// [`vim_regcomp`] into a match structure. `None` when the pattern does
     /// not compile.
-    pub(crate) fn compile(expr: &CStr, re_flags: c_int, ignore_case: bool) -> Option<OwnedMatch> {
-        let prog = vim_regcomp(expr, re_flags);
-        (!prog.is_null()).then(|| OwnedMatch(RegMatch::new(prog, ignore_case)))
-    }
-
-    /// A match structure with no program, for a caller that matches some
-    /// other way but has to hand one on.
-    pub(crate) fn none() -> OwnedMatch {
-        OwnedMatch(RegMatch::new(ptr::null_mut(), false))
+    pub(crate) fn compile(expr: &CStr, re_flags: c_int, ignore_case: bool) -> Option<RegMatch> {
+        vim_regcomp(expr, re_flags).map(|prog| RegMatch::new(Some(prog), ignore_case))
     }
 }
 
-impl core::ops::Deref for OwnedMatch {
-    type Target = RegMatch;
-
-    fn deref(&self) -> &RegMatch {
-        &self.0
-    }
-}
-
-impl core::ops::DerefMut for OwnedMatch {
-    fn deref_mut(&mut self) -> &mut RegMatch {
-        &mut self.0
-    }
-}
-
-impl Drop for OwnedMatch {
-    fn drop(&mut self) {
-        // SAFETY: this holder's program -- the one it compiled, or the one an
-        // engine switch put in its place -- or null.
-        unsafe { vim_regfree(self.0.regprog) };
-    }
-}
-
-/// A [`RegMMatch`] that owns its program: the buffer-match counterpart of
-/// [`OwnedMatch`], for a command that compiles once and runs the program
-/// over line after line (`:substitute`, `:global`). Freed when dropped --
-/// whatever program the last engine switch left in it.
-///
-/// Reads go through [`Deref`](core::ops::Deref); there is no `DerefMut`,
-/// because a caller that replaced `regprog` would leak this one's program
-/// or free another's.
-pub(crate) struct OwnedMMatch(RegMMatch);
-
-impl OwnedMMatch {
-    /// Take over `prog`, matching with `ignore_case` (an `rmm_ic` value).
-    ///
-    /// # Safety
-    /// `prog` must be a live program from [`vim_regcomp`] that nothing else
-    /// will free.
-    pub(crate) unsafe fn adopt(prog: *mut RegProg, ignore_case: c_int) -> OwnedMMatch {
-        OwnedMMatch(RegMMatch {
-            regprog: prog,
-            rmm_ic: ignore_case,
-            rmm_maxcol: 0,
-            ..RegMMatch::default()
-        })
-    }
-
+impl RegMMatch {
     /// Override the case rule the pattern was compiled with: `:s///i`.
     pub(crate) fn set_ignore_case(&mut self, ignore_case: bool) {
-        self.0.rmm_ic = c_int::from(ignore_case);
+        self.rmm_ic = c_int::from(ignore_case);
     }
 
-    /// Whether there is still a program -- a failed recompile for the
-    /// backtracking engine can leave none.
+    /// Whether there is a program.
     pub(crate) fn has_program(&self) -> bool {
-        !self.0.regprog.is_null()
+        self.regprog.is_some()
     }
 
     /// Can the pattern match a line break?
     pub(crate) fn is_multiline(&self) -> bool {
-        // SAFETY: this holder's live program.
-        self.has_program() && unsafe { re_multiline(self.0.regprog) }
+        self.regprog.as_ref().is_some_and(OwnedProg::is_multiline)
     }
 
     /// [`vim_regexec_multi`] over `buffer` from line `lnum`, column `col`,
@@ -753,42 +666,6 @@ impl OwnedMMatch {
         lnum: LineNr,
         col: ColNr,
     ) -> LineNr {
-        if !self.has_program() {
-            return 0;
-        }
-        // SAFETY: the match record is this holder's own, with its live
-        // program; no time limit. An engine switch replaces the program in
-        // the record, which is what `Drop` then frees.
-        unsafe {
-            vim_regexec_multi(
-                &raw mut self.0,
-                win,
-                buffer,
-                lnum,
-                col,
-                ptr::null_mut(),
-                ptr::null_mut(),
-            )
-        }
-    }
-
-    /// The match record, for the substitution's two passes.
-    pub(super) fn record(&mut self) -> &mut RegMMatch {
-        &mut self.0
-    }
-}
-
-impl core::ops::Deref for OwnedMMatch {
-    type Target = RegMMatch;
-
-    fn deref(&self) -> &RegMMatch {
-        &self.0
-    }
-}
-
-impl Drop for OwnedMMatch {
-    fn drop(&mut self) {
-        // SAFETY: this holder's program, or null.
-        unsafe { vim_regfree(self.0.regprog) };
+        vim_regexec_multi(self, win, buffer, lnum, col, None, None)
     }
 }

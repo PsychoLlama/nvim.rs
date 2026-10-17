@@ -29,7 +29,7 @@ use crate::diff::diff_mode_buf;
 use crate::fuzzy::fuzzy_match_str;
 use crate::option::vars::{p_fic, p_wic};
 use crate::os::env::home_replace_in;
-use crate::regexp::{OwnedMatch, RE_MAGIC, vim_regexec};
+use crate::regexp::{RE_MAGIC, vim_regexec};
 use crate::types::{Failed, RegMatch};
 use crate::winlayer::{self, Buf, Win, buffers};
 
@@ -63,12 +63,11 @@ pub(crate) fn buf_name_matches(pat: &CStr, options: WildOpts) -> Result<Vec<XStr
     let fuzzy = cmdline_fuzzy_complete(pat.to_bytes());
     // A copy of "pat" with a leading "^" taken off (when matching with a
     // regular expression).
-    let mut regmatch = OwnedMatch::none();
+    let mut regmatch = RegMatch::default();
     if !fuzzy {
         let bytes = pat.to_bytes_with_nul();
         let patc = if bytes[0] == b'^' { &bytes[1..] } else { bytes };
-        regmatch = OwnedMatch::compile(cstr::in_bytes(patc), RE_MAGIC, false)
-            .unwrap_or_else(OwnedMatch::none);
+        regmatch = RegMatch::compile(cstr::in_bytes(patc), RE_MAGIC, false).unwrap_or_default();
     }
 
     let mut found: Vec<Found> = Vec::new();
@@ -96,7 +95,7 @@ pub(crate) fn buf_name_matches(pat: &CStr, options: WildOpts) -> Result<Vec<XStr
                     score != FUZZY_SCORE_NONE as c_int
                 })
         } else {
-            if regmatch.regprog.is_null() {
+            if regmatch.regprog.is_none() {
                 // An invalid pattern, possibly after recompiling.
                 return Err(Failed);
             }
@@ -187,7 +186,7 @@ pub(crate) fn buflist_match(
     if fname_match(rmp, buffer.name.short(), ignore_case) {
         return Some(BufNameKind::Short);
     }
-    if !rmp.regprog.is_null() && fname_match(rmp, buffer.name.full(), ignore_case) {
+    if rmp.regprog.is_some() && fname_match(rmp, buffer.name.full(), ignore_case) {
         return Some(BufNameKind::Full);
     }
     None
@@ -196,7 +195,7 @@ pub(crate) fn buflist_match(
 /// Whether `name` matches `rmp`. `$HOME` is tried both as itself and as `~`.
 fn fname_match(rmp: &mut RegMatch, name: Option<&CStr>, ignore_case: bool) -> bool {
     // An extra check for valid arguments.
-    let Some(name) = name.filter(|_| !rmp.regprog.is_null()) else {
+    let Some(name) = name.filter(|_| rmp.regprog.is_some()) else {
         return false;
     };
 
@@ -205,7 +204,7 @@ fn fname_match(rmp: &mut RegMatch, name: Option<&CStr>, ignore_case: bool) -> bo
     if vim_regexec(rmp, name, 0) {
         return true;
     }
-    if rmp.regprog.is_null() {
+    if rmp.regprog.is_none() {
         return false;
     }
     // Replace $(HOME) with '~' and try matching again.

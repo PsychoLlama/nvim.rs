@@ -21,10 +21,11 @@ use crate::options::{
 };
 use crate::optionstr::OptString;
 use crate::pos::MAXCOL;
-use crate::regexp::{OwnedMatch, RE_MAGIC};
+use crate::regexp::RE_MAGIC;
 use crate::search::ignorecase_opt;
 use crate::semsg;
 use crate::smsg;
+use crate::types::RegMatch;
 use crate::types::{CONV_NONE, CONV_NONE_INIT, FAIL, Failed, OK};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
@@ -82,7 +83,7 @@ pub(crate) struct Pattern {
     pub(crate) headlen: usize,
     /// The compiled pattern when the caller asked for a regexp. Its
     /// `rm_ic` is the search's "ignore case" whether or not there is one.
-    pub(crate) regmatch: OwnedMatch,
+    pub(crate) regmatch: RegMatch,
 }
 
 impl Pattern {
@@ -124,8 +125,7 @@ impl Pattern {
             self.headlen = limit;
         }
         let flags = if magic_isset() { RE_MAGIC } else { 0 };
-        self.regmatch =
-            OwnedMatch::compile(self.pat.as_cstr(), flags, false).unwrap_or_else(OwnedMatch::none);
+        self.regmatch = RegMatch::compile(self.pat.as_cstr(), flags, false).unwrap_or_default();
     }
 }
 
@@ -343,7 +343,7 @@ impl FindTags {
                 pat,
                 head_at: 0,
                 headlen: 0,
-                regmatch: OwnedMatch::none(),
+                regmatch: RegMatch::default(),
             },
             lbuf: vec![0; LSIZE],
             line_len: 0,
@@ -721,7 +721,7 @@ fn search(
     drop(no_emsg);
 
     let mut retval = Err(Failed);
-    if !(has_re && st.orgpat.regmatch.regprog.is_null()) {
+    if !(has_re && st.orgpat.regmatch.regprog.is_none()) {
         // `apply_tagfunc` still answers the C's three statuses; `NOTDONE`
         // means there is no 'tagfunc' and the tag files are searched below.
         let tagfunc = st.apply_tagfunc(pattern.as_cstr(), buf_ffname);

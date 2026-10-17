@@ -31,8 +31,8 @@ use super::sub::{copy_sub, copy_sub_off, has_zsubexpr, match_follows_from};
 use crate::getchar::state::got_int;
 use crate::mbyte::utf_fold;
 use crate::regexp::{
-    AUTOMATIC_ENGINE, NFA_MAX_STATES, NFA_TOO_EXPENSIVE, PimResult, RegSubs, Rex,
-    recursive_regmatch, reg_breakcheck, reg_nextline, skip_to_start,
+    NFA_MAX_STATES, NFA_TOO_EXPENSIVE, PimResult, RegSubs, Rex, recursive_regmatch, reg_breakcheck,
+    reg_nextline, skip_to_start,
 };
 use crate::types::NUL;
 
@@ -73,14 +73,19 @@ pub(crate) fn nfa_regmatch(
     let states = prog.nfa();
     let start = states.state(start);
     let toplevel = start.c == NfaOp::Mopen.code();
+    // Where every thread starts, here and at each restart: past the
+    // group-0 bracket when it is the entry.
+    let entry = if toplevel {
+        states.state(start.out)
+    } else {
+        start
+    };
     list[0].id = rex.nfa_listid() + 1;
-    let seeded = if toplevel {
+    if toplevel {
         record_match_start(rex, m, 0);
         m.norm.in_use = 1;
-        addstate(&mut list[0], states.state(start.out), m, None, 0)
-    } else {
-        addstate(&mut list[0], start, m, None, 0)
-    };
+    }
+    let seeded = addstate(&mut list[0], entry, m, None, 0);
 
     if !seeded {
         rex.set_nfa_match(NFA_TOO_EXPENSIVE);
@@ -95,7 +100,7 @@ pub(crate) fn nfa_regmatch(
             listids,
             here: &mut here,
         };
-        scan(rex, &mut list, start, toplevel, &mut run);
+        scan(rex, &mut list, entry, toplevel, &mut run);
     }
     let [a, b] = list;
     a.release(&prog.spare);
@@ -112,11 +117,12 @@ fn record_match_start(rex: Rex, m: &mut RegSubs, off: c_int) {
     }
 }
 
-/// The main loop: one pass per input character.
+/// The main loop: one pass per input character, restarting threads at
+/// `entry`.
 fn scan<'p>(
     rex: Rex,
     list: &mut [ThreadList<'_, 'p>; 2],
-    start: &'p NfaState,
+    entry: &'p NfaState,
     toplevel: bool,
     run: &mut Run<'_, 'p>,
 ) {
@@ -146,8 +152,7 @@ fn scan<'p>(
         // Every position gets a fresh generation, which is how a state
         // knows whether it is already on a list.
         rex.set_nfa_listid(rex.nfa_listid() + 1);
-        let automatic = prog.re_engine == AUTOMATIC_ENGINE;
-        if automatic && rex.nfa_listid() >= NFA_MAX_STATES {
+        if prog.automatic && rex.nfa_listid() >= NFA_MAX_STATES {
             rex.set_nfa_match(NFA_TOO_EXPENSIVE);
             return;
         }
@@ -196,7 +201,7 @@ fn scan<'p>(
             listidx += 1;
         }
 
-        if !matched && !restart(rex, start, toplevel, nextlist, run, clen) {
+        if !matched && !restart(rex, entry, toplevel, nextlist, run, clen) {
             return;
         }
 
@@ -337,9 +342,10 @@ fn deliver<'p>(
 /// nowhere left for one to start, or because the list could not grow, which
 /// is reported as `NFA_TOO_EXPENSIVE` so the caller falls back to the
 /// backtracking engine rather than believing there was no match.
+/// `entry` is where a thread starts.
 fn restart<'p>(
     rex: Rex,
-    start: &'p NfaState,
+    entry: &'p NfaState,
     toplevel: bool,
     nextlist: &mut ThreadList<'_, 'p>,
     run: &mut Run<'_, 'p>,
@@ -351,7 +357,7 @@ fn restart<'p>(
     }
     if !toplevel {
         // A lookaround's own machine has no start column to move.
-        return seed(rex, nextlist, start, run, clen);
+        return seed(rex, nextlist, entry, run, clen);
     }
 
     // The program may know the character every match starts with, in
@@ -376,7 +382,7 @@ fn restart<'p>(
     // Only reachable on the match's first line, where `rex.lnum` is
     // still what the seeding call recorded.
     record_match_start(rex, run.m, clen);
-    seed(rex, nextlist, prog.nfa().state(start.out), run, clen)
+    seed(rex, nextlist, entry, run, clen)
 }
 
 /// Put `state` on the next list, reporting `NFA_TOO_EXPENSIVE` if it would

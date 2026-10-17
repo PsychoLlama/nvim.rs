@@ -140,7 +140,9 @@ pub(crate) fn syn_cmd_match(args: &mut ExArg, syncing: c_int) {
     let mut end = name.as_ref().and_then(|name| {
         let at = read_item_options(&line, name.rest, &mut opt, &mut conceal_char, args.skip)?;
         let at = read_pattern(&line, at, &mut item, 0)?;
-        if vim_regcomp_had_eol(item.sp_prog) && !opt.flags.has(SynFlags::EXCLUDENL) {
+        if item.sp_prog.as_ref().is_some_and(OwnedProg::had_eol)
+            && !opt.flags.has(SynFlags::EXCLUDENL)
+        {
             opt.flags |= SynFlags::HAS_EOL;
         }
         read_item_options(&line, at, &mut opt, &mut conceal_char, args.skip)
@@ -304,7 +306,7 @@ fn parse_region_args(args: &mut ExArg, line: &[u8], at: Option<usize>) -> Region
         let mut pat = EMPTY_SYNPAT;
         cursor = read_pattern(line, at, &mut pat, extmatch);
         if item == ITEM_END
-            && vim_regcomp_had_eol(pat.sp_prog)
+            && pat.sp_prog.as_ref().is_some_and(OwnedProg::had_eol)
             && !out.opt.flags.has(SynFlags::EXCLUDENL)
         {
             pat.sp_flags |= SynFlags::HAS_EOL;
@@ -461,9 +463,7 @@ pub(crate) fn read_pattern(
         extmatch,
     );
     ci.sp_pattern = Some(pattern);
-    if ci.sp_prog.is_null() {
-        return None;
-    }
+    ci.sp_prog.as_ref()?;
     ci.sp_ic = cur_syn_block().b_syn_ic;
     syn_clear_time(&mut ci.sp_time);
 

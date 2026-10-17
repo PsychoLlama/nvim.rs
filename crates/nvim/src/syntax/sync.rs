@@ -329,14 +329,14 @@ impl SynState {
     /// Does line `lnum` match the `:syntax sync linecont` pattern, i.e. does the
     /// line after it continue it?
     pub(crate) fn match_linecont(&mut self, lnum: LineNr) -> bool {
-        if self.block().b_syn_linecont_prog.is_null() {
+        if self.block().b_syn_linecont_prog.is_none() {
             return false;
         }
         let mut buf_chartab = [0u64; 4];
         self.install_syntax_chartab(&mut buf_chartab);
 
         let mut regmatch = RegMMatch {
-            regprog: self.block().b_syn_linecont_prog,
+            regprog: self.block().b_syn_linecont_prog.take(),
             startpos: [LPos { lnum: 0, col: 0 }; 10],
             endpos: [LPos { lnum: 0, col: 0 }; 10],
             rmm_matchcol: 0,
@@ -350,7 +350,7 @@ impl SynState {
             output: None,
         };
         let r = self.syn_regexec(&mut regmatch, lnum, 0, time, io);
-        self.block().b_syn_linecont_prog = regmatch.regprog;
+        self.block().b_syn_linecont_prog = regmatch.regprog.take();
 
         self.restore_chartab(&buf_chartab);
         r
@@ -559,7 +559,7 @@ fn sync_linecont(args: &ExArg, next_arg: usize) -> Result<usize, LineContError> 
             vim_regcomp(unsafe { cstr::at(pat.as_ptr().cast_mut()) }, RE_MAGIC);
         syn_clear_time(&mut block.b_syn_linecont_time);
 
-        if block.b_syn_linecont_prog.is_null() {
+        if block.b_syn_linecont_prog.is_none() {
             return Err(LineContError::Reported);
         }
         block.b_syn_linecont_pat = Some(pat);

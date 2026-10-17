@@ -272,7 +272,7 @@ impl Walk<'_> {
                 && unsafe { was_banned(self.su, self.preword.as_ptr().add(preword_len)) };
             if this_word_banned || unsafe { was_banned(self.su, self.preword.as_ptr()) } {
                 // SAFETY: `slang` is the walk's own language.
-                if unsafe { (*self.slang).sl_compprog }.is_null() {
+                if unsafe { (*self.slang).sl_compprog.is_none() } {
                     return;
                 }
                 // Banned so far, but compounding may still save it.

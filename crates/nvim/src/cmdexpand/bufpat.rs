@@ -16,7 +16,7 @@ use crate::memline::Lines;
 use crate::option::vars::{p_ic, p_scs, wop_flags};
 use crate::options::kOptWopFlagExacttext;
 use crate::pos::ltoreq;
-use crate::regexp::{OwnedMatch, RE_LAST, RE_MAGIC, RE_STRING, vim_regexec_nl};
+use crate::regexp::{RE_LAST, RE_MAGIC, RE_STRING, vim_regexec_nl};
 use crate::search::state::{search_first_line, search_last_line};
 use crate::search::{
     BACKWARD, FORWARD, SEARCH_NFMSG, SEARCH_NOOF, SEARCH_OPT, SEARCH_PEEK, SEARCH_START,
@@ -24,6 +24,7 @@ use crate::search::{
 };
 use crate::strings::strcase_copy;
 use crate::tag::TAG_MANY;
+use crate::types::RegMatch;
 use crate::types::{ColNr, Direction, Failed, LineNr};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_uint};
@@ -126,7 +127,7 @@ pub(crate) fn is_regex_match(pat: &CStr, str: &CStr) -> bool {
     }
 
     let quiet = Suppress::output();
-    let compiled = OwnedMatch::compile(pat, RE_MAGIC + RE_STRING, false);
+    let compiled = RegMatch::compile(pat, RE_MAGIC + RE_STRING, false);
     drop(quiet);
 
     let Some(mut regmatch) = compiled else {

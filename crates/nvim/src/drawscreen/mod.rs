@@ -79,7 +79,6 @@ use crate::popupmenu::state::must_redraw_pum;
 use crate::popupmenu::{pum_check_clear, pum_drawn, pum_invalidate, pum_redraw};
 use crate::pos::MAXLNUM;
 use crate::profile::profile_setlimit;
-use crate::regexp::vim_regfree;
 use crate::search::last_pat_prog;
 use crate::search::state::no_hlsearch;
 use crate::spell::spell_check_window;
@@ -105,7 +104,7 @@ use crate::terminal::{terminal_check_size, terminal_suspended};
 use crate::types::ui::{kUICmdline, kUIMessages, kUIMultigrid};
 use crate::types::{
     ColNr, DecorPriority, DecorVirtText, DecorVirtText_data, Failed, FoldInfo, Handle, Hlf,
-    Integer, LineNr, MatchState, OptInt, Pos, ProfTime, RegMMatch, RegProg, ScreenChar, SpellVars,
+    Integer, LineNr, MatchState, OptInt, Pos, ProfTime, RegMMatch, ScreenChar, SpellVars,
     VarNumber, VirtText, VirtTextChunk, WindowHandle, int64_t, size_t, uint16_t,
 };
 use crate::ui::state::{Columns, Rows};
@@ -135,7 +134,6 @@ pub(crate) use self::winupdate::*;
 mod winlines;
 pub use self::winlines::*;
 use crate::optionstr::OptString;
-use crate::regexp::re_multiline;
 /// How much of a window has to be redrawn, ordered by severity. Each value
 /// implies every lower one.
 pub type RedrawType = ::core::ffi::c_int;
@@ -455,7 +453,7 @@ pub fn update_screen() -> Result<(), Failed> {
 
     // Top to bottom through the windows, redrawing the ones that need it.
     let mut did_one = false;
-    SearchHl::current().set_regprog(::core::ptr::null_mut());
+    SearchHl::current().forget_regprog();
 
     for mut wp in winlayer::windows() {
         if wp.w_redr_type == UPD_CLEAR && wp.w_floating && wp.w_grid_alloc.is_allocated() {
@@ -570,16 +568,17 @@ impl SearchHl {
         unsafe { &raw mut (*self.0).rm }
     }
 
-    /// The compiled `'hlsearch'` pattern, NULL when there is none.
-    pub(crate) fn regprog(self) -> *mut RegProg {
+    /// Can the compiled `'hlsearch'` pattern match a line break? False when
+    /// there is none.
+    pub(crate) fn is_multiline(self) -> bool {
         // SAFETY: the only constructor names a `static`.
-        unsafe { (*self.0).rm.regprog }
+        unsafe { (*self.0).rm.is_multiline() }
     }
 
-    /// Install (or, with NULL, forget) the compiled pattern.
-    pub(crate) fn set_regprog(self, prog: *mut RegProg) {
-        // SAFETY: as `regprog`.
-        unsafe { (*self.0).rm.regprog = prog };
+    /// Drop the compiled pattern, if there is one.
+    pub(crate) fn forget_regprog(self) {
+        // SAFETY: as `is_multiline`.
+        unsafe { (*self.0).rm.regprog = None };
     }
 
     /// Bound the matching by `'redrawtime'`.
@@ -605,14 +604,7 @@ pub fn start_search_hl() {
 
 /// Free the compiled `'hlsearch'` pattern.
 pub fn end_search_hl() {
-    let hl = SearchHl::current();
-    let prog = hl.regprog();
-    if prog.is_null() {
-        return;
-    }
-    // SAFETY: the pattern `start_search_hl` compiled, freed once.
-    unsafe { vim_regfree(prog) };
-    hl.set_regprog(::core::ptr::null_mut());
+    SearchHl::current().forget_regprog();
 }
 
 /// Put the terminal cursor where the cursor is in the current window.

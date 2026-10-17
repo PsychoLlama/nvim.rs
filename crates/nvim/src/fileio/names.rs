@@ -299,7 +299,7 @@ const UV_FS_COPYFILE_EXCL: c_int = 0x1;
 /// @param tail       tail of the path
 /// @param allow_dirs the pattern may match a directory
 pub(crate) fn match_file_pat(
-    prog: &mut *mut RegProg,
+    prog: &mut Option<OwnedProg>,
     fname: &CStr,
     sfname: Option<&CStr>,
     tail: &CStr,
@@ -307,10 +307,10 @@ pub(crate) fn match_file_pat(
 ) -> bool {
     let mut regmatch = RegMatch {
         rm_ic: p_fic(),
-        regprog: *prog,
+        regprog: prog.take(),
         ..Default::default()
     };
-    let result = !regmatch.regprog.is_null()
+    let result = regmatch.regprog.is_some()
         && if allow_dirs {
             // Short-circuits: the second match must not run when the full
             // name already matched, as it overwrites `regmatch`.
@@ -319,7 +319,7 @@ pub(crate) fn match_file_pat(
         } else {
             vim_regexec(&mut regmatch, tail, 0)
         };
-    *prog = regmatch.regprog;
+    *prog = regmatch.regprog.take();
     result
 }
 

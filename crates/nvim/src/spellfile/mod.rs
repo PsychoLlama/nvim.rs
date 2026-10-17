@@ -27,7 +27,7 @@ use crate::types::CmdIdx;
 use crate::types::TAB;
 use crate::types::{
     CONV_NONE, EStackType, ExArg, FAIL, Failed, FileComparison, HashTab, MAXPATHL, NUL, OK, OptInt,
-    RegProg, RepItem, SpellAddType, SpellTab, VimConv, XDGVarType, time_t,
+    RepItem, SpellAddType, SpellTab, VimConv, XDGVarType, time_t,
 };
 use crate::ui::ui_flush;
 use crate::winlayer::Buf;
@@ -45,7 +45,7 @@ mod tables;
 mod wordfile;
 mod wordtree;
 mod write;
-use crate::regexp::{vim_regcomp, vim_regexec_prog, vim_regfree};
+use crate::regexp::{OwnedProg, vim_regcomp, vim_regexec_prog};
 pub use add::spell_add_word;
 use aff::spell_read_aff;
 use dic::spell_read_dic;
@@ -199,7 +199,9 @@ pub struct AffEntry {
     pub ae_add: *mut ::core::ffi::c_char,
     pub ae_flags: *mut ::core::ffi::c_char,
     pub ae_cond: *mut ::core::ffi::c_char,
-    pub ae_prog: *mut RegProg,
+    /// `ae_cond` compiled. The entry lives in the spell arena, which frees
+    /// without dropping, so `spell_free_aff` drops this by hand.
+    pub ae_prog: Option<OwnedProg>,
     pub ae_compforbid: ::core::ffi::c_char,
     pub ae_comppermit: ::core::ffi::c_char,
 }

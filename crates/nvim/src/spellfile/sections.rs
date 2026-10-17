@@ -34,16 +34,14 @@ use crate::memory::xfree;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::spell::{ascii_spell_chartab, count_common_word};
-use crate::types::{
-    HashValue, NUL, RegProg, RepItem, SalFirst, SalItem, SpellLang, int16_t, uint8_t,
-};
+use crate::types::{HashValue, NUL, RepItem, SalFirst, SalItem, SpellLang, int16_t, uint8_t};
 
 use super::spl::{SpellReadError, Spl, SplResult, trim_nul};
 use super::{
     CF_UPPER, CF_WORD, COMPOUND_MAX_LEN, MAXREGIONS, MAXWLEN, SAL_COLLAPSE, SAL_F0LLOWUP,
     SAL_REM_ACCENTS, e_duplicate_char_in_map_entry, set_spell_finish, vim_regcomp,
 };
-use crate::regexp::{RE_MAGIC, RE_STRICT, RE_STRING};
+use crate::regexp::{OwnedProg, RE_MAGIC, RE_STRICT, RE_STRING};
 
 /// `SN_REGION`: two letters per region, at most [`MAXREGIONS`] of them.
 pub(super) fn read_region_section(
@@ -89,7 +87,7 @@ pub(super) fn read_prefcond_section(spl: &mut Spl, slang: &mut SpellLang) -> Spl
         return Err(SpellReadError::Format);
     }
     let cnt = cnt as usize;
-    let mut progs: Vec<*mut RegProg> = vec![core::ptr::null_mut(); cnt];
+    let mut progs: Vec<Option<OwnedProg>> = (0..cnt).map(|_| None).collect();
 
     for slot in &mut progs {
         let n = spl.getc().map_or(-1, c_int::from);
@@ -113,7 +111,7 @@ pub(super) fn read_prefcond_section(spl: &mut Spl, slang: &mut SpellLang) -> Spl
     }
 
     slang.sl_prefixcnt = cnt as c_int;
-    slang.sl_prefprog = Box::into_raw(progs.into_boxed_slice()).cast::<*mut RegProg>();
+    slang.sl_prefprog = progs;
     Ok(())
 }
 
@@ -448,7 +446,7 @@ pub(super) fn read_compound(spl: &mut Spl, slang: &mut SpellLang, len: c_int) ->
     };
 
     slang.sl_compprog = vim_regcomp(cstr::in_bytes(&pat), RE_MAGIC + RE_STRING + RE_STRICT);
-    if slang.sl_compprog.is_null() {
+    if slang.sl_compprog.is_none() {
         return Err(SpellReadError::Format);
     }
     Ok(())

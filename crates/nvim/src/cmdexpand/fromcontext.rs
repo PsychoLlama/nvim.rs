@@ -20,7 +20,7 @@ use crate::option::{
     magic_isset,
 };
 use crate::path::ExpandFlags;
-use crate::regexp::{OwnedMatch, RE_MAGIC, vim_regexec};
+use crate::regexp::{RE_MAGIC, vim_regexec};
 use crate::runtime::{RuntimeOpts, packadd_dir_matches, runtime_cmd_matches, runtime_dir_matches};
 use crate::search::ignorecase_of;
 use crate::strings::escaped_bytes;
@@ -133,11 +133,11 @@ pub(crate) fn expand_from_context(
     }
 
     let mut regmatch = if fuzzy {
-        OwnedMatch::none()
+        RegMatch::default()
     } else {
         let flags = if magic_isset() { RE_MAGIC } else { 0 };
         // Set ignore-case according to 'ignorecase', 'smartcase' and pat.
-        OwnedMatch::compile(pat, flags, ignorecase_of(pat)).ok_or(Failed)?
+        RegMatch::compile(pat, flags, ignorecase_of(pat)).ok_or(Failed)?
     };
     let regmatch: &mut RegMatch = &mut regmatch;
 

@@ -102,6 +102,18 @@ impl ShlWalk {
     }
 }
 
+/// After a match through `item`'s highlight copy of its program: when the
+/// copy was recompiled for the backtracking engine, give the item the new
+/// program too, so that the next redraw's copy does not try the NFA engine
+/// again (and announce the switch again).
+fn sync_recompiled(item: &mut MatchItem) {
+    if let (Some(copy), Some(own)) = (&item.mit_hl.rm.regprog, &item.mit_match.regprog)
+        && !copy.same_engine(own)
+    {
+        item.mit_match.regprog = Some(copy.clone());
+    }
+}
+
 impl Win {
     /// Resets every pattern's search state for a fresh window redraw.
     ///
@@ -116,9 +128,8 @@ impl Win {
         let mut search_hl = unsafe { Shl::new(search_hl) };
         let mut cur = self.w_match_head;
         while !cur.is_null() {
-            // The highlight state borrows the item's program; the
-            // item keeps owning it, which is why this is a shallow
-            // clone and not a compile of its own.
+            // The highlight state gets a copy of the item's program to
+            // advance through the lines; the item keeps its own.
             unsafe { (*cur).mit_hl.rm = (*cur).mit_match.clone() };
             unsafe {
                 (*cur).mit_hl.attr = if (*cur).mit_hlg_id == 0 {
@@ -288,34 +299,41 @@ impl Win {
 
             shl.lnum = lnum;
             let mut nmatched = 0;
-            if !shl.rm.regprog.is_null() {
-                // Whether `shl->rm` shares `cur`'s compiled regexp, which
-                // `vim_regexec_multi` may free and recompile under us.
-                let regprog_is_copy = shl != search_hl
+            if shl.rm.regprog.is_some() {
+                // Whether `shl->rm` is `cur`'s highlight copy of its compiled
+                // regexp, which `vim_regexec_multi` may recompile under us.
+                let item_copy = shl != search_hl
                     && !cur.is_null()
-                    && shl.raw() == unsafe { &raw mut (*cur).mit_hl }
-                    && unsafe { (*cur).mit_match.regprog } == unsafe { (*cur).mit_hl.rm.regprog };
-                let mut timed_out: c_int = 0;
+                    && shl.raw() == unsafe { &raw mut (*cur).mit_hl };
+                let mut timed_out = false;
 
                 // SAFETY: the caller's match state, whose own `rm` and `tm` these
-                // are; two addresses off the pointer rather than off a borrow.
-                let (rm, tm) = unsafe { (&raw mut (*shl.raw()).rm, &raw mut (*shl.raw()).tm) };
+                // are: two disjoint fields off the pointer rather than off a borrow.
+                let (rm, tm) = unsafe { (&mut (*shl.raw()).rm, &(*shl.raw()).tm) };
                 let buf = self.buffer();
-                // SAFETY: the caller's window and its buffer.
-                let out = &raw mut timed_out;
-                nmatched =
-                    unsafe { vim_regexec_multi(rm, Some(self), buf, lnum, matchcol, tm, out) };
-                if regprog_is_copy {
-                    unsafe { (*cur).mit_match.regprog = (*cur).mit_hl.rm.regprog };
+                nmatched = vim_regexec_multi(
+                    rm,
+                    Some(self),
+                    buf,
+                    lnum,
+                    matchcol,
+                    Some(tm),
+                    Some(&mut timed_out),
+                );
+                if item_copy {
+                    // A recompile for the other engine goes back to the item
+                    // too, as upstream's shared program did.
+                    // SAFETY: the item the walk is on, which owns both.
+                    unsafe { sync_recompiled(&mut *cur) };
                 }
-                if called_emsg.get() > called_emsg_before || got_int.get() || timed_out != 0 {
-                    // Something went wrong in the regexp: stop using it.
+                if called_emsg.get() > called_emsg_before || got_int.get() || timed_out {
+                    // Something went wrong in the regexp: stop using it --
+                    // `'hlsearch'` for good, a match's highlight copy for the
+                    // rest of this redraw.
                     if shl == search_hl {
-                        // A match's regprog is a copy and must not be freed.
-                        unsafe { vim_regfree(shl.rm.regprog) };
                         set_no_hlsearch(true);
                     }
-                    shl.rm.regprog = ::core::ptr::null_mut();
+                    shl.rm.regprog = None;
                     shl.lnum = 0;
                     got_int.set(false); // avoid the "Type :quit to exit Vim" message
                     break;
@@ -354,7 +372,7 @@ pub(crate) unsafe fn prepare_search_hl(window: Win, search_hl: *mut MatchState, 
     // SAFETY: the caller's window and search state.
     let mut walk = unsafe { ShlWalk::new(window, search_hl.raw(), Order::SearchFirst) };
     while let Some((mut shl, cur)) = unsafe { walk.next() } {
-        if shl.rm.regprog.is_null() || shl.lnum != 0 || !unsafe { re_multiline(shl.rm.regprog) } {
+        if !shl.rm.is_multiline() || shl.lnum != 0 {
             continue;
         }
 
@@ -376,7 +394,7 @@ pub(crate) unsafe fn prepare_search_hl(window: Win, search_hl: *mut MatchState, 
         let mut pos_inprogress = true;
         let mut n: ColNr = 0;
         while shl.first_lnum < lnum
-            && (!shl.rm.regprog.is_null() || (!cur.is_null() && pos_inprogress))
+            && (shl.rm.regprog.is_some() || (!cur.is_null() && pos_inprogress))
         {
             unsafe { window.next_search_hl(search_hl.raw(), shl.raw(), shl.first_lnum, n, cur) };
             pos_inprogress = !cur.is_null() && unsafe { (*cur).mit_pos_cur } != 0;
@@ -520,7 +538,7 @@ pub(crate) unsafe fn update_search_hl(
             unsafe { (*cur).mit_pos_cur = 0 };
         }
         let mut pos_inprogress = true;
-        while !shl.rm.regprog.is_null() || (!cur.is_null() && pos_inprogress) {
+        while shl.rm.regprog.is_some() || (!cur.is_null() && pos_inprogress) {
             if shl.startcol != MAXCOL && col >= shl.startcol && col < shl.endcol {
                 // Inside the match. Widen it to a whole character.
                 let next_col = col + unsafe { utfc_ptr2len((*line).offset(col as isize)) };

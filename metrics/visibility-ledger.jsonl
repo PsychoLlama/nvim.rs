@@ -477,7 +477,6 @@
 {"path":"neovim::regexp::vim_regcomp","kind":"fn","file":"crates/nvim/src/regexp/api.rs","tests":["crates/nvim/tests/unit/regexp.rs"]}
 {"path":"neovim::regexp::vim_regexec","kind":"fn","file":"crates/nvim/src/regexp/api.rs","tests":["crates/nvim/tests/unit/regexp.rs"]}
 {"path":"neovim::regexp::vim_regexec_multi","kind":"fn","file":"crates/nvim/src/regexp/api.rs","tests":["crates/nvim/tests/unit/regexp.rs"]}
-{"path":"neovim::regexp::vim_regfree","kind":"fn","file":"crates/nvim/src/regexp/api.rs","tests":["crates/nvim/tests/unit/regexp.rs","crates/nvim/tests/unit/search.rs"]}
 {"path":"neovim::search::get_search_pat","kind":"fn","file":"crates/nvim/src/search/pattern.rs","tests":["crates/nvim/tests/unit/search.rs"]}
 {"path":"neovim::search::pat_has_uppercase","kind":"fn","file":"crates/nvim/src/search/pattern.rs","tests":["crates/nvim/tests/unit/search.rs"]}
 {"path":"neovim::search::search_regcomp","kind":"fn","file":"crates/nvim/src/search/pattern.rs","tests":["crates/nvim/tests/unit/search.rs"]}

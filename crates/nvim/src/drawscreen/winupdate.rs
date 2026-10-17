@@ -358,18 +358,11 @@ fn find_changed_lines(win: Win, buffer: Buf, rg: &mut Regions) {
         // With a multi-line 'hlsearch' or :match pattern, a change in one
         // line can invalidate the highlighting of an earlier one. Simple
         // solution: redraw every visible line above the change.
-        let regprog = SearchHl::current().regprog();
-        rg.top_to_mod = if !regprog.is_null() {
-            unsafe { re_multiline(regprog) }
-        } else {
-            false
-        };
+        rg.top_to_mod = SearchHl::current().is_multiline();
         if !rg.top_to_mod {
             let mut cur = win.w_match_head;
             while !cur.is_null() {
-                if !unsafe { (*cur).mit_match.regprog }.is_null()
-                    && unsafe { re_multiline((*cur).mit_match.regprog) }
-                {
+                if unsafe { (*cur).mit_match.is_multiline() } {
                     rg.top_to_mod = true;
                     break;
                 }

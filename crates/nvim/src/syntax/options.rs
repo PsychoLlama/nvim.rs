@@ -478,7 +478,7 @@ fn parse_id_name(
         ),
         true,
     );
-    if regmatch.regprog.is_null() {
+    if regmatch.regprog.is_none() {
         return Err(());
     }
     let mut matched = false;
@@ -495,7 +495,7 @@ fn parse_id_name(
             matched = true;
         }
     }
-    unsafe { vim_regfree(regmatch.regprog) };
+    drop(regmatch);
     if !matched {
         let shown = msg_bytes(&line[start..]);
         semsg!("E409: Unknown group name: {shown}");

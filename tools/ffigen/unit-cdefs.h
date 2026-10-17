@@ -15,7 +15,6 @@ typedef struct List List;
 typedef struct MultiQueue MultiQueue;
 typedef struct OptSet OptSet;
 typedef struct Partial Partial;
-typedef struct RegEngine RegEngine;
 typedef struct Scrollback Scrollback;
 typedef struct Window Window;
 typedef struct key_value_pair key_value_pair;
@@ -122,7 +121,6 @@ typedef struct mtnode_inner_s mtnode_inner_s;
 typedef struct mtnode_s mtnode_s;
 typedef struct MapHash MapHash;
 typedef struct Pos Pos;
-typedef struct RegProg RegProg;
 typedef struct VTermColor_indexed VTermColor_indexed;
 typedef struct VTermColor_rgb VTermColor_rgb;
 typedef union VTermColor VTermColor;
@@ -362,7 +360,6 @@ typedef unsigned int QfListType;
 typedef struct rstream RStream;
 typedef int Refcount;
 typedef size_t RefcountSize;
-typedef void (*RegFree)(RegProg *);
 typedef int RemapValues;
 typedef int32_t RgbValue;
 typedef int SalFirst;
@@ -880,13 +877,6 @@ struct Pos {
   LineNr lnum;
   ColNr col;
   ColNr coladd;
-};
-struct RegProg {
-  RegEngine *engine;
-  unsigned int regflags;
-  unsigned int re_engine;
-  unsigned int re_flags;
-  bool re_in_use;
 };
 struct VTermColor_indexed {
   uint8_t type;

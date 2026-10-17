@@ -21,7 +21,6 @@ use std::ptr;
 
 use neovim::ex_docmd::state::cmdmod;
 use neovim::memory::XString;
-use neovim::regexp::vim_regfree;
 use neovim::search::{get_search_pat, pat_has_uppercase, search_regcomp};
 use neovim::types::{CmdModFlags, RegMMatch};
 use neovim::winlayer::graph::curwin;
@@ -159,10 +158,6 @@ fn a_right_to_left_pattern_is_reversed_bytewise() {
 
     let compiled = get_search_pat();
     assert_eq!(&compiled[..], b"\xc0a", "the pattern was reversed");
-
-    // SAFETY: the program came from the `search_regcomp` above and is not
-    // referenced anywhere else.
-    unsafe { vim_regfree(regmatch.regprog) };
 }
 
 #[test]
@@ -190,7 +185,4 @@ fn only_a_rightleftcmd_of_s_reverses_the_pattern() {
 
     let compiled = get_search_pat();
     assert_eq!(&compiled[..], b"a\xc0", "the pattern was kept as typed");
-
-    // SAFETY: as in the case above.
-    unsafe { vim_regfree(regmatch.regprog) };
 }

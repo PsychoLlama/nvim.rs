@@ -17,14 +17,15 @@ use crate::mbyte::cluster_len;
 use crate::memory::XString;
 use crate::option::SavedCpo;
 use crate::option::vars::p_ic;
-use crate::regexp::{OwnedMatch, RE_MAGIC, RE_STRING, regsub_to_vec, vim_regexec_nl};
+use crate::regexp::{RE_MAGIC, RE_STRING, regsub_to_vec, vim_regexec_nl};
+use crate::types::RegMatch;
 use crate::types::TypVal;
 use core::ffi::CStr;
 
 /// Does `pat` match anywhere in `text`?
 pub fn pattern_match(pat: &CStr, text: &CStr, ic: bool) -> bool {
     let _cpo = SavedCpo::empty_under_user_code();
-    let Some(mut regmatch) = OwnedMatch::compile(pat, RE_MAGIC + RE_STRING, ic) else {
+    let Some(mut regmatch) = RegMatch::compile(pat, RE_MAGIC + RE_STRING, ic) else {
         return false;
     };
     vim_regexec_nl(&mut regmatch, text, 0)
@@ -51,7 +52,7 @@ pub fn do_string_sub(
     // (`substitute("x", "x", "", "")`), so the buffer cannot say it.
     let mut substituted = false;
 
-    if let Some(mut regmatch) = OwnedMatch::compile(pat, RE_MAGIC + RE_STRING, p_ic()) {
+    if let Some(mut regmatch) = RegMatch::compile(pat, RE_MAGIC + RE_STRING, p_ic()) {
         // The replacement is lent to each expansion: a `\=` one is
         // evaluated in place.
         let mut source = sub.map(XString::from_cstr);

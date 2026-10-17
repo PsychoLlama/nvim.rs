@@ -81,14 +81,14 @@ use crate::profile::{
     profile_add, profile_cmp, profile_divide, profile_end, profile_msg, profile_start, profile_zero,
 };
 use crate::regexp::{
-    ExtMatch, ExtMatchIo, ExtMatchRef, vim_regcomp, vim_regcomp_ext, vim_regcomp_had_eol,
-    vim_regexec, vim_regexec_syntax, vim_regfree,
+    ExtMatch, ExtMatchIo, ExtMatchRef, OwnedProg, vim_regcomp, vim_regcomp_ext, vim_regexec,
+    vim_regexec_syntax,
 };
 use crate::runtime::{do_source, source_runtime};
 use crate::types::AutoEvent;
 use crate::types::{
-    ColNr, ExArg, Expand, HashTab, LPos, LineNr, OptInt, ProfTime, RegMMatch, RegMatch, RegProg,
-    SynBlock, SynTime, int16_t, size_t, uint8_t, uint64_t,
+    ColNr, ExArg, Expand, HashTab, LPos, LineNr, OptInt, ProfTime, RegMMatch, RegMatch, SynBlock,
+    SynTime, int16_t, size_t, uint8_t, uint64_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::winlayer::Buf;
@@ -287,12 +287,8 @@ pub(crate) struct SynPat {
     /// The pattern text, as `:syntax list` prints it. `None` only in a
     /// half-built pattern that never got one.
     pub sp_pattern: Option<::std::ffi::CString>,
-    /// OWNERSHIP -- **carve-out**. The compiled program is a `regexp/`
-    /// object with its own allocator discipline (`vim_regcomp` /
-    /// `vim_regfree`, and two engines behind one `RegProg`), so it stays
-    /// a raw pointer released by [`Drop`] rather than becoming a `Box`.
-    /// Retiring it is `regexp/`'s job, not this module's.
-    pub sp_prog: *mut RegProg,
+    /// The compiled program; `None` only in a half-built pattern.
+    pub sp_prog: Option<OwnedProg>,
     pub sp_time: SynTime,
 }
 
@@ -337,7 +333,7 @@ pub(crate) const EMPTY_SYNPAT: SynPat = SynPat {
     sp_cont_in_list: IdList::NONE,
     sp_syn: sp_syn { inc_tag: 0, id: 0 },
     sp_pattern: None,
-    sp_prog: ::core::ptr::null_mut(),
+    sp_prog: None,
     sp_time: SynTime {
         total: 0,
         slowest: 0,
@@ -345,14 +341,6 @@ pub(crate) const EMPTY_SYNPAT: SynPat = SynPat {
         match_0: 0,
     },
 };
-
-impl Drop for SynPat {
-    fn drop(&mut self) {
-        // SAFETY: the compiled program is this pattern's own and nothing
-        // else holds it; `vim_regfree` accepts a null one.
-        unsafe { vim_regfree(self.sp_prog) };
-    }
-}
 
 /// One `:syntax cluster`: a name and the ids it stands for.
 pub(crate) struct SynCluster {

@@ -604,7 +604,7 @@ impl FindTags {
 
         // With a regexp, also find the tags it matches.
         margs.match_re = false;
-        if !matched && !self.orgpat.regmatch.regprog.is_null() {
+        if !matched && self.orgpat.regmatch.regprog.is_some() {
             // The name is terminated in the buffer for the regexp, and the
             // TAB put back after.
             let end = tagp.tagname.end;

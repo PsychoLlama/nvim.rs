@@ -31,12 +31,11 @@ use crate::message_fmt::msg_bytes;
 use crate::option::magic_isset;
 use crate::os::cshim::gettext;
 use crate::pos::MAXCOL;
-use crate::regexp::{
-    OwnedMMatch, RE_LAST, RE_SEARCH, RE_SUBST, regtilde_owned, skip_regexp_in_place,
-};
+use crate::regexp::{RE_LAST, RE_SEARCH, RE_SUBST, regtilde_owned, skip_regexp_in_place};
 use crate::search::{SEARCH_HIS, search_regcomp_owned};
 use crate::semsg;
 use crate::types::CmdIdx;
+use crate::types::RegMMatch;
 use crate::types::{ExArg, LineNr, NUL};
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
@@ -48,7 +47,7 @@ pub(super) struct SubSetup {
     /// The replacement text.
     pub sub: XString,
     /// The compiled pattern.
-    pub regmatch: OwnedMMatch,
+    pub regmatch: RegMMatch,
     /// Was there a closing delimiter, and so a replacement at all?  A
     /// preview without one only highlights what matched.
     pub has_second_delim: bool,

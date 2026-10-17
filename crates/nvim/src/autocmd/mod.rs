@@ -39,7 +39,7 @@ use crate::guard::secure;
 use crate::highlight_group::{HLF_8, HLF_E, HLF_T};
 use crate::insexpand::ins_compl_active;
 use crate::lua::executor::nlua_set_sctx;
-use crate::memory::{xfree, xmalloc, xmallocz, xmemdupz, xrealloc, xstrdup};
+use crate::memory::{xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xrealloc, xstrdup};
 use crate::message::state::{did_emsg, msg_col};
 use crate::message::{e_argreq, e_cannot_define_autocommands_for_all_events};
 use crate::message::{
@@ -58,7 +58,7 @@ use crate::os::time::os_now;
 use crate::path::{full_name_save, path_fnamecmp, path_tail};
 use crate::profile::do_profiling;
 use crate::profile::{prof_child_enter, prof_child_exit};
-use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regfree};
+use crate::regexp::{RE_MAGIC, vim_regcomp};
 use crate::runtime::state::current_sctx;
 use crate::runtime::{estack_pop, estack_push};
 use crate::search::{restore_search_patterns, save_search_patterns};

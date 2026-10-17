@@ -390,12 +390,13 @@ pub unsafe fn autocmd_register(
             return Err(Failed);
         }
 
-        ap = unsafe { xmalloc(::core::mem::size_of::<AutoPat>()) }.cast::<AutoPat>();
+        // Zeroed: the program is an owned field, and assigning over it drops
+        // what was there, which zero bytes (`None`) make safe to.
+        ap = unsafe { xcalloc(1, ::core::mem::size_of::<AutoPat>()) }.cast::<AutoPat>();
         // SAFETY: the allocation above, live for the rest of this call.
         let mut new_pat = unsafe { Live::new(ap) };
         if is_buflocal {
             new_pat.buflocal_nr = buflocal_nr;
-            new_pat.reg_prog = ::core::ptr::null_mut();
         } else {
             new_pat.buflocal_nr = 0;
             // SAFETY: the caller's NUL-terminated pattern, `patlen` bytes of
@@ -407,7 +408,8 @@ pub unsafe fn autocmd_register(
                 new_pat.allow_dirs = ::core::ffi::c_char::from(*allow_dirs);
                 new_pat.reg_prog = vim_regcomp(reg_pat.as_cstr(), RE_MAGIC);
             }
-            if reg_pat.is_none() || new_pat.reg_prog.is_null() {
+            if reg_pat.is_none() || new_pat.reg_prog.is_none() {
+                // Nothing compiled, so there is no program to drop.
                 unsafe { xfree(ap.cast::<::core::ffi::c_void>()) };
                 return Err(Failed);
             }

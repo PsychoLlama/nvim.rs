@@ -1,14 +1,11 @@
-//! The engine's entry points: compiling a pattern, freeing a program, and
-//! the two `regexec` shapes the engine table names — one over a string, one
-//! over a buffer.
+//! The engine's entry points: compiling a pattern and running a program.
 //!
 //! Between them and the match loop sits `nfa_regexec_both`, which is where
 //! the shortcuts live: an anchored pattern only tries column 0, a pattern
 //! with a known first character skips to it, and a pattern that is one
 //! literal run never runs the machine at all.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::regexp::ExtMatch;
 use crate::regexp::ExtMatchRef;
@@ -28,9 +25,9 @@ use crate::message::iemsg;
 use crate::os::cshim::gettext;
 use crate::regexp::{
     MatchPos, NFA_TOO_EXPENSIVE, NfaRegProg, REX_SET, RF_ICASE, RF_ICOMBINE, RF_NOICASE, RegSubs,
-    Rex, TimeBudget, cleanup_subexpr, cleanup_zsubexpr, nfa_regengine, reg_getline,
+    Rex, TimeBudget, cleanup_subexpr, cleanup_zsubexpr, reg_getline,
 };
-use crate::types::{ColNr, LPos, NUL, RegProg};
+use crate::types::{ColNr, LPos, NUL};
 
 /// Try to match at column `col` of the current line.
 ///
@@ -235,9 +232,9 @@ fn try_match(rex: Rex, prog: &NfaRegProg, col: &mut ColNr) -> Attempt {
     Attempt::Ran(nfa_regtry(rex, prog, *col))
 }
 
-/// Compile `rc`'s pattern into a program, or answer null after reporting why
-/// not -- or, under 'regexpengine' 0, having declined it quietly.
-pub(crate) fn nfa_regcomp(rc: &mut RegCompiler) -> *mut RegProg {
+/// Compile `rc`'s pattern into a program, or answer `None` after reporting
+/// why not -- or, under 'regexpengine' 0, having declined it quietly.
+pub(crate) fn nfa_regcomp(rc: &mut RegCompiler) -> Option<NfaRegProg> {
     rc.nfa.count = 0;
     rc.nfa.states = Vec::new();
     rc.post.start(rc.pattern_len);
@@ -247,25 +244,22 @@ pub(crate) fn nfa_regcomp(rc: &mut RegCompiler) -> *mut RegProg {
     rc.restart();
 
     if re2post(rc).is_err() {
-        return core::ptr::null_mut();
+        return None;
     }
     // The first pass counts the states, which sizes the thread lists.
     post2nfa(&mut rc.nfa, rc.post.items(), Pass::Count);
     rc.nfa.states = Vec::with_capacity(usize::try_from(rc.nfa.count).unwrap_or(0));
     let start = post2nfa(&mut rc.nfa, rc.post.items(), Pass::Build);
     if start.is_none() {
-        return core::ptr::null_mut();
+        return None;
     }
     let mut flags = rc.flags;
     if rc.had_eol != 0 {
         flags |= RF_HAD_EOL;
     }
     let mut prog = NfaRegProg {
-        engine: (&raw const nfa_regengine).cast_mut(),
         regflags: flags,
-        re_engine: 0,
-        re_flags: 0,
-        re_in_use: false,
+        automatic: false,
         start,
         reganch: false,
         regstart: 0,
@@ -283,18 +277,5 @@ pub(crate) fn nfa_regcomp(rc: &mut RegCompiler) -> *mut RegProg {
     prog.reganch = nfa_get_reganch(&prog.states, start, 0);
     prog.regstart = nfa_get_regstart(&prog.states, start, 0);
     prog.match_text = nfa_get_match_text(&prog.states, start);
-    Box::into_raw(Box::new(prog)).cast::<RegProg>()
-}
-
-/// Free a program this engine compiled.
-///
-/// # Safety
-///
-/// `prog` must be null or such a program, not yet freed.
-pub(crate) unsafe fn nfa_regfree(prog: *mut RegProg) {
-    if prog.is_null() {
-        return;
-    }
-    // SAFETY: the caller's promise -- the box `nfa_regcomp` leaked.
-    drop(unsafe { Box::from_raw(prog.cast::<NfaRegProg>()) });
+    Some(prog)
 }

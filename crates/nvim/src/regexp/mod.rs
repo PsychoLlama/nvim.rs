@@ -24,7 +24,7 @@ use crate::types::CAR;
 use crate::types::ESC;
 use crate::types::NL;
 use crate::types::TAB;
-use crate::types::{ColNr, LPos, LineNr, Magic, MarkGet, RegEngine, int16_t, int64_t, uint8_t};
+use crate::types::{ColNr, LPos, LineNr, Magic, MarkGet, int16_t, int64_t, uint8_t};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int, c_uint};
 /// Last-pattern selectors and the regexp-engine/flag bits.
@@ -117,17 +117,12 @@ pub(crate) enum RegSubMatch {
         endpos: [LPos; NSUBEXP as usize],
     },
 }
-/// A backtracking program: the [`RegProg`](crate::types::RegProg) head every
-/// program opens with, what the compiler found out about the pattern, and
-/// the node text itself (see [`bt::BtProg`]). Boxed: `bt_regcomp` hands the
-/// box over as a `*mut RegProg` and `vim_regfree` takes it back.
-#[repr(C)]
+/// A backtracking program: what the compiler found out about the pattern,
+/// and the node text itself (see [`bt::BtProg`]).
+#[derive(Clone)]
 pub(crate) struct BtRegProg {
-    pub(crate) engine: *mut RegEngine,
+    /// The `RF_*` flags the compiler found.
     pub(crate) regflags: c_uint,
-    pub(crate) re_engine: c_uint,
-    pub(crate) re_flags: c_uint,
-    pub(crate) re_in_use: bool,
     /// The character every match starts with, or `NUL`.
     pub(crate) regstart: c_int,
     /// The pattern only matches at the start of a line.
@@ -221,7 +216,6 @@ pub const REGMAGIC: c_int = 0o234;
 pub const MAX_LIMIT: c_int = 32767 << 16;
 const E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN: &CStr =
     c"E363: Pattern uses more memory than 'maxmempattern'";
-const E_RECURSIVE: &CStr = c"E956: Cannot use pattern recursively";
 const E_SUBSTITUTE_NESTING_TOO_DEEP: &CStr = c"E1290: substitute nesting too deep";
 pub const NOT_MULTI: c_int = 0;
 pub const MULTI_ONE: c_int = 1;
@@ -297,12 +291,6 @@ pub enum PimResult {
     NoMatch,
 }
 pub const ADDSTATE_HERE_OFFSET: c_int = 10;
-static bt_regengine: RegEngine = RegEngine {
-    regfree: Some(bt_regfree),
-};
-static nfa_regengine: RegEngine = RegEngine {
-    regfree: Some(nfa_regfree),
-};
 pub const GRAPHEME_STATE_INIT: c_int = 0;
 pub const INT_MAX: c_int = __INT_MAX__;
 pub const RE_MAGIC: ::core::ffi::c_int = 1;

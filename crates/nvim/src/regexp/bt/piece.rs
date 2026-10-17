@@ -26,12 +26,12 @@ use crate::regexp::state::rc_did_emsg;
 use crate::regexp::{
     HASLOOKBH, HASNL, HASWIDTH, INT_MAX, MAGIC_ALL, MAGIC_NONE, MAGIC_OFF, MAGIC_ON, NOT_MULTI,
     NSUBEXP, REG_NOPAREN, REG_NPAREN, REG_PAREN, REG_ZPAREN, REGMAGIC, RF_HASNL, RF_ICASE,
-    RF_ICOMBINE, RF_LOOKBH, RF_NOICASE, SIMPLE, SPSTART, WORST, bt_regengine, getchr, getdecchrs,
-    gethexchrs, getoctchrs, magic, magic_prefix, peekchr, re_multi_type, read_limits, skipchr,
+    RF_ICOMBINE, RF_LOOKBH, RF_NOICASE, SIMPLE, SPSTART, WORST, getchr, getdecchrs, gethexchrs,
+    getoctchrs, magic, magic_prefix, peekchr, re_multi_type, read_limits, skipchr,
     skipchr_keepstart, unmagic,
 };
 use crate::semsg;
-use crate::types::{NUL, RegProg, int64_t, uint8_t, uint32_t};
+use crate::types::{NUL, int64_t, uint8_t, uint32_t};
 use core::cell::Cell;
 
 const M_AMP: c_int = magic(b'&');
@@ -401,7 +401,7 @@ fn had_endbrace_seen(rc: &mut RegCompiler, parno: c_int) {
 /// is not needed: see [`super::compile`]). Afterwards the head of the program
 /// is inspected for a required first character or a required substring, which
 /// [`super::exec`] uses to skip start positions cheaply.
-pub(crate) fn bt_regcomp(rc: &mut RegCompiler) -> *mut RegProg {
+pub(crate) fn bt_regcomp(rc: &mut RegCompiler) -> Option<BtRegProg> {
     let mut flags = 0;
     rc.restart();
     // Most patterns compile to a few bytes per pattern byte; a `[:class:]`
@@ -413,7 +413,7 @@ pub(crate) fn bt_regcomp(rc: &mut RegCompiler) -> *mut RegProg {
             semsg!("E339: Pattern too long");
             rc_did_emsg.set(true);
         }
-        return core::ptr::null_mut();
+        return None;
     }
     let mut regflags = rc.flags;
     if flags & HASNL != 0 {
@@ -426,11 +426,7 @@ pub(crate) fn bt_regcomp(rc: &mut RegCompiler) -> *mut RegProg {
         regflags |= RF_HAD_EOL;
     }
     let mut prog = BtRegProg {
-        engine: (&raw const bt_regengine).cast_mut(),
         regflags,
-        re_engine: 0,
-        re_flags: 0,
-        re_in_use: false,
         regstart: NUL,
         reganch: 0,
         regmust: None,
@@ -439,7 +435,7 @@ pub(crate) fn bt_regcomp(rc: &mut RegCompiler) -> *mut RegProg {
         program: rc.code.take_text(),
     };
     find_shortcuts(&mut prog, flags);
-    Box::into_raw(Box::new(prog)).cast::<RegProg>()
+    Some(prog)
 }
 
 /// Fill in the `regstart`/`reganch`/`regmust` hints the executor uses to

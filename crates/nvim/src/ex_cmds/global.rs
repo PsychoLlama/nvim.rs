@@ -36,11 +36,10 @@ use crate::r#move::changed_line_abv_curs;
 use crate::option::magic_isset;
 use crate::os::cshim::gettext;
 use crate::os::input::{line_breakcheck, os_breakcheck};
-use crate::regexp::{
-    OwnedMMatch, RE_BOTH, RE_LAST, RE_SEARCH, RE_SUBST, char_delim, skip_regexp_in_place,
-};
+use crate::regexp::{RE_BOTH, RE_LAST, RE_SEARCH, RE_SUBST, char_delim, skip_regexp_in_place};
 use crate::search::{SEARCH_HIS, search_regcomp_owned};
 use crate::smsg;
+use crate::types::RegMMatch;
 use crate::types::{ColNr, ExArg, LineNr};
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
@@ -71,7 +70,7 @@ fn selects(kind: u8, matched: bool) -> bool {
 }
 
 /// Does the pattern match line `lnum`, searching from its first column?
-fn matches_line(regmatch: &mut OwnedMMatch, lnum: LineNr) -> bool {
+fn matches_line(regmatch: &mut RegMMatch, lnum: LineNr) -> bool {
     regmatch.exec(Some(Win::current()), Buf::current(), lnum, 0 as ColNr) != 0
 }
 
@@ -152,7 +151,7 @@ fn global_pattern(args: &mut ExArg) -> Option<GlobalPat> {
 
 /// Pass 1: mark every line of the range that the pattern (does not) match,
 /// and answer how many were marked.
-fn global_mark(args: &ExArg, regmatch: &mut OwnedMMatch, kind: u8) -> c_int {
+fn global_mark(args: &ExArg, regmatch: &mut RegMMatch, kind: u8) -> c_int {
     let (mut lnum, line2) = (args.line1, args.line2);
     let mut ndone = 0 as c_int;
     while lnum <= line2 && !got_int.get() {

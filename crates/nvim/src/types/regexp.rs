@@ -10,26 +10,8 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
+use crate::regexp::OwnedProg;
 use core::ops::Range;
-
-/// The head every compiled pattern starts with, whichever engine built it.
-#[repr(C)]
-pub struct RegProg {
-    pub engine: *mut RegEngine,
-    pub regflags: ::core::ffi::c_uint,
-    pub re_engine: ::core::ffi::c_uint,
-    pub re_flags: ::core::ffi::c_uint,
-    pub re_in_use: bool,
-}
-/// Release a compiled pattern.
-pub type RegFree = Option<unsafe fn(*mut RegProg) -> ()>;
-/// What tells one engine's programs from the other's: the engine a program
-/// came from. Running one is the API layer's dispatch on which this is;
-/// compiling is not in it either: `vim_regcomp` picks the engine and calls
-/// its compiler directly.
-pub struct RegEngine {
-    pub regfree: RegFree,
-}
 
 pub type Magic = ::core::ffi::c_uint;
 pub type OptMagic = ::core::ffi::c_uint;
@@ -47,9 +29,11 @@ pub type OptMagic = ::core::ffi::c_uint;
 /// A group the pattern never filled is `None`. After a match that failed
 /// every group is `None`: upstream leaves the last attempt's pointers
 /// lying in the structure, which is only ever read by mistake.
-#[derive(Clone)]
+///
+/// The structure owns its program (see [`OwnedProg`]): a match borrows it
+/// from here and puts back whatever it ends up with.
 pub struct RegMatch {
-    pub regprog: *mut RegProg,
+    pub regprog: Option<OwnedProg>,
     /// Where each `\0`..`\9` group starts, and where it ends.
     pub starts: [Option<usize>; RE_GROUPS],
     pub ends: [Option<usize>; RE_GROUPS],
@@ -63,9 +47,9 @@ pub const RE_GROUPS: usize = 10;
 impl RegMatch {
     /// A match structure for `regprog`, with no groups filled in yet.
     ///
-    /// `regprog` may be null, which every caller that compiles a pattern
+    /// `regprog` may be `None`, which every caller that compiles a pattern
     /// into the structure afterwards relies on.
-    pub const fn new(regprog: *mut RegProg, ignore_case: bool) -> Self {
+    pub const fn new(regprog: Option<OwnedProg>, ignore_case: bool) -> Self {
         RegMatch {
             regprog,
             starts: [None; RE_GROUPS],
@@ -96,9 +80,12 @@ impl RegMatch {
         self.ends = [None; RE_GROUPS];
     }
 }
-#[derive(Clone)]
+/// A pattern and where its groups landed in the buffer it last ran over:
+/// line and column pairs. Owns its program, as [`RegMatch`] does; a clone
+/// copies the program.
+#[derive(Clone, Default)]
 pub struct RegMMatch {
-    pub regprog: *mut RegProg,
+    pub regprog: Option<OwnedProg>,
     pub startpos: [LPos; 10],
     pub endpos: [LPos; 10],
     pub rmm_matchcol: ColNr,
@@ -106,21 +93,8 @@ pub struct RegMMatch {
     pub rmm_maxcol: ColNr,
 }
 
-impl Default for RegMMatch {
-    fn default() -> Self {
-        RegMMatch {
-            regprog: ::core::ptr::null_mut(),
-            startpos: [LPos::default(); 10],
-            endpos: [LPos::default(); 10],
-            rmm_matchcol: 0,
-            rmm_ic: 0,
-            rmm_maxcol: 0,
-        }
-    }
-}
-
 impl Default for RegMatch {
     fn default() -> Self {
-        RegMatch::new(::core::ptr::null_mut(), false)
+        RegMatch::new(None, false)
     }
 }

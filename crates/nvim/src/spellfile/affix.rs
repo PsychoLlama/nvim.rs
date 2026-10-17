@@ -40,7 +40,7 @@ use super::flags::{aff_process_flags, affitem2flag, check_renumber};
 use super::wordtree::tree_add_word;
 use super::{
     AH_KEY_LEN, AffEntry, AffFile, AffHeader, MAXLINELEN, PFX_FLAGS, SpellInfo, WFP_COMPFORBID,
-    WFP_COMPPERMIT, WFP_NC, WFP_UP, vim_regcomp, vim_regfree,
+    WFP_COMPPERMIT, WFP_NC, WFP_UP, vim_regcomp,
 };
 use crate::regexp::{RE_MAGIC, RE_STRICT, RE_STRING};
 
@@ -215,7 +215,7 @@ pub(super) fn handle_affix_entry(
             (*entry).ae_prog =
                 vim_regcomp(cstr::at(buf.as_mut_ptr()), RE_MAGIC + RE_STRING + RE_STRICT)
         };
-        if unsafe { (*entry).ae_prog }.is_null() {
+        if unsafe { (*entry).ae_prog.is_none() } {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let (fname, arg2) = (msg_cstr(fname), msg_cstr(items[4]));
             smsg!(0, "Broken condition in {fname} line {}: {arg2}", lnum);
@@ -274,7 +274,6 @@ pub(super) fn postpone_prefix(
                         let out = buf.as_mut_ptr();
                         let cond = unsafe { (*entry).ae_cond };
                         unsafe { snprintf!(out, MAXLINELEN as size_t, c"^%s".as_ptr(), cond) };
-                        unsafe { vim_regfree((*entry).ae_prog) };
                         unsafe {
                             (*entry).ae_prog =
                                 vim_regcomp(cstr::at(buf.as_mut_ptr()), RE_MAGIC + RE_STRING)

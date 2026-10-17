@@ -33,9 +33,10 @@ use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::option::vars::p_ic;
 use crate::os::cshim::{cstr_ncasecmp, gettext, strcoll, strtod_prefix};
 use crate::os::input::fast_breakcheck;
-use crate::regexp::{OwnedMatch, char_delim, skip_regexp_at, vim_regexec};
+use crate::regexp::{char_delim, skip_regexp_at, vim_regexec};
 use crate::search::last_pattern_owned;
 use crate::semsg;
+use crate::types::RegMatch;
 use crate::types::{BCount, ColNr, ExArg, ExtmarkOp, Float, LineNr, NUL, VarNumber, size_t};
 use crate::undo::u_save;
 use crate::winlayer::Buf;
@@ -149,7 +150,7 @@ fn compare_lines(order: StringOrder, l1: &SortLine, l2: &SortLine) -> Ordering {
 fn compile_sort_pattern(
     args: &mut ExArg,
     delim_at: usize,
-    regmatch: &mut Option<OwnedMatch>,
+    regmatch: &mut Option<RegMatch>,
 ) -> Option<usize> {
     // The delimiter is handed on as a `char`, sign-extended -- and the skip
     // compares the pattern's bytes the same way, so a high byte still ends it.
@@ -169,9 +170,9 @@ fn compile_sort_pattern(
             emsg(gettext(e_noprevre));
             return None;
         };
-        OwnedMatch::compile(last.as_cstr(), RE_MAGIC, p_ic())
+        RegMatch::compile(last.as_cstr(), RE_MAGIC, p_ic())
     } else {
-        OwnedMatch::compile(args.line.cstr_from(start), RE_MAGIC, p_ic())
+        RegMatch::compile(args.line.cstr_from(start), RE_MAGIC, p_ic())
     };
     *regmatch = Some(compiled?);
     Some(end)
@@ -264,7 +265,7 @@ fn flag_fallback(
     args: &mut ExArg,
     at: usize,
     byte: u8,
-    regmatch: &mut Option<OwnedMatch>,
+    regmatch: &mut Option<RegMatch>,
     keep_nextcmd: bool,
 ) -> Option<Fallback> {
     let base = args.line.arg;
@@ -287,7 +288,7 @@ fn flag_fallback(
 fn parse_sort_flags(
     args: &mut ExArg,
     spec: &mut SortSpec,
-    regmatch: &mut Option<OwnedMatch>,
+    regmatch: &mut Option<RegMatch>,
 ) -> Option<StringOrder> {
     let mut order = StringOrder::BYTES;
     // Only one of 'n', 'b', 'o', 'f' and 'x' is allowed.
@@ -342,7 +343,7 @@ fn parse_uniq_flags(
     args: &mut ExArg,
     mode: &mut UniqMode,
     use_match: &mut bool,
-    regmatch: &mut Option<OwnedMatch>,
+    regmatch: &mut Option<RegMatch>,
 ) -> Option<StringOrder> {
     let mut order = StringOrder::BYTES;
     let mut at = 0;
@@ -379,7 +380,7 @@ fn parse_uniq_flags(
 /// match runs over a C string, and the memline's terminator is the only
 /// thing that says where a line's bytes end.
 fn match_range(
-    regmatch: &mut Option<OwnedMatch>,
+    regmatch: &mut Option<RegMatch>,
     lines: &mut Lines,
     lnum: LineNr,
     use_match: bool,
@@ -446,7 +447,7 @@ fn collect_sort_keys(
     line1: LineNr,
     line2: LineNr,
     spec: &SortSpec,
-    regmatch: &mut Option<OwnedMatch>,
+    regmatch: &mut Option<RegMatch>,
 ) -> Option<Vec<SortLine>> {
     let mut sorted = Vec::with_capacity((line2 - line1 + 1) as usize);
     let mut lines = Lines::current();

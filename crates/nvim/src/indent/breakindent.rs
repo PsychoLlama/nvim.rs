@@ -275,7 +275,7 @@ impl BreakindentCache {
             ),
             false,
         );
-        if regmatch.regprog.is_null() {
+        if regmatch.regprog.is_none() {
             return;
         }
         // SAFETY: the caller's NUL-terminated line.
@@ -297,7 +297,6 @@ impl BreakindentCache {
                 self.indent = indent;
             }
         }
-        unsafe { vim_regfree(regmatch.regprog) };
     }
 }
 

@@ -22,7 +22,6 @@ use core::ffi::{c_int, c_uint};
 use std::ffi::CString;
 
 use super::list::SpareLists;
-use crate::types::RegEngine;
 
 /// A state of the program, by its index in [`NfaRegProg::states`].
 ///
@@ -68,6 +67,7 @@ impl StateId {
 }
 
 /// One state of the machine.
+#[derive(Clone)]
 pub(crate) struct NfaState {
     /// The opcode (negative), or the literal character the state matches.
     pub(crate) c: c_int,
@@ -98,15 +98,15 @@ impl NfaState {
     }
 }
 
-/// An NFA program: the [`RegProg`](crate::types::RegProg) head every program
-/// opens with, the states, and the shortcuts the compiler found.
-#[repr(C)]
+/// An NFA program: the states, and the shortcuts the compiler found.
+#[derive(Clone)]
 pub(crate) struct NfaRegProg {
-    pub(crate) engine: *mut RegEngine,
+    /// The `RF_*` flags the compiler found.
     pub(crate) regflags: c_uint,
-    pub(crate) re_engine: c_uint,
-    pub(crate) re_flags: c_uint,
-    pub(crate) re_in_use: bool,
+    /// Was the engine chosen automatically? Then a match that outgrows the
+    /// machine gives up with `NFA_TOO_EXPENSIVE`, for the backtracking
+    /// engine to take over. `vim_regcomp` sets it.
+    pub(crate) automatic: bool,
     /// The machine's entry.
     pub(crate) start: StateId,
     /// Every match starts at the start of a line.
@@ -167,11 +167,5 @@ impl<'p> States<'p> {
     #[inline(always)]
     pub(crate) fn out(self, id: StateId) -> StateId {
         self.state(id).out
-    }
-
-    /// Its operand.
-    #[inline(always)]
-    pub(crate) fn val(self, id: StateId) -> c_int {
-        self.state(id).val
     }
 }

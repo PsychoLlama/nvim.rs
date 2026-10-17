@@ -58,7 +58,7 @@ pub mod tabstop;
 // Split out for size. The names below are what the rest of the tree calls,
 // and it calls them as `indent::*`.
 use crate::optionstr::OptString;
-use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regexec, vim_regfree};
+use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regexec};
 use crate::state::MODE_INSERT;
 use crate::winlayer::Win;
 pub(crate) use breakindent::check_window_briopt;
@@ -784,7 +784,7 @@ pub fn get_number_indent(lnum: LineNr) -> c_int {
     let flp = Buf::current().b_p_flp.value_ptr();
     // SAFETY: 'formatlistpat' is a NUL-terminated option value.
     let mut regmatch = RegMatch::new(vim_regcomp(unsafe { cstr::at(flp) }, RE_MAGIC), false);
-    if !regmatch.regprog.is_null() {
+    if regmatch.regprog.is_some() {
         regmatch.rm_ic = false;
         // The match starts past the comment leader, so its offsets are
         // relative to there and the leader goes back on at the end.
@@ -794,7 +794,6 @@ pub fn get_number_indent(lnum: LineNr) -> c_int {
             pos.col = (lead_len + regmatch.ends[0].unwrap_or(0)) as ColNr;
             pos.coladd = 0;
         }
-        unsafe { vim_regfree(regmatch.regprog) };
     }
     // The match may have ended at the line's NUL, which is not an indent.
     if pos.lnum == 0 || byte_at(Lines::current().line(pos.lnum), pos.col as usize) == 0 {

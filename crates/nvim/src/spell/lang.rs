@@ -55,13 +55,12 @@ use crate::option::vars::{P_ENC, p_enc};
 use crate::option::{copy_option_part, split_option_part, valid_name};
 use crate::os::fs::os_remove;
 use crate::path::{path_fnamecmp, path_full_compare, path_tail, tail_index};
-use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regfree};
+use crate::regexp::{RE_MAGIC, vim_regcomp};
 use crate::spellfile::spell_load_file;
 use crate::startup::starting;
 use crate::strings::{concat, vim_strchr, xstrnsave};
 use crate::types::{
-    Failed, GArray, LangP, MAXPATHL, NUL, OptError, RegProg, SPL_FNAME_TMPL, SpellLang, SynBlock,
-    size_t,
+    Failed, GArray, LangP, MAXPATHL, NUL, OptError, SPL_FNAME_TMPL, SpellLang, SynBlock, size_t,
 };
 use crate::window::win_valid_any_tab;
 
@@ -702,24 +701,21 @@ pub(crate) fn compile_cap_prog_in(synblock: &mut SynBlock) -> Result<(), OptErro
 ///
 /// `synblock` must point at a live `SynBlock`, unaliased for the call.
 pub unsafe fn compile_cap_prog(synblock: *mut SynBlock) -> Result<(), OptError> {
-    let rp: *mut RegProg = unsafe { (*synblock).b_cap_prog };
-
     if unsafe { (*synblock).b_p_spc.bytes() }.is_empty() {
-        unsafe { (*synblock).b_cap_prog = core::ptr::null_mut() };
+        unsafe { (*synblock).b_cap_prog = None };
     } else {
         let re = concat(b"^", unsafe {
             cstr::bytes_at((*synblock).b_p_spc.value_ptr())
         })
         .into_raw();
-        unsafe { (*synblock).b_cap_prog = vim_regcomp(cstr::at(re), RE_MAGIC as c_int) };
+        let prog = unsafe { vim_regcomp(cstr::at(re), RE_MAGIC as c_int) };
         unsafe { xfree(re as *mut c_void) };
-        if unsafe { (*synblock).b_cap_prog }.is_null() {
-            unsafe { (*synblock).b_cap_prog = rp }; // keep the previous program
+        // A pattern that does not compile keeps the previous program.
+        let Some(prog) = prog else {
             return Err(e_invarg.into());
-        }
+        };
+        unsafe { (*synblock).b_cap_prog = Some(prog) };
     }
-
-    unsafe { vim_regfree(rp) };
     Ok(())
 }
 

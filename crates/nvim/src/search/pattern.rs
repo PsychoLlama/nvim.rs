@@ -232,7 +232,7 @@ pub unsafe fn search_regcomp(
     unsafe { (*regmatch).rmm_ic = c_int::from(ignorecase(pat)) };
     unsafe { (*regmatch).rmm_maxcol = 0 };
     unsafe { (*regmatch).regprog = vim_regcomp(cstr::at(pat), if magic { RE_MAGIC } else { 0 }) };
-    if unsafe { (*regmatch).regprog.is_null() } {
+    if unsafe { (*regmatch).regprog.is_none() } {
         Err(Failed)
     } else {
         Ok(())
@@ -250,7 +250,7 @@ pub(crate) fn search_regcomp_owned(
     pat_use: c_int,
     options: c_int,
     want_used: bool,
-) -> Option<(crate::regexp::OwnedMMatch, Option<XString>)> {
+) -> Option<(RegMMatch, Option<XString>)> {
     let mut used: *mut c_char = ptr::null_mut();
     let mut regmatch = RegMMatch::default();
     // SAFETY: a terminated pattern, lent for the call: the compile reads it
@@ -272,10 +272,7 @@ pub(crate) fn search_regcomp_owned(
     // SAFETY: `used` points into `pat` or into the remembered pattern,
     // both live and terminated until the next compile.
     let used = want_used.then(|| XString::from_cstr(unsafe { cstr::at(used) }));
-    // SAFETY: the program `search_regcomp` just compiled, which the caller
-    // owns.
-    let owned = unsafe { crate::regexp::OwnedMMatch::adopt(regmatch.regprog, regmatch.rmm_ic) };
-    Some((owned, used))
+    Some((regmatch, used))
 }
 
 /// [`save_re_pat`] for a pattern the caller holds.
@@ -626,13 +623,13 @@ pub unsafe fn set_last_search_pat(s: *const c_char, idx: c_int, magic: bool, set
 }
 
 /// Compile the last used search pattern, for highlighting every match in a
-/// window. Answers `regmatch->regprog == NULL` when there is no pattern.
+/// window. Leaves no program in `regmatch` when there is no pattern.
 ///
 /// # Safety
 /// `regmatch` must be writable.
 pub unsafe fn last_pat_prog(regmatch: *mut RegMMatch) {
     if spat(last_idx.get()).pat.is_null() {
-        unsafe { (*regmatch).regprog = ptr::null_mut() };
+        unsafe { (*regmatch).regprog = None };
         return;
     }
     // So it doesn't beep if the pattern is bad.
@@ -730,17 +727,14 @@ pub(crate) unsafe fn is_zero_width(
         // whether its start and end are the same position.
         let nmatched = loop {
             regmatch.startpos[0].col += 1;
-            let (rm, col) = (&raw mut regmatch, regmatch.startpos[0].col);
-            let (no_tm, no_to) = (ptr::null_mut(), ptr::null_mut());
-            // SAFETY: `regmatch` is this frame's compiled program, matched
-            // against a line of the current buffer.
-            let nmatched = unsafe { vim_regexec_multi(rm, w, b, pos.lnum, col, no_tm, no_to) };
+            let col = regmatch.startpos[0].col;
+            let nmatched = vim_regexec_multi(&mut regmatch, w, b, pos.lnum, col, None, None);
             let short_of_the_match = if direction == FORWARD {
                 regmatch.startpos[0].col < pos.col
             } else {
                 regmatch.startpos[0].col > pos.col
             };
-            if nmatched != 0 || regmatch.regprog.is_null() || !short_of_the_match {
+            if nmatched != 0 || regmatch.regprog.is_none() || !short_of_the_match {
                 break nmatched;
             }
         };
@@ -752,7 +746,7 @@ pub(crate) unsafe fn is_zero_width(
         }
     }
 
-    unsafe { vim_regfree(regmatch.regprog) };
+    drop(regmatch);
     result
 }
 

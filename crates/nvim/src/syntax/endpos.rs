@@ -74,7 +74,7 @@ impl SynState {
         let mut block = self.block();
         let spp = block.pattern_mut(idx);
         regmatch.rmm_ic = spp.sp_ic;
-        regmatch.regprog = spp.sp_prog;
+        regmatch.regprog = spp.sp_prog.take();
         let time = &mut spp.sp_time;
         let mut captures = None;
         let io = ExtMatchIo {
@@ -82,7 +82,7 @@ impl SynState {
             output: Some(&mut captures),
         };
         let matched = self.syn_regexec(&mut regmatch, lnum, col, time, io);
-        block.pattern_mut(idx).sp_prog = regmatch.regprog;
+        block.pattern_mut(idx).sp_prog = regmatch.regprog.take();
         (matched, regmatch, captures)
     }
 
@@ -312,10 +312,10 @@ impl SynState {
     }
 }
 
-/// A zeroed `RegMMatch`, which `vim_regexec_multi` fills in.
+/// An empty `RegMMatch`, which `vim_regexec_multi` fills in.
 pub(crate) const fn empty_regmmatch() -> RegMMatch {
     RegMMatch {
-        regprog: ::core::ptr::null_mut(),
+        regprog: None,
         startpos: [LPos { lnum: 0, col: 0 }; 10],
         endpos: [LPos { lnum: 0, col: 0 }; 10],
         rmm_matchcol: 0,
@@ -484,7 +484,7 @@ impl SynState {
         let timing = syn_time_on.get();
         let start = if timing { profile_start() } else { 0 };
 
-        if regmatch.regprog.is_null() {
+        if regmatch.regprog.is_none() {
             // A previous vim_regexec_multi() tried the NFA engine, got
             // NFA_TOO_EXPENSIVE, and compiling with the other engine failed.
             return false;
@@ -493,16 +493,9 @@ impl SynState {
         // have gone, the buffer never has once the parse has begun.
         let (win, buf) = (self.win.and_then(WinId::get), self.buffer);
         regmatch.rmm_maxcol = buf.b_p_smc as ColNr;
-        let mut timed_out: c_int = 0;
-        let tm = self
-            .deadline
-            .as_mut()
-            .map_or(::core::ptr::null_mut(), |tm| tm as *mut ProfTime);
-        // SAFETY: the caller's match holds a live program; the deadline and the
-        // flag are this frame's.
-        let r = unsafe {
-            vim_regexec_syntax(regmatch, win, buf, lnum, col, tm, &raw mut timed_out, io)
-        };
+        let mut timed_out = false;
+        let tm = self.deadline.as_ref();
+        let r = vim_regexec_syntax(regmatch, win, buf, lnum, col, tm, Some(&mut timed_out), io);
 
         if timing {
             let took = profile_end(start);
@@ -517,7 +510,7 @@ impl SynState {
                 time.match_0 += 1;
             }
         }
-        if timed_out != 0
+        if timed_out
             && let Some(mut block) = win.map(Win::syntax)
             && !block.b_syn_slow
         {

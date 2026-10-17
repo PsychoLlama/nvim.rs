@@ -61,8 +61,7 @@ pub(crate) unsafe fn syntax_clear(block: *mut SynBlock) {
     block.b_syn_sync_maxlines = 0;
     block.b_syn_sync_linebreaks = 0;
 
-    unsafe { vim_regfree(block.b_syn_linecont_prog) };
-    block.b_syn_linecont_prog = ::core::ptr::null_mut();
+    block.b_syn_linecont_prog = None;
     block.b_syn_linecont_pat = None;
     block.b_syn_folditems = 0;
     block.b_syn_isk = None;
@@ -128,8 +127,7 @@ fn syntax_sync_clear() {
     block.b_syn_sync_maxlines = 0;
     block.b_syn_sync_linebreaks = 0;
 
-    unsafe { vim_regfree(block.b_syn_linecont_prog) };
-    block.b_syn_linecont_prog = ::core::ptr::null_mut();
+    block.b_syn_linecont_prog = None;
     block.b_syn_linecont_pat = None;
     block.b_syn_isk = None;
 

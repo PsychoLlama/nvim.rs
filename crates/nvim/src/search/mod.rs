@@ -80,7 +80,7 @@ use crate::profile::{profile_passed_limit, profile_setlimit};
 use crate::regexp::state::rc_did_emsg;
 use crate::regexp::{
     skip_regexp_copy, skip_regexp_in_place, skip_regexp_magic, vim_regcomp, vim_regexec,
-    vim_regexec_multi, vim_regfree,
+    vim_regexec_multi,
 };
 use crate::search::state::{
     no_hlsearch, no_smartcase, search_match_endcol, search_match_lines, searchcmdlen,

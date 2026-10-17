@@ -53,7 +53,7 @@ use crate::memory::xmemcpyz;
 use crate::message::emsg;
 use crate::regexp::vim_regexec_prog;
 use crate::strings::vim_strchr;
-use crate::types::{LangP, NUL, RegProg, SpellLang, uint8_t};
+use crate::types::{LangP, NUL, SpellLang, uint8_t};
 
 use super::Tree;
 use super::chartab::{
@@ -214,7 +214,7 @@ pub(super) unsafe fn find_word(mip: &mut MatchInf, mode: c_int) {
         // break, in which case what follows may continue it.
 
         let word_ends = if unsafe { spell_iswordp(ptr.offset(wlen as isize), win) } {
-            if unsafe { (*slang).sl_compprog }.is_null() && !unsafe { (*slang).sl_nobreak } {
+            if unsafe { (*slang).sl_compprog.is_none() } && !unsafe { (*slang).sl_nobreak } {
                 continue;
             }
             false
@@ -628,7 +628,7 @@ pub unsafe fn can_compound(
     word: *const c_char,
     flags: *const uint8_t,
 ) -> bool {
-    if unsafe { (*slang).sl_compprog }.is_null() {
+    if unsafe { (*slang).sl_compprog.is_none() } {
         return false;
     }
 
@@ -748,10 +748,12 @@ pub unsafe fn valid_word_prefix(
             continue;
         }
 
-        let prefprog_idx = ((pidx as c_uint >> 8) & 0xffff) as isize;
-        // SAFETY: the language's own array of compiled conditions.
-        let rp: &mut *mut RegProg = unsafe { &mut *(*slang).sl_prefprog.offset(prefprog_idx) };
-        if !rp.is_null() {
+        let prefprog_idx = ((pidx as c_uint >> 8) & 0xffff) as usize;
+        // SAFETY: the language's own array of compiled conditions. An index
+        // past it (a damaged file) reads as no condition.
+        let conditions = unsafe { &mut (*slang).sl_prefprog };
+        let rp = conditions.get_mut(prefprog_idx);
+        if let Some(rp) = rp.filter(|rp| rp.is_some()) {
             // SAFETY: the caller's NUL-terminated word.
             if !vim_regexec_prog(rp, false, unsafe { cstr::at(word) }, 0) {
                 continue;

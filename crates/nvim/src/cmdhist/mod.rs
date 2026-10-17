@@ -38,8 +38,9 @@ use crate::message::{
 use crate::option::vars::p_hi;
 use crate::os::cshim::gettext;
 use crate::os::time::os_time;
-use crate::regexp::{OwnedMatch, RE_MAGIC, RE_STRING, vim_regexec};
+use crate::regexp::{RE_MAGIC, RE_STRING, vim_regexec};
 use crate::shada::ShadaExtra;
+use crate::types::RegMatch;
 use crate::types::{
     CmdModFlags, EvalFuncData, ExArg, Expand, Failed, HistoryType, IOSIZE, OptInt, Timestamp,
     TypVal, VAR_NUMBER, VarNumber,
@@ -237,7 +238,7 @@ fn del_history_entry(histype: c_int, pat: &CStr) -> bool {
     if get_hislen() == 0 || !valid_histype(histype) || pat.is_empty() || get_hisidx(histype) < 0 {
         return false;
     }
-    let Some(mut regmatch) = OwnedMatch::compile(pat, RE_MAGIC + RE_STRING, false) else {
+    let Some(mut regmatch) = RegMatch::compile(pat, RE_MAGIC + RE_STRING, false) else {
         return false;
     };
     HISTORY.with_mut(|h| {

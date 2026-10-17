@@ -86,7 +86,7 @@ use crate::types::NL;
 use crate::types::ui::kUIMessages;
 use crate::types::{
     AcoSave, BlnFlags, Directory, ExArg, Failed, FileInfo, FileOffset, IOSIZE, LineNr, OptInt,
-    OptVal, OptionSetFlags, RegMatch, RegProg, ScriptId, ShmFlag, int64_t, uv_gid_t,
+    OptVal, OptionSetFlags, RegMatch, ScriptId, ShmFlag, int64_t, uv_gid_t,
 };
 use crate::ui::{ui_flush, ui_has};
 use crate::undo::{

@@ -45,11 +45,11 @@ use crate::message_fmt::msg_bytes;
 use crate::option::vars::p_rdt;
 use crate::os::cshim::gettext;
 use crate::profile::{profile_passed_limit, profile_setlimit};
-use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regexec_multi, vim_regfree};
+use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regexec_multi};
 use crate::search::state::{search_first_line, search_last_line};
 use crate::types::{
-    ColNr, Dict, DictItem, EvalFuncData, ExArg, LLPos, LineNr, List, MatchItem, MatchState,
-    RegProg, TypVal, VAR_LIST, VAR_NUMBER, VarNumber, int64_t, ptrdiff_t, size_t,
+    ColNr, Dict, DictItem, EvalFuncData, ExArg, LLPos, LineNr, List, MatchItem, MatchState, TypVal,
+    VAR_LIST, VAR_NUMBER, VarNumber, int64_t, ptrdiff_t, size_t,
 };
 use crate::winlayer::{Live, Win};
 
@@ -57,8 +57,6 @@ mod searchhl;
 pub(crate) use self::searchhl::*;
 mod vimscript;
 pub(crate) use self::vimscript::*;
-
-use crate::regexp::re_multiline;
 
 /// The highlight state of one matcher — a window's `'hlsearch'` state or one
 /// match's — whose holder has promised it outlives the value.
@@ -132,10 +130,10 @@ unsafe fn match_add(
     if hlg_id == 0 {
         return -1;
     }
-    let mut regprog: *mut RegProg = ::core::ptr::null_mut();
+    let mut regprog = None;
     if !pat.is_null() {
         regprog = vim_regcomp(unsafe { cstr::at(pat) }, RE_MAGIC);
-        if regprog.is_null() {
+        if regprog.is_none() {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let pat = unsafe { c_str(pat) };
             semsg!("E475: Invalid argument: {pat}");
@@ -188,7 +186,7 @@ unsafe fn match_add(
             }
             Some(_) => {}
             None => {
-                unsafe { vim_regfree(regprog) };
+                m.mit_match.regprog = None;
                 unsafe { xfree(m.mit_pattern.cast()) };
                 unsafe { xfree(m.mit_pos_array.cast()) };
                 unsafe { xfree(m.raw().cast()) };
@@ -340,7 +338,9 @@ fn match_delete(mut window: Win, id: c_int, perr: bool) -> c_int {
     } else {
         unsafe { (*prev).mit_next = (*cur).mit_next };
     }
-    unsafe { vim_regfree((*cur).mit_match.regprog) };
+    // The item's program, and the highlight copy a redraw may have left.
+    unsafe { (*cur).mit_match.regprog = None };
+    unsafe { (*cur).mit_hl.rm.regprog = None };
     unsafe { xfree((*cur).mit_pattern.cast()) };
     if unsafe { (*cur).mit_toplnum } != 0 {
         unsafe { redraw_win_range_later(window, (*cur).mit_toplnum, (*cur).mit_botlnum) };
@@ -359,9 +359,10 @@ pub(crate) fn clear_matches(mut window: Win) {
     while !window.w_match_head.is_null() {
         // SAFETY: the window owns every entry of its list until it is
         // unlinked, which is what the line below does.
-        let m = unsafe { Mi::new(window.w_match_head) };
+        let mut m = unsafe { Mi::new(window.w_match_head) };
         window.w_match_head = m.mit_next;
-        unsafe { vim_regfree(m.mit_match.regprog) };
+        m.mit_match.regprog = None;
+        m.mit_hl.rm.regprog = None;
         unsafe { xfree(m.mit_pattern.cast()) };
         unsafe { xfree(m.mit_pos_array.cast()) };
         unsafe { xfree(m.raw().cast()) };

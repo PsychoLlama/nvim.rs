@@ -106,6 +106,13 @@ pub(crate) const BLANK_SUBS: RegSubs = RegSubs {
 /// storage's capacity, so reuse cannot move E363.
 pub(crate) struct SpareLists(Cell<Vec<Vec<NfaThread<'static>>>>);
 
+/// A copy of a program starts with no spare lists of its own.
+impl Clone for SpareLists {
+    fn clone(&self) -> SpareLists {
+        SpareLists::new()
+    }
+}
+
 /// How many spare lists a program keeps, and how large one may be to be
 /// kept: a run that grew a list towards 'maxmempattern' frees it, as upstream
 /// would.
@@ -647,6 +654,12 @@ enum Saved {
 /// `\(`, `\%(` and `\zs`: record where the group starts, walk on, and put
 /// back what the slot held.
 #[allow(clippy::too_many_arguments)]
+// Inlined into `follow` in an optimised build, where it is measurably
+// cheaper (the walk recurses through it). Not at opt-level 0: there an
+// inlined body's locals all land in `follow`'s frame, and the walk recurses
+// `ADDSTATE_MAX_DEPTH` deep through that frame -- a test thread's stack
+// overflowed.
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn open<'p>(
     l: &mut ThreadList<'_, 'p>,
     c: NfaOp,
@@ -698,6 +711,12 @@ fn open<'p>(
 /// `\)` and `\ze`: as [`open`], for the other end of a group. The end is
 /// always recorded, whether or not the slot was in use.
 #[allow(clippy::too_many_arguments)]
+// Inlined into `follow` in an optimised build, where it is measurably
+// cheaper (the walk recurses through it). Not at opt-level 0: there an
+// inlined body's locals all land in `follow`'s frame, and the walk recurses
+// `ADDSTATE_MAX_DEPTH` deep through that frame -- a test thread's stack
+// overflowed.
+#[cfg_attr(not(debug_assertions), inline(always))]
 fn close<'p>(
     l: &mut ThreadList<'_, 'p>,
     c: NfaOp,

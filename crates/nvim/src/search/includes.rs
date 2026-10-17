@@ -156,16 +156,6 @@ pub(crate) struct Patterns {
     pub(crate) def: RegMatch,
 }
 
-impl Drop for Patterns {
-    fn drop(&mut self) {
-        // SAFETY: each `regprog` is either null or a compiled program
-        // this struct owns.
-        unsafe { vim_regfree(self.pat.regprog) };
-        unsafe { vim_regfree(self.incl.regprog) };
-        unsafe { vim_regfree(self.def.regprog) };
-    }
-}
-
 /// Compile `pat` with the current `'magic'`, answering false when it did
 /// not compile.
 ///
@@ -177,7 +167,7 @@ unsafe fn compile(into: &mut RegMatch, pat: *const c_char, ignore_case: bool) ->
         if magic_isset() { RE_MAGIC } else { 0 },
     );
     into.rm_ic = ignore_case;
-    !into.regprog.is_null()
+    into.regprog.is_some()
 }
 
 /// Compile the three patterns.
@@ -866,7 +856,7 @@ pub fn find_pattern_in_path(
 
     loop {
         // SAFETY: the walk's line is NUL-terminated.
-        if !pats.incl.regprog.is_null()
+        if pats.incl.regprog.is_some()
             && vim_regexec(&mut pats.incl, unsafe { cstr::at(walk.line) }, 0)
         {
             unsafe { handle_include(&mut walk, &pats, inc_opt, kind, action, silent) };
@@ -906,7 +896,7 @@ pub fn find_pattern_in_path(
                 };
                 // Look for other matches in the rest of the line,
                 // when there is any of it left.
-                if pats.def.regprog.is_null()
+                if pats.def.regprog.is_none()
                     && action == ACTION_EXPAND
                     && !compl_status_sol()
                     && unsafe { *startp } as c_int != NUL

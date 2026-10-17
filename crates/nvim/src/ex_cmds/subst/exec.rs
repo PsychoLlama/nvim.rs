@@ -51,9 +51,9 @@ use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
 use crate::pos::MAXCOL;
 use crate::profile::profile_passed_limit;
-use crate::regexp::OwnedMMatch;
 use crate::search::get_search_pat;
 use crate::semsg;
+use crate::types::RegMMatch;
 use crate::types::ui::kUIMessages;
 use crate::types::{
     CmdModFlags, ColNr, ExArg, Handle, LPos, LineNr, OptInt, OptionSetFlags, Pos, ProfTime,
@@ -101,7 +101,7 @@ pub(super) struct SubArgs {
 /// Everything the substitute's stages hand one another.
 pub(super) struct Sub {
     /// The compiled pattern and its last match.
-    pub regmatch: OwnedMMatch,
+    pub regmatch: RegMMatch,
     /// The replacement text.
     pub sub: XString,
 

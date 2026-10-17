@@ -23,8 +23,8 @@ use crate::lua::ffi::{
 };
 use crate::luaL_reg_table;
 use crate::memline::{ml_get_buf, ml_get_buf_len};
-use crate::regexp::{vim_regcomp, vim_regexec, vim_regfree};
-use crate::types::{Error, Handle, LineNr, RegMatch, RegProg, lua_State, luaL_Reg};
+use crate::regexp::{OwnedProg, vim_regcomp, vim_regexec};
+use crate::types::{Error, Handle, LineNr, RegMatch, lua_State, luaL_Reg};
 
 /// The registry key the metatable is stored under, and the type name
 /// `luaL_checkudata` matches against.
@@ -36,30 +36,34 @@ const RE_AUTO: c_int = 8;
 const RE_MAGIC: c_int = 1;
 const RE_STRICT: c_int = 4;
 
-/// The compiled program behind the userdatum at slot 1, or a throw.
+/// The compiled program behind the userdatum at slot 1, or a throw. The
+/// userdatum holds an `Option<OwnedProg>`, which [`nlua_regex`] wrote and
+/// [`regex_gc`] empties.
 ///
 /// # Safety
 /// `lstate` must be a live Lua state; this longjmps for a wrong argument.
-unsafe fn regex_check(lstate: *mut lua_State) -> *mut *mut RegProg {
-    unsafe { luaL_checkudata(lstate, 1, REGEX_TYPE.as_ptr()).cast::<*mut RegProg>() }
+unsafe fn regex_check(lstate: *mut lua_State) -> *mut Option<OwnedProg> {
+    unsafe { luaL_checkudata(lstate, 1, REGEX_TYPE.as_ptr()).cast::<Option<OwnedProg>>() }
 }
 
 /// Match `prog` against `str` and push the match's start and end byte offsets,
 /// or nothing.
 ///
 /// `vim_regexec` may swap the program out for a recompiled one, so `prog` is
-/// read back into the userdatum either way — including when it comes back
-/// null, which is the NFA engine's out-of-memory answer and what both callers
-/// report as an internal error.
+/// read back into the userdatum either way. A userdatum with no program left
+/// is what both callers report as an internal error.
 ///
 /// # Safety
-/// `lstate` must be a live Lua state, `prog` a live compiled program and
-/// `str` a NUL-terminated subject.
-unsafe fn regex_match(lstate: *mut lua_State, prog: *mut *mut RegProg, str: *mut c_char) -> c_int {
-    let mut rm = RegMatch::new(unsafe { *prog }, false);
+/// `lstate` must be a live Lua state and `str` a NUL-terminated subject.
+unsafe fn regex_match(
+    lstate: *mut lua_State,
+    prog: &mut Option<OwnedProg>,
+    str: *mut c_char,
+) -> c_int {
+    let mut rm = RegMatch::new(prog.take(), false);
     // SAFETY: the caller's NUL-terminated subject.
     let matched = vim_regexec(&mut rm, unsafe { cstr::at(str) }, 0);
-    unsafe { *prog = rm.regprog };
+    *prog = rm.regprog.take();
 
     match rm.group(0).filter(|_| matched) {
         Some(span) => {
@@ -79,9 +83,9 @@ unsafe extern "C-unwind" fn regex_match_str(lstate: *mut lua_State) -> c_int {
     unsafe {
         let prog = regex_check(lstate);
         let str = luaL_checkstring(lstate, 2);
-        let nret = regex_match(lstate, prog, str.cast_mut());
+        let nret = regex_match(lstate, &mut *prog, str.cast_mut());
 
-        if (*prog).is_null() {
+        if (*prog).is_none() {
             return luaL_error(lstate, c"regex: internal error".as_ptr());
         }
         nret
@@ -153,13 +157,13 @@ unsafe extern "C-unwind" fn regex_match_line(lstate: *mut lua_State) -> c_int {
             *line.add(end as usize) = 0;
         }
 
-        let nret = regex_match(lstate, prog, line.add(start as usize));
+        let nret = regex_match(lstate, &mut *prog, line.add(start as usize));
 
         if end >= 0 {
             *line.add(end as usize) = save;
         }
 
-        if (*prog).is_null() {
+        if (*prog).is_none() {
             return luaL_error(lstate, c"regex: internal error".as_ptr());
         }
         nret
@@ -173,7 +177,7 @@ unsafe extern "C-unwind" fn regex_match_line(lstate: *mut lua_State) -> c_int {
 unsafe extern "C-unwind" fn regex_gc(lstate: *mut lua_State) -> c_int {
     unsafe {
         let prog = regex_check(lstate);
-        vim_regfree(*prog);
+        drop((*prog).take());
         0
     }
 }
@@ -217,13 +221,14 @@ pub unsafe extern "C-unwind" fn nlua_regex(lstate: *mut lua_State) -> c_int {
             nlua_push_errstr(lstate, b"couldn't parse regex: ", err.message_or_empty());
             err.clear();
             return lua_error(lstate);
-        } else if prog.is_null() {
+        } else if prog.is_none() {
             nlua_push_errstr(lstate, b"couldn't parse regex", c"");
             return lua_error(lstate);
         }
 
-        let p = lua_newuserdata(lstate, size_of::<*mut RegProg>()).cast::<*mut RegProg>();
-        *p = prog;
+        let p = lua_newuserdata(lstate, size_of::<Option<OwnedProg>>()).cast::<Option<OwnedProg>>();
+        // The userdatum is fresh, uninitialised memory: write, do not assign.
+        core::ptr::write(p, prog);
 
         lua_getfield(lstate, LUA_REGISTRYINDEX, REGEX_TYPE.as_ptr()); // [udata, meta]
         lua_setmetatable(lstate, -2); // [udata]

@@ -44,8 +44,9 @@ use crate::os::cshim::gettext;
 use crate::os::fs::file_id;
 use crate::path::full_name_save;
 use crate::pos::MAXLNUM;
-use crate::regexp::{OwnedMatch, RE_MAGIC, free_prog_in};
+use crate::regexp::RE_MAGIC;
 use crate::semsg;
+use crate::types::RegMatch;
 use crate::types::{
     AdditionalData, Buffer, Callback, ColNr, Failed, FileID, FileMark, FileMarkView, Handle,
     LineNr, OptInt, Pos, Timestamp, VAR_SCOPE, WinInfo, int16_t, uint64_t,
@@ -432,7 +433,7 @@ pub fn free_buf_options(mut buffer: Buf, free_p_ff: bool) {
     buffer.b_s.b_syn_isk = None;
     buffer.b_s.b_p_spc = None;
     buffer.b_s.b_p_spf = None;
-    free_prog_in(&mut buffer.b_s.b_cap_prog);
+    buffer.b_s.b_cap_prog = None;
     buffer.b_s.b_p_spl = None;
     buffer.b_s.b_p_spo = None;
     buffer.b_p_sua = None;
@@ -708,14 +709,12 @@ fn match_pattern(
             // Add or remove the '^'.
             let from = usize::from(buf[0] == b'^' && attempt & 1 == 0);
             let flags = if magic_isset() { RE_MAGIC } else { 0 };
-            let mut regmatch = OwnedMatch::compile(cstr::in_bytes(&buf[from..]), flags, false)
-                .unwrap_or_else(OwnedMatch::none);
+            let mut regmatch =
+                RegMatch::compile(cstr::in_bytes(&buf[from..]), flags, false).unwrap_or_default();
 
             for b in buffers_back() {
-                if regmatch.regprog.is_null() {
-                    // An invalid pattern, possibly after switching engine.
-                    return None;
-                }
+                // An invalid pattern.
+                regmatch.regprog.as_ref()?;
                 if (b.b_p_bl != 0) != find_listed
                     || diffmode && !is_diff_mode(b)
                     || buflist_match(&mut regmatch, b, false).is_none()

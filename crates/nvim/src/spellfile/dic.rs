@@ -669,7 +669,7 @@ unsafe fn affix_applies(
     }
     // The affix's condition must match the word.
     // SAFETY: the entry's own compiled condition, and the caller's word.
-    if !unsafe { (*ae).ae_prog }.is_null()
+    if unsafe { (*ae).ae_prog.is_some() }
         && !vim_regexec_prog(
             unsafe { &mut (*ae).ae_prog },
             false,

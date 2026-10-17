@@ -29,7 +29,7 @@ use super::api::in_match_scope;
 use super::submatch::call_replacement;
 use super::{
     CAR, E_SUBSTITUTE_NESTING_TOO_DEEP, NL, REGSUB_BACKSLASH, REGSUB_COPY, REGSUB_MAGIC,
-    RegSubMatch, TAB, can_f_submatch, prog_magic_wrong, reg_prev_sub, rsm,
+    RegSubMatch, TAB, can_f_submatch, reg_prev_sub, rsm,
 };
 use crate::eval::eval_to_string;
 use crate::global_cell::GlobalCell;
@@ -44,7 +44,7 @@ use crate::message::{emsg, iemsg};
 use crate::os::cshim::gettext;
 use crate::pos::MAXCOL;
 use crate::strings::escaped_bytes;
-use crate::types::{ColNr, LineNr, NUL, RegMMatch, RegMatch, RegProg, TypVal};
+use crate::types::{ColNr, LineNr, NUL, RegMMatch, RegMatch, TypVal};
 use crate::winlayer::Live;
 use ::libc::strcpy;
 
@@ -445,13 +445,16 @@ struct Expanding<'a> {
 }
 
 impl Expanding<'_> {
-    fn regprog(self) -> *mut RegProg {
+    /// Does the match's program fail its magic check? Reports so when it
+    /// does. A match with no program has nothing to check.
+    fn magic_wrong(self) -> bool {
         // SAFETY: the caller's live match structure, whichever this is.
-        if self.match_.is_null() {
-            unsafe { (*self.mmatch).regprog }
+        let prog = if self.match_.is_null() {
+            unsafe { (*self.mmatch).regprog.as_ref() }
         } else {
-            unsafe { (*self.match_).regprog }
-        }
+            unsafe { (*self.match_).regprog.as_ref() }
+        };
+        prog.is_some_and(super::OwnedProg::magic_wrong)
     }
 
     /// Line `lnum` of a buffer match: null above line 1, empty past the end.
@@ -497,7 +500,7 @@ unsafe fn vim_regsub_both(
         emsg(gettext(e_null));
         return 0;
     }
-    if prog_magic_wrong(rex.regprog()) != 0 {
+    if rex.magic_wrong() {
         return 0;
     }
     if NESTING.get() == MAX_REGSUB_NESTING {
@@ -913,7 +916,7 @@ pub(crate) fn regtilde_owned(mut source: XString, magic: bool, preview: bool) ->
 /// `source` is lent exclusively because a `\=` replacement is evaluated
 /// in place, and the evaluator may cut it while it runs.
 pub(crate) fn regsub_multi_len(
-    matches: &mut super::OwnedMMatch,
+    matches: &mut RegMMatch,
     lnum: LineNr,
     source: &mut XString,
     flags: c_int,
@@ -925,7 +928,7 @@ pub(crate) fn regsub_multi_len(
     // nothing is written through `nowhere`.
     let size = unsafe {
         vim_regsub_multi(
-            matches.record(),
+            matches,
             lnum,
             source.as_mut_ptr(),
             &raw mut nowhere,
@@ -940,7 +943,7 @@ pub(crate) fn regsub_multi_len(
 /// bounds the write. `dest` is the room the measuring pass asked for; an
 /// expansion that no longer fits stops short of its terminator.
 pub(crate) fn regsub_multi_into(
-    matches: &mut super::OwnedMMatch,
+    matches: &mut RegMMatch,
     lnum: LineNr,
     source: &mut XString,
     dest: &mut [u8],
@@ -951,7 +954,7 @@ pub(crate) fn regsub_multi_into(
     // and the expansion bounds every write on that length.
     unsafe {
         vim_regsub_multi(
-            matches.record(),
+            matches,
             lnum,
             source.as_mut_ptr(),
             dest.as_mut_ptr().cast(),

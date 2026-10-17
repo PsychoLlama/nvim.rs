@@ -27,6 +27,10 @@ use crate::types::{ColNr, Failed, LPos};
 /// The ranges are upstream's and are not uniform: some classes only ever
 /// answer for ASCII, others run the whole Latin-1 range or defer to a
 /// multibyte predicate.
+// Out of line for the reason `class_matches` is: its tests of the character
+// are pure, and inlined into the match loop they are hoisted into the
+// per-character prologue.
+#[inline(never)]
 pub(crate) fn check_char_class(rex: Rex, cls: c_int, c: c_int) -> Result<(), Failed> {
     // Upstream asks the C library's `isalnum` and kin, only ever for ASCII,
     // where every locale answers what `u8`'s own tests do.

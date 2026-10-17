@@ -25,7 +25,8 @@ pub struct AutoCmd {
 pub struct AutoPat {
     pub refcount: RefcountSize,
     pub pat: *mut ::core::ffi::c_char,
-    pub reg_prog: *mut RegProg,
+    /// The pattern compiled, for a pattern that is not buffer-local.
+    pub reg_prog: Option<crate::regexp::OwnedProg>,
     pub group: ::core::ffi::c_int,
     pub patlen: ::core::ffi::c_int,
     pub buflocal_nr: ::core::ffi::c_int,

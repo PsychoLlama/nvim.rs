@@ -96,7 +96,7 @@ pub(crate) unsafe fn match_on_line(
     let mut define_matched = false;
     // SAFETY: the caller's line, NUL-terminated.
     let text_line = unsafe { cstr::at(line) };
-    if !pats.def.regprog.is_null() && vim_regexec(&mut pats.def, text_line, 0) {
+    if pats.def.regprog.is_some() && vim_regexec(&mut pats.def, text_line, 0) {
         // The pattern has to be the first identifier after 'define',
         // so skip to it before testing, and don't let the match run
         // past the end of that identifier.
@@ -110,7 +110,7 @@ pub(crate) unsafe fn match_on_line(
 
     // Don't look for a plain match when a define was asked for and
     // this line did not match the define pattern.
-    if !(pats.def.regprog.is_null() || define_matched) {
+    if !(pats.def.regprog.is_none() || define_matched) {
         return None;
     }
 
@@ -130,7 +130,7 @@ pub(crate) unsafe fn match_on_line(
         return None;
     }
 
-    if pats.pat.regprog.is_null()
+    if pats.pat.regprog.is_none()
         || !vim_regexec(&mut pats.pat, text_line, unsafe { p.offset_from(line) }
             as usize)
     {

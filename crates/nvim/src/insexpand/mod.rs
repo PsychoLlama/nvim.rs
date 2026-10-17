@@ -92,7 +92,7 @@ use crate::popupmenu::{
     pum_clear, pum_display, pum_get_height, pum_set_event_info, pum_undisplay, pum_visible,
 };
 use crate::pos::{MAXCOL, MAXLNUM, equalpos};
-use crate::regexp::{RE_LAST, RE_MAGIC, vim_regcomp, vim_regexec, vim_regfree};
+use crate::regexp::{RE_LAST, RE_MAGIC, vim_regcomp, vim_regexec};
 use crate::register::{copy_register, free_register, get_register_name, valid_yank_reg};
 use crate::search::{
     BACKWARD, FORWARD, SEARCH_KEEP, SEARCH_NFMSG, find_pattern_in_path, ignorecase,

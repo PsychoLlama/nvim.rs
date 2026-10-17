@@ -35,9 +35,8 @@ use crate::log::{LOGLVL_ERR, logmsg};
 use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::memline::{ml_close, ml_open, ml_open_file};
 use crate::memory::{xcalloc, xfree, xmalloc, xmemcpyz, xstrdup};
-use crate::regexp::vim_regfree;
 use crate::strings::vim_strchr;
-use crate::types::{HashValue, NUL, OK, RegProg, SpellLang, WordCount, size_t, uint8_t, uint16_t};
+use crate::types::{HashValue, NUL, OK, SpellLang, WordCount, size_t, uint8_t, uint16_t};
 
 use super::{MAXWLEN, MAXWORDCOUNT, SP_FORMERROR, SY_MAXLEN, SylItem, WC_KEY_OFF, WordTree};
 
@@ -76,6 +75,7 @@ pub unsafe fn slang_alloc(lang: *mut c_char) -> *mut SpellLang {
         core::ptr::write(&raw mut (*lp).sl_repsal, Vec::new());
         core::ptr::write(&raw mut (*lp).sl_comppat, Vec::new());
         core::ptr::write(&raw mut (*lp).sl_syl_items, Vec::new());
+        core::ptr::write(&raw mut (*lp).sl_prefprog, Vec::new());
         core::ptr::write(&raw mut (*lp).sl_sugbuf, None);
     }
 
@@ -133,16 +133,13 @@ pub unsafe fn slang_clear(slang: *mut SpellLang) {
         (*slang).sl_sofo_map = Vec::new();
     }
 
-    for i in 0..unsafe { (*slang).sl_prefixcnt } {
-        unsafe { vim_regfree(*(*slang).sl_prefprog.offset(i as isize)) };
-    }
+    // SAFETY: the caller's language. Assigning drops what was there.
+    unsafe { (*slang).sl_prefprog = Vec::new() };
     unsafe { (*slang).sl_prefixcnt = 0 };
-    unsafe { xfree_clear(&raw mut (*slang).sl_prefprog) };
     unsafe { xfree_clear(&raw mut (*slang).sl_info) };
     unsafe { xfree_clear(&raw mut (*slang).sl_midword) };
 
-    unsafe { vim_regfree((*slang).sl_compprog) };
-    unsafe { (*slang).sl_compprog = core::ptr::null_mut::<RegProg>() };
+    unsafe { (*slang).sl_compprog = None };
     unsafe { xfree_clear(&raw mut (*slang).sl_comprules) };
     unsafe { xfree_clear(&raw mut (*slang).sl_compstartflags) };
     unsafe { xfree_clear(&raw mut (*slang).sl_compallflags) };

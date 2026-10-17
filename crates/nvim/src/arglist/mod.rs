@@ -49,7 +49,8 @@ use crate::path::{
     ExpandFlags, expand_wildcards, fix_fname, full_name_save, gen_expand_wildcards, path_fnamecmp,
     path_full_compare,
 };
-use crate::regexp::{OwnedMatch, RE_MAGIC, vim_regexec};
+use crate::regexp::{RE_MAGIC, vim_regexec};
+use crate::types::RegMatch;
 use crate::types::{Failed, *};
 use crate::ui::state::Columns;
 use crate::undo::buf_is_changed;
@@ -497,7 +498,7 @@ fn arglist_del_files(patterns: &[XString]) {
         };
         let re_flags = if magic_isset() { RE_MAGIC } else { 0 };
         // Ignore case when 'fileignorecase' is set.
-        let Some(mut regmatch) = OwnedMatch::compile(regexp.as_cstr(), re_flags, p_fic()) else {
+        let Some(mut regmatch) = RegMatch::compile(regexp.as_cstr(), re_flags, p_fic()) else {
             break;
         };
         if !delete_matching_args(&mut regmatch) {

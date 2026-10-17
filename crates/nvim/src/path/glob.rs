@@ -29,8 +29,9 @@ use crate::fileio::file_pat_to_regpat;
 use crate::guard::{Depth, Suppress};
 use crate::mbyte::{char_at, cluster_len};
 use crate::os::fs::{link_exists, path_exists};
-use crate::regexp::{OwnedMatch, RE_MAGIC, RE_NOBREAK};
+use crate::regexp::{RE_MAGIC, RE_NOBREAK};
 use crate::types::MAXPATHL;
+use crate::types::RegMatch;
 
 /// How deep a `**` may recurse. Upstream's limit, and the reason a pattern
 /// over a symlink loop terminates.
@@ -266,7 +267,7 @@ pub(crate) fn do_path_expand(
         .has(ExpandFlags::NOERROR | ExpandFlags::NOTWILD)
         .then(Suppress::emsg_silent);
     let nobreak = flags.has(ExpandFlags::NOBREAK);
-    let compiled = OwnedMatch::compile(
+    let compiled = RegMatch::compile(
         pat.as_cstr(),
         RE_MAGIC | if nobreak { RE_NOBREAK } else { 0 },
         ignore_case,
@@ -276,7 +277,7 @@ pub(crate) fn do_path_expand(
     if compiled.is_none() && !flags.has(ExpandFlags::NOTWILD) {
         return 0;
     }
-    let mut regmatch = compiled.unwrap_or_else(OwnedMatch::none);
+    let mut regmatch = compiled.unwrap_or_default();
     regmatch.rm_ic = ignore_case;
     // A "**" by itself also matches no directory at all, so the
     // components after it are tried against the directory reached so
@@ -375,13 +376,13 @@ fn name_is_wanted(name: &[u8], starts_with_dot: bool, flags: ExpandFlags) -> boo
 /// [`ExpandFlags::NOTWILD`] asked for the component's own text — the first
 /// `comp_len` bytes of `comp` — to be compared literally.
 fn name_matches(
-    regmatch: &mut OwnedMatch,
+    regmatch: &mut RegMatch,
     name: &CStr,
     flags: ExpandFlags,
     comp: &[u8],
     comp_len: usize,
 ) -> bool {
-    if !regmatch.regprog.is_null() && vim_regexec(regmatch, name, 0) {
+    if regmatch.regprog.is_some() && vim_regexec(regmatch, name, 0) {
         return true;
     }
     flags.has(ExpandFlags::NOTWILD) && path_fnamencmp(comp, name.to_bytes(), comp_len) == 0

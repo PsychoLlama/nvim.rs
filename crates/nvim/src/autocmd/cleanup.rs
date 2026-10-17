@@ -46,7 +46,7 @@ pub(crate) unsafe fn aucmd_del(ac: *mut AutoCmd) {
         // The last autocommand on a pattern takes the pattern with it.
         if unsafe { (*pat).refcount.release() } == 0 {
             xfree_clear(unsafe { &raw mut (*pat).pat });
-            unsafe { vim_regfree((*pat).reg_prog) };
+            unsafe { (*pat).reg_prog = None };
             unsafe { xfree(pat.cast::<::core::ffi::c_void>()) };
         }
     }
