@@ -276,6 +276,11 @@ run inssweep   "$T/insverify.sh"
 run contsweep  "$T/contverify.sh"
 run exprsweep  "$T/exprverify.sh"
 run msgsweep   "$T/msgverify.sh"
+# Every `syn match`/`syn region` pattern in runtime/syntax (~21,000
+# distinct), compiled and searched under 'regexpengine' 0/1/2: the
+# patterns users actually run the engines on.  Its own row so `re`
+# keeps its budget; ~35 s.
+run synsweep   "$T/synverify.sh"
 # Reads on-disk artifacts a FIXED binary wrote (readbaseverify.sh); the
 # rows above only read back what the binary under test wrote.  ~2 s.
 if [ -n "$GOLDENS" ]; then

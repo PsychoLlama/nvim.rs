@@ -1,6 +1,6 @@
 # The differential battery
 
-Thirty-five baselined oracles plus a paired startup probe. Each row drives the
+Thirty-six baselined oracles plus a paired startup probe. Each row drives the
 binary this tree builds through a fixed corpus, scrubs everything that names
 _where_ or _when_ the run happened, and diffs the result against the same
 corpus run through the binary of a **pinned reference commit**. A row says
@@ -11,7 +11,7 @@ Nothing generated is committed. The baselines used to be 276 files and 53 MiB
 of `*base/` in git; they are now **cut on demand** and cached under `target/`.
 
 ```
-just battery              # all 36, ~8 min warm, logs under target/battery-logs
+just battery              # all 37, ~8 min warm, logs under target/battery-logs
 just battery my-label     # same, naming the log set
 test/battery/keyverify.sh # one row, on its own — same cache, same pin
 ```
@@ -92,6 +92,7 @@ its children through `scr`'s harness (the functional suite's `testnvim` +
 | `term`   | `terminal.rs` and its submodules, including a real pty                                        |
 | `mark`   | `marktree.rs` and `marktree/` — the tree's SHAPE, via `nvim__buf_debug_extmarks`              |
 | `re`     | `regexp.rs` and `regexp/` — both engines side by side under `'regexpengine'`                  |
+| `syn`    | the regexp engines over every `syn match`/`syn region` pattern in `runtime/syntax`            |
 | `opt`    | the option TABLE, one row per option for all 374, and `do_set`'s alphabet                     |
 | `spell`  | `spellfile.rs` + `spellsuggest.rs` — 30 `:mkspell` cases, hashed `.spl`/`.sug`                |
 | `pers`   | `memline`, `memfile`, `shada`, `fileio`, `bufwrite` — swap and ShaDa bytes                    |
