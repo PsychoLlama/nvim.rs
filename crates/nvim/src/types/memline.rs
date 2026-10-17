@@ -413,6 +413,7 @@ impl MemLine {
 
     /// The cached line's bytes, its NUL left out. Empty when nothing is
     /// cached.
+    #[inline]
     pub(crate) fn cached_bytes(&self) -> &[u8] {
         let len = usize::try_from(self.ml_line.textlen - 1).unwrap_or(0);
         match &self.ml_line.text {

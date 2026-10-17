@@ -451,18 +451,16 @@ impl SynState {
         cstr::byte_at(Lines::in_buffer(self.buffer).line(self.lnum), col as usize)
     }
 
-    /// The bytes at `col` and `col + 1` of the line being parsed, NUL at and
-    /// past its end: what the per-column step tests for the end of the line,
-    /// from one fetch of it.
+    /// Whether `col`, and `col + 1`, are at or past the end of the line
+    /// being parsed: upstream's tests for the NUL there, which a memline
+    /// line holds only at its end (it stores a NUL byte as an `NL`).
+    ///
+    /// The per-column step asks this of every cell, so it reads the line's
+    /// length and not its bytes.
     #[inline]
-    pub(crate) fn curline_bytes_at(&self, col: ColNr) -> (c_int, c_int) {
-        let mut lines = Lines::in_buffer(self.buffer);
-        let line = lines.line(self.lnum);
-        let at = col as usize;
-        (
-            c_int::from(cstr::byte_at(line, at)),
-            c_int::from(cstr::byte_at(line, at + 1)),
-        )
+    pub(crate) fn line_ends_at(&self, col: ColNr) -> (bool, bool) {
+        let len = self.curline_len();
+        (col >= len, col + 1 >= len)
     }
 
     /// Number of lines in the buffer being parsed.

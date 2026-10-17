@@ -15,11 +15,10 @@
 use core::ffi::c_int;
 
 use super::*;
-use crate::charset::is_word_at;
+use crate::charset::{is_word_at, vim_iswordc_buf};
 use crate::mbyte::head_off;
 use crate::memline::Lines;
 use crate::pos::MAXCOL;
-use crate::types::NUL;
 
 /// Highlight attributes for the character at `col`.
 ///
@@ -135,8 +134,8 @@ impl SynState {
 
         // No character, no attributes -- past end of line? Do try matching an
         // empty line, which could be the start of a region.
-        let (here, next) = self.curline_bytes_at(self.col);
-        if here == NUL && self.col != 0 {
+        let (at_end, next_at_end) = self.line_ends_at(self.col);
+        if at_end && self.col != 0 {
             // If we found a match after the last column, use it.
             if self.next_match.idx >= 0
                 && self.next_match.col >= self.col
@@ -149,7 +148,7 @@ impl SynState {
             return 0;
         }
         // If the current or the next character is NUL, this finishes the line.
-        if here == NUL || next == NUL {
+        if at_end || next_at_end {
             self.finished = true;
             self.state_stored = false;
         }
@@ -234,8 +233,7 @@ impl SynState {
                 if !found_match {
                     let white = self.next_flags.has(SynFlags::SKIPWHITE)
                         && ascii_iswhite(c_int::from(self.curline_byte(self.col)));
-                    let empty = self.next_flags.has(SynFlags::SKIPEMPTY)
-                        && c_int::from(self.curline_byte(0)) == NUL;
+                    let empty = self.next_flags.has(SynFlags::SKIPEMPTY) && self.curline_len() == 0;
                     if white || empty {
                         break;
                     }
@@ -271,7 +269,7 @@ impl SynState {
             // the item here may be an empty match, and a containing item
             // might end in this column too.
             self.check_state_ends();
-            if self.state_len() > 0 && c_int::from(self.curline_byte(self.col)) != NUL {
+            if self.state_len() > 0 && !self.line_ends_at(self.col).0 {
                 self.col += 1;
                 self.check_state_ends();
                 self.col -= 1;
@@ -279,12 +277,11 @@ impl SynState {
         }
 
         // A nextgroup ends at end of line, unless "skipnl" or "skipempty".
-        if !self.next_list.is_none() && !self.next_flags.has(SynFlags::SKIPNL | SynFlags::SKIPEMPTY)
+        if !self.next_list.is_none()
+            && !self.next_flags.has(SynFlags::SKIPNL | SynFlags::SKIPEMPTY)
+            && let (false, true) = self.line_ends_at(self.col)
         {
-            let (here, next) = self.curline_bytes_at(self.col);
-            if here != NUL && next == NUL {
-                self.next_list = IdList::NONE;
-            }
+            self.next_list = IdList::NONE;
         }
 
         self.current.attr
@@ -301,12 +298,18 @@ impl SynState {
         let mut lines = Lines::in_buffer(buffer);
         let line = lines.line(self.lnum);
         let col = self.col as usize;
-        if !is_word_at(&line[col..], buffer) {
+        if !word_char_at(line, col, buffer) {
             return None;
         }
         if col != 0 {
+            // The character before: an ASCII byte starts its own.
             let prev = col - 1;
-            if is_word_at(&line[prev - head_off(line, prev)..], buffer) {
+            let head = if line[prev] < 0x80 {
+                prev
+            } else {
+                prev - head_off(line, prev)
+            };
+            if word_char_at(line, head, buffer) {
                 return None;
             }
         }
@@ -610,6 +613,18 @@ impl SynState {
             .rev()
             .any(|si| si.si_m_startcol == col && si.si_m_lnum == lnum && si.si_idx == idx)
             || gap.contains(&idx)
+    }
+}
+
+/// Whether the character at byte `at` of `line` belongs to a word in
+/// `buffer`: [`is_word_at`] with its ASCII case in line, because
+/// [`SynState::try_keyword`] asks twice per cell.
+#[inline(always)]
+fn word_char_at(line: &[u8], at: usize, buffer: Buf) -> bool {
+    match line.get(at) {
+        Some(&lead) if lead < 0x80 => vim_iswordc_buf(c_int::from(lead), buffer),
+        Some(_) => is_word_at(&line[at..], buffer),
+        None => false,
     }
 }
 

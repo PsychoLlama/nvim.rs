@@ -18,7 +18,6 @@ use core::ffi::{CStr, c_int};
 use super::*;
 use crate::optionstr::OptString;
 use crate::regexp::RE_MAGIC;
-use crate::types::NUL;
 use crate::winlayer::graph::{switch_buffer, switch_window};
 
 /// Where a `:syntax sync match` matched, and what it said to do there.
@@ -278,7 +277,7 @@ impl SynState {
                 // syn_current_attr() skipped the check for an item that ends
                 // here; do it now. Be careful not to go past the NUL.
                 let prev_col = self.col;
-                if c_int::from(self.curline_byte(self.col)) != NUL {
+                if !self.line_ends_at(self.col).0 {
                     self.col += 1;
                 }
                 self.check_state_ends();

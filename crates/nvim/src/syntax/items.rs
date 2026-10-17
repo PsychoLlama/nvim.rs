@@ -15,7 +15,6 @@ use core::ffi::c_int;
 
 use super::*;
 use crate::pos::MAXCOL;
-use crate::types::NUL;
 
 impl SynState {
     /// Number of items on the state stack.
@@ -196,7 +195,7 @@ impl SynState {
             self.next_list = next_list;
             self.next_flags = next_flags;
             if !self.next_flags.has(SynFlags::SKIPNL | SynFlags::SKIPEMPTY)
-                && self.curline_byte(self.col) as c_int == NUL
+                && self.line_ends_at(self.col).0
             {
                 self.next_list = IdList::NONE;
             }
@@ -233,7 +232,7 @@ impl SynState {
                 self.check_keepend();
                 if self.next_flags.has(SynFlags::HAS_EOL)
                     && self.keepend_level < 0
-                    && self.curline_byte(self.col) as c_int == NUL
+                    && self.line_ends_at(self.col).0
                 {
                     return;
                 }
