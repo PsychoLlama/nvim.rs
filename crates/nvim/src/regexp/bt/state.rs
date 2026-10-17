@@ -28,12 +28,13 @@
 //! 'maxmempattern' is expressed in kilobytes of that byte stack, and it is
 //! the only bound on how far a pattern may backtrack — it is what makes a
 //! runaway match end in E363 rather than in a dead editor. So [`RegStack`]
-//! keeps `bytes`: the length upstream's `ga_len` would have, charged
-//! `size_of::<RegItem>()` per frame and the prefix's own size per prefix,
-//! so E363 fires at exactly the depth it used to.
+//! keeps `bytes`: the length upstream's `ga_len` would have, charged the C
+//! size of a frame per frame and of a prefix per prefix
+//! ([`REGITEM_BYTES`], [`REGSTAR_BYTES`], [`REGBEHIND_BYTES`]), so E363
+//! fires at exactly the depth it used to — whatever the Rust records the
+//! stack holds come to.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -41,6 +42,8 @@
     clippy::cast_sign_loss,
     clippy::ptr_as_ptr
 )]
+
+use core::cell::Cell;
 
 use crate::global_cell::GlobalCell;
 use crate::message::emsg;
@@ -51,7 +54,21 @@ use crate::regexp::{
     REGSTACK_INITIAL, RS_MCLOSE, RS_MOPEN, RS_ZOPEN, RegBehind, RegItem, RegStar, RegState, Rex,
     SavedInput, reg_getline,
 };
-use crate::types::{LPos, int64_t, uint8_t};
+use crate::types::int64_t;
+
+/// What one frame cost on upstream's byte stack: a `regitem_T` — the state
+/// (4), the group number (2, padded to 4), the node pointer (8) and the
+/// `regsave_T`/`save_se_T` union (16). 'maxmempattern' is charged this per
+/// frame, which is what keeps the depth E363 fires at where it was.
+pub(crate) const REGITEM_BYTES: usize = 32;
+
+/// A `regstar_T`, the `\{n,m}` counter a `RS_STAR_*` frame carries: two
+/// `int`s and three `long`s.
+pub(crate) const REGSTAR_BYTES: usize = 32;
+
+/// A `regbehind_T`, the snapshot a look-behind frame carries: two
+/// `regsave_T`s (32), an `int` padded to 8, and twenty `save_se_T`s (160).
+pub(crate) const REGBEHIND_BYTES: usize = 200;
 
 /// How many `\1`..`\9` slots a match has.
 const NSUBEXP_SLOTS: usize = NSUBEXP as usize;
@@ -76,30 +93,26 @@ const BLANK_BEHIND: RegBehind = RegBehind {
 /// How many frames the stack keeps between matches. Upstream pre-grew its
 /// byte stack to `REGSTACK_INITIAL` and freed it again whenever a match had
 /// made it larger; this is the same threshold counted in frames.
-const KEEP_FRAMES: usize = REGSTACK_INITIAL as usize / size_of::<RegItem>();
+const KEEP_FRAMES: usize = REGSTACK_INITIAL as usize / REGITEM_BYTES;
 
 /// How many back-edge entries the record keeps between matches, for the same
 /// reason: upstream pre-grew its garray to this and freed it again whenever a
 /// match had made it larger.
 const KEEP_EDGES: usize = BACKPOS_INITIAL as usize;
 
-/// Everything one `regmatch` works in, live for the duration of that call.
+/// The working state matches leave behind for the next one.
 ///
-/// It is a global rather than a local of the match so that an ordinary match
-/// never allocates: the buffers a previous one needed are still there.
-/// Nothing the matcher runs re-enters `regmatch` — `bt_regexec_both` calls
-/// nothing that calls back into the editor — so one of these is enough, and
-/// [`super::matcher::regmatch`] takes it once and threads its three fields
-/// down separately.
+/// It is kept between matches so that an ordinary match never allocates:
+/// the buffers a previous one needed are still there. A match **takes** it
+/// for its whole run ([`GlobalCell::take`], once per `bt_regexec` call
+/// rather than once per start column) and puts it back when it returns —
+/// so the cell is never borrowed across the match, and a match that started
+/// inside another (nothing the matcher runs does that today) would find it
+/// empty and grow its own rather than share it.
 ///
-/// **It is taken raw, not through [`GlobalCell::with_mut`], and that is
-/// measured rather than sloppy.** `regmatch` runs once per start column, so
-/// the debug borrow table's thread-local lookup and hash-map insert land on
-/// it hundreds of thousands of times in a single `:%s`: wrapping the two
-/// entry points in `with_mut` made a regexp-heavy debug workload **3.7×
-/// slower** (2.7 s → 10.2 s). It is the same bargain
-/// [`super::super::rex::Rex::acquire`] makes, for the same reason, and it is
-/// why `reg_save`/`reg_restore` take a `&mut` rather than reaching the cell.
+/// [`super::matcher::regmatch`] threads its three fields down separately,
+/// by `&mut`: `reg_save` and `reg_restore` run millions of times in a
+/// regexp-heavy session.
 pub(crate) static BT_STATE: GlobalCell<BtState> = GlobalCell::new(BtState::new());
 
 /// The backtracker's working state for one match.
@@ -110,6 +123,12 @@ pub(crate) struct BtState {
     pub(crate) backpos: BackPos,
     /// The `\{n,m}` bounds and counters of the complex repeats.
     pub(crate) braces: Braces,
+}
+
+impl Default for BtState {
+    fn default() -> BtState {
+        BtState::new()
+    }
 }
 
 impl BtState {
@@ -346,7 +365,7 @@ impl RegStack {
     ///
     /// `None` when 'maxmempattern' has been reached.
     pub(crate) fn push(&mut self, state: RegState, scan: usize) -> Option<&mut RegItem> {
-        if !self.charge(size_of::<RegItem>()) {
+        if !self.charge(REGITEM_BYTES) {
             return None;
         }
         self.frames.push(RegItem {
@@ -359,7 +378,7 @@ impl RegStack {
 
     /// Push a `\{n,m}` counter and the frame that reads it.
     pub(crate) fn push_star(&mut self, state: RegState, scan: usize, counter: RegStar) -> bool {
-        if !self.charge(size_of::<RegStar>()) {
+        if !self.charge(REGSTAR_BYTES) {
             return false;
         }
         self.stars.push(counter);
@@ -368,7 +387,7 @@ impl RegStack {
 
     /// Push a look-behind snapshot and the frame that reads it.
     pub(crate) fn push_behind(&mut self, state: RegState, scan: usize) -> bool {
-        if !self.charge(size_of::<RegBehind>()) {
+        if !self.charge(REGBEHIND_BYTES) {
             return false;
         }
         self.behinds.push(BLANK_BEHIND);
@@ -405,21 +424,21 @@ impl RegStack {
     pub(crate) fn pop(&mut self, scan: &mut usize) {
         let frame = self.frames.pop().expect("a frame to pop");
         *scan = frame.rs_scan;
-        self.bytes -= size_of::<RegItem>();
+        self.bytes -= REGITEM_BYTES;
     }
 
     /// Pop a `RS_STAR_*` frame and the counter in front of it.
     pub(crate) fn pop_star(&mut self, scan: &mut usize) {
         self.pop(scan);
         self.stars.pop().expect("a counter for the frame");
-        self.bytes -= size_of::<RegStar>();
+        self.bytes -= REGSTAR_BYTES;
     }
 
     /// Pop a `RS_BEHIND*` frame and the snapshot in front of it.
     pub(crate) fn pop_behind(&mut self, scan: &mut usize) {
         self.pop(scan);
         self.behinds.pop().expect("a snapshot for the frame");
-        self.bytes -= size_of::<RegBehind>();
+        self.bytes -= REGBEHIND_BYTES;
     }
 }
 
@@ -444,155 +463,64 @@ pub(crate) fn reg_save(rex: Rex, backpos: &BackPos) -> SavedInput {
 pub(crate) fn reg_restore(rex: Rex, save: &SavedInput, backpos: &mut BackPos) {
     if rex.multi() && rex.lnum() != save.pos.as_pos().lnum {
         rex.set_lnum(save.pos.as_pos().lnum);
-        rex.set_line(reg_getline(rex, rex.lnum()).cast());
+        rex.set_line(reg_getline(rex, rex.lnum()).unwrap_or(b"\0"));
     }
     rex.seek_col_of(save.pos);
     backpos.rewind(save.backpos_len);
 }
 
-/// One end of one capture group, in whichever of the four slot arrays holds
-/// it.
-///
-/// A buffer match records `LPos`s and a string match pointers, and *only the
-/// pair its own kind names exists*: the other pair is null for the whole run.
-/// So the kind has to be settled before a slot address is formed at all —
-/// `null.add(no)` is undefined even when the address is thrown away
-/// unexamined, which is why this is an enum of two addresses rather than a
-/// pair of them.
-#[derive(Clone, Copy)]
-pub(crate) enum GroupSlot {
-    /// A buffer match's slot: the caller's, or the context's for `\z(`.
-    Pos(*mut LPos),
-    /// A string match's slot, likewise.
-    Ptr(*mut *mut uint8_t),
-}
-
-impl GroupSlot {
-    /// What the slot holds.
-    ///
-    /// # Safety
-    ///
-    /// The slot must still belong to the running match.
-    #[inline(always)]
-    pub(crate) unsafe fn get(self) -> MatchPos {
-        match self {
-            // SAFETY: the caller promises a live slot, and the variant is the
-            // shape it holds because the match's own kind chose it.
-            GroupSlot::Pos(p) => MatchPos::from_pos(unsafe { *p }),
-            GroupSlot::Ptr(p) => MatchPos::from_ptr(unsafe { *p }),
-        }
-    }
-
-    /// Put `at` in the slot.
-    ///
-    /// # Safety
-    ///
-    /// As [`GroupSlot::get`].
-    #[inline(always)]
-    pub(crate) unsafe fn set(self, at: MatchPos) {
-        match self {
-            // SAFETY: as `get`.
-            GroupSlot::Pos(p) => unsafe { *p = at.as_pos() },
-            GroupSlot::Ptr(p) => unsafe { *p = at.as_ptr() },
-        }
-    }
-}
-
 /// Which slot a capture frame is about: its state says which end of which
-/// family, and `no` which group.
+/// family — the `\1` groups or the `\z(` ones — and `no` which group.
 ///
-/// The `\1` groups live in the caller's match structure and the `\z(` ones
-/// in the match context, which is why there are four families and not two.
-/// The *kind* has to be settled before an address is formed at all, because
-/// the caller's pair this match does not use is null for the whole run.
-///
-/// # Safety
-///
-/// `state` must be one of `RS_MOPEN`, `RS_MCLOSE`, `RS_ZOPEN`, `RS_ZCLOSE`,
-/// and `no` must name a capture group the running match holds slots for.
+/// # Panics
+/// If `no` is not a group, `\0`..`\9`; the compiler bounds the operand.
 #[inline(always)]
-pub(crate) unsafe fn capture_slot(rex: Rex, state: RegState, no: usize) -> GroupSlot {
-    if rex.multi() {
-        let array = match state {
-            RS_MOPEN => rex.reg_startpos(),
-            RS_MCLOSE => rex.reg_endpos(),
-            RS_ZOPEN => rex.zslot_start_pos(),
-            _ => rex.zslot_end_pos(),
-        };
-        // SAFETY: the caller promises the group, and this is the array a
-        // buffer match fills.
-        GroupSlot::Pos(unsafe { array.add(no) })
-    } else {
-        let array = match state {
-            RS_MOPEN => rex.reg_startp(),
-            RS_MCLOSE => rex.reg_endp(),
-            RS_ZOPEN => rex.zslot_start_ptr(),
-            _ => rex.zslot_end_ptr(),
-        };
-        // SAFETY: as above, for a string match's array.
-        GroupSlot::Ptr(unsafe { array.add(no) })
+pub(crate) fn capture_slot<'t>(rex: Rex<'t>, state: RegState, no: usize) -> &'t Cell<MatchPos> {
+    match state {
+        RS_MOPEN => rex.start(no),
+        RS_MCLOSE => rex.end(no),
+        RS_ZOPEN => rex.zstart(no),
+        _ => rex.zend(no),
     }
 }
 
 /// Move the current position into `slot`, keeping what it held in `savep` so
 /// the unwinder can put it back.
-///
-/// # Safety
-///
-/// `slot` must still belong to the running match.
-pub(crate) unsafe fn save_capture(rex: Rex, savep: &mut MatchPos, slot: GroupSlot) {
-    // SAFETY: the caller promises the slot.
-    *savep = unsafe { slot.get() };
-    unsafe { slot.set(rex.here()) };
+#[inline(always)]
+pub(crate) fn save_capture(rex: Rex, savep: &mut MatchPos, slot: &Cell<MatchPos>) {
+    *savep = slot.replace(rex.here());
 }
 
-/// Copy every `\1`..`\9` capture into `bp`, so that a look-behind attempt can
-/// be undone whole.
+/// Copy every `\1`..`\9` capture into `bp`, so that a look-behind attempt
+/// can be undone whole.
 ///
 /// `need_clear_subexpr` means the captures have not been touched yet this
 /// match, and then there is nothing to copy — the flag alone restores them.
 pub(crate) fn save_subexpr(rex: Rex, behind: &mut RegBehind) {
-    behind.save_need_clear_subexpr = rex.need_clear_subexpr();
-    if behind.save_need_clear_subexpr != 0 {
+    behind.save_need_clear_subexpr = c_int_from(rex.need_clear_subexpr());
+    if rex.need_clear_subexpr() {
         return;
     }
-    // SAFETY: whichever pair of capture arrays this match's kind names holds
-    // `NSUBEXP` live entries for as long as the match runs.
-    if rex.multi() {
-        let (starts, ends) = (rex.reg_startpos(), rex.reg_endpos());
-        behind.save_start = core::array::from_fn(|i| MatchPos::from_pos(unsafe { *starts.add(i) }));
-        behind.save_end = core::array::from_fn(|i| MatchPos::from_pos(unsafe { *ends.add(i) }));
-    } else {
-        let (starts, ends) = (rex.reg_startp(), rex.reg_endp());
-        behind.save_start = core::array::from_fn(|i| MatchPos::from_ptr(unsafe { *starts.add(i) }));
-        behind.save_end = core::array::from_fn(|i| MatchPos::from_ptr(unsafe { *ends.add(i) }));
-    }
+    let (starts, ends) = (rex.starts(), rex.ends());
+    behind.save_start = core::array::from_fn(|i| starts[i].get());
+    behind.save_end = core::array::from_fn(|i| ends[i].get());
 }
 
 /// Undo [`save_subexpr`].
 pub(crate) fn restore_subexpr(rex: Rex, behind: &RegBehind) {
-    rex.set_need_clear_subexpr(behind.save_need_clear_subexpr);
+    rex.set_need_clear_subexpr(behind.save_need_clear_subexpr != 0);
     if behind.save_need_clear_subexpr != 0 {
         return;
     }
-    // SAFETY: as `save_subexpr`.
-    if rex.multi() {
-        let starts = unsafe { core::slice::from_raw_parts_mut(rex.reg_startpos(), NSUBEXP_SLOTS) };
-        let ends = unsafe { core::slice::from_raw_parts_mut(rex.reg_endpos(), NSUBEXP_SLOTS) };
-        for (slot, saved) in starts.iter_mut().zip(&behind.save_start) {
-            *slot = saved.as_pos();
-        }
-        for (slot, saved) in ends.iter_mut().zip(&behind.save_end) {
-            *slot = saved.as_pos();
-        }
-    } else {
-        let starts = unsafe { core::slice::from_raw_parts_mut(rex.reg_startp(), NSUBEXP_SLOTS) };
-        let ends = unsafe { core::slice::from_raw_parts_mut(rex.reg_endp(), NSUBEXP_SLOTS) };
-        for (slot, saved) in starts.iter_mut().zip(&behind.save_start) {
-            *slot = saved.as_ptr();
-        }
-        for (slot, saved) in ends.iter_mut().zip(&behind.save_end) {
-            *slot = saved.as_ptr();
-        }
+    for (slot, saved) in rex.starts().iter().zip(&behind.save_start) {
+        slot.set(*saved);
     }
+    for (slot, saved) in rex.ends().iter().zip(&behind.save_end) {
+        slot.set(*saved);
+    }
+}
+
+/// The flag as the `int` the snapshot keeps.
+fn c_int_from(flag: bool) -> core::ffi::c_int {
+    core::ffi::c_int::from(flag)
 }

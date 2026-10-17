@@ -29,7 +29,7 @@ use super::run::nfa_did_time_out;
 use super::step::{Run, Step, lookaround_held, step};
 use super::sub::{copy_sub, copy_sub_off, has_zsubexpr, match_follows};
 use crate::getchar::state::got_int;
-use crate::mbyte::{utf_fold, utf_ptr2char};
+use crate::mbyte::utf_fold;
 use crate::regexp::{
     AUTOMATIC_ENGINE, NFA_MAX_STATES, NFA_TOO_EXPENSIVE, NfaPim, NfaRegProg, NfaState, PimResult,
     RegSubs, Rex, recursive_regmatch, reg_breakcheck, reg_nextline, skip_to_start,
@@ -231,7 +231,7 @@ unsafe fn scan(
 /// Has the caller's time limit passed? Checked one character in
 /// [`TIME_CHECK_INTERVAL`], because reading the clock is not free.
 fn out_of_time(rex: Rex) -> bool {
-    if rex.time_budget().limit.is_null() || !rex.time_check_due(TIME_CHECK_INTERVAL) {
+    if rex.deadline().is_none() || !rex.time_check_due(TIME_CHECK_INTERVAL) {
         return false;
     }
     nfa_did_time_out(rex)
@@ -239,10 +239,8 @@ fn out_of_time(rex: Rex) -> bool {
 
 /// Does the lookaround being matched still have input left on a later line?
 fn sub_match_spans_lines(rex: Rex) -> bool {
-    let endp = rex.nfa_endp();
-    // SAFETY: `nfa_endp` is null or the stopping point of the lookaround
-    // being matched, which outlives it.
-    !endp.is_null() && rex.multi() && rex.lnum() < unsafe { (*endp).as_pos().lnum }
+    rex.nfa_endp()
+        .is_some_and(|endp| rex.multi() && rex.lnum() < endp.as_pos().lnum)
 }
 
 /// Put the state a thread decided on onto a list.
@@ -392,9 +390,9 @@ unsafe fn restart(
             if skip_to_start(rex, regstart, &mut col).is_err() {
                 return false;
             }
-            rex.set_input(unsafe { rex.line().offset(col as isize).offset(-(clen as isize)) });
+            rex.set_col(col - clen);
         } else {
-            let next = unsafe { utf_ptr2char((rex.input_str()).offset(clen as isize)) };
+            let next = rex.char_at_offset(clen);
             if next != regstart && (!rex.reg_ic() || utf_fold(next) != utf_fold(regstart)) {
                 return true;
             }
@@ -441,11 +439,5 @@ fn wants_restart(rex: Rex, toplevel: bool, clen: c_int) -> bool {
     }
     // A lookaround's machine may start anywhere before the position the
     // outer match told it to stop at.
-    let endp = rex.nfa_endp();
-    if endp.is_null() {
-        return false;
-    }
-    // SAFETY: `nfa_endp` holds the position the lookaround was told to stop
-    // at, which outlives the lookaround.
-    rex.is_before(unsafe { *endp })
+    rex.nfa_endp().is_some_and(|endp| rex.is_before(endp))
 }

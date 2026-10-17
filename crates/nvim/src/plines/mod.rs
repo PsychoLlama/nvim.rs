@@ -175,6 +175,23 @@ pub(crate) unsafe fn win_linetabsize(
     unsafe { win_linetabsize_col(window, lnum, line, 0, len) }
 }
 
+/// [`win_linetabsize`] over a line held as a slice that keeps its NUL.
+///
+/// `lnum` places inline virtual text, as there; the walk itself reads no
+/// further than the NUL or `len`, whichever comes first, so a slice that is
+/// not that line misplaces the virtual text and reads nothing it does not
+/// hold. The regexp matcher's `\%v` hands its *string* here with line 1,
+/// which is upstream's behaviour.
+///
+/// # Panics
+/// If `line` does not end in a NUL.
+pub(crate) fn win_linetabsize_bytes(window: Win, lnum: LineNr, line: &[u8], len: ColNr) -> c_int {
+    assert_eq!(line.last(), Some(&0), "a terminated line");
+    // SAFETY: `line` is NUL-terminated, and nothing below reads past the
+    // terminator or writes through the pointer.
+    unsafe { win_linetabsize(window, lnum, line.as_ptr().cast_mut().cast(), len) }
+}
+
 /// [`win_linetabsize`] starting from virtual column `startvcol` — the one
 /// body both it and [`linetabsize_col`] are.
 ///

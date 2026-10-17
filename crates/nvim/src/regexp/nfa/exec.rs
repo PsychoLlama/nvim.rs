@@ -14,9 +14,7 @@ use crate::regexp::ExtMatch;
 use crate::regexp::ExtMatchRef;
 use crate::regexp::RF_HAD_EOL;
 use crate::regexp::RegCompiler;
-use crate::winlayer::Buf;
-use crate::winlayer::Win;
-use core::ffi::c_int;
+use core::ffi::{CStr, c_int};
 
 use super::build::{Pass, nfa_postprocess, post2nfa};
 use super::compile::{nfa_get_match_text, nfa_get_reganch, nfa_get_regstart};
@@ -29,30 +27,22 @@ use crate::message::e_null;
 use crate::message::iemsg;
 use crate::os::cshim::gettext;
 use crate::regexp::{
-    NFA_TOO_EXPENSIVE, NSUBEXP, NfaRegProg, NfaState, REX_SET, RF_ICASE, RF_ICOMBINE, RF_NOICASE,
-    RegSubs, Rex, TimeBudget, cleanup_subexpr, cleanup_zsubexpr, init_regexec, init_regexec_multi,
-    nfa_regengine, reg_getline,
+    MatchPos, NFA_TOO_EXPENSIVE, NfaRegProg, NfaState, REX_SET, RF_ICASE, RF_ICOMBINE, RF_NOICASE,
+    RegSubs, Rex, TimeBudget, cleanup_subexpr, cleanup_zsubexpr, nfa_regengine, reg_getline,
 };
-use crate::types::{ColNr, LPos, LineNr, NUL, ProfTime, RegMMatch, RegMatch, RegProg, uint8_t};
+use crate::types::{ColNr, LPos, NUL, RegProg};
 
 /// Try to match at column `col` of the current line.
 ///
 /// Returns 0 for no match, `NFA_TOO_EXPENSIVE`, or one more than the line
 /// the match ended on.
-fn nfa_regtry(
-    rex: Rex,
-    prog: *mut NfaRegProg,
-    col: ColNr,
-    tm: *mut ProfTime,
-    timed_out: *mut c_int,
-) -> c_int {
+fn nfa_regtry(rex: Rex, prog: *mut NfaRegProg, col: ColNr) -> c_int {
     // SAFETY: `prog` is a live program and `rex` the match context set up by
-    // `nfa_regexec_both`; the capture arrays below are the caller's, sized
-    // `NSUBEXP`.
+    // `nfa_regexec_both`.
     let mut subs: RegSubs = unsafe { core::mem::zeroed() };
     let mut m: RegSubs = unsafe { core::mem::zeroed() };
-    rex.set_input(unsafe { rex.line().offset(col as isize) });
-    rex.set_time_budget(TimeBudget::new(tm, timed_out));
+    rex.set_col(col);
+    rex.set_time_budget(TimeBudget::NONE);
 
     clear_sub(rex, &mut subs.norm);
     clear_sub(rex, &mut m.norm);
@@ -71,11 +61,7 @@ fn nfa_regtry(
     }
 
     cleanup_subexpr(rex);
-    if rex.multi() {
-        report_buffer_match(rex, &subs, col);
-    } else {
-        report_string_match(rex, &subs, col);
-    }
+    report_match(rex, &subs, col);
 
     // The `\z(` captures go to the syntax highlighter as fresh copies,
     // because it keeps them past the end of this match.
@@ -87,58 +73,26 @@ fn nfa_regtry(
     1 + rex.lnum() as c_int
 }
 
-/// Copy the capture positions of a buffer match into the caller's arrays.
-fn report_buffer_match(rex: Rex, subs: &RegSubs, col: ColNr) {
-    // SAFETY: a buffer match's context holds the caller's position arrays,
-    // `NSUBEXP` slots each.
-    let (starts, ends) = unsafe {
-        (
-            core::slice::from_raw_parts_mut(rex.reg_startpos(), NSUBEXP as usize),
-            core::slice::from_raw_parts_mut(rex.reg_endpos(), NSUBEXP as usize),
-        )
-    };
+/// Copy the capture positions into the match's slots.
+fn report_match(rex: Rex, subs: &RegSubs, col: ColNr) {
+    let (starts, ends) = (rex.starts(), rex.ends());
     for i in 0..slots(subs.norm.in_use) {
-        starts[i] = subs.norm.list[i].start.as_pos();
-        ends[i] = subs.norm.list[i].end.as_pos();
+        starts[i].set(subs.norm.list[i].start);
+        ends[i].set(subs.norm.list[i].end);
     }
-    if !rex.reg_mmatch().is_null() {
-        // SAFETY: a non-null `reg_mmatch` is the caller's match structure.
-        unsafe { (*rex.reg_mmatch()).rmm_matchcol = subs.norm.orig_start_col };
+    if rex.multi() {
+        rex.set_matchcol(subs.norm.orig_start_col);
     }
     // A `\zs` before the start, or a `\ze` before the end, can leave group 0
     // unset; it then covers what the machine actually walked.
-    if starts[0].lnum < 0 {
-        starts[0] = LPos { lnum: 0, col };
+    let kind = rex.pos_kind();
+    if !starts[0].get().is_set(kind) {
+        starts[0].set(MatchPos::from_pos(LPos { lnum: 0, col }));
     }
-    if ends[0].lnum < 0 {
-        ends[0] = LPos {
-            lnum: rex.lnum(),
-            col: rex.col(),
-        };
-    } else {
-        rex.set_lnum(ends[0].lnum);
-    }
-}
-
-/// As [`report_buffer_match`], for a match over a plain string.
-fn report_string_match(rex: Rex, subs: &RegSubs, col: ColNr) {
-    // SAFETY: as `report_buffer_match`; a string match's slots are pointers.
-    let (starts, ends) = unsafe {
-        (
-            core::slice::from_raw_parts_mut(rex.reg_startp(), NSUBEXP as usize),
-            core::slice::from_raw_parts_mut(rex.reg_endp(), NSUBEXP as usize),
-        )
-    };
-    for i in 0..slots(subs.norm.in_use) {
-        starts[i] = subs.norm.list[i].start.as_ptr();
-        ends[i] = subs.norm.list[i].end.as_ptr();
-    }
-    if starts[0].is_null() {
-        // SAFETY: `col` is a byte offset into the line being matched.
-        starts[0] = unsafe { rex.line().offset(col as isize) };
-    }
-    if ends[0].is_null() {
-        ends[0] = rex.input();
+    if !ends[0].get().is_set(kind) {
+        ends[0].set(rex.here());
+    } else if rex.multi() {
+        rex.set_lnum(ends[0].get().as_pos().lnum);
     }
 }
 
@@ -148,104 +102,93 @@ fn z_captures(rex: Rex, subs: &RegSubs) -> ExtMatch {
     // Group 0 is the whole match, which the highlighter does not want.
     for i in 1..slots(subs.synt.in_use) {
         let capture = subs.synt.list[i];
-        let text = if rex.multi() {
-            let (start, end) = (capture.start.as_pos(), capture.end.as_pos());
+        let (start, end) = (capture.start.as_pos(), capture.end.as_pos());
+        let line = if rex.multi() {
             // A capture that spans lines cannot be handed over as one
             // string, so it is dropped.
             if start.lnum < 0 || start.lnum != end.lnum || end.col < start.col {
                 continue;
             }
-            // SAFETY: the capture lies inside the line it was taken from.
-            unsafe {
-                core::slice::from_raw_parts(
-                    reg_getline(rex, start.lnum)
-                        .offset(start.col as isize)
-                        .cast::<u8>(),
-                    (end.col - start.col) as usize,
-                )
-            }
+            let Some(line) = reg_getline(rex, start.lnum) else {
+                continue;
+            };
+            line
         } else {
-            let (start, end) = (capture.start.as_ptr(), capture.end.as_ptr());
-            if start.is_null() || end.is_null() {
+            if start.lnum < 0 || end.lnum < 0 {
                 continue;
             }
-            // SAFETY: both ends point into the string being matched.
-            unsafe { core::slice::from_raw_parts(start, end.offset_from(start) as usize) }
+            rex.line()
+        };
+        let from = usize::try_from(start.col).unwrap_or(0).min(line.len() - 1);
+        let text = &line[from..];
+        let text = match usize::try_from(end.col - start.col) {
+            Ok(len) => &text[..len.min(text.len())],
+            Err(_) => text,
         };
         captures.set(i, text);
     }
     captures
 }
 
-/// Match `prog` against a line, from `startcol`.
+/// Run the NFA program `prog` over the match `rex` is set up for, starting
+/// at column `col`. Returns 0 for no match, `NFA_TOO_EXPENSIVE` when the
+/// pattern has to go to the backtracking engine, or one more than the line
+/// the match ended on.
 ///
-/// SAFETY: `rex` has been pointed at the caller's match structure.
-fn nfa_regexec_both(
-    rex: Rex,
-    mut line: *mut uint8_t,
-    startcol: ColNr,
-    tm: *mut ProfTime,
-    timed_out: *mut c_int,
-) -> c_int {
+/// # Safety
+///
+/// `prog` must be a live program this engine compiled, unaliased for the
+/// call.
+pub(crate) unsafe fn nfa_regexec(rex: Rex, prog: *mut NfaRegProg, startcol: ColNr) -> c_int {
     let mut col = startcol;
-    let prog: *mut NfaRegProg = if rex.multi() {
-        line = reg_getline(rex, 0) as *mut uint8_t;
-        rex.set_reg_startpos((unsafe { &raw mut (*rex.reg_mmatch()).startpos }).cast());
-        rex.set_reg_endpos((unsafe { &raw mut (*rex.reg_mmatch()).endpos }).cast());
-        unsafe { (*rex.reg_mmatch()).regprog.cast() }
+    let line = if rex.multi() {
+        reg_getline(rex, 0)
     } else {
-        // A string match's capture slots are the context's own.
-        unsafe { (*rex.reg_match()).regprog.cast() }
+        Some(rex.line())
     };
 
     let mut retval = 0;
-    if prog.is_null() || line.is_null() {
-        iemsg(gettext(e_null));
-    } else {
-        // The pattern's own `\c`/`\C`/`\Z` override what the caller asked
-        // for.
-        if unsafe { (*prog).regflags } & RF_ICASE as u32 != 0 {
-            rex.set_reg_ic(true);
-        } else if unsafe { (*prog).regflags } & RF_NOICASE as u32 != 0 {
-            rex.set_reg_ic(false);
-        }
-        if unsafe { (*prog).regflags } & RF_ICOMBINE as u32 != 0 {
-            rex.set_reg_icombine(true);
-        }
-        rex.set_line(line);
-        rex.set_lnum(0);
-        rex.set_nfa_has_zend(unsafe { (*prog).has_zend });
-        rex.set_nfa_has_backref(unsafe { (*prog).has_backref });
-        rex.set_nfa_nsubexpr(unsafe { (*prog).nsubexp });
-        rex.set_nfa_listid(1);
-        rex.set_nfa_alt_listid(2);
+    match line {
+        Some(line) if !prog.is_null() => {
+            // The pattern's own `\c`/`\C`/`\Z` override what the caller
+            // asked for.
+            if unsafe { (*prog).regflags } & RF_ICASE as u32 != 0 {
+                rex.set_reg_ic(true);
+            } else if unsafe { (*prog).regflags } & RF_NOICASE as u32 != 0 {
+                rex.set_reg_ic(false);
+            }
+            if unsafe { (*prog).regflags } & RF_ICOMBINE as u32 != 0 {
+                rex.set_reg_icombine(true);
+            }
+            rex.set_line(line);
+            rex.set_lnum(0);
+            rex.set_nfa_has_zend(unsafe { (*prog).has_zend });
+            rex.set_nfa_has_backref(unsafe { (*prog).has_backref });
+            rex.set_nfa_nsubexpr(unsafe { (*prog).nsubexp });
+            rex.set_nfa_listid(1);
+            rex.set_nfa_alt_listid(2);
 
-        retval = match try_match(rex, prog, &mut col, tm, timed_out) {
-            Attempt::Ran(retval) => retval,
-            // The literal-text shortcut and the two "cannot match
-            // here" answers report straight back, without the
-            // start/end tidy-up below.
-            Attempt::Done(retval) => return retval,
-        };
+            retval = match try_match(rex, prog, &mut col) {
+                Attempt::Ran(retval) => retval,
+                // The literal-text shortcut and the two "cannot match
+                // here" answers report straight back, without the
+                // start/end tidy-up below.
+                Attempt::Done(retval) => return retval,
+            };
+        }
+        _ => iemsg(gettext(e_null)),
     }
 
     if retval > 0 {
         // A `\ze` can put the end before the start; report an empty
         // match rather than a backwards one.
-        if rex.multi() {
-            let rmm = rex.reg_mmatch();
-            let (start, end) = (unsafe { (*rmm).startpos[0] }, unsafe { (*rmm).endpos[0] });
-            if end.lnum < start.lnum || (end.lnum == start.lnum && end.col < start.col) {
-                unsafe { (*rmm).endpos[0] = start };
-            }
-        } else {
-            // The slots a string match fills are the context's own; the
-            // API layer turns them into the caller's offsets.
-            let (starts, ends) = (rex.reg_startp(), rex.reg_endp());
-            if unsafe { *ends } < unsafe { *starts } {
-                unsafe { *ends = *starts };
-            }
-            unsafe { (*rex.reg_match()).rm_matchcol = col };
+        let kind = rex.pos_kind();
+        let (start, end) = (rex.start(0).get(), rex.end(0));
+        if end.get().is_before(start, kind) {
+            end.set(start);
+        }
+        if !rex.multi() {
+            rex.set_matchcol(col);
         }
     }
     retval
@@ -262,21 +205,15 @@ enum Attempt {
 /// The shortcuts, and the match itself.
 ///
 /// SAFETY: As `nfa_regexec_both`.
-fn try_match(
-    rex: Rex,
-    prog: *mut NfaRegProg,
-    col: &mut ColNr,
-    tm: *mut ProfTime,
-    timed_out: *mut c_int,
-) -> Attempt {
+fn try_match(rex: Rex, prog: *mut NfaRegProg, col: &mut ColNr) -> Attempt {
     // An anchored pattern can only match at the start of the line.
     if unsafe { (*prog).reganch } != 0 && *col > 0 {
         return Attempt::Done(0);
     }
-    rex.set_need_clear_subexpr(1);
+    rex.set_need_clear_subexpr(true);
     let has_z = unsafe { (*prog).reghasz } == REX_SET;
     rex.set_nfa_has_zsubexpr(has_z as c_int);
-    rex.set_need_clear_zsubexpr(has_z as c_int);
+    rex.set_need_clear_zsubexpr(has_z);
 
     if unsafe { (*prog).regstart } != NUL {
         // The first character is known: there is no point trying any
@@ -291,9 +228,9 @@ fn try_match(
             && unsafe { *(*prog).match_text } as c_int != NUL
             && !rex.reg_icombine()
         {
-            let retval = find_match_text(rex, col, unsafe { (*prog).regstart }, unsafe {
-                (*prog).match_text
-            });
+            // SAFETY: the program's own NUL-terminated copy of the run.
+            let text = unsafe { CStr::from_ptr((*prog).match_text.cast()) }.to_bytes_with_nul();
+            let retval = find_match_text(rex, col, unsafe { (*prog).regstart }, text);
             rex.set_matchcol(*col);
             return Attempt::Done(retval);
         }
@@ -309,7 +246,7 @@ fn try_match(
         unsafe { (*s).id = i };
         unsafe { (*s).lastlist = [0, 0] };
     }
-    Attempt::Ran(nfa_regtry(rex, prog, *col, tm, timed_out))
+    Attempt::Ran(nfa_regtry(rex, prog, *col))
 }
 
 /// Compile `rc`'s pattern into a program, or answer null after reporting why
@@ -373,49 +310,4 @@ pub(crate) unsafe fn nfa_regfree(prog: *mut RegProg) {
     unsafe { xfree((*prog).match_text.cast()) };
     unsafe { xfree((*prog).pattern.cast()) };
     unsafe { xfree(prog.cast()) };
-}
-
-/// Match against a string, treating `\n` as an ordinary character when
-/// `line_lbr` is set.
-///
-/// # Safety
-///
-/// `rmp` must hold a program this engine compiled, and `line` be a
-/// NUL-terminated string.
-pub(crate) unsafe fn nfa_regexec_nl(
-    rmp: *mut RegMatch,
-    line: *mut uint8_t,
-    col: ColNr,
-    line_lbr: bool,
-) -> c_int {
-    // SAFETY: the caller holds the context (`with_rex`) and hands us a
-    // live match structure and a NUL-terminated line.
-    let rex = unsafe { Rex::acquire() };
-    init_regexec(rex, rmp, line_lbr);
-    nfa_regexec_both(rex, line, col, core::ptr::null_mut(), core::ptr::null_mut())
-}
-
-/// Match against a buffer, starting at `lnum`.
-///
-/// # Safety
-///
-/// `rmp` must hold a program this engine compiled, and `buffer`/`win` be the
-/// buffer and window the match runs over.
-pub(crate) unsafe fn nfa_regexec_multi(
-    rmp: *mut RegMMatch,
-    win: Option<Win>,
-    buffer: Buf,
-    lnum: LineNr,
-    col: ColNr,
-    tm: *mut ProfTime,
-    timed_out: *mut c_int,
-) -> c_int {
-    // SAFETY: a live buffer.
-    // SAFETY: the caller holds the context (`with_rex`) and hands us a live
-    // match structure over a live buffer; `init_regexec_multi` points the
-    // context at them, which is what `nfa_regexec_both` reads it out of.
-    let rex = unsafe { Rex::acquire() };
-    // SAFETY: the caller's window (or none) and buffer.
-    init_regexec_multi(rex, rmp, win, buffer, lnum);
-    nfa_regexec_both(rex, core::ptr::null_mut::<uint8_t>(), col, tm, timed_out)
 }

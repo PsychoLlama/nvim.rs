@@ -13,7 +13,7 @@ use super::*;
 
 pub type ColNr = ::core::ffi::c_int;
 pub type LineNr = int32_t;
-#[derive(Copy, Clone, Default)]
+#[derive(Copy, Clone, Default, PartialEq, Eq, Debug)]
 pub struct LPos {
     pub lnum: LineNr,
     pub col: ColNr,

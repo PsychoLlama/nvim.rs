@@ -2,18 +2,17 @@
 //! decomposition table, the case- and composing-aware string compare, and
 //! the case-folded character search.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::cstr;
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use super::Rex;
 use crate::mbyte::{
-    c_cluster_len, char_at, char_len, head_off, iscomposing, utf_fold, utf_ptr2char, utf_strnicmp,
-    utfc_ptr2len,
+    c_cluster_len, char_at, char_len, head_off, iscomposing, strnicmp_in, utf_fold,
 };
-use crate::strings::vim_strchr;
+use crate::memory::memchr_in;
+use crate::strings::find_char;
 use crate::types::GraphemeState;
 
 /// The base characters of U+FB20..U+FB4F, the Hebrew presentation forms, so
@@ -80,17 +79,33 @@ pub(crate) fn decompose(c: c_int) -> [c_int; 3] {
     }
 }
 
+/// `strncmp` over two NUL-terminated slices: the first difference within
+/// `n` bytes, stopping at a terminator.
+#[inline]
+fn compare_prefix(s1: &[u8], s2: &[u8], n: usize) -> c_int {
+    for i in 0..n {
+        let (a, b) = (cstr::byte_at(s1, i), cstr::byte_at(s2, i));
+        if a != b {
+            return if a < b { -1 } else { 1 };
+        }
+        if a == 0 {
+            break;
+        }
+    }
+    0
+}
+
 /// Compare `*n` bytes of `s1` against `s2` under the current 'ignorecase'
 /// and `\Z` settings. On a match `*n` is lowered to the number of bytes of
 /// `s2` that were consumed, which can differ from the bytes of `s1` when a
 /// case fold or a decomposition changed the encoded length.
 ///
-/// # Safety
-///
-/// `s1` and `s2` must point to NUL-terminated strings.
-pub(crate) unsafe fn cstrncmp(rex: Rex, s1: *mut c_char, s2: *mut c_char, n: &mut c_int) -> c_int {
+/// Both are NUL-terminated slices; nothing past a terminator is read.
+pub(crate) fn cstrncmp(rex: Rex, s1: &[u8], s2: &[u8], n: &mut c_int) -> c_int {
+    // A negative count was a huge `size_t` upstream: no bound but the NUL.
+    let bound = |n: c_int| usize::try_from(n).unwrap_or(usize::MAX);
     let mut result = if !rex.reg_ic() {
-        unsafe { cstr::prefix_cmp(s1, s2, *n as usize) as c_int }
+        compare_prefix(s1, s2, bound(*n))
     } else {
         // Count the characters `*n` bytes of s1 spans, then measure how
         // many bytes the same count takes in s2. NB: upstream subtracts
@@ -98,21 +113,22 @@ pub(crate) unsafe fn cstrncmp(rex: Rex, s1: *mut c_char, s2: *mut c_char, n: &mu
         // than the current one's, so a multibyte s1 overcounts the
         // characters; the result feeds only the length hint below, and
         // the quirk is load-bearing for what `*n` comes back as.
-        let mut p = s1;
+        let first = cluster_len_at(s1, 0) as c_int;
+        let mut p = 0;
         let mut chars = 0;
         let mut left = *n;
-        while left > 0 && unsafe { *p } != 0 {
-            left -= unsafe { utfc_ptr2len(s1) };
-            p = unsafe { p.add(utfc_ptr2len(p) as usize) };
+        while left > 0 && cstr::byte_at(s1, p) != 0 {
+            left -= first;
+            p += cluster_len_at(s1, p);
             chars += 1;
         }
-        p = s2;
-        while chars > 0 && unsafe { *p } != 0 {
+        p = 0;
+        while chars > 0 && cstr::byte_at(s2, p) != 0 {
             chars -= 1;
-            p = unsafe { p.add(utfc_ptr2len(p) as usize) };
+            p += cluster_len_at(s2, p);
         }
-        let n2 = unsafe { p.offset_from(s2) } as c_int;
-        let result = unsafe { utf_strnicmp(s1, s2, *n as usize, n2 as usize) };
+        let n2 = p as c_int;
+        let result = strnicmp_in(prefix_at(s1, 0, bound(*n)), prefix_at(s2, 0, bound(n2)));
         if result == 0 && n2 < *n {
             *n = n2;
         }
@@ -122,15 +138,14 @@ pub(crate) unsafe fn cstrncmp(rex: Rex, s1: *mut c_char, s2: *mut c_char, n: &mu
     // `\Z`: differences that are only in the composing characters, or
     // that decomposition erases, don't count.
     if result != 0 && rex.reg_icombine() {
-        let mut str1: *const c_char = s1;
-        let mut str2: *const c_char = s2;
+        let (mut str1, mut str2) = (0usize, 0usize);
         let mut c1 = 0;
         let mut c2 = 0;
-        while unsafe { str1.offset_from(s1) } < *n as isize {
-            c1 = unsafe { utf_ptr2char(str1) };
-            str1 = str1.wrapping_add(unsafe { utfc_ptr2len(str1) } as usize);
-            c2 = unsafe { utf_ptr2char(str2) };
-            str2 = str2.wrapping_add(unsafe { utfc_ptr2len(str2) } as usize);
+        while (str1 as isize) < *n as isize {
+            c1 = char_at_nul(s1, str1);
+            str1 += cluster_len_at(s1, str1);
+            c2 = char_at_nul(s2, str2);
+            str2 += cluster_len_at(s2, str2);
             if c1 == c2 || (rex.reg_ic() && utf_fold(c1) == utf_fold(c2)) {
                 continue;
             }
@@ -142,22 +157,24 @@ pub(crate) unsafe fn cstrncmp(rex: Rex, s1: *mut c_char, s2: *mut c_char, n: &mu
         }
         result = c2 - c1;
         if result == 0 {
-            *n = unsafe { str2.offset_from(s2) } as c_int;
+            *n = str2 as c_int;
         }
     }
     result
 }
 
-/// `strchr` that honours 'ignorecase': find `c` in `s`, matching either
-/// case when the search is case-insensitive.
+/// `strchr` that honours 'ignorecase': where `c` is in `text`, matching
+/// either case when the search is case-insensitive.
 ///
-/// # Safety
-///
-/// `s` must point to a NUL-terminated string.
+/// `text` is the string *without* its terminator — a line from the cursor
+/// to its end ([`super::Rex::text_from`]), or a `[]` operand up to its NUL —
+/// which is what lets the plain search be the C library's `memchr`, as
+/// upstream's `strchr` was: lines are long and core's search costs several
+/// times as much per byte.
 #[inline(always)]
-pub(crate) unsafe fn cstrchr(rex: Rex, s: *const c_char, c: c_int) -> *mut c_char {
+pub(crate) fn cstrchr(rex: Rex, text: &[u8], c: c_int) -> Option<usize> {
     if !rex.reg_ic() {
-        return unsafe { vim_strchr(s, c) };
+        return find_char_in(text, c);
     }
     // `cc` is the other case of `c`, `lc` the folded form to compare
     // non-ASCII against. Characters with no other case take the plain
@@ -173,24 +190,37 @@ pub(crate) unsafe fn cstrchr(rex: Rex, s: *const c_char, c: c_int) -> *mut c_cha
         cc = c - (b'a' - b'A') as c_int;
         lc = c;
     } else {
-        return unsafe { vim_strchr(s, c) };
+        return find_char_in(text, c);
     }
 
-    let mut p = s;
-    while unsafe { *p } != 0 {
-        let uc = unsafe { utf_ptr2char(p) };
+    let mut p = 0;
+    while p < text.len() {
+        let byte = text[p];
+        let uc = char_at_nul(text, p);
         if c > 0x80 || uc > 0x80 {
             // Skip the ASCII case: a multibyte fold must not match a
             // byte that already compared equal below.
-            if (uc < 0x80 || uc != unsafe { *p } as u8 as c_int) && utf_fold(uc) == lc {
-                return p as *mut c_char;
+            if (uc < 0x80 || uc != c_int::from(byte)) && utf_fold(uc) == lc {
+                return Some(p);
             }
-        } else if unsafe { *p } as u8 as c_int == c || unsafe { *p } as u8 as c_int == cc {
-            return p as *mut c_char;
+        } else if c_int::from(byte) == c || c_int::from(byte) == cc {
+            return Some(p);
         }
-        p = unsafe { p.add(utfc_ptr2len(p) as usize) };
+        p += cluster_len_at(text, p);
     }
-    core::ptr::null_mut()
+    None
+}
+
+/// `vim_strchr` over a string held without its terminator.
+#[inline(always)]
+fn find_char_in(text: &[u8], c: c_int) -> Option<usize> {
+    if c <= 0 {
+        return None;
+    }
+    if c < 0x80 {
+        return memchr_in(text, c as u8);
+    }
+    find_char(text, c)
 }
 
 // ------------------------------------------------- the line, as bytes
@@ -249,4 +279,13 @@ pub(crate) fn composes_at(
     // ASCII never combines, and this is the hot answer.
     cstr::byte_at(text, next) >= 0x80
         && iscomposing(char_at_nul(text, cur), char_at_nul(text, next), state)
+}
+
+/// `text[i..]` up to its terminator, at most `n` bytes: what a pointer form
+/// with a length looks at.
+#[inline(always)]
+pub(crate) fn prefix_at(text: &[u8], i: usize, n: usize) -> &[u8] {
+    let rest = text.get(i..).unwrap_or(&[]);
+    let rest = &rest[..n.min(rest.len())];
+    cstr::until_nul(rest)
 }

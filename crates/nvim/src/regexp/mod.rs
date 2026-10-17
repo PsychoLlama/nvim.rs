@@ -27,11 +27,8 @@ use crate::types::CAR;
 use crate::types::ESC;
 use crate::types::NL;
 use crate::types::TAB;
-use crate::types::{
-    ColNr, LPos, LineNr, Magic, MarkGet, ProfTime, RegEngine, RegMMatch, RegMatch, int16_t,
-    int64_t, uint8_t,
-};
-use crate::winlayer::{Buf, Win};
+use crate::types::{ColNr, LPos, LineNr, Magic, MarkGet, RegEngine, int16_t, int64_t, uint8_t};
+use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int, c_uint};
 /// Last-pattern selectors and the regexp-engine/flag bits.
 pub const RE_SEARCH: ::core::ffi::c_int = 0;
@@ -83,90 +80,16 @@ pub const REGSUB_BACKSLASH: c_uint = 4;
 pub const REGSUB_MAGIC: c_uint = 2;
 pub const REGSUB_COPY: c_uint = 1;
 pub const kMarkBufLocal: MarkGet = 0;
-#[derive(Copy, Clone)]
-pub struct RegExec {
-    pub reg_match: *mut RegMatch,
-    pub reg_mmatch: *mut RegMMatch,
-    /// A string match's `\1`..`\9` start slots, and the ends.
-    ///
-    /// Upstream points these at the caller's `RegMatch`, so the engine
-    /// writes the reported captures straight into it. Here they are the
-    /// context's own, and [`api::vim_regexec`] turns them into the offsets
-    /// the caller's match structure carries — which is what lets that
-    /// structure hold spans rather than pointers into text it does not own.
-    /// Being part of the context also means `with_rex` saves and restores
-    /// them, so a `\=` expression that runs a match of its own cannot
-    /// overwrite the captures the outer `submatch()` is about to read.
-    pub str_start: [*mut uint8_t; NSUBEXP as usize],
-    pub str_end: [*mut uint8_t; NSUBEXP as usize],
-    pub reg_startpos: *mut LPos,
-    pub reg_endpos: *mut LPos,
-    /// The window and buffer the match runs in, taken live by the caller
-    /// that sets the match up and only read until it returns.
-    pub reg_win: Option<Win>,
-    pub reg_buf: Buf,
-    pub reg_firstlnum: LineNr,
-    pub reg_maxline: LineNr,
-    pub reg_line_lbr: bool,
-    pub lnum: LineNr,
-    pub line: *mut uint8_t,
-    pub input: *mut uint8_t,
-    pub need_clear_subexpr: c_int,
-    pub need_clear_zsubexpr: c_int,
-    pub reg_ic: bool,
-    pub reg_icombine: bool,
-    pub reg_nobreak: bool,
-    pub reg_maxcol: ColNr,
-    pub nfa_has_zend: c_int,
-    pub nfa_has_backref: c_int,
-    pub nfa_nsubexpr: c_int,
-    pub nfa_listid: c_int,
-    pub nfa_alt_listid: c_int,
-    pub nfa_has_zsubexpr: c_int,
-    /// The NFA engine's verdict so far: 0, a match, or `NFA_TOO_EXPENSIVE`.
-    pub(crate) nfa_match: c_int,
-    /// Where a lookbehind being matched has to stop, or null outside one.
-    pub(crate) nfa_endp: *mut MatchPos,
-    /// Which of a state's two `lastlist` generations the running match
-    /// stamps: 1 inside the first nested lookaround, 0 otherwise.
-    pub(crate) nfa_ll_index: usize,
-    /// The caller's time limit, and how far towards the next read of it.
-    pub(crate) nfa_time: TimeBudget,
-    /// The backtracker's `\z1`..`\z9` slots.
-    pub(crate) zslots: ZSlots,
-    /// Where the look-behind being tried has to end.
-    pub(crate) behind_pos: SavedInput,
-    /// The bounds of the `\{n,m}` the backtracker is about to enter.
-    pub(crate) brace_limits: (int64_t, int64_t),
-    /// The captures `\z1`..`\z9` read: a syntax region's start match,
-    /// borrowed from the caller for the call, or null outside one.
-    pub(crate) ext_in: *const ExtMatch,
-    /// Where a successful match leaves its own `\z(` captures: the caller's
-    /// slot, for the call, or null when nobody asked for them.
-    pub(crate) ext_out: *mut Option<ExtMatchRef>,
-}
-/// The caller's bound on how long an NFA match may run.
+/// The caller's bound on how long an NFA match may run: how many steps
+/// since the clock was last read. The deadline itself is the match
+/// context's ([`Rex::deadline`]).
 #[derive(Copy, Clone)]
 pub(crate) struct TimeBudget {
-    /// The deadline, or null for none.
-    pub(crate) limit: *mut ProfTime,
-    /// Where to report that it passed, or null.
-    pub(crate) timed_out: *mut c_int,
-    /// Steps since the clock was last read.
     count: c_int,
 }
 
 impl TimeBudget {
-    pub(crate) const NONE: TimeBudget =
-        TimeBudget::new(core::ptr::null_mut(), core::ptr::null_mut());
-
-    pub(crate) const fn new(limit: *mut ProfTime, timed_out: *mut c_int) -> TimeBudget {
-        TimeBudget {
-            limit,
-            timed_out,
-            count: 0,
-        }
-    }
+    pub(crate) const NONE: TimeBudget = TimeBudget { count: 0 };
 
     /// Count a step; true once every `interval` of them, when the clock is
     /// worth reading.
@@ -180,48 +103,27 @@ impl TimeBudget {
     }
 }
 
-/// The backtracker's `\z1`..`\z9` slots. Unlike the `\1`..`\9` ones they
-/// are not the caller's: the syntax highlighter collects them once the match
-/// is over. A buffer match fills the positions, a string match the pointers.
-#[derive(Copy, Clone)]
-pub(crate) struct ZSlots {
-    pub(crate) start_pos: [LPos; NSUBEXP as usize],
-    pub(crate) end_pos: [LPos; NSUBEXP as usize],
-    pub(crate) start_ptr: [*mut uint8_t; NSUBEXP as usize],
-    pub(crate) end_ptr: [*mut uint8_t; NSUBEXP as usize],
-}
-
-impl ZSlots {
-    const UNSET: ZSlots = ZSlots {
-        start_pos: [LPos { lnum: -1, col: -1 }; NSUBEXP as usize],
-        end_pos: [LPos { lnum: -1, col: -1 }; NSUBEXP as usize],
-        start_ptr: [core::ptr::null_mut(); NSUBEXP as usize],
-        end_ptr: [core::ptr::null_mut(); NSUBEXP as usize],
-    };
-
-    /// Mark every slot unset: the position pair for a buffer match, the
-    /// pointer pair for a string match.
-    pub(crate) fn clear(&mut self, multi: bool) {
-        if multi {
-            self.start_pos = ZSlots::UNSET.start_pos;
-            self.end_pos = ZSlots::UNSET.end_pos;
-        } else {
-            self.start_ptr = ZSlots::UNSET.start_ptr;
-            self.end_ptr = ZSlots::UNSET.end_ptr;
-        }
-    }
-}
-
-#[derive(Copy, Clone)]
-pub struct RegSubMatch {
-    pub sm_match: *mut RegMatch,
-    pub sm_mmatch: *mut RegMMatch,
-    /// The string a string match ran over, which its capture offsets are
-    /// relative to. Null for a buffer match, whose captures name lines.
-    pub sm_line: *const c_char,
-    pub sm_firstlnum: LineNr,
-    pub sm_maxline: LineNr,
-    pub sm_line_lbr: c_int,
+/// What `submatch()` answers about: the match a `\=` replacement is being
+/// expanded against, as [`substitute`] found it before evaluating — taken
+/// whole, so that a search or substitution the expression runs cannot
+/// change what `submatch()` reports.
+#[derive(Default)]
+pub(crate) enum RegSubMatch {
+    /// No substitution is evaluating an expression.
+    #[default]
+    None,
+    /// A string match: the text each group matched, `None` for a group that
+    /// did not match.
+    Str([Option<Vec<u8>>; NSUBEXP as usize]),
+    /// A buffer match: where each group starts and ends, the lines read
+    /// back from `buf` when asked for.
+    Buf {
+        buf: Buf,
+        firstlnum: LineNr,
+        maxline: LineNr,
+        startpos: [LPos; NSUBEXP as usize],
+        endpos: [LPos; NSUBEXP as usize],
+    },
 }
 /// A backtracking program: the [`RegProg`](crate::types::RegProg) head every
 /// program opens with, what the compiler found out about the pattern, and
@@ -423,53 +325,8 @@ pub const REG_NOPAREN: c_int = 0;
 pub const REG_PAREN: c_int = 1;
 pub const REG_ZPAREN: c_int = 2;
 pub const REG_NPAREN: c_int = 3;
-static rex: GlobalCell<RegExec> = GlobalCell::new(RegExec {
-    reg_match: core::ptr::null_mut::<RegMatch>(),
-    reg_mmatch: core::ptr::null_mut::<RegMMatch>(),
-    str_start: [core::ptr::null_mut::<uint8_t>(); NSUBEXP as usize],
-    str_end: [core::ptr::null_mut::<uint8_t>(); NSUBEXP as usize],
-    reg_startpos: core::ptr::null_mut::<LPos>(),
-    reg_endpos: core::ptr::null_mut::<LPos>(),
-    reg_win: None,
-    reg_buf: Buf::NULL,
-    reg_firstlnum: 0,
-    reg_maxline: 0,
-    reg_line_lbr: false,
-    lnum: 0,
-    line: core::ptr::null_mut::<uint8_t>(),
-    input: core::ptr::null_mut::<uint8_t>(),
-    need_clear_subexpr: 0,
-    need_clear_zsubexpr: 0,
-    reg_ic: false,
-    reg_icombine: false,
-    reg_nobreak: false,
-    reg_maxcol: 0,
-    nfa_has_zend: 0,
-    nfa_has_backref: 0,
-    nfa_nsubexpr: 0,
-    nfa_listid: 0,
-    nfa_alt_listid: 0,
-    nfa_has_zsubexpr: 0,
-    nfa_match: 0,
-    nfa_endp: core::ptr::null_mut(),
-    nfa_ll_index: 0,
-    nfa_time: TimeBudget::NONE,
-    zslots: ZSlots::UNSET,
-    behind_pos: SavedInput::NOWHERE,
-    brace_limits: (0, 0),
-    ext_in: core::ptr::null(),
-    ext_out: core::ptr::null_mut(),
-});
-static rex_in_use: GlobalCell<bool> = GlobalCell::new(false);
 static can_f_submatch: GlobalCell<bool> = GlobalCell::new(false);
-static rsm: GlobalCell<RegSubMatch> = GlobalCell::new(RegSubMatch {
-    sm_match: core::ptr::null_mut::<RegMatch>(),
-    sm_mmatch: core::ptr::null_mut::<RegMMatch>(),
-    sm_line: core::ptr::null::<c_char>(),
-    sm_firstlnum: 0,
-    sm_maxline: 0,
-    sm_line_lbr: 0,
-});
+static rsm: GlobalCell<RegSubMatch> = GlobalCell::new(RegSubMatch::None);
 pub const HASWIDTH: c_int = 0x1 as c_int;
 pub const SIMPLE: c_int = 0x2 as c_int;
 pub const SPSTART: c_int = 0x4 as c_int;
@@ -494,13 +351,9 @@ pub enum PimResult {
 pub const ADDSTATE_HERE_OFFSET: c_int = 10;
 static bt_regengine: RegEngine = RegEngine {
     regfree: Some(bt_regfree),
-    regexec_nl: Some(bt_regexec_nl),
-    regexec_multi: Some(bt_regexec_multi),
 };
 static nfa_regengine: RegEngine = RegEngine {
     regfree: Some(nfa_regfree),
-    regexec_nl: Some(nfa_regexec_nl),
-    regexec_multi: Some(nfa_regexec_multi),
 };
 pub const GRAPHEME_STATE_INIT: c_int = 0;
 pub const INT_MAX: c_int = __INT_MAX__;

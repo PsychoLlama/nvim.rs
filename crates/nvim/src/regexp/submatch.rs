@@ -2,110 +2,139 @@
 //! substitution: `submatch()` and `submatch(n, 1)`, and the list a `\=`
 //! expression's function is handed as its argument.
 //!
-//! These read `rsm`, not `rex`. A `\=` expression may run a search or a
-//! substitution of its own, which takes `rex` over; `rsm` is the snapshot
-//! [`super::substitute`] takes of the outermost match before evaluating, so
-//! that `submatch()` keeps answering about the substitution the user wrote.
+//! These read `rsm`, the snapshot [`super::substitute`] takes of the match
+//! it is expanding before evaluating the expression. A `\=` expression may
+//! run a search or a substitution of its own; the snapshot is what lets
+//! `submatch()` keep answering about the substitution the user wrote.
 //! `can_f_submatch` is what says the snapshot is live.
+//!
+//! A string match's snapshot holds the text of each group, so nothing here
+//! borrows the string the match ran over; a buffer match's holds positions,
+//! and the lines are read back from the buffer when asked for — as upstream
+//! read them, so an expression that changed them is seen to have.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::cstr;
-use crate::memory::XString;
+use crate::eval::gc::{RootId, unroot_list};
+use crate::eval::partial_name;
+use crate::eval::typval::{NumBuf, TV_INITIAL_VALUE, tv_clear};
+use crate::eval::userfunc::{CallWith, call_func_with};
+use crate::memory::{ThinCString, XString};
+use crate::types::{VAR_FUNC, VAR_PARTIAL, VAR_UNKNOWN, ptrdiff_t};
 use core::ffi::{c_char, c_int};
 
-use super::{
-    LineOrigin, RegMMatch, RegMatch, RegSubMatch, Rex, can_f_submatch, reg_line, reg_line_len, rsm,
-};
+use super::{RegSubMatch, can_f_submatch, rsm};
 use crate::eval::typval::{ListRef, SL_SIZE, tv_list_alloc};
-use crate::types::{ColNr, LineNr, ListItem, TypVal, UserFunc, VarLock};
-use crate::winlayer::Live;
+use crate::memline::Lines;
+use crate::types::{ColNr, LPos, LineNr, ListItem, RegMMatch, RegMatch, TypVal, UserFunc, VarLock};
+use crate::winlayer::Buf;
 
-/// The snapshot `submatch()` answers about.
-///
-/// Obtained once with [`Rsm::acquire`] and passed around by value, for the
-/// same reason [`Rex`] is: `RegSubMatch` holds two pointers into the
-/// caller's match structures, and copying the whole thing out of the cell
-/// would leave a second holder of them. The handle names the cell instead —
-/// every accessor reads one field through it and nothing hands out a
-/// reference into it.
-#[derive(Clone, Copy)]
-pub(crate) struct Rsm(*mut RegSubMatch);
-
-impl Rsm {
-    /// The snapshot of the substitution being evaluated.
-    ///
-    /// # Safety
-    ///
-    /// `can_f_submatch` must say a snapshot is live, and it must stay live
-    /// for as long as the handle does — [`super::substitute`] sets it around
-    /// one evaluation and puts the outer one back afterwards. Nothing else
-    /// may hold a reference into the cell meanwhile.
-    ///
-    /// The text a string match ran over is part of that: the snapshot holds
-    /// the capture spans' base, so [`Rsm::line`] borrows it and the caller
-    /// of [`super::vim_regsub`] keeps it alive for the whole evaluation.
-    #[inline(always)]
-    pub(crate) unsafe fn acquire() -> Rsm {
-        Rsm(rsm.ptr())
+impl RegSubMatch {
+    /// The snapshot of a string match over `line`: each group's text.
+    pub(crate) fn of_string(matches: &RegMatch, line: &[u8]) -> RegSubMatch {
+        RegSubMatch::Str(core::array::from_fn(|no| {
+            matches.group_bytes(no, line).map(<[u8]>::to_vec)
+        }))
     }
 
-    /// The string match the snapshot is about, or null for a buffer match.
-    #[inline(always)]
-    pub(crate) fn match_(self) -> *mut RegMatch {
-        // SAFETY: the handle is a claim that the snapshot is live.
-        unsafe { (*self.0).sm_match }
-    }
-
-    /// The buffer match it is about — meaningful only when [`Rsm::match_`]
-    /// is null.
-    #[inline(always)]
-    pub(crate) fn mmatch(self) -> *mut RegMMatch {
-        // SAFETY: as `match_`.
-        unsafe { (*self.0).sm_mmatch }
-    }
-
-    /// The string a string match ran over, whose bytes its capture spans
-    /// index. Empty for a buffer match, which names lines instead.
-    #[inline(always)]
-    pub(crate) fn line(self) -> &'static [u8] {
-        // SAFETY: holding the handle is the claim that the snapshot is live
-        // and the text with it -- see [`Rsm::acquire`].
-        unsafe { cstr::bytes_at_or_empty((*self.0).sm_line) }
-    }
-
-    /// The buffer line the snapshot's line 0 sits on.
-    #[inline(always)]
-    pub(crate) fn firstlnum(self) -> LineNr {
-        // SAFETY: as `match_`.
-        unsafe { (*self.0).sm_firstlnum }
-    }
-
-    /// The last line it reaches, relative to [`Rsm::firstlnum`].
-    #[inline(always)]
-    pub(crate) fn maxline(self) -> LineNr {
-        // SAFETY: as `match_`.
-        unsafe { (*self.0).sm_maxline }
-    }
-
-    /// Whether the match treated `\n` as an ordinary character.
-    #[inline(always)]
-    pub(crate) fn line_lbr(self) -> bool {
-        // SAFETY: as `match_`.
-        unsafe { (*self.0).sm_line_lbr != 0 }
+    /// The snapshot of a buffer match over `buffer` from `firstlnum` on: where
+    /// each group starts and ends.
+    pub(crate) fn of_buffer(
+        buffer: Buf,
+        firstlnum: LineNr,
+        maxline: LineNr,
+        matches: &RegMMatch,
+    ) -> RegSubMatch {
+        RegSubMatch::Buf {
+            buf: buffer,
+            firstlnum,
+            maxline,
+            startpos: matches.startpos,
+            endpos: matches.endpos,
+        }
     }
 }
 
-/// The text of the submatch line `lnum` lines into the match `submatch()`
-/// and a `\=` expression see.
-pub(crate) fn reg_getline_submatch(rex: Rex, lnum: LineNr) -> *mut c_char {
-    reg_line(rex, lnum, LineOrigin::Submatch)
+/// A buffer match's snapshot, as the readers below want it.
+struct BufferMatch {
+    buf: Buf,
+    firstlnum: LineNr,
+    maxline: LineNr,
+    start: LPos,
+    end: LPos,
 }
 
-/// Its length.
-pub(crate) fn reg_getline_submatch_len(rex: Rex, lnum: LineNr) -> ColNr {
-    reg_line_len(rex, lnum, LineOrigin::Submatch)
+/// What the snapshot says about group `no`: its text for a string match,
+/// its span for a buffer one, or `None` — no snapshot, a group that did not
+/// match, or a group number past the ten there are.
+enum Group {
+    Str(Option<Vec<u8>>),
+    Buf(BufferMatch),
+}
+
+fn group(no: usize) -> Option<Group> {
+    rsm.with(|snapshot| match snapshot {
+        RegSubMatch::None => None,
+        RegSubMatch::Str(groups) => Some(Group::Str(groups.get(no)?.clone())),
+        RegSubMatch::Buf {
+            buf,
+            firstlnum,
+            maxline,
+            startpos,
+            endpos,
+        } => Some(Group::Buf(BufferMatch {
+            buf: *buf,
+            firstlnum: *firstlnum,
+            maxline: *maxline,
+            start: *startpos.get(no)?,
+            end: *endpos.get(no)?,
+        })),
+    })
+}
+
+impl BufferMatch {
+    /// Line `lnum` of the match, counted from its first line: `None` above
+    /// line 1, an empty line past the match's last one.
+    fn line(&self, lnum: LineNr, read: impl FnOnce(&[u8])) -> Option<()> {
+        if self.firstlnum + lnum < 1 {
+            return None;
+        }
+        if lnum > self.maxline {
+            read(&[]);
+        } else {
+            read(Lines::in_buffer(self.buf).line(self.firstlnum + lnum));
+        }
+        Some(())
+    }
+
+    /// Up to `len` bytes of line `lnum` from column `from`, stopping at the
+    /// line's end: `read` sees them. A line the match names but the buffer
+    /// no longer has gives no bytes, which is upstream's anti-crash check
+    /// moved inside the walk.
+    fn head(&self, lnum: LineNr, from: ColNr, len: usize, read: impl FnOnce(&[u8])) {
+        let _ = self.line(lnum, |line| {
+            let rest = usize::try_from(from)
+                .ok()
+                .and_then(|at| line.get(at..))
+                .unwrap_or(&[]);
+            read(&rest[..len.min(rest.len())]);
+        });
+    }
+
+    /// How long line `lnum` is; 0 for either stand-in.
+    fn line_len(&self, lnum: LineNr) -> ColNr {
+        let mut len = 0;
+        let _ = self.line(lnum, |line| {
+            len = ColNr::try_from(line.len()).unwrap_or(ColNr::MAX);
+        });
+        len
+    }
+}
+
+/// A count that upstream held in a `size_t`: negative is huge, which the
+/// readers then bound by the line's end.
+fn span_len(len: ColNr) -> usize {
+    usize::try_from(len).unwrap_or(usize::MAX)
 }
 
 /// Fill `argv[argskip]` — the caller's empty list — with the submatches, and
@@ -122,20 +151,18 @@ pub(crate) fn fill_submatch_list(argv: &[TypVal], argskip: usize, func: &UserFun
     }
 
     // The list is the caller's own; it starts empty and gets one item per
-    // capture.
+    // capture. Only `substitute()` calls a function this way, so the match
+    // is a string one; a buffer match's groups read as unset, where upstream
+    // dereferenced the string match it did not have.
     let Some(list) = argv[argskip].list_shared() else {
         return argskip + 1;
     };
-    // SAFETY: the running string match is the caller's structure.
-    let match_ = unsafe { Live::new(Rsm::acquire().match_()) };
     let items = &mut list.edit().lv_items;
     items.reserve_exact(SL_SIZE);
-    // SAFETY: the running string match is the caller's structure.
-    let line = unsafe { Rsm::acquire() }.line();
     for i in 0..SL_SIZE {
-        let li_tv = match match_.group_bytes(i, line) {
-            None => TypVal::string(None),
-            Some(bytes) => TypVal::string_from(bytes),
+        let li_tv = match group(i) {
+            Some(Group::Str(Some(bytes))) => TypVal::string_from(&bytes),
+            _ => TypVal::string(None),
         };
         items.push(ListItem {
             li_tv,
@@ -146,133 +173,147 @@ pub(crate) fn fill_submatch_list(argv: &[TypVal], argskip: usize, func: &UserFun
 }
 
 /// The text capture `no` matched, as an allocated string the caller owns.
-/// Null outside a substitution and for a capture that did not participate.
+/// `None` outside a substitution and for a capture that did not participate.
 ///
 /// A buffer match's capture can span lines, in which case the breaks come
-/// back as newlines. Upstream walked the lines twice -- once to measure and
-/// allocate, once to copy -- and the two rounds had to be kept in step by
-/// hand; an [`XString`] grows as the walk goes, so there is one round.
+/// back as newlines.
 pub(crate) fn reg_submatch(no: c_int) -> Option<XString> {
-    if !can_f_submatch.get() || no < 0 {
+    if !can_f_submatch.get() {
         return None;
     }
-    let no = no as usize;
-    // SAFETY: guarded by `can_f_submatch`, which is only set while `rsm`
-    // describes a live match — so the context still names the buffer the
-    // submatch lines are read from; `no` is bounds-checked against the ten
-    // capture slots by its caller (`submatch()` rejects anything else).
-    let rex = unsafe { Rex::acquire() };
-
-    // A string match has no lines to cross.
-    let snapshot = unsafe { Rsm::acquire() };
-    if !snapshot.match_().is_null() {
-        // SAFETY: the snapshot names the string match that is running.
-        let match_ = unsafe { Live::new(snapshot.match_()) };
-        return match_
-            .group_bytes(no, snapshot.line())
-            .map(XString::from_bytes);
-    }
-
-    // SAFETY: the snapshot names the buffer match that is running.
-    let mmatch = unsafe { Live::new(snapshot.mmatch()) };
-    let mut lnum = mmatch.startpos[no].lnum;
-    if lnum < 0 || mmatch.endpos[no].lnum < 0 {
+    let no = usize::try_from(no).ok()?;
+    let m = match group(no)? {
+        Group::Str(text) => return text.as_deref().map(XString::from_bytes),
+        Group::Buf(m) => m,
+    };
+    let mut lnum = m.start.lnum;
+    if lnum < 0 || m.end.lnum < 0 {
         return None;
     }
-    let line = reg_getline_submatch(rex, lnum);
-    if line.is_null() {
-        // Anti-crash check; cannot happen.
-        return None;
-    }
-    let (scol, ecol) = (mmatch.startpos[no].col, mmatch.endpos[no].col);
+    // Anti-crash check; cannot happen.
+    m.line(lnum, |_| {})?;
+    let (scol, ecol) = (m.start.col, m.end.col);
     let mut text = XString::new();
-    if mmatch.endpos[no].lnum == lnum {
+    if m.end.lnum == lnum {
         // Within one line: from the start column to the end one.
-        text.push_bytes(submatch_head(rex, lnum, scol, (ecol - scol) as usize));
+        m.head(lnum, scol, span_len(ecol - scol), |bytes| {
+            text.push_bytes(bytes);
+        });
         return Some(text);
     }
 
     // The rest of the start line, then whole lines, then the head of the end
     // line. Each break travels as a newline.
-    let rest = (reg_getline_submatch_len(rex, lnum) - scol) as usize;
-    text.push_bytes(submatch_head(rex, lnum, scol, rest));
+    let rest = span_len(m.line_len(lnum) - scol);
+    m.head(lnum, scol, rest, |bytes| text.push_bytes(bytes));
     text.push_byte(b'\n');
     lnum += 1;
-    while lnum < mmatch.endpos[no].lnum {
-        let whole = reg_getline_submatch_len(rex, lnum) as usize;
-        text.push_bytes(submatch_head(rex, lnum, 0, whole));
+    while lnum < m.end.lnum {
+        let whole = span_len(m.line_len(lnum));
+        m.head(lnum, 0, whole, |bytes| text.push_bytes(bytes));
         text.push_byte(b'\n');
         lnum += 1;
     }
-    text.push_bytes(submatch_head(rex, lnum, 0, ecol as usize));
+    m.head(lnum, 0, span_len(ecol), |bytes| text.push_bytes(bytes));
     Some(text)
 }
 
-/// `len` bytes of submatch line `lnum`, starting at column `from` and
-/// stopping at the line's terminator whichever comes first.
-///
-/// A line the match names but the buffer no longer has answers no bytes,
-/// which is upstream's anti-crash check moved inside the walk.
-fn submatch_head(rex: Rex, lnum: LineNr, from: ColNr, len: usize) -> &'static [u8] {
-    let line = reg_getline_submatch(rex, lnum);
-    if line.is_null() {
-        return &[];
-    }
-    // SAFETY: the line `rex`'s match names, NUL-terminated; `prefix_at`
-    // never reads past that terminator, and `from` is a column in it.
-    unsafe { cstr::prefix_at(line.offset(from as isize), len) }
-}
-
 /// [`reg_submatch`] as one list item per line, which is what
-/// `submatch(no, 1)` returns. Unlike [`reg_submatch`] this keeps NULs in the
-/// text apart from the line breaks, because each line is its own item.
+/// `submatch(no, 1)` returns.
 pub(crate) fn reg_submatch_list(no: c_int) -> Option<ListRef> {
-    if !can_f_submatch.get() || no < 0 {
+    if !can_f_submatch.get() {
         return None;
     }
-    let no = no as usize;
-    // SAFETY: as [`reg_submatch`].
-    let rex = unsafe { Rex::acquire() };
-
-    // A string match is one item.
-    let snapshot = unsafe { Rsm::acquire() };
-    if !snapshot.match_().is_null() {
-        // SAFETY: the snapshot names the string match that is running.
-        let match_ = unsafe { Live::new(snapshot.match_()) };
-        let bytes = match_.group_bytes(no, snapshot.line())?;
-        let list = tv_list_alloc(1);
-        // SAFETY: a borrow of the line the match ran over.
-        unsafe { (*list.as_ptr()).push_bytes(Some(bytes)) };
-        return Some(list);
-    }
-
-    // SAFETY: the snapshot names the buffer match that is running.
-    let mmatch = unsafe { Live::new(snapshot.mmatch()) };
-    let slnum = mmatch.startpos[no].lnum;
-    let elnum = mmatch.endpos[no].lnum;
+    let no = usize::try_from(no).ok()?;
+    let m = match group(no)? {
+        // A string match is one item.
+        Group::Str(text) => {
+            let text = text?;
+            let list = tv_list_alloc(1);
+            list.edit().push_bytes(Some(&text));
+            return Some(list);
+        }
+        Group::Buf(m) => m,
+    };
+    let (slnum, elnum) = (m.start.lnum, m.end.lnum);
     if slnum < 0 || elnum < 0 {
         return None;
     }
-    let scol = mmatch.startpos[no].col;
-    let ecol = mmatch.endpos[no].col;
+    let (scol, ecol) = (m.start.col, m.end.col);
 
     let list = tv_list_alloc((elnum - slnum + 1) as isize);
-    let into = list.as_ptr();
-    let s = unsafe { reg_getline_submatch(rex, slnum).offset(scol as isize) };
-    if slnum == elnum {
-        unsafe {
-            (*into).push_bytes((!s.is_null()).then(|| cstr::slice_at(s, (ecol - scol) as usize)))
-        };
-    } else {
-        // A negative length means "to the end of the line".
-        unsafe { (*into).push_str(cstr::at_opt(s)) };
-        for lnum in slnum + 1..elnum {
-            unsafe { (*into).push_str(cstr::at_opt(reg_getline_submatch(rex, lnum))) };
+    let push = |lnum: LineNr, from: ColNr, len: usize| {
+        let found = m.line(lnum, |line| {
+            let rest = usize::try_from(from)
+                .ok()
+                .and_then(|at| line.get(at..))
+                .unwrap_or(&[]);
+            list.edit().push_bytes(Some(&rest[..len.min(rest.len())]));
+        });
+        // A line above the buffer is a NULL string.
+        if found.is_none() {
+            list.edit().push_bytes(None);
         }
-        let last = reg_getline_submatch(rex, elnum);
-        unsafe {
-            (*into).push_bytes((!last.is_null()).then(|| cstr::slice_at(last, ecol as usize)))
-        };
+    };
+    if slnum == elnum {
+        push(slnum, scol, span_len(ecol - scol));
+    } else {
+        // The first line from the start column on, the whole lines between,
+        // and the head of the last.
+        push(slnum, scol, usize::MAX);
+        for lnum in slnum + 1..elnum {
+            push(lnum, 0, usize::MAX);
+        }
+        push(elnum, 0, span_len(ecol));
     }
     Some(list)
+}
+
+/// Call `expr` — a funcref or a partial — with the submatches as its one
+/// argument, and return its result as an allocated string. Null when the
+/// call failed, which has already reported itself.
+pub(crate) fn call_replacement(expr: &TypVal) -> *mut c_char {
+    // `fill_submatch_list` fills the list in if the function takes an
+    // argument at all. Like upstream's static list it is locked and out of
+    // the collector's registry: this frame owns it.
+    let match_list = tv_list_alloc(ptrdiff_t::try_from(SL_SIZE).unwrap_or(0));
+    {
+        let l = match_list.edit();
+        unroot_list(l.lv_root);
+        l.lv_root = RootId::NONE;
+        l.lv_lock = VarLock::Fixed;
+    }
+    let argv = [TypVal::list(Some(match_list.clone()))];
+
+    let mut rettv = TV_INITIAL_VALUE;
+    rettv.write_string(None);
+
+    let mut with = CallWith::new(true);
+    with.argv_func = Some(fill_submatch_list);
+    let name = if expr.v_type() == VAR_FUNC {
+        Some(expr.func_name().map_or(c"", ThinCString::as_cstr))
+    } else if expr.v_type() == VAR_PARTIAL {
+        with.partial = expr.partial_shared();
+        Some(expr.partial_ref().map_or(c"", partial_name))
+    } else {
+        None
+    };
+    if let Some(name) = name {
+        let _ = call_func_with(name, None, &mut rettv, &argv, with);
+    }
+    drop(argv);
+    drop(match_list);
+
+    // An unknown return type means the call failed and has already said
+    // so; there is no second error to report.
+    let text = if rettv.v_type() == VAR_UNKNOWN {
+        core::ptr::null_mut()
+    } else {
+        let mut buf = NumBuf::new();
+        buf.string_chk(&rettv).map_or(core::ptr::null_mut(), |s| {
+            ThinCString::from_cstr(s).into_raw()
+        })
+    };
+    tv_clear(&mut rettv);
+    text
 }

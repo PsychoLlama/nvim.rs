@@ -23,7 +23,7 @@ use super::composing::matches_composing;
 use super::list::{ThreadList, addstate_here, op, out_of, out1_of};
 use super::run::{check_char_class, match_backref, match_zref, recursive_regmatch};
 use super::sub::{copy_sub, copy_sub_off, copy_ze_off, has_zsubexpr};
-use crate::mbyte::{mb_get_class_tab, utf_fold, utf_iscomposing_legacy};
+use crate::mbyte::{class_in, utf_fold, utf_iscomposing_legacy};
 use crate::regexp::{
     NFA_TOO_EXPENSIVE, NfaPim, NfaRegProg, NfaState, PimResult, RegSubs, Rex, reg_prev_class,
 };
@@ -350,10 +350,7 @@ fn spanning(out: *mut NfaState, bytelen: c_int, clen: c_int) -> Step {
 
 /// Is the input where the lookaround that is running was told to stop?
 fn at_sub_match_end(rex: Rex) -> bool {
-    let endp = rex.nfa_endp();
-    // SAFETY: `nfa_endp` is null or the caller's stopping point, which lives
-    // for the whole of the lookaround it was set for.
-    endp.is_null() || rex.is_at(unsafe { *endp })
+    rex.nfa_endp().is_none_or(|endp| rex.is_at(endp))
 }
 
 /// `\<`: a keyword character with something that is not one in front of it.
@@ -361,9 +358,7 @@ fn at_word_start(rex: Rex, curc: c_int) -> bool {
     if curc == NUL {
         return false;
     }
-    let chartab = (&raw mut rex.reg_buf().b_chartab).cast::<u64>();
-    // SAFETY: the match context is live, per the caller.
-    let this_class = unsafe { mb_get_class_tab(rex.input_str(), chartab) };
+    let this_class = class_in(rex.rest(), rex.reg_buf());
     this_class > 1 && reg_prev_class(rex) != this_class
 }
 
@@ -372,9 +367,7 @@ fn at_word_end(rex: Rex) -> bool {
     if rex.at_bol() {
         return false;
     }
-    let chartab = (&raw mut rex.reg_buf().b_chartab).cast::<u64>();
-    // SAFETY: the match context is live, per the caller.
-    let this_class = unsafe { mb_get_class_tab(rex.input_str(), chartab) };
+    let this_class = class_in(rex.rest(), rex.reg_buf());
     let prev_class = reg_prev_class(rex);
     this_class != prev_class && prev_class != 0 && prev_class != 1
 }

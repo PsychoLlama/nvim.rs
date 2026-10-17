@@ -19,7 +19,7 @@
 use crate::regexp::NfaOp;
 use core::ffi::c_int;
 
-use crate::mbyte::{utf_char2len, utf_iscomposing_legacy, utf_ptr2char};
+use crate::mbyte::{utf_char2len, utf_iscomposing_legacy};
 use crate::regexp::{NfaState, Rex};
 use crate::types::MAX_MCO;
 
@@ -64,7 +64,7 @@ pub(crate) unsafe fn matches_composing(
     let mut marks = [0; MAX_MCO as usize];
     let mut count = 0;
     while len < clen {
-        mc = unsafe { utf_ptr2char((rex.input_str()).offset(len as isize)) };
+        mc = rex.char_at_offset(len);
         marks[count] = mc;
         count += 1;
         len += utf_char2len(mc);

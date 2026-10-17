@@ -15,11 +15,10 @@
 )]
 
 use crate::regexp::NfaOp;
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::{vim_is_ident_char, vim_isfilec, vim_isprintc};
-use crate::mbyte::utf_ptr2char;
 use crate::regexp::{ByteClass, RI_FLAGS, Rex};
 use crate::types::NUL;
 
@@ -32,8 +31,8 @@ fn ri(c: c_int, flag: ByteClass) -> bool {
 /// The character at the input, which for the keyword and file-name classes
 /// has to be read from the text rather than taken as a code point: they are
 /// buffer-option-driven and look at the bytes.
-fn input(rex: Rex) -> *mut c_char {
-    rex.input_str()
+fn input(rex: Rex) -> c_int {
+    rex.char_here()
 }
 
 fn is_word_char(rex: Rex) -> bool {
@@ -42,7 +41,7 @@ fn is_word_char(rex: Rex) -> bool {
 
 fn is_printable(rex: Rex) -> bool {
     // SAFETY: the cursor is inside the line being matched.
-    unsafe { vim_isprintc(utf_ptr2char(input(rex))) }
+    vim_isprintc(input(rex))
 }
 
 fn ignoring_case(rex: Rex) -> bool {

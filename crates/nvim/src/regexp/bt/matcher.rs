@@ -12,8 +12,7 @@
 //! that reason. The only bound on how far it can go is 'maxmempattern', which
 //! `regstack_push` charges against the stack's byte size.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use core::ffi::c_int;
 
@@ -21,7 +20,7 @@ use super::compile::BtProg;
 use super::op::BtOp;
 use super::resume::resume;
 use super::single::match_one;
-use super::state::{BT_STATE, BackPos, Braces, BtState, RegStack, capture_slot};
+use super::state::{BackPos, Braces, BtState, RegStack, capture_slot};
 use crate::getchar::state::got_int;
 use crate::mbyte::{mb_isupper, mb_tolower, mb_toupper};
 use crate::message::e_re_corr;
@@ -34,7 +33,7 @@ use crate::regexp::{
     RS_STAR_LONG, RS_STAR_SHORT, RS_ZCLOSE, RS_ZOPEN, RegStar, RegState, Rex, cleanup_subexpr,
     cleanup_zsubexpr, reg_breakcheck, reg_nextline, reg_save, save_capture, save_subexpr,
 };
-use crate::types::{NUL, ProfTime, int16_t, int64_t, uint8_t};
+use crate::types::{NUL, int16_t, int64_t, uint8_t};
 
 /// The first code of each run a group number is measured from. These are
 /// `const` items because `BtOp::Mopen.code()` is a *call* in a runtime
@@ -47,53 +46,31 @@ const BRACE_COMPLEX: c_int = BtOp::BraceComplex.code();
 
 /// Match the program starting at `scan` against `rex.input`.
 ///
-/// `tm` and `timed_out`, when given, cap how long the search may run; the
-/// clock is only read every hundredth node.
-pub(crate) fn regmatch(
-    rex: Rex,
-    prog: BtProg<'_>,
-    start: usize,
-    tm: *const ProfTime,
-    timed_out: *mut c_int,
-) -> bool {
-    // The working state is taken once, here, and threaded down by `&mut`:
-    // `reg_save` and `reg_restore` are called far too often to pay for a
-    // borrow each, and the three fields are handed over separately so that
-    // saving *into* the back-edge record does not borrow the whole of it.
-    // SAFETY: nothing the walk runs re-enters the engine, so this call owns
-    // the state until it returns — see `BT_STATE` for why it is taken raw.
-    let bt = unsafe { &mut *BT_STATE.ptr() };
-    bt.begin();
+/// The caller's deadline, when it gave one, caps how long the search may
+/// run; the clock is only read every hundredth node.
+pub(crate) fn regmatch(rex: Rex, prog: BtProg<'_>, state: &mut BtState, start: usize) -> bool {
+    // The working state is threaded down by `&mut`: `reg_save` and
+    // `reg_restore` are called far too often to pay for a borrow each, and
+    // the three fields are handed over separately so that saving *into* the
+    // back-edge record does not borrow the whole of it.
+    state.begin();
     let BtState {
         stack,
         backpos,
         braces,
-    } = bt;
-    // SAFETY: `start` is a node in the compiled program and `rex` describes
-    // a match that is set up and running; every pointer below either comes
-    // from the program or from `rex`.
-    unsafe { walk(rex, prog, stack, backpos, braces, start, tm, timed_out) }
+    } = state;
+    walk(rex, prog, stack, backpos, braces, start)
 }
 
-#[allow(
-    clippy::too_many_arguments,
-    reason = "the walk's working state, threaded down"
-)]
 /// [`regmatch`]'s loop, with the working state already borrowed.
-///
-/// # Safety
-/// As [`regmatch`].
-unsafe fn walk(
+fn walk(
     rex: Rex,
     prog: BtProg<'_>,
     stack: &mut RegStack,
     backpos: &mut BackPos,
     braces: &mut Braces,
     start: usize,
-    tm: *const ProfTime,
-    timed_out: *mut c_int,
 ) -> bool {
-    // SAFETY: the caller promises the program and the match.
     let mut scan = start;
     let mut tm_count = 0;
     let mut status;
@@ -107,15 +84,15 @@ unsafe fn walk(
                 status = RA_FAIL;
                 break;
             }
-            if !tm.is_null() && {
-                tm_count += 1;
-                tm_count == 100
-            } {
+            if let Some(deadline) = rex.deadline()
+                && {
+                    tm_count += 1;
+                    tm_count == 100
+                }
+            {
                 tm_count = 0;
-                if profile_passed_limit(unsafe { *tm }) {
-                    if !timed_out.is_null() {
-                        unsafe { *timed_out = 1 };
-                    }
+                if profile_passed_limit(deadline) {
+                    rex.set_timed_out();
                     status = RA_FAIL;
                     break;
                 }
@@ -192,9 +169,6 @@ fn push_frame(
     scan: usize,
     next: &mut usize,
 ) -> c_int {
-    // SAFETY: as `regmatch`; `scan` is a node in the program and the frames
-    // pushed here are read back by `resume` while this call is still on the
-    // stack.
     match op {
         // A loop's back edge. Coming back to the same node at the same
         // input position means the loop is not making progress.
@@ -313,9 +287,6 @@ fn push_frame(
         | BtOp::BraceComplex7
         | BtOp::BraceComplex8
         | BtOp::BraceComplex9 => {
-            // The slot number is taken before the block so that the call
-            // fits on one line: a wrapped call inside `unsafe` costs a line
-            // of unchecked code each.
             let slot = op.code() - BRACE_COMPLEX;
             brace_complex(rex, stack, backpos, braces, slot, scan, next)
         }
@@ -361,16 +332,14 @@ fn push_frame(
 /// pattern fails.
 ///
 /// `state` is a capture state and `no` a group number decoded from one of
-/// the capture opcodes, so a slot of the running match — see
-/// [`capture_slot`].
+/// the capture opcodes: see [`capture_slot`].
 fn push_capture(rex: Rex, stack: &mut RegStack, state: RegState, scan: usize, no: c_int) -> c_int {
-    // SAFETY: a capture state and a decoded group number, as above.
-    let slot = unsafe { capture_slot(rex, state, no as usize) };
+    let slot = capture_slot(rex, state, no as usize);
     let Some(rp) = stack.push(state, scan) else {
         return RA_FAIL;
     };
     rp.rs_no = no as int16_t;
-    unsafe { save_capture(rex, &mut rp.rs_saved.pos, slot) };
+    save_capture(rex, &mut rp.rs_saved.pos, slot);
     RA_CONT
 }
 

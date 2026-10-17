@@ -1007,7 +1007,6 @@ CELL_PTR_KEEPERS = {
     "CELL": "`GlobalCell`'s own tests of `ptr`/`as_raw`; they must call them",
     "simple_diffline_change": "F-P22-37: the address goes into `diffline.changes` and is compared back",
     "highlight_attr": "the attribute table `hl_attr_active` holds; one site is its const initialiser",
-    "BT_STATE": "the backtracking engine's state; phase 22's S10 ruled it taken raw per match",
 }
 # Every `.ptr()`/`.as_raw()` site with its receiver, for the partition. The
 # spacing is pinned exactly as CELL_PTR_ALLOW_RE's is, so what this classifies
@@ -1030,9 +1029,8 @@ CELL_COPY_OWNER = (
     # getchar is done: the five `buffheader_T` cells and `typebuf` left the
     # list in phase 22's S7. `KeyBuffer` and `TypeAhead` are not `Copy` at
     # all now, so there is no `get` on either to count.
-    # regexp — saved matcher state holding pointers into the subject
-    "rex",
-    "rsm",
+    # regexp is done: `rex` became a per-match `RegExec` on the API layer's
+    # stack and `rsm` an owned snapshot (`RegSubMatch`), neither `Copy`.
     # the rest, one or a few sites each
     "curgrid",
     # `au_new_curbuf` left the list in phase 23's S11. It is a `BufferRef`,
@@ -4244,7 +4242,7 @@ SELF_TEST_CELL_PTR_ALLOW = [
 # `cell_ptr`'s substring needles counted -- no more, and no fewer than the
 # ones a by-name cap can police.
 SELF_TEST_CELL_PTR_SITE = [
-    ("fn f() {\n    BT_STATE.ptr();\n}\n", {"BT_STATE": 1}),
+    ("fn f() {\n    highlight_attr.ptr();\n}\n", {"highlight_attr": 1}),
     ("fn f() {\n    MUTEX.as_raw();\n}\n", {"MUTEX": 1}),
     # Two receivers, counted apart.
     ("fn f() {\n    a.ptr();\n    b.ptr();\n    a.ptr();\n}\n", {"a": 2, "b": 1}),
@@ -4258,7 +4256,7 @@ SELF_TEST_CELL_PTR_SITE = [
     # Spacing rustfmt never writes stays out, as it does for the allowlist.
     ("fn f() {\n    a . ptr();\n}\n", {}),
     # Prose about one costs nothing.
-    ("// BT_STATE.ptr()\nfn f() {}\n", {}),
+    ("// highlight_attr.ptr()\nfn f() {}\n", {}),
 ]
 # (tree, expected partition). The boundary is subtracted, the keeper register
 # is counted, and everything left is the accessor class -- including the site
@@ -4267,7 +4265,7 @@ SELF_TEST_CELL_PTR_PARTITION = [
     (
         {
             "a.rs": "fn f() {\n    main_loop.ptr();\n    curwin.ptr();\n}\n",
-            "b.rs": "fn g() {\n    BT_STATE.ptr();\n    BT_STATE.ptr();\n"
+            "b.rs": "fn g() {\n    highlight_attr.ptr();\n    highlight_attr.ptr();\n"
             "    curbuf.ptr();\n    self.0.ptr();\n}\n",
         },
         {"cell_ptr_keepers": 2, "cell_ptr_accessors": 3},
@@ -4289,22 +4287,25 @@ SELF_TEST_CELL_PTR_CHECK = [
     ),
     # A listed name may hold as many as its ruling allows.
     ({"a.rs": "fn f() {\n    main_loop.ptr();\n    main_loop.ptr();\n}\n"}, False),
-    ({"a.rs": "fn f() {\n    BT_STATE.ptr();\n    BT_STATE.ptr();\n}\n"}, False),
+    (
+        {"a.rs": "fn f() {\n    highlight_attr.ptr();\n    highlight_attr.ptr();\n}\n"},
+        False,
+    ),
 ]
 # (source, expected cell_copy_owner)
 SELF_TEST_CELL_COPY_OWNER = [
-    ("fn f() {\n    rex.get();\n}\n", 1),
-    ("fn f() {\n    let n = rsm.get().data;\n}\n", 1),
+    ("fn f() {\n    curgrid.get();\n}\n", 1),
+    ("fn f() {\n    let n = CLIPBOARD.get().data;\n}\n", 1),
     # Only `get`: the other accessors do not hand out a second owner.
-    ("fn f() {\n    rex.set(x);\n}\n", 0),
-    ("fn f() {\n    rex.with(|s| s);\n}\n", 0),
+    ("fn f() {\n    curgrid.set(x);\n}\n", 0),
+    ("fn f() {\n    curgrid.with(|s| s);\n}\n", 0),
     # rustfmt wraps a long chain, and the copy still happens.
-    ("fn f() {\n    *rsm\n        .get()\n}\n", 1),
+    ("fn f() {\n    *CLIPBOARD\n        .get()\n}\n", 1),
     # A global that is not on the list.
     ("fn f() {\n    p_ai.get();\n}\n", 0),
     # A longer name ending in a listed one is not it.
-    ("fn f() {\n    saved_rex.get();\n}\n", 0),
-    ("// rex.get()\nfn f() {}\n", 0),
+    ("fn f() {\n    saved_curgrid.get();\n}\n", 0),
+    ("// curgrid.get()\nfn f() {}\n", 0),
 ]
 
 

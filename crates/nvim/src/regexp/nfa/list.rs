@@ -109,7 +109,7 @@ const BLANK_SUBS: RegSubs = RegSubs {
 
 /// The threads alive at one input position, in the priority order the
 /// submatch rules need: the first thread to reach `NFA_MATCH` wins.
-pub(crate) struct ThreadList {
+pub(crate) struct ThreadList<'t> {
     /// The slots that have ever been used. Everything below `n` is live;
     /// everything from `n` to the end is a slot a previous character left
     /// behind and this one may reuse.
@@ -128,13 +128,13 @@ pub(crate) struct ThreadList {
     pub(crate) has_pim: bool,
     /// The match this list belongs to. A list is built for one match and
     /// discarded with it, so the context is the list's, not each walk's.
-    pub(crate) rex: Rex,
+    pub(crate) rex: Rex<'t>,
 }
 
-impl ThreadList {
+impl<'t> ThreadList<'t> {
     /// A list for the match `rex` describes, holding `slots` threads before
     /// it has to grow.
-    pub(crate) fn new(rex: Rex, slots: usize) -> ThreadList {
+    pub(crate) fn new(rex: Rex<'t>, slots: usize) -> ThreadList<'t> {
         ThreadList {
             threads: Vec::with_capacity(slots),
             n: 0,
@@ -451,11 +451,9 @@ fn place(
 /// `^` may belong to a later line than the one the lookaround started on.
 fn past_line_start(rex: Rex) -> bool {
     let endp = rex.nfa_endp();
-    rex.input() > rex.line()
+    rex.input() > 0
         && rex.byte() as c_int != NUL
-        // SAFETY: `nfa_endp` is null or the position a lookaround was told
-        // to stop at, which outlives the lookaround.
-        && (endp.is_null() || !rex.multi() || rex.lnum() == unsafe { (*endp).as_pos() .lnum })
+        && endp.is_none_or(|endp| !rex.multi() || rex.lnum() == endp.as_pos().lnum)
 }
 
 /// Follow everything that consumes no input from `state`, recording what the

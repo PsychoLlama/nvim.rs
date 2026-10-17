@@ -3,8 +3,7 @@
 //! (position assertions, `\%(` groups, the `\%[...]` optional sequence and
 //! the `\%d123` character escapes).
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::compile::Node;
 use crate::regexp::RegCompiler;
@@ -15,7 +14,6 @@ use super::compile::use_multibytecode;
 use super::op::BtOp;
 use super::piece::reg;
 use crate::ascii::ascii_isdigit;
-use crate::plines::getvvcol;
 use crate::regexp::state::rc_did_emsg;
 use crate::regexp::{
     HASLOOKBH, HASNL, HASWIDTH, INT_MAX, REG_NPAREN, REG_ZPAREN, REX_SET, REX_USE, SIMPLE, SPSTART,
@@ -23,7 +21,7 @@ use crate::regexp::{
     unmagic,
 };
 use crate::semsg;
-use crate::types::{ColNr, NUL, int64_t, uint8_t, uint32_t};
+use crate::types::{NUL, int64_t, uint8_t, uint32_t};
 
 use crate::winlayer::Win;
 /// `\z(`, `\z1`..`\z9`, `\zs` and `\ze`.
@@ -336,23 +334,11 @@ fn compare_atom(
 /// The cursor's own line, column or virtual column, as `\%.l`, `\%.c` and
 /// `\%.v` read it at compile time. Columns are one-based in a pattern.
 fn cursor_value(kind: u8) -> uint32_t {
-    // SAFETY: `curwin` is the current window, and `getvvcol` writes only
-    // through the out-parameters it is given.
+    let win = Win::current();
     match kind {
-        b'l' => (Win::current().w_cursor.lnum) as uint32_t,
-        b'c' => (Win::current().w_cursor.col) as uint32_t + 1,
-        _ => {
-            let mut vcol: ColNr = 0;
-            unsafe {
-                getvvcol(
-                    Win::current(),
-                    &raw mut (*Win::current_raw()).w_cursor,
-                    core::ptr::null_mut(),
-                    core::ptr::null_mut(),
-                    &raw mut vcol,
-                )
-            };
-            vcol as uint32_t + 1
-        }
+        b'l' => win.w_cursor.lnum as uint32_t,
+        b'c' => win.w_cursor.col as uint32_t + 1,
+        // The last screen column of the character under the cursor.
+        _ => win.virtual_vcol_span_at(win.w_cursor).1 as uint32_t + 1,
     }
 }

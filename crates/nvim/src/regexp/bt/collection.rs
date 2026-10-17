@@ -6,14 +6,13 @@
 //! multibyte characters is capped: it would otherwise write the whole span
 //! into the program.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::compile::Node;
 use crate::charset::vim_iswordc_buf;
 use crate::cstr;
 use crate::regexp::RegCompiler;
-use core::ffi::{c_int, c_uint};
+use core::ffi::c_int;
 
 use super::equi_class::reg_equi_class;
 use super::op::BtOp;
@@ -21,12 +20,11 @@ use super::piece::coll_get_char;
 use crate::ascii::{ascii_isdigit, ascii_isxdigit};
 use crate::charset::{vim_is_ident_char, vim_isfilec, vim_isprintc};
 use crate::mbyte::{mb_islower, mb_isupper, utf_char2len};
-use crate::os::cshim::__ctype_b_loc;
 use crate::regexp::state::rc_did_emsg;
 use crate::regexp::{
-    _ISalnum, _ISalpha, _IScntrl, _ISgraph, _ISpunct, CharClass, ESC, HASNL, HASWIDTH, INT_MAX,
-    MAGIC_OFF, REGEXP_ABBR, REGEXP_INRANGE, SIMPLE, backslash_abbr, pat_byte, pat_char,
-    pat_charlen, pat_seek, skip_anyof, skipchr, take_bracketed, take_char_class,
+    CharClass, ESC, HASNL, HASWIDTH, INT_MAX, MAGIC_OFF, REGEXP_ABBR, REGEXP_INRANGE, SIMPLE,
+    backslash_abbr, pat_byte, pat_char, pat_charlen, pat_seek, skip_anyof, skipchr, take_bracketed,
+    take_char_class,
 };
 use crate::semsg;
 use crate::types::NUL;
@@ -289,20 +287,21 @@ fn class_ceiling(class: CharClass) -> Option<c_int> {
 }
 
 /// Is `c` a member of `class`?
+///
+/// Upstream asks the C library's `isalnum` and kin for the classes that
+/// only ever cover ASCII ([`class_ceiling`] stops them at 127); for ASCII
+/// those answer the same in every locale, which is what `u8`'s own tests
+/// answer.
 fn in_class(rc: &RegCompiler, class: CharClass, c: c_int) -> bool {
-    // SAFETY: every predicate here is a pure test on a code point, reading
-    // only locale or option state; the ctype table is indexable over the
-    // range `class_ceiling` allows.
-    let ctype =
-        |mask: c_uint| unsafe { *(*__ctype_b_loc()).offset(c as isize) } as c_uint & mask != 0;
+    let ascii = |test: fn(&u8) -> bool| u8::try_from(c).is_ok_and(|b| b.is_ascii() && test(&b));
     use CharClass::*;
     match class {
-        Alnum => ctype(_ISalnum),
-        Alpha => ctype(_ISalpha),
-        Cntrl => ctype(_IScntrl),
+        Alnum => ascii(u8::is_ascii_alphanumeric),
+        Alpha => ascii(u8::is_ascii_alphabetic),
+        Cntrl => ascii(u8::is_ascii_control),
         Digit => ascii_isdigit(c),
-        Graph => ctype(_ISgraph),
-        Punct => ctype(_ISpunct),
+        Graph => ascii(u8::is_ascii_graphic),
+        Punct => ascii(u8::is_ascii_punctuation),
         // U+00AA and U+00BA are the ordinal indicators: lowercase
         // letters, but not the lower half of a case pair.
         Lower => mb_islower(c) && c != 170 && c != 186,

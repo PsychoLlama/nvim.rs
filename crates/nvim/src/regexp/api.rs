@@ -13,9 +13,9 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::global_cell::GlobalCell;
 use crate::memory::XString;
 use crate::regexp::ExtMatchIo;
-use crate::regexp::ExtMatchRef;
 use crate::regexp::RegCompiler;
 use crate::regexp::bt_regcomp;
 use crate::regexp::nfa_regcomp;
@@ -25,30 +25,67 @@ use core::ffi::{CStr, c_int};
 use core::ptr;
 
 use super::{
-    AUTOMATIC_ENGINE, BACKTRACKING_ENGINE, E_RECURSIVE, NFA_ENGINE, NFA_TOO_EXPENSIVE, NfaRegProg,
-    REX_ALL, Rex, rex_in_use,
+    AUTOMATIC_ENGINE, BACKTRACKING_ENGINE, BtRegProg, E_RECURSIVE, MatchPos, MatchSetup,
+    NFA_ENGINE, NFA_TOO_EXPENSIVE, NfaRegProg, RE_NOBREAK, REX_ALL, RegExec, Rex, bt_regexec,
+    nfa_regexec,
 };
 use crate::message::state::called_emsg;
 use crate::message::{emsg, msg_str, verbose_enter, verbose_leave};
 use crate::option::vars::{P_RE, p_re, p_verbose};
 use crate::os::cshim::gettext;
 use crate::regexp::RE_AUTO;
-use crate::types::{
-    ColNr, LineNr, OptInt, ProfTime, RE_GROUPS, RegMMatch, RegMatch, RegProg, uint8_t,
-};
+use crate::types::{ColNr, LineNr, OptInt, ProfTime, RE_GROUPS, RegMMatch, RegMatch, RegProg};
 
-/// Reserve `rex` for `run`, restoring an outer match's context after. The
-/// nesting is real: `:s/…/\=…/` can evaluate an expression that searches.
-pub(crate) fn with_rex<R>(run: impl FnOnce() -> R) -> R {
-    let outer = rex_in_use.get();
-    let saved = outer.then(|| super::rex.get());
-    rex_in_use.set(true);
-    let result = run();
-    rex_in_use.set(outer);
-    if let Some(saved) = saved {
-        super::rex.set(saved);
+/// The first line of the last buffer match, which upstream's `rex` kept
+/// after the match was over: a string match never set it, so `\%'m` in one
+/// compares the mark against that line. Kept here so that it still does.
+static LAST_FIRSTLNUM: GlobalCell<LineNr> = GlobalCell::new(0);
+
+/// How many matches (or expansions) are running, one inside another.
+static MATCH_DEPTH: GlobalCell<c_int> = GlobalCell::new(0);
+
+/// Run `f` as one of upstream's `rex` reservations: a buffer match or a
+/// buffer expansion records its first line (`first`), and `f` is handed the
+/// line in force. A nested reservation puts the outer one's line back when it
+/// is done, as restoring the whole of `rex` around a nested match did.
+pub(crate) fn in_match_scope<R>(first: Option<LineNr>, f: impl FnOnce(LineNr) -> R) -> R {
+    let depth = MATCH_DEPTH.get();
+    let saved = LAST_FIRSTLNUM.get();
+    if let Some(first) = first {
+        LAST_FIRSTLNUM.set(first);
+    }
+    MATCH_DEPTH.set(depth + 1);
+    let result = f(LAST_FIRSTLNUM.get());
+    MATCH_DEPTH.set(depth);
+    if depth > 0 {
+        LAST_FIRSTLNUM.set(saved);
     }
     result
+}
+
+/// Run `prog` over the match `rex` is set up for, from column `col`: the
+/// engine the program came from decides which engine runs it.
+///
+/// # Safety
+///
+/// `prog` must be a live program [`vim_regcomp`] answered.
+unsafe fn run_engine(prog: *mut RegProg, rex: Rex, col: ColNr) -> c_int {
+    // SAFETY: the caller's live program, whose engine field says which shape
+    // it is; a backtracking program is a `BtRegProg` (see `bt_regcomp`).
+    if unsafe { (*prog).engine.cast_const() } == &raw const super::bt_regengine {
+        bt_regexec(rex, unsafe { &*prog.cast::<BtRegProg>() }, col)
+    } else {
+        unsafe { nfa_regexec(rex, prog.cast::<NfaRegProg>(), col) }
+    }
+}
+
+/// Was `prog` compiled with `RE_NOBREAK`?
+///
+/// # Safety
+///
+/// `prog` must be a live program.
+unsafe fn nobreak(prog: *mut RegProg) -> bool {
+    (unsafe { (*prog).re_flags } & RE_NOBREAK as u32) != 0
 }
 
 /// Compile `expr` into a program. A leading `\%#=0`, `\%#=1` or `\%#=2`
@@ -183,90 +220,77 @@ unsafe fn recompile_backtracking(prog: *mut RegProg, extmatch: bool) -> *mut Reg
 /// the line ends. Taking the terminated string says that, and hands the
 /// callers a type they can hold.
 fn vim_regexec_string(matches: &mut RegMatch, line: &CStr, col: usize, nl: bool) -> bool {
-    let text = line.as_ptr();
     debug_assert!(col <= line.count_bytes(), "col past the end of the line");
     let col = ColNr::try_from(col).unwrap_or(ColNr::MAX);
-    let rmp: *mut RegMatch = matches;
-    // SAFETY: `rmp` is the caller's match structure, borrowed exclusively
-    // for the call, and `text` its NUL-terminated line.
+    let text = line.to_bytes_with_nul();
+    // A string match has no buffer of its own, but `\k` and friends still
+    // need an 'iskeyword' to read.
+    let buf = Buf::current();
+    let ic = matches.rm_ic;
+    // SAFETY: the caller's match structure holds a live program, or none.
     // A program cannot match against itself: `\=` calling back into the
     // same pattern would reuse the program's own state.
-    if unsafe { (*(*rmp).regprog).re_in_use } {
+    if unsafe { (*matches.regprog).re_in_use } {
         emsg(gettext(E_RECURSIVE));
         return false;
     }
-    let result = with_rex(|| {
-        unsafe { (*(*rmp).regprog).re_in_use = true };
-        // A string match has no position slots, only the pointer ones the
-        // context holds itself.
-        // SAFETY: `with_rex` reserved the context for this match.
-        let rex = unsafe { Rex::acquire() };
-        rex.set_reg_startpos(ptr::null_mut());
-        rex.set_reg_endpos(ptr::null_mut());
-        let exec = |rmp: *mut RegMatch| unsafe {
-            (*(*(*rmp).regprog).engine)
-                .regexec_nl
-                .expect("non-null function pointer")(rmp, text as *mut uint8_t, col, nl)
+    let run = |prog: *mut RegProg, firstlnum: LineNr| {
+        // SAFETY: a live program, marked in use for the run.
+        unsafe { (*prog).re_in_use = true };
+        let setup = MatchSetup {
+            buf: &buf,
+            win: None,
+            ic,
+            nobreak: unsafe { nobreak(prog) },
+            deadline: None,
+            ext_in: None,
         };
-        let mut result = exec(rmp);
-        unsafe { (*(*rmp).regprog).re_in_use = false };
-        if unsafe { (*(*rmp).regprog).re_engine } == AUTOMATIC_ENGINE as c_int as u32
-            && result == NFA_TOO_EXPENSIVE as c_int
+        let ctx = RegExec::for_string(setup, text, nl, firstlnum);
+        let result = unsafe { run_engine(prog, ctx.rex(), col) };
+        unsafe { (*prog).re_in_use = false };
+        (result, ctx.starts(), ctx.ends(), ctx.matchcol())
+    };
+    let ran = in_match_scope(None, |firstlnum| {
+        let mut ran = run(matches.regprog, firstlnum);
+        if unsafe { (*matches.regprog).re_engine } == AUTOMATIC_ENGINE && ran.0 == NFA_TOO_EXPENSIVE
         {
-            let prev = unsafe { (*rmp).regprog };
-            unsafe { (*rmp).regprog = recompile_backtracking(prev, false) };
+            let prev = matches.regprog;
+            matches.regprog = unsafe { recompile_backtracking(prev, false) };
             unsafe { vim_regfree(prev) };
-            if !unsafe { (*rmp).regprog.is_null() } {
-                unsafe { (*(*rmp).regprog).re_in_use = true };
-                result = exec(rmp);
-                unsafe { (*(*rmp).regprog).re_in_use = false };
+            if !matches.regprog.is_null() {
+                ran = run(matches.regprog, firstlnum);
             }
         }
-        // The slots have to be read before `with_rex` puts an outer
-        // match's context back, and `matches` must not be touched while
-        // `rmp` is live, so what comes out is a copy.
-        // SAFETY: the context is still this match's.
-        let rex = unsafe { Rex::acquire() };
-        (result, rex.str_starts(), rex.str_ends())
+        ran
     });
-    let (result, starts, ends) = result;
+    let (result, starts, ends, matchcol) = ran;
+    if let Some(col) = matchcol {
+        matches.rm_matchcol = col;
+    }
     if result > 0 {
-        record_groups(matches, &starts, &ends, line);
+        record_groups(matches, &starts, &ends);
     } else {
         matches.clear_groups();
     }
     result > 0
 }
 
-/// Copy the slots the engine filled into `matches`, as offsets into `line`.
-///
-/// A slot is null for a group the pattern never reached, and otherwise
-/// points into the line the match ran over — which for a string match is
-/// `line` itself from the first byte to the last: nothing in either engine
-/// moves a string match onto another line.
+/// Copy the slots the engine filled into `matches`, as offsets into the
+/// string the match ran over — which for a string match holds every
+/// position: nothing in either engine moves a string match onto another
+/// line.
 fn record_groups(
     matches: &mut RegMatch,
-    starts: &[*mut uint8_t; RE_GROUPS],
-    ends: &[*mut uint8_t; RE_GROUPS],
-    line: &CStr,
+    starts: &[MatchPos; RE_GROUPS],
+    ends: &[MatchPos; RE_GROUPS],
 ) {
-    let first = line.as_ptr().cast::<uint8_t>();
-    let len = line.count_bytes();
-    let offset = |slot: *mut uint8_t| {
-        if slot.is_null() {
-            return None;
-        }
-        // SAFETY: the slot is a position inside the line just matched.
-        let at = unsafe { slot.offset_from(first) };
-        debug_assert!(
-            (0..=len as isize).contains(&at),
-            "capture outside the matched line"
-        );
-        Some(at as usize)
+    let offset = |slot: &MatchPos| {
+        let pos = slot.as_pos();
+        (pos.lnum >= 0).then(|| usize::try_from(pos.col).unwrap_or(0))
     };
     for no in 0..RE_GROUPS {
-        matches.starts[no] = offset(starts[no]);
-        matches.ends[no] = offset(ends[no]);
+        matches.starts[no] = offset(&starts[no]);
+        matches.ends[no] = offset(&ends[no]);
     }
 }
 
@@ -321,38 +345,88 @@ pub unsafe fn vim_regexec_multi(
     tm: *mut ProfTime,
     timed_out: *mut c_int,
 ) -> c_int {
-    // SAFETY: `rmp` holds a live program; `win`/`buffer`/`tm`/`timed_out` are
-    // the caller's and may be null where the engines allow it.
-    if unsafe { (*(*rmp).regprog).re_in_use } {
+    let io = ExtMatchIo {
+        input: None,
+        output: None,
+    };
+    // SAFETY: the caller's promises.
+    unsafe { regexec_multi_io(rmp, win, buffer, lnum, col, tm, timed_out, io) }
+}
+
+#[allow(
+    clippy::too_many_arguments,
+    reason = "vim_regexec_multi's, and the `\\z` traffic"
+)]
+/// [`vim_regexec_multi`] with a syntax match's `\z` traffic.
+///
+/// # Safety
+///
+/// As for [`vim_regexec_multi`].
+unsafe fn regexec_multi_io(
+    rmp: *mut RegMMatch,
+    win: Option<Win>,
+    buffer: Buf,
+    lnum: LineNr,
+    col: ColNr,
+    tm: *mut ProfTime,
+    timed_out: *mut c_int,
+    io: ExtMatchIo<'_>,
+) -> c_int {
+    // SAFETY: the caller's match structure, borrowed for the call; `tm` and
+    // `timed_out` are null or the caller's.
+    let rmm = unsafe { &mut *rmp };
+    if unsafe { (*rmm.regprog).re_in_use } {
         emsg(gettext(E_RECURSIVE));
         return 0;
     }
-    let result = with_rex(|| {
-        unsafe { (*(*rmp).regprog).re_in_use = true };
-        let exec = |rmp: *mut RegMMatch| unsafe {
-            (*(*(*rmp).regprog).engine)
-                .regexec_multi
-                .expect("non-null function pointer")(
-                rmp, win, buffer, lnum, col, tm, timed_out
-            )
+    let deadline = unsafe { tm.as_ref() }.copied();
+    let ext_in = io.input;
+    let mut ext_out = io.output;
+    let mut run = |rmm: &mut RegMMatch| {
+        let prog = rmm.regprog;
+        // SAFETY: a live program, marked in use for the run.
+        unsafe { (*prog).re_in_use = true };
+        let setup = MatchSetup {
+            buf: &buffer,
+            win,
+            ic: rmm.rmm_ic != 0,
+            nobreak: unsafe { nobreak(prog) },
+            deadline,
+            ext_in,
         };
-        let mut result = exec(rmp);
-        unsafe { (*(*rmp).regprog).re_in_use = false };
-        if unsafe { (*(*rmp).regprog).re_engine } == AUTOMATIC_ENGINE as c_int as u32
-            && result == NFA_TOO_EXPENSIVE as c_int
-        {
-            let prev = unsafe { (*rmp).regprog };
+        let ctx = RegExec::for_buffer(setup, lnum, rmm.rmm_maxcol, &rmm.startpos, &rmm.endpos);
+        let result = unsafe { run_engine(prog, ctx.rex(), col) };
+        unsafe { (*prog).re_in_use = false };
+        // Upstream matched into the caller's slots in place, so they hold
+        // what the match left there whether or not it succeeded.
+        let (starts, ends) = (ctx.starts(), ctx.ends());
+        for no in 0..RE_GROUPS {
+            rmm.startpos[no] = starts[no].as_pos();
+            rmm.endpos[no] = ends[no].as_pos();
+        }
+        if let Some(col) = ctx.matchcol() {
+            rmm.rmm_matchcol = col;
+        }
+        if ctx.timed_out() && !timed_out.is_null() {
+            // SAFETY: the caller's flag.
+            unsafe { *timed_out = 1 };
+        }
+        if let (Some(out), Some(captures)) = (ext_out.as_deref_mut(), ctx.take_ext_out()) {
+            *out = captures;
+        }
+        result
+    };
+    let result = in_match_scope(Some(lnum), |_| {
+        let mut result = run(rmm);
+        if unsafe { (*rmm.regprog).re_engine } == AUTOMATIC_ENGINE && result == NFA_TOO_EXPENSIVE {
+            let prev = rmm.regprog;
             let new = unsafe { recompile_backtracking(prev, true) };
             // Unlike the string case, a failed recompile keeps the old
             // program rather than leaving the caller without one.
-            if new.is_null() {
-                unsafe { (*rmp).regprog = prev };
-            } else {
-                unsafe { (*rmp).regprog = new };
+            if !new.is_null() {
+                rmm.regprog = new;
                 unsafe { vim_regfree(prev) };
-                unsafe { (*(*rmp).regprog).re_in_use = true };
-                result = exec(rmp);
-                unsafe { (*(*rmp).regprog).re_in_use = false };
+                result = run(rmm);
             }
         }
         result
@@ -368,11 +442,6 @@ pub unsafe fn vim_regexec_multi(
 /// `\z9` match, and a successful match leaves its own `\z(` captures in
 /// `io.output` (or `None` when it has none).
 ///
-/// The two are aimed at for the match and cleared after, outside the context
-/// reservation: a syntax match never runs inside another match (the matcher
-/// runs no user code), and every other match finds them cleared, so the plain
-/// entry point pays nothing for them.
-///
 /// # Safety
 ///
 /// As for [`vim_regexec_multi`].
@@ -386,17 +455,8 @@ pub(crate) unsafe fn vim_regexec_syntax(
     timed_out: *mut c_int,
     io: ExtMatchIo<'_>,
 ) -> LineNr {
-    debug_assert!(!rex_in_use.get(), "a syntax match inside another match");
-    let ext_in = io.input.map_or(ptr::null(), ptr::from_ref);
-    let ext_out: *mut Option<ExtMatchRef> = io.output.map_or(ptr::null_mut(), |out| out);
-    super::rex.with_mut(|rex| (rex.ext_in, rex.ext_out) = (ext_in, ext_out));
-    // SAFETY: the caller's promises; the two sets are its borrows, live
-    // until the fields are cleared below.
-    let result = unsafe { vim_regexec_multi(rmp, win, buffer, lnum, col, tm, timed_out) };
-    super::rex.with_mut(|rex| {
-        (rex.ext_in, rex.ext_out) = (ptr::null(), ptr::null_mut());
-    });
-    result
+    // SAFETY: the caller's promises.
+    unsafe { regexec_multi_io(rmp, win, buffer, lnum, col, tm, timed_out, io) }
 }
 
 /// Did `prog`'s pattern end with a `\n` that a search should treat as
@@ -414,17 +474,17 @@ pub(crate) fn vim_regcomp_had_eol(prog: *const RegProg) -> bool {
 /// `prog` must be a program `bt_regcomp` answered, not yet freed.
 pub(crate) unsafe fn bt_regfree(prog: *mut RegProg) {
     // SAFETY: the caller's promise -- the box `bt_regcomp` leaked.
-    drop(unsafe { Box::from_raw(prog.cast::<super::BtRegProg>()) });
+    drop(unsafe { Box::from_raw(prog.cast::<BtRegProg>()) });
 }
 
 /// Does `prog` belong to the backtracking engine, and has its magic number
-/// not survived? Only that engine's programs carry one. Reports E? and
-/// answers 1 when so.
+/// not survived? Only that engine's programs carry one. Reports so and
+/// answers 1 when it has not.
 pub(crate) fn prog_magic_wrong(prog: *mut RegProg) -> c_int {
     // SAFETY: a live program `vim_regcomp` answered, whose engine field says
     // which shape it is.
     let bt = unsafe { (*prog).engine.cast_const() } == &raw const super::bt_regengine;
-    if bt && unsafe { &*prog.cast::<super::BtRegProg>() }.program[0] != super::REGMAGIC as u8 {
+    if bt && unsafe { &*prog.cast::<BtRegProg>() }.program[0] != super::REGMAGIC as u8 {
         emsg(gettext(crate::message::e_re_corr));
         return 1;
     }

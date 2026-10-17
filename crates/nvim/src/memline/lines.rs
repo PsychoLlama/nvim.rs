@@ -228,6 +228,26 @@ impl Lines {
     }
 }
 
+/// Line `lnum` of `buffer`, its NUL included, borrowed for as long as the
+/// handle is rather than for as long as a [`Lines`] borrow.
+///
+/// This is upstream's `ml_get_buf` contract with a slice in place of the
+/// pointer: the bytes are good until the next read of a *different* line of
+/// the buffer, and nothing in the type says so. [`Lines`] says so, and is
+/// what everything else reads lines through; this exists for the one reader
+/// that holds its line across a stretch of work it knows reads no other —
+/// the regexp matcher, whose cursor is an offset into the line it is on and
+/// which fetches the line again, through here, after anything that might
+/// have moved it (`\%V`'s virtual columns, `\%'m`'s mark lookup, a
+/// back-reference to another line). See `regexp::rex` for that side of it.
+///
+/// The NUL is part of the slice because the matcher reads it as a position:
+/// `$` matches there and a character step stops there.
+pub(crate) fn held_line(buffer: &Buf, lnum: LineNr) -> &[u8] {
+    fetch_line(*buffer, lnum, false);
+    buffer.b_ml.cached_bytes_with_nul()
+}
+
 /// A line taken out of the cache, with the terminator the cache had after it.
 ///
 /// A line read from the memline is followed by a NUL in the same allocation,

@@ -6,23 +6,21 @@
 //! Each state either accepts the outcome and pops, or produces another thing
 //! to try and hands control back to the forward walk with `RA_CONT`.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::cstr;
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use super::compile::BtProg;
 use super::op::BtOp;
 use super::repeat::regrepeat;
 use super::state::{BackPos, Braces, RegStack, capture_slot};
 use crate::getchar::state::got_int;
-use crate::mbyte::utf_head_off;
+
 use crate::regexp::{
     MatchPos, RA_BREAK, RA_CONT, RA_FAIL, RA_MATCH, RA_NOMATCH, RS_BEHIND1, RS_BEHIND2, RS_BRANCH,
     RS_BRCPLX_LONG, RS_BRCPLX_MORE, RS_BRCPLX_SHORT, RS_MCLOSE, RS_MOPEN, RS_NOMATCH, RS_NOPEN,
-    RS_STAR_LONG, RS_STAR_SHORT, RS_ZCLOSE, RS_ZOPEN, RegState, Rex, SavedInput, reg_breakcheck,
-    reg_getline, reg_getline_len, reg_restore, reg_save, restore_subexpr,
+    RS_STAR_LONG, RS_STAR_SHORT, RS_ZCLOSE, RS_ZOPEN, Rex, SavedInput, head_off_at, reg_breakcheck,
+    reg_getline, reg_restore, reg_save, restore_subexpr,
 };
 use crate::types::{ColNr, NUL, int64_t, uint8_t};
 
@@ -47,11 +45,10 @@ pub(crate) fn resume(
             // pattern did not work out.
             RS_MOPEN | RS_MCLOSE | RS_ZOPEN | RS_ZCLOSE => {
                 if *status == RA_NOMATCH {
+                    // The frame was pushed for a capture opcode, so its
+                    // state and `rs_no` name the slot it saved.
                     let rp = stack.top();
-                    // SAFETY: the frame was pushed for a capture opcode of
-                    // the running program, so `rs_no` names a group the
-                    // match holds both shapes of slot for.
-                    unsafe { undo_capture(rex, rp.rs_state, rp.rs_no as usize, rp.rs_saved.pos) };
+                    capture_slot(rex, rp.rs_state, rp.rs_no as usize).set(rp.rs_saved.pos);
                 }
                 stack.pop(scan);
             }
@@ -156,18 +153,6 @@ pub(crate) fn resume(
     }
 }
 
-/// Put capture group `no`'s slot back to what the frame saved. Which of the
-/// four slot arrays it is, is the frame's state.
-///
-/// # Safety
-///
-/// As [`super::state::capture_slot`].
-unsafe fn undo_capture(rex: Rex, state: RegState, no: usize, saved: MatchPos) {
-    // SAFETY: the caller promises the group; this is the slot the matching
-    // `push_capture` read the saved value out of.
-    unsafe { capture_slot(rex, state, no).set(saved) };
-}
-
 /// `RS_BEHIND1`: the pattern *after* the look-behind has been reached, so now
 /// the look-behind's own operand has to be run, ending here.
 ///
@@ -228,13 +213,10 @@ fn behind_step(
     // the `\{n}` limit on how far back to look.
     let limit = prog.operand_u32(rp.rs_scan, 3);
     let stop = rex.behind_pos().pos;
-    // SAFETY: `rex` is the running match and `rs_saved` a position in it.
-    let stepped = unsafe {
-        if rex.multi() {
-            step_back_lines(rex, backpos, &mut rp.rs_saved, stop, limit)
-        } else {
-            step_back_string(rex, &mut rp.rs_saved, stop, limit)
-        }
+    let stepped = if rex.multi() {
+        step_back_lines(rex, backpos, &mut rp.rs_saved, stop, limit)
+    } else {
+        step_back_string(rex, &mut rp.rs_saved, stop, limit)
     };
 
     if stepped {
@@ -265,11 +247,7 @@ fn behind_step(
 ///
 /// False when there is nowhere left to look — `stop` has been reached, or the
 /// `\{n}` limit has.
-///
-/// # Safety
-///
-/// `rex` must be a live buffer match, and `start` a position in it.
-unsafe fn step_back_lines(
+fn step_back_lines(
     rex: Rex,
     backpos: &mut BackPos,
     start: &mut SavedInput,
@@ -278,8 +256,7 @@ unsafe fn step_back_lines(
 ) -> bool {
     let (was, stop) = (start.pos.as_pos(), stop.as_pos());
     let end_col = if was.lnum < stop.lnum {
-        // SAFETY: `rex.line` is the NUL-terminated line being matched.
-        unsafe { cstr::bytes_at(rex.line().cast()).len() as ColNr }
+        line_len(rex.line())
     } else {
         stop.col
     };
@@ -291,47 +268,38 @@ unsafe fn step_back_lines(
         // decrement is deliberately inside the short circuit.
         if was.lnum < stop.lnum || {
             start.pos.pos_mut().lnum -= 1;
-            reg_getline(rex, start.pos.as_pos().lnum).is_null()
+            reg_getline(rex, start.pos.as_pos().lnum).is_none()
         } {
             return false;
         }
         reg_restore(rex, start, backpos);
-        // SAFETY: as above.
-        start.pos.pos_mut().col = unsafe { cstr::bytes_at(rex.line().cast()) }.len() as ColNr;
+        start.pos.pos_mut().col = line_len(rex.line());
     } else {
-        let line = reg_getline(rex, was.lnum);
-        // SAFETY: `was.col` is a column of `line` and is not zero, so the
-        // byte before it is on the line too.
-        let head = unsafe { utf_head_off(line, line.add(was.col as usize).sub(1)) };
+        // `was.col` is a column of the line and is not zero, so the byte
+        // before it is on the line too.
+        let line = reg_getline(rex, was.lnum).unwrap_or(b"\0");
+        let head = head_off_at(line, was.col as usize - 1) as ColNr;
         start.pos.pos_mut().col -= head + 1;
     }
     true
 }
 
-/// [`step_back_lines`] for a string match, where there is one line and the
-/// position is a pointer into it.
-///
-/// # Safety
-///
-/// `rex` must be a live string match, and `start` and `stop` positions in the
-/// string it is matching.
-unsafe fn step_back_string(
-    rex: Rex,
-    start: &mut SavedInput,
-    stop: MatchPos,
-    limit: int64_t,
-) -> bool {
-    let was = start.pos.as_ptr();
-    if was == rex.line() {
+/// How long a line the match holds is, its NUL left out.
+fn line_len(line: &[u8]) -> ColNr {
+    ColNr::try_from(line.len() - 1).unwrap_or(ColNr::MAX)
+}
+
+/// [`step_back_lines`] for a string match, where there is one line.
+fn step_back_string(rex: Rex, start: &mut SavedInput, stop: MatchPos, limit: int64_t) -> bool {
+    let was = start.pos.as_pos().col;
+    if was <= 0 {
         return false;
     }
-    // SAFETY: `was` is in the string being matched and is not its first
-    // byte, so the character before it is there to measure.
-    let back = unsafe { utf_head_off(rex.line().cast(), was.cast::<c_char>().sub(1)) } as usize + 1;
-    // SAFETY: `back` is that character's length, so it stays in the string.
-    start.pos.set_ptr(unsafe { was.sub(back) });
-    // SAFETY: both positions are in the one string being matched.
-    limit <= 0 || unsafe { stop.as_ptr().offset_from(start.pos.as_ptr()) } <= limit as isize
+    // `was` is not the string's first byte, so the character before it is
+    // there to measure.
+    let back = head_off_at(rex.line(), was as usize - 1) as ColNr + 1;
+    start.pos.pos_mut().col = was - back;
+    limit <= 0 || i64::from(stop.as_pos().col - start.pos.as_pos().col) <= limit
 }
 
 /// `RS_STAR_LONG`/`RS_STAR_SHORT`: hand back one of the matches
@@ -373,24 +341,17 @@ fn star(
                         break;
                     }
                     rex.set_lnum(rex.lnum() - 1);
-                    rex.set_line(reg_getline(rex, rex.lnum()).cast());
-                    if rex.line().is_null() {
+                    let Some(line) = reg_getline(rex, rex.lnum()) else {
                         break;
-                    }
-                    let len = reg_getline_len(rex, rex.lnum()) as usize;
-                    // SAFETY: `len` is that line's length, so it lands on its
-                    // NUL at worst.
-                    rex.set_input(unsafe { rex.line().add(len) });
+                    };
+                    rex.set_line(line);
+                    rex.set_input(line.len() - 1);
                     reg_breakcheck(rex);
                 } else {
-                    // SAFETY: the cursor is not at the start of the line, so
-                    // the character before it is on the line.
-                    let back = unsafe {
-                        utf_head_off(rex.line().cast(), rex.input().cast::<c_char>().sub(1))
-                    } as usize
-                        + 1;
-                    // SAFETY: `back` is that character's length.
-                    rex.set_input(unsafe { rex.input().sub(back) });
+                    // The cursor is not at the start of the line, so the
+                    // character before it is on the line.
+                    let before = rex.input() - 1;
+                    rex.set_input(before - head_off_at(rex.line(), before));
                 }
             } else {
                 // Non-greedy: take one more match.

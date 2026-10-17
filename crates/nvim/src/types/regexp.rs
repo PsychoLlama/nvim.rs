@@ -10,7 +10,6 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
-use crate::winlayer::{Buf, Win};
 use core::ops::Range;
 
 /// The head every compiled pattern starts with, whichever engine built it.
@@ -24,27 +23,12 @@ pub struct RegProg {
 }
 /// Release a compiled pattern.
 pub type RegFree = Option<unsafe fn(*mut RegProg) -> ()>;
-/// Match within one line.
-pub type RegExecNl =
-    Option<unsafe fn(*mut RegMatch, *mut uint8_t, ColNr, bool) -> ::core::ffi::c_int>;
-/// Match across lines of a buffer, with a timeout.
-pub type RegExecMulti = Option<
-    unsafe fn(
-        *mut RegMMatch,
-        Option<Win>,
-        Buf,
-        LineNr,
-        ColNr,
-        *mut ProfTime,
-        *mut ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int,
->;
-/// The vtable of a regexp engine (backtracking or NFA). Compiling is not
-/// in it: `vim_regcomp` picks the engine and calls its compiler directly.
+/// What tells one engine's programs from the other's: the engine a program
+/// came from. Running one is the API layer's dispatch on which this is;
+/// compiling is not in it either: `vim_regcomp` picks the engine and calls
+/// its compiler directly.
 pub struct RegEngine {
     pub regfree: RegFree,
-    pub regexec_nl: RegExecNl,
-    pub regexec_multi: RegExecMulti,
 }
 
 pub type Magic = ::core::ffi::c_uint;

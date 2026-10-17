@@ -9,14 +9,14 @@
 
 use super::list::op;
 use crate::regexp::NfaOp;
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use super::run::nfa_re_num_cmp;
-use crate::mark::mark_get;
-use crate::plines::win_linetabsize;
+use crate::mark::mark_lookup;
+use crate::plines::win_linetabsize_bytes;
 use crate::pos::MAXCOL;
 use crate::regexp::{NfaState, Rex, kMarkBufLocal, reg_getline, reg_getline_len, reg_match_visual};
-use crate::types::{ColNr, FileMark, LineNr, MB_MAXBYTES, uint8_t};
+use crate::types::{ColNr, LineNr, MB_MAXBYTES};
 
 use crate::winlayer::Win;
 /// The column the match has reached, in bytes from the start of the line.
@@ -61,7 +61,6 @@ pub(crate) fn at_col(rex: Rex, state: *mut NfaState) -> bool {
         unsafe { (*state).val } >= 0,
         "column assertion out of range"
     );
-    assert!(rex.input() >= rex.line(), "input before the line");
     nfa_re_num_cmp(
         unsafe { (*state).val } as u64,
         op(state) - NfaOp::Col.code(),
@@ -96,37 +95,27 @@ pub(crate) fn at_vcol(rex: Rex, state: *mut NfaState) -> bool {
     if rex.multi() && (lnum <= 0 || lnum > wp.buffer().b_ml.ml_line_count) {
         lnum = 1;
     }
-    let vcol = unsafe { win_linetabsize(wp, lnum, rex.line() as *mut c_char, col) };
+    let vcol = win_linetabsize_bytes(wp, lnum, rex.line(), col);
     assert!(want >= 0, "virtual column assertion out of range");
     nfa_re_num_cmp(want as u64, op, vcol as u64 + 1)
 }
 
 /// `\%'m`: the position of mark `m`.
 pub(crate) fn at_mark(rex: Rex, state: *mut NfaState) -> bool {
-    // The record `mark_get` answers into: a motion mark (`'{`, `'(`) has no
-    // store of its own, so it is computed straight into this frame's slot.
-    let mut slot = FileMark::UNSET;
-    // SAFETY: reads the match context and the buffer's marks.
     let col = if rex.multi() { col(rex) } else { 0 };
-    let fm: *mut FileMark = unsafe {
-        mark_get(
-            rex.reg_buf(),
-            Win::current(),
-            &raw mut slot,
-            kMarkBufLocal,
-            (*state).val,
-        )
-    };
+    // SAFETY: a live state of the running program.
+    let name = unsafe { (*state).val };
+    // `mark_lookup` computes a motion mark (`'{`, `'(`) on the spot.
+    let fm = mark_lookup(rex.reg_buf(), Win::current(), kMarkBufLocal, name);
     // Looking a mark up can move the memline's buffer out from under
     // the match.
     if rex.multi() {
-        rex.set_line(reg_getline(rex, rex.lnum()) as *mut uint8_t);
-        rex.set_input(unsafe { rex.line().offset(col as isize) });
+        rex.seek(reg_getline(rex, rex.lnum()).unwrap_or(b"\0"), col);
     }
-    if fm.is_null() || unsafe { (*fm).mark.lnum } <= 0 {
+    let Some(fm) = fm.filter(|fm| fm.mark.lnum > 0) else {
         return false;
-    }
-    let pos = unsafe { (*fm).mark };
+    };
+    let pos = fm.mark;
     let here = lnum(rex);
     // A mark parked at MAXCOL means the end of its line.
     let pos_col = if pos.lnum == here && pos.col == MAXCOL as c_int {
