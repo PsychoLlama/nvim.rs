@@ -1641,6 +1641,50 @@ fn a_match_reports_spans_that_are_read_back_against_the_line() {
     assert_eq!(rm.group(1), None);
 }
 
+/// The automatic engine gives a pattern up to the backtracking one mid-match
+/// once the NFA has walked `NFA_MAX_STATES` positions (`NFA_TOO_EXPENSIVE`):
+/// the pattern is recompiled and the match rerun, and the new program has to
+/// land back in the structure the caller holds -- for a string match and a
+/// buffer match alike -- and serve the next match from there. A program
+/// copied rather than handed back would be freed twice (which the ASan run
+/// would report) or leave the caller with the one that gave up.
+#[test]
+fn a_pattern_the_nfa_gives_up_on_comes_back_recompiled_in_its_holder() {
+    let _sandbox = Sandbox::globals();
+    let pattern = cstr(r"\%#=0a*b");
+    let long = format!("{}b", "a".repeat(100_000));
+
+    let mut rm = RegMatch::new(vim_regcomp(&pattern, RE_MAGIC | RE_STRING), false);
+    let subject = CString::new(long.clone()).expect("a subject holds no NUL");
+    for _ in 0..2 {
+        assert!(vim_regexec(&mut rm, &subject, 0), "the long run matches");
+        assert_eq!(rm.group(0), Some(0..long.len()));
+        assert!(rm.regprog.is_some(), "the holder keeps a program");
+    }
+
+    let put = |line: &str| {
+        let text = CString::new(line).expect("a command holds no NUL");
+        let _ = do_cmdline_cmd(&text);
+    };
+    put("silent! keepjumps keepmarks %delete _");
+    put("call setline(1, repeat('a', 100000) . 'b')");
+    let mut rmm = RegMMatch {
+        regprog: vim_regcomp(&pattern, RE_MAGIC),
+        ..Default::default()
+    };
+    for _ in 0..2 {
+        let lines = vim_regexec_multi(&mut rmm, None, Buf::current(), 1, 0, None, None);
+        assert_eq!(lines, 1, "a one-line match");
+        assert_eq!(
+            (rmm.endpos[0].lnum, rmm.endpos[0].col),
+            (0, 100_001),
+            "it ends past the `b`"
+        );
+        assert!(rmm.regprog.is_some(), "the holder keeps a program");
+    }
+    put("silent! keepjumps keepmarks %delete _");
+}
+
 /// `substitute()` is the string half of the substitution: it runs
 /// `vim_regexec` over a string it owns and expands the replacement against
 /// the spans that come back, which is the path `&`, `\1` and `submatch()`
