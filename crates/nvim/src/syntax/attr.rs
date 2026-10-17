@@ -10,15 +10,14 @@
 //! This is the hottest path in the module: it runs once per cell of every
 //! highlighted line.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use core::ffi::c_int;
 
 use super::*;
 use crate::charset::is_word_at;
 use crate::mbyte::head_off;
-use crate::memline::held_line;
+use crate::memline::Lines;
 use crate::pos::MAXCOL;
 use crate::types::NUL;
 
@@ -136,10 +135,7 @@ impl SynState {
 
         // No character, no attributes -- past end of line? Do try matching an
         // empty line, which could be the start of a region.
-        let line = self.curline();
-        // SAFETY: the parser's column is inside its line, terminator
-        // included, and nothing has run a pattern since the line was got.
-        let here = unsafe { *line.offset(self.col as isize) } as c_int;
+        let (here, next) = self.curline_bytes_at(self.col);
         if here == NUL && self.col != 0 {
             // If we found a match after the last column, use it.
             if self.next_match.idx >= 0
@@ -153,8 +149,7 @@ impl SynState {
             return 0;
         }
         // If the current or the next character is NUL, this finishes the line.
-        // SAFETY: as above; the byte after a non-NUL one is still inside.
-        if here == NUL || unsafe { *line.offset(self.col as isize + 1) } as c_int == NUL {
+        if here == NUL || next == NUL {
             self.finished = true;
             self.state_stored = false;
         }
@@ -286,11 +281,8 @@ impl SynState {
         // A nextgroup ends at end of line, unless "skipnl" or "skipempty".
         if !self.next_list.is_none() && !self.next_flags.has(SynFlags::SKIPNL | SynFlags::SKIPEMPTY)
         {
-            let line = self.curline();
-            // SAFETY: as at the top: inside the line, and the byte after a
-            // non-NUL one is too.
-            let here = unsafe { *line.offset(self.col as isize) } as c_int;
-            if here != NUL && unsafe { *line.offset(self.col as isize + 1) } as c_int == NUL {
+            let (here, next) = self.curline_bytes_at(self.col);
+            if here != NUL && next == NUL {
                 self.next_list = IdList::NONE;
             }
         }
@@ -306,7 +298,8 @@ impl SynState {
     fn try_keyword(&mut self, cur_si: Option<c_int>) -> Option<c_int> {
         // Only on a keyword character that follows a non-keyword one.
         let buffer = self.buffer;
-        let line = held_line(&buffer, self.lnum);
+        let mut lines = Lines::in_buffer(buffer);
+        let line = lines.line(self.lnum);
         let col = self.col as usize;
         if !is_word_at(&line[col..], buffer) {
             return None;

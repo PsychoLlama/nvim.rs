@@ -4,15 +4,14 @@
 //! `SynTime`; [`syntime_report`] sorts the patterns by total time and prints
 //! the table. Used to find the pattern that makes a syntax file slow.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::cstr;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::types::Candidate;
 use crate::winlayer::Win;
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_int};
 
 use super::*;
 
@@ -64,25 +63,9 @@ struct TimeEntry {
     slowest: ProfTime,
     average: ProfTime,
     id: c_int,
-    /// The pattern text, borrowed from the pattern the row came from.
-    pattern: *const c_char,
-}
-
-/// Order two rows by total time, for [`qsort`].
-///
-/// Still `qsort` and not `sort_by`: two patterns can accumulate exactly the
-/// same total, and which of them the sort leaves first is then unprovable for
-/// any other algorithm.
-///
-/// # Safety
-///
-/// As `qsort`'s comparator: `v1` and `v2` must each point at an element of
-/// the array being sorted, and the elements must be of the type this reads
-/// them at.
-unsafe extern "C" fn syn_compare_syntime(v1: *const c_void, v2: *const c_void) -> c_int {
-    profile_cmp(unsafe { (*(v1 as *const TimeEntry)).total }, unsafe {
-        (*(v2 as *const TimeEntry)).total
-    })
+    /// The pattern text, copied: printing the table can run anything a
+    /// message can, so nothing is borrowed from the pattern array across it.
+    pattern: Vec<u8>,
 }
 
 /// `:syntime report` — the timing table, slowest pattern last.
@@ -113,23 +96,16 @@ fn syntime_report() {
             id: spp.sp_syn.id as c_int,
             pattern: spp
                 .sp_pattern
-                .as_ref()
-                .map_or(::core::ptr::null(), |p| p.as_ptr()),
+                .as_deref()
+                .map_or_else(Vec::new, |p| p.to_bytes().to_vec()),
         });
     }
 
-    // Skip the sort when there is nothing to sort: `qsort` may not be
-    // handed a NULL pointer, which an empty `Vec` would be.
-    if entries.len() > 1 {
-        unsafe {
-            qsort(
-                entries.as_mut_ptr() as *mut c_void,
-                entries.len(),
-                ::core::mem::size_of::<TimeEntry>(),
-                Some(syn_compare_syntime),
-            )
-        };
-    }
+    // Ascending by `profile_cmp`, which is negative when its *first*
+    // argument is the larger time. Stable, so patterns with exactly the same
+    // total keep their definition order; upstream's `qsort` left that order
+    // to the C library.
+    entries.sort_by(|a, b| profile_cmp(a.total, b.total).cmp(&0));
 
     msg_title(gettext(
         c"  TOTAL      COUNT  MATCH   SLOWEST     AVERAGE   NAME               PATTERN",
@@ -171,11 +147,7 @@ fn report_row(entry: &TimeEntry) {
     msg_str(cstr::in_chars(&profile_msg(entry.average)));
     msg_str(c" ");
     msg_advance(50);
-    msg_display(
-        unsafe { cstr::at(highlight_group_name(entry.id - 1)) },
-        0,
-        false,
-    );
+    msg_display(syn_id2name(entry.id), 0, false);
     msg_str(c" ");
     msg_advance(69);
 
@@ -186,8 +158,7 @@ fn report_row(entry: &TimeEntry) {
     } else {
         Columns.get() - 70
     };
-    // SAFETY: the entry's pattern is NUL-terminated.
-    let pattern = unsafe { cstr::bytes_at(entry.pattern) };
+    let pattern = &entry.pattern;
     let room = usize::try_from(room).unwrap_or(0);
     msg_display_bytes(&pattern[..room.min(pattern.len())], 0, false);
     msg_str(c"\n");

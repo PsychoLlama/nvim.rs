@@ -32,9 +32,9 @@
 #![allow(non_upper_case_globals)]
 
 use crate::ascii::ascii_iswhite;
-use crate::autocmd::apply_autocmds;
+use crate::autocmd::apply_autocmds_exarg;
 use crate::buffer::buf_get_changedtick;
-use crate::charset::{buf_init_chartab, getdigits_int_at, getdigits_int32, skip, vim_isprintc};
+use crate::charset::{buf_init_chartab, getdigits_int_at, skip, vim_isprintc};
 use crate::cstr;
 use crate::drawscreen::state::display_tick;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, redraw_curbuf_later, redraw_later};
@@ -45,12 +45,12 @@ use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
 use crate::highlight::state::{include_default, include_link, include_none};
 use crate::highlight_group::{
-    HLF_D, highlight_group_name, highlight_link_id, highlight_num_groups, init_highlight,
-    syn_check_group, syn_id2attr, syn_list_header, syn_name2id, syn_name2id_bytes,
+    HLF_D, highlight_link_id, highlight_num_groups, init_highlight, syn_check_group, syn_id2attr,
+    syn_id2name, syn_list_header, syn_name2id, syn_name2id_bytes,
 };
 use crate::indent_c::find_start_comment;
-use crate::mbyte::{mb_strcmp_ic, utf_head_off, utfc_ptr2len};
-use crate::memline::{ml_get, ml_get_buf, ml_get_buf_len, ml_get_len};
+use crate::mbyte::strcmp_ic_in;
+use crate::memline::{Lines, ml_get_buf_len};
 use crate::message::state::msg_col;
 use crate::message::{
     emsg, msg, msg_advance, msg_display, msg_display_bytes, msg_ext_set_kind, msg_outnum,
@@ -79,7 +79,6 @@ use crate::types::{
 use crate::ui::state::{Columns, Rows};
 use crate::winlayer::Buf;
 use crate::winlayer::{Live, Win};
-use ::libc::qsort;
 use ::std::rc::Rc;
 
 mod flags;
@@ -349,8 +348,6 @@ pub(crate) const SYNSPL_TOP: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub(crate) const SYNSPL_NOTOP: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub(crate) const SYNFLD_START: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub(crate) const SYNFLD_MINIMUM: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-/// The `:source` argument the on/off commands build; `%s` is the file's name.
-pub(crate) const SYNTAX_FNAME: &::core::ffi::CStr = c"$VIMRUNTIME/syntax/%s.vim";
 pub(crate) const SST_MIN_ENTRIES: ::core::ffi::c_int = 150 as ::core::ffi::c_int;
 pub(crate) const SST_MAX_ENTRIES: ::core::ffi::c_int = 1000 as ::core::ffi::c_int;
 pub(crate) const SST_DIST: ::core::ffi::c_int = 16 as ::core::ffi::c_int;

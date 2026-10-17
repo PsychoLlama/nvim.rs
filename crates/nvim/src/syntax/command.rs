@@ -12,9 +12,8 @@ use crate::cstr;
 use crate::guard::Suppress;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
-use crate::vim_snprintf;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 
 use super::*;
 use crate::memory::XString;
@@ -228,16 +227,19 @@ fn syn_cmd_onoff(args: &mut ExArg, name: &CStr) {
         return;
     }
     did_syntax_onoff.set(true);
-    let mut buf: [c_char; 100] = [0; 100];
-    buf[0] = b's' as c_char;
-    buf[1] = b'o' as c_char;
-    buf[2] = b' ' as c_char;
-    let (at, room) = (unsafe { buf.as_mut_ptr().add(3) }, buf.len() - 3);
-    // SAFETY: `at` is three bytes into a buffer with `room` left.
-    unsafe { vim_snprintf!(at, room, SYNTAX_FNAME.as_ptr(), name.as_ptr()) };
-    // SAFETY: `vim_snprintf` terminated the buffer above.
-    let _ = do_cmdline_cmd(unsafe { cstr::at(buf.as_ptr()) });
+    // `so $VIMRUNTIME/syntax/{name}.vim`, cut to the 100-byte buffer
+    // upstream formats it into.
+    let mut cmd = b"so ".to_vec();
+    cmd.extend_from_slice(b"$VIMRUNTIME/syntax/");
+    cmd.extend_from_slice(name.to_bytes());
+    cmd.extend_from_slice(b".vim");
+    cmd.truncate(SYNTAX_CMD_MAX);
+    let _ = do_cmdline_cmd(&cstr::owned(&cmd));
 }
+
+/// The longest `:source` command [`syn_cmd_onoff`] builds, which is what fit
+/// upstream's buffer with its NUL.
+const SYNTAX_CMD_MAX: usize = 99;
 
 /// Turn syntax highlighting on unless `:syntax` has already been used one way
 /// or the other.
@@ -348,9 +350,15 @@ pub(crate) fn ex_ownsyntax(excmd: &mut ExArg) {
     // A copy of the name: the autocommand runs commands of its own.
     let mut name = excmd.line.arg().to_vec();
     name.push(0);
-    let (fname, arg) = (buffer.name.shown_ptr(), name.as_mut_ptr().cast());
-    // SAFETY: a live buffer, and the command's own NUL-terminated argument.
-    unsafe { apply_autocmds(AutoEvent::Syntax, arg, fname, true, Some(buffer)) };
+    let fname = buffer.name.shown().map(CStr::to_owned);
+    let _ = apply_autocmds_exarg(
+        AutoEvent::Syntax,
+        Some(cstr::in_bytes(&name)),
+        fname.as_deref(),
+        true,
+        Some(buffer),
+        None,
+    );
 
     // Move the value of b:current_syntax to w:current_syntax.
     if let Some(new_value) = var_string_value(b"b:current_syntax") {

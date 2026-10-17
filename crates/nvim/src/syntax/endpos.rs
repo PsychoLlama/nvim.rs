@@ -8,17 +8,17 @@
 //! lookup), and [`SynState::syn_add_start_off`]/[`SynState::syn_add_end_off`], which apply the seven `ms=`/`me=`/
 //! `hs=`/`he=`/`rs=`/`re=`/`lc=` offsets to a match.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use crate::charset::display::foldcase;
 use crate::charset::is_word_at;
-use crate::mbyte::c_cluster_len;
+use crate::cstr;
+use crate::mbyte::{c_cluster_len, head_off};
+use crate::memline::Lines;
 
 use super::*;
-use crate::types::NUL;
 
 /// What [`SynState::find_endpos`] found.
 ///
@@ -420,36 +420,22 @@ impl SynState {
         if off == 0 {
             return col;
         }
-        let base = ml_get_buf(self.buffer, lnum);
-        let mut p = unsafe { base.offset(col as isize) };
+        let mut lines = Lines::in_buffer(self.buffer);
+        let line = lines.line(lnum);
+        let mut at = (col as usize).min(line.len());
         let mut left = off;
         if off > 0 {
-            while left > 0 && unsafe { *p } as c_int != NUL {
-                p = unsafe { p.offset(utfc_ptr2len(p) as isize) };
+            while left > 0 && at < line.len() {
+                at += c_cluster_len(&line[at..]);
                 left -= 1;
             }
         } else {
-            while left < 0 && base < p {
-                p = unsafe { p.offset(-((utf_head_off(base, p.offset(-1)) + 1) as isize)) };
+            while left < 0 && at > 0 {
+                at -= head_off(line, at - 1) + 1;
                 left += 1;
             }
         }
-        unsafe { p.offset_from(base) as ColNr }
-    }
-
-    /// The current line of the syntax buffer.
-    ///
-    /// NOTE: the *bytes* are invalid after anything that can look for a pattern
-    /// match -- the regexp engine may reach `ml_get_buf` for another line and
-    /// evict this one. Reading them is the caller's unsafe step; asking for the
-    /// pointer is not.
-    ///
-    /// The buffer is the one the entry point resolved for this call, which the
-    /// per-column path reads rather than asking the registry per character.
-    pub(crate) fn curline(&self) -> *mut c_char {
-        // SAFETY: `buffer` is the buffer the parse was started for, and `lnum`
-        // a line of it.
-        ml_get_buf(self.buffer, self.lnum)
+        at as ColNr
     }
 
     /// Length of the current line of the syntax buffer.
@@ -457,14 +443,26 @@ impl SynState {
         ml_get_buf_len(self.buffer, self.lnum)
     }
 
-    /// The byte at `col` of the line being parsed.
+    /// The byte at `col` of the line being parsed, NUL at and past its end.
     ///
-    /// Every caller is testing for the NUL that ends the line, so `col` is at
-    /// most its length and the read stays inside what `ml_get_buf` answered.
+    /// The buffer is the one the entry point resolved for this call, which the
+    /// per-column path reads rather than asking the registry per character.
     pub(crate) fn curline_byte(&self, col: ColNr) -> u8 {
-        debug_assert!(col <= self.curline_len());
-        // SAFETY: `col` is within the line, its terminator included.
-        unsafe { *self.curline().offset(col as isize) as u8 }
+        cstr::byte_at(Lines::in_buffer(self.buffer).line(self.lnum), col as usize)
+    }
+
+    /// The bytes at `col` and `col + 1` of the line being parsed, NUL at and
+    /// past its end: what the per-column step tests for the end of the line,
+    /// from one fetch of it.
+    #[inline]
+    pub(crate) fn curline_bytes_at(&self, col: ColNr) -> (c_int, c_int) {
+        let mut lines = Lines::in_buffer(self.buffer);
+        let line = lines.line(self.lnum);
+        let at = col as usize;
+        (
+            c_int::from(cstr::byte_at(line, at)),
+            c_int::from(cstr::byte_at(line, at + 1)),
+        )
     }
 
     /// Number of lines in the buffer being parsed.
@@ -551,8 +549,8 @@ pub(crate) struct KeywordMatch {
 impl SynState {
     /// Check one position in a line for a matching keyword.
     ///
-    /// `line` is the parser's line of the parser's buffer, its NUL included,
-    /// and a keyword character starts at `startcol` -- the caller has
+    /// `line` is the parser's line of the parser's buffer, and a keyword
+    /// character starts at `startcol` -- the caller has
     /// established that a keyword can start there. `cur_si`, when it is
     /// `Some`, is the current item of the state stack.
     pub(crate) fn check_keyword_id(
@@ -562,8 +560,8 @@ impl SynState {
         cur_si: Option<c_int>,
     ) -> Option<KeywordMatch> {
         // Find the first character after the keyword; the first character was
-        // already checked by the caller. The line's NUL is no word
-        // character, so the walk stops there at the latest.
+        // already checked by the caller. The walk stops at the end of the
+        // line at the latest: past it there is no word character.
         let text = &line[startcol as usize..];
         let mut kwlen = 0;
         loop {

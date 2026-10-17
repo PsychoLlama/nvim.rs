@@ -5,10 +5,8 @@
 //! items, [`put_pattern`] one pattern with its offsets, [`put_id_list`] a
 //! `contains=`/`nextgroup=` list, and [`syn_list_cluster`] a cluster.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::cstr;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::winlayer::Win;
@@ -236,11 +234,7 @@ fn syn_list_one(id: c_int, syncing: bool, link_only: bool) {
         syn_list_header(did_header, 0, id, true);
         msg_str_hl(c"links to", LIST_HL, false);
         msg_putchar(' ' as c_int);
-        msg_display(
-            unsafe { cstr::at(highlight_group_name(link - 1)) },
-            0,
-            false,
-        );
+        msg_display(syn_id2name(link), 0, false);
     }
 }
 
@@ -291,11 +285,7 @@ fn put_sync_group(flags: SynFlags, sync_idx: c_int) {
     if sync_idx >= 0 {
         let block = cur_syn_block();
         let target_id = block.patterns()[sync_idx as usize].sp_syn.id as c_int;
-        msg_display(
-            unsafe { cstr::at(highlight_group_name(target_id - 1)) },
-            0,
-            false,
-        );
+        msg_display(syn_id2name(target_id), 0, false);
     } else {
         msg_str(c"NONE");
     }
@@ -346,17 +336,11 @@ fn put_id_list(name: &CStr, ids: &[int16_t], hl_id: c_int) {
             msg_str(c"CONTAINED");
         } else if item >= SYNID_CLUSTER {
             let block = cur_syn_block();
-            let name = block.clusters()[(item - SYNID_CLUSTER) as usize]
-                .scl_name
-                .as_ptr();
+            let name = &block.clusters()[(item - SYNID_CLUSTER) as usize].scl_name;
             msg_putchar('@' as c_int);
-            msg_display(unsafe { cstr::at(name) }, 0, false);
+            msg_display(name, 0, false);
         } else {
-            msg_display(
-                unsafe { cstr::at(highlight_group_name(item - 1)) },
-                0,
-                false,
-            );
+            msg_display(syn_id2name(item), 0, false);
         }
         if more {
             msg_putchar(',' as c_int);
@@ -382,11 +366,7 @@ fn put_pattern(last_matchgroup: &mut c_int, s: &CStr, c: c_int, spp: &SynPat) {
         if *last_matchgroup == 0 {
             msg_display(c"NONE", 0, false);
         } else {
-            msg_display(
-                unsafe { cstr::at(highlight_group_name(*last_matchgroup - 1)) },
-                0,
-                false,
-            );
+            msg_display(syn_id2name(*last_matchgroup), 0, false);
         }
         msg_putchar(' ' as c_int);
     }

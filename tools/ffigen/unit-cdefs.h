@@ -3693,6 +3693,7 @@ static const int SYNID_TOP = 21000;
 static const int SYNSPL_DEFAULT = 0;
 static const int SYNSPL_NOTOP = 2;
 static const int SYNSPL_TOP = 1;
+static const int SYNTAX_CMD_MAX = 99;
 static const int SY_MAXLEN = 30;
 static const int S_IFBLK = 24576;
 static const int S_IFDIR = 16384;

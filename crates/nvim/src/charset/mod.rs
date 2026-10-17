@@ -380,6 +380,7 @@ pub fn vim_iswordc_buf(c: c_int, buffer: Buf) -> bool {
 
 /// Whether the character at the start of `bytes` belongs to a word in
 /// `buffer`. A byte that leads no multibyte sequence is judged as itself.
+#[inline]
 pub(crate) fn is_word_at(bytes: &[u8], buffer: Buf) -> bool {
     let lead = cstr::byte_at(bytes, 0);
     let c = if utf8len_tab[usize::from(lead)] > 1 {

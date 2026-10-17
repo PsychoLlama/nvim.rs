@@ -174,12 +174,6 @@ pub(crate) fn highlight_num_groups() -> c_int {
     GROUPS.with(|table| table.entries.len() as c_int)
 }
 
-/// The name of the group at *index* `id` — note that this one is not an id
-/// minus one, which is how its two callers in syntax.rs use it.
-pub(crate) fn highlight_group_name(id: c_int) -> *mut c_char {
-    GROUPS.with(|table| table.entries[id as usize].name.as_ptr().cast_mut())
-}
-
 /// The id the group at *index* `id` links to, 0 for none.
 pub(crate) fn highlight_link_id(id: c_int) -> c_int {
     GROUPS.with(|table| table.entries[id as usize].link)

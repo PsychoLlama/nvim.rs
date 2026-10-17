@@ -592,10 +592,7 @@ fn extmatch_equal(
         .zip(&b.matches)
         .all(|(am, bm)| match (am, bm) {
             (None, None) => true,
-            (Some(am), Some(bm)) => {
-                // SAFETY: both are NUL-terminated captures.
-                unsafe { mb_strcmp_ic(ic, am.as_ptr(), bm.as_ptr()) == 0 }
-            }
+            (Some(am), Some(bm)) => strcmp_ic_in(ic, am.to_bytes(), bm.to_bytes()) == 0,
             _ => false,
         })
 }

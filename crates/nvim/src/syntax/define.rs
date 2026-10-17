@@ -6,8 +6,7 @@
 //! syntax file under an inclusion tag so its toplevel items become contained
 //! ones.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::cstr;
 use crate::message_fmt::msg_bytes;
@@ -456,12 +455,7 @@ pub(crate) fn read_pattern(
     // first, to avoid the 'l' flag.
     let pattern = cstr::owned(&tail[1..end]);
     let _cpo = SavedCpo::empty();
-    // SAFETY: an owned NUL-terminated copy of the pattern text.
-    ci.sp_prog = vim_regcomp_ext(
-        unsafe { cstr::at(pattern.as_ptr().cast_mut()) },
-        RE_MAGIC,
-        extmatch,
-    );
+    ci.sp_prog = vim_regcomp_ext(&pattern, RE_MAGIC, extmatch);
     ci.sp_pattern = Some(pattern);
     ci.sp_prog.as_ref()?;
     ci.sp_ic = cur_syn_block().b_syn_ic;

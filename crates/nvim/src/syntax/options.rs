@@ -7,15 +7,14 @@
 //! test -- it runs once per candidate pattern per column, so it is on the
 //! per-cell path even though the rest of this module is not.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::charset::skip;
 use crate::cstr;
 use crate::mbyte::{char_at, cluster_len};
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 
 use super::*;
 use crate::regexp::RE_MAGIC;
@@ -471,13 +470,7 @@ fn parse_id_name(
     name.pop();
     name.push(b'$');
     name.push(0);
-    let mut regmatch = RegMatch::new(
-        vim_regcomp(
-            unsafe { cstr::at(name.as_ptr() as *const c_char) },
-            RE_MAGIC,
-        ),
-        true,
-    );
+    let mut regmatch = RegMatch::new(vim_regcomp(cstr::in_bytes(&name), RE_MAGIC), true);
     if regmatch.regprog.is_none() {
         return Err(());
     }
@@ -485,12 +478,7 @@ fn parse_id_name(
     let mut i = highlight_num_groups();
     while i > 0 {
         i -= 1;
-        // SAFETY: a highlight group's name is NUL-terminated.
-        if vim_regexec(
-            &mut regmatch,
-            unsafe { cstr::at(highlight_group_name(i)) },
-            0,
-        ) {
+        if vim_regexec(&mut regmatch, syn_id2name(i + 1), 0) {
             ids.push((i + 1) as int16_t);
             matched = true;
         }

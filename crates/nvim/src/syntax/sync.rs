@@ -7,14 +7,13 @@
 //! continuations, and the `grouphere`/`groupthere` sync patterns.
 //! [`syn_cmd_sync`] is the command that configures them.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::message_fmt::msg_bytes;
 use crate::option::SavedCpo;
 use crate::regexp::{char_delim, skip_regexp_at};
 use crate::semsg;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 
 use super::*;
 use crate::optionstr::OptString;
@@ -101,11 +100,7 @@ impl SynState {
 
         // Skip lines that end in a backslash.
         while start_lnum > 1 {
-            let l = ml_get(start_lnum - 1);
-            if unsafe { *l } as c_int == NUL
-                || unsafe { *l.offset(ml_get_len(start_lnum - 1) as isize - 1) } as c_int
-                    != '\\' as c_int
-            {
+            if Lines::current().line(start_lnum - 1).last() != Some(&b'\\') {
                 break;
             }
             start_lnum -= 1;
@@ -454,9 +449,7 @@ pub(crate) fn syn_cmd_sync(args: &mut ExArg, _syncing: c_int) {
                 illegal = true;
                 break;
             }
-            // SAFETY: `key` is NUL-terminated and `digits_at` is inside it.
-            let mut digits = unsafe { key.as_mut_ptr().add(count.digits_at) }.cast::<c_char>();
-            let n = unsafe { getdigits_int32(&raw mut digits, false, 0) };
+            let (n, _) = getdigits_int_at(&key, count.digits_at, false, 0);
             if !args.skip {
                 let mut block = cur_syn_block();
                 match count.field {
@@ -554,9 +547,7 @@ fn sync_linecont(args: &ExArg, next_arg: usize) -> Result<usize, LineContError> 
         let pat = name_in(args.line.slice_at(next_arg + 1, arg_end - next_arg - 1));
         block.b_syn_linecont_ic = block.b_syn_ic;
         let _cpo = SavedCpo::empty();
-        // SAFETY: `pat` is live across the call, which only reads it.
-        block.b_syn_linecont_prog =
-            vim_regcomp(unsafe { cstr::at(pat.as_ptr().cast_mut()) }, RE_MAGIC);
+        block.b_syn_linecont_prog = vim_regcomp(&pat, RE_MAGIC);
         syn_clear_time(&mut block.b_syn_linecont_time);
 
         if block.b_syn_linecont_prog.is_none() {
