@@ -8,6 +8,7 @@
 use crate::cstr;
 use core::ffi::c_int;
 
+use super::compile::BtProg;
 use super::exec::re_num_cmp;
 use super::op::BtOp;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
@@ -40,9 +41,10 @@ const ZREF: c_int = BtOp::Zref.code();
 /// the node after `scan`, which only `EXACTLY` looks at.
 pub(crate) fn match_one(
     rex: Rex,
+    prog: BtProg<'_>,
     op: BtOp,
-    scan: *mut uint8_t,
-    next: *mut uint8_t,
+    scan: usize,
+    next: usize,
     c: c_int,
 ) -> Option<c_int> {
     // Step over the character at the cursor when `ok`, else fail.
@@ -69,14 +71,20 @@ pub(crate) fn match_one(
             Some(cursor) => rex.buf_lnum() == cursor.lnum && rex.col() == cursor.col,
             None => false,
         }),
-        BtOp::ReMark => at_mark(rex, scan),
+        BtOp::ReMark => at_mark(rex, prog, scan),
         BtOp::ReVisual => nomatch_unless(reg_match_visual(rex)),
 
         // `\%23l`, `\%23c`, `\%23v` and their `<`/`>` forms. A line
         // number only means something in a multi-line match.
-        BtOp::ReLnum => nomatch_unless(rex.multi() && re_num_cmp(rex.buf_lnum() as uint32_t, scan)),
-        BtOp::ReCol => nomatch_unless(re_num_cmp((rex.col() as uint32_t).wrapping_add(1), scan)),
-        BtOp::ReVcol => nomatch_unless(re_num_cmp(virtual_column(rex).wrapping_add(1), scan)),
+        BtOp::ReLnum => {
+            nomatch_unless(rex.multi() && re_num_cmp(prog, rex.buf_lnum() as uint32_t, scan))
+        }
+        BtOp::ReCol => nomatch_unless(re_num_cmp(
+            prog,
+            (rex.col() as uint32_t).wrapping_add(1),
+            scan,
+        )),
+        BtOp::ReVcol => nomatch_unless(re_num_cmp(prog, virtual_column(rex).wrapping_add(1), scan)),
 
         // `\<` and `\>`: a change of character class, with the classes
         // below 2 (whitespace and punctuation) never starting a word.
@@ -126,9 +134,9 @@ pub(crate) fn match_one(
         BtOp::Upper => return take(ri(ByteClass::UPPER)),
         BtOp::Nupper => return take(c != NUL && !ri(ByteClass::UPPER)),
 
-        BtOp::Exactly => exactly(rex, scan, next),
-        BtOp::Anyof | BtOp::Anybut => collection(rex, scan, c, op == BtOp::Anyof),
-        BtOp::Multibytecode => multibyte(rex, scan),
+        BtOp::Exactly => exactly(rex, prog, scan, next),
+        BtOp::Anyof | BtOp::Anybut => collection(rex, prog.operand(scan), c, op == BtOp::Anyof),
+        BtOp::Multibytecode => multibyte(rex, prog.operand(scan)),
 
         // `\%C`: swallow any combining characters, matching nothing else.
         BtOp::ReComposing => {
@@ -231,10 +239,12 @@ fn virtual_column(rex: Rex) -> uint32_t {
 }
 
 /// `\%'m`, `\%<'m`, `\%>'m`: is the cursor at, before or after mark `m`?
-fn at_mark(rex: Rex, scan: *mut uint8_t) -> c_int {
-    // SAFETY: `scan` is an `RE_MARK` node, whose operand is the mark name and
-    // the comparison character.
-    let (mark, cmp) = unsafe { (*scan.add(3) as c_int, *scan.add(4) as c_int) };
+fn at_mark(rex: Rex, prog: BtProg<'_>, scan: usize) -> c_int {
+    // The operand is the mark name and the comparison character.
+    let (mark, cmp) = (
+        c_int::from(prog.byte(scan, 3)),
+        c_int::from(prog.byte(scan, 4)),
+    );
     let col = if rex.multi() { rex.col() } else { 0 };
     // The record `mark_get` answers into: a motion mark (`'{`, `'(`) has no
     // store of its own, so it is computed straight into this frame's slot.
@@ -283,10 +293,10 @@ fn at_mark(rex: Rex, scan: *mut uint8_t) -> c_int {
 
 /// A literal string. The operand is NUL-terminated, so an empty one always
 /// matches.
-fn exactly(rex: Rex, scan: *mut uint8_t, next: *mut uint8_t) -> c_int {
+fn exactly(rex: Rex, prog: BtProg<'_>, scan: usize, next: usize) -> c_int {
     // SAFETY: `scan` is an `EXACTLY` node, whose operand is a NUL-terminated
     // string; `rex.input` is NUL-terminated too, so `cstrncmp` stops.
-    let opnd = unsafe { scan.add(3) };
+    let opnd = prog.operand(scan).as_ptr().cast_mut();
     if unsafe { *opnd } as c_int != rex.byte() as c_int && !rex.reg_ic() {
         return RA_NOMATCH;
     }
@@ -314,7 +324,7 @@ fn exactly(rex: Rex, scan: *mut uint8_t, next: *mut uint8_t) -> c_int {
             core::ptr::null_mut::<GraphemeState>(),
         )
     } && !rex.reg_icombine()
-        && unsafe { *next } != BtOp::ReComposing.code() as uint8_t
+        && prog.op_byte(next) != BtOp::ReComposing.code() as uint8_t
     {
         return RA_NOMATCH;
     }
@@ -324,10 +334,10 @@ fn exactly(rex: Rex, scan: *mut uint8_t, next: *mut uint8_t) -> c_int {
 
 /// `[abc]` / `[^abc]`. The base character has to be in (or out of) the set,
 /// and any combining characters the set's own entry carries must follow it.
-fn collection(rex: Rex, scan: *mut uint8_t, c: c_int, positive: bool) -> c_int {
-    // SAFETY: `scan` is an `ANYOF`/`ANYBUT` node with a NUL-terminated
-    // operand; `rex.input` is NUL-terminated.
-    let mut q = unsafe { scan.add(3) };
+fn collection(rex: Rex, operand: &[u8], c: c_int, positive: bool) -> c_int {
+    // SAFETY: the operand of an `ANYOF`/`ANYBUT` node is NUL-terminated;
+    // `rex.input` is NUL-terminated.
+    let mut q = operand.as_ptr().cast_mut();
     if c == NUL {
         return RA_NOMATCH;
     }
@@ -356,10 +366,10 @@ fn collection(rex: Rex, scan: *mut uint8_t, c: c_int, positive: bool) -> c_int {
 
 /// One multibyte character, possibly a bare combining character — which
 /// matches anywhere in the grapheme at the cursor.
-fn multibyte(rex: Rex, scan: *mut uint8_t) -> c_int {
-    // SAFETY: `scan` is a `MULTIBYTECODE` node; both operand and input are
+fn multibyte(rex: Rex, operand: &[u8]) -> c_int {
+    // SAFETY: the operand of a `MULTIBYTECODE` node and the input are both
     // NUL-terminated.
-    let opnd = unsafe { scan.add(3) };
+    let opnd = operand.as_ptr().cast_mut();
     let mut len = unsafe { utfc_ptr2len(opnd.cast()) };
     if len < 2 {
         return RA_NOMATCH;

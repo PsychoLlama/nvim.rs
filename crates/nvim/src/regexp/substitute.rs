@@ -454,7 +454,7 @@ unsafe fn vim_regsub_both(
         emsg(gettext(e_null));
         return 0;
     }
-    if prog_magic_wrong(rex) != 0 {
+    if prog_magic_wrong(rex.regprog()) != 0 {
         return 0;
     }
     if NESTING.get() == MAX_REGSUB_NESTING {

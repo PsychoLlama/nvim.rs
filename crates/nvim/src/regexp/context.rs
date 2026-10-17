@@ -25,18 +25,14 @@ use core::ffi::{CStr, c_char, c_int};
 
 use super::submatch::Rsm;
 use super::{
-    BtProg, MULTI_MULT, NSUBEXP, RA_FAIL, RA_MATCH, RA_NOMATCH, REGMAGIC, Rex, cstrncmp,
-    nfa_regengine, peekchr, re_multi_type,
+    MULTI_MULT, NSUBEXP, RA_FAIL, RA_MATCH, RA_NOMATCH, Rex, cstrncmp, peekchr, re_multi_type,
 };
 use crate::charset::vim_iswordc_buf;
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
 use crate::mbyte::{mb_get_class_tab, mb_strnicmp, utf_head_off};
 use crate::memline::{ml_get_buf, ml_get_buf_len};
-use crate::message::e_re_corr;
-use crate::message::emsg;
 use crate::normal::{VisualMode, visual_ever_started, visual_selection};
-use crate::os::cshim::gettext;
 use crate::os::input::fast_breakcheck;
 use crate::plines::{getvvcol, win_linetabsize};
 use crate::pos::{MAXCOL, lt};
@@ -258,19 +254,6 @@ pub(crate) fn reg_match_visual(rex: Rex) -> bool {
     } else {
         true
     }
-}
-
-/// Does the running program belong to the backtracking engine, and has its
-/// magic number survived? Only that engine's programs carry one.
-pub(crate) fn prog_magic_wrong(rex: Rex) -> c_int {
-    // SAFETY: a running match holds a live program.
-    let nfa = unsafe { (*rex.regprog()).engine.cast_const() } == &raw const nfa_regengine;
-    let wrong = !nfa && BtProg::of_match(rex).is_some_and(|p| p.magic() != REGMAGIC);
-    if wrong {
-        emsg(gettext(e_re_corr));
-        return 1;
-    }
-    0
 }
 
 /// Reset the `\1`..`\9` slots, or with `z` the `\z1`..`\z9` ones — which

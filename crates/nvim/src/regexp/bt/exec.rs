@@ -25,14 +25,14 @@ use super::matcher::regmatch;
 use super::state::{BT_STATE, capture_slot};
 use crate::getchar::state::got_int;
 use crate::mbyte::{mb_tolower, utf_fold, utf_ptr2char, utfc_ptr2len};
-use crate::message::e_null;
-use crate::message::iemsg;
+use crate::message::{e_null, e_re_corr};
+use crate::message::{emsg, iemsg};
 use crate::os::cshim::gettext;
 use crate::profile::profile_passed_limit;
 use crate::regexp::{
-    MatchPos, NSUBEXP, RF_ICASE, RF_ICOMBINE, RF_NOICASE, RS_MCLOSE, RS_MOPEN, Rex,
-    cleanup_subexpr, cleanup_zsubexpr, cstrchr, cstrncmp, init_regexec, init_regexec_multi,
-    prog_magic_wrong, reg_getline, trim_line_copy,
+    BtRegProg, MatchPos, NSUBEXP, REGMAGIC, RF_ICASE, RF_ICOMBINE, RF_NOICASE, RS_MCLOSE, RS_MOPEN,
+    Rex, cleanup_subexpr, cleanup_zsubexpr, cstrchr, cstrncmp, init_regexec, init_regexec_multi,
+    reg_getline, trim_line_copy,
 };
 use crate::strings::vim_strchr;
 use crate::types::{ColNr, LPos, LineNr, NUL, ProfTime, RegMMatch, RegMatch, uint8_t, uint32_t};
@@ -49,7 +49,7 @@ fn regtry(rex: Rex, prog: BtProg, col: ColNr, tm: *const ProfTime, timed_out: *m
     rex.set_need_clear_subexpr(1);
     rex.set_need_clear_zsubexpr(prog.has_z() as c_int);
 
-    if !regmatch(rex, prog.first_node(), tm, timed_out) {
+    if !regmatch(rex, prog, prog.first_node(), tm, timed_out) {
         return 0;
     }
 
@@ -179,6 +179,7 @@ fn trim_working_set() {
 /// SAFETY: `rex` has been pointed at the caller's match structure.
 fn bt_regexec_both(
     rex: Rex,
+    prog: Option<BtProg<'_>>,
     line: *mut uint8_t,
     startcol: ColNr,
     tm: *const ProfTime,
@@ -187,12 +188,11 @@ fn bt_regexec_both(
     let mut col = startcol;
     // SAFETY: the caller pointed the context at a live match structure.
     let line = unsafe { aim_at_capture_arrays(rex, line) };
-    let prog = BtProg::of_match(rex);
 
     let mut retval = 0;
     match prog {
         Some(prog) if !line.is_null() => {
-            if prog_magic_wrong(rex) == 0 && !(rex.reg_maxcol() > 0 && col >= rex.reg_maxcol()) {
+            if !magic_wrong(prog) && !(rex.reg_maxcol() > 0 && col >= rex.reg_maxcol()) {
                 // The pattern's own `\c`/`\C`/`\Z` override what the caller
                 // asked for.
                 if prog.regflags() & RF_ICASE as u32 != 0 {
@@ -206,7 +206,7 @@ fn bt_regexec_both(
 
                 // A pattern with a literal run in it cannot match a line that
                 // does not hold that run anywhere past `col`.
-                if prog.regmust().is_null() || has_regmust(rex, prog, line, col) {
+                if prog.regmust().is_none() || has_regmust(rex, prog, line, col) {
                     rex.set_line(line);
                     rex.set_lnum(0);
                     retval = if prog.is_anchored() {
@@ -229,6 +229,15 @@ fn bt_regexec_both(
     retval
 }
 
+/// Has the program's magic number not survived? Reports so when it has not.
+fn magic_wrong(prog: BtProg<'_>) -> bool {
+    if prog.magic() != REGMAGIC {
+        emsg(gettext(e_re_corr));
+        return true;
+    }
+    false
+}
+
 /// A `\ze` can put the end before the start; report an empty match rather
 /// than a backwards one.
 fn clamp_group_zero(rex: Rex) {
@@ -248,7 +257,8 @@ fn clamp_group_zero(rex: Rex) {
 /// SAFETY: as `bt_regexec_both`. `regmust` is a NUL-terminated run the
 /// compiler kept and the walk below stops at `line`'s terminator.
 fn has_regmust(rex: Rex, prog: BtProg, line: *mut uint8_t, col: ColNr) -> bool {
-    let c = unsafe { utf_ptr2char(prog.regmust().cast::<c_char>()) };
+    let regmust = prog.regmust().expect("a regmust run").as_ptr().cast_mut();
+    let c = unsafe { utf_ptr2char(regmust.cast::<c_char>()) };
     let mut s = unsafe { line.offset(col as isize) }.cast::<c_char>();
     loop {
         // Case-insensitively, the first character has to be looked for
@@ -264,7 +274,7 @@ fn has_regmust(rex: Rex, prog: BtProg, line: *mut uint8_t, col: ColNr) -> bool {
         // `cstrncmp` reports back how much it compared, and upstream let
         // it write straight into the program's own `regmlen`.
         let mut mlen = prog.regmlen();
-        let same = unsafe { cstrncmp(rex, s, prog.regmust().cast::<c_char>(), &mut mlen) } == 0;
+        let same = unsafe { cstrncmp(rex, s, regmust.cast::<c_char>(), &mut mlen) } == 0;
         prog.set_regmlen(mlen);
         if same {
             return true;
@@ -375,7 +385,16 @@ pub(crate) unsafe fn bt_regexec_nl(
     // live match structure and a NUL-terminated line.
     let rex = unsafe { Rex::acquire() };
     init_regexec(rex, rmp, line_lbr);
-    bt_regexec_both(rex, line, col, core::ptr::null(), core::ptr::null_mut())
+    // SAFETY: the caller's match structure holds a program of this engine.
+    let prog = unsafe { (*rmp).regprog.cast::<BtRegProg>().as_ref().map(BtProg::new) };
+    bt_regexec_both(
+        rex,
+        prog,
+        line,
+        col,
+        core::ptr::null(),
+        core::ptr::null_mut(),
+    )
 }
 
 /// Match against a buffer, starting at `lnum`.
@@ -399,20 +418,25 @@ pub(crate) unsafe fn bt_regexec_multi(
     // context at them, which is what `bt_regexec_both` reads it out of.
     let rex = unsafe { Rex::acquire() };
     init_regexec_multi(rex, rmp, win, buffer, lnum);
-    bt_regexec_both(rex, core::ptr::null_mut::<uint8_t>(), col, tm, timed_out)
+    // SAFETY: the caller's match structure holds a program of this engine.
+    let prog = unsafe { (*rmp).regprog.cast::<BtRegProg>().as_ref().map(BtProg::new) };
+    bt_regexec_both(
+        rex,
+        prog,
+        core::ptr::null_mut::<uint8_t>(),
+        col,
+        tm,
+        timed_out,
+    )
 }
 
-/// The `\%23l`-family comparison: the node's operand against `val`, with the
-/// `>`/`<`/`=` the pattern spelled out riding in the node's eighth byte.
-///
-/// SAFETY: `scan` is a `RE_LNUM`/`RE_COL`/`RE_VCOL` node, which the compiler
-/// emits eight bytes long.
-pub(crate) fn re_num_cmp(val: uint32_t, scan: *const uint8_t) -> bool {
-    let b = |i: usize| unsafe { *scan.add(i) } as u32;
-    let n = (b(3) << 24) + (b(4) << 16) + (b(5) << 8) + b(6);
-    match unsafe { *scan.add(7) } as c_int {
-        c if c == '>' as c_int => val > n,
-        c if c == '<' as c_int => val < n,
+/// The `\%23l`-family comparison: node `scan`'s operand against `val`, with
+/// the `>`/`<`/`=` the pattern spelled out riding in the node's eighth byte.
+pub(crate) fn re_num_cmp(prog: BtProg, val: uint32_t, scan: usize) -> bool {
+    let n = prog.operand_u32(scan, 3) as u32;
+    match prog.byte(scan, 7) {
+        b'>' => val > n,
+        b'<' => val < n,
         _ => val == n,
     }
 }

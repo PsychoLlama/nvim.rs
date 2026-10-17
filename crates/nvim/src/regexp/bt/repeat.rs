@@ -12,6 +12,7 @@
 
 use core::ffi::c_int;
 
+use super::compile::BtProg;
 use super::op::BtOp;
 use crate::ascii::ascii_isdigit;
 use crate::charset::{vim_is_ident_char, vim_isfilec, vim_isprintc, vim_iswordp_buf};
@@ -20,7 +21,7 @@ use crate::mbyte::{mb_tolower, mb_toupper, utf_fold, utf_ptr2char, utfc_ptr2len}
 use crate::message::e_re_corr;
 use crate::message::iemsg;
 use crate::os::cshim::gettext;
-use crate::regexp::{ByteClass, RI_FLAGS, Rex, cstrchr, reg_nextline};
+use crate::regexp::{ByteClass, RI_FLAGS, Rex, char_at_nul, cluster_len_at, cstrchr, reg_nextline};
 use crate::types::{NUL, int64_t, uint8_t};
 
 /// What stepping onto the next line produced.
@@ -35,13 +36,12 @@ enum Line {
 
 /// How many times the item at `p` matches starting at `rex.input`, capped at
 /// `maxcount`. Leaves `rex.input` just past the last match.
-pub(crate) fn regrepeat(rex: Rex, p: *mut uint8_t, maxcount: int64_t) -> c_int {
-    // SAFETY: `p` is a node in the compiled program, so its opcode byte and
-    // the operand three bytes in are readable; `scan` walks the current line,
-    // which is NUL-terminated, and every advance below is by the length of
-    // the character it just accepted.
-    let opcode = BtOp::decode(unsafe { *p });
-    let opnd = unsafe { p.add(3) };
+pub(crate) fn regrepeat(rex: Rex, prog: BtProg<'_>, p: usize, maxcount: int64_t) -> c_int {
+    // SAFETY: `scan` walks the current line, which is NUL-terminated, and
+    // every advance below is by the length of the character it just
+    // accepted.
+    let opcode = BtOp::decode(prog.op_byte(p));
+    let opnd = prog.operand(p);
     let mut scan = rex.input();
     let mut count: int64_t = 0;
 
@@ -173,8 +173,8 @@ pub(crate) fn regrepeat(rex: Rex, p: *mut uint8_t, maxcount: int64_t) -> c_int {
         // `MULTIBYTECODE`).
         BtOp::Exactly => {
             if rex.reg_ic() {
-                let upper = mb_toupper(unsafe { *opnd } as c_int);
-                let lower = mb_tolower(unsafe { *opnd } as c_int);
+                let upper = mb_toupper(c_int::from(opnd[0]));
+                let lower = mb_tolower(c_int::from(opnd[0]));
                 while count < maxcount
                     && (unsafe { *scan } as c_int == upper || unsafe { *scan } as c_int == lower)
                 {
@@ -182,7 +182,7 @@ pub(crate) fn regrepeat(rex: Rex, p: *mut uint8_t, maxcount: int64_t) -> c_int {
                     scan = unsafe { scan.add(1) };
                 }
             } else {
-                let want = unsafe { *opnd } as c_int;
+                let want = c_int::from(opnd[0]);
                 while count < maxcount && unsafe { *scan } as c_int == want {
                     count += 1;
                     scan = unsafe { scan.add(1) };
@@ -193,17 +193,16 @@ pub(crate) fn regrepeat(rex: Rex, p: *mut uint8_t, maxcount: int64_t) -> c_int {
         // One multibyte character, compared as bytes first and by case
         // fold only if the bytes differ.
         BtOp::Multibytecode => {
-            let len = unsafe { utfc_ptr2len(opnd.cast()) };
+            let len = cluster_len_at(opnd, 0) as c_int;
             if len > 1 {
                 let folded = if rex.reg_ic() {
-                    utf_fold(unsafe { utf_ptr2char(opnd.cast()) })
+                    utf_fold(char_at_nul(opnd, 0))
                 } else {
                     0
                 };
                 while count < maxcount && unsafe { utfc_ptr2len(scan.cast()) } >= len {
-                    let same = (0..len).all(
-                        |i| unsafe { *opnd.add(i as usize) } == unsafe { *scan.add(i as usize) },
-                    );
+                    let same =
+                        (0..len).all(|i| opnd[i as usize] == unsafe { *scan.add(i as usize) });
                     if !same
                         && (!rex.reg_ic()
                             || utf_fold(unsafe { utf_ptr2char(scan.cast()) }) != folded)
@@ -234,7 +233,9 @@ pub(crate) fn regrepeat(rex: Rex, p: *mut uint8_t, maxcount: int64_t) -> c_int {
                     } else {
                         (unsafe { *scan }) as c_int
                     };
-                    if c_int::from(unsafe { cstrchr(rex, opnd.cast(), c) }.is_null()) == wanted {
+                    if c_int::from(unsafe { cstrchr(rex, opnd.as_ptr().cast(), c) }.is_null())
+                        == wanted
+                    {
                         break 'coll;
                     }
                     scan = unsafe { scan.add(if len > 1 { len as usize } else { 1 }) };

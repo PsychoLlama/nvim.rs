@@ -12,8 +12,7 @@
 use crate::cstr;
 use core::ffi::{c_char, c_int};
 
-use super::compile::regnext;
-use super::matcher::operand_u32;
+use super::compile::BtProg;
 use super::op::BtOp;
 use super::repeat::regrepeat;
 use super::state::{BackPos, Braces, RegStack, capture_slot};
@@ -31,10 +30,11 @@ use crate::types::{ColNr, NUL, int64_t, uint8_t};
 /// out. Updates `scan` and `status` in place.
 pub(crate) fn resume(
     rex: Rex,
+    prog: BtProg<'_>,
     stack: &mut RegStack,
     backpos: &mut BackPos,
     braces: &mut Braces,
-    scan: &mut *mut uint8_t,
+    scan: &mut usize,
     status: &mut c_int,
 ) {
     while stack.depth() > 0 && *status != RA_FAIL {
@@ -67,19 +67,15 @@ pub(crate) fn resume(
                         reg_restore(rex, &stack.top().rs_saved, backpos);
                         *scan = stack.top().rs_scan;
                     }
-                    // SAFETY: `scan` is null or a node of the running
-                    // program, whose opcode byte and three-byte header are
-                    // there to read.
-                    if scan.is_null() || unsafe { **scan } != BtOp::Branch.code() as uint8_t {
+                    if *scan == 0 || prog.op_byte(*scan) != BtOp::Branch.code() as uint8_t {
                         *status = RA_NOMATCH;
                         stack.pop(scan);
                     } else {
-                        let next = regnext(*scan);
+                        let next = prog.next(*scan);
                         let rp = stack.top_mut();
                         rp.rs_scan = next;
                         rp.rs_saved = reg_save(rex, backpos);
-                        // SAFETY: as above.
-                        *scan = unsafe { scan.add(3) };
+                        *scan += 3;
                     }
                 }
             }
@@ -104,7 +100,7 @@ pub(crate) fn resume(
                 }
                 stack.pop(scan);
                 if *status == RA_CONT {
-                    *scan = regnext(*scan);
+                    *scan = prog.next(*scan);
                 }
             }
             // A non-greedy `\{-n,m}`: stopping was tried first, so on
@@ -115,9 +111,7 @@ pub(crate) fn resume(
                 }
                 stack.pop(scan);
                 if *status == RA_NOMATCH {
-                    // SAFETY: `scan` is a node of the running program, whose
-                    // three-byte header is there.
-                    *scan = unsafe { scan.add(3) };
+                    *scan += 3;
                     *status = RA_CONT;
                 }
             }
@@ -141,16 +135,16 @@ pub(crate) fn resume(
                 }
                 stack.pop(scan);
                 if *status == RA_CONT {
-                    *scan = regnext(*scan);
+                    *scan = prog.next(*scan);
                 }
             }
 
             // SAFETY: the frames these three read were pushed by this match
             // and still describe live positions in the program and the
             // input; `rex` is the running match.
-            RS_BEHIND1 => unsafe { behind_start(rex, stack, backpos, scan, status) },
-            RS_BEHIND2 => unsafe { behind_step(rex, stack, backpos, scan, status) },
-            RS_STAR_LONG | RS_STAR_SHORT => unsafe { star(rex, stack, backpos, scan, status) },
+            RS_BEHIND1 => behind_start(rex, stack, backpos, scan, status),
+            RS_BEHIND2 => behind_step(rex, prog, stack, backpos, scan, status),
+            RS_STAR_LONG | RS_STAR_SHORT => star(rex, prog, stack, backpos, scan, status),
             _ => {}
         }
 
@@ -177,16 +171,13 @@ unsafe fn undo_capture(rex: Rex, state: RegState, no: usize, saved: MatchPos) {
 /// `RS_BEHIND1`: the pattern *after* the look-behind has been reached, so now
 /// the look-behind's own operand has to be run, ending here.
 ///
-/// # Safety
-///
-/// The top frame must be an `RS_BEHIND1` one this match pushed, so that it
-/// names a look-behind node of the running program and carries a
-/// `RegBehind`.
-unsafe fn behind_start(
+/// The top frame is an `RS_BEHIND1` one this match pushed, so it names a
+/// look-behind node of the running program and carries a `RegBehind`.
+fn behind_start(
     rex: Rex,
     stack: &mut RegStack,
     backpos: &mut BackPos,
-    scan: &mut *mut uint8_t,
+    scan: &mut usize,
     status: &mut c_int,
 ) {
     if *status == RA_NOMATCH {
@@ -201,22 +192,20 @@ unsafe fn behind_start(
     rp.rs_state = RS_BEHIND2;
     reg_restore(rex, &rp.rs_saved, backpos);
     // Past the node header and the four-byte limit.
-    // SAFETY: the caller promises a look-behind node, which is seven bytes
-    // of header and limit followed by its operand.
-    *scan = unsafe { rp.rs_scan.add(3 + 4) };
+    *scan = rp.rs_scan + 3 + 4;
 }
 
 /// `RS_BEHIND2`: one attempt at the look-behind is over. Either it ended in
 /// the right place, or the start position steps back one character and the
 /// operand runs again.
 ///
-/// # Safety
 /// As [`behind_start`], for an `RS_BEHIND2` frame.
-unsafe fn behind_step(
+fn behind_step(
     rex: Rex,
+    prog: BtProg<'_>,
     stack: &mut RegStack,
     backpos: &mut BackPos,
-    scan: &mut *mut uint8_t,
+    scan: &mut usize,
     status: &mut c_int,
 ) {
     let (rp, bp) = stack.top_behind();
@@ -237,9 +226,7 @@ unsafe fn behind_step(
 
     // Step the start position back one character, unless that would run past
     // the `\{n}` limit on how far back to look.
-    // SAFETY: the caller promises a look-behind node, whose four-byte limit
-    // follows its three-byte header.
-    let limit = unsafe { operand_u32(rp.rs_scan, 3) };
+    let limit = prog.operand_u32(rp.rs_scan, 3);
     let stop = rex.behind_pos().pos;
     // SAFETY: `rex` is the running match and `rs_saved` a position in it.
     let stepped = unsafe {
@@ -252,8 +239,7 @@ unsafe fn behind_step(
 
     if stepped {
         reg_restore(rex, &rp.rs_saved, backpos);
-        // SAFETY: as the `limit` read above.
-        *scan = unsafe { rp.rs_scan.add(3 + 4) };
+        *scan = rp.rs_scan + 3 + 4;
         if *status == RA_MATCH {
             // It matched, but ending in the wrong place: try again from one
             // character further back.
@@ -352,15 +338,14 @@ unsafe fn step_back_string(
 /// [`super::repeat::regrepeat`] counted, greedily from the end or
 /// non-greedily from the start.
 ///
-/// # Safety
-///
 /// The top frame must be an `RS_STAR_*` one this match pushed, so that it
 /// names a repeat node of the running program and carries a `RegStar`.
-unsafe fn star(
+fn star(
     rex: Rex,
+    prog: BtProg<'_>,
     stack: &mut RegStack,
     backpos: &mut BackPos,
-    scan: &mut *mut uint8_t,
+    scan: &mut usize,
     status: &mut c_int,
 ) {
     if *status == RA_MATCH {
@@ -409,10 +394,8 @@ unsafe fn star(
                 }
             } else {
                 // Non-greedy: take one more match.
-                // SAFETY: the caller promises a repeat node, whose operand
-                // follows its three-byte header.
                 let one_more =
-                    unsafe { rst.count != rst.minval && regrepeat(rex, rp.rs_scan.add(3), 1) != 0 };
+                    rst.count != rst.minval && regrepeat(rex, prog, rp.rs_scan + 3, 1) != 0;
                 if !one_more {
                     break;
                 }
@@ -433,7 +416,7 @@ unsafe fn star(
             continue;
         }
         rp.rs_saved = reg_save(rex, backpos);
-        *scan = regnext(rp.rs_scan);
+        *scan = prog.next(rp.rs_scan);
         *status = RA_CONT;
         break;
     }

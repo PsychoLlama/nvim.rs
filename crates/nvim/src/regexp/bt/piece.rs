@@ -8,8 +8,7 @@
 //! `SPSTART`/`HASNL`/`HASLOOKBH` flags describing what it built, and null
 //! for "an error was already reported".
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::compile::Node;
 use crate::cstr;
@@ -19,10 +18,10 @@ use crate::regexp::set_magic;
 use core::ffi::c_int;
 
 use super::atom::regatom;
-use super::compile::{BtProg, regnext};
+use super::compile::regnext;
 use super::op::BtOp;
-use crate::mbyte::utf_ptr2char;
-use crate::memory::xfree;
+use crate::regexp::BtRegProg;
+use crate::regexp::mbyte::char_at_nul;
 use crate::regexp::state::rc_did_emsg;
 use crate::regexp::{
     HASLOOKBH, HASNL, HASWIDTH, INT_MAX, MAGIC_ALL, MAGIC_NONE, MAGIC_OFF, MAGIC_ON, NOT_MULTI,
@@ -33,6 +32,7 @@ use crate::regexp::{
 };
 use crate::semsg;
 use crate::types::{NUL, RegProg, int64_t, uint8_t, uint32_t};
+use core::cell::Cell;
 
 const M_AMP: c_int = magic(b'&');
 const M_AT: c_int = magic(b'@');
@@ -415,26 +415,31 @@ pub(crate) fn bt_regcomp(rc: &mut RegCompiler) -> *mut RegProg {
         }
         return core::ptr::null_mut();
     }
-    let text = rc.code.take_text();
-    let prog = BtProg::with_text(&text);
-
-    prog.set_regstart(NUL);
-    prog.set_anchored(false);
-    prog.set_regmust(core::ptr::null_mut(), 0);
-    prog.set_regflags(rc.flags);
+    let mut regflags = rc.flags;
     if flags & HASNL != 0 {
-        prog.add_regflags(RF_HASNL as u32);
+        regflags |= RF_HASNL as u32;
     }
     if flags & HASLOOKBH != 0 {
-        prog.add_regflags(RF_LOOKBH as u32);
+        regflags |= RF_LOOKBH as u32;
     }
     if rc.had_eol != 0 {
-        prog.add_regflags(RF_HAD_EOL);
+        regflags |= RF_HAD_EOL;
     }
-    prog.set_reghasz(rc.has_z as uint8_t);
-    find_shortcuts(prog, flags);
-    prog.set_engine((&raw const bt_regengine).cast_mut());
-    prog.into_regprog()
+    let mut prog = BtRegProg {
+        engine: (&raw const bt_regengine).cast_mut(),
+        regflags,
+        re_engine: 0,
+        re_flags: 0,
+        re_in_use: false,
+        regstart: NUL,
+        reganch: 0,
+        regmust: None,
+        regmlen: Cell::new(0),
+        reghasz: rc.has_z as uint8_t,
+        program: rc.code.take_text(),
+    };
+    find_shortcuts(&mut prog, flags);
+    Box::into_raw(Box::new(prog)).cast::<RegProg>()
 }
 
 /// Fill in the `regstart`/`reganch`/`regmust` hints the executor uses to
@@ -442,26 +447,25 @@ pub(crate) fn bt_regcomp(rc: &mut RegCompiler) -> *mut RegProg {
 ///
 /// Only worth doing when the whole pattern is one branch: `regnext` past the
 /// leading `BRANCH` landing on `END` is what proves there is no `\|`.
-///
-/// `prog` must be a program this module has just finished writing.
-fn find_shortcuts(prog: BtProg, flags: c_int) {
-    // SAFETY: walking the program just written, whose nodes are well formed.
-    let mut scan = prog.first_node();
-    if opcode_at(regnext(scan)) != Some(BtOp::End) {
+fn find_shortcuts(prog: &mut BtRegProg, flags: c_int) {
+    let code = &prog.program;
+    let opcode_at = |p: usize| opcode_at(code, p);
+    let mut scan = 1;
+    if opcode_at(regnext(code, scan)) != Some(BtOp::End) {
         return;
     }
-    scan = unsafe { scan.add(3) };
+    scan += 3;
 
     // A pattern anchored at the start only has to be tried there.
     if matches!(opcode_at(scan), Some(BtOp::Bol | BtOp::ReBof)) {
-        prog.set_anchored(true);
-        scan = regnext(scan);
+        prog.reganch = 1;
+        scan = regnext(code, scan);
     }
 
     // A known first character lets the executor use a memchr-style skip.
     let first = opcode_at(scan);
     if first == Some(BtOp::Exactly) {
-        prog.set_regstart(unsafe { utf_ptr2char(scan.add(3).cast()) });
+        prog.regstart = char_at_nul(code, scan + 3);
     } else if matches!(
         first,
         Some(
@@ -475,9 +479,9 @@ fn find_shortcuts(prog: BtProg, flags: c_int) {
         )
     ) {
         // Those all match empty, so look one node further.
-        let next = regnext(scan);
+        let next = regnext(code, scan);
         if opcode_at(next) == Some(BtOp::Exactly) {
-            prog.set_regstart(unsafe { utf_ptr2char(next.add(3).cast()) });
+            prog.regstart = char_at_nul(code, next + 3);
         }
     }
 
@@ -488,30 +492,23 @@ fn find_shortcuts(prog: BtProg, flags: c_int) {
     if (flags & SPSTART != 0 || matches!(opcode_at(scan), Some(BtOp::Bow | BtOp::Eow)))
         && flags & HASNL == 0
     {
-        let mut longest: *mut uint8_t = core::ptr::null_mut();
+        let mut longest = None;
         let mut len = 0;
-        while !scan.is_null() {
+        while scan != 0 {
             if opcode_at(scan) == Some(BtOp::Exactly) {
-                let scanlen = unsafe { cstr::bytes_at(scan.add(3).cast()) }.len() as c_int;
+                let scanlen = cstr::until_nul(&code[scan + 3..]).len() as c_int;
                 // `>=` rather than `>`: upstream prefers the *last* of
                 // equally long candidates.
                 if scanlen >= len {
-                    longest = unsafe { scan.add(3) };
+                    longest = Some(scan + 3);
                     len = scanlen;
                 }
             }
-            scan = regnext(scan);
+            scan = regnext(code, scan);
         }
-        prog.set_regmust(longest, len);
+        prog.regmust = longest;
+        prog.regmlen.set(len);
     }
-}
-
-/// Did `prog`'s pattern end with a `\n` that a search should treat as
-/// "match at end of line"? False for a null program. Read by the syntax
-/// code right after a compile.
-pub(crate) fn vim_regcomp_had_eol(prog: *const RegProg) -> bool {
-    // SAFETY: a program `vim_regcomp` answered, or null.
-    !prog.is_null() && unsafe { (*prog).regflags } & RF_HAD_EOL != 0
 }
 
 /// The character a `\d123`, `\o40`, `\x2f`, `\u1234` or `\U12345678` escape
@@ -538,26 +535,17 @@ pub(crate) fn coll_get_char(rc: &mut RegCompiler) -> c_int {
     nr.min(INT_MAX as int64_t) as c_int
 }
 
-/// # Safety
-///
-/// `prog` must be a program this module compiled, or null.
-pub(crate) unsafe fn bt_regfree(prog: *mut RegProg) {
-    // SAFETY: one `xmalloc` block, with nothing owned inside it.
-    unsafe { xfree(prog.cast()) };
-}
-
 /// A capture group or complex-brace number as an index into one of
 /// [`BtOp`]'s runs. The parser has already refused a tenth of either.
 fn slot(number: c_int) -> usize {
     usize::try_from(number).expect("a group number")
 }
 
-/// The opcode of the node at `p`, or `None` when `p` is null or holds no
-/// opcode.
-fn opcode_at(p: *const uint8_t) -> Option<BtOp> {
-    if p.is_null() {
+/// The opcode of node `p` of `code`, or `None` when `p` is 0 (no node) or
+/// holds no opcode.
+fn opcode_at(code: &[u8], p: usize) -> Option<BtOp> {
+    if p == 0 {
         return None;
     }
-    // SAFETY: the caller's node, whose opcode byte is readable.
-    BtOp::decode(unsafe { *p }).ok().map(|(op, _)| op)
+    BtOp::decode(code[p]).ok().map(|(op, _)| op)
 }

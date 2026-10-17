@@ -60,7 +60,7 @@ const NSUBEXP_SLOTS: usize = NSUBEXP as usize;
 const BLANK_FRAME: RegItem = RegItem {
     rs_state: 0,
     rs_no: 0,
-    rs_scan: core::ptr::null_mut(),
+    rs_scan: 0,
     rs_saved: SavedInput::NOWHERE,
 };
 
@@ -137,7 +137,7 @@ impl BtState {
 /// One `BACK` node and the input position the walk last reached it at.
 struct BackEdge {
     /// The `BACK` node, which is what identifies the loop.
-    scan: *mut uint8_t,
+    scan: usize,
     /// Where the input was the last time the walk came round to it.
     pos: MatchPos,
 }
@@ -211,7 +211,7 @@ impl BackPos {
     /// is now and reports whether it moved since the last time the walk was
     /// here — a loop that did not move can only spin, so `false` means the
     /// match has to fail at this node.
-    pub(crate) fn stepped(&mut self, rex: Rex, scan: *mut uint8_t) -> bool {
+    pub(crate) fn stepped(&mut self, rex: Rex, scan: usize) -> bool {
         let found = self.seen[..self.live].iter().position(|e| e.scan == scan);
         match found {
             Some(i) if rex.is_at(self.seen[i].pos) => false,
@@ -345,7 +345,7 @@ impl RegStack {
     /// Push a frame for `state` and hand it back for the caller to fill in.
     ///
     /// `None` when 'maxmempattern' has been reached.
-    pub(crate) fn push(&mut self, state: RegState, scan: *mut uint8_t) -> Option<&mut RegItem> {
+    pub(crate) fn push(&mut self, state: RegState, scan: usize) -> Option<&mut RegItem> {
         if !self.charge(size_of::<RegItem>()) {
             return None;
         }
@@ -358,12 +358,7 @@ impl RegStack {
     }
 
     /// Push a `\{n,m}` counter and the frame that reads it.
-    pub(crate) fn push_star(
-        &mut self,
-        state: RegState,
-        scan: *mut uint8_t,
-        counter: RegStar,
-    ) -> bool {
+    pub(crate) fn push_star(&mut self, state: RegState, scan: usize, counter: RegStar) -> bool {
         if !self.charge(size_of::<RegStar>()) {
             return false;
         }
@@ -372,7 +367,7 @@ impl RegStack {
     }
 
     /// Push a look-behind snapshot and the frame that reads it.
-    pub(crate) fn push_behind(&mut self, state: RegState, scan: *mut uint8_t) -> bool {
+    pub(crate) fn push_behind(&mut self, state: RegState, scan: usize) -> bool {
         if !self.charge(size_of::<RegBehind>()) {
             return false;
         }
@@ -407,21 +402,21 @@ impl RegStack {
     }
 
     /// Pop the top frame, resuming at the node it was pushed for.
-    pub(crate) fn pop(&mut self, scan: &mut *mut uint8_t) {
+    pub(crate) fn pop(&mut self, scan: &mut usize) {
         let frame = self.frames.pop().expect("a frame to pop");
         *scan = frame.rs_scan;
         self.bytes -= size_of::<RegItem>();
     }
 
     /// Pop a `RS_STAR_*` frame and the counter in front of it.
-    pub(crate) fn pop_star(&mut self, scan: &mut *mut uint8_t) {
+    pub(crate) fn pop_star(&mut self, scan: &mut usize) {
         self.pop(scan);
         self.stars.pop().expect("a counter for the frame");
         self.bytes -= size_of::<RegStar>();
     }
 
     /// Pop a `RS_BEHIND*` frame and the snapshot in front of it.
-    pub(crate) fn pop_behind(&mut self, scan: &mut *mut uint8_t) {
+    pub(crate) fn pop_behind(&mut self, scan: &mut usize) {
         self.pop(scan);
         self.behinds.pop().expect("a snapshot for the frame");
         self.bytes -= size_of::<RegBehind>();

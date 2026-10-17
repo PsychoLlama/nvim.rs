@@ -333,19 +333,17 @@ popupmenu/	popupmenu/layout.rs	1	4	0	4	-	-	-	vim_strsize:3
 popupmenu/	popupmenu/menu.rs	1	2	0	0	deref:2	-	-	-
 popupmenu/	popupmenu/mod.rs	1	9	3	5	expr:2 deref:1 ref:1	other:2	-	arena_mem_free:1 cstr_to_string:1 ui_pum_get_pos:1
 popupmenu/	popupmenu/preview.rs	1	13	5	10	deref:3	str:4	str:1	.offset:1 cstr_to_string:1 strchr:1 win_linetabsize:1
-regexp/	*	30	767	50	294	deref:387 expr:68 ref:10 compound:1	other:115 str:62 pp:1	other:24 str:20 pp_str:4 pp:2	.add:37 .offset:28 utf_ptr2char:20 utfc_ptr2len:13 xfree:10 .offset_from:9 bytes_at:8 from_raw_parts_mut:8
-regexp/	regexp/api.rs	1	40	6	15	deref:25	other:12 str:2	other:3	.offset_from:1 at:1
+regexp/	*	28	693	43	257	deref:353 expr:64 ref:11 compound:1	other:115 str:30 pp:1	other:22 str:16 pp_str:4 pp:2	.offset:28 .add:21 utf_ptr2char:17 utfc_ptr2len:12 .offset_from:9 xfree:9 from_raw_parts_mut:8 bytes_at:7
+regexp/	regexp/api.rs	1	44	7	16	deref:27 ref:1	other:15 str:2	other:3	.offset_from:1 Box::from_raw:1 at:1
 regexp/	regexp/bt/collection.rs	1	1	0	0	deref:1	-	-	-
-regexp/	regexp/bt/compile.rs	1	25	0	3	deref:19 expr:3	str:2 other:1	str:4 other:1	.add:1 .sub:1 xmalloc:1
 regexp/	regexp/bt/escape.rs	1	1	0	1	-	-	-	getvvcol:1
-regexp/	regexp/bt/exec.rs	1	36	3	24	deref:6 expr:6	other:12 str:5	str:1	from_raw_parts:2 utf_ptr2char:2 .add:1 .offset:1 utfc_ptr2len:1 vim_strchr:1
-regexp/	regexp/bt/matcher.rs	1	27	5	18	deref:8 ref:1	str:9 other:4	-	.add:5
-regexp/	regexp/bt/piece.rs	1	8	1	6	deref:2	other:2 str:1	other:1	.add:2 utf_ptr2char:2 bytes_at:1 xfree:1
-regexp/	regexp/bt/repeat.rs	1	43	0	19	deref:18 expr:4	str:1	-	.add:11 utfc_ptr2len:4 utf_ptr2char:3
-regexp/	regexp/bt/resume.rs	1	24	6	14	expr:7 deref:1	str:4	-	.add:4 utf_head_off:3 .sub:1 bytes_at:1
-regexp/	regexp/bt/single.rs	1	38	0	22	deref:13 expr:3	str:7	-	.add:4 utfc_ptr2len:3 utf_ptr2char:2 utf_ptr2len:2 .offset_from:1 bytes_at:1 mark_get:1 mb_get_class_tab:1
-regexp/	regexp/bt/state.rs	1	16	4	8	deref:8	str:7	-	from_raw_parts_mut:4 .add:2
-regexp/	regexp/context.rs	1	22	0	11	deref:6 compound:1 expr:1	other:2	str:2	from_raw_parts_mut:4 getvvcol:2 bytes_at:1 mb_get_class_tab:1 win_linetabsize:1
+regexp/	regexp/bt/exec.rs	1	36	3	24	deref:6 expr:6	other:12 str:4	str:1	from_raw_parts:2 utf_ptr2char:2 .add:1 .offset:1 utfc_ptr2len:1 vim_strchr:1
+regexp/	regexp/bt/matcher.rs	1	6	1	3	deref:2 ref:1	other:4	-	-
+regexp/	regexp/bt/repeat.rs	1	35	0	16	deref:13 expr:4	-	-	.add:10 utfc_ptr2len:3 utf_ptr2char:2
+regexp/	regexp/bt/resume.rs	1	14	3	6	expr:6	-	-	utf_head_off:3 .sub:1 bytes_at:1
+regexp/	regexp/bt/single.rs	1	33	0	19	deref:11 expr:3	-	-	utfc_ptr2len:3 utf_ptr2char:2 utf_ptr2len:2 .add:1 .offset_from:1 bytes_at:1 mark_get:1 mb_get_class_tab:1
+regexp/	regexp/bt/state.rs	1	16	4	8	deref:8	-	-	from_raw_parts_mut:4 .add:2
+regexp/	regexp/context.rs	1	21	0	11	deref:5 compound:1 expr:1	other:2	str:2	from_raw_parts_mut:4 getvvcol:2 bytes_at:1 mb_get_class_tab:1 win_linetabsize:1
 regexp/	regexp/mbyte.rs	1	22	2	15	deref:6 expr:1	str:3	str:1	.add:3 .offset_from:3 utf_ptr2char:3 utfc_ptr2len:3 vim_strchr:2 utf_strnicmp:1
 regexp/	regexp/nfa/assertions.rs	1	9	0	2	deref:6 expr:1	other:4	-	mark_get:1 win_linetabsize:1
 regexp/	regexp/nfa/build.rs	1	36	0	3	deref:30 expr:3	other:14 pp:1	other:5 pp:2	.offset:3

@@ -399,6 +399,38 @@ pub(crate) unsafe fn vim_regexec_syntax(
     result
 }
 
+/// Did `prog`'s pattern end with a `\n` that a search should treat as
+/// "match at end of line"? False for a null program. Read by the syntax
+/// code right after a compile.
+pub(crate) fn vim_regcomp_had_eol(prog: *const RegProg) -> bool {
+    // SAFETY: a program `vim_regcomp` answered, or null.
+    !prog.is_null() && unsafe { (*prog).regflags } & super::RF_HAD_EOL != 0
+}
+
+/// Release a backtracking program: the box `bt_regcomp` handed over.
+///
+/// # Safety
+///
+/// `prog` must be a program `bt_regcomp` answered, not yet freed.
+pub(crate) unsafe fn bt_regfree(prog: *mut RegProg) {
+    // SAFETY: the caller's promise -- the box `bt_regcomp` leaked.
+    drop(unsafe { Box::from_raw(prog.cast::<super::BtRegProg>()) });
+}
+
+/// Does `prog` belong to the backtracking engine, and has its magic number
+/// not survived? Only that engine's programs carry one. Reports E? and
+/// answers 1 when so.
+pub(crate) fn prog_magic_wrong(prog: *mut RegProg) -> c_int {
+    // SAFETY: a live program `vim_regcomp` answered, whose engine field says
+    // which shape it is.
+    let bt = unsafe { (*prog).engine.cast_const() } == &raw const super::bt_regengine;
+    if bt && unsafe { &*prog.cast::<super::BtRegProg>() }.program[0] != super::REGMAGIC as u8 {
+        emsg(gettext(crate::message::e_re_corr));
+        return 1;
+    }
+    0
+}
+
 /// Can `prog`'s pattern match across a line break?
 ///
 /// # Safety

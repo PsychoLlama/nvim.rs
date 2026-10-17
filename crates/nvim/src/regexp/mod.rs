@@ -223,19 +223,29 @@ pub struct RegSubMatch {
     pub sm_maxline: LineNr,
     pub sm_line_lbr: c_int,
 }
+/// A backtracking program: the [`RegProg`](crate::types::RegProg) head every
+/// program opens with, what the compiler found out about the pattern, and
+/// the node text itself (see [`bt::BtProg`]). Boxed: `bt_regcomp` hands the
+/// box over as a `*mut RegProg` and `vim_regfree` takes it back.
 #[repr(C)]
-pub struct BtRegProg {
-    pub engine: *mut RegEngine,
-    pub regflags: c_uint,
-    pub re_engine: c_uint,
-    pub re_flags: c_uint,
-    pub re_in_use: bool,
-    pub regstart: c_int,
-    pub reganch: uint8_t,
-    pub regmust: *mut uint8_t,
-    pub regmlen: c_int,
-    pub reghasz: uint8_t,
-    pub program: [uint8_t; 0],
+pub(crate) struct BtRegProg {
+    pub(crate) engine: *mut RegEngine,
+    pub(crate) regflags: c_uint,
+    pub(crate) re_engine: c_uint,
+    pub(crate) re_flags: c_uint,
+    pub(crate) re_in_use: bool,
+    /// The character every match starts with, or `NUL`.
+    pub(crate) regstart: c_int,
+    /// The pattern only matches at the start of a line.
+    pub(crate) reganch: uint8_t,
+    /// A literal run every matching line holds: the offset of an `EXACTLY`
+    /// operand in `program`.
+    pub(crate) regmust: Option<usize>,
+    /// Its length, which a match writes back (see `BtProg::regmlen`).
+    pub(crate) regmlen: core::cell::Cell<c_int>,
+    pub(crate) reghasz: uint8_t,
+    /// The nodes, `REGMAGIC` stamp first, as the parser wrote them.
+    pub(crate) program: Vec<uint8_t>,
 }
 #[repr(C)]
 pub struct NfaRegProg {
@@ -316,8 +326,9 @@ pub(crate) struct RegItem {
     /// The capture slot, the `\{n,m}` counter or the lookaround opcode the
     /// state is about, depending on the state.
     pub rs_no: int16_t,
-    /// The program node the frame was pushed for.
-    pub rs_scan: *mut uint8_t,
+    /// The program node the frame was pushed for, as an offset into the
+    /// program text.
+    pub rs_scan: usize,
     /// What the frame has to put back. The capture states (`RS_MOPEN` and
     /// friends) saved the slot's old value and read [`SavedInput::pos`]
     /// alone; every other state saved the input position and reads both

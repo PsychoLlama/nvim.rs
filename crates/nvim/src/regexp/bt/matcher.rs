@@ -17,7 +17,7 @@
 
 use core::ffi::c_int;
 
-use super::compile::regnext;
+use super::compile::BtProg;
 use super::op::BtOp;
 use super::resume::resume;
 use super::single::match_one;
@@ -45,24 +45,14 @@ const ZOPEN: c_int = BtOp::Zopen.code();
 const ZCLOSE: c_int = BtOp::Zclose.code();
 const BRACE_COMPLEX: c_int = BtOp::BraceComplex.code();
 
-/// The four bytes of a node operand at `off`, big-endian, as the compiler
-/// wrote them.
-///
-/// # Safety
-/// `p` must be a node whose operand runs at least `off + 4` bytes.
-pub(crate) unsafe fn operand_u32(p: *const uint8_t, off: usize) -> int64_t {
-    // SAFETY: the caller promises the four bytes.
-    let b = |i: usize| unsafe { *p.add(off + i) } as int64_t;
-    (b(0) << 24) + (b(1) << 16) + (b(2) << 8) + b(3)
-}
-
 /// Match the program starting at `scan` against `rex.input`.
 ///
 /// `tm` and `timed_out`, when given, cap how long the search may run; the
 /// clock is only read every hundredth node.
 pub(crate) fn regmatch(
     rex: Rex,
-    start: *mut uint8_t,
+    prog: BtProg<'_>,
+    start: usize,
     tm: *const ProfTime,
     timed_out: *mut c_int,
 ) -> bool {
@@ -82,19 +72,24 @@ pub(crate) fn regmatch(
     // SAFETY: `start` is a node in the compiled program and `rex` describes
     // a match that is set up and running; every pointer below either comes
     // from the program or from `rex`.
-    unsafe { walk(rex, stack, backpos, braces, start, tm, timed_out) }
+    unsafe { walk(rex, prog, stack, backpos, braces, start, tm, timed_out) }
 }
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the walk's working state, threaded down"
+)]
 /// [`regmatch`]'s loop, with the working state already borrowed.
 ///
 /// # Safety
 /// As [`regmatch`].
 unsafe fn walk(
     rex: Rex,
+    prog: BtProg<'_>,
     stack: &mut RegStack,
     backpos: &mut BackPos,
     braces: &mut Braces,
-    start: *mut uint8_t,
+    start: usize,
     tm: *const ProfTime,
     timed_out: *mut c_int,
 ) -> bool {
@@ -108,7 +103,7 @@ unsafe fn walk(
 
         // Walk forward until something needs deciding.
         loop {
-            if got_int.get() || scan.is_null() {
+            if got_int.get() || scan == 0 {
                 status = RA_FAIL;
                 break;
             }
@@ -127,10 +122,10 @@ unsafe fn walk(
             }
 
             status = RA_CONT;
-            let mut next = regnext(scan);
+            let mut next = prog.next(scan);
             // The `\_x` band is decoded away here, once per node: past the
             // line break such a node behaves as its plain form.
-            let Ok((op, crosses_lines)) = BtOp::decode(unsafe { *scan }) else {
+            let Ok((op, crosses_lines)) = BtOp::decode(prog.op_byte(scan)) else {
                 status = RA_FAIL;
                 break;
             };
@@ -150,9 +145,9 @@ unsafe fn walk(
                 rex.advance_char();
             } else {
                 let c = rex.char_here();
-                status = match match_one(rex, op, scan, next, c) {
+                status = match match_one(rex, prog, op, scan, next, c) {
                     Some(status) => status,
-                    None => push_frame(rex, stack, backpos, braces, op, scan, &mut next),
+                    None => push_frame(rex, prog, stack, backpos, braces, op, scan, &mut next),
                 };
             }
 
@@ -162,13 +157,13 @@ unsafe fn walk(
             scan = next;
         }
 
-        resume(rex, stack, backpos, braces, &mut scan, &mut status);
+        resume(rex, prog, stack, backpos, braces, &mut scan, &mut status);
 
         if status == RA_CONT {
             continue;
         }
         if stack.depth() == 0 || status == RA_FAIL {
-            if scan.is_null() {
+            if scan == 0 {
                 // Should not happen. Providing a message and failing is
                 // better than a crash.
                 iemsg(gettext(e_re_corr));
@@ -183,14 +178,19 @@ unsafe fn walk(
 /// Each pushes a frame describing what [`super::resume`] should do if the
 /// rest of the pattern fails from here. `next` is the node the walk continues
 /// at; several of these redirect it into their own operand.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the walk's working state, threaded down"
+)]
 fn push_frame(
     rex: Rex,
+    prog: BtProg<'_>,
     stack: &mut RegStack,
     backpos: &mut BackPos,
     braces: &mut Braces,
     op: BtOp,
-    scan: *mut uint8_t,
-    next: &mut *mut uint8_t,
+    scan: usize,
+    next: &mut usize,
 ) -> c_int {
     // SAFETY: as `regmatch`; `scan` is a node in the program and the frames
     // pushed here are read back by `resume` while this call is still on the
@@ -219,7 +219,7 @@ fn push_frame(
         | BtOp::Mopen8
         | BtOp::Mopen9 => {
             cleanup_subexpr(rex);
-            unsafe { push_capture(rex, stack, RS_MOPEN, scan, op.code() - MOPEN) }
+            push_capture(rex, stack, RS_MOPEN, scan, op.code() - MOPEN)
         }
         BtOp::Mclose
         | BtOp::Mclose1
@@ -232,7 +232,7 @@ fn push_frame(
         | BtOp::Mclose8
         | BtOp::Mclose9 => {
             cleanup_subexpr(rex);
-            unsafe { push_capture(rex, stack, RS_MCLOSE, scan, op.code() - MCLOSE) }
+            push_capture(rex, stack, RS_MCLOSE, scan, op.code() - MCLOSE)
         }
         BtOp::Zopen1
         | BtOp::Zopen2
@@ -244,7 +244,7 @@ fn push_frame(
         | BtOp::Zopen8
         | BtOp::Zopen9 => {
             cleanup_zsubexpr(rex);
-            unsafe { push_capture(rex, stack, RS_ZOPEN, scan, op.code() - ZOPEN) }
+            push_capture(rex, stack, RS_ZOPEN, scan, op.code() - ZOPEN)
         }
         BtOp::Zclose1
         | BtOp::Zclose2
@@ -256,7 +256,7 @@ fn push_frame(
         | BtOp::Zclose8
         | BtOp::Zclose9 => {
             cleanup_zsubexpr(rex);
-            unsafe { push_capture(rex, stack, RS_ZCLOSE, scan, op.code() - ZCLOSE) }
+            push_capture(rex, stack, RS_ZCLOSE, scan, op.code() - ZCLOSE)
         }
 
         // `\%(` captures nothing, but still needs a frame so that the
@@ -272,8 +272,8 @@ fn push_frame(
         // The last branch of an alternation needs no frame: there is
         // nothing left to fall back to.
         BtOp::Branch => {
-            if unsafe { *(*next) } != BtOp::Branch.code() as uint8_t {
-                *next = unsafe { scan.add(3) };
+            if prog.op_byte(*next) != BtOp::Branch.code() as uint8_t {
+                *next = scan + 3;
                 RA_CONT
             } else if stack.push(RS_BRANCH, scan).is_none() {
                 RA_FAIL
@@ -285,18 +285,16 @@ fn push_frame(
         // The bounds of the `{n,m}` that follows, stashed where the node
         // they belong to can find them.
         BtOp::BraceLimits => {
-            let next_op = BtOp::decode(unsafe { *(*next) }).map(|(op, _)| op);
+            let next_op = BtOp::decode(prog.op_byte(*next)).map(|(op, _)| op);
             if next_op == Ok(BtOp::BraceSimple) {
-                rex.set_brace_limits(unsafe { operand_u32(scan, 3) }, unsafe {
-                    operand_u32(scan, 7)
-                });
+                rex.set_brace_limits(prog.operand_u32(scan, 3), prog.operand_u32(scan, 7));
                 RA_CONT
             } else if let Ok(next_op) = next_op
                 && let Some(slot) = next_op.index_in(BtOp::BraceComplex)
             {
                 let brace = braces.slot(slot);
-                brace.min = unsafe { operand_u32(scan, 3) };
-                brace.max = unsafe { operand_u32(scan, 7) };
+                brace.min = prog.operand_u32(scan, 3);
+                brace.max = prog.operand_u32(scan, 7);
                 brace.count = 0;
                 RA_CONT
             } else {
@@ -319,12 +317,10 @@ fn push_frame(
             // fits on one line: a wrapped call inside `unsafe` costs a line
             // of unchecked code each.
             let slot = op.code() - BRACE_COMPLEX;
-            unsafe { brace_complex(rex, stack, backpos, braces, slot, scan, next) }
+            brace_complex(rex, stack, backpos, braces, slot, scan, next)
         }
 
-        BtOp::BraceSimple | BtOp::Star | BtOp::Plus => unsafe {
-            counted_repeat(rex, stack, op, scan)
-        },
+        BtOp::BraceSimple | BtOp::Star | BtOp::Plus => counted_repeat(rex, prog, stack, op, scan),
 
         // `\@=`, `\@!` and `\@>`: run the operand, then decide what its
         // outcome means.
@@ -334,7 +330,7 @@ fn push_frame(
             };
             rp.rs_no = op.code() as int16_t;
             rp.rs_saved = reg_save(rex, backpos);
-            *next = unsafe { scan.add(3) };
+            *next = scan + 3;
             RA_CONT
         }
 
@@ -364,17 +360,11 @@ fn push_frame(
 /// Push a frame that restores capture group `no`'s slot if the rest of the
 /// pattern fails.
 ///
-/// # Safety
-/// `state` must be a capture state and `no` a group of the running match —
-/// see [`capture_slot`].
-unsafe fn push_capture(
-    rex: Rex,
-    stack: &mut RegStack,
-    state: RegState,
-    scan: *mut uint8_t,
-    no: c_int,
-) -> c_int {
-    // SAFETY: as `push_frame`.
+/// `state` is a capture state and `no` a group number decoded from one of
+/// the capture opcodes, so a slot of the running match — see
+/// [`capture_slot`].
+fn push_capture(rex: Rex, stack: &mut RegStack, state: RegState, scan: usize, no: c_int) -> c_int {
+    // SAFETY: a capture state and a decoded group number, as above.
     let slot = unsafe { capture_slot(rex, state, no as usize) };
     let Some(rp) = stack.push(state, scan) else {
         return RA_FAIL;
@@ -390,18 +380,15 @@ unsafe fn push_capture(
 /// whether the bound is greedy (`min <= max`) and on whether the minimum has
 /// been reached yet.
 ///
-/// # Safety
-/// As `push_frame`.
-unsafe fn brace_complex(
+fn brace_complex(
     rex: Rex,
     stack: &mut RegStack,
     backpos: &mut BackPos,
     braces: &mut Braces,
     no: c_int,
-    scan: *mut uint8_t,
-    next: &mut *mut uint8_t,
+    scan: usize,
+    next: &mut usize,
 ) -> c_int {
-    // SAFETY: as `push_frame`.
     let brace = braces.slot(no as usize);
     brace.count += 1;
     let (count, min, max) = (brace.count, brace.min, brace.max);
@@ -414,7 +401,7 @@ unsafe fn brace_complex(
         };
         rp.rs_no = no as int16_t;
         rp.rs_saved = reg_save(rex, backpos);
-        *next = unsafe { scan.add(3) };
+        *next = scan + 3;
     } else if greedy {
         // Another pass is allowed; try it, and fall back to stopping.
         if count <= max {
@@ -423,7 +410,7 @@ unsafe fn brace_complex(
             };
             rp.rs_no = no as int16_t;
             rp.rs_saved = reg_save(rex, backpos);
-            *next = unsafe { scan.add(3) };
+            *next = scan + 3;
         }
     } else if count <= min {
         // Non-greedy: try stopping first, and fall back to another pass.
@@ -438,10 +425,13 @@ unsafe fn brace_complex(
 /// `*`, `+` or `\{n,m}` around a `SIMPLE` item: count the matches in one go
 /// and push a frame that can give them back one at a time.
 ///
-/// # Safety
-/// As `push_frame`.
-unsafe fn counted_repeat(rex: Rex, stack: &mut RegStack, op: BtOp, scan: *mut uint8_t) -> c_int {
-    // SAFETY: as `push_frame`.
+fn counted_repeat(
+    rex: Rex,
+    prog: BtProg<'_>,
+    stack: &mut RegStack,
+    op: BtOp,
+    scan: usize,
+) -> c_int {
     let mut rst = RegStar {
         nextb: NUL,
         nextb_ic: NUL,
@@ -451,9 +441,9 @@ unsafe fn counted_repeat(rex: Rex, stack: &mut RegStack, op: BtOp, scan: *mut ui
     };
     // Knowing the byte the repeat has to stop before lets the unwinder
     // skip positions that cannot possibly continue.
-    let next = regnext(scan);
-    if !next.is_null() && unsafe { *next } == BtOp::Exactly.code() as uint8_t {
-        rst.nextb = unsafe { *next.add(3) } as c_int;
+    let next = prog.next(scan);
+    if next != 0 && prog.op_byte(next) == BtOp::Exactly.code() as uint8_t {
+        rst.nextb = c_int::from(prog.byte(next, 3));
         rst.nextb_ic = if !rex.reg_ic() {
             rst.nextb
         } else if mb_isupper(rst.nextb) {
@@ -469,7 +459,7 @@ unsafe fn counted_repeat(rex: Rex, stack: &mut RegStack, op: BtOp, scan: *mut ui
         (rst.minval, rst.maxval) = rex.brace_limits();
     }
 
-    rst.count = super::repeat::regrepeat(rex, unsafe { scan.add(3) }, rst.maxval) as int64_t;
+    rst.count = super::repeat::regrepeat(rex, prog, scan + 3, rst.maxval) as int64_t;
     if got_int.get() {
         return RA_FAIL;
     }
