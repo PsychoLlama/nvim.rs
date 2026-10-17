@@ -9,9 +9,9 @@
 //! SEARCH_HL_PRIORITY (0) as `'hlsearch'`'s own place in that order.
 //!
 //! A pattern's state is reached through [`with_shl`], one short borrow per
-//! access: the matcher reads the window while it runs, so no borrow of the
-//! window's match list is held across it -- the regmatch it advances is
-//! moved out for the call and put back after.
+//! access. The matcher reads the window while it runs; a match's regmatch
+//! lives in the list's own storage, outside the window, so the borrow of it
+//! the matcher advances does not overlap anything the matcher reads.
 
 #![forbid(unsafe_code)]
 #![deny(
@@ -29,7 +29,7 @@ use crate::memline::held_line;
 use crate::option::cpo_has;
 use crate::pos::MAXCOL;
 use crate::search::SEARCH_HL_PRIORITY;
-use crate::types::{CpoFlag, RegMMatch};
+use crate::types::CpoFlag;
 use crate::winlayer::Win;
 
 /// Which pattern's highlight state: `'hlsearch'`'s, or the window's match
@@ -236,42 +236,44 @@ fn next_search_hl_pos(item: &mut MatchItem, lnum: LineNr, mincol: ColNr) -> usiz
 /// Run `which`'s pattern against line `lnum` of `window` from `col`:
 /// how many lines the match spans, 0 for none.
 ///
-/// The regmatch is moved out of its holder for the call -- with the match's
-/// program in it, which stays the match's own: what the matcher hands back
-/// (a program recompiled for the other engine, say) goes back to the match
-/// for later redraws, as upstream's shared program did.
+/// A match lends its program to its highlight regmatch for the call, and
+/// takes back what the matcher hands back -- a program recompiled for the
+/// other engine, say -- for later redraws, as upstream's shared program did.
 fn exec_shl(window: Win, which: Which, lnum: LineNr, col: ColNr, timed_out: &mut bool) -> usize {
-    let (mut rm, tm) = match which {
-        Which::Search => screen_search_hl.with_mut(|shl| (core::mem::take(&mut shl.rm), shl.tm)),
+    let buffer = window.buffer();
+    let nmatched = match which {
+        // The matcher does not reach the redraw's matcher cell.
+        Which::Search => screen_search_hl.with_mut(|shl| {
+            let tm = shl.tm;
+            let rm = &mut shl.rm;
+            vim_regexec_multi(
+                rm,
+                Some(window),
+                buffer,
+                lnum,
+                col,
+                Some(&tm),
+                Some(timed_out),
+            )
+        }),
         Which::Item(i) => with_item(window, i, |item| {
-            let mut rm = core::mem::take(&mut item.mit_hl.rm);
+            let tm = item.mit_hl.tm;
+            let rm = &mut item.mit_hl.rm;
             rm.regprog = item.mit_match.regprog.take();
-            (rm, item.mit_hl.tm)
+            let nmatched = vim_regexec_multi(
+                rm,
+                Some(window),
+                buffer,
+                lnum,
+                col,
+                Some(&tm),
+                Some(timed_out),
+            );
+            item.mit_match.regprog = rm.regprog.take();
+            nmatched
         }),
     };
-    let nmatched = vim_regexec_multi(
-        &mut rm,
-        Some(window),
-        window.buffer(),
-        lnum,
-        col,
-        Some(&tm),
-        Some(timed_out),
-    );
-    put_back(window, which, rm);
     usize::try_from(nmatched).unwrap_or(0)
-}
-
-/// Return the regmatch [`exec_shl`] took out.
-#[inline(always)]
-fn put_back(window: Win, which: Which, mut rm: RegMMatch) {
-    match which {
-        Which::Search => screen_search_hl.with_mut(|shl| shl.rm = rm),
-        Which::Item(i) => with_item(window, i, |item| {
-            item.mit_match.regprog = rm.regprog.take();
-            item.mit_hl.rm = rm;
-        }),
-    }
 }
 
 /// Advances `which` to its next match on `lnum` at or past `mincol`.
@@ -553,22 +555,30 @@ pub(crate) fn prepare_search_hl_line(
 }
 
 /// Advances every pattern past `col` and answers the attribute that wins
-/// there.
+/// there, and whether a pattern was searched again -- after which the line
+/// may have moved (a multi-line regexp reads other lines), and the caller
+/// reads it again.
 ///
 /// Called once per column. Each pattern is stepped until it either covers
 /// `col` or starts after it; then a second walk, in priority order, takes
 /// the last non-zero attribute, so the highest-priority pattern wins.
+///
+/// `char_len_here` answers the length of the character at `col` (0 at the
+/// end of the line) from the caller's own view of the line, which is good
+/// until a pattern is searched again; after that the line is read afresh.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn update_search_hl(
     window: Win,
     lnum: LineNr,
     col: ColNr,
+    char_len_here: impl Fn() -> usize,
     has_match_conc: &mut c_int,
     match_conc: &mut c_int,
     lcs_eol_todo: bool,
     on_last_col: &mut bool,
     search_attr_from_match: &mut bool,
-) -> c_int {
+) -> (c_int, bool) {
+    let mut line_moved = false;
     let mut walk = ShlWalk::new(Order::ByPriority);
     while let Some(which) = walk.next(window) {
         reset_pos_cur(window, which);
@@ -578,7 +588,12 @@ pub(crate) fn update_search_hl(
             let (startcol, endcol) = with_shl(window, which, |shl| (shl.startcol, shl.endcol));
             if startcol != MAXCOL && col >= startcol && col < endcol {
                 // Inside the match. Widen it to a whole character.
-                let next_col = col + char_len_at(window, lnum, col);
+                let here = if line_moved {
+                    char_len_at(window, lnum, col)
+                } else {
+                    col_len(char_len_here())
+                };
+                let next_col = col + here;
                 let cursor_attr = match which {
                     Which::Search if screen_search_hl.with(|shl| shl.has_cursor) => {
                         Some(win_hl_attr(window, HLF_LC))
@@ -618,6 +633,7 @@ pub(crate) fn update_search_hl(
             // Just past the end: look for the next match on this line.
             with_shl(window, which, |shl| shl.attr_cur = 0);
             next_search_hl(window, which, lnum, col);
+            line_moved = true;
             pos_inprogress = pos_in_progress(window, which);
 
             let found = with_shl(window, which, |shl| {
@@ -665,13 +681,16 @@ pub(crate) fn update_search_hl(
     // Under `'list'` the eol character is drawn from `'listchars'`, so
     // the match must not colour past the last real character.
     if window.w_onebuf_opt.wo_list != 0 && !lcs_eol_todo {
-        let buffer = window.buffer();
-        let at = usize::try_from(col).unwrap_or(usize::MAX);
-        if cstr::byte_at(held_line(&buffer, lnum), at) == 0 {
+        let at_eol = if line_moved {
+            char_len_at(window, lnum, col) == 0
+        } else {
+            char_len_here() == 0
+        };
+        if at_eol {
             search_attr = 0;
         }
     }
-    search_attr
+    (search_attr, line_moved)
 }
 
 /// Whether the cell just past the end of the line should be highlighted.

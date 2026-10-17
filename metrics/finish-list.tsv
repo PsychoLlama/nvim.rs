@@ -117,8 +117,8 @@ diff/	diff/lmatch.rs	1	16	3	4	deref:11 expr:1	other:3	-	xfree:1
 diff/	diff/opts.rs	1	6	1	4	deref:2	other:2	-	.add:1 .offset_from:1 getdigits_int:1
 diff/	diff/refine.rs	1	57	5	14	deref:14 expr:1 ref:1	other:6	-	mb_get_class_tab:1 utf_char2bytes:1 utf_ptr2char:1 utfc_ptr2len:1
 diff/	diff/update.rs	1	40	6	36	deref:2 expr:2	other:7	-	Live::new:4 xfree:4 os_remove:2 Self::new:1 apply_autocmds:1 at:1 emsg:1 memchrsub:1
-drawline/	*	10	312	18	167	deref:129 expr:7 ref:1	other:9	-	.offset:18 .offset_from:13 schar_get_first_codepoint:9 .add:7 bytes_at:6 schar_cells:6 utf_ptr2cells:6 utfc_ptr2len:6
-drawline/	drawline/attrs.rs	1	10	0	7	deref:3	-	-	utf_ptr2cells:3 .offset:1 .offset_from:1 diff_change_parse:1
+drawline/	*	10	313	18	168	deref:129 expr:7 ref:1	other:9	-	.offset:18 .offset_from:13 schar_get_first_codepoint:9 .add:7 utfc_ptr2len:7 bytes_at:6 schar_cells:6 utf_ptr2cells:6
+drawline/	drawline/attrs.rs	1	11	0	8	deref:3	-	-	utf_ptr2cells:3 .offset:1 .offset_from:1 diff_change_parse:1 utfc_ptr2len:1
 drawline/	drawline/cells.rs	1	9	0	8	deref:1	-	-	schar_cells:2 xfree:2 .offset:1 .offset_from:1 clear_virttext:1
 drawline/	drawline/chars.rs	1	55	3	33	deref:22	-	-	.offset:8 .offset_from:5 schar_get_first_codepoint:3 utfc_ptr2len:3 schar_cells:2 utfc_ptr2schar:2 bytes_at:1 init_charsize_arg:1
 drawline/	drawline/columns.rs	1	46	3	24	deref:17 expr:3	other:4	-	.add:3 build_statuscol_str:2 bytes_at:2 transstr_buf:2 abs:1 decor_redraw_signs:1 get_breakindent_win:1 hl_combine_attr:1

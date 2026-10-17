@@ -13,7 +13,7 @@ count	callee	no_raw	defs	def
 65	c_str	0	1	crates/nvim/src/message_fmt/mod.rs
 65	utf_ptr2char	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 62	nlua_pop_integer	0	1	crates/nvim/src/lua/converter/pop.rs
-59	utfc_ptr2len	0	1	crates/nvim/src/mbyte/utf8/mod.rs
+60	utfc_ptr2len	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 44	pop_keydict	0	1	crates/nvim/src/lua/api_wrappers/mod.rs
 39	cstr_to_string	0	1	crates/nvim/src/api/private/helpers/text.rs
 37	xmalloc	0	1	crates/nvim/src/memory/mod.rs

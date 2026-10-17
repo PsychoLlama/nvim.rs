@@ -66,7 +66,7 @@ enum Source {
 ///
 /// Answers `None` when neither remembered pattern exists (E35).
 fn pattern_to_search(first: u8, delim: c_int) -> Option<Source> {
-    if !(first == NUL as u8 || c_int::from(first) == delim) {
+    if !(first == NUL as u8 || as_char(first) == delim) {
         return Some(Source::Typed);
     }
     if has_last_search_pattern() {
@@ -77,6 +77,12 @@ fn pattern_to_search(first: u8, delim: c_int) -> Option<Source> {
         return None;
     };
     Some(Source::Substitute(subst))
+}
+
+/// `byte` as upstream compares it with a delimiter: a `char`, which is
+/// signed here, so a byte at or above 0x80 never equals an unsigned one.
+fn as_char(byte: u8) -> c_int {
+    c_int::from(c_char::from_ne_bytes([byte]))
 }
 
 /// Parse the `e`/`s`/`b` and `+n`/`-n` suffix that starts `text[at..]`,
@@ -500,7 +506,7 @@ pub fn do_search(
                     end
                 };
                 let mut p = at + end;
-                if c_int::from(cstr::byte_at(&text, p)) == delim {
+                if as_char(cstr::byte_at(&text, p)) == delim {
                     // The pattern searched for ends at the delimiter --
                     // when it is the typed one.
                     if matches!(source, Source::Typed) {
