@@ -211,7 +211,10 @@ pub unsafe fn search_regcomp(
     let compiled = if rightleft_reverse {
         reversed_text(unsafe { CStr::from_ptr(pat) }.to_bytes())
     } else {
-        unsafe { core::slice::from_raw_parts(pat.cast::<u8>(), patlen) }.to_vec()
+        // Upstream's `xstrnsave`, which stops at a NUL inside `patlen`: a
+        // `;`-chained search hands over a length that runs past the NUL
+        // `do_search` wrote over the first leg's delimiter.
+        cstr::until_nul(unsafe { core::slice::from_raw_parts(pat.cast::<u8>(), patlen) }).to_vec()
     };
     compiled_pat.set(Some(XString::from_bytes(&compiled)));
 
@@ -520,13 +523,10 @@ pub fn ignorecase_opt(pat: &CStr, ic_in: bool, scs: bool) -> bool {
 pub unsafe fn pat_has_uppercase(pat: *mut c_char) -> bool {
     // Which of `\`, `%` and `_` introduce an escape depends on the
     // pattern's own magicness, which only a parse can tell us.
-    let mut magic_val: Magic = MAGIC_ON;
     let is_magic = magic_isset() as c_int;
-    let (no_str, no_int) = (ptr::null_mut(), ptr::null_mut());
     // SAFETY: `pat` is a live NUL-terminated pattern.
-    unsafe { skip_regexp_ex(pat, NUL, is_magic, no_str, no_int, &raw mut magic_val) };
-
     let pat = unsafe { CStr::from_ptr(pat) }.to_bytes_with_nul();
+    let (_, magic_val) = skip_regexp_magic(pat, NUL, is_magic);
     let mut i = 0;
     while pat[i] != 0 {
         let at = pat[i..].as_ptr().cast::<c_char>();

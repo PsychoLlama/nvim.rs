@@ -2,8 +2,7 @@
 //! ordinary text, one of the `\d`/`\w`/`\s` class shorthands, and `\~` — the
 //! previous `:substitute` replacement, spliced in as literal text.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -18,10 +17,11 @@ use core::ffi::c_int;
 
 use super::compile::use_multibytecode;
 use super::op::BtOp;
-use crate::mbyte::{utf_composinglike, utf_iscomposing_legacy, utf_ptr2char, utf_ptr2len};
+use crate::mbyte::utf_iscomposing_legacy;
 use crate::message::e_nopresub;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
+use crate::regexp::mbyte::{char_at_nul, char_len_at, composes_at};
 use crate::regexp::state::rc_did_emsg;
 use crate::regexp::{
     GRAPHEME_STATE_INIT, HASWIDTH, NOT_MULTI, SIMPLE, getchr, magic, peekchr, re_multi_type,
@@ -149,15 +149,12 @@ pub(crate) fn literal_run(rc: &mut RegCompiler, flagp: &mut c_int, mut c: c_int)
 /// emitted, so that the grapheme stays one `EXACTLY` operand.
 fn emit_combining_marks(rc: &mut RegCompiler) {
     let mut state: GraphemeState = GRAPHEME_STATE_INIT as GraphemeState;
-    // SAFETY: the cursor points into the NUL-terminated pattern, and
-    // `utf_composinglike` stops the walk at its end.
     loop {
-        let len = unsafe { utf_ptr2len(rc.cursor) };
-        let len = usize::try_from(len).expect("a character is at least one byte");
-        if !unsafe { utf_composinglike(rc.cursor, rc.cursor.add(len), &mut state) } {
+        let len = char_len_at(rc.text, rc.cursor);
+        if !composes_at(rc.text, rc.cursor, rc.cursor + len, Some(&mut state)) {
             break;
         }
-        rc.code.char(unsafe { utf_ptr2char(rc.cursor) });
+        rc.code.char(char_at_nul(rc.text, rc.cursor));
         skipchr(rc);
     }
 }

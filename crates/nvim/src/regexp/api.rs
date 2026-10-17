@@ -399,6 +399,15 @@ pub(crate) unsafe fn vim_regexec_syntax(
     result
 }
 
+/// Can `prog`'s pattern match across a line break?
+///
+/// # Safety
+///
+/// `prog` must point at a live `RegProg`.
+pub unsafe fn re_multiline(prog: *const RegProg) -> bool {
+    (unsafe { (*prog).regflags } & super::RF_HASNL as u32) != 0
+}
+
 /// Free the program a field owns and empty the field: upstream's
 /// `vim_regfree(p); p = NULL` for a slot that holds its own program.
 pub(crate) fn free_prog_in(slot: &mut *mut RegProg) {
@@ -568,7 +577,7 @@ impl OwnedMMatch {
     /// Can the pattern match a line break?
     pub(crate) fn is_multiline(&self) -> bool {
         // SAFETY: this holder's live program.
-        self.has_program() && unsafe { super::re_multiline(self.0.regprog) }
+        self.has_program() && unsafe { re_multiline(self.0.regprog) }
     }
 
     /// [`vim_regexec_multi`] over `buffer` from line `lnum`, column `col`,

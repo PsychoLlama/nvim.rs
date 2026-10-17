@@ -832,11 +832,12 @@ fn skip_pattern(
     delim: ::core::ffi::c_int,
     magic: &mut Magic,
 ) -> *mut ::core::ffi::c_char {
-    let no_str = ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
-    let no_int = ::core::ptr::null_mut::<::core::ffi::c_int>();
     let is_magic = magic_isset() as ::core::ffi::c_int;
     // SAFETY: `p` points into a live NUL-terminated pattern.
-    unsafe { skip_regexp_ex(p, delim, is_magic, no_str, no_int, magic) }
+    let text = unsafe { ::core::ffi::CStr::from_ptr(p) }.to_bytes_with_nul();
+    let (end, ended) = skip_regexp_magic(text, delim, is_magic);
+    *magic = ended;
+    p.wrapping_add(end)
 }
 
 /// The command line's byte at `i`.

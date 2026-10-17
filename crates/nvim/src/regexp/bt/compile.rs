@@ -18,6 +18,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::cstr;
 use crate::regexp::RegCompiler;
 use core::ffi::{c_int, c_uint};
 use core::mem::offset_of;
@@ -445,18 +446,13 @@ pub(crate) fn seen_endbrace(rc: &RegCompiler, refnum: c_int) -> bool {
     if rc.closed_groups[refnum as usize] != 0 {
         return true;
     }
-    // SAFETY: the cursor points into the NUL-terminated pattern, so the walk
-    // stops at its end; the message is a static NUL-terminated string.
-    let mut p = rc.cursor.cast::<uint8_t>();
-    while unsafe { *p } as c_int != NUL {
-        if unsafe { *p } as c_int == '@' as c_int
-            && unsafe { *p.add(1) } as c_int == '<' as c_int
-            && (unsafe { *p.add(2) } as c_int == '!' as c_int
-                || unsafe { *p.add(2) } as c_int == '=' as c_int)
-        {
-            return true;
-        }
-        p = unsafe { p.add(1) };
+    // The rest of the pattern, up to its NUL.
+    let rest = cstr::until_nul(&rc.text[rc.cursor.min(rc.text.len())..]);
+    if rest
+        .windows(3)
+        .any(|w| w[0] == b'@' && w[1] == b'<' && matches!(w[2], b'!' | b'='))
+    {
+        return true;
     }
     emsg(gettext(c"E65: Illegal back reference"));
     rc_did_emsg.set(true);

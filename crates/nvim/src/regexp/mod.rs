@@ -59,12 +59,12 @@ mod substitute;
 
 pub use self::api::*;
 pub(crate) use self::bt::*;
-pub use self::chars::*;
+pub(crate) use self::chars::*;
 pub(crate) use self::compiler::*;
 pub(crate) use self::context::*;
 pub(crate) use self::mbyte::*;
 pub(crate) use self::nfa::*;
-pub use self::parse::*;
+pub(crate) use self::parse::*;
 pub(crate) use self::pos::*;
 pub(crate) use self::rex::*;
 pub(crate) use self::submatch::*;
@@ -299,7 +299,7 @@ pub const NFA_TOO_EXPENSIVE: c_int = -1;
 pub const NFA_MAX_STATES: c_int = 100000;
 pub const AUTOMATIC_ENGINE: c_uint = 0;
 pub struct ParseState {
-    pub regparse: *mut c_char,
+    pub regparse: usize,
     pub prevchr_len: c_int,
     pub curchr: c_int,
     pub prevchr: c_int,

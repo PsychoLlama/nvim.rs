@@ -520,11 +520,9 @@ pub(crate) fn vim_regcomp_had_eol(prog: *const RegProg) -> bool {
 /// Anything else leaves the cursor where it was and stands for a literal
 /// backslash.
 pub(crate) fn coll_get_char(rc: &mut RegCompiler) -> c_int {
-    // SAFETY: the cursor points into the NUL-terminated pattern, and the
-    // readers below only ever advance it.
     let start = rc.cursor;
-    rc.cursor = unsafe { start.add(1) };
-    let mut nr = match unsafe { *start } as u8 {
+    rc.cursor = start + 1;
+    let mut nr = match cstr::byte_at(rc.text, start) {
         b'd' => getdecchrs(rc),
         b'o' => getoctchrs(rc),
         b'x' => gethexchrs(rc, 2),

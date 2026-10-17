@@ -354,7 +354,7 @@ pub(crate) fn nfa_regcomp(rc: &mut RegCompiler) -> *mut RegProg {
             unsafe { (*prog).regstart = nfa_get_regstart((*prog).start, 0) };
             unsafe { (*prog).match_text = nfa_get_match_text((*prog).start) };
             unsafe { (*prog).reghasz = rc.has_z };
-            unsafe { (*prog).pattern = xstrdup(rc.pattern) };
+            unsafe { (*prog).pattern = xstrdup(rc.pattern.as_ptr()) };
         }
     }
     prog.cast()

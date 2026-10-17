@@ -15,6 +15,7 @@
 use super::*;
 use crate::cstr;
 use crate::ex_docmd::cmdmod_has;
+use crate::memory::XString;
 use crate::option::{ScrollMargin, ScrollOff, cpo_has};
 use crate::optionstr::OptString;
 use crate::pos::MAXCOL;
@@ -258,10 +259,7 @@ fn echo_size(plen: size_t, off_len: size_t, with_stats: bool) -> size_t {
 /// `echo.buf` must be an `xmalloc`ed NUL-terminated string of `echo.len`.
 unsafe fn reverse_echo(echo: &mut Echo) {
     let reversed = reversed_text(unsafe { cstr::bytes_at(echo.buf.as_ptr()) });
-    unsafe {
-        echo.buf
-            .replace(crate::memory::XString::from_vec(reversed).into_raw())
-    };
+    unsafe { echo.buf.replace(XString::from_vec(reversed).into_raw()) };
     echo.len = unsafe { cstr::bytes_at(echo.buf.as_ptr()) }.len();
     let base = echo.buf.as_ptr();
     // Move the reversed text to the beginning of the buffer.
@@ -607,14 +605,26 @@ pub unsafe fn do_search(
             if !cmd.pat.is_null() && unsafe { *cmd.pat } as c_int != NUL {
                 // Find the end of the regular expression. If there is
                 // a matching '/' or '?', toss it.
-                let before = strcopy.as_ptr();
-                let mut copied = before;
                 let is_magic = c_int::from(magic_isset());
-                let (cp, no_int, no_magic) = (&raw mut copied, ptr::null_mut(), ptr::null_mut());
-                // SAFETY: `cmd.pat` is the pattern the command line holds.
-                let mut p =
-                    unsafe { skip_regexp_ex(cmd.pat, cmd.delim, is_magic, cp, no_int, no_magic) };
-                if copied != before {
+                // SAFETY: `cmd.pat` is the pattern the command line holds --
+                // inside `strcopy` once a copy has been made, which a `\?`
+                // is then unescaped in place in, as upstream's non-empty
+                // `newp` slot asked for.
+                let pat = unsafe {
+                    core::slice::from_raw_parts_mut(
+                        cmd.pat.cast::<u8>(),
+                        CStr::from_ptr(cmd.pat).count_bytes() + 1,
+                    )
+                };
+                let (end, copy) = if strcopy.as_ptr().is_null() {
+                    skip_regexp_copy(pat, cmd.delim, is_magic)
+                } else {
+                    (skip_regexp_in_place(pat, 0, cmd.delim, is_magic), None)
+                };
+                let mut p = cmd.pat.wrapping_add(end);
+                if let Some(copy) = copy {
+                    let copied = XString::from_vec(copy).into_raw();
+                    p = copied.wrapping_add(end);
                     // Made a copy of "pat" to change "\?" to "?".
                     unsafe { strcopy.replace(copied) };
                     let len = unsafe { cstr::bytes_at(copied) }.len();

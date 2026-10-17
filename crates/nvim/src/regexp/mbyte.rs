@@ -9,8 +9,12 @@ use crate::cstr;
 use core::ffi::{c_char, c_int};
 
 use super::Rex;
-use crate::mbyte::{utf_fold, utf_ptr2char, utf_strnicmp, utfc_ptr2len};
+use crate::mbyte::{
+    c_cluster_len, char_at, char_len, head_off, iscomposing, utf_fold, utf_ptr2char, utf_strnicmp,
+    utfc_ptr2len,
+};
 use crate::strings::vim_strchr;
+use crate::types::GraphemeState;
 
 /// The base characters of U+FB20..U+FB4F, the Hebrew presentation forms, so
 /// that `\Z` can treat a precomposed form and its parts as equal. Entries
@@ -187,4 +191,62 @@ pub(crate) unsafe fn cstrchr(rex: Rex, s: *const c_char, c: c_int) -> *mut c_cha
         p = unsafe { p.add(utfc_ptr2len(p) as usize) };
     }
     core::ptr::null_mut()
+}
+
+// ------------------------------------------------- the line, as bytes
+//
+// Both engines and the pattern parser read NUL-terminated text: a line of the
+// buffer, the string a match runs over, the pattern itself. They hold it as a
+// slice that *keeps* its terminator, because the terminator is a position they
+// test for rather than a bound they stop short of (`$` matches there, `\n` is
+// looked for there). These are the codec's readers over such a slice at an
+// offset, answering what the pointer forms answer at the same byte -- in
+// particular 0 at the terminator, where the slice forms count a NUL as a
+// character of its own.
+
+/// The character at `text[i]`; 0 at the terminator or past the end.
+#[inline(always)]
+pub(crate) fn char_at_nul(text: &[u8], i: usize) -> i32 {
+    match text.get(i..) {
+        Some(rest) => char_at(rest),
+        None => 0,
+    }
+}
+
+/// How many bytes the character at `text[i]` takes; 0 at the terminator.
+#[inline(always)]
+pub(crate) fn char_len_at(text: &[u8], i: usize) -> usize {
+    match text.get(i) {
+        None | Some(0) => 0,
+        Some(_) => char_len(&text[i..]),
+    }
+}
+
+/// How many bytes the character at `text[i]` takes with its combining
+/// characters; 0 at the terminator.
+#[inline(always)]
+pub(crate) fn cluster_len_at(text: &[u8], i: usize) -> usize {
+    match text.get(i..) {
+        Some(rest) => c_cluster_len(rest),
+        None => 0,
+    }
+}
+
+/// How far back from `text[i]` the character covering it starts.
+#[inline(always)]
+pub(crate) fn head_off_at(text: &[u8], i: usize) -> usize {
+    head_off(text, i)
+}
+
+/// Does the character at `text[next]` compose onto the one at `text[cur]`?
+#[inline(always)]
+pub(crate) fn composes_at(
+    text: &[u8],
+    cur: usize,
+    next: usize,
+    state: Option<&mut GraphemeState>,
+) -> bool {
+    // ASCII never combines, and this is the hot answer.
+    cstr::byte_at(text, next) >= 0x80
+        && iscomposing(char_at_nul(text, cur), char_at_nul(text, next), state)
 }

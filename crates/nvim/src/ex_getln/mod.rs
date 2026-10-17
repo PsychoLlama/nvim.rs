@@ -111,7 +111,7 @@ use crate::popupmenu::state::pum_want;
 use crate::popupmenu::{pum_check_clear, pum_ext_want_done, pum_undisplay};
 use crate::pos::{MAXCOL, MAXLNUM, clearpos, equalpos, lt};
 use crate::profile::profile_setlimit;
-use crate::regexp::{RE_SEARCH, skip_regexp_ex};
+use crate::regexp::{RE_SEARCH, skip_regexp_magic};
 use crate::register::{
     cmdline_paste_reg, get_expr_line, get_expr_register, get_spec_reg, is_literal_register,
     valid_yank_reg,

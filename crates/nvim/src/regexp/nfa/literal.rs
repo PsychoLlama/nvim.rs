@@ -16,7 +16,7 @@ use crate::regexp::NfaOp;
 use crate::regexp::RegCompiler;
 use crate::semsg;
 use crate::siemsg;
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use super::{Parsed, Rejected, cursor};
 use crate::mbyte::{char_at, char_len, utf_char2len};
@@ -147,8 +147,8 @@ pub(crate) fn previous_substitute(rc: &mut RegCompiler) -> Parsed {
 ///
 /// A grapheme becomes an `NFA_COMPOSING` group holding each of its code
 /// points; a plain character is one item.
-pub(crate) fn literal(rc: &mut RegCompiler, mut c: c_int, atom_start: *mut c_char) -> Parsed {
-    let plen = cursor::grapheme_len(atom_start);
+pub(crate) fn literal(rc: &mut RegCompiler, mut c: c_int, atom_start: usize) -> Parsed {
+    let plen = cursor::grapheme_len(rc, atom_start);
     if utf_char2len(c) == plen && !cursor::is_composing(c) {
         rc.post.emit(unmagic(c));
         return Ok(());
@@ -164,9 +164,9 @@ pub(crate) fn literal(rc: &mut RegCompiler, mut c: c_int, atom_start: *mut c_cha
         if i >= plen {
             break;
         }
-        c = cursor::char_at(atom_start, i);
+        c = cursor::char_at(rc, atom_start, i);
     }
     rc.post.emit_op(NfaOp::Composing);
-    cursor::seek_to(rc, atom_start.wrapping_offset(plen as isize));
+    cursor::seek_to(rc, atom_start.wrapping_add_signed(plen as isize));
     Ok(())
 }

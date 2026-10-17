@@ -2,16 +2,15 @@
 //! table the `\d`/`\w`/`\s` atoms test against, and the three bracketed
 //! items a `[]` collection can name — `[:alpha:]`, `[=a=]` and `[.a.]`.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
+use crate::cstr;
 use crate::regexp::RegCompiler;
 use core::cmp::Ordering;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 
-use super::{ByteClass, MAGIC_ALL, RF_HASNL};
-use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
-use crate::types::RegProg;
+use super::mbyte::{char_at_nul, cluster_len_at};
+use super::{ByteClass, MAGIC_ALL};
 
 /// A magic metacharacter is held as its byte minus 256, so that the parser
 /// can tell `*` (a repeat) from `\*` (a literal star) by sign alone. These
@@ -133,32 +132,28 @@ static CHAR_CLASS_TAB: [(&CStr, CharClass); 19] = [
     (c"xdigit:]", CharClass::Xdigit),
 ];
 
-/// Recognise a `[:alpha:]`-style class at `*pp`, which points at the `[`.
-/// On a hit `*pp` advances past the name — the caller has already consumed
-/// the `[`, and the name carries its own `:]` — and the class is returned.
-/// Otherwise `None`, with `*pp` untouched.
+/// Recognise a `[:alpha:]`-style class at `text[*at]`, which is the `[`. On
+/// a hit `*at` advances past the name — the caller has already consumed the
+/// `[`, and the name carries its own `:]` — and the class is returned.
+/// Otherwise `None`, with `*at` untouched.
 ///
-/// # Safety
-///
-/// `*pp` must point into a NUL-terminated pattern.
-pub(crate) unsafe fn take_char_class(cursor: &mut *mut c_char) -> Option<CharClass> {
-    let p = *cursor;
+/// `text` is the pattern with its NUL, and reads past it answer NUL.
+pub(crate) fn take_char_class(text: &[u8], at: &mut usize) -> Option<CharClass> {
+    let p = *at;
+    let byte = |off: usize| cstr::byte_at(text, p + off);
     // Only `[:` followed by at least three lowercase letters is a
     // candidate. That is load-bearing, not just a guard against reading
     // off the end: `[:a:]` is a literal, not a class.
-    if unsafe { *p.add(1) } as u8 != b':'
-        || !(2..5).all(|off| (unsafe { *p.add(off) } as u8).is_ascii_lowercase())
-    {
+    if byte(1) != b':' || !(2..5).all(|off| byte(off).is_ascii_lowercase()) {
         return None;
     }
-    let name = unsafe { p.add(2) };
     // Order the pattern text against a class name the way the C
     // `strncmp` over the name's length did: byte by byte, stopping at
     // the first difference. A NUL in the pattern therefore just
     // compares low, and no byte past it is read.
     let cmp = |entry: &CStr| {
         for (i, &want) in entry.to_bytes().iter().enumerate() {
-            match (unsafe { *name.add(i) } as u8).cmp(&want) {
+            match byte(2 + i).cmp(&want) {
                 Ordering::Equal => {}
                 other => return other,
             }
@@ -171,40 +166,30 @@ pub(crate) unsafe fn take_char_class(cursor: &mut *mut c_char) -> Option<CharCla
     let i = CHAR_CLASS_TAB
         .binary_search_by(|(entry, _)| cmp(entry).reverse())
         .ok()?;
-    *cursor = unsafe { p.add(2 + CHAR_CLASS_TAB[i].0.to_bytes().len()) };
+    *at = p + 2 + CHAR_CLASS_TAB[i].0.to_bytes().len();
     Some(CHAR_CLASS_TAB[i].1)
-}
-
-/// # Safety
-///
-/// `prog` must point at a live `RegProg`.
-pub unsafe fn re_multiline(prog: *const RegProg) -> bool {
-    (unsafe { (*prog).regflags } & RF_HASNL as u32) != 0
 }
 
 /// Recognise the one other shape a `[]` collection can bracket: an
 /// equivalence class `[=a=]` (`delim` is `=`) or a collation element
-/// `[.a.]` (`delim` is `.`). `*pp` points at the `[`; on a hit it advances
+/// `[.a.]` (`delim` is `.`). `text[*at]` is the `[`; on a hit `*at` advances
 /// past the whole item and the character between the delimiters is
-/// returned, else 0 with `*pp` untouched.
+/// returned, else 0 with `*at` untouched.
 ///
 /// Upstream splits this in two and only null-checks `p[0]` in the
 /// collation-element half. Both callers hold `p[0] == '['`, so the check
 /// never fires either way; it is applied to both here so that a pattern
 /// ending mid-item can never walk past its terminator.
-///
-/// # Safety
-///
-/// `*pp` must point into a NUL-terminated pattern.
-pub(crate) unsafe fn take_bracketed(cursor: &mut *mut c_char, delim: u8) -> c_int {
-    let p = *cursor;
-    if unsafe { *p } == 0 || unsafe { *p.add(1) } as u8 != delim || unsafe { *p.add(2) } == 0 {
+pub(crate) fn take_bracketed(text: &[u8], at: &mut usize, delim: u8) -> c_int {
+    let p = *at;
+    let byte = |off: usize| cstr::byte_at(text, p + off);
+    if byte(0) == 0 || byte(1) != delim || byte(2) == 0 {
         return 0;
     }
-    let len = unsafe { utfc_ptr2len(p.add(2)) } as usize;
-    if unsafe { *p.add(len + 2) } as u8 != delim || unsafe { *p.add(len + 3) } as u8 != b']' {
+    let len = cluster_len_at(text, p + 2);
+    if byte(len + 2) != delim || byte(len + 3) != b']' {
         return 0;
     }
-    *cursor = unsafe { p.add(len + 4) };
-    unsafe { utf_ptr2char(p.add(2)) }
+    *at = p + len + 4;
+    char_at_nul(text, p + 2)
 }

@@ -16,7 +16,7 @@
 
 use crate::regexp::NfaOp;
 use crate::regexp::RegCompiler;
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use super::collection::{Collection, collection};
 use super::escape::{percent_atom, z_atom};
@@ -154,12 +154,7 @@ fn nul_found() -> Parsed {
 /// A `[` that may open a collection. If it does not close, it is an ordinary
 /// character — unless 'regexpengine' strictness is on, where the missing `]`
 /// is an error.
-fn bracketed(
-    rc: &mut RegCompiler,
-    accepts_newline: bool,
-    atom_start: *mut c_char,
-    c: c_int,
-) -> Parsed {
+fn bracketed(rc: &mut RegCompiler, accepts_newline: bool, atom_start: usize, c: c_int) -> Parsed {
     match collection(rc, accepts_newline, atom_start) {
         Collection::Done => Ok(()),
         Collection::Failed => Err(Rejected),

@@ -9,27 +9,25 @@
 //! why this has to be one shared, stateful reader rather than a pure
 //! function of the byte.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::cstr;
-use crate::message_fmt::{c_str, msg_bytes};
+use crate::message_fmt::msg_bytes;
 use crate::option::cpo_has;
 use crate::regexp::RegCompiler;
 use crate::semsg;
 use crate::types::CpoFlag;
 use core::ffi::{c_char, c_int};
 
+use super::mbyte::{char_at_nul, char_len_at, cluster_len_at};
 use super::{
     MAGIC_ALL, MAGIC_NONE, MAGIC_OFF, MAGIC_ON, MAX_LIMIT, MULTI_MULT, MULTI_ONE, Magic, NOT_MULTI,
     ParseState, REGEXP_ABBR, REGEXP_INRANGE, backslash_abbr, take_bracketed, take_char_class,
     toggle_magic, unmagic,
 };
 use crate::ascii::{ascii_isdigit, ascii_isxdigit};
-use crate::charset::{getdigits_int, hex2nr};
-use crate::mbyte::{utf_ptr2char, utf_ptr2len, utfc_ptr2len};
+use crate::charset::{getdigits_int_at, hex2nr};
 use crate::regexp::state::rc_did_emsg;
-use crate::strings::xstrnsave;
 use crate::types::Failed;
 
 /// Whether `c` is a repeat operator, and whether it can match more than one
@@ -56,70 +54,48 @@ fn is_inrange(c: u8) -> bool {
     REGEXP_INRANGE.to_bytes().contains(&c)
 }
 
-/// Skip past a `[]` collection, `p` pointing just after the `[`. Stops at
-/// the closing `]` or at the pattern's NUL.
+/// Skip past a `[]` collection, `text[p]` being the byte just after the `[`.
+/// Stops at the closing `]` or at the pattern's NUL, and answers where.
 ///
-/// # Safety
-///
-/// `p` must point into a NUL-terminated pattern.
-pub(crate) unsafe fn skip_anyof(mut p: *mut c_char, cpo_lit: bool) -> *mut c_char {
+/// `text` is the pattern with its NUL; nothing past the NUL is read.
+pub(crate) fn skip_anyof(text: &[u8], mut p: usize, cpo_lit: bool) -> usize {
+    let byte = |i: usize| cstr::byte_at(text, i);
     // A leading `^` negates; a `]` or `-` immediately after that is
     // literal rather than the close or a range.
-    if unsafe { *p } as u8 == b'^' {
-        p = unsafe { p.add(1) };
+    if byte(p) == b'^' {
+        p += 1;
     }
-    if matches!(unsafe { *p } as u8, b']' | b'-') {
-        p = unsafe { p.add(1) };
+    if matches!(byte(p), b']' | b'-') {
+        p += 1;
     }
-    while !matches!(unsafe { *p } as u8, 0 | b']') {
-        let len = unsafe { utfc_ptr2len(p) };
+    while !matches!(byte(p), 0 | b']') {
+        let len = cluster_len_at(text, p);
         if len > 1 {
-            p = unsafe { p.add(len as usize) };
-        } else if unsafe { *p } as u8 == b'-' {
-            p = unsafe { p.add(1) };
-            if !matches!(unsafe { *p } as u8, 0 | b']') {
-                p = unsafe { p.add(utfc_ptr2len(p) as usize) };
+            p += len;
+        } else if byte(p) == b'-' {
+            p += 1;
+            if !matches!(byte(p), 0 | b']') {
+                p += cluster_len_at(text, p);
             }
-        } else if unsafe { *p } as u8 == b'\\'
-            && (is_inrange(unsafe { *p.add(1) } as u8)
-                || (!cpo_lit && is_abbr(unsafe { *p.add(1) } as u8)))
+        } else if byte(p) == b'\\'
+            && (is_inrange(byte(p + 1)) || (!cpo_lit && is_abbr(byte(p + 1))))
         {
-            p = unsafe { p.add(2) };
-        } else if unsafe { *p } as u8 == b'[' {
+            p += 2;
+        } else if byte(p) == b'[' {
             // A `[:class:]`, `[=equi=]` or `[.coll.]` advances `p`
             // itself; a bare `[` is literal.
-            if unsafe { take_char_class(&mut p) }.is_none()
-                && unsafe { take_bracketed(&mut p, b'=') } == 0
-                && unsafe { take_bracketed(&mut p, b'.') } == 0
-                && unsafe { *p } as u8 != 0
+            if take_char_class(text, &mut p).is_none()
+                && take_bracketed(text, &mut p, b'=') == 0
+                && take_bracketed(text, &mut p, b'.') == 0
+                && byte(p) != 0
             {
-                p = unsafe { p.add(1) };
+                p += 1;
             }
         } else {
-            p = unsafe { p.add(1) };
+            p += 1;
         }
     }
     p
-}
-
-/// Skip past the pattern starting at `startp`, stopping at `delim` or the
-/// NUL. `magic` is the initial 'magic' setting; `\v`/`\V` inside the
-/// pattern change it as the scan proceeds.
-///
-/// # Safety
-///
-/// `startp` must point to a NUL-terminated pattern.
-pub unsafe fn skip_regexp(startp: *mut c_char, delim: c_int, magic: c_int) -> *mut c_char {
-    unsafe {
-        skip_regexp_ex(
-            startp,
-            delim,
-            magic,
-            core::ptr::null_mut(),
-            core::ptr::null_mut(),
-            core::ptr::null_mut(),
-        )
-    }
 }
 
 /// `byte` as a delimiter the way upstream's `skip_regexp(p + 1, *p, ..)`
@@ -136,24 +112,106 @@ pub(crate) fn char_delim(byte: u8) -> c_int {
     c_int::from(c_char::from_ne_bytes([byte]))
 }
 
-/// [`skip_regexp`] as an offset walk: how many bytes of `text` the pattern
-/// takes, stopping at `delim` or at the NUL that ends the string `text`
-/// starts with.
+/// The pattern text a skip walks: read only, or the caller's to rewrite.
+enum PatText<'a> {
+    Read(&'a [u8]),
+    Write(&'a mut [u8]),
+}
+
+impl PatText<'_> {
+    fn bytes(&self) -> &[u8] {
+        match self {
+            PatText::Read(text) => text,
+            PatText::Write(text) => text,
+        }
+    }
+}
+
+/// What a skip found: where the pattern ends, the 'magic' in force there,
+/// and whether a `?`-delimited walk met a `\?` it would unescape.
+struct Skipped {
+    end: usize,
+    magic: Magic,
+    unescapes: bool,
+}
+
+/// The walk every skip is: from `text[start]` to `dirc` or the NUL, tracking
+/// `\v`/`\V` and stepping over `[]` collections, which may hold the
+/// delimiter. Under a `?` delimiter an escaped `\?` (which a `?` search
+/// cannot contain otherwise) is unescaped in place when the text is the
+/// caller's to write, the rest of the string, terminator included, pulled
+/// down over the backslash.
 ///
-/// The slice form an address or a command-line parse wants. Nothing is
-/// written: [`skip_regexp_ex`] only rewrites the pattern when it is given a
-/// `newp` slot, and this passes none.
+/// The text is NUL-terminated at or after `start`.
+fn skip_walk(mut text: PatText<'_>, start: usize, dirc: c_int, magic: c_int) -> Skipped {
+    let mut mymagic = if magic != 0 { MAGIC_ON } else { MAGIC_OFF };
+    let cpo_lit = cpo_has(CpoFlag::LITERAL);
+    let mut unescapes = false;
+    let mut p = start;
+    loop {
+        let bytes = text.bytes();
+        let byte = |i: usize| cstr::byte_at(bytes, i);
+        // Upstream compares the byte as a (signed) `char`; see
+        // [`char_delim`].
+        if byte(p) == 0 || char_delim(byte(p)) == dirc {
+            break;
+        }
+        if (byte(p) == b'[' && mymagic >= MAGIC_ON)
+            || (byte(p) == b'\\' && byte(p + 1) == b'[' && mymagic <= MAGIC_OFF)
+        {
+            p = skip_anyof(bytes, p + 1, cpo_lit);
+            if byte(p) == 0 {
+                break;
+            }
+        } else if byte(p) == b'\\' && byte(p + 1) != 0 {
+            if dirc == c_int::from(b'?') && byte(p + 1) == b'?' {
+                unescapes = true;
+                if let PatText::Write(text) = &mut text {
+                    let nul = p + 1 + cstr::until_nul(&text[p + 1..]).len();
+                    text.copy_within(p + 1..=nul, p);
+                } else {
+                    p += 1;
+                }
+            } else {
+                p += 1;
+            }
+            let bytes = text.bytes();
+            match cstr::byte_at(bytes, p) {
+                b'v' => mymagic = MAGIC_ALL,
+                b'V' => mymagic = MAGIC_NONE,
+                _ => {}
+            }
+        }
+        p += cluster_len_at(text.bytes(), p);
+    }
+    Skipped {
+        end: p,
+        magic: mymagic,
+        unescapes,
+    }
+}
+
+/// How many bytes of `text` the pattern it starts with takes, stopping at
+/// `delim` or at the NUL that ends the string, and the 'magic' in force at
+/// the end. `magic` is the initial 'magic' setting; `\v`/`\V` inside the
+/// pattern change it as the scan proceeds. Nothing is written: a `\?` under
+/// a `?` delimiter is stepped over as an escape.
+///
+/// # Panics
+/// If `text` holds no NUL at all.
+pub(crate) fn skip_regexp_magic(text: &[u8], delim: c_int, magic: c_int) -> (usize, Magic) {
+    assert!(text.contains(&0), "the walk needs a terminator to stop at");
+    let skipped = skip_walk(PatText::Read(text), 0, delim, magic);
+    (skipped.end, skipped.magic)
+}
+
+/// [`skip_regexp_magic`]'s end alone: the slice form an address or a
+/// command-line parse wants.
 ///
 /// # Panics
 /// If `text` holds no NUL at all.
 pub(crate) fn skip_regexp_at(text: &[u8], delim: c_int, magic: c_int) -> usize {
-    assert!(text.contains(&0), "the walk needs a terminator to stop at");
-    let start = text.as_ptr().cast::<c_char>().cast_mut();
-    // SAFETY: the assert above says `text` is a NUL-terminated string, and
-    // with no `newp` slot the walk only reads it -- so the pointer, derived
-    // from a shared borrow, is never written through. The end it answers is
-    // inside `text`, the start first.
-    unsafe { skip_regexp(start, delim, magic).offset_from(start) }.cast_unsigned()
+    skip_regexp_magic(text, delim, magic).0
 }
 
 /// [`skip_regexp_at`] for a pattern the caller may have rewritten: where
@@ -177,46 +235,39 @@ pub(crate) fn skip_regexp_in_place(
         text[at..].contains(&0),
         "the walk needs a terminator to stop at"
     );
-    let start = text[at..].as_mut_ptr().cast::<c_char>();
-    let mut no_copy = start;
-    // SAFETY: `start` begins a NUL-terminated string inside `text`, which
-    // is lent exclusively for the call; a non-null slot means the unescape
-    // happens in place and never past that terminator. The end it answers
-    // is inside the same string.
-    let end = unsafe {
-        skip_regexp_ex(
-            start,
-            delim,
-            magic,
-            &raw mut no_copy,
-            core::ptr::null_mut(),
-            core::ptr::null_mut(),
-        )
-    };
-    // SAFETY: as above -- both inside `text`, the end not before the start.
-    at + unsafe { end.offset_from(start) }.cast_unsigned()
+    skip_walk(PatText::Write(text), at, delim, magic).end
 }
 
-/// [`skip_regexp`], but complain and return NULL when the delimiter is
-/// missing rather than returning the pattern's end.
+/// [`skip_regexp_at`] for a `?` search that cannot write its pattern: when
+/// the pattern holds an escaped `\?`, the skip runs over a copy with those
+/// unescaped -- upstream's `skip_regexp_ex` handed an empty `newp` slot --
+/// and the copy comes back, its terminator left off, with the end an offset
+/// into it rather than into `text`.
 ///
-/// # Safety
-///
-/// `startp` must point to a NUL-terminated pattern.
-pub unsafe fn skip_regexp_err(startp: *mut c_char, delim: c_int, magic: c_int) -> *mut c_char {
-    let p = unsafe { skip_regexp(startp, delim, magic) };
-    if unsafe { *p } as c_int != delim {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let startp = unsafe { c_str(startp) };
-        semsg!("E654: Missing delimiter after search pattern: {startp}");
-        return core::ptr::null_mut();
+/// # Panics
+/// If `text` holds no NUL at all.
+pub(crate) fn skip_regexp_copy(
+    text: &[u8],
+    delim: c_int,
+    magic: c_int,
+) -> (usize, Option<Vec<u8>>) {
+    assert!(text.contains(&0), "the walk needs a terminator to stop at");
+    let skipped = skip_walk(PatText::Read(text), 0, delim, magic);
+    if !skipped.unescapes {
+        return (skipped.end, None);
     }
-    p
+    let mut copy = cstr::until_nul(text).to_vec();
+    copy.push(0);
+    let end = skip_walk(PatText::Write(&mut copy), 0, delim, magic).end;
+    // Each unescape pulled the terminator down a byte and left the old one
+    // behind it.
+    copy.truncate(cstr::until_nul(&copy).len());
+    (end, Some(copy))
 }
 
-/// [`skip_regexp_err`] as an offset walk: how many bytes of `text` the
-/// pattern takes, or `None` when the closing delimiter is missing (which
-/// reports E654).
+/// [`skip_regexp_at`], but complain when the delimiter is missing: how many
+/// bytes of `text` the pattern takes, or `None` when the closing delimiter
+/// is missing (which reports E654).
 ///
 /// # Panics
 /// If `text` holds no NUL at all.
@@ -237,103 +288,26 @@ pub(crate) fn skip_regexp_err_at(text: &[u8], delim: c_int, magic: c_int) -> Opt
     Some(end)
 }
 
-/// The full skip. Beyond [`skip_regexp`]'s job it can rewrite the pattern:
-/// when `dirc` is `?` and `newp` is given, an escaped `\?` (which a `?`
-/// search cannot contain) is unescaped into a copy, `*newp` taking
-/// ownership and `*dropped` counting the backslashes removed. `*magic_val`
-/// receives the 'magic' setting in force at the end.
-///
-/// # Safety
-///
-/// `startp` must point to a NUL-terminated pattern; the out-parameters
-/// must be null or writable.
-pub unsafe fn skip_regexp_ex(
-    mut startp: *mut c_char,
-    dirc: c_int,
-    magic: c_int,
-    newp: *mut *mut c_char,
-    dropped: *mut c_int,
-    magic_val: *mut Magic,
-) -> *mut c_char {
-    let mut mymagic = if magic != 0 { MAGIC_ON } else { MAGIC_OFF };
-    let mut p = startp;
-    let mut startplen: usize = 0;
-    let cpo_lit = cpo_has(CpoFlag::LITERAL);
-    while unsafe { *p } as u8 != 0 {
-        if unsafe { *p } as c_int == dirc {
-            break;
-        }
-        if (unsafe { *p } as u8 == b'[' && mymagic >= MAGIC_ON)
-            || (unsafe { *p } as u8 == b'\\'
-                && unsafe { *p.add(1) } as u8 == b'['
-                && mymagic <= MAGIC_OFF)
-        {
-            p = unsafe { skip_anyof(p.add(1), cpo_lit) };
-            if unsafe { *p } as u8 == 0 {
-                break;
-            }
-        } else if unsafe { *p } as u8 == b'\\' && unsafe { *p.add(1) } as u8 != 0 {
-            if dirc == b'?' as c_int && !newp.is_null() && unsafe { *p.add(1) } as u8 == b'?' {
-                if startplen == 0 {
-                    startplen = unsafe { cstr::bytes_at(startp) }.len();
-                }
-                if unsafe { (*newp).is_null() } {
-                    unsafe { *newp = xstrnsave(startp, startplen) };
-                    p = unsafe { (*newp).offset(p.offset_from(startp)) };
-                    startp = unsafe { *newp };
-                }
-                if !dropped.is_null() {
-                    unsafe { *dropped += 1 };
-                }
-                let into = p.cast::<u8>();
-                unsafe {
-                    into.copy_from(
-                        p.add(1).cast(),
-                        startplen - p.add(1).offset_from(startp) as usize + 1,
-                    )
-                };
-            } else {
-                p = unsafe { p.add(1) };
-            }
-            if unsafe { *p } as u8 == b'v' {
-                mymagic = MAGIC_ALL;
-            } else if unsafe { *p } as u8 == b'V' {
-                mymagic = MAGIC_NONE;
-            }
-        }
-        p = unsafe { p.add(utfc_ptr2len(p) as usize) };
-    }
-    if !magic_val.is_null() {
-        unsafe { *magic_val = mymagic };
-    }
-    p
-}
-
-/// The byte `off` bytes past the cursor.
+/// The byte `off` bytes past the cursor; NUL past the pattern's end.
 pub(crate) fn pat_byte(rc: &RegCompiler, off: usize) -> u8 {
-    // SAFETY: the cursor points into the compiler's pattern, and
-    // every caller here has already established that `off` is at or before
-    // its NUL.
-    unsafe { *rc.cursor.add(off) as u8 }
+    cstr::byte_at(rc.text, rc.cursor.wrapping_add(off))
 }
 
 /// The character `off` bytes past the cursor.
 pub(crate) fn pat_char(rc: &RegCompiler, off: usize) -> c_int {
-    // SAFETY: as `pat_byte`.
-    unsafe { utf_ptr2char(rc.cursor.add(off)) }
+    char_at_nul(rc.text, rc.cursor.wrapping_add(off))
 }
 
-/// The encoded length of the character `off` bytes past the cursor.
+/// The encoded length of the character `off` bytes past the cursor; 0 at
+/// the pattern's NUL.
 pub(crate) fn pat_charlen(rc: &RegCompiler, off: usize) -> c_int {
-    // SAFETY: as `pat_byte`.
-    unsafe { utf_ptr2len(rc.cursor.add(off)) }
+    char_len_at(rc.text, rc.cursor.wrapping_add(off)) as c_int
 }
 
 /// Move the cursor. Wrapping arithmetic because [`peekchr`] and
-/// [`ungetchr`] step it back over a character they have already read,
-/// which the compiler cannot see is in bounds.
+/// [`ungetchr`] step it back over a character they have already read.
 pub(crate) fn pat_seek(rc: &mut RegCompiler, delta: isize) {
-    rc.cursor = rc.cursor.wrapping_offset(delta);
+    rc.cursor = rc.cursor.wrapping_add_signed(delta);
 }
 
 /// Snapshot the cursor so a speculative parse can be rewound. The NFA
@@ -607,9 +581,9 @@ pub(crate) fn getoctchrs(rc: &mut RegCompiler) -> i64 {
 
 /// Read a number at the cursor, advancing it past the digits.
 fn take_digits(rc: &mut RegCompiler, default: c_int) -> c_int {
-    // SAFETY: the cursor points into the NUL-terminated pattern, and
-    // `getdigits_int` advances it no further than the terminator.
-    unsafe { getdigits_int(&mut rc.cursor, false, default) }
+    let (number, past) = getdigits_int_at(rc.text, rc.cursor, false, default);
+    rc.cursor = past;
+    number
 }
 
 /// Parse the `{n,m}` bound at the cursor into `minval`/`maxval`, leaving

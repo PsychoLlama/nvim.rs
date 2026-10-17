@@ -24,7 +24,7 @@
     clippy::ptr_as_ptr
 )]
 
-use core::ffi::{CStr, c_char, c_int, c_uint};
+use core::ffi::{CStr, c_int, c_uint};
 
 use super::bt::BtEmitter;
 use super::nfa::Postfix;
@@ -34,17 +34,21 @@ use crate::types::{CpoFlag, uint8_t};
 use crate::winlayer::Buf;
 
 /// One compile's state. See the module docs.
-pub(crate) struct RegCompiler {
-    /// The pattern, NUL-terminated, and the flags the compile was asked for
-    /// (`RE_MAGIC`, `RE_STRING`, `RE_STRICT`, `RE_AUTO`). Only ever read.
-    pub(crate) pattern: *mut c_char,
+pub(crate) struct RegCompiler<'p> {
+    /// The pattern, and the flags the compile was asked for (`RE_MAGIC`,
+    /// `RE_STRING`, `RE_STRICT`, `RE_AUTO`). Only ever read.
+    pub(crate) pattern: &'p CStr,
+    /// The pattern's bytes, its NUL included: what the cursor indexes. The
+    /// terminator is part of the text because the parsers read it as a
+    /// position -- the end of the pattern is a byte they test for.
+    pub(crate) text: &'p [u8],
     /// The pattern's length in bytes, terminator excluded.
     pub(crate) pattern_len: usize,
     pub(crate) re_flags: c_int,
 
     // ---------------------------------------------------- the reader
-    /// Where the parse has got to in the pattern.
-    pub(crate) cursor: *mut c_char,
+    /// Where the parse has got to: an offset into [`RegCompiler::text`].
+    pub(crate) cursor: usize,
     /// The token at the cursor, once [`super::peekchr`] has read it; -1
     /// before. A metacharacter is its byte minus 256.
     pub(crate) token: c_int,
@@ -121,27 +125,28 @@ pub(crate) struct NfaStates {
     pub(crate) base: *mut NfaState,
 }
 
-impl RegCompiler {
+impl<'p> RegCompiler<'p> {
     /// A compiler over `pattern`, with `\k` reading `buffer`'s 'iskeyword'.
     ///
     /// Each engine's compiler starts with [`RegCompiler::restart`], which is
     /// what reads the flags and 'cpoptions'.
     ///
-    /// The compiler keeps a pointer into `pattern` and must not outlive it:
+    /// The compiler borrows `pattern` for as long as it lives:
     /// [`super::vim_regcomp`] makes one per engine attempt and drops it
     /// before returning.
     pub(crate) fn new(
-        pattern: &CStr,
+        pattern: &'p CStr,
         re_flags: c_int,
         buffer: Buf,
         extmatch: c_int,
-    ) -> RegCompiler {
+    ) -> RegCompiler<'p> {
         RegCompiler {
             extmatch,
-            pattern: pattern.as_ptr().cast_mut(),
+            pattern,
+            text: pattern.to_bytes_with_nul(),
             pattern_len: pattern.count_bytes(),
             re_flags,
-            cursor: core::ptr::null_mut(),
+            cursor: 0,
             token: -1,
             prev_token: -1,
             prev2_token: -1,
@@ -179,7 +184,7 @@ impl RegCompiler {
     /// Put the reader at the start of the pattern with nothing found yet,
     /// the flags and 'cpoptions' read: how each engine's compiler starts.
     pub(crate) fn restart(&mut self) {
-        self.cursor = self.pattern;
+        self.cursor = 0;
         self.prev_token_len = 0;
         self.next_token = -1;
         self.prev_token = -1;

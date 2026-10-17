@@ -50,7 +50,7 @@ const AUTO_MAX_SPAN: c_int = 200;
 /// A blank parse-cursor snapshot for [`save_parse_state`] to fill in.
 fn no_state() -> ParseState {
     ParseState {
-        regparse: core::ptr::null_mut(),
+        regparse: 0,
         prevchr_len: 0,
         curchr: 0,
         prevchr: 0,

@@ -17,6 +17,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::cstr;
 use crate::regexp::NfaOp;
 use core::ffi::c_int;
 
@@ -213,34 +214,30 @@ fn class_opcode(config: CollParts) -> Option<NfaOp> {
     })
 }
 
-/// Is the collection running from `start` up to `end` (its closing `]`) one
-/// of the character classes? Answers the class and whether it also accepts a
-/// line break, which the `\_[` form and a `\n` member both ask for.
-///
-/// # Safety
-///
-/// `start..=end` must be one collection inside the pattern being parsed.
-pub(crate) unsafe fn nfa_recognize_char_class(
-    start: *mut uint8_t,
-    end: *const uint8_t,
+/// Is the collection running from `text[start]` up to `text[end]` (its
+/// closing `]`) one of the character classes? Answers the class and whether
+/// it also accepts a line break, which the `\_[` form and a `\n` member both
+/// ask for.
+pub(crate) fn nfa_recognize_char_class(
+    text: &[u8],
+    start: usize,
+    end: usize,
     extra_newl: bool,
 ) -> Option<(NfaOp, bool)> {
-    let end = end.cast_mut();
-    // SAFETY: the caller's collection; every read is between `start` and
-    // `end`, which is where the loop keeps `p`.
-    if c_int::from(unsafe { *end }) != ']' as c_int {
+    let byte = |i: usize| cstr::byte_at(text, i);
+    if byte(end) != b']' {
         return None;
     }
     let mut config = CollParts::NONE;
     let mut newl = extra_newl;
     let mut p = start;
-    if unsafe { *p } == b'^' {
+    if byte(p) == b'^' {
         config |= CollParts::NOT;
-        p = unsafe { p.add(1) };
+        p += 1;
     }
     while p < end {
-        if unsafe { p.add(2) } < end && unsafe { *p.add(1) } == b'-' {
-            config |= match (unsafe { *p }, unsafe { *p.add(2) }) {
+        if p + 2 < end && byte(p + 1) == b'-' {
+            config |= match (byte(p), byte(p + 2)) {
                 (b'0', b'9') => CollParts::O9,
                 (b'0', b'7') => CollParts::O7,
                 (b'a', b'z') => CollParts::AZ,
@@ -249,19 +246,16 @@ pub(crate) unsafe fn nfa_recognize_char_class(
                 (b'A', b'F') => CollParts::AF_UPPER,
                 _ => return None,
             };
-            p = unsafe { p.add(3) };
-        } else if unsafe { p.add(1) } < end
-            && unsafe { *p } == b'\\'
-            && unsafe { *p.add(1) } == b'n'
-        {
+            p += 3;
+        } else if p + 1 < end && byte(p) == b'\\' && byte(p + 1) == b'n' {
             newl = true;
-            p = unsafe { p.add(2) };
-        } else if unsafe { *p } == b'_' {
+            p += 2;
+        } else if byte(p) == b'_' {
             config |= CollParts::UNDERSCORE;
-            p = unsafe { p.add(1) };
-        } else if unsafe { *p } == b'\n' {
+            p += 1;
+        } else if byte(p) == b'\n' {
             newl = true;
-            p = unsafe { p.add(1) };
+            p += 1;
         } else {
             return None;
         }

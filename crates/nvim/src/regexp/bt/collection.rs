@@ -11,6 +11,7 @@
 
 use super::compile::Node;
 use crate::charset::vim_iswordc_buf;
+use crate::cstr;
 use crate::regexp::RegCompiler;
 use core::ffi::{c_int, c_uint};
 
@@ -130,9 +131,8 @@ pub(crate) fn collection(
 
 /// Does the collection at the cursor have a closing `]`?
 fn collection_closes(rc: &RegCompiler) -> bool {
-    // SAFETY: the cursor points into the NUL-terminated pattern, and
-    // `skip_anyof` stops at its NUL.
-    unsafe { *skip_anyof(rc.cursor, rc.cpo_lit) as u8 == b']' }
+    let end = skip_anyof(rc.text, rc.cursor, rc.cpo_lit);
+    cstr::byte_at(rc.text, end) == b']'
 }
 
 /// A `-` inside the collection: either a range from `startc`, or a literal
@@ -267,16 +267,12 @@ fn bracketed_item(rc: &mut RegCompiler, startc: &mut c_int) {
 
 /// [`take_char_class`] against the parse cursor.
 fn take_cursor_char_class(rc: &mut RegCompiler) -> Option<CharClass> {
-    // SAFETY: the cursor points into the NUL-terminated pattern, and
-    // `take_char_class` only ever advances it -- it walks bytes and calls
-    // nothing, so it cannot re-enter the cell it is handed.
-    unsafe { take_char_class(&mut rc.cursor) }
+    take_char_class(rc.text, &mut rc.cursor)
 }
 
 /// [`take_bracketed`] against the parse cursor.
 fn take_cursor_bracketed(rc: &mut RegCompiler, delim: u8) -> c_int {
-    // SAFETY: as `take_cursor_char_class`.
-    unsafe { take_bracketed(&mut rc.cursor, delim) }
+    take_bracketed(rc.text, &mut rc.cursor, delim)
 }
 
 /// Upstream's per-class predicates.

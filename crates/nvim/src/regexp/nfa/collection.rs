@@ -17,7 +17,7 @@
 
 use crate::regexp::NfaOp;
 use crate::regexp::RegCompiler;
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use super::cursor;
 use super::equi_class::nfa_emit_equi_class;
@@ -78,10 +78,10 @@ pub(crate) enum Collection {
 pub(crate) fn collection(
     rc: &mut RegCompiler,
     mut accepts_newline: bool,
-    atom_start: *mut c_char,
+    atom_start: usize,
 ) -> Collection {
     let end = cursor::collection_end(rc);
-    if byte_at(end) != b']' {
+    if byte_at(rc, end) != b']' {
         if rc.strict != 0 {
             // Not `magic_prefix`: this wants the backslash whenever `[` is
             // not magic, which is one 'magic' level lower.
@@ -204,7 +204,7 @@ pub(crate) fn collection(
             rc.post.emit(startc);
             // A character carrying combining marks is joined by the
             // `NFA_COMPOSING` group below instead.
-            if pat_charlen(rc, 0) == grapheme_len(cursor::here(rc)) {
+            if pat_charlen(rc, 0) == grapheme_len(rc, cursor::here(rc)) {
                 rc.post.emit_op(NfaOp::Concat);
             }
         }
@@ -243,7 +243,7 @@ pub(crate) fn collection(
 }
 
 /// Put the cursor past the collection's closing `]`.
-fn skip_past(rc: &mut RegCompiler, end: *mut c_char) {
+fn skip_past(rc: &mut RegCompiler, end: usize) {
     cursor::seek_to(rc, end);
     advance_grapheme(rc);
 }
@@ -287,8 +287,8 @@ fn bracketed_item(rc: &mut RegCompiler) -> Bracketed {
 /// the `\r`/`\t` abbreviations only when 'cpoptions' does not contain `l`.
 ///
 /// `end` bounds it: a backslash as the collection's last byte is literal.
-fn escapes_here(rc: &RegCompiler, end: *mut c_char) -> bool {
-    if pat_byte(rc, 0) != b'\\' || cursor::here(rc).wrapping_add(1) > end {
+fn escapes_here(rc: &RegCompiler, end: usize) -> bool {
+    if pat_byte(rc, 0) != b'\\' || cursor::here(rc) + 1 > end {
         return false;
     }
     let next = pat_byte(rc, 1);
@@ -324,14 +324,14 @@ fn emit_span(rc: &mut RegCompiler, startc: c_int, endc: c_int) {
 /// Emit the combining marks on the character at the cursor, wrapped in an
 /// `NFA_COMPOSING` group so the whole grapheme is one member.
 fn emit_combining_marks(rc: &mut RegCompiler) {
-    let plen = grapheme_len(cursor::here(rc));
+    let plen = grapheme_len(rc, cursor::here(rc));
     let mut i = pat_charlen(rc, 0);
     if i == plen {
         return;
     }
     let here = cursor::here(rc);
     loop {
-        let c = char_at(here, i);
+        let c = char_at(rc, here, i);
         // A NUL in the pattern cannot be emitted as itself.
         rc.post.emit_concat(if c == 0 { 1 } else { c });
         i += utf_char2len(c);
