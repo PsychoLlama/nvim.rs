@@ -62,7 +62,9 @@ ab_run() {
   local name=$1
   local out
   out=$(mktemp -d)
-  trap 'rm -rf "$out"' EXIT
+  # Expanded now: `out` is local, and gone by the time the shell exits.
+  # shellcheck disable=SC2064
+  trap "rm -rf '$out'" EXIT
 
   # One untimed, uninstrumented warm-up, so the measured run pays neither for
   # faulting the binary in nor for building a fixture it then reuses.

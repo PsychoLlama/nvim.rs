@@ -1,6 +1,6 @@
 # A/B benches
 
-Five whole-binary timing canaries, each driving one family hard enough that a
+Eight whole-binary timing canaries, each driving one family hard enough that a
 few percent of its work is visible in a total. They are not part of any gate:
 nothing runs them but a person asking whether a change cost something.
 
@@ -9,8 +9,11 @@ nothing runs them but a person asking whether a change cost something.
 | `evalbench`  | the eval substrate: typval allocation, copy, encode/decode, calls, the parser     |
 | `inbench`    | input and the command line: typeahead, mappings, termcodes, completion, messages  |
 | `mlbench`    | the memline hot path: `ml_get`, `ml_append`, `ml_delete`, byte/line offsets       |
+| `readbench`  | reading a file: `:edit` of 100 MB plain, Latin-1 and `'fileencodings'` input      |
+| `rebench`    | the regexp engines (`re=0/1/2`), `search()`, `:s` that writes, `matchlist()`      |
 | `scrbench`   | the screen pipeline: grid diffing, `win_line`, syntax, statusline, the popup menu |
 | `spellbench` | spell checking and suggestion: the word tries, `z=`, the SAL engine               |
+| `undobench`  | undo: recording steps, `:undo` walks, `:wundo`/`:rundo`, `undotree()`             |
 
 Each is a `.lua` canary plus a `.sh` driver; the driver's two modes share
 `common.sh`. The `.lua` files carry the phase map — which code each phase is
@@ -43,8 +46,8 @@ costs about 50x the wall-clock run.
 It does not need both orders — there is no ordering effect in an instruction
 count.
 
-**It is deterministic to a few parts per million for four of the five benches,
-and not for `evalbench`.** Measured: three runs of one binary, minutes apart,
+**It is deterministic to a few parts per million for four of the first five
+benches, and not for `evalbench`.** Measured: three runs of one binary, minutes apart,
 spread 15 ppm on `mlbench` and 11 ppm on `spellbench` — and **3,626 ppm
 (0.36 %) on `evalbench`**. Disabling ASLR (`setarch -R`) narrows that to
 0.126 % without closing it. There is a cross-session component as well: an
@@ -52,6 +55,13 @@ spread 15 ppm on `mlbench` and 11 ppm on `spellbench` — and **3,626 ppm
 same binary weeks later, where `mlbench`'s reproduced to 2 ppm. So: **measure
 both sides in one sitting**, never against a stored number, and treat an
 `evalbench` difference under about 0.4 % as no difference at all.
+Of the three added later, `rebench` (6 ppm) and `readbench` (14 ppm) are
+deterministic and `undobench` is not: two runs spread **1,250 ppm**, so treat
+an `undobench` difference under about 0.2 % the same way.
+
+`readbench`, `rebench` and `undobench` also take `<NAME>_ONLY=phase[,phase]`,
+which runs only those phases after the setup, so cachegrind can count one
+phase at a time.
 
 **It does need `codegen-units = 1` on both sides.** The default release
 profile splits the crate into sixteen units, and which unit a function lands
