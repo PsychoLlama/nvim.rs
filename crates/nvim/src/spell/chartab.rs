@@ -138,8 +138,7 @@ pub fn init_spell_chartab() {
 ///
 /// `p` must point at a NUL-terminated string.
 pub unsafe fn spell_iswordp(p: *const c_char, window: Win) -> bool {
-    // SAFETY: the caller promised a live window, which owns its syntax block.
-    let syn = unsafe { &*window.w_s };
+    let syn = window.syn_block();
     let l = unsafe { utfc_ptr2len(p) };
     let mut s = p;
     if l == 1 {
@@ -184,7 +183,7 @@ pub unsafe fn spell_iswordp_nmw(p: *const c_char, window: Win) -> bool {
 /// Only meaningful above 255. Unicode sub- and superscripts are excluded;
 /// with `'spelloptions'` containing `cjk` the East Asian scripts are too.
 fn spell_mb_isword_class(cl: c_int, window: Win) -> bool {
-    if unsafe { (*window.w_s).b_cjk } != 0 {
+    if window.syn_block().b_cjk != 0 {
         return cl == 2 || cl == 0x2800;
     }
     cl >= 2 && cl != 0x2070 && cl != 0x2080 && cl != 3
@@ -199,8 +198,7 @@ fn spell_mb_isword_class(cl: c_int, window: Win) -> bool {
 /// array standing at the position of interest, and the one *after* the
 /// position is read when the first is a mid-word character.
 pub(super) unsafe fn spell_iswordp_w(w: &[c_int], window: Win) -> bool {
-    // SAFETY: the caller promised a live window, which owns its syntax block.
-    let syn = unsafe { &*window.w_s };
+    let syn = window.syn_block();
     let midword = if w[0] < 256 {
         syn.b_spell_ismw[w[0] as usize]
     } else {

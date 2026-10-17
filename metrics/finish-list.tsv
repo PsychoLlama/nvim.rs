@@ -388,8 +388,8 @@ search/	search/matchpair.rs	1	10	0	8	deref:2	-	-	utf_ptr2char:5 .offset:3
 search/	search/pattern.rs	1	52	9	41	deref:9	str:7 other:3 pp_str:1	str:2	xfree:5 xstrnsave:5 CStr::from_ptr:4 bytes_at:2 from_raw_parts:2 OwnedMMatch::adopt:1 at:1 at_opt:1
 search/	search/select.rs	1	6	0	2	-	-	-	-
 search/	search/stat.rs	1	23	4	20	deref:3	other:2 value:2 str:1	-	.as_ref:3 .as_mut:1 at:1 c_str:1 copy:1 prefix_eq:1 xfree:1 xstrnsave:1
-spell/	*	9	611	45	311	deref:233 expr:42 compound:3 ref:3	str:47 other:23 pp:1	other:3 str:2	.offset:51 utf_ptr2char:16 .offset_from:13 at:11 bytes_at:11 xstrlcpy:11 xfree:9 prefix_eq:8
-spell/	spell/chartab.rs	1	57	10	39	deref:15 ref:2 expr:1	str:15	other:1	.offset:11 utf_ptr2char:8 utf_ptr2len:3 .offset_from:2 at:2 utf_char2bytes:2 utfc_ptr2len:2 strcpy:1
+spell/	*	9	608	45	311	deref:232 expr:42 compound:3 ref:1	str:47 other:23 pp:1	other:3 str:2	.offset:51 utf_ptr2char:16 .offset_from:13 at:11 bytes_at:11 xstrlcpy:11 xfree:9 prefix_eq:8
+spell/	spell/chartab.rs	1	54	10	39	deref:14 expr:1	str:15	other:1	.offset:11 utf_ptr2char:8 utf_ptr2len:3 .offset_from:2 at:2 utf_char2bytes:2 utfc_ptr2len:2 strcpy:1
 spell/	spell/check.rs	1	89	4	47	deref:39 expr:3	str:4 other:2	str:2	.offset:13 .offset_from:6 utf_ptr2char:3 zeroed:2 CStr::from_ptr:1 at:1 bytes_at:1 skipdigits:1
 spell/	spell/dump.rs	1	60	3	37	deref:16 expr:7	other:5 str:5	-	xstrlcat:4 .offset:3 at:3 bytes_at:3 vim_snprintf:3 xstrlcpy:3 eq:1 hash_find:1
 spell/	spell/lang.rs	1	140	7	69	deref:61 expr:9	str:5 other:4	-	.offset:7 xstrlcpy:6 path_full_compare:4 at:3 bytes_at:3 spell_load_file:3 vim_snprintf:3 xfree:3

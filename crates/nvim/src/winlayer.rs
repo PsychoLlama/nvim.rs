@@ -510,6 +510,30 @@ impl Win {
         self.w_buffer
     }
 
+    /// The window's syntax block, `w_s`: its buffer's own `b_s`
+    /// ([`Buf::syntax_block`]) unless `:ownsyntax` gave the window one of its
+    /// own. The syntax, spell and keyword state a window draws with lives
+    /// there, so this is the one front the `(*w_s)` reads go through.
+    #[inline(always)]
+    pub fn syn_block(&self) -> &SynBlock {
+        // SAFETY: a live window's `w_s` is set with its buffer -- every
+        // writer stores either `Buf::syntax_block` of the buffer it installs
+        // or the window's own `:ownsyntax` block -- and the block outlives
+        // the assignment that replaces it. The borrow is the handle's, so it
+        // ends with the expression that asked, as `Deref` does.
+        unsafe { &*self.w_s }
+    }
+
+    /// [`Win::syn_block`], writable. The block may be the buffer's `b_s`, so
+    /// the borrow must not be held across anything that reaches the buffer
+    /// through another handle -- take it per access, as [`DerefMut`] is.
+    #[inline(always)]
+    pub fn syn_block_mut(&mut self) -> &mut SynBlock {
+        // SAFETY: as `syn_block`; `&mut self` keeps this handle from
+        // lending a second borrow of the block while this one lives.
+        unsafe { &mut *self.w_s }
+    }
+
     /// The window's cursor, which lives inside the window.
     #[inline(always)]
     pub fn cursor(self) -> PosRef {
