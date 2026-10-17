@@ -6,8 +6,7 @@
 //! clusters. Individual items go through [`syn_remove_pattern`], which is also
 //! how `:syntax sync clear` drops the sync items.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -21,22 +20,12 @@ use crate::semsg;
 use crate::winlayer::Win;
 use core::ffi::c_int;
 
+use crate::types::GArray;
+
 use super::*;
 
-/// [`syntax_clear`] of a block the caller holds.
-pub(crate) fn syntax_clear_in(block: &mut SynBlock) {
-    // SAFETY: a live block, unaliased for the call by its `&mut`.
-    unsafe { syntax_clear(block) }
-}
-
 /// Clear all syntax info for one block.
-///
-/// # Safety
-///
-/// `block` must point at a live `SynBlock`, unaliased for the call.
-pub(crate) unsafe fn syntax_clear(block: *mut SynBlock) {
-    // SAFETY: the caller's promise -- a live syntax block.
-    let mut block = unsafe { SynBlockRef::new(block) };
+pub(crate) fn syntax_clear(mut block: SynBlockRef) {
     block.b_syn_error = false; // clear previous error
     block.b_syn_slow = false; // clear previous timeout
     block.b_syn_ic = 0; // Use case, by default
@@ -73,44 +62,72 @@ pub(crate) unsafe fn syntax_clear(block: *mut SynBlock) {
     running_syn_inc_tag.set(0);
 }
 
-/// Put the owning fields of a freshly zeroed `SynBlock` into a valid state.
-///
-/// A zeroed `Vec` is not one -- an empty `Vec` holds a dangling non-null
-/// pointer -- and `Option`'s null representation is not something to lean
-/// on. Upstream's blocks come out of `xcalloc`, so this is what stands in
-/// for the zeroing it relied on.
-///
-/// # Safety
-/// `at` must point at a zeroed block nothing has read or dropped.
-pub(crate) unsafe fn init_synblock(at: *mut SynBlock) {
-    // SAFETY: the caller's promise; `write` does not drop what was there.
-    unsafe {
-        (&raw mut (*at).b_keywtab).write(KeywordTable::new());
-        (&raw mut (*at).b_keywtab_ic).write(KeywordTable::new());
-        (&raw mut (*at).b_syn_patterns).write(Vec::new());
-        (&raw mut (*at).b_syn_clusters).write(Vec::new());
-        (&raw mut (*at).b_syn_linecont_pat).write(None);
-        (&raw mut (*at).b_sst).write(StateCache::new());
-        // The block's five string options, for the reason
-        // `optionstr::BUF_STRING_OPTIONS` states: a zeroed `Option<XString>` is
-        // not `None`.
-        (&raw mut (*at).b_p_spc).write(None);
-        (&raw mut (*at).b_p_spf).write(None);
-        (&raw mut (*at).b_p_spl).write(None);
-        (&raw mut (*at).b_p_spo).write(None);
-        (&raw mut (*at).b_syn_isk).write(None);
+impl SynBlock {
+    /// An empty block with every setting at its default: what upstream's
+    /// `xcalloc` gave a buffer and `:ownsyntax`, and what a zeroed block
+    /// would be if all-zero bytes were a valid `Vec` and `Option`.
+    pub(crate) fn new() -> SynBlock {
+        let no_time = SynTime {
+            total: 0,
+            slowest: 0,
+            count: 0,
+            match_0: 0,
+        };
+        SynBlock {
+            b_keywtab: KeywordTable::new(),
+            b_keywtab_ic: KeywordTable::new(),
+            b_syn_error: false,
+            b_syn_slow: false,
+            b_syn_ic: 0,
+            b_syn_foldlevel: 0,
+            b_syn_spell: 0,
+            b_syn_patterns: Vec::new(),
+            b_syn_clusters: Vec::new(),
+            b_spell_cluster_id: 0,
+            b_nospell_cluster_id: 0,
+            b_syn_containedin: 0,
+            b_syn_sync_flags: 0,
+            b_syn_sync_id: 0,
+            b_syn_sync_minlines: 0,
+            b_syn_sync_maxlines: 0,
+            b_syn_sync_linebreaks: 0,
+            b_syn_linecont_pat: None,
+            b_syn_linecont_prog: None,
+            b_syn_linecont_time: no_time,
+            b_syn_linecont_ic: 0,
+            b_syn_topgrp: 0,
+            b_syn_conceal: 0,
+            b_syn_folditems: 0,
+            b_sst: StateCache::new(),
+            b_sst_lasttick: 0,
+            b_langp: GArray::EMPTY,
+            b_spell_ismw: [false; 256],
+            b_spell_ismw_mb: ::core::ptr::null_mut(),
+            b_p_spc: None,
+            b_cap_prog: None,
+            b_p_spf: None,
+            b_p_spl: None,
+            b_p_spo: None,
+            b_p_spo_flags: 0,
+            b_cjk: 0,
+            b_syn_chartab: [0; 32],
+            b_syn_isk: None,
+        }
     }
 }
 
 /// Get rid of `:ownsyntax` for window `window`.
+///
+/// The window's own block is dropped even when `w_s` no longer points at
+/// it -- a buffer switch re-points `w_s` without asking -- where upstream
+/// lost track of it.
 pub(crate) fn reset_synblock(mut window: Win) {
-    if window.w_s != window.buffer().syntax_block() {
-        unsafe { syntax_clear(window.w_s) };
-        // SAFETY: an `:ownsyntax` block, which `ex_ownsyntax` boxed and
-        // only this releases; a buffer's own block took the branch above.
-        drop(unsafe { Box::from_raw(window.w_s) });
-        window.w_s = window.buffer().syntax_block();
+    let own = window.buffer().syntax_block();
+    if window.w_s != own {
+        syntax_clear(window.syntax());
+        window.w_s = own;
     }
+    window.w_own_syntax = None;
 }
 
 /// Clear the syncing info for the current window's block.
@@ -168,7 +185,7 @@ pub(crate) fn syn_cmd_clear(args: &mut ExArg, syncing: c_int) {
         if syncing != 0 {
             syntax_sync_clear();
         } else {
-            unsafe { syntax_clear(cur_syn_block().raw()) };
+            syntax_clear(cur_syn_block());
             if cur_syn_block().raw() == Win::current().buffer().syntax_block() {
                 let _ = do_unlet(b"b:current_syntax", true);
             }

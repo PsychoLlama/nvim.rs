@@ -149,6 +149,9 @@ pub struct Window {
     /// address. Read it through `Win::buffer`/`Win::buffer_or_none`.
     pub w_buffer: Buf,
     pub w_s: *mut SynBlock,
+    /// The block `:ownsyntax` gave the window, which `w_s` then names; `None`
+    /// while the window uses its buffer's. Dropped by `reset_synblock`.
+    pub(crate) w_own_syntax: Option<Box<SynBlock>>,
     pub w_ns_hl: ::core::ffi::c_int,
     pub w_ns_hl_winhl: ::core::ffi::c_int,
     pub w_ns_hl_active: ::core::ffi::c_int,

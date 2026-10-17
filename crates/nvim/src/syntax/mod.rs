@@ -26,8 +26,7 @@
 //! are [`IdList`]s; a keyword is a [`KeyEntry`] inside its block's
 //! [`KeywordTable`]. **An `xfree` in this module is a bug.**
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -423,26 +422,6 @@ pub(crate) fn word_at(text: &[u8]) -> (&[u8], usize) {
 #[inline]
 pub(crate) fn cur_syn_block() -> SynBlockRef {
     Win::current().syntax()
-}
-
-impl Buf {
-    /// The buffer's own syntax block.
-    #[inline]
-    pub(crate) fn syntax(self) -> SynBlockRef {
-        // SAFETY: a buffer's `b_s` lives as long as the buffer.
-        unsafe { SynBlockRef::new(self.syntax_block()) }
-    }
-}
-
-impl Win {
-    /// The syntax block the window uses: its buffer's, or the one
-    /// `:ownsyntax` gave it.
-    #[inline]
-    pub(crate) fn syntax(self) -> SynBlockRef {
-        // SAFETY: `w_s` names either the window's own block or its buffer's,
-        // and both outlive the window that points at them.
-        unsafe { SynBlockRef::new(self.w_s) }
-    }
 }
 
 impl SynBlockRef {

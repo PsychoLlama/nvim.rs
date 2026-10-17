@@ -389,11 +389,6 @@ statusline/	statusline/stl/mod.rs	1	30	1	20	deref:7 expr:3	str:2	str:1	CStr::fro
 statusline/	statusline/tabline.rs	1	8	1	6	compound:1	-	-	CStr::from_ptr:1 cstr_to_string:1 vim_snprintf:1 vim_strsize:1
 strings/	*	1	54	13	18	expr:7 compound:3 deref:3	str:18 pp_str:2	str:3	bytes_at:2 from_raw_parts_mut:2 .add:1 CStr::from_ptr:1 copy_nonoverlapping:1 from_raw_parts:1 strchr:1
 strings/	strings/raw.rs	1	54	13	18	expr:7 compound:3 deref:3	str:18 pp_str:2	str:3	bytes_at:2 from_raw_parts_mut:2 .add:1 CStr::from_ptr:1 copy_nonoverlapping:1 from_raw_parts:1 strchr:1
-syntax/	*	4	25	2	13	compound:1 expr:1	other:2	other:1	.assume_init:2 Box::from_raw:2
-syntax/	syntax/clear.rs	1	16	2	5	compound:1	other:2	-	Box::from_raw:1
-syntax/	syntax/command.rs	1	2	0	2	-	-	-	.assume_init:1
-syntax/	syntax/mod.rs	1	2	0	2	-	-	-	-
-syntax/	syntax/stack.rs	1	5	0	4	expr:1	-	other:1	.assume_init:1 Box::from_raw:1
 textformat/	*	5	42	3	23	deref:11	other:2	-	get_leader_len:4 .add:2 Op::new:2 xstrnsave:2 at:1 bytes_at:1 ins_bytes:1 ins_str:1
 textformat/	textformat/auto.rs	1	8	0	4	deref:4	-	-	get_leader_len:1 ml_replace:1 xstrnsave:1
 textformat/	textformat/lines.rs	1	5	2	5	-	other:2	-	Op::new:2 at:1 starts_with:1

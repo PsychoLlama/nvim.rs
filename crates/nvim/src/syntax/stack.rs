@@ -16,8 +16,7 @@
 //! Displayed lines get an entry each; lines that are not displayed share what
 //! is left over, at a distance that depends on how long the buffer is.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::winlayer::Buf;
 use core::ffi::c_int;
@@ -600,24 +599,22 @@ fn extmatch_equal(
 #[cfg(test)]
 mod tests {
     //! The state cache and the state stack, driven through the parser's own
-    //! steps over a block built here rather than a buffer's: what a stored
+    //! steps over a bare buffer's block: what a stored
     //! entry holds, what loading it gives back, when two states are equal,
     //! and that every extmatch reference taken is given back.
 
     use super::*;
+    use crate::buffer::{bare_buffer, free_bare_buffer};
     use crate::global_cell::{editor_state::Held, editor_state_lock};
     use core::ffi::c_char;
-    use core::mem::MaybeUninit;
 
-    /// A parser over a syntax block with `patterns` plain match patterns, a
-    /// cache of `entries` entries and an empty, valid state stack. Dropping
-    /// it puts the globals it touched back.
+    /// A parser over a bare buffer's syntax block with `patterns` plain
+    /// match patterns, a cache of `entries` entries and an empty, valid state
+    /// stack. Dropping it puts the globals it touched back.
     struct Fixture {
         parser: SynState,
-        /// Leaked from a `Box`, which `drop` takes back: the parser reaches
-        /// the block through a raw handle, and a `Box` moved after that would
-        /// assert a uniqueness the handle contradicts.
-        block: *mut SynBlock,
+        /// The buffer whose block the parser reaches through its handle.
+        buffer: Buf,
         rows: c_int,
         _held: Held,
     }
@@ -625,36 +622,30 @@ mod tests {
     impl Fixture {
         fn new(patterns: usize, entries: c_int) -> Fixture {
             let held = editor_state_lock();
-            let mut block: Box<MaybeUninit<SynBlock>> = Box::new_zeroed();
-            // SAFETY: a zeroed block is what `init_synblock` completes.
-            unsafe { init_synblock(block.as_mut_ptr()) };
-            // SAFETY: completed just above.
-            let mut block = unsafe { block.assume_init() };
+            let buffer = bare_buffer();
+            let mut block = buffer.syntax();
             for _ in 0..patterns {
                 let mut pattern = EMPTY_SYNPAT;
                 pattern.sp_type = SPTYPE_MATCH as c_char;
                 block.b_syn_patterns.push(pattern);
             }
-            let block = Box::into_raw(block);
             let mut parser = SynState::new();
-            // SAFETY: the box just leaked, which outlives the parser.
-            parser.parsed = Some(unsafe { SynBlockRef::new(block) });
+            parser.parsed = Some(block);
             parser.validate_current_state();
             // More rows than entries keeps the cleanup from asking the
-            // (absent) buffer how long it is.
+            // (empty) buffer how long it is.
             let rows = Rows.replace(10_000);
             parser.resize_cache(entries);
             Fixture {
                 parser,
-                block,
+                buffer,
                 rows,
                 _held: held,
             }
         }
 
         fn cache(&self) -> &StateCache {
-            // SAFETY: the fixture's own block, live until it drops.
-            unsafe { &(*self.block).b_sst }
+            &self.buffer.b_s.b_sst
         }
 
         /// The line numbers of the used entries, in list order.
@@ -700,8 +691,7 @@ mod tests {
             self.parser.invalidate_current_state();
             self.parser.parsed = None;
             Rows.set(self.rows);
-            // SAFETY: the box `new` leaked, which nothing points at now.
-            drop(unsafe { Box::from_raw(self.block) });
+            free_bare_buffer(self.buffer);
         }
     }
 

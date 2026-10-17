@@ -5,8 +5,7 @@
 //! the on/off family, which just sources a runtime file. Everything that adds
 //! or removes items lives in the sibling modules.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::cstr;
 use crate::guard::Suppress;
@@ -254,19 +253,6 @@ pub(crate) fn syn_maybe_enable() {
     }
 }
 
-/// A syntax block for `:ownsyntax`, all zero but for the fields a zeroed
-/// block is not a valid value for.
-///
-/// Upstream's `xcalloc(1, sizeof(SynBlock))`; the block is released by
-/// `reset_synblock`, which takes the `Box` back.
-fn empty_synblock() -> Box<SynBlock> {
-    let mut storage = Box::<SynBlock>::new_zeroed();
-    // SAFETY: the block was just allocated and nothing has read it.
-    unsafe { init_synblock(storage.as_mut_ptr()) };
-    // SAFETY: all-zero bytes are otherwise what upstream hands a fresh block.
-    unsafe { storage.assume_init() }
-}
-
 /// One `:syntax` subcommand.
 pub(crate) struct SubCommand {
     pub(crate) name: &'static CStr,
@@ -333,7 +319,10 @@ pub(crate) fn ex_syntax(excmd: &mut ExArg) {
 /// Upstream marks this `@deprecated`.
 pub(crate) fn ex_ownsyntax(excmd: &mut ExArg) {
     if Win::current().w_s == Win::current().buffer().syntax_block() {
-        Win::current().w_s = Box::into_raw(empty_synblock());
+        // The window owns the block; `w_s` names it, as it names a buffer's.
+        let mut window = Win::current();
+        let block: *mut SynBlock = &mut **window.w_own_syntax.insert(Box::new(SynBlock::new()));
+        window.w_s = block;
         // TODO(vim): Keep the spell checking as it was.
         Win::current().w_onebuf_opt.wo_spell = 0; // No spell checking
         // Upstream replaces the block's five NULL option values with the

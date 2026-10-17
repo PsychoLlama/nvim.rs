@@ -138,6 +138,7 @@ mod handles;
 mod live;
 mod walk;
 
+use crate::syntax::SynBlockRef;
 pub(crate) use frame::{current_topframe, free_frame, new_frame};
 pub(crate) use live::{Cc, Live};
 
@@ -524,6 +525,16 @@ impl Win {
         unsafe { &*self.w_s }
     }
 
+    /// The syntax block the window uses -- its buffer's, or the one
+    /// `:ownsyntax` gave it -- as a handle the syntax code reaches every
+    /// field through.
+    #[inline]
+    pub(crate) fn syntax(self) -> SynBlockRef {
+        // SAFETY: as `syn_block`: `w_s` names either the window's own block
+        // or its buffer's, and both outlive the window that points at them.
+        unsafe { Live::new(self.w_s) }
+    }
+
     /// [`Win::syn_block`], writable. The block may be the buffer's `b_s`, so
     /// the borrow must not be held across anything that reaches the buffer
     /// through another handle -- take it per access, as [`DerefMut`] is.
@@ -655,6 +666,14 @@ impl Buf {
     #[inline(always)]
     pub fn syntax_block(self) -> *mut SynBlock {
         self.ptr.wrapping_byte_add(offset_of!(Buffer, b_s)).cast()
+    }
+
+    /// The buffer's own syntax block, as a handle: [`Buf::syntax_block`]
+    /// with the promise made.
+    #[inline]
+    pub(crate) fn syntax(self) -> SynBlockRef {
+        // SAFETY: a buffer's `b_s` lives as long as the buffer.
+        unsafe { Live::new(self.syntax_block()) }
     }
 
     /// Whether this is the null buffer: a window between losing a buffer

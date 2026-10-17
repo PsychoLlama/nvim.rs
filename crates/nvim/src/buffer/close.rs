@@ -46,7 +46,7 @@ use crate::pos::MAXLNUM;
 use crate::semsg;
 use crate::startup::exiting;
 use crate::state::MAP_ALL_MODES;
-use crate::syntax::syntax_clear_in;
+use crate::syntax::syntax_clear;
 use crate::terminal::close_buf_terminal;
 use crate::types::{
     Callback, ColNr, FileMark, FileMarkView, Handle, LineNr, Pos, Refcount, Timestamp,
@@ -681,7 +681,7 @@ pub fn buf_freeall(buffer: Buf, flags: c_int) {
         // free the memory allocated for undo and reset all undo information
         free_undo(buf);
     }
-    syntax_clear_in(&mut buf.b_s); // reset syntax info
+    syntax_clear(buf.syntax()); // reset syntax info
     buf.b_flags.clear(BufFlags::READERR); // a read error is no longer relevant
 }
 
