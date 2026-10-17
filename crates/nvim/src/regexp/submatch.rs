@@ -21,7 +21,7 @@ use crate::eval::typval::{NumBuf, TV_INITIAL_VALUE, tv_clear};
 use crate::eval::userfunc::{CallWith, call_func_with};
 use crate::memory::{ThinCString, XString};
 use crate::types::{VAR_FUNC, VAR_PARTIAL, VAR_UNKNOWN, ptrdiff_t};
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use super::{RegSubMatch, can_f_submatch, rsm};
 use crate::eval::typval::{ListRef, SL_SIZE, tv_list_alloc};
@@ -270,9 +270,9 @@ pub(crate) fn reg_submatch_list(no: c_int) -> Option<ListRef> {
 }
 
 /// Call `expr` — a funcref or a partial — with the submatches as its one
-/// argument, and return its result as an allocated string. Null when the
-/// call failed, which has already reported itself.
-pub(crate) fn call_replacement(expr: &TypVal) -> *mut c_char {
+/// argument, and return its result's text. `None` when the call failed,
+/// which has already reported itself.
+pub(crate) fn call_replacement(expr: &TypVal) -> Option<Vec<u8>> {
     // `fill_submatch_list` fills the list in if the function takes an
     // argument at all. Like upstream's static list it is locked and out of
     // the collector's registry: this frame owns it.
@@ -307,12 +307,10 @@ pub(crate) fn call_replacement(expr: &TypVal) -> *mut c_char {
     // An unknown return type means the call failed and has already said
     // so; there is no second error to report.
     let text = if rettv.v_type() == VAR_UNKNOWN {
-        core::ptr::null_mut()
+        None
     } else {
         let mut buf = NumBuf::new();
-        buf.string_chk(&rettv).map_or(core::ptr::null_mut(), |s| {
-            ThinCString::from_cstr(s).into_raw()
-        })
+        buf.string_chk(&rettv).map(|s| s.to_bytes().to_vec())
     };
     tv_clear(&mut rettv);
     text

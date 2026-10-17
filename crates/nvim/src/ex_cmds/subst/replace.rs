@@ -244,7 +244,7 @@ pub(super) fn build_replacement(
     st.sublen = {
         let _locked = Lock::text();
         let lnum = st.sub_firstlnum - st.regmatch.startpos[0].lnum;
-        regsub_multi_len(&mut st.regmatch, lnum, &mut st.sub, regsub_flags())
+        regsub_multi_len(&st.regmatch, lnum, &st.sub, regsub_flags())
             .map_or(0, |size| c_int::try_from(size).unwrap_or(c_int::MAX))
     };
 
@@ -283,7 +283,7 @@ pub(super) fn build_replacement(
         let _locked = Lock::text();
         let lnum = st.sub_firstlnum - st.regmatch.startpos[0].lnum;
         let sublen = st.sublen as usize;
-        let (regmatch, sub, line) = (&mut st.regmatch, &mut st.sub, &mut st.new_line);
+        let (regmatch, sub, line) = (&st.regmatch, &st.sub, &mut st.new_line);
         let line = line
             .as_mut()
             .expect("a substitution has been built on this line");

@@ -14,7 +14,6 @@
 )]
 
 use crate::mbyte::cluster_len;
-use crate::memory::XString;
 use crate::option::SavedCpo;
 use crate::option::vars::p_ic;
 use crate::regexp::{RE_MAGIC, RE_STRING, regsub_to_vec, vim_regexec_nl};
@@ -53,9 +52,7 @@ pub fn do_string_sub(
     let mut substituted = false;
 
     if let Some(mut regmatch) = RegMatch::compile(pat, RE_MAGIC + RE_STRING, p_ic()) {
-        // The replacement is lent to each expansion: a `\=` one is
-        // evaluated in place.
-        let mut source = sub.map(XString::from_cstr);
+        let source = sub.map(CStr::to_bytes);
         let do_all = flags.to_bytes().first() == Some(&b'g');
         let mut tail = 0;
         // The start of the last zero-width match, so that the next one
@@ -75,8 +72,7 @@ pub fn do_string_sub(
                 zero_width = Some(span.start);
             }
 
-            let Some(replacement) = regsub_to_vec(&mut regmatch, text, source.as_mut(), expr)
-            else {
+            let Some(replacement) = regsub_to_vec(&regmatch, text, source, expr) else {
                 out.clear();
                 substituted = false;
                 break;

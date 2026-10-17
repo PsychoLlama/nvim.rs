@@ -13,7 +13,7 @@
 //! [`RegExec`] the API layer builds for it (see [`rex`]), and a compile in
 //! a [`RegCompiler`] (see [`compiler`]). It holds no code.
 
-#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
