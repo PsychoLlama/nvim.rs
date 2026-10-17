@@ -10,8 +10,7 @@
 //! Only the entries below `in_use` are ever read, which is why copying one
 //! set over another leaves the rest alone.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -20,11 +19,12 @@
     clippy::ptr_as_ptr
 )]
 
-use super::list::{op, out_of, out1_of};
+use super::program::{NfaState, StateId, States};
 use crate::regexp::NfaOp;
 use core::ffi::c_int;
 
-use crate::regexp::{Capture, NSUBEXP, NfaPim, NfaState, PimResult, RegSub, Rex};
+use super::list::NfaPim;
+use crate::regexp::{Capture, NSUBEXP, PimResult, RegSub, Rex};
 
 /// How far [`match_follows`] follows the machine before giving up.
 const MATCH_FOLLOWS_DEPTH: c_int = 10;
@@ -126,7 +126,7 @@ pub(crate) fn sub_equal(rex: Rex, sub1: &RegSub, sub2: &RegSub) -> bool {
 }
 
 /// Copy a postponed lookaround, captures and all.
-pub(crate) fn copy_pim(rex: Rex, to: &mut NfaPim, from: &NfaPim) {
+pub(crate) fn copy_pim<'p>(rex: Rex, to: &mut NfaPim<'p>, from: &NfaPim<'p>) {
     to.result = from.result;
     to.state = from.state;
     copy_sub(&mut to.subs.norm, &from.subs.norm);
@@ -149,8 +149,7 @@ pub(crate) fn pim_equal(rex: Rex, one: Option<&NfaPim>, two: Option<&NfaPim>) ->
     if unused(Some(two)) {
         return false;
     }
-    // SAFETY: a pim in use names a live state of the running program.
-    if unsafe { (*one.state).id != (*two.state).id } {
+    if !core::ptr::eq(one.state, two.state) {
         return false;
     }
     one.end.same(two.end, rex.pos_kind())
@@ -162,17 +161,19 @@ pub(crate) fn pim_equal(rex: Rex, one: Option<&NfaPim>, two: Option<&NfaPim>) ->
 /// nothing but the match itself follows, there is nothing left to postpone
 /// past. Only the states that consume no input are followed, and only
 /// [`MATCH_FOLLOWS_DEPTH`] alternations deep.
-pub(crate) fn match_follows(startstate: *const NfaState, depth: c_int) -> bool {
+pub(crate) fn match_follows(states: States, startstate: StateId, depth: c_int) -> bool {
+    !startstate.is_none() && match_follows_from(states, states.state(startstate), depth)
+}
+
+/// [`match_follows`] from a state in hand.
+pub(crate) fn match_follows_from(states: States, start: &NfaState, depth: c_int) -> bool {
     if depth > MATCH_FOLLOWS_DEPTH {
         return false;
     }
-    // SAFETY: `startstate` and everything reachable from it are states of the
-    // running program.
-
-    let mut state = startstate;
-    while !state.is_null() {
-        let code = op(state);
-        match NfaOp::try_from(code) {
+    let mut state = start;
+    loop {
+        let code = state.c;
+        let next = match NfaOp::try_from(code) {
             Ok(
                 NfaOp::Match
                 | NfaOp::Mclose
@@ -181,8 +182,8 @@ pub(crate) fn match_follows(startstate: *const NfaState, depth: c_int) -> bool {
                 | NfaOp::EndPattern,
             ) => return true,
             Ok(NfaOp::Split) => {
-                return match_follows(out_of(state), depth + 1)
-                    || match_follows(out1_of(state), depth + 1);
+                return match_follows(states, state.out, depth + 1)
+                    || match_follows(states, state.out1, depth + 1);
             }
             // A lookaround or a grapheme group: what follows it hangs off
             // the end state `out1` points at.
@@ -196,9 +197,7 @@ pub(crate) fn match_follows(startstate: *const NfaState, depth: c_int) -> bool {
                 | NfaOp::StartInvisibleBeforeNeg
                 | NfaOp::StartInvisibleBeforeNegFirst
                 | NfaOp::Composing,
-            ) => {
-                state = out_of(out1_of(state));
-            }
+            ) => states.out(state.out1),
             // Anything that consumes input means the pattern goes on.
             Ok(
                 NfaOp::Any
@@ -209,8 +208,11 @@ pub(crate) fn match_follows(startstate: *const NfaState, depth: c_int) -> bool {
             ) => return false,
             Ok(class) if class.is_class() => return false,
             _ if code > 0 => return false,
-            _ => state = out_of(state),
+            _ => state.out,
+        };
+        if next.is_none() {
+            return false;
         }
+        state = states.state(next);
     }
-    false
 }

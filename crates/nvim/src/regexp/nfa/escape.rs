@@ -2,8 +2,7 @@
 //! syntax highlighter's private capture group, and `\%`, which is everything
 //! from `\%(` through the `\%23l` position assertions.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::regexp::NfaOp;
 use crate::regexp::RegCompiler;
@@ -13,14 +12,13 @@ use super::atom::nfa_regatom;
 use super::parse::nfa_reg;
 use super::{Parsed, Rejected};
 use crate::ascii::ascii_isdigit;
-use crate::plines::getvvcol;
 use crate::regexp::state::rc_did_emsg;
 use crate::regexp::{
     INT32_MAX, REG_NPAREN, REG_ZPAREN, REX_SET, REX_USE, getchr, getdecchrs, gethexchrs,
     getoctchrs, magic_prefix, pat_byte, peekchr, re_mult_next, unmagic,
 };
 use crate::semsg;
-use crate::types::{ColNr, MB_MAXBYTES, NUL};
+use crate::types::{MB_MAXBYTES, NUL};
 
 use crate::winlayer::Win;
 /// `\z`: the highlighter's own captures, plus `\zs`/`\ze`.
@@ -290,17 +288,7 @@ fn cursor_col() -> i64 {
 }
 
 fn cursor_vcol() -> i64 {
-    // SAFETY: as `cursor_lnum`; `getvvcol` writes only through the pointers
-    // it is given.
-    let mut vcol: ColNr = 0;
-    unsafe {
-        getvvcol(
-            Win::current(),
-            &raw mut (*Win::current_raw()).w_cursor,
-            core::ptr::null_mut(),
-            core::ptr::null_mut(),
-            &raw mut vcol,
-        )
-    };
-    vcol as i64
+    // The last column the character under the cursor covers.
+    let win = Win::current();
+    i64::from(win.virtual_vcol_span(win.cursor()).1)
 }

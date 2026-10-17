@@ -2,23 +2,21 @@
 //! references, the recursive sub-match a lookaround runs, and the shortcuts
 //! that let the loop skip work.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use super::list::{op, out_of, out1_of};
+use super::program::{NfaRegProg, NfaState, StateId};
+use super::step::Run;
 use crate::regexp::NfaOp;
 use crate::siemsg;
-use core::ffi::{c_int, c_ushort};
+use core::ffi::c_int;
 
 use super::matcher::nfa_regmatch;
 use crate::ascii::{ascii_isdigit, ascii_isxdigit};
 use crate::charset::{vim_is_ident_char, vim_isfilec, vim_isprintc};
 use crate::mbyte::{mb_islower, mb_isupper, utf_char2len, utf_fold, utf_iscomposing_legacy};
-use crate::os::cshim::__ctype_b_loc;
 use crate::profile::profile_passed_limit;
 use crate::regexp::{
-    _ISalnum, _ISalpha, _IScntrl, _ISgraph, _ISpunct, ESC, MatchPos, NFA_TOO_EXPENSIVE, NfaPim,
-    NfaRegProg, NfaState, RA_MATCH, RegSub, RegSubs, Rex, char_at_nul, char_len_at,
+    ESC, MatchPos, NFA_TOO_EXPENSIVE, RA_MATCH, RegSub, Rex, char_at_nul, char_len_at,
     cleanup_subexpr, cleanup_zsubexpr, cstrchr_line, cstrncmp, head_off_at, match_with_backref,
     reg_getline, reg_iswordc,
 };
@@ -30,22 +28,21 @@ use crate::types::{ColNr, Failed, LPos};
 /// answer for ASCII, others run the whole Latin-1 range or defer to a
 /// multibyte predicate.
 pub(crate) fn check_char_class(rex: Rex, cls: c_int, c: c_int) -> Result<(), Failed> {
-    // SAFETY: the ctype table is indexed only inside the guards below.
-    let ctype = |mask: c_int| unsafe {
-        *(*__ctype_b_loc()).offset(c as isize) as c_int & mask as c_ushort as c_int != 0
-    };
+    // Upstream asks the C library's `isalnum` and kin, only ever for ASCII,
+    // where every locale answers what `u8`'s own tests do.
+    let ascii = |test: fn(&u8) -> bool| u8::try_from(c).is_ok_and(|b| test(&b));
     let member = match NfaOp::try_from(cls) {
-        Ok(NfaOp::ClassAlnum) => (1..128).contains(&c) && ctype(_ISalnum as c_int),
-        Ok(NfaOp::ClassAlpha) => (1..128).contains(&c) && ctype(_ISalpha as c_int),
+        Ok(NfaOp::ClassAlnum) => (1..128).contains(&c) && ascii(u8::is_ascii_alphanumeric),
+        Ok(NfaOp::ClassAlpha) => (1..128).contains(&c) && ascii(u8::is_ascii_alphabetic),
         Ok(NfaOp::ClassBlank) => c == b' ' as c_int || c == b'\t' as c_int,
-        Ok(NfaOp::ClassCntrl) => (1..=127).contains(&c) && ctype(_IScntrl as c_int),
+        Ok(NfaOp::ClassCntrl) => (1..=127).contains(&c) && ascii(u8::is_ascii_control),
         Ok(NfaOp::ClassDigit) => ascii_isdigit(c),
-        Ok(NfaOp::ClassGraph) => (1..=127).contains(&c) && ctype(_ISgraph as c_int),
+        Ok(NfaOp::ClassGraph) => (1..=127).contains(&c) && ascii(u8::is_ascii_graphic),
         // U+00AA and U+00BA are the ordinal indicators: lowercase
         // letters, but not the lower half of a case pair.
         Ok(NfaOp::ClassLower) => mb_islower(c) && c != 170 && c != 186,
         Ok(NfaOp::ClassPrint) => vim_isprintc(c),
-        Ok(NfaOp::ClassPunct) => (1..128).contains(&c) && ctype(_ISpunct as c_int),
+        Ok(NfaOp::ClassPunct) => (1..128).contains(&c) && ascii(u8::is_ascii_punctuation),
         Ok(NfaOp::ClassSpace) => (9..=13).contains(&c) || c == b' ' as c_int,
         Ok(NfaOp::ClassUpper) => mb_isupper(c),
         Ok(NfaOp::ClassXdigit) => ascii_isxdigit(c),
@@ -118,21 +115,14 @@ pub(crate) fn match_zref(rex: Rex, subidx: c_int, bytelen: &mut c_int) -> bool {
 ///
 /// A lookaround runs a whole match of its own over the same program, so it
 /// needs the generation counters to itself; these two put them back.
-fn nfa_save_listids(prog: *mut NfaRegProg, list: &mut [c_int]) {
-    // SAFETY: `prog` is the running program and `list` is `prog.nstate` long.
-    let states = unsafe { &raw mut (*prog).state } as *mut NfaState;
-    for (i, slot) in list.iter_mut().enumerate() {
-        let s = unsafe { states.add(i) };
-        *slot = unsafe { (*s).lastlist[1] };
-        unsafe { (*s).lastlist[1] = 0 };
-    }
+fn nfa_save_listids(prog: &NfaRegProg, list: &mut Vec<c_int>) {
+    list.clear();
+    list.extend(prog.states.iter().map(|s| s.lastlist[1].replace(0)));
 }
 
-fn nfa_restore_listids(prog: *mut NfaRegProg, list: &[c_int]) {
-    // SAFETY: as `nfa_save_listids`.
-    let states = unsafe { &raw mut (*prog).state } as *mut NfaState;
-    for (i, &saved) in list.iter().enumerate() {
-        unsafe { (*states.add(i)).lastlist[1] = saved };
+fn nfa_restore_listids(prog: &NfaRegProg, list: &[c_int]) {
+    for (s, &saved) in prog.states.iter().zip(list) {
+        s.lastlist[1].set(saved);
     }
 }
 
@@ -148,18 +138,17 @@ pub(crate) fn nfa_re_num_cmp(val: u64, op: c_int, pos: u64) -> bool {
 
 /// Run the lookaround at `state` as a match of its own.
 ///
-/// `pim` is set when the lookaround was postponed, in which case the match
-/// runs from where it was postponed rather than from the current position.
-/// `listids` is the caller's scratch buffer for the generation counters.
-pub(crate) fn recursive_regmatch(
+/// `postponed` is where the thread stood when the lookaround was postponed,
+/// in which case the match runs from there rather than from the current
+/// position. `run` is the outer match's, whose capture sets and scratch the
+/// sub-match shares.
+pub(crate) fn recursive_regmatch<'p>(
     rex: Rex,
-    state: *mut NfaState,
-    pim: *mut NfaPim,
-    prog: *mut NfaRegProg,
-    submatch: *mut RegSubs,
-    m: *mut RegSubs,
-    listids: &mut Vec<c_int>,
+    state: &'p NfaState,
+    postponed: Option<MatchPos>,
+    run: &mut Run<'_, 'p>,
 ) -> c_int {
+    let prog = run.prog;
     let save_reginput_col = rex.input();
     let save_reglnum = rex.lnum();
     let save_nfa_match = rex.nfa_match();
@@ -168,12 +157,8 @@ pub(crate) fn recursive_regmatch(
 
     // Where the lookaround runs from: where the thread stood when it was
     // postponed, or — with no pim — where the outer match stands now.
-    let from = if pim.is_null() {
-        rex.here()
-    } else {
-        unsafe { (*pim).end }
-    };
-    if !pim.is_null() {
+    let from = postponed.unwrap_or_else(|| rex.here());
+    if postponed.is_some() {
         rex.seek_col_of(from);
     }
 
@@ -181,23 +166,21 @@ pub(crate) fn recursive_regmatch(
     // outer match stands; `endpos` is that stopping point.
     let mut endpos = None;
     if matches!(
-        NfaOp::try_from(op(state)),
+        NfaOp::try_from(state.c),
         Ok(NfaOp::StartInvisibleBefore
             | NfaOp::StartInvisibleBeforeFirst
             | NfaOp::StartInvisibleBeforeNeg
             | NfaOp::StartInvisibleBeforeNegFirst)
     ) {
         endpos = Some(from);
-        unsafe { start_lookbehind(rex, state) };
+        start_lookbehind(rex, state.val);
     }
 
     // Two generations of list ids are available. The first nested match
     // takes the second; a deeper one has to save and restore instead.
     let need_restore = rex.nfa_ll_index() == 1;
     if need_restore {
-        listids.clear();
-        listids.resize(unsafe { (*prog).nstate } as usize, 0);
-        nfa_save_listids(prog, listids);
+        nfa_save_listids(prog, run.listids);
     } else {
         rex.set_nfa_ll_index(1);
         if rex.nfa_listid() <= rex.nfa_alt_listid() {
@@ -206,9 +189,9 @@ pub(crate) fn recursive_regmatch(
     }
 
     rex.set_nfa_endp(endpos);
-    let result = nfa_regmatch(rex, prog, out_of(state), submatch, m);
+    let result = nfa_regmatch(rex, prog, state.out, run.submatch, run.m, run.listids);
     if need_restore {
-        nfa_restore_listids(prog, listids);
+        nfa_restore_listids(prog, run.listids);
     } else {
         rex.set_nfa_ll_index(0);
         rex.set_nfa_alt_listid(rex.nfa_listid());
@@ -233,12 +216,8 @@ pub(crate) fn recursive_regmatch(
 /// bytes before the current position, or the start of the line when the
 /// width is unknown.
 ///
-/// # Safety
-///
-/// The match context must be live, and `state` one of the lookbehind
-/// opcodes.
-unsafe fn start_lookbehind(rex: Rex, state: *mut NfaState) {
-    let val = unsafe { (*state).val };
+/// `val` is the lookbehind state's operand.
+fn start_lookbehind(rex: Rex, val: c_int) {
     if val <= 0 {
         // Unknown width: try from the start of the previous line.
         if rex.multi() {
@@ -283,23 +262,23 @@ unsafe fn start_lookbehind(rex: Rex, state: *mut NfaState) {
 /// Roughly how unlikely the machine from `state` is to match, as a
 /// percentage. Only the ordering matters: it decides whether a lookaround is
 /// cheaper to run now or after the rest of the pattern.
-pub(crate) fn failure_chance(state: *mut NfaState, depth: c_int) -> c_int {
+pub(crate) fn failure_chance(states: &[NfaState], state: StateId, depth: c_int) -> c_int {
     if depth > 4 {
         return 1;
     }
-    // SAFETY: the walk stays inside the program `state` belongs to.
-    let code = op(state);
+    let s = &states[state.index()];
+    let code = s.c;
     match NfaOp::try_from(code) {
         Ok(NfaOp::Split) => {
             // A split of splits is a long alternation; do not try to
             // reason about it.
-            if unsafe { (*out_of(state)).c } == NfaOp::Split.code()
-                || unsafe { (*out1_of(state)).c } == NfaOp::Split.code()
+            if states[s.out.index()].c == NfaOp::Split.code()
+                || states[s.out1.index()].c == NfaOp::Split.code()
             {
                 return 1;
             }
-            let l = failure_chance(out_of(state), depth + 1);
-            let r = failure_chance(out1_of(state), depth + 1);
+            let l = failure_chance(states, s.out, depth + 1);
+            let r = failure_chance(states, s.out1, depth + 1);
             l.min(r)
         }
         // `.` matches nearly anything.
@@ -322,8 +301,8 @@ pub(crate) fn failure_chance(state: *mut NfaState, depth: c_int) -> c_int {
         Ok(NfaOp::Bol | NfaOp::Eol | NfaOp::Bof | NfaOp::Eof | NfaOp::Newl) => 99,
         Ok(NfaOp::Bow | NfaOp::Eow) => 90,
         // A bracket matches nothing itself: ask what is inside it.
-        Ok(NfaOp::Nopen | NfaOp::Nclose) => failure_chance(out_of(state), depth + 1),
-        Ok(marker) if marker.is_capture_marker() => failure_chance(out_of(state), depth + 1),
+        Ok(NfaOp::Nopen | NfaOp::Nclose) => failure_chance(states, s.out, depth + 1),
+        Ok(marker) if marker.is_capture_marker() => failure_chance(states, s.out, depth + 1),
         Ok(reference) if reference.is_reference() => 94,
         Ok(NfaOp::Lnum) => 90,
         Ok(NfaOp::Cursor | NfaOp::Col | NfaOp::Vcol | NfaOp::Mark) => 98,

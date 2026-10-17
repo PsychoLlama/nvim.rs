@@ -26,7 +26,7 @@ use crate::types::NL;
 use crate::types::TAB;
 use crate::types::{ColNr, LPos, LineNr, Magic, MarkGet, RegEngine, int16_t, int64_t, uint8_t};
 use crate::winlayer::Buf;
-use core::ffi::{CStr, c_char, c_int, c_uint};
+use core::ffi::{CStr, c_int, c_uint};
 /// Last-pattern selectors and the regexp-engine/flag bits.
 pub const RE_SEARCH: ::core::ffi::c_int = 0;
 pub const RE_SUBST: ::core::ffi::c_int = 1;
@@ -63,11 +63,6 @@ pub(crate) use self::pos::*;
 pub(crate) use self::rex::*;
 pub(crate) use self::submatch::*;
 pub(crate) use self::substitute::*;
-pub const _ISalnum: c_uint = 8;
-pub const _ISpunct: c_uint = 4;
-pub const _IScntrl: c_uint = 2;
-pub const _ISgraph: c_uint = 32768;
-pub const _ISalpha: c_uint = 1024;
 pub const NSUBEXP: c_uint = 10;
 pub const MAGIC_ALL: Magic = 4;
 pub const MAGIC_ON: Magic = 3;
@@ -146,34 +141,6 @@ pub(crate) struct BtRegProg {
     /// The nodes, `REGMAGIC` stamp first, as the parser wrote them.
     pub(crate) program: Vec<uint8_t>,
 }
-#[repr(C)]
-pub struct NfaRegProg {
-    pub engine: *mut RegEngine,
-    pub regflags: c_uint,
-    pub re_engine: c_uint,
-    pub re_flags: c_uint,
-    pub re_in_use: bool,
-    pub start: *mut NfaState,
-    pub reganch: c_int,
-    pub regstart: c_int,
-    pub match_text: *mut uint8_t,
-    pub has_zend: c_int,
-    pub has_backref: c_int,
-    pub reghasz: c_int,
-    pub pattern: *mut c_char,
-    pub nsubexp: c_int,
-    pub nstate: c_int,
-    pub state: [NfaState; 0],
-}
-#[repr(C)]
-pub struct NfaState {
-    pub c: c_int,
-    pub out: *mut NfaState,
-    pub out1: *mut NfaState,
-    pub id: c_int,
-    pub lastlist: [c_int; 2],
-    pub val: c_int,
-}
 /// The `\1`..`\9` captures one thread is carrying, and how many of them it
 /// has reached. Only the entries below `in_use` mean anything.
 #[derive(Copy, Clone)]
@@ -187,22 +154,6 @@ pub(crate) struct RegSub {
 pub(crate) struct RegSubs {
     pub norm: RegSub,
     pub synt: RegSub,
-}
-#[derive(Copy, Clone)]
-pub(crate) struct NfaThread {
-    pub state: *mut NfaState,
-    pub count: c_int,
-    pub pim: NfaPim,
-    pub subs: RegSubs,
-}
-#[derive(Copy, Clone)]
-pub(crate) struct NfaPim {
-    pub result: PimResult,
-    pub state: *mut NfaState,
-    pub subs: RegSubs,
-    /// Where the thread stood when the lookaround was postponed, which is
-    /// where it has to run from once something settles it.
-    pub end: MatchPos,
 }
 pub const NFA_TOO_EXPENSIVE: c_int = -1;
 pub const NFA_MAX_STATES: c_int = 100000;

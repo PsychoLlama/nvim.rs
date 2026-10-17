@@ -79,7 +79,7 @@ unsafe fn run_engine(prog: *mut RegProg, rex: Rex, col: ColNr) -> c_int {
     if unsafe { (*prog).engine.cast_const() } == &raw const super::bt_regengine {
         bt_regexec(rex, unsafe { &*prog.cast::<BtRegProg>() }, col)
     } else {
-        unsafe { nfa_regexec(rex, prog.cast::<NfaRegProg>(), col) }
+        nfa_regexec(rex, unsafe { &*prog.cast::<NfaRegProg>() }, col)
     }
 }
 
@@ -196,7 +196,7 @@ pub unsafe fn vim_regfree(prog: *mut RegProg) {
 unsafe fn recompile_backtracking(prog: *mut RegProg, extmatch: bool) -> *mut RegProg {
     // SAFETY: `prog` is a live NFA program, so it carries a pattern.
     let re_flags = unsafe { (*prog).re_flags } as c_int;
-    let pat = XString::from_cstr(unsafe { cstr::at((*(prog as *mut NfaRegProg)).pattern) });
+    let pat = XString::from_cstr(unsafe { &(*prog.cast::<NfaRegProg>()).pattern });
     let save_p_re = p_re();
     P_RE.set(BACKTRACKING_ENGINE as c_int as OptInt);
     if p_verbose() > 0 as OptInt {

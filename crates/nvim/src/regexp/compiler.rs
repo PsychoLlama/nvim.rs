@@ -119,10 +119,8 @@ pub(crate) struct RegCompiler<'p> {
 pub(crate) struct NfaStates {
     /// How many the program needs.
     pub(crate) count: c_int,
-    /// How many are written so far.
-    pub(crate) built: c_int,
-    /// The program's state array, `count` long, once it is allocated.
-    pub(crate) base: *mut NfaState,
+    /// The states written so far, which the program takes over.
+    pub(crate) states: Vec<NfaState>,
 }
 
 impl<'p> RegCompiler<'p> {
@@ -175,8 +173,7 @@ impl<'p> RegCompiler<'p> {
             post: Postfix::new(),
             nfa: NfaStates {
                 count: 0,
-                built: 0,
-                base: core::ptr::null_mut(),
+                states: Vec::new(),
             },
         }
     }

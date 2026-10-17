@@ -19,22 +19,24 @@
 //! spawn, so both the step and the byte count are load-bearing: they decide
 //! at what point E363 is reported rather than the editor running out of
 //! memory. [`ThreadList::slots`] is that count and is deliberately not
-//! `Vec::capacity`, which grows by doubling.
+//! `Vec::capacity`, which grows by doubling, and a thread is charged
+//! [`NFA_THREAD_BYTES`], not what it measures today.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::regexp::NfaOp;
 use crate::regexp::NotAnOpcode;
+use core::cell::Cell;
 use core::ffi::c_int;
 
+use super::program::{NfaState, StateId, States};
 use super::sub::{copy_pim, copy_sub, has_backref, has_zsubexpr, pim_equal, slots, sub_equal};
 use crate::message::emsg;
 use crate::option::vars::p_mmp;
 use crate::os::cshim::gettext;
 use crate::regexp::{
     ADDSTATE_HERE_OFFSET, Capture, E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN, MatchPos,
-    NSUBEXP, NfaPim, NfaState, NfaThread, PimResult, PosKind, RegSub, RegSubs, Rex,
+    NSUBEXP, PimResult, PosKind, RegSub, RegSubs, Rex,
 };
 use crate::types::NUL;
 
@@ -42,56 +44,41 @@ use crate::types::NUL;
 /// cycle of states that consume no input would otherwise not terminate.
 const ADDSTATE_MAX_DEPTH: c_int = 5000;
 
-/// The opcode a state carries.
+/// What 'maxmempattern' charges a thread: the size `NfaThread` had when
+/// a state was a pointer, which is what put E363 where the recorded
+/// thresholds have it. A thread is smaller now that it names its state by
+/// index; the charge is the contract, not the layout.
+pub(crate) const NFA_THREAD_BYTES: usize = 712;
+
+/// One thread: the state it sits on, the captures it reached it with, and a
+/// lookaround it may be carrying.
 ///
-/// SAFETY: every state the engine is handed is a state of the running
-/// program, which is one allocation holding all of them and outlives the
-/// match. These three are how the rest of the engine reads a state without
-/// an `unsafe` block of its own.
-#[inline(always)]
-pub(crate) fn op(state: *const NfaState) -> c_int {
-    unsafe { (*state).c }
+/// The state is a reference into the running program, as upstream's was a
+/// pointer: the match loop reads it once per thread per character, and an
+/// index would cost a bounds check there.
+#[derive(Copy, Clone)]
+pub(crate) struct NfaThread<'p> {
+    pub(crate) state: &'p NfaState,
+    /// How many bytes a back-reference still owes before `NFA_SKIP` lets the
+    /// thread advance.
+    pub(crate) count: c_int,
+    pub(crate) pim: NfaPim<'p>,
+    pub(crate) subs: RegSubs,
 }
 
-/// What a state continues at.
-///
-/// SAFETY: as `op`.
-#[inline(always)]
-pub(crate) fn out_of(state: *const NfaState) -> *mut NfaState {
-    unsafe { (*state).out }
+/// A lookaround postponed until what follows it has proved itself: a
+/// "postponed invisible match".
+#[derive(Copy, Clone)]
+pub(crate) struct NfaPim<'p> {
+    pub(crate) result: PimResult,
+    /// The lookaround's start state. Meaningless while `result` is
+    /// [`PimResult::Unused`].
+    pub(crate) state: &'p NfaState,
+    pub(crate) subs: RegSubs,
+    /// Where the thread stood when the lookaround was postponed, which is
+    /// where it has to run from once something settles it.
+    pub(crate) end: MatchPos,
 }
-
-/// A state's second continuation, which only the branching opcodes have.
-///
-/// SAFETY: as `op`.
-#[inline(always)]
-pub(crate) fn out1_of(state: *const NfaState) -> *mut NfaState {
-    unsafe { (*state).out1 }
-}
-
-/// A state's identity, which is what tells two threads on it apart from
-/// threads on anything else.
-///
-/// SAFETY: as `op`.
-#[inline(always)]
-fn id_of(state: *mut NfaState) -> c_int {
-    unsafe { (*state).id }
-}
-
-/// A slot that has never held a thread. Written once per slot, the first time
-/// the list reaches that far, so that reusing a slot on the next character
-/// costs only the fields the C original wrote.
-const BLANK_THREAD: NfaThread = NfaThread {
-    state: core::ptr::null_mut(),
-    count: 0,
-    pim: NfaPim {
-        result: PimResult::Unused,
-        state: core::ptr::null_mut(),
-        subs: BLANK_SUBS,
-        end: MatchPos::NOWHERE,
-    },
-    subs: BLANK_SUBS,
-};
 
 const BLANK_SUB: RegSub = RegSub {
     in_use: 0,
@@ -102,18 +89,73 @@ const BLANK_SUB: RegSub = RegSub {
     orig_start_col: 0,
 };
 
-const BLANK_SUBS: RegSubs = RegSubs {
+pub(crate) const BLANK_SUBS: RegSubs = RegSubs {
     norm: BLANK_SUB,
     synt: BLANK_SUB,
 };
 
+/// The thread-list storage a program keeps between matches.
+///
+/// A buffer search runs the program once per line, and each run wants two
+/// lists of `nstate + 1` threads, more for every lookaround it nests. Upstream
+/// allocates and frees them per run; that was the largest single cost of a
+/// search after the walk itself. Here the program keeps a few empty ones.
+/// Nothing about a list's *contents* survives: a reused one starts empty, and
+/// its slots are blanked as the run first reaches them, as fresh ones are. The
+/// slot count 'maxmempattern' is charged for is the list's own, not the
+/// storage's capacity, so reuse cannot move E363.
+pub(crate) struct SpareLists(Cell<Vec<Vec<NfaThread<'static>>>>);
+
+/// How many spare lists a program keeps, and how large one may be to be
+/// kept: a run that grew a list towards 'maxmempattern' frees it, as upstream
+/// would.
+const SPARE_LISTS: usize = 4;
+const SPARE_LIST_BYTES: usize = 256 << 10;
+
+impl SpareLists {
+    pub(crate) const fn new() -> SpareLists {
+        SpareLists(Cell::new(Vec::new()))
+    }
+
+    /// An empty list, reusing a spare one's storage when there is one.
+    fn take<'p>(&self) -> Vec<NfaThread<'p>> {
+        let mut spare = self.0.take();
+        let list = spare.pop().map_or_else(Vec::new, relabel);
+        self.0.set(spare);
+        list
+    }
+
+    /// Keep `list`'s storage for a later [`SpareLists::take`].
+    fn put(&self, list: Vec<NfaThread<'_>>) {
+        if list.capacity() * size_of::<NfaThread>() > SPARE_LIST_BYTES {
+            return;
+        }
+        let mut spare = self.0.take();
+        if spare.len() < SPARE_LISTS {
+            spare.push(relabel(list));
+        }
+        self.0.set(spare);
+    }
+}
+
+/// `list`, emptied, as a list of threads of another lifetime: the storage
+/// changes hands, no thread does. `collect` reuses the allocation in place,
+/// as it does whenever the element types have one layout — which two
+/// lifetimes of one type always do.
+fn relabel<'a, 'b>(mut list: Vec<NfaThread<'a>>) -> Vec<NfaThread<'b>> {
+    list.clear();
+    list.into_iter()
+        .map(|_| unreachable!("the list was emptied"))
+        .collect()
+}
+
 /// The threads alive at one input position, in the priority order the
 /// submatch rules need: the first thread to reach `NFA_MATCH` wins.
-pub(crate) struct ThreadList<'t> {
+pub(crate) struct ThreadList<'t, 'p> {
     /// The slots that have ever been used. Everything below `n` is live;
     /// everything from `n` to the end is a slot a previous character left
     /// behind and this one may reuse.
-    threads: Vec<NfaThread>,
+    threads: Vec<NfaThread<'p>>,
     /// How many threads are live.
     n: usize,
     /// The slot count 'maxmempattern' is charged against — see the module
@@ -129,20 +171,38 @@ pub(crate) struct ThreadList<'t> {
     /// The match this list belongs to. A list is built for one match and
     /// discarded with it, so the context is the list's, not each walk's.
     pub(crate) rex: Rex<'t>,
+    /// The states of the program running it, which the threads name.
+    pub(crate) states: States<'p>,
 }
 
-impl<'t> ThreadList<'t> {
+impl<'t, 'p> ThreadList<'t, 'p> {
     /// A list for the match `rex` describes, holding `slots` threads before
     /// it has to grow.
-    pub(crate) fn new(rex: Rex<'t>, slots: usize) -> ThreadList<'t> {
+    ///
+    /// The storage comes from `spare`, the running program's, and goes back
+    /// there with [`ThreadList::release`].
+    pub(crate) fn new(
+        rex: Rex<'t>,
+        states: States<'p>,
+        spare: &SpareLists,
+        slots: usize,
+    ) -> ThreadList<'t, 'p> {
+        let mut threads = spare.take();
+        threads.reserve_exact(slots);
         ThreadList {
-            threads: Vec::with_capacity(slots),
+            threads,
             n: 0,
             slots,
             id: 0,
             has_pim: false,
             rex,
+            states,
         }
+    }
+
+    /// Hand the storage back to `spare` for the program's next match.
+    pub(crate) fn release(self, spare: &SpareLists) {
+        spare.put(self.threads);
     }
 
     /// How many threads are live.
@@ -163,14 +223,14 @@ impl<'t> ThreadList<'t> {
     /// the natural spelling and costs a second check on the hottest accessor
     /// the match loop has. `n` is never past `threads.len()`.
     #[inline(always)]
-    pub(crate) fn thread(&self, i: usize) -> &NfaThread {
+    pub(crate) fn thread(&self, i: usize) -> &NfaThread<'p> {
         debug_assert!(i < self.n);
         &self.threads[i]
     }
 
     /// The `i`th live thread, to write to.
     #[inline(always)]
-    pub(crate) fn thread_mut(&mut self, i: usize) -> &mut NfaThread {
+    pub(crate) fn thread_mut(&mut self, i: usize) -> &mut NfaThread<'p> {
         debug_assert!(i < self.n);
         &mut self.threads[i]
     }
@@ -178,7 +238,7 @@ impl<'t> ThreadList<'t> {
     /// Reserve the next slot size up, or report E363 and refuse.
     fn grow(&mut self) -> bool {
         let newlen = self.slots * 3 / 2 + 50;
-        if (((newlen * size_of::<NfaThread>()) >> 10) as i64) >= p_mmp() {
+        if (((newlen * NFA_THREAD_BYTES) >> 10) as i64) >= p_mmp() {
             emsg(gettext(E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN));
             return false;
         }
@@ -190,12 +250,22 @@ impl<'t> ThreadList<'t> {
     /// Append a thread for `state`, carrying `subs` and `pim`.
     ///
     /// The caller has already made room.
-    fn push(&mut self, state: *mut NfaState, subs: &RegSubs, pim: Option<&NfaPim>) {
+    fn push(&mut self, state: &'p NfaState, subs: &RegSubs, pim: Option<&NfaPim<'p>>) {
         let rex = self.rex;
         if self.n == self.threads.len() {
             // The first character to reach this far pays for the slot; every
             // later one writes only the fields below.
-            self.threads.push(BLANK_THREAD);
+            self.threads.push(NfaThread {
+                state,
+                count: 0,
+                pim: NfaPim {
+                    result: PimResult::Unused,
+                    state,
+                    subs: BLANK_SUBS,
+                    end: MatchPos::NOWHERE,
+                },
+                subs: BLANK_SUBS,
+            });
         }
         let has_z = has_zsubexpr(rex);
         self.has_pim |= pim.is_some();
@@ -217,25 +287,24 @@ impl<'t> ThreadList<'t> {
     /// The generation check alone is enough unless the pattern has a
     /// back-reference, when two threads on the same state may still differ in
     /// what they captured.
-    pub(crate) fn holds(&self, state: *mut NfaState, subs: &RegSubs) -> bool {
+    pub(crate) fn holds(&self, state: StateId, subs: &RegSubs) -> bool {
         let rex = self.rex;
-        // SAFETY: `state` is a live state of the running program.
-        let seen = unsafe { (*state).lastlist[rex.nfa_ll_index()] == self.id };
+        let state = self.states.state(state);
+        let seen = state.lastlist[rex.nfa_ll_index()].get() == self.id;
         seen && (!has_backref(rex) || self.holds_with(state, subs, None))
     }
 
     /// Is `state` on this list with exactly these captures and this postponed
     /// lookaround?
-    fn holds_with(&self, state: *mut NfaState, subs: &RegSubs, pim: Option<&NfaPim>) -> bool {
+    fn holds_with(&self, state: &NfaState, subs: &RegSubs, pim: Option<&NfaPim>) -> bool {
         let rex = self.rex;
         let has_z = has_zsubexpr(rex);
-        let id = id_of(state);
         // A plain index walk: at opt-level 0 the iterator adaptors are a
         // handful of calls per thread, and this is the match loop's innermost
         // comparison.
         for i in 0..self.n {
             let thread = &self.threads[i];
-            if id_of(thread.state) == id
+            if core::ptr::eq(thread.state, state)
                 && sub_equal(rex, &thread.subs.norm, &subs.norm)
                 && (!has_z || sub_equal(rex, &thread.subs.synt, &subs.synt))
                 && pim_equal(rex, Some(&thread.pim), pim)
@@ -257,11 +326,11 @@ impl<'t> ThreadList<'t> {
 ///
 /// Returns false when the list could not grow, which the match loop reports
 /// as `NFA_TOO_EXPENSIVE`.
-pub(crate) fn addstate(
-    l: &mut ThreadList,
-    state: *mut NfaState,
+pub(crate) fn addstate<'p>(
+    l: &mut ThreadList<'_, 'p>,
+    state: &'p NfaState,
     subs: &mut RegSubs,
-    pim: Option<&NfaPim>,
+    pim: Option<&NfaPim<'p>>,
     off: c_int,
 ) -> bool {
     walk(l, state, subs, pim, off, 0)
@@ -276,11 +345,11 @@ pub(crate) fn addstate(
 ///
 /// `subs` must be the caller's own copy of the thread's captures: the shuffle
 /// below both reads and rewrites the list, so nothing may point into it.
-pub(crate) fn addstate_here(
-    l: &mut ThreadList,
-    state: *mut NfaState,
+pub(crate) fn addstate_here<'p>(
+    l: &mut ThreadList<'_, 'p>,
+    state: &'p NfaState,
     subs: &mut RegSubs,
-    pim: Option<&NfaPim>,
+    pim: Option<&NfaPim<'p>>,
     ip: &mut c_int,
 ) -> bool {
     let listidx = *ip as usize;
@@ -320,11 +389,11 @@ pub(crate) fn addstate_here(
 }
 
 /// The body of [`addstate`], with the recursion depth it has reached.
-fn walk(
-    l: &mut ThreadList,
-    state: *mut NfaState,
+fn walk<'p>(
+    l: &mut ThreadList<'_, 'p>,
+    s: &'p NfaState,
     subs: &mut RegSubs,
-    pim: Option<&NfaPim>,
+    pim: Option<&NfaPim<'p>>,
     off_arg: c_int,
     depth: c_int,
 ) -> bool {
@@ -341,7 +410,7 @@ fn walk(
         (false, off_arg, 0)
     };
 
-    let c = NfaOp::try_from(op(state));
+    let c = NfaOp::try_from(s.c);
     // One match rather than `RangeInclusive::contains`, which is a call per
     // range at opt-level 0 and this runs once per `addstate`.
     let transparent = matches!(
@@ -379,14 +448,14 @@ fn walk(
         if matches!(c, Ok(NfaOp::Bol | NfaOp::Bof)) && past_line_start(rex) {
             return true;
         }
-        match place(l, state, subs, pim, add_here, listindex) {
+        match place(l, s, subs, pim, add_here, listindex) {
             Place::Skip => return true,
             Place::Full => return false,
             Place::Added => {}
         }
     }
 
-    follow(l, c, state, subs, pim, off, off_arg, depth)
+    follow(l, c, s.out, s.out1, subs, pim, off, off_arg, depth)
 }
 
 /// What [`place`] decided about a state.
@@ -400,19 +469,18 @@ enum Place {
 }
 
 /// Put `state` on `l` unless it is already there.
-fn place(
-    l: &mut ThreadList,
-    state: *mut NfaState,
+fn place<'p>(
+    l: &mut ThreadList<'_, 'p>,
+    s: &'p NfaState,
     subs: &RegSubs,
-    pim: Option<&NfaPim>,
+    pim: Option<&NfaPim<'p>>,
     add_here: bool,
     listindex: usize,
 ) -> Place {
     let rex = l.rex;
-    // SAFETY: `state` is a live state of the running program.
-    let c = op(state);
-    // SAFETY: `state` is a live state of the running program.
-    let seen = unsafe { (*state).lastlist[rex.nfa_ll_index()] == l.id };
+    let c = s.c;
+    let lastlist = &s.lastlist[rex.nfa_ll_index()];
+    let seen = lastlist.get() == l.id;
     let has_backref = has_backref(rex);
 
     // `NFA_SKIP` counts down the bytes a back-reference still owes, so two
@@ -423,15 +491,13 @@ fn place(
             // alone identifies the thread. Adding it at the current position
             // is still worth doing when the copy already on the list is
             // behind where the loop has got to.
-            let found = add_here && {
-                let id = id_of(state);
-                (0..l.len().min(listindex)).any(|k| id_of(l.thread(k).state) == id)
-            };
+            let found = add_here
+                && (0..l.len().min(listindex)).any(|k| core::ptr::eq(l.thread(k).state, s));
             if !add_here || found {
                 return Place::Skip;
             }
         }
-        if l.holds_with(state, subs, pim) {
+        if l.holds_with(s, subs, pim) {
             return Place::Skip;
         }
     }
@@ -439,9 +505,8 @@ fn place(
     if l.len() == l.slots && !l.grow() {
         return Place::Full;
     }
-    // SAFETY: `state` is a live state of the running program.
-    unsafe { (*state).lastlist[rex.nfa_ll_index()] = l.id };
-    l.push(state, subs, pim);
+    lastlist.set(l.id);
+    l.push(s, subs, pim);
     Place::Added
 }
 
@@ -462,40 +527,43 @@ fn past_line_start(rex: Rex) -> bool {
 /// `c` is `state`'s opcode, which [`walk`] has already read: converting it
 /// twice per state is measurable in this loop.
 #[allow(clippy::too_many_arguments)]
-fn follow(
-    l: &mut ThreadList,
+fn follow<'p>(
+    l: &mut ThreadList<'_, 'p>,
     c: Result<NfaOp, NotAnOpcode>,
-    state: *mut NfaState,
+    out: StateId,
+    out1: StateId,
     subs: &mut RegSubs,
-    pim: Option<&NfaPim>,
+    pim: Option<&NfaPim<'p>>,
     off: c_int,
     off_arg: c_int,
     depth: c_int,
 ) -> bool {
     let rex = l.rex;
-    let (out, out1) = (out_of(state), out1_of(state));
+    let states = l.states;
     match c {
         Ok(NfaOp::Split) => {
-            walk(l, out, subs, pim, off_arg, depth + 1)
-                && walk(l, out1, subs, pim, off_arg, depth + 1)
+            walk(l, states.state(out), subs, pim, off_arg, depth + 1)
+                && walk(l, states.state(out1), subs, pim, off_arg, depth + 1)
         }
         Ok(NfaOp::Empty | NfaOp::Nopen | NfaOp::Nclose) => {
-            walk(l, out, subs, pim, off_arg, depth + 1)
+            walk(l, states.state(out), subs, pim, off_arg, depth + 1)
         }
 
         // A capture opens here.
-        Ok(NfaOp::Zstart) => open(l, NfaOp::Zstart, state, subs, pim, off, off_arg, depth),
+        Ok(NfaOp::Zstart) => open(l, NfaOp::Zstart, out, subs, pim, off, off_arg, depth),
         Ok(marker) if marker.opens_capture() => {
-            open(l, marker, state, subs, pim, off, off_arg, depth)
+            open(l, marker, out, subs, pim, off, off_arg, depth)
         }
 
         // The whole match's close, which a `\ze` may already have placed.
-        Ok(NfaOp::Mclose) if has_zend_set(rex, subs) => walk(l, out, subs, pim, off_arg, depth + 1),
+        Ok(NfaOp::Mclose) if has_zend_set(rex, subs) => {
+            walk(l, states.state(out), subs, pim, off_arg, depth + 1)
+        }
 
         // A capture closes here.
-        Ok(NfaOp::Zend) => close(l, NfaOp::Zend, state, subs, pim, off, off_arg, depth),
+        Ok(NfaOp::Zend) => close(l, NfaOp::Zend, out, subs, pim, off, off_arg, depth),
         Ok(marker) if marker.closes_capture() => {
-            close(l, marker, state, subs, pim, off, off_arg, depth)
+            close(l, marker, out, subs, pim, off, off_arg, depth)
         }
 
         // Anything else — including `NfaOp::Match` — ends the walk.
@@ -579,19 +647,18 @@ enum Saved {
 /// `\(`, `\%(` and `\zs`: record where the group starts, walk on, and put
 /// back what the slot held.
 #[allow(clippy::too_many_arguments)]
-fn open(
-    l: &mut ThreadList,
+fn open<'p>(
+    l: &mut ThreadList<'_, 'p>,
     c: NfaOp,
-    state: *mut NfaState,
+    out: StateId,
     subs: &mut RegSubs,
-    pim: Option<&NfaPim>,
+    pim: Option<&NfaPim<'p>>,
     off: c_int,
     off_arg: c_int,
     depth: c_int,
 ) -> bool {
     let rex = l.rex;
     let kind = rex.pos_kind();
-    let out = out_of(state);
     let (subidx, synt) = slot_of(c, true);
 
     let sub = if synt { &mut subs.synt } else { &mut subs.norm };
@@ -616,7 +683,7 @@ fn open(
         slot.end.mark_unset(kind);
     }
 
-    if !walk(l, out, subs, pim, off_arg, depth + 1) {
+    if !walk(l, l.states.state(out), subs, pim, off_arg, depth + 1) {
         return false;
     }
 
@@ -631,19 +698,18 @@ fn open(
 /// `\)` and `\ze`: as [`open`], for the other end of a group. The end is
 /// always recorded, whether or not the slot was in use.
 #[allow(clippy::too_many_arguments)]
-fn close(
-    l: &mut ThreadList,
+fn close<'p>(
+    l: &mut ThreadList<'_, 'p>,
     c: NfaOp,
-    state: *mut NfaState,
+    out: StateId,
     subs: &mut RegSubs,
-    pim: Option<&NfaPim>,
+    pim: Option<&NfaPim<'p>>,
     off: c_int,
     off_arg: c_int,
     depth: c_int,
 ) -> bool {
     let rex = l.rex;
     let kind = rex.pos_kind();
-    let out = out_of(state);
     let (subidx, synt) = slot_of(c, false);
 
     let sub = if synt { &mut subs.synt } else { &mut subs.norm };
@@ -653,7 +719,7 @@ fn close(
     let saved = SavedSlot::of_end(&sub.list[subidx], kind);
     sub.list[subidx].end = rex.at_offset(off);
 
-    let ok = walk(l, out, subs, pim, off_arg, depth + 1);
+    let ok = walk(l, l.states.state(out), subs, pim, off_arg, depth + 1);
     if ok {
         let sub = if synt { &mut subs.synt } else { &mut subs.norm };
         saved.restore(&mut sub.list[subidx]);

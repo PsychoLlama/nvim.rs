@@ -4,10 +4,9 @@
 //! None of them consume input; they only say whether the position the match
 //! has reached is the one asked for.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use super::list::op;
+use super::program::NfaState;
 use crate::regexp::NfaOp;
 use core::ffi::c_int;
 
@@ -15,13 +14,12 @@ use super::run::nfa_re_num_cmp;
 use crate::mark::mark_lookup;
 use crate::plines::win_linetabsize_bytes;
 use crate::pos::MAXCOL;
-use crate::regexp::{NfaState, Rex, kMarkBufLocal, reg_getline, reg_getline_len, reg_match_visual};
+use crate::regexp::{Rex, kMarkBufLocal, reg_getline, reg_getline_len, reg_match_visual};
 use crate::types::{ColNr, LineNr, MB_MAXBYTES};
 
 use crate::winlayer::Win;
 /// The column the match has reached, in bytes from the start of the line.
 fn col(rex: Rex) -> ColNr {
-    // SAFETY: `input` and `line` bound the same line.
     rex.col()
 }
 
@@ -39,42 +37,30 @@ fn window(rex: Rex) -> Win {
 ///
 /// Only a buffer match has line numbers, so a string match never satisfies
 /// it.
-pub(crate) fn at_line(rex: Rex, state: *mut NfaState) -> bool {
-    // SAFETY: `state` is a live state of the running program.
-    let want = unsafe { (*state).val };
+pub(crate) fn at_line(rex: Rex, state: &NfaState) -> bool {
+    let want = state.val;
     assert!(
         want >= 0 && rex.buf_lnum() >= 0,
         "line assertion out of range"
     );
-    rex.multi()
-        && nfa_re_num_cmp(
-            want as u64,
-            op(state) - NfaOp::Lnum.code(),
-            lnum(rex) as u64,
-        )
+    rex.multi() && nfa_re_num_cmp(want as u64, state.c - NfaOp::Lnum.code(), lnum(rex) as u64)
 }
 
 /// `\%23c`: the byte column, counted from one.
-pub(crate) fn at_col(rex: Rex, state: *mut NfaState) -> bool {
-    // SAFETY: as `at_line`.
-    debug_assert!(
-        unsafe { (*state).val } >= 0,
-        "column assertion out of range"
-    );
+pub(crate) fn at_col(rex: Rex, state: &NfaState) -> bool {
+    debug_assert!(state.val >= 0, "column assertion out of range");
     nfa_re_num_cmp(
-        unsafe { (*state).val } as u64,
-        op(state) - NfaOp::Col.code(),
+        state.val as u64,
+        state.c - NfaOp::Col.code(),
         col(rex) as u64 + 1,
     )
 }
 
 /// `\%23v`: the virtual column, counted from one — what the character looks
 /// like it is at once tabs are expanded.
-pub(crate) fn at_vcol(rex: Rex, state: *mut NfaState) -> bool {
-    // SAFETY: as `at_line`; `reg_getline` re-reads the line because
-    // `win_linetabsize` can move the memline's buffer.
-    let op = op(state) - NfaOp::Vcol.code();
-    let want = unsafe { (*state).val };
+pub(crate) fn at_vcol(rex: Rex, state: &NfaState) -> bool {
+    let op = state.c - NfaOp::Vcol.code();
+    let want = state.val;
     let col = col(rex);
     // A virtual column is never smaller than the byte column divided by
     // the widest a character can be, so a `\%<` can be answered without
@@ -101,10 +87,9 @@ pub(crate) fn at_vcol(rex: Rex, state: *mut NfaState) -> bool {
 }
 
 /// `\%'m`: the position of mark `m`.
-pub(crate) fn at_mark(rex: Rex, state: *mut NfaState) -> bool {
+pub(crate) fn at_mark(rex: Rex, state: &NfaState) -> bool {
     let col = if rex.multi() { col(rex) } else { 0 };
-    // SAFETY: a live state of the running program.
-    let name = unsafe { (*state).val };
+    let name = state.val;
     // `mark_lookup` computes a motion mark (`'{`, `'(`) on the spot.
     let fm = mark_lookup(rex.reg_buf(), Win::current(), kMarkBufLocal, name);
     // Looking a mark up can move the memline's buffer out from under
@@ -123,7 +108,7 @@ pub(crate) fn at_mark(rex: Rex, state: *mut NfaState) -> bool {
     } else {
         pos.col
     };
-    let want = op(state);
+    let want = state.c;
     if pos.lnum == here {
         if pos_col == col {
             want == NfaOp::Mark.code()

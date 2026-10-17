@@ -13,23 +13,21 @@
 //! re-parses its atom and throws away what the speculative pass emitted,
 //! which is [`Postfix::len`] plus [`Postfix::truncate`].
 //!
-//! # Why this is not simply a `Vec`
+//! # Why `emit` does not call `Vec::push`
 //!
-//! It was, and it cost a factor of three. Appending happens once per emitted
-//! item, and the compile-speed test's
+//! Appending happens once per emitted item, and the compile-speed test's
 //! `\v(((((Nxxxxxxx&&xxxx){179})+)+)+){179}` emits eight million of them:
 //! the `\{n,m}` expansion re-parses its atom once per repetition and the
 //! repetitions nest. At opt-level 0 — which is what the test suites run —
-//! none of `Vec`'s accessors inline, so `push` is a chain of half a dozen
-//! calls where upstream's macro was six instructions. `Vec` still owns the
-//! allocation; the length and the write pointer are kept beside it as plain
-//! fields so the hot path touches neither.
+//! none of `Vec`'s accessors inline, and `push` was measured at three times
+//! upstream's six-instruction macro. So the buffer is kept zero-filled to its
+//! capacity and `len` beside it is the real length: appending is one store
+//! into an initialised slot.
 //!
 //! The program is a field of the compile's `RegCompiler`, reached by `&mut`:
 //! no cell, no borrow table, nothing between `emit` and the store.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -44,13 +42,9 @@ use core::ffi::c_int;
 /// The postfix program under construction. A field of the compile's
 /// [`RegCompiler`](crate::regexp::RegCompiler).
 pub(crate) struct Postfix {
-    /// Owns the allocation. Its own length stays 0; `len` below is the real
-    /// one, so that appending never calls into `Vec`.
+    /// The items, zero-filled past `len` to the buffer's whole length, so
+    /// that appending never calls into `Vec`.
     buf: Vec<c_int>,
-    /// `buf.as_mut_ptr()`, refreshed whenever `buf` reallocates.
-    items: *mut c_int,
-    /// `buf.capacity()`, likewise.
-    cap: usize,
     len: usize,
 }
 
@@ -59,8 +53,6 @@ impl Postfix {
     pub(crate) const fn new() -> Postfix {
         Postfix {
             buf: Vec::new(),
-            items: core::ptr::null_mut(),
-            cap: 0,
             len: 0,
         }
     }
@@ -69,42 +61,34 @@ impl Postfix {
     ///
     /// The reservation is upstream's guess at how many items a pattern of
     /// that length can produce; it is only a capacity, so an underestimate
-    /// costs a reallocation rather than a failure.
+    /// costs a reallocation rather than a failure. It is not zero-filled
+    /// until [`Postfix::grow`] reaches it: most patterns use a fraction.
     pub(crate) fn start(&mut self, pattern_len: usize) {
         self.len = 0;
-        self.reserve((pattern_len + 1) * 25 + 1000);
-    }
-
-    /// Make room for at least `want` items, keeping the cached pointer and
-    /// capacity in step with `buf`.
-    fn reserve(&mut self, want: usize) {
-        if want <= self.cap {
-            return;
+        let want = (pattern_len + 1) * 25 + 1000;
+        if want > self.buf.capacity() {
+            self.buf.reserve_exact(want - self.buf.len());
         }
-        self.buf.reserve_exact(want);
-        self.items = self.buf.as_mut_ptr();
-        self.cap = self.buf.capacity();
     }
 
-    /// Grow the program. Out of line: appending is the hot path and this
-    /// runs a handful of times per compile.
+    /// Make room for more items: half again what there is, filling the
+    /// reserved capacity before reallocating, as upstream's
+    /// `realloc_post_list` grows by half again. Out of line: appending is
+    /// the hot path and this runs a handful of times per compile.
     #[inline(never)]
     #[cold]
     fn grow(&mut self) {
-        // Upstream's `realloc_post_list` grows by half again.
-        let want = self.cap + self.cap / 2 + 1;
-        self.reserve(want);
+        let len = self.buf.len();
+        self.buf.resize((len + len / 2 + 1).max(256), 0);
     }
 
     /// Append one item. The transpiled form of upstream's `EMIT` macro.
     #[inline(always)]
     pub(crate) fn emit(&mut self, item: c_int) {
-        if self.len == self.cap {
+        if self.len == self.buf.len() {
             self.grow();
         }
-        // SAFETY: `len` is below `cap` now, and `items` addresses `cap`
-        // items of the allocation `buf` owns.
-        unsafe { *self.items.add(self.len) = item };
+        self.buf[self.len] = item;
         self.len += 1;
     }
 
@@ -151,12 +135,7 @@ impl Postfix {
 
     /// The program as emitted, for the compile's read phase.
     pub(crate) fn items(&self) -> &[c_int] {
-        if self.items.is_null() {
-            return &[];
-        }
-        // SAFETY: `items` addresses `len` initialised items of `buf`'s
-        // allocation, and the borrow of `self` keeps it from reallocating.
-        unsafe { core::slice::from_raw_parts(self.items, self.len) }
+        &self.buf[..self.len]
     }
 }
 

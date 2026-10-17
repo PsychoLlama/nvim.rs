@@ -7,8 +7,7 @@
 //! conservatively and gives up — returning "no shortcut" — the moment it
 //! meets anything it cannot reason about.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -21,10 +20,9 @@ use crate::cstr;
 use crate::regexp::NfaOp;
 use core::ffi::c_int;
 
-use crate::mbyte::{utf_char2bytes, utf_char2len};
-use crate::memory::xmalloc;
-use crate::regexp::NfaState;
-use crate::types::uint8_t;
+use super::program::{NfaState, StateId};
+use crate::mbyte::encode_char;
+use crate::types::MB_MAXBYTES;
 
 /// How far the walks below follow a `NFA_SPLIT` before giving up.
 const MAX_DEPTH: c_int = 4;
@@ -36,29 +34,25 @@ fn is_bracket(c: NfaOp) -> bool {
 }
 
 /// Must every match start at the beginning of a line?
-///
-/// # Safety
-///
-/// `start` must be null or a state of a live program.
-pub(crate) unsafe fn nfa_get_reganch(start: *mut NfaState, depth: c_int) -> bool {
+pub(crate) fn nfa_get_reganch(states: &[NfaState], start: StateId, depth: c_int) -> bool {
     if depth > MAX_DEPTH {
         return false;
     }
-    // SAFETY: the caller's program; `out`/`out1` stay inside it.
     let mut p = start;
-    while !p.is_null() {
-        match NfaOp::try_from(unsafe { (*p).c }) {
+    while !p.is_none() {
+        let s = &states[p.index()];
+        match NfaOp::try_from(s.c) {
             Ok(NfaOp::Bol | NfaOp::Bof) => return true,
             // Zero-width, so the anchor is whatever follows. Note that
             // `\%23l` and its neighbours are *not* here: unlike
             // `nfa_get_regstart` below, a position assertion stops this
             // walk.
-            Ok(NfaOp::Cursor | NfaOp::Visual) => p = unsafe { (*p).out },
-            Ok(c) if is_bracket(c) => p = unsafe { (*p).out },
+            Ok(NfaOp::Cursor | NfaOp::Visual) => p = s.out,
+            Ok(c) if is_bracket(c) => p = s.out,
             // Anchored only if both alternatives are.
             Ok(NfaOp::Split) => {
-                return unsafe { nfa_get_reganch((*p).out, depth + 1) }
-                    && unsafe { nfa_get_reganch((*p).out1, depth + 1) };
+                return nfa_get_reganch(states, s.out, depth + 1)
+                    && nfa_get_reganch(states, s.out1, depth + 1);
             }
             _ => return false,
         }
@@ -68,23 +62,19 @@ pub(crate) unsafe fn nfa_get_reganch(start: *mut NfaState, depth: c_int) -> bool
 
 /// The character every match must start with, or 0 if there is no single
 /// such character.
-///
-/// # Safety
-///
-/// `start` must be null or a state of a live program.
-pub(crate) unsafe fn nfa_get_regstart(start: *mut NfaState, depth: c_int) -> c_int {
+pub(crate) fn nfa_get_regstart(states: &[NfaState], start: StateId, depth: c_int) -> c_int {
     if depth > MAX_DEPTH {
         return 0;
     }
-    // SAFETY: the caller's program; `out`/`out1` stay inside it.
     let mut p = start;
-    while !p.is_null() {
-        let code = unsafe { (*p).c };
+    while !p.is_none() {
+        let s = &states[p.index()];
+        let code = s.c;
         match NfaOp::try_from(code) {
             // Zero-width: the start character is whatever follows.
             // `Cursor`..=`Visual` is the whole position-assertion block,
             // `\%#` through `\%V`.
-            Ok(NfaOp::Bol | NfaOp::Bof | NfaOp::Bow | NfaOp::Eow) => p = unsafe { (*p).out },
+            Ok(NfaOp::Bol | NfaOp::Bof | NfaOp::Bow | NfaOp::Eow) => p = s.out,
             Ok(
                 NfaOp::Cursor
                 | NfaOp::Lnum
@@ -100,12 +90,12 @@ pub(crate) unsafe fn nfa_get_regstart(start: *mut NfaState, depth: c_int) -> c_i
                 | NfaOp::MarkGt
                 | NfaOp::MarkLt
                 | NfaOp::Visual,
-            ) => p = unsafe { (*p).out },
-            Ok(c) if is_bracket(c) => p = unsafe { (*p).out },
+            ) => p = s.out,
+            Ok(c) if is_bracket(c) => p = s.out,
             // Only if both alternatives agree.
             Ok(NfaOp::Split) => {
-                let c1 = unsafe { nfa_get_regstart((*p).out, depth + 1) };
-                let c2 = unsafe { nfa_get_regstart((*p).out1, depth + 1) };
+                let c1 = nfa_get_regstart(states, s.out, depth + 1);
+                let c2 = nfa_get_regstart(states, s.out1, depth + 1);
                 return if c1 == c2 { c1 } else { 0 };
             }
             // A literal character is one; any other opcode is not.
@@ -115,43 +105,31 @@ pub(crate) unsafe fn nfa_get_regstart(start: *mut NfaState, depth: c_int) -> c_i
     0
 }
 
-/// The literal text the whole pattern matches, as a fresh NUL-terminated
-/// allocation, or null when it is not one plain run of characters.
-///
-/// # Safety
-///
-/// `start` must be a state of a live program.
-pub(crate) unsafe fn nfa_get_match_text(start: *mut NfaState) -> *mut uint8_t {
-    // SAFETY: the caller's program. The measuring walk proves the chain
-    // ends in `NFA_MCLOSE` -> `NFA_MATCH` before the writing walk follows
-    // it again.
-    if unsafe { (*start).c } != NfaOp::Mopen.code() {
-        return core::ptr::null_mut();
+/// The literal text the whole pattern matches after its first character
+/// (which the program reports as `regstart`), NUL-terminated, or `None`
+/// when the pattern is not one plain run of characters.
+pub(crate) fn nfa_get_match_text(states: &[NfaState], start: StateId) -> Option<Vec<u8>> {
+    let state = |id: StateId| &states[id.index()];
+    if state(start).c != NfaOp::Mopen.code() {
+        return None;
     }
-    let mut p = unsafe { (*start).out };
-    let mut len = 0;
-    while unsafe { (*p).c } > 0 {
-        len += utf_char2len(unsafe { (*p).c });
-        p = unsafe { (*p).out };
+    let mut p = state(start).out;
+    while state(p).c > 0 {
+        p = state(p).out;
     }
-    if unsafe { (*p).c } != NfaOp::Mclose.code() || unsafe { (*(*p).out).c } != NfaOp::Match.code()
-    {
-        return core::ptr::null_mut();
+    if state(p).c != NfaOp::Mclose.code() || state(state(p).out).c != NfaOp::Match.code() {
+        return None;
     }
-
-    // `len` counted the first character too, and the write below skips
-    // it (it is reported separately as the program's `regstart`), so
-    // there is always at least one spare byte for the terminator.
-    let bytes = usize::try_from(len).expect("a character length is never negative");
-    let text = unsafe { xmalloc(bytes) }.cast::<uint8_t>();
-    let mut out = text;
-    let mut p = unsafe { (*(*start).out).out };
-    while unsafe { (*p).c } > 0 {
-        out = unsafe { out.offset(utf_char2bytes((*p).c, out.cast()) as isize) };
-        p = unsafe { (*p).out };
+    let mut text = Vec::new();
+    let mut buf = [0u8; MB_MAXBYTES];
+    let mut p = state(state(start).out).out;
+    while state(p).c > 0 {
+        let len = encode_char(state(p).c, &mut buf);
+        text.extend_from_slice(&buf[..len]);
+        p = state(p).out;
     }
-    unsafe { *out = b'\0' };
-    text
+    text.push(b'\0');
+    Some(text)
 }
 
 crate::flag_set! {

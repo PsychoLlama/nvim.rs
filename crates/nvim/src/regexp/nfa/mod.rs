@@ -27,6 +27,7 @@ mod matcher;
 mod op;
 mod parse;
 mod postfix;
+mod program;
 mod run;
 mod step;
 mod sub;
@@ -34,6 +35,7 @@ mod sub;
 pub(crate) use self::exec::*;
 pub(crate) use self::op::*;
 pub(crate) use self::postfix::Postfix;
+pub(crate) use self::program::*;
 pub(crate) use self::run::*;
 
 /// The parser refused the pattern, so there is no postfix program.

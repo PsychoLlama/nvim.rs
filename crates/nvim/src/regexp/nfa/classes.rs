@@ -4,8 +4,7 @@
 //! Each is a pure test on the character at the input, so they answer `bool`
 //! and the loop decides what to do about it.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -62,6 +61,10 @@ fn is_file_char(c: c_int) -> bool {
 ///
 /// The negated forms all also require a character to be there: at the end of
 /// a line there is nothing for `\I` to match.
+// Out of line: inlined into the match loop, its tests of `curc` are hoisted
+// into the per-character prologue and paid for at every character, class
+// state or not.
+#[inline(never)]
 pub(crate) fn class_matches(rex: Rex, op: NfaOp, curc: c_int) -> bool {
     match op {
         NfaOp::Ident => is_ident_char(curc),

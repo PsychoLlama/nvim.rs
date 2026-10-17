@@ -14,21 +14,21 @@ use crate::regexp::ExtMatch;
 use crate::regexp::ExtMatchRef;
 use crate::regexp::RF_HAD_EOL;
 use crate::regexp::RegCompiler;
-use core::ffi::{CStr, c_int};
+use core::ffi::c_int;
 
 use super::build::{Pass, nfa_postprocess, post2nfa};
 use super::compile::{nfa_get_match_text, nfa_get_reganch, nfa_get_regstart};
+use super::list::{BLANK_SUBS, SpareLists};
 use super::matcher::nfa_regmatch;
 use super::parse::re2post;
 use super::run::{find_match_text, skip_to_start};
 use super::sub::{clear_sub, slots};
-use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::e_null;
 use crate::message::iemsg;
 use crate::os::cshim::gettext;
 use crate::regexp::{
-    MatchPos, NFA_TOO_EXPENSIVE, NfaRegProg, NfaState, REX_SET, RF_ICASE, RF_ICOMBINE, RF_NOICASE,
-    RegSubs, Rex, TimeBudget, cleanup_subexpr, cleanup_zsubexpr, nfa_regengine, reg_getline,
+    MatchPos, NFA_TOO_EXPENSIVE, NfaRegProg, REX_SET, RF_ICASE, RF_ICOMBINE, RF_NOICASE, RegSubs,
+    Rex, TimeBudget, cleanup_subexpr, cleanup_zsubexpr, nfa_regengine, reg_getline,
 };
 use crate::types::{ColNr, LPos, NUL, RegProg};
 
@@ -36,11 +36,9 @@ use crate::types::{ColNr, LPos, NUL, RegProg};
 ///
 /// Returns 0 for no match, `NFA_TOO_EXPENSIVE`, or one more than the line
 /// the match ended on.
-fn nfa_regtry(rex: Rex, prog: *mut NfaRegProg, col: ColNr) -> c_int {
-    // SAFETY: `prog` is a live program and `rex` the match context set up by
-    // `nfa_regexec_both`.
-    let mut subs: RegSubs = unsafe { core::mem::zeroed() };
-    let mut m: RegSubs = unsafe { core::mem::zeroed() };
+fn nfa_regtry(rex: Rex, prog: &NfaRegProg, col: ColNr) -> c_int {
+    let mut subs = BLANK_SUBS;
+    let mut m = BLANK_SUBS;
     rex.set_col(col);
     rex.set_time_budget(TimeBudget::NONE);
 
@@ -49,13 +47,8 @@ fn nfa_regtry(rex: Rex, prog: *mut NfaRegProg, col: ColNr) -> c_int {
     clear_sub(rex, &mut subs.synt);
     clear_sub(rex, &mut m.synt);
 
-    let result = nfa_regmatch(
-        rex,
-        prog,
-        unsafe { (*prog).start },
-        &raw mut subs,
-        &raw mut m,
-    );
+    let mut listids = Vec::new();
+    let result = nfa_regmatch(rex, prog, prog.start, &mut subs, &mut m, &mut listids);
     if result == 0 || result == NFA_TOO_EXPENSIVE {
         return result;
     }
@@ -65,7 +58,7 @@ fn nfa_regtry(rex: Rex, prog: *mut NfaRegProg, col: ColNr) -> c_int {
 
     // The `\z(` captures go to the syntax highlighter as fresh copies,
     // because it keeps them past the end of this match.
-    let captures = (unsafe { (*prog).reghasz } == REX_SET).then(|| {
+    let captures = (prog.reghasz == REX_SET).then(|| {
         cleanup_zsubexpr(rex);
         ExtMatchRef::new(z_captures(rex, &subs))
     });
@@ -138,12 +131,7 @@ fn z_captures(rex: Rex, subs: &RegSubs) -> ExtMatch {
 /// at column `col`. Returns 0 for no match, `NFA_TOO_EXPENSIVE` when the
 /// pattern has to go to the backtracking engine, or one more than the line
 /// the match ended on.
-///
-/// # Safety
-///
-/// `prog` must be a live program this engine compiled, unaliased for the
-/// call.
-pub(crate) unsafe fn nfa_regexec(rex: Rex, prog: *mut NfaRegProg, startcol: ColNr) -> c_int {
+pub(crate) fn nfa_regexec(rex: Rex, prog: &NfaRegProg, startcol: ColNr) -> c_int {
     let mut col = startcol;
     let line = if rex.multi() {
         reg_getline(rex, 0)
@@ -153,22 +141,22 @@ pub(crate) unsafe fn nfa_regexec(rex: Rex, prog: *mut NfaRegProg, startcol: ColN
 
     let mut retval = 0;
     match line {
-        Some(line) if !prog.is_null() => {
+        Some(line) => {
             // The pattern's own `\c`/`\C`/`\Z` override what the caller
             // asked for.
-            if unsafe { (*prog).regflags } & RF_ICASE as u32 != 0 {
+            if prog.regflags & RF_ICASE as u32 != 0 {
                 rex.set_reg_ic(true);
-            } else if unsafe { (*prog).regflags } & RF_NOICASE as u32 != 0 {
+            } else if prog.regflags & RF_NOICASE as u32 != 0 {
                 rex.set_reg_ic(false);
             }
-            if unsafe { (*prog).regflags } & RF_ICOMBINE as u32 != 0 {
+            if prog.regflags & RF_ICOMBINE as u32 != 0 {
                 rex.set_reg_icombine(true);
             }
             rex.set_line(line);
             rex.set_lnum(0);
-            rex.set_nfa_has_zend(unsafe { (*prog).has_zend });
-            rex.set_nfa_has_backref(unsafe { (*prog).has_backref });
-            rex.set_nfa_nsubexpr(unsafe { (*prog).nsubexp });
+            rex.set_nfa_has_zend(prog.has_zend);
+            rex.set_nfa_has_backref(prog.has_backref);
+            rex.set_nfa_nsubexpr(prog.nsubexp);
             rex.set_nfa_listid(1);
             rex.set_nfa_alt_listid(2);
 
@@ -180,7 +168,7 @@ pub(crate) unsafe fn nfa_regexec(rex: Rex, prog: *mut NfaRegProg, startcol: ColN
                 Attempt::Done(retval) => return retval,
             };
         }
-        _ => iemsg(gettext(e_null)),
+        None => iemsg(gettext(e_null)),
     }
 
     if retval > 0 {
@@ -207,34 +195,30 @@ enum Attempt {
 }
 
 /// The shortcuts, and the match itself.
-///
-/// SAFETY: As `nfa_regexec_both`.
-fn try_match(rex: Rex, prog: *mut NfaRegProg, col: &mut ColNr) -> Attempt {
+fn try_match(rex: Rex, prog: &NfaRegProg, col: &mut ColNr) -> Attempt {
     // An anchored pattern can only match at the start of the line.
-    if unsafe { (*prog).reganch } != 0 && *col > 0 {
+    if prog.reganch && *col > 0 {
         return Attempt::Done(0);
     }
     rex.set_need_clear_subexpr(true);
-    let has_z = unsafe { (*prog).reghasz } == REX_SET;
+    let has_z = prog.reghasz == REX_SET;
     rex.set_nfa_has_zsubexpr(has_z as c_int);
     rex.set_need_clear_zsubexpr(has_z);
 
-    if unsafe { (*prog).regstart } != NUL {
+    if prog.regstart != NUL {
         // The first character is known: there is no point trying any
         // column before the next one that holds it.
-        if skip_to_start(rex, unsafe { (*prog).regstart }, col).is_err() {
+        if skip_to_start(rex, prog.regstart, col).is_err() {
             return Attempt::Done(0);
         }
         // And when the whole pattern is that literal run, the machine
         // has nothing to add. Not with 'regexpengine' combining
         // insensitivity, which the text comparison does not implement.
-        if !unsafe { (*prog).match_text.is_null() }
-            && unsafe { *(*prog).match_text } as c_int != NUL
+        if let Some(text) = prog.match_text.as_deref()
+            && text[0] != 0
             && !rex.reg_icombine()
         {
-            // SAFETY: the program's own NUL-terminated copy of the run.
-            let text = unsafe { CStr::from_ptr((*prog).match_text.cast()) }.to_bytes_with_nul();
-            let retval = find_match_text(rex, col, unsafe { (*prog).regstart }, text);
+            let retval = find_match_text(rex, col, prog.regstart, text);
             rex.set_matchcol(*col);
             return Attempt::Done(retval);
         }
@@ -244,11 +228,9 @@ fn try_match(rex: Rex, prog: *mut NfaRegProg, col: &mut ColNr) -> Attempt {
     }
 
     // Every state starts out on no list.
-    let states = unsafe { &raw mut (*prog).state } as *mut NfaState;
-    for i in 0..unsafe { (*prog).nstate } {
-        let s = unsafe { states.offset(i as isize) };
-        unsafe { (*s).id = i };
-        unsafe { (*s).lastlist = [0, 0] };
+    for s in &prog.states {
+        s.lastlist[0].set(0);
+        s.lastlist[1].set(0);
     }
     Attempt::Ran(nfa_regtry(rex, prog, *col))
 }
@@ -257,61 +239,62 @@ fn try_match(rex: Rex, prog: *mut NfaRegProg, col: &mut ColNr) -> Attempt {
 /// not -- or, under 'regexpengine' 0, having declined it quietly.
 pub(crate) fn nfa_regcomp(rc: &mut RegCompiler) -> *mut RegProg {
     rc.nfa.count = 0;
-    rc.nfa.built = 0;
+    rc.nfa.states = Vec::new();
     rc.post.start(rc.pattern_len);
     rc.wants_nfa = false;
     rc.has_zend = 0;
     rc.has_backref = 0;
     rc.restart();
 
-    let mut prog: *mut NfaRegProg = core::ptr::null_mut();
-    if re2post(rc).is_ok() {
-        // The first pass counts the states, because the program is one
-        // block with them inline.
-        post2nfa(&mut rc.nfa, rc.post.items(), Pass::Count);
-        let size = 80 + size_of::<NfaState>() * rc.nfa.count as usize;
-        // SAFETY: `xmalloc` answers a block of `size` bytes, room for the
-        // head and `count` states; everything below writes inside it.
-        prog = unsafe { xmalloc(size) } as *mut NfaRegProg;
-        rc.nfa.base = unsafe { &raw mut (*prog).state } as *mut NfaState;
-        unsafe { (*prog).re_in_use = false };
-        unsafe { (*prog).start = post2nfa(&mut rc.nfa, rc.post.items(), Pass::Build) };
-        if unsafe { (*prog).start.is_null() } {
-            unsafe { xfree(prog.cast()) };
-            prog = core::ptr::null_mut();
-        } else {
-            let mut flags = rc.flags;
-            if rc.had_eol != 0 {
-                flags |= RF_HAD_EOL;
-            }
-            unsafe { (*prog).regflags = flags };
-            unsafe { (*prog).engine = (&raw const nfa_regengine).cast_mut() };
-            unsafe { (*prog).nstate = rc.nfa.count };
-            unsafe { (*prog).has_zend = rc.has_zend };
-            unsafe { (*prog).has_backref = rc.has_backref };
-            unsafe { (*prog).nsubexp = rc.next_group };
-            nfa_postprocess(prog);
-            unsafe { (*prog).reganch = c_int::from(nfa_get_reganch((*prog).start, 0)) };
-            unsafe { (*prog).regstart = nfa_get_regstart((*prog).start, 0) };
-            unsafe { (*prog).match_text = nfa_get_match_text((*prog).start) };
-            unsafe { (*prog).reghasz = rc.has_z };
-            unsafe { (*prog).pattern = xstrdup(rc.pattern.as_ptr()) };
-        }
+    if re2post(rc).is_err() {
+        return core::ptr::null_mut();
     }
-    prog.cast()
+    // The first pass counts the states, which sizes the thread lists.
+    post2nfa(&mut rc.nfa, rc.post.items(), Pass::Count);
+    rc.nfa.states = Vec::with_capacity(usize::try_from(rc.nfa.count).unwrap_or(0));
+    let start = post2nfa(&mut rc.nfa, rc.post.items(), Pass::Build);
+    if start.is_none() {
+        return core::ptr::null_mut();
+    }
+    let mut flags = rc.flags;
+    if rc.had_eol != 0 {
+        flags |= RF_HAD_EOL;
+    }
+    let mut prog = NfaRegProg {
+        engine: (&raw const nfa_regengine).cast_mut(),
+        regflags: flags,
+        re_engine: 0,
+        re_flags: 0,
+        re_in_use: false,
+        start,
+        reganch: false,
+        regstart: 0,
+        match_text: None,
+        has_zend: rc.has_zend,
+        has_backref: rc.has_backref,
+        reghasz: rc.has_z,
+        pattern: rc.pattern.to_owned(),
+        nsubexp: rc.next_group,
+        nstate: rc.nfa.count,
+        states: core::mem::take(&mut rc.nfa.states),
+        spare: SpareLists::new(),
+    };
+    nfa_postprocess(&mut prog);
+    prog.reganch = nfa_get_reganch(&prog.states, start, 0);
+    prog.regstart = nfa_get_regstart(&prog.states, start, 0);
+    prog.match_text = nfa_get_match_text(&prog.states, start);
+    Box::into_raw(Box::new(prog)).cast::<RegProg>()
 }
 
 /// Free a program this engine compiled.
 ///
 /// # Safety
 ///
-/// `prog` must be null or such a program.
+/// `prog` must be null or such a program, not yet freed.
 pub(crate) unsafe fn nfa_regfree(prog: *mut RegProg) {
     if prog.is_null() {
         return;
     }
-    let prog = prog as *mut NfaRegProg;
-    unsafe { xfree((*prog).match_text.cast()) };
-    unsafe { xfree((*prog).pattern.cast()) };
-    unsafe { xfree(prog.cast()) };
+    // SAFETY: the caller's promise -- the box `nfa_regcomp` leaked.
+    drop(unsafe { Box::from_raw(prog.cast::<NfaRegProg>()) });
 }
