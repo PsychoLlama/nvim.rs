@@ -154,7 +154,7 @@ fn write_offset(dirc: c_int, off: SearchOffset) -> Vec<u8> {
     if !(off.line || off.end || off.off != 0) {
         return out;
     }
-    out.push(dirc.to_ne_bytes()[0]);
+    out.push(dirc as u8);
     if off.end {
         out.push(b'e');
     } else if !off.line {
@@ -248,7 +248,7 @@ fn echo_search_cmd(dirc: c_int, searchstr: &[u8], options: c_int) -> Option<(Ech
     // for the search-statistics feature.
     if !cmd_silent.get() {
         ui_busy_start();
-        echo[0] = dirc.to_ne_bytes()[0];
+        echo[0] = dirc as u8;
         let at = if utf_iscomposing_first(char_at(p)) {
             // Use a space to draw the composing character on.
             echo[1] = b' ';
@@ -429,7 +429,7 @@ pub fn do_search(
         dirc = c_int::from(off.dir.to_ne_bytes()[0]);
     } else {
         let mut off = search_offset();
-        off.dir = c_char::from_ne_bytes([dirc.to_ne_bytes()[0]]);
+        off.dir = dirc as c_char;
         set_search_offset(off);
         set_vv_searchforward();
     }

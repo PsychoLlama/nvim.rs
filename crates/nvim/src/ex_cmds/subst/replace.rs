@@ -1,11 +1,11 @@
 //! Building one replacement, and putting the rebuilt line in the buffer.
 //!
 //! The replacement is produced twice: [`build_replacement`] first calls
-//! `vim_regsub_multi` with no destination, purely to learn how long the
-//! result will be, then again to write it -- the "measure or write" shape,
-//! and the reason `\=` expressions are evaluated twice per match.  Both
-//! passes run under `textlock`, so the expression cannot change the text
-//! under the match.
+//! `regsub_multi_len`, purely to learn how long the result will be, then
+//! `regsub_multi_into` to write it -- the "measure or write" shape. A `\=`
+//! expression is evaluated once, by the measuring pass, which keeps its
+//! value for the writing one.  Both passes run under `textlock`, so the
+//! expression cannot change the text under the match.
 //!
 //! [`commit_line`] is the other half: the rebuilt line only reaches the
 //! buffer once there is no further match on it, because replacing it earlier
@@ -103,7 +103,7 @@ impl SubLine {
     ///
     /// `write` is handed the `room` zeroed bytes it was promised, with one
     /// more zero past them; the line then ends at the first NUL it left
-    /// behind. That is `vim_regsub_multi`'s two-pass contract: the caller
+    /// behind. That is the substitution's two-pass contract: the caller
     /// has already measured, so `room` is a length the callee agreed to, and
     /// the spare byte past it covers the one case where the two passes
     /// disagree -- upstream's own buffer is `xcalloc`ed and zero-filled on
@@ -141,7 +141,7 @@ impl SubLine {
     }
 }
 
-/// The `vim_regsub_multi` flags this command uses, without the copy bit.
+/// The `regsub_multi_*` flags this command uses, without the copy bit.
 fn regsub_flags() -> c_int {
     REGSUB_BACKSLASH as c_int
         | if magic_isset() {

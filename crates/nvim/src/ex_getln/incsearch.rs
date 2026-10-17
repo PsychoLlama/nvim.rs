@@ -679,7 +679,7 @@ pub(crate) fn may_do_command_line_next_incsearch(
         if let Some(last) = pat.last_mut()
             && *last == b'\\'
         {
-            *last = firstc.to_ne_bytes()[0];
+            *last = firstc as u8;
         }
     }
 

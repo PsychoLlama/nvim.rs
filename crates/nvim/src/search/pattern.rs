@@ -527,7 +527,7 @@ pub fn last_pat_prog(regmatch: &mut RegMMatch) {
 /// Set the direction `n` repeats in, for `:let v:searchforward =`.
 pub fn set_search_direction(cdir: c_int) {
     // The direction is `/` or `?`, a byte.
-    let dir = c_char::from_ne_bytes([cdir.to_ne_bytes()[0]]);
+    let dir = cdir as c_char;
     update_spat(RE_SEARCH, |spat| spat.off.dir = dir);
 }
 
