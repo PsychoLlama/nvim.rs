@@ -185,21 +185,18 @@ impl Cells {
     pub(super) fn search_highlight(&mut self, wlv: &mut WinLineVars, window: Win) {
         // SAFETY: the caller's window and the redraw's match state.
         let at = self.byte_col();
-        self.search_attr = unsafe {
-            update_search_hl(
-                window,
-                wlv.lnum,
-                at,
-                &raw mut self.line,
-                SearchHl::current().raw(),
-                &raw mut self.has_match_conc,
-                &raw mut self.match_conc,
-                self.lcs_eol_todo,
-                &raw mut self.on_last_col,
-                &raw mut self.search_attr_from_match,
-            )
-        };
-        // `line` may have moved.
+        self.search_attr = update_search_hl(
+            window,
+            wlv.lnum,
+            at,
+            &mut self.has_match_conc,
+            &mut self.match_conc,
+            self.lcs_eol_todo,
+            &mut self.on_last_col,
+            &mut self.search_attr_from_match,
+        );
+        // A multi-line regexp may have moved the line.
+        self.line = ml_get_buf(window.buffer(), wlv.lnum);
         self.ptr = unsafe { self.line.offset(at as isize) };
 
         // A conceal over the end of the line would hide the eol itself.

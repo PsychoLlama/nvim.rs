@@ -172,7 +172,7 @@ pub(crate) fn win_update(window: Win) {
     validate_virtcol(win);
     rg.redr_type = win.w_redr_type;
 
-    unsafe { window.init_search_hl(SearchHl::current().raw()) };
+    window.init_search_hl();
 
     clamp_skipcol(window);
 
@@ -360,14 +360,10 @@ fn find_changed_lines(win: Win, buffer: Buf, rg: &mut Regions) {
         // solution: redraw every visible line above the change.
         rg.top_to_mod = SearchHl::current().is_multiline();
         if !rg.top_to_mod {
-            let mut cur = win.w_match_head;
-            while !cur.is_null() {
-                if unsafe { (*cur).mit_match.is_multiline() } {
-                    rg.top_to_mod = true;
-                    break;
-                }
-                cur = unsafe { (*cur).mit_next };
-            }
+            rg.top_to_mod = win
+                .w_matches
+                .iter()
+                .any(|item| item.mit_match.is_multiline());
         }
     }
 

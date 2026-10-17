@@ -134,15 +134,6 @@ impl OwnedProg {
         wrong
     }
 
-    /// Do both programs belong to the same engine? A recompile for the
-    /// backtracking engine is what makes two copies of a pattern differ.
-    pub(crate) fn same_engine(&self, other: &OwnedProg) -> bool {
-        matches!(
-            (&self.0.program, &other.0.program),
-            (Program::Bt(_), Program::Bt(_)) | (Program::Nfa(_), Program::Nfa(_))
-        )
-    }
-
     /// Was it compiled with `RE_NOBREAK`?
     fn nobreak(&self) -> bool {
         self.0.re_flags & RE_NOBREAK != 0

@@ -1,22 +1,21 @@
 //! Match highlighting: the per-window match list.
 //!
 //! A *match* is a pattern (or a list of positions) that a window paints in a
-//! highlight group, independently of `'hlsearch'`. Matches live in a
-//! priority-ordered singly-linked list hanging off `Window::w_match_head`,
-//! high priority first, and are addressed by an id: 1, 2 and 3 belong to the
+//! highlight group, independently of `'hlsearch'`. Matches live in a list
+//! the window owns, `Window::w_matches`, in ascending priority order (ties in
+//! the order they were added), and are addressed by an id: 1, 2 and 3 belong to the
 //! `:match`, `:2match` and `:3match` commands, everything above to
 //! `matchadd()` and `matchaddpos()`.
 //!
 //! The drawing side lives in [`searchhl`], the `match*()` Vimscript
 //! functions in [`vimscript`].
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::cstr;
 use crate::regexp::{char_delim, skip_regexp_at};
 use crate::semsg;
-use core::ffi::{c_char, c_int};
+use core::ffi::{CStr, c_int};
 
 use crate::ascii::ascii_iswhite;
 use crate::drawscreen::state::search_hl_has_cursor_lnum;
@@ -34,41 +33,27 @@ use crate::highlight::win_hl_attr;
 use crate::highlight_group::{
     HLF_L, HLF_LC, syn_check_group, syn_id2attr, syn_id2name, syn_name2id,
 };
-use crate::mbyte::{utf_char2bytes, utf_ptr2char, utfc_ptr2len};
-use crate::memline::ml_get_buf;
-use crate::memory::{xcalloc, xfree, xstrdup};
+use crate::mbyte::{char_at, encode_char};
+use crate::memory::XString;
 use crate::message::emsg;
 use crate::message::state::called_emsg;
 use crate::message::{e_dictreq, e_invalwindow, e_invcmd, e_listreq, e_trailing_arg};
-use crate::message_fmt::c_str;
-use crate::message_fmt::msg_bytes;
+use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::option::vars::p_rdt;
 use crate::os::cshim::gettext;
 use crate::profile::{profile_passed_limit, profile_setlimit};
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regexec_multi};
 use crate::search::state::{search_first_line, search_last_line};
 use crate::types::{
-    ColNr, Dict, DictItem, EvalFuncData, ExArg, LLPos, LineNr, List, MatchItem, MatchState, TypVal,
-    VAR_LIST, VAR_NUMBER, VarNumber, int64_t, ptrdiff_t, size_t,
+    ColNr, EvalFuncData, ExArg, LLPos, LineNr, List, MatchItem, MatchState, RegMMatch, TypVal,
+    VAR_LIST, VAR_NUMBER, VarNumber, Window, int64_t, ptrdiff_t,
 };
-use crate::winlayer::{Live, Win};
+use crate::winlayer::Win;
 
 mod searchhl;
 pub(crate) use self::searchhl::*;
 mod vimscript;
 pub(crate) use self::vimscript::*;
-
-/// The highlight state of one matcher — a window's `'hlsearch'` state or one
-/// match's — whose holder has promised it outlives the value.
-///
-/// The `'hlsearch'` one is a `static` in `drawscreen`; a match's is a field of
-/// the `MatchItem` the window's list owns, so both live as long as the
-/// redraw that reads them.
-pub(crate) type Shl = Live<MatchState>;
-
-/// One entry of a window's match list, on [`Shl`]'s terms: the window owns it
-/// until `:call matchdelete()` frees it.
-pub(crate) type Mi = Live<MatchItem>;
 
 /// `matchadd()`'s and `:match`'s default priority.
 const DEFAULT_PRIORITY: c_int = 10;
@@ -78,31 +63,25 @@ const DEFAULT_PRIORITY: c_int = 10;
 /// Exactly one of `pat` and `pos_list` describes what to highlight: a
 /// pattern, or a list of `[lnum]` / `[lnum, col]` / `[lnum, col, len]`
 /// positions. `id` of `-1` allocates the next free one.
-///
-/// # Safety
-/// `window` must be live and `grp` NUL-terminated; `pat` and `conceal_char` must
-/// be null or NUL-terminated; `pos_list` must be null or a live list.
-#[allow(clippy::too_many_arguments)]
-unsafe fn match_add(
+fn match_add(
     mut window: Win,
-    grp: *const c_char,
-    pat: *const c_char,
+    grp: &CStr,
+    pat: Option<&CStr>,
     prio: c_int,
     id: c_int,
-    pos_list: *mut List,
-    conceal_char: *const c_char,
+    pos_list: Option<&List>,
+    conceal_char: Option<&CStr>,
 ) -> c_int {
-    // SAFETY: the caller's window, strings and list.
     let mut id = id;
     let mut rtype = UPD_SOME_VALID;
 
-    if unsafe { *grp } == 0 || (!pat.is_null() && unsafe { *pat } == 0) {
+    if grp.is_empty() || pat.is_some_and(CStr::is_empty) {
         return -1;
     }
     if id < -1 || id == 0 {
         semsg!(
             "E799: Invalid ID: {} (must be greater than or equal to 1)",
-            id as int64_t
+            int64_t::from(id)
         );
         return -1;
     }
@@ -110,13 +89,9 @@ unsafe fn match_add(
         id = window.w_next_match_id;
         window.w_next_match_id += 1;
     } else {
-        let mut cur = window.w_match_head;
-        while !cur.is_null() {
-            if unsafe { (*cur).mit_id } == id {
-                semsg!("E801: ID already taken: {}", id as int64_t);
-                return -1;
-            }
-            cur = unsafe { (*cur).mit_next };
+        if window.w_matches.iter().any(|item| item.mit_id == id) {
+            semsg!("E801: ID already taken: {}", int64_t::from(id));
+            return -1;
         }
         // Keep the auto-allocated ids above every hand-picked one, with
         // room for a few more to be picked soon.
@@ -125,114 +100,78 @@ unsafe fn match_add(
         }
     }
 
-    // SAFETY: the caller's NUL-terminated group name.
-    let hlg_id = syn_check_group(unsafe { cstr::bytes_at(grp) });
+    let hlg_id = syn_check_group(grp.to_bytes());
     if hlg_id == 0 {
         return -1;
     }
     let mut regprog = None;
-    if !pat.is_null() {
-        regprog = vim_regcomp(unsafe { cstr::at(pat) }, RE_MAGIC);
+    if let Some(pat) = pat {
+        regprog = vim_regcomp(pat, RE_MAGIC);
         if regprog.is_none() {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let pat = unsafe { c_str(pat) };
+            let pat = msg_cstr(pat);
             semsg!("E475: Invalid argument: {pat}");
             return -1;
         }
     }
 
-    // SAFETY: a fresh allocation, live until this frame hands it to the
-    // window's match list.
-    let mut m =
-        unsafe { Mi::new(xcalloc(1, ::core::mem::size_of::<MatchItem>()).cast::<MatchItem>()) };
-    if list_len(unsafe { pos_list.as_ref() }) > 0 {
-        unsafe {
-            m.mit_pos_array = xcalloc(
-                list_len(pos_list.as_ref()) as size_t,
-                ::core::mem::size_of::<LLPos>(),
-            )
-            .cast::<LLPos>()
-        };
-        m.mit_pos_count = list_len(unsafe { pos_list.as_ref() });
-    }
-    m.mit_id = id;
-    m.mit_priority = prio;
-    unsafe {
-        m.mit_pattern = if pat.is_null() {
-            ::core::ptr::null_mut()
-        } else {
-            xstrdup(pat)
-        }
-    };
-    m.mit_hlg_id = hlg_id;
-    m.mit_match.regprog = regprog;
-    m.mit_match.rmm_ic = 0;
-    m.mit_match.rmm_maxcol = 0;
-    unsafe {
-        m.mit_conceal_char = if conceal_char.is_null() {
-            0
-        } else {
-            utf_ptr2char(conceal_char)
-        }
+    let mut item = MatchItem {
+        mit_id: id,
+        mit_priority: prio,
+        mit_pattern: pat.map(XString::from_cstr),
+        mit_match: RegMMatch {
+            regprog,
+            ..RegMMatch::default()
+        },
+        mit_pos_array: Vec::new(),
+        mit_pos_cur: 0,
+        mit_toplnum: 0,
+        mit_botlnum: 0,
+        mit_hl: MatchState::default(),
+        mit_hlg_id: hlg_id,
+        mit_conceal_char: conceal_char.map_or(0, |c| char_at(c.to_bytes())),
+        mit_suspended: false,
     };
 
-    if !pos_list.is_null() {
-        match unsafe { fill_pos_array(m.raw(), pos_list) } {
+    if let Some(pos_list) = pos_list {
+        item.mit_pos_array = vec![LLPos::default(); list_items(Some(pos_list)).len()];
+        match fill_pos_array(&mut item.mit_pos_array, pos_list) {
             Some((toplnum, botlnum)) if toplnum != 0 => {
                 redraw_win_range_later(window, toplnum, botlnum);
-                m.mit_toplnum = toplnum;
-                m.mit_botlnum = botlnum;
+                item.mit_toplnum = toplnum;
+                item.mit_botlnum = botlnum;
                 rtype = UPD_VALID;
             }
             Some(_) => {}
-            None => {
-                m.mit_match.regprog = None;
-                unsafe { xfree(m.mit_pattern.cast()) };
-                unsafe { xfree(m.mit_pos_array.cast()) };
-                unsafe { xfree(m.raw().cast()) };
-                return -1;
-            }
+            None => return -1,
         }
     }
 
     // Insert into the list, which is in ascending priority order — so a
     // new match goes *after* every existing one of equal priority.
-    let mut cur = window.w_match_head;
-    let mut prev = cur;
-    while !cur.is_null() && prio >= unsafe { (*cur).mit_priority } {
-        prev = cur;
-        cur = unsafe { (*cur).mit_next };
-    }
-    if cur == prev {
-        window.w_match_head = m.raw();
-    } else {
-        unsafe { (*prev).mit_next = m.raw() };
-    }
-    m.mit_next = cur;
+    let at = window
+        .w_matches
+        .iter()
+        .position(|item| prio < item.mit_priority)
+        .unwrap_or(window.w_matches.len());
+    window.w_matches.insert(at, item);
 
     redraw_later(window, rtype);
     id
 }
 
-/// Fills `m`'s position array from a `matchaddpos()` list.
+/// Fills a match's position array from a `matchaddpos()` list.
 ///
 /// Answers the `(toplnum, botlnum)` redraw range, or `None` after
 /// diagnosing a malformed entry. A *rejected but not fatal* entry — a
 /// non-positive line, a negative column or length — is skipped without
-/// taking a slot, which is why the array can end up shorter than the list.
-///
-/// # Safety
-/// `m` must be live with `mit_pos_array` sized for the list, and `pos_list`
-/// must be a live list.
-unsafe fn fill_pos_array(m: *mut MatchItem, pos_list: *mut List) -> Option<(LineNr, LineNr)> {
-    // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let m = unsafe { Mi::new(m) };
-    // SAFETY: the caller's match and list.
+/// taking a slot, which is why the array can end up with unused slots at
+/// its end (a zero line number ends it).
+fn fill_pos_array(positions: &mut [LLPos], pos_list: &List) -> Option<(LineNr, LineNr)> {
     let mut toplnum: LineNr = 0;
     let mut botlnum: LineNr = 0;
     let mut i = 0;
 
-    for (at, li) in list_iter(unsafe { pos_list.as_ref() }).enumerate() {
+    for (at, li) in list_iter(Some(pos_list)).enumerate() {
         let at = index_of(at);
         let tv = &li.li_tv;
         let mut lnum: LineNr = 0;
@@ -241,7 +180,6 @@ unsafe fn fill_pos_array(m: *mut MatchItem, pos_list: *mut List) -> Option<(Line
         let mut skip = false;
 
         if tv.v_type() == VAR_LIST {
-            // SAFETY: a `VAR_LIST` holds a live list or NULL.
             let sub = list_items(tv.list_ref());
             if sub.is_empty() {
                 semsg!("E5030: Empty list at position {at}");
@@ -254,7 +192,7 @@ unsafe fn fill_pos_array(m: *mut MatchItem, pos_list: *mut List) -> Option<(Line
             if lnum <= 0 {
                 skip = true;
             } else {
-                unsafe { (*m.mit_pos_array.offset(i as isize)).lnum = lnum };
+                positions[i].lnum = lnum;
                 if let Some(second) = sub.get(1) {
                     let Ok(second) = tv_get_number_chk(&second.li_tv) else {
                         return None;
@@ -275,8 +213,8 @@ unsafe fn fill_pos_array(m: *mut MatchItem, pos_list: *mut List) -> Option<(Line
                     }
                 }
                 if !skip {
-                    unsafe { (*m.mit_pos_array.offset(i as isize)).col = col };
-                    unsafe { (*m.mit_pos_array.offset(i as isize)).len = len };
+                    positions[i].col = col;
+                    positions[i].len = len;
                 }
             }
         } else if tv.v_type() == VAR_NUMBER {
@@ -284,9 +222,11 @@ unsafe fn fill_pos_array(m: *mut MatchItem, pos_list: *mut List) -> Option<(Line
                 skip = true;
             } else {
                 lnum = tv.number_or_zero() as LineNr;
-                unsafe { (*m.mit_pos_array.offset(i as isize)).lnum = lnum };
-                unsafe { (*m.mit_pos_array.offset(i as isize)).col = 0 };
-                unsafe { (*m.mit_pos_array.offset(i as isize)).len = 0 };
+                positions[i] = LLPos {
+                    lnum,
+                    col: 0,
+                    len: 0,
+                };
             }
         } else {
             semsg!("E5031: List or number required at position {at}");
@@ -314,72 +254,38 @@ fn match_delete(mut window: Win, id: c_int, perr: bool) -> c_int {
         if perr {
             semsg!(
                 "E802: Invalid ID: {} (must be greater than or equal to 1)",
-                id as int64_t
+                int64_t::from(id)
             );
         }
         return -1;
     }
 
-    let mut cur = window.w_match_head;
-    let mut prev = cur;
-    while !cur.is_null() && unsafe { (*cur).mit_id } != id {
-        prev = cur;
-        cur = unsafe { (*cur).mit_next };
-    }
-    if cur.is_null() {
+    let Some(at) = window.w_matches.iter().position(|item| item.mit_id == id) else {
         if perr {
-            semsg!("E803: ID not found: {}", id as int64_t);
+            semsg!("E803: ID not found: {}", int64_t::from(id));
         }
         return -1;
-    }
-
-    if cur == prev {
-        unsafe { window.w_match_head = (*cur).mit_next };
-    } else {
-        unsafe { (*prev).mit_next = (*cur).mit_next };
-    }
-    // The item's program, and the highlight copy a redraw may have left.
-    unsafe { (*cur).mit_match.regprog = None };
-    unsafe { (*cur).mit_hl.rm.regprog = None };
-    unsafe { xfree((*cur).mit_pattern.cast()) };
-    if unsafe { (*cur).mit_toplnum } != 0 {
-        unsafe { redraw_win_range_later(window, (*cur).mit_toplnum, (*cur).mit_botlnum) };
+    };
+    let item = window.w_matches.remove(at);
+    if item.mit_toplnum != 0 {
+        redraw_win_range_later(window, item.mit_toplnum, item.mit_botlnum);
         rtype = UPD_VALID;
     }
-    unsafe { xfree((*cur).mit_pos_array.cast()) };
-    unsafe { xfree(cur.cast()) };
+    drop(item);
     redraw_later(window, rtype);
     0
 }
 
-/// Removes every match from `window`'s list.
+/// Removes every match from `window`'s list, and the list's own storage
+/// with it: a window's memory is released without dropping its fields.
 pub(crate) fn clear_matches(mut window: Win) {
-    // SAFETY: the caller's promise -- see this function's `# Safety`.
-    // SAFETY: the caller's window.
-    while !window.w_match_head.is_null() {
-        // SAFETY: the window owns every entry of its list until it is
-        // unlinked, which is what the line below does.
-        let mut m = unsafe { Mi::new(window.w_match_head) };
-        window.w_match_head = m.mit_next;
-        m.mit_match.regprog = None;
-        m.mit_hl.rm.regprog = None;
-        unsafe { xfree(m.mit_pattern.cast()) };
-        unsafe { xfree(m.mit_pos_array.cast()) };
-        unsafe { xfree(m.raw().cast()) };
-    }
+    drop(core::mem::take(&mut window.w_matches));
     redraw_later(window, UPD_SOME_VALID);
 }
 
-/// The match `id` in `window`'s list, or null.
-///
-/// # Safety
-/// `window` must be live.
-unsafe fn get_match(window: Win, id: c_int) -> *mut MatchItem {
-    let mut cur = window.w_match_head;
-    while !cur.is_null() && unsafe { (*cur).mit_id } != id {
-        cur = unsafe { (*cur).mit_next };
-    }
-    cur
+/// The match `id` in `window`'s list.
+fn get_match(window: &Window, id: c_int) -> Option<&MatchItem> {
+    window.w_matches.iter().find(|item| item.mit_id == id)
 }
 
 /// `:[N]match {group} {pattern}`, `:[N]match none` and `:[N]match`.
@@ -442,20 +348,7 @@ pub(crate) fn ex_match(excmd: &mut ExArg) {
             }
             let pat = cstr::owned(line.slice_at(p + 1, end - (p + 1)));
             let win = Win::current();
-            let no_pos = ::core::ptr::null_mut();
-            let no_conceal = ::core::ptr::null();
-            // SAFETY: the editor's own window, and two NUL-terminated copies.
-            unsafe {
-                match_add(
-                    win,
-                    group.as_ptr(),
-                    pat.as_ptr(),
-                    DEFAULT_PRIORITY,
-                    id,
-                    no_pos,
-                    no_conceal,
-                )
-            };
+            match_add(win, &group, Some(&pat), DEFAULT_PRIORITY, id, None, None);
         }
     }
     excmd.line.next = excmd.line.find_next(end);

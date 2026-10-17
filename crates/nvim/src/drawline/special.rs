@@ -174,8 +174,7 @@ impl Cells {
             return;
         }
         // Does the previous column start a search match?
-        let prevcol_hl_flag =
-            unsafe { get_prevcol_hl_flag(window, SearchHl::current().raw(), self.byte_col() - 1) };
+        let prevcol_hl_flag = get_prevcol_hl_flag(window, self.byte_col() - 1);
         let want = self.lcs_eol_todo
             && ((self.area_attr != 0
                 && wlv.vcol == wlv.fromcol
@@ -197,14 +196,7 @@ impl Cells {
         }
         if self.area_attr == 0 && !self.has_fold {
             // Use the attributes of the highest-priority match.
-            unsafe {
-                get_search_match_hl(
-                    window,
-                    SearchHl::current().raw(),
-                    self.byte_col(),
-                    &raw mut wlv.char_attr,
-                )
-            };
+            get_search_match_hl(window, self.byte_col(), &mut wlv.char_attr);
         }
         let eol_attr = if wlv.cursorline_attr != 0 {
             hl_combine_attr(wlv.cursorline_attr, wlv.char_attr)

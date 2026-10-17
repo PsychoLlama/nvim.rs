@@ -233,7 +233,7 @@ fn line_needs_drawing(window: Win, buffer: Buf, rg: &Regions, w: &Walk) -> bool 
                             || syntax_check_changed(w.lnum)))
                     // A match at a fixed position may need redrawing when
                     // lines were inserted or deleted.
-                    || (!window.w_match_head.is_null()
+                    || (!window.w_matches.is_empty()
                         && buffer.b_mod_set
                         && buffer.b_mod_xlines != 0))))
     {
@@ -300,7 +300,7 @@ fn draw_one_line(
         // below take the rest.
         w.row = window.w_view_height + 1;
     } else {
-        unsafe { prepare_search_hl(window, SearchHl::current().raw(), w.lnum) };
+        prepare_search_hl(window, w.lnum);
         // Let the syntax machinery know lines were skipped.
         if w.syntax_last_parsed != 0 && w.syntax_last_parsed + 1 < w.lnum && syntax_present(window)
         {

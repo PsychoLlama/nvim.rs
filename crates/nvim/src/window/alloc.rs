@@ -65,6 +65,7 @@ fn zeroed_window() -> Win {
             (&raw mut (*wp).w_ns_set).write(id_set());
             (&raw mut (*wp).w_onebuf_opt).write(WinOpt::UNSET);
             (&raw mut (*wp).w_allbuf_opt).write(WinOpt::UNSET);
+            (&raw mut (*wp).w_matches).write(Vec::new());
         }
     })
 }

@@ -695,12 +695,15 @@ pub struct LcsChars {
     pub leadmultispace: Option<Box<[ScreenChar]>>,
     pub conceal: ScreenChar,
 }
+/// One `matchaddpos()` position: a line, and a 1-based column and length
+/// (column 0 for the whole line). A zero line ends a match's positions.
+#[derive(Clone, Default)]
 pub struct LLPos {
     pub lnum: LineNr,
     pub col: ColNr,
     pub len: ::core::ffi::c_int,
 }
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct MatchState {
     pub rm: RegMMatch,
     pub lnum: LineNr,
@@ -713,21 +716,29 @@ pub struct MatchState {
     pub has_cursor: bool,
     pub tm: ProfTime,
 }
-#[derive(Clone)]
+/// One entry of a window's match list: a pattern or a list of positions,
+/// painted in a highlight group.
 pub struct MatchItem {
-    pub mit_next: *mut MatchItem,
     pub mit_id: ::core::ffi::c_int,
     pub mit_priority: ::core::ffi::c_int,
-    pub mit_pattern: *mut ::core::ffi::c_char,
+    /// The pattern, as the user gave it; `None` for a position match.
+    pub mit_pattern: Option<XString>,
+    /// The compiled pattern -- the match's own program, which the redraw
+    /// borrows for each search -- and its matching flags.
     pub mit_match: RegMMatch,
-    pub mit_pos_array: *mut LLPos,
-    pub mit_pos_count: ::core::ffi::c_int,
+    /// The `matchaddpos()` positions, one slot per list entry; slots past
+    /// the last accepted one keep a zero line.
+    pub mit_pos_array: Vec<LLPos>,
     pub mit_pos_cur: ::core::ffi::c_int,
     pub mit_toplnum: LineNr,
     pub mit_botlnum: LineNr,
+    /// The redraw's highlight state for this match.
     pub mit_hl: MatchState,
     pub mit_hlg_id: ::core::ffi::c_int,
     pub mit_conceal_char: ::core::ffi::c_int,
+    /// The program went wrong this redraw (an error, an interrupt, the
+    /// `'redrawtime'` budget) and is not used again until the next one.
+    pub mit_suspended: bool,
 }
 pub struct PosSave {
     pub w_topline_save: ::core::ffi::c_int,

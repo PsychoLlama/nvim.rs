@@ -104,8 +104,8 @@ use crate::terminal::{terminal_check_size, terminal_suspended};
 use crate::types::ui::{kUICmdline, kUIMessages, kUIMultigrid};
 use crate::types::{
     ColNr, DecorPriority, DecorVirtText, DecorVirtText_data, Failed, FoldInfo, Handle, Hlf,
-    Integer, LineNr, MatchState, OptInt, Pos, ProfTime, RegMMatch, ScreenChar, SpellVars,
-    VarNumber, VirtText, VirtTextChunk, WindowHandle, int64_t, size_t, uint16_t,
+    Integer, LineNr, OptInt, Pos, ProfTime, ScreenChar, SpellVars, VarNumber, VirtText,
+    VirtTextChunk, WindowHandle, int64_t, size_t, uint16_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{
@@ -543,48 +543,32 @@ pub fn update_screen() -> Result<(), Failed> {
     Ok(())
 }
 
-/// The search-highlight matcher the whole redraw shares.
-///
-/// A `Copy` handle that *names* the cell rather than borrowing it: it is
-/// handed to `drawline/`, which runs decoration providers that re-enter the
-/// draw pass, so no borrow could span the walk.
+/// The search-highlight matcher the whole redraw shares: a name for the
+/// `screen_search_hl` cell, each method one short borrow of it.
 #[derive(Clone, Copy)]
-pub(crate) struct SearchHl(*mut MatchState);
+pub(crate) struct SearchHl;
 
 impl SearchHl {
-    /// The one place the redraw matcher's address is taken.
+    /// The redraw's matcher.
     pub(crate) fn current() -> Self {
-        SearchHl(screen_search_hl.ptr())
-    }
-
-    /// The address, for the `*_search_hl` helpers that take one.
-    pub(crate) fn raw(self) -> *mut MatchState {
-        self.0
-    }
-
-    /// The multi-line regmatch, for `last_pat_prog` to compile into.
-    pub(crate) fn regmatch(self) -> *mut RegMMatch {
-        // SAFETY: the only constructor names a `static`; no dereference here.
-        unsafe { &raw mut (*self.0).rm }
+        SearchHl
     }
 
     /// Can the compiled `'hlsearch'` pattern match a line break? False when
     /// there is none.
     pub(crate) fn is_multiline(self) -> bool {
-        // SAFETY: the only constructor names a `static`.
-        unsafe { (*self.0).rm.is_multiline() }
+        screen_search_hl.with(|hl| hl.rm.is_multiline())
     }
 
     /// Drop the compiled pattern, if there is one.
     pub(crate) fn forget_regprog(self) {
-        // SAFETY: as `is_multiline`.
-        unsafe { (*self.0).rm.regprog = None };
+        let old = screen_search_hl.with_mut(|hl| hl.rm.regprog.take());
+        drop(old);
     }
 
     /// Bound the matching by `'redrawtime'`.
     fn set_time_limit(self, tm: ProfTime) {
-        // SAFETY: as `regprog`.
-        unsafe { (*self.0).tm = tm };
+        screen_search_hl.with_mut(|hl| hl.tm = tm);
     }
 }
 
@@ -595,9 +579,11 @@ pub fn start_search_hl() {
     }
     end_search_hl(); // just in case it was not called before
     let hl = SearchHl::current();
-    // SAFETY: the redraw's matcher, a `static` no other borrow holds while
-    // the pattern is compiled into it.
-    last_pat_prog(unsafe { &mut *hl.regmatch() });
+    // Compiled outside the cell: the compile reports through the message
+    // machinery, which must not find the cell borrowed.
+    let mut rm = screen_search_hl.with_mut(|hl| core::mem::take(&mut hl.rm));
+    last_pat_prog(&mut rm);
+    screen_search_hl.with_mut(|hl| hl.rm = rm);
     // Bound the search by 'redrawtime'.
     hl.set_time_limit(profile_setlimit(p_rdt() as int64_t));
 }

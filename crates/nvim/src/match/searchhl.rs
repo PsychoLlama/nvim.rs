@@ -4,12 +4,16 @@
 //! per window redraw, [`prepare_search_hl`] once per line to advance every
 //! pattern to that line, [`prepare_search_hl_line`] to find what is already
 //! highlighted at the left edge, then [`update_search_hl`] per column.
-//! `search_hl` (the `'hlsearch'` pattern) and the window's match list are
-//! walked together, ordered by priority, with SEARCH_HL_PRIORITY (0) as
-//! `'hlsearch'`'s own place in that order.
+//! The `'hlsearch'` state (the redraw's `screen_search_hl`) and the window's
+//! match list are walked together, ordered by priority, with
+//! SEARCH_HL_PRIORITY (0) as `'hlsearch'`'s own place in that order.
+//!
+//! A pattern's state is reached through [`with_shl`], one short borrow per
+//! access: the matcher reads the window while it runs, so no borrow of the
+//! window's match list is held across it -- the regmatch it advances is
+//! moved out for the call and put back after.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -19,30 +23,83 @@
 )]
 
 use super::*;
+use crate::drawscreen::state::screen_search_hl;
+use crate::mbyte::c_cluster_len;
+use crate::memline::held_line;
 use crate::option::cpo_has;
 use crate::pos::MAXCOL;
 use crate::search::SEARCH_HL_PRIORITY;
-use crate::types::CpoFlag;
+use crate::types::{CpoFlag, RegMMatch};
 use crate::winlayer::Win;
 
-/// Walks `search_hl` together with a window's match list.
+/// Which pattern's highlight state: `'hlsearch'`'s, or the window's match
+/// at this index.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Which {
+    Search,
+    Item(usize),
+}
+
+/// Run `f` on the highlight state `which` names.
+#[inline(always)]
+fn with_shl<R>(window: Win, which: Which, f: impl FnOnce(&mut MatchState) -> R) -> R {
+    match which {
+        Which::Search => screen_search_hl.with_mut(f),
+        Which::Item(i) => {
+            let mut window = window;
+            f(&mut window.w_matches[i].mit_hl)
+        }
+    }
+}
+
+/// Run `f` on the window's match at index `i`.
+#[inline(always)]
+fn with_item<R>(window: Win, i: usize, f: impl FnOnce(&mut MatchItem) -> R) -> R {
+    let mut window = window;
+    f(&mut window.w_matches[i])
+}
+
+/// Whether `which` still has a compiled pattern to search with this
+/// redraw. A match that went wrong keeps its program but is suspended until
+/// the next redraw; `'hlsearch'` drops its program, which the next redraw
+/// compiles again.
+#[inline(always)]
+fn has_prog(window: Win, which: Which) -> bool {
+    match which {
+        Which::Search => screen_search_hl.with(|shl| shl.rm.regprog.is_some()),
+        Which::Item(i) => window.w_matches[i].active(),
+    }
+}
+
+/// Whether `which`'s pattern can match a line break.
+fn is_multiline(window: Win, which: Which) -> bool {
+    match which {
+        Which::Search => screen_search_hl.with(|shl| shl.rm.is_multiline()),
+        Which::Item(i) => {
+            window.w_matches[i].active() && window.w_matches[i].mit_match.is_multiline()
+        }
+    }
+}
+
+impl MatchItem {
+    /// Whether the match's program is in use this redraw.
+    #[inline(always)]
+    fn active(&self) -> bool {
+        !self.mit_suspended && self.mit_match.regprog.is_some()
+    }
+}
+
+/// Walks `'hlsearch'` together with a window's match list.
 ///
-/// Four functions here need the same walk and each spelled out the same
-/// three-branch pick, `shl_flag` latch and conditional advance. Two orders
-/// are wanted: [`Order::SearchFirst`], which takes `'hlsearch'` before any
-/// match, and [`Order::ByPriority`], which takes it at its place in the
-/// priority order.
+/// Four functions here need the same walk. Two orders are wanted:
+/// [`Order::SearchFirst`], which takes `'hlsearch'` before any match, and
+/// [`Order::ByPriority`], which takes it at its place in the priority order
+/// (the list is kept in ascending priority).
 struct ShlWalk {
-    /// The next match to visit, or null once the list is exhausted.
-    cur: *mut MatchItem,
-    /// The `'hlsearch'` state, which is visited exactly once.
-    search_hl: *mut MatchState,
-    /// Whether `search_hl` has been visited.
+    /// The next match to visit.
+    next: usize,
+    /// Whether `'hlsearch'` has been visited.
     taken: bool,
-    /// Whether the last item handed out was a match, so `cur` has to advance
-    /// before the next one. (Upstream advances at the *bottom* of the loop
-    /// body, which is the same thing.)
-    advance: bool,
     order: Order,
 }
 
@@ -52,169 +109,119 @@ enum Order {
     /// `'hlsearch'` first, then every match. Used where the body's work is
     /// independent per item and the order cannot matter.
     SearchFirst,
-    /// Priority order: `'hlsearch'` once the remaining matches have dropped
-    /// to [`SEARCH_HL_PRIORITY`] or below. Used where the last writer wins.
+    /// Priority order: `'hlsearch'` once the remaining matches are above
+    /// [`SEARCH_HL_PRIORITY`]. Used where the last writer wins.
     ByPriority,
 }
 
 impl ShlWalk {
-    /// # Safety
-    /// `search_hl` must be live.
     #[inline(always)]
-    unsafe fn new(window: Win, search_hl: *mut MatchState, order: Order) -> Self {
+    fn new(order: Order) -> Self {
         Self {
-            cur: window.w_match_head,
-            search_hl,
+            next: 0,
             taken: false,
-            advance: false,
             order,
         }
     }
 
-    /// The next `(shl, cur)` pair, where `cur` is null for `'hlsearch'`.
-    ///
-    /// # Safety
-    /// The match list must not be modified during the walk.
+    /// The next pattern to visit.
     #[inline(always)]
-    unsafe fn next(&mut self) -> Option<(Shl, *mut MatchItem)> {
-        // SAFETY: the caller's match list.
-        if self.advance {
-            self.cur = unsafe { (*self.cur).mit_next };
-            self.advance = false;
-        }
-        if self.cur.is_null() && self.taken {
+    fn next(&mut self, window: Win) -> Option<Which> {
+        let more = self.next < window.w_matches.len();
+        if !more && self.taken {
             return None;
         }
         let take_search = !self.taken
-            && (self.cur.is_null()
+            && (!more
                 || self.order == Order::SearchFirst
-                || unsafe { (*self.cur).mit_priority } > SEARCH_HL_PRIORITY);
+                || window.w_matches[self.next].mit_priority > SEARCH_HL_PRIORITY);
         if take_search {
             self.taken = true;
-            // SAFETY: the caller's `'hlsearch'` state.
-            Some((unsafe { Shl::new(self.search_hl) }, ::core::ptr::null_mut()))
+            Some(Which::Search)
         } else {
-            self.advance = true;
-            // SAFETY: the entry's own highlight state, which the window's
-            // list owns for as long as the walk runs.
-            Some((unsafe { Shl::new(&raw mut (*self.cur).mit_hl) }, self.cur))
+            self.next += 1;
+            Some(Which::Item(self.next - 1))
         }
-    }
-}
-
-/// After a match through `item`'s highlight copy of its program: when the
-/// copy was recompiled for the backtracking engine, give the item the new
-/// program too, so that the next redraw's copy does not try the NFA engine
-/// again (and announce the switch again).
-fn sync_recompiled(item: &mut MatchItem) {
-    if let (Some(copy), Some(own)) = (&item.mit_hl.rm.regprog, &item.mit_match.regprog)
-        && !copy.same_engine(own)
-    {
-        item.mit_match.regprog = Some(copy.clone());
     }
 }
 
 impl Win {
-    /// Resets every pattern's search state for a fresh window redraw.
-    ///
-    /// Each match gets a private copy of its compiled regexp (`mit_hl.rm`) so
-    /// that the per-line search can advance it, and a fresh `'redrawtime'`
-    /// budget.
-    ///
-    /// # Safety
-    /// `search_hl` must be live.
-    pub(crate) unsafe fn init_search_hl(self, search_hl: *mut MatchState) {
-        // SAFETY: the caller's promise -- see this function's `# Safety`.
-        let mut search_hl = unsafe { Shl::new(search_hl) };
-        let mut cur = self.w_match_head;
-        while !cur.is_null() {
-            // The highlight state gets a copy of the item's program to
-            // advance through the lines; the item keeps its own.
-            unsafe { (*cur).mit_hl.rm = (*cur).mit_match.clone() };
-            unsafe {
-                (*cur).mit_hl.attr = if (*cur).mit_hlg_id == 0 {
-                    0
-                } else {
-                    syn_id2attr((*cur).mit_hlg_id)
-                }
+    /// Resets every pattern's search state for a fresh window redraw: each
+    /// match gets its attribute, a fresh `'redrawtime'` budget, and its
+    /// program back if the last redraw suspended it.
+    pub(crate) fn init_search_hl(self) {
+        let mut window = self;
+        for item in &mut window.w_matches {
+            let shl = &mut item.mit_hl;
+            shl.rm.rmm_ic = item.mit_match.rmm_ic;
+            shl.rm.rmm_maxcol = item.mit_match.rmm_maxcol;
+            shl.attr = if item.mit_hlg_id == 0 {
+                0
+            } else {
+                syn_id2attr(item.mit_hlg_id)
             };
-            unsafe { (*cur).mit_hl.lnum = 0 };
-            unsafe { (*cur).mit_hl.first_lnum = 0 };
-            unsafe { (*cur).mit_hl.tm = profile_setlimit(p_rdt()) };
-            cur = unsafe { (*cur).mit_next };
+            shl.lnum = 0;
+            shl.first_lnum = 0;
+            shl.tm = profile_setlimit(p_rdt());
+            item.mit_suspended = false;
         }
-        search_hl.lnum = 0;
-        search_hl.first_lnum = 0;
-        search_hl.attr = win_hl_attr(self, HLF_L);
+        let attr = win_hl_attr(self, HLF_L);
+        screen_search_hl.with_mut(|shl| {
+            shl.lnum = 0;
+            shl.first_lnum = 0;
+            shl.attr = attr;
+        });
         // The time limit is set at the top level, for every window at once.
     }
 }
 
 /// Finds the next `matchaddpos()` position on `lnum` at or after `mincol`.
 ///
-/// Answers 1 on a match, having filled `shl` in as if a regexp had matched.
-/// The positions are not sorted, so this also swaps the winner to the front
-/// of the still-unvisited tail, which is what makes repeated calls walk one
-/// line's positions left to right.
-///
-/// # Safety
-/// `shl` and `match_0` must be live.
-unsafe fn next_search_hl_pos(
-    shl: *mut MatchState,
-    lnum: LineNr,
-    match_0: *mut MatchItem,
-    mincol: ColNr,
-) -> c_int {
-    // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let mut shl = unsafe { Shl::new(shl) };
-    // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let mut match_0 = unsafe { Mi::new(match_0) };
-    // SAFETY: the caller's match state.
-    let mut found = -1;
-
-    shl.lnum = 0;
-    let mut i = match_0.mit_pos_cur;
-    while i < match_0.mit_pos_count {
-        let pos = unsafe { match_0.mit_pos_array.offset(i as isize) };
-        if unsafe { (*pos).lnum } == 0 {
+/// Answers 1 (the lines it spans) on a match, having filled the item's
+/// highlight state in as if a regexp had matched; 0 for none. The positions are not sorted, so this also swaps the
+/// winner to the front of the still-unvisited tail, which is what makes
+/// repeated calls walk one line's positions left to right.
+fn next_search_hl_pos(item: &mut MatchItem, lnum: LineNr, mincol: ColNr) -> usize {
+    item.mit_hl.lnum = 0;
+    let mut found: Option<usize> = None;
+    let start = usize::try_from(item.mit_pos_cur).unwrap_or(0);
+    for i in start..item.mit_pos_array.len() {
+        let pos = &item.mit_pos_array[i];
+        if pos.lnum == 0 {
             break;
         }
         // A whole-line position (len 0) before the column asked for is
         // already behind us; a sized one may still reach past `mincol`.
-        if unsafe { (*pos).len } == 0 && unsafe { (*pos).col } < mincol {
-            i += 1;
+        if pos.len == 0 && pos.col < mincol {
             continue;
         }
-        if unsafe { (*pos).lnum } == lnum {
-            if found >= 0 {
-                let best = unsafe { match_0.mit_pos_array.offset(found as isize) };
-                if unsafe { (*pos).col } < unsafe { (*best).col } {
-                    unsafe { ::core::ptr::swap(pos, best) };
+        if pos.lnum == lnum {
+            match found {
+                Some(best) => {
+                    if pos.col < item.mit_pos_array[best].col {
+                        item.mit_pos_array.swap(i, best);
+                    }
                 }
-            } else {
-                found = i;
+                None => found = Some(i),
             }
         }
-        i += 1;
     }
 
-    match_0.mit_pos_cur = 0;
-    if found < 0 {
+    item.mit_pos_cur = 0;
+    let Some(found) = found else {
         return 0;
-    }
-
-    let best = unsafe { match_0.mit_pos_array.offset(found as isize) };
-    // Column 0 means the whole line; otherwise the position is 1-based
-    // and `len` wide.
-    let (start, end) = if unsafe { (*best).col } == 0 {
-        (0, MAXCOL)
-    } else {
-        (
-            unsafe { (*best).col } - 1,
-            unsafe { (*best).col } - 1 + unsafe { (*best).len },
-        )
     };
 
+    let best = &item.mit_pos_array[found];
+    // Column 0 means the whole line; otherwise the position is 1-based
+    // and `len` wide.
+    let (start, end) = if best.col == 0 {
+        (0, MAXCOL)
+    } else {
+        (best.col - 1, best.col - 1 + best.len)
+    };
+
+    let shl = &mut item.mit_hl;
     shl.lnum = lnum;
     shl.rm.startpos[0].lnum = 0;
     shl.rm.startpos[0].col = start;
@@ -222,139 +229,167 @@ unsafe fn next_search_hl_pos(
     shl.rm.endpos[0].col = end;
     shl.is_addpos = true;
     shl.has_cursor = false;
-    match_0.mit_pos_cur = found + 1;
+    item.mit_pos_cur = c_int::try_from(found + 1).unwrap_or(c_int::MAX);
     1
 }
 
-impl Win {
-    /// Advances `shl` to its next match on `lnum` at or past `mincol`.
-    ///
-    /// A previous match is assumed to be before `lnum` unless `shl->lnum` is
-    /// zero. `cur` is the match item when `shl` belongs to one (so that
-    /// `matchaddpos()` positions can be read), null for `'hlsearch'`.
-    ///
-    /// Any buffer-line pointer the caller holds is invalidated: a multi-line
-    /// regexp can force the line to be re-fetched.
-    ///
-    /// # Safety
-    /// `search_hl` and `shl` must be live; `cur` must be null or live.
-    unsafe fn next_search_hl(
-        self,
-        search_hl: *mut MatchState,
-        shl: *mut MatchState,
-        lnum: LineNr,
-        mincol: ColNr,
-        cur: *mut MatchItem,
-    ) {
-        // SAFETY: the caller's promise -- see this function's `# Safety`.
-        let search_hl = unsafe { Shl::new(search_hl) };
-        // SAFETY: as `search_hl`.
-        let mut shl = unsafe { Shl::new(shl) };
-        let called_emsg_before = called_emsg.get();
+/// Run `which`'s pattern against line `lnum` of `window` from `col`:
+/// how many lines the match spans, 0 for none.
+///
+/// The regmatch is moved out of its holder for the call -- with the match's
+/// program in it, which stays the match's own: what the matcher hands back
+/// (a program recompiled for the other engine, say) goes back to the match
+/// for later redraws, as upstream's shared program did.
+fn exec_shl(window: Win, which: Which, lnum: LineNr, col: ColNr, timed_out: &mut bool) -> usize {
+    let (mut rm, tm) = match which {
+        Which::Search => screen_search_hl.with_mut(|shl| (core::mem::take(&mut shl.rm), shl.tm)),
+        Which::Item(i) => with_item(window, i, |item| {
+            let mut rm = core::mem::take(&mut item.mit_hl.rm);
+            rm.regprog = item.mit_match.regprog.take();
+            (rm, item.mit_hl.tm)
+        }),
+    };
+    let nmatched = vim_regexec_multi(
+        &mut rm,
+        Some(window),
+        window.buffer(),
+        lnum,
+        col,
+        Some(&tm),
+        Some(timed_out),
+    );
+    put_back(window, which, rm);
+    usize::try_from(nmatched).unwrap_or(0)
+}
 
-        // `:{range}s/pat` only highlights inside the range.
-        if (lnum < search_first_line.get() || lnum > search_last_line.get()) && cur.is_null() {
-            shl.lnum = 0;
+/// Return the regmatch [`exec_shl`] took out.
+#[inline(always)]
+fn put_back(window: Win, which: Which, mut rm: RegMMatch) {
+    match which {
+        Which::Search => screen_search_hl.with_mut(|shl| shl.rm = rm),
+        Which::Item(i) => with_item(window, i, |item| {
+            item.mit_match.regprog = rm.regprog.take();
+            item.mit_hl.rm = rm;
+        }),
+    }
+}
+
+/// Advances `which` to its next match on `lnum` at or past `mincol`.
+///
+/// A previous match is assumed to be before `lnum` unless its `lnum` is
+/// zero.
+fn next_search_hl(window: Win, which: Which, lnum: LineNr, mincol: ColNr) {
+    let called_emsg_before = called_emsg.get();
+    let set_lnum = |lnum: LineNr| with_shl(window, which, |shl| shl.lnum = lnum);
+
+    // `:{range}s/pat` only highlights inside the range.
+    if (lnum < search_first_line.get() || lnum > search_last_line.get()) && which == Which::Search {
+        set_lnum(0);
+        return;
+    }
+
+    let (prev_lnum, start, end) = with_shl(window, which, |shl| {
+        (shl.lnum, shl.rm.startpos[0], shl.rm.endpos[0])
+    });
+    if prev_lnum != 0 {
+        // Three cases: `lnum` is below the previous match, so start
+        // again; the previous match already includes `mincol`, so keep
+        // it; otherwise continue after it.
+        let l = prev_lnum + end.lnum - start.lnum;
+        if lnum > l {
+            set_lnum(0);
+        } else if lnum < l || end.col > mincol {
             return;
         }
+    }
 
-        if shl.lnum != 0 {
-            // Three cases: `lnum` is below the previous match, so start
-            // again; the previous match already includes `mincol`, so keep
-            // it; otherwise continue after it.
-            let l = shl.lnum + shl.rm.endpos[0].lnum - shl.rm.startpos[0].lnum;
-            if lnum > l {
-                shl.lnum = 0;
-            } else if lnum < l || shl.rm.endpos[0].col > mincol {
-                return;
-            }
+    // Search until a match that includes `mincol` turns up, or none does.
+    loop {
+        let (tm, prev_lnum, start, end) = with_shl(window, which, |shl| {
+            (shl.tm, shl.lnum, shl.rm.startpos[0], shl.rm.endpos[0])
+        });
+        if profile_passed_limit(tm) {
+            set_lnum(0); // no match found in time
+            break;
         }
 
-        // Search until a match that includes `mincol` turns up, or none does.
-        loop {
-            if profile_passed_limit(shl.tm) {
-                shl.lnum = 0; // no match found in time
+        let matchcol: ColNr = if prev_lnum == 0 {
+            // No useful previous match: search from the line's start.
+            0
+        } else if !cpo_has(CpoFlag::SEARCH) || (end.lnum == 0 && end.col <= start.col) {
+            // Not Vi-compatible, or an empty match: continue at the next
+            // character, and stop if that is past the end of the line.
+            let at = usize::try_from(start.col).unwrap_or(0);
+            let buffer = window.buffer();
+            let line = held_line(&buffer, lnum);
+            if cstr::byte_at(line, at) == 0 {
+                set_lnum(0);
                 break;
             }
+            start.col + col_len(c_cluster_len(&line[at..]))
+        } else {
+            // Vi-compatible: continue at the end of the previous match.
+            end.col
+        };
 
-            let matchcol: ColNr = if shl.lnum == 0 {
-                // No useful previous match: search from the line's start.
-                0
-            } else if !cpo_has(CpoFlag::SEARCH)
-                || (shl.rm.endpos[0].lnum == 0 && shl.rm.endpos[0].col <= shl.rm.startpos[0].col)
-            {
-                // Not Vi-compatible, or an empty match: continue at the next
-                // character, and stop if that is past the end of the line.
-                let at = shl.rm.startpos[0].col;
-                let ml = unsafe { ml_get_buf(self.buffer(), lnum).offset(at as isize) };
-                if unsafe { *ml } == 0 {
-                    shl.lnum = 0;
-                    break;
-                }
-                at + unsafe { utfc_ptr2len(ml) }
-            } else {
-                // Vi-compatible: continue at the end of the previous match.
-                shl.rm.endpos[0].col
-            };
-
-            shl.lnum = lnum;
-            let mut nmatched = 0;
-            if shl.rm.regprog.is_some() {
-                // Whether `shl->rm` is `cur`'s highlight copy of its compiled
-                // regexp, which `vim_regexec_multi` may recompile under us.
-                let item_copy = shl != search_hl
-                    && !cur.is_null()
-                    && shl.raw() == unsafe { &raw mut (*cur).mit_hl };
-                let mut timed_out = false;
-
-                // SAFETY: the caller's match state, whose own `rm` and `tm` these
-                // are: two disjoint fields off the pointer rather than off a borrow.
-                let (rm, tm) = unsafe { (&mut (*shl.raw()).rm, &(*shl.raw()).tm) };
-                let buf = self.buffer();
-                nmatched = vim_regexec_multi(
-                    rm,
-                    Some(self),
-                    buf,
-                    lnum,
-                    matchcol,
-                    Some(tm),
-                    Some(&mut timed_out),
-                );
-                if item_copy {
-                    // A recompile for the other engine goes back to the item
-                    // too, as upstream's shared program did.
-                    // SAFETY: the item the walk is on, which owns both.
-                    unsafe { sync_recompiled(&mut *cur) };
-                }
-                if called_emsg.get() > called_emsg_before || got_int.get() || timed_out {
-                    // Something went wrong in the regexp: stop using it --
-                    // `'hlsearch'` for good, a match's highlight copy for the
-                    // rest of this redraw.
-                    if shl == search_hl {
+        set_lnum(lnum);
+        let mut nmatched = 0;
+        if has_prog(window, which) {
+            let mut timed_out = false;
+            nmatched = exec_shl(window, which, lnum, matchcol, &mut timed_out);
+            if called_emsg.get() > called_emsg_before || got_int.get() || timed_out {
+                // Something went wrong in the regexp: stop using it --
+                // `'hlsearch'` for good, a match for the rest of this redraw.
+                match which {
+                    Which::Search => {
                         set_no_hlsearch(true);
+                        screen_search_hl.with_mut(|shl| shl.rm.regprog = None);
                     }
-                    shl.rm.regprog = None;
-                    shl.lnum = 0;
-                    got_int.set(false); // avoid the "Type :quit to exit Vim" message
-                    break;
+                    Which::Item(i) => with_item(window, i, |item| item.mit_suspended = true),
                 }
-            } else if !cur.is_null() {
-                nmatched = unsafe { next_search_hl_pos(shl.raw(), lnum, cur, matchcol) };
-            }
-
-            if nmatched == 0 {
-                shl.lnum = 0;
+                set_lnum(0);
+                got_int.set(false); // avoid the "Type :quit to exit Vim" message
                 break;
             }
-            if shl.rm.startpos[0].lnum > 0
+        } else if let Which::Item(i) = which {
+            nmatched = with_item(window, i, |item| next_search_hl_pos(item, lnum, matchcol));
+        }
+
+        if nmatched == 0 {
+            set_lnum(0);
+            break;
+        }
+        let useful = with_shl(window, which, |shl| {
+            let useful = shl.rm.startpos[0].lnum > 0
                 || shl.rm.startpos[0].col >= mincol
                 || nmatched > 1
-                || shl.rm.endpos[0].col > mincol
-            {
+                || shl.rm.endpos[0].col > mincol;
+            if useful {
                 shl.lnum += shl.rm.startpos[0].lnum;
-                break; // useful match found
             }
+            useful
+        });
+        if useful {
+            break; // useful match found
         }
+    }
+}
+
+/// Reset a match's position walk; nothing for `'hlsearch'`.
+#[inline(always)]
+fn reset_pos_cur(window: Win, which: Which) {
+    if let Which::Item(i) = which {
+        with_item(window, i, |item| item.mit_pos_cur = 0);
+    }
+}
+
+/// Whether a position match still has unvisited positions on the line it is
+/// on; never for `'hlsearch'`.
+#[inline(always)]
+fn pos_in_progress(window: Win, which: Which) -> bool {
+    match which {
+        Which::Search => false,
+        Which::Item(i) => window.w_matches[i].mit_pos_cur != 0,
     }
 }
 
@@ -363,67 +398,83 @@ impl Win {
 /// Only a pattern that can span lines needs this: it may have started above
 /// the window, so the search restarts from the window top (or from just
 /// after the closest closed fold) and steps forward line by line.
-///
-/// # Safety
-/// `window` and `search_hl` must be live.
-pub(crate) unsafe fn prepare_search_hl(window: Win, search_hl: *mut MatchState, lnum: LineNr) {
-    // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let search_hl = unsafe { Shl::new(search_hl) };
-    // SAFETY: the caller's window and search state.
-    let mut walk = unsafe { ShlWalk::new(window, search_hl.raw(), Order::SearchFirst) };
-    while let Some((mut shl, cur)) = unsafe { walk.next() } {
-        if !shl.rm.is_multiline() || shl.lnum != 0 {
+pub(crate) fn prepare_search_hl(window: Win, lnum: LineNr) {
+    let mut walk = ShlWalk::new(Order::SearchFirst);
+    while let Some(which) = walk.next(window) {
+        if !is_multiline(window, which) || with_shl(window, which, |shl| shl.lnum) != 0 {
             continue;
         }
 
-        if shl.first_lnum == 0 {
-            shl.first_lnum = lnum;
-            while shl.first_lnum > window.w_topline {
-                if has_folding(window, shl.first_lnum - 1, None, None) {
+        if with_shl(window, which, |shl| shl.first_lnum) == 0 {
+            let mut first = lnum;
+            while first > window.w_topline {
+                if has_folding(window, first - 1, None, None) {
                     break;
                 }
-                shl.first_lnum -= 1;
+                first -= 1;
             }
+            with_shl(window, which, |shl| shl.first_lnum = first);
         }
-        if !cur.is_null() {
-            unsafe { (*cur).mit_pos_cur = 0 };
-        }
+        reset_pos_cur(window, which);
 
         // A position match is "in progress" while it still has unvisited
         // positions on the line it is on.
+        let is_item = matches!(which, Which::Item(_));
         let mut pos_inprogress = true;
         let mut n: ColNr = 0;
-        while shl.first_lnum < lnum
-            && (shl.rm.regprog.is_some() || (!cur.is_null() && pos_inprogress))
+        while with_shl(window, which, |shl| shl.first_lnum) < lnum
+            && (has_prog(window, which) || (is_item && pos_inprogress))
         {
-            unsafe { window.next_search_hl(search_hl.raw(), shl.raw(), shl.first_lnum, n, cur) };
-            pos_inprogress = !cur.is_null() && unsafe { (*cur).mit_pos_cur } != 0;
-            if shl.lnum != 0 {
-                shl.first_lnum = shl.lnum + shl.rm.endpos[0].lnum - shl.rm.startpos[0].lnum;
-                n = shl.rm.endpos[0].col;
-            } else {
-                shl.first_lnum += 1;
-                n = 0;
-            }
+            let first = with_shl(window, which, |shl| shl.first_lnum);
+            next_search_hl(window, which, first, n);
+            pos_inprogress = pos_in_progress(window, which);
+            n = with_shl(window, which, |shl| {
+                if shl.lnum != 0 {
+                    shl.first_lnum = shl.lnum + shl.rm.endpos[0].lnum - shl.rm.startpos[0].lnum;
+                    shl.rm.endpos[0].col
+                } else {
+                    shl.first_lnum += 1;
+                    0
+                }
+            });
         }
     }
 }
 
-/// Records whether the cursor is inside `shl`'s match, which is what makes
-/// `CurSearch` apply to one match and not the others.
-///
-/// # Safety
-/// `window` and `shl` must be live.
-unsafe fn check_cur_search_hl(window: Win, shl: *mut MatchState) {
-    // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let mut shl = unsafe { Shl::new(shl) };
-    // SAFETY: the caller's window and match state.
-    let linecount = shl.rm.endpos[0].lnum - shl.rm.startpos[0].lnum;
+/// Records whether the cursor is inside the `'hlsearch'` match, which is
+/// what makes `CurSearch` apply to one match and not the others.
+fn check_cur_search_hl(window: Win) {
     let cursor = window.w_cursor;
-    shl.has_cursor = cursor.lnum >= shl.lnum
-        && cursor.lnum <= shl.lnum + linecount
-        && (cursor.lnum > shl.lnum || cursor.col >= shl.rm.startpos[0].col)
-        && (cursor.lnum < shl.lnum + linecount || cursor.col < shl.rm.endpos[0].col);
+    screen_search_hl.with_mut(|shl| {
+        let linecount = shl.rm.endpos[0].lnum - shl.rm.startpos[0].lnum;
+        shl.has_cursor = cursor.lnum >= shl.lnum
+            && cursor.lnum <= shl.lnum + linecount
+            && (cursor.lnum > shl.lnum || cursor.col >= shl.rm.startpos[0].col)
+            && (cursor.lnum < shl.lnum + linecount || cursor.col < shl.rm.endpos[0].col);
+    });
+}
+
+/// A byte count as a column count.
+#[inline(always)]
+fn col_len(n: usize) -> ColNr {
+    ColNr::try_from(n).unwrap_or(ColNr::MAX)
+}
+
+/// The length of the character at `col` of line `lnum`; 0 at the end of
+/// the line.
+#[inline(always)]
+fn char_len_at(window: Win, lnum: LineNr, col: ColNr) -> ColNr {
+    let buffer = window.buffer();
+    let line = held_line(&buffer, lnum);
+    let at = usize::try_from(col).unwrap_or(usize::MAX);
+    col_len(c_cluster_len(line.get(at..).unwrap_or_default()))
+}
+
+/// How far an empty match at `col` of line `lnum` highlights: the
+/// character there, or one cell past the end of the line.
+#[inline(always)]
+fn empty_match_width(window: Win, lnum: LineNr, col: ColNr) -> ColNr {
+    char_len_at(window, lnum, col).max(1)
 }
 
 /// Prepares every pattern for one window line, and answers whether any of
@@ -433,72 +484,68 @@ unsafe fn check_cur_search_hl(window: Win, shl: *mut MatchState) {
 /// not column 0 under `'nowrap'` or a `'smoothscroll'` skip — also writes
 /// `search_attr`, so the drawing loop starts with the right attribute.
 ///
-/// # Safety
-/// Every pointer must be live; `line` is re-read, because a multi-line
-/// regexp can invalidate it.
-pub(crate) unsafe fn prepare_search_hl_line(
+/// A multi-line regexp can make the line move: the caller reads it again.
+pub(crate) fn prepare_search_hl_line(
     window: Win,
     lnum: LineNr,
     mincol: ColNr,
-    line: *mut *mut c_char,
-    search_hl: *mut MatchState,
-    search_attr: *mut c_int,
-    search_attr_from_match: *mut bool,
+    search_attr: &mut c_int,
+    search_attr_from_match: &mut bool,
 ) -> bool {
-    // SAFETY: the caller's promise -- see this function's `# Safety`.
-    // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let search_hl = unsafe { Shl::new(search_hl) };
     let mut area_highlighting = false;
-    let mut walk = unsafe { ShlWalk::new(window, search_hl.raw(), Order::SearchFirst) };
-    while let Some((mut shl, cur)) = unsafe { walk.next() } {
-        shl.startcol = MAXCOL;
-        shl.endcol = MAXCOL;
-        shl.attr_cur = 0;
-        shl.is_addpos = false;
-        shl.has_cursor = false;
-        if !cur.is_null() {
-            unsafe { (*cur).mit_pos_cur = 0 };
-        }
-        unsafe { window.next_search_hl(search_hl.raw(), shl.raw(), lnum, mincol, cur) };
+    let mut walk = ShlWalk::new(Order::SearchFirst);
+    while let Some(which) = walk.next(window) {
+        with_shl(window, which, |shl| {
+            shl.startcol = MAXCOL;
+            shl.endcol = MAXCOL;
+            shl.attr_cur = 0;
+            shl.is_addpos = false;
+            shl.has_cursor = false;
+        });
+        reset_pos_cur(window, which);
+        next_search_hl(window, which, lnum, mincol);
 
-        // Re-read the line: a multi-line regexp may have invalidated it.
-        unsafe { *line = ml_get_buf(window.buffer(), lnum) };
-
-        if shl.lnum == 0 || shl.lnum > lnum {
+        let found = with_shl(window, which, |shl| {
+            if shl.lnum == 0 || shl.lnum > lnum {
+                return false;
+            }
+            // A match that started on an earlier line covers this one from
+            // column 0; one that ends on a later line covers it to the end.
+            shl.startcol = if shl.lnum == lnum {
+                shl.rm.startpos[0].col
+            } else {
+                0
+            };
+            shl.endcol = if lnum == shl.lnum + shl.rm.endpos[0].lnum - shl.rm.startpos[0].lnum {
+                shl.rm.endpos[0].col
+            } else {
+                MAXCOL
+            };
+            true
+        });
+        if !found {
             continue;
         }
 
-        // A match that started on an earlier line covers this one from
-        // column 0; one that ends on a later line covers it to the end.
-        shl.startcol = if shl.lnum == lnum {
-            shl.rm.startpos[0].col
-        } else {
-            0
-        };
-        shl.endcol = if lnum == shl.lnum + shl.rm.endpos[0].lnum - shl.rm.startpos[0].lnum {
-            shl.rm.endpos[0].col
-        } else {
-            MAXCOL
-        };
-
         // Before the columns are widened below.
-        if shl == search_hl {
-            unsafe { check_cur_search_hl(window, shl.raw()) };
+        if which == Which::Search {
+            check_cur_search_hl(window);
         }
 
         // An empty match still highlights one character.
-        if shl.startcol == shl.endcol {
-            if unsafe { *(*line).offset(shl.endcol as isize) } != 0 {
-                unsafe { shl.endcol += utfc_ptr2len((*line).offset(shl.endcol as isize)) };
-            } else {
-                shl.endcol += 1;
-            }
+        let (startcol, endcol) = with_shl(window, which, |shl| (shl.startcol, shl.endcol));
+        if startcol == endcol {
+            let width = empty_match_width(window, lnum, endcol);
+            with_shl(window, which, |shl| shl.endcol += width);
         }
-        if shl.startcol < mincol {
+        if startcol < mincol {
             // Already highlighted at the left edge.
-            shl.attr_cur = shl.attr;
-            unsafe { *search_attr = shl.attr };
-            unsafe { *search_attr_from_match = shl != search_hl };
+            let attr = with_shl(window, which, |shl| {
+                shl.attr_cur = shl.attr;
+                shl.attr
+            });
+            *search_attr = attr;
+            *search_attr_from_match = which != Which::Search;
         }
         area_highlighting = true;
     }
@@ -511,91 +558,91 @@ pub(crate) unsafe fn prepare_search_hl_line(
 /// Called once per column. Each pattern is stepped until it either covers
 /// `col` or starts after it; then a second walk, in priority order, takes
 /// the last non-zero attribute, so the highest-priority pattern wins.
-///
-/// # Safety
-/// Every pointer must be live; `line` is re-read, because a multi-line
-/// regexp can invalidate it.
 #[allow(clippy::too_many_arguments)]
-pub(crate) unsafe fn update_search_hl(
+pub(crate) fn update_search_hl(
     window: Win,
     lnum: LineNr,
     col: ColNr,
-    line: *mut *mut c_char,
-    search_hl: *mut MatchState,
-    has_match_conc: *mut c_int,
-    match_conc: *mut c_int,
+    has_match_conc: &mut c_int,
+    match_conc: &mut c_int,
     lcs_eol_todo: bool,
-    on_last_col: *mut bool,
-    search_attr_from_match: *mut bool,
+    on_last_col: &mut bool,
+    search_attr_from_match: &mut bool,
 ) -> c_int {
-    // SAFETY: the caller's promise -- see this function's `# Safety`.
-    // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let search_hl = unsafe { Shl::new(search_hl) };
-    // SAFETY: the caller's window, line and out-parameters.
-    let mut walk = unsafe { ShlWalk::new(window, search_hl.raw(), Order::ByPriority) };
-    while let Some((mut shl, cur)) = unsafe { walk.next() } {
-        if !cur.is_null() {
-            unsafe { (*cur).mit_pos_cur = 0 };
-        }
+    let mut walk = ShlWalk::new(Order::ByPriority);
+    while let Some(which) = walk.next(window) {
+        reset_pos_cur(window, which);
+        let is_item = matches!(which, Which::Item(_));
         let mut pos_inprogress = true;
-        while shl.rm.regprog.is_some() || (!cur.is_null() && pos_inprogress) {
-            if shl.startcol != MAXCOL && col >= shl.startcol && col < shl.endcol {
+        while has_prog(window, which) || (is_item && pos_inprogress) {
+            let (startcol, endcol) = with_shl(window, which, |shl| (shl.startcol, shl.endcol));
+            if startcol != MAXCOL && col >= startcol && col < endcol {
                 // Inside the match. Widen it to a whole character.
-                let next_col = col + unsafe { utfc_ptr2len((*line).offset(col as isize)) };
-                if shl.endcol < next_col {
-                    shl.endcol = next_col;
-                }
-                // The match holding the cursor uses `CurSearch`.
-                if shl == search_hl && shl.has_cursor {
-                    shl.attr_cur = win_hl_attr(window, HLF_LC);
-                    if shl.attr_cur != shl.attr {
-                        search_hl_has_cursor_lnum.set(lnum);
+                let next_col = col + char_len_at(window, lnum, col);
+                let cursor_attr = match which {
+                    Which::Search if screen_search_hl.with(|shl| shl.has_cursor) => {
+                        Some(win_hl_attr(window, HLF_LC))
                     }
-                } else {
-                    shl.attr_cur = shl.attr;
-                }
+                    _ => None,
+                };
+                with_shl(window, which, |shl| {
+                    if shl.endcol < next_col {
+                        shl.endcol = next_col;
+                    }
+                    // The match holding the cursor uses `CurSearch`.
+                    if let Some(attr) = cursor_attr {
+                        shl.attr_cur = attr;
+                        if shl.attr_cur != shl.attr {
+                            search_hl_has_cursor_lnum.set(lnum);
+                        }
+                    } else {
+                        shl.attr_cur = shl.attr;
+                    }
+                });
                 // A match in the `Conceal` group hides its text; 2 marks
                 // the first cell, so the replacement character is drawn
                 // once rather than once per cell.
-                if !cur.is_null()
-                    && shl != search_hl
-                    && syn_name2id(c"Conceal") == unsafe { (*cur).mit_hlg_id }
-                {
-                    unsafe { *has_match_conc = if col == shl.startcol { 2 } else { 1 } };
-                    unsafe { *match_conc = (*cur).mit_conceal_char };
-                } else {
-                    unsafe { *has_match_conc = 0 };
+                match which {
+                    Which::Item(i) if syn_name2id(c"Conceal") == window.w_matches[i].mit_hlg_id => {
+                        *has_match_conc = if col == startcol { 2 } else { 1 };
+                        *match_conc = window.w_matches[i].mit_conceal_char;
+                    }
+                    _ => *has_match_conc = 0,
                 }
                 break;
             }
-            if col != shl.endcol {
+            if col != endcol {
                 break;
             }
 
             // Just past the end: look for the next match on this line.
-            shl.attr_cur = 0;
-            unsafe { window.next_search_hl(search_hl.raw(), shl.raw(), lnum, col, cur) };
-            pos_inprogress = !cur.is_null() && unsafe { (*cur).mit_pos_cur } != 0;
+            with_shl(window, which, |shl| shl.attr_cur = 0);
+            next_search_hl(window, which, lnum, col);
+            pos_inprogress = pos_in_progress(window, which);
 
-            // Re-read the line: a multi-line regexp may have invalidated it.
-            unsafe { *line = ml_get_buf(window.buffer(), lnum) };
-
-            if shl.lnum != lnum {
+            let found = with_shl(window, which, |shl| {
+                if shl.lnum != lnum {
+                    return false;
+                }
+                shl.startcol = shl.rm.startpos[0].col;
+                shl.endcol = if shl.rm.endpos[0].lnum == 0 {
+                    shl.rm.endpos[0].col
+                } else {
+                    MAXCOL
+                };
+                true
+            });
+            if !found {
                 break;
             }
-            shl.startcol = shl.rm.startpos[0].col;
-            shl.endcol = if shl.rm.endpos[0].lnum == 0 {
-                shl.rm.endpos[0].col
-            } else {
-                MAXCOL
-            };
-            if shl == search_hl {
-                unsafe { check_cur_search_hl(window, shl.raw()) };
+            if which == Which::Search {
+                check_cur_search_hl(window);
             }
-            if shl.startcol == shl.endcol {
+            let (startcol, endcol) = with_shl(window, which, |shl| (shl.startcol, shl.endcol));
+            if startcol == endcol {
                 // Highlight the empty match, then try again after it.
-                let p = unsafe { (*line).offset(shl.endcol as isize) };
-                unsafe { shl.endcol += if *p == 0 { 1 } else { utfc_ptr2len(p) } };
+                let width = empty_match_width(window, lnum, endcol);
+                with_shl(window, which, |shl| shl.endcol += width);
             }
             // Round again, in case the new match starts here.
         }
@@ -603,24 +650,26 @@ pub(crate) unsafe fn update_search_hl(
 
     // The attribute of the highest-priority pattern covering `col`:
     // walking in priority order, the last writer wins.
-    unsafe { *search_attr_from_match = false };
-    let mut search_attr = search_hl.attr_cur;
-    let mut walk = unsafe { ShlWalk::new(window, search_hl.raw(), Order::ByPriority) };
-    while let Some((shl, _)) = unsafe { walk.next() } {
-        if shl.attr_cur != 0 {
-            search_attr = shl.attr_cur;
-            unsafe { *on_last_col = col + 1 >= shl.endcol };
-            unsafe { *search_attr_from_match = shl != search_hl };
+    *search_attr_from_match = false;
+    let mut search_attr = screen_search_hl.with(|shl| shl.attr_cur);
+    let mut walk = ShlWalk::new(Order::ByPriority);
+    while let Some(which) = walk.next(window) {
+        let (attr_cur, endcol) = with_shl(window, which, |shl| (shl.attr_cur, shl.endcol));
+        if attr_cur != 0 {
+            search_attr = attr_cur;
+            *on_last_col = col + 1 >= endcol;
+            *search_attr_from_match = which != Which::Search;
         }
     }
 
     // Under `'list'` the eol character is drawn from `'listchars'`, so
     // the match must not colour past the last real character.
-    if unsafe { *(*line).offset(col as isize) } == 0
-        && window.w_onebuf_opt.wo_list != 0
-        && !lcs_eol_todo
-    {
-        search_attr = 0;
+    if window.w_onebuf_opt.wo_list != 0 && !lcs_eol_todo {
+        let buffer = window.buffer();
+        let at = usize::try_from(col).unwrap_or(usize::MAX);
+        if cstr::byte_at(held_line(&buffer, lnum), at) == 0 {
+            search_attr = 0;
+        }
     }
     search_attr
 }
@@ -630,18 +679,7 @@ pub(crate) unsafe fn update_search_hl(
 /// True when a match started exactly there, or when it continues into the
 /// next line — i.e. covers the line break itself. `matchaddpos()` matches
 /// are excluded: they name real positions and never the break.
-///
-/// # Safety
-/// `window` and `search_hl` must be live.
-pub(crate) unsafe fn get_prevcol_hl_flag(
-    window: Win,
-    search_hl: *mut MatchState,
-    curcol: ColNr,
-) -> bool {
-    // SAFETY: the caller's promise -- see this function's `# Safety`.
-    // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let search_hl = unsafe { Shl::new(search_hl) };
-    // SAFETY: the caller's window and search state.
+pub(crate) fn get_prevcol_hl_flag(window: Win, curcol: ColNr) -> bool {
     // Not really at that column when text to the left is being skipped.
     let skip = if window.w_onebuf_opt.wo_wrap != 0 {
         window.w_skipcol
@@ -650,41 +688,22 @@ pub(crate) unsafe fn get_prevcol_hl_flag(
     };
     let prevcol = if skip > curcol { curcol + 1 } else { curcol };
 
-    let covers = |m: Shl| {
+    let covers = |m: &MatchState| {
         !m.is_addpos && (prevcol == m.startcol || (prevcol > m.startcol && m.endcol == MAXCOL))
     };
 
-    if covers(search_hl) {
-        return true;
-    }
-    let mut cur = window.w_match_head;
-    while !cur.is_null() {
-        // SAFETY: the entry's own highlight state, which the window owns.
-        if covers(unsafe { Shl::new(&raw mut (*cur).mit_hl) }) {
-            return true;
-        }
-        cur = unsafe { (*cur).mit_next };
-    }
-    false
+    screen_search_hl.with(covers) || window.w_matches.iter().any(|item| covers(&item.mit_hl))
 }
 
 /// The attribute for the character after the text, when a match starts
 /// exactly at `col - 1`.
-///
-/// # Safety
-/// `window`, `search_hl` and `char_attr` must be live.
-pub(crate) unsafe fn get_search_match_hl(
-    window: Win,
-    search_hl: *mut MatchState,
-    col: ColNr,
-    char_attr: *mut c_int,
-) {
-    // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let search_hl = unsafe { Shl::new(search_hl) };
-    let mut walk = unsafe { ShlWalk::new(window, search_hl.raw(), Order::ByPriority) };
-    while let Some((shl, _)) = unsafe { walk.next() } {
-        if col - 1 == shl.startcol && (shl == search_hl || !shl.is_addpos) {
-            unsafe { *char_attr = shl.attr };
+pub(crate) fn get_search_match_hl(window: Win, col: ColNr, char_attr: &mut c_int) {
+    let mut walk = ShlWalk::new(Order::ByPriority);
+    while let Some(which) = walk.next(window) {
+        let (startcol, is_addpos, attr) =
+            with_shl(window, which, |shl| (shl.startcol, shl.is_addpos, shl.attr));
+        if col - 1 == startcol && (which == Which::Search || !is_addpos) {
+            *char_attr = attr;
         }
     }
 }

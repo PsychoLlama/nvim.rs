@@ -304,7 +304,9 @@ pub struct Window {
     pub w_jumplistlen: ::core::ffi::c_int,
     pub w_jumplistidx: ::core::ffi::c_int,
     pub w_changelistidx: ::core::ffi::c_int,
-    pub w_match_head: *mut MatchItem,
+    /// The window's matches, in ascending priority order (ties in the
+    /// order they were added).
+    pub w_matches: Vec<MatchItem>,
     pub w_next_match_id: ::core::ffi::c_int,
     pub w_tagstack: [Taggy; 20],
     pub w_tagstackidx: ::core::ffi::c_int,

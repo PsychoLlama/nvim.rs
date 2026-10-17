@@ -140,18 +140,15 @@ pub(crate) unsafe fn prepare_line(
     if col_rows == 0 && s.draw_text && !s.has_foldtext {
         let at = unsafe { s.ptr.offset_from(s.line) } as ::core::ffi::c_int;
         // `|=`, not `||`: `prepare_search_hl_line` runs either way.
-        s.area_highlighting |= unsafe {
-            prepare_search_hl_line(
-                window,
-                lnum,
-                at,
-                &raw mut s.line,
-                SearchHl::current().raw(),
-                &raw mut s.search_attr,
-                &raw mut s.search_attr_from_match,
-            )
-        };
-        // "line" may have been updated.
+        s.area_highlighting |= prepare_search_hl_line(
+            window,
+            lnum,
+            at,
+            &mut s.search_attr,
+            &mut s.search_attr_from_match,
+        );
+        // A multi-line regexp may have moved the line.
+        s.line = ml_get_buf(window.buffer(), lnum);
         s.ptr = unsafe { s.line.offset(at as isize) };
     }
 
