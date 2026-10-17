@@ -11,6 +11,7 @@ use super::Rex;
 use crate::charset::{is_word_at, vim_iswordc_buf};
 use crate::mbyte::{
     c_cluster_len, char_at, char_len, head_off, iscomposing, strnicmp_in, utf_fold,
+    utf_is_trail_byte, utf8len_tab,
 };
 use crate::memory::{memchr_in, strchr_in, strlen_in};
 use crate::strings::find_char;
@@ -288,12 +289,34 @@ pub(crate) fn char_len_at(text: &[u8], i: usize) -> usize {
 #[inline(always)]
 pub(crate) fn cluster_len_at(text: &[u8], i: usize) -> usize {
     match text.get(i..) {
+        None | Some([] | [0, ..]) => 0,
         // An ASCII byte followed by another cannot be combined with
         // anything: the hot answer, without decoding.
-        Some(&[first, next, ..]) if first != 0 && first < 0x80 && next < 0x80 => 1,
-        Some(rest) => c_cluster_len(rest),
-        None => 0,
+        Some(&[first, next, ..]) if first < 0x80 && next < 0x80 => 1,
+        Some(rest) => cluster_len_slow(rest),
     }
+}
+
+/// [`cluster_len_at`] past its ASCII answer, out of line so that every
+/// caller inlines only that.
+///
+/// A whole multibyte character followed by ASCII is a cluster of its own:
+/// the answer the full walk reaches on its first look past the character,
+/// without its per-byte reads.
+#[inline(never)]
+fn cluster_len_slow(rest: &[u8]) -> usize {
+    let first = rest[0];
+    if first >= 0x80 {
+        let len = usize::from(utf8len_tab[usize::from(first)]);
+        let whole = len >= 2
+            && rest
+                .get(1..len)
+                .is_some_and(|tail| tail.iter().all(|&byte| utf_is_trail_byte(byte)));
+        if whole && rest.get(len).is_none_or(|&byte| byte < 0x80) {
+            return len;
+        }
+    }
+    c_cluster_len(rest)
 }
 
 /// How far back from `text[i]` the character covering it starts.
@@ -345,5 +368,56 @@ pub(crate) fn word_char_at(text: &[u8], buffer: Buf) -> bool {
     match text.first() {
         Some(&byte) if byte < 0x80 => vim_iswordc_buf(c_int::from(byte), buffer),
         _ => is_word_at(text, buffer),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The fast paths in [`cluster_len_at`] and [`char_at_nul`] answer what
+    /// the readers they short-cut answer, over every lead byte followed by a
+    /// spread of the bytes that decide anything: NUL, ASCII, continuation
+    /// bytes, lead bytes, and the first byte of a combining mark.
+    #[test]
+    #[cfg_attr(miri, ignore = "exhaustive: two million reads, minutes under Miri")]
+    fn the_fast_paths_answer_what_the_full_readers_answer() {
+        let probes = [
+            0u8, 0x41, 0x80, 0x81, 0xa9, 0xbf, 0xc3, 0xcc, 0xcd, 0xe2, 0xf0, 0xff,
+        ];
+        for a in 0..=255u8 {
+            for &b in &probes {
+                for &c in &probes {
+                    for &d in &probes {
+                        let text = [a, b, c, d, 0];
+                        for i in 0..text.len() {
+                            assert_eq!(
+                                cluster_len_at(&text, i),
+                                c_cluster_len(&text[i..]),
+                                "cluster at {i} of {text:x?}"
+                            );
+                            let want = match text[i..].first() {
+                                Some(_) => char_at(&text[i..]),
+                                None => 0,
+                            };
+                            assert_eq!(char_at_nul(&text, i), want, "char at {i} of {text:x?}");
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// A base character with combining marks after it is one cluster, and
+    /// the fast path hands it to the full walk.
+    #[test]
+    fn a_character_with_combining_marks_is_one_cluster() {
+        // é as e + U+0301, then x.
+        let text = b"e\xcc\x81x\0";
+        assert_eq!(cluster_len_at(text, 0), 3);
+        // ü (two bytes) + U+0308, then NUL.
+        let text = b"\xc3\xbc\xcc\x88\0";
+        assert_eq!(cluster_len_at(text, 0), 4);
+        assert_eq!(cluster_len_at(text, 4), 0);
     }
 }
