@@ -11,7 +11,6 @@ use super::Rex;
 use crate::charset::{is_word_at, vim_iswordc_buf};
 use crate::mbyte::{
     c_cluster_len, char_at, char_len, head_off, iscomposing, strnicmp_in, utf_fold,
-    utf_is_trail_byte, utf8len_tab,
 };
 use crate::memory::{memchr_in, strchr_in, strlen_in};
 use crate::strings::find_char;
@@ -289,34 +288,12 @@ pub(crate) fn char_len_at(text: &[u8], i: usize) -> usize {
 #[inline(always)]
 pub(crate) fn cluster_len_at(text: &[u8], i: usize) -> usize {
     match text.get(i..) {
-        None | Some([] | [0, ..]) => 0,
         // An ASCII byte followed by another cannot be combined with
         // anything: the hot answer, without decoding.
-        Some(&[first, next, ..]) if first < 0x80 && next < 0x80 => 1,
-        Some(rest) => cluster_len_slow(rest),
+        Some(&[first, next, ..]) if first != 0 && first < 0x80 && next < 0x80 => 1,
+        Some(rest) => c_cluster_len(rest),
+        None => 0,
     }
-}
-
-/// [`cluster_len_at`] past its ASCII answer, out of line so that every
-/// caller inlines only that.
-///
-/// A whole multibyte character followed by ASCII is a cluster of its own:
-/// the answer the full walk reaches on its first look past the character,
-/// without its per-byte reads.
-#[inline(never)]
-fn cluster_len_slow(rest: &[u8]) -> usize {
-    let first = rest[0];
-    if first >= 0x80 {
-        let len = usize::from(utf8len_tab[usize::from(first)]);
-        let whole = len >= 2
-            && rest
-                .get(1..len)
-                .is_some_and(|tail| tail.iter().all(|&byte| utf_is_trail_byte(byte)));
-        if whole && rest.get(len).is_none_or(|&byte| byte < 0x80) {
-            return len;
-        }
-    }
-    c_cluster_len(rest)
 }
 
 /// How far back from `text[i]` the character covering it starts.
