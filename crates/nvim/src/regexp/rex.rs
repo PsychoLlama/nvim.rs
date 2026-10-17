@@ -46,9 +46,9 @@ use core::cell::Cell;
 use core::ffi::{CStr, c_int};
 
 use super::pos::{MatchPos, PosKind, SavedInput};
+use super::word_char_at;
 use super::{ExtMatch, ExtMatchRef, NSUBEXP, TimeBudget};
 use super::{char_at_nul, char_len_at, cluster_len_at};
-use crate::charset::is_word_at;
 use crate::memline::held_line;
 use crate::types::{ColNr, LPos, LineNr, ProfTime};
 use crate::winlayer::{Buf, Win};
@@ -445,7 +445,7 @@ impl<'t> Rex<'t> {
     /// current one.
     #[inline(always)]
     pub(crate) fn iswordp(self) -> bool {
-        is_word_at(self.rest(), self.reg_buf())
+        word_char_at(self.rest(), self.reg_buf())
     }
 
     // --------------------------------------------- what is being matched

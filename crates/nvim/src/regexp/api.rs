@@ -15,10 +15,10 @@
 use crate::cstr;
 use crate::global_cell::GlobalCell;
 use crate::memory::XString;
-use crate::regexp::ExtMatchIo;
 use crate::regexp::RegCompiler;
 use crate::regexp::bt_regcomp;
 use crate::regexp::nfa_regcomp;
+use crate::regexp::{ExtMatch, ExtMatchIo, ExtMatchRef};
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use core::cell::Cell;
@@ -51,6 +51,7 @@ static MATCH_DEPTH: GlobalCell<c_int> = GlobalCell::new(0);
 /// buffer expansion records its first line (`first`), and `f` is handed the
 /// line in force. A nested reservation puts the outer one's line back when it
 /// is done, as restoring the whole of `rex` around a nested match did.
+#[inline(always)]
 pub(crate) fn in_match_scope<R>(first: Option<LineNr>, f: impl FnOnce(LineNr) -> R) -> R {
     let depth = MATCH_DEPTH.get();
     let saved = LAST_FIRSTLNUM.get();
@@ -229,7 +230,6 @@ fn vim_regexec_string(matches: &mut RegMatch, line: &CStr, col: usize, nl: bool)
     // A string match has no buffer of its own, but `\k` and friends still
     // need an 'iskeyword' to read.
     let buf = Buf::current();
-    let ic = matches.rm_ic;
     // SAFETY: the caller's match structure holds a live program, or none.
     // A program cannot match against itself: `\=` calling back into the
     // same pattern would reuse the program's own state.
@@ -237,47 +237,80 @@ fn vim_regexec_string(matches: &mut RegMatch, line: &CStr, col: usize, nl: bool)
         emsg(gettext(E_RECURSIVE));
         return false;
     }
-    let run = |prog: *mut RegProg, firstlnum: LineNr| {
+    let run = StringRun {
+        buffer: &buf,
+        text,
+        col,
+        nl,
+    };
+    let result = in_match_scope(None, |firstlnum| {
+        let result = run.once(matches, firstlnum);
+        if result == NFA_TOO_EXPENSIVE
+            && unsafe { (*matches.regprog).re_engine } == AUTOMATIC_ENGINE
+        {
+            run.again_backtracking(matches, firstlnum)
+        } else {
+            result
+        }
+    });
+    result > 0
+}
+
+/// What one string match runs with, whichever program runs it.
+struct StringRun<'a> {
+    /// The current buffer, whose 'iskeyword' `\k` and friends read.
+    buffer: &'a Buf,
+    /// The string, its NUL included.
+    text: &'a [u8],
+    col: ColNr,
+    nl: bool,
+}
+
+impl StringRun<'_> {
+    /// Run `matches`'s program once, leaving its groups (as offsets into
+    /// the string) on a hit and clearing them on a miss. A match structure
+    /// holds a live program from `vim_regcomp`, which every holder keeps so.
+    #[inline(always)]
+    fn once(&self, matches: &mut RegMatch, firstlnum: LineNr) -> LineNr {
+        let prog = matches.regprog;
         // SAFETY: a live program, marked in use for the run.
         unsafe { (*prog).re_in_use = true };
         let setup = MatchSetup {
-            buf: &buf,
+            buf: self.buffer,
             win: None,
-            ic,
+            ic: matches.rm_ic,
             nobreak: unsafe { nobreak(prog) },
             deadline: None,
             ext_in: None,
         };
         let slots = GroupSlots::new();
-        let ctx = RegExec::for_string(setup, text, nl, firstlnum, &slots);
-        let result = unsafe { run_engine(prog, ctx.rex(), col) };
+        let ctx = RegExec::for_string(setup, self.text, self.nl, firstlnum, &slots);
+        let result = unsafe { run_engine(prog, ctx.rex(), self.col) };
         unsafe { (*prog).re_in_use = false };
-        let matchcol = ctx.matchcol();
-        (result, slots.starts.get(), slots.ends.get(), matchcol)
-    };
-    let ran = in_match_scope(None, |firstlnum| {
-        let mut ran = run(matches.regprog, firstlnum);
-        if unsafe { (*matches.regprog).re_engine } == AUTOMATIC_ENGINE && ran.0 == NFA_TOO_EXPENSIVE
-        {
-            let prev = matches.regprog;
-            matches.regprog = unsafe { recompile_backtracking(prev, false) };
-            unsafe { vim_regfree(prev) };
-            if !matches.regprog.is_null() {
-                ran = run(matches.regprog, firstlnum);
-            }
+        if let Some(col) = ctx.matchcol() {
+            matches.rm_matchcol = col;
         }
-        ran
-    });
-    let (result, starts, ends, matchcol) = ran;
-    if let Some(col) = matchcol {
-        matches.rm_matchcol = col;
+        if result > 0 {
+            record_groups(matches, &slots.starts.get(), &slots.ends.get());
+        } else {
+            matches.clear_groups();
+        }
+        result
     }
-    if result > 0 {
-        record_groups(matches, &starts, &ends);
-    } else {
-        matches.clear_groups();
+
+    /// The NFA engine gave up on the pattern: recompile it for the
+    /// backtracking one, in `matches`, and run that.
+    #[cold]
+    #[inline(never)]
+    fn again_backtracking(&self, matches: &mut RegMatch, firstlnum: LineNr) -> LineNr {
+        let prev = matches.regprog;
+        matches.regprog = unsafe { recompile_backtracking(prev, false) };
+        unsafe { vim_regfree(prev) };
+        if matches.regprog.is_null() {
+            return NFA_TOO_EXPENSIVE;
+        }
+        self.once(matches, firstlnum)
     }
-    result > 0
 }
 
 /// Copy the slots the engine filled into `matches`, as offsets into the
@@ -377,20 +410,54 @@ unsafe fn regexec_multi_io(
         emsg(gettext(E_RECURSIVE));
         return 0;
     }
-    let deadline = unsafe { tm.as_ref() }.copied();
-    let ext_in = io.input;
+    let run = MultiRun {
+        buffer: &buffer,
+        win,
+        lnum,
+        col,
+        deadline: unsafe { tm.as_ref() }.copied(),
+        timed_out,
+        ext_in: io.input,
+    };
     let mut ext_out = io.output;
-    let mut run = |rmm: &mut RegMMatch| {
+    let result = in_match_scope(Some(lnum), |_| {
+        let result = run.once(rmm, &mut ext_out);
+        if result == NFA_TOO_EXPENSIVE && unsafe { (*rmm.regprog).re_engine } == AUTOMATIC_ENGINE {
+            run.again_backtracking(rmm, &mut ext_out)
+        } else {
+            result
+        }
+    });
+    result.max(0)
+}
+
+/// What one buffer match runs with, whichever program runs it.
+struct MultiRun<'a> {
+    buffer: &'a Buf,
+    win: Option<Win>,
+    lnum: LineNr,
+    col: ColNr,
+    deadline: Option<ProfTime>,
+    timed_out: *mut c_int,
+    ext_in: Option<&'a ExtMatch>,
+}
+
+impl MultiRun<'_> {
+    /// Run `rmm`'s program once. A match structure holds a live program,
+    /// and `timed_out` is null or the caller's flag, as `vim_regexec_multi`
+    /// was promised.
+    #[inline(always)]
+    fn once(&self, rmm: &mut RegMMatch, ext_out: &mut Option<&mut Option<ExtMatchRef>>) -> LineNr {
         let prog = rmm.regprog;
         // SAFETY: a live program, marked in use for the run.
         unsafe { (*prog).re_in_use = true };
         let setup = MatchSetup {
-            buf: &buffer,
-            win,
+            buf: self.buffer,
+            win: self.win,
             ic: rmm.rmm_ic != 0,
             nobreak: unsafe { nobreak(prog) },
-            deadline,
-            ext_in,
+            deadline: self.deadline,
+            ext_in: self.ext_in,
         };
         // The match writes the caller's slots in place, as upstream's did.
         let maxcol = rmm.rmm_maxcol;
@@ -398,39 +465,44 @@ unsafe fn regexec_multi_io(
             Cell::from_mut(&mut rmm.startpos),
             Cell::from_mut(&mut rmm.endpos),
         );
-        let ctx = RegExec::for_buffer(setup, lnum, maxcol, starts, ends);
-        let result = unsafe { run_engine(prog, ctx.rex(), col) };
+        let ctx = RegExec::for_buffer(setup, self.lnum, maxcol, starts, ends);
+        let result = unsafe { run_engine(prog, ctx.rex(), self.col) };
         unsafe { (*prog).re_in_use = false };
         let (matchcol, did_time_out, captures) =
             (ctx.matchcol(), ctx.timed_out(), ctx.take_ext_out());
         if let Some(col) = matchcol {
             rmm.rmm_matchcol = col;
         }
-        if did_time_out && !timed_out.is_null() {
+        if did_time_out && !self.timed_out.is_null() {
             // SAFETY: the caller's flag.
-            unsafe { *timed_out = 1 };
+            unsafe { *self.timed_out = 1 };
         }
         if let (Some(out), Some(captures)) = (ext_out.as_deref_mut(), captures) {
             *out = captures;
         }
         result
-    };
-    let result = in_match_scope(Some(lnum), |_| {
-        let mut result = run(rmm);
-        if unsafe { (*rmm.regprog).re_engine } == AUTOMATIC_ENGINE && result == NFA_TOO_EXPENSIVE {
-            let prev = rmm.regprog;
-            let new = unsafe { recompile_backtracking(prev, true) };
-            // Unlike the string case, a failed recompile keeps the old
-            // program rather than leaving the caller without one.
-            if !new.is_null() {
-                rmm.regprog = new;
-                unsafe { vim_regfree(prev) };
-                result = run(rmm);
-            }
+    }
+
+    /// The NFA engine gave up on the pattern: recompile it for the
+    /// backtracking one and run that. Unlike the string case, a failed
+    /// recompile keeps the old program rather than leaving the caller
+    /// without one.
+    #[cold]
+    #[inline(never)]
+    fn again_backtracking(
+        &self,
+        rmm: &mut RegMMatch,
+        ext_out: &mut Option<&mut Option<ExtMatchRef>>,
+    ) -> LineNr {
+        let prev = rmm.regprog;
+        let new = unsafe { recompile_backtracking(prev, true) };
+        if new.is_null() {
+            return NFA_TOO_EXPENSIVE;
         }
-        result
-    });
-    result.max(0)
+        rmm.regprog = new;
+        unsafe { vim_regfree(prev) };
+        self.once(rmm, ext_out)
+    }
 }
 
 #[allow(

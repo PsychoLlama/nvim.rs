@@ -8,12 +8,14 @@ use crate::cstr;
 use core::ffi::c_int;
 
 use super::Rex;
+use crate::charset::{is_word_at, vim_iswordc_buf};
 use crate::mbyte::{
     c_cluster_len, char_at, char_len, head_off, iscomposing, strnicmp_in, utf_fold,
 };
 use crate::memory::{memchr_in, strchr_in, strlen_in};
 use crate::strings::find_char;
 use crate::types::GraphemeState;
+use crate::winlayer::Buf;
 
 /// The base characters of U+FB20..U+FB4F, the Hebrew presentation forms, so
 /// that `\Z` can treat a precomposed form and its parts as equal. Entries
@@ -334,4 +336,14 @@ pub(crate) fn prefix_at(text: &[u8], i: usize, n: usize) -> &[u8] {
     let rest = text.get(i..).unwrap_or(&[]);
     let rest = &rest[..n.min(rest.len())];
     &rest[..nul_at(rest)]
+}
+
+/// Is the character `text` starts with a keyword character of `buffer`'s?
+/// [`is_word_at`] with ASCII answered first, without decoding.
+#[inline(always)]
+pub(crate) fn word_char_at(text: &[u8], buffer: Buf) -> bool {
+    match text.first() {
+        Some(&byte) if byte < 0x80 => vim_iswordc_buf(c_int::from(byte), buffer),
+        _ => is_word_at(text, buffer),
+    }
 }

@@ -14,13 +14,15 @@ use core::ffi::c_int;
 use super::compile::BtProg;
 use super::op::BtOp;
 use crate::ascii::ascii_isdigit;
-use crate::charset::{is_word_at, vim_is_ident_char, vim_isfilec, vim_isprintc};
+use crate::charset::{vim_is_ident_char, vim_isfilec, vim_isprintc};
 use crate::getchar::state::got_int;
 use crate::mbyte::{mb_tolower, mb_toupper, utf_fold};
 use crate::message::e_re_corr;
 use crate::message::iemsg;
 use crate::os::cshim::gettext;
-use crate::regexp::{ByteClass, RI_FLAGS, Rex, char_at_nul, cluster_len_at, cstrchr, reg_nextline};
+use crate::regexp::{
+    ByteClass, RI_FLAGS, Rex, char_at_nul, cluster_len_at, cstrchr, reg_nextline, word_char_at,
+};
 use crate::types::{NUL, int64_t};
 
 /// What stepping onto the next line produced.
@@ -146,7 +148,7 @@ pub(crate) fn regrepeat(rex: Rex, prog: BtProg<'_>, p: usize, maxcount: int64_t)
 
         // `\k`/`\K`: 'iskeyword' characters, which are buffer-local.
         BtOp::Kword | BtOp::Skword => count_class!(false, |text: &[u8]| {
-            is_word_at(text, rex.reg_buf()) && digit_ok(text)
+            word_char_at(text, rex.reg_buf()) && digit_ok(text)
         }),
 
         // `\f`/`\F`: 'isfname' characters.
