@@ -5,9 +5,9 @@
 //! engine selection: `'regexpengine'` and a leading `\%#=` pick one, and
 //! when the NFA engine gives up on a pattern (`NFA_TOO_EXPENSIVE`) the
 //! pattern is recompiled for the backtracking engine and rerun. The other
-//! is the `rex` handover — a match may run a `\=` expression that starts
-//! a match of its own, so the context is saved and restored around every
-//! run rather than assumed to be free.
+//! is the match's context: each run builds its own [`RegExec`] on this
+//! layer's stack — so a `\=` expression that starts a match of its own gets
+//! a context of its own — and reads back what the engine left in it.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]

@@ -8,13 +8,10 @@
 //!
 //! This file is what they share: the C structures the engines still pass
 //! around by pointer, the opcode enumerations, and the globals that stand
-//! in for the C file-scope statics a match still needs (`rex`, the
-//! submatch snapshot, the previous replacement). A compile keeps its state
-//! in a [`RegCompiler`] instead (see [`compiler`]). It holds no code.
-//!
-//! The globals are read through `GlobalCell::ptr` on the matching path, not
-//! `with`/`with_mut` — see [`context`] for why that distinction is
-//! load-bearing.
+//! in for the C file-scope statics that outlive a match (the submatch
+//! snapshot, the previous replacement). A match keeps its state in a
+//! [`RegExec`] the API layer builds for it (see [`rex`]), and a compile in
+//! a [`RegCompiler`] (see [`compiler`]). It holds no code.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.

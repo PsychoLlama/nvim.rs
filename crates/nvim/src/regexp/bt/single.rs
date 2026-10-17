@@ -163,7 +163,7 @@ pub(crate) fn match_one(
         | BtOp::Zref9 => external_reference(rex, op.code() - ZREF),
 
         // The position a `\@<=` look-behind has to end at.
-        // SAFETY: `behind_pos` is this engine's own saved position.
+        // `behind_pos` is this engine's own saved position.
         BtOp::Bhpos => nomatch_unless(rex.is_at(rex.behind_pos().pos)),
 
         BtOp::Newl => {

@@ -1,8 +1,7 @@
 //! Saving and restoring where the engine is, and the stack it saves onto.
 //!
-//! A saved position is a [`MatchPos`]: a pointer for a string match, a
-//! line/column pair for a buffer match, and which one it is comes from the
-//! run rather than from the value — see that type for why.
+//! A saved position is a [`MatchPos`]: a line and a column, a string match
+//! being all on line 0.
 //!
 //! [`RegStack`] is the saved-state stack the matcher pushes decisions onto,
 //! and [`BackPos`] the record of where each loop back-edge has already been — a

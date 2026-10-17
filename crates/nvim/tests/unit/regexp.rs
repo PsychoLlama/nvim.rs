@@ -1740,3 +1740,65 @@ fn an_engine_prefix_with_nothing_after_it_is_an_error_rather_than_a_read_past_th
         }
     }
 }
+
+/// A `?` search unescapes the `\?` it holds (into a copy of the command
+/// line), and a `;`-chained search after it reads the rest of that copy: the
+/// pattern length the chain hands on runs past the NUL written over the
+/// first leg's delimiter, which upstream's `xstrnsave` stopped at.
+#[test]
+fn a_question_mark_search_unescapes_and_chains() {
+    let _sandbox = Sandbox::globals();
+    let put = |line: &str| {
+        let text = cstr(line);
+        // SAFETY: NUL-terminated, and outlives the call.
+        let _ = do_cmdline_cmd(&text);
+    };
+    let read = |expr: &str| {
+        let got = eval_to_string(expr.as_bytes(), false, false);
+        let got = got.unwrap_or_else(|| panic!("{expr} evaluated to nothing"));
+        String::from_utf8(got.to_vec()).unwrap()
+    };
+    put("silent! keepjumps keepmarks %delete _");
+    put("call setline(1, ['one', 'xa?bx', 'three'])");
+    put(r#"exe "silent! normal! G$?a\\?b\<CR>""#);
+    assert_eq!(read("line('.') .. ':' .. col('.')"), "2:2");
+    put(r#"exe "silent! normal! G?a\\?b?;/three\<CR>""#);
+    assert_eq!(read("line('.') .. ':' .. col('.')"), "3:1");
+    put("silent! keepjumps keepmarks %delete _");
+}
+
+/// A back-reference whose group spans lines compares line by line, fetching
+/// the captured lines while the match stands on another: the matcher copies
+/// the captured text out and fetches its own line again.
+#[test]
+fn a_back_reference_to_a_group_that_spans_lines_matches_on_both_engines() {
+    let _sandbox = Sandbox::globals();
+    let put = |line: &str| {
+        let text = cstr(line);
+        // SAFETY: NUL-terminated, and outlives the call.
+        let _ = do_cmdline_cmd(&text);
+    };
+    let read = |expr: &str| {
+        let got = eval_to_string(expr.as_bytes(), false, false);
+        let got = got.unwrap_or_else(|| panic!("{expr} evaluated to nothing"));
+        String::from_utf8(got.to_vec()).unwrap()
+    };
+    put("silent! keepjumps keepmarks %delete _");
+    put("call setline(1, ['ab', 'cd', 'ab', 'cd', 'x'])");
+    for engine in ["1", "2"] {
+        put(&format!("set regexpengine={engine}"));
+        put("call cursor(1, 1)");
+        assert_eq!(
+            read(r"string(searchpos('\(ab\ncd\)\n\1', 'cnW'))"),
+            "[1, 1]",
+            "re={engine}"
+        );
+        assert_eq!(
+            read(r"string(searchpos('\(b\ncd\)\na\1', 'cnW'))"),
+            "[1, 2]",
+            "re={engine}"
+        );
+    }
+    put("set regexpengine=0");
+    put("silent! keepjumps keepmarks %delete _");
+}

@@ -136,9 +136,8 @@ pub(crate) fn resume(
                 }
             }
 
-            // SAFETY: the frames these three read were pushed by this match
-            // and still describe live positions in the program and the
-            // input; `rex` is the running match.
+            // The frames these three read were pushed by this match and
+            // still describe positions in the program and the input.
             RS_BEHIND1 => behind_start(rex, stack, backpos, scan, status),
             RS_BEHIND2 => behind_step(rex, prog, stack, backpos, scan, status),
             RS_STAR_LONG | RS_STAR_SHORT => star(rex, prog, stack, backpos, scan, status),
