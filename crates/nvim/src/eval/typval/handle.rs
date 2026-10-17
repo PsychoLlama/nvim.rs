@@ -51,6 +51,7 @@
 use ::core::ptr::NonNull;
 
 use super::*;
+use crate::hashtab::KeyedEntry;
 use crate::hashtab::removed_sentinel;
 use crate::types::{Refcount, SlotEntry};
 
@@ -662,12 +663,7 @@ impl DictEntry {
     }
 }
 
-// SAFETY: `EMPTY` is the null pointer and `is_empty` is the null test; the
-// tombstone is the hash table's own private sentinel address, which no item
-// can be allocated at and which is never dereferenced; `key` reads the key
-// of an item the caller has promised is live, and a `DictItem` owns its key
-// for as long as it is alive.
-unsafe impl SlotEntry for DictEntry {
+impl SlotEntry for DictEntry {
     const EMPTY: Self = DictEntry(::core::ptr::null_mut());
 
     fn is_empty(self) -> bool {
@@ -681,7 +677,14 @@ unsafe impl SlotEntry for DictEntry {
     fn removed() -> Self {
         DictEntry(removed_sentinel().cast::<DictItem>())
     }
+}
 
+// SAFETY: `EMPTY` is the null pointer and `is_empty` is the null test; the
+// tombstone is the hash table's own private sentinel address, which no item
+// can be allocated at and which is never dereferenced; `key` reads the key
+// of an item the caller has promised is live, and a `DictItem` owns its key
+// for as long as it is alive.
+unsafe impl KeyedEntry for DictEntry {
     /// # Safety
     ///
     /// As the trait's: a live entry, whose item is still alive.

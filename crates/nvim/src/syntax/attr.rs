@@ -16,6 +16,9 @@
 use core::ffi::c_int;
 
 use super::*;
+use crate::charset::is_word_at;
+use crate::mbyte::head_off;
+use crate::memline::held_line;
 use crate::pos::MAXCOL;
 use crate::types::NUL;
 
@@ -162,7 +165,7 @@ impl SynState {
 
         // Only check for keywords when not syncing and there are some.
         let do_keywords =
-            !syncing && (block.b_keywtab.ht_used > 0 || block.b_keywtab_ic.ht_used > 0);
+            !syncing && (!block.b_keywtab.is_empty() || !block.b_keywtab_ic.is_empty());
 
         // Zero-width matches with a nextlist already used here, so the same
         // one cannot match twice in this column and loop forever.
@@ -303,25 +306,18 @@ impl SynState {
     fn try_keyword(&mut self, cur_si: Option<c_int>) -> Option<c_int> {
         // Only on a keyword character that follows a non-keyword one.
         let buffer = self.buffer;
-        let line = self.curline();
-        // SAFETY: the column is inside the line, terminator included.
-        let cur_pos = unsafe { line.offset(self.col as isize) };
-        // SAFETY: as above; the buffer the parser was started for.
-        if !unsafe { vim_iswordp_buf(cur_pos, buffer) } {
+        let line = held_line(&buffer, self.lnum);
+        let col = self.col as usize;
+        if !is_word_at(&line[col..], buffer) {
             return None;
         }
-        if self.col != 0 {
-            // SAFETY: `prev` is inside the line the parser is on.
-            let prev = unsafe { cur_pos.offset(-1) };
-            let head = unsafe { prev.offset(-(utf_head_off(line, prev) as isize)) };
-            // SAFETY: as above.
-            if unsafe { vim_iswordp_buf(head, buffer) } {
+        if col != 0 {
+            let prev = col - 1;
+            if is_word_at(&line[prev - head_off(line, prev)..], buffer) {
                 return None;
             }
         }
-        // SAFETY: a keyword character starts at the column, in the parser's
-        // line of the parser's buffer.
-        let kw = unsafe { self.check_keyword_id(line, self.col, cur_si) }?;
+        let kw = self.check_keyword_id(line, self.col, cur_si)?;
 
         self.push_current_state(KEYWORD_IDX);
         let top = self.top();

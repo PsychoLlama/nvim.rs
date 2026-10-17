@@ -63,22 +63,20 @@ const PERTURB_SHIFT: u32 = 5;
 /// The table probes on a key's *bytes* and stores whatever the caller wants
 /// to find again; the two are the same thing for a table of bare strings
 /// (`*mut c_char`, the default) and are not for a dictionary, whose slots
-/// name a [`DictItem`](crate::types::DictItem) and read the key out of it.
-/// Either way the probe sequence sees only [`SlotEntry::key`], so the slot a
-/// key lands in does not depend on what the entry is -- which is what keeps
-/// `keys()` order the same whichever table shape a scope uses.
+/// name a [`DictItem`](crate::types::DictItem) and read the key out of it,
+/// nor for a table whose entries are indexes into storage beside it (the
+/// syntax keyword tables), which compares keys itself through
+/// [`HashTab::probe`]. Either way the probe sequence sees only the hash and
+/// the caller's equality test, so the slot a key lands in does not depend on
+/// what the entry is -- which is what keeps `keys()` order the same whichever
+/// table shape a scope uses.
 ///
 /// Two of the values are reserved: [`SlotEntry::EMPTY`] for a slot that
 /// never held a key, and the one [`SlotEntry::is_removed`] recognises for a
-/// tombstone. Neither is ever handed to [`SlotEntry::key`].
-///
-/// # Safety
-///
-/// `key` is only called on an entry the implementor reports as neither
-/// empty nor removed, and must answer a NUL-terminated string that stays
-/// alive for as long as the table holds the entry. `EMPTY` must be
-/// recognised by `is_empty` and by nothing else.
-pub unsafe trait SlotEntry: Copy {
+/// tombstone. `EMPTY` must be recognised by `is_empty` and by nothing else;
+/// a table whose entries break that only misplaces its own keys, which is
+/// why the trait is safe and [`KeyedEntry`] is not.
+pub trait SlotEntry: Copy {
     /// The value a slot that never held a key carries.
     const EMPTY: Self;
 
@@ -90,7 +88,18 @@ pub unsafe trait SlotEntry: Copy {
 
     /// The tombstone value itself.
     fn removed() -> Self;
+}
 
+/// An entry that can name its own key, which is what the C-string lookups
+/// ([`hash_find`], [`hash_lookup`], [`hash_add`]) compare.
+///
+/// # Safety
+///
+/// `key` is only called on an entry the [`SlotEntry`] tests report as
+/// neither empty nor removed, and must answer a NUL-terminated string that
+/// stays alive for as long as the table holds the entry; those tests must be
+/// truthful, since they are what decides that an entry is live.
+pub unsafe trait KeyedEntry: SlotEntry {
     /// The entry's key, NUL-terminated.
     ///
     /// # Safety
@@ -111,11 +120,8 @@ pub(crate) fn removed_sentinel() -> *mut c_char {
 }
 
 /// A table of bare strings: the entry *is* the key, which is what every
-/// hashtab outside `eval/`'s scopes holds.
-// SAFETY: `EMPTY` is the null pointer and `is_empty` is the null test; the
-// tombstone is a private sentinel address no caller can produce; `key`
-// answers the entry itself, which the caller promised is a live key.
-unsafe impl SlotEntry for *mut c_char {
+/// hashtab outside `eval/`'s scopes and the syntax keyword tables holds.
+impl SlotEntry for *mut c_char {
     const EMPTY: Self = ::core::ptr::null_mut();
 
     fn is_empty(self) -> bool {
@@ -129,7 +135,12 @@ unsafe impl SlotEntry for *mut c_char {
     fn removed() -> Self {
         removed_sentinel()
     }
+}
 
+// SAFETY: `EMPTY` is the null pointer and `is_empty` is the null test; the
+// tombstone is a private sentinel address no caller can produce; `key`
+// answers the entry itself, which the caller promised is a live key.
+unsafe impl KeyedEntry for *mut c_char {
     /// # Safety
     ///
     /// As the trait's: a live entry, which for this table is the key itself.
@@ -169,7 +180,8 @@ impl<E: SlotEntry> HashItem<E> {
 ///
 /// The copy is what a caller reads (`is_kept`, `hi_key`, `hi_hash`, through
 /// `Deref`); writes go back through the table, and are exactly
-/// [`hash_add_item`], [`hash_remove`] and [`hash_set_key`].
+/// [`HashTab::insert_at`] and [`HashTab::remove_at`] (or their raw-pointer
+/// spellings [`hash_add_item`] and [`hash_remove`]).
 ///
 /// A handle, so a tuple: the index and the copy are reached through
 /// [`Slot::index`] and `Deref`, never as fields.
@@ -212,6 +224,72 @@ impl<E: SlotEntry> HashTab<E> {
     /// and yields exactly the same entries in exactly the same order.
     pub fn items(&self) -> impl Iterator<Item = &HashItem<E>> {
         self.slots().iter().filter(|hi| hi.is_kept())
+    }
+
+    /// The slot holding the entry `is_key` accepts among those hashing to
+    /// `hash`, or -- when none does -- the slot such an entry belongs in: a
+    /// tombstone if the walk crossed one, else the empty slot that ended it.
+    ///
+    /// `is_key` sees only live entries whose stored hash is `hash`. The
+    /// answer names a slot of the *current* array, so it dies at the next
+    /// resize ([`HashTab::lock`]).
+    ///
+    /// # Panics
+    /// On a table with no slots yet ([`HashTab::new`]).
+    pub(crate) fn probe(&self, hash: HashValue, mut is_key: impl FnMut(E) -> bool) -> Slot<E> {
+        let slots = self.slots();
+        let mut freeitem: Option<usize> = None;
+        // The probe never runs off the array: it is masked to `mask()`, and
+        // the table is never full, so some slot is empty and ends the walk.
+        for idx in Probe::new(hash, self.mask()) {
+            let item = &slots[idx];
+            if item.is_empty() {
+                return self.slot(freeitem.unwrap_or(idx));
+            }
+            if item.is_removed() {
+                freeitem.get_or_insert(idx);
+            } else if item.hi_hash == hash && is_key(item.hi_key) {
+                return self.slot(idx);
+            }
+        }
+        unreachable!("probe sequence always finds an empty slot");
+    }
+
+    /// Store `entry`, hashing to `hash`, in the slot `hi`, which a
+    /// [`HashTab::probe`] for that missing key answered (so it is empty or
+    /// a tombstone).
+    pub(crate) fn insert_at(&mut self, hi: Slot<E>, entry: E, hash: HashValue) {
+        let item = &mut self.slots_mut()[hi.index()];
+        let was_empty = item.is_empty();
+        item.hi_key = entry;
+        item.hi_hash = hash;
+        self.ht_used = self.ht_used.wrapping_add(1);
+        self.ht_changed += 1;
+        if was_empty {
+            self.ht_filled = self.ht_filled.wrapping_add(1);
+        }
+        hash_may_resize(self, 0);
+    }
+
+    /// Remove the entry in the live slot `hi`, leaving a tombstone.
+    pub(crate) fn remove_at(&mut self, hi: Slot<E>) {
+        self.slots_mut()[hi.index()].hi_key = E::removed();
+        self.ht_used = self.ht_used.wrapping_sub(1);
+        self.ht_changed += 1;
+        hash_may_resize(self, 0);
+    }
+
+    /// Hold off resizing, so slot indexes stay meaningful across mutations
+    /// until the matching [`HashTab::unlock`].
+    pub(crate) fn lock(&mut self) {
+        self.ht_locked += 1;
+    }
+
+    /// Undo one [`HashTab::lock`], resizing now if the table wanted to
+    /// meanwhile.
+    pub(crate) fn unlock(&mut self) {
+        self.ht_locked -= 1;
+        hash_may_resize(self, 0);
     }
 }
 
@@ -259,7 +337,7 @@ impl Iterator for Probe {
 /// The `hash_hash` fold: seed with the first byte, then `hash * 101 + byte`.
 /// An empty key hashes to 0 (the C code returns early when the first byte is
 /// NUL, which for a C string means empty).
-fn hash_bytes(key: &[u8]) -> HashValue {
+pub(crate) fn hash_bytes(key: &[u8]) -> HashValue {
     let (&first, rest) = match key.split_first() {
         Some(split) => split,
         None => return 0,
@@ -405,7 +483,7 @@ pub unsafe fn hash_clear_all(ht: *mut HashTab, off: c_uint) {
 ///
 /// `ht` points to a live `HashTab` and `key` is NUL-terminated. See
 /// [`hash_lookup`] for what the answer means.
-pub unsafe fn hash_find<E: SlotEntry>(ht: *const HashTab<E>, key: *const c_char) -> Slot<E> {
+pub unsafe fn hash_find<E: KeyedEntry>(ht: *const HashTab<E>, key: *const c_char) -> Slot<E> {
     // SAFETY: the caller's table and NUL-terminated key.
     unsafe {
         hash_lookup(
@@ -421,7 +499,7 @@ pub unsafe fn hash_find<E: SlotEntry>(ht: *const HashTab<E>, key: *const c_char)
 ///
 /// `ht` points to a live `HashTab` and `key` is readable for `len` bytes.
 /// See [`hash_lookup`] for what the answer means.
-pub unsafe fn hash_find_len<E: SlotEntry>(
+pub unsafe fn hash_find_len<E: KeyedEntry>(
     ht: *const HashTab<E>,
     key: *const c_char,
     len: usize,
@@ -431,32 +509,18 @@ pub unsafe fn hash_find_len<E: SlotEntry>(
 }
 
 /// The slot `wanted` occupies, or -- for an absent key -- the slot it belongs
-/// in: a tombstone if the walk crossed one, else the empty slot that ended
-/// it.
+/// in; [`HashTab::probe`] comparing each candidate's own key.
 ///
 /// # Safety
 ///
 /// Every live key in `ht` is NUL-terminated.
-unsafe fn lookup_slot<E: SlotEntry>(ht: &HashTab<E>, wanted: &[u8], hash: HashValue) -> usize {
-    let slots = ht.slots();
-    let mut freeitem: Option<usize> = None;
-    // The probe never runs off the array: it is masked to `mask()`, and the
-    // table is never full, so some slot is empty and ends the walk.
-    for idx in Probe::new(hash, ht.mask()) {
-        let item = &slots[idx];
-        if item.is_empty() {
-            return freeitem.unwrap_or(idx);
-        }
-        if item.is_removed() {
-            freeitem.get_or_insert(idx);
-        // SAFETY: the caller's promise that live keys are NUL-terminated.
-        } else if item.hi_hash == hash
-            && unsafe { CStr::from_ptr(item.hi_key.key()) }.to_bytes() == wanted
-        {
-            return idx;
-        }
-    }
-    unreachable!("probe sequence always finds an empty slot");
+unsafe fn lookup_slot<E: KeyedEntry>(ht: &HashTab<E>, wanted: &[u8], hash: HashValue) -> usize {
+    // SAFETY: the caller's promise that live keys are NUL-terminated; the
+    // probe hands the test only live entries.
+    ht.probe(hash, |entry| {
+        unsafe { CStr::from_ptr(entry.key()) }.to_bytes() == wanted
+    })
+    .index()
 }
 
 /// Find `key` (of `key_len` bytes, hashing to `hash`): returns the slot
@@ -468,7 +532,7 @@ unsafe fn lookup_slot<E: SlotEntry>(ht: &HashTab<E>, wanted: &[u8], hash: HashVa
 /// `ht` points to a live `HashTab` whose live keys are NUL-terminated, and
 /// `key` is readable for `key_len` bytes. The answer names a slot of the
 /// table's *current* array, so it dies at the next resize.
-pub(crate) unsafe fn hash_lookup<E: SlotEntry>(
+pub(crate) unsafe fn hash_lookup<E: KeyedEntry>(
     ht: *const HashTab<E>,
     key: *const c_char,
     key_len: usize,
@@ -488,7 +552,7 @@ pub(crate) unsafe fn hash_lookup<E: SlotEntry>(
 ///
 /// `ht` points to a live `HashTab` and `key` is NUL-terminated and stays
 /// alive for as long as the table holds it.
-pub unsafe fn hash_add<E: SlotEntry>(ht: *mut HashTab<E>, entry: E) -> Result<(), Failed> {
+pub unsafe fn hash_add<E: KeyedEntry>(ht: *mut HashTab<E>, entry: E) -> Result<(), Failed> {
     // SAFETY: the caller's promise: the entry is live, so it has a key.
     let key = unsafe { entry.key() };
     // SAFETY: the caller's table and NUL-terminated key.
@@ -518,31 +582,7 @@ pub unsafe fn hash_add_item<E: SlotEntry>(
     hash: HashValue,
 ) {
     // SAFETY: the caller's table.
-    let table = unsafe { &mut *ht };
-    let item = &mut table.slots_mut()[hi.index()];
-    let was_empty = item.is_empty();
-    item.hi_key = entry;
-    item.hi_hash = hash;
-    table.ht_used = table.ht_used.wrapping_add(1);
-    table.ht_changed += 1;
-    if was_empty {
-        table.ht_filled = table.ht_filled.wrapping_add(1);
-    }
-    hash_may_resize(table, 0);
-}
-
-/// Point the slot `hi` names at a different key, without touching the
-/// table's counts: the key is a chain head the caller has just rewritten,
-/// and the entry itself stays.
-///
-/// # Safety
-///
-/// `hi` names a slot of `ht`'s current array, and `key` hashes to what that
-/// slot already records and outlives its stay in the table.
-pub(crate) unsafe fn hash_set_key<E: SlotEntry>(ht: *mut HashTab<E>, hi: Slot<E>, entry: E) {
-    // SAFETY: the caller's table.
-    let table = unsafe { &mut *ht };
-    table.slots_mut()[hi.index()].hi_key = entry;
+    unsafe { &mut *ht }.insert_at(hi, entry, hash);
 }
 
 /// Remove the item at `hi` (leaving a tombstone). The key itself belongs to
@@ -553,11 +593,7 @@ pub(crate) unsafe fn hash_set_key<E: SlotEntry>(ht: *mut HashTab<E>, hi: Slot<E>
 /// `hi` names a slot of `ht`'s current array holding a live key.
 pub unsafe fn hash_remove<E: SlotEntry>(ht: *mut HashTab<E>, hi: Slot<E>) {
     // SAFETY: the caller's table.
-    let table = unsafe { &mut *ht };
-    table.slots_mut()[hi.index()].hi_key = E::removed();
-    table.ht_used = table.ht_used.wrapping_sub(1);
-    table.ht_changed += 1;
-    hash_may_resize(table, 0);
+    unsafe { &mut *ht }.remove_at(hi);
 }
 
 /// Lock out resizing while a caller walks the slots or holds item pointers
@@ -568,7 +604,7 @@ pub unsafe fn hash_remove<E: SlotEntry>(ht: *mut HashTab<E>, hi: Slot<E>) {
 /// `ht` points to a live `HashTab`, and the lock is released exactly once.
 pub unsafe fn hash_lock<E: SlotEntry>(ht: *mut HashTab<E>) {
     // SAFETY: the caller's table.
-    unsafe { (*ht).ht_locked += 1 };
+    unsafe { &mut *ht }.lock();
 }
 
 /// Undo one [`hash_lock`], resizing now if the table wanted to meanwhile.
@@ -579,9 +615,7 @@ pub unsafe fn hash_lock<E: SlotEntry>(ht: *mut HashTab<E>) {
 /// into its array is held past the call.
 pub unsafe fn hash_unlock<E: SlotEntry>(ht: *mut HashTab<E>) {
     // SAFETY: the caller's table.
-    let table = unsafe { &mut *ht };
-    table.ht_locked -= 1;
-    hash_may_resize(table, 0);
+    unsafe { &mut *ht }.unlock();
 }
 
 /// Grow, shrink, or compact (drop tombstones from) the slot array when the

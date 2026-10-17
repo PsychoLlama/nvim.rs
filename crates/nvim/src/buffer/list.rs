@@ -29,7 +29,6 @@ use crate::ex_eval::aborting;
 use crate::ex_getln::text_or_buf_locked;
 use crate::fileio::file_pat_to_reg_pat;
 use crate::guard::Suppress;
-use crate::hashtab::hash_reset;
 use crate::indent::replace_tabstop_array;
 use crate::insexpand::clear_buffer_cpt_callbacks;
 use crate::mark::{clrallmarks, fmarks_check_names, mark_view_restore};
@@ -211,8 +210,8 @@ pub fn buflist_new(
         entry.wi_win = Some(current_win().id());
     }
 
-    hash_reset(&mut buf.b_s.b_keywtab);
-    hash_reset(&mut buf.b_s.b_keywtab_ic);
+    buf.b_s.b_keywtab.clear();
+    buf.b_s.b_keywtab_ic.clear();
 
     buf.name.show_short();
     buf.file_id_valid = file_id.is_some();
@@ -808,8 +807,8 @@ mod tests {
             assert!(b.b_s.b_syn_clusters.is_empty());
             assert!(b.b_s.b_syn_linecont_pat.is_none());
             assert!(!b.b_s.b_sst.is_allocated());
-            assert_eq!(b.b_s.b_keywtab.items().count(), 0);
-            assert_eq!(b.b_s.b_keywtab_ic.items().count(), 0);
+            assert!(b.b_s.b_keywtab.is_empty());
+            assert!(b.b_s.b_keywtab_ic.is_empty());
             assert!(b.b_ml.ml_stack.is_empty());
             assert_eq!(b.b_ml.ml_chunks.len(), 0);
             assert!(b.b_ml.ml_locked.is_none());

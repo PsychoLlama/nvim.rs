@@ -43,7 +43,6 @@ use crate::memory::{xcalloc, xfree};
 use crate::optionstr::BUF_STRING_OPTIONS;
 use crate::registry::id_map;
 use crate::syntax::init_synblock;
-use crate::types::HashTab;
 use crate::types::MemLine;
 use crate::types::{BufName, Buffer, MarkTree, Tabpage, Window};
 use core::ffi::c_int;
@@ -400,9 +399,8 @@ pub(crate) fn alloc_unregistered_buffer() -> Owned<Buffer> {
     // holds a seeded hasher, and an `Option<XString>`'s niche is the
     // vector's capacity, so all-zero bytes are `Some` of a null vector --
     // are the user-command list, the keymap, the remembered window
-    // positions, the buffer's syntax block (`init_synblock`, and its two
-    // keyword tables, whose zero bytes are a valid empty table only by
-    // the accident of the enum's layout), what the memline owns, the two
+    // positions, the buffer's syntax block (`init_synblock`), what the
+    // memline owns, the two
     // extmark tables, the ShaDa extra data (a vector inside an `Option`), the
     // `U` line, the string options and the file name. The unit case
     // `buffer::a_fresh_buffer_holds_valid_owners` reads each of them back.
@@ -412,8 +410,6 @@ pub(crate) fn alloc_unregistered_buffer() -> Owned<Buffer> {
     unsafe { (&raw mut (*at).b_kmap_ga).write(Vec::new()) };
     unsafe { (&raw mut (*at).b_wininfo).write(Vec::new()) };
     unsafe { init_synblock(&raw mut (*at).b_s) };
-    unsafe { (&raw mut (*at).b_s.b_keywtab).write(HashTab::init()) };
-    unsafe { (&raw mut (*at).b_s.b_keywtab_ic).write(HashTab::init()) };
     unsafe { (&raw mut (*at).b_ml).write(MemLine::closed()) };
     unsafe { (&raw mut (*at).b_marktree).write(MarkTree::EMPTY) };
     unsafe { (&raw mut (*at).b_extmark_ns).write(id_map()) };

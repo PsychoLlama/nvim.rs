@@ -5,134 +5,199 @@
 //! than a scan of every item. [`add_keyword`] fills them, [`syn_clear_keyword`]
 //! and [`clear_keywtab`] empty them.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
+use crate::charset::display::foldcase;
 use crate::cstr;
-use crate::message_fmt::{c_str, msg_bytes};
+use crate::hashtab::{SlotEntry, hash_bytes};
+use crate::mbyte::c_cluster_len;
+use crate::message_fmt::msg_bytes;
 use crate::semsg;
-use crate::strings::vim_strchr;
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::c_int;
 
 use super::*;
 use crate::types::NUL;
 
-/// Where a `KeyEntry`'s trailing `keyword` array starts.
+/// One `:syntax keyword` definition of one keyword text.
 ///
-/// The hash tables key on that array rather than on the entry, so every walk
-/// converts between the two by this offset. Upstream spells it as the `HI2KE`
-/// and `KE2HIKEY` macros.
-pub(crate) const KEYWORD_OFFSET: usize = ::core::mem::offset_of!(KeyEntry, keyword);
-
-/// The entry a hash key points into.
-///
-/// # Safety
-///
-/// `key` must point at a NUL-terminated string, unaliased for the call.
-#[inline]
-pub(crate) unsafe fn key_to_entry(key: *mut c_char) -> *mut KeyEntry {
-    unsafe { key.byte_sub(KEYWORD_OFFSET) as *mut KeyEntry }
+/// A text can have several, with different groups or options; they hang off
+/// one [`KeyChain`] in the table, newest first.
+pub(crate) struct KeyEntry {
+    /// The group, and the `:syntax include` level it was defined at.
+    pub(crate) syn: sp_syn,
+    /// `containedin=`: this entry's own copy.
+    pub(crate) cont_in_list: IdList,
+    /// `nextgroup=`: this entry's own copy.
+    pub(crate) next_list: IdList,
+    pub(crate) flags: SynFlags,
+    /// `cchar=`, or NUL.
+    pub(crate) conceal_char: c_int,
 }
 
-/// An entry's hash key: a pointer to its trailing `keyword` array.
+/// Every entry for one keyword text.
 ///
-/// `&raw mut (*kp).keyword` and not `.as_ptr()`: the field is a zero-length
-/// array, so an autoref would cover no bytes and the pointer could not be
-/// walked.
-///
-/// # Safety
-///
-/// `kp` must point at a live `KeyEntry`, unaliased for the call.
-#[inline]
-pub(crate) unsafe fn entry_to_key(kp: *mut KeyEntry) -> *mut c_char {
-    unsafe { (&raw mut (*kp).keyword).cast::<c_char>() }
+/// Upstream chains the entries through `ke_next` from the hash slot, adding
+/// each new one at the head; `entries` is that chain oldest first, so a walk
+/// from the head is `entries.iter().rev()`.
+struct KeyChain {
+    keyword: Box<[u8]>,
+    entries: Vec<KeyEntry>,
 }
 
-/// Free one entry and the two id lists it owns.
-///
-/// The three `xfree`s of the carve-out (see [`KeyEntry`]): the entry is one
-/// block with its text inside it, so nothing here can be a `Box`.
-///
-/// # Safety
-///
-/// `kp` must point at a live `KeyEntry`, unaliased for the call.
-unsafe fn free_entry(kp: *mut KeyEntry) {
-    unsafe { xfree((*kp).next_list as *mut c_void) };
-    unsafe { xfree((*kp).cont_in_list as *mut c_void) };
-    unsafe { xfree(kp as *mut c_void) };
+/// What a slot of a keyword table holds: the index of its [`KeyChain`].
+#[derive(Copy, Clone, PartialEq, Eq)]
+struct ChainId(u32);
+
+impl SlotEntry for ChainId {
+    const EMPTY: Self = ChainId(u32::MAX);
+
+    fn is_empty(self) -> bool {
+        self == Self::EMPTY
+    }
+
+    fn is_removed(self) -> bool {
+        self == Self::removed()
+    }
+
+    fn removed() -> Self {
+        ChainId(u32::MAX - 1)
+    }
 }
 
-/// Drop every keyword of group `id` from `ht`.
+/// One of a syntax block's two keyword tables (case sensitive, and folded).
 ///
-/// # Safety
-///
-/// `ht` must point at a live hash table, unaliased for the call.
-pub(crate) unsafe fn syn_clear_keyword(id: c_int, ht: *mut HashTab) {
-    unsafe { hash_lock(ht) };
-    let mut todo = unsafe { (*ht).ht_used } as c_int;
-    let mut idx = 0;
-    while todo > 0 {
-        // Re-read the slot every step rather than carrying a cursor: the
-        // walk mutates the table it stands in, and the small run lives
-        // inside the table. The lock is what keeps the *index* meaningful.
-        let hi = unsafe { (*ht).slot(idx) };
-        idx += 1;
-        if !hi.is_kept() {
-            continue;
+/// The slots are a [`HashTab`] because its slot order is what `:syntax list`
+/// shows: the hash, probe sequence and resize points are upstream's, so each
+/// keyword lands in the slot it did there. What the slots hold is an index
+/// into `chains`, which owns the text and the entries; a chain that empties
+/// goes on the free list and its slot becomes a tombstone, as upstream's
+/// `hash_remove` left one.
+pub(crate) struct KeywordTable {
+    slots: HashTab<ChainId>,
+    chains: Vec<KeyChain>,
+    /// Indexes into `chains` whose chain was removed, for reuse.
+    free: Vec<u32>,
+}
+
+impl KeywordTable {
+    /// An empty table, which allocates nothing until the first keyword.
+    pub(crate) const fn new() -> Self {
+        KeywordTable {
+            slots: HashTab::new(),
+            chains: Vec::new(),
+            free: Vec::new(),
         }
-        todo -= 1;
+    }
 
-        // Walk the entry chain hanging off this slot, unlinking the
-        // entries of `id`. The slot's key names the chain's head, so
-        // removing the head has to rewrite it.
-        let mut kp_prev: *mut KeyEntry = ::core::ptr::null_mut();
-        let mut kp = unsafe { key_to_entry(hi.hi_key) };
-        while !kp.is_null() {
-            if unsafe { (*kp).k_syn.id } as c_int != id {
-                kp_prev = kp;
-                kp = unsafe { (*kp).ke_next };
+    /// Whether the table holds no keyword at all.
+    #[inline]
+    pub(crate) fn is_empty(&self) -> bool {
+        self.slots.ht_used == 0
+    }
+
+    /// Drop every keyword, releasing the storage.
+    pub(crate) fn clear(&mut self) {
+        *self = KeywordTable::new();
+    }
+
+    /// The slot `keyword` occupies, or the one it belongs in.
+    fn probe(&self, keyword: &[u8], hash: usize) -> crate::hashtab::Slot<ChainId> {
+        self.slots
+            .probe(hash, |id| &*self.chains[id.0 as usize].keyword == keyword)
+    }
+
+    /// The entries for `keyword`, newest first; none when it is not in the
+    /// table.
+    #[inline]
+    pub(crate) fn lookup(&self, keyword: &[u8]) -> impl Iterator<Item = &KeyEntry> {
+        let entries: &[KeyEntry] = if self.is_empty() {
+            &[]
+        } else {
+            let hi = self.probe(keyword, hash_bytes(keyword));
+            if hi.is_kept() {
+                &self.chains[hi.hi_key.0 as usize].entries
+            } else {
+                &[]
+            }
+        };
+        entries.iter().rev()
+    }
+
+    /// Add `entry` for `keyword`, ahead of any it already has.
+    fn add(&mut self, keyword: &[u8], entry: KeyEntry) {
+        if self.slots.size() == 0 {
+            self.slots = HashTab::init();
+        }
+        let hash = hash_bytes(keyword);
+        let hi = self.probe(keyword, hash);
+        if hi.is_kept() {
+            self.chains[hi.hi_key.0 as usize].entries.push(entry);
+            return;
+        }
+        let chain = KeyChain {
+            keyword: keyword.into(),
+            entries: vec![entry],
+        };
+        let id = match self.free.pop() {
+            Some(id) => {
+                self.chains[id as usize] = chain;
+                id
+            }
+            None => {
+                self.chains.push(chain);
+                u32::try_from(self.chains.len() - 1).expect("fewer keywords than u32::MAX")
+            }
+        };
+        self.slots.insert_at(hi, ChainId(id), hash);
+    }
+
+    /// Drop every keyword entry of group `id`.
+    ///
+    /// The table is locked for the walk, as upstream's was: a removal may
+    /// not resize it under the slot index, and the resize the removals call
+    /// for happens once, at the unlock.
+    pub(crate) fn remove_group(&mut self, id: c_int) {
+        self.slots.lock();
+        for idx in 0..self.slots.size() {
+            let hi = self.slots.slot(idx);
+            if !hi.is_kept() {
                 continue;
             }
-            let kp_next = unsafe { (*kp).ke_next };
-            if kp_prev.is_null() {
-                if kp_next.is_null() {
-                    unsafe { hash_remove(ht, hi) };
-                } else {
-                    unsafe { hash_set_key(ht, hi, entry_to_key(kp_next)) };
-                }
-            } else {
-                unsafe { (*kp_prev).ke_next = kp_next };
+            let chain_id = hi.hi_key.0;
+            let chain = &mut self.chains[chain_id as usize];
+            chain
+                .entries
+                .retain(|entry| c_int::from(entry.syn.id) != id);
+            if chain.entries.is_empty() {
+                *chain = KeyChain {
+                    keyword: Box::default(),
+                    entries: Vec::new(),
+                };
+                self.free.push(chain_id);
+                self.slots.remove_at(hi);
             }
-            unsafe { free_entry(kp) };
-            kp = kp_next;
         }
+        self.slots.unlock();
     }
-    unsafe { hash_unlock(ht) };
+
+    /// Every keyword and entry, in slot order and newest first within a
+    /// keyword: the order `:syntax list` prints them in.
+    pub(crate) fn entries(&self) -> impl Iterator<Item = (&[u8], &KeyEntry)> {
+        self.slots.items().flat_map(|hi| {
+            let chain = &self.chains[hi.hi_key.0 as usize];
+            chain
+                .entries
+                .iter()
+                .rev()
+                .map(|entry| (&*chain.keyword, entry))
+        })
+    }
 }
 
-/// Empty a whole keyword table.
-///
-/// # Safety
-///
-/// `ht` must point at a live hash table, unaliased for the call.
-pub(crate) unsafe fn clear_keywtab(ht: *mut HashTab) {
-    let mut todo = unsafe { (*ht).ht_used } as c_int;
-    let mut idx = 0;
-    while todo > 0 {
-        let hi = unsafe { (*ht).slot(idx) };
-        idx += 1;
-        if hi.is_kept() {
-            todo -= 1;
-            let mut kp = unsafe { key_to_entry(hi.hi_key) };
-            while !kp.is_null() {
-                let kp_next = unsafe { (*kp).ke_next };
-                unsafe { free_entry(kp) };
-                kp = kp_next;
-            }
-        }
+impl Default for KeywordTable {
+    fn default() -> Self {
+        KeywordTable::new()
     }
-    // SAFETY: the caller's table.
-    hash_reset(unsafe { &mut *ht });
 }
 
 /// Everything a run of `:syntax keyword` gives every keyword it defines.
@@ -149,114 +214,95 @@ struct KeywordDef<'a> {
     conceal_char: c_int,
 }
 
-/// Add one keyword to the table its case sensitivity selects.
-///
-/// # Safety
-///
-/// `name` must point at a NUL-terminated string, unaliased for the call.
-unsafe fn add_keyword(name: *mut c_char, namelen: size_t, def: &KeywordDef) {
+/// Add the keyword `name` to the table its case sensitivity selects.
+fn add_keyword(name: &[u8], def: &KeywordDef) {
+    let mut block = cur_syn_block();
     // With `:syntax case ignore` the table is keyed on the folded form,
     // and the lookup folds too.
-    let ignore_case = cur_syn_block().b_syn_ic != 0;
-    let mut name_folded: [c_char; MAXKEYWLEN as usize + 1] = [0; MAXKEYWLEN as usize + 1];
-    let (name_ic, name_iclen) = if ignore_case {
-        let folded = unsafe {
-            str_foldcase(
-                name,
-                namelen as c_int,
-                &raw mut name_folded as *mut c_char,
-                MAXKEYWLEN + 1,
-            )
-        };
-        (folded, unsafe { cstr::bytes_at(folded) }.len())
+    let ignore_case = block.b_syn_ic != 0;
+    let folded;
+    let key = if ignore_case {
+        folded = foldcase(name, Some(MAXKEYWLEN as usize + 1));
+        &folded[..]
     } else {
-        (name, namelen)
+        name
     };
-
-    // The keyword text lives in the entry's trailing array, so the entry
-    // is sized for it.
-    let kp = unsafe { xmalloc(KEYWORD_OFFSET + name_iclen + 1) } as *mut KeyEntry;
-    let key = unsafe { entry_to_key(kp) };
-    unsafe { strcpy(key, name_ic) };
-    unsafe { (*kp).k_syn.id = def.id as int16_t };
-    unsafe { (*kp).k_syn.inc_tag = current_syn_inc_tag.get() };
-    unsafe { (*kp).flags = def.flags };
-    unsafe { (*kp).k_char = def.conceal_char };
-    unsafe { (*kp).cont_in_list = copy_id_list(def.cont_in_list) };
+    let entry = KeyEntry {
+        syn: sp_syn {
+            inc_tag: current_syn_inc_tag.get(),
+            id: def.id as int16_t,
+        },
+        // Each entry gets its own copy, as upstream's did: `:syntax list`
+        // tells two keywords' lists apart by identity.
+        cont_in_list: def.cont_in_list.copy(),
+        next_list: def.next_list.copy(),
+        flags: def.flags,
+        conceal_char: def.conceal_char,
+    };
     if !def.cont_in_list.is_none() {
-        cur_syn_block().b_syn_containedin = 1;
+        block.b_syn_containedin = 1;
     }
-    unsafe { (*kp).next_list = copy_id_list(def.next_list) };
-
-    let hash = unsafe { hash_hash(key) };
-    let ht = if ignore_case {
-        syn_field!(cur_syn_block(), b_keywtab_ic)
+    if ignore_case {
+        block.b_keywtab_ic.add(key, entry);
     } else {
-        syn_field!(cur_syn_block(), b_keywtab)
-    };
-    let hi = unsafe { hash_lookup(ht, key, cstr::bytes_at(key).len(), hash) };
-    if hi.is_kept() {
-        // The keyword already has entries: prepend to the chain.
-        unsafe { (*kp).ke_next = key_to_entry(hi.hi_key) };
-        unsafe { hash_set_key(ht, hi, key) };
-    } else {
-        unsafe { (*kp).ke_next = ::core::ptr::null_mut() };
-        unsafe { hash_add_item(ht, hi, key, hash) };
+        block.b_keywtab.add(key, entry);
     }
 }
 
-/// Add the keyword at `kw` and every variant its `[optional tail]` names,
-/// answering where the next keyword of the buffer starts.
+/// Add the keyword at `kw` in `buf` and every variant its `[optional tail]`
+/// names, answering where the next keyword of `buf` starts.
 ///
-/// `ab[cde]` defines `ab`, `abc`, `abcd` and `abcde`. The variants are made by
-/// editing the buffer in place: the `[` becomes the NUL of the short form,
-/// then each following character is shifted left over it. `None` means the
+/// `buf` holds the keywords one after another, each NUL-terminated.
+/// `ab[cde]` defines `ab`, `abc`, `abcd` and `abcde`. The variants are made
+/// by editing `buf` in place: the `[` becomes the NUL of the short form, then
+/// each following character is shifted left over it. `None` means the
 /// notation was malformed and the message has been given.
-///
-/// # Safety
-///
-/// `kw` must point at a NUL-terminated string, unaliased for the call.
-unsafe fn add_keyword_variants(mut kw: *mut c_char, def: &KeywordDef) -> Option<*mut c_char> {
+fn add_keyword_variants(buf: &mut [u8], mut kw: usize, def: &KeywordDef) -> Option<usize> {
     let mut kwlen;
-    let mut p = unsafe { vim_strchr(kw, '[' as c_int) };
+    let mut bracket = cstr::until_nul(&buf[kw..])
+        .iter()
+        .position(|&b| b == b'[')
+        .map(|at| kw + at);
     loop {
-        if p.is_null() {
-            kwlen = unsafe { cstr::bytes_at(kw) }.len();
-        } else {
-            unsafe { *p = NUL as c_char };
-            kwlen = unsafe { p.offset_from(kw) } as size_t;
+        match bracket {
+            None => kwlen = cstr::until_nul(&buf[kw..]).len(),
+            Some(p) => {
+                buf[p] = NUL as u8;
+                kwlen = p - kw;
+            }
         }
-        unsafe { add_keyword(kw, kwlen, def) };
-        if p.is_null() {
+        add_keyword(&buf[kw..kw + kwlen], def);
+        let Some(p) = bracket else {
             break;
-        }
-        let next = unsafe { *p.add(1) } as c_int;
+        };
+        let next = c_int::from(cstr::byte_at(buf, p + 1));
         if next == NUL {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let kw = unsafe { c_str(kw) };
+            let kw = msg_bytes(cstr::until_nul(&buf[kw..]));
             semsg!("E789: Missing ']': {kw}");
             return None;
         }
         if next == ']' as c_int {
-            if unsafe { *p.add(2) } as c_int != NUL {
-                // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-                let (kw, arg1) = unsafe { (c_str(kw), c_str(p.add(2))) };
+            if c_int::from(cstr::byte_at(buf, p + 2)) != NUL {
+                let (kw, arg1) = (
+                    msg_bytes(cstr::until_nul(&buf[kw..])),
+                    msg_bytes(cstr::until_nul(&buf[p + 2..])),
+                );
                 semsg!("E890: Trailing char after ']': {kw}]{arg1}");
                 return None;
             }
             // Step over the `]`: it and the NUL after it are exactly the
             // two bytes between here and the next keyword.
-            kw = unsafe { p.add(1) };
+            kw = p + 1;
             kwlen = 1;
             break;
         }
         // Shift the next character left over the NUL, lengthening the
         // keyword by one, and look again from there.
-        let l = unsafe { utfc_ptr2len(p.add(1)) };
-        unsafe { p.cast::<u8>().copy_from(p.add(1).cast(), l as size_t) };
-        p = unsafe { p.add(l as usize) };
+        let len = c_cluster_len(&buf[p + 1..]);
+        buf.copy_within(p + 1..p + 1 + len, p);
+        bracket = Some(p + len);
     }
-    Some(unsafe { kw.add(kwlen + 1) })
+    Some(kw + kwlen + 1)
 }
 
 /// `:syntax keyword {group} [{options}] {keyword} ..`.
@@ -273,12 +319,10 @@ pub(crate) fn syn_cmd_keyword(args: &mut ExArg, _syncing: c_int) {
             syn_check_group(&line[..name.len])
         };
         if syn_id != 0 {
-            // A buffer for the keywords with their backslashes removed;
-            // it can only shrink, so the argument's length is enough. The
-            // two passes below write into it and shift bytes around inside
-            // it, so it is handed on as a pointer.
+            // A buffer for the keywords with their backslashes removed, each
+            // NUL-terminated; it can only shrink, so the argument's length
+            // is enough. Pass 2 shifts bytes around inside it.
             let mut buf = vec![0u8; line.len() - name.rest + 1];
-            let keyword_copy: *mut c_char = buf.as_mut_ptr().cast();
             let mut opt = SynOptArg {
                 flags: SynFlags::NONE,
                 keyword: true,
@@ -327,10 +371,10 @@ pub(crate) fn syn_cmd_keyword(args: &mut ExArg, _syncing: c_int) {
                     next_list: &opt.next_list,
                     conceal_char,
                 };
-                let mut kw = keyword_copy;
+                let mut kw = 0;
                 while cnt > 0 {
                     cnt -= 1;
-                    match unsafe { add_keyword_variants(kw, &def) } {
+                    match add_keyword_variants(&mut buf, kw, &def) {
                         Some(next) => kw = next,
                         None => break,
                     }

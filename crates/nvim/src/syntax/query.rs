@@ -20,8 +20,8 @@ pub(crate) fn syntax_present(win: Win) -> bool {
     let block = win.syntax();
     !block.b_syn_patterns.is_empty()
         || !block.b_syn_clusters.is_empty()
-        || block.b_keywtab.ht_used > 0
-        || block.b_keywtab_ic.ht_used > 0
+        || !block.b_keywtab.is_empty()
+        || !block.b_keywtab_ic.is_empty()
 }
 
 /// What the next `get_syntax_name` call should offer, which

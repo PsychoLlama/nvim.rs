@@ -332,8 +332,6 @@ pub(crate) fn ex_syntax(excmd: &mut ExArg) {
 pub(crate) fn ex_ownsyntax(excmd: &mut ExArg) {
     if Win::current().w_s == Win::current().buffer().syntax_block() {
         Win::current().w_s = Box::into_raw(empty_synblock());
-        unsafe { hash_init::<*mut c_char>(syn_field!(cur_syn_block(), b_keywtab)) };
-        unsafe { hash_init::<*mut c_char>(syn_field!(cur_syn_block(), b_keywtab_ic)) };
         // TODO(vim): Keep the spell checking as it was.
         Win::current().w_onebuf_opt.wo_spell = 0; // No spell checking
         // Upstream replaces the block's five NULL option values with the

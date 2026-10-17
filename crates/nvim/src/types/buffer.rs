@@ -754,8 +754,11 @@ pub struct SynTime {
     pub match_0: ::core::ffi::c_int,
 }
 pub struct SynBlock {
-    pub b_keywtab: HashTab,
-    pub b_keywtab_ic: HashTab,
+    /// `:syntax keyword`s defined under `:syntax case match`.
+    pub(crate) b_keywtab: crate::syntax::KeywordTable,
+    /// `:syntax keyword`s defined under `:syntax case ignore`, keyed on
+    /// their folded text.
+    pub(crate) b_keywtab_ic: crate::syntax::KeywordTable,
     pub b_syn_error: bool,
     pub b_syn_slow: bool,
     pub b_syn_ic: ::core::ffi::c_int,

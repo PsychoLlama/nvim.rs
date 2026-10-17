@@ -191,10 +191,9 @@ fn syn_list_one(id: c_int, syncing: bool, link_only: bool) {
 
     // The keywords of `id`, from both tables.
     if !syncing {
-        did_header =
-            unsafe { syn_list_keywords(id, syn_field!(cur_syn_block(), b_keywtab), false) };
-        did_header =
-            unsafe { syn_list_keywords(id, syn_field!(cur_syn_block(), b_keywtab_ic), did_header) };
+        let block = cur_syn_block();
+        did_header = syn_list_keywords(id, &block.b_keywtab, false);
+        did_header = syn_list_keywords(id, &block.b_keywtab_ic, did_header);
     }
 
     // The patterns of `id`. The item's options are read off its *first*
@@ -328,24 +327,6 @@ fn syn_list_cluster(id: c_int) {
     }
 }
 
-/// The ids a bare id-list pointer names, without the terminator.
-///
-/// [`IdList::ids`] for a list that is still raw -- which, since the pattern
-/// and cluster arrays took ownership, means only the two a `KeyEntry`
-/// holds (see [`KeyEntry`]). Listing keywords is the only reader.
-///
-/// # Safety
-/// `list` must be non-null, 0-terminated, and outlive the answer.
-unsafe fn id_list_ids<'a>(list: *const int16_t) -> &'a [int16_t] {
-    let mut len = 0;
-    // SAFETY: the caller's promise -- the list runs to a 0.
-    while unsafe { *list.add(len) } != 0 {
-        len += 1;
-    }
-    // SAFETY: as above; those `len` ids are the list, terminator excluded.
-    unsafe { ::core::slice::from_raw_parts(list, len) }
-}
-
 /// Print `name=a,b,@cl` for a `contains=`/`containedin=`/`nextgroup=` list.
 fn put_id_list(name: &CStr, ids: &[int16_t], hl_id: c_int) {
     msg_str_hl(name, hl_id, false);
@@ -467,6 +448,10 @@ fn put_pattern_offsets(spp: &SynPat) {
 
 /// What the previous keyword of a listing printed, so that a run of keywords
 /// sharing their options prints them once.
+///
+/// The two lists are compared by *identity*, as upstream compared its
+/// pointers: every keyword has its own copy ([`IdList::copy`]), so two
+/// keywords' lists are the same only when neither has one.
 #[derive(PartialEq)]
 struct KeywordOpts {
     contained: SynFlags,
@@ -491,45 +476,31 @@ impl KeywordOpts {
     }
 
     /// What one keyword needs printed before it.
-    ///
-    /// # Safety
-    ///
-    /// `kp` must point at a live `KeyEntry`.
-    unsafe fn of(kp: *const KeyEntry) -> Self {
+    fn of(entry: &KeyEntry) -> Self {
         KeywordOpts {
-            contained: unsafe { (*kp).flags }.masked(SynFlags::CONTAINED),
-            skipnl: unsafe { (*kp).flags }.masked(SynFlags::SKIPNL),
-            skipwhite: unsafe { (*kp).flags }.masked(SynFlags::SKIPWHITE),
-            skipempty: unsafe { (*kp).flags }.masked(SynFlags::SKIPEMPTY),
-            cont_in_list: unsafe { (*kp).cont_in_list },
-            next_list: unsafe { (*kp).next_list },
+            contained: entry.flags.masked(SynFlags::CONTAINED),
+            skipnl: entry.flags.masked(SynFlags::SKIPNL),
+            skipwhite: entry.flags.masked(SynFlags::SKIPWHITE),
+            skipempty: entry.flags.masked(SynFlags::SKIPEMPTY),
+            cont_in_list: entry.cont_in_list.as_ptr(),
+            next_list: entry.next_list.as_ptr(),
         }
     }
 }
 
-/// List the keywords of group `id` in `ht`, answering whether a header has now
-/// been printed.
+/// List the keywords of group `id` in `table`, answering whether a header
+/// has now been printed.
 ///
 /// The keywords come out in hash order, not alphabetically, which is why the
 /// options are re-printed whenever two neighbours disagree.
-///
-/// # Safety
-///
-/// `ht` must point at a live hash table.
-unsafe fn syn_list_keywords(id: c_int, ht: *const HashTab, mut did_header: bool) -> bool {
+fn syn_list_keywords(id: c_int, table: &KeywordTable, mut did_header: bool) -> bool {
     let mut prev = KeywordOpts::none();
-
-    // SAFETY: the caller's table, which nothing here mutates.
-    for hi in unsafe { &*ht }.items() {
+    for (keyword, entry) in table.entries() {
         if got_int.get() {
             break;
         }
-        let mut kp = unsafe { key_to_entry(hi.hi_key) };
-        while !kp.is_null() && !got_int.get() {
-            if unsafe { (*kp).k_syn.id } as c_int == id {
-                did_header = unsafe { put_keyword(kp, id, did_header, &mut prev) };
-            }
-            kp = unsafe { (*kp).ke_next };
+        if c_int::from(entry.syn.id) == id {
+            did_header = put_keyword(keyword, entry, id, did_header, &mut prev);
         }
     }
     did_header
@@ -539,25 +510,22 @@ unsafe fn syn_list_keywords(id: c_int, ht: *const HashTab, mut did_header: bool)
 /// not already print.
 ///
 /// A keyword whose options differ from its neighbour's forces a new line,
-/// which makes `syn_list_header` answer true and resets `prev` — that reset is
-/// what keeps a NULL `containedin=`/`nextgroup=` from ever reaching
-/// [`id_list_ids`], which may not be handed one.
-///
-/// # Safety
-///
-/// `kp` must point at a live `KeyEntry`, unaliased for the call.
-unsafe fn put_keyword(
-    kp: *mut KeyEntry,
+/// which makes `syn_list_header` answer true and resets `prev` -- that reset
+/// is what keeps a keyword without a `containedin=`/`nextgroup=` from
+/// printing an empty one.
+fn put_keyword(
+    keyword: &[u8],
+    entry: &KeyEntry,
     id: c_int,
     did_header: bool,
     prev: &mut KeywordOpts,
 ) -> bool {
-    let opts = unsafe { KeywordOpts::of(kp) };
+    let opts = KeywordOpts::of(entry);
     let force_newline = opts != *prev;
     let outlen = if force_newline {
         0
     } else {
-        unsafe { cstr::bytes_at(entry_to_key(kp)).len() as c_int }
+        keyword.len() as c_int
     };
     if syn_list_header(did_header, outlen, id, force_newline) {
         *prev = KeywordOpts::none();
@@ -569,12 +537,12 @@ unsafe fn put_keyword(
         prev.contained = opts.contained;
     }
     if prev.cont_in_list != opts.cont_in_list {
-        unsafe { put_id_list(c"containedin", id_list_ids(opts.cont_in_list), LIST_HL) };
+        put_id_list(c"containedin", entry.cont_in_list.ids(), LIST_HL);
         msg_putchar(' ' as c_int);
         prev.cont_in_list = opts.cont_in_list;
     }
     if prev.next_list != opts.next_list {
-        unsafe { put_id_list(c"nextgroup", id_list_ids(opts.next_list), LIST_HL) };
+        put_id_list(c"nextgroup", entry.next_list.ids(), LIST_HL);
         msg_putchar(' ' as c_int);
         prev.next_list = opts.next_list;
         // The three skip flags are only meaningful with a `nextgroup=`,
@@ -595,6 +563,6 @@ unsafe fn put_keyword(
             prev.skipempty = opts.skipempty;
         }
     }
-    msg_display(unsafe { cstr::at(entry_to_key(kp)) }, 0, false);
+    msg_display_bytes(keyword, 0, false);
     true
 }

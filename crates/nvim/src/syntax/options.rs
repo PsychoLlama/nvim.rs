@@ -504,26 +504,6 @@ fn parse_id_name(
     Ok(None)
 }
 
-/// Copy an id list into the `xmalloc`ed array a keyword entry holds.
-///
-/// The one place a list is still raw: a `KeyEntry` is one allocation with
-/// its text inside it and has no destructor (see [`KeyEntry`]).
-pub(crate) fn copy_id_list(list: &IdList) -> *mut int16_t {
-    if list.is_none() {
-        return ::core::ptr::null_mut();
-    }
-    let ids = list.ids();
-    let bytes = (ids.len() + 1) * ::core::mem::size_of::<int16_t>();
-    // SAFETY: `xmalloc` answers `bytes` writable bytes or aborts, and the
-    // ids plus the terminator are exactly that many.
-    let out = unsafe { xmalloc(bytes) } as *mut int16_t;
-    // SAFETY: as above; the two ranges are distinct allocations.
-    unsafe { ::core::ptr::copy_nonoverlapping(ids.as_ptr(), out, ids.len()) };
-    // SAFETY: the last of the `bytes`.
-    unsafe { *out.add(ids.len()) = 0 };
-    out
-}
-
 impl SynState {
     /// Is the syntax group `ssp` in the id list `list` of the item at
     /// `cur_si`?

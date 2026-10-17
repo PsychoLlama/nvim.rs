@@ -45,8 +45,8 @@ pub(crate) unsafe fn syntax_clear(block: *mut SynBlock) {
     block.b_syn_containedin = 0;
     block.b_syn_conceal = 0;
 
-    unsafe { clear_keywtab(&raw mut (*block.raw()).b_keywtab) };
-    unsafe { clear_keywtab(&raw mut (*block.raw()).b_keywtab_ic) };
+    block.b_keywtab.clear();
+    block.b_keywtab_ic.clear();
 
     // Each pattern owns its own pattern text, compiled program and id
     // lists, so dropping the array is the whole of what upstream's
@@ -85,6 +85,8 @@ pub(crate) unsafe fn syntax_clear(block: *mut SynBlock) {
 pub(crate) unsafe fn init_synblock(at: *mut SynBlock) {
     // SAFETY: the caller's promise; `write` does not drop what was there.
     unsafe {
+        (&raw mut (*at).b_keywtab).write(KeywordTable::new());
+        (&raw mut (*at).b_keywtab_ic).write(KeywordTable::new());
         (&raw mut (*at).b_syn_patterns).write(Vec::new());
         (&raw mut (*at).b_syn_clusters).write(Vec::new());
         (&raw mut (*at).b_syn_linecont_pat).write(None);
@@ -208,8 +210,8 @@ pub(crate) fn syn_cmd_clear(args: &mut ExArg, syncing: c_int) {
 fn syn_clear_one(id: c_int, syncing: bool) {
     // Keywords only when this is not ":syntax sync clear {group}".
     if !syncing {
-        unsafe { syn_clear_keyword(id, syn_field!(cur_syn_block(), b_keywtab)) };
-        unsafe { syn_clear_keyword(id, syn_field!(cur_syn_block(), b_keywtab_ic)) };
+        cur_syn_block().b_keywtab.remove_group(id);
+        cur_syn_block().b_keywtab_ic.remove_group(id);
     }
 
     let block = cur_syn_block();

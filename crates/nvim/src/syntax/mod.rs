@@ -23,14 +23,8 @@
 //! Everything a syntax block holds is owned by value: `b_syn_patterns` and
 //! `b_syn_clusters` are `Vec`s of [`SynPat`]/[`SynCluster`], a pattern's
 //! text is a `CString` and its `contains=`/`containedin=`/`nextgroup=` lists
-//! are [`IdList`]s. **An `xfree` in this module is a bug** unless it is one of
-//! the two carve-outs, each of which says so at its own field:
-//!
-//! - [`KeyEntry`] -- one `xmalloc` block with the keyword text inside it,
-//!   which the hash tables key on by *interior address*, and the two raw id
-//!   lists [`copy_id_list`](options::copy_id_list) makes for it.
-//! - [`SynPat::sp_prog`] and `SynBlock::b_syn_linecont_prog` -- compiled
-//!   programs, which belong to `regexp/`'s allocator discipline.
+//! are [`IdList`]s; a keyword is a [`KeyEntry`] inside its block's
+//! [`KeywordTable`]. **An `xfree` in this module is a bug.**
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
@@ -40,10 +34,7 @@
 use crate::ascii::ascii_iswhite;
 use crate::autocmd::apply_autocmds;
 use crate::buffer::buf_get_changedtick;
-use crate::charset::{
-    buf_init_chartab, getdigits_int_at, getdigits_int32, skip, str_foldcase, vim_isprintc,
-    vim_iswordp_buf,
-};
+use crate::charset::{buf_init_chartab, getdigits_int_at, getdigits_int32, skip, vim_isprintc};
 use crate::cstr;
 use crate::drawscreen::state::display_tick;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, redraw_curbuf_later, redraw_later};
@@ -52,10 +43,6 @@ use crate::ex_docmd::{do_cmdline_cmd, ends_excmd, expand_filename, separate_next
 use crate::fold::{fold_update_all, foldmethod_is_syntax};
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
-use crate::hashtab::{
-    hash_add_item, hash_find, hash_hash, hash_init, hash_lock, hash_lookup, hash_remove,
-    hash_reset, hash_set_key, hash_unlock,
-};
 use crate::highlight::state::{include_default, include_link, include_none};
 use crate::highlight_group::{
     HLF_D, highlight_group_name, highlight_link_id, highlight_num_groups, init_highlight,
@@ -64,7 +51,6 @@ use crate::highlight_group::{
 use crate::indent_c::find_start_comment;
 use crate::mbyte::{mb_strcmp_ic, utf_head_off, utfc_ptr2len};
 use crate::memline::{ml_get, ml_get_buf, ml_get_buf_len, ml_get_len};
-use crate::memory::{xfree, xmalloc, xmemcpyz};
 use crate::message::state::msg_col;
 use crate::message::{
     emsg, msg, msg_advance, msg_display, msg_display_bytes, msg_ext_set_kind, msg_outnum,
@@ -88,12 +74,12 @@ use crate::runtime::{do_source, source_runtime};
 use crate::types::AutoEvent;
 use crate::types::{
     ColNr, ExArg, Expand, HashTab, LPos, LineNr, OptInt, ProfTime, RegMMatch, RegMatch, SynBlock,
-    SynTime, int16_t, size_t, uint8_t, uint64_t,
+    SynTime, int16_t, uint8_t, uint64_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::winlayer::Buf;
 use crate::winlayer::{Live, Win};
-use ::libc::{qsort, strcpy};
+use ::libc::qsort;
 
 mod flags;
 pub(crate) use self::flags::*;
@@ -146,30 +132,6 @@ pub(crate) struct sp_syn {
     pub inc_tag: ::core::ffi::c_int,
     pub id: int16_t,
 }
-/// One `:syntax keyword`, in one of the two keyword hash tables.
-///
-/// OWNERSHIP -- **carve-out**. The entry is one `xmalloc` block whose
-/// trailing `keyword` array holds the text, and the hash tables key on
-/// *that address*: `key_to_entry` finds the entry by subtracting
-/// [`KEYWORD_OFFSET`](keyword::KEYWORD_OFFSET) from a key. So the entry
-/// cannot be a `Box<KeyEntry>` (the text would not be inside it) and its
-/// two id lists cannot be [`IdList`]s (nothing would run their destructor).
-/// Retiring it needs the keyword tables to stop keying on an interior
-/// address -- a `HashTab` that owns its keys, or an id-keyed table with
-/// the text beside the entry.
-#[repr(C)]
-pub(crate) struct KeyEntry {
-    pub ke_next: *mut KeyEntry,
-    pub k_syn: sp_syn,
-    /// `containedin=`, this entry's own `xmalloc`ed list.
-    pub cont_in_list: *mut int16_t,
-    /// `nextgroup=`, this entry's own `xmalloc`ed list.
-    pub next_list: *mut int16_t,
-    pub flags: SynFlags,
-    pub k_char: ::core::ffi::c_int,
-    pub keyword: [::core::ffi::c_char; 0],
-}
-
 /// A `contains=` / `containedin=` / `nextgroup=` list: the syntax ids it
 /// names, followed by the 0 terminator upstream's `int16_t *` carried.
 ///
@@ -209,6 +171,16 @@ impl IdList {
             IdList::NONE
         } else {
             IdList::from_ids(ids)
+        }
+    }
+
+    /// A list of its own with the same ids: what upstream's `copy_id_list`
+    /// made for each keyword, which `:syntax list` tells apart by identity.
+    pub(crate) fn copy(&self) -> IdList {
+        if self.is_none() {
+            IdList::NONE
+        } else {
+            IdList::from_ids(self.ids())
         }
     }
 
@@ -532,22 +504,6 @@ pub(crate) fn cur_cluster_count() -> ::core::ffi::c_int {
 /// `w_s` is either the buffer's `b_s` or an `:ownsyntax` block the window
 /// frees with itself.
 pub(crate) type SynBlockRef = Live<SynBlock>;
-
-/// The address of one field of a syntax block, **without borrowing the
-/// block**.
-///
-/// `&raw mut cur_syn_block().b_keywtab` would take its provenance from the
-/// transient `&mut SynBlock` that [`Live`]'s `DerefMut` hands out, and the
-/// block's next field access invalidates that borrow — so an address kept
-/// past the statement it was taken in is already dangling under Stacked and
-/// Tree Borrows. [`Live::field_ptr`] computes the same address from the
-/// pointer, which is why it exists.
-macro_rules! syn_field {
-    ($block:expr, $field:ident) => {
-        $block.field_ptr(::core::mem::offset_of!(crate::types::SynBlock, $field))
-    };
-}
-pub(crate) use syn_field;
 
 /// `StateItem::si_idx` for a keyword, which has no pattern.
 pub(crate) const KEYWORD_IDX: ::core::ffi::c_int = -1;

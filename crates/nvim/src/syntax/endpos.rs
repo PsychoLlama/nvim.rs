@@ -13,6 +13,10 @@
 
 use core::ffi::{c_char, c_int};
 
+use crate::charset::display::foldcase;
+use crate::charset::is_word_at;
+use crate::mbyte::c_cluster_len;
+
 use super::*;
 use crate::types::NUL;
 
@@ -547,98 +551,67 @@ pub(crate) struct KeywordMatch {
 impl SynState {
     /// Check one position in a line for a matching keyword.
     ///
-    /// The caller must have established that a keyword can start at `startcol`.
-    ///
-    /// # Safety
-    ///
-    /// `line` must point at a NUL-terminated line with a word character at
-    /// `startcol` — the caller has already established that a keyword can start
-    /// there, and the scan for its end reads forwards from it. `cur_si`, when it
-    /// is `Some`, must still be live: nothing may have pushed to, popped from or
-    /// cleared the syntax state stack since it was taken. `line` is a line of
-    /// `buffer`, whose 'iskeyword' says where the keyword ends.
-    pub(crate) unsafe fn check_keyword_id(
+    /// `line` is the parser's line of the parser's buffer, its NUL included,
+    /// and a keyword character starts at `startcol` -- the caller has
+    /// established that a keyword can start there. `cur_si`, when it is
+    /// `Some`, is the current item of the state stack.
+    pub(crate) fn check_keyword_id(
         &self,
-        line: *mut c_char,
+        line: &[u8],
         startcol: c_int,
         cur_si: Option<c_int>,
     ) -> Option<KeywordMatch> {
         // Find the first character after the keyword; the first character was
-        // already checked by the caller.
-        let kwp = unsafe { line.offset(startcol as isize) };
-        let mut kwlen: c_int = 0;
+        // already checked by the caller. The line's NUL is no word
+        // character, so the walk stops there at the latest.
+        let text = &line[startcol as usize..];
+        let mut kwlen = 0;
         loop {
-            kwlen += unsafe { utfc_ptr2len(kwp.offset(kwlen as isize)) };
-            if !unsafe { vim_iswordp_buf(kwp.offset(kwlen as isize), self.buffer) } {
+            kwlen += c_cluster_len(&text[kwlen..]);
+            if !is_word_at(&text[kwlen..], self.buffer) {
                 break;
             }
         }
-        if kwlen > MAXKEYWLEN {
+        if kwlen > MAXKEYWLEN as usize {
             return None;
         }
+        let keyword = &text[..kwlen];
 
-        // A copy, so it can be NUL-terminated and lowercased.
-        let mut keyword: [c_char; MAXKEYWLEN as usize + 1] = [0; MAXKEYWLEN as usize + 1];
-        let buf = &raw mut keyword as *mut c_char;
-        unsafe { xmemcpyz(buf.cast(), kwp.cast(), kwlen as size_t) };
-
-        let mut kp = ::core::ptr::null_mut::<KeyEntry>();
-        if self.block().b_keywtab.ht_used != 0 {
-            kp = unsafe { self.match_keyword(buf, syn_field!(self.block(), b_keywtab), cur_si) };
+        let block = self.block();
+        let mut found = None;
+        if !block.b_keywtab.is_empty() {
+            found = self.match_keyword(block.b_keywtab.lookup(keyword), cur_si);
         }
-        if kp.is_null() && self.block().b_keywtab_ic.ht_used != 0 {
-            unsafe { str_foldcase(kwp, kwlen, buf, MAXKEYWLEN + 1) };
-            kp = unsafe { self.match_keyword(buf, syn_field!(self.block(), b_keywtab_ic), cur_si) };
+        if found.is_none() && !block.b_keywtab_ic.is_empty() {
+            let folded = foldcase(keyword, Some(MAXKEYWLEN as usize + 1));
+            found = self.match_keyword(block.b_keywtab_ic.lookup(&folded), cur_si);
         }
-        if kp.is_null() {
-            return None;
-        }
+        let entry = found?;
         Some(KeywordMatch {
-            id: unsafe { (*kp).k_syn.id } as c_int,
-            endcol: startcol + kwlen,
-            flags: unsafe { (*kp).flags },
-            next_list: unsafe { (*kp).next_list },
-            cchar: unsafe { (*kp).k_char },
+            id: c_int::from(entry.syn.id),
+            endcol: startcol + kwlen as c_int,
+            flags: entry.flags,
+            next_list: entry.next_list.as_ptr(),
+            cchar: entry.conceal_char,
         })
     }
 
-    /// The first keyword entry for `keyword` in `ht` that the containment rules
-    /// admit here.
+    /// The first of a keyword's `entries` that the containment rules admit
+    /// here.
     ///
-    /// There can be several entries with the same text and different attributes,
-    /// chained through `ke_next`. `next_list` (a pending `nextgroup=`)
-    /// overrides everything; otherwise a keyword is accepted at the top level when
-    /// it is not `contained`, and inside an item when that item's `contains=` list
-    /// names it.
-    ///
-    /// # Safety
-    ///
-    /// `keyword` must point at a NUL-terminated string, unaliased for the call.
-    /// `ht` must point at a live hash table, unaliased for the call. `cur_si`
-    /// must still be live: nothing may have pushed to, popped from or cleared the
-    /// syntax state stack since it was taken, when it is `Some`.
-    unsafe fn match_keyword(
+    /// There can be several entries with the same text and different
+    /// attributes, newest first. `next_list` (a pending `nextgroup=`)
+    /// overrides everything; otherwise a keyword is accepted at the top level
+    /// when it is not `contained`, and inside an item when that item's
+    /// `contains=` list names it.
+    fn match_keyword<'a>(
         &self,
-        keyword: *mut c_char,
-        ht: *mut HashTab,
+        mut entries: impl Iterator<Item = &'a KeyEntry>,
         cur_si: Option<c_int>,
-    ) -> *mut KeyEntry {
-        let hi = unsafe { hash_find(ht, keyword) };
-        if !hi.is_kept() {
-            return ::core::ptr::null_mut();
-        }
-        // The hash key IS the entry's trailing `keyword[]` array, so the entry
-        // starts that many bytes before it.
-        // SAFETY: `hash_find` answered a live item, and the key is the entry's
-        // own trailing array, so the subtraction stays inside the allocation.
-        let mut kp = unsafe {
-            hi.hi_key
-                .offset(-(::core::mem::offset_of!(KeyEntry, keyword) as isize))
-        } as *mut KeyEntry;
-        while !kp.is_null() {
-            // SAFETY: `kp` walks a chain of live keyword entries.
-            let (syn, cont_in, flags) = unsafe { ((*kp).k_syn, (*kp).cont_in_list, (*kp).flags) };
-            let ok = if !self.next_list.is_null() {
+    ) -> Option<&'a KeyEntry> {
+        entries.find(|entry| {
+            let (syn, cont_in, flags) = (entry.syn, entry.cont_in_list.as_ptr(), entry.flags);
+            if !self.next_list.is_null() {
                 let next = self.next_list;
                 // SAFETY: the parser's own lists.
                 unsafe { self.in_id_list(None, next, syn, cont_in, SynFlags::NONE) }
@@ -648,12 +621,7 @@ impl SynState {
                 unsafe { self.in_id_list(Some(cur_si), contains, syn, cont_in, flags) }
             } else {
                 !flags.has(SynFlags::CONTAINED)
-            };
-            if ok {
-                return kp;
             }
-            kp = unsafe { (*kp).ke_next };
-        }
-        ::core::ptr::null_mut()
+        })
     }
 }
