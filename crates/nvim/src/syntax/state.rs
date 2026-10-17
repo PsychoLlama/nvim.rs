@@ -298,7 +298,7 @@ impl SynState {
     pub(crate) fn invalidate_current_state(&mut self) {
         self.clear_current_state();
         self.stack_valid = false;
-        self.next_list = ::core::ptr::null_mut();
+        self.next_list = IdList::NONE;
         self.keepend_level = -1;
     }
 

@@ -449,17 +449,27 @@ fn put_pattern_offsets(spp: &SynPat) {
 /// What the previous keyword of a listing printed, so that a run of keywords
 /// sharing their options prints them once.
 ///
-/// The two lists are compared by *identity*, as upstream compared its
-/// pointers: every keyword has its own copy ([`IdList::copy`]), so two
-/// keywords' lists are the same only when neither has one.
-#[derive(PartialEq)]
+/// The two lists are compared by *identity* ([`IdList::same`]), as upstream
+/// compared its pointers: every keyword has its own copy ([`IdList::copy`]),
+/// so two keywords' lists are the same only when neither has one.
 struct KeywordOpts {
     contained: SynFlags,
     skipnl: SynFlags,
     skipwhite: SynFlags,
     skipempty: SynFlags,
-    cont_in_list: *const int16_t,
-    next_list: *const int16_t,
+    cont_in_list: IdList,
+    next_list: IdList,
+}
+
+impl PartialEq for KeywordOpts {
+    fn eq(&self, other: &Self) -> bool {
+        self.contained == other.contained
+            && self.skipnl == other.skipnl
+            && self.skipwhite == other.skipwhite
+            && self.skipempty == other.skipempty
+            && self.cont_in_list.same(&other.cont_in_list)
+            && self.next_list.same(&other.next_list)
+    }
 }
 
 impl KeywordOpts {
@@ -470,8 +480,8 @@ impl KeywordOpts {
             skipnl: SynFlags::NONE,
             skipwhite: SynFlags::NONE,
             skipempty: SynFlags::NONE,
-            cont_in_list: ::core::ptr::null(),
-            next_list: ::core::ptr::null(),
+            cont_in_list: IdList::NONE,
+            next_list: IdList::NONE,
         }
     }
 
@@ -482,8 +492,8 @@ impl KeywordOpts {
             skipnl: entry.flags.masked(SynFlags::SKIPNL),
             skipwhite: entry.flags.masked(SynFlags::SKIPWHITE),
             skipempty: entry.flags.masked(SynFlags::SKIPEMPTY),
-            cont_in_list: entry.cont_in_list.as_ptr(),
-            next_list: entry.next_list.as_ptr(),
+            cont_in_list: entry.cont_in_list.clone(),
+            next_list: entry.next_list.clone(),
         }
     }
 }
@@ -536,15 +546,15 @@ fn put_keyword(
         msg_putchar(' ' as c_int);
         prev.contained = opts.contained;
     }
-    if prev.cont_in_list != opts.cont_in_list {
-        put_id_list(c"containedin", entry.cont_in_list.ids(), LIST_HL);
+    if !prev.cont_in_list.same(&opts.cont_in_list) {
+        put_id_list(c"containedin", opts.cont_in_list.ids(), LIST_HL);
         msg_putchar(' ' as c_int);
-        prev.cont_in_list = opts.cont_in_list;
+        prev.cont_in_list = opts.cont_in_list.clone();
     }
-    if prev.next_list != opts.next_list {
-        put_id_list(c"nextgroup", entry.next_list.ids(), LIST_HL);
+    if !prev.next_list.same(&opts.next_list) {
+        put_id_list(c"nextgroup", opts.next_list.ids(), LIST_HL);
         msg_putchar(' ' as c_int);
-        prev.next_list = opts.next_list;
+        prev.next_list = opts.next_list.clone();
         // The three skip flags are only meaningful with a `nextgroup=`,
         // and upstream only ever prints them here.
         if opts.skipnl != SynFlags::NONE {

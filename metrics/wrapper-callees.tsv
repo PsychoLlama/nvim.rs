@@ -3,7 +3,7 @@ count	callee	no_raw	defs	def
 198	xfree	0	1	crates/nvim/src/memory/mod.rs
 170	dispatch	0	1	crates/nvim/src/lua/api_wrappers/mod.rs
 149	bytes_at	0	1	crates/nvim/src/cstr.rs
-141	.add	0	0	
+139	.add	0	0	
 119	at	0	2	
 99	CStr::from_ptr	0	1	crates/nvim/src/marktree/node.rs
 86	nlua_pop_string	0	1	crates/nvim/src/lua/converter/pop.rs
@@ -151,7 +151,6 @@ count	callee	no_raw	defs	def
 8	uv_close	0	0	
 8	win_chartabsize	0	1	crates/nvim/src/plines/mod.rs
 8	xmallocz	0	1	crates/nvim/src/memory/mod.rs
-7	.in_id_list	0	1	crates/nvim/src/syntax/options.rs
 7	FoldList::new	0	1	crates/nvim/src/fold/list.rs
 7	Scan::new	0	1	crates/nvim/src/change/leader.rs
 7	Watcher::new	0	1	crates/nvim/src/event/socket/mod.rs
@@ -390,7 +389,6 @@ count	callee	no_raw	defs	def
 3	getvcol_nolist	0	1	crates/nvim/src/plines/vcol.rs
 3	getvpos	0	0	
 3	has_sound_tree	0	1	crates/nvim/src/spellsuggest/soundalike.rs
-3	id_list_has	0	1	crates/nvim/src/syntax/options.rs
 3	init_synblock	0	1	crates/nvim/src/syntax/clear.rs
 3	ins_compl_add_list	0	1	crates/nvim/src/insexpand/vimscript.rs
 3	insert_reg	0	1	crates/nvim/src/register/exec.rs

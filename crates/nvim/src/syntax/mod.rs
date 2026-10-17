@@ -80,6 +80,7 @@ use crate::ui::state::{Columns, Rows};
 use crate::winlayer::Buf;
 use crate::winlayer::{Live, Win};
 use ::libc::qsort;
+use ::std::rc::Rc;
 
 mod flags;
 pub(crate) use self::flags::*;
@@ -132,36 +133,38 @@ pub(crate) struct sp_syn {
     pub inc_tag: ::core::ffi::c_int,
     pub id: int16_t,
 }
-/// A `contains=` / `containedin=` / `nextgroup=` list: the syntax ids it
-/// names, followed by the 0 terminator upstream's `int16_t *` carried.
+/// A `contains=` / `containedin=` / `nextgroup=` list, or the absence of
+/// one.
 ///
-/// The terminator stays because the *borrowers* still walk a bare pointer:
-/// a state-stack item's `si_cont_list`/`si_next_list`, a cached state's
-/// `sst_next_list` and [`current_next_list`] all point into the list of
-/// whatever item they came from. An owner holds a `Box<[int16_t]>`, so the
-/// ids keep their address when the pattern array around them grows.
-///
-/// Nothing shares one: the consecutive START patterns of a region each get
-/// their own copy. Upstream gave them one list owned by the first and freed
-/// the array last to first so the peek at the entry before could tell the
-/// owner from the sharers; a list is a handful of `int16_t`s, and copying
-/// it costs less than a refcount and much less than that rule.
+/// The ids are shared: an item on the state stack, a cached state and the
+/// pending `nextgroup=` of the parser each hold the list of the pattern or
+/// keyword they came from, where upstream held a bare `int16_t *` into it.
+/// Sharing is safe because a list never changes once made. What upstream
+/// told apart by pointer -- a cached state's `nextgroup=` against the
+/// parser's, and two keywords' lists in `:syntax list` -- is told apart by
+/// [`IdList::same`], which compares identity, not contents.
 #[derive(Clone, Default)]
-pub(crate) struct IdList(Option<Box<[int16_t]>>);
-
-impl IdList {
+pub(crate) enum IdList {
     /// No list at all, which upstream spells as a NULL pointer. Not the same
     /// as an *empty* list: `contains=` naming nothing admits nothing, while
     /// no `contains=` at all leaves the item's default containment.
-    pub(crate) const NONE: IdList = IdList(None);
+    #[default]
+    Absent,
+    /// The `contains=` of a transparent item that is not inside anything:
+    /// every not-`contained` group. Upstream's `ID_LIST_ALL`, which only a
+    /// state-stack item ever holds.
+    TopLevel,
+    /// The ids, in the order they were given.
+    Ids(Rc<[int16_t]>),
+}
 
-    /// Copy `ids` into a fresh list, terminator included. Always a list,
-    /// even for no ids.
+impl IdList {
+    /// [`IdList::Absent`], spelled as the constant upstream's NULL was.
+    pub(crate) const NONE: IdList = IdList::Absent;
+
+    /// A fresh list of `ids`. Always a list, even for no ids.
     pub(crate) fn from_ids(ids: &[int16_t]) -> IdList {
-        let mut out = Vec::with_capacity(ids.len() + 1);
-        out.extend_from_slice(ids);
-        out.push(0);
-        IdList(Some(out.into_boxed_slice()))
+        IdList::Ids(ids.into())
     }
 
     /// [`IdList::from_ids`], except that no ids means no list -- which is
@@ -177,31 +180,31 @@ impl IdList {
     /// A list of its own with the same ids: what upstream's `copy_id_list`
     /// made for each keyword, which `:syntax list` tells apart by identity.
     pub(crate) fn copy(&self) -> IdList {
-        if self.is_none() {
-            IdList::NONE
-        } else {
-            IdList::from_ids(self.ids())
+        match self {
+            IdList::Ids(ids) => IdList::from_ids(ids),
+            other => other.clone(),
         }
     }
 
     /// Whether there is no list.
     pub(crate) fn is_none(&self) -> bool {
-        self.0.is_none()
+        matches!(self, IdList::Absent)
     }
 
-    /// The ids, without the terminator.
+    /// The ids; none for [`IdList::Absent`] and [`IdList::TopLevel`].
     pub(crate) fn ids(&self) -> &[int16_t] {
-        match &self.0 {
-            Some(ids) => &ids[..ids.len() - 1],
-            None => &[],
+        match self {
+            IdList::Ids(ids) => ids,
+            _ => &[],
         }
     }
 
-    /// The pointer a borrower walks, or NULL when there is no list.
-    pub(crate) fn as_ptr(&self) -> *mut int16_t {
-        match &self.0 {
-            Some(ids) => ids.as_ptr().cast_mut(),
-            None => ::core::ptr::null_mut(),
+    /// Whether the two are the *same* list -- upstream's pointer equality.
+    pub(crate) fn same(&self, other: &IdList) -> bool {
+        match (self, other) {
+            (IdList::Absent, IdList::Absent) | (IdList::TopLevel, IdList::TopLevel) => true,
+            (IdList::Ids(a), IdList::Ids(b)) => Rc::ptr_eq(a, b),
+            _ => false,
         }
     }
 }
@@ -229,8 +232,10 @@ pub(crate) struct StateItem {
     pub si_flags: SynFlags,
     pub si_seqnr: ::core::ffi::c_int,
     pub si_cchar: ::core::ffi::c_int,
-    pub si_cont_list: *mut int16_t,
-    pub si_next_list: *mut int16_t,
+    /// `contains=`, from the item's pattern or the item around it.
+    pub si_cont_list: IdList,
+    /// `nextgroup=`, from the item's pattern or keyword.
+    pub si_next_list: IdList,
     /// The `\z(` captures of the start match, which the end and skip
     /// patterns match `\z1`..`\z9` against.
     pub si_extmatch: Option<ExtMatchRef>,
@@ -507,9 +512,6 @@ pub(crate) type SynBlockRef = Live<SynBlock>;
 
 /// `StateItem::si_idx` for a keyword, which has no pattern.
 pub(crate) const KEYWORD_IDX: ::core::ffi::c_int = -1;
-/// The `contains=` list of a transparent item that is not inside anything: it
-/// admits every not-`contained` group.
-pub(crate) const ID_LIST_ALL: *mut int16_t = -1 as ::core::ffi::c_int as *mut int16_t;
 
 /// A cleared state item: what upstream's `GA_APPEND_VIA_PTR` slot holds
 /// once `ga_grow` has zeroed it.
@@ -529,8 +531,8 @@ const EMPTY_STATE_ITEM: StateItem = StateItem {
     si_flags: SynFlags::NONE,
     si_seqnr: 0,
     si_cchar: 0,
-    si_cont_list: ::core::ptr::null_mut(),
-    si_next_list: ::core::ptr::null_mut(),
+    si_cont_list: IdList::NONE,
+    si_next_list: IdList::NONE,
     si_extmatch: None,
 };
 pub(crate) const ITEM_START: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

@@ -2646,7 +2646,6 @@ static const int IDX_UCS4LE = 22;
 static const int IDX_UTF16 = 19;
 static const int IDX_UTF16LE = 20;
 static const int IDX_UTF8 = 16;
-static const int ID_LIST_ALL = -1;
 static const int IEXTEN = 32768;
 static const int INC = 20;
 static const int INDENT_DEC = 3;

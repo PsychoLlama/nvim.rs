@@ -51,7 +51,7 @@ pub(crate) struct CachedState {
     /// The state stack, outermost item first.
     items: Vec<CachedItem>,
     /// The pending `nextgroup=` list and its flags.
-    next_list: *mut int16_t,
+    next_list: IdList,
     next_flags: SynFlags,
     /// `display_tick` when the entry was stored, which the cleanup ages
     /// entries by.
@@ -66,7 +66,7 @@ impl CachedState {
         next: None,
         lnum: 0,
         items: Vec::new(),
-        next_list: ::core::ptr::null_mut(),
+        next_list: IdList::NONE,
         next_flags: SynFlags::NONE,
         tick: 0,
         change_lnum: 0,
@@ -478,7 +478,7 @@ impl SynState {
             extmatch: si.si_extmatch.clone(),
         }));
         entry.next_flags = self.next_flags;
-        entry.next_list = self.next_list;
+        entry.next_list = self.next_list.clone();
         entry.tick = display_tick.get();
         entry.change_lnum = 0;
     }
@@ -499,9 +499,9 @@ impl SynState {
                 si_cchar: cached.cchar,
                 si_extmatch: cached.extmatch.clone(),
                 si_next_list: if cached.idx >= 0 {
-                    block.pattern(cached.idx).sp_next_list.as_ptr()
+                    block.pattern(cached.idx).sp_next_list.clone()
                 } else {
-                    ::core::ptr::null_mut()
+                    IdList::NONE
                 },
                 ..EMPTY_STATE_ITEM
             }));
@@ -511,7 +511,7 @@ impl SynState {
             }
             self.update_si_attr(i);
         }
-        self.next_list = entry.next_list;
+        self.next_list = entry.next_list.clone();
         self.next_flags = entry.next_flags;
         self.lnum = entry.lnum;
     }
@@ -524,7 +524,7 @@ impl SynState {
         let block = self.block();
         let entry = block.b_sst.entry(id);
         // A quick check first: same size and same nextlist.
-        if entry.items.len() != self.stack.len() || entry.next_list != self.next_list {
+        if entry.items.len() != self.stack.len() || !entry.next_list.same(&self.next_list) {
             return false;
         }
         // Innermost first, as upstream compares.

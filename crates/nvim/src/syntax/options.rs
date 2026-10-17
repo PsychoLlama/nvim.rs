@@ -511,26 +511,19 @@ impl SynState {
     /// `cur_si` is the current item, or `None` when the `containedin` list
     /// is not being checked. This runs once per candidate pattern per column:
     /// keep it fast.
-    ///
-    /// # Safety
-    ///
-    /// `list` must be null, `ID_LIST_ALL`, or point at a zero-terminated
-    /// syntax id list the parser owns. `cont_in_list` must be null,
-    /// `ID_LIST_ALL`, or point at a zero-terminated syntax id list the parser
-    /// owns.
-    pub(crate) unsafe fn in_id_list(
+    pub(crate) fn in_id_list(
         &self,
         cur_si: Option<c_int>,
-        list: *mut int16_t,
+        list: &IdList,
         ssp: sp_syn,
-        cont_in_list: *mut int16_t,
+        cont_in_list: &IdList,
         flags: SynFlags,
     ) -> bool {
         let block = self.block();
         // If the group has a `containedin` list and `cur_si` is in it, it is
         // admitted whatever `list` says.
         if let Some(mut si) = cur_si
-            && !cont_in_list.is_null()
+            && !cont_in_list.is_none()
             && !self.item(si).si_flags.has(SynFlags::MATCH)
         {
             // Ignore transparent items without a contains argument, double
@@ -542,13 +535,12 @@ impl SynState {
             let si_idx = self.item(si).si_idx;
             if si_idx >= 0 {
                 let spp = block.pattern(si_idx);
-                // SAFETY: the parser's own lists.
-                if unsafe { id_list_has(block, cont_in_list, spp.sp_syn, spp.sp_flags, 0) } {
+                if id_list_has(block, cont_in_list, spp.sp_syn, spp.sp_flags, 0) {
                     return true;
                 }
             }
         }
-        unsafe { id_list_has(block, list, ssp, flags, 0) }
+        id_list_has(block, list, ssp, flags, 0)
     }
 }
 
@@ -557,26 +549,20 @@ impl SynState {
 ///
 /// A cluster that includes itself indirectly would recurse forever, so the
 /// depth is capped at 30.
-///
-/// # Safety
-///
-/// `list` must be null, `ID_LIST_ALL`, or point at a zero-terminated syntax
-/// id list the parser owns.
-unsafe fn id_list_has(
+fn id_list_has(
     block: SynBlockRef,
-    mut list: *mut int16_t,
+    list: &IdList,
     ssp: sp_syn,
     flags: SynFlags,
     depth: c_int,
 ) -> bool {
-    if list.is_null() {
-        return false;
-    }
-    // ID_LIST_ALL means a transparent item that is not inside anything:
-    // only not-contained groups are admitted.
-    if list == ID_LIST_ALL {
-        return !flags.has(SynFlags::CONTAINED);
-    }
+    let mut ids = match list {
+        IdList::Absent => return false,
+        // A transparent item that is not inside anything: only
+        // not-contained groups are admitted.
+        IdList::TopLevel => return !flags.has(SynFlags::CONTAINED),
+        IdList::Ids(ids) => &ids[..],
+    };
 
     // Is this top-level (i.e. not `contained`) in the file it was declared
     // in? For an included file that is not the same as SynFlags::CONTAINED, which
@@ -586,50 +572,47 @@ unsafe fn id_list_has(
     // A leading ALLBUT/TOP/CONTAINED inverts the answer, and requires the
     // group to be at the same `:syntax include` level as the list.
     let id = ssp.id;
-    let mut item = unsafe { *list };
     let mut retval = true;
-    if item as c_int >= SYNID_ALLBUT && (item as c_int) < SYNID_CLUSTER {
-        let level = if (item as c_int) < SYNID_TOP {
-            // ALL or ALLBUT: accept all groups in the same file.
-            item as c_int - SYNID_ALLBUT
-        } else if (item as c_int) < SYNID_CONTAINED {
-            // TOP: accept all not-contained groups in the same file.
-            if !toplevel {
+    if let Some((&first, rest)) = ids.split_first() {
+        let item = c_int::from(first);
+        if (SYNID_ALLBUT..SYNID_CLUSTER).contains(&item) {
+            let level = if item < SYNID_TOP {
+                // ALL or ALLBUT: accept all groups in the same file.
+                item - SYNID_ALLBUT
+            } else if item < SYNID_CONTAINED {
+                // TOP: accept all not-contained groups in the same file.
+                if !toplevel {
+                    return false;
+                }
+                item - SYNID_TOP
+            } else {
+                // CONTAINED: accept all contained groups in the same file.
+                if toplevel {
+                    return false;
+                }
+                item - SYNID_CONTAINED
+            };
+            if level != ssp.inc_tag {
                 return false;
             }
-            item as c_int - SYNID_TOP
-        } else {
-            // CONTAINED: accept all contained groups in the same file.
-            if toplevel {
-                return false;
-            }
-            item as c_int - SYNID_CONTAINED
-        };
-        if level != ssp.inc_tag {
-            return false;
+            ids = rest;
+            retval = false;
         }
-        list = unsafe { list.add(1) };
-        item = unsafe { *list };
-        retval = false;
     }
 
-    while item != 0 {
+    for &item in ids {
         if item == id {
             return retval;
         }
-        if item as c_int >= SYNID_CLUSTER {
-            let scl_list = block.clusters()[(item as c_int - SYNID_CLUSTER) as usize]
-                .scl_list
-                .as_ptr();
-            if !scl_list.is_null()
+        if c_int::from(item) >= SYNID_CLUSTER {
+            let scl_list = &block.clusters()[(c_int::from(item) - SYNID_CLUSTER) as usize].scl_list;
+            if !scl_list.is_none()
                 && depth < 30
-                && unsafe { id_list_has(block, scl_list, ssp, flags, depth + 1) }
+                && id_list_has(block, scl_list, ssp, flags, depth + 1)
             {
                 return retval;
             }
         }
-        list = unsafe { list.add(1) };
-        item = unsafe { *list };
     }
     !retval
 }

@@ -72,7 +72,7 @@ impl SynState {
         cur_si.si_flags = spp.sp_flags | outer_conceal;
         cur_si.si_seqnr = seqnr;
         cur_si.si_cchar = spp.sp_cchar;
-        cur_si.si_next_list = spp.sp_next_list.as_ptr();
+        cur_si.si_next_list = spp.sp_next_list.clone();
         cur_si.si_extmatch = extmatch;
 
         if spp.sp_type as c_int == SPTYPE_START && !spp.sp_flags.has(SynFlags::ONELINE) {
@@ -129,7 +129,7 @@ impl SynState {
             if cur_si.si_flags.has(SynFlags::CONCEALENDS) {
                 cur_si.si_flags |= SynFlags::CONCEAL;
             }
-            cur_si.si_next_list = ::core::ptr::null_mut();
+            cur_si.si_next_list = IdList::NONE;
             self.check_keepend();
             self.update_si_attr(top);
         }
@@ -184,7 +184,7 @@ impl SynState {
 
                 // `nextgroup=` should not match in the end pattern, and what
                 // matches next may be different now.
-                self.next_list = ::core::ptr::null_mut();
+                self.next_list = IdList::NONE;
                 self.next_match.idx = 0;
                 self.next_match.col = MAXCOL as c_int;
                 return;
@@ -192,13 +192,13 @@ impl SynState {
 
             // Hand the ended item's `nextgroup=` to the driver, unless we are
             // at end of line and it has neither "skipnl" nor "skipempty".
-            let (next_list, next_flags) = (cur_si.si_next_list, cur_si.si_flags);
+            let (next_list, next_flags) = (cur_si.si_next_list.clone(), cur_si.si_flags);
             self.next_list = next_list;
             self.next_flags = next_flags;
             if !self.next_flags.has(SynFlags::SKIPNL | SynFlags::SKIPEMPTY)
                 && self.curline_byte(self.col) as c_int == NUL
             {
-                self.next_list = ::core::ptr::null_mut();
+                self.next_list = IdList::NONE;
             }
 
             // When the ended item has "extend", another item with "keepend"
@@ -258,9 +258,9 @@ impl SynState {
             spp.sp_syn.id as c_int
         };
         let cont_list = if is_match {
-            ::core::ptr::null_mut()
+            IdList::NONE
         } else {
-            spp.sp_cont_list.as_ptr()
+            spp.sp_cont_list.clone()
         };
         let sip = self.item_mut(idx);
         sip.si_id = id;
@@ -278,17 +278,17 @@ impl SynState {
             let sip = self.item_mut(idx);
             sip.si_attr = 0;
             sip.si_trans_id = 0;
-            if sip.si_cont_list.is_null() {
-                sip.si_cont_list = ID_LIST_ALL;
+            if sip.si_cont_list.is_none() {
+                sip.si_cont_list = IdList::TopLevel;
             }
         } else {
             let outer = self.item(idx - 1);
             let (attr, trans_id, cont_list) =
-                (outer.si_attr, outer.si_trans_id, outer.si_cont_list);
+                (outer.si_attr, outer.si_trans_id, outer.si_cont_list.clone());
             let sip = self.item_mut(idx);
             sip.si_attr = attr;
             sip.si_trans_id = trans_id;
-            if sip.si_cont_list.is_null() {
+            if sip.si_cont_list.is_none() {
                 sip.si_flags |= SynFlags::TRANS_CONT;
                 sip.si_cont_list = cont_list;
             }

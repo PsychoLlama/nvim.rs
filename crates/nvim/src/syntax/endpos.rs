@@ -543,7 +543,7 @@ pub(crate) struct KeywordMatch {
     /// The keyword's `HL_*` flags.
     pub(crate) flags: SynFlags,
     /// Its `nextgroup=` list.
-    pub(crate) next_list: *mut int16_t,
+    pub(crate) next_list: IdList,
     /// Its `cchar=` conceal substitution character.
     pub(crate) cchar: c_int,
 }
@@ -591,7 +591,7 @@ impl SynState {
             id: c_int::from(entry.syn.id),
             endcol: startcol + kwlen as c_int,
             flags: entry.flags,
-            next_list: entry.next_list.as_ptr(),
+            next_list: entry.next_list.clone(),
             cchar: entry.conceal_char,
         })
     }
@@ -610,15 +610,12 @@ impl SynState {
         cur_si: Option<c_int>,
     ) -> Option<&'a KeyEntry> {
         entries.find(|entry| {
-            let (syn, cont_in, flags) = (entry.syn, entry.cont_in_list.as_ptr(), entry.flags);
-            if !self.next_list.is_null() {
-                let next = self.next_list;
-                // SAFETY: the parser's own lists.
-                unsafe { self.in_id_list(None, next, syn, cont_in, SynFlags::NONE) }
+            let (syn, cont_in, flags) = (entry.syn, &entry.cont_in_list, entry.flags);
+            if !self.next_list.is_none() {
+                self.in_id_list(None, &self.next_list, syn, cont_in, SynFlags::NONE)
             } else if let Some(cur_si) = cur_si {
-                let contains = self.item(cur_si).si_cont_list;
-                // SAFETY: as above, inside the item the caller named.
-                unsafe { self.in_id_list(Some(cur_si), contains, syn, cont_in, flags) }
+                let contains = &self.item(cur_si).si_cont_list;
+                self.in_id_list(Some(cur_si), contains, syn, cont_in, flags)
             } else {
                 !flags.has(SynFlags::CONTAINED)
             }

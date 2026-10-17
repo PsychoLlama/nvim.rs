@@ -191,7 +191,7 @@ impl SynState {
             //    has a `containedin=` (which costs extra time).
             cur_si = (self.state_len() != 0).then(|| self.top());
             if block.b_syn_containedin != 0
-                || cur_si.is_none_or(|si| !self.item(si).si_cont_list.is_null())
+                || cur_si.is_none_or(|si| !self.item(si).si_cont_list.is_none())
             {
                 // 2. A keyword, if we are on a keyword character after a
                 //    non-keyword one. Never while syncing.
@@ -217,7 +217,7 @@ impl SynState {
                             // A zero-width item with a nextgroup: do not push
                             // it, just set the nextgroup -- and remember it,
                             // so it cannot match here again.
-                            self.next_list = lspp.sp_next_list.as_ptr();
+                            self.next_list = lspp.sp_next_list.clone();
                             self.next_flags = lspp.sp_flags;
                             keep_next_list = true;
                             zero_width_next_list = true;
@@ -232,7 +232,7 @@ impl SynState {
             }
 
             // Handle searching for a nextgroup match.
-            if !self.next_list.is_null() && !keep_next_list {
+            if !self.next_list.is_none() && !keep_next_list {
                 // If a nextgroup was not found, keep looking for one when
                 // this is an empty line and "skipempty" was given, or we are
                 // on white space and "skipwhite" was given.
@@ -249,7 +249,7 @@ impl SynState {
                 // found: keep looking for a normal match. When the nextgroup
                 // came from a zero-width item and nothing matched, do not
                 // loop -- we would get stuck.
-                self.next_list = ::core::ptr::null_mut();
+                self.next_list = IdList::NONE;
                 self.next_match.idx = -1;
                 if !zero_width_next_list {
                     found_match = true;
@@ -284,14 +284,14 @@ impl SynState {
         }
 
         // A nextgroup ends at end of line, unless "skipnl" or "skipempty".
-        if !self.next_list.is_null() && !self.next_flags.has(SynFlags::SKIPNL | SynFlags::SKIPEMPTY)
+        if !self.next_list.is_none() && !self.next_flags.has(SynFlags::SKIPNL | SynFlags::SKIPEMPTY)
         {
             let line = self.curline();
             // SAFETY: as at the top: inside the line, and the byte after a
             // non-NUL one is too.
             let here = unsafe { *line.offset(self.col as isize) } as c_int;
             if here != NUL && unsafe { *line.offset(self.col as isize + 1) } as c_int == NUL {
-                self.next_list = ::core::ptr::null_mut();
+                self.next_list = IdList::NONE;
             }
         }
 
@@ -353,7 +353,7 @@ impl SynState {
         } else {
             si.si_attr = syn_id2attr(kw.id);
         }
-        si.si_cont_list = ::core::ptr::null_mut();
+        si.si_cont_list = IdList::NONE;
         si.si_next_list = kw.next_list;
         self.check_keepend();
         Some(top)
@@ -384,7 +384,7 @@ impl SynState {
             // below reaches the pattern array again and writes into it, so
             // no borrow of it may be live across this body.
             let scan = PatScan::of(block, idx);
-            if !self.pattern_admitted(&scan, cur_si, syncing, displaying) {
+            if !self.pattern_admitted(idx, &scan, cur_si, syncing, displaying) {
                 continue;
             }
             // Already tried in this line, and it cannot match before the
@@ -495,6 +495,7 @@ impl SynState {
     #[inline]
     fn pattern_admitted(
         &self,
+        idx: c_int,
         spp: &PatScan,
         cur_si: Option<c_int>,
         syncing: bool,
@@ -509,23 +510,15 @@ impl SynState {
         if spp.ty != SPTYPE_MATCH && spp.ty != SPTYPE_START {
             return false;
         }
-        if !self.next_list.is_null() {
+        let block = self.block();
+        let cont_in = &block.pattern(idx).sp_cont_in_list;
+        if !self.next_list.is_none() {
             // A pending `nextgroup=` admits only what it names.
-            // SAFETY: the parser's own lists.
-            unsafe {
-                self.in_id_list(
-                    None,
-                    self.next_list,
-                    spp.syn,
-                    spp.cont_in_list,
-                    SynFlags::NONE,
-                )
-            }
+            self.in_id_list(None, &self.next_list, spp.syn, cont_in, SynFlags::NONE)
         } else if let Some(cur_si) = cur_si {
             // Inside an item, only what its `contains=` names.
-            let contains = self.item(cur_si).si_cont_list;
-            // SAFETY: as above, inside the item the caller named.
-            unsafe { self.in_id_list(Some(cur_si), contains, spp.syn, spp.cont_in_list, spp.flags) }
+            let contains = &self.item(cur_si).si_cont_list;
+            self.in_id_list(Some(cur_si), contains, spp.syn, cont_in, spp.flags)
         } else {
             // At the top level, anything that is not `contained`.
             !spp.flags.has(SynFlags::CONTAINED)
@@ -583,8 +576,8 @@ impl SynState {
         let block = self.block();
         let mut sps = sp_syn { inc_tag: 0, id: 0 };
         // The two cluster ids are looked up as bare groups: no `containedin=`.
-        let no_cont_in = ::core::ptr::null_mut();
-        let contains = self.item(sip).si_cont_list;
+        let no_cont_in = &IdList::NONE;
+        let contains = &self.item(sip).si_cont_list;
         let trans_id = self.current.trans_id;
         if block.b_spell_cluster_id == 0 {
             // There is no @Spell cluster: spell check items without a
@@ -593,10 +586,7 @@ impl SynState {
                 return block.b_syn_spell != SYNSPL_NOTOP;
             }
             sps.id = block.b_nospell_cluster_id as int16_t;
-            // SAFETY: the parser's own state stack and lists.
-            return !unsafe {
-                self.in_id_list(Some(sip), contains, sps, no_cont_in, SynFlags::NONE)
-            };
+            return !self.in_id_list(Some(sip), contains, sps, no_cont_in, SynFlags::NONE);
         }
         // The @Spell cluster is defined: spell check in items carrying it,
         // but not when @NoSpell is there too. At the top level only spell
@@ -605,13 +595,10 @@ impl SynState {
             return block.b_syn_spell == SYNSPL_TOP;
         }
         sps.id = block.b_spell_cluster_id as int16_t;
-        // SAFETY: as above.
-        let mut can =
-            unsafe { self.in_id_list(Some(sip), contains, sps, no_cont_in, SynFlags::NONE) };
+        let mut can = self.in_id_list(Some(sip), contains, sps, no_cont_in, SynFlags::NONE);
         if block.b_nospell_cluster_id != 0 {
             sps.id = block.b_nospell_cluster_id as int16_t;
-            // SAFETY: as above.
-            if unsafe { self.in_id_list(Some(sip), contains, sps, no_cont_in, SynFlags::NONE) } {
+            if self.in_id_list(Some(sip), contains, sps, no_cont_in, SynFlags::NONE) {
                 can = false;
             }
         }
@@ -654,9 +641,6 @@ struct PatScan {
     line_id: c_int,
     startcol: c_int,
     syn: sp_syn,
-    /// The pattern's `containedin=` list, borrowed. The pattern owns it and
-    /// nothing here can free it.
-    cont_in_list: *mut int16_t,
     offsets: PatOffsets,
 }
 
@@ -670,7 +654,6 @@ impl PatScan {
             line_id: spp.sp_line_id,
             startcol: spp.sp_startcol,
             syn: spp.sp_syn,
-            cont_in_list: spp.sp_cont_in_list.as_ptr(),
             offsets: spp.offsets(),
         }
     }

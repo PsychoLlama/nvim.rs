@@ -33,9 +33,10 @@
 
 use core::ffi::c_int;
 
+use super::IdList;
 use super::{ExtMatchRef, StateItem, SynBlockRef, SynFlags};
 use crate::global_cell::GlobalCell;
-use crate::types::{ColNr, LPos, LineNr, ProfTime, VarNumber, int16_t};
+use crate::types::{ColNr, LPos, LineNr, ProfTime, VarNumber};
 use crate::winlayer::{Buf, BufId, WinId};
 
 /// The match [`SynState::current_attr`] found ahead of the current column and
@@ -138,9 +139,9 @@ pub(crate) struct SynState {
     pub(crate) keepend_level: c_int,
     /// The sequence number the next pushed item gets.
     pub(crate) next_seqnr: c_int,
-    /// The `nextgroup=` list in effect, or null: borrowed from the pattern,
+    /// The `nextgroup=` list in effect, or none: the list of the pattern,
     /// keyword or item that set it.
-    pub(crate) next_list: *mut int16_t,
+    pub(crate) next_list: IdList,
     /// The `skipwhite`/`skipnl`/`skipempty` flags that came with it.
     pub(crate) next_flags: SynFlags,
 
@@ -174,7 +175,7 @@ impl SynState {
             stack_valid: false,
             keepend_level: -1,
             next_seqnr: 1,
-            next_list: ::core::ptr::null_mut(),
+            next_list: IdList::NONE,
             next_flags: SynFlags::NONE,
             next_match: NextMatch {
                 idx: 0,
