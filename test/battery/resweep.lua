@@ -1258,6 +1258,254 @@ if want("r91/groups") then
   say(string.format("%-46s cases=%d aborted=%d", "r91/groups", #PROBES, aborted))
 end
 
+-- =====================================================================
+section("r11-oldtests")
+-- The old tests' own pattern tables, imported once into recorpus.lua:
+-- test_regexp_latin.vim's 385 rows and test_regexp_utf8.vim's 46, each
+-- under all three settings (the old tests skipped the engine a row's
+-- flag excluded; here that engine's answer is a row too).  A
+-- single-line row answers `matchlist()` and `matchstrpos()`; a
+-- multi-line row runs the old test's `%s/pat/XX/` over a buffer.
+-- `want=` says whether the answer is what the old test expected, so an
+-- engine that drifts from upstream's own assertion is visible without
+-- reading the test.  Its own engine tally: r10's must not move.
+local RECORPUS = dofile(vim.fs.dirname(debug.getinfo(1, "S").source:sub(2)) .. "/recorpus.lua")
+local delta11 = 0
+local delta11_rows = {}
+local function oldtest_rows(name, re, pat, answers, wants)
+  for i, e in ipairs(ENGINES) do
+    local tag = string.format("r11/%s/e%d", name, e)
+    if answers[i] ~= nil then
+      row(tag, string.format("re=%d pat=%-28s want=%s %s", re, esc(pat), wants[i], answers[i]))
+    end
+  end
+  if answers[2] ~= nil and answers[3] ~= nil and answers[2] ~= answers[3] then
+    delta11 = delta11 + 1
+    delta11_rows[#delta11_rows + 1] = name
+  end
+end
+for _, c in ipairs(RECORPUS.single) do
+  local name, t = c[1], c[2]
+  local re, pat, subj = t[1], t[2], t[3]
+  local wants = {}
+  local answers = per_engine(function(e)
+    local tag = string.format("r11/%s/e%d", name, e)
+    if not want(tag) then
+      return nil
+    end
+    local ok, l = pcall(vim.fn.matchlist, subj, pat)
+    local good
+    if not ok then
+      good = "err"
+    elseif #l == 0 then
+      good = (#t == 3) and "y" or "n"
+    else
+      good = (#t > 3 and l[1] == t[4]) and "y" or "n"
+      for k = 1, 9 do
+        if good == "y" and l[k + 1] ~= (t[4 + k] or "") then
+          good = "n"
+        end
+      end
+    end
+    wants[#wants + 1] = good
+    return "l=" .. try(tag, "matchlist", vim.fn.matchlist, subj, pat)
+      .. " p=" .. try(tag, "matchstrpos", vim.fn.matchstrpos, subj, pat)
+  end)
+  oldtest_rows(name, re, pat, answers, wants)
+end
+for _, c in ipairs(RECORPUS.multi) do
+  local name, t = c[1], c[2]
+  local re, pat, before, after = t[1], t[2], t[3], t[4]
+  local wants = {}
+  local answers = per_engine(function(e)
+    local tag = string.format("r11/%s/e%d", name, e)
+    if not want(tag) then
+      return nil
+    end
+    local buf = bufbuild(before)
+    -- Verbatim, as the old test's `exe '%s/' . pat . '/XX/'` was: its
+    -- patterns escape their own slashes.
+    local ok, err = pcall(vim.cmd, "silent %s/" .. pat .. "/XX/")
+    local lines = api.nvim_buf_get_lines(buf, 0, -1, false)
+    api.nvim_buf_delete(buf, { force = true })
+    wants[#wants + 1] = ok and (vim.deep_equal(lines, after) and "y" or "n") or "err"
+    if not ok then
+      return "ex=!" .. ecode(err)
+    end
+    return "ex=" .. esc(table.concat(lines, "\\n"))
+  end)
+  oldtest_rows(name, re, pat, answers, wants)
+end
+if want("r11/enginedelta") then
+  row("r11/enginedelta", string.format("rows=%d", delta11))
+end
+if want("r11/deltalist") then
+  table.sort(delta11_rows)
+  row("r11/deltalist", table.concat(delta11_rows, " "))
+end
+
+-- =====================================================================
+section("r13-e363")
+-- 'maxmempattern' PARITY IS A THRESHOLD, NOT A MESSAGE.  Both engines
+-- charge the option in the C program's units -- the backtracker per
+-- saved-state frame, the NFA per thread-list slot -- so the least
+-- 'maxmempattern' (KiB) at which a pattern completes on a given subject
+-- is a property of those record sizes and growth steps.  A rewritten
+-- record that charges a different size moves it.  Each row bisects that
+-- least value over [1, 2000000] for one pattern x engine x subject and
+-- records it with the answer `match()` gives there; `none` means it
+-- completes at 1.  The subjects are built, not stored: `ab` repeated, with
+-- an `x` after it where the row says so.
+--
+-- The backtracker's rows SUCCEED: a frame per iteration stays on its
+-- stack until the match is done, so the threshold grows with the subject,
+-- and above it the match finishes on its first descent.  A failing
+-- subject pops its frames as it goes and never reaches the limit, and the
+-- patterns regexp_spec uses for the message (`\(a*\)\+x`) backtrack
+-- exponentially once they are allowed the memory -- neither has a
+-- threshold a bisection can find.  The NFA's rows fail: a backreference
+-- keeps threads apart, so the lists grow with the subject either way.
+local E363_PATS = {
+  { "bt-alt-star", [==[\%#=1\(a\|b\)*x]==], { 200, 2000 }, "x" },
+  { "bt-nested-star", [==[\%#=1\(\(a\|b\)*\)\+x]==], { 200, 2000 }, "x" },
+  { "bt-inner-group", [==[\%#=1\(\(a\)\|b\)*x]==], { 200, 2000 }, "x" },
+  { "bt-group-plus", [==[\%#=1\(ab\)\+x]==], { 200, 2000 }, "x" },
+  { "bt-lazy", [==[\%#=1\(a\|b\)\{-}x]==], { 200, 2000 }, "x" },
+  { "bt-any-star", [==[\%#=1\(.\)*x]==], { 200, 2000 }, "x" },
+  { "bt-fail", [==[\%#=1\(a\|b\)*x]==], { 2000 }, "" },
+  { "nfa-backref", [==[\%#=2\(a\|b\)*\1x]==], { 20, 80 }, "" },
+  { "nfa-backref-hit", [==[\%#=2\(a\|b\)*\1x]==], { 40 }, "x" },
+  { "nfa-nested-backref", [==[\%#=2\(\(a\|b\)\+\)\+\1x]==], { 10, 20 }, "" },
+  { "nfa-alt-star", [==[\%#=2\(a\|b\)*x]==], { 2000 }, "x" },
+  { "auto-backref", [==[\(a\|b\)*\1x]==], { 20, 40 }, "" },
+}
+local MMP_MAX = 2000000
+local function completes(pat, subj, mmp)
+  vim.o.maxmempattern = mmp
+  vim.g.re13_subj, vim.g.re13_pat = subj, pat
+  -- `:silent`: under re=0 the NFA's give-up is a message, not an error.
+  local ok, res = pcall(vim.cmd, "silent let g:re13 = match(g:re13_subj, g:re13_pat)")
+  if ok then
+    return true, tostring(vim.g.re13)
+  end
+  local code = ecode(res):match("^(E%d+)") or "ERR"
+  if code == "E363" then
+    return false
+  end
+  return true, "!" .. code
+end
+for _, c in ipairs(E363_PATS) do
+  for _, n in ipairs(c[3]) do
+    local tag = string.format("r13/%s/%d", c[1], n)
+    if want(tag) then
+      local subj = string.rep("ab", n / 2) .. c[4]
+      local answer
+      local ok1, res1 = completes(c[2], subj, 1)
+      if ok1 then
+        answer = "mmp=none m=" .. res1
+      elseif not completes(c[2], subj, MMP_MAX) then
+        answer = "mmp=>max"
+      else
+        local lo, hi = 1, MMP_MAX -- lo fails, hi completes
+        while hi - lo > 1 do
+          local mid = math.floor((lo + hi) / 2)
+          if completes(c[2], subj, mid) then
+            hi = mid
+          else
+            lo = mid
+          end
+        end
+        local _, res = completes(c[2], subj, hi)
+        answer = string.format("mmp=%d m=%s", hi, res)
+      end
+      row(tag, string.format("pat=%-30s tail=%-1s %s", esc(c[2]), c[4], answer))
+    end
+  end
+end
+vim.o.maxmempattern = 1000
+vim.g.re13, vim.g.re13_subj, vim.g.re13_pat = nil, nil, nil
+
+-- =====================================================================
+section("r14-twopass")
+-- A `\=` replacement is EVALUATED ONCE PER MATCH even though the
+-- substitution is done in two passes (measure, then copy): the measuring
+-- pass stashes the result and the copying pass takes it.  The expression
+-- here bumps a counter, so `n=` is the number of evaluations and must
+-- equal the number of matches (`want=`), and the text must be what one
+-- evaluation per match writes.  Under all three settings, through `:s`
+-- (vim_regsub_multi) and `substitute()` (vim_regsub), with `g`, a match
+-- that spans lines, a `\r` in the result, `submatch()`, a result longer
+-- and shorter than the match, and an expression that itself runs a
+-- substitution (the nesting level the stash is per).
+vim.cmd([[
+function! ReTwoPassBump(s) abort
+  let g:retwopass_n += 1
+  return a:s
+endfunction
+]])
+local TWOPASS = {
+  { "g", { "a1 b2 c3", "d4", "e5 f6" }, [==[%s/\d/\=ReTwoPassBump(submatch(0) * 10)/g]==], 6 },
+  { "first", { "a1 b2", "c3 d4" }, [==[%s/\d/\=ReTwoPassBump('<' .. submatch(0) .. '>')/]==], 2 },
+  { "shorter", { "aaa bbb", "ccc" }, [==[%s/\w\+/\=ReTwoPassBump(len(submatch(0)))/g]==], 3 },
+  { "longer", { "x y z" }, [==[%s/\a/\=ReTwoPassBump(repeat(submatch(0), 5))/g]==], 3 },
+  { "multiline", { "one", "two", "three", "four" }, [==[%s/\(\w\+\)\n\(\w\+\)/\=ReTwoPassBump(submatch(2) .. '+' .. submatch(1))/]==], 2 },
+  { "newline", { "a,b,c" }, [==[%s/,/\=ReTwoPassBump("\r")/g]==], 2 },
+  { "nested", { "ab ab", "ab" }, [==[%s/ab/\=ReTwoPassBump(substitute(submatch(0), 'b', 'B', 'g'))/g]==], 3 },
+  { "submatch-reorder", { "q1 q2" }, [==[%s/q\(\d\)/\=ReTwoPassBump(submatch(1) .. submatch(0))/g]==], 2 },
+}
+for _, c in ipairs(TWOPASS) do
+  local answers = per_engine(function(e)
+    local tag = string.format("r14/%s/e%d", c[1], e)
+    if not want(tag) then
+      return nil
+    end
+    local buf = bufbuild(c[2])
+    vim.g.retwopass_n = 0
+    local ok, err = pcall(vim.cmd, "silent " .. c[3])
+    local lines = api.nvim_buf_get_lines(buf, 0, -1, false)
+    api.nvim_buf_delete(buf, { force = true })
+    local n = vim.g.retwopass_n
+    if not ok then
+      return string.format("n=%d !%s", n, ecode(err))
+    end
+    return string.format("n=%d want=%d text=%s", n, c[4], esc(table.concat(lines, "\\n")))
+  end)
+  for i, e in ipairs(ENGINES) do
+    local tag = string.format("r14/%s/e%d", c[1], e)
+    if answers[i] ~= nil then
+      row(tag, answers[i])
+    end
+  end
+end
+local TWOPASS_FN = {
+  { "fn-g", "a1b22c333", [==[\d\+]==], "g", 3 },
+  { "fn-first", "a1b22c333", [==[\d\+]==], "", 1 },
+  { "fn-empty", "abc", [==[\zs]==], "g", 4 },
+  { "fn-nested", "x-y-z", [==[\a]==], "g", 3 },
+}
+for _, c in ipairs(TWOPASS_FN) do
+  local answers = per_engine(function(e)
+    local tag = string.format("r14/%s/e%d", c[1], e)
+    if not want(tag) then
+      return nil
+    end
+    vim.g.retwopass_n = 0
+    local expr = c[1] == "fn-nested"
+        and [[\=ReTwoPassBump(substitute(submatch(0), '\a', '[&]', ''))]]
+      or [[\=ReTwoPassBump('(' .. submatch(0) .. ')')]]
+    local res = try(tag, "substitute", vim.fn.substitute, c[2], c[3], expr, c[4])
+    return string.format("n=%d want=%d s=%s", vim.g.retwopass_n, c[5], res)
+  end)
+  for i, e in ipairs(ENGINES) do
+    local tag = string.format("r14/%s/e%d", c[1], e)
+    if answers[i] ~= nil then
+      row(tag, answers[i])
+    end
+  end
+end
+vim.cmd("delfunction ReTwoPassBump")
+vim.g.retwopass_n = nil
+
 -- ---------------------------------------------------------------- output
 local tail = {}
 for _, s in ipairs(section_order) do

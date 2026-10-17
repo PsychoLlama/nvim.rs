@@ -51,12 +51,29 @@
 #
 #   r0-canary 10 · r1-magic 183 · r2-atoms 201 · r3-multi 81 ·
 #   r4-zero 114 · r5-case 204 · r6-drivers 105 · r7-multiline 54 ·
-#   r8-subst 93 · r9-errors 132 · r10-levers 3 · r91-abortprobe 17
+#   r8-subst 93 · r9-errors 132 · r10-levers 3 · r91-abortprobe 17 ·
+#   r11-oldtests 1295 · r13-e363 21 · r14-twopass 36
 #
-# ... summing to `## TOTAL rows=1197`, with artifacts 1,211 / 262 / 0
-# lines (the report adds the twelve section lines, `## TOTAL` and
+# ... summing to `## TOTAL rows=2549`, with artifacts 2,566 / 262 / 0
+# lines (the report adds the fifteen section lines, `## TOTAL` and
 # `exit 0`).  A `rows=0` with everything else unchanged is a harness
 # bug, not a regression.
+#
+# THE THREE SECTIONS AFTER r91 were added later, as pure additions (0
+# lines of the earlier sections moved), and are the oracles a rewrite of
+# the engines is held to:
+#
+#   * `r11-oldtests` -- the 431 pattern rows of test_regexp_latin.vim and
+#     test_regexp_utf8.vim (frozen in recorpus.lua), each under all three
+#     settings, with `want=` saying whether the answer is the one the old
+#     test asserts.  `r11/enginedelta rows=4` is its own engine tally, so
+#     r10's never moves; the four are NFA-only rows run under BT.
+#   * `r13-e363` -- 'maxmempattern' parity as a THRESHOLD: the least
+#     value at which each pattern completes, bisected.  A record that
+#     charges the option a different size moves a number here.
+#   * `r14-twopass` -- a `\=` expression runs once per match although the
+#     substitution makes two passes: `n=` counts evaluations, `want=` the
+#     matches.
 #
 # BASELINED FOUR-WAY ON DAY ONE, WITH NO EXCEPTION SET.  All three
 # artifacts are byte-identical on every kept side:
