@@ -276,8 +276,13 @@ fn step_back_lines(
         start.pos.pos_mut().col = line_len(rex.line());
     } else {
         // `was.col` is a column of the line and is not zero, so the byte
-        // before it is on the line too.
-        let line = reg_getline(rex, was.lnum).unwrap_or(b"\0");
+        // before it is on the line too. The line the cursor is on is the
+        // one the memline last handed out, so it needs no second fetch.
+        let line = if was.lnum == rex.lnum() {
+            rex.line()
+        } else {
+            reg_getline(rex, was.lnum).unwrap_or(b"\0")
+        };
         let head = head_off_at(line, was.col as usize - 1) as ColNr;
         start.pos.pos_mut().col -= head + 1;
     }

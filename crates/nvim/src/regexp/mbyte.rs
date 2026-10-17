@@ -11,7 +11,7 @@ use super::Rex;
 use crate::mbyte::{
     c_cluster_len, char_at, char_len, head_off, iscomposing, strnicmp_in, utf_fold,
 };
-use crate::memory::memchr_in;
+use crate::memory::{memchr_in, strchr_in, strlen_in};
 use crate::strings::find_char;
 use crate::types::GraphemeState;
 
@@ -128,7 +128,8 @@ pub(crate) fn cstrncmp(rex: Rex, s1: &[u8], s2: &[u8], n: &mut c_int) -> c_int {
             p += cluster_len_at(s2, p);
         }
         let n2 = p as c_int;
-        let result = strnicmp_in(prefix_at(s1, 0, bound(*n)), prefix_at(s2, 0, bound(n2)));
+        // `strnicmp_in` ends either side at a NUL itself.
+        let result = strnicmp_in(head(s1, bound(*n)), head(s2, bound(n2)));
         if result == 0 && n2 < *n {
             *n = n2;
         }
@@ -163,16 +164,36 @@ pub(crate) fn cstrncmp(rex: Rex, s1: &[u8], s2: &[u8], n: &mut c_int) -> c_int {
     result
 }
 
-/// `strchr` that honours 'ignorecase': where `c` is in `text`, matching
-/// either case when the search is case-insensitive.
+/// `strchr` that honours 'ignorecase': where `c` is in the string `s`
+/// holds, matching either case when the search is case-insensitive.
 ///
-/// `text` is the string *without* its terminator — a line from the cursor
-/// to its end ([`super::Rex::text_from`]), or a `[]` operand up to its NUL —
-/// which is what lets the plain search be the C library's `memchr`, as
-/// upstream's `strchr` was: lines are long and core's search costs several
-/// times as much per byte.
+/// `s` ends in a NUL, and the string is what comes before its first one —
+/// a line from the cursor on, or a `[]` operand inside the program (which
+/// ends in the `END` node's NUL offset). That is what lets the plain search
+/// be the C library's `strchr`, as upstream's was: lines are long and core's
+/// search costs several times as much per byte.
+///
+/// # Panics
+/// If `s` does not end in a NUL.
 #[inline(always)]
-pub(crate) fn cstrchr(rex: Rex, text: &[u8], c: c_int) -> Option<usize> {
+pub(crate) fn cstrchr(rex: Rex, s: &[u8], c: c_int) -> Option<usize> {
+    if !rex.reg_ic() && (0..0x80).contains(&c) {
+        return u8::try_from(c).ok().and_then(|c| strchr_in(s, c));
+    }
+    cstrchr_in(rex, &s[..strlen_in(s)], c)
+}
+
+/// [`cstrchr`] over a line from the cursor on, whose only NUL is its last
+/// byte: the string is all of it but that, so no search for the end is
+/// needed and the plain search is the C library's `memchr`.
+#[inline(always)]
+pub(crate) fn cstrchr_line(rex: Rex, rest: &[u8], c: c_int) -> Option<usize> {
+    cstrchr_in(rex, &rest[..rest.len() - 1], c)
+}
+
+/// [`cstrchr`] over the string itself, its terminator left off.
+#[inline(always)]
+fn cstrchr_in(rex: Rex, text: &[u8], c: c_int) -> Option<usize> {
     if !rex.reg_ic() {
         return find_char_in(text, c);
     }
@@ -223,6 +244,12 @@ fn find_char_in(text: &[u8], c: c_int) -> Option<usize> {
     find_char(text, c)
 }
 
+/// `strlen` over a NUL-terminated operand or line: the C library's.
+#[inline(always)]
+pub(crate) fn nul_terminated_len(s: &[u8]) -> usize {
+    strlen_in(s)
+}
+
 // ------------------------------------------------- the line, as bytes
 //
 // Both engines and the pattern parser read NUL-terminated text: a line of the
@@ -237,9 +264,11 @@ fn find_char_in(text: &[u8], c: c_int) -> Option<usize> {
 /// The character at `text[i]`; 0 at the terminator or past the end.
 #[inline(always)]
 pub(crate) fn char_at_nul(text: &[u8], i: usize) -> i32 {
-    match text.get(i..) {
-        Some(rest) => char_at(rest),
+    match text.get(i) {
         None => 0,
+        // ASCII, the NUL included, is itself: the hot answer.
+        Some(&byte) if byte < 0x80 => i32::from(byte),
+        Some(_) => char_at(&text[i..]),
     }
 }
 
@@ -257,6 +286,9 @@ pub(crate) fn char_len_at(text: &[u8], i: usize) -> usize {
 #[inline(always)]
 pub(crate) fn cluster_len_at(text: &[u8], i: usize) -> usize {
     match text.get(i..) {
+        // An ASCII byte followed by another cannot be combined with
+        // anything: the hot answer, without decoding.
+        Some(&[first, next, ..]) if first != 0 && first < 0x80 && next < 0x80 => 1,
         Some(rest) => c_cluster_len(rest),
         None => 0,
     }
@@ -281,11 +313,25 @@ pub(crate) fn composes_at(
         && iscomposing(char_at_nul(text, cur), char_at_nul(text, next), state)
 }
 
+/// At most the first `n` bytes of `text`.
+#[inline(always)]
+fn head(text: &[u8], n: usize) -> &[u8] {
+    &text[..n.min(text.len())]
+}
+
+/// Where the first NUL in `text` is, or its length: `strlen` over a slice,
+/// through the C library's `memchr`, which core's search costs several times
+/// as much as.
+#[inline(always)]
+pub(crate) fn nul_at(text: &[u8]) -> usize {
+    memchr_in(text, 0).unwrap_or(text.len())
+}
+
 /// `text[i..]` up to its terminator, at most `n` bytes: what a pointer form
 /// with a length looks at.
 #[inline(always)]
 pub(crate) fn prefix_at(text: &[u8], i: usize, n: usize) -> &[u8] {
     let rest = text.get(i..).unwrap_or(&[]);
     let rest = &rest[..n.min(rest.len())];
-    cstr::until_nul(rest)
+    &rest[..nul_at(rest)]
 }

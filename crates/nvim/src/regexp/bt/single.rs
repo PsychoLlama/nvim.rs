@@ -4,7 +4,6 @@
 
 #![forbid(unsafe_code)]
 
-use crate::cstr;
 use core::ffi::c_int;
 
 use super::compile::BtProg;
@@ -19,8 +18,8 @@ use crate::pos::MAXCOL;
 use crate::regexp::{
     ByteClass, RA_CONT, RA_MATCH, RA_NOMATCH, RI_FLAGS, Rex, char_at_nul, char_len_at,
     cleanup_subexpr, cleanup_zsubexpr, cluster_len_at, composes_at, cstrchr, cstrncmp,
-    kMarkBufLocal, match_with_backref, reg_getline, reg_getline_len, reg_match_visual,
-    reg_nextline, reg_prev_class,
+    kMarkBufLocal, match_with_backref, nul_terminated_len, reg_getline, reg_getline_len,
+    reg_match_visual, reg_nextline, reg_prev_class,
 };
 use crate::types::{LineNr, NUL, Pos, uint8_t, uint32_t};
 
@@ -292,7 +291,7 @@ fn exactly(rex: Rex, prog: BtProg<'_>, scan: usize, next: usize) -> c_int {
     if c_int::from(opnd[1]) == NUL && !rex.reg_ic() {
         len = 1;
     } else {
-        len = cstr::until_nul(opnd).len() as c_int;
+        len = nul_terminated_len(opnd) as c_int;
         if cstrncmp(rex, opnd, rex.rest(), &mut len) != 0 {
             return RA_NOMATCH;
         }
@@ -317,7 +316,7 @@ fn collection(rex: Rex, operand: &[u8], c: c_int, positive: bool) -> c_int {
     if c == NUL {
         return RA_NOMATCH;
     }
-    let found = cstrchr(rex, cstr::until_nul(operand), c);
+    let found = cstrchr(rex, operand, c);
     if found.is_none() == positive {
         return RA_NOMATCH;
     }

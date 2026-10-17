@@ -21,11 +21,12 @@ use crate::regexp::bt_regcomp;
 use crate::regexp::nfa_regcomp;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
+use core::cell::Cell;
 use core::ffi::{CStr, c_int};
 use core::ptr;
 
 use super::{
-    AUTOMATIC_ENGINE, BACKTRACKING_ENGINE, BtRegProg, E_RECURSIVE, MatchPos, MatchSetup,
+    AUTOMATIC_ENGINE, BACKTRACKING_ENGINE, BtRegProg, E_RECURSIVE, GroupSlots, MatchSetup,
     NFA_ENGINE, NFA_TOO_EXPENSIVE, NfaRegProg, RE_NOBREAK, REX_ALL, RegExec, Rex, bt_regexec,
     nfa_regexec,
 };
@@ -34,7 +35,9 @@ use crate::message::{emsg, msg_str, verbose_enter, verbose_leave};
 use crate::option::vars::{P_RE, p_re, p_verbose};
 use crate::os::cshim::gettext;
 use crate::regexp::RE_AUTO;
-use crate::types::{ColNr, LineNr, OptInt, ProfTime, RE_GROUPS, RegMMatch, RegMatch, RegProg};
+use crate::types::{
+    ColNr, LPos, LineNr, OptInt, ProfTime, RE_GROUPS, RegMMatch, RegMatch, RegProg,
+};
 
 /// The first line of the last buffer match, which upstream's `rex` kept
 /// after the match was over: a string match never set it, so `\%'m` in one
@@ -245,10 +248,12 @@ fn vim_regexec_string(matches: &mut RegMatch, line: &CStr, col: usize, nl: bool)
             deadline: None,
             ext_in: None,
         };
-        let ctx = RegExec::for_string(setup, text, nl, firstlnum);
+        let slots = GroupSlots::new();
+        let ctx = RegExec::for_string(setup, text, nl, firstlnum, &slots);
         let result = unsafe { run_engine(prog, ctx.rex(), col) };
         unsafe { (*prog).re_in_use = false };
-        (result, ctx.starts(), ctx.ends(), ctx.matchcol())
+        let matchcol = ctx.matchcol();
+        (result, slots.starts.get(), slots.ends.get(), matchcol)
     };
     let ran = in_match_scope(None, |firstlnum| {
         let mut ran = run(matches.regprog, firstlnum);
@@ -279,15 +284,8 @@ fn vim_regexec_string(matches: &mut RegMatch, line: &CStr, col: usize, nl: bool)
 /// string the match ran over — which for a string match holds every
 /// position: nothing in either engine moves a string match onto another
 /// line.
-fn record_groups(
-    matches: &mut RegMatch,
-    starts: &[MatchPos; RE_GROUPS],
-    ends: &[MatchPos; RE_GROUPS],
-) {
-    let offset = |slot: &MatchPos| {
-        let pos = slot.as_pos();
-        (pos.lnum >= 0).then(|| usize::try_from(pos.col).unwrap_or(0))
-    };
+fn record_groups(matches: &mut RegMatch, starts: &[LPos; RE_GROUPS], ends: &[LPos; RE_GROUPS]) {
+    let offset = |pos: &LPos| (pos.lnum >= 0).then(|| usize::try_from(pos.col).unwrap_or(0));
     for no in 0..RE_GROUPS {
         matches.starts[no] = offset(&starts[no]);
         matches.ends[no] = offset(&ends[no]);
@@ -394,24 +392,25 @@ unsafe fn regexec_multi_io(
             deadline,
             ext_in,
         };
-        let ctx = RegExec::for_buffer(setup, lnum, rmm.rmm_maxcol, &rmm.startpos, &rmm.endpos);
+        // The match writes the caller's slots in place, as upstream's did.
+        let maxcol = rmm.rmm_maxcol;
+        let (starts, ends) = (
+            Cell::from_mut(&mut rmm.startpos),
+            Cell::from_mut(&mut rmm.endpos),
+        );
+        let ctx = RegExec::for_buffer(setup, lnum, maxcol, starts, ends);
         let result = unsafe { run_engine(prog, ctx.rex(), col) };
         unsafe { (*prog).re_in_use = false };
-        // Upstream matched into the caller's slots in place, so they hold
-        // what the match left there whether or not it succeeded.
-        let (starts, ends) = (ctx.starts(), ctx.ends());
-        for no in 0..RE_GROUPS {
-            rmm.startpos[no] = starts[no].as_pos();
-            rmm.endpos[no] = ends[no].as_pos();
-        }
-        if let Some(col) = ctx.matchcol() {
+        let (matchcol, did_time_out, captures) =
+            (ctx.matchcol(), ctx.timed_out(), ctx.take_ext_out());
+        if let Some(col) = matchcol {
             rmm.rmm_matchcol = col;
         }
-        if ctx.timed_out() && !timed_out.is_null() {
+        if did_time_out && !timed_out.is_null() {
             // SAFETY: the caller's flag.
             unsafe { *timed_out = 1 };
         }
-        if let (Some(out), Some(captures)) = (ext_out.as_deref_mut(), ctx.take_ext_out()) {
+        if let (Some(out), Some(captures)) = (ext_out.as_deref_mut(), captures) {
             *out = captures;
         }
         result

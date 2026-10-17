@@ -75,24 +75,28 @@ fn nfa_regtry(rex: Rex, prog: *mut NfaRegProg, col: ColNr) -> c_int {
 
 /// Copy the capture positions into the match's slots.
 fn report_match(rex: Rex, subs: &RegSubs, col: ColNr) {
-    let (starts, ends) = (rex.starts(), rex.ends());
+    let (starts, ends) = (
+        rex.starts().as_array_of_cells(),
+        rex.ends().as_array_of_cells(),
+    );
     for i in 0..slots(subs.norm.in_use) {
-        starts[i].set(subs.norm.list[i].start);
-        ends[i].set(subs.norm.list[i].end);
+        starts[i].set(subs.norm.list[i].start.as_pos());
+        ends[i].set(subs.norm.list[i].end.as_pos());
     }
     if rex.multi() {
         rex.set_matchcol(subs.norm.orig_start_col);
     }
     // A `\zs` before the start, or a `\ze` before the end, can leave group 0
     // unset; it then covers what the machine actually walked.
+    let (start, end) = (rex.start(0), rex.end(0));
     let kind = rex.pos_kind();
-    if !starts[0].get().is_set(kind) {
-        starts[0].set(MatchPos::from_pos(LPos { lnum: 0, col }));
+    if !start.get().is_set(kind) {
+        start.set(MatchPos::from_pos(LPos { lnum: 0, col }));
     }
-    if !ends[0].get().is_set(kind) {
-        ends[0].set(rex.here());
+    if !end.get().is_set(kind) {
+        end.set(rex.here());
     } else if rex.multi() {
-        rex.set_lnum(ends[0].get().as_pos().lnum);
+        rex.set_lnum(end.get().as_pos().lnum);
     }
 }
 

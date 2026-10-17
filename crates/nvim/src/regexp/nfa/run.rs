@@ -19,7 +19,7 @@ use crate::profile::profile_passed_limit;
 use crate::regexp::{
     _ISalnum, _ISalpha, _IScntrl, _ISgraph, _ISpunct, ESC, MatchPos, NFA_TOO_EXPENSIVE, NfaPim,
     NfaRegProg, NfaState, RA_MATCH, RegSub, RegSubs, Rex, char_at_nul, char_len_at,
-    cleanup_subexpr, cleanup_zsubexpr, cstrchr, cstrncmp, head_off_at, match_with_backref,
+    cleanup_subexpr, cleanup_zsubexpr, cstrchr_line, cstrncmp, head_off_at, match_with_backref,
     reg_getline, reg_iswordc,
 };
 use crate::types::{ColNr, Failed, LPos};
@@ -352,7 +352,9 @@ pub(crate) fn failure_chance(state: *mut NfaState, depth: c_int) -> c_int {
 /// every match must start with.
 pub(crate) fn skip_to_start(rex: Rex, c: c_int, colp: &mut ColNr) -> Result<(), Failed> {
     let from = usize::try_from(*colp).unwrap_or(usize::MAX);
-    let found = cstrchr(rex, rex.text_from(from), c).ok_or(Failed)?;
+    let line = rex.line();
+    let rest = line.get(from..).unwrap_or(&line[line.len() - 1..]);
+    let found = cstrchr_line(rex, rest, c).ok_or(Failed)?;
     *colp += found as ColNr;
     Ok(())
 }

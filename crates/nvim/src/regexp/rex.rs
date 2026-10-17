@@ -101,10 +101,18 @@ pub(crate) struct RegExec<'t> {
     input: Cell<usize>,
 
     // ----------------------------------------------------- the captures
-    starts: [Cell<MatchPos>; SLOTS],
-    ends: [Cell<MatchPos>; SLOTS],
-    zstarts: [Cell<MatchPos>; SLOTS],
-    zends: [Cell<MatchPos>; SLOTS],
+    // Each family is one `Cell` of the whole array, reached a slot at a time
+    // through `as_array_of_cells`, so that blanking one is one store of the
+    // array (upstream's `memset`) rather than ten.
+    //
+    // The `\0`..`\9` arrays are the caller's: a buffer match's are its
+    // `RegMMatch`'s own `startpos`/`endpos`, which upstream matched into in
+    // place, and a string match's a [`GroupSlots`] the API layer turns into
+    // offsets afterwards.
+    starts: &'t Slots,
+    ends: &'t Slots,
+    zstarts: Slots,
+    zends: Slots,
     need_clear_subexpr: Cell<bool>,
     need_clear_zsubexpr: Cell<bool>,
 
@@ -133,6 +141,49 @@ pub(crate) struct RegExec<'t> {
     nfa_time: Cell<TimeBudget>,
 }
 
+/// One family of capture slots, `\0`..`\9`.
+pub(crate) type Slots = Cell<[LPos; SLOTS]>;
+
+/// What an unset capture slot holds; see [`MatchPos::unset`].
+const UNSET: LPos = LPos { lnum: -1, col: -1 };
+
+/// The two slot arrays a string match records its groups in.
+pub(crate) struct GroupSlots {
+    pub(crate) starts: Slots,
+    pub(crate) ends: Slots,
+}
+
+impl GroupSlots {
+    pub(crate) fn new() -> GroupSlots {
+        GroupSlots {
+            starts: Cell::new([UNSET; SLOTS]),
+            ends: Cell::new([UNSET; SLOTS]),
+        }
+    }
+}
+
+/// One capture slot, read and written as a [`MatchPos`].
+#[derive(Clone, Copy)]
+pub(crate) struct Slot<'t>(&'t Cell<LPos>);
+
+impl Slot<'_> {
+    #[inline(always)]
+    pub(crate) fn get(self) -> MatchPos {
+        MatchPos::from_pos(self.0.get())
+    }
+
+    #[inline(always)]
+    pub(crate) fn set(self, at: MatchPos) {
+        self.0.set(at.as_pos());
+    }
+
+    /// Put `at` in the slot and answer what it held.
+    #[inline(always)]
+    pub(crate) fn replace(self, at: MatchPos) -> MatchPos {
+        MatchPos::from_pos(self.0.replace(at.as_pos()))
+    }
+}
+
 /// What every match is set up with, whichever kind it is.
 pub(crate) struct MatchSetup<'t> {
     /// The buffer: lines for a buffer match, 'iskeyword' for both.
@@ -147,8 +198,13 @@ pub(crate) struct MatchSetup<'t> {
 }
 
 impl<'t> RegExec<'t> {
-    fn new(setup: MatchSetup<'t>, multi: bool, line: &'t [u8]) -> RegExec<'t> {
-        let unset = || core::array::from_fn(|_| Cell::new(MatchPos::unset(PosKind::Buf)));
+    fn new(
+        setup: MatchSetup<'t>,
+        multi: bool,
+        line: &'t [u8],
+        starts: &'t Slots,
+        ends: &'t Slots,
+    ) -> RegExec<'t> {
         RegExec {
             multi,
             buf: setup.buf,
@@ -165,10 +221,10 @@ impl<'t> RegExec<'t> {
             lnum: Cell::new(0),
             line: Cell::new(line),
             input: Cell::new(0),
-            starts: unset(),
-            ends: unset(),
-            zstarts: unset(),
-            zends: unset(),
+            starts,
+            ends,
+            zstarts: Cell::new([UNSET; SLOTS]),
+            zends: Cell::new([UNSET; SLOTS]),
             need_clear_subexpr: Cell::new(false),
             need_clear_zsubexpr: Cell::new(false),
             matchcol: Cell::new(None),
@@ -204,9 +260,10 @@ impl<'t> RegExec<'t> {
         text: &'t [u8],
         line_lbr: bool,
         firstlnum: LineNr,
+        slots: &'t GroupSlots,
     ) -> Self {
         assert_eq!(text.last(), Some(&0), "a match runs over a terminated line");
-        let mut ctx = RegExec::new(setup, false, text);
+        let mut ctx = RegExec::new(setup, false, text, &slots.starts, &slots.ends);
         ctx.line_lbr = line_lbr;
         ctx.firstlnum = firstlnum;
         ctx
@@ -215,27 +272,20 @@ impl<'t> RegExec<'t> {
     /// A match over `setup.buf` from buffer line `lnum` on, which may start
     /// no later than column `maxcol` (0 for anywhere).
     ///
-    /// The capture slots start out holding `starts`/`ends` — the caller's
-    /// match structure's, which upstream matched into in place — so that
-    /// what a match leaves there is what upstream would have left.
+    /// The capture slots are `starts`/`ends`, the caller's match
+    /// structure's own, which the match writes in place as upstream's did.
     pub(crate) fn for_buffer(
         setup: MatchSetup<'t>,
         lnum: LineNr,
         maxcol: ColNr,
-        starts: &[LPos; SLOTS],
-        ends: &[LPos; SLOTS],
+        starts: &'t Slots,
+        ends: &'t Slots,
     ) -> Self {
         let line_count = setup.buf.b_ml.ml_line_count;
-        let mut ctx = RegExec::new(setup, true, b"\0");
+        let mut ctx = RegExec::new(setup, true, b"\0", starts, ends);
         ctx.firstlnum = lnum;
         ctx.maxline = line_count - lnum;
         ctx.maxcol = maxcol;
-        for (slot, pos) in ctx.starts.iter_mut().zip(starts) {
-            slot.set(MatchPos::from_pos(*pos));
-        }
-        for (slot, pos) in ctx.ends.iter_mut().zip(ends) {
-            slot.set(MatchPos::from_pos(*pos));
-        }
         ctx
     }
 
@@ -245,15 +295,6 @@ impl<'t> RegExec<'t> {
     }
 
     // ----------------------------------- what the API layer reads back
-
-    /// The `\0`..`\9` slots as the match left them.
-    pub(crate) fn starts(&self) -> [MatchPos; SLOTS] {
-        core::array::from_fn(|i| self.starts[i].get())
-    }
-
-    pub(crate) fn ends(&self) -> [MatchPos; SLOTS] {
-        core::array::from_fn(|i| self.ends[i].get())
-    }
 
     /// The column a reported match starts at, when the engine recorded one.
     pub(crate) fn matchcol(&self) -> Option<ColNr> {
@@ -319,13 +360,6 @@ impl<'t> Rex<'t> {
     pub(crate) fn rest(self) -> &'t [u8] {
         let line = self.line();
         line.get(self.input()..).unwrap_or(&line[line.len() - 1..])
-    }
-
-    /// The line from the cursor to its end, its NUL left out.
-    #[inline(always)]
-    pub(crate) fn text_from(self, col: usize) -> &'t [u8] {
-        let line = self.line();
-        line.get(col..line.len() - 1).unwrap_or(&[])
     }
 
     /// The byte at the cursor. NUL at the end of the line — which is a
@@ -586,49 +620,49 @@ impl<'t> Rex<'t> {
     /// # Panics
     /// When `no` is not a group, `\0`..`\9`.
     #[inline(always)]
-    pub(crate) fn start(self, no: usize) -> &'t Cell<MatchPos> {
-        &self.0.starts[no]
+    pub(crate) fn start(self, no: usize) -> Slot<'t> {
+        Slot(&self.0.starts.as_array_of_cells()[no])
     }
 
     /// The end slot of group `no`.
     #[inline(always)]
-    pub(crate) fn end(self, no: usize) -> &'t Cell<MatchPos> {
-        &self.0.ends[no]
+    pub(crate) fn end(self, no: usize) -> Slot<'t> {
+        Slot(&self.0.ends.as_array_of_cells()[no])
     }
 
     /// The start slot of `\z(` group `no`.
     #[inline(always)]
-    pub(crate) fn zstart(self, no: usize) -> &'t Cell<MatchPos> {
-        &self.0.zstarts[no]
+    pub(crate) fn zstart(self, no: usize) -> Slot<'t> {
+        Slot(&self.0.zstarts.as_array_of_cells()[no])
     }
 
     /// The end slot of `\z(` group `no`.
     #[inline(always)]
-    pub(crate) fn zend(self, no: usize) -> &'t Cell<MatchPos> {
-        &self.0.zends[no]
+    pub(crate) fn zend(self, no: usize) -> Slot<'t> {
+        Slot(&self.0.zends.as_array_of_cells()[no])
     }
 
     /// The `\1`..`\9` start slots.
     #[inline(always)]
-    pub(crate) fn starts(self) -> &'t [Cell<MatchPos>; SLOTS] {
-        &self.0.starts
+    pub(crate) fn starts(self) -> &'t Slots {
+        self.0.starts
     }
 
     /// The `\1`..`\9` end slots.
     #[inline(always)]
-    pub(crate) fn ends(self) -> &'t [Cell<MatchPos>; SLOTS] {
-        &self.0.ends
+    pub(crate) fn ends(self) -> &'t Slots {
+        self.0.ends
     }
 
     /// The `\z1`..`\z9` start slots.
     #[inline(always)]
-    pub(crate) fn zstarts(self) -> &'t [Cell<MatchPos>; SLOTS] {
+    pub(crate) fn zstarts(self) -> &'t Slots {
         &self.0.zstarts
     }
 
     /// The `\z1`..`\z9` end slots.
     #[inline(always)]
-    pub(crate) fn zends(self) -> &'t [Cell<MatchPos>; SLOTS] {
+    pub(crate) fn zends(self) -> &'t Slots {
         &self.0.zends
     }
 

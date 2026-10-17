@@ -43,8 +43,6 @@
     clippy::ptr_as_ptr
 )]
 
-use core::cell::Cell;
-
 use crate::global_cell::GlobalCell;
 use crate::message::emsg;
 use crate::option::vars::p_mmp;
@@ -52,7 +50,7 @@ use crate::os::cshim::gettext;
 use crate::regexp::{
     BACKPOS_INITIAL, E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN, MatchPos, NSUBEXP,
     REGSTACK_INITIAL, RS_MCLOSE, RS_MOPEN, RS_ZOPEN, RegBehind, RegItem, RegStar, RegState, Rex,
-    SavedInput, reg_getline,
+    SavedInput, Slot, reg_getline,
 };
 use crate::types::int64_t;
 
@@ -103,12 +101,11 @@ const KEEP_EDGES: usize = BACKPOS_INITIAL as usize;
 /// The working state matches leave behind for the next one.
 ///
 /// It is kept between matches so that an ordinary match never allocates:
-/// the buffers a previous one needed are still there. A match **takes** it
-/// for its whole run ([`GlobalCell::take`], once per `bt_regexec` call
-/// rather than once per start column) and puts it back when it returns —
-/// so the cell is never borrowed across the match, and a match that started
-/// inside another (nothing the matcher runs does that today) would find it
-/// empty and grow its own rather than share it.
+/// the buffers a previous one needed are still there. A match borrows it
+/// for its whole run ([`GlobalCell::with_mut`], once per `bt_regexec` call
+/// rather than once per start column — moving it out and back cost three
+/// copies of the brace counters per call). Nothing the matcher runs starts
+/// another backtracking match, and a debug build would say so if it did.
 ///
 /// [`super::matcher::regmatch`] threads its three fields down separately,
 /// by `&mut`: `reg_save` and `reg_restore` run millions of times in a
@@ -475,7 +472,7 @@ pub(crate) fn reg_restore(rex: Rex, save: &SavedInput, backpos: &mut BackPos) {
 /// # Panics
 /// If `no` is not a group, `\0`..`\9`; the compiler bounds the operand.
 #[inline(always)]
-pub(crate) fn capture_slot<'t>(rex: Rex<'t>, state: RegState, no: usize) -> &'t Cell<MatchPos> {
+pub(crate) fn capture_slot<'t>(rex: Rex<'t>, state: RegState, no: usize) -> Slot<'t> {
     match state {
         RS_MOPEN => rex.start(no),
         RS_MCLOSE => rex.end(no),
@@ -487,7 +484,7 @@ pub(crate) fn capture_slot<'t>(rex: Rex<'t>, state: RegState, no: usize) -> &'t 
 /// Move the current position into `slot`, keeping what it held in `savep` so
 /// the unwinder can put it back.
 #[inline(always)]
-pub(crate) fn save_capture(rex: Rex, savep: &mut MatchPos, slot: &Cell<MatchPos>) {
+pub(crate) fn save_capture(rex: Rex, savep: &mut MatchPos, slot: Slot) {
     *savep = slot.replace(rex.here());
 }
 
@@ -501,9 +498,8 @@ pub(crate) fn save_subexpr(rex: Rex, behind: &mut RegBehind) {
     if rex.need_clear_subexpr() {
         return;
     }
-    let (starts, ends) = (rex.starts(), rex.ends());
-    behind.save_start = core::array::from_fn(|i| starts[i].get());
-    behind.save_end = core::array::from_fn(|i| ends[i].get());
+    behind.save_start = rex.starts().get().map(MatchPos::from_pos);
+    behind.save_end = rex.ends().get().map(MatchPos::from_pos);
 }
 
 /// Undo [`save_subexpr`].
@@ -512,12 +508,8 @@ pub(crate) fn restore_subexpr(rex: Rex, behind: &RegBehind) {
     if behind.save_need_clear_subexpr != 0 {
         return;
     }
-    for (slot, saved) in rex.starts().iter().zip(&behind.save_start) {
-        slot.set(*saved);
-    }
-    for (slot, saved) in rex.ends().iter().zip(&behind.save_end) {
-        slot.set(*saved);
-    }
+    rex.starts().set(behind.save_start.map(MatchPos::as_pos));
+    rex.ends().set(behind.save_end.map(MatchPos::as_pos));
 }
 
 /// The flag as the `int` the snapshot keeps.

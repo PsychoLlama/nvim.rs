@@ -74,6 +74,7 @@ fn walk(
     let mut scan = start;
     let mut tm_count = 0;
     let mut status;
+    let deadline = rex.deadline();
 
     loop {
         reg_breakcheck(rex);
@@ -84,7 +85,7 @@ fn walk(
                 status = RA_FAIL;
                 break;
             }
-            if let Some(deadline) = rex.deadline()
+            if let Some(deadline) = deadline
                 && {
                     tm_count += 1;
                     tm_count == 100
@@ -99,25 +100,25 @@ fn walk(
             }
 
             status = RA_CONT;
-            let mut next = prog.next(scan);
+            let (op_byte, mut next) = prog.op_and_next(scan);
             // The `\_x` band is decoded away here, once per node: past the
             // line break such a node behaves as its plain form.
-            let Ok((op, crosses_lines)) = BtOp::decode(prog.op_byte(scan)) else {
+            let Ok((op, crosses_lines)) = BtOp::decode(op_byte) else {
                 status = RA_FAIL;
                 break;
             };
 
             // A `\_x` sitting at the end of the line consumes the line
-            // break and stays on the same node.
-            let at_line_end = rex.byte() as c_int == NUL;
-            if !rex.reg_line_lbr()
-                && crosses_lines
+            // break and stays on the same node. Only such a node looks: the
+            // byte is read for no other.
+            if crosses_lines
+                && !rex.reg_line_lbr()
                 && rex.multi()
-                && at_line_end
+                && rex.byte() as c_int == NUL
                 && rex.lnum() <= rex.reg_maxline()
             {
                 reg_nextline(rex);
-            } else if rex.reg_line_lbr() && crosses_lines && rex.byte() as c_int == '\n' as c_int {
+            } else if crosses_lines && rex.reg_line_lbr() && rex.byte() as c_int == '\n' as c_int {
                 // With 'reg_line_lbr' the break is a real newline byte.
                 rex.advance_char();
             } else {

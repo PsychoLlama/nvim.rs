@@ -15,7 +15,6 @@ use super::compile::BtProg;
 use super::op::BtOp;
 use crate::ascii::ascii_isdigit;
 use crate::charset::{is_word_at, vim_is_ident_char, vim_isfilec, vim_isprintc};
-use crate::cstr;
 use crate::getchar::state::got_int;
 use crate::mbyte::{mb_tolower, mb_toupper, utf_fold};
 use crate::message::e_re_corr;
@@ -208,7 +207,7 @@ pub(crate) fn regrepeat(rex: Rex, prog: BtProg<'_>, p: usize, maxcount: int64_t)
 
         // A `[]` collection.
         BtOp::Anyof | BtOp::Anybut => {
-            let set = cstr::until_nul(opnd);
+            let set = opnd;
             'coll: while count < maxcount {
                 if c_int::from(byte(line, scan)) == NUL {
                     match next_line() {

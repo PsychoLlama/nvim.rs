@@ -25,7 +25,7 @@ use crate::regexp::ExtMatch;
 use crate::regexp::ExtMatchRef;
 use crate::regexp::{
     BtRegProg, MatchPos, NSUBEXP, REGMAGIC, RF_ICASE, RF_ICOMBINE, RF_NOICASE, Rex, char_at_nul,
-    cleanup_subexpr, cleanup_zsubexpr, cluster_len_at, cstrchr, cstrncmp, reg_getline,
+    cleanup_subexpr, cleanup_zsubexpr, cluster_len_at, cstrchr_line, cstrncmp, reg_getline,
 };
 use crate::types::{ColNr, LPos, NUL, uint32_t};
 
@@ -129,13 +129,14 @@ fn span(line: &[u8], start: ColNr, end: ColNr) -> &[u8] {
 /// starting at column `col`. Returns 0 for no match, or one more than the
 /// line the match ended on.
 pub(crate) fn bt_regexec(rex: Rex, prog: &BtRegProg, col: ColNr) -> c_int {
-    // The working state is the cell's own between matches; this match takes
-    // it for its whole run and hands it back, trimmed, when it is done.
-    let mut state = BT_STATE.take();
-    let retval = bt_regexec_both(rex, BtProg::new(prog), &mut state, col);
-    state.trim();
-    BT_STATE.set(state);
-    retval
+    // The working state is the cell's own between matches; this match
+    // borrows it for its whole run -- nothing the matcher runs starts
+    // another backtracking match -- and leaves it trimmed.
+    BT_STATE.with_mut(|state| {
+        let retval = bt_regexec_both(rex, BtProg::new(prog), state, col);
+        state.trim();
+        retval
+    })
 }
 
 /// Match `rex`'s program against its first line, starting at `startcol`.
@@ -213,11 +214,10 @@ fn has_regmust(rex: Rex, prog: BtProg, line: &[u8], col: ColNr) -> bool {
     };
     let c = char_at_nul(run, 0);
     let mut at = line.len() - rest_from(line, col).len();
-    let text = &line[..line.len() - 1];
     loop {
         // Case-insensitively, the first character has to be looked for
         // with folding, which is what `cstrchr` does over a plain search.
-        match cstrchr(rex, &text[at.min(text.len())..], c) {
+        match cstrchr_line(rex, &line[at..], c) {
             Some(off) => at += off,
             None => return false,
         }
@@ -260,8 +260,7 @@ fn scan_columns(rex: Rex, prog: BtProg, state: &mut BtState, col: &mut ColNr) ->
         // The pattern's first character is known: skip straight to the
         // next place it occurs.
         if prog.regstart() != NUL {
-            let from = usize::try_from(*col).unwrap_or(usize::MAX);
-            match cstrchr(rex, rex.text_from(from), prog.regstart()) {
+            match cstrchr_line(rex, rest_from(rex.line(), *col), prog.regstart()) {
                 Some(off) => *col += off as ColNr,
                 None => return 0,
             }

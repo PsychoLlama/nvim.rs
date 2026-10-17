@@ -147,6 +147,14 @@ impl<'a> BtProg<'a> {
     pub(crate) fn next(self, scan: usize) -> usize {
         regnext(&self.0.program, scan)
     }
+
+    /// Node `scan`'s opcode byte and the node after it, read off its header
+    /// at once: what the matcher's walk asks of every node.
+    #[inline(always)]
+    pub(crate) fn op_and_next(self, scan: usize) -> (uint8_t, usize) {
+        let head = node_head(&self.0.program, scan);
+        (head[0], next_of(head, scan))
+    }
 }
 
 /// A node of the program being written: its offset into the program text,
@@ -365,7 +373,20 @@ pub(crate) fn use_multibytecode(rc: &mut RegCompiler, c: c_int) -> bool {
 /// can be: the `REGMAGIC` stamp) if `p` is the last one.
 #[inline(always)]
 pub(crate) fn regnext(code: &[u8], p: usize) -> usize {
-    let head = &code[p..p + NODE_HDR];
+    next_of(node_head(code, p), p)
+}
+
+/// The three header bytes of node `p`: one bounds check for the three.
+#[inline(always)]
+fn node_head(code: &[u8], p: usize) -> &[u8; NODE_HDR] {
+    code[p..]
+        .first_chunk()
+        .expect("a node's header is in the program")
+}
+
+/// The node after `p`, from its header.
+#[inline(always)]
+fn next_of(head: &[u8; NODE_HDR], p: usize) -> usize {
     let offset = usize::from(u16::from_be_bytes([head[1], head[2]]));
     if offset == 0 {
         0

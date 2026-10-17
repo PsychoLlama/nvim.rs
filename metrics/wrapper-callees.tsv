@@ -5,7 +5,7 @@ count	callee	no_raw	defs	def
 165	bytes_at	0	1	crates/nvim/src/cstr.rs
 153	.add	0	0	
 136	at	0	2	
-104	CStr::from_ptr	0	1	crates/nvim/src/marktree/node.rs
+105	CStr::from_ptr	0	1	crates/nvim/src/marktree/node.rs
 88	.offset_from	0	0	
 86	nlua_pop_string	0	1	crates/nvim/src/lua/converter/pop.rs
 79	nlua_pop_handle	0	1	crates/nvim/src/lua/converter/pop.rs
@@ -82,6 +82,7 @@ count	callee	no_raw	defs	def
 13	copy_option_part	0	1	crates/nvim/src/strings/raw.rs
 13	from	0	0	
 13	notify	0	1	crates/nvim/src/mpack/lmpack/session.rs
+13	vim_strchr	0	1	crates/nvim/src/strings/raw.rs
 13	vterm_dealloc	0	1	crates/nvim/src/vterm/vterm.rs
 13	xmemcpyz	0	1	crates/nvim/src/memory/mod.rs
 12	.copy_from_nonoverlapping	0	0	
@@ -93,7 +94,6 @@ count	callee	no_raw	defs	def
 12	luaL_error	0	0	
 12	mb_get_class	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 12	spell_iswordp_nmw	0	1	crates/nvim/src/spell/chartab.rs
-12	vim_strchr	0	1	crates/nvim/src/strings/raw.rs
 11	Child::new	0	1	crates/nvim/src/event/proc.rs
 11	EventLoop::new	0	1	crates/nvim/src/event/loop.rs
 11	PosRef::new	0	1	crates/nvim/src/winlayer.rs

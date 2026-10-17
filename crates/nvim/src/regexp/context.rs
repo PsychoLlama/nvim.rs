@@ -198,15 +198,14 @@ fn cleanup(rex: Rex, z: bool) {
     }
     // An unset slot is line -1 column -1 in either kind of match: upstream
     // memset a buffer match's to 0xff and a string match's to NULL.
-    let unset = MatchPos::unset(PosKind::Buf);
+    let unset = MatchPos::unset(PosKind::Buf).as_pos();
     let (starts, ends) = if z {
         (rex.zstarts(), rex.zends())
     } else {
         (rex.starts(), rex.ends())
     };
-    for slot in starts.iter().chain(ends) {
-        slot.set(unset);
-    }
+    starts.set([unset; NSUBEXP as usize]);
+    ends.set([unset; NSUBEXP as usize]);
     if z {
         rex.set_need_clear_zsubexpr(false);
     } else {

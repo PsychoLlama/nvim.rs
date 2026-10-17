@@ -170,6 +170,37 @@ pub(crate) fn memchr_in(hay: &[u8], needle: u8) -> Option<usize> {
     (!found.is_null()).then(|| found.addr() - hay.as_ptr().addr())
 }
 
+/// Where the first `needle` in the NUL-terminated `hay` is, before its first
+/// NUL: the C library's `strchr`, which finds the needle and the terminator
+/// in one vectorised pass.
+///
+/// # Panics
+/// If `hay` does not end in a NUL -- which is what keeps the search inside
+/// it.
+pub(crate) fn strchr_in(hay: &[u8], needle: u8) -> Option<usize> {
+    assert_eq!(hay.last(), Some(&0), "strchr wants a terminated string");
+    if needle == 0 {
+        return None;
+    }
+    // SAFETY: `hay` holds a NUL, which the search stops at; the answer is
+    // null or a pointer into `hay` before it.
+    let found = unsafe {
+        crate::strings::vim_strchr(hay.as_ptr().cast(), ::core::ffi::c_int::from(needle))
+    };
+    (!found.is_null()).then(|| found.addr() - hay.as_ptr().addr())
+}
+
+/// How long the NUL-terminated `hay` is, its NUL left out: the C library's
+/// `strlen`.
+///
+/// # Panics
+/// If `hay` does not end in a NUL.
+pub(crate) fn strlen_in(hay: &[u8]) -> usize {
+    assert_eq!(hay.last(), Some(&0), "strlen wants a terminated string");
+    // SAFETY: `hay` holds a NUL, which the count stops at.
+    unsafe { CStr::from_ptr(hay.as_ptr().cast()) }.count_bytes()
+}
+
 /// Sort `items` with the C library's `qsort`, ordered by `cmp`.
 ///
 /// For the callers whose output shows the order `qsort` leaves equal
