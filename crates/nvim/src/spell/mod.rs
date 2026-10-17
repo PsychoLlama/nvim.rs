@@ -55,8 +55,8 @@ use crate::option::vars::{P_WS, p_ws};
 use crate::os::cshim::gettext;
 use crate::search::{SEARCH_KEEP, do_search};
 use crate::types::{
-    ColNr, ExArg, FileComparison, LangP, LineNr, OpArg, Pos, SearchItArg, SpellLang, SpellMoveType,
-    SpellTab, size_t, uint8_t,
+    ColNr, ExArg, FileComparison, LangP, LineNr, Pos, SpellLang, SpellMoveType, SpellTab, size_t,
+    uint8_t,
 };
 use crate::undo::u_save_cursor;
 
@@ -363,7 +363,6 @@ pub fn ex_spellrepall(_excmd: &mut ExArg) {
     let mut frompat = XString::from_bytes(b"\\V\\<");
     frompat.push_bytes(&repl_from);
     frompat.push_bytes(b"\\>");
-    let frompatlen = frompat.len();
     P_WS.set(false);
 
     SUB_NSUBS.set(0);
@@ -371,20 +370,7 @@ pub fn ex_spellrepall(_excmd: &mut ExArg) {
     Win::current().w_cursor.lnum = 0;
     while !got_int.get() {
         let slash = '/' as c_int;
-        let null_op = ::core::ptr::null_mut::<OpArg>();
-        let no_arg = ::core::ptr::null_mut::<SearchItArg>();
-        let found = unsafe {
-            do_search(
-                null_op,
-                slash,
-                slash,
-                frompat.as_ptr().cast_mut(),
-                frompatlen,
-                1,
-                SEARCH_KEEP,
-                no_arg,
-            )
-        };
+        let found = do_search(None, slash, slash, &frompat, 1, SEARCH_KEEP, None);
         if found == 0 || u_save_cursor().is_err() {
             break;
         }

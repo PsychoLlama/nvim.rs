@@ -7,23 +7,20 @@
 //! message line; [`f_searchcount`] is the Vimscript view of the same
 //! numbers.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use super::*;
-use crate::cstr;
-use crate::eval::typval::NumBuf;
-use crate::message_fmt::c_str;
+use crate::eval::typval::{NumBuf, list_items};
+use crate::memory::XString;
 use crate::optionstr::OptString;
 use crate::regexp::RE_LAST;
 use crate::search::{SEARCH_KEEP, SEARCH_STAT_DEF_TIMEOUT};
 use crate::semsg;
-use crate::types::{FAIL, NUL, VAR_LIST};
+use crate::types::{FAIL, VAR_LIST};
 use crate::winlayer::{Buf, BufId, Win};
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
+use core::ffi::{CStr, c_int};
 
 /// How much room `[>999/>999]` and its `W ` prefix need.
 const STAT_BUF_LEN: usize = SEARCH_STAT_BUF_LEN as usize;
@@ -51,16 +48,15 @@ struct Stat {
 /// nothing has been counted yet. The pattern, the buffer and the buffer's
 /// changedtick are remembered beside the numbers — if any of them moved,
 /// the numbers are stale and the count starts again.
-#[derive(Clone, Copy)]
+#[derive(Default)]
 struct Counted {
     at: Pos,
     cur: c_int,
     cnt: c_int,
     exact_match: bool,
     incomplete: c_int,
-    /// An owned copy of the pattern the numbers are for.
-    pat: *mut c_char,
-    patlen: size_t,
+    /// A copy of the pattern the numbers are for.
+    pat: Option<XString>,
     chgtick: c_int,
     /// Which buffer the numbers were counted in, by identity rather than by
     /// address: a wiped buffer's `Buffer` can be handed back out by the
@@ -79,8 +75,7 @@ impl Counted {
         cnt: 0,
         exact_match: false,
         incomplete: 0,
-        pat: ptr::null_mut(),
-        patlen: 0,
+        pat: None,
         chgtick: 0,
         buf: None,
     };
@@ -88,13 +83,8 @@ impl Counted {
     /// Whether the remembered numbers still describe the current buffer,
     /// pattern and cursor position.
     fn still_holds(&self, cursor_pos: Pos) -> bool {
-        let live = last_used_pattern();
-        self.chgtick as VarNumber == buf_get_changedtick(Buf::current())
-            // The null test suppresses clang's "NULL passed as
-            // nonnull parameter" on `strncmp`.
-            && !self.pat.is_null()
-            && unsafe { cstr::prefix_eq(self.pat, live.pat, self.patlen) }
-            && self.patlen == live.patlen
+        VarNumber::from(self.chgtick) == buf_get_changedtick(Buf::current())
+            && self.pat.as_deref().is_some_and(last_used_pattern_is)
             && equalpos(self.at, cursor_pos)
             && self.buf == Some(Buf::current().id())
     }
@@ -110,14 +100,8 @@ impl Counted {
     }
 
     /// Record what the numbers were counted from.
-    ///
-    /// # Safety
-    /// Takes an owned copy of the live pattern; frees the previous one.
-    unsafe fn remember(&mut self, at: Pos) {
-        let live = last_used_pattern();
-        unsafe { xfree(self.pat as *mut c_void) };
-        self.pat = unsafe { xstrnsave(live.pat, live.patlen) };
-        self.patlen = live.patlen;
+    fn remember(&mut self, at: Pos) {
+        self.pat = last_search_pat();
         self.chgtick = buf_get_changedtick(Buf::current()) as c_int;
         self.buf = Some(Buf::current().id());
         self.at = at;
@@ -128,26 +112,22 @@ static counted: GlobalCell<Counted> = GlobalCell::new(Counted::NONE);
 /// The `maxcount` [`update_search_stat`] was last asked for.
 static last_maxcount: GlobalCell<c_int> = GlobalCell::new(0);
 
-/// Add the search count `[3/19]` to the right-hand end of `msgbuf`.
+/// Add the search count `[3/19]` to the right-hand end of `msgbuf`, the
+/// echoed search command with its terminator.
 ///
 /// See [`update_search_stat`] for the other arguments.
-///
-/// # Safety
-/// `pos` and `cursor_pos` must be readable and `msgbuf` a writable buffer
-/// of `msgbuflen` bytes followed by a NUL.
 #[allow(clippy::too_many_arguments)]
-pub(crate) unsafe fn cmdline_search_stat(
+pub(crate) fn cmdline_search_stat(
     dirc: c_int,
-    pos: *mut Pos,
-    cursor_pos: *mut Pos,
+    pos: Pos,
+    cursor_pos: Pos,
     show_top_bot_msg: bool,
-    msgbuf: *mut c_char,
-    msgbuflen: size_t,
+    msgbuf: &mut [u8],
     recompute: bool,
     maxcount: c_int,
     timeout: c_int,
 ) {
-    let stat = unsafe { update_search_stat(dirc, *pos, *cursor_pos, recompute, maxcount, timeout) };
+    let stat = update_search_stat(dirc, pos, cursor_pos, recompute, maxcount, timeout);
     if stat.cur <= 0 {
         return;
     }
@@ -181,16 +161,10 @@ pub(crate) unsafe fn cmdline_search_stat(
         count.insert_str(0, "W ");
     }
 
+    // The count goes into the last bytes before the terminator.
+    let msgbuflen = msgbuf.len() - 1;
     let len = count.len().min(msgbuflen);
-    // SAFETY: the caller guarantees `msgbuf` holds `msgbuflen` bytes, and
-    // the count is written into the last `len` of them.
-    unsafe {
-        ptr::copy(
-            count.as_ptr(),
-            msgbuf.add(msgbuflen - len).cast::<u8>(),
-            len,
-        )
-    };
+    msgbuf[msgbuflen - len..msgbuflen].copy_from_slice(&count.as_bytes()[..len]);
 
     // (Upstream clears `stat.cur` for a backward search that landed on
     // `maxcount + 1` here. Nothing reads it afterwards.)
@@ -198,8 +172,8 @@ pub(crate) unsafe fn cmdline_search_stat(
     // Keep the message even after a redraw, but not in the history.
     msg_ext_overwrite.set(true);
     msg_ext_set_kind(c"search_count");
-    // SAFETY: the caller's NUL-terminated buffer, just written.
-    give_warning(unsafe { cstr::at(msgbuf) }, false, false);
+    let text = CStr::from_bytes_until_nul(msgbuf).unwrap_or_default();
+    give_warning(text, false, false);
 }
 
 /// Count the matches of the last used pattern, reusing the remembered
@@ -217,15 +191,17 @@ fn update_search_stat(
     maxcount: c_int,
     timeout: c_int,
 ) -> Stat {
-    let mut c = counted.get();
+    let mut c = counted.take();
     if dirc == 0 && !recompute && !equalpos(c.at, Pos::default()) {
-        return Stat {
+        let stat = Stat {
             cur: c.cur,
             cnt: c.cnt,
             exact_match: c.exact_match,
             incomplete: c.incomplete,
             last_maxcount: p_msc() as c_int,
         };
+        counted.set(c);
+        return stat;
     }
     last_maxcount.set(maxcount);
 
@@ -271,22 +247,20 @@ fn update_search_stat(
         let mut endpos = Pos::default();
         // `searchit` walks `c.at` forward one match at a time; without
         // 'wrapscan' it fails once past the last one.
+        let (win, buf) = (Some(Win::current()), Buf::current());
         while !got_int.get()
-            && unsafe {
-                searchit(
-                    Some(Win::current()),
-                    Buf::current(),
-                    &raw mut c.at,
-                    &raw mut endpos,
-                    FORWARD,
-                    ptr::null_mut(),
-                    0,
-                    1,
-                    SEARCH_KEEP,
-                    RE_LAST,
-                    ptr::null_mut(),
-                )
-            } != FAIL
+            && searchit(
+                win,
+                buf,
+                &mut c.at,
+                Some(&mut endpos),
+                FORWARD,
+                b"",
+                1,
+                SEARCH_KEEP,
+                RE_LAST,
+                None,
+            ) != FAIL
         {
             done_search = true;
             // Stop after passing the time limit.
@@ -311,31 +285,28 @@ fn update_search_stat(
             c.cur = -1; // abort
         }
         if done_search {
-            unsafe { c.remember(pos) };
+            c.remember(pos);
         }
         P_WS.set(save_ws);
     }
 
-    counted.set(c);
-    Stat {
+    let stat = Stat {
         cur: c.cur,
         cnt: c.cnt,
         exact_match: c.exact_match,
         incomplete: c.incomplete,
         last_maxcount: last_maxcount.get(),
-    }
+    };
+    counted.set(c);
+    stat
 }
 
 /// Read an integer out of the `searchcount()` option dictionary.
 ///
 /// Answers `None` when the value could not be converted, which is the
 /// caller's cue to give up; the conversion has already reported why.
-///
-/// # Safety
-/// `dict` must be a readable dictionary.
-unsafe fn dict_number(dict: *mut Dict, key: &CStr, current: c_int) -> Option<c_int> {
-    // SAFETY: the caller's dictionary.
-    let Some(di) = dict_find(unsafe { dict.as_ref() }, key.to_bytes()) else {
+fn dict_number(dict: Option<&Dict>, key: &CStr, current: c_int) -> Option<c_int> {
+    let Some(di) = dict_find(dict, key.to_bytes()) else {
         return Some(current);
     };
     tv_get_number_chk(&di.di_tv)
@@ -344,23 +315,15 @@ unsafe fn dict_number(dict: *mut Dict, key: &CStr, current: c_int) -> Option<c_i
 }
 
 /// One element of the `pos` list, which is `[lnum, col, off]`.
-///
-/// # Safety
-/// `list` must be a readable list.
-unsafe fn list_number(list: *mut List, index: c_int, current: c_int) -> Option<c_int> {
-    let Some(li) = list_find(unsafe { list.as_mut() }, index) else {
-        return Some(current);
-    };
-    tv_get_number_chk(&li.li_tv)
-        .ok()
-        .map(|value| value as c_int)
+fn list_number(item: &TypVal) -> Option<c_int> {
+    tv_get_number_chk(item).ok().map(|value| value as c_int)
 }
 
 /// `searchcount()`: the match counts as a dictionary.
 pub fn f_searchcount(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut pos = Win::current().w_cursor;
-    let mut pattern = ptr::null_mut::<c_char>();
+    let mut pattern: Option<Vec<u8>> = None;
     let mut maxcount = p_msc() as c_int;
     let mut timeout = SEARCH_STAT_DEF_TIMEOUT as c_int;
     // Upstream also sets this when 'shortmess' contains `S`, which it
@@ -373,59 +336,47 @@ pub fn f_searchcount(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         if tv_check_for_nonnull_dict_arg(args, 0).is_err() {
             return;
         }
-        let dict = args[0].dict_or_null();
-        let found = unsafe { dict_number(dict, c"timeout", timeout) };
-        let Some(t) = found else {
+        let dict = args[0].dict_ref();
+        let Some(t) = dict_number(dict, c"timeout", timeout) else {
             return;
         };
         timeout = t;
-        let found = unsafe { dict_number(dict, c"maxcount", maxcount) };
-        let Some(m) = found else {
+        let Some(m) = dict_number(dict, c"maxcount", maxcount) else {
             return;
         };
         maxcount = m;
-        let found = unsafe { dict_number(dict, c"recompute", recompute as c_int) };
-        let Some(r) = found else {
+        let Some(r) = dict_number(dict, c"recompute", c_int::from(recompute)) else {
             return;
         };
         recompute = r != 0;
 
-        // SAFETY: the caller's dictionary.
-        let dict_ref = unsafe { dict.as_ref() };
-        if let Some(di) = dict_find(dict_ref, b"pattern") {
+        if let Some(di) = dict_find(dict, b"pattern") {
             let Some(text) = numbuf.string_chk(&di.di_tv) else {
                 return;
             };
-            pattern = text.as_ptr().cast_mut();
+            pattern = Some(text.to_bytes().to_vec());
         }
 
-        if let Some(di) = dict_find(dict_ref, b"pos") {
+        if let Some(di) = dict_find(dict, b"pos") {
             if di.di_tv.v_type() != VAR_LIST {
-                // SAFETY: reporting a static, translated message.
                 semsg!("E475: Invalid argument: {}", "pos");
                 return;
             }
-            let list = di.di_tv.list_or_null();
-            if list_len(unsafe { list.as_ref() }) != 3 {
-                let form = c"List format should be [lnum, col, off]".as_ptr();
-                // SAFETY: reporting a static, translated message.
-                let form = unsafe { c_str(form) };
-                semsg!("E475: Invalid argument: {form}");
+            let items = list_items(di.di_tv.list_ref());
+            if items.len() != 3 {
+                semsg!("E475: Invalid argument: List format should be [lnum, col, off]");
                 return;
             }
-            let found = unsafe { list_number(list, 0, pos.lnum) };
-            let Some(lnum) = found else {
+            let Some(lnum) = list_number(&items[0].li_tv) else {
                 return;
             };
             pos.lnum = lnum;
             // The list is 1-based, the position is not.
-            let found = unsafe { list_number(list, 1, pos.col + 1) };
-            let Some(col) = found else {
+            let Some(col) = list_number(&items[1].li_tv) else {
                 return;
             };
             pos.col = col - 1;
-            let found = unsafe { list_number(list, 2, pos.coladd) };
-            let Some(coladd) = found else {
+            let Some(coladd) = list_number(&items[2].li_tv) else {
                 return;
             };
             pos.coladd = coladd;
@@ -435,32 +386,31 @@ pub fn f_searchcount(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     save_last_search_pattern();
     save_incsearch_state();
     'the_end: {
-        if !pattern.is_null() {
-            if unsafe { *pattern } as c_int == NUL {
+        if let Some(pattern) = &pattern {
+            if pattern.is_empty() {
                 break 'the_end;
             }
-            unsafe { replace_last_used_pattern(pattern) };
+            replace_last_used_pattern(pattern);
         }
-        let live = last_used_pattern();
-        if live.pat.is_null() || unsafe { *live.pat } as c_int == NUL {
+        if last_search_pat().is_none_or(|live| live.is_empty()) {
             // The previous pattern was never defined.
             break 'the_end;
         }
 
         let stat = update_search_stat(0, pos, pos, recompute, maxcount, timeout);
-        // SAFETY: `result` is the caller's return value, a dictionary this
-        // function itself allocated above.
-        let dict = result.dict_or_null();
-        let add = |key: &CStr, value: c_int| {
-            let (k, klen, v) = (key.as_ptr(), key.to_bytes().len(), value as VarNumber);
-            // SAFETY: adding a number under a static key.
-            let _ = unsafe { (*dict).add_number(cstr::slice_at(k, klen), v) };
-        };
-        add(c"current", stat.cur);
-        add(c"total", stat.cnt);
-        add(c"exact_match", stat.exact_match as c_int);
-        add(c"incomplete", stat.incomplete);
-        add(c"maxcount", stat.last_maxcount);
+        // The dictionary this function itself allocated above.
+        if let Some(dict) = result.dict_mut() {
+            let values = [
+                (&b"current"[..], stat.cur),
+                (b"total", stat.cnt),
+                (b"exact_match", c_int::from(stat.exact_match)),
+                (b"incomplete", stat.incomplete),
+                (b"maxcount", stat.last_maxcount),
+            ];
+            for (key, value) in values {
+                let _ = dict.add_number(key, VarNumber::from(value));
+            }
+        }
     }
     restore_last_search_pattern();
     restore_incsearch_state();

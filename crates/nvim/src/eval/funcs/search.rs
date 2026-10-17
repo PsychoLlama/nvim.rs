@@ -164,7 +164,7 @@ fn search_cmn(args: &[TypVal], match_pos: Option<&mut Pos>, flagsp: &mut c_int) 
             use_skip = args.get(4).is_some_and(eval_expr_valid_arg);
         }
     }
-    let mut tm = profile_setlimit(time_limit);
+    let tm = profile_setlimit(time_limit);
 
     // `m` and `r` belong to searchpair(); `n` and `s` contradict each
     // other.
@@ -187,14 +187,7 @@ fn search_cmn(args: &[TypVal], match_pos: Option<&mut Pos>, flagsp: &mut c_int) 
     // Repeat until {skip} answers false.
     let mut subpatnum;
     loop {
-        subpatnum = search_in_current(
-            &mut pos,
-            dir as Direction,
-            &pat,
-            options,
-            lnum_stop,
-            &mut tm,
-        );
+        subpatnum = search_in_current(&mut pos, dir as Direction, &pat, options, lnum_stop, &tm);
         // Coming back to the first match means every match was skipped.
         if firstpos.lnum != 0 && equalpos(pos, firstpos) {
             subpatnum = FAIL;
@@ -441,7 +434,7 @@ pub fn do_searchpair(
     let mut nest = 1;
     let mut options = SEARCH_KEEP as c_int;
 
-    let mut tm = profile_setlimit(time_limit);
+    let tm = profile_setlimit(time_limit);
 
     // Without a middle pattern the nested search is the same as the
     // outer one.
@@ -470,7 +463,7 @@ pub fn do_searchpair(
     // nested, since a middle only counts at the outermost level.
     let mut pat = &full;
     loop {
-        let n = search_in_current(&mut pos, dir as Direction, pat, options, lnum_stop, &mut tm);
+        let n = search_in_current(&mut pos, dir as Direction, pat, options, lnum_stop, &tm);
         // No match, or back at the first one: the walk is done.
         if n == FAIL || (firstpos.lnum != 0 && equalpos(pos, firstpos)) {
             break;

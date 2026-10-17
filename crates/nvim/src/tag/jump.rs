@@ -625,7 +625,7 @@ impl Pattern {
     /// Run the command as a search, its first byte the delimiter.
     fn search(&mut self, options: c_int) -> bool {
         let delim = c_int::from(self.buf[0]);
-        do_search_in(&mut self.buf[1..], delim, delim, options) != 0
+        do_search_in(&self.buf[1..], delim, delim, options) != 0
     }
 
     /// Format a guess into the buffer and search for that instead.
@@ -635,7 +635,7 @@ impl Pattern {
     fn search_for(&mut self, fmt: &[u8], name: &[u8], options: c_int) -> bool {
         self.len = format_into(&mut self.buf, fmt, &[FmtArg::Str(name)]);
         let slash = c_int::from(b'/');
-        do_search_in(&mut self.buf, slash, slash, options) != 0
+        do_search_in(&self.buf, slash, slash, options) != 0
     }
 
     /// Run the command as an ex command, in the sandbox: it came out of a

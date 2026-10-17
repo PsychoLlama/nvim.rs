@@ -595,9 +595,9 @@ pub fn start_search_hl() {
     }
     end_search_hl(); // just in case it was not called before
     let hl = SearchHl::current();
-    // SAFETY: the search history's own last pattern, compiled into the
-    // redraw's matcher.
-    unsafe { last_pat_prog(hl.regmatch()) };
+    // SAFETY: the redraw's matcher, a `static` no other borrow holds while
+    // the pattern is compiled into it.
+    last_pat_prog(unsafe { &mut *hl.regmatch() });
     // Bound the search by 'redrawtime'.
     hl.set_time_limit(profile_setlimit(p_rdt() as int64_t));
 }

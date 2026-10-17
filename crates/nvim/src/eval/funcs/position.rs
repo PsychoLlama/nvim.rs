@@ -427,7 +427,7 @@ fn set_position(args: &[TypVal], result: &mut TypVal, charpos: bool) {
 /// `getcharsearch()` — the state `;` and `,` repeat.
 pub fn f_getcharsearch(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // The store is NUL-terminated within its cell's worth of bytes.
-    let csearch = last_csearch().map(|byte| byte as u8);
+    let csearch = last_csearch();
     let text = csearch.split(|&byte| byte == 0).next().unwrap_or_default();
     tv_dict_alloc_ret(result);
     let dict = result.dict_mut().expect("the dict just stored");

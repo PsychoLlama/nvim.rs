@@ -491,9 +491,7 @@ pub fn get_address(
                     } else {
                         SEARCH_HIS as c_int | SEARCH_MSG as c_int
                     };
-                    // `do_search` terminates the pattern in place and puts
-                    // the byte back.
-                    if do_search_in(&mut text[cmd..], c, c, flags) == 0 {
+                    if do_search_in(&text[cmd..], c, c, flags) == 0 {
                         Win::current().w_cursor = pos;
                         failed = true;
                         break;

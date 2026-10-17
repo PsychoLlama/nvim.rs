@@ -55,6 +55,27 @@ describe('ShaDa forward compatibility support code', function()
     fn.garbagecollect(1)
   end)
 
+  -- Upstream's restore_search_patterns() frees a pattern's unknown keys and
+  -- puts the freed pointer back, so the second function call freed it again.
+  it('keeps search pattern unknown keys across function calls', function()
+    wshada('\002\001\011\130\162sX\194\162sp\196\001-')
+    nvim_command(sdrcmd())
+    os.remove(shada_fname)
+    nvim_command('function! Noop()\nendfunction')
+    nvim_command('call Noop()')
+    nvim_command('call Noop()')
+    nvim_command('call Noop()')
+    nvim_command('wshada ' .. shada_fname)
+    local found = false
+    for _, v in ipairs(read_shada_file(shada_fname)) do
+      if v.type == 2 and not v.value.ss then
+        eq(false, v.value.sX)
+        found = true
+      end
+    end
+    eq(true, found)
+  end)
+
   it('works with s/search pattern item with BOOL unknown (sX) key value', function()
     wshada('\002\001\015\131\162sX\194\162ss\195\162sp\196\001-')
     nvim_command(sdrcmd())

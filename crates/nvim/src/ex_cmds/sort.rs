@@ -34,7 +34,7 @@ use crate::option::vars::p_ic;
 use crate::os::cshim::{cstr_ncasecmp, gettext, strcoll, strtod_prefix};
 use crate::os::input::fast_breakcheck;
 use crate::regexp::{char_delim, skip_regexp_at, vim_regexec};
-use crate::search::last_pattern_owned;
+use crate::search::last_search_pat;
 use crate::semsg;
 use crate::types::RegMatch;
 use crate::types::{BCount, ColNr, ExArg, ExtmarkOp, Float, LineNr, NUL, VarNumber, size_t};
@@ -166,7 +166,7 @@ fn compile_sort_pattern(
 
     // Use the last search pattern if the sort pattern is empty.
     let compiled = if end == start {
-        let Some(last) = last_pattern_owned() else {
+        let Some(last) = last_search_pat() else {
             emsg(gettext(e_noprevre));
             return None;
         };

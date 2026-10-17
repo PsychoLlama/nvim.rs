@@ -271,11 +271,7 @@ pub(crate) fn find_common_prefix(curbuf_only: bool) -> Option<(XString, usize)> 
         let leader = get_leader_for_startcol(compl, true);
 
         // Apply 'smartcase' behavior during normal mode.
-        if ctrl_x_mode_normal()
-            && !p_inf()
-            && !leader.is_unset()
-            // SAFETY: the leader is a NUL-terminated string.
-            && !unsafe { ignorecase(leader.data()) }
+        if ctrl_x_mode_normal() && !p_inf() && !leader.is_unset() && !leader.with_bytes(ignorecase)
         {
             compl.update(|m| m.flags &= !CP_ICASE);
         }

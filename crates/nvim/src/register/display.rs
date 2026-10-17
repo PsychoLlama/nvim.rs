@@ -270,10 +270,12 @@ pub fn ex_display(excmd: &mut ExArg) {
         }
     }
 
+    // A copy, as the expression below.
+    let mut last = last_search_pat();
     special(
         '/' as c_int,
         c"\n  c  \"/   ".as_ptr(),
-        last_search_pat(),
+        last.as_mut().map_or(ptr::null_mut(), XString::as_mut_ptr),
         false,
     );
     // A copy: listing a register may run a message callback that sets it.

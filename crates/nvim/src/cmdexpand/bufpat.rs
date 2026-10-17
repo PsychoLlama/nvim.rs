@@ -20,7 +20,7 @@ use crate::regexp::{RE_LAST, RE_MAGIC, RE_STRING, vim_regexec_nl};
 use crate::search::state::{search_first_line, search_last_line};
 use crate::search::{
     BACKWARD, FORWARD, SEARCH_NFMSG, SEARCH_NOOF, SEARCH_OPT, SEARCH_PEEK, SEARCH_START,
-    pat_has_uppercase_of, searchit_buf,
+    pat_has_uppercase, searchit_buf,
 };
 use crate::strings::strcase_copy;
 use crate::tag::TAG_MANY;
@@ -135,7 +135,7 @@ pub(crate) fn is_regex_match(pat: &CStr, str: &CStr) -> bool {
     };
     regmatch.rm_ic = p_ic();
     if p_ic() && p_scs() {
-        regmatch.rm_ic = !pat_has_uppercase_of(pat);
+        regmatch.rm_ic = !pat_has_uppercase(pat.to_bytes());
     }
 
     let quiet = Suppress::output();

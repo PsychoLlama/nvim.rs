@@ -334,8 +334,7 @@ pub(crate) fn ins_compl_build_pum() -> c_int {
         if ctrl_x_mode_normal()
             && !p_inf()
             && !leader.is_unset()
-            // SAFETY: the leader is a NUL-terminated string.
-            && !unsafe { ignorecase(leader.data()) }
+            && !leader.with_bytes(ignorecase)
             && !cot_fuzzy()
         {
             comp.update(|m| m.flags &= !CP_ICASE);

@@ -675,9 +675,9 @@ fn search(
     } else if tagcase == kOptTcFlagMatch {
         P_IC.set(false);
     } else if tagcase == kOptTcFlagFollowscs {
-        P_IC.set(ignorecase_opt(pattern.as_cstr(), p_ic(), p_scs()));
+        P_IC.set(ignorecase_opt(&pattern, p_ic(), p_scs()));
     } else if tagcase == kOptTcFlagSmart {
-        P_IC.set(ignorecase_opt(pattern.as_cstr(), true, true));
+        P_IC.set(ignorecase_opt(&pattern, true, true));
     } else {
         assert_eq!(
             tagcase, kOptTcFlagFollowic,

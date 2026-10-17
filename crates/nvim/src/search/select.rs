@@ -5,8 +5,7 @@
 //! it. The work is two [`searchit`](super::searchit) calls in a row --
 //! backwards then forwards -- so that a match under the cursor counts.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -26,7 +25,6 @@ use crate::search::{SEARCH_END, SEARCH_KEEP};
 use crate::types::Failed;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
-use core::ptr;
 
 /// Where the two searches [`current_search`] runs left the match.
 struct Match {
@@ -45,6 +43,7 @@ struct Match {
 ///
 /// Answers `None` when the pattern is not there at all.
 fn search_around(
+    pat: &[u8],
     mut pos: Pos,
     count: c_int,
     forward: bool,
@@ -72,21 +71,18 @@ fn search_around(
         if i == 0 {
             P_WS.set(false);
         }
-        let result = unsafe {
-            searchit(
-                Some(Win::current()),
-                Buf::current(),
-                &raw mut pos,
-                &raw mut end_pos,
-                if forwards { FORWARD } else { BACKWARD },
-                last_used_pattern().pat,
-                last_used_pattern().patlen,
-                if i != 0 { count } else { 1 },
-                SEARCH_KEEP | flags,
-                RE_SEARCH,
-                ptr::null_mut(),
-            )
-        };
+        let result = searchit(
+            Some(Win::current()),
+            Buf::current(),
+            &mut pos,
+            Some(&mut end_pos),
+            if forwards { FORWARD } else { BACKWARD },
+            pat,
+            if i != 0 { count } else { 1 },
+            SEARCH_KEEP | flags,
+            RE_SEARCH,
+            None,
+        );
         P_WS.set(old_p_ws);
 
         if result != 0 {
@@ -146,15 +142,21 @@ pub fn current_search(count: c_int, forward: bool) -> Result<(), Failed> {
 
     // Is the pattern zero-width? This time, don't care about the
     // direction.
-    let pat = last_used_pattern();
-    let cursor = Win::current().cursor().raw();
-    // SAFETY: the last search pattern and the live window's cursor.
-    let zero_width = unsafe { is_zero_width(pat.pat, pat.patlen, true, cursor, FORWARD) };
+    let pat = last_search_pat().unwrap_or_default();
+    let cursor = Win::current().w_cursor;
+    let zero_width = is_zero_width(&pat, true, cursor, FORWARD);
     if zero_width == -1 {
         return Err(Failed); // pattern not found
     }
 
-    let found = search_around(pos, count, forward, skip_first_backward, zero_width != 0);
+    let found = search_around(
+        &pat,
+        pos,
+        count,
+        forward,
+        skip_first_backward,
+        zero_width != 0,
+    );
     let Some(found) = found else {
         Win::current().w_cursor = orig_pos;
         if visual_active() {

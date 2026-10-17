@@ -124,9 +124,8 @@ use crate::search::state::{
 };
 use crate::search::{
     BACKWARD, FORWARD, SEARCH_COL, SEARCH_KEEP, SEARCH_NOOF, SEARCH_OPT, SEARCH_PEEK, SEARCH_START,
-    do_search, last_search_pattern, last_search_pattern_len, pat_has_uppercase,
-    restore_last_search_pattern, restore_search_patterns, save_last_search_pattern,
-    save_search_patterns, searchit,
+    do_search, last_search_pattern, pat_has_uppercase, restore_last_search_pattern,
+    restore_search_patterns, save_last_search_pattern, save_search_patterns, searchit,
 };
 use crate::state::mode::{State, exmode_active, no_abbr, restart_edit};
 use crate::state::{
@@ -148,7 +147,7 @@ use crate::types::{
     DispTick, DoBufAction, DoBufStart, Error, EvalFuncData, ExArg, ExArgt, Expand, ExpandContext,
     ExprASTNodeType, ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope,
     ExprParserFlags, Handle, HashTab, HistoryType, Integer, LineNr, Magic, MotionType, Object,
-    OpArg, OptInt, OptMagic, OptSet, OptVal, ParserState, Pos, ProfTime, RemapValues, SaveVEvent,
+    OptInt, OptMagic, OptSet, OptVal, ParserState, Pos, ProfTime, RemapValues, SaveVEvent,
     SearchItArg, String_0, TryState, TypVal, UndoLink, UndoObjectType, VarNumber, size_t, time_t,
     uint8_t, uint32_t,
 };

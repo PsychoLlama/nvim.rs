@@ -455,15 +455,15 @@ pub(crate) unsafe fn find_decl(
     };
     let mut found;
     loop {
-        let mut wp = Win::current();
-        let pos = &raw mut wp.w_cursor;
+        let wp = Win::current();
+        let mut pos = wp.w_cursor;
         let (win, buf) = (Some(wp), Buf::current());
-        let end = ptr::null_mut();
-        let arg = ptr::null_mut();
         let opts = searchflags;
         let re = RE_LAST as c_int;
-        // SAFETY: window and buffer are live; `pat` is `patlen` bytes.
-        let hit = unsafe { searchit(win, buf, pos, end, FORWARD, pat, patlen, 1, opts, re, arg) };
+        // SAFETY: `pat` is `patlen` bytes.
+        let text = unsafe { core::slice::from_raw_parts(pat.cast::<u8>(), patlen) };
+        let hit = searchit(win, buf, &mut pos, None, FORWARD, text, 1, opts, re, None);
+        Win::current().w_cursor = pos;
         found = hit != 0;
         if Win::current().w_cursor.lnum >= old_pos.lnum {
             // Found it below the cursor, which is not a declaration of

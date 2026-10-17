@@ -172,6 +172,14 @@ fn blank_after(line: Scan, at: c_int) -> bool {
     line.white_at(at) || line.at(at) == NUL
 }
 
+/// [`get_leader_len`] of a line the caller holds, with no flags wanted.
+pub(crate) fn leader_len_of(line: &core::ffi::CStr, backward: bool, include_space: bool) -> usize {
+    let flags = core::ptr::null_mut();
+    // SAFETY: a NUL-terminated line, read for the call, and no flags slot.
+    let len = unsafe { get_leader_len(line.as_ptr(), flags, backward, include_space) };
+    usize::try_from(len).unwrap_or(0)
+}
+
 /// How many bytes at the start of `line` are a comment leader, 0 for none.
 ///
 /// `backward` is set by the `O` command, which skips items carrying the `O`

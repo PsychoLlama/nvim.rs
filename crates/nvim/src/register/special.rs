@@ -152,10 +152,17 @@ pub unsafe fn get_spec_reg(
         }
         // `"/` -- the last search pattern.
         c if c == '/' as c_int => {
-            if last_search_pat().is_null() && errmsg {
-                emsg(gettext(e_noprevre));
+            // A copy, as the other owned values.
+            match last_search_pat() {
+                Some(pat) => {
+                    value = pat.into_raw();
+                    owned = true;
+                }
+                None if errmsg => {
+                    emsg(gettext(e_noprevre));
+                }
+                None => {}
             }
-            value = last_search_pat();
             true
         }
         // `".` -- the last inserted text.

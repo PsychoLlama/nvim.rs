@@ -6,11 +6,11 @@
 //! buffer when `'wrapscan'` is set. [`search_for_exact_line`] is the
 //! unrelated plain-text line scanner insert-mode line completion uses.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::cstr;
+use crate::mbyte::{strcmp_ic_in, strnicmp_in};
 use crate::message_fmt::{emsg_text, msg_bytes};
 use crate::option::cpo_has;
 use crate::pos::MAXCOL;
@@ -24,8 +24,7 @@ use crate::tr_plural;
 use crate::types::{CpoFlag, FAIL, Failed, NUL, ShmFlag};
 use crate::winlayer::{Buf, Win};
 use core::ffi::CStr;
-use core::ffi::{c_char, c_int};
-use core::ptr;
+use core::ffi::c_int;
 
 // The `SEARCH_*` option flags, retyped for this module: c2rust left the
 // family as `c_uint` and `options` is a `c_int`.
@@ -52,7 +51,7 @@ struct StartPos {
 
 /// Everything a [`searchit`] line walk needs that does not change while it
 /// runs.
-struct Searcher {
+struct Searcher<'a> {
     /// The window the search runs in, `None` for a buffer with no window.
     win: Option<Win>,
     buf: Buf,
@@ -60,10 +59,10 @@ struct Searcher {
     /// which is how a pattern that turned out to be too expensive stops
     /// the whole search.
     regmatch: RegMMatch,
-    /// Timeout limit, or null for none.
-    tm: *mut ProfTime,
-    /// Set when the limit was passed, or null.
-    timed_out: *mut c_int,
+    /// Timeout limit, if there is one.
+    tm: Option<&'a ProfTime>,
+    /// Set when the limit was passed.
+    timed_out: bool,
     options: c_int,
     /// `'cpo'` contains `c`: a repeated search continues from the end of
     /// the previous match rather than one character past its start.
@@ -73,7 +72,7 @@ struct Searcher {
     called_emsg_before: c_int,
 }
 
-impl Searcher {
+impl Searcher<'_> {
     /// Whether one of the `SEARCH_*` option bits is set.
     #[inline(always)]
     fn opt(&self, flag: c_int) -> bool {
@@ -84,21 +83,16 @@ impl Searcher {
     #[inline(always)]
     fn exec(&mut self, lnum: LineNr, col: ColNr) -> c_int {
         let mut timed_out = false;
-        // SAFETY: `tm` is null or points into the caller's `SearchItArg`.
-        let tm = unsafe { self.tm.as_ref() };
         let lines = vim_regexec_multi(
             &mut self.regmatch,
             self.win,
             self.buf,
             lnum,
             col,
-            tm,
+            self.tm,
             Some(&mut timed_out),
         );
-        if timed_out && !self.timed_out.is_null() {
-            // SAFETY: as `tm`, the caller's flag.
-            unsafe { *self.timed_out = 1 };
-        }
+        self.timed_out |= timed_out;
         lines
     }
 
@@ -108,8 +102,7 @@ impl Searcher {
         Found {
             start: self.regmatch.startpos[0],
             end: self.regmatch.endpos[0],
-            // SAFETY: a pointer to our own field.
-            submatch: unsafe { first_submatch(&raw mut self.regmatch) },
+            submatch: first_submatch(&self.regmatch),
         }
     }
 
@@ -143,17 +136,13 @@ impl Searcher {
     /// way the search stops where it is.
     #[inline(always)]
     fn aborted(&self) -> bool {
-        // SAFETY: `timed_out` is null or points into the caller's
-        // `SearchItArg`.
-        called_emsg.get() > self.called_emsg_before
-            || unsafe { !self.timed_out.is_null() && *self.timed_out != 0 }
+        called_emsg.get() > self.called_emsg_before || self.timed_out
     }
 
     /// Whether the timeout has been passed.
     #[inline(always)]
     fn out_of_time(&self) -> bool {
-        // SAFETY: `tm` is null or points into the caller's `SearchItArg`.
-        unsafe { !self.tm.is_null() && profile_passed_limit(*self.tm) }
+        self.tm.is_some_and(|tm| profile_passed_limit(*tm))
     }
 
     /// Advance `col` over the character at it, if there is one.
@@ -320,46 +309,39 @@ impl Searcher {
     /// character of the match and `end_pos` gets its start; otherwise the
     /// other way round. An empty match has no last character, so it is
     /// reported as its start either way.
-    ///
-    /// # Safety
-    /// `pos` must be writable and `end_pos` writable or null.
-    unsafe fn record(&self, lnum: LineNr, found: Found, pos: *mut Pos, end_pos: *mut Pos) {
+    fn record(&self, lnum: LineNr, found: Found, pos: &mut Pos, end_pos: Option<&mut Pos>) {
         let empty = found.start.lnum == found.end.lnum && found.start.col == found.end.col;
-        if self.opt(SEARCH_END) && !self.opt(SEARCH_NOOF) && !empty {
-            unsafe { (*pos).lnum = lnum + found.end.lnum };
-            unsafe { (*pos).col = found.end.col };
+        let (at, other) = if self.opt(SEARCH_END) && !self.opt(SEARCH_NOOF) && !empty {
+            pos.lnum = lnum + found.end.lnum;
+            pos.col = found.end.col;
             if found.end.col == 0 {
                 // A match in the first column ends on the NUL of the
                 // line before.
-                if unsafe { (*pos).lnum } > 1 {
-                    unsafe { (*pos).lnum -= 1 };
-                    unsafe { (*pos).col = self.lines().line_len((*pos).lnum) };
+                if pos.lnum > 1 {
+                    pos.lnum -= 1;
+                    pos.col = self.lines().line_len(pos.lnum);
                 }
             } else {
-                unsafe { (*pos).col -= 1 };
-                if unsafe { (*pos).lnum } <= self.buf.b_ml.ml_line_count {
+                pos.col -= 1;
+                if pos.lnum <= self.buf.b_ml.ml_line_count {
                     // Step back off a trail byte onto the character's own
                     // first byte.
-                    let (lnum, col) = unsafe { ((*pos).lnum, (*pos).col as usize) };
-                    let back = head_off(self.lines().line(lnum), col);
-                    unsafe { (*pos).col -= back as ColNr };
+                    let col = usize::try_from(pos.col).unwrap_or(0);
+                    let back = head_off(self.lines().line(pos.lnum), col);
+                    pos.col -= back as ColNr;
                 }
             }
-            if !end_pos.is_null() {
-                unsafe { (*end_pos).lnum = lnum + found.start.lnum };
-                unsafe { (*end_pos).col = found.start.col };
-            }
+            (pos, found.start)
         } else {
-            unsafe { (*pos).lnum = lnum + found.start.lnum };
-            unsafe { (*pos).col = found.start.col };
-            if !end_pos.is_null() {
-                unsafe { (*end_pos).lnum = lnum + found.end.lnum };
-                unsafe { (*end_pos).col = found.end.col };
-            }
-        }
-        unsafe { (*pos).coladd = 0 };
-        if !end_pos.is_null() {
-            unsafe { (*end_pos).coladd = 0 };
+            pos.lnum = lnum + found.start.lnum;
+            pos.col = found.start.col;
+            (pos, found.end)
+        };
+        at.coladd = 0;
+        if let Some(end_pos) = end_pos {
+            end_pos.lnum = lnum + other.lnum;
+            end_pos.col = other.col;
+            end_pos.coladd = 0;
         }
     }
 }
@@ -372,24 +354,8 @@ pub(crate) fn search_last_pattern(
     options: c_int,
     pat_use: c_int,
 ) -> c_int {
-    // SAFETY: the current window and buffer, the caller's position, and the
-    // empty pattern, which only selects the remembered one and is never
-    // written.
-    unsafe {
-        searchit(
-            Some(Win::current()),
-            Buf::current(),
-            pos,
-            ptr::null_mut(),
-            dir,
-            c"".as_ptr().cast_mut(),
-            0,
-            1,
-            options,
-            pat_use,
-            ptr::null_mut(),
-        )
-    }
+    let (win, buf) = (Some(Win::current()), Buf::current());
+    searchit(win, buf, pos, None, dir, b"", 1, options, pat_use, None)
 }
 
 /// Search for the `count`th occurrence of `pat` in direction `dir`,
@@ -404,44 +370,29 @@ pub(crate) fn search_last_pattern(
 /// - `options & SEARCH_PEEK`: give up when a character is typed.
 /// - `options & SEARCH_COL`: start at `pos->col` rather than at zero.
 ///
-/// # Safety
-/// `pos` must be writable, `end_pos` writable or null, `pat` a readable
-/// string of `patlen` bytes or null, and `extra_arg` writable or null.
+/// `win` is the window to search in, `None` for a buffer without one;
+/// `end_pos` gets the end of the match; `pat_use` is which remembered
+/// pattern an empty `pat` means; `extra_arg` adds a line to stop after and
+/// a deadline, and reports a timeout and a wrap.
 ///
-/// @param win        window to search in; can be None for a buffer without a window!
-/// @param end_pos    set to end of the match, unless NULL
-/// @param pat_use    which pattern to use when `pat` is empty
-/// @param extra_arg  optional extra arguments, can be NULL
-///
-/// @return  FAIL (zero) for failure, otherwise the index of the first
-///          matching sub-pattern plus one; one if there was none.
-pub unsafe fn searchit(
+/// Answers `FAIL` (zero) for failure, otherwise the index of the first
+/// matching sub-pattern plus one; one if there was none.
+#[allow(clippy::too_many_arguments)]
+pub fn searchit(
     win: Option<Win>,
     buffer: Buf,
-    pos: *mut Pos,
-    end_pos: *mut Pos,
+    pos: &mut Pos,
+    mut end_pos: Option<&mut Pos>,
     dir: Direction,
-    pat: *mut c_char,
-    patlen: size_t,
+    pat: &[u8],
     mut count: c_int,
     options: c_int,
     pat_use: c_int,
-    extra_arg: *mut SearchItArg,
+    mut extra_arg: Option<&mut SearchItArg>,
 ) -> c_int {
     let mut regmatch = RegMMatch::default();
-    if unsafe {
-        search_regcomp(
-            pat,
-            patlen,
-            ptr::null_mut(),
-            RE_SEARCH,
-            pat_use,
-            options & (SEARCH_HIS | SEARCH_KEEP),
-            &raw mut regmatch,
-        )
-    }
-    .is_err()
-    {
+    let keep = options & (SEARCH_HIS | SEARCH_KEEP);
+    if search_regcomp(pat, RE_SEARCH, pat_use, keep, &mut regmatch).is_err() {
         if options & SEARCH_MSG != 0 && !rc_did_emsg.get() {
             let pattern = get_search_pat();
             let arg0 = msg_bytes(&pattern);
@@ -456,16 +407,16 @@ pub unsafe fn searchit(
         win,
         buf: buffer,
         regmatch,
-        tm: ptr::null_mut(),
-        timed_out: ptr::null_mut(),
+        tm: None,
+        timed_out: false,
         options,
         from_match_end: cpo_has(CpoFlag::SEARCH),
         called_emsg_before: called_emsg.get(),
     };
-    if !extra_arg.is_null() {
-        stop_lnum = unsafe { (*extra_arg).sa_stop_lnum };
-        s.tm = unsafe { (*extra_arg).sa_tm };
-        s.timed_out = unsafe { &raw mut (*extra_arg).sa_timed_out };
+    if let Some(extra) = &extra_arg {
+        stop_lnum = extra.sa_stop_lnum;
+        s.tm = extra.sa_tm;
+        s.timed_out = extra.sa_timed_out;
     }
 
     let mut found;
@@ -480,14 +431,11 @@ pub unsafe fn searchit(
         // When a match at the start position is not acceptable,
         // `extra_col` is non-zero. Not at MAXCOL though, where
         // MAXCOL + 1 is zero.
-        let start_char_len = if unsafe { (*pos).col } == MAXCOL as c_int {
+        let start_char_len = if pos.col == MAXCOL as c_int {
             0
-        } else if unsafe { (*pos).lnum } >= 1
-            && unsafe { (*pos).lnum } <= buffer.b_ml.ml_line_count
-            && unsafe { (*pos).col } < MAXCOL as c_int - 2
-        {
+        } else if pos.lnum >= 1 && pos.lnum <= buffer.b_ml.ml_line_count && pos.col < MAXCOL - 2 {
             // Watch out for "col" being MAXCOL - 2, used in a closed fold.
-            let (lnum, col) = unsafe { ((*pos).lnum, (*pos).col as usize) };
+            let (lnum, col) = (pos.lnum, usize::try_from(pos.col).unwrap_or(0));
             let mut lines = buffer.lines();
             let line = lines.line(lnum);
             if line.len() <= col {
@@ -501,7 +449,7 @@ pub unsafe fn searchit(
         let accept_at_start = s.opt(SEARCH_START);
         let start = StartPos {
             // Remember the start position, for detecting "no match".
-            pos: unsafe { *pos },
+            pos: *pos,
             extra_col: if dir == FORWARD {
                 if accept_at_start { 0 } else { start_char_len }
             } else if accept_at_start {
@@ -513,10 +461,10 @@ pub unsafe fn searchit(
 
         found = 0;
         let mut at_first_line = true;
-        if unsafe { (*pos).lnum } == 0 {
+        if pos.lnum == 0 {
             // Correct lnum for when starting in line 0.
-            unsafe { (*pos).lnum = 1 };
-            unsafe { (*pos).col = 0 };
+            pos.lnum = 1;
+            pos.col = 0;
             at_first_line = false;
         }
 
@@ -524,10 +472,10 @@ pub unsafe fn searchit(
         // column 0 without accepting a match there — skipping back a
         // line is then free.
         if dir == BACKWARD && start.pos.col == 0 && !accept_at_start {
-            lnum = unsafe { (*pos).lnum } - 1;
+            lnum = pos.lnum - 1;
             at_first_line = false;
         } else {
-            lnum = unsafe { (*pos).lnum };
+            lnum = pos.lnum;
         }
 
         // Loop twice if 'wrapscan' is set.
@@ -550,7 +498,7 @@ pub unsafe fn searchit(
 
                 // Look for a match somewhere in line "lnum".
                 let col = if at_first_line && s.opt(SEARCH_COL) {
-                    unsafe { (*pos).col }
+                    pos.col
                 } else {
                     0
                 };
@@ -573,10 +521,7 @@ pub unsafe fn searchit(
                         // Cancel the search if a character was typed,
                         // for 'incsearch'. Checking too often would
                         // slow searching down too much.
-                        if s.opt(SEARCH_PEEK)
-                            && ((lnum - unsafe { (*pos).lnum }) & 0x3f) == 0
-                            && char_avail()
-                        {
+                        if s.opt(SEARCH_PEEK) && ((lnum - pos.lnum) & 0x3f) == 0 && char_avail() {
                             break_loop = true;
                             break 'lines;
                         }
@@ -603,7 +548,7 @@ pub unsafe fn searchit(
                         break 'next_line;
                     }
 
-                    unsafe { s.record(lnum, m, pos, end_pos) };
+                    s.record(lnum, m, pos, end_pos.as_deref_mut());
                     found = 1;
                     first_match = false;
                     submatch = m.submatch;
@@ -654,8 +599,8 @@ pub unsafe fn searchit(
                 };
                 give_warning(gettext(msg), true, false);
             }
-            if !extra_arg.is_null() {
-                unsafe { (*extra_arg).sa_wrapped = true as c_int };
+            if let Some(extra) = extra_arg.as_deref_mut() {
+                extra.sa_wrapped = true;
             }
         }
 
@@ -670,6 +615,11 @@ pub unsafe fn searchit(
     }
 
     s.regmatch.regprog = None;
+    if s.timed_out
+        && let Some(extra) = extra_arg
+    {
+        extra.sa_timed_out = true;
+    }
 
     if found == 0 {
         if got_int.get() {
@@ -690,11 +640,11 @@ pub unsafe fn searchit(
     }
 
     // A pattern like "\n\zs" may go past the last line.
-    if unsafe { (*pos).lnum } > buffer.b_ml.ml_line_count {
-        unsafe { (*pos).lnum = buffer.b_ml.ml_line_count };
-        unsafe { (*pos).col = buffer.lines().line_len((*pos).lnum) };
-        if unsafe { (*pos).col } > 0 {
-            unsafe { (*pos).col -= 1 };
+    if pos.lnum > buffer.b_ml.ml_line_count {
+        pos.lnum = buffer.b_ml.ml_line_count;
+        pos.col = buffer.lines().line_len(pos.lnum);
+        if pos.col > 0 {
+            pos.col -= 1;
         }
     }
 
@@ -713,26 +663,19 @@ pub(crate) fn searchit_buf(
     options: c_int,
     pat_use: c_int,
 ) -> bool {
-    // A copy the search may write to.
-    let mut owned = pat.to_bytes_with_nul().to_vec();
-    // SAFETY: two positions this call holds, a NUL-terminated copy of the
-    // pattern with its length, and no extra arguments.
-    let status = unsafe {
-        searchit(
-            None,
-            buffer,
-            pos,
-            end_pos,
-            dir,
-            owned.as_mut_ptr().cast(),
-            pat.count_bytes(),
-            1,
-            options,
-            pat_use,
-            ptr::null_mut(),
-        )
-    };
-    status != FAIL
+    let pat = pat.to_bytes();
+    searchit(
+        None,
+        buffer,
+        pos,
+        Some(end_pos),
+        dir,
+        pat,
+        1,
+        options,
+        pat_use,
+        None,
+    ) != FAIL
 }
 
 /// [`searchit`] once in the current window, for the search builtins: for
@@ -747,90 +690,70 @@ pub(crate) fn search_in_current(
     pat: &[u8],
     options: c_int,
     stop_lnum: LineNr,
-    deadline: &mut ProfTime,
+    deadline: &ProfTime,
 ) -> c_int {
-    // A NUL-terminated copy the search may write to, and that no code run
-    // between two searches can free.
-    let mut owned = Vec::with_capacity(pat.len() + 1);
-    owned.extend_from_slice(pat);
-    owned.push(0);
     let mut extra = SearchItArg {
         sa_stop_lnum: stop_lnum,
-        sa_tm: deadline,
-        sa_timed_out: 0,
-        sa_wrapped: 0,
+        sa_tm: Some(deadline),
+        ..SearchItArg::default()
     };
-    // SAFETY: a position this call holds, a NUL-terminated copy of the
-    // pattern with its length, and an argument block of this frame whose
-    // deadline is the caller's.
-    unsafe {
-        searchit(
-            Some(Win::current()),
-            Buf::current(),
-            pos,
-            ptr::null_mut(),
-            dir,
-            owned.as_mut_ptr().cast(),
-            pat.len(),
-            1,
-            options,
-            RE_SEARCH,
-            &raw mut extra,
-        )
-    }
+    let (win, buf) = (Some(Win::current()), Buf::current());
+    searchit(
+        win,
+        buf,
+        pos,
+        None,
+        dir,
+        pat,
+        1,
+        options,
+        RE_SEARCH,
+        Some(&mut extra),
+    )
 }
 
 /// The number of the first sub-pattern that matched, or zero if none of
 /// them did.
-///
-/// # Safety
-/// `rp` must point at the result of a successful match.
 #[inline(always)]
-unsafe fn first_submatch(rp: *mut RegMMatch) -> c_int {
-    let mut submatch = 1;
-    while unsafe { (*rp).startpos[submatch as usize].lnum } < 0 {
-        if submatch == 9 {
-            return 0;
-        }
-        submatch += 1;
-    }
-    submatch
+fn first_submatch(rp: &RegMMatch) -> c_int {
+    (1..10)
+        .find(|&i| rp.startpos[i].lnum >= 0)
+        .map_or(0, |i| i as c_int)
 }
 
 /// Search for a line starting with `pat`, ignoring leading white space,
 /// from `pos` in direction `dir`; `pos` is left on the line found.
 ///
 /// Blank lines match only while insert-mode completion is adding lines.
-/// With `'ignorecase'` the pattern must be in lower case.
+/// With `'ignorecase'` the pattern must be in lower case. The pattern stops
+/// at a NUL.
 ///
-/// # Safety
-/// `pos` must be writable and `pat` a NUL-terminated string.
-///
-/// @return  `Ok` for success, `Err` if no line was found.
-pub unsafe fn search_for_exact_line(
+/// Answers `Err` if no line was found.
+pub fn search_for_exact_line(
     buffer: Buf,
-    pos: *mut Pos,
+    pos: &mut Pos,
     dir: Direction,
-    pat: *mut c_char,
+    pat: &[u8],
 ) -> Result<(), Failed> {
+    let pat = cstr::until_nul(pat);
     let mut start: LineNr = 0;
     let compl_len = ins_compl_len();
     if buffer.b_ml.ml_line_count == 0 {
         return Err(Failed);
     }
     loop {
-        unsafe { (*pos).lnum += dir };
-        if unsafe { (*pos).lnum } < 1 {
+        pos.lnum += dir;
+        if pos.lnum < 1 {
             if !p_ws() {
-                unsafe { (*pos).lnum = 1 };
+                pos.lnum = 1;
                 break;
             }
-            unsafe { (*pos).lnum = buffer.b_ml.ml_line_count };
+            pos.lnum = buffer.b_ml.ml_line_count;
             if !shortmess(ShmFlag::SEARCH) {
                 give_warning(gettext(top_bot_msg), true, false);
             }
-        } else if unsafe { (*pos).lnum } > buffer.b_ml.ml_line_count {
-            unsafe { (*pos).lnum = 1 };
+        } else if pos.lnum > buffer.b_ml.ml_line_count {
+            pos.lnum = 1;
             if !p_ws() {
                 break;
             }
@@ -838,39 +761,37 @@ pub unsafe fn search_for_exact_line(
                 give_warning(gettext(bot_top_msg), true, false);
             }
         }
-        if unsafe { (*pos).lnum } == start {
+        if pos.lnum == start {
             break;
         }
         if start == 0 {
-            start = unsafe { (*pos).lnum };
+            start = pos.lnum;
         }
 
         let mut lines = buffer.lines();
-        let line = lines.line(unsafe { (*pos).lnum });
+        let line = lines.line(pos.lnum);
         let at = skip::white(line);
-        unsafe { (*pos).col = at as ColNr };
-        // The three comparisons below are still `strcmp`-shaped, so they
-        // want the tail as a pointer; a line's bytes are followed by its own
-        // terminator, which is what ends them.
-        let text = line[at..].as_ptr().cast::<c_char>();
+        pos.col = at as ColNr;
+        let text = cstr::until_nul(&line[at..]);
 
         if compl_status_adding() && !compl_status_sol() {
             // When adding lines the matching line may be empty; it is
             // not ignored, because it is the *next* line that is
             // wanted. -- Acevedo
-            if unsafe { mb_strcmp_ic(p_ic(), text, pat) } == 0 {
+            if strcmp_ic_in(p_ic(), text, pat) == 0 {
                 return Ok(());
             }
         } else if at < line.len() {
             // Expanding lines or words; ignore empty lines.
             debug_assert!(compl_len >= 0);
+            let n = usize::try_from(compl_len).unwrap_or(0);
+            let (text, pat) = (&text[..n.min(text.len())], &pat[..n.min(pat.len())]);
             let same = if p_ic() {
-                unsafe { mb_strnicmp(text, pat, compl_len as size_t) }
+                strnicmp_in(text, pat) == 0
             } else {
-                let n = compl_len as size_t;
-                unsafe { cstr::prefix_cmp(text, pat, n) as c_int }
+                text == pat
             };
-            if same == 0 {
+            if same {
                 return Ok(());
             }
         }

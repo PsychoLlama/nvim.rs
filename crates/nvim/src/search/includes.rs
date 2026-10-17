@@ -8,14 +8,18 @@
 //! is pushed onto a stack and read the same way, `'define'` narrows what
 //! counts as a match, and `'path'` is where the names are resolved.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
+use crate::charset::is_word_at;
 use crate::cstr;
 use crate::file_search::FileNameOpts;
+use crate::fileio::Fgets;
 use crate::highlight_group::{HLF_D, HLF_R};
+use crate::insexpand::{word_end, word_start};
+use crate::mbyte::c_cluster_len;
 use crate::memory::XString;
+use crate::message::msg_display_bytes;
 use crate::message_fmt::msg_cstr;
 use crate::option::vars::P_DEF;
 use crate::option::vars::P_INC;
@@ -27,8 +31,10 @@ use crate::types::{FAIL, IOSIZE, NUL, OK, ShmFlag};
 use crate::window::valid_win;
 use crate::winlayer::WinId;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
-use core::ptr;
+use core::ffi::{CStr, c_int, c_uint};
+use std::ffi::OsStr;
+use std::fs::File;
+use std::os::unix::ffi::OsStrExt;
 
 const CHECK_PATH: c_int = super::CHECK_PATH as c_int;
 const FIND_DEFINE: c_int = super::FIND_DEFINE as c_int;
@@ -38,47 +44,30 @@ const ACTION_SHOW_ALL: c_int = super::ACTION_SHOW_ALL as c_int;
 const ACTION_EXPAND: c_int = super::ACTION_EXPAND as c_int;
 const LSIZE: usize = super::LSIZE as usize;
 
-/// An `xmalloc`ed NUL-terminated name that frees itself.
-struct Name(*mut c_char);
-
-impl Name {
-    fn as_ptr(&self) -> *mut c_char {
-        self.0
-    }
-
-    fn as_cstr(&self) -> &CStr {
-        // SAFETY: the allocation is live and NUL-terminated for as long as
-        // this owns it.
-        unsafe { cstr::at(self.0) }
-    }
-}
-
-impl Drop for Name {
-    fn drop(&mut self) {
-        // SAFETY: always an xmalloc'ed allocation.
-        unsafe { xfree(self.0 as *mut c_void) };
-    }
-}
-
 /// One file on the include stack.
 struct SearchedFile {
-    /// Open while the walk is reading the file; null once it has been
+    /// Open while the walk is reading the file; `None` once it has been
     /// read to the end and moved to the "already searched" list.
-    fp: *mut FILE,
-    name: Name,
+    reader: Option<Fgets>,
+    name: XString,
+    /// Which file this is: upstream compared the name's address.
+    id: u32,
     /// The line last read from it, for the listing.
     lnum: LineNr,
     /// Whether a match has been shown in this file or in one it includes.
     matched: bool,
 }
 
-impl Drop for SearchedFile {
-    fn drop(&mut self) {
-        if !self.fp.is_null() {
-            // SAFETY: an open stdio stream this struct owns.
-            unsafe { fclose(self.fp) };
-        }
-    }
+/// Where a line came from: the current buffer, or an included file by its
+/// [`SearchedFile::id`].
+///
+/// Upstream compared file *name pointers*, and the buffer's could be null
+/// for a buffer with no name; [`Walk::curr_fname`] and its kin are `None`
+/// exactly where that pointer was.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum FileRef {
+    Buffer,
+    Included(u32),
 }
 
 /// The include stack.
@@ -92,6 +81,8 @@ struct FileStack {
     open: Vec<SearchedFile>,
     /// Read to the end already, oldest first.
     done: Vec<SearchedFile>,
+    /// The id the next file pushed gets.
+    next_id: u32,
 }
 
 impl FileStack {
@@ -99,6 +90,7 @@ impl FileStack {
         FileStack {
             open: Vec::new(),
             done: Vec::new(),
+            next_id: 0,
         }
     }
 
@@ -113,17 +105,12 @@ impl FileStack {
     ///
     /// Upstream scans the open files outermost-first and then the
     /// finished ones newest-first, and stops at the first equal one.
-    ///
-    /// # Safety
-    /// `name` must be a NUL-terminated path.
-    unsafe fn already_searched(&self, name: *mut c_char) -> Option<bool> {
+    fn already_searched(&self, name: &CStr) -> Option<bool> {
         for file in self.open.iter().chain(self.done.iter().rev()) {
-            if unsafe {
-                path_full_compare(cstr::at(name), cstr::at(file.name.as_ptr()), true, true)
-            } as c_uint
+            let same = path_full_compare(name, file.name.as_cstr(), true, true) as c_uint
                 & kEqualFiles as c_uint
-                != 0
-            {
+                != 0;
+            if same {
                 return Some(file.matched);
             }
         }
@@ -133,11 +120,7 @@ impl FileStack {
     /// Close the innermost file and remember it as searched.
     fn close_innermost(&mut self) {
         if let Some(mut file) = self.open.pop() {
-            if !file.fp.is_null() {
-                // SAFETY: an open stream this stack owns.
-                unsafe { fclose(file.fp) };
-                file.fp = ptr::null_mut();
-            }
+            file.reader = None;
             self.done.push(file);
         }
     }
@@ -145,6 +128,14 @@ impl FileStack {
     /// The innermost open file, which the walk is reading.
     fn innermost(&mut self) -> &mut SearchedFile {
         self.open.last_mut().expect("depth >= 0")
+    }
+
+    /// The name of the open file `id`.
+    fn name_of(&self, id: u32) -> Option<&XString> {
+        self.open
+            .iter()
+            .find(|file| file.id == id)
+            .map(|file| &file.name)
     }
 }
 
@@ -158,14 +149,8 @@ pub(crate) struct Patterns {
 
 /// Compile `pat` with the current `'magic'`, answering false when it did
 /// not compile.
-///
-/// # Safety
-/// `pat` must be NUL-terminated; `into` must be writable.
-unsafe fn compile(into: &mut RegMatch, pat: *const c_char, ignore_case: bool) -> bool {
-    into.regprog = vim_regcomp(
-        unsafe { cstr::at(pat) },
-        if magic_isset() { RE_MAGIC } else { 0 },
-    );
+fn compile(into: &mut RegMatch, pat: &CStr, ignore_case: bool) -> bool {
+    into.regprog = vim_regcomp(pat, if magic_isset() { RE_MAGIC } else { 0 });
     into.rm_ic = ignore_case;
     into.regprog.is_some()
 }
@@ -173,15 +158,7 @@ unsafe fn compile(into: &mut RegMatch, pat: *const c_char, ignore_case: bool) ->
 /// Compile the three patterns.
 ///
 /// Answers `None` when one of them failed, which abandons the search.
-///
-/// # Safety
-/// `pattern` must point at `len` readable bytes.
-unsafe fn compile_patterns(
-    pattern: *mut c_char,
-    len: size_t,
-    whole: bool,
-    kind: c_int,
-) -> Option<Patterns> {
+fn compile_patterns(pattern: &[u8], whole: bool, kind: c_int) -> Option<Patterns> {
     let mut pats = Patterns {
         pat: RegMatch::default(),
         incl: RegMatch::default(),
@@ -192,40 +169,35 @@ unsafe fn compile_patterns(
         // When CONT_SOL is set, comparing "ptr" with the beginning of
         // the line is faster than quote_meta/regcomp/regexec of it
         // -- Acevedo.
-        let mut pat = Vec::with_capacity(len + 5);
+        let mut pat = Vec::with_capacity(pattern.len() + 5);
         if whole {
             pat.extend_from_slice(b"\\<");
         }
-        // Upstream builds this with "%.*s", which stops at a NUL
-        // inside the first `len` bytes; copying them all would put
-        // the closing "\>" past the terminator.
-        let bytes = unsafe { core::slice::from_raw_parts(pattern as *const u8, len) };
-        let end = bytes.iter().position(|&b| b == 0).unwrap_or(len);
-        pat.extend_from_slice(&bytes[..end]);
+        // Upstream builds this with "%.*s", which stops at a NUL inside
+        // the pattern; copying it all would put the closing "\>" past the
+        // terminator.
+        pat.extend_from_slice(cstr::until_nul(pattern));
         if whole {
             pat.extend_from_slice(b"\\>");
         }
-        pat.push(0);
         // Ignore case according to 'ignorecase', 'smartcase' and the
         // pattern itself.
-        let ic = unsafe { ignorecase(pat.as_ptr() as *mut c_char) };
-        if !unsafe { compile(&mut pats.pat, pat.as_ptr() as *const c_char, ic) } {
+        let ic = ignorecase(&pat);
+        if !compile(&mut pats.pat, &cstr::owned(&pat), ic) {
             return None;
         }
     }
 
     let inc_opt = include_option();
-    if !inc_opt.is_empty() {
-        // Don't ignore case in the 'include' pattern.
-        if !unsafe { compile(&mut pats.incl, inc_opt.as_ptr(), false) } {
-            return None;
-        }
+    // Don't ignore case in the 'include' pattern.
+    if !inc_opt.is_empty() && !compile(&mut pats.incl, inc_opt.as_cstr(), false) {
+        return None;
     }
 
     if kind == FIND_DEFINE {
         let def = local_or_global(&Buf::current().b_p_def, P_DEF).get();
         // Don't ignore case in the 'define' pattern.
-        if !def.is_empty() && !unsafe { compile(&mut pats.def, def.as_ptr().cast_mut(), false) } {
+        if !def.is_empty() && !compile(&mut pats.def, def.as_cstr(), false) {
             return None;
         }
     }
@@ -239,52 +211,44 @@ fn include_option() -> XString {
     local_or_global(&Buf::current().b_p_inc, P_INC).get()
 }
 
-/// Whether the `'include'` pattern uses `\zs`, which moves the file name
-/// from "after the match" to "the match itself".
-///
-/// # Safety
-/// `inc_opt` must be NUL-terminated.
-unsafe fn include_uses_zs(inc_opt: *mut c_char) -> bool {
-    has_bytes(unsafe { cstr::at(inc_opt) }, b"\\zs")
-}
-
-/// Copy line `lnum` into `buf`.
+/// Line `lnum` of the current buffer, cut to what upstream's `LSIZE` buffer
+/// held, terminated.
 ///
 /// The copy is made because the regexp may invalidate the line when a
 /// mark is used.
-///
-/// # Safety
-/// `lnum` must be a line of the current buffer and `buf` must hold
-/// `LSIZE` bytes.
-unsafe fn get_line_and_copy(lnum: LineNr, buf: *mut c_char) -> *mut c_char {
+fn get_line_and_copy(lnum: LineNr) -> Vec<u8> {
     let mut lines = Lines::current();
-    let line = lines.line_cstr(lnum, 0);
-    // SAFETY: the caller's `LSIZE` buffer, and a line of the buffer.
-    unsafe { xstrlcpy(buf, line.as_ptr(), LSIZE as size_t) };
-    buf
+    let line = lines.line(lnum);
+    let mut copy = cstr::until_nul(&line[..line.len().min(LSIZE - 1)]).to_vec();
+    copy.push(NUL as u8);
+    copy
+}
+
+/// A line read from an included file, cut at its first NUL and terminated.
+fn read_line_copy(mut read: Vec<u8>) -> Vec<u8> {
+    let end = cstr::until_nul(&read).len();
+    read.truncate(end);
+    read.push(NUL as u8);
+    read
 }
 
 /// The walk's position and the state that survives from one line to the
 /// next.
 struct Walk {
-    /// The line being looked at. Always points into the walk's own
-    /// `LSIZE` buffer — [`get_line_and_copy`] and `vim_fgets` both fill
-    /// it — except that the ACTION_EXPAND path reads the *next* line into
-    /// it before this one is finished with.
-    line: *mut c_char,
-    buf: *mut c_char,
+    /// The line being looked at, terminated: a copy of a buffer line or a
+    /// line read from an included file -- except that the ACTION_EXPAND
+    /// path reads the *next* line into it before this one is finished with.
+    line: Vec<u8>,
     /// The buffer line the walk is on, while `files.depth() == -1`.
     lnum: LineNr,
     end_lnum: LineNr,
     /// A line has already been read into `line`; don't read another.
-    /// Upstream keeps a pointer here and only ever tests it.
     already: bool,
     files: FileStack,
-    /// The file the current line came from. Compared by *identity*
-    /// against `curbuf->b_fname` and against the previous line's file,
-    /// which is why it stays a pointer.
-    curr_fname: *mut c_char,
-    prev_fname: *mut c_char,
+    /// The file the current line came from, compared by identity against
+    /// the current buffer and against the previous line's file.
+    curr_fname: Option<FileRef>,
+    prev_fname: Option<FileRef>,
     /// How much of the include tree `:checkpath` has printed.
     depth_displayed: c_int,
     did_show: bool,
@@ -293,118 +257,148 @@ struct Walk {
     match_count: c_int,
 }
 
+/// The current buffer as a line's source: `None` when it has no name, as
+/// its null name pointer was upstream.
+fn buffer_ref() -> Option<FileRef> {
+    Buf::current().name.shown().map(|_| FileRef::Buffer)
+}
+
 impl Walk {
+    /// The line, its terminator not included.
+    fn text(&self) -> &[u8] {
+        &self.line[..self.line.len() - 1]
+    }
+
+    /// The line, as the C string the matchers read.
+    fn cstr(&self) -> &CStr {
+        CStr::from_bytes_until_nul(&self.line).expect("the walk's line is terminated")
+    }
+
+    /// The name of the file `fname` names, as it is shown.
+    fn name_of(&self, fname: Option<FileRef>) -> Option<XString> {
+        match fname? {
+            FileRef::Buffer => Buf::current().name.shown().map(XString::from_cstr),
+            FileRef::Included(id) => self.files.name_of(id).cloned(),
+        }
+    }
+
     /// Advance to the next line, closing included files that have been
     /// read to the end. Answers false when there is nothing left.
     fn next_line(&mut self) -> bool {
         // When reading an included file and hitting end-of-file,
         // close it and continue in the file that included it.
-        while self.files.depth() >= 0
-            && !self.already
-            && unsafe { vim_fgets(self.buf, LSIZE as c_int, self.files.innermost().fp) }
-        {
-            self.line = self.buf;
+        let mut read = None;
+        while self.files.depth() >= 0 && !self.already {
+            let mut line = Vec::new();
+            let reader = self.files.innermost().reader.as_mut();
+            if reader.is_some_and(|reader| reader.line_capped(&mut line, LSIZE)) {
+                read = Some(line);
+                break;
+            }
             self.files.close_innermost();
             self.curr_fname = if self.files.depth() == -1 {
-                Buf::current().name.shown_ptr()
+                buffer_ref()
             } else {
-                self.files.innermost().name.as_ptr()
+                Some(FileRef::Included(self.files.innermost().id))
             };
             self.depth_displayed = self.depth_displayed.min(self.files.depth());
         }
         if self.files.depth() >= 0 {
             // We could read the line.
-            self.line = self.buf;
+            if let Some(line) = read {
+                self.line = read_line_copy(line);
+            }
             self.files.innermost().lnum += 1;
             // Remove any CR and LF from it.
-            let mut i = unsafe { cstr::bytes_at(self.line) }.len() as isize;
-            if i > 0 && unsafe { *self.line.offset(i - 1) } as c_int == '\n' as c_int {
-                i -= 1;
-                unsafe { *self.line.offset(i) = NUL as c_char };
-            }
-            if i > 0 && unsafe { *self.line.offset(i - 1) } as c_int == '\r' as c_int {
-                i -= 1;
-                unsafe { *self.line.offset(i) = NUL as c_char };
+            for strip in *b"\n\r" {
+                let len = self.line.len() - 1;
+                if len > 0 && self.line[len - 1] == strip {
+                    self.line.truncate(len - 1);
+                    self.line.push(NUL as u8);
+                }
             }
         } else if !self.already {
             self.lnum += 1;
             if self.lnum > self.end_lnum {
                 return false;
             }
-            self.line = unsafe { get_line_and_copy(self.lnum, self.buf) };
+            self.line = get_line_and_copy(self.lnum);
         }
         self.already = false;
         true
     }
 
     /// Read the line after the current one, for the "add the next word
-    /// too" half of insert-mode completion. Answers false at the end.
+    /// too" half of insert-mode completion. Answers false at the end, with
+    /// the line left as it was.
     fn read_following_line(&mut self) -> bool {
         if self.files.depth() < 0 {
             if self.lnum >= self.end_lnum {
                 return false;
             }
             self.lnum += 1;
-            self.line = unsafe { get_line_and_copy(self.lnum, self.buf) };
+            self.line = get_line_and_copy(self.lnum);
             return true;
         }
-        self.line = self.buf;
-        !unsafe { vim_fgets(self.buf, LSIZE as c_int, self.files.innermost().fp) }
+        let mut line = Vec::new();
+        let reader = self.files.innermost().reader.as_mut();
+        if !reader.is_some_and(|reader| reader.line_capped(&mut line, LSIZE)) {
+            return false;
+        }
+        self.line = read_line_copy(line);
+        true
     }
 
-    /// Where `show_pat_in_path` should read continuation lines from, and
-    /// which line number it should report.
-    fn source(&mut self) -> (*mut FILE, *mut LineNr) {
-        if self.files.depth() == -1 {
-            (ptr::null_mut(), &raw mut self.lnum)
+    /// Show the current line with `show_pat_in_path`, continuation lines
+    /// read from where it came from.
+    fn show(&mut self, kind: c_int, did_show: bool, action: c_int, count: c_int) {
+        let Walk {
+            line, files, lnum, ..
+        } = self;
+        let line = &line[..line.len() - 1];
+        if files.depth() == -1 {
+            show_pat_in_path(line, kind, did_show, action, None, lnum, count);
         } else {
-            let file = self.files.innermost();
-            (file.fp, &raw mut file.lnum)
+            let file = files.innermost();
+            let stream = file.reader.as_mut();
+            show_pat_in_path(line, kind, did_show, action, stream, &mut file.lnum, count);
         }
     }
 }
 
 /// What the walk does with a line that matches `'include'`.
-///
-/// # Safety
-/// The current buffer and window must be valid.
-unsafe fn handle_include(
+fn handle_include(
     walk: &mut Walk,
     pats: &Patterns,
-    inc_opt: *mut c_char,
+    uses_zs: bool,
     kind: c_int,
     action: c_int,
     silent: bool,
 ) {
-    // A relative name is resolved against the file the line is in.
-    let p_fname = if walk.curr_fname == Buf::current().name.shown_ptr() {
-        Buf::current().name.full_ptr()
-    } else {
-        walk.curr_fname
+    // A relative name is resolved against the file the line is in. A copy:
+    // the lookup can run 'includeexpr', which may rename the buffer.
+    let p_fname = match walk.curr_fname {
+        None | Some(FileRef::Buffer) => Buf::current().name.full().map(XString::from_cstr),
+        included => walk.name_of(included),
     };
-    // A copy: the lookup can run 'includeexpr', which may rename the buffer.
-    // SAFETY: a NUL-terminated name, or null.
-    let p_fname = unsafe { cstr::at_opt(p_fname) }.map(XString::from_cstr);
     let p_fname = p_fname.as_ref().map(XString::as_cstr);
-    // SAFETY: the walk's own NUL-terminated copy of the line, which nothing
-    // the lookup runs can reach.
-    let line = unsafe { cstr::bytes_at(walk.line) };
-    // The 'include' match's spans are offsets into `walk.line`.
+    let line = walk.text();
+    // The 'include' match's spans are offsets into the line.
     let start = pats.incl.starts[0].unwrap_or(0);
     let end = pats.incl.ends[0].unwrap_or(0);
     let flags = FileNameOpts::EXP | FileNameOpts::INCL | FileNameOpts::REL;
-    let found = if unsafe { include_uses_zs(inc_opt) } {
+    let found = if uses_zs {
         // Use the text from '\zs' to '\ze' (or the end) of 'include'.
         find_file_name_in_path(&line[start..end], flags, 1, p_fname)
     } else {
         // Use the text after the match with 'include'.
         file_name_in_line(&line[end..], 0, flags, 1, p_fname, None)
     };
-    let mut new_fname = found.map(|name| Name(name.into_raw()));
+    let mut new_fname = found;
 
     let mut already_searched = false;
     if let Some(name) = &new_fname
-        && let Some(matched) = unsafe { walk.files.already_searched(name.as_ptr()) }
+        && let Some(matched) = walk.files.already_searched(name.as_cstr())
     {
         if kind != CHECK_PATH && action == ACTION_SHOW_ALL && matched {
             msg_putchar('\n' as c_int); // cursor below the last one
@@ -413,7 +407,7 @@ unsafe fn handle_include(
                 // "--more--" message.
                 msg_home_replace(name.as_cstr());
                 msg_str(gettext(c" (includes previously listed match)"));
-                walk.prev_fname = ptr::null_mut();
+                walk.prev_fname = None;
             }
         }
         new_fname = None;
@@ -423,25 +417,33 @@ unsafe fn handle_include(
     if kind == CHECK_PATH
         && (action == ACTION_SHOW_ALL || (new_fname.is_none() && !already_searched))
     {
-        unsafe { show_include_name(walk, pats, inc_opt, action, &new_fname, already_searched) };
+        show_include_name(
+            walk,
+            pats,
+            uses_zs,
+            action,
+            new_fname.as_ref(),
+            already_searched,
+        );
     }
 
     let Some(new_fname) = new_fname else { return };
 
     // Push the new file onto the stack.
-    let fp = unsafe { os_fopen(new_fname.as_ptr(), c"r".as_ptr()) };
-    if fp.is_null() {
+    let Ok(file) = File::open(OsStr::from_bytes(&new_fname)) else {
         return;
-    }
-    walk.curr_fname = new_fname.as_ptr();
+    };
+    let id = walk.files.next_id;
+    walk.files.next_id += 1;
+    walk.curr_fname = Some(FileRef::Included(id));
     walk.files.open.push(SearchedFile {
-        fp,
+        reader: Some(Fgets::new(file)),
         name: new_fname,
+        id,
         lnum: 0,
         matched: false,
     });
-    // SAFETY: the name the walk just pushed, NUL-terminated.
-    let name = unsafe { cstr::at(walk.files.innermost().name.as_ptr()) };
+    let name = walk.files.innermost().name.as_cstr();
     if action == ACTION_EXPAND && !shortmess(ShmFlag::COMPLETIONSCAN) && !silent {
         msg_hist_off.set(true); // reset in msg_fit_head()
         // Upstream formats into `IObuff`, and the name is cut there.
@@ -458,15 +460,12 @@ unsafe fn handle_include(
 }
 
 /// Print one line of the `:checkpath` tree.
-///
-/// # Safety
-/// As [`handle_include`].
-unsafe fn show_include_name(
+fn show_include_name(
     walk: &mut Walk,
     pats: &Patterns,
-    inc_opt: *mut c_char,
+    uses_zs: bool,
     action: c_int,
-    new_fname: &Option<Name>,
+    new_fname: Option<&XString>,
     already_searched: bool,
 ) {
     if walk.did_show {
@@ -487,11 +486,8 @@ unsafe fn show_include_name(
         for _ in 0..walk.depth_displayed {
             msg_str(c"  ");
         }
-        msg_home_replace(
-            walk.files.open[walk.depth_displayed as usize]
-                .name
-                .as_cstr(),
-        );
+        let shown = &walk.files.open[walk.depth_displayed as usize].name;
+        msg_home_replace(shown.as_cstr());
         msg_str(c" -->\n");
     }
     if got_int.get() {
@@ -511,50 +507,42 @@ unsafe fn show_include_name(
         None => {
             // Isolate the file name off the line, including the
             // surrounding "" or <> if they are there.
-            let line = walk.line;
-            let (mut p, mut i) = if unsafe { include_uses_zs(inc_opt) } {
+            let line = walk.text();
+            let at = |i: usize| cstr::byte_at(line, i);
+            let match_end = pats.incl.ends[0].unwrap_or(0);
+            let (mut p, mut i) = if uses_zs {
                 // The pattern contains \zs: use the match.
                 let span = pats.incl.group(0).unwrap_or(0..0);
-                // SAFETY: an offset into the line just matched.
-                let start = unsafe { line.add(span.start) };
-                (start, (span.end - span.start) as c_int)
+                (span.start, span.end - span.start)
             } else {
                 // Find the file name after the end of the match.
-                // SAFETY: as above.
-                let mut p = unsafe { line.add(pats.incl.ends[0].unwrap_or(0)) };
-                while unsafe { *p } as c_int != NUL && !unsafe { vim_isfilec(*p as u8 as c_int) } {
-                    p = unsafe { p.offset(1) };
+                let mut p = match_end;
+                while at(p) != NUL as u8 && !vim_isfilec(c_int::from(at(p))) {
+                    p += 1;
                 }
                 let mut i = 0;
-                while unsafe { vim_isfilec(*p.offset(i as isize) as u8 as c_int) } {
+                while vim_isfilec(c_int::from(at(p + i))) {
                     i += 1;
                 }
                 (p, i)
             };
             if i == 0 {
                 // Nothing found; use the rest of the line.
-                // SAFETY: an offset into the line just matched.
-                p = unsafe { line.add(pats.incl.ends[0].unwrap_or(0)) };
-                i = unsafe { cstr::bytes_at(p) }.len() as c_int;
-            } else if p > line {
+                p = match_end;
+                i = line.len().saturating_sub(p);
+            } else if p > 0 {
                 // Avoid looking before the start of the line, which
                 // can happen when \zs appears in the pattern.
-                if unsafe { *p.offset(-1) } as c_int == '"' as c_int
-                    || unsafe { *p.offset(-1) } as c_int == '<' as c_int
-                {
-                    p = unsafe { p.offset(-1) };
+                if matches!(at(p - 1), b'"' | b'<') {
+                    p -= 1;
                     i += 1;
                 }
-                if unsafe { *p.offset(i as isize) } as c_int == '"' as c_int
-                    || unsafe { *p.offset(i as isize) } as c_int == '>' as c_int
-                {
+                if matches!(at(p + i), b'"' | b'>') {
                     i += 1;
                 }
             }
-            let save = unsafe { *p.offset(i as isize) };
-            unsafe { *p.offset(i as isize) = NUL as c_char };
-            msg_display(unsafe { cstr::at(p) }, HLF_D, false);
-            unsafe { *p.offset(i as isize) = save };
+            let end = (p + i).min(line.len());
+            msg_display_bytes(&line[p.min(end)..end], HLF_D, false);
         }
     }
 
@@ -570,45 +558,44 @@ unsafe fn show_include_name(
 /// What the walk should do after handling a match.
 enum After {
     /// Done with this match; the rest of the line may still be searched,
-    /// resuming the pattern search from here. Upstream leaves this in
-    /// `p`, which the ACTION_EXPAND arm has walked to the end of the word
-    /// it just offered -- or, when it read the following line, into that.
-    Resume(*mut c_char),
+    /// resuming the pattern search from this offset. Upstream leaves this
+    /// in `p`, which the ACTION_EXPAND arm has walked to the end of the
+    /// word it just offered -- or, when it read the following line, into
+    /// that.
+    Resume(usize),
     /// Go on to the next line.
     NextLine,
     /// Stop the whole search.
     Stop,
 }
 
-/// Offer the match to insert-mode completion (ACTION_EXPAND).
-///
-/// # Safety
-/// As [`handle_include`]; `startp` must be inside `walk.line`.
-unsafe fn expand_match(walk: &mut Walk, startp: *mut c_char, dir: &mut Direction) -> After {
-    // Where a joined `CTRL-X CTRL-I` line is assembled; upstream shares
-    // `IObuff`, which the completion it feeds writes again.
-    let mut joined = [0 as c_char; IOSIZE as usize];
-    let mut cont_s_ipos = false;
+/// Offer the match at offset `startp` to insert-mode completion
+/// (ACTION_EXPAND).
+fn expand_match(walk: &mut Walk, startp: usize, dir: &mut Direction) -> After {
     if walk.files.depth() == -1 && walk.lnum == Win::current().w_cursor.lnum {
         return After::Stop;
     }
     walk.found = true;
+    let compl_len = usize::try_from(ins_compl_len()).unwrap_or(0);
     let mut p = startp;
     let mut aux = p;
-    if compl_status_adding() && unsafe { cstr::bytes_at(p) }.len() as c_int >= ins_compl_len() {
-        p = unsafe { p.offset(ins_compl_len() as isize) };
-        if unsafe { vim_iswordp(p) } {
+    if compl_status_adding() && walk.text().len().saturating_sub(p) >= compl_len {
+        p += compl_len;
+        if vim_iswordp_in(walk.text(), p) {
             return After::Resume(p);
         }
-        p = unsafe { find_word_start(p) };
+        p = word_start(walk.text(), p);
     }
-    p = unsafe { find_word_end(p) };
-    let mut i = unsafe { p.offset_from(aux) } as c_int;
+    p = word_end(walk.text(), p);
+    let mut i = p - aux;
 
-    if compl_status_adding() && i == ins_compl_len() {
+    // Where a joined `CTRL-X CTRL-I` line is assembled; upstream shares
+    // `IObuff`, which the completion it feeds writes again.
+    let mut joined = None;
+    let mut cont_s_ipos = false;
+    if compl_status_adding() && i == compl_len {
         // IOSIZE > compl_length, so the copy fits.
-        let iobuff = joined.as_mut_ptr();
-        unsafe { ptr::copy_nonoverlapping(aux, iobuff, i as usize) };
+        let mut iobuff = walk.text()[aux..aux + i].to_vec();
 
         // Get the next line: from the current buffer below depth 0,
         // otherwise from the included file. Give up when past the
@@ -621,63 +608,62 @@ unsafe fn expand_match(walk: &mut Walk, startp: *mut c_char, dir: &mut Direction
         // rather than skipped. When depth >= 0 the file's line number
         // is bumped further below -- Acevedo.
         walk.already = true;
-        p = unsafe { skipwhite(walk.line) };
+        let text = walk.text();
+        p = skip::white(text);
         aux = p;
-        p = unsafe { find_word_start(p) };
-        p = unsafe { find_word_end(p) };
+        p = word_start(text, p);
+        p = word_end(text, p);
         if p > aux {
-            if unsafe { *aux } as c_int != ')' as c_int
-                && unsafe { *iobuff.offset(i as isize - 1) } as c_int != TAB
-            {
-                if unsafe { *iobuff.offset(i as isize - 1) } as c_int != ' ' as c_int {
-                    unsafe { *iobuff.offset(i as isize) = ' ' as c_char };
-                    i += 1;
+            let last = |buf: &[u8], back: usize| buf.len().checked_sub(back).map_or(0, |i| buf[i]);
+            if text[aux] != b')' && c_int::from(last(&iobuff, 1)) != TAB {
+                if last(&iobuff, 1) != b' ' {
+                    iobuff.push(b' ');
                 }
-                // `joined` =~ "\(\k\|\i\).* ", so i >= 2.
-                if p_js()
-                    && (unsafe { *iobuff.offset(i as isize - 2) } as c_int == '.' as c_int
-                        || unsafe { *iobuff.offset(i as isize - 2) } as c_int == '?' as c_int
-                        || unsafe { *iobuff.offset(i as isize - 2) } as c_int == '!' as c_int)
-                {
-                    unsafe { *iobuff.offset(i as isize) = ' ' as c_char };
-                    i += 1;
+                // `joined` =~ "\(\k\|\i\).* ", so it holds at least two.
+                if p_js() && matches!(last(&iobuff, 2), b'.' | b'?' | b'!') {
+                    iobuff.push(b' ');
                 }
             }
             // Copy as much of the new word as fits.
-            if unsafe { p.offset_from(aux) } >= (IOSIZE - i) as isize {
-                p = unsafe { aux.offset((IOSIZE - i - 1) as isize) };
+            if p - aux >= IOSIZE as usize - iobuff.len() {
+                p = aux + IOSIZE as usize - iobuff.len() - 1;
             }
-            // SAFETY: `aux..p` is inside the word just scanned, and the
-            // clamp above keeps the copy inside `iobuff`'s `IOSIZE` bytes.
-            unsafe {
-                let n = p.offset_from(aux) as usize;
-                ptr::copy_nonoverlapping(aux, iobuff.offset(i as isize), n)
-            };
-            i += unsafe { p.offset_from(aux) } as c_int;
+            iobuff.extend_from_slice(&text[aux..p]);
             cont_s_ipos = true;
         }
-        unsafe { *iobuff.offset(i as isize) = NUL as c_char };
-        aux = iobuff;
+        i = iobuff.len();
+        joined = Some(iobuff);
 
-        if i == ins_compl_len() {
+        if i == compl_len {
             return After::Resume(p);
         }
     }
 
-    let fname = walk.curr_fname;
-    let from_curbuf = fname.is_null() || fname == Buf::current().name.shown_ptr();
-    // SAFETY: the file name is NUL-terminated, and `aux` is a NUL-terminated
-    // string -- the line, or `IObuff` holding the joined word.
-    let (from_file, rest) =
-        unsafe { ((!from_curbuf).then(|| cstr::at(fname)), cstr::bytes_at(aux)) };
-    let len = usize::try_from(i).unwrap_or(0);
-    match ins_compl_add_infercase(rest, len, p_ic(), from_file, *dir, cont_s_ipos, 0) {
+    let from_file = match walk.curr_fname {
+        None | Some(FileRef::Buffer) => None,
+        included => walk.name_of(included),
+    };
+    let rest = match &joined {
+        Some(joined) => &joined[..],
+        None => &walk.text()[aux..],
+    };
+    let from_file = from_file.as_ref().map(XString::as_cstr);
+    match ins_compl_add_infercase(rest, i, p_ic(), from_file, *dir, cont_s_ipos, 0) {
         // If dir was BACKWARD, honour it just once.
         r if r == OK => *dir = FORWARD,
         r if r == FAIL => return After::Stop,
         _ => {}
     }
     After::Resume(p)
+}
+
+/// Whether the character at `text[at..]` is a word character of the
+/// current buffer; the end of `text` is a NUL, which is not.
+fn vim_iswordp_in(text: &[u8], at: usize) -> bool {
+    match text.get(at..) {
+        Some(rest) if !rest.is_empty() => is_word_at(rest, Buf::current()),
+        _ => false,
+    }
 }
 
 /// List the match (ACTION_SHOW_ALL).
@@ -692,8 +678,10 @@ fn list_match(walk: &mut Walk, kind: c_int, action: c_int) {
         }
         if !got_int.get() {
             // Don't display if 'q' was typed at the "--more--"
-            // message.
-            msg_home_replace(unsafe { cstr::at(walk.curr_fname) });
+            // message. A buffer with no name shows nothing, as
+            // upstream's `home_replace` of a null name.
+            let name = walk.name_of(walk.curr_fname).unwrap_or_default();
+            msg_home_replace(name.as_cstr());
         }
         walk.prev_fname = walk.curr_fname;
     }
@@ -701,9 +689,7 @@ fn list_match(walk: &mut Walk, kind: c_int, action: c_int) {
     if !got_int.get() {
         let count = walk.match_count;
         walk.match_count += 1;
-        let line = walk.line;
-        let (fp, lnum) = walk.source();
-        unsafe { show_pat_in_path(line, kind, true, action, fp, lnum, count) };
+        walk.show(kind, true, action, count);
     }
     // Set the matched flag for this file and for every one that
     // includes it.
@@ -712,13 +698,10 @@ fn list_match(walk: &mut Walk, kind: c_int, action: c_int) {
     }
 }
 
-/// Show or jump to the match — the last one of `count`.
-///
-/// # Safety
-/// As [`handle_include`].
-unsafe fn goto_match(
+/// Show or jump to the match at offset `startp` — the last one of `count`.
+fn goto_match(
     walk: &mut Walk,
-    startp: *mut c_char,
+    startp: usize,
     kind: c_int,
     action: c_int,
     forceit: bool,
@@ -730,9 +713,7 @@ unsafe fn goto_match(
         emsg(gettext(c"E387: Match is on current line"));
     } else if action == ACTION_SHOW {
         let did_show = walk.did_show;
-        let line = walk.line;
-        let (fp, lnum) = walk.source();
-        unsafe { show_pat_in_path(line, kind, did_show, action, fp, lnum, 1) };
+        walk.show(kind, did_show, action, 1);
         walk.did_show = true;
     } else {
         // ":psearch" uses the preview window.
@@ -781,7 +762,7 @@ unsafe fn goto_match(
         }
     }
     if action != ACTION_SHOW {
-        Win::current().w_cursor.col = unsafe { startp.offset_from(walk.line) } as ColNr;
+        Win::current().w_cursor.col = startp as ColNr;
         Win::current().w_set_curswant = true;
     }
 
@@ -825,29 +806,24 @@ pub fn find_pattern_in_path(
     let mut dir = dir;
     let mut count = count;
     let tagpreview = g_do_tagpreview.get();
-    // SAFETY: the caller's pattern, `pattern.len()` bytes of it, which the
-    // compiler only reads.
-    let pat = pattern.as_ptr().cast::<c_char>().cast_mut();
-    let found = unsafe { compile_patterns(pat, pattern.len(), whole, kind) };
-    let Some(mut pats) = found else {
+    let Some(mut pats) = compile_patterns(pattern, whole, kind) else {
         return;
     };
-    let inc_opt = include_option();
-    let inc_opt = inc_opt.as_ptr().cast_mut();
+    // Whether the 'include' pattern uses `\zs`, which moves the file name
+    // from "after the match" to "the match itself".
+    let uses_zs = has_bytes(include_option().as_cstr(), b"\\zs");
 
-    let mut file_line = vec![0 as c_char; LSIZE];
     let end_lnum = end_lnum.min(Buf::current().b_ml.ml_line_count);
     // Do at least one line.
     let lnum = start_lnum.min(end_lnum);
     let mut walk = Walk {
-        line: unsafe { get_line_and_copy(lnum, file_line.as_mut_ptr()) },
-        buf: file_line.as_mut_ptr(),
+        line: get_line_and_copy(lnum),
         lnum,
         end_lnum,
         already: false,
         files: FileStack::new(),
-        curr_fname: Buf::current().name.shown_ptr(),
-        prev_fname: ptr::null_mut(),
+        curr_fname: buffer_ref(),
+        prev_fname: None,
         depth_displayed: -1,
         did_show: false,
         found: false,
@@ -855,28 +831,17 @@ pub fn find_pattern_in_path(
     };
 
     loop {
-        // SAFETY: the walk's line is NUL-terminated.
-        if pats.incl.regprog.is_some()
-            && vim_regexec(&mut pats.incl, unsafe { cstr::at(walk.line) }, 0)
-        {
-            unsafe { handle_include(&mut walk, &pats, inc_opt, kind, action, silent) };
+        if pats.incl.regprog.is_some() && vim_regexec(&mut pats.incl, walk.cstr(), 0) {
+            handle_include(&mut walk, &pats, uses_zs, kind, action, silent);
         } else {
             // Look for a match, possibly several times in one line.
-            let mut from = walk.line;
+            let mut from = 0;
             let mut stop = false;
-            while let Some(startp) = unsafe {
-                match_on_line(
-                    walk.line,
-                    &mut pats,
-                    from,
-                    pat,
-                    pattern.len(),
-                    whole,
-                    skip_comments,
-                )
-            } {
+            while let Some(startp) =
+                match_on_line(walk.cstr(), &mut pats, from, pattern, whole, skip_comments)
+            {
                 let after = if action == ACTION_EXPAND {
-                    unsafe { expand_match(&mut walk, startp, &mut dir) }
+                    expand_match(&mut walk, startp, &mut dir)
                 } else if action == ACTION_SHOW_ALL {
                     list_match(&mut walk, kind, action);
                     After::NextLine
@@ -885,7 +850,7 @@ pub fn find_pattern_in_path(
                     if count > 0 {
                         After::NextLine
                     } else {
-                        unsafe { goto_match(&mut walk, startp, kind, action, forceit, tagpreview) }
+                        goto_match(&mut walk, startp, kind, action, forceit, tagpreview)
                     }
                 };
                 let After::Resume(resume) = after else {
@@ -895,12 +860,17 @@ pub fn find_pattern_in_path(
                     break;
                 };
                 // Look for other matches in the rest of the line,
-                // when there is any of it left.
+                // when there is any of it left. The offset is read in the
+                // line the walk holds now, which the match may have
+                // replaced with the following one, as upstream's pointer
+                // into the one buffer did.
+                let text = walk.text();
+                let after_char = startp + c_cluster_len(text.get(startp..).unwrap_or_default());
                 if pats.def.regprog.is_none()
                     && action == ACTION_EXPAND
                     && !compl_status_sol()
-                    && unsafe { *startp } as c_int != NUL
-                    && unsafe { *startp.offset(utfc_ptr2len(startp) as isize) } as c_int != NUL
+                    && cstr::byte_at(text, startp) != NUL as u8
+                    && cstr::byte_at(text, after_char) != NUL as u8
                 {
                     from = resume;
                     continue;

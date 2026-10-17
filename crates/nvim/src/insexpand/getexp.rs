@@ -336,7 +336,7 @@ pub(crate) fn get_next_dict_tsr_completion(
 pub(crate) fn get_next_tag_completion() {
     // Set `p_ic` from `p_ic`, `p_scs` and the pattern, for `find_tags`.
     let save_p_ic = p_ic();
-    P_IC.set(unsafe { ignorecase(compl_pattern().data()) });
+    P_IC.set(compl_pattern().with_bytes(ignorecase));
     g_tag_at_cursor.set(true);
 
     // Bounded to TAG_MANY, which is what stops an empty pattern finding

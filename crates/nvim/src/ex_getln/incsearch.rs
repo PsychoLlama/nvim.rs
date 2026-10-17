@@ -411,29 +411,26 @@ pub(crate) fn may_do_incsearch_highlighting(
             search_flags += SEARCH_START;
         }
         // Half a second of search time.
-        let mut tm: ProfTime = profile_setlimit(500);
+        let tm: ProfTime = profile_setlimit(500);
         let mut sia = SearchItArg {
-            sa_stop_lnum: 0,
-            sa_tm: &raw mut tm,
-            sa_timed_out: 0,
-            sa_wrapped: 0,
+            sa_tm: Some(&tm),
+            ..SearchItArg::default()
         };
-        set_cmd_byte(cc, skiplen + patlen, NUL as ::core::ffi::c_char);
         // So it doesn't beep on a bad expression.
         let no_emsg = Suppress::emsg();
-        let op = ::core::ptr::null_mut::<OpArg>();
         let dir = if firstc == ':' as ::core::ffi::c_int {
             '/' as ::core::ffi::c_int
         } else {
             firstc
         };
-        let (pat, plen) = (cc.at(skiplen), patlen as size_t);
-        let (flags, sia_p) = (search_flags, &raw mut sia);
-        // SAFETY: `pat` is the pattern inside the command line, terminated
-        // just above, and `sia_p` is this frame's search argument block.
-        found = unsafe { do_search(op, dir, search_delim, pat, plen, count, flags, sia_p) };
+        let len = usize::try_from(patlen).unwrap_or(0);
+        // A copy of the pattern: the `patlen` bytes of the command line
+        // from `skiplen`.
+        // SAFETY: the command line holds them.
+        let pat = unsafe { core::slice::from_raw_parts(cc.at(skiplen).cast::<u8>(), len) }.to_vec();
+        let flags = search_flags;
+        found = do_search(None, dir, search_delim, &pat, count, flags, Some(&mut sia));
         drop(no_emsg);
-        set_cmd_byte(cc, skiplen + patlen, next_char);
 
         if Win::current().w_cursor.lnum < search_first_line.get()
             || Win::current().w_cursor.lnum > search_last_line.get()
@@ -556,7 +553,7 @@ pub(crate) fn may_add_char_to_search(
                 && p_scs()
                 // SAFETY: the pattern starts `skiplen` bytes into the
                 // command line, which is NUL-terminated.
-                && !unsafe { pat_has_uppercase(Cc::current().at(skiplen)) }
+                && !pat_has_uppercase(unsafe { cstr::bytes_at(Cc::current().at(skiplen)) })
             {
                 *c = mb_tolower(*c);
             }
@@ -661,30 +658,28 @@ pub(crate) fn may_do_command_line_next_incsearch(
 
     let mut search_flags = SEARCH_NOOF;
 
-    let pat: *mut ::core::ffi::c_char;
-    if search_delim == cmd_byte(cc, skiplen) as ::core::ffi::c_int {
-        pat = last_search_pattern();
-        if pat.is_null() {
+    // A copy of the pattern, which is changed below for the search.
+    let mut pat: Vec<u8> = if search_delim == cmd_byte(cc, skiplen) as ::core::ffi::c_int {
+        let Some(last) = last_search_pattern() else {
             restore_last_search_pattern();
             return Err(Failed);
-        }
-        patlen = last_search_pattern_len() as ::core::ffi::c_int;
+        };
+        last.to_vec()
     } else {
-        pat = cc.at(skiplen);
-    }
+        let len = usize::try_from(patlen).unwrap_or(0);
+        // SAFETY: the pattern is the `patlen` bytes of the command line
+        // from `skiplen`.
+        unsafe { core::slice::from_raw_parts(cc.at(skiplen).cast::<u8>(), len) }.to_vec()
+    };
 
     // Do not search for the search end delimiter, unless it is part of
-    // the pattern.
-    let mut bslsh = false;
-    if patlen > 2 && firstc == unsafe { *pat.offset((patlen - 1) as isize) } as ::core::ffi::c_int {
-        patlen -= 1;
-        if unsafe { *pat.offset((patlen - 1) as isize) } as ::core::ffi::c_int
-            == '\\' as ::core::ffi::c_int
+    // the pattern; an escaped one is searched for unescaped.
+    if pat.len() > 2 && firstc == ::core::ffi::c_int::from(pat[pat.len() - 1]) {
+        pat.pop();
+        if let Some(last) = pat.last_mut()
+            && *last == b'\\'
         {
-            unsafe {
-                *pat.offset((patlen - 1) as isize) = firstc as uint8_t as ::core::ffi::c_char
-            };
-            bslsh = true;
+            *last = firstc.to_ne_bytes()[0];
         }
     }
 
@@ -705,22 +700,11 @@ pub(crate) fn may_do_command_line_next_incsearch(
     }
 
     let no_emsg = Suppress::emsg();
-    let save = unsafe { *pat.offset(patlen as isize) };
-    unsafe { *pat.offset(patlen as isize) = NUL as ::core::ffi::c_char };
     let (w, b) = (Some(Win::current()), Buf::current());
-    let (tp, e) = (&raw mut t, ::core::ptr::null_mut::<Pos>());
     let dir = if next_match { FORWARD } else { BACKWARD } as Direction;
-    let (plen, flags) = (patlen as size_t, search_flags);
     let re = RE_SEARCH as ::core::ffi::c_int;
-    let sia = ::core::ptr::null_mut::<SearchItArg>();
-    // SAFETY: `tp` is this frame's start position and `pat` the pattern
-    // inside the command line, terminated just above.
-    let found = unsafe { searchit(w, b, tp, e, dir, pat, plen, count, flags, re, sia) };
+    let found = searchit(w, b, &mut t, None, dir, &pat, count, search_flags, re, None);
     drop(no_emsg);
-    unsafe { *pat.offset(patlen as isize) = save };
-    if bslsh {
-        unsafe { *pat.offset((patlen - 1) as isize) = '\\' as ::core::ffi::c_char };
-    }
     ui_busy_stop();
 
     if found != 0 {

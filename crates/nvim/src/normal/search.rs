@@ -11,7 +11,6 @@
 use crate::cstr;
 use crate::keycodes::ModMask;
 use crate::winlayer::{Buf, Win};
-use core::ptr;
 
 use crate::cursor::check_cursor;
 use crate::drawscreen::{UPD_SOME_VALID, redraw_later};
@@ -35,9 +34,9 @@ use crate::pos::equalpos;
 use crate::search::state::no_hlsearch;
 use crate::search::{SEARCH_ECHO, SEARCH_MARK, SEARCH_MSG, SEARCH_OPT, do_search};
 use crate::state::virtual_active;
-use crate::types::{CmdArg, FileMark, MarkMove, MarkMoveRes, OpType, SearchItArg, size_t};
+use crate::types::{CmdArg, FileMark, MarkMove, MarkMoveRes, OpType, SearchItArg};
 use crate::window::goto_tabpage_lastused;
-use core::ffi::{c_char, c_int, c_uint};
+use core::ffi::{c_int, c_uint};
 
 /// Whether the highlight of the previous match has to be redrawn.
 ///
@@ -74,25 +73,25 @@ pub(crate) fn nv_search(cmd_arg: &mut CmdArg) {
     } else {
         SEARCH_MARK as c_int
     };
-    let (pat, none) = (cmd_arg.searchbuf, ptr::null_mut());
-    // SAFETY: `pat` is the NUL-terminated pattern just read.
-    let len = unsafe { cstr::bytes_at(pat) }.len();
-    unsafe { normal_search(cmd_arg, cmd_arg.cmdchar, pat, len, mark, none) };
+    // A copy: the command keeps its buffer for the redo.
+    // SAFETY: the NUL-terminated pattern just read.
+    let pat = unsafe { cstr::bytes_at(cmd_arg.searchbuf) }.to_vec();
+    normal_search(cmd_arg, cmd_arg.cmdchar, &pat, mark, None);
 }
 
 /// `n` and `N`: search again for the last pattern.
 pub(crate) fn nv_next(cmd_arg: &mut CmdArg) {
     let old = Win::current().w_cursor;
-    let mut wrapped: c_int = 0;
-    let (none, opt) = (ptr::null_mut(), SEARCH_MARK as c_int | cmd_arg.arg);
-    let i = unsafe { normal_search(cmd_arg, 0, none, 0, opt, &raw mut wrapped) };
+    let mut wrapped = false;
+    let opt = SEARCH_MARK as c_int | cmd_arg.arg;
+    let i = normal_search(cmd_arg, 0, b"", opt, Some(&mut wrapped));
     // A match that lands where the cursor already is, without having
     // wrapped, is the one we are standing on: search once more so `n`
     // always moves.
-    if i == 1 && wrapped == 0 && equalpos(old, Win::current().w_cursor) {
+    if i == 1 && !wrapped && equalpos(old, Win::current().w_cursor) {
         cmd_arg.count1 += 1;
         let again = SEARCH_MARK as c_int | cmd_arg.arg;
-        unsafe { normal_search(cmd_arg, 0, none, 0, again, ptr::null_mut()) };
+        normal_search(cmd_arg, 0, b"", again, None);
         cmd_arg.count1 -= 1;
     }
     if i > 0 && current_match_is_distinct() {
@@ -103,23 +102,15 @@ pub(crate) fn nv_next(cmd_arg: &mut CmdArg) {
 /// The search every normal-mode search command goes through.
 ///
 /// Answers `do_search`'s result: 0 for no match, 1 for a match, 2 for a match
-/// the offset made linewise.
-///
-/// # Safety
-///
-/// `pat` must point at a NUL-terminated string, unaliased for the call.
-/// `wrapped` must point at a writable `int` the caller owns.
-pub(crate) unsafe fn normal_search(
+/// the offset made linewise. `wrapped` is told whether the search wrapped.
+pub(crate) fn normal_search(
     cmd_arg: &mut CmdArg,
     dir: c_int,
-    pat: *mut c_char,
-    patlen: size_t,
+    pat: &[u8],
     opt: c_int,
-    wrapped: *mut c_int,
+    wrapped: Option<&mut bool>,
 ) -> c_int {
-    // SAFETY: `pat` is null or a pattern `patlen` bytes long, and `wrapped`
-    // is null or an out-parameter.
-    let mut sia: SearchItArg = unsafe { core::mem::zeroed() };
+    let mut sia = SearchItArg::default();
     let prev_cursor = Win::current().w_cursor;
     let mut op = cmd_arg.op();
     op.motion_type = kMTCharWise;
@@ -130,10 +121,10 @@ pub(crate) unsafe fn normal_search(
     Win::current().w_set_curswant = true;
 
     let flags = opt | SEARCH_OPT as c_int | SEARCH_ECHO as c_int | SEARCH_MSG as c_int;
-    let (raw, n, arg) = (op.raw(), cmd_arg.count1, &raw mut sia);
-    let i = unsafe { do_search(raw, dir, dir, pat, patlen, n, flags, arg) };
-    if !wrapped.is_null() {
-        unsafe { *wrapped = sia.sa_wrapped };
+    let n = cmd_arg.count1;
+    let i = do_search(Some(&mut *op), dir, dir, pat, n, flags, Some(&mut sia));
+    if let Some(wrapped) = wrapped {
+        *wrapped = sia.sa_wrapped;
     }
 
     if i == 0 {

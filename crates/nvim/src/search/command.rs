@@ -9,15 +9,18 @@
 //! [`charsearch`](super::charsearch) and `gn`/`gN` in
 //! [`select`](super::select).
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
+use crate::autocmd::fire_autocmds;
 use crate::cstr;
 use crate::ex_docmd::cmdmod_has;
+use crate::mbyte::{c_cluster_len, char_at};
 use crate::memory::XString;
+use crate::message::msg_display_bytes;
 use crate::option::{ScrollMargin, ScrollOff, cpo_has};
-use crate::optionstr::OptString;
+use crate::optionstr::{OptString, OptStringRef};
+use crate::plines::vcols_at;
 use crate::pos::MAXCOL;
 use crate::regexp::RE_LAST;
 use crate::search::{
@@ -25,201 +28,136 @@ use crate::search::{
     SEARCH_OPT, SEARCH_PEEK, SEARCH_REV, SEARCH_START, SEARCH_STAT_BUF_LEN,
     SEARCH_STAT_DEF_TIMEOUT,
 };
-use crate::snprintf;
 use crate::types::{CmdModFlags, CpoFlag, FAIL, NUL, ShmFlag};
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
+use core::ffi::{c_char, c_int};
 
 // ---------------------------------------------------------------------
 // `/` and `?`.
 // ---------------------------------------------------------------------
 
-/// An `xmalloc`ed buffer that frees itself.
-///
-/// Two of `do_search`'s locals are allocations that outlive several early
-/// exits: the echo buffer, and the copy `skip_regexp_ex` makes when it has
-/// to rewrite `\?` to `?`.
-struct Owned(*mut c_char);
-
-impl Owned {
-    const fn null() -> Self {
-        Owned(ptr::null_mut())
-    }
-
-    fn as_ptr(&self) -> *mut c_char {
-        self.0
-    }
-
-    fn as_cstr(&self) -> &CStr {
-        // SAFETY: the allocation is live and NUL-terminated for as long as
-        // this owns it, and a null pointer is never shown.
-        unsafe { cstr::at(self.0) }
-    }
-
-    /// Take ownership of `p`, freeing whatever was held.
-    ///
-    /// # Safety
-    /// `p` must be an `xmalloc`ed allocation or null.
-    unsafe fn replace(&mut self, p: *mut c_char) {
-        unsafe { xfree(self.0 as *mut c_void) };
-        self.0 = p;
-    }
-}
-
-impl Drop for Owned {
-    fn drop(&mut self) {
-        // SAFETY: only ever an xmalloc'ed allocation or null.
-        unsafe { xfree(self.0 as *mut c_void) };
-    }
-}
-
-/// The echoed search command, and its length.
+/// The echoed search command, terminated.
 ///
 /// The buffer is deliberately over-long and space-filled: the search
 /// statistics are written into its tail, right-aligned, by
 /// [`cmdline_search_stat`](super::cmdline_search_stat).
-struct Echo {
-    buf: Owned,
-    len: size_t,
+type Echo = Vec<u8>;
+
+/// Where the pattern to search for comes from.
+enum Source {
+    /// The text the command holds.
+    Typed,
+    /// The remembered search pattern, which an empty pattern stands for
+    /// and [`search_regcomp`](super::search_regcomp) fills in itself.
+    Remembered,
+    /// The `:substitute` pattern, named explicitly because there is no
+    /// search pattern yet.
+    Substitute(XString),
 }
 
-impl Echo {
-    const fn none() -> Self {
-        Echo {
-            buf: Owned::null(),
-            len: 0,
-        }
-    }
-}
-
-/// One `/pat/offset` of a search command; a `;`-separated chain is
-/// several of these in a row.
-struct SearchCmd {
-    /// What is left of the command: the pattern, then the offset, then
-    /// either nothing or `;` and the next one.
-    pat: *mut c_char,
-    patlen: size_t,
-    /// `'/'` or `'?'` — this leg's direction.
-    dirc: c_int,
-    /// The character that ends the pattern. Usually `dirc`, but
-    /// `:s%pat%rep` passes its own.
-    delim: c_int,
-}
-
-/// Whether a `;` follows the offset, i.e. whether another leg comes next.
-///
-/// # Safety
-/// `pat` must be null or NUL-terminated.
-unsafe fn chained(pat: *mut c_char) -> bool {
-    unsafe { !pat.is_null() && *pat as c_int == ';' as c_int }
-}
-
-/// Choose the pattern to search for.
+/// Choose the pattern to search for, given the first byte of what is left
+/// of the command.
 ///
 /// An empty pattern means "the last one": normally that is left to
 /// [`search_regcomp`](super::search_regcomp), which is told to use
-/// `RE_LAST` — an empty string is passed through for it to fill in. Only
-/// when there is no search pattern at all does the `:substitute` pattern
-/// get named explicitly.
+/// `RE_LAST`. Only when there is no search pattern at all does the
+/// `:substitute` pattern get named explicitly.
 ///
 /// Answers `None` when neither remembered pattern exists (E35).
-///
-/// # Safety
-/// `pat` must be null or NUL-terminated.
-unsafe fn pattern_to_search(
-    pat: *mut c_char,
-    patlen: size_t,
-    delim: c_int,
-) -> Option<(*mut c_char, size_t)> {
-    if !(pat.is_null() || unsafe { *pat } as c_int == NUL || unsafe { *pat } as c_int == delim) {
-        return Some((pat, patlen));
+fn pattern_to_search(first: u8, delim: c_int) -> Option<Source> {
+    if !(first == NUL as u8 || c_int::from(first) == delim) {
+        return Some(Source::Typed);
     }
-    if !last_search_pattern().is_null() {
-        // Make search_regcomp() use spats[RE_SEARCH].pat.
-        return Some((c"".as_ptr() as *mut c_char, 0));
+    if has_last_search_pattern() {
+        return Some(Source::Remembered);
     }
-    let subst = substitute_pattern();
-    if subst.pat.is_null() {
+    let Some(subst) = substitute_pattern() else {
         emsg(gettext(e_noprevre));
         return None;
-    }
-    Some((subst.pat, subst.patlen))
+    };
+    Some(Source::Substitute(subst))
 }
 
-/// Parse the `e`/`s`/`b` and `+n`/`-n` suffix that follows the pattern,
+/// Parse the `e`/`s`/`b` and `+n`/`-n` suffix that starts `text[at..]`,
 /// leaving it in [`search_offset`](super::search_offset).
 ///
-/// Answers the first byte after the offset. For `get_address` (echo off)
-/// the character offsets are not looked for, because they are meaningless
-/// there and the `s` could be a `:substitute`.
-///
-/// # Safety
-/// `p` must be NUL-terminated.
-unsafe fn parse_offset(mut p: *mut c_char, options: c_int) -> *mut c_char {
+/// Answers the offset of the first byte after it. For `get_address` (echo
+/// off) the character offsets are not looked for, because they are
+/// meaningless there and the `s` could be a `:substitute`.
+fn parse_offset(text: &[u8], mut at: usize, options: c_int) -> usize {
     let mut off = search_offset();
     off.line = false;
     off.end = false;
     off.off = 0;
 
-    let at = |p: *mut c_char| unsafe { *p } as c_int;
-    if at(p) == '+' as c_int || at(p) == '-' as c_int || ascii_isdigit(at(p)) {
+    let byte = |i: usize| cstr::byte_at(text, i);
+    if matches!(byte(at), b'+' | b'-') || byte(at).is_ascii_digit() {
         off.line = true;
-    } else if options & SEARCH_OPT != 0
-        && (at(p) == 'e' as c_int || at(p) == 's' as c_int || at(p) == 'b' as c_int)
-    {
-        off.end = at(p) == 'e' as c_int;
-        p = unsafe { p.offset(1) };
+    } else if options & SEARCH_OPT != 0 && matches!(byte(at), b'e' | b's' | b'b') {
+        off.end = byte(at) == b'e';
+        at += 1;
     }
 
-    if ascii_isdigit(at(p)) || at(p) == '+' as c_int || at(p) == '-' as c_int {
+    if byte(at).is_ascii_digit() || matches!(byte(at), b'+' | b'-') {
         // 'nr' or '+nr' or '-nr'
-        off.off = if ascii_isdigit(at(p)) || ascii_isdigit(at(unsafe { p.offset(1) })) {
-            unsafe { atol(p) as int64_t }
-        } else if at(p) == '-' as c_int {
+        off.off = if byte(at).is_ascii_digit() || byte(at + 1).is_ascii_digit() {
+            atol_bytes(&text[at..])
+        } else if byte(at) == b'-' {
             -1 // a single '-'
         } else {
             1 // a single '+'
         };
-        p = unsafe { p.offset(1) };
-        while ascii_isdigit(at(p)) {
-            p = unsafe { p.offset(1) };
+        at += 1;
+        while byte(at).is_ascii_digit() {
+            at += 1;
         }
     }
 
     set_search_offset(off);
-    p
+    at
+}
+
+/// C's `atol` over the start of `text`: leading white space, a sign and
+/// digits, saturating where `strtol` would.
+fn atol_bytes(text: &[u8]) -> int64_t {
+    let mut i = text
+        .iter()
+        .position(|&b| !matches!(b, b' ' | b'\t' | b'\n' | b'\x0b' | b'\x0c' | b'\r'))
+        .unwrap_or(text.len());
+    let negative = cstr::byte_at(text, i) == b'-';
+    if matches!(cstr::byte_at(text, i), b'+' | b'-') {
+        i += 1;
+    }
+    let mut value: int64_t = 0;
+    while let Some(digit) = text.get(i).filter(|b| b.is_ascii_digit()) {
+        let digit = int64_t::from(digit - b'0');
+        value = if negative {
+            value.saturating_mul(10).saturating_sub(digit)
+        } else {
+            value.saturating_mul(10).saturating_add(digit)
+        };
+        i += 1;
+    }
+    value
 }
 
 /// Spell the offset back out, for the echoed command line.
-///
-/// Answers how many bytes of `buf` were written; the result is *not*
-/// NUL-terminated past that point, and the caller copies exactly that
-/// many bytes.
-fn write_offset(buf: &mut [c_char; 40], dirc: c_int, off: SearchOffset) -> size_t {
-    let mut len = 0usize;
+fn write_offset(dirc: c_int, off: SearchOffset) -> Vec<u8> {
+    let mut out = Vec::new();
     if !(off.line || off.end || off.off != 0) {
-        return 0;
+        return out;
     }
-    buf[len] = dirc as c_char;
-    len += 1;
+    out.push(dirc.to_ne_bytes()[0]);
     if off.end {
-        buf[len] = b'e' as c_char;
-        len += 1;
+        out.push(b'e');
     } else if !off.line {
-        buf[len] = b's' as c_char;
-        len += 1;
+        out.push(b's');
     }
-    buf[len] = NUL as c_char;
     if off.off != 0 || off.line {
-        // SAFETY: writing into the tail of a 40-byte stack buffer, with
-        // the remaining size passed; `%+ld` of an int64 fits in 21.
-        let (tail, room) = (buf.as_mut_ptr(), buf.len() - len);
-        let written = unsafe { snprintf!(tail.add(len), room, c"%+ld".as_ptr(), off.off) };
-        len += written as usize;
+        out.extend_from_slice(format!("{:+}", off.off).as_bytes());
     }
-    len
+    out
 }
 
 /// How much room to reserve for the echoed command.
@@ -232,129 +170,103 @@ fn echo_size(plen: size_t, off_len: size_t, with_stats: bool) -> size_t {
     if !with_stats {
         return plen + off_len + 3;
     }
-    // SAFETY: reading the screen geometry.
     let available = {
         if ui_has(kUIMessages) {
             0 // adjusted below
         } else if msg_scrolled.get() != 0 && !cmd_silent.get() {
             // Use all the columns.
-            ((Rows.get() - msg_row.get()) * Columns.get() - 1) as size_t
+            usize::try_from((Rows.get() - msg_row.get()) * Columns.get() - 1).unwrap_or(0)
         } else {
             // Use up to the 'showcmd' column.
-            ((Rows.get() - msg_row.get() - 1) * Columns.get() + sc_col.get() - 1) as size_t
+            let cells = (Rows.get() - msg_row.get() - 1) * Columns.get() + sc_col.get() - 1;
+            usize::try_from(cells).unwrap_or(0)
         }
     };
     available.max(plen + off_len + SEARCH_STAT_BUF_LEN as usize + 3)
 }
 
-/// Reverse the echoed command in place, for `'rightleft'` with `'rlc'`
-/// naming the search command.
+/// Reverse the echoed command (its terminator not included) in place, for
+/// `'rightleft'` with `'rlc'` naming the search command.
 ///
 /// The pattern could be shown on the right in rightleft mode, but the
 /// `'ruler'` and `'showcmd'` areas use that space too and would blank it
 /// out again very soon; it is shown on the left with the text reversed
 /// instead.
-///
-/// # Safety
-/// `echo.buf` must be an `xmalloc`ed NUL-terminated string of `echo.len`.
-unsafe fn reverse_echo(echo: &mut Echo) {
-    let reversed = reversed_text(unsafe { cstr::bytes_at(echo.buf.as_ptr()) });
-    unsafe { echo.buf.replace(XString::from_vec(reversed).into_raw()) };
-    echo.len = unsafe { cstr::bytes_at(echo.buf.as_ptr()) }.len();
-    let base = echo.buf.as_ptr();
-    // Move the reversed text to the beginning of the buffer.
-    let mut r = base;
-    while unsafe { *r } as c_int == ' ' as c_int {
-        r = unsafe { r.offset(1) };
-    }
-    let lead = unsafe { r.offset_from(base) } as size_t;
-    let pat_len = echo.len - lead;
-    unsafe { ptr::copy(r, base, pat_len) };
-    // Overwrite the old text with blanks.
-    if lead >= pat_len {
-        unsafe { ptr::write_bytes(r, b' ', pat_len) };
-    } else {
-        unsafe { ptr::write_bytes(base.add(pat_len), b' ', lead) };
-    }
+fn reverse_echo(echo: &[u8]) -> Vec<u8> {
+    let mut text = reversed_text(echo);
+    // Move the reversed text to the beginning of the buffer, and blank
+    // what is left after it.
+    let lead = text.iter().take_while(|&&b| b == b' ').count();
+    let pat_len = text.len() - lead;
+    text.copy_within(lead.., 0);
+    text[pat_len..].fill(b' ');
+    text
 }
 
 /// Echo the search command on the command line and answer the buffer it
 /// was drawn from, which the search statistics are later written into.
-///
-/// # Safety
-/// `searchstr` must be NUL-terminated.
-unsafe fn echo_search_cmd(
-    dirc: c_int,
-    searchstr: *mut c_char,
-    searchstrlen: size_t,
-    options: c_int,
-) -> (Echo, bool) {
+fn echo_search_cmd(dirc: c_int, searchstr: &[u8], options: c_int) -> Option<(Echo, bool)> {
     if !(options & SEARCH_ECHO != 0
         && messaging()
         && msg_silent.get() == 0
         && (!cmd_silent.get() || !shortmess(ShmFlag::SEARCHCOUNT)))
     {
-        return (Echo::none(), false);
+        return None;
     }
 
     // Compute msg_row early.
     msg_start();
     msg_ext_set_kind(c"search_cmd");
 
-    let mut off_buf: [c_char; 40] = [0; 40];
-    let off_len = if cmd_silent.get() {
-        0
+    let off_text = if cmd_silent.get() {
+        Vec::new()
     } else {
-        write_offset(&mut off_buf, dirc, search_offset())
+        write_offset(dirc, search_offset())
     };
 
-    let (p, plen) = if unsafe { *searchstr } as c_int == NUL {
-        (last_search_pattern(), last_search_pattern_len())
+    let remembered;
+    let p: &[u8] = if searchstr.is_empty() {
+        remembered = last_search_pattern().unwrap_or_default();
+        &remembered
     } else {
-        (searchstr, searchstrlen)
+        searchstr
     };
+    let plen = p.len();
 
     let with_stats = !shortmess(ShmFlag::SEARCHCOUNT) || cmd_silent.get();
-    let size = echo_size(plen, off_len, with_stats);
-    let mut echo = Echo {
-        buf: Owned(unsafe { xmalloc(size) } as *mut c_char),
-        len: size - 1,
-    };
-    unsafe { ptr::write_bytes(echo.buf.as_ptr(), b' ', size) };
-    unsafe { *echo.buf.as_ptr().add(echo.len) = NUL as c_char };
+    let size = echo_size(plen, off_text.len(), with_stats);
+    let mut echo = vec![b' '; size];
+    echo[size - 1] = NUL as u8;
 
     // Do not fill the buffer when cmd_silent is set: it is left empty
     // for the search-statistics feature.
     if !cmd_silent.get() {
         ui_busy_start();
-        let buf = echo.buf.as_ptr();
-        unsafe { *buf = dirc as c_char };
-        if utf_iscomposing_first(unsafe { utf_ptr2char(p) }) {
+        echo[0] = dirc.to_ne_bytes()[0];
+        let at = if utf_iscomposing_first(char_at(p)) {
             // Use a space to draw the composing character on.
-            unsafe { *buf.add(1) = b' ' as c_char };
-            unsafe { ptr::copy(p, buf.add(2), plen) };
+            echo[1] = b' ';
+            2
         } else {
-            unsafe { ptr::copy(p, buf.add(1), plen) };
-        }
-        if off_len > 0 {
-            unsafe { ptr::copy(off_buf.as_ptr(), buf.add(plen + 1), off_len) };
-        }
+            1
+        };
+        echo[at..at + plen].copy_from_slice(p);
+        echo[plen + 1..plen + 1 + off_text.len()].copy_from_slice(&off_text);
 
-        // SAFETY: the echo buffer is this frame's NUL-terminated string.
-        let text = unsafe { cstr::bytes_at(echo.buf.as_ptr()) };
+        let text = cstr::until_nul(&echo);
         if let Some(truncated) = fit_middle(text, true) {
-            echo.len = truncated.len();
-            // SAFETY: `into_raw` hands over an `xmalloc`ed block.
-            unsafe { echo.buf.replace(truncated.into_raw()) };
+            echo = truncated.as_bytes_with_nul().to_vec();
         }
 
         if Win::current().w_onebuf_opt.wo_rl != 0
-            && Win::current().w_onebuf_opt.wo_rlc.first_byte() as c_int == 's' as c_int
+            && Win::current().w_onebuf_opt.wo_rlc.first_byte() == b's'
         {
-            unsafe { reverse_echo(&mut echo) };
+            let mut reversed = reverse_echo(cstr::until_nul(&echo));
+            reversed.push(NUL as u8);
+            echo = reversed;
         }
 
-        msg_display(echo.buf.as_cstr(), 0, false);
+        msg_display_bytes(cstr::until_nul(&echo), 0, false);
         msg_clr_eos();
         msg_check();
         gotocmdline(false);
@@ -363,7 +275,7 @@ unsafe fn echo_search_cmd(
         msg_nowait.set(true);
     }
 
-    (echo, !shortmess(ShmFlag::SEARCHCOUNT))
+    Some((echo, !shortmess(ShmFlag::SEARCHCOUNT)))
 }
 
 /// Step the start position back over a character offset before searching,
@@ -407,11 +319,11 @@ fn back_off_start(pos: &mut Pos, off: i64) {
 fn add_offset(pos: &mut Pos, off: SearchOffset) -> c_int {
     if off.line {
         // Add the offset to the line number.
-        let lnum = pos.lnum as i64 + off.off;
+        let lnum = i64::from(pos.lnum) + off.off;
         let last = Buf::current().b_ml.ml_line_count;
         pos.lnum = if lnum < 1 {
             1
-        } else if lnum > last as i64 {
+        } else if lnum > i64::from(last) {
             last
         } else {
             lnum as LineNr
@@ -447,64 +359,22 @@ fn add_offset(pos: &mut Pos, off: SearchOffset) -> c_int {
 /// keeping the last search pattern and its direction (`SEARCH_KEEP`).
 /// Answers whether it was found; the cursor is on the match when it was.
 pub(crate) fn search_forward_keep(pattern: &[u8]) -> bool {
-    // A copy, terminated: the search may cut the pattern at a delimiter.
-    let mut copy = pattern.to_vec();
-    copy.push(0);
-    // SAFETY: a NUL-terminated copy this call owns, its length, and no
-    // operator or search state.
-    let found = unsafe {
-        do_search(
-            ptr::null_mut(),
-            c_int::from(b'/'),
-            c_int::from(b'/'),
-            copy.as_mut_ptr().cast(),
-            pattern.len(),
-            1,
-            SEARCH_KEEP,
-            ptr::null_mut(),
-        )
-    };
-    found != 0
+    let slash = c_int::from(b'/');
+    do_search(None, slash, slash, pattern, 1, SEARCH_KEEP, None) != 0
 }
 
 /// [`do_search`] once for the pattern that starts `text` and ends at its
-/// first NUL, with no operator and no extra arguments. The pattern may be
-/// terminated in place for the search, and is put back.
-///
-/// # Panics
-/// When `text` holds no NUL.
-pub(crate) fn do_search_in(
-    text: &mut [u8],
-    dirc: c_int,
-    search_delim: c_int,
-    options: c_int,
-) -> c_int {
-    let patlen = text
-        .iter()
-        .position(|byte| *byte == 0)
-        .expect("a NUL-terminated pattern");
-    let pat = text.as_mut_ptr().cast::<c_char>();
-    // SAFETY: a NUL-terminated pattern, writable up to its terminator for
-    // the call, and no operator or extra arguments.
-    unsafe {
-        do_search(
-            ptr::null_mut(),
-            dirc,
-            search_delim,
-            pat,
-            patlen,
-            1,
-            options,
-            ptr::null_mut(),
-        )
-    }
+/// first NUL (or the end), with no operator and no extra arguments.
+pub(crate) fn do_search_in(text: &[u8], dirc: c_int, search_delim: c_int, options: c_int) -> c_int {
+    let pat = cstr::until_nul(text);
+    do_search(None, dirc, search_delim, pat, 1, options, None)
 }
 
 /// Search for `pat`, `count` times, from the cursor.
 ///
 /// `dirc` is `'/'` or `'?'`, or 0 to reuse the direction of the previous
-/// search. A null or empty `pat` reuses the previous pattern. `options`
-/// is a mask of the `SEARCH_*` flags; `op` and `sia` may be null.
+/// search. An empty `pat` reuses the previous pattern. `options` is a mask
+/// of the `SEARCH_*` flags.
 ///
 /// Careful: with a line offset of 0 (`spats[0].off.line` set and
 /// `off.off == 0`) this makes the motion linewise without moving the
@@ -512,19 +382,14 @@ pub(crate) fn do_search_in(
 ///
 /// Answers 0 for failure, 1 for found, and 2 for found with a line offset
 /// added.
-///
-/// # Safety
-/// `pat` must be null or NUL-terminated and writable up to its
-/// terminator; `op` and `sia` must be null or valid.
-pub unsafe fn do_search(
-    op: *mut OpArg,
+pub fn do_search(
+    mut op: Option<&mut OpArg>,
     dirc: c_int,
     search_delim: c_int,
-    pat: *mut c_char,
-    patlen: size_t,
+    pat: &[u8],
     count: c_int,
     options: c_int,
-    sia: *mut SearchItArg,
+    mut sia: Option<&mut SearchItArg>,
 ) -> c_int {
     searchcmdlen.set(0);
     // A line offset is not remembered; this is vi compatible.
@@ -537,24 +402,33 @@ pub unsafe fn do_search(
     // Saved for when SEARCH_KEEP is used.
     let old_off = search_offset();
 
-    let mut cmd = SearchCmd {
-        pat,
-        patlen,
-        dirc,
-        delim: search_delim,
-    };
+    // The command, terminated: what is left of it is `text[at..]` -- the
+    // pattern, then the offset, then either nothing or `;` and the next
+    // leg. `patlen` is how long the caller (and, after a leg, the walk)
+    // says that is, kept with upstream's wrapping arithmetic.
+    let mut text = pat.to_vec();
+    text.push(NUL as u8);
+    let mut at = 0usize;
+    let mut patlen = pat.len();
+    // Whether `text` is the copy `skip_regexp_copy` made when it rewrote
+    // "\?" to "?"; a later leg rewrites that copy in place.
+    let mut copied = false;
+    // This leg's direction, and the character that ends its pattern --
+    // usually the direction, but `:s%pat%rep` passes its own.
+    let mut dirc = dirc;
+    let mut delim = search_delim;
 
     // Find out the direction of the search.
-    if cmd.dirc == 0 {
-        cmd.dirc = off.dir as u8 as c_int;
+    if dirc == 0 {
+        dirc = c_int::from(off.dir.to_ne_bytes()[0]);
     } else {
         let mut off = search_offset();
-        off.dir = cmd.dirc as c_char;
+        off.dir = c_char::from_ne_bytes([dirc.to_ne_bytes()[0]]);
         set_search_offset(off);
         set_vv_searchforward();
     }
     if options & SEARCH_REV != 0 {
-        cmd.dirc = if cmd.dirc == '/' as c_int {
+        dirc = if dirc == '/' as c_int {
             '?' as c_int
         } else {
             '/' as c_int
@@ -566,7 +440,7 @@ pub unsafe fn do_search(
 
     // If the cursor is in a closed fold, don't find another match in
     // the same fold.
-    if cmd.dirc == '/' as c_int {
+    if dirc == '/' as c_int {
         if has_folding(Win::current(), pos.lnum, None, Some(&mut pos.lnum)) {
             pos.col = (MAXCOL - 2) as ColNr; // avoid overflow when adding 1
         }
@@ -580,10 +454,9 @@ pub unsafe fn do_search(
         set_no_hlsearch(false);
     }
 
-    // The copy skip_regexp_ex makes when it rewrites "\?" to "?"; it
-    // has to outlive the loop, because `cmd.pat` points into it.
-    let mut strcopy = Owned::null();
     let mut retval = 0;
+    // Whether a `;` follows the offset, i.e. whether another leg comes next.
+    let chained = |text: &[u8], at: usize| cstr::byte_at(text, at) == b';';
 
     let found = 'end: {
         // Repeat the search when the pattern is followed by ';', as in
@@ -591,74 +464,73 @@ pub unsafe fn do_search(
         loop {
             let mut show_top_bot_msg = false;
 
-            let found = unsafe { pattern_to_search(cmd.pat, cmd.patlen, cmd.delim) };
-            let Some((searchstr, searchstrlen)) = found else {
+            let Some(source) = pattern_to_search(cstr::byte_at(&text, at), delim) else {
                 break 'end false;
             };
-            let mut searchstr = searchstr;
-            let mut searchstrlen = searchstrlen;
+            // The pattern searched for, as a span of `text` or as the
+            // substitute pattern.
+            let mut span = (at, patlen);
 
-            // Where the pattern's terminator was replaced by a NUL, so
-            // that normal_cmd() can be handed the command back intact.
-            let mut dircp = ptr::null_mut::<c_char>();
-
-            if !cmd.pat.is_null() && unsafe { *cmd.pat } as c_int != NUL {
+            if cstr::byte_at(&text, at) != NUL as u8 {
                 // Find the end of the regular expression. If there is
                 // a matching '/' or '?', toss it.
                 let is_magic = c_int::from(magic_isset());
-                // SAFETY: `cmd.pat` is the pattern the command line holds --
-                // inside `strcopy` once a copy has been made, which a `\?`
-                // is then unescaped in place in, as upstream's non-empty
-                // `newp` slot asked for.
-                let pat = unsafe {
-                    core::slice::from_raw_parts_mut(
-                        cmd.pat.cast::<u8>(),
-                        CStr::from_ptr(cmd.pat).count_bytes() + 1,
-                    )
-                };
-                let (end, copy) = if strcopy.as_ptr().is_null() {
-                    skip_regexp_copy(pat, cmd.delim, is_magic)
+                let end = if copied {
+                    skip_regexp_in_place(&mut text, at, delim, is_magic) - at
                 } else {
-                    (skip_regexp_in_place(pat, 0, cmd.delim, is_magic), None)
+                    let (end, copy) = skip_regexp_copy(&text[at..], delim, is_magic);
+                    if let Some(mut copy) = copy {
+                        // Made a copy of "pat" to change "\?" to "?".
+                        let len = cstr::until_nul(&copy).len();
+                        copy.truncate(len);
+                        copy.push(NUL as u8);
+                        // Wrapping, as upstream: `patlen` is what the
+                        // caller claimed, which for `get_address` is a
+                        // prefix of a longer command line — the copy can
+                        // be longer, and C's size_t difference is then
+                        // the negative number this wants.
+                        let extra = patlen.wrapping_sub(len) as c_int;
+                        searchcmdlen.set(searchcmdlen.get() + extra);
+                        text = copy;
+                        at = 0;
+                        patlen = len;
+                        copied = true;
+                        span = (0, len);
+                    }
+                    end
                 };
-                let mut p = cmd.pat.wrapping_add(end);
-                if let Some(copy) = copy {
-                    let copied = XString::from_vec(copy).into_raw();
-                    p = copied.wrapping_add(end);
-                    // Made a copy of "pat" to change "\?" to "?".
-                    unsafe { strcopy.replace(copied) };
-                    let len = unsafe { cstr::bytes_at(copied) }.len();
-                    // Wrapping, as upstream: `patlen` is what the
-                    // caller claimed, which for `get_address` is a
-                    // prefix of a longer command line — the copy can
-                    // be longer, and C's size_t difference is then
-                    // the negative number this wants.
-                    let extra = cmd.patlen.wrapping_sub(len) as c_int;
-                    searchcmdlen.set(searchcmdlen.get() + extra);
-                    cmd.pat = copied;
-                    cmd.patlen = len;
-                    searchstr = copied;
-                    searchstrlen = len;
-                }
-                if unsafe { *p } as c_int == cmd.delim {
-                    searchstrlen = unsafe { p.offset_from(cmd.pat) } as size_t;
-                    dircp = p; // remember where we put the NUL
-                    unsafe { *p = NUL as c_char };
-                    p = unsafe { p.offset(1) };
+                let mut p = at + end;
+                if c_int::from(cstr::byte_at(&text, p)) == delim {
+                    // The pattern searched for ends at the delimiter --
+                    // when it is the typed one.
+                    if matches!(source, Source::Typed) {
+                        span = (at, p - at);
+                    }
+                    p += 1;
                 }
 
-                p = unsafe { parse_offset(p, options) };
+                p = parse_offset(&text, p, options);
 
                 // Compute the length of the search command, for
                 // get_address().
-                let consumed = unsafe { p.offset_from(cmd.pat) } as size_t;
+                let consumed = p - at;
                 searchcmdlen.set(searchcmdlen.get() + consumed as c_int);
-                cmd.patlen = cmd.patlen.wrapping_sub(consumed);
-                cmd.pat = p; // put pat after the search command
+                patlen = patlen.wrapping_sub(consumed);
+                at = p; // put pat after the search command
             }
 
-            let (echo, show_search_stats) =
-                unsafe { echo_search_cmd(cmd.dirc, searchstr, searchstrlen, options) };
+            let searchstr: &[u8] = match &source {
+                Source::Typed => {
+                    let (start, len) = span;
+                    let end = start.saturating_add(len).min(text.len());
+                    cstr::until_nul(&text[start.min(end)..end])
+                }
+                Source::Remembered => b"",
+                Source::Substitute(subst) => subst,
+            };
+            let searchstr = searchstr.to_vec();
+
+            let echoed = echo_search_cmd(dirc, &searchstr, options);
 
             let off = search_offset();
             if !off.line && off.off != 0 && pos.col < MAXCOL - 2 {
@@ -667,30 +539,22 @@ pub unsafe fn do_search(
 
             // A ';'-chained leg always applies its offset, whatever
             // the caller asked for.
-            let noof = if unsafe { chained(cmd.pat) } {
-                0
-            } else {
-                SEARCH_NOOF
-            };
+            let noof = if chained(&text, at) { 0 } else { SEARCH_NOOF };
             let (w, b) = (Some(Win::current()), Buf::current());
-            let (at, end) = (&raw mut pos, ptr::null_mut());
-            let dir = if cmd.dirc == '/' as c_int {
+            let dir = if dirc == '/' as c_int {
                 FORWARD
             } else {
                 BACKWARD
             };
             let kept = SEARCH_KEEP + SEARCH_PEEK + SEARCH_HIS + SEARCH_MSG + SEARCH_START + noof;
             let opts = c_int::from(off.end) * SEARCH_END + (options & kept);
-            let (pat, plen) = (searchstr, searchstrlen);
-            // SAFETY: `pos` is this frame's start position, `pat` the pattern
-            // the command line holds, and `sia` the caller's argument block.
-            let c = unsafe { searchit(w, b, at, end, dir, pat, plen, count, opts, RE_LAST, sia) };
+            let leg = sia.as_deref_mut();
+            let c = searchit(
+                w, b, &mut pos, None, dir, &searchstr, count, opts, RE_LAST, leg,
+            );
 
-            if !dircp.is_null() {
-                // Restore the second '/' or '?' for normal_cmd().
-                unsafe { *dircp = cmd.delim as c_char };
-            }
-            if !shortmess(ShmFlag::SEARCH) && !sia.is_null() && unsafe { (*sia).sa_wrapped } != 0 {
+            let wrapped = sia.as_ref().is_some_and(|sia| sia.sa_wrapped);
+            if !shortmess(ShmFlag::SEARCH) && wrapped {
                 show_top_bot_msg = true;
             }
             if c == FAIL {
@@ -698,43 +562,36 @@ pub unsafe fn do_search(
             }
 
             let off = search_offset();
-            if off.end && !op.is_null() {
-                unsafe { (*op).inclusive = true }; // 'e' includes the last character
+            if off.end
+                && let Some(op) = op.as_deref_mut()
+            {
+                op.inclusive = true; // 'e' includes the last character
             }
             retval = 1; // pattern found
 
-            if !sia.is_null() && unsafe { (*sia).sa_wrapped } != 0 {
-                let name = ptr::null_mut();
-                // SAFETY: no pattern and no buffer to match against.
-                unsafe { apply_autocmds(AutoEvent::SearchWrapped, name, name, false, None) };
+            if wrapped {
+                fire_autocmds(AutoEvent::SearchWrapped, false, None);
             }
 
             let mut has_offset = false;
-            if options & SEARCH_NOOF == 0 || unsafe { chained(cmd.pat) } {
+            if options & SEARCH_NOOF == 0 || chained(&text, at) {
                 let org_pos = pos;
                 retval = add_offset(&mut pos, search_offset());
                 has_offset = !equalpos(pos, org_pos);
             }
 
             // Show [1/15] if 'S' is not in 'shortmess'.
-            if show_search_stats {
+            if let Some((mut echo, true)) = echoed {
                 let inexact = count != 1
                     || has_offset
                     || (fdo_flags.get() & kOptFdoFlagSearch == 0 && {
                         let (w, lnum) = (Win::current(), Win::current().w_cursor.lnum);
                         has_folding(w, lnum, None, None)
                     });
-                let (at, cursor) = (&raw mut pos, Win::current().cursor().raw());
-                let (msg, msglen) = (echo.buf.as_ptr(), echo.len);
+                let cursor = Win::current().w_cursor;
                 let (top_bot, maxcount) = (show_top_bot_msg, p_msc() as c_int);
                 let tm = SEARCH_STAT_DEF_TIMEOUT;
-                // SAFETY: `pos` is this frame's, `cursor` the live window's,
-                // and `msg` the echoed search command's own buffer.
-                unsafe {
-                    cmdline_search_stat(
-                        cmd.dirc, at, cursor, top_bot, msg, msglen, inexact, maxcount, tm,
-                    )
-                };
+                cmdline_search_stat(dirc, pos, cursor, top_bot, &mut echo, inexact, maxcount, tm);
             }
 
             // The search command can be followed by a ';' to do
@@ -743,18 +600,18 @@ pub unsafe fn do_search(
             // direction is the first search's and that an error leaves
             // the cursor where it was. Not done when called by
             // get_address(), which handles ';' itself.
-            if options & SEARCH_OPT == 0 || !unsafe { chained(cmd.pat) } {
+            if options & SEARCH_OPT == 0 || !chained(&text, at) {
                 break;
             }
-            cmd.pat = unsafe { cmd.pat.offset(1) };
-            cmd.dirc = unsafe { *cmd.pat } as u8 as c_int;
-            cmd.delim = cmd.dirc;
-            if cmd.dirc != '?' as c_int && cmd.dirc != '/' as c_int {
+            at += 1;
+            dirc = c_int::from(cstr::byte_at(&text, at));
+            delim = dirc;
+            if dirc != '?' as c_int && dirc != '/' as c_int {
                 emsg(gettext(c"E386: Expected '?' or '/'  after ';'"));
                 break 'end false;
             }
-            cmd.pat = unsafe { cmd.pat.offset(1) };
-            cmd.patlen -= 1;
+            at += 1;
+            patlen = patlen.wrapping_sub(1);
         }
 
         if options & SEARCH_MARK != 0 {
@@ -785,21 +642,25 @@ pub unsafe fn do_search(
 /// blinks in left-to-right mode and the closing one in right-to-left.
 fn mps_shows_match(c: c_int) -> bool {
     let rightleft = (Win::current().w_onebuf_opt.wo_rl != 0) ^ p_ri();
-    // The walk reads 'matchpairs' in place, as upstream's does.
-    let mut p = Buf::current().b_p_mps.value_ptr();
-    while unsafe { *p } as c_int != NUL {
-        if unsafe { utf_ptr2char(p) } == c && rightleft {
+    let buf = Buf::current();
+    let mps = buf.b_p_mps.bytes();
+    // The walk reads the value as the C string it is: the end is a NUL.
+    let char_from = |i: usize| char_at(mps.get(i..).unwrap_or_default());
+    let len_from = |i: usize| c_cluster_len(mps.get(i..).unwrap_or_default());
+    let mut i = 0;
+    while i < mps.len() {
+        if char_from(i) == c && rightleft {
             return true;
         }
-        p = unsafe { p.offset((utfc_ptr2len(p) + 1) as isize) };
-        if unsafe { utf_ptr2char(p) } == c && !rightleft {
+        i += len_from(i) + 1;
+        if char_from(i) == c && !rightleft {
             return true;
         }
-        p = unsafe { p.offset(utfc_ptr2len(p) as isize) };
-        if unsafe { *p } as c_int == NUL {
+        i += len_from(i);
+        if i >= mps.len() {
             return false;
         }
-        p = unsafe { p.offset(1) };
+        i += 1;
     }
     false
 }
@@ -820,11 +681,8 @@ pub fn showmatch(c: c_int) {
         return;
     }
 
-    let mut vcol: ColNr = 0;
     if Win::current().w_onebuf_opt.wo_wrap == 0 {
-        let (w, at, col) = (Win::current(), &raw mut lpos, &raw mut vcol);
-        // SAFETY: `lpos` is this frame's position in the live window.
-        unsafe { getvcol(w, at, ptr::null_mut(), col, ptr::null_mut()) };
+        let vcol = vcols_at(Win::current(), &mut lpos).1;
         if !(vcol >= Win::current().w_leftcol
             && vcol < Win::current().w_leftcol + Win::current().w_view_width)
         {

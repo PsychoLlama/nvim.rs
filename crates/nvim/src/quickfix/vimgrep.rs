@@ -35,7 +35,7 @@ use crate::optionstr::OptString;
 use crate::os::fs::current_dir;
 use crate::path::path_try_shorten_fname;
 use crate::regexp::{OwnedProg, RE_MAGIC};
-use crate::search::last_pattern_owned;
+use crate::search::last_search_pat;
 use crate::semsg;
 use crate::smsg;
 use crate::types::CmdIdx;
@@ -125,7 +125,7 @@ fn compile_pattern(spat: &XString) -> Option<OwnedProg> {
     if !spat.is_empty() {
         return OwnedProg::compile(spat.as_cstr(), RE_MAGIC);
     }
-    let Some(last) = last_pattern_owned() else {
+    let Some(last) = last_search_pat() else {
         qf_emsg(e_noprevre);
         return None;
     };

@@ -17,7 +17,6 @@
 #![cfg(not(miri))]
 
 use std::ffi::{CStr, c_int};
-use std::ptr;
 
 use neovim::ex_docmd::state::cmdmod;
 use neovim::memory::XString;
@@ -25,15 +24,12 @@ use neovim::search::{get_search_pat, pat_has_uppercase, search_regcomp};
 use neovim::types::{CmdModFlags, RegMMatch};
 use neovim::winlayer::graph::curwin;
 
-use crate::support::{Sandbox, cstr};
+use crate::support::Sandbox;
 
 /// Whether `pat` counts as containing an uppercase character.
 fn has_uppercase(pat: &str) -> bool {
     let _sandbox = Sandbox::globals();
-    let pat = cstr(pat);
-    // SAFETY: `pat` is NUL-terminated and outlives the call, and the editor
-    // lock is held for the character tables `pat_has_uppercase` reads.
-    unsafe { pat_has_uppercase(pat.as_ptr().cast_mut()) }
+    pat_has_uppercase(pat.as_bytes())
 }
 
 #[test]
@@ -140,21 +136,8 @@ fn a_right_to_left_pattern_is_reversed_bytewise() {
     // characters, or the reversal reads past the end of the pattern.
     let _guard = RightLeft::claim(c"s");
     let mut regmatch = RegMMatch::default();
-    let pat = cstr(*b"a\xc0");
-    // SAFETY: the pattern outlives the call, `used_pat` is optional and
-    // null here, and `regmatch` is this stack frame's.
-    let rc = unsafe {
-        search_regcomp(
-            pat.as_ptr().cast_mut(),
-            2,
-            ptr::null_mut(),
-            0,
-            0,
-            0,
-            &raw mut regmatch,
-        )
-    };
-    assert_eq!(rc, Ok(()), "the reversed pattern still compiles");
+    let rc = search_regcomp(b"a\xc0", 0, 0, 0, &mut regmatch);
+    assert!(rc.is_ok(), "the reversed pattern still compiles");
 
     let compiled = get_search_pat();
     assert_eq!(&compiled[..], b"\xc0a", "the pattern was reversed");
@@ -168,20 +151,8 @@ fn only_a_rightleftcmd_of_s_reverses_the_pattern() {
     // so dropping the `'rightleftcmd'` test entirely went unnoticed.
     let _guard = RightLeft::claim(c"");
     let mut regmatch = RegMMatch::default();
-    let pat = cstr(*b"a\xc0");
-    // SAFETY: as in the case above.
-    let rc = unsafe {
-        search_regcomp(
-            pat.as_ptr().cast_mut(),
-            2,
-            ptr::null_mut(),
-            0,
-            0,
-            0,
-            &raw mut regmatch,
-        )
-    };
-    assert_eq!(rc, Ok(()));
+    let rc = search_regcomp(b"a\xc0", 0, 0, 0, &mut regmatch);
+    assert!(rc.is_ok());
 
     let compiled = get_search_pat();
     assert_eq!(&compiled[..], b"a\xc0", "the pattern was kept as typed");

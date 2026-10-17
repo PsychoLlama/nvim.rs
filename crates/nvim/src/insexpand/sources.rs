@@ -85,7 +85,7 @@ pub(crate) unsafe fn ins_compl_dictionaries(
         }
 
         // Ignore case depends on 'ignorecase', 'smartcase' and "pat".
-        regmatch.rm_ic = unsafe { ignorecase(pat) };
+        regmatch.rm_ic = ignorecase(unsafe { cstr::bytes_at(pat) });
         while unsafe { *dict } as c_int != NUL && !got_int.get() && !compl_interrupted.get() {
             // Copy one dictionary file name into buf.
             // Upstream leaves both uninitialised: every path that reads
@@ -545,29 +545,15 @@ pub(crate) fn get_next_default_completion(
         {
             // ctrl_x_mode_line_or_eval(), or a word-wise search that has
             // added a word that was at the beginning of the line.
-            let pat = compl_pattern().data();
-            // SAFETY: `pos` is a position in `ins_buf` and `pat` is the
-            // running completion's NUL-terminated pattern.
-            found_new_match = unsafe { search_for_exact_line(ins_buf, &raw mut pos, dir, pat) };
+            // A copy: the search must not hold the completion state.
+            let pat = compl_pattern().to_vec();
+            found_new_match = search_for_exact_line(ins_buf, &mut pos, dir, &pat);
         } else {
-            let (pat, pat_len) = compl_pattern().parts();
+            let pat = compl_pattern().to_vec();
             let flags = SEARCH_KEEP + SEARCH_NFMSG;
-            // SAFETY: as above, with the pattern's own length.
-            let found = unsafe {
-                searchit(
-                    None,
-                    ins_buf,
-                    &raw mut pos,
-                    ptr::null_mut(),
-                    dir,
-                    pat,
-                    pat_len,
-                    1,
-                    flags,
-                    RE_LAST,
-                    ptr::null_mut(),
-                )
-            };
+            let found = searchit(
+                None, ins_buf, &mut pos, None, dir, &pat, 1, flags, RE_LAST, None,
+            );
             found_new_match = if found == FAIL { Err(Failed) } else { Ok(()) };
         }
         drop(silenced);

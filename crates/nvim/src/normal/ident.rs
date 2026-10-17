@@ -471,9 +471,9 @@ pub(crate) fn nv_ident(cmd_arg: &mut CmdArg) {
         add_to_history(HIST_SEARCH as c_int, entry, true, NUL as u8);
         let star = cmdchar == '*' as c_int;
         let dir = if star { '/' as c_int } else { '?' as c_int };
-        let cmd = out.as_ptr();
-        let used = out.used();
-        unsafe { normal_search(cmd_arg, dir, cmd, used, 0, ptr::null_mut()) };
+        // SAFETY: the command holds `used()` bytes.
+        let cmd = unsafe { core::slice::from_raw_parts(out.as_ptr().cast::<u8>(), out.used()) };
+        normal_search(cmd_arg, dir, cmd, 0, None);
     } else {
         // `taglist()` and friends need to know the tag came from under
         // the cursor rather than from a command line.

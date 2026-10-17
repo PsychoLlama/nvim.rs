@@ -4,20 +4,18 @@
 //! `;` and `,` replay; `set_last_csearch` and friends exist so that
 //! `getcharsearch()`/`setcharsearch()` can read and write them.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use super::*;
 use crate::cstr;
 use crate::mbyte::MAX_SCHAR_SIZE;
-use crate::mbyte::char_len;
+use crate::mbyte::{c_cluster_len, char_len, encode_char};
 use crate::option::cpo_has;
 use crate::types::{CpoFlag, Failed, NUL};
 use crate::winlayer::Win;
-use core::ffi::{c_char, c_int};
-use core::ptr;
+use core::ffi::c_int;
 
 state_record! {
     /// What `;` and `,` replay: the last `f`/`t`/`F`/`T`.
@@ -32,7 +30,7 @@ state_record! {
     last_t_cmd: bool = true;
     /// The full (possibly multi-byte, possibly composed) sequence, which
     /// `lastc_bytelen > 1` switches the comparison over to.
-    lastc_bytes: [c_char; SCHAR_BYTES] = [0; SCHAR_BYTES];
+    lastc_bytes: [u8; SCHAR_BYTES] = [0; SCHAR_BYTES];
     lastc_bytelen: c_int = 1;
 }
 
@@ -41,7 +39,7 @@ const SCHAR_BYTES: usize = MAX_SCHAR_SIZE as usize + 1;
 
 /// The bytes `;` and `,` look for, NUL-terminated, by value: `getcharsearch()`
 /// reads them while the very dictionary it is building can run code.
-pub fn last_csearch() -> [c_char; SCHAR_BYTES] {
+pub fn last_csearch() -> [u8; SCHAR_BYTES] {
     lastc_bytes.get()
 }
 
@@ -78,9 +76,7 @@ pub fn set_last_csearch(c: c_int, text: &[u8]) {
     } else {
         [0; SCHAR_BYTES]
     };
-    for (to, &from) in bytes.iter_mut().zip(&text[..len]) {
-        *to = from as c_char;
-    }
+    bytes[..len].copy_from_slice(&text[..len]);
     lastc_bytes.set(bytes);
 }
 
@@ -114,14 +110,15 @@ pub fn searchc(cmd_arg: &mut CmdArg, t_cmd: bool) -> Result<(), Failed> {
             let mut bytes = lastc_bytes.get();
             if cmd_arg.nchar_len != 0 {
                 lastc_bytelen.set(cmd_arg.nchar_len);
-                // SAFETY: `nchar_composing` holds `nchar_len` bytes, and
-                // `bytes` is a `MB_MAXBYTES`-sized array of this frame.
-                unsafe {
-                    let from = (&raw const cmd_arg.nchar_composing).cast::<c_char>();
-                    ptr::copy_nonoverlapping(from, bytes.as_mut_ptr(), cmd_arg.nchar_len as usize)
-                };
+                // `nchar_composing` holds `nchar_len` bytes; the store holds
+                // one cell's worth, and upstream copies them all.
+                let len = usize::try_from(cmd_arg.nchar_len).unwrap_or(0);
+                for (to, &from) in bytes.iter_mut().zip(&cmd_arg.nchar_composing[..len]) {
+                    *to = from as u8;
+                }
             } else {
-                lastc_bytelen.set(unsafe { utf_char2bytes(c, bytes.as_mut_ptr()) });
+                let len = encode_char(c, &mut bytes);
+                lastc_bytelen.set(c_int::try_from(len).expect("a character's bytes"));
             }
             lastc_bytes.set(bytes);
         }
@@ -149,17 +146,22 @@ pub fn searchc(cmd_arg: &mut CmdArg, t_cmd: bool) -> Result<(), Failed> {
 
     cmd_arg.op().inclusive = dir != BACKWARD as c_int;
 
-    let line = get_cursor_line_ptr();
-    let len = get_cursor_line_len();
+    let mut lines = Lines::current();
+    let line = lines.line(Win::current().w_cursor.lnum);
+    let len = line.len() as c_int;
     let bytelen = lastc_bytelen.get();
     let bytes = lastc_bytes.get();
     let mut col = Win::current().w_cursor.col as c_int;
+    // The first `n` bytes of `text`, or up to its NUL: what `strncmp` reads.
+    let prefix = |text: &[u8], n: usize| cstr::until_nul(&text[..n.min(text.len())]).to_vec();
+    let want = prefix(&bytes, bytelen as usize);
 
     while count > 0 {
         count -= 1;
         loop {
             if dir > 0 {
-                col += unsafe { utfc_ptr2len(line.offset(col as isize)) };
+                let at = usize::try_from(col).unwrap_or(0);
+                col += c_cluster_len(line.get(at..).unwrap_or_default()) as c_int;
                 if col >= len {
                     return Err(Failed);
                 }
@@ -167,14 +169,13 @@ pub fn searchc(cmd_arg: &mut CmdArg, t_cmd: bool) -> Result<(), Failed> {
                 if col == 0 {
                     return Err(Failed);
                 }
-                col -= unsafe { utf_head_off(line, line.offset(col as isize - 1)) } + 1;
+                col -= head_off(line, col as usize - 1) as c_int + 1;
             }
+            let at = col as usize;
             let hit = if bytelen <= 1 {
-                unsafe { *line.offset(col as isize) as c_int == c }
+                c_int::from(line[at]) == c
             } else {
-                unsafe {
-                    cstr::prefix_eq(line.offset(col as isize), bytes.as_ptr(), bytelen as size_t)
-                }
+                prefix(&line[at..], bytelen as usize) == want
             };
             if hit && stop {
                 break;
@@ -190,7 +191,7 @@ pub fn searchc(cmd_arg: &mut CmdArg, t_cmd: bool) -> Result<(), Failed> {
             // Landed on the search char, which is bytelen bytes long.
             col += bytelen - 1;
         } else {
-            col -= unsafe { utf_head_off(line, line.offset(col as isize)) };
+            col -= head_off(line, col as usize) as c_int;
         }
     }
     Win::current().w_cursor.col = col as ColNr;

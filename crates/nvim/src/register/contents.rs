@@ -554,9 +554,10 @@ pub unsafe fn write_reg_contents_ex(
     };
 
     if name == '/' as c_int {
-        // SAFETY: `str` holds `len` bytes, which is what the pattern is read
-        // from; it is copied, not kept.
-        unsafe { set_last_search_pat(str, RE_SEARCH as c_int, true, true) };
+        // SAFETY: the pattern is read up to its NUL, as upstream's
+        // `set_last_search_pat` reads it; it is copied, not kept.
+        let pat = unsafe { cstr::bytes_at(str) };
+        set_last_search_pat(pat, RE_SEARCH as c_int, true, true);
         return;
     }
 

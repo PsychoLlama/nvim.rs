@@ -8,15 +8,14 @@
 //! escaping backslash, a raw-string delimiter ([`find_rawstring_end`]) —
 //! and the `'cpoptions'` flags `%` and `M` that switch those rules off.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::charset::skip;
 use crate::cstr::byte_at;
-use crate::mbyte::char_at;
+use crate::mbyte::{c_cluster_len, char_at};
 use crate::option::cpo_has;
-use crate::optionstr::OptString;
+use crate::optionstr::OptStringRef;
 use crate::pos::MAXCOL;
 use crate::strings::has_char;
 use crate::types::{CpoFlag, NUL};
@@ -110,18 +109,19 @@ fn backslash_count(line: &[u8], col: c_int) -> c_int {
 /// the roles are swapped, which is how `%` on a closing bracket comes to
 /// look backwards for the opening one. Everything is left alone when the
 /// character is not in the option.
-///
-/// Safe because the only pointer it walks is `'matchpairs'` itself, a live
-/// NUL-terminated option value of the current buffer.
 fn find_mps_values(target: &mut Target, switchit: bool) {
     let (initc, findc) = (&mut target.initc, &mut target.findc);
     let backwards = &mut target.backwards;
-    // The walk reads 'matchpairs' in place, as upstream's does.
-    let mut ptr = Buf::current().b_p_mps.value_ptr();
-    while unsafe { *ptr } as c_int != NUL {
+    let buf = Buf::current();
+    let mps = buf.b_p_mps.bytes();
+    // The walk reads the value as the C string it is: the end is a NUL.
+    let char_from = |i: usize| char_at(mps.get(i..).unwrap_or_default());
+    let len_from = |i: usize| c_cluster_len(mps.get(i..).unwrap_or_default());
+    let mut ptr = 0;
+    while ptr < mps.len() {
         // The opening half of this pair.
-        if unsafe { utf_ptr2char(ptr) } == *initc {
-            let other = unsafe { utf_ptr2char(ptr.offset(utfc_ptr2len(ptr) as isize + 1)) };
+        if char_from(ptr) == *initc {
+            let other = char_from(ptr + len_from(ptr) + 1);
             if switchit {
                 *findc = *initc;
                 *initc = other;
@@ -134,21 +134,21 @@ fn find_mps_values(target: &mut Target, switchit: bool) {
         }
         // The closing half.
         let prev = ptr;
-        ptr = unsafe { ptr.offset((utfc_ptr2len(ptr) + 1) as isize) };
-        if unsafe { utf_ptr2char(ptr) } == *initc {
+        ptr += len_from(ptr) + 1;
+        if char_from(ptr) == *initc {
             if switchit {
                 *findc = *initc;
-                *initc = unsafe { utf_ptr2char(prev) };
+                *initc = char_from(prev);
                 *backwards = false;
             } else {
-                *findc = unsafe { utf_ptr2char(prev) };
+                *findc = char_from(prev);
                 *backwards = true;
             }
             return;
         }
-        ptr = unsafe { ptr.offset(utfc_ptr2len(ptr) as isize) };
-        if unsafe { *ptr } as c_int == ',' as c_int {
-            ptr = unsafe { ptr.offset(1) };
+        ptr += len_from(ptr);
+        if byte_at(mps, ptr) == b',' {
+            ptr += 1;
         }
     }
 }

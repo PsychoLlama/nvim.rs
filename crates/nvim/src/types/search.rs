@@ -18,19 +18,17 @@ pub struct SearchOffset {
     pub end: bool,
     pub off: int64_t,
 }
-#[derive(Copy, Clone)]
-pub struct SearchPattern {
-    pub pat: *mut ::core::ffi::c_char,
-    pub patlen: size_t,
-    pub magic: bool,
-    pub no_scs: bool,
-    pub timestamp: Timestamp,
-    pub off: SearchOffset,
-    pub additional_data: *mut AdditionalData,
-}
-pub struct SearchItArg {
+/// What a caller of `searchit` may add: a line to stop after, a deadline,
+/// and the two answers -- whether the deadline was passed, and whether the
+/// search wrapped around the end of the buffer.
+#[derive(Default)]
+pub struct SearchItArg<'a> {
+    /// Stop after this line, when it is not zero.
     pub sa_stop_lnum: LineNr,
-    pub sa_tm: *mut ProfTime,
-    pub sa_timed_out: ::core::ffi::c_int,
-    pub sa_wrapped: ::core::ffi::c_int,
+    /// Give up at this time.
+    pub sa_tm: Option<&'a ProfTime>,
+    /// Set when `sa_tm` was passed.
+    pub sa_timed_out: bool,
+    /// Set when the search wrapped around.
+    pub sa_wrapped: bool,
 }
