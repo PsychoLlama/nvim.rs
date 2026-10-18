@@ -39,8 +39,9 @@ all become safe Rust, and listing them here would retire them by fiat. So
 `memline/` (including the on-disk block structs), `marktree/`, `shada/`,
 `spellfile/`, `undo/`, `msgpack_rpc/`, `mpack/`'s own codec, `grid/` and
 `log.rs` are **outside** the perimeter and are expected to leave the debt
-column the ordinary way. `memline/`, `undo/` and `shada/` have: each forbids
-unsafe code. `memline/` reads its pages through bounds-checked block views
+column the ordinary way. `memline/`, `undo/`, `shada/` and `spellfile/` have:
+each forbids unsafe code (the `:mkspell` word tree is an index slab that
+charges the arena's old byte counts, so compression runs where it did). `memline/` reads its pages through bounds-checked block views
 over the `Box<[u8]>` pages `memfile/` owns, and holds a block by a
 generation-checked id, so the page store kept its row while its unchecked
 code fell from 206 statements to 19.
@@ -52,23 +53,23 @@ should move out of the module rather than be carved out of the list.
 
 ## The list
 
-| module                     | files | unchecked | why, and what would retire it                                                                                                                     |
-| -------------------------- | ----: | --------: | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `lua/`                     |    46 |     2,428 | LuaJIT's C API: a `lua_State`, its stack and the registry, plus luv and lpeg. Retires with the embedded interpreter, not before.                  |
-| `lua/treesitter/`          |    10 |       873 | (inside `lua/`, listed for its own reason) the tree-sitter C library — parsers, trees, queries and cursors are opaque C objects with C lifetimes. |
-| `mpack/lmpack/`            |     3 |       528 | libmpack-lua: a Lua C module, so every value it moves crosses the `lua_State` stack.                                                              |
-| `cjson/lua_cjson/`         |     3 |       178 | lua-cjson: a Lua C module, same stack.                                                                                                            |
-| `event/`                   |    11 |       571 | libuv: the loop, streams, timers, signals and processes are C objects registered by address.                                                      |
-| `os/`                      |    22 |     1,233 | The operating system: libc and libuv syscalls, the PTY, the shell, the environment.                                                               |
-| `vterm/`                   |    11 |       283 | libvterm, ported with its C ABI intact — the callbacks it takes and the symbols it exports are that library's interface.                          |
-| `terminal/`                |     7 |       168 | The emulator's glue: a PTY on one side, libvterm's `extern "C"` callbacks on the other.                                                           |
-| `tui/`                     |    14 |       588 | The terminal: libuv tty handles, termkey's parser, the terminfo entry unibilium hands back.                                                       |
-| `xdiff/`                   |     1 |         8 | libxdiff, vendored: `mmfile_t` and the emit callbacks keep their C layout because the engine's interface is C.                                    |
-| `allocator.rs`             |     1 |        20 | The global allocator: malloc/realloc/free.                                                                                                        |
-| `memory/`                  |     4 |       133 | `xmalloc` and the arena — the floor under every owned type in the tree.                                                                           |
-| `global_cell.rs`           |     1 |        13 | The checked wrapper over c2rust's mutable statics; the raw static is touched here so it is nowhere else.                                          |
-| `winlayer.rs`, `winlayer/` |     3 |        43 | The window/buffer/position handles: constructing one is the unsafe step, dereferencing it is not.                                                 |
-| `memfile/`                 |     2 |        19 | The swap file's page store — the only thing that hands out the address of a `.swp` page.                                                          |
+| module                     | files | unchecked | why, and what would retire it                                                                                                                       |
+| -------------------------- | ----: | --------: | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lua/`                     |    46 |     2,422 | LuaJIT's C API: a `lua_State`, its stack and the registry, plus luv and lpeg. Retires with the embedded interpreter, not before.                    |
+| `lua/treesitter/`          |    10 |       873 | (inside `lua/`, listed for its own reason) the tree-sitter C library — parsers, trees, queries and cursors are opaque C objects with C lifetimes.   |
+| `mpack/lmpack/`            |     3 |       528 | libmpack-lua: a Lua C module, so every value it moves crosses the `lua_State` stack.                                                                |
+| `cjson/lua_cjson/`         |     3 |       178 | lua-cjson: a Lua C module, same stack.                                                                                                              |
+| `event/`                   |    11 |       571 | libuv: the loop, streams, timers, signals and processes are C objects registered by address.                                                        |
+| `os/`                      |    22 |     1,233 | The operating system: libc and libuv syscalls, the PTY, the shell, the environment.                                                                 |
+| `vterm/`                   |    11 |       283 | libvterm, ported with its C ABI intact — the callbacks it takes and the symbols it exports are that library's interface.                            |
+| `terminal/`                |     7 |       168 | The emulator's glue: a PTY on one side, libvterm's `extern "C"` callbacks on the other.                                                             |
+| `tui/`                     |    14 |       588 | The terminal: libuv tty handles, termkey's parser, the terminfo entry unibilium hands back.                                                         |
+| `xdiff/`                   |     1 |         8 | libxdiff, vendored: `mmfile_t` and the emit callbacks keep their C layout because the engine's interface is C.                                      |
+| `allocator.rs`             |     1 |        20 | The global allocator: malloc/realloc/free.                                                                                                          |
+| `memory/`                  |     4 |       135 | `xmalloc` and the arena — the floor under every owned type in the tree, and the C `strchr`/`strlen` scans over a terminated slice the matchers use. |
+| `global_cell.rs`           |     1 |        13 | The checked wrapper over c2rust's mutable statics; the raw static is touched here so it is nowhere else.                                            |
+| `winlayer.rs`, `winlayer/` |     3 |        45 | The window/buffer/position handles, and the window's syntax block (`w_s`): constructing one is the unsafe step, dereferencing it is not.            |
+| `memfile/`                 |     2 |        19 | The swap file's page store — the only thing that hands out the address of a `.swp` page.                                                            |
 
 Paths are relative to `crates/nvim/src/`. Counts are `unsafe_stmts` from
 `metrics/ratchet.json` and drift as work lands; the list, not the table, is
@@ -153,12 +154,12 @@ where `files_allowing_unsafe_code` counts the ones that have made the opposite
 claim, deliberately, in a line a reviewer can see.
 
 **There are no free `forbid`s left, and there will not be until a subtree
-finishes.** Exactly 45 files carry neither attribute, and every one of them is
+finishes.** Exactly 35 files carry neither attribute, and every one of them is
 a `mod.rs` (or `lib.rs`) with at least one descendant that still allows
 unsafe: `allow` under a `forbid` is `E0453`, a hard error, so writing the
 attribute on any of them fails to compile. Counting files without the
 attribute therefore says nothing about progress — the number cannot move until
-`api/`, `eval/`, `lua/`, `os/` and the other 41 roots have emptied their
+`api/`, `eval/`, `lua/`, `os/` and the other 31 roots have emptied their
 subtrees, at which point it falls in one step. This is the same rule as
 "take a `mod.rs` last", stated for the attribute rather than for the lint.
 
