@@ -17,297 +17,199 @@
 //! ([`init_syl_tab`]/[`count_syllables`]) that `COMPOUNDSYLMAX` is measured
 //! against.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::cstr;
-use crate::strings::has_char;
-use crate::types::Buffer;
+use crate::global_cell::GlobalCell;
+use crate::memory::XString;
+use crate::strings::find_char;
+use crate::types::{Buffer, HashTab, LangId};
 use crate::winlayer::Buf;
-use core::ffi::{c_char, c_int, c_void};
+use core::cell::RefCell;
+use core::ffi::c_int;
+use std::collections::HashMap;
 
 use crate::allocator::Owned;
 use crate::buffer::alloc_unregistered_buffer;
-use crate::hashtab::{
-    hash_add_item, hash_clear_all, hash_hash, hash_init, hash_lookup, hash_reset,
-};
 use crate::log::{LOGLVL_ERR, logmsg};
-use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
+use crate::mbyte::{c_cluster_len, char_at};
 use crate::memline::{ml_close, ml_open, ml_open_file};
-use crate::memory::{xcalloc, xfree, xmalloc, xmemcpyz, xstrdup};
-use crate::strings::vim_strchr;
-use crate::types::{HashValue, NUL, OK, SpellLang, WordCount, size_t, uint8_t, uint16_t};
+use crate::types::{OK, SpellLang, uint8_t, uint16_t};
 
-use super::{MAXWLEN, MAXWORDCOUNT, SP_FORMERROR, SY_MAXLEN, SylItem, WC_KEY_OFF, WordTree};
+use super::{MAXWLEN, MAXWORDCOUNT, SP_FORMERROR, SY_MAXLEN, SylItem, WordTree};
 
-/// Free `*p` and null it.
-///
-/// # Safety
-///
-/// `p` must point at a writable `*mut T` slot the caller owns for the call.
-unsafe fn xfree_clear<T>(p: *mut *mut T) {
-    unsafe { xfree(*p as *mut c_void) };
-    unsafe { *p = core::ptr::null_mut() };
+impl SpellLang {
+    /// An empty language named `name` (which may be empty), read from
+    /// `fname`. The caller fills it from the file and lists it with
+    /// [`register_lang`].
+    pub(crate) fn new(name: &[u8], fname: XString) -> Box<SpellLang> {
+        Box::new(SpellLang {
+            sl_name: name.to_vec(),
+            sl_fname: fname,
+            sl_add: false,
+            sl_fold_tree: WordTree::default(),
+            sl_keep_tree: WordTree::default(),
+            sl_prefix_tree: WordTree::default(),
+            sl_info: None,
+            sl_regions: [0; 17],
+            sl_midword: Vec::new(),
+            sl_wordcount: HashMap::new(),
+            sl_compmax: MAXWLEN as c_int,
+            sl_compminlen: 0,
+            sl_compsylmax: MAXWLEN as c_int,
+            sl_compoptions: 0,
+            sl_comppat: Vec::new(),
+            sl_compprog: RefCell::new(None),
+            sl_comprules: None,
+            sl_compstartflags: Vec::new(),
+            sl_compallflags: Vec::new(),
+            sl_nobreak: false,
+            sl_syllable: None,
+            sl_syl_items: Vec::new(),
+            sl_prefixcnt: 0,
+            sl_prefprog: Vec::new(),
+            sl_rep: Vec::new(),
+            sl_rep_first: [0; 256],
+            sl_sal: Vec::new(),
+            sl_sofo_map: Vec::new(),
+            sl_sal_first: [0; 256],
+            sl_followup: false,
+            sl_collapse: false,
+            sl_rem_accents: false,
+            sl_sofo: false,
+            sl_repsal: Vec::new(),
+            sl_repsal_first: [0; 256],
+            sl_nosplitsugs: false,
+            sl_nocompoundsugs: false,
+            sl_sugtime: 0,
+            sl_sound_tree: WordTree::default(),
+            sl_sugbuf: None,
+            sl_sugloaded: false,
+            sl_has_map: false,
+            sl_map_hash: HashMap::new(),
+            sl_map_array: [0; 256],
+            sl_sounddone: HashTab::init(),
+        })
+    }
 }
 
-/// Allocate an empty language named `lang` (which may be null). The caller
-/// lists it in `loaded_langs`.
-///
-/// # Safety
-///
-/// `lang` must point at a NUL-terminated string, unaliased for the call.
-pub unsafe fn slang_alloc(lang: *mut c_char) -> *mut SpellLang {
-    let lp = unsafe { xcalloc(1, size_of::<SpellLang>()) } as *mut SpellLang;
+/// Empty a language so its file can be read again, leaving its name and
+/// file name intact.
+pub fn slang_clear(slang: &mut SpellLang) {
+    slang.sl_fold_tree = WordTree::default();
+    slang.sl_keep_tree = WordTree::default();
+    slang.sl_prefix_tree = WordTree::default();
 
-    // The four trees are owned values, and an all-zero `Box<[u8]>` is not
-    // one: its pointer would be null where the type promises it is not.
-    // Every other field of a `SpellLang` is happy zeroed.
-    // SAFETY: `xcalloc` just handed back room for one `SpellLang`, so these
-    // are the addresses of four uninitialised fields of it.
-    unsafe {
-        core::ptr::write(&raw mut (*lp).sl_fold_tree, WordTree::default());
-        core::ptr::write(&raw mut (*lp).sl_keep_tree, WordTree::default());
-        core::ptr::write(&raw mut (*lp).sl_prefix_tree, WordTree::default());
-        core::ptr::write(&raw mut (*lp).sl_sound_tree, WordTree::default());
-        core::ptr::write(&raw mut (*lp).sl_sal, Vec::new());
-        core::ptr::write(&raw mut (*lp).sl_sofo_map, Vec::new());
-        core::ptr::write(&raw mut (*lp).sl_rep, Vec::new());
-        core::ptr::write(&raw mut (*lp).sl_repsal, Vec::new());
-        core::ptr::write(&raw mut (*lp).sl_comppat, Vec::new());
-        core::ptr::write(&raw mut (*lp).sl_syl_items, Vec::new());
-        core::ptr::write(&raw mut (*lp).sl_prefprog, Vec::new());
-        core::ptr::write(&raw mut (*lp).sl_sugbuf, None);
-    }
+    slang.sl_rep = Vec::new();
+    slang.sl_repsal = Vec::new();
 
-    if !lang.is_null() {
-        unsafe { (*lp).sl_name = xstrdup(lang) };
-    }
-    unsafe { (*lp).sl_compmax = MAXWLEN as c_int };
-    unsafe { (*lp).sl_compsylmax = MAXWLEN as c_int };
-    // All three tables, not just the one the caller is about to fill: a
-    // `SpellLang` reached by reference must be a valid value throughout, and
-    // `slang_clear` empties `sl_map_hash` whether or not a MAP section was
-    // ever read.
-    unsafe { hash_init(&raw mut (*lp).sl_wordcount) };
-    unsafe { hash_init(&raw mut (*lp).sl_map_hash) };
-    unsafe { hash_init(&raw mut (*lp).sl_sounddone) };
+    slang.sl_sal = Vec::new();
+    slang.sl_sofo_map = Vec::new();
 
-    lp
-}
+    slang.sl_prefprog = Vec::new();
+    slang.sl_prefixcnt = 0;
+    slang.sl_info = None;
+    slang.sl_midword = Vec::new();
 
-/// Free a language and everything it owns.
-///
-/// # Safety
-///
-/// `slang` must point at a live `SpellLang`, unaliased for the call.
-pub unsafe fn slang_free(slang: *mut SpellLang) {
-    unsafe { xfree((*slang).sl_name as *mut c_void) };
-    unsafe { xfree((*slang).sl_fname as *mut c_void) };
-    unsafe { slang_clear(slang) };
-    unsafe { xfree(slang as *mut c_void) };
-}
+    *slang.sl_compprog.get_mut() = None;
+    slang.sl_comprules = None;
+    slang.sl_compstartflags = Vec::new();
+    slang.sl_compallflags = Vec::new();
 
-/// Empty a language so its file can be read again, leaving the struct
-/// itself usable and its name and chain link intact.
-///
-/// # Safety
-///
-/// `slang` must point at a live `SpellLang`, unaliased for the call.
-pub unsafe fn slang_clear(slang: *mut SpellLang) {
-    // SAFETY: the caller's language. Assigning drops the old tree.
-    unsafe {
-        (*slang).sl_fold_tree = WordTree::default();
-        (*slang).sl_keep_tree = WordTree::default();
-        (*slang).sl_prefix_tree = WordTree::default();
-    }
+    slang.sl_syllable = None;
+    slang.sl_syl_items = Vec::new();
 
-    // SAFETY: the caller's language. Assigning drops what was there.
-    unsafe {
-        (*slang).sl_rep = Vec::new();
-        (*slang).sl_repsal = Vec::new();
-    }
+    slang.sl_comppat = Vec::new();
 
-    // SAFETY: the caller's language. Assigning drops what was there.
-    unsafe {
-        (*slang).sl_sal = Vec::new();
-        (*slang).sl_sofo_map = Vec::new();
-    }
+    slang.sl_wordcount = HashMap::new();
+    slang.sl_map_hash = HashMap::new();
 
-    // SAFETY: the caller's language. Assigning drops what was there.
-    unsafe { (*slang).sl_prefprog = Vec::new() };
-    unsafe { (*slang).sl_prefixcnt = 0 };
-    unsafe { xfree_clear(&raw mut (*slang).sl_info) };
-    unsafe { xfree_clear(&raw mut (*slang).sl_midword) };
+    slang_clear_sug(slang);
 
-    unsafe { (*slang).sl_compprog = None };
-    unsafe { xfree_clear(&raw mut (*slang).sl_comprules) };
-    unsafe { xfree_clear(&raw mut (*slang).sl_compstartflags) };
-    unsafe { xfree_clear(&raw mut (*slang).sl_compallflags) };
-
-    unsafe { xfree_clear(&raw mut (*slang).sl_syllable) };
-    unsafe { (*slang).sl_syl_items = Vec::new() };
-
-    unsafe { (*slang).sl_comppat = Vec::new() };
-
-    unsafe { hash_clear_all(&raw mut (*slang).sl_wordcount, WC_KEY_OFF as u32) };
-    // SAFETY: the caller's language.
-    hash_reset(unsafe { &mut (*slang).sl_wordcount });
-
-    unsafe { hash_clear_all(&raw mut (*slang).sl_map_hash, 0) };
-
-    unsafe { slang_clear_sug(slang) };
-
-    unsafe { (*slang).sl_compmax = MAXWLEN as c_int };
-    unsafe { (*slang).sl_compminlen = 0 };
-    unsafe { (*slang).sl_compsylmax = MAXWLEN as c_int };
-    unsafe { (*slang).sl_regions[0] = NUL as c_char };
+    slang.sl_compmax = MAXWLEN as c_int;
+    slang.sl_compminlen = 0;
+    slang.sl_compsylmax = MAXWLEN as c_int;
+    slang.sl_regions[0] = 0;
 }
 
 /// Drop what the `.sug` file contributed, so it can be read again.
-///
-/// # Safety
-///
-/// `slang` must point at a live `SpellLang`, unaliased for the call.
-pub unsafe fn slang_clear_sug(slang: *mut SpellLang) {
-    // SAFETY: the caller's language. Assigning drops the old tree.
-    unsafe { (*slang).sl_sound_tree = WordTree::default() };
-    unsafe { (*slang).sl_sugbuf = None };
-    unsafe { (*slang).sl_sugloaded = false };
-    unsafe { (*slang).sl_sugtime = 0 };
+pub fn slang_clear_sug(slang: &mut SpellLang) {
+    slang.sl_sound_tree = WordTree::default();
+    slang.sl_sugbuf = None;
+    slang.sl_sugloaded = false;
+    slang.sl_sugtime = 0;
 }
 
 /// Note that `word` is a `COMMON` word of `slang`, or bump its count if it is
 /// already known.
 ///
-/// `len` is the word's length, or -1 when it is NUL terminated. `count` is
-/// 1 to count one use and 10 to seed a word the `.spl` file declared
-/// common. The count saturates rather than wrapping.
-///
-/// # Safety
-///
-/// `slang` must point at a live `SpellLang`, unaliased for the call. `word`
-/// must point at `len` bytes the caller owns, readable and writable,
-/// unaliased for the call.
-pub unsafe fn count_common_word(
-    slang: *mut SpellLang,
-    word: *mut c_char,
-    len: c_int,
-    count: uint8_t,
-) {
-    let mut buf = [0 as c_char; MAXWLEN];
-    let p = if len == -1 {
-        word
-    } else if len >= MAXWLEN as c_int {
+/// `count` is 1 to count one use and 10 to seed a word the `.spl` file
+/// declared common. The count saturates rather than wrapping. A word of
+/// [`MAXWLEN`] bytes or more is not counted.
+pub fn count_common_word(slang: &mut SpellLang, word: &[u8], count: uint8_t) {
+    if word.len() >= MAXWLEN {
         return;
-    } else {
-        let to = buf.as_mut_ptr() as *mut c_void;
-        unsafe { xmemcpyz(to, word as *const c_void, len as size_t) };
-        buf.as_mut_ptr()
-    };
-
-    let hash: HashValue = unsafe { hash_hash(p) };
-    let p_len = unsafe { cstr::bytes_at(p) }.len();
-    let hi = unsafe { hash_lookup(&raw mut (*slang).sl_wordcount, p, p_len, hash) };
-    if !hi.is_kept() {
-        let wc = unsafe { xmalloc(WC_KEY_OFF as size_t + p_len + 1) } as *mut WordCount;
-        let key = unsafe { &raw mut (*wc).wc_word }.cast::<c_char>();
-        let into = key.cast::<u8>();
-        unsafe { into.copy_from_nonoverlapping(p.cast(), p_len + 1) };
-        unsafe { (*wc).wc_count = count as uint16_t };
-        unsafe { hash_add_item(&raw mut (*slang).sl_wordcount, hi, key, hash) };
-    } else {
-        let wc = unsafe { hi.hi_key.offset(-(WC_KEY_OFF as isize)) } as *mut WordCount;
+    }
+    let count = uint16_t::from(count);
+    if let Some(total) = slang.sl_wordcount.get_mut(word) {
         // The C adds and then checks for the wrap, which is a saturate
         // spelled the long way round.
-        let total = unsafe { (*wc).wc_count }.wrapping_add(count as uint16_t);
-        let capped = if (total as c_int) < count as c_int {
-            MAXWORDCOUNT as uint16_t
-        } else {
-            total
-        };
-        unsafe { (*wc).wc_count = capped };
+        *total = total.checked_add(count).unwrap_or(MAXWORDCOUNT as uint16_t);
+    } else {
+        slang.sl_wordcount.insert(word.into(), count);
     }
 }
 
-/// Split `sl_syllable` at its slashes: the part before the first becomes
-/// the set of single syllable characters, and each part after it becomes an
-/// entry in `sl_syl_items`.
+/// Split `SYLLABLE`'s value at its slashes: the part before the first
+/// becomes `sl_syllable`, the set of single syllable characters, and each
+/// part after it becomes an entry in `sl_syl_items`.
 ///
 /// Returns `SP_FORMERROR` for an entry longer than [`SY_MAXLEN`].
-///
-/// # Safety
-///
-/// `slang` must point at a live `SpellLang`, unaliased for the call.
-pub unsafe fn init_syl_tab(slang: *mut SpellLang) -> c_int {
-    // SAFETY: the caller's language, whose `sl_syllable` is a live
-    // NUL-terminated string this splits in place.
+pub fn init_syl_tab(slang: &mut SpellLang, value: &[u8]) -> c_int {
+    let mut parts = value.split(|&b| b == b'/');
+    slang.sl_syllable = Some(parts.next().unwrap_or_default().to_vec());
     let mut items: Vec<SylItem> = Vec::new();
-    let mut p = unsafe { vim_strchr((*slang).sl_syllable, '/' as c_int) };
-    while !p.is_null() {
-        unsafe { *p = NUL as c_char };
-        p = unsafe { p.offset(1) };
-        if unsafe { *p } == NUL as c_char {
-            break; // trailing slash
+    for item in parts {
+        if item.is_empty() {
+            // A trailing slash, or an empty item, which no word matches.
+            continue;
         }
-        let s = p;
-        p = unsafe { vim_strchr(p, '/' as c_int) };
-        let l = if p.is_null() {
-            unsafe { cstr::bytes_at(s).len() }
-        } else {
-            unsafe { p.offset_from(s) as usize }
-        };
-        if l >= SY_MAXLEN as usize {
+        if item.len() >= SY_MAXLEN as usize {
             return SP_FORMERROR;
         }
-
-        let mut syl = SylItem {
-            sy_chars: [0; SY_MAXLEN as usize],
-            sy_len: l as c_int,
-        };
-        // SAFETY: as above; `l` is under `SY_MAXLEN`, which is the room
-        // `sy_chars` has, and those bytes are the item's own.
-        // SAFETY: as above.
-        syl.sy_chars[..l].copy_from_slice(unsafe { &core::slice::from_raw_parts(s, l)[..l] });
-        items.push(syl);
+        items.push(SylItem {
+            sy_chars: item.into(),
+        });
     }
-    // SAFETY: the caller's language.
-    unsafe { (*slang).sl_syl_items = items };
+    slang.sl_syl_items = items;
     OK
 }
 
 /// How many syllables `word` has, by the language's syllable definition.
 ///
 /// A space resets the count, so what is returned is the count after the
-/// last space. Zero means the language defines no syllables.
-///
-/// # Safety
-///
-/// `slang` must point at a live `SpellLang`, unaliased for the call. `word`
-/// must point at a NUL-terminated string.
-pub(super) unsafe fn count_syllables(slang: *mut SpellLang, word: *const c_char) -> c_int {
-    if unsafe { (*slang).sl_syllable }.is_null() {
+/// last space. Zero means the language defines no syllables. `word` ends
+/// at its end or at a NUL.
+pub(super) fn count_syllables(slang: &SpellLang, word: &[u8]) -> c_int {
+    let Some(syllable) = &slang.sl_syllable else {
         return 0;
-    }
+    };
 
     let mut cnt = 0;
     let mut skip = false;
-    let mut p = word;
-    while unsafe { *p } != 0 {
-        if unsafe { *p } == b' ' as c_char {
+    let mut p = 0;
+    while p < word.len() && word[p] != 0 {
+        if word[p] == b' ' {
             cnt = 0;
-            p = unsafe { p.offset(1) };
+            p += 1;
             continue;
         }
 
         // The longest matching syllable item wins.
+        let rest = &word[p..];
         let mut len = 0;
-        for syl in unsafe { &(*slang).sl_syl_items } {
-            // SAFETY: `p` walks the caller's NUL-terminated word, and the
-            // item's own length is what is compared.
-            if syl.sy_len > len
-                && unsafe { cstr::prefix_eq(p, syl.sy_chars.as_ptr(), syl.sy_len as size_t) }
-            {
-                len = syl.sy_len;
+        for syl in &slang.sl_syl_items {
+            if syl.sy_chars.len() > len && rest.starts_with(&syl.sy_chars) {
+                len = syl.sy_chars.len();
             }
         }
 
@@ -317,18 +219,122 @@ pub(super) unsafe fn count_syllables(slang: *mut SpellLang, word: *const c_char)
         } else {
             // No item matched; a bare syllable character still counts,
             // but only the first of a run.
-            let c = unsafe { utf_ptr2char(p) };
-            len = unsafe { utfc_ptr2len(p) };
-            if !has_char(unsafe { cstr::at((*slang).sl_syllable) }, c) {
+            let c = char_at(rest);
+            len = c_cluster_len(rest).max(1);
+            if find_char(syllable, c).is_none() {
                 skip = false;
             } else if !skip {
                 cnt += 1;
                 skip = true;
             }
         }
-        p = unsafe { p.offset(len as isize) };
+        p += len;
     }
     cnt
+}
+
+/// Every language loaded: a slot per language, never reused while the
+/// table lives, and the order they were loaded in.
+pub(crate) struct LoadedLangs {
+    /// The languages, by [`LangId`]. A slot is empty while its language is
+    /// being reloaded, and once [`spell_free_all`](super::spell_free_all)
+    /// has dropped it; a window still naming it then sees no language.
+    slots: Vec<Option<Box<SpellLang>>>,
+    /// Newest first, which is the order a search for a language by name
+    /// or file walks.
+    order: Vec<LangId>,
+}
+
+impl LoadedLangs {
+    const fn new() -> Self {
+        LoadedLangs {
+            slots: Vec::new(),
+            order: Vec::new(),
+        }
+    }
+
+    /// The language in slot `id`, if it is there.
+    #[inline]
+    pub(crate) fn get(&self, id: LangId) -> Option<&SpellLang> {
+        self.slots.get(id.0 as usize)?.as_deref()
+    }
+
+    /// [`LoadedLangs::get`], writable.
+    #[inline]
+    pub(crate) fn get_mut(&mut self, id: LangId) -> Option<&mut SpellLang> {
+        self.slots.get_mut(id.0 as usize)?.as_deref_mut()
+    }
+
+    /// The languages, newest first, with their slots.
+    pub(crate) fn iter(&self) -> impl Iterator<Item = (LangId, &SpellLang)> {
+        self.order
+            .iter()
+            .filter_map(|&id| self.get(id).map(|slang| (id, slang)))
+    }
+}
+
+/// The language table. Windows name its slots in their `b_langp`.
+pub(crate) static loaded_langs: GlobalCell<LoadedLangs> = GlobalCell::new(LoadedLangs::new());
+
+/// The loaded languages' slots, newest first: a copy to walk, because a
+/// walk may load another language.
+pub(crate) fn languages() -> Vec<LangId> {
+    loaded_langs.with(|langs| langs.order.clone())
+}
+
+/// List a freshly read language as the newest, and answer its slot.
+pub fn register_lang(slang: Box<SpellLang>) -> LangId {
+    loaded_langs.with_mut(|langs| {
+        let id = LangId(u32::try_from(langs.slots.len()).expect("fewer than 2^32 spell files"));
+        langs.slots.push(Some(slang));
+        langs.order.insert(0, id);
+        id
+    })
+}
+
+/// Run `f` over the language in slot `id`, if it is there.
+pub(crate) fn with_lang<R>(id: LangId, f: impl FnOnce(&SpellLang) -> R) -> Option<R> {
+    loaded_langs.with(|langs| langs.get(id).map(f))
+}
+
+/// Take the language out of slot `id` to change it with the table unlocked
+/// -- a reload reads a file and gives messages -- leaving the slot empty
+/// until [`put_lang`] returns it. A lookup meanwhile sees no language
+/// there, as upstream's saw a cleared one.
+pub fn take_lang(id: LangId) -> Option<Box<SpellLang>> {
+    loaded_langs.with_mut(|langs| langs.slots.get_mut(id.0 as usize)?.take())
+}
+
+/// Return a language [`take_lang`] took to its slot.
+pub(crate) fn put_lang(id: LangId, slang: Box<SpellLang>) {
+    loaded_langs.with_mut(|langs| langs.slots[id.0 as usize] = Some(slang));
+}
+
+/// The address of the language in slot `id`, or null while the slot is
+/// empty: for the suggestion code, which still holds languages by address.
+/// The language stays where it is while its slot holds it.
+pub(crate) fn lang_ptr(id: LangId) -> *mut SpellLang {
+    loaded_langs.with_mut(|langs| {
+        langs
+            .get_mut(id)
+            .map_or(core::ptr::null_mut(), core::ptr::from_mut)
+    })
+}
+
+/// [`lang_ptr`] of an optional slot: null for none.
+pub(crate) fn lang_ptr_opt(id: Option<LangId>) -> *mut SpellLang {
+    id.map_or(core::ptr::null_mut(), lang_ptr)
+}
+
+/// Drop every language. The slots stay allocated, empty, so that an id a
+/// window still holds names nothing rather than a later language.
+pub(crate) fn free_langs() {
+    let dropped = loaded_langs.with_mut(|langs| {
+        langs.order.clear();
+        langs.slots.iter_mut().map(Option::take).collect::<Vec<_>>()
+    });
+    // Dropped outside the borrow: a `.sug` buffer's drop closes a memline.
+    drop(dropped);
 }
 
 /// A nameless, unlisted buffer holding nothing but text lines, backed by a

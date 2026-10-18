@@ -25,16 +25,15 @@
 
 use crate::cstr;
 use crate::strings::has_char;
+use core::cell::RefCell;
 use core::ffi::{c_char, c_int};
+use std::collections::hash_map::Entry;
 
-use crate::hashtab::{hash_add_item, hash_hash, hash_lookup, hash_reset};
 use crate::mbyte::{char_at, char_len, encode_char, utf_char2len, utf_ptr2char, utfc_ptr2len};
-use crate::memory::handoff::owned_cstr;
-use crate::memory::xfree;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::spell::{ascii_spell_chartab, count_common_word};
-use crate::types::{HashValue, NUL, RepItem, SalFirst, SalItem, SpellLang, int16_t, uint8_t};
+use crate::types::{NUL, RepItem, SalFirst, SalItem, SpellLang, int16_t, uint8_t};
 
 use super::spl::{SpellReadError, Spl, SplResult, trim_nul};
 use super::{
@@ -55,10 +54,8 @@ pub(super) fn read_region_section(
     }
     let len = len as usize;
     let bytes = spl.read_nonnul_bytes(len)?;
-    for (slot, &b) in slang.sl_regions.iter_mut().zip(bytes.iter()) {
-        *slot = b.cast_signed();
-    }
-    slang.sl_regions[len] = NUL as c_char;
+    slang.sl_regions[..len].copy_from_slice(&bytes[..len]);
+    slang.sl_regions[len] = 0;
     Ok(())
 }
 
@@ -87,7 +84,7 @@ pub(super) fn read_prefcond_section(spl: &mut Spl, slang: &mut SpellLang) -> Spl
         return Err(SpellReadError::Format);
     }
     let cnt = cnt as usize;
-    let mut progs: Vec<Option<OwnedProg>> = (0..cnt).map(|_| None).collect();
+    let mut progs: Vec<RefCell<Option<OwnedProg>>> = (0..cnt).map(|_| RefCell::new(None)).collect();
 
     for slot in &mut progs {
         let n = spl.getc().map_or(-1, c_int::from);
@@ -103,11 +100,7 @@ pub(super) fn read_prefcond_section(spl: &mut Spl, slang: &mut SpellLang) -> Spl
         pat.push(b'^');
         pat.extend_from_slice(&spl.read_nonnul_bytes(n)?);
         pat.push(NUL as u8);
-        // SAFETY: `pat` is NUL-terminated and outlives the call.
-        *slot = vim_regcomp(
-            unsafe { cstr::at(pat.as_mut_ptr().cast::<c_char>()) },
-            RE_MAGIC | RE_STRING,
-        );
+        *slot.get_mut() = vim_regcomp(cstr::in_bytes(&pat), RE_MAGIC | RE_STRING);
     }
 
     slang.sl_prefixcnt = cnt as c_int;
@@ -275,9 +268,7 @@ pub(super) fn read_words_section(
             word.push(c);
         }
         done += word.len() as c_int + 1;
-        word.push(NUL as u8);
-        // SAFETY: `word` is NUL-terminated and outlives the call.
-        unsafe { count_common_word(slang, word.as_mut_ptr().cast::<c_char>(), -1, 10) };
+        count_common_word(slang, &word, 10);
     }
     Ok(())
 }
@@ -436,17 +427,14 @@ pub(super) fn read_compound(spl: &mut Spl, slang: &mut SpellLang, len: c_int) ->
     pat.extend_from_slice(b"\\)$");
     pat.push(NUL as u8);
 
-    slang.sl_compallflags = owned_cstr(all).cast::<uint8_t>();
-    slang.sl_compstartflags = owned_cstr(start).cast::<uint8_t>();
-    // SAFETY: whatever a previous section left there is this language's.
-    unsafe { xfree(slang.sl_comprules.cast()) };
-    slang.sl_comprules = match rules {
-        Some(kept) => owned_cstr(kept).cast::<uint8_t>(),
-        None => core::ptr::null_mut(),
-    };
+    slang.sl_compallflags = all;
+    slang.sl_compstartflags = start;
+    slang.sl_comprules = rules;
 
-    slang.sl_compprog = vim_regcomp(cstr::in_bytes(&pat), RE_MAGIC + RE_STRING + RE_STRICT);
-    if slang.sl_compprog.is_none() {
+    let prog = vim_regcomp(cstr::in_bytes(&pat), RE_MAGIC + RE_STRING + RE_STRICT);
+    let failed = prog.is_none();
+    *slang.sl_compprog.get_mut() = prog;
+    if failed {
         return Err(SpellReadError::Format);
     }
     Ok(())
@@ -549,14 +537,9 @@ fn bytes2wide(bytes: &[u8]) -> Box<[c_int]> {
 /// `SN_MAP`: `/`-separated groups whose members count as near-equivalent
 /// when scoring a suggestion.
 ///
-/// Members below 256 go in a direct table; above that, a hash table keyed
-/// on the pair of characters answers "are these two in the same group".
-///
-/// # Safety
-///
-/// `slang`'s `sl_map_hash` must be an initialised table; every key added to it
-/// is an allocation the table then owns.
-pub(super) unsafe fn set_map_str(slang: &mut SpellLang, map: &[u8]) {
+/// Members below 256 go in a direct table; above that, a map answers which
+/// group a character is in.
+pub(super) fn set_map_str(slang: &mut SpellLang, map: &[u8]) {
     if map.is_empty() {
         slang.sl_has_map = false;
         return;
@@ -564,7 +547,7 @@ pub(super) unsafe fn set_map_str(slang: &mut SpellLang, map: &[u8]) {
     slang.sl_has_map = true;
 
     slang.sl_map_array.fill(0);
-    hash_reset(&mut slang.sl_map_hash);
+    slang.sl_map_hash.clear();
 
     // The first character of a group represents the whole group.
     let mut headc = 0;
@@ -584,22 +567,12 @@ pub(super) unsafe fn set_map_str(slang: &mut SpellLang, map: &[u8]) {
             continue;
         }
 
-        // Key: the character, a NUL, then its group's head.
-        let mut key = vec![0u8; (utf_char2len(c) + utf_char2len(headc)) as usize + 1];
-        let cl = encode_char(c, &mut key);
-        encode_char(headc, &mut key[cl + 1..]);
-        let b = owned_cstr(key);
-
-        // SAFETY: `b` is a NUL-terminated allocation the table takes over
-        // when it is kept, and this frame frees when it is not.
-        unsafe {
-            let hash: HashValue = hash_hash(b);
-            let hi = hash_lookup(&raw mut slang.sl_map_hash, b, cstr::bytes_at(b).len(), hash);
-            if hi.is_kept() {
+        match slang.sl_map_hash.entry(c) {
+            Entry::Occupied(_) => {
                 emsg(gettext(e_duplicate_char_in_map_entry));
-                xfree(b.cast());
-            } else {
-                hash_add_item(&raw mut slang.sl_map_hash, hi, b, hash);
+            }
+            Entry::Vacant(slot) => {
+                slot.insert(headc);
             }
         }
     }

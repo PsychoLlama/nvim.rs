@@ -32,7 +32,6 @@ use crate::types::Failed;
 use crate::types::VAR_LIST;
 use ::libc::{FILE, fclose, strcasecmp};
 use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
 
 /// Does a `timeout:` item name a number? The value may be negative, which
 /// switches the timeout off.
@@ -190,8 +189,9 @@ pub(super) unsafe fn spell_suggest_file(su: Sug, fname: *mut c_char) {
         unsafe { *p.offset(len) = NUL as c_char };
 
         // A suggestion with no case of its own takes the bad word's.
-        if unsafe { captype(p, ptr::null()) }.is_empty() {
-            unsafe { make_case_word(p, cwordp, su.su_badflags) };
+        let good = unsafe { cstr::bytes_at(p) };
+        if captype(good, good.len()).is_empty() {
+            make_case_word(good, cstr::as_bytes_mut(&mut cword), su.su_badflags);
             p = cwordp;
         }
 

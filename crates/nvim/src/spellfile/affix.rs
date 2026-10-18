@@ -268,7 +268,8 @@ pub(super) fn postpone_prefix(
                 if !unsafe { (*entry).ae_cond }.is_null() {
                     // The condition has to match the capitalised form.
                     let mut buf: [c_char; MAXLINELEN as usize] = [0; MAXLINELEN as usize];
-                    unsafe { onecap_copy(item_ptr(items[4]), buf.as_mut_ptr(), true) };
+                    let cond = unsafe { cstr::bytes_at(item_ptr(items[4])) };
+                    onecap_copy(cond, cstr::as_bytes_mut(&mut buf), true);
                     unsafe { (*entry).ae_cond = spin.si_arena.save_str(buf.as_mut_ptr()) };
                     if !unsafe { (*entry).ae_cond }.is_null() {
                         let out = buf.as_mut_ptr();

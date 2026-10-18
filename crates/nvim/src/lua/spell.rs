@@ -50,7 +50,7 @@ unsafe extern "C-unwind" fn nlua_spell_check(lstate: *mut lua_State) -> c_int {
         if lua_type(lstate, 1) != LUA_TSTRING {
             luaL_argerror(lstate, 1, c"expected string".as_ptr());
         }
-        lua_tolstring(lstate, 1, ptr::null_mut())
+        CStr::from_ptr(lua_tolstring(lstate, 1, ptr::null_mut())).to_bytes_with_nul()
     };
 
     // spell.c insists 'spell' is on, so turn it on for the duration.
@@ -60,8 +60,7 @@ unsafe extern "C-unwind" fn nlua_spell_check(lstate: *mut lua_State) -> c_int {
         let _ = parse_spelllang(win);
         win.w_onebuf_opt.wo_spell = 1;
     }
-    // SAFETY: `w_s` is the window's synblock, always set.
-    if unsafe { (*win.w_s).b_p_spl.first_byte() } == 0 {
+    if win.syn_block().b_p_spl.first_byte() == 0 {
         emsg(gettext(e_no_spell));
         win.w_onebuf_opt.wo_spell = wo_spell_save;
         return 0;
@@ -72,14 +71,11 @@ unsafe extern "C-unwind" fn nlua_spell_check(lstate: *mut lua_State) -> c_int {
     let mut nresults: c_int = 0;
     // SAFETY: the caller's live state.
     unsafe { lua_createtable(lstate, 0, 0) };
-    let mut word = text;
-    // SAFETY: `text` is NUL-terminated and `spell_check` never steps past
-    // the terminator, so `word` stays inside it.
-    while unsafe { *word } != 0 {
-        let mut attr: Hlf = HLF_COUNT;
-        // SAFETY: a live window.
-        let len =
-            unsafe { spell_check(win, word.cast_mut(), &raw mut attr, &raw mut capcol, false) };
+    // `spell_check` never steps past the terminator, so `pos` stays inside
+    // the text.
+    while text[pos] != 0 {
+        let word = &text[pos..];
+        let (len, attr): (size_t, Hlf) = spell_check(win, word, Some(&mut capcol), false);
         debug_assert!(len <= c_int::MAX as size_t);
         if attr != HLF_COUNT {
             let kind: &CStr = match attr {
@@ -94,7 +90,7 @@ unsafe extern "C-unwind" fn nlua_spell_check(lstate: *mut lua_State) -> c_int {
             // table and `rawseti`'d into it, so the stack ends level.
             unsafe {
                 lua_createtable(lstate, 3, 0);
-                lua_pushlstring(lstate, word, len);
+                lua_pushlstring(lstate, word.as_ptr().cast(), len);
                 lua_rawseti(lstate, -2, 1);
                 lua_pushstring(lstate, kind.as_ptr());
                 lua_rawseti(lstate, -2, 2);
@@ -104,8 +100,6 @@ unsafe extern "C-unwind" fn nlua_spell_check(lstate: *mut lua_State) -> c_int {
                 lua_rawseti(lstate, -2, nresults);
             }
         }
-        // SAFETY: as above.
-        word = unsafe { word.add(len) };
         pos += len;
         capcol -= c_int::try_from(len).expect("a spell_check length fits an int");
     }

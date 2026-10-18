@@ -25,47 +25,39 @@
 //! them borrows from the first entry whose name starts with the same two
 //! letters — so `en-math` uses `en`'s.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use crate::cstr;
 use crate::memory::XString;
-use crate::message_fmt::{c_str, msg_cstr};
+use crate::message_fmt::msg_bytes;
 use crate::smsg;
-use crate::snprintf;
 use crate::types::AutoEvent;
-use crate::vim_snprintf;
 use crate::winlayer::Win;
-use ::libc::strcasecmp;
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_int};
 
-use crate::autocmd::apply_autocmds;
+use crate::autocmd::fire_autocmds_for;
 use crate::buffer::BufRef;
 use crate::charset::vim_is_fname_char;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_later};
 use crate::ex_docmd::do_cmdline_cmd;
-use crate::garray::{ga_append_via_ptr, ga_clear, ga_init};
 use crate::global_cell::GlobalCell;
-use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
-use crate::memory::{xfree, xmemcpyz, xmemdupz, xstrlcpy};
+use crate::mbyte::{c_cluster_len, char_at};
 use crate::message::e_invarg;
 use crate::option::vars::{P_ENC, p_enc};
-use crate::option::{copy_option_part, split_option_part, valid_name};
+use crate::option::{split_option_part, valid_name};
 use crate::os::fs::os_remove;
-use crate::path::{path_fnamecmp, path_full_compare, path_tail, tail_index};
+use crate::path::{path_fnamecmp, path_full_compare, tail_index};
 use crate::regexp::{RE_MAGIC, vim_regcomp};
 use crate::spellfile::spell_load_file;
 use crate::startup::starting;
-use crate::strings::{concat, vim_strchr, xstrnsave};
-use crate::types::{
-    Failed, GArray, LangP, MAXPATHL, NUL, OptError, SPL_FNAME_TMPL, SpellLang, SynBlock, size_t,
-};
+use crate::strings::concat;
+use crate::types::{Failed, LangId, LangP, MAXPATHL, OptError, SpellLang, SynBlock};
 use crate::window::win_valid_any_tab;
 
 use super::chartab::init_spell_chartab;
-use super::slang::slang_free;
+use super::slang::{free_langs, register_lang, with_lang};
 use super::{
     MAXWLEN, REGION_ALL, SpellLoad, int_wordlist, kEqualFiles, languages, last_replacement,
     loaded_langs,
@@ -75,12 +67,8 @@ use crate::runtime::RuntimeOpts;
 use crate::winlayer::{Buf, buffers, windows};
 
 /// `ASCII_ISALPHA`: an unaccented Latin letter.
-fn ascii_isalpha(c: c_int) -> bool {
-    // Unsigned, so that a negative byte fails both ranges rather than
-    // wrapping into one of them.
-    let c = c as core::ffi::c_uint;
-    (c >= 'A' as core::ffi::c_uint && c <= 'Z' as core::ffi::c_uint)
-        || (c >= 'a' as core::ffi::c_uint && c <= 'z' as core::ffi::c_uint)
+fn ascii_isalpha(c: u8) -> bool {
+    c.is_ascii_alphabetic()
 }
 
 /// The encoding spell files are named after: `'encoding'`, except that
@@ -95,18 +83,23 @@ pub fn spell_enc() -> XString {
     }
 }
 
-/// The `.spl` file name for the internal word list, into `fname[MAXPATHL]`.
-///
-/// # Safety
-///
-/// `fname` must point at a NUL-terminated string, unaliased for the call.
-unsafe fn int_wordlist_spl(fname: *mut c_char) {
-    let fmt = SPL_FNAME_TMPL.as_ptr();
+/// `parts` run together, cut to `size - 1` bytes as a `snprintf` into a
+/// buffer of `size` would leave them.
+fn joined(parts: &[&[u8]], size: usize) -> Vec<u8> {
+    let mut out = parts.concat();
+    out.truncate(size - 1);
+    out
+}
+
+/// The `.spl` file name for the internal word list.
+fn int_wordlist_spl() -> Vec<u8> {
     let enc = spell_enc();
     int_wordlist.with(|list| {
-        let list = list.as_ref().map_or(core::ptr::null(), XString::as_ptr);
-        unsafe { vim_snprintf!(fname, MAXPATHL as size_t, fmt, list, enc.as_ptr()) };
-    });
+        // Only asked for while there is a list; upstream's `%s` of a null
+        // pointer would print "(null)".
+        let list = list.as_ref().map_or(&b"(null)"[..], |list| list);
+        joined(&[list, b".", &enc, b".spl"], MAXPATHL as usize)
+    })
 }
 
 /// Load every spell file for language `lang` (a name without a region)
@@ -116,46 +109,47 @@ unsafe fn int_wordlist_spl(fname: *mut c_char) {
 /// to produce the file, and the whole search is retried. Failing that, at
 /// startup an autocommand is queued to offer downloading it, and otherwise
 /// a warning is printed.
-///
-/// # Safety
-///
-/// `lang` must point at a NUL-terminated string, unaliased for the call.
-unsafe fn spell_load_lang(lang: *mut c_char) {
-    let mut fname_enc = [0 as c_char; 85];
-    let mut sl: SpellLoad = unsafe { core::mem::zeroed() };
-
-    // The name is passed to spell_load_cb() as a cookie, and truncated
-    // there when an error is found.
-    let (into, room) = (sl.sl_lang.as_mut_ptr(), sl.sl_lang.len());
-    unsafe { xstrlcpy(into, lang, room) };
-    sl.sl_slang = core::ptr::null_mut();
-    sl.sl_nobreak = 0;
+fn spell_load_lang(lang: &[u8]) {
+    // The name is passed to spell_load_cb() as a cookie, and cleared there
+    // when an error is found.
+    let mut sl = SpellLoad {
+        lang: lang[..lang.len().min(MAXWLEN)].to_vec(),
+        last: None,
+        nobreak: false,
+    };
 
     // Autocommands could otherwise delete the buffer and free "lang".
     Buf::current().b_locked += 1;
 
+    // Upstream's name buffer is 85 bytes, and names were written into 80 of
+    // them.
+    let room = 85 - 5;
+    let mut fname_enc = Vec::new();
     let mut r = Err(Failed);
     for round in 1..=2 {
-        let (buf, room) = (fname_enc.as_mut_ptr(), fname_enc.len() as size_t - 5);
-        let fmt = c"spell/%s.%s.spl".as_ptr();
         let enc = spell_enc();
-        unsafe { vim_snprintf!(buf, room, fmt, lang, enc.as_ptr()) };
-        r = unsafe { do_in_runtimepath_cb(fname_enc.as_mut_ptr(), RuntimeOpts::NONE, &raw mut sl) };
+        fname_enc = joined(&[b"spell/", lang, b".", &enc, b".spl"], room);
+        r = do_in_runtimepath_cb(&fname_enc, RuntimeOpts::NONE, &mut sl);
 
-        if r.is_err() && sl.sl_lang[0] != 0 {
+        if r.is_err() && !sl.lang.is_empty() {
             // Fall back on the ASCII version.
-            let (buf, room) = (fname_enc.as_mut_ptr(), fname_enc.len() as size_t - 5);
-            let fmt = c"spell/%s.ascii.spl".as_ptr();
-            unsafe { vim_snprintf!(buf, room, fmt, lang) };
-            r = unsafe {
-                do_in_runtimepath_cb(fname_enc.as_mut_ptr(), RuntimeOpts::NONE, &raw mut sl)
-            };
+            fname_enc = joined(&[b"spell/", lang, b".ascii.spl"], room);
+            r = do_in_runtimepath_cb(&fname_enc, RuntimeOpts::NONE, &mut sl);
 
-            if r.is_err() && sl.sl_lang[0] != 0 && round == 1 && {
+            if r.is_err() && !sl.lang.is_empty() && round == 1 && {
                 // Re-read each round: the handler may have changed buffers.
                 let buffer = Buf::current();
-                let (fname, event) = (buffer.name.shown_ptr(), AutoEvent::SpellFileMissing);
-                unsafe { apply_autocmds(event, lang, fname, false, Some(buffer)) }
+                let pattern = cstr::owned(lang);
+                let afile = buffer.name.shown().map(CStr::to_owned);
+                let event = AutoEvent::SpellFileMissing;
+                fire_autocmds_for(
+                    event,
+                    Some(&pattern),
+                    afile.as_deref(),
+                    false,
+                    Some(buffer),
+                    None,
+                )
             } {
                 continue;
             }
@@ -167,77 +161,60 @@ unsafe fn spell_load_lang(lang: *mut c_char) {
         if starting.get() != 0 {
             // Plugins are not loaded yet, so nvim/spellfile.lua cannot
             // offer the download itself. #3027
-            let mut autocmd_buf = [0 as c_char; 512];
-            let (buf, room) = (autocmd_buf.as_mut_ptr(), autocmd_buf.len());
-            let fmt = c"autocmd VimEnter * call v:lua.require'nvim.spellfile'.get('%s')|set spell"
-                .as_ptr();
-            unsafe { snprintf!(buf, room, fmt, lang) };
-            // SAFETY: `snprintf` terminated the buffer above.
-            let _ = do_cmdline_cmd(unsafe { cstr::at(autocmd_buf.as_ptr()) });
+            let cmd = joined(
+                &[
+                    b"autocmd VimEnter * call v:lua.require'nvim.spellfile'.get('",
+                    lang,
+                    b"')|set spell",
+                ],
+                512,
+            );
+            let _ = do_cmdline_cmd(&cstr::owned(&cmd));
         } else {
-            // SAFETY: the language name and the encoding are NUL-terminated.
             let encoding = spell_enc();
-            let (lang, enc) = unsafe { (c_str(lang), msg_cstr(encoding.as_cstr())) };
+            let (lang, enc) = (msg_bytes(lang), msg_bytes(&encoding));
             smsg!(
                 0,
                 "Warning: Cannot find word list \"{lang}.{enc}.spl\" or \"{lang}.ascii.spl\""
             );
         }
-    } else if !sl.sl_slang.is_null() {
+    } else if sl.last.is_some() {
         // At least one file loaded; now take all the additions.
-        let ptr_len = unsafe { cstr::bytes_at(fname_enc.as_ptr()) }.len();
-        let at = unsafe { fname_enc.as_mut_ptr().add(ptr_len - 3) };
-        unsafe { xstrlcpy(at, c"add.spl".as_ptr(), fname_enc.len() - (ptr_len - 3)) };
-        let _ =
-            unsafe { do_in_runtimepath_cb(fname_enc.as_mut_ptr(), RuntimeOpts::ALL, &raw mut sl) };
+        fname_enc.truncate(fname_enc.len() - 3);
+        fname_enc.extend_from_slice(b"add.spl");
+        let _ = do_in_runtimepath_cb(&fname_enc, RuntimeOpts::ALL, &mut sl);
     }
 
     Buf::current().b_locked -= 1;
 }
 
 /// `do_in_runtimepath_visit` with [`spell_load_cb`] as the visit.
-///
-/// # Safety
-///
-/// `name` must point at a NUL-terminated string. `sl` must point at a live
-/// `SpellLoad`, unaliased for the call.
-unsafe fn do_in_runtimepath_cb(
-    name: *mut c_char,
-    flags: RuntimeOpts,
-    sl: *mut SpellLoad,
-) -> Result<(), Failed> {
-    // A copy: loading a spell file can run autocommands.
-    let name = unsafe { cstr::at(name) }.to_owned();
-    crate::runtime::do_in_runtimepath_visit(&name, flags, &mut |fnames, all| unsafe {
+fn do_in_runtimepath_cb(name: &[u8], flags: RuntimeOpts, sl: &mut SpellLoad) -> Result<(), Failed> {
+    let name = cstr::owned(name);
+    crate::runtime::do_in_runtimepath_visit(&name, flags, &mut |fnames, all| {
         spell_load_cb(fnames, all, sl)
     })
 }
 
-/// Load the spell files the search found, keeping the last one in `slp`.
+/// Load the spell files the search found, keeping the last one in `sl`.
 ///
 /// NOBREAK is sticky in both directions: a `.add` file inherits it from the
 /// base language, and a base language that declares it passes it on.
-///
-/// # Safety
-///
-/// `slp` must point at the `SpellLoad` the search was started with, live for
-/// the call.
-unsafe fn spell_load_cb(fnames: &[&CStr], all: bool, slp: *mut SpellLoad) -> bool {
+fn spell_load_cb(fnames: &[&CStr], all: bool, sl: &mut SpellLoad) -> bool {
     for &fname in fnames {
-        let lang = unsafe { (*slp).sl_lang.as_mut_ptr() };
-        let none = core::ptr::null_mut();
-        let slang = unsafe { spell_load_file(fname, lang, none, false) };
-        if slang.is_null() {
+        let Some(mut slang) = spell_load_file(fname, Some(&sl.lang), false) else {
+            // The name is cleared, so the caller stops trying it.
+            sl.lang.clear();
             continue;
+        };
+
+        if sl.nobreak && slang.sl_add {
+            slang.sl_nobreak = true;
+        } else if slang.sl_nobreak {
+            sl.nobreak = true;
         }
 
-        if unsafe { (*slp).sl_nobreak } != 0 && unsafe { (*slang).sl_add } {
-            unsafe { (*slang).sl_nobreak = true };
-        } else if unsafe { (*slang).sl_nobreak } {
-            unsafe { (*slp).sl_nobreak = 1 };
-        }
-
-        unsafe { (*slp).sl_slang = slang };
+        sl.last = Some(register_lang(slang));
 
         if !all {
             break;
@@ -251,6 +228,56 @@ unsafe fn spell_load_cb(fnames: &[&CStr], all: bool, slp: *mut SpellLoad) -> boo
 /// autocommand can open a new buffer with `'spell'` set.
 static recursive: GlobalCell<bool> = GlobalCell::new(false);
 
+/// Where the region a `'spelllang'` name asked for is read from.
+///
+/// Upstream keeps a *pointer* to it, into the name buffer or the region
+/// copy, and reads through it after later names have been copied over that
+/// buffer -- so a later name changes what an earlier region says. Kept as a
+/// place rather than a value so that the answer stays upstream's.
+#[derive(Copy, Clone)]
+enum RegionAt {
+    /// That many bytes into the name buffer.
+    Name(usize),
+    /// The copy a file name's region was taken into.
+    Copy,
+}
+
+/// The region string at `at`: up to its NUL, as upstream reads it.
+fn region_text<'a>(at: RegionAt, name: &'a [u8], copy: &'a [u8]) -> &'a [u8] {
+    match at {
+        RegionAt::Name(offset) => cstr::until_nul(&name[offset..]),
+        RegionAt::Copy => cstr::until_nul(copy),
+    }
+}
+
+/// Copy `text` into the C string buffer `buf`, NUL terminated, cut to fit;
+/// what lay past the terminator stays, as it did in upstream's buffer.
+fn put_name(buf: &mut [u8], text: &[u8]) {
+    let n = text.len().min(buf.len() - 1);
+    buf[..n].copy_from_slice(&text[..n]);
+    buf[n] = 0;
+}
+
+/// Whether `slang` is the language `name` names: by file for a file name,
+/// else by language name, ignoring ASCII case.
+fn names_language(slang: &SpellLang, name: &[u8], filename: bool) -> bool {
+    if filename {
+        path_full_compare(&cstr::owned(name), slang.sl_fname.as_cstr(), false, true) == kEqualFiles
+    } else {
+        name.eq_ignore_ascii_case(&slang.sl_name)
+    }
+}
+
+/// The first two bytes of a language name as `strncmp(…, 2)` compares them:
+/// a byte past the end of the name is its terminator.
+fn name_head(slang: &SpellLang) -> [u8; 2] {
+    let name = &slang.sl_name;
+    match name.first() {
+        None => [0, 0],
+        Some(&first) => [first, name.get(1).copied().unwrap_or(0)],
+    }
+}
+
 /// Parse `'spelllang'` and fill `window.w_s->b_langp`.
 ///
 /// Returns null on success, or an untranslated error message.
@@ -260,104 +287,94 @@ pub fn parse_spelllang(mut window: Win) -> Result<(), OptError> {
     }
     recursive.set(true);
 
-    let mut region_cp = [0 as c_char; 3];
-    let mut lang = [0 as c_char; MAXWLEN + 1];
-    let mut spf_name = [0 as c_char; MAXPATHL as usize];
-    let mut use_region: *mut c_char = core::ptr::null_mut();
+    let mut region_cp = [0u8; 3];
+    let mut lang = [0u8; MAXWLEN + 1];
+    let mut use_region: Option<RegionAt> = None;
     let mut dont_use_region = false;
     let mut nobreak = false;
     let mut ret_msg: Result<(), OptError> = Ok(());
 
     let bufref = BufRef::of_opt(window.buffer_or_none());
 
-    let mut ga: GArray = unsafe { core::mem::zeroed() };
-    unsafe { ga_init(&raw mut ga, size_of::<LangP>() as c_int, 2) };
+    let mut ga: Vec<LangP> = Vec::new();
     clear_midword(window);
 
     // The SpellFileMissing autocommands may change 'spelllang' underfoot.
-    let mut spl_copy = XString::from_cstr(unsafe { cstr::at((*window.w_s).b_p_spl.value_ptr()) });
+    let spl_copy = window.syn_block().b_p_spl.bytes().to_vec();
 
-    unsafe { (*window.w_s).b_cjk = 0 };
+    window.syn_block_mut().b_cjk = 0;
 
-    let mut splp = spl_copy.as_mut_ptr();
-    'names: while unsafe { *splp } != 0 {
-        let (buf, room) = (lang.as_mut_ptr(), MAXWLEN as size_t);
-        let sep = c",".as_ptr() as *mut c_char;
-        let len = unsafe { copy_option_part(&raw mut splp, buf, room, sep) } as c_int;
-        let mut region: *mut c_char = core::ptr::null_mut();
+    let mut splp: &[u8] = &spl_copy;
+    'names: while !splp.is_empty() {
+        let (part, rest) = split_option_part(splp, MAXWLEN, b",");
+        splp = rest;
+        put_name(&mut lang, &part);
+        let len = part.len();
+        let mut region: Option<RegionAt> = None;
 
-        if !valid_spelllang(cstr::in_chars(&lang)) {
+        if !valid_spelllang(cstr::in_bytes(&lang)) {
             continue;
         }
 
-        if unsafe { cstr::eq_bytes(lang.as_ptr(), b"cjk") } {
-            unsafe { (*window.w_s).b_cjk = 1 };
+        if cstr::until_nul(&lang) == b"cjk" {
+            window.syn_block_mut().b_cjk = 1;
             continue;
         }
 
-        let filename =
-            len > 4 && path_fnamecmp(&cstr::as_bytes(&lang)[len as usize - 4..], b".spl") == 0;
+        let filename = len > 4 && path_fnamecmp(&lang[len - 4..], b".spl") == 0;
         if filename {
             // The name is a file name; a region in it is pulled out.
-
-            let tail = tail_index(cstr::in_chars(&lang).to_bytes());
-            let p = unsafe { vim_strchr(lang.as_mut_ptr().add(tail), '_' as c_int) };
-            if !p.is_null()
-                && ascii_isalpha(unsafe { *p.offset(1) } as c_int)
-                && ascii_isalpha(unsafe { *p.offset(2) } as c_int)
-                && !ascii_isalpha(unsafe { *p.offset(3) } as c_int)
-            {
-                unsafe { xstrlcpy(region_cp.as_mut_ptr(), p.offset(1), 3) };
-                let after = unsafe { p.offset(3) } as *const c_void;
-                let rest = unsafe { len as isize - p.offset_from(lang.as_ptr()) - 2 };
-                unsafe { p.cast::<u8>().copy_from(after.cast(), rest as size_t) };
-                region = region_cp.as_mut_ptr();
-            } else {
-                dont_use_region = true;
-            }
-        } else {
-            if len > 3 && lang[(len - 3) as usize] == b'_' as c_char {
-                region = unsafe { lang.as_mut_ptr().offset(len as isize - 2) };
-                lang[(len - 3) as usize] = NUL as c_char;
-            } else {
-                dont_use_region = true;
-            }
-        }
-        let slang = languages()
-            .into_iter()
-            .find(|&slang| {
-                if filename {
-                    let cmp = unsafe {
-                        path_full_compare(
-                            cstr::in_chars(&lang),
-                            cstr::at((*slang).sl_fname),
-                            false,
-                            true,
-                        )
-                    };
-                    cmp == kEqualFiles
-                } else {
-                    unsafe { strcasecmp(lang.as_ptr(), (*slang).sl_name) == 0 }
+            let tail = tail_index(cstr::until_nul(&lang));
+            let at = lang[tail..len].iter().position(|&b| b == b'_');
+            match at.map(|at| tail + at) {
+                Some(p)
+                    if ascii_isalpha(lang[p + 1])
+                        && ascii_isalpha(lang[p + 2])
+                        && !ascii_isalpha(lang[p + 3]) =>
+                {
+                    put_name(&mut region_cp, &lang[p + 1..p + 3]);
+                    // Close the gap, terminator included.
+                    lang.copy_within(p + 3..len + 1, p);
+                    region = Some(RegionAt::Copy);
                 }
-            })
-            .unwrap_or(core::ptr::null_mut());
+                _ => dont_use_region = true,
+            }
+        } else if len > 3 && lang[len - 3] == b'_' {
+            region = Some(RegionAt::Name(len - 2));
+            lang[len - 3] = 0;
+        } else {
+            dont_use_region = true;
+        }
 
-        if !region.is_null() {
+        let name = cstr::until_nul(&lang).to_vec();
+        let loaded = loaded_langs.with(|langs| {
+            langs
+                .iter()
+                .any(|(_, slang)| names_language(slang, &name, filename))
+        });
+
+        if let Some(region) = region {
             // A region that disagrees with an earlier one disqualifies
             // regions for 'spellfile'.
-            if !use_region.is_null() && !unsafe { cstr::eq(region, use_region) } {
+            if let Some(used) = use_region
+                && region_text(region, &lang, &region_cp) != region_text(used, &lang, &region_cp)
+            {
                 dont_use_region = true;
             }
-            use_region = region;
+            use_region = Some(region);
         }
 
         // Not loaded yet: load it now.
-        if slang.is_null() {
+        if !loaded {
             if filename {
-                let name = lang.as_mut_ptr();
-                unsafe { spell_load_file(cstr::at(name), name, core::ptr::null_mut(), false) };
+                match spell_load_file(&cstr::owned(&name), Some(&name), false) {
+                    Some(slang) => {
+                        register_lang(slang);
+                    }
+                    None => lang[0] = 0,
+                }
             } else {
-                unsafe { spell_load_lang(lang.as_mut_ptr()) };
+                spell_load_lang(&name);
                 // The autocommands may have destroyed the buffer being
                 // used, or closed the window.
                 if !bufref.valid() || !win_valid_any_tab(window.id()) {
@@ -368,46 +385,53 @@ pub fn parse_spelllang(mut window: Win) -> Result<(), OptError> {
         }
 
         // There can be several files for one language.
-        for slang in languages() {
-            let matches = if filename {
-                let fname = unsafe { (*slang).sl_fname };
-                let cmp = unsafe {
-                    path_full_compare(cstr::in_chars(&lang), cstr::at(fname), false, true)
-                };
-                cmp == kEqualFiles
-            } else {
-                unsafe { strcasecmp(lang.as_ptr(), (*slang).sl_name) == 0 }
-            };
-            if matches {
+        let name = cstr::until_nul(&lang).to_vec();
+        let region = region.map(|at| region_text(at, &lang, &region_cp).to_vec());
+        for id in languages() {
+            // The mask, whether the language is NOBREAK, and whether its
+            // region is one it does not have.
+            let entry = loaded_langs.with(|langs| {
+                let slang = langs.get(id)?;
+                if !names_language(slang, &name, filename) {
+                    return None;
+                }
                 let mut region_mask = REGION_ALL;
-                if !filename && !region.is_null() {
-                    let c = unsafe { find_region((*slang).sl_regions.as_ptr(), region) };
+                let mut unsupported = false;
+                if !filename && let Some(region) = &region {
+                    let c = find_region(&slang.sl_regions, region);
                     if c == REGION_ALL {
-                        if unsafe { (*slang).sl_add } {
-                            if unsafe { (*slang).sl_regions[0] } != 0 {
+                        if slang.sl_add {
+                            if slang.sl_regions[0] != 0 {
                                 // This addition file covers other regions.
                                 region_mask = 0;
                             }
                         } else {
-                            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                            let region = unsafe { c_str(region) };
-                            smsg!(0, "Warning: region {region} not supported");
+                            unsupported = true;
                         }
                     } else {
                         region_mask = 1 << c;
                     }
                 }
+                Some((region_mask, slang.sl_nobreak, unsupported))
+            });
+            let Some((region_mask, lang_nobreak, unsupported)) = entry else {
+                continue;
+            };
+            if unsupported && let Some(region) = &region {
+                let region = msg_bytes(region);
+                smsg!(0, "Warning: region {region} not supported");
+            }
 
-                if region_mask != 0 {
-                    let p_ =
-                        unsafe { ga_append_via_ptr(&raw mut ga, size_of::<LangP>()) } as *mut LangP;
-                    unsafe { (*p_).lp_slang = slang };
-                    unsafe { (*p_).lp_region = region_mask };
-
-                    unsafe { use_midword(slang, window) };
-                    if unsafe { (*slang).sl_nobreak } {
-                        nobreak = true;
-                    }
+            if region_mask != 0 {
+                ga.push(LangP {
+                    slang: id,
+                    sallang: None,
+                    replang: None,
+                    region: region_mask,
+                });
+                use_midword(id, window);
+                if lang_nobreak {
+                    nobreak = true;
                 }
             }
         }
@@ -416,183 +440,180 @@ pub fn parse_spelllang(mut window: Win) -> Result<(), OptError> {
     if ret_msg.is_ok() {
         // Round 0 is the internal word list; each round after that is one
         // entry of 'spellfile'.
-        // SAFETY: the window's own syntax block; the walk reads
-        // 'spellfile' in place, as upstream's does.
-        let mut spf = unsafe { (*Win::current().w_s).b_p_spf.value_ptr() };
+        let spf_copy = Win::current().syn_block().b_p_spf.bytes().to_vec();
+        let mut spf: &[u8] = &spf_copy;
         let mut round = 0;
-        while round == 0 || unsafe { *spf } != 0 {
-            if round == 0 {
+        while round == 0 || !spf.is_empty() {
+            let spf_name = if round == 0 {
                 if int_wordlist.with(Option::is_none) {
                     round += 1;
                     continue;
                 }
-                unsafe { int_wordlist_spl(spf_name.as_mut_ptr()) };
+                int_wordlist_spl()
             } else {
-                let (buf, room) = (spf_name.as_mut_ptr(), MAXPATHL as size_t - 4);
-                let sep = c",".as_ptr() as *mut c_char;
-                let len = unsafe { copy_option_part(&raw mut spf, buf, room, sep) } as c_int;
-                let tail = unsafe { buf.offset(len as isize) };
-                unsafe { xstrlcpy(tail, c".spl".as_ptr(), MAXPATHL as usize - len as usize) };
+                let (part, rest) = split_option_part(spf, MAXPATHL as usize - 4, b",");
+                spf = rest;
+                let spf_name = joined(&[&part, b".spl"], MAXPATHL as usize);
 
                 // Skip it if the loop above already took it.
-                let mut c = 0;
-                while c < ga.ga_len {
-                    let entry = ga.ga_data as *mut LangP;
-                    let p = unsafe { (*(*entry.offset(c as isize)).lp_slang).sl_fname };
-                    if !p.is_null()
-                        && unsafe {
-                            path_full_compare(cstr::in_chars(&spf_name), cstr::at(p), false, true)
-                        } == kEqualFiles
-                    {
-                        break;
-                    }
-                    c += 1;
-                }
-                if c < ga.ga_len {
+                let name = cstr::owned(&spf_name);
+                let taken = ga.iter().any(|lp| {
+                    loaded_langs.with(|langs| {
+                        langs.get(lp.slang).is_some_and(|slang| {
+                            path_full_compare(&name, slang.sl_fname.as_cstr(), false, true)
+                                == kEqualFiles
+                        })
+                    })
+                });
+                if taken {
                     round += 1;
                     continue;
                 }
-            }
+                spf_name
+            };
 
-            let mut slang = languages()
-                .into_iter()
-                .find(|&slang| {
-                    let fname = unsafe { (*slang).sl_fname };
-                    let name = cstr::in_chars(&spf_name);
-                    let cmp = unsafe { path_full_compare(name, cstr::at(fname), false, true) };
-                    cmp == kEqualFiles
-                })
-                .unwrap_or(core::ptr::null_mut());
+            let name = cstr::owned(&spf_name);
+            let mut slang = loaded_langs.with(|langs| {
+                langs
+                    .iter()
+                    .find(|(_, slang)| {
+                        path_full_compare(&name, slang.sl_fname.as_cstr(), false, true)
+                            == kEqualFiles
+                    })
+                    .map(|(id, _)| id)
+            });
 
-            if slang.is_null() {
+            if slang.is_none() {
                 // The language name includes the region; the region is
                 // ignored for these. The internal word list gets an
                 // arbitrary name.
                 if round == 0 {
-                    let (into, name) = (lang.as_mut_ptr(), c"internal wordlist");
-                    unsafe { xstrlcpy(into, name.as_ptr(), MAXWLEN + 1) };
+                    put_name(&mut lang, b"internal wordlist");
                 } else {
-                    let tail = path_tail(cstr::in_chars(&spf_name)).as_ptr();
-                    unsafe { xstrlcpy(lang.as_mut_ptr(), tail, MAXWLEN + 1) };
-                    let p = unsafe { vim_strchr(lang.as_mut_ptr(), '.' as c_int) };
-                    if !p.is_null() {
-                        unsafe { *p = NUL as c_char }; // truncate at ".encoding.add"
+                    let tail = &spf_name[tail_index(&spf_name)..];
+                    put_name(&mut lang, tail);
+                    // Truncate at ".encoding.add".
+                    if let Some(dot) = cstr::until_nul(&lang).iter().position(|&b| b == b'.') {
+                        lang[dot] = 0;
                     }
                 }
-                let (file, name) = (spf_name.as_mut_ptr(), lang.as_mut_ptr());
-                slang =
-                    unsafe { spell_load_file(cstr::at(file), name, core::ptr::null_mut(), true) };
-
-                // If any language has NOBREAK assume the additions do too.
-                if !slang.is_null() && nobreak {
-                    unsafe { (*slang).sl_nobreak = true };
+                match spell_load_file(&name, Some(cstr::until_nul(&lang)), true) {
+                    Some(mut loaded) => {
+                        // If any language has NOBREAK assume the additions
+                        // do too.
+                        if nobreak {
+                            loaded.sl_nobreak = true;
+                        }
+                        slang = Some(register_lang(loaded));
+                    }
+                    None => lang[0] = 0,
                 }
             }
 
-            if !slang.is_null() {
+            if let Some(id) = slang {
                 let mut region_mask = REGION_ALL;
-                if !use_region.is_null() && !dont_use_region {
-                    let c = unsafe { find_region((*slang).sl_regions.as_ptr(), use_region) };
+                if let Some(used) = use_region
+                    && !dont_use_region
+                {
+                    let used = region_text(used, &lang, &region_cp);
+                    let regions = with_lang(id, |slang| slang.sl_regions).unwrap_or_default();
+                    let c = find_region(&regions, used);
                     if c != REGION_ALL {
                         region_mask = 1 << c;
-                    } else if unsafe { (*slang).sl_regions[0] } != 0 {
+                    } else if regions[0] != 0 {
                         // This spell file covers other regions.
                         region_mask = 0;
                     }
                 }
 
                 if region_mask != 0 {
-                    let p_ =
-                        unsafe { ga_append_via_ptr(&raw mut ga, size_of::<LangP>()) } as *mut LangP;
-                    unsafe { (*p_).lp_slang = slang };
-                    unsafe { (*p_).lp_sallang = core::ptr::null_mut() };
-                    unsafe { (*p_).lp_replang = core::ptr::null_mut() };
-                    unsafe { (*p_).lp_region = region_mask };
-
-                    unsafe { use_midword(slang, window) };
+                    ga.push(LangP {
+                        slang: id,
+                        sallang: None,
+                        replang: None,
+                        region: region_mask,
+                    });
+                    use_midword(id, window);
                 }
             }
             round += 1;
         }
 
+        lend_tables(&mut ga);
+
         // Everything worked; publish the new list.
-        unsafe { ga_clear(&raw mut (*window.w_s).b_langp) };
-        unsafe { (*window.w_s).b_langp = ga };
-
-        // A language with no sound folding or no REP items of its own
-        // borrows from the first similarly-named one that has them, so
-        // that "en-math" gets "en"'s.
-        let entries = ga.ga_data as *mut LangP;
-        for i in 0..ga.ga_len {
-            let lp = unsafe { entries.offset(i as isize) };
-            // The first two bytes of `sl_name` are the language; a region
-            // suffix past them does not have to match.
-            let lang = unsafe { (*(*lp).lp_slang).sl_name };
-
-            if unsafe { (*(*lp).lp_slang).has_soundfold() } {
-                unsafe { (*lp).lp_sallang = (*lp).lp_slang };
-            } else {
-                for j in 0..ga.ga_len {
-                    let lp2 = unsafe { entries.offset(j as isize) };
-                    let lang2 = unsafe { (*(*lp2).lp_slang).sl_name };
-                    if unsafe { (*(*lp2).lp_slang).has_soundfold() }
-                        && unsafe { cstr::prefix_eq(lang, lang2, 2) }
-                    {
-                        unsafe { (*lp).lp_sallang = (*lp2).lp_slang };
-                        break;
-                    }
-                }
-            }
-
-            if unsafe { !(*(*lp).lp_slang).sl_rep.is_empty() } {
-                unsafe { (*lp).lp_replang = (*lp).lp_slang };
-            } else {
-                for j in 0..ga.ga_len {
-                    let lp2 = unsafe { entries.offset(j as isize) };
-                    let lang2 = unsafe { (*(*lp2).lp_slang).sl_name };
-                    if unsafe { !(*(*lp2).lp_slang).sl_rep.is_empty() }
-                        && unsafe { cstr::prefix_eq(lang, lang2, 2) }
-                    {
-                        unsafe { (*lp).lp_replang = (*lp2).lp_slang };
-                        break;
-                    }
-                }
-            }
-        }
+        window.syn_block_mut().b_langp = ga;
         redraw_later(window, UPD_NOT_VALID);
     }
 
     recursive.set(false);
     ret_msg
 }
+/// Fill in where each entry's sound folding and REP items come from: its own
+/// language when that has them, else the first entry's whose name starts
+/// with the same two letters, so that "en-math" uses "en"'s.
+fn lend_tables(ga: &mut [LangP]) {
+    loaded_langs.with(|langs| {
+        // What each entry's language offers: the first two bytes of its
+        // name (a region suffix past them does not have to match), whether
+        // it sound-folds, and whether it has REP items.
+        let offers: Vec<Option<([u8; 2], bool, bool)>> = ga
+            .iter()
+            .map(|lp| {
+                let slang = langs.get(lp.slang)?;
+                Some((
+                    name_head(slang),
+                    slang.has_soundfold(),
+                    !slang.sl_rep.is_empty(),
+                ))
+            })
+            .collect();
+        let ids: Vec<LangId> = ga.iter().map(|lp| lp.slang).collect();
+        let first = |head: [u8; 2], pick: fn(bool, bool) -> bool| {
+            offers
+                .iter()
+                .position(|offer| offer.is_some_and(|(h, s, r)| h == head && pick(s, r)))
+                .map(|j| ids[j])
+        };
+        for (lp, offer) in ga.iter_mut().zip(&offers) {
+            let Some((head, soundfolds, has_rep)) = *offer else {
+                continue;
+            };
+            if soundfolds {
+                lp.sallang = Some(lp.slang);
+            } else if let Some(lender) = first(head, |s, _| s) {
+                lp.sallang = Some(lender);
+            }
+            if has_rep {
+                lp.replang = Some(lp.slang);
+            } else if let Some(lender) = first(head, |_, r| r) {
+                lp.replang = Some(lender);
+            }
+        }
+    });
+}
 
 /// Forget the midword characters recorded for `window`.
 fn clear_midword(mut window: Win) {
-    unsafe { (*window.w_s).b_spell_ismw = [false; 256] };
-    unsafe { xfree((*window.w_s).b_spell_ismw_mb as *mut c_void) };
-    unsafe { (*window.w_s).b_spell_ismw_mb = core::ptr::null_mut() };
+    let syn = window.syn_block_mut();
+    syn.b_spell_ismw = [false; 256];
+    syn.b_spell_ismw_mb = Vec::new();
 }
 
-/// The index of region `region[..2]` in `rp` (which is `sl_regions`, two
-/// characters per region), or `REGION_ALL` when it is not there.
-///
-/// # Safety
-///
-/// `rp` must point at a NUL-terminated string. `region` must point at a NUL-
-/// terminated string.
-unsafe fn find_region(rp: *const c_char, region: *const c_char) -> c_int {
-    let mut i = 0;
-    loop {
-        if unsafe { *rp.offset(i as isize) } == 0 {
-            return REGION_ALL;
+/// The index of region `region[..2]` in `regions` (which is `sl_regions`,
+/// two characters per region, NUL terminated), or `REGION_ALL` when it is
+/// not there.
+fn find_region(regions: &[u8], region: &[u8]) -> c_int {
+    let at = |i: usize| cstr::byte_at(region, i);
+    for (i, pair) in regions.chunks(2).enumerate() {
+        if pair[0] == 0 {
+            break;
         }
-        if unsafe { *rp.offset(i as isize) } == unsafe { *region }
-            && unsafe { *rp.offset(i as isize + 1) } == unsafe { *region.offset(1) }
-        {
-            return i / 2;
+        if pair[0] == at(0) && pair.get(1).copied().unwrap_or(0) == at(1) {
+            return i as c_int;
         }
-        i += 2;
     }
+    REGION_ALL
 }
 
 /// Delete the internal word list and its compiled `.spl`.
@@ -601,25 +622,18 @@ pub fn spell_delete_wordlist() {
         return;
     };
 
-    let mut fname = [0 as c_char; MAXPATHL as usize];
     os_remove(list.as_cstr());
-    unsafe { int_wordlist_spl(fname.as_mut_ptr()) };
-    os_remove(cstr::in_chars(&fname));
+    os_remove(&cstr::owned(&int_wordlist_spl()));
     int_wordlist.set(None);
 }
 
 /// Free every loaded language and everything derived from them.
 pub fn spell_free_all() {
     for buf in buffers() {
-        // SAFETY: a live buffer from the editor's own list, and its own
-        // growarray. The address is taken from the raw pointer rather than
-        // through `DerefMut`, so no `&mut Buffer` is formed.
-        unsafe { ga_clear(&raw mut (*buf.raw()).b_s.b_langp) };
+        buf.syntax().b_langp = Vec::new();
     }
 
-    for slang in loaded_langs.take() {
-        unsafe { slang_free(slang) };
-    }
+    free_langs();
 
     spell_delete_wordlist();
 
@@ -629,7 +643,6 @@ pub fn spell_free_all() {
 /// Drop every spelling table and load them again, after `'encoding'`
 /// changed or `:mkspell` ran.
 pub fn spell_reload() {
-    // SAFETY: on the main thread, as every caller of this is.
     init_spell_chartab();
     spell_free_all();
 
@@ -637,9 +650,7 @@ pub fn spell_reload() {
     // the buffer has 'spell' on. The walk is over the current tab, which
     // always starts at `firstwin`.
     for wp in windows() {
-        // SAFETY: a live window of the current tab page, and the synblock it
-        // points at.
-        if unsafe { (*wp.w_s).b_p_spl.first_byte() } != 0 && wp.w_onebuf_opt.wo_spell != 0 {
+        if wp.syn_block().b_p_spl.first_byte() != 0 && wp.w_onebuf_opt.wo_spell != 0 {
             let _ = parse_spelllang(wp);
             break;
         }
@@ -685,74 +696,47 @@ pub fn did_set_spell_option() -> Result<(), OptError> {
     errmsg
 }
 
-/// [`compile_cap_prog`] over a syntax block the caller holds.
-pub(crate) fn compile_cap_prog_in(synblock: &mut SynBlock) -> Result<(), OptError> {
-    // SAFETY: a live block, unaliased for the call by its `&mut`.
-    unsafe { compile_cap_prog(synblock) }
-}
-
 /// Compile `'spellcapcheck'` into `b_cap_prog`, anchored so that it can
 /// only match at one column.
 ///
 /// Returns an error message when the pattern does not compile, leaving the
 /// previous program in place.
-///
-/// # Safety
-///
-/// `synblock` must point at a live `SynBlock`, unaliased for the call.
-pub unsafe fn compile_cap_prog(synblock: *mut SynBlock) -> Result<(), OptError> {
-    if unsafe { (*synblock).b_p_spc.bytes() }.is_empty() {
-        unsafe { (*synblock).b_cap_prog = None };
+pub fn compile_cap_prog(synblock: &mut SynBlock) -> Result<(), OptError> {
+    if synblock.b_p_spc.bytes().is_empty() {
+        synblock.b_cap_prog = None;
     } else {
-        let re = concat(b"^", unsafe {
-            cstr::bytes_at((*synblock).b_p_spc.value_ptr())
-        })
-        .into_raw();
-        let prog = unsafe { vim_regcomp(cstr::at(re), RE_MAGIC as c_int) };
-        unsafe { xfree(re as *mut c_void) };
+        let re = concat(b"^", synblock.b_p_spc.bytes());
         // A pattern that does not compile keeps the previous program.
-        let Some(prog) = prog else {
+        let Some(prog) = vim_regcomp(re.as_cstr(), RE_MAGIC as c_int) else {
             return Err(e_invarg.into());
         };
-        unsafe { (*synblock).b_cap_prog = Some(prog) };
+        synblock.b_cap_prog = Some(prog);
     }
     Ok(())
 }
 
-/// Record `slang`'s `MIDWORD` characters in `window`, so that [`spell_iswordp`]
-/// treats them as part of a word when a word character follows.
+/// Record the `MIDWORD` characters of the language in slot `id` in
+/// `window`, so that [`spell_iswordp`] treats them as part of a word when a
+/// word character follows.
 ///
 /// Characters below 256 that take at most two bytes go in the flat
 /// `b_spell_ismw` table; anything wider is appended to the
 /// `b_spell_ismw_mb` string, which is scanned instead.
 ///
 /// [`spell_iswordp`]: super::chartab::spell_iswordp
-///
-/// # Safety
-///
-/// `slang` must point at a live `SpellLang`, unaliased for the call.
-unsafe fn use_midword(slang: *mut SpellLang, mut window: Win) {
-    if unsafe { (*slang).sl_midword }.is_null() {
-        return;
-    }
-
-    let mut p = unsafe { (*slang).sl_midword };
-    while unsafe { *p } != 0 {
-        let c = unsafe { utf_ptr2char(p) };
-        let l = unsafe { utfc_ptr2len(p) };
+fn use_midword(id: LangId, mut window: Win) {
+    let midword = with_lang(id, |slang| slang.sl_midword.clone()).unwrap_or_default();
+    let syn = window.syn_block_mut();
+    let mut p = 0;
+    while p < midword.len() {
+        let rest = &midword[p..];
+        let c = char_at(rest);
+        let l = c_cluster_len(rest).max(1);
         if c < 256 && l <= 2 {
-            unsafe { (*window.w_s).b_spell_ismw[c as usize] = true };
-        } else if unsafe { (*window.w_s).b_spell_ismw_mb }.is_null() {
-            let copy = unsafe { xmemdupz(p as *const c_void, l as size_t) };
-            unsafe { (*window.w_s).b_spell_ismw_mb = copy as *mut c_char };
+            syn.b_spell_ismw[c as usize] = true;
         } else {
-            let n = unsafe { cstr::bytes_at((*window.w_s).b_spell_ismw_mb) }.len() as c_int;
-            let bp = unsafe { xstrnsave((*window.w_s).b_spell_ismw_mb, (n + l) as size_t) };
-            unsafe { xfree((*window.w_s).b_spell_ismw_mb as *mut c_void) };
-            unsafe { (*window.w_s).b_spell_ismw_mb = bp };
-            let at = unsafe { bp.offset(n as isize) } as *mut c_void;
-            unsafe { xmemcpyz(at, p as *const c_void, l as size_t) };
+            syn.b_spell_ismw_mb.extend_from_slice(&rest[..l]);
         }
-        p = unsafe { p.offset(l as isize) };
+        p += l;
     }
 }

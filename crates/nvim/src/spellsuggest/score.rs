@@ -39,16 +39,15 @@
 use crate::ascii::ascii_iswhite;
 use crate::charset::skiptowhite;
 use crate::cstr;
-use crate::hashtab::hash_find;
-use crate::mbyte::{mb_isupper, utf_char2bytes, utf_fold, utf_ptr2char, utf_ptr2len};
+use crate::mbyte::{mb_isupper, utf_fold, utf_ptr2char, utf_ptr2len};
 use crate::memory::xmemcpyz;
 use crate::memory::xstrlcpy;
-use crate::spell::{WC_KEY_OFF, spell_casefold, spell_soundfold, spelltab_fold, spelltab_isu};
+use crate::spell::{spell_casefold, spell_soundfold, spelltab_fold, spelltab_isu};
 use crate::spellsuggest::{
     MAXWLEN, SCORE_COMMON1, SCORE_COMMON2, SCORE_COMMON3, SCORE_DEL, SCORE_ICASE, SCORE_INS,
     SCORE_MAXMAX, SCORE_SIMILAR, SCORE_SUBST, SCORE_SWAP, SCORE_THRES2, SCORE_THRES3, SugInfo,
 };
-use crate::types::{MB_MAXCHAR, NUL, SpellLang, WordCount, size_t};
+use crate::types::{NUL, SpellLang, size_t};
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -123,17 +122,7 @@ fn map_class(slang: &SpellLang, c: c_int) -> c_int {
     if c < 256 {
         return slang.sl_map_array[c as usize];
     }
-    let mut buf = [0 as c_char; MB_MAXCHAR + 1];
-    // SAFETY: `buf` holds any single character plus a terminator, the hash
-    // key is that NUL-terminated buffer, and the value stored with a key is
-    // the NUL-terminated string just past that key's terminator.
-    let len = unsafe { utf_char2bytes(c, buf.as_mut_ptr()) };
-    buf[len as usize] = 0;
-    let hi = unsafe { &*hash_find(&raw const slang.sl_map_hash, buf.as_ptr()) };
-    if !hi.is_kept() {
-        return 0;
-    }
-    unsafe { utf_ptr2char(hi.hi_key.add(cstr::bytes_at(hi.hi_key).len() + 1)) }
+    slang.sl_map_hash.get(&c).copied().unwrap_or(0)
 }
 
 /// Discount the score of a word the dictionary counted as common.
@@ -156,14 +145,11 @@ pub(super) unsafe fn score_wordcount_adj(
     word: *mut c_char,
     split: bool,
 ) -> c_int {
-    // SAFETY: the caller guarantees a NUL-terminated word; the hash table
-    // stores `WordCount`s whose key is an inline field at `WC_KEY_OFF`,
-    // so stepping back by that offset recovers the record.
-    let hi = unsafe { &*hash_find(&raw const slang.sl_wordcount, word) };
-    if !hi.is_kept() {
+    // SAFETY: the caller guarantees a NUL-terminated word.
+    let Some(&count) = slang.sl_wordcount.get(unsafe { cstr::bytes_at(word) }) else {
         return score;
-    }
-    let count = unsafe { (*(hi.hi_key.sub(WC_KEY_OFF) as *mut WordCount)).wc_count } as c_int;
+    };
+    let count = c_int::from(count);
 
     let bonus = if count < SCORE_THRES2 {
         SCORE_COMMON1
@@ -729,8 +715,13 @@ pub(super) unsafe fn stp_sal_score(
         // of which the suggestion replaces `st_orglen` bytes; `fword` is
         // `MAXWLEN` bytes, which is the bound handed over.
         let win = Win::current();
-        let len = MAXWLEN as c_int;
-        let _ = unsafe { spell_casefold(win, su.su_badptr, orglen, fword.as_mut_ptr(), len) };
+        let badword = unsafe { cstr::bytes_at(su.su_badptr) };
+        let _ = spell_casefold(
+            win,
+            badword,
+            orglen as usize,
+            cstr::as_bytes_mut(&mut fword),
+        );
 
         // Joining two words changes the sound a lot -- "t he" sounds
         // like "t h" where "the" sounds like "@" -- so drop the space,
@@ -758,7 +749,13 @@ pub(super) unsafe fn stp_sal_score(
 
         // SAFETY: `fword` is the NUL-terminated fold just built and
         // `badsound2` has room for a soundfold.
-        unsafe { spell_soundfold(slang, fword.as_mut_ptr(), true, badsound2.as_mut_ptr()) };
+        let lang = unsafe { &*slang };
+        spell_soundfold(
+            lang,
+            cstr::as_bytes(&fword),
+            true,
+            cstr::as_bytes_mut(&mut badsound2),
+        );
         &badsound2
     };
 
@@ -780,7 +777,8 @@ pub(super) unsafe fn stp_sal_score(
 
     // SAFETY: `pgood` is one of the two NUL-terminated words above and
     // `goodsound` has room for a soundfold.
-    unsafe { spell_soundfold(slang, pgood, false, goodsound.as_mut_ptr()) };
+    let (lang, pgood) = unsafe { (&*slang, cstr::bytes_at(pgood)) };
+    spell_soundfold(lang, pgood, false, cstr::as_bytes_mut(&mut goodsound));
 
     soundalike_score(&goodsound, pbad)
 }

@@ -131,6 +131,17 @@ impl DecorStateRef {
         // caller's promise is the borrow half.
         unsafe { Self::new(decor_state.ptr()) }
     }
+
+    /// Put the decoration state aside, answering what it held and a handle
+    /// to the now empty state: the spelling-navigation scan rebuilds it per
+    /// line and puts the old one back when it is done.
+    pub(crate) fn set_aside() -> (DecorState, Self) {
+        // `take` is a checked exclusive borrow, so it returning at all says
+        // no `with`/`with_mut` borrow is outstanding -- `current`'s promise.
+        let saved = decor_state.take();
+        // SAFETY: as just said.
+        (saved, unsafe { Self::current() })
+    }
 }
 
 // ---------------------------------------------------------------------------

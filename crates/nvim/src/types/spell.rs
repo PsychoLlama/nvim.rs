@@ -24,11 +24,24 @@ pub struct RepItem {
     pub to: Box<[u8]>,
 }
 pub type SpellIdx = ::core::ffi::c_int;
+
+/// A loaded language's slot in the language table. The slot, not the
+/// language's address, is its identity: reloading a spell file refills the
+/// slot in place, so every window that names it keeps naming it.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub struct LangId(pub(crate) u32);
+
+/// One entry of a window's `'spelllang'`: a language, the region mask
+/// chosen for it, and where its sound folding and REP items come from.
+#[derive(Copy, Clone)]
 pub struct LangP {
-    pub lp_slang: *mut SpellLang,
-    pub lp_sallang: *mut SpellLang,
-    pub lp_replang: *mut SpellLang,
-    pub lp_region: ::core::ffi::c_int,
+    pub slang: LangId,
+    /// The language to sound-fold with: this one, or a similarly named one
+    /// that has a table when this has none.
+    pub sallang: Option<LangId>,
+    /// The language whose REP items to use, chosen the same way.
+    pub replang: Option<LangId>,
+    pub region: ::core::ffi::c_int,
 }
 pub type SalFirst = ::core::ffi::c_int;
 /// One `SAL` sound-folding rule.
@@ -50,8 +63,11 @@ pub struct SalItem {
     pub sm_to_w: Option<Box<[::core::ffi::c_int]>>,
 }
 pub struct SpellLang {
-    pub sl_name: *mut ::core::ffi::c_char,
-    pub sl_fname: *mut ::core::ffi::c_char,
+    /// The language name, as `'spelllang'` names it; empty for a file
+    /// loaded without one.
+    pub sl_name: Vec<u8>,
+    /// The `.spl` file it was read from.
+    pub sl_fname: crate::memory::XString,
     pub sl_add: bool,
     /// Case-folded words.
     pub sl_fold_tree: WordTree,
@@ -59,26 +75,38 @@ pub struct SpellLang {
     pub sl_keep_tree: WordTree,
     /// Postponed prefixes.
     pub sl_prefix_tree: WordTree,
-    pub sl_info: *mut ::core::ffi::c_char,
-    pub sl_regions: [::core::ffi::c_char; 17],
-    pub sl_midword: *mut ::core::ffi::c_char,
-    pub sl_wordcount: HashTab,
+    /// `SN_INFO`'s text, when the file has one.
+    pub sl_info: Option<crate::memory::XString>,
+    /// Two letters per region, NUL terminated.
+    pub sl_regions: [u8; 17],
+    /// `MIDWORD`'s characters.
+    pub sl_midword: Vec<u8>,
+    /// `COMMON` word counts.
+    pub sl_wordcount: std::collections::HashMap<Box<[u8]>, uint16_t>,
     pub sl_compmax: ::core::ffi::c_int,
     pub sl_compminlen: ::core::ffi::c_int,
     pub sl_compsylmax: ::core::ffi::c_int,
     pub sl_compoptions: ::core::ffi::c_int,
     /// `CHECKCOMPOUNDPATTERN`'s pairs, in order.
     pub sl_comppat: Vec<Box<[u8]>>,
-    pub sl_compprog: Option<crate::regexp::OwnedProg>,
-    pub sl_comprules: *mut uint8_t,
-    pub sl_compstartflags: *mut uint8_t,
-    pub sl_compallflags: *mut uint8_t,
+    /// COMPOUNDRULE compiled. A cell, because a match may recompile the
+    /// program while the language is only borrowed for a lookup.
+    pub sl_compprog: core::cell::RefCell<Option<crate::regexp::OwnedProg>>,
+    /// The COMPOUNDRULE flags in order, while they form a plain sequence
+    /// (no `?`, `+` or `*`).
+    pub sl_comprules: Option<Vec<u8>>,
+    /// The compound flags that may start a compound.
+    pub sl_compstartflags: Vec<u8>,
+    /// Every compound flag.
+    pub sl_compallflags: Vec<u8>,
     pub sl_nobreak: bool,
-    pub sl_syllable: *mut ::core::ffi::c_char,
+    /// `SYLLABLE`'s single syllable characters, when there is the item.
+    pub sl_syllable: Option<Vec<u8>>,
     pub sl_syl_items: Vec<SylItem>,
     pub sl_prefixcnt: ::core::ffi::c_int,
-    /// The prefix conditions compiled, `sl_prefixcnt` of them.
-    pub sl_prefprog: Vec<Option<crate::regexp::OwnedProg>>,
+    /// The prefix conditions compiled, `sl_prefixcnt` of them; cells for
+    /// the reason [`SpellLang::sl_compprog`] is one.
+    pub sl_prefprog: Vec<core::cell::RefCell<Option<crate::regexp::OwnedProg>>>,
     pub sl_rep: Vec<RepItem>,
     pub sl_rep_first: [int16_t; 256],
     /// The `SAL` rules, grouped by the low byte of their first character.
@@ -105,7 +133,8 @@ pub struct SpellLang {
     pub sl_sugbuf: Option<SpellBuf>,
     pub sl_sugloaded: bool,
     pub sl_has_map: bool,
-    pub sl_map_hash: HashTab,
+    /// `MAP` groups above 255: each character to its group's head.
+    pub sl_map_hash: std::collections::HashMap<::core::ffi::c_int, ::core::ffi::c_int>,
     pub sl_map_array: [::core::ffi::c_int; 256],
     pub sl_sounddone: HashTab,
 }
@@ -127,13 +156,4 @@ pub struct SpellTab {
     pub st_isu: [bool; 256],
     pub st_fold: [uint8_t; 256],
     pub st_upper: [uint8_t; 256],
-}
-/// `#[repr(C)]`: `wc_word` is a flexible array member. A record is
-/// `xmalloc(WC_KEY_OFF + len + 1)` and the hash table keys on the inline
-/// word, stepping back by `WC_KEY_OFF` to recover the record -- which only
-/// describes the allocation while `wc_word` is last.
-#[repr(C)]
-pub struct WordCount {
-    pub wc_count: uint16_t,
-    pub wc_word: [::core::ffi::c_char; 0],
 }

@@ -28,7 +28,7 @@ use crate::regexp::{OwnedProg, RE_MAGIC, RE_STRING, reg_submatch, reg_submatch_l
 use crate::search::FORWARD;
 use crate::semsg;
 use crate::sha256::hex_digest;
-use crate::spell::{SMT_ALL, eval_soundfold, parse_spelllang, spell_check_text, spell_move_to};
+use crate::spell::{SMT_ALL, eval_soundfold, parse_spelllang, spell_check, spell_move_to};
 use crate::spellsuggest::spell_suggest_list;
 use crate::strings::{escaped_bytes, format_typvals, shellescape};
 use crate::types::{
@@ -261,13 +261,15 @@ pub fn f_spellbadword(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
             let text = numbuf.string_chk(&args[0]);
             let mut capcol: c_int = -1;
             if let Some(text) = text {
-                let end = text.count_bytes();
+                let text = text.to_bytes_with_nul();
+                let end = text.len() - 1;
                 let mut offset = 0;
                 while offset < end {
                     let rest = &text[offset..];
-                    let len = spell_check_text(Win::current(), rest, &mut attr, &mut capcol, false);
+                    let len;
+                    (len, attr) = spell_check(Win::current(), rest, Some(&mut capcol), false);
                     if attr != HLF_COUNT {
-                        word = rest.to_bytes()[..len.min(rest.count_bytes())].to_vec();
+                        word = rest[..len.min(end - offset)].to_vec();
                         break;
                     }
                     offset += len;

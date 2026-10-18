@@ -379,6 +379,12 @@ pub(crate) fn as_bytes(buf: &[c_char]) -> &[u8] {
     unsafe { slice::from_raw_parts(buf.as_ptr().cast::<u8>(), buf.len()) }
 }
 
+/// [`as_bytes`], writable: a `c_char` buffer filled as bytes.
+pub(crate) fn as_bytes_mut(buf: &mut [c_char]) -> &mut [u8] {
+    // SAFETY: as `as_bytes`; the exclusive borrow is handed on whole.
+    unsafe { slice::from_raw_parts_mut(buf.as_mut_ptr().cast::<u8>(), buf.len()) }
+}
+
 /// The first byte of a C string, or NUL when it has none.
 ///
 /// The spelling of `*p` for a value that is a string in its own right: the

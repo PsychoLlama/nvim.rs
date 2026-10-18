@@ -793,9 +793,11 @@ pub struct SynBlock {
     /// `display_tick` at the last parse, which the cache's cleanup ages its
     /// entries against.
     pub b_sst_lasttick: DispTick,
-    pub b_langp: GArray,
+    /// The window's `'spelllang'`, resolved.
+    pub b_langp: Vec<LangP>,
     pub b_spell_ismw: [bool; 256],
-    pub b_spell_ismw_mb: *mut ::core::ffi::c_char,
+    /// The `MIDWORD` characters above 255, run together.
+    pub b_spell_ismw_mb: Vec<u8>,
     pub b_p_spc: Option<XString>,
     /// `'spellcapcheck'` compiled.
     pub b_cap_prog: Option<crate::regexp::OwnedProg>,

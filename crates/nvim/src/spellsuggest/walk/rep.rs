@@ -19,6 +19,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::spell::lang_ptr_opt;
 use crate::spellsuggest::SCORE_REP;
 use crate::spellsuggest::walk::{State, Walk};
 use crate::types::RepItem;
@@ -38,7 +39,7 @@ impl Walk<'_> {
         //
         // SAFETY: `langp` and `su` are the caller's, valid by the contract
         // above.
-        if (unsafe { (*self.langp).lp_replang }.is_null() && !self.soundfold)
+        if (unsafe { (*self.langp).replang }.is_none() && !self.soundfold)
             || self.stack[level].score + SCORE_REP >= unsafe { (*self.su).su_maxscore }
             || self.stack[level].bad_idx < self.stack[level].change_from
         {
@@ -54,7 +55,7 @@ impl Walk<'_> {
         self.stack[level].child = if self.soundfold {
             unsafe { (*self.slang).sl_repsal_first[first_byte] }
         } else {
-            unsafe { (*(*self.langp).lp_replang).sl_rep_first[first_byte] }
+            unsafe { (*lang_ptr_opt((*self.langp).replang)).sl_rep_first[first_byte] }
         };
 
         if self.stack[level].child < 0 {
@@ -156,7 +157,7 @@ impl Walk<'_> {
         if self.soundfold {
             unsafe { &(*self.slang).sl_repsal }
         } else {
-            unsafe { &(*(*self.langp).lp_replang).sl_rep }
+            unsafe { &(*lang_ptr_opt((*self.langp).replang)).sl_rep }
         }
     }
 }

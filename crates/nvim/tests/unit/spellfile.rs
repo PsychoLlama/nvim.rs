@@ -49,10 +49,9 @@
 #![cfg(not(miri))]
 
 use neovim::winlayer::Win;
-use std::ffi::{CString, c_char, c_int};
+use std::ffi::{CString, c_char};
 
-use neovim::garray::{ga_clear, ga_grow, ga_init};
-use neovim::spell::{REGION_ALL, init_spell_chartab, spell_check};
+use neovim::spell::{REGION_ALL, init_spell_chartab, register_lang, spell_check, take_lang};
 use neovim::spellfile::{mkspell, spell_check_msm, spell_load_file};
 use neovim::types::{LangP, SpellLang};
 use neovim::winlayer::graph::curwin;
@@ -143,10 +142,8 @@ fn tree_words(byts: &[u8], idxs: &[i32]) -> Vec<String> {
 ///
 /// # Safety
 ///
-/// `slang` must be a language `spell_load_file` answered.
-unsafe fn fold_words(slang: *const SpellLang) -> Vec<String> {
-    // SAFETY: the caller promises the language.
-    let (byts, idxs) = unsafe { (*slang).sl_fold_tree.as_slices() };
+fn fold_words(slang: &SpellLang) -> Vec<String> {
+    let (byts, idxs) = slang.sl_fold_tree.as_slices();
     tree_words(byts, idxs)
 }
 
@@ -217,18 +214,12 @@ fn the_golden_round_trips_through_the_reader() {
     let sandbox = Sandbox::dir("spellfile-roundtrip");
     let at = sandbox.write("one-utf8.spl", GOLDEN);
     let path = CString::new(at.to_str().expect("a temp path is text")).expect("no interior NUL");
-    // SAFETY: the path is this frame's and NUL-terminated; no language name
-    // and no old language means a fresh one this case owns.
-    let lp = unsafe { spell_load_file(&path, std::ptr::null_mut(), std::ptr::null_mut(), true) };
-    assert!(!lp.is_null(), "the golden loads");
-    // SAFETY: the language was just allocated and is freed below.
-    let words = unsafe { fold_words(lp) };
+    // No language name: a fresh language this case owns.
+    let lp = spell_load_file(&path, None, true).expect("the golden loads");
+    let words = fold_words(&lp);
     assert_eq!(words, vec![WORD.to_string()]);
     // The keep-case tree of a lower-case-only word list is empty.
-    // SAFETY: as above.
-    assert!(unsafe { (*lp).sl_keep_tree.as_slices().0.is_empty() });
-    // SAFETY: as above; nothing else holds this language.
-    unsafe { neovim::spell::slang_free(lp) };
+    assert!(lp.sl_keep_tree.as_slices().0.is_empty());
 }
 
 /// What the writer wrote is what the reader reads: the same tree comes back
@@ -240,13 +231,8 @@ fn the_writer_and_the_reader_agree() {
     write_one_spl(&sandbox, "Xdet");
     let at = sandbox.path("Xdet-utf8.spl");
     let path = CString::new(at.to_str().expect("a temp path is text")).expect("no interior NUL");
-    // SAFETY: as the round-trip case above.
-    let lp = unsafe { spell_load_file(&path, std::ptr::null_mut(), std::ptr::null_mut(), true) };
-    assert!(!lp.is_null(), "what the writer wrote loads");
-    // SAFETY: the language was just allocated and is freed below.
-    assert_eq!(unsafe { fold_words(lp) }, vec![WORD.to_string()]);
-    // SAFETY: nothing else holds this language.
-    unsafe { neovim::spell::slang_free(lp) };
+    let lp = spell_load_file(&path, None, true).expect("what the writer wrote loads");
+    assert_eq!(fold_words(&lp), vec![WORD.to_string()]);
 }
 
 /// The language the tree ships is 621,617 bytes of every section the format
@@ -262,9 +248,7 @@ fn the_shipped_english_language_loads_with_its_sections() {
         .canonicalize()
         .expect("the shipped language is in the tree");
     let path = CString::new(at.to_str().expect("a repo path is text")).expect("no interior NUL");
-    // SAFETY: the path is this frame's and NUL-terminated.
-    let lp = unsafe { spell_load_file(&path, std::ptr::null_mut(), std::ptr::null_mut(), true) };
-    assert!(!lp.is_null(), "en.utf-8.spl loads");
+    let lp = spell_load_file(&path, None, true).expect("en.utf-8.spl loads");
     assert_eq!(
         describe(&std::fs::read(&at).expect("the shipped language is readable")),
         "VIMspell version 50, section 0 flags 1 len 10, section 1 flags 1 len 387, \
@@ -273,46 +257,43 @@ fn the_shipped_english_language_loads_with_its_sections() {
          section 11 flags 0 len 8, SN_END at 3257, 618359 bytes of trees"
     );
 
-    // SAFETY: the language was just allocated and is freed below. Each
-    // field below is one section of the file, so a section the reader
-    // stopped filling in shows up here as a missing feature rather than as
-    // a mis-spelled word three suites away.
-    unsafe {
-        // SN_REGION: the five two-letter regions, lower-cased as the
-        // reader stores them, in the order the file lists them.
-        let regions = std::ffi::CStr::from_ptr((*lp).sl_regions.as_ptr());
-        assert_eq!(regions.to_bytes(), b"usaucagbnz");
-        // SN_MIDWORD, one character long.
-        assert!(!(*lp).sl_midword.is_null(), "SN_MIDWORD");
-        // SN_SOFO is absent and SN_SAL present, which is what makes
-        // sound-folding fall to the `SAL` rules.
-        assert!(!(*lp).sl_sofo);
-        assert!(!(*lp).sl_sal.is_empty(), "SN_SAL");
-        assert!(!(*lp).sl_rep.is_empty(), "SN_REP");
-        assert!(!(*lp).sl_repsal.is_empty(), "SN_REPSAL");
-        assert!((*lp).sl_has_map, "SN_MAP");
-        assert!((*lp).sl_wordcount.ht_used > 0, "SN_WORDS (the COMMON list)");
-        // SN_SUGFILE: the timestamp a `.sug` file would have to match.
-        // There is no `.sug` in the tree, so this is the only place the
-        // field is seen at all.
-        assert_ne!((*lp).sl_sugtime, 0, "SN_SUGFILE");
-        // Sections the file does *not* carry, named so that a reader that
-        // started inventing them is caught too.
-        assert!((*lp).sl_info.is_null(), "no SN_INFO");
-        assert_eq!((*lp).sl_prefixcnt, 0, "no SN_PREFCOND");
-        // `slang_alloc`'s default, untouched: no SN_COMPOUND.
-        assert_eq!((*lp).sl_compmax, 254, "no SN_COMPOUND");
-        assert!(!(*lp).sl_nobreak, "no SN_NOBREAK");
-        assert!((*lp).sl_syllable.is_null(), "no SN_SYLLABLE");
-        assert!(!(*lp).sl_fold_tree.as_slices().0.is_empty());
-        assert!(
-            !(*lp).sl_keep_tree.as_slices().0.is_empty(),
-            "a keep-case tree"
-        );
-    }
+    // Each field below is one section of the file, so a section the
+    // reader stopped filling in shows up here as a missing feature rather
+    // than as a mis-spelled word three suites away.
+    //
+    // SN_REGION: the five two-letter regions, lower-cased as the reader
+    // stores them, in the order the file lists them.
+    let regions = std::ffi::CStr::from_bytes_until_nul(&lp.sl_regions).expect("terminated");
+    assert_eq!(regions.to_bytes(), b"usaucagbnz");
+    // SN_MIDWORD, one character long.
+    assert!(!lp.sl_midword.is_empty(), "SN_MIDWORD");
+    // SN_SOFO is absent and SN_SAL present, which is what makes
+    // sound-folding fall to the `SAL` rules.
+    assert!(!lp.sl_sofo);
+    assert!(!lp.sl_sal.is_empty(), "SN_SAL");
+    assert!(!lp.sl_rep.is_empty(), "SN_REP");
+    assert!(!lp.sl_repsal.is_empty(), "SN_REPSAL");
+    assert!(lp.sl_has_map, "SN_MAP");
+    assert!(!lp.sl_wordcount.is_empty(), "SN_WORDS (the COMMON list)");
+    // SN_SUGFILE: the timestamp a `.sug` file would have to match. There
+    // is no `.sug` in the tree, so this is the only place the field is
+    // seen at all.
+    assert_ne!(lp.sl_sugtime, 0, "SN_SUGFILE");
+    // Sections the file does *not* carry, named so that a reader that
+    // started inventing them is caught too.
+    assert!(lp.sl_info.is_none(), "no SN_INFO");
+    assert_eq!(lp.sl_prefixcnt, 0, "no SN_PREFCOND");
+    // The constructor's default, untouched: no SN_COMPOUND.
+    assert_eq!(lp.sl_compmax, 254, "no SN_COMPOUND");
+    assert!(!lp.sl_nobreak, "no SN_NOBREAK");
+    assert!(lp.sl_syllable.is_none(), "no SN_SYLLABLE");
+    assert!(!lp.sl_fold_tree.as_slices().0.is_empty());
+    assert!(
+        !lp.sl_keep_tree.as_slices().0.is_empty(),
+        "a keep-case tree"
+    );
 
-    // SAFETY: the language was just allocated.
-    let words = unsafe { fold_words(lp) };
+    let words = fold_words(&lp);
     // Sorted, and only weakly: a node may carry more than one word end,
     // one per set of flags the word has (region, affix, rare), and the
     // walk reports each. That is why the two counts differ, and why
@@ -338,9 +319,6 @@ fn the_shipped_english_language_loads_with_its_sections() {
             "{word} is not"
         );
     }
-
-    // SAFETY: nothing else holds this language.
-    unsafe { neovim::spell::slang_free(lp) };
 }
 
 /// The reader's tree, seen from where the editor sees it: `spell_check`.
@@ -356,71 +334,54 @@ fn the_golden_answers_spell_check() {
     let sandbox = Sandbox::dir("spellfile-spell-check");
     let at = sandbox.write("one-utf8.spl", GOLDEN);
     let path = CString::new(at.to_str().expect("a temp path is text")).expect("no interior NUL");
-    // SAFETY: the path is this frame's and NUL-terminated.
-    let lp = unsafe { spell_load_file(&path, std::ptr::null_mut(), std::ptr::null_mut(), true) };
-    assert!(!lp.is_null(), "the golden loads");
+    let lp = spell_load_file(&path, None, true).expect("the golden loads");
     init_spell_chartab();
+    let id = register_lang(lp);
 
     let wp = curwin.get();
     assert!(!wp.is_null(), "`early_init` left a window");
     // SAFETY: the window is the editor's own and the sandbox holds the
     // lock, so nothing else is reading `b_langp` while it is swapped out.
-    // The whole garray is saved and put back, so the case leaves the
-    // window's language list exactly as it found it.
-    let saved = unsafe { (*(*wp).w_s).b_langp };
-    let langp = unsafe { &raw mut (*(*wp).w_s).b_langp };
-    // SAFETY: as above; one entry, this language, every region.
-    unsafe {
-        ga_init(langp, size_of::<LangP>() as c_int, 1);
-        ga_grow(langp, 1);
-        (*langp).ga_data.cast::<LangP>().write(LangP {
-            lp_slang: lp,
-            lp_sallang: lp,
-            lp_replang: lp,
-            lp_region: REGION_ALL,
-        });
-        (*langp).ga_len = 1;
-    }
-
-    // `spell_check` writes a highlight id only when the word is *not*
-    // good, so a sentinel that is not a highlight id says which happened
-    // without this file having to name `HLF_SPB`.
-    const UNTOUCHED: c_int = -1;
-    let verdict = |word: &str| -> (usize, c_int) {
-        let text = cstr(word);
-        let mut attr: c_int = UNTOUCHED;
-        // SAFETY: the text is this frame's and NUL-terminated, the window
-        // is the editor's, `attr` is a local, and no capital column is
-        // asked for.
-        let len = unsafe {
-            spell_check(
-                Win::new(wp),
-                text.as_ptr().cast_mut(),
-                &raw mut attr,
-                std::ptr::null_mut(),
-                false,
-            )
-        };
-        (len, attr)
+    // The whole list is saved and put back, so the case leaves the
+    // window's language list exactly as it found it. One entry: this
+    // language, every region.
+    let saved = unsafe {
+        std::mem::replace(
+            &mut (*(*wp).w_s).b_langp,
+            vec![LangP {
+                slang: id,
+                sallang: Some(id),
+                replang: Some(id),
+                region: REGION_ALL,
+            }],
+        )
     };
 
-    assert_eq!(verdict(WORD), (3, UNTOUCHED), "`one` is in the tree");
+    // `spell_check` answers one highlight for every good word and another
+    // for a bad one; comparing the two says which happened without this
+    // file having to name either.
+    // SAFETY: the editor's own window, live for the case.
+    let win = unsafe { Win::new(wp) };
+    let verdict = |word: &str| {
+        let text = cstr(word);
+        spell_check(win, text.as_bytes_with_nul(), None, false)
+    };
+
+    let (len, good) = verdict(WORD);
+    assert_eq!(len, 3, "`one` is consumed whole");
     // The whole word is consumed either way, so that the caller can step
     // over a bad word as easily as a good one.
-    let (len, attr) = verdict("onx");
+    let (len, bad) = verdict("onx");
     assert_eq!(len, 3, "`onx` is consumed whole");
-    assert_ne!(attr, UNTOUCHED, "`onx` is not in the tree");
+    assert_ne!(bad, good, "`onx` is not in the tree, `one` is");
     // Case: the tree holds the folded word, so the capitalised form is
     // good and the mixed-case form is not.
-    assert_eq!(verdict("One").1, UNTOUCHED, "`One` is `one` capitalised");
-    assert_ne!(verdict("oNe").1, UNTOUCHED, "`oNe` is not");
+    assert_eq!(verdict("One").1, good, "`One` is `one` capitalised");
+    assert_eq!(verdict("oNe").1, bad, "`oNe` is not");
 
     // SAFETY: as above — the borrowed list goes, the window's comes back.
-    unsafe {
-        ga_clear(langp);
-        (*(*wp).w_s).b_langp = saved;
-        neovim::spell::slang_free(lp);
-    }
+    unsafe { (*(*wp).w_s).b_langp = saved };
+    drop(take_lang(id));
 }
 
 /// The `.sug` pair, with the timestamp masked out.

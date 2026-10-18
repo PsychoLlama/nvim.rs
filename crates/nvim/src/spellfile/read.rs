@@ -28,16 +28,14 @@
 //! `E759` rather than `E758`, so those sites spell the fallback out
 //! (`unwrap_or(-1)`) instead of propagating the error.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::cstr;
 use crate::semsg;
 use crate::smsg;
 use crate::spell::{WordFlags, WordTree};
 use crate::strings::has_bytes;
 use crate::winlayer::Win;
-use core::ffi::{CStr, c_char, c_int, c_uint};
+use core::ffi::{CStr, c_int, c_uint};
 use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
@@ -45,21 +43,19 @@ use std::path::Path;
 use crate::drawscreen::{UPD_SOME_VALID, redraw_all_later};
 use crate::getchar::state::got_int;
 use crate::memline::ml_append_buf_terminated;
-use crate::memory::handoff::owned_cstr;
-use crate::memory::{xfree, xstrdup};
+use crate::memory::XString;
 use crate::message::{emsg, verbose_enter, verbose_leave};
-use crate::message_fmt::{c_str, msg_cstr};
+use crate::message_fmt::msg_cstr;
 use crate::option::vars::p_verbose;
 use crate::os::cshim::gettext;
 use crate::os::input::fast_breakcheck;
 use crate::path::{path_fnamecmp, path_full_compare, path_tail};
 use crate::runtime::{estack_pop, estack_push};
 use crate::spell::{
-    e_format, init_syl_tab, languages, loaded_langs, open_spellbuf, parse_spelllang, slang_alloc,
-    slang_clear, slang_clear_sug, slang_free,
+    e_format, init_syl_tab, languages, open_spellbuf, parse_spelllang, put_lang, slang_clear,
+    slang_clear_sug, take_lang, with_lang,
 };
-use crate::types::{LangP, LineNr, NUL, OptInt, SpellIdx, SpellLang, time_t, uint8_t};
-use ::libc::{strcpy, strrchr};
+use crate::types::{LangId, LineNr, NUL, OptInt, SpellIdx, SpellLang, time_t, uint8_t};
 
 use super::sections::{
     read_charflags_section, read_compound, read_prefcond_section, read_region_section,
@@ -106,75 +102,70 @@ fn spell_check_magic_string(spl: &mut Spl) -> SplResult<()> {
     Ok(())
 }
 
-/// Load a spell file, returning the language it describes or null.
+/// Load a spell file, returning the language it describes.
 ///
-/// With `old_lp` given, that language is refilled in place — this is how a
-/// `.add` file is folded into the language it extends. Otherwise a fresh
-/// one is allocated, and registered in the global list when `lang` names
-/// it.
-///
-/// # Safety
-///
-/// `fname` must be a NUL-terminated path; `lang`, when given, must point at
-/// a writable language name.
-pub unsafe fn spell_load_file(
-    fname: &CStr,
-    lang: *mut c_char,
-    old_lp: *mut SpellLang,
-    silent: bool,
-) -> *mut SpellLang {
-    // SAFETY: the caller promises the path.
-    let path = Path::new(OsStr::from_bytes(unsafe { cstr::bytes_at(fname.as_ptr()) }));
+/// The language is named `lang` (none for a file read only to be looked
+/// at); the caller lists it. A `.add` file is recognised by its name and
+/// adds to the language it is loaded with rather than defining one.
+pub fn spell_load_file(fname: &CStr, lang: Option<&[u8]>, silent: bool) -> Option<Box<SpellLang>> {
+    let path = Path::new(OsStr::from_bytes(fname.to_bytes()));
     let opened = Spl::open(path);
-
-    let mut lp: *mut SpellLang = core::ptr::null_mut();
+    let mut slang = None;
     let mut did_estack_push = false;
-
-    let (out, pushed) = (&mut lp, &mut did_estack_push);
-    // SAFETY: the caller promises the path and the language buffer.
-    let ok = unsafe { load_spl(opened, fname, lang, old_lp, silent, out, pushed) };
-    if !ok {
-        // The language name is cleared even when the file could not be
-        // opened, so the caller stops trying this name.
-        if !lang.is_null() {
-            // SAFETY: the caller promises the language buffer.
-            unsafe { *lang = NUL as c_char };
-        }
-        if !lp.is_null() && old_lp.is_null() {
-            // SAFETY: this frame allocated it and nothing else holds it.
-            unsafe { slang_free(lp) };
-        }
-        lp = core::ptr::null_mut();
-    }
-
+    let ok = load_spl(
+        opened,
+        fname,
+        None,
+        silent,
+        &mut slang,
+        &mut did_estack_push,
+        lang,
+    );
     if did_estack_push {
         estack_pop();
     }
-    lp
+    if ok { slang } else { None }
 }
 
-/// The body of [`spell_load_file`]: true when the language is usable.
-///
-/// # Safety
-///
-/// As [`spell_load_file`].
-unsafe fn load_spl(
+/// Read `fname` again into `slang`, which [`slang_clear`] has emptied: the
+/// reload that keeps a language where windows find it.
+pub(crate) fn spell_reload_file(fname: &CStr, slang: &mut SpellLang) -> bool {
+    let path = Path::new(OsStr::from_bytes(fname.to_bytes()));
+    let opened = Spl::open(path);
+    let mut did_estack_push = false;
+    let mut fresh = None;
+    let ok = load_spl(
+        opened,
+        fname,
+        Some(slang),
+        false,
+        &mut fresh,
+        &mut did_estack_push,
+        None,
+    );
+    if did_estack_push {
+        estack_pop();
+    }
+    ok
+}
+
+/// The body of [`spell_load_file`]: true when the language is usable. Reads
+/// into `old` when given, else into a new language left in `fresh`.
+fn load_spl(
     opened: std::io::Result<Spl>,
     fname: &CStr,
-    lang: *mut c_char,
-    old_lp: *mut SpellLang,
+    old: Option<&mut SpellLang>,
     silent: bool,
-    lpp: &mut *mut SpellLang,
+    fresh: &mut Option<Box<SpellLang>>,
     did_estack_push: &mut bool,
+    lang: Option<&[u8]>,
 ) -> bool {
     let Ok(mut spl) = opened else {
         if !silent {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let fname = msg_cstr(fname);
             semsg!("E484: Can't open file {fname}");
         } else if p_verbose() > 2 as OptInt {
             verbose_enter();
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let fname = msg_cstr(fname);
             smsg!(0, "E484: Can't open file {fname}");
             verbose_leave();
@@ -183,31 +174,21 @@ unsafe fn load_spl(
     };
     if p_verbose() > 2 as OptInt {
         verbose_enter();
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let fname = msg_cstr(fname);
         smsg!(0, "Reading spell file \"{fname}\"");
         verbose_leave();
     }
 
-    let lp = if old_lp.is_null() {
-        // SAFETY: the caller promises the language buffer and the path.
-        let lp = unsafe { slang_alloc(lang) };
-        // SAFETY: freshly allocated, and the caller's path.
-        unsafe { (*lp).sl_fname = xstrdup(fname.as_ptr()) };
-        // ".add.spl" files add to an existing language rather than
-        // defining one.
-        // SAFETY: as above.
-        unsafe {
-            (*lp).sl_add = has_bytes(
-                path_tail(cstr::at(fname.as_ptr())),
-                SPL_FNAME_ADD.to_bytes(),
-            )
-        };
-        lp
-    } else {
-        old_lp
+    let slang = match old {
+        Some(slang) => slang,
+        None => {
+            let mut slang = SpellLang::new(lang.unwrap_or_default(), XString::from_cstr(fname));
+            // ".add.spl" files add to an existing language rather than
+            // defining one.
+            slang.sl_add = has_bytes(path_tail(fname), SPL_FNAME_ADD.to_bytes());
+            &mut **fresh.insert(slang)
+        }
     };
-    *lpp = lp;
 
     estack_push(
         ETYPE_SPELL,
@@ -216,15 +197,7 @@ unsafe fn load_spl(
     );
     *did_estack_push = true;
 
-    // SAFETY: `lp` is either this frame's allocation or the caller's
-    // language, and nothing else holds a reference while this runs.
-    let slang = unsafe { &mut *lp };
-    // SAFETY: `fname` is the caller's path, used only for messages.
-    let read = read_spl(&mut spl, slang, fname);
-    if read && old_lp.is_null() && !lang.is_null() {
-        loaded_langs.with_mut(|langs| langs.insert(0, lp));
-    }
-    read
+    read_spl(&mut spl, slang, fname)
 }
 
 /// Read the header, every section and the three trees.
@@ -304,15 +277,13 @@ fn read_section(
     match id as u32 {
         SN_INFO => {
             let text = spl.read_string(len as usize).map_err(|_| Stop::Silent)?;
-            // SAFETY: `sl_info` is this language's own allocation.
-            unsafe { xfree(slang.sl_info.cast()) };
-            slang.sl_info = owned_cstr(text);
+            slang.sl_info = Some(XString::from_bytes(trim_nul(&text)));
         }
         SN_REGION => read_region_section(spl, slang, len)?,
         SN_CHARFLAGS => read_charflags_section(spl)?,
         SN_MIDWORD => {
             let text = spl.read_string(len as usize).map_err(|_| Stop::Silent)?;
-            slang.sl_midword = owned_cstr(text);
+            slang.sl_midword = trim_nul(&text).to_vec();
         }
         SN_PREFCOND => read_prefcond_section(spl, slang)?,
         SN_REP => read_rep_section(spl, &mut slang.sl_rep, &mut slang.sl_rep_first)?,
@@ -321,8 +292,7 @@ fn read_section(
         SN_SOFO => read_sofo_section(spl, slang)?,
         SN_MAP => {
             let text = spl.read_string(len as usize).map_err(|_| Stop::Silent)?;
-            // SAFETY: the language's hash table is its own.
-            unsafe { set_map_str(slang, trim_nul(&text)) };
+            set_map_str(slang, trim_nul(&text));
         }
         SN_WORDS => read_words_section(spl, slang, len)?,
         SN_SUGFILE => slang.sl_sugtime = spl.get8ctime().unwrap_or(-1),
@@ -332,9 +302,7 @@ fn read_section(
         SN_NOBREAK => slang.sl_nobreak = true,
         SN_SYLLABLE => {
             let text = spl.read_string(len as usize).map_err(|_| Stop::Silent)?;
-            slang.sl_syllable = owned_cstr(text);
-            // SAFETY: the syllable string was just installed.
-            if unsafe { init_syl_tab(slang) } != OK {
+            if init_syl_tab(slang, trim_nul(&text)) != OK {
                 return Err(Stop::Silent);
             }
         }
@@ -376,74 +344,62 @@ fn read_trees(spl: &mut Spl, slang: &mut SpellLang) -> SplResult<()> {
 /// A `.sug` is optional and best-effort: anything wrong with it is
 /// reported and the language carries on without sound-a-like suggestions.
 pub fn suggest_load_files() {
-    // SAFETY: `b_langp` holds `ga_len` live `LangP`s.
-    let langp = unsafe { (*Win::current().w_s).b_langp };
-    for lpi in 0..langp.ga_len {
-        // SAFETY: `lpi` is inside the array's own length.
-        let lp = unsafe { langp.ga_data.cast::<LangP>().offset(lpi as isize) };
-        // SAFETY: every entry names a live language.
-        let slang = unsafe { &mut *(*lp).lp_slang };
-        if slang.sl_sugtime == 0 as time_t || slang.sl_sugloaded {
+    let ids: Vec<LangId> = Win::current()
+        .syn_block()
+        .b_langp
+        .iter()
+        .map(|lp| lp.slang)
+        .collect();
+    for id in ids {
+        // Out of its slot while the file is read: reading gives messages.
+        let Some(mut slang) = take_lang(id) else {
             continue;
-        }
-        // One attempt per language, successful or not.
-        slang.sl_sugloaded = true;
+        };
+        if slang.sl_sugtime != 0 as time_t && !slang.sl_sugloaded {
+            // One attempt per language, successful or not.
+            slang.sl_sugloaded = true;
 
-        // The `.sug` sits beside the `.spl` under the same stem; the
-        // name is edited in place and put back afterwards.
-        // SAFETY: `sl_fname` is this language's own NUL-terminated path.
-        let dotp = unsafe { strrchr(slang.sl_fname, b'.' as c_int) };
-        // SAFETY: as above; `path_fnamecmp` reads two C strings.
-        if dotp.is_null() || unsafe { path_fnamecmp(cstr::bytes_at(dotp), b".spl") } != 0 {
-            continue;
+            // The `.sug` sits beside the `.spl` under the same stem.
+            let fname = &slang.sl_fname[..];
+            if let Some(dot) = fname.iter().rposition(|&b| b == b'.')
+                && path_fnamecmp(&fname[dot..], b".spl") == 0
+            {
+                let mut sug = fname[..dot].to_vec();
+                sug.extend_from_slice(b".sug");
+                let path = Path::new(OsStr::from_bytes(&sug));
+                if let Ok(mut spl) = Spl::open(path) {
+                    load_sug(&mut spl, &mut slang);
+                }
+            }
         }
-        // SAFETY: `dotp` points at ".spl" inside `sl_fname`, so the copy
-        // is four bytes and a terminator over four bytes and a terminator.
-        unsafe { strcpy(dotp, c".sug".as_ptr().cast_mut()) };
-
-        // SAFETY: as above.
-        let path = Path::new(OsStr::from_bytes(unsafe { cstr::bytes_at(slang.sl_fname) }));
-        if let Ok(mut spl) = Spl::open(path) {
-            // SAFETY: the language is live for the whole read.
-            unsafe { load_sug(&mut spl, slang) };
-        }
-        // SAFETY: as above, in the other direction.
-        unsafe { strcpy(dotp, c".spl".as_ptr().cast_mut()) };
+        put_lang(id, slang);
     }
 }
 
 /// Read one `.sug` file into `slang`.
-///
-/// # Safety
-///
-/// `slang.sl_fname` must be a NUL-terminated path, for the messages.
-unsafe fn load_sug(spl: &mut Spl, slang: &mut SpellLang) {
+fn load_sug(spl: &mut Spl, slang: &mut SpellLang) {
     let mut buf = [0u8; VIMSUGMAGICL as usize];
     let _ = spl.read_exact(&mut buf);
     if buf != VIMSUGMAGIC.to_bytes() {
-        // SAFETY: the language's own file name.
-        let sl_fname = unsafe { c_str(slang.sl_fname) };
+        let sl_fname = msg_cstr(slang.sl_fname.as_cstr());
         semsg!("E778: This does not look like a .sug file: {sl_fname}");
         return;
     }
     let version = spl.getc().map_or(-1, c_int::from);
     if version < VIMSUGVERSION {
-        // SAFETY: the language's own file name.
-        let sl_fname = unsafe { c_str(slang.sl_fname) };
+        let sl_fname = msg_cstr(slang.sl_fname.as_cstr());
         semsg!("E779: Old .sug file, needs to be updated: {sl_fname}");
         return;
     }
     if version > VIMSUGVERSION {
-        // SAFETY: the language's own file name.
-        let sl_fname = unsafe { c_str(slang.sl_fname) };
+        let sl_fname = msg_cstr(slang.sl_fname.as_cstr());
         semsg!("E780: .sug file is for newer version of Vim: {sl_fname}");
         return;
     }
     // The `.spl` stamped both files; a mismatch means the pair is
     // stale and the word numbers would point at the wrong words.
     if spl.get8ctime().unwrap_or(-1) != slang.sl_sugtime {
-        // SAFETY: the language's own file name.
-        let sl_fname = unsafe { c_str(slang.sl_fname) };
+        let sl_fname = msg_cstr(slang.sl_fname.as_cstr());
         semsg!("E781: .sug file doesn't match .spl file: {sl_fname}");
         return;
     }
@@ -452,11 +408,9 @@ unsafe fn load_sug(spl: &mut Spl, slang: &mut SpellLang) {
     if read_sug_body(spl, slang).is_ok() {
         return;
     }
-    // SAFETY: the loaded language's own file name.
-    let fname = unsafe { c_str(slang.sl_fname) };
+    let fname = msg_cstr(slang.sl_fname.as_cstr());
     semsg!("E782: Error while reading .sug file: {fname}");
-    // SAFETY: the language is live and this only frees what it owns.
-    unsafe { slang_clear_sug(slang) };
+    slang_clear_sug(slang);
 }
 
 /// The sound-fold tree and the word-number lines behind it.
@@ -710,23 +664,28 @@ fn read_tree_node(
 /// Re-read every loaded language that came from `fname`, and redraw the
 /// windows that were spell-checking with it.
 pub(super) fn spell_reload_one(fname: &CStr, added_word: bool) {
-    // SAFETY: the caller promises the path; the language list is global
-    // and only walked here.
     let mut didit = false;
-    for slang in languages() {
-        if unsafe { path_full_compare(fname, cstr::at((*slang).sl_fname), false, true) } as c_uint
-            == kEqualFiles as c_uint
-        {
-            unsafe { slang_clear(slang) };
-            // Reload in place, so every window pointing at this
-            // language keeps its pointer.
-            if unsafe { spell_load_file(fname, core::ptr::null_mut(), slang, false) }.is_null() {
-                // Leave it empty rather than half-read.
-                unsafe { slang_clear(slang) };
-            }
-            redraw_all_later(UPD_SOME_VALID);
-            didit = true;
+    for id in languages() {
+        let same = with_lang(id, |slang| {
+            path_full_compare(fname, slang.sl_fname.as_cstr(), false, true) as c_uint
+                == kEqualFiles as c_uint
+        });
+        if same != Some(true) {
+            continue;
         }
+        // Reload in its slot, so every window naming this language keeps
+        // naming it; out of the slot while the file is read.
+        let Some(mut slang) = take_lang(id) else {
+            continue;
+        };
+        slang_clear(&mut slang);
+        if !spell_reload_file(fname, &mut slang) {
+            // Leave it empty rather than half-read.
+            slang_clear(&mut slang);
+        }
+        put_lang(id, slang);
+        redraw_all_later(UPD_SOME_VALID);
+        didit = true;
     }
 
     // A word was added to a file no window had loaded; re-resolving

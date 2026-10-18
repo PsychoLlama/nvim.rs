@@ -585,8 +585,9 @@ impl LineSetup {
         // comment leaders.
         nextline[SPELL_LOOKAHEAD] = 0;
         if lnum < window.w_buffer.b_ml.ml_line_count {
-            let next = ml_get_buf(window.buffer(), lnum + 1);
-            unsafe { spell_cat_line(nextline.as_mut_ptr().add(SPELL_LOOKAHEAD), next, SPWORDLEN) };
+            let mut lines = window.buffer().lines();
+            let next = lines.line(lnum + 1);
+            spell_cat_line(&mut nextline[SPELL_LOOKAHEAD..], next, SPWORDLEN);
         }
         let line = ml_get_buf(window.buffer(), lnum);
 
@@ -614,7 +615,9 @@ impl LineSetup {
                 .iter()
                 .position(|&c| c == 0)
                 .unwrap_or(SPELL_LOOKAHEAD - 1);
-            unsafe { ::core::ptr::copy_nonoverlapping(line, nextline.as_mut_ptr(), line_len) };
+            unsafe {
+                ::core::ptr::copy_nonoverlapping(line.cast(), nextline.as_mut_ptr(), line_len)
+            };
             nextline.copy_within(SPELL_LOOKAHEAD..SPELL_LOOKAHEAD + tail + 1, line_len);
             self.nextlinecol = 0;
             self.nextline_idx = line_len as ::core::ffi::c_int + 1;
@@ -623,7 +626,7 @@ impl LineSetup {
             self.nextlinecol = (line_len - SPELL_LOOKAHEAD) as ::core::ffi::c_int;
             unsafe {
                 ::core::ptr::copy_nonoverlapping(
-                    line.add(self.nextlinecol as usize),
+                    line.add(self.nextlinecol as usize).cast(),
                     nextline.as_mut_ptr(),
                     SPELL_LOOKAHEAD,
                 )
@@ -810,8 +813,8 @@ impl LineSetup {
         if len == 0 || window.w_cursor.col > linecol {
             // No bad word at the line start: do not check again until the
             // end of a word.
-            let end = unsafe { spell_to_word_end(self.ptr, window) };
-            self.word_end = (unsafe { end.offset_from(self.line) } + 1) as ::core::ffi::c_int;
+            let end = spell_to_word_end(unsafe { crate::cstr::bytes_at(self.ptr) }, window);
+            self.word_end = (linecol as usize + end + 1) as ::core::ffi::c_int;
         } else {
             // Bad word found: its attribute applies to the end of it.
             debug_assert!(len <= ::core::ffi::c_int::MAX as size_t);

@@ -22,36 +22,37 @@
 //!   `capcol` carries the column where the next such check is due, and
 //!   [`check_need_cap`] answers the question for a given position.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::cstr;
+use crate::cstr::byte_at;
+use crate::memline::Lines;
 use crate::memory::XString;
 use crate::spell::WordFlags;
 use crate::winlayer::Win;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 
-use crate::charset::{skip, skipbin, skipdigits, skiphex};
-use crate::cursor::get_cursor_line_ptr;
+use crate::charset::skip;
 use crate::global_cell::GlobalCell;
-use crate::mbyte::{head_off, mb_isupper, utf_head_off, utf_ptr2char, utfc_ptr2len};
+use crate::mbyte::{c_cluster_len, char_at, head_off, mb_isupper};
 use crate::message::e_no_spell;
 use crate::message::emsg;
 use crate::options::kOptSpoFlagCamel;
 use crate::os::cshim::gettext;
 use crate::regexp::vim_regexec;
 use crate::spellsuggest::spell_suggest_list;
-use crate::types::{ColNr, Hlf, LangP, LineNr, RegMatch, size_t, uint8_t};
+use crate::types::{ColNr, Hlf, LangId, LineNr, RegMatch};
 
-use super::chartab::{spell_iswordp, spell_iswordp_nmw};
+use super::chartab::{spell_casefold, spell_iswordp, spell_iswordp_nmw, tail};
 use super::lookup::{find_prefix, find_word};
+use super::slang::LoadedLangs;
 use super::{
     CHAR_DIGIT, CHAR_OTHER, CHAR_UPPER, FIND_COMPOUND, FIND_FOLDWORD, FIND_KEEPWORD, MAXWLEN,
-    MatchInf, SP_BAD, SP_BANNED, SP_OK, SP_RARE, count_common_word, spelltab_isu,
+    MatchInf, SP_BAD, SP_BANNED, SP_OK, SP_RARE, c_text, count_common_word, loaded_langs,
+    spelltab_isu,
 };
-use crate::highlight_group::{HLF_SPB, HLF_SPC, HLF_SPL, HLF_SPR};
+use crate::highlight_group::{HLF_COUNT, HLF_SPB, HLF_SPC, HLF_SPL, HLF_SPR};
 use crate::optionstr::OptString;
 
 /// Whether `c` is upper case, by the spell table below 128 and the general
@@ -64,232 +65,251 @@ fn is_upper(c: c_int) -> bool {
     }
 }
 
-/// Check the word starting at `text` in window `window`.
+/// Check the word `text` starts with in window `window`.
 ///
-/// `attrp` is set to the highlight for a badly spelled word and left alone
-/// otherwise. `capcol`, when not null, is the column at which to check for
-/// a capital after a sentence end; it is set to the next such column, or
-/// -1 when no sentence end was found. `docount` asks for the word to be
-/// counted towards the `COMMON` statistics.
+/// `text` runs from the word to the end of its string; its end, or a NUL
+/// in it, is the end of the text.
+///
+/// Answers the length of the word in bytes, good or bad, so the caller can
+/// skip over it, and the highlight for a badly spelled word -- `HLF_COUNT`
+/// for one spelled right. `capcol`, when given, is the column at which to
+/// check for a capital after a sentence end; it is set to the next such
+/// column, or -1 when no sentence end was found. `docount` asks for the
+/// word to be counted towards the `COMMON` statistics.
 ///
 /// Must only be called with a non-empty `'spelllang'`.
-///
-/// Returns the length of the word in bytes, good or bad, so the caller can
-/// skip over it.
-///
-/// # Safety
-///
-/// `text` must point at a NUL-terminated string, unaliased for the call.
-/// `attrp` must point at a live `Hlf`, unaliased for the call. `capcol` must
-/// point at a writable `int` the caller owns.
-pub unsafe fn spell_check(
-    mut window: Win,
-    text: *mut c_char,
-    attrp: *mut Hlf,
-    capcol: *mut c_int,
+pub fn spell_check(
+    window: Win,
+    text: &[u8],
+    mut capcol: Option<&mut c_int>,
     docount: bool,
-) -> size_t {
+) -> (usize, Hlf) {
     // A word never starts at a space or a control character.
-    if unsafe { *text } as uint8_t as c_int <= ' ' as c_int {
-        return 1;
+    if byte_at(text, 0) <= b' ' {
+        return (1, HLF_COUNT);
     }
     // Loading the language files failed.
-    if unsafe { (*window.w_s).b_langp.ga_len } <= 0 {
-        return 1;
+    if window.syn_block().b_langp.is_empty() {
+        return (1, HLF_COUNT);
     }
 
-    let mut nrlen: size_t = 0; // a number came first
-    let mut wrongcaplen: size_t = 0;
+    // The languages are resolved once for the whole lookup.
+    let mut counted = None;
+    let checked = loaded_langs.with(|langs| {
+        look_up(
+            window,
+            text,
+            langs,
+            capcol.as_deref_mut(),
+            docount,
+            &mut counted,
+        )
+    });
+    if let Some((id, len)) = counted {
+        // Counted once the lookup is over, which only reads the language.
+        loaded_langs.with_mut(|langs| {
+            if let Some(slang) = langs.get_mut(id) {
+                count_common_word(slang, &text[..len.min(text.len())], 1);
+            }
+        });
+    }
+    if let Some(checked) = checked {
+        return checked;
+    }
+
+    // Sitting on a non-word character is not an error; step over it and
+    // look for a word after it.
+    if let Some(capcol) = capcol
+        && window.syn_block().b_cap_prog.is_some()
+    {
+        // Did a sentence end here?
+        let mut block = window;
+        let mut regmatch = RegMatch::new(block.syn_block_mut().b_cap_prog.take(), false);
+        let r = vim_regexec(&mut regmatch, &c_text(text), 0);
+        block.syn_block_mut().b_cap_prog = regmatch.regprog.take();
+        if let Some(end) = regmatch.ends[0]
+            && r
+        {
+            *capcol = end as c_int;
+        }
+    }
+    (c_cluster_len(text), HLF_COUNT)
+}
+
+/// The lookup half of [`spell_check`], over the language table `langs`:
+/// the word's length and highlight, or `None` when `text` starts with a
+/// character that is not part of a word. A word to count towards
+/// `COMMON` is left in `counted`, as the language and the word's length.
+fn look_up(
+    window: Win,
+    text: &[u8],
+    langs: &LoadedLangs,
+    capcol: Option<&mut c_int>,
+    docount: bool,
+    counted: &mut Option<(LangId, usize)>,
+) -> Option<(usize, Hlf)> {
+    let syn = window.syn_block();
+    let langp = &syn.b_langp[..];
+    let mut nrlen = 0usize; // a number came first
+    let mut wrongcaplen = 0usize;
     let mut count_word = docount;
-    let use_camel_case = unsafe { (*window.w_s).b_p_spo_flags } & kOptSpoFlagCamel != 0;
+    let use_camel_case = syn.b_p_spo_flags & kOptSpoFlagCamel != 0;
     let mut is_camel_case = false;
 
     // Nearly everything lives in "mi" so that it can be handed to the
     // lookup functions in one go.
-    // SAFETY: the caller's promise -- `text` is a NUL-terminated line of
-    // `window`'s buffer, which nothing writes while the lookup runs.
-    let mut mi = unsafe { MatchInf::new(text, window) };
+    let mut mi = MatchInf::new(text, window, langs, langp);
 
     // A number is always fine, including hex and binary literals. The
     // word is still checked, so that "3GPP" and "11 julifeest" are
     // caught.
-    if unsafe { *text } >= b'0' as c_char && unsafe { *text } <= b'9' as c_char {
-        mi.mi_end = if unsafe { *text } == b'0' as c_char
-            && (unsafe { *text.offset(1) } == b'b' as c_char
-                || unsafe { *text.offset(1) } == b'B' as c_char)
-        {
-            unsafe { skipbin(text.offset(2)) as *mut c_char }
-        } else if unsafe { *text } == b'0' as c_char
-            && (unsafe { *text.offset(1) } == b'x' as c_char
-                || unsafe { *text.offset(1) } == b'X' as c_char)
-        {
-            unsafe { skiphex(text.offset(2)) }
+    let first = text[0];
+    if first.is_ascii_digit() {
+        let second = byte_at(text, 1);
+        mi.end = if first == b'0' && matches!(second, b'b' | b'B') {
+            2 + skip::bin(tail(text, 2))
+        } else if first == b'0' && matches!(second, b'x' | b'X') {
+            2 + skip::hex(tail(text, 2))
         } else {
-            unsafe { skipdigits(text) }
+            skip::digits(text)
         };
-        nrlen = unsafe { mi.mi_end.offset_from(text) } as size_t;
+        nrlen = mi.end;
     }
 
     // Find the end of the word: the next non-word character.
-    if unsafe { spell_iswordp(mi.mi_fend, window) } {
+    if spell_iswordp(tail(text, mi.fend), window) {
         if use_camel_case {
-            mi.mi_fend = unsafe { advance_camelcase_word(text, window, &mut is_camel_case) };
+            mi.fend = advance_camelcase_word(text, window, &mut is_camel_case);
         } else {
             loop {
-                mi.mi_fend = unsafe { mi.mi_fend.offset(utfc_ptr2len(mi.mi_fend) as isize) };
-                if unsafe { *mi.mi_fend } == 0 || !unsafe { spell_iswordp(mi.mi_fend, window) } {
+                mi.fend += c_cluster_len(tail(text, mi.fend)).max(1);
+                if byte_at(text, mi.fend) == 0 || !spell_iswordp(tail(text, mi.fend), window) {
                     break;
                 }
             }
         }
 
-        if !capcol.is_null()
-            && unsafe { *capcol } == 0
-            && unsafe { (*window.w_s).b_cap_prog.is_some() }
-        {
+        if capcol.as_deref() == Some(&0) && syn.b_cap_prog.is_some() {
             // This word should have started with a capital.
-            if !is_upper(unsafe { utf_ptr2char(text) }) {
-                wrongcaplen = unsafe { mi.mi_fend.offset_from(text) } as size_t;
+            if !is_upper(char_at(text)) {
+                wrongcaplen = mi.fend;
             }
         }
     }
-    if !capcol.is_null() {
-        unsafe { *capcol = -1 };
+    if let Some(capcol) = capcol {
+        *capcol = -1;
     }
 
     // Characters up to the next non-word character are consumed even
     // for a bad word.
-    mi.mi_end = mi.mi_fend;
+    mi.end = mi.fend;
 
     // The caps type is worked out later, on demand.
-    mi.mi_capflags = WordFlags::NONE;
-    mi.mi_cend = core::ptr::null_mut();
+    mi.capflags = WordFlags::NONE;
+    mi.cend = None;
 
     // Fold one character past the word, so the lookup can see where the
     // word ends.
-    if unsafe { *mi.mi_fend } != 0 {
-        mi.mi_fend = unsafe { mi.mi_fend.offset(utfc_ptr2len(mi.mi_fend) as isize) };
+    if byte_at(text, mi.fend) != 0 {
+        mi.fend += c_cluster_len(tail(text, mi.fend));
     }
-    let fword = &raw mut mi.mi_fword as *mut c_char;
-    let taken = unsafe { mi.mi_fend.offset_from(text) } as c_int;
-    let room = MAXWLEN as c_int + 1;
-    let _ = unsafe { super::chartab::spell_casefold(window, text, taken, fword, room) };
-    mi.mi_fwordlen = unsafe { cstr::bytes_at(fword) }.len() as c_int;
+    let _ = spell_casefold(window, text, mi.fend, &mut mi.fword[..MAXWLEN + 1]);
+    mi.fwordlen = crate::cstr::until_nul(&mi.fword).len() as c_int;
 
-    if is_camel_case && mi.mi_fwordlen > 0 {
+    if is_camel_case && mi.fwordlen > 0 {
         // Put a fake word end into the folded word.
-        mi.mi_fword[(mi.mi_fwordlen - 1) as usize] = b' ' as c_char;
+        mi.fword[(mi.fwordlen - 1) as usize] = b' ';
     }
 
     // Bad until recognised.
-    mi.mi_result = SP_BAD;
-    mi.mi_result2 = SP_BAD;
+    mi.result = SP_BAD;
+    mi.result2 = SP_BAD;
 
     // Every language is tried, because a later one may match longer.
-    let langp_data = unsafe { (*window.w_s).b_langp.ga_data } as *mut LangP;
-    let langp_len = unsafe { (*window.w_s).b_langp.ga_len };
-    for lpi in 0..langp_len {
-        mi.mi_lp = unsafe { langp_data.offset(lpi as isize) };
+    for lp in langp {
+        mi.lp = *lp;
+        mi.slang = langs.get(lp.slang);
 
         // A language whose reload failed stays in the list with
         // everything cleared out.
-        if unsafe { (*(*mi.mi_lp).lp_slang).sl_fold_tree.is_empty() } {
+        let Some(slang) = mi.slang.filter(|slang| !slang.sl_fold_tree.is_empty()) else {
             continue;
-        }
+        };
 
-        unsafe { find_word(&mut mi, FIND_FOLDWORD) };
-        unsafe { find_word(&mut mi, FIND_KEEPWORD) };
-        unsafe { find_prefix(&mut mi, FIND_FOLDWORD) };
+        find_word(&mut mi, FIND_FOLDWORD);
+        find_word(&mut mi, FIND_KEEPWORD);
+        find_prefix(&mut mi, FIND_FOLDWORD);
 
         // A NOBREAK language may fall back on a word with nothing valid
         // after it.
-        if unsafe { (*(*mi.mi_lp).lp_slang).sl_nobreak }
-            && mi.mi_result == SP_BAD
-            && mi.mi_result2 != SP_BAD
-        {
-            mi.mi_result = mi.mi_result2;
-            mi.mi_end = mi.mi_end2;
+        if slang.sl_nobreak && mi.result == SP_BAD && mi.result2 != SP_BAD {
+            mi.result = mi.result2;
+            mi.end = mi.end2;
         }
 
         // Count the word in the first language that accepts it.
-        if count_word && mi.mi_result == SP_OK {
-            let slang = unsafe { (*mi.mi_lp).lp_slang };
-            let len = unsafe { mi.mi_end.offset_from(text) } as c_int;
-            unsafe { count_common_word(slang, text, len, 1) };
+        if count_word && mi.result == SP_OK {
+            *counted = Some((lp.slang, mi.end));
             count_word = false;
         }
     }
 
-    if mi.mi_result != SP_OK {
+    let mut attr = HLF_COUNT;
+    if mi.result != SP_OK {
+        let first_lang = langs.get(langp[0].slang);
         if nrlen > 0 {
             // Skip over a leading number, so that "42nd" works. Rare and
             // local words are still flagged, for "3GPP".
-            if mi.mi_result == SP_BAD || mi.mi_result == SP_BANNED {
-                return nrlen;
+            if mi.result == SP_BAD || mi.result == SP_BANNED {
+                return Some((nrlen, HLF_COUNT));
             }
-        } else if !unsafe { spell_iswordp_nmw(text, window) } {
-            // Sitting on a non-word character is not an error; step over
-            // it and look for a word after it.
-            if !capcol.is_null() && unsafe { (*window.w_s).b_cap_prog.is_some() } {
-                // Did a sentence end here?
-                let mut regmatch = RegMatch::new(unsafe { (*window.w_s).b_cap_prog.take() }, false);
-                // SAFETY: the caller's NUL-terminated text.
-                let r = vim_regexec(&mut regmatch, unsafe { cstr::at(text) }, 0);
-                unsafe { (*window.w_s).b_cap_prog = regmatch.regprog.take() };
-                if let Some(end) = regmatch.ends[0]
-                    && r
-                {
-                    unsafe { *capcol = end as c_int };
-                }
-            }
-
-            return unsafe { utfc_ptr2len(text) } as size_t;
-        } else if mi.mi_end == text {
+        } else if !spell_iswordp_nmw(text, window) {
+            return None;
+        } else if mi.end == 0 {
             // Always consume at least one character, in case 'midword'
             // left the word empty.
-            mi.mi_end = unsafe { mi.mi_end.offset(utfc_ptr2len(mi.mi_end) as isize) };
-        } else if mi.mi_result == SP_BAD && unsafe { (*(*langp_data).lp_slang).sl_nobreak } {
+            mi.end = c_cluster_len(text);
+        } else if mi.result == SP_BAD && first_lang.is_some_and(|slang| slang.sl_nobreak) {
             // The first language is NOBREAK: find the first position at
             // which any word would be valid.
-            let save_result = mi.mi_result;
-            mi.mi_lp = langp_data;
-            if !unsafe { (*(*mi.mi_lp).lp_slang).sl_fold_tree.is_empty() } {
-                let mut p = mi.mi_word;
-                let mut fp = fword;
+            let save_result = mi.result;
+            mi.lp = langp[0];
+            mi.slang = first_lang;
+            if first_lang.is_some_and(|slang| !slang.sl_fold_tree.is_empty()) {
+                let mut p = 0;
+                let mut fp = 0;
                 loop {
-                    p = unsafe { p.offset(utfc_ptr2len(p) as isize) };
-                    fp = unsafe { fp.offset(utfc_ptr2len(fp) as isize) };
-                    if p >= mi.mi_end {
+                    p += c_cluster_len(tail(text, p));
+                    fp += c_cluster_len(tail(&mi.fword, fp));
+                    if p >= mi.end {
                         break;
                     }
-                    mi.mi_compoff = unsafe { fp.offset_from(fword) } as c_int;
-                    unsafe { find_word(&mut mi, FIND_COMPOUND) };
-                    if mi.mi_result != SP_BAD {
-                        mi.mi_end = p;
+                    mi.compoff = fp as c_int;
+                    find_word(&mut mi, FIND_COMPOUND);
+                    if mi.result != SP_BAD {
+                        mi.end = p;
                         break;
                     }
                 }
-                mi.mi_result = save_result;
+                mi.result = save_result;
             }
         }
 
-        let attr = if mi.mi_result == SP_BAD || mi.mi_result == SP_BANNED {
+        attr = if mi.result == SP_BAD || mi.result == SP_BANNED {
             HLF_SPB
-        } else if mi.mi_result == SP_RARE {
+        } else if mi.result == SP_RARE {
             HLF_SPR
         } else {
             HLF_SPL
         };
-        unsafe { *attrp = attr };
     }
 
-    if wrongcaplen > 0 && (mi.mi_result == SP_OK || mi.mi_result == SP_RARE) {
+    if wrongcaplen > 0 && (mi.result == SP_OK || mi.result == SP_RARE) {
         // SpellCap is only reported when the word itself is fine.
-        unsafe { *attrp = HLF_SPC };
-        return wrongcaplen;
+        return Some((wrongcaplen, HLF_SPC));
     }
 
-    unsafe { mi.mi_end.offset_from(text) as size_t }
+    Some((mi.end, attr))
 }
 
 /// Classify `c` for the camel-case split.
@@ -303,42 +323,33 @@ fn get_char_type(c: c_int) -> c_int {
     CHAR_OTHER
 }
 
-/// The end of the word starting at `str`, splitting camel-case words into
-/// their parts.
+/// The end of the word `text` starts with, splitting camel-case words into
+/// their parts, as an offset into `text`.
 ///
 /// A split happens where the character type changes in a way that only a
 /// word boundary explains: `fooBar`, `fooA1`, `1a`, and — looking two
 /// characters back — `HTTPServer`, which splits before the `S` rather than
 /// after it.
-///
-/// # Safety
-///
-/// `str` must point at a NUL-terminated string, unaliased for the call.
-unsafe fn advance_camelcase_word(
-    str: *mut c_char,
-    window: Win,
-    is_camel_case: &mut bool,
-) -> *mut c_char {
+fn advance_camelcase_word(text: &[u8], window: Win, is_camel_case: &mut bool) -> usize {
     *is_camel_case = false;
-    if unsafe { *str } == 0 {
-        return str;
+    if byte_at(text, 0) == 0 {
+        return 0;
     }
 
-    let mut end = str;
-    let c = unsafe { utf_ptr2char(end) };
-    end = unsafe { end.offset(utfc_ptr2len(end) as isize) };
+    let c = char_at(text);
+    let mut end = c_cluster_len(text);
 
     // Only the last two characters' types are ever needed.
     let mut last_last_type = -1;
     let mut last_type = get_char_type(c);
 
-    while unsafe { *end } != 0 && unsafe { spell_iswordp(end, window) } {
-        let this_type = get_char_type(unsafe { utf_ptr2char(end) });
+    while byte_at(text, end) != 0 && spell_iswordp(tail(text, end), window) {
+        let this_type = get_char_type(char_at(tail(text, end)));
 
         if last_last_type == CHAR_UPPER && last_type == CHAR_UPPER && this_type == CHAR_OTHER {
             // UpperUpperLower: the word ends one character back.
             *is_camel_case = true;
-            end = unsafe { end.offset(-(utf_head_off(str, end.offset(-1)) as isize + 1)) };
+            end -= head_off(text, end - 1) + 1;
             break;
         } else if (this_type == CHAR_UPPER && last_type == CHAR_OTHER)
             || (this_type != last_type && (this_type == CHAR_DIGIT || last_type == CHAR_DIGIT))
@@ -351,7 +362,7 @@ unsafe fn advance_camelcase_word(
         last_last_type = last_type;
         last_type = this_type;
 
-        end = unsafe { end.offset(utfc_ptr2len(end) as isize) };
+        end += c_cluster_len(tail(text, end)).max(1);
     }
 
     end
@@ -367,17 +378,15 @@ pub fn spell_valid_case(wordflags: WordFlags, treeflags: WordFlags) -> bool {
 
 /// Whether spell checking is on for `window` and a language is actually loaded.
 pub fn spell_check_window(window: Win) -> bool {
-    let on =
-        unsafe { window.w_onebuf_opt.wo_spell != 0 && (*window.w_s).b_p_spl.first_byte() != 0 };
-    on && unsafe { (*window.w_s).b_langp.ga_len } > 0
-        && !unsafe { *((*window.w_s).b_langp.ga_data as *mut *mut c_char) }.is_null()
+    let syn = window.syn_block();
+    window.w_onebuf_opt.wo_spell != 0 && syn.b_p_spl.first_byte() != 0 && !syn.b_langp.is_empty()
 }
 
 /// Whether spell checking is *off* for `window`, giving an error if so.
 pub fn no_spell_checking(window: Win) -> bool {
     if window.w_onebuf_opt.wo_spell == 0
-        || unsafe { (*window.w_s).b_p_spl.first_byte() } == 0
-        || unsafe { (*window.w_s).b_langp.ga_len } <= 0
+        || window.syn_block().b_p_spl.first_byte() == 0
+        || window.syn_block().b_langp.is_empty()
     {
         emsg(gettext(e_no_spell));
         return true;
@@ -392,7 +401,7 @@ pub fn no_spell_checking(window: Win) -> bool {
 /// a line that means looking at the previous line, with a space standing
 /// in for the line break.
 pub fn check_need_cap(mut window: Win, lnum: LineNr, col: ColNr) -> bool {
-    if unsafe { (*window.w_s).b_cap_prog.is_none() } {
+    if window.syn_block().b_cap_prog.is_none() {
         return false;
     }
 
@@ -411,32 +420,29 @@ pub fn check_need_cap(mut window: Win, lnum: LineNr, col: ColNr) -> bool {
             sentence_before(lines.line(lnum - 1))
         }
     };
-    let CapCheck::Scan { mut text, endcol } = context else {
+    let CapCheck::Scan { text, endcol } = context else {
         return true;
     };
 
     // Does a sentence end before the word?
     let mut need_cap = false;
-    let mut regmatch = RegMatch::new(unsafe { (*window.w_s).b_cap_prog.take() }, false);
-    // `text` is this frame's own NUL-terminated buffer, and `at` stays
-    // inside it: the walk starts at `endcol` and only ever moves back.
-    let base = text.as_mut_ptr().cast::<c_char>();
+    let mut regmatch = RegMatch::new(window.syn_block_mut().b_cap_prog.take(), false);
+    // The walk starts at `endcol` and only ever moves back.
     let mut at = endcol;
     loop {
         at -= head_off(&text[..endcol], at - 1) + 1;
-        // SAFETY: `base + at` is inside `text`, which is NUL-terminated.
-        if at == 0 || unsafe { spell_iswordp_nmw(base.wrapping_add(at), window) } {
+        if at == 0 || spell_iswordp_nmw(&text[at..], window) {
             break;
         }
         // The match has to end exactly where the word begins, which is
         // `endcol` bytes into `text` and so that many past `at`.
-        let word = cstr::in_bytes(&text[at..]);
+        let word = crate::cstr::in_bytes(&text[at..]);
         if vim_regexec(&mut regmatch, word, 0) && regmatch.ends[0] == Some(endcol - at) {
             need_cap = true;
             break;
         }
     }
-    unsafe { (*window.w_s).b_cap_prog = regmatch.regprog.take() };
+    window.syn_block_mut().b_cap_prog = regmatch.regprog.take();
     need_cap
 }
 
@@ -477,15 +483,12 @@ fn sentence_before(prev: &[u8]) -> CapCheck {
     CapCheck::Scan { text, endcol }
 }
 
-/// The end of the word starting at `start`, by the spell word characters.
-///
-/// # Safety
-///
-/// `start` must point at a NUL-terminated string, unaliased for the call.
-pub unsafe fn spell_to_word_end(start: *mut c_char, win: Win) -> *mut c_char {
-    let mut p = start;
-    while unsafe { *p } != 0 && unsafe { spell_iswordp(p, win) } {
-        p = unsafe { p.offset(utfc_ptr2len(p) as isize) };
+/// The end of the word `text` starts with, by the spell word characters, as
+/// an offset into it.
+pub fn spell_to_word_end(text: &[u8], win: Win) -> usize {
+    let mut p = 0;
+    while byte_at(text, p) != 0 && spell_iswordp(tail(text, p), win) {
+        p += c_cluster_len(tail(text, p)).max(1);
     }
     p
 }
@@ -496,27 +499,29 @@ pub unsafe fn spell_to_word_end(start: *mut c_char, win: Win) -> *mut c_char {
 /// Whether it is misspelled is not checked — completion can only replace
 /// the word before the cursor anyway.
 pub fn spell_word_start(startcol: c_int) -> c_int {
-    if no_spell_checking(Win::current()) {
+    let win = Win::current();
+    if no_spell_checking(win) {
         return startcol;
     }
 
-    let line = get_cursor_line_ptr();
+    let mut lines = Lines::current();
+    let line = lines.line(win.w_cursor.lnum);
 
     // Back up to a word character.
-    let mut p = unsafe { line.offset(startcol as isize) };
-    while p > line {
-        p = unsafe { p.offset(-(utf_head_off(line, p.offset(-1)) as isize + 1)) };
-        if unsafe { spell_iswordp_nmw(p, Win::current()) } {
+    let mut p = usize::try_from(startcol).unwrap_or(0).min(line.len());
+    while p > 0 {
+        p -= head_off(line, p - 1) + 1;
+        if spell_iswordp_nmw(&line[p..], win) {
             break;
         }
     }
 
     // Then back to the start of that word.
     let mut col = 0;
-    while p > line {
-        col = unsafe { p.offset_from(line) } as c_int;
-        p = unsafe { p.offset(-(utf_head_off(line, p.offset(-1)) as isize + 1)) };
-        if !unsafe { spell_iswordp(p, Win::current()) } {
+    while p > 0 {
+        col = p as c_int;
+        p -= head_off(line, p - 1) + 1;
+        if !spell_iswordp(&line[p..], win) {
             break;
         }
         col = 0;
@@ -543,28 +548,8 @@ pub fn spell_expand_check_cap(col: ColNr) {
 }
 
 /// Insert-mode completion `CTRL-X ?`: the suggestions for `pat`.
-///
-/// # Safety
-///
-/// `pat` must point at a NUL-terminated string, unaliased for the call.
-pub unsafe fn expand_spelling(_lnum: LineNr, pat: *mut c_char) -> Vec<XString> {
-    // SAFETY: the caller's promise.
-    let pat = unsafe { CStr::from_ptr(pat) };
+pub fn expand_spelling(_lnum: LineNr, pat: &CStr) -> Vec<XString> {
     spell_suggest_list(pat, 100, spell_expand_need_cap.get(), true)
-}
-
-/// [`spell_check`] of the word `text` starts with, for a caller holding the
-/// text as a string: the word's length in bytes, good or bad.
-pub(crate) fn spell_check_text(
-    window: Win,
-    text: &CStr,
-    attr: &mut Hlf,
-    capcol: &mut c_int,
-    docount: bool,
-) -> usize {
-    // SAFETY: a terminated string, which the check only reads, and two
-    // cells of the caller's own.
-    unsafe { spell_check(window, text.as_ptr().cast_mut(), attr, capcol, docount) }
 }
 
 #[cfg(test)]

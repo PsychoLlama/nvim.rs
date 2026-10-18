@@ -464,7 +464,9 @@ pub(crate) fn get_next_cmdline_completion() {
 
 /// Spelling suggestions for the bad word at `lnum`.
 pub(crate) fn get_next_spell_completion(lnum: LineNr) {
-    let matches = unsafe { expand_spelling(lnum, compl_pattern().data()) };
+    // A copy: the suggestions can run a user function.
+    let pat = compl_pattern().with_cstr(::core::ffi::CStr::to_owned);
+    let matches = expand_spelling(lnum, &pat);
     ins_compl_add_match_list(&matches, p_ic());
 }
 

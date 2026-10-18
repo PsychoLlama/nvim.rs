@@ -40,7 +40,7 @@ use crate::options::*;
 use crate::optionstr::{
     OptString, OptStringRef, derive_breakat_flags, didset_string_options, set_window_chars_option,
 };
-use crate::spell::{compile_cap_prog_in, did_set_spell_option};
+use crate::spell::{compile_cap_prog, did_set_spell_option};
 use crate::spellfile::spell_check_msm;
 use crate::spellsuggest::spell_check_sps;
 use crate::startup::starting;
@@ -156,7 +156,7 @@ pub(crate) fn didset_options() {
     didset_string_options();
     let _ = spell_check_msm();
     let _ = spell_check_sps();
-    let _ = compile_cap_prog_in(&mut Win::current().syntax());
+    let _ = compile_cap_prog(&mut Win::current().syntax());
     let _ = did_set_spell_option();
     // The two callbacks these stand in for read no frame at all, and the
     // startup sweep has none to give.

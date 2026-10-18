@@ -151,12 +151,12 @@ impl Walk<'_> {
         // word, so both offsets stay inside it.
         unsafe {
             let consumed = nofold_len(
-                self.fword.as_mut_ptr().cast(),
-                self.stack[child].bad_idx as c_int,
-                (*self.su).su_badptr,
+                self.fword,
+                self.stack[child].bad_idx as usize,
+                crate::cstr::bytes_at((*self.su).su_badptr),
             );
             (*self.su).su_badflags = badword_captype(
-                (*self.su).su_badptr.offset(consumed as isize),
+                (*self.su).su_badptr.add(consumed),
                 (*self.su).su_badptr.offset((*self.su).su_badlen as isize),
             );
         }
@@ -190,7 +190,7 @@ impl Walk<'_> {
         // the validity of what it reads.
         !self.soundfold
             && !unsafe { (*self.slang).sl_nocompoundsugs }
-            && unsafe { (*self.slang).sl_compprog.is_some() }
+            && unsafe { (*self.slang).sl_compprog.borrow().is_some() }
             && (flags.bits() as u32) >> 24 != 0
             && this_word_len >= unsafe { (*self.slang).sl_compminlen }
             && (unsafe { (*self.slang).sl_compminlen } == 0
@@ -232,9 +232,9 @@ impl Walk<'_> {
             // `compflags`, this walk's own array.
             let joins = unsafe {
                 can_compound(
-                    self.slang,
-                    last_word,
-                    self.compflags.as_ptr().add(comp_split),
+                    &*self.slang,
+                    crate::cstr::bytes_at(last_word),
+                    &self.compflags[comp_split..],
                 )
             };
             if !joins {
@@ -280,7 +280,7 @@ impl Walk<'_> {
         // SAFETY: `bad_idx` is a position the walk reached inside the bad
         // word, the caller's NUL-terminated buffer.
         let replacing_nonword =
-            !try_compound && !unsafe { spell_iswordp_nmw(self.fword_ptr(bad_idx), Win::current()) };
+            !try_compound && !spell_iswordp_nmw(&self.fword[bad_idx..], Win::current());
         if !((replacing_nonword || bad_word_ends)
             && self.fword_at(bad_idx) != NUL
             && good_word_ends)
@@ -327,12 +327,13 @@ impl Walk<'_> {
         //
         // SAFETY: `slang` is the walk's own language and its flag strings
         // are NUL-terminated.
+        let slang = unsafe { &*self.slang };
         let allowed = if comp_len == comp_split {
-            unsafe { (*self.slang).sl_compstartflags }
+            &slang.sl_compstartflags
         } else {
-            unsafe { (*self.slang).sl_compallflags }
+            &slang.sl_compallflags
         };
-        if !unsafe { byte_in_str(allowed, flag) } {
+        if !byte_in_str(allowed, flag) {
             return false;
         }
 
@@ -341,15 +342,14 @@ impl Walk<'_> {
         // there are two or more words.
         //
         // SAFETY: as above.
-        if unsafe { (*self.slang).sl_comprules }.is_null() || comp_len <= comp_split {
+        if slang.sl_comprules.is_none() || comp_len <= comp_split {
             return true;
         }
         self.compflags[comp_len] = flag as u8;
         self.compflags[comp_len + 1] = NUL as u8;
         // SAFETY: as above, and `compflags` is this walk's own array,
         // NUL-terminated by the two lines above.
-        let matched =
-            unsafe { match_compoundrule(self.slang, self.compflags.as_ptr().add(comp_split)) };
+        let matched = match_compoundrule(slang, &self.compflags[comp_split..]);
         self.compflags[comp_len] = NUL as u8;
         matched
     }

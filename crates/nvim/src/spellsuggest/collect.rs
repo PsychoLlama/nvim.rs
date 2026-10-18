@@ -32,10 +32,10 @@ use crate::hashtab::{hash_add_item, hash_hash, hash_lookup};
 use crate::highlight_group::HLF_COUNT;
 use crate::mbyte::{utf_head_off, utf_ptr2char};
 use crate::memory::{xmemdupz, xstrlcpy};
-use crate::spell::{spell_check, spell_soundfold};
+use crate::spell::{lang_ptr, spell_check, spell_soundfold};
 use crate::spellsuggest::score::{EMPTY_SOUND, spell_edit_score, stp_sal_score};
 use crate::spellsuggest::{MAXWLEN, SCORE_INS, SCORE_MAXMAX, SugInfo, Suggest, window_langs};
-use crate::types::{__compar_fn_t, Hlf, SpellLang, size_t};
+use crate::types::{__compar_fn_t, SpellLang, size_t};
 use ::libc::{qsort, strcasecmp};
 use core::ffi::{c_char, c_int, c_void};
 use core::{mem, ptr};
@@ -247,13 +247,8 @@ pub(super) unsafe fn check_suggestions(su: *mut SugInfo, gap: *mut Vec<Suggest>)
         let rest = unsafe { (*su).su_badptr.offset(orglen as isize) };
         unsafe { xstrlcpy(tail, rest, MAXWLEN + 1 - len as usize) };
 
-        let mut attr: Hlf = HLF_COUNT;
-        let win = Win::current();
-        let longwordp = longword.as_mut_ptr();
-        let attrp = &raw mut attr;
-        // SAFETY: `longword` is NUL-terminated by the copies above and
-        // `attr` is a live local.
-        unsafe { spell_check(win, longwordp, attrp, ptr::null_mut(), false) };
+        // `longword` is NUL-terminated by the copies above.
+        let (_, attr) = spell_check(Win::current(), cstr::as_bytes(&longword), None, false);
         if attr == HLF_COUNT {
             continue;
         }
@@ -363,8 +358,13 @@ unsafe fn sal_rescore(
     let badsound = if slang == unsafe { (*su).su_sallang } {
         unsafe { &(*su).su_sal_badword }
     } else {
-        let fbadword = unsafe { &raw mut (*su).su_fbadword } as *mut c_char;
-        unsafe { spell_soundfold(slang, fbadword, true, sal_badword.as_mut_ptr()) };
+        let (lang, fbadword) = unsafe { (&*slang, &(*su).su_fbadword) };
+        spell_soundfold(
+            lang,
+            cstr::as_bytes(fbadword),
+            true,
+            cstr::as_bytes_mut(&mut sal_badword),
+        );
         &sal_badword
     };
 
@@ -455,17 +455,22 @@ pub(super) unsafe fn score_comp_sal(su: *mut SugInfo) {
     let langs = unsafe { window_langs() };
     let Some(lp) = langs
         .iter()
-        .find(|lp| unsafe { (*lp.lp_slang).has_soundfold() })
+        .find(|lp| unsafe { (*lang_ptr(lp.slang)).has_soundfold() })
     else {
         return;
     };
-    let slang = lp.lp_slang;
+    let slang = lang_ptr(lp.slang);
 
     let mut badsound = EMPTY_SOUND;
     // SAFETY: `su_fbadword` is the bad word's NUL-terminated fold and
     // `badsound` has room for a soundfold.
-    let fbadword = unsafe { &raw mut (*su).su_fbadword } as *mut c_char;
-    unsafe { spell_soundfold(slang, fbadword, true, badsound.as_mut_ptr()) };
+    let (lang, fbadword) = unsafe { (&*slang, &(*su).su_fbadword) };
+    spell_soundfold(
+        lang,
+        cstr::as_bytes(fbadword),
+        true,
+        cstr::as_bytes_mut(&mut badsound),
+    );
 
     // SAFETY: `su` is valid by the contract above, so both lists are its
     // own. Neither is borrowed across the scoring, which reads the rest of
@@ -519,11 +524,16 @@ pub(super) unsafe fn score_combine(su: *mut SugInfo) {
     let langs = unsafe { window_langs() };
     if let Some(lp) = langs
         .iter()
-        .find(|lp| unsafe { (*lp.lp_slang).has_soundfold() })
+        .find(|lp| unsafe { (*lang_ptr(lp.slang)).has_soundfold() })
     {
-        slang = lp.lp_slang;
-        let fbadword = unsafe { &raw mut (*su).su_fbadword } as *mut c_char;
-        unsafe { spell_soundfold(slang, fbadword, true, badsound.as_mut_ptr()) };
+        slang = lang_ptr(lp.slang);
+        let (lang, fbadword) = unsafe { (&*slang, &(*su).su_fbadword) };
+        spell_soundfold(
+            lang,
+            cstr::as_bytes(fbadword),
+            true,
+            cstr::as_bytes_mut(&mut badsound),
+        );
 
         for i in 0..unsafe { (*su).su_ga.len() } {
             let (word, wordlen, orglen, score) = {

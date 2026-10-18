@@ -49,7 +49,7 @@ use crate::options::{
 use crate::optionstr::{
     OptStringRef, check_buf_options, check_window_signcolumn, set_window_chars_option,
 };
-use crate::spell::compile_cap_prog_in;
+use crate::spell::compile_cap_prog;
 use crate::tag::set_buflocal_tfu_callback;
 use crate::types::{CmdModFlags, ColNr, CpoFlag, OptInt, ScriptCtx, WinOpt, int16_t};
 use crate::window::{check_window_colorcolumn, set_winbar_win};
@@ -427,7 +427,7 @@ pub(crate) fn buf_copy_options(buffer: Buf, flags: c_int) {
         b.b_s.b_syn_isk = None;
         b.b_s.b_p_spc = p_spc(dup);
         copy_sctx(b, kBufOptSpellcapcheck);
-        let _ = compile_cap_prog_in(&mut b.b_s);
+        let _ = compile_cap_prog(&mut b.b_s);
         b.b_s.b_p_spf = p_spf(dup);
         copy_sctx(b, kBufOptSpellfile);
         b.b_s.b_p_spl = p_spl(dup);

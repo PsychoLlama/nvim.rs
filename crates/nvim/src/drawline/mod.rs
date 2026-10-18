@@ -233,7 +233,7 @@ pub unsafe fn win_line(
         spv,
         statuscol: &raw mut statuscol,
         term_attrs: term_attrs.as_ptr(),
-        nextline: nextline.as_mut_ptr(),
+        nextline: nextline.as_mut_ptr().cast(),
         fold_buf: fold_buf.as_mut_ptr(),
     };
     Cells::new(setup).run(&mut wlv, window, window.buffer(), &frame)

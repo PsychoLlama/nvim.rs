@@ -36,8 +36,8 @@ use crate::mbyte::{mb_charlen, utfc_ptr2len};
 use crate::memory::xmemcpyz;
 use crate::spell::WordFlags;
 use crate::spell::{
-    can_compound, captype, make_case_word, match_checkcompoundpattern, nofold_len, spell_iswordp,
-    spell_iswordp_nmw, spell_valid_case, valid_word_prefix,
+    can_compound, captype, lang_ptr_opt, make_case_word, match_checkcompoundpattern, nofold_len,
+    spell_iswordp, spell_iswordp_nmw, spell_valid_case, valid_word_prefix,
 };
 use crate::spellsuggest::collect::{add_banned, add_suggestion};
 use crate::spellsuggest::score::score_wordcount_adj;
@@ -134,16 +134,14 @@ impl Walk<'_> {
         // out of it, so both offsets stay inside it.
         let prefix_flags = unsafe {
             let prefix_len = nofold_len(
-                self.fword.as_mut_ptr().cast(),
-                self.stack[level].bad_idx as c_int,
-                (*self.su).su_badptr,
+                self.fword,
+                self.stack[level].bad_idx as usize,
+                cstr::bytes_at((*self.su).su_badptr),
             );
-            let prefix_flags = badword_captype(
-                (*self.su).su_badptr,
-                (*self.su).su_badptr.offset(prefix_len as isize),
-            );
+            let prefix_flags =
+                badword_captype((*self.su).su_badptr, (*self.su).su_badptr.add(prefix_len));
             (*self.su).su_badflags = badword_captype(
-                (*self.su).su_badptr.offset(prefix_len as isize),
+                (*self.su).su_badptr.add(prefix_len),
                 (*self.su).su_badptr.offset((*self.su).su_badlen as isize),
             );
             prefix_flags
@@ -162,15 +160,12 @@ impl Walk<'_> {
         self.tword[self.stack[child].good_len as usize] = NUL as c_char;
         let split_off = self.stack[child].split_off as usize;
         let preword_len = self.stack[child].preword_len as usize;
-        // SAFETY: both offsets are into this walk's own buffers, and
         // `tword` was terminated on the line above.
-        unsafe {
-            make_case_word(
-                self.tword.as_mut_ptr().add(split_off),
-                self.preword.as_mut_ptr().add(preword_len),
-                prefix_flags,
-            );
-        }
+        make_case_word(
+            &cstr::as_bytes(&self.tword)[split_off..],
+            &mut cstr::as_bytes_mut(&mut self.preword)[preword_len..],
+            prefix_flags,
+        );
         self.stack[child].preword_len = self.preword_len() as u8;
         self.stack[child].split_off = self.stack[child].good_len;
     }
@@ -207,14 +202,12 @@ impl Walk<'_> {
         //
         // SAFETY: `bad_idx` is a position the walk reached within the bad
         // word's buffer, which is valid by the contract above.
-        let bad_word_ends = unsafe {
-            self.fword_at(bad_idx) == NUL
-                || if self.soundfold {
-                    ascii_iswhite(self.fword_at(bad_idx))
-                } else {
-                    !spell_iswordp(self.fword_ptr(bad_idx), Win::current())
-                }
-        };
+        let bad_word_ends = self.fword_at(bad_idx) == NUL
+            || if self.soundfold {
+                ascii_iswhite(self.fword_at(bad_idx))
+            } else {
+                !spell_iswordp(&self.fword[bad_idx..], Win::current())
+            };
         self.tword[self.stack[level].good_len as usize] = NUL as c_char;
 
         if !self.prefix_allows_word(&mut flags) {
@@ -272,7 +265,7 @@ impl Walk<'_> {
                 && unsafe { was_banned(self.su, self.preword.as_ptr().add(preword_len)) };
             if this_word_banned || unsafe { was_banned(self.su, self.preword.as_ptr()) } {
                 // SAFETY: `slang` is the walk's own language.
-                if unsafe { (*self.slang).sl_compprog.is_none() } {
+                if unsafe { (*self.slang).sl_compprog.borrow().is_none() } {
                     return;
                 }
                 // Banned so far, but compounding may still save it.
@@ -287,7 +280,7 @@ impl Walk<'_> {
             // SAFETY: `langp` is the caller's language pointer, valid by the
             // contract above; `&&` keeps the read out of the common case.
             if flags.has(WordFlags::REGION)
-                && (flags.bits() as u32 >> 16) & unsafe { (*self.langp).lp_region } as u32 == 0
+                && (flags.bits() as u32 >> 16) & unsafe { (*self.langp).region } as u32 == 0
             {
                 newscore += SCORE_REGION;
             }
@@ -298,7 +291,8 @@ impl Walk<'_> {
             // SAFETY: `su` is valid by the contract above and `preword` is
             // this walk's own buffer, NUL-terminated by `build_preword`.
             let badflags = unsafe { (*self.su).su_badflags };
-            let caps = unsafe { captype(self.preword.as_ptr().add(preword_len), ptr::null()) };
+            let preword = cstr::until_nul(&cstr::as_bytes(&self.preword)[preword_len..]);
+            let caps = captype(preword, preword.len());
             if !spell_valid_case(badflags, caps) {
                 newscore += SCORE_ICASE;
             }
@@ -351,16 +345,14 @@ impl Walk<'_> {
         // SAFETY: `tword` is this walk's own buffer, `slang` its language,
         // and the prefix node is the one whose NUL bytes were counted
         // just above.
-        let prefix_flags = unsafe {
-            valid_word_prefix(
-                prefix_count as c_int,
-                node,
-                *flags,
-                self.tword.as_mut_ptr().add(split_off),
-                self.slang,
-                false,
-            )
-        };
+        let prefix_flags = valid_word_prefix(
+            prefix_count as c_int,
+            node,
+            *flags,
+            &cstr::as_bytes(&self.tword)[split_off..],
+            unsafe { &*self.slang },
+            false,
+        );
         if prefix_flags == 0 {
             return false;
         }
@@ -424,7 +416,7 @@ impl Walk<'_> {
                     score,
                     0,
                     false,
-                    (*self.langp).lp_sallang,
+                    lang_ptr_opt((*self.langp).sallang),
                     false,
                 );
             }
@@ -494,8 +486,8 @@ impl Walk<'_> {
         // copy above, and `slang` is its language.
         let forbidden_pair = unsafe {
             match_checkcompoundpattern(
-                self.preword.as_mut_ptr(),
-                self.stack[level].preword_len as c_int,
+                cstr::as_bytes(&self.preword),
+                self.stack[level].preword_len as usize,
                 &(*self.slang).sl_comppat,
             )
         };
@@ -508,9 +500,9 @@ impl Walk<'_> {
             let last_word = unsafe { self.last_word_of_preword() };
             let joins = unsafe {
                 can_compound(
-                    self.slang,
-                    last_word,
-                    self.compflags.as_ptr().add(comp_split),
+                    &*self.slang,
+                    cstr::bytes_at(last_word),
+                    &self.compflags[comp_split..],
                 )
             };
             if !joins {
@@ -592,12 +584,15 @@ impl Walk<'_> {
             // character of `preword`, and the `&&` is what keeps the null
             // away from `spell_iswordp_nmw`.
             if !prev_word_tail.is_null()
-                && unsafe { spell_iswordp_nmw(prev_word_tail, Win::current()) }
+                && spell_iswordp_nmw(unsafe { cstr::bytes_at(prev_word_tail) }, Win::current())
             {
                 caps.clear(WordFlags::ONECAP);
             }
-            // SAFETY: as above.
-            unsafe { make_case_word(good, out, caps) };
+            make_case_word(
+                &cstr::as_bytes(&self.tword)[split_off..],
+                &mut cstr::as_bytes_mut(&mut self.preword)[preword_len..],
+                caps,
+            );
         }
     }
 
@@ -639,13 +634,15 @@ impl Walk<'_> {
         p = unsafe { Walk::char_back(self.fword.as_ptr().cast(), p) };
         // SAFETY: `p` is a character of the bad word; the `&&` only saves
         // the work of measuring an empty `preword`.
-        if !unsafe { spell_iswordp(p, Win::current()) } && self.preword[0] != NUL as c_char {
+        if !spell_iswordp(unsafe { cstr::bytes_at(p) }, Win::current())
+            && self.preword[0] != NUL as c_char
+        {
             let end = self.preword_len();
             // SAFETY: `end` is `preword`'s own length and it is not empty,
             // so the character before its terminator is inside it.
             let mut q = unsafe { self.preword.as_mut_ptr().add(end) };
             q = unsafe { Walk::char_back(self.preword.as_ptr(), q) };
-            if unsafe { spell_iswordp(q, Win::current()) } {
+            if spell_iswordp(unsafe { cstr::bytes_at(q) }, Win::current()) {
                 newscore += SCORE_NONWORD;
             }
         }
@@ -678,7 +675,7 @@ impl Walk<'_> {
                 score,
                 0,
                 false,
-                (*self.langp).lp_sallang,
+                lang_ptr_opt((*self.langp).sallang),
                 false,
             );
         }
@@ -689,18 +686,16 @@ impl Walk<'_> {
             // should be upper or lower case, so offer both.
             //
             // SAFETY: as above.
-            let caps = unsafe { captype(self.preword.as_ptr(), ptr::null()) };
+            let preword = cstr::until_nul(cstr::as_bytes(&self.preword));
+            let caps = captype(preword, preword.len());
             if caps.is_empty() || caps == WordFlags::ALLCAP {
                 let split_off = self.stack[level].split_off as usize;
-                // SAFETY: both offsets are into this walk's own buffers,
-                // and `tword` was terminated before this ran.
-                unsafe {
-                    make_case_word(
-                        self.tword.as_mut_ptr().add(split_off),
-                        self.preword.as_mut_ptr().add(preword_len),
-                        WordFlags::ALLCAP.when(caps.is_empty()),
-                    );
-                }
+                // `tword` was terminated before this ran.
+                make_case_word(
+                    &cstr::as_bytes(&self.tword)[split_off..],
+                    &mut cstr::as_bytes_mut(&mut self.preword)[preword_len..],
+                    WordFlags::ALLCAP.when(caps.is_empty()),
+                );
                 // SAFETY: as for the first `add_suggestion` above.
                 unsafe {
                     add_suggestion(
@@ -711,7 +706,7 @@ impl Walk<'_> {
                         score + SCORE_ICASE,
                         0,
                         false,
-                        (*self.langp).lp_sallang,
+                        lang_ptr_opt((*self.langp).sallang),
                         false,
                     );
                 }

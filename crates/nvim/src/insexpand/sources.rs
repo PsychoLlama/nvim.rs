@@ -136,14 +136,9 @@ pub(crate) unsafe fn ins_compl_dictionaries(
             if count == -1 {
                 // Complete from active spelling.  Skip "\<" in the pattern,
                 // we don't use it as a RE.
-                let word = if unsafe { *pat } as c_int == '\\' as c_int
-                    && unsafe { *pat.offset(1) } as c_int == '<' as c_int
-                {
-                    unsafe { pat.offset(2) }
-                } else {
-                    pat
-                };
-                unsafe { spell_dump_compl(word, regmatch.rm_ic as c_int, &raw mut dir, 0) };
+                let pat = unsafe { cstr::bytes_at(pat) };
+                let word = pat.strip_prefix(b"\\<").unwrap_or(pat);
+                spell_dump_compl(Some(word), regmatch.rm_ic as c_int, Some(&mut dir), 0);
             } else if count > 0 {
                 // SAFETY: `files` is `count` NUL-terminated names and `buf`
                 // a scratch buffer of `LSIZE`.

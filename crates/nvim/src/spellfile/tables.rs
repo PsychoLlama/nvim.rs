@@ -181,11 +181,9 @@ pub(super) fn add_fromto(out: &mut Vec<RepItem>, from: &CStr, to: &CStr) {
     // SAFETY: the caller promises the strings; `word` is MAXWLEN, the
     // bound `spell_casefold` is given.
     let folded = |s: &CStr| -> Box<[u8]> {
-        let mut word: [c_char; MAXWLEN] = [0; MAXWLEN];
-        let (win, buf) = (Win::current(), word.as_mut_ptr());
-        let len = s.to_bytes().len() as c_int;
-        let _ = unsafe { spell_casefold(win, s.as_ptr(), len, buf, MAXWLEN as c_int) };
-        unsafe { cstr::bytes_at(word.as_ptr()) }.into()
+        let mut word = [0u8; MAXWLEN];
+        let _ = spell_casefold(Win::current(), s.to_bytes(), s.count_bytes(), &mut word);
+        cstr::until_nul(&word).into()
     };
     out.push(RepItem {
         from: folded(from),

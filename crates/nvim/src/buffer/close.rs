@@ -35,7 +35,6 @@ use crate::drawscreen::state::updating_screen;
 use crate::eval::typval::{callback_free, tv_dict_item_copy, unlink_buf_changedtick};
 use crate::eval::vars::{release_var_scope, vars_clear};
 use crate::extmark::extmark_free_all;
-use crate::garray::ga_free;
 use crate::mapping::map_clear_mode;
 use crate::mark::{clear_mark, mark_adjust_buf, mark_forget_file, set_last_cursor};
 use crate::memline::ml_close;
@@ -790,7 +789,7 @@ pub(crate) fn free_buffer_stuff(mut buffer: Buf, free_flags: c_int) {
     if free_flags & kBffClearWinInfo as c_int != 0 {
         clear_wininfo(buffer); // including window-local options
         free_buf_options(buffer, true);
-        ga_free(&mut buffer.b_s.b_langp);
+        buffer.b_s.b_langp = Vec::new();
     }
     clear_buf_vars(buffer); // free all internal variables
     if free_flags & kBffInitChangedtick as c_int != 0 {

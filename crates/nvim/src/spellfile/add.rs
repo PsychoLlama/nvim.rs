@@ -54,9 +54,9 @@ use crate::os::env::home_replace;
 use crate::os::fs::{os_fopen, os_mkdir, os_mkdir_recurse};
 use crate::os::stdpaths::get_xdg_home;
 use crate::path::{dir_of_file_exists, path_tail, tail_with_sep_index, vim_ispathsep};
-use crate::spell::{int_wordlist, spell_enc};
+use crate::spell::{int_wordlist, spell_enc, with_lang};
 use crate::types::{
-    FILE, LangP, MAXPATHL, NUL, OptVal, OptionSetFlags, SpellAddType, int32_t, size_t, uint8_t,
+    FILE, MAXPATHL, NUL, OptVal, OptionSetFlags, SpellAddType, int32_t, size_t, uint8_t,
 };
 use crate::undo::buf_is_changed;
 use crate::winlayer::Buf;
@@ -302,8 +302,8 @@ unsafe fn comment_out_word(fname: &CStr, word: *mut c_char, len: c_int, undo: bo
 /// directory `'spelllang'` named if it named one by path, holding a
 /// `.add` file named after the language and encoding in use.
 fn init_spellfile() {
-    if unsafe { (*Win::current().w_s).b_p_spl.first_byte() } == 0
-        || unsafe { (*Win::current().w_s).b_langp.ga_len } <= 0
+    if Win::current().syn_block().b_p_spl.first_byte() == 0
+        || Win::current().syn_block().b_langp.is_empty()
     {
         return;
     }
@@ -359,15 +359,16 @@ fn init_spellfile() {
 
     // The suffix has to match the file actually loaded, which may be
     // the ASCII build of the language rather than the current encoding.
-    let fname =
-        unsafe { (*(*((*Win::current().w_s).b_langp.ga_data as *mut LangP)).lp_slang).sl_fname };
+    let first = Win::current().syn_block().b_langp[0].slang;
+    let ascii = with_lang(first, |slang| {
+        has_bytes(path_tail(slang.sl_fname.as_cstr()), b".ascii.")
+    });
     let encoding = spell_enc();
-    let enc_suffix =
-        if !fname.is_null() && has_bytes(unsafe { path_tail(cstr::at(fname)) }, b".ascii.") {
-            c"ascii".as_ptr()
-        } else {
-            encoding.as_ptr()
-        };
+    let enc_suffix = if ascii == Some(true) {
+        c"ascii".as_ptr()
+    } else {
+        encoding.as_ptr()
+    };
     let used = unsafe { cstr::bytes_at(buf) }.len();
     let at = unsafe { buf.add(used) };
     unsafe { vim_snprintf!(at, buf_len - used, c".%s.add".as_ptr(), enc_suffix) };

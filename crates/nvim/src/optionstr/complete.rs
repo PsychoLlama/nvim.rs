@@ -21,7 +21,7 @@ use crate::option::vars::{P_CIA, P_HLG, cia_flags, cot_flags, spo_flags, tc_flag
 use crate::options::{opt_cot_values, opt_spo_values, opt_tc_values};
 use crate::os::env::vim_unsetenv_named;
 use crate::os::state::{didset_vim, didset_vimruntime};
-use crate::spell::{compile_cap_prog_in, did_set_spell_option, valid_spellfile, valid_spelllang};
+use crate::spell::{compile_cap_prog, did_set_spell_option, valid_spellfile, valid_spelllang};
 use crate::spellfile::spell_check_msm;
 use crate::spellsuggest::spell_check_sps;
 use crate::types::{OptError, OptSet, OptionSetFlags};
@@ -231,7 +231,7 @@ pub fn did_set_optexpr(args: &mut OptSet) -> Result<(), OptError> {
 }
 
 pub fn did_set_spellcapcheck(args: &mut OptSet) -> Result<(), OptError> {
-    compile_cap_prog_in(&mut win(args).syntax())
+    compile_cap_prog(&mut win(args).syntax())
 }
 
 pub fn did_set_spellfile(args: &mut OptSet) -> Result<(), OptError> {

@@ -312,8 +312,9 @@ pub(super) unsafe fn store_word(
 ) -> Result<(), Failed> {
     // SAFETY: the caller promises terminated strings; `foldword` is a
     // MAXWLEN buffer, which is the bound spell_casefold is given.
-    let len = unsafe { cstr::bytes_at(word) }.len() as c_int;
-    let ct = unsafe { captype(word, word.offset(len as isize)) };
+    let text = unsafe { cstr::bytes_at(word) };
+    let len = text.len() as c_int;
+    let ct = captype(text, text.len());
     let mut foldword: [c_char; MAXWLEN] = [0; MAXWLEN];
     let mut res;
 
@@ -321,8 +322,8 @@ pub(super) unsafe fn store_word(
         return Err(Failed);
     }
 
-    let (win, out) = (Win::current(), foldword.as_mut_ptr());
-    let _ = unsafe { spell_casefold(win, word, len, out, MAXWLEN as c_int) };
+    let out = cstr::as_bytes_mut(&mut foldword);
+    let _ = spell_casefold(Win::current(), text, text.len(), out);
 
     let root = spin.si_foldroot;
     let folded = foldword.as_ptr();

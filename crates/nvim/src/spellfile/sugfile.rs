@@ -50,7 +50,7 @@ use crate::message_fmt::msg_cstr;
 use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
 use crate::path::path_full_compare;
-use crate::spell::{languages, open_spellbuf, slang_free, spell_soundfold};
+use crate::spell::{languages, open_spellbuf, put_lang, spell_soundfold, take_lang, with_lang};
 use crate::types::{Failed, LineNr, NUL, SpellIdx, SpellLang, int16_t, uint16_t};
 
 use super::wordtree::{WordNode, tree_add_word, wordtree_alloc, wordtree_compress};
@@ -66,32 +66,24 @@ use super::{
 /// word numbers have to match the order the *reader* will see, and the
 /// tree in memory has been compressed since.
 pub(super) fn spell_make_sugfile(spin: &mut SpellInfo, wfname: &CStr) {
-    // SAFETY: `wfname` is a valid path and every pointer below is either
-    // from `spin` or from the language just loaded.
-    // Prefer an already-loaded copy of this file.
-    let mut slang = languages()
-        .into_iter()
-        .find(|&slang| {
-            let cmp = unsafe {
-                path_full_compare(
-                    cstr::at(wfname.as_ptr()),
-                    cstr::at((*slang).sl_fname),
-                    false,
-                    true,
-                )
+    // Prefer an already-loaded copy of this file, taken out of its slot
+    // while the walk below rewrites its word counts.
+    let loaded = languages().into_iter().find(|&id| {
+        with_lang(id, |slang| {
+            path_full_compare(wfname, slang.sl_fname.as_cstr(), false, true) as c_uint
+                == kEqualFiles as c_uint
+        }) == Some(true)
+    });
+    let (mut slang, slot) = match loaded.and_then(|id| take_lang(id).map(|slang| (slang, id))) {
+        Some((slang, id)) => (slang, Some(id)),
+        None => {
+            spell_message(spin, c"Reading back spell file...");
+            let Some(slang) = spell_load_file(wfname, None, false) else {
+                return;
             };
-            cmp as c_uint == kEqualFiles as c_uint
-        })
-        .unwrap_or(core::ptr::null_mut());
-    let free_slang = slang.is_null();
-    if free_slang {
-        spell_message(spin, c"Reading back spell file...");
-        slang =
-            unsafe { spell_load_file(wfname, core::ptr::null_mut(), core::ptr::null_mut(), false) };
-        if slang.is_null() {
-            return;
+            (slang, None)
         }
-    }
+    };
 
     // Start a fresh arena and tree: the ones the `.spl` was built from
     // have already been released.
@@ -102,7 +94,7 @@ pub(super) fn spell_make_sugfile(spin: &mut SpellInfo, wfname: &CStr) {
     spin.si_foldwcount = 0;
 
     spell_message(spin, c"Performing soundfolding...");
-    if unsafe { sug_filltree(spin, slang) }.is_ok() && sug_maketable(spin) != FAIL {
+    if sug_filltree(spin, &mut slang).is_ok() && sug_maketable(spin) != FAIL {
         let done = spin.spellbuf().line_count() as i64;
         smsg!(0, "Number of words after soundfolding: {}", done);
         spell_message(spin, super::wordtree::MSG_COMPRESSING);
@@ -119,8 +111,8 @@ pub(super) fn spell_make_sugfile(spin: &mut SpellInfo, wfname: &CStr) {
         sug_write(spin, fname.as_cstr());
     }
 
-    if free_slang {
-        unsafe { slang_free(slang) };
+    if let Some(id) = slot {
+        put_lang(id, slang);
     }
     spin.si_arena.clear();
     spin.si_spellbuf = None;
@@ -133,28 +125,20 @@ pub(super) fn spell_make_sugfile(spin: &mut SpellInfo, wfname: &CStr) {
 /// end is overwritten with the number of words in that sub-tree, which is
 /// what the suggestion search will later use to turn a position in the tree
 /// into a word number.
-///
-/// # Safety
-///
-/// `slang` must be a fully loaded language.
-unsafe fn sug_filltree(spin: &mut SpellInfo, slang: *mut SpellLang) -> Result<(), Failed> {
-    // SAFETY: the caller promises a loaded language; the walk is bounded by
-    // the byte counts the tree itself carries, and depth by MAXWLEN, which
-    // is the longest word the tree can hold.
+fn sug_filltree(spin: &mut SpellInfo, slang: &mut SpellLang) -> Result<(), Failed> {
+    // The walk is bounded by the byte counts the tree itself carries, and
+    // depth by MAXWLEN, which is the longest word the tree can hold.
     let mut arridx = [0usize; MAXWLEN];
     let mut curi = [0usize; MAXWLEN];
-    let mut tword: [c_char; MAXWLEN] = [0; MAXWLEN];
-    let mut tsalword: [c_char; MAXWLEN] = [0; MAXWLEN];
+    let mut tword = [0u8; MAXWLEN];
+    let mut tsalword = [0u8; MAXWLEN];
     let mut wordcount: [SpellIdx; MAXWLEN] = [0; MAXWLEN];
     let mut words_done: c_uint = 0;
 
     spin.si_foldroot = wordtree_alloc(spin);
     spin.si_sugtree = 1;
 
-    // SAFETY: the caller promises a loaded language. The borrow lasts the
-    // walk, which neither reloads nor frees it.
-    let tree = unsafe { &mut (*slang).sl_fold_tree };
-    if tree.is_empty() {
+    if slang.sl_fold_tree.is_empty() {
         return Err(Failed);
     }
 
@@ -164,12 +148,12 @@ unsafe fn sug_filltree(spin: &mut SpellInfo, slang: *mut SpellLang) -> Result<()
         if got_int.get() {
             break;
         }
-        if curi[depth] > tree.node_len(arridx[depth]) {
+        if curi[depth] > slang.sl_fold_tree.node_len(arridx[depth]) {
             // Done with this node: publish the sub-tree's word count
             // where its index used to be, and fold it into the parent.
             let at = arridx[depth];
             let total = wordcount[depth];
-            tree.idxs_mut()[at] = total;
+            slang.sl_fold_tree.idxs_mut()[at] = total;
             let at_root = depth == 0;
             if !at_root {
                 wordcount[depth - 1] += total;
@@ -184,11 +168,11 @@ unsafe fn sug_filltree(spin: &mut SpellInfo, slang: *mut SpellLang) -> Result<()
 
         let mut n = arridx[depth] + curi[depth];
         curi[depth] += 1;
-        if !tree.ends_word(n) {
+        if !slang.sl_fold_tree.ends_word(n) {
             // Descend one byte.
-            tword[depth] = tree.byte(n) as c_char;
+            tword[depth] = slang.sl_fold_tree.byte(n);
             depth += 1;
-            arridx[depth] = tree.child_node(n);
+            arridx[depth] = slang.sl_fold_tree.child_node(n);
             curi[depth] = 1;
             wordcount[depth] = 0;
             continue;
@@ -196,10 +180,10 @@ unsafe fn sug_filltree(spin: &mut SpellInfo, slang: *mut SpellLang) -> Result<()
 
         // A word end. Its number goes in through the flags and region
         // arguments, split across the two.
-        tword[depth] = NUL as c_char;
-        unsafe { spell_soundfold(slang, tword.as_mut_ptr(), true, tsalword.as_mut_ptr()) };
+        tword[depth] = 0;
+        spell_soundfold(slang, &tword, true, &mut tsalword);
         let foldroot = spin.si_foldroot;
-        let word = tsalword.as_ptr();
+        let word = tsalword.as_ptr().cast::<c_char>();
         let (hi, lo) = ((words_done >> 16) as c_int, (words_done & 0xffff) as c_int);
         unsafe { tree_add_word(spin, word, foldroot, hi, lo, 0) }?;
         words_done = words_done.wrapping_add(1);
@@ -211,7 +195,7 @@ unsafe fn sug_filltree(spin: &mut SpellInfo, slang: *mut SpellLang) -> Result<()
 
         // One word may end several times over, once per flag set; they
         // are the same word for this purpose.
-        while n + 1 < tree.len() && tree.ends_word(n + 1) {
+        while n + 1 < slang.sl_fold_tree.len() && slang.sl_fold_tree.ends_word(n + 1) {
             n += 1;
             curi[depth] += 1;
         }

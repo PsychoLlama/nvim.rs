@@ -156,12 +156,12 @@
 {"path":"neovim::fuzzy::FUZZY_SCORE_NONE","kind":"const","file":"crates/nvim/src/fuzzy.rs","tests":["crates/nvim/tests/unit/fuzzy.rs"]}
 {"path":"neovim::fuzzy::fuzzy_match","kind":"fn","file":"crates/nvim/src/fuzzy.rs","tests":["crates/nvim/tests/unit/fuzzy.rs"]}
 {"path":"neovim::garray::ga_append","kind":"fn","file":"crates/nvim/src/garray.rs","tests":["crates/nvim/tests/unit/garray.rs"]}
-{"path":"neovim::garray::ga_clear","kind":"fn","file":"crates/nvim/src/garray.rs","tests":["crates/nvim/tests/unit/fold.rs","crates/nvim/tests/unit/garray.rs","crates/nvim/tests/unit/spellfile.rs"]}
+{"path":"neovim::garray::ga_clear","kind":"fn","file":"crates/nvim/src/garray.rs","tests":["crates/nvim/tests/unit/fold.rs","crates/nvim/tests/unit/garray.rs"]}
 {"path":"neovim::garray::ga_clear_strings","kind":"fn","file":"crates/nvim/src/garray.rs","tests":["crates/nvim/tests/unit/garray.rs","crates/nvim/tests/unit/users.rs"]}
 {"path":"neovim::garray::ga_concat","kind":"fn","file":"crates/nvim/src/garray.rs","tests":["crates/nvim/tests/unit/garray.rs"]}
 {"path":"neovim::garray::ga_concat_strings","kind":"fn","file":"crates/nvim/src/garray.rs","tests":["crates/nvim/tests/unit/garray.rs"]}
-{"path":"neovim::garray::ga_grow","kind":"fn","file":"crates/nvim/src/garray.rs","tests":["crates/nvim/tests/unit/fold.rs","crates/nvim/tests/unit/garray.rs","crates/nvim/tests/unit/spellfile.rs"]}
-{"path":"neovim::garray::ga_init","kind":"fn","file":"crates/nvim/src/garray.rs","tests":["crates/nvim/tests/unit/fold.rs","crates/nvim/tests/unit/garray.rs","crates/nvim/tests/unit/spellfile.rs"]}
+{"path":"neovim::garray::ga_grow","kind":"fn","file":"crates/nvim/src/garray.rs","tests":["crates/nvim/tests/unit/fold.rs","crates/nvim/tests/unit/garray.rs"]}
+{"path":"neovim::garray::ga_init","kind":"fn","file":"crates/nvim/src/garray.rs","tests":["crates/nvim/tests/unit/fold.rs","crates/nvim/tests/unit/garray.rs"]}
 {"path":"neovim::garray::ga_remove_duplicate_strings","kind":"fn","file":"crates/nvim/src/garray.rs","tests":["crates/nvim/tests/unit/garray.rs"]}
 {"path":"neovim::grid::MAX_SCHAR_SIZE","kind":"const","file":"crates/nvim/src/grid/schar.rs","tests":["crates/nvim/tests/unit/mbyte.rs","crates/nvim/tests/unit/mbyte_oracle.rs","crates/nvim/tests/unit/optionstr_oracle.rs"]}
 {"path":"neovim::grid::schar_from_str","kind":"fn","file":"crates/nvim/src/grid/schar.rs","tests":["crates/nvim/tests/unit/statusline.rs"]}
@@ -485,8 +485,9 @@
 {"path":"neovim::sha256::hex_digest","kind":"fn","file":"crates/nvim/src/sha256.rs","tests":["crates/nvim/tests/unit/sha256.rs"]}
 {"path":"neovim::spell::REGION_ALL","kind":"const","file":"crates/nvim/src/spell/mod.rs","tests":["crates/nvim/tests/unit/spellfile.rs"]}
 {"path":"neovim::spell::init_spell_chartab","kind":"fn","file":"crates/nvim/src/spell/chartab.rs","tests":["crates/nvim/tests/unit/spellfile.rs"]}
-{"path":"neovim::spell::slang_free","kind":"fn","file":"crates/nvim/src/spell/slang.rs","tests":["crates/nvim/tests/unit/spellfile.rs"]}
+{"path":"neovim::spell::register_lang","kind":"fn","file":"crates/nvim/src/spell/slang.rs","tests":["crates/nvim/tests/unit/spellfile.rs"]}
 {"path":"neovim::spell::spell_check","kind":"fn","file":"crates/nvim/src/spell/check.rs","tests":["crates/nvim/tests/unit/spellfile.rs"]}
+{"path":"neovim::spell::take_lang","kind":"fn","file":"crates/nvim/src/spell/slang.rs","tests":["crates/nvim/tests/unit/spellfile.rs"]}
 {"path":"neovim::spellfile::mkspell","kind":"fn","file":"crates/nvim/src/spellfile/mod.rs","tests":["crates/nvim/tests/unit/spellfile.rs"]}
 {"path":"neovim::spellfile::spell_check_msm","kind":"fn","file":"crates/nvim/src/spellfile/mod.rs","tests":["crates/nvim/tests/unit/spellfile.rs"]}
 {"path":"neovim::spellfile::spell_load_file","kind":"fn","file":"crates/nvim/src/spellfile/read.rs","tests":["crates/nvim/tests/unit/spellfile.rs"]}

@@ -19,76 +19,60 @@
 //! Everything here works on words of at most [`MAXWLEN`] bytes and writes
 //! into a caller-owned `res` buffer of that size.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::cstr;
 use crate::winlayer::Win;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
-use crate::mbyte::{utf_char2bytes, utf_class, utf_ptr2char, utf_ptr2len};
+use crate::mbyte::{char_at, char_len, encode_char, utf_class};
 use crate::memory::XString;
-use crate::types::{LangP, MB_MAXBYTES, NUL, SpellLang};
+use crate::types::{MB_MAXBYTES, NUL, SpellLang};
 
-use super::MAXWLEN;
 use super::chartab::{spell_casefold, spell_iswordp_nmw, spell_iswordp_w};
+use super::{MAXWLEN, loaded_langs};
 use crate::optionstr::OptString;
 
 /// `soundfold()`: the sound-fold of `word` in the first of the window's
 /// languages that has a sound-folding table, or a copy of `word` itself
 /// when spell checking is off or no language defines one.
 pub fn eval_soundfold(word: &CStr) -> XString {
-    let win = Win::current_raw();
-    if unsafe { (*win).w_onebuf_opt.wo_spell } != 0
-        && unsafe { (*(*win).w_s).b_p_spl.first_byte() } != 0
-    {
-        // SAFETY: `win` is the current window; its syntax block is live.
-        let langp = unsafe { &(*(*win).w_s).b_langp };
-        for lpi in 0..langp.ga_len {
-            let lp = unsafe { (langp.ga_data as *mut LangP).offset(lpi as isize) };
-            if unsafe { (*(*lp).lp_slang).has_soundfold() } {
-                let mut sound = [0 as c_char; MAXWLEN];
-                let slang = unsafe { (*lp).lp_slang };
-                let out = sound.as_mut_ptr();
-                // SAFETY: a live language of the window's, a terminated word
-                // the fold only reads, and a buffer of `MAXWLEN` it fills.
-                unsafe { spell_soundfold(slang, word.as_ptr().cast_mut(), false, out) };
-                return XString::from_bytes(cstr::in_chars(&sound).to_bytes());
-            }
+    let win = Win::current();
+    if win.w_onebuf_opt.wo_spell != 0 && win.syn_block().b_p_spl.first_byte() != 0 {
+        let folded = loaded_langs.with(|langs| {
+            win.syn_block().b_langp.iter().find_map(|lp| {
+                let slang = langs.get(lp.slang)?;
+                slang.has_soundfold().then(|| {
+                    let mut sound = [0u8; MAXWLEN];
+                    spell_soundfold(slang, word.to_bytes(), false, &mut sound);
+                    XString::from_bytes(crate::cstr::in_bytes(&sound).to_bytes())
+                })
+            })
+        });
+        if let Some(folded) = folded {
+            return folded;
         }
     }
     XString::from_bytes(word.to_bytes())
 }
 
-/// Sound-fold `inword` into `res` using `slang`'s scheme.
+/// Sound-fold `inword` into `res` using `slang`'s scheme, NUL terminated.
+/// At most [`MAXWLEN`] bytes of `res` are used.
 ///
 /// `folded` says whether `inword` has already been case-folded; the SAL
 /// rules are written against folded text, so an unfolded word is folded
 /// here first. The SOFO scheme folds case as part of its mapping and does
-/// not care.
-///
-/// # Safety
-///
-/// `slang` must point at a live `SpellLang`, unaliased for the call. `inword`
-/// must point at a NUL-terminated string, unaliased for the call. `res` must
-/// point at a NUL-terminated string, unaliased for the call.
-pub unsafe fn spell_soundfold(
-    slang: *mut SpellLang,
-    inword: *mut c_char,
-    folded: bool,
-    res: *mut c_char,
-) {
-    if unsafe { (*slang).sl_sofo } {
-        unsafe { spell_soundfold_sofo(slang, inword, res) };
+/// not care. `inword` ends at its end or at a NUL, whichever comes first.
+pub fn spell_soundfold(slang: &SpellLang, inword: &[u8], folded: bool, res: &mut [u8]) {
+    let inword = crate::cstr::until_nul(inword);
+    if slang.sl_sofo {
+        spell_soundfold_sofo(slang, inword, res);
     } else if folded {
-        unsafe { spell_soundfold_wsal(slang, inword, res) };
+        spell_soundfold_wsal(slang, inword, res);
     } else {
-        let mut fword = [0 as c_char; MAXWLEN];
-        let (win, out) = (Win::current(), fword.as_mut_ptr());
-        let len = unsafe { cstr::bytes_at(inword) }.len() as c_int;
-        let _ = unsafe { spell_casefold(win, inword, len, out, MAXWLEN as c_int) };
-        unsafe { spell_soundfold_wsal(slang, fword.as_ptr(), res) };
+        let mut fword = [0u8; MAXWLEN];
+        let _ = spell_casefold(Win::current(), inword, inword.len(), &mut fword);
+        spell_soundfold_wsal(slang, crate::cstr::until_nul(&fword), res);
     }
 }
 
@@ -99,27 +83,22 @@ pub unsafe fn spell_soundfold(
 /// Characters below 256 are looked up in the flat `sl_sal_first` table.
 /// Wider ones select a list by their low byte, where the reader left a
 /// zero-terminated run of from/to pairs to scan.
-///
-/// # Safety
-///
-/// `slang` must point at a live `SpellLang`, unaliased for the call. `inword`
-/// must point at a NUL-terminated string. `res` must point at a NUL-
-/// terminated string, unaliased for the call.
-unsafe fn spell_soundfold_sofo(slang: *mut SpellLang, inword: *const c_char, res: *mut c_char) {
+fn spell_soundfold_sofo(slang: &SpellLang, inword: &[u8], res: &mut [u8]) {
     let mut ri = 0;
     let mut prevc = 0;
-    let mut s = inword;
-    while unsafe { *s } != 0 {
-        let mut c = unsafe { utf_ptr2char(s) };
-        s = s.wrapping_add(unsafe { utf_ptr2len(s) } as usize);
+    let mut s = 0;
+    while s < inword.len() {
+        let rest = &inword[s..];
+        let mut c = char_at(rest);
+        s += char_len(rest);
         if utf_class(c) == 0 {
             c = ' ' as c_int;
         } else if c < 256 {
-            c = unsafe { (*slang).sl_sal_first[c as usize] };
+            c = slang.sl_sal_first[c as usize];
         } else {
-            // SAFETY: the caller's language; the scheme's table has one
-            // entry per low byte, and each list ends in a zero.
-            let list = &unsafe { &(*slang).sl_sofo_map }[(c & 0xff) as usize];
+            // The scheme's table has one entry per low byte, and each list
+            // ends in a zero.
+            let list = &slang.sl_sofo_map[(c & 0xff) as usize];
             c = list
                 .as_chunks::<2>()
                 .0
@@ -130,14 +109,14 @@ unsafe fn spell_soundfold_sofo(slang: *mut SpellLang, inword: *const c_char, res
         }
 
         if c != NUL && c != prevc {
-            ri += unsafe { utf_char2bytes(c, res.offset(ri as isize)) };
-            if ri + MB_MAXBYTES as c_int > MAXWLEN as c_int {
+            ri += encode_char(c, &mut res[ri..]);
+            if ri + MB_MAXBYTES > MAXWLEN {
                 break;
             }
             prevc = c;
         }
     }
-    unsafe { *res.offset(ri as isize) = NUL as c_char };
+    res[ri] = 0;
 }
 
 /// The SAL scheme, ported from Aspell's `phonet.cpp` by way of Vim.
@@ -172,12 +151,7 @@ unsafe fn spell_soundfold_sofo(slang: *mut SpellLang, inword: *const c_char, res
 /// character the match already compared against the word and found
 /// non-NUL, or the NUL that terminates it, so no index passes `wordlen`.
 ///
-/// # Safety
-///
-/// `slang` must point at a live `SpellLang`, unaliased for the call. `inword`
-/// must point at a NUL-terminated string. `res` must point at a NUL-
-/// terminated string, unaliased for the call.
-unsafe fn spell_soundfold_wsal(slang: *mut SpellLang, inword: *const c_char, res: *mut c_char) {
+fn spell_soundfold_wsal(slang: &SpellLang, inword: &[u8], res: &mut [u8]) {
     // `spell_iswordp*` answer for a window's `'iskeyword'`, and this whole
     // body runs in one: read the current one once.
     let win = Win::current();
@@ -186,12 +160,12 @@ unsafe fn spell_soundfold_wsal(slang: *mut SpellLang, inword: *const c_char, res
     let mut word = [0 as c_int; MAXWLEN];
     let mut wordlen = 0usize;
     let mut did_white = false;
-    let mut s = inword;
-    while unsafe { *s } != 0 {
-        let t = s;
-        let mut c = unsafe { utf_ptr2char(s) };
-        s = s.wrapping_add(unsafe { utf_ptr2len(s) } as usize);
-        if unsafe { (*slang).sl_rem_accents } {
+    let mut s = 0;
+    while s < inword.len() {
+        let t = &inword[s..];
+        let mut c = char_at(t);
+        s += char_len(t);
+        if slang.sl_rem_accents {
             if utf_class(c) == 0 {
                 if did_white {
                     continue;
@@ -200,7 +174,7 @@ unsafe fn spell_soundfold_wsal(slang: *mut SpellLang, inword: *const c_char, res
                 did_white = true;
             } else {
                 did_white = false;
-                if !unsafe { spell_iswordp_nmw(t, win) } {
+                if !spell_iswordp_nmw(t, win) {
                     continue;
                 }
             }
@@ -210,8 +184,7 @@ unsafe fn spell_soundfold_wsal(slang: *mut SpellLang, inword: *const c_char, res
     }
     word[wordlen] = NUL;
 
-    // SAFETY: the caller's language, which stays loaded for the fold.
-    let smp = unsafe { &(*slang).sl_sal };
+    let smp = &slang.sl_sal;
     let mut wres = [0 as c_int; MAXWLEN];
     let mut reslen = 0usize;
 
@@ -231,7 +204,7 @@ unsafe fn spell_soundfold_wsal(slang: *mut SpellLang, inword: *const c_char, res
         // Rules are grouped by the low byte of their first character. For
         // a character like 0x300 that byte is NUL, so the run's end has
         // to be recognised by the sentinel entry as well.
-        let mut n = unsafe { (*slang).sl_sal_first[(c & 0xff) as usize] };
+        let mut n = slang.sl_sal_first[(c & 0xff) as usize];
         let mut z0 = 0;
 
         if n >= 0 {
@@ -292,12 +265,12 @@ unsafe fn spell_soundfold_wsal(slang: *mut SpellLang, inword: *const c_char, res
                     let at_word_start = rules[0] == b'^'
                         && (i == 0
                             || !(word[i - 1] == ' ' as c_int
-                                || unsafe { spell_iswordp_w(&word[i - 1..], win) }))
-                        && (rules[1] != b'$' || !unsafe { spell_iswordp_w(&word[i + k0..], win) });
+                                || spell_iswordp_w(&word[i - 1..], win)))
+                        && (rules[1] != b'$' || !spell_iswordp_w(&word[i + k0..], win));
                     let at_word_end = rules[0] == b'$'
                         && i > 0
-                        && unsafe { spell_iswordp_w(&word[i - 1..], win) }
-                        && !unsafe { spell_iswordp_w(&word[i + k0..], win) };
+                        && spell_iswordp_w(&word[i - 1..], win)
+                        && !spell_iswordp_w(&word[i + k0..], win);
                     if !(rules[0] == NUL as u8 || at_word_start || at_word_end) {
                         break 'next_rule;
                     }
@@ -305,8 +278,8 @@ unsafe fn spell_soundfold_wsal(slang: *mut SpellLang, inword: *const c_char, res
                     // A longer rule starting at this match's last
                     // character wins if its priority is at least as high.
                     let c0 = word[i + k - 1];
-                    let mut n0 = unsafe { (*slang).sl_sal_first[(c0 & 0xff) as usize] };
-                    if unsafe { (*slang).sl_followup }
+                    let mut n0 = slang.sl_sal_first[(c0 & 0xff) as usize];
+                    if slang.sl_followup
                         && k > 1
                         && n0 >= 0
                         && p0 != '-' as c_int
@@ -369,8 +342,7 @@ unsafe fn spell_soundfold_wsal(slang: *mut SpellLang, inword: *const c_char, res
 
                                 // A '^' rule never cuts the current match.
                                 if frules[0] == NUL as u8
-                                    || (frules[0] == b'$'
-                                        && !unsafe { spell_iswordp_w(&word[i + k0..], win) })
+                                    || (frules[0] == b'$' && !spell_iswordp_w(&word[i + k0..], win))
                                 {
                                     // Same length means the follow-up is
                                     // only a piece of this match.
@@ -459,7 +431,7 @@ unsafe fn spell_soundfold_wsal(slang: *mut SpellLang, inword: *const c_char, res
                 && p0 == 0
                 && reslen < MAXWLEN
                 && c != NUL
-                && (!unsafe { (*slang).sl_collapse } || reslen == 0 || wres[reslen - 1] != c)
+                && (!slang.sl_collapse || reslen == 0 || wres[reslen - 1] != c)
             {
                 wres[reslen] = c;
                 reslen += 1;
@@ -472,10 +444,10 @@ unsafe fn spell_soundfold_wsal(slang: *mut SpellLang, inword: *const c_char, res
 
     let mut l = 0;
     for &wc in &wres[..reslen] {
-        l += unsafe { utf_char2bytes(wc, res.offset(l as isize)) };
-        if l + MB_MAXBYTES as c_int > MAXWLEN as c_int {
+        l += encode_char(wc, &mut res[l..]);
+        if l + MB_MAXBYTES > MAXWLEN {
             break;
         }
     }
-    unsafe { *res.offset(l as isize) = NUL as c_char };
+    res[l] = 0;
 }

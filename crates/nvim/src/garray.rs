@@ -132,12 +132,6 @@ unsafe fn cbytes<'a>(s: *const c_char) -> &'a [u8] {
     unsafe { CStr::from_ptr(s) }.to_bytes()
 }
 
-/// [`ga_clear`] of an array the caller holds: a `GArray` owns its `ga_data`.
-pub(crate) fn ga_free(gap: &mut GArray) {
-    // SAFETY: a live array, whose data is its own allocation or null.
-    unsafe { ga_clear(gap) }
-}
-
 /// Release the array's storage and reset it to empty. The items themselves
 /// are the caller's (see [`ga_clear_strings`] for the `char *` case).
 ///

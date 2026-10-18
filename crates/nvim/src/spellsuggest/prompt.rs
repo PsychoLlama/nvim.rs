@@ -202,14 +202,16 @@ fn move_to_bad_word(prev_cursor: Pos) -> Option<c_int> {
     let curline = get_cursor_line_ptr();
     let mut p = unsafe { curline.offset(Win::current().w_cursor.col as isize) };
     // Back up to before the start of the word...
-    while p > curline && unsafe { spell_iswordp_nmw(p, Win::current()) } {
+    while p > curline && spell_iswordp_nmw(unsafe { cstr::bytes_at(p) }, Win::current()) {
         p = unsafe { p.sub(utf_head_off(curline, p.sub(1)) as usize + 1) };
     }
     // ...then forward to its start.
-    while unsafe { *p } as c_int != NUL && !unsafe { spell_iswordp_nmw(p, Win::current()) } {
+    while unsafe { *p } as c_int != NUL
+        && !spell_iswordp_nmw(unsafe { cstr::bytes_at(p) }, Win::current())
+    {
         p = unsafe { p.add(utfc_ptr2len(p) as usize) };
     }
-    if !unsafe { spell_iswordp_nmw(p, Win::current()) } {
+    if !spell_iswordp_nmw(unsafe { cstr::bytes_at(p) }, Win::current()) {
         beep_flush(); // no word at all
         return None;
     }

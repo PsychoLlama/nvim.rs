@@ -40,7 +40,7 @@ use crate::memline::ml_get_buf;
 use crate::memory::{xfree, xmalloc};
 use crate::message::internal_error;
 use crate::spell::WordFlags;
-use crate::spell::{allcap_copy, make_case_word, spell_soundfold};
+use crate::spell::{allcap_copy, lang_ptr, make_case_word, spell_soundfold};
 use crate::spellsuggest::collect::add_suggestion;
 use crate::spellsuggest::score::{
     EMPTY_SOUND, score_wordcount_adj, spell_edit_score, spell_edit_score_limit, spell_isupper,
@@ -85,9 +85,10 @@ pub(super) fn suggest_try_soundalike_prep() {
     for lp in unsafe { crate::spellsuggest::window_langs() } {
         // SAFETY: `lp` came out of the window's language list, so
         // `lp_slang` is a loaded language -- what both calls here need.
-        if unsafe { has_sound_tree(lp.lp_slang) } {
-            // SAFETY: as above; `slang_alloc` set the table up.
-            hash_reset(unsafe { &mut (*lp.lp_slang).sl_sounddone });
+        let slang = lang_ptr(lp.slang);
+        if unsafe { has_sound_tree(slang) } {
+            // SAFETY: as above; the language's constructor set the table up.
+            hash_reset(unsafe { &mut (*slang).sl_sounddone });
         }
     }
 }
@@ -105,17 +106,21 @@ pub(super) unsafe fn suggest_try_soundalike(su: *mut SugInfo) {
     for lp in unsafe { crate::spellsuggest::window_langs() } {
         // SAFETY: `lp` came out of the window's language list, so
         // `lp_slang` is a loaded language.
-        if !unsafe { has_sound_tree(lp.lp_slang) } {
+        let slang = lang_ptr(lp.slang);
+        if !unsafe { has_sound_tree(slang) } {
             continue;
         }
         let mut salword = EMPTY_SOUND;
-        // SAFETY: `su` is valid by the contract above, so the address of
-        // its `su_fbadword` field is too.
-        let fbadword = unsafe { &raw mut (*su).su_fbadword } as *mut c_char;
-        // SAFETY: `fbadword` is the bad word's NUL-terminated fold and
-        // `salword` has room for `MAXWLEN` bytes, which is what
-        // `spell_soundfold` writes at most.
-        unsafe { spell_soundfold(lp.lp_slang, fbadword, true, salword.as_mut_ptr()) };
+        // SAFETY: `su` is valid by the contract above, so its
+        // `su_fbadword` is the bad word's NUL-terminated fold; `slang`
+        // came out of the window's language list.
+        let (slang, fbadword) = unsafe { (&*slang, &(*su).su_fbadword) };
+        spell_soundfold(
+            slang,
+            cstr::as_bytes(fbadword),
+            true,
+            cstr::as_bytes_mut(&mut salword),
+        );
         // The same walker as the edit-distance search, told to treat
         // the tree it walks as sounds rather than letters.
         //
@@ -129,7 +134,7 @@ pub(super) unsafe fn suggest_try_soundalike(su: *mut SugInfo) {
 pub(super) fn suggest_try_soundalike_finish() {
     // SAFETY: by the contract above, the window's languages are loaded.
     for lp in unsafe { crate::spellsuggest::window_langs() } {
-        let slang = lp.lp_slang;
+        let slang = lang_ptr(lp.slang);
         // SAFETY: `slang` came out of the window's language list.
         if !unsafe { has_sound_tree(slang) } {
             continue;
@@ -198,7 +203,7 @@ pub(super) unsafe fn add_sound_suggest(
     langp: *mut LangP,
 ) {
     // SAFETY: `langp` is valid by the contract above.
-    let slang = unsafe { (*langp).lp_slang };
+    let slang = lang_ptr(unsafe { (*langp).slang });
 
     // The same soundfold turns up many times with different scores and
     // what follows is slow, so only the best score for each is done.
@@ -384,7 +389,11 @@ unsafe fn emit_word(
             flags |= unsafe { (*su).su_badflags };
             if flags.has(WordFlags::CAPMASK) {
                 // SAFETY: as for `find_keepcap_word` above.
-                unsafe { make_case_word(theword.as_mut_ptr(), cword.as_mut_ptr(), flags) };
+                make_case_word(
+                    cstr::as_bytes(&theword[..]),
+                    cstr::as_bytes_mut(&mut cword),
+                    flags,
+                );
                 cword.as_mut_ptr()
             } else {
                 theword.as_mut_ptr()
@@ -408,7 +417,7 @@ unsafe fn emit_word(
         //
         // SAFETY: `langp` is valid by the contract above.
         let mut goodscore = if flags.has(WordFlags::REGION)
-            && (flags.bits() as u32 >> 16) & unsafe { (*langp).lp_region } as u32 == 0
+            && (flags.bits() as u32 >> 16) & unsafe { (*langp).region } as u32 == 0
         {
             SCORE_REGION
         } else {
@@ -584,9 +593,12 @@ pub(super) unsafe fn find_keepcap_word(
     }
 
     let mut uword = [0 as c_char; MAXWLEN];
-    // SAFETY: `fword` is NUL-terminated and `uword` has room for `MAXWLEN`
+    // SAFETY: `fword` is NUL-terminated; `uword` has room for `MAXWLEN`
     // bytes, which bounds what the upper-cased copy can grow to.
-    unsafe { allcap_copy(fword, uword.as_mut_ptr()) };
+    allcap_copy(
+        unsafe { cstr::bytes_at(fword) },
+        cstr::as_bytes_mut(&mut uword),
+    );
 
     let mut stack = [KeepCapLevel::default(); MAXWLEN];
     let mut depth: isize = 0;

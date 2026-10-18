@@ -20,8 +20,6 @@ use crate::semsg;
 use crate::winlayer::Win;
 use core::ffi::c_int;
 
-use crate::types::GArray;
-
 use super::*;
 
 /// Clear all syntax info for one block.
@@ -100,9 +98,9 @@ impl SynBlock {
             b_syn_folditems: 0,
             b_sst: StateCache::new(),
             b_sst_lasttick: 0,
-            b_langp: GArray::EMPTY,
+            b_langp: Vec::new(),
             b_spell_ismw: [false; 256],
-            b_spell_ismw_mb: ::core::ptr::null_mut(),
+            b_spell_ismw_mb: Vec::new(),
             b_p_spc: None,
             b_cap_prog: None,
             b_p_spf: None,

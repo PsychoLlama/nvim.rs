@@ -177,7 +177,6 @@ typedef struct VTermStateFallbacks VTermStateFallbacks;
 typedef struct VTermStateFields VTermStateFields;
 typedef struct VTermStringFragment VTermStringFragment;
 typedef union VTermValue VTermValue;
-typedef struct WordCount WordCount;
 typedef struct addrinfo addrinfo;
 typedef struct luaL_Buffer luaL_Buffer;
 typedef struct luaL_Reg luaL_Reg;
@@ -1339,10 +1338,6 @@ union VTermValue {
   int number;
   VTermStringFragment string;
   VTermColor color;
-};
-struct WordCount {
-  uint16_t wc_count;
-  char wc_word[0];
 };
 struct addrinfo {
   int ai_flags;

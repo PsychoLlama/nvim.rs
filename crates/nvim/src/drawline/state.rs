@@ -174,7 +174,7 @@ pub(crate) const SPELL_LOOKAHEAD: usize = SPWORDLEN as usize;
 /// The next line arrives at offset [`SPWORDLEN`] and the two halves are then
 /// joined at [`LineSetup::nextline_idx`]. Lives in `win_line`'s frame — too
 /// large to hand over by value.
-pub(crate) type SpellLookahead = [::core::ffi::c_char; SPELL_LOOKAHEAD * 2];
+pub(crate) type SpellLookahead = [u8; SPELL_LOOKAHEAD * 2];
 
 /// What the setup half tells the character loop.
 ///

@@ -395,7 +395,7 @@ impl Cells {
             return;
         }
 
-        let mut spell_hlf: Hlf = HLF_COUNT;
+        let mut spell_hlf: Hlf;
         at -= self.char_len - 1;
 
         // Use the look-ahead buffer where it reaches: it carries the start
@@ -409,15 +409,22 @@ impl Cells {
         };
 
         unsafe { (*f.spv).spv_cap_col -= prev_at as ::core::ffi::c_int };
-        let tmplen = unsafe {
-            spell_check(
-                window,
-                p,
-                &raw mut spell_hlf,
-                &raw mut (*f.spv).spv_cap_col,
-                (*f.spv).spv_unchanged,
+        // The text to the end of the buffer it is in, terminator included:
+        // the look-ahead buffer, or the line.
+        let room = if p == prev_ptr {
+            ml_get_buf_len(window.buffer(), wlv.lnum) as usize + 1 - prev_at as usize
+        } else {
+            SPELL_LOOKAHEAD * 2 - (prev_at - self.nextlinecol as isize) as usize
+        };
+        let (text, spv) = unsafe {
+            (
+                ::core::slice::from_raw_parts(p.cast::<u8>(), room),
+                &mut *f.spv,
             )
         };
+        let tmplen;
+        (tmplen, spell_hlf) =
+            spell_check(window, text, Some(&mut spv.spv_cap_col), spv.spv_unchanged);
         debug_assert!(tmplen <= ::core::ffi::c_int::MAX as size_t);
         let len = tmplen as ::core::ffi::c_int;
         self.word_end = at + len;

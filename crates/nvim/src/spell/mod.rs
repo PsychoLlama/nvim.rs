@@ -28,23 +28,21 @@
 //! [`ex_spellrepall`], which belongs to neither half: it is the `z=`
 //! replacement applied to the rest of the buffer.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::cstr;
+use crate::memline::Lines;
 use crate::memory::XString;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::types::TAB;
 use crate::winlayer::Win;
 use core::ffi::CStr;
-use core::ffi::{c_char, c_int, c_uint};
-use core::slice;
+use core::ffi::{c_int, c_uint};
+use std::borrow::Cow;
 
 use crate::change::inserted_bytes;
-use crate::cursor::get_cursor_line_ptr;
 use crate::ex_cmds::do_sub_msg;
 use crate::ex_cmds::{SUB_NLINES, SUB_NSUBS};
 use crate::getchar::state::got_int;
@@ -55,7 +53,7 @@ use crate::option::vars::{P_WS, p_ws};
 use crate::os::cshim::gettext;
 use crate::search::{SEARCH_KEEP, do_search};
 use crate::types::{
-    ColNr, ExArg, FileComparison, LangP, LineNr, Pos, SpellLang, SpellMoveType, SpellTab, size_t,
+    ColNr, ExArg, FileComparison, LangId, LangP, LineNr, Pos, SpellLang, SpellMoveType, SpellTab,
     uint8_t,
 };
 use crate::undo::u_save_cursor;
@@ -75,13 +73,11 @@ pub use chartab::{
     nofold_len, onecap_copy, spell_casefold, spell_iswordp, spell_iswordp_nmw,
 };
 pub(crate) use chartab::{spelltab_fold, spelltab_isu, spelltab_isw, spelltab_upper};
-pub(crate) use check::spell_check_text;
 pub use check::{
     check_need_cap, expand_spelling, no_spell_checking, spell_check, spell_check_window,
     spell_expand_check_cap, spell_to_word_end, spell_valid_case, spell_word_start,
 };
 pub use dump::{ex_spelldump, ex_spellinfo, spell_dump_compl};
-pub(crate) use lang::compile_cap_prog_in;
 pub use lang::{
     compile_cap_prog, did_set_spell_option, parse_spelllang, spell_delete_wordlist, spell_enc,
     spell_free_all, spell_reload, valid_spellfile, valid_spelllang,
@@ -89,9 +85,12 @@ pub use lang::{
 pub use lookup::{can_compound, match_checkcompoundpattern, match_compoundrule, valid_word_prefix};
 pub use navigate::{spell_cat_line, spell_move_to};
 use slang::count_syllables;
+pub(crate) use slang::{
+    LoadedLangs, lang_ptr, lang_ptr_opt, languages, loaded_langs, put_lang, with_lang,
+};
 pub use slang::{
-    SpellBuf, count_common_word, init_syl_tab, open_spellbuf, slang_alloc, slang_clear,
-    slang_clear_sug, slang_free,
+    SpellBuf, count_common_word, init_syl_tab, open_spellbuf, register_lang, slang_clear,
+    slang_clear_sug, take_lang,
 };
 pub use soundfold::{eval_soundfold, spell_soundfold};
 pub(crate) use wordtree::Tree;
@@ -206,112 +205,140 @@ pub const CHAR_DIGIT: CharType = 2;
 
 /// The longest `SYLLABLE` item.
 pub const SY_MAXLEN: c_int = 30;
-/// A `WordCount`'s key starts this far into it, so a hash item's key
-/// pointer can be walked back to the struct. Derived from the type rather
-/// than spelled out: the word-count table stores the record and hashes on
-/// the inline `wc_word`, so a wrong value here is a wild pointer.
-pub const WC_KEY_OFF: usize = ::core::mem::offset_of!(crate::types::WordCount, wc_word);
-
 /// State threaded through one word's lookup, so that the tree walk and the
 /// compound recursion can pass it around in one piece rather than a dozen
 /// arguments.
 ///
-/// Four of its fields are positions *inside* the word being checked and one
-/// names the window the language came from; the tree walk reads through all
-/// five without checking any of them, which is why the only way to start one
-/// is [`MatchInf::new`], an `unsafe fn` that says what they have to be. The
-/// walk then moves them within the word it was given, and that is safe.
-pub(crate) struct MatchInf {
-    /// The language being tried.
-    pub mi_lp: *mut LangP,
-    /// The word as written, at its first character.
-    pub mi_word: *mut c_char,
+/// Positions in the word are offsets into [`MatchInf::word`], the text from
+/// the word's first character to the end of its string.
+pub(crate) struct MatchInf<'a> {
+    /// The language table the window's entries name.
+    pub langs: &'a LoadedLangs,
+    /// The window's languages.
+    pub langp: &'a [LangP],
+    /// The entry being tried,
+    pub lp: LangP,
+    /// and its language, when its slot holds one.
+    pub slang: Option<&'a SpellLang>,
+    /// The word as written, from its first character on.
+    pub word: &'a [u8],
     /// One past the last character accepted so far.
-    pub mi_end: *mut c_char,
-    /// How far the case folding into `mi_fword` has reached.
-    pub mi_fend: *mut c_char,
-    /// The word length `mi_capflags` was computed for.
-    pub mi_cend: *mut c_char,
+    pub end: usize,
+    /// How far the case folding into `fword` has reached.
+    pub fend: usize,
+    /// The word length `capflags` was computed for.
+    pub cend: Option<usize>,
     /// The case-folded word.
-    pub mi_fword: [c_char; MAXWLEN + 1],
-    pub mi_fwordlen: c_int,
+    pub fword: [u8; MAXWLEN + 1],
+    pub fwordlen: c_int,
     /// Where in the language's prefix tree the candidate prefixes start,
-    pub mi_prefarridx: usize,
+    pub prefarridx: usize,
     /// and how many there are.
-    pub mi_prefcnt: c_int,
+    pub prefcnt: c_int,
     /// The prefix's length, folded and as written.
-    pub mi_prefixlen: c_int,
-    pub mi_cprefixlen: c_int,
+    pub prefixlen: c_int,
+    pub cprefixlen: c_int,
     /// Where the next compound part begins.
-    pub mi_compoff: c_int,
+    pub compoff: c_int,
     /// The flag of each compound part used so far.
-    pub mi_compflags: [uint8_t; MAXWLEN],
-    pub mi_complen: c_int,
+    pub compflags: [uint8_t; MAXWLEN],
+    pub complen: c_int,
     /// How many of those parts were COMPOUNDROOT.
-    pub mi_compextra: c_int,
+    pub compextra: c_int,
     /// The best result so far, and the capitalisation it assumed.
-    pub mi_result: SpellResult,
-    pub mi_capflags: WordFlags,
-    /// The window the lookup is for, taken live by [`MatchInf::new`]; the
-    /// state lives no longer than the lookup that built it.
-    pub mi_win: Win,
+    pub result: SpellResult,
+    pub capflags: WordFlags,
+    /// The window the lookup is for.
+    pub win: Win,
     /// For NOBREAK: the best result reached *without* a good word
     /// following, kept as a fall-back.
-    pub mi_result2: SpellResult,
-    pub mi_end2: *mut c_char,
+    pub result2: SpellResult,
+    pub end2: usize,
 }
 
-impl MatchInf {
-    /// The state for checking `word` in `win`, with the walk at the word's
-    /// first character and nothing accepted yet.
-    ///
-    /// # Safety
-    ///
-    /// `word` must point at a NUL-terminated string that outlives the
-    /// lookup and is not written while it runs: `mi_end`/`mi_fend`/`mi_cend`
-    /// are positions inside it, and every step of the walk dereferences them
-    /// without a bound of its own. `win` must be the window whose
-    /// `'spelllang'` the languages tried came from -- the walk reads its
-    /// buffer's spell settings and its `w_s` synblock.
-    pub(crate) unsafe fn new(word: *mut c_char, win: Win) -> Self {
-        // The remaining forty-odd fields are counters, flags and the
-        // case-folded scratch word, all of which start at zero; upstream
-        // built this state with `memset`.
-        let mut mi: MatchInf = unsafe { ::core::mem::zeroed() };
-        mi.mi_word = word;
-        mi.mi_end = word;
-        mi.mi_fend = word;
-        mi.mi_win = win;
-        mi
+impl<'a> MatchInf<'a> {
+    /// The state for checking `word` in `win`, whose languages are `langp`
+    /// in `langs`, with the walk at the word's first character and nothing
+    /// accepted yet. The language being tried is set per language.
+    pub(crate) fn new(
+        word: &'a [u8],
+        win: Win,
+        langs: &'a LoadedLangs,
+        langp: &'a [LangP],
+    ) -> Self {
+        MatchInf {
+            langs,
+            langp,
+            lp: LangP {
+                slang: LangId(u32::MAX),
+                sallang: None,
+                replang: None,
+                region: 0,
+            },
+            slang: None,
+            word,
+            end: 0,
+            fend: 0,
+            cend: None,
+            fword: [0; MAXWLEN + 1],
+            fwordlen: 0,
+            prefarridx: 0,
+            prefcnt: 0,
+            prefixlen: 0,
+            cprefixlen: 0,
+            compoff: 0,
+            compflags: [0; MAXWLEN],
+            complen: 0,
+            compextra: 0,
+            result: 0,
+            capflags: WordFlags::NONE,
+            win,
+            result2: 0,
+            end2: 0,
+        }
+    }
+}
+
+/// Whether the C strings `a` and `b` agree in their first `n` bytes:
+/// `strncmp(a, b, n) == 0`, with the end of a slice reading as its NUL.
+pub(crate) fn strn_eq(a: &[u8], b: &[u8], n: usize) -> bool {
+    for i in 0..n {
+        let (x, y) = (crate::cstr::byte_at(a, i), crate::cstr::byte_at(b, i));
+        if x != y {
+            return false;
+        }
+        if x == 0 {
+            break;
+        }
+    }
+    true
+}
+
+/// `text` as a C string for the regexp engine: up to its first NUL, copied
+/// only when it has none.
+pub(crate) fn c_text(text: &[u8]) -> Cow<'_, CStr> {
+    match CStr::from_bytes_until_nul(text) {
+        Ok(terminated) => Cow::Borrowed(terminated),
+        Err(_) => Cow::Owned(crate::cstr::owned(text)),
     }
 }
 
 /// One `SYLLABLE` item: a short sequence of characters counting as one
 /// syllable.
 pub struct SylItem {
-    pub sy_chars: [c_char; SY_MAXLEN as usize],
-    pub sy_len: c_int,
+    pub sy_chars: Box<[u8]>,
 }
 
 /// The cookie `do_in_runtimepath` carries while loading a language.
 pub struct SpellLoad {
-    /// The language name, truncated when an error is found.
-    pub sl_lang: [c_char; MAXWLEN + 1],
+    /// The language name, cleared when an error is found.
+    pub lang: Vec<u8>,
     /// The last file loaded.
-    pub sl_slang: *mut SpellLang,
+    pub last: Option<LangId>,
     /// Whether any file so far declared NOBREAK.
-    pub sl_nobreak: c_int,
+    pub nobreak: bool,
 }
 
-/// Every language loaded, newest first. Each is an allocation of
-/// `slang_alloc`'s, freed by `spell_free_all`; windows' `LangP` rows hold
-/// their addresses, which is why they are not moved into the vector.
-pub(crate) static loaded_langs: GlobalCell<Vec<*mut SpellLang>> = GlobalCell::new(Vec::new());
-
-/// A copy of [`loaded_langs`] to walk: a walk may load another language.
-pub(crate) fn languages() -> Vec<*mut SpellLang> {
-    loaded_langs.with(Clone::clone)
-}
 /// The word list `zg` appends to when `'spellfile'` is empty.
 pub static int_wordlist: GlobalCell<Option<XString>> = GlobalCell::new(None);
 
@@ -377,23 +404,20 @@ pub fn ex_spellrepall(_excmd: &mut ExArg) {
 
         // Only replace where the replacement is not already there. That
         // happens when changing "etc" to "etc.".
-        let line = get_cursor_line_ptr();
         let col = Win::current().w_cursor.col;
-        if addlen <= 0
-            || !(unsafe {
-                cstr::prefix_eq(line.offset(col as isize), repl_to.as_ptr(), repl_to_len)
-            })
-        {
-            // SAFETY: the cursor line is NUL-terminated and at least `col`
-            // bytes long, the replaced word is `repl_from_len` of its bytes,
-            // and 'spellfile's replacement is a NUL-terminated option value.
-            let replaced = unsafe {
-                let mut rebuilt =
-                    XString::from_bytes(slice::from_raw_parts(line.cast::<u8>(), col as size_t));
+        let replaced = {
+            let mut lines = Lines::current();
+            let line = lines.line(Win::current().w_cursor.lnum);
+            let at = col as usize;
+            let present = chartab::tail(line, at).starts_with(&repl_to);
+            (addlen <= 0 || !present).then(|| {
+                let mut rebuilt = XString::from_bytes(&line[..at.min(line.len())]);
                 rebuilt.push_bytes(&repl_to);
-                rebuilt.push_bytes(cstr::bytes_at(line.offset(col as isize).add(repl_from_len)));
+                rebuilt.push_bytes(chartab::tail(line, at + repl_from_len));
                 rebuilt
-            };
+            })
+        };
+        if let Some(replaced) = replaced {
             let _ = ml_replace_owned(Win::current().w_cursor.lnum, replaced);
             let lnum = Win::current().w_cursor.lnum;
             let (was, now) = (repl_from_len as c_int, repl_to_len as c_int);

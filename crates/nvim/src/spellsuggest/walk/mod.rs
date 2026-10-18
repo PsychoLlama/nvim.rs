@@ -87,7 +87,7 @@ use crate::getchar::state::got_int;
 use crate::mbyte::utf_head_off;
 use crate::os::input::os_breakcheck;
 use crate::profile::{profile_passed_limit, profile_setlimit};
-use crate::spell::Tree;
+use crate::spell::{Tree, lang_ptr};
 use crate::spellsuggest::{MAXWLEN, SugInfo, spell_suggest_timeout};
 use crate::types::{LangP, ProfTime, SpellIdx, SpellLang, int64_t};
 use core::ffi::{c_char, c_int};
@@ -334,7 +334,7 @@ impl Walk<'_> {
         // SAFETY: the caller guarantees the pointers, so the language
         // beside `langp` is one of the loaded ones. It stays loaded for as
         // long as the walk, which is what the borrows below stand on.
-        let slang = unsafe { (*langp).lp_slang };
+        let slang = lang_ptr(unsafe { (*langp).slang });
         // The sound-fold tree has no prefixes.
         let lang = unsafe { &*slang };
         let words = if soundfold {
