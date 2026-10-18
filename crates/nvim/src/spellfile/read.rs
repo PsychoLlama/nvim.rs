@@ -366,10 +366,14 @@ pub fn suggest_load_files() {
             {
                 let mut sug = fname[..dot].to_vec();
                 sug.extend_from_slice(b".sug");
-                let path = Path::new(OsStr::from_bytes(&sug));
+                // Upstream renames the language's file to the `.sug` for the
+                // read, so that is the name the messages give.
+                let spl_name = core::mem::replace(&mut slang.sl_fname, XString::from_vec(sug));
+                let path = Path::new(OsStr::from_bytes(&slang.sl_fname));
                 if let Ok(mut spl) = Spl::open(path) {
                     load_sug(&mut spl, &mut slang);
                 }
+                slang.sl_fname = spl_name;
             }
         }
         put_lang(id, slang);
