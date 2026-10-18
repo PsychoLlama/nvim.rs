@@ -87,7 +87,7 @@ use crate::getchar::state::got_int;
 use crate::mbyte::utf_head_off;
 use crate::os::input::os_breakcheck;
 use crate::profile::{profile_passed_limit, profile_setlimit};
-use crate::spell::{Tree, lang_ptr};
+use crate::spell::{Tree, lang_ptr, lang_ptr_opt};
 use crate::spellsuggest::{MAXWLEN, SugInfo, spell_suggest_timeout};
 use crate::types::{LangP, ProfTime, SpellIdx, SpellLang, int64_t};
 use core::ffi::{c_char, c_int};
@@ -244,6 +244,8 @@ pub(crate) struct Walk<'a> {
     pub su: *mut SugInfo,
     pub langp: *mut LangP,
     pub slang: *mut SpellLang,
+    /// The language whose `REP` items the walk uses, or null for none.
+    pub replang: *mut SpellLang,
     /// Walking the sound-fold tree rather than the case-folded one. Word
     /// flags, case, banned words, splitting and `similar_chars` all do not
     /// apply then; see [`suggest_trie_walk`].
@@ -334,7 +336,8 @@ impl Walk<'_> {
         // SAFETY: the caller guarantees the pointers, so the language
         // beside `langp` is one of the loaded ones. It stays loaded for as
         // long as the walk, which is what the borrows below stand on.
-        let slang = lang_ptr(unsafe { (*langp).slang });
+        let (slang, replang) =
+            unsafe { (lang_ptr((*langp).slang), lang_ptr_opt((*langp).replang)) };
         // The sound-fold tree has no prefixes.
         let lang = unsafe { &*slang };
         let words = if soundfold {
@@ -347,6 +350,7 @@ impl Walk<'_> {
             su,
             langp,
             slang,
+            replang,
             soundfold,
             word_tree,
             prefix_tree,

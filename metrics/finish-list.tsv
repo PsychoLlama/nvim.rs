@@ -352,7 +352,7 @@ spellfile/	spellfile/tables.rs	1	6	0	1	compound:1	-	-	bytes_at:1
 spellfile/	spellfile/wordfile.rs	1	36	0	23	expr:9 deref:4	str:1	-	.add:5 bytes_at:3 xfree:3 CStr::from_ptr:2 starts_with:2 bytes_at_or_empty:1 enc_canonize:1 fclose:1
 spellfile/	spellfile/wordtree.rs	1	109	15	32	deref:71 expr:6	other:13 str:9 pp:1 value:1	other:5 str:3	.add:3 bytes_at:2 copy_nonoverlapping:1 hash_add_item:1 hash_hash:1 hash_lookup:1 slice_at:1
 spellfile/	spellfile/write.rs	1	44	3	13	deref:30 expr:1	other:3	-	bytes_at:6 time:1
-spellsuggest/	*	12	383	39	214	deref:96 expr:35 ref:27 compound:4	other:30 str:27 void:2	str:7 other:1 value:1	bytes_at:20 utf_ptr2char:13 .add:7 .offset:5 .offset_from:5 .sub:3 CStr::from_ptr:3 copy_nonoverlapping:3
+spellsuggest/	*	12	382	39	214	deref:94 expr:36 ref:27 compound:4	other:30 str:27 void:2	str:7 other:1 value:1	bytes_at:20 utf_ptr2char:13 .add:7 .offset:5 .offset_from:5 .sub:3 CStr::from_ptr:3 copy_nonoverlapping:3
 spellsuggest/	spellsuggest/collect.rs	1	79	10	31	deref:18 ref:17 expr:11 compound:1	other:14 str:3 void:2	-	.offset_from:2 utf_ptr2char:2 xstrlcpy:2 .add:1 bytes_at:1 from_raw_parts:1 hash_add_item:1 hash_hash:1
 spellsuggest/	spellsuggest/mod.rs	1	55	4	42	deref:5 expr:3 ref:2 compound:1	str:3	str:3 other:1 value:1	bytes_at:6 utf_ptr2char:2 .add:1 .offset:1 .offset_from:1 CStr::from_ptr:1 atoi:1 captype:1
 spellsuggest/	spellsuggest/prompt.rs	1	32	3	28	deref:2 expr:2	str:2	-	bytes_at:4 .offset:3 prefix_at:3 .offset_from:2 .add:1 .sub:1 from_raw_parts:1 ml_replace:1
@@ -360,9 +360,9 @@ spellsuggest/	spellsuggest/score.rs	1	21	5	14	deref:4 ref:2 expr:1	str:7 other:1
 spellsuggest/	spellsuggest/soundalike.rs	1	70	7	34	deref:24 expr:10 ref:2	other:10 str:4	-	.add:3 copy_nonoverlapping:2 utf_ptr2char:2 utf_ptr2len:2 .sub:1 CStr::from_ptr:1 bytes_at:1 hash_add_item:1
 spellsuggest/	spellsuggest/sps.rs	1	24	2	18	deref:6	str:2	-	bytes_at:2 .add:1 CStr::from_ptr:1 c_str:1 copy_option_part:1 fclose:1 getdigits_int:1 os_fopen:1
 spellsuggest/	spellsuggest/walk/edit.rs	1	13	0	9	deref:2 expr:1 ref:1	-	-	utf_ptr2char:6 utfc_ptr2len:2
-spellsuggest/	spellsuggest/walk/mod.rs	1	7	3	3	deref:2 expr:1 ref:1	other:4 str:4	str:2	.sub:1 from_raw_parts_mut:1
+spellsuggest/	spellsuggest/walk/mod.rs	1	7	3	3	expr:2 deref:1 ref:1	other:4 str:4	str:2	.sub:1 from_raw_parts_mut:1
 spellsuggest/	spellsuggest/walk/node.rs	1	51	4	26	deref:16 expr:4 compound:1 ref:1	str:2 other:1	str:2	bytes_at:3 can_compound:1 match_checkcompoundpattern:1 mb_charlen:1 prefix_eq:1 skipwhite:1 strcpy:1 xmemcpyz:1
-spellsuggest/	spellsuggest/walk/rep.rs	1	8	1	2	deref:4 expr:2	-	-	-
+spellsuggest/	spellsuggest/walk/rep.rs	1	7	1	2	deref:3 expr:2	-	-	-
 spellsuggest/	spellsuggest/walk/split.rs	1	23	0	7	deref:13 compound:1 ref:1	-	-	can_compound:1 copy_nonoverlapping:1 mb_charlen:1 skipwhite:1 utfc_ptr2len:1 xstrlcat:1
 spellsuggest/	spellsuggest/walk/transpose.rs	1	0	0	0	-	-	-	-
 startup/	*	2	0	0	0	-	-	-	-

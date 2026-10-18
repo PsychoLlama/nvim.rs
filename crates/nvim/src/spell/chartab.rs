@@ -369,20 +369,33 @@ pub(super) fn spell_toupper(c: c_int) -> c_int {
     }
 }
 
-/// The bytes of `word` up to its first NUL.
-fn word_of(word: &[u8]) -> &[u8] {
-    word.iter()
-        .position(|&b| b == 0)
-        .map_or(word, |nul| &word[..nul])
+/// Copy the C string `src` into `out` at `at`, cut so that terminator
+/// included it fills no more than `room` bytes there: `xstrlcpy`. Answers
+/// where the terminator went.
+fn put_cstr(out: &mut [u8], at: usize, src: &[u8], room: usize) -> usize {
+    let mut d = at;
+    for &b in src.iter().take(room.saturating_sub(1)) {
+        if b == 0 {
+            break;
+        }
+        out[d] = b;
+        d += 1;
+    }
+    out[d] = 0;
+    d
 }
 
 /// Copy `word` into `out`, upper-casing (or folding) the first character,
 /// NUL terminated. At most [`MAXWLEN`] bytes of `out` are used, terminator
-/// included; the copy stops short rather than overflow.
+/// included; the copy stops short rather than overflow. `word` ends at a
+/// NUL or at its end.
 pub fn onecap_copy(word: &[u8], out: &mut [u8], upper: bool) {
-    let word = word_of(word);
     let mut c = char_at(word);
-    let rest = tail(word, char_len(word));
+    let first = if byte_at(word, 0) == 0 {
+        0
+    } else {
+        char_len(word)
+    };
     c = if upper {
         spell_toupper(c)
     } else if c >= 128 {
@@ -391,20 +404,16 @@ pub fn onecap_copy(word: &[u8], out: &mut [u8], upper: bool) {
         c_int::from(spelltab_fold(c as usize))
     };
     let l = encode_char(c, out);
-    let room = MAXWLEN - l;
-    let n = rest.len().min(room - 1);
-    out[l..l + n].copy_from_slice(&rest[..n]);
-    out[l + n] = 0;
+    put_cstr(out, l, tail(word, first), MAXWLEN - l);
 }
 
 /// Copy `word` into `out` with every character upper-cased, NUL
 /// terminated. At most [`MAXWLEN`] bytes of `out` are used; the copy stops
-/// short rather than overflow.
+/// short rather than overflow. `word` ends at a NUL or at its end.
 pub fn allcap_copy(word: &[u8], out: &mut [u8]) {
-    let word = word_of(word);
     let mut d = 0;
     let mut s = 0;
-    while s < word.len() {
+    while byte_at(word, s) != 0 {
         let rest = &word[s..];
         let mut c = char_at(rest);
         s += char_len(rest);
@@ -458,14 +467,14 @@ pub fn make_case_word(fword: &[u8], out: &mut [u8], flags: WordFlags) {
     } else if flags.has(WordFlags::ONECAP) {
         onecap_copy(fword, out, true);
     } else {
-        let word = word_of(fword);
-        out[..word.len()].copy_from_slice(word);
-        out[word.len()] = 0;
+        put_cstr(out, 0, fword, usize::MAX);
     }
 }
 
 /// Whether byte `n` is one of `set`'s, up to a NUL in it. Like `strchr()`
 /// but independent of the locale.
 pub fn byte_in_str(set: &[u8], n: c_int) -> bool {
-    word_of(set).iter().any(|&b| c_int::from(b) == n)
+    set.iter()
+        .take_while(|&&b| b != 0)
+        .any(|&b| c_int::from(b) == n)
 }

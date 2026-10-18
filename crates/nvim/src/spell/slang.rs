@@ -52,6 +52,12 @@ impl core::hash::Hasher for WordHasher {
         }
     }
 
+    fn write_usize(&mut self, n: usize) {
+        // The length a slice's hash starts with: taken whole, not a byte
+        // at a time.
+        self.0 = n as u64;
+    }
+
     fn finish(&self) -> u64 {
         self.0.wrapping_mul(0x9e37_79b9_7f4a_7c15)
     }

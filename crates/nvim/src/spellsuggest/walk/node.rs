@@ -291,8 +291,7 @@ impl Walk<'_> {
             // SAFETY: `su` is valid by the contract above and `preword` is
             // this walk's own buffer, NUL-terminated by `build_preword`.
             let badflags = unsafe { (*self.su).su_badflags };
-            let preword = cstr::until_nul(&cstr::as_bytes(&self.preword)[preword_len..]);
-            let caps = captype(preword, preword.len());
+            let caps = captype(&cstr::as_bytes(&self.preword)[preword_len..], usize::MAX);
             if !spell_valid_case(badflags, caps) {
                 newscore += SCORE_ICASE;
             }
@@ -686,8 +685,7 @@ impl Walk<'_> {
             // should be upper or lower case, so offer both.
             //
             // SAFETY: as above.
-            let preword = cstr::until_nul(cstr::as_bytes(&self.preword));
-            let caps = captype(preword, preword.len());
+            let caps = captype(cstr::as_bytes(&self.preword), usize::MAX);
             if caps.is_empty() || caps == WordFlags::ALLCAP {
                 let split_off = self.stack[level].split_off as usize;
                 // `tword` was terminated before this ran.

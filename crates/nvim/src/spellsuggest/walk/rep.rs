@@ -19,7 +19,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use crate::spell::lang_ptr_opt;
 use crate::spellsuggest::SCORE_REP;
 use crate::spellsuggest::walk::{State, Walk};
 use crate::types::RepItem;
@@ -39,7 +38,7 @@ impl Walk<'_> {
         //
         // SAFETY: `langp` and `su` are the caller's, valid by the contract
         // above.
-        if (unsafe { (*self.langp).replang }.is_none() && !self.soundfold)
+        if (self.replang.is_null() && !self.soundfold)
             || self.stack[level].score + SCORE_REP >= unsafe { (*self.su).su_maxscore }
             || self.stack[level].bad_idx < self.stack[level].change_from
         {
@@ -49,13 +48,13 @@ impl Walk<'_> {
 
         // SAFETY: `bad_idx` is a position inside the bad word, and the
         // first-byte index is a 256-entry table indexed by an unsigned
-        // byte of it. `lp_replang` is non-null here unless this is the
+        // byte of it. `replang` is non-null here unless this is the
         // sound-fold walk -- that is what the test above just settled.
         let first_byte = self.fword_at(self.stack[level].bad_idx as usize) as usize;
         self.stack[level].child = if self.soundfold {
             unsafe { (*self.slang).sl_repsal_first[first_byte] }
         } else {
-            unsafe { (*lang_ptr_opt((*self.langp).replang)).sl_rep_first[first_byte] }
+            unsafe { (*self.replang).sl_rep_first[first_byte] }
         };
 
         if self.stack[level].child < 0 {
@@ -148,16 +147,16 @@ impl Walk<'_> {
     ///
     /// # Safety
     ///
-    /// The walk's language must be valid, and `lp_replang` must be
+    /// The walk's language must be valid, and `replang` must be
     /// non-null unless this is the sound-fold walk. The list must outlive
     /// the borrow, which it does: nothing unloads a language mid-walk.
     unsafe fn rep_items<'a>(&self) -> &'a [RepItem] {
         // SAFETY: the caller guarantees the language; `rep_ini` is what
-        // establishes the `lp_replang` precondition.
+        // establishes the `replang` precondition.
         if self.soundfold {
             unsafe { &(*self.slang).sl_repsal }
         } else {
-            unsafe { &(*lang_ptr_opt((*self.langp).replang)).sl_rep }
+            unsafe { &(*self.replang).sl_rep }
         }
     }
 }
