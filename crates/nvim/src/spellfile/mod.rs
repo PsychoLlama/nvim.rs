@@ -1,23 +1,21 @@
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
-// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
+#![forbid(unsafe_code)]
+// The constants here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use crate::arglist::expand_arglist;
-use crate::ascii::ascii_isdigit;
-use crate::charset::getdigits_int;
+use crate::charset::getdigits_int_at;
 use crate::cstr;
 use crate::getchar::state::got_int;
-use crate::hashtab::{hash_clear_all, hash_init};
+use core::cell::RefCell;
 
 use crate::memory::XString;
 use crate::message::{e_exists, e_invarg};
 use crate::message::{emsg, msg, verbose_enter, verbose_leave};
-use crate::message_fmt::{c_str, msg_cstr};
+use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::option::vars::{p_msm, p_verbose};
 use crate::os::cshim::gettext;
-use crate::os::fs::{os_isdir, os_path_exists};
-use crate::path::path_tail;
+use crate::os::fs::{dir_exists, path_exists};
+use crate::path::{path_tail, tail_index};
 use crate::semsg;
 use crate::spell::SpellBuf;
 use crate::spell::{did_set_spelltab, spell_enc, spelltab};
@@ -26,8 +24,8 @@ use crate::strings::has_char;
 use crate::types::CmdIdx;
 use crate::types::TAB;
 use crate::types::{
-    CONV_NONE, EStackType, ExArg, FAIL, Failed, FileComparison, HashTab, MAXPATHL, NUL, OK, OptInt,
-    RepItem, SpellAddType, SpellTab, VimConv, XDGVarType, time_t,
+    CONV_NONE, EStackType, ExArg, FAIL, Failed, FileComparison, MAXPATHL, NUL, OK, OptInt, RepItem,
+    SpellAddType, SpellTab, VimConv, XDGVarType, time_t,
 };
 use crate::ui::ui_flush;
 use crate::winlayer::Buf;
@@ -37,6 +35,7 @@ mod aff;
 mod affix;
 mod dic;
 mod flags;
+mod keyed;
 mod read;
 mod sections;
 mod spl;
@@ -49,17 +48,16 @@ use crate::regexp::{OwnedProg, vim_regcomp, vim_regexec_prog};
 pub use add::spell_add_word;
 use aff::spell_read_aff;
 use dic::spell_read_dic;
-use flags::spell_free_aff;
+use keyed::{Keyed, KeyedTable};
 use read::spell_reload_one;
 pub use read::{spell_load_file, suggest_load_files};
 use sugfile::spell_make_sugfile;
 use wordfile::spell_read_wordfile;
 use wordtree::{
-    MSG_COMPRESSING, SpellArena, WordNode, set_compression_limits, wordtree_alloc,
+    MSG_COMPRESSING, NodeId, SpellArena, WordNode, set_compression_limits, wordtree_alloc,
     wordtree_compress,
 };
 use write::write_vim_spell;
-pub const _ISdigit: ::core::ffi::c_uint = 2048;
 pub const ETYPE_SPELL: EStackType = 9;
 pub const kXDGDataHome: XDGVarType = 1;
 pub const kEqualFiles: FileComparison = 1;
@@ -107,171 +105,192 @@ pub const SN_CHARFLAGS: ::core::ffi::c_uint = 1;
 pub const SN_REGION: ::core::ffi::c_uint = 0;
 pub const SN_INFO: ::core::ffi::c_uint = 15;
 pub const SN_END: ::core::ffi::c_uint = 255;
-pub struct SpellInfo {
-    pub si_foldroot: *mut WordNode,
-    pub si_foldwcount: ::core::ffi::c_int,
-    pub si_keeproot: *mut WordNode,
-    pub si_keepwcount: ::core::ffi::c_int,
-    pub si_prefroot: *mut WordNode,
-    pub si_sugtree: ::core::ffi::c_int,
-    pub si_arena: SpellArena,
-    pub si_did_emsg: ::core::ffi::c_int,
-    pub si_compress_cnt: ::core::ffi::c_int,
-    pub si_first_free: *mut WordNode,
-    pub si_free_count: ::core::ffi::c_int,
-    pub si_spellbuf: Option<SpellBuf>,
-    pub si_ascii: ::core::ffi::c_int,
-    pub si_add: ::core::ffi::c_int,
-    pub si_clear_chartab: ::core::ffi::c_int,
-    pub si_region: ::core::ffi::c_int,
-    pub si_conv: VimConv,
-    pub si_memtot: ::core::ffi::c_int,
-    pub si_verbose: ::core::ffi::c_int,
-    pub si_msg_count: ::core::ffi::c_int,
-    pub si_info: *mut ::core::ffi::c_char,
-    pub si_region_count: ::core::ffi::c_int,
-    pub si_region_name: [::core::ffi::c_char; 17],
+/// A spell file under construction: what `:mkspell` has read so far.
+///
+/// Parse-time only. The trees live in [`si_nodes`](Self::si_nodes) and are
+/// reached through the three roots; every string is owned.
+pub(crate) struct SpellInfo {
+    si_foldroot: Option<NodeId>,
+    si_foldwcount: ::core::ffi::c_int,
+    si_keeproot: Option<NodeId>,
+    si_keepwcount: ::core::ffi::c_int,
+    si_prefroot: Option<NodeId>,
+    si_sugtree: ::core::ffi::c_int,
+    /// The nodes of every tree; see `wordtree`.
+    si_nodes: Vec<WordNode>,
+    si_arena: SpellArena,
+    si_compress_cnt: ::core::ffi::c_int,
+    si_first_free: Option<NodeId>,
+    si_free_count: ::core::ffi::c_int,
+    /// The `.sug` tree's runs of word ends: by head, the word end last
+    /// filed; see `wordtree`.
+    si_end_hint: wordtree::EndHints,
+    si_spellbuf: Option<SpellBuf>,
+    si_ascii: ::core::ffi::c_int,
+    si_add: ::core::ffi::c_int,
+    si_clear_chartab: ::core::ffi::c_int,
+    si_region: ::core::ffi::c_int,
+    si_conv: VimConv,
+    si_memtot: ::core::ffi::c_int,
+    si_verbose: ::core::ffi::c_int,
+    si_msg_count: ::core::ffi::c_int,
+    /// The `NAME`/`VERSION`/... lines `:spellinfo` shows.
+    si_info: Option<Vec<u8>>,
+    si_region_count: ::core::ffi::c_int,
+    si_region_name: [u8; 17],
     /// `REP` pairs, sorted by the writer.
-    pub si_rep: Vec<RepItem>,
+    si_rep: Vec<RepItem>,
     /// `REPSAL` pairs, likewise.
-    pub si_repsal: Vec<RepItem>,
+    si_repsal: Vec<RepItem>,
     /// `SAL` rules, which keep the order the affix file gave.
-    pub si_sal: Vec<RepItem>,
-    pub si_sofofr: *mut ::core::ffi::c_char,
-    pub si_sofoto: *mut ::core::ffi::c_char,
-    pub si_nosugfile: ::core::ffi::c_int,
-    pub si_nosplitsugs: ::core::ffi::c_int,
-    pub si_nocompoundsugs: ::core::ffi::c_int,
-    pub si_followup: ::core::ffi::c_int,
-    pub si_collapse: ::core::ffi::c_int,
-    pub si_commonwords: HashTab,
-    pub si_sugtime: time_t,
-    pub si_rem_accents: ::core::ffi::c_int,
+    si_sal: Vec<RepItem>,
+    si_sofofr: Option<Vec<u8>>,
+    si_sofoto: Option<Vec<u8>>,
+    si_nosugfile: ::core::ffi::c_int,
+    si_nosplitsugs: ::core::ffi::c_int,
+    si_nocompoundsugs: ::core::ffi::c_int,
+    si_followup: ::core::ffi::c_int,
+    si_collapse: ::core::ffi::c_int,
+    /// The `COMMON` words, written in the table's slot order.
+    si_commonwords: KeyedTable<Box<[u8]>>,
+    si_sugtime: time_t,
+    si_rem_accents: ::core::ffi::c_int,
     /// `MAP` groups, `/`-separated, as the section's payload.
-    pub si_map: Vec<u8>,
-    pub si_midword: *mut ::core::ffi::c_char,
-    pub si_compmax: ::core::ffi::c_int,
-    pub si_compminlen: ::core::ffi::c_int,
-    pub si_compsylmax: ::core::ffi::c_int,
-    pub si_compoptions: ::core::ffi::c_int,
+    si_map: Vec<u8>,
+    si_midword: Option<Vec<u8>>,
+    si_compmax: ::core::ffi::c_int,
+    si_compminlen: ::core::ffi::c_int,
+    si_compsylmax: ::core::ffi::c_int,
+    si_compoptions: ::core::ffi::c_int,
     /// `CHECKCOMPOUNDPATTERN`'s strings, in pairs.
-    pub si_comppat: Vec<Box<[u8]>>,
-    pub si_compflags: *mut ::core::ffi::c_char,
-    pub si_nobreak: ::core::ffi::c_char,
-    pub si_syllable: *mut ::core::ffi::c_char,
+    si_comppat: Vec<Box<[u8]>>,
+    /// The compound pattern, in compound ids.
+    si_compflags: Option<Vec<u8>>,
+    si_nobreak: ::core::ffi::c_char,
+    si_syllable: Option<Vec<u8>>,
     /// One condition per postponed-prefix id; `None` where an id has
     /// none, which the writer emits as a zero length and no payload.
-    pub si_prefcond: Vec<Option<Box<[u8]>>>,
-    pub si_newpref_id: ::core::ffi::c_int,
-    pub si_newcomp_id: ::core::ffi::c_int,
+    si_prefcond: Vec<Option<Box<[u8]>>>,
+    si_newpref_id: ::core::ffi::c_int,
+    si_newcomp_id: ::core::ffi::c_int,
 }
 /// What one `.aff` file declared.
 ///
 /// Parse-time only: `:mkspell` reads the affix and dictionary files into
 /// this and the word trees, and [`write::write_vim_spell`] then emits the
-/// `.spl` a field at a time. None of the types below is ever written to a
-/// file as a struct image, none is named by `tools/ffigen/unit-cdefs.h` or
-/// the ABI ledger, and none crosses an `extern` boundary — so none of them
-/// carries `repr(C)`, and the compiler is free to lay them out.
-pub struct AffFile {
-    pub af_enc: *mut ::core::ffi::c_char,
-    pub af_flagtype: ::core::ffi::c_int,
-    pub af_rare: ::core::ffi::c_uint,
-    pub af_keepcase: ::core::ffi::c_uint,
-    pub af_bad: ::core::ffi::c_uint,
-    pub af_needaffix: ::core::ffi::c_uint,
-    pub af_circumfix: ::core::ffi::c_uint,
-    pub af_needcomp: ::core::ffi::c_uint,
-    pub af_comproot: ::core::ffi::c_uint,
-    pub af_compforbid: ::core::ffi::c_uint,
-    pub af_comppermit: ::core::ffi::c_uint,
-    pub af_nosuggest: ::core::ffi::c_uint,
-    pub af_pfxpostpone: ::core::ffi::c_int,
-    pub af_ignoreextra: bool,
-    pub af_pref: HashTab,
-    pub af_suff: HashTab,
-    pub af_comp: HashTab,
-}
-/// One `PFX`/`SFX` line: what to chop, what to add, and when.
-pub struct AffEntry {
-    pub ae_next: *mut AffEntry,
-    pub ae_chop: *mut ::core::ffi::c_char,
-    pub ae_add: *mut ::core::ffi::c_char,
-    pub ae_flags: *mut ::core::ffi::c_char,
-    pub ae_cond: *mut ::core::ffi::c_char,
-    /// `ae_cond` compiled. The entry lives in the spell arena, which frees
-    /// without dropping, so `spell_free_aff` drops this by hand.
-    pub ae_prog: Option<OwnedProg>,
-    pub ae_compforbid: ::core::ffi::c_char,
-    pub ae_comppermit: ::core::ffi::c_char,
-}
-/// All the `PFX`/`SFX` blocks that share one affix name.
-///
-/// The `af_pref`/`af_suff` tables key on [`ah_key`](Self::ah_key), which
-/// the header owns, so the table's key pointer points *into* the header;
-/// [`Self::key`] and [`Self::of_key`] are the two directions.
-pub struct AffHeader {
-    pub ah_key: [::core::ffi::c_char; 17],
-    pub ah_flag: ::core::ffi::c_uint,
-    pub ah_new_id: ::core::ffi::c_int,
-    pub ah_combine: ::core::ffi::c_int,
-    pub ah_follows: ::core::ffi::c_int,
-    pub ah_first: *mut AffEntry,
+/// `.spl` a field at a time.
+pub(crate) struct AffFile {
+    /// The `SET` encoding, canonized.
+    af_enc: Option<XString>,
+    af_flagtype: ::core::ffi::c_int,
+    af_rare: ::core::ffi::c_uint,
+    af_keepcase: ::core::ffi::c_uint,
+    af_bad: ::core::ffi::c_uint,
+    af_needaffix: ::core::ffi::c_uint,
+    af_circumfix: ::core::ffi::c_uint,
+    af_needcomp: ::core::ffi::c_uint,
+    af_comproot: ::core::ffi::c_uint,
+    af_compforbid: ::core::ffi::c_uint,
+    af_comppermit: ::core::ffi::c_uint,
+    af_nosuggest: ::core::ffi::c_uint,
+    af_pfxpostpone: ::core::ffi::c_int,
+    af_ignoreextra: bool,
+    af_pref: KeyedTable<AffHeader>,
+    af_suff: KeyedTable<AffHeader>,
+    af_comp: KeyedTable<CompItem>,
 }
 
-impl AffHeader {
-    /// This header's affix name, as the NUL-terminated string `af_pref` and
-    /// `af_suff` key on.
-    fn key(this: *mut Self) -> *mut ::core::ffi::c_char {
-        // SAFETY: the offset lands inside the header; nothing is read.
-        unsafe { (&raw mut (*this).ah_key).cast() }
+impl AffFile {
+    fn new() -> Self {
+        AffFile {
+            af_enc: None,
+            af_flagtype: AFT_CHAR,
+            af_rare: 0,
+            af_keepcase: 0,
+            af_bad: 0,
+            af_needaffix: 0,
+            af_circumfix: 0,
+            af_needcomp: 0,
+            af_comproot: 0,
+            af_compforbid: 0,
+            af_comppermit: 0,
+            af_nosuggest: 0,
+            af_pfxpostpone: 0,
+            af_ignoreextra: false,
+            af_pref: KeyedTable::new(),
+            af_suff: KeyedTable::new(),
+            af_comp: KeyedTable::new(),
+        }
     }
 
-    /// The header a [`key`](Self::key) came from.
-    ///
-    /// # Safety
-    ///
-    /// `key` must be a pointer [`key`](Self::key) returned for a header
-    /// that is still live.
-    unsafe fn of_key(key: *mut ::core::ffi::c_char) -> *mut Self {
-        // SAFETY: the caller promises the pointer names a live header's key
-        // field, so stepping back over the field's offset lands on it.
-        unsafe { key.byte_sub(::core::mem::offset_of!(Self, ah_key)).cast() }
+    /// The prefix or the suffix table.
+    fn affixes(&self, kind: AffixKind) -> &KeyedTable<AffHeader> {
+        match kind {
+            AffixKind::Prefix => &self.af_pref,
+            AffixKind::Suffix => &self.af_suff,
+        }
+    }
+
+    fn affixes_mut(&mut self, kind: AffixKind) -> &mut KeyedTable<AffHeader> {
+        match kind {
+            AffixKind::Prefix => &mut self.af_pref,
+            AffixKind::Suffix => &mut self.af_suff,
+        }
+    }
+}
+
+/// Which of an affix file's two affix tables.
+#[derive(Copy, Clone, PartialEq, Eq)]
+enum AffixKind {
+    Prefix,
+    Suffix,
+}
+
+/// One `PFX`/`SFX` line: what to chop, what to add, and when. Each string
+/// is the item without its terminator; `None` is upstream's null (`0`).
+pub(crate) struct AffEntry {
+    ae_chop: Option<Vec<u8>>,
+    ae_add: Option<Vec<u8>>,
+    /// The flags the added form carries, after its `/`.
+    ae_flags: Option<Vec<u8>>,
+    ae_cond: Option<Vec<u8>>,
+    /// `ae_cond` compiled. In a cell because matching may recompile it
+    /// while the affix tables are borrowed for the walk.
+    ae_prog: RefCell<Option<OwnedProg>>,
+    ae_compforbid: bool,
+    ae_comppermit: bool,
+}
+
+/// All the `PFX`/`SFX` blocks that share one affix name.
+pub(crate) struct AffHeader {
+    ah_key: Vec<u8>,
+    ah_flag: ::core::ffi::c_uint,
+    ah_new_id: ::core::ffi::c_int,
+    ah_combine: ::core::ffi::c_int,
+    ah_follows: ::core::ffi::c_int,
+    /// The entries, oldest first; upstream's list ran newest first, so a
+    /// walk is `ah_entries.iter().rev()`.
+    ah_entries: Vec<AffEntry>,
+}
+
+impl Keyed for AffHeader {
+    fn key(&self) -> &[u8] {
+        &self.ah_key
     }
 }
 
 /// One `COMPOUNDFLAG` value and the internal id standing in for it.
-///
-/// `af_comp` keys on [`ci_key`](Self::ci_key) exactly as `af_pref` keys on
-/// an affix name; see [`AffHeader`].
-pub struct CompItem {
-    pub ci_key: [::core::ffi::c_char; 17],
-    pub ci_flag: ::core::ffi::c_uint,
-    pub ci_new_id: ::core::ffi::c_int,
+pub(crate) struct CompItem {
+    ci_key: Vec<u8>,
+    ci_new_id: ::core::ffi::c_int,
 }
 
-impl CompItem {
-    /// This item's compound flag, as the NUL-terminated string `af_comp`
-    /// keys on.
-    fn key(this: *mut Self) -> *mut ::core::ffi::c_char {
-        // SAFETY: the offset lands inside the item; nothing is read.
-        unsafe { (&raw mut (*this).ci_key).cast() }
-    }
-
-    /// The item a [`key`](Self::key) came from.
-    ///
-    /// # Safety
-    ///
-    /// `key` must be a pointer [`key`](Self::key) returned for an item that
-    /// is still live.
-    unsafe fn of_key(key: *mut ::core::ffi::c_char) -> *mut Self {
-        // SAFETY: as for `AffHeader::of_key`.
-        unsafe { key.byte_sub(::core::mem::offset_of!(Self, ci_key)).cast() }
+impl Keyed for CompItem {
+    fn key(&self) -> &[u8] {
+        &self.ci_key
     }
 }
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const EOF: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-pub const SEEK_SET: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const SPL_FNAME_ADD: &::core::ffi::CStr = c".add.";
 pub const SPL_FNAME_ASCII: &::core::ffi::CStr = c".ascii.";
 pub const VIMSUGMAGIC: &::core::ffi::CStr = c"VIMsug";
@@ -316,22 +335,20 @@ impl SpellInfo {
     /// The C listed an initialiser and then `memset` the whole struct to
     /// zero over the top of it, so every field really does start at zero;
     /// only the four values [`mkspell`] assigns straight afterwards differ.
-    /// Writing it out is also what lets `si_arena` own a `Vec` at all: an
-    /// empty `Vec`'s pointer is dangling-but-aligned rather than null, so
-    /// `memset`ing over one leaves it invalid.
     fn new() -> Self {
         Self {
-            si_foldroot: ::core::ptr::null_mut(),
+            si_foldroot: None,
             si_foldwcount: 0,
-            si_keeproot: ::core::ptr::null_mut(),
+            si_keeproot: None,
             si_keepwcount: 0,
-            si_prefroot: ::core::ptr::null_mut(),
+            si_prefroot: None,
             si_sugtree: 0,
+            si_nodes: wordtree::empty_slab(),
             si_arena: SpellArena::new(),
-            si_did_emsg: 0,
             si_compress_cnt: 0,
-            si_first_free: ::core::ptr::null_mut(),
+            si_first_free: None,
             si_free_count: 0,
+            si_end_hint: wordtree::EndHints::default(),
             si_spellbuf: None,
             si_ascii: 0,
             si_add: 0,
@@ -346,32 +363,32 @@ impl SpellInfo {
             si_memtot: 0,
             si_verbose: 0,
             si_msg_count: 0,
-            si_info: ::core::ptr::null_mut(),
+            si_info: None,
             si_region_count: 0,
             si_region_name: [0; 17],
             si_rep: Vec::new(),
             si_repsal: Vec::new(),
             si_sal: Vec::new(),
-            si_sofofr: ::core::ptr::null_mut(),
-            si_sofoto: ::core::ptr::null_mut(),
+            si_sofofr: None,
+            si_sofoto: None,
             si_nosugfile: 0,
             si_nosplitsugs: 0,
             si_nocompoundsugs: 0,
             si_followup: 0,
             si_collapse: 0,
-            si_commonwords: HashTab::new(),
+            si_commonwords: KeyedTable::new(),
             si_sugtime: 0,
             si_rem_accents: 0,
             si_map: Vec::new(),
-            si_midword: ::core::ptr::null_mut(),
+            si_midword: None,
             si_compmax: 0,
             si_compminlen: 0,
             si_compsylmax: 0,
             si_compoptions: 0,
             si_comppat: Vec::new(),
-            si_compflags: ::core::ptr::null_mut(),
+            si_compflags: None,
             si_nobreak: 0,
-            si_syllable: ::core::ptr::null_mut(),
+            si_syllable: None,
             si_prefcond: Vec::new(),
             si_newpref_id: 0,
             si_newcomp_id: 0,
@@ -387,8 +404,7 @@ impl SpellInfo {
 /// given in megabytes and scaled to arena blocks here; the third is in
 /// thousands of words.
 pub fn spell_check_msm() -> Result<(), Failed> {
-    // SAFETY: `p_msm` holds the option's value, a NUL-terminated string.
-    let parsed = p_msm(|value| unsafe { parse_mkspellmem(value.as_ptr().cast_mut()) });
+    let parsed = p_msm(|value| parse_mkspellmem(value.to_bytes()));
     let Some((start, incr, added)) = parsed else {
         return Err(Failed);
     };
@@ -406,44 +422,30 @@ pub fn spell_check_msm() -> Result<(), Failed> {
 
 /// The three unscaled numbers of a `'mkspellmem'` value, or `None` when the
 /// string is not exactly `<digits>,<digits>,<digits>`.
-///
-/// # Safety
-///
-/// `p` must point at a NUL-terminated string.
-unsafe fn parse_mkspellmem(
-    p: *mut ::core::ffi::c_char,
+fn parse_mkspellmem(
+    value: &[u8],
 ) -> Option<(::core::ffi::c_int, ::core::ffi::c_int, ::core::ffi::c_int)> {
-    // SAFETY: the caller promises a terminated string, and each step below
-    // stops at the first byte that is not a digit — the NUL at the latest.
-    let mut p = p;
-    let start = unsafe { digits_then(&mut p, ',' as ::core::ffi::c_int) }?;
-    let incr = unsafe { digits_then(&mut p, ',' as ::core::ffi::c_int) }?;
-    let added = unsafe { digits_then(&mut p, NUL) }?;
+    let mut at = 0;
+    let start = digits_then(value, &mut at, b',')?;
+    let incr = digits_then(value, &mut at, b',')?;
+    let added = digits_then(value, &mut at, NUL as u8)?;
     Some((start, incr, added))
 }
 
-/// Read a decimal number that `sep` must follow, stepping `p` past both.
+/// Read a decimal number that `sep` must follow, stepping `at` past both.
 /// A `sep` of [`NUL`] means "and that must be the end of the string", where
 /// there is nothing to step over.
-///
-/// # Safety
-///
-/// `p` must point into a NUL-terminated string.
-unsafe fn digits_then(
-    p: &mut *mut ::core::ffi::c_char,
-    sep: ::core::ffi::c_int,
-) -> Option<::core::ffi::c_int> {
-    // SAFETY: the caller promises the string; `getdigits_int` advances `p`
-    // over the digits it consumed and no further.
-    if !ascii_isdigit(unsafe { **p } as ::core::ffi::c_int) {
+fn digits_then(text: &[u8], at: &mut usize, sep: u8) -> Option<::core::ffi::c_int> {
+    if !cstr::byte_at(text, *at).is_ascii_digit() {
         return None;
     }
-    let n = unsafe { getdigits_int(&raw mut *p, true, 0) };
-    if unsafe { **p } as ::core::ffi::c_int != sep {
+    let (n, past) = getdigits_int_at(text, *at, true, 0);
+    *at = past;
+    if cstr::byte_at(text, *at) != sep {
         return None;
     }
-    if sep != NUL {
-        *p = unsafe { p.add(1) };
+    if sep != NUL as u8 {
+        *at += 1;
     }
     Some(n)
 }
@@ -458,14 +460,11 @@ pub fn ex_mkspell(excmd: &mut ExArg) {
         arg = &arg[crate::charset::skip::white(arg)..];
     }
 
-    let Ok(mut names) = expand_arglist(arg, false) else {
+    let Ok(names) = expand_arglist(arg, false) else {
         return;
     };
-    let mut fnames: Vec<*mut ::core::ffi::c_char> =
-        names.iter_mut().map(XString::as_mut_ptr).collect();
-    let fcount = ::core::ffi::c_int::try_from(fnames.len()).unwrap_or(::core::ffi::c_int::MAX);
-    // SAFETY: `fcount` NUL-terminated names this frame owns.
-    unsafe { mkspell(fcount, fnames.as_mut_ptr(), ascii, excmd.forceit, false) };
+    let fnames: Vec<&[u8]> = names.iter().map(|name| &name[..]).collect();
+    mkspell(&fnames, ascii, excmd.forceit, false);
 }
 
 /// Read `.aff`/`.dic` pairs or word lists and write the `.spl` they make.
@@ -477,38 +476,24 @@ pub fn ex_mkspell(excmd: &mut ExArg) {
 /// drives the writer directly rather than through `:mkspell`, so that a
 /// change to the format fails a test that names the format rather than one
 /// that happens to spell-check a word.
-///
-/// # Safety
-///
-/// `fnames` must hold `fcount` NUL-terminated paths.
-pub unsafe fn mkspell(
-    fcount: ::core::ffi::c_int,
-    fnames: *mut *mut ::core::ffi::c_char,
-    ascii: bool,
-    over_write: bool,
-    added_word: bool,
-) {
-    let mut afile = [::core::ptr::null_mut::<AffFile>(); MAXREGIONS as usize];
+pub fn mkspell(fnames: &[&[u8]], ascii: bool, over_write: bool, added_word: bool) {
+    let fcount = ::core::ffi::c_int::try_from(fnames.len()).unwrap_or(::core::ffi::c_int::MAX);
+    let mut afile: Vec<Option<AffFile>> = Vec::new();
     let mut spin = SpellInfo::new();
-    spin.si_verbose = !added_word as ::core::ffi::c_int;
-    spin.si_ascii = ascii as ::core::ffi::c_int;
+    spin.si_verbose = ::core::ffi::c_int::from(!added_word);
+    spin.si_ascii = ::core::ffi::c_int::from(ascii);
     spin.si_followup = 1;
     spin.si_rem_accents = 1;
-
-    // SAFETY: `si_commonwords` is this frame's own.
-    unsafe { hash_init(&raw mut spin.si_commonwords) };
     spin.si_newcomp_id = 127;
 
     // With one name it is both the input stem and the output; with
     // more, the first is the output and the rest are the inputs.
-    let innames = unsafe { fnames.offset(if fcount == 1 { 0 } else { 1 }) };
+    let innames = fnames.get(usize::from(fcount != 1)..).unwrap_or_default();
     let mut incount = fcount - 1;
     let mut wfname = XString::new();
-    if fcount >= 1 {
-        // SAFETY: the caller promises the paths.
-        (wfname, incount) = unsafe { output_name(fnames, fcount, spin.si_ascii != 0, incount) };
-        // SAFETY: `wfname` is NUL-terminated, so its tail is too.
-        let tail = unsafe { path_tail(cstr::at(wfname.as_ptr())) };
+    if let Some(&first) = fnames.first() {
+        (wfname, incount) = output_name(first, fcount, spin.si_ascii != 0, incount);
+        let tail = path_tail(wfname.as_cstr());
         if has_bytes(tail, SPL_FNAME_ASCII.to_bytes()) {
             spin.si_ascii = 1;
         }
@@ -522,30 +507,32 @@ pub unsafe fn mkspell(
         if !output_is_writable(wfname, incount, over_write) {
             break '_theend;
         }
-        if !unsafe { read_region_names(&mut spin, innames, incount) } {
+        let innames = &innames[..usize::try_from(incount).unwrap_or(0).min(innames.len())];
+        if !read_region_names(&mut spin, innames) {
             break '_theend;
         }
         spin.si_region_count = incount;
-        spin.si_foldroot = wordtree_alloc(&mut spin);
-        spin.si_keeproot = wordtree_alloc(&mut spin);
-        spin.si_prefroot = wordtree_alloc(&mut spin);
+        spin.si_foldroot = Some(wordtree_alloc(&mut spin));
+        spin.si_keeproot = Some(wordtree_alloc(&mut spin));
+        spin.si_prefroot = Some(wordtree_alloc(&mut spin));
         if spin.si_add == 0 {
             spin.si_clear_chartab = 1;
         }
 
-        let mut error = unsafe { read_inputs(&mut spin, innames, incount, &mut afile) };
-        if !spin.si_compflags.is_null() && spin.si_nobreak != 0 {
+        let mut error = read_inputs(&mut spin, innames, &mut afile);
+        if spin.si_compflags.is_some() && spin.si_nobreak != 0 {
             let text = c"Warning: both compounding and NOBREAK specified";
             msg(gettext(text), 0);
         }
         if !error && !got_int.get() {
             spell_message(&spin, MSG_COMPRESSING);
-            let root = spin.si_foldroot;
-            unsafe { wordtree_compress(&mut spin, root, c"case-folded") };
-            let root = spin.si_keeproot;
-            unsafe { wordtree_compress(&mut spin, root, c"keep-case") };
-            let root = spin.si_prefroot;
-            unsafe { wordtree_compress(&mut spin, root, c"prefixes") };
+            for (root, name) in [
+                (spin.si_foldroot, c"case-folded"),
+                (spin.si_keeproot, c"keep-case"),
+                (spin.si_prefroot, c"prefixes"),
+            ] {
+                wordtree_compress(&mut spin, root, name);
+            }
         }
         if !error && !got_int.get() {
             let name = wfname.to_string_lossy();
@@ -568,19 +555,16 @@ pub unsafe fn mkspell(
         spin.si_map = Vec::new();
         spin.si_comppat = Vec::new();
         spin.si_prefcond = Vec::new();
-        unsafe { hash_clear_all(&raw mut spin.si_commonwords, 0) };
-        for aff in afile.iter().take(incount as usize) {
-            if !aff.is_null() {
-                unsafe { spell_free_aff(&mut **aff) };
-            }
-        }
+        spin.si_commonwords = KeyedTable::new();
+        afile = Vec::new();
         // The `.sug` pass reads the file back and builds its own tree,
-        // so the arena goes first.
-        spin.si_arena.clear();
+        // so the trees go first.
+        spin.clear_trees();
         if spin.si_sugtime != 0 && !error && !got_int.get() {
             spell_make_sugfile(&mut spin, wfname);
         }
     }
+    drop(afile);
 }
 
 /// The output path, and how many inputs there are.
@@ -590,24 +574,15 @@ pub unsafe fn mkspell(
 /// as it stands. `default_incount` is what to report when the first name
 /// was only the output.
 ///
-/// The name is built by concatenation rather than by `vim_snprintf` into a
-/// [`MAXPATHL`] buffer -- the format was `"%s.spl"`, `"%s.%s.spl"` and a
-/// straight copy, none of which needs a formatter. The cap stays: upstream
-/// truncated at `MAXPATHL`, and a path longer than that only fails to open,
-/// so truncating here keeps the same answer.
-///
-/// # Safety
-///
-/// `fnames` must hold `fcount` NUL-terminated paths, at least one.
-unsafe fn output_name(
-    fnames: *mut *mut ::core::ffi::c_char,
+/// The cap stays: upstream truncated at `MAXPATHL`, and a path longer than
+/// that only fails to open, so truncating here keeps the same answer.
+fn output_name(
+    first: &[u8],
     fcount: ::core::ffi::c_int,
     ascii: bool,
     default_incount: ::core::ffi::c_int,
 ) -> (XString, ::core::ffi::c_int) {
-    // SAFETY: the caller promises the paths.
-    let first = unsafe { cstr::bytes_at(*fnames) };
-    let ends_with = |ext: &::core::ffi::CStr| {
+    let ends_with = |ext: &CStr| {
         let ext = ext.to_bytes();
         first.len() > ext.len() && first.ends_with(ext)
     };
@@ -631,23 +606,18 @@ unsafe fn output_name(
 
 /// Can `:mkspell` write here? Reports why not, if not.
 fn output_is_writable(wfname: &CStr, incount: ::core::ffi::c_int, over_write: bool) -> bool {
-    // SAFETY: the caller promises the path.
     if incount <= 0 {
         emsg(gettext(e_invarg));
-    } else if has_char(
-        unsafe { path_tail(cstr::at(wfname.as_ptr())) },
-        '_' as ::core::ffi::c_int,
-    ) {
+    } else if has_char(path_tail(wfname), '_' as ::core::ffi::c_int) {
         emsg(gettext(c"E751: Output file name must not have region name"));
     } else if incount > MAXREGIONS as ::core::ffi::c_int {
         semsg!(
             "E754: Only up to {} regions supported",
             MAXREGIONS as ::core::ffi::c_int
         );
-    } else if !over_write && unsafe { os_path_exists(wfname.as_ptr()) } {
+    } else if !over_write && path_exists(wfname) {
         emsg(gettext(e_exists));
-    } else if unsafe { os_isdir(wfname.as_ptr()) } {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+    } else if dir_exists(wfname) {
         let wfname = msg_cstr(wfname);
         semsg!("E17: \"{wfname}\" is a directory");
     } else {
@@ -660,82 +630,51 @@ fn output_is_writable(wfname: &CStr, incount: ::core::ffi::c_int, over_write: bo
 ///
 /// A single input covers every region and carries no suffix. Returns false,
 /// having reported the name, when one of several does not carry one.
-///
-/// # Safety
-///
-/// `innames` must hold `incount` NUL-terminated paths.
-unsafe fn read_region_names(
-    spin: &mut SpellInfo,
-    innames: *mut *mut ::core::ffi::c_char,
-    incount: ::core::ffi::c_int,
-) -> bool {
-    if incount <= 1 {
+fn read_region_names(spin: &mut SpellInfo, innames: &[&[u8]]) -> bool {
+    if innames.len() <= 1 {
         return true;
     }
-    // SAFETY: the caller promises the paths; the two bytes read below are
-    // the last two before the terminator of a name at least five long.
-    for i in 0..incount as usize {
-        let name = unsafe { *innames.add(i) };
-        let len = unsafe { cstr::bytes_at(name) }.len();
-        if unsafe { path_tail(cstr::at(name)).to_bytes() }.len() < 5
-            || unsafe { *name.add(len - 3) } != b'_' as ::core::ffi::c_char
-        {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let name = unsafe { c_str(name) };
+    for (i, name) in innames.iter().enumerate() {
+        let len = name.len();
+        if len - tail_index(name) < 5 || name[len - 3] != b'_' {
+            let name = msg_bytes(name);
             semsg!("E755: Invalid region in {name}");
             return false;
         }
-        spin.si_region_name[i * 2] = to_lower_ascii(unsafe { *name.add(len - 2) });
-        spin.si_region_name[i * 2 + 1] = to_lower_ascii(unsafe { *name.add(len - 1) });
+        spin.si_region_name[i * 2] = name[len - 2].to_ascii_lowercase();
+        spin.si_region_name[i * 2 + 1] = name[len - 1].to_ascii_lowercase();
     }
     true
 }
 
-/// Lower-case one ASCII letter, leaving every other byte — including the
-/// high half, where `c_char` is negative — alone.
-fn to_lower_ascii(c: ::core::ffi::c_char) -> ::core::ffi::c_char {
-    if c < b'A' as ::core::ffi::c_char || c > b'Z' as ::core::ffi::c_char {
-        c
-    } else {
-        c + (b'a' - b'A') as ::core::ffi::c_char
-    }
-}
-
 /// Read every input into `spin`: an `.aff`/`.dic` pair where an `.aff`
 /// exists, a plain word list otherwise. Returns whether one of them failed,
-/// which stops the rest.
-///
-/// # Safety
-///
-/// `innames` must hold `incount` NUL-terminated paths and `afile` at least
-/// `incount` slots.
-unsafe fn read_inputs(
-    spin: &mut SpellInfo,
-    innames: *mut *mut ::core::ffi::c_char,
-    incount: ::core::ffi::c_int,
-    afile: &mut [*mut AffFile],
-) -> bool {
-    // SAFETY: the caller promises the paths.
-    for (i, aff) in afile.iter_mut().enumerate().take(incount as usize) {
+/// which stops the rest. The affix files read go to `afile`, which owns
+/// them until the run is over.
+fn read_inputs(spin: &mut SpellInfo, innames: &[&[u8]], afile: &mut Vec<Option<AffFile>>) -> bool {
+    for (i, &stem) in innames.iter().enumerate() {
         spin.si_conv.vc_type = CONV_NONE;
         spin.si_region = 1 << i;
-        // SAFETY: the caller promises `incount` NUL-terminated paths.
-        let stem = unsafe { cstr::at(*innames.add(i)) };
         let with_ext = |ext: &[u8]| {
-            let mut name = XString::from_cstr(stem);
+            let mut name = XString::from_bytes(stem);
             name.push_bytes(ext);
             name
         };
 
         let aff_name = with_ext(b".aff");
-        let failed = if unsafe { os_path_exists(aff_name.as_ptr()) } {
-            *aff = unsafe { spell_read_aff(spin, aff_name.as_cstr()) };
-            aff.is_null() || {
-                let dic_name = with_ext(b".dic");
-                unsafe { spell_read_dic(spin, dic_name.as_cstr(), &mut **aff).is_err() }
-            }
+        let failed = if path_exists(aff_name.as_cstr()) {
+            let aff = spell_read_aff(spin, aff_name.as_cstr());
+            let failed = match aff {
+                None => true,
+                Some(ref aff) => {
+                    let dic_name = with_ext(b".dic");
+                    spell_read_dic(spin, dic_name.as_cstr(), aff).is_err()
+                }
+            };
+            afile.push(aff);
+            failed
         } else {
-            spell_read_wordfile(spin, stem).is_err()
+            spell_read_wordfile(spin, XString::from_bytes(stem).as_cstr()).is_err()
         };
         spin.si_conv = crate::types::CONV_NONE_INIT;
         if failed {
@@ -778,10 +717,7 @@ pub(super) fn spell_message_fmt(spin: &SpellInfo, args: core::fmt::Arguments<'_>
 pub fn ex_spell(excmd: &mut ExArg) {
     let (cmdidx, forceit, line2) = (excmd.cmdidx, excmd.forceit, excmd.line2);
     // A copy of the word: adding it writes files and may run autocommands.
-    let mut word = excmd.line.arg().to_vec();
-    let len = word.len() as ::core::ffi::c_int;
-    word.push(0);
-    let arg = word.as_mut_ptr().cast::<::core::ffi::c_char>();
+    let word = excmd.line.arg().to_vec();
 
     let kind = if cmdidx == CmdIdx::spellwrong {
         SPELL_ADD_BAD
@@ -799,7 +735,7 @@ pub fn ex_spell(excmd: &mut ExArg) {
     };
 
     let undo = cmdidx == CmdIdx::spellundo;
-    unsafe { spell_add_word(arg, len, kind as SpellAddType, which, undo) };
+    spell_add_word(&word, kind as SpellAddType, which, undo);
 }
 
 /// Adopt `new_st` as the word character table, or check that it agrees with
@@ -826,43 +762,4 @@ fn set_spell_finish(new_st: &SpellTab) -> Result<(), Failed> {
         return Err(Failed);
     }
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// The affix tables store a pointer *into* the header, so the way back
-    /// is the field's offset — which is why dropping `repr(C)` from these
-    /// parse-time structs costs nothing.
-    #[test]
-    fn an_affix_key_names_the_header_it_came_from() {
-        let mut ah = AffHeader {
-            ah_key: [0; 17],
-            ah_flag: 0,
-            ah_new_id: 0,
-            ah_combine: 0,
-            ah_follows: 0,
-            ah_first: ::core::ptr::null_mut(),
-        };
-        let at = &raw mut ah;
-        let key = AffHeader::key(at);
-        assert_eq!(key, (&raw mut ah.ah_key).cast());
-        // SAFETY: `key` is this header's key field and the header is alive.
-        assert_eq!(unsafe { AffHeader::of_key(key) }, at);
-    }
-
-    #[test]
-    fn a_compound_key_names_the_item_it_came_from() {
-        let mut ci = CompItem {
-            ci_key: [0; 17],
-            ci_flag: 0,
-            ci_new_id: 0,
-        };
-        let at = &raw mut ci;
-        let key = CompItem::key(at);
-        assert_eq!(key, (&raw mut ci.ci_key).cast());
-        // SAFETY: `key` is this item's key field and the item is alive.
-        assert_eq!(unsafe { CompItem::of_key(key) }, at);
-    }
 }

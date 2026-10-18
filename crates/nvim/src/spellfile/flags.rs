@@ -28,44 +28,43 @@
 //! [`check_renumber`] jumps both apart when they are about to collide, so
 //! the two kinds never share a value.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::cstr;
-use crate::message_fmt::{c_str, msg_cstr};
+use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::smsg;
-use crate::strings::has_char;
-use core::ffi::{CStr, c_char, c_int, c_uint};
+use crate::strings::{find_char, has_char};
+use core::ffi::{CStr, c_int, c_uint};
 
-use crate::ascii::ascii_isdigit;
-use crate::charset::getdigits_int;
-use crate::hashtab::{hash_add, hash_clear, hash_find};
-use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
-use crate::memory::{xfree, xmemcpyz};
-use crate::types::{NUL, size_t, uint8_t};
-use ::libc::{strcat, strcpy};
+use crate::charset::getdigits_int_at;
+use crate::cstr::byte_at;
+use crate::mbyte::{c_cluster_len, char_at};
+use crate::types::NUL;
 
+use super::wordtree::COMP_ITEM_BYTES;
 use super::{
-    AFT_CAPLONG, AFT_CHAR, AFT_LONG, AFT_NUM, AffEntry, AffFile, AffHeader, CompItem, SpellInfo,
-    ZERO_FLAG,
+    AFT_CAPLONG, AFT_CHAR, AFT_LONG, AFT_NUM, AffEntry, AffFile, CompItem, SpellInfo, ZERO_FLAG,
 };
 
-/// Decode one flag and advance `cursor` past it. Returns 0 when there is none.
+/// `text` from `at` on, empty past its end: what a C walk saw there.
+fn rest(text: &[u8], at: usize) -> &[u8] {
+    text.get(at..).unwrap_or_default()
+}
+
+/// Decode one flag of `text` at `*at` and advance past it. Returns 0 when
+/// there is none.
 ///
-/// # Safety
-///
-/// `cursor` must point at a pointer into a NUL-terminated string.
-pub(super) unsafe fn get_affitem(flagtype: c_int, cursor: *mut *mut c_char) -> c_uint {
-    // SAFETY: the caller promises the string; each branch advances `cursor` by
-    // at most what it read.
+/// `text` is read as the C string it was: past its end, or at a NUL, is
+/// the terminator.
+pub(super) fn get_affitem(flagtype: c_int, text: &[u8], at: &mut usize) -> c_uint {
     if flagtype == AFT_NUM {
-        if !ascii_isdigit(unsafe { **cursor } as c_int) {
+        if !byte_at(text, *at).is_ascii_digit() {
             // Not a number at all; step over the offending byte so the
             // caller makes progress.
-            unsafe { *cursor = (*cursor).add(1) };
+            *at += 1;
             return 0;
         }
-        let mut res = unsafe { getdigits_int(cursor, true, 0) };
+        let (mut res, past) = getdigits_int_at(text, *at, true, 0);
+        *at = past;
         if res == 0 {
             // Zero would read as "no flag", so it gets its own value.
             res = ZERO_FLAG;
@@ -73,40 +72,29 @@ pub(super) unsafe fn get_affitem(flagtype: c_int, cursor: *mut *mut c_char) -> c
         return res as c_uint;
     }
 
-    let mut res = unsafe { utf_ptr2char(*cursor) };
-    unsafe { *cursor = (*cursor).wrapping_add(utfc_ptr2len(*cursor) as usize) };
+    let mut res = char_at(rest(text, *at));
+    *at += c_cluster_len(rest(text, *at));
     // Two-character flags: always for LONG, and for CAPLONG only when
     // the first character is upper case ASCII.
     if flagtype == AFT_LONG
         || (flagtype == AFT_CAPLONG && res >= b'A' as c_int && res <= b'Z' as c_int)
     {
-        if unsafe { **cursor } as c_int == NUL {
+        if byte_at(text, *at) == NUL as u8 {
             return 0;
         }
-        res = unsafe { utf_ptr2char(*cursor) } + (res << 16);
-        unsafe { *cursor = (*cursor).wrapping_add(utfc_ptr2len(*cursor) as usize) };
+        res = char_at(rest(text, *at)) + (res << 16);
+        *at += c_cluster_len(rest(text, *at));
     }
     res as c_uint
 }
 
 /// Decode an item that should hold exactly one flag, complaining if it
 /// does not.
-///
-/// # Safety
-///
-/// `item` and `fname` must be NUL-terminated.
-pub(super) unsafe fn affitem2flag(
-    flagtype: c_int,
-    item: *mut c_char,
-    fname: &CStr,
-    lnum: c_int,
-) -> c_uint {
-    // SAFETY: the caller promises the strings.
-    let mut p = item;
-    let res = unsafe { get_affitem(flagtype, &raw mut p) };
+pub(super) fn affitem2flag(flagtype: c_int, item: &[u8], fname: &CStr, lnum: c_int) -> c_uint {
+    let mut at = 0;
+    let res = get_affitem(flagtype, item, &mut at);
     if res == 0 {
-        // SAFETY: the affix file's name and the offending item.
-        let (file, shown) = unsafe { (msg_cstr(fname), c_str(item)) };
+        let (file, shown) = (msg_cstr(fname), msg_bytes(item));
         if flagtype == AFT_NUM {
             smsg!(0, "Flag is not a number in {file} line {lnum}: {shown}");
         } else {
@@ -114,9 +102,8 @@ pub(super) unsafe fn affitem2flag(
         }
     }
     // Anything left over means the item was more than one flag.
-    if unsafe { *p } as c_int != NUL {
-        // SAFETY: as above.
-        let (file, shown) = unsafe { (msg_cstr(fname), c_str(item)) };
+    if byte_at(item, at) != NUL as u8 {
+        let (file, shown) = (msg_cstr(fname), msg_bytes(item));
         smsg!(0, "Affix name too long in {file} line {lnum}: {shown}");
         return 0;
     }
@@ -124,24 +111,19 @@ pub(super) unsafe fn affitem2flag(
 }
 
 /// Is `flag` one of the flags in `afflist`?
-///
-/// # Safety
-///
-/// `afflist` must be NUL-terminated.
-pub(super) unsafe fn flag_in_afflist(flagtype: c_int, afflist: *mut c_char, flag: c_uint) -> bool {
-    // SAFETY: the caller promises the string; every walk stops at its NUL.
+pub(super) fn flag_in_afflist(flagtype: c_int, afflist: &[u8], flag: c_uint) -> bool {
     match flagtype {
-        AFT_CHAR => has_char(unsafe { cstr::at(afflist) }, flag as c_int),
+        AFT_CHAR => find_char(afflist, flag as c_int).is_some(),
         AFT_LONG | AFT_CAPLONG => {
-            let mut p = afflist;
-            while unsafe { *p } as c_int != NUL {
-                let mut n = unsafe { utf_ptr2char(p) } as c_uint;
-                p = p.wrapping_add(unsafe { utfc_ptr2len(p) } as usize);
+            let mut p = 0;
+            while byte_at(afflist, p) != NUL as u8 {
+                let mut n = char_at(rest(afflist, p)) as c_uint;
+                p += c_cluster_len(rest(afflist, p));
                 if (flagtype == AFT_LONG || (n >= b'A' as c_uint && n <= b'Z' as c_uint))
-                    && unsafe { *p } as c_int != NUL
+                    && byte_at(afflist, p) != NUL as u8
                 {
-                    n = (unsafe { utf_ptr2char(p) } as c_uint).wrapping_add(n << 16);
-                    p = p.wrapping_add(unsafe { utfc_ptr2len(p) } as usize);
+                    n = (char_at(rest(afflist, p)) as c_uint).wrapping_add(n << 16);
+                    p += c_cluster_len(rest(afflist, p));
                 }
                 if n == flag {
                     return true;
@@ -150,9 +132,10 @@ pub(super) unsafe fn flag_in_afflist(flagtype: c_int, afflist: *mut c_char, flag
             false
         }
         AFT_NUM => {
-            let mut p = afflist;
-            while unsafe { *p } as c_int != NUL {
-                let digits = unsafe { getdigits_int(&raw mut p, true, 0) };
+            let mut p = 0;
+            while byte_at(afflist, p) != NUL as u8 {
+                let (digits, past) = getdigits_int_at(afflist, p, true, 0);
+                p = past;
                 debug_assert!(digits >= 0);
                 let mut n = digits as c_uint;
                 if n == 0 {
@@ -163,8 +146,8 @@ pub(super) unsafe fn flag_in_afflist(flagtype: c_int, afflist: *mut c_char, flag
                 }
                 // Step over the comma, or the byte that was not a
                 // digit, so the walk terminates.
-                if unsafe { *p } as c_int != NUL {
-                    p = unsafe { p.add(1) };
+                if byte_at(afflist, p) != NUL as u8 {
+                    p += 1;
                 }
             }
             false
@@ -175,118 +158,94 @@ pub(super) unsafe fn flag_in_afflist(flagtype: c_int, afflist: *mut c_char, flag
 
 /// Strip `COMPOUNDPERMITFLAG` and `COMPOUNDFORBIDFLAG` out of an affix
 /// entry's own flags, recording them as booleans on the entry instead.
-///
-/// # Safety
-///
-/// `entry` and `affile` must be live, and `ae_flags` NUL-terminated.
-pub(super) unsafe fn aff_process_flags(affile: &AffFile, entry: *mut AffEntry) {
-    // SAFETY: the caller promises both; the memmove closes a gap inside one
-    // string, so source and destination share an allocation.
-    if unsafe { (*entry).ae_flags }.is_null()
-        || (affile.af_compforbid == 0 && affile.af_comppermit == 0)
-    {
+pub(super) fn aff_process_flags(affile: &AffFile, entry: &mut AffEntry) {
+    if affile.af_compforbid == 0 && affile.af_comppermit == 0 {
         return;
     }
-    let mut p = unsafe { (*entry).ae_flags };
-    while unsafe { *p } as c_int != NUL {
+    let Some(flags) = entry.ae_flags.as_mut() else {
+        return;
+    };
+    let mut p = 0;
+    while byte_at(flags, p) != NUL as u8 {
         let prevp = p;
-        let flag = unsafe { get_affitem(affile.af_flagtype, &raw mut p) };
+        let flag = get_affitem(affile.af_flagtype, flags, &mut p);
         if flag == affile.af_comppermit || flag == affile.af_compforbid {
             // Remove the flag from the list and stay put, so the next
             // flag is read from where this one was.
-            let into = prevp.cast::<u8>();
-            unsafe { into.copy_from(p.cast(), cstr::bytes_at(p).len() + 1) };
+            flags.drain(prevp..p.min(flags.len()));
             p = prevp;
             if flag == affile.af_comppermit {
-                unsafe { (*entry).ae_comppermit = 1 };
+                entry.ae_comppermit = true;
             } else {
-                unsafe { (*entry).ae_compforbid = 1 };
+                entry.ae_compforbid = true;
             }
         }
-        if affile.af_flagtype == AFT_NUM && unsafe { *p } as c_int == b',' as c_int {
-            p = unsafe { p.add(1) };
+        if affile.af_flagtype == AFT_NUM && byte_at(flags, p) == b',' {
+            p += 1;
         }
     }
-    if unsafe { *(*entry).ae_flags } as c_int == NUL {
-        unsafe { (*entry).ae_flags = core::ptr::null_mut() };
+    if flags.first().is_none_or(|&b| b == NUL as u8) {
+        entry.ae_flags = None;
     }
 }
 
 /// Rewrite the compound pattern in terms of one-byte ids, appending it to
 /// whatever a previous `.aff` file already contributed.
-///
-/// # Safety
-///
-/// `compflags` must be NUL-terminated and `aff` live.
-pub(super) unsafe fn process_compflags(
-    spin: &mut SpellInfo,
-    aff: &mut AffFile,
-    compflags: *mut c_char,
-) {
-    // SAFETY: the destination is sized for the old pattern, a separator and
-    // the new one, and each flag turns into at most one byte.
-    let mut len = unsafe { cstr::bytes_at(compflags) }.len() + 1;
-    if !spin.si_compflags.is_null() {
-        len += unsafe { cstr::bytes_at(spin.si_compflags) }.len() + 1;
+pub(super) fn process_compflags(spin: &mut SpellInfo, aff: &mut AffFile, compflags: &[u8]) {
+    // What upstream allocated: the old pattern, a separator and the new one,
+    // where each flag turns into at most one byte.
+    let mut len = compflags.len() + 1;
+    if let Some(old) = &spin.si_compflags {
+        len += old.len() + 1;
     }
-    let dest = spin.si_arena.alloc_bytes(len, false);
-    if !spin.si_compflags.is_null() {
-        unsafe { strcpy(dest, spin.si_compflags) };
-        unsafe { strcat(dest, c"/".as_ptr()) };
+    spin.si_arena.charge(len, false);
+    let mut dest = Vec::with_capacity(len);
+    if let Some(old) = &spin.si_compflags {
+        dest.extend_from_slice(old);
+        dest.push(b'/');
     }
-    spin.si_compflags = dest;
 
-    let mut tp = unsafe { dest.cast::<uint8_t>().add(cstr::bytes_at(dest).len()) };
-    let mut p = compflags;
-    let mut key: [c_char; 17] = [0; 17];
-    while unsafe { *p } as c_int != NUL {
+    let mut p = 0;
+    while p < compflags.len() {
         // Pattern punctuation passes straight through.
-        if has_char(c"/?*+[]", unsafe { *p } as uint8_t as c_int) {
-            unsafe { *tp = *p as uint8_t };
-            tp = unsafe { tp.add(1) };
-            p = unsafe { p.add(1) };
+        if has_char(c"/?*+[]", c_int::from(compflags[p])) {
+            dest.push(compflags[p]);
+            p += 1;
             continue;
         }
 
         let prevp = p;
-        let flag = unsafe { get_affitem(aff.af_flagtype, &raw mut p) };
+        let flag = get_affitem(aff.af_flagtype, compflags, &mut p);
         if flag != 0 {
-            unsafe {
-                xmemcpyz(
-                    key.as_mut_ptr().cast(),
-                    prevp.cast(),
-                    p.offset_from(prevp) as size_t,
-                )
+            let key = &compflags[prevp..p.min(compflags.len())];
+            let id = match aff.af_comp.find(key) {
+                Some(at) => aff.af_comp.get(at).ci_new_id,
+                None => {
+                    spin.si_arena.charge(COMP_ITEM_BYTES, true);
+                    // Ids count downwards, skipping any byte that would be
+                    // meaningful in the pattern this becomes.
+                    let id = loop {
+                        check_renumber(spin);
+                        let id = spin.si_newcomp_id;
+                        spin.si_newcomp_id -= 1;
+                        if !has_char(c"/?*+[]\\-^", id) {
+                            break id;
+                        }
+                    };
+                    aff.af_comp.insert(CompItem {
+                        ci_key: key.to_vec(),
+                        ci_new_id: id,
+                    });
+                    id
+                }
             };
-            let hi = unsafe { hash_find(&raw mut aff.af_comp, key.as_mut_ptr()) };
-            let id = if hi.is_kept() {
-                unsafe { (*CompItem::of_key(hi.hi_key)).ci_new_id }
-            } else {
-                let ci = spin.si_arena.alloc::<CompItem>();
-                unsafe { strcpy(CompItem::key(ci), key.as_mut_ptr()) };
-                unsafe { (*ci).ci_flag = flag };
-                // Ids count downwards, skipping any byte that would be
-                // meaningful in the pattern this becomes.
-                let id = loop {
-                    check_renumber(spin);
-                    let id = spin.si_newcomp_id;
-                    spin.si_newcomp_id -= 1;
-                    if !has_char(c"/?*+[]\\-^", id) {
-                        break id;
-                    }
-                };
-                unsafe { (*ci).ci_new_id = id };
-                let _ = unsafe { hash_add(&raw mut aff.af_comp, CompItem::key(ci)) };
-                id
-            };
-            unsafe { *tp = id as uint8_t };
-            tp = unsafe { tp.add(1) };
+            dest.push(id as u8);
         }
-        if aff.af_flagtype == AFT_NUM && unsafe { *p } as c_int == b',' as c_int {
-            p = unsafe { p.add(1) };
+        if aff.af_flagtype == AFT_NUM && byte_at(compflags, p) == b',' {
+            p += 1;
         }
     }
-    unsafe { *tp = NUL as uint8_t };
+    spin.si_compflags = Some(dest);
 }
 
 /// Move the prefix and compound id counters apart before they meet.
@@ -299,31 +258,4 @@ pub(super) fn check_renumber(spin: &mut SpellInfo) {
         spin.si_newpref_id = 127;
         spin.si_newcomp_id = 255;
     }
-}
-
-/// Release what an affix file owns outside the arena: the encoding name and
-/// every compiled condition.
-///
-/// # Safety
-///
-/// `aff` must be a live affix file that is not used again.
-pub(super) unsafe fn spell_free_aff(aff: &mut AffFile) {
-    // SAFETY: the caller promises the affix file; the regexps below are the
-    // only heap allocations the entries own.
-    unsafe { xfree(aff.af_enc.cast()) };
-
-    for ht in [&aff.af_pref, &aff.af_suff] {
-        for hi in ht.items() {
-            let ah = unsafe { AffHeader::of_key(hi.hi_key) };
-            let mut ae = unsafe { (*ah).ah_first };
-            while !ae.is_null() {
-                unsafe { (*ae).ae_prog = None };
-                ae = unsafe { (*ae).ae_next };
-            }
-        }
-    }
-
-    hash_clear(&mut aff.af_pref);
-    hash_clear(&mut aff.af_suff);
-    hash_clear(&mut aff.af_comp);
 }

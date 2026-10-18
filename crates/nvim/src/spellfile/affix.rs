@@ -18,31 +18,36 @@
 //! no entry in the block turns out to be postponable the id is given back,
 //! since ids are a scarce single byte shared with compound flags.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::cstr;
 use crate::message_fmt::msg_cstr;
 use crate::smsg;
-use crate::snprintf;
-use core::ffi::{CStr, c_char, c_int};
+use core::cell::RefCell;
+use core::ffi::{CStr, c_int};
 
-use crate::hashtab::{hash_add, hash_find};
-use crate::mbyte::{mb_toupper, utf_head_off, utf_ptr2char, utfc_ptr2len};
-use crate::memory::xstrlcpy;
+use crate::mbyte::{c_cluster_len, char_at, head_off, mb_toupper};
 use crate::spell::{onecap_copy, spelltab_upper};
-use crate::strings::{any_non_ascii, vim_strchr};
-use crate::types::{HashTab, NUL, size_t};
-use ::libc::{atoi, strcpy};
+use crate::strings::{any_non_ascii, find_char};
 
-use super::aff::{AffState, item_ptr};
+use super::aff::{AffState, item_number};
 use super::flags::{aff_process_flags, affitem2flag, check_renumber};
-use super::wordtree::tree_add_word;
+use super::wordtree::{AFF_ENTRY_BYTES, AFF_HEADER_BYTES, tree_add_word};
 use super::{
-    AH_KEY_LEN, AffEntry, AffFile, AffHeader, MAXLINELEN, PFX_FLAGS, SpellInfo, WFP_COMPFORBID,
-    WFP_COMPPERMIT, WFP_NC, WFP_UP, vim_regcomp,
+    AH_KEY_LEN, AffEntry, AffFile, AffHeader, AffixKind, MAXLINELEN, PFX_FLAGS, SpellInfo,
+    WFP_COMPFORBID, WFP_COMPPERMIT, WFP_NC, WFP_UP, vim_regcomp,
 };
-use crate::regexp::{RE_MAGIC, RE_STRICT, RE_STRING};
+use crate::regexp::{OwnedProg, RE_MAGIC, RE_STRICT, RE_STRING};
+
+/// Compile an affix condition: `pattern` is `^%s` or `%s$` around it,
+/// cut where upstream's `MAXLINELEN` buffer cut it.
+fn compile_condition(before: &[u8], cond: &[u8], after: &[u8], flags: c_int) -> Option<OwnedProg> {
+    let mut pattern = Vec::with_capacity(before.len() + cond.len() + after.len());
+    pattern.extend_from_slice(before);
+    pattern.extend_from_slice(cond);
+    pattern.extend_from_slice(after);
+    pattern.truncate(MAXLINELEN as usize - 1);
+    crate::cstr::with_terminated(&pattern, |pattern| vim_regcomp(pattern, flags))
+}
 
 /// The header line of a `PFX`/`SFX` block. Returns false to stop reading.
 pub(super) fn handle_affix_header(
@@ -53,95 +58,93 @@ pub(super) fn handle_affix_header(
     fname: &CStr,
     lnum: c_int,
 ) -> bool {
-    // SAFETY: `key` is AH_KEY_LEN and `xstrlcpy` is given that bound.
-    let is_prefix = items[0].to_bytes().starts_with(b"P");
-    let tp: *mut HashTab = if is_prefix {
-        &raw mut aff.af_pref
+    let kind = if items[0].to_bytes().starts_with(b"P") {
+        AffixKind::Prefix
     } else {
-        &raw mut aff.af_suff
+        AffixKind::Suffix
     };
-
-    let mut key: [c_char; 17] = [0; 17];
-    unsafe { xstrlcpy(key.as_mut_ptr(), item_ptr(items[1]), AH_KEY_LEN as size_t) };
-    let hi = unsafe { hash_find(tp, key.as_mut_ptr()) };
+    let name = items[1].to_bytes();
+    // The table keys on the name cut to the key's room.
+    let key = &name[..name.len().min(AH_KEY_LEN as usize - 1)];
     let combines = items[2].to_bytes().starts_with(b"Y");
 
-    if hi.is_kept() {
-        // A continued block for an affix already defined.
-        st.cur_aff = unsafe { AffHeader::of_key(hi.hi_key) };
-        if (unsafe { (*st.cur_aff).ah_combine } != 0) != combines {
-            // SAFETY: the affix file's name, NUL-terminated.
-            let (file, item) = (msg_cstr(fname), msg_cstr(items[1]));
-            smsg!(
-                0,
-                "Different combining flag in continued affix block in {file} line {lnum}: {item}"
-            );
+    let at = match aff.affixes(kind).find(key) {
+        Some(at) => {
+            // A continued block for an affix already defined.
+            let ah = aff.affixes(kind).get(at);
+            if (ah.ah_combine != 0) != combines {
+                let (file, item) = (msg_cstr(fname), msg_cstr(items[1]));
+                smsg!(
+                    0,
+                    "Different combining flag in continued affix block in {file} line {lnum}: {item}"
+                );
+            }
+            if ah.ah_follows == 0 {
+                let (fname, arg2) = (msg_cstr(fname), msg_cstr(items[1]));
+                smsg!(0, "Duplicate affix in {fname} line {}: {arg2}", lnum);
+            }
+            at
         }
-        if unsafe { (*st.cur_aff).ah_follows } == 0 {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let (fname, arg2) = (msg_cstr(fname), msg_cstr(items[1]));
-            smsg!(0, "Duplicate affix in {fname} line {}: {arg2}", lnum);
+        None => {
+            spin.si_arena.charge(AFF_HEADER_BYTES, true);
+            let flag = affitem2flag(aff.af_flagtype, name, fname, lnum);
+            // An unusable name is fatal: the key would not fit, or the
+            // flag could not be read.
+            if flag == 0 || name.len() >= AH_KEY_LEN as usize {
+                st.cur_aff = None;
+                return false;
+            }
+            let clashes = [
+                aff.af_bad,
+                aff.af_rare,
+                aff.af_keepcase,
+                aff.af_needaffix,
+                aff.af_circumfix,
+                aff.af_nosuggest,
+                aff.af_needcomp,
+                aff.af_comproot,
+            ];
+            if clashes.contains(&flag) {
+                let (fname, arg2) = (msg_cstr(fname), msg_cstr(items[1]));
+                smsg!(
+                    0,
+                    "Affix also used for BAD/RARE/KEEPCASE/NEEDAFFIX/NEEDCOMPOUND/NOSUGGEST in {fname} line {}: {arg2}",
+                    lnum
+                );
+            }
+            aff.affixes_mut(kind).insert(AffHeader {
+                ah_key: name.to_vec(),
+                ah_flag: flag,
+                ah_new_id: 0,
+                ah_combine: c_int::from(combines),
+                ah_follows: 0,
+                ah_entries: Vec::new(),
+            })
         }
-    } else {
-        st.cur_aff = spin.si_arena.alloc::<AffHeader>();
-        unsafe {
-            (*st.cur_aff).ah_flag = affitem2flag(aff.af_flagtype, item_ptr(items[1]), fname, lnum)
-        };
-        // An unusable name is fatal: the key would not fit, or the
-        // flag could not be read.
-        if unsafe { (*st.cur_aff).ah_flag } == 0
-            || items[1].to_bytes().len() >= AH_KEY_LEN as size_t
-        {
-            return false;
-        }
-        let clashes = [
-            aff.af_bad,
-            aff.af_rare,
-            aff.af_keepcase,
-            aff.af_needaffix,
-            aff.af_circumfix,
-            aff.af_nosuggest,
-            aff.af_needcomp,
-            aff.af_comproot,
-        ];
-        if clashes.contains(&unsafe { (*st.cur_aff).ah_flag }) {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let (fname, arg2) = (msg_cstr(fname), msg_cstr(items[1]));
-            smsg!(
-                0,
-                "Affix also used for BAD/RARE/KEEPCASE/NEEDAFFIX/NEEDCOMPOUND/NOSUGGEST in {fname} line {}: {arg2}",
-                lnum
-            );
-        }
-        unsafe { strcpy(AffHeader::key(st.cur_aff), item_ptr(items[1])) };
-        let _ = unsafe { hash_add(tp, AffHeader::key(st.cur_aff)) };
-        unsafe { (*st.cur_aff).ah_combine = combines as c_int };
-    }
+    };
+    st.cur_aff = Some((kind, at));
 
     // An "S" after the count says another block for this affix follows.
     let mut lasti = 4;
-    if items.len() > lasti && items[lasti] == c"S" {
+    let follows = items.len() > lasti && items[lasti] == c"S";
+    if follows {
         lasti += 1;
-        unsafe { (*st.cur_aff).ah_follows = 1 };
-    } else {
-        unsafe { (*st.cur_aff).ah_follows = 0 };
     }
+    aff.affixes_mut(kind).get_mut(at).ah_follows = c_int::from(follows);
     if items.len() > lasti && !aff.af_ignoreextra && !items[lasti].to_bytes().starts_with(b"#") {
-        // SAFETY: the affix file's name, NUL-terminated.
         let (file, item) = (msg_cstr(fname), msg_cstr(items[lasti]));
         smsg!(0, "Trailing text in {file} line {lnum}: {item}");
     }
     if items[2] != c"Y" && items[2] != c"N" {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let (fname, arg2) = (msg_cstr(fname), msg_cstr(items[2]));
         smsg!(0, "Expected Y or N in {fname} line {}: {arg2}", lnum);
     }
 
-    if is_prefix && aff.af_pfxpostpone != 0 {
-        if unsafe { (*st.cur_aff).ah_new_id } == 0 {
+    if kind == AffixKind::Prefix && aff.af_pfxpostpone != 0 {
+        if aff.af_pref.get(at).ah_new_id == 0 {
             check_renumber(spin);
             spin.si_newpref_id += 1;
-            unsafe { (*st.cur_aff).ah_new_id = spin.si_newpref_id };
+            aff.af_pref.get_mut(at).ah_new_id = spin.si_newpref_id;
             // Nothing has used the id yet; it is given back at the end
             // of the block if nothing does.
             st.did_postpone_prefix = false;
@@ -149,8 +152,7 @@ pub(super) fn handle_affix_header(
             st.did_postpone_prefix = true;
         }
     }
-    // SAFETY: an item, which is a live NUL-terminated string.
-    st.aff_todo = unsafe { atoi(item_ptr(items[3])) };
+    st.aff_todo = item_number(items[3]);
     true
 }
 
@@ -163,157 +165,149 @@ pub(super) fn handle_affix_entry(
     fname: &CStr,
     lnum: c_int,
 ) {
-    // SAFETY: `buf` is MAXLINELEN, which is the bound the snprintf calls
-    // are given.
     let lasti = 5;
     // A lone "-" is Hunspell's morphological field separator.
     if items.len() > lasti
         && !items[lasti].to_bytes().starts_with(b"#")
         && (items[lasti] != c"-" || items.len() != lasti + 1)
     {
-        // SAFETY: the affix file's name, NUL-terminated.
         let (file, item) = (msg_cstr(fname), msg_cstr(items[lasti]));
         smsg!(0, "Trailing text in {file} line {lnum}: {item}");
     }
     st.aff_todo -= 1;
+    let (kind, at) = st.cur_aff.expect("an entry follows its block's header");
 
-    let entry = spin.si_arena.alloc::<AffEntry>();
+    spin.si_arena.charge(AFF_ENTRY_BYTES, true);
+    let mut entry = AffEntry {
+        ae_chop: None,
+        ae_add: None,
+        ae_flags: None,
+        ae_cond: None,
+        ae_prog: RefCell::new(None),
+        ae_compforbid: false,
+        ae_comppermit: false,
+    };
     if items[2] != c"0" {
-        unsafe { (*entry).ae_chop = spin.si_arena.save_str(item_ptr(items[2])) };
+        let chop = items[2].to_bytes();
+        spin.si_arena.charge_str(chop);
+        entry.ae_chop = Some(chop.to_vec());
     }
     if items[3] != c"0" {
-        unsafe { (*entry).ae_add = spin.si_arena.save_str(item_ptr(items[3])) };
+        let mut add = items[3].to_bytes().to_vec();
+        spin.si_arena.charge_str(&add);
         // Flags the added form itself carries follow a "/".
-        unsafe { (*entry).ae_flags = vim_strchr((*entry).ae_add, b'/' as c_int) };
-        if !unsafe { (*entry).ae_flags }.is_null() {
-            unsafe { *(*entry).ae_flags = NUL as c_char };
-            unsafe { (*entry).ae_flags = (*entry).ae_flags.add(1) };
-            unsafe { aff_process_flags(aff, entry) };
+        if let Some(slash) = find_char(&add, c_int::from(b'/')) {
+            entry.ae_flags = Some(add[slash + 1..].to_vec());
+            add.truncate(slash);
+            entry.ae_add = Some(add);
+            aff_process_flags(aff, &mut entry);
+        } else {
+            entry.ae_add = Some(add);
         }
     }
 
     // With 'ascii' set, an affix that needs more than ASCII is dropped.
     if spin.si_ascii != 0
-        && (any_non_ascii(unsafe { cstr::bytes_at_or_empty((*entry).ae_chop) })
-            || any_non_ascii(unsafe { cstr::bytes_at_or_empty((*entry).ae_add) }))
+        && (any_non_ascii(entry.ae_chop.as_deref().unwrap_or_default())
+            || any_non_ascii(entry.ae_add.as_deref().unwrap_or_default()))
     {
         return;
     }
 
-    unsafe { (*entry).ae_next = (*st.cur_aff).ah_first };
-    unsafe { (*st.cur_aff).ah_first = entry };
-
-    let is_prefix = items[0].to_bytes().starts_with(b"P");
+    let is_prefix = kind == AffixKind::Prefix;
     if items[4] != c"." {
-        unsafe { (*entry).ae_cond = spin.si_arena.save_str(item_ptr(items[4])) };
-        let mut buf: [c_char; MAXLINELEN as usize] = [0; MAXLINELEN as usize];
+        let cond = items[4].to_bytes();
+        spin.si_arena.charge_str(cond);
+        entry.ae_cond = Some(cond.to_vec());
         // A prefix condition anchors at the start, a suffix at the end.
-        let pattern = if is_prefix { c"^%s" } else { c"%s$" };
-        let (out, room) = (buf.as_mut_ptr(), size_of_val(&buf));
-        unsafe { snprintf!(out, room, pattern.as_ptr(), item_ptr(items[4])) };
-        unsafe {
-            (*entry).ae_prog =
-                vim_regcomp(cstr::at(buf.as_mut_ptr()), RE_MAGIC + RE_STRING + RE_STRICT)
-        };
-        if unsafe { (*entry).ae_prog.is_none() } {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let (before, after): (&[u8], &[u8]) = if is_prefix { (b"^", b"") } else { (b"", b"$") };
+        let prog = compile_condition(before, cond, after, RE_MAGIC + RE_STRING + RE_STRICT);
+        if prog.is_none() {
             let (fname, arg2) = (msg_cstr(fname), msg_cstr(items[4]));
             smsg!(0, "Broken condition in {fname} line {}: {arg2}", lnum);
         }
+        entry.ae_prog = RefCell::new(prog);
     }
 
-    if is_prefix && aff.af_pfxpostpone != 0 && unsafe { (*entry).ae_flags }.is_null() {
-        postpone_prefix(spin, st, entry, items);
+    if is_prefix && aff.af_pfxpostpone != 0 && entry.ae_flags.is_none() {
+        postpone_prefix(spin, aff, st, &mut entry, items);
     }
+    aff.affixes_mut(kind).get_mut(at).ah_entries.push(entry);
 }
 
 /// File a prefix in the prefix tree instead of expanding it into words.
 pub(super) fn postpone_prefix(
     spin: &mut SpellInfo,
+    aff: &mut AffFile,
     st: &mut AffState,
-    entry: *mut AffEntry,
+    entry: &mut AffEntry,
     items: &[&CStr],
 ) {
-    // SAFETY: the caller promises the entry and the items.
     // A prefix that chops one letter and adds the same letter upper
     // cased is really a capitalisation rule; record it as one so the
     // checker can apply it without a chop.
     let mut upper = false;
-    if !unsafe { (*entry).ae_chop }.is_null()
-        && !unsafe { (*entry).ae_add }.is_null()
-        && unsafe {
-            *(*entry)
-                .ae_chop
-                .offset(utfc_ptr2len((*entry).ae_chop) as isize)
-        } as c_int
-            == NUL
+    if let (Some(chop), Some(add)) = (&entry.ae_chop, &mut entry.ae_add)
+        && c_cluster_len(chop) == chop.len()
     {
-        let c = unsafe { utf_ptr2char((*entry).ae_chop) };
+        let c = char_at(chop);
         let c_up = if c >= 128 {
             mb_toupper(c)
         } else {
-            spelltab_upper(c as usize) as c_int
+            c_int::from(spelltab_upper(c as usize))
         };
         if c_up != c
-            && (unsafe { (*entry).ae_cond }.is_null()
-                || unsafe { utf_ptr2char((*entry).ae_cond) } == c)
+            && entry
+                .ae_cond
+                .as_deref()
+                .is_none_or(|cond| char_at(cond) == c)
         {
             // Step back to the last character of what is added.
-            let mut p = unsafe { (*entry).ae_add.add(cstr::bytes_at((*entry).ae_add).len()) };
-            p = unsafe { p.offset(-((utf_head_off((*entry).ae_add, p.sub(1)) + 1) as isize)) };
-            if unsafe { utf_ptr2char(p) } == c_up {
+            let last = add
+                .len()
+                .checked_sub(1)
+                .map_or(0, |end| end - head_off(add, end));
+            if char_at(&add[last..]) == c_up {
                 upper = true;
-                unsafe { (*entry).ae_chop = core::ptr::null_mut() };
-                unsafe { *p = NUL as c_char };
-                if !unsafe { (*entry).ae_cond }.is_null() {
+                add.truncate(last);
+                entry.ae_chop = None;
+                if entry.ae_cond.is_some() {
                     // The condition has to match the capitalised form.
-                    let mut buf: [c_char; MAXLINELEN as usize] = [0; MAXLINELEN as usize];
-                    let cond = unsafe { cstr::bytes_at(item_ptr(items[4])) };
-                    onecap_copy(cond, cstr::as_bytes_mut(&mut buf), true);
-                    unsafe { (*entry).ae_cond = spin.si_arena.save_str(buf.as_mut_ptr()) };
-                    if !unsafe { (*entry).ae_cond }.is_null() {
-                        let out = buf.as_mut_ptr();
-                        let cond = unsafe { (*entry).ae_cond };
-                        unsafe { snprintf!(out, MAXLINELEN as size_t, c"^%s".as_ptr(), cond) };
-                        unsafe {
-                            (*entry).ae_prog =
-                                vim_regcomp(cstr::at(buf.as_mut_ptr()), RE_MAGIC + RE_STRING)
-                        };
-                    }
+                    let mut buf = [0u8; MAXLINELEN as usize];
+                    onecap_copy(items[4].to_bytes(), &mut buf, true);
+                    let cond = crate::cstr::until_nul(&buf).to_vec();
+                    spin.si_arena.charge_str(&cond);
+                    *entry.ae_prog.get_mut() =
+                        compile_condition(b"^", &cond, b"", RE_MAGIC + RE_STRING);
+                    entry.ae_cond = Some(cond);
                 }
             }
         }
     }
 
     // Only a prefix with nothing to chop can be applied at match time.
-    if unsafe { (*entry).ae_chop }.is_null() {
-        file_postponed_prefix(spin, st, entry, upper);
+    if entry.ae_chop.is_none() {
+        file_postponed_prefix(spin, aff, st, entry, upper);
     }
 
     // Nothing in the block was postponed after all; give the id back.
     if st.aff_todo == 0 && !st.did_postpone_prefix {
         spin.si_newpref_id -= 1;
-        unsafe { (*st.cur_aff).ah_new_id = 0 };
+        let (kind, at) = st.cur_aff.expect("an entry follows its block's header");
+        aff.affixes_mut(kind).get_mut(at).ah_new_id = 0;
     }
 }
 
 /// Put one postponed prefix into the prefix tree.
 pub(super) fn file_postponed_prefix(
     spin: &mut SpellInfo,
+    aff: &AffFile,
     st: &mut AffState,
-    entry: *mut AffEntry,
+    entry: &AffEntry,
     upper: bool,
 ) {
-    // SAFETY: the caller promises the entry.
     // Conditions are shared: the tree stores an index into si_prefcond.
-    // SAFETY: the caller promises the entry's condition string.
-    let cond = unsafe { (*entry).ae_cond };
-    let want: Option<&[u8]> = if cond.is_null() {
-        None
-    } else {
-        // SAFETY: as above.
-        Some(unsafe { cstr::bytes_at(cond) })
-    };
+    let want: Option<&[u8]> = entry.ae_cond.as_deref();
     let found = spin
         .si_prefcond
         .iter()
@@ -326,26 +320,24 @@ pub(super) fn file_postponed_prefix(
         }
     };
 
-    let added = if unsafe { (*entry).ae_add }.is_null() {
-        c"".as_ptr().cast_mut()
-    } else {
-        unsafe { (*entry).ae_add }
-    };
+    let added = entry.ae_add.as_deref().unwrap_or_default();
+    let (kind, at) = st.cur_aff.expect("an entry follows its block's header");
+    let ah = aff.affixes(kind).get(at);
     let mut n = PFX_FLAGS;
-    if unsafe { (*st.cur_aff).ah_combine } == 0 {
+    if ah.ah_combine == 0 {
         n |= WFP_NC as c_int;
     }
     if upper {
         n |= WFP_UP as c_int;
     }
-    if unsafe { (*entry).ae_comppermit } != 0 {
+    if entry.ae_comppermit {
         n |= WFP_COMPPERMIT as c_int;
     }
-    if unsafe { (*entry).ae_compforbid } != 0 {
+    if entry.ae_compforbid {
         n |= WFP_COMPFORBID as c_int;
     }
-    let prefroot = spin.si_prefroot;
-    let new_id = unsafe { (*st.cur_aff).ah_new_id };
-    let _ = unsafe { tree_add_word(&mut *spin, added, prefroot, n, idx, new_id) };
+    let prefroot = spin.si_prefroot.expect("mkspell allocates the roots first");
+    let new_id = ah.ah_new_id;
+    tree_add_word(spin, added, prefroot, n, idx, new_id);
     st.did_postpone_prefix = true;
 }

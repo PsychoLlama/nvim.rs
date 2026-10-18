@@ -34,7 +34,7 @@ use crate::spell::{SMT_ALL, spell_move_to};
 use crate::spellfile::spell_add_word;
 use crate::spellsuggest::spell_suggest;
 use crate::state::mode::finish_op;
-use crate::types::{CmdArg, ColNr, Failed, LineNr, OpType, OptInt, SpellAddType, int64_t, size_t};
+use crate::types::{CmdArg, ColNr, Failed, LineNr, OpType, OptInt, SpellAddType, int64_t};
 use crate::window::{set_fraction, win_setheight};
 use core::ffi::{c_char, c_int};
 
@@ -170,8 +170,6 @@ pub(crate) fn nv_zg_zw(cmd_arg: &mut CmdArg, mut nchar: c_int) -> Result<(), Fai
             XString::from_bytes(unsafe { slice::from_raw_parts(found.cast::<u8>(), n) })
         }
     };
-    let len = word.len();
-    debug_assert!(len <= c_int::MAX as size_t);
 
     // Lower case adds to the file 'spellfile' names, upper case to the
     // internal list that lasts for this session only -- which is why the
@@ -186,8 +184,7 @@ pub(crate) fn nv_zg_zw(cmd_arg: &mut CmdArg, mut nchar: c_int) -> Result<(), Fai
     } else {
         cmd_arg.count1
     };
-    // SAFETY: the copy just made, of `len` bytes.
-    unsafe { spell_add_word(word.as_ptr().cast_mut(), len as c_int, what, index, undo) };
+    spell_add_word(&word, what, index, undo);
     Ok(())
 }
 

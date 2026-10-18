@@ -1,4 +1,5 @@
-//! The word tree `:mkspell` builds, and the arena it lives in.
+//! The word tree `:mkspell` builds, and the byte accounting that decides
+//! when it is compressed.
 //!
 //! Every word of a dictionary is added to a trie: one node per byte, with
 //! siblings chained through [`WordNode::wn_sibling`] in ascending byte
@@ -16,277 +17,268 @@
 //! A dictionary's words share endings, so the finished trie is compressed:
 //! [`wordtree_compress`] walks it bottom-up and replaces each child chain
 //! with an identical one already seen, bumping that one's reference count.
-//! The lookup is a hash table keyed on a five-byte digest stored inside the
-//! node itself ([`WordNode::wn_digest`]), so no separate key allocation is
-//! needed — the table's key pointer points *into* the node, and
-//! [`node_of_digest_key`] is how [`node_compress`] gets back out.
+//! The lookup is keyed on a five-byte digest of the chain
+//! ([`WordNode::wn_digest`]); chains with the same digest are linked
+//! through [`WordNode::wn_link`] and [`node_equal`] decides.
 //!
 //! Because a compressed sub-tree is shared, [`tree_add_word`] has to
 //! un-share any node it is about to modify: a node with more than one
 //! reference is copied first. Compression therefore runs *during* the
-//! build as well as at the end, whenever the arena has grown past the
-//! threshold `'mkspellmem'` sets.
+//! build as well as at the end, whenever the accounting says the build has
+//! grown past the threshold `'mkspellmem'` sets.
 //!
-//! # Ownership — the one carve-out of `spellfile/`
+//! # The slab
 //!
-//! **The node graph and its slab stay raw pointers.** Not a `Vec` of
-//! indices, not a `Box` per node, and no destructor: three reasons, each
-//! sufficient on its own.
+//! The nodes are a `Vec<WordNode>` in [`SpellInfo::si_nodes`], linked by
+//! [`NodeId`] — an index, which is a node's identity: [`node_equal`]
+//! compares children by id, so two child chains are only equal once
+//! compression has made them the same node. After the first compression a
+//! node can be reachable from several parents, which [`WordNode::wn_refs`]
+//! counts; [`deref_wordnode`] puts a chain on the free list
+//! (`si_first_free`, chained through `wn_child`, last in first out) when
+//! its last reference goes, and [`get_wordnode`] takes from it before it
+//! grows the slab. That is upstream's allocation order node for node, so a
+//! node gets the same id here as its address had rank there.
 //!
-//! 1. **Node identity is the equality test.** A node's *address* feeds the
-//!    digest in [`node_compress`], and [`node_equal`] decides two sub-trees
-//!    are the same by comparing child pointers — a child chain is only
-//!    equal to another once compression has made them literally the same
-//!    object. Indices would have to reproduce that identity exactly.
-//! 2. **It is a reference-counted DAG, not a tree.** After the first
-//!    compression run a node is reachable from several parents
-//!    ([`WordNode::wn_refs`]); [`tree_add_word`] copies one before
-//!    modifying it, and [`deref_wordnode`] returns a chain to the free list
-//!    when the last reference goes. Rust ownership does not describe that
-//!    shape without an `Rc`, and an `Rc` per node is a box per node.
-//! 3. **The compression *order* is observable.** `'mkspellmem'` decides
-//!    when a run happens, from `SpellArena::block_count`; a different
-//!    allocation pattern compresses at a different point and the same words
-//!    come out as different `.spl` bytes. `crates/nvim/tests/unit/
-//!    spellfile.rs`'s golden is exactly that assertion.
+//! # The run of word ends
 //!
-//! So [`get_wordnode`] / [`free_wordnode`] over `si_first_free` are a slab,
-//! and the arena never moves what it has handed out. Everything *else* in
-//! `spellfile/` is owned: an `xfree` outside this carve-out and the
-//! `regexp`/`hashtab` seams is a bug.
+//! A word end goes among its siblings in sorted order, so filing one walks
+//! the run of word ends before it. The `.sug` tree files words in
+//! ascending number, and words that fold alike share one run, so that walk
+//! made the `.sug` pass quadratic -- and so did every longer word whose
+//! byte sorts after such a run. `si_end_hint` remembers, by each run's
+//! head, the word end last filed in it: the next walk of a run with that
+//! head starts there, when that node still sorts before what is filed.
+//! Runs only ever grow between compression runs (a copy of a shared run
+//! has a new head), and compression clears the hint, so the walk ends where
+//! it would have from the head.
+//!
+//! # What decides when compression runs
+//!
+//! Upstream allocated the nodes, the affix tables and their strings from
+//! one arena of [`SBLOCKSIZE`]-byte blocks and compressed when it had taken
+//! enough blocks. Nothing lives in an arena any more, but the *count* is
+//! the contract: `'mkspellmem'` is expressed in it, and the node counts
+//! `:mkspell` reports at each compression run follow from where the runs
+//! fall. So [`SpellArena`] still charges every allocation the arena used
+//! to make — same size, same alignment, same order — and keeps the block
+//! count. The sizes are the records' sizes when they lived in the arena,
+//! kept as named constants ([`WORD_NODE_BYTES`] and the ones beside it)
+//! because the records themselves no longer have them.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
-// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
+#![forbid(unsafe_code)]
 
 use crate::cstr;
 use crate::spell::WordFlags;
 use crate::winlayer::Win;
-use core::ffi::{c_char, c_int, c_uint};
-use core::{mem, ptr};
+use core::ffi::{CStr, c_int, c_uint};
+use core::hash::{BuildHasherDefault, Hasher};
+use core::num::NonZeroU32;
+use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
-use crate::hashtab::{hash_add_item, hash_hash, hash_lookup};
-use crate::mbyte::{utfc_ptr2len, valid_utf8};
+use crate::mbyte::{c_cluster_len, valid_utf8};
 use crate::message::state::{msg_col, msg_didout};
 use crate::message::{msg_clr_eos, msg_start, msg_str};
 use crate::option::vars::p_verbose;
 use crate::os::cshim::gettext;
 use crate::os::input::veryfast_breakcheck;
 use crate::spell::{captype, spell_casefold};
-use crate::types::{Failed, HashTab, NUL, int16_t, uint8_t, uint16_t};
+use crate::types::{Failed, NUL};
 use crate::ui::ui_flush;
 
 use super::{MAXWLEN, SpellInfo, spell_message_fmt};
 
-/// Bytes handed out per arena block.
+/// Bytes per accounting block.
 const SBLOCKSIZE: usize = 16000;
+
+/// What one word node cost the arena.
+pub(super) const WORD_NODE_BYTES: usize = 48;
+/// What one `PFX`/`SFX` header cost the arena.
+pub(super) const AFF_HEADER_BYTES: usize = 48;
+/// What one `PFX`/`SFX` entry cost the arena.
+pub(super) const AFF_ENTRY_BYTES: usize = 56;
+/// What one `.aff` file's record cost the arena.
+pub(super) const AFF_FILE_BYTES: usize = 928;
+/// What one compound-flag item cost the arena.
+pub(super) const COMP_ITEM_BYTES: usize = 28;
+/// The alignment a record charge rounds the block's cursor up to.
+const RECORD_ALIGN: usize = 8;
 
 /// The part of a word node's flags that is stored in the tree; the caller
 /// passes extra bits above it that only steer where the word is filed.
 pub(super) const WN_MASK: c_int = 0xffff;
 
-pub(super) const MSG_COMPRESSING: &core::ffi::CStr = c"Compressing word tree...";
+pub(super) const MSG_COMPRESSING: &CStr = c"Compressing word tree...";
 
-/// A bump allocator for everything a spell file under construction owns.
-///
-/// The affix tables, the condition strings, and every word node are
-/// allocated once and released together, so individual frees would only be
-/// bookkeeping. Blocks are `u64`-typed to make the base eight-byte aligned;
-/// `align` on [`SpellArena::alloc_bytes`] rounds the cursor up to the same
-/// boundary for allocations that will hold a struct.
-///
-/// Blocks are never reallocated, so a pointer handed out stays valid until
-/// [`SpellArena::clear`] — which invalidates all of them at once, and is
-/// only called where the whole tree is being abandoned.
-pub struct SpellArena {
-    blocks: Vec<Vec<u64>>,
-    /// Start of the newest block, or null while there is none.
-    head: *mut u8,
-    /// Bytes handed out from the newest block.
+/// The byte count of everything a spell file under construction would
+/// have allocated from upstream's arena; see the module doc.
+pub(crate) struct SpellArena {
+    /// Whether a block has been taken since the last [`clear`](Self::clear).
+    started: bool,
+    /// Bytes charged to the newest block.
     used: usize,
     /// Blocks taken since the compression heuristic last reset the count.
-    /// It is not `blocks.len()`: [`tree_add_word`] subtracts from it after
-    /// each compression run, and the `.sug` pass zeroes it per word.
-    pub block_count: c_int,
+    /// It is not the number of blocks: [`tree_add_word`] subtracts from it
+    /// after each compression run, and the `.sug` pass zeroes it per word.
+    pub(crate) block_count: c_int,
 }
 
 impl SpellArena {
-    pub const fn new() -> Self {
+    pub(crate) const fn new() -> Self {
         Self {
-            blocks: Vec::new(),
-            head: ptr::null_mut(),
+            started: false,
             used: 0,
             block_count: 0,
         }
     }
 
-    /// Hand out `len` zeroed bytes, aligned for a struct when `align`.
-    pub fn alloc_bytes(&mut self, len: usize, align: bool) -> *mut c_char {
+    /// Charge `len` bytes, aligned for a record when `align`: a new block
+    /// when the newest cannot hold them.
+    pub(crate) fn charge(&mut self, len: usize, align: bool) {
         debug_assert!(len <= SBLOCKSIZE);
-        if align && !self.head.is_null() {
-            self.used = self.used.next_multiple_of(align_of::<*mut c_char>());
+        if align && self.started {
+            self.used = self.used.next_multiple_of(RECORD_ALIGN);
         }
-        if self.head.is_null() || self.used + len > SBLOCKSIZE {
-            let mut block = vec![0u64; SBLOCKSIZE / size_of::<u64>()];
-            self.head = block.as_mut_ptr().cast::<u8>();
-            self.blocks.push(block);
+        if !self.started || self.used + len > SBLOCKSIZE {
+            self.started = true;
             self.used = 0;
             self.block_count += 1;
         }
-        // SAFETY: the block holds SBLOCKSIZE bytes and the test above
-        // leaves `used + len` within it.
-        let p = unsafe { self.head.add(self.used) };
         self.used += len;
-        p.cast::<c_char>()
     }
 
-    /// Hand out one zeroed `T`.
-    pub fn alloc<T>(&mut self) -> *mut T {
-        const { assert!(align_of::<T>() <= align_of::<*mut c_char>()) };
-        self.alloc_bytes(size_of::<T>(), true).cast::<T>()
+    /// Charge a copy of the string `s` with its terminator.
+    pub(crate) fn charge_str(&mut self, s: &[u8]) {
+        self.charge(s.len() + 1, false);
     }
 
-    /// Copy a NUL-terminated string into the arena.
-    ///
-    /// # Safety
-    ///
-    /// `s` must point at a NUL-terminated string.
-    pub unsafe fn save_str(&mut self, s: *const c_char) -> *mut c_char {
-        // SAFETY: the caller promises a terminated string, and the arena
-        // just handed out `size` writable bytes.
-        let size = unsafe { cstr::bytes_at(s) }.len() + 1;
-        let p = self.alloc_bytes(size, false);
-        unsafe { ptr::copy_nonoverlapping(s, p, size) };
-        p
+    /// Start over with no blocks.
+    pub(crate) fn clear(&mut self) {
+        *self = Self::new();
+    }
+}
+
+/// A node of the slab: its index. Slot 0 is a placeholder no link names,
+/// so that `Option<NodeId>` is the null link at no cost.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub(crate) struct NodeId(NonZeroU32);
+
+impl NodeId {
+    fn index(self) -> usize {
+        self.0.get() as usize
     }
 
-    /// Release every block. All pointers handed out become dangling.
-    pub fn clear(&mut self) {
-        self.blocks.clear();
-        self.head = ptr::null_mut();
-        self.used = 0;
-        self.block_count = 0;
+    fn of_index(idx: usize) -> Self {
+        let n = u32::try_from(idx).expect("fewer word nodes than u32::MAX");
+        NodeId(NonZeroU32::new(n).expect("slot 0 is never handed out"))
+    }
+
+    /// The id as the digest reads it.
+    fn raw(self) -> u32 {
+        self.0.get()
     }
 }
 
 /// One byte of one word, or — when [`wn_byte`](Self::wn_byte) is NUL — the
 /// end of a word and the properties that go with it.
-///
-/// # Two phases, three scratch fields
-///
-/// A node is scribbled on twice over its life, and upstream overlays each
-/// pair of uses in a union. Both overlays are gone here, for different
-/// reasons.
-///
-/// The digest and the index are genuinely different types — five bytes the
-/// hash table reads as a string, against an `int` — so they are two fields
-/// ([`wn_digest`](Self::wn_digest), [`wn_index`](Self::wn_index)). That
-/// costs nothing: the union's own tail padding was four bytes wide, so the
-/// node is the same size either way, which
-/// `a_node_costs_no_more_than_the_union` pins down.
-///
-/// [`wn_link`](Self::wn_link) is the other overlay, whose two arms were
-/// *both* `*mut WordNode` — documentation of the phase change rather
-/// than a representation. It is one field, and the phases are written down
-/// on it instead.
-pub struct WordNode {
-    /// Compression phase: five digest bytes over this node's whole sibling
-    /// chain, plus a terminator, so the hash table can key on it as a
-    /// string. None of the five is ever zero. See [`node_compress`].
-    pub wn_digest: [uint8_t; 6],
+#[derive(Clone, Default)]
+pub(crate) struct WordNode {
+    /// Compression phase: this node's sibling chain's length and four hash
+    /// bytes, none of them zero (upstream keyed a string on them). See
+    /// [`write_digest`].
+    pub(crate) wn_digest: [u8; 5],
     /// Write phase: this node's index in the written tree, or 0 while it
     /// has not been placed. See [`put_node`](super::write::put_node).
-    pub wn_index: c_int,
+    pub(crate) wn_index: c_int,
     /// Whichever node currently has a claim on this one — the two phases
     /// mean different things by that, and never overlap:
     ///
-    /// - while compressing, the next node whose sibling chain hashes to the
-    ///   same [`wn_digest`](Self::wn_digest), so that [`node_compress`] can
-    ///   walk a bucket looking for a chain worth sharing;
+    /// - while compressing, the next node whose sibling chain has the same
+    ///   [`wn_digest`](Self::wn_digest), so that [`node_compress`] can walk
+    ///   a bucket looking for a chain worth sharing;
     /// - while writing, the sibling chain that claimed this node and will
     ///   therefore emit it; every other parent emits a
     ///   [`BY_INDEX`](super::BY_INDEX) reference instead.
     ///
-    /// [`clear_node`](super::write::clear_node) is the handover: it drops
-    /// the compression meaning and starts the write one.
-    pub wn_link: *mut WordNode,
-    pub wn_child: *mut WordNode,
-    pub wn_sibling: *mut WordNode,
+    /// [`clear_node`](super::write::clear_node) is the handover. A link a
+    /// compression run left is *not* cleared by the next run, as upstream
+    /// did not clear it.
+    pub(crate) wn_link: Option<NodeId>,
+    pub(crate) wn_child: Option<NodeId>,
+    pub(crate) wn_sibling: Option<NodeId>,
     /// How many parents point here; above one the sub-tree is shared.
-    pub wn_refs: c_int,
-    pub wn_byte: uint8_t,
-    pub wn_affix_id: uint8_t,
-    pub wn_flags: uint16_t,
-    pub wn_region: int16_t,
+    pub(crate) wn_refs: c_int,
+    pub(crate) wn_byte: u8,
+    pub(crate) wn_affix_id: u8,
+    pub(crate) wn_flags: u16,
+    pub(crate) wn_region: i16,
 }
 
-/// The digest of `node`'s sibling chain, as the NUL-terminated string the
-/// compression hash table keys on.
-///
-/// The table stores key *pointers*, so this is also how a node gets into
-/// the table at all: [`node_of_digest_key`] is the way back.
-fn digest_key(node: *mut WordNode) -> *mut c_char {
-    // SAFETY: the offset lands inside the node; nothing is read.
-    unsafe { (&raw mut (*node).wn_digest).cast::<c_char>() }
+impl SpellInfo {
+    pub(super) fn node(&self, id: NodeId) -> &WordNode {
+        &self.si_nodes[id.index()]
+    }
+
+    pub(super) fn node_mut(&mut self, id: NodeId) -> &mut WordNode {
+        &mut self.si_nodes[id.index()]
+    }
+
+    /// Drop every tree and the byte count with them.
+    pub(super) fn clear_trees(&mut self) {
+        self.si_arena.clear();
+        self.si_nodes = empty_slab();
+        self.si_first_free = None;
+        self.si_free_count = 0;
+        self.si_end_hint.clear();
+    }
 }
 
-/// The node a [`digest_key`] came from.
-///
-/// # Safety
-///
-/// `key` must be a pointer [`digest_key`] returned for a still-live node.
-unsafe fn node_of_digest_key(key: *mut c_char) -> *mut WordNode {
-    // SAFETY: the caller promises the pointer names a live node's digest
-    // field, so stepping back over the field's offset lands on the node.
-    unsafe { key.byte_sub(mem::offset_of!(WordNode, wn_digest)).cast() }
+/// A slab with nothing in it but the placeholder in slot 0.
+pub(super) fn empty_slab() -> Vec<WordNode> {
+    vec![WordNode::default()]
 }
 
 /// Arena blocks in use before the first compression run.
-static compress_start: GlobalCell<c_int> = GlobalCell::new(30_000);
+static COMPRESS_START: GlobalCell<c_int> = GlobalCell::new(30_000);
 /// Blocks that have to be taken again before compressing again.
-static compress_inc: GlobalCell<c_int> = GlobalCell::new(100);
+static COMPRESS_INC: GlobalCell<c_int> = GlobalCell::new(100);
 /// Words to add after a compression run before considering another.
-static compress_added: GlobalCell<c_int> = GlobalCell::new(500_000);
+static COMPRESS_ADDED: GlobalCell<c_int> = GlobalCell::new(500_000);
 
 /// Install the `'mkspellmem'` values, already scaled to blocks.
 pub(super) fn set_compression_limits(start: c_int, incr: c_int, added: c_int) {
-    compress_start.set(start);
-    compress_inc.set(incr);
-    compress_added.set(added);
+    COMPRESS_START.set(start);
+    COMPRESS_INC.set(incr);
+    COMPRESS_ADDED.set(added);
 }
 
-/// The `'mkspellmem'` block count a run starts at, for validating the option.
+/// The size of an accounting block, for scaling `'mkspellmem'`.
 pub(super) const fn block_size() -> c_int {
     SBLOCKSIZE as c_int
 }
 
-/// Allocate a tree's root node.
-pub(super) fn wordtree_alloc(spin: &mut SpellInfo) -> *mut WordNode {
-    spin.si_arena.alloc::<WordNode>()
+/// Allocate a tree's root node. Always a fresh one, never the free list's.
+pub(super) fn wordtree_alloc(spin: &mut SpellInfo) -> NodeId {
+    fresh_node(spin)
 }
 
 /// Reject words a spell file cannot represent: invalid UTF-8, control
 /// characters, and a trailing `/` (which would read as a flag separator).
 ///
-/// # Safety
-///
-/// `word` and `end` must delimit one readable range.
-pub(super) unsafe fn valid_spell_word(word: *const c_char, end: *const c_char) -> bool {
-    // SAFETY: the caller promises the range; the walk stops at `end`.
-    if !valid_utf8(unsafe { cstr::slice_at(word, end.offset_from(word).unsigned_abs()) }) {
+/// `word` is read as the C string it was: a NUL in it ends it.
+pub(super) fn valid_spell_word(word: &[u8]) -> bool {
+    if !valid_utf8(word) {
         return false;
     }
-    let mut p = word;
-    while unsafe { *p } as c_int != NUL && p < end {
-        if (unsafe { *p } as uint8_t as c_int) < b' ' as c_int
-            || (unsafe { *p } as c_int == b'/' as c_int && unsafe { *p.add(1) } as c_int == NUL)
-        {
+    let mut at = 0;
+    while at < word.len() && word[at] != NUL as u8 {
+        if word[at] < b' ' || (word[at] == b'/' && cstr::byte_at(word, at + 1) == NUL as u8) {
             return false;
         }
-        p = unsafe { p.add(utfc_ptr2len(p) as usize) };
+        at += c_cluster_len(&word[at..]);
     }
     true
 }
@@ -297,177 +289,196 @@ pub(super) unsafe fn valid_spell_word(word: *const c_char, end: *const c_char) -
 /// `pfxlist` is the set of affix ids the word takes; the word is added once
 /// per id, since which prefixes apply is part of what the tree records.
 /// When `need_affix` is set the word is only added for real affix ids, not
-/// for the bare word.
-///
-/// # Safety
-///
-/// `word` must be NUL-terminated, and `pfxlist` either null or likewise.
-pub(super) unsafe fn store_word(
+/// for the bare word. Both are read as the C strings they were.
+pub(super) fn store_word(
     spin: &mut SpellInfo,
-    word: *mut c_char,
+    word: &[u8],
     flags: WordFlags,
     region: c_int,
-    pfxlist: *const c_char,
+    pfxlist: &[u8],
     need_affix: bool,
 ) -> Result<(), Failed> {
-    // SAFETY: the caller promises terminated strings; `foldword` is a
-    // MAXWLEN buffer, which is the bound spell_casefold is given.
-    let text = unsafe { cstr::bytes_at(word) };
-    let len = text.len() as c_int;
+    let text = cstr::until_nul(word);
+    let pfxlist = cstr::until_nul(pfxlist);
     let ct = captype(text, text.len());
-    let mut foldword: [c_char; MAXWLEN] = [0; MAXWLEN];
-    let mut res;
-
-    if !unsafe { valid_spell_word(word, word.offset(len as isize)) } {
+    if !valid_spell_word(text) {
         return Err(Failed);
     }
 
-    let out = cstr::as_bytes_mut(&mut foldword);
-    let _ = spell_casefold(Win::current(), text, text.len(), out);
+    let mut foldword = [0u8; MAXWLEN];
+    let _ = spell_casefold(Win::current(), text, text.len(), &mut foldword);
 
-    let root = spin.si_foldroot;
-    let folded = foldword.as_ptr();
+    let root = spin.si_foldroot.expect("mkspell allocates the roots first");
     let with_case = ct | flags;
-    res = unsafe { add_per_affix(spin, folded, root, with_case, region, pfxlist, need_affix) };
+    let folded = cstr::until_nul(&foldword);
+    add_per_affix(spin, folded, root, with_case, region, pfxlist, need_affix);
     spin.si_foldwcount += 1;
 
-    if res.is_ok() && (ct == WordFlags::KEEPCAP || flags.has(WordFlags::KEEPCAP)) {
-        let root = spin.si_keeproot;
-        res = unsafe { add_per_affix(spin, word, root, flags, region, pfxlist, need_affix) };
+    if ct == WordFlags::KEEPCAP || flags.has(WordFlags::KEEPCAP) {
+        let root = spin.si_keeproot.expect("mkspell allocates the roots first");
+        add_per_affix(spin, text, root, flags, region, pfxlist, need_affix);
         spin.si_keepwcount += 1;
     }
-    res
+    Ok(())
 }
 
-/// Add `word` to `root` once per affix id in `pfxlist`, stopping at the
-/// first failure.
+/// Add `word` to `root` once per affix id in `pfxlist`, then once more
+/// under affix id 0 — unless `need_affix`, which means only real ids count.
 ///
-/// A null or empty `pfxlist` still adds the word once, under affix id 0 —
-/// unless `need_affix`, which means only real ids count.
-///
-/// # Safety
-///
-/// `word` must be NUL-terminated, `pfxlist` null or NUL-terminated, and
-/// `root` a node of this arena's tree.
-unsafe fn add_per_affix(
+/// An id is a `char` the way upstream read it, so one above 127 is
+/// negative.
+fn add_per_affix(
     spin: &mut SpellInfo,
-    word: *const c_char,
-    root: *mut WordNode,
+    word: &[u8],
+    root: NodeId,
     flags: WordFlags,
     region: c_int,
-    pfxlist: *const c_char,
+    pfxlist: &[u8],
     need_affix: bool,
-) -> Result<(), Failed> {
-    // SAFETY: the caller promises the strings and the root; the walk stops
-    // at `pfxlist`'s NUL.
-    let mut res = Ok(());
-    let mut p = pfxlist;
-    while res.is_ok() {
-        let affix_id = if p.is_null() {
-            0
-        } else {
-            unsafe { *p as c_int }
-        };
+) {
+    for id in pfxlist.iter().copied().chain([0]) {
+        let affix_id = c_int::from(id.cast_signed());
         if !need_affix || affix_id != NUL {
-            res = unsafe { tree_add_word(spin, word, root, flags.bits(), region, affix_id) };
+            tree_add_word(spin, word, root, flags.bits(), region, affix_id);
         }
-        if p.is_null() || unsafe { *p } as c_int == NUL {
-            break;
-        }
-        p = unsafe { p.add(1) };
     }
-    res
 }
 
-/// Add one word to `root`, and compress the trees when the arena has grown
-/// past the threshold.
+/// The link a node was reached through, which is where a replacement for
+/// it has to be written back.
+#[derive(Copy, Clone)]
+enum Link {
+    /// The tree's root itself, which nothing points at.
+    Root,
+    Child(NodeId),
+    Sibling(NodeId),
+}
+
+fn set_link(spin: &mut SpellInfo, link: Link, to: NodeId) {
+    match link {
+        Link::Root => {}
+        Link::Child(n) => spin.node_mut(n).wn_child = Some(to),
+        Link::Sibling(n) => spin.node_mut(n).wn_sibling = Some(to),
+    }
+}
+
+/// Add one word to `root`, and compress the trees when the accounting says
+/// the build has grown past the threshold.
 ///
 /// A negative `flags` means the prefix tree, where `affix_id` rather than
 /// the flags decides sibling order and no two entries are ever merged.
-///
-/// # Safety
-///
-/// `word` must be NUL-terminated and `root` a node of this arena's tree.
-pub(super) unsafe fn tree_add_word(
+/// `word` is read as the C string it was, up to a NUL or its end.
+pub(super) fn tree_add_word(
     spin: &mut SpellInfo,
-    word: *const c_char,
-    root: *mut WordNode,
+    word: &[u8],
+    root: NodeId,
     flags: c_int,
     region: c_int,
     affix_id: c_int,
-) -> Result<(), Failed> {
-    // SAFETY: nodes come from the arena and outlive the call; the walk
-    // follows `word` only up to its NUL.
-    let mut node = root;
-    // Where to write back a replaced node: the parent's child or
-    // sibling slot, or null at the root.
-    let mut prev: *mut *mut WordNode = ptr::null_mut();
-    let mut i: isize = 0;
+) {
+    let word = cstr::until_nul(word);
+    let order = EndOrder {
+        flags,
+        masked: flags & WN_MASK,
+        sugtree: spin.si_sugtree != 0,
+        region,
+        affix_id,
+    };
+    let mut node = Some(root);
+    let mut prev = Link::Root;
+    let mut i = 0;
 
     loop {
+        let byte = cstr::byte_at(word, i);
         // A shared chain has to be copied before it can be changed.
-        if !node.is_null() && unsafe { (*node).wn_refs } > 1 {
-            unsafe { (*node).wn_refs -= 1 };
+        if let Some(n) = node
+            && spin.node(n).wn_refs > 1
+        {
+            spin.node_mut(n).wn_refs -= 1;
             let mut copyprev = prev;
-            let mut copyp = node;
-            while !copyp.is_null() {
+            let mut copyp = Some(n);
+            while let Some(cp) = copyp {
                 let np = get_wordnode(spin);
-                if np.is_null() {
-                    return Err(Failed);
+                let from = spin.node(cp).clone();
+                if let Some(child) = from.wn_child {
+                    spin.node_mut(child).wn_refs += 1;
                 }
-                unsafe { (*np).wn_child = (*copyp).wn_child };
-                if !unsafe { (*np).wn_child }.is_null() {
-                    unsafe { (*(*np).wn_child).wn_refs += 1 };
+                let new = spin.node_mut(np);
+                new.wn_child = from.wn_child;
+                new.wn_byte = from.wn_byte;
+                if from.wn_byte == NUL as u8 {
+                    new.wn_flags = from.wn_flags;
+                    new.wn_region = from.wn_region;
+                    new.wn_affix_id = from.wn_affix_id;
                 }
-                unsafe { (*np).wn_byte = (*copyp).wn_byte };
-                if unsafe { (*np).wn_byte } as c_int == NUL {
-                    unsafe { (*np).wn_flags = (*copyp).wn_flags };
-                    unsafe { (*np).wn_region = (*copyp).wn_region };
-                    unsafe { (*np).wn_affix_id = (*copyp).wn_affix_id };
+                new.wn_refs = 1;
+                set_link(spin, copyprev, np);
+                copyprev = Link::Sibling(np);
+                if cp == n {
+                    node = Some(np);
                 }
-                unsafe { (*np).wn_refs = 1 };
-                if !copyprev.is_null() {
-                    unsafe { *copyprev = np };
-                }
-                copyprev = unsafe { &raw mut (*np).wn_sibling };
-                if copyp == node {
-                    node = np;
-                }
-                copyp = unsafe { (*copyp).wn_sibling };
+                copyp = from.wn_sibling;
             }
         }
 
-        // Skip siblings that sort before what is being added.
-        while !node.is_null()
-            && unsafe { sorts_before(spin, node, *word.offset(i), flags, region, affix_id) }
-        {
-            prev = unsafe { &raw mut (*node).wn_sibling };
-            node = unsafe { *prev };
+        // Skip siblings that sort before what is being added. In the
+        // `.sug` tree, start from where the last word end of this run went
+        // when that still sorts before; see `si_end_hint`.
+        let head = node;
+        let hinted = head
+            .filter(|_| order.sugtree)
+            .and_then(|head| spin.si_end_hint.get(&head).copied())
+            .map(|from| skip_siblings(&spin.si_nodes, Some(from), byte, &order))
+            .filter(|&(_, last)| last.is_some());
+        let last;
+        (node, last) = hinted.unwrap_or_else(|| skip_siblings(&spin.si_nodes, node, byte, &order));
+        if let Some(last) = last {
+            prev = Link::Sibling(last);
         }
 
         // Insert a node when there is no matching one here. Word ends
         // never merge in the prefix or sound-fold trees, and only merge
         // elsewhere when the flags and affix id match too.
-        let need_new = node.is_null()
-            || unsafe { (*node).wn_byte } as c_int
-                != unsafe { *word.offset(i) } as uint8_t as c_int
-            || (unsafe { *word.offset(i) } as c_int == NUL
-                && (flags < 0
-                    || spin.si_sugtree != 0
-                    || unsafe { (*node).wn_flags } as c_int != flags & WN_MASK
-                    || unsafe { (*node).wn_affix_id } as c_int != affix_id));
-        if need_new && !unsafe { insert_before(spin, &mut node, prev, *word.offset(i)) } {
-            return Err(Failed);
-        }
+        let need_new = match node {
+            None => true,
+            Some(n) => {
+                let n = spin.node(n);
+                n.wn_byte != byte
+                    || (byte == NUL as u8
+                        && (flags < 0
+                            || spin.si_sugtree != 0
+                            || c_int::from(n.wn_flags) != flags & WN_MASK
+                            || c_int::from(n.wn_affix_id) != affix_id))
+            }
+        };
+        let n = if need_new {
+            insert_before(spin, node, prev, byte)
+        } else {
+            node.expect("a matching node is a node")
+        };
 
-        if unsafe { *word.offset(i) } as c_int == NUL {
-            unsafe { (*node).wn_flags = flags as uint16_t };
-            unsafe { (*node).wn_region |= region as int16_t };
-            unsafe { (*node).wn_affix_id = affix_id as uint8_t };
+        if byte == NUL as u8 {
+            if order.sugtree {
+                let run_head = match (last, head) {
+                    (Some(_), Some(head)) => head,
+                    _ => {
+                        // A new head: the run is known by it from now on.
+                        if let Some(old) = head {
+                            spin.si_end_hint.remove(&old);
+                        }
+                        n
+                    }
+                };
+                spin.si_end_hint.insert(run_head, n);
+            }
+            let end = spin.node_mut(n);
+            end.wn_flags = flags as u16;
+            end.wn_region |= region as i16;
+            end.wn_affix_id = affix_id as u8;
             break;
         }
-        prev = unsafe { &raw mut (*node).wn_child };
-        node = unsafe { *prev };
+        prev = Link::Child(n);
+        node = spin.node(n).wn_child;
         i += 1;
     }
 
@@ -478,17 +489,17 @@ pub(super) unsafe fn tree_add_word(
     if spin.si_compress_cnt > 1 {
         spin.si_compress_cnt -= 1;
         if spin.si_compress_cnt == 1 {
-            spin.si_arena.block_count += compress_inc.get();
+            spin.si_arena.block_count += COMPRESS_INC.get();
         }
     }
     let due = if spin.si_compress_cnt == 1 {
         spin.si_free_count < MAXWLEN as c_int
     } else {
-        spin.si_arena.block_count >= compress_start.get()
+        spin.si_arena.block_count >= COMPRESS_START.get()
     };
     if due {
-        spin.si_arena.block_count -= compress_inc.get();
-        spin.si_compress_cnt = compress_added.get();
+        spin.si_arena.block_count -= COMPRESS_INC.get();
+        spin.si_compress_cnt = COMPRESS_ADDED.get();
         if spin.si_verbose != 0 {
             msg_start();
             msg_str(gettext(MSG_COMPRESSING));
@@ -497,98 +508,116 @@ pub(super) unsafe fn tree_add_word(
             msg_col.set(0);
             ui_flush();
         }
-        unsafe { wordtree_compress(spin, spin.si_foldroot, c"case-folded") };
+        wordtree_compress(spin, spin.si_foldroot, c"case-folded");
         if affix_id >= 0 {
-            unsafe { wordtree_compress(spin, spin.si_keeproot, c"keep-case") };
+            wordtree_compress(spin, spin.si_keeproot, c"keep-case");
         }
     }
-    Ok(())
 }
 
-/// Does `node` sort before the entry being added?
-///
-/// # Safety
-///
-/// `node` must be a live node.
-#[inline]
-unsafe fn sorts_before(
-    spin: &SpellInfo,
-    node: *mut WordNode,
-    byte: c_char,
+/// What decides where a word end goes among its siblings: the entry's
+/// flags (negative for the prefix tree), those flags as stored, whether
+/// this is the `.sug` tree, and its region and affix id.
+struct EndOrder {
     flags: c_int,
+    masked: c_int,
+    sugtree: bool,
     region: c_int,
     affix_id: c_int,
-) -> bool {
-    // SAFETY: the caller promises a live node.
-    if (unsafe { (*node).wn_byte } as c_int) < byte as uint8_t as c_int {
-        return true;
-    }
-    if unsafe { (*node).wn_byte } as c_int != NUL {
-        return false;
-    }
-    // Word ends sort among themselves: by affix id in the prefix tree,
-    // otherwise by flags and then by region or affix id.
-    if flags < 0 {
-        return (unsafe { (*node).wn_affix_id } as c_uint) < affix_id as c_uint;
-    }
-    if (unsafe { (*node).wn_flags } as c_uint) < (flags & WN_MASK) as c_uint {
-        return true;
-    }
-    if unsafe { (*node).wn_flags } as c_int != flags & WN_MASK {
-        return false;
-    }
-    if spin.si_sugtree != 0 {
-        (unsafe { (*node).wn_region } as c_int & 0xffff) < region
-    } else {
-        (unsafe { (*node).wn_affix_id } as c_uint) < affix_id as c_uint
-    }
 }
 
-/// Splice a fresh node carrying `byte` in ahead of `*node`. Returns false
-/// when no node could be had.
+/// Step over the siblings from `node` on that sort before the entry being
+/// added, whose byte is `byte`: the first that does not, and the last that
+/// did.
 ///
-/// # Safety
-///
-/// `prev`, when non-null, must point at the slot holding `*node`.
+/// A long run of word ends (the `.sug` tree's, where words that fold
+/// alike pile up) makes this the loop `:mkspell` spends its time in, so
+/// the three ways word ends are ordered each get a loop of their own.
 #[inline]
-unsafe fn insert_before(
-    spin: &mut SpellInfo,
-    node: &mut *mut WordNode,
-    prev: *mut *mut WordNode,
-    byte: c_char,
-) -> bool {
-    let np = get_wordnode(spin);
-    if np.is_null() {
-        return false;
-    }
-    // SAFETY: `np` is a fresh arena node, `*node` a live one or null, and
-    // `prev` the slot that holds it.
-    unsafe { (*np).wn_byte = byte as uint8_t };
-    // The new node inherits the chain's reference count; the old head
-    // is now reached only through it.
-    if node.is_null() {
-        unsafe { (*np).wn_refs = 1 };
+fn skip_siblings(
+    nodes: &[WordNode],
+    node: Option<NodeId>,
+    byte: u8,
+    order: &EndOrder,
+) -> (Option<NodeId>, Option<NodeId>) {
+    if order.flags < 0 {
+        // The prefix tree: by affix id.
+        let affix = order.affix_id as c_uint;
+        skip_while(nodes, node, byte, |n| c_uint::from(n.wn_affix_id) < affix)
+    } else if order.sugtree {
+        // By flags, then region: the `.sug` tree's word number.
+        let (flags, region) = (order.masked, order.region);
+        skip_while(nodes, node, byte, |n| {
+            let f = c_int::from(n.wn_flags);
+            f < flags || (f == flags && (c_int::from(n.wn_region) & 0xffff) < region)
+        })
     } else {
-        unsafe { (*np).wn_refs = (**node).wn_refs };
-        unsafe { (**node).wn_refs = 1 };
+        // By flags, then affix id.
+        let (flags, affix) = (order.masked, order.affix_id as c_uint);
+        skip_while(nodes, node, byte, |n| {
+            let f = c_int::from(n.wn_flags);
+            f < flags || (f == flags && c_uint::from(n.wn_affix_id) < affix)
+        })
     }
-    if !prev.is_null() {
-        unsafe { *prev = np };
-    }
-    unsafe { (*np).wn_sibling = *node };
-    *node = np;
-    true
 }
 
-/// Take a node from the free list, or a fresh one from the arena.
-fn get_wordnode(spin: &mut SpellInfo) -> *mut WordNode {
-    let n = spin.si_first_free;
-    if n.is_null() {
-        return spin.si_arena.alloc::<WordNode>();
+/// [`skip_siblings`] with the word ends' order as `end_before`. A node
+/// sorts before the entry when its byte is lower, or when both are word
+/// ends and `end_before` says so.
+#[inline(always)]
+fn skip_while(
+    nodes: &[WordNode],
+    mut node: Option<NodeId>,
+    byte: u8,
+    end_before: impl Fn(&WordNode) -> bool,
+) -> (Option<NodeId>, Option<NodeId>) {
+    let mut last = None;
+    while let Some(n) = node {
+        let sibling = &nodes[n.index()];
+        let before =
+            sibling.wn_byte < byte || (sibling.wn_byte == NUL as u8 && end_before(sibling));
+        if !before {
+            break;
+        }
+        last = node;
+        node = sibling.wn_sibling;
     }
-    // SAFETY: the free list only holds nodes this module released.
-    spin.si_first_free = unsafe { (*n).wn_child };
-    unsafe { *n = mem::zeroed() };
+    (node, last)
+}
+
+/// Splice a fresh node carrying `byte` in ahead of `node`, writing it to
+/// the link `node` was reached through, and answer it.
+#[inline]
+fn insert_before(spin: &mut SpellInfo, node: Option<NodeId>, prev: Link, byte: u8) -> NodeId {
+    let np = get_wordnode(spin);
+    // The new node inherits the chain's reference count; the old head is
+    // now reached only through it.
+    let refs = match node {
+        None => 1,
+        Some(old) => core::mem::replace(&mut spin.node_mut(old).wn_refs, 1),
+    };
+    let new = spin.node_mut(np);
+    new.wn_byte = byte;
+    new.wn_refs = refs;
+    new.wn_sibling = node;
+    set_link(spin, prev, np);
+    np
+}
+
+/// A node the slab grows by, charged as the arena would have.
+fn fresh_node(spin: &mut SpellInfo) -> NodeId {
+    spin.si_arena.charge(WORD_NODE_BYTES, true);
+    spin.si_nodes.push(WordNode::default());
+    NodeId::of_index(spin.si_nodes.len() - 1)
+}
+
+/// Take a node from the free list, or a fresh one.
+fn get_wordnode(spin: &mut SpellInfo) -> NodeId {
+    let Some(n) = spin.si_first_free else {
+        return fresh_node(spin);
+    };
+    spin.si_first_free = spin.node(n).wn_child;
+    *spin.node_mut(n) = WordNode::default();
     spin.si_free_count -= 1;
     n
 }
@@ -597,62 +626,47 @@ fn get_wordnode(spin: &mut SpellInfo) -> *mut WordNode {
 /// sibling chain and their sub-trees to the free list.
 ///
 /// Returns how many nodes were freed, for the compression report.
-///
-/// # Safety
-///
-/// `node` must be a live node of this arena's tree.
-unsafe fn deref_wordnode(spin: &mut SpellInfo, node: *mut WordNode) -> c_int {
-    // SAFETY: the caller promises a live node; the walk stays inside the
-    // tree it roots.
+fn deref_wordnode(spin: &mut SpellInfo, node: NodeId) -> c_int {
     let mut cnt = 0;
-    unsafe { (*node).wn_refs -= 1 };
-    if unsafe { (*node).wn_refs } == 0 {
-        let mut np = node;
-        while !np.is_null() {
-            if !unsafe { (*np).wn_child }.is_null() {
-                cnt += unsafe { deref_wordnode(spin, (*np).wn_child) };
+    spin.node_mut(node).wn_refs -= 1;
+    if spin.node(node).wn_refs == 0 {
+        let mut np = Some(node);
+        while let Some(p) = np {
+            if let Some(child) = spin.node(p).wn_child {
+                cnt += deref_wordnode(spin, child);
             }
-            unsafe { free_wordnode(spin, np) };
+            free_wordnode(spin, p);
             cnt += 1;
-            np = unsafe { (*np).wn_sibling };
+            np = spin.node(p).wn_sibling;
         }
         cnt += 1;
     }
     cnt
 }
 
-/// Put one node on the free list, chained through its child slot.
-///
-/// # Safety
-///
-/// `n` must be a node no longer reachable from any tree.
-unsafe fn free_wordnode(spin: &mut SpellInfo, n: *mut WordNode) {
-    // SAFETY: the caller promises the node is unreachable.
-    unsafe { (*n).wn_child = spin.si_first_free };
-    spin.si_first_free = n;
+/// Put one node on the free list, chained through its child link. Its
+/// other fields stay as they were, as upstream left them.
+fn free_wordnode(spin: &mut SpellInfo, n: NodeId) {
+    spin.node_mut(n).wn_child = spin.si_first_free;
+    spin.si_first_free = Some(n);
     spin.si_free_count += 1;
 }
 
-/// Compress a whole tree and report how much it shrank.
-///
-/// # Safety
-///
-/// `root` must be the root node of one of this arena's trees.
-pub(super) unsafe fn wordtree_compress(
-    spin: &mut SpellInfo,
-    root: *mut WordNode,
-    name: &core::ffi::CStr,
-) {
-    // SAFETY: the caller promises a live root.
+/// Compress a whole tree and report how much it shrank. A tree that is not
+/// there (the `.sug` pass has no keep-case tree) is left alone.
+pub(super) fn wordtree_compress(spin: &mut SpellInfo, root: Option<NodeId>, name: &CStr) {
     // The root's own chain is what holds the tree; an empty one has
     // nothing to share.
-    if unsafe { (*root).wn_sibling }.is_null() {
+    let Some(tree) = root.and_then(|root| spin.node(root).wn_sibling) else {
         return;
-    }
+    };
+    // Compression frees nodes, and a freed id may come back as part of a
+    // different run.
+    spin.si_end_hint.clear();
 
-    let mut ht = HashTab::init();
+    let mut ht = DigestTable::default();
     let mut tot: c_int = 0;
-    let n = unsafe { node_compress(spin, (*root).wn_sibling, &raw mut ht, &mut tot) };
+    let n = node_compress(spin, tree, &mut ht, &mut tot);
 
     if spin.si_verbose != 0 || p_verbose() > 2 {
         let perc = remaining_percentage(n, tot);
@@ -684,65 +698,59 @@ fn remaining_percentage(compressed: c_int, total: c_int) -> core::ffi::c_long {
 /// Compress one sibling chain and everything below it, returning how many
 /// nodes the sharing removed. `tot` accumulates the nodes seen.
 ///
-/// # Safety
-///
-/// `node` must head a live sibling chain and `ht` be an initialised table
-/// holding only nodes of the same tree.
-unsafe fn node_compress(
+/// `ht` maps a digest to the first chain seen with it; the rest with the
+/// same digest hang off that one's [`WordNode::wn_link`].
+fn node_compress(
     spin: &mut SpellInfo,
-    node: *mut WordNode,
-    ht: *mut HashTab,
+    node: NodeId,
+    ht: &mut DigestTable,
     tot: &mut c_int,
 ) -> c_int {
-    // SAFETY: the caller promises a live chain and a live table; every key
-    // in the table was entered below as a node address.
     let mut compressed = 0;
     let mut len = 0;
 
-    for np in unsafe { siblings(node) } {
+    let mut next = Some(node);
+    while let Some(np) = next {
+        next = spin.node(np).wn_sibling;
         if got_int.get() {
             break;
         }
         len += 1;
-        let child = unsafe { (*np).wn_child };
-        if !child.is_null() {
-            // Depth first: the child's digest is only meaningful once
-            // everything below it has been compressed.
-            compressed += unsafe { node_compress(spin, child, ht, tot) };
+        let Some(child) = spin.node(np).wn_child else {
+            continue;
+        };
+        // Depth first: the child's digest is only meaningful once
+        // everything below it has been compressed.
+        compressed += node_compress(spin, child, ht, tot);
 
-            // The key is the node's own digest field, so the table
-            // borrows storage the node already owns and every entry
-            // names a node.
-            let key = digest_key(child);
-            let hash = unsafe { hash_hash(key) };
-            let hi = unsafe { hash_lookup(ht, key, cstr::bytes_at(key).len(), hash) };
-            if !hi.is_kept() {
-                unsafe { hash_add_item(ht, hi, key, hash) };
+        let head = match ht.entry(digest_key(spin.node(child).wn_digest)) {
+            Entry::Vacant(slot) => {
+                slot.insert(child);
                 continue;
             }
+            Entry::Occupied(slot) => *slot.get(),
+        };
 
-            // Same digest: walk the chain of nodes sharing it looking
-            // for a genuinely equal sub-tree to point at instead.
-            let mut tp = unsafe { node_of_digest_key(hi.hi_key) };
-            while !tp.is_null() {
-                if unsafe { node_equal(child, tp) } {
-                    unsafe { (*tp).wn_refs += 1 };
-                    compressed += unsafe { deref_wordnode(spin, child) };
-                    unsafe { (*np).wn_child = tp };
-                    break;
-                }
-                tp = unsafe { (*tp).wn_link };
+        // Same digest: walk the chain of nodes sharing it looking for a
+        // genuinely equal sub-tree to point at instead.
+        let mut tp = Some(head);
+        while let Some(t) = tp {
+            if node_equal(spin, child, t) {
+                spin.node_mut(t).wn_refs += 1;
+                compressed += deref_wordnode(spin, child);
+                spin.node_mut(np).wn_child = Some(t);
+                break;
             }
-            if tp.is_null() {
-                // No match; join the chain for the next comer.
-                let head = unsafe { node_of_digest_key(hi.hi_key) };
-                unsafe { (*child).wn_link = (*head).wn_link };
-                unsafe { (*head).wn_link = child };
-            }
+            tp = spin.node(t).wn_link;
+        }
+        if tp.is_none() {
+            // No match; join the chain for the next comer.
+            spin.node_mut(child).wn_link = spin.node(head).wn_link;
+            spin.node_mut(head).wn_link = Some(child);
         }
     }
     *tot += len + 1;
-    unsafe { write_digest(node, len) };
+    write_digest(spin, node, len);
 
     veryfast_breakcheck();
     compressed
@@ -750,219 +758,242 @@ unsafe fn node_compress(
 
 /// Digest `node`'s whole sibling chain into [`WordNode::wn_digest`]: the
 /// chain's length, then a rolling hash over every sibling's byte and either
-/// its child pointer or, at a word end, its flags.
+/// its child's id or, at a word end, its flags.
 ///
-/// Each of the five bytes is forced non-zero so that together they form a
-/// NUL-terminated string the hash table can key on. `len` is the chain's
-/// length as [`node_compress`] counted it, truncated — a longer chain only
-/// collides more often, and [`node_equal`] is what decides equality.
-///
-/// # Safety
-///
-/// `node` must head a live sibling chain.
-unsafe fn write_digest(node: *mut WordNode, len: c_int) {
-    // SAFETY: the caller promises a live chain, and `siblings` walks it to
-    // its null terminator without changing it.
+/// Each of the four hash bytes is forced non-zero, as upstream needed for
+/// a string key. `len` is the chain's length as [`node_compress`] counted
+/// it, truncated — a longer chain only collides more often, and
+/// [`node_equal`] is what decides equality.
+fn write_digest(spin: &mut SpellInfo, node: NodeId, len: c_int) {
     let mut nr: c_uint = 0;
-    for np in unsafe { siblings(node) } {
-        let n: c_uint = if unsafe { (*np).wn_byte } as c_int == NUL {
-            (unsafe { (*np).wn_flags } as c_int
-                + ((unsafe { (*np).wn_region } as c_int) << 8)
-                + ((unsafe { (*np).wn_affix_id } as c_int) << 16)) as c_uint
+    let mut next = Some(node);
+    while let Some(np) = next {
+        let n = spin.node(np);
+        let v: c_uint = if n.wn_byte == NUL as u8 {
+            (c_int::from(n.wn_flags)
+                + (c_int::from(n.wn_region) << 8)
+                + (c_int::from(n.wn_affix_id) << 16)) as c_uint
         } else {
-            (unsafe { (*np).wn_byte } as usize).wrapping_add(
-                unsafe { (*np).wn_child }
-                    .expose_provenance()
-                    .wrapping_shl(8),
-            ) as c_uint
+            let child = n.wn_child.map_or(0, NodeId::raw);
+            c_uint::from(n.wn_byte).wrapping_add(child.wrapping_shl(8))
         };
-        nr = nr.wrapping_mul(101).wrapping_add(n);
+        nr = nr.wrapping_mul(101).wrapping_add(v);
+        next = n.wn_sibling;
     }
 
-    let digest = unsafe { &mut (*node).wn_digest };
-    digest[0] = len as uint8_t;
+    let mut digest = [len as u8, 0, 0, 0, 0];
     for (i, shift) in [0, 8, 16, 24].into_iter().enumerate() {
-        let b = (nr >> shift & 0xff) as uint8_t;
-        digest[i + 1] = if b == 0 { 1 } else { b };
+        digest[i + 1] = ((nr >> shift & 0xff) as u8).max(1);
     }
-    digest[5] = NUL as uint8_t;
+    spin.node_mut(node).wn_digest = digest;
 }
 
-/// The nodes of a sibling chain, `node` first.
-///
-/// # Safety
-///
-/// `node` must be null or head a live sibling chain, and nothing may change
-/// a `wn_sibling` link in it while the iterator is alive.
-unsafe fn siblings(node: *mut WordNode) -> impl Iterator<Item = *mut WordNode> {
-    let mut next = node;
-    core::iter::from_fn(move || {
-        let cur = next;
-        if cur.is_null() {
-            return None;
+/// The hasher of the two node tables. A key is a node id or a digest
+/// (already four hash bytes and a length), so it only needs spreading over
+/// the table's index bits.
+#[derive(Default)]
+pub(super) struct DigestHasher(u64);
+
+impl Hasher for DigestHasher {
+    fn finish(&self) -> u64 {
+        self.0.wrapping_mul(0x9e37_79b9_7f4a_7c15)
+    }
+
+    fn write(&mut self, bytes: &[u8]) {
+        for &b in bytes {
+            self.0 = (self.0 << 8) ^ u64::from(b);
         }
-        // SAFETY: the caller promises a live chain, so every node reached
-        // this way is live and its sibling link readable.
-        next = unsafe { (*cur).wn_sibling };
-        Some(cur)
-    })
+    }
+
+    fn write_u64(&mut self, v: u64) {
+        self.0 = v;
+    }
+
+    fn write_u32(&mut self, v: u32) {
+        self.0 = u64::from(v);
+    }
+}
+
+/// Chain heads by digest; see [`node_compress`].
+type DigestTable = HashMap<u64, NodeId, BuildHasherDefault<DigestHasher>>;
+
+/// The `.sug` tree's runs of word ends, by head: the word end last filed
+/// in each. See the module doc.
+pub(super) type EndHints = HashMap<NodeId, NodeId, BuildHasherDefault<DigestHasher>>;
+
+/// A digest as the compression table's key.
+fn digest_key(digest: [u8; 5]) -> u64 {
+    let [a, b, c, d, e] = digest;
+    u64::from_le_bytes([a, b, c, d, e, 0, 0, 0])
 }
 
 /// Are two sibling chains interchangeable?
 ///
-/// Children are compared by pointer, not by content: by the time a chain is
+/// Children are compared by id, not by content: by the time a chain is
 /// looked at, everything below it has already been compressed, so equal
-/// sub-trees are the same object.
-///
-/// # Safety
-///
-/// Both arguments must head live sibling chains.
-unsafe fn node_equal(n1: *mut WordNode, n2: *mut WordNode) -> bool {
-    // SAFETY: the caller promises live chains.
-    let mut p1 = n1;
-    let mut p2 = n2;
-    while !p1.is_null() && !p2.is_null() {
-        if unsafe { (*p1).wn_byte } != unsafe { (*p2).wn_byte } {
+/// sub-trees are the same node.
+fn node_equal(spin: &SpellInfo, n1: NodeId, n2: NodeId) -> bool {
+    let mut p1 = Some(n1);
+    let mut p2 = Some(n2);
+    while let (Some(a), Some(b)) = (p1, p2) {
+        let (a, b) = (spin.node(a), spin.node(b));
+        if a.wn_byte != b.wn_byte {
             break;
         }
-        let differs = if unsafe { (*p1).wn_byte } as c_int == NUL {
-            unsafe {
-                (*p1).wn_flags != (*p2).wn_flags
-                    || (*p1).wn_region != (*p2).wn_region
-                    || (*p1).wn_affix_id != (*p2).wn_affix_id
-            }
+        let differs = if a.wn_byte == NUL as u8 {
+            a.wn_flags != b.wn_flags || a.wn_region != b.wn_region || a.wn_affix_id != b.wn_affix_id
         } else {
-            unsafe { (*p1).wn_child != (*p2).wn_child }
+            a.wn_child != b.wn_child
         };
         if differs {
             break;
         }
-        p1 = unsafe { (*p1).wn_sibling };
-        p2 = unsafe { (*p2).wn_sibling };
+        p1 = a.wn_sibling;
+        p2 = b.wn_sibling;
     }
-    p1.is_null() && p2.is_null()
+    p1.is_none() && p2.is_none()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn blank_node() -> WordNode {
-        WordNode {
-            wn_digest: [0; 6],
-            wn_index: 0,
-            wn_link: ptr::null_mut(),
-            wn_child: ptr::null_mut(),
-            wn_sibling: ptr::null_mut(),
-            wn_refs: 0,
-            wn_byte: 0,
-            wn_affix_id: 0,
-            wn_flags: 0,
-            wn_region: 0,
+    fn spin() -> SpellInfo {
+        let mut spin = SpellInfo::new();
+        spin.si_foldroot = Some(wordtree_alloc(&mut spin));
+        spin
+    }
+
+    /// The words of a tree, in tree order, as `byte...` strings with the
+    /// word end's affix id.
+    fn words(spin: &SpellInfo, node: Option<NodeId>, prefix: &mut Vec<u8>, out: &mut Vec<String>) {
+        let mut next = node;
+        while let Some(n) = next {
+            let node = spin.node(n);
+            if node.wn_byte == 0 {
+                out.push(format!(
+                    "{}/{}",
+                    String::from_utf8_lossy(prefix),
+                    node.wn_affix_id
+                ));
+            } else {
+                prefix.push(node.wn_byte);
+                words(spin, node.wn_child, prefix, out);
+                prefix.pop();
+            }
+            next = node.wn_sibling;
         }
     }
 
-    /// What the overlay was worth, measured rather than assumed: the union
-    /// of `[u8; 6]` and `c_int` was eight bytes with four of them padding,
-    /// which is exactly what an `int` beside the array costs. One node per
-    /// byte of dictionary is why anyone cares.
-    ///
-    /// Measured over the *fields*, not over `size_of::<WordNode>()`.
-    /// `WordNode` is `repr(Rust)`, so a layout-randomising build is free
-    /// to order it badly and pad it past the `repr(C)` original — which
-    /// would say something about that build and nothing about this struct.
-    /// Summing the declared fields is the comparison that means what the
-    /// paragraph above says, and it holds whatever the compiler does with
-    /// the order.
+    fn tree_of(spin: &SpellInfo) -> Vec<String> {
+        let root = spin.si_foldroot.expect("allocated");
+        let mut out = Vec::new();
+        words(spin, spin.node(root).wn_sibling, &mut Vec::new(), &mut out);
+        out
+    }
+
     #[test]
-    fn a_node_costs_no_more_than_the_union() {
-        /// `WordNode` as upstream lays it out, with both overlays.
-        #[repr(C)]
-        struct AsUnion {
-            u1: [uint8_t; 8],
-            u2: *mut u8,
-            child: *mut u8,
-            sibling: *mut u8,
-            refs: c_int,
-            byte: uint8_t,
-            affix_id: uint8_t,
-            flags: uint16_t,
-            region: int16_t,
+    fn the_arena_takes_a_block_when_the_newest_is_full() {
+        let mut arena = SpellArena::new();
+        arena.charge(10, false);
+        assert_eq!(arena.block_count, 1);
+        // Aligned: 10 rounds up to 16, and 16 + 15984 fills the block.
+        arena.charge(SBLOCKSIZE - 16, true);
+        assert_eq!(arena.block_count, 1);
+        arena.charge(1, false);
+        assert_eq!(arena.block_count, 2);
+        arena.charge_str(b"abc");
+        assert_eq!(arena.used, 5);
+        arena.clear();
+        assert_eq!(arena.block_count, 0);
+    }
+
+    #[test]
+    fn words_are_filed_in_byte_order() {
+        let mut spin = spin();
+        let root = spin.si_foldroot.unwrap();
+        for w in [&b"cab"[..], b"ab", b"abc", b"b"] {
+            tree_add_word(&mut spin, w, root, 0, 1, 0);
         }
-        // Exhaustive: a field added to `WordNode` stops compiling here,
-        // which is the half of the claim a size cannot make.
-        let WordNode {
-            wn_digest,
-            wn_index,
-            wn_link,
-            wn_child,
-            wn_sibling,
-            wn_refs,
-            wn_byte,
-            wn_affix_id,
-            wn_flags,
-            wn_region,
-        } = blank_node();
-        let fields = size_of_val(&wn_digest)
-            + size_of_val(&wn_index)
-            + size_of_val(&wn_link)
-            + size_of_val(&wn_child)
-            + size_of_val(&wn_sibling)
-            + size_of_val(&wn_refs)
-            + size_of_val(&wn_byte)
-            + size_of_val(&wn_affix_id)
-            + size_of_val(&wn_flags)
-            + size_of_val(&wn_region);
-        assert!(
-            fields <= size_of::<AsUnion>(),
-            "{fields} bytes of fields against {} for the union",
-            size_of::<AsUnion>()
-        );
-        assert_eq!(align_of::<WordNode>(), align_of::<AsUnion>());
+        assert_eq!(tree_of(&spin), ["ab/0", "abc/0", "b/0", "cab/0"]);
+        // One node per byte and word end, plus the root: "cab" takes four,
+        // "ab" three, "abc" and "b" two each. Slot 0 is the placeholder,
+        // which the arena never paid for.
+        let nodes = spin.si_nodes.len() - 1;
+        assert_eq!(nodes, 1 + 4 + 3 + 2 + 2);
+        assert_eq!(spin.si_arena.used, nodes * WORD_NODE_BYTES);
     }
 
-    /// The compression table stores a pointer into the node, not to it, so
-    /// the way back is the field's offset — no longer a promise that the
-    /// digest sits first.
+    /// Compression shares equal tails; adding below a shared node copies
+    /// it first and leaves the other word as it was; freed nodes come back
+    /// before the slab grows.
     #[test]
-    fn a_digest_key_names_the_node_it_came_from() {
-        let mut node = blank_node();
-        let at = &raw mut node;
-        let key = digest_key(at);
-        assert_eq!(key.cast::<uint8_t>(), (&raw mut node.wn_digest).cast());
-        // SAFETY: `key` is this node's digest field and the node is alive.
-        assert_eq!(unsafe { node_of_digest_key(key) }, at);
+    fn a_shared_tail_is_copied_before_it_changes() {
+        let mut spin = spin();
+        let root = spin.si_foldroot.unwrap();
+        tree_add_word(&mut spin, b"xa", root, 0, 1, 0);
+        tree_add_word(&mut spin, b"ya", root, 0, 1, 0);
+        let before = spin.si_nodes.len();
+        wordtree_compress(&mut spin, Some(root), c"t");
+        // "a" + end under "y" went to the free list.
+        assert_eq!(spin.si_free_count, 2);
+        let x = spin.node(root).wn_sibling.unwrap();
+        let y = spin.node(x).wn_sibling.unwrap();
+        assert_eq!(spin.node(x).wn_child, spin.node(y).wn_child);
+        assert_eq!(spin.node(spin.node(x).wn_child.unwrap()).wn_refs, 2);
+
+        tree_add_word(&mut spin, b"yab", root, 0, 1, 0);
+        assert_eq!(tree_of(&spin), ["xa/0", "ya/0", "yab/0"]);
+        // The two copies came off the free list; "b" and its end are new.
+        assert_eq!(spin.si_free_count, 0);
+        assert_eq!(spin.si_nodes.len(), before + 2);
     }
 
-    /// The five digest bytes have to read as a NUL-terminated string of
-    /// length five, whatever the chain hashes to: the table calls `strlen`
-    /// on them.
+    /// The `.sug` tree's word ends, filed in any order, end up sorted by
+    /// their number whether the walk starts at the run's head or at the
+    /// hint.
     #[test]
-    fn a_digest_is_five_non_zero_bytes_and_a_terminator() {
-        let mut tail = blank_node();
-        tail.wn_byte = b'x';
-        let mut head = blank_node();
-        head.wn_sibling = &raw mut tail;
-        // SAFETY: the two nodes form a live chain that outlives the call.
-        unsafe { write_digest(&raw mut head, 2) };
-        assert_eq!(head.wn_digest[0], 2);
-        assert!(head.wn_digest[1..5].iter().all(|&b| b != 0));
-        assert_eq!(head.wn_digest[5], NUL as uint8_t);
+    fn word_ends_are_sorted_however_they_arrive() {
+        let mut spin = spin();
+        spin.si_sugtree = 1;
+        let root = spin.si_foldroot.unwrap();
+        let order = [5, 6, 7, 1, 8, 2, 9, 3, 10, 4, 11, 12];
+        for (i, &nr) in order.iter().enumerate() {
+            tree_add_word(&mut spin, b"ab", root, 0, nr, 0);
+            if i % 3 == 0 {
+                // Another run in between moves the hint away.
+                tree_add_word(&mut spin, b"x", root, 0, nr, 0);
+            }
+        }
+        let a = spin.node(root).wn_sibling.unwrap();
+        let b = spin.node(a).wn_child.unwrap();
+        let mut run = Vec::new();
+        let mut next = spin.node(b).wn_child;
+        while let Some(n) = next {
+            run.push(spin.node(n).wn_region);
+            next = spin.node(n).wn_sibling;
+        }
+        assert_eq!(run, (1..=12).collect::<Vec<i16>>());
     }
 
-    /// The point of the split: the write phase's index no longer lands on
-    /// top of the compression phase's digest. Under the union, storing an
-    /// index cleared the first four digest bytes, which is why
-    /// `clear_node` could be read as "forget the digests" as well.
     #[test]
-    fn the_index_and_the_digest_are_separate_storage() {
-        let mut node = blank_node();
-        // SAFETY: a one-node chain, alive for the call.
-        unsafe { write_digest(&raw mut node, 1) };
-        let digest = node.wn_digest;
-        node.wn_index = 0x0102_0304;
-        node.wn_link = &raw mut node;
-        assert_eq!(node.wn_digest, digest);
-        assert_ne!(node.wn_digest[0], 0);
+    fn a_digest_has_no_zero_hash_byte() {
+        let mut spin = spin();
+        let root = spin.si_foldroot.unwrap();
+        tree_add_word(&mut spin, b"x", root, 0, 1, 0);
+        let x = spin.node(root).wn_sibling.unwrap();
+        write_digest(&mut spin, x, 1);
+        let d = spin.node(x).wn_digest;
+        assert_eq!(d[0], 1);
+        assert!(d[1..].iter().all(|&b| b != 0));
+    }
+
+    #[test]
+    fn a_word_with_a_control_character_or_trailing_slash_is_refused() {
+        assert!(valid_spell_word(b"word"));
+        assert!(!valid_spell_word(b"wo\x01rd"));
+        assert!(!valid_spell_word(b"word/"));
+        assert!(valid_spell_word(b"wo/rd"));
+        assert!(!valid_spell_word(b"\xff"));
     }
 }

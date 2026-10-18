@@ -49,7 +49,7 @@
 #![cfg(not(miri))]
 
 use neovim::winlayer::Win;
-use std::ffi::{CString, c_char};
+use std::ffi::CString;
 
 use neovim::spell::{REGION_ALL, init_spell_chartab, register_lang, spell_check, take_lang};
 use neovim::spellfile::{mkspell, spell_check_msm, spell_load_file};
@@ -156,13 +156,10 @@ fn write_one_spl(sandbox: &Sandbox, stem: &str) -> Vec<u8> {
     // otherwise install. Its default is the value the golden was made with.
     spell_check_msm().expect("the default 'mkspellmem' parses");
 
-    let out = cstr(format!("{stem}-utf8.spl"));
-    let input = cstr(stem);
-    let mut names: [*mut c_char; 2] = [out.as_ptr().cast_mut(), input.as_ptr().cast_mut()];
-    // SAFETY: both paths are this frame's, NUL-terminated, and live across
-    // the call; `over_write` lets a rerun replace its own output and
-    // `added_word` keeps the progress messages off stdout.
-    unsafe { mkspell(2, names.as_mut_ptr(), false, true, true) };
+    let out = format!("{stem}-utf8.spl");
+    // `over_write` lets a rerun replace its own output and `added_word`
+    // keeps the progress messages off stdout.
+    mkspell(&[out.as_bytes(), stem.as_bytes()], false, true, true);
     std::fs::read(sandbox.path(&format!("{stem}-utf8.spl"))).expect("the writer wrote a file")
 }
 
@@ -405,11 +402,7 @@ fn a_sug_file_matches_its_spl_once_the_timestamp_is_masked() {
     sandbox.write("Xsug.dic", b"1\none\n");
     sandbox.write("Xsug.aff", b"SAL n n\nSAL e _\n");
     spell_check_msm().expect("the default 'mkspellmem' parses");
-    let out = cstr("Xsug-utf8.spl");
-    let input = cstr("Xsug");
-    let mut names: [*mut c_char; 2] = [out.as_ptr().cast_mut(), input.as_ptr().cast_mut()];
-    // SAFETY: as `write_one_spl` — this frame's paths, live across the call.
-    unsafe { mkspell(2, names.as_mut_ptr(), false, true, true) };
+    mkspell(&[&b"Xsug-utf8.spl"[..], b"Xsug"], false, true, true);
 
     let mut spl = std::fs::read(sandbox.path("Xsug-utf8.spl")).expect("a .spl");
     let mut sug = std::fs::read(sandbox.path("Xsug-utf8.sug")).expect("a .sug");

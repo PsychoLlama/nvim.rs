@@ -158,22 +158,6 @@ pub(crate) unsafe fn bytes_at<'a>(p: *const c_char) -> &'a [u8] {
     unsafe { CStr::from_ptr(p) }.to_bytes()
 }
 
-/// [`bytes_at`] where the pointer may be absent: a null `p` answers the
-/// empty slice rather than walking it.
-///
-/// The C this replaces used `String`'s null spelling for "no value", and a
-/// consumer that reads `size` bytes cannot tell the two apart.
-///
-/// # Safety
-/// [`at_opt`]'s contract.
-pub(crate) unsafe fn bytes_at_or_empty<'a>(p: *const c_char) -> &'a [u8] {
-    if p.is_null() {
-        return &[];
-    }
-    // SAFETY: caller's contract, and `p` is not null.
-    unsafe { bytes_at(p) }
-}
-
 /// The first `n` bytes of the string at `p`, stopping at its terminator --
 /// which is exactly the span `strncmp(p, _, n)` compares.
 ///
@@ -377,12 +361,6 @@ pub(crate) fn as_bytes(buf: &[c_char]) -> &[u8] {
     // SAFETY: `c_char` and `u8` have the same size and alignment, and every
     // bit pattern is valid for both.
     unsafe { slice::from_raw_parts(buf.as_ptr().cast::<u8>(), buf.len()) }
-}
-
-/// [`as_bytes`], writable: a `c_char` buffer filled as bytes.
-pub(crate) fn as_bytes_mut(buf: &mut [c_char]) -> &mut [u8] {
-    // SAFETY: as `as_bytes`; the exclusive borrow is handed on whole.
-    unsafe { slice::from_raw_parts_mut(buf.as_mut_ptr().cast::<u8>(), buf.len()) }
 }
 
 /// The first byte of a C string, or NUL when it has none.

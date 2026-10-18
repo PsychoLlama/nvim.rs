@@ -6,27 +6,25 @@
 //! to. Lines starting with `/` are headers: `/encoding=` says what the file
 //! is in, `/regions=` names the regions the digits refer to.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::cstr;
-use crate::memory::ThinCString;
-use crate::message_fmt::{c_str, msg_cstr};
+use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::semsg;
 use crate::smsg;
 use crate::spell::WordFlags;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
+use std::ffi::OsStr;
+use std::fs::File;
+use std::os::unix::ffi::OsStrExt;
 
-use crate::fileio::vim_fgets;
+use crate::cstr;
+use crate::fileio::Fgets;
 use crate::getchar::state::got_int;
-use crate::mbyte::enc_canonize;
-use crate::memory::xfree;
+use crate::mbyte::canonize;
 use crate::option::vars::p_enc;
-use crate::os::fs::os_fopen;
 use crate::os::input::line_breakcheck;
-use crate::strings::{any_non_ascii, vim_strchr};
-use crate::types::{CONV_NONE, Failed, LineNr, NUL, size_t, uint8_t};
-use ::libc::{fclose, strcpy};
+use crate::strings::{any_non_ascii, find_char};
+use crate::types::{CONV_NONE, Failed, LineNr};
 
 use super::wordtree::store_word;
 use super::{MAXLINELEN, MAXREGIONS, SpellInfo, spell_message_fmt};
@@ -34,77 +32,65 @@ use super::{MAXLINELEN, MAXREGIONS, SpellInfo, spell_message_fmt};
 /// Read a plain word list: one word per line, with optional `/` flags, and
 /// `/encoding=` and `/regions=` header lines.
 pub(super) fn spell_read_wordfile(spin: &mut SpellInfo, fname: &CStr) -> Result<(), Failed> {
-    // SAFETY: the caller promises the path; `rline` is MAXLINELEN, which is
-    // the bound `vim_fgets` is given.
-    let fd = unsafe { os_fopen(fname.as_ptr(), c"r".as_ptr()) };
-    if fd.is_null() {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+    let Ok(file) = File::open(OsStr::from_bytes(fname.to_bytes())) else {
         let fname = msg_cstr(fname);
         semsg!("E484: Can't open file {fname}");
         return Err(Failed);
-    }
-    let name = unsafe { CStr::from_ptr(fname.as_ptr()) }.to_string_lossy();
+    };
+    let mut fd = Fgets::new(file);
+    let name = fname.to_string_lossy();
     spell_message_fmt(&*spin, format_args!("Reading word file {name}..."));
 
-    let mut rline: [c_char; MAXLINELEN as usize] = [0; MAXLINELEN as usize];
-    let mut pc: *mut c_char = core::ptr::null_mut();
+    let mut rline: Vec<u8> = Vec::new();
     let mut lnum: LineNr = 0;
     let mut retval = Ok(());
     let mut did_word = false;
     let mut non_ascii = 0;
 
-    while !unsafe { vim_fgets(rline.as_mut_ptr(), MAXLINELEN, fd) } && !got_int.get() {
+    while fd.line_capped(&mut rline, MAXLINELEN as usize) && !got_int.get() {
         line_breakcheck();
         lnum += 1;
-        if rline[0] as c_int == b'#' as c_int {
+        let read = cstr::until_nul(&rline);
+        if read.first() == Some(&b'#') {
             continue;
         }
-        let mut l = unsafe { cstr::bytes_at(rline.as_ptr()) }.len();
-        while l > 0 && rline[l - 1] as uint8_t as c_int <= b' ' as c_int {
-            l -= 1;
-        }
+        // Trim trailing white space, and skip the line if nothing is left.
+        let l = read.iter().rposition(|&b| b > b' ').map_or(0, |at| at + 1);
         if l == 0 {
             continue;
         }
-        rline[l] = NUL as c_char;
+        let read = &read[..l];
 
-        unsafe { xfree(pc.cast()) };
-        pc = core::ptr::null_mut();
-        let mut line = if spin.si_conv.vc_type != CONV_NONE {
-            pc = spin
-                .si_conv
-                .convert_cstr(cstr::in_chars(&rline))
-                .map_or(core::ptr::null_mut(), ThinCString::into_raw);
-            if pc.is_null() {
-                // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-                let (fname, rline) = unsafe { (msg_cstr(fname), c_str(rline.as_mut_ptr())) };
+        let converted;
+        let mut line: &[u8] = if spin.si_conv.vc_type != CONV_NONE {
+            let Some(text) = spin.si_conv.convert(read) else {
+                let (fname, rline) = (msg_cstr(fname), msg_bytes(read));
                 smsg!(
                     0,
                     "Conversion failure for word in {fname} line {}: {rline}",
                     lnum
                 );
                 continue;
-            }
-            pc
+            };
+            converted = text;
+            cstr::until_nul(&converted)
         } else {
-            rline.as_mut_ptr()
+            read
         };
 
-        if unsafe { *line } as c_int == b'/' as c_int {
-            line = unsafe { line.add(1) };
-            read_wordfile_header(spin, line, fname, lnum, did_word);
+        if let Some(header) = line.strip_prefix(b"/") {
+            read_wordfile_header(spin, header, fname, lnum, did_word);
             continue;
         }
 
         // A word, with optional flags after a "/".
         let mut flags = WordFlags::NONE;
         let mut regionmask = spin.si_region;
-        let mut p = unsafe { vim_strchr(line, b'/' as c_int) };
-        if !p.is_null() {
-            unsafe { *p = NUL as c_char };
-            p = unsafe { p.add(1) };
-            while unsafe { *p } as c_int != NUL {
-                match unsafe { *p } as u8 {
+        if let Some(slash) = find_char(line, c_int::from(b'/')) {
+            let flag_text = &line[slash + 1..];
+            line = &line[..slash];
+            for (i, &f) in flag_text.iter().enumerate() {
+                match f {
                     b'=' => flags |= WordFlags::KEEPCAP | WordFlags::FIXCAP,
                     b'!' => flags |= WordFlags::BANNED,
                     b'?' => flags |= WordFlags::RARE,
@@ -115,30 +101,26 @@ pub(super) fn spell_read_wordfile(spin: &mut SpellInfo, fname: &CStr) -> Result<
                             regionmask = 0;
                         }
                         flags |= WordFlags::REGION;
-                        let n = (d - b'0') as c_int;
+                        let n = c_int::from(d - b'0');
                         if n == 0 || n > spin.si_region_count {
-                            // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-                            let (fname, p) = unsafe { (msg_cstr(fname), c_str(p)) };
+                            let (fname, p) = (msg_cstr(fname), msg_bytes(&flag_text[i..]));
                             smsg!(0, "Invalid region nr in {fname} line {}: {p}", lnum);
                             break;
                         }
                         regionmask |= 1 << (n - 1);
                     }
                     _ => {
-                        // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-                        let (fname, p) = unsafe { (msg_cstr(fname), c_str(p)) };
+                        let (fname, p) = (msg_cstr(fname), msg_bytes(&flag_text[i..]));
                         smsg!(0, "Unrecognized flags in {fname} line {}: {p}", lnum);
                         break;
                     }
                 }
-                p = unsafe { p.add(1) };
             }
         }
 
-        let none = core::ptr::null();
-        if spin.si_ascii != 0 && any_non_ascii(unsafe { cstr::bytes_at_or_empty(line) }) {
+        if spin.si_ascii != 0 && any_non_ascii(line) {
             non_ascii += 1;
-        } else if unsafe { store_word(&mut *spin, line, flags, regionmask, none, false) }.is_err() {
+        } else if store_word(&mut *spin, line, flags, regionmask, b"", false).is_err() {
             retval = Err(Failed);
             break;
         } else {
@@ -146,8 +128,6 @@ pub(super) fn spell_read_wordfile(spin: &mut SpellInfo, fname: &CStr) -> Result<
         }
     }
 
-    unsafe { xfree(pc.cast()) };
-    unsafe { fclose(fd) };
     if spin.si_ascii != 0 && non_ascii > 0 {
         spell_message_fmt(
             &*spin,
@@ -159,84 +139,71 @@ pub(super) fn spell_read_wordfile(spin: &mut SpellInfo, fname: &CStr) -> Result<
 
 /// Handle a `/`-prefixed header line of a word file.
 ///
-/// `line` points just past the `/`.
+/// `line` is what follows the `/`.
 fn read_wordfile_header(
     spin: &mut SpellInfo,
-    mut line: *mut c_char,
+    line: &[u8],
     fname: &CStr,
     lnum: LineNr,
     did_word: bool,
 ) {
-    // SAFETY: the caller promises the strings; the region name is copied
-    // only after its length has been checked against the array.
-    if unsafe { cstr::starts_with(line, b"encoding=") } {
+    // The whole line, `/` included, as the messages show it.
+    let whole = || {
+        let mut text = b"/".to_vec();
+        text.extend_from_slice(line);
+        text
+    };
+    if let Some(enc) = line.strip_prefix(b"encoding=") {
         if spin.si_conv.vc_type != CONV_NONE {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-            let (fname, arg2) = unsafe { (msg_cstr(fname), c_str(line.sub(1))) };
+            let whole = whole();
+            let (fname, arg2) = (msg_cstr(fname), msg_bytes(&whole));
             smsg!(
                 0,
                 "Duplicate /encoding= line ignored in {fname} line {}: {arg2}",
                 lnum
             );
         } else if did_word {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-            let (fname, arg2) = unsafe { (msg_cstr(fname), c_str(line.sub(1))) };
+            let whole = whole();
+            let (fname, arg2) = (msg_cstr(fname), msg_bytes(&whole));
             smsg!(
                 0,
                 "/encoding= line after word ignored in {fname} line {}: {arg2}",
                 lnum
             );
         } else {
-            line = unsafe { line.add(9) };
-            let enc = unsafe { enc_canonize(line) };
+            let canon = canonize(enc);
             if spin.si_ascii == 0
-                && p_enc(|value| {
-                    spin.si_conv
-                        .setup(Some(unsafe { CStr::from_ptr(enc) }), Some(value))
-                })
-                .is_err()
+                && p_enc(|value| spin.si_conv.setup(Some(canon.as_cstr()), Some(value))).is_err()
             {
-                // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-                let (fname, line, arg2) = p_enc(|value| unsafe {
-                    (
-                        msg_cstr(fname),
-                        c_str(line),
-                        c_str(value.as_ptr().cast_mut()),
-                    )
-                });
+                let to = p_enc(|value| value.to_bytes().to_vec());
+                let (fname, line, arg2) = (msg_cstr(fname), msg_bytes(enc), msg_bytes(&to));
                 smsg!(
                     0,
                     "Conversion in {fname} not supported: from {line} to {arg2}"
                 );
             }
-            unsafe { xfree(enc.cast()) };
             spin.si_conv.vc_fail = true;
         }
-    } else if unsafe { cstr::starts_with(line, b"regions=") } {
+    } else if let Some(regions) = line.strip_prefix(b"regions=") {
         if spin.si_region_count > 1 {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-            let (fname, line) = unsafe { (msg_cstr(fname), c_str(line)) };
+            let (fname, line) = (msg_cstr(fname), msg_bytes(line));
             smsg!(
                 0,
                 "Duplicate /regions= line ignored in {fname} line {}: {line}",
                 lnum
             );
+        } else if regions.len() > MAXREGIONS as usize * 2 {
+            let (fname, line) = (msg_cstr(fname), msg_bytes(regions));
+            smsg!(0, "Too many regions in {fname} line {}: {line}", lnum);
         } else {
-            line = unsafe { line.add(8) };
-            if unsafe { cstr::bytes_at(line) }.len() > (MAXREGIONS as c_int * 2) as size_t {
-                // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-                let (fname, line) = unsafe { (msg_cstr(fname), c_str(line)) };
-                smsg!(0, "Too many regions in {fname} line {}: {line}", lnum);
-            } else {
-                // SAFETY: the caller's NUL-terminated line.
-                spin.si_region_count = unsafe { cstr::bytes_at(line) }.len() as c_int / 2;
-                unsafe { strcpy((&raw mut spin.si_region_name).cast::<c_char>(), line) };
-                spin.si_region = (1 << spin.si_region_count) - 1;
-            }
+            spin.si_region_count = regions.len() as c_int / 2;
+            spin.si_region_name[..regions.len()].copy_from_slice(regions);
+            spin.si_region_name[regions.len()] = 0;
+            spin.si_region = (1 << spin.si_region_count) - 1;
         }
     } else {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-        let (fname, arg2) = unsafe { (msg_cstr(fname), c_str(line.sub(1))) };
+        let whole = whole();
+        let (fname, arg2) = (msg_cstr(fname), msg_bytes(&whole));
         smsg!(0, "/ line ignored in {fname} line {}: {arg2}", lnum);
     }
 }

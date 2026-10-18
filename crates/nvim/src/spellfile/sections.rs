@@ -20,16 +20,15 @@
 //! - `MAP` — characters that count as near-equivalent when scoring.
 //! - `COMPOUND` — the rules for joining words together.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::cstr;
 use crate::strings::has_char;
 use core::cell::RefCell;
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 use std::collections::hash_map::Entry;
 
-use crate::mbyte::{char_at, char_len, encode_char, utf_char2len, utf_ptr2char, utfc_ptr2len};
+use crate::mbyte::{c_cluster_len, char_at, char_len, encode_char, utf_char2len};
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::spell::{ascii_spell_chartab, count_common_word};
@@ -583,12 +582,9 @@ pub(super) fn set_map_str(slang: &mut SpellLang, map: &[u8]) {
 fn set_spell_charflags(flags: &[u8], fol: &[u8]) {
     let mut new_st = ascii_spell_chartab();
 
-    // `fol`'s walk is over composing characters as well as base ones, and
-    // the codec's slice forms do not cover that pairing, so it stays a
-    // pointer walk over a copy this frame owns and terminates.
-    let mut folded = fol.to_vec();
-    folded.push(NUL as u8);
-    let mut p = folded.as_ptr().cast::<c_char>();
+    // `fol` is read as the C string upstream terminated: up to a NUL.
+    let fol = cstr::until_nul(fol);
+    let mut at = 0;
 
     // Only the high half is described; the low half is fixed.
     for i in 0..128usize {
@@ -596,11 +592,9 @@ fn set_spell_charflags(flags: &[u8], fol: &[u8]) {
             new_st.st_isw[i + 128] = f & CF_WORD as u8 != 0;
             new_st.st_isu[i + 128] = f & CF_UPPER as u8 != 0;
         }
-        // SAFETY: `folded` is NUL-terminated, and the walk stops there.
-        if unsafe { *p } as c_int != NUL {
-            // SAFETY: as above.
-            let c = unsafe { utf_ptr2char(p) };
-            p = p.wrapping_add(unsafe { utfc_ptr2len(p) } as usize);
+        if at < fol.len() {
+            let c = char_at(&fol[at..]);
+            at += c_cluster_len(&fol[at..]);
             new_st.st_fold[i + 128] = c as uint8_t;
             // Record the reverse mapping too, when it fits.
             if i as c_int + 128 != c && new_st.st_isu[i + 128] && c < 256 {

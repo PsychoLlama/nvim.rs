@@ -10,47 +10,39 @@
 //! to the first's rather than replacing it. `AffState` carries those
 //! decisions as its `do_*` fields.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::cstr;
 use crate::message_fmt::msg_cstr;
 use crate::smsg;
 use crate::strings::find_char;
 use crate::winlayer::Win;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
 use crate::mbyte::{char_at, char_len, cluster_len};
 use crate::spell::spell_casefold;
 use crate::types::RepItem;
-use ::libc::{strcat, strcpy};
 
-use super::aff::{AffState, first_byte, is_digit_byte, item_ptr};
+use super::aff::{AffState, first_byte};
 use super::{MAXWLEN, SpellInfo};
 
 /// Append `KEYWORD value` to the text `:spellinfo` shows.
 pub(super) fn append_info(spin: &mut SpellInfo, items: &[&CStr]) {
-    let old = if spin.si_info.is_null() {
-        0
-    } else {
-        // SAFETY: `si_info` is a NUL-terminated arena string.
-        unsafe { cstr::bytes_at(spin.si_info) }.len()
-    };
+    let old = spin.si_info.as_ref().map_or(0, Vec::len);
+    // Upstream's room: the old text, a newline, both items and a space,
+    // plus the terminator.
     let len = old + items[0].to_bytes().len() + items[1].to_bytes().len() + 3;
-    let p = spin.si_arena.alloc_bytes(len, false);
-    // SAFETY: `p` is `len` bytes, which is the old text, a newline, both
-    // items and a space, plus the terminator.
-    unsafe {
-        if !spin.si_info.is_null() {
-            strcpy(p, spin.si_info);
-            strcat(p, c"\n".as_ptr());
-        }
-        strcat(p, item_ptr(items[0]));
-        strcat(p, c" ".as_ptr());
-        strcat(p, item_ptr(items[1]));
+    spin.si_arena.charge(len, false);
+    let mut info = Vec::with_capacity(len);
+    if let Some(old) = &spin.si_info {
+        info.extend_from_slice(old);
+        info.push(b'\n');
     }
-    spin.si_info = p;
+    info.extend_from_slice(items[0].to_bytes());
+    info.push(b' ');
+    info.extend_from_slice(items[1].to_bytes());
+    spin.si_info = Some(info);
 }
 
 /// `CHECKCOMPOUNDPATTERN`: a pair of strings that may not meet at a
@@ -78,7 +70,6 @@ pub(super) fn add_rep_entry(
     lnum: c_int,
 ) {
     if items.len() > 3 && !items[3].to_bytes().starts_with(b"#") {
-        // SAFETY: the affix file's name, NUL-terminated.
         let (file, item) = (msg_cstr(fname), msg_cstr(items[3]));
         smsg!(0, "Trailing text in {file} line {lnum}: {item}");
     }
@@ -121,9 +112,7 @@ pub(super) fn handle_map(
     if !st.found_map {
         // The first MAP line is the number of groups.
         st.found_map = true;
-        // SAFETY: reading the locale table.
-        if !is_digit_byte(first_byte(items[1]) as c_char) {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        if !first_byte(items[1]).is_ascii_digit() {
             let fname = msg_cstr(fname);
             smsg!(0, "Expected MAP count in {fname} line {}", lnum);
         }
@@ -140,7 +129,6 @@ pub(super) fn handle_map(
         let c = char_at(&group[at..]);
         at += cluster_len(&group[at..]);
         if chars_of(&spin.si_map).any(|seen| seen == c) || find_char(&group[at..], c).is_some() {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let fname = msg_cstr(fname);
             smsg!(0, "Duplicate character in MAP in {fname} line {}", lnum);
         }
@@ -178,8 +166,7 @@ pub(super) fn handle_sal(spin: &mut SpellInfo, items: &[&CStr]) {
 
 /// Add a case-folded from/to pair to one of the substitution tables.
 pub(super) fn add_fromto(out: &mut Vec<RepItem>, from: &CStr, to: &CStr) {
-    // SAFETY: the caller promises the strings; `word` is MAXWLEN, the
-    // bound `spell_casefold` is given.
+    // `word` is MAXWLEN, the bound `spell_casefold` is given.
     let folded = |s: &CStr| -> Box<[u8]> {
         let mut word = [0u8; MAXWLEN];
         let _ = spell_casefold(Win::current(), s.to_bytes(), s.count_bytes(), &mut word);

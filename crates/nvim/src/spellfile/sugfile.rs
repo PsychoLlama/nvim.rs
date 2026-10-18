@@ -29,13 +29,11 @@
 //! reach the three-byte form; the four-byte form needs more than about
 //! four million words.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::cstr;
 use crate::semsg;
 use crate::smsg;
-use core::ffi::{CStr, c_char, c_int, c_uint};
+use core::ffi::{CStr, c_int, c_uint};
 use std::ffi::OsStr;
 use std::fs::File;
 use std::os::unix::ffi::OsStrExt;
@@ -51,9 +49,9 @@ use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
 use crate::path::path_full_compare;
 use crate::spell::{languages, open_spellbuf, put_lang, spell_soundfold, take_lang, with_lang};
-use crate::types::{Failed, LineNr, NUL, SpellIdx, SpellLang, int16_t, uint16_t};
+use crate::types::{Failed, LineNr, NUL, SpellIdx, SpellLang};
 
-use super::wordtree::{WordNode, tree_add_word, wordtree_alloc, wordtree_compress};
+use super::wordtree::{NodeId, tree_add_word, wordtree_alloc, wordtree_compress};
 use super::write::{SplWriter, clear_node, put_node};
 use super::{
     FAIL, MAXWLEN, OK, SpellInfo, VIMSUGMAGIC, VIMSUGVERSION, kEqualFiles, spell_load_file,
@@ -85,12 +83,14 @@ pub(super) fn spell_make_sugfile(spin: &mut SpellInfo, wfname: &CStr) {
         }
     };
 
-    // Start a fresh arena and tree: the ones the `.spl` was built from
-    // have already been released.
-    spin.si_arena.clear();
+    // Start a fresh tree: the ones the `.spl` was built from have already
+    // been released. Upstream kept their dangling roots, and a compression
+    // run the `.sug` walk set off then compressed the freed keep-case tree;
+    // here only the new tree is left to compress.
+    spin.clear_trees();
+    spin.si_keeproot = None;
+    spin.si_prefroot = None;
     spin.si_compress_cnt = 0;
-    spin.si_free_count = 0;
-    spin.si_first_free = core::ptr::null_mut();
     spin.si_foldwcount = 0;
 
     spell_message(spin, c"Performing soundfolding...");
@@ -99,7 +99,7 @@ pub(super) fn spell_make_sugfile(spin: &mut SpellInfo, wfname: &CStr) {
         smsg!(0, "Number of words after soundfolding: {}", done);
         spell_message(spin, super::wordtree::MSG_COMPRESSING);
         let foldroot = spin.si_foldroot;
-        unsafe { wordtree_compress(spin, foldroot, c"case-folded") };
+        wordtree_compress(spin, foldroot, c"case-folded");
 
         // Same path as the `.spl`, with the extension's last two
         // letters swapped: "spl" becomes "sug".
@@ -114,7 +114,7 @@ pub(super) fn spell_make_sugfile(spin: &mut SpellInfo, wfname: &CStr) {
     if let Some(id) = slot {
         put_lang(id, slang);
     }
-    spin.si_arena.clear();
+    spin.clear_trees();
     spin.si_spellbuf = None;
 }
 
@@ -135,7 +135,8 @@ fn sug_filltree(spin: &mut SpellInfo, slang: &mut SpellLang) -> Result<(), Faile
     let mut wordcount: [SpellIdx; MAXWLEN] = [0; MAXWLEN];
     let mut words_done: c_uint = 0;
 
-    spin.si_foldroot = wordtree_alloc(spin);
+    let foldroot = wordtree_alloc(spin);
+    spin.si_foldroot = Some(foldroot);
     spin.si_sugtree = 1;
 
     if slang.sl_fold_tree.is_empty() {
@@ -182,10 +183,8 @@ fn sug_filltree(spin: &mut SpellInfo, slang: &mut SpellLang) -> Result<(), Faile
         // arguments, split across the two.
         tword[depth] = 0;
         spell_soundfold(slang, &tword, true, &mut tsalword);
-        let foldroot = spin.si_foldroot;
-        let word = tsalword.as_ptr().cast::<c_char>();
         let (hi, lo) = ((words_done >> 16) as c_int, (words_done & 0xffff) as c_int);
-        unsafe { tree_add_word(spin, word, foldroot, hi, lo, 0) }?;
+        tree_add_word(spin, &tsalword, foldroot, hi, lo, 0);
         words_done = words_done.wrapping_add(1);
         wordcount[depth] += 1;
 
@@ -210,8 +209,8 @@ fn sug_maketable(spin: &mut SpellInfo) -> c_int {
     spin.si_spellbuf = Some(open_spellbuf());
 
     let mut line: Vec<u8> = Vec::with_capacity(100);
-    let root = unsafe { (*spin.si_foldroot).wn_sibling };
-    if unsafe { sug_filltable(spin, root, 0, &mut line) } == -1 {
+    let root = spin.si_foldroot.and_then(|root| spin.node(root).wn_sibling);
+    if sug_filltable(spin, root, 0, &mut line) == -1 {
         FAIL
     } else {
         OK
@@ -225,43 +224,41 @@ fn sug_maketable(spin: &mut SpellInfo) -> c_int {
 ///
 /// The run of word ends is collapsed to a single node as it goes: the tree
 /// that gets written only needs one, since the numbers now live in the
-/// buffer line rather than in the nodes.
-///
-/// # Safety
-///
-/// `node` must be null or head a live sibling chain of the sound-fold tree.
-/// `line` is scratch the caller lends for each line built.
-unsafe fn sug_filltable(
+/// buffer line rather than in the nodes. `line` is scratch the caller lends
+/// for each line built.
+fn sug_filltable(
     spin: &mut SpellInfo,
-    node: *mut WordNode,
+    node: Option<NodeId>,
     startwordnr: c_int,
     line: &mut Vec<u8>,
 ) -> c_int {
-    // SAFETY: the caller promises the chain.
     let mut wordnr = startwordnr;
-    let mut p = node;
+    let mut next = node;
     let spellbuf = spin.spellbuf();
-    while !p.is_null() {
-        if unsafe { (*p).wn_byte } as c_int != NUL {
-            wordnr = unsafe { sug_filltable(spin, (*p).wn_child, wordnr, line) };
+    while let Some(p) = next {
+        if spin.node(p).wn_byte != NUL as u8 {
+            let child = spin.node(p).wn_child;
+            wordnr = sug_filltable(spin, child, wordnr, line);
             if wordnr == -1 {
                 return -1;
             }
-            p = unsafe { (*p).wn_sibling };
+            next = spin.node(p).wn_sibling;
             continue;
         }
 
         line.clear();
         let mut prev_nr = 0;
-        let mut np = p;
-        while !np.is_null() && unsafe { (*np).wn_byte } as c_int == NUL {
-            let nr = ((unsafe { (*np).wn_flags } as c_int) << 16)
-                + (unsafe { (*np).wn_region } as c_int & 0xffff);
+        let mut run = Some(p);
+        while let Some(np) = run
+            && spin.node(np).wn_byte == NUL as u8
+        {
+            let n = spin.node(np);
+            let nr = (c_int::from(n.wn_flags) << 16) + (c_int::from(n.wn_region) & 0xffff);
             let mut bytes = [0u8; 4];
-            let n = offset2bytes(nr - prev_nr, &mut bytes);
+            let len = offset2bytes(nr - prev_nr, &mut bytes);
             prev_nr = nr;
-            line.extend_from_slice(&bytes[..n]);
-            np = unsafe { (*np).wn_sibling };
+            line.extend_from_slice(&bytes[..len]);
+            run = n.wn_sibling;
         }
         line.push(0);
 
@@ -273,15 +270,16 @@ unsafe fn sug_filltable(
 
         // Drop the rest of the run and blank what is left, so the node
         // carries no word number into the file.
-        while !unsafe { (*p).wn_sibling }.is_null()
-            && unsafe { (*(*p).wn_sibling).wn_byte } as c_int == NUL
+        while let Some(sib) = spin.node(p).wn_sibling
+            && spin.node(sib).wn_byte == NUL as u8
         {
-            unsafe { (*p).wn_sibling = (*(*p).wn_sibling).wn_sibling };
+            spin.node_mut(p).wn_sibling = spin.node(sib).wn_sibling;
         }
-        unsafe { (*p).wn_flags = 0 as uint16_t };
-        unsafe { (*p).wn_region = 0 as int16_t };
+        let n = spin.node_mut(p);
+        n.wn_flags = 0;
+        n.wn_region = 0;
 
-        p = unsafe { (*p).wn_sibling };
+        next = n.wn_sibling;
     }
     wordnr
 }
@@ -318,16 +316,13 @@ fn offset2bytes(nr: c_int, buf: &mut [u8; 4]) -> usize {
 /// Write the `.sug` file: the sound-fold trie, then one line of word
 /// numbers per word end.
 fn sug_write(spin: &mut SpellInfo, fname: &CStr) {
-    // SAFETY: the caller promises the path.
-    let path = Path::new(OsStr::from_bytes(unsafe { cstr::bytes_at(fname.as_ptr()) }));
+    let path = Path::new(OsStr::from_bytes(fname.to_bytes()));
     let Ok(file) = File::create(path) else {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let fname = msg_cstr(fname);
         semsg!("E484: Can't open file {fname}");
         return;
     };
-    // SAFETY: as above.
-    let name = unsafe { CStr::from_ptr(fname.as_ptr()) }.to_string_lossy();
+    let name = fname.to_string_lossy();
     spell_message_fmt(spin, format_args!("Writing suggestion file {name}..."));
 
     let mut w = SplWriter::new(file);
@@ -342,17 +337,14 @@ fn sug_write(spin: &mut SpellInfo, fname: &CStr) {
     w.bytes(&spin.si_sugtime.to_be_bytes());
 
     spin.si_memtot = 0;
-    // SAFETY: the fold tree is built and compressed by now.
-    let tree = unsafe { (*spin.si_foldroot).wn_sibling };
-    // SAFETY: as above.
-    unsafe { clear_node(tree) };
-    // SAFETY: as above.
-    let nodecount = unsafe { put_node(None, tree, 0, 0, false) } as usize;
+    // The fold tree is built and compressed by now.
+    let tree = spin.si_foldroot.and_then(|root| spin.node(root).wn_sibling);
+    clear_node(spin, tree);
+    let nodecount = put_node(None, spin, tree, 0, 0, false) as usize;
     w.u32(nodecount);
     debug_assert!(nodecount + nodecount * size_of::<c_int>() < c_int::MAX as usize);
     spin.si_memtot += (nodecount + nodecount * size_of::<c_int>()) as c_int;
-    // SAFETY: as above.
-    unsafe { put_node(Some(&mut w), tree, 0, 0, false) };
+    put_node(Some(&mut w), spin, tree, 0, 0, false);
 
     let spellbuf = spin.spellbuf();
     // The scratch buffer holds one line per word end.
