@@ -833,3 +833,42 @@ fn fold_more(mip: &mut MatchInf<'_>) -> c_int {
     mip.fwordlen += flen;
     flen
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::memory::XString;
+
+    fn rules(text: &[u8]) -> Box<SpellLang> {
+        let mut slang = SpellLang::new(b"", XString::new());
+        slang.sl_comprules = Some(text.to_vec());
+        slang
+    }
+
+    #[test]
+    fn a_compound_is_a_prefix_of_some_rule() {
+        let slang = rules(b"ab/cd");
+        assert!(match_compoundrule(&slang, b"a\0"));
+        assert!(match_compoundrule(&slang, b"c\0"));
+        assert!(!match_compoundrule(&slang, b"x\0"));
+        let sets = rules(b"[ab]c");
+        assert!(match_compoundrule(&sets, b"bc\0"));
+        assert!(!match_compoundrule(&sets, b"cc\0"));
+    }
+
+    #[test]
+    fn a_compound_longer_than_every_rule_is_no_prefix() {
+        // The first rule runs out on its `/`; the scan has to step past it
+        // to the next rule rather than stop on it for good.
+        let slang = rules(b"ab/cd");
+        assert!(!match_compoundrule(&slang, b"abc\0"));
+        assert!(!match_compoundrule(&slang, b"cdx\0"));
+    }
+
+    #[test]
+    fn a_language_without_rules_matches_nothing() {
+        let mut slang = rules(b"");
+        slang.sl_comprules = None;
+        assert!(!match_compoundrule(&slang, b"a\0"));
+    }
+}

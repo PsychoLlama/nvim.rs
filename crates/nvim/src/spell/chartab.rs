@@ -451,10 +451,12 @@ pub fn nofold_len(fword: &[u8], flen: usize, word: &[u8]) -> usize {
         p += step(fword, p);
     }
 
+    // At the word's NUL the pointer walk stood still, so a folded word
+    // longer in characters than the original lands on its end.
     let mut p = 0;
     while i > 0 {
         i -= 1;
-        p += step(word, p);
+        p += c_cluster_len(tail(word, p));
     }
     p
 }
@@ -477,4 +479,33 @@ pub fn byte_in_str(set: &[u8], n: c_int) -> bool {
     set.iter()
         .take_while(|&&b| b != 0)
         .any(|&b| c_int::from(b) == n)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn nofold_len_counts_characters_across() {
+        // Two-byte characters on both sides: the length carries over as is.
+        assert_eq!(nofold_len("éa".as_bytes(), 3, "éa".as_bytes()), 3);
+        // An ASCII fold of a two-byte character's slot: one character is
+        // two bytes of the original.
+        assert_eq!(nofold_len(b"ea", 1, "éa".as_bytes()), 2);
+    }
+
+    #[test]
+    fn nofold_len_stops_at_the_original_words_end() {
+        // The folded text runs on past what the original holds; the walk
+        // over the original stands still at its end, as the pointer walk
+        // did at its NUL, rather than stepping past it.
+        assert_eq!(nofold_len(b"abcd", 4, b"ab"), 2);
+        assert_eq!(nofold_len(b"abcd", 4, b"ab\0zz"), 2);
+    }
+
+    #[test]
+    fn byte_in_str_stops_at_the_nul() {
+        assert!(byte_in_str(b"abc", c_int::from(b'b')));
+        assert!(!byte_in_str(b"a\0b", c_int::from(b'b')));
+    }
 }
