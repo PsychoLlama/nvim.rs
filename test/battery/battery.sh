@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run all thirty-five baselined differentials + the paired startup probe.
+# Run all thirty-seven baselined differentials + the paired startup probe.
 #
 # THIS IS THE CANONICAL COPY.  Every close before phase 20 kept the
 # battery in its own session scratchpad and copied it forward, which is
@@ -161,6 +161,12 @@
 # row reads its swap/ShaDa/undo artifacts with this tree's binary.  The
 # goldens are a recording, not part of the tree, so without the argument
 # that row is skipped (and says so).
+# The `spellmem` row (spellmemverify.sh) compiles one generated 20,000-word
+# input under four forced 'mkspellmem' settings and diffs every
+# "Compressed ..." line and the scrubbed .spl/.sug hashes: WHEN the word
+# tree is compressed is decided by the bytes upstream's allocator would have
+# charged, and the `spell` row's small cases never compress twice. Its cut
+# is ~45 s (the reference binary's quadratic .sug pass); the head run ~15 s.
 set -u
 LABEL="${1:?label}"
 GOLDENS="${2:-}"
@@ -216,6 +222,7 @@ run optsweep  "$T/optverify.sh"
 # their subsystems so the twenty-four rows above keep their order and a
 # run of this battery can still be diffed against p19-close's logs.
 run spellsweep "$T/spellverify.sh"
+run spellmem  "$T/spellmemverify.sh"
 run perssweep  "$T/persverify.sh"
 run undosweep  "$T/undoverify.sh"
 # The two P20-12 additions, appended for the same reason: the

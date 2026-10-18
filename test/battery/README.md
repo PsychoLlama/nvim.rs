@@ -1,6 +1,6 @@
 # The differential battery
 
-Thirty-six baselined oracles plus a paired startup probe. Each row drives the
+Thirty-seven baselined oracles plus a paired startup probe. Each row drives the
 binary this tree builds through a fixed corpus, scrubs everything that names
 _where_ or _when_ the run happened, and diffs the result against the same
 corpus run through the binary of a **pinned reference commit**. A row says
@@ -11,7 +11,7 @@ Nothing generated is committed. The baselines used to be 276 files and 53 MiB
 of `*base/` in git; they are now **cut on demand** and cached under `target/`.
 
 ```
-just battery              # all 37, ~8 min warm, logs under target/battery-logs
+just battery              # all 38, ~8 min warm, logs under target/battery-logs
 just battery my-label     # same, naming the log set
 test/battery/keyverify.sh # one row, on its own — same cache, same pin
 ```
@@ -67,45 +67,46 @@ over `exprcorpus.txt` and `exprcmds.txt`, and `msg` drives
 its children through `scr`'s harness (the functional suite's `testnvim` +
 `ui/screen`).
 
-| row      | what it watches                                                                               |
-| -------- | --------------------------------------------------------------------------------------------- |
-| `key`    | `getchar.rs`, `mapping.rs`, `keycodes.rs` — typeahead and the `:map` family                   |
-| `scr`    | the screen pipeline: `drawscreen`, `drawline`, decorations, highlight, syntax, the popup menu |
-| `eval`   | the value substrate — typval, lists/dicts, `userfunc`, `vars`, encode/decode                  |
-| `au`     | `autocmd.rs` + `api/autocmd.rs`, as an event-ORDER log                                        |
-| `vars`   | `v:` variables and the variable scopes                                                        |
-| `op`     | `ops.rs`, `register.rs`, `change.rs`, `textobject.rs`, `edit.rs`                              |
-| `fmt`    | `indent_c.rs`, `textformat.rs`, the indent options                                            |
-| `diff`   | `diff.rs` and the vendored `xdiff/`                                                           |
-| `utf`    | `mbyte.rs` and the UTF-8/latin1 surface                                                       |
-| `cmd`    | the Ex layer through `nvim_parse_cmd()`/`nvim_cmd()`                                          |
-| `rt`     | `runtime/` — `:runtime`, the rtp, packages, `:scriptnames`, `estack`                          |
-| `sess`   | `:mksession`/`:mkview` byte goldens                                                           |
-| `ex`     | the rehomed Ex probe: parse + excmd                                                           |
-| `fs`     | the eval filesystem family (slowest of the Lua rows, ~30 s)                                   |
-| `stl`    | `statusline.rs` — `build_stl_str_hl`, click definitions, ruler, tabline                       |
-| `mouse`  | `mouse.rs` — `do_mouse`, `jump_to_mouse`, the wheel, `getmousepos()`                          |
-| `menu`   | `menu.rs` — `:menu`, `menu_get`/`menu_info`, `:emenu`, `:popup`                               |
-| `win`    | `window.rs` + `winfloat.rs` — every `wincmd`, the float config matrix, tabpages               |
-| `buf`    | `buffer.rs` — `:ls`, addressing, the delete/unload lifecycle, `getbufinfo()`                  |
-| `vt`     | `vterm/` — the escape parser, the pen, modes, mouse encoders, damage merging                  |
-| `term`   | `terminal.rs` and its submodules, including a real pty                                        |
-| `mark`   | `marktree.rs` and `marktree/` — the tree's SHAPE, via `nvim__buf_debug_extmarks`              |
-| `re`     | `regexp.rs` and `regexp/` — both engines side by side under `'regexpengine'`                  |
-| `syn`    | the regexp engines over every `syn match`/`syn region` pattern in `runtime/syntax`            |
-| `opt`    | the option TABLE, one row per option for all 374, and `do_set`'s alphabet                     |
-| `spell`  | `spellfile.rs` + `spellsuggest.rs` — 30 `:mkspell` cases, hashed `.spl`/`.sug`                |
-| `pers`   | `memline`, `memfile`, `shada`, `fileio`, `bufwrite` — swap and ShaDa bytes                    |
-| `undo`   | the undofile golden: 20 cases, 20 `.un~`, decoded field by field                              |
-| `fold`   | `fold/` — the fold TREE under edits, with a per-case `'foldlevel'` scan                       |
-| `jmark`  | `mark/` — named marks, the jumplist, the changelist                                           |
-| `nav`    | `file_search.rs`, `path.rs`, `quickfix.rs`, `search.rs`, `tag.rs`                             |
-| `decode` | json, msgpack, `vim.json`, `vim.mpack` and the msgpack-RPC transport                          |
-| `ins`    | `insexpand/` — the CTRL-X alphabet, one line per KEYSTROKE                                    |
-| `cont`   | lists, dicts (slot order) and blobs — sharing, copies, locks, ranges, the collector           |
-| `expr`   | the expression parser: every prefix of every line, six entries, lvalues, re-entrant text      |
-| `msg`    | `message/` — echo/emsg/`shortmess`, truncation, prompts, history, capture, `confirm()`        |
-| probe    | `startprobe.py`: ~200 nvim _processes_ — argv, `$XDG_*`, `-l`/`-S`/`--api-info`, the log file |
+| row        | what it watches                                                                               |
+| ---------- | --------------------------------------------------------------------------------------------- |
+| `key`      | `getchar.rs`, `mapping.rs`, `keycodes.rs` — typeahead and the `:map` family                   |
+| `scr`      | the screen pipeline: `drawscreen`, `drawline`, decorations, highlight, syntax, the popup menu |
+| `eval`     | the value substrate — typval, lists/dicts, `userfunc`, `vars`, encode/decode                  |
+| `au`       | `autocmd.rs` + `api/autocmd.rs`, as an event-ORDER log                                        |
+| `vars`     | `v:` variables and the variable scopes                                                        |
+| `op`       | `ops.rs`, `register.rs`, `change.rs`, `textobject.rs`, `edit.rs`                              |
+| `fmt`      | `indent_c.rs`, `textformat.rs`, the indent options                                            |
+| `diff`     | `diff.rs` and the vendored `xdiff/`                                                           |
+| `utf`      | `mbyte.rs` and the UTF-8/latin1 surface                                                       |
+| `cmd`      | the Ex layer through `nvim_parse_cmd()`/`nvim_cmd()`                                          |
+| `rt`       | `runtime/` — `:runtime`, the rtp, packages, `:scriptnames`, `estack`                          |
+| `sess`     | `:mksession`/`:mkview` byte goldens                                                           |
+| `ex`       | the rehomed Ex probe: parse + excmd                                                           |
+| `fs`       | the eval filesystem family (slowest of the Lua rows, ~30 s)                                   |
+| `stl`      | `statusline.rs` — `build_stl_str_hl`, click definitions, ruler, tabline                       |
+| `mouse`    | `mouse.rs` — `do_mouse`, `jump_to_mouse`, the wheel, `getmousepos()`                          |
+| `menu`     | `menu.rs` — `:menu`, `menu_get`/`menu_info`, `:emenu`, `:popup`                               |
+| `win`      | `window.rs` + `winfloat.rs` — every `wincmd`, the float config matrix, tabpages               |
+| `buf`      | `buffer.rs` — `:ls`, addressing, the delete/unload lifecycle, `getbufinfo()`                  |
+| `vt`       | `vterm/` — the escape parser, the pen, modes, mouse encoders, damage merging                  |
+| `term`     | `terminal.rs` and its submodules, including a real pty                                        |
+| `mark`     | `marktree.rs` and `marktree/` — the tree's SHAPE, via `nvim__buf_debug_extmarks`              |
+| `re`       | `regexp.rs` and `regexp/` — both engines side by side under `'regexpengine'`                  |
+| `syn`      | the regexp engines over every `syn match`/`syn region` pattern in `runtime/syntax`            |
+| `opt`      | the option TABLE, one row per option for all 374, and `do_set`'s alphabet                     |
+| `spell`    | `spellfile.rs` + `spellsuggest.rs` — 30 `:mkspell` cases, hashed `.spl`/`.sug`                |
+| `spellmem` | when `:mkspell` compresses: one 20,000-word input under four forced `'mkspellmem'` settings   |
+| `pers`     | `memline`, `memfile`, `shada`, `fileio`, `bufwrite` — swap and ShaDa bytes                    |
+| `undo`     | the undofile golden: 20 cases, 20 `.un~`, decoded field by field                              |
+| `fold`     | `fold/` — the fold TREE under edits, with a per-case `'foldlevel'` scan                       |
+| `jmark`    | `mark/` — named marks, the jumplist, the changelist                                           |
+| `nav`      | `file_search.rs`, `path.rs`, `quickfix.rs`, `search.rs`, `tag.rs`                             |
+| `decode`   | json, msgpack, `vim.json`, `vim.mpack` and the msgpack-RPC transport                          |
+| `ins`      | `insexpand/` — the CTRL-X alphabet, one line per KEYSTROKE                                    |
+| `cont`     | lists, dicts (slot order) and blobs — sharing, copies, locks, ranges, the collector           |
+| `expr`     | the expression parser: every prefix of every line, six entries, lvalues, re-entrant text      |
+| `msg`      | `message/` — echo/emsg/`shortmess`, truncation, prompts, history, capture, `confirm()`        |
+| probe      | `startprobe.py`: ~200 nvim _processes_ — argv, `$XDG_*`, `-l`/`-S`/`--api-info`, the log file |
 
 ## The `readbase` row: reading a fixed binary's files
 
