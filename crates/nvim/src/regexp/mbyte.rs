@@ -196,9 +196,19 @@ pub(crate) fn cstrchr_line(rex: Rex, rest: &[u8], c: c_int) -> Option<usize> {
 /// [`cstrchr`] over the string itself, its terminator left off.
 #[inline(always)]
 fn cstrchr_in(rex: Rex, text: &[u8], c: c_int) -> Option<usize> {
-    if !rex.reg_ic() {
-        return find_char_in(text, c);
+    if rex.reg_ic() {
+        find_char_ic(text, c)
+    } else {
+        find_char_in(text, c)
     }
+}
+
+/// [`cstrchr_in`] matching either case. Kept out of line: inlined, its
+/// loop's registers and frame made every caller's prologue dearer, and the
+/// callers run once per start position whether or not the search ignores
+/// case.
+#[inline(never)]
+fn find_char_ic(text: &[u8], c: c_int) -> Option<usize> {
     // `cc` is the other case of `c`, `lc` the folded form to compare
     // non-ASCII against. Characters with no other case take the plain
     // search.
