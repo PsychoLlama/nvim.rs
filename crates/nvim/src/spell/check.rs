@@ -49,7 +49,7 @@ use super::lookup::{find_prefix, find_word};
 use super::slang::LoadedLangs;
 use super::{
     CHAR_DIGIT, CHAR_OTHER, CHAR_UPPER, FIND_COMPOUND, FIND_FOLDWORD, FIND_KEEPWORD, MAXWLEN,
-    MatchInf, SP_BAD, SP_BANNED, SP_OK, SP_RARE, c_text, count_common_word, loaded_langs,
+    MatchInf, SP_BAD, SP_BANNED, SP_OK, SP_RARE, WordEnd, c_text, count_common_word, loaded_langs,
     spelltab_isu,
 };
 use crate::highlight_group::{HLF_COUNT, HLF_SPB, HLF_SPC, HLF_SPL, HLF_SPR};
@@ -96,14 +96,17 @@ pub fn spell_check(
     // The languages are resolved once for the whole lookup.
     let mut counted = None;
     let checked = loaded_langs.with(|langs| {
-        look_up(
-            window,
-            text,
-            langs,
-            capcol.as_deref_mut(),
-            docount,
-            &mut counted,
-        )
+        langs.with_word_ends(|ends| {
+            look_up(
+                window,
+                text,
+                langs,
+                ends,
+                capcol.as_deref_mut(),
+                docount,
+                &mut counted,
+            )
+        })
     });
     if let Some((id, len)) = counted {
         // Counted once the lookup is over, which only reads the language.
@@ -144,6 +147,7 @@ fn look_up(
     window: Win,
     text: &[u8],
     langs: &LoadedLangs,
+    ends: &mut Vec<WordEnd>,
     capcol: Option<&mut c_int>,
     docount: bool,
     counted: &mut Option<(LangId, usize)>,
@@ -158,7 +162,7 @@ fn look_up(
 
     // Nearly everything lives in "mi" so that it can be handed to the
     // lookup functions in one go.
-    let mut mi = MatchInf::new(text, window, langs, langp);
+    let mut mi = MatchInf::new(text, window, langs, langp, ends);
 
     // A number is always fine, including hex and binary literals. The
     // word is still checked, so that "3GPP" and "11 julifeest" are

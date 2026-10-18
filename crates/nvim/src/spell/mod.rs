@@ -203,6 +203,14 @@ pub const CHAR_DIGIT: CharType = 2;
 
 /// The longest `SYLLABLE` item.
 pub const SY_MAXLEN: c_int = 30;
+/// A "a word could end here" node [`find_word`](lookup::find_word) passed
+/// on its way down the tree: one past the node's index, and how far into
+/// the word it sat.
+pub(crate) struct WordEnd {
+    pub len: c_int,
+    pub node: u32,
+}
+
 /// State threaded through one word's lookup, so that the tree walk and the
 /// compound recursion can pass it around in one piece rather than a dozen
 /// arguments.
@@ -252,6 +260,10 @@ pub(crate) struct MatchInf<'a> {
     /// following, kept as a fall-back.
     pub result2: SpellResult,
     pub end2: usize,
+    /// The endings stack every [`find_word`](lookup::find_word) call of
+    /// this lookup shares, nested calls above their callers': a scratch
+    /// [`LoadedLangs`] lends out, so no call zeroes a `MAXWLEN` array.
+    pub ends: &'a mut Vec<WordEnd>,
 }
 
 impl<'a> MatchInf<'a> {
@@ -263,6 +275,7 @@ impl<'a> MatchInf<'a> {
         win: Win,
         langs: &'a LoadedLangs,
         langp: &'a [LangP],
+        ends: &'a mut Vec<WordEnd>,
     ) -> Self {
         MatchInf {
             langs,
@@ -293,6 +306,7 @@ impl<'a> MatchInf<'a> {
             win,
             result2: 0,
             end2: 0,
+            ends,
         }
     }
 }

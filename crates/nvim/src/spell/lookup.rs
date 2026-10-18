@@ -28,7 +28,7 @@
 //!
 //! The walk goes as deep as it can and *then* works back out, because the
 //! longest match wins. Every "word ends here" node passed on the way down
-//! is pushed onto `endidx`/`endlen`, and the second half of [`find_word`]
+//! is pushed onto [`MatchInf::ends`], and the second half of [`find_word`]
 //! pops them longest-first, checking case, region, prefix conditions and
 //! compounding rules until one is accepted.
 //!
@@ -59,7 +59,7 @@ use super::chartab::{
 };
 use super::{
     FIND_COMPOUND, FIND_FOLDWORD, FIND_KEEPCOMPOUND, FIND_KEEPWORD, FIND_PREFIX, MAXWLEN, MatchInf,
-    SP_BAD, SP_BANNED, SP_LOCAL, SP_OK, SP_RARE, TAB, c_text, count_syllables, e_format,
+    SP_BAD, SP_BANNED, SP_LOCAL, SP_OK, SP_RARE, TAB, WordEnd, c_text, count_syllables, e_format,
     spell_valid_case, strn_eq,
 };
 
@@ -139,10 +139,9 @@ pub(super) fn find_word(mip: &mut MatchInf<'_>, mode: c_int) {
 
     let mut arridx: usize = 0;
     // Where each "a word could end here" node was, and how far into the
-    // word it sat.
-    let mut endlen = [0 as c_int; MAXWLEN];
-    let mut endidx = [0u32; MAXWLEN];
-    let mut endidxcnt = 0usize;
+    // word it sat: pushed above whatever the calls this one is nested in
+    // left on the stack, and popped back to `base` before returning.
+    let base = mip.ends.len();
 
     // Descend until a byte does not match, the tree runs out, or the
     // word does. `ptr` is re-read whenever folding has added to it.
@@ -161,14 +160,16 @@ pub(super) fn find_word(mip: &mut MatchInf<'_>, mode: c_int) {
         // and carry on; the longest match is preferred, so the endings
         // are only examined once the descent is done.
         if children.first() == Some(&0) {
-            if endidxcnt == MAXWLEN {
+            if mip.ends.len() - base == MAXWLEN {
                 // Only a corrupted spell file can nest this deep.
                 emsg(gettext(e_format));
+                mip.ends.truncate(base);
                 return;
             }
-            endlen[endidxcnt] = wlen;
-            endidx[endidxcnt] = arridx as u32 + 1;
-            endidxcnt += 1;
+            mip.ends.push(WordEnd {
+                len: wlen,
+                node: arridx as u32 + 1,
+            });
 
             // Step over every zero: one per flag/region variant.
             first = Tree::word_ends_in(children);
@@ -213,10 +214,10 @@ pub(super) fn find_word(mip: &mut MatchInf<'_>, mode: c_int) {
 
     // Now try the endings, longest first.
     let win = mip.win;
-    while endidxcnt > 0 {
-        endidxcnt -= 1;
-        arridx = endidx[endidxcnt] as usize;
-        wlen = endlen[endidxcnt];
+    while mip.ends.len() > base {
+        let WordEnd { len: end_len, node } = mip.ends.pop().expect("above base");
+        arridx = node as usize;
+        wlen = end_len;
 
         if head_off(text!(mip, keep), wlen as usize) > 0 {
             continue; // not on a character boundary
@@ -296,7 +297,7 @@ pub(super) fn find_word(mip: &mut MatchInf<'_>, mode: c_int) {
                         break 'variants;
                     }
                 } else if mode == FIND_COMPOUND || mode == FIND_KEEPCOMPOUND || !word_ends {
-                    let at = endlen[endidxcnt];
+                    let at = end_len;
                     if !compound_part_allowed(mip, keep, wlen, flags, word_ends, mode, at) {
                         break 'variant;
                     }
@@ -320,7 +321,7 @@ pub(super) fn find_word(mip: &mut MatchInf<'_>, mode: c_int) {
                         mip.result = SP_BAD;
                     }
 
-                    mip.compoff = endlen[endidxcnt];
+                    mip.compoff = end_len;
                     if mode == FIND_KEEPWORD {
                         // Translate the keep-case length into a case-folded
                         // one, again short-cutting when folding changed
@@ -422,6 +423,7 @@ pub(super) fn find_word(mip: &mut MatchInf<'_>, mode: c_int) {
         }
 
         if mip.result == SP_OK {
+            mip.ends.truncate(base);
             break;
         }
     }

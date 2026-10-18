@@ -24,7 +24,7 @@ use crate::memory::XString;
 use crate::strings::find_char;
 use crate::types::{Buffer, LangId};
 use crate::winlayer::Buf;
-use core::cell::RefCell;
+use core::cell::{Cell, RefCell};
 use core::ffi::c_int;
 use std::collections::HashMap;
 
@@ -35,7 +35,7 @@ use crate::mbyte::{c_cluster_len, char_at};
 use crate::memline::{ml_close, ml_open, ml_open_file};
 use crate::types::{OK, SpellLang, uint8_t, uint16_t};
 
-use super::{MAXWLEN, MAXWORDCOUNT, SP_FORMERROR, SY_MAXLEN, SylItem, WordTree};
+use super::{MAXWLEN, MAXWORDCOUNT, SP_FORMERROR, SY_MAXLEN, SylItem, WordEnd, WordTree};
 
 /// The hash the `COMMON` table keys words with: upstream's `hash_hash`
 /// (`h = h * 101 + byte`), spread over the word by a multiplicative mix so
@@ -271,6 +271,10 @@ pub(crate) struct LoadedLangs {
     /// Newest first, which is the order a search for a language by name
     /// or file walks.
     order: Vec<LangId>,
+    /// The word-endings stack a lookup's tree walks share, kept here so it
+    /// is allocated once rather than zeroed per walk. A `spell_check` takes
+    /// it for the length of one word and puts it back empty.
+    word_ends: Cell<Vec<WordEnd>>,
 }
 
 impl LoadedLangs {
@@ -278,7 +282,19 @@ impl LoadedLangs {
         LoadedLangs {
             slots: Vec::new(),
             order: Vec::new(),
+            word_ends: Cell::new(Vec::new()),
         }
+    }
+
+    /// Run `f` with the word-endings stack, which is empty on entry and must
+    /// be left empty. A nested call gets an empty one, which costs it an
+    /// allocation and nothing else.
+    pub(crate) fn with_word_ends<R>(&self, f: impl FnOnce(&mut Vec<WordEnd>) -> R) -> R {
+        let mut ends = self.word_ends.take();
+        let r = f(&mut ends);
+        debug_assert!(ends.is_empty(), "a lookup left word endings behind");
+        self.word_ends.set(ends);
+        r
     }
 
     /// The language in slot `id`, if it is there.
