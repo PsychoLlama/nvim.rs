@@ -87,6 +87,11 @@
 -- of 355 ppm (0.036 %) -- a tenth of the `old` group's 0.36 %, since these
 -- phases barely touch LuaJIT.  Read a `parser` difference under ~0.05 % as
 -- none.
+
+-- EVALBENCH_ONLY runs a comma-separated subset of the phases, for a per-phase
+-- instruction count. The setup between phases always runs; a phase that
+-- reads state an earlier phase leaves behind measures that state's absence.
+
 local NROUND = tonumber(os.getenv('EVALBENCH_SCALE') or '1')
 local GROUP = os.getenv('EVALBENCH_GROUP') or 'all'
 
@@ -108,10 +113,26 @@ local function ms(f, rounds)
   return (vim.uv.hrtime() - t0) / 1e6
 end
 
+local ONLY = os.getenv('EVALBENCH_ONLY')
+
+-- Whether phase `name` is in EVALBENCH_ONLY's comma-separated list (every phase
+-- when it is unset).
+local function wanted(name)
+  if not ONLY then
+    return true
+  end
+  for p in ONLY:gmatch('[^,]+') do
+    if p == name then
+      return true
+    end
+  end
+  return false
+end
+
 local out = {}
 local current = 'old'
 local function phase(name, rounds, f)
-  if GROUP ~= 'all' and GROUP ~= current then
+  if (GROUP ~= 'all' and GROUP ~= current) or not wanted(name) then
     return
   end
   out[#out + 1] = ('EVALBENCH\t%s\t%.1f'):format(name, ms(f, rounds))

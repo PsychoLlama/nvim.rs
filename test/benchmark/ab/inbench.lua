@@ -37,6 +37,11 @@
 --   inscompl   insexpand.rs   -- <C-n> over a 10,000-word buffer
 --   msgout     message.rs     -- 10,000 echomsg through msg_puts_display
 --                                and the history
+
+-- INBENCH_ONLY runs a comma-separated subset of the phases, for a per-phase
+-- instruction count. The setup between phases always runs; a phase that
+-- reads state an earlier phase leaves behind measures that state's absence.
+
 local work = os.getenv('INBENCH_WORK') or '/tmp/inbench'
 vim.fn.mkdir(work, 'p')
 vim.cmd('silent! cd ' .. vim.fn.fnameescape(work))
@@ -120,8 +125,27 @@ local function ms(f, rounds)
   return (vim.uv.hrtime() - t0) / 1e6
 end
 
+local ONLY = os.getenv('INBENCH_ONLY')
+
+-- Whether phase `name` is in INBENCH_ONLY's comma-separated list (every phase
+-- when it is unset).
+local function wanted(name)
+  if not ONLY then
+    return true
+  end
+  for p in ONLY:gmatch('[^,]+') do
+    if p == name then
+      return true
+    end
+  end
+  return false
+end
+
 local out = {}
 local function phase(name, rounds, f)
+  if not wanted(name) then
+    return
+  end
   out[#out + 1] = ('INBENCH\t%s\t%.1f'):format(name, ms(f, rounds))
 end
 

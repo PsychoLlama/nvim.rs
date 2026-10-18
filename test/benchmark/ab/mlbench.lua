@@ -11,7 +11,9 @@
 --
 --   nvim --clean --headless -l mlbench.lua
 --
--- Env: MLBENCH_LINES (default 120000), MLBENCH_REPS (default 1).
+-- Env: MLBENCH_LINES (default 120000), MLBENCH_REPS (default 1),
+-- MLBENCH_ONLY (a comma-separated subset of the phases; `build` always runs,
+-- since every other phase reads its buffer, but is reported only if named).
 
 local NLINES = tonumber(os.getenv('MLBENCH_LINES') or '120000')
 local REPS = tonumber(os.getenv('MLBENCH_REPS') or '1')
@@ -26,12 +28,35 @@ end
 local api = vim.api
 local hrtime = vim.uv.hrtime
 
+local ONLY = os.getenv('MLBENCH_ONLY')
+
+-- Whether phase `name` is in MLBENCH_ONLY's comma-separated list (every phase
+-- when it is unset).
+local function wanted(name)
+  if not ONLY then
+    return true
+  end
+  for p in ONLY:gmatch('[^,]+') do
+    if p == name then
+      return true
+    end
+  end
+  return false
+end
+
 local results = {}
+-- `build` is every other phase's buffer, so it always runs; like the rest
+-- it is reported only when wanted.
 local function phase(name, fn)
+  if name ~= 'build' and not wanted(name) then
+    return
+  end
   local t = hrtime()
   local out = fn()
   local ns = hrtime() - t
-  results[#results + 1] = { name, ns, out }
+  if wanted(name) then
+    results[#results + 1] = { name, ns, out }
+  end
 end
 
 -- Varying line lengths so data blocks hold varying line counts, and the

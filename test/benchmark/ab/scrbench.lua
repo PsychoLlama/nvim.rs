@@ -87,6 +87,10 @@
 -- is `bufnr('%')`, which goes through `tv_get_buf` into buffer.rs, and is
 -- therefore NOT a floor for a batch that owns buffer.rs.
 
+-- SCRBENCH_ONLY runs a comma-separated subset of the phases, for a per-phase
+-- instruction count. The setup between phases always runs; a phase that
+-- reads state an earlier phase leaves behind measures that state's absence.
+
 local NLINE = 400 -- lines in the wrapped fixture
 
 local function ms(f, rounds)
@@ -97,8 +101,27 @@ local function ms(f, rounds)
   return (vim.uv.hrtime() - t0) / 1e6
 end
 
+local ONLY = os.getenv('SCRBENCH_ONLY')
+
+-- Whether phase `name` is in SCRBENCH_ONLY's comma-separated list (every phase
+-- when it is unset).
+local function wanted(name)
+  if not ONLY then
+    return true
+  end
+  for p in ONLY:gmatch('[^,]+') do
+    if p == name then
+      return true
+    end
+  end
+  return false
+end
+
 local out = {}
 local function phase(name, rounds, f)
+  if not wanted(name) then
+    return
+  end
   out[#out + 1] = string.format('SCRBENCH\t%s\t%.1f', name, ms(f, rounds))
 end
 

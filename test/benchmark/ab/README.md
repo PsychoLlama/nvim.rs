@@ -59,9 +59,10 @@ Of the three added later, `rebench` (6 ppm) and `readbench` (14 ppm) are
 deterministic and `undobench` is not: two runs spread **1,250 ppm**, so treat
 an `undobench` difference under about 0.2 % the same way.
 
-`readbench`, `rebench` and `undobench` also take `<NAME>_ONLY=phase[,phase]`,
-which runs only those phases after the setup, so cachegrind can count one
-phase at a time.
+Every bench takes `<NAME>_ONLY=phase[,phase]` (`INBENCH_ONLY`,
+`SCRBENCH_ONLY`, …), which runs only those phases after the setup, so
+cachegrind can count one phase at a time; subtract a run with a phase name
+that matches nothing (`=none`) to take the setup out.
 
 **It does need `codegen-units = 1` on both sides.** The default release
 profile splits the crate into sixteen units, and which unit a function lands
