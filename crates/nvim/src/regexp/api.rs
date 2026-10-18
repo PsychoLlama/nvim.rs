@@ -202,7 +202,8 @@ impl OwnedProg {
             deadline: None,
             ext_in: None,
         };
-        run.exec(self, rmp, None, &mut None)
+        let (_, mut out) = MultiOut::split(rmp);
+        run.exec(self, &mut out, None, &mut None)
     }
 }
 
@@ -513,7 +514,9 @@ fn regexec_multi_io(
     timed_out: Option<&mut bool>,
     io: ExtMatchIo<'_>,
 ) -> c_int {
-    let Some(mut prog) = rmp.regprog.take() else {
+    // The program is borrowed where it lives, beside the slots the match
+    // writes: a recompile for the backtracking engine replaces it in place.
+    let (Some(prog), mut out) = MultiOut::split(rmp) else {
         return 0;
     };
     let run = MultiRun {
@@ -525,9 +528,41 @@ fn regexec_multi_io(
         ext_in: io.input,
     };
     let mut ext_out = io.output;
-    let result = run.exec(&mut prog, rmp, timed_out, &mut ext_out);
-    rmp.regprog = Some(prog);
-    result
+    run.exec(prog, &mut out, timed_out, &mut ext_out)
+}
+
+/// What a buffer match reads from its `RegMMatch` and writes back to it,
+/// borrowed apart from the program that runs.
+struct MultiOut<'a> {
+    starts: &'a mut [LPos; RE_GROUPS],
+    ends: &'a mut [LPos; RE_GROUPS],
+    matchcol: &'a mut ColNr,
+    /// Ignore case, unless the pattern says otherwise.
+    ic: bool,
+    /// Give up once a match starts past this column, or 0 for no bound.
+    maxcol: ColNr,
+}
+
+impl<'a> MultiOut<'a> {
+    /// `rmm`'s program, and the rest of it as a match's settings and slots.
+    fn split(rmm: &'a mut RegMMatch) -> (Option<&'a mut OwnedProg>, MultiOut<'a>) {
+        let RegMMatch {
+            regprog,
+            startpos,
+            endpos,
+            rmm_matchcol,
+            rmm_ic,
+            rmm_maxcol,
+        } = rmm;
+        let out = MultiOut {
+            starts: startpos,
+            ends: endpos,
+            matchcol: rmm_matchcol,
+            ic: *rmm_ic != 0,
+            maxcol: *rmm_maxcol,
+        };
+        (regprog.as_mut(), out)
+    }
 }
 
 /// What one buffer match runs with, whichever program runs it.
@@ -541,19 +576,19 @@ struct MultiRun<'a> {
 }
 
 impl MultiRun<'_> {
-    /// Run `prog` with `rmm`'s settings, into `rmm`'s slots, falling back to
+    /// Run `prog` with `out`'s settings, into `out`'s slots, falling back to
     /// the backtracking engine when the NFA one gives up.
     fn exec(
         &self,
         prog: &mut OwnedProg,
-        rmm: &mut RegMMatch,
+        out: &mut MultiOut<'_>,
         mut timed_out: Option<&mut bool>,
         ext_out: &mut Option<&mut Option<ExtMatchRef>>,
     ) -> c_int {
         let result = in_match_scope(Some(self.lnum), |_| {
-            let result = self.once(prog, rmm, &mut timed_out, ext_out);
+            let result = self.once(prog, out, &mut timed_out, ext_out);
             if result == NFA_TOO_EXPENSIVE && prog.automatic() {
-                self.again_backtracking(prog, rmm, &mut timed_out, ext_out)
+                self.again_backtracking(prog, out, &mut timed_out, ext_out)
             } else {
                 result
             }
@@ -566,7 +601,7 @@ impl MultiRun<'_> {
     fn once(
         &self,
         prog: &OwnedProg,
-        rmm: &mut RegMMatch,
+        out: &mut MultiOut<'_>,
         timed_out: &mut Option<&mut bool>,
         ext_out: &mut Option<&mut Option<ExtMatchRef>>,
     ) -> LineNr {
@@ -574,7 +609,7 @@ impl MultiRun<'_> {
         let setup = MatchSetup {
             buf: self.buffer,
             win: self.win,
-            ic: rmm.rmm_ic != 0,
+            ic: out.ic,
             nobreak: prog.nobreak(),
             deadline: self.deadline,
             ext_in: self.ext_in,
@@ -587,16 +622,16 @@ impl MultiRun<'_> {
             },
         };
         // The match writes the caller's slots in place, as upstream's did.
-        let maxcol = rmm.rmm_maxcol;
+        let maxcol = out.maxcol;
         let (starts, ends) = (
-            Cell::from_mut(&mut rmm.startpos),
-            Cell::from_mut(&mut rmm.endpos),
+            Cell::from_mut(&mut *out.starts),
+            Cell::from_mut(&mut *out.ends),
         );
         let ctx = RegExec::for_buffer(setup, self.lnum, maxcol, starts, ends);
         let result = prog.run(ctx.rex(), self.col);
         let (matchcol, did_time_out) = (ctx.matchcol(), ctx.timed_out());
         if let Some(col) = matchcol {
-            rmm.rmm_matchcol = col;
+            *out.matchcol = col;
         }
         if did_time_out && let Some(flag) = timed_out.as_deref_mut() {
             *flag = true;
@@ -612,7 +647,7 @@ impl MultiRun<'_> {
     fn again_backtracking(
         &self,
         prog: &mut OwnedProg,
-        rmm: &mut RegMMatch,
+        out: &mut MultiOut<'_>,
         timed_out: &mut Option<&mut bool>,
         ext_out: &mut Option<&mut Option<ExtMatchRef>>,
     ) -> LineNr {
@@ -620,7 +655,7 @@ impl MultiRun<'_> {
             return NFA_TOO_EXPENSIVE;
         };
         *prog = new;
-        self.once(prog, rmm, timed_out, ext_out)
+        self.once(prog, out, timed_out, ext_out)
     }
 }
 
