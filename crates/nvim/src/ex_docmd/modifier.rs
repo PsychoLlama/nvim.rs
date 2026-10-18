@@ -46,7 +46,7 @@ use crate::message::redirecting;
 use crate::option::set_option_direct;
 use crate::options::kOptEventignore;
 
-use crate::debugger::atoi;
+use crate::charset::atoi;
 use crate::pos::MAXLNUM;
 use crate::regexp::{RE_MAGIC, skip_regexp_at};
 use crate::types::{CmdAddr, CmdMod, CmdModFlags, ExArg, Failed, OptInt, OptVal, OptionSetFlags};

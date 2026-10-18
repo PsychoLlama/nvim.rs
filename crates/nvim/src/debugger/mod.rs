@@ -43,6 +43,7 @@
 pub(crate) mod state;
 #[cfg(test)]
 mod tests;
+use crate::charset::atoi;
 use crate::debugger::state::{
     debug_backtrace_level, debug_break_level, debug_did_msg, debug_mode, debug_tick,
 };
@@ -297,36 +298,6 @@ fn digits_saturated(text: &[u8]) -> (LineNr, usize) {
         n.saturating_mul(10).saturating_add(i64::from(d - b'0'))
     });
     (LineNr::try_from(value).unwrap_or(LineNr::MAX), len)
-}
-
-/// `atoi(text)`: leading white space, a sign and the digits after it, read
-/// as glibc's `(int)strtol(..)` reads them -- saturated at the `long`'s range,
-/// then cut to the `int`'s 32 bits.
-pub(crate) fn atoi(text: &[u8]) -> c_int {
-    let mut at = 0;
-    while text
-        .get(at)
-        .is_some_and(|&b| b == b' ' || (b'\t'..=b'\r').contains(&b))
-    {
-        at += 1;
-    }
-    let negative = text.get(at) == Some(&b'-');
-    if matches!(text.get(at), Some(b'-' | b'+')) {
-        at += 1;
-    }
-    let digits = text[at.min(text.len())..]
-        .iter()
-        .take_while(|b| b.is_ascii_digit());
-    let value = digits.fold(0_i64, |n, &d| {
-        let d = i64::from(d - b'0');
-        if negative {
-            n.saturating_mul(10).saturating_sub(d)
-        } else {
-            n.saturating_mul(10).saturating_add(d)
-        }
-    });
-    let low = u32::try_from(value.rem_euclid(1 << 32)).expect("below 2^32");
-    c_int::from_ne_bytes(low.to_ne_bytes())
 }
 
 /// Parse the arguments of `:breakadd`, `:breakdel` or `:profile` into a

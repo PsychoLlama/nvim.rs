@@ -272,6 +272,36 @@ pub(super) fn scan(scan: &mut Scan, what: Str2NrBases) -> Option<Scanned> {
     })
 }
 
+/// `atoi(text)`: leading white space, a sign and the digits after it, read
+/// as glibc's `(int)strtol(..)` reads them -- saturated at the `long`'s range,
+/// then cut to the `int`'s 32 bits.
+pub(crate) fn atoi(text: &[u8]) -> c_int {
+    let mut at = 0;
+    while text
+        .get(at)
+        .is_some_and(|&b| b == b' ' || (b'\t'..=b'\r').contains(&b))
+    {
+        at += 1;
+    }
+    let negative = text.get(at) == Some(&b'-');
+    if matches!(text.get(at), Some(b'-' | b'+')) {
+        at += 1;
+    }
+    let digits = text[at.min(text.len())..]
+        .iter()
+        .take_while(|b| b.is_ascii_digit());
+    let value = digits.fold(0_i64, |n, &d| {
+        let d = i64::from(d - b'0');
+        if negative {
+            n.saturating_mul(10).saturating_sub(d)
+        } else {
+            n.saturating_mul(10).saturating_add(d)
+        }
+    });
+    let low = u32::try_from(value.rem_euclid(1 << 32)).expect("below 2^32");
+    c_int::from_ne_bytes(low.to_ne_bytes())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

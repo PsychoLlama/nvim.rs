@@ -55,8 +55,8 @@ use std::ffi::OsStr;
 use std::fs::File;
 use std::os::unix::ffi::OsStrExt;
 
+use crate::charset::atoi;
 use crate::cstr;
-use crate::debugger::atoi;
 use crate::fileio::Fgets;
 use crate::getchar::state::got_int;
 use crate::mbyte::canonize;

@@ -11,8 +11,8 @@
 use super::Jumped;
 use super::*;
 use crate::buffer::find_buffer_by_name;
+use crate::charset::atoi;
 use crate::cstr;
-use crate::debugger::atoi;
 use crate::ex_docmd::{cmdmod_add_split, cmdmod_set_tab, cmdmod_tab};
 use crate::guard::{Lock, Suppress};
 use crate::mbyte::c_cluster_len;

@@ -7,7 +7,7 @@
 #![forbid(unsafe_code)]
 
 use super::*;
-use crate::debugger::atoi;
+use crate::charset::atoi;
 use crate::guard::Keys;
 use crate::keycodes::{Key, key_escape, key_unescape};
 use crate::lua::executor::nlua_call_ref_reporting;

@@ -37,6 +37,7 @@ pub mod display;
 pub mod skip;
 pub mod str2nr;
 pub use str2nr::Str2NrBases;
+pub(crate) use str2nr::atoi;
 pub mod transchar;
 
 // The display half was split out for size; its callers are spread over three

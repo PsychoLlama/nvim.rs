@@ -8,9 +8,9 @@
 #![forbid(unsafe_code)]
 
 use super::*;
+use crate::charset::atoi;
 use crate::charset::ptr2cells_at;
 use crate::cstr;
-use crate::debugger::atoi;
 use crate::formatted;
 use crate::highlight_group::{HLF_CM, HLF_D, HLF_T};
 use crate::pos::MAXCOL;

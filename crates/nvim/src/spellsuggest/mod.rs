@@ -58,7 +58,7 @@ pub(crate) use prompt::spell_suggest;
 pub(crate) use sps::spell_check_sps;
 use sps::{spell_suggest_expr, spell_suggest_file};
 
-use crate::debugger::atoi;
+use crate::charset::atoi;
 use crate::getchar::state::got_int;
 use crate::getchar::vgetc;
 use crate::global_cell::GlobalCell;
