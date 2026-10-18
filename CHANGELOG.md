@@ -7,6 +7,31 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Rewrote the pattern matchers over data they own: both regexp engines (each
+  match carries its own context instead of global state, and a compiled
+  pattern has one owner), search and `:substitute`, `'hlsearch'` and the
+  match list, syntax highlighting, spell checking, suggestions and
+  `:mkspell`. Matches, `'maxmempattern'` limits and the `.spl`/`.sug` bytes
+  are what they were. `:mkspell` of a large word list with sound-folding is
+  about 100 times faster: the `.sug` pass no longer rescans every word that
+  folds alike for each word it files.
+
+### Fixed
+
+- A search pattern read from ShaDa with unknown keys was freed twice once a
+  function call or autocommand saved and restored the search patterns.
+- After `/a/;/b`, `n` lost its `[N/M]` count; after `//` following only a
+  `:s`, `n` matched everywhere instead of repeating the `:s` pattern.
+- `:mkspell` with sound-folding and a small `'mkspellmem'` compressed a word
+  tree it had already freed, and could crash.
+- A timer or autocommand changing the line while the `z=` prompt was open
+  made the replacement read freed memory.
+- A spell file with compound rules longer than its first rule hung spell
+  checking, and `:ownsyntax` leaked the window's syntax block when a buffer
+  switch had already replaced it.
+
 ## [2026.10.16-553e23395f]
 
 ### Changed
