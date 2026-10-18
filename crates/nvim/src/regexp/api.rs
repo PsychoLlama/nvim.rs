@@ -32,7 +32,7 @@ use crate::message::state::called_emsg;
 use crate::message::{emsg, msg_str, verbose_enter, verbose_leave};
 use crate::option::vars::{P_RE, p_re, p_verbose};
 use crate::os::cshim::gettext;
-use crate::regexp::RE_AUTO;
+use crate::regexp::{RE_AUTO, REX_SET};
 use crate::types::{ColNr, LPos, LineNr, OptInt, ProfTime, RE_GROUPS, RegMMatch, RegMatch};
 
 /// The first line of the last buffer match, which upstream's `rex` kept
@@ -142,6 +142,15 @@ impl OwnedProg {
     /// May the NFA engine give the pattern up for the backtracking one?
     fn automatic(&self) -> bool {
         self.0.engine == AUTOMATIC_ENGINE
+    }
+
+    /// Does the program have `\z(` groups, and so need slots for them?
+    #[inline(always)]
+    fn has_z(&self) -> bool {
+        match &self.0.program {
+            Program::Bt(bt) => c_int::from(bt.reghasz) == REX_SET,
+            Program::Nfa(nfa) => nfa.reghasz == REX_SET,
+        }
     }
 
     /// Run the program over the match `rex` is set up for, from column
@@ -360,6 +369,7 @@ impl StringRun<'_> {
     /// string) on a hit and clearing them on a miss.
     #[inline(always)]
     fn once(&self, prog: &OwnedProg, matches: &mut RegMatch, firstlnum: LineNr) -> LineNr {
+        let zslots;
         let setup = MatchSetup {
             buf: self.buffer,
             win: None,
@@ -367,6 +377,13 @@ impl StringRun<'_> {
             nobreak: prog.nobreak(),
             deadline: None,
             ext_in: None,
+            ext_out: None,
+            zslots: if prog.has_z() {
+                zslots = GroupSlots::new();
+                Some(&zslots)
+            } else {
+                None
+            },
         };
         let slots = GroupSlots::new();
         let ctx = RegExec::for_string(setup, self.text, self.nl, firstlnum, &slots);
@@ -553,6 +570,7 @@ impl MultiRun<'_> {
         timed_out: &mut Option<&mut bool>,
         ext_out: &mut Option<&mut Option<ExtMatchRef>>,
     ) -> LineNr {
+        let zslots;
         let setup = MatchSetup {
             buf: self.buffer,
             win: self.win,
@@ -560,6 +578,13 @@ impl MultiRun<'_> {
             nobreak: prog.nobreak(),
             deadline: self.deadline,
             ext_in: self.ext_in,
+            ext_out: ext_out.as_deref_mut().map(Cell::from_mut),
+            zslots: if prog.has_z() {
+                zslots = GroupSlots::new();
+                Some(&zslots)
+            } else {
+                None
+            },
         };
         // The match writes the caller's slots in place, as upstream's did.
         let maxcol = rmm.rmm_maxcol;
@@ -569,16 +594,12 @@ impl MultiRun<'_> {
         );
         let ctx = RegExec::for_buffer(setup, self.lnum, maxcol, starts, ends);
         let result = prog.run(ctx.rex(), self.col);
-        let (matchcol, did_time_out, captures) =
-            (ctx.matchcol(), ctx.timed_out(), ctx.take_ext_out());
+        let (matchcol, did_time_out) = (ctx.matchcol(), ctx.timed_out());
         if let Some(col) = matchcol {
             rmm.rmm_matchcol = col;
         }
         if did_time_out && let Some(flag) = timed_out.as_deref_mut() {
             *flag = true;
-        }
-        if let (Some(out), Some(captures)) = (ext_out.as_deref_mut(), captures) {
-            *out = captures;
         }
         result
     }

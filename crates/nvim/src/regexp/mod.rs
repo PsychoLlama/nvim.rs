@@ -74,8 +74,8 @@ pub const REGSUB_COPY: c_uint = 1;
 pub const kMarkBufLocal: MarkGet = 0;
 /// The caller's bound on how long an NFA match may run: how many steps
 /// since the clock was last read. The deadline itself is the match
-/// context's ([`Rex::deadline`]).
-#[derive(Copy, Clone)]
+/// context's ([`Rex::deadline`]). The default is [`TimeBudget::NONE`].
+#[derive(Copy, Clone, Default)]
 pub(crate) struct TimeBudget {
     count: c_int,
 }

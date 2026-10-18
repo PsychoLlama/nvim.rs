@@ -111,34 +111,55 @@ pub(crate) struct RegExec<'t> {
     // offsets afterwards.
     starts: &'t Slots,
     ends: &'t Slots,
-    zstarts: Slots,
-    zends: Slots,
+    /// The `\z(` slots, which only a program with `\z(` groups has: the
+    /// API layer sets them up for one and nobody else pays for them.
+    zslots: Option<&'t GroupSlots>,
     need_clear_subexpr: Cell<bool>,
     need_clear_zsubexpr: Cell<bool>,
 
     // ------------------------------------------- what the match reports
     matchcol: Cell<Option<ColNr>>,
     timed_out: Cell<bool>,
-    /// The `\z(` captures a successful match left, once one has: `None`
-    /// until then, so that a caller's slot is only written by a match that
-    /// wrote it upstream.
-    ext_out: Cell<Option<Option<ExtMatchRef>>>,
+    /// Where a successful syntax match leaves its `\z(` captures: the
+    /// caller's own slot, written only by a match that wrote it upstream,
+    /// or `None` for a caller that does not want them.
+    ext_out: Option<&'t Cell<Option<ExtMatchRef>>>,
 
-    // ----------------------------------------- the backtracker's own state
+    // ------------------------------------------ each engine's own state
+    bt: BtVars,
+    nfa: NfaVars,
+}
+
+/// The backtracker's own variables. Each engine's are a struct of their own
+/// so that they sit together and setting up a match blanks them in a few
+/// wide stores rather than one per field.
+struct BtVars {
     behind_pos: Cell<SavedInput>,
     brace_limits: Cell<(i64, i64)>,
+}
 
-    // -------------------------------------------- the NFA engine's state
-    nfa_has_zend: Cell<c_int>,
-    nfa_has_backref: Cell<c_int>,
-    nfa_nsubexpr: Cell<c_int>,
-    nfa_listid: Cell<c_int>,
-    nfa_alt_listid: Cell<c_int>,
-    nfa_has_zsubexpr: Cell<c_int>,
-    nfa_match: Cell<c_int>,
-    nfa_endp: Cell<Option<MatchPos>>,
-    nfa_ll_index: Cell<usize>,
-    nfa_time: Cell<TimeBudget>,
+impl Default for BtVars {
+    fn default() -> BtVars {
+        BtVars {
+            behind_pos: Cell::new(SavedInput::NOWHERE),
+            brace_limits: Cell::new((0, 0)),
+        }
+    }
+}
+
+/// The NFA engine's own variables: see [`BtVars`].
+#[derive(Default)]
+struct NfaVars {
+    has_zend: Cell<c_int>,
+    has_backref: Cell<c_int>,
+    nsubexpr: Cell<c_int>,
+    listid: Cell<c_int>,
+    alt_listid: Cell<c_int>,
+    has_zsubexpr: Cell<c_int>,
+    verdict: Cell<c_int>,
+    endp: Cell<Option<MatchPos>>,
+    ll_index: Cell<usize>,
+    time: Cell<TimeBudget>,
 }
 
 /// One family of capture slots, `\0`..`\9`.
@@ -147,7 +168,8 @@ pub(crate) type Slots = Cell<[LPos; SLOTS]>;
 /// What an unset capture slot holds; see [`MatchPos::unset`].
 const UNSET: LPos = LPos { lnum: -1, col: -1 };
 
-/// The two slot arrays a string match records its groups in.
+/// Two slot arrays: the ones a string match records its groups in, or a
+/// `\z(` program's.
 pub(crate) struct GroupSlots {
     pub(crate) starts: Slots,
     pub(crate) ends: Slots,
@@ -195,6 +217,11 @@ pub(crate) struct MatchSetup<'t> {
     pub(crate) nobreak: bool,
     pub(crate) deadline: Option<ProfTime>,
     pub(crate) ext_in: Option<&'t ExtMatch>,
+    /// Where a successful match leaves its `\z(` captures, if the caller
+    /// wants them.
+    pub(crate) ext_out: Option<&'t Cell<Option<ExtMatchRef>>>,
+    /// The `\z(` slots: `Some` exactly when the program has `\z(` groups.
+    pub(crate) zslots: Option<&'t GroupSlots>,
 }
 
 impl<'t> RegExec<'t> {
@@ -223,25 +250,14 @@ impl<'t> RegExec<'t> {
             input: Cell::new(0),
             starts,
             ends,
-            zstarts: Cell::new([UNSET; SLOTS]),
-            zends: Cell::new([UNSET; SLOTS]),
+            zslots: setup.zslots,
             need_clear_subexpr: Cell::new(false),
             need_clear_zsubexpr: Cell::new(false),
             matchcol: Cell::new(None),
             timed_out: Cell::new(false),
-            ext_out: Cell::new(None),
-            behind_pos: Cell::new(SavedInput::NOWHERE),
-            brace_limits: Cell::new((0, 0)),
-            nfa_has_zend: Cell::new(0),
-            nfa_has_backref: Cell::new(0),
-            nfa_nsubexpr: Cell::new(0),
-            nfa_listid: Cell::new(0),
-            nfa_alt_listid: Cell::new(0),
-            nfa_has_zsubexpr: Cell::new(0),
-            nfa_match: Cell::new(0),
-            nfa_endp: Cell::new(None),
-            nfa_ll_index: Cell::new(0),
-            nfa_time: Cell::new(TimeBudget::NONE),
+            ext_out: setup.ext_out,
+            bt: BtVars::default(),
+            nfa: NfaVars::default(),
         }
     }
 
@@ -304,12 +320,6 @@ impl<'t> RegExec<'t> {
     /// Did the caller's deadline pass?
     pub(crate) fn timed_out(&self) -> bool {
         self.timed_out.get()
-    }
-
-    /// A successful syntax match's own `\z(` captures, taken: `None` when
-    /// no match reported any, `Some(None)` when one reported it had none.
-    pub(crate) fn take_ext_out(&self) -> Option<Option<ExtMatchRef>> {
-        self.ext_out.take()
     }
 }
 
@@ -630,16 +640,27 @@ impl<'t> Rex<'t> {
         Slot(&self.0.ends.as_array_of_cells()[no])
     }
 
+    /// The `\z(` slots.
+    ///
+    /// # Panics
+    /// When the program has no `\z(` groups, and so no slots for them.
+    #[inline(always)]
+    fn zslots(self) -> &'t GroupSlots {
+        self.0
+            .zslots
+            .expect("only a program with `\\z(` groups reaches its slots")
+    }
+
     /// The start slot of `\z(` group `no`.
     #[inline(always)]
     pub(crate) fn zstart(self, no: usize) -> Slot<'t> {
-        Slot(&self.0.zstarts.as_array_of_cells()[no])
+        Slot(&self.zslots().starts.as_array_of_cells()[no])
     }
 
     /// The end slot of `\z(` group `no`.
     #[inline(always)]
     pub(crate) fn zend(self, no: usize) -> Slot<'t> {
-        Slot(&self.0.zends.as_array_of_cells()[no])
+        Slot(&self.zslots().ends.as_array_of_cells()[no])
     }
 
     /// The `\1`..`\9` start slots.
@@ -657,13 +678,13 @@ impl<'t> Rex<'t> {
     /// The `\z1`..`\z9` start slots.
     #[inline(always)]
     pub(crate) fn zstarts(self) -> &'t Slots {
-        &self.0.zstarts
+        &self.zslots().starts
     }
 
     /// The `\z1`..`\z9` end slots.
     #[inline(always)]
     pub(crate) fn zends(self) -> &'t Slots {
-        &self.0.zends
+        &self.zslots().ends
     }
 
     /// Do the `\1`..`\9` slots still hold a previous attempt's captures?
@@ -695,70 +716,70 @@ impl<'t> Rex<'t> {
     /// Did the pattern use `\ze`?
     #[inline(always)]
     pub(crate) fn nfa_has_zend(self) -> c_int {
-        self.0.nfa_has_zend.get()
+        self.0.nfa.has_zend.get()
     }
 
     #[inline(always)]
     pub(crate) fn set_nfa_has_zend(self, has: c_int) {
-        self.0.nfa_has_zend.set(has);
+        self.0.nfa.has_zend.set(has);
     }
 
     /// Did the pattern use a back-reference? One forces the slow path.
     #[inline(always)]
     pub(crate) fn nfa_has_backref(self) -> c_int {
-        self.0.nfa_has_backref.get()
+        self.0.nfa.has_backref.get()
     }
 
     #[inline(always)]
     pub(crate) fn set_nfa_has_backref(self, has: c_int) {
-        self.0.nfa_has_backref.set(has);
+        self.0.nfa.has_backref.set(has);
     }
 
     /// Did the pattern use a `\z(` group?
     #[inline(always)]
     pub(crate) fn nfa_has_zsubexpr(self) -> c_int {
-        self.0.nfa_has_zsubexpr.get()
+        self.0.nfa.has_zsubexpr.get()
     }
 
     #[inline(always)]
     pub(crate) fn set_nfa_has_zsubexpr(self, has: c_int) {
-        self.0.nfa_has_zsubexpr.set(has);
+        self.0.nfa.has_zsubexpr.set(has);
     }
 
     /// How many capture groups the NFA program has, so that only the slots
     /// in use are copied around.
     #[inline(always)]
     pub(crate) fn nfa_nsubexpr(self) -> c_int {
-        self.0.nfa_nsubexpr.get()
+        self.0.nfa.nsubexpr.get()
     }
 
     #[inline(always)]
     pub(crate) fn set_nfa_nsubexpr(self, n: c_int) {
-        self.0.nfa_nsubexpr.set(n);
+        self.0.nfa.nsubexpr.set(n);
     }
 
     /// The generation stamp that says whether a state is already on the
     /// list being built. Bumped once per input position.
     #[inline(always)]
     pub(crate) fn nfa_listid(self) -> c_int {
-        self.0.nfa_listid.get()
+        self.0.nfa.listid.get()
     }
 
     #[inline(always)]
     pub(crate) fn set_nfa_listid(self, id: c_int) {
-        self.0.nfa_listid.set(id);
+        self.0.nfa.listid.set(id);
     }
 
     /// The stamp a `\@=` sub-match runs under, kept apart from the outer
     /// match's so that neither invalidates the other's lists.
     #[inline(always)]
     pub(crate) fn nfa_alt_listid(self) -> c_int {
-        self.0.nfa_alt_listid.get()
+        self.0.nfa.alt_listid.get()
     }
 
     #[inline(always)]
     pub(crate) fn set_nfa_alt_listid(self, id: c_int) {
-        self.0.nfa_alt_listid.set(id);
+        self.0.nfa.alt_listid.set(id);
     }
 
     // --------------------------------------------- the NFA engine's run
@@ -766,50 +787,50 @@ impl<'t> Rex<'t> {
     /// The verdict so far: 0, a match, or `NFA_TOO_EXPENSIVE`.
     #[inline(always)]
     pub(crate) fn nfa_match(self) -> c_int {
-        self.0.nfa_match.get()
+        self.0.nfa.verdict.get()
     }
 
     #[inline(always)]
     pub(crate) fn set_nfa_match(self, verdict: c_int) {
-        self.0.nfa_match.set(verdict);
+        self.0.nfa.verdict.set(verdict);
     }
 
     /// Where the lookbehind being matched has to stop, or `None` outside
     /// one.
     #[inline(always)]
     pub(crate) fn nfa_endp(self) -> Option<MatchPos> {
-        self.0.nfa_endp.get()
+        self.0.nfa.endp.get()
     }
 
     #[inline(always)]
     pub(crate) fn set_nfa_endp(self, endp: Option<MatchPos>) {
-        self.0.nfa_endp.set(endp);
+        self.0.nfa.endp.set(endp);
     }
 
     /// Which of a state's two `lastlist` slots the running match stamps.
     #[inline(always)]
     pub(crate) fn nfa_ll_index(self) -> usize {
-        self.0.nfa_ll_index.get()
+        self.0.nfa.ll_index.get()
     }
 
     #[inline(always)]
     pub(crate) fn set_nfa_ll_index(self, index: usize) {
-        self.0.nfa_ll_index.set(index);
+        self.0.nfa.ll_index.set(index);
     }
 
     /// Start the clock for one try.
     #[inline(always)]
     pub(crate) fn set_time_budget(self, budget: TimeBudget) {
-        self.0.nfa_time.set(budget);
+        self.0.nfa.time.set(budget);
     }
 
     /// Count one step towards the next read of the clock: see
     /// [`TimeBudget::tick`].
     #[inline(always)]
     pub(crate) fn time_check_due(self, interval: c_int) -> bool {
-        let mut budget = self.0.nfa_time.get();
+        let mut budget = self.0.nfa.time.get();
         let due = budget.tick(interval);
-        self.0.nfa_time.set(budget);
+        self.0.nfa.time.set(budget);
         due
     }
 
@@ -840,7 +861,9 @@ impl<'t> Rex<'t> {
     /// Hand a successful match's `\z(` captures to the caller.
     #[inline(always)]
     pub(crate) fn put_ext_out(self, captures: Option<ExtMatchRef>) {
-        self.0.ext_out.set(Some(captures));
+        if let Some(out) = self.0.ext_out {
+            out.set(captures);
+        }
     }
 
     // --------------------------------------- the backtracker's own slots
@@ -848,23 +871,23 @@ impl<'t> Rex<'t> {
     /// Where the look-behind being tried has to end.
     #[inline(always)]
     pub(crate) fn behind_pos(self) -> SavedInput {
-        self.0.behind_pos.get()
+        self.0.bt.behind_pos.get()
     }
 
     #[inline(always)]
     pub(crate) fn set_behind_pos(self, pos: SavedInput) {
-        self.0.behind_pos.set(pos);
+        self.0.bt.behind_pos.set(pos);
     }
 
     /// The bounds of the `\{n,m}` about to be entered, read off its
     /// `BRACE_LIMITS` node and consumed by the `BRACE_SIMPLE` after it.
     #[inline(always)]
     pub(crate) fn brace_limits(self) -> (i64, i64) {
-        self.0.brace_limits.get()
+        self.0.bt.brace_limits.get()
     }
 
     #[inline(always)]
     pub(crate) fn set_brace_limits(self, minval: i64, maxval: i64) {
-        self.0.brace_limits.set((minval, maxval));
+        self.0.bt.brace_limits.set((minval, maxval));
     }
 }
