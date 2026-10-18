@@ -151,6 +151,11 @@ impl Win {
     /// program back if the last redraw suspended it.
     pub(crate) fn init_search_hl(self) {
         let mut window = self;
+        let conceal = if window.w_matches.is_empty() {
+            0
+        } else {
+            syn_name2id(c"Conceal")
+        };
         for item in &mut window.w_matches {
             let shl = &mut item.mit_hl;
             shl.rm.rmm_ic = item.mit_match.rmm_ic;
@@ -160,6 +165,7 @@ impl Win {
             } else {
                 syn_id2attr(item.mit_hlg_id)
             };
+            shl.conceals = item.mit_hlg_id != 0 && item.mit_hlg_id == conceal;
             shl.lnum = 0;
             shl.first_lnum = 0;
             shl.tm = profile_setlimit(p_rdt());
@@ -579,13 +585,27 @@ pub(crate) fn update_search_hl(
     search_attr_from_match: &mut bool,
 ) -> (c_int, bool) {
     let mut line_moved = false;
+    // The attribute of the highest-priority pattern covering `col`: the
+    // walk is in priority order and each pattern's state is final once the
+    // walk leaves it, so the last non-zero attribute wins.
+    *search_attr_from_match = false;
+    let mut search_attr = 0;
     let mut walk = ShlWalk::new(Order::ByPriority);
     while let Some(which) = walk.next(window) {
-        reset_pos_cur(window, which);
         let is_item = matches!(which, Which::Item(_));
         let mut pos_inprogress = true;
-        while has_prog(window, which) || (is_item && pos_inprogress) {
-            let (startcol, endcol) = with_shl(window, which, |shl| (shl.startcol, shl.endcol));
+        let mut first = true;
+        let (attr_cur, endcol) = loop {
+            // The common case -- `col` neither inside the match nor at its
+            // end -- is settled by this one look at the state.
+            let peek = peek(window, which, first, is_item && pos_inprogress);
+            first = false;
+            if !peek.live {
+                break (peek.attr_cur, peek.endcol);
+            }
+            let Peek {
+                startcol, endcol, ..
+            } = peek;
             if startcol != MAXCOL && col >= startcol && col < endcol {
                 // Inside the match. Widen it to a whole character.
                 let here = if line_moved {
@@ -600,7 +620,7 @@ pub(crate) fn update_search_hl(
                     }
                     _ => None,
                 };
-                with_shl(window, which, |shl| {
+                let (attr_cur, endcol) = with_shl(window, which, |shl| {
                     if shl.endcol < next_col {
                         shl.endcol = next_col;
                     }
@@ -613,21 +633,22 @@ pub(crate) fn update_search_hl(
                     } else {
                         shl.attr_cur = shl.attr;
                     }
+                    (shl.attr_cur, shl.endcol)
                 });
                 // A match in the `Conceal` group hides its text; 2 marks
                 // the first cell, so the replacement character is drawn
                 // once rather than once per cell.
                 match which {
-                    Which::Item(i) if syn_name2id(c"Conceal") == window.w_matches[i].mit_hlg_id => {
+                    Which::Item(i) if peek.conceals => {
                         *has_match_conc = if col == startcol { 2 } else { 1 };
                         *match_conc = window.w_matches[i].mit_conceal_char;
                     }
                     _ => *has_match_conc = 0,
                 }
-                break;
+                break (attr_cur, endcol);
             }
             if col != endcol {
-                break;
+                break (peek.attr_cur, endcol);
             }
 
             // Just past the end: look for the next match on this line.
@@ -649,7 +670,7 @@ pub(crate) fn update_search_hl(
                 true
             });
             if !found {
-                break;
+                break with_shl(window, which, |shl| (shl.attr_cur, shl.endcol));
             }
             if which == Which::Search {
                 check_cur_search_hl(window);
@@ -661,20 +682,11 @@ pub(crate) fn update_search_hl(
                 with_shl(window, which, |shl| shl.endcol += width);
             }
             // Round again, in case the new match starts here.
-        }
-    }
-
-    // The attribute of the highest-priority pattern covering `col`:
-    // walking in priority order, the last writer wins.
-    *search_attr_from_match = false;
-    let mut search_attr = screen_search_hl.with(|shl| shl.attr_cur);
-    let mut walk = ShlWalk::new(Order::ByPriority);
-    while let Some(which) = walk.next(window) {
-        let (attr_cur, endcol) = with_shl(window, which, |shl| (shl.attr_cur, shl.endcol));
+        };
         if attr_cur != 0 {
             search_attr = attr_cur;
             *on_last_col = col + 1 >= endcol;
-            *search_attr_from_match = which != Which::Search;
+            *search_attr_from_match = is_item;
         }
     }
 
@@ -691,6 +703,40 @@ pub(crate) fn update_search_hl(
         }
     }
     (search_attr, line_moved)
+}
+
+/// What [`update_search_hl`] reads of a pattern's state at each column.
+struct Peek {
+    /// The pattern can still search, or (a position match) still has
+    /// positions to visit on this line.
+    live: bool,
+    startcol: ColNr,
+    endcol: ColNr,
+    attr_cur: c_int,
+    conceals: bool,
+}
+
+/// One borrow of `which`'s state for [`update_search_hl`]: `reset` starts a
+/// match's position walk over (each column does, once), and `in_progress`
+/// is whether a position match still had positions when last searched.
+#[inline(always)]
+fn peek(window: Win, which: Which, reset: bool, in_progress: bool) -> Peek {
+    let read = |shl: &MatchState, live: bool| Peek {
+        live,
+        startcol: shl.startcol,
+        endcol: shl.endcol,
+        attr_cur: shl.attr_cur,
+        conceals: shl.conceals,
+    };
+    match which {
+        Which::Search => screen_search_hl.with(|shl| read(shl, shl.rm.regprog.is_some())),
+        Which::Item(i) => with_item(window, i, |item| {
+            if reset {
+                item.mit_pos_cur = 0;
+            }
+            read(&item.mit_hl, item.active() || in_progress)
+        }),
+    }
 }
 
 /// Whether the cell just past the end of the line should be highlighted.

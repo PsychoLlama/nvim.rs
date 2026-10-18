@@ -714,6 +714,10 @@ pub struct MatchState {
     pub endcol: ColNr,
     pub is_addpos: bool,
     pub has_cursor: bool,
+    /// The match's group is `Conceal`, so it hides the text it covers;
+    /// set when the match is added and again at each redraw. Never for
+    /// `'hlsearch'`.
+    pub conceals: bool,
     pub tm: ProfTime,
 }
 /// One entry of a window's match list: a pattern or a list of positions,

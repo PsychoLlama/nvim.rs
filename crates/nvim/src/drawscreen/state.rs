@@ -56,6 +56,7 @@ pub(crate) static screen_search_hl: GlobalCell<MatchState> = GlobalCell::new(Mat
     endcol: 0,
     is_addpos: false,
     has_cursor: false,
+    conceals: false,
     tm: 0,
 });
 pub(crate) static search_hl_has_cursor_lnum: GlobalCell<LineNr> = GlobalCell::new(0 as LineNr);

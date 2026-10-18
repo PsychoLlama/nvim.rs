@@ -126,7 +126,10 @@ fn match_add(
         mit_pos_cur: 0,
         mit_toplnum: 0,
         mit_botlnum: 0,
-        mit_hl: MatchState::default(),
+        mit_hl: MatchState {
+            conceals: hlg_id == syn_name2id(c"Conceal"),
+            ..MatchState::default()
+        },
         mit_hlg_id: hlg_id,
         mit_conceal_char: conceal_char.map_or(0, |c| char_at(c.to_bytes())),
         mit_suspended: false,
