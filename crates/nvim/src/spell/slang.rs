@@ -37,6 +37,29 @@ use crate::types::{OK, SpellLang, uint8_t, uint16_t};
 
 use super::{MAXWLEN, MAXWORDCOUNT, SP_FORMERROR, SY_MAXLEN, SylItem, WordTree};
 
+/// The hash the `COMMON` table keys words with: upstream's `hash_hash`
+/// (`h = h * 101 + byte`), spread over the word by a multiplicative mix so
+/// that short words do not all land in the table's low buckets. The table
+/// is asked once per word checked while counting, where SipHash cost as
+/// much as the rest of the count.
+#[derive(Default)]
+pub struct WordHasher(u64);
+
+impl core::hash::Hasher for WordHasher {
+    fn write(&mut self, bytes: &[u8]) {
+        for &b in bytes {
+            self.0 = self.0.wrapping_mul(101).wrapping_add(u64::from(b));
+        }
+    }
+
+    fn finish(&self) -> u64 {
+        self.0.wrapping_mul(0x9e37_79b9_7f4a_7c15)
+    }
+}
+
+/// `COMMON` word counts, by word.
+pub type WordCounts = HashMap<Box<[u8]>, uint16_t, core::hash::BuildHasherDefault<WordHasher>>;
+
 impl SpellLang {
     /// An empty language named `name` (which may be empty), read from
     /// `fname`. The caller fills it from the file and lists it with
@@ -52,7 +75,7 @@ impl SpellLang {
             sl_info: None,
             sl_regions: [0; 17],
             sl_midword: Vec::new(),
-            sl_wordcount: HashMap::new(),
+            sl_wordcount: WordCounts::default(),
             sl_compmax: MAXWLEN as c_int,
             sl_compminlen: 0,
             sl_compsylmax: MAXWLEN as c_int,
@@ -120,7 +143,7 @@ pub fn slang_clear(slang: &mut SpellLang) {
 
     slang.sl_comppat = Vec::new();
 
-    slang.sl_wordcount = HashMap::new();
+    slang.sl_wordcount = WordCounts::default();
     slang.sl_map_hash = HashMap::new();
 
     slang_clear_sug(slang);

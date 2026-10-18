@@ -54,7 +54,8 @@ use crate::types::{SpellLang, uint8_t};
 
 use super::Tree;
 use super::chartab::{
-    byte_in_str, captype, nofold_len, spell_casefold, spell_iswordp, spell_iswordp_nmw, tail,
+    byte_in_str, captype, casefold_len, nofold_len, spell_casefold, spell_iswordp,
+    spell_iswordp_nmw, step, tail,
 };
 use super::{
     FIND_COMPOUND, FIND_FOLDWORD, FIND_KEEPCOMPOUND, FIND_KEEPWORD, FIND_PREFIX, MAXWLEN, MatchInf,
@@ -66,7 +67,7 @@ use super::{
 /// `mb_ptr_adv` did: a NUL, or the end, is stepped over as one byte.
 #[inline]
 fn advance(text: &[u8], at: usize) -> usize {
-    at + c_cluster_len(tail(text, at)).max(1)
+    at + step(text, at)
 }
 
 /// Translate a length in `from` to the same number of characters in `to`,
@@ -144,10 +145,12 @@ pub(super) fn find_word(mip: &mut MatchInf<'_>, mode: c_int) {
     let mut endidxcnt = 0usize;
 
     // Descend until a byte does not match, the tree runs out, or the
-    // word does.
+    // word does. `ptr` is re-read whenever folding has added to it.
+    let mut ptr = text!(mip, keep);
     loop {
         if flen <= 0 && byte_at(mip.word, mip.fend) != 0 {
             flen = fold_more(mip);
+            ptr = text!(mip, keep);
         }
 
         // The whole node at once: one bounds check for every read below.
@@ -174,7 +177,7 @@ pub(super) fn find_word(mip: &mut MatchInf<'_>, mode: c_int) {
             }
         }
 
-        let mut c = byte_at(text!(mip, keep), wlen as usize);
+        let mut c = byte_at(ptr, wlen as usize);
         if c == 0 {
             break; // end of the line
         }
@@ -196,8 +199,9 @@ pub(super) fn find_word(mip: &mut MatchInf<'_>, mode: c_int) {
             loop {
                 if flen <= 0 && byte_at(mip.word, mip.fend) != 0 {
                     flen = fold_more(mip);
+                    ptr = text!(mip, keep);
                 }
-                let ch = c_int::from(byte_at(text!(mip, keep), wlen as usize));
+                let ch = c_int::from(byte_at(ptr, wlen as usize));
                 if ch != ' ' as c_int && ch != TAB {
                     break;
                 }
@@ -824,8 +828,8 @@ fn fold_more(mip: &mut MatchInf<'_>) -> c_int {
 
     let fwordlen = mip.fwordlen as usize;
     let taken = mip.fend - p;
-    let _ = spell_casefold(win, tail(word, p), taken, &mut mip.fword[fwordlen..MAXWLEN]);
-    let flen = crate::cstr::until_nul(&mip.fword[fwordlen..]).len() as c_int;
+    let folded = casefold_len(win, tail(word, p), taken, &mut mip.fword[fwordlen..MAXWLEN]);
+    let flen = folded.unwrap_or_else(|written| written) as c_int;
     mip.fwordlen += flen;
     flen
 }

@@ -22,6 +22,10 @@
 --
 -- The word list is fixed so both binaries see the same tree descents; the
 -- language is the shipped en.utf-8.spl, which is git-tracked.
+--
+-- SPELLBENCH_ONLY runs a comma-separated subset of the phases, for a
+-- per-phase instruction count; the setup (buffer, language load, the
+-- sanity check) always runs.
 
 -- stylua: ignore
 local WORDS = {
@@ -75,6 +79,27 @@ local function say(name, value)
   io.stdout:write(('SPELLBENCH\t%s\t%.3f\n'):format(name, value))
 end
 
+local ONLY = os.getenv('SPELLBENCH_ONLY')
+
+local function wanted(name)
+  if not ONLY then
+    return true
+  end
+  for p in ONLY:gmatch('[^,]+') do
+    if p == name then
+      return true
+    end
+  end
+  return false
+end
+
+-- Time `f` as phase `name`, when the phase is wanted.
+local function phase(name, f)
+  if wanted(name) then
+    say(name, ms(f))
+  end
+end
+
 local text = build(5000)
 vim.api.nvim_buf_set_lines(0, 0, -1, false, text)
 vim.o.spelllang = 'en'
@@ -88,69 +113,51 @@ if vim.fn.spellbadword('teh')[2] ~= 'bad' or #vim.fn.spellsuggest('teh', 3) == 0
 end
 
 -- ctl: the noise floor, nothing to do with spelling.
-say(
-  'ctl',
-  ms(function()
-    local n = 0
-    for _ = 1, 20 do
-      for i = 1, #text do
-        n = n + vim.fn.strdisplaywidth(text[i])
-      end
+phase('ctl', function()
+  local n = 0
+  for _ = 1, 20 do
+    for i = 1, #text do
+      n = n + vim.fn.strdisplaywidth(text[i])
     end
-  end)
-)
+  end
+end)
 
 -- check: one tree descent per word.
-say(
-  'check',
-  ms(function()
-    for i = 1, #text do
-      vim.fn.spellbadword(text[i])
-    end
-  end)
-)
+phase('check', function()
+  for i = 1, #text do
+    vim.fn.spellbadword(text[i])
+  end
+end)
 
 -- redraw: 'spell' on, scrolled through the buffer.
 vim.o.spell = true
-say(
-  'redraw',
-  ms(function()
-    for i = 1, 5000, 20 do
-      vim.api.nvim_win_set_cursor(0, { i, 0 })
-      vim.cmd('redraw')
-    end
-  end)
-)
+phase('redraw', function()
+  for i = 1, 5000, 20 do
+    vim.api.nvim_win_set_cursor(0, { i, 0 })
+    vim.cmd('redraw')
+  end
+end)
 vim.o.spell = false
 
 -- suggest: the edit walk plus the sound-a-like pass.
 vim.o.spellsuggest = 'fast'
-say(
-  'sug_fast',
-  ms(function()
-    for _, w in ipairs(BAD) do
-      vim.fn.spellsuggest(w, 5)
-    end
-  end)
-)
+phase('sug_fast', function()
+  for _, w in ipairs(BAD) do
+    vim.fn.spellsuggest(w, 5)
+  end
+end)
 vim.o.spellsuggest = 'best'
-say(
-  'suggest',
-  ms(function()
-    for _, w in ipairs(BAD) do
-      vim.fn.spellsuggest(w, 5)
-    end
-  end)
-)
+phase('suggest', function()
+  for _, w in ipairs(BAD) do
+    vim.fn.spellsuggest(w, 5)
+  end
+end)
 
 -- soundfold: the SAL engine on its own.
-say(
-  'soundfold',
-  ms(function()
-    for _ = 1, 200 do
-      for _, w in ipairs(WORDS) do
-        vim.fn.soundfold(w)
-      end
+phase('soundfold', function()
+  for _ = 1, 200 do
+    for _, w in ipairs(WORDS) do
+      vim.fn.soundfold(w)
     end
-  end)
-)
+  end
+end)

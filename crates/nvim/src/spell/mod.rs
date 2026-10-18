@@ -89,8 +89,8 @@ pub(crate) use slang::{
     LoadedLangs, lang_ptr, lang_ptr_opt, languages, loaded_langs, put_lang, with_lang,
 };
 pub use slang::{
-    SpellBuf, count_common_word, init_syl_tab, open_spellbuf, register_lang, slang_clear,
-    slang_clear_sug, take_lang,
+    SpellBuf, WordCounts, WordHasher, count_common_word, init_syl_tab, open_spellbuf,
+    register_lang, slang_clear, slang_clear_sug, take_lang,
 };
 pub use soundfold::{eval_soundfold, spell_soundfold};
 pub(crate) use wordtree::Tree;

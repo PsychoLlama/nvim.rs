@@ -82,7 +82,7 @@ pub struct SpellLang {
     /// `MIDWORD`'s characters.
     pub sl_midword: Vec<u8>,
     /// `COMMON` word counts.
-    pub sl_wordcount: std::collections::HashMap<Box<[u8]>, uint16_t>,
+    pub sl_wordcount: crate::spell::WordCounts,
     pub sl_compmax: ::core::ffi::c_int,
     pub sl_compminlen: ::core::ffi::c_int,
     pub sl_compsylmax: ::core::ffi::c_int,

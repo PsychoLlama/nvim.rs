@@ -218,12 +218,25 @@ pub(super) fn spell_iswordp_w(w: &[c_int], window: Win) -> bool {
 /// Answers `Err` when the result does not fit in `out`, having still
 /// terminated what was written.
 pub fn spell_casefold(window: Win, text: &[u8], len: usize, out: &mut [u8]) -> Result<(), Failed> {
+    casefold_len(window, text, len, out)
+        .map(|_| ())
+        .map_err(|_| Failed)
+}
+
+/// [`spell_casefold`], answering how many bytes it wrote before the
+/// terminator: `Err` with that count when the result did not fit.
+pub(crate) fn casefold_len(
+    window: Win,
+    text: &[u8],
+    len: usize,
+    out: &mut [u8],
+) -> Result<usize, usize> {
     let buflen = out.len();
     if len >= buflen {
         if let Some(first) = out.first_mut() {
             *first = 0;
         }
-        return Err(Failed);
+        return Err(0);
     }
 
     let mut outi = 0;
@@ -231,7 +244,22 @@ pub fn spell_casefold(window: Win, text: &[u8], len: usize, out: &mut [u8]) -> R
     while p < len {
         if outi + MB_MAXBYTES > buflen {
             out[outi] = 0;
-            return Err(Failed);
+            return Err(outi);
+        }
+        // ASCII folds through the table, one byte for one; what the table
+        // answers may still need two bytes.
+        if let Some(&b) = text.get(p)
+            && b < 0x80
+        {
+            p += 1;
+            let folded = spelltab_fold(usize::from(b));
+            if folded < 0x80 {
+                out[outi] = folded;
+                outi += 1;
+            } else {
+                outi += encode_char(c_int::from(folded), &mut out[outi..]);
+            }
+            continue;
         }
         let rest = tail(text, p);
         let mut c = char_at(rest);
@@ -252,7 +280,18 @@ pub fn spell_casefold(window: Win, text: &[u8], len: usize, out: &mut [u8]) -> R
         outi += encode_char(c, &mut out[outi..]);
     }
     out[outi] = 0;
-    Ok(())
+    Ok(outi)
+}
+
+/// How far the character at `at` in `text` reaches: one byte for ASCII
+/// with nothing composing on it, else the cluster -- and one byte at a NUL
+/// or the end, so a walk always moves.
+#[inline]
+pub(crate) fn step(text: &[u8], at: usize) -> usize {
+    match text.get(at..at + 2) {
+        Some(&[first, next]) if first < 0x80 && next < 0x80 && first != 0 => 1,
+        _ => c_cluster_len(tail(text, at)).max(1),
+    }
 }
 
 /// Classify the capitalisation of `text[..end]` as one of
@@ -274,11 +313,11 @@ pub fn captype(text: &[u8], end: usize) -> WordFlags {
         if at_end(p) {
             return WordFlags::NONE;
         }
-        p += c_cluster_len(tail(text, p)).max(1);
+        p += step(text, p);
     }
 
     let c = char_at(tail(text, p));
-    p += c_cluster_len(tail(text, p)).max(1);
+    p += step(text, p);
     let mut allcap = is_upper(c);
     let firstcap = allcap;
     let mut past_second = false;
@@ -298,7 +337,7 @@ pub fn captype(text: &[u8], end: usize) -> WordFlags {
             }
             past_second = true;
         }
-        p += c_cluster_len(rest).max(1);
+        p += step(text, p);
     }
 
     if allcap {
@@ -400,13 +439,13 @@ pub fn nofold_len(fword: &[u8], flen: usize, word: &[u8]) -> usize {
     let mut p = 0;
     while p < flen {
         i += 1;
-        p += c_cluster_len(tail(fword, p)).max(1);
+        p += step(fword, p);
     }
 
     let mut p = 0;
     while i > 0 {
         i -= 1;
-        p += c_cluster_len(tail(word, p)).max(1);
+        p += step(word, p);
     }
     p
 }

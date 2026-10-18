@@ -44,7 +44,7 @@ use crate::regexp::vim_regexec;
 use crate::spellsuggest::spell_suggest_list;
 use crate::types::{ColNr, Hlf, LangId, LineNr, RegMatch};
 
-use super::chartab::{spell_casefold, spell_iswordp, spell_iswordp_nmw, tail};
+use super::chartab::{casefold_len, spell_iswordp, spell_iswordp_nmw, step, tail};
 use super::lookup::{find_prefix, find_word};
 use super::slang::LoadedLangs;
 use super::{
@@ -182,7 +182,7 @@ fn look_up(
             mi.fend = advance_camelcase_word(text, window, &mut is_camel_case);
         } else {
             loop {
-                mi.fend += c_cluster_len(tail(text, mi.fend)).max(1);
+                mi.fend += step(text, mi.fend);
                 if byte_at(text, mi.fend) == 0 || !spell_iswordp(tail(text, mi.fend), window) {
                     break;
                 }
@@ -211,10 +211,10 @@ fn look_up(
     // Fold one character past the word, so the lookup can see where the
     // word ends.
     if byte_at(text, mi.fend) != 0 {
-        mi.fend += c_cluster_len(tail(text, mi.fend));
+        mi.fend += step(text, mi.fend);
     }
-    let _ = spell_casefold(window, text, mi.fend, &mut mi.fword[..MAXWLEN + 1]);
-    mi.fwordlen = crate::cstr::until_nul(&mi.fword).len() as c_int;
+    let folded = casefold_len(window, text, mi.fend, &mut mi.fword[..MAXWLEN + 1]);
+    mi.fwordlen = folded.unwrap_or_else(|written| written) as c_int;
 
     if is_camel_case && mi.fwordlen > 0 {
         // Put a fake word end into the folded word.
@@ -362,7 +362,7 @@ fn advance_camelcase_word(text: &[u8], window: Win, is_camel_case: &mut bool) ->
         last_last_type = last_type;
         last_type = this_type;
 
-        end += c_cluster_len(tail(text, end)).max(1);
+        end += step(text, end);
     }
 
     end
@@ -488,7 +488,7 @@ fn sentence_before(prev: &[u8]) -> CapCheck {
 pub fn spell_to_word_end(text: &[u8], win: Win) -> usize {
     let mut p = 0;
     while byte_at(text, p) != 0 && spell_iswordp(tail(text, p), win) {
-        p += c_cluster_len(tail(text, p)).max(1);
+        p += step(text, p);
     }
     p
 }

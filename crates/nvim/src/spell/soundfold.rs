@@ -64,15 +64,15 @@ pub fn eval_soundfold(word: &CStr) -> XString {
 /// here first. The SOFO scheme folds case as part of its mapping and does
 /// not care. `inword` ends at its end or at a NUL, whichever comes first.
 pub fn spell_soundfold(slang: &SpellLang, inword: &[u8], folded: bool, res: &mut [u8]) {
-    let inword = crate::cstr::until_nul(inword);
     if slang.sl_sofo {
         spell_soundfold_sofo(slang, inword, res);
     } else if folded {
         spell_soundfold_wsal(slang, inword, res);
     } else {
         let mut fword = [0u8; MAXWLEN];
-        let _ = spell_casefold(Win::current(), inword, inword.len(), &mut fword);
-        spell_soundfold_wsal(slang, crate::cstr::until_nul(&fword), res);
+        let len = crate::cstr::until_nul(inword).len();
+        let _ = spell_casefold(Win::current(), inword, len, &mut fword);
+        spell_soundfold_wsal(slang, &fword, res);
     }
 }
 
@@ -87,7 +87,7 @@ fn spell_soundfold_sofo(slang: &SpellLang, inword: &[u8], res: &mut [u8]) {
     let mut ri = 0;
     let mut prevc = 0;
     let mut s = 0;
-    while s < inword.len() {
+    while s < inword.len() && inword[s] != 0 {
         let rest = &inword[s..];
         let mut c = char_at(rest);
         s += char_len(rest);
@@ -161,7 +161,7 @@ fn spell_soundfold_wsal(slang: &SpellLang, inword: &[u8], res: &mut [u8]) {
     let mut wordlen = 0usize;
     let mut did_white = false;
     let mut s = 0;
-    while s < inword.len() {
+    while s < inword.len() && inword[s] != 0 {
         let t = &inword[s..];
         let mut c = char_at(t);
         s += char_len(t);
