@@ -368,6 +368,14 @@ pub(crate) fn find_match_text(
         }
         let mut s2 = at + regstart_len2 as usize;
         while match_text[s1] != 0 {
+            // The same ASCII byte on both sides is the same one-byte
+            // character: the common case, decided without decoding.
+            let byte = match_text[s1];
+            if byte < 0x80 && line.get(s2) == Some(&byte) {
+                s1 += 1;
+                s2 += 1;
+                continue;
+            }
             let c1 = char_at_nul(match_text, s1);
             let c2 = char_at_nul(line, s2);
             if c1 != c2 && (!rex.reg_ic() || utf_fold(c1) != utf_fold(c2)) {
