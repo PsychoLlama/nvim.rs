@@ -184,7 +184,7 @@ fn sug_filltree(spin: &mut SpellInfo, slang: &mut SpellLang) -> Result<(), Faile
         tword[depth] = 0;
         spell_soundfold(slang, &tword, true, &mut tsalword);
         let (hi, lo) = ((words_done >> 16) as c_int, (words_done & 0xffff) as c_int);
-        tree_add_word(spin, &tsalword, foldroot, hi, lo, 0);
+        tree_add_word(spin, crate::cstr::until_nul(&tsalword), foldroot, hi, lo, 0);
         words_done = words_done.wrapping_add(1);
         wordcount[depth] += 1;
 

@@ -125,6 +125,9 @@ pub(crate) struct SpellInfo {
     /// The `.sug` tree's runs of word ends: by head, the word end last
     /// filed; see `wordtree`.
     si_end_hint: wordtree::EndHints,
+    /// Per depth: the head of the chain the last word walked there, and the
+    /// node it stopped at; see `wordtree`.
+    si_path_hint: [Option<(NodeId, NodeId)>; MAXWLEN],
     si_spellbuf: Option<SpellBuf>,
     si_ascii: ::core::ffi::c_int,
     si_add: ::core::ffi::c_int,
@@ -349,6 +352,7 @@ impl SpellInfo {
             si_first_free: None,
             si_free_count: 0,
             si_end_hint: wordtree::EndHints::default(),
+            si_path_hint: [None; MAXWLEN],
             si_spellbuf: None,
             si_ascii: 0,
             si_add: 0,

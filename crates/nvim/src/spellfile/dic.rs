@@ -35,9 +35,10 @@
 use crate::cstr;
 use crate::semsg;
 use crate::smsg;
-use crate::spell::WordFlags;
+use crate::spell::{WordFlags, WordHasher};
 use crate::tr;
 use core::ffi::{CStr, c_int};
+use core::hash::BuildHasherDefault;
 use std::collections::HashSet;
 use std::ffi::OsStr;
 use std::fs::File;
@@ -82,7 +83,7 @@ pub(super) fn spell_read_dic(
     let mut fd = Fgets::new(file);
 
     // The words seen so far, to report duplicates.
-    let mut seen: HashSet<Vec<u8>> = HashSet::new();
+    let mut seen: HashSet<Box<[u8]>, BuildHasherDefault<WordHasher>> = HashSet::default();
     let name = fname.to_string_lossy();
     spell_message_fmt(&*spin, format_args!("Reading dictionary file {name}..."));
 
@@ -112,7 +113,8 @@ pub(super) fn spell_read_dic(
     while fd.line_capped(&mut raw, MAXLINELEN as usize) && !got_int.get() {
         line_breakcheck();
         lnum += 1;
-        let read = cstr::until_nul(&raw);
+        // As C reads the line: up to its first NUL.
+        let read = cstr::find_byte(&raw, NUL as u8).map_or(&raw[..], |at| &raw[..at]);
         if matches!(read.first(), Some(b'#' | b'/')) {
             continue;
         }
@@ -180,7 +182,7 @@ pub(super) fn spell_read_dic(
         // Upstream kept the word in the arena so its duplicate table could
         // point at it for the rest of the run.
         spin.si_arena.charge_str(&w);
-        if !seen.insert(w.clone()) {
+        if !seen.insert(w.as_slice().into()) {
             // Report every duplicate when 'verbose' is on, otherwise
             // just the first, plus a count at the end.
             if p_verbose() > 0 {

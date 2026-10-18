@@ -53,6 +53,20 @@
 //! has a new head), and compression clears the hint, so the walk ends where
 //! it would have from the head.
 //!
+//! # Where a walk starts
+//!
+//! Every word walks one sibling chain per byte, and a dictionary sorted
+//! alphabetically walks the same chains to the same nodes word after word.
+//! `si_path_hint` keeps, per depth, the head of the chain the last word
+//! walked there and the node it stopped at: a walk of a chain with that
+//! head starts at that node when it sorts before what is filed, and takes
+//! it outright when it carries the very byte (below a word end, where a
+//! match inserts nothing). The `.sug` tree's runs are interleaved rather
+//! than sorted, so it keeps its hint per run head instead (below). Chains
+//! only grow between compression runs -- a copy of a shared chain has a
+//! new head, an insertion at the head changes it -- and compression
+//! clears both hints, so a walk ends where it would have from the head.
+//!
 //! # What decides when compression runs
 //!
 //! Upstream allocated the nodes, the affix tables and their strings from
@@ -79,13 +93,13 @@ use std::collections::hash_map::Entry;
 
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
-use crate::mbyte::{c_cluster_len, valid_utf8};
+use crate::mbyte::valid_utf8;
 use crate::message::state::{msg_col, msg_didout};
 use crate::message::{msg_clr_eos, msg_start, msg_str};
 use crate::option::vars::p_verbose;
 use crate::os::cshim::gettext;
 use crate::os::input::veryfast_breakcheck;
-use crate::spell::{captype, spell_casefold};
+use crate::spell::{captype, casefold_len};
 use crate::types::{Failed, NUL};
 use crate::ui::ui_flush;
 
@@ -233,6 +247,7 @@ impl SpellInfo {
         self.si_first_free = None;
         self.si_free_count = 0;
         self.si_end_hint.clear();
+        self.si_path_hint = [None; MAXWLEN];
     }
 }
 
@@ -268,19 +283,16 @@ pub(super) fn wordtree_alloc(spin: &mut SpellInfo) -> NodeId {
 /// Reject words a spell file cannot represent: invalid UTF-8, control
 /// characters, and a trailing `/` (which would read as a flag separator).
 ///
-/// `word` is read as the C string it was: a NUL in it ends it.
+/// The encoding is checked over all of `word`; the rest reads it as the C
+/// string it was, which a NUL ends. Upstream tested the lead byte of each
+/// character, but in valid UTF-8 every other byte is 0x80 or above, so no
+/// byte but a lead can be a control character or a `/`.
 pub(super) fn valid_spell_word(word: &[u8]) -> bool {
     if !valid_utf8(word) {
         return false;
     }
-    let mut at = 0;
-    while at < word.len() && word[at] != NUL as u8 {
-        if word[at] < b' ' || (word[at] == b'/' && cstr::byte_at(word, at + 1) == NUL as u8) {
-            return false;
-        }
-        at += c_cluster_len(&word[at..]);
-    }
-    true
+    let text = cstr::until_nul(word);
+    !text.iter().any(|&b| b < b' ') && text.last() != Some(&b'/')
 }
 
 /// File one word in the case-folded tree, and in the keep-case tree when
@@ -289,7 +301,8 @@ pub(super) fn valid_spell_word(word: &[u8]) -> bool {
 /// `pfxlist` is the set of affix ids the word takes; the word is added once
 /// per id, since which prefixes apply is part of what the tree records.
 /// When `need_affix` is set the word is only added for real affix ids, not
-/// for the bare word. Both are read as the C strings they were.
+/// for the bare word. `word` holds no NUL; `pfxlist` is read as the C
+/// string it was.
 pub(super) fn store_word(
     spin: &mut SpellInfo,
     word: &[u8],
@@ -298,19 +311,22 @@ pub(super) fn store_word(
     pfxlist: &[u8],
     need_affix: bool,
 ) -> Result<(), Failed> {
-    let text = cstr::until_nul(word);
-    let pfxlist = cstr::until_nul(pfxlist);
+    debug_assert!(!word.contains(&(NUL as u8)), "a word is cut at its NUL");
+    let text = word;
     let ct = captype(text, text.len());
     if !valid_spell_word(text) {
         return Err(Failed);
     }
 
     let mut foldword = [0u8; MAXWLEN];
-    let _ = spell_casefold(Win::current(), text, text.len(), &mut foldword);
+    // What was written before the terminator, whether or not it all fit;
+    // folding a character never yields a NUL.
+    let (Ok(folded_len) | Err(folded_len)) =
+        casefold_len(Win::current(), text, text.len(), &mut foldword);
 
     let root = spin.si_foldroot.expect("mkspell allocates the roots first");
     let with_case = ct | flags;
-    let folded = cstr::until_nul(&foldword);
+    let folded = &foldword[..folded_len];
     add_per_affix(spin, folded, root, with_case, region, pfxlist, need_affix);
     spin.si_foldwcount += 1;
 
@@ -336,7 +352,9 @@ fn add_per_affix(
     pfxlist: &[u8],
     need_affix: bool,
 ) {
-    for id in pfxlist.iter().copied().chain([0]) {
+    // The list is a C string: its ids run to the first NUL.
+    let ids = pfxlist.iter().copied().take_while(|&id| id != NUL as u8);
+    for id in ids.chain([0]) {
         let affix_id = c_int::from(id.cast_signed());
         if !need_affix || affix_id != NUL {
             tree_add_word(spin, word, root, flags.bits(), region, affix_id);
@@ -367,7 +385,7 @@ fn set_link(spin: &mut SpellInfo, link: Link, to: NodeId) {
 ///
 /// A negative `flags` means the prefix tree, where `affix_id` rather than
 /// the flags decides sibling order and no two entries are ever merged.
-/// `word` is read as the C string it was, up to a NUL or its end.
+/// `word` holds no NUL; its end is the word's.
 pub(super) fn tree_add_word(
     spin: &mut SpellInfo,
     word: &[u8],
@@ -376,7 +394,7 @@ pub(super) fn tree_add_word(
     region: c_int,
     affix_id: c_int,
 ) {
-    let word = cstr::until_nul(word);
+    debug_assert!(!word.contains(&(NUL as u8)), "a word is cut at its NUL");
     let order = EndOrder {
         flags,
         masked: flags & WN_MASK,
@@ -421,15 +439,32 @@ pub(super) fn tree_add_word(
             }
         }
 
-        // Skip siblings that sort before what is being added. In the
-        // `.sug` tree, start from where the last word end of this run went
-        // when that still sorts before; see `si_end_hint`.
+        // Skip siblings that sort before what is being added, starting
+        // from a node the last walk of this chain found when it still sorts
+        // before (or, below a word end, is the very byte); see "Where a walk
+        // starts" in the module doc.
         let head = node;
-        let hinted = head
-            .filter(|_| order.sugtree)
-            .and_then(|head| spin.si_end_hint.get(&head).copied())
-            .map(|from| skip_siblings(&spin.si_nodes, Some(from), byte, &order))
-            .filter(|&(_, last)| last.is_some());
+        let hint = head.and_then(|head| {
+            if order.sugtree {
+                spin.si_end_hint.get(&head).copied()
+            } else {
+                spin.si_path_hint
+                    .get(i)
+                    .copied()
+                    .flatten()
+                    .filter(|&(hint_head, _)| hint_head == head)
+                    .map(|(_, found)| found)
+            }
+        });
+        let hinted = hint.and_then(|from| {
+            if byte != NUL as u8 && spin.node(from).wn_byte == byte {
+                // The byte's own node: everything ahead of it sorts before,
+                // and a match inserts nothing, so its predecessor is moot.
+                return Some((Some(from), None));
+            }
+            Some(skip_siblings(&spin.si_nodes, Some(from), byte, &order))
+                .filter(|&(_, last)| last.is_some())
+        });
         let last;
         (node, last) = hinted.unwrap_or_else(|| skip_siblings(&spin.si_nodes, node, byte, &order));
         if let Some(last) = last {
@@ -456,6 +491,15 @@ pub(super) fn tree_add_word(
         } else {
             node.expect("a matching node is a node")
         };
+        if !order.sugtree
+            && let Some(slot) = spin.si_path_hint.get_mut(i)
+        {
+            let chain_head = match head {
+                Some(head) if !(need_new && last.is_none()) => head,
+                _ => n,
+            };
+            *slot = Some((chain_head, n));
+        }
 
         if byte == NUL as u8 {
             if order.sugtree {
@@ -533,7 +577,7 @@ struct EndOrder {
 /// A long run of word ends (the `.sug` tree's, where words that fold
 /// alike pile up) makes this the loop `:mkspell` spends its time in, so
 /// the three ways word ends are ordered each get a loop of their own.
-#[inline]
+#[inline(always)]
 fn skip_siblings(
     nodes: &[WordNode],
     node: Option<NodeId>,
@@ -632,12 +676,16 @@ fn deref_wordnode(spin: &mut SpellInfo, node: NodeId) -> c_int {
     if spin.node(node).wn_refs == 0 {
         let mut np = Some(node);
         while let Some(p) = np {
-            if let Some(child) = spin.node(p).wn_child {
+            let (child, sibling) = {
+                let n = spin.node(p);
+                (n.wn_child, n.wn_sibling)
+            };
+            if let Some(child) = child {
                 cnt += deref_wordnode(spin, child);
             }
             free_wordnode(spin, p);
             cnt += 1;
-            np = spin.node(p).wn_sibling;
+            np = sibling;
         }
         cnt += 1;
     }
@@ -663,6 +711,7 @@ pub(super) fn wordtree_compress(spin: &mut SpellInfo, root: Option<NodeId>, name
     // Compression frees nodes, and a freed id may come back as part of a
     // different run.
     spin.si_end_hint.clear();
+    spin.si_path_hint = [None; MAXWLEN];
 
     let mut ht = DigestTable::default();
     let mut tot: c_int = 0;
@@ -795,8 +844,14 @@ fn write_digest(spin: &mut SpellInfo, node: NodeId, len: c_int) {
 pub(super) struct DigestHasher(u64);
 
 impl Hasher for DigestHasher {
+    /// splitmix64's finaliser: every key bit reaches the low bits the
+    /// table indexes by (a bare multiply leaves them to the low key bits,
+    /// which for a digest are its length and first hash byte).
     fn finish(&self) -> u64 {
-        self.0.wrapping_mul(0x9e37_79b9_7f4a_7c15)
+        let mut x = self.0;
+        x = (x ^ (x >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+        x = (x ^ (x >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+        x ^ (x >> 31)
     }
 
     fn write(&mut self, bytes: &[u8]) {
