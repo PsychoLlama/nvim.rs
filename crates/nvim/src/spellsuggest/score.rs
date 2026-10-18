@@ -33,34 +33,30 @@
 //! stack buffer happened to hold there. Taking the buffer keeps those
 //! reads in bounds and keeps the answer identical.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::ascii::ascii_iswhite;
-use crate::charset::skiptowhite;
-use crate::cstr;
-use crate::mbyte::{mb_isupper, utf_fold, utf_ptr2char, utf_ptr2len};
-use crate::memory::xmemcpyz;
-use crate::memory::xstrlcpy;
+use crate::cstr::until_nul;
+use crate::mbyte::{char_at, char_len, mb_isupper, utf_fold};
 use crate::spell::{spell_casefold, spell_soundfold, spelltab_fold, spelltab_isu};
 use crate::spellsuggest::{
     MAXWLEN, SCORE_COMMON1, SCORE_COMMON2, SCORE_COMMON3, SCORE_DEL, SCORE_ICASE, SCORE_INS,
     SCORE_MAXMAX, SCORE_SIMILAR, SCORE_SUBST, SCORE_SWAP, SCORE_THRES2, SCORE_THRES3, SugInfo,
+    copy_terminated,
 };
-use crate::types::{NUL, SpellLang, size_t};
+use crate::types::{NUL, SpellLang};
 use crate::winlayer::Win;
-use core::ffi::{c_char, c_int};
-use core::ptr;
+use core::ffi::c_int;
 
 /// A sound-folded word and the room around it, as the callers keep it.
-pub(super) type SoundBuf = [c_char; MAXWLEN];
+pub(super) type SoundBuf = [u8; MAXWLEN];
 
 /// An empty sound-fold buffer, ready to be filled by `spell_soundfold`.
 pub(super) const EMPTY_SOUND: SoundBuf = [0; MAXWLEN];
 
 /// The character that sound-folding puts at the front of a word starting
 /// with a vowel. Adding or dropping one is cheaper than a real edit.
-const SOUND_VOWEL: c_char = b'*' as c_char;
+const SOUND_VOWEL: u8 = b'*';
 
 /// Fold a character for comparison, mirroring the `SPELL_TOFOLD` macro:
 /// the byte table covers Latin-1, everything above it goes through the
@@ -83,25 +79,20 @@ pub(super) fn spell_isupper(c: c_int) -> bool {
     }
 }
 
-/// Decode a NUL-terminated word into code points, terminator included.
+/// Decode a word into code points, with a terminating zero after them.
+/// The word ends at its end or at a NUL, and has at most `MAXWLEN - 1`
+/// characters.
 ///
 /// The edit-distance measures index characters at arbitrary positions, and
 /// doing that over UTF-8 bytes would mean re-scanning from the start every
 /// time.
-///
-/// # Safety
-///
-/// `word` must point at a NUL-terminated string of at most `MAXWLEN - 1`
-/// characters.
-unsafe fn word_chars(word: *const c_char, out: &mut [c_int; MAXWLEN]) -> usize {
+fn word_chars(word: &[u8], out: &mut [c_int; MAXWLEN]) -> usize {
+    let word = until_nul(word);
     let mut len = 0;
-    let mut p = word;
-    // SAFETY: the caller guarantees a NUL-terminated string of at most
-    // `MAXWLEN - 1` characters, so the scan stops at its terminator and
-    // `len` stays inside `out`.
-    while unsafe { *p } != 0 {
-        out[len] = unsafe { utf_ptr2char(p) };
-        p = p.wrapping_add(unsafe { utf_ptr2len(p) } as usize);
+    let mut p = 0;
+    while p < word.len() {
+        out[len] = char_at(&word[p..]);
+        p += char_len(&word[p..]);
         len += 1;
     }
     out[len] = 0;
@@ -131,22 +122,22 @@ fn map_class(slang: &SpellLang, c: c_int) -> c_int {
 /// to be what the user meant, so it is allowed to sit closer to the top
 /// than its raw edit distance says.
 ///
-/// # Safety
-///
-/// `word` must be a NUL-terminated string.
+/// `word` ends at its end or at a NUL.
 ///
 /// Forced inline, as the walk's split helpers are: left to the inliner, it
 /// fell out of `suggest_trie_walk` once those were pinned (spellbench
 /// +0.9 %).
 #[inline(always)]
-pub(super) unsafe fn score_wordcount_adj(
+pub(super) fn score_wordcount_adj(
     slang: &SpellLang,
     score: c_int,
-    word: *mut c_char,
+    word: &[u8],
     split: bool,
 ) -> c_int {
-    // SAFETY: the caller guarantees a NUL-terminated word.
-    let Some(&count) = slang.sl_wordcount.get(unsafe { cstr::bytes_at(word) }) else {
+    if slang.sl_wordcount.is_empty() {
+        return score;
+    }
+    let Some(&count) = slang.sl_wordcount.get(until_nul(word)) else {
         return score;
     };
     let count = c_int::from(count);
@@ -174,7 +165,7 @@ pub(super) unsafe fn score_wordcount_adj(
 /// The comparisons below deliberately look just past a terminator; the
 /// clamp only matters for a buffer that is full to the last byte, which no
 /// sound-folded word is.
-fn at(buf: &SoundBuf, i: usize) -> c_char {
+fn at(buf: &SoundBuf, i: usize) -> u8 {
     if i < buf.len() { buf[i] } else { 0 }
 }
 
@@ -436,20 +427,17 @@ pub(super) fn soundalike_score(goodstart: &SoundBuf, badstart: &SoundBuf) -> c_i
 /// The algorithm is described by Du and Chang, 1992; the implementation
 /// follows Aspell's `editdist.cpp`.
 ///
-/// # Safety
-///
-/// Both words must be NUL-terminated and shorter than `MAXWLEN`
-/// characters.
-pub(super) unsafe fn spell_edit_score(
+/// Both words end at their end or at a NUL, and are shorter than
+/// `MAXWLEN` characters.
+pub(super) fn spell_edit_score(
     slang: Option<&SpellLang>,
-    badword: *const c_char,
-    goodword: *const c_char,
+    badword: &[u8],
+    goodword: &[u8],
 ) -> c_int {
     let mut wbadword = [0; MAXWLEN];
     let mut wgoodword = [0; MAXWLEN];
-    // SAFETY: the caller guarantees NUL-terminated words that fit.
-    let badlen = unsafe { word_chars(badword, &mut wbadword) };
-    let goodlen = unsafe { word_chars(goodword, &mut wgoodword) };
+    let badlen = word_chars(badword, &mut wbadword);
+    let goodlen = word_chars(goodword, &mut wgoodword);
 
     // `cnt` is a (badlen + 1) x (goodlen + 1) table addressed column-major,
     // so that a row of it is one character of the bad word against every
@@ -518,21 +506,18 @@ const SCORE_EDIT_MIN: c_int = SCORE_SIMILAR;
 /// branches it does not take right away go on a small stack. The idea
 /// comes from Aspell's `leditdist.cpp`.
 ///
-/// # Safety
-///
-/// Both words must be NUL-terminated and shorter than `MAXWLEN`
-/// characters.
-pub(super) unsafe fn spell_edit_score_limit(
+/// Both words end at their end or at a NUL, and are shorter than
+/// `MAXWLEN` characters.
+pub(super) fn spell_edit_score_limit(
     slang: Option<&SpellLang>,
-    badword: *const c_char,
-    goodword: *const c_char,
+    badword: &[u8],
+    goodword: &[u8],
     limit: c_int,
 ) -> c_int {
     let mut wbadword = [0; MAXWLEN];
     let mut wgoodword = [0; MAXWLEN];
-    // SAFETY: the caller guarantees NUL-terminated words that fit.
-    unsafe { word_chars(badword, &mut wbadword) };
-    unsafe { word_chars(goodword, &mut wgoodword) };
+    word_chars(badword, &mut wbadword);
+    word_chars(goodword, &mut wgoodword);
 
     // Room for over three times two edits, which is more than the cutoff
     // can ever leave outstanding.
@@ -680,105 +665,68 @@ fn pop(
 /// cannot be compared as they stand: whichever side is short gets the
 /// missing stretch of the original line appended before folding.
 ///
-/// The suggestion is named by its own numbers rather than by a reference,
-/// because the list it sits in is one of `su`'s fields and all of `su` is
-/// read here.
-///
-/// # Safety
-///
-/// `word` must be NUL-terminated and `wordlen` bytes long, `su` valid, and
-/// `su`'s bad word must still point into the line it was taken from.
-pub(super) unsafe fn stp_sal_score(
-    word: *mut c_char,
-    wordlen: c_int,
+/// The suggestion is named by its word and `orglen` rather than by a
+/// reference, because the list it sits in is one of `su`'s fields.
+pub(super) fn stp_sal_score(
+    word: &[u8],
     orglen: c_int,
     su: &SugInfo,
-    slang: *mut SpellLang,
+    slang: &SpellLang,
     badsound: &SoundBuf,
 ) -> c_int {
     let mut badsound2 = EMPTY_SOUND;
-    let mut fword = EMPTY_SOUND;
     let mut goodsound = EMPTY_SOUND;
     let mut goodword = EMPTY_SOUND;
 
     let lendiff = su.su_badlen - orglen;
 
-    // SAFETY: the pointers come from the caller's suggestion list and bad
-    // word; every buffer below is `MAXWLEN` and every helper is told so.
     let pbad: &SoundBuf = if lendiff >= 0 {
         badsound
     } else {
         // Sound-fold the bad word with the extra characters that the
         // suggestion covers.
-        //
-        // SAFETY: `su_badptr` points into the line the bad word came from,
-        // of which the suggestion replaces `st_orglen` bytes; `fword` is
-        // `MAXWLEN` bytes, which is the bound handed over.
-        let win = Win::current();
-        let badword = unsafe { cstr::bytes_at(su.su_badptr) };
-        let _ = spell_casefold(
-            win,
-            badword,
-            orglen as usize,
-            cstr::as_bytes_mut(&mut fword),
-        );
+        let mut fword = EMPTY_SOUND;
+        let _ = spell_casefold(Win::current(), &su.su_bad, orglen as usize, &mut fword);
 
         // Joining two words changes the sound a lot -- "t he" sounds
-        // like "t h" where "the" sounds like "@" -- so drop the space,
+        // like "t h" where "the" sounds like "@" -- so drop the blanks,
         // unless the good word has one too.
-        //
-        // SAFETY: as above; `st_word` is NUL-terminated, `fword` now is
-        // too, and each copy moves a NUL-terminated tail down one byte
-        // inside `fword`.
-        if ascii_iswhite(unsafe { *su.su_badptr.offset(su.su_badlen as isize) } as c_int)
-            && unsafe { *skiptowhite(word) } == NUL as c_char
+        let is_white = |b: &u8| *b == b' ' || *b == b'\t';
+        if ascii_iswhite(c_int::from(su.bad_byte(su.su_badlen as usize)))
+            && !word.iter().any(is_white)
         {
-            let mut p = fword.as_mut_ptr();
-            loop {
-                p = unsafe { skiptowhite(p) };
-                if unsafe { *p } == NUL as c_char {
-                    break;
+            let len = until_nul(&fword).len();
+            let mut kept = 0;
+            for i in 0..len {
+                if !is_white(&fword[i]) {
+                    fword[kept] = fword[i];
+                    kept += 1;
                 }
-                // Close the gap over the space in place. Upstream's
-                // `STRMOVE`, which is `memmove`: the two overlap by every
-                // byte but one, which `strcpy` does not allow.
-                let rest = unsafe { cstr::bytes_at(p.add(1)) }.len() + 1;
-                unsafe { ptr::copy(p.add(1), p, rest) };
             }
+            fword[kept] = NUL as u8;
         }
 
-        // SAFETY: `fword` is the NUL-terminated fold just built and
-        // `badsound2` has room for a soundfold.
-        let lang = unsafe { &*slang };
-        spell_soundfold(
-            lang,
-            cstr::as_bytes(&fword),
-            true,
-            cstr::as_bytes_mut(&mut badsound2),
-        );
+        spell_soundfold(slang, &fword, true, &mut badsound2);
         &badsound2
     };
 
-    let pgood = if lendiff > 0 && wordlen + lendiff < MAXWLEN as c_int {
+    let wordlen = word.len() as c_int;
+    let pgood: &[u8] = if lendiff > 0 && wordlen + lendiff < MAXWLEN as c_int {
         // Append the part of the bad word the suggestion does not
         // reach, so that what gets folded is the whole replacement.
-        //
-        // SAFETY: the test above leaves `wordlen + lendiff` under
-        // `MAXWLEN`, so both the word and the tail fit in `goodword`, and
-        // the tail really is `lendiff` bytes of the line.
-        unsafe { xstrlcpy(goodword.as_mut_ptr(), word, goodword.len()) };
-        let tail = unsafe { goodword.as_mut_ptr().offset(wordlen as isize) };
-        let rest = unsafe { su.su_badptr.offset((su.su_badlen - lendiff) as isize) };
-        unsafe { xmemcpyz(tail as *mut _, rest as *const _, lendiff as size_t) };
-        goodword.as_mut_ptr()
+        let n = word.len();
+        goodword[..n].copy_from_slice(word);
+        let rest = su.bad_from(orglen as usize);
+        copy_terminated(
+            &mut goodword[n..],
+            &rest[..rest.len().min(lendiff as usize)],
+        );
+        until_nul(&goodword)
     } else {
         word
     };
 
-    // SAFETY: `pgood` is one of the two NUL-terminated words above and
-    // `goodsound` has room for a soundfold.
-    let (lang, pgood) = unsafe { (&*slang, cstr::bytes_at(pgood)) };
-    spell_soundfold(lang, pgood, false, cstr::as_bytes_mut(&mut goodsound));
+    spell_soundfold(slang, pgood, false, &mut goodsound);
 
     soundalike_score(&goodsound, pbad)
 }

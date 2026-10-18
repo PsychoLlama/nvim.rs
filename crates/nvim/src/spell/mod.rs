@@ -85,9 +85,7 @@ pub use lang::{
 pub use lookup::{can_compound, match_checkcompoundpattern, match_compoundrule, valid_word_prefix};
 pub use navigate::{spell_cat_line, spell_move_to};
 use slang::count_syllables;
-pub(crate) use slang::{
-    LoadedLangs, lang_ptr, lang_ptr_opt, languages, loaded_langs, put_lang, with_lang,
-};
+pub(crate) use slang::{LoadedLangs, languages, loaded_langs, put_lang, with_lang};
 pub use slang::{
     SpellBuf, WordCounts, WordHasher, count_common_word, init_syl_tab, open_spellbuf,
     register_lang, slang_clear, slang_clear_sug, take_lang,

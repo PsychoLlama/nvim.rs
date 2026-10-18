@@ -73,8 +73,7 @@
 //! purpose: the wrap is upstream behaviour that suggestion output depends
 //! on, and a checked add would panic where the C quietly wrapped.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 mod edit;
 mod node;
@@ -82,15 +81,15 @@ mod rep;
 mod split;
 mod transpose;
 
-use crate::cstr;
+use crate::cstr::until_nul;
 use crate::getchar::state::got_int;
-use crate::mbyte::utf_head_off;
+use crate::mbyte::head_off;
 use crate::os::input::os_breakcheck;
 use crate::profile::{profile_passed_limit, profile_setlimit};
-use crate::spell::{Tree, lang_ptr, lang_ptr_opt};
+use crate::spell::{LoadedLangs, Tree};
 use crate::spellsuggest::{MAXWLEN, SugInfo, spell_suggest_timeout};
 use crate::types::{LangP, ProfTime, SpellIdx, SpellLang, int64_t};
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 /// One level per byte of the bad word is all the walk can ever need.
 const STACK_SIZE: usize = MAXWLEN;
@@ -236,16 +235,16 @@ const _: () = assert!(size_of::<Frame>() == 32);
 
 /// Everything one run of the walk carries.
 ///
-/// The raw pointers are the language's loaded tables and the caller's
-/// buffers, none of which this module owns; the arrays are its own working
+/// The languages are borrowed from the language table for the whole walk,
+/// resolved once when it starts; the arrays are the walk's own working
 /// storage.
 pub(crate) struct Walk<'a> {
-    /// The suggestion list being filled, and the language being searched.
-    pub su: *mut SugInfo,
-    pub langp: *mut LangP,
-    pub slang: *mut SpellLang,
-    /// The language whose `REP` items the walk uses, or null for none.
-    pub replang: *mut SpellLang,
+    /// The suggestion state being filled, and the language being searched.
+    pub su: &'a mut SugInfo,
+    pub langp: LangP,
+    pub slang: &'a SpellLang,
+    /// The language whose `REP` items the walk uses, if any.
+    pub replang: Option<&'a SpellLang>,
     /// Walking the sound-fold tree rather than the case-folded one. Word
     /// flags, case, banned words, splitting and `similar_chars` all do not
     /// apply then; see [`suggest_trie_walk`].
@@ -262,7 +261,7 @@ pub(crate) struct Walk<'a> {
     /// postponed prefix, `word_tree` otherwise.
     pub tree: Tree<'a>,
 
-    /// The bad word, case-folded, in the caller's buffer. `REP` items
+    /// The bad word, case-folded, in the caller's buffer of `MAXWLEN`. `REP` items
     /// rewrite stretches of it in place and undo the change on the way
     /// back up, which is why the whole buffer is here and not just the
     /// word: a replacement that grows the word shifts the tail along, and
@@ -274,11 +273,11 @@ pub(crate) struct Walk<'a> {
     pub repextra: c_int,
 
     /// The good word collected from the tree so far.
-    pub tword: [c_char; MAXWLEN],
+    pub tword: [u8; MAXWLEN],
     /// The suggestion with its proper case: prefix, compounded words and
     /// split words concatenated. NUL-terminated while going deeper, but
     /// not on the way back up.
-    pub preword: [c_char; PREWORD_SIZE],
+    pub preword: [u8; PREWORD_SIZE],
     /// One compound flag per word collected in `preword`.
     pub compflags: [u8; MAXWLEN],
 
@@ -301,51 +300,41 @@ pub(crate) struct Walk<'a> {
 /// its `REP` items from `sl_repsal` rather than the replacement language's
 /// `sl_rep`.
 ///
-/// # Safety
-///
-/// `su` and `langp` must be valid, `langp`'s language must have its trees
-/// loaded, and `fword` must be a NUL-terminated buffer of `MAXWLEN` bytes.
-pub(super) unsafe fn suggest_trie_walk(
-    su: *mut SugInfo,
-    langp: *mut LangP,
-    fword: *mut c_char,
+/// `fword` is the bad word, NUL-terminated in a buffer of `MAXWLEN`, and
+/// `langp`'s language is looked up in `langs`; a language whose slot is empty
+/// is not walked.
+pub(super) fn suggest_trie_walk(
+    su: &mut SugInfo,
+    langp: LangP,
+    langs: &LoadedLangs,
+    fword: &mut [u8],
     soundfold: bool,
 ) {
-    // SAFETY: the caller guarantees the pointers and the loaded trees.
-    let mut walk = unsafe { Walk::new(su, langp, fword, soundfold) };
-    walk.run();
+    if let Some(mut walk) = Walk::new(su, langp, langs, fword, soundfold) {
+        walk.run();
+    }
 }
 
-impl Walk<'_> {
+impl<'a> Walk<'a> {
     /// Set the walk up at the root of whichever tree it starts in.
-    ///
-    /// # Safety
-    ///
-    /// As [`suggest_trie_walk`].
-    unsafe fn new(
-        su: *mut SugInfo,
-        langp: *mut LangP,
-        fword: *mut c_char,
+    fn new(
+        su: &'a mut SugInfo,
+        langp: LangP,
+        langs: &'a LoadedLangs,
+        fword: &'a mut [u8],
         soundfold: bool,
-    ) -> Walk<'static> {
-        // SAFETY: the caller promises `MAXWLEN` bytes there, and this is
-        // the only handle on them for the walk's lifetime. Every read and
-        // write below goes through the slice, so the buffer's end is
-        // checked rather than argued about.
-        let fword = unsafe { core::slice::from_raw_parts_mut(fword.cast::<u8>(), MAXWLEN) };
-        // SAFETY: the caller guarantees the pointers, so the language
-        // beside `langp` is one of the loaded ones. It stays loaded for as
-        // long as the walk, which is what the borrows below stand on.
-        let (slang, replang) =
-            unsafe { (lang_ptr((*langp).slang), lang_ptr_opt((*langp).replang)) };
+    ) -> Option<Walk<'a>> {
+        debug_assert_eq!(fword.len(), MAXWLEN);
+        // Resolved once: a lookup per step cost the search a per cent.
+        let slang = langs.get(langp.slang)?;
+        let replang = langp.replang.and_then(|id| langs.get(id));
         // The sound-fold tree has no prefixes.
-        let lang = unsafe { &*slang };
         let words = if soundfold {
-            &lang.sl_sound_tree
+            &slang.sl_sound_tree
         } else {
-            &lang.sl_fold_tree
+            &slang.sl_fold_tree
         };
-        let (word_tree, prefix_tree) = (words.view(), lang.sl_prefix_tree.view());
+        let (word_tree, prefix_tree) = (words.view(), slang.sl_prefix_tree.view());
         let mut walk = Walk {
             su,
             langp,
@@ -382,7 +371,7 @@ impl Walk<'_> {
         if timeout > 0 {
             walk.time_limit = profile_setlimit(timeout as int64_t);
         }
-        walk
+        Some(walk)
     }
 
     /// Run every state of every level until the stack empties or the user
@@ -461,9 +450,8 @@ impl Walk<'_> {
     /// already found is not worth trying.
     #[inline(always)]
     fn try_deeper(&self, score_add: c_int) -> bool {
-        // SAFETY: the caller guarantees `su`.
         self.depth < MAXWLEN as c_int - 1
-            && self.stack[self.depth as usize].score + score_add < unsafe { (*self.su).su_maxscore }
+            && self.stack[self.depth as usize].score + score_add < self.su.su_maxscore
     }
 
     /// One byte of the tree currently being walked.
@@ -499,28 +487,33 @@ impl Walk<'_> {
         &mut self.fword[at..]
     }
 
-    /// A pointer into the bad word, for the helpers that take one.
-    #[inline]
-    fn fword_ptr(&mut self, at: usize) -> *mut c_char {
-        self.fword[at..].as_mut_ptr().cast()
-    }
-
     /// The length of the word currently in `preword`.
     fn preword_len(&self) -> usize {
-        // SAFETY: `preword` is NUL-terminated wherever this is called, and
-        // it is this module's own buffer.
-        unsafe { cstr::bytes_at(self.preword.as_ptr()).len() }
+        until_nul(&self.preword).len()
     }
+}
 
-    /// Step a pointer back over the character before it, as the C's
-    /// `MB_PTR_BACK` did.
-    ///
-    /// # Safety
-    ///
-    /// `p` must be inside the string starting at `base`, past its start.
-    #[inline]
-    unsafe fn char_back(base: *const c_char, p: *mut c_char) -> *mut c_char {
-        // SAFETY: the caller guarantees the pointers.
-        unsafe { p.sub(utf_head_off(base, p.sub(1)) as usize + 1) }
+/// Where the character before byte `at` of `text` starts, as the C's
+/// `MB_PTR_BACK` stepped. `at` must be past the start.
+#[inline]
+fn char_back(text: &[u8], at: usize) -> usize {
+    at - 1 - head_off(&text[..at], at - 1)
+}
+
+/// `strncmp(a, b, n) == 0` over two buffers: the first `n` bytes agree, or
+/// they agree up to a NUL both have. A buffer's end reads as a NUL.
+fn c_prefix_eq(a: &[u8], b: &[u8], n: usize) -> bool {
+    for i in 0..n {
+        let (x, y) = (
+            a.get(i).copied().unwrap_or(0),
+            b.get(i).copied().unwrap_or(0),
+        );
+        if x != y {
+            return false;
+        }
+        if x == 0 {
+            return true;
+        }
     }
+    true
 }

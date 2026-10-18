@@ -22,7 +22,7 @@
 use crate::global_cell::GlobalCell;
 use crate::memory::XString;
 use crate::strings::find_char;
-use crate::types::{Buffer, HashTab, LangId};
+use crate::types::{Buffer, LangId};
 use crate::winlayer::Buf;
 use core::cell::RefCell;
 use core::ffi::c_int;
@@ -116,7 +116,6 @@ impl SpellLang {
             sl_has_map: false,
             sl_map_hash: HashMap::new(),
             sl_map_array: [0; 256],
-            sl_sounddone: HashTab::init(),
         })
     }
 }
@@ -337,22 +336,6 @@ pub fn take_lang(id: LangId) -> Option<Box<SpellLang>> {
 /// Return a language [`take_lang`] took to its slot.
 pub(crate) fn put_lang(id: LangId, slang: Box<SpellLang>) {
     loaded_langs.with_mut(|langs| langs.slots[id.0 as usize] = Some(slang));
-}
-
-/// The address of the language in slot `id`, or null while the slot is
-/// empty: for the suggestion code, which still holds languages by address.
-/// The language stays where it is while its slot holds it.
-pub(crate) fn lang_ptr(id: LangId) -> *mut SpellLang {
-    loaded_langs.with_mut(|langs| {
-        langs
-            .get_mut(id)
-            .map_or(core::ptr::null_mut(), core::ptr::from_mut)
-    })
-}
-
-/// [`lang_ptr`] of an optional slot: null for none.
-pub(crate) fn lang_ptr_opt(id: Option<LangId>) -> *mut SpellLang {
-    id.map_or(core::ptr::null_mut(), lang_ptr)
 }
 
 /// Drop every language. The slots stay allocated, empty, so that an id a

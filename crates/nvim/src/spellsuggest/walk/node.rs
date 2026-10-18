@@ -25,34 +25,43 @@
 //! rather than the end of a word, and the walk switches over to the
 //! case-folded tree to look for the word the prefix goes in front of.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::ascii::ascii_iswhite;
-use crate::charset::{skiptowhite, skipwhite};
-use crate::cstr;
-use crate::hashtab::hash_find;
-use crate::mbyte::{mb_charlen, utfc_ptr2len};
-use crate::memory::xmemcpyz;
+use crate::cstr::until_nul;
+use crate::mbyte::{c_cluster_len, char_count};
 use crate::spell::WordFlags;
 use crate::spell::{
-    can_compound, captype, lang_ptr_opt, make_case_word, match_checkcompoundpattern, nofold_len,
-    spell_iswordp, spell_iswordp_nmw, spell_valid_case, valid_word_prefix,
+    can_compound, captype, make_case_word, match_checkcompoundpattern, nofold_len, spell_iswordp,
+    spell_iswordp_nmw, spell_valid_case, valid_word_prefix,
 };
-use crate::spellsuggest::collect::{add_banned, add_suggestion};
+use crate::spellsuggest::collect::{List, add_banned, add_suggestion};
 use crate::spellsuggest::score::score_wordcount_adj;
 use crate::spellsuggest::soundalike::{add_sound_suggest, find_keepcap_word};
 use crate::spellsuggest::walk::{
-    FLAG_PREFIX_OK, PFD_NOTSPECIAL, PFD_PREFIXTREE, STACK_SIZE, State, Walk,
+    FLAG_PREFIX_OK, PFD_NOTSPECIAL, PFD_PREFIXTREE, STACK_SIZE, State, Walk, c_prefix_eq, char_back,
 };
 use crate::spellsuggest::{
-    MAXWLEN, SCORE_ICASE, SCORE_NONWORD, SCORE_RARE, SCORE_REGION, SugInfo, badword_captype,
+    MAXWLEN, SCORE_ICASE, SCORE_NONWORD, SCORE_RARE, SCORE_REGION, SugInfo, copy_terminated,
 };
-use crate::types::{NUL, SpellIdx, size_t};
+use crate::types::{NUL, SpellIdx};
 use crate::winlayer::Win;
-use ::libc::strcpy;
-use core::ffi::{c_char, c_int};
-use core::ptr;
+use core::ffi::c_int;
+
+/// Where the last blank-separated word of `text` starts. `text` ends at its
+/// end or at a NUL.
+pub(super) fn last_word_start(text: &[u8]) -> usize {
+    let text = until_nul(text);
+    let is_white = |b: &u8| *b == b' ' || *b == b'\t';
+    let mut p = 0;
+    loop {
+        let Some(white) = text[p..].iter().position(is_white) else {
+            return p;
+        };
+        let white = p + white;
+        p = white + text[white..].iter().take_while(|b| is_white(b)).count();
+    }
+}
 
 impl Walk<'_> {
     /// At the start of a node: deal with the NUL bytes, which mean the
@@ -62,9 +71,8 @@ impl Walk<'_> {
         let entry_state = self.stack[level].state;
 
         let node = self.stack[level].node;
-        // SAFETY: the tree index is this level's node plus a child number
-        // the node's own length byte bounds, and the tree is valid by the
-        // contract above.
+        // The tree index is this level's node plus a child number the
+        // node's own length byte bounds.
         let node_len = self.byte_at(node) as c_int; // bytes in this node
         let at = node + self.stack[level].child as SpellIdx; // the current byte
 
@@ -73,15 +81,12 @@ impl Walk<'_> {
             return;
         }
 
-        // SAFETY: `at` is this node plus a child number, and the `||`
-        // short circuit is what keeps the read from happening once that
-        // child number has run past the node's own length byte.
+        // The `||` short circuit is what keeps the read from happening once
+        // the child number has run past the node's own length byte.
         if self.stack[level].child as c_int > node_len || self.byte_at(at) != 0 {
             // Past the bytes in the node and/or past its NUL bytes.
             self.stack[level].state = State::EndNul;
-            // SAFETY: `su` is the caller's suggestion state, valid by the
-            // contract above.
-            self.stack[level].saved_badflags = unsafe { (*self.su).su_badflags }.bits() as u8;
+            self.stack[level].saved_badflags = self.su.su_badflags.bits() as u8;
             return;
         }
 
@@ -98,11 +103,9 @@ impl Walk<'_> {
     fn prefix_tree_node(&mut self, entry_state: State, node_len: c_int, at: SpellIdx) {
         let level = self.depth as usize;
 
-        // Skip over the NUL bytes; they are used just below.
+        // Skip over the NUL bytes; they are used just below. The `&&` is
+        // what stops the read once the count has reached the node's length.
         let mut nul_count = 0;
-        // SAFETY: `at` and the bytes after it are inside the node, which
-        // the node's own length byte bounds; the `&&` is what stops the
-        // read once the count has reached that length.
         while nul_count < node_len && self.byte_at(at + nul_count) == 0 {
             nul_count += 1;
         }
@@ -110,17 +113,12 @@ impl Walk<'_> {
 
         // Always past the NUL bytes now.
         self.stack[level].state = State::EndNul;
-        // SAFETY: `su` is the caller's suggestion state, valid by the
-        // contract above.
-        self.stack[level].saved_badflags = unsafe { (*self.su).su_badflags }.bits() as u8;
+        self.stack[level].saved_badflags = self.su.su_badflags.bits() as u8;
 
         // At the end of a prefix, or at the very start of the prefix
         // tree: check for a word following. `at` is still the byte the
         // node was entered at, so a NUL there is what says a prefix
         // ended.
-        //
-        // SAFETY: `at` is the byte this node was entered at, inside the
-        // node the length byte bounds.
         let at_prefix_end = self.byte_at(at) == 0 || entry_state == State::NoPrefix;
         if self.depth >= MAXWLEN as c_int - 1 || !at_prefix_end {
             return;
@@ -128,24 +126,15 @@ impl Walk<'_> {
 
         // Set `su_badflags` to the caps type at this position; the
         // prefix itself keeps the caps type up to here.
-        //
-        // SAFETY: `su` and its bad word are valid by the contract above,
-        // and `prefix_len` is a length of that word `nofold_len` measured
-        // out of it, so both offsets stay inside it.
-        let prefix_flags = unsafe {
-            let prefix_len = nofold_len(
-                self.fword,
-                self.stack[level].bad_idx as usize,
-                cstr::bytes_at((*self.su).su_badptr),
-            );
-            let prefix_flags =
-                badword_captype((*self.su).su_badptr, (*self.su).su_badptr.add(prefix_len));
-            (*self.su).su_badflags = badword_captype(
-                (*self.su).su_badptr.add(prefix_len),
-                (*self.su).su_badptr.offset((*self.su).su_badlen as isize),
-            );
-            prefix_flags
-        };
+        let prefix_len = nofold_len(
+            self.fword,
+            self.stack[level].bad_idx as usize,
+            &self.su.su_bad,
+        );
+        let prefix_flags = self.su.captype_between(0, prefix_len);
+        self.su.su_badflags = self
+            .su
+            .captype_between(prefix_len, self.su.su_badlen as usize);
 
         self.go_deeper(0);
         self.depth += 1;
@@ -157,13 +146,12 @@ impl Walk<'_> {
 
         // Move the prefix to `preword` with the right case, which is
         // also what makes `find_keepcap_word` work later.
-        self.tword[self.stack[child].good_len as usize] = NUL as c_char;
+        self.tword[self.stack[child].good_len as usize] = NUL as u8;
         let split_off = self.stack[child].split_off as usize;
         let preword_len = self.stack[child].preword_len as usize;
-        // `tword` was terminated on the line above.
         make_case_word(
-            &cstr::as_bytes(&self.tword)[split_off..],
-            &mut cstr::as_bytes_mut(&mut self.preword)[preword_len..],
+            &self.tword[split_off..],
+            &mut self.preword[preword_len..],
             prefix_flags,
         );
         self.stack[child].preword_len = self.preword_len() as u8;
@@ -175,7 +163,7 @@ impl Walk<'_> {
     pub(super) fn split_undo(&mut self) {
         let level = self.depth as usize;
         let saved = WordFlags::from_bits(self.stack[level].saved_badflags.into());
-        unsafe { (*self.su).su_badflags = saved };
+        self.su.su_badflags = saved;
 
         self.stack[level].state = State::Start;
 
@@ -189,8 +177,8 @@ impl Walk<'_> {
         let level = self.depth as usize;
         self.stack[level].child += 1; // eat one NUL byte
 
-        // SAFETY: `at` is a NUL child of this level's node, so the entry
-        // beside it is the ending word's flags.
+        // `at` is a NUL child of this level's node, so the entry beside it
+        // is the ending word's flags.
         let mut flags = WordFlags::from_bits(self.idx_at(at) as c_int);
         if flags.has(WordFlags::NOSUGGEST) {
             return;
@@ -199,16 +187,13 @@ impl Walk<'_> {
         let bad_idx = self.stack[level].bad_idx as usize;
         // The bad word "ends" wherever a word can no longer continue,
         // not only at its terminator.
-        //
-        // SAFETY: `bad_idx` is a position the walk reached within the bad
-        // word's buffer, which is valid by the contract above.
         let bad_word_ends = self.fword_at(bad_idx) == NUL
             || if self.soundfold {
                 ascii_iswhite(self.fword_at(bad_idx))
             } else {
                 !spell_iswordp(&self.fword[bad_idx..], Win::current())
             };
-        self.tword[self.stack[level].good_len as usize] = NUL as c_char;
+        self.tword[self.stack[level].good_len as usize] = NUL as u8;
 
         if !self.prefix_allows_word(&mut flags) {
             return;
@@ -220,22 +205,20 @@ impl Walk<'_> {
             && bad_word_ends
             && flags.has(WordFlags::NEEDCOMP));
 
-        // The last character of the word before this one, once there
-        // is one to compound onto. Null until then, and the null is
-        // meaningful: it is what says "nothing precedes this word".
-        let mut prev_word_tail: *mut c_char = ptr::null_mut();
+        // Where in `preword` the last character of the word before this one
+        // starts, once there is one to compound onto. `None` until then,
+        // and that is meaningful: it is what says "nothing precedes this
+        // word".
+        let mut prev_word_tail = None;
         let mut compound_ok = true;
         if self.stack[level].comp_len > self.stack[level].comp_split {
-            // SAFETY: `slang` is the language of the walk's own trees, and
-            // the two helpers want no more than the contract above.
-            if unsafe { (*self.slang).sl_nobreak } {
+            if self.slang.sl_nobreak {
                 if self.nobreak_previous_word_matches() {
                     self.suggest_previous_word();
                     return;
                 }
             } else {
-                // SAFETY: as above.
-                match unsafe { self.join_compound(flags, bad_word_ends) } {
+                match self.join_compound(flags, bad_word_ends) {
                     None => return,
                     Some((tail, ok)) => {
                         prev_word_tail = tail;
@@ -245,27 +228,22 @@ impl Walk<'_> {
             }
         }
 
-        // SAFETY: `tword` was terminated above and `prev_word_tail` is
-        // either null or a character of `preword`, both this walk's own.
-        unsafe { self.build_preword(flags, prev_word_tail) };
+        self.build_preword(flags, prev_word_tail);
 
         if !self.soundfold {
             // A banned word must not be suggested. It may turn up
             // again as a good word, so remember it.
             let preword_len = self.stack[level].preword_len as usize;
             if flags.has(WordFlags::BANNED) {
-                // SAFETY: `su` is valid by the contract above and
-                // `preword` is this walk's own NUL-terminated buffer.
-                unsafe { add_banned(self.su, self.preword.as_mut_ptr().add(preword_len)) };
+                add_banned(self.su, &self.preword[preword_len..]);
                 return;
             }
-            // SAFETY: as above -- and both `&&` and `||` are load bearing
-            // only for the work they save, not for validity.
+            // Both `&&` and `||` are load bearing only for the work they
+            // save.
             let this_word_banned = self.stack[level].comp_len == self.stack[level].comp_split
-                && unsafe { was_banned(self.su, self.preword.as_ptr().add(preword_len)) };
-            if this_word_banned || unsafe { was_banned(self.su, self.preword.as_ptr()) } {
-                // SAFETY: `slang` is the walk's own language.
-                if unsafe { (*self.slang).sl_compprog.borrow().is_none() } {
+                && was_banned(self.su, &self.preword[preword_len..]);
+            if this_word_banned || was_banned(self.su, &self.preword) {
+                if self.slang.sl_compprog.borrow().is_none() {
                     return;
                 }
                 // Banned so far, but compounding may still save it.
@@ -275,12 +253,10 @@ impl Walk<'_> {
 
         let mut newscore = 0;
         if !self.soundfold {
-            // Sound-folded words have no flags.
-            //
-            // SAFETY: `langp` is the caller's language pointer, valid by the
-            // contract above; `&&` keeps the read out of the common case.
+            // Sound-folded words have no flags. The `&&` keeps the region
+            // read out of the common case.
             if flags.has(WordFlags::REGION)
-                && (flags.bits() as u32 >> 16) & unsafe { (*self.langp).region } as u32 == 0
+                && (flags.bits() as u32 >> 16) & self.langp.region as u32 == 0
             {
                 newscore += SCORE_REGION;
             }
@@ -288,11 +264,8 @@ impl Walk<'_> {
                 newscore += SCORE_RARE;
             }
             let preword_len = self.stack[level].preword_len as usize;
-            // SAFETY: `su` is valid by the contract above and `preword` is
-            // this walk's own buffer, NUL-terminated by `build_preword`.
-            let badflags = unsafe { (*self.su).su_badflags };
-            let caps = captype(&cstr::as_bytes(&self.preword)[preword_len..], usize::MAX);
-            if !spell_valid_case(badflags, caps) {
+            let caps = captype(&self.preword[preword_len..], usize::MAX);
+            if !spell_valid_case(self.su.su_badflags, caps) {
                 newscore += SCORE_ICASE;
             }
         }
@@ -341,15 +314,12 @@ impl Walk<'_> {
         }
 
         let split_off = self.stack[level].split_off as usize;
-        // SAFETY: `tword` is this walk's own buffer, `slang` its language,
-        // and the prefix node is the one whose NUL bytes were counted
-        // just above.
         let prefix_flags = valid_word_prefix(
             prefix_count as c_int,
             node,
             *flags,
-            &cstr::as_bytes(&self.tword)[split_off..],
-            unsafe { &*self.slang },
+            &self.tword[split_off..],
+            self.slang,
             false,
         );
         if prefix_flags == 0 {
@@ -376,11 +346,13 @@ impl Walk<'_> {
         }
         let split_off = self.stack[level].split_off as usize;
         let split_bad_idx = self.stack[level].split_bad_idx as usize;
-        let bad = self.fword_ptr(split_bad_idx);
-        // SAFETY: both stretches compared are inside this walk's buffers,
-        // and the test above is what holds the comparison to a length that
-        // both of them have.
-        unsafe { cstr::prefix_eq(bad, self.tword.as_ptr().add(split_off), taken as size_t) }
+        // The test above is what holds the comparison to a length that both
+        // stretches have.
+        c_prefix_eq(
+            self.fword.get(split_bad_idx..).unwrap_or_default(),
+            &self.tword[split_off..],
+            taken.max(0) as usize,
+        )
     }
 
     /// For a `NOBREAK` language whose previous word was already correct:
@@ -392,33 +364,25 @@ impl Walk<'_> {
     fn suggest_previous_word(&mut self) {
         let level = self.depth as usize;
         let preword_len = self.stack[level].preword_len as usize;
-        self.preword[preword_len] = NUL as c_char;
-        // SAFETY: `slang` is the walk's own language, and `preword` is
-        // this walk's buffer, terminated on the line above.
-        let score = unsafe {
-            score_wordcount_adj(
-                &*self.slang,
-                self.stack[level].score,
-                self.preword.as_mut_ptr().add(preword_len),
-                self.stack[level].preword_len > 0,
-            )
-        };
-        // SAFETY: `su` and `langp` are the caller's, valid by the contract
-        // above, and `preword` is terminated as it is handed on.
-        if score <= unsafe { (*self.su).su_maxscore } {
-            unsafe {
-                add_suggestion(
-                    self.su,
-                    &raw mut (*self.su).su_ga,
-                    self.preword.as_ptr(),
-                    self.stack[level].split_bad_idx as c_int - self.repextra,
-                    score,
-                    0,
-                    false,
-                    lang_ptr_opt((*self.langp).sallang),
-                    false,
-                );
-            }
+        self.preword[preword_len] = NUL as u8;
+        let score = score_wordcount_adj(
+            self.slang,
+            self.stack[level].score,
+            &self.preword[preword_len..],
+            self.stack[level].preword_len > 0,
+        );
+        if score <= self.su.su_maxscore {
+            add_suggestion(
+                self.su,
+                List::Main,
+                &self.preword,
+                self.stack[level].split_bad_idx as c_int - self.repextra,
+                score,
+                0,
+                false,
+                self.langp.sallang,
+                false,
+            );
         }
     }
 
@@ -426,39 +390,29 @@ impl Walk<'_> {
     ///
     /// Returns `None` when the word cannot compound at all, which ends
     /// this NUL byte's turn -- splitting is still tried later for the same
-    /// word without its compound flag. Otherwise it returns the last
-    /// character of the word before this one and whether the compound is
-    /// allowed; a compound that is not allowed may still become one once
-    /// another short word is appended, so the walk carries on.
-    ///
-    /// # Safety
-    ///
-    /// The walk's state must be valid.
-    unsafe fn join_compound(
+    /// word without its compound flag. Otherwise it returns where the last
+    /// character of the word before this one starts in `preword`, and
+    /// whether the compound is allowed; a compound that is not allowed may
+    /// still become one once another short word is appended, so the walk
+    /// carries on.
+    fn join_compound(
         &mut self,
         flags: WordFlags,
         bad_word_ends: bool,
-    ) -> Option<(*mut c_char, bool)> {
+    ) -> Option<(Option<usize>, bool)> {
         let level = self.depth as usize;
         let this_word_len =
             self.stack[level].good_len as c_int - self.stack[level].split_off as c_int;
         let split_off = self.stack[level].split_off as usize;
 
         // No compound flag, or too short to be a compound part.
-        //
-        // SAFETY: `slang` is the language of the walk's own trees, valid
-        // by the contract above.
-        if (flags.bits() as u32) >> 24 == 0
-            || this_word_len < unsafe { (*self.slang).sl_compminlen }
-        {
+        if (flags.bits() as u32) >> 24 == 0 || this_word_len < self.slang.sl_compminlen {
             return None;
         }
-        // `COMPOUNDMIN` counts characters, not bytes.
-        //
-        // SAFETY: as above; `tword` is this walk's own buffer and the
-        // caller terminated it before this ran.
-        let compminlen = unsafe { (*self.slang).sl_compminlen };
-        if compminlen > 0 && unsafe { mb_charlen(self.tword.as_ptr().add(split_off)) } < compminlen
+        // `COMPOUNDMIN` counts characters, not bytes. `tword` was
+        // terminated before this ran.
+        let compminlen = self.slang.sl_compminlen;
+        if compminlen > 0 && (char_count(until_nul(&self.tword[split_off..])) as c_int) < compminlen
         {
             return None;
         }
@@ -467,43 +421,28 @@ impl Walk<'_> {
         self.compflags[comp_len] = ((flags.bits() as u32) >> 24) as u8;
         self.compflags[comp_len + 1] = NUL as u8;
         let preword_len = self.stack[level].preword_len as usize;
-        // SAFETY: both buffers are this walk's own, and what is copied is
-        // the word `tword` holds, after whatever a previous split left in
+        // The word `tword` holds, after whatever a previous split left in
         // `preword`.
-        unsafe {
-            xmemcpyz(
-                self.preword.as_mut_ptr().add(preword_len) as *mut _,
-                self.tword.as_ptr().add(split_off) as *const _,
-                this_word_len as size_t,
-            );
-        }
+        let word = &self.tword[split_off..split_off + this_word_len as usize];
+        copy_terminated(&mut self.preword[preword_len..], word);
 
         // CHECKCOMPOUNDPATTERN forbids some pairs of word endings and
         // beginnings outright.
-        //
-        // SAFETY: `preword` is this walk's own buffer, terminated by the
-        // copy above, and `slang` is its language.
-        let forbidden_pair = unsafe {
-            match_checkcompoundpattern(
-                cstr::as_bytes(&self.preword),
-                self.stack[level].preword_len as usize,
-                &(*self.slang).sl_comppat,
-            )
-        };
+        let forbidden_pair = match_checkcompoundpattern(
+            &self.preword,
+            self.stack[level].preword_len as usize,
+            &self.slang.sl_comppat,
+        );
         let mut compound_ok = !forbidden_pair;
 
         if compound_ok && bad_word_ends {
             let comp_split = self.stack[level].comp_split as usize;
-            // SAFETY: `preword` is NUL-terminated as above, and
-            // `comp_split` indexes `compflags`, this walk's own array.
-            let last_word = unsafe { self.last_word_of_preword() };
-            let joins = unsafe {
-                can_compound(
-                    &*self.slang,
-                    cstr::bytes_at(last_word),
-                    &self.compflags[comp_split..],
-                )
-            };
+            let last_word = last_word_start(&self.preword);
+            let joins = can_compound(
+                self.slang,
+                until_nul(&self.preword[last_word..]),
+                &self.compflags[comp_split..],
+            );
             if !joins {
                 // Not allowed as it stands; another short word may
                 // still make it valid.
@@ -511,66 +450,34 @@ impl Walk<'_> {
             }
         }
 
-        // SAFETY: `preword` holds the word copied in above, so stepping
-        // back over its last character stays inside the buffer.
-        let mut tail = unsafe { self.preword.as_mut_ptr().add(preword_len) };
-        tail = unsafe { Walk::char_back(self.preword.as_ptr(), tail) };
+        // Step back from this word's start over the last character of the
+        // one before it.
+        let tail = (preword_len > 0).then(|| char_back(&self.preword, preword_len));
         Some((tail, compound_ok))
-    }
-
-    /// The start of the last whitespace-separated word in `preword`.
-    ///
-    /// # Safety
-    ///
-    /// `preword` must be NUL-terminated.
-    unsafe fn last_word_of_preword(&mut self) -> *mut c_char {
-        let mut p = self.preword.as_mut_ptr();
-        // SAFETY: `preword` is this walk's own NUL-terminated buffer, so
-        // `skiptowhite` stops inside it and the byte it stops at is one of
-        // the buffer's own; `skipwhite` then stops at the next word.
-        while unsafe { *skiptowhite(p) } != NUL as c_char {
-            p = unsafe { skipwhite(skiptowhite(p)) };
-        }
-        p
     }
 
     /// Put the word with its proper case into `preword`, after whatever a
     /// previous split or compound left there.
-    ///
-    /// # Safety
-    ///
-    /// The walk's state must be valid.
-    unsafe fn build_preword(&mut self, flags: WordFlags, prev_word_tail: *mut c_char) {
+    fn build_preword(&mut self, flags: WordFlags, prev_word_tail: Option<usize>) {
         let level = self.depth as usize;
         let split_off = self.stack[level].split_off as usize;
         let preword_len = self.stack[level].preword_len as usize;
-        // SAFETY: both buffers are this walk's own, both offsets are
-        // lengths it has itself measured out of them, and `tword` was
-        // terminated by the caller.
-        let good = unsafe { self.tword.as_mut_ptr().add(split_off) };
-        let out = unsafe { self.preword.as_mut_ptr().add(preword_len) };
+        // `tword` was terminated by the caller.
+        let good = &self.tword[split_off..];
 
         if self.soundfold {
             // Sound-folded words have no case to get right.
-            //
-            // SAFETY: `good` is NUL-terminated and `out` is the tail of
-            // `preword`, which the walk keeps long enough for it.
-            unsafe { strcpy(out, good) };
+            copy_terminated(&mut self.preword[preword_len..], until_nul(good));
         } else if flags.has(WordFlags::KEEPCAP) {
             // The spelling has to come from the keep-case tree.
-            //
-            // SAFETY: as above, plus `slang` is the walk's own language.
-            unsafe { find_keepcap_word(self.slang, good, out) };
+            find_keepcap_word(self.slang, good, &mut self.preword[preword_len..]);
         } else {
             // Take the bad word's caps type: a one-cap or all-cap bad
             // word wants a good word to match. An all-cap bad word
             // one character long only says one-cap, though.
-            //
-            // SAFETY: `su` is the caller's suggestion state and
-            // `su_badptr` its NUL-terminated bad word.
-            let mut caps = unsafe { (*self.su).su_badflags };
+            let mut caps = self.su.su_badflags;
             if caps.has(WordFlags::ALLCAP)
-                && unsafe { (*self.su).su_badlen == utfc_ptr2len((*self.su).su_badptr) }
+                && self.su.su_badlen as usize == c_cluster_len(&self.su.su_bad)
             {
                 caps = WordFlags::ONECAP;
             }
@@ -578,20 +485,12 @@ impl Walk<'_> {
 
             // A compound word appended after a word character must not
             // start with a capital.
-            //
-            // SAFETY: `prev_word_tail`, when it is not null, is a
-            // character of `preword`, and the `&&` is what keeps the null
-            // away from `spell_iswordp_nmw`.
-            if !prev_word_tail.is_null()
-                && spell_iswordp_nmw(unsafe { cstr::bytes_at(prev_word_tail) }, Win::current())
+            if let Some(tail) = prev_word_tail
+                && spell_iswordp_nmw(&self.preword[tail..], Win::current())
             {
                 caps.clear(WordFlags::ONECAP);
             }
-            make_case_word(
-                &cstr::as_bytes(&self.tword)[split_off..],
-                &mut cstr::as_bytes_mut(&mut self.preword)[preword_len..],
-                caps,
-            );
+            make_case_word(good, &mut self.preword[preword_len..], caps);
         }
     }
 
@@ -605,18 +504,8 @@ impl Walk<'_> {
         if self.soundfold {
             // A sound-folded match stands for real words, which have
             // to be found and scored separately.
-            //
-            // SAFETY: `su` and `langp` are the caller's, valid by the
-            // contract above, and `preword` is this walk's own buffer,
-            // NUL-terminated by now.
-            unsafe {
-                add_sound_suggest(
-                    self.su,
-                    self.preword.as_mut_ptr(),
-                    self.stack[level].score,
-                    self.langp,
-                );
-            }
+            let score = self.stack[level].score;
+            add_sound_suggest(self.su, self.slang, self.langp, &self.preword, score);
             return newscore;
         }
         if self.stack[level].bad_idx == 0 {
@@ -624,103 +513,73 @@ impl Walk<'_> {
         }
 
         // Penalise turning a non-word character into a word character,
-        // as in "thes," -> "these".
-        //
-        // SAFETY: `bad_idx` is a position the walk reached inside the bad
-        // word, and it is not zero -- tested just above -- so there is a
-        // character before it to step back over.
-        let mut p = self.fword_ptr(self.stack[level].bad_idx as usize);
-        p = unsafe { Walk::char_back(self.fword.as_ptr().cast(), p) };
-        // SAFETY: `p` is a character of the bad word; the `&&` only saves
-        // the work of measuring an empty `preword`.
-        if !spell_iswordp(unsafe { cstr::bytes_at(p) }, Win::current())
-            && self.preword[0] != NUL as c_char
-        {
+        // as in "thes," -> "these". `bad_idx` is not zero -- tested just
+        // above -- so there is a character before it to step back over.
+        let p = char_back(self.fword, self.stack[level].bad_idx as usize);
+        if !spell_iswordp(until_nul(&self.fword[p..]), Win::current()) && self.preword[0] != 0 {
             let end = self.preword_len();
-            // SAFETY: `end` is `preword`'s own length and it is not empty,
-            // so the character before its terminator is inside it.
-            let mut q = unsafe { self.preword.as_mut_ptr().add(end) };
-            q = unsafe { Walk::char_back(self.preword.as_ptr(), q) };
-            if spell_iswordp(unsafe { cstr::bytes_at(q) }, Win::current()) {
+            let q = char_back(&self.preword, end);
+            if spell_iswordp(&self.preword[q..end], Win::current()) {
                 newscore += SCORE_NONWORD;
             }
         }
 
         let preword_len = self.stack[level].preword_len as usize;
-        // SAFETY: `slang` is the walk's own language and `preword` its own
-        // NUL-terminated buffer.
-        let score = unsafe {
-            score_wordcount_adj(
-                &*self.slang,
-                self.stack[level].score + newscore,
-                self.preword.as_mut_ptr().add(preword_len),
-                self.stack[level].preword_len > 0,
-            )
-        };
-        // SAFETY: `su` is the caller's suggestion state.
-        if score > unsafe { (*self.su).su_maxscore } {
+        let score = score_wordcount_adj(
+            self.slang,
+            self.stack[level].score + newscore,
+            &self.preword[preword_len..],
+            self.stack[level].preword_len > 0,
+        );
+        if score > self.su.su_maxscore {
             return newscore;
         }
 
         let replaced = self.stack[level].bad_idx as c_int - self.repextra;
-        // SAFETY: `su` and `langp` are the caller's and `preword` is
-        // NUL-terminated as it is handed on.
-        unsafe {
-            add_suggestion(
-                self.su,
-                &raw mut (*self.su).su_ga,
-                self.preword.as_ptr(),
-                replaced,
-                score,
-                0,
-                false,
-                lang_ptr_opt((*self.langp).sallang),
-                false,
-            );
-        }
+        let sallang = self.langp.sallang;
+        add_suggestion(
+            self.su,
+            List::Main,
+            &self.preword,
+            replaced,
+            score,
+            0,
+            false,
+            sallang,
+            false,
+        );
 
-        // SAFETY: as above.
-        if unsafe { (*self.su).su_badflags }.has(WordFlags::MIXCAP) {
+        if self.su.su_badflags.has(WordFlags::MIXCAP) {
             // With mixed case there is no telling whether the word
             // should be upper or lower case, so offer both.
-            //
-            // SAFETY: as above.
-            let caps = captype(cstr::as_bytes(&self.preword), usize::MAX);
+            let caps = captype(&self.preword, usize::MAX);
             if caps.is_empty() || caps == WordFlags::ALLCAP {
                 let split_off = self.stack[level].split_off as usize;
                 // `tword` was terminated before this ran.
                 make_case_word(
-                    &cstr::as_bytes(&self.tword)[split_off..],
-                    &mut cstr::as_bytes_mut(&mut self.preword)[preword_len..],
+                    &self.tword[split_off..],
+                    &mut self.preword[preword_len..],
                     WordFlags::ALLCAP.when(caps.is_empty()),
                 );
-                // SAFETY: as for the first `add_suggestion` above.
-                unsafe {
-                    add_suggestion(
-                        self.su,
-                        &raw mut (*self.su).su_ga,
-                        self.preword.as_ptr(),
-                        replaced,
-                        score + SCORE_ICASE,
-                        0,
-                        false,
-                        lang_ptr_opt((*self.langp).sallang),
-                        false,
-                    );
-                }
+                add_suggestion(
+                    self.su,
+                    List::Main,
+                    &self.preword,
+                    replaced,
+                    score + SCORE_ICASE,
+                    0,
+                    false,
+                    sallang,
+                    false,
+                );
             }
         }
         newscore
     }
 }
 
-/// Is this word one the walk has been told never to suggest?
-///
-/// # Safety
-///
-/// `su` must be valid and `word` NUL-terminated.
-unsafe fn was_banned(su: *mut SugInfo, word: *const c_char) -> bool {
-    // SAFETY: the caller guarantees both; a miss returns an empty item
-    // rather than null.
-    unsafe { (*hash_find(&raw const (*su).su_banned, word)).is_kept() }
+/// Is this word, which ends at its end or at a NUL, one the walk has been
+/// told never to suggest?
+fn was_banned(su: &SugInfo, word: &[u8]) -> bool {
+    !su.su_banned.is_empty() && su.su_banned.contains(until_nul(word))
 }

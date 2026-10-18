@@ -22,27 +22,49 @@
 //! "double" mode, where the edit-distance list and the sound-a-like list
 //! are scored separately and then interleaved.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::cstr;
+use crate::cstr::until_nul;
 use crate::winlayer::Win;
 
-use crate::hashtab::{hash_add_item, hash_hash, hash_lookup};
 use crate::highlight_group::HLF_COUNT;
-use crate::mbyte::{utf_head_off, utf_ptr2char};
-use crate::memory::{xmemdupz, xstrlcpy};
-use crate::spell::{lang_ptr, spell_check, spell_soundfold};
+use crate::mbyte::{char_at, head_off};
+use crate::spell::{loaded_langs, spell_check, spell_soundfold};
 use crate::spellsuggest::score::{EMPTY_SOUND, spell_edit_score, stp_sal_score};
 use crate::spellsuggest::{MAXWLEN, SCORE_INS, SCORE_MAXMAX, SugInfo, Suggest, window_langs};
-use crate::types::{__compar_fn_t, SpellLang, size_t};
-use ::libc::{qsort, strcasecmp};
-use core::ffi::{c_char, c_int, c_void};
-use core::{mem, ptr};
+use crate::types::{LangId, SpellLang};
+use core::cmp::Ordering;
+use core::ffi::c_int;
+use core::mem;
 
 /// A sound-a-like score that could not be computed stands in as "three
 /// insertions apart", which is far but not infinitely so.
 const SCORE_BIG: c_int = SCORE_INS * 3;
+
+/// Which of the two suggestion lists a candidate goes into.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum List {
+    /// `su_ga`, the list that is shown.
+    Main,
+    /// `su_sga`, the sound-a-like list of "double" mode.
+    Sound,
+}
+
+impl SugInfo {
+    fn list(&self, list: List) -> &Vec<Suggest> {
+        match list {
+            List::Main => &self.su_ga,
+            List::Sound => &self.su_sga,
+        }
+    }
+
+    fn list_mut(&mut self, list: List) -> &mut Vec<Suggest> {
+        match list {
+            List::Main => &mut self.su_ga,
+            List::Sound => &mut self.su_sga,
+        }
+    }
+}
 
 /// Blend a word's edit-distance score with its sound-a-like score. The
 /// edit distance dominates; the sound only nudges.
@@ -69,52 +91,40 @@ fn max_count(su: &SugInfo) -> c_int {
 /// Add a suggestion to the list, or lower the score of the one already
 /// there.
 ///
-/// `badlenarg` is how much of the bad word `goodword` replaces; `maxsf`
-/// says whether the caller's score ceiling is the sound-fold one.
-///
-/// # Safety
-///
-/// `su` and `gap` must be valid, `goodword` NUL-terminated, and `su`'s bad
-/// word must still point into the line it came from.
+/// `goodword` ends at its end or at a NUL. `badlenarg` is how much of the
+/// bad word it replaces; `maxsf` says whether the caller's score ceiling
+/// is the sound-fold one.
 #[allow(clippy::too_many_arguments)]
-pub(super) unsafe fn add_suggestion(
-    su: *mut SugInfo,
-    gap: *mut Vec<Suggest>,
-    goodword: *const c_char,
+pub(super) fn add_suggestion(
+    su: &mut SugInfo,
+    list: List,
+    goodword: &[u8],
     badlenarg: c_int,
     score: c_int,
     altscore: c_int,
     had_bonus: bool,
-    slang: *mut SpellLang,
+    slang: Option<LangId>,
     maxsf: bool,
 ) {
+    let goodword = until_nul(goodword);
     // Minimise "badlen" for consistency: changing "the the" to "thee
     // the" should not be listed next to changing the first "the" to
     // "thee". Walk both tails back over the characters they share.
     // The lengths are the ones measured before the last step back: a
     // shared trailing character is not part of the replacement.
-    //
-    // SAFETY: `goodword` is NUL-terminated and `su_badptr` still points
-    // into the line the bad word came from, so both walks start at the end
-    // of a live string and only step back over characters already matched;
-    // the loop stops as soon as either offset reaches zero.
-    let mut pgood = unsafe { goodword.add(cstr::bytes_at(goodword).len()) };
-    let mut pbad = unsafe { (*su).su_badptr.offset(badlenarg as isize) };
+    let bad = &su.su_bad[..];
+    let mut gi = goodword.len();
+    let mut bi = badlenarg.max(0) as usize;
     let (goodlen, badlen) = loop {
-        let lens = (unsafe { pgood.offset_from(goodword) } as c_int, unsafe {
-            pbad.offset_from((*su).su_badptr)
-        }
-            as c_int);
-        if lens.0 <= 0 || lens.1 <= 0 {
+        let lens = (gi as c_int, bi as c_int);
+        // The second test only bites on a replaced length past the end of
+        // the line, which the C read on into whatever followed it.
+        if gi == 0 || bi == 0 || bi > bad.len() {
             break lens;
         }
-        // SAFETY: as above.
-        unsafe {
-            pgood = pgood.sub(utf_head_off(goodword as *mut c_char, pgood.sub(1)) as usize + 1);
-            pbad = pbad.sub(utf_head_off((*su).su_badptr, pbad.sub(1)) as usize + 1);
-        }
-        // SAFETY: both now sit on a character head inside their word.
-        if unsafe { utf_ptr2char(pgood) } != unsafe { utf_ptr2char(pbad) } {
+        gi -= head_off(goodword, gi - 1) + 1;
+        bi -= head_off(bad, bi - 1) + 1;
+        if char_at(&goodword[gi..]) != char_at(&bad[bi..]) {
             break lens;
         }
     };
@@ -124,24 +134,19 @@ pub(super) unsafe fn add_suggestion(
         // first "the" replaced by itself.
         return;
     }
+    let good = &goodword[..goodlen as usize];
 
     // Already in the list? The replaced length is part of the identity:
     // "thes," -> "these" is a different suggestion from "thes" ->
     // "these".
-    //
-    // SAFETY: `gap` is one of `su`'s two lists by the contract above, and
-    // `goodlen` bytes of `goodword` are its own. Each step below takes the
-    // list afresh rather than holding it across the scoring, which reads
-    // the rest of `su`.
-    let found = unsafe { &*gap }.iter().position(|stp| {
-        stp.st_wordlen == goodlen
-            && stp.st_orglen == badlen
-            && unsafe { cstr::prefix_eq(stp.word(), goodword, goodlen as size_t) }
-    });
+    let found = su
+        .list(list)
+        .iter()
+        .position(|stp| stp.st_orglen == badlen && stp.word_bytes() == good);
     if let Some(at) = found {
         let had_bonus_before = {
-            let stp = &mut unsafe { &mut *gap }[at];
-            if stp.st_slang.is_null() {
+            let stp = &mut su.list_mut(list)[at];
+            if stp.st_slang.is_none() {
                 stp.st_slang = slang;
             }
             stp.st_had_bonus
@@ -156,28 +161,26 @@ pub(super) unsafe fn add_suggestion(
             // cannot be compared yet. `suggest_try_change` leaves it
             // out to stay fast, while some of the special methods set
             // it to zero.
-            //
-            // SAFETY: `su` is valid by the contract above. Neither call
-            // holds the list, which is one of `su`'s own fields.
             if had_bonus {
-                unsafe { rescore_one(su, gap, at) };
-                let stp = &unsafe { &*gap }[at];
+                rescore_one(su, list, at);
+                let stp = &su.list(list)[at];
                 new_score = stp.st_score;
                 new_altscore = stp.st_altscore;
                 new_had_bonus = stp.st_had_bonus;
-            } else if !slang.is_null() && unsafe { (*slang).has_soundfold() } {
-                let (word, wordlen) = {
-                    let stp = &unsafe { &*gap }[at];
-                    (stp.word(), stp.st_wordlen)
-                };
-                let (s, a) = unsafe { sal_rescore(su, slang, word, wordlen, badlen, score) };
-                new_score = s;
-                new_altscore = a;
-                new_had_bonus = true;
+            } else if let Some(id) = slang {
+                let rescored = loaded_langs.with(|langs| {
+                    let lang = langs.get(id).filter(|lang| lang.has_soundfold())?;
+                    Some(sal_rescore(su, id, lang, good, badlen, score))
+                });
+                if let Some((s, a)) = rescored {
+                    new_score = s;
+                    new_altscore = a;
+                    new_had_bonus = true;
+                }
             }
         }
 
-        let stp = &mut unsafe { &mut *gap }[at];
+        let stp = &mut su.list_mut(list)[at];
         if stp.st_score > new_score {
             stp.st_score = new_score;
             stp.st_altscore = new_altscore;
@@ -186,15 +189,8 @@ pub(super) unsafe fn add_suggestion(
         return;
     }
 
-    // SAFETY: `goodlen` bytes of `goodword` are its own.
-    let bytes = unsafe { core::slice::from_raw_parts(goodword.cast::<u8>(), goodlen as usize) };
-    let mut word = Vec::with_capacity(goodlen as usize + 1);
-    word.extend_from_slice(bytes);
-    word.push(0);
-    // SAFETY: as above.
-    let list = unsafe { &mut *gap };
-    list.push(Suggest {
-        st_word: word.into_boxed_slice(),
+    let entry = Suggest {
+        st_word: good.into(),
         st_wordlen: goodlen,
         st_orglen: badlen,
         st_score: score,
@@ -202,17 +198,22 @@ pub(super) unsafe fn add_suggestion(
         st_salscore: false,
         st_had_bonus: had_bonus,
         st_slang: slang,
-    });
+    };
+    su.list_mut(list).push(entry);
 
     // Far enough over the display count that sorting pays for itself.
-    //
-    // SAFETY: `su` is valid by the contract above.
-    if list.len() as c_int > max_count(unsafe { &*su }) {
-        let keep = clean_count(unsafe { &*su });
-        if maxsf {
-            unsafe { (*su).su_sfmaxscore = cleanup_suggestions(gap, (*su).su_sfmaxscore, keep) };
+    if su.list(list).len() as c_int > max_count(su) {
+        let keep = clean_count(su);
+        let ceiling = if maxsf {
+            su.su_sfmaxscore
         } else {
-            unsafe { (*su).su_maxscore = cleanup_suggestions(gap, (*su).su_maxscore, keep) };
+            su.su_maxscore
+        };
+        let ceiling = cleanup_suggestions(su.list_mut(list), ceiling, keep);
+        if maxsf {
+            su.su_sfmaxscore = ceiling;
+        } else {
+            su.su_maxscore = ceiling;
         }
     }
 }
@@ -222,218 +223,141 @@ pub(super) unsafe fn add_suggestion(
 /// Banned words and split words -- "the the" -- only show up as errors
 /// once the replacement is checked against the rest of the line, which is
 /// why this cannot be done as candidates arrive.
-///
-/// # Safety
-///
-/// `su` and `gap` must be valid and `gap` must hold `Suggest`s.
-pub(super) unsafe fn check_suggestions(su: *mut SugInfo, gap: *mut Vec<Suggest>) {
-    let mut longword = [0 as c_char; MAXWLEN + 1];
-    // SAFETY: `gap` is one of `su`'s two lists by the contract above, and
-    // the list is taken afresh at each step rather than held across
-    // `spell_check`.
-    for i in (0..unsafe { (*gap).len() }).rev() {
-        let (word, len, orglen) = {
-            let sug = &unsafe { &*gap }[i];
-            (sug.word(), sug.st_wordlen, sug.st_orglen)
-        };
+pub(super) fn check_suggestions(su: &mut SugInfo, list: List) {
+    let mut longword = Vec::with_capacity(MAXWLEN);
+    for i in (0..su.list(list).len()).rev() {
+        let stp = &su.list(list)[i];
         // Append what follows in the line, so that "the the" is
-        // recognisable.
-        //
-        // SAFETY: `longword` is `MAXWLEN + 1` bytes and both copies are
-        // told how much of it is left; `su_badptr` points into the line the
-        // bad word came from, of which `st_orglen` bytes are replaced.
-        unsafe { xstrlcpy(longword.as_mut_ptr(), word, MAXWLEN + 1) };
-        let tail = unsafe { longword.as_mut_ptr().offset(len as isize) };
-        let rest = unsafe { (*su).su_badptr.offset(orglen as isize) };
-        unsafe { xstrlcpy(tail, rest, MAXWLEN + 1 - len as usize) };
+        // recognisable; at most `MAXWLEN` bytes of the two.
+        let word = stp.word_bytes();
+        let word = &word[..word.len().min(MAXWLEN)];
+        let rest = su.bad_from(stp.st_orglen as usize);
+        longword.clear();
+        longword.extend_from_slice(word);
+        longword.extend_from_slice(&rest[..rest.len().min(MAXWLEN - word.len())]);
 
-        // `longword` is NUL-terminated by the copies above.
-        let (_, attr) = spell_check(Win::current(), cstr::as_bytes(&longword), None, false);
-        if attr == HLF_COUNT {
-            continue;
+        let (_, attr) = spell_check(Win::current(), &longword, None, false);
+        if attr != HLF_COUNT {
+            su.list_mut(list).remove(i);
         }
-
-        // The suggestion owns its word, so removing it frees it.
-        //
-        // SAFETY: as above.
-        unsafe { &mut *gap }.remove(i);
     }
 }
 
-/// Remember a word that must never be suggested.
-///
-/// # Safety
-///
-/// `su` must be valid and `word` NUL-terminated.
-pub(super) unsafe fn add_banned(su: *mut SugInfo, word: *mut c_char) {
-    // SAFETY: `word` is NUL-terminated and `su` is valid by the contract
-    // above, so `su_banned` is a live hash table; `hash_add_item` is handed
-    // back the `hi`/`hash` pair `hash_lookup` just produced for it, and the
-    // copy it takes is owned by the table until `hash_clear_all` frees it.
-    let hash = unsafe { hash_hash(word) };
-    let word_len = unsafe { cstr::bytes_at(word) }.len();
-    let hi = unsafe { hash_lookup(&raw mut (*su).su_banned, word, word_len, hash) };
-    if hi.is_kept() {
-        return; // already present
+/// Remember a word that must never be suggested. It ends at its end or at a
+/// NUL.
+pub(super) fn add_banned(su: &mut SugInfo, word: &[u8]) {
+    let word = until_nul(word);
+    if !su.su_banned.contains(word) {
+        su.su_banned.insert(word.into());
     }
-    let owned = unsafe { xmemdupz(word as *const c_void, word_len) } as *mut c_char;
-    unsafe { hash_add_item(&raw mut (*su).su_banned, hi, owned, hash) };
 }
 
 /// Recompute every suggestion's score with sound folding taken into
 /// account. Slow, so only done once the list is final.
-///
-/// # Safety
-///
-/// `su` must be valid.
-pub(super) unsafe fn rescore_suggestions(su: *mut SugInfo) {
-    // SAFETY: `su` is valid by the contract above, so `su_ga` is its own
-    // suggestion list.
-    if unsafe { (*su).su_sallang }.is_null() {
+pub(super) fn rescore_suggestions(su: &mut SugInfo) {
+    if su.su_sallang.is_none() {
         return;
     }
-    let gap = unsafe { &raw mut (*su).su_ga };
-    for at in 0..unsafe { (*gap).len() } {
-        unsafe { rescore_one(su, gap, at) };
+    for at in 0..su.su_ga.len() {
+        rescore_one(su, List::Main, at);
     }
 }
 
 /// Recompute one suggestion's score with sound folding taken into account.
-///
-/// The entry is named by its position rather than borrowed: the scoring
-/// reads the rest of `su`, and the list is one of `su`'s own fields, so the
-/// numbers come out, the score is worked out, and the entry is written back.
-///
-/// # Safety
-///
-/// `su` must be valid and `gap` be one of its two lists, with `at` inside it.
-pub(super) unsafe fn rescore_one(su: *mut SugInfo, gap: *mut Vec<Suggest>, at: usize) {
-    // SAFETY: the caller guarantees `gap` and `at`.
-    let stp = &unsafe { &*gap }[at];
-    let (slang, had_bonus) = (stp.st_slang, stp.st_had_bonus);
+pub(super) fn rescore_one(su: &mut SugInfo, list: List, at: usize) {
+    let stp = &su.list(list)[at];
     // Only worth doing for a suggestion that has no sound-a-like score
     // yet and knows which language it came from.
-    //
-    // SAFETY: `st_slang` is either null -- which the `||` tests first -- or
-    // a loaded language that outlives the suggestion list.
-    if slang.is_null() || !unsafe { (*slang).has_soundfold() } || had_bonus {
+    let Some(id) = stp.st_slang.filter(|_| !stp.st_had_bonus) else {
         return;
-    }
-    let (word, wordlen, orglen, score) = (stp.word(), stp.st_wordlen, stp.st_orglen, stp.st_score);
+    };
+    let rescored = loaded_langs.with(|langs| {
+        let lang = langs.get(id).filter(|lang| lang.has_soundfold())?;
+        let stp = &su.list(list)[at];
+        Some(sal_rescore(
+            su,
+            id,
+            lang,
+            stp.word_bytes(),
+            stp.st_orglen,
+            stp.st_score,
+        ))
+    });
+    let Some((score, altscore)) = rescored else {
+        return;
+    };
 
-    // SAFETY: as above; the word outlives the call because nothing here
-    // adds to or drops from the list.
-    let (score, altscore) = unsafe { sal_rescore(su, slang, word, wordlen, orglen, score) };
-
-    // SAFETY: the caller guarantees `gap` and `at`.
-    let stp = &mut unsafe { &mut *gap }[at];
+    let stp = &mut su.list_mut(list)[at];
     stp.st_score = score;
     stp.st_altscore = altscore;
     stp.st_had_bonus = true;
 }
 
-/// What sound folding scores one suggestion: the pair that replaces its
-/// `st_score` and `st_altscore`.
-///
-/// Takes the entry's own numbers rather than the entry, so that the
-/// suggestion list -- a field of `su`, all of which the scoring reads --
-/// need not be borrowed across the call.
-///
-/// # Safety
-///
-/// `su` must be valid, `slang` loaded, and `word` a NUL-terminated string
-/// of `wordlen` bytes that outlives the call.
-unsafe fn sal_rescore(
-    su: *mut SugInfo,
-    slang: *mut SpellLang,
-    word: *mut c_char,
-    wordlen: c_int,
+/// What sound folding scores one suggestion, the language `id` being
+/// `lang`: the pair that replaces its `st_score` and `st_altscore`.
+fn sal_rescore(
+    su: &SugInfo,
+    id: LangId,
+    lang: &SpellLang,
+    word: &[u8],
     orglen: c_int,
     score: c_int,
 ) -> (c_int, c_int) {
     let mut sal_badword = EMPTY_SOUND;
-    // SAFETY: `su` is valid by the contract above, so `su_sal_badword` is
-    // its own soundfold of the bad word and `su_fbadword` the bad word's
-    // NUL-terminated fold; `sal_badword` has room for a soundfold.
-    let badsound = if slang == unsafe { (*su).su_sallang } {
-        unsafe { &(*su).su_sal_badword }
+    let badsound = if Some(id) == su.su_sallang {
+        &su.su_sal_badword
     } else {
-        let (lang, fbadword) = unsafe { (&*slang, &(*su).su_fbadword) };
-        spell_soundfold(
-            lang,
-            cstr::as_bytes(fbadword),
-            true,
-            cstr::as_bytes_mut(&mut sal_badword),
-        );
+        spell_soundfold(lang, &su.su_fbadword, true, &mut sal_badword);
         &sal_badword
     };
 
-    // SAFETY: as above; `badsound` is one of the two soundfolds.
-    let mut altscore = unsafe { stp_sal_score(word, wordlen, orglen, &*su, slang, badsound) };
+    let mut altscore = stp_sal_score(word, orglen, su, lang, badsound);
     if altscore == SCORE_MAXMAX {
         altscore = SCORE_BIG;
     }
     (rescore(score, altscore), altscore)
 }
 
+/// `strcasecmp` over two words: bytes compared with ASCII letters folded
+/// to lower case, the end of the shorter one reading as a NUL.
+pub(super) fn ascii_casecmp(a: &[u8], b: &[u8]) -> Ordering {
+    let mut i = 0;
+    loop {
+        let x = a.get(i).map_or(0, u8::to_ascii_lowercase);
+        let y = b.get(i).map_or(0, u8::to_ascii_lowercase);
+        if x != y || x == 0 {
+            return x.cmp(&y);
+        }
+        i += 1;
+    }
+}
+
 /// Order suggestions by score, then by sound-a-like score, then by word.
 ///
-/// Still spelled for `qsort`: replacing the sort with `slice::sort_by`
-/// would be a behaviour change, because the last comparison is
-/// case-insensitive and two entries differing only in case therefore tie,
-/// leaving their relative order up to the algorithm.
-///
-/// # Safety
-///
-/// Both pointers must be to `Suggest`s, as `qsort` guarantees.
-pub(super) unsafe extern "C" fn sug_compare(s1: *const c_void, s2: *const c_void) -> c_int {
-    // SAFETY: `qsort` passes pointers to the elements of the array it was
-    // given, which is an array of `Suggest`.
-    let (p1, p2) = unsafe { (&*(s1 as *const Suggest), &*(s2 as *const Suggest)) };
-    match p1.st_score.cmp(&p2.st_score) {
-        core::cmp::Ordering::Less => -1,
-        core::cmp::Ordering::Greater => 1,
-        core::cmp::Ordering::Equal => match p1.st_altscore.cmp(&p2.st_altscore) {
-            core::cmp::Ordering::Less => -1,
-            core::cmp::Ordering::Greater => 1,
-            // SAFETY: each entry's word is NUL-terminated.
-            core::cmp::Ordering::Equal => unsafe { strcasecmp(p1.word(), p2.word()) },
-        },
-    }
+/// The last comparison is case-insensitive, so two entries differing only
+/// in case tie; the sort is stable, as glibc's `qsort` (a merge sort) was,
+/// so they keep the order they were found in.
+fn sug_compare(p1: &Suggest, p2: &Suggest) -> Ordering {
+    p1.st_score
+        .cmp(&p2.st_score)
+        .then(p1.st_altscore.cmp(&p2.st_altscore))
+        .then_with(|| ascii_casecmp(p1.word_bytes(), p2.word_bytes()))
 }
 
 /// Sort the suggestions and drop the ones that will not be displayed.
 ///
 /// Returns the new score ceiling: the score of the worst suggestion still
 /// in the list, which nothing worse can now beat.
-///
-/// # Safety
-///
-/// `gap` must be a live suggestion list.
-pub(super) unsafe fn cleanup_suggestions(
-    gap: *mut Vec<Suggest>,
-    maxscore: c_int,
-    keep: c_int,
-) -> c_int {
-    // SAFETY: the caller guarantees the list.
-    let list = unsafe { &mut *gap };
+pub(super) fn cleanup_suggestions(list: &mut Vec<Suggest>, maxscore: c_int, keep: c_int) -> c_int {
     if list.is_empty() {
         return maxscore;
     }
-
-    let cmp = Some(sug_compare as unsafe extern "C" fn(*const c_void, *const c_void) -> c_int)
-        as __compar_fn_t;
-    // SAFETY: the buffer really is `len` `Suggest`s, which is the size
-    // the comparator reads at each of the pointers `qsort` hands it, and
-    // `qsort` only permutes them -- which for these is a move.
-    let (data, len) = (list.as_mut_ptr().cast::<c_void>(), list.len());
-    unsafe { qsort(data, len as size_t, size_of::<Suggest>() as size_t, cmp) };
+    list.sort_by(sug_compare);
 
     let keep = keep.max(0) as usize;
     if list.len() <= keep {
         return maxscore;
     }
-    // Each entry dropped here owns its word, so truncating frees them.
     list.truncate(keep);
     if keep >= 1 {
         return list[keep - 1].st_score;
@@ -441,63 +365,48 @@ pub(super) unsafe fn cleanup_suggestions(
     maxscore
 }
 
+/// The first language the window has that can sound-fold, and the bad word
+/// folded by it -- for `f` to score with.
+fn with_first_soundfold<R>(
+    su: &SugInfo,
+    f: impl FnOnce(&SpellLang, &[u8; MAXWLEN]) -> R,
+) -> Option<R> {
+    let langs = window_langs();
+    loaded_langs.with(|table| {
+        let lang = langs
+            .iter()
+            .filter_map(|lp| table.get(lp.slang))
+            .find(|lang| lang.has_soundfold())?;
+        let mut badsound = EMPTY_SOUND;
+        spell_soundfold(lang, &su.su_fbadword, true, &mut badsound);
+        Some(f(lang, &badsound))
+    })
+}
+
 /// Score every suggestion in `su_ga` by sound and put the ones that are
 /// close enough into `su_sga`.
-///
-/// # Safety
-///
-/// `su` must be valid and the current window must have its languages
-/// loaded.
-pub(super) unsafe fn score_comp_sal(su: *mut SugInfo) {
+pub(super) fn score_comp_sal(su: &mut SugInfo) {
     // Use the sound folding of the first language that has any.
-    //
-    // SAFETY: the languages come from the current window's loaded list.
-    let langs = unsafe { window_langs() };
-    let Some(lp) = langs
-        .iter()
-        .find(|lp| unsafe { (*lang_ptr(lp.slang)).has_soundfold() })
-    else {
-        return;
-    };
-    let slang = lang_ptr(lp.slang);
-
-    let mut badsound = EMPTY_SOUND;
-    // SAFETY: `su_fbadword` is the bad word's NUL-terminated fold and
-    // `badsound` has room for a soundfold.
-    let (lang, fbadword) = unsafe { (&*slang, &(*su).su_fbadword) };
-    spell_soundfold(
-        lang,
-        cstr::as_bytes(fbadword),
-        true,
-        cstr::as_bytes_mut(&mut badsound),
-    );
-
-    // SAFETY: `su` is valid by the contract above, so both lists are its
-    // own. Neither is borrowed across the scoring, which reads the rest of
-    // `su`; the entries copied across are new ones, so the word is copied
-    // rather than moved.
-    for i in 0..unsafe { (*su).su_ga.len() } {
-        let (word, wordlen, orglen) = {
-            let stp = &unsafe { &(*su).su_ga }[i];
-            (stp.word(), stp.st_wordlen, stp.st_orglen)
-        };
-        let score = unsafe { stp_sal_score(word, wordlen, orglen, &*su, slang, &badsound) };
-        if score >= SCORE_MAXMAX {
-            continue;
-        }
-        let copy = unsafe { &(*su).su_ga }[i].st_word.clone();
-        unsafe {
-            (*su).su_sga.push(Suggest {
-                st_word: copy,
-                st_wordlen: wordlen,
-                st_orglen: orglen,
-                st_score: score,
-                st_altscore: 0,
-                st_salscore: false,
-                st_had_bonus: false,
-                st_slang: ptr::null_mut(),
-            });
-        }
+    let found = with_first_soundfold(su, |lang, badsound| {
+        su.su_ga
+            .iter()
+            .filter_map(|stp| {
+                let score = stp_sal_score(stp.word_bytes(), stp.st_orglen, su, lang, badsound);
+                (score < SCORE_MAXMAX).then(|| Suggest {
+                    st_word: stp.st_word.clone(),
+                    st_wordlen: stp.st_wordlen,
+                    st_orglen: stp.st_orglen,
+                    st_score: score,
+                    st_altscore: 0,
+                    st_salscore: false,
+                    st_had_bonus: false,
+                    st_slang: None,
+                })
+            })
+            .collect::<Vec<_>>()
+    });
+    if let Some(found) = found {
+        su.su_sga.extend(found);
     }
 }
 
@@ -507,101 +416,61 @@ pub(super) unsafe fn score_comp_sal(su: *mut SugInfo) {
 /// comparable, then the two are taken from alternately -- best of one,
 /// best of the other -- so that "double" mode shows a mixture rather than
 /// whichever measure happened to score lower.
-///
-/// # Safety
-///
-/// `su` must be valid.
-pub(super) unsafe fn score_combine(su: *mut SugInfo) {
-    let mut badsound = EMPTY_SOUND;
-    let mut slang: *mut SpellLang = ptr::null_mut();
+pub(super) fn score_combine(su: &mut SugInfo) {
+    // Give the edit-distance list a sound-a-like score, and the sound-a-like
+    // list an edit-distance one. Here the sound score is the one that
+    // dominates.
+    let scores = with_first_soundfold(su, |lang, badsound| {
+        let main: Vec<c_int> = su
+            .su_ga
+            .iter()
+            .map(|stp| stp_sal_score(stp.word_bytes(), stp.st_orglen, su, lang, badsound))
+            .collect();
+        let sound: Vec<c_int> = su
+            .su_sga
+            .iter()
+            .map(|stp| spell_edit_score(Some(lang), su.badword(), stp.word_bytes()))
+            .collect();
+        (main, sound)
+    });
 
-    // Give the edit-distance list a sound-a-like score.
-    //
-    // SAFETY: the languages come from the current window's loaded list;
-    // `su` is valid by the contract above, so `su_fbadword` is the bad
-    // word's NUL-terminated fold and `su_ga` one of its own growarrays of
-    // `Suggest`. `badsound` has room for a soundfold.
-    let langs = unsafe { window_langs() };
-    if let Some(lp) = langs
-        .iter()
-        .find(|lp| unsafe { (*lang_ptr(lp.slang)).has_soundfold() })
-    {
-        slang = lang_ptr(lp.slang);
-        let (lang, fbadword) = unsafe { (&*slang, &(*su).su_fbadword) };
-        spell_soundfold(
-            lang,
-            cstr::as_bytes(fbadword),
-            true,
-            cstr::as_bytes_mut(&mut badsound),
-        );
-
-        for i in 0..unsafe { (*su).su_ga.len() } {
-            let (word, wordlen, orglen, score) = {
-                let stp = &unsafe { &(*su).su_ga }[i];
-                (stp.word(), stp.st_wordlen, stp.st_orglen, stp.st_score)
-            };
-            let altscore = unsafe { stp_sal_score(word, wordlen, orglen, &*su, slang, &badsound) };
-            let alt = if altscore == SCORE_MAXMAX {
-                SCORE_BIG
-            } else {
-                altscore
-            };
-            let stp = &mut unsafe { &mut (*su).su_ga }[i];
-            stp.st_altscore = altscore;
-            stp.st_score = rescore(score, alt);
-            stp.st_salscore = false;
-        }
-    }
-
-    if slang.is_null() {
+    let Some((main, sound)) = scores else {
         // "double" without a language that can sound-fold.
-        //
-        // SAFETY: as above.
-        unsafe { cleanup_suggestions(&raw mut (*su).su_ga, (*su).su_maxscore, (*su).su_maxcount) };
+        let (maxscore, maxcount) = (su.su_maxscore, su.su_maxcount);
+        cleanup_suggestions(&mut su.su_ga, maxscore, maxcount);
         return;
-    }
-
-    // Give the sound-a-like list an edit-distance score. Here the
-    // sound score is the one that dominates.
-    //
-    // SAFETY: `su_sga` is one of `su`'s own lists, `slang` is the loaded
-    // language found above, and `su_badword` and every word are
-    // NUL-terminated. The list is taken afresh at each step rather than
-    // held across the scoring, which reads the rest of `su`.
-    for i in 0..unsafe { (*su).su_sga.len() } {
-        let (word, score) = {
-            let stp = &unsafe { &(*su).su_sga }[i];
-            (stp.word(), stp.st_score)
-        };
-        let badword = unsafe { &raw const (*su).su_badword } as *const c_char;
-        let altscore = unsafe { spell_edit_score(Some(&*slang), badword, word) };
-        let base = if score == SCORE_MAXMAX {
+    };
+    for (stp, altscore) in su.su_ga.iter_mut().zip(main) {
+        let alt = if altscore == SCORE_MAXMAX {
             SCORE_BIG
         } else {
-            score
+            altscore
         };
-        let stp = &mut unsafe { &mut (*su).su_sga }[i];
+        stp.st_altscore = altscore;
+        stp.st_score = rescore(stp.st_score, alt);
+        stp.st_salscore = false;
+    }
+    for (stp, altscore) in su.su_sga.iter_mut().zip(sound) {
+        let base = if stp.st_score == SCORE_MAXMAX {
+            SCORE_BIG
+        } else {
+            stp.st_score
+        };
         stp.st_altscore = altscore;
         stp.st_score = (base * 7 + altscore) / 8;
         stp.st_salscore = true;
     }
 
-    // SAFETY: both lists are `su`'s own.
-    unsafe { check_suggestions(su, &raw mut (*su).su_ga) };
-    unsafe { cleanup_suggestions(&raw mut (*su).su_ga, (*su).su_maxscore, (*su).su_maxcount) };
-    unsafe { check_suggestions(su, &raw mut (*su).su_sga) };
-    unsafe { cleanup_suggestions(&raw mut (*su).su_sga, (*su).su_maxscore, (*su).su_maxcount) };
+    let (maxscore, maxcount) = (su.su_maxscore, su.su_maxcount);
+    check_suggestions(su, List::Main);
+    cleanup_suggestions(&mut su.su_ga, maxscore, maxcount);
+    check_suggestions(su, List::Sound);
+    cleanup_suggestions(&mut su.su_sga, maxscore, maxcount);
 
     // Take from the two lists alternately, skipping a word already
-    // merged; its copy is then nobody's, and dropping it frees it.
-    //
-    // SAFETY: `su` is valid by the contract above.
-    let (mut main, mut sound) = unsafe {
-        (
-            mem::take(&mut (*su).su_ga).into_iter(),
-            mem::take(&mut (*su).su_sga).into_iter(),
-        )
-    };
+    // merged.
+    let mut main = mem::take(&mut su.su_ga).into_iter();
+    let mut sound = mem::take(&mut su.su_sga).into_iter();
     let mut merged: Vec<Suggest> = Vec::new();
     loop {
         let round = [main.next(), sound.next()];
@@ -615,11 +484,7 @@ pub(super) unsafe fn score_combine(su: *mut SugInfo) {
         }
     }
 
-    // Keep only what will be displayed; the entries dropped own their
-    // words.
-    //
-    // SAFETY: as above.
-    let maxcount = unsafe { (*su).su_maxcount }.max(0) as usize;
-    merged.truncate(maxcount);
-    unsafe { (*su).su_ga = merged };
+    // Keep only what will be displayed.
+    merged.truncate(su.su_maxcount.max(0) as usize);
+    su.su_ga = merged;
 }

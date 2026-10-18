@@ -7,31 +7,31 @@
 //! own word trees, and [`spell_suggest_expr`] and [`spell_suggest_file`]
 //! are those two.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::{
-    MAXPATHL, MAXWLEN, NUL, SCORE_FILE, SPS_BEST, SPS_DOUBLE, SPS_FAST, Sug, sps_flags, sps_limit,
+    MAXPATHL, MAXWLEN, SCORE_FILE, SPS_BEST, SPS_DOUBLE, SPS_FAST, SugInfo, sps_flags, sps_limit,
 };
-use crate::charset::getdigits_int;
-use crate::cstr;
+use crate::charset::getdigits_int_at;
 use crate::eval::typval::list_iter;
 use crate::eval::vars::{eval_spell_expr, get_spellword};
-use crate::fileio::vim_fgets;
+use crate::fileio::Fgets;
 use crate::getchar::state::got_int;
-use crate::message_fmt::c_str;
-use crate::option::copy_option_part;
+use crate::message_fmt::msg_bytes;
+use crate::option::split_option_part;
 use crate::option::vars::P_SPS;
-use crate::os::fs::os_fopen;
 use crate::os::input::line_breakcheck;
 use crate::semsg;
 use crate::spell::{captype, make_case_word};
-use crate::spellsuggest::collect::{add_suggestion, check_suggestions, cleanup_suggestions};
-use crate::strings::vim_strchr;
+use crate::spellsuggest::collect::{
+    List, add_suggestion, ascii_casecmp, check_suggestions, cleanup_suggestions,
+};
 use crate::types::Failed;
 use crate::types::VAR_LIST;
-use ::libc::{FILE, fclose, strcasecmp};
-use core::ffi::{CStr, c_char, c_int};
+use core::cmp::Ordering;
+use std::ffi::OsStr;
+use std::fs::File;
+use std::os::unix::ffi::OsStrExt;
 
 /// Does a `timeout:` item name a number? The value may be negative, which
 /// switches the timeout off.
@@ -45,31 +45,25 @@ fn is_timeout_value(value: &[u8]) -> bool {
 /// Answers `Err` for a value the option should not take, having put both
 /// back to their defaults.
 pub(crate) fn spell_check_sps() -> Result<(), Failed> {
-    // SAFETY: the caller guarantees the option; `buf` is `MAXPATHL`, which
-    // is what `copy_option_part` is told it may fill.
-    let mut buf = [0 as c_char; MAXPATHL as usize];
-    let bufp = buf.as_mut_ptr();
-
     sps_flags.set(0);
     sps_limit.set(9999);
 
-    // A copy: the cursor below walks past the end of a projection's borrow.
     let sps = P_SPS.get();
-    let mut p = sps.as_ptr().cast_mut();
-    while unsafe { *p } as c_int != NUL {
-        // SAFETY: `p` walks the option's NUL-terminated value and `buf` is
-        // `MAXPATHL`, which is what `copy_option_part` is told it may fill.
-        let sep = c",".as_ptr().cast_mut();
-        unsafe { copy_option_part(&raw mut p, bufp, MAXPATHL as usize, sep) };
-        let part = unsafe { CStr::from_ptr(bufp) }.to_bytes();
+    let mut rest: &[u8] = crate::cstr::until_nul(&sps);
+    while !rest.is_empty() {
+        let (part, after) = split_option_part(rest, MAXPATHL as usize, b",");
+        rest = after;
 
         // Zero means "this item said nothing about the method", -1
         // means "this item is not a valid one".
         let mut f = 0;
         if part.first().is_some_and(u8::is_ascii_digit) {
-            let mut s = bufp;
-            sps_limit.set(unsafe { getdigits_int(&raw mut s, true, 0) });
-            if unsafe { *s } as c_int != NUL && !(unsafe { *s } as u8).is_ascii_digit() {
+            let (limit, past) = getdigits_int_at(&part, 0, true, 0);
+            sps_limit.set(limit);
+            if part
+                .get(past)
+                .is_some_and(|&b| b != 0 && !b.is_ascii_digit())
+            {
                 f = -1;
             }
         // Keep the three names in sync with `opt_sps_values`.
@@ -107,105 +101,80 @@ pub(crate) fn spell_check_sps() -> Result<(), Failed> {
 
 /// Find suggestions by evaluating `expr`, the `expr:` item of
 /// `'spellsuggest'`.
-///
-/// # Safety
-///
-/// `su` must be valid and `expr` NUL-terminated.
-pub(super) unsafe fn spell_suggest_expr(su: Sug, expr: *mut c_char) {
-    let badword = cstr::in_chars(&su.su_badword).to_bytes();
-    // SAFETY: the caller guarantees `expr` is NUL-terminated.
-    let expr = unsafe { cstr::bytes_at(expr) };
+pub(super) fn spell_suggest_expr(su: &mut SugInfo, expr: &[u8]) {
     // The list the expression returns is owned here until the handle drops.
     // The work is split up so that `SugInfo` need not be exported to
     // the evaluator.
-    if let Some(list) = eval_spell_expr(badword, expr) {
+    if let Some(list) = eval_spell_expr(su.badword(), expr) {
         for li in list_iter(Some(&list)) {
             if li.li_tv.v_type() == VAR_LIST {
                 // Each item is a [word, score] pair.
-                let Some((mut word, score)) = get_spellword(li.li_tv.list_ref()) else {
+                let Some((word, score)) = get_spellword(li.li_tv.list_ref()) else {
                     continue;
                 };
                 if score >= 0 && score <= su.su_maxscore {
-                    word.push(0);
-                    let word = word.as_ptr().cast::<c_char>();
-                    let sug = su.raw();
-                    let ga = su.su_ga();
-                    let badlen = su.su_badlen;
-                    let lang = su.su_sallang;
-                    // SAFETY: `su` is live by the contract above, so `ga` is
-                    // its own list of `Suggest`; `word` is the
-                    // NUL-terminated string the list item yielded.
-                    unsafe { add_suggestion(sug, ga, word, badlen, score, 0, true, lang, false) };
+                    let (badlen, lang) = (su.su_badlen, su.su_sallang);
+                    add_suggestion(su, List::Main, &word, badlen, score, 0, true, lang, false);
                 }
             }
         }
     }
 
-    unsafe { check_suggestions(su.raw(), su.su_ga()) };
-    unsafe { cleanup_suggestions(su.su_ga(), su.su_maxscore, su.su_maxcount) };
+    check_suggestions(su, List::Main);
+    let (maxscore, maxcount) = (su.su_maxscore, su.su_maxcount);
+    cleanup_suggestions(&mut su.su_ga, maxscore, maxcount);
 }
 
 /// Find suggestions in `fname`, the `file:` item of `'spellsuggest'`.
 ///
 /// Every line of the file is `badword/goodword`.
-///
-/// # Safety
-///
-/// `su` must be valid and `fname` NUL-terminated.
-pub(super) unsafe fn spell_suggest_file(su: Sug, fname: *mut c_char) {
-    // SAFETY: the caller guarantees the pointers; `line` is what
-    // `vim_fgets` is told its size is, and the good word is terminated
-    // inside it before it is used.
-    let fd: *mut FILE = unsafe { os_fopen(fname, c"r".as_ptr()) };
-    if fd.is_null() {
-        // SAFETY: the message macros expand to a `vim_snprintf` over the // format literal above and the editor's message buffers.
-        let fname = unsafe { c_str(fname) };
+pub(super) fn spell_suggest_file(su: &mut SugInfo, fname: &[u8]) {
+    let Ok(file) = File::open(OsStr::from_bytes(fname)) else {
+        let fname = msg_bytes(fname);
         semsg!("E484: Can't open file {fname}");
         return;
-    }
+    };
+    let mut file = Fgets::new(file);
 
-    let mut line = [0 as c_char; MAXWLEN * 2];
-    let mut cword = [0 as c_char; MAXWLEN];
-    let linep = line.as_mut_ptr();
-    let cwordp = cword.as_mut_ptr();
-    while !unsafe { vim_fgets(linep, (MAXWLEN * 2) as c_int, fd) } && !got_int.get() {
+    let mut line = Vec::new();
+    let mut cword = [0u8; MAXWLEN];
+    while file.line_capped(&mut line, MAXWLEN * 2) && !got_int.get() {
         line_breakcheck();
 
-        let mut p = unsafe { vim_strchr(linep, '/' as c_int) };
-        if p.is_null() {
+        // As C reads the line: up to its first NUL.
+        let line = crate::cstr::until_nul(&line);
+        let Some(slash) = line.iter().position(|&b| b == b'/') else {
             continue; // no separator, so not an entry
-        }
-        unsafe { *p = NUL as c_char };
-        p = unsafe { p.add(1) };
-        if unsafe { strcasecmp(su.su_badword() as *const c_char, linep) } != 0 {
+        };
+        if ascii_casecmp(su.badword(), &line[..slash]) != Ordering::Equal {
             continue;
         }
 
         // A match: the good word runs to the CR or NL.
-        let mut len = 0isize;
-        while unsafe { *p.offset(len) } as u8 >= b' ' {
-            len += 1;
-        }
-        unsafe { *p.offset(len) = NUL as c_char };
+        let good = &line[slash + 1..];
+        let mut good = &good[..good.iter().position(|&b| b < b' ').unwrap_or(good.len())];
 
         // A suggestion with no case of its own takes the bad word's.
-        let good = unsafe { cstr::bytes_at(p) };
         if captype(good, good.len()).is_empty() {
-            make_case_word(good, cstr::as_bytes_mut(&mut cword), su.su_badflags);
-            p = cwordp;
+            make_case_word(good, &mut cword, su.su_badflags);
+            good = crate::cstr::until_nul(&cword);
         }
 
-        let sug = su.raw();
-        let ga = su.su_ga();
-        let badlen = su.su_badlen;
-        let lang = su.su_sallang;
-        // SAFETY: `su` is live by the contract above, so `ga` is its own
-        // list of `Suggest`; `p` is a NUL-terminated word in `line` or in
-        // `cword`, both of which outlive the call.
-        unsafe { add_suggestion(sug, ga, p, badlen, SCORE_FILE, 0, true, lang, false) };
+        let (badlen, lang) = (su.su_badlen, su.su_sallang);
+        add_suggestion(
+            su,
+            List::Main,
+            good,
+            badlen,
+            SCORE_FILE,
+            0,
+            true,
+            lang,
+            false,
+        );
     }
-    unsafe { fclose(fd) };
 
-    unsafe { check_suggestions(su.raw(), su.su_ga()) };
-    unsafe { cleanup_suggestions(su.su_ga(), su.su_maxscore, su.su_maxcount) };
+    check_suggestions(su, List::Main);
+    let (maxscore, maxcount) = (su.su_maxscore, su.su_maxcount);
+    cleanup_suggestions(&mut su.su_ga, maxscore, maxcount);
 }

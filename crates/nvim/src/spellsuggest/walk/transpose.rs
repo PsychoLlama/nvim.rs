@@ -32,8 +32,7 @@
 //! swap, so they are skipped wholesale. The middle character may be
 //! anything: "a.b" -> "b.a" is a legitimate swap.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::mbyte::{char_at, char_len, cluster_len, encode_char, utf_char2len};
 use crate::spell::spell_iswordp;
@@ -71,7 +70,7 @@ impl Walk<'_> {
         // A leading non-word character rules out the three-character
         // rearrangements as well.
         //
-        // SAFETY: the byte at `bad_idx` was just tested non-NUL, so the
+        // The byte at `bad_idx` was just tested non-NUL, so the
         // character there is inside the bad word.
         if !self.soundfold && !spell_iswordp(&self.fword[bad_idx..], Win::current()) {
             self.stack[level].state = State::RepIni;
@@ -83,7 +82,7 @@ impl Walk<'_> {
         let second = if word[first_len] == NUL as u8 {
             NUL
         } else if !self.soundfold
-            // SAFETY: the byte after the first character was just tested
+            // The byte after the first character was just tested
             // non-NUL, so the character there is inside the bad word too.
             && !spell_iswordp(&self.fword[bad_idx + first_len..], Win::current())
         {
@@ -153,7 +152,7 @@ impl Walk<'_> {
         let (first, first_len) = Walk::head(word);
         let (middle, middle_len) = Walk::head(&word[first_len..]);
         let third_at = first_len + middle_len;
-        // SAFETY: `third_at` is a character boundary at or before the
+        // `third_at` is a character boundary at or before the
         // terminator, so the character there is inside the bad word.
         let third = if !self.soundfold
             && !spell_iswordp(&self.fword[bad_idx + third_at..], Win::current())
@@ -213,7 +212,7 @@ impl Walk<'_> {
         // The middle character was never checked: the first and third
         // were, at the swap and the three-way swap.
         //
-        // SAFETY: `first_len` is a character boundary inside the bad word.
+        // `first_len` is a character boundary inside the bad word.
         if !self.soundfold && !spell_iswordp(&self.fword[bad_idx + first_len..], Win::current()) {
             self.stack[level].state = State::RepIni;
             return;

@@ -11,10 +11,10 @@
 //! same trie walker the edit-distance search uses (so that inserts,
 //! deletes and swaps of *sounds* are tried), and for every sound-folded
 //! word it reaches call [`add_sound_suggest`] to turn that back into real
-//! words. [`suggest_try_soundalike_prep`] and
-//! [`suggest_try_soundalike_finish`] bracket it around a per-language
-//! table of soundfolds already handled, because the same soundfold is
-//! reached many times over and the work below is far too slow to repeat.
+//! words. The passes share a per-language
+//! table of soundfolds already handled, `SugInfo::su_sounddone`, because
+//! the same soundfold is reached many times over and the work below is far
+//! too slow to repeat.
 //!
 //! # From a soundfold back to words
 //!
@@ -30,18 +30,16 @@
 //! keep-case tree for a word that folds to the same thing, trying each
 //! character both folded and upper-case.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::cstr;
-use crate::hashtab::{hash_add_item, hash_hash, hash_lookup, hash_reset};
-use crate::mbyte::{utf_ptr2char, utf_ptr2len};
-use crate::memline::ml_get_buf;
-use crate::memory::{xfree, xmalloc};
+use crate::cstr::until_nul;
+use crate::mbyte::{char_at, char_len};
+use crate::memline::Lines;
 use crate::message::internal_error;
-use crate::spell::WordFlags;
-use crate::spell::{allcap_copy, lang_ptr, make_case_word, spell_soundfold};
-use crate::spellsuggest::collect::add_suggestion;
+use crate::spell::{
+    WordFlags, WordHasher, allcap_copy, loaded_langs, make_case_word, spell_soundfold,
+};
+use crate::spellsuggest::collect::{List, add_suggestion};
 use crate::spellsuggest::score::{
     EMPTY_SOUND, score_wordcount_adj, spell_edit_score, spell_edit_score_limit, spell_isupper,
     spell_tofold,
@@ -49,109 +47,38 @@ use crate::spellsuggest::score::{
 use crate::spellsuggest::walk::suggest_trie_walk;
 use crate::spellsuggest::{
     MAXWLEN, SCORE_ICASE, SCORE_LIMITMAX, SCORE_MAXMAX, SCORE_REGION, SPS_DOUBLE, SugInfo, TAB,
-    sps_flags,
+    sps_flags, window_langs,
 };
-use crate::types::{LangP, LineNr, NUL, SpellLang, int16_t, uint8_t};
-use core::ffi::{c_char, c_int, c_void};
-use core::{mem, ptr};
+use crate::types::{LangId, LangP, LineNr, NUL, SpellLang, int16_t};
+use core::ffi::c_int;
+use core::hash::BuildHasherDefault;
+use std::collections::HashMap;
 
-/// The best score seen so far for one sound-folded word, with that word
-/// stored inline after it. The hash table of soundfolds already handled
-/// keys on the inline word.
-#[repr(C)]
-struct SftWord {
-    sft_score: int16_t,
-    sft_word: [uint8_t; 0],
-}
-
-/// Where the inline soundfolded word sits inside a `SftWord`; the hash
-/// table keys on that field, so the record is recovered by stepping back.
-const SFT_WORD_OFF: usize = mem::offset_of!(SftWord, sft_word);
+/// The best score seen so far for each sound-folded word one language's
+/// passes have handled.
+pub(crate) type SoundDone = HashMap<Box<[u8]>, int16_t, BuildHasherDefault<WordHasher>>;
 
 /// Does a language have both a sound-folding table and a loaded `.sug`?
 /// Without both there is nothing to walk.
-///
-/// # Safety
-///
-/// `slang` must be a loaded language.
-unsafe fn has_sound_tree(slang: *mut SpellLang) -> bool {
-    // SAFETY: the caller guarantees the language.
-    unsafe { (*slang).has_soundfold() && !(*slang).sl_sound_tree.is_empty() }
-}
-
-/// Prepare the per-language table of soundfolds already handled.
-pub(super) fn suggest_try_soundalike_prep() {
-    // SAFETY: by the contract above, the window's languages are loaded.
-    for lp in unsafe { crate::spellsuggest::window_langs() } {
-        // SAFETY: `lp` came out of the window's language list, so
-        // `lp_slang` is a loaded language -- what both calls here need.
-        let slang = lang_ptr(lp.slang);
-        if unsafe { has_sound_tree(slang) } {
-            // SAFETY: as above; the language's constructor set the table up.
-            hash_reset(unsafe { &mut (*slang).sl_sounddone });
-        }
-    }
+fn has_sound_tree(slang: &SpellLang) -> bool {
+    slang.has_soundfold() && !slang.sl_sound_tree.is_empty()
 }
 
 /// Find suggestions by comparing the bad word in sound-a-like form.
 ///
 /// Postponed prefixes are not supported here.
-///
-/// # Safety
-///
-/// `su` must be valid and the current window must have its languages
-/// loaded.
-pub(super) unsafe fn suggest_try_soundalike(su: *mut SugInfo) {
-    // SAFETY: by the contract above, the window's languages are loaded.
-    for lp in unsafe { crate::spellsuggest::window_langs() } {
-        // SAFETY: `lp` came out of the window's language list, so
-        // `lp_slang` is a loaded language.
-        let slang = lang_ptr(lp.slang);
-        if !unsafe { has_sound_tree(slang) } {
-            continue;
-        }
-        let mut salword = EMPTY_SOUND;
-        // SAFETY: `su` is valid by the contract above, so its
-        // `su_fbadword` is the bad word's NUL-terminated fold; `slang`
-        // came out of the window's language list.
-        let (slang, fbadword) = unsafe { (&*slang, &(*su).su_fbadword) };
-        spell_soundfold(
-            slang,
-            cstr::as_bytes(fbadword),
-            true,
-            cstr::as_bytes_mut(&mut salword),
-        );
-        // The same walker as the edit-distance search, told to treat
-        // the tree it walks as sounds rather than letters.
-        //
-        // SAFETY: `su` and `lp` are valid by the contract above and
-        // `salword` is the NUL-terminated soundfold just written.
-        unsafe { suggest_trie_walk(su, lp, salword.as_mut_ptr(), true) };
-    }
-}
-
-/// Release the per-language table of soundfolds already handled.
-pub(super) fn suggest_try_soundalike_finish() {
-    // SAFETY: by the contract above, the window's languages are loaded.
-    for lp in unsafe { crate::spellsuggest::window_langs() } {
-        let slang = lang_ptr(lp.slang);
-        // SAFETY: `slang` came out of the window's language list.
-        if !unsafe { has_sound_tree(slang) } {
-            continue;
-        }
-
-        // SAFETY: `slang` is a loaded language, so it carries a hash table.
-        let done = unsafe { &mut (*slang).sl_sounddone };
-        for hi in done.items() {
-            // SAFETY: every key in this table is the inline word of a
-            // `SftWord` this module allocated, so stepping back by
-            // `SFT_WORD_OFF` recovers that allocation's start.
-            unsafe { xfree(hi.hi_key.sub(SFT_WORD_OFF) as *mut c_void) };
-        }
-
-        // Another region may reuse the table, so leave it empty rather
-        // than freed.
-        hash_reset(done);
+pub(super) fn suggest_try_soundalike(su: &mut SugInfo) {
+    for langp in window_langs() {
+        loaded_langs.with(|langs| {
+            let Some(slang) = langs.get(langp.slang).filter(|slang| has_sound_tree(slang)) else {
+                return;
+            };
+            let mut salword = EMPTY_SOUND;
+            spell_soundfold(slang, &su.su_fbadword, true, &mut salword);
+            // The same walker as the edit-distance search, told to treat
+            // the tree it walks as sounds rather than letters.
+            suggest_trie_walk(su, langp, langs, &mut salword, true);
+        });
     }
 }
 
@@ -161,7 +88,7 @@ pub(super) fn suggest_try_soundalike_finish() {
 /// the top bits of the first byte and every byte biased by one so that no
 /// NUL can appear inside the line. Returns the delta and steps `pos` past
 /// what it consumed.
-fn bytes2offset(bytes: &[u8], pos: &mut usize) -> c_int {
+pub(super) fn bytes2offset(bytes: &[u8], pos: &mut usize) -> c_int {
     // A missing byte only happens on a damaged file; reading it as zero
     // keeps the walk inside the line where the C would have run on into
     // whatever followed it.
@@ -191,105 +118,80 @@ fn bytes2offset(bytes: &[u8], pos: &mut usize) -> c_int {
 /// A match with a sound-folded word was found: add the real word or words
 /// that produce it.
 ///
-/// `score` is the sound-a-like score the walk arrived at.
-///
-/// # Safety
-///
-/// `su` and `langp` must be valid and the language must have a loaded `.sug`.
-pub(super) unsafe fn add_sound_suggest(
-    su: *mut SugInfo,
-    goodword: *mut c_char,
+/// `goodword` ends at its end or at a NUL; `score` is the sound-a-like score
+/// the walk arrived at; `slang` is `langp`'s language, with a loaded `.sug`.
+pub(super) fn add_sound_suggest(
+    su: &mut SugInfo,
+    slang: &SpellLang,
+    langp: LangP,
+    goodword: &[u8],
     score: c_int,
-    langp: *mut LangP,
 ) {
-    // SAFETY: `langp` is valid by the contract above.
-    let slang = lang_ptr(unsafe { (*langp).slang });
+    let goodword = until_nul(goodword);
 
     // The same soundfold turns up many times with different scores and
     // what follows is slow, so only the best score for each is done.
-    //
-    // SAFETY: `goodword` is a NUL-terminated word by the contract above,
-    // and `slang` is a loaded language, so its `sl_sounddone` is a live
-    // hash table -- the table `hash_add_item` is then told to insert into,
-    // with the `hi`/`hash` pair `hash_lookup` just produced for it.
-    let sounddone = unsafe { &raw mut (*slang).sl_sounddone };
-    let hash = unsafe { hash_hash(goodword) };
-    let goodword_len = unsafe { cstr::bytes_at(goodword).len() };
-    let hi = unsafe { hash_lookup(sounddone, goodword, goodword_len, hash) };
-    if !hi.is_kept() {
-        // SAFETY: the allocation is `SFT_WORD_OFF + goodword_len + 1`
-        // bytes, so the record's header and the word after it both fit,
-        // and `goodword` really is `goodword_len + 1` bytes with its NUL.
-        let sft = unsafe { xmalloc(SFT_WORD_OFF + goodword_len + 1) } as *mut SftWord;
-        unsafe { (*sft).sft_score = score as int16_t };
-        let word = unsafe { (sft as *mut u8).add(SFT_WORD_OFF) };
-        unsafe { ptr::copy_nonoverlapping(goodword as *const u8, word, goodword_len + 1) };
-        unsafe { hash_add_item(sounddone, hi, word as *mut c_char, hash) };
-    } else {
-        // SAFETY: the key is the inline word of a `SftWord` allocated
-        // above, so stepping back by `SFT_WORD_OFF` recovers the record.
-        let sft = unsafe { hi.hi_key.sub(SFT_WORD_OFF) } as *mut SftWord;
-        if score >= unsafe { (*sft).sft_score } as c_int {
-            return;
+    let done = sounddone(su, langp.slang);
+    match done.get_mut(goodword) {
+        None => {
+            done.insert(goodword.into(), score as int16_t);
         }
-        unsafe { (*sft).sft_score = score as int16_t };
+        Some(best) => {
+            if score >= c_int::from(*best) {
+                return;
+            }
+            *best = score as int16_t;
+        }
     }
 
-    // SAFETY: the language has a loaded `.sug` by the contract above and
-    // `goodword` is NUL-terminated.
-    let sfwordnr = unsafe { soundfold_find(slang, goodword) };
+    let sfwordnr = soundfold_find(slang, goodword);
     if sfwordnr < 0 {
-        // SAFETY: the message is a NUL-terminated literal.
         internal_error(c"add_sound_suggest()");
         return;
     }
 
     // Walk the list of word numbers that produce this soundfold.
-    //
-    // SAFETY: `sl_sugbuf` is the loaded `.sug` buffer and `soundfold_find`
-    // returned a line number inside it; the line it hands back is a
-    // NUL-terminated string owned by that buffer.
-    let nrline = unsafe {
-        ml_get_buf(
-            (*slang)
-                .sl_sugbuf
-                .as_ref()
-                .expect("a loaded `.sug` has its buffer")
-                .buf(),
-            sfwordnr as LineNr + 1,
-        )
-    };
-    let deltas = unsafe { core::ffi::CStr::from_ptr(nrline) }.to_bytes();
+    let sugbuf = slang
+        .sl_sugbuf
+        .as_ref()
+        .expect("a loaded `.sug` has its buffer");
+    let mut lines = Lines::in_buffer(sugbuf.buf());
+    let deltas = lines.line(sfwordnr as LineNr + 1);
     let mut pos = 0;
     let mut orgnr = 0;
 
     while pos < deltas.len() {
         orgnr += bytes2offset(deltas, &mut pos);
-        // SAFETY: `slang` has a case-folded tree, and the `n`/`i` pair the
-        // walk returns is the tree position `emit_word` expects.
-        let (mut theword, n, i) = unsafe { word_number_to_letters(slang, orgnr) };
-        unsafe { emit_word(su, langp, slang, &mut theword, n, i, score) };
+        let (theword, n, i) = word_number_to_letters(slang, orgnr);
+        emit_word(su, langp, slang, &theword, n, i, score);
     }
+}
+
+/// The table of soundfolds already handled for language `id`, made empty on
+/// first use in a run.
+fn sounddone(su: &mut SugInfo, id: LangId) -> &mut SoundDone {
+    let at = match su.su_sounddone.iter().position(|(lang, _)| *lang == id) {
+        Some(at) => at,
+        None => {
+            su.su_sounddone.push((id, SoundDone::default()));
+            su.su_sounddone.len() - 1
+        }
+    };
+    &mut su.su_sounddone[at].1
 }
 
 /// Turn a word number back into its letters by walking the case-folded
 /// tree, counting the words hanging below every sibling passed over.
 ///
-/// Returns the word buffer, its length, the tree node the word ended at
-/// and the sibling index to continue the flag scan from.
-///
-/// # Safety
-///
-/// `slang` must have a case-folded tree.
-unsafe fn word_number_to_letters(
-    slang: *mut SpellLang,
+/// Returns the NUL-terminated word, the tree node the word ended at and the
+/// sibling index to continue the flag scan from.
+pub(super) fn word_number_to_letters(
+    slang: &SpellLang,
     orgnr: c_int,
-) -> ([c_char; MAXWLEN], usize, usize) {
-    // SAFETY: the caller guarantees the tree, and it stays loaded for as
-    // long as this walk.
-    let tree = unsafe { (*slang).sl_fold_tree.view() };
+) -> ([u8; MAXWLEN], usize, usize) {
+    let tree = slang.sl_fold_tree.view();
 
-    let mut theword = [0 as c_char; MAXWLEN];
+    let mut theword = [0u8; MAXWLEN];
     let mut n: usize = 0;
     let mut wordcount = 0;
     let mut wlen = 0;
@@ -309,11 +211,7 @@ unsafe fn word_number_to_letters(
         while tree.ends_word(n + i) {
             if i > tree.node_len(n) {
                 // Safety check: the tree disagrees with the count.
-                theword[wlen..wlen + 3].copy_from_slice(&[
-                    b'B' as c_char,
-                    b'A' as c_char,
-                    b'D' as c_char,
-                ]);
+                theword[wlen..wlen + 3].copy_from_slice(b"BAD");
                 wlen += 3;
                 bad = true;
                 break;
@@ -336,39 +234,32 @@ unsafe fn word_number_to_letters(
             i += 1;
         }
 
-        theword[wlen] = tree.byte(n + i) as c_char;
+        theword[wlen] = tree.byte(n + i);
         n = tree.child_node(n + i);
         wlen += 1;
     }
-    theword[wlen] = NUL as c_char;
+    theword[wlen] = NUL as u8;
     (theword, n, i)
 }
 
 /// Offer the word `theword` under every flag/region combination the tree
-/// records for it.
-///
-/// # Safety
-///
-/// All pointers must be valid and `n`/`i` must come from
-/// [`word_number_to_letters`].
+/// records for it. `n`/`i` come from [`word_number_to_letters`].
 #[allow(clippy::too_many_arguments)]
-unsafe fn emit_word(
-    su: *mut SugInfo,
-    langp: *mut LangP,
-    slang: *mut SpellLang,
-    theword: &mut [c_char; MAXWLEN],
+fn emit_word(
+    su: &mut SugInfo,
+    langp: LangP,
+    slang: &SpellLang,
+    theword: &[u8; MAXWLEN],
     n: usize,
     mut i: usize,
     score: c_int,
 ) {
-    // SAFETY: the caller guarantees the language, so it has a case-folded
-    // tree, and it stays loaded for as long as this walk.
-    let tree = unsafe { (*slang).sl_fold_tree.view() };
+    let tree = slang.sl_fold_tree.view();
 
     // The flags and regions are the NUL-byte children of this node, so the
     // scan stops at the node's child count.
     while i <= tree.node_len(n) && tree.ends_word(n + i) {
-        let mut cword = [0 as c_char; MAXWLEN];
+        let mut cword = [0u8; MAXWLEN];
         let mut flags = WordFlags::from_bits(tree.idx(n + i));
         i += 1;
 
@@ -376,48 +267,33 @@ unsafe fn emit_word(
             continue;
         }
 
-        let p = if flags.has(WordFlags::KEEPCAP) {
+        let p: &[u8] = if flags.has(WordFlags::KEEPCAP) {
             // The letters came out of the case-folded tree, so the
             // real spelling has to be looked up in the keep-case one.
-            //
-            // SAFETY: `theword` is NUL-terminated and `cword` has room for
-            // `MAXWLEN` bytes, which is the most either call writes.
-            unsafe { find_keepcap_word(slang, theword.as_mut_ptr(), cword.as_mut_ptr()) };
-            cword.as_mut_ptr()
+            find_keepcap_word(slang, theword, &mut cword);
+            until_nul(&cword)
         } else {
-            // SAFETY: `su` is valid by the contract above.
-            flags |= unsafe { (*su).su_badflags };
+            flags |= su.su_badflags;
             if flags.has(WordFlags::CAPMASK) {
-                // SAFETY: as for `find_keepcap_word` above.
-                make_case_word(
-                    cstr::as_bytes(&theword[..]),
-                    cstr::as_bytes_mut(&mut cword),
-                    flags,
-                );
-                cword.as_mut_ptr()
+                make_case_word(theword, &mut cword, flags);
+                until_nul(&cword)
             } else {
-                theword.as_mut_ptr()
+                until_nul(theword)
             }
         };
 
         if sps_flags.get() & SPS_DOUBLE != 0 {
-            // SAFETY: `su` is valid by the contract above.
-            if score <= unsafe { (*su).su_maxscore } {
-                let sga = unsafe { &raw mut (*su).su_sga };
-                let badlen = unsafe { (*su).su_badlen };
-                // SAFETY: `su` and `slang` are valid, `sga` is one of
-                // `su`'s own growarrays and `p` is a NUL-terminated word
-                // in a buffer that outlives the call.
-                unsafe { add_suggestion(su, sga, p, badlen, score, 0, false, slang, false) };
+            if score <= su.su_maxscore {
+                let badlen = su.su_badlen;
+                let id = Some(langp.slang);
+                add_suggestion(su, List::Sound, p, badlen, score, 0, false, id, false);
             }
             continue;
         }
 
         // A word from another region is worth less.
-        //
-        // SAFETY: `langp` is valid by the contract above.
         let mut goodscore = if flags.has(WordFlags::REGION)
-            && (flags.bits() as u32 >> 16) & unsafe { (*langp).region } as u32 == 0
+            && (flags.bits() as u32 >> 16) & langp.region as u32 == 0
         {
             SCORE_REGION
         } else {
@@ -428,12 +304,9 @@ unsafe fn emit_word(
         // upper case: "tath" -> "Kath" is less likely than "tath" ->
         // "path". Not when the letter is the same, which is counted
         // already.
-        //
-        // SAFETY: `p` is a NUL-terminated word and `su` is valid, so its
-        // `su_badword` is one too.
-        let gc = unsafe { utf_ptr2char(p) };
+        let gc = char_at(p);
         if spell_isupper(gc) {
-            let bc = unsafe { utf_ptr2char(&raw const (*su).su_badword as *const c_char) };
+            let bc = char_at(su.badword());
             if !spell_isupper(bc) && spell_tofold(bc) != spell_tofold(gc) {
                 goodscore += SCORE_ICASE / 2;
             }
@@ -443,62 +316,46 @@ unsafe fn emit_word(
         // considered, which may leave the score a little high. A
         // ceiling makes it faster; past a high enough ceiling the
         // depth-first search costs more than filling the table.
-        //
-        // SAFETY: `su` is valid, so the address of its `su_badword` is a
-        // NUL-terminated word, and `slang` is a loaded language.
-        let badword = unsafe { &raw const (*su).su_badword } as *const c_char;
-        let scored_lang = Some(unsafe { &*slang });
-        let limit = (4 * (unsafe { (*su).su_sfmaxscore } - goodscore) - score) / 3;
+        let limit = (4 * (su.su_sfmaxscore - goodscore) - score) / 3;
         goodscore += if limit > SCORE_LIMITMAX {
-            unsafe { spell_edit_score(scored_lang, badword, p) }
+            spell_edit_score(Some(slang), su.badword(), p)
         } else {
-            unsafe { spell_edit_score_limit(scored_lang, badword, p, limit) }
+            spell_edit_score_limit(Some(slang), su.badword(), p, limit)
         };
 
         if goodscore >= SCORE_MAXMAX {
             continue;
         }
 
-        // SAFETY: as above -- `p` is a NUL-terminated word.
-        goodscore = unsafe { score_wordcount_adj(&*slang, goodscore, p, false) };
+        goodscore = score_wordcount_adj(slang, goodscore, p, false);
         goodscore = (3 * goodscore + score) / 4;
-        // SAFETY: `su` is valid by the contract above.
-        if goodscore <= unsafe { (*su).su_sfmaxscore } {
-            let ga = unsafe { &raw mut (*su).su_ga };
-            let badlen = unsafe { (*su).su_badlen };
-            // SAFETY: as for the `su_sga` call above.
-            unsafe { add_suggestion(su, ga, p, badlen, goodscore, score, true, slang, true) };
+        if goodscore <= su.su_sfmaxscore {
+            let badlen = su.su_badlen;
+            let id = Some(langp.slang);
+            add_suggestion(su, List::Main, p, badlen, goodscore, score, true, id, true);
         }
     }
 }
 
 /// Find `word` in the sound-fold tree and return its word number, or -1
-/// when it is not there.
-///
-/// # Safety
-///
-/// `slang` must have a loaded `.sug` and `word` must be NUL-terminated.
-pub(super) unsafe fn soundfold_find(slang: *mut SpellLang, word: *mut c_char) -> c_int {
-    // SAFETY: the caller guarantees the loaded `.sug`, so the sound-fold
-    // tree is there and stays loaded for as long as this walk.
-    let tree = unsafe { (*slang).sl_sound_tree.view() };
-    let ptr = word as *mut u8;
+/// when it is not there. `word` ends at its end or at a NUL.
+pub(super) fn soundfold_find(slang: &SpellLang, word: &[u8]) -> c_int {
+    let tree = slang.sl_sound_tree.view();
+    let byte = |at: usize| word.get(at).copied().unwrap_or(0);
 
     let mut arridx: usize = 0;
     let mut wlen = 0;
     let mut wordnr = 0;
 
-    // Every `ptr` read below is behind a NUL test on the byte before it,
-    // so the walk stops at the word's terminator.
+    // The walk stops at the word's terminator: every read of it past the
+    // first is behind a test on the byte before.
     loop {
         // The first byte of a node is how many bytes may follow.
         let mut len = tree.node_len(arridx);
         arridx += 1;
 
         // A leading zero byte means a word may end here.
-        //
-        // SAFETY: the caller's NUL-terminated word.
-        let mut c = unsafe { *ptr.add(wlen) };
+        let mut c = byte(wlen);
         if tree.ends_word(arridx) {
             if c == NUL as u8 {
                 return wordnr;
@@ -543,8 +400,7 @@ pub(super) unsafe fn soundfold_find(slang: *mut SpellLang, word: *mut c_char) ->
         // One space in the good word may stand for several in the
         // word being checked.
         if c == b' ' {
-            // SAFETY: as above -- the scan stops at the word's NUL.
-            while unsafe { *ptr.add(wlen) } == b' ' || unsafe { *ptr.add(wlen) } == TAB as u8 {
+            while byte(wlen) == b' ' || byte(wlen) == TAB as u8 {
                 wlen += 1;
             }
         }
@@ -565,59 +421,47 @@ struct KeepCapLevel {
     kwordlen: usize,
 }
 
-/// Find the keep-case spelling of a case-folded word.
+/// `utf_ptr2len` over the bytes of a C string: 0 at its end.
+fn c_char_len(bytes: &[u8]) -> usize {
+    match bytes.first() {
+        None | Some(0) => 0,
+        Some(_) => char_len(bytes),
+    }
+}
+
+/// Find the keep-case spelling of a case-folded word, NUL-terminated into
+/// `kword`. `fword` ends at its end or at a NUL.
 ///
 /// There could in theory be several keep-case words folding to the same
 /// thing; this finds one of them. Each character is tried both folded and
 /// upper-case, and changing case can change a character's byte length, so
 /// the two words are tracked with separate offsets.
-///
-/// # Safety
-///
-/// `fword` must be NUL-terminated and `kword` must have room for
-/// `MAXWLEN` bytes.
-pub(super) unsafe fn find_keepcap_word(
-    slang: *mut SpellLang,
-    fword: *mut c_char,
-    kword: *mut c_char,
-) {
-    // SAFETY: the caller guarantees the language, and it stays loaded for
-    // as long as this walk.
-    let tree = unsafe { (*slang).sl_keep_tree.view() };
+pub(super) fn find_keepcap_word(slang: &SpellLang, fword: &[u8], kword: &mut [u8]) {
+    let tree = slang.sl_keep_tree.view();
     if tree.is_empty() {
         // The tree is empty: cannot happen.
-        //
-        // SAFETY: `kword` has room for `MAXWLEN` bytes by the contract.
-        unsafe { *kword = NUL as c_char };
+        kword[0] = NUL as u8;
         return;
     }
+    let fword = until_nul(fword);
 
-    let mut uword = [0 as c_char; MAXWLEN];
-    // SAFETY: `fword` is NUL-terminated; `uword` has room for `MAXWLEN`
-    // bytes, which bounds what the upper-cased copy can grow to.
-    allcap_copy(
-        unsafe { cstr::bytes_at(fword) },
-        cstr::as_bytes_mut(&mut uword),
-    );
+    let mut uword = [0u8; MAXWLEN];
+    allcap_copy(fword, &mut uword);
+    let uword = until_nul(&uword);
 
     let mut stack = [KeepCapLevel::default(); MAXWLEN];
     let mut depth: isize = 0;
 
     // Every level's offsets are byte counts already matched inside `fword`
-    // and `uword`, which are both NUL-terminated; every `byts`/`idxs` index
-    // is a node start the tree handed back, stepped forward at most that
-    // node's child count. So all the reads below stay in bounds.
+    // and `uword`; every tree index is a node start the tree handed back,
+    // stepped forward at most that node's child count.
     while depth >= 0 {
         let level = stack[depth as usize];
-        // SAFETY: as above.
-        if unsafe { *fword.add(level.fwordidx) } == NUL as c_char {
+        if level.fwordidx >= fword.len() {
             // At the end of the folded word: if the tree lets a word
             // end here, this is the answer.
-            //
-            // SAFETY: as above; `kwordlen` is what has been written into
-            // `kword` so far, which is under `MAXWLEN`.
             if tree.ends_word(level.arridx + 1) {
-                unsafe { *kword.add(level.kwordlen) = NUL as c_char };
+                kword[level.kwordlen] = NUL as u8;
                 return;
             }
             // Otherwise the answer would be too long; back up.
@@ -633,51 +477,36 @@ pub(super) unsafe fn find_keepcap_word(
             continue;
         }
 
-        // SAFETY: as above -- both words are NUL-terminated and neither
-        // offset has reached their terminator.
-        let flen = unsafe { utf_ptr2len(fword.add(level.fwordidx)) } as usize;
-        let ulen = unsafe { utf_ptr2len(uword.as_ptr().add(level.uwordidx)) } as usize;
-        let (mut p, mut l) = if round == 1 {
-            (unsafe { fword.add(level.fwordidx) } as *const u8, flen)
+        let folded = &fword[level.fwordidx..];
+        let upper = uword.get(level.uwordidx..).unwrap_or_default();
+        let (flen, ulen) = (c_char_len(folded), c_char_len(upper));
+        let (chars, taken) = if round == 1 {
+            (folded, flen)
         } else {
-            (
-                unsafe { uword.as_ptr().add(level.uwordidx) } as *const u8,
-                ulen,
-            )
+            (upper, ulen)
         };
 
         // Match the character's bytes one node at a time.
         let mut tryidx = level.arridx;
-        while l > 0 {
+        let mut matched = 0;
+        while matched < taken {
             let len = tree.node_len(tryidx);
             tryidx += 1;
-            // SAFETY: `l` bytes of the character are left, so `p` has that
-            // many to read before it reaches the word's end.
-            let c = unsafe { *p };
-            p = unsafe { p.add(1) };
-
-            let Some(at) = tree.child(tryidx, len, c) else {
+            let Some(at) = tree.child(tryidx, len, chars[matched]) else {
                 break;
             };
             tryidx = tree.child_node(at);
-            l -= 1;
+            matched += 1;
         }
 
-        if l != 0 {
+        // An answer longer than the buffer cannot be written down; the C
+        // wrote on past it.
+        if matched != taken || level.kwordlen + taken >= kword.len() {
             continue;
         }
 
         // The whole character matched: keep it and go a level deeper.
-        //
-        // SAFETY: as above; `taken` is the character's length in whichever
-        // word it came from, and `kword` has `MAXWLEN` bytes.
-        let (src, taken) = if round == 1 {
-            (unsafe { fword.add(level.fwordidx) } as *const c_char, flen)
-        } else {
-            (unsafe { uword.as_ptr().add(level.uwordidx) }, ulen)
-        };
-        unsafe { ptr::copy_nonoverlapping(src, kword.add(level.kwordlen), taken) };
-
+        kword[level.kwordlen..level.kwordlen + taken].copy_from_slice(&chars[..taken]);
         depth += 1;
         stack[depth as usize] = KeepCapLevel {
             arridx: tryidx,
@@ -689,7 +518,5 @@ pub(super) unsafe fn find_keepcap_word(
     }
 
     // Not found: cannot happen.
-    //
-    // SAFETY: `kword` has room for `MAXWLEN` bytes by the contract.
-    unsafe { *kword = NUL as c_char };
+    kword[0] = NUL as u8;
 }

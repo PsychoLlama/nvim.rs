@@ -25,20 +25,21 @@
 //! Until then no delete, insert or swap may be tried, which is what
 //! [`State::Del`]'s first test enforces.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::getchar::state::got_int;
-use crate::mbyte::{utf_iscomposing_legacy, utf_ptr2char, utf8len_tab, utfc_ptr2len};
+use crate::mbyte::{c_cluster_len, char_at, utf_iscomposing_legacy, utf8len_tab};
 use crate::spell::WordFlags;
 use crate::spellsuggest::score::similar_chars;
-use crate::spellsuggest::walk::{DIFF_INSERT, DIFF_NONE, DIFF_YES, FLAG_DID_DEL, State, Walk};
+use crate::spellsuggest::walk::{
+    DIFF_INSERT, DIFF_NONE, DIFF_YES, FLAG_DID_DEL, State, Walk, char_back,
+};
 use crate::spellsuggest::{
     SCORE_DEL, SCORE_DELCOMP, SCORE_DELDUP, SCORE_INS, SCORE_INSCOMP, SCORE_INSDUP, SCORE_SIMILAR,
     SCORE_SUBCOMP, SCORE_SUBST,
 };
 use crate::types::{NUL, SpellIdx};
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 /// The sound-fold marker for a word starting with a vowel. Adding or
 /// dropping one is cheaper than a real edit, as `soundalike_score` also
@@ -62,9 +63,9 @@ impl Walk<'_> {
     pub(super) fn end_nul(&mut self) {
         let level = self.depth as usize;
         let saved = WordFlags::from_bits(self.stack[level].saved_badflags.into());
-        unsafe { (*self.su).su_badflags = saved };
+        self.su.su_badflags = saved;
 
-        // SAFETY: `bad_idx` is a position the walk reached inside the bad
+        // `bad_idx` is a position the walk reached inside the bad
         // word, the caller's NUL-terminated buffer.
         if self.fword_at(self.stack[level].bad_idx as usize) == NUL
             && self.stack[level].char_len == 0
@@ -109,7 +110,7 @@ impl Walk<'_> {
         // Matching costs nothing. So does a byte in the middle of a
         // character that has already been paid for.
         //
-        // SAFETY: `bad_idx` is a position the walk reached inside the bad
+        // `bad_idx` is a position the walk reached inside the bad
         // word, the caller's NUL-terminated buffer.
         let newscore = if byte == self.fword_at(bad_idx)
             || (self.stack[level].char_len > 0 && self.stack[level].diff != DIFF_NONE)
@@ -123,7 +124,7 @@ impl Walk<'_> {
         // changed, and don't substitute a byte that was just deleted:
         // accepting it is always cheaper than delete plus substitute.
         //
-        // SAFETY: `del_idx` is a bad-word position too, and the `&&` is
+        // `del_idx` is a bad-word position too, and the `&&` is
         // what keeps it from being read before a delete has set it.
         let undoing_a_delete = self.stack[level].flags & FLAG_DID_DEL != 0
             && byte == self.fword_at(self.stack[level].del_idx as usize);
@@ -137,11 +138,11 @@ impl Walk<'_> {
         self.depth += 1;
         let child = self.depth as usize;
 
-        // SAFETY: a bad-word position again, as above.
+        // A bad-word position again, as above.
         if self.fword_at(self.stack[child].bad_idx as usize) != NUL {
             self.stack[child].bad_idx += 1;
         }
-        self.tword[self.stack[child].good_len as usize] = byte as c_char;
+        self.tword[self.stack[child].good_len as usize] = byte as u8;
         self.stack[child].good_len += 1;
         self.stack[child].node = self.idx_at(at);
         if newscore == SCORE_SUBST {
@@ -185,24 +186,18 @@ impl Walk<'_> {
             // different length than the bytes matched; that was not
             // checked while the bytes were coming in.
             //
-            // SAFETY: `char_start` is where this character begins in the
-            // bad word, a NUL-terminated buffer, so measuring the
-            // character there stays inside it.
-            self.stack[level].bad_idx = (self.stack[level].bad_char_start as c_int
-                + unsafe { utfc_ptr2len(self.fword_ptr(char_start)) })
+            self.stack[level].bad_idx = (self.stack[level].bad_char_start as usize
+                + c_cluster_len(&self.fword[char_start..]))
                 as u8;
 
-            // SAFETY: both are the first byte of a character, one in
-            // `tword` -- this walk's own buffer -- and one in the bad
-            // word; `slang` is the language of the walk's own trees.
-            let good = unsafe { utf_ptr2char(self.tword.as_ptr().add(good_char)) };
-            let bad = unsafe { utf_ptr2char(self.fword_ptr(char_start)) };
+            let good = char_at(&self.tword[good_char..]);
+            let bad = char_at(&self.fword[char_start..]);
             if utf_iscomposing_legacy(good) && utf_iscomposing_legacy(bad) {
                 // Changing a composing character counts for less.
                 self.stack[level].score -= SCORE_SUBST - SCORE_SUBCOMP;
             } else if !self.soundfold
-                && unsafe { (*self.slang).sl_has_map }
-                && similar_chars(unsafe { &*self.slang }, good, bad)
+                && self.slang.sl_has_map
+                && similar_chars(self.slang, good, bad)
             {
                 // So does substituting a character the language's MAP
                 // lines call similar.
@@ -211,10 +206,7 @@ impl Walk<'_> {
         } else if self.stack[level].diff == DIFF_INSERT
             && self.stack[level].good_len > self.stack[level].char_len
         {
-            // SAFETY: `good_char` is where the character just added begins
-            // in `tword`, this walk's own buffer.
-            let mut p = unsafe { self.tword.as_mut_ptr().add(good_char) };
-            let inserted = unsafe { utf_ptr2char(p) };
+            let inserted = char_at(&self.tword[good_char..]);
             if utf_iscomposing_legacy(inserted) {
                 // Inserting a composing character does not count for
                 // much.
@@ -223,12 +215,10 @@ impl Walk<'_> {
                 // Doubling a character earns a bonus. Illogical for
                 // the sound-fold tree, but it does score better there
                 // too.
-                //
-                // SAFETY: the branch above tested that `good_len` is past
-                // this character, so `p` is past `tword`'s start and there
-                // is a character before it to step back over.
-                p = unsafe { Walk::char_back(self.tword.as_ptr(), p) };
-                if inserted == unsafe { utf_ptr2char(p) } {
+                // The branch above tested that `good_len` is past this
+                // character, so there is a character before it.
+                let prev = char_back(&self.tword, good_char);
+                if inserted == char_at(&self.tword[prev..]) {
                     self.stack[level].score -= SCORE_INS - SCORE_INSDUP;
                 }
             }
@@ -254,7 +244,7 @@ impl Walk<'_> {
         self.stack[level].child = 1;
 
         let bad_idx = self.stack[level].bad_idx as usize;
-        // SAFETY: `bad_idx` is a position the walk reached inside the bad
+        // `bad_idx` is a position the walk reached inside the bad
         // word, the caller's NUL-terminated buffer.
         let newscore = if self.soundfold
             && self.stack[level].bad_idx == 0
@@ -284,19 +274,12 @@ impl Walk<'_> {
         // Advance over the character. Deleting one of a doubled pair
         // -- "nn" -> "n" -- earns a bonus; that is a little illogical
         // for the sound-fold tree but it scores better there too.
-        //
-        // SAFETY: `bad_idx` is the first byte of a character of the bad
-        // word, and stepping over that character lands on the next one or
-        // on the terminator.
-        let deleted = unsafe { utf_ptr2char(self.fword_ptr(bad_idx)) };
-        self.stack[child].bad_idx = (self.stack[child].bad_idx as c_int
-            + unsafe { utfc_ptr2len(self.fword_ptr(bad_idx)) })
-            as u8;
+        let deleted = char_at(&self.fword[bad_idx..]);
+        self.stack[child].bad_idx =
+            (self.stack[child].bad_idx as usize + c_cluster_len(&self.fword[bad_idx..])) as u8;
         if utf_iscomposing_legacy(deleted) {
             self.stack[child].score -= SCORE_DEL - SCORE_DELCOMP;
-        } else if deleted
-            == unsafe { utf_ptr2char(self.fword_ptr(self.stack[child].bad_idx as usize)) }
-        {
+        } else if deleted == char_at(&self.fword[self.stack[child].bad_idx as usize..]) {
             self.stack[child].score -= SCORE_DEL - SCORE_DELDUP;
         }
     }
@@ -340,7 +323,7 @@ impl Walk<'_> {
         let level = self.depth as usize;
         let node = self.stack[level].node;
 
-        // SAFETY: `node` is a node the walk arrived at, and a node's first
+        // `node` is a node the walk arrived at, and a node's first
         // byte is the count of children that follow it.
         if self.stack[level].child as c_int > self.byte_at(node) as c_int {
             // Every byte of this node has been tried.
@@ -381,9 +364,9 @@ impl Walk<'_> {
         self.depth += 1;
         let child = self.depth as usize;
 
-        self.tword[self.stack[child].good_len as usize] = byte as c_char;
+        self.tword[self.stack[child].good_len as usize] = byte as u8;
         self.stack[child].good_len += 1;
-        // SAFETY: `at` is a child byte of the node, so the entry beside it
+        // `at` is a child byte of the node, so the entry beside it
         // is where that child's own node starts.
         self.stack[child].node = self.idx_at(at);
 
@@ -398,7 +381,7 @@ impl Walk<'_> {
             // Doubling a character earns a bonus, in the sound-fold
             // tree as well.
             let good_len = self.stack[child].good_len as usize;
-            if good_len >= 2 && self.tword[good_len - 2] as u8 as c_int == byte {
+            if good_len >= 2 && c_int::from(self.tword[good_len - 2]) == byte {
                 self.stack[child].score -= SCORE_INS - SCORE_INSDUP;
             }
         }

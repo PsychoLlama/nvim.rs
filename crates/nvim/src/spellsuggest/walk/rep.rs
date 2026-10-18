@@ -16,15 +16,14 @@
 //! starts at the first item that can possibly match and stops at the first
 //! one whose first byte no longer does.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::spellsuggest::SCORE_REP;
 use crate::spellsuggest::walk::{State, Walk};
 use crate::types::RepItem;
 use core::ffi::c_int;
 
-impl Walk<'_> {
+impl<'a> Walk<'a> {
     /// Decide whether trying `REP` items here is worth it at all, and if
     /// so where in the list to start.
     ///
@@ -35,27 +34,23 @@ impl Walk<'_> {
         // Skip quickly when there are no REP items and this is not the
         // sound-fold tree, when the score would be too high anyway, or
         // when a REP item or a swap has already changed the text here.
-        //
-        // SAFETY: `langp` and `su` are the caller's, valid by the contract
-        // above.
-        if (self.replang.is_null() && !self.soundfold)
-            || self.stack[level].score + SCORE_REP >= unsafe { (*self.su).su_maxscore }
-            || self.stack[level].bad_idx < self.stack[level].change_from
-        {
+        let first = if self.soundfold {
+            Some(&self.slang.sl_repsal_first)
+        } else {
+            self.replang.map(|lang| &lang.sl_rep_first)
+        };
+        let Some(first) = first.filter(|_| {
+            self.stack[level].score + SCORE_REP < self.su.su_maxscore
+                && self.stack[level].bad_idx >= self.stack[level].change_from
+        }) else {
             self.stack[level].state = State::Final;
             return;
-        }
-
-        // SAFETY: `bad_idx` is a position inside the bad word, and the
-        // first-byte index is a 256-entry table indexed by an unsigned
-        // byte of it. `replang` is non-null here unless this is the
-        // sound-fold walk -- that is what the test above just settled.
-        let first_byte = self.fword_at(self.stack[level].bad_idx as usize) as usize;
-        self.stack[level].child = if self.soundfold {
-            unsafe { (*self.slang).sl_repsal_first[first_byte] }
-        } else {
-            unsafe { (*self.replang).sl_rep_first[first_byte] }
         };
+
+        // The first-byte index is a 256-entry table indexed by an unsigned
+        // byte of the bad word.
+        let first_byte = self.fword_at(self.stack[level].bad_idx as usize) as usize;
+        self.stack[level].child = first[first_byte];
 
         if self.stack[level].child < 0 {
             // No item starts with this byte.
@@ -75,9 +70,7 @@ impl Walk<'_> {
     pub(super) fn rep(&mut self) {
         let level = self.depth as usize;
         let bad_idx = self.stack[level].bad_idx as usize;
-        // SAFETY: the language is valid by the contract above and stays
-        // loaded for as long as the walk.
-        let items = unsafe { self.rep_items() };
+        let items = self.rep_items();
 
         while (self.stack[level].child as usize) < items.len() {
             let item = &items[self.stack[level].child as usize];
@@ -100,12 +93,11 @@ impl Walk<'_> {
             // Change the "from" text into the "to" text, closing or
             // opening the gap between them first.
             let (from_len, to_len) = (item.from.len(), item.to.len());
-            let to = item.to.clone();
             if from_len != to_len {
                 move_tail(&mut self.fword[bad_idx..], from_len, to_len);
                 self.repextra += to_len as c_int - from_len as c_int;
             }
-            self.fword[bad_idx..bad_idx + to_len].copy_from_slice(&to);
+            self.fword[bad_idx..bad_idx + to_len].copy_from_slice(&item.to);
 
             let child = self.depth as usize;
             self.stack[child].change_from = (bad_idx + to_len) as u8;
@@ -127,36 +119,27 @@ impl Walk<'_> {
         let level = self.depth as usize;
         let bad_idx = self.stack[level].bad_idx as usize;
         // `child` still points just past the item that was applied.
-        //
-        // SAFETY: the language is valid by the contract above.
-        let item = &unsafe { self.rep_items() }[self.stack[level].child as usize - 1];
+        let item = &self.rep_items()[self.stack[level].child as usize - 1];
         let (from_len, to_len) = (item.from.len(), item.to.len());
-        let from = item.from.clone();
 
         if from_len != to_len {
             move_tail(&mut self.fword[bad_idx..], to_len, from_len);
             self.repextra -= to_len as c_int - from_len as c_int;
         }
-        self.fword[bad_idx..bad_idx + from_len].copy_from_slice(&from);
+        self.fword[bad_idx..bad_idx + from_len].copy_from_slice(&item.from);
 
         self.stack[level].state = State::Rep;
     }
 
     /// The `REP` list this walk uses: the sound-fold one when walking the
-    /// sound-fold tree, otherwise the replacement language's.
-    ///
-    /// # Safety
-    ///
-    /// The walk's language must be valid, and `replang` must be
-    /// non-null unless this is the sound-fold walk. The list must outlive
-    /// the borrow, which it does: nothing unloads a language mid-walk.
-    unsafe fn rep_items<'a>(&self) -> &'a [RepItem] {
-        // SAFETY: the caller guarantees the language; `rep_ini` is what
-        // establishes the `replang` precondition.
+    /// sound-fold tree, otherwise the replacement language's (none without
+    /// one). Borrowed from the language, not the walk, so the bad word can
+    /// be rewritten while an item is held.
+    fn rep_items(&self) -> &'a [RepItem] {
         if self.soundfold {
-            unsafe { &(*self.slang).sl_repsal }
+            &self.slang.sl_repsal
         } else {
-            unsafe { &(*self.replang).sl_rep }
+            self.replang.map_or(&[], |lang| &lang.sl_rep)
         }
     }
 }

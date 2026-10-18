@@ -136,7 +136,6 @@ pub struct SpellLang {
     /// `MAP` groups above 255: each character to its group's head.
     pub sl_map_hash: std::collections::HashMap<::core::ffi::c_int, ::core::ffi::c_int>,
     pub sl_map_array: [::core::ffi::c_int; 256],
-    pub sl_sounddone: HashTab,
 }
 
 impl SpellLang {
