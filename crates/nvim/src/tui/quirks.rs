@@ -373,6 +373,13 @@ pub unsafe fn patch_terminfo_bugs(ti: &mut TerminfoEntry, arena: *mut Arena, t: 
         // rxvt's own alternate-screen entries do not save the cursor.
         set(ti, kTerm_enter_ca_mode, c"\x1b[?1049h");
         set(ti, kTerm_exit_ca_mode, c"\x1b[?1049l");
+        // urxvt starts with a steady block cursor (unless configured for an
+        // underline, which nothing here can see), and `\x1b[0 q` gives a
+        // *blinking* block rather than that default. So "reset" sets a
+        // steady block, the likeliest starting shape; and rxvt stays out of
+        // the DECSCUSR list below, which would put `\x1b[0 q` back.
+        set(ti, kTerm_reset_cursor_style, c"\x1b[2 q");
+        set(ti, kTerm_set_cursor_style, c"\x1b[%p1%d q");
     } else if t.screen {
         set_if_empty(ti, kTerm_to_status_line, c"\x1b_");
         set_if_empty(ti, kTerm_from_status_line, c"\x1b\\");
@@ -445,7 +452,6 @@ pub unsafe fn patch_terminfo_bugs(ti: &mut TerminfoEntry, arena: *mut Arena, t: 
             || t.tmux
             || t.screen
             || t.st
-            || t.rxvt
             || t.iterm
             || t.iterm_pretending_xterm
             || t.teraterm
