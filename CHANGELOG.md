@@ -7,6 +7,8 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ## [Unreleased]
 
+## [2026.10.19-b2125c18d1]
+
 ### Changed
 
 - Rewrote the pattern matchers over data they own: both regexp engines (each
@@ -954,7 +956,8 @@ made to build and pass the functional, old, and unit suites, with the CalVer
 release pipeline in place. The starting point: ~1.21M lines of mostly `unsafe`
 Rust with no user-visible change from upstream.
 
-[Unreleased]: https://github.com/PsychoLlama/nvim.rs/compare/2026.10.16-553e23395f...HEAD
+[Unreleased]: https://github.com/PsychoLlama/nvim.rs/compare/2026.10.19-b2125c18d1...HEAD
+[2026.10.19-b2125c18d1]: https://github.com/PsychoLlama/nvim.rs/compare/2026.10.16-553e23395f...2026.10.19-b2125c18d1
 [2026.10.16-553e23395f]: https://github.com/PsychoLlama/nvim.rs/compare/2026.10.14-6a52875728...2026.10.16-553e23395f
 [2026.10.14-6a52875728]: https://github.com/PsychoLlama/nvim.rs/compare/2026.10.08-4261f9c37a...2026.10.14-6a52875728
 [2026.10.08-4261f9c37a]: https://github.com/PsychoLlama/nvim.rs/compare/2026.10.04-0a84d0b534...2026.10.08-4261f9c37a
