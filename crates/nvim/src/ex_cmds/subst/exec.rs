@@ -51,6 +51,7 @@ use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
 use crate::pos::MAXCOL;
 use crate::profile::profile_passed_limit;
+use crate::regexp::vim_regexec_multi;
 use crate::search::get_search_pat;
 use crate::semsg;
 use crate::types::RegMMatch;
@@ -113,6 +114,8 @@ pub(super) struct Sub {
     /// both move it.
     pub line2: LineNr,
     pub got_quit: bool,
+    /// A match ran out of the preview's time.
+    pub timed_out: bool,
     pub got_match: bool,
     /// Whether undo has been saved for this command yet -- extmarks need it
     /// saved once, before the first change.
@@ -211,10 +214,21 @@ impl Sub {
         self.sub.starts_with(b"\\=")
     }
 
-    /// Search for the pattern in the current buffer, from `lnum`:`col`.
-    pub(super) fn regexec_at(&mut self, lnum: LineNr, col: ColNr) -> c_int {
-        self.regmatch
-            .exec(Some(Win::current()), Buf::current(), lnum, col)
+    /// Search for the pattern in the current buffer, from `lnum`:`col`,
+    /// giving up -- and setting `timed_out` -- once `timeout` passes, so that
+    /// one pathological line cannot hold up a preview. A zero `timeout` is
+    /// no limit.
+    pub(super) fn regexec_at(&mut self, lnum: LineNr, col: ColNr, timeout: ProfTime) -> c_int {
+        let deadline = (timeout != 0).then_some(&timeout);
+        vim_regexec_multi(
+            &mut self.regmatch,
+            Some(Win::current()),
+            Buf::current(),
+            lnum,
+            col,
+            deadline,
+            Some(&mut self.timed_out),
+        )
     }
 }
 
@@ -413,7 +427,7 @@ fn match_loop(st: &mut Sub, args: &SubArgs) {
         let no_more = if lastone || st.nmatch_tl > 0 as LineNr {
             true
         } else {
-            st.nmatch = st.regexec_at(st.sub_firstlnum, st.matchcol);
+            st.nmatch = st.regexec_at(st.sub_firstlnum, st.matchcol, args.timeout);
             st.nmatch == 0 as c_int || st.regmatch.startpos[0].lnum > 0 as LineNr
         };
 
@@ -422,7 +436,7 @@ fn match_loop(st: &mut Sub, args: &SubArgs) {
                 break;
             }
             if st.nmatch == -1 as c_int && !lastone {
-                st.nmatch = st.regexec_at(st.sub_firstlnum, st.matchcol);
+                st.nmatch = st.regexec_at(st.sub_firstlnum, st.matchcol, args.timeout);
             }
 
             // 5. Break if there isn't another match in this line.
@@ -489,12 +503,12 @@ fn substitute_range(st: &mut Sub, args: &SubArgs) {
         {
             break;
         }
-        st.nmatch = st.regexec_at(st.lnum, 0 as ColNr);
+        st.nmatch = st.regexec_at(st.lnum, 0 as ColNr, args.timeout);
         if st.nmatch != 0 {
             substitute_line(st, args);
         }
         line_breakcheck();
-        if profile_passed_limit(args.timeout) {
+        if st.timed_out || profile_passed_limit(args.timeout) {
             st.got_quit = true;
         }
         st.lnum += 1;
@@ -686,6 +700,7 @@ pub(crate) fn do_sub(
         lnum: line1,
         line2,
         got_quit: false,
+        timed_out: false,
         got_match: false,
         did_save: false,
         first_line: 0 as LineNr,
