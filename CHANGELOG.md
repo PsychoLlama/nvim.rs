@@ -10,6 +10,23 @@ and this project adheres to [CalVer](https://calver.org/).
 ### Changed
 
 - Integrated upstream neovim v0.12.5 (the port now reports 0.12.5).
+  `:restart` saves the session and restores it in the new server;
+  `:restart!` is the old behavior (restart without a session). The new
+  server can tell why it started from `v:startreason`, and `ZR` takes a
+  count (1-8 restart without the session, 9 also discards changes).
+
+### Fixed
+
+- From upstream v0.12.5: a search pattern or register cleared in one
+  instance now stays cleared in ShaDa instead of coming back from another;
+  `'inccommand'` honors its timeout within a single long line; an OSC 52
+  copy of several lines reaches the clipboard as lines; highlights no longer
+  bleed into `'linebreak'` filler and do reach `'breakindent'` gaps; `zb`
+  works with the cursor just above a closed fold; cursor-relative floats are
+  placed from an up-to-date cursor; closing windows from autocommands no
+  longer crashes; `--listen` rejects a socket path too long to bind;
+  `vim.regex()` works in Luv callbacks and an unknown `~user` expands without
+  running a shell, where both used to abort.
 
 ## [2026.10.19-b2125c18d1]
 
