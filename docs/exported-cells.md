@@ -155,7 +155,6 @@ binary as well as the default one.
 ## `search`
 
 - `neovim::search::pattern::last_idx`
-- `neovim::search::pattern::spats`
 
 ## `spell`
 
