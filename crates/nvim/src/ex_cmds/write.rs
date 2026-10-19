@@ -587,8 +587,11 @@ fn write_one_buffer(
         && !buffer.terminal.is_null()
         && channel_job_running(buffer.b_p_channel as u64)
     {
+        // A running terminal is not written: going on to write it would
+        // add E676 to the message.
         no_write_message_buf(buffer);
         *error += 1;
+        return WriteAll::Next;
     } else if !buf_is_changed(buffer) || buf_is_dontwrite(Some(buffer)) {
         return WriteAll::Next;
     }
