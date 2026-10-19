@@ -198,7 +198,7 @@ fn update_search_stat(
             cnt: c.cnt,
             exact_match: c.exact_match,
             incomplete: c.incomplete,
-            last_maxcount: p_msc() as c_int,
+            last_maxcount: last_maxcount.get(),
         };
         counted.set(c);
         return stat;
