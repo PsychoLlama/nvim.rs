@@ -8,6 +8,8 @@
 
 use crate::cstr;
 use crate::memory::ThinCString;
+use crate::os::env::{ENV_STARTREASON, env_exists, env_unset, getenv_owned};
+use core::ffi::CStr;
 use core::ffi::c_int;
 
 use super::*;
@@ -102,6 +104,27 @@ pub fn evalvars_init() {
 
     // The default for v:register is not 0 but '"'.
     set_reg_var(0);
+
+    set_vim_var_string(Vv::Startreason, Some(start_reason().to_bytes()));
+}
+
+/// Why this instance started, for `v:startreason`: `restart` or `restart!`
+/// when `:restart` spawned it, and `normal` otherwise. The variable that
+/// says so is meant for this process alone, so it is unset here rather than
+/// passed on to whatever this one starts.
+fn start_reason() -> &'static CStr {
+    let given = getenv_owned(ENV_STARTREASON);
+    if env_exists(ENV_STARTREASON, false) {
+        env_unset(ENV_STARTREASON);
+    }
+    [c"restart", c"restart!"]
+        .into_iter()
+        .find(|reason| {
+            given
+                .as_ref()
+                .is_some_and(|given| given.as_cstr() == *reason)
+        })
+        .unwrap_or(c"normal")
 }
 
 /// Whether the unprefixed `name` is a `v:` variable readable without its

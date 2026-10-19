@@ -16,7 +16,7 @@ use crate::event::socket::socket_address_is_tcp;
 use crate::lua::executor::nlua_exec_cstr;
 use crate::lua::state::kRetObject;
 use crate::os::cshim::{write_c_stderr, write_c_stdout};
-use crate::os::env::env_get_bounded;
+use crate::os::env::{ENV_NVIM, env_get_bounded};
 use crate::startup::exit::os_exit;
 use crate::startup::{MainParams, WIN_TABS, ui_client_channel_id};
 use crate::types::{ApiDict, Array, CallbackReader, Integer, Object, String_0, size_t, uint64_t};
@@ -85,7 +85,7 @@ pub(crate) fn remote_request(parm: &mut MainParams, remote_args: usize, ui_only:
             Err(why) => fail(&[b"Remote ui failed to start: ", why.to_bytes(), b"\n"], 1),
             Ok(chan) => {
                 let addr = server_addr.expect("a connection had an address").to_bytes();
-                if addr == env_get_bounded(c"NVIM") {
+                if addr == env_get_bounded(ENV_NVIM) {
                     // $NVIM in a `:terminal` child names its own parent, and
                     // a UI attached to that is a loop.
                     let why = b"Cannot attach UI of :terminal child to its parent. ";

@@ -238,6 +238,8 @@ pub enum Vv {
     Starttime = 104,
     /// `v:exitreason`
     Exitreason = 105,
+    /// `v:startreason`
+    Startreason = 106,
 }
 
 /// A number that is not a `v:` variable's slot.
@@ -256,7 +258,7 @@ impl TryFrom<usize> for Vv {
 
 impl Vv {
     /// How many `v:` variables there are; the length of the `vimvars` table.
-    pub const COUNT: usize = 106;
+    pub const COUNT: usize = 107;
 
     /// Every `v:` variable, in table order.
     pub const ALL: [Vv; Self::COUNT] = ALL_VIM_VARS;
@@ -374,6 +376,7 @@ const ALL_VIM_VARS: [Vv; Vv::COUNT] = [
     Vv::Virtnum,
     Vv::Starttime,
     Vv::Exitreason,
+    Vv::Startreason,
 ];
 
 crate::flag_set! {

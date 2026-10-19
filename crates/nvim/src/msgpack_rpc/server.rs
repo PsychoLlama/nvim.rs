@@ -26,7 +26,7 @@ use crate::log::{LOGLVL_ERR, LOGLVL_WRN, logmsg};
 use crate::memory::XString;
 use crate::memory::{strequal, xcalloc, xfree, xmalloc, xstrdup};
 use crate::message_fmt::{c_str, msg_bytes};
-use crate::os::env::{env_exists, env_unset, getenv_owned, os_get_pid};
+use crate::os::env::{ENV_TEST_LOG, env_exists, env_unset, getenv_owned, os_get_pid};
 use crate::os::fs::os_strerror;
 use crate::os::stdpaths::{get_appname, stdpaths_get_xdg_var};
 use crate::path::fix_fname;
@@ -98,7 +98,7 @@ pub fn server_init(listen_addr: Option<&CStr>) -> Result<(), CString> {
 
     let rv = server_start(listen_addr);
 
-    if env_exists(c"__NVIM_TEST_LOG", false) {
+    if env_exists(ENV_TEST_LOG, false) {
         logmsg!(LOGLVL_ERR, c"server_init", 58, "test log message");
     }
 

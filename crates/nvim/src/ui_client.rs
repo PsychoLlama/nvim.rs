@@ -37,7 +37,7 @@ use crate::log::{LOGLVL_ERR, LOGLVL_INF, logmsg};
 use crate::memory::{xfree, xmemdupz};
 use crate::message_fmt::{c_str, msg_cstr};
 use crate::msgpack_rpc::channel::rpc_send_event;
-use crate::os::env::{os_env_exists, os_get_pid};
+use crate::os::env::{ENV_TEST_LOG, env_exists, os_get_pid};
 use crate::profile::{time_finish, time_msg_at};
 use crate::startup::{
     main_loop, os_exit, stderr_isatty, stdin_isatty, stdout_isatty, ui_client_attached,
@@ -320,7 +320,7 @@ pub(crate) fn ui_client_run() -> ! {
 
     // The test harness waits for a line in the log before it starts
     // driving the terminal, so that it is not racing startup.
-    if unsafe { os_env_exists(c"__NVIM_TEST_LOG".as_ptr(), true) } {
+    if env_exists(ENV_TEST_LOG, true) {
         logmsg!(
             LOGLVL_ERR,
             c"ui_client_run",

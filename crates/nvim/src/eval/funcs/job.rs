@@ -32,7 +32,7 @@ use crate::message::{e_channotpty, e_invarg};
 use crate::message_fmt::{c_str, msg_cstr};
 use crate::option::vars::p_tgc;
 use crate::os::cshim::gettext;
-use crate::os::env::{home_replace, os_getenv};
+use crate::os::env::{ENV_NVIM, getenv_owned, home_replace};
 use crate::os::fs::os_isdir;
 use crate::os::pty_proc_unix::pty_proc_resize;
 use crate::os::time::os_hrtime;
@@ -283,98 +283,78 @@ const PTY_IGNORED_ENV: [&CStr; 7] = [
 /// would change.
 const REQUIRED_ENV: [&CStr; 0] = [];
 
-/// Build the environment for a child process.
+/// Build the environment for a child process: ours (unless `clear_env`),
+/// adjusted for a pty, then the job's own `job_env` on top.
 ///
-/// # Safety
-/// `job_env` is null or a live dict item holding a Dict; `pty_term_name` is
-/// null or a NUL-terminated string, and non-null whenever `pty` is set.
-unsafe fn create_environment(
-    job_env: *mut Dict,
+/// `set_nvim_addr` points the child's `$NVIM` at this instance's server
+/// address, so a job can talk back; `:restart`'s replacement server is not
+/// a job of this one and leaves it alone. `pty_term_name` is the child's
+/// `$TERM`, and present whenever `pty` is set.
+pub(crate) fn create_environment(
+    job_env: Option<&DictRef>,
     clear_env: bool,
     pty: bool,
-    pty_term_name: *const c_char,
-) -> *mut Dict {
-    // SAFETY: the caller's obligation; every key below is a `'static`
-    // NUL-terminated string and the dict owns what it is given.
-    let mut env_held = tv_dict_alloc();
-    let env = env_held.as_ptr();
+    set_nvim_addr: bool,
+    pty_term_name: Option<&CStr>,
+) -> DictRef {
+    let mut env = tv_dict_alloc();
 
     if !clear_env {
         // Start from our own environment. `f_environ` is the builtin,
         // called directly because it is the only thing that knows how
         // to turn `environ` into a Dict.
         let mut inherited = TV_INITIAL_VALUE;
-        let out = &raw mut inherited;
-        let row = EvalFuncData::None;
-        // SAFETY: `out` is this frame's own value.
-        f_environ(&[], unsafe { &mut *out }, row);
-        if let TypVal::Dict(inherited) = &inherited
-            && let Some(inherited) = &**inherited
-        {
-            dict_extend(&env_held, inherited, b'f');
+        f_environ(&[], &mut inherited, EvalFuncData::None);
+        if let Some(inherited) = inherited.dict_shared() {
+            dict_extend(&env, inherited, b'f');
         }
         // The one reference, given back with the handle.
         drop(inherited.take_dict());
 
         if pty {
             for name in PTY_IGNORED_ENV {
-                drop(env_held.remove_key(name.to_bytes()));
+                drop(env.remove_key(name.to_bytes()));
             }
             // COLORTERM was just removed; put ours back when we know
             // the child can use it.
             if p_tgc() {
-                let truecolor = c"truecolor".as_ptr();
-                let _ = unsafe { (*env).add_str(b"COLORTERM", cstr::at_opt(truecolor)) };
+                let _ = env.add_str(b"COLORTERM", Some(c"truecolor"));
             }
         }
     }
 
     if pty {
-        drop(env_held.remove_key(b"TERM"));
-        let _ = unsafe { (*env).add_str(b"TERM", cstr::at_opt(pty_term_name)) };
+        drop(env.remove_key(b"TERM"));
+        let _ = env.add_str(b"TERM", pty_term_name);
     }
 
     // $NVIM points the child at this instance's server address, when
-    // there is one.
-    let nvim_addr = vim_var_bytes(Vv::Servername);
-    if !nvim_addr.is_empty() {
-        drop(env_held.remove_key(b"NVIM"));
-        let _ = unsafe { (*env).add_str_len(b"NVIM", Some(&nvim_addr)) };
+    // there is one. #3118
+    if set_nvim_addr {
+        let nvim_addr = vim_var_bytes(Vv::Servername);
+        if !nvim_addr.is_empty() {
+            drop(env.remove_key(ENV_NVIM.to_bytes()));
+            let _ = env.add_str_len(ENV_NVIM.to_bytes(), Some(&nvim_addr));
+        }
     }
 
     // The job's own `env` wins over everything above.
-    if !job_env.is_null() {
-        // SAFETY: the job's own dictionary; the view takes no reference.
-        dict_extend(
-            &env_held,
-            &::core::mem::ManuallyDrop::new(
-                unsafe { DictRef::owning(job_env) }.expect("a live dictionary"),
-            ),
-            b'f',
-        );
+    if let Some(job_env) = job_env {
+        dict_extend(&env, job_env, b'f');
     }
 
     if pty {
         for name in REQUIRED_ENV {
-            if env_held.has_key(name.to_bytes()) {
+            if env.has_key(name.to_bytes()) {
                 continue;
             }
-            // SAFETY: a NUL-terminated variable name.
-            let value = unsafe { os_getenv(name.as_ptr()) };
-            if !value.is_null() {
-                // SAFETY: `os_getenv` answers an allocation this takes over.
-                let _ = unsafe {
-                    env_held.add_allocated_str(
-                        name.to_bytes(),
-                        crate::memory::ThinCString::from_raw(value),
-                    )
-                };
+            if let Some(value) = getenv_owned(name) {
+                let _ = env.add_str(name.to_bytes(), Some(value.as_cstr()));
             }
         }
     }
 
-    // The caller takes the reference over, and frees it with the process.
-    env_held.into_raw()
+    env
 }
 
 /// `jobstart({cmd} [, {opts}])`
@@ -428,10 +408,10 @@ pub fn f_jobstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut on_stderr = NO_READER;
     let mut on_exit = NO_CALLBACK;
     let mut cwd = ptr::null::<c_char>();
-    // The env dictionary itself, not the item holding it: the borrow the
-    // lookup answers does not survive `common_job_callbacks`, which takes a
-    // reference to the options dictionary it was found in.
-    let mut job_env = ptr::null_mut::<Dict>();
+    // A reference to the env dictionary itself, not the item holding it:
+    // the borrow the lookup answers does not survive `common_job_callbacks`,
+    // which takes a reference to the options dictionary it was found in.
+    let mut job_env: Option<DictRef> = None;
 
     if args.get(1).is_some_and(|arg| arg.v_type() == VAR_DICT) {
         job_opts = args[1].dict_ref();
@@ -491,7 +471,7 @@ pub fn f_jobstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
                 semsg!("E475: Invalid argument: {arg0}");
                 return;
             }
-            job_env = di.di_tv.dict_or_null();
+            job_env = di.di_tv.dict_handle();
         }
 
         let options = args[1].dict_shared();
@@ -508,7 +488,7 @@ pub fn f_jobstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // whether or not there were options at all.
     let mut width = dict_get_number(job_opts, b"width") as uint16_t;
     let mut height = dict_get_number(job_opts, b"height") as uint16_t;
-    let mut term_name = ptr::null::<c_char>();
+    let mut term_name: Option<&CStr> = None;
 
     if term {
         if text_locked() {
@@ -531,7 +511,7 @@ pub fn f_jobstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         // `pty && rpc` was refused above and `term` implies `pty`.
         debug_assert!(!rpc);
 
-        term_name = c"xterm-256color".as_ptr();
+        term_name = Some(c"xterm-256color");
         if cwd.is_null() {
             cwd = c".".as_ptr();
         }
@@ -545,14 +525,11 @@ pub fn f_jobstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             height = Win::current().w_view_height as uint16_t;
         }
     }
-    if pty && term_name.is_null() {
-        term_name = numbuf3
-            .dict_string(job_opts, b"TERM")
-            .unwrap_or(c"ansi")
-            .as_ptr();
+    if pty && term_name.is_none() {
+        term_name = Some(numbuf3.dict_string(job_opts, b"TERM").unwrap_or(c"ansi"));
     }
 
-    let env = unsafe { create_environment(job_env, clear_env, pty, term_name) };
+    let env = create_environment(job_env.as_ref(), clear_env, pty, true, term_name).into_raw();
     // `channel_job_start` answers the channel id, or the reason it failed,
     // through this slot on every path; it lands in the return value below.
     let mut status: VarNumber = 0;

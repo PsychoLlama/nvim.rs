@@ -229,7 +229,7 @@ const fn vv(name: &'static CStr, declared: VarType, flags: VimVarFlags) -> VimVa
 }
 
 /// How many rows the `v:` table has; one per `Vv` discriminant.
-pub(crate) const VIMVAR_COUNT: usize = 106;
+pub(crate) const VIMVAR_COUNT: usize = 107;
 
 /// The `v:` table, in [`Vv`] order -- which is also the order the rows go
 /// into the `v:` dictionary, and so what `keys(v:)` answers.
@@ -344,6 +344,7 @@ pub(crate) static VIMVAR_ROWS: [VimVarRow; VIMVAR_COUNT] = [
     vv(c"virtnum", VAR_NUMBER, VimVarFlags::RO),
     vv(c"starttime", VAR_NUMBER, VimVarFlags::RO),
     vv(c"exitreason", VAR_STRING, VimVarFlags::RO),
+    vv(c"startreason", VAR_STRING, VimVarFlags::RO),
 ];
 
 /// The eight `v:msgpack_types` keys, in `MessagePackType` order.

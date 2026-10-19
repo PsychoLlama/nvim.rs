@@ -151,7 +151,6 @@ count	callee	no_raw	defs	def
 7	vim_iswordp	0	1	crates/nvim/src/charset/walk.rs
 6	.as_mut	0	0	
 6	ClickArena::new	0	1	crates/nvim/src/statusline/mod.rs
-6	DictRef::owning	0	1	crates/nvim/src/eval/typval/handle.rs
 6	GridRef::new	0	1	crates/nvim/src/grid/mod.rs
 6	Timer::new	0	1	crates/nvim/src/event/time.rs
 6	Tm::new	0	41	
@@ -180,6 +179,7 @@ count	callee	no_raw	defs	def
 5	.next_arg::<::core::ffi::c_ulong>	0	0	
 5	.write	0	0	
 5	Chan::new	0	1	crates/nvim/src/msgpack_rpc/channel/mod.rs
+5	DictRef::owning	0	1	crates/nvim/src/eval/typval/handle.rs
 5	Fmt::copy_of	0	1	crates/nvim/src/statusline/mod.rs
 5	ManuallyDrop::take	0	1	crates/nvim/src/change/leader.rs
 5	Range::new	0	1	crates/nvim/src/decoration/handles.rs
@@ -202,7 +202,6 @@ count	callee	no_raw	defs	def
 5	lua_pushboolean	0	0	
 5	lua_type	0	0	
 5	mpack_tokbuf_init	0	1	crates/nvim/src/mpack/mpack_core.rs
-5	os_env_exists	0	1	crates/nvim/src/os/env/mod.rs
 5	proc_stop	0	1	crates/nvim/src/event/proc.rs
 5	rpc_start	0	1	crates/nvim/src/msgpack_rpc/channel/mod.rs
 5	set_clipboard	0	1	crates/nvim/src/clipboard.rs
@@ -252,6 +251,7 @@ count	callee	no_raw	defs	def
 4	nlua_pushref	0	1	crates/nvim/src/lua/executor/refs.rs
 4	nvim_buf_get_lines	0	1	crates/nvim/src/api/buffer/lines.rs
 4	op_yank_reg	0	1	crates/nvim/src/register/yank.rs
+4	os_env_exists	0	1	crates/nvim/src/os/env/mod.rs
 4	process_events	0	1	crates/nvim/src/event/loop.rs
 4	pum_items	1	1	crates/nvim/src/popupmenu/mod.rs
 4	push_linestr	0	1	crates/nvim/src/api/buffer/lines.rs
@@ -600,7 +600,6 @@ count	callee	no_raw	defs	def
 2	os_free_fullenv	0	1	crates/nvim/src/os/env/mod.rs
 2	os_fsync	1	1	crates/nvim/src/os/fs/mod.rs
 2	os_get_uname	0	1	crates/nvim/src/os/users.rs
-2	os_getenv	0	1	crates/nvim/src/os/env/mod.rs
 2	os_getenv_into	0	1	crates/nvim/src/os/env/mod.rs
 2	os_isdir	0	1	crates/nvim/src/os/fs/mod.rs
 2	os_open	0	1	crates/nvim/src/os/fs/mod.rs
@@ -706,7 +705,6 @@ count	callee	no_raw	defs	def
 2	wstream_init	0	1	crates/nvim/src/event/wstream.rs
 2	yank_copy_line	0	1	crates/nvim/src/register/yank.rs
 2	yank_register_mline	0	1	crates/nvim/src/register/store.rs
-1	.add_allocated_str	0	0	
 1	.add_list_indent	0	1	crates/nvim/src/indent/breakindent.rs
 1	.answers	0	1	crates/nvim/src/indent/breakindent.rs
 1	.append_string_contents	0	1	crates/nvim/src/cjson/lua_cjson/encode.rs
@@ -838,7 +836,6 @@ count	callee	no_raw	defs	def
 1	copy_indent	0	1	crates/nvim/src/indent/edit.rs
 1	copy_register	0	1	crates/nvim/src/register/store.rs
 1	count_lines	0	1	crates/nvim/src/register/contents.rs
-1	create_environment	0	1	crates/nvim/src/eval/funcs/job.rs
 1	current_quote	0	1	crates/nvim/src/textobject/quote.rs
 1	damage	0	0	
 1	dec	0	0	
@@ -1057,6 +1054,7 @@ count	callee	no_raw	defs	def
 1	os_fileinfo_size	0	1	crates/nvim/src/os/fs/meta.rs
 1	os_get_hostname	0	1	crates/nvim/src/os/env/mod.rs
 1	os_get_username	0	1	crates/nvim/src/os/users.rs
+1	os_getenv	0	1	crates/nvim/src/os/env/mod.rs
 1	os_getenv_buf	0	1	crates/nvim/src/os/env/mod.rs
 1	os_mkdir_recurse	0	1	crates/nvim/src/os/fs/dir.rs
 1	os_read	0	1	crates/nvim/src/os/fs/mod.rs

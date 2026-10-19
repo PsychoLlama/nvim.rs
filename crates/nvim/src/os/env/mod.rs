@@ -55,6 +55,20 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use std::ffi::CString;
 
+/// The log file the user asked for.
+pub(crate) const ENV_LOGFILE: &CStr = c"NVIM_LOG_FILE";
+/// The log file the user (or the default) wanted, set when it could not be
+/// created; `_core/log.lua:check_log_file` reports it at startup.
+pub(crate) const ENV_LOGFILE_WANT: &CStr = c"__NVIM_LOG_FILE_WANT";
+/// A child's way back to its parent: the parent's server address.
+pub(crate) const ENV_NVIM: &CStr = c"NVIM";
+/// Why this instance started: `restart` or `restart!` in a server that
+/// `:restart` spawned, read into `v:startreason` at startup and unset.
+pub(crate) const ENV_STARTREASON: &CStr = c"__NVIM_STARTREASON";
+/// Set by the test harness: log a line once the server (or the TUI) is up,
+/// so a test can wait for it.
+pub(crate) const ENV_TEST_LOG: &CStr = c"__NVIM_TEST_LOG";
+
 // The libuv error codes this file distinguishes, retyped from the `c_int`
 // anonymous enum c2rust emitted.
 

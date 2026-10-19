@@ -51,7 +51,9 @@ use crate::eval::vars::vim_var_bytes;
 use crate::global_cell::GlobalCell;
 use crate::message_fmt::{msg_cstr, to_bytes};
 use crate::msg_schedule_semsg;
-use crate::os::env::{env_get_bounded, env_set, expand_env_into, os_get_pid};
+use crate::os::env::{
+    ENV_LOGFILE, ENV_LOGFILE_WANT, ENV_NVIM, env_get_bounded, env_set, expand_env_into, os_get_pid,
+};
 use crate::os::fs::{MkdirFailure, dir_exists, mkdir_recurse};
 use crate::os::stdpaths::{user_state_subpath, xdg_home};
 use crate::os::time::{os_localtime, tm_zeroed};
@@ -92,10 +94,7 @@ const LOG_PATH_SIZE: usize = 4096 + 1;
 const INSTANCE_NAME_SIZE: usize = 31;
 /// The `%-10s` the instance name is printed in.
 const INSTANCE_NAME_COLUMNS: usize = 10;
-const ENV_LOGFILE: &CStr = c"NVIM_LOG_FILE";
 const ENV_LOGFILE_REF: &CStr = c"$NVIM_LOG_FILE";
-const ENV_LOGFILE_WANT: &CStr = c"__NVIM_LOG_FILE_WANT";
-const ENV_NVIM: &CStr = c"NVIM";
 
 /// The log file decided by [`log_path_init`], or `None` while logging still
 /// falls back to stderr (before `log_init`, or when no candidate path was
