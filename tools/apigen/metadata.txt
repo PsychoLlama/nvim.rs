@@ -19,7 +19,7 @@
 #   prerelease      whether this is a development build
 #   build           the build's version string, upstream's NVIM_VERSION_BUILD
 
-version api_level=14 api_compatible=0 api_prerelease=false prerelease=false build=v0.12.4
+version api_level=14 api_compatible=0 api_prerelease=false prerelease=false build=v0.12.5
 
 # The error kinds an RPC error response can carry, by their wire ids.
 

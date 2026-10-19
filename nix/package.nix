@@ -18,7 +18,7 @@
 
 rustPlatform.buildRustPackage {
   pname = "nvim";
-  version = "0.12.4";
+  version = "0.12.5";
 
   inherit src;
 
@@ -73,7 +73,7 @@ rustPlatform.buildRustPackage {
   doCheck = false;
 
   meta = {
-    description = "Neovim v0.12.4, ported to Rust";
+    description = "Neovim v0.12.5, ported to Rust";
     homepage = "https://github.com/PsychoLlama/nvim.rs";
     # Apache-2.0 overall, Vim-license contributions, and the in-tree ports
     # (xdiff: LGPL-2.1+ except xhistogram under the Eclipse Distribution

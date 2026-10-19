@@ -7,6 +7,10 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Integrated upstream neovim v0.12.5 (the port now reports 0.12.5).
+
 ## [2026.10.19-b2125c18d1]
 
 ### Changed
