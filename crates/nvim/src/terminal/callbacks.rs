@@ -20,7 +20,6 @@ use crate::channel::main_loop_events;
 use crate::drawscreen::status_redraw_buf;
 use crate::eval::eval_call_provider;
 use crate::memory::ThinCString;
-use crate::types::TypVal;
 
 use crate::api::private::helpers::{dict_set_var, scope_vars};
 use crate::eval::typval::tv_list_alloc;
@@ -30,7 +29,8 @@ use crate::option::vars::p_bg;
 use crate::options::kOptBoFlagTerm;
 use crate::types::{
     Error, Event, Object, String_0, VTermPos, VTermProp, VTermRect, VTermScreenCallbacks,
-    VTermSelectionCallbacks, VTermSelectionMask, VTermStringFragment, VTermValue, ptrdiff_t,
+    VTermSelectionCallbacks, VTermSelectionMask, VTermStringFragment, VTermValue, kListLenMayKnow,
+    ptrdiff_t,
 };
 use crate::ui::vim_beep;
 use crate::vterm::vterm::{
@@ -242,26 +242,29 @@ unsafe extern "C" fn term_theme(dark: *mut bool, _data: *mut c_void) -> c_int {
 /// call.
 unsafe extern "C" fn term_clipboard_set(argv: *mut *mut c_void) {
     // SAFETY: the event's own two arguments, as `term_selection_set` left
-    // them: a selection mask, and the string it allocated.
-    let (mask, data) = unsafe { ((*argv).expose_provenance(), *argv.add(1) as *mut c_char) };
+    // them: a selection mask, and the string it allocated, taken over here.
+    let (mask, payload) = unsafe {
+        let data = *argv.add(1) as *mut c_char;
+        ((*argv).expose_provenance(), ThinCString::from_raw(data))
+    };
     let regname = if mask as VTermSelectionMask == VTERM_SELECTION_PRIMARY {
         b'*' as c_char
     } else {
         b'+' as c_char
     };
-    let lines = tv_list_alloc(1 as ptrdiff_t);
-    // SAFETY: as above; the list takes `data` over.
-    unsafe { (*lines.as_ptr()).push(TypVal::string(ThinCString::from_raw(data))) };
+    let payload = payload.as_ref().map_or(&b""[..], ThinCString::as_bytes);
+    // A readfile()-style list of lines (`:h chansend()`), the last one kept
+    // even when empty so that a trailing newline survives: a newline inside
+    // one item would reach a command-line provider as a NUL.
+    let lines = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
+    for line in payload.split(|&byte| byte == b'\n') {
+        lines.edit().push_bytes(Some(line));
+    }
     let held = tv_list_alloc(3 as ptrdiff_t);
-    let args = held.as_ptr();
-    // SAFETY: as above.
-    unsafe { (*args).push_list(Some(lines)) };
-    let regtype = b'v' as c_char;
-    // SAFETY: as above, over one byte of this frame each, which the list
-    // copies.
-    unsafe { (*args).push_bytes(Some(&[regtype.cast_unsigned()])) };
-    // SAFETY: as above.
-    unsafe { (*args).push_bytes(Some(&[regname.cast_unsigned()])) };
+    let args = held.edit();
+    args.push_list(Some(lines));
+    args.push_bytes(Some(b"v"));
+    args.push_bytes(Some(&[regname.cast_unsigned()]));
     // The provider is Vimscript, which is why this runs on the main loop.
     eval_call_provider(c"clipboard", c"set", Some(held), true);
 }

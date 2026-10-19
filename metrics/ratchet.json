@@ -859,7 +859,7 @@
     "crates/nvim/src/tag/query.rs": {"pub_items": 1},
     "crates/nvim/src/tag/stack.rs": {"pub_items": 4},
     "crates/nvim/src/tag/tagfunc.rs": {"pub_items": 3},
-    "crates/nvim/src/terminal/callbacks.rs": {"extern_abi": 8, "unsafe_stmts": 18},
+    "crates/nvim/src/terminal/callbacks.rs": {"extern_abi": 8, "unsafe_stmts": 15},
     "crates/nvim/src/terminal/input.rs": {"unsafe_stmts": 16},
     "crates/nvim/src/terminal/mod.rs": {"extern_abi": 3, "unsafe_stmts": 71},
     "crates/nvim/src/terminal/mode.rs": {"unsafe_stmts": 20},
