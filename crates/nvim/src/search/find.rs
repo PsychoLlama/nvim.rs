@@ -14,7 +14,7 @@ use crate::mbyte::{strcmp_ic_in, strnicmp_in};
 use crate::message_fmt::{emsg_text, msg_bytes};
 use crate::option::cpo_has;
 use crate::pos::MAXCOL;
-use crate::regexp::RE_SEARCH;
+use crate::regexp::{LineMatcher, RE_SEARCH, walk_lines};
 use crate::search::{
     SEARCH_COL, SEARCH_END, SEARCH_HIS, SEARCH_KEEP, SEARCH_MSG, SEARCH_NOOF, SEARCH_PEEK,
     SEARCH_START,
@@ -51,14 +51,10 @@ struct StartPos {
 
 /// Everything a [`searchit`] line walk needs that does not change while it
 /// runs.
-struct Searcher<'a> {
-    /// The window the search runs in, `None` for a buffer with no window.
-    win: Option<Win>,
+struct Searcher<'a, 'm> {
     buf: Buf,
-    /// The compiled pattern. `vim_regexec_multi` may clear `regprog`,
-    /// which is how a pattern that turned out to be too expensive stops
-    /// the whole search.
-    regmatch: RegMMatch,
+    /// The compiled pattern, set up once to be run line after line.
+    matcher: &'a mut LineMatcher<'m>,
     /// Timeout limit, if there is one.
     tm: Option<&'a ProfTime>,
     /// Set when the limit was passed.
@@ -72,7 +68,7 @@ struct Searcher<'a> {
     called_emsg_before: c_int,
 }
 
-impl Searcher<'_> {
+impl Searcher<'_, '_> {
     /// Whether one of the `SEARCH_*` option bits is set.
     #[inline(always)]
     fn opt(&self, flag: c_int) -> bool {
@@ -82,34 +78,23 @@ impl Searcher<'_> {
     /// Run the pattern against line `lnum` from column `col`.
     #[inline(always)]
     fn exec(&mut self, lnum: LineNr, col: ColNr) -> c_int {
-        let mut timed_out = false;
-        let lines = vim_regexec_multi(
-            &mut self.regmatch,
-            self.win,
-            self.buf,
-            lnum,
-            col,
-            self.tm,
-            Some(&mut timed_out),
-        );
-        self.timed_out |= timed_out;
-        lines
+        self.matcher.exec(lnum, col, &mut self.timed_out)
     }
 
     /// The match `exec` just reported.
     #[inline(always)]
     fn found(&mut self) -> Found {
         Found {
-            start: self.regmatch.startpos[0],
-            end: self.regmatch.endpos[0],
-            submatch: first_submatch(&self.regmatch),
+            start: self.matcher.start(0),
+            end: self.matcher.end(0),
+            submatch: first_submatch(self.matcher),
         }
     }
 
     /// The buffer's line cache.
     ///
     /// Read afresh at every use rather than held: `exec` hands the line to
-    /// `vim_regexec_multi`, which reads other lines of this same buffer for
+    /// the matcher, which reads other lines of this same buffer for
     /// a multi-line pattern, so a slice taken before it is stale after it.
     /// That is the pointer upstream re-fetched by hand ("a multi-line search
     /// may have invalidated the pointer"), with the re-fetch made
@@ -205,7 +190,7 @@ impl Searcher<'_> {
             } else {
                 // `rmm_matchcol` is the actual start of the match,
                 // ignoring `\zs`.
-                self.step_over(lnum, self.regmatch.rmm_matchcol)
+                self.step_over(lnum, self.matcher.matchcol())
             };
             if matchcol == 0 && self.opt(SEARCH_START) {
                 return true;
@@ -216,9 +201,6 @@ impl Searcher<'_> {
             *nmatched = self.exec(lnum, matchcol);
             if *nmatched == 0 {
                 return false;
-            }
-            if self.regmatch.regprog.is_none() {
-                return true;
             }
             *found = self.found();
             // The loop only works while the match starts in this line:
@@ -281,9 +263,6 @@ impl Searcher<'_> {
                 }
                 break;
             }
-            if self.regmatch.regprog.is_none() {
-                break;
-            }
         }
         match_ok
     }
@@ -293,16 +272,232 @@ impl Searcher<'_> {
     #[inline(always)]
     fn before_start_pos(&self, lnum: LineNr, start: StartPos) -> bool {
         if self.opt(SEARCH_END) {
-            let end = self.regmatch.endpos[0];
+            let end = self.matcher.end(0);
             lnum + end.lnum < start.pos.lnum
                 || (lnum + end.lnum == start.pos.lnum
                     && end.col - 1 < start.pos.col + start.extra_col)
         } else {
-            let begin = self.regmatch.startpos[0];
+            let begin = self.matcher.start(0);
             lnum + begin.lnum < start.pos.lnum
                 || (lnum + begin.lnum == start.pos.lnum
                     && begin.col < start.pos.col + start.extra_col)
         }
+    }
+
+    /// The search proper: from `pos`, the `count`th match in direction
+    /// `dir`, wrapping round the buffer with `'wrapscan'`. Answers whether
+    /// one was found, its first sub-pattern, and the line the walk stopped
+    /// on.
+    fn walk(
+        &mut self,
+        pos: &mut Pos,
+        mut end_pos: Option<&mut Pos>,
+        dir: Direction,
+        mut count: c_int,
+        stop_lnum: LineNr,
+        mut extra_arg: Option<&mut SearchItArg>,
+    ) -> (c_int, c_int, LineNr) {
+        let mut found;
+        let mut submatch = 0;
+        let mut first_match = true;
+        let mut break_loop = false;
+        // The line the walk stopped on; the "hit TOP" message reads it
+        // after every loop has been left.
+        let mut lnum: LineNr;
+
+        loop {
+            // When a match at the start position is not acceptable,
+            // `extra_col` is non-zero. Not at MAXCOL though, where
+            // MAXCOL + 1 is zero.
+            let start_char_len = if pos.col == MAXCOL as c_int {
+                0
+            } else if pos.lnum >= 1
+                && pos.lnum <= self.buf.b_ml.ml_line_count
+                && pos.col < MAXCOL - 2
+            {
+                // Watch out for "col" being MAXCOL - 2, used in a closed fold.
+                let (lnum, col) = (pos.lnum, usize::try_from(pos.col).unwrap_or(0));
+                let mut lines = self.buf.lines();
+                let line = lines.line(lnum);
+                if line.len() <= col {
+                    1
+                } else {
+                    cluster_len(&line[col..]) as c_int
+                }
+            } else {
+                1
+            };
+            let accept_at_start = self.opt(SEARCH_START);
+            let start = StartPos {
+                // Remember the start position, for detecting "no match".
+                pos: *pos,
+                extra_col: if dir == FORWARD {
+                    if accept_at_start { 0 } else { start_char_len }
+                } else if accept_at_start {
+                    start_char_len
+                } else {
+                    0
+                },
+            };
+
+            found = 0;
+            let mut at_first_line = true;
+            if pos.lnum == 0 {
+                // Correct lnum for when starting in line 0.
+                pos.lnum = 1;
+                pos.col = 0;
+                at_first_line = false;
+            }
+
+            // Start in the current line, unless searching backwards from
+            // column 0 without accepting a match there — skipping back a
+            // line is then free.
+            if dir == BACKWARD && start.pos.col == 0 && !accept_at_start {
+                lnum = pos.lnum - 1;
+                at_first_line = false;
+            } else {
+                lnum = pos.lnum;
+            }
+
+            // Loop twice if 'wrapscan' is set.
+            for wrapped in [false, true] {
+                'lines: while lnum > 0 && lnum <= self.buf.b_ml.ml_line_count {
+                    // Stop after checking "stop_lnum", if it is set.
+                    if stop_lnum != 0
+                        && if dir == FORWARD {
+                            lnum > stop_lnum
+                        } else {
+                            lnum < stop_lnum
+                        }
+                    {
+                        break 'lines;
+                    }
+                    // Stop after passing the time limit.
+                    if self.out_of_time() {
+                        break 'lines;
+                    }
+
+                    // Look for a match somewhere in line "lnum".
+                    let col = if at_first_line && self.opt(SEARCH_COL) {
+                        pos.col
+                    } else {
+                        0
+                    };
+                    let mut nmatched = self.exec(lnum, col);
+                    // Abort searching on an error (e.g., out of stack).
+                    if self.aborted() {
+                        break 'lines;
+                    }
+
+                    'next_line: {
+                        if nmatched <= 0 {
+                            line_breakcheck(); // stop if ctrl-C typed
+                            if got_int.get() {
+                                break 'lines;
+                            }
+                            // Cancel the search if a character was typed,
+                            // for 'incsearch'. Checking too often would
+                            // slow searching down too much.
+                            if self.opt(SEARCH_PEEK)
+                                && ((lnum - pos.lnum) & 0x3f) == 0
+                                && char_avail()
+                            {
+                                break_loop = true;
+                                break 'lines;
+                            }
+                            if wrapped && lnum == start.pos.lnum {
+                                // Second time round: stop where we started.
+                                break 'lines;
+                            }
+                            break 'next_line;
+                        }
+
+                        // The match may be in another line, with `\zs`.
+                        let mut m = self.found();
+
+                        if dir == FORWARD
+                            && at_first_line
+                            && !self.skip_to_start_pos(
+                                lnum,
+                                &mut m,
+                                &mut nmatched,
+                                start,
+                                first_match,
+                            )
+                        {
+                            break 'next_line;
+                        }
+                        if dir == BACKWARD
+                            && !self.last_match_before(lnum, &mut m, &mut nmatched, start, wrapped)
+                        {
+                            // There is only a match after the cursor.
+                            break 'next_line;
+                        }
+
+                        self.record(lnum, m, pos, end_pos.as_deref_mut());
+                        found = 1;
+                        first_match = false;
+                        submatch = m.submatch;
+
+                        // Variables used for 'incsearch' highlighting.
+                        search_match_lines.set(m.end.lnum - m.start.lnum);
+                        search_match_endcol.set(m.end.col);
+                        break 'lines;
+                    }
+                    lnum += dir;
+                    at_first_line = false;
+                }
+                at_first_line = false;
+
+                // Stop when 'wrapscan' is off, "stop_lnum" was given,
+                // after an interrupt, after a match, and after looping
+                // twice.
+                if !p_ws()
+                    || stop_lnum != 0
+                    || got_int.get()
+                    || self.aborted()
+                    || break_loop
+                    || found != 0
+                    || wrapped
+                {
+                    break;
+                }
+
+                // Continue at the other end of the file. Say so unless
+                // 'shortmess' asks us not to, or the search stat is going
+                // to be shown anyway (so SEARCH_COUNT must be absent).
+                // The message is remembered in keep_msg for a redraw.
+                lnum = if dir == BACKWARD {
+                    self.buf.b_ml.ml_line_count
+                } else {
+                    1
+                };
+                if !shortmess(ShmFlag::SEARCH)
+                    && shortmess(ShmFlag::SEARCHCOUNT)
+                    && self.opt(SEARCH_MSG)
+                {
+                    let msg = if dir == BACKWARD {
+                        top_bot_msg
+                    } else {
+                        bot_top_msg
+                    };
+                    give_warning(gettext(msg), true, false);
+                }
+                if let Some(extra) = extra_arg.as_deref_mut() {
+                    extra.sa_wrapped = true;
+                }
+            }
+
+            if got_int.get() || self.aborted() || break_loop {
+                break;
+            }
+            // Stop after "count" matches, or as soon as one is missed.
+            count -= 1;
+            if count <= 0 || found == 0 {
+                break;
+            }
+        }
+        (found, submatch, lnum)
     }
 
     /// Write a match out. With `SEARCH_END` the position is the last
@@ -382,10 +577,10 @@ pub fn searchit(
     win: Option<Win>,
     buffer: Buf,
     pos: &mut Pos,
-    mut end_pos: Option<&mut Pos>,
+    end_pos: Option<&mut Pos>,
     dir: Direction,
     pat: &[u8],
-    mut count: c_int,
+    count: c_int,
     options: c_int,
     pat_use: c_int,
     mut extra_arg: Option<&mut SearchItArg>,
@@ -403,221 +598,40 @@ pub fn searchit(
 
     // Stop after this line number, when it is not zero.
     let mut stop_lnum: LineNr = 0;
-    let mut s = Searcher {
-        win,
-        buf: buffer,
-        regmatch,
-        tm: None,
-        timed_out: false,
-        options,
-        from_match_end: cpo_has(CpoFlag::SEARCH),
-        called_emsg_before: called_emsg.get(),
-    };
+    let (mut tm, mut timed_out) = (None, false);
     if let Some(extra) = &extra_arg {
         stop_lnum = extra.sa_stop_lnum;
-        s.tm = extra.sa_tm;
-        s.timed_out = extra.sa_timed_out;
+        tm = extra.sa_tm;
+        timed_out = extra.sa_timed_out;
     }
 
-    let mut found;
-    let mut submatch = 0;
-    let mut first_match = true;
-    let mut break_loop = false;
-    // The line the walk stopped on; the "hit TOP" message reads it
-    // after every loop has been left.
-    let mut lnum: LineNr;
-
-    loop {
-        // When a match at the start position is not acceptable,
-        // `extra_col` is non-zero. Not at MAXCOL though, where
-        // MAXCOL + 1 is zero.
-        let start_char_len = if pos.col == MAXCOL as c_int {
-            0
-        } else if pos.lnum >= 1 && pos.lnum <= buffer.b_ml.ml_line_count && pos.col < MAXCOL - 2 {
-            // Watch out for "col" being MAXCOL - 2, used in a closed fold.
-            let (lnum, col) = (pos.lnum, usize::try_from(pos.col).unwrap_or(0));
-            let mut lines = buffer.lines();
-            let line = lines.line(lnum);
-            if line.len() <= col {
-                1
-            } else {
-                cluster_len(&line[col..]) as c_int
-            }
-        } else {
-            1
-        };
-        let accept_at_start = s.opt(SEARCH_START);
-        let start = StartPos {
-            // Remember the start position, for detecting "no match".
-            pos: *pos,
-            extra_col: if dir == FORWARD {
-                if accept_at_start { 0 } else { start_char_len }
-            } else if accept_at_start {
-                start_char_len
-            } else {
-                0
-            },
+    // The pattern is set up once for the whole walk, not once per line.
+    let walked = walk_lines(&mut regmatch, win, &buffer, tm, |matcher| {
+        let mut s = Searcher {
+            buf: buffer,
+            matcher,
+            tm,
+            timed_out,
+            options,
+            from_match_end: cpo_has(CpoFlag::SEARCH),
+            called_emsg_before: called_emsg.get(),
         };
 
-        found = 0;
-        let mut at_first_line = true;
-        if pos.lnum == 0 {
-            // Correct lnum for when starting in line 0.
-            pos.lnum = 1;
-            pos.col = 0;
-            at_first_line = false;
-        }
+        let (found, submatch, lnum) = s.walk(
+            pos,
+            end_pos,
+            dir,
+            count,
+            stop_lnum,
+            extra_arg.as_deref_mut(),
+        );
+        (found, submatch, lnum, s.timed_out)
+    });
+    drop(regmatch);
+    // `search_regcomp` left a program, so the walk ran.
+    let (found, submatch, lnum, timed_out) = walked.unwrap_or((0, 0, pos.lnum, timed_out));
 
-        // Start in the current line, unless searching backwards from
-        // column 0 without accepting a match there — skipping back a
-        // line is then free.
-        if dir == BACKWARD && start.pos.col == 0 && !accept_at_start {
-            lnum = pos.lnum - 1;
-            at_first_line = false;
-        } else {
-            lnum = pos.lnum;
-        }
-
-        // Loop twice if 'wrapscan' is set.
-        for wrapped in [false, true] {
-            'lines: while lnum > 0 && lnum <= buffer.b_ml.ml_line_count {
-                // Stop after checking "stop_lnum", if it is set.
-                if stop_lnum != 0
-                    && if dir == FORWARD {
-                        lnum > stop_lnum
-                    } else {
-                        lnum < stop_lnum
-                    }
-                {
-                    break 'lines;
-                }
-                // Stop after passing the time limit.
-                if s.out_of_time() {
-                    break 'lines;
-                }
-
-                // Look for a match somewhere in line "lnum".
-                let col = if at_first_line && s.opt(SEARCH_COL) {
-                    pos.col
-                } else {
-                    0
-                };
-                let mut nmatched = s.exec(lnum, col);
-                // vim_regexec_multi() may clear "regprog".
-                if s.regmatch.regprog.is_none() {
-                    break 'lines;
-                }
-                // Abort searching on an error (e.g., out of stack).
-                if s.aborted() {
-                    break 'lines;
-                }
-
-                'next_line: {
-                    if nmatched <= 0 {
-                        line_breakcheck(); // stop if ctrl-C typed
-                        if got_int.get() {
-                            break 'lines;
-                        }
-                        // Cancel the search if a character was typed,
-                        // for 'incsearch'. Checking too often would
-                        // slow searching down too much.
-                        if s.opt(SEARCH_PEEK) && ((lnum - pos.lnum) & 0x3f) == 0 && char_avail() {
-                            break_loop = true;
-                            break 'lines;
-                        }
-                        if wrapped && lnum == start.pos.lnum {
-                            // Second time round: stop where we started.
-                            break 'lines;
-                        }
-                        break 'next_line;
-                    }
-
-                    // The match may be in another line, with `\zs`.
-                    let mut m = s.found();
-
-                    if dir == FORWARD
-                        && at_first_line
-                        && !s.skip_to_start_pos(lnum, &mut m, &mut nmatched, start, first_match)
-                    {
-                        break 'next_line;
-                    }
-                    if dir == BACKWARD
-                        && !s.last_match_before(lnum, &mut m, &mut nmatched, start, wrapped)
-                    {
-                        // There is only a match after the cursor.
-                        break 'next_line;
-                    }
-
-                    s.record(lnum, m, pos, end_pos.as_deref_mut());
-                    found = 1;
-                    first_match = false;
-                    submatch = m.submatch;
-
-                    // Variables used for 'incsearch' highlighting.
-                    search_match_lines.set(m.end.lnum - m.start.lnum);
-                    search_match_endcol.set(m.end.col);
-                    break 'lines;
-                }
-                lnum += dir;
-                at_first_line = false;
-            }
-            at_first_line = false;
-
-            // vim_regexec_multi() may clear "regprog".
-            if s.regmatch.regprog.is_none() {
-                break;
-            }
-
-            // Stop when 'wrapscan' is off, "stop_lnum" was given,
-            // after an interrupt, after a match, and after looping
-            // twice.
-            if !p_ws()
-                || stop_lnum != 0
-                || got_int.get()
-                || s.aborted()
-                || break_loop
-                || found != 0
-                || wrapped
-            {
-                break;
-            }
-
-            // Continue at the other end of the file. Say so unless
-            // 'shortmess' asks us not to, or the search stat is going
-            // to be shown anyway (so SEARCH_COUNT must be absent).
-            // The message is remembered in keep_msg for a redraw.
-            lnum = if dir == BACKWARD {
-                buffer.b_ml.ml_line_count
-            } else {
-                1
-            };
-            if !shortmess(ShmFlag::SEARCH) && shortmess(ShmFlag::SEARCHCOUNT) && s.opt(SEARCH_MSG) {
-                let msg = if dir == BACKWARD {
-                    top_bot_msg
-                } else {
-                    bot_top_msg
-                };
-                give_warning(gettext(msg), true, false);
-            }
-            if let Some(extra) = extra_arg.as_deref_mut() {
-                extra.sa_wrapped = true;
-            }
-        }
-
-        if got_int.get() || s.aborted() || break_loop {
-            break;
-        }
-        // Stop after "count" matches, or as soon as one is missed.
-        count -= 1;
-        if count <= 0 || found == 0 {
-            break;
-        }
-    }
-
-    s.regmatch.regprog = None;
-    if s.timed_out
-        && let Some(extra) = extra_arg
-    {
+    if timed_out && let Some(extra) = extra_arg {
         extra.sa_timed_out = true;
     }
 
@@ -715,9 +729,9 @@ pub(crate) fn search_in_current(
 /// The number of the first sub-pattern that matched, or zero if none of
 /// them did.
 #[inline(always)]
-fn first_submatch(rp: &RegMMatch) -> c_int {
+fn first_submatch(matcher: &LineMatcher) -> c_int {
     (1..10)
-        .find(|&i| rp.startpos[i].lnum >= 0)
+        .find(|&i| matcher.start(i).lnum >= 0)
         .map_or(0, |i| i as c_int)
 }
 

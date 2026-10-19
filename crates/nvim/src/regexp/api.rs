@@ -7,16 +7,19 @@
 //! pattern is recompiled for the backtracking engine and rerun. The other
 //! is the match's context: each run builds its own [`RegExec`] on this
 //! layer's stack — so a `\=` expression that starts a match of its own gets
-//! a context of its own — and reads back what the engine left in it.
+//! a context of its own — and reads back what the engine left in it. A
+//! caller that tries one pattern on line after line ([`walk_lines`]) has the
+//! context built once and re-seated on each line, which is what a search
+//! that fails on most lines would otherwise pay for per line.
 
 #![forbid(unsafe_code)]
 
 use crate::cstr;
 use crate::global_cell::GlobalCell;
+use crate::regexp::ExtMatchIo;
 use crate::regexp::RegCompiler;
 use crate::regexp::bt_regcomp;
 use crate::regexp::nfa_regcomp;
-use crate::regexp::{ExtMatch, ExtMatchIo, ExtMatchRef};
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use core::cell::Cell;
@@ -194,16 +197,14 @@ impl OwnedProg {
         lnum: LineNr,
         col: ColNr,
     ) -> c_int {
-        let run = MultiRun {
-            buffer: &buffer,
-            win,
-            lnum,
-            col,
-            deadline: None,
-            ext_in: None,
+        let (_, out) = MultiOut::split(rmp);
+        let io = ExtMatchIo {
+            input: None,
+            output: None,
         };
-        let (_, mut out) = MultiOut::split(rmp);
-        run.exec(self, &mut out, None, &mut None)
+        walk_with(self, out, win, &buffer, None, io, Some(lnum), |lines| {
+            lines.exec_seated(lnum, col, &mut false)
+        })
     }
 }
 
@@ -516,19 +517,176 @@ fn regexec_multi_io(
 ) -> c_int {
     // The program is borrowed where it lives, beside the slots the match
     // writes: a recompile for the backtracking engine replaces it in place.
-    let (Some(prog), mut out) = MultiOut::split(rmp) else {
+    let (Some(prog), out) = MultiOut::split(rmp) else {
         return 0;
     };
-    let run = MultiRun {
-        buffer: &buffer,
+    let mut flag = false;
+    let result = walk_with(prog, out, win, &buffer, tm, io, Some(lnum), |lines| {
+        lines.exec_seated(lnum, col, &mut flag)
+    });
+    if flag && let Some(timed_out) = timed_out {
+        *timed_out = true;
+    }
+    result
+}
+
+/// Run `f` with `rmp`'s program set up to match line after line of
+/// `buffer`: the match context is built once here and only re-seated per
+/// line, so a walk that fails on most lines pays for the setup once. `None`
+/// (and `f` not run) when `rmp` holds no program.
+///
+/// `tm` bounds how long each line's match may spend. To a match nested in
+/// it (a `\=` expression, a callout) the walk is one running match.
+pub(crate) fn walk_lines<R>(
+    rmp: &mut RegMMatch,
+    win: Option<Win>,
+    buffer: &Buf,
+    tm: Option<&ProfTime>,
+    f: impl FnOnce(&mut LineMatcher<'_>) -> R,
+) -> Option<R> {
+    let (Some(prog), out) = MultiOut::split(rmp) else {
+        return None;
+    };
+    let io = ExtMatchIo {
+        input: None,
+        output: None,
+    };
+    Some(walk_with(prog, out, win, buffer, tm, io, None, f))
+}
+
+/// [`walk_lines`] of `prog` with `out`'s settings and slots, and a syntax
+/// match's `\z` traffic. With `seat_on`, the match is built on that line
+/// already, for a caller that runs it there once.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "walk_lines's, the `\\z` traffic and the seat"
+)]
+#[inline(always)]
+fn walk_with<R>(
+    prog: &mut OwnedProg,
+    out: MultiOut<'_>,
+    win: Option<Win>,
+    buffer: &Buf,
+    tm: Option<&ProfTime>,
+    io: ExtMatchIo<'_>,
+    seat_on: Option<LineNr>,
+    f: impl FnOnce(&mut LineMatcher<'_>) -> R,
+) -> R {
+    let MultiOut {
+        starts,
+        ends,
+        matchcol,
+        ic,
+        maxcol,
+    } = out;
+    // A recompile keeps the pattern, and with it its `\z(` groups and its
+    // `RE_NOBREAK`: what is set up for the first program serves the next.
+    let zslots;
+    let setup = MatchSetup {
+        buf: buffer,
         win,
-        lnum,
-        col,
+        ic,
+        nobreak: prog.nobreak(),
         deadline: tm.copied(),
         ext_in: io.input,
+        ext_out: io.output.map(Cell::from_mut),
+        zslots: if prog.has_z() {
+            zslots = GroupSlots::new();
+            Some(&zslots)
+        } else {
+            None
+        },
     };
-    let mut ext_out = io.output;
-    run.exec(prog, &mut out, timed_out, &mut ext_out)
+    // The match writes the caller's slots in place, as upstream's did.
+    let (starts, ends) = (Cell::from_mut(starts), Cell::from_mut(ends));
+    let ctx = match seat_on {
+        Some(lnum) => RegExec::for_buffer(setup, lnum, maxcol, starts, ends),
+        None => RegExec::for_lines(setup, maxcol, starts, ends),
+    };
+    let mut lines = LineMatcher {
+        ctx: &ctx,
+        prog,
+        matchcol,
+    };
+    in_match_scope(seat_on, |_| f(&mut lines))
+}
+
+/// A buffer match set up by [`walk_lines`], run one line at a time.
+pub(crate) struct LineMatcher<'t> {
+    ctx: &'t RegExec<'t>,
+    prog: &'t mut OwnedProg,
+    matchcol: &'t mut ColNr,
+}
+
+impl LineMatcher<'_> {
+    /// Run the program over buffer line `lnum` from column `col`, falling
+    /// back to the backtracking engine when the NFA one gives up. Answers
+    /// the number of lines the match spans plus one, or 0; a match that ran
+    /// out of time sets `timed_out`.
+    ///
+    /// The line is read afresh each time, as a single match reads it.
+    pub(crate) fn exec(&mut self, lnum: LineNr, col: ColNr, timed_out: &mut bool) -> LineNr {
+        LAST_FIRSTLNUM.set(lnum);
+        self.ctx.seat(lnum);
+        self.exec_seated(lnum, col, timed_out)
+    }
+
+    /// [`LineMatcher::exec`] of a match already seated on `lnum`.
+    #[inline(always)]
+    fn exec_seated(&mut self, lnum: LineNr, col: ColNr, timed_out: &mut bool) -> LineNr {
+        let result = self.run(col, timed_out);
+        let result = if result == NFA_TOO_EXPENSIVE && self.prog.automatic() {
+            self.again_backtracking(lnum, col, timed_out)
+        } else {
+            result
+        };
+        result.max(0)
+    }
+
+    /// Run the program once, from where the match is seated.
+    #[inline(always)]
+    fn run(&mut self, col: ColNr, timed_out: &mut bool) -> LineNr {
+        let ctx = self.ctx;
+        let result = self.prog.run(ctx.rex(), col);
+        if let Some(col) = ctx.matchcol() {
+            *self.matchcol = col;
+        }
+        if ctx.timed_out() {
+            *timed_out = true;
+        }
+        result
+    }
+
+    /// The NFA engine gave up on the pattern: recompile it for the
+    /// backtracking one, in place, and run that. A failed recompile keeps
+    /// the old program rather than leaving the caller without one.
+    #[cold]
+    #[inline(never)]
+    fn again_backtracking(&mut self, lnum: LineNr, col: ColNr, timed_out: &mut bool) -> LineNr {
+        let Some(new) = recompile_backtracking(self.prog, true) else {
+            return NFA_TOO_EXPENSIVE;
+        };
+        *self.prog = new;
+        self.ctx.seat(lnum);
+        self.run(col, timed_out)
+    }
+
+    /// The column the last match really starts at, `\zs` aside.
+    pub(crate) fn matchcol(&self) -> ColNr {
+        *self.matchcol
+    }
+
+    /// Where group `no` of the last match starts, relative to the line it
+    /// was run from.
+    pub(crate) fn start(&self, no: usize) -> LPos {
+        self.ctx.rex().start(no).get().as_pos()
+    }
+
+    /// Where group `no` of the last match ends, relative to the line it
+    /// was run from.
+    pub(crate) fn end(&self, no: usize) -> LPos {
+        self.ctx.rex().end(no).get().as_pos()
+    }
 }
 
 /// What a buffer match reads from its `RegMMatch` and writes back to it,
@@ -562,100 +720,6 @@ impl<'a> MultiOut<'a> {
             maxcol: *rmm_maxcol,
         };
         (regprog.as_mut(), out)
-    }
-}
-
-/// What one buffer match runs with, whichever program runs it.
-struct MultiRun<'a> {
-    buffer: &'a Buf,
-    win: Option<Win>,
-    lnum: LineNr,
-    col: ColNr,
-    deadline: Option<ProfTime>,
-    ext_in: Option<&'a ExtMatch>,
-}
-
-impl MultiRun<'_> {
-    /// Run `prog` with `out`'s settings, into `out`'s slots, falling back to
-    /// the backtracking engine when the NFA one gives up.
-    fn exec(
-        &self,
-        prog: &mut OwnedProg,
-        out: &mut MultiOut<'_>,
-        mut timed_out: Option<&mut bool>,
-        ext_out: &mut Option<&mut Option<ExtMatchRef>>,
-    ) -> c_int {
-        let result = in_match_scope(Some(self.lnum), |_| {
-            let result = self.once(prog, out, &mut timed_out, ext_out);
-            if result == NFA_TOO_EXPENSIVE && prog.automatic() {
-                self.again_backtracking(prog, out, &mut timed_out, ext_out)
-            } else {
-                result
-            }
-        });
-        result.max(0)
-    }
-
-    /// Run `prog` once.
-    #[inline(always)]
-    fn once(
-        &self,
-        prog: &OwnedProg,
-        out: &mut MultiOut<'_>,
-        timed_out: &mut Option<&mut bool>,
-        ext_out: &mut Option<&mut Option<ExtMatchRef>>,
-    ) -> LineNr {
-        let zslots;
-        let setup = MatchSetup {
-            buf: self.buffer,
-            win: self.win,
-            ic: out.ic,
-            nobreak: prog.nobreak(),
-            deadline: self.deadline,
-            ext_in: self.ext_in,
-            ext_out: ext_out.as_deref_mut().map(Cell::from_mut),
-            zslots: if prog.has_z() {
-                zslots = GroupSlots::new();
-                Some(&zslots)
-            } else {
-                None
-            },
-        };
-        // The match writes the caller's slots in place, as upstream's did.
-        let maxcol = out.maxcol;
-        let (starts, ends) = (
-            Cell::from_mut(&mut *out.starts),
-            Cell::from_mut(&mut *out.ends),
-        );
-        let ctx = RegExec::for_buffer(setup, self.lnum, maxcol, starts, ends);
-        let result = prog.run(ctx.rex(), self.col);
-        let (matchcol, did_time_out) = (ctx.matchcol(), ctx.timed_out());
-        if let Some(col) = matchcol {
-            *out.matchcol = col;
-        }
-        if did_time_out && let Some(flag) = timed_out.as_deref_mut() {
-            *flag = true;
-        }
-        result
-    }
-
-    /// The NFA engine gave up on the pattern: recompile it for the
-    /// backtracking one, in place, and run that. A failed recompile keeps
-    /// the old program rather than leaving the caller without one.
-    #[cold]
-    #[inline(never)]
-    fn again_backtracking(
-        &self,
-        prog: &mut OwnedProg,
-        out: &mut MultiOut<'_>,
-        timed_out: &mut Option<&mut bool>,
-        ext_out: &mut Option<&mut Option<ExtMatchRef>>,
-    ) -> LineNr {
-        let Some(new) = recompile_backtracking(prog, true) else {
-            return NFA_TOO_EXPENSIVE;
-        };
-        *prog = new;
-        self.once(prog, out, timed_out, ext_out)
     }
 }
 

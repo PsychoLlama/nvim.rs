@@ -5,10 +5,11 @@
 //! is on and the byte within it, the capture slots it fills, and the flags
 //! the compiler left for it. Upstream keeps it in a file-scope `rex` and
 //! reaches it from everywhere, saving and restoring the whole of it around
-//! a nested match. Here the API layer builds one per match, on its own
-//! stack, and the engines thread a [`Rex`] — a shared borrow of it — down
-//! by value. A nested match (a `\=` expression that searches) builds its
-//! own, so there is nothing to save and restore.
+//! a nested match. Here the API layer builds one per match (or one per walk
+//! over lines, re-seated on each: [`RegExec::seat`]), on its own stack, and
+//! the engines thread a [`Rex`] — a shared borrow of it — down by value. A
+//! nested match (a `\=` expression that searches) builds its own, so there
+//! is nothing to save and restore.
 //!
 //! ## The line
 //!
@@ -75,10 +76,11 @@ pub(crate) struct RegExec<'t> {
     /// The window the match runs in, if there is one: `\%#` and `\%V`
     /// need one, and a string match has none.
     win: Option<Win>,
-    /// The buffer line the match's line 0 sits on.
-    firstlnum: LineNr,
+    /// The buffer line the match's line 0 sits on. A [`Cell`] because a
+    /// line walk ([`RegExec::seat`]) moves it from one line to the next.
+    firstlnum: Cell<LineNr>,
     /// The last line the match may reach, relative to `firstlnum`.
-    maxline: LineNr,
+    maxline: Cell<LineNr>,
     /// Is a line break in the text a character to match rather than the
     /// end of the line? Set for a string that holds newlines.
     line_lbr: bool,
@@ -90,6 +92,9 @@ pub(crate) struct RegExec<'t> {
     deadline: Option<ProfTime>,
     /// What `\z1`..`\z9` match: a syntax region's start captures.
     ext_in: Option<&'t ExtMatch>,
+
+    /// 'ignorecase' as the caller asked, which each match starts from.
+    caller_ic: bool,
 
     // --------------------------------------- what the pattern overrides
     ic: Cell<bool>,
@@ -147,6 +152,15 @@ impl Default for BtVars {
     }
 }
 
+impl BtVars {
+    /// Back to [`BtVars::default`], in place.
+    #[inline(always)]
+    fn reset(&self) {
+        self.behind_pos.set(SavedInput::NOWHERE);
+        self.brace_limits.set((0, 0));
+    }
+}
+
 /// The NFA engine's own variables: see [`BtVars`].
 #[derive(Default)]
 struct NfaVars {
@@ -160,6 +174,23 @@ struct NfaVars {
     endp: Cell<Option<MatchPos>>,
     ll_index: Cell<usize>,
     time: Cell<TimeBudget>,
+}
+
+impl NfaVars {
+    /// Back to [`NfaVars::default`], in place.
+    #[inline(always)]
+    fn reset(&self) {
+        self.has_zend.set(0);
+        self.has_backref.set(0);
+        self.nsubexpr.set(0);
+        self.listid.set(0);
+        self.alt_listid.set(0);
+        self.has_zsubexpr.set(0);
+        self.verdict.set(0);
+        self.endp.set(None);
+        self.ll_index.set(0);
+        self.time.set(TimeBudget::default());
+    }
 }
 
 /// One family of capture slots, `\0`..`\9`.
@@ -236,13 +267,14 @@ impl<'t> RegExec<'t> {
             multi,
             buf: setup.buf,
             win: setup.win,
-            firstlnum: 0,
-            maxline: 0,
+            firstlnum: Cell::new(0),
+            maxline: Cell::new(0),
             line_lbr: false,
             nobreak: setup.nobreak,
             maxcol: 0,
             deadline: setup.deadline,
             ext_in: setup.ext_in,
+            caller_ic: setup.ic,
             ic: Cell::new(setup.ic),
             icombine: Cell::new(false),
             lnum: Cell::new(0),
@@ -281,7 +313,7 @@ impl<'t> RegExec<'t> {
         assert_eq!(text.last(), Some(&0), "a match runs over a terminated line");
         let mut ctx = RegExec::new(setup, false, text, &slots.starts, &slots.ends);
         ctx.line_lbr = line_lbr;
-        ctx.firstlnum = firstlnum;
+        ctx.firstlnum = Cell::new(firstlnum);
         ctx
     }
 
@@ -298,11 +330,45 @@ impl<'t> RegExec<'t> {
         ends: &'t Slots,
     ) -> Self {
         let line_count = setup.buf.b_ml.ml_line_count;
+        let mut ctx = RegExec::for_lines(setup, maxcol, starts, ends);
+        ctx.firstlnum = Cell::new(lnum);
+        ctx.maxline = Cell::new(line_count - lnum);
+        ctx
+    }
+
+    /// A buffer match over `setup.buf` that is not on a line yet: a line
+    /// walk sets it up once and [`RegExec::seat`]s it on each line it
+    /// tries, rather than setting up a match per line.
+    pub(crate) fn for_lines(
+        setup: MatchSetup<'t>,
+        maxcol: ColNr,
+        starts: &'t Slots,
+        ends: &'t Slots,
+    ) -> Self {
         let mut ctx = RegExec::new(setup, true, b"\0", starts, ends);
-        ctx.firstlnum = lnum;
-        ctx.maxline = line_count - lnum;
         ctx.maxcol = maxcol;
         ctx
+    }
+
+    /// Put a [`RegExec::for_lines`] match on buffer line `lnum`, as fresh
+    /// as a match built for that line: everything a match leaves behind is
+    /// reset, and what the walk fixed is kept. The capture slots are the
+    /// engines' to clear, as they are in a new match.
+    #[inline(always)]
+    pub(crate) fn seat(&self, lnum: LineNr) {
+        self.firstlnum.set(lnum);
+        self.maxline.set(self.buf.b_ml.ml_line_count - lnum);
+        self.ic.set(self.caller_ic);
+        self.icombine.set(false);
+        self.lnum.set(0);
+        self.line.set(b"\0");
+        self.input.set(0);
+        self.need_clear_subexpr.set(false);
+        self.need_clear_zsubexpr.set(false);
+        self.matchcol.set(None);
+        self.timed_out.set(false);
+        self.bt.reset();
+        self.nfa.reset();
     }
 
     /// The handle the engines run the match through.
@@ -476,13 +542,13 @@ impl<'t> Rex<'t> {
     /// The buffer line `lnum` 0 of the match sits on.
     #[inline(always)]
     pub(crate) fn reg_firstlnum(self) -> LineNr {
-        self.0.firstlnum
+        self.0.firstlnum.get()
     }
 
     /// The last line the match may reach, relative to `reg_firstlnum`.
     #[inline(always)]
     pub(crate) fn reg_maxline(self) -> LineNr {
-        self.0.maxline
+        self.0.maxline.get()
     }
 
     /// The buffer line the cursor is on.
