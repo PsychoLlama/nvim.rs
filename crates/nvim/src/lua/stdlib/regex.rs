@@ -23,18 +23,14 @@ use crate::lua::ffi::{
 };
 use crate::luaL_reg_table;
 use crate::memline::{ml_get_buf, ml_get_buf_len};
-use crate::regexp::{OwnedProg, vim_regcomp, vim_regexec};
+use crate::regexp::{
+    OwnedProg, RE_AUTO, RE_MAGIC, RE_NOBREAK, RE_STRICT, vim_regcomp, vim_regexec,
+};
 use crate::types::{Error, Handle, LineNr, RegMatch, lua_State, luaL_Reg};
 
 /// The registry key the metatable is stored under, and the type name
 /// `luaL_checkudata` matches against.
 const REGEX_TYPE: &core::ffi::CStr = c"nvim_regex";
-
-/// `vim_regcomp` flags: pick the engine automatically, honour 'magic', and
-/// reject a pattern the automaton cannot take.
-const RE_AUTO: c_int = 8;
-const RE_MAGIC: c_int = 1;
-const RE_STRICT: c_int = 4;
 
 /// The compiled program behind the userdatum at slot 1, or a throw. The
 /// userdatum holds an `Option<OwnedProg>`, which [`nlua_regex`] wrote and
@@ -214,7 +210,12 @@ pub unsafe extern "C-unwind" fn nlua_regex(lstate: *mut lua_State) -> c_int {
         // vim_regcomp reports a bad pattern by throwing, so it runs bracketed.
         let mut tstate = TRY_STATE_INIT;
         try_enter(&raw mut tstate);
-        let prog = vim_regcomp(cstr::at(text), RE_AUTO | RE_MAGIC | RE_STRICT);
+        // Pick the engine automatically, honour 'magic', reject what the
+        // automaton cannot take -- and never check for CTRL-C: that polls
+        // the event loop, which aborts when the match runs inside a luv
+        // callback (the loop is already running), and `vim.regex` is
+        // allowed in a fast context.
+        let prog = vim_regcomp(cstr::at(text), RE_AUTO | RE_MAGIC | RE_STRICT | RE_NOBREAK);
         err.absorb(try_leave(&raw mut tstate));
 
         if err.is_set() {

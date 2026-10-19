@@ -53,7 +53,7 @@
   "raw_variadic_calls": 109,
   "long_fns": 55,
   "safety_on_safe_fns": 0,
-  "dup_consts": 1112,
+  "dup_consts": 1109,
   "types_files": 112,
   "untested_dirs": 16,
   "cchar_scratch": 146,
