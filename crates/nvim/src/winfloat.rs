@@ -39,7 +39,7 @@ use crate::memory::XString;
 use crate::message::e_cmdwin;
 use crate::message::emsg;
 use crate::mouse::{MousePos, find_win_inner};
-use crate::r#move::textpos2screenpos;
+use crate::r#move::{textpos2screenpos, validate_cursor};
 use crate::option::vars::{p_ch, p_ls};
 use crate::option::{OptionTarget, parse_winhl_opt, set_option_direct_for};
 use crate::options::kOptBufhidden;
@@ -500,6 +500,9 @@ pub(crate) fn win_config_float(win: Win, mut fconfig: WinConfig) {
 
     if fconfig.relative == kFloatRelativeCursor {
         let cur = current_win();
+        // The cursor may have moved since the last redraw: `w_wrow`/`w_wcol`
+        // are only current once validated.
+        validate_cursor(cur);
         fconfig.relative = kFloatRelativeWindow;
         fconfig.row += f64::from(cur.w_wrow);
         fconfig.col += f64::from(cur.w_wcol);
@@ -709,7 +712,9 @@ pub(crate) fn win_float_find_altwin(win: Win, tabpage: Option<TabPage>) -> Optio
         .and_then(WinId::get)
         .expect("a window list has a head");
     let wp = wp.unwrap_or(first);
-    if wp.w_config.focusable && !wp.w_config.hide {
+    // Not the window being closed itself: it may be the other tab's
+    // `tp_prevwin`.
+    if wp != win && wp.w_config.focusable && !wp.w_config.hide {
         Some(wp)
     } else {
         Some(first)
