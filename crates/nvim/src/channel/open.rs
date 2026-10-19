@@ -31,10 +31,12 @@ use crate::event::rstream::{rstream_init, rstream_init_fd, rstream_start};
 use crate::event::socket::{socket_connect, socket_watcher_accept};
 use crate::event::wstream::{wstream_init, wstream_init_fd};
 use crate::global_cell::GlobalCell;
+use crate::log::{LOGLVL_ERR, logmsg};
 use crate::memory::{xfree, xstrdup};
 use crate::msgpack_rpc::channel::rpc_start;
 use crate::msgpack_rpc::server::server_owns_pipe_address;
 use crate::os::cshim::gettext;
+use crate::os::fs::os_strerror;
 use crate::os::pty_proc_unix::pty_proc_init;
 use crate::os::shell::shell_free_argv;
 use crate::startup::{embedded_mode, exiting, headless_mode, ui_client_channel_id};
@@ -339,7 +341,19 @@ pub fn channel_connect(
 pub unsafe fn channel_from_connection(watcher: *mut SocketWatcher) {
     // SAFETY: the caller's live watcher.
     let channel = unsafe { channel_alloc(kChannelStreamSocket) };
-    unsafe { socket_watcher_accept(watcher, &raw mut (*channel).stream.socket) };
+    let result = unsafe { socket_watcher_accept(watcher, &raw mut (*channel).stream.socket) };
+    if result != 0 {
+        // The client handle is already closed; the channel never got going.
+        logmsg!(
+            LOGLVL_ERR,
+            c"channel_from_connection",
+            529,
+            "Failed to accept connection: {}",
+            os_strerror(result).to_string_lossy()
+        );
+        unsafe { channel_destroy_early(channel) };
+        return;
+    }
     unsafe { attach_socket(channel) };
     unsafe { rpc_start(channel) };
     unsafe { channel_create_event(channel, (&raw mut (*watcher).addr).cast()) };

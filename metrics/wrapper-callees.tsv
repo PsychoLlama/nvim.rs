@@ -300,6 +300,7 @@ count	callee	no_raw	defs	def
 3	buckets_mut	1	1	crates/nvim/src/map/table.rs
 3	buf_collect_lines	0	1	crates/nvim/src/api/buffer/lines.rs
 3	callback_copy	0	0	
+3	channel_destroy_early	0	1	crates/nvim/src/channel/mod.rs
 3	channel_send	0	1	crates/nvim/src/channel/mod.rs
 3	clear_diffout	0	1	crates/nvim/src/diff/update.rs
 3	clear_fmark	0	1	crates/nvim/src/mark/mod.rs
@@ -457,7 +458,6 @@ count	callee	no_raw	defs	def
 2	callback_reader_free	0	0	
 2	cbuf_to_string	0	1	crates/nvim/src/api/private/helpers/text.rs
 2	cells_mut	0	1	crates/nvim/src/vterm/screen/mod.rs
-2	channel_destroy_early	0	1	crates/nvim/src/channel/mod.rs
 2	channel_info_changed	0	1	crates/nvim/src/channel/info.rs
 2	channel_instream	0	1	crates/nvim/src/channel/mod.rs
 2	channel_pty	0	1	crates/nvim/src/channel/mod.rs

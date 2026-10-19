@@ -79,10 +79,10 @@ change/	change/open_line/mod.rs	1	48	6	35	deref:11 compound:1	str:6 other:1	str:
 change/	change/open_line/smart.rs	1	2	1	2	-	str:1	-	bytes_at:1
 change/	change/splice.rs	1	4	0	2	deref:1 ref:1	-	-	.copy_from:1 free_fmark:1
 change/	change/text.rs	1	26	6	17	deref:2 expr:2 compound:1	str:9	-	.offset:2 from_raw_parts:2 utf_composinglike:2 win_chartabsize:2 getvcol:1 showmatch:1 slice_at:1 utf_char2bytes:1
-channel/	*	5	299	48	150	deref:115 expr:28 ref:3 compound:1	other:42 str:10 void:10 pp:4 pp_str:4 value:1	other:10 str:3	multiqueue_put_event:6 rpc_start:5 rstream_may_close:4 rstream_start:4 xfree:4 rstream_init:3 DictRef::owning:2 bytes_at:2
+channel/	*	5	300	48	151	deref:115 expr:28 ref:3 compound:1	other:42 str:10 void:10 pp:4 pp_str:4 value:1	other:10 str:3	multiqueue_put_event:6 rpc_start:5 rstream_may_close:4 rstream_start:4 xfree:4 rstream_init:3 DictRef::owning:2 bytes_at:2
 channel/	channel/info.rs	1	28	4	13	deref:13 expr:1 ref:1	other:2 pp:1 pp_str:1 str:1	-	cstr_to_string:2 DictRef::retained:1 multiqueue_put_event:1 terminal_buf:1 xfree:1
 channel/	channel/mod.rs	1	91	19	43	deref:34 expr:11 compound:1	other:16 pp_str:2 str:2 pp:1 void:1	other:9 str:3	rstream_may_close:4 multiqueue_put_event:2 stream_may_close:2 xfree:2 zeroed:2 Box::from_raw:1 api_free_luaref:1 callback_free:1
-channel/	channel/open.rs	1	100	6	57	deref:36 expr:7	other:6 str:2 void:2 pp_str:1 value:1	other:1	rpc_start:5 rstream_start:4 rstream_init:3 DictRef::owning:2 dup2:2 fcntl:2 wstream_init:2 at:1
+channel/	channel/open.rs	1	101	6	58	deref:36 expr:7	other:6 str:2 void:2 pp_str:1 value:1	other:1	rpc_start:5 rstream_start:4 rstream_init:3 DictRef::owning:2 dup2:2 fcntl:2 wstream_init:2 at:1
 channel/	channel/reader.rs	1	54	12	24	deref:23 expr:5 ref:2	other:17 str:4 void:2 pp:1	-	bytes_at:2 callback_call:1 dict_find:1 from_raw_parts:1 multiqueue_put_event:1 terminal_receive:1
 channel/	channel/term.rs	1	26	7	13	deref:9 expr:4	void:5 other:1 pp:1 str:1	-	multiqueue_put_event:2 proc_stop:1 pty_proc_resize:1 pty_proc_resume:1 rstream_start_inner:1 rstream_stop_inner:1 terminal_destroy:1 wstream_write:1
 charset/	*	1	49	25	30	deref:10 expr:2 compound:1	str:24 other:6 pp_str:4	str:10	bytes_at:5 from_raw_parts_mut:3 prefix_at:3 from_raw_parts:2 slice_at:2 utf_ptr2cells:1
