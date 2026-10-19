@@ -197,8 +197,10 @@ pub(crate) fn nv_exit_command(cmd_arg: &mut CmdArg) {
         Ok(b'Z') => c"x",
         // Quit without writing.
         Ok(b'Q') => c"q!",
-        // Restart. A count means "and abandon every other window too".
-        Ok(b'R') if cmd_arg.count0 >= 1 => c"restart +qall!",
+        // Restart, restoring the session. A count skips the session; a
+        // count of 9 also abandons unsaved changes.
+        Ok(b'R') if (1..=8).contains(&cmd_arg.count0) => c"restart!",
+        Ok(b'R') if cmd_arg.count0 == 9 => c"restart! +qall!",
         Ok(b'R') => c"restart",
         _ => {
             clear_op_beep(cmd_arg.op());

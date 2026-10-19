@@ -61,8 +61,9 @@ use super::{
 /// Whether stdio has already been claimed. Only one channel may own it.
 static did_stdio: GlobalCell<bool> = GlobalCell::new(false);
 
-/// [`channel_job_start`] of an owned argument vector, with no working
-/// directory, environment or pty size of its own: answers the new channel's
+/// [`channel_job_start`] of an owned argument vector and environment
+/// (`None` inherits this process's), with no working directory or pty size
+/// of its own: answers the new channel's
 /// id, or `None` with `status` set as the start sets it.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn channel_job_start_argv(
@@ -74,6 +75,7 @@ pub(crate) fn channel_job_start_argv(
     rpc: bool,
     overlapped: bool,
     detach: bool,
+    env: Option<DictRef>,
     status: &mut VarNumber,
 ) -> Option<uint64_t> {
     // SAFETY: an owned vector in the shape the start takes over, a name or
@@ -93,7 +95,7 @@ pub(crate) fn channel_job_start_argv(
             ptr::null(),
             0,
             0,
-            ptr::null_mut(),
+            env.map_or(ptr::null_mut(), DictRef::into_raw),
             status,
         )
     };

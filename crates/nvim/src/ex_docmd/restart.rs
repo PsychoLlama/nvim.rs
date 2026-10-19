@@ -5,10 +5,14 @@
 use crate::channel::channel_close_or_report;
 use crate::channel::channel_job_stop_wait;
 use crate::channel::open::channel_job_start_argv;
+use crate::eval::funcs::create_environment;
+use crate::ex_docmd::kRetNilBool;
+use crate::lua::executor::nlua_exec_cstr;
 use crate::memory::ThinCString;
 use crate::message::emsg;
-use crate::message_fmt::msg_cstr;
+use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::msgpack_rpc::channel::rpc_call_with;
+use crate::os::env::ENV_STARTREASON;
 use crate::os::shell::Argv;
 use core::ffi::CStr;
 
@@ -30,7 +34,7 @@ use crate::ui::state::current_ui;
 
 use crate::msgpack_rpc::server::{server_start, server_stop};
 
-use crate::strings::{concat, has_bytes};
+use crate::strings::has_bytes;
 use crate::types::{
     ApiDict, Array, Callback, CallbackReader, CmdModFlags, Error, ExArg, KeyValuePair, Object,
     String_0, VarNumber, Vv, key_value_pair,
@@ -65,7 +69,36 @@ fn entry(key: &'static CStr, value: Object) -> KeyValuePair {
     }
 }
 
-/// `:restart` — start a second Nvim, hand every UI over to it, and quit.
+/// `:restart` — save the session, then `:restart!` into a server that
+/// restores it.
+///
+/// The session half is Lua (`vim._core.server.ex_session_restart`), which
+/// writes the session and calls back into `:restart! +::: {quit} {after}`;
+/// the `:::` tells [`restart_server`] that it is the second half of this
+/// command, not a `:restart!` of the user's own.
+pub(crate) fn ex_restart(excmd: &mut ExArg) {
+    if excmd.forceit {
+        restart_server(excmd);
+        return;
+    }
+    let quit_cmd = excmd.do_ecmd_cmd.cstr(&excmd.line).unwrap_or(c"");
+    let args = Array::from(vec![
+        Object::string(String_0::from_bytes(excmd.line.arg())),
+        obj_str(quit_cmd),
+    ]);
+    const CHUNK: &CStr = c"require'vim._core.server'.ex_session_restart(...)";
+    if let Err(e) = nlua_exec_cstr(CHUNK, args, kRetNilBool) {
+        emsg(e.message_or_empty());
+    }
+}
+
+/// E5201: the quit command ran and this server is still here.
+fn report_quit_failed(quit_cmd: &[u8]) {
+    let quit_cmd = msg_bytes(quit_cmd);
+    semsg!("E5201: Restart failed: +cmd did not quit server: {quit_cmd}");
+}
+
+/// `:restart!` — start a second Nvim, hand every UI over to it, and quit.
 ///
 /// The new server is started as an embedded RPC job so that this one can
 /// talk to it: it has to be told not to exit when the channel closes, told
@@ -73,63 +106,20 @@ fn entry(key: &'static CStr, value: Object) -> KeyValuePair {
 /// UIs to. Only then does this server try to quit — and if it *cannot*
 /// (an unsaved buffer, a `+cmd` that did not quit), the new server is
 /// killed again and nothing has changed.
-pub(crate) fn ex_restart(excmd: &mut ExArg) {
-    let mut numbuf = NumBuf::new();
+fn restart_server(excmd: &mut ExArg) {
+    let Some(RestartPlan {
+        reason,
+        quit_cmd,
+        after_cmd,
+    }) = restart_plan(excmd)
+    else {
+        return;
+    };
     let mut err = Error::none();
     let no_ui = ui_active() == 0;
     // A copy: the variable is held across the job start below.
     let exepath = ThinCString::from_vec(vim_var_bytes(Vv::Progpath));
-    let argv_list = get_vim_var_list_handle(Vv::Argv);
-
-    let mut words: Vec<ThinCString> =
-        Vec::with_capacity(list_len(argv_list.as_deref()) as usize + 2);
-    // The address after `--listen`: in use by *this* server, so it has to be
-    // released before the new one can take it.
-    let mut listen_arg: Option<ThinCString> = None;
-
-    let items = list_items(argv_list.as_deref());
-    let mut at = 0;
-    while at < items.len() {
-        let arg = ThinCString::from_cstr(numbuf.string(&items[at].li_tv));
-        let first = words.is_empty();
-        // `-- [files…]` is dropped: it is almost never wanted, and
-        // `:mksession` is the way to carry a session over.
-        if !first && arg.as_cstr() == c"--" {
-            break;
-        }
-        // `-s <scriptfile>` is dropped, script file and all.
-        if !first && arg.as_cstr() == c"-s" {
-            if at + 1 >= items.len() {
-                break;
-            }
-            at += 2;
-            continue;
-        }
-        if !first
-            && arg.as_cstr() == c"--listen"
-            && let Some(next_li) = items.get(at + 1)
-            && let text = numbuf.string(&next_li.li_tv)
-            && (has_bytes(text, b":") || has_bytes(text, b"/") || has_bytes(text, b"\\"))
-        {
-            listen_arg = Some(ThinCString::from_cstr(text));
-        }
-        // `--embed`, `--headless` and `-` are replaced by exactly one
-        // `--embed` (plus `--headless` when there is no UI), inserted
-        // right after argv[0].
-        let dropped = [c"--embed", c"--headless", c"-"].contains(&arg.as_cstr());
-        if first || !dropped {
-            words.push(arg);
-            if first {
-                words.push(ThinCString::from_cstr(c"--embed"));
-                // Without `--headless`, an embedded server waits for a
-                // UI to attach.
-                if no_ui {
-                    words.push(ThinCString::from_cstr(c"--headless"));
-                }
-            }
-        }
-        at += 1;
-    }
+    let (words, listen_arg) = restart_argv(no_ui);
     let server_stopped = listen_arg
         .as_ref()
         .is_some_and(|addr| server_stop(addr.as_cstr(), true));
@@ -138,6 +128,11 @@ pub(crate) fn ex_restart(excmd: &mut ExArg) {
     // The stderr fd is inherited, so forwarding still works after this
     // server exits.
     on_err.fwd_err = true;
+    // The new server's environment is this one's, plus why it started:
+    // set on the job, not here, where anything else this server starts
+    // would see it too.
+    let mut env = create_environment(None, false, false, false, None);
+    let _ = env.add_str(ENV_STARTREASON.to_bytes(), Some(reason));
     let mut exit_status: VarNumber = 0;
     // `v:argv` names at least the program; an empty one starts nothing, as
     // a vector with no program cannot.
@@ -152,6 +147,7 @@ pub(crate) fn ex_restart(excmd: &mut ExArg) {
                 true,
                 true,
                 true, // detach: the new server outlives this one
+                Some(env),
                 &mut exit_status,
             )
         })
@@ -170,14 +166,11 @@ pub(crate) fn ex_restart(excmd: &mut ExArg) {
 
             // `:restart {cmd}` runs {cmd} over there, once a UI has
             // arrived.
-            if excmd.line.byte_at(excmd.line.arg) != 0 {
+            if !after_cmd.is_empty() {
                 let opt_items = [
                     entry(c"once", obj_bool(true)),
                     entry(c"nested", obj_bool(true)),
-                    entry(
-                        c"command",
-                        Object::string(String_0::from_bytes(excmd.line.arg())),
-                    ),
+                    entry(c"command", Object::string(String_0::from_bytes(&after_cmd))),
                 ];
                 let autocmd_items = [obj_str(c"UIEnter"), Object::dict(dict_of(opt_items))];
                 if let Err(e) =
@@ -207,15 +200,14 @@ pub(crate) fn ex_restart(excmd: &mut ExArg) {
             ui_call_restart(servername);
             ui_flush();
 
-            set_vim_var_string(Vv::Exitreason, Some(b"restart"));
+            set_vim_var_string(Vv::Exitreason, Some(reason.to_bytes()));
 
-            let quit_cmd = excmd.do_ecmd_cmd.cstr(&excmd.line).unwrap_or(c"qall");
             let quit_cmd = if cmdmod_has(CmdModFlags::CONFIRM) {
-                String_0::from_bytes(&concat(b"confirm ", quit_cmd.to_bytes()))
+                [&b"confirm "[..], &quit_cmd].concat()
             } else {
-                String_0::from_cstr(quit_cmd)
+                quit_cmd
             };
-            if let Err(e) = nvim_command(quit_cmd) {
+            if let Err(e) = nvim_command(String_0::from_bytes(&quit_cmd)) {
                 err = e;
             }
 
@@ -223,7 +215,7 @@ pub(crate) fn ex_restart(excmd: &mut ExArg) {
                 emsg(err.message_or_empty());
                 err.clear();
             } else if !exiting.get() {
-                emsg(c"restart failed: +cmd did not quit the server");
+                report_quit_failed(&quit_cmd);
             }
         }
 
@@ -260,6 +252,117 @@ pub(crate) fn ex_restart(excmd: &mut ExArg) {
         let listen_arg = msg_cstr(addr.as_cstr());
         semsg!("couldn't resume listening on {listen_arg}");
     }
+}
+
+/// What `:restart!` was asked to do.
+struct RestartPlan {
+    /// What the new server's `v:startreason` and this one's `v:exitreason`
+    /// say: `restart` for a plain `:restart`, `restart!` otherwise.
+    reason: &'static CStr,
+    /// The command that quits this server.
+    quit_cmd: Vec<u8>,
+    /// The command the new server runs once a UI arrives; may be empty.
+    after_cmd: Vec<u8>,
+}
+
+/// Read [`RestartPlan`] off `:restart!`'s arguments. `None` (with the error
+/// given) for a `+:::` without its quit command.
+fn restart_plan(excmd: &ExArg) -> Option<RestartPlan> {
+    let given_quit_cmd = excmd.do_ecmd_cmd.cstr(&excmd.line);
+    if given_quit_cmd == Some(c":::") {
+        // The second half of a plain `:restart`, whose arguments come
+        // pre-split from `nvim_cmd`: `+:::`, the quit command, and the
+        // rest.
+        let Some(&(at, len)) = excmd.line.args.get(1) else {
+            report_quit_failed(b":::");
+            return None;
+        };
+        let after_cmd = excmd
+            .line
+            .args
+            .get(2)
+            .map_or(&[][..], |&(at, _)| excmd.line.rest_of(at));
+        Some(RestartPlan {
+            reason: c"restart",
+            quit_cmd: excmd.line.slice_at(at, len).to_vec(),
+            after_cmd: after_cmd.to_vec(),
+        })
+    } else {
+        Some(RestartPlan {
+            reason: c"restart!",
+            quit_cmd: given_quit_cmd.unwrap_or(c"qall").to_bytes().to_vec(),
+            after_cmd: excmd.line.arg().to_vec(),
+        })
+    }
+}
+
+/// The new server's argument vector: this one's `v:argv`, less what would
+/// make it a different session (files, `-s`/`-S` scripts) or a different
+/// kind of server, with `--embed` (and `--headless` when no UI is
+/// attached). Also the address after `--listen`: in use by *this* server,
+/// so it has to be released before the new one can take it.
+fn restart_argv(no_ui: bool) -> (Vec<ThinCString>, Option<ThinCString>) {
+    let mut numbuf = NumBuf::new();
+    let argv_list = get_vim_var_list_handle(Vv::Argv);
+
+    let mut words: Vec<ThinCString> =
+        Vec::with_capacity(list_len(argv_list.as_deref()) as usize + 2);
+    let mut listen_arg: Option<ThinCString> = None;
+
+    let items = list_items(argv_list.as_deref());
+    let mut at = 0;
+    while at < items.len() {
+        let arg = ThinCString::from_cstr(numbuf.string(&items[at].li_tv));
+        let first = words.is_empty();
+        // `-- [files…]` is dropped: it is almost never wanted, and
+        // `:mksession` is the way to carry a session over.
+        if !first && arg.as_cstr() == c"--" {
+            break;
+        }
+        // `-S [session]` is dropped: it conflicts with `:restart`, and is
+        // seldom wanted for `:restart!`. The session file is optional, so
+        // the next word goes too only when it is not an option.
+        if !first && arg.as_cstr() == c"-S" {
+            let session_follows = items
+                .get(at + 1)
+                .is_some_and(|next| numbuf.string(&next.li_tv).to_bytes().first() != Some(&b'-'));
+            at += if session_follows { 2 } else { 1 };
+            continue;
+        }
+        // `-s <scriptfile>` is dropped, script file and all.
+        if !first && arg.as_cstr() == c"-s" {
+            if at + 1 >= items.len() {
+                break;
+            }
+            at += 2;
+            continue;
+        }
+        if !first
+            && arg.as_cstr() == c"--listen"
+            && let Some(next_li) = items.get(at + 1)
+            && let text = numbuf.string(&next_li.li_tv)
+            && (has_bytes(text, b":") || has_bytes(text, b"/") || has_bytes(text, b"\\"))
+        {
+            listen_arg = Some(ThinCString::from_cstr(text));
+        }
+        // `--embed`, `--headless` and `-` are replaced by exactly one
+        // `--embed` (plus `--headless` when there is no UI), inserted
+        // right after argv[0].
+        let dropped = [c"--embed", c"--headless", c"-"].contains(&arg.as_cstr());
+        if first || !dropped {
+            words.push(arg);
+            if first {
+                words.push(ThinCString::from_cstr(c"--embed"));
+                // Without `--headless`, an embedded server waits for a
+                // UI to attach.
+                if no_ui {
+                    words.push(ThinCString::from_cstr(c"--headless"));
+                }
+            }
+        }
+        at += 1;
+    }
+    (words, listen_arg)
 }
 
 /// A `CallbackReader` that reads nothing.
