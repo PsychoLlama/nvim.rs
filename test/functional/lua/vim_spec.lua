@@ -1796,6 +1796,22 @@ describe('lua stdlib', function()
     ]]
 
     eq(2, fn.luaeval 'vim.g.var')
+
+    -- Passing many arguments to indexed vim.cmd (#41314)
+    local props = exec_lua [[
+      local props = {}
+      for i = 1, 300 do
+        props[i] = ('custom_property_%03d'):format(i)
+      end
+      vim.cmd.syntax { 'keyword', 'editorconfigProperty', unpack(props) }
+      return props
+    ]]
+
+    local output = n.exec_capture('syntax list editorconfigProperty')
+    output = output:match('^%-%-%- Syntax items %-%-%-\neditorconfigProperty xxx (.*)')
+    local output_list = vim.split(output, ' ')
+    table.sort(output_list)
+    eq(props, output_list)
   end)
 
   it('vim.regex', function()
@@ -1818,6 +1834,29 @@ describe('lua stdlib', function()
     -- vim.regex() error inside :silent! should not crash. #20546
     command([[silent! lua vim.regex('\\z')]])
     assert_alive()
+
+    -- match_str() in a fast (luv) callback does not abort. #18111
+    eq(
+      { true, true },
+      exec_lua(function()
+        local re = vim.regex('^.*\\.go$')
+        local res
+        local timer = assert(vim.uv.new_timer())
+        timer:start(10, 0, function()
+          -- Enough matches to reach BREAKCHECK_SKIP, which would abort (reentrant event loop).
+          local ok = true
+          for _ = 1, 3000 do
+            ok = ok and re:match_str('internal/config/config.go') ~= nil
+          end
+          res = { ok, vim.in_fast_event() }
+          timer:close()
+        end)
+        vim.wait(1000, function()
+          return res ~= nil
+        end)
+        return res
+      end)
+    )
   end)
 
   it('vim.defer_fn', function()
