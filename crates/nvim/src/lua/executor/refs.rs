@@ -24,7 +24,8 @@ use core::ffi::c_int;
 use super::get_global_lstate;
 use crate::lua::ffi::{
     LUA_NOREF, LUA_REGISTRYINDEX, LUA_TFUNCTION, lua_getfield, lua_newuserdata, lua_pop,
-    lua_pushstring, lua_pushvalue, lua_rawgeti, lua_touserdata, lua_type, luaL_ref, luaL_unref,
+    lua_pushstring, lua_pushvalue, lua_rawgeti, lua_touserdata, lua_type, luaL_error, luaL_ref,
+    luaL_unref,
 };
 use crate::lua::state::nlua_global_refs;
 use crate::types::{LuaRef, NluaRefState, lua_State};
@@ -95,6 +96,15 @@ pub(crate) unsafe extern "C-unwind" fn nlua_nil_tostring(lstate: *mut lua_State)
         lua_pushstring(lstate, c"vim.NIL".as_ptr());
         1
     }
+}
+
+/// `vim.NIL`'s `__index` and `__newindex`: indexing a JSON `null` names
+/// what was indexed, rather than Lua's "attempt to index a userdata value".
+///
+/// # Safety
+/// `lstate` must be a live Lua state; the error does not return.
+pub(crate) unsafe extern "C-unwind" fn nlua_nil_index(lstate: *mut lua_State) -> c_int {
+    unsafe { luaL_error(lstate, c"attempt to index vim.NIL".as_ptr()) }
 }
 
 /// `vim.empty_dict()`'s `__tostring`.

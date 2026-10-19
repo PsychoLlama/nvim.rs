@@ -65,6 +65,7 @@ count	callee	no_raw	defs	def
 14	ml_replace	0	1	crates/nvim/src/change/text.rs
 13	aucmd_prepbuf	0	1	crates/nvim/src/autocmd/aucmdwin.rs
 13	from	0	0	
+13	luaL_error	0	0	
 13	notify	0	1	crates/nvim/src/mpack/lmpack/session.rs
 13	vterm_dealloc	0	1	crates/nvim/src/vterm/vterm.rs
 12	api_free_luaref	1	1	crates/nvim/src/lua/executor/refs.rs
@@ -73,7 +74,6 @@ count	callee	no_raw	defs	def
 12	get_leader_len	0	1	crates/nvim/src/change/leader.rs
 12	get_yank_register	0	1	crates/nvim/src/register/store.rs
 12	getdigits_int	0	1	crates/nvim/src/charset/walk.rs
-12	luaL_error	0	0	
 12	mb_get_class	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 12	prefix_eq	0	1	crates/nvim/src/cstr.rs
 12	starts_with	0	1	crates/nvim/src/cstr.rs

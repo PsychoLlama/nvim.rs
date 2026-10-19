@@ -15,8 +15,8 @@ use core::ffi::{CStr, c_char, c_int};
 use super::{
     BUILTIN_MODULES, luv_set_callback, luv_set_cthread, luv_set_thread, nlua_empty_dict_tostring,
     nlua_fast_cfpcall, nlua_is_thread, nlua_luv_thread_cb_cfpcall, nlua_luv_thread_cfcpcall,
-    nlua_luv_thread_cfpcall, nlua_new_ref_state, nlua_nil_tostring, nlua_pcall, nlua_ref,
-    nlua_ref_global,
+    nlua_luv_thread_cfpcall, nlua_new_ref_state, nlua_nil_index, nlua_nil_tostring, nlua_pcall,
+    nlua_ref, nlua_ref_global,
 };
 use crate::api::extmark::ns_initialized;
 use crate::lua::ffi::{
@@ -68,6 +68,10 @@ pub(crate) unsafe fn nlua_common_vim_init(
         lua_newtable(lstate);
         lua_pushcfunction(lstate, nlua_nil_tostring);
         lua_setfield(lstate, -2, c"__tostring".as_ptr());
+        lua_pushcfunction(lstate, nlua_nil_index);
+        lua_setfield(lstate, -2, c"__index".as_ptr());
+        lua_pushcfunction(lstate, nlua_nil_index);
+        lua_setfield(lstate, -2, c"__newindex".as_ptr());
         lua_setmetatable(lstate, -2);
         (*ref_state).nil_ref = nlua_ref(lstate, ref_state, -1);
         lua_pushvalue(lstate, -1);
