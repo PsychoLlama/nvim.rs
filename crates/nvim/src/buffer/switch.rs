@@ -819,9 +819,9 @@ fn pick_replacement(buf_fnum: c_int, update_jumplist: &mut bool) -> Option<Buf> 
         });
     }
     if buf.is_none() {
-        // Still no buffer, just take one.  Upstream tests the answer without
-        // checking it for null first; with both neighbours gone there is
-        // nothing to test, which is what `filter` says here.
+        // Still no buffer, just take one. Both neighbours may be gone (a
+        // WinLeave autocommand wiping every other buffer), and then there is
+        // nothing to take.
         let cur = Buf::current();
         buf = cur.next().or_else(|| cur.prev()).filter(|b| {
             !is_quickfix(*b) && !(b.raw() != Buf::current_raw() && b.b_locked_split != 0)

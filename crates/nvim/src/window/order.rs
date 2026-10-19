@@ -157,9 +157,10 @@ pub(crate) fn exchange(prenum: c_int) {
     } else if visual_active() {
         wp.w_cursor = cur.w_cursor;
     }
+    // `wp` is current now, unless autocommands moved on — and then they
+    // may have closed it, so it is not touched again.
     win_enter(wp, true);
     Win::current().redraw_later(UPD_NOT_VALID);
-    wp.redraw_later(UPD_NOT_VALID);
 }
 
 /// Rotate the windows in the current row or column `count` places, upwards or

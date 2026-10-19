@@ -168,8 +168,10 @@ fn close_all(buffer: Buf, keep_curwin: bool) {
                             break 'theend; // Only give one error message.
                         }
                         if !close_othertab(wp, false, tp, false) {
-                            // Give up rather than loop forever.
-                            break;
+                            // Give up rather than loop forever — on every tab
+                            // page: `nexttp` was taken before the autocommands
+                            // ran and may be gone.
+                            break 'theend;
                         }
                         // Start all over: the tab page may be gone and
                         // autocommands may change the window layout.

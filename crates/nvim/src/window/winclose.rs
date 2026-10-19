@@ -563,6 +563,16 @@ pub(crate) fn close_othertab(win: Win, free_buf: bool, tabpage: TabPage, force: 
             }
         }
 
+        // Take the window off the UI before freeing it: a multigrid UI
+        // must hear that its grid closed, and the compositor must not keep
+        // a float's grid it would otherwise draw from after the free.
+        if ui_has(kUIMultigrid) {
+            ui_call_win_close(win.w_grid_alloc.handle as Integer);
+        }
+        if win.w_floating {
+            drop_grid(win);
+        }
+
         // About to free the window: remember its final buffer for
         // `terminal_check_size` and TabClosed, which may have changed since the
         // last `BufRef` (`close_buffer` autocommands, say).
