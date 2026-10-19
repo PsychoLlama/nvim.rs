@@ -309,6 +309,7 @@ impl Cells {
             wlv.char_attr = hl_combine_attr(term_attr, wlv.char_attr);
         }
 
+        self.gap_decor_attr = self.decor_attr;
         self.linebreak(wlv, window, c0);
         unsafe { self.listchars(wlv, window, *prev_ptr) };
     }
@@ -515,10 +516,21 @@ impl Cells {
                 .width
                 - 1;
 
-        if self.on_last_col && self.char_code != TAB {
-            // Search and match highlighting do not continue over the line
-            // break — but a Tab's highlight covers its whole width.
-            self.search_attr = 0;
+        // Do not bleed an underline, strikethrough or overline into the
+        // filler for the pushed-down word: over blank cells it looks like a
+        // broken line. A background or reverse-video highlight reads fine
+        // there, so it stays. A Tab keeps its own full-width highlight, and
+        // search highlighting also stops when its match ends right here.
+        if self.char_code != TAB {
+            if self.on_last_col || attr_has_line_deco(self.search_attr) {
+                self.search_attr = 0;
+            }
+            if attr_has_line_deco(self.decor_attr) {
+                self.decor_attr = 0;
+            }
+            if attr_has_line_deco(self.area_attr) {
+                self.area_attr = 0;
+            }
         }
         if self.char_code == TAB && wlv.extra_todo + wlv.col > self.view_width {
             wlv.extra_todo = window.w_buffer.tab_padding(wlv.vcol) - 1;

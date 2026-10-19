@@ -371,7 +371,7 @@ impl Cells {
 
     /// Draw an unprintable character in its `^X` or `<xx>` form.
     pub(super) fn escaped(&mut self, wlv: &mut WinLineVars, window: Win) {
-        // `transchar_buf` answers a static NUL-terminated buffer.
+        // An owned copy: evaluating 'statuscolumn' mid-escape cannot clobber it.
         wlv.escape_buf = transchar_buf(window.buffer_or_none(), self.char_code);
         wlv.extra_text = wlv.escape_buf.as_mut_ptr();
         if wlv.extra_todo == 0 {

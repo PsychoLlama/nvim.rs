@@ -25,8 +25,20 @@
 
 use super::*;
 use crate::decoration::kHlModeReplace;
+use crate::highlight::HlAttrFlags;
 use crate::pos::MAXCOL;
 use crate::types::NUL;
+
+/// Whether `attr` draws an underline (of any style), a strikethrough or an
+/// overline: a line tied to the glyphs, which looks broken drawn over blank
+/// filler cells — unlike a background or reverse-video highlight.
+pub(super) fn attr_has_line_deco(attr: ::core::ffi::c_int) -> bool {
+    let line_deco = HlAttrFlags::UNDERLINE_MASK
+        .or(HlAttrFlags::STRIKETHROUGH)
+        .or(HlAttrFlags::OVERLINE);
+    let entry = syn_attr2entry(attr);
+    entry.rgb_ae_attr.has(line_deco) || entry.cterm_ae_attr.has(line_deco)
+}
 
 impl Cells {
     /// Work out what this cell takes from everything that is not the character

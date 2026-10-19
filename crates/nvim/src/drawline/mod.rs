@@ -92,6 +92,7 @@ pub(crate) use self::prologue::*;
 mod cells;
 pub(crate) use self::cells::*;
 mod attrs;
+use self::attrs::attr_has_line_deco;
 mod chars;
 mod rows;
 mod special;

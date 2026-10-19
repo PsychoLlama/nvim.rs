@@ -92,12 +92,21 @@ impl Cells {
             return self.columns_only(wlv, window, f);
         }
 
+        // The highlight active where the row wrapped carries on into the
+        // indent and 'showbreak' — the text has not ended, there is just no
+        // buffer text in those cells. Not a line decoration, though, for the
+        // same reason as the 'linebreak' filler.
+        let gap_attr = if attr_has_line_deco(self.gap_decor_attr) {
+            0
+        } else {
+            self.gap_decor_attr
+        };
         if !window.w_briopt_sbr {
-            wlv.handle_breakindent(window);
+            wlv.handle_breakindent(window, gap_attr);
         }
-        wlv.handle_showbreak_and_filler(window);
+        wlv.handle_showbreak_and_filler(window, gap_attr);
         if window.w_briopt_sbr {
-            wlv.handle_breakindent(window);
+            wlv.handle_breakindent(window, gap_attr);
         }
 
         wlv.col = wlv.off;

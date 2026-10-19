@@ -257,6 +257,10 @@ pub(crate) struct Cells {
     pub(super) attr_before_vcol_hl: ::core::ffi::c_int,
     /// Syntax and decoration attribute for this cell.
     pub(super) decor_attr: ::core::ffi::c_int,
+    /// [`Cells::decor_attr`] of the last buffer character, taken before
+    /// `'linebreak'` can reset it: the highlight still active when a row
+    /// wraps, which the next row's `'breakindent'`/`'showbreak'` gap extends.
+    pub(super) gap_decor_attr: ::core::ffi::c_int,
     /// Attribute of the `>` that stands for a double-width character with
     /// nowhere to go, applied to that one cell only.
     pub(super) overflow_attr: ::core::ffi::c_int,
@@ -384,6 +388,7 @@ impl Cells {
             area_attr: 0,
             attr_before_vcol_hl: 0,
             decor_attr: 0,
+            gap_decor_attr: 0,
             overflow_attr: 0,
             extmark_attr: 0,
             eol_extra_cell: 0,

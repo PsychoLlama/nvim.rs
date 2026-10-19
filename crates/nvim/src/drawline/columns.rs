@@ -689,14 +689,15 @@ impl WinLineVars {
 
 impl WinLineVars {
     /// Indent a wrapped line's continuation row to match its first row.
-    pub(crate) fn handle_breakindent(&mut self, window: Win) {
+    /// `gap_attr` is the highlight still active where the row wrapped.
+    pub(crate) fn handle_breakindent(&mut self, window: Win, gap_attr: ::core::ffi::c_int) {
         if window.w_onebuf_opt.wo_bri != 0
             && (self.row > self.startrow + self.filler_lines || self.need_showbreak)
         {
             let attr = if self.diff_hlf != HLF_NONE {
-                win_hl_attr(window, self.diff_hlf)
+                hl_combine_attr(gap_attr, win_hl_attr(window, self.diff_hlf))
             } else {
-                0
+                gap_attr
             };
             let mut num =
                 unsafe { get_breakindent_win(window, ml_get_buf(window.buffer(), self.lnum)) };
@@ -739,8 +740,13 @@ impl WinLineVars {
     }
 
     /// Fill a filler line, and draw `'showbreak'` at the start of a wrapped
-    /// line's continuation row.
-    pub(crate) fn handle_showbreak_and_filler(&mut self, window: Win) {
+    /// line's continuation row. `gap_attr` is the highlight still active
+    /// where the row wrapped.
+    pub(crate) fn handle_showbreak_and_filler(
+        &mut self,
+        window: Win,
+        gap_attr: ::core::ffi::c_int,
+    ) {
         let remaining = window.w_view_width - self.off;
         if self.filler_todo > self.filler_lines - self.n_virt_lines {
             // A virtual line: its text is drawn by the decoration code, so
@@ -759,8 +765,10 @@ impl WinLineVars {
 
         let sbr = window.showbreak_leader();
         if unsafe { *sbr } != NUL as ::core::ffi::c_char && self.need_showbreak {
-            // 'showbreak' combined with 'cursorline', 'showbreak' winning.
-            let attr = hl_combine_attr(self.cursorline_attr, win_hl_attr(window, HLF_AT));
+            // 'showbreak' over the still-active highlight over
+            // 'cursorline', 'showbreak' winning.
+            let attr = hl_combine_attr(self.cursorline_attr, gap_attr);
+            let attr = hl_combine_attr(attr, win_hl_attr(window, HLF_AT));
             let vcol_before = self.vcol;
             let sbr_len = unsafe { cstr::bytes_at(sbr) }.len();
             unsafe { self.draw_col_buf(window, sbr, sbr_len, attr, ::core::ptr::null(), true) };
