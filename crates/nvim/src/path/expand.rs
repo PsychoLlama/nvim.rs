@@ -38,8 +38,9 @@ use crate::os::shell::ShellOpts;
 use crate::types::{Failed, MAXPATHL};
 
 /// Whether a `gen_expand_wildcards` is already running. The pieces it calls
-/// can come back round to it — `expand_env` falls back on `expand_one` — and
-/// the inner call has to go straight to the shell instead of recursing.
+/// can come back round to it — a `=expr` item evaluates an expression that
+/// starts another expansion — and the inner call has to go straight to the
+/// shell instead of recursing.
 static RECURSIVE: GlobalCell<bool> = GlobalCell::new(false);
 
 /// Expand every entry of `path_option` — a `'path'` or `'cdpath'` — into the
@@ -214,9 +215,9 @@ pub fn gen_expand_wildcards(
     patterns: &[&CStr],
     flags: ExpandFlags,
 ) -> Result<Vec<XString>, Failed> {
-    // `expand_env` is called below to expand things like "~user". If
-    // that fails it calls `expand_one`, which brings us back here; go
-    // straight to the machine-specific expansion in that case.
+    // A recursive call can happen when a `=expr` item evaluates an
+    // expression that starts another expansion; go straight to the
+    // machine-specific expansion in that case.
     if RECURSIVE.get() {
         return expand_by_shell(patterns, flags);
     }

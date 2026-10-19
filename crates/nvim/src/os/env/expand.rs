@@ -12,7 +12,6 @@
 
 use super::*;
 use crate::charset::{vim_is_ident_char, vim_isfilec};
-use crate::cmdexpand::{WildMode, WildOpts, expand_one};
 use crate::cstr;
 use crate::eval::skip_expr;
 use crate::memory::XString;
@@ -20,7 +19,7 @@ use crate::os::users::os_get_userdir;
 use crate::path::after_pathsep;
 use crate::strings::escaped_bytes;
 use crate::strings::has_char;
-use crate::types::{Expand, ExpandContext, MAXPATHL};
+use crate::types::MAXPATHL;
 
 /// [`expand_env`] into a newly allocated `MAXPATHL` buffer.
 ///
@@ -156,8 +155,8 @@ unsafe fn resolve_env_var(src: *const c_char, dst: *mut c_char, dstlen: c_int) -
     }
 }
 
-/// Resolve the `~user` at `src`, falling back to shell expansion when the
-/// user is not in the password database.
+/// Resolve the `~user` at `src`; no directory when the user is not in the
+/// password database.
 ///
 /// # Safety
 /// As [`resolve_env_var`].
@@ -180,25 +179,13 @@ unsafe fn resolve_user_dir(src: *const c_char, dst: *mut c_char, dstlen: c_int) 
         }
         *var = 0;
 
-        let mut var = if *dst == 0 {
+        // An unknown user is left unexpanded. (Asking the shell instead
+        // would re-enter the event loop, which aborts in a fast event.)
+        let var = if *dst == 0 {
             ptr::null_mut()
         } else {
             os_get_userdir(dst.add(1))
         };
-        if var.is_null() {
-            // Not a known user: let the shell expand `~user`, which is slower
-            // and may fail on an old /bin/sh.
-            let mut xpc = Expand::new();
-            xpc.context = ExpandContext::Files;
-            var = expand_one(
-                &mut xpc,
-                Some(CStr::from_ptr(dst)),
-                None,
-                WildOpts::ADD_SLASH | WildOpts::SILENT,
-                WildMode::ExpandFree,
-            )
-            .map_or(ptr::null_mut(), XString::into_raw);
-        }
         Expansion {
             var,
             tail,
