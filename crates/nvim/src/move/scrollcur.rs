@@ -342,6 +342,7 @@ impl Win {
             }
 
             // Add one line above.
+            let loff_lnum_before = loff.lnum;
             topline_back(self, &mut loff);
             if loff.height == MAXCOL as c_int {
                 used = MAXCOL as c_int;
@@ -356,7 +357,10 @@ impl Win {
             {
                 // Count the screen lines that are below the window.
                 scrolled += loff.height;
-                if loff.lnum == self.w_botline && loff.fill == 0 {
+                // The empty rows belong to `w_botline`: subtract them once,
+                // on the step that reaches it from below (its filler rows
+                // are later steps on the same line).
+                if loff.lnum == self.w_botline && loff_lnum_before > self.w_botline {
                     scrolled -= self.w_empty_rows;
                 }
             }
@@ -365,6 +369,7 @@ impl Win {
                 continue;
             }
             // Add one line below.
+            let boff_lnum_before = boff.lnum;
             botline_forw(self, &mut boff);
             debug_assert!(boff.height != MAXCOL as c_int, "boff.height != MAXCOL");
             used += boff.height;
@@ -378,7 +383,9 @@ impl Win {
                 {
                     // Count the screen lines that are below the window.
                     scrolled += boff.height;
-                    if boff.lnum == self.w_botline && boff.fill == 0 {
+                    // Once, when this step reaches or crosses `w_botline` —
+                    // a closed fold may carry it past.
+                    if boff.lnum >= self.w_botline && boff_lnum_before < self.w_botline {
                         scrolled -= self.w_empty_rows;
                     }
                 }
