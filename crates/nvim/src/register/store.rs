@@ -104,7 +104,7 @@ pub(crate) fn shada_registers(max_lines: Option<usize>) -> Vec<(c_char, bool, Sh
         // SAFETY: a slot of the register array, which owns `y_size` strings
         // at `y_array` and its extra data; both are only read here.
         unsafe {
-            if reg_empty(reg) || max_lines.is_some_and(|max| (*reg).y_size > max) {
+            if reg_empty(&*reg) || max_lines.is_some_and(|max| (*reg).y_size > max) {
                 continue;
             }
             let contents = core::slice::from_raw_parts((*reg).y_array, (*reg).y_size).to_vec();
@@ -122,12 +122,27 @@ pub(crate) fn shada_registers(max_lines: Option<usize>) -> Vec<(c_char, bool, Sh
     found
 }
 
+/// Look at the register named `name`, or answer `None` for a name with no
+/// slot.
+fn with_named_register<R>(name: c_char, f: impl FnOnce(&YankReg) -> R) -> Option<R> {
+    let i = op_reg_index(c_int::from(name));
+    // SAFETY: a slot of the register array, which owns `y_size` strings at
+    // `y_array`; it is only read, and nothing writes registers while `f`
+    // runs.
+    (i != -1).then(|| f(unsafe { &*get_y_register(i) }))
+}
+
 /// When the register named `name` was set, or `None` for a name with no
 /// slot.
 pub(crate) fn shada_register_timestamp(name: c_char) -> Option<Timestamp> {
-    let i = op_reg_index(c_int::from(name));
-    // SAFETY: a slot of the register array, read.
-    (i != -1).then(|| unsafe { (*get_y_register(i)).timestamp })
+    with_named_register(name, |reg| reg.timestamp)
+}
+
+/// When the register named `name` was emptied, or `None` when it holds
+/// something (or the name has no slot) -- so that ShaDa does not bring back
+/// a register this session cleared after the file was written.
+pub(crate) fn shada_cleared_register_timestamp(name: c_char) -> Option<Timestamp> {
+    with_named_register(name, |reg| reg_empty(reg).then_some(reg.timestamp)).flatten()
 }
 
 /// Put `yank` in the register named `name`, freeing whatever was there, and
@@ -389,14 +404,13 @@ pub fn get_register_name(num: c_int) -> c_int {
 
 /// Whether a register holds nothing -- either no array at all, or the one
 /// empty charwise line an empty yank leaves behind.
-///
-/// # Safety
-/// `reg` must point at a register whose `y_array` holds `y_size` strings.
 #[inline]
-unsafe fn reg_empty(reg: *const YankReg) -> bool {
-    unsafe { (*reg).y_array }.is_null()
-        || unsafe { (*reg).y_size } == 0
-        || unsafe { (*reg).y_size } == 1
-            && unsafe { (*reg).y_type } == kMTCharWise
-            && unsafe { (*(*reg).y_array).is_empty() }
+fn reg_empty(reg: &YankReg) -> bool {
+    reg.y_array.is_null()
+        || reg.y_size == 0
+        || reg.y_size == 1
+            && reg.y_type == kMTCharWise
+            // SAFETY: a register's non-null `y_array` holds its `y_size`
+            // strings, and there is one.
+            && unsafe { (*reg.y_array).is_empty() }
 }

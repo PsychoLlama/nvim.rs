@@ -643,6 +643,15 @@ pub(crate) fn shada_pattern_timestamp(is_substitute: bool) -> Option<Timestamp> 
     })
 }
 
+/// When the last search (or substitute) pattern was cleared, or `None`
+/// when there is one -- so that ShaDa does not bring back a pattern this
+/// session cleared (`:let @/ = ""`) after the file was written.
+pub(crate) fn shada_cleared_pattern_timestamp(is_substitute: bool) -> Option<Timestamp> {
+    with_spat(shada_slot(is_substitute), |slot| {
+        slot.pat.is_none().then_some(slot.timestamp)
+    })
+}
+
 /// Make `pattern` the last search (or substitute) pattern, taking it over.
 pub(crate) fn shada_set_pattern(is_substitute: bool, pattern: ShadaPattern) {
     let idx = shada_slot(is_substitute);

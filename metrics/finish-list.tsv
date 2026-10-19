@@ -329,7 +329,7 @@ popupmenu/	popupmenu/layout.rs	1	4	0	4	-	-	-	vim_strsize:3
 popupmenu/	popupmenu/menu.rs	1	2	0	0	deref:2	-	-	-
 popupmenu/	popupmenu/mod.rs	1	9	3	5	expr:2 deref:1 ref:1	other:2	-	arena_mem_free:1 cstr_to_string:1 ui_pum_get_pos:1
 popupmenu/	popupmenu/preview.rs	1	13	5	10	deref:3	str:4	str:1	.offset:1 cstr_to_string:1 strchr:1 win_linetabsize:1
-register/	*	9	390	33	197	deref:126 expr:12 compound:8 ref:5	other:24 str:13 pp:1 pp_str:1	other:5 str:2	xfree:15 from:13 .add:8 .offset:8 at:8 .offset_from:6 bytes_at:6 utfc_ptr2len:4
+register/	*	9	386	32	197	deref:121 expr:12 compound:8 ref:6	other:23 str:13 pp:1 pp_str:1	other:5 str:2	xfree:15 from:13 .add:8 .offset:8 at:8 .offset_from:6 bytes_at:6 utfc_ptr2len:4
 register/	register/contents.rs	1	85	7	43	deref:27 expr:7 compound:1 ref:1	other:5 str:3	other:1	.add:5 .offset_from:3 .copy_from_nonoverlapping:2 from:2 xfree:2 .offset:1 CStr::from_ptr:1 ThinCString::from_raw:1
 register/	register/display.rs	1	27	3	23	deref:4	str:4 other:1	-	at:6 from:4 .offset:2 ptr2cells:2 slice_at:2 utfc_ptr2len:2 get_clipboard:1
 register/	register/exec.rs	1	81	6	46	deref:32 expr:3	str:4 other:3	str:1	xfree:8 bytes_at:4 .add:3 skipwhite:3 apply_autocmds:2 cmdline_paste_str:2 from_raw_parts:2 .copy_from_nonoverlapping:1
@@ -337,7 +337,7 @@ register/	register/put/block.rs	1	37	2	19	deref:2 compound:1	str:2	-	from:4 init
 register/	register/put/lines.rs	1	11	0	4	deref:6 ref:1	-	-	at:1 getvcol:1 getvpos:1 utf_head_off:1
 register/	register/put/mod.rs	1	26	1	21	compound:1 deref:1	other:1	-	from:3 .offset_from:2 xmemdupz:2 .offset:1 String_0::from_bytes:1 String_0::from_owned_parts:1 at:1 c_str:1
 register/	register/special.rs	1	9	2	5	deref:3 expr:1	other:1 pp_str:1	str:1	XString::from_raw:1 find_ident_under_cursor:1 get_last_insert_save:1 xfree:1
-register/	register/store.rs	1	44	6	9	deref:26 compound:2 ref:1	other:3 pp:1	other:4	xfree:2 adjust_clipboard_name:1 get_clipboard:1 mb_string2cells_len:1 xmalloc:1
+register/	register/store.rs	1	40	5	9	deref:21 compound:2 ref:2	other:2 pp:1	other:4	xfree:2 adjust_clipboard_name:1 get_clipboard:1 mb_string2cells_len:1 xmalloc:1
 register/	register/yank.rs	1	70	6	27	deref:25 compound:3 ref:2 expr:1	other:10	-	.offset:4 .copy_from:1 .write_bytes:1 abort:1 apply_autocmds:1 block_prep:1 bytes_at:1 c_str:1
 startup/	*	2	0	0	0	-	-	-	-
 startup/	startup/entry.rs	1	0	0	0	-	-	-	-

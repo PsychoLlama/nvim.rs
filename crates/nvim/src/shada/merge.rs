@@ -24,8 +24,9 @@ use crate::cmdhist::{
 };
 use crate::mark::{global_mark_timestamp, shada_local_mark_timestamp};
 use crate::path::path_fnamecmp;
-use crate::register::op_reg_index;
+use crate::register::{op_reg_index, shada_cleared_register_timestamp};
 use crate::registry::{IdMap, id_map};
+use crate::search::shada_cleared_pattern_timestamp;
 use crate::types::{Pos, Timestamp};
 use crate::winlayer::{Win, buffers};
 use core::cmp::Ordering;
@@ -436,11 +437,20 @@ pub(crate) fn read_when_writing(
             }
             ShadaEntryData::Unknown(_) => ret = pack_entry(out, &entry, 0),
             ShadaEntryData::SearchPattern(pattern) => {
-                let slot = if pattern.is_substitute_pattern.unwrap_or(false) {
+                let is_substitute = pattern.is_substitute_pattern.unwrap_or(false);
+                let slot = if is_substitute {
                     &mut wms.sub_search_pattern
                 } else {
                     &mut wms.search_pattern
                 };
+                // A pattern this session cleared since the file was written
+                // stays cleared.
+                if slot.is_missing()
+                    && shada_cleared_pattern_timestamp(is_substitute)
+                        .is_some_and(|cleared| cleared >= entry.timestamp)
+                {
+                    continue;
+                }
                 keep_newer(slot, entry);
             }
             ShadaEntryData::SubString(_) => keep_newer(&mut wms.replacement, entry),
@@ -456,6 +466,11 @@ pub(crate) fn read_when_writing(
             }
             ShadaEntryData::Register(reg) => {
                 match usize::try_from(op_reg_index(c_int::from(reg.name))) {
+                    // Likewise a register this session emptied.
+                    Ok(idx)
+                        if wms.registers[idx].is_missing()
+                            && shada_cleared_register_timestamp(reg.name)
+                                .is_some_and(|cleared| cleared >= entry.timestamp) => {}
                     Ok(idx) => keep_newer(&mut wms.registers[idx], entry),
                     Err(_) => ret = pack_entry(out, &entry, 0),
                 }
