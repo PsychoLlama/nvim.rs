@@ -26,8 +26,9 @@ and this project adheres to [CalVer](https://calver.org/).
   `:s`, `n` matched everywhere instead of repeating the `:s` pattern.
 - `:mkspell` with sound-folding and a small `'mkspellmem'` compressed a word
   tree it had already freed, and could crash.
-- A timer or autocommand changing the line while the `z=` prompt was open
-  made the replacement read freed memory.
+- `z=` kept the misspelled word as a pointer into the buffer line, so an
+  `expr:` item in `'spellsuggest'` that changed the line made it read freed
+  memory.
 - A spell file with compound rules longer than its first rule hung spell
   checking, and `:ownsyntax` leaked the window's syntax block when a buffer
   switch had already replaced it.
