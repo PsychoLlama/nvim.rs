@@ -648,6 +648,7 @@ impl LineMatcher<'_> {
     fn run(&mut self, col: ColNr, timed_out: &mut bool) -> LineNr {
         let ctx = self.ctx;
         let result = self.prog.run(ctx.rex(), col);
+        ctx.release_line();
         if let Some(col) = ctx.matchcol() {
             *self.matchcol = col;
         }

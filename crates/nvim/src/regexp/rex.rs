@@ -353,7 +353,8 @@ impl<'t> RegExec<'t> {
     /// Put a [`RegExec::for_lines`] match on buffer line `lnum`, as fresh
     /// as a match built for that line: everything a match leaves behind is
     /// reset, and what the walk fixed is kept. The capture slots are the
-    /// engines' to clear, as they are in a new match.
+    /// engines' to clear, as they are in a new match, and the line was let
+    /// go of after the last one ([`RegExec::release_line`]).
     #[inline(always)]
     pub(crate) fn seat(&self, lnum: LineNr) {
         self.firstlnum.set(lnum);
@@ -361,7 +362,6 @@ impl<'t> RegExec<'t> {
         self.ic.set(self.caller_ic);
         self.icombine.set(false);
         self.lnum.set(0);
-        self.line.set(b"\0");
         self.input.set(0);
         self.need_clear_subexpr.set(false);
         self.need_clear_zsubexpr.set(false);
@@ -369,6 +369,15 @@ impl<'t> RegExec<'t> {
         self.timed_out.set(false);
         self.bt.reset();
         self.nfa.reset();
+    }
+
+    /// Let go of the buffer line the match last read. A walk calls this
+    /// after each line, so that between lines — when the caller may run
+    /// anything, and the memline may drop the line — the context holds no
+    /// borrow of it; the next line's match fetches its own.
+    #[inline(always)]
+    pub(crate) fn release_line(&self) {
+        self.line.set(b"\0");
     }
 
     /// The handle the engines run the match through.
