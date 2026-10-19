@@ -242,6 +242,7 @@ v:exitreason
 		- ""          Not exiting, or exit was canceled.
 		- "quit"      |:quit|, |:qall|, |:wq|, |ZZ|, |ZQ|, etc.
 		- "restart"   |:restart|, |ZR|.
+		- "restart!"  |:restart!|, |[count]||ZR|.
 
 		Example: >vim
 		  autocmd ExitPre * if v:exitreason ==# 'restart' | echomsg 'restarting' | endif
@@ -632,6 +633,15 @@ v:stacktrace
 		not finished.  Refer to |getstacktrace()| for the structure of
 		stack trace.  See also |v:exception|, |v:throwpoint|, and
 		|throw-variables|.
+
+				*v:startreason* *startreason-variable*
+v:startreason
+		The reason Nvim started. Possible values:
+		  - "normal"    normal startup.
+		  - "restart"   started by |:restart|.
+		  - "restart!"  started by |:restart!|.
+
+		Read-only.
 
 				*v:starttime* *starttime-variable*
 v:starttime

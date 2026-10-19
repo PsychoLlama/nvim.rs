@@ -282,6 +282,7 @@ M.vars = {
       - ""          Not exiting, or exit was canceled.
       - "quit"      |:quit|, |:qall|, |:wq|, |ZZ|, |ZQ|, etc.
       - "restart"   |:restart|, |ZR|.
+      - "restart!"  |:restart!|, |[count]||ZR|.
 
       Example: >vim
         autocmd ExitPre * if v:exitreason ==# 'restart' | echomsg 'restarting' | endif
@@ -762,6 +763,17 @@ M.vars = {
       To see the current "uptime": >lua
         vim.print(('uptime: %d seconds'):format(os.time() - (vim.v.starttime / 1e9)))
       <
+      Read-only.
+    ]=],
+  },
+  startreason = {
+    type = 'string',
+    desc = [=[
+      The reason Nvim started. Possible values:
+        - "normal"    normal startup.
+        - "restart"   started by |:restart|.
+        - "restart!"  started by |:restart!|.
+
       Read-only.
     ]=],
   },

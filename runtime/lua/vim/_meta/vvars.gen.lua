@@ -256,6 +256,7 @@ vim.v.exiting = ...
 --- - ""          Not exiting, or exit was canceled.
 --- - "quit"      `:quit`, `:qall`, `:wq`, `ZZ`, `ZQ`, etc.
 --- - "restart"   `:restart`, `ZR`.
+--- - "restart!"  `:restart!`, `[count]``ZR`.
 ---
 --- Example:
 ---
@@ -666,6 +667,15 @@ vim.v.shell_error = ...
 --- `throw-variables`.
 --- @type table[]
 vim.v.stacktrace = ...
+
+--- The reason Nvim started. Possible values:
+---   - "normal"    normal startup.
+---   - "restart"   started by `:restart`.
+---   - "restart!"  started by `:restart!`.
+---
+--- Read-only.
+--- @type string
+vim.v.startreason = ...
 
 --- Timestamp (nanoseconds since UNIX epoch) when the Nvim process
 --- started.

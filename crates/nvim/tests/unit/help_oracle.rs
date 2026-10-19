@@ -131,6 +131,8 @@ fn helptags_over_hostile_files() {
     assert_eq!(d.value(), HOSTILE, "hostile helptags digest moved");
 }
 
-/// Recorded on the `FILE *` writer.
-const RUNTIME: u64 = 8_490_653_835_842_779_532;
+/// `HOSTILE` was recorded on the `FILE *` writer. `RUNTIME` follows the
+/// docs: it was re-recorded when the upstream v0.12.5 docs landed (new tags
+/// such as `v:startreason` and `:restart!`), with the tag writer unchanged.
+const RUNTIME: u64 = 5_486_496_003_043_726_054;
 const HOSTILE: u64 = 14_626_439_989_836_119_607;

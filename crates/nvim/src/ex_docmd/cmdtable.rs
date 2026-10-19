@@ -447,7 +447,7 @@ pub(crate) static cmdnames: ConstTable<[CommandDefinition; 557]> = ConstTable::n
     cmd(c"redrawtabline", ex_redrawtabline, Ex::TRLBAR.or(Ex::CMDWIN).or(Ex::LOCK_OK), Ad::NoRange),
     cmd(c"registers", ex_display, Ex::EXTRA.or(Ex::TRLBAR).or(Ex::NOTRLCOM).or(Ex::SBOXOK).or(Ex::CMDWIN).or(Ex::LOCK_OK), Ad::NoRange),
     cmd(c"resize", ex_resize, Ex::RANGE.or(Ex::EXTRA).or(Ex::NOSPC).or(Ex::TRLBAR).or(Ex::CMDWIN).or(Ex::LOCK_OK), Ad::Other),
-    cmd(c"restart", ex_restart, Ex::EXTRA.or(Ex::NOTRLCOM).or(Ex::CMDARG), Ad::NoRange),
+    cmd(c"restart", ex_restart, Ex::BANG.or(Ex::EXTRA).or(Ex::NOTRLCOM).or(Ex::CMDARG), Ad::NoRange),
     cmd(c"retab", ex_retab, Ex::RANGE.or(Ex::BANG).or(Ex::EXTRA).or(Ex::NOSPC).or(Ex::DFLALL).or(Ex::WHOLEFOLD).or(Ex::TRLBAR).or(Ex::CMDWIN).or(Ex::MODIFY).or(Ex::LOCK_OK), Ad::Lines),
     cmd(c"return", ex_return, Ex::EXTRA.or(Ex::NOTRLCOM).or(Ex::SBOXOK).or(Ex::CMDWIN).or(Ex::LOCK_OK), Ad::NoRange),
     cmd(c"rewind", ex_rewind, Ex::BANG.or(Ex::EXTRA).or(Ex::TRLBAR).or(Ex::CMDARG).or(Ex::ARGOPT), Ad::NoRange),
