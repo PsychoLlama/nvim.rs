@@ -3975,6 +3975,7 @@ static const int UV_IGNORE = 0;
 static const int UV_INHERIT_FD = 2;
 static const int UV_NAMED_PIPE = 7;
 static const int UV_NONBLOCK_PIPE = 64;
+static const int UV_PIPE_NO_TRUNCATE = 1;
 static const int UV_PROCESS_DETACHED = 8;
 static const int UV_PROCESS_WINDOWS_HIDE = 16;
 static const int UV_RUN_DEFAULT = 0;

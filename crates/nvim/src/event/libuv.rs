@@ -247,9 +247,11 @@ unsafe extern "C" {
         read_flags: ::core::ffi::c_int,
         write_flags: ::core::ffi::c_int,
     ) -> ::core::ffi::c_int;
-    pub fn uv_pipe_bind(
+    pub fn uv_pipe_bind2(
         handle: *mut uv_pipe_t,
         name: *const ::core::ffi::c_char,
+        namelen: usize,
+        flags: ::core::ffi::c_uint,
     ) -> ::core::ffi::c_int;
     pub fn uv_pipe_connect(
         req: *mut uv_connect_t,

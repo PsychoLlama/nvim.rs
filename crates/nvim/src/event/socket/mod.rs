@@ -30,15 +30,15 @@ pub mod address;
 use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::os::uv_error::{UV_EACCES, UV_EADDRINUSE, UV_EINVAL, UV_ENOENT};
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ops::{Deref, DerefMut};
 use core::{mem, ptr};
 
 use crate::charset::try_getdigits;
 use crate::event::libuv::{
-    uv_accept, uv_close, uv_freeaddrinfo, uv_getaddrinfo, uv_listen, uv_pipe_bind, uv_pipe_connect,
-    uv_pipe_init, uv_strerror, uv_tcp_bind, uv_tcp_connect, uv_tcp_getsockname, uv_tcp_init,
-    uv_tcp_nodelay,
+    uv_accept, uv_close, uv_freeaddrinfo, uv_getaddrinfo, uv_listen, uv_pipe_bind2,
+    uv_pipe_connect, uv_pipe_init, uv_strerror, uv_tcp_bind, uv_tcp_connect, uv_tcp_getsockname,
+    uv_tcp_init, uv_tcp_nodelay,
 };
 use crate::event::r#loop::{one_arg_event, process_events_until};
 use crate::event::multiqueue::multiqueue_put_event;
@@ -60,6 +60,9 @@ use crate::types::{
 use ::libc::ntohs;
 
 const UV_TCP: uv_handle_type = 12;
+/// `uv_pipe_bind2`: fail on a name too long for a socket path, rather than
+/// truncating it.
+const UV_PIPE_NO_TRUNCATE: c_uint = 1;
 
 const AF_UNSPEC: c_int = 0;
 const SOCK_STREAM: c_int = 1;
@@ -106,6 +109,22 @@ impl Watcher {
     fn addr_ptr(self) -> *mut c_char {
         // SAFETY: a field of the live watcher.
         unsafe { (&raw mut (*self.0).addr).cast() }
+    }
+
+    /// Bind the local-socket arm to the address. A path too long for a
+    /// socket fails with `UV_EINVAL` rather than being truncated, which would
+    /// serve a different path than `v:servername` reports.
+    ///
+    /// The error is libuv's negative code.
+    fn bind_pipe(self) -> Result<(), c_int> {
+        let addr = self.addr_ptr();
+        // SAFETY: the watcher's own handle, and its NUL-terminated address
+        // buffer, which libuv only reads.
+        let result = unsafe {
+            let len = CStr::from_ptr(addr).count_bytes();
+            uv_pipe_bind2(self.pipe(), addr, len, UV_PIPE_NO_TRUNCATE)
+        };
+        if result == 0 { Ok(()) } else { Err(result) }
     }
 
     /// The TCP arm of the handle union.
@@ -312,8 +331,7 @@ pub unsafe fn socket_watcher_start(
         // SAFETY: the list the lookup allocated for this watcher.
         unsafe { uv_freeaddrinfo(watcher.addrinfo()) };
     } else {
-        // SAFETY: the watcher's own handle and address buffer.
-        result = unsafe { uv_pipe_bind(watcher.pipe(), addr) };
+        result = watcher.bind_pipe().err().unwrap_or(0);
         if result == UV_EACCES || result == UV_EADDRINUSE {
             result = rebind_stale_socket(watcher, result);
         }
@@ -429,8 +447,7 @@ fn rebind_stale_socket(mut watcher: Watcher, failure: c_int) -> c_int {
     watcher.stream = handle.cast();
     // SAFETY: the handle just re-initialised.
     unsafe { (*handle).data = watcher.as_ptr().cast() };
-    // SAFETY: as above, with the watcher's own address.
-    unsafe { uv_pipe_bind(handle, addr) }
+    watcher.bind_pipe().err().unwrap_or(0)
 }
 
 /// Is anything listening on `addr`? Probed by connecting to it, with a 500ms

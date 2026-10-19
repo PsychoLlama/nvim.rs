@@ -687,7 +687,6 @@ count	callee	no_raw	defs	def
 2	uv_fs_lstat	0	0	
 2	uv_fs_req_cleanup	0	0	
 2	uv_listen	0	0	
-2	uv_pipe_bind	0	0	
 2	uv_signal_stop	0	0	
 2	uv_sleep	0	0	
 2	vim_isfilec	0	0	
