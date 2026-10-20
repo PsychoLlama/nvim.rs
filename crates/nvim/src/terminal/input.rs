@@ -26,8 +26,8 @@
 use crate::drawscreen::UPD_NOT_VALID;
 use crate::getchar::state::{KeyTyped, mod_mask, vgetc_char, vgetc_mod_mask};
 use crate::getchar::{ins_char_typebuf, ungetchars};
-use crate::keycodes::ModMask;
 use crate::keycodes::{Ctrl_AT, Ctrl_M, Key, NotAKey};
+use crate::keycodes::{ModMask, unsimplify_key};
 use crate::mbyte::{utf_ptr2char, utf_ptr2len};
 use crate::mouse::{MousePos, do_mousescroll, find_win_inner};
 use crate::ops::clear_oparg;
@@ -86,14 +86,12 @@ const BUTTON_WHEEL_LEFT: c_int = 7;
 const BUTTON_X1: c_int = 8;
 const BUTTON_X2: c_int = 9;
 
-/// Move the editor's modifier state into vterm's, folding in the modifiers
-/// that are baked into the keycode itself.
+/// Move the editor's modifiers `mods` into vterm's modifier state.
 ///
 /// Control-uppercase is lowercased first: the editor reports `<C-A>` as
 /// Ctrl plus `A`, but a terminal's control codes are computed from the
 /// lowercase letter.
-fn convert_modifiers(key: &mut c_int, state: &mut VTermModifier) {
-    let mods = mod_mask.get();
+fn convert_modifiers(key: &mut c_int, mods: ModMask, state: &mut VTermModifier) {
     if mods.has(ModMask::SHIFT) {
         *state |= VTERM_MOD_SHIFT;
     }
@@ -106,51 +104,32 @@ fn convert_modifiers(key: &mut c_int, state: &mut VTermModifier) {
     if mods.has(ModMask::ALT) {
         *state |= VTERM_MOD_ALT;
     }
-    match Key::try_from(*key) {
-        Ok(
-            Key::STab
-            | Key::SUp
-            | Key::SDown
-            | Key::SLeft
-            | Key::SRight
-            | Key::SHome
-            | Key::SEnd
-            | Key::SF1
-            | Key::SF2
-            | Key::SF3
-            | Key::SF4
-            | Key::SF5
-            | Key::SF6
-            | Key::SF7
-            | Key::SF8
-            | Key::SF9
-            | Key::SF10
-            | Key::SF11
-            | Key::SF12,
-        ) => *state |= VTERM_MOD_SHIFT,
-        Ok(Key::CLeft | Key::CRight | Key::CHome | Key::CEnd) => *state |= VTERM_MOD_CTRL,
-        _ => {}
-    }
 }
 
-/// Apply the editor's modifiers to `key`, and name the vterm key it stands
-/// for — [`VTERM_KEY_NONE`] if it is an ordinary character rather than a
-/// named key.
-fn convert_key(key: &mut c_int, state: &mut VTermModifier) -> VTermKey {
-    convert_modifiers(key, state);
+/// Apply the editor's modifiers `mods` to `key`, and name the vterm key it
+/// stands for — [`VTERM_KEY_NONE`] if it is an ordinary character rather
+/// than a named key.
+///
+/// A key that is itself a modified code (`<S-Del>`, `<C-Left>`) is split
+/// back into the plain key and its modifier first, so every such code the
+/// editor has reaches the child, not only a hand-picked few.
+fn convert_key(key: &mut c_int, mods: ModMask, state: &mut VTermModifier) -> VTermKey {
+    let (unsimplified, mods) = unsimplify_key(*key, mods);
+    *key = unsimplified;
+    convert_modifiers(key, mods, state);
     match Key::try_from(*key) {
         Ok(Key::Bs) => VTERM_KEY_BACKSPACE,
-        Ok(Key::STab) | Err(NotAKey(TAB)) => VTERM_KEY_TAB,
+        Ok(Key::Tab) | Err(NotAKey(TAB)) => VTERM_KEY_TAB,
         Err(NotAKey(Ctrl_M)) => VTERM_KEY_ENTER,
         Err(NotAKey(ESC)) => VTERM_KEY_ESCAPE,
-        Ok(Key::SUp | Key::Up) => VTERM_KEY_UP,
-        Ok(Key::SDown | Key::Down) => VTERM_KEY_DOWN,
-        Ok(Key::SLeft | Key::CLeft | Key::Left) => VTERM_KEY_LEFT,
-        Ok(Key::SRight | Key::CRight | Key::Right) => VTERM_KEY_RIGHT,
+        Ok(Key::Up) => VTERM_KEY_UP,
+        Ok(Key::Down) => VTERM_KEY_DOWN,
+        Ok(Key::Left) => VTERM_KEY_LEFT,
+        Ok(Key::Right) => VTERM_KEY_RIGHT,
         Ok(Key::Ins) => VTERM_KEY_INS,
         Ok(Key::Del) => VTERM_KEY_DEL,
-        Ok(Key::SHome | Key::CHome | Key::Home) => VTERM_KEY_HOME,
-        Ok(Key::SEnd | Key::CEnd | Key::End) => VTERM_KEY_END,
+        Ok(Key::Home) => VTERM_KEY_HOME,
+        Ok(Key::End) => VTERM_KEY_END,
         Ok(Key::Pageup) => VTERM_KEY_PAGEUP,
         Ok(Key::Pagedown) => VTERM_KEY_PAGEDOWN,
         // The keypad's keys double as cursor keys when NumLock is off, and
@@ -171,20 +150,18 @@ fn convert_key(key: &mut c_int, state: &mut VTermModifier) -> VTermKey {
         Ok(Key::Kminus) => VTERM_KEY_KP_MINUS,
         Ok(Key::Kmultiply) => VTERM_KEY_KP_MULT,
         Ok(Key::Kdivide) => VTERM_KEY_KP_DIVIDE,
-        // Shift-F1..F12 are their own keycodes but the same vterm key; the
-        // shift went into the modifier set above.
-        Ok(Key::SF1 | Key::F1) => function_key(1),
-        Ok(Key::SF2 | Key::F2) => function_key(2),
-        Ok(Key::SF3 | Key::F3) => function_key(3),
-        Ok(Key::SF4 | Key::F4) => function_key(4),
-        Ok(Key::SF5 | Key::F5) => function_key(5),
-        Ok(Key::SF6 | Key::F6) => function_key(6),
-        Ok(Key::SF7 | Key::F7) => function_key(7),
-        Ok(Key::SF8 | Key::F8) => function_key(8),
-        Ok(Key::SF9 | Key::F9) => function_key(9),
-        Ok(Key::SF10 | Key::F10) => function_key(10),
-        Ok(Key::SF11 | Key::F11) => function_key(11),
-        Ok(Key::SF12 | Key::F12) => function_key(12),
+        Ok(Key::F1) => function_key(1),
+        Ok(Key::F2) => function_key(2),
+        Ok(Key::F3) => function_key(3),
+        Ok(Key::F4) => function_key(4),
+        Ok(Key::F5) => function_key(5),
+        Ok(Key::F6) => function_key(6),
+        Ok(Key::F7) => function_key(7),
+        Ok(Key::F8) => function_key(8),
+        Ok(Key::F9) => function_key(9),
+        Ok(Key::F10) => function_key(10),
+        Ok(Key::F11) => function_key(11),
+        Ok(Key::F12) => function_key(12),
         Ok(Key::F13) => function_key(13),
         Ok(Key::F14) => function_key(14),
         Ok(Key::F15) => function_key(15),
@@ -249,7 +226,7 @@ pub(super) fn terminal_send_key(term: Term, c: c_int) {
     // The editor spells NUL as an extra so it survives being a C string;
     // vterm wants the control character back.
     let mut key = if c == Key::Zero.code() { Ctrl_AT } else { c };
-    let named = convert_key(&mut key, &mut state);
+    let named = convert_key(&mut key, mod_mask.get(), &mut state);
     let vt = term.vt;
     if named != VTERM_KEY_NONE {
         // SAFETY: the terminal's own emulator.
@@ -450,7 +427,7 @@ pub(super) fn send_mouse_event(term: Term, c: c_int) -> bool {
                 return false;
             };
             let mut state = VTERM_MOD_NONE;
-            convert_modifiers(&mut { c }, &mut state);
+            convert_modifiers(&mut { c }, mod_mask.get(), &mut state);
             let vt = term.vt;
             // SAFETY: the terminal's own emulator.
             unsafe { vterm_mouse_move(vt, row, col - offset, state) };

@@ -258,6 +258,8 @@ pub enum Key {
     Rightrelease = extra(KE_RIGHTRELEASE),
     Plug = extra(KE_PLUG),
     Snr = extra(KE_SNR),
+    /// `<Tab>` as a special key: what `<S-Tab>` is without its shift.
+    Tab = extra(KE_TAB),
     SDown = extra(KE_S_DOWN),
     SF1 = extra(KE_S_F1),
     SF2 = extra(KE_S_F2),
@@ -422,7 +424,7 @@ impl Key {
     /// highest `KE_*` byte, and nothing else about the order means anything.
     /// It is the table [`Key::try_from`] binary searches, and the `const`
     /// block below fails the build if it ever stops being sorted.
-    const ALL: [Key; 184] = [
+    const ALL: [Key; 185] = [
         Key::Up,
         Key::Kup,
         Key::Right,
@@ -560,6 +562,7 @@ impl Key {
         Key::F17,
         Key::End,
         Key::SEnd,
+        Key::Tab,
         Key::F6,
         Key::Kplus,
         Key::F16,

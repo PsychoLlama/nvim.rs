@@ -89,6 +89,18 @@ pub fn simplify_key(key: c_int, modifiers: &mut ModMask) -> c_int {
     }
 }
 
+/// The inverse of [`simplify_key`]: a special key that is itself a shifted or
+/// ctrl'ed code (`<S-Del>`, `<C-Left>`) becomes the plain key, with the
+/// modifier it carried added to `modifiers`. Anything else comes back as is.
+pub(crate) fn unsimplify_key(key: c_int, modifiers: ModMask) -> (c_int, ModMask) {
+    if key < 0
+        && let Some((plain, bit)) = unshift(key)
+    {
+        return (plain, modifiers | bit);
+    }
+    (key, modifiers)
+}
+
 /// [`simplify_key`] applied to the global `mod_mask`.
 pub(crate) fn simplify_mod_mask(key: c_int) -> c_int {
     let mut modifiers = crate::getchar::state::mod_mask.get();
@@ -135,12 +147,7 @@ pub fn get_special_key_name(key: c_int, modifiers: ModMask) -> SpecialKeyName {
         key = c_int::from(termcap_name(key)[1]);
     }
     // A shifted or ctrl'ed special key becomes the plain key and a bit.
-    if key < 0
-        && let Some((plain, bit)) = unshift(key)
-    {
-        modifiers |= bit;
-        key = plain;
-    }
+    (key, modifiers) = unsimplify_key(key, modifiers);
 
     let mut name = name_of_code(key);
     // Not a known key and not printable: try to read modifiers off the byte.
