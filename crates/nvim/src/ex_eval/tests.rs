@@ -465,6 +465,10 @@ fn error_in_function(fx: &Fixture, lines: &[&str]) -> String {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "seven 50-deep nests, each line re-parsed per level: hours under the interpreter"
+)]
 fn loops_and_conditionals_nest_to_the_stack_cap() {
     let fx = Fixture::new();
     // A `:for` that loops is not taken to 50: upstream checks the depth
