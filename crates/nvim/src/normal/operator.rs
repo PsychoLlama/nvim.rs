@@ -6,8 +6,7 @@
 //! always the same shape -- rewrite `cmd_arg` as the `g` form and call
 //! [`nv_operator`].
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,

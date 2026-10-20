@@ -5,8 +5,7 @@
 //! [`ins_compl_bs`] and [`ins_compl_addleader`] are the two that edit the
 //! leader and re-filter what is shown.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::keycodes::{
