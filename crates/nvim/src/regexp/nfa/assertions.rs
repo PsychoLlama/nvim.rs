@@ -12,7 +12,7 @@ use core::ffi::c_int;
 
 use super::run::nfa_re_num_cmp;
 use crate::mark::mark_lookup;
-use crate::plines::win_linetabsize_bytes;
+use crate::plines::win_linetabsize;
 use crate::pos::MAXCOL;
 use crate::regexp::{Rex, kMarkBufLocal, reg_getline, reg_getline_len, reg_match_visual};
 use crate::types::{ColNr, LineNr, MB_MAXBYTES};
@@ -81,7 +81,7 @@ pub(crate) fn at_vcol(rex: Rex, state: &NfaState) -> bool {
     if rex.multi() && (lnum <= 0 || lnum > wp.buffer().b_ml.ml_line_count) {
         lnum = 1;
     }
-    let vcol = win_linetabsize_bytes(wp, lnum, rex.line(), col);
+    let vcol = win_linetabsize(wp, lnum, rex.line(), col);
     assert!(want >= 0, "virtual column assertion out of range");
     nfa_re_num_cmp(want as u64, op, vcol as u64 + 1)
 }

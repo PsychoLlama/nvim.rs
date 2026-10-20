@@ -81,7 +81,7 @@ use crate::option::{
 use crate::options::{kOptBoFlagOperator, kOptVeFlagAll, kOptVeFlagOnemore};
 use crate::os::cshim::{__ctype_b_loc, gettext, ngettext};
 use crate::os::input::{line_breakcheck, os_breakcheck};
-use crate::plines::{getvcols, init_charsize_arg, linetabsize_str, win_charsize};
+use crate::plines::{getvcols, linetabsize_str, win_charsize};
 use crate::pos::{MAXCOL, equalpos, lt, ltoreq};
 use crate::register::{
     do_autocmd_textyankpost, get_y_register, get_yank_register, op_yank, op_yank_reg,

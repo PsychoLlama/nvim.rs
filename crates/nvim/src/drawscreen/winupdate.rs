@@ -757,11 +757,11 @@ fn visual_line_range(mut win: Win, sel: VisualSelection, redr_type: c_int) -> (L
 
 /// The first and last screen columns of a blockwise Visual selection.
 fn visual_block_columns(win: Win, sel: VisualSelection) -> (ColNr, ColNr) {
-    // A copy of the anchor: `getvcols` only reads it.
+    // Copies of the anchor and the cursor: the walk reads the window they
+    // belong to. The cursor's column is written back, which is the clamp
+    // upstream's in-place `getvcols` leaves.
     let mut anchor = sel.anchor;
-    // SAFETY: the caller's window.
-    let mut fromc = 0;
-    let mut toc = 0;
+    let mut cursor = Win::current().w_cursor;
 
     // With 'linebreak' the columns are computed as if 'virtualedit' were
     // "all", because that is how the selection is drawn.
@@ -769,15 +769,8 @@ fn visual_block_columns(win: Win, sel: VisualSelection) -> (ColNr, ColNr) {
     if Win::current().w_onebuf_opt.wo_lbr != 0 {
         Win::current().w_onebuf_opt.wo_ve_flags = kOptVeFlagAll;
     }
-    unsafe {
-        getvcols(
-            win,
-            &raw mut anchor,
-            &raw mut (*Win::current_raw()).w_cursor,
-            &raw mut fromc,
-            &raw mut toc,
-        )
-    };
+    let (fromc, mut toc) = getvcols(win, &mut anchor, &mut cursor);
+    Win::current().w_cursor = cursor;
     toc += 1;
     Win::current().w_onebuf_opt.wo_ve_flags = save_ve_flags;
 
@@ -804,17 +797,7 @@ fn visual_block_columns(win: Win, sel: VisualSelection) -> (ColNr, ColNr) {
     } {
         pos.lnum = lnum;
         pos.col = ml_get_buf_len(win.buffer(), lnum);
-        let mut end = 0;
-        unsafe {
-            getvvcol(
-                win,
-                &raw mut pos,
-                ::core::ptr::null_mut(),
-                ::core::ptr::null_mut(),
-                &raw mut end,
-            )
-        };
-        toc = toc.max(end);
+        toc = toc.max(getvvcol(win, &mut pos).2);
         lnum += if cursor_above { 1 } else { -1 };
     }
     (fromc, toc + 1)

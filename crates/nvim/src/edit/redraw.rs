@@ -267,8 +267,11 @@ pub(crate) fn get_nolist_virtcol() -> ColNr {
         return 0;
     }
     if win.w_onebuf_opt.wo_list != 0 && !cpo_has(CpoFlag::LISTWM) {
-        // SAFETY: a live window's own cursor, in a buffer it has lines for.
-        return unsafe { getvcol_nolist(&mut win.w_cursor) };
+        // A copy of the cursor, written back: the walk reads the window.
+        let mut cursor = win.w_cursor;
+        let vcol = getvcol_nolist(&mut cursor);
+        win.w_cursor = cursor;
+        return vcol;
     }
     // SAFETY: `curwin` is live for the whole session.
     validate_virtcol(win);

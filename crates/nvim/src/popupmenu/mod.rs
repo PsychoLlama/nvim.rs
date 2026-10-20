@@ -7,7 +7,7 @@ use crate::types::CAR;
 use crate::types::ESC;
 use crate::types::NL;
 use crate::winlayer::cmdline_window;
-use core::ffi::{c_int, c_uint};
+use core::ffi::{CStr, c_int, c_uint};
 use std::rc::Rc;
 
 use crate::api::buffer::nvim_buf_set_lines;
@@ -52,7 +52,7 @@ use crate::options::{
     kOptCotFlagPreview, kOptDiff, kOptSwapfile,
 };
 use crate::os::cshim::gettext;
-use crate::plines::{plines_m_win, win_linetabsize_bytes};
+use crate::plines::{plines_m_win, win_linetabsize};
 use crate::popupmenu::state::{PumWant, must_redraw_pum, pum_grid, pum_want};
 use crate::state::MODE_CMDLINE;
 use crate::state::mode::State;

@@ -248,8 +248,7 @@ pub(crate) fn ins_updown(up: bool, startcol: bool) {
         if startcol {
             // `getvcol_nolist` only reads: a copy keeps the global out
             // of the call's reach.
-            // SAFETY: `Insstart` is a live position in the current buffer.
-            coladvance_to(unsafe { getvcol_nolist(&mut Insstart.get()) });
+            coladvance_to(getvcol_nolist(&mut Insstart.get()));
         }
         if old_topline != Win::current().w_topline || old_topfill != Win::current().w_topfill {
             redraw_later(Win::current(), UPD_VALID);

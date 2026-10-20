@@ -85,7 +85,7 @@ use crate::options::{kOptVeFlagAll, kOptVeFlagOnemore};
 use crate::os::cshim::{gettext, ngettext};
 use crate::os::input::os_breakcheck;
 use crate::os::time::os_time;
-use crate::plines::{getvcol, init_charsize_arg, win_charsize};
+use crate::plines::{getvcol, win_charsize};
 use crate::pos::{MAXCOL, MAXLNUM};
 use crate::regexp::RE_SEARCH;
 use crate::search::{BACKWARD, FORWARD, last_search_pat, set_last_search_pat};

@@ -50,11 +50,7 @@ impl Put {
                     col,
                     coladd: 0,
                 };
-                let none = ::core::ptr::null_mut();
-                let win = Win::current();
-                // SAFETY: a writable local position; only the cursor column
-                // of the three is asked for.
-                unsafe { getvcol(win, &raw mut pos, none, &raw mut vcol, none) };
+                vcol = getvcol(Win::current(), &mut pos).1;
             }
         }
 

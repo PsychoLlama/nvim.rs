@@ -555,5 +555,6 @@ fn cursor_char_class() -> c_int {
 #[inline(always)]
 fn charsize_at(use_ts: bool, vcol: ColNr, sci: StrCharInfo) -> c_int {
     // SAFETY: `sci` names a character of a live line of `curbuf`.
-    unsafe { charsize_nowrap(Buf::current(), sci.ptr, use_ts, vcol, sci.chr.value) }
+    let text = unsafe { cstr::prefix_at(sci.ptr, CHAR_CELLS_SPAN) };
+    charsize_nowrap(Buf::current(), text, use_ts, vcol, sci.chr.value)
 }

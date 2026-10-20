@@ -28,9 +28,10 @@ use core::ffi::c_int;
 use core::ptr;
 
 use super::*;
+use crate::cstr;
 use crate::grid::get_win_by_grid_handle;
 use crate::message::state::{msg_grid, msg_grid_pos};
-use crate::plines::{init_charsize_arg, win_charsize};
+use crate::plines::win_charsize;
 use crate::popupmenu::pum_grid_ref;
 use crate::types::{CharsizeArg, Handle, LineNr};
 use crate::ui_compositor::ui_comp_mouse_focus;
@@ -225,16 +226,16 @@ pub(crate) fn comp_pos(win: Win, row: &mut c_int, col: &mut c_int) -> (LineNr, b
 /// character it landed in.
 pub(crate) fn vcol_to_col(win: Win, lnum: LineNr, vcol: ColNr) -> (ColNr, ColNr) {
     let line = win.buffer().line_raw(lnum);
-    let mut csarg = CharsizeArg::default();
-    // SAFETY: a live window and a NUL-terminated line of its buffer.
-    let cstype = unsafe { init_charsize_arg(&mut csarg, win, lnum, line.raw()) };
+    // SAFETY: a NUL-terminated line of the window's buffer, which nothing
+    // below re-fetches.
+    let (mut csarg, cstype) = CharsizeArg::new(win, lnum, unsafe { cstr::bytes_at(line.raw()) });
     let mut ci = line.first_char();
     let mut cur_vcol: c_int = 0;
     // Try to advance to the specified column.
     // SAFETY: `ci` walks that line and the loop stops at its terminating NUL.
     while cur_vcol < vcol && !unsafe { line.ended(ci) } {
-        let width =
-            unsafe { win_charsize(cstype, cur_vcol, ci.ptr, ci.chr.value, &mut csarg) }.width;
+        let at = ci.ptr.addr() - line.raw().addr();
+        let width = win_charsize(cstype, cur_vcol, at, ci.chr.value, &mut csarg).width;
         if cur_vcol + width > vcol {
             break;
         }

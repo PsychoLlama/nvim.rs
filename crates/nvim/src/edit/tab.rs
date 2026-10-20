@@ -220,32 +220,23 @@ fn tab_spaces_to_tabs() {
         fpos.col = Insstart.get().col;
     }
 
-    let mut vcol: ColNr = 0;
-    let mut want_vcol: ColNr = 0;
-    let none = ::core::ptr::null_mut();
-    // SAFETY: `fpos` and `cursor` are live positions in the current buffer.
-    unsafe { getvcol(Win::current(), &raw mut fpos, &raw mut vcol, none, none) };
-    let cursor: *mut Pos = if vreplace {
-        &raw mut pos
+    let mut vcol: ColNr = getvcol(Win::current(), &mut fpos).0;
+    let want_vcol: ColNr = if vreplace {
+        getvcol(Win::current(), &mut pos).0
     } else {
-        &raw mut Win::current().w_cursor
+        let win = Win::current();
+        win.vcol_triple(win.cursor()).0
     };
-    unsafe { getvcol(Win::current(), cursor, &raw mut want_vcol, none, none) };
 
     // Use as many TABs as possible, measuring each one's width where it
     // lands.
-    let tab = c"\t".as_ptr().cast_mut();
-    // SAFETY: `tab` is a static one-byte string, and the character widths
-    // are asked of a live window.
-    let tab_v = unsafe { *tab } as uint8_t as int32_t;
-    let mut csarg = CharsizeArg::default();
-    let mut cstype = unsafe { init_charsize_arg(&mut csarg, Win::current(), 0, tab) };
+    let (mut csarg, cstype) = CharsizeArg::new(Win::current(), 0, b"\t");
     loop {
         let byte = unsafe { *ptr } as c_int;
         if !ascii_iswhite(byte) {
             break;
         }
-        let i = unsafe { win_charsize(cstype, vcol, tab, tab_v, &mut csarg) }.width;
+        let i = win_charsize(cstype, vcol, 0, TAB, &mut csarg).width;
         if vcol + i > want_vcol {
             break;
         }
@@ -266,9 +257,13 @@ fn tab_spaces_to_tabs() {
     if change_col >= 0 {
         // Skip over the spaces the TABs have made redundant.
         let mut repl_off = 0;
-        cstype = unsafe { init_charsize_arg(&mut csarg, Win::current(), 0, ptr) };
+        // SAFETY: `ptr` is inside the line, which the walk below only reads.
+        let base = ptr;
+        let (mut csarg, cstype) =
+            CharsizeArg::new(Win::current(), 0, unsafe { cstr::bytes_at(base) });
         while vcol < want_vcol && unsafe { *ptr } as c_int == ' ' as c_int {
-            vcol += unsafe { win_charsize(cstype, vcol, ptr, b' ' as int32_t, &mut csarg) }.width;
+            let at = ptr.addr() - base.addr();
+            vcol += win_charsize(cstype, vcol, at, b' ' as int32_t, &mut csarg).width;
             ptr = unsafe { ptr.offset(1) };
             repl_off += 1;
         }

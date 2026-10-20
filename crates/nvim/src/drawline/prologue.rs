@@ -19,6 +19,7 @@
 #![allow(unsafe_code)]
 
 use super::*;
+use crate::cstr;
 use crate::decoration::kMTMetaInline;
 use crate::normal::{VisualSelection, visual_active, visual_selection};
 use crate::option::vars::P_SEL;
@@ -300,15 +301,7 @@ impl LineSetup {
                 if sel.mode.is_line() {
                     wlv.fromcol = 0;
                 } else {
-                    unsafe {
-                        getvvcol(
-                            window,
-                            &raw mut top,
-                            &raw mut wlv.fromcol,
-                            ::core::ptr::null_mut(),
-                            ::core::ptr::null_mut(),
-                        )
-                    };
+                    wlv.fromcol = getvvcol(window, &mut top).0;
                     if gchar_pos(&top) == NUL {
                         // Empty line: invert the one cell past its end.
                         wlv.tocol = wlv.fromcol + 1;
@@ -326,26 +319,9 @@ impl LineSetup {
                 } else {
                     let mut pos = bot;
                     if P_SEL.first_byte() == b'e' {
-                        unsafe {
-                            getvvcol(
-                                window,
-                                &raw mut pos,
-                                &raw mut wlv.tocol,
-                                ::core::ptr::null_mut(),
-                                ::core::ptr::null_mut(),
-                            )
-                        };
+                        wlv.tocol = getvvcol(window, &mut pos).0;
                     } else {
-                        unsafe {
-                            getvvcol(
-                                window,
-                                &raw mut pos,
-                                ::core::ptr::null_mut(),
-                                ::core::ptr::null_mut(),
-                                &raw mut wlv.tocol,
-                            )
-                        };
-                        wlv.tocol += 1;
+                        wlv.tocol = getvvcol(window, &mut pos).2 + 1;
                     }
                 }
             }
@@ -370,15 +346,8 @@ impl LineSetup {
     fn incsearch_area(&mut self, wlv: &mut WinLineVars, window: Win) {
         let lnum = wlv.lnum;
         if lnum == Win::current().w_cursor.lnum {
-            unsafe {
-                getvcol(
-                    Win::current(),
-                    &raw mut (*Win::current_raw()).w_cursor,
-                    &raw mut wlv.fromcol,
-                    ::core::ptr::null_mut(),
-                    ::core::ptr::null_mut(),
-                )
-            };
+            let win = Win::current();
+            wlv.fromcol = win.vcol_triple(win.cursor()).0;
         } else {
             wlv.fromcol = 0;
         }
@@ -388,15 +357,7 @@ impl LineSetup {
                 col: search_match_endcol.get(),
                 coladd: 0,
             };
-            unsafe {
-                getvcol(
-                    Win::current(),
-                    &raw mut pos,
-                    &raw mut wlv.tocol,
-                    ::core::ptr::null_mut(),
-                    ::core::ptr::null_mut(),
-                )
-            };
+            wlv.tocol = getvcol(Win::current(), &mut pos).0;
         }
         // Do at least one character; the match can be past the end of the
         // line.
@@ -449,17 +410,14 @@ impl LineSetup {
 
     /// Count the filler lines above this one — diff filler plus virtual lines.
     fn filler_lines(&mut self, wlv: &mut WinLineVars, window: Win) {
-        // SAFETY: the caller's window.
-        wlv.n_virt_lines = unsafe {
-            decor_virt_lines(
-                window,
-                wlv.lnum - 1,
-                wlv.lnum,
-                &raw mut wlv.n_virt_below,
-                &raw mut self.virt_lines,
-                true,
-            )
-        };
+        wlv.n_virt_lines = decor_virt_lines(
+            window,
+            wlv.lnum - 1,
+            wlv.lnum,
+            Some(&mut wlv.n_virt_below),
+            Some(&mut self.virt_lines),
+            true,
+        );
         wlv.filler_lines += wlv.n_virt_lines;
         if wlv.lnum == window.w_topline {
             // The top line shows only as much filler as it is scrolled to.
@@ -693,13 +651,16 @@ impl LineSetup {
         let start_vcol = self.start_vcol;
         let mut prev_ptr = self.ptr;
         let mut cs = CharSize { width: 0, head: 0 };
-        let mut csarg = CharsizeArg::default();
-        let cstype = unsafe { init_charsize_arg(&mut csarg, window, wlv.lnum, self.line) };
+        // SAFETY: the line being drawn, which nothing below re-fetches.
+        let (mut csarg, cstype) =
+            CharsizeArg::new(window, wlv.lnum, unsafe { cstr::bytes_at(self.line) });
         csarg.max_head_vcol = start_vcol;
         let mut vcol = wlv.vcol;
         let mut ci = unsafe { utf_ptr2str_char_info(self.ptr) };
         while vcol < start_vcol {
-            cs = unsafe { win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &mut csarg) };
+            // SAFETY: `ci` walks the line.
+            let at = ci.ptr.addr() - self.line.addr();
+            cs = win_charsize(cstype, vcol, at, ci.chr.value, &mut csarg);
             vcol += cs.width;
             prev_ptr = ci.ptr;
             if unsafe { *prev_ptr } == 0 {
@@ -813,7 +774,7 @@ impl LineSetup {
         if len == 0 || window.w_cursor.col > linecol {
             // No bad word at the line start: do not check again until the
             // end of a word.
-            let end = spell_to_word_end(unsafe { crate::cstr::bytes_at(self.ptr) }, window);
+            let end = spell_to_word_end(unsafe { cstr::bytes_at(self.ptr) }, window);
             self.word_end = (linecol as usize + end + 1) as ::core::ffi::c_int;
         } else {
             // Bad word found: its attribute applies to the end of it.

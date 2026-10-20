@@ -36,7 +36,7 @@ use crate::option::vars::{P_SBR, P_SEL, p_ch, p_sc, p_sloc};
 use crate::plines::getvcols;
 use crate::pos::lt;
 use crate::statusline::{draw_tabline, win_redr_status};
-use crate::types::{Array, ColNr, LineNr, NUL, Object, OptInt, String_0};
+use crate::types::{Array, LineNr, NUL, Object, OptInt, String_0};
 use crate::ui::state::Rows;
 use crate::ui::{ui_call_msg_showcmd, ui_has};
 use core::ffi::{CStr, c_char, c_int};
@@ -186,17 +186,17 @@ fn visual_line_range(sel: VisualSelection, cursor_bot: bool) -> (LineNr, LineNr)
 /// The width of a blockwise selection, measured with 'showbreak' suppressed
 /// so a wrapped line does not add the leader to the column count.
 fn blockwise_width(sel: VisualSelection) -> c_int {
-    let (mut leftcol, mut rightcol): (ColNr, ColNr) = (0, 0);
-    // A copy of the anchor: `getvcols` only reads it.
+    // Copies of the anchor and the cursor: the walk reads the window. The
+    // cursor is written back, which keeps the clamp of its column.
     let mut anchor = sel.anchor;
     // Both positions are in the current buffer, and the two 'showbreak'
     // values are put back before returning.
     let saved_sbr = P_SBR.clear();
     let saved_w_sbr = Win::current().w_onebuf_opt.wo_sbr.take();
-    let win = Win::current();
-    let (cursor, other) = (win.cursor().raw(), &raw mut anchor);
-    let (l, r) = (&raw mut leftcol, &raw mut rightcol);
-    unsafe { getvcols(win, cursor, other, l, r) };
+    let mut win = Win::current();
+    let mut cursor = win.w_cursor;
+    let (leftcol, rightcol) = getvcols(win, &mut cursor, &mut anchor);
+    win.w_cursor = cursor;
     P_SBR.restore(saved_sbr);
     Win::current().w_onebuf_opt.wo_sbr = saved_w_sbr;
     rightcol - leftcol + 1

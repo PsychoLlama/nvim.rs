@@ -91,24 +91,17 @@ fn vreplace_extent(buf: *mut c_char, col: size_t, charlen: size_t) -> (size_t, s
 
     let mut oldlen: size_t = 0;
     let mut newlen: size_t = charlen;
-    let mut vcol: ColNr = 0;
     let win = Win::current();
-    let cursor = Win::current().cursor().raw();
-    let novcol = ::core::ptr::null_mut::<ColNr>();
-    // SAFETY: the current window and its own cursor; only the middle column
-    // is asked for, and it is a local.
-    unsafe { getvcol(win, cursor, novcol, &raw mut vcol, novcol) };
-    // SAFETY: the current window is live and `buf` holds the character.
-    let new_vcol = vcol + unsafe { win_chartabsize(win, buf, vcol) };
+    let mut vcol: ColNr = win.vcol_triple(win.cursor()).1;
+    // SAFETY: `buf` holds the character's `charlen` bytes.
+    let new_vcol = vcol + win_chartabsize(win, unsafe { cstr::slice_at(buf, charlen) }, vcol);
     // The line is read here, not handed in: `getvcol` above reads the
     // memline too, so a slice taken in front of it is not one to hold.
     let mut lines = Buf::current().lines();
     let line = lines.line(Win::current().w_cursor.lnum);
     while col + oldlen < line.len() && vcol < new_vcol {
         let at = &line[col + oldlen..];
-        // SAFETY: the current window is live and `at` is the rest of its
-        // cursor line, terminated by the memline's own NUL.
-        vcol += unsafe { win_chartabsize(win, at.as_ptr().cast::<c_char>().cast_mut(), vcol) };
+        vcol += win_chartabsize(win, at, vcol);
         // A TAB that lands exactly where the new character ends does not
         // need removing.
         if vcol > new_vcol && c_int::from(at[0]) == TAB {

@@ -508,13 +508,12 @@ impl Cells {
         let mb_off = unsafe { utf_head_off(self.line, self.ptr.offset(-1)) };
         let p = unsafe { self.ptr.offset(-(mb_off as isize + 1)) };
 
-        let mut csarg = CharsizeArg::default();
         // `lnum` 0: virtual text is not to be counted here.
-        let cstype = unsafe { init_charsize_arg(&mut csarg, window, 0, self.line) };
-        wlv.extra_todo =
-            unsafe { win_charsize(cstype, wlv.vcol, p, utf_ptr2char_info(p).value, &mut csarg) }
-                .width
-                - 1;
+        // SAFETY: the line being drawn, and `p` a character in it.
+        let at = p.addr() - self.line.addr();
+        let (line, chr) = unsafe { (cstr::bytes_at(self.line), utf_ptr2char_info(p).value) };
+        let (mut csarg, cstype) = CharsizeArg::new(window, 0, line);
+        wlv.extra_todo = win_charsize(cstype, wlv.vcol, at, chr, &mut csarg).width - 1;
 
         // Do not bleed an underline, strikethrough or overline into the
         // filler for the pushed-down word: over blank cells it looks like a

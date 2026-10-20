@@ -197,9 +197,7 @@ fn measure_selection(sel: VisualSelection) -> Selection {
         oparg.is_visual = true;
         oparg.motion_type = kMTBlockWise;
         oparg.op_type = OpType::Nop;
-        // SAFETY: a live window and two live positions in its buffer.
-        let (sv, ev) = (&raw mut oparg.start_vcol, &raw mut oparg.end_vcol);
-        unsafe { getvcols(Win::current(), &raw mut min, &raw mut max, sv, ev) };
+        (oparg.start_vcol, oparg.end_vcol) = getvcols(Win::current(), &mut min, &mut max);
 
         P_SBR.restore(saved_sbr);
         Win::current().w_onebuf_opt.wo_sbr = saved_w_sbr;
@@ -364,12 +362,10 @@ fn report_counts(counts: &PosCounts, selection: Option<&Selection>) -> String {
             Win::current().w_cursor.col + 1,
             Win::current().w_virtcol + 1,
         );
-        let p = get_cursor_line_ptr();
         validate_virtcol(Win::current());
         let at = col_text(col, virtcol);
-        // SAFETY: the cursor is on a line of the current buffer, which is
-        // what `linetabsize_str` asks of the pointer taken above.
-        let of = col_text(get_cursor_line_len(), unsafe { linetabsize_str(p) });
+        let width = linetabsize_str(Lines::current().line(Win::current().w_cursor.lnum));
+        let of = col_text(get_cursor_line_len(), width);
         return if same_as_bytes {
             tr!(
                 "Col {at} of {of}; Line {lnum} of {lines}; Word {wc} of {words}; Byte {bc} of {bytes}"
@@ -388,10 +384,9 @@ fn report_counts(counts: &PosCounts, selection: Option<&Selection>) -> String {
         // Both vcols are `c_int`, so the difference cannot overflow an
         // `int64_t` (upstream computes it under STRICT_SUB and aborts).
         let cols = int64_t::from(sel.oparg.end_vcol) + 1 - int64_t::from(sel.oparg.start_vcol);
-        let (minc, maxc) = (&raw mut min.col, &raw mut max.col);
-        // SAFETY: the two positions are this frame's own, and so are the
-        // columns written back into them.
-        unsafe { getvcols(Win::current(), &raw mut min, &raw mut max, minc, maxc) };
+        // Upstream measures the two corners into their own columns and
+        // reads neither; the walk is kept for its clamp of them.
+        let _ = getvcols(Win::current(), &mut min, &mut max);
         tr!("{cols} Cols; ")
     } else {
         String::new()

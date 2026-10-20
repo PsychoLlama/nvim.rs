@@ -502,7 +502,8 @@ pub(super) fn head_off_in<T: Text>(t: T, at: usize) -> usize {
 /// character itself.
 #[inline(always)]
 pub(super) fn next_cluster_in<T: Text>(t: T, at: usize, cur: CharInfo) -> (usize, CharInfo) {
-    let next = at + usize::try_from(cur.len).unwrap_or(0);
+    // A character is at least one byte long, so the length is positive.
+    let next = at + cur.len.unsigned_abs() as usize;
     let ascii = |next: usize| {
         let value = i32::from(t.byte(next));
         (next, CharInfo { value, len: 1 })

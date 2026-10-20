@@ -12,7 +12,7 @@
 use super::*;
 use crate::winlayer::Win;
 
-/// Which of the two charsize functions a line needs. `init_charsize_arg`
+/// Which of the two charsize functions a line needs. `CharsizeArg::new`
 /// decides once per line and every walk over that line uses the answer.
 ///
 /// `Fast` is the common case: nothing on the line can change a character's
@@ -31,17 +31,17 @@ pub struct CharSize {
     pub width: ::core::ffi::c_int,
     pub head: ::core::ffi::c_int,
 }
-/// The per-line state the charsize functions walk with.
+/// The per-line state the charsize functions walk with, seated on the line
+/// it measures.
 ///
-/// Zero is not a meaningful value for any of these: every field is set by
-/// `init_charsize_arg` before the first character is measured. `Default`
-/// exists only so callers can declare one without spelling out the marktree
-/// iterator, which is what c2rust made them do.
-pub struct CharsizeArg {
-    /// The window being measured in, taken live by `init_charsize_arg`; the
+/// `line` is the text without its NUL: a walk reads a NUL past its end, and
+/// stops at a NUL inside it, exactly as the pointer walk it replaces
+/// stopped at the terminator. Positions in it are byte offsets.
+pub struct CharsizeArg<'a> {
+    /// The window being measured in, taken live by `CharsizeArg::new`; the
     /// walk is one call that nothing in it can close a window during.
     pub win: Win,
-    pub line: *mut ::core::ffi::c_char,
+    pub line: &'a [u8],
     pub use_tabstop: bool,
     /// Width of 'showbreak' plus 'breakindent', memoised across the line;
     /// `c_int::MIN` until the first character needs it.
@@ -53,20 +53,4 @@ pub struct CharsizeArg {
     pub cur_text_width_right: ::core::ffi::c_int,
     pub max_head_vcol: ::core::ffi::c_int,
     pub iter: [MarkTreeIter; 1],
-}
-
-impl Default for CharsizeArg {
-    fn default() -> Self {
-        Self {
-            win: Win::NULL,
-            line: ::core::ptr::null_mut(),
-            use_tabstop: false,
-            indent_width: 0,
-            virt_row: 0,
-            cur_text_width_left: 0,
-            cur_text_width_right: 0,
-            max_head_vcol: 0,
-            iter: Default::default(),
-        }
-    }
 }

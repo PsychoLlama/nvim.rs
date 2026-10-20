@@ -95,17 +95,7 @@ pub(crate) fn line_vcol(lnum: LineNr, col: ColNr) -> c_int {
         col,
         coladd: 0,
     };
-    let mut vcol: ColNr = 0;
-    unsafe {
-        getvcol(
-            Win::current(),
-            &raw mut fp,
-            &raw mut vcol,
-            ::core::ptr::null_mut::<ColNr>(),
-            ::core::ptr::null_mut::<ColNr>(),
-        )
-    };
-    vcol
+    getvcol(Win::current(), &mut fp).0
 }
 
 /// Borrow a 'vartabstop' array as a slice. `None` when the option is unset

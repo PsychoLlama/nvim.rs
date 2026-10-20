@@ -20,7 +20,7 @@ use crate::memory::XString;
 use crate::message::msg_display_bytes;
 use crate::option::{ScrollMargin, ScrollOff, cpo_has};
 use crate::optionstr::{OptString, OptStringRef};
-use crate::plines::vcols_at;
+use crate::plines::getvcol;
 use crate::pos::MAXCOL;
 use crate::regexp::RE_LAST;
 use crate::search::{
@@ -688,7 +688,7 @@ pub fn showmatch(c: c_int) {
     }
 
     if Win::current().w_onebuf_opt.wo_wrap == 0 {
-        let vcol = vcols_at(Win::current(), &mut lpos).1;
+        let vcol = getvcol(Win::current(), &mut lpos).1;
         if !(vcol >= Win::current().w_leftcol
             && vcol < Win::current().w_leftcol + Win::current().w_view_width)
         {

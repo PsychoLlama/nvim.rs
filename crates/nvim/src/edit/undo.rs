@@ -105,7 +105,8 @@ pub(crate) fn stop_arrow() -> Result<(), Failed> {
             // right, except when nothing was inserted yet.
             update_Insstart_orig.set(false);
         }
-        Insstart_textlen.set(unsafe { linetabsize_str(get_cursor_line_ptr()) } as ColNr);
+        let mut lines = Lines::current();
+        Insstart_textlen.set(linetabsize_str(lines.line(Win::current().w_cursor.lnum)) as ColNr);
 
         if save_cursor_line().is_ok() {
             arrow_used.set(false);

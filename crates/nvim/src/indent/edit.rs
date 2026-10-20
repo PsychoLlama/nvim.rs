@@ -39,7 +39,7 @@ use crate::option::vars::{p_paste, p_report};
 use crate::optionstr::OptString;
 use crate::os::cshim::{gettext, ngettext};
 use crate::os::input::line_breakcheck;
-use crate::plines::{getvcol_nolist, init_charsize_arg, win_charsize, win_chartabsize};
+use crate::plines::{CHAR_CELLS_SPAN, getvcol_nolist, win_charsize, win_chartabsize};
 use crate::pos::MAXCOL;
 use crate::search::findmatch;
 use crate::state::mode::{Insstart, State, ai_col, can_si, can_si_back, did_si, old_indent};
@@ -327,12 +327,11 @@ fn place_cursor_in_indent(end_vcol: c_int) -> c_int {
     let mut new_cursor_col = 0;
     let mut vcol = 0;
     if unsafe { *line } != 0 {
-        let mut csarg = CharsizeArg::default();
-        let cstype = unsafe { init_charsize_arg(&mut csarg, win, 0, line) };
+        let (mut csarg, cstype) = CharsizeArg::new(win, 0, unsafe { cstr::bytes_at(line) });
         let mut ci: StrCharInfo = unsafe { utf_ptr2str_char_info(line) };
         loop {
-            let next_vcol = vcol
-                + unsafe { win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &mut csarg) }.width;
+            let at = ci.ptr.addr() - line.addr();
+            let next_vcol = vcol + win_charsize(cstype, vcol, at, ci.chr.value, &mut csarg).width;
             if next_vcol > end_vcol {
                 break;
             }
@@ -440,7 +439,10 @@ pub fn change_indent(type_0: c_int, amount: c_int, round: c_int, call_changed_by
     // The tricks below do not want 'list' mode.
     let save_p_list = win.w_onebuf_opt.wo_list;
     win.w_onebuf_opt.wo_list = 0;
-    let mut vcol = unsafe { getvcol_nolist(&raw mut win.w_cursor) } as c_int;
+    // A copy of the cursor, written back: the walk reads the window.
+    let mut cursor = win.w_cursor;
+    let mut vcol = getvcol_nolist(&mut cursor) as c_int;
+    win.w_cursor = cursor;
     // Replace mode fixes its stack below, which is only possible when the
     // cursor is in the indent; this is how many characters precede it.
     let mut start_col = win.w_cursor.col as c_int;
@@ -768,8 +770,9 @@ impl Retab {
         // Written inside `unsafe` blocks so that the walk stays checked code.
         let byte = |s: &LineScan| unsafe { *s.ptr.offset(s.col as isize) };
         let win = Win::current();
-        let width = |s: &LineScan| unsafe {
-            win_chartabsize(win, s.ptr.offset(s.col as isize), s.vcol as ColNr)
+        let width = |s: &LineScan| {
+            let text = unsafe { cstr::prefix_at(s.ptr.offset(s.col as isize), CHAR_CELLS_SPAN) };
+            win_chartabsize(win, text, s.vcol as ColNr)
         };
         let charlen = |s: &LineScan| unsafe { utfc_ptr2len(s.ptr.offset(s.col as isize)) };
         loop {

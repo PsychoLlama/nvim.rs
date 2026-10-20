@@ -13,7 +13,7 @@ use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::{vim_is_ident_char, vim_isfilec, vim_isprintc};
 use crate::mark::mark_lookup;
 use crate::mbyte::{class_in, utf_iscomposing_legacy};
-use crate::plines::win_linetabsize_bytes;
+use crate::plines::win_linetabsize;
 use crate::pos::MAXCOL;
 use crate::regexp::{
     ByteClass, RA_CONT, RA_MATCH, RA_NOMATCH, RI_FLAGS, Rex, char_at_nul, char_len_at,
@@ -226,7 +226,7 @@ fn virtual_column(rex: Rex) -> uint32_t {
     if rex.multi() && (lnum <= 0 || lnum > wp.buffer().b_ml.ml_line_count) {
         lnum = 1;
     }
-    win_linetabsize_bytes(wp, lnum, rex.line(), rex.col()) as uint32_t
+    win_linetabsize(wp, lnum, rex.line(), rex.col()) as uint32_t
 }
 
 /// `\%'m`, `\%<'m`, `\%>'m`: is the cursor at, before or after mark `m`?

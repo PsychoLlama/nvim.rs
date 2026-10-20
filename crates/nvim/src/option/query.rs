@@ -232,6 +232,21 @@ impl Win {
         let local = &self.w_onebuf_opt.wo_sbr;
         local.bytes() != b"NONE" && local_or_global(local, P_SBR).first_byte() != 0
     }
+
+    /// Cells the 'showbreak' leader takes on screen, zero for none:
+    /// upstream's `vim_strsize(get_showbreak_value(wp))`.
+    pub(crate) fn showbreak_cells(self) -> c_int {
+        let local = &self.w_onebuf_opt.wo_sbr;
+        if local.bytes() == b"NONE" {
+            return 0;
+        }
+        // `local_or_global`'s choice, read in place: the local copy unless
+        // it is empty.
+        match local.as_ref().filter(|value| !value.is_empty()) {
+            Some(value) => crate::charset::strsize(value),
+            None => P_SBR.with_bytes(crate::charset::strsize),
+        }
+    }
 }
 
 /// The buffer's line ending. 'binary' forces Unix whatever 'fileformat' says.

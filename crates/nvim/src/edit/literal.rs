@@ -309,12 +309,14 @@ pub(crate) fn ins_copychar(lnum: LineNr) -> c_int {
     let end_vcol = Win::current().w_virtcol;
     let line = ml_get(lnum);
 
-    let mut csarg = CharsizeArg::default();
-    let cstype = unsafe { init_charsize_arg(&mut csarg, Win::current(), lnum, line) };
+    // SAFETY: the line just fetched, which nothing below re-fetches.
+    let (mut csarg, cstype) =
+        CharsizeArg::new(Win::current(), lnum, unsafe { cstr::bytes_at(line) });
     let mut ci: StrCharInfo = unsafe { utf_ptr2str_char_info(line) };
     let mut vcol = 0;
     while vcol < end_vcol && unsafe { *ci.ptr } as c_int != NUL {
-        vcol += unsafe { win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &mut csarg) }.width;
+        let at = ci.ptr.addr() - line.addr();
+        vcol += win_charsize(cstype, vcol, at, ci.chr.value, &mut csarg).width;
         if vcol > end_vcol {
             break;
         }

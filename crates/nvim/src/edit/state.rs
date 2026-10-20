@@ -66,7 +66,8 @@ fn insert_enter(s: &mut InsertState) {
             Insstart.set(Insstart.get().with_col(0));
         }
     }
-    Insstart_textlen.set(unsafe { linetabsize_str(get_cursor_line_ptr()) } as ColNr);
+    let mut lines = Lines::current();
+    Insstart_textlen.set(linetabsize_str(lines.line(Win::current().w_cursor.lnum)) as ColNr);
     Insstart_blank_vcol.set(MAXCOL as ColNr);
     if !did_ai.get() {
         ai_col.set(0);

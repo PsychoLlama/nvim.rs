@@ -16,7 +16,6 @@
 #![allow(unsafe_code)]
 
 use core::ffi::{c_char, c_int, c_uint};
-use core::ptr;
 
 use super::*;
 use crate::api::private::helpers::{cstr_to_string, find_window_by_handle, try_enter, try_leave};
@@ -447,14 +446,15 @@ fn text_height(
     end_lnum: &mut LineNr,
     end_vcol: &mut int64_t,
 ) -> int64_t {
-    let (none, all) = (ptr::null_mut::<int64_t>(), INT64_MAX as int64_t);
-    // SAFETY: two lines of the window's own buffer, and two out-parameters of
-    // the caller's.
-    unsafe {
-        win_text_height(
-            window, start_lnum, start_vcol, end_lnum, end_vcol, none, all,
-        )
-    }
+    win_text_height(
+        window,
+        start_lnum,
+        start_vcol,
+        end_lnum,
+        end_vcol,
+        None,
+        INT64_MAX as int64_t,
+    )
 }
 
 // ---------------------------------------------------------------------------

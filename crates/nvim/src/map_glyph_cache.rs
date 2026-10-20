@@ -39,10 +39,6 @@ fn key_len(key: &[u8]) -> uint32_t {
     uint32_t::try_from(key.len()).expect("a glyph is at most MAX_SCHAR_SIZE bytes")
 }
 
-/// The keys array's first heap size. Bytes, not entries, so it is eight
-/// times the fixed-size sets' floor -- upstream's own number for this layout.
-const MIN_KEY_BYTES: uint32_t = 64;
-
 impl Set_glyph {
     /// The bucket table: `h.n_buckets` slots, each 0 (empty), a tombstone,
     /// or a glyph's byte offset plus one.
@@ -141,6 +137,11 @@ impl Set_glyph {
     /// offset. `key` must hold no NUL and be shorter than
     /// [`crate::grid::MAX_SCHAR_SIZE`].
     pub(crate) fn intern(&mut self, key: &[u8]) -> uint32_t {
+        // The keys array's first heap size. Bytes, not entries, so it is
+        // eight times the fixed-size sets' floor -- upstream's own number for
+        // this layout. Function-local so it stays out of the FFI golden.
+        const MIN_KEY_BYTES: uint32_t = 64;
+
         if self.h.n_occupied >= self.h.upper_bound {
             // The cache never deletes, so there are no tombstones to shed and
             // no `should_grow` decision to make: growing is the only way back

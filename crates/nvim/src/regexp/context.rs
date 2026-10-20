@@ -21,7 +21,7 @@ use crate::getchar::state::got_int;
 use crate::mbyte::{class_in, strnicmp_in};
 use crate::normal::{VisualMode, visual_ever_started, visual_selection};
 use crate::os::input::fast_breakcheck;
-use crate::plines::win_linetabsize_bytes;
+use crate::plines::win_linetabsize;
 use crate::pos::{MAXCOL, lt};
 use crate::regexp::state::rc_did_emsg;
 use crate::semsg;
@@ -178,7 +178,7 @@ pub(crate) fn reg_match_visual(rex: Rex) -> bool {
         // from under the match: fetch it again.
         let line = reg_getline(rex, rex.lnum()).unwrap_or(PAST_THE_END);
         rex.seek(line, col);
-        let cols = win_linetabsize_bytes(wp, rex.buf_lnum(), line, col);
+        let cols = win_linetabsize(wp, rex.buf_lnum(), line, col);
         cols >= start && cols <= end - ColNr::from(P_SEL.first_byte() == b'e')
     } else {
         true

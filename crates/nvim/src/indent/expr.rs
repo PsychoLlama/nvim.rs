@@ -24,7 +24,7 @@ use crate::mbyte::{utf_ptr2char_info, utf_ptr2str_char_info, utfc_next};
 use crate::option::vars::{P_LISPWORDS, p_debug, p_paste};
 use crate::option::{copy_option_part, was_set_insecurely};
 use crate::optionstr::OptString;
-use crate::plines::{init_charsize_arg, win_charsize};
+use crate::plines::win_charsize;
 use crate::pos::lt;
 use crate::runtime::state::current_sctx;
 use crate::search::{findmatch, linewhite};
@@ -183,14 +183,13 @@ unsafe fn skip_white_measuring(
     that: &mut *mut c_char,
     amount: &mut c_int,
     cstype: CharsizeKind,
-    csarg: &mut CharsizeArg,
+    csarg: &mut CharsizeArg<'_>,
 ) {
     // SAFETY: the caller's line, walked one byte at a time and stopped by
     // the NUL, which is not white space.
     while ascii_iswhite(unsafe { **that } as c_int) {
-        *amount +=
-            unsafe { win_charsize(cstype, *amount, *that, **that as uint8_t as int32_t, csarg) }
-                .width;
+        let (at, byte) = (that.addr() - csarg.line.as_ptr().addr(), unsafe { **that });
+        *amount += win_charsize(cstype, *amount, at, byte as uint8_t as int32_t, csarg).width;
         *that = unsafe { that.add(1) };
     }
 }
@@ -204,15 +203,16 @@ fn indent_after_open(open: &Pos) -> c_int {
     win.w_cursor.lnum = open.lnum;
     win.w_cursor.col = open.col;
     let line = get_cursor_line_ptr();
-    let mut csarg = CharsizeArg::default();
-    let cstype = unsafe { init_charsize_arg(&mut csarg, win, open.lnum, line) };
+    // SAFETY: the cursor line, which nothing below re-fetches.
+    let (mut csarg, cstype) = CharsizeArg::new(win, open.lnum, unsafe { cstr::bytes_at(line) });
 
     // Walk to `open`'s column, measuring what is before it.
     let mut sci: StrCharInfo = unsafe { utf_ptr2str_char_info(line) };
     let mut amount = 0;
     let mut col = open.col;
     while unsafe { *sci.ptr } != 0 && col > 0 {
-        amount += unsafe { win_charsize(cstype, amount, sci.ptr, sci.chr.value, &mut csarg) }.width;
+        let at = sci.ptr.addr() - line.addr();
+        amount += win_charsize(cstype, amount, at, sci.chr.value, &mut csarg).width;
         sci = unsafe { utfc_next(sci) };
         col -= 1;
     }
@@ -267,7 +267,7 @@ unsafe fn measure_first_argument(
     that: &mut *mut c_char,
     mut amount: c_int,
     cstype: CharsizeKind,
-    csarg: &mut CharsizeArg,
+    csarg: &mut CharsizeArg<'_>,
 ) -> c_int {
     // SAFETY: the caller's line, walked one character at a time by
     // `utfc_next` and stopped by the NUL.
@@ -296,7 +296,8 @@ unsafe fn measure_first_argument(
         }
         // A backslash and the character it escapes are one step.
         if ci.value == '\\' as int32_t && unsafe { *that.add(1) } != 0 {
-            amount += unsafe { win_charsize(cstype, amount, *that, ci.value, csarg) }.width;
+            let at = that.addr() - csarg.line.as_ptr().addr();
+            amount += win_charsize(cstype, amount, at, ci.value, csarg).width;
             let next = unsafe {
                 utfc_next(StrCharInfo {
                     ptr: *that,
@@ -306,7 +307,8 @@ unsafe fn measure_first_argument(
             *that = next.ptr;
             ci = next.chr;
         }
-        amount += unsafe { win_charsize(cstype, amount, *that, ci.value, csarg) }.width;
+        let at = that.addr() - csarg.line.as_ptr().addr();
+        amount += win_charsize(cstype, amount, at, ci.value, csarg).width;
         let next = unsafe {
             utfc_next(StrCharInfo {
                 ptr: *that,

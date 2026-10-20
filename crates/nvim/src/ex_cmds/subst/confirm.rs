@@ -34,7 +34,7 @@ use crate::r#move::{
 use crate::option::cpo_has;
 use crate::option::vars::{P_LZ, p_lz};
 use crate::os::cshim::gettext;
-use crate::plines::vcols_at;
+use crate::plines::getvcol;
 use crate::search::state::{highlight_match, search_match_endcol, search_match_lines};
 use crate::state::mode::{State, exmode_active};
 use crate::types::ui::kUIMessages;
@@ -77,11 +77,11 @@ fn prompt_exmode(st: &Sub) -> c_int {
     // The cursor is at the start of the match; moving it to the last byte
     // of the match and back is what gives the match's screen columns.
     let mut cursor = Win::current().w_cursor;
-    let (mut sc, _, _) = vcols_at(Win::current(), &mut cursor);
+    let (mut sc, _, _) = getvcol(Win::current(), &mut cursor);
     Win::current().w_cursor = cursor;
     Win::current().w_cursor.col = (st.regmatch.endpos[0].col - 1 as c_int).max(0 as c_int);
     let mut cursor = Win::current().w_cursor;
-    let (_, _, mut ec) = vcols_at(Win::current(), &mut cursor);
+    let (_, _, mut ec) = getvcol(Win::current(), &mut cursor);
     Win::current().w_cursor = cursor;
     Win::current().w_cursor.col = st.regmatch.startpos[0].col;
     if SUB_FLAGS.with(|flags| flags.do_number) || Win::current().w_onebuf_opt.wo_nu != 0 {

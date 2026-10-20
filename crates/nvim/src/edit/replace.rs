@@ -232,19 +232,11 @@ pub(crate) fn replace_do_bs(limit_col: c_int) {
         if l_state & VREPLACE_FLAG != 0 {
             // How many screen cells the character about to be deleted
             // took.
-            let none = ::core::ptr::null_mut();
-            // SAFETY: a live window and its own cursor.
-            unsafe {
-                getvcol(
-                    Win::current(),
-                    &mut Win::current().w_cursor,
-                    none,
-                    &raw mut start_vcol,
-                    none,
-                )
-            };
-            orig_vcols =
-                unsafe { win_chartabsize(Win::current(), get_cursor_pos_ptr(), start_vcol) };
+            let win = Win::current();
+            start_vcol = win.vcol_triple(win.cursor()).1;
+            // SAFETY: the cursor's character, in the cursor line.
+            let at = unsafe { cstr::prefix_at(get_cursor_pos_ptr(), CHAR_CELLS_SPAN) };
+            orig_vcols = win_chartabsize(win, at, start_vcol);
         }
         del_char_after_col(limit_col);
         let orig_len = if l_state & VREPLACE_FLAG != 0 {
@@ -261,7 +253,9 @@ pub(crate) fn replace_do_bs(limit_col: c_int) {
             let mut vcol = start_vcol;
             let mut i = 0;
             while i < ins_len {
-                vcol += unsafe { win_chartabsize(Win::current(), p.offset(i as isize), vcol) };
+                // SAFETY: `i` is within the restored text.
+                let at = unsafe { cstr::prefix_at(p.offset(i as isize), CHAR_CELLS_SPAN) };
+                vcol += win_chartabsize(Win::current(), at, vcol);
                 // O-B15-22: upstream steps by the length of the *first*
                 // character every time (`utfc_ptr2len(p)`, not
                 // `p + i`), so a restored run of differently-sized

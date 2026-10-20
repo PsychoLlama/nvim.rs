@@ -13,7 +13,6 @@ use crate::ops::Op;
 use crate::strings::has_char;
 use crate::winlayer::{Buf, Win};
 use core::ffi::CStr;
-use core::ptr;
 
 use crate::cursor::{adjust_cursor_col, check_cursor, coladvance, gchar_cursor, inc_cursor};
 use crate::drawscreen::state::redraw_cmdline;
@@ -409,12 +408,8 @@ pub(crate) fn v_swap_corners(cmdchar: c_int) {
         return;
     }
 
-    let (mut left, mut right): (ColNr, ColNr) = (0, 0);
     let mut old_cursor = Win::current().w_cursor;
-    let win = Win::current();
-    let (from, to) = (&raw mut old_cursor, &raw mut anchor);
-    let (l, r) = (&raw mut left, &raw mut right);
-    unsafe { getvcols(win, from, to, l, r) };
+    let (left, mut right) = getvcols(Win::current(), &mut old_cursor, &mut anchor);
     Win::current().w_cursor.lnum = visual_anchor().lnum;
     coladvance(Win::current(), left);
     set_visual_anchor(Win::current().w_cursor);
@@ -760,9 +755,7 @@ pub(crate) fn unadjust_for_sel_inner(pos: &mut Pos) -> bool {
         // screen column the TAB covers.
         // SAFETY: `curwin` is set from startup to exit.
         if virtual_active(Win::current()) {
-            let (mut cs, mut ce): (ColNr, ColNr) = (0, 0);
-            let win = Win::current();
-            unsafe { getvcol(win, pos, &raw mut cs, ptr::null_mut(), &raw mut ce) };
+            let (cs, _, ce) = getvcol(Win::current(), pos);
             pos.coladd = ce - cs;
         }
     } else if pos.lnum > 1 {

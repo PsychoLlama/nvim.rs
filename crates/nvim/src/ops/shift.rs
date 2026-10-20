@@ -23,6 +23,7 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_ulong, c_void};
 
 use super::*;
+use crate::cstr;
 use crate::edit::BeginlineOpts;
 use crate::ex_docmd::cmdmod_has;
 use crate::types::{IOSIZE, NUL};
@@ -385,13 +386,17 @@ fn shift_block_right(bd: &mut BlockDef, mut total: c_int) -> ShiftedLine {
     }
 
     // Add the width of the white space that follows the block's edge.
-    let mut csarg = CharsizeArg::default();
     let lnum = Win::current().w_cursor.lnum;
-    let cstype = unsafe { init_charsize_arg(&mut csarg, Win::current(), lnum, bd.textstart) };
+    let base = bd.textstart;
+    // SAFETY: `textstart` points into the cursor line, which the walks below
+    // only read.
+    let (mut csarg, cstype) =
+        CharsizeArg::new(Win::current(), lnum, unsafe { cstr::bytes_at(base) });
     let mut ci: StrCharInfo = unsafe { utf_ptr2str_char_info(bd.textstart) };
     let mut vcol = bd.start_vcol as c_int;
     while ascii_iswhite(ci.chr.value) {
-        let incr = unsafe { win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &mut csarg) }.width;
+        let at = ci.ptr.addr() - base.addr();
+        let incr = win_charsize(cstype, vcol, at, ci.chr.value, &mut csarg).width;
         ci = unsafe { utfc_next(ci) };
         total += incr;
         vcol += incr;
@@ -471,13 +476,17 @@ fn shift_block_left(op: Op, bd: &mut BlockDef, total: c_int) -> ShiftedLine {
         non_white = unsafe { non_white.offset(utfc_ptr2len(non_white) as isize) };
     }
     let mut non_white_col = bd.start_vcol;
-    let mut csarg = CharsizeArg::default();
     let lnum = Win::current().w_cursor.lnum;
-    let mut cstype = unsafe { init_charsize_arg(&mut csarg, Win::current(), lnum, bd.textstart) };
+    let base = bd.textstart;
+    // SAFETY: as in `shift_block`.
+    let (mut csarg, mut cstype) =
+        CharsizeArg::new(Win::current(), lnum, unsafe { cstr::bytes_at(base) });
     while ascii_iswhite(unsafe { *non_white } as c_int) {
-        let c = unsafe { *non_white } as u8 as int32_t;
-        let at = non_white;
-        non_white_col += unsafe { win_charsize(cstype, non_white_col, at, c, &mut csarg) }.width;
+        let (c, at) = (
+            unsafe { *non_white } as u8 as int32_t,
+            non_white.addr() - base.addr(),
+        );
+        non_white_col += win_charsize(cstype, non_white_col, at, c, &mut csarg).width;
         non_white = unsafe { non_white.offset(1) };
     }
 
@@ -492,11 +501,12 @@ fn shift_block_left(op: Op, bd: &mut BlockDef, total: c_int) -> ShiftedLine {
     if bd.startspaces != 0 {
         verbatim_copy_width -= bd.start_char_vcols;
     }
-    cstype = unsafe { init_charsize_arg(&mut csarg, Win::current(), 0, bd.textstart) };
+    (csarg, cstype) = CharsizeArg::new(Win::current(), 0, unsafe { cstr::bytes_at(base) });
     let mut ci: StrCharInfo = unsafe { utf_ptr2str_char_info(bd.textstart) };
     while verbatim_copy_width < destination_col {
         let w = verbatim_copy_width;
-        let incr = unsafe { win_charsize(cstype, w, ci.ptr, ci.chr.value, &mut csarg) }.width;
+        let at = ci.ptr.addr() - base.addr();
+        let incr = win_charsize(cstype, w, at, ci.chr.value, &mut csarg).width;
         if verbatim_copy_width + incr > destination_col {
             break;
         }

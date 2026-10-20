@@ -289,6 +289,27 @@ pub(crate) fn c_cells_at(bytes: &[u8]) -> c_int {
     cells_in(CBytes(bytes), 0)
 }
 
+/// [`c_cells_at`] of the character at byte `at`, without slicing: the
+/// per-character walks in `plines` measure in place.
+#[inline(always)]
+pub(crate) fn c_cells_in(bytes: &[u8], at: usize) -> c_int {
+    cells_in(CBytes(bytes), at)
+}
+
+/// [`utf_ptr2char_info`] over the bytes of a C string, at byte `at`.
+#[inline(always)]
+pub(crate) fn c_char_info(bytes: &[u8], at: usize) -> CharInfo {
+    char_info_in(CBytes(bytes), at)
+}
+
+/// [`utfc_next`] over the bytes of a C string: where the character after
+/// the cluster at byte `at`, whose base is `cur`, starts, and what it is.
+/// At the end of the text that is the NUL past it.
+#[inline(always)]
+pub(crate) fn c_next_cluster(bytes: &[u8], at: usize, cur: CharInfo) -> (usize, CharInfo) {
+    next_cluster_in(CBytes(bytes), at, cur)
+}
+
 /// [`utfc_ptr2schar`] for a cluster whose length is already known.
 ///
 /// # Safety
@@ -736,6 +757,7 @@ pub unsafe fn mb_string2cells(str: *const c_char) -> size_t {
 
 /// [`string_cells`] of the bytes of a C string, as [`mb_string2cells`] reads
 /// them: a sequence the end cuts short is an invalid byte.
+#[inline]
 pub(crate) fn c_string_cells(bytes: &[u8]) -> usize {
     string_cells_in(CBytes(bytes), 0)
 }

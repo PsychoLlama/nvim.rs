@@ -40,7 +40,7 @@ use crate::eval::typval::tv_dict_alloc_ret;
 use crate::ex_docmd::{tabpage_close, tabpage_close_other};
 use crate::global_cell::GlobalCell;
 use crate::grid::grid_adjust;
-use crate::mbyte::{mb_get_class, utf_head_off, utf8len_tab, utfc_ptr2len};
+use crate::mbyte::{cluster_len, mb_get_class, utf_head_off, utf8len_tab, utfc_ptr2len};
 use crate::mouse::state::{mouse_col, mouse_row};
 use crate::normal::sel_exclusive;
 use crate::optionstr::OptString;
@@ -190,12 +190,7 @@ fn global_stl_height() -> c_int {
 
 /// The leftmost and rightmost virtual column two positions span.
 fn vcols_between(win: Win, mut first: Pos, mut second: Pos) -> (ColNr, ColNr) {
-    let (mut left, mut right) = (0, 0);
-    let (a, b) = (&raw mut first, &raw mut second);
-    // SAFETY: a live window and two local copies of positions in its buffer,
-    // which `getvcols` only reads.
-    unsafe { getvcols(win, a, b, &raw mut left, &raw mut right) };
-    (left, right)
+    getvcols(win, &mut first, &mut second)
 }
 
 impl Win {
@@ -447,12 +442,14 @@ fn mouse_tab_close(c1: c_int) {
 /// Length of line `lnum` in screen cells, for horizontal scrolling.  The last
 /// character is deliberately not counted.
 fn scroll_line_len(win: Win, lnum: LineNr) -> ColNr {
-    let mut p = win.buffer().line_raw(lnum).raw();
+    let mut lines = win.buffer().lines();
+    let line = lines.line(lnum);
+    let mut at = 0;
     let mut col: ColNr = 0;
-    while unsafe { *p } != NUL as c_char {
-        let numchar = unsafe { win_chartabsize(win, p, col) };
-        p = unsafe { p.offset(utfc_ptr2len(p) as isize) };
-        if unsafe { *p } == NUL as c_char {
+    while at < line.len() {
+        let numchar = win_chartabsize(win, &line[at..], col);
+        at += cluster_len(&line[at..]);
+        if at >= line.len() {
             break; // don't count the last character
         }
         col += numchar;

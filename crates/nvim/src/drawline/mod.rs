@@ -57,7 +57,7 @@ use crate::options::{
     kOptCuloptFlagLine, kOptCuloptFlagNumber, kOptCuloptFlagScreenline, kOptDyFlagUhex,
     kOptSpoFlagNoplainbuffer,
 };
-use crate::plines::{getvcol, getvvcol, init_charsize_arg, win_charsize};
+use crate::plines::{getvcol, getvvcol, win_charsize};
 use crate::pos::{MAXCOL, ltoreq};
 use crate::search::FORWARD;
 use crate::search::state::{highlight_match, search_match_endcol, search_match_lines};

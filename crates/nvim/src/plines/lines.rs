@@ -1,5 +1,4 @@
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 //! Vertical size: how many window lines a buffer line occupies.
 //!
@@ -8,8 +7,6 @@
 //! one), diff filler, and virtual lines.
 
 use super::*;
-use crate::pos::MAXCOL;
-use crate::types::NUL;
 
 /// Whether there may be filler lines anywhere in `window`.
 ///
@@ -21,16 +18,7 @@ pub(crate) fn win_may_fill(window: Win) -> bool {
 /// Filler lines above `lnum`: virtual lines plus, in a diff, the lines the
 /// other buffer has here and this one does not.
 pub(crate) fn win_get_fill(window: Win, lnum: LineNr) -> c_int {
-    let virt_lines = unsafe {
-        decor_virt_lines(
-            window,
-            lnum - 1,
-            lnum,
-            ::core::ptr::null_mut::<c_int>(),
-            ::core::ptr::null_mut::<VirtLines>(),
-            true,
-        )
-    };
+    let virt_lines = decor_virt_lines(window, lnum - 1, lnum, None, None, true);
 
     // Be quick when there are no filler lines.
     if diffopt_filler() {
@@ -70,10 +58,10 @@ pub(crate) fn plines_win_nofill(window: Win, lnum: LineNr, limit_winheight: bool
 /// Window lines physical line `lnum` occupies, ignoring folding, 'wrap' and
 /// filler lines.
 pub(crate) fn plines_win_nofold(window: Win, lnum: LineNr) -> c_int {
-    let s = ml_get_buf(window.buffer(), lnum);
-    let mut csarg = CharsizeArg::default();
-    let cstype = unsafe { init_charsize_arg(&mut csarg, window, lnum, s) };
-    if unsafe { *s } == NUL as c_char && csarg.virt_row < 0 {
+    let mut text = window.buffer().lines();
+    let s = text.line(lnum);
+    let (mut csarg, cstype) = CharsizeArg::new(window, lnum, s);
+    if s.is_empty() && csarg.virt_row < 0 {
         // Be quick for an empty line.
         return 1;
     }
@@ -116,29 +104,29 @@ pub(crate) fn plines_win_col(window: Win, lnum: LineNr, mut column: c_long) -> c
         return lines + 1;
     }
 
-    let line = ml_get_buf(window.buffer(), lnum);
-    let mut csarg = CharsizeArg::default();
-    let cstype = unsafe { init_charsize_arg(&mut csarg, window, lnum, line) };
+    let mut text = window.buffer().lines();
+    let line = text.line(lnum);
+    let (mut csarg, cstype) = CharsizeArg::new(window, lnum, line);
 
     let mut vcol: ColNr = 0;
-    let mut ci: StrCharInfo = unsafe { utf_ptr2str_char_info(line) };
+    let mut at = 0;
+    let mut chr = c_char_info(line, 0);
     if cstype == CharsizeKind::Fast {
         let use_tabstop = csarg.use_tabstop;
-        while unsafe { *ci.ptr } != NUL as c_char && {
+        while !ends_at(line, at, chr) && {
             column -= 1;
             column >= 0
         } {
-            vcol += unsafe { charsize_fast_impl(window, ci.ptr, use_tabstop, vcol, ci.chr.value) }
-                .width;
-            ci = unsafe { utfc_next(ci) };
+            vcol += charsize_fast_impl(window, line, at, use_tabstop, vcol, chr.value).width;
+            (at, chr) = c_next_cluster(line, at, chr);
         }
     } else {
-        while unsafe { *ci.ptr } != NUL as c_char && {
+        while !ends_at(line, at, chr) && {
             column -= 1;
             column >= 0
         } {
-            vcol += unsafe { charsize_regular(&mut csarg, ci.ptr, vcol, ci.chr.value) }.width;
-            ci = unsafe { utfc_next(ci) };
+            vcol += charsize_regular(&mut csarg, at, vcol, chr.value).width;
+            (at, chr) = c_next_cluster(line, at, chr);
         }
     }
 
@@ -147,8 +135,8 @@ pub(crate) fn plines_win_col(window: Win, lnum: LineNr, mut column: c_long) -> c
     // only fixes an error when the TAB wraps from one screen line to the
     // next (when 'columns' is not a multiple of 'ts') -- webb.
     let mut col = vcol;
-    if ci.chr.value == TAB && State.get() & MODE_NORMAL != 0 && csarg.use_tabstop {
-        col += unsafe { win_charsize(cstype, col, ci.ptr, ci.chr.value, &mut csarg) }.width - 1;
+    if chr.value == TAB && State.get() & MODE_NORMAL != 0 && csarg.use_tabstop {
+        col += win_charsize(cstype, col, at, chr.value, &mut csarg).width - 1;
     }
 
     // Column offset for 'number', 'relativenumber', 'foldcolumn', etc.
@@ -219,18 +207,7 @@ pub(crate) fn plines_m_win(window: Win, mut first: LineNr, last: LineNr, max: c_
 /// [`plines_m_win`], a fold is not one line and a wrapped line is not
 /// several. Mainly used for scrolling offsets.
 pub(crate) fn plines_m_win_fill(window: Win, first: LineNr, last: LineNr) -> c_int {
-    let mut count = last - first
-        + 1
-        + unsafe {
-            decor_virt_lines(
-                window,
-                first - 1,
-                last,
-                ::core::ptr::null_mut::<c_int>(),
-                ::core::ptr::null_mut::<VirtLines>(),
-                false,
-            )
-        };
+    let mut count = last - first + 1 + decor_virt_lines(window, first - 1, last, None, None, false);
 
     if diffopt_filler() {
         let mut lnum = first;
@@ -251,17 +228,15 @@ pub(crate) fn plines_m_win_fill(window: Win, first: LineNr, last: LineNr) -> c_i
 /// down to a whole screen line. `end_vcol` is the mirror of that, rounded up,
 /// and is overwritten with the column actually reached. `end_lnum` is
 /// likewise overwritten with the last line measured, which is earlier than
-/// the one passed in when `max` is reached first.
-///
-/// # Safety
-/// `window`, `end_lnum` and `end_vcol` must be live; `fill` may be null.
-pub(crate) unsafe fn win_text_height(
+/// the one passed in when `max` is reached first. `fill`, when given, gets
+/// the filler lines counted.
+pub(crate) fn win_text_height(
     window: Win,
     start_lnum: LineNr,
     start_vcol: int64_t,
-    end_lnum: *mut LineNr,
-    end_vcol: *mut int64_t,
-    fill: *mut int64_t,
+    end_lnum: &mut LineNr,
+    end_vcol: &mut int64_t,
+    fill: Option<&mut int64_t>,
     max: int64_t,
 ) -> int64_t {
     let first_width = window.w_view_width - window.col_off();
@@ -289,7 +264,7 @@ pub(crate) unsafe fn win_text_height(
         lnum = lnum_next + 1;
     }
 
-    while lnum <= unsafe { *end_lnum } && height_sum_nofill + height_sum_fill < max {
+    while lnum <= *end_lnum && height_sum_nofill + height_sum_fill < max {
         let mut lnum_next = lnum;
         cur_folded = has_folding(window, lnum, Some(&mut lnum), Some(&mut lnum_next));
         height_sum_fill += win_get_fill(window, lnum) as int64_t;
@@ -299,8 +274,8 @@ pub(crate) unsafe fn win_text_height(
         lnum = lnum_next + 1;
     }
 
-    let mut vcol_end = unsafe { *end_vcol };
-    let use_vcol = vcol_end >= 0 && lnum > unsafe { *end_lnum };
+    let mut vcol_end = *end_vcol;
+    let use_vcol = vcol_end >= 0 && lnum > *end_lnum;
     if use_vcol {
         height_sum_nofill -= height_cur_nofill;
         let row_off = if vcol_end == 0 {
@@ -327,10 +302,10 @@ pub(crate) unsafe fn win_text_height(
             (vcol_end - width1 as int64_t) % width2 as int64_t + (overflow - 1) * width2 as int64_t;
     }
 
-    unsafe { *end_lnum = cur_lnum };
-    unsafe { *end_vcol = vcol_end };
-    if !fill.is_null() {
-        unsafe { *fill = height_sum_fill };
+    *end_lnum = cur_lnum;
+    *end_vcol = vcol_end;
+    if let Some(fill) = fill {
+        *fill = height_sum_fill;
     }
     height_sum_fill + height_sum_nofill
 }

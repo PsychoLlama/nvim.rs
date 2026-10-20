@@ -34,6 +34,7 @@ use crate::winlayer::{Buf, PosRef, Win};
 use core::ffi::{c_char, c_int};
 
 use super::*;
+use crate::cstr;
 use crate::r#move::WinValid;
 use crate::normal::{sel_exclusive, visual_mode};
 use crate::types::NUL;
@@ -261,12 +262,13 @@ pub unsafe fn block_prep(op: *mut OpArg, bdp: *mut BlockDef, lnum: LineNr, is_de
     // Walk to the block's left edge, remembering the run of white space in
     // front of it (`shift_block` widens exactly that run).
     let mut incr = 0;
-    let mut csarg = CharsizeArg::default();
-    let mut cstype = unsafe { init_charsize_arg(&mut csarg, Win::current(), lnum, line) };
+    let (mut csarg, mut cstype) =
+        CharsizeArg::new(Win::current(), lnum, unsafe { cstr::bytes_at(line) });
     let mut ci: StrCharInfo = unsafe { utf_ptr2str_char_info(line) };
     let mut vcol = bdp.start_vcol;
     while vcol < op.start_vcol && unsafe { *ci.ptr } as c_int != NUL {
-        incr = unsafe { win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &mut csarg) }.width;
+        let at = ci.ptr.addr() - line.addr();
+        incr = win_charsize(cstype, vcol, at, ci.chr.value, &mut csarg).width;
         vcol += incr;
         if ascii_iswhite(ci.chr.value) {
             bdp.pre_whitesp += incr;
@@ -316,14 +318,15 @@ pub unsafe fn block_prep(op: *mut OpArg, bdp: *mut BlockDef, lnum: LineNr, is_de
             }
         } else {
             // Walk on to the block's right edge.
-            cstype = unsafe { init_charsize_arg(&mut csarg, Win::current(), lnum, line) };
+            (csarg, cstype) =
+                CharsizeArg::new(Win::current(), lnum, unsafe { cstr::bytes_at(line) });
             ci = unsafe { utf_ptr2str_char_info(pend) };
             vcol = bdp.end_vcol;
             let mut prev_pend = pend;
             while vcol <= op.end_vcol && unsafe { *ci.ptr } as c_int != NUL {
                 prev_pend = ci.ptr;
-                incr =
-                    unsafe { win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &mut csarg) }.width;
+                let at = ci.ptr.addr() - line.addr();
+                incr = win_charsize(cstype, vcol, at, ci.chr.value, &mut csarg).width;
                 vcol += incr;
                 ci = unsafe { utfc_next(ci) };
             }

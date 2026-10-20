@@ -16,10 +16,10 @@ use core::ffi::CStr;
 
 use super::*;
 use crate::buffer::buf_get_changedtick;
-use crate::charset::{getdigits, getdigits_int, vim_strsize};
+use crate::charset::{getdigits, getdigits_int};
 use crate::global_cell::GlobalCell;
-use crate::mbyte::utfc_ptr2len;
-use crate::memory::{xfree, xstrdup};
+use crate::mbyte::c_cluster_len;
+use crate::memory::{XString, xfree, xstrdup};
 use crate::r#move::win_col_off2;
 use crate::narrow::number_as_int;
 use crate::option::vars::dy_flags;
@@ -177,9 +177,9 @@ struct BreakindentCache {
     indent: c_int,
     /// The extra indent 'breakindentopt' "list" asked for.
     list: c_int,
-    /// Owned copies of the line and of 'formatlistpat'; null before the
-    /// first miss.
-    line: *mut c_char,
+    /// Owned copies of the line and of 'formatlistpat'; absent and null
+    /// before the first miss.
+    line: Option<XString>,
     flp: *mut c_char,
 }
 
@@ -195,7 +195,7 @@ static CACHE: GlobalCell<BreakindentCache> = GlobalCell::new(BreakindentCache {
     },
     indent: 0,
     list: 0,
-    line: ::core::ptr::null_mut(),
+    line: None,
     flp: ::core::ptr::null_mut(),
 });
 
@@ -204,59 +204,48 @@ impl BreakindentCache {
     /// options.
     ///
     /// # Safety
-    /// `line` and `flp` must be NUL-terminated strings.
-    unsafe fn answers(
-        &self,
-        key: &BreakindentKey,
-        line: *const c_char,
-        flp: *const c_char,
-    ) -> bool {
-        // SAFETY: the cache's own copies are NUL-terminated when non-null,
-        // and the caller's two strings are as well.
+    /// `flp` must be a NUL-terminated string.
+    unsafe fn answers(&self, key: &BreakindentKey, line: &[u8], flp: *const c_char) -> bool {
+        // SAFETY: the cache's own copy is NUL-terminated when non-null, and
+        // the caller's is as well.
         self.key == *key
             && !self.flp.is_null()
             && unsafe { cstr::eq(self.flp, flp) }
-            && !self.line.is_null()
-            && unsafe { cstr::eq(self.line, line) }
+            && self.line.as_deref() == Some(line)
     }
 
     /// Measures `line`'s indent and stores it against `key`.
     ///
     /// # Safety
-    /// `window` must be a window whose buffer `key` was read from, and `line`
-    /// and `flp` NUL-terminated strings.
+    /// `window` must be a window whose buffer `key` was read from, and `flp`
+    /// a NUL-terminated string.
     unsafe fn refill(
         &mut self,
         window: Win,
         key: &BreakindentKey,
-        line: *mut c_char,
+        line: &[u8],
         flp: *const c_char,
     ) {
-        // SAFETY: the caller's window and strings; the two copies this
-        // replaces are the cache's own allocations.
-        unsafe { xfree(self.line.cast()) };
-        self.line = unsafe { xstrdup(line) };
+        let owned = XString::from_bytes(line);
+        // SAFETY: the caller's string; the copy this replaces is the cache's
+        // own allocation.
         unsafe { xfree(self.flp.cast()) };
         self.flp = unsafe { xstrdup(flp) };
         self.key = *key;
         self.list = 0;
-        if window.w_briopt_vcol != 0 {
-            // A fixed column needs no measurement.
-            return;
+        // A fixed column needs no measurement.
+        if window.w_briopt_vcol == 0 {
+            self.indent = if key.no_ts {
+                indent_size_no_ts(line)
+            } else {
+                // SAFETY: the key's 'vartabstop' array, the buffer's own.
+                unsafe { indent_size_ts(line, key.ts, key.vts) }
+            };
+            if window.w_briopt_list != 0 {
+                unsafe { self.add_list_indent(window, owned.as_cstr(), flp) };
+            }
         }
-        // SAFETY: the caller's NUL-terminated line. The measurement is a
-        // cache miss's worth of work either way, and the `xstrdup` above
-        // has already walked the same bytes.
-        let bytes = unsafe { cstr::bytes_at(line) };
-        self.indent = if key.no_ts {
-            indent_size_no_ts(bytes)
-        } else {
-            // SAFETY: the key's 'vartabstop' array, the buffer's own.
-            unsafe { indent_size_ts(bytes, key.ts, key.vts) }
-        };
-        if window.w_briopt_list != 0 {
-            unsafe { self.add_list_indent(window, line) };
-        }
+        self.line = Some(owned);
     }
 
     /// The extra indent a numbered list asks for: either the flat
@@ -264,13 +253,12 @@ impl BreakindentCache {
     /// of what 'formatlistpat' matched, which then *replaces* the indent.
     ///
     /// # Safety
-    /// `window` must be a window and `line` a NUL-terminated string; `self.flp`
-    /// must hold the current 'formatlistpat'.
-    unsafe fn add_list_indent(&mut self, window: Win, line: *mut c_char) {
-        // SAFETY: the caller's window and line, and the cache's own pattern.
+    /// `flp` must be the current 'formatlistpat', NUL-terminated.
+    unsafe fn add_list_indent(&mut self, window: Win, line: &CStr, flp: *const c_char) {
+        // SAFETY: the caller's pattern.
         let mut regmatch: RegMatch = RegMatch::new(
             vim_regcomp(
-                unsafe { cstr::at(self.flp) },
+                unsafe { cstr::at(flp) },
                 RE_MAGIC + RE_STRING + RE_AUTO + RE_STRICT,
             ),
             false,
@@ -278,21 +266,19 @@ impl BreakindentCache {
         if regmatch.regprog.is_none() {
             return;
         }
-        // SAFETY: the caller's NUL-terminated line.
-        if vim_regexec(&mut regmatch, unsafe { cstr::at(line) }, 0) {
+        if vim_regexec(&mut regmatch, line, 0) {
             if window.w_briopt_list > 0 {
                 self.list += window.w_briopt_list;
             } else {
                 // Measure the match with `win_chartabsize`, so that a TAB
                 // is the right width and wrapping is ignored.
                 let span = regmatch.group(0).unwrap_or(0..0);
-                // SAFETY: offsets into the line just matched.
-                let end = unsafe { line.add(span.end) };
-                let mut ptr = unsafe { line.add(span.start) };
+                let bytes = line.to_bytes();
+                let mut at = span.start;
                 let mut indent = 0;
-                while ptr < end {
-                    indent += unsafe { win_chartabsize(window, ptr, indent as ColNr) };
-                    ptr = unsafe { ptr.offset(utfc_ptr2len(ptr) as isize) };
+                while at < span.end {
+                    indent += win_chartabsize(window, &bytes[at..], indent as ColNr);
+                    at += c_cluster_len(&bytes[at..]);
                 }
                 self.indent = indent;
             }
@@ -304,9 +290,9 @@ impl BreakindentCache {
 ///
 /// The window has to be named because it is not necessarily the current one.
 ///
-/// # Safety
-/// `window` must be a window and `line` a NUL-terminated string.
-pub unsafe fn get_breakindent_win(window: Win, line: *mut c_char) -> c_int {
+/// `line` is the text up to its first NUL, as the C string it stands for.
+pub fn get_breakindent_win(window: Win, line: &[u8]) -> c_int {
+    let line = cstr::until_nul(line);
     // SAFETY: the caller's window and its buffer.
     // SAFETY: the caller's window; a live window has a live buffer.
     let win = window;
@@ -335,8 +321,8 @@ pub unsafe fn get_breakindent_win(window: Win, line: *mut c_char) -> c_int {
     // back into this function (the regex engine and chartabsize helpers run
     // no user code), and debug builds will catch it if that ever changes.
     let mut bri = CACHE.with_mut(|prev| {
-        // SAFETY: `line` and `flp` are NUL-terminated, and `window` is the
-        // caller's window, which `key` was just read from.
+        // SAFETY: `flp` is NUL-terminated, and `window` is the caller's
+        // window, which `key` was just read from.
         if !unsafe { prev.answers(&key, line, flp) } {
             unsafe { prev.refill(window, &key, line, flp) };
         }
@@ -355,8 +341,7 @@ pub unsafe fn get_breakindent_win(window: Win, line: *mut c_char) -> c_int {
         bri
     });
     if opt.sbr {
-        // SAFETY: 'showbreak' is a NUL-terminated option value.
-        bri -= unsafe { vim_strsize(win.showbreak_leader()) };
+        bri -= win.showbreak_cells();
     }
     // Never indent past the left window margin, and always leave `min`
     // columns for the text when the window is wide enough for them.

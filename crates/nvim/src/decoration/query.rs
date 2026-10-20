@@ -186,20 +186,15 @@ pub fn win_lines_concealed(window: Win) -> bool {
 /// given, receives copies of the `virt_line`s themselves; `num_below` counts
 /// only the ones drawn *below* their mark; `apply_folds` drops the blocks
 /// whose own line is folded away or concealed.
-///
-/// # Safety
-/// `wp` must be live; `lines` must be null or a live `VirtLines` this may
-/// grow; `num_below` null or writable.
-pub unsafe fn decor_virt_lines(
+pub fn decor_virt_lines(
     window: Win,
     start_row: c_int,
     end_row: c_int,
-    num_below: *mut c_int,
-    lines: *mut VirtLines,
+    mut num_below: Option<&mut c_int>,
+    mut lines: Option<&mut VirtLines>,
     apply_folds: bool,
 ) -> c_int {
-    // SAFETY: the caller's window and out-parameters, null or writable.
-    let (wp, mut lines, mut num_below) = unsafe { (window, lines.as_mut(), num_below.as_mut()) };
+    let wp = window;
     let buf = wp.buffer();
     // Only pay for what you use: in a buffer with no virt_lines the layout
     // code does not reach the marktree at all.

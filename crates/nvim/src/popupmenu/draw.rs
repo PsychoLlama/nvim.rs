@@ -130,25 +130,39 @@ fn pum_compute_text_attrs(text: &XString, hlf: Hlf, user_hlattr: c_int) -> Optio
         return None;
     }
 
-    let leader = if State.get() & MODE_CMDLINE != 0 {
-        cmdline_compl_pattern()?
+    if State.get() & MODE_CMDLINE != 0 {
+        let leader = cmdline_compl_pattern()?;
+        text_attrs_for(
+            text,
+            leader.as_cstr(),
+            cmdline_compl_is_fuzzy(),
+            hlf,
+            user_hlattr,
+        )
     } else {
-        XString::from_vec(ins_compl_leader_str().to_vec())
-    };
+        let in_fuzzy = get_cot_flags() & kOptCotFlagFuzzy != 0;
+        // Read in place: nothing the walk calls reaches the completion.
+        ins_compl_leader_str()
+            .with_cstr(|leader| text_attrs_for(text, leader, in_fuzzy, hlf, user_hlattr))
+    }
+}
+
+/// [`pum_compute_text_attrs`] once the leader is known.
+fn text_attrs_for(
+    text: &XString,
+    leader: &CStr,
+    in_fuzzy: bool,
+    hlf: Hlf,
+    user_hlattr: c_int,
+) -> Option<Vec<c_int>> {
+    let win = Win::current();
     if leader.is_empty() {
         return None;
     }
-
-    let in_fuzzy = if State.get() & MODE_CMDLINE != 0 {
-        cmdline_compl_is_fuzzy()
-    } else {
-        let flags = get_cot_flags();
-        flags & kOptCotFlagFuzzy != 0
-    };
     // The fuzzy matcher answers the character positions it matched, or
     // `None` when the item does not match at all.
     let matched_chars = if in_fuzzy {
-        Some(fuzzy_match_str_with_pos(text.as_cstr(), leader.as_cstr())?)
+        Some(fuzzy_match_str_with_pos(text.as_cstr(), leader)?)
     } else {
         None
     };
@@ -169,7 +183,7 @@ fn pum_compute_text_attrs(text: &XString, hlf: Hlf, user_hlattr: c_int) -> Optio
     };
 
     let text: &[u8] = text;
-    let leader: &[u8] = &leader;
+    let leader = leader.to_bytes();
     let mut attrs = vec![0; strsize(text) as usize];
     let mut at = 0;
     let mut cell_idx = 0;

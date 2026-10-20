@@ -52,6 +52,7 @@ use crate::change::{
 use crate::charset::{
     byte2cells, char2cells, hex2nr, ptr2cells, skipwhite, vim_isprintc, vim_iswordc,
 };
+use crate::cstr;
 use crate::cursor::{
     char_before_cursor, check_cursor, check_cursor_col, check_visual_pos, coladvance, dec_cursor,
     gchar_cursor, get_cursor_line_len, get_cursor_line_ptr, get_cursor_pos_len, get_cursor_pos_ptr,
@@ -123,7 +124,7 @@ use crate::mbyte::{
     mb_adjust_cursor, mb_get_class, utf_char2bytes, utf_char2len, utf_composinglike, utf_head_off,
     utf_ptr2char, utf_ptr2len, utf_ptr2str_char_info, utf8len_tab, utfc_next, utfc_ptr2len,
 };
-use crate::memline::{gchar_pos, ml_append_cstr, ml_get, ml_get_buf, ml_get_len};
+use crate::memline::{Lines, gchar_pos, ml_append_cstr, ml_get, ml_get_buf, ml_get_len};
 use crate::memory::{strnequal, xfree, xmalloc, xmemdupz};
 use crate::message::state::{emsg_on_display, msg_scroll, msg_silent};
 use crate::message::{e_noinstext, e_sandbox, e_textlock};
@@ -153,7 +154,7 @@ use crate::os::cshim::{__ctype_b_loc, gettext};
 use crate::os::input::line_breakcheck;
 use crate::os::time::os_time;
 use crate::plines::{
-    charsize_nowrap, getvcol, getvcol_nolist, init_charsize_arg, linetabsize_str, win_charsize,
+    CHAR_CELLS_SPAN, charsize_nowrap, getvcol, getvcol_nolist, linetabsize_str, win_charsize,
     win_chartabsize,
 };
 use crate::popupmenu::state::pum_want;

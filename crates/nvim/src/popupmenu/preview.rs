@@ -65,9 +65,7 @@ fn pum_preview_set_text(mut win: Win, info: &[u8]) -> (LineNr, c_int) {
         // inflate the answer in a narrow window.
         let save_wrap = win.w_onebuf_opt.wo_wrap;
         win.w_onebuf_opt.wo_wrap = 0;
-        let mut terminated = line.to_vec();
-        terminated.push(0);
-        max_width = max_width.max(win_linetabsize_bytes(win, 0, &terminated, MAXCOL as c_int));
+        max_width = max_width.max(win_linetabsize(win, 0, line, MAXCOL as c_int));
         win.w_onebuf_opt.wo_wrap = save_wrap;
 
         lines.push(Object::string(String_0::from_bytes(line)));

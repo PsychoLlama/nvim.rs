@@ -36,6 +36,7 @@ use self::arith::{
 };
 use crate::change::inserted_bytes;
 use crate::change::ml_replace;
+use crate::cstr;
 use crate::drawscreen::UPD_NOT_VALID;
 use crate::mbyte::{utf_head_off, utf_ptr2char};
 use crate::memline::{dec, inc, ml_get_len};
@@ -44,7 +45,7 @@ use crate::r#move::{WinValid, changed_cline_bef_curs, set_valid_virtcol};
 use crate::normal::{set_visual_anchor, visual_active, visual_anchor};
 use crate::option::get_ve_flags;
 use crate::options::{kOptVeFlagAll, kOptVeFlagOnemore};
-use crate::plines::{init_charsize_arg, linetabsize, linetabsize_eol, win_charsize};
+use crate::plines::{linetabsize, linetabsize_eol, win_charsize};
 use crate::pos::MAXCOL;
 use crate::state::mode::{State, restart_edit};
 use crate::state::{MODE_INSERT, MODE_TERMINAL, virtual_active};
@@ -146,26 +147,28 @@ impl Win {
     /// Prepare to measure the characters of `line`, which must be line `lnum`
     /// of this window's buffer.
     #[inline(always)]
-    fn measure(self, lnum: LineNr, line: Line) -> Measure {
-        let mut arg = CharsizeArg::default();
-        // SAFETY: a live window, and `line` is its line `lnum`.
-        let kind = unsafe { init_charsize_arg(&mut arg, self, lnum, line.raw()) };
-        Measure { arg, kind }
+    fn measure<'a>(self, lnum: LineNr, line: Line) -> Measure<'a> {
+        // SAFETY: a live window, and `line` is its line `lnum`, which stays
+        // put while the caller walks it.
+        let bytes = unsafe { cstr::bytes_at(line.raw()) };
+        let (arg, kind) = CharsizeArg::new(self, lnum, bytes);
+        Measure { arg, kind, line }
     }
 }
 
 /// The per-line state `win_charsize` walks with, prepared by [`Win::measure`].
-struct Measure {
-    arg: CharsizeArg,
+struct Measure<'a> {
+    arg: CharsizeArg<'a>,
     kind: CharsizeKind,
+    line: Line,
 }
 
-impl Measure {
+impl Measure<'_> {
     /// Cells the character at `ci` takes, starting from virtual column `vcol`.
     #[inline(always)]
     fn char_size(&mut self, vcol: c_int, ci: StrCharInfo) -> CharSize {
-        // SAFETY: `ci` is a character of the line `measure` was prepared for.
-        unsafe { win_charsize(self.kind, vcol, ci.ptr, ci.chr.value, &mut self.arg) }
+        let at = ci.ptr.addr() - self.line.raw().addr();
+        win_charsize(self.kind, vcol, at, ci.chr.value, &mut self.arg)
     }
 }
 

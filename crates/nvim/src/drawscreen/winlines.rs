@@ -352,16 +352,7 @@ fn draw_one_line(
         // unless a virtual line is attached below it, which has to be drawn
         // and so ends the run. A virtual line below a *second* adjacent
         // concealed line is concealed with it.
-        let mut virt_below = unsafe {
-            decor_virt_lines(
-                window,
-                lastlnum,
-                lastlnum + 1,
-                ::core::ptr::null_mut(),
-                ::core::ptr::null_mut(),
-                true,
-            )
-        } > 0;
+        let mut virt_below = decor_virt_lines(window, lastlnum, lastlnum + 1, None, None, true) > 0;
         while !virt_below
             && unsafe { (*wl).wl_lastlnum } < buffer.b_ml.ml_line_count
             && unsafe { decor_conceal_line(window, (*wl).wl_lastlnum, false) }

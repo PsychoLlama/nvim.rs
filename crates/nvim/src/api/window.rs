@@ -365,11 +365,15 @@ pub fn nvim_win_text_height(
     }
 
     let mut fill: int64_t = 0;
-    let last = (&raw mut end_lnum, &raw mut end_vcol, &raw mut fill);
-    // SAFETY: `w` is live and the three counters `last` names are this
-    // frame's own.
-    let mut all: int64_t =
-        unsafe { win_text_height(w, start_lnum, start_vcol, last.0, last.1, last.2, max) };
+    let mut all: int64_t = win_text_height(
+        w,
+        start_lnum,
+        start_vcol,
+        &mut end_lnum,
+        &mut end_vcol,
+        Some(&mut fill),
+        max,
+    );
     if opts.end_row.is_none() {
         // With no 'end_row' the answer covers the whole buffer, so the virtual
         // lines below its last line count too.

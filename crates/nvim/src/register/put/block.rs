@@ -11,6 +11,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::cstr;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_void};
 
@@ -39,9 +40,8 @@ struct Landing {
 /// # Safety
 /// `oldp` must be the cursor line, NUL-terminated.
 unsafe fn land_block(oldp: *mut c_char, col: ColNr) -> Landing {
-    let mut csarg = CharsizeArg::default();
     let (win, lnum) = (Win::current(), Win::current().w_cursor.lnum);
-    let cstype = unsafe { init_charsize_arg(&mut csarg, win, lnum, oldp) };
+    let (mut csarg, cstype) = CharsizeArg::new(win, lnum, unsafe { cstr::bytes_at(oldp) });
 
     // Walk to the block's screen column, or to the end of the line.
     //
@@ -51,7 +51,8 @@ unsafe fn land_block(oldp: *mut c_char, col: ColNr) -> Landing {
     let mut ci = unsafe { utf_ptr2str_char_info(oldp) };
     let (mut vcol, mut incr) = (0, 0);
     while vcol < col && unsafe { c_int::from(*ci.ptr) } != NUL {
-        incr = unsafe { win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &mut csarg) }.width;
+        let at = ci.ptr.addr() - oldp.addr();
+        incr = win_charsize(cstype, vcol, at, ci.chr.value, &mut csarg).width;
         vcol += incr;
         ci = unsafe { utfc_next(ci) };
     }
@@ -97,16 +98,16 @@ unsafe fn land_block(oldp: *mut c_char, col: ColNr) -> Landing {
 /// # Safety
 /// `line` must be NUL-terminated.
 unsafe fn right_padding(line: *mut c_char, y_width: c_int) -> c_int {
-    let mut csarg = CharsizeArg::default();
-    // SAFETY: a live window, and `line` is NUL-terminated.
-    let cstype = unsafe { init_charsize_arg(&mut csarg, Win::current(), 0, line) };
+    // SAFETY: `line` is NUL-terminated.
+    let (mut csarg, cstype) = CharsizeArg::new(Win::current(), 0, unsafe { cstr::bytes_at(line) });
     // SAFETY (all four): `ci` starts at `line` and `utfc_next` steps over one
     // whole character at a time, so it stays inside it; the `!= NUL` test in
     // front of the walk is what stops it at the end.
     let mut ci = unsafe { utf_ptr2str_char_info(line) };
     let mut spaces = y_width + 1;
     while unsafe { c_int::from(*ci.ptr) } != NUL {
-        spaces -= unsafe { win_charsize(cstype, 0, ci.ptr, ci.chr.value, &mut csarg) }.width;
+        let at = ci.ptr.addr() - line.addr();
+        spaces -= win_charsize(cstype, 0, at, ci.chr.value, &mut csarg).width;
         ci = unsafe { utfc_next(ci) };
     }
     spaces.max(0)
