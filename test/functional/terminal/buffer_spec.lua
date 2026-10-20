@@ -1468,6 +1468,15 @@ describe(':terminal buffer', function()
     eq(oldbuf, buffilepost_bufs[1][1])
     matches('^term://', buffilepost_bufs[1][2])
   end)
+
+  it('double width char does not crash 1-wide terminal #41856', function()
+    command('botright vnew')
+    local screen = Screen.new(50, 7)
+    local chan = api.nvim_open_term(0, {})
+    screen:try_resize(25, 7)
+    api.nvim_chan_send(chan, 'キ')
+    assert_alive()
+  end)
 end)
 
 describe('on_lines does not emit out-of-bounds line indexes when', function()
@@ -1596,7 +1605,9 @@ describe('terminal input', function()
       '<BS>',
       '<S-Tab>',
       '<Insert>',
+      '<S-Insert>',
       '<Del>',
+      '<S-Del>',
       '<PageUp>',
       '<PageDown>',
       '<S-Up>',
@@ -1658,6 +1669,7 @@ describe('terminal input', function()
     }
     -- FIXME: The escape sequence to enable kitty keyboard mode doesn't work on Windows
     if not is_os('win') then
+      table.insert(keys, '<S-BS>')
       table.insert(keys, '<C-I>')
       table.insert(keys, '<C-M>')
       table.insert(keys, '<C-[>')
