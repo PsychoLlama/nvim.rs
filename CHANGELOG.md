@@ -7,6 +7,8 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ## [Unreleased]
 
+## [2026.10.20-391bd79481]
+
 ### Changed
 
 - Integrated neovim's upstream changes from `v0.12.6`. See [release
@@ -970,7 +972,8 @@ made to build and pass the functional, old, and unit suites, with the CalVer
 release pipeline in place. The starting point: ~1.21M lines of mostly `unsafe`
 Rust with no user-visible change from upstream.
 
-[Unreleased]: https://github.com/PsychoLlama/nvim.rs/compare/2026.10.19-d6234e9235...HEAD
+[Unreleased]: https://github.com/PsychoLlama/nvim.rs/compare/2026.10.20-391bd79481...HEAD
+[2026.10.20-391bd79481]: https://github.com/PsychoLlama/nvim.rs/compare/2026.10.19-d6234e9235...2026.10.20-391bd79481
 [2026.10.19-d6234e9235]: https://github.com/PsychoLlama/nvim.rs/compare/2026.10.19-b2125c18d1...2026.10.19-d6234e9235
 [2026.10.19-b2125c18d1]: https://github.com/PsychoLlama/nvim.rs/compare/2026.10.16-553e23395f...2026.10.19-b2125c18d1
 [2026.10.16-553e23395f]: https://github.com/PsychoLlama/nvim.rs/compare/2026.10.14-6a52875728...2026.10.16-553e23395f
