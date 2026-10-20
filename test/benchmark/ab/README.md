@@ -1,20 +1,21 @@
 # A/B benches
 
-Nine whole-binary timing canaries, each driving one family hard enough that a
+Ten whole-binary timing canaries, each driving one family hard enough that a
 few percent of its work is visible in a total. They are not part of any gate:
 nothing runs them but a person asking whether a change cost something.
 
-| bench          | what it drives                                                                       |
-| -------------- | ------------------------------------------------------------------------------------ |
-| `evalbench`    | the eval substrate: typval allocation, copy, encode/decode, calls, the parser        |
-| `inbench`      | input and the command line: typeahead, mappings, termcodes, completion, messages     |
-| `mkspellbench` | `:mkspell` with no `.sug`: reading .aff/.dic, the word tree, compression, the writer |
-| `mlbench`      | the memline hot path: `ml_get`, `ml_append`, `ml_delete`, byte/line offsets          |
-| `readbench`    | reading a file: `:edit` of 100 MB plain, Latin-1 and `'fileencodings'` input         |
-| `rebench`      | the regexp engines (`re=0/1/2`), `search()`, `:s` that writes, `matchlist()`         |
-| `scrbench`     | the screen pipeline: grid diffing, `win_line`, syntax, statusline, the popup menu    |
-| `spellbench`   | spell checking and suggestion: the word tries, `z=`, the SAL engine                  |
-| `undobench`    | undo: recording steps, `:undo` walks, `:wundo`/`:rundo`, `undotree()`                |
+| bench          | what it drives                                                                         |
+| -------------- | -------------------------------------------------------------------------------------- |
+| `edbench`      | the editing core: operators, registers, text objects, folds, diff, autocommands, marks |
+| `evalbench`    | the eval substrate: typval allocation, copy, encode/decode, calls, the parser          |
+| `inbench`      | input and the command line: typeahead, mappings, termcodes, completion, messages       |
+| `mkspellbench` | `:mkspell` with no `.sug`: reading .aff/.dic, the word tree, compression, the writer   |
+| `mlbench`      | the memline hot path: `ml_get`, `ml_append`, `ml_delete`, byte/line offsets            |
+| `readbench`    | reading a file: `:edit` of 100 MB plain, Latin-1 and `'fileencodings'` input           |
+| `rebench`      | the regexp engines (`re=0/1/2`), `search()`, `:s` that writes, `matchlist()`           |
+| `scrbench`     | the screen pipeline: grid diffing, `win_line`, syntax, statusline, the popup menu      |
+| `spellbench`   | spell checking and suggestion: the word tries, `z=`, the SAL engine                    |
+| `undobench`    | undo: recording steps, `:undo` walks, `:wundo`/`:rundo`, `undotree()`                  |
 
 Each is a `.lua` canary plus a `.sh` driver; the driver's two modes share
 `common.sh`. The `.lua` files carry the phase map — which code each phase is
@@ -59,6 +60,11 @@ both sides in one sitting**, never against a stored number, and treat an
 Of the three added later, `rebench` (6 ppm) and `readbench` (14 ppm) are
 deterministic and `undobench` is not: two runs spread **1,250 ppm**, so treat
 an `undobench` difference under about 0.2 % the same way.
+`edbench` (added with the editing-core work) is deterministic phase by phase
+once its fixtures are built in Vimscript rather than in Lua: two runs of each
+phase alone spread at most **1,250 ppm** (`textobj`), `put` 313, `ctl` 416,
+`fold` 294, `marks` 160, `diff`/`au` ~50 and the rest under 10 ppm. The first
+draft built its buffers as Lua tables and moved 2 % on `yank` between two runs.
 
 Every bench takes `<NAME>_ONLY=phase[,phase]` (`INBENCH_ONLY`,
 `SCRBENCH_ONLY`, …), which runs only those phases after the setup, so
