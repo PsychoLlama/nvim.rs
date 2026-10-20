@@ -165,12 +165,11 @@ impl StlScratch {
     /// This is the only place any arena is reallocated, which is what keeps
     /// a live `hltab`/`tabtab` pointer valid for as long as it is in C.
     ///
-    /// Upstream checks this once per format item rather than once per item
-    /// *recorded*, which is one slot short for a `'statuscolumn'` sign
-    /// column: `%s` records one item per sign, up to nine of them, and
-    /// writes past the arena when the cursor was near its end. Here every
-    /// recording call asks first, which cannot overflow and grows the arena
-    /// at the same points otherwise.
+    /// Every recording call asks first. Upstream checked once per format
+    /// item until v0.12.6, which overran the arena when a `'statuscolumn'`
+    /// `%s` (one item per sign) or `%l` (up to three) came after many
+    /// items; 04197decd6 added the check at those extra sites, which is the
+    /// shape this already had.
     pub(super) fn grow(&mut self) {
         if self.curitem < self.items.len() {
             return;
