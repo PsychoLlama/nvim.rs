@@ -69,8 +69,7 @@ impl Win {
 ///
 /// `vt` is a live kvec of chunks whose texts are null or NUL-terminated --
 /// the invariant every `VirtText` the decorations build keeps, and the one
-/// [`virt_text_to_array`](crate::api::extmark::query::virt_text_to_array)
-/// already reads it under.
+/// the API's `virt_text_to_array` already reads it under.
 pub fn next_virt_text_chunk<'a>(
     vt: &'a VirtText,
     pos: &mut size_t,
