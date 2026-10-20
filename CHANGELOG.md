@@ -11,7 +11,7 @@ and this project adheres to [CalVer](https://calver.org/).
 
 - Integrated neovim's upstream changes from `v0.12.6`. See [release
   notes](https://github.com/neovim/neovim/releases/tag/v0.12.6) for what
-  changed.
+  changed. Only upstream's CI changes were omitted.
 
 ## [2026.10.19-d6234e9235]
 
