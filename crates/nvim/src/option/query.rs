@@ -228,6 +228,7 @@ impl Win {
 
     /// Whether the window draws a 'showbreak' leader at all: upstream's
     /// `*get_showbreak_value(wp) != NUL`, without the pointer.
+    #[inline(always)]
     pub(crate) fn has_showbreak(self) -> bool {
         let local = &self.w_onebuf_opt.wo_sbr;
         local.bytes() != b"NONE" && local_or_global(local, P_SBR).first_byte() != 0

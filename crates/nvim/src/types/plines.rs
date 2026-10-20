@@ -52,5 +52,9 @@ pub struct CharsizeArg<'a> {
     pub cur_text_width_left: ::core::ffi::c_int,
     pub cur_text_width_right: ::core::ffi::c_int,
     pub max_head_vcol: ::core::ffi::c_int,
-    pub iter: [MarkTreeIter; 1],
+    /// The inline-virtual-text walk, positioned on `virt_row`; `None` when
+    /// the line has no inline virtual text. Boxed because it is the rare
+    /// case and a `MarkTreeIter` is ~200 bytes: inline, every walk state
+    /// paid two copies of it on the way out of its constructor.
+    pub iter: Option<Box<MarkTreeIter>>,
 }

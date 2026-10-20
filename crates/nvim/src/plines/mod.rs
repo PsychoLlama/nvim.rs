@@ -19,7 +19,9 @@
 use crate::buffer::buf_meta_total;
 use crate::charset::{byte2cells, vim_isbreak, vim_isprintc};
 use crate::cstr::byte_at;
-use crate::decoration::{decor_conceal_line, decor_virt_lines, mark_virt_chain, ns_in_win};
+use crate::decoration::{
+    decor_conceal_line, decor_virt_lines, kMTMetaInline, mark_virt_chain, ns_in_win,
+};
 use crate::diff::{diff_check_fill, diffopt_filler};
 use crate::fold::{has_folding, has_folding_win, line_folded};
 use crate::indent::get_breakindent_win;
@@ -32,8 +34,8 @@ use crate::pos::{MAXCOL, lt, ltoreq};
 use crate::state::mode::State;
 use crate::state::{MODE_NORMAL, virtual_active};
 use crate::types::{
-    CharInfo, CharSize, CharsizeArg, CharsizeKind, ColNr, LineNr, MB_MAXCHAR, MetaIndex, NUL, Pos,
-    int32_t, int64_t, uint32_t,
+    CharInfo, CharSize, CharsizeArg, CharsizeKind, ColNr, LineNr, MB_MAXCHAR, MarkTreeIter,
+    MetaIndex, NUL, Pos, int32_t, int64_t, uint32_t,
 };
 use crate::winlayer::{Buf, Win};
 
@@ -189,22 +191,29 @@ impl<'a> CharsizeArg<'a> {
     /// out of line it is copied into the caller's frame on the way back.
     #[inline(always)]
     pub(crate) fn new(window: Win, lnum: LineNr, line: &'a [u8]) -> (Self, CharsizeKind) {
-        let mut csarg = CharsizeArg {
+        // A buffer with no inline virtual text never reaches the marktree:
+        // the walk would find nothing.
+        let mut virt_row = -1;
+        let mut iter = None;
+        if lnum > 0 && window.buffer().meta_total(kMTMetaInline) != 0 {
+            let mut itr = MarkTreeIter::default();
+            let mut walk = Cursor::in_buffer(window.buffer(), &mut itr);
+            if walk.seek_filter(lnum - 1, 0, lnum, 0, &INLINE_FILTER) {
+                virt_row = lnum - 1;
+                iter = Some(Box::new(itr));
+            }
+        }
+        let csarg = CharsizeArg {
             win: window,
             line,
             use_tabstop: window.expands_tab(),
             indent_width: c_int::MIN,
-            virt_row: -1,
+            virt_row,
             cur_text_width_left: 0,
             cur_text_width_right: 0,
             max_head_vcol: 0,
-            iter: Default::default(),
+            iter,
         };
-
-        let mut walk = Cursor::in_buffer(window.buffer(), &mut csarg.iter[0]);
-        if lnum > 0 && walk.seek_filter(lnum - 1, 0, lnum, 0, &INLINE_FILTER) {
-            csarg.virt_row = lnum - 1;
-        }
 
         let needs_regular = csarg.virt_row >= 0
             || (window.w_onebuf_opt.wo_wrap != 0
@@ -369,7 +378,10 @@ fn add_inline_virt_text(
         cur_text_width_right,
         ..
     } = csarg;
-    let mut walk = Cursor::in_buffer(buf, &mut iter[0]);
+    let Some(iter) = iter.as_deref_mut() else {
+        return size;
+    };
+    let mut walk = Cursor::in_buffer(buf, iter);
 
     loop {
         let mark = walk.current();
@@ -563,7 +575,7 @@ fn charsize_fast_impl(
 
 /// [`charsize_fast_impl`] for callers holding a [`CharsizeArg`]. Only valid
 /// when [`CharsizeArg::new`] answered [`CharsizeKind::Fast`].
-#[inline]
+#[inline(always)]
 pub(crate) fn charsize_fast(
     csarg: &CharsizeArg<'_>,
     at: usize,

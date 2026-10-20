@@ -262,8 +262,9 @@ pub unsafe fn block_prep(op: *mut OpArg, bdp: *mut BlockDef, lnum: LineNr, is_de
     // Walk to the block's left edge, remembering the run of white space in
     // front of it (`shift_block` widens exactly that run).
     let mut incr = 0;
-    let (mut csarg, mut cstype) =
-        CharsizeArg::new(Win::current(), lnum, unsafe { cstr::bytes_at(line) });
+    // SAFETY: the line just fetched, which the walks below only read.
+    let bytes = unsafe { cstr::bytes_at(line) };
+    let (mut csarg, mut cstype) = CharsizeArg::new(Win::current(), lnum, bytes);
     let mut ci: StrCharInfo = unsafe { utf_ptr2str_char_info(line) };
     let mut vcol = bdp.start_vcol;
     while vcol < op.start_vcol && unsafe { *ci.ptr } as c_int != NUL {
@@ -318,8 +319,7 @@ pub unsafe fn block_prep(op: *mut OpArg, bdp: *mut BlockDef, lnum: LineNr, is_de
             }
         } else {
             // Walk on to the block's right edge.
-            (csarg, cstype) =
-                CharsizeArg::new(Win::current(), lnum, unsafe { cstr::bytes_at(line) });
+            (csarg, cstype) = CharsizeArg::new(Win::current(), lnum, bytes);
             ci = unsafe { utf_ptr2str_char_info(pend) };
             vcol = bdp.end_vcol;
             let mut prev_pend = pend;
