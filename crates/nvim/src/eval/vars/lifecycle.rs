@@ -113,6 +113,12 @@ pub fn evalvars_init() {
 /// says so is meant for this process alone, so it is unset here rather than
 /// passed on to whatever this one starts.
 fn start_reason() -> &'static CStr {
+    // Miri cannot call into libuv, which is where the environment is read
+    // and unset; every in-crate test that brings up the evaluator runs this,
+    // so under Miri the instance simply was not restarted.
+    if cfg!(miri) {
+        return c"normal";
+    }
     let given = getenv_owned(ENV_STARTREASON);
     if env_exists(ENV_STARTREASON, false) {
         env_unset(ENV_STARTREASON);
