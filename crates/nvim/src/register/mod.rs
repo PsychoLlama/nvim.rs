@@ -59,7 +59,7 @@ use crate::keycodes::{
 };
 use crate::mark::mark_adjust;
 use crate::mbyte::mb_tolower;
-use crate::memline::{decl, ml_append_cstr, ml_replace_owned};
+use crate::memline::{decl, ml_append_cstr, ml_append_terminated, ml_replace_owned};
 use crate::memory::XString;
 use crate::message::state::{msg_ext_skip_flush, redir_reg};
 use crate::message::{e_noinstext, e_nolastcmd, e_noprevre, e_resulting_text_too_long};

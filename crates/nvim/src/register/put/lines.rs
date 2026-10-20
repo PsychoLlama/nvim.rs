@@ -147,7 +147,7 @@ impl Put {
         let last = self.lines.last().expect("a charwise register holds a line");
         let mut appended = XString::from_bytes(last);
         appended.push_bytes(&Buf::current().lines().line(lnum)[col as usize..]);
-        let _ = ml_append_cstr(lnum, appended.as_cstr());
+        let _ = ml_append_terminated(lnum, appended.as_bytes_with_nul(), false);
 
         // The head of the cursor line keeps the register's *first* line. The
         // line is read again rather than held: `ml_append` above flushed and
@@ -296,8 +296,8 @@ impl Put {
                     // A charwise register's last line is already on the
                     // second half of the split.
                     if self.kind != kMTCharWise || i < y_size - 1 {
-                        // As the C string it is, to its first NUL.
-                        if ml_append_cstr(lnum, self.lines[i].as_cstr()).is_err() {
+                        let line = self.lines[i].as_bytes_with_nul();
+                        if ml_append_terminated(lnum, line, false).is_err() {
                             break 'error;
                         }
                         new_lnum += 1;

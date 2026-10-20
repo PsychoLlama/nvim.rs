@@ -77,6 +77,13 @@ impl Default for BlockDef {
 /// and a writer that finds the vector shared copies it first
 /// ([`lines_mut`](Self::lines_mut)), so the reader's lines stay what they
 /// were and the register gets the new ones.
+///
+/// No line holds a NUL: a NUL in the text is stored as the newline that
+/// stands for it, as in a buffer line, and every way into a register keeps
+/// that (`str_to_reg` translates, the clipboard and the API hand over C
+/// strings or translate, ShaDa's reader translates). So a line is the C
+/// string a reader of upstream's `String` saw, and the puts hand its bytes
+/// on without a scan.
 #[derive(Clone, Default, Debug)]
 pub struct RegLines(Option<Rc<Vec<XString>>>);
 

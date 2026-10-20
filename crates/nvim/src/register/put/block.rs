@@ -10,7 +10,7 @@
 
 #![forbid(unsafe_code)]
 
-use crate::cstr::{self, until_nul};
+use crate::cstr;
 use crate::mbyte::{c_char_info, c_next_cluster, head_off};
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
@@ -175,8 +175,7 @@ impl Put {
         let put = &self.lines[i];
         let yanklen = c_int::try_from(put.len()).unwrap_or(c_int::MAX);
         let spaces = if self.flags & PUT_BLOCK_INNER as c_int == 0 {
-            // Measured as the C string the line is.
-            right_padding(until_nul(put), self.width)
+            right_padding(put, self.width)
         } else {
             0
         };
@@ -220,8 +219,8 @@ impl Put {
         newline.resize(newline.len() + pad(land.endspaces), b' ');
         // The rest of the old line.
         newline.extend_from_slice(&old[textcol + pad(land.delcount)..]);
-        // The buffer takes the line as the C string it is, to its first NUL.
-        let _ = ml_replace_owned(lnum, XString::from_bytes(until_nul(&newline)));
+        // Neither the buffer's line nor the register's holds a NUL.
+        let _ = ml_replace_owned(lnum, XString::from_vec(newline));
 
         let buf = Buf::current();
         let at = Win::current().w_cursor.lnum - 1;

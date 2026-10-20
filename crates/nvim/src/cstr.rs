@@ -392,9 +392,10 @@ pub(crate) fn byte_at(s: &[u8], i: usize) -> u8 {
 /// `bytes` up to their first NUL, or all of them: what a C reader handed
 /// them as a string sees.
 pub(crate) fn until_nul(bytes: &[u8]) -> &[u8] {
-    // `from_bytes_until_nul` finds the NUL with `memchr`, where a
-    // `position` walk goes a byte at a time.
-    CStr::from_bytes_until_nul(bytes).map_or(bytes, CStr::to_bytes)
+    // The C library's vectorised `memchr`: `CStr::from_bytes_until_nul`'s
+    // search costs several times as much per byte (a register put spent
+    // four times `strlen`'s instructions in it).
+    crate::memory::memchr_in(bytes, 0).map_or(bytes, |at| &bytes[..at])
 }
 
 /// Run `f` over `bytes` as a C string, up to the first NUL among them.

@@ -186,13 +186,17 @@ pub(crate) fn shada_cleared_register_timestamp(name: c_char) -> Option<Timestamp
     with_named_register(name, |reg| reg_empty(reg).then_some(reg.timestamp)).flatten()
 }
 
-/// `bytes` as a register line, byte for byte: ShaDa's text is not the
-/// editor's, so it may hold a NUL, which a line keeps as upstream's counted
-/// `String` does.
-fn exact_line(bytes: &[u8]) -> XString {
-    let mut line = XString::with_capacity(bytes.len());
-    line.push_bytes(bytes);
-    line
+/// `bytes` as a register line. A line holds no NUL -- in memory a NUL in the
+/// text is the newline that stands for it -- and ShaDa's own lines never have
+/// one, since they are written from memory; a file that does is read with
+/// the NUL as that newline, as `setreg()` reads it.
+fn shada_line(bytes: &[u8]) -> XString {
+    XString::from_vec(
+        bytes
+            .iter()
+            .map(|&b| if b == 0 { b'\n' } else { b })
+            .collect(),
+    )
 }
 
 /// Put `yank` in the register named `name`, replacing whatever was there,
@@ -206,7 +210,7 @@ pub(crate) fn shada_set_register(name: c_char, yank: ShadaYank, is_unnamed: bool
     let lines = yank
         .contents
         .iter()
-        .map(|line| exact_line(line.as_bytes()))
+        .map(|line| shada_line(line.as_bytes()))
         .collect();
     let reg = YankReg {
         lines: RegLines::new(lines),

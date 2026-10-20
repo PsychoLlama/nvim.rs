@@ -216,7 +216,7 @@ impl Put {
         };
         // Kept for the extmark_splice() the multiline put emits.
         self.split_pos = ColNr::try_from(split).unwrap_or(ColNr::MAX);
-        let _ = ml_append_cstr(lnum, tail.as_cstr());
+        let _ = ml_append_terminated(lnum, tail.as_bytes_with_nul(), false);
 
         // The head of the line stays where it is, cut short at the split.
         // The line is re-read because `ml_append` may have moved it.
