@@ -10,7 +10,9 @@
 //!
 //! No editor is needed: the cache is a plain table, so these run under Miri
 //! too, which watches the inline form's byte reinterpretation and the
-//! cache's arena. They take a lock of their own there -- the cache is one
+//! cache's arena (the two answers that read the editor's character tables,
+//! a cell width and the lam-alef ligature, are left to the normal lane). They
+//! take a lock of their own there -- the cache is one
 //! global -- and the editor lock otherwise, because the statusline cases
 //! intern glyphs in the same table.
 
@@ -67,8 +69,13 @@ fn up_to_four_bytes_are_stored_inline() {
         assert_eq!(sc, want, "{glyph:?} inline");
         assert!(!schar_high(sc), "{glyph:?} is not in the cache");
         assert_eq!(text(sc), glyph.as_bytes());
+        // Cell widths read the printable-character tables, which only an
+        // initialised editor has: under Miri `é` is `<e9>`, four cells.
+        #[cfg(not(miri))]
         // SAFETY: a glyph this process produced.
         assert_eq!(unsafe { schar_cells(sc) }, cells, "{glyph:?} cells");
+        #[cfg(miri)]
+        let _ = cells;
     }
     // The empty glyph is zero, which is also the right half of a
     // double-width cell.
@@ -217,10 +224,14 @@ fn arabic_text_takes_its_contextual_forms() {
     // as `win_line` builds it under 'arabicshape' -- they become the
     // ligature, and the cell holds that one codepoint.
     assert_eq!(shape("\u{644}\u{627}"), [0xfedd, 0xfe8d]);
-    let mut cell = [intern("\u{644}\u{627}")];
-    // SAFETY: a glyph this process produced.
-    unsafe { line_do_arabic_shape(&mut cell) };
-    assert_eq!(text(cell[0]), "\u{fefb}".as_bytes());
+    // The ligature reads the editor's character tables too.
+    #[cfg(not(miri))]
+    {
+        let mut cell = [intern("\u{644}\u{627}")];
+        // SAFETY: a glyph this process produced.
+        unsafe { line_do_arabic_shape(&mut cell) };
+        assert_eq!(text(cell[0]), "\u{fefb}".as_bytes());
+    }
     // Text with no Arabic is left alone.
     assert_eq!(shape("ab"), ['a' as u32, 'b' as u32]);
 }
