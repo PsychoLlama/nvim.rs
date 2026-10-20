@@ -1711,17 +1711,18 @@ ARGUMENT_MACROS = VARIADIC_CALLEES + (
 
 # Counted over every masked file, tree-wide.
 INSTRUMENTS = {
-    # `ml_get_buf_len(` is the same needle as `ml_get_buf(` with the `_len`
-    # branch taken; both are pointer forms and both retire together. The
-    # `_raw`/`_ptr` spellings are the *aliases*: `Buf::line_raw`,
-    # `Buf::line_len_raw` and the four `get_cursor_*` accessors are thin
-    # wrappers over `ml_get_buf*` that a caller reaches for instead of the
-    # free function, so a needle blind to them books a rename as progress
-    # (p31-e). They carry the pointer form's contract; they count as it.
+    # The forms that hand back a line's *address*: `ml_get(`, `ml_get_buf(`
+    # and `ml_get_buf_mut(`, and their aliases -- `Buf::line_raw`/
+    # `line_mut_raw` and `get_cursor_line_ptr`/`get_cursor_pos_ptr` are thin
+    # wrappers a caller reaches for instead of the free function, so a needle
+    # blind to them books a rename as progress (p31-e). The length forms
+    # (`ml_get_len`, `ml_get_buf_len`, `Buf::line_len_raw`,
+    # `get_cursor_{line,pos}_len`) answer a number, are safe, and stay when
+    # the pointer forms go, so they are not debt and are not matched.
     "ml_get_raw": re.compile(
-        r"\bml_get(?:_buf)?(?:_len)?\(|\bml_get_(?:pos|cursor)\("
-        r"|\bline(?:_mut|_len)?_raw\("
-        r"|\bget_cursor_(?:line|pos)_(?:ptr|len)\("
+        r"\bml_get(?:_buf(?:_mut)?)?\(|\bml_get_(?:pos|cursor)\("
+        r"|\bline(?:_mut)?_raw\("
+        r"|\bget_cursor_(?:line|pos)_ptr\("
     ),
     # The `(` is what keeps the *pointer* forms apart from the `_len` ones
     # that take a slice's length and are the safe bodies underneath them:
@@ -4841,18 +4842,21 @@ SELF_TEST_INSTRUMENTS = [
         },
         {"raw_cstr_fields": 6},
     ),
-    # The pointer forms count and the `_len` bodies underneath them do not.
+    # The pointer forms count and the `_len` bodies underneath them do not;
+    # nor do the memline's length forms.
     (
         {
             "crates/nvim/src/a.rs": "fn f() {\n"
             "    utf_ptr2char(p);\n    utfc_ptr2len(p);\n"
             "    utfc_ptr2len_len(s, n);\n    utf_ptr2char_info(p);\n"
             "    ml_get(lnum);\n    ml_get_buf_len(buf, lnum);\n"
+            "    ml_get_buf_mut(buf, lnum);\n    ml_get_len(lnum);\n"
             "    buf.line_raw(lnum);\n    buf.line_len_raw(lnum);\n"
-            "    get_cursor_pos_ptr();\n    buf.lines().line(lnum);\n"
+            "    get_cursor_pos_ptr();\n    get_cursor_line_len();\n"
+            "    buf.lines().line(lnum);\n"
             "}\n",
         },
-        {"mbyte_raw": 2, "ml_get_raw": 5},
+        {"mbyte_raw": 2, "ml_get_raw": 4},
     ),
     # A direct variadic call counts; the checked macro, a method of the same
     # name, the declaration and the macros' own expansion do not.

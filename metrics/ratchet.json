@@ -36,7 +36,7 @@
   "raw_cstr_params": 736,
   "raw_cstr_returns": 216,
   "raw_cstr_fields": 136,
-  "ml_get_raw": 222,
+  "ml_get_raw": 140,
   "mbyte_raw": 149,
   "bytes_at": 173,
   "vval_raw": 0,
