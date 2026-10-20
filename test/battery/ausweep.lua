@@ -19,7 +19,10 @@
 --                      they are being walked -- the au_need_clean
 --                      deferred-deletion path, this subsystem's highest
 --                      risk shape (AutoPatCmd nodes live on the global
---                      active_apc_list across the firing call)
+--                      active_apc_list across the firing call): clearing,
+--                      adding, deleting itself / the next command / a later
+--                      pattern, ++once with nested re-entry, `:autocmd!`
+--                      of the group being fired, nvim_clear_autocmds
 --   §10 recurse        recursive :doautocmd from inside a handler
 --   §11 afile          <afile> / <amatch> / <abuf> / <sfile> / %
 --   §12 doautoall      :doautoall and aucmd_prepbuf/aucmd_restbuf
@@ -866,6 +869,104 @@ section('selfmod', function()
   dump('selfmod/log-api1')
   run('selfmod/gfire2', 'doautocmd User AuSM6')
   dump('selfmod/log-api2')
+
+  -- (h) Delete-self: a handler that removes *its own* autocmd by id while
+  -- it runs.  The walk is on that very command; the ones after it still
+  -- run, and the second firing no longer reaches it.
+  reset()
+  run('selfmod/h1', 'autocmd User AuSM7 call Au("1")')
+  local self_id
+  self_id = vim.api.nvim_create_autocmd('User', {
+    pattern = 'AuSM7',
+    callback = function()
+      vim.fn.Au('self-deleter')
+      pcall(vim.api.nvim_del_autocmd, self_id)
+    end,
+  })
+  run('selfmod/h3', 'autocmd User AuSM7 call Au("3")')
+  run('selfmod/hfire1', 'doautocmd User AuSM7')
+  dump('selfmod/log-self1')
+  run('selfmod/hfire2', 'doautocmd User AuSM7')
+  dump('selfmod/log-self2')
+
+  -- (i) Delete-next: the handler removes the command that comes right
+  -- after it, which the walk has not reached yet.
+  reset()
+  local next_id
+  vim.api.nvim_create_autocmd('User', {
+    pattern = 'AuSM8',
+    callback = function()
+      vim.fn.Au('next-deleter')
+      pcall(vim.api.nvim_del_autocmd, next_id)
+    end,
+  })
+  next_id = vim.api.nvim_create_autocmd('User', {
+    pattern = 'AuSM8',
+    command = 'call Au("next-victim")',
+  })
+  run('selfmod/i3', 'autocmd User AuSM8 call Au("after-victim")')
+  run('selfmod/ifire1', 'doautocmd User AuSM8')
+  dump('selfmod/log-next1')
+  run('selfmod/ifire2', 'doautocmd User AuSM8')
+  dump('selfmod/log-next2')
+
+  -- (j) ++once, fired again from inside itself with `nested`: the once
+  -- handler is already marked gone when the inner walk starts, so the
+  -- inner firing does not run it a second time.
+  reset()
+  run('selfmod/j1', 'autocmd User AuSM9 ++once ++nested call Au("once-outer") '
+    .. '| doautocmd User AuSM9')
+  run('selfmod/j2', 'autocmd User AuSM9 call Au("plain")')
+  run('selfmod/jfire1', 'doautocmd User AuSM9')
+  dump('selfmod/log-oncenest1')
+  run('selfmod/jfire2', 'doautocmd User AuSM9')
+  dump('selfmod/log-oncenest2')
+
+  -- (k) `:autocmd!` of the group that is being fired *by name*
+  -- (`:doautocmd GSM3 User ...`), from a handler of that group.
+  reset()
+  mkgroup('GSM3')
+  run('selfmod/k1', 'autocmd GSM3 User AuSM10 call Au("g-1")')
+  run('selfmod/k2', 'autocmd GSM3 User AuSM10 call Au("g-2-deleter") | autocmd! GSM3')
+  run('selfmod/k3', 'autocmd GSM3 User AuSM10 call Au("g-3")')
+  run('selfmod/k4', 'autocmd User AuSM10 call Au("default-4")')
+  run('selfmod/kfire1', 'doautocmd GSM3 User AuSM10')
+  dump('selfmod/log-rungroup1')
+  run('selfmod/kfire2', 'doautocmd User AuSM10')
+  dump('selfmod/log-rungroup2')
+
+  -- (l) nvim_clear_autocmds from a handler: once for the event and
+  -- pattern being fired, once for a whole group mid-walk.
+  reset()
+  run('selfmod/l1', 'autocmd User AuSM11 call Au("1")')
+  vim.api.nvim_create_autocmd('User', {
+    pattern = 'AuSM11',
+    callback = function()
+      vim.fn.Au('api-clearer')
+      pcall(vim.api.nvim_clear_autocmds, { event = 'User', pattern = 'AuSM11' })
+    end,
+  })
+  run('selfmod/l3', 'autocmd User AuSM11 call Au("3")')
+  run('selfmod/lfire1', 'doautocmd User AuSM11')
+  dump('selfmod/log-apiclear1')
+  run('selfmod/lfire2', 'doautocmd User AuSM11')
+  dump('selfmod/log-apiclear2')
+  reset()
+  local g = vim.api.nvim_create_augroup('GSM4', {})
+  run('selfmod/l5', 'autocmd GSM4 User AuSM12 call Au("g-1")')
+  vim.api.nvim_create_autocmd('User', {
+    group = g,
+    pattern = 'AuSM12',
+    callback = function()
+      vim.fn.Au('g-clearer')
+      pcall(vim.api.nvim_clear_autocmds, { group = g })
+    end,
+  })
+  run('selfmod/l7', 'autocmd GSM4 User AuSM12 call Au("g-3")')
+  run('selfmod/l8', 'autocmd User AuSM12 call Au("default-4")')
+  run('selfmod/lfire3', 'doautocmd User AuSM12')
+  dump('selfmod/log-apiclear3')
+  attempt('selfmod/lleft', vim.api.nvim_get_autocmds, { event = 'User' })
 end)
 
 -- ---------------------------------------------------------------------
