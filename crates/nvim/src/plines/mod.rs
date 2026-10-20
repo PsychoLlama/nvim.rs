@@ -144,7 +144,11 @@ pub(crate) fn win_linetabsize(window: Win, lnum: LineNr, line: &[u8], len: ColNr
 
 /// [`win_linetabsize`] starting from virtual column `startvcol` — the one
 /// body both it and [`linetabsize_col`] are.
-#[inline(always)]
+///
+/// Out of line: it builds a whole walk state, and inlined into the regexp
+/// matcher's `\%v` arm it cost the backtracking engine's loop +1.1 % on
+/// rebench `bt` in spills, for a call it makes once per test.
+#[inline(never)]
 fn win_linetabsize_col(
     window: Win,
     lnum: LineNr,
