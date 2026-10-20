@@ -111,10 +111,32 @@ pub fn aubuflocal_remove(buffer: Buf) {
         }
     });
 
-    for event in AutoEvent::all() {
-        let deleted = aucmd_del_where(event, |pat| pat.buflocal_nr == buffer.handle);
+    // One pass over the whole table: a buffer is wiped far more often than
+    // it has autocommands of its own. The messages wait for the table.
+    let mut deleted: Vec<(AutoEvent, usize)> = Vec::new();
+    autocmds.with_mut(|table| {
+        for (event, cmds) in AutoEvent::all().zip(table.iter_mut()) {
+            let mut count = 0;
+            for idx in 0..cmds.len() {
+                if cmds.cmds[idx]
+                    .pat
+                    .is_some_and(|id| cmds.pat(id).buflocal_nr == buffer.handle)
+                {
+                    cmds.delete(idx);
+                    count += 1;
+                }
+            }
+            if count > 0 {
+                deleted.push((event, count));
+            }
+        }
+    });
+    if !deleted.is_empty() {
+        au_need_clean.set(true);
+    }
+    for (event, count) in deleted {
         if p_verbose() >= 6 {
-            for _ in 0..deleted {
+            for _ in 0..count {
                 verbose_enter();
                 let arg0 = msg_cstr(event_nr2name(event));
                 smsg!(

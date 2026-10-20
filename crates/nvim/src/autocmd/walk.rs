@@ -80,7 +80,7 @@ fn sourcing_name(event: AutoEvent, pattern: &[u8]) -> XString {
         // Untranslated, so the format is a concatenation: the formatter's
         // two passes are most of what a firing costs when nothing else
         // happens.
-        let mut out = XString::with_capacity(name.count_bytes() + pattern.len() + 19);
+        let mut out = XString::with_capacity(name.count_bytes() + pattern.len() + 20);
         out.push_cstr(name);
         out.push_bytes(b" Autocommands for \"");
         out.push_bytes(pattern);
