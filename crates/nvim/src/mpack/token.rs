@@ -301,7 +301,7 @@ pub fn encode_token(tok: &Tok) -> Option<Encoded> {
             (0, lo) => out.push(0xce).push4(lo),
             (hi, lo) => out.push(0xcf).push4(hi).push4(lo),
         },
-        Kind::Sint => match sint_len(tok.hi, tok.lo) {
+        Kind::Sint => match wire_sint_len(tok.hi, tok.lo) {
             8 => out.push(0xd3).push4(tok.hi).push4(tok.lo),
             4 => out.push(0xd2).push4(tok.lo),
             2 => out.push(0xd1).push2(tok.lo),
@@ -366,9 +366,9 @@ fn encode_ext(out: Encoded, ext: u32, len: u32) -> Encoded {
 ///
 /// Every form below eight bytes stores `lo` alone, so `hi` has to *be* `lo`'s
 /// sign extension for one of them to be usable. Upstream tests `lo` on its
-/// own, both here and when choosing a token's `length`, so a value like
-/// `-4294967297` (`hi = 0xfffffffe`, `lo = 0xffffffff`) reads as a negative
-/// fixint and encodes as `-1`. See O-B15-10.
+/// own until v0.12.6, both here and when choosing a token's `length`, so a
+/// value like `-4294967297` (`hi = 0xfffffffe`, `lo = 0xffffffff`) read as a
+/// negative fixint and encoded as `-1`. See O-B15-10.
 const fn sint_len(hi: u32, lo: u32) -> u32 {
     if hi != u32::MAX || lo < 0x8000_0000 {
         8
@@ -381,12 +381,23 @@ const fn sint_len(hi: u32, lo: u32) -> u32 {
     }
 }
 
+/// [`sint_len`] for a token about to be written, which may also be one
+/// [`decode_token`] read: a value narrower than 8 bytes off the wire leaves
+/// `hi` at zero instead of sign-extending it, and its width is `lo`'s alone.
+/// (`lo` is not sign-extended either, so only a 4-byte value survives the
+/// trip at its own width; no caller re-encodes a decoded token.)
+const fn wire_sint_len(hi: u32, lo: u32) -> u32 {
+    sint_len(if hi == 0 { u32::MAX } else { hi }, lo)
+}
+
 // ---------------------------------------------------------------------------
 // Value conversions (`conv.c`)
 // ---------------------------------------------------------------------------
 
 /// 2^32, the boundary between `lo` and `hi`.
 const POW2_32: f64 = 4294967296.0;
+/// 2^63: the magnitude of the smallest msgpack integer.
+const POW2_63: f64 = 9223372036854775808.0;
 /// 2^64: one past the largest msgpack integer.
 const POW2_64: f64 = 18446744073709551616.0;
 
@@ -519,15 +530,16 @@ pub fn unpack_number(tok: &Tok) -> f64 {
 /// assertion here: the range is not an input contract, it is one of the
 /// cases the fallback exists for. See O-B15-3.
 pub fn pack_number(v: f64) -> Tok {
-    let vabs = if v < 0.0 { -v } else { v };
-    // Past the integer types the halves cannot be computed at all: `f64 as
-    // u32` saturates, and for `v == 2^64` exactly the saturated pair rounds
-    // back to `v`, so the round trip below would accept a token that is one
-    // short. Rule the range out first. (NaN is not excluded here — it fails
-    // the round trip, since it compares equal to nothing.)
-    if vabs >= POW2_64 {
+    // Outside msgpack's integer range `[-2^63, 2^64)` — NaN and the
+    // infinities included — only a float can carry `v`. The round trip below
+    // cannot be trusted with the rule: past 2^64 `f64 as u32` saturates and
+    // `v == 2^64` rounds back from the saturated pair, and below -2^63 the
+    // two's complement wraps into a positive `i64` whose halves still
+    // reconstruct `v` (`-1.5 * 2^63` would go out as `2^62`).
+    if !(-POW2_63..POW2_64).contains(&v) {
         return pack_float(v);
     }
+    let vabs = if v < 0.0 { -v } else { v };
     let mut tok = Tok::new(
         Kind::Uint,
         0,
@@ -765,7 +777,10 @@ mod tests {
             -1.9e19,
             POW2_64,
             -POW2_64,
+            -POW2_63 - 2048.0,
+            -1.5 * POW2_63,
             f64::INFINITY,
+            f64::NEG_INFINITY,
         ] {
             assert_eq!(pack_number(v).kind, Some(Kind::Float), "{v}");
             assert_eq!(unpack_number(&dec(&enc(&pack_number(v)))), v, "{v}");
@@ -791,6 +806,26 @@ mod tests {
         ] {
             assert_eq!(unpack_number(&dec(&enc(&pack_number(v)))), v, "{v}");
         }
+    }
+
+    #[test]
+    fn the_smallest_int64_is_an_integer_and_one_below_it_a_float() {
+        assert_eq!(
+            enc(&pack_number(-POW2_63)),
+            [0xd3, 0x80, 0, 0, 0, 0, 0, 0, 0]
+        );
+        assert_eq!(
+            enc(&pack_number(-1.5 * POW2_63)),
+            enc(&pack_float(-1.5 * POW2_63))
+        );
+    }
+
+    /// A 4-byte negative off the wire carries `hi == 0`; writing it back
+    /// keeps its width instead of reading it as a positive `int 64`.
+    #[test]
+    fn a_decoded_int32_reencodes_at_its_own_width() {
+        let bytes = [0xd2, 0x80, 0, 0, 0];
+        assert_eq!(enc(&dec(&bytes)), bytes);
     }
 
     #[test]
