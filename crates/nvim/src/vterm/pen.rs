@@ -363,14 +363,23 @@ fn arg_value(args: &[c_long], i: usize) -> c_long {
 /// so that the caller stays in step with the rest of the sequence.
 fn parse_sgr_color(palette: c_long, args: &[c_long]) -> (Option<ColorValue>, usize) {
     match palette {
-        // Three parameters holding the channels directly.
+        // Three parameters holding the channels directly. ITU-T T.416 puts a
+        // colour space id before them, as in `38:2::R:G:B`; it is skipped when
+        // the colon-separated group holds more than three parameters. The
+        // group ends at the first parameter without the sub-parameter flag,
+        // so a `;`-separated parameter after it is never taken for a channel.
         2 => {
-            let Some(channels) = args.get(..3) else {
+            let group_len = args
+                .iter()
+                .position(|&arg| arg & c_long::from(CSI_ARG_FLAG_MORE) == 0)
+                .map_or(args.len(), |last| last + 1);
+            let skip = usize::from(group_len > 3);
+            let Some(channels) = args.get(skip..skip + 3) else {
                 return (None, args.len());
             };
             let channel = |i: usize| (channels[i] & c_long::from(CSI_ARG_MASK)) as u8;
             let value = ColorValue::rgb(channel(0), channel(1), channel(2));
-            (Some(value), 3)
+            (Some(value), skip + 3)
         }
         // One parameter holding a palette index.
         5 => {
@@ -703,6 +712,20 @@ mod tests {
         // Too few: nothing is set, but the whole remainder is skipped.
         assert_eq!(parse_sgr_color(2, &[10, 20]), (None, 2));
         assert_eq!(parse_sgr_color(2, &[]), (None, 0));
+    }
+
+    #[test]
+    fn rgb_selector_skips_a_colour_space_id() {
+        // `38:2::10:20:30`: the empty colour space id comes first.
+        assert_eq!(
+            parse_sgr_color(2, &[CSI_ARG_MISSING | MORE, 10 | MORE, 20 | MORE, 30]),
+            (Some(ColorValue::rgb(10, 20, 30)), 4)
+        );
+        // `38:2:10:20:30;40`: three in the group, so nothing is skipped.
+        assert_eq!(
+            parse_sgr_color(2, &[10 | MORE, 20 | MORE, 30, 40]),
+            (Some(ColorValue::rgb(10, 20, 30)), 3)
+        );
     }
 
     #[test]
