@@ -487,8 +487,10 @@ pub unsafe fn apply_autocmds_group(
         filechangeshell_busy.set(event == AutoEvent::FileChangedShell);
         let nested = Depth::of(autocmd_nesting);
 
-        // Remembered for `did_filetype()`.
-        if event == AutoEvent::FileType {
+        // Remembered for `did_filetype()` and `:setfiletype`, but only once
+        // 'filetype' is set: a FileType for an empty one (`:set ft=`) must
+        // not stop a later `:setf` from detecting the real type.
+        if event == AutoEvent::FileType && Buf::current().b_p_ft.first_byte() != 0 {
             Buf::current().b_did_filetype = true;
         }
 
