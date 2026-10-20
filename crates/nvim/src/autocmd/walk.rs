@@ -47,7 +47,7 @@ enum Step {
     Skip,
     /// The same pattern the walk last stopped at, which matched then.
     Same(PatId),
-    /// A new pattern that matches, and its text for the execution stack.
+    /// A new pattern that matches, and the execution stack's name for it.
     Matched(PatId, XString),
 }
 
@@ -61,6 +61,36 @@ enum Probe {
     Matched(PatId),
 }
 
+/// The names one [`aucmd_next`] call matches every row against, measured
+/// once rather than per row.
+struct Names<'a> {
+    fname: &'a CStr,
+    sfname: Option<&'a CStr>,
+    tail: &'a CStr,
+    bufnr: BufferHandle,
+}
+
+/// The execution stack's name for an autocommand of `event` on `pattern`:
+/// `"%s Autocommands for \"%s\""`, translated.
+fn sourcing_name(event: AutoEvent, pattern: &[u8]) -> XString {
+    const TEMPLATE: &CStr = c"%s Autocommands for \"%s\"";
+    let name = event_nr2name(event);
+    let s = gettext(TEMPLATE);
+    if s == TEMPLATE {
+        // Untranslated, so the format is a concatenation: the formatter's
+        // two passes are most of what a firing costs when nothing else
+        // happens.
+        let mut out = XString::with_capacity(name.count_bytes() + pattern.len() + 19);
+        out.push_cstr(name);
+        out.push_bytes(b" Autocommands for \"");
+        out.push_bytes(pattern);
+        out.push_byte(b'"');
+        return out;
+    }
+    let room = s.count_bytes() + name.count_bytes() + pattern.len() + 1;
+    XString::from_vec(crate::formatted!(room, s.to_bytes(), name, pattern))
+}
+
 /// Whether row `idx` of `apc`'s event is one to run.
 ///
 /// The program is taken out of the table for the match and put back after
@@ -68,8 +98,7 @@ enum Probe {
 /// input, which runs fast events. A pattern a nested firing finds with its
 /// program out matches nothing, which is what upstream's matcher, taking
 /// the program into its `regmatch_T`, did too.
-fn step_at(apc: &AutoPatCmd, idx: usize) -> Step {
-    let bufnr = walk_bufnr(apc);
+fn step_at(apc: &AutoPatCmd, names: &Names<'_>, idx: usize) -> Step {
     let probe = with_event_cmds_mut(apc.event, |cmds| {
         // Skip deleted autocommands.
         let Some(id) = cmds.cmds[idx].pat else {
@@ -87,37 +116,36 @@ fn step_at(apc: &AutoPatCmd, idx: usize) -> Step {
         // ...or the pattern, or the buffer number.
         if pat.buflocal_nr == 0 {
             Probe::File(id, pat.reg_prog.take(), pat.allow_dirs)
-        } else if pat.buflocal_nr == bufnr {
+        } else if pat.buflocal_nr == names.bufnr {
             Probe::Matched(id)
         } else {
             Probe::Skip
         }
     });
-    let id = match probe {
+    let (id, prog) = match probe {
         Probe::Skip => return Step::Skip,
         Probe::Same(id) => return Step::Same(id),
-        Probe::Matched(id) => id,
+        Probe::Matched(id) => (id, None),
         Probe::File(id, mut prog, allow_dirs) => {
-            let matched = match_file_pat(
-                &mut prog,
-                apc.fname.as_cstr(),
-                apc.sfname.as_ref().map(XString::as_cstr),
-                apc.fname.cstr_at(apc.tail),
-                allow_dirs,
-            );
-            // Rows and patterns do not go while a walk runs, so the slot is
-            // the one the program came out of.
-            with_event_cmds_mut(apc.event, |cmds| cmds.pat_mut(id).reg_prog = prog);
+            let matched =
+                match_file_pat(&mut prog, names.fname, names.sfname, names.tail, allow_dirs);
             if !matched {
+                // Rows and patterns do not go while a walk runs, so the
+                // slot is the one the program came out of.
+                with_event_cmds_mut(apc.event, |cmds| cmds.pat_mut(id).reg_prog = prog);
                 return Step::Skip;
             }
-            id
+            (id, prog)
         }
     };
-    Step::Matched(
-        id,
-        with_event_cmds(apc.event, |cmds| cmds.pat(id).pat.clone()),
-    )
+    let event = apc.event;
+    with_event_cmds_mut(event, |cmds| {
+        let pat = cmds.pat_mut(id);
+        if prog.is_some() {
+            pat.reg_prog = prog;
+        }
+        Step::Matched(id, sourcing_name(event, &pat.pat))
+    })
 }
 
 /// Advance `apc` to the next autocommand whose pattern matches, updating
@@ -128,57 +156,67 @@ fn step_at(apc: &AutoPatCmd, idx: usize) -> Step {
 pub(crate) fn aucmd_next(apc: &mut AutoPatCmd) {
     debug_assert!(apc.ausize <= with_event_cmds(apc.event, EventCmds::len));
 
-    // `ausize` is the snapshot, not the current length: a handler that
-    // defines more autocommands for its own event must not extend the
-    // walk it is running under.
-    for idx in apc.auidx..apc.ausize {
-        if got_int.get() {
-            break;
-        }
-        let id = match step_at(apc, idx) {
-            Step::Skip => continue,
-            Step::Same(id) => id,
-            Step::Matched(id, pattern) => {
-                let name = event_nr2name(apc.event);
-                let s = gettext(c"%s Autocommands for \"%s\"");
-                let room = s.count_bytes() + name.count_bytes() + pattern.len() + 1;
-                let namep = XString::from_vec(crate::formatted!(
-                    room,
-                    s.to_bytes(),
-                    name,
-                    pattern.as_cstr()
-                ));
-                if p_verbose() >= 8 {
-                    verbose_enter();
-                    let namep = crate::message_fmt::msg_cstr(namep.as_cstr());
-                    smsg!(0, "Executing {namep}");
-                    verbose_leave();
-                }
-
-                // Point the execution stack at this autocommand, and at the
-                // script context of the command the walk is on.
-                crate::runtime::set_sourcing_name(FrameName::Owned(namep));
-                let sctx = apc.script_ctx;
-                crate::runtime::with_innermost(|entry| {
-                    entry.es_info = EstackInfo::Autocommand(sctx);
-                });
-                id
-            }
+    let found = {
+        let names = Names {
+            fname: apc.fname.as_cstr(),
+            sfname: apc.sfname.as_ref().map(XString::as_cstr),
+            tail: apc.fname.cstr_at(apc.tail),
+            bufnr: walk_bufnr(apc),
         };
+        let mut found = None;
+        // `ausize` is the snapshot, not the current length: a handler that
+        // defines more autocommands for its own event must not extend the
+        // walk it is running under.
+        for idx in apc.auidx..apc.ausize {
+            if got_int.get() {
+                break;
+            }
+            match step_at(apc, &names, idx) {
+                Step::Skip => {}
+                Step::Same(id) => {
+                    found = Some((idx, id, None));
+                    break;
+                }
+                Step::Matched(id, namep) => {
+                    found = Some((idx, id, Some(namep)));
+                    break;
+                }
+            }
+        }
+        found
+    };
 
-        apc.lastpat = Some(id);
-        apc.auidx = idx;
+    let Some((idx, id, namep)) = found else {
+        // Nothing left: clear the ETYPE_AUCMD stack entry.
+        crate::runtime::set_sourcing_name(FrameName::None);
+        crate::runtime::with_innermost(|entry| entry.es_info = EstackInfo::None);
 
-        line_breakcheck();
+        apc.lastpat = None;
+        apc.auidx = usize::MAX;
         return;
+    };
+
+    if let Some(namep) = namep {
+        if p_verbose() >= 8 {
+            verbose_enter();
+            let namep = crate::message_fmt::msg_cstr(namep.as_cstr());
+            smsg!(0, "Executing {namep}");
+            verbose_leave();
+        }
+
+        // Point the execution stack at this autocommand, and at the script
+        // context of the command the walk is on.
+        crate::runtime::set_sourcing_name(FrameName::Owned(namep));
+        let sctx = apc.script_ctx;
+        crate::runtime::with_innermost(|entry| {
+            entry.es_info = EstackInfo::Autocommand(sctx);
+        });
     }
 
-    // Nothing left: clear the ETYPE_AUCMD stack entry.
-    crate::runtime::set_sourcing_name(FrameName::None);
-    crate::runtime::with_innermost(|entry| entry.es_info = EstackInfo::None);
+    apc.lastpat = Some(id);
+    apc.auidx = idx;
 
-    apc.lastpat = None;
-    apc.auidx = usize::MAX;
+    line_breakcheck();
 }
 
 /// What a callback handler is, held outside the table for its call.
