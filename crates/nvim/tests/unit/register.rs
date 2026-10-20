@@ -277,3 +277,211 @@ fn the_registers_listing() {
     fx.check_output("registers z", "\nType Name Content");
     fresh(&fx);
 }
+
+#[test]
+fn a_yank_into_an_upper_case_name_appends() {
+    let sandbox = Sandbox::globals();
+    let fx = Probe::new(sandbox.editor());
+    fresh(&fx);
+    fx.run("call setline(1, ['one two', 'three four'])");
+    // Linewise onto linewise adds the lines.
+    fx.run("silent normal! gg\"ayy");
+    fx.run("silent normal! j\"Ayy");
+    // Characterwise onto characterwise joins the first new piece to the last
+    // old line...
+    fx.run("silent normal! gg0\"byiw");
+    fx.run("silent normal! j0\"Byiw");
+    // ...unless 'cpoptions' has `>`, which starts a new line instead.
+    fx.run("set cpoptions+=>");
+    fx.run("silent normal! gg0\"cyiw");
+    fx.run("silent normal! j0\"Cyiw");
+    fx.run("set cpoptions-=>");
+    // Linewise onto characterwise makes the whole register linewise.
+    fx.run("silent normal! gg0\"dyiw");
+    fx.run("silent normal! j\"Dyy");
+    // A blockwise yank appended to a characterwise one.
+    fx.run("silent normal! gg0\"eyiw");
+    fx.run("silent execute \"normal! gg0\\<C-v>j2l\\\"Ey\"");
+    fx.expect_all(&[
+        (
+            "[getreg('a', 1, 1), getregtype('a')]",
+            "[['one two', 'three four'], 'V']",
+        ),
+        (
+            "[getreg('b', 1, 1), getregtype('b')]",
+            "[['onethree'], 'v']",
+        ),
+        (
+            "[getreg('c', 1, 1), getregtype('c')]",
+            "[['one', 'three'], 'v']",
+        ),
+        (
+            "[getreg('d', 1, 1), getregtype('d')]",
+            "[['one', 'three four'], 'V']",
+        ),
+        (
+            "[getreg('e', 1, 1), getregtype('e')]",
+            "[['oneone', 'thr'], 'v']",
+        ),
+    ]);
+    fresh(&fx);
+}
+
+#[test]
+fn a_delete_shifts_the_numbered_registers() {
+    let sandbox = Sandbox::globals();
+    let fx = Probe::new(sandbox.editor());
+    fresh(&fx);
+    fx.run("for r in range(1, 9) | call setreg(r, 'old' . r) | endfor");
+    fx.run("call setline(1, ['l1', 'l2', 'l3', 'w1 w2'])");
+    fx.run("silent normal! ggdd");
+    fx.run("silent normal! dd");
+    // A delete inside one line goes to `"-`, not `"1`.
+    fx.run("silent normal! j0dw");
+    fx.expect_all(&[
+        ("getreg('1', 1, 1)", "['l2']"),
+        ("getreg('2', 1, 1)", "['l1']"),
+        ("getreg('3')", "'old1'"),
+        ("getreg('9')", "'old7'"),
+        ("getreg('-')", "'w1 '"),
+        // `""` is the last register written.
+        ("getreg('\"')", "'w1 '"),
+    ]);
+    // A named delete writes the name and `"1` both.
+    fx.run("call setline(1, ['x', 'y'])");
+    fx.run("silent normal! gg\"zdd");
+    fx.expect_all(&[
+        ("getreg('z', 1, 1)", "['x']"),
+        ("getreg('1', 1, 1)", "['x']"),
+        ("getreg('2', 1, 1)", "['l2']"),
+    ]);
+    fx.run("for r in range(1, 9) | call setreg(r, []) | endfor");
+    fx.run("call setreg('-', [])");
+    fresh(&fx);
+}
+
+#[test]
+fn text_yank_post_sees_the_register() {
+    let sandbox = Sandbox::globals();
+    let fx = Probe::new(sandbox.editor());
+    fresh(&fx);
+    fx.run("call setline(1, ['abc', 'defg'])");
+    fx.run("let g:ev = {}");
+    fx.run("autocmd TextYankPost * let g:ev = copy(v:event)");
+    fx.run("silent execute \"normal! gg0\\<C-v>jl\\\"ay\"");
+    fx.expect_all(&[
+        ("g:ev.regcontents", "['ab', 'de']"),
+        ("g:ev.regtype", "'\u{16}2'"),
+        ("g:ev.regname", "'a'"),
+        ("g:ev.operator", "'y'"),
+        ("g:ev.visual", "v:true"),
+    ]);
+    fx.run("silent normal! gg\"bdd");
+    fx.expect_all(&[
+        ("g:ev.regcontents", "['abc']"),
+        ("g:ev.regname", "'b'"),
+        ("g:ev.operator", "'d'"),
+    ]);
+    fx.run("autocmd! TextYankPost");
+    fx.run("unlet g:ev");
+    fresh(&fx);
+}
+
+#[test]
+fn executing_a_register() {
+    let sandbox = Sandbox::globals();
+    let fx = Probe::new(sandbox.editor());
+    fresh(&fx);
+    // `:@a` runs each line as a command, and joins `\` continuation lines,
+    // dropping `"\ ` comments inside them.
+    fx.run("let g:x = 0");
+    fx.run("call setreg('a', ['let g:x = 1', '\\ + 2', '\"\\ a comment', '\\ + 4'])");
+    fx.run("silent execute \"normal! :@a\\<CR>\"");
+    fx.check("g:x", "7");
+    // `@b` replays keys.
+    fx.run("call setline(1, 'abc')");
+    fx.run("call setreg('b', 'x')");
+    fx.run("silent normal! gg03@b");
+    fx.check("getline(1)", "''");
+    // `@@` repeats the last one.
+    fx.run("call setline(1, 'abcd')");
+    fx.run("silent normal! gg0@b@@");
+    fx.check("getline(1)", "'cd'");
+    // An unset register fails and replays nothing.
+    fx.run("call setline(1, 'abcd')");
+    fx.run("silent! normal! gg0@z");
+    fx.check("getline(1)", "'abcd'");
+    fresh(&fx);
+}
+
+#[test]
+fn inserting_a_register() {
+    let sandbox = Sandbox::globals();
+    let fx = Probe::new(sandbox.editor());
+    fresh(&fx);
+    fx.run("call setline(1, 'ab')");
+    // CTRL-R a: the text, as if typed -- through the read buffer, which
+    // `:normal` only drains once its own keys are done, so the text lands
+    // where the `<Esc>` left the cursor (the real editor does the same).
+    fx.run("call setreg('a', ['one', 'two'])");
+    fx.run("silent execute \"normal! gg0li\\<C-R>a\\<Esc>\"");
+    fx.check("getline(1, '$')", "['one', 'two', 'ab']");
+    fx.run("silent %delete _");
+    // CTRL-R - of a characterwise small delete goes in through a put.
+    fx.run("call setline(1, ['xy'])");
+    fx.run("call setreg('-', 'MID')");
+    fx.run("silent execute \"normal! gg0li\\<C-R>-\\<Esc>\"");
+    fx.check("getline(1, '$')", "['xMIDy']");
+    fx.run("silent %delete _");
+    // CTRL-R CTRL-O puts linewise text above the line.
+    fx.run("call setline(1, ['xy'])");
+    fx.run("call setreg('b', ['L1', 'L2'])");
+    fx.run("silent execute \"normal! gg0li\\<C-R>\\<C-O>b\\<Esc>\"");
+    fx.check("getline(1, '$')", "['L1', 'L2', 'xy']");
+    // On the command line, CTRL-R pastes the lines joined by a CR that is a
+    // character of the command line, not its end: the two `:let`s are one
+    // command, which fails.
+    fx.run("call setreg('c', ['let g:y = 5', 'let g:y += 1'])");
+    fx.run("let g:y = 0");
+    fx.run("silent! execute \"normal! :\\<C-R>c\\<CR>\"");
+    fx.check("g:y", "0");
+    fx.run("call setreg('-', [])");
+    fresh(&fx);
+}
+
+#[test]
+fn putting_with_a_count_and_over_a_selection() {
+    let sandbox = Sandbox::globals();
+    let fx = Probe::new(sandbox.editor());
+    fresh(&fx);
+    fx.run("call setline(1, ['1234', '5678'])");
+    fx.run("call setreg('a', ['ab', 'c'], 'b')");
+    fx.run("silent normal! gg02\"ap");
+    fx.check("getline(1, '$')", "['1abab234', '5c c 678']");
+    fx.run("silent %delete _");
+    // A Visual put replaces the selection, and the deleted text goes to `""`
+    // -- but the register being put is the one read before the delete.
+    fx.run("call setline(1, ['one two'])");
+    fx.run("call setreg('\"', 'NEW')");
+    fx.run("silent normal! gg0viwp");
+    fx.expect_all(&[("getline(1)", "'NEW two'"), ("getreg('\"')", "'one'")]);
+    // `P` over a selection keeps the register.
+    fx.run("call setline(1, ['one two'])");
+    fx.run("call setreg('\"', 'NEW')");
+    fx.run("silent normal! gg0viwP");
+    fx.expect_all(&[("getline(1)", "'NEW two'"), ("getreg('\"')", "'NEW'")]);
+    // A charwise put of several lines splits the cursor line.
+    fx.run("call setline(1, ['abcd'])");
+    fx.run("call setreg('b', \"X\\nY\")");
+    fx.run("silent normal! gg0l\"bp");
+    fx.check("getline(1, '$')", "['abX', 'Ycd']");
+    fx.run("silent %delete _");
+    // `]p` reindents to the cursor line.
+    fx.run("call setline(1, ['    top'])");
+    fx.run("call setreg('c', ['x', '  y'], 'l')");
+    fx.run("silent normal! gg\"c]p");
+    fx.check("getline(1, '$')", "['    top', '    x', '      y']");
+    // Nothing to put.
+    fx.check_error("normal! \"zp", "E353: Nothing in register z");
+    fresh(&fx);
+}
