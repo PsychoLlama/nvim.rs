@@ -12,8 +12,7 @@
 //! read the *buffer* around the cursor, which are what CTRL-R CTRL-W and its
 //! friends insert.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 #![deny(
@@ -24,10 +23,13 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::ex_getln::cmdline_input;
 use crate::guard::Depth;
 use crate::memory::XString;
+use crate::message::e_noalt;
+use crate::normal::ident_under_cursor;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::c_int;
 
 use super::*;
 use crate::file_search::FileNameOpts;
@@ -39,18 +41,12 @@ use crate::types::NUL;
 /// empty answer leaves the previous expression in place, so that `"=<CR>`
 /// repeats it.
 pub fn get_expr_register() -> c_int {
-    let new_line = getcmdline('=' as c_int, 0, 0, true);
-    if new_line.is_null() {
+    let Some(new_line) = cmdline_input('=' as c_int, 0, true) else {
         return NUL; // cancelled
-    }
-    // SAFETY: a non-null answer is an allocated, NUL-terminated string, so
-    // its first byte is readable.
-    if c_int::from(unsafe { *new_line }) == NUL {
-        // SAFETY: the empty answer is ours and nothing else points at it.
-        unsafe { xfree(new_line.cast::<c_void>()) }; // keep the previous expression
-    } else {
-        // SAFETY: an allocated, NUL-terminated string, handed over.
-        set_expr_line(unsafe { XString::from_raw(new_line) });
+    };
+    // An empty answer keeps the previous expression.
+    if !new_line.is_empty() {
+        set_expr_line(new_line);
     }
     '=' as c_int
 }
@@ -60,29 +56,24 @@ pub fn set_expr_line(new_line: XString) {
     expr_line.set(Some(new_line));
 }
 
-/// Evaluate the `"=` expression and answer the result, allocated.
+/// Evaluate the `"=` expression and answer the result.
 ///
-/// Null when no expression has been set. The evaluation is nested at most ten
-/// deep: past that the *source* is answered instead, which is what stops
-/// `let @= = '@='` from recursing forever.
+/// `None` when no expression has been set, or it fails. The evaluation is
+/// nested at most ten deep: past that the *source* is answered instead,
+/// which is what stops `let @= = '@='` from recursing forever.
 ///
-/// # Safety
 /// Runs arbitrary Vimscript.
-pub unsafe fn get_expr_line() -> *mut c_char {
+pub fn get_expr_line() -> Option<XString> {
     static nested: GlobalCell<c_int> = GlobalCell::new(0);
 
     // Evaluating may set `expr_line` again, so work on a copy.
-    let Some(expression) = expr_line.with(Clone::clone) else {
-        return ::core::ptr::null_mut();
-    };
+    let expression = expr_line.with(Clone::clone)?;
     if nested.get() >= 10 {
-        return expression.into_raw();
+        return Some(expression);
     }
-    let nesting = Depth::of(&nested);
+    let _nesting = Depth::of(&nested);
     // The copy is this call's own, whatever the expression does to `"=`.
-    let rv = eval_to_string(&expression, true, false);
-    drop(nesting);
-    rv.map_or(::core::ptr::null_mut(), XString::into_raw)
+    eval_to_string(&expression, true, false)
 }
 
 /// A copy of the `"=` expression itself, without evaluating it.
@@ -90,90 +81,61 @@ pub fn get_expr_line_src() -> Option<XString> {
     expr_line.with(Clone::clone)
 }
 
-/// The contents of a computed register.
+/// The contents of a computed register, copied.
 ///
-/// Answers false when `regname` is not one of them (or when a buffer-reading
-/// one is asked for without `errmsg`, which is the caller saying it only
-/// wants an answer it can get without side effects). `*allocated` says
-/// whether the caller must free `*argp`.
+/// `None` when `regname` is not one of them (or when a buffer-reading one is
+/// asked for without `errmsg`, which is the caller saying it only wants an
+/// answer it can get without side effects); `Some(None)` for one that has
+/// nothing in it.
 ///
 /// `errmsg` also turns on the error messages for a register that has nothing
-/// in it -- E29 for `".`, E30 for `":`, E35 for `"/`.
-///
-/// # Safety
-/// `argp` and `allocated` must be writable. `"=` runs arbitrary Vimscript.
-pub unsafe fn get_spec_reg(
-    regname: c_int,
-    argp: *mut *mut c_char,
-    allocated: *mut bool,
-    errmsg: bool,
-) -> bool {
-    // The answer is built here and handed over in one place at the end, so
-    // that the two writes through the caller's pointers are the whole of
-    // this function's unchecked surface.
-    let mut value: *mut c_char = ::core::ptr::null_mut();
-    let mut owned = false;
-
-    let found = match regname {
+/// in it -- E29 for `".`, E30 for `":`, E35 for `"/`. `"=` runs arbitrary
+/// Vimscript.
+pub fn get_spec_reg(regname: c_int, errmsg: bool) -> Option<Option<XString>> {
+    let value = match regname {
         // `"%` -- the current file name.
         c if c == '%' as c_int => {
             if errmsg {
                 let _ = check_fname(); // will give an error message
             }
-            value = Buf::current().name.shown_ptr();
-            true
+            Buf::current().name.shown().map(XString::from_cstr)
         }
         // `"#` -- the alternate file name.
-        c if c == '#' as c_int => {
-            value = getaltfname(errmsg);
-            true
-        }
+        c if c == '#' as c_int => match buflist_name_nr(0) {
+            Some((alt, _)) => alt.name.shown().map(XString::from_cstr),
+            None => {
+                if errmsg {
+                    emsg(gettext(e_noalt));
+                }
+                None
+            }
+        },
         // `"=` -- the expression, evaluated.
-        c if c == '=' as c_int => {
-            // SAFETY: running Vimscript is this function's own promise.
-            value = unsafe { get_expr_line() };
-            owned = true;
-            true
-        }
+        c if c == '=' as c_int => get_expr_line(),
         // `":` -- the last command line.
         c if c == ':' as c_int => {
             // A copy: the caller may run commands while it holds it.
-            match last_cmdline.with(Clone::clone) {
-                Some(line) => {
-                    value = line.into_raw();
-                    owned = true;
-                }
-                None if errmsg => {
-                    emsg(gettext(e_nolastcmd));
-                }
-                None => {}
+            let line = last_cmdline.with(Clone::clone);
+            if line.is_none() && errmsg {
+                emsg(gettext(e_nolastcmd));
             }
-            true
+            line
         }
         // `"/` -- the last search pattern.
         c if c == '/' as c_int => {
-            // A copy, as the other owned values.
-            match last_search_pat() {
-                Some(pat) => {
-                    value = pat.into_raw();
-                    owned = true;
-                }
-                None if errmsg => {
-                    emsg(gettext(e_noprevre));
-                }
-                None => {}
+            let pat = last_search_pat();
+            if pat.is_none() && errmsg {
+                emsg(gettext(e_noprevre));
             }
-            true
+            pat
         }
         // `".` -- the last inserted text.
         c if c == '.' as c_int => {
-            // SAFETY: main thread; it answers a fresh allocation or null.
-            value = unsafe { get_last_insert_save() };
-            owned = true;
-            if value.is_null() && errmsg {
+            let text = get_last_insert_save();
+            if text.is_none() && errmsg {
                 emsg(gettext(e_noinstext));
             }
-            true
+            text
         }
         // CTRL-R CTRL-F / CTRL-P -- the file name under the cursor, the
         // second form expanded to a full path.  Reading the buffer is a side
@@ -181,10 +143,7 @@ pub unsafe fn get_spec_reg(
         Ctrl_F | Ctrl_P if errmsg => {
             let opts =
                 FileNameOpts::MESS | FileNameOpts::HYP | FileNameOpts::EXP.when(regname == Ctrl_P);
-            value = file_name_at_cursor(opts, 1, None)
-                .map_or(::core::ptr::null_mut(), XString::into_raw);
-            owned = true;
-            true
+            file_name_at_cursor(opts, 1, None)
         }
         // CTRL-R CTRL-W / CTRL-A -- the word, or the WORD, under the cursor.
         Ctrl_W | Ctrl_A if errmsg => {
@@ -193,22 +152,9 @@ pub unsafe fn get_spec_reg(
             } else {
                 FIND_STRING
             };
-            // The identifier is found in the buffer's own line, so it has to
-            // be copied out before anything else can move the line.
-            let mut ident: *mut c_char = ::core::ptr::null_mut();
-            // SAFETY: main thread, with a cursor on a line of the buffer;
-            // `ident` is a writable local and a null `textcol` asks for none.
-            let cnt =
-                unsafe { find_ident_under_cursor(&raw mut ident, find, ::core::ptr::null_mut()) };
-            value = if cnt != 0 {
-                // SAFETY: a non-zero answer means `ident` points at that many
-                // bytes of the cursor's line.
-                unsafe { xmemdupz(ident as *const c_void, cnt).cast::<c_char>() }
-            } else {
-                ::core::ptr::null_mut()
-            };
-            owned = true;
-            true
+            // A copy out of the buffer's own line.
+            let ident = ident_under_cursor(find);
+            (!ident.is_empty()).then(|| XString::from_vec(ident))
         }
         // CTRL-R CTRL-L -- the whole cursor line.
         Ctrl_L if errmsg => {
@@ -216,21 +162,13 @@ pub unsafe fn get_spec_reg(
             // the text, and inserting re-enters the editor, which may move
             // or free the block the line was read out of.
             let win = Win::current();
-            value = XString::from_bytes(win.buffer().lines().line(win.w_cursor.lnum)).into_raw();
-            owned = true;
-            true
+            Some(XString::from_bytes(
+                win.buffer().lines().line(win.w_cursor.lnum),
+            ))
         }
         // `"_` -- the black hole, which reads as empty.
-        c if c == '_' as c_int => {
-            value = c"".as_ptr().cast_mut();
-            true
-        }
-        _ => false,
+        c if c == '_' as c_int => Some(XString::new()),
+        _ => return None,
     };
-
-    // SAFETY: the caller promises both pointers are writable.
-    unsafe { *argp = value };
-    // SAFETY: as above.
-    unsafe { *allocated = owned };
-    found
+    Some(value)
 }

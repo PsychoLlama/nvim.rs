@@ -33,7 +33,6 @@ use crate::getchar::{
 use crate::guard::Suppress;
 use crate::mbyte::{mb_adjust_cursor, mb_charlen};
 use crate::memline::{inc, ml_delete_flags};
-use crate::memory::xfree;
 use crate::message::e_modifiable;
 use crate::message::emsg;
 use crate::r#move::WinValid;
@@ -49,7 +48,7 @@ use crate::option::vars::{P_SEL, cb_flags, p_sta, p_to, p_ww};
 use crate::options::{kOptCbFlagUnnamed, kOptCbFlagUnnamedplus, kOptVeFlagAll};
 use crate::os::cshim::gettext;
 use crate::pos::MAXCOL;
-use crate::register::{copy_register, do_put, free_register};
+use crate::register::{copy_register, do_put};
 use crate::search::{BACKWARD, FORWARD};
 use crate::state::mode::{State, restart_edit};
 use crate::state::{MODE_INSERT, MODE_REPLACE, virtual_active};
@@ -59,7 +58,7 @@ use crate::types::{
     PUT_FIXINDENT, PUT_LINE, PUT_LINE_FORWARD, PUT_LINE_SPLIT, YankReg, size_t,
 };
 use crate::undo::{u_clearline, u_save, u_save_cursor, u_savesub};
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_uint};
 
 /// Refuse a change in a prompt buffer that is not on its own editable line.
 fn prompt_refuses(cmd_arg: &mut CmdArg) -> bool {
@@ -668,7 +667,7 @@ pub(crate) fn nv_put_opt(cmd_arg: &mut CmdArg, fix_indent: bool) {
     }
 
     let was_visual = visual_active();
-    let mut savereg: *mut YankReg = ptr::null_mut();
+    let mut savereg: Option<YankReg> = None;
     let mut emptied = false;
     if was_visual {
         let regname = cmd_arg.op().regname;
@@ -685,7 +684,7 @@ pub(crate) fn nv_put_opt(cmd_arg: &mut CmdArg, fix_indent: bool) {
             || ascii_isdigit(regname)
             || regname == '-' as c_int
         {
-            savereg = unsafe { copy_register(regname) };
+            savereg = Some(copy_register(regname));
         }
         // The delete must not close or open folds under the selection.
         win.w_onebuf_opt.wo_fen = 0;
@@ -723,11 +722,13 @@ pub(crate) fn nv_put_opt(cmd_arg: &mut CmdArg, fix_indent: bool) {
         set_visual_active(true);
     }
 
-    unsafe { do_put(cmd_arg.op().regname, savereg, dir, cmd_arg.count1, flags) };
-    if !savereg.is_null() {
-        unsafe { free_register(savereg) };
-        unsafe { xfree(savereg as *mut c_void) };
-    }
+    do_put(
+        cmd_arg.op().regname,
+        savereg.as_ref(),
+        dir,
+        cmd_arg.count1,
+        flags,
+    );
     if was_visual {
         if save_fen != 0 {
             win.w_onebuf_opt.wo_fen = 1;

@@ -778,6 +778,20 @@ pub unsafe fn mb_string2cells_len(str: *const c_char, size: size_t) -> size_t {
     text::partial_string_cells_in(unsafe { NulTerminated::new(str) }, size)
 }
 
+/// [`utf_ptr2cells_len`] of the character at byte `at` of the bytes of a C
+/// string, the text ending at byte `size`.
+#[inline]
+pub(crate) fn c_partial_cells_in(bytes: &[u8], at: usize, size: usize) -> c_int {
+    text::partial_cells_in(CBytes(bytes), at, size)
+}
+
+/// [`mb_string2cells_len`] over the bytes of a C string: the width of at
+/// most `size` of them, stopping early at a NUL.
+#[inline]
+pub(crate) fn c_string_cells_len(bytes: &[u8], size: usize) -> usize {
+    text::partial_string_cells_in(CBytes(bytes), size)
+}
+
 /// Might the character at `p` be drawn at a width the grid did not predict?
 /// [`ambiguous_width_at`] over a string.
 ///

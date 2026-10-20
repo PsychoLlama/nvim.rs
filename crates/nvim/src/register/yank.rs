@@ -11,201 +11,96 @@
 //! and `:registers` both show, and [`do_autocmd_textyankpost`] builds the
 //! `v:event` dictionary TextYankPost sees.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use crate::cstr;
 use crate::ex_docmd::cmdmod_has;
+use crate::formatted;
 use crate::guard::Lock;
+use crate::mbyte::head_off;
 use crate::memory::{ThinCString, XString};
-use crate::message_fmt::{c_str, report_msg};
+use crate::message_fmt::{msg_bytes, report_msg};
+use crate::ops::{block_def, charwise_block_def};
 use crate::option::vars::P_SEL;
 use crate::tr_plural;
-use crate::vim_snprintf;
+use crate::types::RegLines;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{c_char, c_int, c_ulong, c_void};
+use core::ffi::{c_int, c_ulong};
 
 use super::*;
 use crate::option::cpo_has;
 use crate::types::{CpoFlag, NUL};
 
-/// Copy one line of a block into slot `y_idx` of `reg`, padding both ends
-/// with the spaces `block_prep` measured.
+/// One line of a block, as `bd` measured it on `line`: the text with the
+/// spaces `block_prep` counted on both ends.
 ///
 /// With `exclude_trailing_space` -- 'formatoptions' `y`'s blockwise yank --
 /// the padding at the end is dropped and any white space the text itself ends
 /// with is trimmed off.
-///
-/// # Safety
-/// `bd` must describe a region of the current line, and `reg.y_array` hold at
-/// least `y_idx + 1` slots.
-unsafe fn yank_copy_line(
-    reg: *mut YankReg,
-    bd: *mut BlockDef,
-    y_idx: size_t,
-    exclude_trailing_space: bool,
-) {
-    if exclude_trailing_space {
-        // SAFETY: the caller promises `bd` describes a region of the line.
-        unsafe { (*bd).endspaces = 0 };
-    }
-    // Nothing below writes through `bd`, so its measurements are read once.
-    //
-    // SAFETY: as above.
-    let def = unsafe { *bd };
-    let size = def.startspaces + def.endspaces + def.textlen;
-    debug_assert!(size >= 0);
-    // SAFETY: `size` is not negative, so it is a length; `xmallocz` adds the
-    // terminating NUL's byte itself.
-    let start = unsafe { xmallocz(size as size_t) } as *mut c_char;
+fn yank_copy_line(line: &[u8], bd: &BlockDef, exclude_trailing_space: bool) -> XString {
+    let endspaces = if exclude_trailing_space {
+        0
+    } else {
+        bd.endspaces
+    };
+    let pad = |n: c_int| usize::try_from(n).expect("a block's padding");
+    let textcol = usize::try_from(bd.textcol).expect("a column of the line");
+    let text = &line[textcol..];
+    let textlen = pad(bd.textlen);
 
     // Lay the line out: the leading padding, the text, the trailing padding.
-    //
-    // SAFETY: the three runs are together exactly the `size` bytes `start`
-    // owns, and `textstart` points at `textlen` bytes of the current line.
-    let mut pnew = start;
-    let into = pnew.cast::<u8>();
-    unsafe { into.write_bytes(b' ', def.startspaces as size_t) };
-    pnew = unsafe { pnew.offset(def.startspaces as isize) };
-    let text = def.textstart as *const c_void;
-    let into = pnew.cast::<u8>();
-    unsafe { into.copy_from(text.cast(), def.textlen as size_t) };
-    pnew = unsafe { pnew.offset(def.textlen as isize) };
-    unsafe { pnew.cast::<u8>().write_bytes(b' ', def.endspaces as size_t) };
-    pnew = unsafe { pnew.offset(def.endspaces as isize) };
+    let mut out = Vec::with_capacity(pad(bd.startspaces) + textlen + pad(endspaces) + 1);
+    out.resize(pad(bd.startspaces), b' ');
+    out.extend_from_slice(&text[..textlen]);
+    out.resize(out.len() + pad(endspaces), b' ');
 
     if exclude_trailing_space {
         // Walk back over the trailing white space, a character at a time
         // so that a multi-byte character is not cut in half.
-        //
-        // SAFETY: `s` starts at the end of the text `textstart` points at and
-        // only ever moves back inside it; the `s > 0` test in front of the
-        // read is what proves the byte at `s - 1` is one of them.  `pnew`
-        // steps back over bytes it just wrote.
-        let mut s = def.textlen + def.endspaces;
-        while s > 0
-            && ascii_iswhite(c_int::from(unsafe {
-                *def.textstart.offset((s - 1) as isize)
-            }))
-        {
-            s -= unsafe { utf_head_off(def.textstart, def.textstart.offset((s - 1) as isize)) } + 1;
-            pnew = unsafe { pnew.offset(-1) };
+        let mut s = textlen;
+        while s > 0 && ascii_iswhite(c_int::from(text[s - 1])) {
+            s -= head_off(text, s - 1) + 1;
+            out.pop();
         }
     }
-    // SAFETY: `pnew` is at most one past the text, and `xmallocz` left room
-    // for a NUL there.
-    unsafe { *pnew = NUL as c_char };
-    // SAFETY: `pnew` is at or past `start`, so the length is the block's own;
-    // the caller promises `y_array` has more than `y_idx` slots, whose old
-    // string the assignment releases.
-    unsafe {
-        let len = pnew.offset_from(start) as size_t;
-        *(*reg).y_array.add(y_idx) = String_0::from_owned_parts(start, len);
-    };
+    XString::from_vec(out)
 }
 
-/// Move the lines of `reg` onto the end of `curr`, and free `reg`'s array.
+/// Move the lines of `new` onto the end of `curr`.
 ///
 /// This is what an uppercase register name does. A charwise append joins the
 /// last old line and the first new one into a single line, unless 'cpoptions'
-/// has `>`.
-///
-/// # Safety
-/// Both registers must own their arrays; `reg` must hold at least one line
-/// when the charwise join runs.
-unsafe fn append_to_register(curr: *mut YankReg, reg: *mut YankReg, yank_type: MotionType) {
-    // Grow `curr`'s array to hold both registers' lines, moving the old ones
-    // over.  `j` is where the appended lines start.
-    //
-    // SAFETY: the caller promises both registers own arrays of `y_size`
-    // strings, and the new array is allocated for both counts together.
-    let mut j = unsafe {
-        let old = (*curr).y_size;
-        let room = ::core::mem::size_of::<String_0>().wrapping_mul(old.wrapping_add((*reg).y_size));
-        let new_ptr = xmalloc(room) as *mut String_0;
-        for i in 0..old {
-            // The strings move; `xmalloc` left the destination uninitialised,
-            // so nothing there is released.
-            new_ptr.add(i).write((*curr).y_array.add(i).read());
-        }
-        // The slots the appended lines go into are `xmalloc`'s too, and the
-        // walk below *assigns* into them: zero is the null string, which is
-        // what makes that assignment release nothing.
-        new_ptr.add(old).write_bytes(0, (*reg).y_size);
-        xfree((*curr).y_array as *mut c_void);
-        (*curr).y_array = new_ptr;
-        old
-    };
-
+/// has `>`. `curr` keeps its width, time and extra data, as upstream's does.
+fn append_to_register(curr: &mut YankReg, new: Vec<XString>, yank_type: MotionType) {
     // Appending linewise text makes the whole register linewise.
     if yank_type == kMTLineWise {
-        // SAFETY: `curr` is a live register.
-        unsafe { (*curr).y_type = kMTLineWise };
+        curr.kind = kMTLineWise;
     }
-
-    let mut y_idx: size_t = 0;
-    // SAFETY: as above.
-    if unsafe { (*curr).y_type } == kMTCharWise && !cpo_has(CpoFlag::REGAPPEND) {
+    let join = curr.kind == kMTCharWise && !cpo_has(CpoFlag::REGAPPEND);
+    let lines = curr.lines.lines_mut();
+    let mut new = new.into_iter();
+    if join && let Some(last_old) = lines.last_mut() {
         // Join the last old line and the first new one.
-        //
-        // SAFETY: `j` is `curr`'s line count, which is at least one here
-        // because a charwise register holds a line, and the caller promises
-        // `reg` holds one too.  Both strings are NUL-terminated and carry
-        // their own lengths, and the joined allocation is the sum plus a NUL.
-        let first_new = unsafe { &mut *(*reg).y_array };
-        j = j.wrapping_sub(1);
-        let last_old = unsafe { &mut *(*curr).y_array.add(j) };
-        let mut joined = XString::from_bytes(last_old.as_bytes());
-        joined.push_bytes(first_new.as_bytes());
-        // The assignment releases the old string.
-        *last_old = String_0::from_xstring(joined);
-        j = j.wrapping_add(1);
-
-        *first_new = String_0::NULL;
-        y_idx = 1;
+        if let Some(first_new) = new.next() {
+            last_old.push_bytes(&first_new);
+        }
     }
-
-    // The rest of `reg`'s lines are *moved*, so `reg`'s array is freed but
-    // the strings in it are not.
-    //
-    // SAFETY: the space for them was made above, and `y_idx` walks `reg`'s
-    // own `y_size` strings.
-    while y_idx < unsafe { (*reg).y_size } {
-        // The string moves; the slot it leaves behind is emptied so that
-        // freeing `reg` does not release it twice.
-        unsafe {
-            *(*curr).y_array.add(j) =
-                core::mem::replace(&mut *(*reg).y_array.add(y_idx), String_0::NULL);
-        };
-        y_idx = y_idx.wrapping_add(1);
-        j = j.wrapping_add(1);
-    }
-    unsafe { (*curr).y_size = j };
-    unsafe { xfree((*reg).y_array as *mut c_void) };
+    lines.extend(new);
 }
 
 /// The "N lines yanked" message.
-///
-/// # Safety
-/// `op` must be the operator that was just applied.
-unsafe fn report_yank(op: *mut OpArg, yank_type: MotionType, yanklines: size_t) {
-    let mut namebuf: [c_char; 100] = [0; 100];
-    // SAFETY: the caller promises `op` is the operator just applied.
-    let regname = unsafe { (*op).regname };
-    if regname == NUL {
-        namebuf[0] = NUL as c_char;
+fn report_yank(op: &OpArg, yank_type: MotionType, yanklines: size_t) {
+    let regname = op.regname;
+    let name = if regname == NUL {
+        Vec::new()
     } else {
-        let fmt = gettext(c" into \"%c");
-        // SAFETY: `namebuf` is writable for the length given, and the format
-        // takes exactly the one `%c` argument handed over.
-        unsafe { vim_snprintf!(namebuf.as_mut_ptr(), namebuf.len(), fmt.as_ptr(), regname) };
-    }
+        formatted!(100, gettext(c" into \"%c").to_bytes(), regname)
+    };
 
     // The message may be the first thing that scrolls, so make sure the
     // window is up to date before it is written.
-    //
     update_topline(Win::current());
     if must_redraw.get() != 0 {
         let _ = update_screen();
@@ -220,59 +115,29 @@ unsafe fn report_yank(op: *mut OpArg, yank_type: MotionType, yanklines: size_t) 
         (c"%ld line yanked%s", c"%ld lines yanked%s")
     };
     let fmt = ngettext(one, many, yanklines as c_ulong);
-    // SAFETY: `namebuf` is this frame's, NUL-terminated by the writes above.
-    let name = unsafe { c_str(namebuf.as_mut_ptr()) };
+    let name = msg_bytes(&name);
     let _: bool = report_msg(0, || tr_plural!(fmt, yanklines as int64_t, name));
 }
 
 /// Yank the operator's region into `reg`.
 ///
 /// With `append`, the new text goes onto the end of whatever `reg` already
-/// holds; with `message`, the "N lines yanked" report is given.
-///
-/// # Safety
-/// `op` must describe a region of the current buffer and `reg` be a live
-/// register.
-pub unsafe fn op_yank_reg(op: *mut OpArg, message: bool, mut reg: *mut YankReg, append: bool) {
-    let mut newreg = EMPTY_YANKREG;
-    // Nothing this function reaches writes through `op`, so the operator is
-    // read once and worked from.
-    //
-    // SAFETY: the caller promises `op` describes a region of the buffer.
-    let region = unsafe { *op };
+/// holds; with `message`, the "N lines yanked" report is given. `op` must
+/// describe a region of the current buffer.
+pub fn op_yank_reg(op: &OpArg, message: bool, reg: Reg, append: bool) {
+    let region = *op;
     let mut yank_type = region.motion_type;
     let mut yanklines = region.line_count as size_t;
     let mut yankendlnum = region.end.lnum;
-    let mut bd = BlockDef {
-        startspaces: 0,
-        endspaces: 0,
-        textlen: 0,
-        textstart: ::core::ptr::null_mut(),
-        textcol: 0,
-        start_vcol: 0,
-        end_vcol: 0,
-        is_short: 0,
-        is_max: 0,
-        is_one_char: 0,
-        pre_whitesp: 0,
-        pre_whitesp_c: 0,
-        end_char_vcols: 0,
-        start_char_vcols: 0,
-    };
 
     // Appending yanks into a scratch register first, then merges.
-    let curr = reg;
-    // SAFETY: the caller promises `reg` is a live register.
-    if append && !unsafe { (*reg).y_array }.is_null() {
-        reg = &raw mut newreg;
-    } else {
-        // SAFETY: as above; it owns whatever it holds.
-        unsafe { free_register(reg) };
+    let appending = append && reg.read(|reg| reg.lines.is_set());
+    if !appending {
+        reg.write(YankReg::clear);
     }
 
     // A charwise yank that starts in column 0 and ends before column 0 of
     // a later line is really a linewise one.
-    //
     let sel_old = region.is_visual && P_SEL.first_byte() != b'o';
     if region.motion_type == kMTCharWise
         && region.start.col == 0
@@ -286,80 +151,51 @@ pub unsafe fn op_yank_reg(op: *mut OpArg, message: bool, mut reg: *mut YankReg, 
         yanklines = yanklines.wrapping_sub(1);
     }
 
-    // SAFETY: `reg` is live and its array is being replaced wholesale; the
-    // new one has a slot per line the walk below fills in.
-    unsafe { (*reg).y_size = yanklines };
-    unsafe { (*reg).y_type = yank_type };
-    unsafe { (*reg).y_width = 0 };
-    unsafe {
-        (*reg).y_array = xcalloc(yanklines, ::core::mem::size_of::<String_0>()) as *mut String_0
-    };
-    unsafe { (*reg).additional_data = ::core::ptr::null_mut() };
-    unsafe { (*reg).timestamp = os_time() };
-
+    let mut width = 0;
     if yank_type == kMTBlockWise {
         // A `$`-extended block has no fixed width.
         let narrow = Win::current().w_curswant == MAXCOL;
-        // SAFETY: `reg` is live.
-        unsafe { (*reg).y_width = region.end_vcol - region.start_vcol };
-        if narrow && unsafe { (*reg).y_width } > 0 {
-            unsafe { (*reg).y_width -= 1 };
+        width = region.end_vcol - region.start_vcol;
+        if narrow && width > 0 {
+            width -= 1;
         }
     }
 
-    let mut y_idx: size_t = 0;
+    let mut lines = Vec::with_capacity(yanklines);
     let mut lnum = region.start.lnum;
     while lnum <= yankendlnum {
-        // SAFETY: `reg` is live and holds the type just written.
-        match unsafe { (*reg).y_type } {
+        match yank_type {
             kMTBlockWise => {
-                // SAFETY: `lnum` is a line of the region `op` describes, and
-                // `bd` is this walk's own measurement block.
-                unsafe { block_prep(op, &raw mut bd, lnum, false) };
-                // SAFETY: `bd` now describes a region of that line, and the
-                // array has a slot for every line of the region.
-                unsafe { yank_copy_line(reg, &raw mut bd, y_idx, region.excl_tr_ws) };
+                let bd = block_def(op, lnum);
+                let mut text = Buf::current().lines();
+                lines.push(yank_copy_line(text.line(lnum), &bd, region.excl_tr_ws));
             }
-            kMTLineWise => {
-                let text = String_0::from_bytes(Buf::current().lines().line(lnum));
-                // SAFETY: the slot is this walk's own.
-                unsafe { *(*reg).y_array.add(y_idx) = text };
-            }
+            kMTLineWise => lines.push(XString::from_bytes(Buf::current().lines().line(lnum))),
             kMTCharWise => {
-                // SAFETY: `lnum` is a line of the region, and `bd` is this
-                // walk's own block.
-                unsafe {
-                    charwise_block_prep(
-                        region.start,
-                        region.end,
-                        &raw mut bd,
-                        lnum,
-                        region.inclusive,
-                    )
-                };
+                let mut bd = charwise_block_def(region.start, region.end, lnum, region.inclusive);
+                let mut text = Buf::current().lines();
+                let line = text.line(lnum);
                 // The region may reach past the end of a short line.
-                //
-                // SAFETY: `textstart` points into that line, NUL-terminated.
-                let tmp = unsafe { cstr::bytes_at(bd.textstart) }.len() as c_int;
-                if tmp < bd.textlen {
-                    bd.textlen = tmp;
-                }
-                // SAFETY: as in the blockwise arm.
-                unsafe { yank_copy_line(reg, &raw mut bd, y_idx, false) };
+                let rest = line.len() - usize::try_from(bd.textcol).expect("a column");
+                bd.textlen = bd.textlen.min(c_int::try_from(rest).unwrap_or(c_int::MAX));
+                lines.push(yank_copy_line(line, &bd, false));
             }
-            // SAFETY: `abort` never returns and touches nothing.
-            kMTUnknown => unsafe { abort() },
-            _ => {}
+            _ => ::std::process::abort(),
         }
         lnum += 1;
-        y_idx = y_idx.wrapping_add(1);
     }
 
-    if curr != reg {
-        // SAFETY: `curr` is the caller's register and `reg` the scratch one
-        // just filled; both own their arrays, and a charwise `reg` holds at
-        // least the one line the walk above put in it.
-        unsafe { append_to_register(curr, reg, yank_type) };
+    if appending {
+        reg.write(|curr| append_to_register(curr, lines, yank_type));
+    } else {
+        let new = YankReg {
+            lines: RegLines::new(lines),
+            kind: yank_type,
+            width,
+            timestamp: os_time(),
+            extra: None,
+        };
+        reg.write(|slot| *slot = new);
     }
 
     if message {
@@ -368,8 +204,7 @@ pub unsafe fn op_yank_reg(op: *mut OpArg, message: bool, mut reg: *mut YankReg, 
             yanklines = 0;
         }
         if yanklines > p_report() as size_t {
-            // SAFETY: `op` is still the operator that was just applied.
-            unsafe { report_yank(op, yank_type, yanklines) };
+            report_yank(op, yank_type, yanklines);
         }
     }
 
@@ -382,11 +217,10 @@ pub unsafe fn op_yank_reg(op: *mut OpArg, message: bool, mut reg: *mut YankReg, 
         }
         if yank_type != kMTLineWise && !region.inclusive {
             // An exclusive region's `']` is the character *before* the end.
-            //
-            // SAFETY: the mark is a position in the current buffer, and the
-            // borrow is taken through the root because `dec` reads `curbuf`
-            // itself -- handing it a borrow of the whole `Buffer` would alias.
-            unsafe { decl(&mut (*Buf::current_raw()).b_op_end) };
+            // Stepped on a copy: `decl` reads the current buffer itself.
+            let mut end = Buf::current().b_op_end;
+            decl(&mut end);
+            Buf::current().b_op_end = end;
         }
     }
 }
@@ -403,18 +237,14 @@ pub fn format_reg_type(reg_type: MotionType, reg_width: ColNr) -> ThinCString {
     }
 }
 
-/// Fire TextYankPost with the `v:event` dictionary describing the yank.
+/// Fire TextYankPost with the `v:event` dictionary describing the yank of
+/// `op` into `reg`.
 ///
 /// Guarded against recursion: an autocommand that yanks would otherwise fire
-/// this again.
-///
-/// # Safety
-/// `op` and `reg` must describe the yank that just happened. Runs arbitrary
-/// autocommands, under `textlock`.
-pub unsafe fn do_autocmd_textyankpost(op: *mut OpArg, reg: *mut YankReg) {
+/// this again. Runs arbitrary autocommands, under `textlock`.
+pub fn do_autocmd_textyankpost(op: &OpArg, reg: Reg) {
     static recursive: GlobalCell<bool> = GlobalCell::new(false);
 
-    // SAFETY: main thread, reading the autocommand table.
     if recursive.get() || !has_event(AutoEvent::TextYankPost) {
         return;
     }
@@ -427,43 +257,40 @@ pub unsafe fn do_autocmd_textyankpost(op: *mut OpArg, reg: *mut YankReg) {
     let dict = get_v_event(&mut save_v_event);
 
     // `regcontents`: the register's lines, as a locked list.
-    //
-    // SAFETY: the caller promises `reg` describes the yank, so its `y_array`
-    // holds `y_size` strings, each NUL-terminated and carrying its length.
-    let list = unsafe {
-        let list = tv_list_alloc((*reg).y_size as ptrdiff_t);
-        for i in 0..(*reg).y_size {
-            let line = &*(*reg).y_array.add(i);
-            (*list.as_ptr()).push_bytes(Some(line.as_bytes()));
+    let (list, regtype) = reg.read(|reg| {
+        let list = tv_list_alloc(reg.lines.len() as ptrdiff_t);
+        for line in reg.lines.iter() {
+            list.edit().push_bytes(Some(line));
         }
-        list_set_lock(list.as_ptr().as_mut(), VarLock::Fixed);
-        list
-    };
+        list_set_lock(Some(list.edit()), VarLock::Fixed);
+        (list, format_reg_type(reg.kind, reg.width))
+    });
     let _ = dict.edit().add_list(b"regcontents", Some(list));
-
-    // SAFETY: `reg` is live.
-    let regtype = unsafe { format_reg_type((*reg).y_type, (*reg).y_width) };
     let _ = dict.edit().add_str(b"regtype", Some(&regtype));
 
-    // SAFETY: the caller promises `op` is the yank's operator.
-    let op = unsafe { *op };
-    let mut buf: [c_char; 2] = [op.regname as c_char, NUL as c_char];
-    let _ = dict.edit().add_str(b"regname", Some(cstr::in_chars(&buf)));
+    let name = [op.regname as u8, NUL as u8];
+    let _ = dict.edit().add_str(b"regname", Some(cstr::in_bytes(&name)));
 
     let flag = |set| if set { kBoolVarTrue } else { kBoolVarFalse };
     let _ = dict.edit().add_bool(b"inclusive", flag(op.inclusive));
 
-    buf[0] = get_op_char(op.op_type) as c_char;
-    buf[1] = NUL as c_char;
-    let _ = dict.edit().add_str(b"operator", Some(cstr::in_chars(&buf)));
+    let operator = [get_op_char(op.op_type) as u8, NUL as u8];
+    let _ = dict
+        .edit()
+        .add_str(b"operator", Some(cstr::in_bytes(&operator)));
 
     let _ = dict.edit().add_bool(b"visual", flag(op.is_visual));
     dict.edit().set_keys_readonly();
 
     // The buffer must not change under the yank that is still in flight.
     let locked = Lock::text();
-    let __hoisted_0 = Buf::current_or_none();
-    apply_autocmds(AutoEvent::TextYankPost, None, None, false, __hoisted_0);
+    apply_autocmds(
+        AutoEvent::TextYankPost,
+        None,
+        None,
+        false,
+        Buf::current_or_none(),
+    );
     drop(locked);
 
     restore_v_event(dict, &mut save_v_event);
@@ -472,15 +299,11 @@ pub unsafe fn do_autocmd_textyankpost(op: *mut OpArg, reg: *mut YankReg) {
 
 /// `y`: yank the operator's region into the register it names.
 ///
-/// Answers false for an invalid register name, having beeped.
-///
-/// # Safety
-/// `op` must describe a region of the current buffer. Runs the clipboard
-/// provider and TextYankPost, and so arbitrary Lua.
-pub unsafe fn op_yank(op: *mut OpArg, message: bool) -> bool {
-    // SAFETY: the caller promises `op` describes a region of the buffer.
-    let regname = unsafe { (*op).regname };
-    // SAFETY: main thread, reading the register store.
+/// Answers false for an invalid register name, having beeped. `op` must
+/// describe a region of the current buffer. Runs the clipboard provider and
+/// TextYankPost, and so arbitrary Lua.
+pub fn op_yank(op: &OpArg, message: bool) -> bool {
+    let regname = op.regname;
     if regname != 0 && !valid_yank_reg(regname, true) {
         beep_flush();
         return false;
@@ -489,14 +312,10 @@ pub unsafe fn op_yank(op: *mut OpArg, message: bool) -> bool {
         return true; // black hole: nothing to do
     }
 
-    // SAFETY: `regname` is a valid register name, checked above.
-    let reg = unsafe { get_yank_register(regname, YREG_YANK) };
-    // SAFETY: `op` describes a region of the buffer and `reg` is live.
-    unsafe { op_yank_reg(op, message, reg, is_append_register(regname)) };
-    // SAFETY: `reg` holds what was just yanked; this is what runs the
-    // clipboard provider's Lua.
-    unsafe { clipboard::set_clipboard(regname, reg) };
-    // SAFETY: `op` and `reg` describe the yank that just happened.
-    unsafe { do_autocmd_textyankpost(op, reg) };
+    let reg = get_yank_register(regname, YREG_YANK);
+    op_yank_reg(op, message, reg, is_append_register(regname));
+    // This is what runs the clipboard provider's Lua.
+    clipboard::set_clipboard(regname, reg);
+    do_autocmd_textyankpost(op, reg);
     true
 }

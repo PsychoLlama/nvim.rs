@@ -234,9 +234,9 @@ pub fn restore_lbr(lbr_saved: bool) {
 /// # Safety
 /// `op` and `bdp` must point to live structs, and `lnum` must be a line of
 /// the current buffer.
-pub unsafe fn block_prep(op: *mut OpArg, bdp: *mut BlockDef, lnum: LineNr, is_del: bool) {
+pub unsafe fn block_prep(op: *const OpArg, bdp: *mut BlockDef, lnum: LineNr, is_del: bool) {
     // SAFETY: the caller's promise -- both point to live structs.
-    let (op, bdp) = unsafe { (&mut *op, &mut *bdp) };
+    let (op, bdp) = unsafe { (&*op, &mut *bdp) };
     // Unwanted line breaks would move every column measured below.
     let lbr_saved = reset_lbr();
 
@@ -457,10 +457,11 @@ pub unsafe fn charwise_block_prep(
 /// [`block_prep`] of `op` on line `lnum` of the current buffer, for a caller
 /// that only reads the answer.
 pub(crate) fn block_def(op: &OpArg, lnum: LineNr) -> BlockDef {
-    let (mut op, mut bd) = (*op, BlockDef::ZERO);
-    // SAFETY: both are this frame's locals, and `ml_get` answers a line for
-    // any `lnum`, which is all `block_prep` reads it through.
-    unsafe { block_prep(&raw mut op, &raw mut bd, lnum, false) };
+    let mut bd = BlockDef::ZERO;
+    // SAFETY: `op` is borrowed for the call and only read, `bd` is this
+    // frame's local, and `ml_get` answers a line for any `lnum`, which is all
+    // `block_prep` reads it through.
+    unsafe { block_prep(op, &raw mut bd, lnum, false) };
     bd
 }
 

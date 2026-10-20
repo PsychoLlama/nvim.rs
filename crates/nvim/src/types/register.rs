@@ -10,6 +10,9 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
+use crate::memory::XString;
+use crate::shada::ShadaExtra;
+use std::rc::Rc;
 
 pub type GRegFlags = ::core::ffi::c_uint;
 #[derive(Copy, Clone)]
@@ -58,14 +61,97 @@ impl Default for BlockDef {
         Self::ZERO
     }
 }
-#[derive(Copy, Clone)]
+/// The lines a register holds.
+///
+/// Upstream's `y_array`/`y_size` pair, with its null kept as a state of its
+/// own: a register that was never set (or was freed) holds no array at all,
+/// which is not the same as one holding an array of no lines -- `@r` fails on
+/// the first and replays nothing on the second, and the clipboard provider
+/// can answer the second.
+///
+/// The vector is shared. A put, a replay or a `:registers` listing reads a
+/// register while the editor runs code that may write it -- an `on_bytes`
+/// callback, the clipboard provider, an autocommand -- and upstream's answer
+/// is to hold a pointer into the array and hope. Here the reader takes a
+/// counted share ([`Clone`] is a reference count, not a copy of the text)
+/// and a writer that finds the vector shared copies it first
+/// ([`lines_mut`](Self::lines_mut)), so the reader's lines stay what they
+/// were and the register gets the new ones.
+#[derive(Clone, Default, Debug)]
+pub struct RegLines(Option<Rc<Vec<XString>>>);
+
+impl RegLines {
+    /// No array: the register is unset.
+    pub const NONE: Self = RegLines(None);
+
+    /// An array holding `lines` -- set, even when `lines` is empty.
+    pub fn new(lines: Vec<XString>) -> Self {
+        RegLines(Some(Rc::new(lines)))
+    }
+
+    /// Whether there is an array, empty or not: upstream's `y_array != NULL`.
+    pub fn is_set(&self) -> bool {
+        self.0.is_some()
+    }
+
+    /// The lines; none for an unset register.
+    pub fn as_slice(&self) -> &[XString] {
+        self.0.as_deref().map_or(&[], Vec::as_slice)
+    }
+
+    /// The lines, to change: the array is created when there is none, and
+    /// copied first when a reader still holds a share of it.
+    pub fn lines_mut(&mut self) -> &mut Vec<XString> {
+        Rc::make_mut(self.0.get_or_insert_with(Rc::default))
+    }
+}
+
+impl core::ops::Deref for RegLines {
+    type Target = [XString];
+
+    fn deref(&self) -> &[XString] {
+        self.as_slice()
+    }
+}
+
+/// One register: its lines, how a put lays them out, when it was set, and
+/// the ShaDa data this editor does not read but writes back.
+#[derive(Clone, Debug)]
 pub struct YankReg {
-    pub y_array: *mut String_0,
-    pub y_size: size_t,
-    pub y_type: MotionType,
-    pub y_width: ColNr,
+    pub lines: RegLines,
+    /// `kMTCharWise`, `kMTLineWise`, `kMTBlockWise`, or `kMTUnknown` while a
+    /// write is still deciding.
+    pub kind: MotionType,
+    /// A blockwise register's width in cells, less one.
+    pub width: ColNr,
     pub timestamp: Timestamp,
-    pub additional_data: *mut AdditionalData,
+    pub(crate) extra: Option<ShadaExtra>,
+}
+
+impl YankReg {
+    /// The empty register every slot starts as: upstream's
+    /// `static yankreg_T y_regs[NUM_REGISTERS] = { 0 }`.
+    pub const EMPTY: YankReg = YankReg {
+        lines: RegLines::NONE,
+        kind: 0, // kMTCharWise
+        width: 0,
+        timestamp: 0,
+        extra: None,
+    };
+
+    /// Drop the lines and the extra data, leaving the register unset --
+    /// upstream's `free_register`. The type, width and timestamp stay, as
+    /// they do there.
+    pub fn clear(&mut self) {
+        self.lines = RegLines::NONE;
+        self.extra = None;
+    }
+}
+
+impl Default for YankReg {
+    fn default() -> Self {
+        Self::EMPTY
+    }
 }
 
 /// `do_put()` flags — upstream's anonymous enum in `register_defs.h`.

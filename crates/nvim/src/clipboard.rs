@@ -7,27 +7,24 @@
 //! (`eval_has_provider`/`eval_call_provider` run user code that may
 //! reenter this module).
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::api::private::helpers::cstr_to_string;
-use crate::eval::typval::{list_first, list_iter, list_last, list_len, tv_list_alloc};
-use crate::eval::{eval_call_provider, eval_has_provider};
+use crate::eval::eval_call_provider;
+use crate::eval::eval_has_provider;
+use crate::eval::typval::{list_iter, tv_list_alloc};
 use crate::global_cell::GlobalCell;
-use crate::memory::{xcalloc, xfree};
+use crate::memory::XString;
 use crate::message::{emsg, msg, redirecting};
 use crate::option::vars::cb_flags;
 use crate::options::{kOptCbFlagUnnamed, kOptCbFlagUnnamedplus};
 use crate::register::{
-    PLUS_REGISTER, STAR_REGISTER, free_register, get_y_previous, get_y_register, kMTBlockWise,
-    kMTCharWise, kMTLineWise, kMTUnknown, update_yankreg_width,
+    PLUS_REGISTER, Reg, STAR_REGISTER, get_y_previous, get_y_register, kMTBlockWise, kMTCharWise,
+    kMTLineWise, kMTUnknown,
 };
-use crate::types::{
-    AdditionalData, NUL, String_0, VAR_LIST, VAR_NUMBER, VAR_STRING, YankReg, ptrdiff_t, size_t,
-};
-use core::ffi::{c_char, c_int, c_void};
+use crate::types::{NUL, RegLines, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING, YankReg, ptrdiff_t};
+use core::ffi::{c_char, c_int};
 
 /// The message shown once when a clipboard register is used and no provider
 /// answers.
@@ -54,27 +51,20 @@ static CLIPBOARD: GlobalCell<ClipboardState> = GlobalCell::new(ClipboardState {
     didwarn: false,
 });
 
-/// Resolve register `*name` to a clipboard register, or null when the
-/// clipboard is not involved (not a clipboard register, no provider, or
+/// Resolve register `*name` to a clipboard register's slot, or `None` when
+/// the clipboard is not involved (not a clipboard register, no provider, or
 /// the access is deferred/satisfied by a pending update).
 ///
-/// # Safety
-///
-/// Main-thread editor call; may run the provider-detection vimscript.
-pub(crate) unsafe fn adjust_clipboard_name(
-    name: &mut c_int,
-    quiet: bool,
-    writing: bool,
-) -> *mut YankReg {
+/// May run the provider-detection Vimscript.
+pub(crate) fn adjust_clipboard_name(name: &mut c_int, quiet: bool, writing: bool) -> Option<usize> {
     let explicit_cb_reg = *name == '*' as c_int || *name == '+' as c_int;
     let implicit_cb_reg =
         *name == NUL && cb_flags.get() & (kOptCbFlagUnnamed | kOptCbFlagUnnamedplus) != 0;
     if !explicit_cb_reg && !implicit_cb_reg {
-        return core::ptr::null_mut();
+        return None;
     }
 
-    // SAFETY: main-thread editor call; the feature name is a literal. This
-    // runs user code, so no borrow of CLIPBOARD may be held across it.
+    // This runs user code, so no borrow of CLIPBOARD may be held across it.
     if !eval_has_provider(c"clipboard", false) {
         // Be silent inside a `:while`, a `:redir` and the like — but always
         // complain the first time. `redirecting` walks the message state,
@@ -88,20 +78,20 @@ pub(crate) unsafe fn adjust_clipboard_name(
             // Do not use emsg here: it may interrupt other logic.
             msg(MSG_NO_CLIP, 0);
         }
-        return core::ptr::null_mut();
+        return None;
     }
 
     if explicit_cb_reg {
         let star = *name == '*' as c_int;
         let (reg, flag) = if star {
-            (STAR_REGISTER as c_int, kOptCbFlagUnnamed)
+            (STAR_REGISTER, kOptCbFlagUnnamed)
         } else {
-            (PLUS_REGISTER as c_int, kOptCbFlagUnnamedplus)
+            (PLUS_REGISTER, kOptCbFlagUnnamedplus)
         };
         if writing && cb_flags.get() & flag != 0 {
             CLIPBOARD.with_mut(|st| st.needs_update = false);
         }
-        return get_y_register(reg);
+        return Some(reg as usize);
     }
 
     // Unnamed register with clipboard= routing to "* or "+.
@@ -109,12 +99,12 @@ pub(crate) unsafe fn adjust_clipboard_name(
     if writing && st.delay_update {
         // For "set" (copy), defer the provider call.
         CLIPBOARD.with_mut(|st| st.needs_update = true);
-        return core::ptr::null_mut();
+        return None;
     }
     if !writing && st.needs_update {
         // The pending write hasn't reached the provider yet; read our own
         // register instead of stale provider contents.
-        return core::ptr::null_mut();
+        return None;
     }
     let reg = if cb_flags.get() & kOptCbFlagUnnamedplus != 0 {
         *name = if cb_flags.get() & kOptCbFlagUnnamed != 0 && writing {
@@ -122,12 +112,12 @@ pub(crate) unsafe fn adjust_clipboard_name(
         } else {
             '+' as c_int
         };
-        PLUS_REGISTER as c_int
+        PLUS_REGISTER
     } else {
         *name = '*' as c_int;
-        STAR_REGISTER as c_int
+        STAR_REGISTER
     };
-    get_y_register(reg)
+    Some(reg as usize)
 }
 
 /// The register type a provider's one-character `regtype` names, or `None`
@@ -142,185 +132,155 @@ fn regtype_of(byte: u8) -> Option<c_int> {
     }
 }
 
-/// Fill `*target` with provider contents for register `name`. Returns
-/// false (with the register emptied) when the clipboard is not involved
-/// or the provider returned invalid data.
+/// What the provider answered, as a register: its lines and its type, or
+/// `Err(lines read so far)` for an answer that is not a list of strings (and
+/// an optional type).
 ///
-/// # Safety
-///
-/// Main-thread editor call; runs the clipboard provider.
-pub(crate) unsafe fn get_clipboard(
-    mut name: c_int,
-    target: &mut *mut YankReg,
-    quiet: bool,
-) -> bool {
-    // SAFETY: main-thread editor call.
-    let reg = unsafe { adjust_clipboard_name(&mut name, quiet, false) };
-    if reg.is_null() {
-        return false;
+/// The partial lines matter only as upstream's: its error path frees what it
+/// had filled in, which leaves the register unset either way.
+fn register_from_provider(result: &TypVal) -> Result<YankReg, bool> {
+    let not_a_list = |result: &TypVal| {
+        // A provider that answered 0 has said it failed: no message.
+        !(result.v_type() == VAR_NUMBER && result.number_or_zero() == 0)
+    };
+    if result.v_type() != VAR_LIST {
+        return Err(not_a_list(result));
     }
-    // SAFETY: a live register, about to be refilled.
-    unsafe { free_register(reg) };
+    let items = list_iter(result.list_ref()).as_slice();
+    let (lines, kind) = match items {
+        [lines, regtype] if lines.li_tv.v_type() == VAR_LIST => {
+            if regtype.li_tv.v_type() != VAR_STRING {
+                return Err(true);
+            }
+            let Some(regtype) = regtype.li_tv.string_ref() else {
+                return Err(true);
+            };
+            if regtype.as_bytes().len() > 1 {
+                return Err(true);
+            }
+            let Some(kind) = regtype_of(regtype.first()) else {
+                return Err(true);
+            };
+            (lines.li_tv.list_ref(), kind)
+        }
+        // The provider did not specify a regtype; inferred below.
+        _ => (result.list_ref(), kMTUnknown),
+    };
+
+    let mut reg = YankReg {
+        lines: RegLines::NONE,
+        kind,
+        width: 0,
+        // No timestamp: clipboard registers are not saved in the ShaDa file.
+        timestamp: 0,
+        extra: None,
+    };
+    let mut text = Vec::with_capacity(list_iter(lines).len());
+    for li in list_iter(lines) {
+        if li.li_tv.v_type() != VAR_STRING {
+            return Err(true);
+        }
+        text.push(XString::from_cstr(li.li_tv.string_cstr().unwrap_or(c"")));
+    }
+
+    if text.last().is_some_and(|last| last.is_empty()) {
+        // A known-to-be charwise yank might have a final linebreak, but
+        // otherwise there is no line after the final newline.
+        if reg.kind != kMTCharWise {
+            text.pop();
+            if reg.kind == kMTUnknown {
+                reg.kind = kMTLineWise;
+            }
+        }
+    } else if reg.kind == kMTUnknown {
+        reg.kind = kMTCharWise;
+    }
+    // A provider that answered no lines still set the register: upstream's
+    // array of none, which `@*` replays as nothing rather than failing.
+    reg.lines = RegLines::new(text);
+    reg.update_width();
+    Ok(reg)
+}
+
+/// Fill the clipboard register `name` resolves to with the provider's
+/// contents. `None` when the clipboard is not involved; otherwise the slot,
+/// and false when the provider answered nothing usable -- the register is
+/// then left unset.
+///
+/// Runs the clipboard provider.
+pub(crate) fn get_clipboard(mut name: c_int, quiet: bool) -> Option<(usize, bool)> {
+    let slot = adjust_clipboard_name(&mut name, quiet, false)?;
+    get_y_register(slot as c_int).write(YankReg::clear);
 
     let args = tv_list_alloc(1);
     let regname = name as c_char;
-    // SAFETY: a fresh list; `regname` outlives the append, and the provider
-    // call below owns `args` from here on.
-    unsafe { (*args.as_ptr()).push_bytes(Some(&[regname.cast_unsigned()])) };
+    args.edit().push_bytes(Some(&[regname.cast_unsigned()]));
     let result = eval_call_provider(c"clipboard", c"get", Some(args), false);
 
-    // Show a message on error unless the provider already indicated failure.
-    let mut errmsg = true;
-    // SAFETY: `result` is the provider's typval, whose list (if any) is
-    // alive for this block, and `reg` is the live register being filled.
-    'err: {
-        if result.v_type() != VAR_LIST {
-            if result.v_type() == VAR_NUMBER && result.number_or_zero() == 0 {
-                errmsg = false;
-            }
-            break 'err;
+    match register_from_provider(&result) {
+        Ok(reg) => {
+            get_y_register(slot as c_int).write(|slot| *slot = reg);
+            Some((slot, true))
         }
-        let res = result.list_or_null();
-        let lines;
-        if list_len(result.list_ref()) == 2
-            && unsafe { list_first(res.as_mut()).expect("two items").li_tv.v_type() } == VAR_LIST
-        {
-            lines = unsafe {
-                list_first(res.as_mut())
-                    .expect("two items")
-                    .li_tv
-                    .list_or_null()
-            };
-            if unsafe { list_last(res.as_mut()).expect("two items").li_tv.v_type() } != VAR_STRING {
-                break 'err;
+        Err(errmsg) => {
+            // Leave the register empty.
+            get_y_register(slot as c_int).write(|reg| {
+                reg.clear();
+                reg.timestamp = 0;
+            });
+            if errmsg {
+                emsg(c"clipboard: provider returned invalid data");
             }
-            let Some(regtype) = (unsafe {
-                list_last(res.as_mut())
-                    .expect("two items")
-                    .li_tv
-                    .string_ref()
-            }) else {
-                break 'err;
-            };
-            if regtype.as_bytes().len() > 1 {
-                break 'err;
-            }
-            match regtype_of(regtype.first()) {
-                Some(ty) => unsafe { (*reg).y_type = ty },
-                None => break 'err,
-            }
-        } else {
-            lines = res;
-            // The provider did not specify a regtype; inferred below.
-            unsafe { (*reg).y_type = kMTUnknown };
+            Some((slot, false))
         }
-
-        unsafe {
-            (*reg).y_array =
-                xcalloc(list_len(lines.as_ref()) as size_t, size_of::<String_0>()) as *mut String_0
-        };
-        unsafe { (*reg).y_size = list_len(lines.as_ref()) as size_t };
-        unsafe { (*reg).y_width = 0 };
-        unsafe { (*reg).additional_data = core::ptr::null_mut::<AdditionalData>() };
-        // No timestamp: clipboard registers are not saved in the ShaDa file.
-        unsafe { (*reg).timestamp = 0 };
-
-        let mut tv_idx: size_t = 0;
-        if !lines.is_null() {
-            for li in list_iter(unsafe { lines.as_ref() }) {
-                if li.li_tv.v_type() != VAR_STRING {
-                    break 'err;
-                }
-                let s = li.li_tv.string_cstr().unwrap_or(c"");
-                unsafe { *(*reg).y_array.add(tv_idx) = cstr_to_string(s.as_ptr()) };
-                tv_idx += 1;
-            }
-        }
-
-        if unsafe { (*reg).y_size } > 0
-            && unsafe { (*(*reg).y_array.add((*reg).y_size - 1)).is_empty() }
-        {
-            // A known-to-be charwise yank might have a final linebreak, but
-            // otherwise there is no line after the final newline.
-            if unsafe { (*reg).y_type } != kMTCharWise {
-                unsafe { xfree((*(*reg).y_array.add((*reg).y_size - 1)).data() as *mut c_void) };
-                unsafe { (*reg).y_size -= 1 };
-                if unsafe { (*reg).y_type } == kMTUnknown {
-                    unsafe { (*reg).y_type = kMTLineWise };
-                }
-            }
-        } else if unsafe { (*reg).y_type } == kMTUnknown {
-            unsafe { (*reg).y_type = kMTCharWise };
-        }
-
-        unsafe { update_yankreg_width(reg) };
-        *target = reg;
-        return true;
     }
-
-    // Error path: leave the register empty.
-    if !unsafe { (*reg).y_array }.is_null() {
-        for i in 0..unsafe { (*reg).y_size } {
-            unsafe { xfree((*(*reg).y_array.add(i)).data() as *mut c_void) };
-        }
-        unsafe { xfree((*reg).y_array as *mut c_void) };
-    }
-    unsafe { (*reg).y_array = core::ptr::null_mut() };
-    unsafe { (*reg).y_size = 0 };
-    unsafe { (*reg).additional_data = core::ptr::null_mut() };
-    unsafe { (*reg).timestamp = 0 };
-    if errmsg {
-        emsg(c"clipboard: provider returned invalid data");
-    }
-    *target = reg;
-    false
 }
 
 /// Send register `reg` to the provider as register `name`.
 ///
-/// # Safety
-///
-/// Main-thread editor call; runs the clipboard provider. `reg` must point
-/// to a valid register whose y_type is known.
-pub(crate) unsafe fn set_clipboard(mut name: c_int, reg: *mut YankReg) {
-    // SAFETY: main-thread editor call.
-    if unsafe { adjust_clipboard_name(&mut name, false, true) }.is_null() {
+/// Runs the clipboard provider. `reg`'s type must be known.
+pub(crate) fn set_clipboard(mut name: c_int, reg: Reg) {
+    if adjust_clipboard_name(&mut name, false, true).is_none() {
         return;
     }
-    // SAFETY: the caller's live register.
-    let reg = unsafe { &*reg };
 
-    // A line-wise or block-wise register carries a trailing empty line.
-    let trailing = reg.y_type != kMTCharWise;
-    let regtype: c_char = match reg.y_type {
-        kMTLineWise => b'V' as c_char,
-        kMTCharWise => b'v' as c_char,
-        kMTBlockWise => b'b' as c_char,
-        // kMTUnknown, which has no spelling the provider would accept.
-        // Upstream aborts here and so does this; every register handed over
-        // has been through `get_clipboard` or a yank, both of which decide
-        // the type.
-        _ => ::std::process::abort(),
-    };
-
-    // SAFETY: a fresh list; each register line outlives its append, and the
-    // provider call below owns the whole structure from here on.
-    let lines = tv_list_alloc(reg.y_size as ptrdiff_t + trailing as ptrdiff_t);
-    for i in 0..reg.y_size {
-        let line = unsafe { &*reg.y_array.add(i) };
-        unsafe { (*lines.as_ptr()).push_bytes(Some(line.as_bytes())) };
-    }
-    if trailing {
-        unsafe { (*lines.as_ptr()).push_bytes(None) };
-    }
+    let (lines, regtype) = reg.read(|reg| {
+        // A line-wise or block-wise register carries a trailing empty line.
+        let trailing = reg.kind != kMTCharWise;
+        let regtype: u8 = match reg.kind {
+            kMTLineWise => b'V',
+            kMTCharWise => b'v',
+            kMTBlockWise => b'b',
+            // kMTUnknown, which has no spelling the provider would accept.
+            // Upstream aborts here and so does this; every register handed
+            // over has been through `get_clipboard` or a yank, both of which
+            // decide the type.
+            _ => ::std::process::abort(),
+        };
+        let lines = tv_list_alloc(reg.lines.len() as ptrdiff_t + ptrdiff_t::from(trailing));
+        for line in reg.lines.iter() {
+            lines.edit().push_bytes(Some(line));
+        }
+        if trailing {
+            lines.edit().push_bytes(None);
+        }
+        (lines, regtype)
+    });
 
     let args = tv_list_alloc(3);
-    let into = args.as_ptr();
-    unsafe { (*into).push_list(Some(lines)) };
-    unsafe { (*into).push_bytes(Some(&[regtype.cast_unsigned()])) };
-    let regname = [name as c_char];
-    unsafe { (*into).push_bytes(Some(&[regname[0].cast_unsigned()])) };
+    args.edit().push_list(Some(lines));
+    args.edit().push_bytes(Some(&[regtype]));
+    let regname = name as c_char;
+    args.edit().push_bytes(Some(&[regname.cast_unsigned()]));
     eval_call_provider(c"clipboard", c"set", Some(args), true);
+}
+
+/// Flush a pending update of the unnamed register to the provider.
+fn flush_unnamed() {
+    // A pending update means something was written, so `""` points at it.
+    if let Some(reg) = get_y_previous() {
+        set_clipboard(NUL, reg);
+    }
 }
 
 /// Start a batch: defer provider updates until the matching
@@ -346,8 +306,7 @@ pub(crate) fn end_batch_changes() {
         core::mem::replace(&mut st.needs_update, false)
     });
     if update {
-        // SAFETY: main-thread editor call, flushing the unnamed register.
-        unsafe { set_clipboard(NUL, get_y_previous()) };
+        flush_unnamed();
     }
 }
 
@@ -361,8 +320,7 @@ pub(crate) fn save_batch_count() -> c_int {
         (save, core::mem::replace(&mut st.needs_update, false))
     });
     if update {
-        // SAFETY: main-thread editor call, flushing the unnamed register.
-        unsafe { set_clipboard(NUL, get_y_previous()) };
+        flush_unnamed();
     }
     save_count
 }

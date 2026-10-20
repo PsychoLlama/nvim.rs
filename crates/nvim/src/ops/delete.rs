@@ -179,9 +179,10 @@ pub unsafe fn op_delete(op: *mut OpArg) -> Result<(), NotDeleted> {
 /// autocommand, which is upstream's behaviour and the reason `reg` is carried
 /// rather than each branch handling its own.
 fn save_deleted_text(op: Op) -> bool {
-    // SAFETY: a live `OpArg` of the current buffer, and every register
-    // written is one `get_yank_register`/`get_y_register` just handed back.
-    let mut reg: *mut YankReg = ::core::ptr::null_mut();
+    // A copy of the operator: TextYankPost runs user code, which must not
+    // find the pending operator borrowed.
+    let arg: OpArg = *op;
+    let mut reg: Option<crate::register::Reg> = None;
     let mut did_yank = false;
 
     if op.regname != 0 {
@@ -189,10 +190,11 @@ fn save_deleted_text(op: Op) -> bool {
             beep_flush();
             return false;
         }
-        reg = unsafe { get_yank_register(op.regname, YREG_YANK as c_int) };
+        let named = get_yank_register(op.regname, YREG_YANK as c_int);
         // Yank without a message.
         let append = is_append_register(op.regname);
-        unsafe { op_yank_reg(op.raw(), false, reg, append) };
+        op_yank_reg(&arg, false, named, append);
+        reg = Some(named);
         did_yank = true;
     }
 
@@ -200,25 +202,27 @@ fn save_deleted_text(op: Op) -> bool {
     // line break or a specific operator was used (Vi compatible).
     if op.motion_type == kMTLineWise || op.line_count > 1 || op.use_reg_one {
         shift_delete_registers(is_append_register(op.regname));
-        reg = get_y_register(1);
-        unsafe { op_yank_reg(op.raw(), false, reg, false) };
+        let one = get_y_register(1);
+        op_yank_reg(&arg, false, one, false);
+        reg = Some(one);
         did_yank = true;
     }
 
     // Into the small-delete register when no register was named and the
     // delete is within one line.
     if op.regname == 0 && op.motion_type != kMTLineWise && op.line_count == 1 {
-        reg = unsafe { get_yank_register('-' as c_int, YREG_YANK as c_int) };
-        unsafe { op_yank_reg(op.raw(), false, reg, false) };
+        let small = get_yank_register('-' as c_int, YREG_YANK as c_int);
+        op_yank_reg(&arg, false, small, false);
+        reg = Some(small);
         did_yank = true;
     }
 
     if did_yank || op.regname == 0 {
-        if reg.is_null() {
-            unsafe { abort() };
-        }
-        unsafe { crate::clipboard::set_clipboard(op.regname, reg as *mut _) };
-        unsafe { do_autocmd_textyankpost(op.raw(), reg) };
+        let Some(reg) = reg else {
+            std::process::abort();
+        };
+        crate::clipboard::set_clipboard(op.regname, reg);
+        do_autocmd_textyankpost(&arg, reg);
     }
     true
 }

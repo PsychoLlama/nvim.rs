@@ -9,8 +9,7 @@
 //! Every preview is cut off at the window width rather than wrapped, and
 //! `os_breakcheck` runs per register so that CTRL-C stops a long listing.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 #![deny(
@@ -21,105 +20,73 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::charset::byte2cells;
 use crate::cstr;
+use crate::mbyte::{c_cells_at, c_cluster_len};
 use crate::memory::XString;
 use crate::strings::has_char;
 use crate::winlayer::Buf;
-use core::ffi::{c_char, c_int};
-use core::ptr;
+use core::ffi::{CStr, c_int};
 
 use super::*;
-use crate::types::NUL;
+
+/// Print `text`'s characters, up to its first NUL, for as long as they fit in
+/// the `n` cells left, which it counts down -- below zero when a character
+/// did not fit.
+fn put_cut(text: &[u8], n: &mut c_int, skip_esc: bool) {
+    let text = cstr::until_nul(text);
+    let mut at = 0;
+    while at < text.len() {
+        let rest = &text[at..];
+        // A recording's trailing <Esc> is noise, not content.
+        if skip_esc && rest.len() == 1 && c_int::from(rest[0]) == ESC {
+            break;
+        }
+        // As `ptr2cells` measures the C string `text` is the bytes of.
+        *n -= if rest[0] >= 0x80 {
+            c_cells_at(rest)
+        } else {
+            byte2cells(c_int::from(rest[0]))
+        };
+        if *n < 0 {
+            break;
+        }
+        // The character's bytes, never less than one.
+        let len = c_cluster_len(rest).max(1);
+        msg_display_bytes(&rest[..len], 0, false);
+        at += len;
+    }
+}
 
 /// Print `p` as one line of `:registers`, stopping at the window width.
-///
-/// # Safety
-/// `p` must be NUL-terminated.
-unsafe fn dis_msg(mut p: *const c_char, skip_esc: bool) {
-    let mut n = Columns.get() - 6;
-    loop {
-        // SAFETY: `p` starts at the caller's NUL-terminated string and only
-        // ever steps over a whole character, so it stays inside it.
-        let c = unsafe { c_int::from(*p) };
-        // A recording's trailing <Esc> is noise, not content.  The `c == ESC`
-        // test in front is what proves `p.add(1)` still inside the string.
-        // SAFETY: as above.
-        if c == NUL || (c == ESC && skip_esc && unsafe { c_int::from(*p.add(1)) } == NUL) {
-            break;
-        }
-        // SAFETY: `p` points at a character of a NUL-terminated string.
-        n -= unsafe { ptr2cells(p) };
-        if n < 0 {
-            break;
-        }
-        // SAFETY: as above; the answer covers one whole character, and is
-        // never less than one byte.
-        let l = unsafe { utfc_ptr2len(p) }.max(1);
-        // SAFETY: `l` bytes from `p` are that character.
-        msg_display_bytes(
-            unsafe { cstr::slice_at(p, l.cast_unsigned() as usize) },
-            0,
-            false,
-        );
-        // SAFETY: stepping over a whole character stays within the string.
-        p = unsafe { p.offset(l as isize) };
-    }
+fn dis_msg(p: &[u8], skip_esc: bool) {
+    put_cut(p, &mut (Columns.get() - 6), skip_esc);
     os_breakcheck();
 }
 
 /// Print one computed register's line, if it has content and the `:registers`
 /// argument asked for it.
-///
-/// # Safety
-/// `text` must be null or NUL-terminated, and `label` a five-byte prefix.
-unsafe fn dis_special(
-    arg: *mut c_char,
-    name: c_int,
-    label: *const c_char,
-    text: *mut c_char,
-    skip_esc: bool,
-) {
-    if text.is_null() {
+fn dis_special(arg: Option<&CStr>, name: c_int, label: &CStr, text: Option<&CStr>, skip_esc: bool) {
+    let Some(text) = text else {
+        return;
+    };
+    if arg.is_some_and(|arg| !has_char(arg, name)) {
         return;
     }
-    // SAFETY: `arg`, tested non-null, is the NUL-terminated `:registers`
-    // argument.
-    if !arg.is_null() && !has_char(unsafe { cstr::at(arg) }, name) {
+    if got_int.get() || message_filtered(text) {
         return;
     }
-    // SAFETY: `text` is NUL-terminated, tested non-null above.
-    if got_int.get() || message_filtered(unsafe { cstr::at(text) }) {
-        return;
-    }
-    // SAFETY: `label` is the caller's NUL-terminated prefix.
-    msg_str(unsafe { cstr::at(label) });
-    // SAFETY: `text` is NUL-terminated.
-    unsafe { dis_msg(text, skip_esc) };
+    msg_str(label);
+    dis_msg(text.to_bytes(), skip_esc);
 }
 
-/// Print one slot of `y_regs`.
-///
-/// # Safety
-/// `yb` must point at a register whose `y_array` holds `y_size` strings.
-unsafe fn dis_register(yb: *mut YankReg, name: c_int, type_0: c_int, hl_id: c_int) {
-    // Both of these re-read the register every time, as the transpiled code
-    // did: printing can run `:redir`, which writes into a register.
-    //
-    // SAFETY (both): the caller promises `yb` is a live register whose
-    // `y_array` holds `y_size` NUL-terminated strings, so any index below
-    // `y_size` names one of them.
-    let size = || unsafe { (*yb).y_size };
-    let line = |j: size_t| unsafe { (*(*yb).y_array.add(j)).data() };
+/// Print one slot of `y_regs`, as it was when the listing reached it.
+fn dis_register(yb: &YankReg, name: c_int, type_0: c_int, hl_id: c_int) {
+    let lines = yb.lines.as_slice();
 
     // 'msgfilter': show the register if any of its lines survives.
-    let mut do_show = false;
-    let mut j: size_t = 0;
-    while !do_show && j < size() {
-        // SAFETY: `j` is below `y_size`, so the line is NUL-terminated.
-        do_show = !message_filtered(unsafe { cstr::at(line(j)) });
-        j = j.wrapping_add(1);
-    }
-    if !do_show && size() != 0 {
+    let do_show = lines.iter().any(|line| !message_filtered(line.as_cstr()));
+    if !do_show && !lines.is_empty() {
         return;
     }
 
@@ -134,39 +101,17 @@ unsafe fn dis_register(yb: *mut YankReg, name: c_int, type_0: c_int, hl_id: c_in
     // The content, cut off at the window width. A line break inside the
     // register shows as `^J`.
     let mut n = Columns.get() - 11;
-    let mut j: size_t = 0;
-    while j < size() && n > 1 {
+    for (j, line) in lines.iter().enumerate() {
+        if n <= 1 {
+            break;
+        }
         if j != 0 {
             msg_str_hl(c"^J", hl_id, false);
             n -= 2;
         }
-        let mut p = line(j);
-        loop {
-            // SAFETY: `p` starts at a NUL-terminated line of the register and
-            // only ever steps over a whole character.
-            if unsafe { c_int::from(*p) } == NUL {
-                break;
-            }
-            // SAFETY: as above.
-            n -= unsafe { ptr2cells(p) };
-            if n < 0 {
-                break;
-            }
-            // SAFETY: as above; the answer covers one whole character.
-            let clen = unsafe { utfc_ptr2len(p) };
-            // SAFETY: `clen` bytes from `p` are that character.
-            msg_display_bytes(
-                unsafe { cstr::slice_at(p, clen.cast_unsigned() as usize) },
-                0,
-                false,
-            );
-            // SAFETY: stepping over a whole character stays within the line.
-            p = unsafe { p.offset(clen as isize) };
-        }
-        j = j.wrapping_add(1);
+        put_cut(line, &mut n, false);
     }
-    // SAFETY: `yb` is still the caller's live register.
-    if n > 1 && unsafe { (*yb).y_type } == kMTLineWise {
+    if n > 1 && yb.kind == kMTLineWise {
         msg_str_hl(c"^J", hl_id, false);
     }
 }
@@ -178,16 +123,10 @@ unsafe fn dis_register(yb: *mut YankReg, name: c_int, type_0: c_int, hl_id: c_in
 pub fn ex_display(excmd: &mut ExArg) {
     // A copy of the filter: listing a register may run the clipboard
     // provider.
-    let mut filter = excmd.line.arg().to_vec();
-    filter.push(0);
-    let mut arg = filter.as_mut_ptr().cast::<::core::ffi::c_char>();
-    // SAFETY: as above, and tested non-null.
-    if !arg.is_null() && unsafe { c_int::from(*arg) } == NUL {
-        arg = ::core::ptr::null_mut();
-    }
+    let filter = XString::from_bytes(excmd.line.arg());
+    let arg = (!filter.is_empty()).then(|| filter.as_cstr());
     let hl_id = HLF_8;
 
-    // SAFETY (both): main thread, printing NUL-terminated literals.
     msg_ext_set_kind(c"list_cmd");
     msg_ext_skip_flush.set(true);
     msg_title(gettext(c"\nType Name Content"));
@@ -197,8 +136,7 @@ pub fn ex_display(excmd: &mut ExArg) {
     let mut i = -1;
     while i < NUM_REGISTERS && !got_int.get() {
         let name = get_register_name(i);
-        // SAFETY: `arg` is null or the NUL-terminated `:registers` argument.
-        if arg.is_null() || has_char(unsafe { cstr::at(arg) }, name) {
+        if arg.is_none_or(|arg| has_char(arg, name)) {
             // Before `get_clipboard` below, because for `"*`/`"+` this
             // queries the provider itself, and upstream's order of the
             // two queries is what the messages depend on.
@@ -212,18 +150,20 @@ pub fn ex_display(excmd: &mut ExArg) {
             } else {
                 get_y_register(i)
             };
-            // SAFETY: main thread, with a live slot to fill in; this is the
-            // call that may run the clipboard provider's Lua.
-            unsafe { clipboard::get_clipboard(name, &mut yb, true) };
+            // This is the call that may run the clipboard provider's Lua.
+            if let Some((slot, _)) = clipboard::get_clipboard(name, true) {
+                yb = Reg::Slot(slot);
+            }
 
             // Don't show the register `:redir` is writing into: it would
             // record its own listing.
             let redir_target = name == mb_tolower(redir_reg.get())
-                || redir_reg.get() == '"' as c_int && yb == get_y_previous();
-            // SAFETY: `yb` is a live register slot.
-            if !redir_target && !unsafe { (*yb).y_array }.is_null() {
-                // SAFETY: a live slot whose `y_array` holds `y_size` strings.
-                unsafe { dis_register(yb, name, type_0, hl_id) };
+                || redir_reg.get() == '"' as c_int && Some(yb) == get_y_previous();
+            // A share of the lines: printing can run `:redir`, which writes
+            // a register.
+            let reg = yb.snapshot();
+            if !redir_target && reg.lines.is_set() {
+                dis_register(&reg, name, type_0, hl_id);
                 os_breakcheck();
             }
         }
@@ -231,32 +171,36 @@ pub fn ex_display(excmd: &mut ExArg) {
     }
 
     // The registers with no slot, in the order `:registers` documents.
-    //
-    // SAFETY: every `text` below is null or a NUL-terminated string, and
-    // every `label` one of this module's five-byte literals.
-    let special = |name, label, text, skip_esc| unsafe {
+    let special = |name, label, text: Option<&CStr>, skip_esc| {
         dis_special(arg, name, label, text, skip_esc);
     };
     let insert = get_last_insert();
-    special('.' as c_int, c"\n  c  \".   ".as_ptr(), insert.data(), true);
+    let insert =
+        (!insert.is_null()).then(|| XString::from_bytes(cstr::until_nul(insert.as_bytes())));
+    special(
+        '.' as c_int,
+        c"\n  c  \".   ",
+        insert.as_ref().map(XString::as_cstr),
+        true,
+    );
     // A copy: listing it runs the message machinery.
-    let mut last = last_cmdline.with(Clone::clone);
+    let last = last_cmdline.with(Clone::clone);
     special(
         ':' as c_int,
-        c"\n  c  \":   ".as_ptr(),
-        last.as_mut().map_or(ptr::null_mut(), XString::as_mut_ptr),
+        c"\n  c  \":   ",
+        last.as_ref().map(XString::as_cstr),
         false,
     );
+    let current = Buf::current().name.shown().map(XString::from_cstr);
     special(
         '%' as c_int,
-        c"\n  c  \"%   ".as_ptr(),
-        Buf::current().name.shown_ptr(),
+        c"\n  c  \"%   ",
+        current.as_ref().map(XString::as_cstr),
         false,
     );
 
     // `"#` is listed under the `%` argument, as upstream has it.
-    // SAFETY: `arg` is null or the NUL-terminated `:registers` argument.
-    let want_alt = arg.is_null() || has_char(unsafe { cstr::at(arg) }, '%' as c_int);
+    let want_alt = arg.is_none_or(|arg| has_char(arg, '%' as c_int));
     if want_alt && !got_int.get() {
         // A copy: the filter runs a regexp and the display the message
         // machinery.
@@ -265,25 +209,24 @@ pub fn ex_display(excmd: &mut ExArg) {
             && !message_filtered(fname.as_cstr())
         {
             msg_str(c"\n  c  \"#   ");
-            // SAFETY: a NUL-terminated name, this frame's copy.
-            unsafe { dis_msg(fname.as_ptr().cast_mut(), false) };
+            dis_msg(&fname, false);
         }
     }
 
     // A copy, as the expression below.
-    let mut last = last_search_pat();
+    let last = last_search_pat();
     special(
         '/' as c_int,
-        c"\n  c  \"/   ".as_ptr(),
-        last.as_mut().map_or(ptr::null_mut(), XString::as_mut_ptr),
+        c"\n  c  \"/   ",
+        last.as_ref().map(XString::as_cstr),
         false,
     );
     // A copy: listing a register may run a message callback that sets it.
-    let mut expr = expr_line.with(Clone::clone);
+    let expr = expr_line.with(Clone::clone);
     special(
         '=' as c_int,
-        c"\n  c  \"=   ".as_ptr(),
-        expr.as_mut().map_or(ptr::null_mut(), XString::as_mut_ptr),
+        c"\n  c  \"=   ",
+        expr.as_ref().map(XString::as_cstr),
         false,
     );
 

@@ -8,12 +8,12 @@
 //! follows still lines up; and the buffer may run out of lines, in which case
 //! empty ones are appended.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::cstr;
+use crate::cstr::{self, until_nul};
+use crate::mbyte::{c_char_info, c_next_cluster, head_off};
 use crate::winlayer::{Buf, Win};
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::c_int;
 
 use super::Put;
 use crate::register::*;
@@ -35,33 +35,24 @@ struct Landing {
     shortline: bool,
 }
 
-/// Walk `oldp` to screen column `col` and work out what has to happen there.
-///
-/// # Safety
-/// `oldp` must be the cursor line, NUL-terminated.
-unsafe fn land_block(oldp: *mut c_char, col: ColNr) -> Landing {
+/// Walk `line`, the cursor line, to screen column `col` and work out what has
+/// to happen there.
+fn land_block(line: &[u8], col: ColNr) -> Landing {
     let (win, lnum) = (Win::current(), Win::current().w_cursor.lnum);
-    let (mut csarg, cstype) = CharsizeArg::new(win, lnum, unsafe { cstr::bytes_at(oldp) });
+    let (mut csarg, cstype) = CharsizeArg::new(win, lnum, line);
 
     // Walk to the block's screen column, or to the end of the line.
-    //
-    // SAFETY (all four): `ci` starts at `oldp` and `utfc_next` steps over one
-    // whole character at a time, so it stays inside the NUL-terminated line;
-    // the `!= NUL` test in front of the walk is what stops it there.
-    let mut ci = unsafe { utf_ptr2str_char_info(oldp) };
+    let mut at = 0;
+    let mut chr = c_char_info(line, 0);
     let (mut vcol, mut incr) = (0, 0);
-    while vcol < col && unsafe { c_int::from(*ci.ptr) } != NUL {
-        let at = ci.ptr.addr() - oldp.addr();
-        incr = win_charsize(cstype, vcol, at, ci.chr.value, &mut csarg).width;
+    while vcol < col && !(chr.value == 0 && cstr::byte_at(line, at) == 0) {
+        incr = win_charsize(cstype, vcol, at, chr.value, &mut csarg).width;
         vcol += incr;
-        ci = unsafe { utfc_next(ci) };
+        (at, chr) = c_next_cluster(line, at, chr);
     }
-    let ptr = ci.ptr;
 
-    // SAFETY: `ptr` is a position in `oldp`'s NUL-terminated line, so the
-    // distance back to `oldp` is a column of it and the byte there readable.
-    let textcol = unsafe { ptr.offset_from(oldp) } as ColNr;
-    let ends_here = vcol == col && unsafe { c_int::from(*ptr) } == NUL;
+    let textcol = ColNr::try_from(at).expect("a column of the line");
+    let ends_here = vcol == col && cstr::byte_at(line, at) == 0;
     let mut land = Landing {
         textcol,
         startspaces: 0,
@@ -81,10 +72,9 @@ unsafe fn land_block(oldp: *mut c_char, col: ColNr) -> Landing {
         land.startspaces = incr - land.endspaces;
         land.textcol -= 1;
         land.delcount = 1;
-        // SAFETY (both): `textcol` is a byte offset into `oldp`'s line, so
-        // the head of the character there is one of its bytes too.
-        land.textcol -= unsafe { utf_head_off(oldp, oldp.offset(land.textcol as isize)) };
-        if unsafe { c_int::from(*oldp.offset(land.textcol as isize)) } != TAB {
+        let back = head_off(line, land.textcol as usize);
+        land.textcol -= ColNr::try_from(back).expect("a column of the line");
+        if c_int::from(cstr::byte_at(line, land.textcol as usize)) != TAB {
             land.delcount = 0;
             land.endspaces = 0;
         }
@@ -92,23 +82,16 @@ unsafe fn land_block(oldp: *mut c_char, col: ColNr) -> Landing {
     land
 }
 
-/// How many spaces one line of the block needs on its right to reach the
-/// block's full width.
-///
-/// # Safety
-/// `line` must be NUL-terminated.
-unsafe fn right_padding(line: *mut c_char, y_width: c_int) -> c_int {
-    // SAFETY: `line` is NUL-terminated.
-    let (mut csarg, cstype) = CharsizeArg::new(Win::current(), 0, unsafe { cstr::bytes_at(line) });
-    // SAFETY (all four): `ci` starts at `line` and `utfc_next` steps over one
-    // whole character at a time, so it stays inside it; the `!= NUL` test in
-    // front of the walk is what stops it at the end.
-    let mut ci = unsafe { utf_ptr2str_char_info(line) };
+/// How many spaces `line`, one line of the block, needs on its right to
+/// reach the block's full width.
+fn right_padding(line: &[u8], y_width: c_int) -> c_int {
+    let (mut csarg, cstype) = CharsizeArg::new(Win::current(), 0, line);
+    let mut at = 0;
+    let mut chr = c_char_info(line, 0);
     let mut spaces = y_width + 1;
-    while unsafe { c_int::from(*ci.ptr) } != NUL {
-        let at = ci.ptr.addr() - line.addr();
-        spaces -= win_charsize(cstype, 0, at, ci.chr.value, &mut csarg).width;
-        ci = unsafe { utfc_next(ci) };
+    while !(chr.value == 0 && cstr::byte_at(line, at) == 0) {
+        spaces -= win_charsize(cstype, 0, at, chr.value, &mut csarg).width;
+        (at, chr) = c_next_cluster(line, at, chr);
     }
     spaces.max(0)
 }
@@ -129,11 +112,9 @@ impl Put {
             } else {
                 col = Win::current().vcol_span(Win::current().cursor()).1;
             }
-            // Move to the start of the next character.
-            //
-            // SAFETY: the cursor is on a valid line and `c` is not the NUL
-            // that ends it, so there is a character there to step over.
-            Win::current().w_cursor.col += unsafe { utfc_ptr2len(get_cursor_pos_ptr()) };
+            // Move to the start of the next character: `c` is not the NUL
+            // that ends the line, so there is one to step over.
+            Win::current().w_cursor.col += super::cursor_char_len();
             col += 1;
         } else {
             (col, endcol2) = Win::current().vcol_span(Win::current().cursor());
@@ -190,24 +171,20 @@ impl Put {
             lines_appended = 1;
         }
 
-        // SAFETY (both): the cursor is now on a line of the buffer, so this
-        // is its NUL-terminated text and that text's length.
-        let oldp = get_cursor_line_ptr();
-        let oldlen = get_cursor_line_len();
-        // SAFETY: `oldp` is the cursor line, NUL-terminated.
-        let land = unsafe { land_block(oldp, col) };
-        *textcol = land.textcol;
-
-        // SAFETY (both): `i` is below `y_size`, so `y_array`'s `i`th string is
-        // there, NUL-terminated and carrying its own length.
-        let yanklen = unsafe { (*self.y_array.add(i)).len() } as c_int;
-        let put = unsafe { (*self.y_array.add(i)).data() };
+        let lnum = Win::current().w_cursor.lnum;
+        let put = &self.lines[i];
+        let yanklen = c_int::try_from(put.len()).unwrap_or(c_int::MAX);
         let spaces = if self.flags & PUT_BLOCK_INNER as c_int == 0 {
-            // SAFETY: `put` is NUL-terminated.
-            unsafe { right_padding(put, self.y_width) }
+            // Measured as the C string the line is.
+            right_padding(until_nul(put), self.width)
         } else {
             0
         };
+
+        let mut lines = Buf::current().lines();
+        let old = lines.line(lnum);
+        let land = land_block(old, col);
+        *textcol = land.textcol;
 
         // The whole insert is `count` copies of the line plus its padding.
         if yanklen + spaces != 0
@@ -216,55 +193,35 @@ impl Put {
             emsg(gettext(e_resulting_text_too_long));
             return false;
         }
+        let pad = |n: c_int| usize::try_from(n).expect("a count of spaces");
         *totlen = (self.count as size_t)
             .wrapping_mul((yanklen + spaces) as size_t)
             .wrapping_add(land.startspaces as size_t)
             .wrapping_add(land.endspaces as size_t);
-        let room = (*totlen).wrapping_add(oldlen as size_t).wrapping_add(1);
-        // SAFETY: `room` is the whole new line and its NUL.
-        let newp = unsafe { xmalloc(room) } as *mut c_char;
 
         // Lay the new line out: the head of the old line, the block's left
         // padding, `count` copies of the block's line each with its own right
         // padding, the spaces replacing the back half of a split tab, and
         // finally the rest of the old line.
-        //
-        // SAFETY: `newp` owns exactly the `totlen + oldlen + 1` bytes the runs
-        // below write; `oldp` is `oldlen` bytes plus a NUL and `textcol +
-        // delcount` is within it; and `put` is `yanklen` bytes.
-        let mut ptr = newp;
-        unsafe {
-            ptr.cast::<u8>()
-                .copy_from(oldp.cast(), land.textcol as size_t);
-            ptr = ptr.offset(land.textcol as isize);
-            ptr.cast::<u8>()
-                .write_bytes(b' ', land.startspaces as size_t);
-            ptr = ptr.offset(land.startspaces as isize);
-
-            for j in 0..self.count {
-                ptr.cast::<u8>().copy_from(put.cast(), yanklen as size_t);
-                ptr = ptr.offset(yanklen as isize);
-                // The block's right padding only goes in if there is text
-                // behind it; otherwise it would be trailing white space.
-                if (j < self.count - 1 || !land.shortline) && spaces > 0 {
-                    ptr.cast::<u8>().write_bytes(b' ', spaces as size_t);
-                    ptr = ptr.offset(spaces as isize);
-                } else {
-                    *totlen -= spaces as size_t;
-                }
+        let textcol = pad(land.textcol);
+        let mut newline = Vec::with_capacity(*totlen + old.len() + 1);
+        newline.extend_from_slice(&old[..textcol]);
+        newline.resize(newline.len() + pad(land.startspaces), b' ');
+        for j in 0..self.count {
+            newline.extend_from_slice(put);
+            // The block's right padding only goes in if there is text
+            // behind it; otherwise it would be trailing white space.
+            if (j < self.count - 1 || !land.shortline) && spaces > 0 {
+                newline.resize(newline.len() + pad(spaces), b' ');
+            } else {
+                *totlen -= spaces as size_t;
             }
-
-            ptr.cast::<u8>().write_bytes(b' ', land.endspaces as size_t);
-            ptr = ptr.offset(land.endspaces as isize);
-
-            // The rest of the old line, including its NUL.
-            let columns = oldlen - land.textcol - land.delcount + 1;
-            debug_assert!(columns >= 0);
-            let rest = oldp.offset((land.textcol + land.delcount) as isize) as *const c_void;
-            ptr.cast::<u8>().copy_from(rest.cast(), columns as size_t);
         }
-        // SAFETY: `newp` is a NUL-terminated line the buffer takes over.
-        let _ = unsafe { ml_replace(Win::current().w_cursor.lnum, newp, false) };
+        newline.resize(newline.len() + pad(land.endspaces), b' ');
+        // The rest of the old line.
+        newline.extend_from_slice(&old[textcol + pad(land.delcount)..]);
+        // The buffer takes the line as the C string it is, to its first NUL.
+        let _ = ml_replace_owned(lnum, XString::from_bytes(until_nul(&newline)));
 
         let buf = Buf::current();
         let at = Win::current().w_cursor.lnum - 1;
@@ -287,14 +244,14 @@ impl Put {
 
         let mut textcol: ColNr = 0;
         let mut totlen: size_t = 0;
-        for i in 0..self.y_size {
+        for i in 0..self.lines.len() {
             if !self.blockwise_line(i, col, &mut textcol, &mut totlen) {
                 break;
             }
         }
 
-        let to = Buf::current().b_op_start.lnum + self.y_size as LineNr - self.nr_lines;
-        // SAFETY: a live buffer; the range is the lines the put rewrote.
+        let to = Buf::current().b_op_start.lnum + self.lines.len() as LineNr - self.nr_lines;
+        // The range is the lines the put rewrote.
         changed_lines(Buf::current(), lnum, 0, to, self.nr_lines, true);
 
         Buf::current().b_op_start = Win::current().w_cursor;
@@ -308,8 +265,6 @@ impl Put {
             Win::current().w_cursor = Buf::current().b_op_end;
             Win::current().w_cursor.col += 1;
             // In Insert mode the cursor may be past the NUL.
-            //
-            // SAFETY: the cursor is on a line of the buffer.
             let len = get_cursor_line_len();
             Win::current().w_cursor.col = Win::current().w_cursor.col.min(len);
         } else {

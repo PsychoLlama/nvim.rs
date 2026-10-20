@@ -20,8 +20,9 @@ use crate::api::private::validate::{err_bad_number, err_bad_value, err_expected}
 use crate::cstr;
 use crate::getchar::PastePhase;
 use crate::guard::Suppress;
+use crate::memory::XString;
 use crate::normal::{set_visual_active, visual_active};
-use crate::types::{NUL, PUT_CURSEND, Terminal};
+use crate::types::{PUT_CURSEND, RegLines, Terminal};
 use crate::winlayer::Buf;
 
 /// The terminal the current buffer shows, if it shows one.
@@ -114,26 +115,15 @@ pub fn nvim_put(
     follow: Boolean,
 ) -> Result<(), Error> {
     let mut error = Error::none();
-    let mut reg = YankReg {
-        y_array: ::core::ptr::null_mut::<String_0>(),
-        y_size: 0,
-        y_type: kMTCharWise,
-        y_width: 0,
-        timestamp: 0,
-        additional_data: ::core::ptr::null_mut::<AdditionalData>(),
-    };
-    // SAFETY: `reg` is this frame's own, and `type_0` names its own bytes.
-    let typed = unsafe { prepare_yankreg_from_object(&raw mut reg, &type_0, lines.len()) };
-    if !typed {
+    let mut reg = YankReg::EMPTY;
+    if !prepare_yankreg_from_object(&mut reg, type_0.as_bytes()) {
         error = err_bad_value(c"type", type_0.as_cstr());
         return ().reported(error);
     }
     if lines.is_empty() {
         return ().reported(error);
     }
-    // The register's lines, which this frame owns and releases once the put
-    // is done: the register only borrows them.
-    let mut owned: Vec<String_0> = Vec::with_capacity(lines.len());
+    let mut owned: Vec<XString> = Vec::with_capacity(lines.len());
     for i in 0..lines.len() {
         let item = &lines[i];
         let Some(line) = item.as_string() else {
@@ -141,34 +131,24 @@ pub fn nvim_put(
             error = err_expected(c"line", want, Some(got));
             return ().reported(error);
         };
-        let nul = ::core::ffi::c_char::try_from(NUL).expect("NUL is zero");
-        let nl = ::core::ffi::c_char::try_from(NL).expect("NL is an ASCII byte");
         // A NUL in an API string stands for a newline, as it does in every
         // buffer line.
-        let copy = line.clone();
-        // SAFETY: `copy` owns its `len()` bytes.
-        unsafe {
-            memchrsub(
-                copy.data().cast::<::core::ffi::c_void>(),
-                nul,
-                nl,
-                copy.len(),
-            )
-        };
-        owned.push(copy);
+        let text = line
+            .as_bytes()
+            .iter()
+            .map(|&b| if b == 0 { b'\n' } else { b })
+            .collect();
+        owned.push(XString::from_vec(text));
     }
-    reg.y_array = owned.as_mut_ptr();
-    reg.y_size = owned.len();
-    // SAFETY: `reg` is this frame's own, now holding `y_size` lines.
-    unsafe { finish_yankreg_from_object(&raw mut reg, false) };
+    reg.lines = RegLines::new(owned);
+    finish_yankreg_from_object(&mut reg, false);
     let dir = if after { FORWARD } else { BACKWARD };
     let flags = if follow { PUT_CURSEND.cast_signed() } else { 0 };
     api_try(|| {
         // `do_put` can leave Visual mode; the caller's is put back.
         let visual_was_active = visual_active();
         let silenced = Suppress::messages();
-        // SAFETY: `reg` is this frame's own, filled in above.
-        unsafe { do_put(0, &raw mut reg, dir, 1, flags) };
+        do_put(0, Some(&reg), dir, 1, flags);
         drop(silenced);
         set_visual_active(visual_was_active);
     })?;

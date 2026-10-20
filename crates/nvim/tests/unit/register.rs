@@ -16,10 +16,9 @@
 
 #![cfg(not(miri))]
 
-use std::ffi::{CStr, c_char, c_int};
+use std::ffi::c_int;
 
 use crate::support::{Probe, Sandbox};
-use neovim::memory::xfree;
 use neovim::register::get_spec_reg;
 
 /// Every register these cases write, cleared on the way in and out.
@@ -210,8 +209,7 @@ fn the_computed_registers() {
     fresh(&fx);
 }
 
-/// `get_spec_reg` directly: the answer, whether the caller owns it, and the
-/// registers it does not answer.
+/// `get_spec_reg` directly: the answer, and the registers it does not answer.
 #[test]
 fn get_spec_reg_answers_the_computed_registers_only() {
     let sandbox = Sandbox::dir("register_spec");
@@ -220,35 +218,26 @@ fn get_spec_reg_answers_the_computed_registers_only() {
     fx.run("silent file spec.txt");
     fx.run("let @/ = 'needle'");
 
-    let ask = |name: char, errmsg: bool| -> (bool, Option<Vec<u8>>, bool) {
-        let mut value: *mut c_char = std::ptr::null_mut();
-        let mut allocated = false;
-        // SAFETY: both out-parameters are locals.
-        let found =
-            unsafe { get_spec_reg(name as c_int, &raw mut value, &raw mut allocated, errmsg) };
-        let text = (!value.is_null()).then(|| {
-            // SAFETY: a found register's value is NUL-terminated.
-            unsafe { CStr::from_ptr(value) }.to_bytes().to_vec()
-        });
-        if allocated {
-            // SAFETY: `allocated` hands the block to the caller.
-            unsafe { xfree(value.cast()) };
-        }
-        (found, text, allocated)
+    // `None`: not computed; `Some(None)`: computed, and nothing in it.
+    let ask = |name: char, errmsg: bool| -> Option<Option<Vec<u8>>> {
+        get_spec_reg(name as c_int, errmsg).map(|value| value.map(|text| text.to_vec()))
     };
 
-    assert_eq!(ask('%', false), (true, Some(b"spec.txt".to_vec()), false));
-    // `%` lends the buffer's name; `/` is a copy of the pattern, the
-    // caller's to free.
-    assert_eq!(ask('/', false), (true, Some(b"needle".to_vec()), true));
+    assert_eq!(ask('%', false), Some(Some(b"spec.txt".to_vec())));
+    assert_eq!(ask('/', false), Some(Some(b"needle".to_vec())));
+    // The black hole reads as empty, not as nothing.
+    assert_eq!(ask('_', false), Some(Some(Vec::new())));
     // Not computed: the caller reads the store instead.
-    assert!(!ask('a', false).0);
-    assert!(!ask('"', false).0);
+    assert_eq!(ask('a', false), None);
+    assert_eq!(ask('"', false), None);
     // CTRL-W, the word under the cursor, needs `errmsg` to be asked at all.
     fx.run("call setline(1, 'word here')");
     fx.run("call cursor(1, 1)");
-    assert_eq!(ask('\u{17}', false), (false, None, false));
-    assert_eq!(ask('\u{17}', true), (true, Some(b"word".to_vec()), true));
+    assert_eq!(ask('\u{17}', false), None);
+    assert_eq!(ask('\u{17}', true), Some(Some(b"word".to_vec())));
+    // No word under the cursor.
+    fx.run("call setline(1, '   ')");
+    assert_eq!(ask('\u{17}', true), Some(None));
     fx.run("silent 0file");
     fresh(&fx);
 }

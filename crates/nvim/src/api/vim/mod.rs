@@ -61,7 +61,7 @@ use crate::mark::mark_get_global;
 use crate::mbyte::{mb_string2cells, utfc_ptr2len, utfc_ptr2schar};
 use crate::memline::ml_open;
 use crate::memory::arena_alloc_count;
-use crate::memory::{memchrsub, strequal};
+use crate::memory::strequal;
 use crate::message::state::{
     did_emsg, lines_left, msg_didany, msg_no_more, msg_scroll, need_wait_return,
 };
@@ -93,10 +93,9 @@ use crate::terminal::{
     terminal_running, terminal_set_streamed_paste,
 };
 use crate::types::AutoEvent;
-use crate::types::NL;
 use crate::types::{
-    AdditionalData, ApiDict, Array, BlnFlags, Boolean, BufferHandle, Channel, ChannelStreamType,
-    Context, DoBufAction, DoBufStart, Error, Float, FoldInfo, Handle, HlAttrs, Integer,
+    ApiDict, Array, BlnFlags, Boolean, BufferHandle, Channel, ChannelStreamType, Context,
+    DoBufAction, DoBufStart, Error, Float, FoldInfo, Handle, HlAttrs, Integer,
     KeyDict_complete_set, KeyDict_context, KeyDict_echo_opts, KeyDict_empty,
     KeyDict_eval_statusline, KeyDict_get_highlight, KeyDict_get_ns, KeyDict_highlight,
     KeyDict_keymap, KeyDict_open_term, KeyDict_redraw, KeyDict_runtime, LineNr, LuaRef, LuaRetMode,

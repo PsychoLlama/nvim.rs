@@ -74,10 +74,9 @@ pub use lookup::{
     mark_move_to,
 };
 pub(crate) use shada::{
-    ShadaMark, extra_copy_raw, extra_into_raw, global_mark_timestamp, shada_buffer_marks,
-    shada_changes, shada_global_marks, shada_insert_change, shada_insert_jump, shada_jumps,
-    shada_local_mark_timestamp, shada_restore_last_cursor, shada_set_global_mark,
-    shada_set_local_mark,
+    ShadaMark, global_mark_timestamp, shada_buffer_marks, shada_changes, shada_global_marks,
+    shada_insert_change, shada_insert_jump, shada_jumps, shada_local_mark_timestamp,
+    shada_restore_last_cursor, shada_set_global_mark, shada_set_local_mark,
 };
 pub use show::{ex_delmarks, ex_marks, fm_getname};
 

@@ -7,9 +7,8 @@
 //! [`shada_jumps`] and [`shada_changes`] answer copies, and the setters and
 //! inserters take a [`ShadaMark`] by value and turn it into the store's
 //! record. The raw end of the extra data -- `AdditionalData`, an `xmalloc`
-//! block of a count, a length and the bytes -- is [`extra_into_raw`],
-//! and [`extra_copy_raw`], which the register and search
-//! stores use too.
+//! block of a count, a length and the bytes -- is [`extra_into_raw`]
+//! and [`extra_copy_raw`]; the file marks are the last store that keeps it.
 //!
 //! The two setters are the merge half. Neither overwrites a record that is
 //! *newer* than the one being merged in, which is what `update` selects; the
@@ -90,7 +89,7 @@ impl ShadaMark {
 
 /// The extra data as the stores hold it: an `xmalloc` block, or null for
 /// none. The block is the caller's to free.
-pub(crate) fn extra_into_raw(extra: Option<ShadaExtra>) -> *mut AdditionalData {
+fn extra_into_raw(extra: Option<ShadaExtra>) -> *mut AdditionalData {
     let Some(extra) = extra else {
         return ptr::null_mut();
     };
@@ -119,7 +118,7 @@ pub(crate) fn extra_into_raw(extra: Option<ShadaExtra>) -> *mut AdditionalData {
 /// # Safety
 /// `raw` is null or a live block [`extra_into_raw`] (or the shada reader
 /// before it) made.
-pub(crate) unsafe fn extra_copy_raw(raw: *const AdditionalData) -> Option<ShadaExtra> {
+unsafe fn extra_copy_raw(raw: *const AdditionalData) -> Option<ShadaExtra> {
     if raw.is_null() {
         return None;
     }

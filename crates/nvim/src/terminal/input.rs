@@ -29,6 +29,7 @@ use crate::getchar::{ins_char_typebuf, ungetchars};
 use crate::keycodes::{Ctrl_AT, Ctrl_M, Key, NotAKey};
 use crate::keycodes::{ModMask, unsimplify_key};
 use crate::mbyte::{utf_ptr2char, utf_ptr2len};
+use crate::memory::XString;
 use crate::mouse::{MousePos, do_mousescroll, find_win_inner};
 use crate::ops::clear_oparg;
 use crate::option::vars::tpf_flags;
@@ -36,7 +37,7 @@ use crate::options::{
     kOptTpfFlagBS, kOptTpfFlagC0, kOptTpfFlagC1, kOptTpfFlagDEL, kOptTpfFlagESC, kOptTpfFlagFF,
     kOptTpfFlagHT,
 };
-use crate::types::{CmdArg, OpArg, String_0, Terminal, VTermKey, VTermModifier, size_t};
+use crate::types::{CmdArg, OpArg, Terminal, VTermKey, VTermModifier};
 use crate::vterm::keyboard::{
     vterm_keyboard_end_paste, vterm_keyboard_key, vterm_keyboard_start_paste,
     vterm_keyboard_unichar,
@@ -44,7 +45,7 @@ use crate::vterm::keyboard::{
 use crate::vterm::mouse::{vterm_mouse_button, vterm_mouse_move};
 use crate::winlayer::graph::switch_to;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{c_char, c_int};
 
 use super::refresh::invalidate_terminal;
 use super::{Term, terminal_send};
@@ -281,20 +282,14 @@ pub(crate) unsafe fn terminal_set_streamed_paste(term: *mut Terminal, streamed: 
     term.streamed_paste = streamed;
 }
 
-/// Paste `y_array` into the current terminal `count` times.
+/// Paste `lines` into the current terminal `count` times.
 ///
 /// Bracketed unless the paste is already part of a stream, and filtered
 /// through `'termpastefilter'` a character at a time.
-///
-/// # Safety
-///
-/// `y_array` must point at a live `String_0`, unaliased for the call.
-pub(crate) unsafe fn terminal_paste(count: c_int, y_array: *mut String_0, y_size: size_t) {
-    if y_size == 0 {
+pub(crate) fn terminal_paste(lines: &[XString], count: c_int) {
+    if lines.is_empty() {
         return;
     }
-    // SAFETY: the caller hands over `y_size` readable strings.
-    let lines = unsafe { ::core::slice::from_raw_parts(y_array, y_size) };
     // SAFETY: `curbuf` is set from startup to exit, and a paste only
     // reaches here while it has a terminal.
     let term = unsafe { Term::new(Buf::current().terminal) };
@@ -310,8 +305,8 @@ pub(crate) unsafe fn terminal_paste(count: c_int, y_array: *mut String_0, y_size
                 terminal_send(term, b"\n");
             }
             filtered.clear();
-            // SAFETY: a register's line is NUL-terminated.
-            let bytes = unsafe { CStr::from_ptr(line.data()) }.to_bytes();
+            // As the C string the line is, to its first NUL.
+            let bytes = line.as_cstr().to_bytes();
             let mut at = 0;
             while at < bytes.len() {
                 let src = bytes[at..].as_ptr().cast::<c_char>();

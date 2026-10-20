@@ -12,18 +12,20 @@
 //! one; and a blockwise write has to measure the widest line in **cells**
 //! rather than bytes.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::charset::getdigits_int_at;
+use crate::charset::str2nr::atoi;
 use crate::cstr;
+use crate::mbyte::{c_partial_cells_in, c_string_cells, promised_char_len};
 use crate::memory::ThinCString;
 use crate::memory::XString;
 use crate::semsg;
-use crate::types::{ListRef, TypVal};
+use crate::types::{ListRef, RegLines, TypVal};
 use crate::winlayer::Win;
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_int};
 
 use super::*;
 use crate::types::NUL;
@@ -53,14 +55,17 @@ pub fn get_reg_type(regname: c_int) -> (MotionType, ColNr) {
     if regname != NUL && !valid_yank_reg(regname, false) {
         return (kMTUnknown, 0);
     }
-    // SAFETY: a valid register name, so this answers a live register.
-    let reg = unsafe { get_yank_register(regname, YREG_PASTE) };
-    // SAFETY: `reg` is that live register; these are three of its fields.
-    let (y_array, y_type, y_width) = unsafe { ((*reg).y_array, (*reg).y_type, (*reg).y_width) };
-    if y_array.is_null() {
-        return (kMTUnknown, 0);
-    }
-    (y_type, if y_type == kMTBlockWise { y_width } else { 0 })
+    get_yank_register(regname, YREG_PASTE).read(|reg| {
+        if !reg.lines.is_set() {
+            return (kMTUnknown, 0);
+        }
+        let width = if reg.kind == kMTBlockWise {
+            reg.width
+        } else {
+            0
+        };
+        (reg.kind, width)
+    })
 }
 
 /// What a register read answers: one string, or -- with `kGRegList` -- its
@@ -97,11 +102,9 @@ fn get_reg_contents(regname: c_int, flags: c_int) -> Option<RegContents> {
         if flags & kGRegExprSrc as c_int != 0 {
             return one_line(get_expr_line_src());
         }
-        // SAFETY: `get_expr_line` answers an allocated NUL-terminated string
-        // or null, taken over once here. Evaluating the expression may run
-        // Vimscript, which this function's own caller already allows for.
-        let value = unsafe { ThinCString::from_raw(get_expr_line()) };
-        return one_line(value.map(ThinCString::into_xstring));
+        // Evaluating the expression may run Vimscript, which this
+        // function's own caller already allows for.
+        return one_line(get_expr_line());
     }
     if regname == '@' as c_int {
         regname = '"' as c_int; // `getreg('@')` means the unnamed register
@@ -110,56 +113,35 @@ fn get_reg_contents(regname: c_int, flags: c_int) -> Option<RegContents> {
         return None;
     }
 
-    let mut retval: *mut c_char = ::core::ptr::null_mut();
-    let mut allocated = false;
-    // SAFETY: two writable locals, which is all `get_spec_reg` writes to.
-    if unsafe { get_spec_reg(regname, &raw mut retval, &raw mut allocated, false) } {
-        if retval.is_null() {
+    if let Some(value) = get_spec_reg(regname, false) {
+        return value.and_then(|text| one_line(Some(text)));
+    }
+
+    get_yank_register(regname, YREG_PUT).read(|reg| {
+        if !reg.lines.is_set() {
             return None;
         }
-        // The caller always owns the answer.
-        let owned = if allocated {
-            // SAFETY: `get_spec_reg` allocated this NUL-terminated string
-            // for the caller, which takes it over once here.
-            unsafe { XString::from_raw(retval) }
-        } else {
-            // SAFETY: `get_spec_reg` answered a NUL-terminated string it
-            // keeps, which is copied before anything can change it.
-            XString::from_cstr(unsafe { CStr::from_ptr(retval) })
-        };
-        return one_line(Some(owned));
-    }
-
-    // SAFETY: a valid register name, so this answers a live register.
-    let reg = unsafe { get_yank_register(regname, YREG_PUT) };
-    // SAFETY: `reg` is that live register; these are three of its fields.
-    let (y_array, y_type, y_size) = unsafe { ((*reg).y_array, (*reg).y_type, (*reg).y_size) };
-    if y_array.is_null() {
-        return None;
-    }
-    // SAFETY: a non-null `y_array` holds `y_size` lines and `i` is below
-    // `y_size`, so each of these is one of the register's own lines.
-    let lines = || (0..y_size).map(|i| unsafe { &*y_array.add(i) });
-
-    if as_list {
-        let list = tv_list_alloc(y_size as ptrdiff_t);
-        for line in lines() {
-            list.edit().push_bytes(Some(line.as_bytes()));
+        let lines = reg.lines.as_slice();
+        if as_list {
+            let list = tv_list_alloc(lines.len() as ptrdiff_t);
+            for line in lines {
+                list.edit().push_bytes(Some(line));
+            }
+            return Some(RegContents::Lines(list));
         }
-        return Some(RegContents::Lines(list));
-    }
 
-    // One string, with a newline between lines and after the last one if
-    // the register is linewise.
-    let needs_nl = |i: size_t| y_type == kMTLineWise || i < y_size.wrapping_sub(1);
-    let mut text = XString::with_capacity(lines().map(|line| line.len() + 1).sum::<size_t>());
-    for (i, line) in lines().enumerate() {
-        text.push_bytes(line.as_bytes());
-        if needs_nl(i) {
-            text.push_byte(b'\n');
+        // One string, with a newline between lines and after the last one if
+        // the register is linewise.
+        let needs_nl = |i: usize| reg.kind == kMTLineWise || i < lines.len().wrapping_sub(1);
+        let mut text = XString::with_capacity(lines.iter().map(|line| line.len() + 1).sum());
+        for (i, line) in lines.iter().enumerate() {
+            text.push_bytes(line);
+            if needs_nl(i) {
+                text.push_byte(b'\n');
+            }
         }
-    }
-    Some(RegContents::Text(text))
+        Some(RegContents::Text(text))
+    })
 }
 
 /// [`get_reg_contents`] as one owned string, `None` when the register is
@@ -184,278 +166,162 @@ pub(crate) fn get_reg_contents_list(regname: c_int, flags: c_int) -> Option<List
 /// Prepare register `name` to be written: check the name, remember `""`, and
 /// empty the register unless the write is an append.
 ///
-/// Answers null for an invalid name, having given E354.
-///
-/// # Safety
-/// Unless the write is an append, the register's current contents are freed,
-/// so nothing may still be pointing at them.
-unsafe fn init_write_reg(
+/// Answers `None` for an invalid name, having given E354.
+fn init_write_reg(
     name: c_int,
     old_y_previous: &mut Option<c_int>,
     must_append: bool,
-) -> *mut YankReg {
+) -> Option<Reg> {
     if !valid_yank_reg(name, true) {
         emsg_invreg(name);
-        return ::core::ptr::null_mut();
+        return None;
     }
     // `get_yank_register` moves `""`, which a write to a *named* register
     // must not do; `finish_write_reg` puts it back.
     *old_y_previous = y_previous.get();
-    // SAFETY: a valid register name, so this answers a live register.
-    let reg = unsafe { get_yank_register(name, YREG_YANK) };
+    let reg = get_yank_register(name, YREG_YANK);
     if !is_append_register(name) && !must_append {
-        // SAFETY: `reg` is that live register, and the caller promises
-        // nothing else holds on to the lines being dropped here.
-        unsafe { free_register(reg) };
+        reg.write(YankReg::clear);
     }
-    reg
+    Some(reg)
 }
 
-/// How many lines `str` will become, and whether the first of them joins the
-/// register's current last line.
-///
-/// `extraline` is the line a string not ending in a newline still contributes.
-///
-/// # Safety
-/// `y_ptr` must be a live register, and `str` must hold `len` bytes, or --
-/// with `str_list` -- be a null-terminated array of NUL-terminated strings.
-unsafe fn count_lines(
-    y_ptr: *mut YankReg,
-    yank_type: MotionType,
-    str: *const c_char,
-    len: size_t,
-    str_list: bool,
-) -> (size_t, bool, bool) {
-    if str_list {
-        let mut newlines: size_t = 0;
-        // SAFETY: with `str_list`, `str` is a null-terminated array of string
-        // pointers, so the walk stops on its terminator without leaving it.
-        let mut ss = str as *mut *mut c_char;
-        while !unsafe { *ss }.is_null() {
-            newlines = newlines.wrapping_add(1);
-            ss = unsafe { ss.add(1) };
-        }
-        return (newlines, false, false);
-    }
-
-    // SAFETY: `str` holds `len` bytes, which is the span searched.
-    let mut newlines = unsafe { memcnt(str as *const c_void, '\n' as c_char, len) };
-    let mut extraline = false;
-    // SAFETY: the `len == 0` arm in front is the bounds proof -- the read is
-    // of the last of `str`'s `len` bytes -- so the chain stays whole.
-    if yank_type == kMTCharWise
-        || len == 0
-        || unsafe { c_int::from(*str.add(len.wrapping_sub(1))) } != '\n' as c_int
-    {
-        extraline = true;
-        newlines = newlines.wrapping_add(1);
-    }
-    // A charwise register's last line has no newline of its own, so the
-    // first new line continues it.
-    // SAFETY: `y_ptr` is a live register.
-    let append = unsafe { (*y_ptr).y_size > 0 && (*y_ptr).y_type == kMTCharWise };
-    if append {
-        newlines = newlines.wrapping_sub(1);
-    }
-    (newlines, extraline, append)
+/// What [`str_to_reg`] splits into lines: text with newlines in it, or
+/// lines already split.
+#[derive(Clone, Copy)]
+enum RegText<'a> {
+    Text(&'a [u8]),
+    Lines(&'a [&'a CStr]),
 }
 
-/// Put `str` in `y_ptr`, appending to whatever is already there.
+/// Put `text` in `reg`, appending to whatever is already there.
 ///
 /// `yank_type` may be `kMTUnknown`, in which case it is worked out from the
 /// text: a trailing newline (or carriage return) means linewise. `blocklen`
 /// is the block width, or -1 to measure it.
-///
-/// # Safety
-/// `str` must hold `len` bytes, or -- with `str_list` -- be a
-/// null-terminated array of NUL-terminated strings.
-unsafe fn str_to_reg(
-    y_ptr: *mut YankReg,
-    mut yank_type: MotionType,
-    str: *const c_char,
-    len: size_t,
-    blocklen: ColNr,
-    str_list: bool,
-) {
-    // SAFETY: `y_ptr` is a live register.
-    if unsafe { (*y_ptr).y_array.is_null() } {
-        // SAFETY: as above.
-        unsafe { (*y_ptr).y_size = 0 };
-    }
+fn str_to_reg(reg: &mut YankReg, mut yank_type: MotionType, text: RegText<'_>, blocklen: ColNr) {
     if yank_type == kMTUnknown {
-        // SAFETY: the `len > 0` in front of the reads is their bounds proof
-        // -- they are of the last of `str`'s `len` bytes -- so the chain
-        // stays whole. `str_list` short-circuits before any of it.
-        let ends_line = str_list
-            || len > 0
-                && unsafe {
-                    c_int::from(*str.add(len.wrapping_sub(1))) == NL
-                        || c_int::from(*str.add(len.wrapping_sub(1))) == CAR
-                };
+        let ends_line = match text {
+            RegText::Lines(_) => true,
+            RegText::Text(text) => text
+                .last()
+                .is_some_and(|&last| c_int::from(last) == NL || c_int::from(last) == CAR),
+        };
         yank_type = if ends_line { kMTLineWise } else { kMTCharWise };
     }
 
-    // SAFETY: `y_ptr` is a live register and the caller's promise about
-    // `str`/`len`/`str_list` carries straight through.
-    let (newlines, extraline, mut append) =
-        unsafe { count_lines(y_ptr, yank_type, str, len, str_list) };
-    // SAFETY: `y_ptr` is a live register.
-    let y_size = unsafe { (*y_ptr).y_size };
-    if y_size.wrapping_add(newlines) == 0 {
-        // SAFETY: `y_array` is the register's own allocation, and the field
-        // is nulled in the same breath so nothing reads the freed block.
-        unsafe { xfree((*y_ptr).y_array as *mut c_void) };
-        unsafe { (*y_ptr).y_array = ::core::ptr::null_mut() };
+    // How many lines `text` becomes, and whether the first of them joins the
+    // register's current last line; `extraline` is the line a string not
+    // ending in a newline still contributes.
+    let y_size = reg.lines.len();
+    let (newlines, extraline, mut append) = match text {
+        RegText::Lines(lines) => (lines.len(), false, false),
+        RegText::Text(text) => {
+            let mut newlines = text.iter().filter(|&&b| b == b'\n').count();
+            let extraline =
+                yank_type == kMTCharWise || text.last().is_none_or(|&last| last != b'\n');
+            if extraline {
+                newlines += 1;
+            }
+            // A charwise register's last line has no newline of its own, so
+            // the first new line continues it.
+            let append = y_size > 0 && reg.kind == kMTCharWise;
+            if append {
+                newlines -= 1;
+            }
+            (newlines, extraline, append)
+        }
+    };
+    if y_size + newlines == 0 {
+        reg.lines = RegLines::NONE;
         return;
     }
 
-    let room = y_size
-        .wrapping_add(newlines)
-        .wrapping_mul(::core::mem::size_of::<String_0>());
-    // SAFETY: `y_array` is the register's own allocation, grown here to hold
-    // the lines it already has plus the new ones; the field is updated to the
-    // block `xrealloc` answered before anything reads it again.
-    let pp = unsafe { xrealloc((*y_ptr).y_array as *mut c_void, room) } as *mut String_0;
-    // The slots past what the register already holds are `xrealloc`'s, so
-    // they are zeroed into null strings: a slot the walk below assigns into
-    // has to hold something releasable.
-    // SAFETY: `pp` has `y_size + newlines` slots and the first `y_size` are
-    // the register's own.
-    unsafe { pp.add(y_size).write_bytes(0, newlines) };
-    // SAFETY: as above.
-    unsafe { (*y_ptr).y_array = pp };
-
-    let mut lnum = y_size;
-    let mut maxlen: size_t = 0;
-    if str_list {
-        // SAFETY: with `str_list`, `str` is a null-terminated array of
-        // NUL-terminated strings, so the walk stops on its terminator and
-        // every string it hands on is readable; `count_lines` counted the
-        // same elements, so `pp` has room for all of them from `lnum` on.
-        let mut ss = str as *mut *mut c_char;
-        while !unsafe { *ss }.is_null() {
-            unsafe { *pp.add(lnum) = cstr_to_string(*ss) };
-            if yank_type == kMTBlockWise {
-                maxlen = maxlen.max(unsafe { mb_string2cells(*ss) });
-            }
-            ss = unsafe { ss.add(1) };
-            lnum = lnum.wrapping_add(1);
-        }
-    } else {
-        let mut start = str;
-        // SAFETY: `str` holds `len` bytes, so this is its one-past-the-end.
-        let end = unsafe { str.add(len) };
-        // `+ extraline` so that a string with no trailing newline still
-        // produces its last (possibly empty) line. Both operands are loop
-        // invariants, so the limit is worked out once; it is only ever
-        // compared against, never read through, hence `wrapping_offset`.
-        let limit = end.wrapping_offset(extraline as c_int as isize);
-        while start < limit {
-            let mut charlen = 0;
-            let mut line_end = start;
-            // SAFETY: `line_end` walks from `start` to `end`, so it stays
-            // inside `str`'s `len` bytes; the two UTF-8 helpers are handed
-            // the number of bytes left, so neither reads past `end`, and a
-            // NUL byte is stepped over singly rather than measured.
-            while line_end < end {
-                if c_int::from(unsafe { *line_end }) == '\n' as c_int {
-                    break;
-                }
+    let lines = reg.lines.lines_mut();
+    lines.reserve(newlines);
+    let mut maxlen: usize = 0;
+    match text {
+        RegText::Lines(new) => {
+            for line in new {
                 if yank_type == kMTBlockWise {
-                    charlen +=
-                        unsafe { utf_ptr2cells_len(line_end, end.offset_from(line_end) as c_int) };
+                    maxlen = maxlen.max(c_string_cells(line.to_bytes()));
                 }
-                // A NUL is one byte and is translated below, so it must
-                // not be handed to the UTF-8 length.
-                if c_int::from(unsafe { *line_end }) == NUL {
-                    line_end = unsafe { line_end.add(1) };
-                } else {
-                    // A sequence `str`'s end cuts short is as long as the
-                    // lead byte promised, so the step stops at `end`:
-                    // upstream's walked past it and copied the bytes after.
-                    let left = unsafe { end.offset_from(line_end) } as c_int;
-                    line_end = unsafe {
-                        line_end.offset(utf_ptr2len_len(line_end, left).min(left) as isize)
-                    };
+                lines.push(XString::from_cstr(line));
+            }
+        }
+        RegText::Text(text) => {
+            let end = text.len();
+            // `+ extraline` so that a string with no trailing newline still
+            // produces its last (possibly empty) line.
+            let limit = end + usize::from(extraline);
+            let mut start = 0;
+            while start < limit {
+                let mut charlen: c_int = 0;
+                let mut line_end = start;
+                while line_end < end {
+                    let byte = text[line_end];
+                    if byte == b'\n' {
+                        break;
+                    }
+                    if yank_type == kMTBlockWise {
+                        charlen += c_partial_cells_in(text, line_end, end);
+                    }
+                    // A NUL is one byte and is translated below, so it must
+                    // not be handed to the UTF-8 length.
+                    if c_int::from(byte) == NUL {
+                        line_end += 1;
+                    } else {
+                        // A sequence `text`'s end cuts short is as long as the
+                        // lead byte promised, so the step stops at `end`:
+                        // upstream's walked past it and copied the bytes after.
+                        let left = end - line_end;
+                        line_end += promised_char_len(&text[line_end..]).min(left);
+                    }
                 }
-            }
-            debug_assert!(line_end >= start);
-            // SAFETY: both point into `str`, `line_end` at or after `start`.
-            let line_len = unsafe { line_end.offset_from(start) } as size_t;
-            maxlen = maxlen.max(charlen as size_t);
+                maxlen = maxlen.max(usize::try_from(charlen).unwrap_or(0));
 
-            // Appending continues the register's current last line.
-            let extra = if append {
-                lnum = lnum.wrapping_sub(1);
-                // SAFETY: `append` means the register had a last line, which
-                // `lnum` now indexes.
-                unsafe { (*pp.add(lnum)).len() }
-            } else {
-                0
-            };
-            // SAFETY: room for the line the register already had and the one
-            // just read off `str`, plus the NUL `xmallocz` adds.
-            let s = unsafe { xmallocz(line_len.wrapping_add(extra)) } as *mut c_char;
-            if extra > 0 {
-                // SAFETY: `extra` is the length of the line at `lnum`, and
-                // `s` was sized to take it first.
-                let into = s.cast::<u8>();
-                unsafe { into.copy_from_nonoverlapping((*pp.add(lnum)).data().cast(), extra) };
-            }
-            if line_len > 0 {
-                // SAFETY: `line_len` bytes from `start` lie inside `str`, and
-                // `s` was sized to take them after `extra`.
-                let into = unsafe { s.add(extra) }.cast::<u8>();
-                unsafe { into.copy_from_nonoverlapping(start.cast(), line_len) };
-            }
-            let s_len = extra.wrapping_add(line_len);
-            if append {
-                append = false;
-            }
-            // SAFETY: `lnum` is inside the array sized above, `s` is an
-            // allocation of `s_len` bytes plus a NUL, and the slot holds
-            // either the line this one is appending to or a null string --
-            // the assignment releases it either way.
-            unsafe { *pp.add(lnum) = String_0::from_owned_parts(s, s_len) };
-            // A NUL in the text is how the editor spells a newline.
-            // SAFETY: `s` holds those `s_len` bytes.
-            unsafe { memchrsub(s as *mut c_void, NUL as c_char, '\n' as c_char, s_len) };
+                // Appending continues the register's current last line.
+                let mut joined = Vec::new();
+                if append {
+                    append = false;
+                    if let Some(last) = lines.pop() {
+                        joined = last.into_vec();
+                        joined.pop(); // its terminator
+                    }
+                }
+                joined.extend_from_slice(&text[start..line_end]);
+                // A NUL in the text is how the editor spells a newline.
+                for byte in &mut joined {
+                    if c_int::from(*byte) == NUL {
+                        *byte = b'\n';
+                    }
+                }
+                lines.push(XString::from_vec(joined));
 
-            // Past the newline `line_end` stopped on -- which on the last
-            // line is one past `end`, so this cannot be a plain `add`.
-            start = start.wrapping_add(line_len.wrapping_add(1));
-            lnum = lnum.wrapping_add(1);
+                // Past the newline `line_end` stopped on.
+                start = line_end + 1;
+            }
         }
     }
 
-    let y_width = if yank_type == kMTBlockWise {
+    reg.width = if yank_type == kMTBlockWise {
         if blocklen == -1 {
-            maxlen as c_int - 1
+            c_int::try_from(maxlen).unwrap_or(c_int::MAX) - 1
         } else {
             blocklen
         }
     } else {
         0
     };
-    // SAFETY: `y_ptr` is a live register, now holding `lnum` lines; its
-    // `additional_data` is its own allocation and described the text that has
-    // just been replaced, so it is dropped and the field nulled.
-    unsafe { (*y_ptr).y_type = yank_type };
-    unsafe { (*y_ptr).y_size = lnum };
-    unsafe { xfree((*y_ptr).additional_data as *mut c_void) };
-    unsafe { (*y_ptr).additional_data = ::core::ptr::null_mut() };
-    unsafe { (*y_ptr).timestamp = os_time() };
-    unsafe { (*y_ptr).y_width = y_width };
+    // The extra data described the text that has just been replaced.
+    reg.kind = yank_type;
+    reg.extra = None;
+    reg.timestamp = os_time();
 }
 
 /// Push the write out to the clipboard and put `""` back where it was.
-///
-/// # Safety
-/// `reg` must be the register [`init_write_reg`] answered.
-unsafe fn finish_write_reg(name: c_int, reg: *mut YankReg, old_y_previous: Option<c_int>) {
-    // SAFETY: `reg` is the register `init_write_reg` answered, which the
-    // provider is handed the contents of.
-    unsafe { clipboard::set_clipboard(name, reg) };
+fn finish_write_reg(name: c_int, reg: Reg, old_y_previous: Option<c_int>) {
+    clipboard::set_clipboard(name, reg);
     // Only an explicit write to `""` moves it.
     if name != '"' as c_int {
         y_previous.set(old_y_previous);
@@ -464,9 +330,7 @@ unsafe fn finish_write_reg(name: c_int, reg: *mut YankReg, old_y_previous: Optio
 
 /// Write `text` to register `name`, working out the motion type from it.
 pub fn write_reg_contents(name: c_int, text: &[u8], must_append: bool) {
-    let len = ssize_t::try_from(text.len()).expect("a register fits in memory");
-    // SAFETY: `text` names its own bytes, and the length is given.
-    unsafe { write_reg_contents_ex(name, text.as_ptr().cast(), len, must_append, kMTUnknown, 0) };
+    write_reg_contents_ex(name, text, must_append, kMTUnknown, 0);
 }
 
 /// Write `lines` to register `name`, one line apiece.
@@ -499,22 +363,11 @@ pub fn write_reg_contents_lst(
     }
 
     let mut old_y_previous = None;
-    // SAFETY: a plain write, so nothing is still holding the old contents.
-    let reg = unsafe { init_write_reg(name, &mut old_y_previous, must_append) };
-    if reg.is_null() {
+    let Some(reg) = init_write_reg(name, &mut old_y_previous, must_append) else {
         return;
-    }
-    // `str_to_reg` reads a list as a null-terminated array of string
-    // pointers, and ignores the length.
-    let array: Vec<*const c_char> = lines
-        .iter()
-        .map(|line| line.as_ptr())
-        .chain([::core::ptr::null()])
-        .collect();
-    // SAFETY: `array` is that null-terminated array of NUL-terminated
-    // strings, live for the call, and `reg` is the register just prepared.
-    unsafe { str_to_reg(reg, yank_type, array.as_ptr().cast(), 0, block_len, true) };
-    unsafe { finish_write_reg(name, reg, old_y_previous) };
+    };
+    reg.write(|reg| str_to_reg(reg, yank_type, RegText::Lines(lines), block_len));
+    finish_write_reg(name, reg, old_y_previous);
 }
 
 /// [`write_reg_contents_ex`] of `text`.
@@ -525,66 +378,47 @@ pub(crate) fn write_reg_contents_cstr(
     yank_type: MotionType,
     block_len: ColNr,
 ) {
-    let len = ssize_t::try_from(text.to_bytes().len()).expect("a register fits in memory");
-    // SAFETY: `text` is NUL-terminated and holds `len` bytes before it.
-    unsafe { write_reg_contents_ex(name, text.as_ptr(), len, must_append, yank_type, block_len) };
+    write_reg_contents_ex(name, text.to_bytes(), must_append, yank_type, block_len);
 }
 
-/// Write `str` to register `name` as `yank_type`.
+/// Write `text` to register `name` as `yank_type`.
 ///
 /// `"/`, `"#` and `"=` are not real registers and are handled here: the first
 /// sets the last search pattern, the second the alternate file, and the third
-/// the expression source.
-///
-/// # Safety
-/// `str` must hold `len` bytes, or be NUL-terminated when `len` is negative.
-pub unsafe fn write_reg_contents_ex(
+/// the expression source. The first two read `text` as the C string it was,
+/// up to a NUL.
+pub fn write_reg_contents_ex(
     name: c_int,
-    str: *const c_char,
-    len: ssize_t,
+    text: &[u8],
     must_append: bool,
     yank_type: MotionType,
     block_len: ColNr,
 ) {
-    // SAFETY: a negative `len` means `str` is NUL-terminated.
-    let len = if len < 0 {
-        unsafe { cstr::bytes_at(str).len() as ssize_t }
-    } else {
-        len
-    };
-
     if name == '/' as c_int {
-        // SAFETY: the pattern is read up to its NUL, as upstream's
-        // `set_last_search_pat` reads it; it is copied, not kept.
-        let pat = unsafe { cstr::bytes_at(str) };
-        set_last_search_pat(pat, RE_SEARCH as c_int, true, true);
+        // The pattern is copied, not kept.
+        set_last_search_pat(text, RE_SEARCH as c_int, true, true);
         return;
     }
 
     if name == '#' as c_int {
         // The alternate file, by number or by name.
-        // SAFETY: `str` is the buffer number or name, NUL-terminated or
-        // `len` bytes long; `atoi` stops at the first non-digit, which the
-        // test in front proves is not the first byte, and `str + len` is the
-        // one-past-the-end `buflist_findpat` wants.
-        let buf = unsafe {
-            if ascii_isdigit(c_int::from(*str)) {
-                let num = atoi(str);
-                let buf = find_buf(num);
-                if buf.is_none() {
-                    semsg!("E86: Buffer {} does not exist", int64_t::from(num));
-                }
-                buf
-            } else {
-                let len = usize::try_from(len).unwrap_or(0);
-                find_buf(buflist_findpat(
-                    cstr::at(str),
-                    Some(len),
-                    true,
-                    false,
-                    false,
-                ))
+        let text = cstr::until_nul(text);
+        let buf = if text.first().is_some_and(|&b| ascii_isdigit(c_int::from(b))) {
+            let num = atoi(text);
+            let buf = find_buf(num);
+            if buf.is_none() {
+                semsg!("E86: Buffer {} does not exist", int64_t::from(num));
             }
+            buf
+        } else {
+            let pattern = XString::from_bytes(text);
+            find_buf(buflist_findpat(
+                pattern.as_cstr(),
+                Some(text.len()),
+                true,
+                false,
+                false,
+            ))
         };
         if let Some(buf) = buf {
             Win::current().w_alt_fnum = buf.handle;
@@ -594,8 +428,6 @@ pub unsafe fn write_reg_contents_ex(
 
     if name == '=' as c_int {
         // The expression register keeps its source, not a yankreg.
-        // SAFETY: `str` holds `len` bytes.
-        let text = unsafe { core::slice::from_raw_parts(str.cast::<u8>(), len as usize) };
         expr_line.with_mut(|line| {
             if !must_append {
                 *line = None;
@@ -610,73 +442,47 @@ pub unsafe fn write_reg_contents_ex(
     }
 
     let mut old_y_previous = None;
-    // SAFETY: a plain write, so nothing is still holding the old contents.
-    let reg = unsafe { init_write_reg(name, &mut old_y_previous, must_append) };
-    if reg.is_null() {
+    let Some(reg) = init_write_reg(name, &mut old_y_previous, must_append) else {
         return;
-    }
-    // SAFETY: `str` holds `len` bytes -- `strlen`'s answer, when the caller
-    // gave -1 -- and `reg` is the register just prepared.
-    unsafe { str_to_reg(reg, yank_type, str, len as size_t, block_len, false) };
-    unsafe { finish_write_reg(name, reg, old_y_previous) };
+    };
+    reg.write(|reg| str_to_reg(reg, yank_type, RegText::Text(text), block_len));
+    finish_write_reg(name, reg, old_y_previous);
 }
 
 /// Set `reg`'s type from an API `regtype` string (`""`, `v`/`c`, `V`/`l`,
 /// `b`/CTRL-V, optionally followed by a block width).
 ///
 /// Answers false for a `regtype` that does not parse.
-///
-/// # Safety
-/// `reg` must be writable and `regtype` describe readable bytes.
-pub unsafe fn prepare_yankreg_from_object(
-    reg: *mut YankReg,
-    regtype: &String_0,
-    _lines: size_t,
-) -> bool {
-    // SAFETY: a non-null `regtype` describes readable bytes, so its first is
-    // there to be read.
-    let type_0 = if regtype.data().is_null() {
-        NUL
-    } else {
-        unsafe { c_int::from(*regtype.data()) }
-    };
-    let y_type = match type_0 {
+pub fn prepare_yankreg_from_object(reg: &mut YankReg, regtype: &[u8]) -> bool {
+    let kind = match regtype.first().map_or(NUL, |&b| c_int::from(b)) {
         0 => kMTUnknown, // "" means "work it out from the text"
         c if c == 'v' as c_int || c == 'c' as c_int => kMTCharWise,
         c if c == 'V' as c_int || c == 'l' as c_int => kMTLineWise,
         c if c == 'b' as c_int || c == Ctrl_V => kMTBlockWise,
         _ => return false,
     };
-    // SAFETY: the caller promises a writable `reg`. As upstream, both fields
-    // are settled before the width is parsed, so a `regtype` that fails below
-    // still leaves the type behind.
-    unsafe { (*reg).y_type = y_type };
-    unsafe { (*reg).y_width = 0 };
+    // As upstream, both fields are settled before the width is parsed, so a
+    // `regtype` that fails below still leaves the type behind.
+    reg.kind = kind;
+    reg.width = 0;
 
     if regtype.len() > 1 {
         // A width only means something for a block.
-        if y_type != kMTBlockWise {
+        if kind != kMTBlockWise {
             return false;
         }
-        // SAFETY: `regtype` is longer than one byte, so its second is there.
-        if !unsafe { ascii_isdigit(c_int::from(*regtype.data().add(1))) } {
+        if !regtype[1].is_ascii_digit() {
             return false;
         }
-        // SAFETY: as above.
-        let mut p: *const c_char = unsafe { regtype.data().add(1) };
-        // SAFETY: `p` is a writable local, pointing at the digit just seen;
-        // `getdigits_int` walks it to the end of the run and no further, so
-        // it stays inside `regtype`, and `reg` is writable.
-        unsafe { (*reg).y_width = getdigits_int(&raw mut p as *mut *mut c_char, false, 1) - 1 };
+        let (width, past) = getdigits_int_at(regtype, 1, false, 1);
+        reg.width = width - 1;
         // Nothing may follow the width.
-        // SAFETY: `p` and `regtype.data()` are into the same string.
-        if regtype.len() > unsafe { p.offset_from(regtype.data()) } as size_t {
+        if regtype.len() > past {
             return false;
         }
     }
-    // SAFETY: a writable `reg`, as above.
-    unsafe { (*reg).additional_data = ::core::ptr::null_mut() };
-    unsafe { (*reg).timestamp = 0 };
+    reg.extra = None;
+    reg.timestamp = 0;
     true
 }
 
@@ -685,32 +491,19 @@ pub unsafe fn prepare_yankreg_from_object(
 ///
 /// `clipboard_adjust` is for the clipboard provider, whose lists always carry
 /// that trailing empty line.
-///
-/// # Safety
-/// `reg` must own an array of `y_size` lines.
-pub unsafe fn finish_yankreg_from_object(reg: *mut YankReg, clipboard_adjust: bool) {
-    // SAFETY: `reg` owns an array of `y_size` lines; these are its fields.
-    let (y_type, y_size, y_array) = unsafe { ((*reg).y_type, (*reg).y_size, (*reg).y_array) };
-    // SAFETY: the `y_size > 0` in front is the bounds proof for the read, so
-    // the chain stays whole -- it names the array's last line.
-    let ends_empty = y_size > 0 && unsafe { (*y_array.add(y_size.wrapping_sub(1))).is_empty() };
+pub fn finish_yankreg_from_object(reg: &mut YankReg, clipboard_adjust: bool) {
+    let ends_empty = reg.lines.last().is_some_and(|last| last.is_empty());
     if ends_empty {
-        if y_type != kMTCharWise {
-            if y_type == kMTUnknown || clipboard_adjust {
-                // SAFETY: `reg` is writable; the empty last line is dropped
-                // from the count, its `String_0` staying in the array for
-                // `free_register` to release.
-                unsafe { (*reg).y_size = y_size.wrapping_sub(1) };
+        if reg.kind != kMTCharWise {
+            if reg.kind == kMTUnknown || clipboard_adjust {
+                reg.lines.lines_mut().pop();
             }
-            if y_type == kMTUnknown {
-                // SAFETY: as above.
-                unsafe { (*reg).y_type = kMTLineWise };
+            if reg.kind == kMTUnknown {
+                reg.kind = kMTLineWise;
             }
         }
-    } else if y_type == kMTUnknown {
-        // SAFETY: as above.
-        unsafe { (*reg).y_type = kMTCharWise };
+    } else if reg.kind == kMTUnknown {
+        reg.kind = kMTCharWise;
     }
-    // SAFETY: `reg` is the register whose lines were just settled.
-    unsafe { update_yankreg_width(reg) };
+    reg.update_width();
 }

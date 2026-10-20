@@ -125,7 +125,7 @@ use crate::mbyte::{
     utf_ptr2char, utf_ptr2len, utf_ptr2str_char_info, utf8len_tab, utfc_next, utfc_ptr2len,
 };
 use crate::memline::{Lines, gchar_pos, ml_append_cstr, ml_get, ml_get_buf, ml_get_len};
-use crate::memory::{strnequal, xfree, xmalloc, xmemdupz};
+use crate::memory::{strnequal, xfree, xmalloc};
 use crate::message::state::{emsg_on_display, msg_scroll, msg_silent};
 use crate::message::{e_noinstext, e_sandbox, e_textlock};
 use crate::message::{emsg, msg_check_for_delay};

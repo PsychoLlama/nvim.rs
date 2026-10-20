@@ -415,6 +415,12 @@ pub fn getvpos(win: Win, pos: PosRef, wcol: ColNr) -> bool {
     coladvance2(win, pos, false, win.virtual_active(), wcol)
 }
 
+/// [`getvpos`] of a position the caller holds.
+pub(crate) fn getvpos_of(win: Win, pos: &mut Pos, wcol: ColNr) -> bool {
+    // SAFETY: the caller's exclusive borrow, live for the call.
+    getvpos(win, unsafe { PosRef::new(pos) }, wcol)
+}
+
 /// Move the cursor one character forward; see `inc`.
 ///
 /// Safe: the only promise is that the editor exists, which `Win::current()`

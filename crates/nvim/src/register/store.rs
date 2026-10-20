@@ -18,16 +18,22 @@
 //! provider first, and an unnamed *paste* reads whatever was last written
 //! rather than slot 0. [`shada_registers`] and [`shada_set_register`] are
 //! shada's view of the same array.
+//!
+//! A slot is reached through [`Reg::read`]/[`Reg::write`], whose closure is
+//! the whole of the borrow: nothing that runs user code may run inside one.
+//! A caller that has to hold a register across such code -- a put, a replay,
+//! the listing -- takes [`Reg::snapshot`], which shares the lines rather than
+//! copying them (see [`RegLines`]).
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::mbyte::c_string_cells_len;
 use crate::shada::ShadaExtra;
 use crate::strings::has_char;
-use crate::types::{ColNr, MotionType, Timestamp};
-use core::ffi::{c_char, c_int, c_void};
+use crate::types::{ColNr, MotionType, RegLines, Timestamp};
+use core::ffi::{c_char, c_int};
 
 use super::*;
 use crate::types::NUL;
@@ -36,6 +42,44 @@ use crate::types::NUL;
 #[inline]
 fn is_ascii_letter(c: c_int) -> bool {
     (b'a' as c_int..=b'z' as c_int).contains(&c) || (b'A' as c_int..=b'Z' as c_int).contains(&c)
+}
+
+/// A register a name resolved to: one of the 39 slots, or the empty register
+/// a `YREG_PUT` of `"*`/`"+` reports without asking the provider (upstream's
+/// `static yankreg_T empty_reg`).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Reg {
+    Slot(usize),
+    Empty,
+}
+
+impl Reg {
+    /// Run `f` on the register.
+    ///
+    /// `f` must not reach the register store again -- no user code, no
+    /// clipboard provider: the borrow is the cell's (a debug build panics on
+    /// a nested one).
+    pub fn read<R>(self, f: impl FnOnce(&YankReg) -> R) -> R {
+        match self {
+            Reg::Slot(slot) => y_regs.with(|regs| f(&regs[slot])),
+            Reg::Empty => f(&YankReg::EMPTY),
+        }
+    }
+
+    /// Run `f` on the register, to change it. As [`read`](Self::read); a
+    /// write to the empty register is dropped, as nothing reads it back.
+    pub fn write<R>(self, f: impl FnOnce(&mut YankReg) -> R) -> R {
+        match self {
+            Reg::Slot(slot) => y_regs.with_mut(|regs| f(&mut regs[slot])),
+            Reg::Empty => f(&mut YankReg::EMPTY.clone()),
+        }
+    }
+
+    /// The register as it is now, to hold across code that may write it:
+    /// the lines are shared, not copied.
+    pub fn snapshot(self) -> YankReg {
+        self.read(YankReg::clone)
+    }
 }
 
 /// The index of the slot `""` currently points at, or -1 when nothing has
@@ -47,17 +91,15 @@ pub(crate) fn get_unname_register() -> c_int {
 /// Slot `reg` of the register array.
 ///
 /// Panics unless `reg` is a valid index, as [`op_reg_index`] answers.
-pub fn get_y_register(reg: c_int) -> *mut YankReg {
+pub fn get_y_register(reg: c_int) -> Reg {
     let reg = usize::try_from(reg).expect("a register index");
     assert!(reg < NUM_REGISTERS as usize, "a register index");
-    y_regs.ptr().cast::<YankReg>().wrapping_add(reg)
+    Reg::Slot(reg)
 }
 
-/// The register `""` points at, or null.
-pub fn get_y_previous() -> *mut YankReg {
-    y_previous
-        .get()
-        .map_or(::core::ptr::null_mut(), get_y_register)
+/// The register `""` points at, if anything has been written.
+pub fn get_y_previous() -> Option<Reg> {
+    y_previous.get().map(get_y_register)
 }
 
 /// Whether `regname` names a register.
@@ -80,7 +122,7 @@ pub fn valid_yank_reg(regname: c_int, writing: bool) -> bool {
 /// 'clipboard' does not ask for one (or no provider is available).
 pub fn get_default_register_name() -> c_int {
     let mut name = NUL;
-    unsafe { clipboard::adjust_clipboard_name(&mut name, true, false) };
+    let _ = clipboard::adjust_clipboard_name(&mut name, true, false);
     name
 }
 
@@ -98,38 +140,37 @@ pub(crate) struct ShadaYank {
 /// its name and whether `""` points at it, in slot order. A register of
 /// more than `max_lines` lines is left out.
 pub(crate) fn shada_registers(max_lines: Option<usize>) -> Vec<(c_char, bool, ShadaYank)> {
-    let mut found = Vec::new();
-    for i in 0..NUM_SAVED_REGISTERS {
-        let reg = get_y_register(i);
-        // SAFETY: a slot of the register array, which owns `y_size` strings
-        // at `y_array` and its extra data; both are only read here.
-        unsafe {
-            if reg_empty(&*reg) || max_lines.is_some_and(|max| (*reg).y_size > max) {
-                continue;
-            }
-            let contents = core::slice::from_raw_parts((*reg).y_array, (*reg).y_size).to_vec();
-            let yank = ShadaYank {
-                contents,
-                motion: (*reg).y_type,
-                width: (*reg).y_width,
-                timestamp: (*reg).timestamp,
-                extra: crate::mark::extra_copy_raw((*reg).additional_data),
-            };
-            let name = get_register_name(i) as c_char;
-            found.push((name, core::ptr::eq(reg, get_y_previous()), yank));
-        }
-    }
-    found
+    let previous = y_previous.get();
+    y_regs.with(|regs| {
+        (0..NUM_SAVED_REGISTERS)
+            .filter_map(|i| {
+                let reg = &regs[i as usize];
+                if reg_empty(reg) || max_lines.is_some_and(|max| reg.lines.len() > max) {
+                    return None;
+                }
+                let yank = ShadaYank {
+                    contents: reg
+                        .lines
+                        .iter()
+                        .map(|line| String_0::from_bytes(line))
+                        .collect(),
+                    motion: reg.kind,
+                    width: reg.width,
+                    timestamp: reg.timestamp,
+                    extra: reg.extra.clone(),
+                };
+                let name = get_register_name(i) as c_char;
+                Some((name, previous == Some(i), yank))
+            })
+            .collect()
+    })
 }
 
 /// Look at the register named `name`, or answer `None` for a name with no
 /// slot.
 fn with_named_register<R>(name: c_char, f: impl FnOnce(&YankReg) -> R) -> Option<R> {
     let i = op_reg_index(c_int::from(name));
-    // SAFETY: a slot of the register array, which owns `y_size` strings at
-    // `y_array`; it is only read, and nothing writes registers while `f`
-    // runs.
-    (i != -1).then(|| f(unsafe { &*get_y_register(i) }))
+    (i != -1).then(|| get_y_register(i).read(f))
 }
 
 /// When the register named `name` was set, or `None` for a name with no
@@ -145,36 +186,36 @@ pub(crate) fn shada_cleared_register_timestamp(name: c_char) -> Option<Timestamp
     with_named_register(name, |reg| reg_empty(reg).then_some(reg.timestamp)).flatten()
 }
 
-/// Put `yank` in the register named `name`, freeing whatever was there, and
-/// point `""` at it when `is_unnamed`. Answers false for a name with no
+/// `bytes` as a register line, byte for byte: ShaDa's text is not the
+/// editor's, so it may hold a NUL, which a line keeps as upstream's counted
+/// `String` does.
+fn exact_line(bytes: &[u8]) -> XString {
+    let mut line = XString::with_capacity(bytes.len());
+    line.push_bytes(bytes);
+    line
+}
+
+/// Put `yank` in the register named `name`, replacing whatever was there,
+/// and point `""` at it when `is_unnamed`. Answers false for a name with no
 /// slot.
 pub(crate) fn shada_set_register(name: c_char, yank: ShadaYank, is_unnamed: bool) -> bool {
     let i = op_reg_index(c_int::from(name));
     if i == -1 {
         return false;
     }
-    let size = yank.contents.len();
-    // SAFETY: an `xmalloc` array of exactly `size` strings, each written
-    // before the register can read it; the register owns it and the extra
-    // data from here, and frees both in `free_register`.
-    let reg = unsafe {
-        let array = xmalloc(size * size_of::<String_0>()).cast::<String_0>();
-        for (at, line) in yank.contents.into_iter().enumerate() {
-            array.add(at).write(line);
-        }
-        YankReg {
-            y_array: array,
-            y_size: size,
-            y_type: yank.motion,
-            y_width: yank.width,
-            timestamp: yank.timestamp,
-            additional_data: crate::mark::extra_into_raw(yank.extra),
-        }
+    let lines = yank
+        .contents
+        .iter()
+        .map(|line| exact_line(line.as_bytes()))
+        .collect();
+    let reg = YankReg {
+        lines: RegLines::new(lines),
+        kind: yank.motion,
+        width: yank.width,
+        timestamp: yank.timestamp,
+        extra: yank.extra,
     };
-    // SAFETY: the slot owns its array and extra data, released before the
-    // new register is written over it.
-    unsafe { free_register(get_y_register(i)) };
-    unsafe { *get_y_register(i) = reg };
+    get_y_register(i).write(|slot| *slot = reg);
     if is_unnamed {
         y_previous.set(Some(i));
     }
@@ -199,53 +240,47 @@ pub(crate) fn point_unnamed_at(regname: c_int) {
     y_previous.set(Some(op_reg_index(regname).max(0)));
 }
 
-/// Widen a blockwise register's `y_width` to its widest line, in *cells*.
-///
-/// Does nothing to a register that is not blockwise.
-///
-/// # Safety
-/// `reg` must point at a register whose `y_array` holds `y_size` strings.
-pub unsafe fn update_yankreg_width(reg: *mut YankReg) {
-    if unsafe { (*reg).y_type } != kMTBlockWise {
-        return;
+impl YankReg {
+    /// Widen a blockwise register's `width` to its widest line, in *cells*.
+    ///
+    /// Does nothing to a register that is not blockwise.
+    pub fn update_width(&mut self) {
+        if self.kind != kMTBlockWise {
+            return;
+        }
+        let widest = self
+            .lines
+            .iter()
+            .map(|line| c_string_cells_len(line, line.len()))
+            .max()
+            .unwrap_or(0);
+        let widest = c_int::try_from(widest).expect("a register line is narrower than c_int");
+        self.width = self.width.max(widest - 1);
     }
-    let mut maxlen: size_t = 0;
-    for i in 0..unsafe { (*reg).y_size } {
-        let line = unsafe { &*(*reg).y_array.add(i) };
-        maxlen = maxlen.max(unsafe { mb_string2cells_len(line.data(), line.len()) });
-    }
-    debug_assert!(maxlen <= c_int::MAX as size_t);
-    unsafe { (*reg).y_width = (*reg).y_width.max(maxlen as c_int - 1) };
 }
 
 /// The register `regname` names, for one of the three `YREG_*` purposes.
 ///
 /// Cannot handle the black hole `"_`, and must only be called with a valid
-/// register name.
+/// register name (see [`valid_yank_reg`]).
 ///
 /// - `YREG_PASTE` -- about to paste it. With no name, read whatever was
 ///   written last, or the unnamed clipboard if 'clipboard' says so; a
-///   `"*`/`"+` read queries the provider.
+///   `"*`/`"+` read queries the provider, and so may run arbitrary Lua.
 /// - `YREG_YANK` -- about to yank into it. With no name, yank into `"0`, and
 ///   move `""` to it.
-/// - `YREG_PUT` -- only report where a paste *would* read from, without
-///   querying the provider.
-///
-/// # Safety
-/// `regname` must be a valid register name (see [`valid_yank_reg`]). May run
-/// the clipboard provider, and so arbitrary Lua.
-pub unsafe fn get_yank_register(regname: c_int, mode: c_int) -> *mut YankReg {
-    let mut reg: *mut YankReg = ::core::ptr::null_mut();
+/// - `YREG_PUT` -- only report where a paste *would* read from; a `"*`/`"+`
+///   the provider does not answer is [`Reg::Empty`].
+pub fn get_yank_register(regname: c_int, mode: c_int) -> Reg {
     if (mode == YREG_PASTE || mode == YREG_PUT)
-        && unsafe { clipboard::get_clipboard(regname, &mut reg, false) }
+        && let Some((slot, true)) = clipboard::get_clipboard(regname, false)
     {
-        return reg;
+        return Reg::Slot(slot);
     }
     if mode == YREG_PUT && (regname == '*' as c_int || regname == '+' as c_int) {
         // Reporting only: hand back an empty register rather than asking
         // the provider what the clipboard holds.
-        static empty_reg: GlobalCell<YankReg> = GlobalCell::new(EMPTY_YANKREG);
-        return empty_reg.ptr();
+        return Reg::Empty;
     }
     if mode != YREG_YANK
         && (regname == 0
@@ -265,85 +300,50 @@ pub unsafe fn get_yank_register(regname: c_int, mode: c_int) -> *mut YankReg {
     get_y_register(i)
 }
 
-/// Whether the register `regname` holds linewise text, also handing back the
-/// register prepared for pasting.
-///
-/// `*reg` is set to null for an invalid or black-hole register.
-///
-/// # Safety
-/// `reg` must be writable. May run the clipboard provider.
-pub unsafe fn yank_register_mline(regname: c_int, reg: *mut *mut YankReg) -> bool {
-    unsafe { *reg = ::core::ptr::null_mut() };
+/// Whether the register `regname` holds linewise text, and the register
+/// as it is, prepared for pasting -- `None` for an invalid or black-hole
+/// name. May run the clipboard provider.
+pub fn yank_register_mline(regname: c_int) -> (bool, Option<YankReg>) {
     if regname != 0 && !valid_yank_reg(regname, false) {
-        return false;
+        return (false, None);
     }
     if regname == '_' as c_int {
-        return false; // black hole
+        return (false, None); // black hole
     }
-    unsafe { *reg = get_yank_register(regname, YREG_PASTE) };
-    unsafe { (**reg).y_type == kMTLineWise }
+    let reg = get_yank_register(regname, YREG_PASTE).snapshot();
+    (reg.kind == kMTLineWise, Some(reg))
 }
 
-/// A deep copy of register `name`, for `do_put` to work on.
-///
-/// The caller frees it with [`free_register`] and `xfree`.
-///
-/// # Safety
-/// `name` must be a valid register name. May run the clipboard provider.
-pub unsafe fn copy_register(name: c_int) -> *mut YankReg {
-    let reg = unsafe { get_yank_register(name, YREG_PASTE) };
-    let copy = unsafe { xmalloc(::core::mem::size_of::<YankReg>()) } as *mut YankReg;
-    unsafe { *copy = *reg };
-    if unsafe { (*copy).y_size } == 0 {
-        unsafe { (*copy).y_array = ::core::ptr::null_mut() };
-    } else {
-        unsafe {
-            (*copy).y_array =
-                xcalloc((*copy).y_size, ::core::mem::size_of::<String_0>()) as *mut String_0
-        };
-        for i in 0..unsafe { (*copy).y_size } {
-            // SAFETY: `xcalloc` zeroed the destination, which is the null
-            // string, so the assignment has nothing to release.
-            unsafe { *(*copy).y_array.add(i) = (*(*reg).y_array.add(i)).clone() };
-        }
-    }
-    copy
+/// Register `name` as it is now, for `do_put` to work on after something has
+/// overwritten it. May run the clipboard provider.
+pub fn copy_register(name: c_int) -> YankReg {
+    get_yank_register(name, YREG_PASTE).snapshot()
 }
 
-/// Shift the numbered delete registers `"1`..`"8` up one, freeing `"9`, so
+/// Shift the numbered delete registers `"1`..`"8` up one, dropping `"9`, so
 /// that a new delete can go into `"1`.
 ///
 /// With `y_append` the caller is appending to an uppercase register, so `""`
 /// is left where it is.
 pub fn shift_delete_registers(y_append: bool) {
-    unsafe { free_register(get_y_register(9)) };
-    for n in (2..=9).rev() {
-        unsafe { *get_y_register(n) = *get_y_register(n - 1) };
-    }
+    y_regs.with_mut(|regs| {
+        regs[1..=9].rotate_right(1);
+        // `"1` is left unset, keeping the type, width and time of the
+        // register that moved to `"2` -- upstream copies the struct and nulls
+        // only the array. The extra data moved with it: upstream leaves `"1`
+        // and `"2` sharing one block, which the yank into `"1` then frees.
+        let moved = &regs[2];
+        regs[1] = YankReg {
+            lines: RegLines::NONE,
+            kind: moved.kind,
+            width: moved.width,
+            timestamp: moved.timestamp,
+            extra: None,
+        };
+    });
     if !y_append {
         y_previous.set(Some(1));
     }
-    // `"1`'s array now belongs to `"2`: forget it rather than free it.
-    unsafe { (*get_y_register(1)).y_array = ::core::ptr::null_mut() };
-}
-
-/// Free everything a register owns and leave it empty.
-///
-/// # Safety
-/// `reg` must own its `y_array` and additional data.
-pub unsafe fn free_register(reg: *mut YankReg) {
-    unsafe { xfree((*reg).additional_data as *mut c_void) };
-    unsafe { (*reg).additional_data = ::core::ptr::null_mut() };
-    if unsafe { (*reg).y_array }.is_null() {
-        return;
-    }
-    for i in (0..unsafe { (*reg).y_size }).rev() {
-        // SAFETY: the register owns `y_size` strings at `y_array`, each of
-        // them initialised.
-        unsafe { (*reg).y_array.add(i).drop_in_place() };
-    }
-    unsafe { xfree((*reg).y_array as *mut c_void) };
-    unsafe { (*reg).y_array = ::core::ptr::null_mut() };
 }
 
 /// Whether text put in `regname` is taken literally -- that is, whether the
@@ -402,15 +402,13 @@ pub fn get_register_name(num: c_int) -> c_int {
     }
 }
 
-/// Whether a register holds nothing -- either no array at all, or the one
+/// Whether a register holds nothing -- either no lines at all, or the one
 /// empty charwise line an empty yank leaves behind.
 #[inline]
 fn reg_empty(reg: &YankReg) -> bool {
-    reg.y_array.is_null()
-        || reg.y_size == 0
-        || reg.y_size == 1
-            && reg.y_type == kMTCharWise
-            // SAFETY: a register's non-null `y_array` holds its `y_size`
-            // strings, and there is one.
-            && unsafe { (*reg.y_array).is_empty() }
+    match reg.lines.as_slice() {
+        [] => true,
+        [only] => reg.kind == kMTCharWise && only.is_empty(),
+        _ => false,
+    }
 }

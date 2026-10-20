@@ -670,7 +670,9 @@ fn run_operator(
                 restore_lbr(lbr_saved != 0);
                 // `zy` yanks without the trailing white space.
                 op.excl_tr_ws = cmd_arg.cmdchar == 'z' as c_int;
-                unsafe { op_yank(op.raw(), !gui_yank) };
+                // A copy: TextYankPost runs user code.
+                let arg: OpArg = *op;
+                op_yank(&arg, !gui_yank);
             }
             check_cursor_col(Win::current());
         }

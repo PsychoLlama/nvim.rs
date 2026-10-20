@@ -21,23 +21,18 @@
 //! | `put` | `p` `P` `gp` `gP` `]p` `[p` `zp` |
 //! | `display` | `:registers` |
 //! | `contents` | a register as text: `getreg()`, `setreg()`, the clipboard, shada |
-#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::api::private::helpers::cstr_to_string;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::autocmd::{apply_autocmds, has_event};
-use crate::buffer::{buf_is_empty, buflist_findpat, buflist_name_nr, find_buf, getaltfname};
+use crate::buffer::{buf_is_empty, buflist_findpat, buflist_name_nr, find_buf};
 use crate::buffer_updates::buf_updates_send_changes;
-use crate::change::ml_replace;
 use crate::change::{changed_bytes, changed_lines, del_chars};
-use crate::charset::{getdigits_int, ptr2cells, skipwhite, transchar};
+use crate::charset::transchar;
 use crate::clipboard;
-use crate::cursor::{
-    coladvance_force, gchar_cursor, get_cursor_line_len, get_cursor_line_ptr, get_cursor_pos_len,
-    get_cursor_pos_ptr, getviscol, getvpos,
-};
+use crate::cursor::{coladvance_force, gchar_cursor, get_cursor_line_len, getviscol};
 use crate::drawscreen::state::must_redraw;
 use crate::drawscreen::{showmode, update_screen};
 use crate::edit::{beginline, get_last_insert, get_last_insert_save, oneright, stuff_inserted};
@@ -45,7 +40,7 @@ use crate::eval::typval::{list_set_lock, tv_list_alloc};
 use crate::eval::{eval_to_string, get_v_event, restore_v_event};
 use crate::ex_cmds2::check_fname;
 use crate::ex_docmd::state::{last_cmdline, new_last_cmdline};
-use crate::ex_getln::{cmdline_paste_str, getcmdline};
+use crate::ex_getln::cmdline_paste_str;
 use crate::extmark::{extmark_splice, extmark_splice_cols};
 use crate::file_search::file_name_at_cursor;
 use crate::getchar::state::{
@@ -57,19 +52,15 @@ use crate::getchar::{
 };
 use crate::global_cell::GlobalCell;
 use crate::highlight_group::HLF_8;
-use crate::indent::{get_indent, preprocs_left, set_indent, tabstop_padding};
+use crate::indent::{get_indent, preprocs_left, set_indent};
 use crate::insexpand::{ins_compl_delete, ins_compl_preinsert_effect};
 use crate::keycodes::{
     Ctrl_A, Ctrl_F, Ctrl_L, Ctrl_P, Ctrl_R, Ctrl_U, Ctrl_V, Ctrl_W, escape_ks_bytes, unescape_ks_in,
 };
 use crate::mark::mark_adjust;
-use crate::mbyte::{
-    mb_charlen, mb_string2cells, mb_string2cells_len, mb_tolower, utf_head_off, utf_ptr2cells_len,
-    utf_ptr2len_len, utf_ptr2str_char_info, utfc_next, utfc_ptr2len,
-};
+use crate::mbyte::mb_tolower;
 use crate::memline::{decl, ml_append_cstr, ml_replace_owned};
 use crate::memory::XString;
-use crate::memory::{memchrsub, memcnt, xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xrealloc};
 use crate::message::state::{msg_ext_skip_flush, redir_reg};
 use crate::message::{e_noinstext, e_nolastcmd, e_noprevre, e_resulting_text_too_long};
 use crate::message::{
@@ -77,8 +68,7 @@ use crate::message::{
     msg_str, msg_str_hl, msg_title, msgmore,
 };
 use crate::r#move::{changed_cline_bef_curs, invalidate_botline_win, update_topline};
-use crate::normal::find_ident_under_cursor;
-use crate::ops::{adjust_cursor_eol, block_prep, charwise_block_prep, get_op_char};
+use crate::ops::{adjust_cursor_eol, get_op_char};
 use crate::option::get_ve_flags;
 use crate::option::vars::{p_ch, p_report};
 use crate::options::{kOptVeFlagAll, kOptVeFlagOnemore};
@@ -100,16 +90,14 @@ use crate::types::NL;
 use crate::types::TAB;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    AdditionalData, BCount, BlockDef, CharsizeArg, CmdModFlags, ColNr, ExArg, ExtmarkOp, GRegFlags,
-    HashTab, LineNr, MotionType, NUL, OpArg, PUT_BLOCK_INNER, PUT_CURSEND, PUT_CURSLINE,
-    PUT_FIXINDENT, PUT_LINE, PUT_LINE_FORWARD, PUT_LINE_SPLIT, Pos, RemapValues, SaveVEvent,
-    String_0, UndoObjectType, VarLock, YankReg, int64_t, kBoolVarFalse, kBoolVarTrue, ptrdiff_t,
-    size_t, ssize_t,
+    BCount, BlockDef, CharsizeArg, CmdModFlags, ColNr, ExArg, ExtmarkOp, GRegFlags, HashTab,
+    LineNr, MotionType, NUL, OpArg, PUT_BLOCK_INNER, PUT_CURSEND, PUT_CURSLINE, PUT_FIXINDENT,
+    PUT_LINE, PUT_LINE_FORWARD, PUT_LINE_SPLIT, Pos, RemapValues, SaveVEvent, String_0,
+    UndoObjectType, VarLock, YankReg, int64_t, kBoolVarFalse, kBoolVarTrue, ptrdiff_t, size_t,
 };
 use crate::ui::state::Columns;
 use crate::ui::ui_has;
 use crate::undo::{u_save, u_save_cursor};
-use ::libc::{abort, atoi};
 use core::ffi::c_int;
 
 // The carve of the transpiled module; see each child's docs.
@@ -179,17 +167,9 @@ pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 static expr_line: GlobalCell<Option<XString>> = GlobalCell::new(None);
 static execreg_lastc: GlobalCell<::core::ffi::c_int> = GlobalCell::new(NUL);
-/// The empty register every slot of `y_regs` starts as: upstream's
-/// `static YankReg y_regs[NUM_REGISTERS] = { 0 }`.
-const EMPTY_YANKREG: YankReg = YankReg {
-    y_array: ::core::ptr::null_mut::<String_0>(),
-    y_size: 0,
-    y_type: kMTCharWise,
-    y_width: 0,
-    timestamp: 0,
-    additional_data: ::core::ptr::null_mut::<AdditionalData>(),
-};
-static y_regs: GlobalCell<[YankReg; 39]> = GlobalCell::new([EMPTY_YANKREG; 39]);
+/// The 39 register slots, laid out as [`op_reg_index`] says; reached only
+/// through [`Reg`]'s closures.
+static y_regs: GlobalCell<[YankReg; 39]> = GlobalCell::new([YankReg::EMPTY; 39]);
 /// The slot of `y_regs` that `""` reads: the last register written.
 static y_previous: GlobalCell<Option<c_int>> = GlobalCell::new(None);
 static e_search_pattern_and_expression_register_may_not_contain_two_or_more_lines:

@@ -665,23 +665,14 @@ pub(crate) fn get_register_completion() {
             continue;
         }
 
-        // The register's lines, copied: adding a match can run code that
-        // changes the register.
-        // SAFETY: a valid register name; the copy `copy_register` answers is
-        // this frame's own, read and then freed here.
-        let lines: Vec<XString> = unsafe {
-            let reg = copy_register(regname);
-            let (array, size) = ((*reg).y_array, (*reg).y_size);
-            let count = if array.is_null() { 0 } else { size };
-            let lines = (0..count)
-                .map(|j| (*array.add(j)).data())
-                .filter(|line| !line.is_null())
-                .map(|line| XString::from_cstr(cstr::at(line)))
-                .collect();
-            free_register(reg);
-            xfree(reg.cast::<c_void>());
-            lines
-        };
+        // The register's lines, copied as the C strings they are: adding a
+        // match can run code that changes the register.
+        let reg = copy_register(regname);
+        let lines: Vec<XString> = reg
+            .lines
+            .iter()
+            .map(|line| XString::from_cstr(line.as_cstr()))
+            .collect();
 
         for line in &lines {
             if adding_mode {

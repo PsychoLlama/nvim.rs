@@ -117,7 +117,7 @@ pub(crate) fn ins_reg() {
         beep(kOptBoFlagRegister as ::core::ffi::c_uint);
         need_redraw = true; // remove the `"`
     } else {
-        let reg = unsafe { get_yank_register(regname, YREG_PASTE) };
+        let reg = get_yank_register(regname, YREG_PASTE);
 
         if literally == Ctrl_O || literally == Ctrl_P {
             // Append the command to the redo buffer.
@@ -130,13 +130,13 @@ pub(crate) fn ins_reg() {
                 0
             };
             let flags = fix | PUT_CURSEND as c_int;
-            unsafe { do_put(regname, ::core::ptr::null_mut(), BACKWARD, 1, flags) };
-        } else if unsafe { (*reg).y_size } > 1 && is_literal_register(regname) {
+            do_put(regname, None, BACKWARD, 1, flags);
+        } else if reg.read(|reg| reg.lines.len()) > 1 && is_literal_register(regname) {
             append_to_redobuff_char(Ctrl_R);
             append_to_redobuff_char(regname);
             let flags = PUT_CURSEND as c_int;
-            unsafe { do_put(regname, ::core::ptr::null_mut(), BACKWARD, 1, flags) };
-        } else if unsafe { insert_reg(regname, ::core::ptr::null_mut(), literally != 0) }.is_err() {
+            do_put(regname, None, BACKWARD, 1, flags);
+        } else if insert_reg(regname, None, literally != 0).is_err() {
             beep(kOptBoFlagRegister as ::core::ffi::c_uint);
             need_redraw = true; // remove the `"`
         } else if stop_insert_mode.get() {

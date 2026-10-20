@@ -89,15 +89,14 @@ fn command_line_handle_ctrl_bsl(mut s: Cls) -> CtrlBsl {
         // going to another buffer.
         let p = {
             let _locked = Lock::text();
-            unsafe { get_expr_line() }
+            get_expr_line()
         };
 
-        if !p.is_null() {
-            let len = unsafe { cstr::bytes_at(p) }.len() as ::core::ffi::c_int;
+        if let Some(p) = p {
+            let len = p.as_cstr().to_bytes().len() as ::core::ffi::c_int;
             realloc_cmdbuff(cc, len + 1);
             cc.set_len(len);
-            unsafe { strcpy(cc.text(), p) };
-            unsafe { xfree(p as *mut ::core::ffi::c_void) };
+            unsafe { strcpy(cc.text(), p.as_ptr()) };
 
             // Restore the cursor, or use the position set with
             // set_cmdline_pos().

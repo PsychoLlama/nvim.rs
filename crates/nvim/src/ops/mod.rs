@@ -100,12 +100,12 @@ use crate::types::TAB;
 use crate::types::{
     BCount, BlockDef, Callback, CharsizeArg, CmdArg, CmdModFlags, ColNr, Dict, ExtmarkOp, LineNr,
     MotionType, OpArg, OpType, OptInt, OptSet, Pos, StrCharInfo, TypVal, UVarNumber, VarNumber,
-    YankReg, int32_t, int64_t, size_t, ssize_t,
+    int32_t, int64_t, size_t, ssize_t,
 };
 use crate::ui::vim_beep;
 use crate::undo::{u_clearline, u_save, u_save_cursor};
 use crate::winlayer::{Live, PosRef};
-use ::libc::{abort, strcpy};
+use ::libc::strcpy;
 use core::mem::offset_of;
 
 // The carve of the transpiled module; see each child's docs.

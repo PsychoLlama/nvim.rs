@@ -18,6 +18,7 @@
 use core::ffi::{c_char, c_int};
 
 use super::*;
+use crate::memory::XString;
 use crate::types::{Failed, NUL};
 
 /// Set the last inserted text to the single character `c`.
@@ -145,22 +146,18 @@ pub(crate) fn get_last_insert() -> String_0 {
     })
 }
 
-/// The last inserted text as a fresh allocation, with the trailing `<Esc>`
-/// removed.  Null when there is none; the caller frees it.
-///
-/// # Safety
-/// Must run on the main thread.
-pub(crate) unsafe fn get_last_insert_save() -> *mut c_char {
+/// The last inserted text as its own copy, with the trailing `<Esc>`
+/// removed, as far as a C string would read it (to a NUL). `None` when there
+/// is none.
+pub(crate) fn get_last_insert_save() -> Option<XString> {
     let insert = get_last_insert();
-    if insert.data().is_null() {
-        return ::core::ptr::null_mut();
+    if insert.is_null() {
+        return None;
     }
-
-    let s = unsafe { xmemdupz(insert.data() as *const ::core::ffi::c_void, insert.len()) }
-        as *mut c_char;
-    if !insert.is_empty() && unsafe { *s.add(insert.len() - 1) } as c_int == ESC {
-        // The copy is shortened, not the string it came from.
-        unsafe { *s.add(insert.len() - 1) = NUL as c_char };
+    let mut text = insert.as_bytes();
+    // The copy is shortened, not the string it came from.
+    if text.last().is_some_and(|&last| c_int::from(last) == ESC) {
+        text = &text[..text.len() - 1];
     }
-    s
+    Some(XString::from_bytes(cstr::until_nul(text)))
 }

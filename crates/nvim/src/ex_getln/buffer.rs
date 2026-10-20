@@ -392,34 +392,27 @@ pub(crate) fn cmdline_paste(regname: ::core::ffi::c_int, literally: bool, remcr:
 
     // "textlock" avoids nasty things like going to another buffer while
     // evaluating an expression.
-    let mut arg: *mut ::core::ffi::c_char = ::core::ptr::null_mut();
-    let mut allocated: bool = false;
-    let got_special = {
+    let special = {
         let _locked = Lock::text();
-        special_reg(regname, &raw mut arg, &raw mut allocated)
+        special_reg(regname)
     };
 
-    if !got_special {
+    let Some(arg) = special else {
         return cmdline_paste_reg(regname, literally, remcr);
-    }
+    };
 
     // Got the value of a special register in "arg".
-    if arg.is_null() {
+    let Some(arg) = arg else {
         return false;
-    }
-    let mut p = arg;
+    };
+    let mut skip = 0;
     // With 'incsearch' set and CTRL-R CTRL-W used: skip the duplicate
     // part of the word.
     if p_is() && regname == Ctrl_W {
-        let skip = duplicate_word_len(arg);
-        p = p.wrapping_add(skip as usize);
+        skip = duplicate_word_len(arg.as_ptr()) as usize;
     }
 
-    // SAFETY: the register's own text, or a slice of it.
-    unsafe { cmdline_paste_str(p, literally) };
-    if allocated {
-        free(arg);
-    }
+    cmdline_paste_str(arg.cstr_at(skip), literally);
     true
 }
 
@@ -461,17 +454,13 @@ fn is_yank_reg(regname: ::core::ffi::c_int) -> bool {
     valid_yank_reg(regname, false)
 }
 
-/// `get_spec_reg()` for reading: fills `arg` and says whether it did.
+/// `get_spec_reg()` for reading: `None` when `regname` is not a computed
+/// register, `Some(None)` when it has nothing in it.
 ///
 /// Runs user code -- `'` and `=` evaluate an expression -- which is why the
 /// caller raises `textlock` around it and holds no command line across it.
-fn special_reg(
-    regname: ::core::ffi::c_int,
-    arg: *mut *mut ::core::ffi::c_char,
-    allocated: *mut bool,
-) -> bool {
-    // SAFETY: two slots of the caller's own.
-    unsafe { get_spec_reg(regname, arg, allocated, true) }
+fn special_reg(regname: ::core::ffi::c_int) -> Option<Option<XString>> {
+    get_spec_reg(regname, true)
 }
 
 /// Put a string on the command line.
@@ -479,11 +468,8 @@ fn special_reg(
 /// With `literally` set the text is inserted as-is; otherwise it is stuffed
 /// back as if typed — which does not leave the command line, but does mean
 /// every character that would end it has to be quoted with CTRL-V.
-///
-/// # Safety
-///
-/// `s` must point at a NUL-terminated string.
-pub unsafe fn cmdline_paste_str(mut s: *const ::core::ffi::c_char, literally: bool) {
+pub fn cmdline_paste_str(s: &CStr, literally: bool) {
+    let mut s = s.as_ptr();
     if literally {
         // SAFETY: a NUL-terminated string, whose length it works out itself.
         unsafe { put_on_cmdline(s, -1, true) };

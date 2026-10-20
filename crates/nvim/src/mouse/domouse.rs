@@ -62,7 +62,7 @@ use crate::state::{MODE_INSERT, MODE_NORMAL, REPLACE_FLAG};
 use crate::statusline::{
     kStlClickDisabled, kStlClickFuncRun, kStlClickTabClose, kStlClickTabSwitch,
 };
-use crate::types::{NUL, OpArg, PUT_CURSEND, PUT_FIXINDENT, YankReg};
+use crate::types::{NUL, OpArg, PUT_CURSEND, PUT_FIXINDENT};
 use crate::ui::state::Columns;
 use crate::ui::ui_mouse_has;
 use crate::window::{goto_tabpage, tabpage_move};
@@ -474,8 +474,7 @@ fn middle_button_insert(op: Option<Op>, mut regname: c_int, fixindent: bool) -> 
     }
 
     if regname == '.' as c_int {
-        // SAFETY: inserts the register's text at the cursor.
-        let _ = unsafe { insert_reg(regname, ptr::null_mut(), true) };
+        let _ = insert_reg(regname, None, true);
         return Some(false);
     }
     if regname == 0 && has_clipboard_provider() {
@@ -484,20 +483,19 @@ fn middle_button_insert(op: Option<Op>, mut regname: c_int, fixindent: bool) -> 
 
     // The register is looked up only in Replace mode, as the C's `&&` has it;
     // everywhere else `reg` stays null and `do_put` looks it up itself.
-    let mut reg: *mut YankReg = ptr::null_mut();
-    // SAFETY: `reg` is a live local, and the answer is a register the editor
-    // owns.
-    let replacing =
-        State.get() & REPLACE_FLAG != 0 && !unsafe { yank_register_mline(regname, &raw mut reg) };
+    let mut reg = None;
+    let replacing = State.get() & REPLACE_FLAG != 0 && {
+        let (mline, fetched) = yank_register_mline(regname);
+        reg = fetched;
+        !mline
+    };
     if replacing {
-        // SAFETY: `reg` is a register the editor owns.
-        let _ = unsafe { insert_reg(regname, reg, true) };
+        let _ = insert_reg(regname, reg.as_ref(), true);
         return Some(false);
     }
 
     let flags = if fixindent { PUT_FIXINDENT } else { 0 } as c_int | PUT_CURSEND as c_int;
-    // SAFETY: as above.
-    unsafe { do_put(regname, reg, BACKWARD as c_int, 1, flags) };
+    do_put(regname, reg.as_ref(), BACKWARD as c_int, 1, flags);
     // Repeat it with CTRL-R CTRL-O r or CTRL-R CTRL-P r
     append_to_redobuff_char(Ctrl_R);
     append_to_redobuff_char(if fixindent { Ctrl_P } else { Ctrl_O });
@@ -677,10 +675,7 @@ fn dispatch_action(a: Action, win: Win) {
         if regname == 0 && has_clipboard_provider() {
             regname = '*' as c_int;
         }
-        let mut reg: *mut YankReg = ptr::null_mut();
-        // SAFETY: `reg` is a live local, and the answer is a register the
-        // editor owns.
-        let mline = unsafe { yank_register_mline(regname, &raw mut reg) };
+        let (mline, reg) = yank_register_mline(regname);
         if if mline {
             mouse_past_bottom.get()
         } else {
@@ -704,8 +699,7 @@ fn dispatch_action(a: Action, win: Win) {
             where_paste_started.set(win.w_cursor);
         }
         let flags = if fixindent { PUT_FIXINDENT } else { 0 } as c_int | PUT_CURSEND as c_int;
-        // SAFETY: `reg` is a register the editor owns.
-        unsafe { do_put(regname, reg, dir, count, flags) };
+        do_put(regname, reg.as_ref(), dir, count, flags);
         return;
     }
 

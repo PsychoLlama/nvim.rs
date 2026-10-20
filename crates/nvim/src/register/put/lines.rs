@@ -12,12 +12,12 @@
 //! That is also where 'autoindent'-style reindenting (`PUT_FIXINDENT`, which
 //! is `]p`) and the `'[`/`']` marks are settled.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
+use crate::cursor::getvpos_of;
 use crate::mbyte::head_off;
 use crate::memory::XString;
-use crate::winlayer::{Buf, PosRef, Win};
+use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::Put;
@@ -29,9 +29,8 @@ impl Put {
     /// Splice `count` copies of the register's single line into the buffer at
     /// `col`, once per line of a Visual selection.
     pub(crate) fn charwise_one_line(&mut self, mut lnum: LineNr, mut col: ColNr) {
-        // SAFETY: a charwise register holds at least one line, so `y_array`'s
-        // first string is there.
-        let yanklen = unsafe { (*self.y_array).len() } as c_int;
+        // A charwise register holds at least one line.
+        let yanklen = self.lines[0].len() as c_int;
         let start_lnum = lnum;
         let mut end_lnum = 0;
         let mut first_byte_off = 0;
@@ -68,8 +67,7 @@ impl Put {
                         col: 0,
                         coladd: 0,
                     };
-                    // SAFETY: a live window and a writable local position.
-                    let found = unsafe { getvpos(Win::current(), PosRef::new(&raw mut pos), vcol) };
+                    let found = getvpos_of(Win::current(), &mut pos, vcol);
                     col = if found { pos.col } else { MAXCOL };
                 }
                 // A Visual line too short to reach the column is skipped
@@ -86,10 +84,7 @@ impl Put {
                 // The new line is `col` bytes of the old one, then `count`
                 // copies of the register's line, then the rest of the old
                 // one.
-                //
-                // SAFETY: a charwise register holds at least one line, so
-                // `y_array`'s first string is there.
-                let put = unsafe { (*self.y_array).as_bytes() };
+                let put: &[u8] = &self.lines[0];
                 let mut newline = XString::with_capacity(totlen + oldlen as usize);
                 {
                     let mut lines = Buf::current().lines();
@@ -106,7 +101,6 @@ impl Put {
                 let end = col as usize + totlen;
                 first_byte_off = ColNr::try_from(head_off(&newline, end - 1)).unwrap_or(0);
 
-                // SAFETY: a NUL-terminated line the buffer takes ownership of.
                 let _ = ml_replace_owned(lnum, newline);
 
                 if lnum == Win::current().w_cursor.lnum {
@@ -150,10 +144,7 @@ impl Put {
     fn split_line_for_charwise(&self, lnum: LineNr, col: ColNr) {
         // The tail of the cursor line, with the register's *last* line in
         // front of it, becomes a new line below.
-        //
-        // SAFETY: `y_array` holds `y_size` strings and `y_size` is at least
-        // one, so the last is there.
-        let last = unsafe { (*self.y_array.add(self.y_size.wrapping_sub(1))).as_bytes() };
+        let last = self.lines.last().expect("a charwise register holds a line");
         let mut appended = XString::from_bytes(last);
         appended.push_bytes(&Buf::current().lines().line(lnum)[col as usize..]);
         let _ = ml_append_cstr(lnum, appended.as_cstr());
@@ -163,8 +154,7 @@ impl Put {
         // relocked the block the first read answered out of.
         let mut replacement =
             XString::from_bytes(&Buf::current().lines().line(lnum)[..col as usize]);
-        // SAFETY: a charwise register holds at least one line.
-        replacement.push_bytes(unsafe { (*self.y_array).as_bytes() });
+        replacement.push_bytes(&self.lines[0]);
         let _ = ml_replace_owned(lnum, replacement);
     }
 
@@ -199,7 +189,7 @@ impl Put {
         col: ColNr,
         lendiff: c_int,
     ) {
-        if self.y_type == kMTLineWise {
+        if self.kind == kMTLineWise {
             Buf::current().b_op_start.col = 0;
             if self.dir == FORWARD {
                 Buf::current().b_op_start.lnum += 1;
@@ -208,17 +198,16 @@ impl Put {
 
         // Only a plain linewise put moves the marks itself; a split put
         // has already spliced them.
-        let kind = if self.y_type == kMTLineWise && self.flags & PUT_LINE_SPLIT as c_int == 0 {
+        let kind = if self.kind == kMTLineWise && self.flags & PUT_LINE_SPLIT as c_int == 0 {
             kExtmarkUndo
         } else {
             kExtmarkNOOP
         };
-        let from = Buf::current().b_op_start.lnum + LineNr::from(self.y_type == kMTCharWise);
+        let from = Buf::current().b_op_start.lnum + LineNr::from(self.kind == kMTCharWise);
         mark_adjust(from, MAXLNUM, self.nr_lines, 0, kind);
 
-        // SAFETY (both): a live buffer, and the range is the lines the put
-        // just rewrote.
-        if self.y_type == kMTCharWise {
+        // The range is the lines the put just rewrote.
+        if self.kind == kMTCharWise {
             let at = Win::current().w_cursor.lnum;
             changed_lines(Buf::current(), at, col, at + 1, self.nr_lines, true);
         } else {
@@ -229,17 +218,13 @@ impl Put {
         // `']` goes on the first byte of the last character put, its
         // column corrected for whatever the reindent above removed.
         Buf::current().b_op_end.lnum = new_lnum;
-        // SAFETY: `y_array` holds `y_size` strings and `y_size` is at least
-        // one, so the last is there.
-        let last = unsafe { &*self.y_array.add(self.y_size.wrapping_sub(1)) };
+        let last = self.lines.last().expect("a register holds a line");
         let col = (last.len() as ColNr - lendiff).max(0);
         if col > 1 {
             Buf::current().b_op_end.col = col - 1;
             if !last.is_empty() {
-                // SAFETY: `last` is NUL-terminated and `len()` bytes long, so
-                // its final byte is one of them.
-                let head = unsafe { utf_head_off(last.data(), last.data().add(last.len() - 1)) };
-                Buf::current().b_op_end.col -= head;
+                let head = head_off(last, last.len() - 1);
+                Buf::current().b_op_end.col -= ColNr::try_from(head).unwrap_or(0);
             }
         } else {
             Buf::current().b_op_end.col = 0;
@@ -248,11 +233,10 @@ impl Put {
         if self.flags & PUT_CURSLINE as c_int != 0 {
             // `:put`: the cursor goes on the last inserted line.
             Win::current().w_cursor.lnum = lnum;
-            // SAFETY: the cursor is on a line of the current buffer.
             beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
         } else if self.flags & PUT_CURSEND as c_int != 0 {
             // The cursor goes after the inserted text.
-            if self.y_type == kMTLineWise {
+            if self.kind == kMTLineWise {
                 Win::current().w_cursor.lnum = if lnum >= Buf::current().b_ml.ml_line_count {
                     Buf::current().b_ml.ml_line_count
                 } else {
@@ -267,13 +251,12 @@ impl Put {
                     Buf::current().b_op_end.col = col - 1;
                 }
             }
-        } else if self.y_type == kMTLineWise {
+        } else if self.kind == kMTLineWise {
             // The cursor goes on the first non-blank of the first line.
             Win::current().w_cursor.col = 0;
             if self.dir == FORWARD {
                 Win::current().w_cursor.lnum += 1;
             }
-            // SAFETY: the cursor is on a line of the current buffer.
             beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
         } else {
             // The cursor goes on the first character put.
@@ -287,7 +270,6 @@ impl Put {
         let mut lendiff = 0;
         let mut indent_state = FixIndent {
             orig_indent: if self.flags & PUT_FIXINDENT as c_int != 0 {
-                // SAFETY: the cursor is on a line of the current buffer.
                 get_indent()
             } else {
                 0
@@ -301,7 +283,7 @@ impl Put {
         'error: {
             for cnt in 1..=self.count {
                 let mut i: size_t = 0;
-                if self.y_type == kMTCharWise {
+                if self.kind == kMTCharWise {
                     lnum = new_cursor.lnum;
                     self.split_line_for_charwise(lnum, col);
                     new_lnum += 1;
@@ -309,14 +291,13 @@ impl Put {
                     i = 1;
                 }
 
-                while i < self.y_size {
+                let y_size = self.lines.len();
+                while i < y_size {
                     // A charwise register's last line is already on the
                     // second half of the split.
-                    if self.y_type != kMTCharWise || i < self.y_size.wrapping_sub(1) {
-                        // SAFETY: `i` is below `y_size`, so `y_array`'s `i`th
-                        // string is there and NUL-terminated.
-                        let text = unsafe { crate::cstr::at((*self.y_array.add(i)).data()) };
-                        if ml_append_cstr(lnum, text).is_err() {
+                    if self.kind != kMTCharWise || i < y_size - 1 {
+                        // As the C string it is, to its first NUL.
+                        if ml_append_cstr(lnum, self.lines[i].as_cstr()).is_err() {
                             break 'error;
                         }
                         new_lnum += 1;
@@ -326,7 +307,7 @@ impl Put {
                     if self.flags & PUT_FIXINDENT as c_int != 0 {
                         // Only the very last line's length is wanted, to see
                         // what the reindent took off it.
-                        let measured = cnt == self.count && i == self.y_size.wrapping_sub(1);
+                        let measured = cnt == self.count && i == y_size - 1;
                         if measured {
                             lendiff = Buf::current().lines().line_len(lnum);
                         }
@@ -342,26 +323,25 @@ impl Put {
                 // put that did *not* split a line has its marks moved by
                 // `mark_adjust` below instead.
                 let splits_a_line =
-                    self.y_type == kMTLineWise && self.flags & PUT_LINE_SPLIT as c_int != 0;
-                if self.y_type == kMTCharWise || splits_a_line {
+                    self.kind == kMTLineWise && self.flags & PUT_LINE_SPLIT as c_int != 0;
+                if self.kind == kMTCharWise || splits_a_line {
+                    let (last, init) = self.lines.split_last().expect("a register holds a line");
                     let mut totsize: BCount = 0;
-                    for i in 0..self.y_size.wrapping_sub(1) {
-                        // SAFETY: `i` is below `y_size`.
-                        totsize += unsafe { (*self.y_array.add(i)).len() } as BCount + 1;
+                    for line in init {
+                        totsize += line.len() as BCount + 1;
                     }
-                    let last = self.y_size.wrapping_sub(1);
-                    // SAFETY: `y_size` is at least one, so `last` names a line.
-                    let lastsize = unsafe { (*self.y_array.add(last)).len() } as c_int;
+                    let lastsize = last.len() as c_int;
                     totsize += lastsize as BCount;
 
                     let buf = Buf::current();
                     let at = new_cursor.lnum - 1;
-                    let (start, rows, cols, bytes) = if self.y_type == kMTCharWise {
-                        (col, self.y_size as c_int - 1, lastsize, totsize)
+                    let y_size = self.lines.len() as c_int;
+                    let (start, rows, cols, bytes) = if self.kind == kMTCharWise {
+                        (col, y_size - 1, lastsize, totsize)
                     } else {
                         // Account for the last pasted newline and the
                         // newline the split itself added.
-                        (self.split_pos, self.y_size as c_int + 1, 0, totsize + 2)
+                        (self.split_pos, y_size + 1, 0, totsize + 2)
                     };
                     extmark_splice(buf, at, start, 0, 0, 0, rows, cols, bytes, kExtmarkUndo);
                 }
