@@ -44,7 +44,7 @@ use crate::winlayer::first_window;
 
 pub(crate) const NVIM_VERSION_MAJOR: c_int = 0;
 pub(crate) const NVIM_VERSION_MINOR: c_int = 12;
-pub(crate) const NVIM_VERSION_PATCH: c_int = 5;
+pub(crate) const NVIM_VERSION_PATCH: c_int = 6;
 
 /// The banner, NUL-terminated for the C-ABI callers that print it
 /// (`:version`, `nvim -v`, the intro screen, shada's generator field). The
@@ -87,7 +87,7 @@ pub(crate) fn has_nvim_version(asked: &[u8]) -> bool {
 /// An absent component reads as 0, and each present one is read up to its
 /// first non-digit -- C's `atoi`, which is what this replaced, stopped
 /// there. A component that does not *start* with a digit is a hard no, so
-/// `0.` and `0.x` are false while `0.12.5-dev` is true.
+/// `0.` and `0.x` are false while `0.12.6-dev` is true.
 fn at_most_this_nvim(asked: &[u8]) -> bool {
     /// An absent component, or one that leads with digits.
     fn component(text: Option<&[u8]>) -> Option<c_int> {
@@ -556,8 +556,8 @@ mod tests {
     fn nvim_version_omits_what_it_does_not_care_about() {
         assert!(at_most_this_nvim(b"0"));
         assert!(at_most_this_nvim(b"0.12"));
-        assert!(at_most_this_nvim(b"0.12.5"));
-        assert!(!at_most_this_nvim(b"0.12.6"));
+        assert!(at_most_this_nvim(b"0.12.6"));
+        assert!(!at_most_this_nvim(b"0.12.7"));
         assert!(!at_most_this_nvim(b"0.13"));
         assert!(!at_most_this_nvim(b"1"));
     }
@@ -565,7 +565,7 @@ mod tests {
     #[test]
     fn nvim_version_reads_each_component_as_atoi_did() {
         // Digits run out where the component does; the rest is ignored.
-        assert!(at_most_this_nvim(b"0.12.5-dev"));
+        assert!(at_most_this_nvim(b"0.12.6-dev"));
         assert!(at_most_this_nvim(b"00.012.0004"));
         // But a component that leads with anything else is not a version.
         assert!(!at_most_this_nvim(b""));

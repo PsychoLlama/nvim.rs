@@ -19,8 +19,8 @@
 
 /// The packed metadata, describing 261 methods and 69 UI events.
 pub static PACKED_API_METADATA: &[u8] =
-    b"\x86\xa7version\x88\xa5major\x00\xa5minor\x0c\xa5patch\x05\xaaprerelease\xc2\xa9api_level\
-\x0e\xaeapi_compatible\x00\xaeapi_prerelease\xc2\xa5build\xa7v0.12.5\xa9functions\xdc\x01\
+    b"\x86\xa7version\x88\xa5major\x00\xa5minor\x0c\xa5patch\x06\xaaprerelease\xc2\xa9api_level\
+\x0e\xaeapi_compatible\x00\xaeapi_prerelease\xc2\xa5build\xa7v0.12.6\xa9functions\xdc\x01\
 \x05\x85\xaaparameters\x91\x92\xa4Dict\xa4opts\xa5since\x09\xabreturn_type\xadArrayOf(Dict)\
 \xa4name\xb1nvim_get_autocmds\xa6method\xc2\x85\xaaparameters\x92\x92\xa6Object\xa5event\x92\
 \xa4Dict\xa4opts\xa5since\x09\xabreturn_type\xa7Integer\xa4name\xb3nvim_create_autocmd\xa6me\

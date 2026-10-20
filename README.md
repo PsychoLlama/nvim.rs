@@ -1,6 +1,6 @@
 # nvim.rs
 
-A rewrite of Neovim [v0.12.5](https://github.com/neovim/neovim/releases/tag/v0.12.5) to Rust.
+A rewrite of Neovim [v0.12.6](https://github.com/neovim/neovim/releases/tag/v0.12.6) to Rust.
 
 ## Purpose
 
@@ -8,7 +8,7 @@ I've been a vim/neovim zealot for the past decade. It's my home. But the nvim tr
 
 I'd yeet some AI at it, but a codebase dating back to the 80s isn't exactly the safest playground. Segfaults don't spark joy. It needs guardrails. It needs Rust.
 
-This repo is an attempt to port neovim's `v0.12.5` codebase to safe, idiomatic Rust while keeping user-facing behavior identical. Once it's my preferred brand of "maintainable" I'll fork it to pursue new absurdities.
+This repo is an attempt to port neovim's `v0.12.6` codebase to safe, idiomatic Rust while keeping user-facing behavior identical. Once it's my preferred brand of "maintainable" I'll fork it to pursue new absurdities.
 
 ## Roadmap
 
@@ -43,6 +43,6 @@ nix run 'github:PsychoLlama/nvim.rs#'
 
 ## License
 
-[Inherited from Neovim](https://github.com/neovim/neovim/blob/v0.12.5/README.md?plain=1#L94-L99):
+[Inherited from Neovim](https://github.com/neovim/neovim/blob/v0.12.6/README.md?plain=1#L94-L99):
 
 > Neovim contributions since [b17d96](https://github.com/neovim/neovim/commit/b17d9691a24099c9210289f16afb1a498a89d803) are licensed under the Apache 2.0 license, except for contributions copied from Vim (identified by the `vim-patch` token). See [LICENSE.txt](./LICENSE.txt) for details.

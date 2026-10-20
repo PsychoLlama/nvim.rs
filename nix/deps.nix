@@ -43,7 +43,7 @@ in
 
 stdenv.mkDerivation {
   pname = "nvim-deps";
-  version = "0.12.5";
+  version = "0.12.6";
 
   inherit src;
 
