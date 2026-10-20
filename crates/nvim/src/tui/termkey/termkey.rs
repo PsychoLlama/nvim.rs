@@ -595,7 +595,7 @@ fn peekkey(mut tk: Tk, key: &mut TermKeyKey, force: c_int, nbytep: &mut size_t) 
 }
 
 /// Whatever neither driver claimed: a plain character, or an escape prefix that
-/// makes the key after it an Alt- key.
+/// makes the key after it an Alt- key (unless that key is a repeat or release).
 fn peekkey_simple(
     mut tk: Tk,
     key: &mut TermKeyKey,
@@ -623,6 +623,15 @@ fn peekkey_simple(
         tk.buffstart -= 1;
         tk.buffcount += 1;
         if result == TERMKEY_RES_KEY {
+            if key.event == TERMKEY_EVENT_REPEAT || key.event == TERMKEY_EVENT_RELEASE {
+                // A repeat or release carries its modifiers in its own
+                // escape sequence, so the escape before it cannot be its Alt:
+                // it was the escape key, pressed on its own.
+                key.event = TERMKEY_EVENT_PRESS;
+                emit_codepoint(tk, first as c_int, key);
+                *nbytep = 1;
+                return TERMKEY_RES_KEY;
+            }
             key.modifiers |= TERMKEY_KEYMOD_ALT as c_int;
             *nbytep += 1;
         }
