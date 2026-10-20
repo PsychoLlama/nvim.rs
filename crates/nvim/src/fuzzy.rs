@@ -105,9 +105,10 @@ fn has_match(needle: &[c_int], haystack: &[c_int]) -> bool {
         return false;
     }
     let mut haystack = haystack.iter();
-    needle
-        .iter()
-        .all(|&n| haystack.any(|&h| n == h || mb_toupper(n) == h))
+    needle.iter().all(|&n| {
+        let upper = mb_toupper(n);
+        haystack.any(|&h| h == n || h == upper)
+    })
 }
 
 /// What a haystack character earns for the character in front of it: the
