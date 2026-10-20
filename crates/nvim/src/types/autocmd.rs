@@ -10,6 +10,7 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
+use crate::memory::XString;
 use crate::winlayer::Win;
 
 pub struct AutoCmd {
@@ -56,8 +57,10 @@ pub struct AcoSave {
     pub new_curwin_handle: Handle,
     pub save_prevwin_handle: Handle,
     pub new_curbuf: BufferRef,
-    pub tp_localdir: *mut ::core::ffi::c_char,
-    pub globaldir: *mut ::core::ffi::c_char,
+    /// The tab page's and the global directory, held aside while the
+    /// autocommand window is current so `win_enter` cannot `chdir`.
+    pub tp_localdir: Option<XString>,
+    pub globaldir: Option<XString>,
     pub save_visual_active: bool,
     pub save_prompt_insert: ::core::ffi::c_int,
 }
@@ -72,8 +75,8 @@ impl Default for AcoSave {
             new_curwin_handle: 0,
             save_prevwin_handle: 0,
             new_curbuf: BufferRef::new(),
-            tp_localdir: ::core::ptr::null_mut(),
-            globaldir: ::core::ptr::null_mut(),
+            tp_localdir: None,
+            globaldir: None,
             save_visual_active: false,
             save_prompt_insert: 0,
         }

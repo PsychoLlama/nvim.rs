@@ -134,8 +134,9 @@ pub struct Tabpage {
     pub(crate) tp_snapshot: [Option<FrameId>; 3],
     pub tp_winvar: ScopeDictItem,
     pub tp_vars: *mut Dict,
-    pub tp_localdir: *mut ::core::ffi::c_char,
-    pub tp_prevdir: *mut ::core::ffi::c_char,
+    /// `:tcd`'s directory, and the one `:tcd -` goes back to.
+    pub tp_localdir: Option<XString>,
+    pub tp_prevdir: Option<XString>,
 }
 /// Neither `Copy` nor `Clone`. A window owns its buffer list entry, its
 /// grid, its option strings, its tag stack and its jump list; nothing in
@@ -287,8 +288,9 @@ pub struct Window {
     pub w_arg_idx: ::core::ffi::c_int,
     /// Whether `w_arg_idx` no longer names the argument the window shows.
     pub w_arg_idx_invalid: bool,
-    pub w_localdir: *mut ::core::ffi::c_char,
-    pub w_prevdir: *mut ::core::ffi::c_char,
+    /// `:lcd`'s directory, and the one `:lcd -` goes back to.
+    pub w_localdir: Option<XString>,
+    pub w_prevdir: Option<XString>,
     pub w_onebuf_opt: WinOpt,
     pub w_allbuf_opt: WinOpt,
     pub w_p_cc_cols: *mut ::core::ffi::c_int,

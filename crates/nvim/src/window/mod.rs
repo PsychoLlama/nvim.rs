@@ -66,7 +66,7 @@ use crate::os::cshim::gettext;
 use crate::terminal::terminal_check_size;
 use crate::types::{
     AlignTextPos, BlnFlags, CdCause, Direction, DoBufAction, DoBufStart, Error, GetFileFlags,
-    Handle, MotionType, OptInt, WinSplit, WinStyle, Window, kErrorTypeException, size_t,
+    Handle, MotionType, OptInt, WinSplit, WinStyle, Window, kErrorTypeException,
 };
 use crate::ui_compositor::{ui_comp_remove_grid, win_grid};
 use crate::winlayer::graph::{first_tabpage, firstwin, lastwin};

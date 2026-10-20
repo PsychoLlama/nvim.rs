@@ -16,7 +16,6 @@
 
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of;
-use core::ptr;
 
 use super::arith::NextCurwin;
 use super::*;
@@ -25,7 +24,6 @@ use crate::drawscreen::{UPD_NOT_VALID, comp_col, status_redraw_all};
 use crate::ex_docmd::state::cmdmod;
 use crate::fold::copy_folding_state;
 use crate::mark::copy_jumplist;
-use crate::memory::xstrdup;
 use crate::message::e_noroom;
 use crate::message::msg_clr_eos_force;
 use crate::message::state::{msg_col, msg_row};
@@ -791,8 +789,8 @@ fn init(newp: Win, oldp: Win, flags: c_int) {
     } else {
         oldp.copy_location_lists_to(newp);
     }
-    newp.w_localdir = dup(oldp.w_localdir);
-    newp.w_prevdir = dup(oldp.w_prevdir);
+    newp.w_localdir = oldp.w_localdir.clone();
+    newp.w_prevdir = oldp.w_prevdir.clone();
 
     // SAFETY: `'splitkeep'` is a NUL-terminated option string.
     let spk = p_spk(|value| c_int::from(cstr::first(value)));
@@ -820,13 +818,4 @@ fn init(newp: Win, oldp: Win, flags: c_int) {
     newp.w_arg_idx = oldp.w_arg_idx;
     win_copy_options(oldp, newp);
     newp.w_winbar_height = oldp.w_winbar_height;
-}
-
-/// `xstrdup`, keeping a null a null.
-fn dup(s: *mut c_char) -> *mut c_char {
-    if s.is_null() {
-        return ptr::null_mut::<c_char>();
-    }
-    // SAFETY: a NUL-terminated string the window owns.
-    unsafe { xstrdup(s) }
 }

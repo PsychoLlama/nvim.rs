@@ -81,12 +81,12 @@ fn path_arg<'a>(args: &'a [TypVal], i: usize, buf: &'a mut NumBuf) -> &'a CStr {
 
 /// Whether the window has a directory of its own.
 fn win_has_localdir(win: Win) -> bool {
-    !win.w_localdir.is_null()
+    win.w_localdir.is_some()
 }
 
 /// Whether the tabpage has a directory of its own.
 fn tab_has_localdir(tabpage: TabPage) -> bool {
-    !tabpage.tp_localdir.is_null()
+    tabpage.tp_localdir.is_some()
 }
 
 /// Tabpage number `n`, or NULL when there is none.

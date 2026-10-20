@@ -192,12 +192,9 @@ pub unsafe fn aucmd_prepbuf(aco: *mut AcoSave, mut buffer: Buf) {
 
         // `w_localdir`, `tp_localdir` and `globaldir` all have to be
         // null, or `win_enter_ext` chdir()s.
-        unsafe { xfree((*auc_win).w_localdir.cast::<::core::ffi::c_void>()) };
-        unsafe { (*auc_win).w_localdir = ::core::ptr::null_mut() };
-        unsafe { (*aco).tp_localdir = TabPage::current().tp_localdir };
-        TabPage::current().tp_localdir = ::core::ptr::null_mut();
-        unsafe { (*aco).globaldir = globaldir.get() };
-        globaldir.set(::core::ptr::null_mut());
+        unsafe { (*auc_win).w_localdir = None };
+        unsafe { (*aco).tp_localdir = TabPage::current().tp_localdir.take() };
+        unsafe { (*aco).globaldir = globaldir.take() };
 
         block_autocmds();
         if need_append {
@@ -324,13 +321,11 @@ pub unsafe fn aucmd_restbuf(aco: *mut AcoSave) {
 
         // A `:lcd` inside the autocommand window has to be undone
         // *before* `tp_localdir` and `globaldir` come back.
-        if !aw.w_localdir.is_null() {
+        if aw.w_localdir.is_some() {
             win_fix_current_dir();
         }
-        unsafe { xfree(TabPage::current().tp_localdir.cast::<::core::ffi::c_void>()) };
-        unsafe { TabPage::current().tp_localdir = (*aco).tp_localdir };
-        unsafe { xfree(globaldir.get().cast::<::core::ffi::c_void>()) };
-        globaldir.set(unsafe { (*aco).globaldir });
+        TabPage::current().tp_localdir = unsafe { (*aco).tp_localdir.take() };
+        globaldir.set(unsafe { (*aco).globaldir.take() });
 
         // The buffer's contents may have changed under the cursor.
         set_visual_active(unsafe { (*aco).save_visual_active });

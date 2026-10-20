@@ -44,7 +44,6 @@ use crate::winlayer::{
     Buf, FrameRef, TabPage, Win, WinId, buffers, defer_free_window, forget_window, register_window,
     tabs,
 };
-use ::libc::abort;
 
 // ---------------------------------------------------------------------------
 // The neighbours only this file reaches
@@ -54,8 +53,9 @@ use ::libc::abort;
 /// All-zero bytes are not a valid `ScreenGrid` -- its cell buffers are
 /// `Vec`s, whose pointers are never null -- nor a valid `w_ns_set`, which is
 /// a `HashSet` and carries a hasher, nor either `WinOpt`'s string options,
-/// for the reason `optionstr::BUF_STRING_OPTIONS` states. All four are
-/// written before anything can read or drop them.
+/// for the reason `optionstr::BUF_STRING_OPTIONS` states, nor the two
+/// directories, which are `Option<XString>`s. All of them are written before
+/// anything can read or drop them.
 fn zeroed_window() -> Win {
     Win::alloc_zeroed(|wp| {
         // SAFETY: a fresh allocation this thread alone holds; the zeroed
@@ -66,6 +66,8 @@ fn zeroed_window() -> Win {
             (&raw mut (*wp).w_onebuf_opt).write(WinOpt::UNSET);
             (&raw mut (*wp).w_allbuf_opt).write(WinOpt::UNSET);
             (&raw mut (*wp).w_matches).write(Vec::new());
+            (&raw mut (*wp).w_localdir).write(None);
+            (&raw mut (*wp).w_prevdir).write(None);
         }
     })
 }
@@ -108,8 +110,7 @@ fn clear_options(opt: *mut WinOpt) {
 
 pub fn win_alloc_first() {
     if win_alloc_firstwin(None).is_err() {
-        // SAFETY: aborts the process; nothing comes back.
-        unsafe { abort() };
+        std::process::abort();
     }
     let first = alloc_tabpage();
     first_tabpage.set(Some(first.id()));
@@ -294,8 +295,8 @@ pub(crate) fn win_free(window: Win, tabpage: Option<TabPage>) {
     for i in 0..window.w_tagstacklen {
         tagstack_clear_entry(&mut window.w_tagstack[i as usize]);
     }
-    free(window.w_localdir);
-    free(window.w_prevdir);
+    window.w_localdir = None;
+    window.w_prevdir = None;
     free_click_defs(window.w_status_click_defs, window.w_status_click_defs_size);
     free_click_defs(window.w_winbar_click_defs, window.w_winbar_click_defs_size);
     free_click_defs(

@@ -18,7 +18,7 @@ use crate::types::CmdIdx;
 use crate::winlayer::TabId;
 use crate::winlayer::last_used_tab;
 use core::ffi::CStr;
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 use core::ptr;
 
 use super::*;
@@ -33,7 +33,6 @@ use crate::eval::window::{restore_win_noblock, switch_win_noblock};
 use crate::ex_docmd::state::cmdmod;
 use crate::ex_getln::{text_locked, text_locked_msg};
 use crate::global_cell::GlobalCell;
-use crate::memory::xstrdup;
 use crate::message::e_cmdwin;
 use crate::message::set_keep_msg;
 use crate::mouse::reset_dragwin;
@@ -87,10 +86,17 @@ pub(crate) fn adopt_tabpage(tabpage: TabPage) {
 /// Allocate a `Tabpage` and fill in its defaults.
 pub(crate) fn alloc_tabpage() -> TabPage {
     static LAST_TP_HANDLE: GlobalCell<c_int> = GlobalCell::new(0);
+    let mut zeroed = Box::<Tabpage>::new_zeroed();
+    let raw = zeroed.as_mut_ptr();
     // SAFETY: all-zero bytes are what upstream's `xcalloc(1, sizeof(Tabpage))`
     // hands a fresh tab page, and every field of `tabpage_S` that owns an
-    // allocation is null when zeroed.
-    let owned = Owned::new(unsafe { Box::<Tabpage>::new_zeroed().assume_init() });
+    // allocation is null when zeroed -- but for the two directories, which
+    // are `Option<XString>`s and are written here before the box is valid.
+    let owned = Owned::new(unsafe {
+        (&raw mut (*raw).tp_localdir).write(None);
+        (&raw mut (*raw).tp_prevdir).write(None);
+        zeroed.assume_init()
+    });
     // `owned` keeps it alive until the registry takes it over two lines
     // below.
     let mut tp = TabPage::owned_by(&owned);
@@ -130,8 +136,6 @@ pub(crate) fn free_tab(tabpage: TabPage) {
     if lastused_tabpage.get() == Some(tabpage.id()) {
         lastused_tabpage.set(None);
     }
-    free(tabpage.tp_localdir);
-    free(tabpage.tp_prevdir);
     // The free: `tabpage_S`'s destructor runs and the memory goes back.
     drop(owned);
 }
@@ -189,7 +193,7 @@ pub(crate) fn new_tabpage(
         lastwin.set(None);
     }
 
-    newtp.tp_localdir = clone_dir(old_curtab.tp_localdir);
+    newtp.tp_localdir = old_curtab.tp_localdir.clone();
     newtp.make_current();
 
     // Create a new empty window.
@@ -275,15 +279,6 @@ fn in_window(tabpage: TabPage, body: impl FnOnce()) {
 fn rows_avail() -> int64_t {
     (Rows.get() as OptInt - p_ch() - tabline_rows() as OptInt - global_stl_rows() as OptInt)
         as int64_t
-}
-
-/// A copy of `dir`, owned by the caller, or null for null.
-fn clone_dir(dir: *mut c_char) -> *mut c_char {
-    if dir.is_null() {
-        return ptr::null_mut();
-    }
-    // SAFETY: a NUL-terminated path.
-    unsafe { xstrdup(dir) }
 }
 
 /// Open a new tab page if `:tab cmd` was used. It edits the same buffer, as

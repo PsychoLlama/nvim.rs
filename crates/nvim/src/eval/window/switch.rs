@@ -30,10 +30,10 @@ pub fn win_execute_before(args: &mut WinExecute, window: Win, tabpage: TabPage) 
     args.apply_acd = false;
     args.save_sfname = None;
     if !window.is_current()
-        && (!Win::current().w_localdir.is_null()
-            || !window.w_localdir.is_null()
+        && (Win::current().w_localdir.is_some()
+            || window.w_localdir.is_some()
             || !tabpage.is_current()
-                && (!TabPage::current().tp_localdir.is_null() || !tabpage.tp_localdir.is_null())
+                && (TabPage::current().tp_localdir.is_some() || tabpage.tp_localdir.is_some())
             || p_acd())
     {
         args.cwd = current_dir();

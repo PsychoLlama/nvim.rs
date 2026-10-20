@@ -14,13 +14,11 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use crate::cstr;
 use crate::memory::XString;
 use crate::types::AutoEvent;
 use crate::winlayer::WinId;
 use crate::winlayer::prev_window;
-use core::ffi::{c_char, c_int};
-use core::ptr;
+use core::ffi::c_int;
 use std::ffi::CStr;
 
 use super::*;
@@ -31,21 +29,18 @@ use crate::ex_eval::aborting;
 use crate::ex_getln::text_or_buf_locked;
 use crate::file_search::do_autocmd_dirchanged;
 use crate::fileio::shorten_fnames;
-use crate::memory::xstrdup;
 use crate::message::state::msg_scrolled;
 use crate::mouse::setmouse;
 use crate::r#move::{changed_line_abv_curs, update_topline};
 use crate::normal::{reset_visual_and_resel, visual_active};
 use crate::option::buf_copy_options;
 use crate::option::vars::{P_SPK, p_acd, p_wh, p_wiw};
-use crate::os::fs::{os_chdir, os_dirname};
+use crate::os::fs::{current_dir, os_chdir};
 use crate::os::state::{globaldir, last_chdir_reason};
 use crate::path::pathcmp;
 use crate::state::mode::restart_edit;
 use crate::state::{MODE_CMDLINE, MODE_NORMAL, MODE_TERMINAL, get_real_state, virtual_active};
-use crate::types::{
-    CdScope, MAXPATHL, NUL, OptInt, kCdScopeGlobal, kCdScopeTabpage, kCdScopeWindow,
-};
+use crate::types::{CdScope, OptInt, kCdScopeGlobal, kCdScopeTabpage, kCdScopeWindow};
 use crate::undo::u_sync;
 use crate::winlayer::graph::prevwin;
 use crate::winlayer::{first_window, frames, tabs, windows_in_tab};
@@ -402,61 +397,50 @@ pub(crate) enum DirOwner {
     Global,
 }
 
-/// The slot `owner` keeps its directory in.
-fn own_dir_slot(owner: &DirOwner) -> *mut c_char {
-    match owner {
-        DirOwner::Window(window) => window.w_localdir,
-        DirOwner::TabPage(tabpage) => tabpage.tp_localdir,
-        DirOwner::Global => globaldir.get(),
-    }
-}
-
 /// A copy of the directory `owner` has of its own, or `None` when it has
 /// none.
 pub(crate) fn own_dir(owner: DirOwner) -> Option<XString> {
-    let dir = own_dir_slot(&owner);
-    // SAFETY: each is null or an allocated NUL-terminated string its owner
-    // keeps, and it is copied before anything can replace it.
-    unsafe { crate::cstr::at_opt(dir) }.map(XString::from_cstr)
+    match owner {
+        DirOwner::Window(window) => window.w_localdir.clone(),
+        DirOwner::TabPage(tabpage) => tabpage.tp_localdir.clone(),
+        DirOwner::Global => globaldir.with(Clone::clone),
+    }
 }
 
 /// Whether `owner` has a directory of its own.
 pub(crate) fn has_own_dir(owner: DirOwner) -> bool {
-    !own_dir_slot(&owner).is_null()
+    match owner {
+        DirOwner::Window(window) => window.w_localdir.is_some(),
+        DirOwner::TabPage(tabpage) => tabpage.tp_localdir.is_some(),
+        DirOwner::Global => globaldir.with(Option::is_some),
+    }
 }
 
 /// Replace the directory `owner` has of its own, releasing the old one.
 pub(crate) fn set_own_dir(owner: DirOwner, dir: Option<XString>) {
-    let dir = dir.map_or(ptr::null_mut(), XString::into_raw);
-    let old = match owner {
-        DirOwner::Window(mut window) => core::mem::replace(&mut window.w_localdir, dir),
-        DirOwner::TabPage(mut tabpage) => core::mem::replace(&mut tabpage.tp_localdir, dir),
-        DirOwner::Global => globaldir.replace(dir),
-    };
-    free(old);
+    match owner {
+        DirOwner::Window(mut window) => window.w_localdir = dir,
+        DirOwner::TabPage(mut tabpage) => tabpage.tp_localdir = dir,
+        DirOwner::Global => globaldir.set(dir),
+    }
 }
 
 /// A copy of the directory `:cd -` goes back to at `scope`'s owner.
 pub(crate) fn prev_dir_of(owner: DirOwner) -> Option<XString> {
-    let dir = match owner {
-        DirOwner::Window(window) => window.w_prevdir,
-        DirOwner::TabPage(tabpage) => tabpage.tp_prevdir,
-        DirOwner::Global => return crate::ex_docmd::global_prev_dir(),
-    };
-    // SAFETY: null or an allocated NUL-terminated string the owner keeps,
-    // copied before anything can replace it.
-    unsafe { crate::cstr::at_opt(dir) }.map(XString::from_cstr)
+    match owner {
+        DirOwner::Window(window) => window.w_prevdir.clone(),
+        DirOwner::TabPage(tabpage) => tabpage.tp_prevdir.clone(),
+        DirOwner::Global => crate::ex_docmd::global_prev_dir(),
+    }
 }
 
 /// Replace the directory `:cd -` goes back to, releasing the old one.
 pub(crate) fn set_prev_dir(owner: DirOwner, dir: Option<XString>) {
-    let raw = |dir: Option<XString>| dir.map_or(ptr::null_mut(), XString::into_raw);
-    let old = match owner {
-        DirOwner::Window(mut window) => core::mem::replace(&mut window.w_prevdir, raw(dir)),
-        DirOwner::TabPage(mut tabpage) => core::mem::replace(&mut tabpage.tp_prevdir, raw(dir)),
-        DirOwner::Global => return crate::ex_docmd::set_global_prev_dir(dir),
-    };
-    free(old);
+    match owner {
+        DirOwner::Window(mut window) => window.w_prevdir = dir,
+        DirOwner::TabPage(mut tabpage) => tabpage.tp_prevdir = dir,
+        DirOwner::Global => crate::ex_docmd::set_global_prev_dir(dir),
+    }
 }
 
 /// Change directory after another window became the current one.
@@ -464,37 +448,33 @@ pub(crate) fn set_prev_dir(owner: DirOwner, dir: Option<XString>) {
 /// The new directory is the window's own, or its tab page's, or -- when it has
 /// neither -- the global one saved when the first local directory was entered.
 fn fix_current_dir() {
-    // The new directory is the window's own, the tab page's, or none.
-    let new_dir = if Win::current().w_localdir.is_null() {
-        TabPage::current().tp_localdir
-    } else {
-        Win::current().w_localdir
-    };
-    let mut cwd = [0 as c_char; MAXPATHL as usize];
-    // SAFETY: a buffer of exactly `MAXPATHL` bytes to fill in.
-    if unsafe { os_dirname(cwd.as_mut_ptr(), MAXPATHL as size_t) }.is_err() {
-        cwd[0] = NUL as c_char;
-    }
+    // The new directory is the window's own, the tab page's, or none. A copy:
+    // the directory-change autocommands below may replace either.
+    let window_dir = Win::current().w_localdir.clone();
+    let has_window_dir = window_dir.is_some();
+    let new_dir = window_dir.or_else(|| TabPage::current().tp_localdir.clone());
+    // What `os_dirname` leaves when it fails is not a directory: the empty
+    // string stands for "unknown", as the NUL upstream wrote did.
+    let cwd = current_dir().unwrap_or_default();
 
-    if !new_dir.is_null() {
+    if let Some(new_dir) = new_dir {
         // Window or tab page has a local directory: save the current one as
         // global (unless that was done already) and change to the local one.
-        if globaldir.get().is_null() && cwd[0] as c_int != NUL {
-            // SAFETY: `cwd` is NUL-terminated and `xstrdup` copies it.
-            globaldir.set(unsafe { xstrdup(cwd.as_ptr()) });
+        if globaldir.with(Option::is_none) && !cwd.is_empty() {
+            globaldir.set(Some(cwd.clone()));
         }
-        let scope = if Win::current().w_localdir.is_null() {
-            kCdScopeTabpage
-        } else {
+        let scope = if has_window_dir {
             kCdScopeWindow
+        } else {
+            kCdScopeTabpage
         };
-        chdir_to(new_dir, scope as CdScope, cwd.as_ptr());
-    } else if !globaldir.get().is_null() {
+        chdir_to(new_dir.as_cstr(), scope as CdScope, cwd.as_cstr());
+    } else if let Some(global) = globaldir.with(Clone::clone) {
         // The window has no local directory and we are not in the global one:
-        // change back to it.
-        chdir_to(globaldir.get(), kCdScopeGlobal, cwd.as_ptr());
-        free(globaldir.get());
-        globaldir.set(ptr::null_mut::<c_char>());
+        // change back to it. The global one is only forgotten afterwards, as
+        // upstream frees it after the directory-change autocommands.
+        chdir_to(global.as_cstr(), kCdScopeGlobal, cwd.as_cstr());
+        globaldir.set(None);
     } else {
         return;
     }
@@ -504,24 +484,15 @@ fn fix_current_dir() {
 
 /// `chdir()` to `dir`, firing `DirChangedPre` and `DirChanged` around it when
 /// it actually differs from `cwd` and `'autochdir'` is off.
-fn chdir_to(dir: *mut c_char, scope: CdScope, cwd: *const c_char) {
-    // SAFETY: two NUL-terminated paths; -1 means "compare all of both".
-    let differs = unsafe { pathcmp(cstr::bytes_at(dir), cstr::bytes_at(cwd), None) } != 0;
+fn chdir_to(dir: &CStr, scope: CdScope, cwd: &CStr) {
+    let differs = pathcmp(dir.to_bytes(), cwd.to_bytes(), None) != 0;
     let announce = !p_acd() && differs;
     if announce {
-        dirchanged(dir, scope, true);
+        do_autocmd_dirchanged(dir, scope, kCdCauseWindow, true);
     }
-    // SAFETY: a NUL-terminated path.
-    if unsafe { os_chdir(cstr::at(dir)) } == 0 && announce {
-        dirchanged(dir, scope, false);
+    if os_chdir(dir) == 0 && announce {
+        do_autocmd_dirchanged(dir, scope, kCdCauseWindow, false);
     }
-}
-
-/// `do_autocmd_dirchanged()`: fire `DirChanged`, or `DirChangedPre` with
-/// `pre`.
-fn dirchanged(dir: *mut c_char, scope: CdScope, pre: bool) {
-    // SAFETY: a NUL-terminated path.
-    do_autocmd_dirchanged(unsafe { CStr::from_ptr(dir) }, scope, kCdCauseWindow, pre);
 }
 
 pub fn buf_jump_open_win(buffer: Buf) -> Option<Win> {
