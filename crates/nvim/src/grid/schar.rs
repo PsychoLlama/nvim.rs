@@ -248,10 +248,39 @@ fn schar_get_adv_cached(buf_out: &mut &mut [u8], sc: ScreenChar) -> size_t {
     len
 }
 
+// The readers of a cached glyph are out of line, private and not generic:
+// a `pub` or `#[inline]` body that names `GLYPH_CACHE` (through
+// `with_glyph`) can be shipped to another crate, which exports the cell and
+// sends every access through the GOT (`just state-exports`).
+
+/// Byte length of the cached glyph at `idx`.
+#[inline(never)]
+fn glyph_len(idx: uint32_t) -> size_t {
+    with_glyph(idx, <[u8]>::len)
+}
+
+/// Screen cells of the cached glyph at `idx`.
+#[inline(never)]
+fn glyph_cells(idx: uint32_t) -> c_int {
+    with_glyph(idx, c_cells_at)
+}
+
+/// First byte of the cached glyph at `idx`, NUL for the empty glyph.
+#[inline(never)]
+fn glyph_first_byte(idx: uint32_t) -> u8 {
+    with_glyph(idx, |glyph| glyph.first().copied().unwrap_or(0))
+}
+
+/// First codepoint of the cached glyph at `idx`.
+#[inline(never)]
+fn glyph_first_codepoint(idx: uint32_t) -> c_int {
+    with_glyph(idx, char_at)
+}
+
 /// Byte length of `sc`.
 pub fn schar_len(sc: ScreenChar) -> size_t {
     if schar_high(sc) {
-        with_glyph(schar_idx(sc), <[u8]>::len)
+        glyph_len(schar_idx(sc))
     } else {
         inline_len(&inline_bytes(sc))
     }
@@ -265,7 +294,7 @@ pub fn schar_cells(sc: ScreenChar) -> c_int {
         return 1;
     }
     if schar_high(sc) {
-        with_glyph(schar_idx(sc), c_cells_at)
+        glyph_cells(schar_idx(sc))
     } else {
         c_cells_at(&inline_bytes(sc))
     }
@@ -274,7 +303,7 @@ pub fn schar_cells(sc: ScreenChar) -> c_int {
 /// First raw UTF-8 byte of `sc`, NUL for the empty glyph.
 fn schar_get_first_byte(sc: ScreenChar) -> u8 {
     if schar_high(sc) {
-        with_glyph(schar_idx(sc), |glyph| glyph.first().copied().unwrap_or(0))
+        glyph_first_byte(schar_idx(sc))
     } else {
         inline_bytes(sc)[0]
     }
@@ -288,7 +317,7 @@ pub fn schar_get_first_codepoint(sc: ScreenChar) -> c_int {
         return sc as c_int;
     }
     if schar_high(sc) {
-        with_glyph(schar_idx(sc), char_at)
+        glyph_first_codepoint(schar_idx(sc))
     } else {
         let bytes = inline_bytes(sc);
         char_at(&bytes[..inline_len(&bytes)])
