@@ -174,3 +174,52 @@ pub const PUT_LINE_SPLIT: PutFlags = 16;
 pub const PUT_LINE_FORWARD: PutFlags = 32;
 /// in block mode, do not add trailing spaces
 pub const PUT_BLOCK_INNER: PutFlags = 64;
+
+#[cfg(test)]
+mod tests {
+    use super::{RegLines, YankReg};
+    use crate::memory::XString;
+
+    fn lines(text: &[&str]) -> Vec<XString> {
+        text.iter().map(|&line| XString::from(line)).collect()
+    }
+
+    #[test]
+    fn an_unset_register_is_not_an_empty_one() {
+        assert!(!RegLines::NONE.is_set());
+        assert!(RegLines::NONE.is_empty());
+        let none = RegLines::new(Vec::new());
+        assert!(none.is_set());
+        assert!(none.is_empty());
+        // Writing to an unset register sets it.
+        let mut unset = RegLines::NONE;
+        unset.lines_mut().push(XString::from("x"));
+        assert!(unset.is_set());
+        assert_eq!(unset.as_slice(), &lines(&["x"])[..]);
+    }
+
+    #[test]
+    fn a_share_keeps_its_lines_when_the_register_is_written() {
+        let mut reg = YankReg::EMPTY;
+        reg.lines = RegLines::new(lines(&["one", "two"]));
+        let held = reg.clone();
+        // The writer copies the shared vector; the share keeps the old one.
+        reg.lines.lines_mut()[0].push_bytes(b"!");
+        reg.lines.lines_mut().push(XString::from("three"));
+        assert_eq!(held.lines.as_slice(), &lines(&["one", "two"])[..]);
+        assert_eq!(reg.lines.as_slice(), &lines(&["one!", "two", "three"])[..]);
+        // Clearing drops only the register's own share.
+        reg.clear();
+        assert!(!reg.lines.is_set());
+        assert_eq!(held.lines.len(), 2);
+    }
+
+    #[test]
+    fn an_unshared_write_is_in_place() {
+        let mut reg = RegLines::new(lines(&["a"]));
+        let before = reg.as_slice().as_ptr();
+        reg.lines_mut()[0].push_bytes(b"b");
+        assert_eq!(reg.as_slice().as_ptr(), before);
+        assert_eq!(reg.as_slice(), &lines(&["ab"])[..]);
+    }
+}
