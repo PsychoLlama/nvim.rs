@@ -14,7 +14,6 @@ use crate::api::private::helpers::{
 };
 use crate::types::OptionSetFlags;
 use core::ffi::CStr;
-use core::ptr;
 
 use crate::buffer::BufRef;
 use crate::winlayer::{Buf, TabPage, Win, buffers, tab_windows, tabs};
@@ -135,17 +134,13 @@ fn create_buf(listed: Boolean, scratch: Boolean) -> BufferHandle {
     }
     unblock_autocmds();
     let bufref = BufRef::of_opt(Some(b));
-    let (no_fname, no_fname_io) = (ptr::null_mut(), ptr::null_mut());
     let event = AutoEvent::BufNew;
-    let wiped =
-        unsafe { apply_autocmds(event, no_fname, no_fname_io, false, buf) } && !bufref.valid();
+    let wiped = apply_autocmds(event, None, None, false, buf) && !bufref.valid();
     if wiped {
         return 0;
     }
     let event = AutoEvent::BufAdd;
-    let wiped = listed
-        && unsafe { apply_autocmds(event, no_fname, no_fname_io, false, buf) }
-        && !bufref.valid();
+    let wiped = listed && apply_autocmds(event, None, None, false, buf) && !bufref.valid();
     if wiped {
         return 0;
     }

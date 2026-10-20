@@ -67,15 +67,13 @@ pub(crate) unsafe fn get_patterns_from_pattern_or_buf(
     /// One pattern string per `,`-separated span of `text`, which is what
     /// `aucmd_span_pattern` walks.
     fn push_spans(patterns: &mut Array, text: &String_0) {
-        let mut pat: *const ::core::ffi::c_char = text.data();
-        // SAFETY: the caller's promise.
-        let mut patlen: size_t = unsafe { aucmd_span_pattern(pat, &raw mut pat) };
-        while patlen != 0 {
-            // SAFETY: the span is `patlen` bytes of `text`.
-            let span = unsafe { core::slice::from_raw_parts(pat.cast::<u8>(), patlen) };
-            patterns.push(Object::string(String_0::from_bytes(span)));
-            // SAFETY: as above.
-            patlen = unsafe { aucmd_span_pattern(pat.add(patlen), &raw mut pat) };
+        let text = text.as_bytes();
+        let (mut start, mut len) = aucmd_span_pattern(text);
+        while len != 0 {
+            let end = start + len;
+            patterns.push(Object::string(String_0::from_bytes(&text[start..end])));
+            (start, len) = aucmd_span_pattern(&text[end..]);
+            start += end;
         }
     }
 

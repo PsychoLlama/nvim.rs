@@ -26,7 +26,7 @@ use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
 use super::*;
-use crate::autocmd::{aucmd_prepbuf_in, aucmd_restbuf_in};
+use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};
 use crate::change::{changed, save_file_ff};
 use crate::charset::buf_init_chartab;
 use crate::fileio::{Loaded, ReadFlags, prep_exarg, readfile_named};
@@ -148,9 +148,9 @@ fn lines_differ(buffer: Buf, lnum: LineNr) -> bool {
 /// would have unwound.
 fn in_buffer<R>(buffer: Buf, f: impl FnOnce() -> R) -> R {
     let mut aco = AcoSave::default();
-    aucmd_prepbuf_in(&mut aco, buffer);
+    aucmd_prepbuf(&mut aco, buffer);
     let answer = f();
-    aucmd_restbuf_in(&mut aco);
+    aucmd_restbuf(&mut aco);
     answer
 }
 

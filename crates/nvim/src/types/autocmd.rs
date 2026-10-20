@@ -13,34 +13,190 @@ use super::*;
 use crate::memory::XString;
 use crate::winlayer::Win;
 
+/// A pattern's slot in its event's [`EventCmds::pats`] slab.
+///
+/// An id, not an address: a handler running under a walk can define and
+/// delete autocommands, and a walk holds its last pattern across that. A
+/// slot is cleared when its last command goes and is only reused after the
+/// slab compacts, which waits for the last walk to end -- so an id names one
+/// pattern for as long as any walk can hold it.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) struct PatId(u32);
+
+impl PatId {
+    /// The slot this id names.
+    pub(crate) fn index(self) -> usize {
+        self.0 as usize
+    }
+}
+
+/// What an autocommand runs.
+pub(crate) enum AutoHandler {
+    /// An Ex command line.
+    Cmd(XString),
+    /// A callback -- a Lua function, a funcref or a partial. A deleted
+    /// command holds `Callback::None`.
+    Fn(Callback),
+}
+
 pub struct AutoCmd {
-    pub pat: *mut AutoPat,
+    /// The command's pattern, `None` once [`aucmd_del`] has deleted it --
+    /// the mark compaction removes it on.
+    ///
+    /// [`aucmd_del`]: crate::autocmd::aucmd_del
+    pub(crate) pat: Option<PatId>,
     pub id: int64_t,
-    pub desc: *mut ::core::ffi::c_char,
-    pub handler_cmd: *mut ::core::ffi::c_char,
-    pub handler_fn: Callback,
+    pub desc: Option<XString>,
+    pub(crate) handler: AutoHandler,
     pub script_ctx: ScriptCtx,
     pub once: bool,
     pub nested: bool,
 }
+
 pub struct AutoPat {
-    pub refcount: RefcountSize,
-    pub pat: *mut ::core::ffi::c_char,
+    /// How many commands name this pattern; the slot is cleared at zero.
+    pub refcount: usize,
+    pub pat: XString,
     /// The pattern compiled, for a pattern that is not buffer-local.
     pub reg_prog: Option<crate::regexp::OwnedProg>,
     pub group: ::core::ffi::c_int,
-    pub patlen: ::core::ffi::c_int,
     pub buflocal_nr: ::core::ffi::c_int,
-    pub allow_dirs: ::core::ffi::c_char,
+    pub allow_dirs: bool,
 }
+
+/// One event's autocommands: the commands in definition order, which is the
+/// order they fire and list in, over a slab of the patterns they share.
+///
+/// A deleted command stays in place, its `pat` cleared, until no walk is
+/// running; then [`compact`](Self::compact) removes the deleted rows and
+/// the cleared slots together.
+pub(crate) struct EventCmds {
+    pub(crate) pats: Vec<Option<AutoPat>>,
+    pub(crate) cmds: Vec<AutoCmd>,
+}
+
+impl EventCmds {
+    /// No autocommands, and nothing allocated.
+    pub(crate) const EMPTY: EventCmds = EventCmds {
+        pats: Vec::new(),
+        cmds: Vec::new(),
+    };
+
+    /// How many command rows there are, the deleted ones included -- the
+    /// bound a walk snapshots.
+    pub(crate) fn len(&self) -> usize {
+        self.cmds.len()
+    }
+
+    /// Whether there are no rows at all, deleted or not.
+    pub(crate) fn is_empty(&self) -> bool {
+        self.cmds.is_empty()
+    }
+
+    /// The pattern `id` names, which must be live: a command that has a
+    /// pattern holds a count of it.
+    pub(crate) fn pat(&self, id: PatId) -> &AutoPat {
+        self.pats[id.index()]
+            .as_ref()
+            .expect("a command's pattern is live while the command is")
+    }
+
+    /// [`pat`](Self::pat), to write.
+    pub(crate) fn pat_mut(&mut self, id: PatId) -> &mut AutoPat {
+        self.pats[id.index()]
+            .as_mut()
+            .expect("a command's pattern is live while the command is")
+    }
+
+    /// The commands that are not deleted, each with its pattern, in order.
+    pub(crate) fn live(&self) -> impl Iterator<Item = (&AutoCmd, &AutoPat)> {
+        self.cmds
+            .iter()
+            .filter_map(|cmd| cmd.pat.map(|id| (cmd, self.pat(id))))
+    }
+
+    /// Put `pat` in the slab, holding no count yet.
+    pub(crate) fn add_pat(&mut self, pat: AutoPat) -> PatId {
+        let id = PatId(u32::try_from(self.pats.len()).expect("fewer than 2^32 patterns"));
+        self.pats.push(Some(pat));
+        id
+    }
+
+    /// Delete command `idx`: give up its count of its pattern, clearing the
+    /// slot at zero, and release what the command owns. The row stays
+    /// where a running walk's index can still reach it. Answers whether the
+    /// row was live.
+    pub(crate) fn delete(&mut self, idx: usize) -> bool {
+        let cmd = &mut self.cmds[idx];
+        let was_live = cmd.pat.is_some();
+        if let Some(id) = cmd.pat.take() {
+            let slot = &mut self.pats[id.index()];
+            let pat = slot
+                .as_mut()
+                .expect("a command's pattern is live while the command is");
+            pat.refcount -= 1;
+            if pat.refcount == 0 {
+                *slot = None;
+            }
+        }
+        let cmd = &mut self.cmds[idx];
+        if let AutoHandler::Fn(callback) = &mut cmd.handler {
+            callback.clear();
+        }
+        cmd.handler = AutoHandler::Fn(Callback::None);
+        cmd.desc = None;
+        was_live
+    }
+
+    /// Remove the deleted rows and the cleared pattern slots, renumbering
+    /// the patterns that stay. Only for when no walk is running: a walk
+    /// holds row indices and a pattern id.
+    pub(crate) fn compact(&mut self) {
+        self.cmds.retain(|cmd| cmd.pat.is_some());
+        if self.cmds.is_empty() {
+            // An event with nothing left gives its blocks back.
+            *self = EventCmds::EMPTY;
+            return;
+        }
+        if self.pats.iter().all(Option::is_some) {
+            return;
+        }
+        let mut renumbered = vec![PatId(u32::MAX); self.pats.len()];
+        let mut kept = Vec::with_capacity(self.pats.len());
+        for (slot, pat) in core::mem::take(&mut self.pats).into_iter().enumerate() {
+            if let Some(pat) = pat {
+                renumbered[slot] =
+                    PatId(u32::try_from(kept.len()).expect("fewer than 2^32 patterns"));
+                kept.push(Some(pat));
+            }
+        }
+        self.pats = kept;
+        for cmd in &mut self.cmds {
+            if let Some(id) = &mut cmd.pat {
+                *id = renumbered[id.index()];
+            }
+        }
+    }
+}
+
+/// The cursor of one firing walk: where it is in its event's commands, and
+/// the names its patterns are matched against.
 pub struct AutoPatCmd {
-    pub lastpat: *mut AutoPat,
-    pub auidx: size_t,
-    pub ausize: size_t,
-    pub afile_orig: *mut ::core::ffi::c_char,
-    pub fname: *mut ::core::ffi::c_char,
-    pub sfname: *mut ::core::ffi::c_char,
-    pub tail: *mut ::core::ffi::c_char,
+    /// The pattern of the command the walk last stopped at; `None` when it
+    /// has not started, or has run out.
+    pub(crate) lastpat: Option<PatId>,
+    pub auidx: usize,
+    /// The row count when the walk started: commands a handler adds for
+    /// the same event do not extend the walk.
+    pub ausize: usize,
+    /// `<afile>` as the caller gave it, for a callback's `file`.
+    pub afile_orig: Option<XString>,
+    /// The name the patterns match: a full path unless the event's names
+    /// are not file names.
+    pub fname: XString,
+    pub sfname: Option<XString>,
+    /// Where `fname`'s tail starts.
+    pub tail: usize,
     pub group: ::core::ffi::c_int,
     pub event: AutoEvent,
     pub script_ctx: ScriptCtx,
@@ -49,7 +205,6 @@ pub struct AutoPatCmd {
     /// a buffer being freed clears.
     pub arg_bufnr: ::core::ffi::c_int,
     pub(crate) walk: Option<usize>,
-    pub data: *mut Object,
 }
 pub struct AcoSave {
     pub use_aucmd_win_idx: ::core::ffi::c_int,
@@ -346,3 +501,108 @@ static AUTO_EVENTS: [AutoEvent; 145] = [
     AutoEvent::WinEnter, AutoEvent::WinLeave, AutoEvent::WinNew, AutoEvent::WinNewPre,
     AutoEvent::WinResized, AutoEvent::WinScrolled,
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A pattern row holding no compiled program.
+    fn pattern(text: &str) -> AutoPat {
+        AutoPat {
+            refcount: 0,
+            pat: XString::from(text),
+            reg_prog: None,
+            group: -1,
+            buflocal_nr: 0,
+            allow_dirs: false,
+        }
+    }
+
+    /// Append a command on `pat` to `cmds`, as `autocmd_register` does.
+    fn push(cmds: &mut EventCmds, pat: PatId, line: &str) {
+        cmds.pat_mut(pat).refcount += 1;
+        cmds.cmds.push(AutoCmd {
+            pat: Some(pat),
+            id: 0,
+            desc: None,
+            handler: AutoHandler::Cmd(XString::from(line)),
+            script_ctx: ScriptCtx::NONE,
+            once: false,
+            nested: false,
+        });
+    }
+
+    /// The live commands' lines with their patterns, in order.
+    fn listing(cmds: &EventCmds) -> Vec<(String, String)> {
+        cmds.live()
+            .map(|(cmd, pat)| {
+                let AutoHandler::Cmd(line) = &cmd.handler else {
+                    unreachable!("the cases only push commands")
+                };
+                (
+                    String::from_utf8_lossy(&pat.pat).into_owned(),
+                    String::from_utf8_lossy(line).into_owned(),
+                )
+            })
+            .collect()
+    }
+
+    /// A deletion only marks: the rows keep their indices, which a walk is
+    /// standing on, and the pattern goes with its last command.
+    #[test]
+    fn delete_marks_in_place_and_frees_the_last_users_pattern() {
+        let mut cmds = EventCmds::EMPTY;
+        let a = cmds.add_pat(pattern("*.c"));
+        push(&mut cmds, a, "echo 1");
+        push(&mut cmds, a, "echo 2");
+        let b = cmds.add_pat(pattern("*.h"));
+        push(&mut cmds, b, "echo 3");
+
+        assert!(cmds.delete(0));
+        assert_eq!(cmds.len(), 3, "the row stays");
+        assert!(cmds.pats[a.index()].is_some(), "one command still names it");
+        assert!(cmds.delete(1));
+        assert!(cmds.pats[a.index()].is_none(), "its last command went");
+        assert!(!cmds.delete(1), "a deleted row is not live");
+        assert_eq!(listing(&cmds), [("*.h".into(), "echo 3".into())]);
+    }
+
+    /// Compaction drops the deleted rows and the cleared slots, renumbers
+    /// the patterns that stay, and keeps the order the list fires in.
+    #[test]
+    fn compact_keeps_order_and_renumbers_patterns() {
+        let mut cmds = EventCmds::EMPTY;
+        let a = cmds.add_pat(pattern("a"));
+        push(&mut cmds, a, "1");
+        let b = cmds.add_pat(pattern("b"));
+        push(&mut cmds, b, "2");
+        let c = cmds.add_pat(pattern("c"));
+        push(&mut cmds, c, "3");
+        push(&mut cmds, b, "4");
+        cmds.delete(0);
+
+        cmds.compact();
+        assert_eq!(cmds.len(), 3);
+        assert_eq!(cmds.pats.len(), 2);
+        assert_eq!(
+            listing(&cmds),
+            [
+                ("b".into(), "2".into()),
+                ("c".into(), "3".into()),
+                ("b".into(), "4".into()),
+            ]
+        );
+        // The two commands on `b` still share one slot, with both counts.
+        assert_eq!(cmds.cmds[0].pat, cmds.cmds[2].pat);
+        assert_eq!(cmds.pat(cmds.cmds[0].pat.unwrap()).refcount, 2);
+
+        // Deleting everything gives the blocks back.
+        for idx in 0..cmds.len() {
+            cmds.delete(idx);
+        }
+        cmds.compact();
+        assert!(cmds.is_empty());
+        assert_eq!(cmds.pats.capacity(), 0);
+        assert_eq!(cmds.cmds.capacity(), 0);
+    }
+}

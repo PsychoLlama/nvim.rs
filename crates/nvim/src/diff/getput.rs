@@ -201,7 +201,7 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
     let put = cmdidx != CmdIdx::diffget;
     if put {
         // SAFETY: `aco` is a local, and `other` a live buffer of the diff.
-        unsafe { aucmd_prepbuf(&raw mut aco, tp.used_diffbuf(idx_other as usize)) };
+        aucmd_prepbuf(&mut aco, tp.used_diffbuf(idx_other as usize));
     }
     let (idx_from, idx_to) = if put {
         (idx_cur, idx_other)
@@ -224,7 +224,7 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
                 u_sync(false);
             }
             // SAFETY: `aco` was filled in by `aucmd_prepbuf` above.
-            unsafe { aucmd_restbuf(&raw mut aco) };
+            aucmd_restbuf(&mut aco);
         }
     }
     diff_busy.set(false);
@@ -249,10 +249,9 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
     if diff_need_update.get() {
         diff_need_update.set(false);
     } else {
-        let nul = ::core::ptr::null_mut::<c_char>();
         diff_redraw(false);
         let here = Buf::current_or_none();
-        unsafe { apply_autocmds(AutoEvent::DiffUpdated, nul, nul, false, here) };
+        apply_autocmds(AutoEvent::DiffUpdated, None, None, false, here);
     }
 }
 

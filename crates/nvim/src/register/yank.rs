@@ -462,9 +462,8 @@ pub unsafe fn do_autocmd_textyankpost(op: *mut OpArg, reg: *mut YankReg) {
 
     // The buffer must not change under the yank that is still in flight.
     let locked = Lock::text();
-    let none = ::core::ptr::null_mut();
     let __hoisted_0 = Buf::current_or_none();
-    unsafe { apply_autocmds(AutoEvent::TextYankPost, none, none, false, __hoisted_0) };
+    apply_autocmds(AutoEvent::TextYankPost, None, None, false, __hoisted_0);
     drop(locked);
 
     restore_v_event(dict, &mut save_v_event);

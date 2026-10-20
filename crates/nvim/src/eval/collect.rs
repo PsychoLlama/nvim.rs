@@ -33,7 +33,7 @@ use core::ffi::c_int;
 use core::mem::{ManuallyDrop, offset_of};
 use core::ptr::NonNull;
 
-use crate::autocmd::aucmd_wins;
+use crate::autocmd::{aucmd_win_count, aucmd_window};
 use crate::channel::channels;
 use crate::eval::gc::{dict_at, dict_slots, list_at, list_slots};
 use crate::eval::gc::{garbage_collect_at_exit, may_garbage_collect, want_garbage_collect};
@@ -173,9 +173,8 @@ pub fn garbage_collect(testing: bool) -> bool {
     }
 
     // window-local variables in the autocommand windows
-    let wins = aucmd_wins();
-    for i in 0..wins.len() {
-        if let Some(win) = wins.window(i) {
+    for i in 0..aucmd_win_count() {
+        if let Some(win) = aucmd_window(i) {
             abort = abort || mark_root(&win.w_winvar.di_tv, copy_id);
         }
     }

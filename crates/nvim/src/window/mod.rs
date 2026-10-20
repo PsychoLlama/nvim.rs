@@ -45,7 +45,6 @@ use crate::types::CmdIdx;
 use crate::types::TAB;
 use crate::winlayer::WinId;
 use crate::winlayer::prev_window;
-use core::ptr;
 
 use crate::autocmd::{apply_autocmds, is_aucmd_win};
 use crate::buffer::{buf_hide, buf_is_quickfix};
@@ -428,17 +427,14 @@ pub(crate) fn make_err(msg: *const ::core::ffi::c_char) -> Error {
 /// **Nothing derived from a window or buffer survives this call**: the event
 /// may close windows, switch tab pages or wipe the buffer.
 fn fire(event: AutoEvent, buffer: Buf) -> bool {
-    let none = ptr::null_mut();
-    // SAFETY: a live buffer; both name arguments are optional.
-    unsafe { apply_autocmds(event, none, none, false, Some(buffer)) }
+    apply_autocmds(event, None, None, false, Some(buffer))
 }
 
 /// [`fire`] with a name, which the event reports as `<afile>` and matches
 /// against: a window id for `WinClosed`, a tab page index for `TabClosed`, a
 /// file name for `TabNew`. `None` is the buffer-less form two events take.
-fn fire_named(event: AutoEvent, name: *mut ::core::ffi::c_char, buffer: Option<Buf>) -> bool {
-    // SAFETY: a live buffer or none, and a NUL-terminated name or null.
-    unsafe { apply_autocmds(event, name, name, false, buffer) }
+fn fire_named(event: AutoEvent, name: Option<&::core::ffi::CStr>, buffer: Option<Buf>) -> bool {
+    apply_autocmds(event, name, name, false, buffer)
 }
 
 /// Ring the bell and drop the typeahead, the family's answer to a move that

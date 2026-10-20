@@ -165,7 +165,7 @@ pub fn ex_diffpatch(excmd: &mut ExArg) {
                         // SAFETY: the caller's command; the group name and
                         // the command line are static strings.
                         ex_file(excmd);
-                        if unsafe { augroup_exists(c"filetypedetect".as_ptr()) } {
+                        if augroup_exists(b"filetypedetect") {
                             let _ = do_cmdline_cmd(c":doau filetypedetect BufRead");
                         }
                     }

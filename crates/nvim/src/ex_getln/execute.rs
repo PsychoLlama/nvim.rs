@@ -480,13 +480,13 @@ pub(crate) fn do_autocmd_cmdlinechanged(firstc: ::core::ffi::c_int) {
     }
     let mut err: Error = Error::none();
     let mut save_v_event: SaveVEvent = SAVE_V_EVENT_INIT;
-    let mut firstcbuf: [::core::ffi::c_char; 2] = [firstc as ::core::ffi::c_char, 0];
+    let firstcbuf: [::core::ffi::c_char; 2] = [firstc as ::core::ffi::c_char, 0];
     let dict = cmdline_event_dict(&mut save_v_event, cstr::in_chars(&firstcbuf));
 
     // C's TRY_WRAP, with restore_v_event() inside it.
     let mut tstate: TryState = TRY_STATE_INIT;
     unsafe { try_enter(&raw mut tstate) };
-    cmdline_autocmd(AutoEvent::CmdlineChanged, firstcbuf.as_mut_ptr());
+    cmdline_autocmd(AutoEvent::CmdlineChanged, cstr::in_chars(&firstcbuf));
     restore_v_event(dict, &mut save_v_event);
     err.absorb(unsafe { try_leave(&raw mut tstate) });
 

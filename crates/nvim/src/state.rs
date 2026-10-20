@@ -25,7 +25,6 @@ use crate::keycodes::{Ctrl_V, Key, get_special_key_name};
 use crate::types::AutoEvent;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
 
 use crate::autocmd::{apply_autocmds, has_event};
 use crate::channel::main_loop_events;
@@ -514,7 +513,7 @@ pub fn may_trigger_modechanged() {
         return;
     }
 
-    let mut pattern = modechanged_pattern(&old_mode, &curr_mode);
+    let pattern = modechanged_pattern(&old_mode, &curr_mode);
 
     let mut save_v_event = SaveVEvent {
         sve_did_save: false,
@@ -526,9 +525,14 @@ pub fn may_trigger_modechanged() {
     let old_mode = cstr::as_bytes(letters(&old_mode));
     let _ = v_event.edit().add_str_len(b"old_mode", Some(old_mode));
     v_event.edit().set_keys_readonly();
-    let (fname, fname_io) = (pattern.as_mut_ptr(), ptr::null_mut::<c_char>());
     let buf = Buf::current_or_none();
-    unsafe { apply_autocmds(AutoEvent::ModeChanged, fname, fname_io, false, buf) };
+    apply_autocmds(
+        AutoEvent::ModeChanged,
+        Some(cstr::in_chars(&pattern)),
+        None,
+        false,
+        buf,
+    );
     last_mode.set(curr_mode);
     restore_v_event(v_event, &mut save_v_event);
 }
@@ -560,9 +564,8 @@ pub fn may_trigger_safestate(safe: bool) {
     }
     if is_safe {
         // SAFETY: the editor is initialized, so `curbuf` is live.
-        let (fname, fname_io) = (ptr::null_mut::<c_char>(), ptr::null_mut::<c_char>());
         let buf = Buf::current_or_none();
-        unsafe { apply_autocmds(AutoEvent::SafeState, fname, fname_io, false, buf) };
+        apply_autocmds(AutoEvent::SafeState, None, None, false, buf);
     }
     was_safe.set(is_safe);
 }

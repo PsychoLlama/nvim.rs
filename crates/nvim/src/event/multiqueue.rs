@@ -236,6 +236,49 @@ pub unsafe fn multiqueue_put_event(queue: *mut MultiQueue, event: Event) {
     put_event(unsafe { Queue::new(queue) }, event);
 }
 
+/// Queue `job` on the queue `cell` holds, to run once when that queue is
+/// processed: the safe spelling of an [`Event`] whose one argument is the
+/// work to do. The job owns what it needs; one the queue never runs is
+/// dropped unrun with the process, as an unrun event's arguments were.
+///
+/// # Panics
+/// If the cell holds no queue yet.
+pub(crate) fn put_job_in(cell: &GlobalCell<Option<ChildQueue>>, job: Box<dyn FnOnce()>) {
+    let queue = queue_in(cell);
+    assert!(!queue.is_null(), "a job is queued after its queue is made");
+    // SAFETY: the cell's own live queue; `run_job` takes back the job packed
+    // here, once.
+    unsafe { multiqueue_put_event(queue, job_event(job)) };
+}
+
+/// [`put_job_in`] the main loop's own queue.
+pub(crate) fn put_job_on_main_loop(job: Box<dyn FnOnce()>) {
+    // SAFETY: the main loop's queue, live from startup to exit; `run_job`
+    // takes back the job packed here, once.
+    unsafe {
+        multiqueue_put_event(
+            (*crate::event::r#loop::main_loop_raw()).events,
+            job_event(job),
+        )
+    };
+}
+
+/// The event that runs `job`.
+fn job_event(job: Box<dyn FnOnce()>) -> Event {
+    let job = Box::into_raw(Box::new(job)).cast::<c_void>();
+    Event::new(Some(run_job), [job])
+}
+
+/// A queue reached a [`put_job_in`] event: run it.
+///
+/// # Safety
+/// `argv[0]` is the boxed job [`job_event`] packed, taken back once here.
+unsafe extern "C" fn run_job(argv: *mut *mut c_void) {
+    // SAFETY: the caller's promise.
+    let job = unsafe { Box::from_raw((*argv).cast::<Box<dyn FnOnce()>>()) };
+    job();
+}
+
 /// Append `event`, linking it into the parent and notifying that parent's
 /// `on_put` if there is one.
 fn put_event(mut queue: Queue, event: Event) {

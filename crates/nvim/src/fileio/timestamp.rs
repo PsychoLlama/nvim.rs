@@ -515,7 +515,7 @@ pub fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
 
     // Set curwin/curbuf for "buf" and save some things.
     let mut aco = AcoSave::default();
-    aucmd_prepbuf_in(&mut aco, buffer);
+    aucmd_prepbuf(&mut aco, buffer);
 
     // Unless reload_options is set we only want to read the text from the
     // file, not reset the syntax highlighting, clear marks, diff status
@@ -663,7 +663,7 @@ pub fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
 
     // Restore curwin/curbuf and a few other things. Careful: autocommands
     // may have made "buf" invalid!
-    aucmd_restbuf_in(&mut aco);
+    aucmd_restbuf(&mut aco);
 }
 
 /// Record the file's size, mode and modification time on the buffer, so that

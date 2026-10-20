@@ -52,22 +52,22 @@ pub(crate) fn cmdpreview_open_buf() -> Option<Buf> {
 
     // Rename the preview buffer.
     let mut aco = AcoSave::default();
-    unsafe { aucmd_prepbuf(&raw mut aco, cmdpreview_buf) };
+    aucmd_prepbuf(&mut aco, cmdpreview_buf);
     let retv = rename_buffer(c"[Preview]");
-    unsafe { aucmd_restbuf(&raw mut aco) };
+    aucmd_restbuf(&mut aco);
 
     if retv.is_err() {
         return None;
     }
 
     // Temporarily switch to the preview buffer to set it up.
-    unsafe { aucmd_prepbuf(&raw mut aco, cmdpreview_buf) };
+    aucmd_prepbuf(&mut aco, cmdpreview_buf);
     buf_clear();
     Buf::current().b_p_ma = 1;
     Buf::current().b_p_ul = -1;
     // Reset 'textwidth', which a ftplugin may have set.
     Buf::current().b_p_tw = 0;
-    unsafe { aucmd_restbuf(&raw mut aco) };
+    aucmd_restbuf(&mut aco);
     cmdpreview_bufnr.set(cmdpreview_buf.handle);
 
     Some(cmdpreview_buf)
@@ -257,7 +257,7 @@ pub(crate) fn cmdpreview_restore_state(mut cpinfo: Cp) {
             let mut aco = AcoSave::default();
             // SAFETY: `aco` is this frame's, and every `prepbuf` below is
             // paired with the `restbuf` that follows it.
-            unsafe { aucmd_prepbuf(&raw mut aco, buf) };
+            aucmd_prepbuf(&mut aco, buf);
             if Buf::current().b_u_synced as ::core::ffi::c_int == 0 {
                 u_sync(true);
             }
@@ -267,7 +267,7 @@ pub(crate) fn cmdpreview_restore_state(mut cpinfo: Cp) {
                 unsafe { abort() };
             }
             // SAFETY: pairs with the `aucmd_prepbuf` above.
-            unsafe { aucmd_restbuf(&raw mut aco) };
+            aucmd_restbuf(&mut aco);
         }
 
         u_blockfree(buf);

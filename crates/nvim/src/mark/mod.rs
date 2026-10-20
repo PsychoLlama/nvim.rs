@@ -234,10 +234,7 @@ unsafe fn do_markset_autocmd(c: c_char, pos: *mut Pos, buffer: Buf) {
     }
     // SAFETY: the caller promised a live position.
     let pos = unsafe { *pos };
-    let mut mark_str: [c_char; 2] = [c, NUL_BYTE];
-    // SAFETY: the three keys are `'static` C strings, `mark_str` and `items`
-    // outlive the `aucmd_defer` call, and `aucmd_defer` copies the payload
-    // before it returns. `buffer` is the caller's live buffer.
+    let mark_str: [c_char; 2] = [c, NUL_BYTE];
     let items: Vec<KeyValuePair> = vec![
         key_value_pair {
             key: c"name".into(),
@@ -252,17 +249,16 @@ unsafe fn do_markset_autocmd(c: c_char, pos: *mut Pos, buffer: Buf) {
             value: Object::Integer(Integer::from(pos.col)),
         },
     ];
-    let mut payload: Object = Object::dict(ApiDict::from(items));
-    unsafe {
-        aucmd_defer(
-            AutoEvent::MarkSet,
-            mark_str.as_mut_ptr(),
-            ptr::null_mut(),
-            AUGROUP_ALL,
-            buffer,
-            &raw mut payload,
-        )
-    };
+    let payload: Object = Object::dict(ApiDict::from(items));
+    // `aucmd_defer` copies the name and the payload before it returns.
+    aucmd_defer(
+        AutoEvent::MarkSet,
+        Some(cstr::in_chars(&mark_str)),
+        None,
+        AUGROUP_ALL,
+        buffer,
+        Some(&payload),
+    );
 }
 
 /// Set named mark "c" to position "pos".

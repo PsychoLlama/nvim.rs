@@ -18,7 +18,7 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::autocmd::{aucmd_prepbuf_in, aucmd_restbuf_in};
+use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};
 use crate::eval::window::{restore_win_noblock, switch_win_noblock};
 use crate::types::{
     AcoSave, Error, OptIndex, OptScope, OptVal, OptionSetFlags, ScriptId, SwitchWin,
@@ -119,7 +119,7 @@ impl OptionContext {
             }
             Some(OptionTarget::Buf(buf)) => {
                 let mut aco = AcoSave::default();
-                aucmd_prepbuf_in(&mut aco, buf);
+                aucmd_prepbuf(&mut aco, buf);
                 Ok(Some(OptionContext::Buf(aco)))
             }
         }
@@ -131,7 +131,7 @@ impl OptionContext {
             OptionContext::Win(switchwin) => restore_win_noblock(switchwin, true),
             // The scratch space `enter` filled; nothing else has moved the
             // current buffer since.
-            OptionContext::Buf(aco) => aucmd_restbuf_in(aco),
+            OptionContext::Buf(aco) => aucmd_restbuf(aco),
         }
     }
 }

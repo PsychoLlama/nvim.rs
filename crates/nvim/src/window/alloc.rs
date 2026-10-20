@@ -18,7 +18,7 @@ use core::ffi::{c_char, c_int};
 
 use super::*;
 use crate::arglist::alist_unlink;
-use crate::autocmd::aucmd_wins;
+use crate::autocmd::set_aucmd_window;
 use crate::autocmd::state::autocmd_busy;
 use crate::autocmd::{block_autocmds, unblock_autocmds};
 use crate::buffer::buflist_new;
@@ -131,8 +131,7 @@ pub fn win_alloc_aucmd_win(idx: c_int) {
         .ok()
         .flatten()
         .expect("the autocommand window");
-    // SAFETY: `aucmd_win_vec` has been sized for `idx`.
-    unsafe { (*aucmd_wins().slot(idx as usize)).auc_win = Some(win) };
+    set_aucmd_window(usize::try_from(idx).expect("a slot index"), win);
     win.buffer().b_nwindows -= 1;
     win.w_onebuf_opt.wo_scb = 0;
     win.w_onebuf_opt.wo_crb = 0;

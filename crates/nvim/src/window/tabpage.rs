@@ -19,7 +19,6 @@ use crate::winlayer::TabId;
 use crate::winlayer::last_used_tab;
 use core::ffi::CStr;
 use core::ffi::c_int;
-use core::ptr;
 
 use super::*;
 use crate::allocator::Owned;
@@ -233,7 +232,7 @@ pub(crate) fn new_tabpage(
     update_last_status(false);
     resize_terminal(Buf::current());
 
-    let name = filename.map_or(ptr::null_mut(), |n| n.as_ptr().cast_mut());
+    let name = filename;
     if enter {
         redraw_all(UPD_NOT_VALID);
         check_tabpage_windows(old_curtab);

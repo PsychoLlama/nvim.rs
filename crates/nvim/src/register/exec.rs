@@ -117,18 +117,15 @@ unsafe fn fire_recording_leave(regname: c_int, contents: *mut c_char) {
     buf[1] = NUL as c_char;
     let _ = dict.edit().add_str(b"regname", Some(cstr::in_chars(&buf)));
     dict.edit().set_keys_readonly();
-    let no_fname: *mut c_char = ::core::ptr::null_mut();
     // SAFETY: the event carries no file name; running the autocommands is
     // what this function is for, and the caller allows it.
-    unsafe {
-        apply_autocmds(
-            AutoEvent::RecordingLeave,
-            no_fname,
-            no_fname,
-            false,
-            Buf::current_or_none(),
-        )
-    };
+    apply_autocmds(
+        AutoEvent::RecordingLeave,
+        None,
+        None,
+        false,
+        Buf::current_or_none(),
+    );
     restore_v_event(dict, &mut save_v_event);
 }
 
@@ -154,18 +151,15 @@ pub fn do_record(c: c_int) -> Result<(), Failed> {
         reg_recording.set(c);
         showmode();
         regname.set(c);
-        let no_fname: *mut c_char = ::core::ptr::null_mut();
         // SAFETY: the event carries no file name, and this function's own
         // caller allows the autocommands it fires.
-        unsafe {
-            apply_autocmds(
-                AutoEvent::RecordingEnter,
-                no_fname,
-                no_fname,
-                false,
-                Buf::current_or_none(),
-            )
-        };
+        apply_autocmds(
+            AutoEvent::RecordingEnter,
+            None,
+            None,
+            false,
+            Buf::current_or_none(),
+        );
         return Ok(());
     }
 

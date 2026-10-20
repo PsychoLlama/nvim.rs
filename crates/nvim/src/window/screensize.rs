@@ -32,7 +32,7 @@ use crate::global_cell::GlobalCell;
 use crate::option::option_was_set;
 use crate::option::vars::{P_WINDOW, p_ch, p_window};
 use crate::options::kOptWindow;
-use crate::optionstr::OptString;
+use crate::optionstr::OptStringRef;
 use crate::types::{Dict, LineNr, List, OptInt, SaveVEvent, TypVal, VarNumber, ptrdiff_t, size_t};
 use crate::ui::state::{Columns, Rows};
 use crate::window::state::skip_win_fix_scroll;
@@ -196,9 +196,9 @@ fn scan_windows(what: &mut Scan) {
             snapshot_window(&mut wp);
             continue;
         }
-        let eiw = wp.w_onebuf_opt.wo_eiw.value_ptr();
-        let ignore_scroll = unsafe { event_ignored(AutoEvent::WinScrolled, eiw, true) };
-        let ignore_resize = unsafe { event_ignored(AutoEvent::WinResized, eiw, true) };
+        let eiw = wp.w_onebuf_opt.wo_eiw.bytes();
+        let ignore_scroll = event_ignored(AutoEvent::WinScrolled, eiw, true);
+        let ignore_resize = event_ignored(AutoEvent::WinResized, eiw, true);
         let size_changed =
             !ignore_resize && (wp.w_last_width != wp.w_width || wp.w_last_height != wp.w_height);
         if size_changed {
@@ -286,10 +286,6 @@ impl Subject {
         subject
     }
 
-    fn name(&mut self) -> *mut c_char {
-        (&raw mut self.winid).cast::<c_char>()
-    }
-
     /// The buffer to fire the event for: the window's own if it is still
     /// there, the current one otherwise.
     fn buffer(&mut self) -> Buf {
@@ -356,12 +352,19 @@ fn fire_resized(resize: &mut Subject, windows_list: Option<ListRef>) {
     let mut save = SaveVEvent::default();
     let v_event = get_v_event(&mut save);
     if v_event.edit().add_list(b"windows", windows_list).is_ok() {
-        let (name, buf) = (resize.name(), resize.buffer());
+        let buf = resize.buffer();
+        let name = cstr::in_chars(&resize.winid);
         v_event.edit().set_keys_readonly();
 
         let __hoisted_0 = Some(buf);
 
-        unsafe { apply_autocmds(AutoEvent::WinResized, name, name, false, __hoisted_0) };
+        apply_autocmds(
+            AutoEvent::WinResized,
+            Some(name),
+            Some(name),
+            false,
+            __hoisted_0,
+        );
     }
     restore_v_event(v_event, &mut save);
 }
@@ -375,11 +378,18 @@ fn fire_scrolled(scroll: &mut Subject, scroll_dict: Option<DictRef>) {
     }
     v_event.edit().set_keys_readonly();
     drop(scroll_dict);
-    let (name, buf) = (scroll.name(), scroll.buffer());
+    let buf = scroll.buffer();
+    let name = cstr::in_chars(&scroll.winid);
 
     let __hoisted_0 = Some(buf);
 
-    unsafe { apply_autocmds(AutoEvent::WinScrolled, name, name, false, __hoisted_0) };
+    apply_autocmds(
+        AutoEvent::WinScrolled,
+        Some(name),
+        Some(name),
+        false,
+        __hoisted_0,
+    );
     restore_v_event(v_event, &mut save);
 }
 

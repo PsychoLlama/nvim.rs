@@ -354,7 +354,7 @@ pub(crate) unsafe fn terminal_open(termpp: *mut *mut Terminal, mut buffer: Buf) 
     // SAFETY: a plain save area `aucmd_prepbuf` fills in, restored below.
     let mut aco: AcoSave = unsafe { ::core::mem::zeroed() };
     // SAFETY: paired with the `aucmd_restbuf` below.
-    unsafe { aucmd_prepbuf(&raw mut aco, buffer) };
+    aucmd_prepbuf(&mut aco, buffer);
     if term.sb.is_sized() {
         refresh_scrollback(term, buffer);
     } else {
@@ -390,13 +390,12 @@ pub(crate) unsafe fn terminal_open(termpp: *mut *mut Terminal, mut buffer: Buf) 
         col: 0 as ColNr,
         coladd: 0 as ColNr,
     };
-    let none = ::core::ptr::null_mut();
     // SAFETY: TermOpen against a live buffer. It may wipe the buffer or
     // close the terminal, which is what the re-check below is for, and
     // nothing of either is borrowed across it.
-    unsafe { apply_autocmds(AutoEvent::TermOpen, none, none, false, Some(buffer)) };
+    apply_autocmds(AutoEvent::TermOpen, None, None, false, Some(buffer));
     // SAFETY: paired with the `aucmd_prepbuf` above.
-    unsafe { aucmd_restbuf(&raw mut aco) };
+    aucmd_restbuf(&mut aco);
     // SAFETY: the caller's slot, which TermOpen may have emptied. The
     // terminal is only reached again once the slot says it is still there.
     if unsafe { (*termpp).is_null() } || term.buf_handle == 0 {
@@ -513,15 +512,13 @@ pub(crate) unsafe fn terminal_close(termpp: *mut *mut Terminal, status: c_int) {
     dict.edit().set_keys_readonly();
     let mut payload = DictBuf::<1>::new();
     payload.insert(c"pos", Object::integer(pos as i64));
-    let mut event = payload.object();
-    // Pre-bound so that the eight-argument call still fits on one line.
-    let (data, none) = (&mut event, ::core::ptr::null_mut());
+    let data = payload.object();
     let exited = status >= 0;
     let (group, buf) = (AUGROUP_ALL, Some(buf));
-    // SAFETY: TermClose against a live buffer; nothing of the terminal is
-    // borrowed across it.
+    // TermClose against a live buffer; nothing of the terminal is borrowed
+    // across it.
     let event = AutoEvent::TermClose;
-    unsafe { apply_autocmds_group(event, none, none, exited, group, buf, None, data) };
+    apply_autocmds_group(event, None, None, exited, group, buf, None, Some(&data));
     restore_v_event(dict, &mut save_v_event);
 }
 

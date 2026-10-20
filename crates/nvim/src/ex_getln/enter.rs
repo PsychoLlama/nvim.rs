@@ -323,7 +323,7 @@ pub(crate) fn command_line_enter(
             // upstream's.
             let mut tstate: TryState = TRY_STATE_INIT;
             unsafe { try_enter(&raw mut tstate) };
-            cmdline_autocmd(AutoEvent::CmdlineEnter, firstcbuf.as_mut_ptr());
+            cmdline_autocmd(AutoEvent::CmdlineEnter, cstr::in_chars(&firstcbuf));
             restore_v_event(dict, &mut save_v_event);
             err.absorb(unsafe { try_leave(&raw mut tstate) });
 
@@ -407,7 +407,7 @@ pub(crate) fn command_line_enter(
             // redraw issues.
             let mut tstate: TryState = TRY_STATE_INIT;
             unsafe { try_enter(&raw mut tstate) };
-            cmdline_autocmd(AutoEvent::CmdlineLeave, firstcbuf.as_mut_ptr());
+            cmdline_autocmd(AutoEvent::CmdlineLeave, cstr::in_chars(&firstcbuf));
             err.absorb(unsafe { try_leave(&raw mut tstate) });
 
             if dict_get_number(Some(&dict), b"abort") != 0 {

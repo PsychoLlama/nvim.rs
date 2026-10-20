@@ -15,6 +15,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::memory::XString;
 use crate::option::vars::P_BG;
 use crate::types::AutoEvent;
 use crate::winlayer::Buf;
@@ -556,33 +557,41 @@ pub(crate) fn init_highlight(both: bool, reset: bool) {
 /// being sourced set `'background'`, which reloaded the highlighting, which
 /// is proof enough that it is working.
 pub(crate) fn load_colors(name: &CStr) -> Result<(), Failed> {
-    let name = name.as_ptr().cast_mut();
     static RECURSIVE: GlobalCell<bool> = GlobalCell::new(false);
 
-    // SAFETY: `name` is the caller's NUL-terminated scheme name.
     if RECURSIVE.get() {
         return Ok(());
     }
     RECURSIVE.set(true);
 
+    // A copy of the buffer's name, for the call: a handler may rename the
+    // buffer.
     let buffer = Buf::current();
-    let fname = buffer.name.shown_ptr();
-    // SAFETY: the current buffer, and a NUL-terminated colour scheme name.
-    unsafe { apply_autocmds(AutoEvent::ColorSchemePre, name, fname, false, Some(buffer)) };
-    let pattern = [
-        b"colors/",
-        unsafe { CStr::from_ptr(name) }.to_bytes(),
-        b".*",
-    ]
-    .concat();
+    let fname = buffer.name.shown().map(XString::from_cstr);
+    let fname = fname.as_ref().map(XString::as_cstr);
+    apply_autocmds(
+        AutoEvent::ColorSchemePre,
+        Some(name),
+        fname,
+        false,
+        Some(buffer),
+    );
+    let pattern = [b"colors/", name.to_bytes(), b".*"].concat();
     // A NUL-terminated pattern this frame owns.
     let pattern = crate::cstr::owned(&pattern);
     let retval = source_runtime_vim_lua(&pattern, RuntimeOpts::START | RuntimeOpts::OPT);
     if retval.is_ok() {
+        // As above; the scheme's own file may have changed it.
         let buffer = Buf::current();
-        let fname = buffer.name.shown_ptr();
-        // SAFETY: as above; the scheme's own file may have changed it.
-        unsafe { apply_autocmds(AutoEvent::ColorScheme, name, fname, false, Some(buffer)) };
+        let fname = buffer.name.shown().map(XString::from_cstr);
+        let fname = fname.as_ref().map(XString::as_cstr);
+        apply_autocmds(
+            AutoEvent::ColorScheme,
+            Some(name),
+            fname,
+            false,
+            Some(buffer),
+        );
     }
 
     RECURSIVE.set(false);

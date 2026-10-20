@@ -16,11 +16,6 @@ use core::mem::ManuallyDrop;
 
 use super::*;
 
-pub struct AutoCmdVec {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut AutoCmd,
-}
 /// The khash-derived maps and sets still in the tree: the URL set the TUI
 /// writes OSC 8 ids from, the glyph cache's variable-stride index, and the
 /// marktree's splice damage. Everything else the editor keeps is an

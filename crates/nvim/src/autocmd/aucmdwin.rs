@@ -10,11 +10,17 @@
 //! The order of the impure calls in both is load-bearing and unchanged:
 //! `block_autocmds` brackets the window surgery so no `BufEnter`/`WinEnter`
 //! escapes it, `p_acd` and `RedrawingDisabled` bracket `win_enter` so it
-//! cannot `chdir` or redraw, and `aucmd_win[]` entries are re-read after
-//! every call that might have grown the vector.
+//! cannot `chdir` or redraw, and `aucmd_win[]` entries are re-read by
+//! index after every call that might have grown the vector.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -23,113 +29,63 @@ use crate::buffer::BufRef;
 use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
 use crate::normal::{set_visual_active, visual_active, with_visual_anchor};
-use crate::types::{AucmdWin, size_t};
+use crate::types::AucmdWin;
 use crate::winlayer::TabPage;
 use crate::winlayer::WinId;
 use crate::winlayer::{Buf, Win, first_window, last_window, tabs, windows, windows_in_tab};
 
-/// The stack of autocommand windows, one slot per nesting level.
+/// The stack of autocommand windows, one slot per nesting level: a
+/// grow-only vector of slots, each either free or holding the window an
+/// `aucmd_prepbuf` is running in.
 ///
-/// The autocommand-window stack itself: a grow-only vector of slots, each
-/// either free or holding the window an `aucmd_prepbuf` is running in.
-///
-/// A hand-rolled vector rather than a `Vec` because [`AucmdWins`] hands out
-/// raw slot pointers that stay valid across the autocommands run in them.
-pub(crate) struct AucmdWinVec {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut AucmdWin,
-}
-
-pub(crate) static aucmd_win_vec: GlobalCell<AucmdWinVec> = GlobalCell::new(AucmdWinVec {
-    size: 0 as size_t,
-    capacity: 0 as size_t,
-    items: ::core::ptr::null_mut::<AucmdWin>(),
-});
-
-/// A `Copy` handle rather than a borrow: `win_alloc_aucmd_win` writes back
+/// Reached a slot at a time, by index: `win_alloc_aucmd_win` writes back
 /// into a slot while [`aucmd_prepbuf`] is still choosing one, and the
-/// autocommands then run with a slot marked in use, so nothing here can hold
-/// a `&mut` across the calls that matter.
-#[derive(Clone, Copy)]
-pub(crate) struct AucmdWins(*mut AucmdWinVec);
+/// autocommands then run with a slot marked in use, so nothing holds a
+/// borrow of the vector across a call.
+static aucmd_win_vec: GlobalCell<Vec<AucmdWin>> = GlobalCell::new(Vec::new());
 
-/// The one place the autocommand-window stack's address is taken.
-pub(crate) fn aucmd_wins() -> AucmdWins {
-    AucmdWins(aucmd_win_vec.ptr())
+/// How many slots the stack has.
+pub(crate) fn aucmd_win_count() -> usize {
+    aucmd_win_vec.with(Vec::len)
 }
 
-impl AucmdWins {
-    /// How many slots the stack has.
-    pub(crate) fn len(self) -> usize {
-        // SAFETY: the only constructor names a `static`.
-        unsafe { (*self.0).size }
-    }
+/// The window slot `idx` holds, if any; `idx` must be below
+/// [`aucmd_win_count`].
+pub(crate) fn aucmd_window(idx: usize) -> Option<Win> {
+    aucmd_win_vec.with(|slots| slots[idx].auc_win)
+}
 
-    /// Slot `idx`, which must be below [`len`](Self::len).
-    pub(crate) fn slot(self, idx: usize) -> *mut AucmdWin {
-        // SAFETY: as `len`; the array holds `size` initialised slots.
-        unsafe { (*self.0).items.add(idx) }
-    }
+/// Give slot `idx` its window: `win_alloc_aucmd_win`'s write-back.
+pub(crate) fn set_aucmd_window(idx: usize, win: Win) {
+    aucmd_win_vec.with_mut(|slots| slots[idx].auc_win = Some(win));
+}
 
-    /// The window slot `idx` holds, if any; `idx` must be below
-    /// [`len`](Self::len).
-    pub(crate) fn window(self, idx: usize) -> Option<Win> {
-        debug_assert!(idx < self.len());
-        // SAFETY: as `slot`: the slot is initialised.
-        unsafe { (*self.slot(idx)).auc_win }
-    }
+/// Whether slot `idx` is in use.
+fn aucmd_slot_used(idx: usize) -> bool {
+    aucmd_win_vec.with(|slots| slots[idx].auc_win_used)
+}
 
-    /// Push an unused slot, growing the array if it is full.
-    fn push_empty(self) {
-        let vec = self.0;
-        // SAFETY: as `len`; the array and its length are updated together,
-        // and this whole run is `kv_pushp` -- every step of it reads or
-        // writes through `vec`, so one region around it is as tight as it
-        // gets.
-        if unsafe { (*vec).size } == unsafe { (*vec).capacity } {
-            let capacity = unsafe { (*vec).capacity };
-            let grown = if capacity != 0 { capacity << 1 } else { 8 };
-            let bytes = ::core::mem::size_of::<AucmdWin>().wrapping_mul(grown);
-            unsafe {
-                (*vec).capacity = grown;
-                (*vec).items = xrealloc((*vec).items.cast(), bytes).cast::<AucmdWin>();
-            };
-        }
-        let empty = AucmdWin {
-            auc_win: None,
-            auc_win_used: false,
-        };
-        unsafe {
-            *(*vec).items.add((*vec).size) = empty;
-            (*vec).size = (*vec).size.wrapping_add(1);
-        };
-    }
+/// Mark slot `idx` in use, or free.
+fn set_aucmd_slot_used(idx: usize, used: bool) {
+    aucmd_win_vec.with_mut(|slots| slots[idx].auc_win_used = used);
 }
 
 /// Whether `win` is one of the autocommand windows currently in use.
 ///
-/// Safe: `win` is only ever *compared*, never dereferenced, so a caller may
-/// hand it an address an autocommand has already freed — exactly as
+/// `win` is only ever *compared*, never dereferenced, so a caller may hand
+/// it an address an autocommand has already freed -- exactly as
 /// `win_valid` is.
 pub(crate) fn is_aucmd_win(win: Win) -> bool {
-    let vec = aucmd_wins();
-    (0..vec.len()).any(|i| {
-        // SAFETY: `i` is below `len`, so the slot is initialised.
-        let entry = unsafe { &*vec.slot(i) };
-        entry.auc_win_used && entry.auc_win == Some(win)
+    aucmd_win_vec.with(|slots| {
+        slots
+            .iter()
+            .any(|entry| entry.auc_win_used && entry.auc_win == Some(win))
     })
 }
 
 /// Make `buffer` the current buffer for the duration of an autocommand,
 /// saving what it takes to undo that in `aco`.
-///
-/// # Safety
-///
-/// `aco` must point at a live `AcoSave`, unaliased for the call.
-pub unsafe fn aucmd_prepbuf(aco: *mut AcoSave, mut buffer: Buf) {
-    let entry = |idx: usize| aucmd_wins().slot(idx);
-
+pub fn aucmd_prepbuf(aco: &mut AcoSave, mut buffer: Buf) {
     let same_buffer = buffer == Buf::current();
 
     // A window already showing `buffer` is preferred: making it current
@@ -144,57 +100,59 @@ pub unsafe fn aucmd_prepbuf(aco: *mut AcoSave, mut buffer: Buf) {
     // Allocate an autocommand window when there is no window to use.
     let mut need_append = true;
     let mut auc_win: Option<Win> = None;
-    let mut auc_idx = aucmd_wins().len();
+    let mut auc_idx = aucmd_win_count();
     if win.is_none() {
         auc_idx = 0;
-        while auc_idx < aucmd_wins().len() && unsafe { (*entry(auc_idx)).auc_win_used } {
+        while auc_idx < aucmd_win_count() && aucmd_slot_used(auc_idx) {
             auc_idx += 1;
         }
 
         // All of them are in use -- an autocommand fired from inside
         // another one -- so push an empty slot for this nesting level.
-        if auc_idx == aucmd_wins().len() {
-            aucmd_wins().push_empty();
+        if auc_idx == aucmd_win_count() {
+            aucmd_win_vec.with_mut(|slots| {
+                slots.push(AucmdWin {
+                    auc_win: None,
+                    auc_win_used: false,
+                });
+            });
         }
 
         // The slot may have been pushed empty either just now or by an
         // earlier nesting level that has since given it back.
-        if unsafe { (*entry(auc_idx)).auc_win.is_none() } {
-            win_alloc_aucmd_win(auc_idx as ::core::ffi::c_int);
+        if aucmd_window(auc_idx).is_none() {
+            win_alloc_aucmd_win(::core::ffi::c_int::try_from(auc_idx).expect("a nesting depth"));
             need_append = false;
         }
-        auc_win = unsafe { (*entry(auc_idx)).auc_win };
-        unsafe { (*entry(auc_idx)).auc_win_used = true };
+        auc_win = aucmd_window(auc_idx);
+        set_aucmd_slot_used(auc_idx, true);
     }
 
-    unsafe { (*aco).save_curwin_handle = Win::current().handle };
-    unsafe { (*aco).save_prevwin_handle = prevwin.get().map_or(0, WinId::handle) };
+    aco.save_curwin_handle = Win::current().handle;
+    aco.save_prevwin_handle = prevwin.get().map_or(0, WinId::handle);
     if buf_is_prompt(current_buf()) {
-        unsafe { (*aco).save_prompt_insert = Buf::current().b_prompt_insert };
+        aco.save_prompt_insert = Buf::current().b_prompt_insert;
     }
 
     if let Some(win) = win {
-        unsafe { (*aco).use_aucmd_win_idx = -1 };
+        aco.use_aucmd_win_idx = -1;
         win.make_current();
     } else {
         // No window shows "buf", so borrow the autocommand window and
         // put it in the current tab page.
-        unsafe { (*aco).use_aucmd_win_idx = auc_idx as ::core::ffi::c_int };
-        // The slot's window, allocated or reused just above. The field
-        // writes below stay raw on purpose: `w_s` is handed a pointer *into*
-        // `buffer`, and a write through a handle would pop it.
-        let auc = auc_win.expect("the slot was given a window above");
-        let auc_win = auc.raw();
-        unsafe { (*auc_win).w_buffer = buffer };
-        unsafe { (*auc_win).w_s = buffer.syntax_block() };
+        aco.use_aucmd_win_idx = ::core::ffi::c_int::try_from(auc_idx).expect("a nesting depth");
+        // The slot's window, allocated or reused just above.
+        let mut auc = auc_win.expect("the slot was given a window above");
+        auc.w_buffer = buffer;
+        auc.w_s = buffer.syntax_block();
         buffer.b_nwindows += 1;
         win_init_empty(auc);
 
         // `w_localdir`, `tp_localdir` and `globaldir` all have to be
-        // null, or `win_enter_ext` chdir()s.
-        unsafe { (*auc_win).w_localdir = None };
-        unsafe { (*aco).tp_localdir = TabPage::current().tp_localdir.take() };
-        unsafe { (*aco).globaldir = globaldir.take() };
+        // unset, or `win_enter_ext` chdir()s.
+        auc.w_localdir = None;
+        aco.tp_localdir = TabPage::current().tp_localdir.take();
+        aco.globaldir = globaldir.take();
 
         block_autocmds();
         if need_append {
@@ -204,7 +162,8 @@ pub unsafe fn aucmd_prepbuf(aco: *mut AcoSave, mut buffer: Buf) {
             // `aucmd_restbuf` takes it back out, after the `win_remove`.
             register_window(auc);
             win_append(last_window(), auc, None);
-            unsafe { win_config_float(auc, (*auc_win).w_config.clone()) };
+            let config = auc.w_config.clone();
+            win_config_float(auc, config);
         }
         // `p_acd` off keeps `win_enter_ext` out of `do_autochdir`;
         // `RedrawingDisabled` keeps it from redrawing or setting the
@@ -219,42 +178,23 @@ pub unsafe fn aucmd_prepbuf(aco: *mut AcoSave, mut buffer: Buf) {
         auc.make_current();
     }
 
-    // SAFETY: the caller's promise -- a live buffer.
     buffer.make_current();
-    unsafe { (*aco).new_curwin_handle = Win::current().handle };
-    unsafe { (*aco).new_curbuf = BufRef::of_opt(current_buf()).record() };
+    aco.new_curwin_handle = Win::current().handle;
+    aco.new_curbuf = BufRef::of_opt(current_buf()).record();
 
-    unsafe { (*aco).save_visual_active = visual_active() };
+    aco.save_visual_active = visual_active();
     if !same_buffer {
         // The Visual area's positions mean nothing in another buffer.
         set_visual_active(false);
     }
 }
 
-/// [`aucmd_prepbuf`] into scratch space the caller holds.
-pub(crate) fn aucmd_prepbuf_in(aco: &mut AcoSave, buffer: Buf) {
-    // SAFETY: a live `AcoSave`, unaliased for the call by its `&mut`.
-    unsafe { aucmd_prepbuf(aco, buffer) }
-}
-
-/// [`aucmd_restbuf`] from scratch space [`aucmd_prepbuf_in`] filled.
-pub(crate) fn aucmd_restbuf_in(aco: &mut AcoSave) {
-    // SAFETY: as [`aucmd_prepbuf_in`].
-    unsafe { aucmd_restbuf(aco) }
-}
-
 /// Undo [`aucmd_prepbuf`], restoring the window layout as far as what the
 /// autocommand did to it allows.
-///
-/// # Safety
-///
-/// `aco` must point at a live `AcoSave`, unaliased for the call.
-pub unsafe fn aucmd_restbuf(aco: *mut AcoSave) {
-    if unsafe { (*aco).use_aucmd_win_idx } >= 0 {
-        let idx = unsafe { (*aco).use_aucmd_win_idx } as usize;
-        let awp = unsafe { (*aucmd_wins().slot(idx)).auc_win };
+pub fn aucmd_restbuf(aco: &mut AcoSave) {
+    if let Ok(idx) = usize::try_from(aco.use_aucmd_win_idx) {
+        let awp = aucmd_window(idx);
         let aw = awp.expect("a slot in use has its window");
-
         // Go to `awp`.  It cannot have been closed, but the autocommand
         // may have moved it to another tab page.
         block_autocmds();
@@ -287,19 +227,19 @@ pub unsafe fn aucmd_restbuf(aco: *mut AcoSave) {
         forget_window(auc.handle);
         if auc.w_grid_alloc.is_allocated() {
             ui_comp_remove_grid(crate::ui_compositor::win_grid(auc));
-            ui_call_win_hide(auc.w_grid_alloc.handle as Integer);
+            ui_call_win_hide(Integer::from(auc.w_grid_alloc.handle));
             auc.w_grid_alloc.free();
         }
 
         // The window is given back, not freed: it is used again.
-        unsafe { (*aucmd_wins().slot(idx)).auc_win_used = false };
+        set_aucmd_slot_used(idx, false);
 
         if valid_tabpage_win(TabPage::current()) == 0 {
             close_tabpage(TabPage::current());
         }
         unblock_autocmds();
 
-        let save_curwin = win_find_by_handle(unsafe { (*aco).save_curwin_handle });
+        let save_curwin = win_find_by_handle(aco.save_curwin_handle);
         // The original window may have disappeared under the
         // autocommand; the first one is then as good as any. There being
         // neither is the editor tearing itself down, and nothing to enter.
@@ -309,10 +249,10 @@ pub unsafe fn aucmd_restbuf(aco: *mut AcoSave) {
         }
         entering_window(Win::current());
         if buf_is_prompt(current_buf()) {
-            Buf::current().b_prompt_insert = unsafe { (*aco).save_prompt_insert };
+            Buf::current().b_prompt_insert = aco.save_prompt_insert;
         }
 
-        prevwin.set(win_find_by_handle(unsafe { (*aco).save_prevwin_handle }).map(Win::id));
+        prevwin.set(win_find_by_handle(aco.save_prevwin_handle).map(Win::id));
         // Free the autocommand window's `w:` variables, keeping the
         // hashtab for the next borrower.
         if let Some(vars) = aw.w_winvar.di_tv.dict_handle() {
@@ -324,11 +264,11 @@ pub unsafe fn aucmd_restbuf(aco: *mut AcoSave) {
         if aw.w_localdir.is_some() {
             win_fix_current_dir();
         }
-        TabPage::current().tp_localdir = unsafe { (*aco).tp_localdir.take() };
-        globaldir.set(unsafe { (*aco).globaldir.take() });
+        TabPage::current().tp_localdir = aco.tp_localdir.take();
+        globaldir.set(aco.globaldir.take());
 
         // The buffer's contents may have changed under the cursor.
-        set_visual_active(unsafe { (*aco).save_visual_active });
+        set_visual_active(aco.save_visual_active);
         check_cursor(Win::current());
         if Win::current().w_topline > Buf::current().b_ml.ml_line_count {
             Win::current().w_topline = Buf::current().b_ml.ml_line_count;
@@ -337,13 +277,12 @@ pub unsafe fn aucmd_restbuf(aco: *mut AcoSave) {
     } else {
         // Restore `curwin` by handle: a window may have been closed and
         // its memory re-used for another one.
-        let save_curwin = win_find_by_handle(unsafe { (*aco).save_curwin_handle });
+        let save_curwin = win_find_by_handle(aco.save_curwin_handle);
         if let Some(save_curwin) = save_curwin {
             // Put back the buffer `curwin` was editing, if it changed
             // and we are still the same window with a valid buffer.
-            // SAFETY: `aco` is the caller's, filled in by `aucmd_prepbuf`.
-            let new_curbuf = BufRef::of_record(unsafe { (*aco).new_curbuf });
-            if Win::current().handle == unsafe { (*aco).new_curwin_handle }
+            let new_curbuf = BufRef::of_record(aco.new_curbuf);
+            if Win::current().handle == aco.new_curwin_handle
                 && !new_curbuf.is(Buf::current_or_none())
                 && let Some(new_curbuf) = new_curbuf.get()
                 && new_curbuf.b_ml.ml_mfp.is_some()
@@ -359,16 +298,16 @@ pub unsafe fn aucmd_restbuf(aco: *mut AcoSave) {
 
             save_curwin.make_current();
             save_curwin.buffer().make_current();
-            prevwin.set(win_find_by_handle(unsafe { (*aco).save_prevwin_handle }).map(Win::id));
+            prevwin.set(win_find_by_handle(aco.save_prevwin_handle).map(Win::id));
 
             // The autocommand may have left the cursor where curbuf has
             // no such position.
-            set_visual_active(unsafe { (*aco).save_visual_active });
+            set_visual_active(aco.save_visual_active);
             check_cursor(Win::current());
         }
     }
 
-    set_visual_active(unsafe { (*aco).save_visual_active });
+    set_visual_active(aco.save_visual_active);
     // Just in case lines got deleted.
     check_cursor(Win::current());
     if visual_active() {
@@ -387,15 +326,13 @@ impl AucmdBuf {
     /// window — saving what is needed to put things back.
     pub(crate) fn enter(buffer: Buf) -> AucmdBuf {
         let mut aco = AcoSave::default();
-        // SAFETY: a local the guard owns; the restore reads it back.
-        unsafe { aucmd_prepbuf(&mut aco, buffer) };
+        aucmd_prepbuf(&mut aco, buffer);
         AucmdBuf { aco }
     }
 }
 
 impl Drop for AucmdBuf {
     fn drop(&mut self) {
-        // SAFETY: the record `enter` filled in, restored once.
-        unsafe { aucmd_restbuf(&mut self.aco) };
+        aucmd_restbuf(&mut self.aco);
     }
 }

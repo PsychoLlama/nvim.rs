@@ -237,39 +237,43 @@ fn on_signal(_watcher: *mut SignalWatcher, signum: c_int, _data: *mut c_void) {
 /// What each watched signal means to the editor.
 fn handle_signal(signum: c_int) {
     debug_assert!(signum >= 0);
-    // SAFETY: every call below is an ordinary main-thread editor call; this
-    // runs from the event loop rather than from a signal handler. `curbuf` is
-    // non-null for as long as the editor is running.
-    unsafe {
-        match signum {
-            // Power failure (eg batteries low): flush the swap files to be
-            // safe.
-            SIGPWR => ml_sync_all(0, 0, true),
-            SIGPIPE => {}
-            SIGTSTP => {
-                if p_awa() {
-                    autowrite_all();
-                }
+    // Every call below is an ordinary main-thread editor call; this runs
+    // from the event loop rather than from a signal handler.
+    match signum {
+        // Power failure (eg batteries low): flush the swap files to be
+        // safe.
+        SIGPWR => ml_sync_all(0, 0, true),
+        SIGPIPE => {}
+        SIGTSTP => {
+            if p_awa() {
+                autowrite_all();
             }
-            SIGHUP | SIGINT | SIGTERM | SIGQUIT => {
-                if !REJECTING_DEADLY.get() {
-                    deadly_signal(signum);
-                }
+        }
+        SIGHUP | SIGINT | SIGTERM | SIGQUIT => {
+            if !REJECTING_DEADLY.get() {
+                deadly_signal(signum);
             }
-            // The autocommand is named for the signal, which is exactly what
-            // signal_name yields.
-            SIGUSR1 | SIGWINCH => {
-                apply_autocmds(
-                    AutoEvent::Signal,
-                    signal_name(signum).as_ptr() as *mut c_char,
-                    Buf::current().name.shown_ptr(),
-                    true,
-                    Buf::current_or_none(),
-                );
-            }
-            _ => {
-                logmsg!(LOGLVL_ERR, c"on_signal", 254, "invalid signal: {}", signum);
-            }
+        }
+        // The autocommand is named for the signal, which is exactly what
+        // signal_name yields.
+        SIGUSR1 | SIGWINCH => {
+            // A copy of the buffer's name, for the call: a handler may
+            // rename the buffer.
+            apply_autocmds(
+                AutoEvent::Signal,
+                Some(signal_name(signum)),
+                Buf::current()
+                    .name
+                    .shown()
+                    .map(crate::memory::XString::from_cstr)
+                    .as_ref()
+                    .map(crate::memory::XString::as_cstr),
+                true,
+                Buf::current_or_none(),
+            );
+        }
+        _ => {
+            logmsg!(LOGLVL_ERR, c"on_signal", 254, "invalid signal: {}", signum);
         }
     }
 }

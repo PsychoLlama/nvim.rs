@@ -142,7 +142,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_with(lstate: *mut lua_State) -> c_in
                 win_execute_before(&mut win_execute_args, win, tabpage)
             } else {
                 if let Some(buf) = buf {
-                    aucmd_prepbuf(&raw mut aco, buf);
+                    aucmd_prepbuf(&mut aco, buf);
                 }
                 true
             };
@@ -156,7 +156,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_with(lstate: *mut lua_State) -> c_in
                 if win.is_some() {
                     win_execute_after(&mut win_execute_args);
                 } else if buf.is_some() {
-                    aucmd_restbuf(&raw mut aco);
+                    aucmd_restbuf(&mut aco);
                 }
             }
         }

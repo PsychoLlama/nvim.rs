@@ -6,22 +6,17 @@
 //! buffer), runs the matching commands through `do_cmdline` with an
 //! `AutoPatCmd` as the walk's cursor, then unwinds all of it.  The
 //! three `apply_autocmds*` entry points above it differ only in what they
-//! pass and what they return; [`block_autocmds`] is the editor-wide off
-//! switch.
+//! pass and what they return.
 //!
-//! **`patcmd` is a stack local whose address escapes** -- into the
-//! execution stack's frame, while `do_cmdline` reads it as its line source
-//! -- so it cannot move.
-//! What upstream also published it for, a handler wiping out the buffer the
-//! walk matches `<buffer=N>` against, goes through the running walks'
+//! The walk's cursor, `patcmd`, owns copies of every name it matches
+//! against, so the caller's names are only read before anything runs. What
+//! upstream also published the cursor for, a handler wiping out the buffer
+//! the walk matches `<buffer=N>` against, goes through the running walks'
 //! numbers in the autocommand state instead: the walk pushes its number when
 //! it starts running and keeps the index (`AutoPatCmd::walk`), and
 //! `aubuflocal_remove` clears the number there.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// The exports here are metrics/abi-ledger.jsonl rows (`block_autocmds`, `unblock_autocmds`), and
-// `#[unsafe(no_mangle)]` is itself an unsafe attribute.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 #![deny(
@@ -38,7 +33,7 @@ use crate::ex_docmd::{DoCmdOpts, LineSource};
 use crate::getchar::KeyBuffer;
 use crate::guard::{Depth, Script, Suppress};
 use crate::memory::XString;
-use crate::optionstr::OptString;
+use crate::optionstr::{OptString, OptStringRef};
 use crate::types::{FAIL, MAXPATHL, OK};
 use crate::winlayer::{Buf, Win, tab_windows};
 
@@ -113,83 +108,58 @@ fn keeps_changed_flag(event: AutoEvent) -> bool {
 }
 
 /// Fire `event`, in every group, with no file name: the patterns match the
-/// buffer's name, as a null `fname` asks of [`apply_autocmds`].
+/// buffer's name, as no `fname` asks of [`apply_autocmds`].
 pub fn fire_autocmds(event: AutoEvent, force: bool, buffer: Option<Buf>) -> bool {
-    // SAFETY: both names null, which the callee reads as "none".
-    unsafe {
-        apply_autocmds(
-            event,
-            ::core::ptr::null_mut(),
-            ::core::ptr::null_mut(),
-            force,
-            buffer,
-        )
-    }
+    apply_autocmds(event, None, None, force, buffer)
 }
 
 /// Fire `event`, in every group, matching the patterns against `pattern`
 /// (or the buffer's name, for `None`) with `afile` as `<afile>`, and `data`
 /// as the handlers' `data` -- `nvim_exec_autocmds`' `data`, a `Progress`
 /// message's fields.
-///
-/// Both names are copied before any autocommand runs, so the caller may
-/// hand in a name an autocommand could change.
 pub(crate) fn fire_autocmds_for(
     event: AutoEvent,
     pattern: Option<&CStr>,
     afile: Option<&CStr>,
     force: bool,
     buffer: Option<Buf>,
-    data: Option<&mut Object>,
+    data: Option<&Object>,
 ) -> bool {
-    let name = |s: Option<&CStr>| s.map_or(::core::ptr::null_mut(), |s| s.as_ptr().cast_mut());
-    let data = data.map_or(::core::ptr::null_mut(), ::core::ptr::from_mut);
-    // SAFETY: two NUL-terminated names or null, which `apply_autocmds_group`
-    // copies before it runs anything and writes to neither; `data` is the
-    // caller's live object or null.
-    unsafe {
-        apply_autocmds_group(
-            event,
-            name(pattern),
-            name(afile),
-            force,
-            AUGROUP_ALL,
-            buffer,
-            None,
-            data,
-        )
-    }
+    apply_autocmds_group(
+        event,
+        pattern,
+        afile,
+        force,
+        AUGROUP_ALL,
+        buffer,
+        None,
+        data,
+    )
 }
 
 /// Fire `event`, in every group.
 ///
-/// # Safety
-///
-/// `event` must be an initialized `AutoEvent` whose pointer fields point at
-/// live data for the call. `fname` must point at a NUL-terminated string,
-/// unaliased for the call. `fname_io` must point at a NUL-terminated string,
-/// unaliased for the call.
-pub unsafe fn apply_autocmds(
+/// The names are copied before any autocommand runs. A caller hands in its
+/// own copy of a name an autocommand could change (a buffer's, an
+/// option's): a borrow passed in lives for the whole call, handlers and
+/// all.
+pub fn apply_autocmds(
     event: AutoEvent,
-    fname: *mut ::core::ffi::c_char,
-    fname_io: *mut ::core::ffi::c_char,
+    fname: Option<&CStr>,
+    fname_io: Option<&CStr>,
     force: bool,
     buffer: Option<Buf>,
 ) -> bool {
-    // SAFETY: every pointer is the caller's, handed straight on;
-    // `apply_autocmds_group` asks of them exactly what this does.
-    unsafe {
-        apply_autocmds_group(
-            event,
-            fname,
-            fname_io,
-            force,
-            AUGROUP_ALL,
-            buffer,
-            None,
-            ::core::ptr::null_mut(),
-        )
-    }
+    apply_autocmds_group(
+        event,
+        fname,
+        fname_io,
+        force,
+        AUGROUP_ALL,
+        buffer,
+        None,
+        None,
+    )
 }
 
 /// `fire_autocmds_for` passing an `ExArg` on, so that `v:cmdarg` and
@@ -207,22 +177,16 @@ pub fn apply_autocmds_exarg(
     buffer: Option<Buf>,
     excmd: Option<&mut ExArg>,
 ) -> bool {
-    let name = |s: Option<&CStr>| s.map_or(::core::ptr::null_mut(), |s| s.as_ptr().cast_mut());
-    // SAFETY: two NUL-terminated names or null, which `apply_autocmds_group`
-    // copies before it runs anything and writes to neither; `excmd` is only
-    // read, for its `forceit` and its command argument.
-    unsafe {
-        apply_autocmds_group(
-            event,
-            name(pattern),
-            name(afile),
-            force,
-            AUGROUP_ALL,
-            buffer,
-            excmd,
-            ::core::ptr::null_mut(),
-        )
-    }
+    apply_autocmds_group(
+        event,
+        pattern,
+        afile,
+        force,
+        AUGROUP_ALL,
+        buffer,
+        excmd,
+        None,
+    )
 }
 
 /// [`apply_autocmds_retval`] with no names: `buffer`'s event, which may turn
@@ -232,50 +196,55 @@ pub(crate) fn fire_autocmds_retval(
     buffer: Buf,
     retval: &mut ::core::ffi::c_int,
 ) -> bool {
-    let none = ::core::ptr::null_mut();
-    // SAFETY: no names, a live buffer and the caller's status to report
-    // through.
-    unsafe { apply_autocmds_retval(event, none, none, false, buffer, retval) }
+    apply_autocmds_retval(event, None, None, false, buffer, retval)
 }
 
 /// [`apply_autocmds`] threaded through a caller's `OK`/`FAIL`: it does
 /// nothing once that says to abort, and turns it to `FAIL` if a handler
 /// aborted.
-///
-/// # Safety
-///
-/// `event` must be an initialized `AutoEvent` whose pointer fields point at
-/// live data for the call. `fname` must point at a NUL-terminated string,
-/// unaliased for the call. `fname_io` must point at a NUL-terminated string,
-/// unaliased for the call. `retval` must point at a writable `int` the caller
-/// owns.
-pub unsafe fn apply_autocmds_retval(
+pub fn apply_autocmds_retval(
     event: AutoEvent,
-    fname: *mut ::core::ffi::c_char,
-    fname_io: *mut ::core::ffi::c_char,
+    fname: Option<&CStr>,
+    fname_io: Option<&CStr>,
     force: bool,
     buffer: Buf,
-    retval: *mut ::core::ffi::c_int,
+    retval: &mut ::core::ffi::c_int,
 ) -> bool {
-    if should_abort(unsafe { *retval }) {
+    if should_abort(*retval) {
         return false;
     }
-    let did_cmd = unsafe {
-        apply_autocmds_group(
-            event,
-            fname,
-            fname_io,
-            force,
-            AUGROUP_ALL,
-            Some(buffer),
-            None,
-            ::core::ptr::null_mut(),
-        )
-    };
+    let did_cmd = apply_autocmds_group(
+        event,
+        fname,
+        fname_io,
+        force,
+        AUGROUP_ALL,
+        Some(buffer),
+        None,
+        None,
+    );
     if did_cmd && aborting() {
-        unsafe { *retval = FAIL };
+        *retval = FAIL;
     }
     did_cmd
+}
+
+/// Whether 'eventignorewin' keeps `event` from firing for `buffer`: it is
+/// per window, so the question is whether *every* window showing the
+/// buffer ignores it. Only window-local events can be listed there.
+fn ignored_in_every_window(event: AutoEvent, buffer: Option<Buf>) -> bool {
+    if !event_row(event).win_local {
+        return false;
+    }
+    if buffer == Buf::current_or_none() {
+        return event_ignored(event, Win::current().w_onebuf_opt.wo_eiw.bytes(), true);
+    }
+    if !buffer.is_some_and(|b| b.b_nwindows > 0) {
+        return false;
+    }
+    tab_windows()
+        .filter(|wp| Some(wp.buffer()) == buffer)
+        .all(|wp| event_ignored(event, wp.w_onebuf_opt.wo_eiw.bytes(), true))
 }
 
 /// Fire `event` for `buffer`, running every autocommand in `group` whose
@@ -287,24 +256,19 @@ pub unsafe fn apply_autocmds_retval(
 /// buffer's own autocommands, and remembering that `FileType` ran -- are
 /// after it.
 ///
-/// # Safety
-///
-/// `event` must be an initialized `AutoEvent` whose pointer fields point at
-/// live data for the call. `fname` must point at a NUL-terminated string,
-/// unaliased for the call. `fname_io` must point at a NUL-terminated string,
-/// unaliased for the call. `excmd` must point at the command's `ExArg`. `data`
-/// must point at a live `Object`, unaliased for the call.
-pub unsafe fn apply_autocmds_group(
+/// `fname` and `fname_io` are copied before anything runs; see
+/// [`apply_autocmds`] for what a caller hands in. `data` is the caller's,
+/// which a Lua handler is given a copy of.
+pub fn apply_autocmds_group(
     event: AutoEvent,
-    mut fname: *mut ::core::ffi::c_char,
-    fname_io: *mut ::core::ffi::c_char,
+    fname: Option<&CStr>,
+    fname_io: Option<&CStr>,
     force: bool,
     group: ::core::ffi::c_int,
     buffer: Option<Buf>,
     excmd: Option<&mut ExArg>,
-    data: *mut Object,
+    data: Option<&Object>,
 ) -> bool {
-    let mut sfname: *mut ::core::ffi::c_char = ::core::ptr::null_mut();
     let mut retval = false;
     let mut did_save_redobuff = false;
     let mut save_redo = SAVE_REDO_INIT;
@@ -312,7 +276,7 @@ pub unsafe fn apply_autocmds_group(
 
     'bypass: {
         // Nothing to fire, or firing is off.
-        if unsafe { (*au_event_vec(event)).size } == 0 || is_autocmd_blocked() {
+        if !has_event(event) || is_autocmd_blocked() {
             break 'bypass;
         }
         // While autocommands are running, a new one only fires when it
@@ -330,31 +294,10 @@ pub unsafe fn apply_autocmds_group(
         {
             break 'bypass;
         }
-        if p_ei(|ei| unsafe { event_ignored(event, ei.as_ptr().cast_mut(), false) }) {
+        if p_ei(|ei| event_ignored(event, ei.to_bytes(), false)) {
             break 'bypass;
         }
-
-        // 'eventignorewin' is per window, so the question is whether
-        // *every* window showing the buffer ignores the event.  Only
-        // window-local events can be listed there.
-        let win_local = event_row(event).win_local;
-        let mut win_ignore = false;
-        if buffer == Buf::current_or_none() && win_local {
-            win_ignore = unsafe {
-                event_ignored(event, Win::current().w_onebuf_opt.wo_eiw.value_ptr(), true)
-            };
-        } else if buffer.is_some_and(|b| win_local && b.b_nwindows > 0) {
-            win_ignore = true;
-            for wp in tab_windows() {
-                if Some(wp.buffer()) == buffer
-                    && !unsafe { event_ignored(event, wp.w_onebuf_opt.wo_eiw.value_ptr(), true) }
-                {
-                    win_ignore = false;
-                    break;
-                }
-            }
-        }
-        if win_ignore {
+        if ignored_in_every_window(event, buffer) {
             break 'bypass;
         }
 
@@ -386,22 +329,22 @@ pub unsafe fn apply_autocmds_group(
 
         // `<afile>`.  A copy, so renaming a buffer or changing
         // directory cannot invalidate it.
-        let afile = if !fname_io.is_null() {
-            fname_io
+        let afile_orig: Option<XString> = if let Some(fname_io) = fname_io {
+            Some(XString::from_cstr(fname_io))
         } else if afile_is_not_a_name(event) {
-            ::core::ptr::null_mut()
-        } else if !fname.is_null() && ends_excmd(::core::ffi::c_int::from(unsafe { *fname })) == 0 {
-            fname
+            None
+        } else if let Some(fname) =
+            fname.filter(|fname| ends_excmd(::core::ffi::c_int::from(cstr::first(fname))) == 0)
+        {
+            Some(XString::from_cstr(fname))
         } else {
-            buffer.map_or(::core::ptr::null_mut(), |b| b.name.full_ptr())
+            buffer.and_then(|b| b.name.full().map(XString::from_cstr))
         };
-        // The unexpanded `<afile>`, kept for the API's `file` field.
-        let mut afile_orig: *mut ::core::ffi::c_char = ::core::ptr::null_mut();
-        if !afile.is_null() {
-            afile_orig = unsafe { xstrdup(afile) };
-            // Cut at MAXPATHL, as upstream's copy is: `eval_vars` resolves
-            // the full path in that much room later.
-            let mut copy = XString::from_cstr(unsafe { ::core::ffi::CStr::from_ptr(afile) });
+        // The unexpanded `<afile>` is kept for the API's `file` field; the
+        // expansion's copy is cut at MAXPATHL, as upstream's is: `eval_vars`
+        // resolves the full path in that much room later.
+        if let Some(afile) = &afile_orig {
+            let mut copy = afile.clone();
             copy.truncate(MAXPATHL as usize);
             autocmd_fname.set(Some(copy));
         }
@@ -412,45 +355,31 @@ pub unsafe fn apply_autocmds_group(
 
         // The name to match the patterns against.  Always a full path,
         // in case a pattern has `allow_dirs` set.
-        if fname.is_null() || unsafe { *fname } == 0 {
-            match (buffer, event) {
-                (None, _) => fname = ::core::ptr::null_mut(),
-                (Some(b), AutoEvent::Syntax) => fname = b.b_p_syn.value_ptr(),
-                (Some(b), AutoEvent::FileType) => fname = b.b_p_ft.value_ptr(),
+        let mut sfname: Option<XString> = None;
+        let fname: XString = match fname.filter(|fname| !fname.is_empty()) {
+            None => match (buffer, event) {
+                (None, _) => XString::new(),
+                (Some(b), AutoEvent::Syntax) => b.b_p_syn.get(),
+                (Some(b), AutoEvent::FileType) => b.b_p_ft.get(),
                 (Some(b), _) => {
-                    if !b.name.short().is_none() {
-                        sfname = unsafe { xstrdup(b.name.short_ptr()) };
-                    }
-                    fname = b.name.full_ptr();
+                    sfname = b.name.short().map(XString::from_cstr);
+                    b.name.full().map_or_else(XString::new, XString::from_cstr)
+                }
+            },
+            Some(fname) => {
+                sfname = Some(XString::from_cstr(fname));
+                if afile_is_not_expanded(event) {
+                    // Don't expand it later either.
+                    autocmd_fname_full.set(true);
+                    XString::from_cstr(fname)
+                } else {
+                    full_name_save(fname, false)
                 }
             }
-            if fname.is_null() {
-                fname = c"".as_ptr().cast_mut();
-            }
-            // A copy, so it can be changed.
-            fname = unsafe { xstrdup(fname) };
-        } else {
-            sfname = unsafe { xstrdup(fname) };
-            if afile_is_not_expanded(event) {
-                fname = unsafe { xstrdup(fname) };
-                // Don't expand it later either.
-                autocmd_fname_full.set(true);
-            } else {
-                fname = unsafe { full_name_save(cstr::at(fname), false) }.into_raw();
-            }
-        }
-        if fname.is_null() {
-            // Out of memory.
-            unsafe { xfree(sfname.cast::<::core::ffi::c_void>()) };
-            retval = false;
-            break 'bypass;
-        }
+        };
 
         // `<amatch>`.
-        // SAFETY: `fname` is this firing's NUL-terminated copy.
-        autocmd_match.set(Some(XString::from_cstr(unsafe {
-            ::core::ffi::CStr::from_ptr(fname)
-        })));
+        autocmd_match.set(Some(fname.clone()));
 
         // Don't redraw while running autocommands.
         let redraw_off = Suppress::redraw();
@@ -494,21 +423,17 @@ pub unsafe fn apply_autocmds_group(
             Buf::current().b_did_filetype = true;
         }
 
-        let tail = unsafe { cstr::at_opt(fname) }
-            .map_or(c"", path_tail)
-            .as_ptr()
-            .cast_mut();
+        let tail = fname.len() - path_tail(fname.as_cstr()).count_bytes();
 
-        // The walk's cursor.  This is a *stack local* whose address is
-        // published on `active_apc_list` below; see the module docs.
+        // The walk's cursor.
         let mut patcmd = AutoPatCmd {
-            // `aucmd_next` sets `lastpat` back to null when there is
+            // `aucmd_next` sets `lastpat` back to `None` when there is
             // nothing left to run.
-            lastpat: ::core::ptr::null_mut(),
+            lastpat: None,
             auidx: 0,
             // The size is snapshotted so that patterns added by a
             // handler cannot extend this walk into an endless loop.
-            ausize: unsafe { (*au_event_vec(event)).size },
+            ausize: with_event_cmds(event, EventCmds::len),
             afile_orig,
             fname,
             sfname,
@@ -519,18 +444,17 @@ pub unsafe fn apply_autocmds_group(
             script_ctx: ScriptCtx::NONE,
             arg_bufnr: autocmd_bufnr.get(),
             walk: None,
-            data: ::core::ptr::null_mut(),
         };
-        unsafe { aucmd_next(&raw mut patcmd) };
+        aucmd_next(&mut patcmd);
 
         // Something matched: run the autocommands.
-        if !patcmd.lastpat.is_null() {
+        if patcmd.lastpat.is_some() {
             let bufnr = patcmd.arg_bufnr;
-            patcmd.walk = Some(active_walk_bufnrs.with_mut(|nrs| {
+            let walk = active_walk_bufnrs.with_mut(|nrs| {
                 nrs.push(bufnr);
                 nrs.len() - 1
-            }));
-            patcmd.data = data;
+            });
+            patcmd.walk = Some(walk);
 
             // `v:cmdarg`/`v:cmdbang`, only when a pattern matched.
             let save_cmdbang = get_vim_var_nr(Vv::Cmdbang);
@@ -560,7 +484,7 @@ pub unsafe fn apply_autocmds_group(
             // matching autocommand.
             let _ = do_cmdline(
                 None,
-                Some(&mut LineSource::Autocmd(&mut patcmd)),
+                Some(&mut LineSource::Autocmd(&mut patcmd, data)),
                 DoCmdOpts::NOWAIT | DoCmdOpts::VERBOSE | DoCmdOpts::REPEAT,
             );
 
@@ -579,9 +503,7 @@ pub unsafe fn apply_autocmds_group(
             // The walk is over. A nested one has popped its own number
             // already; anything above this one's would be a walk that did
             // not, and is gone with it.
-            if let Some(at) = patcmd.walk {
-                active_walk_bufnrs.with_mut(|nrs| nrs.truncate(at));
-            }
+            active_walk_bufnrs.with_mut(|nrs| nrs.truncate(walk));
         }
 
         drop(redraw_off);
@@ -590,7 +512,6 @@ pub unsafe fn apply_autocmds_group(
         autocmd_nested.set(save_autocmd_nested);
         // The frame takes the name `aucmd_next` left there with it.
         estack_pop();
-        unsafe { xfree(afile_orig.cast::<::core::ffi::c_void>()) };
         autocmd_fname.set(save_autocmd_fname);
         autocmd_fname_full.set(save_autocmd_fname_full);
         autocmd_bufnr.set(save_autocmd_bufnr);
@@ -601,8 +522,7 @@ pub unsafe fn apply_autocmds_group(
             prof_child_exit(wait_time);
         }
         KeyTyped.set(save_key_typed);
-        unsafe { xfree(fname.cast::<::core::ffi::c_void>()) };
-        unsafe { xfree(sfname.cast::<::core::ffi::c_void>()) };
+        drop(patcmd);
         // The handlers below run at the enclosing level, not this one.
         drop(nested);
 
@@ -639,31 +559,4 @@ pub unsafe fn apply_autocmds_group(
     }
 
     retval
-}
-
-/// Turn autocommands off editor-wide, nestably.
-#[unsafe(no_mangle)]
-pub extern "C" fn block_autocmds() {
-    // Remember that we may need to fire `TermResponse` later.
-    if !is_autocmd_blocked() {
-        termresponse_changed.set(false);
-    }
-    autocmd_blocked.set(autocmd_blocked.get() + 1);
-}
-
-/// Undo one [`block_autocmds`], firing the `TermResponse` that arrived
-/// while they were off.
-#[unsafe(no_mangle)]
-pub extern "C" fn unblock_autocmds() {
-    autocmd_blocked.set(autocmd_blocked.get() - 1);
-    if !is_autocmd_blocked() && termresponse_changed.get() && has_event(AutoEvent::TermResponse) {
-        // The autocommand takes the copy over.
-        let sequence = String_0::from_bytes(&vim_var_bytes(Vv::Termresponse));
-        unsafe { do_termresponse_autocmd(sequence) };
-    }
-}
-
-/// Whether [`block_autocmds`] is in effect.
-pub fn is_autocmd_blocked() -> bool {
-    autocmd_blocked.get() != 0
 }

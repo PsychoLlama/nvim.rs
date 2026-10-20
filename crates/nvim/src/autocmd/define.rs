@@ -2,211 +2,163 @@
 //!
 //! [`do_autocmd`] splits the command into group, event list, pattern and
 //! command, then loops [`do_autocmd_event`] over the events;
-//! [`autocmd_register`] is the one place an `AutoPat`/`AutoCmd` pair is
-//! created, and the same entry point the API's `nvim_create_autocmd`
+//! [`autocmd_register`] is the one place an `AutoCmd` (and, when it is new,
+//! its `AutoPat`) is created, and the same entry point the API's `nvim_create_autocmd`
 //! reaches.  The `arg_*` helpers are the pieces of the parse the API
 //! shares, and [`autocmd_delete_id`] is the deletion by id that
 //! `nvim_del_autocmd` is.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::charset::skip;
 use crate::cstr;
-use crate::message_fmt::{c_str, msg_cstr};
+use crate::lua::executor::set_sctx_from_lua;
+use crate::memory::XString;
+use crate::message_fmt::msg_bytes;
+use crate::os::env::expand::expand_env_save_opt_of;
 use crate::semsg;
-use crate::strings::has_char;
-use crate::types::{Failed, RefcountSize};
+use crate::types::{AutoHandler, Failed};
 use crate::winlayer::TabPage;
-use crate::winlayer::{Live, Win, tabs};
+use crate::winlayer::{Win, tabs};
 
-/// A `Callback` that holds nothing: `CALLBACK_INIT`.
-const CALLBACK_INIT: Callback = Callback::None;
+/// Whether `c` is a blank, as the parse below reads one.
+fn white(c: u8) -> bool {
+    ascii_iswhite(::core::ffi::c_int::from(c))
+}
 
 /// `:autocmd [group] {event} {pat} [++once] [++nested] {cmd}`, and every
 /// shorter spelling of it: listing, deleting, and `:autocmd *`.
 ///
-/// The argument is walked -- and its pattern terminated -- in place, in the
-/// command's own line; the next command after a `|` is recorded as an
-/// offset into it.
+/// The argument is walked by offset; the next command after a `|` is
+/// recorded as an offset into the line.
 pub fn do_autocmd(excmd: &mut ExArg, forceit: ::core::ffi::c_int) {
-    let start = excmd.line.arg;
-    let mut empty = [0u8];
-    let text = excmd.line.buffer_mut();
-    // The empty line has no buffer; it reads as the empty string.
-    let (base, start) = if text.is_empty() {
-        (empty.as_mut_ptr().cast::<::core::ffi::c_char>(), 0)
-    } else {
-        (
-            text.as_mut_ptr().cast::<::core::ffi::c_char>(),
-            start.min(text.len() - 1),
-        )
-    };
-    // Where `p`, a cursor into the line, is.
-    let offset = |p: *const ::core::ffi::c_char| p.addr() - base.addr();
-    // SAFETY: the line is NUL-terminated after `arg`, and nothing else
-    // reaches its bytes until this returns.
-    let mut arg = unsafe { base.add(start) };
-    let mut envpat: *mut ::core::ffi::c_char = ::core::ptr::null_mut();
-    let mut cmd: *mut ::core::ffi::c_char;
-    let mut need_free = false;
+    let arg_start = excmd.line.arg;
+    let line = excmd.line.arg().to_vec();
+    // The byte at `at`, a NUL past the end, as the C walk read it.
+    let at = |at: usize| line.get(at).copied().unwrap_or(0);
     let mut nested = false;
     let mut once = false;
 
-    let group = if unsafe { *arg } == b'|' as ::core::ffi::c_char {
-        excmd.line.next = Some(offset(arg) + 1);
-        arg = c"".as_ptr().cast_mut();
-        AUGROUP_ALL
+    // `arg` is where the event list starts; the end of the line reads as the
+    // empty string.
+    let (group, mut arg) = if at(0) == b'|' {
+        excmd.line.next = Some(arg_start + 1);
+        (AUGROUP_ALL, line.len())
     } else {
-        unsafe { arg_augroup_get(&raw mut arg) }
+        arg_augroup_get(&line)
     };
 
     // Validate every event name before doing anything.
-    let mut pat = unsafe { arg_event_skip(arg, group != AUGROUP_ALL) };
-    if pat.is_null() {
+    let Some(events_len) = arg_event_skip(&line[arg..], group != AUGROUP_ALL) else {
         return;
-    }
+    };
+    let mut pat = arg + events_len;
+    pat += skip::white(&line[pat..]);
 
-    pat = unsafe { skipwhite(pat) };
-    if unsafe { *pat } == b'|' as ::core::ffi::c_char {
-        excmd.line.next = Some(offset(pat) + 1);
-        pat = c"".as_ptr().cast_mut();
-        cmd = c"".as_ptr().cast_mut();
+    let pattern: XString;
+    let cmd: Vec<u8>;
+    if at(pat) == b'|' {
+        excmd.line.next = Some(arg_start + pat + 1);
+        pattern = XString::new();
+        cmd = Vec::new();
     } else {
-        // Scan over the pattern, whose whitespace may be
-        // backslash-escaped, and terminate it in place.
-        cmd = pat;
-        while unsafe { *cmd } != 0
-            && (!ascii_iswhite(unsafe { *cmd } as ::core::ffi::c_int)
-                || unsafe { *cmd.sub(1) } == b'\\' as ::core::ffi::c_char)
-        {
-            cmd = unsafe { cmd.add(1) };
+        // Scan over the pattern, whose whitespace may be backslash-escaped.
+        let mut end = pat;
+        while at(end) != 0 && (!white(at(end)) || end.checked_sub(1).map_or(0, at) == b'\\') {
+            end += 1;
         }
-        if unsafe { *cmd } != 0 {
-            unsafe { *cmd = 0 };
-            cmd = unsafe { cmd.add(1) };
-        }
+        let raw = &line[pat..end];
+        let mut cmd_at = if at(end) != 0 { end + 1 } else { end };
 
-        if has_char(unsafe { cstr::at(pat) }, '$' as ::core::ffi::c_int)
-            || has_char(unsafe { cstr::at(pat) }, '~' as ::core::ffi::c_int)
-        {
-            envpat = unsafe { expand_env_save(pat) };
-            if !envpat.is_null() {
-                pat = envpat;
-            }
-        }
+        pattern = if raw.contains(&b'$') || raw.contains(&b'~') {
+            expand_env_save_opt_of(XString::from_bytes(raw).as_cstr(), false)
+        } else {
+            XString::from_bytes(raw)
+        };
 
-        cmd = unsafe { skipwhite(cmd) };
+        cmd_at += skip::white(&line[cmd_at.min(line.len())..]);
 
         // Two passes, so the flags may be given in either order.
         let mut invalid_flags = false;
         for _ in 0..2 {
-            if unsafe { *cmd } == 0 {
+            if at(cmd_at) == 0 {
                 continue;
             }
-            invalid_flags |=
-                unsafe { arg_autocmd_flag_get(&raw mut once, &raw mut cmd, c"++once", 6) };
-            invalid_flags |=
-                unsafe { arg_autocmd_flag_get(&raw mut nested, &raw mut cmd, c"++nested", 8) };
+            invalid_flags |= arg_autocmd_flag_get(&mut once, &line, &mut cmd_at, b"++once");
+            invalid_flags |= arg_autocmd_flag_get(&mut nested, &line, &mut cmd_at, b"++nested");
             // The deprecated spelling of `++nested`.
-            invalid_flags |=
-                unsafe { arg_autocmd_flag_get(&raw mut nested, &raw mut cmd, c"nested", 6) };
+            invalid_flags |= arg_autocmd_flag_get(&mut nested, &line, &mut cmd_at, b"nested");
         }
         if invalid_flags {
             return;
         }
 
-        if unsafe { *cmd } != 0 {
-            let Some(expanded) = expand_sfile(unsafe { cstr::bytes_at(cmd) }) else {
+        cmd = if at(cmd_at) != 0 {
+            let Some(expanded) = expand_sfile(cstr::until_nul(&line[cmd_at..])) else {
                 return;
             };
-            cmd = crate::memory::ThinCString::from_vec(expanded).into_raw();
-            need_free = true;
-        }
+            expanded
+        } else {
+            Vec::new()
+        };
     }
+    let cmd = cstr::until_nul(&cmd);
+    let pattern = &pattern[..];
 
     // No command and no `!`: this is a listing.
-    let is_showing = forceit == 0 && unsafe { *cmd } == 0;
-    let all_events = unsafe { *arg } == b'*' as ::core::ffi::c_char
-        || unsafe { *arg } == b'|' as ::core::ffi::c_char
-        || unsafe { *arg } == 0;
+    let is_showing = forceit == 0 && cmd.is_empty();
+    let all_events = matches!(at(arg), b'*' | b'|' | 0);
 
     if is_showing {
         msg_ext_set_kind(c"list_cmd");
         msg_title(gettext(c"\n--- Autocommands ---"));
 
         if all_events {
-            unsafe { au_show_for_all_events(group, pat) };
+            au_show_for_all_events(group, pattern);
         } else {
-            // `au_event_check` has already refused an unknown name.
-            let event = unsafe { event_name2nr(arg, &raw mut arg) }
-                .expect("the event list was checked before it was walked");
-            unsafe { au_show_for_event(group, event, pat) };
+            // `arg_event_skip` has already refused an unknown name.
+            let (event, _) = event_name2nr(&line[arg..]);
+            let event = event.expect("the event list was checked before it was walked");
+            au_show_for_event(group, event, pattern);
         }
     } else if all_events {
-        if unsafe { *cmd } != 0 {
+        if !cmd.is_empty() {
             emsg(gettext(e_cannot_define_autocommands_for_all_events));
         } else {
-            unsafe {
-                do_all_autocmd_events(
-                    pat,
-                    once,
-                    nested as ::core::ffi::c_int,
-                    cmd,
-                    forceit != 0,
-                    group,
-                )
-            };
+            do_all_autocmd_events(pattern, once, nested, cmd, forceit != 0, group);
         }
     } else {
-        while unsafe { *arg } != 0
-            && unsafe { *arg } != b'|' as ::core::ffi::c_char
-            && !ascii_iswhite(unsafe { *arg } as ::core::ffi::c_int)
-        {
-            // `au_event_check` has already refused an unknown name.
-            let event = unsafe { event_name2nr(arg, &raw mut arg) }
-                .expect("the event list was checked before it was walked");
-            if unsafe {
-                do_autocmd_event(
-                    event,
-                    pat,
-                    once,
-                    nested as ::core::ffi::c_int,
-                    cmd,
-                    forceit != 0,
-                    group,
-                )
-            }
-            .is_err()
-            {
+        while at(arg) != 0 && at(arg) != b'|' && !white(at(arg)) {
+            // `arg_event_skip` has already refused an unknown name.
+            let (event, consumed) = event_name2nr(&line[arg..]);
+            arg += consumed;
+            let event = event.expect("the event list was checked before it was walked");
+            if do_autocmd_event(event, pattern, once, nested, cmd, forceit != 0, group).is_err() {
                 break;
             }
         }
     }
-
-    if need_free {
-        unsafe { xfree(cmd.cast::<::core::ffi::c_void>()) };
-    }
-    unsafe { xfree(envpat.cast::<::core::ffi::c_void>()) };
 }
 
 /// [`do_autocmd_event`] for every event: what `:autocmd *` means.
-///
-/// # Safety
-///
-/// `pat` must point at a NUL-terminated string. `cmd` must point at a NUL-
-/// terminated string, unaliased for the call.
-pub unsafe fn do_all_autocmd_events(
-    pat: *const ::core::ffi::c_char,
+pub fn do_all_autocmd_events(
+    pat: &[u8],
     once: bool,
-    nested: ::core::ffi::c_int,
-    cmd: *mut ::core::ffi::c_char,
+    nested: bool,
+    cmd: &[u8],
     del: bool,
     group: ::core::ffi::c_int,
 ) {
     for event in AutoEvent::all() {
-        if unsafe { do_autocmd_event(event, pat, once, nested, cmd, del, group) }.is_err() {
+        if do_autocmd_event(event, pat, once, nested, cmd, del, group).is_err() {
             return;
         }
     }
@@ -216,27 +168,20 @@ pub unsafe fn do_all_autocmd_events(
 ///
 /// An empty `cmd` with `del` deletes; a non-empty one adds.  Both together
 /// are `:autocmd! {event} {pat} {cmd}`, which deletes the existing
-/// autocommands on the pattern and then appends to the same `AutoPat`.
-///
-/// # Safety
-///
-/// `event` must be an initialized `AutoEvent` whose pointer fields point at
-/// live data for the call. `pat` must point at a NUL-terminated string. `cmd`
-/// must point at a NUL-terminated string.
-pub unsafe fn do_autocmd_event(
+/// autocommands on the pattern and then appends a fresh one.
+pub fn do_autocmd_event(
     event: AutoEvent,
-    mut pat: *const ::core::ffi::c_char,
+    pat: &[u8],
     once: bool,
-    nested: ::core::ffi::c_int,
-    cmd: *const ::core::ffi::c_char,
+    nested: bool,
+    cmd: &[u8],
     del: bool,
     group: ::core::ffi::c_int,
 ) -> Result<(), Failed> {
     // Listing all patterns goes through `au_show_for_event` instead.
-    debug_assert!(unsafe { *pat } != 0 || del);
+    debug_assert!(!pat.is_empty() || del);
 
-    let mut buflocal_pat = [0 as ::core::ffi::c_char; BUFLOCAL_PAT_LEN as usize];
-    let is_adding_cmd = unsafe { *cmd } != 0;
+    let is_adding_cmd = !cmd.is_empty();
     let findgroup = if group == AUGROUP_ALL {
         current_augroup.get()
     } else {
@@ -244,69 +189,42 @@ pub unsafe fn do_autocmd_event(
     };
 
     // `:autocmd! {event}`: every pattern goes.
-    if unsafe { *pat } == 0 && del {
+    if pat.is_empty() && del {
         aucmd_del_for_event_and_group(event, findgroup);
         return Ok(());
     }
 
-    let mut patlen = unsafe { aucmd_span_pattern(pat, &raw mut pat) } as ::core::ffi::c_int;
-    while patlen != 0 {
-        let endpat = unsafe { pat.offset(patlen as isize) };
-
+    let (mut start, mut len) = aucmd_span_pattern(pat);
+    while len != 0 {
+        let end = start + len;
         // `<buffer[=X]>` is normalised on the way in, so every later
-        // comparison against a stored pattern is a plain `strncmp`.
-        if unsafe { aupat_is_buflocal(pat, patlen) } {
-            unsafe {
-                aupat_normalize_buflocal_pat(
-                    buflocal_pat.as_mut_ptr(),
-                    pat,
-                    patlen,
-                    aupat_get_buflocal_nr(pat, patlen),
-                )
-            };
-            pat = buflocal_pat.as_ptr();
-            patlen = unsafe { cstr::bytes_at(buflocal_pat.as_ptr()) }.len() as ::core::ffi::c_int;
-        }
+        // comparison against a stored pattern is a plain one.
+        let item = normalized_pattern(&pat[start..end]);
 
         if del {
-            debug_assert!(unsafe { *pat } != 0);
-            // Only the commands go; the `AutoPat` survives when a new
-            // command is about to be appended to it below.
-            let acs = au_event_vec(event);
-            let mut i: usize = 0;
-            while i < unsafe { (*acs).size } {
-                let ac = unsafe { (*acs).items.add(i) };
-                let ap = unsafe { (*ac).pat };
-                if !ap.is_null()
-                    && unsafe { (*ap).group } == findgroup
-                    && unsafe { (*ap).patlen } == patlen
-                    && unsafe { cstr::prefix_eq(pat, (*ap).pat, patlen as size_t) }
-                {
-                    unsafe { aucmd_del(ac) };
-                }
-                i = i.wrapping_add(1);
-            }
+            // Only the commands go; a pattern a new command is about to be
+            // appended with is made again below.
+            aucmd_del_where(event, |stored| {
+                stored.group == findgroup && stored.pat[..] == item[..]
+            });
         }
 
         if is_adding_cmd {
-            let mut handler_fn = CALLBACK_INIT;
-            let _ = unsafe {
-                autocmd_register(
-                    0,
-                    event,
-                    pat,
-                    patlen,
-                    group,
-                    once,
-                    nested != 0,
-                    ::core::ptr::null_mut(),
-                    cmd,
-                    &raw mut handler_fn,
-                )
-            };
+            let _ = autocmd_register(
+                0,
+                event,
+                &item,
+                group,
+                once,
+                nested,
+                None,
+                Some(cmd),
+                &Callback::None,
+            );
         }
 
-        patlen = unsafe { aucmd_span_pattern(endpat, &raw mut pat) } as ::core::ffi::c_int;
+        (start, len) = aucmd_span_pattern(&pat[end..]);
+        start += end;
     }
 
     // The patterns and commands marked above can really go now.
@@ -314,35 +232,27 @@ pub unsafe fn do_autocmd_event(
     Ok(())
 }
 
-/// Create one autocommand: the only place an `AutoPat`/`AutoCmd` pair is
-/// made, reached from both `:autocmd` and `nvim_create_autocmd`.
+/// Create one autocommand: the only place one is made, reached from both
+/// `:autocmd` and `nvim_create_autocmd`.
 ///
-/// The handler is `handler_cmd` when that is non-null and `handler_fn`
-/// otherwise.
-///
-/// # Safety
-///
-/// `event` must be an initialized `AutoEvent` whose pointer fields point at
-/// live data for the call. `pat` must point at a NUL-terminated string.
-/// `desc` must point at a NUL-terminated string, unaliased for the call.
-/// `handler_cmd` must point at a NUL-terminated string. `handler_fn` must
-/// point at an initialized callback, unaliased for the call.
-pub unsafe fn autocmd_register(
+/// The handler is `handler_cmd` when there is one, and a counted copy of
+/// `handler_fn` otherwise. A pattern holding a NUL is refused, as a C
+/// string shorter than its count was.
+pub fn autocmd_register(
     id: int64_t,
     event: AutoEvent,
-    mut pat: *const ::core::ffi::c_char,
-    mut patlen: ::core::ffi::c_int,
+    pat: &[u8],
     group: ::core::ffi::c_int,
     once: bool,
     nested: bool,
-    desc: *mut ::core::ffi::c_char,
-    handler_cmd: *const ::core::ffi::c_char,
-    handler_fn: *mut Callback,
+    desc: Option<&[u8]>,
+    handler_cmd: Option<&[u8]>,
+    handler_fn: &Callback,
 ) -> Result<(), Failed> {
     // 0 is not a valid group.
     debug_assert!(group != 0);
 
-    if patlen > unsafe { cstr::bytes_at(pat) }.len() as ::core::ffi::c_int {
+    if pat.contains(&0) {
         return Err(Failed);
     }
 
@@ -352,204 +262,145 @@ pub unsafe fn autocmd_register(
         group
     };
 
-    let is_buflocal = unsafe { aupat_is_buflocal(pat, patlen) };
-    let mut buflocal_nr = 0;
-    let mut buflocal_pat = [0 as ::core::ffi::c_char; BUFLOCAL_PAT_LEN as usize];
-    if is_buflocal {
-        buflocal_nr = unsafe { aupat_get_buflocal_nr(pat, patlen) };
-        unsafe {
-            aupat_normalize_buflocal_pat(buflocal_pat.as_mut_ptr(), pat, patlen, buflocal_nr)
-        };
-        pat = buflocal_pat.as_ptr();
-        patlen = unsafe { cstr::bytes_at(buflocal_pat.as_ptr()) }.len() as ::core::ffi::c_int;
-    }
+    let is_buflocal = aupat_is_buflocal(pat);
+    let buflocal_nr = if is_buflocal {
+        aupat_get_buflocal_nr(pat)
+    } else {
+        0
+    };
+    let pat = normalized_pattern(pat);
+    let pat = &pat[..];
 
     // Reuse the pattern of the last live autocommand when it is the
     // same one, so `:autocmd` twice on a pattern compiles one regexp.
-    let acs = au_event_vec(event);
-    let mut ap: *mut AutoPat = ::core::ptr::null_mut();
-    for i in (0..unsafe { (*acs).size }).rev() {
-        ap = unsafe { (*(*acs).items.add(i)).pat };
-        // Skip deleted autocommands.
-        if ap.is_null() {
-            continue;
-        }
-        if unsafe { (*ap).group } != findgroup
-            || unsafe { (*ap).patlen } != patlen
-            || !unsafe { cstr::prefix_eq(pat, (*ap).pat, patlen as size_t) }
-        {
-            ap = ::core::ptr::null_mut();
-        }
-        break;
-    }
+    let reused = with_event_cmds(event, |cmds| {
+        cmds.cmds
+            .iter()
+            .rev()
+            .find_map(|cmd| cmd.pat)
+            .filter(|&id| {
+                let stored = cmds.pat(id);
+                stored.group == findgroup && stored.pat[..] == *pat
+            })
+    });
 
-    if ap.is_null() {
-        // A buffer-local pattern needs a buffer that exists.
-        if is_buflocal && (buflocal_nr == 0 || find_buf(buflocal_nr).is_none()) {
-            semsg!("E680: <buffer={}>: invalid buffer number ", buflocal_nr);
-            return Err(Failed);
-        }
-
-        // Zeroed: the program is an owned field, and assigning over it drops
-        // what was there, which zero bytes (`None`) make safe to.
-        ap = unsafe { xcalloc(1, ::core::mem::size_of::<AutoPat>()) }.cast::<AutoPat>();
-        // SAFETY: the allocation above, live for the rest of this call.
-        let mut new_pat = unsafe { Live::new(ap) };
-        if is_buflocal {
-            new_pat.buflocal_nr = buflocal_nr;
-        } else {
-            new_pat.buflocal_nr = 0;
-            // SAFETY: the caller's NUL-terminated pattern, `patlen` bytes of
-            // which are this one.
-            let text = unsafe { cstr::bytes_at(pat) };
-            let reg_pat = file_pat_to_reg_pat(text, patlen as usize);
-            new_pat.allow_dirs = 0;
-            if let Some((reg_pat, allow_dirs)) = &reg_pat {
-                new_pat.allow_dirs = ::core::ffi::c_char::from(*allow_dirs);
-                new_pat.reg_prog = vim_regcomp(reg_pat.as_cstr(), RE_MAGIC);
-            }
-            if reg_pat.is_none() || new_pat.reg_prog.is_none() {
-                // Nothing compiled, so there is no program to drop.
-                unsafe { xfree(ap.cast::<::core::ffi::c_void>()) };
+    let pat_id = match reused {
+        Some(id) => id,
+        None => {
+            // A buffer-local pattern needs a buffer that exists.
+            if is_buflocal && (buflocal_nr == 0 || find_buf(buflocal_nr).is_none()) {
+                semsg!("E680: <buffer={}>: invalid buffer number ", buflocal_nr);
                 return Err(Failed);
             }
-        }
 
-        new_pat.refcount = RefcountSize::ZERO;
-        new_pat.pat = unsafe { xmemdupz(pat.cast::<::core::ffi::c_void>(), patlen as size_t) }
-            .cast::<::core::ffi::c_char>();
-        new_pat.patlen = patlen;
-
-        // The events below compare against state sampled the last time
-        // they fired.  The *first* autocommand for one has to seed that
-        // state, or it fires immediately on a difference that predates
-        // it.
-        if event == AutoEvent::ModeChanged && !has_event(AutoEvent::ModeChanged) {
-            last_mode.set(get_mode());
-        }
-        if (event == AutoEvent::CursorMoved && !has_event(AutoEvent::CursorMoved))
-            || (event == AutoEvent::CursorMovedI && !has_event(AutoEvent::CursorMovedI))
-        {
-            last_cursormoved_win.set(Win::current_or_none().map(Win::id));
-            last_cursormoved.set(Win::current().w_cursor);
-        }
-        if (event == AutoEvent::WinScrolled || event == AutoEvent::WinResized)
-            && !(has_event(AutoEvent::WinScrolled) || has_event(AutoEvent::WinResized))
-        {
-            let save_curtab = TabPage::current();
-            for tp in tabs() {
-                unuse_tabpage(TabPage::current());
-                use_tabpage(tp);
-                snapshot_windows_scroll_size();
-            }
-            unuse_tabpage(TabPage::current());
-            use_tabpage(save_curtab);
-        }
-
-        // Spelled out rather than reusing `findgroup`: they are the
-        // same value (nothing above can change `current_augroup`), but
-        // upstream asks the question twice and a mutation aimed at
-        // either one should still land where it lands.
-        new_pat.group = if group == AUGROUP_ALL {
-            current_augroup.get()
-        } else {
-            group
-        };
-    }
-
-    // SAFETY: either the pattern found above or the one just allocated;
-    // both are live for the rest of this call.
-    let mut pat_entry = unsafe { Live::new(ap) };
-    pat_entry.refcount.retain();
-
-    // `kv_pushp`: append an `AutoCmd` at the end of the event's vector.
-    // SAFETY: `acs` is the event's vector, whose array and size are grown
-    // together here -- every step of the run reads or writes through it, so
-    // one region is as tight as it gets.
-    let ac = unsafe {
-        if (*acs).size == (*acs).capacity {
-            (*acs).capacity = if (*acs).capacity != 0 {
-                (*acs).capacity << 1
-            } else {
-                8
+            let mut new_pat = AutoPat {
+                refcount: 0,
+                pat: XString::from_bytes(pat),
+                reg_prog: None,
+                group: 0,
+                buflocal_nr,
+                allow_dirs: false,
             };
-            (*acs).items = xrealloc(
-                (*acs).items.cast::<::core::ffi::c_void>(),
-                ::core::mem::size_of::<AutoCmd>().wrapping_mul((*acs).capacity),
-            )
-            .cast::<AutoCmd>();
-        }
-        let ac = (*acs).items.add((*acs).size);
-        (*acs).size = (*acs).size.wrapping_add(1);
-        // SAFETY: the slot `kv_pushp` just made, live until the vector next
-        // grows -- which nothing below does.
-        Live::new(ac)
-    };
-    let mut ac = ac;
+            if !is_buflocal {
+                let reg_pat = file_pat_to_reg_pat(pat, pat.len());
+                if let Some((reg_pat, allow_dirs)) = &reg_pat {
+                    new_pat.allow_dirs = *allow_dirs;
+                    new_pat.reg_prog = vim_regcomp(reg_pat.as_cstr(), RE_MAGIC);
+                }
+                if reg_pat.is_none() || new_pat.reg_prog.is_none() {
+                    return Err(Failed);
+                }
+            }
 
-    ac.pat = ap;
-    ac.id = id;
-    if handler_cmd.is_null() {
-        ac.handler_cmd = ::core::ptr::null_mut();
-        unsafe { callback_copy(&mut (*ac.raw()).handler_fn, &*handler_fn) };
-    } else {
-        ac.handler_cmd = unsafe { xstrdup(handler_cmd) };
-        // The slot `kv_pushp` handed over is whatever `xrealloc` left there.
-        // Only `handler_cmd.is_null()` rows are ever asked for a handler, so
-        // the C left it uninitialised; a `Callback` is an enum and a bogus
-        // discriminant is not a value at all.
-        ac.handler_fn = Callback::None;
-    }
-    ac.script_ctx = current_sctx.get();
-    // `SOURCING_LNUM`: the line of the innermost execution-stack frame.
-    ac.script_ctx.sc_lnum += crate::runtime::sourcing_lnum();
-    unsafe { nlua_set_sctx(&raw mut (*ac.raw()).script_ctx) };
-    ac.once = once;
-    ac.nested = nested;
-    ac.desc = if desc.is_null() {
-        ::core::ptr::null_mut()
-    } else {
-        unsafe { xstrdup(desc) }
+            // The events below compare against state sampled the last time
+            // they fired.  The *first* autocommand for one has to seed that
+            // state, or it fires immediately on a difference that predates
+            // it.
+            seed_first_autocmd(event);
+
+            // Spelled out rather than reusing `findgroup`: they are the
+            // same value (nothing above can change `current_augroup`), but
+            // upstream asks the question twice.
+            new_pat.group = if group == AUGROUP_ALL {
+                current_augroup.get()
+            } else {
+                group
+            };
+            with_event_cmds_mut(event, |cmds| cmds.add_pat(new_pat))
+        }
     };
+
+    let handler = match handler_cmd {
+        Some(cmd) => AutoHandler::Cmd(XString::from_bytes(cstr::until_nul(cmd))),
+        None => AutoHandler::Fn(handler_fn.duplicate()),
+    };
+    let mut script_ctx = current_sctx.get();
+    // `SOURCING_LNUM`: the line of the innermost execution-stack frame.
+    script_ctx.sc_lnum += crate::runtime::sourcing_lnum();
+    set_sctx_from_lua(&mut script_ctx);
+    let cmd = AutoCmd {
+        pat: Some(pat_id),
+        id,
+        desc: desc.map(|desc| XString::from_bytes(cstr::until_nul(desc))),
+        handler,
+        script_ctx,
+        once,
+        nested,
+    };
+    with_event_cmds_mut(event, |cmds| {
+        cmds.pat_mut(pat_id).refcount += 1;
+        cmds.cmds.push(cmd);
+    });
 
     Ok(())
 }
 
-/// The length of the first pattern in a comma-separated list, with `start`
-/// left at where it begins.
+/// Seed what the first autocommand for `event` compares against.
+fn seed_first_autocmd(event: AutoEvent) {
+    if event == AutoEvent::ModeChanged && !has_event(AutoEvent::ModeChanged) {
+        last_mode.set(get_mode());
+    }
+    if (event == AutoEvent::CursorMoved && !has_event(AutoEvent::CursorMoved))
+        || (event == AutoEvent::CursorMovedI && !has_event(AutoEvent::CursorMovedI))
+    {
+        last_cursormoved_win.set(Win::current_or_none().map(Win::id));
+        last_cursormoved.set(Win::current().w_cursor);
+    }
+    if (event == AutoEvent::WinScrolled || event == AutoEvent::WinResized)
+        && !(has_event(AutoEvent::WinScrolled) || has_event(AutoEvent::WinResized))
+    {
+        let save_curtab = TabPage::current();
+        for tp in tabs() {
+            unuse_tabpage(TabPage::current());
+            use_tabpage(tp);
+            snapshot_windows_scroll_size();
+        }
+        unuse_tabpage(TabPage::current());
+        use_tabpage(save_curtab);
+    }
+}
+
+/// Where the first pattern in a comma-separated list starts and how long
+/// it is.
 ///
 /// Leading commas are skipped, and a comma inside braces or after a
 /// backslash (`*.\{obj,o\}`) does not end a pattern.
-///
-/// # Safety
-///
-/// `pat` must point at a NUL-terminated string. `start` must point at a
-/// writable `*const c_char` slot the caller owns for the call.
-pub unsafe fn aucmd_span_pattern(
-    mut pat: *const ::core::ffi::c_char,
-    start: *mut *const ::core::ffi::c_char,
-) -> size_t {
-    while unsafe { *pat } == b',' as ::core::ffi::c_char {
-        pat = unsafe { pat.add(1) };
-    }
-
-    let mut p = pat;
-    let mut brace_level = 0;
-    while unsafe { *p } != 0
-        && (unsafe { *p } != b',' as ::core::ffi::c_char
-            || brace_level != 0
-            || (p > pat && unsafe { *p.sub(1) } == b'\\' as ::core::ffi::c_char))
+pub fn aucmd_span_pattern(pat: &[u8]) -> (usize, usize) {
+    let start = pat.iter().take_while(|&&c| c == b',').count();
+    let mut p = start;
+    let mut brace_level = 0i32;
+    while p < pat.len()
+        && pat[p] != 0
+        && (pat[p] != b',' || brace_level != 0 || (p > start && pat[p - 1] == b'\\'))
     {
-        if unsafe { *p } == b'{' as ::core::ffi::c_char {
+        if pat[p] == b'{' {
             brace_level += 1;
-        } else if unsafe { *p } == b'}' as ::core::ffi::c_char {
+        } else if pat[p] == b'}' {
             brace_level -= 1;
         }
-        p = unsafe { p.add(1) };
+        p += 1;
     }
-
-    unsafe { *start = pat };
-    unsafe { p.offset_from(pat) as size_t }
+    (start, p - start)
 }
 
 /// Whether `do_modelines` should be called, and how far past a leading
@@ -564,115 +415,85 @@ pub fn check_nomodeline(arg: &[u8]) -> (bool, usize) {
 /// Delete the autocommand with this id, wherever it is.
 ///
 /// Only autocommands created through the API have one.
-///
-/// Safe: it takes an id, not a pointer, and reaches the rows only through
-/// the events' own vectors.
 pub fn autocmd_delete_id(id: int64_t) -> bool {
     debug_assert!(id > 0);
 
     let mut success = false;
     for event in AutoEvent::all() {
-        let acs = au_event_vec(event);
-        let mut i: usize = 0;
-        while i < unsafe { (*acs).size } {
-            let ac = unsafe { (*acs).items.add(i) };
-            if unsafe { (*ac).id } == id {
-                unsafe { aucmd_del(ac) };
-                success = true;
+        with_event_cmds_mut(event, |cmds| {
+            for idx in 0..cmds.len() {
+                if cmds.cmds[idx].id == id {
+                    cmds.delete(idx);
+                    success = true;
+                }
             }
-            i = i.wrapping_add(1);
-        }
+        });
+    }
+    if success {
+        au_need_clean.set(true);
     }
     success
 }
 
-/// An autocommand's handler as an allocated string, whichever kind it is.
-///
-/// # Safety
-///
-/// `ac` must point at a live `AutoCmd`, unaliased for the call.
-pub unsafe fn aucmd_handler_to_string(ac: *mut AutoCmd) -> *mut ::core::ffi::c_char {
-    if unsafe { (*ac).handler_cmd.is_null() } {
-        callback_to_string(unsafe { &(*ac).handler_fn }).into_raw()
-    } else {
-        unsafe { xstrdup((*ac).handler_cmd) }
+/// An autocommand's handler as a string, whichever kind it is.
+pub fn aucmd_handler_to_string(ac: &AutoCmd) -> XString {
+    match &ac.handler {
+        AutoHandler::Cmd(cmd) => cmd.clone(),
+        AutoHandler::Fn(callback) => XString::from_cstr(callback_to_string(callback).as_cstr()),
     }
 }
 
-/// Skip over `:autocmd`'s comma-separated event list, answering what
-/// follows it -- or null, having raised an error, when a name is not an
-/// event.
+/// How far past `:autocmd`'s comma-separated event list at the head of
+/// `arg` what follows starts -- or `None`, having raised an error, when a
+/// name is not an event.
 ///
 /// `have_group` only picks the wording: without a group, the leading word
 /// could have been meant as one.
-///
-/// # Safety
-///
-/// `arg` must point at a NUL-terminated string, unaliased for the call.
-pub(crate) unsafe fn arg_event_skip(
-    arg: *mut ::core::ffi::c_char,
-    have_group: bool,
-) -> *mut ::core::ffi::c_char {
-    if unsafe { *arg } == b'*' as ::core::ffi::c_char {
-        if unsafe { *arg.add(1) } != 0
-            && !ascii_iswhite(unsafe { *arg.add(1) } as ::core::ffi::c_int)
-        {
-            // SAFETY: the message macros expand to a `vim_snprintf` over the // format literal above and the editor's message buffers.
-            let arg = unsafe { c_str(arg) };
+pub(crate) fn arg_event_skip(arg: &[u8], have_group: bool) -> Option<usize> {
+    let arg = cstr::until_nul(arg);
+    let at = |at: usize| arg.get(at).copied().unwrap_or(0);
+    if at(0) == b'*' {
+        if at(1) != 0 && !white(at(1)) {
+            let arg = msg_bytes(arg);
             semsg!("E215: Illegal character after *: {arg}");
-            return ::core::ptr::null_mut();
+            return None;
         }
-        return unsafe { arg.add(1) };
+        return Some(1);
     }
 
-    let mut pat = arg;
-    let mut p: *mut ::core::ffi::c_char = ::core::ptr::null_mut();
-    while unsafe { *pat } != 0
-        && unsafe { *pat } != b'|' as ::core::ffi::c_char
-        && !ascii_iswhite(unsafe { *pat } as ::core::ffi::c_int)
-    {
-        if unsafe { event_name2nr(pat, &raw mut p) }.is_none() {
-            // SAFETY: `pat` is the NUL-terminated rest of the pattern.
-            let shown = unsafe { c_str(pat) };
+    let mut pat = 0;
+    while at(pat) != 0 && at(pat) != b'|' && !white(at(pat)) {
+        let (event, consumed) = event_name2nr(&arg[pat..]);
+        if event.is_none() {
+            let shown = msg_bytes(&arg[pat..]);
             if have_group {
                 semsg!("E216: No such event: {shown}");
             } else {
                 semsg!("E216: No such group or event: {shown}");
             }
-            return ::core::ptr::null_mut();
+            return None;
         }
-        pat = p;
+        pat += consumed;
     }
-    pat
+    Some(pat)
 }
 
-/// Take a leading `++once`/`++nested`/`nested` off `*cmd_ptr`, setting
-/// `*flag`.
+/// Take a leading `++once`/`++nested`/`nested` off the command at `*cmd`
+/// in `line`, setting `*flag`.
 ///
 /// Answers *true* on the error case -- the flag given twice -- so the
 /// caller can `|=` the three calls together.
-///
-/// # Safety
-///
-/// `flag` must point at a writable `bool` the caller owns. `cmd_ptr` must
-/// point at a writable `*mut c_char` slot the caller owns for the call.
-unsafe fn arg_autocmd_flag_get(
-    flag: *mut bool,
-    cmd_ptr: *mut *mut ::core::ffi::c_char,
-    pattern: &CStr,
-    len: ::core::ffi::c_int,
-) -> bool {
-    if unsafe { cstr::prefix_eq(*cmd_ptr, pattern.as_ptr(), len as size_t) }
-        && ascii_iswhite(unsafe { *(*cmd_ptr).offset(len as isize) } as ::core::ffi::c_int)
-    {
-        if unsafe { *flag } {
-            // SAFETY: the message macros expand to a `vim_snprintf` over the // format literal above and the editor's message buffers.
-            let pattern = msg_cstr(pattern);
+fn arg_autocmd_flag_get(flag: &mut bool, line: &[u8], cmd: &mut usize, pattern: &[u8]) -> bool {
+    let rest = &line[(*cmd).min(line.len())..];
+    if rest.starts_with(pattern) && white(rest.get(pattern.len()).copied().unwrap_or(0)) {
+        if *flag {
+            let pattern = msg_bytes(pattern);
             semsg!("E983: Duplicate argument: {pattern}");
             return true;
         }
-        unsafe { *flag = true };
-        unsafe { *cmd_ptr = skipwhite((*cmd_ptr).offset(len as isize)) };
+        *flag = true;
+        *cmd += pattern.len();
+        *cmd += skip::white(&line[*cmd..]);
     }
     false
 }

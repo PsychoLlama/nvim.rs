@@ -149,9 +149,9 @@ pub fn do_autocmd_progress(msg_id: Object, msg: &[HlMessageChunk], msg_data: Opt
         Some(msg_data) if !msg_data.source.is_empty() => msg_data.source.as_cstr(),
         _ => c"",
     };
-    let mut event_data = data.object();
+    let event_data = data.object();
     // No file name, no buffer and no `:autocmd` argument block: the pattern
     // and the data are the whole of what this event carries.
-    let data = Some(&mut event_data);
+    let data = Some(&event_data);
     fire_autocmds_for(AutoEvent::Progress, Some(pattern), None, true, None, data);
 }

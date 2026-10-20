@@ -25,7 +25,7 @@ use crate::eval::vars::set_vim_var_string;
 use crate::getchar::read_cmd_key_line;
 use crate::memory::{ThinCString, XString};
 use crate::runtime::SourceCookie;
-use crate::types::{AutoPatCmd, FuncCall};
+use crate::types::{AutoPatCmd, FuncCall, Object};
 
 use crate::ex_cmds::print_line_no_prefix;
 use crate::ex_docmd::cmdline::do_cmdline;
@@ -390,8 +390,9 @@ pub(crate) enum LineSource<'a> {
     Function(&'a FuncCall),
     /// A script, read through its cookie.
     Script(&'a mut SourceCookie),
-    /// An autocommand's commands, one handler per line.
-    Autocmd(&'a mut AutoPatCmd),
+    /// An autocommand's commands, one handler per line, and the firing's
+    /// `data` for a Lua handler.
+    Autocmd(&'a mut AutoPatCmd, Option<&'a Object>),
     /// A `:while`/`:for` body being stored and replayed, around another
     /// source.
     Loop(LoopLines<'a>),
@@ -456,7 +457,7 @@ impl ReadLines for LineSource<'_> {
             LineSource::List(walk) => get_list_line(walk),
             LineSource::Function(frame) => get_func_line(frame),
             LineSource::Script(cookie) => cookie.getsourceline(do_concat),
-            LineSource::Autocmd(walk) => getnextac(walk),
+            LineSource::Autocmd(walk, data) => getnextac(walk, *data),
             LineSource::Loop(lines) => lines.next_line(c, indent, do_concat),
         }
     }
@@ -469,7 +470,7 @@ impl ReadLines for LineSource<'_> {
             LineSource::List(_) => SourceKind::List,
             LineSource::Function(_) => SourceKind::Function,
             LineSource::Script(_) => SourceKind::Script,
-            LineSource::Autocmd(_) => SourceKind::Autocmd,
+            LineSource::Autocmd(..) => SourceKind::Autocmd,
             LineSource::Loop(lines) => lines.inner.kind(),
         }
     }

@@ -22,7 +22,7 @@ use core::ffi::CStr;
 use std::borrow::Cow;
 use std::ffi::CString;
 
-use crate::autocmd::{apply_autocmds_exarg, aucmd_prepbuf_in, aucmd_restbuf_in};
+use crate::autocmd::{apply_autocmds_exarg, aucmd_prepbuf, aucmd_restbuf};
 use crate::buffer::{BufFlags, buf_get_changedtick, buf_is_nofilename, buf_set_file_id};
 use crate::change::unchanged;
 use crate::drawscreen::state::need_maketitle;

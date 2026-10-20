@@ -19,8 +19,6 @@ type Opts = Live<KeyDict_get_autocmds>;
 const MAX_PATTERNS: usize = 256;
 /// How many events there are, which is the width of the event filter.
 const EVENT_COUNT: usize = 145;
-/// The longest `<buffer=N>` a buffer-local pattern normalises to.
-const BUFLOCAL_PAT_LEN: usize = 25;
 /// How many keys one command's Dict can grow to.
 const DICT_KEYS: size_t = 12;
 
@@ -47,31 +45,22 @@ pub fn nvim_get_autocmds(opts: &mut KeyDict_get_autocmds) -> Result<Array, Error
         if events.is_some_and(|wanted| !wanted[event.index()]) {
             continue;
         }
-        let acs: *mut AutoCmdVec = au_get_autocmds_for_event(event);
-        // SAFETY: `au_get_autocmds_for_event` answers the table's own vector
-        // for this event, which nothing below edits.
-        for i in 0..unsafe { (*acs).size } {
-            // SAFETY: `i` is below `(*acs).size`.
-            let ac: *mut AutoCmd = unsafe { (*acs).items.add(i) };
-            // SAFETY: as above.
-            let ap: *mut AutoPat = unsafe { (*ac).pat };
-            if ap.is_null() {
-                continue;
+        // Building a row runs no user code, so it is done with the table
+        // held; the order is the table's, which is the order they fire in.
+        with_autocmds_for_event(event, |cmds| {
+            for (ac, ap) in cmds.live() {
+                if id != -1 && ac.id != int64_t::from(id) {
+                    continue;
+                }
+                if group != 0 && ap.group != group {
+                    continue;
+                }
+                if !patterns.is_empty() && !matches_pattern(ap, &patterns) {
+                    continue;
+                }
+                autocmd_list.push(Object::dict(autocmd_dict(event, ac, ap)));
             }
-            // SAFETY: the command and pattern rows the vector holds, live
-            // for as long as the table is not edited.
-            let (ac, ap) = unsafe { (&*ac, &*ap) };
-            if id != -1 && ac.id != int64_t::from(id) {
-                continue;
-            }
-            if group != 0 && ap.group != group {
-                continue;
-            }
-            if !patterns.is_empty() && !matches_pattern(ap, &patterns) {
-                continue;
-            }
-            autocmd_list.push(Object::dict(autocmd_dict(event, ac, ap)));
-        }
+        });
     }
     Ok(autocmd_list)
 }
@@ -81,8 +70,7 @@ fn group_filter(opts: &Opts) -> Result<::core::ffi::c_int, Error> {
     match opts.group.as_ref().unwrap_or(&Object::Nil) {
         Object::Nil => Ok(0),
         Object::String(group_name) => {
-            // SAFETY: the value the keyset carried, live for this call.
-            let group = unsafe { augroup_find(group_name.data()) };
+            let group = augroup_find(crate::cstr::until_nul(group_name.as_bytes()));
             if group < 0 {
                 return Err(err_bad_value(c"group", group_name.as_cstr()));
             }
@@ -90,13 +78,13 @@ fn group_filter(opts: &Opts) -> Result<::core::ffi::c_int, Error> {
         }
         Object::Integer(group_id) => {
             let group = *group_id as ::core::ffi::c_int;
+            // No name is the empty one, as a null `char *` was.
             let name = if group == 0 {
-                ::core::ptr::null_mut()
+                None
             } else {
                 augroup_name(group)
             };
-            // SAFETY: `augroup_name` answers a C string or null.
-            if !unsafe { augroup_exists(name) } {
+            if !augroup_exists(name.as_deref().unwrap_or_default()) {
                 return Err(err_bad_number(c"group", *group_id));
             }
             Ok(group)
@@ -231,72 +219,58 @@ fn pattern_filters<'a>(
 ///
 /// A buffer-local filter is normalised first: `<buffer>` and `<buffer=abuf>`
 /// both mean one particular buffer, and the stored pattern spells it out.
-///
 fn matches_pattern(ap: &AutoPat, filters: &[&::core::ffi::CStr]) -> bool {
     filters.iter().any(|filter| {
-        let patlen = filter.count_bytes() as ::core::ffi::c_int;
-        let mut normalized = [0 as ::core::ffi::c_char; BUFLOCAL_PAT_LEN];
-        // SAFETY: `filter` is a C string of `patlen` bytes, and `normalized`
-        // is this frame's buffer, which is what the normalised form fits in.
-        let pat = unsafe {
-            if aupat_is_buflocal(filter.as_ptr(), patlen) {
-                let dest = (&raw mut normalized).cast::<::core::ffi::c_char>();
-                let nr = aupat_get_buflocal_nr(filter.as_ptr(), patlen);
-                aupat_normalize_buflocal_pat(dest, filter.as_ptr(), patlen, nr);
-                dest.cast_const()
-            } else {
-                filter.as_ptr()
-            }
+        let filter = filter.to_bytes();
+        let normalized;
+        let pat = if aupat_is_buflocal(filter) {
+            normalized = aupat_normalize_buflocal_pat(filter, aupat_get_buflocal_nr(filter));
+            &normalized[..]
+        } else {
+            filter
         };
-        // SAFETY: the row's own pattern, and a C string either way.
-        unsafe { strequal(ap.pat, pat) }
+        ap.pat[..] == *pat
     })
 }
 
 /// One command, as the Dict `nvim_get_autocmds` reports it.
 fn autocmd_dict(event: AutoEvent, ac: &AutoCmd, ap: &AutoPat) -> ApiDict {
-    // Every C string read below is either a row's own or a static name, so
-    // each `cstr_to_string` copies out of a live one.
     let mut info = ApiDict::with_capacity(DICT_KEYS);
     if ap.group != AUGROUP_DEFAULT {
         info.insert(c"group", Object::integer(ap.group as Integer));
-        // SAFETY: `augroup_name` answers a C string for a live group.
-        let name = unsafe { cstr_to_string(augroup_name(ap.group)) };
+        let name =
+            augroup_name(ap.group).map_or(String_0::NULL, |name| String_0::from_bytes(&name));
         info.insert(c"group_name", Object::string(name));
     }
     if ac.id > 0 {
         info.insert(c"id", Object::integer(ac.id));
     }
-    if !ac.desc.is_null() {
-        // SAFETY: the row's own description.
-        info.insert(c"desc", Object::string(unsafe { cstr_to_string(ac.desc) }));
+    if let Some(desc) = &ac.desc {
+        info.insert(c"desc", Object::string(String_0::from_bytes(desc)));
     }
-    if ac.handler_cmd.is_null() {
-        info.insert(c"command", Object::string(String_0::NULL));
-        match &ac.handler_fn {
-            Callback::Lua(luaref) => {
-                if nlua_ref_is_function(*luaref) {
-                    info.insert(c"callback", Object::luaref(api_new_luaref(*luaref)));
+    match &ac.handler {
+        AutoHandler::Fn(handler) => {
+            info.insert(c"command", Object::string(String_0::NULL));
+            match handler {
+                Callback::Lua(luaref) => {
+                    if nlua_ref_is_function(*luaref) {
+                        info.insert(c"callback", Object::luaref(api_new_luaref(*luaref)));
+                    }
                 }
+                Callback::Funcref(_) | Callback::Partial(_) => {
+                    let name = String_0::from(callback_to_string(handler).as_cstr());
+                    info.insert(c"callback", Object::string(name));
+                }
+                // A live row with neither a command nor a handler cannot
+                // exist.
+                Callback::None => std::process::abort(),
             }
-            handler @ (Callback::Funcref(_) | Callback::Partial(_)) => {
-                let name = String_0::from(callback_to_string(handler).as_cstr());
-                info.insert(c"callback", Object::string(name));
-            }
-            // A row with neither a command nor a handler cannot exist.
-            // SAFETY: `abort` only ever ends the process.
-            Callback::None => unsafe { abort() },
         }
-    } else {
-        // SAFETY: the row's own command.
-        let command = unsafe { cstr_to_string(ac.handler_cmd) };
-        info.insert(c"command", Object::string(command));
+        AutoHandler::Cmd(command) => {
+            info.insert(c"command", Object::string(String_0::from_bytes(command)));
+        }
     }
-    // SAFETY: the pattern row's own string.
-    info.insert(
-        c"pattern",
-        Object::string(unsafe { cstr_to_string(ap.pat) }),
-    );
+    info.insert(c"pattern", Object::string(String_0::from_bytes(&ap.pat)));
     let event = String_0::from_cstr(event_nr2name(event));
     info.insert(c"event", Object::string(event));
     info.insert(c"once", Object::boolean(ac.once));

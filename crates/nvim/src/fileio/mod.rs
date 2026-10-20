@@ -14,7 +14,7 @@
 pub(crate) mod state;
 use crate::autocmd::state::autocmd_busy;
 use crate::autocmd::{
-    apply_autocmds_exarg, aucmd_prepbuf_in, aucmd_restbuf_in, augroup_exists_of, do_doautocmd,
+    apply_autocmds_exarg, aucmd_prepbuf, aucmd_restbuf, augroup_exists_of, do_doautocmd,
     fire_autocmds, fire_autocmds_for,
 };
 use crate::buffer::state::swap_exists_action;

@@ -1,4 +1,11 @@
 #![deny(unsafe_op_in_unsafe_fn)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -8,7 +15,7 @@ use crate::types::AutoEvent;
 use core::cmp::Ordering;
 use core::ffi::CStr;
 
-use crate::api::private::helpers::{cstr_to_string, find_buffer_by_handle};
+use crate::api::private::helpers::find_buffer_by_handle;
 use crate::ascii::ascii_iswhite;
 use crate::autocmd::state::{
     active_walk_bufnrs, au_need_clean, autocmd_blocked, autocmd_bufnr, autocmd_busy, autocmd_fname,
@@ -19,16 +26,12 @@ use crate::autocmd::state::{
     pending_vimresume, termresponse_changed, uienter_busy,
 };
 use crate::buffer::{buf_is_prompt, current_buf, do_modelines, find_buf};
-use crate::charset::{skipdigits, skipwhite};
 use crate::cursor::{check_cursor, check_pos};
 use crate::drawscreen::state::need_maketitle;
-use crate::eval::typval::{
-    TV_INITIAL_VALUE, callback_copy, callback_free, callback_to_string, tv_clear,
-};
+use crate::eval::typval::{TV_INITIAL_VALUE, callback_to_string, tv_clear};
 use crate::eval::userfunc::CallStackAside;
 use crate::eval::vars::{get_vim_var_nr, set_cmdarg, set_vim_var_nr, vars_clear, vim_var_bytes};
 use crate::eval::{callback_call, get_v_event, last_set_msg, restore_v_event};
-use crate::event::multiqueue::multiqueue_put_event;
 use crate::ex_docmd::{do_cmdline, ends_excmd, expand_sfile, get_pressedreturn, set_pressedreturn};
 use crate::ex_eval::{aborting, should_abort};
 use crate::fileio::{check_timestamps, file_pat_to_reg_pat, match_file_pat};
@@ -38,8 +41,6 @@ use crate::global_cell::GlobalCell;
 use crate::guard::secure;
 use crate::highlight_group::{HLF_8, HLF_E, HLF_T};
 use crate::insexpand::ins_compl_active;
-use crate::lua::executor::nlua_set_sctx;
-use crate::memory::{xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xrealloc, xstrdup};
 use crate::message::state::{did_emsg, msg_col};
 use crate::message::{e_argreq, e_cannot_define_autocommands_for_all_events};
 use crate::message::{
@@ -50,8 +51,7 @@ use crate::message::{
 use crate::option::set_option_direct;
 use crate::option::vars::{P_ACD, p_acd, p_ei, p_verbose};
 use crate::options::kOptEventignore;
-use crate::os::cshim::{gettext, strncasecmp};
-use crate::os::env::expand_env_save;
+use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
 use crate::os::state::globaldir;
 use crate::os::time::os_now;
@@ -62,14 +62,14 @@ use crate::regexp::{RE_MAGIC, vim_regcomp};
 use crate::runtime::state::current_sctx;
 use crate::runtime::{estack_pop, estack_push};
 use crate::search::{restore_search_patterns, save_search_patterns};
-use crate::startup::{main_loop, starting};
+use crate::startup::starting;
 use crate::state::mode::last_mode;
 use crate::state::{MODE_INSERT, MODE_NORMAL_BUSY, get_mode, get_real_state};
 use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::{
-    AcoSave, AutoCmd, AutoCmdVec, AutoPat, AutoPatCmd, BufferHandle, Callback, EStackType, Error,
-    Event, ExArg, Expand, Integer, LuaRetMode, Object, OptVal, ProfTime, SaveRedo, SaveVEvent,
-    ScriptCtx, String_0, Timestamp, VarNumber, Vv, int64_t, size_t, uint64_t,
+    AcoSave, AutoCmd, AutoPat, AutoPatCmd, BufferHandle, Callback, EStackType, Error, EventCmds,
+    ExArg, Expand, Integer, LuaRef, LuaRetMode, Object, OptVal, ProfTime, SaveRedo, SaveVEvent,
+    ScriptCtx, String_0, Timestamp, VarNumber, Vv, int64_t, uint64_t,
 };
 use crate::ui::ui_call_win_hide;
 use crate::ui_compositor::ui_comp_remove_grid;
@@ -82,10 +82,10 @@ use crate::window::{
 use crate::winfloat::win_config_float;
 use crate::winlayer::graph::prevwin;
 use crate::winlayer::{forget_window, free_deferred, register_window};
-use ::libc::{abort, atoi, strcasecmp};
 
 // The carve of the transpiled module; see each child's docs.
 mod aucmdwin;
+mod block;
 mod cleanup;
 mod define;
 mod events;
@@ -96,6 +96,7 @@ mod trigger;
 mod walk;
 
 pub use self::aucmdwin::*;
+pub use self::block::*;
 pub use self::cleanup::*;
 pub use self::define::*;
 pub use self::events::*;
@@ -104,14 +105,6 @@ pub use self::groups::*;
 pub use self::listing::*;
 pub use self::trigger::*;
 pub use self::walk::*;
-pub struct AutoCmdEvent {
-    pub event: AutoEvent,
-    pub fname: *mut ::core::ffi::c_char,
-    pub fname_io: *mut ::core::ffi::c_char,
-    pub buf: BufferHandle,
-    pub group: ::core::ffi::c_int,
-    pub data: *mut Object,
-}
 pub const AUGROUP_DELETED: ::core::ffi::c_int = -4;
 pub const AUGROUP_ALL: ::core::ffi::c_int = -3;
 pub const AUGROUP_ERROR: ::core::ffi::c_int = -2;
@@ -119,9 +112,6 @@ pub const AUGROUP_DEFAULT: ::core::ffi::c_int = -1;
 pub const BUFLOCAL_PAT_LEN: ::core::ffi::c_uint = 25;
 pub const ETYPE_AUCMD: EStackType = 3;
 pub const kRetNilBool: LuaRetMode = 1;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615 as ::core::ffi::c_ulong;
 /// `e_autocommand_nesting_too_deep`.  A `GlobalCell` holding a transmuted
 /// byte array upstream, because c2rust had no `CStr`; nothing writes it.
 const E_AUTOCOMMAND_NESTING_TOO_DEEP: &CStr = c"E218: Autocommand nesting too deep";
@@ -336,28 +326,3 @@ pub static EVENT_NAMES: [EventName; 145] = [
     named_win_local(c"WinResized", AutoEvent::WinResized),
     named_win_local(c"WinScrolled", AutoEvent::WinScrolled),
 ];
-/// The state every event's autocommand list starts in: an empty `kvec`
-/// with nothing allocated.
-const AUTOCMDVEC_INIT: AutoCmdVec = AutoCmdVec {
-    size: 0 as size_t,
-    capacity: 0,
-    items: ::core::ptr::null_mut::<AutoCmd>(),
-};
-
-/// The autocommands defined for each event, indexed by event number.
-static autocmds: GlobalCell<[AutoCmdVec; 145]> = GlobalCell::new([AUTOCMDVEC_INIT; 145]);
-
-/// The autocommand list of `event`.
-///
-/// It stays a raw pointer on purpose.  A handler running under the walk
-/// can define or delete autocommands, which reallocates the `items` block
-/// and marks rows deleted underneath it, so nothing may hold a borrow of
-/// one of these across a call into user code.  `wrapping_add` keeps the
-/// whole table's provenance and needs no `unsafe`; only reading through
-/// the result does.
-pub(super) fn au_event_vec(event: AutoEvent) -> *mut AutoCmdVec {
-    autocmds
-        .ptr()
-        .cast::<AutoCmdVec>()
-        .wrapping_add(event.index())
-}

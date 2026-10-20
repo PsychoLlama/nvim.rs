@@ -191,15 +191,13 @@ impl OptionRequest {
 /// entered and so has to be left again.
 ///
 /// # Safety
-/// `filetype` must be null or a C string, `aco` and `aco_used` must be the
-/// caller's.
+/// `filetype` must be null or a C string.
 unsafe fn do_ft_buf(
     filetype: *const c_char,
-    aco: *mut AcoSave,
-    aco_used: *mut bool,
+    aco: &mut AcoSave,
+    aco_used: &mut bool,
 ) -> (Option<Buf>, Result<(), Error>) {
-    // SAFETY: `aco_used` is the caller's out-parameter.
-    unsafe { *aco_used = false };
+    *aco_used = false;
     if filetype.is_null() {
         return (None, Ok(()));
     }
@@ -214,8 +212,8 @@ unsafe fn do_ft_buf(
         return (Some(ftbuf), Err(why));
     }
     let bufref = BufRef::of(ftbuf);
-    unsafe { aucmd_prepbuf(aco, ftbuf) };
-    unsafe { *aco_used = true };
+    aucmd_prepbuf(aco, ftbuf);
+    *aco_used = true;
     // 'bufhidden' and 'buftype' keep the scratch buffer out of everything the
     // user can see; both are set without autocommands, as `:setlocal` would.
     set_option_direct(
@@ -285,15 +283,13 @@ pub fn nvim_get_option_value(name: String_0, opts: &mut KeyDict_option) -> Resul
 
     let mut aco: AcoSave = AcoSave::default();
     let mut aco_used: bool = false;
-    let (paco, pused) = (&raw mut aco, &raw mut aco_used);
-    // SAFETY: `aco` and `aco_used` are this frame's own; `target.filetype`
-    // borrows `opts`, which outlives the call. The buffer comes back even
-    // when the call refused, because it still has to be wiped.
-    let (ftbuf, made) = unsafe { do_ft_buf(target.filetype, paco, pused) };
-    // SAFETY: `aco` is this frame's own and `ftbuf` is the scratch buffer.
-    let mut leave_ft_buf = |ftbuf: Option<Buf>| unsafe {
+    // SAFETY: `target.filetype` borrows `opts`, which outlives the call. The
+    // buffer comes back even when the call refused, because it still has to
+    // be wiped.
+    let (ftbuf, made) = unsafe { do_ft_buf(target.filetype, &mut aco, &mut aco_used) };
+    let mut leave_ft_buf = |ftbuf: Option<Buf>| {
         if aco_used {
-            aucmd_restbuf(&raw mut aco);
+            aucmd_restbuf(&mut aco);
         }
         if let Some(ftbuf) = ftbuf {
             wipe_ft_buf(ftbuf);

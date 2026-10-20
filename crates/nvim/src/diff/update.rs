@@ -526,9 +526,8 @@ pub(crate) fn diff_update(excmd: Option<&mut ExArg>) {
     }
 
     if had_diffs || !tp.tp_first_diff.is_null() {
-        let nul = ::core::ptr::null_mut::<c_char>();
         diff_redraw(true);
         let buffer = Buf::current_or_none();
-        unsafe { apply_autocmds(AutoEvent::DiffUpdated, nul, nul, false, buffer) };
+        apply_autocmds(AutoEvent::DiffUpdated, None, None, false, buffer);
     }
 }

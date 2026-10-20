@@ -23,7 +23,6 @@ use crate::api::private::validate::{
 };
 use crate::cstr;
 use crate::memory::ThinCString;
-use crate::narrow::len_as_int;
 use crate::types::Failed;
 use crate::winlayer::Live;
 
@@ -40,8 +39,8 @@ pub fn nvim_create_autocmd(
     let buf: BufferHandle;
     let patterns: Array;
     let mut autocmd_id: int64_t = -1 as int64_t;
-    let mut desc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut handler_cmd: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let mut desc: Option<&[u8]> = None;
+    let mut handler_cmd: Option<&[u8]> = None;
     let mut handler_fn: Callback = Callback::None;
     let event_array: Array = unsafe {
         unpack_string_or_array(
@@ -84,7 +83,7 @@ pub fn nvim_create_autocmd(
                         break '_cleanup;
                     }
                 } else if let Some(command) = opts.command.as_ref() {
-                    handler_cmd = string_to_cstr(command);
+                    handler_cmd = Some(command.as_bytes());
                 } else if true {
                     error = err_required(c"'command' or 'callback'");
                     break '_cleanup;
@@ -120,7 +119,7 @@ pub fn nvim_create_autocmd(
                         };
                         {
                             if let Some(given) = opts.desc.as_ref() {
-                                desc = given.data();
+                                desc = Some(given.as_bytes());
                             }
                             if !(event_array.len() > 0 as size_t) {
                                 error = err_required(c"event");
@@ -152,21 +151,17 @@ pub fn nvim_create_autocmd(
                                                  Strings only",
                                             );
                                             let sctx = api_set_sctx(channel_id);
-                                            let patlen = len_as_int(pat.len());
-                                            retval = unsafe {
-                                                autocmd_register(
-                                                    autocmd_id,
-                                                    event_nr,
-                                                    pat.data(),
-                                                    patlen,
-                                                    au_group,
-                                                    opts.once.unwrap_or(false),
-                                                    opts.nested.unwrap_or(false),
-                                                    desc,
-                                                    handler_cmd,
-                                                    &raw mut handler_fn,
-                                                )
-                                            };
+                                            retval = autocmd_register(
+                                                autocmd_id,
+                                                event_nr,
+                                                pat.as_bytes(),
+                                                au_group,
+                                                opts.once.unwrap_or(false),
+                                                opts.nested.unwrap_or(false),
+                                                desc,
+                                                handler_cmd,
+                                                &handler_fn,
+                                            );
                                             drop(sctx);
                                             if retval.is_err() {
                                                 let why = c"Failed to set autocmd";
@@ -186,13 +181,7 @@ pub fn nvim_create_autocmd(
             }
         }
     }
-    if !handler_cmd.is_null() {
-        let ptr_: *mut *mut ::core::ffi::c_void =
-            (&raw mut handler_cmd).cast::<*mut ::core::ffi::c_void>();
-        unsafe { xfree(*ptr_) };
-        unsafe { *ptr_ = NULL_0 };
-        let _ = unsafe { *ptr_ };
-    } else {
+    if handler_cmd.is_none() {
         callback_free(&mut handler_fn);
     }
     (autocmd_id as Integer).reported(error)
@@ -246,11 +235,10 @@ pub fn nvim_clear_autocmds(opts: &mut KeyDict_clear_autocmds) -> Result<(), Erro
             let mut pat_object_index: size_t = 0 as size_t;
             while pat_object_index < patterns.len() {
                 let pat_object = &patterns[pat_object_index];
-                let pat: *mut ::core::ffi::c_char = pat_object
+                let pat = pat_object
                     .as_string()
-                    .expect("`get_patterns_from_pattern_or_buf` answers Strings only")
-                    .data();
-                unsafe { clear_autocmd(event, pat, au_group) }?;
+                    .expect("`get_patterns_from_pattern_or_buf` answers Strings only");
+                clear_autocmd(event, pat.as_bytes(), au_group)?;
                 pat_object_index = pat_object_index.wrapping_add(1);
             }
         }
@@ -268,11 +256,10 @@ pub fn nvim_clear_autocmds(opts: &mut KeyDict_clear_autocmds) -> Result<(), Erro
             let mut pat_object_index_0: size_t = 0 as size_t;
             while pat_object_index_0 < patterns.len() {
                 let pat_object_0 = &patterns[pat_object_index_0];
-                let pat_0: *mut ::core::ffi::c_char = pat_object_0
+                let pat_0 = pat_object_0
                     .as_string()
-                    .expect("`get_patterns_from_pattern_or_buf` answers Strings only")
-                    .data();
-                unsafe { clear_autocmd(event_nr, pat_0, au_group) }?;
+                    .expect("`get_patterns_from_pattern_or_buf` answers Strings only");
+                clear_autocmd(event_nr, pat_0.as_bytes(), au_group)?;
                 pat_object_index_0 = pat_object_index_0.wrapping_add(1);
             }
             event_str_index = event_str_index.wrapping_add(1);
@@ -281,15 +268,11 @@ pub fn nvim_clear_autocmds(opts: &mut KeyDict_clear_autocmds) -> Result<(), Erro
     ().reported(error)
 }
 
-/// # Safety
-///
-/// `pat` must point at a NUL-terminated string, unaliased for the call.
-unsafe fn clear_autocmd(
-    event: AutoEvent,
-    pat: *mut ::core::ffi::c_char,
-    au_group: ::core::ffi::c_int,
-) -> Result<(), Error> {
-    if unsafe { do_autocmd_event(event, pat, false, 0, c"".as_ptr(), true, au_group) }.is_err() {
+/// `nvim_clear_autocmds` for one event and pattern; the pattern reads as
+/// far as a NUL, as the C string it was.
+fn clear_autocmd(event: AutoEvent, pat: &[u8], au_group: ::core::ffi::c_int) -> Result<(), Error> {
+    let pat = cstr::until_nul(pat);
+    if do_autocmd_event(event, pat, false, false, b"", true, au_group).is_err() {
         return Err(Error::exception(c"Failed to clear autocmd"));
     }
     Ok(())

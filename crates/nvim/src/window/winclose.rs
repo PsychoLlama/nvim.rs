@@ -16,7 +16,6 @@ use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use crate::vim_snprintf;
 use core::ffi::{c_char, c_int};
-use core::ptr;
 
 use super::*;
 use crate::autocmd::has_event;
@@ -397,7 +396,7 @@ fn away_from_preview(window: Win) -> Win {
 
 pub(crate) fn trigger_winnewpre() {
     window_lock();
-    fire_named(AutoEvent::WinNewPre, ptr::null_mut(), None);
+    fire_named(AutoEvent::WinNewPre, None, None);
     window_unlock();
 }
 
@@ -412,7 +411,7 @@ fn fire_winclosed(win: Win) {
     number_into(&mut winid, c"%d".as_ptr(), win.handle);
     fire_named(
         AutoEvent::WinClosed,
-        winid.as_mut_ptr(),
+        Some(cstr::in_chars(&winid)),
         win.buffer_or_none(),
     );
     RECURSIVE.set(false);
@@ -437,7 +436,7 @@ fn tabclosedpre(tabpage: TabPage) {
     }
     RECURSIVE.set(true);
     window_lock();
-    fire_named(AutoEvent::TabClosedPre, ptr::null_mut(), None);
+    fire_named(AutoEvent::TabClosedPre, None, None);
     window_unlock();
     RECURSIVE.set(false);
     // The tab page may have been modified or deleted by the autocommands: try
@@ -587,7 +586,11 @@ pub(crate) fn close_othertab(win: Win, free_buf: bool, tabpage: TabPage, force: 
                 let mut prev_idx = [0 as c_char; NUMBUFLEN as usize];
                 number_into(&mut prev_idx, c"%i".as_ptr(), free_tp_idx);
                 let buf = bufref.get().unwrap_or_else(Buf::current);
-                fire_named(AutoEvent::TabClosed, prev_idx.as_mut_ptr(), Some(buf));
+                fire_named(
+                    AutoEvent::TabClosed,
+                    Some(cstr::in_chars(&prev_idx)),
+                    Some(buf),
+                );
             }
         }
         return true;

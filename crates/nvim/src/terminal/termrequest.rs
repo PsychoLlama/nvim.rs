@@ -140,13 +140,12 @@ fn report(request: &mut TermRequest, mut term: Term, buffer: Buf) {
     // the writes below still have somewhere to go.
     term.refcount.retain();
     // Pre-bound so that the eight-argument call still fits on one line.
-    let mut event = data.object();
-    let (data, none) = (&mut event, ::core::ptr::null_mut());
+    let data = data.object();
     let group = AUGROUP_ALL;
-    // SAFETY: TermRequest against a live buffer; nothing of the terminal is
+    // TermRequest against a live buffer; nothing of the terminal is
     // borrowed across it.
     let (event, buffer) = (AutoEvent::TermRequest, Some(buffer));
-    unsafe { apply_autocmds_group(event, none, none, true, group, buffer, None, data) };
+    apply_autocmds_group(event, None, None, true, group, buffer, None, Some(&data));
     term.refcount.release();
 
     // Let writes through again before flushing what the handler wrote, or

@@ -183,11 +183,8 @@ fn resolve_command(cmd: &KeyDict_cmd, excmd: &mut ExArg) -> Result<Option<bool>,
         && excmd.line.byte_at(excmd.line.cmd).is_ascii_uppercase()
         && has_event(AutoEvent::CmdUndefined)
     {
-        // SAFETY: `name` is the caller's NUL-terminated name.
-        let ret = unsafe {
-            let event = name.data();
-            apply_autocmds(AutoEvent::CmdUndefined, event, event, true, None)
-        };
+        let event = Some(name.as_cstr());
+        let ret = apply_autocmds(AutoEvent::CmdUndefined, event, event, true, None);
         found = if ret as c_int != 0 && !aborting() {
             find_ex_command(excmd, None)
         } else {

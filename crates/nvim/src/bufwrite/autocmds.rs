@@ -164,7 +164,7 @@ pub(crate) fn buf_write_do_autocmds(
 
     // Set curwin/curbuf to buf and save a few things.
     let mut aco = AcoSave::default();
-    aucmd_prepbuf_in(&mut aco, buffer);
+    aucmd_prepbuf(&mut aco, buffer);
     let bufref = BufRef::of_opt(Some(buffer));
 
     // One firing of a `*WriteCmd`-family event against the short name.
@@ -220,7 +220,7 @@ pub(crate) fn buf_write_do_autocmds(
     }
 
     // Restore curwin/curbuf and a few other things.
-    aucmd_restbuf_in(&mut aco);
+    aucmd_restbuf(&mut aco);
 
     // The buffer is gone if the autocommands deleted or unloaded it.
     let live = bufref.valid().then_some(buffer);
@@ -331,7 +331,7 @@ pub(crate) fn buf_write_do_post_autocmds(
     Buf::current().b_no_eol_lnum = 0;
 
     let mut aco = AcoSave::default();
-    aucmd_prepbuf_in(&mut aco, buffer);
+    aucmd_prepbuf(&mut aco, buffer);
 
     let event = if mode.req.append {
         AutoEvent::FileAppendPost
@@ -354,5 +354,5 @@ pub(crate) fn buf_write_do_post_autocmds(
     );
 
     // Restore curwin/curbuf and a few other things.
-    aucmd_restbuf_in(&mut aco);
+    aucmd_restbuf(&mut aco);
 }

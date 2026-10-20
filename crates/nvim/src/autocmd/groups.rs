@@ -7,8 +7,7 @@
 //! including `AUGROUP_DELETED`, whose name is the `--Deleted--`
 //! placeholder.  [`do_augroup`] is `:augroup` and `:augroup!`.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -19,41 +18,33 @@
 
 use super::*;
 use crate::cstr;
-use crate::message_fmt::c_str;
+use crate::memory::XString;
+use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::types::Candidate;
 
-/// The table key for `name`, borrowed.
+/// The table key for `name`: its bytes and a NUL, because the listing
+/// prints a key as a C string.
 ///
-/// A **null** pointer is the *empty* name, which is what khash made of it:
-/// the key type was `String_0`, whose comparison checked the length first
-/// and so never dereferenced the null `data` a zero-length string carries.
-/// `nvim_del_augroup_by_id` reaches `augroup_find` with null, by way of
-/// `augroup_name` answering it for an id no group ever had.
-///
-/// # Safety
-/// `name` is null or a NUL-terminated string, live for `'a`.
-unsafe fn group_key<'a>(name: *const ::core::ffi::c_char) -> &'a [u8] {
-    if name.is_null() {
-        return b"\0";
-    }
-    // SAFETY: the caller's NUL-terminated string.
-    unsafe { CStr::from_ptr(name) }.to_bytes_with_nul()
+/// The empty name is a key like any other, which is what khash made of the
+/// null name `nvim_del_augroup_by_id` reached `augroup_find` with, by way
+/// of `augroup_name` answering it for an id no group ever had.
+fn group_key(name: &[u8]) -> Box<[u8]> {
+    let mut key = Vec::with_capacity(name.len() + 1);
+    key.extend_from_slice(name);
+    key.push(0);
+    key.into_boxed_slice()
 }
 
 /// Drop a group's entries from the two tables.
 ///
-/// A null `name` leaves the name table alone, which is how `:augroup! X`
+/// No `name` leaves the name table alone, which is how `:augroup! X`
 /// releases the *id* of a group whose name it has just re-pointed at
 /// `AUGROUP_DELETED`.
-///
-/// # Safety
-/// `name` is null or a NUL-terminated string.
-unsafe fn augroup_map_del(id: ::core::ffi::c_int, name: *const ::core::ffi::c_char) {
-    if !name.is_null() {
-        // SAFETY: `name` is the caller's string, non-null here.
-        let key = unsafe { group_key(name) };
-        map_augroup_name_to_id.with_mut(|groups| groups.remove(key));
+fn augroup_map_del(id: ::core::ffi::c_int, name: Option<&[u8]>) {
+    if let Some(name) = name {
+        let key = group_key(name);
+        map_augroup_name_to_id.with_mut(|groups| groups.remove(&key[..]));
     }
     if id > 0 {
         map_augroup_id_to_name.with_mut(|names| names.remove(&id));
@@ -61,42 +52,24 @@ unsafe fn augroup_map_del(id: ::core::ffi::c_int, name: *const ::core::ffi::c_ch
 }
 
 /// The name a deleted-but-still-referenced group lists under, translated
-/// once and cached.
-///
-/// The cache is not an optimisation: `autocmd_get`'s "is this the deleted
-/// group" test is an *address* comparison against what this answered
-/// earlier, so the answer has to stay the same one for the session even if
-/// `:language` moves the catalogue under it.
-///
-/// Safe: it takes no pointer and only reads the cache and the message
-/// catalogue, both of which are live for as long as the editor is.
-#[inline(always)]
-pub(crate) fn get_deleted_augroup() -> *const ::core::ffi::c_char {
+/// once and cached, so that `:language` cannot move it during a session.
+pub(crate) fn get_deleted_augroup() -> &'static CStr {
     /// See [`get_deleted_augroup`].
     static DELETED: GlobalCell<Option<&'static ::core::ffi::CStr>> = GlobalCell::new(None);
 
-    DELETED
-        .get()
-        .unwrap_or_else(|| {
-            let translated = gettext(c"--Deleted--");
-            DELETED.set(Some(translated));
-            translated
-        })
-        .as_ptr()
+    DELETED.get().unwrap_or_else(|| {
+        let translated = gettext(c"--Deleted--");
+        DELETED.set(Some(translated));
+        translated
+    })
 }
 
 /// The id of the group called `name`, creating one if there is not
 /// already an id for that name.
-///
-/// # Safety
-///
-/// `name` must point at a NUL-terminated string.
-pub unsafe fn augroup_add(name: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
-    // SAFETY: `name` is the caller's NUL-terminated string.
-    debug_assert!(unsafe { strcasecmp(name, c"end".as_ptr()) } != 0);
+pub fn augroup_add(name: &[u8]) -> ::core::ffi::c_int {
+    debug_assert!(!name.eq_ignore_ascii_case(b"end"));
 
-    // SAFETY: as above -- `augroup_find` only reads through `name`.
-    let existing_id = unsafe { augroup_find(name) };
+    let existing_id = augroup_find(name);
     if existing_id > 0 {
         debug_assert!(existing_id != AUGROUP_DELETED);
         return existing_id;
@@ -106,16 +79,13 @@ pub unsafe fn augroup_add(name: *const ::core::ffi::c_char) -> ::core::ffi::c_in
     // `:augroup! name`; that mapping has to go before a fresh id can
     // take the name.
     if existing_id == AUGROUP_DELETED {
-        // SAFETY: `name` is the caller's string, and `existing_id` is the
-        // id the name map just answered for it.
-        unsafe { augroup_map_del(existing_id, name) };
+        augroup_map_del(existing_id, Some(name));
     }
 
     let next_id = next_augroup_id.get();
     next_augroup_id.set(next_id + 1);
     // The two tables each own their copy of the name.
-    // SAFETY: `name` is the caller's NUL-terminated string.
-    let key: Box<[u8]> = unsafe { group_key(name) }.into();
+    let key = group_key(name);
     map_augroup_name_to_id.with_mut(|groups| groups.insert(key.clone(), next_id));
     map_augroup_id_to_name.with_mut(|names| names.insert(next_id, key));
     next_id
@@ -128,15 +98,15 @@ pub unsafe fn augroup_add(name: *const ::core::ffi::c_char) -> ::core::ffi::c_in
 /// them defined and unreachable (O-B14-2).  Everywhere else the
 /// autocommands go with the group.
 ///
-/// # Safety
-///
-/// `name` must point at a NUL-terminated string, unaliased for the call.
-pub unsafe fn augroup_del(name: *mut ::core::ffi::c_char, stupid_legacy_mode: bool) {
-    // SAFETY: `name` is the caller's NUL-terminated string.
-    let group = unsafe { augroup_find(name) };
+/// No `name` is the null `char *` `nvim_del_augroup_by_id` hands over for
+/// an id no group ever had: it is looked up as the empty name, and the
+/// error spells it `[NULL]`, as the C `%s` did.
+pub fn augroup_del(name: Option<&[u8]>, stupid_legacy_mode: bool) {
+    let shown = name;
+    let name = name.unwrap_or_default();
+    let group = augroup_find(name);
     if group == AUGROUP_ERROR {
-        // SAFETY: the message macros expand to a `vim_snprintf` over the // format literal above and the editor's message buffers.
-        let name = unsafe { c_str(name) };
+        let name = msg_bytes(shown.unwrap_or(b"[NULL]"));
         semsg!("E367: No such group: \"{name}\"");
         return;
     } else if group == current_augroup.get() {
@@ -144,59 +114,38 @@ pub unsafe fn augroup_del(name: *mut ::core::ffi::c_char, stupid_legacy_mode: bo
         return;
     }
 
-    for event in AutoEvent::all() {
-        let acs = au_event_vec(event);
-        let mut i: usize = 0;
-        // `(*acs).size` is re-read every step: `aucmd_del` only marks a
-        // row deleted, but nothing here may assume the list is frozen.
-        // SAFETY: `acs` is the event's own vector, which lives as long as
-        // the editor does; `i` is below its size at every read below.
-        while i < unsafe { (*acs).size } {
-            let ac = unsafe { (*acs).items.add(i) };
-            let ap = unsafe { (*ac).pat };
-            // The deref stays on the right of the `&&`: a deleted row's
-            // pattern is null.
-            if !ap.is_null() && unsafe { (*ap).group } == group {
-                if stupid_legacy_mode {
-                    let warning = gettext(c"W19: Deleting augroup that is still in use");
-                    give_warning(warning, true, true);
-                    // Re-point the *name* at the deleted-group id and
-                    // give up the old id, leaving the autocommands on it.
-                    // The name keeps its place in the listing, which is what
-                    // khash's `map_put_ref` over an existing key did.
-                    // SAFETY: `name` is the caller's NUL-terminated string.
-                    let key: Box<[u8]> = unsafe { group_key(name) }.into();
-                    map_augroup_name_to_id.with_mut(|groups| groups.insert(key, AUGROUP_DELETED));
-                    // SAFETY: `ap` is the live pattern of row `i`, checked
-                    // non-null above.
-                    unsafe { augroup_map_del((*ap).group, ::core::ptr::null()) };
-                    return;
-                }
-                // SAFETY: `ac` is row `i` of the vector, still in bounds.
-                unsafe { aucmd_del(ac) };
-            }
-            i = i.wrapping_add(1);
+    let in_use = AutoEvent::all()
+        .any(|event| with_event_cmds(event, |cmds| cmds.live().any(|(_, pat)| pat.group == group)));
+    if in_use && stupid_legacy_mode {
+        let warning = gettext(c"W19: Deleting augroup that is still in use");
+        give_warning(warning, true, true);
+        // Re-point the *name* at the deleted-group id and give up the old
+        // id, leaving the autocommands on it. The name keeps its place in
+        // the listing, which is what khash's `map_put_ref` over an existing
+        // key did.
+        let key = group_key(name);
+        map_augroup_name_to_id.with_mut(|groups| groups.insert(key, AUGROUP_DELETED));
+        augroup_map_del(group, None);
+        return;
+    }
+    if in_use {
+        for event in AutoEvent::all() {
+            aucmd_del_where(event, |pat| pat.group == group);
         }
     }
 
     // Nothing is using the group, so it can go for real.
-    // SAFETY: `name` is the caller's string and `group` the id it named.
-    unsafe { augroup_map_del(group, name) };
+    augroup_map_del(group, Some(name));
     au_cleanup();
 }
 
 /// The id of the group called `name`, or `AUGROUP_ERROR` when there is
 /// none.  `AUGROUP_DELETED` is an answer of its own: the name is known and
 /// belongs to a group `:augroup!` renamed.
-///
-/// # Safety
-///
-/// `name` must point at a NUL-terminated string.
-pub unsafe fn augroup_find(name: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
-    // SAFETY: `name` is the caller's string, read only for the lookup.
-    let key = unsafe { group_key(name) };
+pub fn augroup_find(name: &[u8]) -> ::core::ffi::c_int {
+    let key = group_key(name);
     let existing_id = map_augroup_name_to_id
-        .with(|groups| groups.get(key))
+        .with(|groups| groups.get(&key[..]))
         .unwrap_or(0);
     if existing_id == AUGROUP_DELETED || existing_id > 0 {
         existing_id
@@ -205,151 +154,129 @@ pub unsafe fn augroup_find(name: *const ::core::ffi::c_char) -> ::core::ffi::c_i
     }
 }
 
-/// The name of group `group`, or null when no group ever had that id.
+/// The name of group `group`, or `None` when no group ever had that id.
 ///
 /// `next_augroup_id` is the source of truth about which ids have existed:
 /// the map shrinks when a group is deleted, so its size is not.  The id
 /// one past the last is spelled `END`, which is what makes `:augroup`
-/// completion terminate.
-///
-/// Safe: it takes an id rather than a pointer, and the string it answers
-/// is owned by the id map or by the message catalogue, both of which
-/// outlive the call.
-pub fn augroup_name(mut group: ::core::ffi::c_int) -> *mut ::core::ffi::c_char {
+/// completion terminate. A deleted group's name is the `--Deleted--`
+/// placeholder; [`augroup_is_deleted`] tells it from a group really called
+/// that.
+pub fn augroup_name(mut group: ::core::ffi::c_int) -> Option<XString> {
     debug_assert!(group != 0);
 
     if group == AUGROUP_DELETED {
-        return get_deleted_augroup().cast_mut();
+        return Some(XString::from_cstr(get_deleted_augroup()));
     }
     if group == AUGROUP_ALL {
         group = current_augroup.get();
     }
     if group == next_augroup_id.get() {
-        return c"END".as_ptr().cast_mut();
+        return Some(XString::from_cstr(c"END"));
     }
     if group > next_augroup_id.get() {
-        return ::core::ptr::null_mut();
+        return None;
     }
 
-    // The name is a `Box` the table never moves, so the pointer outlives
-    // the borrow that produced it.
     let name = map_augroup_id_to_name.with(|names| {
         names
             .get(&group)
-            .map(|name| name.as_ptr().cast::<::core::ffi::c_char>().cast_mut())
+            .map(|name| XString::from_bytes(&name[..name.len() - 1]))
     });
     // The id existed but is no longer in the table, so it was deleted.
-    name.unwrap_or_else(|| get_deleted_augroup().cast_mut())
+    Some(name.unwrap_or_else(|| XString::from_cstr(get_deleted_augroup())))
+}
+
+/// Whether [`augroup_name`] answers the deleted-group placeholder for
+/// `group`: the id is `AUGROUP_DELETED`, or one that existed and is gone.
+pub(crate) fn augroup_is_deleted(group: ::core::ffi::c_int) -> bool {
+    if group == AUGROUP_DELETED {
+        return true;
+    }
+    let group = if group == AUGROUP_ALL {
+        current_augroup.get()
+    } else {
+        group
+    };
+    group < next_augroup_id.get()
+        && !map_augroup_id_to_name.with(|names| names.get(&group).is_some())
 }
 
 /// Whether a group called `name` exists.
-///
-/// # Safety
-///
-/// `name` must point at a NUL-terminated string.
-pub unsafe fn augroup_exists(name: *const ::core::ffi::c_char) -> bool {
-    unsafe { augroup_find(name) > 0 }
+pub fn augroup_exists(name: &[u8]) -> bool {
+    augroup_find(name) > 0
 }
 
 /// [`augroup_exists`] for a name the caller holds.
 pub(crate) fn augroup_exists_of(name: &::core::ffi::CStr) -> bool {
-    // SAFETY: a NUL-terminated name, which the lookup only reads.
-    unsafe { augroup_exists(name.as_ptr()) }
+    augroup_exists(name.to_bytes())
 }
 
 /// `:augroup`: switch to a group, leave one, delete one, or list them.
 pub fn do_augroup(arg: &CStr, del_group: bool) {
-    let arg = arg.as_ptr().cast_mut();
-    // SAFETY, for every region in this function: `arg` is the caller's
-    // NUL-terminated string, so reading its first byte and comparing it
-    // against a literal are both in bounds, and it stays live throughout.
+    let arg = arg.to_bytes();
     if del_group {
-        if unsafe { *arg } == 0 {
+        if arg.is_empty() {
             emsg(gettext(e_argreq));
         } else {
-            // SAFETY: `arg` is the caller's string.
-            unsafe { augroup_del(arg, true) };
+            augroup_del(Some(arg), true);
         }
-    } else if unsafe { strcasecmp(arg, c"end".as_ptr()) } == 0 {
+    } else if arg.eq_ignore_ascii_case(b"end") {
         current_augroup.set(AUGROUP_DEFAULT);
-    } else if unsafe { *arg } != 0 {
-        // SAFETY: `arg` is the caller's string.
-        current_augroup.set(unsafe { augroup_add(arg) });
+    } else if !arg.is_empty() {
+        current_augroup.set(augroup_add(arg));
     } else {
         msg_start();
-        // SAFETY: a static literal names the message kind.
         msg_ext_set_kind(c"list_cmd");
         // The listing is the table's own order, which is creation order.
-        // `msg_str` writes to the message buffers and reads nothing here,
-        // so the borrow across it is a leaf.
-        map_augroup_name_to_id.with(|groups| {
-            for (name, id) in groups.entries() {
-                // A group `:augroup!` renamed lists as `--Deleted--`; its
-                // key is still the old name.
-                if *id > 0 {
-                    // The table's own key, NUL-terminated by
-                    // `interned_key`.
-                    msg_str(cstr::in_bytes(name));
-                } else {
-                    // SAFETY: `augroup_name` answers a string the id table
-                    // or the catalogue owns.
-                    msg_str(unsafe { cstr::at(augroup_name(*id)) });
-                }
-                // SAFETY: a static literal.
-                msg_str(c"  ");
-            }
+        // The names are copied out first: a message can run a redraw, and
+        // nothing may hold the table across that.
+        let entries: Vec<(Box<[u8]>, ::core::ffi::c_int)> = map_augroup_name_to_id.with(|groups| {
+            groups
+                .entries()
+                .iter()
+                .map(|(name, id)| (name.clone(), *id))
+                .collect()
         });
+        for (name, id) in entries {
+            // A group `:augroup!` renamed lists as `--Deleted--`; its
+            // key is still the old name.
+            if id > 0 {
+                msg_str(cstr::in_bytes(&name));
+            } else if let Some(name) = augroup_name(id) {
+                msg_str(name.as_cstr());
+            }
+            msg_str(c"  ");
+        }
         msg_clr_eos();
         msg_end();
     }
 }
 
-/// Completion source for a group name: [`augroup_name`] answers null once
-/// `idx` runs past the last id.
+/// Completion source for a group name: [`augroup_name`] answers `None`
+/// once `idx` runs past the last id.
 pub fn expand_get_augroup_name(_expand: &Expand, idx: usize) -> Option<Candidate> {
     let group = ::core::ffi::c_int::try_from(idx).ok()? + 1;
-    // SAFETY: a group's name, or the literals for the special groups;
-    // null past the last one.
-    unsafe { cstr::at_opt(augroup_name(group)) }.map(|name| Candidate::Owned(name.to_owned()))
+    augroup_name(group).map(|name| Candidate::Owned(name.as_cstr().to_owned()))
 }
 
-/// Take a leading group name off `*argp`, answering its id.
+/// The group a leading word of `arg` names, and how far past it (and the
+/// blanks after it) the rest starts.
 ///
 /// A name that is not a group is *not* consumed and answers
 /// `AUGROUP_ALL`, which is how `:autocmd BufEnter …` is told from
 /// `:autocmd MyGroup BufEnter …` without a lookahead.
-///
-/// # Safety
-///
-/// `argp` must point at a writable `*mut c_char` slot the caller owns for the
-/// call.
-pub(crate) unsafe fn arg_augroup_get(argp: *mut *mut ::core::ffi::c_char) -> ::core::ffi::c_int {
-    // SAFETY: `argp` points at the caller's live `char *` slot, and what it
-    // holds is a NUL-terminated string.
-    let arg = unsafe { *argp };
-    let bytes = unsafe { CStr::from_ptr(arg) }.to_bytes();
-    let len = bytes
+pub(crate) fn arg_augroup_get(arg: &[u8]) -> (::core::ffi::c_int, usize) {
+    let len = arg
         .iter()
-        .position(|&c| ascii_iswhite(::core::ffi::c_int::from(c)) || c == b'|')
-        .unwrap_or(bytes.len());
+        .position(|&c| c == 0 || ascii_iswhite(::core::ffi::c_int::from(c)) || c == b'|')
+        .unwrap_or(arg.len());
     if len == 0 {
-        return AUGROUP_ALL;
+        return (AUGROUP_ALL, 0);
     }
-
-    // SAFETY: `len` is an index into `arg`'s own bytes, so the copy is in
-    // bounds; the result is a fresh NUL-terminated allocation.
-    let group_name =
-        unsafe { xmemdupz(arg.cast::<::core::ffi::c_void>(), len) }.cast::<::core::ffi::c_char>();
-    // SAFETY: `group_name` is the allocation just made.
-    let mut group = unsafe { augroup_find(group_name) };
+    let group = augroup_find(&arg[..len]);
     if group == AUGROUP_ERROR {
-        group = AUGROUP_ALL;
-    } else {
-        // SAFETY: `len` is within `arg`, so `arg.add(len)` is at worst its
-        // one-past-the-end NUL; `argp` is the caller's live slot.
-        unsafe { *argp = skipwhite(arg.add(len)) };
+        return (AUGROUP_ALL, 0);
     }
-    // SAFETY: `group_name` is the allocation above, dead from here.
-    unsafe { xfree(group_name.cast::<::core::ffi::c_void>()) };
-    group
+    (group, len + crate::charset::skip::white(&arg[len..]))
 }

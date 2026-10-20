@@ -10,8 +10,7 @@
 //! are the save-and-restore pair the rest of the editor brackets a
 //! side-effecting operation with.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::getchar::typeahead;
@@ -29,34 +28,22 @@ pub(super) fn event_row(event: AutoEvent) -> &'static EventName {
     &EVENT_NAMES[event.index()]
 }
 
-/// The event named by the head of `start`: up to the first whitespace,
-/// comma or bar.  `*end` is left just past the name and its comma, so a
-/// caller can walk a list; `None` means no event is spelled that way, which
-/// upstream said with `NUM_EVENTS`.
-///
-/// # Safety
-///
-/// `start` must point at a NUL-terminated string. `end` must point at a
-/// writable `*mut c_char` slot the caller owns for the call.
-pub unsafe fn event_name2nr(
-    start: *const ::core::ffi::c_char,
-    end: *mut *mut ::core::ffi::c_char,
-) -> Option<AutoEvent> {
-    // SAFETY: the caller's `start` is a NUL-terminated string, so the name
-    // and its terminator are one allocation the borrow below stays inside.
-    let rest = unsafe { CStr::from_ptr(start) }.to_bytes();
-    let len = rest
+/// The event named by the head of `text`: up to the first whitespace,
+/// comma, bar or NUL. The second answer is how far to step past the name
+/// and its comma, so a caller can walk a list; `None` means no event is
+/// spelled that way, which upstream said with `NUM_EVENTS`.
+pub fn event_name2nr(text: &[u8]) -> (Option<AutoEvent>, usize) {
+    let len = text
         .iter()
-        .position(|&c| ascii_iswhite(c as ::core::ffi::c_int) || c == b',' || c == b'|')
-        .unwrap_or(rest.len());
-    let found = event_name_index(&rest[..len]);
+        .position(|&c| {
+            c == 0 || ascii_iswhite(::core::ffi::c_int::from(c)) || c == b',' || c == b'|'
+        })
+        .unwrap_or(text.len());
+    let found = event_name_index(&text[..len]);
     // A separating comma belongs to the name just measured, not to the
     // next one; anything else the caller has to step over itself.
-    let consumed = len + usize::from(rest.get(len) == Some(&b','));
-    // SAFETY: `consumed` is at most `rest.len()`, so the offset lands on or
-    // before the NUL, and `end` is the caller's out-parameter.
-    unsafe { *end = start.add(consumed).cast_mut() };
-    found.map(|at| EVENT_NAMES[at].event)
+    let consumed = len + usize::from(text.get(len) == Some(&b','));
+    (found.map(|at| EVENT_NAMES[at].event), consumed)
 }
 
 /// [`event_name2nr`] over a counted string, which is the whole name.
@@ -77,39 +64,31 @@ pub fn event_nr2name(event: AutoEvent) -> &'static ::core::ffi::CStr {
 ///
 /// The list is scanned left to right and the *last* mention wins, except
 /// that a `-name` exclusion answers immediately.  `all` in 'eventignorewin'
-/// covers only the window-local events, which is what the sign of a row's
-/// `event` records.
+/// covers only the window-local events, which is what a row's `win_local`
+/// records.
 ///
 /// `window_local` says which of the two options `ei` is, which upstream
 /// asked by comparing the pointer against `p_ei` -- a question the option's
 /// value cannot answer now that it owns its storage, and that the caller
 /// knew all along.
-///
-/// # Safety
-///
-/// `event` must be an initialized `AutoEvent` whose pointer fields point at
-/// live data for the call. `ei` must point at a NUL-terminated string,
-/// unaliased for the call.
-pub unsafe fn event_ignored(
-    event: AutoEvent,
-    mut ei: *mut ::core::ffi::c_char,
-    window_local: bool,
-) -> bool {
+pub fn event_ignored(event: AutoEvent, ei: &[u8], window_local: bool) -> bool {
     let mut ignored = false;
-    // SAFETY: `ei` is a NUL-terminated option value, so the walk stops at
-    // its end.  `skip_all` and `event_name2nr` take the same contract, and
-    // only ever hand back a position inside the same string.
-    while unsafe { *ei } != 0 {
-        let unignore = unsafe { *ei } == b'-' as ::core::ffi::c_char;
-        ei = unsafe { ei.add(usize::from(unignore)) };
-        if let Some(after_all) = unsafe { skip_all(ei) } {
+    let mut at = 0;
+    while at < ei.len() && ei[at] != 0 {
+        let unignore = ei[at] == b'-';
+        at += usize::from(unignore);
+        if let Some(all) = skip_all(&ei[at..]) {
             ignored = !window_local || event_row(event).win_local;
-            ei = after_all;
-        } else if unsafe { event_name2nr(ei, &raw mut ei) } == Some(event) {
-            if unignore {
-                return false;
+            at += all;
+        } else {
+            let (found, consumed) = event_name2nr(&ei[at..]);
+            at += consumed;
+            if found == Some(event) {
+                if unignore {
+                    return false;
+                }
+                ignored = true;
             }
-            ignored = true;
         }
     }
     ignored
@@ -120,19 +99,17 @@ pub unsafe fn event_ignored(
 ///
 /// `win` says the value is 'eventignorewin', which accepts only the
 /// window-local events.
-///
-/// The walk only reads the value; the cursor is mutable because the
-/// event-name reader's out-parameter is.
 pub fn check_ei(value: &CStr, win: bool) -> Result<(), Failed> {
-    let mut ei = value.as_ptr().cast_mut();
-    // SAFETY: as in `event_ignored` -- `ei` is a NUL-terminated option
-    // value, and every step below stays within it.
-    while unsafe { *ei } != 0 {
-        if let Some(after_all) = unsafe { skip_all(ei) } {
-            ei = after_all;
+    let ei = value.to_bytes();
+    let mut at = 0;
+    while at < ei.len() {
+        if let Some(all) = skip_all(&ei[at..]) {
+            at += all;
         } else {
-            ei = unsafe { ei.add(usize::from(*ei == b'-' as ::core::ffi::c_char)) };
-            let Some(event) = (unsafe { event_name2nr(ei, &raw mut ei) }) else {
+            at += usize::from(ei[at] == b'-');
+            let (found, consumed) = event_name2nr(&ei[at..]);
+            at += consumed;
+            let Some(event) = found else {
                 return Err(Failed);
             };
             if win && !event_row(event).win_local {
@@ -143,31 +120,20 @@ pub fn check_ei(value: &CStr, win: bool) -> Result<(), Failed> {
     Ok(())
 }
 
-/// The rest of `ei` past a leading `all` item, or `None` when there is not
-/// one.
+/// How far past a leading `all` item of `ei` (and its comma) the rest
+/// starts, or `None` when there is not one.
 ///
-/// `strncasecmp` rather than an ASCII fold because upstream's is the
-/// locale's, and it stops at the first mismatch -- so a string shorter than
-/// `all` is rejected without `ei[3]` ever being read.
-///
-/// # Safety
-///
-/// `ei` must point at a NUL-terminated string, unaliased for the call.
-unsafe fn skip_all(ei: *mut ::core::ffi::c_char) -> Option<*mut ::core::ffi::c_char> {
-    // SAFETY: `ei` is NUL-terminated, so the comparison reads at most three
-    // bytes of it and stops at the first mismatch -- a shorter string
-    // mismatches on its NUL rather than reading past it.
-    if unsafe { strncasecmp(ei, c"all".as_ptr(), 3) } != 0 {
+/// Upstream compares with `strncasecmp`, the locale's; `all` is plain
+/// ASCII, which no locale folds differently.
+fn skip_all(ei: &[u8]) -> Option<usize> {
+    if ei.len() < 3 || !ei[..3].eq_ignore_ascii_case(b"all") {
         return None;
     }
-    // SAFETY: the three bytes matched, so `ei[3]` is in bounds: it is the
-    // NUL, or the byte that follows `all`.
-    let after = unsafe { *ei.add(3) };
-    if after != 0 && after != b',' as ::core::ffi::c_char {
-        return None;
+    match ei.get(3) {
+        None | Some(0) => Some(3),
+        Some(b',') => Some(4),
+        Some(_) => None,
     }
-    // SAFETY: as above, and a comma at `ei[3]` is followed by a byte too.
-    Some(unsafe { ei.add(3 + usize::from(after == b',' as ::core::ffi::c_char)) })
 }
 
 /// Append `what` (which starts with a comma) to 'eventignore', and answer
@@ -205,12 +171,10 @@ fn set_option_eventignore(value: &CStr) {
     );
 }
 
-/// Whether any autocommand is defined for `event`.
-///
-/// Safe: the table is the editor's own, live from startup to exit.
+/// Whether any autocommand is defined for `event` -- counting the deleted
+/// rows a running walk still keeps, as upstream's `kv_size` did.
 pub fn has_event(event: AutoEvent) -> bool {
-    // SAFETY: the table's own row for `event`.
-    unsafe { (*au_event_vec(event)).size != 0 }
+    with_event_cmds(event, |cmds| !cmds.is_empty())
 }
 
 /// Whether a `CursorHold` autocommand exists for the mode we are in.
@@ -248,16 +212,14 @@ pub fn trigger_cursorhold() -> bool {
 /// first (when [`autocmd_include_groups`] is set), then every event name.
 pub fn expand_get_event_name(_expand: &Expand, idx: usize) -> Option<Candidate> {
     let idx = ::core::ffi::c_int::try_from(idx).ok()?;
-    // `augroup_name` answers null once `idx` walks past the last group.
-    let name = augroup_name(idx + 1);
-    if !name.is_null() {
+    // `augroup_name` answers `None` once `idx` walks past the last group.
+    if let Some(name) = augroup_name(idx + 1) {
         // Skip the group, but keep it in the numbering: the caller
         // walks `idx` up until this answers `None`.
-        if !autocmd_include_groups.get() || name.cast_const() == get_deleted_augroup() {
+        if !autocmd_include_groups.get() || augroup_is_deleted(idx + 1) {
             return Some(Candidate::Borrowed(c""));
         }
-        // SAFETY: a group's name, NUL-terminated while the group lives.
-        return Some(Candidate::Owned(unsafe { CStr::from_ptr(name) }.to_owned()));
+        return Some(Candidate::Owned(name.as_cstr().to_owned()));
     }
     let row = usize::try_from(idx - next_augroup_id.get()).ok()?;
     EVENT_NAMES
@@ -280,10 +242,7 @@ pub fn get_event_name_no_group(idx: usize, win: bool) -> Option<&'static CStr> {
 
 /// Whether `event` is an event nvim has.
 pub fn autocmd_supported(event: &::core::ffi::CStr) -> bool {
-    let mut end = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    // SAFETY: `event` is a NUL-terminated name, and `end` is a local for the
-    // position `event_name2nr` reports back.
-    unsafe { event_name2nr(event.as_ptr(), &raw mut end) }.is_some()
+    event_name2nr(event.to_bytes()).0.is_some()
 }
 
 /// ASCII-case-folded comparison, the order [`EVENT_NAMES`] is in.

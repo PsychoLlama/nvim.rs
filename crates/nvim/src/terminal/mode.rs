@@ -329,10 +329,9 @@ pub(crate) fn terminal_enter() -> bool {
     buf.b_last_changedtick_i = buf_get_changedtick(buf);
 
     s.term.refcount.retain();
-    let none = ::core::ptr::null_mut();
     // SAFETY: TermEnter against a live buffer; nothing of the terminal or
     // the session is borrowed across it.
-    unsafe { apply_autocmds(AutoEvent::TermEnter, none, none, false, Some(buf)) };
+    apply_autocmds(AutoEvent::TermEnter, None, None, false, Some(buf));
     may_trigger_modechanged();
     s.term.refcount.release();
     if s.term.buf_handle == 0 {
@@ -373,7 +372,7 @@ pub(crate) fn terminal_enter() -> bool {
 
     let buffer = Some(current_buf());
 
-    unsafe { apply_autocmds(AutoEvent::TermLeave, none, none, false, buffer) };
+    apply_autocmds(AutoEvent::TermLeave, None, None, false, buffer);
     if s.close {
         s.term.refcount.release();
         let buf_handle = s.term.buf_handle;
@@ -493,10 +492,9 @@ pub(crate) unsafe fn terminal_check(state: *mut TerminalState) -> c_int {
     let buf = current_buf();
     // SAFETY: a live buffer's own change counter.
     if observed && buf.b_last_changedtick_i != buf_get_changedtick(buf) {
-        let none = ::core::ptr::null_mut();
         // SAFETY: TextChangedT against a live buffer; nothing of the
         // terminal or the session is borrowed across it.
-        unsafe { apply_autocmds(AutoEvent::TextChangedT, none, none, false, Some(buf)) };
+        apply_autocmds(AutoEvent::TextChangedT, None, None, false, Some(buf));
         let mut buf = current_buf();
         buf.b_last_changedtick_i = buf_get_changedtick(buf);
     }

@@ -22,8 +22,6 @@ pub fn nvim_exec_autocmds(event: Object, opts: &mut KeyDict_exec_autocmds) -> Re
     let mut buffer: Option<Buf> = Buf::current_or_none();
     // The event data is handed on by address; the keyset's own `Option` has
     // no `Object` to point at, so the value is copied into this frame first.
-    let mut event_data: Object;
-    let mut data: *mut Object = ::core::ptr::null_mut::<Object>();
     let event_array: Array = unsafe {
         unpack_string_or_array(
             Some(event),
@@ -31,11 +29,10 @@ pub fn nvim_exec_autocmds(event: Object, opts: &mut KeyDict_exec_autocmds) -> Re
             true,
         )
     }?;
-    let name: *mut ::core::ffi::c_char;
     match opts.group.as_ref().unwrap_or(&Object::Nil) {
         Object::Nil => {}
         Object::String(group) => {
-            au_group = unsafe { augroup_find(group.data()) };
+            au_group = augroup_find(crate::cstr::until_nul(group.as_bytes()));
             if !(au_group != AUGROUP_ERROR as ::core::ffi::c_int) {
                 error = err_bad_value(c"group", group.as_cstr());
                 return ().reported(error);
@@ -44,12 +41,13 @@ pub fn nvim_exec_autocmds(event: Object, opts: &mut KeyDict_exec_autocmds) -> Re
         Object::Integer(group) => {
             let group = *group;
             au_group = group as ::core::ffi::c_int;
-            name = if au_group == 0 as ::core::ffi::c_int {
-                ::core::ptr::null_mut::<::core::ffi::c_char>()
+            // No name is the empty one, as a null `char *` was.
+            let name = if au_group == 0 as ::core::ffi::c_int {
+                None
             } else {
                 augroup_name(au_group)
             };
-            if !unsafe { augroup_exists(name) } {
+            if !augroup_exists(name.as_deref().unwrap_or_default()) {
                 error = err_bad_number(c"group", au_group as int64_t);
                 return ().reported(error);
             }
@@ -84,10 +82,7 @@ pub fn nvim_exec_autocmds(event: Object, opts: &mut KeyDict_exec_autocmds) -> Re
             c"".as_ptr() as *mut ::core::ffi::c_char,
         )
     }?;
-    if let Some(given) = opts.data.as_ref() {
-        event_data = given.clone();
-        data = &raw mut event_data;
-    }
+    let event_data: Option<Object> = opts.data.as_ref().cloned();
     let modeline: bool = opts.modeline.unwrap_or(true);
     let mut did_aucmd: bool = false;
     let mut event_str_index: size_t = 0 as size_t;
@@ -103,26 +98,26 @@ pub fn nvim_exec_autocmds(event: Object, opts: &mut KeyDict_exec_autocmds) -> Re
         let mut pat_index: size_t = 0 as size_t;
         while pat_index < patterns.len() {
             let pat = &patterns[pat_index];
-            let fname: *mut ::core::ffi::c_char = if !has_buf {
-                pat.as_string()
-                    .expect("`get_patterns_from_pattern_or_buf` answers Strings only")
-                    .data()
+            let fname = if !has_buf {
+                Some(
+                    pat.as_string()
+                        .expect("`get_patterns_from_pattern_or_buf` answers Strings only")
+                        .as_cstr(),
+                )
             } else {
-                ::core::ptr::null_mut::<::core::ffi::c_char>()
+                None
             };
             did_aucmd = did_aucmd as ::core::ffi::c_int
-                | unsafe {
-                    apply_autocmds_group(
-                        event_nr,
-                        fname,
-                        ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                        true,
-                        au_group,
-                        buffer,
-                        None,
-                        data,
-                    )
-                } as ::core::ffi::c_int
+                | apply_autocmds_group(
+                    event_nr,
+                    fname,
+                    None,
+                    true,
+                    au_group,
+                    buffer,
+                    None,
+                    event_data.as_ref(),
+                ) as ::core::ffi::c_int
                 != 0;
             pat_index = pat_index.wrapping_add(1);
         }

@@ -83,10 +83,9 @@ pub(crate) fn ins_redraw(ready: bool) {
 
         // Save and restore curwin/curbuf, in case the autocommand changes
         // them.
-        unsafe { aucmd_prepbuf(&raw mut aco, Buf::current()) };
-        let none = ::core::ptr::null_mut();
-        unsafe { apply_autocmds(event, none, none, false, Buf::current_or_none()) };
-        unsafe { aucmd_restbuf(&raw mut aco) };
+        aucmd_prepbuf(&mut aco, Buf::current());
+        apply_autocmds(event, None, None, false, Buf::current_or_none());
+        aucmd_restbuf(&mut aco);
 
         unsafe { *tick = buf_get_changedtick(Buf::current()) };
         if before != unsafe { *tick } {
@@ -123,9 +122,8 @@ pub(crate) fn ins_redraw(ready: bool) {
         && Buf::current().b_changed_invalid
         && !pum_visible()
     {
-        let none = ::core::ptr::null_mut();
         let __hoisted_0 = Buf::current_or_none();
-        unsafe { apply_autocmds(AutoEvent::BufModifiedSet, none, none, false, __hoisted_0) };
+        apply_autocmds(AutoEvent::BufModifiedSet, None, None, false, __hoisted_0);
         Buf::current().b_changed_invalid = false;
     }
 

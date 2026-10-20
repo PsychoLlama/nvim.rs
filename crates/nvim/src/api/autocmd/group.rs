@@ -30,11 +30,10 @@ pub fn nvim_create_augroup(
     // SAFETY: the dispatcher's keyset outlives this call.
     let opts = unsafe { Live::<KeyDict_create_augroup>::new(opts) };
     let mut error = Error::none();
-    let augroup_name_0: *mut ::core::ffi::c_char = name.data();
     // An augroup the caller says nothing about is cleared.
     let clear_autocmds: bool = opts.clear.unwrap_or(true);
     let _sctx = api_set_sctx(channel_id);
-    let augroup: ::core::ffi::c_int = unsafe { augroup_add(augroup_name_0) };
+    let augroup: ::core::ffi::c_int = augroup_add(crate::cstr::until_nul(name.as_bytes()));
     if augroup == AUGROUP_ERROR as ::core::ffi::c_int {
         // Unreachable: `augroup_add` only ever answers a positive id.
         // The guard restores on the way out regardless -- upstream's
@@ -54,12 +53,12 @@ pub fn nvim_create_augroup(
 pub fn nvim_del_augroup_by_id(id: Integer) -> Result<(), Error> {
     let mut tstate: TryState = TryState::INIT;
     unsafe { try_enter(&raw mut tstate) };
-    let name: *mut ::core::ffi::c_char = if id == 0 as Integer {
-        ::core::ptr::null_mut::<::core::ffi::c_char>()
+    let name = if id == 0 as Integer {
+        None
     } else {
         augroup_name(number_as_int(id))
     };
-    unsafe { augroup_del(name, false) };
+    augroup_del(name.as_deref(), false);
     unsafe { try_leave(&raw mut tstate) }?;
     Ok(())
 }
@@ -67,7 +66,7 @@ pub fn nvim_del_augroup_by_id(id: Integer) -> Result<(), Error> {
 pub fn nvim_del_augroup_by_name(name: String_0) -> Result<(), Error> {
     let mut tstate: TryState = TryState::INIT;
     unsafe { try_enter(&raw mut tstate) };
-    unsafe { augroup_del(name.data(), false) };
+    augroup_del(Some(crate::cstr::until_nul(name.as_bytes())), false);
     unsafe { try_leave(&raw mut tstate) }?;
     Ok(())
 }
@@ -76,14 +75,13 @@ pub fn nvim_del_augroup_by_name(name: String_0) -> Result<(), Error> {
 /// looked up by name and an Integer is checked for existence.
 pub(crate) fn get_augroup_from_object(group: Option<&Object>) -> Result<::core::ffi::c_int, Error> {
     let au_group: ::core::ffi::c_int;
-    let name: *mut ::core::ffi::c_char;
     let Some(group) = group.filter(|group| !group.is_nil()) else {
         return Ok(AUGROUP_DEFAULT as ::core::ffi::c_int);
     };
     match group {
         Object::Nil => Ok(AUGROUP_DEFAULT as ::core::ffi::c_int),
         Object::String(s) => {
-            au_group = unsafe { augroup_find(s.data()) };
+            au_group = augroup_find(crate::cstr::until_nul(s.as_bytes()));
             if !(au_group != AUGROUP_ERROR as ::core::ffi::c_int) {
                 let name = s.as_cstr();
                 return Err(err_bad_value(c"group", name));
@@ -92,12 +90,13 @@ pub(crate) fn get_augroup_from_object(group: Option<&Object>) -> Result<::core::
         }
         Object::Integer(n) => {
             au_group = number_as_int(*n);
-            name = if au_group == 0 as ::core::ffi::c_int {
-                ::core::ptr::null_mut::<::core::ffi::c_char>()
+            // No name is the empty one, as a null `char *` was.
+            let name = if au_group == 0 as ::core::ffi::c_int {
+                None
             } else {
                 augroup_name(au_group)
             };
-            if !unsafe { augroup_exists(name) } {
+            if !augroup_exists(name.as_deref().unwrap_or_default()) {
                 return Err(err_bad_number(c"group", int64_t::from(au_group)));
             }
             Ok(au_group)

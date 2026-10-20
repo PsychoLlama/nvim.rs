@@ -593,8 +593,7 @@ unsafe fn attach_terminal(chan: *mut Channel, cwd: *const c_char, cmd: *const c_
     }
     unsafe { channel_incref(chan) };
     unsafe { channel_terminal_alloc(buf, chan) };
-    let noname = ptr::null_mut::<c_char>();
-    unsafe { apply_autocmds(AutoEvent::BufFilePre, noname, noname, false, Some(buf)) };
+    apply_autocmds(AutoEvent::BufFilePre, None, None, false, Some(buf));
 
     // The autocommand may have closed the terminal out from under us,
     // which is what each of these three re-tests is for.
@@ -620,7 +619,7 @@ unsafe fn attach_terminal(chan: *mut Channel, cwd: *const c_char, cmd: *const c_
         let dir = shortened.as_ptr();
         unsafe { snprintf!(out, MAXPATHL as usize, fmt, dir, pid, cmd) };
         let _ = setfname(buf, Some(cstr::in_chars(&name)), None, true);
-        unsafe { apply_autocmds(AutoEvent::BufFilePost, noname, noname, false, Some(buf)) };
+        apply_autocmds(AutoEvent::BufFilePost, None, None, false, Some(buf));
 
         if unsafe { terminal_live(chan) } {
             // Locked so that the two variables cannot be swapped out
