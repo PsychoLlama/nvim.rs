@@ -25,10 +25,6 @@ binary as well as the default one.
 
 - `neovim::api::extmark::ns::next_namespace_id`
 
-## `autocmd`
-
-- `neovim::autocmd::autocmds`
-
 ## `buffer`
 
 - `neovim::buffer::top_file_num`

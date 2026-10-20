@@ -160,7 +160,7 @@ pub fn augroup_find(name: &[u8]) -> ::core::ffi::c_int {
 /// the map shrinks when a group is deleted, so its size is not.  The id
 /// one past the last is spelled `END`, which is what makes `:augroup`
 /// completion terminate. A deleted group's name is the `--Deleted--`
-/// placeholder; [`augroup_is_deleted`] tells it from a group really called
+/// placeholder; `augroup_is_deleted` tells it from a group really called
 /// that.
 pub fn augroup_name(mut group: ::core::ffi::c_int) -> Option<XString> {
     debug_assert!(group != 0);

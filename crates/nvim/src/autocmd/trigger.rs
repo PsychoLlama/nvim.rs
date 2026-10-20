@@ -166,7 +166,7 @@ pub fn ex_doautoall(excmd: &mut ExArg) {
 ///
 /// Everything is copied: `fname`, `fname_io` and `data` are the caller's.
 /// The *handle* of `buffer` is kept, not the buffer: it may be gone by the
-/// time the queued event runs, and [`deferred_event`] looks it up again.
+/// time the queued event runs, and `deferred_event` looks it up again.
 pub fn aucmd_defer(
     event: AutoEvent,
     fname: Option<&CStr>,
