@@ -1,0 +1,283 @@
+//! The text-changing primitives: inserting bytes at the cursor, Replace
+//! mode's overwrite, opening a line with its comment leader, and the leader
+//! scan itself.
+//!
+//! The oracle the `change/` retype is checked against. [`ins_char_bytes`] and
+//! [`ins_str`] are called directly, the way every editing module calls them;
+//! Replace and Virtual Replace (which reach `ins_char_bytes` with the mode
+//! flags set) and `open_line` (which every `o`, `O` and Insert-mode `<CR>`
+//! reaches, and which writes the split line back through the memline's
+//! pointer-form replace) are driven by keys; [`get_leader_len`] is asked about
+//! a table of lines. Each answer is today's -- the key-driven rows are also
+//! upstream 0.12.6's -- odd corners included: the leader scan's `flags` is
+//! written even when nothing matches, except on a blank line.
+
+#![cfg(not(miri))]
+
+use std::ffi::{CStr, c_char};
+
+use crate::support::{Probe, Sandbox, cstr};
+use neovim::change::{get_last_leader_offset, get_leader_len, ins_char_bytes, ins_str};
+use neovim::undo::u_save_cursor;
+
+/// The buffer-local options these cases set, back to their defaults: buffer
+/// 1 outlives the case.
+fn restore(fx: &Probe<'_>) {
+    fx.run(
+        "setlocal comments& formatoptions& autoindent& smartindent& cindent& expandtab& \
+         shiftwidth& tabstop& textwidth&",
+    );
+    fx.home();
+}
+
+fn fresh(fx: &Probe<'_>, lines: &str) {
+    fx.home();
+    fx.run("setlocal comments& formatoptions& autoindent& noexpandtab shiftwidth=8 tabstop=8");
+    fx.run(&format!("call setline(1, {lines})"));
+}
+
+/// Insert `bytes` at (`line`, `col`) (one-based column) with
+/// `ins_char_bytes`, one character's worth at a time as the callers do.
+fn insert_chars(fx: &Probe<'_>, line: i64, col: i64, chars: &[&str]) {
+    fx.run(&format!("call cursor({line}, {col})"));
+    let _ = u_save_cursor();
+    for ch in chars {
+        let mut buf = ch.as_bytes().to_vec();
+        // SAFETY: `buf` holds `len` readable bytes and undo is prepared.
+        unsafe { ins_char_bytes(buf.as_mut_ptr().cast::<c_char>(), buf.len()) };
+    }
+}
+
+#[test]
+fn ins_char_bytes_inserts_and_moves_the_cursor_past() {
+    let sandbox = Sandbox::globals();
+    let fx = Probe::new(sandbox.editor());
+    fresh(&fx, "['abc', '', 'x\u{e9}y']");
+    insert_chars(&fx, 1, 2, &["X", "\u{e9}", "日"]);
+    fx.expect_all(&[
+        ("getline(1)", "'aX\u{e9}日bc'"),
+        // The cursor is a byte column, past what went in.
+        ("col('.')", "8"),
+    ]);
+    // Into an empty line, and before a multibyte character.
+    insert_chars(&fx, 2, 1, &["z"]);
+    insert_chars(&fx, 3, 2, &["-"]);
+    fx.expect_all(&[
+        ("getline(2, 3)", "['z', 'x-\u{e9}y']"),
+        // A combining character is one "character" to the caller.
+        ("strchars(getline(1))", "6"),
+    ]);
+    insert_chars(&fx, 1, 1, &["e\u{301}"]);
+    fx.check("getline(1)", "'e\u{301}aX\u{e9}日bc'");
+    restore(&fx);
+}
+
+#[test]
+fn ins_str_inserts_any_bytes_in_one_piece() {
+    let sandbox = Sandbox::globals();
+    let fx = Probe::new(sandbox.editor());
+    fresh(&fx, "['hello world']");
+    fx.run("call cursor(1, 6)");
+    let _ = u_save_cursor();
+    let mut text = b", there".to_vec();
+    // SAFETY: `text` holds `len` readable bytes and undo is prepared.
+    unsafe { ins_str(text.as_mut_ptr().cast::<c_char>(), text.len()) };
+    fx.expect_all(&[("getline(1)", "'hello, there world'"), ("col('.')", "13")]);
+    // At the end of the line, and a zero-length insert changing nothing.
+    fx.run("call cursor(1, 19)");
+    fx.run("normal! $");
+    let _ = u_save_cursor();
+    let mut tail = b"!".to_vec();
+    // SAFETY: as above.
+    unsafe { ins_str(tail.as_mut_ptr().cast::<c_char>(), 1) };
+    // SAFETY: as above, no bytes.
+    unsafe { ins_str(tail.as_mut_ptr().cast::<c_char>(), 0) };
+    // `$` puts the cursor *on* the last character, so the bang lands before
+    // it.
+    fx.check("getline(1)", "'hello, there worl!d'");
+    restore(&fx);
+}
+
+#[test]
+fn replace_mode_overwrites_whole_characters() {
+    let sandbox = Sandbox::globals();
+    let fx = Probe::new(sandbox.editor());
+    fresh(&fx, "['abcdef', 'a\u{e9}日b', 'ab']");
+    fx.run("call cursor(1, 2) | silent execute \"normal! RXY\\<Esc>\"");
+    // A multibyte character -- two bytes or three -- is replaced whole by a
+    // single-byte one.
+    fx.run("call cursor(2, 2) | silent execute \"normal! Rxy\\<Esc>\"");
+    // Past the end of the line Replace mode appends.
+    fx.run("call cursor(3, 2) | silent execute \"normal! R1234\\<Esc>\"");
+    fx.check("getline(1, 3)", "['aXYdef', 'axyb', 'a1234']");
+    // Backspace in Replace mode puts back what was overwritten -- the
+    // replace stack `ins_char_bytes` pushed.
+    fx.run("call setline(1, 'a\u{e9}日b') | call cursor(1, 1)");
+    fx.run("silent execute \"normal! Rxyz\\<BS>\\<BS>\\<Esc>\"");
+    fx.check("getline(1)", "'x\u{e9}日b'");
+    restore(&fx);
+}
+
+#[test]
+fn virtual_replace_counts_cells() {
+    let sandbox = Sandbox::globals();
+    let fx = Probe::new(sandbox.editor());
+    fresh(&fx, "[\"\\tabc\", \"ab\\tcd\", '日本語']");
+    // Typing over a TAB keeps it until the text reaches its end.
+    fx.run("call cursor(1, 1) | silent execute \"normal! gRxy\\<Esc>\"");
+    // A TAB typed over `b` and the TAB eats up to the next stop.
+    fx.run("call cursor(2, 2) | silent execute \"normal! gR\\<Tab>\\<Esc>\"");
+    // One single-width character over a double-width one pads with a space.
+    fx.run("call cursor(3, 1) | silent execute \"normal! gRx\\<Esc>\"");
+    fx.check("getline(1, 3)", "['xy\tabc', 'a\tcd', 'x 本語']");
+    restore(&fx);
+}
+
+#[test]
+fn open_line_copies_the_comment_leader() {
+    let sandbox = Sandbox::globals();
+    let fx = Probe::new(sandbox.editor());
+    let cases: &[(&str, &str, &str, &str)] = &[
+        // (lines, 'formatoptions', keys, buffer after)
+        ("['  // one']", "o", "onext", "['  // one', '  // next']"),
+        ("['  // one']", "o", "Oprev", "['  // prev', '  // one']"),
+        // Without `o` the leader is not repeated, but the indent is.
+        ("['  // one']", "", "onext", "['  // one', '  next']"),
+        // A three-piece comment: the start gives way to the middle.
+        (
+            "['/*', ' * one']",
+            "o",
+            "Gonext",
+            "['/*', ' * one', ' * next']",
+        ),
+        ("['/* one']", "o", "onext", "['/* one', ' * next']"),
+        // After the end part, the indent of the start comes back.
+        ("['  /* one */']", "o", "onext", "['  /* one */', '  next']"),
+        // Insert-mode <CR> takes the `r` flag, and splits the line.
+        (
+            "['# one two']",
+            "r",
+            "6|i\\<CR>\\<Esc>",
+            "['# one', '# two']",
+        ),
+        // An `f` item (only the first line) gives its width as indent.
+        ("['- item']", "o", "onext", "['- item', '  next']"),
+        // The `b` flag: blank after is required -- `#x` is no leader.
+        ("['#x one']", "o", "onext", "['#x one', 'next']"),
+        ("['  - item']", "o", "onext", "['  - item', '    next']"),
+        // `n`: nested leaders are repeated whole.
+        ("['> > quoted']", "o", "onext", "['> > quoted', '> > next']"),
+    ];
+    let mut moved = Vec::new();
+    for (lines, fo, keys, want) in cases {
+        fresh(&fx, lines);
+        fx.run("setlocal comments=s1:/*,mb:*,ex:*/,://,b:#,n:>,fb:-");
+        fx.run(&format!("setlocal formatoptions={fo}"));
+        fx.run("call cursor(1, 1)");
+        fx.run(&format!("silent execute \"normal! {keys}\""));
+        let got = fx.eval("getline(1, '$')");
+        if got != *want {
+            moved.push(format!("({lines:?}, {fo:?}, {keys:?}, {got:?})"));
+        }
+    }
+    restore(&fx);
+    assert!(moved.is_empty(), "rows moved:\n{}", moved.join("\n"));
+}
+
+#[test]
+fn open_line_splits_and_indents() {
+    let sandbox = Sandbox::globals();
+    let fx = Probe::new(sandbox.editor());
+    // 'autoindent' copies the indent, and a line left with only it loses it
+    // again on <Esc> -- so the `o` after it starts from nothing.
+    fresh(&fx, "[\"\\t  if (x) {\"]");
+    fx.run("setlocal autoindent");
+    fx.run("silent execute \"normal! o\\<Esc>ofoo\\<Esc>\"");
+    fx.check("getline(1, '$')", "['\t  if (x) {', '', 'foo']");
+    // 'smartindent' adds a level after `{`.
+    fresh(&fx, "['if (x) {']");
+    fx.run("setlocal autoindent smartindent shiftwidth=4 expandtab");
+    fx.run("silent execute \"normal! obody\\<CR>}\\<Esc>\"");
+    fx.check("getline(1, '$')", "['if (x) {', '    body', '}']");
+    // <CR> in the middle of a line: the white space before the cut stays
+    // (only 'autoindent''s own indent is taken back), the tail moves down
+    // with the new indent.
+    fresh(&fx, "['    one   two']");
+    fx.run("setlocal autoindent");
+    fx.run("call cursor(1, 11) | silent execute \"normal! i\\<CR>\\<Esc>\"");
+    fx.check("getline(1, '$')", "['    one   ', '    two']");
+    // 'formatoptions' n: a numbered list item indents the next line to its
+    // text.
+    fresh(&fx, "['1. first item']");
+    fx.run("setlocal autoindent formatoptions=tn textwidth=20");
+    fx.run("silent execute \"normal! A and some more words\\<Esc>\"");
+    fx.check(
+        "getline(1, '$')",
+        "['1. first item and', '   some more words']",
+    );
+    restore(&fx);
+}
+
+/// Ask the leader scan about `line`: its length, and the flags it left
+/// behind (the bytes up to the item's `:`).
+fn leader(line: &str, backward: bool, include_space: bool) -> (i32, String) {
+    let text = cstr(line);
+    let mut flags: *mut c_char = std::ptr::null_mut();
+    // SAFETY: `text` is NUL-terminated and `flags` is a local.
+    let len = unsafe { get_leader_len(text.as_ptr(), &raw mut flags, backward, include_space) };
+    let flags = if flags.is_null() {
+        "<null>".to_string()
+    } else {
+        // SAFETY: `flags` points into 'comments', which is NUL-terminated.
+        let rest = unsafe { CStr::from_ptr(flags) }.to_string_lossy();
+        rest.split(':').next().unwrap_or_default().to_string()
+    };
+    (len, flags)
+}
+
+#[test]
+fn get_leader_len_measures_the_leader_and_names_its_item() {
+    let sandbox = Sandbox::globals();
+    let fx = Probe::new(sandbox.editor());
+    fx.home();
+    fx.run("setlocal comments=s1:/*,mb:*,ex:*/,://,b:#,n:>,fb:-");
+    let cases: &[(&str, bool, bool, (i32, &str))] = &[
+        ("// text", false, false, (2, "")),
+        ("// text", false, true, (3, "")),
+        ("   // text", false, true, (6, "")),
+        // Nested: `> > text` is two leaders, measured together.
+        ("> > text", false, true, (4, "n")),
+        ("/* text", false, true, (3, "s1")),
+        (" * text", false, true, (3, "mb")),
+        (" */", false, true, (3, "ex")),
+        // `b`: blank required after.
+        ("# text", false, true, (2, "b")),
+        ("#text", false, true, (0, "fb")),
+        ("- item", false, true, (2, "fb")),
+        // No leader: 0, but the flags name the last item tried.
+        ("plain", false, true, (0, "fb")),
+        // ... except on a line that is empty or only white space, where no
+        // item is tried at all.
+        ("", false, true, (0, "<null>")),
+        ("    ", false, true, (0, "<null>")),
+    ];
+    for &(line, backward, space, (want_len, want_flags)) in cases {
+        let got = leader(line, backward, space);
+        assert_eq!(
+            (got.0, got.1.as_str()),
+            (want_len, want_flags),
+            "get_leader_len({line:?}, {backward}, {space})"
+        );
+    }
+    // The trailing comment of a line of code.
+    let offset = |line: &str| {
+        let text = cstr(line);
+        // SAFETY: `text` is NUL-terminated and `flags` may be null.
+        unsafe { get_last_leader_offset(text.as_ptr().cast_mut(), std::ptr::null_mut()) }
+    };
+    assert_eq!(offset("code(); // why"), 8);
+    // The last leader is the closed comment's end part, not its start.
+    assert_eq!(offset("a = b; /* why */"), 14);
+    assert_eq!(offset("no comment"), -1);
+    restore(&fx);
+}

@@ -1,6 +1,6 @@
 {
   "internal_exports": 0,
-  "test_reached_pub": 728,
+  "test_reached_pub": 745,
   "cell_ptr_keepers": 11,
   "cell_ptr_accessors": 21,
   "cell_copy_owner": 7,
@@ -55,7 +55,7 @@
   "safety_on_safe_fns": 0,
   "dup_consts": 1109,
   "types_files": 112,
-  "untested_dirs": 16,
+  "untested_dirs": 10,
   "cchar_scratch": 146,
   "files_without_deny_unsafe_op": 0,
   "files_without_deny_casts": 691,
