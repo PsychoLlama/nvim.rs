@@ -9,7 +9,7 @@
 #![forbid(unsafe_code)]
 
 use super::*;
-use crate::grid::{MAX_SCHAR_SIZE, default_grid_ref, default_gridview, schar_text};
+use crate::grid::{SCHAR_BUF_SIZE, default_grid_ref, default_gridview, schar_text};
 use crate::winlayer::Win;
 use core::ffi::{c_int, c_uint};
 
@@ -56,7 +56,7 @@ pub fn msg_id_exists(id: int64_t) -> bool {
 /// Tell the UI where the message grid now sits.
 pub(crate) fn ui_ext_msg_set_pos(row: c_int, scrolled: bool) {
     let mut grid = msg_grid_ref();
-    let mut sep = [0; MAX_SCHAR_SIZE as usize];
+    let mut sep = [0; SCHAR_BUF_SIZE];
     let sep = String_0::from_bytes(schar_text(Win::current().w_p_fcs_chars.msgsep, &mut sep));
     ui_call_msg_set_pos(
         grid.handle.into(),

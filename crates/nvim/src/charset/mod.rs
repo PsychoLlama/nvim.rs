@@ -45,7 +45,7 @@ pub mod transchar;
 pub use display::transchar_hex_into;
 pub(crate) use display::{
     CharDisplay, ptr2cells_at, strsize, trans_characters_in, transchar, transchar_buf,
-    transchar_byte, transchar_byte_buf, transchar_nonprint_form, vim_strsize_cstr,
+    transchar_byte, transchar_byte_buf, transchar_nonprint_form, transstr_owned, vim_strsize_cstr,
 };
 pub use display::{byte2cells, char2cells};
 

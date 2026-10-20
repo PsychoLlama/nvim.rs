@@ -23,9 +23,9 @@ use crate::eval::vars::set_vim_var_nr;
 use crate::fold::{FOLD_TEXT_LEN, VIRTTEXT_EMPTY, get_foldtext};
 use crate::global_cell::GlobalCell;
 use crate::grid::{
-    LineAttrs, LineSpan, SLF_RIGHTLEFT, grid_adjust, grid_put_linebuf, linebuf, linebuf_mirror,
-    schar_cells, schar_from_ascii, schar_from_char, schar_get_adv, schar_get_ascii,
-    schar_get_first_codepoint, schar_len,
+    LineAttrs, LineSpan, SLF_RIGHTLEFT, grid_adjust, grid_put_linebuf, linebuf_mirror, schar_cells,
+    schar_from_ascii, schar_from_char, schar_get_adv, schar_get_ascii, schar_get_first_codepoint,
+    schar_len, with_linebuf,
 };
 use crate::highlight::default_hl_attr;
 use crate::highlight::namespace::hl_attr_table;
@@ -261,8 +261,6 @@ fn wlv_put_linebuf(
     bg_attr: ::core::ffi::c_int,
     mut flags: ::core::ffi::c_int,
 ) {
-    let mut line = linebuf();
-    // SAFETY: the caller's window and line buffers.
     let grid: GridView = window.w_grid;
     let mut startcol = 0;
     let mut clear_width = if clear_end {
@@ -289,54 +287,57 @@ fn wlv_put_linebuf(
         // ... nor the 'listchars' "precedes" text.
         && !(window.w_onebuf_opt.wo_list != 0 && window.w_p_lcs_chars.prec != 0)
     {
-        let mut off = 0;
-        if window.w_onebuf_opt.wo_nu != 0 && window.w_onebuf_opt.wo_rnu != 0 {
-            // Do not overwrite the line number either: "123 text" becomes
-            // "123<<<xt".
-            while off < window.w_view_width
-                && ascii_isdigit(schar_get_ascii(line.chars()[off as usize]) as ::core::ffi::c_int)
-            {
+        let at_attr = unsafe { *hl_attr_table().add(HLF_AT as usize) } as ScreenAttr;
+        with_linebuf(|line| {
+            let mut off = 0;
+            if window.w_onebuf_opt.wo_nu != 0 && window.w_onebuf_opt.wo_rnu != 0 {
+                // Do not overwrite the line number either: "123 text"
+                // becomes "123<<<xt".
+                while off < window.w_view_width
+                    && ascii_isdigit(
+                        schar_get_ascii(line.chars()[off as usize]) as ::core::ffi::c_int
+                    )
+                {
+                    off += 1;
+                }
+            }
+            for _ in 0..3 {
+                if off >= window.w_view_width {
+                    break;
+                }
+                if off + 1 < window.w_view_width
+                    && line.chars()[off as usize + 1] == NUL as ScreenChar
+                {
+                    // The first half of a double-width character is being
+                    // overwritten; blank its second half.
+                    line.chars_mut()[off as usize + 1] = schar_from_ascii(b' ');
+                }
+                line.chars_mut()[off as usize] = schar_from_ascii(b'<');
+                line.attrs_mut()[off as usize] = at_attr;
                 off += 1;
             }
-        }
-        let at_attr = unsafe { *hl_attr_table().add(HLF_AT as usize) } as ScreenAttr;
-        for _ in 0..3 {
-            if off >= window.w_view_width {
-                break;
-            }
-            if off + 1 < window.w_view_width && line.chars()[off as usize + 1] == NUL as ScreenChar
-            {
-                // The first half of a double-width character is being
-                // overwritten; blank its second half.
-                line.chars_mut()[off as usize + 1] = schar_from_ascii(b' ');
-            }
-            line.chars_mut()[off as usize] = schar_from_ascii(b'<');
-            line.attrs_mut()[off as usize] = at_attr;
-            off += 1;
-        }
+        });
     }
 
     let mut row = wlv.row;
     let mut coloff = 0;
     let g = grid_adjust(grid, &mut row, &mut coloff);
-    unsafe {
-        grid_put_linebuf(
-            g,
-            row,
-            coloff,
-            LineSpan {
-                col: startcol,
-                endcol,
-                clear_width,
-            },
-            LineAttrs {
-                bg: bg_attr,
-                clear: 0,
-            },
-            wlv.vcol - 1,
-            flags,
-        )
-    };
+    grid_put_linebuf(
+        g,
+        row,
+        coloff,
+        LineSpan {
+            col: startcol,
+            endcol,
+            clear_width,
+        },
+        LineAttrs {
+            bg: bg_attr,
+            clear: 0,
+        },
+        wlv.vcol - 1,
+        flags,
+    );
 }
 
 /// Tell the decoration providers that a line is about to be drawn, and ask

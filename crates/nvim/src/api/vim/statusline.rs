@@ -367,8 +367,7 @@ pub fn nvim__complete_set(
         return rv.reported(error);
     }
     if let Some(info) = opts.info.as_ref() {
-        // SAFETY: a checked API string.
-        let win = unsafe { pum_set_info(index as c_int, info.data()) };
+        let win = pum_set_info(index as c_int, info.as_bytes());
         if let Some(win) = win {
             put(&mut rv, c"winid", Object::window(win.handle));
             put(&mut rv, c"bufnr", Object::buffer(win.buffer().handle));

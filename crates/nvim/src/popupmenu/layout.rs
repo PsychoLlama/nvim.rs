@@ -11,8 +11,7 @@
 //! answering a value: `pum_display` computes the placement in three steps
 //! and the later ones read what the earlier ones decided.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::winlayer::Win;
@@ -37,18 +36,14 @@ fn clamp_to_option(value: c_int, limit: OptInt) -> c_int {
 /// get one cell more than their widest entry, for the space that separates
 /// them from what precedes.
 pub(crate) fn pum_compute_size() {
-    // SAFETY: the item strings belong to the caller of `pum_display` and stay
-    // valid until `pum_undisplay`.
     let (mut base, mut kind, mut extra) = (0, 0, 0);
-    for item in unsafe { pum_items() } {
-        if !item.pum_text.is_null() {
-            base = base.max(unsafe { vim_strsize(item.pum_text) });
+    for item in pum_items().iter() {
+        base = base.max(strsize(&item.pum_text));
+        if let Some(text) = &item.pum_kind {
+            kind = kind.max(strsize(text) + 1);
         }
-        if !item.pum_kind.is_null() {
-            kind = kind.max(unsafe { vim_strsize(item.pum_kind) } + 1);
-        }
-        if !item.pum_extra.is_null() {
-            extra = extra.max(unsafe { vim_strsize(item.pum_extra) } + 1);
+        if let Some(text) = &item.pum_extra {
+            extra = extra.max(strsize(text) + 1);
         }
     }
     pum_base_width.set(base);

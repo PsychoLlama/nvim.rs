@@ -302,14 +302,9 @@ fn parse_grid_line_cell(g: &mut GridLineEvent, cursor: &mut Cursor) -> Result<()
     };
 
     g.clear_width = 0;
-    // SAFETY: `cell` is `cell_len` bytes the cursor just handed over, and
-    // `schar_from_buf` reads within that length.
-    let (cell_bytes, sc): (&[u8], ScreenChar) = unsafe {
-        (
-            core::slice::from_raw_parts(cell.cast::<u8>(), cell_len),
-            schar_from_buf(cell, cell_len),
-        )
-    };
+    // SAFETY: `cell` is `cell_len` bytes the cursor just handed over.
+    let cell_bytes: &[u8] = unsafe { core::slice::from_raw_parts(cell.cast::<u8>(), cell_len) };
+    let sc = schar_from_buf(cell_bytes);
     if protocol::is_clear_run(g.icell == g.ncells - 1, cell_bytes, repeat) {
         g.clear_width = repeat;
         return Ok(());

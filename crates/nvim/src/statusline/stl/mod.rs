@@ -65,7 +65,7 @@ use crate::drawscreen::state::{redraw_not_allowed, updating_screen};
 use crate::eval::eval_to_string_safe;
 use crate::eval::vars::{do_unlet, get_vim_var_nr, set_internal_string_var, set_var};
 use crate::getchar::state::KeyTyped;
-use crate::grid::{MAX_SCHAR_SIZE, schar_get_adv};
+use crate::grid::{SCHAR_BUF_SIZE, SCharBuf, schar_copy, schar_get_adv};
 use crate::highlight_group::{HLF_CLF, HLF_FC, syn_name2id_bytes};
 use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::memline::{ml_find_line_or_offset, ml_get_buf_len};
@@ -481,7 +481,7 @@ pub(super) fn char_len_at(out: &[u8], at: usize) -> usize {
 pub(super) struct Fill {
     /// The glyph itself, for the two arms that compare it to `-`.
     schar: ScreenChar,
-    bytes: [u8; MAX_SCHAR_SIZE as usize],
+    bytes: SCharBuf,
     len: usize,
 }
 
@@ -493,12 +493,8 @@ impl Fill {
         } else {
             schar
         };
-        let mut bytes = [0u8; MAX_SCHAR_SIZE as usize];
-        let mut p = bytes.as_mut_ptr().cast::<c_char>();
-        // SAFETY: `bytes` has room for `MAX_SCHAR_SIZE`, which is what
-        // `schar_get_adv` is allowed; `schar` is a glyph this process
-        // produced, from `'fillchars'` or the blank above.
-        let len = unsafe { schar_get_adv(&raw mut p, schar) } as usize;
+        let mut bytes: SCharBuf = [0; SCHAR_BUF_SIZE];
+        let len = schar_copy(&mut bytes, schar);
         Fill { schar, bytes, len }
     }
 
@@ -524,12 +520,13 @@ impl Fill {
 }
 
 /// Write the glyph `sc` into `buf` at `at`, answering its byte length.
+///
+/// # Panics
+/// When the glyph does not fit what is left of `buf`; upstream writes past
+/// the end.
 fn put_schar(buf: &mut [u8], at: usize, sc: ScreenChar) -> usize {
-    // SAFETY: `schar_get_adv` writes at most `MAX_SCHAR_SIZE` bytes and `sc`
-    // is a glyph this process produced; the slice bounds the write.
-    let dst = &mut buf[at..];
-    let mut p = dst.as_mut_ptr().cast::<c_char>();
-    unsafe { schar_get_adv(&raw mut p, sc) as usize }
+    let mut dst = &mut buf[at..];
+    schar_get_adv(&mut dst, sc)
 }
 
 /// Print a number item through `template` at `at`, answering where the next

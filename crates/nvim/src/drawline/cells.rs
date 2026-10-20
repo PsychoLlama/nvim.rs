@@ -622,7 +622,7 @@ impl Cells {
                 wlv.char_attr
             };
             put_cell(wlv.off, self.cell_char, attr, wlv.vcol);
-            if unsafe { schar_cells(self.cell_char) } > 1 {
+            if schar_cells(self.cell_char) > 1 {
                 // A double-width character needs two screen columns; the
                 // second carries a 0 and the same attribute.
                 wlv.off += 1;
@@ -638,7 +638,7 @@ impl Cells {
             wlv.off += 1;
             wlv.col += 1;
         } else if window.w_onebuf_opt.wo_cole > 0 && self.is_concealing {
-            self.skip_concealed(wlv, unsafe { schar_cells(self.cell_char) } > 1);
+            self.skip_concealed(wlv, schar_cells(self.cell_char) > 1);
         } else {
             wlv.skip_cells -= 1;
         }

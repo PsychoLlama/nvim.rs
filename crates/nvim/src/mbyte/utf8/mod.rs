@@ -330,13 +330,16 @@ pub unsafe fn utfc_ptrlen2schar(
 /// `buf` must point at `len` readable bytes, and `len` must leave room for
 /// the space when `first_compose` is set.
 unsafe fn schar_from_buf_first(buf: *const c_char, len: size_t, first_compose: bool) -> ScreenChar {
+    // SAFETY: the caller's `len` readable bytes, at a pointer into the text
+    // and so never null.
+    let bytes = unsafe { core::slice::from_raw_parts(buf.cast::<u8>(), len) };
     if !first_compose {
-        return unsafe { schar_from_buf(buf, len) };
+        return schar_from_buf(bytes);
     }
-    let mut cbuf = [0 as c_char; MAX_SCHAR_SIZE as usize];
-    cbuf[0] = b' ' as c_char;
-    unsafe { core::ptr::copy_nonoverlapping(buf, cbuf.as_mut_ptr().offset(1), len) };
-    unsafe { schar_from_buf(cbuf.as_ptr(), len + 1) }
+    let mut cbuf = [0u8; MAX_SCHAR_SIZE as usize];
+    cbuf[0] = b' ';
+    cbuf[1..=len].copy_from_slice(bytes);
+    schar_from_buf(&cbuf[..len + 1])
 }
 
 /// How many bytes the sequence introduced by byte `b` occupies.

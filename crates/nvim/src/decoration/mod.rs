@@ -540,9 +540,7 @@ pub fn decor_check_invalid_glyphs() {
         };
         for j in 0..width {
             if schar_high(it.text[j]) {
-                // SAFETY: reaches the glyph cache, which is the caller's
-                // promise.
-                it.text[j] = unsafe { schar_from_char(schar_get_first_codepoint(it.text[j])) };
+                it.text[j] = schar_from_char(schar_get_first_codepoint(it.text[j]));
             }
         }
     }

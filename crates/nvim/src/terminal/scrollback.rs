@@ -25,7 +25,7 @@ use crate::types::{
 };
 use crate::vterm::screen::vterm_screen_get_cell;
 use crate::winlayer::Buf;
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{c_int, c_void};
 
 use super::refresh::invalidate_terminal;
 use super::{SB_MAX, Term, kExtmarkUndo, kMarkAdjustTerm};
@@ -150,33 +150,25 @@ pub(crate) fn fetch_row(mut term: Term, row: c_int, end_col: c_int) {
     if term.textbuf.len() < needed {
         term.textbuf.resize(needed, 0);
     }
-    // Stable for the whole loop: nothing below touches `textbuf`.
-    let start = term.textbuf.as_mut_ptr();
-    let mut ptr = start;
+    let mut at = 0usize;
     let mut line_len = 0usize;
     let mut col = 0;
     while col < end_col {
         let mut cell = blank_cell();
         fetch_cell(term, row, col, &mut cell);
         if cell.schar != 0 {
-            // SAFETY: `textbuf` holds room for a maximum-length cluster at
-            // every column, and `ptr` has advanced one cluster per column.
-            unsafe { schar_get_adv(&raw mut ptr, cell.schar) };
-            // SAFETY: as above; both pointers are into `textbuf`.
-            line_len = unsafe { ptr.offset_from(start) } as usize;
+            let mut rest: &mut [u8] = &mut term.textbuf[at..];
+            at += schar_get_adv(&mut rest, cell.schar);
+            line_len = at;
         } else {
             // Written but not counted, so that trailing blanks are dropped
             // by terminating at the last cell with content.
-            //
-            // SAFETY: as above.
-            unsafe { *ptr = b' ' as c_char };
-            // SAFETY: as above.
-            ptr = unsafe { ptr.add(1) };
+            term.textbuf[at] = b' ';
+            at += 1;
         }
         col += cell.width as c_int;
     }
-    // SAFETY: as above; `line_len` is at most what the loop wrote.
-    unsafe { *start.add(line_len) = NUL as c_char };
+    term.textbuf[line_len] = NUL as u8;
 }
 
 /// One cell of the screen or of the scrollback.
@@ -273,7 +265,7 @@ pub(crate) fn refresh_scrollback(mut term: Term, buffer: Buf) {
     while term.sb.pending() > 0 {
         fetch_row(term, -term.sb.pending(), width);
         let at = (buffer.line_count() as c_int - old_height) as LineNr;
-        let text = crate::cstr::in_chars(&term.textbuf).to_bytes_with_nul();
+        let text = crate::cstr::in_bytes(&term.textbuf).to_bytes_with_nul();
         let _ = ml_append_buf_terminated(buffer, at, text, false);
         appended_lines_buf(buffer, at, 1 as LineNr);
         term.sb.mark_mirrored();

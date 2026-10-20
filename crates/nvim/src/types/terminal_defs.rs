@@ -36,7 +36,7 @@ pub struct terminal {
     /// Where a screen row is rendered to text before being written into
     /// the buffer's lines. Grown to fit the widest row seen and then
     /// reused, so the refresh does not allocate per line.
-    pub textbuf: Vec<::core::ffi::c_char>,
+    pub textbuf: Vec<u8>,
     pub sb: Scrollback,
     pub old_sb_deleted: usize,
     pub old_height: ::core::ffi::c_int,

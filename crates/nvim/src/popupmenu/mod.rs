@@ -1,5 +1,4 @@
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -8,14 +7,14 @@ use crate::types::CAR;
 use crate::types::ESC;
 use crate::types::NL;
 use crate::winlayer::cmdline_window;
-use core::ffi::{c_char, c_int, c_uint};
+use core::ffi::{c_int, c_uint};
+use std::rc::Rc;
 
 use crate::api::buffer::nvim_buf_set_lines;
-use crate::api::private::helpers::cstr_to_string;
-use crate::api::win_config::{BORDER_NONE, BORDER_SHADOW, parse_winborder};
+use crate::api::win_config::{BORDER_NONE, BORDER_SHADOW, parse_winborder_in};
 use crate::autocmd::{block_autocmds, unblock_autocmds};
 use crate::buffer::{buf_clear, buf_is_nofile, current_buf};
-use crate::charset::{ptr2cells, transstr, vim_strsize};
+use crate::charset::{ptr2cells_at, strsize, transstr_owned};
 use crate::cmdexpand::{cmdline_compl_is_fuzzy, cmdline_compl_pattern};
 use crate::drawscreen::state::{RedrawingDisabled, cmdline_row};
 use crate::drawscreen::{
@@ -28,19 +27,18 @@ use crate::global_cell::GlobalCell;
 use crate::grid::{
     GridRef, default_grid_ref, get_win_by_grid_handle, grid_alloc, grid_assign_handle,
     grid_draw_border, grid_line_fill, grid_line_flush, grid_line_put_schar, grid_line_puts,
-    schar_from_ascii, schar_from_str, screengrid_line_start,
+    grid_of_view, schar_from_ascii, schar_from_str, screengrid_line_start,
 };
-use crate::highlight::namespace::hl_attr_table;
 use crate::highlight::{hl_combine_attr, hl_get_ui_attr, win_hl_attr};
 use crate::highlight_group::{
     HLF_PBR, HLF_PMNI, HLF_PMSI, HLF_PNI, HLF_PNK, HLF_PNX, HLF_PSB, HLF_PSI, HLF_PSK, HLF_PST,
     HLF_PSX, syn_check_group,
 };
 use crate::insexpand::{
-    compl_match_curr_select, get_cot_flags, ins_compl_active, ins_compl_leader,
+    compl_match_curr_select, get_cot_flags, ins_compl_active, ins_compl_leader_str,
 };
-use crate::mbyte::{mb_string2cells, mb_strnicmp, utf_ptr2cells, utfc_ptr2len};
-use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, xfree};
+use crate::mbyte::{c_cells_at, c_cluster_len, c_string_cells, strnicmp_in};
+use crate::memory::XString;
 use crate::menu::{execute_menu, get_menu_mode_flag, menu_find};
 use crate::message::e_menu_only_exists_in_another_mode;
 use crate::message::emsg;
@@ -54,10 +52,11 @@ use crate::options::{
     kOptCotFlagPreview, kOptDiff, kOptSwapfile,
 };
 use crate::os::cshim::gettext;
-use crate::plines::{plines_m_win, win_linetabsize};
+use crate::plines::{plines_m_win, win_linetabsize_bytes};
 use crate::popupmenu::state::{PumWant, must_redraw_pum, pum_grid, pum_want};
 use crate::state::MODE_CMDLINE;
 use crate::state::mode::State;
+use crate::statusline::hl_attr;
 use crate::strings::reversed_text;
 use crate::tag::state::g_do_tagpreview;
 use crate::types::ui::{kUICmdline, kUIMultigrid, kUIPopupmenu, kUIWildmenu};
@@ -65,7 +64,7 @@ use crate::types::{
     AlignTextPos, Array, BufferHandle, Dict, Float, Handle, Hlf, Integer, LPos, LineNr, Object,
     OptInt, OptVal, PumItem, ScreenAttr, ScreenChar, String_0, VarNumber, VimMenu, VirtText,
     VirtTextChunk, WinConfig, WinSplit, WinStyle, WindowHandle, kBoolVarFalse, kBoolVarTrue,
-    size_t, uint32_t,
+    uint32_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{
@@ -107,10 +106,10 @@ pub const DEFAULT_GRID_HANDLE: c_int = 1;
 // one struct because `pum_set_selected` re-enters the editor (autocommands,
 // `update_screen`) between writes, and no borrow may span that.
 
-/// The items being shown: a copy of the rows [`pum_display`] was handed, or
-/// `pum_show_popupmenu`'s own; `None` while the menu is down. The rows'
-/// strings stay borrowed from whoever built them.
-static pum_array: GlobalCell<Option<Vec<PumItem>>> = GlobalCell::new(None);
+/// The items being shown: the rows [`pum_display`] was handed, shared with
+/// whoever built them, or `pum_show_popupmenu`'s own; `None` while the menu
+/// is down.
+static pum_array: GlobalCell<Option<Rc<[PumItem]>>> = GlobalCell::new(None);
 /// Number of items in `pum_array`.
 static pum_size: GlobalCell<c_int> = GlobalCell::new(0);
 /// Index of the selected item, or -1.
@@ -159,30 +158,15 @@ static pum_invalid: GlobalCell<bool> = GlobalCell::new(false);
 
 /// The items the menu is showing, empty while it is down.
 ///
-/// `pum_array` is only read; the strings its rows borrow are what the
-/// drawing code writes through (it NUL-terminates an item in place to
-/// measure a prefix, then puts the byte back), which is why a shared slice
-/// is honest here.
-///
-/// # Safety
-/// The result must not be held across `pum_undisplay` or another
-/// `pum_display`, which drop or replace the rows.
+/// A share of the cell's rows rather than a borrow of it: drawing a row and
+/// filling the info window both run code that may take the menu down or
+/// replace it (`pum_set_selected` fires autocommands), and the rows this
+/// answers stay good across that -- they own their text.
 #[inline]
-unsafe fn pum_items() -> &'static [PumItem] {
-    let (rows, len) = pum_array.with(|rows| {
-        rows.as_ref().map_or(
-            (
-                ::core::ptr::NonNull::<PumItem>::dangling()
-                    .as_ptr()
-                    .cast_const(),
-                0,
-            ),
-            |rows| (rows.as_ptr(), rows.len()),
-        )
-    });
-    // SAFETY: the rows stay put until the menu replaces or drops them,
-    // which the caller promises not to hold the answer across.
-    unsafe { ::core::slice::from_raw_parts(rows, len) }
+fn pum_items() -> Rc<[PumItem]> {
+    pum_array
+        .with(|rows| rows.clone())
+        .unwrap_or_else(|| Rc::from([]))
 }
 
 /// Cells `'pumborder'` costs on each side of the menu.
@@ -262,8 +246,7 @@ fn pum_compute_anchor(cmd_startcol: c_int) -> PumAnchor {
     }
 
     if let Some(target) = target_win {
-        // SAFETY: a live window's grid target is live.
-        pum_anchor_grid.set(unsafe { (*target.w_grid.target).handle } as c_int);
+        pum_anchor_grid.set(grid_of_view(target.w_grid).handle as c_int);
         win_row += target.w_grid.row_offset;
         cursor_col += target.w_grid.col_offset;
         if target.w_grid.target != default_grid_ref().raw() {
@@ -299,25 +282,17 @@ fn pum_compute_anchor(cmd_startcol: c_int) -> PumAnchor {
 }
 
 /// Hand the whole item list to a UI that draws the menu itself.
-///
-/// # Safety
-/// `array` must hold `size` items whose strings are NUL-terminated.
-unsafe fn pum_publish_external(
-    array: *mut PumItem,
-    size: c_int,
-    selected: c_int,
-    anchor: &PumAnchor,
-) {
-    let mut arena = ARENA_EMPTY;
-    let mut arr = Array::with_capacity(size as size_t);
-    for i in 0..size as isize {
-        // SAFETY: `i` is below `size`, so the entry is inside `array`.
-        let src = unsafe { &*array.offset(i) };
+fn pum_publish_external(items: &[PumItem], selected: c_int, anchor: &PumAnchor) {
+    let text = |text: Option<&XString>| {
+        Object::string(text.map_or(String_0::NULL, |text| String_0::from_bytes(text)))
+    };
+    let mut arr = Array::with_capacity(items.len());
+    for src in items {
         let mut item = Array::with_capacity(4);
-        for text in [src.pum_text, src.pum_kind, src.pum_extra, src.pum_info] {
-            // SAFETY: an entry's four strings are null or NUL-terminated.
-            item.push(Object::string(unsafe { cstr_to_string(text) }));
-        }
+        item.push(text(Some(&src.pum_text)));
+        item.push(text(src.pum_kind.as_ref()));
+        item.push(text(src.pum_extra.as_ref()));
+        item.push(text(src.pum_info.as_ref()));
         arr.push(Object::array(item));
     }
     ui_call_popupmenu_show(
@@ -327,28 +302,22 @@ unsafe fn pum_publish_external(
         (anchor.cursor_col - pum_win_col_offset.get()) as Integer,
         pum_anchor_grid.get() as Integer,
     );
-    unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
 }
 
-/// Show the popup menu with `array[size]`.
+/// Show the popup menu with `items`.
 ///
-/// `array` must stay valid until [`pum_undisplay`]. `selected` is the
-/// initially selected item, or -1 for none; `array_changed` says whether the
-/// items differ from the last call, which is all an external UI needs to know
-/// to redraw. `cmd_startcol` is the column of the completed match and only
-/// applies in cmdline mode.
-///
-/// # Safety
-/// `array` must hold `size` items with NUL-terminated strings and outlive the
-/// menu. Autocommands run from here.
-pub unsafe fn pum_display(
-    array: *mut PumItem,
-    size: c_int,
+/// The menu keeps a share of `items` until [`pum_undisplay`]. `selected` is
+/// the initially selected item, or -1 for none; `array_changed` says whether
+/// the items differ from the last call, which is all an external UI needs to
+/// know to redraw. `cmd_startcol` is the column of the completed match and
+/// only applies in cmdline mode. Autocommands run from here.
+pub fn pum_display(
+    items: Rc<[PumItem]>,
     selected: c_int,
     array_changed: bool,
     cmd_startcol: c_int,
 ) {
-    // SAFETY: `array` is the caller's and outlives the menu.
+    let size = c_int::try_from(items.len()).expect("a menu fits a c_int");
     if !pum_is_visible.get() {
         // The draw mode may only change while the menu is down, which
         // keeps everything below from having to handle both.
@@ -375,7 +344,7 @@ pub unsafe fn pum_display(
                 ui_call_popupmenu_select(selected as Integer);
                 return;
             }
-            unsafe { pum_publish_external(array, size, selected, &anchor) };
+            pum_publish_external(&items, selected, &anchor);
         }
 
         pum_compute_vertical_placement(
@@ -392,13 +361,7 @@ pub unsafe fn pum_display(
             return;
         }
 
-        // SAFETY: the caller's `size` rows.
-        let rows = unsafe { ::core::slice::from_raw_parts(array, size as usize) };
-        pum_array.with_mut(|shown| {
-            let shown = shown.get_or_insert_with(Vec::new);
-            shown.clear();
-            shown.extend_from_slice(rows);
-        });
+        pum_array.set(Some(items.clone()));
         // Set before returning, so `pum_set_event_info` sees the size.
         pum_size.set(size);
         if pum_external.get() {
@@ -422,27 +385,6 @@ pub unsafe fn pum_display(
         kZIndexPopupMenu as c_int
     };
     pum_redraw();
-}
-
-/// [`pum_display`] of `items`.
-pub(crate) fn pum_display_items(
-    items: &mut [PumItem],
-    selected: c_int,
-    array_changed: bool,
-    cmd_startcol: c_int,
-) {
-    let size = c_int::try_from(items.len()).expect("a menu fits a c_int");
-    // SAFETY: the caller's items, whose texts point into strings that the
-    // caller keeps for as long as the menu shows them.
-    unsafe {
-        pum_display(
-            items.as_mut_ptr(),
-            size,
-            selected,
-            array_changed,
-            cmd_startcol,
-        )
-    }
 }
 
 /// The popup menu's own grid, as a handle.
@@ -563,14 +505,15 @@ pub fn pum_set_event_info(dict: &mut Dict) {
     if !pum_visible() {
         return;
     }
-    let (mut w, mut h, mut r, mut c) = (0.0, 0.0, 0.0, 0.0);
-    // SAFETY: four locals, writable.
-    if !unsafe { ui_pum_get_pos(&raw mut w, &raw mut h, &raw mut r, &raw mut c) } {
-        w = f64::from(pum_width.get());
-        h = f64::from(pum_height.get());
-        r = f64::from(pum_row.get());
-        c = f64::from(pum_col.get());
-    }
+    let [w, h, r, c] = ui_pum_get_pos().unwrap_or_else(|| {
+        [
+            pum_width.get(),
+            pum_height.get(),
+            pum_row.get(),
+            pum_col.get(),
+        ]
+        .map(f64::from)
+    });
     for (key, value) in [(c"height", h), (c"width", w), (c"row", r), (c"col", c)] {
         let _ = dict.add_float(key.to_bytes(), value as Float);
     }

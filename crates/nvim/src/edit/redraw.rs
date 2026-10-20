@@ -167,17 +167,14 @@ pub(crate) fn edit_putchar(c: c_int, highlight: bool) {
     grid_line_start(win.w_grid, pc_row.get());
     if win.w_onebuf_opt.wo_rl != 0 {
         pc_col.set(win.w_view_width - 1 - win.w_wcol);
-        if unsafe { grid_line_getchar(pc_col.get(), ::core::ptr::null_mut()) } == NUL as ScreenChar
-        {
+        if grid_line_getchar(pc_col.get()).0 == NUL as ScreenChar {
             grid_line_put_schar(pc_col.get() - 1, ' ' as ScreenChar, attr);
             win.w_wcol -= 1;
             pc_status.set(PutChar::Right);
         }
     } else {
         pc_col.set(win.w_wcol);
-        if unsafe { grid_line_getchar(pc_col.get() + 1, ::core::ptr::null_mut()) }
-            == NUL as ScreenChar
-        {
+        if grid_line_getchar(pc_col.get() + 1).0 == NUL as ScreenChar {
             // pc_col is the left half of a double-width character.
             pc_status.set(PutChar::Left);
         }
@@ -185,9 +182,11 @@ pub(crate) fn edit_putchar(c: c_int, highlight: bool) {
 
     // Save the character, so it can be put back.
     if pc_status.get() == PutChar::Unset {
-        let mut attr = pc_attr.get();
-        pc_schar.set(unsafe { grid_line_getchar(pc_col.get(), &raw mut attr) });
-        pc_attr.set(attr);
+        let (schar, attr) = grid_line_getchar(pc_col.get());
+        pc_schar.set(schar);
+        if let Some(attr) = attr {
+            pc_attr.set(attr);
+        }
         pc_status.set(PutChar::Set);
     }
 

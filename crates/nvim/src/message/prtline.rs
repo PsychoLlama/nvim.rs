@@ -9,7 +9,7 @@
 use super::*;
 use crate::charset::CharDisplay;
 use crate::cstr;
-use crate::grid::{MAX_SCHAR_SIZE, schar_text};
+use crate::grid::{SCHAR_BUF_SIZE, schar_text};
 use crate::mbyte::char_at;
 use crate::types::{MB_MAXBYTES, NUL};
 use crate::winlayer::{Buf, Win};
@@ -94,7 +94,7 @@ pub fn msg_prt_line(line: &CStr, list: bool) {
             if len > 1 {
                 // A multi-byte character goes out whole, not as a cell.
                 col += cells_at(rest);
-                let mut glyph = [0; MAX_SCHAR_SIZE as usize];
+                let mut glyph = [0; SCHAR_BUF_SIZE];
                 let c = char_at(rest);
                 let shown: &[u8] = if len >= MB_MAXBYTES {
                     b"?"
@@ -209,7 +209,7 @@ pub fn msg_prt_line(line: &CStr, list: bool) {
 /// Put one cell on the message area.
 fn emit(sc: ScreenChar, hl_id: c_int, col: &mut c_int) {
     // TODO(bfredl): this is such baloney. need msg_put_schar
-    let mut glyph = [0; MAX_SCHAR_SIZE as usize];
+    let mut glyph = [0; SCHAR_BUF_SIZE];
     msg_bytes(schar_text(sc, &mut glyph), hl_id, false);
     *col += 1;
 }

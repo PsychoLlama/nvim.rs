@@ -41,15 +41,9 @@ use crate::arabic::arabic_shape;
 use crate::decoration::{decor_check_invalid_glyphs, next_virt_text_chunk};
 use crate::drawscreen::state::resizing_screen;
 use crate::global_cell::GlobalCell;
-use crate::highlight::namespace::hl_attr_table;
 use crate::highlight::{hl_apply_winblend, hl_combine_attr};
 use crate::log::LOGLVL_DBG;
-use crate::map::mh_clear;
-use crate::map_glyph_cache::mh_put_glyph;
-use crate::mbyte::{
-    cluster_len, mb_string2cells, utf_char2bytes, utf_char2len, utf_cp_bounds, utf_ptr2cells,
-    utf_ptr2cells_len, utf_ptr2char, utf_ptr2len, utfc_ptr2len, utfc_ptrlen2schar,
-};
+use crate::mbyte::{cluster_len, utf_char2len};
 use crate::memory::{xcalloc, xfree};
 use crate::option::vars::{p_arshape, p_tbidi, rdb_flags};
 use crate::options::{kOptRdbFlagInvalid, kOptRdbFlagNodelta};
@@ -58,15 +52,14 @@ use crate::startup::full_screen;
 use crate::state::mode::exmode_active;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
-    AlignTextPos, BorderTextType, ColNr, GridCells, GridView, Handle, Integer, MHPutStatus,
-    MapHash, ScreenChar, ScreenGrid, Set_glyph, VirtText, WLine, WinConfig, size_t, uint32_t,
+    AlignTextPos, ColNr, GridCells, GridView, Handle, Integer, MapHash, ScreenChar, ScreenGrid,
+    Set_glyph, VirtText, WLine, WinConfig, size_t, uint32_t,
 };
 use crate::ui::{
     ui_call_grid_resize, ui_call_grid_scroll, ui_check_cursor_grid, ui_grid_cursor_goto, ui_has,
     ui_line,
 };
 use crate::winlayer::{Win, windows};
-use ::libc::{abort, strnlen};
 
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of;
@@ -77,7 +70,7 @@ pub mod line;
 pub mod schar;
 
 pub use border::grid_draw_border;
-pub(crate) use line::linebuf;
+pub(crate) use line::with_linebuf;
 pub use line::{
     LineAttrs, LineSpan, grid_clear, grid_line_clear_end, grid_line_cursor_goto, grid_line_fill,
     grid_line_flush, grid_line_flush_if_valid_row, grid_line_getchar, grid_line_mirror,
@@ -89,13 +82,10 @@ pub use schar::{
     schar_cells, schar_from_ascii, schar_from_buf, schar_from_char, schar_from_str, schar_get,
     schar_get_adv, schar_get_ascii, schar_get_first_codepoint, schar_high, schar_len,
 };
-pub(crate) use schar::{schar_bytes, schar_text};
+pub(crate) use schar::{SCHAR_BUF_SIZE, SCharBuf, schar_bytes, schar_copy, schar_text};
 
 pub(crate) static default_grid: GlobalCell<ScreenGrid> = GlobalCell::new(ScreenGrid::empty());
 
-const kMHExisting: MHPutStatus = 0;
-const kBorderTextTitle: BorderTextType = 0;
-const kBorderTextFooter: BorderTextType = 1;
 const kAlignLeft: AlignTextPos = 0;
 const kAlignCenter: AlignTextPos = 1;
 const kAlignRight: AlignTextPos = 2;
@@ -207,8 +197,17 @@ pub(crate) fn default_gridview() -> GridView {
 pub fn grid_adjust(view: GridView, row_off: &mut c_int, col_off: &mut c_int) -> GridRef {
     *row_off += view.row_offset;
     *col_off += view.col_offset;
-    // SAFETY: a view always names a live grid; the caller's promise is that
-    // it has been resolved.
+    grid_of_view(view)
+}
+
+/// The grid a view draws on.
+///
+/// A view always names a live grid -- a window's own or `default_grid` --
+/// once `win_grid_alloc` has resolved it, which every caller here runs
+/// after; that is the one promise this module takes on trust, and the
+/// reason [`GridRef`] stays a handle (see the module docs).
+pub(crate) fn grid_of_view(view: GridView) -> GridRef {
+    // SAFETY: as above.
     unsafe { GridRef::new(view.target) }
 }
 
@@ -242,47 +241,47 @@ pub fn grid_alloc(grid: &mut ScreenGrid, rows: c_int, columns: c_int, copy: bool
 
     // One line buffer is shared by every grid, so keep it as wide as the
     // widest of them.
-    linebuf().widen(columns as size_t);
+    with_linebuf(|buf| buf.widen(columns as size_t));
 }
 
 /// (Re)allocate a window's own grid if its size changed while in
 /// `ext_multigrid` mode, and update its size, offsets and handle regardless.
 pub fn win_grid_alloc(mut window: Win) {
-    let grid: *mut GridView = &raw mut window.w_grid;
-    let grid_allocated: *mut ScreenGrid = &raw mut window.w_grid_alloc;
-
     let total_rows = window.w_height_outer;
     let total_cols = window.w_width_outer;
 
     // A window only gets a grid of its own when the UI asked for
     // multigrid, or when it is a float (which needs one to be composed).
     let want_allocation = ui_has(kUIMultigrid) || window.w_floating;
-    let has_allocation = unsafe { (*grid_allocated).is_allocated() };
+    let has_allocation = window.w_grid_alloc.is_allocated();
 
     if window.w_view_height > window.w_lines_size {
         window.w_lines_valid = 0;
-        unsafe { xfree(window.w_lines.cast::<c_void>()) };
-        unsafe {
-            window.w_lines =
-                xcalloc(window.w_view_height as size_t + 1, size_of::<WLine>()).cast::<WLine>()
-        };
+        // SAFETY: `w_lines` is the window's own allocation (or null), and
+        // nothing holds a row of it across a resize.
+        window.w_lines = unsafe {
+            xfree(window.w_lines.cast::<c_void>());
+            xcalloc(window.w_view_height as size_t + 1, size_of::<WLine>())
+        }
+        .cast::<WLine>();
         window.w_lines_size = window.w_view_height;
     }
 
     let mut was_resized = false;
     if want_allocation
         && (!has_allocation
-            || unsafe { (*grid_allocated).rows } != total_rows
-            || unsafe { (*grid_allocated).cols } != total_cols)
+            || window.w_grid_alloc.rows != total_rows
+            || window.w_grid_alloc.cols != total_cols)
     {
+        let copy = window.w_grid_alloc.valid;
         grid_alloc(
-            unsafe { &mut *grid_allocated },
+            &mut window.w_grid_alloc,
             total_rows,
             total_cols,
-            window.w_grid_alloc.valid,
+            copy,
             false,
         );
-        unsafe { (*grid_allocated).valid = true };
+        window.w_grid_alloc.valid = true;
         if window.w_floating && window.w_config.border {
             window.w_redr_border = true;
         }
@@ -290,32 +289,33 @@ pub fn win_grid_alloc(mut window: Win) {
     } else if !want_allocation && has_allocation {
         // Single-grid mode: all rendering is redirected to default_grid
         // and only the window's size and offset are tracked.
-        unsafe { (*grid_allocated).free() };
-        unsafe { (*grid_allocated).valid = false };
+        window.w_grid_alloc.free();
+        window.w_grid_alloc.valid = false;
         was_resized = true;
     } else if want_allocation && has_allocation && !window.w_grid_alloc.valid {
-        unsafe { (*grid_allocated).revalidate() };
+        window.w_grid_alloc.revalidate();
     }
 
     if want_allocation {
-        unsafe { (*grid).target = grid_allocated };
-        unsafe { (*grid).row_offset = window.w_winrow_off };
-        unsafe { (*grid).col_offset = window.w_wincol_off };
+        window.w_grid.target = &raw mut window.w_grid_alloc;
+        window.w_grid.row_offset = window.w_winrow_off;
+        window.w_grid.col_offset = window.w_wincol_off;
     } else {
-        unsafe { (*grid).target = default_grid_ref().raw() };
-        unsafe { (*grid).row_offset = window.w_winrow + window.w_winrow_off };
-        unsafe { (*grid).col_offset = window.w_wincol + window.w_wincol_off };
+        window.w_grid.target = default_grid_ref().raw();
+        window.w_grid.row_offset = window.w_winrow + window.w_winrow_off;
+        window.w_grid.col_offset = window.w_wincol + window.w_wincol_off;
     }
 
     // Send a grid resize event when a grid was just resized, or when
     // screen_resize asked for every size to be re-sent.
     if (resizing_screen.get() || was_resized) && want_allocation {
+        let grid = &window.w_grid_alloc;
         ui_call_grid_resize(
-            unsafe { (*grid_allocated).handle } as Integer,
-            unsafe { (*grid_allocated).cols } as Integer,
-            unsafe { (*grid_allocated).rows } as Integer,
+            grid.handle as Integer,
+            grid.cols as Integer,
+            grid.rows as Integer,
         );
-        ui_check_cursor_grid(unsafe { (*grid_allocated).handle });
+        ui_check_cursor_grid(window.w_grid_alloc.handle);
     }
 }
 

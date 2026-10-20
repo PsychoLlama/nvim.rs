@@ -19,12 +19,11 @@
 #![allow(non_upper_case_globals)]
 
 use super::*;
-use crate::cstr;
 use crate::decoration::{
     kDecorKindUIWatched, kDecorKindVirtText, kHlModeBlend, kHlModeCombine, kVPosEndOfLine,
     kVPosEndOfLineRightAlign, kVPosInline, kVPosRightAlign, kVPosWinCol, kVTRepeatLinebreak,
 };
-use crate::grid::linebuf;
+use crate::grid::with_linebuf;
 use crate::types::NUL;
 use crate::winlayer::Buf;
 
@@ -258,90 +257,93 @@ pub(crate) unsafe fn draw_virt_text_item(
     mut vcol: ::core::ffi::c_int,
     mut skip_cells: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
-    let mut line = linebuf();
     // SAFETY: the caller's buffer, chunks and line-buffer width.
     let mut virt_str = c"".as_ptr();
     let mut virt_attr = 0;
     let mut virt_pos: size_t = 0;
 
-    while col < max_col {
-        if skip_cells >= 0 && unsafe { *virt_str } as ::core::ffi::c_int == NUL {
-            if virt_pos >= vt.size {
-                break;
+    // The line buffer for the whole walk: nothing below draws or calls out.
+    with_linebuf(|line| {
+        while col < max_col {
+            if skip_cells >= 0 && unsafe { *virt_str } as ::core::ffi::c_int == NUL {
+                if virt_pos >= vt.size {
+                    break;
+                }
+                virt_attr = 0;
+                let Some(chunk) = next_virt_text_chunk(&vt, &mut virt_pos, &mut virt_attr) else {
+                    break;
+                };
+                virt_str = chunk.as_ptr();
             }
-            virt_attr = 0;
-            virt_str = unsafe { next_virt_text_chunk(vt, &raw mut virt_pos, &raw mut virt_attr) };
-            if virt_str.is_null() {
-                break;
-            }
-        }
 
-        // Skip cells at the front of this chunk.
-        while skip_cells > 0 && unsafe { *virt_str } as ::core::ffi::c_int != NUL {
-            let c_len = unsafe { utfc_ptr2len(virt_str) };
-            let cells = if unsafe { *virt_str } as ::core::ffi::c_int == TAB {
-                buffer.tab_padding(vcol)
+            // Skip cells at the front of this chunk.
+            while skip_cells > 0 && unsafe { *virt_str } as ::core::ffi::c_int != NUL {
+                let c_len = unsafe { utfc_ptr2len(virt_str) };
+                let cells = if unsafe { *virt_str } as ::core::ffi::c_int == TAB {
+                    buffer.tab_padding(vcol)
+                } else {
+                    unsafe { utf_ptr2cells(virt_str) }
+                };
+                skip_cells -= cells;
+                vcol += cells;
+                virt_str = unsafe { virt_str.add(c_len as usize) };
+            }
+
+            // A wide character the skip cut in half is paid back as spaces.
+            let mut draw_str = if skip_cells < 0 {
+                c" ".as_ptr()
             } else {
-                unsafe { utf_ptr2cells(virt_str) }
+                virt_str
             };
-            skip_cells -= cells;
-            vcol += cells;
-            virt_str = unsafe { virt_str.add(c_len as usize) };
-        }
-
-        // A wide character the skip cut in half is paid back as spaces.
-        let mut draw_str = if skip_cells < 0 {
-            c" ".as_ptr()
-        } else {
-            virt_str
-        };
-        if unsafe { *draw_str } as ::core::ffi::c_int == NUL {
-            continue;
-        }
-        debug_assert!(skip_cells <= 0);
-
-        let mut through = false;
-        let under = line.attrs_mut()[col as usize];
-        let attr = match hl_mode {
-            kHlModeCombine => hl_combine_attr(under, virt_attr),
-            kHlModeBlend => {
-                // A space blends the cell underneath through, rather than
-                // painting over it.
-                through = unsafe { *draw_str } as ::core::ffi::c_int == ' ' as ::core::ffi::c_int;
-                hl_blend_attrs(under, virt_attr, &mut through)
+            if unsafe { *draw_str } as ::core::ffi::c_int == NUL {
+                continue;
             }
-            _ => virt_attr,
-        };
+            debug_assert!(skip_cells <= 0);
 
-        // Landing on the right half of a double-width character: clear
-        // its left half too, and the right half itself so `line_putchar`
-        // has a non-zero cell to start from.
-        if !through && line.chars()[col as usize] == 0 {
-            debug_assert!(col > 0);
-            line.chars_mut()[col as usize - 1] = schar_from_ascii(b' ');
-            line.chars_mut()[col as usize] = schar_from_ascii(b' ');
-        }
+            let mut through = false;
+            let under = line.attrs_mut()[col as usize];
+            let attr = match hl_mode {
+                kHlModeCombine => hl_combine_attr(under, virt_attr),
+                kHlModeBlend => {
+                    // A space blends the cell underneath through, rather than
+                    // painting over it.
+                    through =
+                        unsafe { *draw_str } as ::core::ffi::c_int == ' ' as ::core::ffi::c_int;
+                    hl_blend_attrs(under, virt_attr, &mut through)
+                }
+                _ => virt_attr,
+            };
 
-        let mut dummy: [ScreenChar; 2] = [schar_from_ascii(b' '); 2];
-        let dest: &mut [ScreenChar] = if through {
-            &mut dummy
-        } else {
-            &mut line.chars_mut()[col as usize..]
-        };
-        let cells = unsafe { line_putchar(buffer, &mut draw_str, dest, max_col - col, vcol) };
-        let attrs = line.attrs_mut();
-        for _ in 0..cells {
-            attrs[col as usize] = attr as ScreenAttr;
-            col += 1;
-        }
+            // Landing on the right half of a double-width character: clear
+            // its left half too, and the right half itself so `line_putchar`
+            // has a non-zero cell to start from.
+            if !through && line.chars()[col as usize] == 0 {
+                debug_assert!(col > 0);
+                line.chars_mut()[col as usize - 1] = schar_from_ascii(b' ');
+                line.chars_mut()[col as usize] = schar_from_ascii(b' ');
+            }
 
-        if skip_cells < 0 {
-            skip_cells += 1;
-        } else {
-            vcol += cells;
-            virt_str = draw_str;
+            let mut dummy: [ScreenChar; 2] = [schar_from_ascii(b' '); 2];
+            let dest: &mut [ScreenChar] = if through {
+                &mut dummy
+            } else {
+                &mut line.chars_mut()[col as usize..]
+            };
+            let cells = unsafe { line_putchar(buffer, &mut draw_str, dest, max_col - col, vcol) };
+            let attrs = line.attrs_mut();
+            for _ in 0..cells {
+                attrs[col as usize] = attr as ScreenAttr;
+                col += 1;
+            }
+
+            if skip_cells < 0 {
+                skip_cells += 1;
+            } else {
+                vcol += cells;
+                virt_str = draw_str;
+            }
         }
-    }
+    });
     col
 }
 
@@ -442,21 +444,19 @@ impl WinLineVars {
 
             // Already inside a text with several chunks.
             let mut attr = 0;
-            let text = unsafe {
-                next_virt_text_chunk(self.virt_inline, &raw mut self.virt_inline_i, &raw mut attr)
-            };
-            if text.is_null() {
+            let vt = self.virt_inline;
+            let Some(text) = next_virt_text_chunk(&vt, &mut self.virt_inline_i, &mut attr) else {
                 continue;
-            }
-            self.extra_text = text;
-            self.extra_todo = unsafe { cstr::bytes_at(text) }.len() as ::core::ffi::c_int;
+            };
+            self.extra_todo = text.to_bytes().len() as ::core::ffi::c_int;
+            self.extra_text = text.as_ptr().cast_mut();
             if self.extra_todo == 0 {
                 continue;
             }
             self.extra_fill = NUL as ScreenChar;
             self.extra_last = NUL as ScreenChar;
             self.extra_attr = attr;
-            self.n_attr = unsafe { mb_charlen(text) };
+            self.n_attr = unsafe { mb_charlen(self.extra_text) };
 
             if self.skip_cells > 0 {
                 // The text starts left of the first visible column.

@@ -15,8 +15,7 @@
 //! a mapping run from `vgetc` can delete it. The mouse position is read
 //! through [`MousePos`].
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -72,8 +71,7 @@ pub(crate) fn pum_select_mouse_pos() {
         pum_selected.set(-1);
         return;
     }
-    // SAFETY: the caller's promise -- a live item array of `pum_size`.
-    let empty = unsafe { *pum_items()[idx as usize].pum_text == 0 };
+    let empty = pum_items()[idx as usize].pum_text.is_empty();
     if !empty {
         // A separator has empty text and cannot be selected; the selection
         // stays where it was.
@@ -211,16 +209,13 @@ pub(crate) fn pum_show_popupmenu(menu: MenuId) {
         return;
     }
 
-    let array: Vec<PumItem> = entries
+    let array: Rc<[PumItem]> = entries
         .iter()
         .map(|text| PumItem {
-            pum_text: text.as_ptr().cast_mut(),
+            pum_text: XString::from_cstr(text),
             ..Default::default()
         })
         .collect();
-
-    // The rows borrow `entries`' strings, which outlive the menu: the
-    // `pum_undisplay` at the end takes it down.
     pum_array.set(Some(array));
     pum_compute_size();
     pum_scrollbar.set(0);
@@ -289,8 +284,7 @@ pub fn pum_make_popup(path_name: &CStr, use_mouse_pos: c_int) {
             // Only under multigrid is the window's own grid guaranteed to
             // have been allocated -- headless it can still be null, which is
             // why this read stays inside the branch.
-            // SAFETY: a live window's own grid.
-            mouse_grid.set(unsafe { (*win.w_grid.target).handle } as c_int);
+            mouse_grid.set(grid_of_view(win.w_grid).handle as c_int);
         } else if !ptr::eq(win.w_grid.target, default_grid_ref().raw()) {
             // Without multigrid the window's own grid is composed onto the
             // screen, so the position has to be screen-relative.

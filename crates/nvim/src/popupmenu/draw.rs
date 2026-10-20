@@ -12,12 +12,11 @@
 //! Under `'rightleft'` the row is drawn from the right edge leftwards, which
 //! is why nearly every step here has two spellings.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::cstr;
-use crate::grid::linebuf;
+use crate::grid::with_linebuf;
 use crate::message::emsg;
 use crate::types::kFloatRelativeEditor;
 use crate::winlayer::Win;
@@ -85,19 +84,14 @@ fn pum_align_order() -> [c_int; 3] {
     ]
 }
 
-/// One item's text for a column kind, or null when it has none.
-///
-/// # Safety
-/// `idx` must be in range for the live item array.
+/// One item's text for a column kind, or `None` when it has none.
 #[inline]
-unsafe fn pum_get_item(index: c_int, item_type: c_int) -> *mut c_char {
-    // SAFETY: the caller guarantees `index` addresses a live item.
-    let item = unsafe { &pum_items()[index as usize] };
+fn item_text(item: &PumItem, item_type: c_int) -> Option<&[u8]> {
     match item_type as c_uint {
-        CPT_ABBR => item.pum_text,
-        CPT_KIND => item.pum_kind,
-        CPT_MENU => item.pum_extra,
-        _ => ::core::ptr::null_mut(),
+        CPT_ABBR => Some(&item.pum_text),
+        CPT_KIND => item.pum_kind.as_deref(),
+        CPT_MENU => item.pum_extra.as_deref(),
+        _ => None,
     }
 }
 
@@ -105,13 +99,8 @@ unsafe fn pum_get_item(index: c_int, item_type: c_int) -> *mut c_char {
 ///
 /// Only the first two column kinds can carry one; the caller never asks for
 /// the third.
-///
-/// # Safety
-/// `idx` must be in range for the live item array, `item_type` 0 or 1.
 #[inline]
-unsafe fn pum_user_attr_combine(idx: c_int, item_type: c_int, attr: c_int) -> c_int {
-    // SAFETY: the caller guarantees both indices.
-    let item = &unsafe { pum_items() }[idx as usize];
+fn pum_user_attr_combine(item: &PumItem, item_type: c_int, attr: c_int) -> c_int {
     let user_attr = [item.pum_user_abbr_hlattr, item.pum_user_kind_hlattr][item_type as usize];
     if user_attr > 0 {
         hl_combine_attr(attr, user_attr)
@@ -131,17 +120,9 @@ unsafe fn pum_user_attr_combine(idx: c_int, item_type: c_int, attr: c_int) -> c_
 /// `None` is answered whenever no cell could differ from the rest — which is
 /// the common case, and is why the caller can skip the per-cell path.
 ///
-/// # Safety
-/// `text` must be NUL-terminated.
-unsafe fn pum_compute_text_attrs(
-    text: *mut c_char,
-    hlf: Hlf,
-    user_hlattr: c_int,
-) -> Option<Vec<c_int>> {
-    // SAFETY: `text` is the caller's NUL-terminated string; `ins_compl_leader`
-    // and `cmdline_compl_pattern` answer editor-owned strings.
+fn pum_compute_text_attrs(text: &XString, hlf: Hlf, user_hlattr: c_int) -> Option<Vec<c_int>> {
     let win = Win::current();
-    if unsafe { *text } == 0
+    if text.is_empty()
         || (hlf != HLF_PSI as Hlf && hlf != HLF_PNI as Hlf)
         || (win_hl_attr(win, HLF_PMSI) == win_hl_attr(win, HLF_PSI)
             && win_hl_attr(win, HLF_PMNI) == win_hl_attr(win, HLF_PNI))
@@ -149,16 +130,12 @@ unsafe fn pum_compute_text_attrs(
         return None;
     }
 
-    let cmdline_leader;
     let leader = if State.get() & MODE_CMDLINE != 0 {
-        cmdline_leader = cmdline_compl_pattern();
-        cmdline_leader
-            .as_ref()
-            .map_or(core::ptr::null_mut(), |leader| leader.as_ptr().cast_mut())
+        cmdline_compl_pattern()?
     } else {
-        ins_compl_leader()
+        XString::from_vec(ins_compl_leader_str().to_vec())
     };
-    if leader.is_null() || unsafe { *leader } == 0 {
+    if leader.is_empty() {
         return None;
     }
 
@@ -169,11 +146,9 @@ unsafe fn pum_compute_text_attrs(
         flags & kOptCotFlagFuzzy != 0
     };
     // The fuzzy matcher answers the character positions it matched, or
-    // null when the item does not match at all.
+    // `None` when the item does not match at all.
     let matched_chars = if in_fuzzy {
-        // SAFETY: two NUL-terminated strings that outlive the call.
-        let (text, leader) = unsafe { (cstr::at(text), cstr::at(leader)) };
-        Some(fuzzy_match_str_with_pos(text, leader)?)
+        Some(fuzzy_match_str_with_pos(text.as_cstr(), leader.as_cstr())?)
     } else {
         None
     };
@@ -193,24 +168,28 @@ unsafe fn pum_compute_text_attrs(
         })
     };
 
-    let leader_len = unsafe { cstr::bytes_at(leader) }.len();
-    let mut attrs = vec![0; unsafe { vim_strsize(text) } as usize];
-    let mut ptr: *const c_char = text;
+    let text: &[u8] = text;
+    let leader: &[u8] = &leader;
+    let mut attrs = vec![0; strsize(text) as usize];
+    let mut at = 0;
     let mut cell_idx = 0;
     let mut char_pos: uint32_t = 0;
     // Outside fuzzy matching the leader matches one leading run, counted
     // down in bytes as the walk passes over it.
     let mut matched_len: c_int = -1;
 
-    while unsafe { *ptr } != 0 {
+    while at < text.len() {
+        let rest = &text[at..];
         let mut new_attr = win_hl_attr(win, hlf as c_int);
         if let Some(positions) = &matched_chars {
             if positions.contains(&char_pos) {
                 new_attr = matched_attr(win);
             }
         } else {
-            if matched_len < 0 && unsafe { mb_strnicmp(ptr, leader, leader_len) } == 0 {
-                matched_len = leader_len as c_int;
+            // `mb_strnicmp(ptr, leader, leader_len)`: both sides cut to the
+            // leader's length.
+            if matched_len < 0 && strnicmp_in(&rest[..rest.len().min(leader.len())], leader) == 0 {
+                matched_len = leader.len() as c_int;
             }
             if matched_len > 0 {
                 new_attr = matched_attr(win);
@@ -223,13 +202,13 @@ unsafe fn pum_compute_text_attrs(
             new_attr = hl_combine_attr(new_attr, user_hlattr);
         }
 
-        let char_cells = unsafe { utf_ptr2cells(ptr) };
+        let char_cells = c_cells_at(rest);
         for i in 0..char_cells {
             attrs[(cell_idx + i) as usize] = new_attr;
         }
         cell_idx += char_cells;
 
-        ptr = unsafe { ptr.offset(utfc_ptr2len(ptr) as isize) };
+        at += c_cluster_len(rest);
         char_pos += 1;
     }
 
@@ -240,27 +219,23 @@ unsafe fn pum_compute_text_attrs(
 ///
 /// `attrs` is indexed by cell offset into the *unreversed* text, so under
 /// `'rightleft'` — where `text` has already been reversed — the index is
-/// mirrored across the `cells` the run occupies.
-///
-/// # Safety
-/// A line batch must be in progress and `text` must be NUL-terminated.
-unsafe fn pum_grid_puts_with_attrs(col: c_int, cells: c_int, text: *const c_char, attrs: &[c_int]) {
-    // SAFETY: the caller holds the batch and owns `text`.
+/// mirrored across the `cells` the run occupies. A line batch must be in
+/// progress.
+fn pum_grid_puts_with_attrs(col: c_int, cells: c_int, text: &[u8], attrs: &[c_int]) {
     let col_start = col;
     let mut col = col;
-    let mut ptr = text;
-    while unsafe { *ptr } != 0 {
-        let char_len = unsafe { utfc_ptr2len(ptr) };
-        let at = if pum_rl.get() {
+    let mut at = 0;
+    while at < text.len() {
+        let rest = &text[at..];
+        let char_len = c_cluster_len(rest);
+        let cell = if pum_rl.get() {
             col_start + cells - col - 1
         } else {
             col - col_start
         };
-        // SAFETY: `char_len` bytes of the caller's string start at `ptr`.
-        let char_bytes = unsafe { cstr::slice_at(ptr, char_len as usize) };
-        grid_line_puts(col, char_bytes, attrs[at as usize]);
-        col += unsafe { utf_ptr2cells(ptr) };
-        ptr = unsafe { ptr.offset(char_len as isize) };
+        grid_line_puts(col, &rest[..char_len], attrs[cell as usize]);
+        col += c_cells_at(rest);
+        at += char_len;
     }
 }
 
@@ -291,13 +266,10 @@ fn resolve_border(config: &mut WinConfig) -> Option<PumBorder> {
         });
     }
 
-    match p_pumborder(|value| unsafe {
-        parse_winborder(&raw mut *config, value.as_ptr().cast_mut())
-    }) {
+    match p_pumborder(|value| parse_winborder_in(config, value)) {
         Ok(true) => {}
         Ok(false) => return None,
         Err(e) => {
-            // SAFETY: the refusal owns its message.
             emsg(e.message_or_empty());
             return None;
         }
@@ -321,13 +293,13 @@ fn resolve_border(config: &mut WinConfig) -> Option<PumBorder> {
         config.border_attr[i] = if config.border_hl_ids[i] != 0 {
             hl_get_ui_attr(-1, HLF_PBR, config.border_hl_ids[i], false)
         } else {
-            unsafe { *hl_attr_table().offset(HLF_PBR as isize) }
+            hl_attr(HLF_PBR)
         };
     }
 
     let scrollbar = (pum_scrollbar.get() != 0).then(|| {
-        let right = (&raw const config.border_chars[3]).cast::<c_char>();
-        (unsafe { schar_from_str(right) }, config.border_attr[3])
+        let right = cstr::in_chars(&config.border_chars[3]);
+        (schar_from_str(right), config.border_attr[3])
     });
     Some(PumBorder { width, scrollbar })
 }
@@ -354,8 +326,6 @@ struct RowStyle {
 
 /// One row of the menu, mid-draw.
 struct PumRow {
-    /// The item this row shows.
-    idx: c_int,
     /// Highlight groups for this row's three columns, selected or not.
     hlfs: [Hlf; 3],
     /// Grid column the next glyph goes at.
@@ -371,38 +341,34 @@ struct PumRow {
 impl PumRow {
     /// Draw one run of an item's text, ending at the truncation point.
     ///
-    /// `text` is an owned `transstr` result (already reversed under
-    /// `'rightleft'`) and `width` the cells the run was measured at; the
-    /// truncating branch shortens both. Advances `grid_col` past the run.
-    ///
-    /// # Safety
-    /// A line batch must be in progress and `text` must be a live
-    /// NUL-terminated buffer of the run.
-    unsafe fn emit(
+    /// `text` is a `transstr` result (already reversed under `'rightleft'`)
+    /// and `width` the cells the run was measured at; the truncating branch
+    /// shortens both, and may write a `<` over a cut character. Advances
+    /// `grid_col` past the run. A line batch must be in progress.
+    fn emit(
         &mut self,
         style: &RowStyle,
-        text: *mut c_char,
+        text: &mut [u8],
         mut width: c_int,
         attrs: Option<&[c_int]>,
         attr: c_int,
         next_isempty: bool,
     ) {
-        // SAFETY: the caller holds the batch and owns `text`.
         let width_limit = pum_width.get();
         // Two cells are kept for the separator unless nothing follows.
         let pad = if next_isempty { 0 } else { 2 };
-        let mut cells = unsafe { mb_string2cells(text) } as c_int;
+        let mut cells = c_string_cells(text) as c_int;
         if width_limit - self.totwidth < cells + pad {
             self.need_trunc = true;
         }
 
         if pum_rl.get() {
-            let mut rt = text;
+            let mut at = 0;
             // Drop leading characters until what is left fits.
             if self.grid_col - cells < style.col_off - width_limit {
                 loop {
-                    cells -= unsafe { utf_ptr2cells(rt) };
-                    rt = unsafe { rt.offset(utfc_ptr2len(rt) as isize) };
+                    cells -= c_cells_at(&text[at..]);
+                    at += c_cluster_len(&text[at..]);
                     if self.grid_col - cells >= style.col_off - width_limit {
                         break;
                     }
@@ -410,52 +376,48 @@ impl PumRow {
                 if self.grid_col - cells > style.col_off - width_limit {
                     // The leftmost character wants two cells and only one
                     // is left: mark it with a '<' instead.
-                    rt = unsafe { rt.offset(-1) };
-                    unsafe { *rt = b'<' as c_char };
+                    at -= 1;
+                    text[at] = b'<';
                     cells += 1;
                 }
             }
 
+            let rt = &text[at..];
             match attrs {
                 None => {
-                    // SAFETY: `rt` is a cursor into the run's NUL-terminated text.
-                    let rt = unsafe { cstr::bytes_at(rt) };
                     grid_line_puts(self.grid_col - cells + 1, rt, attr);
                 }
                 Some(attrs) => {
-                    unsafe {
-                        pum_grid_puts_with_attrs(self.grid_col - cells + 1, cells, rt, attrs)
-                    };
+                    pum_grid_puts_with_attrs(self.grid_col - cells + 1, cells, rt, attrs);
                 }
             }
             self.grid_col -= width;
         } else {
+            let mut text: &[u8] = text;
             if self.need_trunc {
                 // Cut the run at the last character that still fits.
                 let available_cells = width_limit - self.totwidth;
-                let mut p_end = text;
+                let mut end = 0;
                 let mut displayed = 0;
-                while unsafe { *p_end } != 0 {
-                    let char_cells = unsafe { utf_ptr2cells(p_end) };
+                while end < text.len() {
+                    let char_cells = c_cells_at(&text[end..]);
                     if displayed + char_cells > available_cells {
                         break;
                     }
                     displayed += char_cells;
-                    p_end = unsafe { p_end.offset(utfc_ptr2len(p_end) as isize) };
+                    end += c_cluster_len(&text[end..]);
                 }
-                unsafe { *p_end = 0 };
+                text = &text[..end];
                 cells = displayed;
                 width = displayed;
             }
 
             match attrs {
                 None => {
-                    // SAFETY: `text` is the run's NUL-terminated text.
-                    let text = unsafe { cstr::bytes_at(text) };
                     grid_line_puts(self.grid_col, text, attr);
                 }
                 Some(attrs) => {
-                    unsafe { pum_grid_puts_with_attrs(self.grid_col, cells, text, attrs) };
+                    pum_grid_puts_with_attrs(self.grid_col, cells, text, attrs);
                 }
             }
             self.grid_col += width;
@@ -467,74 +429,62 @@ impl PumRow {
     /// The text is walked forwards until it runs out, hits a Tab or would
     /// exceed `pum_width`; each such run is made printable with `transstr`
     /// and drawn, and a Tab is drawn as two spaces before the walk resumes.
-    ///
-    /// # Safety
-    /// A line batch must be in progress and `self.idx` must address a live
-    /// item.
-    unsafe fn put_column(&mut self, style: &RowStyle, item_type: c_int, next_isempty: bool) {
-        // SAFETY: the caller holds the batch; `p` walks an item string, which
-        // is NUL-terminated and stays live for the whole redraw.
+    /// A line batch must be in progress.
+    fn put_column(
+        &mut self,
+        style: &RowStyle,
+        item: &PumItem,
+        item_type: c_int,
+        next_isempty: bool,
+    ) {
         let win = Win::current();
         let hlf = self.hlfs[item_type as usize];
         self.orig_attr = hl_combine_attr(win_hl_attr(win, HLF_PNI), win_hl_attr(win, hlf as c_int));
         let attr = if item_type < 2 {
-            unsafe { pum_user_attr_combine(self.idx, item_type, self.orig_attr) }
+            pum_user_attr_combine(item, item_type, self.orig_attr)
         } else {
             self.orig_attr
         };
 
-        let mut p = unsafe { pum_get_item(self.idx, item_type) };
-        if p.is_null() {
+        let Some(text) = item_text(item, item_type) else {
             return;
-        }
-        let mut run_start: *mut c_char = ::core::ptr::null_mut();
+        };
+        let mut at = 0;
+        let mut run_start: Option<usize> = None;
         let mut width = 0;
 
         loop {
-            if run_start.is_null() {
-                run_start = p;
-            }
-            let w = unsafe { ptr2cells(p) };
-            if unsafe { *p } != 0
-                && unsafe { *p } != b'\t' as c_char
-                && self.totwidth + w <= pum_width.get()
-            {
+            let start = *run_start.get_or_insert(at);
+            let byte = cstr::byte_at(text, at);
+            let w = ptr2cells_at(&text[at..]);
+            if byte != 0 && byte != b'\t' && self.totwidth + w <= pum_width.get() {
                 width += w;
-                p = unsafe { p.offset(utfc_ptr2len(p) as isize) };
+                at += c_cluster_len(&text[at..]);
                 continue;
             }
 
-            // Draw [run_start, p). The item string is NUL-terminated in
-            // place for `transstr`, then put back.
-            let saved = unsafe { *p };
-            if saved != 0 {
-                unsafe { *p = 0 };
-            }
-            let st = unsafe { transstr(run_start, true) };
-            if saved != 0 {
-                unsafe { *p = saved };
-            }
+            // Draw [start, at).
+            let st = transstr_owned(&text[start..at], true);
 
             let attrs = if item_type == CPT_ABBR as c_int {
-                let user = unsafe { pum_items() }[self.idx as usize].pum_user_abbr_hlattr;
-                unsafe { pum_compute_text_attrs(st, hlf, user) }
+                pum_compute_text_attrs(&st, hlf, item.pum_user_abbr_hlattr)
             } else {
                 None
             };
 
-            if pum_rl.get() {
-                // `emit` writes into the text it is lent: a `<` over a cut
-                // character and a NUL at the truncation point.
-                let mut rt = reversed_text(unsafe { cstr::bytes_at(st) });
-                rt.push(0);
-                let rt = rt.as_mut_ptr().cast::<c_char>();
-                unsafe { self.emit(style, rt, width, attrs.as_deref(), attr, next_isempty) };
+            // `emit` writes into the text it is lent: a `<` over a cut
+            // character.
+            let mut run = if pum_rl.get() {
+                reversed_text(&st)
             } else {
-                unsafe { self.emit(style, st, width, attrs.as_deref(), attr, next_isempty) };
+                st.into_vec()
+            };
+            if !pum_rl.get() {
+                run.pop();
             }
-            unsafe { xfree(st.cast()) };
+            self.emit(style, &mut run, width, attrs.as_deref(), attr, next_isempty);
 
-            if unsafe { *p } != b'\t' as c_char {
+            if byte != b'\t' {
                 break;
             }
 
@@ -547,26 +497,25 @@ impl PumRow {
                 self.grid_col += 2;
             }
             self.totwidth += 2;
-            run_start = ::core::ptr::null_mut();
+            run_start = None;
             width = 0;
-            p = unsafe { p.offset(utfc_ptr2len(p) as isize) };
+            at += c_cluster_len(&text[at..]);
         }
     }
 }
 
 /// Draw one row of the menu: its item, the truncation marker, the scrollbar.
 ///
-/// # Safety
 /// No line batch may be in progress; `pum_grid` must be allocated for
-/// `pum_height` rows.
-unsafe fn pum_draw_row(style: &RowStyle, i: c_int, grid_row: c_int) {
-    // SAFETY: the item indices come from `pum_first`/`pum_height`, which
-    // `pum_redraw` has already clamped to the array.
+/// `pum_height` rows, and `items` must hold the row's item -- the indices
+/// come from `pum_first`/`pum_height`, which `pum_redraw` has already
+/// clamped to the array.
+fn pum_draw_row(style: &RowStyle, items: &[PumItem], i: c_int, grid_row: c_int) {
     let win = Win::current();
     let idx = i + pum_first.get();
+    let item = &items[idx as usize];
     let selected = idx == pum_selected.get();
     let mut row = PumRow {
-        idx,
         hlfs: if selected {
             [HLF_PSI as Hlf, HLF_PSK as Hlf, HLF_PSX as Hlf]
         } else {
@@ -607,8 +556,8 @@ unsafe fn pum_draw_row(style: &RowStyle, i: c_int, grid_row: c_int) {
 
     for j in 0..3 {
         let item_type = order[j];
-        let next_isempty = j + 1 >= 3 || unsafe { pum_get_item(idx, order[j + 1]) }.is_null();
-        unsafe { row.put_column(style, item_type, next_isempty) };
+        let next_isempty = j + 1 >= 3 || item_text(item, order[j + 1]).is_none();
+        row.put_column(style, item, item_type, next_isempty);
 
         let n = if j > 0 {
             widths[order[1] as usize] + c_int::from(!last_isabbr)
@@ -618,8 +567,7 @@ unsafe fn pum_draw_row(style: &RowStyle, i: c_int, grid_row: c_int) {
 
         // Stop when there is nothing more to display.
         if j == 2
-            || (next_isempty
-                && (j == 1 || (j == 0 && unsafe { pum_get_item(idx, order[j + 2]) }.is_null())))
+            || (next_isempty && (j == 1 || (j == 0 && item_text(item, order[j + 2]).is_none())))
             || basic_width + n >= pum_width.get()
         {
             break;
@@ -649,10 +597,7 @@ unsafe fn pum_draw_row(style: &RowStyle, i: c_int, grid_row: c_int) {
     // Blank the rest of the row, then overwrite its far cell with the
     // truncation marker if anything was cut. The marker is written
     // straight into the line buffer because it replaces a cell
-    // `grid_line_fill` has already put there -- so the handle is taken
-    // here but each slice of it is borrowed for one write only, with the
-    // `grid_line_fill` calls between them.
-    let mut line = linebuf();
+    // `grid_line_fill` has already put there.
     if pum_rl.get() {
         let lcol = style.col_off - pum_width.get() + 1;
         grid_line_fill(
@@ -662,31 +607,35 @@ unsafe fn pum_draw_row(style: &RowStyle, i: c_int, grid_row: c_int) {
             row.orig_attr,
         );
         if row.need_trunc {
-            line.chars_mut()[lcol as usize] = if style.fcs_trunc != 0 {
-                style.fcs_trunc
-            } else {
-                schar_from_ascii(b'<')
-            };
-            line.attrs_mut()[lcol as usize] = trunc_attr as ScreenAttr;
-            // The marker may have replaced the left half of a wide
-            // character; give the orphaned right half a space.
-            if pum_width.get() > 1 && line.chars()[lcol as usize + 1] == 0 {
-                line.chars_mut()[lcol as usize + 1] = schar_from_ascii(b' ');
-            }
+            with_linebuf(|line| {
+                line.chars_mut()[lcol as usize] = if style.fcs_trunc != 0 {
+                    style.fcs_trunc
+                } else {
+                    schar_from_ascii(b'<')
+                };
+                line.attrs_mut()[lcol as usize] = trunc_attr as ScreenAttr;
+                // The marker may have replaced the left half of a wide
+                // character; give the orphaned right half a space.
+                if pum_width.get() > 1 && line.chars()[lcol as usize + 1] == 0 {
+                    line.chars_mut()[lcol as usize + 1] = schar_from_ascii(b' ');
+                }
+            });
         }
     } else {
         let rcol = style.col_off + pum_width.get();
         grid_line_fill(row.grid_col, rcol, schar_from_ascii(b' '), row.orig_attr);
         if row.need_trunc {
-            if pum_width.get() > 1 && line.chars()[(rcol - 1) as usize] == 0 {
-                line.chars_mut()[(rcol - 2) as usize] = schar_from_ascii(b' ');
-            }
-            line.chars_mut()[(rcol - 1) as usize] = if style.fcs_trunc != 0 {
-                style.fcs_trunc
-            } else {
-                schar_from_ascii(b'>')
-            };
-            line.attrs_mut()[(rcol - 1) as usize] = trunc_attr as ScreenAttr;
+            with_linebuf(|line| {
+                if pum_width.get() > 1 && line.chars()[(rcol - 1) as usize] == 0 {
+                    line.chars_mut()[(rcol - 2) as usize] = schar_from_ascii(b' ');
+                }
+                line.chars_mut()[(rcol - 1) as usize] = if style.fcs_trunc != 0 {
+                    style.fcs_trunc
+                } else {
+                    schar_from_ascii(b'>')
+                };
+                line.attrs_mut()[(rcol - 1) as usize] = trunc_attr as ScreenAttr;
+            });
         }
     }
 
@@ -783,15 +732,7 @@ pub fn pum_redraw() {
 
     let mut grid_row = 0;
     if config.border {
-        unsafe {
-            grid_draw_border(
-                grid.raw(),
-                &raw mut config,
-                ::core::ptr::null_mut(),
-                0,
-                ::core::ptr::null_mut(),
-            )
-        };
+        grid_draw_border(grid, &config, None, 0, None);
         if !config.shadow {
             grid_row += 1;
             col_off += 1;
@@ -828,8 +769,9 @@ pub fn pum_redraw() {
         thumb_height,
     };
 
+    let items = pum_items();
     for i in 0..pum_height.get() {
-        unsafe { pum_draw_row(&style, i, grid_row) };
+        pum_draw_row(&style, &items, i, grid_row);
         grid_row += 1;
     }
 }

@@ -30,6 +30,7 @@
 
 pub mod entry;
 
+use crate::cstr;
 use core::ffi::{c_char, c_int, c_long, c_uint, c_void};
 use core::slice;
 
@@ -438,7 +439,10 @@ impl VTermState {
         let buf = self.grapheme_buf.as_ptr();
         // SAFETY: `len` bytes of the pending grapheme, which is this array.
         let cells = unsafe { utf_ptr2cells_len(buf, len as c_int) };
-        (cells, unsafe { schar_from_buf(buf, len) })
+        (
+            cells,
+            schar_from_buf(cstr::as_bytes(&self.grapheme_buf[..len])),
+        )
     }
 
     // --------------------------------------------------------- character sets

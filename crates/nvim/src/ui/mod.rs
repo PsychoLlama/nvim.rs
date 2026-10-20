@@ -303,25 +303,20 @@ pub fn ui_pum_get_height() -> c_int {
         .unwrap_or(0)
 }
 
-/// The geometry of the externally drawn popup menu, if a UI reported one.
-///
-/// # Safety
-///
-/// The four out-parameters must be writable.
-pub unsafe fn ui_pum_get_pos(
-    pwidth: *mut f64,
-    pheight: *mut f64,
-    prow: *mut f64,
-    pcol: *mut f64,
-) -> bool {
-    let Some(ui) = each_ui().find(|&ui| unsafe { (*ui).pum_pos }) else {
-        return false;
-    };
-    unsafe { *pwidth = (*ui).pum_width };
-    unsafe { *pheight = (*ui).pum_height };
-    unsafe { *prow = (*ui).pum_row };
-    unsafe { *pcol = (*ui).pum_col };
-    true
+/// The geometry of the externally drawn popup menu, if a UI reported one:
+/// width, height, row and column.
+pub fn ui_pum_get_pos() -> Option<[f64; 4]> {
+    let ui = each_ui().find(|&ui| unsafe { (*ui).pum_pos })?;
+    // SAFETY: `each_ui` yields the attached UIs, which stay attached for
+    // the call.
+    Some(unsafe {
+        [
+            (*ui).pum_width,
+            (*ui).pum_height,
+            (*ui).pum_row,
+            (*ui).pum_col,
+        ]
+    })
 }
 
 extern "C" fn ui_refresh_event(_argv: *mut *mut core::ffi::c_void) {

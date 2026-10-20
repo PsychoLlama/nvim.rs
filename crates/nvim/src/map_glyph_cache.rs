@@ -24,15 +24,14 @@
 //! 2008, 2009, 2011 Attractive Chaos, under the MIT license; the notice is
 //! reproduced in licenses/klib-LICENSE.txt.
 
-use core::ffi::{CStr, c_char, c_void};
+use core::ffi::{c_char, c_void};
+use core::mem::MaybeUninit;
 use core::slice;
 
-use crate::map::{
-    MH_TOMBSTONE, MapKey, grown_keys_capacity, kMHExisting, kMHNewKeyDidFit, kMHNewKeyRealloc,
-    mh_realloc, probe,
-};
+use crate::cstr::until_nul;
+use crate::map::{MH_TOMBSTONE, MapKey, grown_keys_capacity, mh_clear, mh_realloc, probe};
 use crate::memory::xrealloc;
-use crate::types::{MHPutStatus, Set_glyph, uint32_t};
+use crate::types::{Set_glyph, uint32_t};
 
 /// A glyph's length as the index counts it: bytes, and never near 2^32
 /// because [`crate::grid::MAX_SCHAR_SIZE`] caps it at 32.
@@ -40,143 +39,160 @@ fn key_len(key: &[u8]) -> uint32_t {
     uint32_t::try_from(key.len()).expect("a glyph is at most MAX_SCHAR_SIZE bytes")
 }
 
-/// The glyph stored at `pos`, as bytes.
-///
-/// # Safety
-/// `pos` must be the offset of a NUL-terminated glyph in `keys`, which must
-/// stay put for the borrow.
-unsafe fn stored_glyph<'a>(keys: *const c_char, pos: uint32_t) -> &'a [u8] {
-    // SAFETY: the caller's promise.
-    unsafe { CStr::from_ptr(keys.add(pos as usize)) }.to_bytes()
-}
+/// The keys array's first heap size. Bytes, not entries, so it is eight
+/// times the fixed-size sets' floor -- upstream's own number for this layout.
+const MIN_KEY_BYTES: uint32_t = 64;
 
-/// The bucket `key` belongs in. See [`crate::map::probe`].
-///
-/// # Safety
-/// `set` must point at a live `Set_glyph`: `h.hash` at `h.n_buckets` slots,
-/// `keys` at `h.n_keys` bytes of NUL-terminated glyphs.
-unsafe fn find_bucket(set: *const Set_glyph, key: &[u8], put: bool) -> uint32_t {
-    // SAFETY: the caller promises a live `Set_glyph`.
-    let set = unsafe { &*set };
-    // SAFETY: as above — `h.hash` points at `h.n_buckets` slots.
-    let buckets = unsafe { slice::from_raw_parts(set.h.hash, set.h.n_buckets as usize) };
-    probe(buckets, set.h.n_buckets - 1, key.map_hash(), put, |pos| {
-        // SAFETY: a live bucket holds the one-based byte offset of a
-        // NUL-terminated glyph in `keys`.
-        unsafe { stored_glyph(set.keys, pos) == key }
-    })
-}
-
-/// Re-point every bucket at its glyph after the table was resized.
-///
-/// The walk is over the packed keys rather than an index, so it steps by
-/// each glyph's own length: `strlen + 1`.
-///
-/// # Safety
-/// As [`find_bucket`], with an all-zero bucket table.
-unsafe fn rehash(set: *mut Set_glyph) {
-    // SAFETY: the caller promises a live `Set_glyph`.
-    let (keys, hash, n_keys) = unsafe { ((*set).keys, (*set).h.hash, (*set).h.n_keys) };
-    let mut at = 0;
-    while at < n_keys {
-        // SAFETY: `at` is the offset of a NUL-terminated glyph.
-        let key = unsafe { stored_glyph(keys, at) };
-        // SAFETY: as above; the bucket table is all-zero.
-        let idx = unsafe { find_bucket(set, key, true) };
-        // SAFETY: `find_bucket` answers a slot of the live bucket table.
-        let slot = unsafe { &mut *hash.add(idx as usize) };
-        assert!(
-            *slot == 0,
-            "glyph cache: rehash landed on an occupied bucket"
-        );
-        *slot = at + 1;
-        at += key_len(key) + 1;
-    }
-    // SAFETY: the caller promises a live `Set_glyph`. Nothing was deleted,
-    // so every key is live and no bucket is a tombstone.
-    unsafe {
-        (*set).h.size = n_keys;
-        (*set).h.n_occupied = n_keys;
-    }
-}
-
-/// Intern `key`, or find the copy already there. Answers the byte offset of
-/// the stored copy and reports through `status` whether it is new and whether
-/// the keys array moved.
-///
-/// # Safety
-/// As [`find_bucket`]; `status` must be writable.
-pub(crate) unsafe fn mh_put_glyph(
-    set: *mut Set_glyph,
-    key: &[u8],
-    status: *mut MHPutStatus,
-) -> uint32_t {
-    // The keys array's first heap size. Bytes, not entries, so it is eight
-    // times the fixed-size sets' floor -- upstream's own number for this
-    // layout. Function-local so it stays out of the FFI golden.
-    const MIN_KEY_BYTES: uint32_t = 64;
-
-    // SAFETY: the caller promises a live `Set_glyph`.
-    let h = unsafe { &raw mut (*set).h };
-    // SAFETY: as above.
-    if unsafe { (*h).n_occupied >= (*h).upper_bound } {
-        // The cache never deletes, so there are no tombstones to shed and
-        // no `should_grow` decision to make: growing is the only way back
-        // under the bound.
-        // SAFETY: as above; `mh_realloc` leaves an all-zero table, which is
-        // what `rehash` needs.
-        unsafe {
-            mh_realloc(h, (*h).n_buckets + 1);
-            rehash(set);
+impl Set_glyph {
+    /// The bucket table: `h.n_buckets` slots, each 0 (empty), a tombstone,
+    /// or a glyph's byte offset plus one.
+    fn buckets(&self) -> &[uint32_t] {
+        if self.h.hash.is_null() {
+            return &[];
         }
+        // SAFETY: a live set's `h.hash` is its own allocation of
+        // `h.n_buckets` slots, which `mh_realloc` keeps in step.
+        unsafe { slice::from_raw_parts(self.h.hash, self.h.n_buckets as usize) }
     }
 
-    // SAFETY: as above.
-    let (idx, entry) = unsafe {
-        let idx = find_bucket(set, key, true);
-        (idx, *(*h).hash.add(idx as usize))
-    };
-    if entry != 0 && entry != MH_TOMBSTONE {
-        let pos = entry - 1;
-        // SAFETY: `status` is the caller's, and `pos` names a live glyph.
-        unsafe {
-            *status = kMHExisting;
-            debug_assert!(stored_glyph((*set).keys, pos) == key);
+    /// [`Set_glyph::buckets`], writable.
+    fn buckets_mut(&mut self) -> &mut [uint32_t] {
+        if self.h.hash.is_null() {
+            return &mut [];
         }
-        return pos;
+        // SAFETY: as `buckets`, and the borrow of `self` is exclusive.
+        unsafe { slice::from_raw_parts_mut(self.h.hash, self.h.n_buckets as usize) }
     }
 
-    let width = key_len(key) + 1;
-    // SAFETY: `h` is the live index; `pos` is where this glyph's bytes go.
-    let pos = unsafe {
-        (*h).size += 1;
-        (*h).n_occupied += 1;
-        let pos = (*h).n_keys;
-        (*h).n_keys += width;
+    /// The packed run of interned glyphs: `n_keys` bytes, each glyph
+    /// followed by its NUL.
+    fn packed_keys(&self) -> &[u8] {
+        if self.keys.is_null() {
+            return &[];
+        }
+        // SAFETY: a live set's `keys` holds `h.n_keys` bytes of
+        // NUL-terminated glyphs -- what [`Set_glyph::intern`] wrote -- and
+        // the borrow of `self` keeps them from being grown under the slice.
+        unsafe { slice::from_raw_parts(self.keys.cast::<u8>(), self.h.n_keys as usize) }
+    }
+
+    /// The glyph stored at byte offset `pos`, without its NUL.
+    ///
+    /// A checked index. Upstream reads the arena at whatever offset a
+    /// `ScreenChar` carries, guarded by a debug-only assertion; the
+    /// assertion is kept, and a release build answers the empty glyph for an
+    /// offset past the end -- one a stale `ScreenChar` can still carry after
+    /// [`Set_glyph::clear`] -- where upstream would read past the arena.
+    pub(crate) fn glyph(&self, pos: uint32_t) -> &[u8] {
+        let keys = self.packed_keys();
+        debug_assert!((pos as usize) < keys.len(), "idx < n_keys");
+        keys.get(pos as usize..).map_or(&[], until_nul)
+    }
+
+    /// Bytes of interned glyphs: every valid offset is below it.
+    pub(crate) fn packed_len(&self) -> uint32_t {
+        self.h.n_keys
+    }
+
+    /// The bucket `key` belongs in. See [`crate::map::probe`].
+    fn find_bucket(&self, key: &[u8], put: bool) -> uint32_t {
+        let keys = self.packed_keys();
+        probe(
+            self.buckets(),
+            self.h.n_buckets - 1,
+            key.map_hash(),
+            put,
+            |pos| {
+                // A live bucket holds the one-based byte offset of a
+                // NUL-terminated glyph in `keys`.
+                until_nul(&keys[pos as usize..]) == key
+            },
+        )
+    }
+
+    /// Re-point every bucket at its glyph after the table was resized: the
+    /// table must be all zero.
+    ///
+    /// The walk is over the packed keys rather than an index, so it steps by
+    /// each glyph's own length: `strlen + 1`.
+    fn rehash(&mut self) {
+        let n_keys = self.h.n_keys;
+        let mut at = 0;
+        while at < n_keys {
+            let (idx, len) = {
+                let key = until_nul(&self.packed_keys()[at as usize..]);
+                (self.find_bucket(key, true), key_len(key))
+            };
+            let slot = &mut self.buckets_mut()[idx as usize];
+            assert!(
+                *slot == 0,
+                "glyph cache: rehash landed on an occupied bucket"
+            );
+            *slot = at + 1;
+            at += len + 1;
+        }
+        // Nothing was deleted, so every key is live and no bucket is a
+        // tombstone.
+        self.h.size = n_keys;
+        self.h.n_occupied = n_keys;
+    }
+
+    /// Intern `key`, or find the copy already there, answering its byte
+    /// offset. `key` must hold no NUL and be shorter than
+    /// [`crate::grid::MAX_SCHAR_SIZE`].
+    pub(crate) fn intern(&mut self, key: &[u8]) -> uint32_t {
+        if self.h.n_occupied >= self.h.upper_bound {
+            // The cache never deletes, so there are no tombstones to shed and
+            // no `should_grow` decision to make: growing is the only way back
+            // under the bound.
+            // SAFETY: the set's own index. `mh_realloc` leaves an all-zero
+            // table, which is what `rehash` needs.
+            unsafe { mh_realloc(&raw mut self.h, self.h.n_buckets + 1) };
+            self.rehash();
+        }
+
+        let idx = self.find_bucket(key, true);
+        let entry = self.buckets()[idx as usize];
+        if entry != 0 && entry != MH_TOMBSTONE {
+            let pos = entry - 1;
+            debug_assert!(self.glyph(pos) == key);
+            return pos;
+        }
+
+        let width = key_len(key) + 1;
+        self.h.size += 1;
+        self.h.n_occupied += 1;
+        let pos = self.h.n_keys;
+        self.h.n_keys += width;
+
+        if self.h.n_keys > self.h.keys_capacity {
+            // `keys_capacity` counts bytes here rather than entries.
+            self.h.keys_capacity = grown_keys_capacity(self.h.keys_capacity, MIN_KEY_BYTES);
+            let bytes = self.h.keys_capacity as usize * size_of::<c_char>();
+            // SAFETY: `xrealloc` grows the set's own allocation.
+            self.keys = unsafe { xrealloc(self.keys.cast::<c_void>(), bytes) }.cast::<c_char>();
+        }
+
+        // SAFETY: `pos + width` is within the capacity just checked or grown
+        // to; the bytes are not yet written, which is why they are
+        // `MaybeUninit`.
+        let room = unsafe {
+            slice::from_raw_parts_mut(
+                self.keys.add(pos as usize).cast::<MaybeUninit<u8>>(),
+                width as usize,
+            )
+        };
+        for (dst, &byte) in room.iter_mut().zip(key) {
+            dst.write(byte);
+        }
+        room[key.len()].write(0);
+        self.buckets_mut()[idx as usize] = pos + 1;
         pos
-    };
-
-    // SAFETY: as above. `xrealloc` grows the caller's own allocation, and
-    // `keys_capacity` counts bytes here rather than entries.
-    unsafe {
-        if (*h).n_keys > (*h).keys_capacity {
-            (*h).keys_capacity = grown_keys_capacity((*h).keys_capacity, MIN_KEY_BYTES);
-            let bytes = (*h).keys_capacity as usize * size_of::<c_char>();
-            (*set).keys = xrealloc((*set).keys.cast::<c_void>(), bytes).cast::<c_char>();
-            *status = kMHNewKeyRealloc;
-        } else {
-            *status = kMHNewKeyDidFit;
-        }
     }
 
-    // SAFETY: `pos + width` is within the capacity just checked or grown to,
-    // and `key` has `key.len()` readable bytes.
-    unsafe {
-        let room =
-            slice::from_raw_parts_mut((*set).keys.add(pos as usize).cast::<u8>(), width as usize);
-        room[..key.len()].copy_from_slice(key);
-        room[key.len()] = 0;
-        *(*h).hash.add(idx as usize) = pos + 1;
+    /// Forget every glyph: the arena is kept, its contents are not.
+    pub(crate) fn clear(&mut self) {
+        // SAFETY: the set's own index.
+        unsafe { mh_clear(&raw mut self.h) };
     }
-    pos
 }

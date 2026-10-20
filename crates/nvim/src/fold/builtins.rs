@@ -181,12 +181,10 @@ pub fn f_foldtextresult(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDat
             let mut i: size_t = 0;
             while i < vt.size {
                 let mut attr: c_int = 0;
-                let chunk = unsafe { next_virt_text_chunk(vt, &raw mut i, &raw mut attr) };
-                if chunk.is_null() {
+                let Some(chunk) = next_virt_text_chunk(&vt, &mut i, &mut attr) else {
                     break;
-                }
-                // SAFETY: a chunk's NUL-terminated text.
-                text.push_bytes(unsafe { cstr::bytes_at(chunk) });
+                };
+                text.push_bytes(chunk.to_bytes());
             }
         }
         // SAFETY: `vt` is this frame's virtual text.

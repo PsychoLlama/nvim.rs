@@ -10,8 +10,7 @@
 //! `prepare_tagpreview` and edited into a scratch buffer. Both end up in
 //! [`pum_preview_set_text`].
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::ex_cmds::EcmdFlags;
@@ -20,7 +19,6 @@ use crate::guard::{Allow, Suppress};
 use crate::message::emsg;
 use crate::option::boolean_optval;
 use crate::optionstr::OptString;
-use crate::os::cshim::strchr;
 use crate::pos::MAXCOL;
 use crate::types::OptionSetFlags;
 use crate::winlayer::Win;
@@ -38,18 +36,11 @@ fn static_optval(value: &'static ::core::ffi::CStr) -> OptVal {
 ///
 /// Answers `None` for "nothing selected" as well; upstream reads
 /// `pum_array[pum_selected]` after testing only the lower bound, which is out
-/// of range whenever a caller passes an index past the end.
-///
-/// # Safety
-/// The item array must be the live one.
-unsafe fn pum_selected_info() -> Option<*mut c_char> {
-    let selected = pum_selected.get();
-    let items = unsafe { pum_items() };
-    if selected < 0 || selected as usize >= items.len() {
-        return None;
-    }
-    let info = items[selected as usize].pum_info;
-    (!info.is_null()).then_some(info)
+/// of range whenever a caller passes an index past the end. A copy: showing
+/// it runs autocommands, which may replace the menu's rows.
+fn pum_selected_info() -> Option<XString> {
+    let selected = usize::try_from(pum_selected.get()).ok()?;
+    pum_items().get(selected)?.pum_info.clone()
 }
 
 /// Fill `win`'s buffer with `info`, one buffer line per `\n`-separated line.
@@ -57,26 +48,16 @@ unsafe fn pum_selected_info() -> Option<*mut c_char> {
 /// Answers the number of lines written and the widest of them in cells,
 /// which is what the caller sizes the window with. A trailing empty line is
 /// dropped; empty lines anywhere else are kept.
-///
-/// # Safety
-/// `win` must be live and `info` NUL-terminated. `info` is written through
-/// and restored, so it must be writable — the callers own it.
-unsafe fn pum_preview_set_text(mut win: Win, info: *mut c_char) -> (LineNr, c_int) {
+fn pum_preview_set_text(mut win: Win, info: &[u8]) -> (LineNr, c_int) {
     let mut buf = win.buffer();
     buf.b_p_ma = 1;
 
     let mut lines: Vec<Object> = Vec::new();
     let mut max_width = 0;
-    let mut curr = info;
-    while !curr.is_null() {
-        let next = unsafe { strchr(curr, '\n' as c_int) };
-        if !next.is_null() {
-            // Terminate the line for `cstr_to_string` and the width
-            // measurement, then put the newline back.
-            unsafe { *next = 0 };
-        }
+    let mut parts = info.split(|&byte| byte == b'\n').peekable();
+    while let Some(line) = parts.next() {
         // An empty line is only dropped when it is the last one.
-        if unsafe { *curr } == 0 && next.is_null() {
+        if line.is_empty() && parts.peek().is_none() {
             break;
         }
 
@@ -84,20 +65,12 @@ unsafe fn pum_preview_set_text(mut win: Win, info: *mut c_char) -> (LineNr, c_in
         // inflate the answer in a narrow window.
         let save_wrap = win.w_onebuf_opt.wo_wrap;
         win.w_onebuf_opt.wo_wrap = 0;
-        max_width = max_width.max(unsafe { win_linetabsize(win, 0, curr, MAXCOL as c_int) });
+        let mut terminated = line.to_vec();
+        terminated.push(0);
+        max_width = max_width.max(win_linetabsize_bytes(win, 0, &terminated, MAXCOL as c_int));
         win.w_onebuf_opt.wo_wrap = save_wrap;
 
-        // SAFETY: `curr` points at the line, NUL-terminated by the split.
-        lines.push(Object::string(unsafe { cstr_to_string(curr) }));
-
-        if !next.is_null() {
-            unsafe { *next = b'\n' as c_char };
-        }
-        curr = if next.is_null() {
-            ::core::ptr::null_mut()
-        } else {
-            unsafe { next.offset(1) }
-        };
+        lines.push(Object::string(String_0::from_bytes(line)));
     }
 
     let lnum = lines.len() as LineNr;
@@ -168,9 +141,7 @@ fn pum_adjust_info_position(mut window: Win, width: c_int) -> bool {
 /// Answers the info window, or null when the menu is down, the item is not
 /// the selected one, or there is no room for the window.
 ///
-/// # Safety
-/// `info` must be a writable NUL-terminated string owned by the caller.
-pub unsafe fn pum_set_info(selected: c_int, info: *mut c_char) -> Option<Win> {
+pub fn pum_set_info(selected: c_int, info: &[u8]) -> Option<Win> {
     if !pum_is_visible.get() || !compl_match_curr_select(selected) {
         return None;
     }
@@ -190,7 +161,7 @@ pub unsafe fn pum_set_info(selected: c_int, info: *mut c_char) -> Option<Win> {
         }
     };
 
-    let (_lnum, max_info_width) = unsafe { pum_preview_set_text(wp, info) };
+    let (_lnum, max_info_width) = pum_preview_set_text(wp, info);
     no_u_sync.set(no_u_sync.get() - 1);
     RedrawingDisabled.set(RedrawingDisabled.get() - 1);
     redraw_later(wp, UPD_NOT_VALID);
@@ -257,17 +228,9 @@ fn wants_info_window(cot_flags: c_uint, repeat: c_int) -> bool {
 /// Open (or reuse) the preview window and put the item's `info` in it.
 ///
 /// Answers whether a window was resized, which is what makes `pum_display`
-/// redo the whole placement.
-///
-/// # Safety
-/// Must be called with a selected item that has info text. Autocommands run
-/// from here, so nothing may be held across it.
-unsafe fn pum_show_info(
-    info: *mut c_char,
-    repeat: c_int,
-    use_float: bool,
-    prev_selected: c_int,
-) -> bool {
+/// redo the whole placement. Autocommands run from here, which is why `info`
+/// is the caller's own copy.
+fn pum_show_info(info: &[u8], repeat: c_int, use_float: bool, prev_selected: c_int) -> bool {
     // SAFETY: every window pointer below is re-checked with `win_valid`
     // after anything that can run autocommands.
     let mut resized = false;
@@ -334,9 +297,7 @@ unsafe fn pum_show_info(
         }
 
         if res.is_ok() {
-            resized = unsafe {
-                pum_fill_info(info, repeat, use_float, prev_selected, resized, curwin_save)
-            };
+            resized = pum_fill_info(info, repeat, use_float, prev_selected, resized, curwin_save);
             resized = pum_restore_window(curwin_save, curtab_save, resized);
         }
     }
@@ -347,21 +308,18 @@ unsafe fn pum_show_info(
     resized
 }
 
-/// Put the info text in the window `pum_show_info` just entered and size it.
-///
-/// # Safety
-/// `curwin` must be the preview window.
-unsafe fn pum_fill_info(
-    info: *mut c_char,
+/// Put the info text in the window `pum_show_info` just entered -- the
+/// current one, the preview window -- and size it.
+fn pum_fill_info(
+    info: &[u8],
     repeat: c_int,
     use_float: bool,
     prev_selected: c_int,
     mut resized: bool,
     curwin_save: WinId,
 ) -> bool {
-    // SAFETY: `curwin`/`curbuf` are the preview window and its buffer;
     // `curwin_save` is the window completion started in and is re-validated.
-    let (lnum, max_info_width) = unsafe { pum_preview_set_text(Win::current(), info) };
+    let (lnum, max_info_width) = pum_preview_set_text(Win::current(), info);
 
     // Grow a preview split to fit the text, up to 'previewheight'.
     if repeat == 0 && !use_float {
@@ -458,7 +416,7 @@ pub(crate) fn pum_set_selected(n: c_int, repeat: c_int) -> bool {
     let prev_selected = pum_selected.replace(n);
     let cot_flags = get_cot_flags();
     let use_float = cot_flags & kOptCotFlagPopup != 0;
-    let info = unsafe { pum_selected_info() };
+    let info = pum_selected_info();
 
     // Back to no selection, or to one with nothing to show: hide the
     // float rather than closing it, so the next item can reuse it.
@@ -476,9 +434,9 @@ pub(crate) fn pum_set_selected(n: c_int, repeat: c_int) -> bool {
     pum_scroll_to_selected();
 
     match info {
-        Some(info) if wants_info_window(cot_flags, repeat) => unsafe {
-            pum_show_info(info, repeat, use_float, prev_selected)
-        },
+        Some(info) if wants_info_window(cot_flags, repeat) => {
+            pum_show_info(&info, repeat, use_float, prev_selected)
+        }
         _ => false,
     }
 }

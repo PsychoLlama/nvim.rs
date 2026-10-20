@@ -15,7 +15,7 @@
 
 use super::*;
 use crate::cstr;
-use crate::grid::linebuf;
+use crate::grid::with_linebuf;
 use crate::normal::{visual_active, visual_anchor, visual_mode};
 use crate::optionstr::OptStringRef;
 use crate::pos::MAXCOL;
@@ -43,7 +43,7 @@ impl Cells {
             return;
         }
         self.lcs_prec_todo = NUL as ScreenChar;
-        if unsafe { schar_cells(self.cell_char) } > 1 {
+        if schar_cells(self.cell_char) > 1 {
             // The "precedes" character overwrites a double-width one;
             // fill up its other half.
             wlv.extra_fill = schar_from_ascii(MB_FILLER_CHAR);
@@ -60,7 +60,7 @@ impl Cells {
             wlv.extra_attr = win_hl_attr(window, HLF_AT);
         }
         self.cell_char = window.w_p_lcs_chars.prec;
-        self.char_code = unsafe { schar_get_first_codepoint(self.cell_char) };
+        self.char_code = schar_get_first_codepoint(self.cell_char);
         self.attr_before_prec = wlv.char_attr;
         wlv.char_attr = win_hl_attr(window, HLF_AT);
         self.prec_attr_todo = 1;
@@ -103,7 +103,7 @@ impl Cells {
         {
             self.cell_char = lcs_ext;
             wlv.char_attr = win_hl_attr(window, HLF_AT);
-            self.char_code = unsafe { schar_get_first_codepoint(self.cell_char) };
+            self.char_code = schar_get_first_codepoint(self.cell_char);
         }
     }
 
@@ -192,7 +192,7 @@ impl Cells {
             wlv.col -= 1;
         } else {
             // Add a blank character to highlight.
-            linebuf().chars_mut()[wlv.off as usize] = schar_from_ascii(b' ');
+            with_linebuf(|line| line.chars_mut()[wlv.off as usize] = schar_from_ascii(b' '));
         }
         if self.area_attr == 0 && !self.has_fold {
             // Use the attributes of the highest-priority match.
@@ -203,8 +203,10 @@ impl Cells {
         } else {
             wlv.char_attr
         };
-        linebuf().attrs_mut()[wlv.off as usize] = eol_attr as ScreenAttr;
-        linebuf().vcols_mut()[wlv.off as usize] = wlv.vcol;
+        with_linebuf(|line| {
+            line.attrs_mut()[wlv.off as usize] = eol_attr as ScreenAttr;
+            line.vcols_mut()[wlv.off as usize] = wlv.vcol;
+        });
         wlv.col += 1;
         wlv.off += 1;
         wlv.vcol += 1;
@@ -288,23 +290,27 @@ impl Cells {
                 // `extra_todo` shorter than the Tab — so the running total is
                 // signed. Upstream lets `size_t` wrap through the same
                 // arithmetic and relies on the total coming back positive.
-                let tab2_len = unsafe { schar_len(lcs_tab2) } as isize;
+                let tab2_len = schar_len(lcs_tab2) as isize;
                 let mut len = tab_len as isize * tab2_len;
                 if lcs_tab3 != 0 {
-                    len += unsafe { schar_len(lcs_tab3) } as isize - tab2_len;
+                    len += schar_len(lcs_tab3) as isize - tab2_len;
                 }
                 if wlv.extra_todo > 0 {
                     len += (wlv.extra_todo - tab_len) as isize;
                 }
                 let len = len as size_t;
                 self.cell_char = lcs_tab1;
-                self.char_code = unsafe { schar_get_first_codepoint(self.cell_char) };
-                let mut p = unsafe { get_extra_buf(len + 1) };
-                unsafe { p.cast::<u8>().write_bytes(b' ', len) };
-                unsafe { *p.add(len) = NUL as ::core::ffi::c_char };
+                self.char_code = schar_get_first_codepoint(self.cell_char);
+                let p = unsafe { get_extra_buf(len + 1) };
+                // SAFETY: `get_extra_buf` answers `len + 1` bytes of its
+                // own buffer, which nothing else reads until this is done.
+                let buf = unsafe { core::slice::from_raw_parts_mut(p.cast::<u8>(), len + 1) };
+                buf[..len].fill(b' ');
+                buf[len] = NUL as u8;
                 wlv.extra_text = p;
+                let mut rest: &mut [u8] = buf;
                 for i in 0..tab_len {
-                    if unsafe { *p } == NUL as ::core::ffi::c_char {
+                    if rest[0] == NUL as u8 {
                         tab_len = i;
                         break;
                     }
@@ -314,7 +320,7 @@ impl Cells {
                     } else {
                         lcs_tab2
                     };
-                    let slen = unsafe { schar_get_adv(&raw mut p, lcs_here) };
+                    let slen = schar_get_adv(&mut rest, lcs_here);
                     wlv.extra_todo +=
                         slen as ::core::ffi::c_int - ::core::ffi::c_int::from(saved_nextra > 0);
                 }
@@ -366,7 +372,7 @@ impl Cells {
             wlv.extra_fill = schar_from_ascii(b' ');
             self.cell_char = schar_from_ascii(b' ');
         }
-        self.char_code = unsafe { schar_get_first_codepoint(self.cell_char) };
+        self.char_code = schar_get_first_codepoint(self.cell_char);
     }
 
     /// Draw an unprintable character in its `^X` or `<xx>` form.
@@ -448,7 +454,7 @@ impl Cells {
         self.ptr = unsafe { self.ptr.offset(-1) };
         wlv.extra_attr = win_hl_attr(window, HLF_AT);
         wlv.n_attr = 1;
-        self.char_code = unsafe { schar_get_first_codepoint(self.cell_char) };
+        self.char_code = schar_get_first_codepoint(self.cell_char);
     }
 
     /// Concealment: either replace the first character of a concealed run with
@@ -486,7 +492,7 @@ impl Cells {
             || (self.decor_conceal != 0 && wlv.decor.conceal_char != 0)
             || window.w_onebuf_opt.wo_cole == 1;
         if first_of_run && have_char && window.w_onebuf_opt.wo_cole != 3 {
-            if unsafe { schar_cells(self.cell_char) } > 1 {
+            if schar_cells(self.cell_char) > 1 {
                 // The first concealed character is double-width, so one
                 // more virtual column goes with it.
                 wlv.extra_todo += 1;
@@ -505,7 +511,7 @@ impl Cells {
             } else {
                 schar_from_ascii(b' ')
             };
-            self.char_code = unsafe { schar_get_first_codepoint(self.cell_char) };
+            self.char_code = schar_get_first_codepoint(self.cell_char);
             self.prev_syntax_id = self.syntax_seqnr;
 
             if wlv.extra_todo > 0 {

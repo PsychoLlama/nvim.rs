@@ -26,15 +26,16 @@ use core::slice;
 ///
 /// [`ins_compl_build_pum`] filters the cyclic `ComplItem` list by the current
 /// leader, sorts what survives and flattens it into a `PumItem` array;
-/// [`ins_compl_show_pum`] lends that array to `pum_display`, and
-/// `pum_undisplay` gives the borrow back. Upstream keeps it as a bare
-/// `PumItem *` with `compl_match_arraysize` beside it, with "is the menu
-/// up?" spelled as a null check on the pointer; here it is a `Vec` in
-/// [`ComplState`], empty for that null.
+/// [`ins_compl_show_pum`] shares that array with `pum_display`. Upstream
+/// keeps it as a bare `PumItem *` with `compl_match_arraysize` beside it,
+/// with "is the menu up?" spelled as a null check on the pointer; here it is
+/// an `Rc<[PumItem]>` in [`ComplState`], empty for that null, with the
+/// matches each row was built from beside it.
 ///
-/// The *strings* inside each item stay borrowed from the match they were
-/// read out of, so this owns the spine and nothing else; the menu must come
-/// down before the match list is freed, exactly as upstream required.
+/// The rows own copies of their match's strings, so the menu's share stays
+/// good whatever happens to the match list. Upstream finds the shown match's
+/// row by comparing string *addresses*; the copies have addresses of their
+/// own, so the row is found by the match id it came from instead.
 #[derive(Clone, Copy)]
 pub(crate) struct ComplMatchArray(());
 
@@ -43,39 +44,58 @@ pub(crate) fn compl_match_array() -> ComplMatchArray {
     ComplMatchArray(())
 }
 
+/// The array behind [`ComplMatchArray`]: the rows, and the match each came
+/// from.
+pub(crate) struct MatchRows {
+    rows: Option<Rc<[PumItem]>>,
+    ids: Vec<MatchId>,
+}
+
+impl MatchRows {
+    /// No array: upstream's null `compl_match_array`.
+    pub(crate) const EMPTY: MatchRows = MatchRows {
+        rows: None,
+        ids: Vec::new(),
+    };
+}
+
 impl ComplMatchArray {
     /// Whether there is no array at all -- upstream's
     /// `compl_match_array == NULL`, which is how the completion asks whether
     /// a menu is up.
     pub(crate) fn is_unset(self) -> bool {
-        COMPL_MATCH_ARRAY.with(Vec::is_empty)
+        COMPL_MATCH_ARRAY.with(|array| array.ids.is_empty())
     }
 
     /// The number of items.
+    #[cfg(test)]
     pub(crate) fn len(self) -> c_int {
-        COMPL_MATCH_ARRAY.with(Vec::len) as c_int
+        COMPL_MATCH_ARRAY.with(|array| array.ids.len()) as c_int
     }
 
-    /// The index of the first item `pred` accepts.
-    pub(crate) fn position(self, pred: impl FnMut(&PumItem) -> bool) -> Option<usize> {
-        COMPL_MATCH_ARRAY.with(|items| items.iter().position(pred))
+    /// The index of the row built from match `id`.
+    pub(crate) fn position_of(self, id: MatchId) -> Option<usize> {
+        COMPL_MATCH_ARRAY.with(|array| array.ids.iter().position(|&row| row == id))
     }
 
-    /// The address `pum_display` borrows. It stays put until the array is
-    /// replaced or cleared, which `pum_undisplay` comes before.
-    pub(crate) fn as_mut_ptr(self) -> *mut PumItem {
-        COMPL_MATCH_ARRAY.with_mut(Vec::as_mut_ptr)
+    /// The rows, shared: what `pum_display` keeps.
+    pub(crate) fn rows(self) -> Rc<[PumItem]> {
+        COMPL_MATCH_ARRAY
+            .with(|array| array.rows.clone())
+            .unwrap_or_else(|| Rc::from([]))
     }
 
-    /// Take `items` as the new array, dropping whatever was there. An empty
-    /// `items` leaves the array unset.
-    pub(crate) fn set(self, items: Vec<PumItem>) {
-        COMPL_MATCH_ARRAY.set(items);
+    /// Take `rows`, built from the matches `ids`, as the new array, dropping
+    /// whatever was there. An empty `rows` leaves the array unset.
+    pub(crate) fn set(self, rows: Vec<PumItem>, ids: Vec<MatchId>) {
+        debug_assert_eq!(rows.len(), ids.len(), "one match per row");
+        let rows = (!rows.is_empty()).then(|| Rc::from(rows));
+        COMPL_MATCH_ARRAY.set(MatchRows { rows, ids });
     }
 
     /// Drop the array. The menu must already be down.
     pub(crate) fn clear(self) {
-        COMPL_MATCH_ARRAY.set(Vec::new());
+        COMPL_MATCH_ARRAY.set(MatchRows::EMPTY);
     }
 }
 
@@ -416,34 +436,23 @@ pub(crate) fn ins_compl_build_pum() -> c_int {
         cur = 0;
     }
 
-    // The strings stay the matches': each is a heap block of its own, which
-    // the list growing does not move, and the menu comes down before a match
-    // is freed.
     let array: Vec<PumItem> = MATCHES.with(|list| {
         let item = |id: MatchId| {
             let m = list.get(id);
-            let extra = |which: c_int| {
-                m.extra[which as usize]
-                    .as_ref()
-                    .map(|text| text.as_ptr().cast_mut())
-            };
+            let extra = |which: c_int| m.extra[which as usize].clone();
             PumItem {
-                pum_text: extra(CPT_ABBR).unwrap_or(m.text.as_ptr().cast_mut()),
-                pum_kind: extra(CPT_KIND).unwrap_or(ptr::null_mut()),
-                pum_info: extra(CPT_INFO).unwrap_or(ptr::null_mut()),
+                pum_text: extra(CPT_ABBR).unwrap_or_else(|| m.text.clone()),
+                pum_kind: extra(CPT_KIND),
+                pum_info: extra(CPT_INFO),
                 pum_cpt_source_idx: m.cpt_source_idx,
                 pum_user_abbr_hlattr: m.user_abbr_hlattr,
                 pum_user_kind_hlattr: m.user_kind_hlattr,
-                pum_extra: extra(CPT_MENU).unwrap_or_else(|| {
-                    m.fname
-                        .as_ref()
-                        .map_or(ptr::null_mut(), |name| name.as_ptr().cast_mut())
-                }),
+                pum_extra: extra(CPT_MENU).or_else(|| m.fname.as_deref().cloned()),
             }
         };
         shown_in_menu.iter().map(|&id| item(id)).collect()
     });
-    compl_match_array().set(array);
+    compl_match_array().set(array, shown_in_menu);
 
     if !shown_match_ok {
         // No displayed match at all.
@@ -470,16 +479,7 @@ pub fn ins_compl_show_pum() {
         cur = ins_compl_build_pum();
     } else if let Some(shown) = shown_match() {
         // The menu already exists; only the current item has to be found.
-        let (text, abbr) = shown.with(|m| {
-            let abbr = m.extra[CPT_ABBR as usize].as_ref();
-            (
-                m.text.as_ptr(),
-                abbr.map_or(ptr::null(), |abbr| abbr.as_ptr()),
-            )
-        });
-        if let Some(i) = compl_match_array()
-            .position(|item| ptr::eq(item.pum_text, text) || ptr::eq(item.pum_text, abbr))
-        {
+        if let Some(i) = compl_match_array().position_of(shown) {
             cur = i as c_int;
         }
     }
@@ -499,11 +499,7 @@ pub fn ins_compl_show_pum() {
     let col = Win::current().w_cursor.col;
     Win::current().w_cursor.col = compl_col.get();
     compl_selected_item.set(cur);
-    let items = compl_match_array().as_mut_ptr();
-    let len = compl_match_array().len();
-    // SAFETY: the array is `len` items long and stays put until
-    // `pum_undisplay` gives the borrow back.
-    unsafe { pum_display(items, len, cur, array_changed, 0) };
+    pum_display(compl_match_array().rows(), cur, array_changed, 0);
     Win::current().w_cursor.col = col;
 
     if compl_started.get() && compl_curr_match.get() != compl_shown_match.get() {

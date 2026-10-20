@@ -211,7 +211,7 @@ pub fn nvim__screenshot(path: String_0) {
 // `nvim__invalidate_glyph_cache` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
 pub fn nvim__invalidate_glyph_cache() {
-    unsafe { schar_cache_clear() };
+    schar_cache_clear();
     must_redraw.set(UPD_CLEAR);
 }
 

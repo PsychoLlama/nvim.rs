@@ -37,8 +37,7 @@ fn lock() -> std::sync::MutexGuard<'static, ()> {
 }
 
 fn intern(text: &str) -> ScreenChar {
-    // SAFETY: `text` holds `len` readable bytes and no NUL.
-    unsafe { schar_from_buf(text.as_ptr().cast::<c_char>(), text.len()) }
+    schar_from_buf(text.as_bytes())
 }
 
 /// `sc`'s bytes, through `schar_get` into a buffer of exactly
@@ -48,8 +47,7 @@ fn text(sc: ScreenChar) -> Vec<u8> {
     // SAFETY: `buf` has room for `MAX_SCHAR_SIZE` bytes.
     let len = unsafe { schar_get(buf.as_mut_ptr().cast::<c_char>(), sc) };
     assert_eq!(buf[len], 0, "schar_get terminates the glyph");
-    // SAFETY: `sc` is a glyph this process produced.
-    assert_eq!(unsafe { schar_len(sc) }, len);
+    assert_eq!(schar_len(sc), len);
     buf[..len].to_vec()
 }
 
@@ -72,8 +70,7 @@ fn up_to_four_bytes_are_stored_inline() {
         // Cell widths read the printable-character tables, which only an
         // initialised editor has: under Miri `é` is `<e9>`, four cells.
         #[cfg(not(miri))]
-        // SAFETY: a glyph this process produced.
-        assert_eq!(unsafe { schar_cells(sc) }, cells, "{glyph:?} cells");
+        assert_eq!(schar_cells(sc), cells, "{glyph:?} cells");
         #[cfg(miri)]
         let _ = cells;
     }
@@ -81,12 +78,10 @@ fn up_to_four_bytes_are_stored_inline() {
     // double-width cell.
     assert_eq!(intern(""), 0);
     assert_eq!(text(0), b"");
-    // `schar_from_str` measures to the NUL.
-    // SAFETY: NUL-terminated, and null is allowed.
-    unsafe {
-        assert_eq!(schar_from_str(c"ab".as_ptr()), 0x6261);
-        assert_eq!(schar_from_str(std::ptr::null()), 0);
-    }
+    // `schar_from_str` measures to the NUL; the empty string is the empty
+    // glyph (upstream's null pointer answers the same).
+    assert_eq!(schar_from_str(c"ab"), 0x6261);
+    assert_eq!(schar_from_str(c""), 0);
 }
 
 #[test]
@@ -104,11 +99,8 @@ fn longer_glyphs_are_interned_once() {
     assert_ne!(other, a);
     assert_eq!(text(a), five.as_bytes());
     assert_eq!(text(other), "o\u{301}\u{302}".as_bytes());
-    // SAFETY: glyphs this process produced.
-    unsafe {
-        assert_eq!(schar_cells(a), 1);
-        assert_eq!(schar_get_first_codepoint(a), 'e' as c_int);
-    }
+    assert_eq!(schar_cells(a), 1);
+    assert_eq!(schar_get_first_codepoint(a), 'e' as c_int);
     // ASCII-only answers ASCII, NUL for anything else.
     assert_eq!(schar_get_ascii(intern("x")) as u8, b'x');
     assert_eq!(schar_get_ascii(a), 0);
@@ -128,11 +120,8 @@ fn the_longest_glyph_and_its_terminator_fill_the_buffer() {
     let sc = intern(&long);
     assert!(schar_high(sc));
     assert_eq!(text(sc), long.as_bytes());
-    // SAFETY: a glyph this process produced.
-    unsafe {
-        assert_eq!(schar_get_first_codepoint(sc), 'a' as c_int);
-        assert_eq!(schar_cells(sc), 1);
-    }
+    assert_eq!(schar_get_first_codepoint(sc), 'a' as c_int);
+    assert_eq!(schar_cells(sc), 1);
 }
 
 /// A 32-byte glyph leaves no room for the NUL; a debug build refuses it at
@@ -161,19 +150,15 @@ fn schar_get_adv_builds_a_string_from_glyphs() {
         intern("z"),
     ];
     let mut buf = [0u8; 5 * MAX_SCHAR_SIZE as usize];
-    let mut at = buf.as_mut_ptr().cast::<c_char>();
+    let mut at: &mut [u8] = &mut buf;
     let mut total = 0;
     for &sc in &glyphs {
-        // SAFETY: `at` has at least `MAX_SCHAR_SIZE` bytes of `buf` left.
-        total += unsafe { schar_get_adv(&raw mut at, sc) };
+        total += schar_get_adv(&mut at, sc);
     }
     let want = "a日e\u{301}\u{302}z";
     assert_eq!(total, want.len());
-    // SAFETY: both point into `buf`.
-    assert_eq!(
-        unsafe { at.offset_from(buf.as_ptr().cast::<c_char>()) },
-        want.len() as isize
-    );
+    // The slice advanced past exactly what was written.
+    assert_eq!(at.len(), buf.len() - want.len());
     assert_eq!(&buf[..total], want.as_bytes());
     // No terminator is written: the byte after is as it was.
     assert_eq!(buf[total], 0);
@@ -196,8 +181,7 @@ fn arabic_text_takes_its_contextual_forms() {
     let shape = |text: &str| -> Vec<u32> {
         let mut cells: Vec<ScreenChar> =
             text.chars().map(|c| schar_from_char(c as c_int)).collect();
-        // SAFETY: glyphs this process produced.
-        unsafe { line_do_arabic_shape(&mut cells) };
+        line_do_arabic_shape(&mut cells);
         cells
             .iter()
             .map(|&sc| {
@@ -228,8 +212,7 @@ fn arabic_text_takes_its_contextual_forms() {
     #[cfg(not(miri))]
     {
         let mut cell = [intern("\u{644}\u{627}")];
-        // SAFETY: a glyph this process produced.
-        unsafe { line_do_arabic_shape(&mut cell) };
+        line_do_arabic_shape(&mut cell);
         assert_eq!(text(cell[0]), "\u{fefb}".as_bytes());
     }
     // Text with no Arabic is left alone.

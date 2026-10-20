@@ -245,7 +245,7 @@ pub(crate) fn refresh_screen(mut term: Term, buffer: Buf) {
     for (offset, row) in (term.invalid_start..term.invalid_end).enumerate() {
         let linenr = (first_linenr + offset as c_int) as LineNr;
         fetch_row(term, row, width);
-        let text = crate::cstr::in_chars(&term.textbuf);
+        let text = crate::cstr::in_bytes(&term.textbuf);
         // Past the end of the buffer means the terminal is still filling
         // out its first screen.
         if linenr <= buffer.line_count() {

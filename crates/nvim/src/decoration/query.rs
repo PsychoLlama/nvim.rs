@@ -36,7 +36,7 @@ use crate::types::{
     DecorVirtText, LineNr, MarkTreeIter, OptInt, VirtLines, VirtText, size_t, uint64_t, virt_line,
 };
 use crate::winlayer::{Buf, Win};
-use core::ffi::{c_char, c_int};
+use core::ffi::{CStr, c_int};
 use core::{ptr, slice};
 
 /// Marktree filters, indexed by `MetaIndex`: `kMTMetaLines` is 1 and
@@ -59,7 +59,7 @@ impl Win {
     }
 }
 
-/// The text of the next chunk of `vt`, or null when there are no more.
+/// The text of the next chunk of `vt`, or `None` when there are no more.
 ///
 /// `pos` is the walk's position and is advanced past the chunk answered;
 /// `attr` accumulates the highlights of every chunk passed, including the
@@ -67,27 +67,23 @@ impl Win {
 /// `attr` from -1 ("no highlight given") to 0, which is how a caller tells
 /// "explicitly unhighlighted" from "nothing said".
 ///
-/// # Safety
-/// `vt` must be live; `pos` and `attr` must be writable. They are raw
-/// pointers rather than references because two of the callers pass fields of
-/// a struct they keep reading through a raw pointer across the call.
-pub unsafe fn next_virt_text_chunk(
-    vt: VirtText,
-    pos: *mut size_t,
-    attr: *mut c_int,
-) -> *mut c_char {
+/// `vt` is a live kvec of chunks whose texts are null or NUL-terminated --
+/// the invariant every `VirtText` the decorations build keeps, and the one
+/// [`virt_text_to_array`](crate::api::extmark::query::virt_text_to_array)
+/// already reads it under.
+pub fn next_virt_text_chunk<'a>(
+    vt: &'a VirtText,
+    pos: &mut size_t,
+    attr: &mut c_int,
+) -> Option<&'a CStr> {
     if vt.size == 0 {
-        return ptr::null_mut();
+        return None;
     }
     // SAFETY: a non-empty kvec's `items` is its own allocation, `size` long.
     let chunks = unsafe { slice::from_raw_parts(vt.items, vt.size) };
-    // SAFETY: the caller's out-parameters.
-    let (pos, attr) = unsafe { (&mut *pos, &mut *attr) };
 
-    let mut text: *mut c_char = ptr::null_mut();
-    while text.is_null() && *pos < chunks.len() {
+    while *pos < chunks.len() {
         let chunk = chunks[*pos];
-        text = chunk.text;
         if chunk.hl_id >= 0 {
             *attr = (*attr).max(0);
             if chunk.hl_id > 0 {
@@ -95,8 +91,13 @@ pub unsafe fn next_virt_text_chunk(
             }
         }
         *pos += 1;
+        if !chunk.text.is_null() {
+            // SAFETY: a chunk's text is NUL-terminated and lives as long as
+            // the chunk array.
+            return Some(unsafe { CStr::from_ptr(chunk.text) });
+        }
     }
-    text
+    None
 }
 
 /// The first virtual *text* on `row` — skipping virtual *lines*, which are a

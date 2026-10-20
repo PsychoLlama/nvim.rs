@@ -1,30 +1,30 @@
 count	callee	no_raw	defs	def
 170	dispatch	0	1	crates/nvim/src/lua/api_wrappers/mod.rs
-148	xfree	0	1	crates/nvim/src/memory/mod.rs
-134	.offset	0	0	
-95	bytes_at	0	1	crates/nvim/src/cstr.rs
-91	.add	0	0	
+146	xfree	0	1	crates/nvim/src/memory/mod.rs
+125	.offset	0	0	
+90	.add	0	0	
 86	nlua_pop_string	0	1	crates/nvim/src/lua/converter/pop.rs
+85	bytes_at	0	1	crates/nvim/src/cstr.rs
 81	CStr::from_ptr	0	1	crates/nvim/src/marktree/node.rs
 80	at	0	2	
 79	nlua_pop_handle	0	1	crates/nvim/src/lua/converter/pop.rs
-71	from_raw_parts	0	0	
+73	from_raw_parts	0	0	
 62	nlua_pop_integer	0	1	crates/nvim/src/lua/converter/pop.rs
-53	.offset_from	0	0	
+52	.offset_from	0	0	
 51	c_str	0	1	crates/nvim/src/message_fmt/mod.rs
-46	utfc_ptr2len	0	1	crates/nvim/src/mbyte/utf8/mod.rs
+45	utfc_ptr2len	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 44	pop_keydict	0	1	crates/nvim/src/lua/api_wrappers/mod.rs
-34	cstr_to_string	0	1	crates/nvim/src/api/private/helpers/text.rs
-34	from_raw_parts_mut	0	0	
+38	from_raw_parts_mut	0	0	
+32	cstr_to_string	0	1	crates/nvim/src/api/private/helpers/text.rs
 29	Term::new	0	1	crates/nvim/src/terminal/mod.rs
 29	f	0	0	
 29	multiqueue_put_event	0	1	crates/nvim/src/event/multiqueue.rs
 28	xmalloc	0	1	crates/nvim/src/memory/mod.rs
-27	utf_ptr2char	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 26	Node::new	0	1	crates/nvim/src/marktree/node.rs
 26	nlua_pop_boolean	0	1	crates/nvim/src/lua/converter/pop.rs
 24	Live::new	0	1	crates/nvim/src/winlayer/live.rs
 24	nlua_push_array	0	1	crates/nvim/src/lua/converter/push_object.rs
+24	utf_ptr2char	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 22	.as_ref	0	0	
 21	nlua_push_dict	0	1	crates/nvim/src/lua/converter/push_object.rs
 21	utfc_next	1	1	crates/nvim/src/mbyte/utf8/mod.rs
@@ -34,33 +34,31 @@ count	callee	no_raw	defs	def
 20	init_charsize_arg	0	1	crates/nvim/src/plines/mod.rs
 20	nlua_push_integer	0	1	crates/nvim/src/lua/converter/push_object.rs
 20	nlua_push_object	0	1	crates/nvim/src/lua/converter/push_object.rs
-20	ptr2cells	0	1	crates/nvim/src/charset/walk.rs
 20	win_charsize	0	1	crates/nvim/src/plines/mod.rs
 20	zeroed	0	0	
 19	NulTerminated::new	0	1	crates/nvim/src/mbyte/utf8/text.rs
 19	at_opt	0	1	crates/nvim/src/cstr.rs
 19	channel_decref	0	1	crates/nvim/src/channel/mod.rs
-19	slice_at	0	1	crates/nvim/src/cstr.rs
-19	vim_strsize	0	1	crates/nvim/src/mbyte/utf8/mod.rs
-18	abort	0	0	
+19	ptr2cells	0	1	crates/nvim/src/charset/walk.rs
+18	slice_at	0	1	crates/nvim/src/cstr.rs
 18	try_enter	0	1	crates/nvim/src/api/private/helpers/mod.rs
 18	try_leave	0	1	crates/nvim/src/api/private/helpers/mod.rs
 17	Op::new	0	41	
 17	Reader::new	0	1	crates/nvim/src/event/rstream.rs
 17	nlua_pop_object	0	1	crates/nvim/src/lua/converter/pop_object.rs
 17	utf_head_off	0	1	crates/nvim/src/mbyte/utf8/mod.rs
-17	utf_ptr2cells	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 16	Ui::new	0	41	
+16	abort	0	0	
 16	utf_ptr2str_char_info	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 15	XString::from_raw	0	1	crates/nvim/src/memory/xstring.rs
 15	snprintf	0	1	crates/nvim/src/os/cshim.rs
-15	utf_char2bytes	0	1	crates/nvim/src/mbyte/utf8/mod.rs
+15	vim_strsize	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 14	NormalStateRef::new	0	1	crates/nvim/src/normal/state.rs
-14	arena_mem_free	0	1	crates/nvim/src/memory/arena.rs
 14	getvcol	0	1	crates/nvim/src/plines/vcol.rs
 14	ml_replace	0	1	crates/nvim/src/change/text.rs
 14	skipwhite	0	1	crates/nvim/src/charset/walk.rs
 14	xmemdupz	0	1	crates/nvim/src/memory/mod.rs
+13	arena_mem_free	0	1	crates/nvim/src/memory/arena.rs
 13	from	0	0	
 13	luaL_error	0	0	
 13	notify	0	1	crates/nvim/src/mpack/lmpack/session.rs
@@ -72,7 +70,8 @@ count	callee	no_raw	defs	def
 12	get_yank_register	0	1	crates/nvim/src/register/store.rs
 12	getdigits_int	0	1	crates/nvim/src/charset/walk.rs
 12	mb_get_class	0	1	crates/nvim/src/mbyte/utf8/mod.rs
-11	.copy_from_nonoverlapping	0	0	
+12	utf_char2bytes	0	1	crates/nvim/src/mbyte/utf8/mod.rs
+12	xrealloc	0	1	crates/nvim/src/memory/mod.rs
 11	Child::new	0	1	crates/nvim/src/event/proc.rs
 11	EventLoop::new	0	1	crates/nvim/src/event/loop.rs
 11	PosRef::new	0	1	crates/nvim/src/winlayer.rs
@@ -80,8 +79,8 @@ count	callee	no_raw	defs	def
 11	dispatch_fast	0	1	crates/nvim/src/lua/api_wrappers/mod.rs
 11	starts_with	0	1	crates/nvim/src/cstr.rs
 11	take_arg	1	1	crates/nvim/src/ui_client.rs
+11	utf_ptr2cells	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 11	vterm_alloc	0	1	crates/nvim/src/vterm/vterm.rs
-11	xrealloc	0	1	crates/nvim/src/memory/mod.rs
 10	Queue::new	0	1	crates/nvim/src/event/multiqueue.rs
 10	Screen::at	0	1	crates/nvim/src/vterm/screen/mod.rs
 10	ThinCString::from_raw	0	1	crates/nvim/src/memory/thin_cstring.rs
@@ -95,8 +94,8 @@ count	callee	no_raw	defs	def
 10	nlua_push_boolean	0	1	crates/nvim/src/lua/converter/push_object.rs
 10	normalize_index	0	1	crates/nvim/src/api/private/helpers/text.rs
 10	process_events_until	0	1	crates/nvim/src/event/loop.rs
-10	schar_get	0	1	crates/nvim/src/grid/schar.rs
 10	state_of	0	1	crates/nvim/src/vterm/state/entry.rs
+9	.copy_from_nonoverlapping	0	0	
 9	Node::from_ptr	0	1	crates/nvim/src/marktree/node.rs
 9	String_0::from_owned_parts	0	1	crates/nvim/src/api/private/helpers/text.rs
 9	channel_incref	0	1	crates/nvim/src/channel/mod.rs
@@ -105,7 +104,6 @@ count	callee	no_raw	defs	def
 9	nlua_push_handle	0	1	crates/nvim/src/lua/converter/push_object.rs
 9	push_call	0	1	crates/nvim/src/api/ui/packer.rs
 9	rpc_send_event	0	1	crates/nvim/src/msgpack_rpc/channel/mod.rs
-9	schar_get_first_codepoint	1	1	crates/nvim/src/grid/schar.rs
 9	xcalloc	0	1	crates/nvim/src/memory/mod.rs
 9	xstrlcpy	0	1	crates/nvim/src/memory/mod.rs
 9	xstrnsave	0	1	crates/nvim/src/strings/raw.rs
@@ -134,7 +132,6 @@ count	callee	no_raw	defs	def
 7	copy	0	0	
 7	fclose	0	0	
 7	free_register	0	1	crates/nvim/src/register/store.rs
-7	mb_string2cells	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 7	multiqueue_process_events	0	1	crates/nvim/src/event/multiqueue.rs
 7	os_remove	0	0	
 7	prefix_at	0	1	crates/nvim/src/cstr.rs
@@ -144,7 +141,6 @@ count	callee	no_raw	defs	def
 7	xmallocz	0	1	crates/nvim/src/memory/mod.rs
 6	.as_mut	0	0	
 6	ClickArena::new	0	1	crates/nvim/src/statusline/mod.rs
-6	GridRef::new	0	1	crates/nvim/src/grid/mod.rs
 6	Timer::new	0	1	crates/nvim/src/event/time.rs
 6	Tm::new	0	41	
 6	chan_close_on_err	0	1	crates/nvim/src/msgpack_rpc/channel/mod.rs
@@ -163,8 +159,6 @@ count	callee	no_raw	defs	def
 6	os_fopen	0	1	crates/nvim/src/os/fs/mod.rs
 6	rstream_may_close	0	1	crates/nvim/src/event/rstream.rs
 6	rstream_start	0	1	crates/nvim/src/event/rstream.rs
-6	schar_cells	1	1	crates/nvim/src/grid/schar.rs
-6	schar_from_buf	0	1	crates/nvim/src/grid/schar.rs
 6	strcpy	0	0	
 6	strequal	0	1	crates/nvim/src/memory/mod.rs
 5	.advance_color_col	1	1	crates/nvim/src/drawline/state.rs
@@ -173,6 +167,7 @@ count	callee	no_raw	defs	def
 5	Chan::new	0	1	crates/nvim/src/msgpack_rpc/channel/mod.rs
 5	DictRef::owning	0	1	crates/nvim/src/eval/typval/handle.rs
 5	Fmt::copy_of	0	1	crates/nvim/src/statusline/mod.rs
+5	GridRef::new	0	1	crates/nvim/src/grid/mod.rs
 5	ManuallyDrop::take	0	1	crates/nvim/src/change/leader.rs
 5	Range::new	0	1	crates/nvim/src/decoration/handles.rs
 5	Signal::new	0	1	crates/nvim/src/event/signal.rs
@@ -189,17 +184,17 @@ count	callee	no_raw	defs	def
 5	lua_createtable	0	0	
 5	lua_pushboolean	0	0	
 5	lua_type	0	0	
+5	mb_string2cells	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 5	mpack_tokbuf_init	0	1	crates/nvim/src/mpack/mpack_core.rs
 5	proc_stop	0	1	crates/nvim/src/event/proc.rs
 5	rpc_start	0	1	crates/nvim/src/msgpack_rpc/channel/mod.rs
+5	schar_get	0	1	crates/nvim/src/grid/schar.rs
 5	set_clipboard	0	1	crates/nvim/src/clipboard.rs
 5	stream_may_close	0	1	crates/nvim/src/event/stream.rs
-5	strnlen	0	2	
 5	table	0	1	crates/nvim/src/mpack/rpc.rs
 5	tabstop_padding	0	1	crates/nvim/src/indent/mod.rs
 5	time_watcher_start	0	1	crates/nvim/src/event/time.rs
 5	time_watcher_stop	0	1	crates/nvim/src/event/time.rs
-5	utf_ptr2len	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 5	utfc_ptr2schar	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 5	vim_fgets	0	1	crates/nvim/src/fileio/legacy_stream.rs
 5	vim_isprintc	0	0	
@@ -224,7 +219,6 @@ count	callee	no_raw	defs	def
 4	expand_by_function	0	1	crates/nvim/src/insexpand/callbacks.rs
 4	findpar	0	1	crates/nvim/src/textobject/para.rs
 4	get_spec_reg	0	1	crates/nvim/src/register/special.rs
-4	grid_line_getchar	0	1	crates/nvim/src/grid/line.rs
 4	inc	0	0	
 4	indent_size_ts	0	1	crates/nvim/src/indent/mod.rs
 4	lua_pop	0	1	crates/nvim/src/lua/ffi.rs
@@ -232,7 +226,6 @@ count	callee	no_raw	defs	def
 4	mb_prevptr	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 4	memchrsub	0	1	crates/nvim/src/memory/mod.rs
 4	ml_replace_len	0	1	crates/nvim/src/change/text.rs
-4	next_virt_text_chunk	0	1	crates/nvim/src/decoration/query.rs
 4	nlua_call_ref	0	1	crates/nvim/src/lua/executor/exec.rs
 4	nlua_call_ref_ctx	0	1	crates/nvim/src/lua/executor/exec.rs
 4	nlua_pushref	0	1	crates/nvim/src/lua/executor/refs.rs
@@ -240,13 +233,11 @@ count	callee	no_raw	defs	def
 4	op_yank_reg	0	1	crates/nvim/src/register/yank.rs
 4	os_env_exists	0	1	crates/nvim/src/os/env/mod.rs
 4	process_events	0	1	crates/nvim/src/event/loop.rs
-4	pum_items	1	1	crates/nvim/src/popupmenu/mod.rs
 4	push_linestr	0	1	crates/nvim/src/api/buffer/lines.rs
 4	put_byte	1	1	crates/nvim/src/msgpack_rpc/channel/envelope.rs
 4	put_in_typebuf	0	1	crates/nvim/src/register/exec.rs
 4	put_on_cmdline	0	1	crates/nvim/src/ex_getln/draw.rs
 4	refkey	0	1	crates/nvim/src/marktree/node.rs
-4	schar_get_adv	0	1	crates/nvim/src/grid/schar.rs
 4	serialize_request	0	1	crates/nvim/src/msgpack_rpc/channel/envelope.rs
 4	show_one_mark	0	1	crates/nvim/src/mark/show.rs
 4	socket_watcher_close	0	1	crates/nvim/src/event/socket/mod.rs
@@ -256,8 +247,8 @@ count	callee	no_raw	defs	def
 4	timer_stop	0	1	crates/nvim/src/eval/timer.rs
 4	try_to_free_memory	1	1	crates/nvim/src/memory/mod.rs
 4	ui_flush_buf	0	1	crates/nvim/src/api/ui/packer.rs
+4	utf_ptr2len	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 4	uv_timer_start	0	0	
-4	win_linetabsize	0	1	crates/nvim/src/plines/mod.rs
 4	xmemdup	0	1	crates/nvim/src/memory/mod.rs
 3	.append_array	0	1	crates/nvim/src/cjson/lua_cjson/encode.rs
 3	.next_arg::<::core::ffi::c_int>	0	0	
@@ -298,7 +289,6 @@ count	callee	no_raw	defs	def
 3	diff_free	0	1	crates/nvim/src/diff/block.rs
 3	draw_virt_text_item	1	1	crates/nvim/src/drawline/virttext.rs
 3	eq	0	1	crates/nvim/src/cstr.rs
-3	find_bucket	0	2	
 3	fname2fnum	0	1	crates/nvim/src/mark/mod.rs
 3	fold_merge	1	1	crates/nvim/src/fold/adjust.rs
 3	fold_reverse_order	1	1	crates/nvim/src/fold/adjust.rs
@@ -346,32 +336,28 @@ count	callee	no_raw	defs	def
 3	os_write	0	1	crates/nvim/src/os/fs/mod.rs
 3	packer_buffer_finish	1	1	crates/nvim/src/msgpack_rpc/channel/envelope.rs
 3	packer_buffer_init	0	1	crates/nvim/src/msgpack_rpc/channel/envelope.rs
-3	parse_winborder	0	1	crates/nvim/src/api/win_config/border.rs
 3	prepare_call	0	1	crates/nvim/src/api/ui/packer.rs
 3	proc_free	0	1	crates/nvim/src/event/proc.rs
 3	pty_proc_close_master	0	1	crates/nvim/src/os/pty_proc_unix/mod.rs
-3	pum_get_item	0	1	crates/nvim/src/popupmenu/draw.rs
 3	push_keydict	0	1	crates/nvim/src/lua/api_wrappers/mod.rs
 3	put	0	1	crates/nvim/src/map/table.rs
 3	rl_mirror_ascii	0	1	crates/nvim/src/charset/walk.rs
 3	rstream_init	0	1	crates/nvim/src/event/rstream.rs
 3	scan_progress	0	1	crates/nvim/src/insexpand/getexp.rs
 3	schar_from_buf_first	0	1	crates/nvim/src/mbyte/utf8/mod.rs
-3	screengrid_line_start	0	0	
 3	shell_free_argv	0	1	crates/nvim/src/os/shell/mod.rs
 3	skip_comment	0	1	crates/nvim/src/ops/join.rs
 3	step	0	0	
+3	strnlen	0	2	
 3	swapchars	0	1	crates/nvim/src/ops/case.rs
 3	terminal_close	0	1	crates/nvim/src/terminal/mod.rs
 3	terminal_live	0	1	crates/nvim/src/eval/funcs/job.rs
 3	terminal_running	0	1	crates/nvim/src/terminal/mod.rs
 3	textpos2screenpos	0	1	crates/nvim/src/move/columns.rs
 3	time_watcher_init	0	1	crates/nvim/src/event/time.rs
-3	transstr	0	1	crates/nvim/src/charset/walk.rs
 3	transstr_buf	0	1	crates/nvim/src/charset/walk.rs
 3	unpack_string_or_array	0	1	crates/nvim/src/api/autocmd/pattern.rs
 3	utf_composinglike	0	1	crates/nvim/src/mbyte/utf8/mod.rs
-3	utf_ptr2cells_len	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 3	utf_ptr2char_info	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 3	uv_fs_access	0	0	
 3	uv_pipe_init	0	0	
@@ -381,13 +367,13 @@ count	callee	no_raw	defs	def
 3	vterm_get_size	0	1	crates/nvim/src/vterm/vterm.rs
 3	vterm_push_output_bytes	0	1	crates/nvim/src/vterm/vterm.rs
 3	win_line	0	1	crates/nvim/src/drawline/mod.rs
+3	win_linetabsize	0	1	crates/nvim/src/plines/mod.rs
 3	wstream_write	0	1	crates/nvim/src/event/wstream.rs
 2	.append_number	0	1	crates/nvim/src/cjson/lua_cjson/encode.rs
 2	.append_string	0	1	crates/nvim/src/cjson/lua_cjson/encode.rs
 2	.bit_copy	1	1	crates/nvim/src/eval/typval/handle.rs
 2	.byte	1	1	crates/nvim/src/winlayer.rs
 2	.color_col_attr	1	1	crates/nvim/src/drawline/state.rs
-2	.emit	0	1	crates/nvim/src/popupmenu/draw.rs
 2	.ended	1	1	crates/nvim/src/winlayer.rs
 2	.has_flag	1	1	crates/nvim/src/textformat/para.rs
 2	.has_more_inline_virt	0	0	
@@ -468,6 +454,7 @@ count	callee	no_raw	defs	def
 2	file_close	0	1	crates/nvim/src/os/fileio.rs
 2	file_flush	0	1	crates/nvim/src/os/fileio.rs
 2	file_open	0	1	crates/nvim/src/os/fileio.rs
+2	find_bucket	0	1	crates/nvim/src/map/table.rs
 2	find_decl	0	1	crates/nvim/src/normal/identfind.rs
 2	find_next_quote	0	1	crates/nvim/src/textobject/quote.rs
 2	find_prev_quote	0	1	crates/nvim/src/textobject/quote.rs
@@ -493,9 +480,6 @@ count	callee	no_raw	defs	def
 2	getdigits_int32	0	1	crates/nvim/src/charset/walk.rs
 2	gettext_raw	0	1	crates/nvim/src/os/cshim.rs
 2	getuid	0	0	
-2	grid_draw_border	0	1	crates/nvim/src/grid/border.rs
-2	grid_draw_bordertext	0	1	crates/nvim/src/grid/border.rs
-2	grid_put_linebuf	1	1	crates/nvim/src/grid/line.rs
 2	has_char	0	0	
 2	hash_remove	0	1	crates/nvim/src/hashtab.rs
 2	hl_add_url	0	1	crates/nvim/src/highlight/mod.rs
@@ -577,15 +561,13 @@ count	callee	no_raw	defs	def
 2	parse_border_style	0	1	crates/nvim/src/api/win_config/border.rs
 2	parse_diffanchors	0	1	crates/nvim/src/diff/opts.rs
 2	parse_pattern_and_range	0	1	crates/nvim/src/ex_getln/incsearch.rs
+2	parse_winborder	0	1	crates/nvim/src/api/win_config/border.rs
 2	path_fnamecmp	0	0	
 2	pop_reuse_blk	0	1	crates/nvim/src/memory/arena.rs
 2	proc_close_streams	0	1	crates/nvim/src/event/proc.rs
 2	proc_get_exepath	0	1	crates/nvim/src/event/proc.rs
 2	proc_wait	0	1	crates/nvim/src/event/proc.rs
 2	pty_proc_resize	0	1	crates/nvim/src/os/pty_proc_unix/mod.rs
-2	pum_display	0	1	crates/nvim/src/popupmenu/mod.rs
-2	pum_grid_puts_with_attrs	0	1	crates/nvim/src/popupmenu/draw.rs
-2	pum_preview_set_text	0	1	crates/nvim/src/popupmenu/preview.rs
 2	push_clear	0	1	crates/nvim/src/api/ui/line.rs
 2	push_paste_marker	0	1	crates/nvim/src/vterm/keyboard.rs
 2	queue_channel_event	0	1	crates/nvim/src/channel/reader.rs
@@ -599,11 +581,6 @@ count	callee	no_raw	defs	def
 2	row_cells	0	1	crates/nvim/src/vterm/screen/mod.rs
 2	rpc_send_call	0	1	crates/nvim/src/msgpack_rpc/channel/mod.rs
 2	run	0	2	
-2	schar_cache_clear	1	1	crates/nvim/src/grid/schar.rs
-2	schar_cache_clear_if_full	1	1	crates/nvim/src/grid/schar.rs
-2	schar_from_str	0	1	crates/nvim/src/grid/schar.rs
-2	schar_get_first_two_codepoints	1	1	crates/nvim/src/grid/schar.rs
-2	schar_len	1	1	crates/nvim/src/grid/schar.rs
 2	schedule_channel_event	0	1	crates/nvim/src/channel/reader.rs
 2	seam_calloc	0	1	crates/nvim/src/memory/mod.rs
 2	seam_malloc	0	1	crates/nvim/src/memory/mod.rs
@@ -621,7 +598,6 @@ count	callee	no_raw	defs	def
 2	stop_insert	0	1	crates/nvim/src/edit/undo.rs
 2	str_to_reg	0	1	crates/nvim/src/register/contents.rs
 2	strcat	0	0	
-2	strchr	0	1	crates/nvim/src/os/cshim.rs
 2	strchrsub	0	1	crates/nvim/src/memory/mod.rs
 2	stream_init	0	1	crates/nvim/src/event/stream.rs
 2	strncasecmp	0	1	crates/nvim/src/os/cshim.rs
@@ -642,6 +618,7 @@ count	callee	no_raw	defs	def
 2	tolower	0	0	
 2	transcode	0	1	crates/nvim/src/lua/base64.rs
 2	translate_contents	0	1	crates/nvim/src/api/ui/redraw.rs
+2	transstr	0	1	crates/nvim/src/charset/walk.rs
 2	tv_copy	0	0	
 2	tv_dict_free_dict	0	1	crates/nvim/src/eval/typval/handle.rs
 2	typed_items	1	1	crates/nvim/src/garray.rs
@@ -652,6 +629,7 @@ count	callee	no_raw	defs	def
 2	unpack	0	1	crates/nvim/src/msgpack_rpc/unpacker/mod.rs
 2	update_yankreg_width	0	1	crates/nvim/src/register/store.rs
 2	utf_iscomposing	0	1	crates/nvim/src/mbyte/utf8/mod.rs
+2	utf_ptr2cells_len	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 2	uv_freeaddrinfo	0	0	
 2	uv_fs_lstat	0	0	
 2	uv_fs_req_cleanup	0	0	
@@ -695,7 +673,6 @@ count	callee	no_raw	defs	def
 1	.parse_array	0	1	crates/nvim/src/cjson/lua_cjson/decode.rs
 1	.parse_object	0	1	crates/nvim/src/cjson/lua_cjson/decode.rs
 1	.push_value	0	1	crates/nvim/src/cjson/lua_cjson/decode.rs
-1	.put_column	1	1	crates/nvim/src/popupmenu/draw.rs
 1	.refill	0	1	crates/nvim/src/indent/breakindent.rs
 1	.set_cstr	0	1	crates/nvim/src/ex_getln/buffer.rs
 1	.set_cterm_color	0	1	crates/nvim/src/highlight_group/command.rs
@@ -909,7 +886,6 @@ count	callee	no_raw	defs	def
 1	left_adjust	0	1	crates/nvim/src/change/open_line/comment.rs
 1	libuv_proc_close	0	1	crates/nvim/src/event/libuv_proc.rs
 1	libuv_proc_spawn	0	1	crates/nvim/src/event/libuv_proc.rs
-1	line_do_arabic_shape	1	1	crates/nvim/src/grid/schar.rs
 1	linebreak_size	0	1	crates/nvim/src/plines/mod.rs
 1	lisp_match	0	1	crates/nvim/src/indent/expr.rs
 1	log_uv_handles	0	1	crates/nvim/src/event/loop.rs
@@ -948,13 +924,12 @@ count	callee	no_raw	defs	def
 1	marktree_itr_step_overlap	0	0	
 1	marktree_lookup_ns	0	0	
 1	mb_get_class_tab	0	1	crates/nvim/src/mbyte/utf8/mod.rs
-1	mb_strnicmp	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 1	measure_first_argument	0	1	crates/nvim/src/indent/expr.rs
 1	memchr	0	0	
 1	memcnt	0	1	crates/nvim/src/memory/mod.rs
 1	merge	0	0	
 1	mh_clear	0	1	crates/nvim/src/map/mod.rs
-1	mh_put_glyph	0	1	crates/nvim/src/map_glyph_cache.rs
+1	mh_realloc	0	1	crates/nvim/src/map/mod.rs
 1	ml_get_buf_len	0	0	
 1	move_prompt_down	0	1	crates/nvim/src/change/open_line/mod.rs
 1	movecursor	0	1	crates/nvim/src/vterm/screen/callbacks.rs
@@ -1054,14 +1029,6 @@ count	callee	no_raw	defs	def
 1	pty_proc_resume	0	1	crates/nvim/src/os/pty_proc_unix/mod.rs
 1	pty_proc_spawn	0	1	crates/nvim/src/os/pty_proc_unix/mod.rs
 1	pty_proc_teardown	0	1	crates/nvim/src/os/pty_proc_unix/mod.rs
-1	pum_compute_text_attrs	0	1	crates/nvim/src/popupmenu/draw.rs
-1	pum_draw_row	1	1	crates/nvim/src/popupmenu/draw.rs
-1	pum_fill_info	0	1	crates/nvim/src/popupmenu/preview.rs
-1	pum_publish_external	0	1	crates/nvim/src/popupmenu/mod.rs
-1	pum_selected_info	0	1	crates/nvim/src/popupmenu/preview.rs
-1	pum_set_info	0	1	crates/nvim/src/popupmenu/preview.rs
-1	pum_show_info	0	1	crates/nvim/src/popupmenu/preview.rs
-1	pum_user_attr_combine	1	1	crates/nvim/src/popupmenu/draw.rs
 1	put_virt_lines	1	1	crates/nvim/src/decoration/dict.rs
 1	put_virt_text	1	1	crates/nvim/src/decoration/dict.rs
 1	qsort	0	0	
@@ -1076,7 +1043,7 @@ count	callee	no_raw	defs	def
 1	realloc	0	1	crates/nvim/src/allocator.rs
 1	refine_inline_char	0	1	crates/nvim/src/diff/refine.rs
 1	refine_inline_word	0	1	crates/nvim/src/diff/refine.rs
-1	rehash	0	2	
+1	rehash	0	1	crates/nvim/src/map/table.rs
 1	reindent_new_line	0	1	crates/nvim/src/change/open_line/mod.rs
 1	remote_ui_chdir	0	0	
 1	remote_ui_destroy	0	1	crates/nvim/src/api/ui/mod.rs
@@ -1094,7 +1061,6 @@ count	callee	no_raw	defs	def
 1	report_failed_notification	0	1	crates/nvim/src/msgpack_rpc/channel/envelope.rs
 1	report_yank	0	1	crates/nvim/src/register/yank.rs
 1	request_event	0	1	crates/nvim/src/msgpack_rpc/channel/receive.rs
-1	reshape	1	1	crates/nvim/src/grid/schar.rs
 1	resolve_ctrl_backslash	0	1	crates/nvim/src/normal/dispatch.rs
 1	right_adjust	0	1	crates/nvim/src/change/open_line/comment.rs
 1	right_padding	0	1	crates/nvim/src/register/put/block.rs
@@ -1108,9 +1074,6 @@ count	callee	no_raw	defs	def
 1	sb_clear	0	1	crates/nvim/src/vterm/screen/callbacks.rs
 1	sb_popline	0	0	
 1	sb_pushline	0	0	
-1	schar_from_cache	0	1	crates/nvim/src/grid/schar.rs
-1	schar_from_char	0	0	
-1	schar_in_arabic_block	1	1	crates/nvim/src/grid/schar.rs
 1	screen_new	0	1	crates/nvim/src/vterm/screen/mod.rs
 1	seam_free	0	1	crates/nvim/src/memory/mod.rs
 1	search_tag_pair	0	0	
@@ -1143,8 +1106,8 @@ count	callee	no_raw	defs	def
 1	start_job_streams	0	1	crates/nvim/src/channel/open.rs
 1	stdpaths_user_state_subpath	0	1	crates/nvim/src/os/stdpaths.rs
 1	stl_clear_click_defs	0	1	crates/nvim/src/statusline/mod.rs
-1	stored_glyph	0	1	crates/nvim/src/map_glyph_cache.rs
 1	strcasecmp	0	0	
+1	strchr	0	1	crates/nvim/src/os/cshim.rs
 1	strftime	0	0	
 1	striequal	0	1	crates/nvim/src/strings/raw.rs
 1	strnequal	0	1	crates/nvim/src/memory/mod.rs
@@ -1197,7 +1160,6 @@ count	callee	no_raw	defs	def
 1	ui_comp_msg_set_pos	1	1	crates/nvim/src/ui_compositor/mod.rs
 1	ui_comp_raw_line	0	1	crates/nvim/src/ui_compositor/mod.rs
 1	ui_detach_impl	0	1	crates/nvim/src/ui/mod.rs
-1	ui_pum_get_pos	0	1	crates/nvim/src/ui/mod.rs
 1	ui_send_all_hls	0	1	crates/nvim/src/highlight/mod.rs
 1	unpacker_advance	0	1	crates/nvim/src/msgpack_rpc/unpacker/mod.rs
 1	unpacker_init	0	1	crates/nvim/src/msgpack_rpc/unpacker/mod.rs
@@ -1205,11 +1167,9 @@ count	callee	no_raw	defs	def
 1	unpacker_parse_redraw	0	1	crates/nvim/src/msgpack_rpc/unpacker/redraw.rs
 1	unpacker_teardown	0	1	crates/nvim/src/msgpack_rpc/unpacker/mod.rs
 1	utf_ambiguous_width	0	1	crates/nvim/src/mbyte/utf8/mod.rs
-1	utf_cp_bounds	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 1	utf_cp_bounds_len	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 1	utf_eat_space	0	0	
 1	utf_strnicmp	0	1	crates/nvim/src/mbyte/utf8/mod.rs
-1	utfc_ptrlen2schar	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 1	uv_accept	0	0	
 1	uv_chdir	0	0	
 1	uv_cwd	0	0	

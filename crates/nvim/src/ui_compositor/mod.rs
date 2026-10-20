@@ -766,8 +766,7 @@ pub unsafe fn ui_comp_msg_set_pos(
     if scrolled && row > 0 {
         msg_sep_row.set(row as c_int - 1);
         if !sep_char.data().is_null() {
-            // SAFETY: the caller's obligation.
-            msg_sep_char.set(unsafe { schar_from_buf(sep_char.data(), sep_char.len()) });
+            msg_sep_char.set(schar_from_buf(sep_char.as_bytes()));
         }
     } else {
         msg_sep_row.set(-1);

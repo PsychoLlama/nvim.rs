@@ -667,10 +667,7 @@ fn draw_unfinished_last_line(mut window: Win, w: &Walk) {
         // "@@@" at the end of the last screen line, over the text. Four
         // cells when three would split a double-width character in half.
         grid_line_start(window.w_grid, window.w_view_height - 1);
-        let width = if unsafe {
-            grid_line_getchar((window.w_view_width - 3).max(0), ::core::ptr::null_mut())
-        } == 0
-        {
+        let width = if grid_line_getchar((window.w_view_width - 3).max(0)).0 == 0 {
             4
         } else {
             3

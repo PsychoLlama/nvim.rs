@@ -29,7 +29,7 @@ use crate::message::{msg_grid_view, msg_scroll_up};
 use crate::option::csh_like_shell;
 use crate::option::vars::{P_LS, P_WMH, p_ls, p_wmh, wop_flags};
 use crate::options::kOptWopFlagPum;
-use crate::popupmenu::{pum_display_items, pum_undisplay, pum_visible};
+use crate::popupmenu::{pum_display, pum_undisplay, pum_visible};
 use crate::statusline::{fillchar_status_of, hl_attr};
 use crate::types::ui::{kUICmdline, kUIPopupmenu, kUIWildmenu};
 use crate::types::{ExpandContext, OptInt};
@@ -39,19 +39,14 @@ use crate::window::{global_stl_height, last_status};
 use crate::winlayer::graph::cmdline_win;
 use crate::winlayer::{Cc, Win, current_topframe, last_window};
 use core::ffi::{CStr, c_int, c_uint};
+use std::rc::Rc;
 
 /// The command line's completion popup menu: the rows, and what the menu's
 /// drawing asks about the completion while it is up.
 ///
-/// The rows' text points into the matches, so the menu keeps whichever list
-/// it was built from alive: the completion's own (which the completion only
-/// drops after removing the menu) or, for a listing nothing kept, its own
-/// copy.
+/// The rows own copies of the matches' text, and are shared with the menu.
 pub(crate) struct CmdlinePum {
-    rows: Vec<PumItem>,
-    /// The matches the rows point into, when the completion did not keep
-    /// them itself.
-    _kept: Vec<XString>,
+    rows: Rc<[PumItem]>,
     /// The text the matches replaced, which the menu highlights in each
     /// item: upstream reads it as the command line's `xp_orig`.
     orig: Option<XString>,
@@ -74,14 +69,14 @@ pub(crate) fn cmdline_pum_create(
         .iter()
         .map(|m| PumItem {
             // C's SHOW_MATCH(i).
-            pum_text: m.as_ptr().cast_mut().wrapping_add(if showtail {
-                showmatches_gettail(m, false)
+            pum_text: XString::from_bytes(if showtail {
+                &m[showmatches_gettail(m, false)..]
             } else {
-                0
+                m
             }),
-            pum_info: core::ptr::null_mut(),
-            pum_extra: core::ptr::null_mut(),
-            pum_kind: core::ptr::null_mut(),
+            pum_info: None,
+            pum_extra: None,
+            pum_kind: None,
             pum_cpt_source_idx: 0,
             pum_user_abbr_hlattr: -1,
             pum_user_kind_hlattr: -1,
@@ -89,7 +84,6 @@ pub(crate) fn cmdline_pum_create(
         .collect();
     compl_match_array.set(Some(CmdlinePum {
         rows,
-        _kept: matches.unwrap_or_default(),
         orig: expand.orig.clone(),
         context: expand.context,
     }));
@@ -111,11 +105,10 @@ pub(crate) fn cmdline_pum_create(
 }
 
 pub fn cmdline_pum_display(changed_array: bool) {
-    // A copy: placing the menu can run autocommands that remove it.
-    let mut rows = compl_match_array.with(|pum| pum.as_ref().map(|pum| pum.rows.clone()));
-    let rows = rows.get_or_insert_default();
-    pum_display_items(
-        rows,
+    // A share: placing the menu can run autocommands that remove it.
+    let rows = compl_match_array.with(|pum| pum.as_ref().map(|pum| pum.rows.clone()));
+    pum_display(
+        rows.unwrap_or_else(|| Rc::from([])),
         compl_selected.get(),
         changed_array,
         compl_startcol.get(),

@@ -112,7 +112,7 @@ use crate::ui::{
     ui_call_grid_clear, ui_call_grid_resize, ui_call_msg_clear, ui_call_win_extmark, ui_flush,
     ui_grid_cursor_goto, ui_has,
 };
-use crate::ui_compositor::ui_comp_set_screen_valid;
+use crate::ui_compositor::{ui_comp_set_screen_valid, win_grid};
 use crate::version::{intro_message, may_show_intro};
 use crate::window::{
     frame2window, global_stl_height, last_stl_height, min_rows, min_rows_for_all_tabpages,
@@ -339,7 +339,7 @@ pub fn update_screen() -> Result<(), Failed> {
 
     // Glyph cache full, very rare. The screen buffers cannot be compared
     // against their previous contents after this, so it has to be a CLEAR.
-    if unsafe { schar_cache_clear_if_full() } {
+    if schar_cache_clear_if_full() {
         redr_type = redr_type.max(UPD_CLEAR);
     }
 
@@ -465,15 +465,19 @@ pub fn update_screen() -> Result<(), Failed> {
         win_grid_alloc(wp);
 
         if wp.w_redr_border || wp.w_redr_type >= UPD_NOT_VALID {
-            unsafe {
-                grid_draw_border(
-                    &raw mut wp.w_grid_alloc,
-                    &raw mut wp.w_config,
-                    (&raw mut wp.w_border_adj).cast::<c_int>(),
-                    wp.w_onebuf_opt.wo_winbl as c_int,
-                    wp.w_ns_hl_attr,
-                )
+            // SAFETY: a window's `w_ns_hl_attr` is null or one of the
+            // `HLF_COUNT` tables `highlight::namespace` never frees.
+            let hl_attr = unsafe {
+                (!wp.w_ns_hl_attr.is_null())
+                    .then(|| core::slice::from_raw_parts(wp.w_ns_hl_attr, HLF_COUNT as usize))
             };
+            grid_draw_border(
+                win_grid(wp),
+                &wp.w_config,
+                Some(wp.w_border_adj),
+                wp.w_onebuf_opt.wo_winbl as c_int,
+                hl_attr,
+            );
         }
 
         if wp.w_redr_type != 0 {

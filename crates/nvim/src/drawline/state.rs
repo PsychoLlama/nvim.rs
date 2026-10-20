@@ -32,7 +32,7 @@
 )]
 
 use super::*;
-use crate::grid::linebuf;
+use crate::grid::with_linebuf;
 use crate::types::NUL;
 use crate::winlayer::Win;
 use crate::winlayer::WinId;
@@ -336,7 +336,7 @@ pub(crate) fn put_cell(
     vcol: ColNr,
 ) {
     let off = usize::try_from(off).expect("a screen column is never negative");
-    linebuf().put(off, ch, attr as ScreenAttr, vcol);
+    with_linebuf(|line| line.put(off, ch, attr as ScreenAttr, vcol));
 }
 
 // ---------------------------------------------------------------------------

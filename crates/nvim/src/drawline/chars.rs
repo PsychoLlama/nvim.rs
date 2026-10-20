@@ -58,7 +58,7 @@ impl Cells {
             } else {
                 wlv.extra_fill
             };
-            self.char_code = unsafe { schar_get_first_codepoint(self.cell_char) };
+            self.char_code = schar_get_first_codepoint(self.cell_char);
             wlv.extra_todo -= 1;
         } else {
             debug_assert!(!wlv.extra_text.is_null());
@@ -69,7 +69,7 @@ impl Cells {
                 self.char_len = 1;
             }
 
-            if wlv.col >= self.view_width - 1 && unsafe { schar_cells(self.cell_char) } == 2 {
+            if wlv.col >= self.view_width - 1 && schar_cells(self.cell_char) == 2 {
                 // A double-width character with one column left: show a
                 // `>` and leave the pointer where it is, so the character
                 // itself starts the next row.
@@ -200,7 +200,7 @@ impl Cells {
             self.char_len = 1;
         }
 
-        if wlv.col >= self.view_width - 1 && unsafe { schar_cells(self.cell_char) } == 2 {
+        if wlv.col >= self.view_width - 1 && schar_cells(self.cell_char) == 2 {
             // A double-width character with one column left: show a `>`
             // and put the pointer back, so the character is drawn at the
             // start of the next row.
@@ -601,7 +601,7 @@ impl Cells {
             wlv.n_attr = 1;
             wlv.extra_attr = win_hl_attr(window, HLF_0);
             self.attr_before_run = wlv.char_attr;
-            self.char_code = unsafe { schar_get_first_codepoint(self.cell_char) };
+            self.char_code = schar_get_first_codepoint(self.cell_char);
         }
 
         // Leading and trailing whitespace get their own characters, and
@@ -627,7 +627,7 @@ impl Cells {
             wlv.n_attr = 1;
             wlv.extra_attr = win_hl_attr(window, HLF_0);
             self.attr_before_run = wlv.char_attr;
-            self.char_code = unsafe { schar_get_first_codepoint(self.cell_char) };
+            self.char_code = schar_get_first_codepoint(self.cell_char);
         }
     }
 }

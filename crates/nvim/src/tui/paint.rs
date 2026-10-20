@@ -400,8 +400,7 @@ pub fn tui_grid_resize(tui: &mut TUIData, _grid: Integer, width: Integer, height
 ///
 pub fn tui_grid_clear(tui: &mut TUIData, _grid: Integer) {
     tui.grid.clear();
-    // SAFETY: no grapheme handle is held across this call.
-    unsafe { schar_cache_clear_if_full() };
+    schar_cache_clear_if_full();
     // Nothing that was damaged matters once everything is repainted.
     tui.invalid_regions.clear();
     clear_region(tui, 0, tui.height, 0, tui.width, 0);

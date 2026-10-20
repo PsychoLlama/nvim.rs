@@ -15,7 +15,7 @@
 )]
 
 use super::*;
-use crate::grid::schar_text;
+use crate::grid::{SCHAR_BUF_SIZE, schar_text};
 use crate::mbyte::{c_cells_at, c_cluster_len, c_cluster_schar};
 use crate::types::Failed;
 
@@ -23,7 +23,7 @@ use crate::types::Failed;
 /// the first empty one -- `:sign list`, `sign_getdefined()`, an extmark's
 /// `sign_text` and `'statuscolumn'`'s `%s`.
 pub(crate) fn push_sign_text(cells: &[ScreenChar; 2], out: &mut Vec<u8>) {
-    let mut buf = [0; MAX_SCHAR_SIZE as usize];
+    let mut buf = [0; SCHAR_BUF_SIZE];
     for &cell in cells {
         let glyph = schar_text(cell, &mut buf);
         if glyph.is_empty() {

@@ -188,10 +188,13 @@ unsafe fn raw_line_linegrid(
         // fixstr header goes down first and is patched in place.
         let size_byte = live.packer.cursor();
         // SAFETY: as above -- the reserve covers the header and the text.
+        let mut room = unsafe {
+            core::slice::from_raw_parts_mut(size_byte.add(1).cast::<u8>(), MAX_SCHAR_SIZE)
+        };
+        let len = schar_get_adv(&mut room, text);
+        // SAFETY: as above; `len` bytes of the room were just written.
         unsafe {
-            let after_header = live.packer.cursor().add(1);
-            live.packer.set_cursor(after_header);
-            let len = schar_get_adv(live.packer.cursor_mut(), text);
+            live.packer.set_cursor(size_byte.add(1 + len));
             *size_byte = (0xa0 | len) as c_char;
         }
         if fields >= 2 {

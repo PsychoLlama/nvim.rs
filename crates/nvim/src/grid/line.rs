@@ -1,10 +1,9 @@
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 //! Building one screen line and pushing it to the grid.
 //!
 //! Drawing a line is a batch: `grid_line_start` claims the shared line
-//! buffer ([`LineBuf`], reached through [`linebuf`]), any number of
+//! buffer ([`LineBuf`], reached through [`with_linebuf`]), any number of
 //! `grid_line_puts`/`_fill`/`_put_schar` calls fill columns in, and
 //! `grid_line_flush` hands the result to [`grid_put_linebuf`], which
 //! compares it against what is already on the grid and sends the UI only the
@@ -16,42 +15,23 @@
 use super::*;
 use crate::grid::{SLF_INC_VCOL, SLF_RIGHTLEFT, SLF_WRAP};
 use crate::log::logmsg;
+use crate::mbyte::{c_cells_at, c_cluster_schar};
 use crate::types::{LineBuf, NUL};
 
 /// The one line under construction. See [`LineBuf`].
 static LINEBUF: GlobalCell<LineBuf> = GlobalCell::new(LineBuf::empty());
 
-/// The line buffers, as a handle.
+/// `f` over the shared scratch line buffers.
 ///
-/// One acquisition per function, never one per cell: `grid_put_linebuf` and
-/// the `drawline` writers run per cell of every redraw. A `&mut LineBuf` will
-/// not thread down that path for the same reason a `&mut ScreenGrid` will
-/// not -- drawing a line calls out to the decoration providers and to the UI
-/// -- so this is [`GridRef`]'s shape again, and every borrow of the columns
-/// lasts one accessor call.
-#[derive(Clone, Copy)]
-pub(crate) struct LineBufRef(*mut LineBuf);
-
-impl ::core::ops::Deref for LineBufRef {
-    type Target = LineBuf;
-
-    fn deref(&self) -> &LineBuf {
-        // SAFETY: the only constructor names a `static`.
-        unsafe { &*self.0 }
-    }
-}
-
-impl ::core::ops::DerefMut for LineBufRef {
-    fn deref_mut(&mut self) -> &mut LineBuf {
-        // SAFETY: the only constructor names a `static`. The borrow lasts one
-        // call: see the type's own docs for why it may not last longer.
-        unsafe { &mut *self.0 }
-    }
-}
-
-/// The shared scratch line buffers.
-pub(crate) fn linebuf() -> LineBufRef {
-    LineBufRef(LINEBUF.ptr())
+/// A borrow for one closure, never one per cell: `grid_put_linebuf` and the
+/// `drawline` writers run per cell of every redraw, and each takes the
+/// buffers once around its loop. Nothing a writer calls inside reaches the
+/// buffers again -- drawing a line calls out to the decoration providers
+/// and to the UI, but only *between* these borrows -- and a debug build's
+/// borrow tracker holds every caller to that.
+#[inline(always)]
+pub(crate) fn with_linebuf<R>(f: impl FnOnce(&mut LineBuf) -> R) -> R {
+    LINEBUF.with_mut(f)
 }
 
 /// The line batch in progress. Only one exists at a time; `grid` being
@@ -91,38 +71,12 @@ impl LineBatch {
     }
 }
 
+/// The batch in progress. A `Copy` record behind a cell: each entry point
+/// reads it, works on its copy and writes it back before anything that
+/// could re-enter -- `grid_line_flush` hands the batch to
+/// `grid_put_linebuf`, which draws, and drawing re-enters this module
+/// through the compositor.
 static BATCH: GlobalCell<LineBatch> = GlobalCell::new(LineBatch::new());
-
-/// The batch in progress, as a handle.
-///
-/// One acquisition per entry point, for the same reason [`LineBufRef`] is
-/// one: `grid_line_flush` hands the batch to `grid_put_linebuf`, which draws
-/// -- and drawing re-enters this module through the compositor. Every borrow
-/// of a field lasts one access.
-#[derive(Clone, Copy)]
-struct BatchRef(*mut LineBatch);
-
-impl ::core::ops::Deref for BatchRef {
-    type Target = LineBatch;
-
-    fn deref(&self) -> &LineBatch {
-        // SAFETY: the only constructor names a `static`.
-        unsafe { &*self.0 }
-    }
-}
-
-impl ::core::ops::DerefMut for BatchRef {
-    fn deref_mut(&mut self) -> &mut LineBatch {
-        // SAFETY: the only constructor names a `static`. The borrow lasts one
-        // access: see the type's own docs for why it may not last longer.
-        unsafe { &mut *self.0 }
-    }
-}
-
-/// The one line batch.
-fn batch() -> BatchRef {
-    BatchRef(BATCH.ptr())
-}
 
 /// A column as an index. Every column reaching this module is non-negative.
 #[inline(always)]
@@ -170,15 +124,23 @@ pub fn grid_line_start(view: GridView, mut row: c_int) {
 /// [`grid_line_start`] against a `ScreenGrid` directly, for the callers that
 /// have no `GridView` (float borders, the popup menu, the statusline).
 pub fn screengrid_line_start(grid: GridRef, row: c_int, col: c_int) {
-    let mut buf = linebuf();
-    let mut b = batch();
-    debug_assert!(b.grid.is_none(), "grid_line_grid == NULL");
-    *b = LineBatch {
+    debug_assert!(BATCH.get().grid.is_none(), "grid_line_grid == NULL");
+    let poison = full_screen.get() && rdb_flags.get() & kOptRdbFlagInvalid != 0;
+    let width = with_linebuf(|buf| {
+        if poison {
+            // This batch must not depend on the previous line's contents.
+            // Poison the buffers so that any such dependency trips an
+            // assertion further down.
+            buf.poison();
+        }
+        buf.width()
+    });
+    let b = LineBatch {
         grid: Some(grid),
         row,
         coloff: col,
         maxcol: grid.cols.min(grid.cols - col),
-        first: buf.width() as c_int,
+        first: width as c_int,
         last: 0,
         clear_to: 0,
         bg_attr: 0,
@@ -186,52 +148,42 @@ pub fn screengrid_line_start(grid: GridRef, row: c_int, col: c_int) {
         flags: 0,
     };
     debug_assert!(
-        b.maxcol as size_t <= buf.width(),
+        b.maxcol as size_t <= width,
         "(size_t)grid_line_maxcol <= linebuf_size"
     );
-
-    if full_screen.get() && rdb_flags.get() & kOptRdbFlagInvalid != 0 {
-        // This batch must not depend on the previous line's contents. Poison
-        // the buffers so that any such dependency trips an assertion further
-        // down.
-        buf.poison();
-    }
+    BATCH.set(b);
 }
 
 /// The glyph currently *on screen* at `col` -- not what the pending batch has
-/// put there. A space when `col` is off the end of the line.
-///
-/// # Safety
-/// A batch must be in progress.
-pub unsafe fn grid_line_getchar(mut col: c_int, attr: *mut c_int) -> ScreenChar {
-    let b = *batch();
+/// put there -- with its attribute. A space and no attribute when `col` is
+/// off the end of the line. A batch must be in progress.
+pub fn grid_line_getchar(mut col: c_int) -> (ScreenChar, Option<c_int>) {
+    let b = BATCH.get();
     if col >= b.maxcol {
         // NUL is a very special value (right half of a double-width
         // cell); a space is True Neutral.
-        return schar_from_ascii(b' ');
+        return (schar_from_ascii(b' '), None);
     }
     col += b.coloff;
     let grid = b.grid.expect("a batch is in progress");
     let off = grid.cell_offset(b.row, col);
-    if !attr.is_null() {
-        unsafe { *attr = grid.attr_at(off) };
-    }
-    grid.char_at(off)
+    (grid.char_at(off), Some(grid.attr_at(off)))
 }
 
 /// Put one glyph at `col`. A no-op when no batch is open.
 pub fn grid_line_put_schar(col: c_int, schar: ScreenChar, attr: c_int) {
-    let mut b = batch();
+    let mut b = BATCH.get();
     debug_assert!(b.grid.is_some(), "grid_line_grid");
     if col >= b.maxcol {
         return;
     }
 
-    linebuf().put(col as size_t, schar, attr, -1);
+    with_linebuf(|buf| buf.put(col as size_t, schar, attr, -1));
 
     b.first = b.first.min(col);
     // TODO(bfredl): Y U NO DOUBLEWIDTH?
     b.last = b.last.max(col + 1);
+    BATCH.set(b);
 }
 
 /// Put `text` at `col`, answering the number of cells used. Only ever writes
@@ -240,63 +192,61 @@ pub fn grid_line_put_schar(col: c_int, schar: ScreenChar, attr: c_int) {
 /// Draws into the batch in progress; with none there is no room
 /// (`maxcol` is zero) and nothing is drawn.
 pub fn grid_line_puts(col: c_int, text: &[u8], attr: c_int) -> c_int {
-    let mut buf = linebuf();
-    let (chars, attrs, vcols) = buf.parts_mut();
-    let mut b = batch();
+    let mut b = BATCH.get();
     debug_assert!(b.grid.is_some(), "grid_line_grid");
 
     let max_col = b.maxcol;
     let start_col = col;
-    let mut col = col;
-    let mut at = 0;
+    let col = with_linebuf(|buf| {
+        let (chars, attrs, vcols) = buf.parts_mut();
+        let mut col = col;
+        let mut at = 0;
 
-    while col < max_col && at < text.len() && text[at] != NUL as u8 {
-        let rest = &text[at..];
-        // How many bytes is this character, composing marks included?
-        let mbyte_blen = cluster_len(rest).min(rest.len()).max(1);
-        let ptr = rest.as_ptr().cast::<c_char>();
-        let blen = mbyte_blen as c_int;
+        while col < max_col && at < text.len() && text[at] != NUL as u8 {
+            let rest = &text[at..];
+            // How many bytes is this character, composing marks included?
+            let mbyte_blen = cluster_len(rest).min(rest.len()).max(1);
+            let char_bytes = &rest[..mbyte_blen];
 
-        let mut firstc = 0;
-        // SAFETY: `blen` bytes of `text` start at `ptr`, and the readers
-        // look no further.
-        let mut schar = unsafe { utfc_ptrlen2schar(ptr, blen, &raw mut firstc) };
-        // SAFETY: as above.
-        let mut mbyte_cells = unsafe { utf_ptr2cells_len(ptr, blen) };
-        if mbyte_cells > 2 || schar == 0 {
-            mbyte_cells = 1;
-            schar = schar_from_char(0xfffd);
+            let (mut schar, _firstc) = c_cluster_schar(char_bytes);
+            let mut mbyte_cells = c_cells_at(char_bytes);
+            if mbyte_cells > 2 || schar == 0 {
+                mbyte_cells = 1;
+                schar = schar_from_char(0xfffd);
+            }
+
+            if col + mbyte_cells > max_col {
+                // Only one cell left but the character needs two: show a '>'
+                // in the last column rather than wrap.
+                schar = schar_from_ascii(b'>');
+                mbyte_cells = 1;
+            }
+
+            // At the start of the text, overwriting the right half of a
+            // two-cell character already in this batch truncates it to '>'.
+            if at == 0 && col > b.first && col < b.last && chars[col as size_t] == 0 {
+                chars[(col - 1) as size_t] = schar_from_ascii(b'>');
+            }
+
+            chars[col as size_t] = schar;
+            attrs[col as size_t] = attr;
+            vcols[col as size_t] = -1;
+            if mbyte_cells == 2 {
+                chars[(col + 1) as size_t] = 0;
+                attrs[(col + 1) as size_t] = attr;
+                vcols[(col + 1) as size_t] = -1;
+            }
+
+            col += mbyte_cells;
+            at += mbyte_blen;
         }
-
-        if col + mbyte_cells > max_col {
-            // Only one cell left but the character needs two: show a '>'
-            // in the last column rather than wrap.
-            schar = schar_from_ascii(b'>');
-            mbyte_cells = 1;
-        }
-
-        // At the start of the text, overwriting the right half of a
-        // two-cell character already in this batch truncates it to '>'.
-        if at == 0 && col > b.first && col < b.last && chars[col as size_t] == 0 {
-            chars[(col - 1) as size_t] = schar_from_ascii(b'>');
-        }
-
-        chars[col as size_t] = schar;
-        attrs[col as size_t] = attr;
-        vcols[col as size_t] = -1;
-        if mbyte_cells == 2 {
-            chars[(col + 1) as size_t] = 0;
-            attrs[(col + 1) as size_t] = attr;
-            vcols[(col + 1) as size_t] = -1;
-        }
-
-        col += mbyte_cells;
-        at += mbyte_blen;
-    }
+        col
+    });
 
     if col > start_col {
         b.first = b.first.min(start_col);
         b.last = b.last.max(col);
+        BATCH.set(b);
     }
 
     col - start_col
@@ -304,21 +254,23 @@ pub fn grid_line_puts(col: c_int, text: &[u8], attr: c_int) -> c_int {
 
 /// Fill `start_col..end_col` with one glyph, answering where it stopped.
 pub fn grid_line_fill(start_col: c_int, mut end_col: c_int, sc: ScreenChar, attr: c_int) -> c_int {
-    let mut b = batch();
+    let mut b = BATCH.get();
     end_col = end_col.min(b.maxcol);
     if start_col >= end_col {
         return end_col;
     }
 
-    let mut buf = linebuf();
-    let (chars, attrs, vcols) = buf.parts_mut();
-    let span = at(start_col)..at(end_col);
-    chars[span.clone()].fill(sc);
-    attrs[span.clone()].fill(attr);
-    vcols[span].fill(-1);
+    with_linebuf(|buf| {
+        let (chars, attrs, vcols) = buf.parts_mut();
+        let span = at(start_col)..at(end_col);
+        chars[span.clone()].fill(sc);
+        attrs[span.clone()].fill(attr);
+        vcols[span].fill(-1);
+    });
 
     b.first = b.first.min(start_col);
     b.last = b.last.max(end_col);
+    BATCH.set(b);
     end_col
 }
 
@@ -327,7 +279,7 @@ pub fn grid_line_fill(start_col: c_int, mut end_col: c_int, sc: ScreenChar, attr
 /// `bg_attr` applies to both the buffered line and the cleared columns;
 /// `clear_attr` only to the cleared columns.
 pub fn grid_line_clear_end(start_col: c_int, end_col: c_int, bg_attr: c_int, clear_attr: c_int) {
-    let mut b = batch();
+    let mut b = BATCH.get();
     if b.first > start_col {
         b.first = start_col;
         b.last = start_col;
@@ -335,20 +287,22 @@ pub fn grid_line_clear_end(start_col: c_int, end_col: c_int, bg_attr: c_int, cle
     b.clear_to = end_col;
     b.bg_attr = bg_attr;
     b.clear_attr = clear_attr;
+    BATCH.set(b);
 }
 
 /// Move the cursor to a column of the line being rendered.
 pub fn grid_line_cursor_goto(col: c_int) {
-    let b = *batch();
+    let b = BATCH.get();
     let grid = b.grid.expect("a batch is in progress");
     ui_grid_cursor_goto(grid.handle, b.row, col);
 }
 
 /// Reverse the batch for a 'rightleft' window.
 pub fn grid_line_mirror(width: c_int) {
-    let mut b = batch();
+    let mut b = BATCH.get();
     b.clear_to = b.last.max(b.clear_to);
     if b.first >= b.clear_to {
+        BATCH.set(b);
         return;
     }
     let (mut first, mut last, mut clear_to) = (b.first, b.last, b.clear_to);
@@ -357,13 +311,14 @@ pub fn grid_line_mirror(width: c_int) {
     b.last = last;
     b.clear_to = clear_to;
     b.flags |= SLF_RIGHTLEFT;
+    BATCH.set(b);
 }
 
 /// Reverse `*firstp..*lastp` of the line buffer about a line of `width`
 /// columns, and rewrite the three bounds to describe the mirrored line.
 pub fn linebuf_mirror(firstp: &mut c_int, lastp: &mut c_int, clearp: &mut c_int, width: c_int) {
     let (first, last) = (*firstp, *lastp);
-    linebuf().mirror(first, last, width);
+    with_linebuf(|buf| buf.mirror(first, last, width));
 
     *firstp = width - *clearp;
     *clearp = width - first;
@@ -372,10 +327,11 @@ pub fn linebuf_mirror(firstp: &mut c_int, lastp: &mut c_int, clearp: &mut c_int,
 
 /// End the batch and send the line to the UI.
 pub fn grid_line_flush() {
-    let mut b = batch();
+    let mut b = BATCH.get();
     // Ended here, whether or not there turns out to be anything to send.
     let grid = b.grid.take();
     b.clear_to = b.last.max(b.clear_to);
+    BATCH.set(b);
     debug_assert!(
         b.clear_to <= b.maxcol,
         "grid_line_clear_to <= grid_line_maxcol"
@@ -384,36 +340,35 @@ pub fn grid_line_flush() {
         return;
     }
 
-    unsafe {
-        grid_put_linebuf(
-            grid.expect("a batch is in progress"),
-            b.row,
-            b.coloff,
-            LineSpan {
-                col: b.first,
-                endcol: b.last,
-                clear_width: b.clear_to,
-            },
-            LineAttrs {
-                bg: b.bg_attr,
-                clear: b.clear_attr,
-            },
-            -1,
-            b.flags,
-        )
-    };
+    grid_put_linebuf(
+        grid.expect("a batch is in progress"),
+        b.row,
+        b.coloff,
+        LineSpan {
+            col: b.first,
+            endcol: b.last,
+            clear_width: b.clear_to,
+        },
+        LineAttrs {
+            bg: b.bg_attr,
+            clear: b.clear_attr,
+        },
+        -1,
+        b.flags,
+    );
 }
 
 /// Flush the batch, but only if it is on a row the grid really has.
 ///
 /// A stopgap until message.c has been refactored to behave.
 pub fn grid_line_flush_if_valid_row() {
-    let mut b = batch();
+    let mut b = BATCH.get();
     if b.row < 0 || b.row >= b.grid.expect("a batch is in progress").rows {
         if rdb_flags.get() & kOptRdbFlagInvalid != 0 {
-            unsafe { abort() };
+            std::process::abort();
         }
         b.grid = None;
+        BATCH.set(b);
         return;
     }
     grid_line_flush();
@@ -431,11 +386,12 @@ pub fn grid_clear(
     let mut row = start_row;
     while row < end_row {
         grid_line_start(view, row);
-        let mut b = batch();
+        let mut b = BATCH.get();
         end_col = end_col.min(b.maxcol);
         if b.row >= b.grid.expect("a batch is in progress").rows || start_col >= end_col {
             // TODO(bfredl): make callers behave instead.
             b.grid = None;
+            BATCH.set(b);
             return;
         }
         grid_line_clear_end(start_col, end_col, attr, 0);
@@ -630,9 +586,9 @@ fn clear_rest_of_line(
 /// - `SLF_INC_VCOL` -- number the cleared columns' vcols upwards from
 ///   `last_vcol + 1` rather than giving them all `last_vcol`.
 ///
-/// # Safety
-/// `row` must be within `grid` and the scratch buffers must hold the line.
-pub unsafe fn grid_put_linebuf(
+/// `row` must be within `grid` and the scratch buffers must hold the line;
+/// a row or column outside them panics rather than writing past the grid.
+pub fn grid_put_linebuf(
     mut grid: GridRef,
     row: c_int,
     coloff: c_int,
@@ -641,8 +597,6 @@ pub unsafe fn grid_put_linebuf(
     last_vcol: ColNr,
     flags: c_int,
 ) {
-    let mut line = linebuf();
-    // SAFETY: the caller's promise about `row` and the buffers.
     let LineSpan {
         mut col,
         mut endcol,
@@ -670,10 +624,13 @@ pub unsafe fn grid_put_linebuf(
 
     // At the start of the text, overwriting the right half of a two-cell
     // character already on the grid truncates it into a '>'.
-    if col > 0 && grid.char_at(off_to + col as size_t) == 0 {
-        let at = (col - 1) as size_t;
-        line.chars_mut()[at] = schar_from_ascii(b'>');
-        line.attrs_mut()[at] = grid.attr_at(off_to + col as size_t - 1);
+    let truncated = (col > 0 && grid.char_at(off_to + col as size_t) == 0).then(|| {
+        (
+            (col - 1) as size_t,
+            grid.attr_at(off_to + col as size_t - 1),
+        )
+    });
+    if truncated.is_some() {
         col -= 1;
     }
 
@@ -685,43 +642,53 @@ pub unsafe fn grid_put_linebuf(
         clear_width = col;
     }
 
-    if p_arshape() && !p_tbidi() && endcol > col {
-        unsafe { line_do_arabic_shape(&mut line.chars_mut()[at(col)..at(endcol)]) };
-    }
-
-    if attrs.bg != 0 {
-        for cell in &mut line.attrs_mut()[at(col)..at(endcol)] {
-            *cell = hl_combine_attr(attrs.bg, *cell);
-        }
-    }
-
     let clear_attr = hl_combine_attr(attrs.bg, attrs.clear);
-    let mut on_grid = grid.cells_mut(off_to, span_width);
-    let copied = copy_changed_cells(&line, &mut on_grid, col, endcol);
+    // The buffers and the grid row are borrowed for the copy only: the UI
+    // calls below draw, and drawing re-enters the line code.
+    let (copied, mut end_dirty, cleared) = with_linebuf(|line| {
+        if let Some((at, attr)) = truncated {
+            line.chars_mut()[at] = schar_from_ascii(b'>');
+            line.attrs_mut()[at] = attr;
+        }
+
+        if p_arshape() && !p_tbidi() && endcol > col {
+            line_do_arabic_shape(&mut line.chars_mut()[at(col)..at(endcol)]);
+        }
+
+        if attrs.bg != 0 {
+            for cell in &mut line.attrs_mut()[at(col)..at(endcol)] {
+                *cell = hl_combine_attr(attrs.bg, *cell);
+            }
+        }
+
+        let mut on_grid = grid.cells_mut(off_to, span_width);
+        let copied = copy_changed_cells(line, &mut on_grid, col, endcol);
+        let mut end_dirty = copied.dirty.end;
+
+        if copied.clear_next {
+            // Clear the second half of a double-width character whose left
+            // half was overwritten with a single-width one.
+            on_grid.chars[copied.col as size_t] = schar_from_ascii(b' ');
+            end_dirty += 1;
+        }
+
+        // Clearing the left half of a double-width char clears the right
+        // too.
+        if (clear_width as size_t) < span_width && on_grid.chars[clear_width as size_t] == 0 {
+            clear_width += 1;
+        }
+
+        let cleared = clear_rest_of_line(
+            &mut on_grid,
+            clear_start,
+            clear_width,
+            clear_attr,
+            flags,
+            last_vcol,
+        );
+        (copied, end_dirty, cleared)
+    });
     let mut start_dirty = copied.dirty.start;
-    let mut end_dirty = copied.dirty.end;
-    col = copied.col;
-
-    if copied.clear_next {
-        // Clear the second half of a double-width character whose left
-        // half was overwritten with a single-width one.
-        on_grid.chars[col as size_t] = schar_from_ascii(b' ');
-        end_dirty += 1;
-    }
-
-    // Clearing the left half of a double-width char clears the right too.
-    if (clear_width as size_t) < span_width && on_grid.chars[clear_width as size_t] == 0 {
-        clear_width += 1;
-    }
-
-    let cleared = clear_rest_of_line(
-        &mut on_grid,
-        clear_start,
-        clear_width,
-        clear_attr,
-        flags,
-        last_vcol,
-    );
     let mut clear_end = cleared.end;
 
     if flags & SLF_RIGHTLEFT != 0 && start_dirty != -1 && cleared.start != -1 {

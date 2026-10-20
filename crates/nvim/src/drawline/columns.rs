@@ -21,7 +21,7 @@
 use super::*;
 use crate::cstr;
 use crate::decoration::{SCL_NUM, SIGN_WIDTH};
-use crate::grid::linebuf;
+use crate::grid::with_linebuf;
 use crate::r#move::WinValid;
 use crate::option::cpo_has;
 use crate::optionstr::OptString;
@@ -69,11 +69,10 @@ impl WinLineVars {
     ) {
         // SAFETY: the caller's buffer, and `off` is kept under the view width
         // by the loop condition.
-        let mut line = linebuf();
         let end = unsafe { text.add(len) };
         let mut ptr = text;
         while ptr < end && self.off < window.w_view_width {
-            let cells = unsafe {
+            let cells = with_linebuf(|line| unsafe {
                 line_putchar(
                     window.buffer(),
                     &mut ptr,
@@ -81,7 +80,7 @@ impl WinLineVars {
                     window.w_view_width - self.off,
                     self.off,
                 )
-            };
+            });
             let myattr = if inc_vcol {
                 unsafe { self.color_col_attr(window, attr) }
             } else {
@@ -99,8 +98,11 @@ impl WinLineVars {
                 } else {
                     -1
                 };
-                line.attrs_mut()[self.off as usize] = myattr as ScreenAttr;
-                line.vcols_mut()[self.off as usize] = vcol;
+                let at = self.off as usize;
+                with_linebuf(|line| {
+                    line.attrs_mut()[at] = myattr as ScreenAttr;
+                    line.vcols_mut()[at] = vcol;
+                });
                 self.off += 1;
             }
         }
@@ -118,13 +120,14 @@ impl WinLineVars {
         width: ::core::ffi::c_int,
         attr: ::core::ffi::c_int,
     ) {
-        let mut line = linebuf();
-        for _ in 0..width {
-            let at = self.off as usize;
-            line.chars_mut()[at] = fillchar;
-            line.attrs_mut()[at] = attr as ScreenAttr;
-            self.off += 1;
-        }
+        with_linebuf(|line| {
+            for _ in 0..width {
+                let at = self.off as usize;
+                line.chars_mut()[at] = fillchar;
+                line.attrs_mut()[at] = attr as ScreenAttr;
+                self.off += 1;
+            }
+        });
     }
 }
 
@@ -330,10 +333,11 @@ impl WinLineVars {
         );
         let sign_pos = self.off - SIGN_WIDTH as ::core::ffi::c_int - nrcol as ::core::ffi::c_int;
         debug_assert!(sign_pos >= 0);
-        let mut line = linebuf();
-        let chars = &mut line.chars_mut()[sign_pos as usize..];
-        chars[0] = sattr.text[0];
-        chars[1] = sattr.text[1];
+        with_linebuf(|line| {
+            let chars = &mut line.chars_mut()[sign_pos as usize..];
+            chars[0] = sattr.text[0];
+            chars[1] = sattr.text[1];
+        });
     }
 }
 

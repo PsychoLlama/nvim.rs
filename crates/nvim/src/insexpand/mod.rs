@@ -836,7 +836,7 @@ state_record! {
     /// added under.
     CPT_GENERATION: u64 = 0;
     /// See [`ComplMatchArray`].
-    COMPL_MATCH_ARRAY: Vec<PumItem> = Vec::new();
+    COMPL_MATCH_ARRAY: MatchRows = MatchRows::EMPTY;
     /// See [`CptCallbacks`].
     CPT_CB: Vec<Callback> = Vec::new();
     /// `CompleteChanged` is running: it does not fire again from inside.

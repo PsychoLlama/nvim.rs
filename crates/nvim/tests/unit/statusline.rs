@@ -114,11 +114,10 @@ impl Statusline {
         let mut out = vec![b' ' as c_char; BUF_BYTES];
         let fmt = cstr(format);
         let fill_str = cstr(fill);
-        // SAFETY: `fill_str` is NUL-terminated.
         let fillchar: ScreenChar = if fill.is_empty() {
             0
         } else {
-            unsafe { schar_from_str(fill_str.as_ptr()) }
+            schar_from_str(&fill_str)
         };
         // SAFETY: `fmt` is NUL-terminated and outlives the call, `curwin`
         // is the editor's window, and no sink is asked for.
