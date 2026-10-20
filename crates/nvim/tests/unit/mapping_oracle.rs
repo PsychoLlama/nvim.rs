@@ -264,7 +264,9 @@ fn mapping_tables_over_the_corpus() {
     fx.home();
 }
 
-/// Recorded on the intrusive lists.
+/// Recorded on the intrusive lists, except the two menu digests (`MoMenus`,
+/// the first `MoMenuReaders`): re-recorded when `menu_get()` began reporting
+/// `noremap`/`sid` by equality (upstream v0.12.6).
 const EXPECTED: [u64; 15] = [
     18_325_338_693_757_688_101,
     10_546_707_823_912_418_311,
@@ -278,7 +280,7 @@ const EXPECTED: [u64; 15] = [
     8_944_349_779_487_404_315,
     7_797_769_361_626_727_342,
     8_101_208_710_798_376_915,
-    10_752_954_196_177_704_387,
-    11_028_288_259_730_776_395,
+    1_424_953_540_592_255_650,
+    8_502_670_605_520_003_403,
     18_080_044_942_998_795_006,
 ];

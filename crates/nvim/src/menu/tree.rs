@@ -188,14 +188,12 @@ fn menu_get_recursive(menu: &VimMenu, modes: c_int) -> Option<DictRef> {
             let _ = mapping.add_number(b"silent", VarNumber::from(menu.silent[bit]));
             let enabled = menu.enabled & (1 << bit) != 0;
             let _ = mapping.add_number(b"enabled", VarNumber::from(enabled));
-            // `noremap` holds 0, REMAP_NONE (-1) or REMAP_SCRIPT (-2), and
-            // these two report it as *bit tests* on values that overlap --
-            // so a `:noremenu` entry answers `sid` 1 as well. `menu_info()`
-            // next door compares for equality and does not agree; the
-            // documented `menu_get()` example carries the bit tests' answer.
+            // `noremap` holds 0, REMAP_NONE (-1) or REMAP_SCRIPT (-2): one
+            // value, not flags, so each key compares for equality, as
+            // `menu_info()` does.
             let noremap = menu.noremap[bit];
-            let _ = mapping.add_number(b"noremap", VarNumber::from(noremap & REMAP_NONE != 0));
-            let _ = mapping.add_number(b"sid", VarNumber::from(noremap & REMAP_SCRIPT != 0));
+            let _ = mapping.add_number(b"noremap", VarNumber::from(noremap == REMAP_NONE));
+            let _ = mapping.add_number(b"sid", VarNumber::from(noremap == REMAP_SCRIPT));
             // One byte of the mode letters, so `tl` files under `t`.
             let _ = commands.add_dict(&mode.to_bytes()[..1], Some(mapping_held));
         }
