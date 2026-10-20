@@ -525,7 +525,7 @@ unsafe fn linebreak_size(win: Win, cur: *mut c_char, vcol: ColNr, size: c_int) -
         colmax += col_adj;
         let n = colmax + win.col_off2();
         if n > 0 {
-            colmax += ((vcol - colmax) / n + 1) * n - col_adj;
+            colmax += ((vcol + col_adj - colmax) / n + 1) * n - col_adj;
         }
     }
 
