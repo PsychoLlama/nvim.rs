@@ -17,7 +17,7 @@
 #![allow(unsafe_code)]
 
 use crate::change::{appended_lines_buf, deleted_lines_buf};
-use crate::grid::{MAX_SCHAR_SIZE, schar_get_adv};
+use crate::grid::{MAX_SCHAR_SIZE, schar_put_scratch};
 use crate::mark::mark_adjust_buf;
 use crate::memline::{ml_append_buf_terminated, ml_delete_buf};
 use crate::types::{
@@ -150,25 +150,51 @@ pub(crate) fn fetch_row(mut term: Term, row: c_int, end_col: c_int) {
     if term.textbuf.len() < needed {
         term.textbuf.resize(needed, 0);
     }
+    // Out of the terminal for the walk: reading a cell does not touch it.
+    // The two arms are the same walk, specialised: which half of
+    // `fetch_cell` runs is decided once per row rather than once per cell.
+    let mut text = core::mem::take(&mut term.textbuf);
+    let line_len = if row >= 0 {
+        render_row(&mut text, end_col, |col, cell| {
+            fetch_cell(term, row, col, cell)
+        })
+    } else {
+        render_row(&mut text, end_col, |col, cell| {
+            fetch_cell(term, row, col, cell)
+        })
+    };
+    text[line_len] = NUL as u8;
+    term.textbuf = text;
+}
+
+/// [`fetch_row`]'s walk over the cells `cell_at` reads, into `text`:
+/// answers the length of the line up to its last cell with content.
+#[inline(always)]
+fn render_row(
+    text: &mut [u8],
+    end_col: c_int,
+    mut cell_at: impl FnMut(c_int, &mut VTermScreenCell) -> bool,
+) -> usize {
     let mut at = 0usize;
     let mut line_len = 0usize;
     let mut col = 0;
     while col < end_col {
         let mut cell = blank_cell();
-        fetch_cell(term, row, col, &mut cell);
+        cell_at(col, &mut cell);
         if cell.schar != 0 {
-            let mut rest: &mut [u8] = &mut term.textbuf[at..];
-            at += schar_get_adv(&mut rest, cell.schar);
+            // The bytes past the glyph are overwritten by the next cell or
+            // lie past the terminator.
+            at += schar_put_scratch(text, at, cell.schar);
             line_len = at;
         } else {
             // Written but not counted, so that trailing blanks are dropped
             // by terminating at the last cell with content.
-            term.textbuf[at] = b' ';
+            text[at] = b' ';
             at += 1;
         }
         col += cell.width as c_int;
     }
-    term.textbuf[line_len] = NUL as u8;
+    line_len
 }
 
 /// One cell of the screen or of the scrollback.

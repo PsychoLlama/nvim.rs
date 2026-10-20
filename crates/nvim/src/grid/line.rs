@@ -204,16 +204,15 @@ pub fn grid_line_puts(col: c_int, text: &[u8], attr: c_int) -> c_int {
 
         while col < max_col && at < text.len() && text[at] != NUL as u8 {
             let rest = &text[at..];
-            // How many bytes is this character, composing marks included?
-            let mbyte_blen = cluster_len(rest).min(rest.len()).max(1);
-            let char_bytes = &rest[..mbyte_blen];
-
-            let (mut schar, _firstc) = c_cluster_schar(char_bytes);
-            let mut mbyte_cells = c_cells_at(char_bytes);
-            if mbyte_cells > 2 || schar == 0 {
-                mbyte_cells = 1;
-                schar = schar_from_char(0xfffd);
-            }
+            let first = rest[0];
+            let (mut schar, mut mbyte_cells, mbyte_blen) =
+                if first < 0x80 && rest.get(1).is_none_or(|&next| next < 0x80) {
+                    // ASCII with nothing after it that could compose onto
+                    // it: the glyph is the byte, one cell wide.
+                    (schar_from_ascii(first), 1, 1)
+                } else {
+                    cluster_glyph(rest)
+                };
 
             if col + mbyte_cells > max_col {
                 // Only one cell left but the character needs two: show a '>'
@@ -250,6 +249,24 @@ pub fn grid_line_puts(col: c_int, text: &[u8], attr: c_int) -> c_int {
     }
 
     col - start_col
+}
+
+/// The glyph, its cells and its byte length for the cluster `rest` starts
+/// with: [`grid_line_puts`]'s slow path, out of line so the ASCII loop stays
+/// small. A cluster that is not a glyph, or wider than two cells, is drawn
+/// as U+FFFD.
+#[inline(never)]
+fn cluster_glyph(rest: &[u8]) -> (ScreenChar, c_int, usize) {
+    // How many bytes is this character, composing marks included?
+    let blen = cluster_len(rest).min(rest.len()).max(1);
+    let char_bytes = &rest[..blen];
+    let (schar, _firstc) = c_cluster_schar(char_bytes);
+    let cells = c_cells_at(char_bytes);
+    if cells > 2 || schar == 0 {
+        (schar_from_char(0xfffd), 1, blen)
+    } else {
+        (schar, cells, blen)
+    }
 }
 
 /// Fill `start_col..end_col` with one glyph, answering where it stopped.

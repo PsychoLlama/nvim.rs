@@ -741,8 +741,14 @@ pub(super) fn display_width_in<T: Text>(t: T, mut len: i32) -> i32 {
         len -= 1;
         len >= 0
     } {
-        let l = cluster_len_in(t, at);
         let first = t.byte(at);
+        // Two ASCII bytes: the first is a character of its own, and the
+        // answer `cluster_len_in` would give without the second look.
+        let l = if first < 0x80 && t.byte(at + 1) < 0x80 {
+            1
+        } else {
+            cluster_len_in(t, at)
+        };
         size += if first >= 0x80 {
             cells_in(t, at)
         } else {

@@ -202,19 +202,48 @@ pub(crate) fn schar_bytes(sc: ScreenChar) -> Vec<u8> {
 /// # Panics
 /// When `buf_out` has less room than the glyph needs. Upstream writes up to
 /// [`MAX_SCHAR_SIZE`] bytes wherever it is pointed.
+#[inline(always)]
 pub fn schar_get_adv(buf_out: &mut &mut [u8], sc: ScreenChar) -> size_t {
+    if schar_high(sc) {
+        return schar_get_adv_cached(buf_out, sc);
+    }
+    // At most four bytes, copied one by one: a variable-length
+    // `copy_from_slice` is a `memcpy` call per cell.
+    let bytes = inline_bytes(sc);
+    let len = inline_len(&bytes);
     let out = core::mem::take(buf_out);
-    let len = if schar_high(sc) {
-        with_glyph(schar_idx(sc), |glyph| {
-            out[..glyph.len()].copy_from_slice(glyph);
-            glyph.len()
-        })
-    } else {
+    for (dst, &byte) in out[..len].iter_mut().zip(&bytes) {
+        *dst = byte;
+    }
+    *buf_out = &mut out[len..];
+    len
+}
+
+/// [`schar_get_adv`] into `buf` at `at`, for a buffer whose bytes past the
+/// glyph are scratch: an inline glyph is stored as its four bytes at once --
+/// the ones past its end are the glyph's NUL padding, which the caller
+/// overwrites or never reads -- so a cell costs no copy. Answers the glyph's
+/// byte length.
+#[inline(always)]
+pub(crate) fn schar_put_scratch(buf: &mut [u8], at: usize, sc: ScreenChar) -> size_t {
+    if !schar_high(sc)
+        && let Some(dst) = buf.get_mut(at..at + 4)
+    {
         let bytes = inline_bytes(sc);
-        let len = inline_len(&bytes);
-        out[..len].copy_from_slice(&bytes[..len]);
-        len
-    };
+        dst.copy_from_slice(&bytes);
+        return inline_len(&bytes);
+    }
+    schar_get_adv(&mut &mut buf[at..], sc)
+}
+
+/// [`schar_get_adv`] of a glyph in the cache.
+#[inline(never)]
+fn schar_get_adv_cached(buf_out: &mut &mut [u8], sc: ScreenChar) -> size_t {
+    let out = core::mem::take(buf_out);
+    let len = with_glyph(schar_idx(sc), |glyph| {
+        out[..glyph.len()].copy_from_slice(glyph);
+        glyph.len()
+    });
     *buf_out = &mut out[len..];
     len
 }

@@ -87,9 +87,9 @@ impl ComplMatchArray {
 
     /// Take `rows`, built from the matches `ids`, as the new array, dropping
     /// whatever was there. An empty `rows` leaves the array unset.
-    pub(crate) fn set(self, rows: Vec<PumItem>, ids: Vec<MatchId>) {
+    pub(crate) fn set(self, rows: Rc<[PumItem]>, ids: Vec<MatchId>) {
         debug_assert_eq!(rows.len(), ids.len(), "one match per row");
-        let rows = (!rows.is_empty()).then(|| Rc::from(rows));
+        let rows = (!rows.is_empty()).then_some(rows);
         COMPL_MATCH_ARRAY.set(MatchRows { rows, ids });
     }
 
@@ -436,7 +436,9 @@ pub(crate) fn ins_compl_build_pum() -> c_int {
         cur = 0;
     }
 
-    let array: Vec<PumItem> = MATCHES.with(|list| {
+    // Collected straight into the shared array: one allocation, not a
+    // vector copied into one.
+    let array: Rc<[PumItem]> = MATCHES.with(|list| {
         let item = |id: MatchId| {
             let m = list.get(id);
             let extra = |which: c_int| m.extra[which as usize].clone();
