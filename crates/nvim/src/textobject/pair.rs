@@ -6,32 +6,27 @@
 //! start/end pattern to `do_searchpair`. The retry loops in both are
 //! Visual-mode extension -- an object already selected whole grows outwards.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::normal::{VisualMode, set_visual_anchor, set_visual_mode, visual_active, visual_anchor};
-use crate::snprintf;
 use crate::winlayer::Win;
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::c_int;
 
 use super::*;
 use crate::ascii::ascii_iswhite;
-use crate::cstr::{self, byte_at};
-use crate::cursor::{
-    dec_cursor, gchar_cursor, get_cursor_line_ptr, get_cursor_pos_ptr, inc_cursor,
-};
+use crate::cstr::byte_at;
+use crate::cursor::{dec_cursor, gchar_cursor, inc_cursor};
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later, showmode};
 use crate::eval::funcs::do_searchpair;
 use crate::indent::inindent;
 use crate::mark::setpcmark;
-use crate::mbyte::{utf_head_off, utfc_ptr2len};
+use crate::mbyte::{c_cluster_len, head_off};
 use crate::memline::{Lines, decl, inc, incl};
-use crate::memory::{xfree, xmalloc};
 use crate::option::vars::{P_SEL, P_WS, p_ws};
 use crate::option::{SavedCpo, cpo_has};
 use crate::pos::{equalpos, lt, ltoreq};
 use crate::search::{BACKWARD, FORWARD, findmatch, findmatchlimit};
-use crate::types::{ColNr, CpoFlag, FAIL, Failed, NUL, OK, OpArg, Pos, size_t};
+use crate::types::{ColNr, CpoFlag, FAIL, Failed, NUL, OK, OpArg, Pos};
 
 /// The `do_searchpair` pattern that matches any HTML start tag, used to find
 /// the one enclosing the cursor before its name is known.
@@ -39,13 +34,13 @@ const ANY_START_TAG: &::core::ffi::CStr =
     c"<[^ \t>/!]\\+\\%(\\_s\\_[^>]\\{-}[^/]>\\|$\\|\\_s\\=>\\)";
 /// The matching end tag, likewise before the name is known.
 const ANY_END_TAG: &::core::ffi::CStr = c"</[^>]*>";
-/// `snprintf` format for the start tag of a *named* element, once the name
-/// has been isolated: `<%.*s` takes the name, the rest matches the
+/// What follows the name in the pattern for the start tag of a *named*
+/// element, once the name has been isolated (`<` comes before it): the
 /// attributes up to the `>`.
-const NAMED_START_TAG: &::core::ffi::CStr =
-    c"<%.*s\\>\\%%(\\_s\\_[^>]\\{-}\\_[^/]>\\|\\_s\\?>\\)\\c";
-/// The matching end tag for a named element.
-const NAMED_END_TAG: &::core::ffi::CStr = c"</%.*s>\\c";
+const NAMED_START_TAG_REST: &[u8] = b"\\>\\%(\\_s\\_[^>]\\{-}\\_[^/]>\\|\\_s\\?>\\)\\c";
+/// What follows the name in the matching end tag's pattern (`</` comes
+/// before it).
+const NAMED_END_TAG_REST: &[u8] = b">\\c";
 
 /// `i(` / `a{` / ... : the region between the `count`th enclosing `what` and
 /// its matching `other`, cursor left at the end.
@@ -53,11 +48,8 @@ const NAMED_END_TAG: &::core::ffi::CStr = c"</%.*s>\\c";
 /// `include` takes the brackets themselves; without it a closing bracket
 /// preceded only by indent gives the object the whole line break, which is
 /// what `sol` records.
-///
-/// # Safety
-/// `op` must be a live operator argument, and there must be a current line.
-pub unsafe fn current_block(
-    op: *mut OpArg,
+pub fn current_block(
+    op: &mut OpArg,
     mut count: c_int,
     include: bool,
     what: c_int,
@@ -77,8 +69,6 @@ pub unsafe fn current_block(
 
     // Starting on a bracket takes the whole block, brackets included.
     if !visual_active() || equalpos(visual_anchor(), Win::current().w_cursor) {
-        // SAFETY: on the main thread with a current window and buffer, which
-        // is all `setpcmark` reads.
         setpcmark();
         if what == '{' as c_int {
             // Ignore the indent.
@@ -88,8 +78,6 @@ pub unsafe fn current_block(
                 }
             }
         }
-        // SAFETY: there is a current line with the cursor on it, which is
-        // the character `gchar_cursor` reads.
         if gchar_cursor() == what {
             // On the opening bracket: move just past it.
             Win::current().w_cursor.col += 1;
@@ -113,8 +101,6 @@ pub unsafe fn current_block(
     // finds one anyway. Upstream's probe *is* the first `pos`, which is
     // why it is kept rather than discarded.
     //
-    // SAFETY: there is a current line with the cursor on it; the null
-    // operator argument is what the search takes to mean "no operator".
     pos = findmatch(None, what);
     let unbounded = pos.is_none();
     loop {
@@ -123,8 +109,6 @@ pub unsafe fn current_block(
         if this <= 0 {
             break;
         }
-        // SAFETY: as above -- the cursor is still on a line of the current
-        // buffer, moved only to positions the search itself handed back.
         pos = if unbounded {
             findmatchlimit(None, what, FM_FORWARD as c_int, 0)
         } else {
@@ -143,7 +127,6 @@ pub unsafe fn current_block(
         Win::current().w_cursor = old_pos;
         return Err(Failed);
     }
-    // SAFETY: the cursor sits on the opening bracket the search above found.
     let Some(mut end_pos) = findmatch(None, other) else {
         Win::current().w_cursor = old_pos;
         return Err(Failed);
@@ -209,14 +192,9 @@ pub unsafe fn current_block(
         }
         set_visual_anchor(start_pos);
         set_visual_mode(VisualMode::CHAR);
-        // SAFETY: on the main thread with a current window; both only mark
-        // the screen dirty and reprint the mode message.
         redraw_curbuf_later(UPD_INVERTED); // update the inversion
         showmode();
     } else {
-        // SAFETY: the caller passes a live operator argument, and nothing
-        // reached from here reads it back through the raw pointer.
-        let op = unsafe { &mut *op };
         op.start = start_pos;
         op.motion_type = kMTCharWise;
         op.inclusive = false;
@@ -237,49 +215,43 @@ pub unsafe fn current_block(
 /// Whether the cursor is inside a `<aaa>` tag, or with `end_tag` a `</aaa>`
 /// one. A self-closing `<aaa/>` is neither.
 fn in_html_tag(end_tag: bool) -> bool {
-    // SAFETY: on the main thread with a current buffer, so this hands back
-    // the NUL-terminated cursor line; the cursor's column indexes into it.
-    let line = get_cursor_line_ptr();
+    let cursor = Win::current().w_cursor;
     let mut lc = NUL;
+    let at = {
+        let mut lines = Lines::current();
+        let line = lines.line(cursor.lnum);
 
-    // Back to the `<` under or before the cursor, giving up at a `>`.
-    let mut p = unsafe { line.offset(Win::current().w_cursor.col as isize) };
-    while p > line {
-        // SAFETY: `p` is inside `line`, at or before its NUL.
-        if unsafe { *p } as c_int == '<' as c_int {
-            break;
+        // Back to the `<` under or before the cursor, giving up at a `>`.
+        let mut p = usize::try_from(cursor.col).unwrap_or(0).min(line.len());
+        while p > 0 {
+            if byte_at(line, p) == b'<' {
+                break;
+            }
+            p -= head_off(line, p - 1) + 1;
+            if byte_at(line, p) == b'>' {
+                break;
+            }
         }
-        // SAFETY: `p > line`, so `p - 1` is still inside the line, and
-        // `utf_head_off` walks back no further than `line` itself.
-        p = unsafe { p.offset(-((utf_head_off(line, p.offset(-1)) + 1) as isize)) };
-        // SAFETY: the step above left `p` inside `line`.
-        if unsafe { *p } as c_int == '>' as c_int {
-            break;
+        if byte_at(line, p) != b'<' {
+            return false;
         }
-    }
-    // SAFETY: `p` is inside `line`, at or before its NUL.
-    if unsafe { *p } as c_int != '<' as c_int {
-        return false;
-    }
 
+        // The `/` an end tag needs after its `<`, and a start tag must not
+        // have.
+        let slash = byte_at(line, p + c_cluster_len(&line[p..])) == b'/';
+        if slash != end_tag {
+            return false;
+        }
+        if end_tag {
+            return true;
+        }
+        p
+    };
     let mut pos = Pos {
-        lnum: Win::current().w_cursor.lnum,
-        // SAFETY: `p` and `line` point into the same line.
-        col: unsafe { p.offset_from(line) } as ColNr,
+        lnum: cursor.lnum,
+        col: at as ColNr,
         coladd: 0,
     };
-    // SAFETY: `p` is on the `<`, so the character it starts is inside the
-    // line and stepping over it lands at or before the NUL.
-    p = unsafe { p.offset(utfc_ptr2len(p) as isize) };
-    if end_tag {
-        // There must be a `/` after the `<`.
-        // SAFETY: `p` is inside `line`, at or before its NUL.
-        return unsafe { *p } as c_int == '/' as c_int;
-    }
-    // SAFETY: as above.
-    if unsafe { *p } as c_int == '/' as c_int {
-        return false;
-    }
     // The matching `>` must not be preceded by a `/`.
     loop {
         if inc(&mut pos) < 0 {
@@ -304,10 +276,7 @@ fn search_tag_pair(spat: &[u8], epat: &[u8], dir: c_int) -> c_int {
 
 /// `it` / `at`: the region between an enclosing HTML start and end tag,
 /// cursor left at the end.
-///
-/// # Safety
-/// `op` must be a live operator argument, and there must be a current line.
-pub unsafe fn current_tagblock(op: *mut OpArg, count_arg: c_int, include: bool) -> c_int {
+pub fn current_tagblock(op: &mut OpArg, count_arg: c_int, include: bool) -> c_int {
     let mut count = count_arg;
     let mut do_include = include;
     let save_p_ws = p_ws();
@@ -324,30 +293,25 @@ pub unsafe fn current_tagblock(op: *mut OpArg, count_arg: c_int, include: bool) 
 
     // Starting on a `<aaa>` selects that block.
     if !visual_active() || equalpos(visual_anchor(), Win::current().w_cursor) {
-        // SAFETY: on the main thread with a current window and buffer.
         setpcmark();
         // Ignore the indent.
-        // SAFETY: there is a current line; `inindent` only measures its
-        // leading white space and `inc_cursor` only advances within it.
         while inindent(1) {
             if inc_cursor() != 0 {
                 break;
             }
         }
-        // SAFETY: there is a current line with the cursor on it, which is
-        // all `in_html_tag` needs; `get_cursor_pos_ptr` hands back a pointer
-        // into that NUL-terminated line and `inc_cursor`/`dec_cursor` report
-        // running off its ends themselves.
+        // `inc_cursor`/`dec_cursor` report running off the line's ends
+        // themselves.
         if in_html_tag(false) {
             // On a start tag: move to its `>`.
-            while unsafe { *get_cursor_pos_ptr() } as c_int != '>' as c_int {
+            while gchar_cursor() != '>' as c_int {
                 if inc_cursor() < 0 {
                     break;
                 }
             }
         } else if in_html_tag(true) {
             // On an end tag: move to just before it.
-            while unsafe { *get_cursor_pos_ptr() } as c_int != '<' as c_int {
+            while gchar_cursor() != '<' as c_int {
                 if dec_cursor() < 0 {
                     break;
                 }
@@ -380,47 +344,27 @@ pub unsafe fn current_tagblock(op: *mut OpArg, count_arg: c_int, include: bool) 
         start_pos = Win::current().w_cursor;
 
         // Isolate the `aaa` so the matching `</aaa>` can be searched for.
-        // SAFETY: there is a current line with the cursor on it, so
-        // `get_cursor_pos_ptr` hands back a pointer into it.
         inc_cursor();
-        let p = get_cursor_pos_ptr();
-        let mut cp = p;
-        // SAFETY: `cp` walks the same NUL-terminated line from `p`; the NUL
-        // test leads the chain, so the later reads are of a character that
-        // is really there, and `utfc_ptr2len` stops at the NUL as well.
-        while unsafe {
-            *cp as c_int != NUL && *cp as c_int != '>' as c_int && !ascii_iswhite(*cp as c_int)
-        } {
-            cp = unsafe { cp.offset(utfc_ptr2len(cp) as isize) };
-        }
-        let len = unsafe { cp.offset_from(p) } as c_int;
-        if len == 0 {
+        let name = {
+            let cursor = Win::current().w_cursor;
+            let mut lines = Lines::current();
+            let line = lines.line(cursor.lnum);
+            let start = usize::try_from(cursor.col).unwrap_or(0).min(line.len());
+            let mut end = start;
+            while !matches!(byte_at(line, end), 0 | b'>') && !ascii_iswhite(c_int::from(line[end]))
+            {
+                end += c_cluster_len(&line[end..]);
+            }
+            line[start..end].to_vec()
+        };
+        if name.is_empty() {
             Win::current().w_cursor = old_pos;
             P_WS.set(save_p_ws);
             return retval;
         }
-        let spat_len = len as size_t + 39;
-        // SAFETY: `xmalloc` aborts rather than answering null, and the two
-        // lengths leave room for the format plus the `len` bytes of name.
-        let spat = unsafe { xmalloc(spat_len) } as *mut c_char;
-        let epat_len = len as size_t + 9;
-        let epat = unsafe { xmalloc(epat_len) } as *mut c_char;
-        // SAFETY: each buffer is `*_len` bytes long, the formats are
-        // NUL-terminated constants, and `%.*s` is given the matching
-        // `c_int` length and a pointer to that many bytes of the line.
-        unsafe { snprintf!(spat, spat_len, NAMED_START_TAG.as_ptr(), len, p) };
-        unsafe { snprintf!(epat, epat_len, NAMED_END_TAG.as_ptr(), len, p) };
-        // SAFETY: `snprintf` NUL-terminated both patterns above.
-        let r = unsafe {
-            search_tag_pair(
-                cstr::at(spat).to_bytes(),
-                cstr::at(epat).to_bytes(),
-                FORWARD,
-            )
-        };
-        // SAFETY: both came from `xmalloc` above and are dead from here on.
-        unsafe { xfree(spat as *mut c_void) };
-        unsafe { xfree(epat as *mut c_void) };
+        let spat = [&b"<"[..], &name, NAMED_START_TAG_REST].concat();
+        let epat = [&b"</"[..], &name, NAMED_END_TAG_REST].concat();
+        let r = search_tag_pair(&spat, &epat, FORWARD);
 
         if r < 1 || lt(Win::current().w_cursor, old_end) {
             // No other end, or it is before the previous one: this could
@@ -432,29 +376,21 @@ pub unsafe fn current_tagblock(op: *mut OpArg, count_arg: c_int, include: bool) 
         }
 
         if do_include {
-            // Include up to the `>`.
-            // SAFETY: there is a current line with the cursor on it, so
-            // `get_cursor_pos_ptr` hands back a pointer into it, and
-            // `inc_cursor` reports the end of the line itself.
-            while unsafe { *get_cursor_pos_ptr() } as c_int != '>' as c_int {
+            // Include up to the `>`; `inc_cursor` reports the end of the
+            // line itself.
+            while gchar_cursor() != '>' as c_int {
                 if inc_cursor() < 0 {
                     break;
                 }
             }
         } else {
-            // SAFETY: as above.
-            let c = get_cursor_pos_ptr();
+            let c = gchar_cursor();
             // Exclude the `<` of the end tag. With the closing tag on a
             // new line, leave the cursor where it is and make the
             // operation exclusive instead, so the line feed is selected.
-            // SAFETY: `c` points into the NUL-terminated cursor line.
-            if unsafe { *c } as c_int == '<' as c_int
-                && !visual_active()
-                && Win::current().w_cursor.col == 0
-            {
+            if c == '<' as c_int && !visual_active() && Win::current().w_cursor.col == 0 {
                 is_inclusive = false;
-            } else if unsafe { *c } as c_int == '<' as c_int {
-                // SAFETY: the cursor is on a line of the current buffer.
+            } else if c == '<' as c_int {
                 dec_cursor();
             }
         }
@@ -464,11 +400,10 @@ pub unsafe fn current_tagblock(op: *mut OpArg, count_arg: c_int, include: bool) 
             // Exclude the start tag, stepping over any `>` inside quotes.
             let mut in_quotes = false;
             Win::current().w_cursor = start_pos;
-            // SAFETY: `inc_cursor` reports running off the buffer itself, so
-            // the cursor is on a character of a line of the current buffer
-            // whenever the body runs, and `get_cursor_pos_ptr` points at it.
+            // `inc_cursor` reports running off the buffer itself, so the
+            // cursor is on a character whenever the body runs.
             while inc_cursor() >= 0 {
-                let q = unsafe { *get_cursor_pos_ptr() } as c_int;
+                let q = gchar_cursor();
                 if q == '>' as c_int && !in_quotes {
                     inc_cursor();
                     start_pos = Win::current().w_cursor;
@@ -497,19 +432,13 @@ pub unsafe fn current_tagblock(op: *mut OpArg, count_arg: c_int, include: bool) 
         if lt(end_pos, start_pos) {
             Win::current().w_cursor = start_pos;
         } else if P_SEL.first_byte() == b'e' {
-            // SAFETY: the cursor is on a line of the current buffer.
             inc_cursor();
         }
         set_visual_anchor(start_pos);
         set_visual_mode(VisualMode::CHAR);
-        // SAFETY: on the main thread with a current window; both only mark
-        // the screen dirty and reprint the mode message.
         redraw_curbuf_later(UPD_INVERTED); // update the inversion
         showmode();
     } else {
-        // SAFETY: the caller passes a live operator argument, and nothing
-        // reached from here reads it back through the raw pointer.
-        let op = unsafe { &mut *op };
         op.start = start_pos;
         op.motion_type = kMTCharWise;
         if lt(end_pos, start_pos) {

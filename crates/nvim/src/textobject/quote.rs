@@ -6,21 +6,21 @@
 //! the cursor is nearest, whether the current Visual selection already sits
 //! inside a quoted string, and how 'selection' shifts both ends.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::cstr;
+use crate::cstr::byte_at;
+use crate::memline::Lines;
 use crate::option::vars::P_SEL;
-use crate::strings::has_char;
+use crate::strings::find_char;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use super::*;
 use crate::ascii::ascii_iswhite;
-use crate::cursor::{dec_cursor, get_cursor_line_ptr, inc_cursor};
+use crate::cursor::{dec_cursor, inc_cursor};
 use crate::drawscreen::state::redraw_cmdline;
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later};
-use crate::mbyte::{utf_head_off, utfc_ptr2len};
+use crate::mbyte::{c_cluster_len, head_off};
 use crate::memline::dec;
 use crate::normal::{
     VisualMode, set_visual_anchor, set_visual_mode, visual_active, visual_anchor, visual_mode,
@@ -35,36 +35,22 @@ use crate::types::{ColNr, NUL, OpArg};
 ///
 /// A character named in `escape` ('quoteescape') takes the one after it out
 /// of consideration, whatever it is.
-///
-/// # Safety
-/// `line` must be NUL-terminated; `escape` must be null or NUL-terminated.
-unsafe fn find_next_quote(
-    line: *mut c_char,
-    mut col: c_int,
-    quotechar: c_int,
-    escape: *mut c_char,
-) -> c_int {
+fn find_next_quote(line: &[u8], mut col: c_int, quotechar: c_int, escape: Option<&[u8]>) -> c_int {
+    let at = |col: c_int| byte_at(line, col as usize);
     loop {
-        // SAFETY: `line` is NUL-terminated and `col` is a column of it: the
-        // walk stops at the first NUL, and every step past a byte is the
-        // `utfc_ptr2len` of the character just read there.
-        let c = unsafe { *line.offset(col as isize) } as u8 as c_int;
+        let c = c_int::from(at(col));
         if c == NUL {
             return -1;
         }
-        // SAFETY: `escape` is null or NUL-terminated; the `&&` guards the
-        // call and is left whole.
-        if !escape.is_null() && unsafe { has_char(cstr::at(escape), c) } {
+        if escape.is_some_and(|escape| find_char(escape, c).is_some()) {
             col += 1;
-            // SAFETY: `c` was not the NUL, so `col` is still within the line.
-            if unsafe { *line.offset(col as isize) } as c_int == NUL {
+            if at(col) == 0 {
                 return -1;
             }
         } else if c == quotechar {
             return col;
         }
-        // SAFETY: as above.
-        col += unsafe { utfc_ptr2len(line.offset(col as isize)) };
+        col += c_cluster_len(&line[col as usize..]) as c_int;
     }
 }
 
@@ -73,39 +59,25 @@ unsafe fn find_next_quote(
 ///
 /// An *odd* run of 'quoteescape' characters in front of a quote escapes it;
 /// an even one is escaped escapes, and the quote counts.
-///
-/// # Safety
-/// `line` must be NUL-terminated; `escape` must be null or NUL-terminated.
-unsafe fn find_prev_quote(
-    line: *mut c_char,
+fn find_prev_quote(
+    line: &[u8],
     mut col_start: c_int,
     quotechar: c_int,
-    escape: *mut c_char,
+    escape: Option<&[u8]>,
 ) -> c_int {
+    let at = |col: c_int| c_int::from(byte_at(line, col as usize));
     while col_start > 0 {
         col_start -= 1;
-        // SAFETY: `line` is NUL-terminated and `col_start` is a column of it,
-        // so `utf_head_off` only ever walks back towards `line`.
-        col_start -= unsafe { utf_head_off(line, line.offset(col_start as isize)) };
+        col_start -= head_off(line, col_start as usize) as c_int;
         let mut n = 0;
-        if !escape.is_null() {
-            // SAFETY: `escape` is NUL-terminated, and the byte read is at a
-            // column kept at or above zero by the first half of the `&&` --
-            // the chain is the proof and is left whole.
-            while unsafe {
-                col_start - n > 0
-                    && has_char(
-                        cstr::at(escape),
-                        *line.offset((col_start - n - 1) as isize) as u8 as c_int,
-                    )
-            } {
+        if let Some(escape) = escape {
+            while col_start - n > 0 && find_char(escape, at(col_start - n - 1)).is_some() {
                 n += 1;
             }
         }
         if n & 1 != 0 {
             col_start -= n; // an odd number of escapes: skip the quote
-        // SAFETY: `col_start` is still a column of `line`.
-        } else if unsafe { *line.offset(col_start as isize) } as u8 as c_int == quotechar {
+        } else if at(col_start) == quotechar {
             break;
         }
     }
@@ -113,35 +85,29 @@ unsafe fn find_prev_quote(
 }
 
 /// Where the quoted string enclosing the cursor begins and ends, as byte
-/// columns of `line`. `None` is upstream's `abort_search`.
+/// columns of `line`, the cursor's line. `None` is upstream's `abort_search`.
 ///
 /// Which of the four ways this is asked depends on what is already selected
 /// and on whether the cursor sits on a quote -- the cursor alone cannot say
 /// whether a quote it is on opens or closes a string, which is why the third
 /// arm rescans from column zero.
-///
-/// # Safety
-/// `line` must be the current line, NUL-terminated.
-unsafe fn quoted_span(
-    line: *mut c_char,
+fn quoted_span(
+    line: &[u8],
     mut col_start: c_int,
     quotechar: c_int,
     vis_empty: bool,
     vis_bef_curs: bool,
 ) -> Option<(c_int, c_int)> {
-    let qe = Buf::current().b_p_qe.value_ptr();
-    // SAFETY, for all five: the caller guarantees `line` is the current line
-    // and so NUL-terminated, and 'quoteescape' is a NUL-terminated option
-    // string -- between them that is everything the two searches ask of their
-    // arguments.  Every column handed to them below either came out of one of
-    // them or is the cursor's, so it is a column of `line`.
-    let next = |col| unsafe { find_next_quote(line, col, quotechar, ::core::ptr::null_mut()) };
-    let next_esc = |col| unsafe { find_next_quote(line, col, quotechar, qe) };
-    let prev = |col| unsafe { find_prev_quote(line, col, quotechar, ::core::ptr::null_mut()) };
-    let prev_esc = |col| unsafe { find_prev_quote(line, col, quotechar, qe) };
-    let at = |col: c_int| unsafe { *line.offset(col as isize) };
+    // 'quoteescape', copied: the walks below read it per byte.
+    let qe = Buf::current().b_p_qe.get();
+    let qe = Some(&qe[..]);
+    let next = |col| find_next_quote(line, col, quotechar, None);
+    let next_esc = |col| find_next_quote(line, col, quotechar, qe);
+    let prev = |col| find_prev_quote(line, col, quotechar, None);
+    let prev_esc = |col| find_prev_quote(line, col, quotechar, qe);
+    let at = |col: c_int| c_int::from(byte_at(line, col as usize));
 
-    let on_quote = at(col_start) as u8 as c_int == quotechar;
+    let on_quote = at(col_start) == quotechar;
     let col_end;
 
     if !vis_empty && on_quote {
@@ -162,11 +128,11 @@ unsafe fn quoted_span(
             col_end = end;
         } else {
             let mut end = prev(col_start);
-            if at(end) as u8 as c_int != quotechar {
+            if at(end) != quotechar {
                 return None;
             }
             col_start = prev_esc(end);
-            if at(col_start) as u8 as c_int != quotechar {
+            if at(col_start) != quotechar {
                 // It was an ending quote after all.
                 col_start = end;
                 end = Win::current().w_cursor.col as c_int;
@@ -205,7 +171,7 @@ unsafe fn quoted_span(
     } else {
         // Search backwards for an opening quote.
         col_start = prev_esc(col_start);
-        if at(col_start) as u8 as c_int != quotechar {
+        if at(col_start) != quotechar {
             // None before the cursor: look after it.
             col_start = next(col_start);
             if col_start < 0 {
@@ -229,18 +195,12 @@ fn swap_cursor_and_anchor() {
 
 /// `i"` / `a'` / ... : the text inside the quoted string under the cursor,
 /// cursor left at the end. Answers whether one was found.
-///
-/// # Safety
-/// `op` must be a live operator argument, and there must be a current line.
-pub unsafe fn current_quote(op: *mut OpArg, count: c_int, include: bool, quotechar: c_int) -> bool {
-    // SAFETY: the caller guarantees a current line; `get_cursor_line_ptr`
-    // hands back the cursor's line, NUL-terminated.
-    let line = get_cursor_line_ptr();
-    // SAFETY: `line` is NUL-terminated.  Every column read through this is
-    // either one of `line`'s own or one just past a byte already found
-    // non-NUL, so the reads stay inside it -- the `&&` chains that prove it
-    // are left whole below.
-    let at = |col: c_int| unsafe { *line.offset(col as isize) };
+pub fn current_quote(op: &mut OpArg, count: c_int, include: bool, quotechar: c_int) -> bool {
+    // A copy of the cursor line: the cursor moves to the next line below
+    // when the string ends the line, and the line is still read after that.
+    let line = Lines::current().line_copy(Win::current().w_cursor.lnum);
+    // Past the end reads as the terminator, which no quote character is.
+    let at = |col: c_int| byte_at(&line, col as usize);
     let mut col_start = Win::current().w_cursor.col as c_int;
     let mut inclusive = false;
     let mut vis_empty = true; // the Visual selection is one character or less
@@ -262,7 +222,6 @@ pub unsafe fn current_quote(op: *mut OpArg, count: c_int, include: bool, quotech
         vis_empty = equalpos(visual_anchor(), Win::current().w_cursor);
         if P_SEL.first_byte() == b'e' {
             if vis_bef_curs {
-                // SAFETY: the cursor is on a line of the current buffer.
                 dec_cursor();
                 did_exclusive_adj = true;
             } else if !vis_empty {
@@ -286,16 +245,16 @@ pub unsafe fn current_quote(op: *mut OpArg, count: c_int, include: bool, quotech
         let sel_end;
         if vis_bef_curs {
             inside_quotes = visual_anchor().col > 0
-                && at(visual_anchor().col - 1) as u8 as c_int == quotechar
-                && at(Win::current().w_cursor.col) as c_int != NUL
-                && at(Win::current().w_cursor.col + 1) as u8 as c_int == quotechar;
+                && at(visual_anchor().col - 1) == quotechar as u8
+                && at(Win::current().w_cursor.col) != 0
+                && at(Win::current().w_cursor.col + 1) == quotechar as u8;
             i = visual_anchor().col as c_int;
             sel_end = Win::current().w_cursor.col as c_int;
         } else {
             inside_quotes = Win::current().w_cursor.col > 0
-                && at(Win::current().w_cursor.col - 1) as u8 as c_int == quotechar
-                && at(visual_anchor().col) as c_int != NUL
-                && at(visual_anchor().col + 1) as u8 as c_int == quotechar;
+                && at(Win::current().w_cursor.col - 1) == quotechar as u8
+                && at(visual_anchor().col) != 0
+                && at(visual_anchor().col + 1) == quotechar as u8;
             i = Win::current().w_cursor.col as c_int;
             sel_end = visual_anchor().col as c_int;
         }
@@ -303,10 +262,10 @@ pub unsafe fn current_quote(op: *mut OpArg, count: c_int, include: bool, quotech
         while i <= sel_end {
             // The line may have been changed since the Visual area was
             // selected, so this can run off the end of it.
-            if at(i) as c_int == NUL {
+            if at(i) == 0 {
                 break;
             }
-            let c = at(i) as u8 as c_int;
+            let c = c_int::from(at(i));
             i += 1;
             if c == quotechar {
                 selected_quote = true;
@@ -315,14 +274,12 @@ pub unsafe fn current_quote(op: *mut OpArg, count: c_int, include: bool, quotech
         }
     }
 
-    // SAFETY: `line` is the current line, NUL-terminated.
     let Some((start, mut col_end)) =
-        (unsafe { quoted_span(line, col_start, quotechar, vis_empty, vis_bef_curs) })
+        quoted_span(&line, col_start, quotechar, vis_empty, vis_bef_curs)
     else {
         // `abort_search`: undo the 'selection' adjustment made above.
         if visual_active() && P_SEL.first_byte() == b'e' {
             if did_exclusive_adj {
-                // SAFETY: the cursor is on a line of the current buffer.
                 inc_cursor();
             }
             if restore_vis_bef {
@@ -336,12 +293,12 @@ pub unsafe fn current_quote(op: *mut OpArg, count: c_int, include: bool, quotech
     // With `include`, take the white space after the closing quote, or --
     // when there is none there -- the white space before the opening one.
     if include {
-        if ascii_iswhite(at(col_end + 1) as c_int) {
-            while ascii_iswhite(at(col_end + 1) as c_int) {
+        if ascii_iswhite(c_int::from(at(col_end + 1))) {
+            while ascii_iswhite(c_int::from(at(col_end + 1))) {
                 col_end += 1;
             }
         } else {
-            while col_start > 0 && ascii_iswhite(at(col_start - 1) as c_int) {
+            while col_start > 0 && ascii_iswhite(c_int::from(at(col_start - 1))) {
                 col_start -= 1;
             }
         }
@@ -362,24 +319,19 @@ pub unsafe fn current_quote(op: *mut OpArg, count: c_int, include: bool, quotech
             || (vis_bef_curs
                 && !selected_quote
                 && (inside_quotes
-                    || (at(anchor_col) as u8 as c_int != quotechar
-                        && (anchor_col == 0 || at(anchor_col - 1) as u8 as c_int != quotechar))))
+                    || (at(anchor_col) != quotechar as u8
+                        && (anchor_col == 0 || at(anchor_col - 1) != quotechar as u8))))
         {
             set_visual_anchor(Win::current().w_cursor);
-            // SAFETY: on the main thread with a current buffer.
             redraw_curbuf_later(UPD_INVERTED);
         }
     } else {
-        // SAFETY: the caller guarantees `op` is a live operator argument.
-        let op = unsafe { &mut *op };
         op.start = Win::current().w_cursor;
         op.motion_type = kMTCharWise;
     }
 
     // The end position.
     Win::current().w_cursor.col = col_end as ColNr;
-    // SAFETY: the cursor is on a line of the current buffer; the `&&` keeps
-    // `inc_cursor`'s side effect behind the same test it had.
     if (include || count > 1 || (!vis_empty && inside_quotes)) && inc_cursor() == 2 {
         inclusive = true;
     }
@@ -395,11 +347,10 @@ pub unsafe fn current_quote(op: *mut OpArg, count: c_int, include: bool, quotech
             // a quote.
             if inside_quotes
                 || (!selected_quote
-                    && at(visual_anchor().col) as u8 as c_int != quotechar
-                    && (at(visual_anchor().col) as c_int == NUL
-                        || at(visual_anchor().col + 1) as u8 as c_int != quotechar))
+                    && at(visual_anchor().col) != quotechar as u8
+                    && (at(visual_anchor().col) == 0
+                        || at(visual_anchor().col + 1) != quotechar as u8))
             {
-                // SAFETY: the cursor is on a line of the current buffer.
                 dec_cursor();
                 set_visual_anchor(Win::current().w_cursor);
             }
@@ -410,8 +361,7 @@ pub unsafe fn current_quote(op: *mut OpArg, count: c_int, include: bool, quotech
             redraw_cmdline.set(true); // show the mode later
         }
     } else {
-        // SAFETY: the caller guarantees `op` is a live operator argument.
-        unsafe { (*op).inclusive = inclusive };
+        op.inclusive = inclusive;
     }
     true
 }

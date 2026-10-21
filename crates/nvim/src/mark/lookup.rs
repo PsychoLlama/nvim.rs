@@ -267,17 +267,12 @@ pub unsafe fn mark_get_motion(
     listcmd_busy.set(true);
     let mut mark: *mut FileMark = ptr::null_mut();
     if name == '{' as c_int || name == '}' as c_int {
-        let mut oa = OpArg {
-            motion_type: kMTCharWise,
-            ..OPARG_EMPTY
-        };
         let dir = if name == '}' as c_int {
             FORWARD
         } else {
             BACKWARD
         };
-        // SAFETY: the editor's globals are live and `oa` lives on the stack.
-        if unsafe { findpar(&raw mut oa.inclusive, dir as c_int, 1, NUL, false) } {
+        if findpar(dir as c_int, 1, NUL, false).is_some() {
             // SAFETY: `buffer` is live and `fmp` is the caller's record.
             mark = unsafe { pos_to_mark(buffer, fmp, winh.w_cursor) };
         }
@@ -297,29 +292,6 @@ pub unsafe fn mark_get_motion(
     listcmd_busy.set(was_busy);
     mark
 }
-
-/// An `OpArg` with every field zeroed, which is what the motion lookups need
-/// (only `inclusive` is read back).
-const OPARG_EMPTY: OpArg = OpArg {
-    op_type: OpType::Nop,
-    regname: 0,
-    motion_type: 0,
-    motion_force: 0,
-    use_reg_one: false,
-    inclusive: false,
-    end_adjusted: false,
-    start: UNSET_POS,
-    end: UNSET_POS,
-    cursor_start: UNSET_POS,
-    line_count: 0,
-    empty: false,
-    is_visual: false,
-    start_vcol: 0,
-    end_vcol: 0,
-    prev_opcount: 0,
-    prev_count0: 0,
-    excl_tr_ws: false,
-};
 
 /// Get visual marks '<', '>'
 ///

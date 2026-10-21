@@ -792,8 +792,8 @@ pub(crate) fn nv_object(cmd_arg: &mut CmdArg) {
     let op = cmd_arg.op();
     let n = cmd_arg.count1;
     let found = match u8::try_from(cmd_arg.nchar).unwrap_or(0) {
-        b'w' => unsafe { current_word(op.raw(), n, include, false).is_ok() },
-        b'W' => unsafe { current_word(op.raw(), n, include, true).is_ok() },
+        b'w' => op.on_copy(|op| current_word(op, n, include, false).is_ok()),
+        b'W' => op.on_copy(|op| current_word(op, n, include, true).is_ok()),
         b'b' | b'(' | b')' => block(op, n, include, '(', ')'),
         b'B' | b'{' | b'}' => block(op, n, include, '{', '}'),
         b'[' | b']' => block(op, n, include, '[', ']'),
@@ -802,11 +802,14 @@ pub(crate) fn nv_object(cmd_arg: &mut CmdArg) {
             // A tag block's end is already where it should be; the
             // operator must not push it back over the closing tag.
             cmd_arg.outcome |= Outcome::NO_ADJ_OP_END;
-            unsafe { current_tagblock(op.raw(), n, include) != 0 }
+            op.on_copy(|op| current_tagblock(op, n, include) != 0)
         }
-        b'p' => unsafe { current_par(op.raw(), n, include, 'p' as c_int) != 0 },
-        b's' => unsafe { current_sent(op.raw(), n, include).is_ok() },
-        b'"' | b'\'' | b'`' => unsafe { current_quote(op.raw(), n, include, cmd_arg.nchar) },
+        b'p' => op.on_copy(|op| current_par(op, n, include, 'p' as c_int) != 0),
+        b's' => op.on_copy(|op| current_sent(op, n, include).is_ok()),
+        b'"' | b'\'' | b'`' => {
+            let quote = cmd_arg.nchar;
+            op.on_copy(|op| current_quote(op, n, include, quote))
+        }
         _ => false,
     };
 
@@ -821,6 +824,5 @@ pub(crate) fn nv_object(cmd_arg: &mut CmdArg) {
 /// The `i(`/`a{`-family text object: the block `open`..`close` around the
 /// cursor, `n` levels out.
 fn block(op: Op, n: c_int, include: bool, open: char, close: char) -> bool {
-    // SAFETY: `op` is a live operator and the cursor is in its own buffer.
-    unsafe { current_block(op.raw(), n, include, open as c_int, close as c_int).is_ok() }
+    op.on_copy(|op| current_block(op, n, include, open as c_int, close as c_int).is_ok())
 }

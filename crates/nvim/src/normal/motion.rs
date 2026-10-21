@@ -633,17 +633,12 @@ pub(crate) fn nv_findpar(cmd_arg: &mut CmdArg) {
     cmd_arg.op().inclusive = false;
     cmd_arg.op().use_reg_one = true;
     Win::current().w_set_curswant = true;
-    if !unsafe {
-        findpar(
-            &raw mut cmd_arg.op().inclusive,
-            cmd_arg.arg,
-            cmd_arg.count1,
-            NUL,
-            false,
-        )
-    } {
+    let Some(inclusive) = findpar(cmd_arg.arg, cmd_arg.count1, NUL, false) else {
         clear_op_beep(cmd_arg.op());
         return;
+    };
+    if inclusive {
+        cmd_arg.op().inclusive = true;
     }
     Win::current().w_cursor.coladd = 0;
     may_fold_open(cmd_arg, kOptFdoFlagBlock as c_uint);

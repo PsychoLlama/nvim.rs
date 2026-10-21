@@ -5,8 +5,7 @@
 //! bucket when a WORD is asked for -- changes. `w`/`b`/`e`/`ge` are the four
 //! directions of it, and [`current_word`] composes them.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -15,7 +14,7 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
-use crate::cursor::{coladvance, dec_cursor, gchar_cursor, get_cursor_line_ptr, inc_cursor};
+use crate::cursor::{coladvance, dec_cursor, gchar_cursor, get_cursor_line_len, inc_cursor};
 use crate::drawscreen::state::redraw_cmdline;
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later};
 use crate::edit::oneleft;
@@ -44,7 +43,7 @@ static cls_bigword: GlobalCell<bool> = GlobalCell::new(false);
 /// With `cls_bigword` set every non-blank answers 1, which is what makes
 /// `W`/`B`/`E` treat a run of anything as one word.
 fn cls() -> c_int {
-    // SAFETY: `curwin` and `curbuf` are set from startup to exit, which is all
+    // `curwin` and `curbuf` are set from startup to exit, which is all
     // `gchar_cursor` asks for; it answers NUL past the end of the line.
     let c = gchar_cursor();
     if c == ' ' as c_int || c == '\t' as c_int || c == NUL {
@@ -99,7 +98,7 @@ pub fn fwd_word(mut count: c_int, bigword: bool, eol: bool) -> Result<(), Failed
         // Inside a fold, move to the last character of the last line.
         if let Some(last) = Win::current().fold_end(Win::current().w_cursor.lnum) {
             Win::current().w_cursor.lnum = last;
-            // SAFETY: `cur_win()` is a live window.
+            // `cur_win()` is a live window.
             coladvance(Win::current(), MAXCOL);
         }
         let sclass = cls();
@@ -130,10 +129,7 @@ pub fn fwd_word(mut count: c_int, bigword: bool, eol: bool) -> Result<(), Failed
         // Then on to the next non-white character.
         while cls() == 0 {
             // Stop on a blank line.
-            // SAFETY: `get_cursor_line_ptr` hands back the cursor's line,
-            // NUL-terminated, so its first byte is there to read.
-            if Win::current().w_cursor.col == 0 && unsafe { *get_cursor_line_ptr() } as c_int == NUL
-            {
+            if Win::current().w_cursor.col == 0 && get_cursor_line_len() == 0 {
                 break;
             }
             i = inc_cursor();
@@ -223,7 +219,7 @@ pub fn end_word(
         && visual_mode().is_char()
         && VIsual_select_exclu_adj.get()
     {
-        // SAFETY: Visual mode is active, with a current window.
+        // Visual mode is active, with a current window.
         unadjust_for_sel();
     }
 
@@ -235,7 +231,7 @@ pub fn end_word(
         // Inside a fold, move to the last character of the last line.
         if let Some(last) = Win::current().fold_end(Win::current().w_cursor.lnum) {
             Win::current().w_cursor.lnum = last;
-            // SAFETY: `cur_win()` is a live window.
+            // `cur_win()` is a live window.
             coladvance(Win::current(), MAXCOL);
         }
         let sclass = cls();
@@ -335,11 +331,8 @@ pub fn bckend_word(mut count: c_int, bigword: bool, eol: bool) -> Result<(), Fai
 /// Used with an operator pending and in Visual mode, where a `count` beyond
 /// the first extends the selection by that many more objects -- in whichever
 /// direction the cursor sits relative to the Visual start.
-///
-/// # Safety
-/// `op` must be a live operator argument, and there must be a current line.
-pub unsafe fn current_word(
-    op: *mut OpArg,
+pub fn current_word(
+    op: &mut OpArg,
     mut count: c_int,
     include: bool,
     bigword: bool,
@@ -356,10 +349,8 @@ pub unsafe fn current_word(
     clearpos(&mut start_pos);
 
     // Correct the cursor when 'selection' is exclusive.
-    // SAFETY: 'selection' is a NUL-terminated option string.
     if visual_active() && P_SEL.first_byte() == b'e' && lt(visual_anchor(), Win::current().w_cursor)
     {
-        // SAFETY: the caller guarantees the cursor is on a line of the buffer.
         dec_cursor();
     }
 
@@ -393,11 +384,8 @@ pub unsafe fn current_word(
         if visual_active() {
             // Should do something when `inclusive` is false.
             set_visual_anchor(start_pos);
-            // SAFETY: on the main thread with a current buffer.
             redraw_curbuf_later(UPD_INVERTED); // update the inversion
         } else {
-            // SAFETY: the caller guarantees `op` is a live operator argument.
-            let op = unsafe { &mut *op };
             op.start = start_pos;
             op.motion_type = kMTCharWise;
         }
@@ -455,8 +443,7 @@ pub unsafe fn current_word(
                 if visual_active() {
                     set_visual_anchor(Win::current().w_cursor);
                 } else {
-                    // SAFETY: `op` is a live operator argument.
-                    unsafe { (*op).start = Win::current().w_cursor };
+                    op.start = Win::current().w_cursor;
                 }
             }
         }
@@ -468,7 +455,6 @@ pub unsafe fn current_word(
             && inclusive
             && ltoreq(visual_anchor(), Win::current().w_cursor)
         {
-            // SAFETY: the cursor is on a line of the current buffer.
             inc_cursor();
         }
         if visual_mode().is_line() {
@@ -476,8 +462,7 @@ pub unsafe fn current_word(
             redraw_cmdline.set(true); // show the mode later
         }
     } else {
-        // SAFETY: the caller guarantees `op` is a live operator argument.
-        unsafe { (*op).inclusive = inclusive };
+        op.inclusive = inclusive;
     }
     Ok(())
 }

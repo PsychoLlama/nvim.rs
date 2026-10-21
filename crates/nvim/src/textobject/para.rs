@@ -5,8 +5,7 @@
 //! [`starts_para`] is that test -- the rest of the tree asks it too -- and
 //! [`findpar`] and [`current_par`] are the two shapes built on it.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
@@ -29,18 +28,10 @@ use crate::types::{FAIL, LineNr, OK, OpArg};
 /// boundary in `dir`, answering whether one was found.
 ///
 /// `what` is NUL for a paragraph and `{` or `}` for a section; `both` also
-/// stops at a `}` in column 0. `pincl` is set when the last character of the
-/// buffer is reached and has to be included in the motion.
-///
-/// # Safety
-/// `pincl` must be writable, and there must be a current window.
-pub unsafe fn findpar(
-    pincl: *mut bool,
-    dir: c_int,
-    mut count: c_int,
-    what: c_int,
-    both: bool,
-) -> bool {
+/// stops at a `}` in column 0. Answers `None` when there is no such
+/// boundary, and otherwise whether the last character of the buffer was
+/// reached and has to be included in the motion.
+pub fn findpar(dir: c_int, mut count: c_int, what: c_int, both: bool) -> Option<bool> {
     let mut curr = Win::current().w_cursor.lnum;
 
     loop {
@@ -54,9 +45,6 @@ pub unsafe fn findpar(
         let mut did_skip = false;
         let mut first = true;
         loop {
-            // SAFETY: on the main thread with a current buffer; `ml_get`
-            // checks the line number itself and hands back a NUL-terminated
-            // line, so its first byte is there to read.
             if !Lines::current().line(curr).is_empty() {
                 did_skip = true;
             }
@@ -78,7 +66,7 @@ pub unsafe fn findpar(
             curr += dir as LineNr;
             if curr < 1 || curr > Buf::current().b_ml.ml_line_count {
                 if count != 0 {
-                    return false;
+                    return None;
                 }
                 curr -= dir as LineNr;
                 break;
@@ -87,12 +75,12 @@ pub unsafe fn findpar(
         }
     }
 
-    // SAFETY: on the main thread with a current window.
     setpcmark();
     if both && Lines::current().line(curr).first() == Some(&b'}') {
         curr += 1; // include the line holding the `}`
     }
     Win::current().w_cursor.lnum = curr;
+    let mut inclusive = false;
     if curr == Buf::current().b_ml.ml_line_count && what != '}' as c_int && dir == FORWARD as c_int
     {
         // Put the cursor on the last character of the last line and make
@@ -103,13 +91,12 @@ pub unsafe fn findpar(
         if Win::current().w_cursor.col != 0 {
             let col = Win::current().w_cursor.col - 1;
             Win::current().w_cursor.col = col - head_off(line, col as usize) as ColNr;
-            // SAFETY: the caller guarantees `pincl` is writable.
-            unsafe { *pincl = true };
+            inclusive = true;
         }
     } else {
         Win::current().w_cursor.col = 0;
     }
-    true
+    Some(inclusive)
 }
 
 /// Whether `s` opens with an nroff macro named in `opt` -- a list of
@@ -230,10 +217,7 @@ fn extend_paragraphs(mut start_lnum: LineNr, count: c_int, include: bool) -> c_i
 ///
 /// `type_0` is `p`; `S` (section) is not implemented upstream and answers
 /// FAIL.
-///
-/// # Safety
-/// `op` must be a live operator argument, and there must be a current line.
-pub unsafe fn current_par(op: *mut OpArg, count: c_int, include: bool, type_0: c_int) -> c_int {
+pub fn current_par(op: &mut OpArg, count: c_int, include: bool, type_0: c_int) -> c_int {
     if type_0 == 'S' as c_int {
         return FAIL; // not implemented yet
     }
@@ -325,8 +309,6 @@ pub unsafe fn current_par(op: *mut OpArg, count: c_int, include: bool, type_0: c
         redraw_curbuf_later(UPD_INVERTED); // update the inversion
         showmode();
     } else {
-        // SAFETY: the caller guarantees `op` is a live operator argument.
-        let op = unsafe { &mut *op };
         op.start.lnum = start_lnum;
         op.start.col = 0;
         op.motion_type = kMTLineWise;

@@ -426,10 +426,7 @@ pub(crate) unsafe fn find_decl(
     // Where the enclosing block starts, which is as far back as a local
     // declaration may be.
     let par_pos;
-    let mut incll = false;
-    // SAFETY: `incll` is this frame's own out-parameter.
-    let in_block =
-        locally && unsafe { findpar(&raw mut incll, BACKWARD as c_int, 1, '{' as c_int, false) };
+    let in_block = locally && findpar(BACKWARD as c_int, 1, '{' as c_int, false).is_some();
     if !in_block {
         setpcmark();
         Win::current().w_cursor.lnum = 1;

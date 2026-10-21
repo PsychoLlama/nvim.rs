@@ -20,11 +20,11 @@
 //!
 //! This parent keeps no functions, only the vocabulary the children share.
 
-#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use core::ffi::{c_uint, c_void};
+use core::ffi::c_uint;
 
 use crate::types::MotionType;
 
@@ -44,4 +44,3 @@ pub const kMTLineWise: MotionType = 1;
 pub const kMTCharWise: MotionType = 0;
 /// `findmatchlimit`'s "search forward" flag.
 pub const FM_FORWARD: c_uint = 2;
-pub const NULL: *mut c_void = ::core::ptr::null_mut::<c_void>();

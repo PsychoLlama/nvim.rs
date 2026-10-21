@@ -320,14 +320,17 @@ pub(crate) fn nv_brackets(cmd_arg: &mut CmdArg) {
         let both_ways = cmd_arg.op().op_type != OpType::Nop
             && cmd_arg.arg == FORWARD as c_int
             && flag == '{' as c_int;
-        let (incl, dir, n) = (&raw mut cmd_arg.op().inclusive, cmd_arg.arg, cmd_arg.count1);
-        if !unsafe { findpar(incl, dir, n, flag, both_ways) } {
-            clear_op_beep(cmd_arg.op());
-        } else {
+        let (dir, n) = (cmd_arg.arg, cmd_arg.count1);
+        if let Some(inclusive) = findpar(dir, n, flag, both_ways) {
+            if inclusive {
+                cmd_arg.op().inclusive = true;
+            }
             if cmd_arg.op().op_type == OpType::Nop {
                 beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
             }
             may_fold_open(cmd_arg, kOptFdoFlagBlock as c_uint);
+        } else {
+            clear_op_beep(cmd_arg.op());
         }
     } else if nchar == 'p' as c_int || nchar == 'P' as c_int {
         // The put that reindents to the current line.
