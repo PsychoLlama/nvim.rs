@@ -216,6 +216,19 @@ pub fn restore_lbr(lbr_saved: bool) {
 /// Note that this converts a partly selected multi-byte character to spaces,
 /// like a partly selected TAB.
 pub fn block_prep(bd: &mut BlockDef, op: &OpArg, lnum: LineNr, is_del: bool) {
+    let mut lines = Lines::current();
+    block_prep_line(bd, op, lnum, lines.line(lnum), is_del);
+}
+
+/// [`block_prep`] of `line`, which is line `lnum` of the current buffer, for
+/// a caller that holds it already.
+pub(crate) fn block_prep_line(
+    bd: &mut BlockDef,
+    op: &OpArg,
+    lnum: LineNr,
+    line: &[u8],
+    is_del: bool,
+) {
     // Unwanted line breaks would move every column measured below.
     let lbr_saved = reset_lbr();
 
@@ -233,8 +246,6 @@ pub fn block_prep(bd: &mut BlockDef, op: &OpArg, lnum: LineNr, is_del: bool) {
     bd.end_char_vcols = 0;
     bd.start_char_vcols = 0;
 
-    let mut lines = Lines::current();
-    let line = lines.line(lnum);
     // The walks end at the line's end, where the decoder answers a zero
     // codepoint; the byte test only runs then.
     let at_end = |at: usize, chr: CharInfo| chr.value == 0 && byte_at(line, at) == 0;
@@ -423,6 +434,13 @@ fn charwise_block_prep(
 pub(crate) fn block_def(op: &OpArg, lnum: LineNr) -> BlockDef {
     let mut bd = BlockDef::ZERO;
     block_prep(&mut bd, op, lnum, false);
+    bd
+}
+
+/// [`block_def`] of `line`, which is line `lnum` of the current buffer.
+pub(crate) fn block_def_of(op: &OpArg, lnum: LineNr, line: &[u8]) -> BlockDef {
+    let mut bd = BlockDef::ZERO;
+    block_prep_line(&mut bd, op, lnum, line, false);
     bd
 }
 

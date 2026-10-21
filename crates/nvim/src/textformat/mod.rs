@@ -81,14 +81,21 @@ pub(crate) fn has_format_option(x: FoFlag) -> bool {
 ///
 /// Upstream reads the byte after the cursor even when the cursor is on the
 /// line's terminator; past the end reads as no character here.
+#[inline]
 pub(crate) fn whitechar(cc: c_int) -> bool {
-    ascii_iswhite(cc) && {
-        let cursor = Win::current().w_cursor;
-        let mut lines = Lines::current();
-        let line = lines.line(cursor.lnum);
-        let after = (usize::try_from(cursor.col).unwrap_or(0) + 1).min(line.len());
-        !utf_iscomposing_first(char_at(&line[after..]))
-    }
+    ascii_iswhite(cc) && !composing_after_cursor()
+}
+
+/// Whether the character one byte after the cursor is a composing one. An
+/// ASCII byte, the end of the line among them, never is -- the common case,
+/// and the only one that needs no decode.
+fn composing_after_cursor() -> bool {
+    let cursor = Win::current().w_cursor;
+    let mut lines = Lines::current();
+    let line = lines.line(cursor.lnum);
+    let after = usize::try_from(cursor.col).unwrap_or(0) + 1;
+    line.get(after)
+        .is_some_and(|&b| b >= 0x80 && utf_iscomposing_first(char_at(&line[after..])))
 }
 
 /// The width to format to: 'textwidth' if set, else the window width less

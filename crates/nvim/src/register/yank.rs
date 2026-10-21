@@ -22,7 +22,7 @@ use crate::guard::Lock;
 use crate::mbyte::head_off;
 use crate::memory::{ThinCString, XString};
 use crate::message_fmt::{msg_bytes, report_msg};
-use crate::ops::{block_def, charwise_block_def};
+use crate::ops::{block_def_of, charwise_block_def};
 use crate::option::vars::P_SEL;
 use crate::tr_plural;
 use crate::types::RegLines;
@@ -166,9 +166,10 @@ pub fn op_yank_reg(op: &OpArg, message: bool, reg: Reg, append: bool) {
     while lnum <= yankendlnum {
         match yank_type {
             kMTBlockWise => {
-                let bd = block_def(op, lnum);
                 let mut text = Buf::current().lines();
-                lines.push(yank_copy_line(text.line(lnum), &bd, region.excl_tr_ws));
+                let line = text.line(lnum);
+                let bd = block_def_of(op, lnum, line);
+                lines.push(yank_copy_line(line, &bd, region.excl_tr_ws));
             }
             kMTLineWise => lines.push(XString::from_bytes(Buf::current().lines().line(lnum))),
             kMTCharWise => {

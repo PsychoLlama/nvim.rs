@@ -81,7 +81,8 @@ struct BreakSearch {
 
 impl BreakSearch {
     /// Upstream's `WHITECHAR(cc)` arm: `cc` is white space, so the break goes
-    /// in front of the run of blanks this is the end of.
+    /// in front of the run of blanks this is the end of. The caller has just
+    /// found `whitechar(cc)` true at the cursor.
     fn at_white(&mut self, mut cc: c_int) -> Step {
         // Remember where the blank just before the text is.
         let end_col = Win::current().w_cursor.col;
@@ -89,7 +90,11 @@ impl BreakSearch {
         // Walk back to the start of the run of blanks, counting them --
         // only "more than one" matters, for the `p` flag below.
         let mut wcc = 0;
-        while Win::current().w_cursor.col > 0 && whitechar(cc) {
+        // The first test is the caller's, and is not asked again.
+        let mut known_white = true;
+        while Win::current().w_cursor.col > 0
+            && (::core::mem::take(&mut known_white) || whitechar(cc))
+        {
             dec_cursor();
             cc = gchar_cursor();
             if wcc < 2 {

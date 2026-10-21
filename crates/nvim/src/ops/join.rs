@@ -1,13 +1,12 @@
 //! `J` and `gJ` -- joining lines.
 //!
-//! [`do_join`] builds the joined line in **one** allocation, which is why it
-//! is two passes over the same lines. The first ([`measure_join`]) walks
-//! forwards and only measures: how much of each line survives once
-//! [`skip_comment`] has trimmed a comment leader, and how many spaces go in
-//! each seam. The second ([`assemble_join`]) walks *backwards* and copies,
-//! filling the buffer from its end -- which is also the order marks have to
-//! move in, since each line's marks land at a column that depends on where the
-//! lines after it ended up.
+//! [`do_join`] is two passes. The first ([`measure_join`]) walks the lines
+//! forwards, works out how much of each survives once [`skip_comment`] has
+//! trimmed a comment leader and how many spaces go in each seam, and builds
+//! the joined line as it goes, remembering where each line landed. The
+//! second ([`assemble_join`]) walks *backwards* over those landing columns,
+//! moving the marks -- upstream's order, which built the line from its end
+//! and so read every line twice -- and replaces the first line.
 //!
 //! The seam width is the fiddly part: normally one space, two after `.`, `?`
 //! or `!` under 'joinspaces', none before `)` or after a TAB, none at all for
@@ -65,18 +64,23 @@ pub fn skip_comment(line: &[u8], process: bool, include_space: bool) -> (usize, 
 
 /// What [`measure_join`] worked out and [`assemble_join`] replays.
 struct JoinPlan {
-    /// Spaces to put in front of line `t`; `count` entries.
-    spaces: Vec<u8>,
-    /// Bytes of comment leader skipped on line `t`, `count` entries; `None`
-    /// when 'formatoptions' does not have `j`.
-    comments: Option<Vec<c_int>>,
+    /// 'formatoptions' `j`: comment leaders are removed.
+    remove_comments: bool,
+    /// The joined line.
+    joined: Vec<u8>,
+    /// For line `t`, where the marks on it move: the column its text lands
+    /// at less what was skipped of it, and the bytes skipped less the
+    /// spaces put in front of it -- `mark_col_adjust`'s two amounts.
+    landed: Vec<(ColNr, c_int)>,
     /// Length of the joined line, spaces included.
     sumsize: c_int,
     /// Length of the *last* line joined, after skipping.
     currsize: c_int,
-    /// Bytes skipped at the start of the last line joined: its leader and
-    /// white space.
-    curr: usize,
+    /// Length of the first line, which nothing is skipped of: the column of
+    /// the first seam.
+    first_size: c_int,
+    /// Spaces put in front of the last line joined.
+    last_spaces: c_int,
 }
 
 /// `J` and `gJ`: join `count` lines from the cursor.
@@ -104,22 +108,22 @@ pub fn do_join(
         u_save(above, past)?;
     }
 
-    // The per-line space counts are wanted twice: to size the one
-    // allocation the joined line goes in, and to place each line in it.
     let mut plan = JoinPlan {
-        spaces: vec![0; count],
-        comments: remove_comments.then(|| vec![0; count]),
+        remove_comments,
+        joined: Vec::new(),
+        landed: Vec::with_capacity(count),
         sumsize: 0,
         currsize: 0,
-        curr: 0,
+        first_size: 0,
+        last_spaces: 0,
     };
 
     measure_join(count, insert_space, setmark, &mut plan)?;
-    assemble_join(count, insert_space, setmark, &mut plan);
+    assemble_join(count, setmark, &mut plan);
     Ok(())
 }
 
-/// First pass: measure the joined line without moving anything.
+/// First pass: build the joined line without changing the buffer.
 ///
 /// Answers `Err` when the user interrupted it, which is why the walk calls
 /// `line_breakcheck` -- a join can be over a very large count.
@@ -141,6 +145,7 @@ fn measure_join(
         let mut lines = Lines::current();
         let line = lines.line(Win::current().w_cursor.lnum + t as LineNr);
         let mut curr = 0;
+        let mut spaces = 0;
 
         if t == 0 && setmark && !cmdmod_has(CmdModFlags::LOCKMARKS) {
             let mut buf = Win::current().buffer();
@@ -148,14 +153,11 @@ fn measure_join(
             buf.b_op_start.col = line.len() as ColNr;
         }
 
-        if let Some(comments) = plan.comments.as_mut() {
+        if plan.remove_comments {
             // The leader is only noise when the line before was a comment
             // too; otherwise just ask whether *this* line is one.
             if t > 0 && prev_was_comment {
-                let skipped;
-                (skipped, prev_was_comment) = skip_comment(line, true, insert_space);
-                comments[t] = skipped as c_int;
-                curr = skipped;
+                (curr, prev_was_comment) = skip_comment(line, true, insert_space);
             } else {
                 prev_was_comment = skip_comment(line, false, insert_space).1;
             }
@@ -182,7 +184,7 @@ fn measure_join(
                     // back for the 'joinspaces' test below.
                     endcurr1 = endcurr2;
                 } else {
-                    plan.spaces[t] += 1;
+                    spaces += 1;
                 }
                 // 'joinspaces': two spaces after the end of a sentence.
                 if p_js()
@@ -190,12 +192,12 @@ fn measure_join(
                         || endcurr1 == '?' as c_int
                         || endcurr1 == '!' as c_int)
                 {
-                    plan.spaces[t] += 1;
+                    spaces += 1;
                 }
             }
         }
 
-        let added = c_int::from(plan.spaces[t]);
+        let added = spaces;
         if t > 0 && curbuf_splice_pending.get() == 0 {
             let removed = curr as ColNr;
             let row = Win::current().w_cursor.lnum as c_int - 1;
@@ -216,8 +218,22 @@ fn measure_join(
         }
 
         let text = &line[curr..];
-        plan.curr = curr;
+        if t == 0 {
+            // Sized as if every line were as long as the first, seams and
+            // terminator included: one allocation for the usual join of
+            // similar lines, and no growth step per line for `:%j`.
+            plan.joined = Vec::with_capacity((text.len() + 2) * count + 1);
+        }
+        // Where this line's marks go: its spaces start at `sumsize`.
+        let removed = curr as c_int - added;
+        plan.landed.push((plan.sumsize - removed, removed));
+        plan.joined.resize(plan.joined.len() + added as usize, b' ');
+        plan.joined.extend_from_slice(text);
         plan.currsize = text.len() as c_int;
+        if t == 0 {
+            plan.first_size = plan.currsize;
+        }
+        plan.last_spaces = added;
         plan.sumsize += plan.currsize + added;
 
         endcurr1 = NUL;
@@ -241,72 +257,33 @@ fn measure_join(
     Ok(())
 }
 
-/// Second pass: build the joined line and move the marks onto it.
+/// Second pass: move the marks onto the joined line and put it in place of
+/// the first.
 ///
-/// Walks *backwards*, filling the one allocation from its end, because each
-/// line's column offset in the result depends on everything after it. The
-/// forward pass left `plan.curr`/`currsize` on the last line, which is where
-/// this one starts.
+/// Walks *backwards*, as upstream does: it built the line from its end, and
+/// moved each line's marks as it went.
 ///
 /// `plan` must be as [`measure_join`] left it.
-fn assemble_join(count: size_t, insert_space: bool, setmark: bool, plan: &mut JoinPlan) {
-    let last = count - 1;
+fn assemble_join(count: size_t, setmark: bool, plan: &mut JoinPlan) {
     // The column the last line starts at, for the cursor below.
-    let col = plan.sumsize - plan.currsize - c_int::from(plan.spaces[last]);
-
-    // `sumsize` is what `measure_join` counted for exactly the lines copied
-    // back here; the terminator's room is reserved so that it costs no
-    // second allocation.
-    let sumsize = plan.sumsize as usize;
-    let mut newp = Vec::with_capacity(sumsize + 1);
-    newp.resize(sumsize, 0);
-    let mut cend = sumsize;
+    let col = plan.sumsize - plan.currsize - plan.last_spaces;
 
     // The four edits below are one splice as far as extmarks and the
     // buffer-update RPC are concerned.
     let splice = Suppress::splice();
 
-    let mut t = last;
-    loop {
-        let spaces_t = usize::from(plan.spaces[t]);
-        {
-            let mut lines = Lines::current();
-            let line = lines.line(Win::current().w_cursor.lnum + t as LineNr);
-            let text = &line[plan.curr..];
-            cend -= text.len();
-            newp[cend..cend + text.len()].copy_from_slice(text);
-        }
-        cend -= spaces_t;
-        newp[cend..cend + spaces_t].fill(b' ');
-        // Where the mark adjustment below wants the line to have landed.
-        let spaces_removed = plan.curr as c_int - spaces_t as c_int;
-        let at = cend as ColNr - spaces_removed;
-
-        // Marks move from each deleted line onto the joined one. Not Vi
-        // compatible -- Vi deletes them -- but better. If more spaces are
-        // deleted than added, a mark inside them moves no further than
-        // what was added.
+    // Marks move from each deleted line onto the joined one. Not Vi
+    // compatible -- Vi deletes them -- but better. If more spaces are
+    // deleted than added, a mark inside them moves no further than what
+    // was added.
+    for t in (0..count).rev() {
+        let (at, spaces_removed) = plan.landed[t];
         let lnum = Win::current().w_cursor.lnum + t as LineNr;
         mark_col_adjust(lnum, 0, -(t as LineNr), at, spaces_removed);
-
-        if t == 0 {
-            break;
-        }
-
-        let mut lines = Lines::current();
-        let line = lines.line(Win::current().w_cursor.lnum + t as LineNr - 1);
-        plan.curr = plan
-            .comments
-            .as_ref()
-            .map_or(0, |comments| comments[t - 1] as usize);
-        if insert_space && t > 1 {
-            plan.curr += skip::white(&line[plan.curr..]);
-        }
-        plan.currsize = (line.len() - plan.curr) as c_int;
-        t -= 1;
     }
 
-    let _ = ml_replace_owned(Win::current().w_cursor.lnum, XString::from_vec(newp));
+    let joined = ::core::mem::take(&mut plan.joined);
+    let _ = ml_replace_owned(Win::current().w_cursor.lnum, XString::from_vec(joined));
 
     if setmark && !cmdmod_has(CmdModFlags::LOCKMARKS) {
         let mut buf = Win::current().buffer();
@@ -320,7 +297,7 @@ fn assemble_join(count: size_t, insert_space: bool, setmark: bool, plan: &mut Jo
         Win::current().w_cursor.lnum,
         Win::current().w_cursor.lnum + 1,
     );
-    changed_lines(Buf::current(), lnum, plan.currsize, next, 0, true);
+    changed_lines(Buf::current(), lnum, plan.first_size, next, 0, true);
 
     // Delete the following lines with the cursor moved there briefly.
     // `del_lines` may move it up again if the last line went, so the line
@@ -335,7 +312,7 @@ fn assemble_join(count: size_t, insert_space: bool, setmark: bool, plan: &mut Jo
     // 'cpoptions' `q`: Vi puts the cursor at the column of the *first*
     // join, Vim at the column of the last.
     Win::current().w_cursor.col = if cpo_has(CpoFlag::JOINCOL) {
-        plan.currsize
+        plan.first_size
     } else {
         col
     };
