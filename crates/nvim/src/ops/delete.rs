@@ -18,8 +18,7 @@
 //! edits reach extmarks and the buffer-update RPC as the single splice
 //! [`get_region_bytecount`] measured up front.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::guard::Suppress;
 use crate::memline::MlFlags;
@@ -67,13 +66,8 @@ impl From<Failed> for NotDeleted {
 /// An empty or refused region is *success*: nothing to delete is not a
 /// failure, and neither is a read-only register (which beeps instead).
 ///
-/// # Safety
-/// `op` must point to a live `OpArg` describing a region of the current
-/// buffer.
-pub unsafe fn op_delete(op: *mut OpArg) -> Result<(), NotDeleted> {
-    // SAFETY: the caller's promise -- a live `OpArg` of the current buffer.
-    // Every line and column touched below is one of that region's.
-    let mut op = unsafe { Op::new(op) };
+/// `op` describes a region of the current buffer.
+pub fn op_delete(op: &mut OpArg) -> Result<(), NotDeleted> {
     let old_lcount = Buf::current().line_count();
 
     if Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
@@ -93,7 +87,7 @@ pub unsafe fn op_delete(op: *mut OpArg) -> Result<(), NotDeleted> {
         op.regname = VIsual_select_reg.get();
     }
 
-    unsafe { mb_adjust_opend(op.raw()) };
+    mb_adjust_opend(op);
 
     // Imitate the strange Vi behaviour: a charwise delete spanning more
     // than one line whose result would be a blank line becomes linewise.
@@ -178,10 +172,7 @@ pub unsafe fn op_delete(op: *mut OpArg) -> Result<(), NotDeleted> {
 /// inside one line. Only the *last* one written reaches the clipboard and the
 /// autocommand, which is upstream's behaviour and the reason `reg` is carried
 /// rather than each branch handling its own.
-fn save_deleted_text(op: Op) -> bool {
-    // A copy of the operator: TextYankPost runs user code, which must not
-    // find the pending operator borrowed.
-    let arg: OpArg = *op;
+fn save_deleted_text(op: &OpArg) -> bool {
     let mut reg: Option<crate::register::Reg> = None;
     let mut did_yank = false;
 
@@ -193,7 +184,7 @@ fn save_deleted_text(op: Op) -> bool {
         let named = get_yank_register(op.regname, YREG_YANK as c_int);
         // Yank without a message.
         let append = is_append_register(op.regname);
-        op_yank_reg(&arg, false, named, append);
+        op_yank_reg(op, false, named, append);
         reg = Some(named);
         did_yank = true;
     }
@@ -203,7 +194,7 @@ fn save_deleted_text(op: Op) -> bool {
     if op.motion_type == kMTLineWise || op.line_count > 1 || op.use_reg_one {
         shift_delete_registers(is_append_register(op.regname));
         let one = get_y_register(1);
-        op_yank_reg(&arg, false, one, false);
+        op_yank_reg(op, false, one, false);
         reg = Some(one);
         did_yank = true;
     }
@@ -212,7 +203,7 @@ fn save_deleted_text(op: Op) -> bool {
     // delete is within one line.
     if op.regname == 0 && op.motion_type != kMTLineWise && op.line_count == 1 {
         let small = get_yank_register('-' as c_int, YREG_YANK as c_int);
-        op_yank_reg(&arg, false, small, false);
+        op_yank_reg(op, false, small, false);
         reg = Some(small);
         did_yank = true;
     }
@@ -222,7 +213,7 @@ fn save_deleted_text(op: Op) -> bool {
             std::process::abort();
         };
         crate::clipboard::set_clipboard(op.regname, reg);
-        do_autocmd_textyankpost(&arg, reg);
+        do_autocmd_textyankpost(op, reg);
     }
     true
 }
@@ -235,16 +226,15 @@ fn save_deleted_text(op: Op) -> bool {
 /// patched.
 ///
 /// `op` must be blockwise.
-fn delete_block(mut op: Op) -> Result<(), UndoFailed> {
-    // SAFETY: every line the walk reaches is one of the region's, so it is a
-    // line of the current buffer.
+fn delete_block(op: &mut OpArg) -> Result<(), UndoFailed> {
+    // Every line the walk reaches is one of the region's.
     let (above, below) = (op.start.lnum - 1, op.end.lnum + 1);
     u_save(above, below)?;
 
     let mut bd = BlockDef::ZERO;
     let mut lnum = Win::current().w_cursor.lnum;
     while lnum <= op.end.lnum {
-        unsafe { block_prep(op.raw(), &raw mut bd, lnum, true) };
+        block_prep(&mut bd, op, lnum, true);
         if bd.textlen != 0 {
             // Adjust the cursor for a TAB replaced by spaces, and 'lbr'.
             if lnum == Win::current().w_cursor.lnum {
@@ -296,7 +286,7 @@ fn delete_block(mut op: Op) -> Result<(), UndoFailed> {
 /// 'autoindent' has an indent to keep.
 ///
 /// `op` must be linewise.
-fn delete_whole_lines(op: Op) -> Result<(), UndoFailed> {
+fn delete_whole_lines(op: &OpArg) -> Result<(), UndoFailed> {
     if op.op_type != OpType::Change {
         del_lines(op.line_count, true);
         beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
@@ -335,7 +325,7 @@ fn delete_whole_lines(op: Op) -> Result<(), UndoFailed> {
 /// The charwise arm.
 ///
 /// `op` must be charwise.
-fn delete_chars(op: Op) -> Result<(), UndoFailed> {
+fn delete_chars(op: &mut OpArg) -> Result<(), UndoFailed> {
     if op_virtual() {
         break_tabs_at_edges(op)?;
     }
@@ -358,10 +348,10 @@ fn delete_chars(op: Op) -> Result<(), UndoFailed> {
 /// Moves `op.start`/`op.end` onto those positions.
 ///
 /// `op` must be charwise.
-fn break_tabs_at_edges(mut op: Op) -> Result<(), UndoFailed> {
-    // SAFETY: both ends name positions of the current buffer, and the cursor
-    // is put on one of them before each column is measured.
-    if gchar_pos(&op.start()) == '\t' as c_int {
+fn break_tabs_at_edges(op: &mut OpArg) -> Result<(), UndoFailed> {
+    // Both ends name positions of the current buffer, and the cursor is put
+    // on one of them before each column is measured.
+    if gchar_pos(&op.start) == '\t' as c_int {
         // Save the first line for undo.
         u_save_cursor()?;
         // Breaking the start TAB moves the end too, so remember where the
@@ -382,7 +372,7 @@ fn break_tabs_at_edges(mut op: Op) -> Result<(), UndoFailed> {
     }
 
     // Break the end TAB only when it is inside the region.
-    if gchar_pos(&op.end()) == '\t' as c_int && op.end.coladd == 0 && op.inclusive {
+    if gchar_pos(&op.end) == '\t' as c_int && op.end.coladd == 0 && op.inclusive {
         // Save the last line for undo.
         u_save(op.end.lnum - 1, op.end.lnum + 1)?;
         Win::current().w_cursor = op.end;
@@ -392,16 +382,14 @@ fn break_tabs_at_edges(mut op: Op) -> Result<(), UndoFailed> {
         Win::current().w_cursor = op.start;
     }
 
-    unsafe { mb_adjust_opend(op.raw()) };
+    mb_adjust_opend(op);
     Ok(())
 }
 
 /// Delete characters within one line.
 ///
 /// `op` must be charwise, and its region one line.
-fn delete_chars_one_line(op: Op) -> Result<(), UndoFailed> {
-    // SAFETY: the region is one line of the current buffer, and the cursor
-    // is on it.
+fn delete_chars_one_line(op: &OpArg) -> Result<(), UndoFailed> {
     // Save the line for undo.
     u_save_cursor()?;
 
@@ -448,9 +436,9 @@ fn delete_chars_one_line(op: Op) -> Result<(), UndoFailed> {
 /// one splice measured up front rather than four.
 ///
 /// `op` must be charwise and span at least two lines.
-fn delete_chars_across_lines(op: Op) -> Result<(), UndoFailed> {
-    // SAFETY: the region is the current buffer's and spans at least two of
-    // its lines; the cursor stays inside it through all four edits.
+fn delete_chars_across_lines(op: &OpArg) -> Result<(), UndoFailed> {
+    // The region spans at least two lines; the cursor stays inside it
+    // through all four edits.
     let above = Win::current().w_cursor.lnum - 1;
     let past = Win::current().w_cursor.lnum + op.line_count;
     // Save the deleted and changed lines for undo.
@@ -490,13 +478,8 @@ fn delete_chars_across_lines(op: Op) -> Result<(), UndoFailed> {
 /// Pull `op.end` back onto the *last byte* of the character it lands in, so
 /// that an inclusive delete takes the whole character.
 ///
-/// # Safety
-/// `op` must point to a live `OpArg` whose end names a position in the
-/// current buffer.
-pub(crate) unsafe fn mb_adjust_opend(op: *mut OpArg) {
-    // SAFETY: the caller's promise -- `op.end` names a position of the
-    // current buffer, so its line is live and `end.col` a column of it.
-    let mut op = unsafe { Op::new(op) };
+/// `op.end` names a position in the current buffer.
+pub(crate) fn mb_adjust_opend(op: &mut OpArg) {
     if !op.inclusive {
         return;
     }

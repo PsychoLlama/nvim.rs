@@ -31,7 +31,6 @@ use crate::keycodes::{ModMask, unsimplify_key};
 use crate::mbyte::{utf_ptr2char, utf_ptr2len};
 use crate::memory::XString;
 use crate::mouse::{MousePos, do_mousescroll, find_win_inner};
-use crate::ops::clear_oparg;
 use crate::option::vars::tpf_flags;
 use crate::options::{
     kOptTpfFlagBS, kOptTpfFlagC0, kOptTpfFlagC1, kOptTpfFlagDEL, kOptTpfFlagESC, kOptTpfFlagFF,
@@ -376,11 +375,10 @@ fn scroll_direction(c: c_int) -> Option<c_int> {
 fn scroll_window(mouse_win: Win, key: c_int, direction: c_int) {
     let saved = switch_to(mouse_win);
 
-    // SAFETY: all-zeroes is what `clear_oparg` and the command argument
-    // start from; every field of both is a scalar or a pointer.
-    let (mut oa, mut cap): (OpArg, CmdArg) = unsafe { ::core::mem::zeroed() };
-    // SAFETY: an operator argument of this frame's own.
-    unsafe { clear_oparg(&raw mut oa) };
+    // SAFETY: all-zeroes is what the command argument starts from; every
+    // field is a scalar or a pointer.
+    let mut cap: CmdArg = unsafe { ::core::mem::zeroed() };
+    let mut oa = OpArg::ZERO;
     cap.oap = &raw mut oa;
     cap.cmdchar = key;
     cap.arg = direction;

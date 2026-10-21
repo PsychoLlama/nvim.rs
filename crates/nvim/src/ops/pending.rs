@@ -26,10 +26,8 @@
 //! which is why `OpType::Function` saves and restores it around 'operatorfunc'
 //! (the callback may run another operator and overwrite it).
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::cstr;
 use crate::keycodes::Key;
 use crate::option::vars::{P_FP, P_SEL};
 use crate::winlayer::{Buf, Win};
@@ -56,14 +54,6 @@ static REDO_VISUAL: GlobalCell<RedoVisual> = GlobalCell::new(RedoVisual {
     rv_count: 0,
     rv_arg: 0,
 });
-
-/// Zero an `OpArg` between commands.
-///
-/// # Safety
-/// `op` must point to a live `OpArg`.
-pub unsafe fn clear_oparg(op: *mut OpArg) {
-    unsafe { *op = OpArg::ZERO };
-}
 
 /// Was the operator reached through a command line rather than a key?
 ///
@@ -110,12 +100,11 @@ pub fn do_pending_operator(cmd_arg: &mut CmdArg, old_col: c_int, gui_yank: bool)
     check_pos(Win::current().buffer(), &mut op.end);
     op.line_count = op.end.lnum - op.start.lnum + 1;
     // Set before `VIsual_active` is reset below.
-    // SAFETY: a live window.
     let virt = virtual_active(Win::current());
     virtual_op.set(Some(virt));
 
     if visual_active() || redo_VIsual_busy.get() {
-        get_op_vcol(op, REDO_VISUAL.get().rv_vcol, true);
+        get_op_vcol(&mut op, REDO_VISUAL.get().rv_vcol, true);
         prepare_visual_redo(cmd_arg, op, gui_yank, redo_yank);
         finish_visual_region(op, include_line_break, gui_yank, lbr_saved);
     }
@@ -138,11 +127,11 @@ pub fn do_pending_operator(cmd_arg: &mut CmdArg, old_col: c_int, gui_yank: bool)
 
     // `empty` is set when start and end are the same. `inclusive` affects
     // that too, unless yanking with the end on a NUL.
-    // SAFETY: the `gchar_pos` reads a live position of the current buffer,
+    // The `gchar_pos` reads a live position of the current buffer,
     // and only when the operator is a yank -- the chain is left as it is so
     // that it stays as conditional as upstream wrote it.
     op.empty = op.motion_type != kMTLineWise
-        && (!op.inclusive || (op.op_type == OpType::Yank && gchar_pos(&op.end()) == NUL))
+        && (!op.inclusive || (op.op_type == OpType::Yank && gchar_pos(&op.end) == NUL))
         && equalpos(op.start, op.end)
         && !(op_virtual() && op.start.coladd != op.end.coladd);
     // For delete, change and yank it is an error to operate on an empty
@@ -153,7 +142,6 @@ pub fn do_pending_operator(cmd_arg: &mut CmdArg, old_col: c_int, gui_yank: bool)
     // or a fold: none of those will redraw by themselves.
     if op.is_visual && (op.empty || Buf::current().b_p_ma == 0 || op.op_type == OpType::Fold) {
         restore_lbr(lbr_saved != 0);
-        // SAFETY: touches only the current buffer's windows.
         redraw_curbuf_later(UPD_INVERTED);
     }
 
@@ -176,7 +164,6 @@ pub fn do_pending_operator(cmd_arg: &mut CmdArg, old_col: c_int, gui_yank: bool)
         Win::current().w_curswant = old_col;
         Win::current().coladvance(Win::current().w_curswant);
     }
-    // SAFETY: a live `OpArg`.
     clear_op(op);
     motion_force.set(NUL);
 
@@ -245,14 +232,11 @@ fn record_operator_redo(cmd_arg: &CmdArg, op: Op, redo_yank: bool) {
         cmd_arg.nchar,
     );
 
-    // SAFETY: every call below only appends to the redo buffer, and the two
-    // strings handed to it are `cmd_arg.searchbuf` and `repeat_cmdline`, both
-    // NUL-terminated for as long as the editor owns them.
     if cmd_arg.cmdchar == '/' as c_int || cmd_arg.cmdchar == '?' as c_int {
         // A search: without 'cpoptions' `r` the pattern goes in too, so
         // that the repeat really is the same command.
         if !cpo_has(CpoFlag::REDO) {
-            append_to_redobuff_literally(unsafe { cstr::bytes_at(cmd_arg.searchbuf) });
+            append_to_redobuff_literally(cmd_arg.search_text());
         }
         append_to_redobuff(b"\n");
     } else if is_ex_cmdchar(cmd_arg) {
@@ -261,7 +245,6 @@ fn record_operator_redo(cmd_arg: &CmdArg, op: Op, redo_yank: bool) {
         match repeat_cmdline.take() {
             None => reset_redobuff(),
             Some(line) => {
-                // SAFETY: NUL-terminated by its type.
                 if cmd_arg.cmdchar == ':' as c_int {
                     append_to_redobuff_literally(line.as_cstr().to_bytes());
                 } else {
@@ -330,7 +313,7 @@ fn start_visual_region(mut op: Op, gui_yank: bool) -> bool {
 
     // In Select mode a linewise selection is operated on like a charwise
     // one. `gH<Del>`, which deletes the last line, is the exception.
-    // SAFETY: both lines are the current buffer's -- one holds the cursor,
+    // Both lines are the current buffer's -- one holds the cursor,
     // the other the Visual anchor. `unadjust_for_sel` only moves the cursor.
     if visual_select() && visual_mode().is_line() && op.op_type != OpType::Delete {
         if lt(visual_anchor(), Win::current().w_cursor) {
@@ -373,7 +356,7 @@ fn order_region(mut op: Op) {
                 Win::current().w_cursor.col > 0 || op.inclusive || op.motion_type == kMTLineWise;
             if past_start && let Some(last) = win.fold_end(Win::current().w_cursor.lnum) {
                 Win::current().w_cursor.lnum = last;
-                // SAFETY: the cursor line is a line of the buffer.
+                // The cursor line is a line of the buffer.
                 Win::current().w_cursor.col = get_cursor_line_len();
             }
         }
@@ -409,12 +392,12 @@ fn prepare_visual_redo(cmd_arg: &CmdArg, mut op: Op, gui_yank: bool, redo_yank: 
             resel_VIsual_vcol.set(MAXCOL);
         } else {
             if !visual_mode().is_block() {
-                op.end_vcol = Win::current().virtual_vcol_span(op.end()).1;
+                op.end_vcol = getvvcol(Win::current(), &mut op.end).2;
             }
             if visual_mode().is_block() || op.line_count <= 1 {
                 // A block, or a one-line region: the size is a width.
                 if !visual_mode().is_block() {
-                    op.start_vcol = Win::current().virtual_vcol(op.start());
+                    op.start_vcol = getvvcol(Win::current(), &mut op.start).0;
                 }
                 resel_VIsual_vcol.set(op.end_vcol - op.start_vcol + 1);
             } else {
@@ -563,7 +546,6 @@ fn finish_visual_region(mut op: Op, include_line_break: bool, gui_yank: bool, lb
             && op.motion_force == NUL
         {
             restore_lbr(lbr_saved != 0);
-            // SAFETY: touches only the current buffer's windows.
             redraw_curbuf_later(UPD_INVERTED);
         }
     }
@@ -574,7 +556,6 @@ fn finish_visual_region(mut op: Op, include_line_break: bool, gui_yank: bool, lb
 /// And if the start is on or before that line's first non-blank, the operator
 /// becomes linewise -- strange, but that is what vi does.
 fn adjust_region_end(cmd_arg: &CmdArg, mut op: Op) {
-    // SAFETY: 'sel' is a NUL-terminated option string.
     if !(op.motion_type == kMTCharWise
         && !op.inclusive
         && !cmd_arg.outcome.has(Outcome::NO_ADJ_OP_END)
@@ -622,12 +603,12 @@ fn run_operator(
         cancel_redo();
     }
 
-    // SAFETY: every operator below is handed the same live `OpArg` and the
-    // current window, which is exactly what each of them asks for.
+    // Each operator works on a copy of the frame's operator (`Op::on_copy`):
+    // every one of them may run user code.
     match op.op_type {
         OpType::Lshift | OpType::Rshift => {
             let amount = if op.is_visual { cmd_arg.count1 } else { 1 };
-            unsafe { op_shift(op.raw(), true, amount) };
+            op.on_copy(|arg| op_shift(arg, true, amount));
             auto_format(false, true);
         }
 
@@ -650,7 +631,7 @@ fn run_operator(
             } else {
                 // Nothing to do about a refusal: the message is out and
                 // the buffer is untouched.
-                let _ = unsafe { op_delete(op.raw()) };
+                let _ = op.on_copy(op_delete);
                 // Save the cursor line for undo if that has not happened.
                 if op.motion_type == kMTLineWise
                     && has_format_option(FoFlag::AUTO)
@@ -703,29 +684,37 @@ fn run_operator(
             if empty_region_error {
                 refuse();
             } else {
-                unsafe { op_tilde(op.raw()) };
+                op.on_copy(op_tilde);
             }
             check_cursor_col(Win::current());
         }
 
         OpType::Format => {
             if Buf::current().b_p_fex.first_byte() as c_int != NUL {
-                unsafe { op_formatexpr(op.raw()) };
+                // A copy: the expression is user code.
+                let arg = *op;
+                op_formatexpr(&arg);
             } else if P_FP.first_byte() != 0 || Buf::current().b_p_fp.first_byte() as c_int != NUL {
                 // An external program.
-                unsafe { op_colon(op.raw()) };
+                op_colon(&op);
             } else {
-                unsafe { op_format(op.raw(), false) };
+                let arg = *op;
+                op_format(&arg, false);
             }
         }
-        OpType::Format2 => unsafe { op_format(op.raw(), true) },
+        OpType::Format2 => {
+            let arg = *op;
+            op_format(&arg, true);
+        }
 
         OpType::Function => {
             // 'operatorfunc' may run another operator and overwrite the
             // recorded Visual area, so it is put back afterwards.
             let saved = REDO_VISUAL.get();
             restore_lbr(lbr_saved != 0);
-            unsafe { op_function(op.raw()) };
+            // A copy: the function is user code.
+            let arg = *op;
+            op_function(&arg);
             REDO_VISUAL.set(saved);
         }
 
@@ -744,7 +733,7 @@ fn run_operator(
                 refuse();
             } else {
                 restore_lbr(lbr_saved != 0);
-                let _ = unsafe { op_replace(op.raw(), cmd_arg.nchar) };
+                let _ = op.on_copy(|arg| op_replace(arg, cmd_arg.nchar));
             }
         }
 
@@ -777,7 +766,7 @@ fn run_operator(
                 set_visual_active(true);
                 restore_lbr(lbr_saved != 0);
                 let (count, g) = (cmd_arg.count1 as LineNr, REDO_VISUAL.get().rv_arg != 0);
-                unsafe { op_addsub(op.raw(), count, g) };
+                op.on_copy(|arg| op_addsub(arg, count, g));
                 set_visual_active(false);
             }
             check_cursor_col(Win::current());
@@ -792,10 +781,8 @@ fn run_operator(
 /// With an empty 'equalprg' the indenting is done internally; otherwise the
 /// region is handed to a `:` command line.
 fn indent_or_colon(op: Op) {
-    // SAFETY: a live `OpArg` describing a region of the current buffer, and
-    // 'equalprg'/'indentexpr' are NUL-terminated option strings.
     if op.op_type != OpType::Indent || !get_equalprg().is_empty() {
-        unsafe { op_colon(op.raw()) };
+        op_colon(&op);
         return;
     }
     if Buf::current().b_p_lisp != 0 {
@@ -804,7 +791,8 @@ fn indent_or_colon(op: Op) {
         } else {
             get_lisp_indent as unsafe fn() -> c_int
         };
-        unsafe { op_reindent(op.raw(), Some(indent)) };
+        let arg = *op;
+        op_reindent(&arg, Some(indent));
         return;
     }
     let indent = if Buf::current().b_p_inde.first_byte() as c_int != NUL {
@@ -812,7 +800,8 @@ fn indent_or_colon(op: Op) {
     } else {
         get_c_indent as unsafe fn() -> c_int
     };
-    unsafe { op_reindent(op.raw(), Some(indent)) };
+    let arg = *op;
+    op_reindent(&arg, Some(indent));
 }
 
 /// The `c` arm: run `op_change`, which enters Insert mode.
@@ -832,7 +821,7 @@ fn run_change(cmd_arg: &mut CmdArg, op: Op, lbr_saved: c_int) {
     // Trigger TextChangedI.
     Buf::current().b_last_changedtick_i = buf_get_changedtick(Buf::current());
 
-    if unsafe { op_change(op.raw()) } != 0 {
+    if op.on_copy(op_change) != 0 {
         // `edit()` returned because of a CTRL-O command.
         cmd_arg.outcome |= Outcome::COMMAND_BUSY;
     }
@@ -849,7 +838,7 @@ fn run_block_insert(cmd_arg: &mut CmdArg, op: Op, lbr_saved: c_int) {
     restore_lbr(lbr_saved != 0);
     Buf::current().b_last_changedtick_i = buf_get_changedtick(Buf::current());
 
-    unsafe { op_insert(op.raw(), cmd_arg.count1) };
+    op.on_copy(|arg| op_insert(arg, cmd_arg.count1));
 
     // Back off again, so that formatting measures columns correctly.
     reset_lbr();

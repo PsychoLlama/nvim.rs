@@ -129,7 +129,6 @@ pub fn get_op_type(char1: c_int, char2: c_int) -> OpType {
             return OpType::ALL[op];
         }
     }
-    // SAFETY: a literal C string.
     internal_error(c"get_op_type()");
     OpType::ALL[OPCHARS.len() - 1]
 }

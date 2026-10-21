@@ -35,7 +35,6 @@ use crate::normal::{
     DT_POP, FIND_IDENT, FIND_STRING, HIST_SEARCH, POUND, VSE_NONE, check_clear_op_quit,
     check_text_or_curbuf_locked, clear_op, get_visual_text, normal_search, visual_active,
 };
-use crate::ops::clear_oparg;
 use crate::option::magic_isset;
 use crate::optionstr::{OptString, local_or_global};
 use crate::os::cshim::gettext;
@@ -54,11 +53,9 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 /// Run one of the identifier commands from outside the command loop, with a
 /// command argument built for it. `CTRL-W ]` and friends use this.
 pub(crate) fn do_nv_ident(c1: c_int, c2: c_int) {
-    // SAFETY: both structures are plain data, and both are filled in before
-    // `nv_ident` reads them.
-    let mut oa: OpArg = unsafe { core::mem::zeroed() };
+    let mut oa = OpArg::ZERO;
+    // SAFETY: plain data, filled in before `nv_ident` reads it.
     let mut ca: CmdArg = unsafe { core::mem::zeroed() };
-    unsafe { clear_oparg(&raw mut oa) };
     ca.oap = &raw mut oa;
     ca.cmdchar = c1;
     ca.nchar = c2;

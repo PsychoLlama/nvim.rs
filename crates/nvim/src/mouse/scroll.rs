@@ -30,7 +30,6 @@ use crate::mouse::state::{mouse_col, mouse_row};
 use crate::r#move::pagescroll;
 use crate::narrow::number_as_int;
 use crate::normal::nv_scroll_line;
-use crate::ops::clear_oparg;
 use crate::option::vars::{P_MOUSEM, p_mousem, p_mousescroll_hor, p_mousescroll_vert};
 use crate::popupmenu::pum_visible;
 use crate::pos::equalpos;
@@ -124,12 +123,10 @@ pub(crate) fn do_mousescroll(cmd_arg: &mut CmdArg) {
 /// Scrolling in Insert mode in direction `dir`, which is one of the `MSCR_`
 /// values.
 pub(crate) fn ins_mousescroll(dir: c_int) {
-    // SAFETY: `CmdArg` and `OpArg` are C aggregates of scalars and
-    // pointers, which is what the C's `CLEAR_FIELD` zeroes; `clear_oparg`
-    // then initialises the operator properly.
-    let (mut cmd_arg, mut oa): (CmdArg, OpArg) = unsafe { core::mem::zeroed() };
-    // SAFETY: a live local operator.
-    unsafe { clear_oparg(&raw mut oa) };
+    // SAFETY: `CmdArg` is a C aggregate of scalars and pointers, which is
+    // what the C's `CLEAR_FIELD` zeroes.
+    let mut cmd_arg: CmdArg = unsafe { core::mem::zeroed() };
+    let mut oa = OpArg::ZERO;
     cmd_arg.oap = &raw mut oa;
     cmd_arg.arg = dir;
     cmd_arg.cmdchar = match dir {

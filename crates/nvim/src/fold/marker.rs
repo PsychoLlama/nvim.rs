@@ -78,16 +78,7 @@ pub(super) fn fold_add_marker(buffer: Buf, pos: Pos, marker: &[u8]) {
     // A copy, because the line is rewritten from it below.
     let text = Lines::in_buffer(buffer).line_copy(lnum);
     // Does the line already end inside a comment?
-    let mut line_is_comment = false;
-    // SAFETY: the copy is NUL-terminated and the flag is this frame's.
-    unsafe {
-        skip_comment(
-            text.as_cstr().as_ptr().cast_mut(),
-            false,
-            false,
-            &raw mut line_is_comment,
-        )
-    };
+    let (_, line_is_comment) = skip_comment(&text, false, false);
 
     let mut new = Vec::with_capacity(text.len() + marker.len() + cms.len() + 1);
     new.extend_from_slice(&text);

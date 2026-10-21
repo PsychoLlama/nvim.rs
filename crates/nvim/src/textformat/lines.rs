@@ -5,11 +5,8 @@
 //! and [`op_format`] the operator around it. [`fex_format`] is the
 //! 'formatexpr' escape hatch [`op_formatexpr`] tries first.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::cstr;
-use crate::memory::XString;
 use crate::winlayer::{Buf, Win, windows};
 use core::ffi::{c_int, c_long};
 
@@ -33,7 +30,7 @@ use crate::indent_c::{cindent_on, get_c_indent};
 use crate::mark::mark_col_adjust;
 use crate::memline::Lines;
 use crate::message::msgmore;
-use crate::ops::{Op, do_join};
+use crate::ops::do_join;
 use crate::option::vars::{P_SMD, p_smd};
 use crate::option::was_set_insecurely;
 use crate::options::kOptFormatexpr;
@@ -54,12 +51,7 @@ use crate::undo::{u_save, u_save_cursor};
 ///
 /// `keep_cursor` is `gw`: the cursor goes back to where the command was
 /// given, adjusted for the lines that were joined and split under it.
-///
-/// # Safety
-/// `op` must be a live operator argument over the current buffer.
-pub(crate) unsafe fn op_format(op: *mut OpArg, keep_cursor: bool) {
-    // SAFETY: the caller's promise -- a live operator argument.
-    let op = unsafe { Op::new(op) };
+pub(crate) fn op_format(op: &OpArg, keep_cursor: bool) {
     let mut old_line_count = Buf::current().b_ml.ml_line_count;
 
     // Put the cursor where the command was given, so `u` can put it back.
@@ -123,18 +115,13 @@ pub(crate) unsafe fn op_format(op: *mut OpArg, keep_cursor: bool) {
 
 /// `gq` when 'formatexpr' is set. As documented, a non-zero answer from the
 /// expression means "I did not handle it", and the internal formatter runs.
-///
-/// # Safety
-/// `op` must be a live operator argument over the current buffer.
-pub(crate) unsafe fn op_formatexpr(op: *mut OpArg) {
-    // SAFETY: the caller's promise -- a live operator argument.
-    let region = unsafe { Op::new(op) };
-    if region.is_visual {
+pub(crate) fn op_formatexpr(op: &OpArg) {
+    if op.is_visual {
         // When nothing changes, the Visual selection still has to go.
         redraw_curbuf_later(UPD_INVERTED);
     }
-    if fex_format(region.start.lnum, region.line_count as c_long, NUL) != 0 {
-        unsafe { op_format(op, false) };
+    if fex_format(op.start.lnum, op.line_count as c_long, NUL) != 0 {
+        op_format(op, false);
     }
 }
 
@@ -148,8 +135,7 @@ pub(crate) fn fex_format(lnum: LineNr, count: c_long, c: c_int) -> c_int {
     set_vim_var_char(c);
 
     // Copy it: the option can be changed while it is running.
-    // SAFETY: 'formatexpr' is a NUL-terminated option value.
-    let fex = XString::from_cstr(unsafe { cstr::at(Buf::current().b_p_fex.value_ptr()) });
+    let fex = Buf::current().b_p_fex.get();
     // Errors go against the script that set `'formatexpr'`.
     let script_ctx = Script::context(Buf::current().b_p_script_ctx[kBufOptFormatexpr as usize]);
     let r = {

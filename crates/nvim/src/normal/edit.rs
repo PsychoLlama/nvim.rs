@@ -81,7 +81,8 @@ pub(crate) fn nv_addsub(cmd_arg: &mut CmdArg) {
         } else {
             OpType::NrSub
         };
-        unsafe { op_addsub(cmd_arg.oap, cmd_arg.count1 as LineNr, cmd_arg.arg != 0) };
+        let (count, g_cmd) = (cmd_arg.count1 as LineNr, cmd_arg.arg != 0);
+        cmd_arg.op().on_copy(|op| op_addsub(op, count, g_cmd));
         cmd_arg.op().op_type = OpType::Nop;
     } else if visual_active() {
         nv_operator(cmd_arg);
@@ -308,12 +309,7 @@ pub(crate) fn n_swapchar(cmd_arg: &mut CmdArg) {
     let mut did_change = false;
     let mut n = cmd_arg.count1;
     while n > 0 {
-        did_change |= unsafe {
-            swapchar(
-                cmd_arg.op().op_type,
-                &raw mut (*Win::current_raw()).w_cursor,
-            )
-        };
+        did_change |= swapchar(cmd_arg.op().op_type, Win::current().w_cursor);
         inc_cursor();
         if gchar_cursor() == NUL {
             if !(wraps && Win::current().w_cursor.lnum < Buf::current().b_ml.ml_line_count) {

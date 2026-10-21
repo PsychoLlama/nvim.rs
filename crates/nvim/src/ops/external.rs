@@ -12,8 +12,7 @@
 //! parsed callback behind that option, so its setter and the garbage
 //! collector's mark hook live here too.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 #![deny(
@@ -40,13 +39,7 @@ use crate::types::{NUL, OptError};
 /// when it does. The range is spelled the way a human would type it (`.`,
 /// `$`, `.+N`) so that `:` in the command-line history reads well and can be
 /// repeated.
-///
-/// # Safety
-/// `op` must point to a live `OpArg`.
-pub(crate) unsafe fn op_colon(op: *mut OpArg) {
-    // SAFETY: the caller's promise -- a live `OpArg`. Every string queued
-    // below is either a literal of this file's or a NUL-terminated option.
-    let op = unsafe { Op::new(op) };
+pub(crate) fn op_colon(op: &OpArg) {
     stuff_readbuf_char(':' as c_int);
     if op.is_visual {
         stuff_readbuf(b"'<,'>");
@@ -103,15 +96,6 @@ pub(crate) unsafe fn op_colon(op: *mut OpArg) {
 /// The parsed callback behind 'operatorfunc'.
 static OPFUNC_CB: GlobalCell<Callback> = GlobalCell::new(Callback::None);
 
-/// The parsed `'operatorfunc'`.
-///
-/// The address, because every operation the tree has on a callback —
-/// parsing an option into it, marking it for the collector, copying it,
-/// calling it — takes a `*mut Callback`.
-fn global_opfunc() -> *mut Callback {
-    OPFUNC_CB.ptr()
-}
-
 /// Parse a new 'operatorfunc' value; `E474` if it names nothing callable.
 pub fn did_set_operatorfunc(_args: &mut OptSet) -> Result<(), OptError> {
     // A copy: evaluating the value may set the option again.
@@ -119,15 +103,13 @@ pub fn did_set_operatorfunc(_args: &mut OptSet) -> Result<(), OptError> {
     let Ok(cb) = callback_from_option(value.as_cstr()) else {
         return Err((e_invarg).into());
     };
-    // SAFETY: the cell's own slot, which nothing borrows across this.
-    install_callback(unsafe { &mut *global_opfunc() }, cb);
+    OPFUNC_CB.with_mut(|slot| install_callback(slot, cb));
     Ok(())
 }
 
 /// Mark the 'operatorfunc' callback with `copy_id` so the collector keeps it.
 pub fn set_ref_in_opfunc(copy_id: c_int) -> bool {
-    // SAFETY: the caller's promise -- the eval heap is consistent.
-    set_ref_in_callback(unsafe { &*global_opfunc() }, copy_id, None, None)
+    OPFUNC_CB.with(|cb| set_ref_in_callback(cb, copy_id, None, None))
 }
 
 /// `g@` -- call 'operatorfunc' with the region in `'[`/`']`.
@@ -137,14 +119,7 @@ pub fn set_ref_in_opfunc(copy_id: c_int) -> bool {
 /// `virtual_op`, which would otherwise pin the old value) and `finish_op`, so
 /// that `mode()` answers what the user sees rather than "an operator is
 /// pending". `:lockmarks` restores the marks afterwards.
-///
-/// # Safety
-/// `op` must point to a live `OpArg`.
-pub(crate) unsafe fn op_function(op: *const OpArg) {
-    // SAFETY: the caller's promise -- a live `OpArg`. 'operatorfunc' is a
-    // NUL-terminated option string, and `b_op_end` is a live position of the
-    // current buffer.
-    let op = unsafe { Op::new(op.cast_mut()) };
+pub(crate) fn op_function(op: &OpArg) {
     let orig_start: Pos = Buf::current().b_op_start;
     let orig_end: Pos = Buf::current().b_op_end;
 
@@ -176,10 +151,14 @@ pub(crate) unsafe fn op_function(op: *const OpArg) {
     let save_finish_op: bool = finish_op.get();
     finish_op.set(false);
 
+    // A second reference, so that the call holds no borrow of the cell: the
+    // function may set 'operatorfunc' again.
+    let mut callback = OPFUNC_CB.with(Callback::duplicate);
     let mut rettv: TypVal = TV_INITIAL_VALUE;
-    if unsafe { callback_call(&*global_opfunc(), &argv, &mut rettv) } {
+    if callback_call(&callback, &argv, &mut rettv) {
         tv_clear(&mut rettv);
     }
+    callback.clear();
 
     virtual_op.set(save_virtual_op);
     finish_op.set(save_finish_op);

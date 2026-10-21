@@ -13,16 +13,18 @@
 //!   and `CTRL-V <CR>` (`REPLACE_CR_NCHAR`) asks for the literal carriage
 //!   return instead -- which is the whole job of the `had_ctrl_v_cr` flag.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::guard::Suppress;
 use crate::memline::MlFlags;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::c_int;
 
 use super::*;
+use crate::cursor::getvpos_of;
 use crate::ex_docmd::cmdmod_has;
+use crate::mbyte::{c_cluster_len, encode_char};
+use crate::types::MB_MAXCHAR;
 use crate::types::{Failed, NUL};
 
 /// Overwrite the single byte at `pos` with `c`.
@@ -31,16 +33,18 @@ use crate::types::{Failed, NUL};
 /// changes the line's length and has to go through [`replace_character`].
 pub(crate) fn pbyte(mut pos: Pos, c: c_int) {
     debug_assert!(c <= c_int::from(u8::MAX));
-    // SAFETY: the caller's promise -- `pos` names a line of the current
-    // buffer, and the column is clamped to that line below before the write.
-    let p = ml_get_buf_mut(Buf::current(), pos.lnum);
-    let len = Buf::current().b_ml.cached_len();
-
-    // Safety check: the caller's column may be past the line.
+    let mut lines = Lines::current();
+    let line = lines.line_mut(pos.lnum);
+    // The caller's column may be past the line: the last character then.
+    // (Upstream measures with the NUL, so an empty line would have its NUL
+    // written; no caller gets here on an empty line.)
+    let len = ColNr::try_from(line.len()).unwrap_or(ColNr::MAX);
     if pos.col >= len {
-        pos.col = if len > 1 { len - 2 } else { 0 };
+        pos.col = (len - 1).max(0);
     }
-    unsafe { *p.offset(pos.col as isize) = c as c_char };
+    if let Some(byte) = line.get_mut(pos.col as usize) {
+        *byte = c as u8;
+    }
     if curbuf_splice_pending.get() == 0 {
         let row = pos.lnum as c_int - 1;
         extmark_splice_cols(Buf::current(), row, pos.col, 1, 1, kExtmarkUndo);
@@ -64,14 +68,8 @@ fn replace_character(c: c_int) {
 ///
 /// `c` is the replacement, or `REPLACE_CR_NCHAR`/`REPLACE_NL_NCHAR` for the
 /// `CTRL-V <CR>`/`CTRL-V <NL>` spellings that mean the literal byte rather
-/// than a line split.
-///
-/// # Safety
-/// `op` must point to a live `OpArg` describing a region of the current
-/// buffer.
-pub(crate) unsafe fn op_replace(op: *mut OpArg, mut c: c_int) -> Result<(), Failed> {
-    // SAFETY: the caller's promise -- a live `OpArg` of the current buffer.
-    let op = unsafe { Op::new(op) };
+/// than a line split. `op` describes a region of the current buffer.
+pub(crate) fn op_replace(op: &mut OpArg, mut c: c_int) -> Result<(), Failed> {
     if Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) || op.empty {
         return Ok(());
     }
@@ -86,7 +84,7 @@ pub(crate) unsafe fn op_replace(op: *mut OpArg, mut c: c_int) -> Result<(), Fail
         c = NL;
     }
 
-    unsafe { mb_adjust_opend(op.raw()) };
+    mb_adjust_opend(op);
 
     let (above, below) = (op.start.lnum - 1, op.end.lnum + 1);
     u_save(above, below)?;
@@ -112,15 +110,15 @@ pub(crate) unsafe fn op_replace(op: *mut OpArg, mut c: c_int) -> Result<(), Fail
 /// The blockwise arm: one rebuilt line per line the block reaches.
 ///
 /// `op` must be blockwise.
-fn replace_block(op: Op, c: c_int, had_ctrl_v_cr: bool) {
+fn replace_block(op: &mut OpArg, c: c_int, had_ctrl_v_cr: bool) {
     let mut bd = BlockDef::ZERO;
     bd.is_max = c_int::from(Win::current().w_curswant == MAXCOL);
     while Win::current().w_cursor.lnum <= op.end.lnum {
         // Make sure the cursor position is valid for `block_prep`.
         Win::current().w_cursor.col = 0;
-        // SAFETY: the cursor walks the region, so its line is the buffer's.
+        // The cursor walks the region, so its line is the buffer's.
         let lnum = Win::current().w_cursor.lnum;
-        unsafe { block_prep(op.raw(), &raw mut bd, lnum, true) };
+        block_prep(&mut bd, op, lnum, true);
         if bd.textlen != 0 || (op_virtual() && bd.is_max == 0) {
             replace_block_line(op, &mut bd, c, had_ctrl_v_cr);
         }
@@ -136,24 +134,25 @@ fn replace_block(op: Op, c: c_int, had_ctrl_v_cr: bool) {
 /// `\n` and no CTRL-V there is no "after": the tail becomes a new line.
 ///
 /// `op` and `bd` must describe the cursor line, as [`block_prep`] left them.
-fn replace_block_line(mut op: Op, bd: &mut BlockDef, c: c_int, had_ctrl_v_cr: bool) {
+fn replace_block_line(op: &mut OpArg, bd: &mut BlockDef, c: c_int, had_ctrl_v_cr: bool) {
     // Replacing with `\r`/`\n` splits the line rather than overwriting.
     let splits_line = !had_ctrl_v_cr && (c == '\r' as c_int || c == '\n' as c_int);
+    let baselnum = Win::current().w_cursor.lnum;
 
     // When the block starts in virtual space, that offset counts as
     // pre-padding. (Upstream also keeps a running count `n` of the extra
     // characters a split TAB needs, here and just below; nothing reads it,
     // so only this side effect on `startspaces` is carried over.)
-    // SAFETY: `bd` describes the cursor line, so `bd.textstart` is inside it.
-    if op_virtual() && bd.is_short != 0 && unsafe { *bd.textstart } as c_int == NUL {
+    if op_virtual()
+        && bd.is_short != 0
+        && byte_at(Lines::current().line(baselnum), bd.textcol as usize) == 0
+    {
         let mut vpos = Pos {
-            lnum: Win::current().w_cursor.lnum,
+            lnum: baselnum,
             col: 0,
             coladd: 0,
         };
-        // SAFETY: a live current window, and a local position in the cursor's
-        // own line.
-        unsafe { getvpos(Win::current(), PosRef::new(&raw mut vpos), op.start_vcol) };
+        getvpos_of(Win::current(), &mut vpos, op.start_vcol);
         bd.startspaces += vpos.coladd;
     }
 
@@ -169,74 +168,56 @@ fn replace_block_line(mut op: Op, bd: &mut BlockDef, c: c_int, had_ctrl_v_cr: bo
         }
         numc /= 2;
     }
+    let mut char_bytes = [0u8; MB_MAXCHAR];
+    let encoded_len = encode_char(c, &mut char_bytes);
+    let encoded = &char_bytes[..encoded_len];
 
-    let mut num_chars = numc;
-    numc *= utf_char2len(c);
-
-    let mut oldp = get_cursor_line_ptr();
-    let oldlen = get_cursor_line_len();
-
-    let mut newp_size = bd.textcol as size_t + bd.startspaces as size_t;
-    if !splits_line {
-        newp_size += numc as size_t;
-        if bd.is_short == 0 {
-            newp_size += (bd.endspaces + oldlen - bd.textcol - bd.textlen) as size_t;
+    // Up to the replaced part, then the pre-spaces; then, unless the line
+    // splits there, the replacement, the post-spaces and what is left of
+    // the line after the block. Splitting, that tail becomes the next line,
+    // NUL included.  The borrow ends before `ml_replace` writes it back.
+    let (line, after, newcols) = {
+        let mut lines = Lines::current();
+        let oldp = lines.line(baselnum);
+        let textcol = usize::try_from(bd.textcol).unwrap_or(0).min(oldp.len());
+        let tail = &oldp[(textcol + bd.textlen as usize).min(oldp.len())..];
+        let mut line = Vec::with_capacity(
+            textcol
+                + bd.startspaces as usize
+                + numc.max(0) as usize * encoded.len()
+                + bd.endspaces.max(0) as usize
+                + tail.len()
+                + 1,
+        );
+        line.extend_from_slice(&oldp[..textcol]);
+        line.resize(line.len() + bd.startspaces as usize, b' ');
+        if splits_line {
+            let mut after = Vec::with_capacity(tail.len() + 1);
+            after.extend_from_slice(tail);
+            after.push(0);
+            (line, Some(after), 0)
+        } else {
+            for _ in 0..numc {
+                line.extend_from_slice(encoded);
+            }
+            let mut newcols = line.len() - textcol;
+            if bd.is_short == 0 {
+                line.resize(line.len() + bd.endspaces as usize, b' ');
+                newcols += bd.endspaces as usize;
+                line.extend_from_slice(tail);
+            }
+            (line, None, newcols as c_int)
         }
-    }
-    // SAFETY: `newp_size` counts the prefix, the pre-spaces, the repeated
-    // replacement, the post-spaces and the tail -- exactly what is written.
-    let newp = unsafe { xmallocz(newp_size) } as *mut c_char;
+    };
+    let newrows = c_int::from(after.is_some());
 
-    // Up to the replaced part, then the pre-spaces.
-    let into = newp.cast::<u8>();
-    unsafe { into.copy_from(oldp.cast(), bd.textcol as size_t) };
-    oldp = unsafe { oldp.offset((bd.textcol + bd.textlen) as isize) };
-    let at = unsafe { newp.offset(bd.textcol as isize) } as *mut c_void;
-    unsafe { at.cast::<u8>().write_bytes(b' ', bd.startspaces as size_t) };
-
-    // What is left of the line after the block, NUL included.
-    let col = oldlen - bd.textcol - bd.textlen + 1;
-    debug_assert!(col >= 0);
-
-    let mut after_p: *mut c_char = ::core::ptr::null_mut();
-    let mut after_p_len: size_t = 0;
-    let mut newrows = 0;
-    let mut newcols = 0;
-    if !splits_line {
-        let mut newp_len = bd.textcol + bd.startspaces;
-        while num_chars > 0 {
-            num_chars -= 1;
-            newp_len += unsafe { utf_char2bytes(c, newp.offset(newp_len as isize)) };
-        }
-        if bd.is_short == 0 {
-            let at = unsafe { newp.offset(newp_len as isize) } as *mut c_void;
-            unsafe { at.cast::<u8>().write_bytes(b' ', bd.endspaces as size_t) };
-            newp_len += bd.endspaces;
-            let tail = unsafe { newp.offset(newp_len as isize) } as *mut c_void;
-            unsafe { tail.cast::<u8>().copy_from(oldp.cast(), col as size_t) };
-        }
-        newcols = newp_len - bd.textcol;
-    } else {
-        // The tail becomes the next line.
-        after_p_len = col as size_t;
-        after_p = unsafe { xmalloc(after_p_len) } as *mut c_char;
-        unsafe { after_p.cast::<u8>().copy_from(oldp.cast(), after_p_len) };
-        newrows = 1;
-    }
-
-    let baselnum = Win::current().w_cursor.lnum;
-    // SAFETY: `newp` is this function's `xmallocz` block, which the memline
-    // takes over.
-    let _ = ml_replace_owned(baselnum, unsafe { XString::from_raw(newp) });
+    let _ = ml_replace_owned(baselnum, XString::from_vec(line));
     let splice = Suppress::splice();
-    if !after_p.is_null() {
-        // SAFETY: the `after_p_len` bytes just copied, the NUL among them.
-        let line = unsafe { crate::cstr::slice_at(after_p, after_p_len) };
-        let _ = ml_append_terminated(Win::current().w_cursor.lnum, line, false);
+    if let Some(after) = after {
+        let _ = ml_append_terminated(Win::current().w_cursor.lnum, &after, false);
         Win::current().w_cursor.lnum += 1;
         appended_lines_mark(Win::current().w_cursor.lnum, 1);
         op.end.lnum += 1;
-        unsafe { xfree(after_p as *mut c_void) };
     }
     drop(splice);
     let old_bytes = bd.textlen as BCount;
@@ -261,9 +242,9 @@ fn replace_block_line(mut op: Op, bd: &mut BlockDef, c: c_int, had_ctrl_v_cr: bo
 /// The charwise and linewise arm: walk the region a character at a time.
 ///
 /// `op` must be charwise or linewise.
-fn replace_chars(mut op: Op, c: c_int) {
-    // SAFETY: the cursor walks the region, so it names a position of the
-    // current buffer at every step, which is what each of these asks for.
+fn replace_chars(op: &mut OpArg, c: c_int) {
+    // The cursor walks the region, so it names a position of the current
+    // buffer at every step, which is what each of these asks for.
     if op.motion_type == kMTLineWise {
         op.start.col = 0;
         Win::current().w_cursor.col = 0;
@@ -281,7 +262,13 @@ fn replace_chars(mut op: Op, c: c_int) {
         let under_cursor = gchar_cursor();
         if under_cursor != NUL {
             let new_byte_len = utf_char2len(c);
-            let old_byte_len = unsafe { utfc_ptr2len(get_cursor_pos_ptr()) };
+            let old_byte_len = {
+                let cursor = Win::current().w_cursor;
+                let mut lines = Lines::current();
+                let line = lines.line(cursor.lnum);
+                let col = usize::try_from(cursor.col).unwrap_or(0).min(line.len());
+                c_cluster_len(&line[col..]) as c_int
+            };
 
             if new_byte_len > 1 || old_byte_len > 1 {
                 // Slow, but it handles a single-byte character replacing a
@@ -301,7 +288,7 @@ fn replace_chars(mut op: Op, c: c_int) {
                     }
                     coladvance_force(getviscol());
                     if Win::current().w_cursor.lnum == op.end.lnum {
-                        getvpos(Win::current(), op.end(), end_vcol);
+                        getvpos_of(Win::current(), &mut op.end, end_vcol);
                     }
                 }
                 // With `coladd` set the cursor may now be just past a TAB.
@@ -330,7 +317,7 @@ fn replace_chars(mut op: Op, c: c_int) {
 /// first and those are then replaced.
 ///
 /// The cursor must be on `op.end.lnum`.
-fn replace_virtual_tail(op: Op, c: c_int) {
+fn replace_virtual_tail(op: &OpArg, c: c_int) {
     let mut virtcols = op.end.coladd;
     if Win::current().w_cursor.lnum == op.start.lnum
         && op.start.col == op.end.col

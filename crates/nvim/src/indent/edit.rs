@@ -71,16 +71,11 @@ fn indent_progress(fmt: &CStr, n: int64_t, status: &CStr) {
 }
 
 /// Reindents `op`'s lines with `how`, one of the three indent engines.
-///
-/// # Safety
-/// `op` must be a live operator argument.
-pub unsafe fn op_reindent(op: *mut OpArg, how: Indenter) {
-    // SAFETY: the caller's operator argument, and the buffer it names is
-    // the current one.
+pub fn op_reindent(op: &OpArg, how: Indenter) {
     let mut win = Win::current();
     let mut buf = Buf::current();
     let start_lnum = win.w_cursor.lnum;
-    let line_count = unsafe { (*op).line_count };
+    let line_count = op.line_count;
     if buf.b_p_ma == 0 {
         emsg(gettext(e_modifiable));
         return;
@@ -149,13 +144,13 @@ pub unsafe fn op_reindent(op: *mut OpArg, how: Indenter) {
     // has to reach the last line even when nothing changed, so that the
     // highlight goes away.
     if last_changed != 0 {
-        let end = if unsafe { (*op).is_visual } {
+        let end = if op.is_visual {
             start_lnum + line_count
         } else {
             last_changed + 1
         };
         changed_lines(buf, first_changed, 0, end, 0, true);
-    } else if unsafe { (*op).is_visual } {
+    } else if op.is_visual {
         redraw_curbuf_later(UPD_INVERTED);
     }
     if line_count as OptInt > p_report() {
@@ -172,8 +167,8 @@ pub unsafe fn op_reindent(op: *mut OpArg, how: Indenter) {
     }
     if !cmdmod_has(CmdModFlags::LOCKMARKS) {
         // Set the '[ and '] marks.
-        unsafe { buf.b_op_start = (*op).start };
-        unsafe { buf.b_op_end = (*op).end };
+        buf.b_op_start = op.start;
+        buf.b_op_end = op.end;
     }
 }
 

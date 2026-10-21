@@ -13,8 +13,7 @@
 //! re-measures the character under `pos` on every step rather than trusting
 //! the length it was given.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -30,17 +29,13 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
+use crate::mbyte::char_len;
 
-/// `g~`, `gu`, `gU`, `g?` over the operator's region.
-///
-/// # Safety
-/// `op` must point to a live `OpArg` describing a region of the current
+/// `g~`, `gu`, `gU`, `g?` over the operator's region, which is of the current
 /// buffer.
-pub(crate) unsafe fn op_tilde(op: *mut OpArg) {
-    // SAFETY: the caller's promise -- a live `OpArg` of the current buffer.
+pub(crate) fn op_tilde(op: &mut OpArg) {
     // `pos` walks that region, so it names a position of the buffer at every
     // step, which is what `swapchars` and `inc` ask for.
-    let mut op = unsafe { Op::new(op) };
     let mut did_change = false;
 
     let (above, below) = (op.start.lnum - 1, op.end.lnum + 1);
@@ -52,9 +47,9 @@ pub(crate) unsafe fn op_tilde(op: *mut OpArg) {
     if op.motion_type == kMTBlockWise {
         let mut bd = BlockDef::ZERO;
         while pos.lnum <= op.end.lnum {
-            unsafe { block_prep(op.raw(), &raw mut bd, pos.lnum, false) };
+            block_prep(&mut bd, op, pos.lnum, false);
             pos.col = bd.textcol;
-            did_change |= unsafe { swapchars(op.op_type, &raw mut pos, bd.textlen) } != 0;
+            did_change |= swapchars(op.op_type, &mut pos, bd.textlen);
             pos.lnum += 1;
         }
         if did_change {
@@ -75,7 +70,7 @@ pub(crate) unsafe fn op_tilde(op: *mut OpArg) {
 
         if pos.lnum == op.end.lnum {
             let len = op.end.col - pos.col + 1;
-            did_change = unsafe { swapchars(op.op_type, &raw mut pos, len) } != 0;
+            did_change = swapchars(op.op_type, &mut pos, len);
         } else {
             loop {
                 let len = if pos.lnum == op.end.lnum {
@@ -83,7 +78,7 @@ pub(crate) unsafe fn op_tilde(op: *mut OpArg) {
                 } else {
                     Lines::current().line_len(pos.lnum) - pos.col
                 };
-                did_change |= unsafe { swapchars(op.op_type, &raw mut pos, len) } != 0;
+                did_change |= swapchars(op.op_type, &mut pos, len);
                 // `inc` answers -1 at the end of the buffer; either exit
                 // leaves `pos` where the walk stopped.
                 if ltoreq(op.end, pos) || inc(&mut pos) == -1 {
@@ -123,18 +118,16 @@ pub(crate) unsafe fn op_tilde(op: *mut OpArg) {
 /// character's byte length, the loop re-measures at `pos` each time rather
 /// than stepping by what it was told.
 ///
-/// # Safety
-/// `pos` must point to a valid position in the current buffer.
-unsafe fn swapchars(op_type: OpType, pos: *mut Pos, length: c_int) -> c_int {
-    // SAFETY: the caller's promise -- `pos` names a position of the current
-    // buffer, and `inc` keeps it one until it answers -1.
-    let mut did_change: c_int = 0;
+/// `pos` names a position in the current buffer, and `inc` keeps it one until
+/// it answers -1.
+fn swapchars(op_type: OpType, pos: &mut Pos, length: c_int) -> bool {
+    let mut did_change = false;
     let mut todo = length;
     while todo > 0 {
         // We are counting bytes, not characters.  The borrow ends before
         // `swapchar` writes the line.
         let len = {
-            let at = unsafe { *pos };
+            let at = *pos;
             let mut lines = Lines::current();
             let line = lines.line(at.lnum);
             let col = usize::try_from(at.col).unwrap_or(0).min(line.len());
@@ -143,8 +136,8 @@ unsafe fn swapchars(op_type: OpType, pos: *mut Pos, length: c_int) -> c_int {
         if len > 0 {
             todo -= len - 1;
         }
-        did_change |= c_int::from(unsafe { swapchar(op_type, pos) });
-        if unsafe { inc(&mut *pos) } == -1 {
+        did_change |= swapchar(op_type, *pos);
+        if inc(pos) == -1 {
             // At the end of the buffer; do not run the decrement.
             break;
         }
@@ -156,14 +149,10 @@ unsafe fn swapchars(op_type: OpType, pos: *mut Pos, length: c_int) -> c_int {
 /// Apply one case operator to the character at `pos`; `true` if it changed.
 ///
 /// `op_type` is `OP_UPPER`, `OP_LOWER`, `OP_ROT13`, or anything else for
-/// "swap the case".
-///
-/// # Safety
-/// `pos` must point to a valid position in the current buffer.
-pub unsafe fn swapchar(op_type: OpType, pos: *mut Pos) -> bool {
-    // SAFETY: the caller's promise -- `pos` names a position of the current
-    // buffer, so the cursor may be put on it and the character rebuilt there.
-    let c = gchar_pos(unsafe { &*pos });
+/// "swap the case". `pos` names a position in the current buffer, so the
+/// cursor may be put on it and the character rebuilt there.
+pub fn swapchar(op_type: OpType, pos: Pos) -> bool {
+    let c = gchar_pos(&pos);
 
     // Only rot13 ASCII.
     if c >= 0x80 && op_type == OpType::Rot13 {
@@ -193,12 +182,18 @@ pub unsafe fn swapchar(op_type: OpType, pos: *mut Pos) -> bool {
         // change layer. Not `del_char()`: that would take the composing
         // characters with it.
         let saved: Pos = Win::current().w_cursor;
-        Win::current().w_cursor = unsafe { *pos };
-        let _ = unsafe { del_bytes(utf_ptr2len(get_cursor_pos_ptr()), false, false) };
+        Win::current().w_cursor = pos;
+        let len = {
+            let mut lines = Lines::current();
+            let line = lines.line(pos.lnum);
+            let col = usize::try_from(pos.col).unwrap_or(0).min(line.len());
+            ColNr::try_from(char_len(&line[col..])).unwrap_or(1)
+        };
+        let _ = del_bytes(len, false, false);
         ins_char(nc);
         Win::current().w_cursor = saved;
     } else {
-        unsafe { pbyte(*pos, nc) };
+        pbyte(pos, nc);
     }
     true
 }

@@ -15,8 +15,7 @@
 //! API use to size a splice; it does not walk the text at all, only the line
 //! lengths.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::memline::MlFlags;
 use crate::winlayer::{Buf, Win};
@@ -294,10 +293,8 @@ fn count_selected_line(
     // `lnum` is a line of the current buffer, and `start_col` a column of it.
     let span = if sel.mode.is_block() {
         virtual_op.set(Some(virtual_active(Win::current())));
-        // SAFETY: `sel.oparg` and `bd` are live, and `lnum` is in the region.
-        unsafe { block_prep(&raw mut sel.oparg, &raw mut *bd, lnum, false) };
+        block_prep(bd, &sel.oparg, lnum, false);
         virtual_op.set(None);
-        // `block_prep` puts `textstart` at `textcol` of the same line.
         Some((bd.textcol, bd.textlen))
     } else if sel.mode.is_line() {
         Some((0, MAXCOL))

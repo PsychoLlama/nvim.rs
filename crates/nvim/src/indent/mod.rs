@@ -253,6 +253,29 @@ impl Buf {
         })
     }
 
+    /// The tabs and trailing spaces that fill the columns `start_col` to
+    /// `end_col`, by this buffer's 'tabstop' and 'vartabstop'.
+    pub(crate) fn tab_fill(self, start_col: ColNr, end_col: ColNr) -> (c_int, c_int) {
+        let ts = self.b_p_ts as c_int;
+        self.with_stops(StopList::Tab, |stops| match stops {
+            Some(stops) => stops.from_to(start_col, end_col),
+            None => tabstop::uniform_from_to(start_col, end_col, ts),
+        })
+    }
+
+    /// A copy of this buffer's 'vartabstop' list, its count first; `None`
+    /// when it names no stops.
+    pub(crate) fn tab_stop_list(self) -> Option<Vec<ColNr>> {
+        self.with_stops(StopList::Tab, |stops| {
+            stops.map(|stops| {
+                let mut list = Vec::with_capacity(stops.widths().len() + 1);
+                list.push(stops.count());
+                list.extend_from_slice(stops.widths());
+                list
+            })
+        })
+    }
+
     /// The screen width of the indent at `text`, by this buffer's
     /// 'tabstop' and 'vartabstop'.
     pub(crate) fn indent_width(self, text: &[u8]) -> c_int {

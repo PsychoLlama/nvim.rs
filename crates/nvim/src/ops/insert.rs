@@ -24,14 +24,14 @@
 //! [`adjust_cursor_eol`] is the shared tail that puts the cursor back on a
 //! legal column afterwards.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::memline::MlFlags;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_int, c_uint};
 
 use super::*;
+use crate::cursor::getvpos_of;
 use crate::types::NUL;
 
 /// The first line, measured just before Insert mode runs.
@@ -49,21 +49,15 @@ struct BlockInsertPre {
     pre_textlen: c_int,
 }
 
-/// Blockwise `I` and `A`.
-///
-/// # Safety
-/// `op` must point to a live `OpArg` describing a region of the current
+/// Blockwise `I` and `A` over the operator's region, which is of the current
 /// buffer.
-pub(crate) unsafe fn op_insert(op: *mut OpArg, count1: c_int) {
-    // SAFETY: the caller's promise -- a live `OpArg` of the current buffer.
-    let mut op = unsafe { Op::new(op) };
+pub(crate) fn op_insert(op: &mut OpArg, count1: c_int) {
     let mut bd = BlockDef::ZERO;
     // `edit()` changes `w_curswant`; record it now, for `A`.
     bd.is_max = c_int::from(Win::current().w_curswant == MAXCOL);
 
     // The Visual block is still marked; get rid of it now.
     Win::current().w_cursor.lnum = op.start.lnum;
-    // SAFETY: both only touch the current buffer's windows.
     redraw_curbuf_later(UPD_INVERTED);
     let _ = update_screen();
 
@@ -110,13 +104,11 @@ pub(crate) unsafe fn op_insert(op: *mut OpArg, count1: c_int) {
 /// `None` means undo could not be prepared and the operator must stop.
 ///
 /// `op` must be blockwise.
-fn measure_before_insert(op: Op, bd: &mut BlockDef) -> Option<BlockInsertPre> {
+fn measure_before_insert(op: &OpArg, bd: &mut BlockDef) -> Option<BlockInsertPre> {
     // With 'virtualedit' the spaces have to go in before `block_prep`
     // runs. When only "block" is set, virtual edit is already off here,
     // but `coladvance_force` still needs it -- and it reads the
     // *window-local* 'virtualedit', so that is what gets overridden.
-    // SAFETY: the region's first line is a line of the current buffer, and
-    // the cursor is on it.
     if Win::current().w_cursor.coladd > 0 {
         let old_ve_flags: c_uint = Win::current().w_onebuf_opt.wo_ve_flags;
         if u_save_cursor().is_err() {
@@ -135,7 +127,7 @@ fn measure_before_insert(op: Op, bd: &mut BlockDef) -> Option<BlockInsertPre> {
         Win::current().w_onebuf_opt.wo_ve_flags = old_ve_flags;
     }
 
-    unsafe { block_prep(op.raw(), &raw mut *bd, op.start.lnum, true) };
+    block_prep(bd, op, op.start.lnum, true);
     let mut pre_textlen = Lines::current().line_len(op.start.lnum) - bd.textcol;
     if op.op_type == OpType::Append {
         pre_textlen -= bd.textlen;
@@ -150,17 +142,13 @@ fn measure_before_insert(op: Op, bd: &mut BlockDef) -> Option<BlockInsertPre> {
 /// Put the cursor where `A` should start typing; false means give up.
 ///
 /// `bd` must describe `op`'s first line.
-fn move_cursor_for_append(op: Op, bd: &mut BlockDef) -> bool {
-    // SAFETY: the cursor is on a line of the current buffer throughout, which
-    // is what each of these asks for.
+fn move_cursor_for_append(op: &OpArg, bd: &mut BlockDef) -> bool {
     if op.motion_type == kMTBlockWise && Win::current().w_cursor.coladd == 0 {
-        // To the character right of the block.
+        // To the character right of the block, or the end of the line.
         Win::current().w_set_curswant = true;
-        while unsafe { *get_cursor_pos_ptr() } as c_int != NUL
-            && Win::current().w_cursor.col < bd.textcol + bd.textlen
-        {
-            Win::current().w_cursor.col += 1;
-        }
+        let len = get_cursor_line_len();
+        let col = Win::current().w_cursor.col;
+        Win::current().w_cursor.col = col.max(len.min(bd.textcol + bd.textlen));
         if bd.is_short != 0 && bd.is_max == 0 {
             // The first line was too short: pad it out and say so in `bd`.
             if u_save_cursor().is_err() {
@@ -190,8 +178,8 @@ fn move_cursor_for_append(op: Op, bd: &mut BlockDef) -> bool {
 /// `$` the block has no right edge to measure against.
 ///
 /// `op` must be blockwise, and its first line the cursor line.
-fn replay_insert(mut op: Op, bd: &mut BlockDef, pre: &mut BlockInsertPre, start_insert: Pos) {
-    // SAFETY: the cursor is on the region's first line, which is a line of
+fn replay_insert(op: &mut OpArg, bd: &mut BlockDef, pre: &mut BlockInsertPre, start_insert: Pos) {
+    // The cursor is on the region's first line, which is a line of
     // the current buffer, and every other line asked for below is one of the
     // region's.
     let mut ind_post_vcol = 0;
@@ -239,7 +227,7 @@ fn replay_insert(mut op: Op, bd: &mut BlockDef, pre: &mut BlockInsertPre, start_
         op.end_vcol += ind_post_vcol - pre.ind_pre_vcol;
     }
     let mut bd2 = BlockDef::ZERO;
-    unsafe { block_prep(op.raw(), &raw mut bd2, op.start.lnum, true) };
+    block_prep(&mut bd2, op, op.start.lnum, true);
     if shift_for_indent {
         // `op` is used below, so put it back.
         op.start.col -= ind_post_col - pre.ind_pre_col;
@@ -300,8 +288,7 @@ fn replay_insert(mut op: Op, bd: &mut BlockDef, pre: &mut BlockInsertPre, start_
         let (first, last) = (op.start.lnum, op.end.lnum + 1);
         if u_save(first, last).is_ok() {
             let insert = op.op_type == OpType::Insert;
-            // SAFETY: `op` and `bd` are live, and the text is this scope's.
-            unsafe { block_insert(op.raw(), &ins_text, insert, &raw mut *bd) };
+            block_insert(op, &ins_text, insert, bd);
         }
         Win::current().w_cursor.col = op.start.col;
         check_cursor(Win::current());
@@ -310,15 +297,9 @@ fn replay_insert(mut op: Op, bd: &mut BlockDef, pre: &mut BlockInsertPre, start_
 
 /// `c` -- delete the region, then insert.
 ///
-/// Answers true when `edit()` returned because of a CTRL-O command.
-///
-/// # Safety
-/// `op` must point to a live `OpArg` describing a region of the current
-/// buffer.
-pub(crate) unsafe fn op_change(op: *mut OpArg) -> c_int {
-    // SAFETY: the caller's promise -- a live `OpArg` of the current buffer.
-    // Everything below works on that region and on the cursor line.
-    let op = unsafe { Op::new(op) };
+/// Answers true when `edit()` returned because of a CTRL-O command. `op`
+/// describes a region of the current buffer.
+pub(crate) fn op_change(op: &mut OpArg) -> c_int {
     let mut l = op.start.col;
     if op.motion_type == kMTLineWise {
         l = 0;
@@ -332,7 +313,7 @@ pub(crate) unsafe fn op_change(op: *mut OpArg) -> c_int {
         if u_save_cursor().is_err() {
             return 0;
         }
-    } else if unsafe { op_delete(op.raw()) }.is_err() {
+    } else if op_delete(op).is_err() {
         return 0;
     }
 
@@ -383,7 +364,7 @@ pub(crate) unsafe fn op_change(op: *mut OpArg) -> c_int {
 /// block.
 ///
 /// `op` must be blockwise, and `bd.textcol` the column the insert started at.
-fn replay_change(op: Op, bd: &mut BlockDef, mut pre_textlen: c_int, pre_indent: c_int) {
+fn replay_change(op: &OpArg, bd: &mut BlockDef, mut pre_textlen: c_int, pre_indent: c_int) {
     // Every line the walk reaches is one of the region's, so it is a line of
     // the current buffer.  A later read flushes the line data, so the
     // inserted text is copied out before anything else touches the buffer.
@@ -413,7 +394,7 @@ fn replay_change(op: Op, bd: &mut BlockDef, mut pre_textlen: c_int, pre_indent: 
 
     let mut linenr = op.start.lnum + 1;
     while linenr <= op.end.lnum {
-        unsafe { block_prep(op.raw(), &raw mut *bd, linenr, true) };
+        block_prep(bd, op, linenr, true);
         if bd.is_short == 0 || op_virtual() {
             // When the block starts in virtual space, that offset is
             // padding in front of the text.
@@ -423,9 +404,7 @@ fn replay_change(op: Op, bd: &mut BlockDef, mut pre_textlen: c_int, pre_indent: 
                 coladd: 0,
             };
             if bd.is_short != 0 {
-                // SAFETY: a live current window, and a local position in its
-                // buffer's line `linenr`.
-                unsafe { getvpos(Win::current(), PosRef::new(&raw mut vpos), op.start_vcol) };
+                getvpos_of(Win::current(), &mut vpos, op.start_vcol);
             }
 
             // Up to the block's column, then the pad, then the text, then

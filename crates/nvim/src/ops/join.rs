@@ -15,123 +15,68 @@
 //! 'formatoptions' `M`/`B` rules -- which exist because CJK text has no spaces
 //! between words and a join must not invent one.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::cstr;
 use crate::guard::Suppress;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::c_int;
 
 use super::*;
 use crate::ex_docmd::cmdmod_has;
+use crate::mbyte::char_at;
 use crate::option::cpo_has;
 use crate::types::{CpoFlag, Failed, FoFlag, NUL};
 
-/// Where the text of a line starts once its comment leader is skipped, and
+/// Where the text of `line` starts once its comment leader is skipped, and
 /// whether the line ends *inside* an unclosed comment.
 ///
-/// `process` false only answers the second question and leaves `line` alone;
-/// that is how the caller decides whether the *next* line's leader may be
+/// `process` false only answers the second question and leaves the start at
+/// 0; that is how the caller decides whether the *next* line's leader may be
 /// removed at all, since a leader is only noise when the line before it was a
 /// comment too.
-///
-/// # Safety
-/// `line` must be a NUL-terminated string; `is_comment` must be writable.
-pub unsafe fn skip_comment(
-    mut line: *mut c_char,
-    process: bool,
-    include_space: bool,
-    is_comment: *mut bool,
-) -> *mut c_char {
-    // SAFETY: the caller's promise -- `line` is NUL-terminated and
-    // `is_comment` writable.
-    let text = unsafe { cstr::bytes_at(line) };
-    let (leader_offset, comment_flags) = get_last_leader_offset(text);
+pub fn skip_comment(line: &[u8], process: bool, include_space: bool) -> (usize, bool) {
+    let (leader_offset, comment_flags) = get_last_leader_offset(line);
     // A flag string walked to its `COM_END`, its colon, or its end, whichever
     // comes first.
     let end_or_colon = |flags: Option<ComFlags>| {
         c_int::from(flags.map_or(NUL as u8, |flags| flags.first_of(&[COM_END as u8, b':'])))
     };
 
-    unsafe { *is_comment = false };
-    if leader_offset != -1 {
-        // Does the line end with an unclosed comment? It does unless the
-        // last leader's flags carry COM_END.
-        if end_or_colon(comment_flags) != COM_END {
-            unsafe { *is_comment = true };
-        }
-    }
-
+    // Does the line end with an unclosed comment? It does unless the last
+    // leader's flags carry COM_END.
+    let is_comment = leader_offset != -1 && end_or_colon(comment_flags) != COM_END;
     if !process {
-        return line;
+        return (0, is_comment);
     }
 
-    let (lead_len, flags) = get_leader_len(text, false, include_space);
+    let (lead_len, flags) = get_leader_len(line, false, include_space);
     if lead_len == 0 {
-        return line;
+        return (0, is_comment);
     }
 
     // A colon means this is not the closing part of a three-part comment.
     // Those are left alone: removing them would be annoying.
     let flag = end_or_colon(flags.or(comment_flags));
     if flag == ':' as c_int || flag == NUL {
-        line = unsafe { line.offset(lead_len as isize) };
+        return (usize::try_from(lead_len).unwrap_or(0), is_comment);
     }
-    line
+    (0, is_comment)
 }
 
 /// What [`measure_join`] worked out and [`assemble_join`] replays.
 struct JoinPlan {
-    /// Spaces to put in front of line `t`; `count` entries, allocated by the
-    /// caller.
-    spaces: *mut c_char,
-    /// Bytes of comment leader skipped on line `t`, or null when
-    /// 'formatoptions' does not have `j`; `count` entries.
-    comments: *mut c_int,
+    /// Spaces to put in front of line `t`; `count` entries.
+    spaces: Vec<u8>,
+    /// Bytes of comment leader skipped on line `t`, `count` entries; `None`
+    /// when 'formatoptions' does not have `j`.
+    comments: Option<Vec<c_int>>,
     /// Length of the joined line, spaces included.
     sumsize: c_int,
     /// Length of the *last* line joined, after skipping.
     currsize: c_int,
-    /// The last line joined, after skipping its leader and white space.
-    curr: *mut c_char,
-    /// The last line joined, as `ml_get` answered it.
-    curr_start: *mut c_char,
-}
-
-impl JoinPlan {
-    /// Spaces to put in front of line `t`.
-    ///
-    /// The two arrays are `count` entries each and `t` never leaves that
-    /// range, which is what makes these three safe -- the raw pointers stay
-    /// so that the walk is an index rather than a bounds check.
-    #[inline(always)]
-    fn spaces_at(&self, t: LineNr) -> c_int {
-        // SAFETY: `t` is below `count`, the length both arrays were made at.
-        c_int::from(unsafe { *self.spaces.offset(t as isize) })
-    }
-
-    /// One more space in front of line `t`.
-    #[inline(always)]
-    fn add_space(&mut self, t: LineNr) {
-        // SAFETY: as [`JoinPlan::spaces_at`].
-        unsafe { *self.spaces.offset(t as isize) += 1 };
-    }
-
-    /// Bytes of comment leader skipped on line `t`; only with `j` in
-    /// 'formatoptions', where `comments` is non-null.
-    #[inline(always)]
-    fn comment_at(&self, t: LineNr) -> c_int {
-        // SAFETY: as [`JoinPlan::spaces_at`].
-        unsafe { *self.comments.offset(t as isize) }
-    }
-
-    /// Record the bytes of comment leader skipped on line `t`.
-    #[inline(always)]
-    fn set_comment(&mut self, t: LineNr, len: c_int) {
-        // SAFETY: as [`JoinPlan::spaces_at`].
-        unsafe { *self.comments.offset(t as isize) = len };
-    }
+    /// Bytes skipped at the start of the last line joined: its leader and
+    /// white space.
+    curr: usize,
 }
 
 /// `J` and `gJ`: join `count` lines from the cursor.
@@ -141,6 +86,8 @@ impl JoinPlan {
 /// the callers -- backspace over a line break, and the charwise delete in
 /// `op_delete` -- that must not have comment leaders removed underneath them.
 /// `setmark` false leaves `'[`/`']` to the caller.
+///
+/// The cursor line plus `count - 1` must exist.
 pub fn do_join(
     count: size_t,
     insert_space: bool,
@@ -149,8 +96,6 @@ pub fn do_join(
     setmark: bool,
 ) -> Result<(), Failed> {
     debug_assert!(count >= 1);
-    // SAFETY: the caller's promise -- the cursor line plus `count - 1` exist.
-    // The two arrays are `count` entries each, which is what the walks index.
     let remove_comments = use_formatoptions && has_format_option(FoFlag::REMOVE_COMS);
 
     let above = Win::current().w_cursor.lnum - 1;
@@ -162,31 +107,16 @@ pub fn do_join(
     // The per-line space counts are wanted twice: to size the one
     // allocation the joined line goes in, and to place each line in it.
     let mut plan = JoinPlan {
-        spaces: unsafe { xcalloc(count, 1) } as *mut c_char,
-        comments: if remove_comments {
-            let n = ::core::mem::size_of::<c_int>();
-            unsafe { xcalloc(count, n) as *mut c_int }
-        } else {
-            ::core::ptr::null_mut()
-        },
+        spaces: vec![0; count],
+        comments: remove_comments.then(|| vec![0; count]),
         sumsize: 0,
         currsize: 0,
-        curr: ::core::ptr::null_mut(),
-        curr_start: ::core::ptr::null_mut(),
+        curr: 0,
     };
 
-    let ret = if measure_join(count, insert_space, setmark, &mut plan).is_err() {
-        Err(Failed)
-    } else {
-        assemble_join(count, insert_space, setmark, &mut plan);
-        Ok(())
-    };
-
-    unsafe { xfree(plan.spaces as *mut c_void) };
-    if remove_comments {
-        unsafe { xfree(plan.comments as *mut c_void) };
-    }
-    ret
+    measure_join(count, insert_space, setmark, &mut plan)?;
+    assemble_join(count, insert_space, setmark, &mut plan);
+    Ok(())
 }
 
 /// First pass: measure the joined line without moving anything.
@@ -194,8 +124,7 @@ pub fn do_join(
 /// Answers `Err` when the user interrupted it, which is why the walk calls
 /// `line_breakcheck` -- a join can be over a very large count.
 ///
-/// `plan.spaces` (and `plan.comments`, when non-null) must have `count`
-/// entries; the cursor line plus `count - 1` must exist.
+/// The cursor line plus `count - 1` must exist.
 fn measure_join(
     count: size_t,
     insert_space: bool,
@@ -208,36 +137,34 @@ fn measure_join(
     let mut endcurr2 = NUL;
     let mut prev_was_comment = false;
 
-    // SAFETY: every line the walk reaches exists (the caller's promise), so
-    // `ml_get` answers a live NUL-terminated line, and `plan.curr` stays
-    // inside the line `plan.curr_start` begins.
-    for t in 0..count as LineNr {
-        plan.curr_start = ml_get(Win::current().w_cursor.lnum + t);
-        plan.curr = plan.curr_start;
+    for t in 0..count {
+        let mut lines = Lines::current();
+        let line = lines.line(Win::current().w_cursor.lnum + t as LineNr);
+        let mut curr = 0;
 
         if t == 0 && setmark && !cmdmod_has(CmdModFlags::LOCKMARKS) {
             let mut buf = Win::current().buffer();
             buf.b_op_start.lnum = Win::current().w_cursor.lnum;
-            buf.b_op_start.col = unsafe { cstr::bytes_at(plan.curr) }.len() as ColNr;
+            buf.b_op_start.col = line.len() as ColNr;
         }
 
-        if !plan.comments.is_null() {
+        if let Some(comments) = plan.comments.as_mut() {
             // The leader is only noise when the line before was a comment
             // too; otherwise just ask whether *this* line is one.
-            let was = &raw mut prev_was_comment;
             if t > 0 && prev_was_comment {
-                let new_curr = unsafe { skip_comment(plan.curr, true, insert_space, was) };
-                let skipped = unsafe { new_curr.offset_from(plan.curr) } as c_int;
-                plan.set_comment(t, skipped);
-                plan.curr = new_curr;
+                let skipped;
+                (skipped, prev_was_comment) = skip_comment(line, true, insert_space);
+                comments[t] = skipped as c_int;
+                curr = skipped;
             } else {
-                plan.curr = unsafe { skip_comment(plan.curr, false, insert_space, was) };
+                prev_was_comment = skip_comment(line, false, insert_space).1;
             }
         }
 
         if insert_space && t > 0 {
-            plan.curr = unsafe { skipwhite(plan.curr) };
-            let at = unsafe { *plan.curr } as c_int;
+            curr += skip::white(&line[curr..]);
+            let at = c_int::from(byte_at(line, curr));
+            let first = || char_at(&line[curr..]);
             if at != NUL
                 && at != ')' as c_int
                 && plan.sumsize != 0
@@ -245,20 +172,17 @@ fn measure_join(
                 // 'formatoptions' M: no space between two multi-byte
                 // characters. B: no space if either side is a character
                 // that eats one.
-                && (!has_format_option(FoFlag::MBYTE_JOIN)
-                    || (unsafe { utf_ptr2char(plan.curr) } < 0x100 && endcurr1 < 0x100))
+                && (!has_format_option(FoFlag::MBYTE_JOIN) || (first() < 0x100 && endcurr1 < 0x100))
                 && (!has_format_option(FoFlag::MBYTE_JOIN2)
-                    || (unsafe { utf_ptr2char(plan.curr) } < 0x100
-                        && !utf_eat_space(endcurr1))
-                    || (endcurr1 < 0x100
-                        && !unsafe { utf_eat_space(utf_ptr2char(plan.curr)) }))
+                    || (first() < 0x100 && !utf_eat_space(endcurr1))
+                    || (endcurr1 < 0x100 && !utf_eat_space(first())))
             {
                 if endcurr1 == ' ' as c_int {
                     // The line already ends in a space; look one further
                     // back for the 'joinspaces' test below.
                     endcurr1 = endcurr2;
                 } else {
-                    plan.add_space(t);
+                    plan.spaces[t] += 1;
                 }
                 // 'joinspaces': two spaces after the end of a sentence.
                 if p_js()
@@ -266,14 +190,14 @@ fn measure_join(
                         || endcurr1 == '?' as c_int
                         || endcurr1 == '!' as c_int)
                 {
-                    plan.add_space(t);
+                    plan.spaces[t] += 1;
                 }
             }
         }
 
-        let added = plan.spaces_at(t);
+        let added = c_int::from(plan.spaces[t]);
         if t > 0 && curbuf_splice_pending.get() == 0 {
-            let removed = unsafe { plan.curr.offset_from(plan.curr_start) } as ColNr;
+            let removed = curr as ColNr;
             let row = Win::current().w_cursor.lnum as c_int - 1;
             let (old, new) = ((removed + 1) as BCount, added as BCount);
             let op = kExtmarkUndo;
@@ -291,18 +215,21 @@ fn measure_join(
             );
         }
 
-        plan.currsize = unsafe { cstr::bytes_at(plan.curr) }.len() as c_int;
+        let text = &line[curr..];
+        plan.curr = curr;
+        plan.currsize = text.len() as c_int;
         plan.sumsize += plan.currsize + added;
 
         endcurr1 = NUL;
         endcurr2 = NUL;
-        if insert_space && plan.currsize > 0 {
-            let mut cend = unsafe { plan.curr.offset(plan.currsize as isize) };
-            cend = unsafe { mb_ptr_back(plan.curr, cend) };
-            endcurr1 = unsafe { utf_ptr2char(cend) };
-            if cend > plan.curr {
-                cend = unsafe { mb_ptr_back(plan.curr, cend) };
-                endcurr2 = unsafe { utf_ptr2char(cend) };
+        if insert_space && !text.is_empty() {
+            // The last two characters, stepping back over whole ones.
+            let back = |end: usize| end - (head_off(text, end - 1) + 1);
+            let mut cend = back(text.len());
+            endcurr1 = char_at(&text[cend..]);
+            if cend > 0 {
+                cend = back(cend);
+                endcurr2 = char_at(&text[cend..]);
             }
         }
 
@@ -314,15 +241,6 @@ fn measure_join(
     Ok(())
 }
 
-/// Upstream's `MB_PTR_BACK`: step `p` back over the character in front of it.
-///
-/// # Safety
-/// `line` must be the start of the string `p` points into, and `p` must be
-/// past it.
-unsafe fn mb_ptr_back(line: *const c_char, p: *mut c_char) -> *mut c_char {
-    unsafe { p.offset(-(utf_head_off(line, p.offset(-1)) as isize + 1)) }
-}
-
 /// Second pass: build the joined line and move the marks onto it.
 ///
 /// Walks *backwards*, filling the one allocation from its end, because each
@@ -332,16 +250,17 @@ unsafe fn mb_ptr_back(line: *const c_char, p: *mut c_char) -> *mut c_char {
 ///
 /// `plan` must be as [`measure_join`] left it.
 fn assemble_join(count: size_t, insert_space: bool, setmark: bool, plan: &mut JoinPlan) {
-    // SAFETY: `plan.sumsize` is what `measure_join` counted for exactly the
-    // lines copied back here, so `newp` has room for all of them; every line
-    // the backwards walk asks for is one the forwards walk already read.
-    let last = count as LineNr - 1;
+    let last = count - 1;
     // The column the last line starts at, for the cursor below.
-    let col = plan.sumsize - plan.currsize - plan.spaces_at(last);
+    let col = plan.sumsize - plan.currsize - c_int::from(plan.spaces[last]);
 
-    let newp_len = plan.sumsize as size_t;
-    let newp = unsafe { xmallocz(newp_len) } as *mut c_char;
-    let mut cend = unsafe { newp.offset(plan.sumsize as isize) };
+    // `sumsize` is what `measure_join` counted for exactly the lines copied
+    // back here; the terminator's room is reserved so that it costs no
+    // second allocation.
+    let sumsize = plan.sumsize as usize;
+    let mut newp = Vec::with_capacity(sumsize + 1);
+    newp.resize(sumsize, 0);
+    let mut cend = sumsize;
 
     // The four edits below are one splice as far as extmarks and the
     // buffer-update RPC are concerned.
@@ -349,52 +268,45 @@ fn assemble_join(count: size_t, insert_space: bool, setmark: bool, plan: &mut Jo
 
     let mut t = last;
     loop {
-        let spaces_t = plan.spaces_at(t);
+        let spaces_t = usize::from(plan.spaces[t]);
+        {
+            let mut lines = Lines::current();
+            let line = lines.line(Win::current().w_cursor.lnum + t as LineNr);
+            let text = &line[plan.curr..];
+            cend -= text.len();
+            newp[cend..cend + text.len()].copy_from_slice(text);
+        }
+        cend -= spaces_t;
+        newp[cend..cend + spaces_t].fill(b' ');
         // Where the mark adjustment below wants the line to have landed.
-        let (at, spaces_removed) = unsafe {
-            cend = cend.offset(-(plan.currsize as isize));
-            let n = plan.currsize as size_t;
-            cend.cast::<u8>().copy_from(plan.curr.cast(), n);
-            if spaces_t > 0 {
-                cend = cend.offset(-(spaces_t as isize));
-                cend.cast::<u8>().write_bytes(b' ', spaces_t as size_t);
-            }
-            let removed = (plan.curr.offset_from(plan.curr_start) - spaces_t as isize) as c_int;
-            (
-                (cend.offset_from(newp) - removed as isize) as ColNr,
-                removed,
-            )
-        };
+        let spaces_removed = plan.curr as c_int - spaces_t as c_int;
+        let at = cend as ColNr - spaces_removed;
 
         // Marks move from each deleted line onto the joined one. Not Vi
         // compatible -- Vi deletes them -- but better. If more spaces are
         // deleted than added, a mark inside them moves no further than
         // what was added.
-        let lnum = Win::current().w_cursor.lnum + t;
-        mark_col_adjust(lnum, 0, -t, at, spaces_removed);
+        let lnum = Win::current().w_cursor.lnum + t as LineNr;
+        mark_col_adjust(lnum, 0, -(t as LineNr), at, spaces_removed);
 
         if t == 0 {
             break;
         }
 
-        plan.curr_start = ml_get(Win::current().w_cursor.lnum + t - 1);
-        plan.curr = plan.curr_start;
-        if !plan.comments.is_null() {
-            let skipped = plan.comment_at(t - 1);
-            plan.curr = unsafe { plan.curr.offset(skipped as isize) };
-        }
+        let mut lines = Lines::current();
+        let line = lines.line(Win::current().w_cursor.lnum + t as LineNr - 1);
+        plan.curr = plan
+            .comments
+            .as_ref()
+            .map_or(0, |comments| comments[t - 1] as usize);
         if insert_space && t > 1 {
-            plan.curr = unsafe { skipwhite(plan.curr) };
+            plan.curr += skip::white(&line[plan.curr..]);
         }
-        plan.currsize = unsafe { cstr::bytes_at(plan.curr) }.len() as c_int;
+        plan.currsize = (line.len() - plan.curr) as c_int;
         t -= 1;
     }
 
-    // SAFETY: `newp` is this function's `xmallocz` block, terminated at
-    // `newp_len`, and the memline takes it over.
-    let _ = ml_replace_owned(Win::current().w_cursor.lnum, unsafe {
-        XString::from_raw(newp)
-    });
+    let _ = ml_replace_owned(Win::current().w_cursor.lnum, XString::from_vec(newp));
 
     if setmark && !cmdmod_has(CmdModFlags::LOCKMARKS) {
         let mut buf = Win::current().buffer();

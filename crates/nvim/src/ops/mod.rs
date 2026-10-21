@@ -9,8 +9,7 @@
 //! This file holds no code -- only the constants c2rust copied in from the
 //! headers, and the `RedoVisual` that `pending.rs` keeps one of.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -22,12 +21,11 @@ use crate::change::{
     ComFlags, appended_lines_mark, changed_bytes, changed_lines, del_bytes, del_char, del_lines,
     get_last_leader_offset, get_leader_len, ins_char, ins_str, truncate_line,
 };
-use crate::charset::{getwhitecols_curline, skip, skipwhite, vim_str2nr};
+use crate::charset::{getwhitecols_curline, skip};
 use crate::cstr::byte_at;
 use crate::cursor::{
     check_cursor, check_cursor_col, check_pos, coladvance_force, dec_cursor, gchar_cursor,
-    get_cursor_line_len, get_cursor_line_ptr, get_cursor_pos_ptr, getviscol, getviscol2, getvpos,
-    inc_cursor,
+    get_cursor_line_len, getviscol, getviscol2, inc_cursor,
 };
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later, update_screen};
 use crate::edit::{beginline, display_dollar, edit};
@@ -46,22 +44,20 @@ use crate::getchar::{
 use crate::global_cell::GlobalCell;
 use crate::indent::{
     change_indent, fix_indent, get_expr_indent, get_indent, get_lisp_indent, get_sw_value_indent,
-    inindent, may_do_si, op_reindent, preprocs_left, set_indent, tabstop_fromto,
-    use_indentexpr_for_lisp,
+    inindent, may_do_si, op_reindent, preprocs_left, set_indent, use_indentexpr_for_lisp,
 };
 use crate::indent_c::get_c_indent;
 use crate::keycodes::Ctrl_V;
 use crate::mark::mark_col_adjust;
 use crate::mbyte::{
     bomb_size, cluster_len, head_off, mb_islower, mb_isupper, mb_tolower, mb_toupper,
-    utf_char2bytes, utf_char2cells, utf_char2len, utf_eat_space, utf_head_off, utf_ptr2char,
-    utf_ptr2len, utf_ptr2str_char_info, utfc_next, utfc_ptr2len,
+    utf_char2cells, utf_char2len, utf_eat_space,
 };
 use crate::memline::{
-    Lines, dec, decl, gchar_pos, inc, ml_append_terminated, ml_get, ml_get_buf_mut, ml_get_len,
-    ml_replace_buf_text, ml_replace_owned,
+    Lines, dec, decl, gchar_pos, inc, ml_append_terminated, ml_get_len, ml_replace_buf_text,
+    ml_replace_owned,
 };
-use crate::memory::{XString, xcalloc, xfree, xmalloc, xmallocz};
+use crate::memory::XString;
 use crate::message::state::{msg_scroll, no_lines_msg};
 use crate::message::{e_invarg, e_modifiable};
 use crate::message::{emsg, msg, msg_keep_text, msg_start, msgmore};
@@ -79,9 +75,9 @@ use crate::option::{
     callback_from_option, get_equalprg, get_fileformat, get_ve_flags, install_callback,
 };
 use crate::options::{kOptBoFlagOperator, kOptVeFlagAll, kOptVeFlagOnemore};
-use crate::os::cshim::{__ctype_b_loc, gettext, ngettext};
+use crate::os::cshim::{gettext, ngettext};
 use crate::os::input::{line_breakcheck, os_breakcheck};
-use crate::plines::{getvcols, linetabsize_str, win_charsize};
+use crate::plines::{getvcols, getvvcol, linetabsize_str, win_charsize};
 use crate::pos::{MAXCOL, equalpos, lt, ltoreq};
 use crate::register::{
     do_autocmd_textyankpost, get_y_register, get_yank_register, op_yank, op_yank_reg,
@@ -99,14 +95,12 @@ use crate::types::NL;
 use crate::types::TAB;
 use crate::types::{
     BCount, BlockDef, Callback, CharsizeArg, CmdArg, CmdModFlags, ColNr, Dict, ExtmarkOp, LineNr,
-    MotionType, OpArg, OpType, OptInt, OptSet, Pos, StrCharInfo, TypVal, UVarNumber, VarNumber,
-    int32_t, int64_t, size_t, ssize_t,
+    MotionType, OpArg, OpType, OptInt, OptSet, Pos, TypVal, UVarNumber, VarNumber, int32_t,
+    int64_t, size_t, ssize_t,
 };
 use crate::ui::vim_beep;
 use crate::undo::{u_clearline, u_save, u_save_cursor};
-use crate::winlayer::{Live, PosRef};
-use ::libc::strcpy;
-use core::mem::offset_of;
+use crate::winlayer::Live;
 
 // The carve of the transpiled module; see each child's docs.
 mod addsub;
@@ -187,42 +181,37 @@ pub struct RedoVisual {
     pub rv_arg: ::core::ffi::c_int,
 }
 
-/// An `OpArg` the caller has promised is live: the region an operator is
-/// about to work on.
+/// An `OpArg` the caller has promised is live: the operator a normal-mode
+/// frame is pending on.
 ///
-/// [`Live`]'s shape, for the one struct every operator in this module is
-/// handed. Field access goes through `Deref`, so the borrow lasts no longer
-/// than the access that asked for it -- which matters here, because an
-/// operator may hand control to Insert mode, to 'operatorfunc' or to an
-/// external filter, and the editor reaches the same `OpArg` again while it
-/// is away. [`Live::raw`] hands the pointer back to the callees that still
-/// take one.
+/// [`Live`]'s shape, for the one struct every operator is reached through.
+/// Field access goes through `Deref`, so the borrow lasts no longer than the
+/// access that asked for it -- which matters, because `op_pending` reads the
+/// frame's operator from wherever user code runs. The operators themselves
+/// take an `&mut OpArg`, and [`Op::on_copy`] is how a frame hands one over.
 pub(crate) type Op = Live<OpArg>;
 
 impl Op {
-    /// The region's first position, which lives inside the `OpArg`.
-    ///
-    /// [`Live::field_ptr`]'s trick: a field's address is the object's plus a
-    /// constant, so saying where it is needs no dereference.
-    #[inline(always)]
-    pub(crate) fn start(self) -> PosRef {
-        // SAFETY: the constructor's promise -- a live `OpArg`, so the
-        // address of its `start` is a live position.
-        unsafe { PosRef::new(self.field_ptr(offset_of!(OpArg, start))) }
-    }
-
-    /// The region's last position. [`Op::start`].
-    #[inline(always)]
-    pub(crate) fn end(self) -> PosRef {
-        // SAFETY: as [`Op::start`].
-        unsafe { PosRef::new(self.field_ptr(offset_of!(OpArg, end))) }
-    }
-
     /// Whether an operator is pending on it, which is what every caller means
     /// by the `op_type != OpType::Nop` it used to spell out.
     #[inline(always)]
     pub(crate) fn pending(self) -> bool {
         self.op_type != OpType::Nop
+    }
+
+    /// Run `operator` on a copy of the frame's operator, and write the copy
+    /// back when it returns.
+    ///
+    /// An operator may give control away -- to Insert mode, 'operatorfunc',
+    /// a TextYankPost autocommand, a buffer's `on_lines` callback -- and the
+    /// editor reads the frame's operator from there (`mode()` asks
+    /// `op_pending`). An `&mut` to the frame's own `OpArg` held across that
+    /// would alias the read; a copy is nobody else's.
+    pub(crate) fn on_copy<R>(mut self, operator: impl FnOnce(&mut OpArg) -> R) -> R {
+        let mut arg = *self;
+        let result = operator(&mut arg);
+        *self = arg;
+        result
     }
 }
 

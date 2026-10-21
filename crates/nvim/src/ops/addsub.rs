@@ -23,19 +23,16 @@
 //! A single alphabetic character is the fifth case ('nrformats' `p`), and it
 //! short-circuits all of the above.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::charset::Str2NrBases;
-use crate::cstr;
+use crate::charset::{Str2NrBases, str2nr_scan};
 use crate::ex_docmd::cmdmod_has;
 use crate::guard::Suppress;
 use crate::message_fmt::report_msg;
-use crate::strings::has_char;
+use crate::os::cshim::ctype_bits;
 use crate::tr_plural;
-use crate::vim_snprintf;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{c_char, c_int, c_ulong, c_void};
+use core::ffi::{c_int, c_ulong};
 
 use super::*;
 use crate::normal::{visual_active, visual_mode};
@@ -68,12 +65,7 @@ struct NrFormats {
 impl NrFormats {
     /// Read the current buffer's 'nrformats'.
     fn current() -> Self {
-        let has = |c: u8| {
-            has_char(
-                unsafe { cstr::at(Buf::current().b_p_nf.value_ptr()) },
-                c_int::from(c),
-            )
-        };
+        let has = |c: u8| Buf::current().b_p_nf.has_byte(c);
         NrFormats {
             hex: has(b'x'),
             oct: has(b'o'),
@@ -101,14 +93,9 @@ enum Minus {
 /// `g_cmd` is `g CTRL-A`: add `prenum1` to the first changed line, twice that
 /// to the second, and so on.
 ///
-/// # Safety
-/// `op` must point to a live `OpArg` describing a region of the current
-/// buffer.
-pub unsafe fn op_addsub(op: *mut OpArg, prenum1: LineNr, g_cmd: bool) {
-    // SAFETY: the caller's promise -- a live `OpArg` of the current buffer.
-    // Everything below works on that region and on the cursor line, which is
-    // what `u_save`, `do_addsub` and `changed_lines` each ask for.
-    let op = unsafe { Op::new(op) };
+/// `op` describes a region of the current buffer; everything below works on
+/// that region and on the cursor line.
+pub fn op_addsub(op: &mut OpArg, prenum1: LineNr, g_cmd: bool) {
     // 'foldexpr' may be re-evaluated part way through, and it must not see
     // the buffer mid-operation.
     let folds_frozen = Suppress::fold_update();
@@ -118,7 +105,7 @@ pub unsafe fn op_addsub(op: *mut OpArg, prenum1: LineNr, g_cmd: bool) {
         if u_save_cursor().is_err() {
             return;
         }
-        let changed = unsafe { do_addsub(op.op_type, &raw mut pos, 0, prenum1) };
+        let changed = do_addsub(op.op_type, &mut pos, 0, prenum1);
         drop(folds_frozen);
         if changed {
             changed_lines(Buf::current(), pos.lnum, 0, pos.lnum + 1, 0, true);
@@ -143,7 +130,7 @@ pub unsafe fn op_addsub(op: *mut OpArg, prenum1: LineNr, g_cmd: bool) {
     let mut pos = op.start;
     while pos.lnum <= op.end.lnum {
         let length = addsub_line_span(op, &mut bd, &mut pos);
-        let one_change = unsafe { do_addsub(op.op_type, &raw mut pos, length, amount) };
+        let one_change = do_addsub(op.op_type, &mut pos, length, amount);
         if one_change {
             if change_cnt == 0 {
                 startpos = Buf::current().b_op_start;
@@ -181,11 +168,10 @@ pub unsafe fn op_addsub(op: *mut OpArg, prenum1: LineNr, g_cmd: bool) {
 /// length in bytes.
 ///
 /// `pos.lnum` must be a line of the region.
-fn addsub_line_span(mut op: Op, bd: &mut BlockDef, pos: &mut Pos) -> c_int {
-    // SAFETY: every line touched below is one of the region's, so it is a
-    // line of the current buffer.
+fn addsub_line_span(op: &mut OpArg, bd: &mut BlockDef, pos: &mut Pos) -> c_int {
+    // Every line touched below is one of the region's.
     if op.motion_type == kMTBlockWise {
-        unsafe { block_prep(op.raw(), &raw mut *bd, pos.lnum, false) };
+        block_prep(bd, op, pos.lnum, false);
         pos.col = bd.textcol;
         return bd.textlen;
     }
@@ -216,19 +202,9 @@ fn addsub_line_span(mut op: Op, bd: &mut BlockDef, pos: &mut Pos) -> c_int {
 /// Add `prenum1` to (or subtract it from) the number at `pos`.
 ///
 /// `length` is the region the caller allows the number to occupy; it is 0
-/// outside Visual mode, where the number's own extent decides instead.
-///
-/// # Safety
-/// `pos` must name a position in the current buffer.
-pub unsafe fn do_addsub(
-    op_type: OpType,
-    pos: *mut Pos,
-    mut length: c_int,
-    prenum1: LineNr,
-) -> bool {
-    // SAFETY: the caller's promise -- `pos` names a position of the current
-    // buffer, so its line is a live NUL-terminated string.
-    let mut pos = unsafe { PosRef::new(pos) };
+/// outside Visual mode, where the number's own extent decides instead. `pos`
+/// names a position in the current buffer.
+pub fn do_addsub(op_type: OpType, pos: &mut Pos, mut length: c_int, prenum1: LineNr) -> bool {
     let fmt = NrFormats::current();
     let visual = visual_active();
     let save_cursor = Win::current().w_cursor;
@@ -316,7 +292,6 @@ fn finish_addsub(visual: bool, did_change: bool, save_cursor: Pos, save_coladd: 
         Win::current().w_cursor = save_cursor;
     } else if did_change {
         Win::current().w_set_curswant = true;
-    // SAFETY: a live window.
     } else if virtual_active(Win::current()) {
         Win::current().w_cursor.coladd = save_coladd;
     }
@@ -451,8 +426,8 @@ fn bump_alpha_char(
     } else {
         firstdigit - 'a' as c_int
     });
-    // SAFETY: the C library's own locale table, indexed by a byte value.
-    let class = unsafe { *(*__ctype_b_loc()).offset(firstdigit as isize) } as c_int;
+    // The C library's own locale table: `firstdigit` is an ASCII letter.
+    let class = c_int::from(ctype_bits(firstdigit as u8));
     let upper = class & _ISupper as ::core::ffi::c_ushort as c_int != 0;
     if op_type == OpType::NrSub {
         if ord < prenum1 {
@@ -539,24 +514,24 @@ fn replace_number(
         };
     }
 
-    // `pre` is the base marker: 'x'/'X' hex, 'b'/'B' binary, '0' octal, 0
-    // decimal.
-    let mut pre: c_int = 0;
-    let mut n: UVarNumber = 0;
-    let mut overflow = false;
     let bases = Str2NrBases::BIN.when(fmt.bin)
         | Str2NrBases::OCT.when(fmt.oct)
         | Str2NrBases::HEX.when(fmt.hex);
-    let none = ::core::ptr::null_mut();
-    let (prep, np, op) = (&raw mut pre, &raw mut n, &raw mut overflow);
-    // SAFETY: `text` is a copy of the line that kept its terminator, so the
-    // byte at `col` starts a NUL-terminated string -- which is all
-    // `vim_str2nr` reads, and it reads it before anything below changes the
-    // buffer.
-    unsafe {
-        let at = text.as_ptr().add(col as usize).cast::<c_char>();
-        vim_str2nr(at, prep, length, bases, none, np, maxlen, false, op);
+    // `text` is a copy of the line, read before anything below changes the
+    // buffer; its end ends the number, as the terminator did, and a bounded
+    // scan sees nothing past its bound, as the pointer form's slice of
+    // `maxlen` bytes did.
+    let at = usize::try_from(col).unwrap_or(0).min(text.len());
+    let end = match usize::try_from(maxlen) {
+        Ok(bound @ 1..) => (at + bound).min(text.len()),
+        _ => text.len(),
     };
+    let parsed = str2nr_scan(&text[at..end], maxlen, bases, false, false);
+    *length = c_int::try_from(parsed.len).unwrap_or(c_int::MAX);
+    let overflow = parsed.overflow;
+    // The base marker: 'x'/'X' hex, 'b'/'B' binary, '0' octal, 0 decimal.
+    let pre = parsed.prefix;
+    let mut n: UVarNumber = parsed.magnitude;
 
     // A leading `-` is not a sign for hex, octal or binary.
     if pre != 0 && negative {
@@ -593,12 +568,7 @@ fn replace_number(
     while todel > 0 {
         todel -= 1;
         // The C library's own locale table, indexed by a byte value.
-        let class = if c < 0x100 {
-            let entry = unsafe { *(*__ctype_b_loc()).offset(c as isize) };
-            entry as c_int
-        } else {
-            0
-        };
+        let class = u8::try_from(c).map_or(0, |c| c_int::from(ctype_bits(c)));
         if class & _ISalpha as ::core::ffi::c_ushort as c_int != 0 {
             HEX_UPPER.set(class & _ISupper as ::core::ffi::c_ushort as c_int != 0);
         }
@@ -674,92 +644,63 @@ fn render_number(
     was_positive: bool,
     fmt: &NrFormats,
 ) {
-    // Sized before the decrements below, as upstream does: with many
-    // leading zeros the prefix can be long, so this is deliberately
-    // generous rather than exact.
-    // SAFETY: `buf` has room for the sign, the prefix, the padding zeros and
-    // the digits -- `length` bounds the first three and `NUMBUFLEN` the last,
-    // which is also what `digits` is sized by.
-    let buf = unsafe { xmalloc(length as size_t + NUMBUFLEN as size_t) } as *mut c_char;
-    let mut at = buf;
+    // Sized as upstream does, before the decrements below: with many
+    // leading zeros the prefix can be long.
+    let mut buf = Vec::with_capacity(length.max(0) as usize + NUMBUFLEN as usize);
     if negative && (!visual || was_positive) {
-        unsafe { *at = '-' as c_char };
-        at = unsafe { at.offset(1) };
+        buf.push(b'-');
     }
     if pre != 0 {
-        unsafe { *at = '0' as c_char };
-        at = unsafe { at.offset(1) };
+        buf.push(b'0');
         length -= 1;
     }
     if pre == 'b' as c_int || pre == 'B' as c_int || pre == 'x' as c_int || pre == 'X' as c_int {
-        unsafe { *at = pre as c_char };
-        at = unsafe { at.offset(1) };
+        buf.push(pre as u8);
         length -= 1;
     }
 
     // The digits themselves.
-    let mut digits: [c_char; NUMBUFLEN as usize] = [0; NUMBUFLEN as usize];
-    let digits_len = if pre == 'b' as c_int || pre == 'B' as c_int {
-        format_binary(n, &mut digits)
+    let digits = if pre == 'b' as c_int || pre == 'B' as c_int {
+        format_binary(n)
+    } else if pre == 0 {
+        format!("{n}").into_bytes()
+    } else if pre == '0' as c_int {
+        format!("{n:o}").into_bytes()
+    } else if HEX_UPPER.get() {
+        format!("{n:X}").into_bytes()
     } else {
-        let format = if pre == 0 {
-            c"%lu"
-        } else if pre == '0' as c_int {
-            c"%lo"
-        } else if HEX_UPPER.get() {
-            c"%lX"
-        } else {
-            c"%lx"
-        };
-        let out = &raw mut digits as *mut c_char;
-        unsafe { vim_snprintf!(out, digits.len(), format.as_ptr(), n) }
+        format!("{n:x}").into_bytes()
     };
-    length -= digits_len;
+    length -= digits.len() as c_int;
 
     // Keep the total width by padding with zeros -- unless the result
     // would then look like an octal number.
     if firstdigit == '0' as c_int && !(fmt.oct && pre == 0) {
         while length > 0 {
             length -= 1;
-            unsafe { *at = '0' as c_char };
-            at = unsafe { at.offset(1) };
+            buf.push(b'0');
         }
     }
-    unsafe { *at = NUL as c_char };
-
-    let mut buflen = unsafe { at.offset_from(buf) } as c_int;
-    let tail = unsafe { buf.offset(buflen as isize) };
-    unsafe { strcpy(tail, &raw const digits as *const c_char) };
-    buflen += digits_len;
-
-    // SAFETY: the `buflen` bytes just written into `buf`.
-    ins_str(unsafe { cstr::slice_at(buf, buflen as usize) });
-    unsafe { xfree(buf as *mut c_void) };
+    buf.extend_from_slice(&digits);
+    ins_str(&buf);
 }
 
-/// Write `n` in binary, most significant one-bit first; answers its length.
+/// `n` in binary, most significant one-bit first.
 ///
-/// Truncates rather than overflowing `out`, which is why it is not a
-/// `vim_snprintf` call like the other three bases.
-fn format_binary(n: UVarNumber, out: &mut [c_char; NUMBUFLEN as usize]) -> c_int {
+/// At most `NUMBUFLEN - 1` digits, which a 64-bit number never reaches.
+fn format_binary(n: UVarNumber) -> Vec<u8> {
     // Skip the leading zeros.
     let mut bits = 8 * ::core::mem::size_of::<UVarNumber>();
     while bits > 0 && (n >> (bits - 1)) & 0x1 == 0 {
         bits -= 1;
     }
 
-    let mut len = 0;
-    while bits > 0 && len < NUMBUFLEN as usize - 1 {
+    let mut out = Vec::with_capacity(bits);
+    while bits > 0 && out.len() < NUMBUFLEN as usize - 1 {
         bits -= 1;
-        out[len] = if (n >> bits) & 0x1 != 0 {
-            b'1' as c_char
-        } else {
-            b'0' as c_char
-        };
-        len += 1;
+        out.push(if (n >> bits) & 0x1 != 0 { b'1' } else { b'0' });
     }
-    out[len] = NUL as c_char;
-    len as c_int
+    out
 }
 
 #[cfg(test)]

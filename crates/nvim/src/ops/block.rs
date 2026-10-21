@@ -27,17 +27,17 @@
 //! changes what `getvcol` answers and every column here has to be measured
 //! with it off.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::winlayer::{Buf, PosRef, Win};
+use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
-use crate::cstr;
+use crate::mbyte::{c_char_info, c_next_cluster, snap_pos_to_char};
 use crate::r#move::WinValid;
 use crate::normal::{sel_exclusive, visual_mode};
-use crate::types::NUL;
+use crate::plines::{getvcol, getvvcol};
+use crate::types::CharInfo;
 
 /// Insert `s` into every line of the block below the first, before the block
 /// (`b_insert`, for `I`) or after it (for `A`).
@@ -45,20 +45,14 @@ use crate::types::NUL;
 /// The first line was inserted into interactively; this is the replay over the
 /// rest, and it runs once, after Insert mode has been left. The caller
 /// prepares undo.
-///
-/// # Safety
-/// `op` and `bdp` must point to live structs.
-pub(crate) unsafe fn block_insert(op: *mut OpArg, s: &[u8], b_insert: bool, bdp: *mut BlockDef) {
-    // SAFETY: the caller's promise -- both point to live structs.
-    let (op, bdp) = unsafe { (&mut *op, &mut *bdp) };
+pub(crate) fn block_insert(op: &OpArg, s: &[u8], b_insert: bool, bdp: &mut BlockDef) {
     let old_state = State.get();
     // Not MODE_REPLACE, whatever the user was in.
     State.set(MODE_INSERT);
 
     let mut lnum = op.start.lnum + 1;
     while lnum <= op.end.lnum {
-        // SAFETY: `lnum` walks the region, which is of the current buffer.
-        unsafe { block_prep(&raw mut *op, &raw mut *bdp, lnum, true) };
+        block_prep(bdp, op, lnum, true);
         if bdp.is_short != 0 && b_insert {
             // `I` on a line that ends before the block starts.
             lnum += 1;
@@ -176,7 +170,6 @@ pub(crate) unsafe fn block_insert(op: *mut OpArg, s: &[u8], b_insert: bool, bdp:
     // loop's own bound.
     if op.start.lnum < op.end.lnum {
         let (first, last) = (op.start.lnum + 1, op.end.lnum + 1);
-        // SAFETY: both name lines of the current buffer.
         changed_lines(Buf::current(), first, 0, last, 0, true);
     }
 }
@@ -214,130 +207,125 @@ pub fn restore_lbr(lbr_saved: bool) {
         .clear(WinValid::WROW | WinValid::WCOL | WinValid::VIRTCOL);
 }
 
-/// Where the block sits in one line: fill `bdp` for `lnum`.
+/// Where the block sits in one line: fill `bd` for `lnum` of the current
+/// buffer.
 ///
 /// `is_del` selects the delete reading of the answer described in the module
 /// doc; every other operator passes false.
 ///
 /// Note that this converts a partly selected multi-byte character to spaces,
 /// like a partly selected TAB.
-///
-/// # Safety
-/// `op` and `bdp` must point to live structs, and `lnum` must be a line of
-/// the current buffer.
-pub unsafe fn block_prep(op: *const OpArg, bdp: *mut BlockDef, lnum: LineNr, is_del: bool) {
-    // SAFETY: the caller's promise -- both point to live structs.
-    let (op, bdp) = unsafe { (&*op, &mut *bdp) };
+pub fn block_prep(bd: &mut BlockDef, op: &OpArg, lnum: LineNr, is_del: bool) {
     // Unwanted line breaks would move every column measured below.
     let lbr_saved = reset_lbr();
 
-    // Everything but `textcol`, `textstart` (written at the end) and
-    // `is_max` (the caller's, meaning the block was opened with `$`).
-    bdp.startspaces = 0;
-    bdp.endspaces = 0;
-    bdp.textlen = 0;
-    bdp.start_vcol = 0;
-    bdp.end_vcol = 0;
-    bdp.is_short = 0;
-    bdp.is_one_char = 0;
-    bdp.pre_whitesp = 0;
-    bdp.pre_whitesp_c = 0;
-    bdp.end_char_vcols = 0;
-    bdp.start_char_vcols = 0;
+    // Everything but `textcol` (written at the end) and `is_max` (the
+    // caller's, meaning the block was opened with `$`).
+    bd.startspaces = 0;
+    bd.endspaces = 0;
+    bd.textlen = 0;
+    bd.start_vcol = 0;
+    bd.end_vcol = 0;
+    bd.is_short = 0;
+    bd.is_one_char = 0;
+    bd.pre_whitesp = 0;
+    bd.pre_whitesp_c = 0;
+    bd.end_char_vcols = 0;
+    bd.start_char_vcols = 0;
 
-    // SAFETY: `lnum` is a line of the current buffer, so the line is a live
-    // NUL-terminated string and every walk below stays inside it.
-    let line = ml_get(lnum);
-    let mut prev_pstart = line;
+    let mut lines = Lines::current();
+    let line = lines.line(lnum);
+    // The walks end at the line's end, where the decoder answers a zero
+    // codepoint; the byte test only runs then.
+    let at_end = |at: usize, chr: CharInfo| chr.value == 0 && byte_at(line, at) == 0;
 
     // Walk to the block's left edge, remembering the run of white space in
     // front of it (`shift_block` widens exactly that run).
     let mut incr = 0;
-    // SAFETY: the line just fetched, which the walks below only read.
-    let bytes = unsafe { cstr::bytes_at(line) };
-    let (mut csarg, mut cstype) = CharsizeArg::new(Win::current(), lnum, bytes);
-    let mut ci: StrCharInfo = unsafe { utf_ptr2str_char_info(line) };
-    let mut vcol = bdp.start_vcol;
-    while vcol < op.start_vcol && unsafe { *ci.ptr } as c_int != NUL {
-        let at = ci.ptr.addr() - line.addr();
-        incr = win_charsize(cstype, vcol, at, ci.chr.value, &mut csarg).width;
+    let (mut csarg, mut cstype) = CharsizeArg::new(Win::current(), lnum, line);
+    let mut prev_pstart = 0;
+    let mut at = 0;
+    let mut chr = c_char_info(line, 0);
+    let mut vcol = bd.start_vcol;
+    while vcol < op.start_vcol && !at_end(at, chr) {
+        incr = win_charsize(cstype, vcol, at, chr.value, &mut csarg).width;
         vcol += incr;
-        if ascii_iswhite(ci.chr.value) {
-            bdp.pre_whitesp += incr;
-            bdp.pre_whitesp_c += 1;
+        if ascii_iswhite(chr.value) {
+            bd.pre_whitesp += incr;
+            bd.pre_whitesp_c += 1;
         } else {
-            bdp.pre_whitesp = 0;
-            bdp.pre_whitesp_c = 0;
+            bd.pre_whitesp = 0;
+            bd.pre_whitesp_c = 0;
         }
-        prev_pstart = ci.ptr;
-        ci = unsafe { utfc_next(ci) };
+        prev_pstart = at;
+        (at, chr) = c_next_cluster(line, at, chr);
     }
-    bdp.start_vcol = vcol;
-    let mut pstart = ci.ptr;
-    bdp.start_char_vcols = incr;
+    bd.start_vcol = vcol;
+    let mut pstart = at;
+    bd.start_char_vcols = incr;
 
-    if bdp.start_vcol < op.start_vcol {
+    if bd.start_vcol < op.start_vcol {
         // The line ends before the block starts.
-        bdp.end_vcol = bdp.start_vcol;
-        bdp.is_short = 1;
+        bd.end_vcol = bd.start_vcol;
+        bd.is_short = 1;
         if !is_del || op.op_type == OpType::Append {
-            bdp.endspaces = op.end_vcol - op.start_vcol + 1;
+            bd.endspaces = op.end_vcol - op.start_vcol + 1;
         }
     } else {
-        bdp.startspaces = bdp.start_vcol - op.start_vcol;
-        if is_del && bdp.startspaces != 0 {
-            bdp.startspaces = bdp.start_char_vcols - bdp.startspaces;
+        bd.startspaces = bd.start_vcol - op.start_vcol;
+        if is_del && bd.startspaces != 0 {
+            bd.startspaces = bd.start_char_vcols - bd.startspaces;
         }
         let mut pend = pstart;
-        bdp.end_vcol = bdp.start_vcol;
+        bd.end_vcol = bd.start_vcol;
 
-        if bdp.end_vcol > op.end_vcol {
+        if bd.end_vcol > op.end_vcol {
             // The whole block is inside one character -- a wide TAB.
-            bdp.is_one_char = 1;
+            bd.is_one_char = 1;
             if op.op_type == OpType::Insert {
-                bdp.endspaces = bdp.start_char_vcols - bdp.startspaces;
+                bd.endspaces = bd.start_char_vcols - bd.startspaces;
             } else if op.op_type == OpType::Append {
-                bdp.startspaces += op.end_vcol - op.start_vcol + 1;
-                bdp.endspaces = bdp.start_char_vcols - bdp.startspaces;
+                bd.startspaces += op.end_vcol - op.start_vcol + 1;
+                bd.endspaces = bd.start_char_vcols - bd.startspaces;
             } else {
-                bdp.startspaces = op.end_vcol - op.start_vcol + 1;
+                bd.startspaces = op.end_vcol - op.start_vcol + 1;
                 if is_del && op.op_type != OpType::Lshift {
                     // Summing the two into `startspaces` does not work for
                     // a Visual replace, so the TAB is split in two.
-                    bdp.startspaces = bdp.start_char_vcols - (bdp.start_vcol - op.start_vcol);
-                    bdp.endspaces = bdp.end_vcol - op.end_vcol - 1;
+                    bd.startspaces = bd.start_char_vcols - (bd.start_vcol - op.start_vcol);
+                    bd.endspaces = bd.end_vcol - op.end_vcol - 1;
                 }
             }
         } else {
             // Walk on to the block's right edge.
-            (csarg, cstype) = CharsizeArg::new(Win::current(), lnum, bytes);
-            ci = unsafe { utf_ptr2str_char_info(pend) };
-            vcol = bdp.end_vcol;
+            (csarg, cstype) = CharsizeArg::new(Win::current(), lnum, line);
+            at = pend;
+            chr = c_char_info(line, pend);
+            vcol = bd.end_vcol;
             let mut prev_pend = pend;
-            while vcol <= op.end_vcol && unsafe { *ci.ptr } as c_int != NUL {
-                prev_pend = ci.ptr;
-                let at = ci.ptr.addr() - line.addr();
-                incr = win_charsize(cstype, vcol, at, ci.chr.value, &mut csarg).width;
+            while vcol <= op.end_vcol && !at_end(at, chr) {
+                prev_pend = at;
+                incr = win_charsize(cstype, vcol, at, chr.value, &mut csarg).width;
                 vcol += incr;
-                ci = unsafe { utfc_next(ci) };
+                (at, chr) = c_next_cluster(line, at, chr);
             }
-            bdp.end_vcol = vcol;
-            pend = ci.ptr;
+            bd.end_vcol = vcol;
+            pend = at;
 
-            if bdp.end_vcol <= op.end_vcol
+            if bd.end_vcol <= op.end_vcol
                 && (!is_del || op.op_type == OpType::Append || op.op_type == OpType::Replace)
             {
                 // The line ends inside the block. Filling it out to the
                 // block's width is the alternative, and it is deliberately
                 // not done: it leaves trailing white space behind.
-                bdp.is_short = 1;
+                bd.is_short = 1;
                 if op.op_type == OpType::Append || op_virtual() {
-                    bdp.endspaces = op.end_vcol - bdp.end_vcol + c_int::from(op.inclusive);
+                    bd.endspaces = op.end_vcol - bd.end_vcol + c_int::from(op.inclusive);
                 }
-            } else if bdp.end_vcol > op.end_vcol {
-                bdp.endspaces = bdp.end_vcol - op.end_vcol - 1;
-                if !is_del && bdp.endspaces != 0 {
-                    bdp.endspaces = incr - bdp.endspaces;
+            } else if bd.end_vcol > op.end_vcol {
+                bd.endspaces = bd.end_vcol - op.end_vcol - 1;
+                if !is_del && bd.endspaces != 0 {
+                    bd.endspaces = incr - bd.endspaces;
                     if pend != pstart {
                         pend = prev_pend;
                     }
@@ -345,20 +333,19 @@ pub unsafe fn block_prep(op: *const OpArg, bdp: *mut BlockDef, lnum: LineNr, is_
             }
         }
 
-        bdp.end_char_vcols = incr;
-        if is_del && bdp.startspaces != 0 {
+        bd.end_char_vcols = incr;
+        if is_del && bd.startspaces != 0 {
             pstart = prev_pstart;
         }
-        // SAFETY: `pstart` and `pend` are both inside `line`.
-        bdp.textlen = unsafe { pend.offset_from(pstart) } as c_int;
+        bd.textlen = (pend - pstart) as c_int;
     }
 
-    bdp.textcol = unsafe { pstart.offset_from(line) } as ColNr;
-    bdp.textstart = pstart;
+    bd.textcol = pstart as ColNr;
     restore_lbr(lbr_saved);
 }
 
-/// Where a *charwise* region sits in one line: fill `bdp` for `lnum`.
+/// Where a *charwise* region sits in one line: fill `bd` for `lnum` of the
+/// current buffer.
 ///
 /// The region is `start`..`end` rather than a rectangle, so only the first and
 /// last lines are clipped; everything between is the whole line. The
@@ -366,27 +353,20 @@ pub unsafe fn block_prep(op: *const OpArg, bdp: *mut BlockDef, lnum: LineNr, is_
 /// becomes `endspaces` columns of padding, and a region that starts and ends
 /// inside the *same* character is `is_one_char` with no text at all.
 ///
-/// # Safety
-/// `bdp` must point to a live struct and `lnum` must be a line of the current
-/// buffer.
-pub unsafe fn charwise_block_prep(
+/// A corner on `lnum` must be a column of that line, its end included.
+fn charwise_block_prep(
     mut start: Pos,
     mut end: Pos,
-    bdp: *mut BlockDef,
+    bd: &mut BlockDef,
     lnum: LineNr,
     inclusive: bool,
 ) {
-    // SAFETY: the caller's promise -- `bdp` is live and `lnum` is a line of
-    // the current buffer, so `p` is a live NUL-terminated line of `plen`
-    // bytes and every index taken of it below is a column of that line.
-    let bdp = unsafe { &mut *bdp };
-    let p = ml_get(lnum);
-    let plen = ml_get_len(lnum);
+    let plen = Lines::current().line_len(lnum);
 
-    bdp.startspaces = 0;
-    bdp.endspaces = 0;
-    bdp.is_one_char = 0;
-    bdp.start_char_vcols = 0;
+    bd.startspaces = 0;
+    bd.endspaces = 0;
+    bd.is_one_char = 0;
+    bd.start_char_vcols = 0;
 
     let mut startcol: ColNr = 0;
     let mut endcol: ColNr = MAXCOL;
@@ -394,12 +374,11 @@ pub unsafe fn charwise_block_prep(
     if lnum == start.lnum {
         startcol = start.col;
         if op_virtual() {
-            let at = unsafe { PosRef::new(&raw mut start) };
-            let (cs, ce) = Win::current().vcol_span(at);
+            let (cs, _, ce) = getvcol(Win::current(), &mut start);
             if ce != cs && start.coladd > 0 {
                 // Part of a TAB is selected -- but do not double-count it.
-                bdp.start_char_vcols = ce - cs + 1;
-                bdp.startspaces = (bdp.start_char_vcols - start.coladd).max(0);
+                bd.start_char_vcols = ce - cs + 1;
+                bd.startspaces = (bd.start_char_vcols - start.coladd).max(0);
                 startcol += 1;
             }
         }
@@ -408,21 +387,20 @@ pub unsafe fn charwise_block_prep(
     if lnum == end.lnum {
         endcol = end.col;
         if op_virtual() {
-            let at = unsafe { PosRef::new(&raw mut end) };
-            let (cs, ce) = Win::current().vcol_span(at);
+            let (cs, _, ce) = getvcol(Win::current(), &mut end);
+            let mut lines = Lines::current();
+            let p = lines.line(lnum);
+            let at = usize::try_from(endcol).unwrap_or(0);
             // No padding for a double-width character: `endcol` is then on
             // the last byte of the character, not past it.
-            let mid_char = || unsafe { utf_head_off(p, p.offset(endcol as isize)) } == 0;
-            if unsafe { *p.offset(endcol as isize) } as c_int == NUL
-                || (cs + end.coladd < ce && mid_char())
-            {
+            if byte_at(p, at) == 0 || (cs + end.coladd < ce && head_off(p, at) == 0) {
                 if start.lnum == end.lnum && start.col == end.col {
                     // The whole region is inside one character.
-                    bdp.is_one_char = 1;
-                    bdp.startspaces = end.coladd - start.coladd + c_int::from(inclusive);
+                    bd.is_one_char = 1;
+                    bd.startspaces = end.coladd - start.coladd + c_int::from(inclusive);
                     endcol = startcol;
                 } else {
-                    bdp.endspaces = end.coladd + c_int::from(inclusive);
+                    bd.endspaces = end.coladd + c_int::from(inclusive);
                     endcol -= c_int::from(inclusive);
                 }
             }
@@ -432,27 +410,19 @@ pub unsafe fn charwise_block_prep(
     if endcol == MAXCOL {
         endcol = plen;
     }
-    bdp.textlen = if startcol > endcol || bdp.is_one_char != 0 {
+    bd.textlen = if startcol > endcol || bd.is_one_char != 0 {
         0
     } else {
         endcol - startcol + c_int::from(inclusive)
     };
-    bdp.textcol = startcol;
-    bdp.textstart = if startcol <= plen {
-        unsafe { p.offset(startcol as isize) }
-    } else {
-        p
-    };
+    bd.textcol = startcol;
 }
 
 /// [`block_prep`] of `op` on line `lnum` of the current buffer, for a caller
 /// that only reads the answer.
 pub(crate) fn block_def(op: &OpArg, lnum: LineNr) -> BlockDef {
     let mut bd = BlockDef::ZERO;
-    // SAFETY: `op` is borrowed for the call and only read, `bd` is this
-    // frame's local, and `ml_get` answers a line for any `lnum`, which is all
-    // `block_prep` reads it through.
-    unsafe { block_prep(op, &raw mut bd, lnum, false) };
+    block_prep(&mut bd, op, lnum, false);
     bd
 }
 
@@ -470,18 +440,7 @@ pub(crate) fn charwise_block_def(start: Pos, end: Pos, lnum: LineNr, inclusive: 
         ..pos
     };
     let mut bd = BlockDef::ZERO;
-    // SAFETY: `bd` is this frame's local, `ml_get` answers a line for any
-    // `lnum`, and a corner on that line is a column of it, terminator
-    // included -- the only columns `charwise_block_prep` reads at.
-    unsafe {
-        charwise_block_prep(
-            onto_line(start),
-            onto_line(end),
-            &raw mut bd,
-            lnum,
-            inclusive,
-        )
-    };
+    charwise_block_prep(onto_line(start), onto_line(end), &mut bd, lnum, inclusive);
     bd
 }
 
@@ -494,18 +453,19 @@ pub(crate) fn charwise_block_def(start: Pos, end: Pos, lnum: LineNr, inclusive: 
 /// `initial` is false when replaying, and asks for the 'selection' adjustment
 /// to be skipped. `redo_visual_vcol` is the recorded width a `.` replay uses
 /// instead of measuring the selection again.
-pub(crate) fn get_op_vcol(mut op: Op, redo_visual_vcol: ColNr, initial: bool) {
+pub(crate) fn get_op_vcol(op: &mut OpArg, redo_visual_vcol: ColNr, initial: bool) {
     if !visual_mode().is_block() || (!initial && op.end.col < Win::current().w_view_width) {
         return;
     }
 
     op.motion_type = kMTBlockWise;
     // Do not let the end land on a trail byte.
-    Win::current().buffer().snap_to_char(op.end());
+    op.end = snap_pos_to_char(Win::current().buffer(), op.end);
 
-    (op.start_vcol, op.end_vcol) = Win::current().virtual_vcol_span(op.start());
+    let (start, _, end) = getvvcol(Win::current(), &mut op.start);
+    (op.start_vcol, op.end_vcol) = (start, end);
     if !redo_VIsual_busy.get() {
-        let (start, end) = Win::current().virtual_vcol_span(op.end());
+        let (start, _, end) = getvvcol(Win::current(), &mut op.end);
         op.start_vcol = op.start_vcol.min(start);
         if end > op.end_vcol {
             if initial && sel_exclusive() && start >= 1 && start > op.end_vcol {
@@ -521,9 +481,8 @@ pub(crate) fn get_op_vcol(mut op: Op, redo_visual_vcol: ColNr, initial: bool) {
         Win::current().w_cursor.col = MAXCOL;
         op.end_vcol = 0;
         Win::current().w_cursor.lnum = op.start.lnum;
-        let cursor = Win::current().cursor();
         while Win::current().w_cursor.lnum <= op.end.lnum {
-            let (_, end) = Win::current().virtual_vcol_span(cursor);
+            let (_, end) = Win::current().virtual_vcol_span(Win::current().cursor());
             op.end_vcol = op.end_vcol.max(end);
             Win::current().w_cursor.lnum += 1;
         }

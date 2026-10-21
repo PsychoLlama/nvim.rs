@@ -74,9 +74,22 @@ pub(crate) fn nv_search(cmd_arg: &mut CmdArg) {
         SEARCH_MARK as c_int
     };
     // A copy: the command keeps its buffer for the redo.
-    // SAFETY: the NUL-terminated pattern just read.
-    let pat = unsafe { cstr::bytes_at(cmd_arg.searchbuf) }.to_vec();
+    let pat = cmd_arg.search_text().to_vec();
     normal_search(cmd_arg, cmd_arg.cmdchar, &pat, mark, None);
+}
+
+impl CmdArg {
+    /// The pattern `/` or `?` read, which the command keeps for its redo;
+    /// empty before one is read.
+    pub(crate) fn search_text(&self) -> &[u8] {
+        if self.searchbuf.is_null() {
+            return &[];
+        }
+        // SAFETY: `nv_search` stores the NUL-terminated string `getcmdline`
+        // answered, which the frame owns until `normal_finish_command` frees
+        // it with the command.
+        unsafe { cstr::bytes_at(self.searchbuf) }
+    }
 }
 
 /// `n` and `N`: search again for the last pattern.
