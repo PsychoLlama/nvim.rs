@@ -259,6 +259,10 @@ pub(crate) fn normal_enter(cmdwin: bool, noexmode: bool) {
 }
 
 /// Set up `s.ca` for the command about to be read.
+///
+/// `inline`: called once per key from `normal_cmd`, and out of line the pair
+/// cost inbench `typeahead` 3-6 % of its cycles at flat instructions.
+#[inline]
 pub(crate) fn normal_prepare(ns: &mut NormalState) {
     ns.ca.reset();
     ns.ca.opcount = opcount.get();
@@ -619,6 +623,7 @@ pub(crate) fn set_vcount_ca(cmd_arg: &CmdArg, set_prevcount: bool) {
 /// carries what one command leaves pending into the next.
 ///
 /// This is what `:normal` and the operator-pending machinery re-enter through.
+#[inline]
 pub(crate) fn normal_cmd(op: Op, toplevel: bool) {
     let mut s = new_state(op);
     s.toplevel = toplevel;
