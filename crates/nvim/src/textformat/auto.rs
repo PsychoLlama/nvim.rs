@@ -6,8 +6,7 @@
 //! part-typed word still ends a paragraph is `did_add_space`, and
 //! [`check_auto_format`] is what takes it away again.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -23,10 +22,10 @@ use core::ffi::c_int;
 
 use super::*;
 use crate::change::{del_char, get_leader_len};
-use crate::cstr;
+use crate::cstr::byte_at;
 use crate::cursor::{
     check_cursor, check_cursor_col, coladvance, dec_cursor, gchar_cursor, get_cursor_line_len,
-    get_cursor_line_ptr, inc_cursor,
+    inc_cursor,
 };
 use crate::global_cell::GlobalCell;
 use crate::memline::{Lines, ml_replace_owned};
@@ -57,10 +56,14 @@ pub fn auto_format(trailblank: bool, prev_line: bool) {
     }
 
     let pos = Win::current().w_cursor;
-    let old = get_cursor_line_ptr();
 
     // May remove an added space.
     check_auto_format(false);
+    // The line as that left it. Upstream holds a pointer taken before the
+    // space goes, which reads the same bytes whenever the line is the
+    // cache's own allocation -- the space is deleted in place then -- and
+    // that is the case right after `auto_format` added it.
+    let old = Lines::current().line_copy(pos.lnum);
 
     // Don't format in Insert mode when the cursor is on a trailing blank:
     // the user may be about to type ordinary text. Skip it too when `1`
@@ -68,7 +71,7 @@ pub fn auto_format(trailblank: bool, prev_line: bool) {
     // cursor -- otherwise the line is broken, and typing another
     // non-white character does not join it back together.
     let wasatend = pos.col == get_cursor_line_len();
-    if c_int::from(unsafe { *old }) != NUL && !trailblank && wasatend {
+    if !old.is_empty() && !trailblank && wasatend {
         dec_cursor();
         let mut cc = gchar_cursor();
         if !whitechar(cc)
@@ -90,17 +93,16 @@ pub fn auto_format(trailblank: bool, prev_line: bool) {
     // `OPENLINE_DELSPACES` would eat that space at the break. Deferring
     // means the next non-white character lands next to the space, which
     // protects it, and the keystroke after that reformats properly.
-    if c_int::from(unsafe { *old }) != NUL
-        && !trailblank
-        && !wasatend
-        && pos.col > 0
-        && State.get() & MODE_INSERT != 0
+    if !old.is_empty() && !trailblank && !wasatend && pos.col > 0 && State.get() & MODE_INSERT != 0
     {
-        let line = get_cursor_line_ptr();
+        let before = byte_at(
+            Lines::current().line(pos.lnum),
+            usize::try_from(pos.col - 1).unwrap_or(0),
+        );
         // Note the argument: `WHITECHAR` tests `ascii_iswhite` on what it
         // is given but the composing check at the *cursor*, which is one
         // byte further along than the byte named here.
-        if unsafe { whitechar(c_int::from(*line.offset(pos.col as isize - 1))) } {
+        if whitechar(c_int::from(before)) {
             Win::current().w_cursor = pos;
             return;
         }
@@ -109,8 +111,7 @@ pub fn auto_format(trailblank: bool, prev_line: bool) {
     // With `c` in 'formatoptions' and `t` missing, only comments format.
     if has_format_option(FoFlag::WRAP_COMS)
         && !has_format_option(FoFlag::WRAP)
-        // SAFETY: the cursor line read above, which nothing has replaced.
-        && get_leader_len(unsafe { cstr::bytes_at(old) }, false, true).0 == 0
+        && get_leader_len(&old, false, true).0 == 0
     {
         return;
     }

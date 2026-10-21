@@ -1,12 +1,12 @@
 count	callee	no_raw	defs	def
 170	dispatch	0	1	crates/nvim/src/lua/api_wrappers/mod.rs
-114	xfree	0	1	crates/nvim/src/memory/mod.rs
+113	xfree	0	1	crates/nvim/src/memory/mod.rs
 86	nlua_pop_string	0	1	crates/nvim/src/lua/converter/pop.rs
 79	nlua_pop_handle	0	1	crates/nvim/src/lua/converter/pop.rs
 78	CStr::from_ptr	0	1	crates/nvim/src/marktree/node.rs
 70	.add	0	0	
-67	bytes_at	0	1	crates/nvim/src/cstr.rs
 67	from_raw_parts	0	0	
+65	bytes_at	0	1	crates/nvim/src/cstr.rs
 64	at	0	2	
 62	nlua_pop_integer	0	1	crates/nvim/src/lua/converter/pop.rs
 60	.offset	0	0	
@@ -39,9 +39,9 @@ count	callee	no_raw	defs	def
 18	xmalloc	0	1	crates/nvim/src/memory/mod.rs
 17	Reader::new	0	1	crates/nvim/src/event/rstream.rs
 17	nlua_pop_object	0	1	crates/nvim/src/lua/converter/pop_object.rs
-17	utf_ptr2char	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 16	Ui::new	0	39	
 16	XString::from_raw	0	1	crates/nvim/src/memory/xstring.rs
+16	utf_ptr2char	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 14	NormalStateRef::new	0	1	crates/nvim/src/normal/state.rs
 14	abort	0	0	
 14	slice_at	0	1	crates/nvim/src/cstr.rs
@@ -135,7 +135,6 @@ count	callee	no_raw	defs	def
 6	rstream_start	0	1	crates/nvim/src/event/rstream.rs
 6	strequal	0	1	crates/nvim/src/memory/mod.rs
 6	utfc_next	1	1	crates/nvim/src/mbyte/utf8/mod.rs
-6	xstrnsave	0	1	crates/nvim/src/strings/raw.rs
 5	.advance_color_col	1	1	crates/nvim/src/drawline/state.rs
 5	.next_arg::<::core::ffi::c_ulong>	0	0	
 5	.write	0	0	
@@ -172,6 +171,7 @@ count	callee	no_raw	defs	def
 5	vim_fgets	0	1	crates/nvim/src/fileio/legacy_stream.rs
 5	vterm_scroll_rect	0	1	crates/nvim/src/vterm/vterm.rs
 5	wstream_release_wbuffer	0	1	crates/nvim/src/event/wstream.rs
+5	xstrnsave	0	1	crates/nvim/src/strings/raw.rs
 4	.copy_from	0	0	
 4	.draw_col_buf	0	1	crates/nvim/src/drawline/columns.rs
 4	Cls::new	0	39	
@@ -1095,7 +1095,6 @@ count	callee	no_raw	defs	def
 1	vterm_state_set_unrecognised_fallbacks	0	1	crates/nvim/src/vterm/state/entry.rs
 1	waitpid	0	0	
 1	watcher_addr	0	1	crates/nvim/src/msgpack_rpc/server.rs
-1	whitechar	0	0	
 1	win_update_cursorline	0	1	crates/nvim/src/drawscreen/mod.rs
 1	word_matches	0	1	crates/nvim/src/indent_c/keys.rs
 1	write_bytes	0	0	

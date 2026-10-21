@@ -14,18 +14,17 @@
 //! [`has_format_option`] (which every one of those files asks) and
 //! [`comp_textwidth`] (the margin they are all measured against).
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
-use core::ffi::{c_int, c_uint, c_void};
+use core::ffi::{c_int, c_uint};
 
 use crate::ascii::ascii_iswhite;
-use crate::cursor::get_cursor_pos_ptr;
-use crate::mbyte::{utf_iscomposing_first, utf_ptr2char};
+use crate::mbyte::{char_at, utf_iscomposing_first};
+use crate::memline::Lines;
 use crate::option::vars::p_paste;
 use crate::optionstr::OptStringRef;
 use crate::types::FoFlag;
@@ -51,7 +50,6 @@ pub const OPENLINE_DO_COM: c_uint = 2;
 pub const OPENLINE_DELSPACES: c_uint = 1;
 pub const INDENT_SET: c_uint = 1;
 pub const SIN_CHANGED: c_uint = 1;
-pub const NULL: *mut c_void = ::core::ptr::null_mut::<c_void>();
 
 // The 'formatoptions' flag letters this family reads. Each is the option's
 // own spelling, so a flag test is `has_format_option(FoFlag::WRAP)`.
@@ -80,9 +78,17 @@ pub(crate) fn has_format_option(x: FoFlag) -> bool {
 /// byte *after* the cursor -- so a caller passing `line[col - 1]` is asking
 /// about two different characters at once. Upstream is a macro, and every
 /// call site inherits that.
+///
+/// Upstream reads the byte after the cursor even when the cursor is on the
+/// line's terminator; past the end reads as no character here.
 pub(crate) fn whitechar(cc: c_int) -> bool {
-    ascii_iswhite(cc)
-        && !utf_iscomposing_first(unsafe { utf_ptr2char(get_cursor_pos_ptr().add(1)) })
+    ascii_iswhite(cc) && {
+        let cursor = Win::current().w_cursor;
+        let mut lines = Lines::current();
+        let line = lines.line(cursor.lnum);
+        let after = (usize::try_from(cursor.col).unwrap_or(0) + 1).min(line.len());
+        !utf_iscomposing_first(char_at(&line[after..]))
+    }
 }
 
 /// The width to format to: 'textwidth' if set, else the window width less

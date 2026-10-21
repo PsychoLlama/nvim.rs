@@ -6,10 +6,8 @@
 //! come back here. Two questions per break, in order -- *where* may this line
 //! be broken ([`BreakSearch`]), and then what it takes to break it there.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::cstr;
 use crate::memline::Lines;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
@@ -17,16 +15,12 @@ use core::ffi::{c_char, c_int};
 use super::*;
 use crate::change::{get_leader_len, ins_bytes, ins_str, open_line};
 use crate::charset::char2cells;
-use crate::cursor::{
-    dec_cursor, gchar_cursor, get_cursor_line_len, get_cursor_pos_len, get_cursor_pos_ptr,
-    inc_cursor, pchar_cursor,
-};
+use crate::cursor::{dec_cursor, gchar_cursor, get_cursor_line_len, inc_cursor, pchar_cursor};
 use crate::drawscreen::{UPD_VALID, redraw_curbuf_later};
 use crate::edit::{backspace_until_column, get_nolist_virtcol, set_can_cindent, undisplay_dollar};
 use crate::getchar::state::got_int;
 use crate::indent::{change_indent, get_number_indent, set_indent};
 use crate::mbyte::{utf_allow_break, utf_allow_break_before};
-use crate::memory::xfree;
 use crate::r#move::update_topline;
 use crate::os::input::line_breakcheck;
 use crate::pos::MAXCOL;
@@ -35,8 +29,7 @@ use crate::state::VREPLACE_FLAG;
 use crate::state::mode::{
     Insstart, State, can_si, can_si_back, did_ai, did_si, old_indent, replace_offset,
 };
-use crate::strings::xstrnsave;
-use crate::types::{ColNr, INSCHAR_COM_LIST, INSCHAR_DO_COM, INSCHAR_FORMAT, NUL, size_t};
+use crate::types::{ColNr, INSCHAR_COM_LIST, INSCHAR_DO_COM, INSCHAR_FORMAT, NUL};
 
 /// What one step of the backwards search for a break column decided.
 ///
@@ -411,13 +404,19 @@ pub fn internal_format(
         startcol -= win.w_cursor.col as c_int;
         startcol = startcol.max(0);
 
-        let mut saved_text = ::core::ptr::null_mut::<c_char>();
+        let mut saved_text = Vec::new();
         if State.get() & VREPLACE_FLAG != 0 {
             // MODE_VREPLACE backspaces over the text being wrapped, so
-            // save a copy now to put on the next line.
-            saved_text = unsafe { xstrnsave(get_cursor_pos_ptr(), get_cursor_pos_len() as size_t) };
+            // save a copy now -- the `startcol` bytes from the cursor -- to
+            // put on the next line.
+            saved_text = {
+                let cursor = win.w_cursor;
+                let mut lines = Lines::current();
+                let line = lines.line(cursor.lnum);
+                let rest = &line[usize::try_from(cursor.col).unwrap_or(0).min(line.len())..];
+                rest[..usize::try_from(startcol).unwrap_or(0).min(rest.len())].to_vec()
+            };
             win.w_cursor.col = orig_col as ColNr;
-            unsafe { *saved_text.offset(startcol as isize) = NUL as c_char };
             if !fo_white_par {
                 backspace_until_column(foundcol);
             }
@@ -488,9 +487,7 @@ pub fn internal_format(
         if State.get() & VREPLACE_FLAG != 0 {
             // MODE_VREPLACE backspaced over the text being moved; put it
             // into the new line.
-            // SAFETY: the text `saved_text` holds, NUL-terminated.
-            ins_bytes(unsafe { cstr::bytes_at(saved_text) });
-            unsafe { xfree(saved_text as *mut ::core::ffi::c_void) };
+            ins_bytes(&saved_text);
         } else {
             // Keep the cursor off the NUL past the end: cindent may have
             // added or removed indent.

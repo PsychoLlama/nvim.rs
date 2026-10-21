@@ -282,10 +282,6 @@ statusline/	statusline/stl/mod.rs	1	28	1	19	deref:7 expr:2	str:2	str:1	CStr::fro
 statusline/	statusline/tabline.rs	1	8	1	6	compound:1	-	-	CStr::from_ptr:1 cstr_to_string:1 vim_snprintf:1 vim_strsize:1
 strings/	*	1	54	13	18	expr:7 compound:3 deref:3	str:18 pp_str:2	str:3	bytes_at:2 from_raw_parts_mut:2 .add:1 CStr::from_ptr:1 copy_nonoverlapping:1 from_raw_parts:1 strchr:1
 strings/	strings/raw.rs	1	54	13	18	expr:7 compound:3 deref:3	str:18 pp_str:2	str:3	bytes_at:2 from_raw_parts_mut:2 .add:1 CStr::from_ptr:1 copy_nonoverlapping:1 from_raw_parts:1 strchr:1
-textformat/	*	3	9	0	6	deref:3	-	-	bytes_at:2 utf_ptr2char:1 xfree:1 xstrnsave:1
-textformat/	textformat/auto.rs	1	4	0	2	deref:2	-	-	bytes_at:1
-textformat/	textformat/mod.rs	1	1	0	1	-	-	-	utf_ptr2char:1
-textformat/	textformat/wrap.rs	1	4	0	3	deref:1	-	-	bytes_at:1 xfree:1 xstrnsave:1
 ui/	*	4	53	8	30	deref:17 expr:3 ref:3	other:13 str:2 pp:1	other:2 str:1	cstr_to_string:3 api_free_luaref:2 from_raw_parts:2 .add:1 CStr::from_ptr:1 arena_mem_free:1 at:1 bytes_at:1
 ui/	ui/callbacks.rs	1	8	2	7	expr:1	str:2 other:1	-	api_free_luaref:2 CStr::from_ptr:1 from_raw_parts:1 nlua_call_ref_ctx:1 remote_ui_event:1
 ui/	ui/mod.rs	1	33	3	14	deref:15 ref:3 expr:1	other:5 pp:1	other:2 str:1	cstr_to_string:3 arena_mem_free:1 bytes_at:1 from_raw_parts:1 multiqueue_put_event:1 remote_ui_option_set:1 ui_comp_attach:1 ui_comp_detach:1
