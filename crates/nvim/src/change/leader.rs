@@ -407,3 +407,70 @@ pub fn get_last_leader_offset(line: &[u8]) -> (c_int, Option<ComFlags>) {
     }
     (result, found_flags)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{ComItem, blank_after, leader_match};
+
+    /// The items `take` copies out of `list`, as `(flags, leader, has_colon)`.
+    fn items(list: &[u8]) -> Vec<(Vec<u8>, Vec<u8>, bool)> {
+        let mut list = list;
+        let mut item = ComItem::new();
+        let mut out = Vec::new();
+        while !list.is_empty() {
+            let colon = item.take(&mut list);
+            out.push((item.flags().to_vec(), item.leader().to_vec(), colon));
+        }
+        out
+    }
+
+    #[test]
+    fn an_item_splits_at_its_first_colon() {
+        let got = items(b"s1:/*,mb:*,ex:*/, ://,b:#,noflags,x:a:b");
+        let want: Vec<(&[u8], &[u8], bool)> = vec![
+            (b"s1", b"/*", true),
+            (b"mb", b"*", true),
+            (b"ex", b"*/", true),
+            // The blanks after a comma are the separator's.
+            (b"", b"//", true),
+            (b"b", b"#", true),
+            (b"noflags", b"", false),
+            (b"x", b"a:b", true),
+        ];
+        let want: Vec<_> = want
+            .into_iter()
+            .map(|(f, l, c)| (f.to_vec(), l.to_vec(), c))
+            .collect();
+        assert_eq!(got, want);
+    }
+
+    #[test]
+    fn an_item_keeps_an_escaped_comma_and_is_cut_to_the_buffer() {
+        assert_eq!(
+            items(br"b:a\,b,:c"),
+            vec![
+                (b"b".to_vec(), b"a,b".to_vec(), true),
+                (b"".to_vec(), b"c".to_vec(), true),
+            ]
+        );
+        // `copy_option_part` keeps COM_MAX_LEN - 1 bytes of an item.
+        let long = [b"f:".as_slice(), &[b'x'; 80]].concat();
+        let got = items(&long);
+        assert_eq!(got.len(), 1);
+        assert_eq!(got[0].1.len(), 49 - 2);
+    }
+
+    #[test]
+    fn a_leader_matches_exactly_or_after_any_white_space() {
+        assert_eq!(leader_match(b"// x", 0, b"//"), Some(2));
+        assert_eq!(leader_match(b"/ x", 0, b"//"), None);
+        // A leader opening with white space wants some in front of it.
+        assert_eq!(leader_match(b"\t\t* x", 2, b" *"), Some(1));
+        assert_eq!(leader_match(b"* x", 0, b" *"), None);
+        // The end of the line ends the comparison.
+        assert_eq!(leader_match(b"/", 0, b"//"), None);
+        assert!(blank_after(b"# x", 1));
+        assert!(blank_after(b"#", 1));
+        assert!(!blank_after(b"#x", 1));
+    }
+}
