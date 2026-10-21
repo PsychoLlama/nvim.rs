@@ -9,11 +9,10 @@
 //!
 //! Original: `src/nvim/move.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::cstr;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::c_int;
 
 use super::*;
 use crate::drawscreen::state::dollar_vcol;
@@ -22,12 +21,13 @@ use crate::eval::typval::{
     tv_check_for_number_arg, tv_dict_alloc_ret, tv_get_number, tv_get_number_chk,
 };
 use crate::eval::window::find_win_by_nr_or_id;
-use crate::mbyte::utf_head_off;
-use crate::mouse::vcol2col;
+use crate::mbyte::head_off;
+use crate::mouse::vcol_to_col;
 use crate::option::vars::p_ss;
+use crate::plines::getvcol;
 use crate::semsg;
-use crate::types::{ColNr, Dict, EvalFuncData, LineNr, Pos, TypVal, VarNumber, int64_t, size_t};
-use crate::winlayer::{PosRef, Win};
+use crate::types::{ColNr, EvalFuncData, LineNr, Pos, TypVal, VarNumber, int64_t};
+use crate::winlayer::Win;
 
 impl Win {
     /// Scroll the window's own grid by `lines`, so that a `w_skipcol` change
@@ -210,23 +210,13 @@ fn curs_columns_win(mut win: Win, may_scroll: bool) {
     win.w_valid |= WinValid::WCOL | WinValid::WROW | WinValid::VIRTCOL;
 }
 
-/// The screen position of the character at `pos` in window `window`. The answers
-/// are one-based, and zero when the character is not visible.
+/// The screen position of the character at `pos` in window `win`, as
+/// `(row, start col, cursor col, end col)`. The answers are one-based, and
+/// zero when the character is not visible.
 ///
-/// # Safety
-/// `window` must be a valid window, `pos` a position in its buffer, and the four
-/// out-params must be writable.
-pub unsafe fn textpos2screenpos(
-    window: Win,
-    pos: *mut Pos,
-    rowp: *mut c_int,
-    scolp: *mut c_int,
-    ccolp: *mut c_int,
-    ecolp: *mut c_int,
-    local: bool,
-) {
-    // SAFETY: the caller's promise.
-    let (win, pos) = unsafe { (window, PosRef::new(pos)) };
+/// `pos` is written back: the column walk clamps a column past the end of
+/// the line, as upstream's did through its pointer.
+pub fn textpos2screenpos(win: Win, pos: &mut Pos, local: bool) -> (c_int, c_int, c_int, c_int) {
     let (mut scol, mut ccol, mut ecol): (ColNr, ColNr, ColNr) = (0, 0, 0);
     let mut coloff: ColNr = 0;
     let mut visible_row = false;
@@ -272,7 +262,7 @@ pub unsafe fn textpos2screenpos(
                 + off;
         } else {
             debug_assert!(lnum == pos.lnum, "lnum == pos->lnum");
-            (scol, ccol, ecol) = win.vcol_triple(pos);
+            (scol, ccol, ecol) = getvcol(win, pos);
 
             // As in `validate_cursor_col()`.
             let mut col = scol + off;
@@ -315,25 +305,17 @@ pub unsafe fn textpos2screenpos(
             }
         }
     }
-    // SAFETY: the caller's promise about the out-params.
-    unsafe {
-        *rowp = row;
-        *scolp = scol + coloff;
-        *ccolp = ccol + coloff;
-        *ecolp = ecol + coloff;
-    }
+    (row, scol + coloff, ccol + coloff, ecol + coloff)
 }
 
 /// `screenpos({winid}, {lnum}, {col})`.
 pub fn f_screenpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the evaluator's calling convention.
-    let (dict, wp) = unsafe { (alloc_dict_ret(result), find_win_by_nr_or_id(&args[0])) };
-    let Some(wp) = wp else {
+    tv_dict_alloc_ret(result);
+    let Some(wp) = find_win_by_nr_or_id(&args[0]) else {
         return;
     };
-    // SAFETY: the evaluator's calling convention: three arguments, checked
-    // by the builtin table.
-    let (lnum, col) = unsafe { (arg_number(args, 1), arg_number(args, 2)) };
+    // The builtin table checks for three arguments.
+    let (lnum, col) = (tv_get_number(&args[1]), tv_get_number(&args[2]));
     let mut pos = Pos {
         lnum: lnum as LineNr,
         col: (col as ColNr - 1).max(0),
@@ -343,61 +325,26 @@ pub fn f_screenpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         semsg!("E966: Invalid line number: {}", pos.lnum);
         return;
     }
-    let (mut row, mut scol, mut ccol, mut ecol) = (0, 0, 0, 0);
-    let (r, s, c, e) = (&raw mut row, &raw mut scol, &raw mut ccol, &raw mut ecol);
-    // SAFETY: a live window, and five out-params of this frame.
-    unsafe { textpos2screenpos(wp, &raw mut pos, r, s, c, e, false) };
+    let (row, scol, ccol, ecol) = textpos2screenpos(wp, &mut pos, false);
+    let dict = result.dict_mut().expect("just allocated");
     for (name, value) in [
         (c"row", row),
         (c"col", scol),
         (c"curscol", ccol),
         (c"endcol", ecol),
     ] {
-        // SAFETY: a live Dict and a NUL-terminated key.
-        unsafe { dict_add_nr(dict, name, value) };
+        let _ = dict.add_number(name.to_bytes(), value as VarNumber);
     }
-}
-
-/// `tv_dict_alloc_ret`, answering the Dict it installed.
-///
-/// # Safety
-/// `result` must be a writable return value.
-unsafe fn alloc_dict_ret(result: &mut TypVal) -> *mut Dict {
-    tv_dict_alloc_ret(result);
-    result.dict_or_null()
-}
-
-/// The `n`th argument of a builtin, as a number.
-///
-/// # Safety
-/// `args` must hold at least `n + 1` values.
-unsafe fn arg_number(args: &[TypVal], n: isize) -> VarNumber {
-    tv_get_number(&args[n as usize])
-}
-
-/// `tv_dict_add_nr` with the key spelled as a C string literal.
-///
-/// # Safety
-/// `dict` must be a live Dict.
-unsafe fn dict_add_nr(dict: *mut Dict, key: &CStr, value: c_int) {
-    let bytes = key.to_bytes();
-    let _ = unsafe {
-        (*dict).add_number(
-            cstr::slice_at(bytes.as_ptr().cast::<c_char>(), bytes.len() as size_t),
-            value as VarNumber,
-        )
-    };
 }
 
 /// The character column that shows at virtual (screen) column `vcol`. The
 /// first column is one; for a multibyte character the column of its first
 /// byte is answered.
 fn virtcol2col(win: Win, lnum: LineNr, vcol: c_int) -> c_int {
-    // SAFETY: a live window and a line of its buffer.
-    let offset = unsafe { vcol2col(win, lnum, vcol - 1, ::core::ptr::null_mut()) };
-    let line = win.buffer().line_raw(lnum);
-    // SAFETY: `vcol2col` answers a byte index within the line.
-    if unsafe { line.byte(offset) } != 0 {
+    let (offset, _) = vcol_to_col(win, lnum, vcol - 1);
+    let mut lines = win.buffer().lines();
+    let line = lines.line(lnum);
+    if cstr::byte_at(line, offset as usize) != 0 {
         return offset + 1;
     }
     if offset == 0 {
@@ -405,9 +352,7 @@ fn virtcol2col(win: Win, lnum: LineNr, vcol: c_int) -> c_int {
         return 0;
     }
     // Move back onto the first byte of the last character.
-    // SAFETY: `offset` is past the line's first byte and within it.
-    let head = unsafe { utf_head_off(line.raw(), line.raw().offset((offset - 1) as isize)) };
-    offset - head
+    offset - head_off(line, (offset - 1) as usize) as c_int
 }
 
 /// `virtcol2col({winid}, {lnum}, {col})`.

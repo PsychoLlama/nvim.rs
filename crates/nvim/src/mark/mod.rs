@@ -28,12 +28,11 @@
 use crate::ascii::{ascii_isdigit, ascii_islower, ascii_isupper};
 use crate::autocmd::{aucmd_defer, has_event};
 use crate::buffer::{buf_is_prompt, buflist_new, find_buf};
-use crate::charset::{ptr2cells, vim_isprintc};
+use crate::charset::{ptr2cells_at, vim_isprintc};
 use crate::cstr;
 use crate::ex_docmd::ex_msg;
 use crate::fold::has_folding;
-use crate::mbyte::{utf_head_off, utf_ptr2char};
-use crate::memline::{ml_get_buf, ml_get_buf_len};
+use crate::mbyte::{char_at, head_off};
 use crate::memory::{xfree, xstrlcpy};
 use crate::message::{e_markinval, e_marknotset, e_umark};
 use crate::r#move::set_topline;
@@ -631,34 +630,26 @@ pub fn set_last_cursor(win: Win) {
 /// If it points to a tail byte it is move backwards to the head byte.
 ///
 /// `buffer` — Buffer to adjust position in.
-/// `pos` — Position to adjust.
-///
-/// # Safety
-/// `buffer` must be a live buffer and `pos` must point at a live, writable
-/// position naming a line of it.
-pub unsafe fn mark_mb_adjustpos(buffer: Buf, pos: *mut Pos) {
-    // SAFETY: the caller promised a live position.
-    let mut adjusted = unsafe { *pos };
-    if adjusted.col <= 0 && adjusted.coladd <= 1 {
+/// `pos` — Position to adjust, naming a line of `buffer`.
+pub fn mark_mb_adjustpos(buffer: Buf, pos: &mut Pos) {
+    if pos.col <= 0 && pos.coladd <= 1 {
         return;
     }
-    // SAFETY: the caller promised a live buffer and a line of it.
-    let p = ml_get_buf(buffer, adjusted.lnum);
-    if unsafe { *p } == NUL_BYTE || ml_get_buf_len(buffer, adjusted.lnum) < adjusted.col {
-        adjusted.col = 0;
+    let mut lines = buffer.lines();
+    let line = lines.line(pos.lnum);
+    let col = usize::try_from(pos.col).unwrap_or(0);
+    let col = if line.is_empty() || line.len() < col {
+        0
     } else {
-        adjusted.col -= unsafe { utf_head_off(p, p.offset(adjusted.col as isize)) };
-    }
-    // A `coladd` of 1 on a printable wide character is the "one cell into
-    // it" position virtual editing produces; the head byte has no such
-    // offset, so it goes.
-    let at = unsafe { p.offset(adjusted.col as isize) };
-    if adjusted.coladd == 1
-        && c_int::from(unsafe { *at }) != TAB
-        && unsafe { vim_isprintc(utf_ptr2char(at)) }
-        && unsafe { ptr2cells(at) } > 1
+        col - head_off(line, col)
+    };
+    pos.col = ColNr::try_from(col).unwrap_or(ColNr::MAX);
+    let at = &line[col..];
+    if pos.coladd == 1
+        && c_int::from(cstr::byte_at(at, 0)) != TAB
+        && vim_isprintc(char_at(at))
+        && ptr2cells_at(at) > 1
     {
-        adjusted.coladd = 0;
+        pos.coladd = 0;
     }
-    unsafe { *pos = adjusted };
 }

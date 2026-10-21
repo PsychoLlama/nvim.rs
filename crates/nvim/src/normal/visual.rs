@@ -6,8 +6,7 @@
 //! covers, and `unadjust_for_sel` puts that back before anything reads the
 //! area again.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::ops::Op;
 use crate::strings::has_char;
@@ -662,33 +661,33 @@ pub(crate) fn n_start_visual_mode(c: c_int) {
 /// Doing it while a selection is up *swaps* the two, so `gv` twice comes back
 /// where it started.
 pub(crate) fn nv_gv_cmd(cmd_arg: &mut CmdArg) {
-    let vi = unsafe { &raw mut (*Buf::current_raw()).b_visual };
-    if unsafe { (*vi).vi_start.lnum } == 0
-        || unsafe { (*vi).vi_start.lnum } > Buf::current().b_ml.ml_line_count
-        || unsafe { (*vi).vi_end.lnum } == 0
+    let mut buf = Buf::current();
+    let last = buf.b_visual;
+    if last.vi_start.lnum == 0
+        || last.vi_start.lnum > buf.b_ml.ml_line_count
+        || last.vi_end.lnum == 0
     {
         beep_flush();
         return;
     }
 
-    let tpos;
+    let tpos = last.vi_end;
     if visual_active() {
+        // The selection that is up becomes the one `gv` comes back to.
         let mode = visual_mode();
-        set_visual_mode(VisualMode::from_raw(unsafe { (*vi).vi_mode }));
-        unsafe { (*vi).vi_mode = mode.raw() };
-        Buf::current().b_visual_mode_eval = mode.raw();
+        set_visual_mode(VisualMode::from_raw(last.vi_mode));
+        buf.b_visual.vi_mode = mode.raw();
+        buf.b_visual_mode_eval = mode.raw();
         let curswant = Win::current().w_curswant;
-        Win::current().w_curswant = unsafe { (*vi).vi_curswant };
-        unsafe { (*vi).vi_curswant = curswant };
-        tpos = unsafe { (*vi).vi_end };
-        unsafe { (*vi).vi_end = Win::current().w_cursor };
-        Win::current().w_cursor = unsafe { (*vi).vi_start };
-        unsafe { (*vi).vi_start = visual_anchor() };
+        Win::current().w_curswant = last.vi_curswant;
+        buf.b_visual.vi_curswant = curswant;
+        buf.b_visual.vi_end = Win::current().w_cursor;
+        Win::current().w_cursor = last.vi_start;
+        buf.b_visual.vi_start = visual_anchor();
     } else {
-        set_visual_mode(VisualMode::from_raw(unsafe { (*vi).vi_mode }));
-        Win::current().w_curswant = unsafe { (*vi).vi_curswant };
-        tpos = unsafe { (*vi).vi_end };
-        Win::current().w_cursor = unsafe { (*vi).vi_start };
+        set_visual_mode(VisualMode::from_raw(last.vi_mode));
+        Win::current().w_curswant = last.vi_curswant;
+        Win::current().w_cursor = last.vi_start;
     }
 
     set_visual_active(true);
@@ -748,9 +747,7 @@ pub(crate) fn unadjust_for_sel_inner(pos: &mut Pos) -> bool {
         pos.coladd -= 1;
     } else if pos.col > 0 {
         pos.col -= 1;
-        // SAFETY: `curbuf` is set from startup to exit, and `pos` is lent for
-        // the length of the call.
-        unsafe { mark_mb_adjustpos(Buf::current(), pos) };
+        mark_mb_adjustpos(Buf::current(), pos);
         // Inside a TAB, stepping back a byte means stepping to the last
         // screen column the TAB covers.
         // SAFETY: `curwin` is set from startup to exit.

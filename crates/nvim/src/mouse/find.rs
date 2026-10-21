@@ -244,25 +244,3 @@ pub(crate) fn vcol_to_col(win: Win, lnum: LineNr, vcol: ColNr) -> (ColNr, ColNr)
     }
     (line.index_of(ci), vcol - cur_vcol)
 }
-
-// ---------------------------------------------------------------------------
-// The raw entry point the rest of the editor still calls
-
-/// [`vcol_to_col`], writing the leftover columns through `coladdp`.
-///
-/// # Safety
-/// `window` must be a live window and `lnum` a line of the buffer it shows;
-/// `coladdp` must be writable or null.
-pub(crate) unsafe fn vcol2col(
-    window: Win,
-    lnum: LineNr,
-    vcol: ColNr,
-    coladdp: *mut ColNr,
-) -> ColNr {
-    let (col, coladd) = vcol_to_col(window, lnum, vcol);
-    if !coladdp.is_null() {
-        // SAFETY: as above.
-        unsafe { *coladdp = coladd };
-    }
-    col
-}

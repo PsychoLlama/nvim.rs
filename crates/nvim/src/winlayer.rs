@@ -772,9 +772,8 @@ impl Buf {
 
     /// Step `pos` back off a trail byte, so it names a whole character.
     #[inline(always)]
-    pub fn snap_to_char(self, pos: PosRef) {
-        // SAFETY: a live buffer and a live position in it.
-        unsafe { mark_mb_adjustpos(self, pos.0) };
+    pub fn snap_to_char(self, mut pos: PosRef) {
+        mark_mb_adjustpos(self, &mut pos);
     }
 }
 

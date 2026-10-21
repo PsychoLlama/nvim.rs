@@ -14,7 +14,7 @@
 
 #![forbid(unsafe_code)]
 
-use crate::cursor::getvpos_of;
+use crate::cursor::getvpos;
 use crate::mbyte::head_off;
 use crate::memory::XString;
 use crate::winlayer::{Buf, Win};
@@ -67,7 +67,7 @@ impl Put {
                         col: 0,
                         coladd: 0,
                     };
-                    let found = getvpos_of(Win::current(), &mut pos, vcol);
+                    let found = getvpos(Win::current(), &mut pos, vcol);
                     col = if found { pos.col } else { MAXCOL };
                 }
                 // A Visual line too short to reach the column is skipped

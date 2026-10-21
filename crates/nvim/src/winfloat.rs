@@ -269,11 +269,7 @@ fn adjust_for_grid(win: &mut Win, row: &mut c_int, col: &mut c_int) {
     grid_adjust(win.w_grid, row, col);
 }
 fn screen_pos_of(win: Win, pos: &mut Pos) -> (c_int, c_int) {
-    let (mut row, mut scol, mut ccol, mut ecol) = (0, 0, 0, 0);
-    let (r, s, c, e) = (&raw mut row, &raw mut scol, &raw mut ccol, &raw mut ecol);
-    // SAFETY: a live window, a position in the buffer it shows, and four
-    // locals for the answers.
-    unsafe { textpos2screenpos(win, pos, r, s, c, e, true) };
+    let (row, scol, _, _) = textpos2screenpos(win, pos, true);
     (row, scol)
 }
 fn create_scratch_buffer() -> Result<BufferHandle, Error> {

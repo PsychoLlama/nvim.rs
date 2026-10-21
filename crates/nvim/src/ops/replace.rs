@@ -21,7 +21,7 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
-use crate::cursor::getvpos_of;
+use crate::cursor::getvpos;
 use crate::ex_docmd::cmdmod_has;
 use crate::mbyte::{c_cluster_len, encode_char};
 use crate::types::MB_MAXCHAR;
@@ -152,7 +152,7 @@ fn replace_block_line(op: &mut OpArg, bd: &mut BlockDef, c: c_int, had_ctrl_v_cr
             col: 0,
             coladd: 0,
         };
-        getvpos_of(Win::current(), &mut vpos, op.start_vcol);
+        getvpos(Win::current(), &mut vpos, op.start_vcol);
         bd.startspaces += vpos.coladd;
     }
 
@@ -288,7 +288,7 @@ fn replace_chars(op: &mut OpArg, c: c_int) {
                     }
                     coladvance_force(getviscol());
                     if Win::current().w_cursor.lnum == op.end.lnum {
-                        getvpos_of(Win::current(), &mut op.end, end_vcol);
+                        getvpos(Win::current(), &mut op.end, end_vcol);
                     }
                 }
                 // With `coladd` set the cursor may now be just past a TAB.

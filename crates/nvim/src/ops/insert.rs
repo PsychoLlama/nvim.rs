@@ -31,7 +31,7 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::{c_int, c_uint};
 
 use super::*;
-use crate::cursor::getvpos_of;
+use crate::cursor::getvpos;
 use crate::types::NUL;
 
 /// The first line, measured just before Insert mode runs.
@@ -404,7 +404,7 @@ fn replay_change(op: &OpArg, bd: &mut BlockDef, mut pre_textlen: c_int, pre_inde
                 coladd: 0,
             };
             if bd.is_short != 0 {
-                getvpos_of(Win::current(), &mut vpos, op.start_vcol);
+                getvpos(Win::current(), &mut vpos, op.start_vcol);
             }
 
             // Up to the block's column, then the pad, then the text, then
