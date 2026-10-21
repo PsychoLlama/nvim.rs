@@ -32,7 +32,7 @@ use crate::charset::buf_init_chartab;
 use crate::fileio::{Loaded, ReadFlags, prep_exarg, readfile_named};
 use crate::getchar::state::got_int;
 use crate::help::get_local_additions;
-use crate::indent_c::parse_cino_for;
+use crate::indent_c::parse_cino;
 use crate::memfile::MfDirty;
 use crate::memline::ml_open;
 use crate::r#move::WinValid;
@@ -97,7 +97,7 @@ fn init_chartab(buffer: Buf) {
 }
 
 fn parse_cindent_options(buffer: Buf) {
-    parse_cino_for(buffer);
+    parse_cino(buffer);
 }
 
 /// Populate `*local-additions*` in `help.txt`.

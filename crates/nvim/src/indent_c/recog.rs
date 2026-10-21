@@ -29,16 +29,14 @@
 //! | `cin_ends_in` | [`ends_in`] |
 //! | `cin_isterminated` | [`terminator`] |
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::cstr;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
 use crate::option::next_option_part;
-use crate::optionstr::OptString;
+use crate::optionstr::OptStringRef;
 
 /// Whether `line` starts with a word from 'cinwords' -- `if`, `else`,
 /// `while`, `do`, `for`, `switch` by default.
@@ -52,8 +50,8 @@ pub fn starts_with_cinword(line: &[u8]) -> bool {
         .position(|&b| !ascii_iswhite(c_int::from(b)))
         .unwrap_or(line.len());
 
-    // SAFETY: 'cinwords' is a NUL-terminated option string of this buffer.
-    let words = unsafe { cstr::bytes_at(Buf::current().b_p_cinw.value_ptr()) };
+    let buf = Buf::current();
+    let words = buf.b_p_cinw.bytes();
     let mut rest = words;
     let mut word = Vec::with_capacity(words.len());
     while !rest.is_empty() {
@@ -174,10 +172,8 @@ fn is_option_label(line: &[u8], at: usize, option: &[u8]) -> bool {
 /// Whether `line[at..]` is a scope declaration label named by
 /// 'cinscopedecls' -- `public`, `protected`, `private` by default.
 pub(crate) fn is_scope_decl(line: &[u8], at: usize) -> bool {
-    // SAFETY: 'cinscopedecls' is a NUL-terminated option string of this
-    // buffer, and `is_option_label` only reads the bytes it is handed.
-    let decls = unsafe { cstr::bytes_at(Buf::current().b_p_cinsd.value_ptr()) };
-    is_option_label(line, at, decls)
+    let buf = Buf::current();
+    is_option_label(line, at, buf.b_p_cinsd.bytes())
 }
 
 /// Whether `line[at..]` starts with `word` followed by a non-identifier

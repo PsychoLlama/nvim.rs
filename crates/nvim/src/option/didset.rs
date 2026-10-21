@@ -38,7 +38,7 @@ use crate::fold::{
 use crate::global_cell::GlobalCell;
 use crate::guard::Depth;
 use crate::highlight::hl_invalidate_blends;
-use crate::indent_c::parse_cino_for;
+use crate::indent_c::parse_cino;
 use crate::memfile::mf_close_file;
 use crate::memline::{ml_open_file, ml_open_files};
 use crate::message::e_invarg;
@@ -508,7 +508,7 @@ pub(crate) fn did_set_shiftwidth_tabstop(args: &mut OptSet) -> Result<(), OptErr
     // C indent options too.
     let own_sw = OptSlot::from(Local::Buf(f.buf, field!(Buffer, b_p_sw)));
     if f.varp == own_sw || f.buf.b_p_sw == 0 {
-        parse_cino_for(f.buf);
+        parse_cino(f.buf);
     }
     Ok(())
 }

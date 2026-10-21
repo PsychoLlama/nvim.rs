@@ -21,27 +21,22 @@
 //! | `KEY_*` | the pseudo-keys `in_cinkeys` is asked about that are not typed characters |
 //! | `CppBaseclassCache` | one line's `in_baseclass_list` answer, cached across the scan |
 
-#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unsafe_code)]
 
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::skip;
-use crate::charset::{
-    getdigits_int, getwhitecols_curline, vim_is_ident_char, vim_iswordc, vim_iswordp, vim_strsize,
-};
-use crate::cursor::{get_cursor_line_ptr, get_cursor_pos_ptr};
+use crate::charset::{getwhitecols_curline, vim_is_ident_char, vim_iswordc};
 use crate::eval::typval::tv_get_lnum;
 use crate::indent::{fixthisline, get_indent, get_indent_lnum, get_sw_value};
 use crate::keycodes::special_key_code;
-use crate::mbyte::{cluster_len, mb_prevptr, mb_strnicmp};
+use crate::mbyte::cluster_len;
 use crate::memline::Lines;
 use crate::option::vars::p_paste;
-use crate::option::{copy_option_part, skip_to_option_part};
 use crate::pos::{MAXCOL, MAXLNUM, lt};
 use crate::search::{check_linecomment, findmatchlimit, linewhite};
 use crate::state::MODE_INSERT;
 use crate::state::mode::State;
 use crate::types::{ColNr, EvalFuncData, LPos, LineNr, Pos, TypVal, VarNumber, int64_t};
-use ::libc::{atoi, tolower};
 
 // The carve of the transpiled module; see each child's docs.
 mod cino;

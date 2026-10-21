@@ -40,7 +40,7 @@ use super::{
 };
 
 use crate::state::MODE_TERMINAL;
-pub(crate) use crate::strings::{copy_option_part, skip_to_option_part};
+pub(crate) use crate::strings::copy_option_part;
 use crate::winlayer::Win;
 
 /// 'equalprg', local where set.

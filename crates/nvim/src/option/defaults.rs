@@ -27,7 +27,7 @@ use crate::buffer::buf_is_empty;
 use crate::change::save_file_ff;
 use crate::cursor_shape::{SHAPE_CURSOR, parse_shape_opt};
 use crate::drawscreen::comp_col;
-use crate::indent_c::parse_cino_for;
+use crate::indent_c::parse_cino;
 use crate::log::{LOGLVL_INF, logmsg};
 use crate::mapping::langmap_init;
 use crate::mbyte::enc_locale;
@@ -333,7 +333,7 @@ pub(crate) fn set_options_default(opt_flags: OptionSetFlags) {
     for wp in winlayer::tab_windows() {
         win_comp_scroll(wp);
     }
-    parse_cino_for(Buf::current());
+    parse_cino(Buf::current());
 }
 
 /// The second startup pass, once the screen size is known.

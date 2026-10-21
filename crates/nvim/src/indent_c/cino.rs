@@ -7,8 +7,7 @@
 //! inputs `get_c_indent` has besides the text -- so this function is the
 //! whole option surface of C indenting.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -18,17 +17,10 @@
 )]
 
 use super::*;
+use crate::charset::{atoi, getdigits_int_at};
 use crate::optionstr::OptString;
 use crate::winlayer::Buf;
-use core::ffi::{CStr, c_int};
-
-/// [`parse_cino`] for the option code, which reaches the buffer only
-/// through its handle and holds no reference into it across the call.
-pub(crate) fn parse_cino_for(buffer: Buf) {
-    // SAFETY: the callers -- the option callbacks and the startup pass --
-    // hold no borrow of the buffer while this runs.
-    unsafe { parse_cino(buffer) }
-}
+use core::ffi::c_int;
 
 /// Set every `b_ind_*` on `buffer` from its 'cinoptions'.
 ///
@@ -48,16 +40,12 @@ pub(crate) fn parse_cino_for(buffer: Buf) {
 /// here would hide one spelling of a tree-wide divergence and leave the rest.
 /// Phase 16 owns the `assert!`/`debug_assert!` sweep; `fmtsweep`'s s91 pins
 /// eleven aborted cases until then.
-///
-/// # Safety
-///
-/// Nothing else may hold the buffer while this runs: it takes a `&mut` to it
-/// for the whole of the parse.
-pub unsafe fn parse_cino(buffer: Buf) {
+pub fn parse_cino(buffer: Buf) {
     let sw = get_sw_value(buffer);
-    // SAFETY: the caller promises nothing else holds the buffer, and the
-    // option string walked below is a separate allocation.
-    let buffer = unsafe { &mut *buffer.raw() };
+    // A copy of the option: the fields below are written through the same
+    // handle the value would be borrowed from.
+    let cino = buffer.b_p_cino.get();
+    let mut buffer = buffer;
 
     // The defaults.  A `sw` here means the option tracks 'shiftwidth'
     // unless 'cinoptions' overrides it.
@@ -99,12 +87,7 @@ pub unsafe fn parse_cino(buffer: Buf) {
     buffer.b_ind_cpp_extern_c = 0; // E C++ `extern "C"`
     buffer.b_ind_pragma = 0; // P `#pragma` directives
 
-    // The option itself is walked by *index* into its bytes, so only the
-    // three steps that hand a pointer to C are unchecked.  Nothing below
-    // writes 'cinoptions', so the borrow stays good for the whole pass.
-    let start = buffer.b_p_cino.value_ptr();
-    // SAFETY: `b_p_cino` is a NUL-terminated option string.
-    let cino = unsafe { CStr::from_ptr(start) }.to_bytes();
+    let cino: &[u8] = &cino;
 
     let mut i = 0usize;
     while byte_at(cino, i) != 0 {
@@ -115,16 +98,9 @@ pub unsafe fn parse_cino(buffer: Buf) {
         }
 
         let digits_start = i;
-        // SAFETY: `i` is an index into `cino`, whose storage runs to the NUL
-        // one past its end, so `start.add(i)` points inside the option
-        // string; `getdigits_int` leaves `q` at or after where it started and
-        // no further than that NUL.
-        let mut n = int64_t::from(unsafe {
-            let mut q = start.add(i);
-            let digits = getdigits_int(&raw mut q, true, 0);
-            i = q.offset_from_unsigned(start);
-            digits
-        });
+        let digits;
+        (digits, i) = getdigits_int_at(cino, i, true, 0);
+        let mut n = int64_t::from(digits);
 
         // ".5s" is a fraction of a 'shiftwidth'.  Upstream declares
         // `fraction` outside the loop, but it is only ever read when
@@ -134,9 +110,7 @@ pub unsafe fn parse_cino(buffer: Buf) {
         let mut fraction = 0;
         if byte_at(cino, i) == b'.' {
             i += 1;
-            // SAFETY: as above -- `start.add(i)` is inside the option string,
-            // and `atoi` reads no further than its NUL.
-            fraction = unsafe { atoi(start.add(i)) };
+            fraction = atoi(&cino[i..]);
             while ascii_isdigit(c_int::from(byte_at(cino, i))) {
                 i += 1;
                 divider = if divider == 0 { 10 } else { divider * 10 };

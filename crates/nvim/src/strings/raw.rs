@@ -355,22 +355,6 @@ pub(crate) unsafe fn copy_option_part(
     len
 }
 
-/// Step over the separator and any padding between two parts of a
-/// comma-separated option; the pointer form of
-/// [`skip_option_separator`](crate::option::skip_option_separator).
-///
-/// # Safety
-///
-/// `p` must be NUL-terminated.
-pub(crate) unsafe fn skip_to_option_part(p: *const c_char) -> *mut c_char {
-    // SAFETY: the caller's string, and an offset inside it.
-    unsafe {
-        let text = cstr::bytes_at(p);
-        let rest = crate::option::skip_option_separator(text);
-        p.add(text.len() - rest.len()).cast_mut()
-    }
-}
-
 /// Copy at most `len` bytes of `string` into a fresh NUL-terminated block of
 /// `len + 1` bytes, zero-filling the remainder (`strncpy` semantics).
 ///

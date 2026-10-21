@@ -31,7 +31,7 @@ use crate::fold::{
 };
 use crate::guard::secure;
 use crate::indent::{TabStopArray, replace_tabstop_array, tabstop_set};
-use crate::indent_c::parse_cino_for;
+use crate::indent_c::parse_cino;
 use crate::mark::reset_fmark;
 use crate::mbyte::canonize;
 use crate::mbyte::{c_cluster_len, char_at};
@@ -176,7 +176,7 @@ pub fn did_set_buftype(args: &mut OptSet) -> Result<(), OptError> {
 }
 
 pub fn did_set_cinoptions(args: &mut OptSet) -> Result<(), OptError> {
-    parse_cino_for(args.os_buf);
+    parse_cino(args.os_buf);
     Ok(())
 }
 

@@ -175,11 +175,6 @@ highlight_group/	highlight_group/list.rs	1	2	0	2	-	-	-	at:1 vim_strsize:1
 highlight_group/	highlight_group/mod.rs	1	2	0	2	-	-	-	CStr::from_ptr:1 cstr_to_string:1
 highlight_group/	highlight_group/query.rs	1	4	0	4	-	-	-	hlattrs2dict:2 bytes_at:1 cstr_to_string:1
 highlight_group/	highlight_group/table.rs	1	1	1	1	-	str:1	-	CStr::from_ptr:1
-indent_c/	*	4	64	2	34	deref:16 compound:3 expr:3 ref:1	str:1	-	.add:16 bytes_at:3 .offset:1 .offset_from:1 .sub:1 CStr::from_ptr:1 atoi:1 copy_option_part:1
-indent_c/	indent_c/cino.rs	1	8	1	3	compound:1 ref:1	-	-	CStr::from_ptr:1 atoi:1
-indent_c/	indent_c/incomment.rs	1	11	0	7	deref:4	-	-	.add:4 copy_option_part:1 getdigits_int:1 vim_strsize:1
-indent_c/	indent_c/keys.rs	1	43	1	22	deref:12 expr:3 compound:2	str:1	-	.add:12 .offset:1 .offset_from:1 .sub:1 bytes_at:1 mb_prevptr:1 prefix_eq:1 skip_to_option_part:1
-indent_c/	indent_c/recog.rs	1	2	0	2	-	-	-	bytes_at:2
 input.rs	*	1	12	0	3	compound:3	-	-	at:1 getcmdline_prompt:1 utf_ptr2char:1
 input.rs	input.rs	1	12	0	3	compound:3	-	-	at:1 getcmdline_prompt:1 utf_ptr2char:1
 insexpand/	*	9	182	21	119	deref:27 expr:14 ref:7 compound:6	value:13 str:11 other:2 pp:2 pp_str:1	str:5 value:3	.offset:16 mb_get_class:5 .as_ref:4 vim_snprintf:4 xfree:4 bytes_at:3 vim_iswordp:3 String_0::from_owned_parts:2
@@ -275,8 +270,8 @@ statusline/	statusline/mod.rs	1	24	8	17	deref:5 expr:2	other:5 str:3	other:2 str
 statusline/	statusline/status.rs	1	3	0	0	compound:1	-	-	-
 statusline/	statusline/stl/mod.rs	1	28	1	19	deref:7 expr:2	str:2	str:1	CStr::from_ptr:5 vim_snprintf_safelen:2 atoi:1 fill_foldcolumn:1 from_raw_parts_mut:1 home_replace:1 ptr2cells:1 trans_characters:1
 statusline/	statusline/tabline.rs	1	8	1	6	compound:1	-	-	CStr::from_ptr:1 cstr_to_string:1 vim_snprintf:1 vim_strsize:1
-strings/	*	1	54	13	18	expr:7 compound:3 deref:3	str:18 pp_str:2	str:3	bytes_at:2 from_raw_parts_mut:2 .add:1 CStr::from_ptr:1 copy_nonoverlapping:1 from_raw_parts:1 strchr:1
-strings/	strings/raw.rs	1	54	13	18	expr:7 compound:3 deref:3	str:18 pp_str:2	str:3	bytes_at:2 from_raw_parts_mut:2 .add:1 CStr::from_ptr:1 copy_nonoverlapping:1 from_raw_parts:1 strchr:1
+strings/	*	1	51	12	18	expr:7 deref:3 compound:2	str:17 pp_str:2	str:2	bytes_at:2 from_raw_parts_mut:2 .add:1 CStr::from_ptr:1 copy_nonoverlapping:1 from_raw_parts:1 strchr:1
+strings/	strings/raw.rs	1	51	12	18	expr:7 deref:3 compound:2	str:17 pp_str:2	str:2	bytes_at:2 from_raw_parts_mut:2 .add:1 CStr::from_ptr:1 copy_nonoverlapping:1 from_raw_parts:1 strchr:1
 ui/	*	4	53	8	30	deref:17 expr:3 ref:3	other:13 str:2 pp:1	other:2 str:1	cstr_to_string:3 api_free_luaref:2 from_raw_parts:2 .add:1 CStr::from_ptr:1 arena_mem_free:1 at:1 bytes_at:1
 ui/	ui/callbacks.rs	1	8	2	7	expr:1	str:2 other:1	-	api_free_luaref:2 CStr::from_ptr:1 from_raw_parts:1 nlua_call_ref_ctx:1 remote_ui_event:1
 ui/	ui/mod.rs	1	33	3	14	deref:15 ref:3 expr:1	other:5 pp:1	other:2 str:1	cstr_to_string:3 arena_mem_free:1 bytes_at:1 from_raw_parts:1 multiqueue_put_event:1 remote_ui_option_set:1 ui_comp_attach:1 ui_comp_detach:1

@@ -8,8 +8,7 @@
 //! (how far from the opener, when there is nothing after it) and `C` (use `c`
 //! even when there *is* something after it).
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -19,9 +18,11 @@
 )]
 
 use super::*;
-use crate::optionstr::OptString;
+use crate::charset::{getdigits_int_at, strsize};
+use crate::option::split_option_part;
+use crate::optionstr::OptStringRef;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 /// How long a 'comments' leader part may be.
 const LEN: usize = COM_MAX_LEN as usize;
@@ -130,10 +131,8 @@ pub(crate) fn align_in_comment(line: &Line, comment: &mut Pos) -> c_int {
 /// opener, skip it" `continue`, so an abandoned item still suppresses the
 /// fallbacks in [`align_in_comment`].
 fn align_with_comment_leader(line: &Line, comment: &Pos, amount: &mut c_int) -> bool {
-    // A closure, not a free function: two call sites in one body.
-    // SAFETY: the leaders are `LEN`-byte buffers `copy_option_part` filled,
-    // and it always NUL-terminates what it writes.
-    let strsize = |buf: &[u8; LEN]| unsafe { vim_strsize(buf.as_ptr().cast::<c_char>()) };
+    // The leaders are `LEN`-byte buffers holding a NUL-terminated part.
+    let strsize = |buf: &[u8; LEN]| strsize(buf);
     let theline = line.theline();
 
     // The three parts of a leader.  The initial lengths are upstream's,
@@ -148,42 +147,40 @@ fn align_with_comment_leader(line: &Line, comment: &Pos, amount: &mut c_int) -> 
     let mut start_align = 0;
     let mut done = false;
 
-    let mut p = Buf::current().b_p_com.value_ptr();
-    // SAFETY: 'comments' is a NUL-terminated option string, and nothing below
-    // steps `p` past that NUL: each `add(1)` follows a byte just read and
-    // found non-NUL, `getdigits_int` stops at the first non-digit, and
-    // `copy_option_part` stops at the NUL or the separator.
-    while unsafe { *p != 0 } {
+    // The option's own bytes: nothing below sets an option.
+    let buf = Buf::current();
+    let com = buf.b_p_com.bytes();
+    let mut p = 0;
+    while byte_at(com, p) != 0 {
         // The flag letters in front of this item's ':'.
         let mut align = 0;
         let mut off = 0;
         let mut what = 0;
-        // SAFETY: as above -- `p` is inside the option string throughout.
-        while unsafe { *p != 0 && (*p).cast_unsigned() != b':' } {
-            let c = c_int::from(unsafe { *p }.cast_unsigned());
+        while byte_at(com, p) != 0 && byte_at(com, p) != b':' {
+            let c = c_int::from(byte_at(com, p));
             if c == COM_START || c == COM_END || c == COM_MIDDLE {
                 what = c;
-                p = unsafe { p.add(1) };
+                p += 1;
             } else if c == COM_LEFT || c == COM_RIGHT {
                 align = c;
-                p = unsafe { p.add(1) };
+                p += 1;
             } else if ascii_isdigit(c) || c == c_int::from(b'-') {
-                off = unsafe { getdigits_int(&raw mut p, true, 0) };
+                (off, p) = getdigits_int_at(com, p, true, 0);
             } else {
-                p = unsafe { p.add(1) };
+                p += 1;
             }
         }
-        // SAFETY: the loop above left `p` on the NUL or on the ':'.
-        if unsafe { *p }.cast_unsigned() == b':' {
-            p = unsafe { p.add(1) };
+        if byte_at(com, p) == b':' {
+            p += 1;
         }
 
+        // The part, cut to fit `LEN` with its terminator, as upstream's
+        // `copy_option_part` into a `LEN`-byte buffer cuts it.
         let mut lead_end = [0u8; LEN];
-        let dst = lead_end.as_mut_ptr().cast::<c_char>();
-        let comma = c",".as_ptr().cast_mut();
-        // SAFETY: `p` points into the NUL-terminated option, `dst` has `LEN`
-        // bytes -- which is the cap handed over -- and `comma` is a literal.
-        let lead_end_len = unsafe { copy_option_part(&raw mut p, dst, LEN, comma) };
+        let (part, rest) = split_option_part(&com[p..], LEN, b",");
+        lead_end[..part.len()].copy_from_slice(&part);
+        let lead_end_len = part.len();
+        p = com.len() - rest.len();
 
         if what == COM_START {
             lead_start = lead_end;

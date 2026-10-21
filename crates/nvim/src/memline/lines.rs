@@ -186,6 +186,22 @@ impl Lines {
         self.0.b_ml.cached_bytes_mut()
     }
 
+    /// Overwrite byte `at` of line `lnum` in place, answering the byte that
+    /// was there -- **without** booking it as a change: no dirty block and no
+    /// deleted-bytes accounting, which [`line_mut`](Self::line_mut) does.
+    ///
+    /// Only for a probe that puts the old byte back before anything else can
+    /// see the line ('cinkeys'' `::` test blanks a colon while the label
+    /// recognisers read the line, as upstream writes through `ml_get`'s
+    /// pointer). Answers NUL, writing nothing, when `at` is past the line.
+    pub fn swap_byte_unbooked(&mut self, lnum: LineNr, at: usize, byte: u8) -> u8 {
+        fetch_line(self.0, lnum, false);
+        match self.0.b_ml.cached_bytes_mut().get_mut(at) {
+            Some(slot) => core::mem::replace(slot, byte),
+            None => NUL as u8,
+        }
+    }
+
     /// How long line `lnum` is, without its NUL.
     ///
     /// [`ml_get_len`] as a method, and the answer callers want when they are

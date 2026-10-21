@@ -30,7 +30,7 @@ use crate::ascii::ascii_isdigit;
 use crate::charset::transchar;
 use crate::global_cell::{Field, field};
 use crate::guard::secure;
-use crate::indent_c::parse_cino_for;
+use crate::indent_c::parse_cino;
 use crate::memory::XString;
 use crate::option::{kOptFlagNDname, kOptFlagNFname, valid_name};
 use crate::options::{
@@ -179,7 +179,7 @@ pub const BUF_STRING_OPTIONS: [Field<Buffer, Option<XString>>; 58] = [
 /// bytes now and `None` is the shared empty string, so nothing is left to
 /// patch up and the cache is the whole of it.
 pub fn check_buf_options(buffer: Buf) {
-    parse_cino_for(buffer);
+    parse_cino(buffer);
 }
 
 /// Is `val` a name 'filetype', 'syntax' or 'keymap' will accept?
