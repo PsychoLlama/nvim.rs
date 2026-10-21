@@ -496,3 +496,97 @@ fn a_mapping_is_expanded_before_the_table_is_consulted() {
     assert_eq!(text(&editor), "eta theta/iota kappa");
     run(&editor, "silent! nunmap <buffer> gQ");
 }
+
+// ---------------------------------------------------------------------------
+// The identifier under the cursor
+
+/// `*` and `#` search for the word under the cursor as a whole word, `g*`
+/// without the anchors, and the cursor first moves to the word's start.
+#[test]
+fn star_searches_for_the_word_under_the_cursor() {
+    let editor = editor_lock();
+    let _restore = Restore::new(&editor);
+    run(&editor, "silent! keepjumps keepmarks %delete _");
+    run(
+        &editor,
+        "call setline(1, ['  foo.bar baz', 'bar foo', 'xbarx bar'])",
+    );
+    run(&editor, "1");
+    // On the `a` of `bar`: the word is `bar`, not `foo.bar`.
+    keys(&editor, "0fa*");
+    assert_eq!(string(&editor, "@/"), "\\<bar\\>");
+    assert_eq!(cursor(&editor), (2, 1));
+    keys(&editor, "gg0fag*");
+    assert_eq!(string(&editor, "@/"), "bar");
+    // `#` searches backwards; from line 3's `bar` that is line 2's.
+    keys(&editor, "G$#");
+    assert_eq!(string(&editor, "@/"), "\\<bar\\>");
+    assert_eq!(cursor(&editor), (2, 1));
+}
+
+/// With no word character under or after the cursor, `*` takes the run of
+/// non-blanks there -- a punctuation string gets no `\<`, and the
+/// characters a pattern would read as magic are escaped.
+#[test]
+fn star_falls_back_to_the_string_under_the_cursor() {
+    let editor = editor_lock();
+    let _restore = Restore::new(&editor);
+    run(&editor, "silent! keepjumps keepmarks %delete _");
+    run(&editor, "call setline(1, ['a *.[', 'c *.['])");
+    run(&editor, "1");
+    keys(&editor, "02l*");
+    assert_eq!(string(&editor, "@/"), "\\*\\.\\[");
+    assert_eq!(cursor(&editor), (2, 3));
+}
+
+/// `gd` finds the first use of the word in the function it is in, skipping
+/// a use inside a comment.
+#[test]
+fn gd_jumps_to_the_local_declaration() {
+    let editor = editor_lock();
+    let _restore = Restore::new(&editor);
+    run(&editor, "silent! keepjumps keepmarks %delete _");
+    run(
+        &editor,
+        r"call setline(1, ['int f()', '{', '  // count here', '  int count;', '  count = 1;', '}'])",
+    );
+    run(&editor, "5");
+    keys(&editor, "^gd");
+    assert_eq!(cursor(&editor), (4, 7));
+}
+
+/// An identifier command with nothing under the cursor fails without
+/// running anything: `E348`, and the buffer is left alone.
+#[test]
+fn star_on_a_blank_line_reports_no_string() {
+    let editor = editor_lock();
+    let _restore = Restore::new(&editor);
+    run(&editor, "silent! keepjumps keepmarks %delete _");
+    run(&editor, "call setline(1, ['', 'x'])");
+    run(&editor, "1");
+    run(&editor, "let v:errmsg = ''");
+    run(&editor, "silent! normal! *");
+    assert!(string(&editor, "v:errmsg").starts_with("E348"));
+    assert_eq!(text(&editor), "/x");
+}
+
+// ---------------------------------------------------------------------------
+// 'virtualedit'
+
+/// `coladvance` with spaces: under `virtualedit=all`, inserting past the end
+/// of a line pads it out, and inserting in the middle of a tab splits the
+/// tab into the spaces it showed as.
+#[test]
+fn virtual_insert_pads_the_line_and_splits_a_tab() {
+    let editor = editor_lock();
+    let _restore = Restore::new(&editor);
+    run(&editor, "silent! keepjumps keepmarks %delete _");
+    run(&editor, "call setline(1, ['ab', \"\\tx\"])");
+    run(&editor, "setlocal virtualedit=all");
+    run(&editor, "1");
+    keys(&editor, "06|iX\\<Esc>");
+    assert_eq!(string(&editor, "getline(1)"), "ab   X");
+    keys(&editor, "j03|iY\\<Esc>");
+    assert_eq!(string(&editor, "getline(2)"), "  Y      x");
+    run(&editor, "setlocal virtualedit=");
+}
