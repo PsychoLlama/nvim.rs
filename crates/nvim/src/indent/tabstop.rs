@@ -36,6 +36,11 @@ impl<'a> TabStops<'a> {
         (!stops.is_empty() && stops[0] != 0).then_some(TabStops { stops })
     }
 
+    /// The widths, without the count in front of them.
+    pub fn widths(self) -> &'a [ColNr] {
+        &self.stops[1..=self.count() as usize]
+    }
+
     /// How many stops the list names.
     pub fn count(self) -> c_int {
         self.stops[0]

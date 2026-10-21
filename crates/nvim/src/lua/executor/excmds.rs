@@ -16,7 +16,6 @@ use core::ptr;
 
 use super::{get_global_lstate, nlua_error, nlua_pcall, nlua_typval_exec};
 use crate::change::inserted_bytes;
-use crate::change::ml_replace;
 use crate::cursor::check_cursor;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_curbuf_later};
 use crate::ex_getln::script_get;
@@ -25,8 +24,9 @@ use crate::lua::ffi::{
     LUA_TNIL, lua_getglobal, lua_isnil, lua_isstring, lua_pop, lua_pushnumber, lua_pushstring,
     lua_pushvalue, lua_tolstring, lua_type, luaL_loadbuffer,
 };
-use crate::memline::{ml_get_buf, ml_get_buf_len};
-use crate::memory::{strequal, xfree, xmalloc, xmallocz, xmemdupz, xrealloc};
+use crate::memline::{ml_get_buf, ml_get_buf_len, ml_replace_owned};
+use crate::memory::XString;
+use crate::memory::{strequal, xfree, xmalloc, xmallocz, xrealloc};
 use crate::message::e_argreq;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
@@ -150,14 +150,8 @@ pub fn ex_luado(excmd: &mut ExArg) {
             if lua_isstring(lstate, -1) != 0 {
                 let mut new_line_len: size_t = 0;
                 let new_line = lua_tolstring(lstate, -1, &raw mut new_line_len);
-                let new_line_transformed =
-                    xmemdupz(new_line.cast::<c_void>(), new_line_len).cast::<c_char>();
-                for i in 0..new_line_len {
-                    if *new_line_transformed.add(i) == 0 {
-                        *new_line_transformed.add(i) = b'\n' as c_char;
-                    }
-                }
-                let _ = ml_replace(l, new_line_transformed, false);
+                let new_line = core::slice::from_raw_parts(new_line.cast::<u8>(), new_line_len);
+                let _ = ml_replace_owned(l, nul_to_nl(new_line));
                 inserted_bytes(l, 0 as ColNr, old_line_len, new_line_len as c_int);
             }
             lua_pop(lstate, 1);
@@ -167,6 +161,16 @@ pub fn ex_luado(excmd: &mut ExArg) {
         check_cursor(Win::current());
         redraw_curbuf_later(UPD_NOT_VALID);
     }
+}
+
+/// `line` as a buffer line: a NUL in it is stored as the NL the memline uses
+/// for one.
+fn nul_to_nl(line: &[u8]) -> XString {
+    XString::from_vec(
+        line.iter()
+            .map(|&b| if b == 0 { b'\n' } else { b })
+            .collect(),
+    )
 }
 
 /// `:luafile {path}`.

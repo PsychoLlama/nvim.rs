@@ -20,10 +20,11 @@
 //! whether the mode was left by `i_CTRL-O`, which is what tells
 //! `do_pending_operator` to run one Normal-mode command and come back.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
+use crate::cstr::byte_at;
 use crate::keycodes::Key;
+use crate::mbyte::{c_cluster_len, char_at};
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -174,8 +175,7 @@ fn insert_enter(s: &mut InsertState) {
     // The mode ends when `ins_esc` says so: a count means the whole
     // insert is typed again.
     loop {
-        // SAFETY: `s` is this call's live `InsertState`.
-        state_enter(unsafe { ModeState::insert(&raw mut *s) });
+        state_enter(ModeState::insert(s));
         if ins_esc(&mut s.count, s.cmdchar, s.nomove) {
             break;
         }
@@ -249,33 +249,33 @@ fn restore_ctrl_o_column() {
     if !at_eol && Win::current().w_curswant <= Win::current().w_virtcol {
         return;
     }
-    // SAFETY: the cursor's column is a byte of the cursor's line, so `ptr`
-    // addresses that byte and every read below stops at the line's NUL.
-    let ptr = unsafe { get_cursor_line_ptr().offset(Win::current().w_cursor.col as isize) };
-    if unsafe { *ptr } as c_int == NUL {
-        return;
-    }
-    if unsafe { *ptr.offset(1) } as c_int == NUL {
-        Win::current().w_cursor.col += 1;
-    } else {
-        let len = unsafe { utfc_ptr2len(ptr) };
-        if unsafe { *ptr.offset(len as isize) } as c_int == NUL {
-            Win::current().w_cursor.col += len;
+    let cursor = Win::current().w_cursor;
+    let step = {
+        let mut lines = Lines::current();
+        let line = lines.line(cursor.lnum);
+        let tail = &line[(cursor.col as usize).min(line.len())..];
+        if tail.is_empty() {
+            return;
         }
-    }
+        if byte_at(tail, 1) == NUL as u8 {
+            1
+        } else {
+            let len = c_cluster_len(tail);
+            if byte_at(tail, len) == NUL as u8 {
+                len
+            } else {
+                0
+            }
+        }
+    };
+    Win::current().w_cursor.col += step as ColNr;
 }
 
 /// The state loop's `check` callback: everything that happens before the
 /// next key is asked for.
 ///
 /// Answers 0 to leave Insert mode, and 1 to go on.
-///
-/// # Safety
-/// `state` must point at a live `InsertState`, unaliased for the call.
-pub(crate) unsafe fn insert_check(state: *mut InsertState) -> c_int {
-    // SAFETY: the caller's promise.
-    let s = unsafe { &mut *state };
-
+pub(crate) fn insert_check(s: &mut InsertState) -> c_int {
     if revins_legal.get() == 0 {
         revins_scol.set(-1); // reset on an illegal motion
     } else {
@@ -401,8 +401,7 @@ fn may_scroll_for_wrap(s: &mut InsertState) {
     validate_cursor_col(Win::current());
 
     let vcol = get_nolist_virtcol();
-    let (ts, vts) = (Buf::current().b_p_ts, Buf::current().b_p_vts_array);
-    let tabstop = unsafe { tabstop_at(vcol, ts, vts, false) };
+    let tabstop = Buf::current().tab_width_at(vcol, false);
     if Win::current().w_wcol < s.mincol - tabstop
         && Win::current().w_wrow as int64_t
             == (Win::current().w_view_height - 1) as int64_t - get_scrolloff_value(Win::current())
@@ -429,13 +428,7 @@ fn may_scroll_for_wrap(s: &mut InsertState) {
 ///
 /// Answers 0 to leave Insert mode, -1 to ignore the key entirely, and 1 to
 /// go on.
-///
-/// # Safety
-/// `state` must point at a live `InsertState`, unaliased for the call.
-pub(crate) unsafe fn insert_execute(state: *mut InsertState, key: c_int) -> c_int {
-    // SAFETY: the caller's promise.
-    let s = unsafe { &mut *state };
-
+pub(crate) fn insert_execute(s: &mut InsertState, key: c_int) -> c_int {
     if stop_insert_mode.get() {
         // Insert mode ended while the key was being read; give it back so
         // Normal mode sees it.
@@ -587,18 +580,15 @@ fn compl_takes_key(s: &mut InsertState) -> bool {
     // replace it with a whole string, which goes in a character at a
     // time.
     if ins_compl_accept_char(s.c) {
-        let str = do_insert_char_pre(s.c);
-        if str.is_null() {
-            ins_compl_addleader(s.c);
-        } else {
-            let mut p = str;
-            // SAFETY: `do_insert_char_pre` answers a NUL-terminated string, so
-            // the walk stops at its NUL and every step stays inside it.
-            while unsafe { *p } as c_int != NUL {
-                unsafe { ins_compl_addleader(utf_ptr2char(p)) };
-                p = unsafe { p.offset(utfc_ptr2len(p) as isize) };
+        match do_insert_char_pre(s.c) {
+            None => ins_compl_addleader(s.c),
+            Some(text) => {
+                let mut at = 0;
+                while at < text.len() {
+                    ins_compl_addleader(char_at(&text[at..]));
+                    at += c_cluster_len(&text[at..]);
+                }
             }
-            unsafe { xfree(str as *mut ::core::ffi::c_void) };
         }
         return true;
     }
@@ -725,7 +715,6 @@ pub(crate) fn ins_need_undo_get() -> bool {
 /// Is a character available to be read without waiting?
 #[inline(always)]
 fn key_available() -> bool {
-    // SAFETY: the typeahead buffer is live for the whole session.
     char_avail()
 }
 

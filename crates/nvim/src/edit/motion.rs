@@ -16,12 +16,12 @@
 //! [`ins_updown`] and [`ins_page`] are each one function with a direction:
 //! upstream's four are the same body twice apiece.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::cstr;
 use crate::keycodes::Key;
 use crate::keycodes::ModMask;
+use crate::mbyte::c_cluster_len;
 use crate::strings::has_char;
 use crate::winlayer::{Buf, Win, first_tab};
 use core::ffi::{c_char, c_int};
@@ -61,7 +61,6 @@ pub(crate) fn ins_start_select(c: c_int) -> bool {
             mod_mask.get().bits() as uint8_t as c_char,
             NUL as c_char,
         ];
-        // SAFETY: `buf` is a live four-byte array and 3 of it is read.
         stuff_readbuf_len(&cstr::as_bytes(&buf)[..3]);
     }
     stuff_readbuf_char(c);
@@ -86,15 +85,13 @@ fn ends_change() -> bool {
 
 /// `<Left>` in Insert mode.
 pub(crate) fn ins_left() {
-    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
-    // precondition is the live `curwin`/`curbuf` this mode runs with.
     let end_change = ends_change();
     may_open_fold_hor();
     hide_dollar();
 
-    let mut tpos = Win::current().w_cursor;
+    let tpos = Win::current().w_cursor;
     if oneleft().is_ok() {
-        start_arrow_changing(&mut tpos, end_change);
+        start_arrow_changing(InsertEnd::At(tpos), end_change);
         if !end_change {
             append_to_redobuff_char(Key::Left.code());
         }
@@ -106,7 +103,7 @@ pub(crate) fn ins_left() {
         revins_chars.set(revins_chars.get() + 1);
     } else if p_ww(|value| has_char(value, '[' as c_int)) && Win::current().w_cursor.lnum > 1 {
         // 'whichwrap' allows the motion to leave the line.
-        start_arrow_at(&mut tpos);
+        start_arrow_at(InsertEnd::At(tpos));
         Win::current().w_cursor.lnum -= 1;
         coladvance_to(MAXCOL as c_int);
         Win::current().w_set_curswant = true;
@@ -121,14 +118,14 @@ pub(crate) fn ins_home(c: c_int) {
     may_open_fold_hor();
     hide_dollar();
 
-    let mut tpos = Win::current().w_cursor;
+    let tpos = Win::current().w_cursor;
     if c == Key::CHome.code() {
         Win::current().w_cursor.lnum = 1;
     }
     Win::current().w_cursor.col = 0;
     Win::current().w_cursor.coladd = 0;
     Win::current().w_curswant = 0;
-    start_arrow_at(&mut tpos);
+    start_arrow_at(InsertEnd::At(tpos));
 }
 
 /// `<End>`, and `<C-End>` -- which goes to the last line first.
@@ -136,25 +133,23 @@ pub(crate) fn ins_end(c: c_int) {
     may_open_fold_hor();
     hide_dollar();
 
-    let mut tpos = Win::current().w_cursor;
+    let tpos = Win::current().w_cursor;
     if c == Key::CEnd.code() {
         Win::current().w_cursor.lnum = Buf::current().b_ml.ml_line_count;
     }
     coladvance_to(MAXCOL as c_int);
     Win::current().w_curswant = MAXCOL as ColNr;
-    start_arrow_at(&mut tpos);
+    start_arrow_at(InsertEnd::At(tpos));
 }
 
 /// `<S-Left>`: one word back.
 pub(crate) fn ins_s_left() {
-    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
-    // precondition is the live `curwin`/`curbuf` this mode runs with.
     let end_change = ends_change();
     may_open_fold_hor();
     hide_dollar();
 
     if Win::current().w_cursor.lnum > 1 || Win::current().w_cursor.col > 0 {
-        start_arrow_changing(&mut Win::current().w_cursor, end_change);
+        start_arrow_changing(InsertEnd::cursor(), end_change);
         if !end_change {
             append_to_redobuff_char(Key::SLeft.code());
         }
@@ -173,7 +168,7 @@ pub(crate) fn ins_right() {
     hide_dollar();
 
     if gchar_cursor() != NUL || virtual_active(Win::current()) {
-        start_arrow_changing(&mut Win::current().w_cursor, end_change);
+        start_arrow_changing(InsertEnd::cursor(), end_change);
         if !end_change {
             append_to_redobuff_char(Key::Right.code());
         }
@@ -181,9 +176,13 @@ pub(crate) fn ins_right() {
         if virtual_active(Win::current()) {
             let _ = oneright();
         } else {
-            // SAFETY: the cursor is on a character of its line, so the
-            // character there has a length.
-            Win::current().w_cursor.col += unsafe { utfc_ptr2len(get_cursor_pos_ptr()) };
+            let cursor = Win::current().w_cursor;
+            let step = {
+                let mut lines = Lines::current();
+                let line = lines.line(cursor.lnum);
+                c_cluster_len(&line[(cursor.col as usize).min(line.len())..])
+            };
+            Win::current().w_cursor.col += step as ColNr;
         }
 
         revins_legal.set(revins_legal.get() + 1);
@@ -194,7 +193,7 @@ pub(crate) fn ins_right() {
         && Win::current().w_cursor.lnum < Buf::current().b_ml.ml_line_count
     {
         // 'whichwrap' allows the motion to leave the line.
-        start_arrow_at(&mut Win::current().w_cursor);
+        start_arrow_at(InsertEnd::cursor());
         Win::current().w_set_curswant = true;
         Win::current().w_cursor.lnum += 1;
         Win::current().w_cursor.col = 0;
@@ -206,8 +205,6 @@ pub(crate) fn ins_right() {
 
 /// `<S-Right>`: one word forward.
 pub(crate) fn ins_s_right() {
-    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
-    // precondition is the live `curwin`/`curbuf` this mode runs with.
     // The strings walked below are NUL-terminated lines of that buffer, and
     // every step stops at the NUL.
     let end_change = ends_change();
@@ -215,7 +212,7 @@ pub(crate) fn ins_s_right() {
     hide_dollar();
 
     if Win::current().w_cursor.lnum < Buf::current().b_ml.ml_line_count || gchar_cursor() != NUL {
-        start_arrow_changing(&mut Win::current().w_cursor, end_change);
+        start_arrow_changing(InsertEnd::cursor(), end_change);
         if !end_change {
             append_to_redobuff_char(Key::SRight.code());
         }
@@ -238,7 +235,7 @@ pub(crate) fn ins_updown(up: bool, startcol: bool) {
     let old_topfill = Win::current().w_topfill;
     hide_dollar();
 
-    let mut tpos = Win::current().w_cursor;
+    let tpos = Win::current().w_cursor;
     let moved = if up {
         cursor_up(1, true)
     } else {
@@ -253,7 +250,7 @@ pub(crate) fn ins_updown(up: bool, startcol: bool) {
         if old_topline != Win::current().w_topline || old_topfill != Win::current().w_topfill {
             redraw_later(Win::current(), UPD_VALID);
         }
-        start_arrow_at(&mut tpos);
+        start_arrow_at(InsertEnd::At(tpos));
         can_cindent.set(true);
     } else {
         beep_cursor();
@@ -268,16 +265,16 @@ pub(crate) fn ins_page(back: bool) {
     if mod_mask.get().has(ModMask::CTRL) {
         // <C-PageUp>/<C-PageDown>: another tab page, if there is one.
         if first_tab().is_some_and(|tp| tp.next().is_some()) {
-            start_arrow_at(&mut Win::current().w_cursor);
+            start_arrow_at(InsertEnd::cursor());
             goto_tabpage(if back { -1 } else { 0 });
         }
         return;
     }
 
-    let mut tpos = Win::current().w_cursor;
+    let tpos = Win::current().w_cursor;
     let dir = if back { BACKWARD } else { FORWARD };
     if pagescroll(dir, 1, false) == OK {
-        start_arrow_at(&mut tpos);
+        start_arrow_at(InsertEnd::At(tpos));
         can_cindent.set(true);
     } else {
         beep_cursor();
@@ -299,17 +296,15 @@ fn hide_dollar() {
 /// End the undoable insert before an arrow key moves the cursor away from
 /// `pos`, the position the insert ended at.
 #[inline(always)]
-fn start_arrow_at(pos: &mut Pos) {
-    // SAFETY: `pos` is a live position, and `curbuf` is live.
-    unsafe { start_arrow(pos) }
+fn start_arrow_at(pos: InsertEnd) {
+    start_arrow(Some(pos));
 }
 
 /// [`start_arrow_at`], with `i_CTRL-G_U`'s answer for whether the change
 /// ends here too.
 #[inline(always)]
-fn start_arrow_changing(pos: &mut Pos, end_change: bool) {
-    // SAFETY: `pos` is a live position, and `curbuf` is live.
-    unsafe { start_arrow_with_change(pos, end_change) }
+fn start_arrow_changing(pos: InsertEnd, end_change: bool) {
+    start_arrow_with_change(Some(pos), end_change);
 }
 
 /// Move the cursor to virtual column `vcol` of its line.

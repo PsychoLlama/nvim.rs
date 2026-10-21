@@ -3,7 +3,7 @@
 //! A 'buftype' of "prompt" makes the last line a prompt the user types after
 //! and cannot back over.  [`init_prompt`] is what runs on entering Insert
 //! mode in such a buffer: make sure the prompt line exists and starts with
-//! the prompt text, and put the cursor after it.  [`buf_prompt_text`]
+//! the prompt text, and put the cursor after it.  [`buf_prompt_text_owned`]
 //! resolves 'b:prompt_text' against the default, and
 //! [`prompt_curpos_editable`] is the guard `ins_bs` and the cursor motions
 //! ask before moving left.
@@ -14,8 +14,7 @@
 //! agreement, since either can have moved while the buffer was not in Insert
 //! mode.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -24,40 +23,23 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::cstr;
+use crate::memory::ThinCString;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use super::*;
-use crate::types::NUL;
-
-/// The effective prompt for `buffer`: 'b:prompt_text', or `"% "`.
-///
-/// Safe: `b:prompt_text` is either null or a NUL-terminated string the
-/// buffer owns.
-pub(crate) fn buf_prompt_text(buffer: Buf) -> *mut c_char {
-    buffer
-        .b_prompt_text
-        .as_ref()
-        .map_or(c"% ".as_ptr(), |text| text.as_ptr())
-        .cast_mut()
-}
 
 /// Give `buffer` the prompt `text`, releasing the one it had.
-pub(crate) fn set_buf_prompt_text(mut buffer: Buf, text: crate::memory::ThinCString) {
+pub(crate) fn set_buf_prompt_text(mut buffer: Buf, text: ThinCString) {
     buffer.b_prompt_text = Some(text);
 }
 
-/// [`buf_prompt_text`], copied.
-pub(crate) fn buf_prompt_text_owned(buffer: Buf) -> crate::memory::ThinCString {
-    // SAFETY: the buffer's own terminated prompt text, or a literal; copied
-    // before anything can change it.
-    crate::memory::ThinCString::from_cstr(unsafe { cstr::at(buf_prompt_text(buffer)) })
-}
-
-/// The effective prompt for the current buffer.
-pub(crate) fn prompt_text() -> *mut c_char {
-    buf_prompt_text(Buf::current())
+/// The effective prompt for `buffer`, 'b:prompt_text' or `"% "`, copied.
+pub(crate) fn buf_prompt_text_owned(buffer: Buf) -> ThinCString {
+    buffer
+        .b_prompt_text
+        .clone()
+        .unwrap_or_else(|| ThinCString::from_cstr(c"% "))
 }
 
 /// Prepare for prompt mode: make sure the prompt line carries the prompt
@@ -68,10 +50,10 @@ pub(crate) fn prompt_text() -> *mut c_char {
 /// the prompt line.
 pub(crate) fn init_prompt(cmdchar_todo: c_int) {
     let mut win = Win::current();
-    let prompt = prompt_text();
-    let prompt_bytes = unsafe { cstr::bytes_at(prompt) }.len();
+    let prompt = buf_prompt_text_owned(Buf::current());
+    let prompt = prompt.as_bytes();
     let prompt_len =
-        c_int::try_from(prompt_bytes).expect("a prompt string is never longer than an int");
+        c_int::try_from(prompt.len()).expect("a prompt string is never longer than an int");
 
     // The mark may name a line that no longer exists.  It is read and
     // written a field at a time rather than held: the calls below adjust
@@ -82,34 +64,27 @@ pub(crate) fn init_prompt(cmdchar_todo: c_int) {
     }
 
     win.w_cursor.lnum = win.w_cursor.lnum.max(start().lnum);
-    let text = ml_get(start().lnum);
-    let text_len = ml_get_len(start().lnum);
 
-    // Is the prompt actually there, ending at the mark's column?  The
-    // `col` bounds are what keeps the `strnequal` read inside the line, so
-    // this stays a closure: it must not run before they have been checked.
+    // Is the prompt actually there, ending at the mark's column?
     let start_col = start().col;
-    let prompt_missing = || {
-        start_col < prompt_len
-            || start_col > text_len
-            || !unsafe {
-                strnequal(
-                    text.offset((start_col - prompt_len) as isize),
-                    prompt,
-                    prompt_bytes,
-                )
-            }
+    let (prompt_missing, empty) = {
+        let mut lines = Lines::current();
+        let text = lines.line(start().lnum);
+        let missing = usize::try_from(start_col).ok().is_none_or(|end| {
+            end < prompt.len() || end > text.len() || text[end - prompt.len()..end] != *prompt
+        });
+        (missing, text.is_empty())
     };
-    if start().lnum == win.w_cursor.lnum && prompt_missing() {
-        if c_int::from(unsafe { *text }) == NUL {
+    if start().lnum == win.w_cursor.lnum && prompt_missing {
+        if empty {
             // The line is empty: the prompt *is* the line.
-            let _ = unsafe { ml_replace(start().lnum, prompt, true) };
+            let _ = ml_replace_buf_text(Buf::current(), start().lnum, prompt);
             inserted_bytes(start().lnum, 0, 0, prompt_len);
         } else {
             // The line holds something else, so the prompt goes on a new
             // last line.
             let lnum = Buf::current().b_ml.ml_line_count;
-            let _ = ml_append_cstr(lnum, unsafe { cstr::at(prompt) });
+            let _ = ml_append_text(lnum, prompt);
             appended_lines_mark(lnum, 1);
             set_start_lnum(Buf::current().b_ml.ml_line_count);
             Buf::current().b_prompt_append_new_line = true;
@@ -166,7 +141,6 @@ fn set_start_col(col: ColNr) {
 /// Move `win`'s cursor to virtual column `vcol` of its line.
 #[inline(always)]
 fn coladvance_win(win: Win, vcol: c_int) {
-    // SAFETY: a live window, whose cursor line exists.
     coladvance(win, vcol);
 }
 

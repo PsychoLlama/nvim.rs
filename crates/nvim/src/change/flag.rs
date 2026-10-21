@@ -8,8 +8,7 @@
 //! remembers a buffer's 'fileformat', 'fileencoding', end-of-line and BOM at
 //! load time so that `:w` can tell a real change from one the reader made.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -19,17 +18,17 @@
 )]
 
 use crate::autocmd::fire_autocmds;
-use core::ffi::{c_char, c_int};
+use core::ffi::{CStr, c_int};
 
 use super::*;
 use crate::buffer::{BufFlags, BufRef};
 use crate::memory::ThinCString;
 use crate::optionstr::{OptString, OptStringRef};
-use crate::os::cshim::gettext_ptr;
+use crate::os::cshim::gettext;
 use crate::winlayer::Buf;
 
 /// The message [`change_warning`] gives, once per buffer.
-const W_READONLY: *const c_char = c"W10: Warning: Changing a readonly file".as_ptr();
+const W_READONLY: &CStr = c"W10: Warning: Changing a readonly file";
 
 /// Warn about the first change to a 'readonly' file.
 ///
@@ -65,12 +64,8 @@ pub fn change_warning(mut buffer: Buf, col: c_int) {
     }
     msg_source(HLF_W);
     msg_ext_set_kind(c"wmsg");
-    // SAFETY: the translation of a static message.
-    msg_str_hl(unsafe { gettext_ptr(W_READONLY) }, HLF_W, true);
-    set_vim_var_string(
-        Vv::Warningmsg,
-        Some(unsafe { gettext_ptr(W_READONLY) }.to_bytes()),
-    );
+    msg_str_hl(gettext(W_READONLY), HLF_W, true);
+    set_vim_var_string(Vv::Warningmsg, Some(gettext(W_READONLY).to_bytes()));
     msg_clr_eos();
     msg_end();
     if msg_silent.get() == 0 && !silent_mode.get() && ui_active() != 0 {

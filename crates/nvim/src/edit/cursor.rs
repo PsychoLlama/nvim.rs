@@ -12,12 +12,14 @@
 //! Every one of them ends in `adjust_skipcol` or `coladvance`, because the
 //! cursor is not allowed to come to rest on a column that is not there.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use super::*;
+use crate::charset::ptr2cells_at;
+use crate::cstr::byte_at;
+use crate::mbyte::{c_cluster_len, char_at};
 use crate::types::{Failed, NUL};
 use crate::winlayer::Win;
 
@@ -42,7 +44,6 @@ crate::flag_set! {
 pub(crate) fn beginline(flags: BeginlineOpts) {
     let mut win = Win::current();
     if flags.has(BeginlineOpts::SOL) && !p_sol() {
-        // SAFETY: `curwin` is live for the whole session.
         let want = win.w_curswant;
         coladvance_win(win, want);
     } else {
@@ -50,14 +51,16 @@ pub(crate) fn beginline(flags: BeginlineOpts) {
         win.w_cursor.coladd = 0;
 
         if flags.has(BeginlineOpts::WHITE | BeginlineOpts::SOL) {
-            let mut ptr = get_cursor_line_ptr();
-            // `ptr[1] == NUL` under `FIX` is what keeps an all-white
+            let mut lines = Lines::current();
+            let line = lines.line(win.w_cursor.lnum);
+            let mut at = 0;
+            // `line[at + 1] == NUL` under `FIX` is what keeps an all-white
             // line from ending with the cursor on the NUL.
-            while ascii_iswhite(unsafe { *ptr } as c_int)
-                && !(flags.has(BeginlineOpts::FIX) && unsafe { *ptr.offset(1) } as c_int == NUL)
+            while ascii_iswhite(c_int::from(byte_at(line, at)))
+                && !(flags.has(BeginlineOpts::FIX) && byte_at(line, at + 1) == NUL as u8)
             {
                 win.w_cursor.col += 1;
-                ptr = unsafe { ptr.offset(1) };
+                at += 1;
             }
         }
         win.w_set_curswant = true;
@@ -67,10 +70,6 @@ pub(crate) fn beginline(flags: BeginlineOpts) {
 
 /// Move one character right; answers `Err` at the end of the line.
 pub(crate) fn oneright() -> Result<(), Failed> {
-    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
-    // precondition is the live `curwin`/`curbuf` this mode runs with.
-    // The strings walked below are NUL-terminated lines of that buffer, and
-    // every step stops at the NUL.
     let mut win = Win::current();
 
     if virtual_edit(win) {
@@ -78,13 +77,13 @@ pub(crate) fn oneright() -> Result<(), Failed> {
         // character has to be stepped over whole -- except a TAB, whose
         // width the cursor is allowed to sit inside.
         let prevpos = win.w_cursor;
-        let ptr = cursor_pos_ptr();
-        let width = if unsafe { *ptr } as c_int != TAB && unsafe { vim_isprintc(utf_ptr2char(ptr)) }
-        {
-            unsafe { ptr2cells(ptr) }
-        } else {
-            1
-        };
+        let width = with_cursor_tail(|tail| {
+            if printable_not_tab(tail) {
+                ptr2cells_at(tail)
+            } else {
+                1
+            }
+        });
         coladvance_win(win, viscol() + width);
         win.w_set_curswant = true;
         // OK if the cursor moved, FAIL otherwise (at the window edge).
@@ -95,20 +94,20 @@ pub(crate) fn oneright() -> Result<(), Failed> {
         };
     }
 
-    let ptr = cursor_pos_ptr();
-    if unsafe { *ptr } as c_int == NUL {
+    // How far the next character is, and whether it is the last one.
+    let Some((l, last)) = with_cursor_tail(|tail| {
+        let l = c_cluster_len(tail);
+        (l != 0).then(|| (l, byte_at(tail, l) == NUL as u8))
+    }) else {
         return Err(Failed); // already at the very end
-    }
+    };
 
     // Move "l" bytes right, but do not end up on the NUL unless
     // 'virtualedit' contains "onemore".
-    let l = unsafe { utfc_ptr2len(ptr) };
-    if unsafe { *ptr.offset(l as isize) } as c_int == NUL
-        && get_ve_flags(win) & kOptVeFlagOnemore as c_int as ::core::ffi::c_uint == 0
-    {
+    if last && get_ve_flags(win) & kOptVeFlagOnemore as c_int as ::core::ffi::c_uint == 0 {
         return Err(Failed);
     }
-    win.w_cursor.col += l;
+    win.w_cursor.col += l as ColNr;
 
     win.w_set_curswant = true;
     adjust_skipcol_now();
@@ -117,10 +116,6 @@ pub(crate) fn oneright() -> Result<(), Failed> {
 
 /// Move one character left; answers `Err` at column 0.
 pub(crate) fn oneleft() -> Result<(), Failed> {
-    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
-    // precondition is the live `curwin`/`curbuf` this mode runs with.
-    // The strings walked below are NUL-terminated lines of that buffer, and
-    // every step stops at the NUL.
     let mut win = Win::current();
 
     if virtual_edit(win) {
@@ -144,11 +139,7 @@ pub(crate) fn oneleft() -> Result<(), Failed> {
         if win.w_cursor.coladd == 1 {
             // Landed one cell inside a character: legal for a TAB, not
             // for a wide one.
-            let ptr = cursor_pos_ptr();
-            if unsafe { *ptr } as c_int != TAB
-                && unsafe { vim_isprintc(utf_ptr2char(ptr)) }
-                && unsafe { ptr2cells(ptr) } > 1
-            {
+            if with_cursor_tail(|tail| printable_not_tab(tail) && ptr2cells_at(tail) > 1) {
                 win.w_cursor.coladd = 0;
             }
         }
@@ -296,15 +287,23 @@ fn adjust_skipcol_now() {
 /// Move `win`'s cursor to virtual column `vcol` of its line.
 #[inline(always)]
 fn coladvance_win(win: Win, vcol: ColNr) {
-    // SAFETY: a live window, whose cursor line exists.
     coladvance(win, vcol);
 }
 
-/// The cursor's line, from the cursor's own column on.
+/// `f` of the cursor's line from the cursor's own column on.
 #[inline(always)]
-fn cursor_pos_ptr() -> *mut c_char {
-    // SAFETY: `curwin`/`curbuf` are live for the whole session.
-    get_cursor_pos_ptr()
+fn with_cursor_tail<R>(f: impl FnOnce(&[u8]) -> R) -> R {
+    let cursor = Win::current().w_cursor;
+    let mut lines = Lines::current();
+    let line = lines.line(cursor.lnum);
+    f(&line[(cursor.col as usize).min(line.len())..])
+}
+
+/// Whether the character `tail` starts with is printable and not a TAB --
+/// the one a 'virtualedit' cursor may not sit inside.
+#[inline(always)]
+fn printable_not_tab(tail: &[u8]) -> bool {
+    c_int::from(byte_at(tail, 0)) != TAB && vim_isprintc(char_at(tail))
 }
 
 /// The cursor's virtual column.

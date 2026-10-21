@@ -15,8 +15,7 @@
 //! the same trick for the `$` that 'cpoptions' `$` puts at the end of a
 //! changed region.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -25,7 +24,7 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::mbyte::encode_char;
+use crate::mbyte::{encode_char, head_off};
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -77,7 +76,8 @@ pub(crate) fn ins_redraw(ready: bool) {
     // The autocommand may change the buffer *and* the window, so `curbuf`
     // is saved around it; and if it changed the text, the insert's undo
     // block has to be closed the way `ins_apply_autocmds` does it.
-    let fire_text_changed = |event: AutoEvent, tick: *mut VarNumber| {
+    let buf = Buf::current();
+    let fire_text_changed = |event: AutoEvent, popup: bool| {
         let mut aco = AcoSave::default();
         let before = buf_get_changedtick(Buf::current());
 
@@ -87,8 +87,16 @@ pub(crate) fn ins_redraw(ready: bool) {
         apply_autocmds(event, None, None, false, Buf::current_or_none());
         aucmd_restbuf(&mut aco);
 
-        unsafe { *tick = buf_get_changedtick(Buf::current()) };
-        if before != unsafe { *tick } {
+        // The tick is the buffer's the insert is in, which the autocommand
+        // may have left: it is written through the handle, not held.
+        let tick = buf_get_changedtick(Buf::current());
+        let mut buf = buf;
+        if popup {
+            buf.b_last_changedtick_pum = tick;
+        } else {
+            buf.b_last_changedtick_i = tick;
+        }
+        if before != tick {
             // See `ins_apply_autocmds`: the autocommand's change belongs
             // to a block of its own.
             let _ = u_save(
@@ -98,18 +106,19 @@ pub(crate) fn ins_redraw(ready: bool) {
         }
     };
 
-    let mut buf = Buf::current();
-    if ready && has_event(AutoEvent::TextChangedI) && !pum_visible() {
-        let tick = &mut buf.b_last_changedtick_i;
-        if *tick != buf_get_changedtick(Buf::current()) {
-            fire_text_changed(AutoEvent::TextChangedI, tick);
-        }
+    if ready
+        && has_event(AutoEvent::TextChangedI)
+        && !pum_visible()
+        && buf.b_last_changedtick_i != buf_get_changedtick(Buf::current())
+    {
+        fire_text_changed(AutoEvent::TextChangedI, false);
     }
-    if ready && has_event(AutoEvent::TextChangedP) && pum_visible() {
-        let tick = &mut buf.b_last_changedtick_pum;
-        if *tick != buf_get_changedtick(Buf::current()) {
-            fire_text_changed(AutoEvent::TextChangedP, tick);
-        }
+    if ready
+        && has_event(AutoEvent::TextChangedP)
+        && pum_visible()
+        && buf.b_last_changedtick_pum != buf_get_changedtick(Buf::current())
+    {
+        fire_text_changed(AutoEvent::TextChangedP, true);
     }
 
     if ready {
@@ -156,8 +165,6 @@ pub(crate) fn edit_putchar(c: c_int, highlight: bool) {
         return;
     }
 
-    // SAFETY: `curwin` is live, which is all these editor-wide routines ask
-    // for, and the grid line is opened and flushed around every write.
     update_topline(win); // just in case w_topline isn't valid
     validate_cursor(win);
     let attr = if highlight { hl_attr(HLF_8) } else { 0 };
@@ -217,12 +224,9 @@ pub(crate) fn edit_unputchar() {
 }
 
 /// Called when `$` is in 'cpoptions': show a `$` at the end of the changed
-/// text.  Only works while the cursor is in the line that changes.
-///
-/// # Safety
-/// Must run with a live `curwin` whose cursor line is at least `col_arg`
-/// bytes long.
-pub(crate) unsafe fn display_dollar(col_arg: ColNr) {
+/// text.  Only works while the cursor is in the line that changes, at a
+/// column `col_arg` inside it.
+pub(crate) fn display_dollar(col_arg: ColNr) {
     let col = col_arg.max(0);
 
     if !redrawing() {
@@ -234,10 +238,12 @@ pub(crate) unsafe fn display_dollar(col_arg: ColNr) {
     win.w_cursor.col = col;
 
     // On the last byte of a multi-byte character, move to the first byte.
-    // SAFETY: the caller promises the cursor line holds at least `col` bytes,
-    // so `p + col` is a byte of that line.
-    let p = get_cursor_line_ptr();
-    win.w_cursor.col -= unsafe { utf_head_off(p, p.offset(col as isize)) };
+    let back = {
+        let mut lines = Lines::current();
+        let line = lines.line(win.w_cursor.lnum);
+        head_off(line, usize::try_from(col).unwrap_or(0).min(line.len()))
+    };
+    win.w_cursor.col -= ColNr::try_from(back).unwrap_or(0);
     curs_columns(win, 0); // recompute w_wrow and w_wcol
     if win.w_wcol < win.w_view_width {
         edit_putchar('$' as c_int, false);
@@ -273,7 +279,6 @@ pub(crate) fn get_nolist_virtcol() -> ColNr {
         win.w_cursor = cursor;
         return vcol;
     }
-    // SAFETY: `curwin` is live for the whole session.
     validate_virtcol(win);
     win.w_virtcol
 }

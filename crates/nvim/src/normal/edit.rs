@@ -9,7 +9,6 @@ use crate::keycodes::{Ctrl_A, Ctrl_E, Ctrl_Q, Ctrl_V, Ctrl_Y, Key};
 use crate::memline::MlFlags;
 use crate::strings::has_char;
 use crate::winlayer::{Buf, Win};
-use core::ptr;
 
 use crate::ascii::ascii_isdigit;
 use crate::buffer::{buf_get_changedtick, buf_is_prompt, current_buf};
@@ -58,7 +57,7 @@ use crate::types::{
     PUT_FIXINDENT, PUT_LINE, PUT_LINE_FORWARD, PUT_LINE_SPLIT, YankReg, size_t,
 };
 use crate::undo::{u_clearline, u_save, u_save_cursor, u_savesub};
-use core::ffi::{CStr, c_char, c_int, c_uint};
+use core::ffi::{CStr, c_int, c_uint};
 
 /// Refuse a change in a prompt buffer that is not on its own editable line.
 fn prompt_refuses(cmd_arg: &mut CmdArg) -> bool {
@@ -209,8 +208,8 @@ pub(crate) fn nv_replace(cmd_arg: &mut CmdArg) {
                 Win::current().w_cursor.col += 1;
             }
         } else if cmd_arg.nchar_len != 0 {
-            let bytes = &raw mut cmd_arg.nchar_composing as *mut c_char;
-            unsafe { ins_char_bytes(bytes, cmd_arg.nchar_len as size_t) };
+            let bytes = cstr::as_bytes(&cmd_arg.nchar_composing);
+            ins_char_bytes(&bytes[..cmd_arg.nchar_len as usize]);
         } else {
             ins_char(cmd_arg.nchar);
         }
@@ -220,7 +219,7 @@ pub(crate) fn nv_replace(cmd_arg: &mut CmdArg) {
     mb_adjust_cursor();
     Buf::current().b_op_end = Win::current().w_cursor;
     Win::current().w_set_curswant = true;
-    unsafe { set_last_insert(cmd_arg.nchar) };
+    set_last_insert(cmd_arg.nchar);
     fold_update_after_insert();
 }
 
@@ -440,8 +439,7 @@ pub(crate) fn n_opencmd(cmd_arg: &mut CmdArg) {
     } else {
         0
     };
-    let opened = u_save(undo_first, undo_last).is_ok()
-        && unsafe { open_line(dir, flags, 0, ptr::null_mut()) };
+    let opened = u_save(undo_first, undo_last).is_ok() && open_line(dir, flags, 0, None);
     if opened {
         if win_cursorline_standout(win) {
             // The cursor line moved, so its highlight has to be redrawn.

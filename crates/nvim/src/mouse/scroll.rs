@@ -24,7 +24,7 @@ use crate::keycodes::ModMask;
 use super::*;
 use crate::buffer::buf_is_prompt;
 use crate::drawscreen::redraw_statuslines;
-use crate::edit::{set_can_cindent, start_arrow, undisplay_dollar};
+use crate::edit::{InsertEnd, set_can_cindent, start_arrow, undisplay_dollar};
 use crate::getchar::state::mod_mask;
 use crate::mouse::state::{mouse_col, mouse_row};
 use crate::r#move::pagescroll;
@@ -46,7 +46,7 @@ pub(crate) fn ins_mouse(c: c_int) {
     let old_curwin = Win::current();
 
     undisplay_dollar();
-    let mut tpos = old_curwin.w_cursor;
+    let tpos = old_curwin.w_cursor;
 
     if do_mouse(None, c, BACKWARD as c_int, 1, false) {
         let new_curwin = Win::current();
@@ -60,14 +60,9 @@ pub(crate) fn ins_mouse(c: c_int) {
                 old_curwin.buffer().b_prompt_insert = 'A' as c_int;
             }
         }
-        let end = if old_curwin.is_current() {
-            &raw mut tpos
-        } else {
-            ptr::null_mut()
-        };
-        // SAFETY: `tpos` is a live local position; a null end means "the
-        // cursor moved to another window".
-        unsafe { start_arrow(end) };
+        // No end means "the cursor moved to another window".
+        let end = old_curwin.is_current().then_some(InsertEnd::At(tpos));
+        start_arrow(end);
         if !new_curwin.is_current() && new_curwin.is_valid() {
             new_curwin.make_current();
             new_curwin.buffer().make_current();
@@ -186,9 +181,7 @@ pub(crate) fn ins_mousescroll(dir: c_int) {
     // the window that was scrolled, which are two different windows whenever
     // the wheel was over another one.
     if !equalpos(restored.w_cursor, orig_cursor) {
-        let mut orig_cursor = orig_cursor;
-        // SAFETY: a live local position.
-        unsafe { start_arrow(&raw mut orig_cursor) };
+        start_arrow(Some(InsertEnd::At(orig_cursor)));
         set_can_cindent(true);
     }
 }

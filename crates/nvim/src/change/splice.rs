@@ -31,8 +31,7 @@
     clippy::ptr_as_ptr
 )]
 
-use core::ffi::{c_int, c_void};
-use core::mem::offset_of;
+use core::ffi::c_int;
 
 use super::*;
 use crate::ex_docmd::cmdmod_has;
@@ -148,10 +147,7 @@ fn record_change_mark(mut buffer: Buf, lnum: LineNr, col: ColNr) {
     }
 
     // RESET_FMARK: the old mark's additional data is freed first.
-    let old = buffer.b_last_change.clone();
-    // SAFETY: the additional data is the mark's own, and nothing else holds
-    // it once the mark is overwritten below.
-    unsafe { free_fmark(old) };
+    clear_mark(&mut buffer.b_last_change, 0);
     let handle = buffer.handle;
     let now = os_time();
     buffer.b_last_change.mark = Pos {
@@ -190,18 +186,11 @@ fn record_change_mark(mut buffer: Buf, lnum: LineNr, col: ColNr) {
                 // The list is full: drop the oldest entry, and pull every
                 // window's index back with it.
                 buffer.b_changelistlen = JUMPLISTSIZE - 1;
-                // A field's address is the object's plus a constant, which
-                // needs no dereference to compute.
-                let head = buffer
-                    .raw()
-                    .wrapping_byte_add(offset_of!(Buffer, b_changelist))
-                    .cast::<c_void>();
-                let one = ::core::mem::size_of::<FileMark>();
-                let bytes = one.wrapping_mul((JUMPLISTSIZE - 1) as size_t);
-                // SAFETY: `b_changelist` holds `JUMPLISTSIZE` marks, so its
-                // last `JUMPLISTSIZE - 1` fit at its head.
-                let into = head.cast::<u8>();
-                unsafe { into.copy_from(head.wrapping_byte_add(one).cast_const().cast(), bytes) };
+                // Upstream `memmove`s the rest down and leaves the last
+                // slot a copy of the one before it; rotating puts the
+                // oldest there instead, and the new entry below overwrites
+                // it either way.
+                buffer.b_changelist.rotate_left(1);
                 for mut wp in tab_windows() {
                     if wp.w_buffer == buffer && wp.w_changelistidx > 0 {
                         wp.w_changelistidx -= 1;

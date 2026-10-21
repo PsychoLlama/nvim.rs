@@ -225,7 +225,9 @@ fn replace_block_line(mut op: Op, bd: &mut BlockDef, c: c_int, had_ctrl_v_cr: bo
     }
 
     let baselnum = Win::current().w_cursor.lnum;
-    let _ = unsafe { ml_replace(baselnum, newp, false) };
+    // SAFETY: `newp` is this function's `xmallocz` block, which the memline
+    // takes over.
+    let _ = ml_replace_owned(baselnum, unsafe { XString::from_raw(newp) });
     let splice = Suppress::splice();
     if !after_p.is_null() {
         // SAFETY: the `after_p_len` bytes just copied, the NUL among them.

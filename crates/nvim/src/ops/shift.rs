@@ -342,7 +342,9 @@ fn shift_block(op: Op, amount: c_int) {
         shift_block_right(&mut bd, total)
     };
 
-    let _ = unsafe { ml_replace(lnum, shifted.line, false) };
+    // SAFETY: the line `shift_block_*` allocated, which the memline takes
+    // over.
+    let _ = ml_replace_owned(lnum, unsafe { XString::from_raw(shifted.line) });
     changed_bytes(lnum, bd.textcol);
     let (at, old, new) = (shifted.start_col, shifted.old_len, shifted.new_len);
     let (buffer, row) = (Buf::current(), lnum as c_int - 1);

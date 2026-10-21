@@ -24,7 +24,7 @@
 use crate::guard::Suppress;
 use crate::memline::MlFlags;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use super::*;
 use crate::edit::BeginlineOpts;
@@ -273,16 +273,7 @@ fn delete_block(mut op: Op) -> Result<(), UndoFailed> {
                 line.extend_from_slice(&oldp[after.min(oldp.len())..]);
                 line
             };
-            // SAFETY: `line` holds exactly the bytes named, and `copy` is
-            // what hands the memline its own allocation of them.
-            let _ = unsafe {
-                ml_replace_len(
-                    lnum,
-                    line.as_ptr().cast_mut().cast::<c_char>(),
-                    line.len(),
-                    true,
-                )
-            };
+            let _ = ml_replace_buf_text(Buf::current(), lnum, &line);
             let row = lnum as c_int - 1;
             let buffer = Buf::current();
             extmark_splice_cols(buffer, row, bd.textcol, bd.textlen, pad, kExtmarkUndo);
@@ -421,7 +412,7 @@ fn delete_chars_one_line(op: Op) -> Result<(), UndoFailed> {
         && op.end.lnum == Win::current().w_cursor.lnum
         && !op.is_visual
     {
-        unsafe { display_dollar(op.end.col - c_int::from(!op.inclusive)) };
+        display_dollar(op.end.col - c_int::from(!op.inclusive));
     }
 
     let mut n = op.end.col - op.start.col + 1 - c_int::from(!op.inclusive);

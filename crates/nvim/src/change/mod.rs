@@ -26,11 +26,8 @@ use crate::buffer::{
     buf_inc_changedtick, buf_is_dontwrite, buf_is_prompt, buf_meta_total, current_buf,
 };
 use crate::buffer_updates::buf_updates_send_changes;
-use crate::charset::{getdigits_int, getwhitecols_curline, ptr2cells, skipwhite, vim_strnsize};
-use crate::cursor::{
-    check_cursor_lnum, check_visual_pos, coladvance_force, get_cursor_line_len,
-    get_cursor_line_ptr, get_cursor_pos_ptr, getviscol,
-};
+use crate::charset::getwhitecols_curline;
+use crate::cursor::{check_cursor_lnum, check_visual_pos, coladvance_force, getviscol};
 use crate::decoration::{kMTMetaInline, kMTMetaLines};
 use crate::diff::{diff_internal, diff_lnum_win, diff_update_line};
 use crate::drawscreen::state::{
@@ -39,28 +36,24 @@ use crate::drawscreen::state::{
 use crate::drawscreen::{
     UPD_NOT_VALID, UPD_VALID, redraw_buf_status_later, redraw_win_line, set_must_redraw, showmode,
 };
-use crate::edit::{prompt_text, replace_push, replace_push_nul, truncate_spaces};
+use crate::edit::{replace_push, replace_push_nul, truncate_spaces};
 use crate::eval::vars::set_vim_var_string;
 use crate::extmark::curbuf_splice_pending;
 use crate::extmark::{extmark_adjust, extmark_splice, extmark_splice_cols};
 use crate::fold::{find_wl_entry, fold_update, has_folding_win};
 use crate::highlight_group::HLF_W;
 use crate::indent::{
-    copy_indent, fixthisline, get_indent, get_lisp_indent, get_sw_value, indent_size_ts, may_do_si,
-    set_indent, use_indentexpr_for_lisp,
+    copy_indent, fixthisline, get_indent, get_lisp_indent, get_sw_value, may_do_si, set_indent,
+    use_indentexpr_for_lisp,
 };
 use crate::indent_c::{do_c_expr_indent, in_cinkeys, starts_with_cinword};
 use crate::insexpand::ins_compl_active;
-use crate::mark::{free_fmark, mark_adjust, mark_col_adjust, mark_view_make};
-use crate::mbyte::{
-    mb_adjust_cursor, utf_char2bytes, utf_composinglike, utf_head_off, utf_iscomposing_first,
-    utf_ptr2char, utf_ptr2len, utfc_ptr2len,
-};
+use crate::mark::{clear_mark, mark_adjust, mark_col_adjust, mark_view_make};
+use crate::mbyte::{mb_adjust_cursor, utf_iscomposing_first};
 use crate::memline::{
-    ml_add_deleted_len, ml_append_cstr, ml_delete_flags, ml_line_alloced, ml_open_file,
-    ml_replace_buf_text, ml_replace_owned, ml_setflags,
+    ml_add_deleted_len, ml_delete_flags, ml_line_alloced, ml_open_file, ml_replace_buf_text,
+    ml_replace_owned, ml_setflags,
 };
-use crate::memory::{xfree, xmalloc, xmemcpyz, xstrdup};
 use crate::message::state::{
     emsg_silent, in_assert_fails, msg_col, msg_row, msg_scroll, msg_silent, need_wait_return,
 };
@@ -72,8 +65,8 @@ use crate::r#move::{
     approximate_botline_win, changed_cline_bef_curs, changed_line_abv_curs_win,
     invalidate_botline_win, set_topline, sms_marker_overlap,
 };
+use crate::option::get_ve_flags;
 use crate::option::vars::{p_deco, p_paste, p_ri, p_sm, p_sr};
-use crate::option::{copy_option_part, get_ve_flags};
 use crate::options::kOptVeFlagOnemore;
 use crate::os::time::os_time;
 use crate::plines::{linetabsize_eol, win_chartabsize};
@@ -87,19 +80,17 @@ use crate::state::mode::{
     orig_line_count, restart_edit, vr_lines_changed,
 };
 use crate::state::{MODE_INSERT, REPLACE_FLAG, VREPLACE_FLAG, virtual_active};
-use crate::strings::{concat, xstrnsave};
+use crate::strings::concat;
 use crate::textformat::{comp_textwidth, has_format_option};
 use crate::types::AutoEvent;
 use crate::types::TAB;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    BCount, Buffer, CmdModFlags, ColNr, ExtmarkOp, FileMark, FileMarkView, GraphemeState, LineNr,
-    Pos, Vv, int64_t, size_t,
+    BCount, CmdModFlags, ColNr, ExtmarkOp, FileMarkView, GraphemeState, LineNr, Pos, Vv, int64_t,
 };
 use crate::ui::state::Rows;
 use crate::ui::{ui_active, ui_has};
 use crate::undo::{curbuf_is_changed, u_clearline, u_save_cursor, u_savedel};
-use ::libc::strcat;
 
 // The carve of the transpiled module; see each child's docs.
 mod flag;

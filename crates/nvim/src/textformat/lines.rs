@@ -338,8 +338,9 @@ pub(crate) fn format_lines(line_count: LineNr, avoid_fex: bool) {
                 // Except when the next line opens a line comment and this
                 // one has a line comment after some text: then the
                 // paragraph does not really end.
-                if next_leader.flags.is_null()
-                    || !unsafe { cstr::starts_with(next_leader.flags, b"://") }
+                if next_leader
+                    .flags
+                    .is_none_or(|flags| !flags.with_rest(|rest| rest.starts_with(b"://")))
                     || check_linecomment(Lines::current().line(Win::current().w_cursor.lnum))
                         == MAXCOL
                 {

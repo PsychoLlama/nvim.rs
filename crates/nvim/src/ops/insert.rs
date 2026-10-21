@@ -29,7 +29,7 @@
 
 use crate::memline::MlFlags;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{c_char, c_int, c_uint};
+use core::ffi::{c_int, c_uint};
 
 use super::*;
 use crate::types::NUL;
@@ -443,16 +443,7 @@ fn replay_change(op: Op, bd: &mut BlockDef, mut pre_textlen: c_int, pre_indent: 
                 line.extend_from_slice(&oldp[at..]);
                 line
             };
-            // SAFETY: `line` holds exactly the bytes named, and `copy` is
-            // what hands the memline its own allocation of them.
-            let _ = unsafe {
-                ml_replace_len(
-                    linenr,
-                    line.as_ptr().cast_mut().cast::<c_char>(),
-                    line.len(),
-                    true,
-                )
-            };
+            let _ = ml_replace_buf_text(Buf::current(), linenr, &line);
             let splice = vpos.coladd + ins_len;
             let row = linenr as c_int - 1;
             let buffer = Buf::current();

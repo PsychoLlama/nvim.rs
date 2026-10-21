@@ -12,10 +12,9 @@
 //! single-character case `r` uses, which has to build the redo-buffer
 //! spelling itself.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use super::*;
 use crate::memory::XString;
@@ -26,38 +25,15 @@ use crate::types::{Failed, NUL};
 /// Used by `r`.  What is stored is the *redo buffer* spelling: a CTRL-V in
 /// front of a control character, then the character, then the `<Esc>` that
 /// ends an insert.
-///
-/// # Safety
-/// Must run on the main thread; frees and replaces `last_insert`.
-pub(crate) unsafe fn set_last_insert(c: c_int) {
-    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
-    // precondition is the live `curwin`/`curbuf` this mode runs with.
-    // The strings walked below are NUL-terminated lines of that buffer, and
-    // every step stops at the NUL.
-    let start =
-        unsafe { xmalloc((MB_MAXBYTES as c_int * 3 + 5) as size_t) } as *mut ::core::ffi::c_char;
-    let mut s = start;
+pub(crate) fn set_last_insert(c: c_int) {
+    let mut text = Vec::with_capacity(MB_MAXBYTES * 3 + 4);
     // The CTRL-V is only needed to enter a special character.
     if c < ' ' as c_int || c == DEL {
-        unsafe { *s = Ctrl_V as c_char };
-        s = unsafe { s.offset(1) };
+        text.push(Ctrl_V as u8);
     }
-    let mut escaped = Vec::new();
-    push_char_escaped(c, &mut escaped);
-    unsafe {
-        s.cast::<u8>()
-            .copy_from_nonoverlapping(escaped.as_ptr(), escaped.len())
-    };
-    s = s.wrapping_add(escaped.len());
-    unsafe { *s = ESC as c_char };
-    s = unsafe { s.offset(1) };
-    unsafe { *s = NUL as c_char };
-
-    let len = unsafe { s.offset_from(start) } as size_t;
-    // SAFETY: `start` is this function's own allocation, NUL-terminated at
-    // `len` by the write above.
-    let text = unsafe { String_0::from_owned_parts(start, len) };
-    last_insert.set(text);
+    push_char_escaped(c, &mut text);
+    text.push(ESC as u8);
+    last_insert.set(String_0::from_bytes(&text));
     last_insert_skip.set(0);
 }
 
@@ -71,7 +47,7 @@ pub(crate) unsafe fn set_last_insert(c: c_int) {
 /// `Err` -- with `E29` -- when there is nothing to insert.
 pub(crate) fn stuff_inserted(c: c_int, mut count: c_int, no_esc: c_int) -> Result<(), Failed> {
     let mut insert = get_last_insert(); // text to be inserted
-    if insert.data().is_null() {
+    if insert.is_null() {
         emsg(gettext(e_noinstext));
         return Err(Failed);
     }
@@ -83,37 +59,34 @@ pub(crate) fn stuff_inserted(c: c_int, mut count: c_int, no_esc: c_int) -> Resul
 
     // Cut the text at the last ESC: what follows it is not part of the
     // insert.
-    let mut i = insert.len();
-    while i > 0 {
-        i -= 1;
-        if unsafe { *insert.data().add(i) } as c_int == ESC {
-            insert = String_0::from_bytes(&insert.as_bytes()[..i]);
-            break;
-        }
+    if let Some(i) = insert
+        .as_bytes()
+        .iter()
+        .rposition(|&b| c_int::from(b) == ESC)
+    {
+        insert = String_0::from_bytes(&insert.as_bytes()[..i]);
     }
 
     // A trailing `0` or `^` has to be quoted, because either would be
     // read as the start of `0 CTRL-D`/`^ CTRL-D` -- but only when
     // nothing follows it (no ESC is coming) or when the text is repeated
     // and starts with CTRL-D.  -- Acevedo
-    let mut last = NUL as c_char;
-    if !insert.is_empty() {
-        let p = unsafe { insert.data().add(insert.len() - 1) };
-        if (unsafe { *p } as c_int == '0' as c_int || unsafe { *p } as c_int == '^' as c_int)
-            && (no_esc != 0 || (unsafe { *insert.data() } as c_int == Ctrl_D && count > 1))
-        {
-            last = unsafe { *p };
-            let shorter = insert.len() - 1;
-            insert = String_0::from_bytes(&insert.as_bytes()[..shorter]);
-        }
+    let mut last = NUL as u8;
+    if let (Some(&first), Some(&end)) = (insert.as_bytes().first(), insert.as_bytes().last())
+        && matches!(end, b'0' | b'^')
+        && (no_esc != 0 || (c_int::from(first) == Ctrl_D && count > 1))
+    {
+        last = end;
+        let shorter = insert.len() - 1;
+        insert = String_0::from_bytes(&insert.as_bytes()[..shorter]);
     }
 
     loop {
         stuff_readbuf_len(insert.as_bytes());
         // The quoted forms: `0` as `<C-V>048`, `^` as `<C-V>^`.
-        if last == b'0' as c_char {
+        if last == b'0' {
             stuff_readbuf_len(b"\x16048");
-        } else if last == b'^' as c_char {
+        } else if last == b'^' {
             stuff_readbuf_len(b"\x16^");
         }
         count -= 1;

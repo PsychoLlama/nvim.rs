@@ -19,8 +19,7 @@
 //! because an autocommand may change the buffer, and that change needs an
 //! undo block of its own.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -37,44 +36,57 @@ use crate::normal::visual_active;
 use crate::option::cpo_has;
 use crate::types::{CpoFlag, Failed, FoFlag, NUL};
 
+/// Where an insert ended, as [`stop_insert`] reads it.
+///
+/// Upstream passes a `pos_T *`, and the callers point it either at a copy of
+/// the position or at the window's own cursor -- which `stop_insert` then
+/// sees move as it moves the cursor itself. The two are two arms here.
+#[derive(Clone, Copy)]
+pub(crate) enum InsertEnd {
+    /// This position.
+    At(Pos),
+    /// `win`'s cursor, wherever it is each time it is read.
+    CursorOf(Win),
+}
+
+impl InsertEnd {
+    /// The current window's cursor, read live.
+    pub(crate) fn cursor() -> Self {
+        Self::CursorOf(Win::current())
+    }
+
+    fn pos(self) -> Pos {
+        match self {
+            Self::At(pos) => pos,
+            Self::CursorOf(win) => win.w_cursor,
+        }
+    }
+}
+
 /// Called when an arrow key is used in Insert mode: for undo and redo it
 /// resembles hitting `<Esc>`.
 ///
-/// `end_insert_pos` may be null, meaning the insert's end is not known
-/// (another buffer is current now).
-///
-/// # Safety
-/// `end_insert_pos`, if not null, must point to a valid position.
-pub(crate) unsafe fn start_arrow(end_insert_pos: *mut Pos) {
-    // SAFETY: the caller's promise about `end_insert_pos` is exactly what
-    // `start_arrow_common` passes on to `stop_insert`.
-    unsafe { start_arrow_common(end_insert_pos, true) }
+/// `end_insert_pos` is `None` when the insert's end is not known (another
+/// buffer is current now).
+pub(crate) fn start_arrow(end_insert_pos: Option<InsertEnd>) {
+    start_arrow_common(end_insert_pos, true);
 }
 
 /// [`start_arrow`], but able to keep the undoable change open -- which is
 /// `i_CTRL-G_U`, and is recorded so redo does the same.
-///
-/// # Safety
-/// `end_insert_pos`, if not null, must point to a valid position.
-pub(crate) unsafe fn start_arrow_with_change(end_insert_pos: *mut Pos, end_change: bool) {
-    // SAFETY: the caller's promise about `end_insert_pos` is exactly what
-    // `start_arrow_common` passes on to `stop_insert`.
-    unsafe { start_arrow_common(end_insert_pos, end_change) };
+pub(crate) fn start_arrow_with_change(end_insert_pos: Option<InsertEnd>, end_change: bool) {
+    start_arrow_common(end_insert_pos, end_change);
     if !end_change {
         append_to_redobuff_char(Ctrl_G);
         append_to_redobuff_char('U' as c_int);
     }
 }
 
-/// # Safety
-/// `end_insert_pos`, if not null, must point to a valid position.
-unsafe fn start_arrow_common(end_insert_pos: *mut Pos, end_change: bool) {
-    // SAFETY: the caller's promise about `end_insert_pos` is exactly what
-    // `stop_insert` asks of it; `ESC_STR` is a static string.
+fn start_arrow_common(end_insert_pos: Option<InsertEnd>, end_change: bool) {
     if !arrow_used.get() && end_change {
         // Something has been inserted: close the block.
         append_to_redobuff(ESC_STR.to_bytes());
-        unsafe { stop_insert(end_insert_pos, 0, 0) };
+        stop_insert(end_insert_pos, 0, 0);
         arrow_used.set(true);
     }
     check_spell_redraw();
@@ -96,8 +108,6 @@ pub(crate) fn check_spell_redraw() {
 ///
 /// `Err` when undo is impossible, in which case the caller must not insert.
 pub(crate) fn stop_arrow() -> Result<(), Failed> {
-    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
-    // precondition is the live `curwin`/`curbuf` this mode runs with.
     if arrow_used.get() {
         Insstart.set(Win::current().w_cursor); // new insertion starts here
         if Insstart.get().col > Insstart_orig.get().col && !ins_need_undo.get() {
@@ -136,15 +146,12 @@ pub(crate) fn stop_arrow() -> Result<(), Failed> {
 
 /// Do the few things that stop an insert.
 ///
-/// `end_insert_pos` is where the insert ended, and is null when another
+/// `end_insert_pos` is where the insert ended, and is `None` when another
 /// window or buffer has already been jumped to -- in which case neither the
 /// trimming nor the `'[`/`']` marks happen.  `esc` says the caller is
 /// `ins_esc`, and `nomove` is `i_CTRL-\_CTRL-O`, which must not move the
 /// cursor.
-///
-/// # Safety
-/// `end_insert_pos`, if not null, must point to a valid position.
-pub(crate) unsafe fn stop_insert(end_insert_pos: *mut Pos, esc: c_int, nomove: c_int) {
+pub(crate) fn stop_insert(end_insert_pos: Option<InsertEnd>, esc: c_int, nomove: c_int) {
     stop_redo_ins();
 
     // Abandon the replace stack (this reinitialises it).
@@ -165,7 +172,9 @@ pub(crate) unsafe fn stop_insert(end_insert_pos: *mut Pos, esc: c_int, nomove: c
         last_insert_skip.set(if added < 0 { 0 } else { new_insert_skip.get() });
     }
 
-    if !arrow_used.get() && !end_insert_pos.is_null() {
+    if !arrow_used.get()
+        && let Some(end_insert_pos) = end_insert_pos
+    {
         // Auto-format now.  It looks odd to do this when *stopping* an
         // insertion, but appending a line that ends in a space needs it.
         // Only when something was actually inserted, or undo breaks.
@@ -213,13 +222,13 @@ pub(crate) unsafe fn stop_insert(end_insert_pos: *mut Pos, esc: c_int, nomove: c
             && did_ai.get()
             && (esc != 0
                 || (!cpo_has(CpoFlag::INDENT)
-                    && Win::current().w_cursor.lnum != unsafe { (*end_insert_pos).lnum }))
-            && unsafe { (*end_insert_pos).lnum } <= Buf::current().b_ml.ml_line_count
+                    && Win::current().w_cursor.lnum != end_insert_pos.pos().lnum))
+            && end_insert_pos.pos().lnum <= Buf::current().b_ml.ml_line_count
         {
             let mut tpos = Win::current().w_cursor;
-            let prev_col = unsafe { (*end_insert_pos).col };
+            let prev_col = end_insert_pos.pos().col;
 
-            Win::current().w_cursor = unsafe { *end_insert_pos };
+            Win::current().w_cursor = end_insert_pos.pos();
             check_cursor_col(Win::current()); // make sure it is not past the line
             loop {
                 if char_at_cursor() == NUL && Win::current().w_cursor.col > 0 {
@@ -257,10 +266,10 @@ pub(crate) unsafe fn stop_insert(end_insert_pos: *mut Pos, esc: c_int, nomove: c
 
     // Set `'[` and `']` to the inserted text.  A null `end_insert_pos`
     // means a different buffer is current now.
-    if !end_insert_pos.is_null() {
+    if let Some(end_insert_pos) = end_insert_pos {
         Buf::current().b_op_start = Insstart.get();
         Buf::current().b_op_start_orig = Insstart_orig.get();
-        Buf::current().b_op_end = unsafe { *end_insert_pos };
+        Buf::current().b_op_end = end_insert_pos.pos();
     }
 }
 
@@ -290,13 +299,11 @@ pub(crate) fn ins_apply_autocmds(event: AutoEvent) -> c_int {
 /// The character under the cursor, `NUL` at the end of the line.
 #[inline(always)]
 fn char_at_cursor() -> c_int {
-    // SAFETY: `curwin`/`curbuf` are live for the whole session.
     gchar_cursor()
 }
 
 /// Save the cursor's line for undo, answering `Ok` when it was saved.
 #[inline(always)]
 fn save_cursor_line() -> Result<(), Failed> {
-    // SAFETY: `curwin`/`curbuf` are live for the whole session.
     u_save_cursor()
 }

@@ -10,6 +10,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::memline::Lines;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
 
@@ -17,8 +18,8 @@ use super::*;
 use crate::change::{get_leader_len, ins_bytes, ins_str, open_line};
 use crate::charset::char2cells;
 use crate::cursor::{
-    dec_cursor, gchar_cursor, get_cursor_line_len, get_cursor_line_ptr, get_cursor_pos_len,
-    get_cursor_pos_ptr, inc_cursor, pchar_cursor,
+    dec_cursor, gchar_cursor, get_cursor_line_len, get_cursor_pos_len, get_cursor_pos_ptr,
+    inc_cursor, pchar_cursor,
 };
 use crate::drawscreen::{UPD_VALID, redraw_curbuf_later};
 use crate::edit::{backspace_until_column, get_nolist_virtcol, set_can_cindent, undisplay_dollar};
@@ -272,21 +273,13 @@ impl BreakSearch {
 /// With 'cindent', a leader that is not at the start of the line still counts
 /// -- a line comment after code -- which is what the second lookup is for.
 fn wrap_leader_len() -> ColNr {
-    let line = get_cursor_line_ptr();
-    let mut leader_len =
-        unsafe { get_leader_len(line, ::core::ptr::null_mut::<*mut c_char>(), false, true) };
+    let mut lines = Lines::current();
+    let line = lines.line(Win::current().w_cursor.lnum);
+    let mut leader_len = get_leader_len(line, false, true).0;
     if leader_len == 0 && Buf::current().b_p_cin != 0 {
-        // SAFETY: the cursor's line, NUL-terminated.
-        let comment_start = check_linecomment(unsafe { cstr::bytes_at(line) });
+        let comment_start = check_linecomment(line);
         if comment_start != MAXCOL {
-            leader_len = unsafe {
-                get_leader_len(
-                    line.offset(comment_start as isize),
-                    ::core::ptr::null_mut::<*mut c_char>(),
-                    false,
-                    true,
-                )
-            };
+            leader_len = get_leader_len(&line[comment_start as usize..], false, true).0;
             if leader_len != 0 {
                 leader_len += comment_start;
             }
@@ -435,27 +428,25 @@ pub fn internal_format(
 
         // Split the line just before the margin. Only insert and delete
         // lines; don't really redraw the window.
-        unsafe {
-            open_line(
-                FORWARD as c_int,
-                (OPENLINE_DELSPACES
-                    + OPENLINE_MARKFIX
-                    + if fo_white_par { OPENLINE_KEEPTRAIL } else { 0 }
-                    + if do_comments { OPENLINE_DO_COM } else { 0 }
-                    + OPENLINE_FORMAT
-                    + if flags & INSCHAR_COM_LIST as c_int != 0 {
-                        OPENLINE_COM_LIST
-                    } else {
-                        0
-                    }) as c_int,
-                if flags & INSCHAR_COM_LIST as c_int != 0 {
-                    second_indent
+        let _ = open_line(
+            FORWARD as c_int,
+            (OPENLINE_DELSPACES
+                + OPENLINE_MARKFIX
+                + if fo_white_par { OPENLINE_KEEPTRAIL } else { 0 }
+                + if do_comments { OPENLINE_DO_COM } else { 0 }
+                + OPENLINE_FORMAT
+                + if flags & INSCHAR_COM_LIST as c_int != 0 {
+                    OPENLINE_COM_LIST
                 } else {
-                    old_indent.get()
-                },
-                &raw mut did_do_comment,
-            )
-        };
+                    0
+                }) as c_int,
+            if flags & INSCHAR_COM_LIST as c_int != 0 {
+                second_indent
+            } else {
+                old_indent.get()
+            },
+            Some(&mut did_do_comment),
+        );
         if flags & INSCHAR_COM_LIST as c_int == 0 {
             old_indent.set(0);
         }
@@ -484,7 +475,7 @@ pub fn internal_format(
                         // white space the number wants after it.
                         let padding = second_indent - leader_len;
                         for _ in 0..padding {
-                            unsafe { ins_str(c" ".as_ptr() as *mut c_char, 1) };
+                            ins_str(b" ");
                         }
                     } else {
                         set_indent(second_indent, SIN_CHANGED as c_int);
@@ -497,7 +488,8 @@ pub fn internal_format(
         if State.get() & VREPLACE_FLAG != 0 {
             // MODE_VREPLACE backspaced over the text being moved; put it
             // into the new line.
-            unsafe { ins_bytes(saved_text) };
+            // SAFETY: the text `saved_text` holds, NUL-terminated.
+            ins_bytes(unsafe { cstr::bytes_at(saved_text) });
             unsafe { xfree(saved_text as *mut ::core::ffi::c_void) };
         } else {
             // Keep the cursor off the NUL past the end: cindent may have

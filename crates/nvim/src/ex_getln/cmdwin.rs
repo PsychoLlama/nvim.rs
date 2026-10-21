@@ -10,6 +10,7 @@
 
 use super::*;
 use crate::buffer::{BufRef, current_buf};
+use crate::cstr;
 use crate::ex_docmd::{cmdmod_add_flags, cmdmod_set_tab};
 use crate::guard::Allow;
 use crate::keycodes::{Ctrl_C, Key};
@@ -254,7 +255,10 @@ pub(crate) fn open_cmdwin() -> ::core::ffi::c_int {
     // Replace the empty last line with the current command line and put
     // the cursor there.
     let (last, text) = (Buf::current().b_ml.ml_line_count, Cc::current().text());
-    let _ = unsafe { ml_replace(last, text, true) };
+    if !text.is_null() {
+        // SAFETY: the command line's own NUL-terminated text, copied.
+        let _ = ml_replace_buf_text(Buf::current(), last, unsafe { cstr::bytes_at(text) });
+    }
     Win::current().w_cursor.lnum = Buf::current().b_ml.ml_line_count;
     Win::current().w_cursor.col = Cc::current().cmdpos as ColNr;
     changed_line_abv_curs();

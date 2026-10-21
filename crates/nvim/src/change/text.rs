@@ -12,76 +12,55 @@
 //! Every one of these ends in [`inserted_bytes`], which is what turns the edit
 //! into an extmark splice and a buffer-update event.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::cstr;
-use crate::mbyte::{cluster_len, head_off};
+use crate::mbyte::{char_at, char_len, cluster_len, encode_char, head_off, iscomposing};
 use crate::memline::MlFlags;
 use crate::memory::XString;
 use crate::siemsg;
-use core::ffi::{c_char, c_int};
-use core::slice;
+use core::ffi::c_int;
 
 use super::*;
 use crate::option::cpo_has;
 use crate::types::{CpoFlag, Failed, NUL};
 use crate::winlayer::{Buf, Win};
 
-/// `memmove` between two places inside this module's own line buffers.
+/// Insert `bytes` at the cursor, one character at a time, so that Replace
+/// mode overwrites -- and the replace stack records -- each in turn.
 ///
-/// Every call below moves bytes within, or between, an allocation this file
-/// made and sized for them, which is the promise the one region here pays.
-fn move_bytes(dst: *mut c_char, src: *const c_char, n: size_t) {
-    // SAFETY: the caller sized `dst` for `n` bytes read from `src`; the two
-    // may overlap, which is what `memmove` is for.
-    unsafe { dst.cast::<u8>().copy_from(src.cast(), n) };
-}
-
-/// Insert the NUL-terminated string `p` at the cursor.
-///
-/// # Safety
-/// `p` must be NUL-terminated. The caller must have prepared for undo.
-pub unsafe fn ins_bytes(p: *mut c_char) {
-    unsafe { ins_bytes_len(p, cstr::bytes_at(p).len()) };
-}
-
-/// Insert `len` bytes of `p` at the cursor, one character at a time.
-///
-/// # Safety
-/// `p` must point to at least `len` readable bytes. The caller must have
-/// prepared for undo.
-pub unsafe fn ins_bytes_len(p: *mut c_char, len: size_t) {
-    let mut i: size_t = 0;
-    while i < len {
+/// The caller must have prepared for undo.
+pub fn ins_bytes(bytes: &[u8]) {
+    let mut i = 0;
+    while i < bytes.len() {
         // Bounded by the bytes left, so that a truncated sequence at the end
-        // does not read past `p[len]`.
-        let n = cluster_len(unsafe { cstr::slice_at(p.add(i), len - i) });
-        unsafe { ins_char_bytes(p.add(i), n) };
-        i = i.wrapping_add(n);
+        // is a character of its own.
+        let n = cluster_len(&bytes[i..]);
+        ins_char_bytes(&bytes[i..i + n]);
+        i += n;
     }
 }
 
 /// Insert or replace the single character `c` at the cursor.
 pub fn ins_char(c: c_int) {
-    let mut buf: [c_char; 7] = [0; 7];
-    let n = unsafe { utf_char2bytes(c, buf.as_mut_ptr()) } as size_t;
+    let mut buf = [0u8; 7];
+    let n = encode_char(c, &mut buf);
     // `c` being 0x100, 0x200, ... would encode to a leading NUL byte, which
     // must not go into the line; CTRL-V u9900 reaches this.
     if buf[0] == 0 {
-        buf[0] = b'\n' as c_char;
+        buf[0] = b'\n';
     }
-    unsafe { ins_char_bytes(buf.as_mut_ptr(), n) };
+    ins_char_bytes(&buf[..n]);
 }
 
 /// How many bytes at the cursor Virtual Replace mode has to consume to make
-/// room for `buf`, and how many bytes the new text takes once padded.
+/// room for `new`, and how many bytes the new text takes once padded.
 ///
 /// Each typed character replaces one or more existing ones, or none at all for
 /// a TAB, because what is being matched is screen cells. Overshooting the
 /// column the new character ends at means the difference has to be filled with
 /// spaces, which is what the returned `newlen` carries.
-fn vreplace_extent(buf: *mut c_char, col: size_t, charlen: size_t) -> (size_t, size_t) {
+fn vreplace_extent(new: &[u8], col: usize) -> (usize, usize) {
     // Disable 'list' while measuring, unless 'cpo' has the `L` flag: it
     // changes how wide a TAB looks.
     let old_list = Win::current().w_onebuf_opt.wo_list;
@@ -89,12 +68,11 @@ fn vreplace_extent(buf: *mut c_char, col: size_t, charlen: size_t) -> (size_t, s
         Win::current().w_onebuf_opt.wo_list = false as c_int;
     }
 
-    let mut oldlen: size_t = 0;
-    let mut newlen: size_t = charlen;
+    let mut oldlen = 0;
+    let mut newlen = new.len();
     let win = Win::current();
     let mut vcol: ColNr = win.vcol_triple(win.cursor()).1;
-    // SAFETY: `buf` holds the character's `charlen` bytes.
-    let new_vcol = vcol + win_chartabsize(win, unsafe { cstr::slice_at(buf, charlen) }, vcol);
+    let new_vcol = vcol + win_chartabsize(win, new, vcol);
     // The line is read here, not handed in: `getvcol` above reads the
     // memline too, so a slice taken in front of it is not one to hold.
     let mut lines = Buf::current().lines();
@@ -110,7 +88,7 @@ fn vreplace_extent(buf: *mut c_char, col: size_t, charlen: size_t) -> (size_t, s
         oldlen += cluster_len(at);
         // Took off a bit too much: pad with spaces.
         if vcol > new_vcol {
-            newlen = newlen.wrapping_add((vcol - new_vcol) as size_t);
+            newlen += (vcol - new_vcol) as usize;
         }
     }
 
@@ -118,35 +96,32 @@ fn vreplace_extent(buf: *mut c_char, col: size_t, charlen: size_t) -> (size_t, s
     (oldlen, newlen)
 }
 
-/// Insert `charlen` bytes of `buf` -- one whole character -- at the cursor,
-/// replacing what is there in Replace and Virtual Replace modes.
+/// Insert `new` -- one whole character -- at the cursor, replacing what is
+/// there in Replace and Virtual Replace modes.
 ///
 /// The caller has already turned bytes into a character; this only ever writes
-/// one.
-///
-/// # Safety
-/// `buf` must point to at least `charlen` readable bytes. The caller must have
-/// prepared for undo.
-pub unsafe fn ins_char_bytes(buf: *mut c_char, charlen: size_t) {
+/// one. The caller must have prepared for undo.
+pub fn ins_char_bytes(new: &[u8]) {
     // Break tabs if needed.
     if virtual_active(Win::current()) && Win::current().w_cursor.coladd > 0 {
         coladvance_force(getviscol());
     }
 
-    let col = Win::current().w_cursor.col as size_t;
+    let col = Win::current().w_cursor.col as usize;
     let lnum = Win::current().w_cursor.lnum;
+    let charlen = new.len();
 
     // The defaults are the values for when not replacing: nothing deleted,
     // the whole character inserted.
-    let mut oldlen: size_t = 0;
-    let mut newlen: size_t = charlen;
+    let mut oldlen = 0;
+    let mut newlen = charlen;
 
     if State.get() & REPLACE_FLAG != 0 {
         if State.get() & VREPLACE_FLAG != 0 {
             // Measures the line for itself: the screen-column walk it does
             // reads the memline, so a line taken before it is not one to
             // hold across it.
-            (oldlen, newlen) = vreplace_extent(buf, col, charlen);
+            (oldlen, newlen) = vreplace_extent(new, col);
         } else {
             let mut lines = Buf::current().lines();
             let tail = &lines.line(lnum)[col..];
@@ -169,8 +144,7 @@ pub unsafe fn ins_char_bytes(buf: *mut c_char, charlen: size_t) {
         let old = lines.line(lnum);
         let mut newline = XString::with_capacity(old.len() + newlen - oldlen);
         newline.push_bytes(&old[..col]);
-        // SAFETY: the caller promises `charlen` readable bytes at `buf`.
-        newline.push_bytes(unsafe { slice::from_raw_parts(buf.cast::<u8>(), charlen) });
+        newline.push_bytes(new);
         // Fill the rest with spaces when Virtual Replace took off too much.
         for _ in charlen..newlen {
             newline.push_byte(b' ');
@@ -185,7 +159,7 @@ pub unsafe fn ins_char_bytes(buf: *mut c_char, charlen: size_t) {
     // In Insert or Replace mode with 'showmatch', briefly show the match
     // for a closing bracket.
     if p_sm() && State.get() & MODE_INSERT != 0 && msg_silent.get() == 0 && !ins_compl_active() {
-        unsafe { showmatch(utf_ptr2char(buf)) };
+        showmatch(char_at(new));
     }
 
     if !p_ri() || State.get() & REPLACE_FLAG != 0 {
@@ -194,36 +168,31 @@ pub unsafe fn ins_char_bytes(buf: *mut c_char, charlen: size_t) {
     }
 }
 
-/// Insert `slen` bytes of `s` at the cursor.
+/// Insert `text` at the cursor, all at once.
 ///
-/// Unlike [`ins_char_bytes`] this does *not* handle Replace mode.
-///
-/// # Safety
-/// `s` must point to at least `slen` readable bytes. The caller must have
-/// prepared for undo.
-pub unsafe fn ins_str(s: *mut c_char, slen: size_t) {
+/// Unlike [`ins_char_bytes`] this does *not* handle Replace mode. The caller
+/// must have prepared for undo.
+pub fn ins_str(text: &[u8]) {
     let lnum = Win::current().w_cursor.lnum;
 
     if virtual_active(Win::current()) && Win::current().w_cursor.coladd > 0 {
         coladvance_force(getviscol());
     }
 
-    let col = Win::current().w_cursor.col as size_t;
+    let col = Win::current().w_cursor.col as usize;
 
     let newline = {
         let mut lines = Buf::current().lines();
         let old = lines.line(lnum);
-        let mut newline = XString::with_capacity(old.len() + slen);
+        let mut newline = XString::with_capacity(old.len() + text.len());
         newline.push_bytes(&old[..col]);
-        // SAFETY: the caller promises `slen` readable bytes at `s`.
-        newline.push_bytes(unsafe { slice::from_raw_parts(s.cast::<u8>(), slen) });
+        newline.push_bytes(text);
         newline.push_bytes(&old[col..]);
         newline
     };
     let _ = ml_replace_owned(lnum, newline);
-    let col = col as ColNr;
-    inserted_bytes(lnum, col, 0, slen as c_int);
-    Win::current().w_cursor.col += slen as ColNr;
+    inserted_bytes(lnum, col as ColNr, 0, text.len() as c_int);
+    Win::current().w_cursor.col += text.len() as ColNr;
 }
 
 /// Delete the character under the cursor.
@@ -232,7 +201,9 @@ pub unsafe fn ins_str(s: *mut c_char, slen: size_t) {
 pub fn del_char(fixpos: bool) -> Result<(), Failed> {
     // Make sure the cursor is at the start of a character.
     mb_adjust_cursor();
-    if c_int::from(unsafe { *get_cursor_pos_ptr() }) == NUL {
+    let cursor = Win::current().w_cursor;
+    let mut lines = Buf::current().lines();
+    if cstr::byte_at(lines.line(cursor.lnum), cursor.col as usize) == NUL as u8 {
         return Err(Failed);
     }
     del_chars(1, fixpos as c_int)
@@ -240,16 +211,30 @@ pub fn del_char(fixpos: bool) -> Result<(), Failed> {
 
 /// [`del_bytes`] counted in characters rather than bytes.
 pub fn del_chars(count: c_int, fixpos: c_int) -> Result<(), Failed> {
-    let mut bytes = 0;
-    let mut p = get_cursor_pos_ptr();
-    let mut i = 0;
-    while i < count && c_int::from(unsafe { *p }) != NUL {
-        let l = unsafe { utfc_ptr2len(p) };
-        bytes += l;
-        p = unsafe { p.offset(l as isize) };
-        i += 1;
-    }
-    del_bytes(bytes, fixpos != 0, true)
+    let cursor = Win::current().w_cursor;
+    let col = cursor.col as usize;
+    let bytes = {
+        let mut lines = Buf::current().lines();
+        let line = lines.line(cursor.lnum);
+        let mut at = col;
+        let mut i = 0;
+        while i < count && at < line.len() {
+            at += cluster_len(&line[at..]);
+            i += 1;
+        }
+        at - col
+    };
+    del_bytes(bytes as ColNr, fixpos != 0, true)
+}
+
+/// Whether the character at byte `next` of `line` belongs to the grapheme
+/// cluster of the one at byte `at` -- upstream's `utf_composinglike`, with
+/// the walk state it carries.
+fn composes_with(line: &[u8], at: usize, next: usize, state: &mut GraphemeState) -> bool {
+    // ASCII never combines, and this is the hot answer; the end of the line
+    // reads as its NUL.
+    cstr::byte_at(line, next) >= 0x80
+        && iscomposing(char_at(&line[at..]), char_at(&line[next..]), Some(state))
 }
 
 /// Delete `count` bytes at the cursor.
@@ -287,33 +272,17 @@ pub fn del_bytes(mut count: ColNr, fixpos_arg: bool, use_delcombine: bool) -> Re
     if p_deco() && use_delcombine {
         let mut lines = Buf::current().lines();
         let line = lines.line(lnum);
-        // The line's own bytes: every offset taken off it below is a column
-        // reached by stepping whole characters from `col`.
-        let base = line.as_ptr().cast::<c_char>();
-        if cluster_len(&line[col as usize..]) >= count as usize {
-            // SAFETY: `col` is a column of the line.
-            let p0 = unsafe { base.offset(col as isize) };
+        let at = col as usize;
+        if cluster_len(&line[at..]) >= count as usize {
             let mut state: GraphemeState = GRAPHEME_STATE_INIT as GraphemeState;
-            // SAFETY: `p0` and the byte after its character, both inside the
-            // line or its terminator.
-            if unsafe { utf_composinglike(p0, p0.offset(utf_ptr2len(p0) as isize), &raw mut state) }
-            {
+            if composes_with(line, at, at + char_len(&line[at..]), &mut state) {
                 // Walk to the last composing character; there can be several.
-                let mut n = col;
+                let mut n = at;
                 loop {
-                    col = n;
-                    // SAFETY: `n` is a column of the line.
-                    count = unsafe { utf_ptr2len(base.offset(n as isize)) };
-                    n += count;
-                    // SAFETY: two columns of the line, the second of which
-                    // may be its terminator.
-                    if !unsafe {
-                        utf_composinglike(
-                            base.offset(col as isize),
-                            base.offset(n as isize),
-                            &raw mut state,
-                        )
-                    } {
+                    col = n as ColNr;
+                    count = char_len(&line[n..]) as ColNr;
+                    n += count as usize;
+                    if !composes_with(line, col as usize, n, &mut state) {
                         break;
                     }
                 }
@@ -346,17 +315,19 @@ pub fn del_bytes(mut count: ColNr, fixpos_arg: bool, use_delcombine: bool) -> Re
     let newlen = oldlen - count;
 
     // An already-allocated line can be edited in place; one that is still
-    // memory-mapped has to be copied.
+    // in its block has to be copied.
     if ml_line_alloced() {
-        // The cached line is this buffer's own block, `oldlen + 1` bytes of
-        // it, so the tail moves up inside it. `movelen` counts the NUL.
+        // The cached line is this buffer's own, `oldlen + 1` bytes of it, so
+        // the tail moves up inside it. `movelen` counts the NUL.
         ml_add_deleted_len(Buf::current().b_ml.cached_bytes(), oldlen as usize);
-        let oldp = Buf::current().b_ml.cached_text();
-        let from = oldp
-            .wrapping_offset(col as isize)
-            .wrapping_offset(count as isize);
-        move_bytes(oldp.wrapping_offset(col as isize), from, movelen as size_t);
-        Buf::current().b_ml.set_cached_len(newlen + 1);
+        let mut buffer = Buf::current();
+        let line = buffer
+            .b_ml
+            .owned_bytes_with_nul_mut()
+            .expect("an allocated line is owned");
+        let (col, count, movelen) = (col as usize, count as usize, movelen as usize);
+        line.copy_within(col + count..col + count + movelen, col);
+        buffer.b_ml.set_cached_len(newlen + 1);
     } else {
         let newline = {
             let mut lines = Buf::current().lines();
@@ -420,49 +391,4 @@ pub fn del_lines(nlines: LineNr, undo: bool) {
     Win::current().w_cursor.col = 0;
     check_cursor_lnum(Win::current());
     deleted_lines_mark(first, n);
-}
-
-/// Line `lnum` of the current buffer becomes `line`: the memline copies it
-/// (`copy`) or takes it over. The pointer form of the memline's replace
-/// ([`ml_replace_buf_text`], [`ml_replace_owned`]), kept here beside most of
-/// the callers that still hold their new line as a pointer, until they hold
-/// it as an owned string.
-///
-/// # Safety
-/// `line` is null or NUL-terminated; unless `copy`, it is an `xmalloc` block
-/// that nobody else frees.
-pub(crate) unsafe fn ml_replace(lnum: LineNr, line: *mut c_char, copy: bool) -> Result<(), Failed> {
-    if line.is_null() {
-        return Err(Failed); // just checking...
-    }
-    // SAFETY: the caller's NUL-terminated line, read for the copy, or the
-    // caller's block, handed over.
-    unsafe {
-        if copy {
-            ml_replace_buf_text(Buf::current(), lnum, cstr::bytes_at(line))
-        } else {
-            ml_replace_owned(lnum, XString::from_raw(line))
-        }
-    }
-}
-
-/// [`ml_replace`] of the first `len` bytes at `line`.
-///
-/// # Safety
-/// `line` holds `len` readable bytes; unless `copy`, it is an `xmalloc`
-/// block that nobody else frees, and this frees it.
-pub(crate) unsafe fn ml_replace_len(
-    lnum: LineNr,
-    line: *mut c_char,
-    len: usize,
-    copy: bool,
-) -> Result<(), Failed> {
-    // SAFETY: the caller's `len` bytes, copied; then its block, freed.
-    unsafe {
-        let replaced = ml_replace_buf_text(Buf::current(), lnum, cstr::slice_at(line, len));
-        if !copy {
-            xfree(line.cast());
-        }
-        replaced
-    }
 }

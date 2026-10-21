@@ -699,11 +699,11 @@ pub fn ins_complete(c: c_int, enable_pum: bool) -> Result<(), Failed> {
 /// Move the cursor back to the start of the bad word, recording its length in
 /// `spell_bad_len`.
 pub(crate) fn spell_back_to_badword() {
-    let mut tpos = Win::current().w_cursor;
+    let tpos = Win::current().w_cursor;
     let win = Win::current();
     spell_bad_len.set(spell_move_to(win, BACKWARD, SMT_ALL, true, None));
     if Win::current().w_cursor.col != tpos.col {
-        unsafe { start_arrow(&raw mut tpos) };
+        start_arrow(Some(InsertEnd::At(tpos)));
     }
 }
 

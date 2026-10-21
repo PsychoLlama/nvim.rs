@@ -3,115 +3,66 @@
 //! Two phases. [`plan_leader`] reads the flag letters of the 'comments' item
 //! that matched the *old* line and decides what the new line should carry:
 //! nothing at all, the same leader, the item's *middle* part, or an empty
-//! leader. [`build_leader`] then allocates the leader and edits it into shape
+//! leader. [`build_leader`] then copies the leader and edits it into shape
 //! -- which is where 'comments' `l`/`r` (left/right adjusted) and the numeric
 //! indent offset are honoured.
 //!
 //! The subtlety throughout is that a leader is measured in *screen cells*,
 //! not bytes: replacing `/*` with ` *` has to keep the following text where
 //! it was, and a double-width character being blanked out becomes two spaces.
+//!
+//! The leader is edited in a buffer sized the way upstream sizes its
+//! allocation, zero-filled, with every `memmove` a `copy_within` -- the walks
+//! read the terminator after the leader and, in two places, a few bytes past
+//! it, and the zeros answer what the C reads there.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::cstr;
-use crate::strings::has_char;
-use core::ffi::{c_char, c_int, c_void};
+use crate::charset::ptr2cells_at;
+use crate::cstr::{byte_at, until_nul};
+use crate::mbyte::{c_cluster_len, c_display_width, head_off};
+use core::ffi::c_int;
 
 use crate::change::*;
-use crate::optionstr::OptString;
+use crate::charset::getdigits_int_at;
+use crate::option::split_option_part;
+use crate::optionstr::OptStringRef;
 use crate::types::NUL;
 use crate::winlayer::{Buf, Win};
 
-/// `memmove` inside the leader buffer [`build_leader`] allocated.
-///
-/// The block is over-allocated for the replacement, the extra space and the
-/// text that moves to the new line, which is what makes every move below fit.
-fn move_bytes(dst: *mut c_char, src: *const c_char, n: size_t) {
-    // SAFETY: both ends are inside the leader's own allocation, which was
-    // sized for the longest form it takes; the two may overlap.
-    unsafe { dst.cast::<u8>().copy_from(src.cast(), n) };
+/// The byte at `at` of `text` as the C's `int`, NUL past its end.
+fn at(text: &[u8], at: usize) -> c_int {
+    c_int::from(byte_at(text, at))
 }
 
-/// How many bytes are between `to` and `from`, both inside one leader.
-fn gap(to: *const c_char, from: *const c_char) -> size_t {
-    // SAFETY: both pointers are inside the same allocation.
-    unsafe { to.offset_from(from) as size_t }
+/// The byte before `at`, which at the very start of 'comments' is none --
+/// upstream reads the byte in front of the option there.
+fn before(text: &[u8], at: usize) -> c_int {
+    at.checked_sub(1)
+        .map_or(NUL, |prev| c_int::from(text[prev]))
 }
 
-/// A cursor into the NUL-terminated `'comments'` value.
-///
-/// Every walk below tests the byte under the cursor before stepping, so the
-/// cursor never passes the terminating NUL -- which is what makes reading
-/// through it ordinary code rather than an unchecked dereference. Taking the
-/// cursor in the first place is the one unchecked step.
-#[derive(Clone, Copy)]
-struct Com(*mut c_char);
-
-impl Com {
-    /// # Safety
-    /// `p` must point inside `curbuf->b_p_com`, which is NUL-terminated, and
-    /// stay valid for as long as the cursor is used.
-    unsafe fn new(p: *mut c_char) -> Self {
-        Self(p)
-    }
-
-    /// The byte under the cursor.
-    fn byte(self) -> c_int {
-        // SAFETY: the constructor's promise, and no walk here steps past the
-        // terminating NUL.
-        c_int::from(unsafe { *self.0 })
-    }
-
-    /// The byte `off` bytes from the cursor.
-    fn byte_at(self, off: isize) -> c_int {
-        // SAFETY: as [`Com::byte`]; `off` only ever names a byte the walk has
-        // already passed or is about to reach.
-        c_int::from(unsafe { *self.0.offset(off) })
-    }
-
-    /// The byte under the cursor as an unsigned value -- the form the flag
-    /// letters are compared and stored as.
-    fn flag(self) -> c_int {
-        // SAFETY: as [`Com::byte`].
-        c_int::from(unsafe { *self.0 } as u8)
-    }
-
-    fn step(&mut self) {
-        self.0 = self.0.wrapping_add(1);
-    }
-
-    fn back(&mut self) {
-        self.0 = self.0.wrapping_sub(1);
-    }
-
-    fn raw(self) -> *mut c_char {
-        self.0
-    }
-
-    /// The cursor as `copy_option_part`'s in/out argument.
-    fn as_list(&mut self) -> *mut *mut c_char {
-        &raw mut self.0
-    }
+/// How many bytes of white space start `text`.
+fn white_run(text: &[u8]) -> usize {
+    text.iter()
+        .take_while(|&&b| ascii_iswhite(c_int::from(b)))
+        .count()
 }
 
-/// `copy_option_part` one item into `into`, advancing `p` past it.
-fn copy_part(p: &mut Com, into: *mut c_char) -> size_t {
-    let sep = c",".as_ptr().cast_mut();
-    // SAFETY: `p` is a position inside 'comments', and every caller's `into`
-    // has room for the `COM_MAX_LEN` bytes named here.
-    unsafe { copy_option_part(p.as_list(), into, COM_MAX_LEN as size_t, sep) }
+/// `copy_option_part` one item of `com` from byte `*p`, stepping `*p` past
+/// it: the item, cut to `COM_MAX_LEN - 1` bytes.
+fn copy_part(com: &[u8], p: &mut usize) -> Vec<u8> {
+    let (part, rest) = split_option_part(&com[(*p).min(com.len())..], COM_MAX_LEN as usize, b",");
+    *p = com.len() - rest.len();
+    part
 }
 
 /// What the new line's leader should be built from.
 pub(crate) enum Repl {
     /// Keep the old line's leader as it is.
     Same,
-    /// Replace it with the 'comments' item's middle part, held in
-    /// [`LeaderPlan::middle`].
-    Middle(c_int),
-    /// Replace it with this text, which points into 'comments' itself.
-    Text(*mut c_char, c_int),
+    /// Replace it with this text: the 'comments' item's middle part.
+    Text(Vec<u8>),
     /// Replace it with nothing (the `f` flag: leader on the first line only).
     Blank,
 }
@@ -121,39 +72,32 @@ pub(crate) struct LeaderPlan {
     /// Bytes of the old line to take as the leader; 0 means "no leader".
     pub(crate) lead_len: c_int,
     pub(crate) repl: Repl,
-    /// Storage for [`Repl::Middle`]; `copy_option_part` writes into it.
-    pub(crate) middle: [c_char; COM_MAX_LEN as usize],
     /// Append a space after the leader.
     pub(crate) extra_space: bool,
     /// Where the *end* of a comment was found on the old line, if the leader
     /// was dropped because of it.
-    pub(crate) comment_end: *mut c_char,
+    pub(crate) comment_end: Option<usize>,
 }
 
 impl Repl {
-    /// The replacement as a pointer and a length, or `None` for
-    /// [`Repl::Same`].
-    ///
-    /// `middle` must be the buffer of the [`LeaderPlan`] this came out of:
-    /// [`Repl::Middle`] points into it.
-    fn resolve(&self, middle: &mut [c_char; COM_MAX_LEN as usize]) -> Option<(*mut c_char, c_int)> {
-        match *self {
+    /// The replacement, or `None` for [`Repl::Same`].
+    fn text(&self) -> Option<&[u8]> {
+        match self {
             Repl::Same => None,
-            Repl::Middle(len) => Some((middle.as_mut_ptr(), len)),
-            Repl::Text(p, len) => Some((p, len)),
-            Repl::Blank => Some((c"".as_ptr().cast_mut(), 0)),
+            Repl::Text(text) => Some(text),
+            Repl::Blank => Some(b""),
         }
     }
 }
 
 /// Step `p` to just past the next `:` of the 'comments' value, noting the `b`
 /// flag on the way.
-fn skip_flags(p: &mut Com, require_blank: &mut bool) {
-    while p.byte() != 0 && p.byte_at(-1) != ':' as c_int {
-        if p.byte() == COM_BLANK {
+fn skip_flags(com: &[u8], p: &mut usize, require_blank: &mut bool) {
+    while at(com, *p) != 0 && before(com, *p) != ':' as c_int {
+        if at(com, *p) == COM_BLANK {
             *require_blank = true;
         }
-        p.step();
+        *p += 1;
     }
 }
 
@@ -162,29 +106,30 @@ fn skip_flags(p: &mut Com, require_blank: &mut bool) {
 /// The `x` flag means "closing this comment automatically is allowed", and is
 /// recorded by setting `end_comment_pending` to -1 -- the "we want to set it"
 /// marker the caller then replaces with the last character of the end leader.
-fn skip_flags_noting_auto_end(p: &mut Com) {
-    while p.byte() != 0 && p.byte_at(-1) != ':' as c_int {
-        if p.byte() == COM_AUTO_END {
+fn skip_flags_noting_auto_end(com: &[u8], p: &mut usize) {
+    while at(com, *p) != 0 && before(com, *p) != ':' as c_int {
+        if at(com, *p) == COM_AUTO_END {
             end_comment_pending.set(-1);
         }
-        p.step();
+        *p += 1;
     }
 }
 
 /// The `s`/`m` arm: the old line carries the *start* or the *middle* of a
 /// three-part comment, so the new line gets the middle part.
 ///
-/// # Safety
-/// `saved_line` must be the old line, NUL-terminated.
-unsafe fn plan_start_or_middle(
+/// `saved_line` is the old line (cut at the cursor when text moves to the new
+/// line, which `has_extra` says).
+fn plan_start_or_middle(
     plan: &mut LeaderPlan,
-    mut p: Com,
+    com: &[u8],
+    mut p: usize,
     dir: c_int,
-    saved_line: *mut c_char,
-    p_extra: *mut c_char,
+    saved_line: &[u8],
+    has_extra: bool,
     mut require_blank: bool,
 ) {
-    let current_flag = p.flag();
+    let current_flag = at(com, p);
     if current_flag == COM_START {
         if dir == BACKWARD {
             // `O` on the start of a comment inserts no leader.
@@ -192,152 +137,135 @@ unsafe fn plan_start_or_middle(
             return;
         }
         // Step over the start item to reach the middle one.
-        copy_part(&mut p, plan.middle.as_mut_ptr());
+        let _ = copy_part(com, &mut p);
         require_blank = false;
     }
 
     // Isolate the middle leader, then the end leader.
-    skip_flags(&mut p, &mut require_blank);
-    let middle_len = copy_part(&mut p, plan.middle.as_mut_ptr()) as c_int;
+    skip_flags(com, &mut p, &mut require_blank);
+    let middle = copy_part(com, &mut p);
 
-    let mut lead_end: [c_char; COM_MAX_LEN as usize] = [0; COM_MAX_LEN as usize];
-    skip_flags_noting_auto_end(&mut p);
-    let n = copy_part(&mut p, lead_end.as_mut_ptr());
+    skip_flags_noting_auto_end(com, &mut p);
+    let lead_end = copy_part(com, &mut p);
     if end_comment_pending.get() == -1 {
-        end_comment_pending.set(c_int::from(lead_end[n.wrapping_sub(1) as usize] as u8));
+        // An empty end part has no last character; upstream reads the byte
+        // in front of its buffer.
+        end_comment_pending.set(c_int::from(lead_end.last().copied().unwrap_or(0)));
     }
 
-    // SAFETY: the caller's NUL-terminated old line, and `lead_len` bytes of
-    // it are the leader that matched.
-    let old = unsafe { Com::new(saved_line) };
+    let lead_len = plan.lead_len as usize;
 
     // The comment already ends on this line, so it needs no leader.
     if dir == FORWARD {
-        // SAFETY: `lead_len` bytes into the old line is inside it.
-        let mut q = unsafe { Com::new(old.raw().wrapping_offset(plan.lead_len as isize)) };
-        while q.byte() != 0 {
-            // SAFETY: `lead_end` holds the `n` bytes just copied into it, and
-            // `q` is inside the NUL-terminated old line.
-            if unsafe { cstr::prefix_eq(q.raw(), lead_end.as_ptr(), n) } {
-                plan.comment_end = q.raw();
+        let mut q = lead_len;
+        while at(saved_line, q) != 0 {
+            if saved_line[q..].starts_with(&lead_end) {
+                plan.comment_end = Some(q);
                 plan.lead_len = 0;
                 return;
             }
-            q.step();
+            q += 1;
         }
     }
 
     if plan.lead_len > 0 {
-        if current_flag == COM_START {
-            // `o` on the start of a comment inserts the middle leader.
-            plan.repl = Repl::Middle(middle_len);
-        }
+        let middle_part = current_flag == COM_START;
         // <CR> immediately after the start leader wants a space after the
         // middle leader on the new line -- as does the `b` flag.
-        let after_leader = old.byte_at(plan.lead_len as isize);
-        let last_of_leader = old.byte_at((plan.lead_len - 1) as isize);
+        let after_leader = at(saved_line, lead_len);
+        let last_of_leader = at(saved_line, lead_len - 1);
         if !ascii_iswhite(last_of_leader)
-            && (!p_extra.is_null() && Win::current().w_cursor.col == plan.lead_len
-                || p_extra.is_null() && after_leader == NUL
+            && (has_extra && Win::current().w_cursor.col == plan.lead_len
+                || !has_extra && after_leader == NUL
                 || require_blank)
         {
             plan.extra_space = true;
+        }
+        if middle_part {
+            // `o` on the start of a comment inserts the middle leader.
+            plan.repl = Repl::Text(middle);
         }
     }
 }
 
 /// The `e` arm: the old line carries the *end* of a comment.
-///
-/// # Safety
-/// `saved_line` must be the old line, NUL-terminated.
-unsafe fn plan_end(plan: &mut LeaderPlan, mut p: Com, dir: c_int, saved_line: *mut c_char) {
+fn plan_end(plan: &mut LeaderPlan, com: &[u8], mut p: usize, dir: c_int, saved_line: &[u8]) {
     if dir == FORWARD {
         // `o` on the end of a comment inserts no leader. Remember where
         // the end is: it may be wanted to find the start (C comments).
-        // SAFETY: the caller's NUL-terminated old line.
-        plan.comment_end = unsafe { skipwhite(saved_line) };
+        plan.comment_end = Some(white_run(saved_line));
         plan.lead_len = 0;
         return;
     }
 
     // `O` on the end of a comment inserts the middle leader, which is the
     // item before this one -- so search backwards for it.
-    let com = Buf::current().b_p_com.value_ptr();
-    while p.raw() > com && p.byte() != ',' as c_int {
-        p.back();
+    while p > 0 && at(com, p) != ',' as c_int {
+        p -= 1;
     }
     let mut repl = p;
-    while repl.raw() > com && repl.byte_at(-1) != ':' as c_int {
-        repl.back();
+    while repl > 0 && before(com, repl) != ':' as c_int {
+        repl -= 1;
     }
-    // SAFETY: both cursors are inside 'comments', with `repl` at or before
-    // `p`.
-    let len = unsafe { p.raw().offset_from(repl.raw()) } as c_int;
-    plan.repl = Repl::Text(repl.raw(), len);
+    plan.repl = Repl::Text(com[repl..p].to_vec());
 
     // A space after the middle leader is always right for `O` on an end.
     plan.extra_space = true;
 
     // Is automatic ending of the comment allowed?
     let mut p2 = p;
-    while p2.byte() != 0 && p2.byte() != ':' as c_int {
-        if p2.byte() == COM_AUTO_END {
+    while at(com, p2) != 0 && at(com, p2) != ':' as c_int {
+        if at(com, p2) == COM_AUTO_END {
             end_comment_pending.set(-1);
         }
-        p2.step();
+        p2 += 1;
     }
     if end_comment_pending.get() == -1 {
         // The last character of the end leader is what will close it.
-        while p2.byte() != 0 && p2.byte() != ',' as c_int {
-            p2.step();
+        while at(com, p2) != 0 && at(com, p2) != ',' as c_int {
+            p2 += 1;
         }
-        p2.back();
-        end_comment_pending.set(p2.flag());
+        end_comment_pending.set(before(com, p2));
     }
 }
 
 /// Decide what leader the new line should carry, from the flag letters of the
 /// 'comments' item that matched the old line.
 ///
-/// `lead_flags` points into 'comments' at the start of that item, so the scan
-/// runs up to the item's `:`.  Only the first of `s`/`m`/`e`/`f` decides;
-/// `b` seen before it is remembered.
+/// `lead_flags` names that item, so the scan runs up to the item's `:`.
+/// Only the first of `s`/`m`/`e`/`f` decides; `b` seen before it is
+/// remembered. `saved_line` is the old line, cut where text moves to the new
+/// one (`has_extra`).
 ///
 /// Sets `end_comment_pending`, the global that lets the *next* thing typed
 /// close the comment automatically ('comments' `x`).
-///
-/// # Safety
-/// `lead_flags` must point into `curbuf->b_p_com` and `saved_line` be the old
-/// line, NUL-terminated.
-pub(crate) unsafe fn plan_leader(
+pub(crate) fn plan_leader(
     dir: c_int,
     lead_len: c_int,
-    lead_flags: *mut c_char,
-    saved_line: *mut c_char,
-    p_extra: *mut c_char,
+    lead_flags: ComFlags,
+    saved_line: &[u8],
+    has_extra: bool,
 ) -> LeaderPlan {
     let mut plan = LeaderPlan {
         lead_len,
         repl: Repl::Same,
-        middle: [0; COM_MAX_LEN as usize],
         extra_space: false,
-        comment_end: ::core::ptr::null_mut(),
+        comment_end: None,
     };
     let mut require_blank = false;
 
-    // SAFETY: the caller's position inside `curbuf->b_p_com`.
-    let mut p = unsafe { Com::new(lead_flags) };
-    while p.byte() != 0 && p.byte() != ':' as c_int {
-        let flag = p.byte();
+    let buffer = Buf::current();
+    let com = buffer.b_p_com.bytes();
+    let mut p = lead_flags.offset();
+    while at(com, p) != 0 && at(com, p) != ':' as c_int {
+        let flag = at(com, p);
         if flag == COM_BLANK {
             require_blank = true;
         } else if flag == COM_START || flag == COM_MIDDLE {
-            // SAFETY: the caller's old line.
-            unsafe { plan_start_or_middle(&mut plan, p, dir, saved_line, p_extra, require_blank) };
+            plan_start_or_middle(&mut plan, com, p, dir, saved_line, has_extra, require_blank);
             break;
         } else if flag == COM_END {
-            // SAFETY: as above.
-            unsafe { plan_end(&mut plan, p, dir, saved_line) };
+            plan_end(&mut plan, com, p, dir, saved_line);
             break;
         } else if flag == COM_FIRST {
             // The leader belongs on the first line only: `O` gets none,
@@ -349,183 +277,156 @@ pub(crate) unsafe fn plan_leader(
             }
             break;
         }
-        p.step();
+        p += 1;
     }
     plan
 }
 
 /// The `l`/`r` alignment letter and the numeric indent offset of a 'comments'
 /// item.
-///
-/// # Safety
-/// `lead_flags` must point into a NUL-terminated 'comments' value.
-unsafe fn leader_alignment(lead_flags: *mut c_char) -> (c_int, c_int) {
+fn leader_alignment(lead_flags: ComFlags) -> (c_int, c_int) {
     let mut align = 0;
     let mut off = 0;
-    // SAFETY: the caller's position inside 'comments'.
-    let mut p = unsafe { Com::new(lead_flags) };
-    while p.byte() != NUL && p.byte() != ':' as c_int {
-        if p.byte() == COM_RIGHT || p.byte() == COM_LEFT {
-            align = p.flag();
-            p.step();
-        } else if ascii_isdigit(p.byte()) || p.byte() == '-' as c_int {
-            // SAFETY: `p` is inside 'comments' and `getdigits_int` only walks
-            // the digits it finds there.
-            off = unsafe { getdigits_int(p.as_list(), true, 0) };
-        } else {
-            p.step();
+    lead_flags.with_rest(|com| {
+        let mut p = 0;
+        while at(com, p) != NUL && at(com, p) != ':' as c_int {
+            let c = at(com, p);
+            if c == COM_RIGHT || c == COM_LEFT {
+                align = c;
+                p += 1;
+            } else if ascii_isdigit(c) || c == '-' as c_int {
+                let (n, past) = getdigits_int_at(com, p, true, 0);
+                off = n;
+                // A `-` with no digits after it is no number: upstream reads
+                // nothing and stands still here for ever.
+                p = past.max(p + 1);
+            } else {
+                p += 1;
+            }
         }
-    }
+    });
     (align, off)
 }
 
-/// Overwrite the *right* end of `leader` with `repl`, keeping the text that
-/// follows in the same screen column.
+/// Overwrite the *right* end of the leader in `buf` with `repl`, keeping the
+/// text that follows in the same screen column.
 ///
-/// Answers the new leader length.
-///
-/// # Safety
-/// `leader` must hold `lead_len` bytes with room for `repl_len` more.
-unsafe fn right_adjust(
-    leader: *mut c_char,
-    mut lead_len: c_int,
-    repl: *mut c_char,
-    repl_len: c_int,
-) -> c_int {
+/// Answers the new leader length. `buf` holds `lead_len` bytes of leader
+/// with room for `repl` after them.
+fn right_adjust(buf: &mut [u8], mut lead_len: usize, repl: &[u8]) -> usize {
+    let repl_len = repl.len();
     // Line up with the last non-white character of the old leader.
-    let mut p = unsafe { leader.offset((lead_len - 1) as isize) };
-    while p > leader && ascii_iswhite(c_int::from(unsafe { *p })) {
-        p = unsafe { p.offset(-1) };
+    let mut p = lead_len - 1;
+    while p > 0 && ascii_iswhite(c_int::from(buf[p])) {
+        p -= 1;
     }
-    p = unsafe { p.add(1) };
+    p += 1;
 
     // Walk back over as many *cells* as the replacement takes.
-    let repl_size = unsafe { vim_strnsize(repl, repl_len) };
+    let repl_size = c_display_width(repl, repl_len as c_int);
     let mut old_size = 0;
     let endp = p;
-    while old_size < repl_size && p > leader {
-        p = unsafe { p.offset(-((utf_head_off(leader, p.offset(-1)) + 1) as isize)) };
-        old_size += unsafe { ptr2cells(p) };
+    while old_size < repl_size && p > 0 {
+        p -= head_off(buf, p - 1) + 1;
+        old_size += ptr2cells_at(&buf[p..]);
     }
-    let shift = repl_len - gap(endp, p) as c_int;
-    if shift != 0 {
-        let end = leader.wrapping_offset(lead_len as isize);
-        move_bytes(endp.wrapping_offset(shift as isize), endp, gap(end, endp));
+    let gap = endp - p;
+    if repl_len != gap {
+        buf.copy_within(endp..lead_len, endp + repl_len - gap);
     }
-    lead_len += shift;
-    move_bytes(p, repl, repl_len as size_t);
-    if unsafe { p.offset(repl_len as isize) } > unsafe { leader.offset(lead_len as isize) } {
-        unsafe { *p.offset(repl_len as isize) = NUL as c_char };
+    lead_len = lead_len + repl_len - gap;
+    buf[p..p + repl_len].copy_from_slice(repl);
+    if p + repl_len > lead_len {
+        buf[p + repl_len] = NUL as u8;
     }
 
     // Blank out whatever is left of the old leader in front of it, a
     // double-width character becoming two spaces so the columns hold.
-    loop {
-        p = unsafe { p.offset(-1) };
-        if p < leader {
-            break;
-        }
-        let mut l = unsafe { utf_head_off(leader, p) };
+    while p > 0 {
+        p -= 1;
+        let mut l = head_off(buf, p);
         if l > 1 {
-            p = unsafe { p.offset(-(l as isize)) };
-            if unsafe { ptr2cells(p) } > 1 {
-                unsafe { *p.add(1) = b' ' as c_char };
+            p -= l;
+            if ptr2cells_at(&buf[p..]) > 1 {
+                buf[p + 1] = b' ';
                 l -= 1;
             }
-            let end = leader.wrapping_offset(lead_len as isize);
-            let from = p.wrapping_offset(l as isize).wrapping_add(1);
-            move_bytes(p.wrapping_add(1), from, gap(end, from));
+            let from = p + l + 1;
+            buf.copy_within(from..from.max(lead_len), p + 1);
             lead_len -= l;
-            unsafe { *p = b' ' as c_char };
-        } else if !ascii_iswhite(c_int::from(unsafe { *p })) {
-            unsafe { *p = b' ' as c_char };
+            buf[p] = b' ';
+        } else if !ascii_iswhite(c_int::from(buf[p])) {
+            buf[p] = b' ';
         }
     }
     lead_len
 }
 
-/// Overwrite the *left* end of `leader` with `repl`, keeping the text that
-/// follows in the same screen column.
+/// Overwrite the *left* end of the leader in `buf` with `repl`, keeping the
+/// text that follows in the same screen column.
 ///
-/// Answers the new leader length.
-///
-/// # Safety
-/// `leader` must hold `lead_len` bytes with room for `repl_len` more.
-unsafe fn left_adjust(
-    leader: *mut c_char,
-    mut lead_len: c_int,
-    repl: *mut c_char,
-    repl_len: c_int,
-) -> c_int {
-    let mut p = unsafe { skipwhite(leader) };
+/// Answers the new leader length. `buf` holds `lead_len` bytes of leader
+/// with room for `repl` after them.
+fn left_adjust(buf: &mut [u8], mut lead_len: usize, repl: &[u8]) -> usize {
+    let repl_len = repl.len();
+    let mut p = white_run(until_nul(buf));
 
     // How many bytes of the old leader take as many cells as the
     // replacement; move the rest out of the way.
-    let repl_size = unsafe { vim_strnsize(repl, repl_len) };
+    let repl_size = c_display_width(repl, repl_len as c_int);
     let mut i = 0;
-    while i < lead_len && c_int::from(unsafe { *p.offset(i as isize) }) != NUL {
-        let l = unsafe { utfc_ptr2len(p.offset(i as isize)) };
-        if unsafe { vim_strnsize(p, i + l) } > repl_size {
+    while i < lead_len && buf[p + i] != NUL as u8 {
+        let l = c_cluster_len(&buf[p + i..]);
+        if c_display_width(&buf[p..], (i + l) as c_int) > repl_size {
             break;
         }
         i += l;
     }
     if i != repl_len {
-        let rest = ((lead_len - i) as size_t).wrapping_sub(gap(p, leader));
-        move_bytes(
-            p.wrapping_offset(repl_len as isize),
-            p.wrapping_offset(i as isize),
-            rest,
-        );
-        lead_len += repl_len - i;
+        let rest = (lead_len - i).saturating_sub(p);
+        buf.copy_within(p + i..p + i + rest, p + repl_len);
+        lead_len = lead_len + repl_len - i;
     }
-    move_bytes(p, repl, repl_len as size_t);
+    buf[p..p + repl_len].copy_from_slice(repl);
 
     // Blank out the rest of the old leader, keeping tabs so the indent
     // stays the same width.
-    p = unsafe { p.offset(repl_len as isize) };
-    while p < unsafe { leader.offset(lead_len as isize) } {
-        if !ascii_iswhite(c_int::from(unsafe { *p })) {
-            if unsafe { p.add(1) } < unsafe { leader.offset(lead_len as isize) }
-                && c_int::from(unsafe { *p.add(1) }) == TAB
-            {
+    p += repl_len;
+    while p < lead_len {
+        if !ascii_iswhite(c_int::from(buf[p])) {
+            if p + 1 < lead_len && c_int::from(buf[p + 1]) == TAB {
                 // Don't put a space in front of a TAB: drop the byte.
                 lead_len -= 1;
-                let end = leader.wrapping_offset(lead_len as isize);
-                move_bytes(p, p.wrapping_add(1), gap(end, p));
+                buf.copy_within(p + 1..lead_len + 1, p);
             } else {
-                let mut l = unsafe { utfc_ptr2len(p) };
+                let mut l = c_cluster_len(&buf[p..]);
                 if l > 1 {
-                    if unsafe { ptr2cells(p) } > 1 {
+                    if ptr2cells_at(&buf[p..]) > 1 {
                         // A double-width character becomes two spaces.
                         l -= 1;
-                        unsafe { *p = b' ' as c_char };
-                        p = unsafe { p.add(1) };
+                        buf[p] = b' ';
+                        p += 1;
                     }
-                    let end = leader.wrapping_offset(lead_len as isize);
-                    move_bytes(
-                        p.wrapping_add(1),
-                        p.wrapping_offset(l as isize),
-                        gap(end, p),
-                    );
+                    // Upstream moves `lead_len - p` bytes from `p + l`,
+                    // which reads a little past the leader; what lands
+                    // there is behind the terminator written below.
+                    let end = (lead_len + l).min(buf.len());
+                    buf.copy_within(p + l..end, p + 1);
                     lead_len -= l - 1;
                 }
-                unsafe { *p = b' ' as c_char };
+                buf[p] = b' ';
             }
         }
-        p = unsafe { p.add(1) };
+        p += 1;
     }
-    unsafe { *p = NUL as c_char };
+    buf[p] = NUL as u8;
     lead_len
 }
 
 /// What [`build_leader`] produced.
 pub(crate) struct BuiltLeader {
-    /// The leader text, which may have been advanced past its own indent --
-    /// so this is *not* what has to be freed.
-    pub(crate) leader: *mut c_char,
-    /// The allocation, for `xfree`.
-    pub(crate) allocated: *mut c_char,
+    /// The leader text, without the indent it may have carried.
+    pub(crate) text: Vec<u8>,
     pub(crate) lead_len: c_int,
     pub(crate) newcol: ColNr,
     pub(crate) newindent: c_int,
@@ -539,22 +440,18 @@ pub(crate) struct LeaderContext {
     pub(crate) comment_start: c_int,
     /// Bytes of the old line that will be appended after the leader.
     pub(crate) extra_len: c_int,
-    /// The 'formatlistpat' padding the caller may add, to the same block.
+    /// The 'formatlistpat' padding the caller may add.
     pub(crate) second_line_indent: c_int,
 }
 
-/// Allocate the new line's leader and edit it into shape.
+/// Copy the new line's leader out of `saved_line` and edit it into shape.
 ///
-/// The buffer is deliberately over-allocated: the caller appends `p_extra`,
-/// and 'comments' `n` list padding, to the same block.
-///
-/// # Safety
-/// `saved_line` must hold at least `plan.lead_len` bytes and `lead_flags`
-/// point into 'comments'.
-pub(crate) unsafe fn build_leader(
-    mut plan: LeaderPlan,
-    lead_flags: *mut c_char,
-    saved_line: *mut c_char,
+/// `saved_line` holds at least `plan.lead_len` bytes; `lead_flags` names the
+/// 'comments' item that matched.
+pub(crate) fn build_leader(
+    plan: LeaderPlan,
+    lead_flags: ComFlags,
+    saved_line: &[u8],
     ctx: LeaderContext,
     do_si: bool,
     mut newindent: c_int,
@@ -564,50 +461,43 @@ pub(crate) unsafe fn build_leader(
         extra_len,
         second_line_indent,
     } = ctx;
-    let repl = plan.repl.resolve(&mut plan.middle);
-    let repl_len = repl.map_or(0, |(_, len)| len);
-    let mut lead_len = plan.lead_len;
+    let repl = plan.repl.text();
+    let repl_len = repl.map_or(0, <[u8]>::len);
+    let mut lead_len = plan.lead_len as usize;
     let mut extra_space = plan.extra_space;
 
-    // Room for the leader, its replacement, the space, what moves to the
-    // new line, and the 'comments' `n` padding the caller may add.
-    let bytes =
-        lead_len + repl_len + c_int::from(extra_space) + extra_len + second_line_indent.max(0) + 1;
-    debug_assert!(bytes >= 0);
-    let leader = unsafe { xmalloc(bytes as size_t) } as *mut c_char;
-    let allocated = leader;
-    unsafe {
-        xmemcpyz(
-            leader as *mut c_void,
-            saved_line as *const c_void,
-            lead_len as size_t,
-        )
-    };
+    // Upstream's allocation: the leader, its replacement, the space, what
+    // moves to the new line, and the 'comments' `n` padding the caller may
+    // add.
+    let bytes = lead_len
+        + repl_len
+        + usize::from(extra_space)
+        + extra_len as usize
+        + second_line_indent.max(0) as usize
+        + 1;
+    let mut buf = vec![0u8; bytes];
+    buf[..lead_len].copy_from_slice(&saved_line[..lead_len]);
 
     // A leader found *after* code (`code(); // why`) keeps only its white
     // space, so that the new line lines up under the comment.
     // TODO(vim): handle multi-byte and double width chars
-    for li in 0..comment_start {
-        if !ascii_iswhite(c_int::from(unsafe { *leader.offset(li as isize) })) {
-            unsafe { *leader.offset(li as isize) = b' ' as c_char };
+    for byte in &mut buf[..comment_start as usize] {
+        if !ascii_iswhite(c_int::from(*byte)) {
+            *byte = b' ';
         }
     }
 
-    let mut leader = leader;
-    if let Some((repl, repl_len)) = repl {
-        let (align, mut off) = unsafe { leader_alignment(lead_flags) };
+    if let Some(repl) = repl {
+        let (align, mut off) = leader_alignment(lead_flags);
         lead_len = if align == COM_RIGHT {
-            unsafe { right_adjust(leader, lead_len, repl, repl_len) }
+            right_adjust(&mut buf, lead_len, repl)
         } else {
-            unsafe { left_adjust(leader, lead_len, repl, repl_len) }
+            left_adjust(&mut buf, lead_len, repl)
         };
 
         // The indent may have changed with the leader.
         if Buf::current().b_p_ai != 0 || do_si {
-            let (ts, vts) = (Buf::current().b_p_ts, Buf::current().b_p_vts_array);
-            // SAFETY: the leader this frame just built, and the buffer's
-            // own tabstop array.
-            newindent = unsafe { indent_size_ts(cstr::bytes_at(leader), ts, vts) };
+            newindent = Buf::current().indent_width(until_nul(&buf));
         }
 
         // Add the 'comments' numeric offset.
@@ -621,11 +511,9 @@ pub(crate) unsafe fn build_leader(
         // Take the shift back out of the trailing spaces so the alignment
         // holds -- but not if a tab is in the way, which would change the
         // width by more than one column.
-        while off > 0
-            && lead_len > 0
-            && c_int::from(unsafe { *leader.offset((lead_len - 1) as isize) }) == ' ' as c_int
-        {
-            if has_char(unsafe { cstr::at(skipwhite(leader)) }, '\t' as c_int) {
+        while off > 0 && lead_len > 0 && buf[lead_len - 1] == b' ' {
+            let text = until_nul(&buf);
+            if text[white_run(text)..].contains(&b'\t') {
                 break;
             }
             lead_len -= 1;
@@ -633,40 +521,36 @@ pub(crate) unsafe fn build_leader(
         }
 
         // A leader already ending in white space needs no extra space.
-        if lead_len > 0
-            && ascii_iswhite(c_int::from(unsafe {
-                *leader.offset((lead_len - 1) as isize)
-            }))
-        {
+        if lead_len > 0 && ascii_iswhite(c_int::from(buf[lead_len - 1])) {
             extra_space = false;
         }
-        unsafe { *leader.offset(lead_len as isize) = NUL as c_char };
+        buf[lead_len] = NUL as u8;
     }
 
     if extra_space {
-        unsafe { *leader.offset(lead_len as isize) = b' ' as c_char };
+        buf[lead_len] = b' ';
         lead_len += 1;
-        unsafe { *leader.offset(lead_len as isize) = NUL as c_char };
+        buf[lead_len] = NUL as u8;
     }
 
     let mut newcol = lead_len as ColNr;
 
     // An indent is about to be set below, so drop the one the leader
-    // carries -- advancing past it rather than moving the text.
+    // carries -- starting past it rather than moving the text.
+    let mut start = 0;
     if newindent != 0 || did_si.get() {
-        while lead_len != 0 && ascii_iswhite(c_int::from(unsafe { *leader })) {
+        while lead_len != 0 && ascii_iswhite(c_int::from(buf[start])) {
             lead_len -= 1;
             newcol -= 1;
-            leader = unsafe { leader.add(1) };
+            start += 1;
         }
     }
     can_si.set(false);
     did_si.set(false);
 
     BuiltLeader {
-        leader,
-        allocated,
-        lead_len,
+        text: until_nul(&buf[start..]).to_vec(),
+        lead_len: lead_len as c_int,
         newcol,
         newindent,
     }
@@ -676,22 +560,21 @@ pub(crate) unsafe fn build_leader(
 /// comment and 'autoindent'/'smartindent' is on, line the new line up with
 /// the line the comment *started* on.
 ///
-/// # Safety
-/// `comment_end` must point into `saved_line`.
-pub(crate) unsafe fn indent_after_comment_end(
-    comment_end: *mut c_char,
-    saved_line: *mut c_char,
+/// `comment_end` is a byte offset into `saved_line`.
+pub(crate) fn indent_after_comment_end(
+    comment_end: usize,
+    saved_line: &[u8],
     do_si: bool,
     newindent: c_int,
 ) -> c_int {
-    if c_int::from(unsafe { *comment_end }) != '*' as c_int
-        || c_int::from(unsafe { *comment_end.add(1) }) != '/' as c_int
+    if at(saved_line, comment_end) != '*' as c_int
+        || at(saved_line, comment_end + 1) != '/' as c_int
         || (Buf::current().b_p_ai == 0 && !do_si)
     {
         return newindent;
     }
     let old_cursor = Win::current().w_cursor;
-    Win::current().w_cursor.col = unsafe { comment_end.offset_from(saved_line) } as ColNr;
+    Win::current().w_cursor.col = comment_end as ColNr;
     let newindent = match findmatch(None, NUL) {
         None => newindent,
         Some(pos) => {

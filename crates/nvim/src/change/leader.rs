@@ -4,17 +4,17 @@
 //! comment leader, and [`get_last_leader_offset`] where the *last* leader on a
 //! line begins -- the one a trailing `//` comment starts at.
 //!
-//! Both walk 'comments' item by item. One item is `flags:leader`, and both
-//! functions isolate the two halves by writing a NUL over the `:` **in their
-//! own copy** of the item, so the flag letters are a NUL-terminated string
-//! and the leader is what follows.
+//! Both walk 'comments' item by item. One item is `flags:leader`; a copy of
+//! it ([`ComItem`]) holds the two halves on either side of its first `:`.
 //!
-//! The `flags` out-parameter of both points back into the 'comments' option
-//! itself -- at the start of the matching item -- so it stays valid as long as
-//! the option does. Note what [`get_leader_len`] does with it on failure.
+//! The item that matched is answered as a [`ComFlags`]: where it starts in
+//! the current buffer's 'comments' value. Upstream hands back a pointer into
+//! the option for the same purpose; an offset is that pointer without the
+//! promise that the option is not written in the meantime -- read after a
+//! change it names whatever is there now, never freed bytes. Note what
+//! [`get_leader_len`] answers for it on failure.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -23,216 +23,209 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::cstr;
+use crate::cstr::byte_at;
 use crate::narrow::len_as_int;
-use crate::strings::has_char;
-use crate::strings::vim_strchr;
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use super::*;
-use crate::optionstr::OptString;
+use crate::option::split_option_part_with;
+use crate::optionstr::OptStringRef;
 use crate::types::NUL;
 use crate::winlayer::Buf;
 
-/// A NUL-terminated string being walked byte by byte.
-///
-/// The scans here index a line and a leader from a base that never moves, and
-/// never step past the terminating NUL -- so the one unchecked step is
-/// *taking* the pointer, and every read after it is ordinary code.
-#[derive(Clone, Copy)]
-struct Scan(*const c_char);
+/// A 'comments' item of the current buffer, by the byte offset in the option
+/// value at which it starts -- its flag letters come first.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct ComFlags(usize);
 
-impl Scan {
-    /// # Safety
-    /// `s` must stay a NUL-terminated string for as long as the value is
-    /// used.
-    unsafe fn new(s: *const c_char) -> Self {
-        Self(s)
+impl ComFlags {
+    /// Where the item starts in 'comments'.
+    pub(crate) const fn offset(self) -> usize {
+        self.0
     }
 
-    /// The byte `at` bytes in, as the C's `int`.
-    fn at(self, at: c_int) -> c_int {
-        // SAFETY: the constructor's promise. No walk below passes the
-        // terminating NUL, so `at` stays inside the string.
-        c_int::from(unsafe { *self.0.offset(at as isize) })
+    /// `f` of the rest of the current buffer's 'comments' from this item on
+    /// -- upstream's `char *flags` read as a string. Empty when the option
+    /// has since become shorter than the offset.
+    pub(crate) fn with_rest<R>(self, f: impl FnOnce(&[u8]) -> R) -> R {
+        let buffer = Buf::current();
+        let com = buffer.b_p_com.bytes();
+        f(com.get(self.0..).unwrap_or_default())
     }
 
-    /// Whether the byte `at` bytes in is white space.
-    fn white_at(self, at: c_int) -> bool {
-        ascii_iswhite(self.at(at))
+    /// The item's flag letters: the bytes up to its `:`.
+    pub fn letters(self) -> Vec<u8> {
+        self.with_rest(|rest| {
+            let end = rest.iter().position(|&b| b == b':').unwrap_or(rest.len());
+            rest[..end].to_vec()
+        })
     }
 
-    /// How many bytes of white space start at `at`.
-    fn white_run(self, at: c_int) -> c_int {
-        let mut n = 0;
-        while self.white_at(at + n) {
-            n += 1;
-        }
-        n
+    /// Whether the item's flag letters contain `flag`; only the current item
+    /// is searched -- its `:` ends the letters.
+    pub(crate) fn has(self, flag: c_int) -> bool {
+        self.with_rest(|rest| {
+            rest.iter()
+                .take_while(|&&b| b != b':')
+                .any(|&b| c_int::from(b) == flag)
+        })
     }
 
-    /// The string, `at` bytes in.
-    fn from(self, at: c_int) -> *const c_char {
-        self.0.wrapping_offset(at as isize)
+    /// The first byte from the item's start that is one of `stops`, or NUL
+    /// when the option ends first.
+    pub(crate) fn first_of(self, stops: &[u8]) -> u8 {
+        self.with_rest(|rest| {
+            rest.iter()
+                .copied()
+                .find(|b| stops.contains(b))
+                .unwrap_or(0)
+        })
     }
-
-    /// The string's length, `strlen`.
-    fn len(self) -> c_int {
-        // SAFETY: the constructor's promise.
-        len_as_int(unsafe { cstr::bytes_at(self.0) }.len())
-    }
-}
-
-/// Whether `list` still names an item of 'comments' rather than its final NUL.
-fn more_items(list: *mut c_char) -> bool {
-    // SAFETY: `list` walks the buffer's own NUL-terminated 'comments' value,
-    // which `copy_option_part` never advances past its NUL.
-    unsafe { *list != 0 }
 }
 
 /// One 'comments' item, copied out of the option.
 ///
-/// `COM_MAX_LEN` bytes is upstream's `part_buf`; `copy_option_part` truncates
-/// into it.
+/// `COM_MAX_LEN` bytes is upstream's `part_buf`, and the copy is cut to fit
+/// it the way `copy_option_part` cuts it: at most `COM_MAX_LEN - 1` bytes.
 struct ComItem {
-    buf: [c_char; COM_MAX_LEN as usize],
+    buf: [u8; COM_MAX_LEN as usize],
+    len: usize,
+    /// Where the first `:` is, or `None` for an item with no `:` at all.
+    colon: Option<usize>,
 }
 
 impl ComItem {
     fn new() -> ComItem {
         ComItem {
             buf: [0; COM_MAX_LEN as usize],
+            len: 0,
+            colon: None,
         }
     }
 
-    fn as_ptr(&mut self) -> *mut c_char {
-        self.buf.as_mut_ptr()
+    /// Copy the item at the start of `list` into `self` and step `list` past
+    /// it -- and the separator and blanks after it.
+    ///
+    /// Answers whether the item has a `:`, that is, whether it has a leader.
+    fn take(&mut self, list: &mut &[u8]) -> bool {
+        let (buf, len) = (&mut self.buf, &mut self.len);
+        *len = 0;
+        *list = split_option_part_with(list, COM_MAX_LEN as usize, b",", |run| {
+            buf[*len..*len + run.len()].copy_from_slice(run);
+            *len += run.len();
+        });
+        self.colon = self.buf[..self.len].iter().position(|&b| b == b':');
+        self.colon.is_some()
     }
 
-    /// Copy the item `*list` points at into `self` and advance `list` past it.
-    ///
-    /// Answers where the leader text starts -- everything after the `:`, which
-    /// is overwritten with a NUL so that `self` is just the flag letters --
-    /// or `None` for an item with no `:` at all.
-    ///
-    /// # Safety
-    /// `list` must point at a position inside a NUL-terminated 'comments'
-    /// value.
-    unsafe fn take(&mut self, list: *mut *mut c_char) -> Option<*mut c_char> {
-        let into = self.as_ptr();
-        let sep = c",".as_ptr().cast_mut();
-        // SAFETY: the caller's position in 'comments', and `buf` has room for
-        // the `COM_MAX_LEN` bytes `copy_option_part` is told about.
-        unsafe { copy_option_part(list, into, COM_MAX_LEN as size_t, sep) };
-        // SAFETY: `copy_option_part` NUL-terminates what it wrote.
-        let colon = unsafe { vim_strchr(into, ':' as c_int) };
-        if colon.is_null() {
-            return None;
-        }
-        // SAFETY: `colon` points at the `:` inside `buf`, so the byte after
-        // it is inside `buf` too.
-        unsafe { *colon = c_char::try_from(NUL).expect("NUL is zero") };
-        Some(unsafe { colon.add(1) })
+    /// The item's flag letters: everything before the `:`.
+    fn flags(&self) -> &[u8] {
+        &self.buf[..self.colon.unwrap_or(self.len)]
+    }
+
+    /// The leader text: everything after the `:`.
+    fn leader(&self) -> &[u8] {
+        self.colon
+            .map_or(&[], |colon| &self.buf[colon + 1..self.len])
     }
 
     /// Whether the item's flag letters contain `flag`.
-    fn has(&mut self, flag: c_int) -> bool {
-        // SAFETY: `buf` is NUL-terminated -- `copy_option_part` writes the
-        // NUL, and `take` only turns the `:` inside it into another one.
-        unsafe { has_char(cstr::at(self.as_ptr()), flag) }
+    fn has(&self, flag: c_int) -> bool {
+        self.flags().iter().any(|&b| c_int::from(b) == flag)
     }
 }
 
-/// Whether `leader` matches `line` at byte `at`, and how many bytes of it did.
+/// The byte at `at` of `text` as the C's `int`, NUL past its end.
+fn at(text: &[u8], at: usize) -> c_int {
+    c_int::from(byte_at(text, at))
+}
+
+/// How many bytes of white space start at `from`.
+fn white_run(text: &[u8], from: usize) -> usize {
+    let mut n = 0;
+    while ascii_iswhite(at(text, from + n)) {
+        n += 1;
+    }
+    n
+}
+
+/// Whether `leader` matches `line` at byte `i`, and how many bytes of it did.
 ///
 /// The comparison is exact, except that a leader *starting* with white space
 /// only needs some white space in front of it in the line -- the amount need
 /// not match, since a line may mix tabs and spaces.
-fn leader_match(line: Scan, at: c_int, leader: Scan) -> Option<c_int> {
+fn leader_match(line: &[u8], i: usize, leader: &[u8]) -> Option<usize> {
     let mut skip = 0;
-    if leader.white_at(0) {
-        if at == 0 || !line.white_at(at - 1) {
+    if ascii_iswhite(at(leader, 0)) {
+        if i == 0 || !ascii_iswhite(at(line, i - 1)) {
             return None; // missing white space
         }
-        skip = leader.white_run(0);
+        skip = white_run(leader, 0);
     }
     let mut j = 0;
-    while leader.at(skip + j) != NUL && leader.at(skip + j) == line.at(at + j) {
+    while at(leader, skip + j) != NUL && at(leader, skip + j) == at(line, i + j) {
         j += 1;
     }
-    if leader.at(skip + j) != NUL {
+    if at(leader, skip + j) != NUL {
         return None; // the leader ran past what the line has
     }
     Some(j)
 }
 
-/// Whether the `b` flag is satisfied at `at`: there must be white space or the
+/// Whether the `b` flag is satisfied at `i`: there must be white space or the
 /// end of the line after the leader.
-fn blank_after(line: Scan, at: c_int) -> bool {
-    line.white_at(at) || line.at(at) == NUL
+fn blank_after(line: &[u8], i: usize) -> bool {
+    ascii_iswhite(at(line, i)) || at(line, i) == NUL
 }
 
-/// [`get_leader_len`] of a line the caller holds, with no flags wanted.
-pub(crate) fn leader_len_of(line: &core::ffi::CStr, backward: bool, include_space: bool) -> usize {
-    let flags = core::ptr::null_mut();
-    // SAFETY: a NUL-terminated line, read for the call, and no flags slot.
-    let len = unsafe { get_leader_len(line.as_ptr(), flags, backward, include_space) };
-    usize::try_from(len).unwrap_or(0)
+/// [`get_leader_len`] when only the length is wanted.
+pub(crate) fn leader_len_of(line: &[u8], backward: bool, include_space: bool) -> usize {
+    usize::try_from(get_leader_len(line, backward, include_space).0).unwrap_or(0)
 }
 
-/// How many bytes at the start of `line` are a comment leader, 0 for none.
+/// How many bytes at the start of `line` are a comment leader, 0 for none,
+/// and the 'comments' item the scan settled on.
 ///
 /// `backward` is set by the `O` command, which skips items carrying the `O`
 /// flag. `include_space` adds the white space after the leader to the answer.
 ///
-/// **`flags` is written even when nothing matches.** Every item the scan
-/// *tries* overwrites it (until a nested comment has been found), so after a
-/// line with no leader it names the last item of 'comments' rather than
-/// nothing. `format_lines` reads it in exactly that state -- its `://` test --
-/// so clearing it would be a behaviour change.
-///
-/// # Safety
-/// `line` must be NUL-terminated. `flags` must be null or writable.
-pub unsafe fn get_leader_len(
-    line: *const c_char,
-    flags: *mut *mut c_char,
+/// **The item is answered even when nothing matches.** Every item the scan
+/// *tries* is noted (until a nested comment has been found), so after a line
+/// with no leader the answer names the last item of 'comments' rather than
+/// nothing; `None` means no item was tried at all -- a line that is empty or
+/// only white space. Upstream writes its `flags` out-parameter the same way,
+/// and `format_lines` reads it in exactly that state -- its `://` test -- so
+/// a caller carrying an older answer keeps it on `None`.
+pub fn get_leader_len(
+    line: &[u8],
     backward: bool,
     include_space: bool,
-) -> c_int {
-    // SAFETY: the caller's NUL-terminated line.
-    let line = unsafe { Scan::new(line) };
-    let set_flags = |at: *mut c_char| {
-        if !flags.is_null() {
-            // SAFETY: the caller's out-parameter, and it is not null.
-            unsafe { *flags = at };
-        }
-    };
+) -> (c_int, Option<ComFlags>) {
+    let buffer = Buf::current();
+    let com = buffer.b_p_com.bytes();
+    let mut flags = None;
     let mut got_com = false;
     let mut item = ComItem::new();
     // A middle-part match is remembered rather than taken, because it may
     // be a substring of the *end* part, whose flags are the better answer.
     let mut middle_match_len = 0;
-    let mut saved_flags: *mut c_char = ::core::ptr::null_mut();
+    let mut saved_flags = None;
 
     let mut result = 0;
-    let mut i = line.white_run(0); // leading white space is ignored
+    let mut i = white_run(line, 0); // leading white space is ignored
 
     // Repeat to match several nested comment strings.
-    while line.at(i) != NUL {
+    while at(line, i) != NUL {
         let mut found_one = false;
-        let mut list = Buf::current().b_p_com.value_ptr();
-        while more_items(list) {
+        let mut list = com;
+        while !list.is_empty() {
+            let here = ComFlags(com.len() - list.len());
             if !got_com {
-                set_flags(list); // where this item's flags started
+                flags = Some(here); // where this item's flags started
             }
-            let prev_list = list;
-            // SAFETY: `list` is a position inside 'comments'.
-            let taken = unsafe { item.take(&raw mut list) };
-            let Some(leader) = taken else {
+            if !item.take(&mut list) {
                 continue; // no ':' in the item: ignore it
-            };
-            // SAFETY: `take` answers a NUL-terminated tail of its own buffer.
-            let leader = unsafe { Scan::new(leader) };
+            }
 
             // A middle match is already in hand and this item can neither
             // extend nor end it, so stop and use the middle match.
@@ -248,7 +241,7 @@ pub unsafe fn get_leader_len(
                 continue;
             }
 
-            let Some(j) = leader_match(line, i, leader) else {
+            let Some(j) = leader_match(line, i, item.leader()) else {
                 continue;
             };
             if item.has(COM_BLANK) && !blank_after(line, i + j) {
@@ -260,7 +253,7 @@ pub unsafe fn get_leader_len(
                 // better answer, and carries better flags.
                 if middle_match_len == 0 {
                     middle_match_len = j;
-                    saved_flags = prev_list;
+                    saved_flags = Some(here);
                 }
                 continue;
             }
@@ -278,7 +271,7 @@ pub unsafe fn get_leader_len(
         if middle_match_len != 0 {
             // Fall back on the middle match, no end item having matched.
             if !got_com {
-                set_flags(saved_flags);
+                flags = saved_flags;
             }
             i += middle_match_len;
             found_one = true;
@@ -288,7 +281,7 @@ pub unsafe fn get_leader_len(
         }
 
         result = i;
-        i += line.white_run(i);
+        i += white_run(line, i);
         if include_space {
             result = i;
         }
@@ -299,29 +292,32 @@ pub unsafe fn get_leader_len(
             break;
         }
     }
-    result
+    (len_as_int(result), flags)
 }
 
-/// Where the last comment on `line` starts, or -1 if there is none.
+/// Where the last comment on `line` starts, or -1 if there is none, and the
+/// 'comments' item that matched there.
 ///
 /// This is the *trailing* comment question -- `code(); // why` -- so the scan
 /// runs backwards from the end of the line. `lower_check_bound` is what stops
 /// it: once a leader is found at `i`, no leader can start earlier than the
 /// longest overlap any *other* 'comments' item has with it.
 ///
-/// `flags`, when not null, is set to the matching item's flag letters.
-///
-/// # Safety
-/// `line` must be NUL-terminated. `flags` must be null or writable.
-pub unsafe fn get_last_leader_offset(line: *mut c_char, flags: *mut *mut c_char) -> c_int {
-    // SAFETY: the caller's NUL-terminated line.
-    let line = unsafe { Scan::new(line) };
+/// The item is the one that matched last, kept when a later round finds
+/// nothing; `None` when nothing ever matched.
+pub fn get_last_leader_offset(line: &[u8]) -> (c_int, Option<ComFlags>) {
+    let buffer = Buf::current();
+    let com = buffer.b_p_com.bytes();
     let mut result = -1;
+    let mut found_flags = None;
     let mut lower_check_bound = 0;
     let mut item = ComItem::new();
 
     let mut i = line.len();
     loop {
+        if i == 0 {
+            break;
+        }
         i -= 1;
         if i < lower_check_bound {
             break;
@@ -329,21 +325,15 @@ pub unsafe fn get_last_leader_offset(line: *mut c_char, flags: *mut *mut c_char)
 
         // Scan 'comments' for an item whose leader starts at `i`.
         let mut found_one = false;
-        let mut com_leader = None;
-        let mut com_flags: *mut c_char = ::core::ptr::null_mut();
-        let mut list = Buf::current().b_p_com.value_ptr();
-        while more_items(list) {
-            let flags_save = list;
-            // SAFETY: `list` is a position inside 'comments'.
-            let taken = unsafe { item.take(&raw mut list) };
-            let Some(leader) = taken else {
+        let mut com_flags = None;
+        let mut list = com;
+        while !list.is_empty() {
+            let flags_save = ComFlags(com.len() - list.len());
+            if !item.take(&mut list) {
                 continue; // cannot happen for a well-formed 'comments'
-            };
-            // SAFETY: `take` answers a NUL-terminated tail of its own buffer.
-            let leader = unsafe { Scan::new(leader) };
-            com_leader = Some(leader);
+            }
 
-            let Some(j) = leader_match(line, i, leader) else {
+            let Some(j) = leader_match(line, i, item.leader()) else {
                 continue;
             };
             if item.has(COM_BLANK) && !blank_after(line, i + j) {
@@ -354,7 +344,7 @@ pub unsafe fn get_last_leader_offset(line: *mut c_char, flags: *mut *mut c_char)
                 // is white space: otherwise C's `*` would look like the
                 // middle of a comment wherever it appears.
                 let mut k = 0;
-                while k <= i && line.white_at(k) {
+                while k <= i && ascii_iswhite(at(line, k)) {
                     k += 1;
                 }
                 if k < i {
@@ -363,18 +353,15 @@ pub unsafe fn get_last_leader_offset(line: *mut c_char, flags: *mut *mut c_char)
             }
 
             found_one = true;
-            if !flags.is_null() {
-                // SAFETY: the caller's out-parameter, and it is not null.
-                unsafe { *flags = flags_save };
-            }
-            com_flags = flags_save;
+            found_flags = Some(flags_save);
+            com_flags = Some(flags_save);
             break;
         }
         if !found_one {
             continue;
         }
 
-        result = i;
+        result = len_as_int(i);
         // A nesting comment can have another one in front of it.
         if item.has(COM_NEST) {
             continue;
@@ -384,35 +371,25 @@ pub unsafe fn get_last_leader_offset(line: *mut c_char, flags: *mut *mut c_char)
         // The leader found may be the *tail* of a longer one belonging to
         // another item -- `#` inside `#if`, say. Pull `lower_check_bound`
         // back far enough that the next round can find that longer one.
-        let Some(com_leader) = com_leader else {
-            continue;
-        };
-        let com_start = com_leader.white_run(0);
-        // SAFETY: white space is inside the leader, so the byte after a run
-        // of it is too, and the string stays NUL-terminated.
-        let com_leader = unsafe { Scan::new(com_leader.from(com_start)) };
+        let found_leader = item.leader();
+        let com_leader = &found_leader[white_run(found_leader, 0)..];
         let len1 = com_leader.len();
 
         let mut other = ComItem::new();
-        let mut list = Buf::current().b_p_com.value_ptr();
-        while more_items(list) {
-            let flags_save = list;
-            // `take` writes the NUL that isolates the flags, so the leader
-            // has to be taken before the identity test short-circuits it.
-            //
-            // SAFETY: `list` is a position inside 'comments'.
-            let taken = unsafe { other.take(&raw mut list) };
-            if flags_save == com_flags {
+        let mut list = com;
+        while !list.is_empty() {
+            let flags_save = ComFlags(com.len() - list.len());
+            let taken = other.take(&mut list);
+            if Some(flags_save) == com_flags {
                 continue;
             }
             // Upstream does not test for a missing ':' here; a
             // well-formed 'comments' always has one.
-            let Some(leader) = taken else {
+            if !taken {
                 continue;
-            };
-            // SAFETY: as for `com_leader` above.
-            let leader = unsafe { Scan::new(leader) };
-            let leader = unsafe { Scan::new(leader.from(leader.white_run(0))) };
+            }
+            let leader = other.leader();
+            let leader = &leader[white_run(leader, 0)..];
             let len2 = leader.len();
             if len2 == 0 {
                 continue;
@@ -422,15 +399,11 @@ pub unsafe fn get_last_leader_offset(line: *mut c_char, flags: *mut *mut c_char)
             let mut off = len2.min(i);
             while off > 0 && off + len1 > len2 {
                 off -= 1;
-                let tail = leader.from(off);
-                let n = usize::try_from(len2 - off).expect("`off` is at most `len2`");
-                // SAFETY: `tail` is `off` bytes into a string of `len2`, and
-                // `n` is the rest of it; `com_leader` is NUL-terminated.
-                if unsafe { cstr::prefix_eq(tail, com_leader.from(0), n) } {
+                if com_leader.starts_with(&leader[off..]) {
                     lower_check_bound = lower_check_bound.min(i - off);
                 }
             }
         }
     }
-    result
+    (result, found_flags)
 }

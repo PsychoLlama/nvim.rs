@@ -25,7 +25,6 @@ use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
 use crate::ascii::ascii_iswhite;
-use crate::change::ml_replace;
 use crate::change::{changed_bytes, get_leader_len};
 use crate::charset::{byte2cells, char2cells, getwhitecols_curline, skipwhite};
 use crate::cstr::byte_at;
@@ -34,7 +33,8 @@ use crate::edit::get_nolist_virtcol;
 use crate::extmark::extmark_splice_cols;
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::memline::Lines;
-use crate::memory::{xfree, xmalloc};
+use crate::memline::ml_replace_owned;
+use crate::memory::{XString, xfree, xmalloc};
 use crate::message::e_positive;
 use crate::message::emsg;
 use crate::message_fmt::{msg_bytes, msg_cstr};
@@ -177,13 +177,89 @@ pub unsafe fn tabstop_padding(col: ColNr, ts: OptInt, vts: *const ColNr) -> c_in
     }
 }
 
+/// Which of a buffer's two tab-stop lists.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum StopList {
+    /// 'vartabstop', which 'tabstop' stands in for.
+    Tab,
+    /// 'varsofttabstop', which 'softtabstop' stands in for.
+    SoftTab,
+}
+
 impl Buf {
+    /// `f` of the buffer's `which` list, `None` when it names no stops.
+    ///
+    /// Private, and every `f` below is arithmetic on the list: nothing can
+    /// set the option -- and free the array -- while it is borrowed.
+    #[inline(always)]
+    fn with_stops<R>(
+        self,
+        which: StopList,
+        f: impl FnOnce(Option<tabstop::TabStops<'_>>) -> R,
+    ) -> R {
+        let vts = match which {
+            StopList::Tab => self.b_p_vts_array,
+            StopList::SoftTab => self.b_p_vsts_array,
+        };
+        // SAFETY: the buffer's own tab-stop array, or null, for the length of
+        // a call that cannot write it.
+        f(unsafe { tabstops(vts) })
+    }
+
     /// How many columns from `col` to this buffer's next tabstop, by its
     /// `'tabstop'` and `'vartabstop'`.
     #[inline]
     pub fn tab_padding(self, col: ColNr) -> ColNr {
-        // SAFETY: the buffer's own 'vartabstop' array, or null.
-        unsafe { tabstop_padding(col, self.b_p_ts, self.b_p_vts_array) }
+        self.stop_padding(StopList::Tab, col, self.b_p_ts)
+    }
+
+    /// How many columns from `col` to the next stop of `which`, the uniform
+    /// width `ts` standing in when the list names none.
+    #[inline]
+    pub(crate) fn stop_padding(self, which: StopList, col: ColNr, ts: OptInt) -> ColNr {
+        self.with_stops(which, |stops| match stops {
+            Some(stops) => stops.padding(col),
+            None => tabstop::uniform_padding(col, ts),
+        })
+    }
+
+    /// How many stops `which` names, or zero when it names none.
+    pub(crate) fn stop_count(self, which: StopList) -> c_int {
+        self.with_stops(which, |stops| stops.map_or(0, tabstop::TabStops::count))
+    }
+
+    /// The first 'vartabstop' width, or the default of eight.
+    pub(crate) fn first_tab_stop(self) -> c_int {
+        self.with_stops(StopList::Tab, |stops| {
+            stops.map_or(8, tabstop::TabStops::first)
+        })
+    }
+
+    /// The width of the 'vartabstop' stop at `col` ('tabstop' when there is
+    /// no list); with `left`, of the one a cursor moving back would cross.
+    pub(crate) fn tab_width_at(self, col: ColNr, left: bool) -> c_int {
+        let ts = self.b_p_ts as c_int;
+        self.with_stops(StopList::Tab, |stops| {
+            stops.map_or(ts, |stops| stops.at(col, left))
+        })
+    }
+
+    /// The column the stop of `which` containing `col` starts at, `ts`
+    /// standing in when the list names none.
+    pub(crate) fn stop_start(self, which: StopList, col: ColNr, ts: c_int) -> ColNr {
+        self.with_stops(which, |stops| match stops {
+            Some(stops) => stops.start(col),
+            None => col - col % ts,
+        })
+    }
+
+    /// The screen width of the indent at `text`, by this buffer's
+    /// 'tabstop' and 'vartabstop'.
+    pub(crate) fn indent_width(self, text: &[u8]) -> c_int {
+        let ts = self.b_p_ts;
+        self.with_stops(StopList::Tab, |stops| {
+            indent_width(text, stops.map(tabstop::TabStops::widths), ts)
+        })
     }
 }
 
@@ -301,7 +377,7 @@ pub fn get_sw_value_col(buffer: Buf, col: ColNr, left: bool) -> c_int {
     if buffer.b_p_sw != 0 {
         buffer.b_p_sw as c_int
     } else {
-        unsafe { tabstop_at(col, buffer.b_p_ts, buffer.b_p_vts_array, left) }
+        buffer.tab_width_at(col, left)
     }
 }
 
@@ -335,10 +411,8 @@ pub fn get_indent_lnum(lnum: LineNr) -> c_int {
 /// Safe: as [`get_indent_lnum`]. The line is borrowed for the measurement
 /// and dropped with it, which is the whole of what the cache asks.
 pub fn get_indent_buf(buffer: Buf, lnum: LineNr) -> c_int {
-    let (ts, vts) = (buffer.b_p_ts, buffer.b_p_vts_array);
     let mut lines = buffer.lines();
-    // SAFETY: the buffer's own 'vartabstop' array, read while it is live.
-    unsafe { indent_size_ts(lines.line(lnum), ts, vts) }
+    buffer.indent_width(lines.line(lnum))
 }
 
 /// The screen width of the indent at `text`, with every tab a fixed
@@ -705,7 +779,9 @@ pub fn set_indent(size: c_int, flags: c_int) -> bool {
     // Replace the line, unless undo fails.
     if flags & SIN_UNDO as c_int == 0 || u_savesub(Win::current().w_cursor.lnum).is_ok() {
         // This may free `newline`.
-        let _ = unsafe { ml_replace(Win::current().w_cursor.lnum, newline, false) };
+        let _ = ml_replace_owned(Win::current().w_cursor.lnum, unsafe {
+            XString::from_raw(newline)
+        });
         if flags & SIN_NOMARK as c_int == 0 {
             extmark_splice_cols(
                 buf,
@@ -761,15 +837,7 @@ pub fn get_number_indent(lnum: LineNr) -> c_int {
     let line = Lines::current().line_copy(lnum);
     let mut lead_len = 0;
     if State.get() & MODE_INSERT != 0 || has_format_option(FoFlag::Q_COMS) {
-        // SAFETY: the copy is NUL-terminated and this frame owns it.
-        lead_len = unsafe {
-            get_leader_len(
-                line.as_cstr().as_ptr(),
-                ::core::ptr::null_mut::<*mut c_char>(),
-                false,
-                true,
-            )
-        };
+        lead_len = get_leader_len(&line, false, true).0;
     }
     let flp = Buf::current().b_p_flp.value_ptr();
     // SAFETY: 'formatlistpat' is a NUL-terminated option value.

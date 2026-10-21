@@ -11,7 +11,6 @@ use core::ptr;
 
 use super::*;
 use crate::ascii::{ascii_isdigit, ascii_iswhite, ascii_iswhite_or_nul};
-use crate::change::ml_replace;
 use crate::change::{changed_lines, ins_bytes, ins_str};
 use crate::charset::skip;
 use crate::charset::skipwhite;
@@ -28,8 +27,9 @@ use crate::getchar::state::got_int;
 use crate::guard::Suppress;
 use crate::indent_c::in_cinkeys;
 use crate::mbyte::{utf_ptr2str_char_info, utfc_next, utfc_ptr2len};
+use crate::memline::ml_replace_owned;
 use crate::memline::{Lines, ml_get, ml_get_len};
-use crate::memory::{xfree, xmalloc, xmallocz, xmemdupz};
+use crate::memory::{xfree, xmalloc, xmemdupz};
 use crate::message::{e_interr, e_modifiable, e_resulting_text_too_long};
 use crate::message::{emsg, msg_progress};
 use crate::r#move::changed_cline_bef_curs;
@@ -350,10 +350,7 @@ fn place_cursor_in_indent(end_vcol: c_int) -> c_int {
     // the cursor needs to sit where it was asked to.
     win.w_cursor.col = new_cursor_col as ColNr;
     let ptrlen = (win.w_virtcol as c_int - vcol) as size_t;
-    let spaces: *mut c_char = unsafe { xmallocz(ptrlen) }.cast();
-    unsafe { spaces.cast::<u8>().write_bytes(b' ', ptrlen) };
-    unsafe { ins_str(spaces, ptrlen) };
-    unsafe { xfree(spaces.cast()) };
+    ins_str(&vec![b' '; ptrlen]);
     new_cursor_col + ptrlen as c_int
 }
 
@@ -404,11 +401,12 @@ unsafe fn vreplace_restore(orig_line: *mut c_char, orig_col: ColNr) {
     let new_line = unsafe { xstrnsave(get_cursor_line_ptr(), get_cursor_line_len() as size_t) };
     let new_col = win.w_cursor.col;
     unsafe { *new_line.offset(new_col as isize) = 0 };
-    let _ = unsafe { ml_replace(win.w_cursor.lnum, orig_line, false) };
+    let _ = ml_replace_owned(win.w_cursor.lnum, unsafe { XString::from_raw(orig_line) });
     win.w_cursor.col = orig_col;
     let splice = Suppress::splice();
     backspace_until_column(0);
-    unsafe { ins_bytes(new_line) };
+    // SAFETY: the copy just made, cut at the cursor.
+    ins_bytes(unsafe { cstr::bytes_at(new_line) });
     unsafe { xfree(new_line.cast()) };
     drop(splice);
     let delta = orig_col as c_int - new_col as c_int;
@@ -501,18 +499,16 @@ pub fn change_indent(type_0: c_int, amount: c_int, round: c_int, call_changed_by
 /// it. The indent is built into a `Vec` here instead, so the shape is stated
 /// once.
 ///
-/// # Safety
-/// `src` must be NUL-terminated, and there must be a current window.
-pub unsafe fn copy_indent(size: c_int, src: *mut c_char) -> bool {
+/// `src` is the line whose indent is copied; only its leading white space is
+/// read.
+pub fn copy_indent(size: c_int, src: &[u8]) -> bool {
     let buf = Buf::current();
     // SAFETY: `b_p_ts`/`b_p_vts_array` are the buffer's own tabstop
     // settings. Written as a closure inside the `unsafe`, so that the walk
     // below — which is the whole of this function — stays checked code.
     let pad = |col: c_int| buf.tab_padding(col as ColNr);
-    // SAFETY: the caller's NUL-terminated source line.
     let expandtab = buf.b_p_et != 0;
-    // SAFETY: the caller's NUL-terminated source line.
-    let src_indent = unsafe { CStr::from_ptr(src) }.to_bytes();
+    let src_indent = src;
 
     let mut indent: Vec<u8> = Vec::new();
     let mut todo = size;
@@ -562,21 +558,10 @@ pub unsafe fn copy_indent(size: c_int, src: *mut c_char) -> bool {
     indent.resize(indent.len() + todo.max(0) as usize, b' ');
     let ind_len = indent.len() as c_int;
 
-    // SAFETY: the allocation is sized from what was just built plus the
-    // line it is prefixed to, and `ml_replace` takes it over.
-    // The rest of the line, including its NUL.
-    let line_len = get_cursor_line_len() + 1;
-    // Both operands are non-negative `int`s, so the only way the
-    // narrowing to `size_t` the C guarded could fail is a negative sum.
-    debug_assert!(ind_len + line_len >= 0, "STRICT_ADD overflow");
-    let line: *mut c_char = unsafe { xmalloc((ind_len + line_len) as size_t) }.cast();
-    unsafe { ptr::copy_nonoverlapping(indent.as_ptr(), line.cast::<u8>(), indent.len()) };
-    unsafe {
-        line.add(indent.len())
-            .cast::<u8>()
-            .copy_from(get_cursor_line_ptr().cast(), line_len as size_t)
-    };
-    let _ = unsafe { ml_replace(Win::current().w_cursor.lnum, line, false) };
+    // The indent, then the whole of the cursor line.
+    let lnum = Win::current().w_cursor.lnum;
+    indent.extend_from_slice(Lines::current().line(lnum));
+    let _ = ml_replace_owned(lnum, XString::from_vec(indent));
     Win::current().w_cursor.col = ind_len as ColNr;
     true
 }
@@ -737,7 +722,8 @@ impl Retab {
             unsafe { *run.offset(i as isize) = if i < num_tabs { b'\t' } else { b' ' } as c_char };
         }
         let mut line = new_line;
-        if unsafe { ml_replace(scan.lnum, new_line, false) }.is_ok() {
+        // SAFETY: the line just built, which the memline takes over.
+        if ml_replace_owned(scan.lnum, unsafe { XString::from_raw(new_line) }).is_ok() {
             // `new_line` may have been copied.
             line = { buf }.b_ml.cached_text();
             let lnum = scan.lnum as c_int - 1;

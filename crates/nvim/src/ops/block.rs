@@ -31,7 +31,7 @@
 #![allow(unsafe_code)]
 
 use crate::winlayer::{Buf, PosRef, Win};
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use super::*;
 use crate::cstr;
@@ -146,16 +146,7 @@ pub(crate) unsafe fn block_insert(op: *mut OpArg, s: &[u8], b_insert: bool, bdp:
             (line, startcol)
         };
 
-        // SAFETY: `line` holds exactly the bytes named, and `copy` is what
-        // hands the memline its own allocation of them.
-        let _ = unsafe {
-            ml_replace_len(
-                lnum,
-                line.as_ptr().cast_mut().cast::<c_char>(),
-                line.len(),
-                true,
-            )
-        };
+        let _ = ml_replace_buf_text(Buf::current(), lnum, &line);
         let splice = offset - startcol;
         extmark_splice_cols(
             Buf::current(),

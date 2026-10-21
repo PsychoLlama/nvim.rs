@@ -101,33 +101,34 @@ pub const MODE_NORMAL: ModeFlags = 1;
 /// checked. Naming the machine instead makes the dispatch a `match` and the
 /// layout nobody's business.
 ///
-/// The address is raw rather than a `&mut`, and the promise that it is live
-/// is booked at the constructor the way every other handle in the tree books
-/// it: a `check` or an `execute` re-enters the editor, and the frames below
-/// it reach the same state through the globals that name it — `op_pending`
-/// reads the normal-mode frame's operator — so a `&mut` spanning the loop
-/// would be a promise the editor does not keep.
-pub(crate) struct ModeState(Machine);
+/// The address is raw rather than a `&mut` for three of them, and the
+/// promise that it is live is booked at the constructor the way every other
+/// handle in the tree books it: a `check` or an `execute` re-enters the
+/// editor, and the frames below it reach the same state through the globals
+/// that name it — `op_pending` reads the normal-mode frame's operator — so a
+/// `&mut` spanning the loop would be a promise the editor does not keep.
+/// Insert mode's state is the exception: no global names it, so it is lent
+/// for the length of the loop.
+pub(crate) struct ModeState<'a>(Machine<'a>);
 
 /// [`ModeState`]'s arms. Private, so the only way to make one is through a
 /// constructor that takes the liveness promise.
-enum Machine {
+enum Machine<'a> {
     Normal(*mut NormalState),
-    Insert(*mut InsertState),
+    Insert(&'a mut InsertState),
     CommandLine(*mut CommandLineState),
     Terminal(*mut TerminalState),
 }
 
-impl ModeState {
+impl<'a> ModeState<'a> {
     /// # Safety
     /// `s` must stay a live `NormalState` for the whole of [`state_enter`].
     pub(crate) const unsafe fn normal(s: *mut NormalState) -> Self {
         Self(Machine::Normal(s))
     }
 
-    /// # Safety
-    /// `s` must stay a live `InsertState` for the whole of [`state_enter`].
-    pub(crate) const unsafe fn insert(s: *mut InsertState) -> Self {
+    /// Insert mode's state, which nothing else reaches while the loop runs.
+    pub(crate) const fn insert(s: &'a mut InsertState) -> Self {
         Self(Machine::Insert(s))
     }
 
@@ -147,31 +148,31 @@ impl ModeState {
     /// Before each key: 0 ends the state, -1 asks for the check to be run
     /// again (something it did invalidated what came after), anything else
     /// goes on to read a key.
-    fn check(&self) -> c_int {
+    fn check(&mut self) -> c_int {
         // SAFETY (throughout): the constructor's promise -- a live state of
         // the named kind.
-        match self.0 {
-            Machine::Normal(s) => unsafe { normal_check(s) },
-            Machine::Insert(s) => unsafe { insert_check(s) },
-            Machine::CommandLine(s) => unsafe { command_line_check(s) },
-            Machine::Terminal(s) => unsafe { terminal_check(s) },
+        match &mut self.0 {
+            Machine::Normal(s) => unsafe { normal_check(*s) },
+            Machine::Insert(s) => insert_check(s),
+            Machine::CommandLine(s) => unsafe { command_line_check(*s) },
+            Machine::Terminal(s) => unsafe { terminal_check(*s) },
         }
     }
 
     /// The key, answered the same three ways as [`Self::check`].
-    fn execute(&self, key: c_int) -> c_int {
+    fn execute(&mut self, key: c_int) -> c_int {
         // SAFETY (throughout): as [`Self::check`].
-        match self.0 {
-            Machine::Normal(s) => unsafe { normal_execute(s, key) },
-            Machine::Insert(s) => unsafe { insert_execute(s, key) },
-            Machine::CommandLine(s) => unsafe { command_line_execute(s, key) },
-            Machine::Terminal(s) => unsafe { terminal_execute(s, key) },
+        match &mut self.0 {
+            Machine::Normal(s) => unsafe { normal_execute(*s, key) },
+            Machine::Insert(s) => insert_execute(s, key),
+            Machine::CommandLine(s) => unsafe { command_line_execute(*s, key) },
+            Machine::Terminal(s) => unsafe { terminal_execute(*s, key) },
         }
     }
 }
 
 /// Run `s` until its `execute` says to stop.
-pub(crate) fn state_enter(s: ModeState) {
+pub(crate) fn state_enter(mut s: ModeState<'_>) {
     'state: loop {
         let check_result = s.check();
         if check_result == 0 {

@@ -22,19 +22,19 @@
 //! *non*-word character that ends the word, which is the character being
 //! inserted.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::cstr;
+use crate::cstr::{self, byte_at};
+use crate::mbyte::encode_char;
 use crate::memline::Lines;
-use crate::memory::ThinCString;
-use crate::strings::has_char;
+use crate::memory::XString;
+use crate::option::split_option_part;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use super::*;
 use crate::guard::Lock;
-use crate::optionstr::OptString;
+use crate::optionstr::{OptString, OptStringRef};
 use crate::types::{FoFlag, MB_MAXCHAR, NUL};
 
 /// Upstream's `ISSPECIAL`: a character that needs processing other than the
@@ -87,10 +87,10 @@ pub(crate) fn insertchar(c: c_int, flags: c_int, second_indent: c_int) {
         && !cindent_on()
         && !p_ri()
     {
-        let mut buf: [c_char; INPUT_BUFLEN as usize + 1] = [0; INPUT_BUFLEN as usize + 1];
+        let mut buf = [0u8; INPUT_BUFLEN as usize];
         let mut virtcol: ColNr = 0;
 
-        buf[0] = c as c_char;
+        buf[0] = c as u8;
         let mut i = 1;
         if textwidth > 0 {
             virtcol = get_nolist_virtcol();
@@ -106,42 +106,41 @@ pub(crate) fn insertchar(c: c_int, flags: c_int, second_indent: c_int) {
                 && utf8len_tab[next as usize] as c_int == 1
                 && i < INPUT_BUFLEN
                 && (textwidth == 0 || {
-                    virtcol += byte2cells(buf[i as usize - 1] as uint8_t as c_int);
+                    virtcol += byte2cells(c_int::from(buf[i as usize - 1]));
                     virtcol < textwidth
                 })
                 && !(!no_abbr.get()
                     && !vim_iswordc(next)
-                    && vim_iswordc(buf[i as usize - 1] as uint8_t as c_int));
+                    && vim_iswordc(c_int::from(buf[i as usize - 1])));
             if !take {
                 break;
             }
-            buf[i as usize] = vgetc() as c_char;
+            buf[i as usize] = vgetc() as u8;
             i += 1;
         }
 
         do_digraph(-1); // clear digraphs
-        do_digraph(buf[i as usize - 1] as uint8_t as c_int); // may start one
-        buf[i as usize] = NUL as c_char;
-        unsafe { ins_str(buf.as_mut_ptr(), i as size_t) };
+        do_digraph(c_int::from(buf[i as usize - 1])); // may start one
+        let typed = &buf[..i as usize];
+        ins_str(typed);
 
         // After CTRL-V the first character is recorded literally, and
         // the rest as themselves.
         let redo_from = if flags & INSCHAR_CTRLV as c_int != 0 {
-            redo_literal(buf[0] as uint8_t as c_int);
+            redo_literal(c_int::from(typed[0]));
             1
         } else {
             0
         };
-        if buf[redo_from] as c_int != NUL {
-            append_to_redobuff_literally(&cstr::as_bytes(&buf)[redo_from..]);
+        if redo_from < typed.len() {
+            append_to_redobuff_literally(&typed[redo_from..]);
         }
     } else {
         let cc = utf_char2len(c);
         if cc > 1 {
-            let mut buf: [c_char; MB_MAXCHAR + 1] = [0; MB_MAXCHAR + 1];
-            unsafe { utf_char2bytes(c, buf.as_mut_ptr()) };
-            buf[cc as usize] = NUL as c_char;
-            unsafe { ins_char_bytes(buf.as_mut_ptr(), cc as size_t) };
+            let mut buf = [0u8; MB_MAXCHAR];
+            let len = encode_char(c, &mut buf);
+            ins_char_bytes(&buf[..len]);
             append_to_redobuff_char(c);
         } else {
             ins_char(c);
@@ -176,7 +175,7 @@ fn wrap_before_insert(c: c_int, flags: c_int, second_indent: c_int, textwidth: c
         || (!ascii_iswhite(c)
             && !(State.get() & REPLACE_FLAG != 0
                 && State.get() & VREPLACE_FLAG == 0
-                && unsafe { *get_cursor_pos_ptr() } as c_int != NUL)
+                && cursor_byte() != NUL as u8)
             && (Win::current().w_cursor.lnum != Insstart.get().lnum
                 || ((!fo_ins_long || Insstart_textlen.get() <= textwidth)
                     && (!fo_ins_blank || Insstart_blank_vcol.get() <= textwidth))));
@@ -215,53 +214,64 @@ fn end_pending_comment(c: c_int) {
     }
 
     // Find the comment leader this line starts with.
-    let mut p: *mut c_char = ::core::ptr::null_mut();
-    let line = get_cursor_line_ptr();
-    let mut i = unsafe { get_leader_len(line, &raw mut p, false, true) };
-    if i <= 0 || !has_char(unsafe { cstr::at(p) }, COM_MIDDLE) {
+    let lnum = Win::current().w_cursor.lnum;
+    let (lead, flags) = get_leader_len(Lines::current().line(lnum), false, true);
+    // The middle item's flags, searched as upstream searches them: to the
+    // end of 'comments'.
+    let Some(flags) = flags
+        .filter(|flags| lead > 0 && flags.with_rest(|rest| rest.contains(&(COM_MIDDLE as u8))))
+    else {
         return; // just checking
-    }
+    };
 
-    let mut lead_end: [c_char; COM_MAX_LEN as usize] = [0; COM_MAX_LEN as usize];
+    let (middle_len, lead_end) = {
+        let buffer = Buf::current();
+        let com = buffer.b_p_com.bytes();
+        let before = |p: usize| p.checked_sub(1).map_or(NUL as u8, |prev| com[prev]);
+        let mut p = flags.offset();
+        // Skip the middle-comment string.
+        while byte_at(com, p) != 0 && before(p) != b':' {
+            p += 1; // find the end of the middle flags
+        }
+        let (middle, rest) = split_option_part(&com[p..], COM_MAX_LEN as usize, b",");
+        p = com.len() - rest.len();
+        // Trailing white space does not count towards `middle_len`.
+        let mut middle_len = middle.len();
+        while middle_len > 0 && ascii_iswhite(c_int::from(middle[middle_len - 1])) {
+            middle_len -= 1;
+        }
 
-    // Skip the middle-comment string.
-    while unsafe { *p } as c_int != 0 && unsafe { *p.offset(-1) } as c_int != b':' as c_int {
-        p = unsafe { p.offset(1) }; // find the end of the middle flags
-    }
-    let comma = c",".as_ptr().cast_mut();
-    let out = lead_end.as_mut_ptr();
-    let mut middle_len =
-        unsafe { copy_option_part(&raw mut p, out, COM_MAX_LEN as size_t, comma) } as c_int;
-    // Trailing white space does not count towards `middle_len`.
-    while middle_len > 0 && ascii_iswhite(lead_end[middle_len as usize - 1] as c_int) {
-        middle_len -= 1;
-    }
-
-    // Find the end-comment string.
-    while unsafe { *p } as c_int != 0 && unsafe { *p.offset(-1) } as c_int != b':' as c_int {
-        p = unsafe { p.offset(1) }; // find the end of the end flags
-    }
-    let end_len =
-        unsafe { copy_option_part(&raw mut p, out, COM_MAX_LEN as size_t, comma) } as c_int;
+        // Find the end-comment string.
+        while byte_at(com, p) != 0 && before(p) != b':' {
+            p += 1; // find the end of the end flags
+        }
+        let (lead_end, _) = split_option_part(&com[p..], COM_MAX_LEN as usize, b",");
+        (middle_len as c_int, lead_end)
+    };
 
     // Skip the white space before the cursor, then back over the middle
     // leader.
-    i = Win::current().w_cursor.col;
-    while i > 0 && ascii_iswhite(unsafe { *line.offset(i as isize - 1) } as c_int) {
-        i -= 1;
+    let mut i = Win::current().w_cursor.col;
+    {
+        let mut lines = Lines::current();
+        let line = lines.line(lnum);
+        while i > 0 && ascii_iswhite(c_int::from(line[i as usize - 1])) {
+            i -= 1;
+        }
     }
     i -= middle_len;
 
     // Check some expected things before going on.
     if i >= 0
-        && end_len > 0
-        && lead_end[end_len as usize - 1] as uint8_t as c_int == end_comment_pending.get()
+        && lead_end
+            .last()
+            .is_some_and(|&last| c_int::from(last) == end_comment_pending.get())
     {
         // Backspace over everything being replaced.
         backspace_until_column(i);
         // Insert the end-comment string except for its last character,
         // which the caller inserts as an ordinary one.
-        unsafe { ins_bytes_len(lead_end.as_mut_ptr(), (end_len - 1) as size_t) };
+        ins_bytes(&lead_end[..lead_end.len() - 1]);
     }
 }
 
@@ -294,29 +304,28 @@ pub(crate) fn echeck_abbr(c: c_int) -> bool {
 
 /// Run the `InsertCharPre` autocommand for `c`.
 ///
-/// Answers an allocated replacement string when the autocommand changed
-/// `v:char`, and null to go on inserting `c` -- which is also the answer when
-/// there is no such autocommand at all.
-pub(crate) fn do_insert_char_pre(c: c_int) -> *mut c_char {
+/// Answers the replacement string when the autocommand changed `v:char`, and
+/// `None` to go on inserting `c` -- which is also the answer when there is no
+/// such autocommand at all.
+pub(crate) fn do_insert_char_pre(c: c_int) -> Option<XString> {
     if c == Ctrl_RSB || !has_event(AutoEvent::InsertCharPre) {
-        return ::core::ptr::null_mut();
+        return None;
     }
 
     let save_state = State.get();
-    let mut buf: [c_char; MB_MAXBYTES + 1] = [0; MB_MAXBYTES + 1];
-    let buflen = unsafe { utf_char2bytes(c, buf.as_mut_ptr()) } as size_t;
-    buf[buflen] = NUL as c_char;
+    let mut buf = [0u8; MB_MAXBYTES];
+    let buflen = encode_char(c, &mut buf);
 
     let locked = Lock::text();
-    // Up to the NUL `buf` holds, which is where every reader stops.
-    let typed = cstr::in_chars(&buf).to_bytes();
+    // Up to a NUL, which is where every reader stops: `c` may be one.
+    let typed = cstr::until_nul(&buf[..buflen]);
     set_vim_var_string(Vv::Char, Some(typed));
 
-    let mut res = ::core::ptr::null_mut();
+    let mut res = None;
     if ins_apply_autocmds(AutoEvent::InsertCharPre) != 0 {
         let now = vim_var_bytes(Vv::Char);
         if now != typed {
-            res = ThinCString::from_vec(now).into_raw();
+            res = Some(XString::from_bytes(cstr::until_nul(&now)));
         }
     }
 
@@ -324,4 +333,10 @@ pub(crate) fn do_insert_char_pre(c: c_int) -> *mut c_char {
     drop(locked);
     State.set(save_state);
     res
+}
+
+/// The byte under the cursor, NUL past the end of its line.
+fn cursor_byte() -> u8 {
+    let cursor = Win::current().w_cursor;
+    byte_at(Lines::current().line(cursor.lnum), cursor.col as usize)
 }

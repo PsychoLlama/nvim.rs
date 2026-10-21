@@ -24,6 +24,7 @@ use crate::fold::fold_open_cursor;
 use crate::getchar::state::KeyTyped;
 use crate::mark::setpcmark;
 use crate::mbyte::{cluster_len, head_off, mb_get_class};
+use crate::memline::Lines;
 use crate::memory::{xfree, xmalloc};
 use crate::message::e_noident;
 use crate::message::state::msg_silent;
@@ -491,8 +492,8 @@ pub(crate) unsafe fn find_decl(
             }
             break;
         }
-        // SAFETY: the cursor line is a NUL-terminated buffer line.
-        let leader = unsafe { get_leader_len(get_cursor_line_ptr(), ptr::null_mut(), false, true) };
+        let lnum = Win::current().w_cursor.lnum;
+        let leader = get_leader_len(Lines::current().line(lnum), false, true).0;
         if leader > 0 {
             // The whole line is a comment; skip past it.
             Win::current().w_cursor.lnum += 1;

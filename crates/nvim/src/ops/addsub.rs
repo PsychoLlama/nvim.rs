@@ -732,7 +732,8 @@ fn render_number(
     unsafe { strcpy(tail, &raw const digits as *const c_char) };
     buflen += digits_len;
 
-    unsafe { ins_str(buf, buflen as size_t) };
+    // SAFETY: the `buflen` bytes just written into `buf`.
+    ins_str(unsafe { cstr::slice_at(buf, buflen as usize) });
     unsafe { xfree(buf as *mut c_void) };
 }
 

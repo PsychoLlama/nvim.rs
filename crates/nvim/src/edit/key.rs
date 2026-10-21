@@ -19,8 +19,7 @@
 //! `Normal` runs [`insert_normal_char`], `CheckPum` runs [`check_pum`], and
 //! both then join `Continue` in running `insert_handle_key_post`.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 #![deny(
@@ -31,9 +30,9 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::cstr;
 use crate::keycodes::ModMask;
 use crate::keycodes::{Key, NotAKey};
+use crate::mbyte::{c_cluster_len, char_at};
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -66,10 +65,6 @@ enum Next {
 /// Answers 0 to leave the mode and 1 to go on, which is the state loop's
 /// contract.
 pub(crate) fn insert_handle_key(s: &mut InsertState) -> c_int {
-    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
-    // precondition is the live `curwin`/`curbuf` this mode runs with.
-    // The strings walked below are NUL-terminated lines of that buffer, and
-    // every step stops at the NUL.
     // TODO(tarruda, upstream): this could look better with a lookup
     // table, the way Normal mode's `nv_cmds[]` does it.
     let mut next = match Key::try_from(s.c) {
@@ -476,8 +471,6 @@ fn key_tab(s: &mut InsertState) -> Next {
 /// CR, NL and `<kEnter>`: open a line -- or, in the buffers where `<CR>` means
 /// something else, do that instead.
 fn key_eol(s: &mut InsertState) -> Next {
-    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
-    // precondition is the live `curwin`/`curbuf` this mode runs with.
     // In a quickfix or location-list window, `<CR>` jumps to the entry.
     if buf_is_quickfix(current_buf()) && s.c == CAR {
         if Win::current().w_llist_ref.is_none() {
@@ -585,28 +578,22 @@ fn check_pum(s: &mut InsertState) {
 /// which case it is *not* inserted here -- `check_abbr` has stuffed the
 /// expansion and the character back into the typeahead.
 fn insert_normal_char(s: &mut InsertState) {
-    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
-    // precondition is the live `curwin`/`curbuf` this mode runs with.
-    // The strings walked below are NUL-terminated lines of that buffer, and
-    // every step stops at the NUL.
     if !p_paste() {
-        let str = do_insert_char_pre(s.c);
-        if !str.is_null() {
-            if c_int::from(unsafe { *str }) != NUL && stop_arrow().is_ok() {
+        if let Some(text) = do_insert_char_pre(s.c) {
+            if !text.is_empty() && stop_arrow().is_ok() {
                 // Insert the new value of v:char literally.
-                let mut p = str;
-                while c_int::from(unsafe { *p }) != NUL {
-                    s.c = unsafe { utf_ptr2char(p) };
+                let mut at = 0;
+                while at < text.len() {
+                    s.c = char_at(&text[at..]);
                     if s.c == CAR || s.c == Key::Kenter.code() || s.c == NL {
                         ins_eol(s.c);
                     } else {
                         ins_char(s.c);
                     }
-                    p = unsafe { p.offset(utfc_ptr2len(p) as isize) };
+                    at += c_cluster_len(&text[at..]);
                 }
-                append_to_redobuff_literally(unsafe { cstr::bytes_at(str) });
+                append_to_redobuff_literally(&text);
             }
-            unsafe { xfree(str.cast::<::core::ffi::c_void>()) };
             s.c = NUL;
         }
         // The new value is already in, or was an empty string.
@@ -654,7 +641,6 @@ fn insert_normal_char(s: &mut InsertState) {
 /// Show the text as it now stands, then start completing on it.
 #[inline(always)]
 fn start_autocomplete(s: &mut InsertState) {
-    // SAFETY: `curwin` is live, which is all a redraw asks for.
     redraw_later(Win::current(), UPD_VALID);
     let _ = update_screen();
     ui_flush();

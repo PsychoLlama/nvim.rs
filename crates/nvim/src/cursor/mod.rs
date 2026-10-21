@@ -35,12 +35,12 @@ use self::arith::{
     ColAdd, carried_coladd, checked_col, folded_line_span, gap_coladd, step_back, wrap_target_col,
 };
 use crate::change::inserted_bytes;
-use crate::change::ml_replace;
 use crate::cstr;
 use crate::drawscreen::UPD_NOT_VALID;
 use crate::mbyte::{utf_head_off, utf_ptr2char};
+use crate::memline::ml_replace_owned;
 use crate::memline::{dec, inc, ml_get_len};
-use crate::memory::xmallocz;
+use crate::memory::{XString, xmallocz};
 use crate::r#move::{WinValid, changed_cline_bef_curs, set_valid_virtcol};
 use crate::normal::{set_visual_anchor, visual_active, visual_anchor};
 use crate::option::get_ve_flags;
@@ -404,7 +404,7 @@ unsafe fn pad_line(
             newline.offset((idx + spaces) as isize),
             tail as usize,
         );
-        let _ = ml_replace(lnum, newline, false);
+        let _ = ml_replace_owned(lnum, XString::from_raw(newline));
         inserted_bytes(lnum, idx, skipped, spaces);
     }
 }

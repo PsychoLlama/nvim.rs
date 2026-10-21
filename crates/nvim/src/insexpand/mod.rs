@@ -17,9 +17,7 @@ use crate::api::private::helpers::{cbuf_to_string, cstr_to_string};
 use crate::ascii::{ascii_iswhite, ascii_iswhite_or_nul};
 use crate::autocmd::has_event;
 use crate::buffer::buf_spname;
-use crate::change::{
-    deleted_lines_mark, ins_bytes_len, ins_char, ins_char_bytes, ins_str, open_line,
-};
+use crate::change::{deleted_lines_mark, ins_bytes, ins_char, ins_char_bytes, ins_str, open_line};
 use crate::charset::{
     ptr2cells, str_foldcase, vim_is_ident_char, vim_isfilec, vim_isprintc, vim_iswordc,
     vim_iswordp, vim_strsize,
@@ -33,8 +31,8 @@ use crate::drawscreen::{
     UPD_VALID, redraw_later, redraw_win_line, setcursor, showmode, update_screen,
 };
 use crate::edit::{
-    backspace_until_column, get_can_cindent, ins_apply_autocmds, ins_eol, ins_need_undo_get,
-    ins_redraw, insertchar, start_arrow, stop_arrow,
+    InsertEnd, backspace_until_column, get_can_cindent, ins_apply_autocmds, ins_eol,
+    ins_need_undo_get, ins_redraw, insertchar, start_arrow, stop_arrow,
 };
 use crate::eval::typval::{
     callback_copy, callback_free, dict_find, dict_get_number, dict_get_tv, tv_clear, tv_dict_alloc,

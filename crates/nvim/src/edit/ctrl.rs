@@ -17,8 +17,7 @@
 //! `"` it draws at the cursor has to be taken back again by hand, on every
 //! path, which is what `need_redraw` is for.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -56,9 +55,6 @@ pub(crate) fn ins_reg() {
 
     // A character is about to be waited for: show a `"`.
     pc_status.set(PutChar::Unset);
-    // SAFETY: every `unsafe` call in this function is an editor-wide routine
-    // whose only precondition is the live `curwin`/`curbuf` Insert mode runs
-    // with.
     if redrawing() && !char_avail() {
         // May need to redraw now that no more characters are available.
         ins_redraw(false);
@@ -270,7 +266,7 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: c_int, nomove: bool) -> bool {
             disabled_redraw.set(true);
             return false;
         }
-        unsafe { stop_insert(&mut Win::current().w_cursor, 1, nomove as c_int) };
+        stop_insert(Some(InsertEnd::cursor()), 1, nomove as c_int);
         undisplay_dollar();
     }
 
@@ -288,7 +284,7 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: c_int, nomove: bool) -> bool {
         let view = mark_view_make(Win::current(), Win::current().w_cursor);
         let mut buf = Buf::current();
         let fm = &mut buf.b_last_insert;
-        unsafe { free_fmark(fm.clone()) };
+        clear_mark(fm, 0);
         fm.mark = Win::current().w_cursor;
         fm.fnum = Buf::current().handle;
         fm.timestamp = os_time();
@@ -350,10 +346,6 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: c_int, nomove: bool) -> bool {
 /// CTRL-_ : toggle 'revins', and move to the end of the reverse-inserted
 /// text.
 pub(crate) fn ins_ctrl_() {
-    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
-    // precondition is the live `curwin`/`curbuf` this mode runs with.
-    // The strings walked below are NUL-terminated lines of that buffer, and
-    // every step stops at the NUL.
     if revins_on.get() && revins_chars.get() != 0 && revins_scol.get() >= 0 {
         // Upstream's `while (gchar_cursor() != NUL && revins_chars--)`:
         // the decrement runs on the iteration that ends the loop too, so
@@ -413,8 +405,6 @@ pub(crate) fn ins_insert(replace_state: c_int) {
 /// and `ins_at_eol` remembers whether the cursor was past the last character
 /// so it can be put back there.
 pub(crate) fn ins_ctrl_o() {
-    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
-    // precondition is the live `curwin`/`curbuf` this mode runs with.
     restart_VIsual_select.set(0);
     restart_edit.set(if State.get() & VREPLACE_FLAG != 0 {
         'V' as c_int
@@ -449,14 +439,12 @@ fn show_mode() -> c_int {
 /// The character under the cursor, `NUL` at the end of the line.
 #[inline(always)]
 fn char_at_cursor() -> c_int {
-    // SAFETY: `curwin`/`curbuf` are live for the whole session.
     gchar_cursor()
 }
 
 /// Read the next key, waiting for it if need be.
 #[inline(always)]
 fn get_key() -> c_int {
-    // SAFETY: the typeahead buffer is live for the whole session.
     plain_vgetc()
 }
 

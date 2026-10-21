@@ -45,17 +45,20 @@ pub unsafe fn skip_comment(
     is_comment: *mut bool,
 ) -> *mut c_char {
     // SAFETY: the caller's promise -- `line` is NUL-terminated and
-    // `is_comment` writable, and every flag string below is one the comment
-    // parser just handed back.
-    let mut comment_flags: *mut c_char = ::core::ptr::null_mut();
-    let leader_offset = unsafe { get_last_leader_offset(line, &raw mut comment_flags) };
+    // `is_comment` writable.
+    let text = unsafe { cstr::bytes_at(line) };
+    let (leader_offset, comment_flags) = get_last_leader_offset(text);
+    // A flag string walked to its `COM_END`, its colon, or its end, whichever
+    // comes first.
+    let end_or_colon = |flags: Option<ComFlags>| {
+        c_int::from(flags.map_or(NUL as u8, |flags| flags.first_of(&[COM_END as u8, b':'])))
+    };
 
     unsafe { *is_comment = false };
     if leader_offset != -1 {
         // Does the line end with an unclosed comment? It does unless the
         // last leader's flags carry COM_END.
-        comment_flags = unsafe { skip_to_end_or_colon(comment_flags) };
-        if unsafe { *comment_flags } as c_int != COM_END {
+        if end_or_colon(comment_flags) != COM_END {
             unsafe { *is_comment = true };
         }
     }
@@ -64,36 +67,18 @@ pub unsafe fn skip_comment(
         return line;
     }
 
-    let flagsp = &raw mut comment_flags;
-    let lead_len = unsafe { get_leader_len(line, flagsp, false, include_space) };
+    let (lead_len, flags) = get_leader_len(text, false, include_space);
     if lead_len == 0 {
         return line;
     }
 
     // A colon means this is not the closing part of a three-part comment.
     // Those are left alone: removing them would be annoying.
-    comment_flags = unsafe { skip_to_end_or_colon(comment_flags) };
-    let flag = unsafe { *comment_flags } as c_int;
+    let flag = end_or_colon(flags.or(comment_flags));
     if flag == ':' as c_int || flag == NUL {
         line = unsafe { line.offset(lead_len as isize) };
     }
     line
-}
-
-/// Walk a 'comments' flag string to its `COM_END`, its colon, or its end,
-/// whichever comes first.
-///
-/// # Safety
-/// `flags` must be a NUL-terminated string.
-unsafe fn skip_to_end_or_colon(mut flags: *mut c_char) -> *mut c_char {
-    // SAFETY: the caller's promise -- the walk stops at the string's NUL.
-    loop {
-        let flag = unsafe { *flags } as c_int;
-        if flag == 0 || flag == COM_END || flag == ':' as c_int {
-            return flags;
-        }
-        flags = unsafe { flags.offset(1) };
-    }
 }
 
 /// What [`measure_join`] worked out and [`assemble_join`] replays.
@@ -405,7 +390,11 @@ fn assemble_join(count: size_t, insert_space: bool, setmark: bool, plan: &mut Jo
         t -= 1;
     }
 
-    let _ = unsafe { ml_replace_len(Win::current().w_cursor.lnum, newp, newp_len, false) };
+    // SAFETY: `newp` is this function's `xmallocz` block, terminated at
+    // `newp_len`, and the memline takes it over.
+    let _ = ml_replace_owned(Win::current().w_cursor.lnum, unsafe {
+        XString::from_raw(newp)
+    });
 
     if setmark && !cmdmod_has(CmdModFlags::LOCKMARKS) {
         let mut buf = Win::current().buffer();

@@ -5,14 +5,13 @@
 //! and [`same_leader`] whether two lines carry leaders that let them be
 //! joined. [`paragraph_start`] is the pair asked about one line.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use super::*;
 use crate::ascii::ascii_iswhite;
-use crate::change::get_leader_len;
+use crate::change::{ComFlags, get_leader_len};
 use crate::charset::skip;
 use crate::cstr::byte_at;
 use crate::indent::get_number_indent;
@@ -23,15 +22,15 @@ use crate::types::{LineNr, NUL};
 /// A line's comment leader: how many bytes of it there are, and where the
 /// 'comments' item that matched begins.
 ///
-/// `flags` points into the 'comments' option itself, so it stays valid for as
-/// long as the option does -- which is what lets `format_lines` carry one
-/// from the "next line" slot to the "current line" slot without copying.
+/// `flags` names an item of the 'comments' option by where it starts, which
+/// is what lets `format_lines` carry one from the "next line" slot to the
+/// "current line" slot without copying.
 #[derive(Clone, Copy)]
 pub(crate) struct Leader {
     /// Bytes of leader, including the white space in front of it.
     pub(crate) len: c_int,
-    /// The flag letters of the matching 'comments' item, or null.
-    pub(crate) flags: *mut c_char,
+    /// The matching 'comments' item, or `None`.
+    pub(crate) flags: Option<ComFlags>,
 }
 
 impl Leader {
@@ -39,26 +38,13 @@ impl Leader {
     /// comments are not being formatted.
     pub(crate) const NONE: Leader = Leader {
         len: 0,
-        flags: ::core::ptr::null_mut(),
+        flags: None,
     };
 
     /// Whether the item's flag letters contain `flag`, searching only the
     /// current item -- `:` starts the next one.
-    ///
-    /// # Safety
-    /// `self.flags` must be null or NUL-terminated.
-    unsafe fn has_flag(self, flag: c_int) -> bool {
-        let mut p = self.flags;
-        if p.is_null() {
-            return false;
-        }
-        while unsafe { *p } as c_int != NUL && unsafe { *p } as c_int != ':' as c_int {
-            if unsafe { *p } as c_int == flag {
-                return true;
-            }
-            p = unsafe { p.add(1) };
-        }
-        false
+    fn has_flag(self, flag: c_int) -> bool {
+        self.flags.is_some_and(|flags| flags.has(flag))
     }
 }
 
@@ -82,16 +68,19 @@ pub(crate) fn fmt_check_par(lnum: LineNr, leader: &mut Leader, do_comments: bool
         let mut lines = Lines::current();
         let line = lines.line(lnum);
         leader.len = if do_comments {
-            // SAFETY: a line out of the cache, which is NUL-terminated
-            // where the cache put it, and the caller's out-parameter.
-            unsafe { get_leader_len(line.as_ptr().cast(), &raw mut leader.flags, false, true) }
+            let (len, flags) = get_leader_len(line, false, true);
+            // An item the scan did not reach leaves the old one in place.
+            if flags.is_some() {
+                leader.flags = flags;
+            }
+            len
         } else {
             0
         };
         let after = &line[(leader.len as usize).min(line.len())..];
         byte_at(after, skip::white(after)) == NUL as u8
     };
-    let ends_a_comment = leader.len > 0 && unsafe { leader.has_flag(COM_END) };
+    let ends_a_comment = leader.len > 0 && leader.has_flag(COM_END);
     nothing_but_leader || ends_a_comment || starts_para(lnum, NUL, false)
 }
 
@@ -118,10 +107,9 @@ pub(crate) fn same_leader(lnum: LineNr, first: Leader, second: Leader) -> bool {
     if first.len == 0 {
         return second.len == 0;
     }
-    if !first.flags.is_null() {
-        let mut p = first.flags;
-        while unsafe { *p } as c_int != NUL && unsafe { *p } as c_int != ':' as c_int {
-            match unsafe { *p } as c_int {
+    if let Some(flags) = first.flags {
+        for flag in flags.letters() {
+            match c_int::from(flag) {
                 COM_FIRST => return second.len == 0,
                 COM_END => return false,
                 COM_START => {
@@ -131,14 +119,13 @@ pub(crate) fn same_leader(lnum: LineNr, first: Leader, second: Leader) -> bool {
                     if Lines::current().line_len(lnum) <= first.len {
                         return false;
                     }
-                    if second.flags.is_null() || second.len == 0 {
+                    if second.flags.is_none() || second.len == 0 {
                         return false;
                     }
-                    return unsafe { second.has_flag(COM_MIDDLE) };
+                    return second.has_flag(COM_MIDDLE);
                 }
                 _ => {}
             }
-            p = unsafe { p.add(1) };
         }
     }
 

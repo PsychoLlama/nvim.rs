@@ -14,7 +14,6 @@ use crate::buffer::{
     buf_clear, buf_get_changedtick, buf_open_scratch, buf_set_changedtick, buf_valid, close_buffer,
     do_buffer, find_buf,
 };
-use crate::change::ml_replace;
 use crate::charset::{ptr2cells, skipwhite, vim_is_ident_char, vim_isprintc, vim_iswordc};
 use crate::cmdexpand::state::wild_menu_showing;
 use crate::cmdexpand::{
@@ -70,6 +69,7 @@ use crate::mbyte::{
     utf_iscomposing_first, utf_ptr2cells, utf_ptr2char, utf_ptr2len, utf8len_tab_zero,
     utfc_ptr2len,
 };
+use crate::memline::ml_replace_buf_text;
 use crate::memline::{decl, incl, ml_append_cstr};
 use crate::memory::{XString, xfree, xmalloc, xmallocz, xstrdup};
 use crate::message::state::{

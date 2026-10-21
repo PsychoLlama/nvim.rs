@@ -14,9 +14,7 @@
 
 #![cfg(not(miri))]
 
-use std::ffi::{CStr, c_char};
-
-use crate::support::{Probe, Sandbox, cstr};
+use crate::support::{Probe, Sandbox};
 use neovim::change::{get_last_leader_offset, get_leader_len, ins_char_bytes, ins_str};
 use neovim::undo::u_save_cursor;
 
@@ -42,9 +40,7 @@ fn insert_chars(fx: &Probe<'_>, line: i64, col: i64, chars: &[&str]) {
     fx.run(&format!("call cursor({line}, {col})"));
     let _ = u_save_cursor();
     for ch in chars {
-        let mut buf = ch.as_bytes().to_vec();
-        // SAFETY: `buf` holds `len` readable bytes and undo is prepared.
-        unsafe { ins_char_bytes(buf.as_mut_ptr().cast::<c_char>(), buf.len()) };
+        ins_char_bytes(ch.as_bytes());
     }
 }
 
@@ -79,19 +75,14 @@ fn ins_str_inserts_any_bytes_in_one_piece() {
     fresh(&fx, "['hello world']");
     fx.run("call cursor(1, 6)");
     let _ = u_save_cursor();
-    let mut text = b", there".to_vec();
-    // SAFETY: `text` holds `len` readable bytes and undo is prepared.
-    unsafe { ins_str(text.as_mut_ptr().cast::<c_char>(), text.len()) };
+    ins_str(b", there");
     fx.expect_all(&[("getline(1)", "'hello, there world'"), ("col('.')", "13")]);
     // At the end of the line, and a zero-length insert changing nothing.
     fx.run("call cursor(1, 19)");
     fx.run("normal! $");
     let _ = u_save_cursor();
-    let mut tail = b"!".to_vec();
-    // SAFETY: as above.
-    unsafe { ins_str(tail.as_mut_ptr().cast::<c_char>(), 1) };
-    // SAFETY: as above, no bytes.
-    unsafe { ins_str(tail.as_mut_ptr().cast::<c_char>(), 0) };
+    ins_str(b"!");
+    ins_str(b"");
     // `$` puts the cursor *on* the last character, so the bang lands before
     // it.
     fx.check("getline(1)", "'hello, there worl!d'");
@@ -221,17 +212,11 @@ fn open_line_splits_and_indents() {
 /// Ask the leader scan about `line`: its length, and the flags it left
 /// behind (the bytes up to the item's `:`).
 fn leader(line: &str, backward: bool, include_space: bool) -> (i32, String) {
-    let text = cstr(line);
-    let mut flags: *mut c_char = std::ptr::null_mut();
-    // SAFETY: `text` is NUL-terminated and `flags` is a local.
-    let len = unsafe { get_leader_len(text.as_ptr(), &raw mut flags, backward, include_space) };
-    let flags = if flags.is_null() {
-        "<null>".to_string()
-    } else {
-        // SAFETY: `flags` points into 'comments', which is NUL-terminated.
-        let rest = unsafe { CStr::from_ptr(flags) }.to_string_lossy();
-        rest.split(':').next().unwrap_or_default().to_string()
-    };
+    let (len, flags) = get_leader_len(line.as_bytes(), backward, include_space);
+    let flags = flags.map_or_else(
+        || "<null>".to_string(),
+        |flags| String::from_utf8_lossy(&flags.letters()).into_owned(),
+    );
     (len, flags)
 }
 
@@ -270,11 +255,7 @@ fn get_leader_len_measures_the_leader_and_names_its_item() {
         );
     }
     // The trailing comment of a line of code.
-    let offset = |line: &str| {
-        let text = cstr(line);
-        // SAFETY: `text` is NUL-terminated and `flags` may be null.
-        unsafe { get_last_leader_offset(text.as_ptr().cast_mut(), std::ptr::null_mut()) }
-    };
+    let offset = |line: &str| get_last_leader_offset(line.as_bytes()).0;
     assert_eq!(offset("code(); // why"), 8);
     // The last leader is the closed comment's end part, not its start.
     assert_eq!(offset("a = b; /* why */"), 14);

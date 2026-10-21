@@ -12,24 +12,24 @@
 //! the cursor rather than the characters just inserted, since a TAB can only
 //! start at a tab stop and the run may already have begun before this key was
 //! pressed.  In `MODE_VREPLACE` it does all of that on a *copy* of the line
-//! and replays the result through `ins_bytes_len`, so the replace stack stays
+//! and replays the result through `ins_bytes`, so the replace stack stays
 //! consistent.
 //!
 //! [`ins_eol`] is CR/NL: `open_line` does the work, but the replace stack and
 //! 'formatoptions' have to be told first.  [`ins_shift`] is `i_CTRL-T` and
 //! `i_CTRL-D`, which add or remove one 'shiftwidth'.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::cstr;
+use crate::charset::skip;
+use crate::cstr::byte_at;
+use crate::indent::StopList;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{c_char, c_int};
-use core::slice;
+use core::ffi::c_int;
 
 use super::*;
 use crate::option::cpo_has;
-use crate::types::{CpoFlag, FoFlag, NUL};
+use crate::types::{CpoFlag, FoFlag};
 
 /// `i_CTRL-T` and `i_CTRL-D`: add or remove one 'shiftwidth' of indent.
 ///
@@ -62,10 +62,12 @@ pub(crate) fn ins_shift(c: c_int, lastc: c_int) {
         change_indent(dir, 0, 1, true);
     }
 
-    // SAFETY: the cursor's line is NUL-terminated, so `skipwhite` stops at
-    // its NUL and the byte it answers is still in the line.
-    if did_ai.get() && unsafe { *skipwhite(get_cursor_line_ptr()) } as c_int != NUL {
-        did_ai.set(false);
+    if did_ai.get() {
+        let mut lines = Lines::current();
+        let line = lines.line(Win::current().w_cursor.lnum);
+        if skip::white(line) < line.len() {
+            did_ai.set(false);
+        }
     }
     did_si.set(false);
     can_si.set(false);
@@ -98,12 +100,10 @@ pub(crate) fn ins_tab() -> bool {
     // 'vartabstop' cases are asking.
     let smart_tab = p_sta()
         && ind
-        && (tabstops(Buf::current().b_p_vts_array) > 1
-            || (tabstops(Buf::current().b_p_vts_array) == 1
-                && unsafe { tabstop_first(Buf::current().b_p_vts_array) } != sw_value())
-            || (tabstops(Buf::current().b_p_vts_array) == 0
-                && Buf::current().b_p_ts != sw_value() as OptInt));
-    let soft_tab = tabstops(Buf::current().b_p_vsts_array) != 0 || sts_value() != 0;
+        && (tabstops(StopList::Tab) > 1
+            || (tabstops(StopList::Tab) == 1 && Buf::current().first_tab_stop() != sw_value())
+            || (tabstops(StopList::Tab) == 0 && Buf::current().b_p_ts != sw_value() as OptInt));
+    let soft_tab = tabstops(StopList::SoftTab) != 0 || sts_value() != 0;
     if Buf::current().b_p_et == 0 && !smart_tab && !soft_tab {
         // Nothing special: insert TAB like a normal character.
         return true;
@@ -117,7 +117,6 @@ pub(crate) fn ins_tab() -> bool {
     did_si.set(false);
     can_si.set(false);
     can_si_back.set(false);
-    // SAFETY: a static one-byte string.
     append_to_redobuff(b"\t");
 
     // How many columns to the next stop, from whichever option owns it.
@@ -125,14 +124,12 @@ pub(crate) fn ins_tab() -> bool {
         // A tab in the indent uses 'shiftwidth'.
         let sw = sw_value();
         sw - nolist_virtcol() % sw
-    } else if tabstops(Buf::current().b_p_vsts_array) > 0 || Buf::current().b_p_sts != 0 {
+    } else if tabstops(StopList::SoftTab) > 0 || Buf::current().b_p_sts != 0 {
         let sts = sts_value() as OptInt;
-        // SAFETY: a live buffer's own 'vartabstop' array.
-        unsafe { tabstop_padding(nolist_virtcol(), sts, Buf::current().b_p_vsts_array) }
+        Buf::current().stop_padding(StopList::SoftTab, nolist_virtcol(), sts)
     } else {
         let ts = Buf::current().b_p_ts;
-        // SAFETY: a live buffer's own 'vartabstop' array.
-        unsafe { tabstop_padding(nolist_virtcol(), ts, Buf::current().b_p_vts_array) }
+        Buf::current().stop_padding(StopList::Tab, nolist_virtcol(), ts)
     };
 
     // The first space goes in with `ins_char`, which in Replace mode
@@ -144,7 +141,7 @@ pub(crate) fn ins_tab() -> bool {
         if State.get() & VREPLACE_FLAG != 0 {
             insert_space();
         } else {
-            unsafe { ins_str(c" ".as_ptr().cast_mut(), 1) };
+            ins_str(b" ");
             if State.get() & REPLACE_FLAG != 0 {
                 replace_push_nul(); // no character was replaced
             }
@@ -154,7 +151,7 @@ pub(crate) fn ins_tab() -> bool {
 
     // With 'expandtab' off, put TABs back where the spaces will do.
     if Buf::current().b_p_et == 0
-        && (tabstops(Buf::current().b_p_vsts_array) > 0 || sts_value() > 0 || (p_sta() && ind))
+        && (tabstops(StopList::SoftTab) > 0 || sts_value() > 0 || (p_sta() && ind))
     {
         tab_spaces_to_tabs();
     }
@@ -166,15 +163,15 @@ pub(crate) fn ins_tab() -> bool {
 ///
 /// Three phases.  Walk back to the start of the run; walk forward writing a
 /// TAB wherever one fits, remembering the first column changed; and then
-/// delete the spaces the TABs made redundant, which is the `memmove` that
-/// rebuilds the line.
+/// delete the spaces the TABs made redundant, which rebuilds the line.
 ///
-/// In `MODE_VREPLACE` all of it happens on a copy (`saved_line`), and the
-/// result is replayed with `backspace_until_column` + `ins_bytes_len` so the
-/// replace stack sees an ordinary edit.
+/// The walk is over a copy of the line, because it measures columns through
+/// the memline as it goes. In `MODE_VREPLACE` the copy is all that changes,
+/// and the result is replayed with `backspace_until_column` + `ins_bytes` so
+/// the replace stack sees an ordinary edit; otherwise the copy goes back into
+/// the cached line -- in place, as upstream writes its TABs through the
+/// cache, when no space was dropped.
 fn tab_spaces_to_tabs() {
-    let mut ptr: *mut c_char;
-    let mut saved_line: *mut c_char = ::core::ptr::null_mut();
     let mut pos = Pos::default();
     // In `MODE_VREPLACE` the cursor that moves is the copy in `pos`; the
     // real one must not move until the change is replayed.  Nothing holds a
@@ -183,21 +180,14 @@ fn tab_spaces_to_tabs() {
     let vreplace = State.get() & VREPLACE_FLAG != 0;
     let mut change_col = -1;
     let save_list = Win::current().w_onebuf_opt.wo_list;
+    let lnum = Win::current().w_cursor.lnum;
 
-    // Get the current line.  In `MODE_VREPLACE` no real change may
-    // happen yet, so work on a copy.
-    // SAFETY: `ptr` addresses the cursor's own column of a NUL-terminated
-    // line -- the buffer's, or the copy of it `saved_line` owns -- and every
-    // walk below stays between that line's start and its NUL.
+    let mut line = Lines::current().line(lnum).to_vec();
     if vreplace {
         pos = Win::current().w_cursor;
-        let col = pos.col as isize;
-        let len = get_cursor_line_len() as size_t;
-        saved_line = unsafe { xstrnsave(get_cursor_line_ptr(), len) };
-        ptr = unsafe { saved_line.offset(col) };
-    } else {
-        ptr = get_cursor_pos_ptr();
     }
+    // The byte being looked at, which is the cursor's column to begin with.
+    let mut at = Win::current().w_cursor.col as usize;
 
     // 'list' changes what a TAB is worth; unless 'cpoptions' has `L`, it
     // must not be allowed to.
@@ -207,16 +197,16 @@ fn tab_spaces_to_tabs() {
 
     // Find the first white character of the run.
     let mut fpos = Win::current().w_cursor;
-    while fpos.col > 0 && ascii_iswhite(unsafe { *ptr.offset(-1) } as c_int) {
+    while fpos.col > 0 && ascii_iswhite(c_int::from(line[at - 1])) {
         fpos.col -= 1;
-        ptr = unsafe { ptr.offset(-1) };
+        at -= 1;
     }
     // In Replace mode the run must not reach back before the insert.
     if State.get() & REPLACE_FLAG != 0
         && fpos.lnum == Insstart.get().lnum
         && fpos.col < Insstart.get().col
     {
-        ptr = unsafe { ptr.offset((Insstart.get().col - fpos.col) as isize) };
+        at += (Insstart.get().col - fpos.col) as usize;
         fpos.col = Insstart.get().col;
     }
 
@@ -232,7 +222,7 @@ fn tab_spaces_to_tabs() {
     // lands.
     let (mut csarg, cstype) = CharsizeArg::new(Win::current(), 0, b"\t");
     loop {
-        let byte = unsafe { *ptr } as c_int;
+        let byte = c_int::from(byte_at(&line, at));
         if !ascii_iswhite(byte) {
             break;
         }
@@ -241,7 +231,7 @@ fn tab_spaces_to_tabs() {
             break;
         }
         if byte != TAB {
-            unsafe { *ptr = TAB as c_char };
+            line[at] = TAB as u8;
             if change_col < 0 {
                 change_col = fpos.col; // remember the first changed column
                 if fpos.lnum == Insstart.get().lnum && fpos.col < Insstart.get().col {
@@ -250,61 +240,54 @@ fn tab_spaces_to_tabs() {
             }
         }
         fpos.col += 1;
-        ptr = unsafe { ptr.offset(1) };
+        at += 1;
         vcol += i;
     }
 
     if change_col >= 0 {
         // Skip over the spaces the TABs have made redundant.
         let mut repl_off = 0;
-        // SAFETY: `ptr` is inside the line, which the walk below only reads.
-        let base = ptr;
-        let (mut csarg, cstype) =
-            CharsizeArg::new(Win::current(), 0, unsafe { cstr::bytes_at(base) });
-        while vcol < want_vcol && unsafe { *ptr } as c_int == ' ' as c_int {
-            let at = ptr.addr() - base.addr();
-            vcol += win_charsize(cstype, vcol, at, b' ' as int32_t, &mut csarg).width;
-            ptr = unsafe { ptr.offset(1) };
+        let base = at;
+        let (mut csarg, cstype) = CharsizeArg::new(Win::current(), 0, &line[base..]);
+        while vcol < want_vcol && byte_at(&line, at) == b' ' {
+            vcol += win_charsize(cstype, vcol, at - base, b' ' as int32_t, &mut csarg).width;
+            at += 1;
             repl_off += 1;
         }
         if vcol > want_vcol {
-            ptr = unsafe { ptr.offset(-1) };
+            at -= 1;
             repl_off -= 1;
         }
         fpos.col += repl_off;
 
         // Delete the spaces between `fpos` and the cursor.
         let i = walk_col(&pos, vreplace) - fpos.col;
-        if i > 0 {
-            if State.get() & VREPLACE_FLAG == 0 {
-                // Rebuild the line without them.
-                let newp_len = (Buf::current().b_ml.cached_len() - i) as usize;
-                let col = unsafe { ptr.offset_from(Buf::current().b_ml.cached_text()) } as usize;
-                // SAFETY: `col` is how far `ptr` is into the cached line and
-                // `i` is the run of spaces being dropped -- so the head is
-                // the `col` bytes in front of `ptr`, and the tail the rest of
-                // the line after the spaces, its NUL included.
-                let newp = unsafe {
-                    let mut newp = Vec::with_capacity(newp_len);
-                    newp.extend_from_slice(slice::from_raw_parts(ptr.sub(col).cast::<u8>(), col));
-                    let tail = ptr.add(i as usize).cast::<u8>();
-                    newp.extend_from_slice(slice::from_raw_parts(tail, newp_len - col));
-                    newp
-                };
-                Buf::current().b_ml.swap_cached_text(newp);
-                let old_len = walk_col(&pos, vreplace) - change_col;
-                let new_len = fpos.col - change_col;
-                inserted_bytes(fpos.lnum, change_col, old_len, new_len);
-            } else {
-                // SAFETY: the tail is NUL-terminated and moves down over the
-                // `i` spaces in front of it, terminator included.
-                let tail = unsafe { ptr.offset(i as isize) };
-                let tail_len = unsafe { cstr::bytes_at(tail) }.len() + 1;
-                unsafe { ptr.cast::<u8>().copy_from(tail.cast(), tail_len) };
+        if i > 0 && !vreplace {
+            // Rebuild the line without them, its NUL included.
+            let mut newp = Vec::with_capacity(line.len() + 1 - i as usize);
+            newp.extend_from_slice(&line[..at]);
+            newp.extend_from_slice(&line[at + i as usize..]);
+            newp.push(0);
+            let _ = Lines::current().line(lnum);
+            Buf::current().b_ml.swap_cached_text(newp);
+            let old_len = walk_col(&pos, vreplace) - change_col;
+            let new_len = fpos.col - change_col;
+            inserted_bytes(fpos.lnum, change_col, old_len, new_len);
+        } else if i > 0 {
+            line.drain(at..at + i as usize);
+        } else if !vreplace {
+            // Only TABs went in: they are written over the spaces in the
+            // cached line, which keeps its length.
+            let _ = Lines::current().line(lnum);
+            let mut buffer = Buf::current();
+            let cached = buffer.b_ml.cached_bytes_mut();
+            if cached.len() == line.len() {
+                cached.copy_from_slice(&line);
             }
-
+        }
+        if i > 0 {
             // Each deleted space had an entry on the replace stack.
-            if State.get() & REPLACE_FLAG != 0 && State.get() & VREPLACE_FLAG == 0 {
+            if State.get() & REPLACE_FLAG != 0 && !vreplace {
                 for _ in 0..i {
                     replace_join(repl_off);
                 }
@@ -318,19 +301,14 @@ fn tab_spaces_to_tabs() {
 
         // In `MODE_VREPLACE` the change was made to the copy; replay it
         // onto the real line.
-        if State.get() & VREPLACE_FLAG != 0 {
+        if vreplace {
             backspace_until_column(change_col);
-            // SAFETY: `saved_line` holds the line as it now stands, and the
-            // run from `change_col` to the cursor is inside it.
-            let from = unsafe { saved_line.offset(change_col as isize) };
-            let len = (walk_col(&pos, vreplace) - change_col) as size_t;
-            unsafe { ins_bytes_len(from, len) };
+            let from = change_col as usize;
+            let len = (walk_col(&pos, vreplace) - change_col) as usize;
+            ins_bytes(&line[from..from + len]);
         }
     }
 
-    if vreplace {
-        unsafe { xfree(saved_line.cast()) };
-    }
     Win::current().w_onebuf_opt.wo_list = save_list;
 }
 
@@ -339,9 +317,6 @@ fn tab_spaces_to_tabs() {
 /// Answers false when undo could not be saved -- but *true* when an
 /// abbreviation swallowed the key, which is not the same thing.
 pub(crate) fn ins_eol(c: c_int) -> bool {
-    // SAFETY: every `unsafe` call in this function is an editor-wide routine
-    // whose only precondition is the live `curwin`/`curbuf` Insert mode runs
-    // with.
     if echeck_abbr(c + ABBR_OFF) {
         return true;
     }
@@ -375,7 +350,7 @@ pub(crate) fn ins_eol(c: c_int) -> bool {
         0
     };
     let indent = old_indent.get();
-    let ok = unsafe { open_line(FORWARD, comments, indent, ::core::ptr::null_mut()) };
+    let ok = open_line(FORWARD, comments, indent, None);
     old_indent.set(0);
     can_cindent.set(true);
     // The new line may be in a closed fold.
@@ -419,11 +394,10 @@ fn sts_value() -> c_int {
     get_sts_value()
 }
 
-/// How many stops the 'vartabstop'-style array `ts` holds.
+/// How many stops the current buffer's `which` list holds.
 #[inline(always)]
-fn tabstops(ts: *mut ColNr) -> c_int {
-    // SAFETY: a live buffer's own tab-stop array, or null for none.
-    unsafe { tabstop_count(ts) }
+fn tabstops(which: StopList) -> c_int {
+    Buf::current().stop_count(which)
 }
 
 /// Insert one space at the cursor, replacing a character in Replace mode.

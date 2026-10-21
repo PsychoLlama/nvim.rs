@@ -27,19 +27,21 @@
 //! of the new line, which is what stops the second half of a broken line from
 //! starting a *new* comment.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::cstr;
+use crate::cstr::byte_at;
 use crate::guard::Suppress;
+use crate::memline::{Lines, ml_append_terminated};
 use crate::memory::XString;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::c_int;
 
 use self::comment::{LeaderContext, build_leader, indent_after_comment_end, plan_leader};
 use self::smart::smart_indent;
 use super::*;
+use crate::edit::buf_prompt_text_owned;
 use crate::ex_docmd::{cmdmod_add_flags, cmdmod_flags, cmdmod_set_flags};
+use crate::mbyte::char_at;
 use crate::optionstr::OptString;
 use crate::types::{FoFlag, NUL};
 
@@ -54,50 +56,52 @@ fn replace_normal(state: c_int) -> bool {
     state & REPLACE_FLAG != 0 && state & VREPLACE_FLAG == 0
 }
 
+/// How many bytes of white space start `text`.
+fn white_run(text: &[u8]) -> usize {
+    text.iter()
+        .take_while(|&&b| ascii_iswhite(c_int::from(b)))
+        .count()
+}
+
 /// A prompt line cannot have anything inserted above it, so `O` on one moves
 /// the prompt down instead: the prompt text is taken off the current line and
-/// prepended to what will become the new line.
+/// prepended to `text`, what will become the new line.
 ///
-/// Answers the allocated replacement for `p_extra`, or null if this was not a
-/// prompt line. Freezes the marks (`CmdModFlags::LOCKMARKS`) for the move, so that
+/// Answers the new line, or `None` if this was not a prompt line. Freezes
+/// the marks (`CmdModFlags::LOCKMARKS`) for the move, so that
 /// `b_prompt_start` stays where it is.
-///
-/// # Safety
-/// The cursor must be on a valid line of the current buffer.
-unsafe fn move_prompt_down(p_extra: *mut c_char) -> *mut c_char {
+fn move_prompt_down(text: &[u8]) -> Option<XString> {
     if !buf_is_prompt(current_buf())
         || Win::current().w_cursor.lnum != Buf::current().b_prompt_start.mark.lnum
     {
-        return ::core::ptr::null_mut();
+        return None;
     }
     let lnum = Win::current().w_cursor.lnum;
-    let prompt = prompt_text();
-    // SAFETY: `prompt_text` answers a NUL-terminated string.
-    let prompt_bytes = unsafe { cstr::bytes_at(prompt) };
-    let mut lines = Buf::current().lines();
-    let line = lines.line(lnum);
-    if !line.starts_with(prompt_bytes) {
-        return ::core::ptr::null_mut();
-    }
-    // Take the prompt off the front of the line.
-    let rest = XString::from_bytes(&line[prompt_bytes.len()..]);
+    let prompt = buf_prompt_text_owned(Buf::current());
+    let prompt = prompt.as_bytes();
+    let rest = {
+        let mut lines = Buf::current().lines();
+        let line = lines.line(lnum);
+        if !line.starts_with(prompt) {
+            return None;
+        }
+        // Take the prompt off the front of the line.
+        XString::from_bytes(&line[prompt.len()..])
+    };
     cmdmod_add_flags(CmdModFlags::LOCKMARKS);
     let _ = ml_replace_owned(lnum, rest);
-    concat(prompt_bytes, unsafe { cstr::bytes_at(p_extra) }).into_raw()
+    Some(concat(prompt, text))
 }
 
-/// Put `p_extra` in the buffer as the new line.
+/// Put `text` in the buffer as the new line.
 ///
 /// Answers `Some(did_append)` -- false meaning Virtual Replace overwrote the
 /// following line instead of adding one -- or `None` when `ml_append` failed.
 /// The cursor is left on the line *above* the new one either way.
-///
-/// # Safety
-/// The cursor must be on a valid line and `p_extra` NUL-terminated.
-unsafe fn append_new_line(p_extra: *mut c_char, old_cursor: Pos) -> Option<bool> {
+fn append_new_line(text: &XString, old_cursor: Pos) -> Option<bool> {
     if State.get() & VREPLACE_FLAG == 0 || old_cursor.lnum >= orig_line_count.get() {
-        let line = unsafe { cstr::at(p_extra) };
-        if ml_append_cstr(Win::current().w_cursor.lnum, line).is_err() {
+        let line = text.as_bytes_with_nul();
+        if ml_append_terminated(Win::current().w_cursor.lnum, line, false).is_err() {
             return None;
         }
         // changed_lines() is postponed: calling it here would upset
@@ -116,7 +120,7 @@ unsafe fn append_new_line(p_extra: *mut c_char, old_cursor: Pos) -> Option<bool>
         let _ = u_save_cursor();
         vr_lines_changed.set(vr_lines_changed.get() + 1);
     }
-    let _ = unsafe { ml_replace(Win::current().w_cursor.lnum, p_extra, true) };
+    let _ = ml_replace_buf_text(Buf::current(), Win::current().w_cursor.lnum, text);
     changed_bytes(Win::current().w_cursor.lnum, 0);
     Win::current().w_cursor.lnum -= 1;
     Some(false)
@@ -124,14 +128,12 @@ unsafe fn append_new_line(p_extra: *mut c_char, old_cursor: Pos) -> Option<bool>
 
 /// Indent the new line, and account for the columns that takes.
 ///
-/// `less_cols` and `newcol` are adjusted in place; the return value is the
-/// possibly-shifted indent.
-///
-/// # Safety
-/// The cursor must be on the line above the new one.
-unsafe fn apply_new_indent(
+/// `less_cols` and `newcol` are adjusted in place. `saved_line` is the old
+/// line, whose indent 'copyindent' copies. The cursor must be on the line
+/// above the new one.
+fn apply_new_indent(
     mut newindent: c_int,
-    saved_line: *mut c_char,
+    saved_line: &[u8],
     less_cols: &mut ColNr,
     newcol: &mut ColNr,
     no_si: bool,
@@ -146,7 +148,7 @@ unsafe fn apply_new_indent(
     }
 
     if Buf::current().b_p_ci != 0 {
-        unsafe { copy_indent(newindent, saved_line) };
+        copy_indent(newindent, saved_line);
         // Keep 'preserveindent' on so that later fiddling with the line
         // does not undo the copy; restored at the end of `open_line`.
         Buf::current().b_p_pi = true as c_int;
@@ -169,36 +171,37 @@ unsafe fn apply_new_indent(
     }
 }
 
-/// Cut the old line off at the cursor and tell the extmark tree about both
-/// halves of the split.
-///
-/// Takes ownership of `saved_line` (it becomes the buffer's line), so the
-/// caller must not free it afterwards.
-///
-/// # Safety
-/// The cursor must be back on the old line, and `did_append` describe what
-/// [`append_new_line`] did.
-#[allow(clippy::too_many_arguments)]
-unsafe fn truncate_old_line(
-    saved_line: *mut c_char,
-    flags: c_int,
-    trunc_line: bool,
+/// Where [`truncate_old_line`] splices the extmarks of the line that was
+/// split.
+struct Split {
     lnum: LineNr,
     mincol: ColNr,
     less_cols: ColNr,
     less_cols_off: ColNr,
+}
+
+/// Cut the old line off at the cursor and tell the extmark tree about both
+/// halves of the split.
+///
+/// `saved_line` becomes the buffer's line. The cursor must be back on the
+/// old line, and `did_append` describe what [`append_new_line`] did.
+fn truncate_old_line(
+    mut saved_line: Vec<u8>,
+    flags: c_int,
+    trunc_line: bool,
+    split: Split,
     did_append: bool,
 ) {
-    unsafe { *saved_line.offset(Win::current().w_cursor.col as isize) = NUL as c_char };
+    saved_line.truncate(Win::current().w_cursor.col as usize);
     // Remove trailing white space, unless the caller asked to keep it --
     // and only when the line being left was auto-indented, so that white
     // space the user typed on purpose survives.
     if trunc_line && flags & OPENLINE_KEEPTRAIL == 0 {
-        unsafe { truncate_spaces(saved_line, Win::current().w_cursor.col as size_t) };
+        truncate_spaces(&mut saved_line);
     }
-    let _ = unsafe { ml_replace(Win::current().w_cursor.lnum, saved_line, false) };
+    let new_len = saved_line.len() as c_int;
+    let _ = ml_replace_owned(Win::current().w_cursor.lnum, XString::from_vec(saved_line));
 
-    let new_len = unsafe { cstr::bytes_at(saved_line) }.len() as c_int;
     let mut cols_spliced = 0;
     if new_len < Win::current().w_cursor.col {
         // Trailing white space went as well as the split.
@@ -210,6 +213,12 @@ unsafe fn truncate_old_line(
     }
 
     if did_append {
+        let Split {
+            lnum,
+            mincol,
+            less_cols,
+            less_cols_off,
+        } = split;
         // Move the extmarks of the line the cursor is on; the
         // mark_adjust() in `append_new_line` took care of the lines below.
         let added = mincol - 1 + less_cols_off - less_cols;
@@ -233,14 +242,12 @@ unsafe fn truncate_old_line(
 }
 
 /// Reindent the new line with 'lisp', 'cindent' or 'indentexpr', whichever
-/// applies.
+/// applies; 'lisp' only when no comment leader was built.
 ///
 /// Virtual Replace handles the replace stack itself, so `State` is faked to
-/// plain Insert first to stop `change_indent()` from touching it.
-///
-/// # Safety
-/// The cursor must be on the new line.
-unsafe fn reindent_new_line(leader: *mut c_char, do_cindent: bool) {
+/// plain Insert first to stop `change_indent()` from touching it. The cursor
+/// must be on the new line.
+fn reindent_new_line(has_leader: bool, do_cindent: bool) {
     let vreplace_mode = if State.get() & VREPLACE_FLAG != 0 {
         let saved = State.get();
         State.set(MODE_INSERT);
@@ -250,7 +257,7 @@ unsafe fn reindent_new_line(leader: *mut c_char, do_cindent: bool) {
     };
 
     if !p_paste() {
-        if leader.is_null()
+        if !has_leader
             && !use_indentexpr_for_lisp()
             && Buf::current().b_p_lisp != 0
             && Buf::current().b_p_ai != 0
@@ -278,26 +285,24 @@ unsafe fn reindent_new_line(leader: *mut c_char, do_cindent: bool) {
 ///
 /// The caller takes care of undo. Virtual Replace may touch any number of
 /// lines, so this calls `u_save_cursor()` again itself when it starts on a
-/// new one.
+/// new one. The cursor must be on a valid line of the current buffer.
 ///
 /// Answers false only when `ml_append` failed.
-///
-/// # Safety
-/// The cursor must be on a valid line of the current buffer.
-pub unsafe fn open_line(
+pub fn open_line(
     dir: c_int,
     flags: c_int,
     second_line_indent: c_int,
-    did_do_comment: *mut bool,
+    did_do_comment: Option<&mut bool>,
 ) -> bool {
     let do_si = may_do_si();
     let saved_pi = Buf::current().b_p_pi;
     let lnum = Win::current().w_cursor.lnum;
     let mincol = Win::current().w_cursor.col + 1;
+    let col = Win::current().w_cursor.col as usize;
 
     // A copy of the current line, so that it can be cut in two.
-    let mut saved_line = copy_cursor_line();
-    let mut next_line: *mut c_char = ::core::ptr::null_mut();
+    let mut saved_line = Lines::current().line(lnum).to_vec();
+    let mut next_line = None;
 
     if State.get() & VREPLACE_FLAG != 0 {
         // Virtual Replace keeps a copy of the line it is about to start
@@ -305,41 +310,37 @@ pub unsafe fn open_line(
         // leader machinery below can do as it likes; what it produces is
         // taken off again at the bottom and inserted character by
         // character over the original.  -- webb.
-        next_line = if Win::current().w_cursor.lnum < orig_line_count.get() {
-            let next = Win::current().w_cursor.lnum + 1;
-            XString::from_bytes(Buf::current().lines().line(next)).into_raw()
+        next_line = Some(if lnum < orig_line_count.get() {
+            XString::from_bytes(Lines::current().line(lnum + 1))
         } else {
-            // SAFETY: a static empty string.
-            unsafe { xstrdup(c"".as_ptr()) }
-        };
+            XString::new()
+        });
 
         // A NL replaces the rest of the line, so everything past the
         // cursor goes on the replace stack. Twice, because BS over a NL
         // expects it.
         replace_push_nul();
         replace_push_nul();
-        let p = unsafe { saved_line.offset(Win::current().w_cursor.col as isize) };
-        // SAFETY: `saved_line` is our own NUL-terminated copy.
-        replace_push(unsafe { cstr::bytes_at(p) });
-        unsafe { *p = NUL as c_char };
+        replace_push(&saved_line[col..]);
+        saved_line.truncate(col);
     }
 
-    // What moves to the new line: the tail of the old one. Cut with a NUL
-    // for now, and remember the byte so it can be put back.
-    let mut p_extra: *mut c_char = ::core::ptr::null_mut();
+    // What moves to the new line: the tail of the old one, from `extra` on.
+    // Until the leader is built the line is read as ending there -- the C
+    // writes a NUL over the cut and puts the byte back afterwards.
+    let mut extra = None;
     let mut extra_len = 0;
-    let mut saved_char = NUL as c_char;
     let mut first_char = NUL;
     if State.get() & MODE_INSERT != 0 && State.get() & VREPLACE_FLAG == 0 {
-        p_extra = unsafe { saved_line.offset(Win::current().w_cursor.col as isize) };
+        extra = Some(col);
+        let tail = &saved_line[col..];
         if do_si {
             // 'smartindent' wants the first character after the break.
-            first_char = c_int::from(unsafe { *skipwhite(p_extra) } as u8);
+            first_char = c_int::from(byte_at(tail, white_run(tail)));
         }
-        extra_len = unsafe { cstr::bytes_at(p_extra) }.len() as c_int;
-        saved_char = unsafe { *p_extra };
-        unsafe { *p_extra = NUL as c_char };
+        extra_len = tail.len() as c_int;
     }
+    let cut = extra.unwrap_or(saved_line.len());
 
     u_clearline(Buf::current()); // "U" cannot undo added lines
     did_si.set(false);
@@ -355,11 +356,8 @@ pub unsafe fn open_line(
     if flags & OPENLINE_FORCE_INDENT != 0 {
         newindent = second_line_indent;
     } else if Buf::current().b_p_ai != 0 || do_si {
-        let ts = Buf::current().b_p_ts;
-        let vts = Buf::current().b_p_vts_array;
-        // SAFETY: `saved_line` is this frame's NUL-terminated copy of the
-        // line, and the tabstops are the buffer's own.
-        newindent = unsafe { indent_size_ts(cstr::bytes_at(saved_line), ts, vts) };
+        let head = &saved_line[..cut];
+        newindent = Buf::current().indent_width(head);
         if newindent == 0 && flags & OPENLINE_COM_LIST == 0 {
             newindent = second_line_indent; // CTRL-D in Insert mode
         }
@@ -367,10 +365,10 @@ pub unsafe fn open_line(
         // indent, so that a <CR> before the `{` of "if (cond) {" works.
         if !trunc_line
             && do_si
-            && c_int::from(unsafe { *saved_line }) != NUL
-            && (p_extra.is_null() || first_char != '{' as c_int)
+            && !head.is_empty()
+            && (extra.is_none() || first_char != '{' as c_int)
         {
-            (newindent, no_si) = unsafe { smart_indent(dir, flags, saved_line, newindent) };
+            (newindent, no_si) = smart_indent(dir, flags, head, newindent);
         }
         if do_si {
             can_si.set(true);
@@ -384,9 +382,8 @@ pub unsafe fn open_line(
     } else {
         KEY_OPEN_BACK
     };
-    // SAFETY: `b_p_inde` is the buffer's own `'indentexpr'` string, and
-    // `in_cinkeys` reads `'cinkeys'` and the cursor line; the short circuits
-    // are upstream's.
+    // The short circuits are upstream's: `in_cinkeys` reads 'cinkeys' and
+    // the cursor line.
     let do_cindent = !p_paste()
         && (Buf::current().b_p_cin != 0
             || c_int::from(Buf::current().b_p_inde.first_byte()) != NUL)
@@ -396,12 +393,12 @@ pub unsafe fn open_line(
     // Does the current line start with a comment leader that should be
     // repeated in front of the new line?
     end_comment_pending.set(NUL);
-    let mut lead_flags: *mut c_char = ::core::ptr::null_mut();
+    let mut lead_flags = None;
     let mut comment_start = 0;
     let mut lead_len = 0;
     if flags & OPENLINE_DO_COM != 0 {
-        lead_len =
-            unsafe { get_leader_len(saved_line, &raw mut lead_flags, dir == BACKWARD, true) };
+        let head = &saved_line[..cut];
+        (lead_len, lead_flags) = get_leader_len(head, dir == BACKWARD, true);
         if lead_len == 0
             && Buf::current().b_p_cin != 0
             && do_cindent
@@ -409,29 +406,28 @@ pub unsafe fn open_line(
             && (!has_format_option(FoFlag::NO_OPEN_COMS) || flags & OPENLINE_FORMAT != 0)
         {
             // A line comment after code: `code(); // why`.
-            // SAFETY: this frame's NUL-terminated copy of the line.
-            comment_start = check_linecomment(unsafe { cstr::bytes_at(saved_line) });
+            comment_start = check_linecomment(head);
             if comment_start != MAXCOL {
-                let at = saved_line.wrapping_offset(comment_start as isize);
-                let out = &raw mut lead_flags;
-                // SAFETY: `at` is inside this frame's NUL-terminated copy of
-                // the line, and `lead_flags` is a local.
-                lead_len = unsafe { get_leader_len(at, out, false, true) };
+                let (len, tried) = get_leader_len(&head[comment_start as usize..], false, true);
+                // One out-parameter for both scans upstream: a scan that
+                // tried nothing leaves the first one's answer.
+                lead_flags = tried.or(lead_flags);
+                lead_len = len;
                 if lead_len != 0 {
                     lead_len += comment_start;
-                    if !did_do_comment.is_null() {
-                        unsafe { *did_do_comment = true };
+                    if let Some(did_do_comment) = did_do_comment {
+                        *did_do_comment = true;
                     }
                 }
             }
         }
     }
 
-    let mut leader: *mut c_char = ::core::ptr::null_mut();
-    let mut allocated: *mut c_char = ::core::ptr::null_mut();
+    let mut leader = None;
     let mut newcol: ColNr = 0;
-    if lead_len > 0 {
-        let plan = unsafe { plan_leader(dir, lead_len, lead_flags, saved_line, p_extra) };
+    if let Some(lead_flags) = lead_flags.filter(|_| lead_len > 0) {
+        let head = &saved_line[..cut];
+        let plan = plan_leader(dir, lead_len, lead_flags, head, extra.is_some());
         lead_len = plan.lead_len;
         if lead_len > 0 {
             let ctx = LeaderContext {
@@ -439,27 +435,22 @@ pub unsafe fn open_line(
                 extra_len,
                 second_line_indent,
             };
-            // SAFETY: `lead_flags` points into 'comments' and `saved_line` is
-            // this frame's copy of the line.
-            let built =
-                unsafe { build_leader(plan, lead_flags, saved_line, ctx, do_si, newindent) };
-            leader = built.leader;
-            allocated = built.allocated;
+            let built = build_leader(plan, lead_flags, head, ctx, do_si, newindent);
+            leader = Some(built.text);
             lead_len = built.lead_len;
             newcol = built.newcol;
             newindent = built.newindent;
-        } else if !plan.comment_end.is_null() {
-            newindent =
-                unsafe { indent_after_comment_end(plan.comment_end, saved_line, do_si, newindent) };
+        } else if let Some(comment_end) = plan.comment_end {
+            newindent = indent_after_comment_end(comment_end, head, do_si, newindent);
         }
     }
+    let has_leader = leader.is_some();
 
     // Only reached with dir == FORWARD, in Insert or Replace state.
     let mut less_cols: ColNr = 0;
     let mut less_cols_off: ColNr = 0;
-    if !p_extra.is_null() {
-        unsafe { *p_extra = saved_char }; // put back the byte the NUL replaced
-
+    let mut tail = &saved_line[saved_line.len()..];
+    if let Some(mut from) = extra {
         // With 'autoindent' or OPENLINE_DELSPACES, skip to the first
         // non-blank. In Replace mode the blanks go on the replace stack,
         // preceded by a NUL, so BS can put them back.
@@ -467,68 +458,66 @@ pub unsafe fn open_line(
             replace_push_nul(); // end of the extra blanks
         }
         if Buf::current().b_p_ai != 0 || flags & OPENLINE_DELSPACES != 0 {
-            while (c_int::from(unsafe { *p_extra }) == ' ' as c_int
-                || c_int::from(unsafe { *p_extra }) == '\t' as c_int)
-                && !utf_iscomposing_first(unsafe { utf_ptr2char(p_extra.add(1)) })
+            while matches!(byte_at(&saved_line, from), b' ' | b'\t')
+                && !utf_iscomposing_first(char_at(&saved_line[from + 1..]))
             {
                 if replace_normal(State.get()) {
-                    // SAFETY: the byte the loop just tested. Always ASCII.
-                    replace_push(&[unsafe { *p_extra } as u8]);
+                    // The byte the loop just tested. Always ASCII.
+                    replace_push(&saved_line[from..=from]);
                 }
-                p_extra = unsafe { p_extra.add(1) };
+                from += 1;
                 less_cols_off += 1;
             }
         }
         // Columns for the marks, adjusted for the ones just removed.
-        less_cols = unsafe { p_extra.offset_from(saved_line) } as ColNr;
-    }
-    if p_extra.is_null() {
-        p_extra = c"".as_ptr().cast_mut(); // append an empty line
+        less_cols = from as ColNr;
+        tail = &saved_line[from..];
     }
 
-    if lead_len > 0 {
-        if flags & OPENLINE_COM_LIST != 0 && second_line_indent > 0 {
-            // 'formatlistpat': pad after the comment leader so that the
-            // text lines up with the first line's. The white space
-            // *before* the leader is `set_indent`'s job below.
-            let padding =
-                second_line_indent - (newindent + unsafe { cstr::bytes_at(leader) }.len() as c_int);
-            for _ in 0..padding {
-                unsafe { strcat(leader, c" ".as_ptr()) };
-                less_cols -= 1;
-                newcol += 1;
+    let mut new_text = match leader {
+        Some(mut text) => {
+            if flags & OPENLINE_COM_LIST != 0 && second_line_indent > 0 {
+                // 'formatlistpat': pad after the comment leader so that the
+                // text lines up with the first line's. The white space
+                // *before* the leader is `set_indent`'s job below.
+                let padding = second_line_indent - (newindent + text.len() as c_int);
+                if padding > 0 {
+                    text.resize(text.len() + padding as usize, b' ');
+                    less_cols -= padding;
+                    newcol += padding;
+                }
             }
+            text.extend_from_slice(tail);
+            did_ai.set(true); // so that truncating blanks works with comments
+            less_cols -= lead_len;
+            XString::from_vec(text)
         }
-        unsafe { strcat(leader, p_extra) };
-        p_extra = leader;
-        did_ai.set(true); // so that truncating blanks works with comments
-        less_cols -= lead_len;
-    } else {
-        end_comment_pending.set(NUL); // there was no leader after all
-    }
+        None => {
+            end_comment_pending.set(NUL); // there was no leader after all
+            XString::from_bytes(tail) // an empty line when nothing moves
+        }
+    };
 
     let splice = Suppress::splice();
     let old_cursor = Win::current().w_cursor;
     let old_cmod_flags = cmdmod_flags();
-    let mut prompt_moved: *mut c_char = ::core::ptr::null_mut();
     if dir == BACKWARD {
-        prompt_moved = unsafe { move_prompt_down(p_extra) };
-        if !prompt_moved.is_null() {
-            p_extra = prompt_moved;
+        if let Some(moved) = move_prompt_down(&new_text) {
+            new_text = moved;
         }
         Win::current().w_cursor.lnum -= 1;
     }
 
     let mut retval = false;
     'theend: {
-        let found = unsafe { append_new_line(p_extra, old_cursor) };
+        let found = append_new_line(&new_text, old_cursor);
         let Some(mut did_append) = found else {
             break 'theend;
         };
 
         let uncounted = Suppress::delete_count();
         if newindent != 0 || did_si.get() {
-            unsafe { apply_new_indent(newindent, saved_line, &mut less_cols, &mut newcol, no_si) };
+            apply_new_indent(newindent, &saved_line, &mut less_cols, &mut newcol, no_si);
         }
         drop(uncounted);
 
@@ -544,20 +533,15 @@ pub unsafe fn open_line(
         Win::current().w_cursor = old_cursor;
         if dir == FORWARD {
             if trunc_line || State.get() & MODE_INSERT != 0 {
-                unsafe {
-                    truncate_old_line(
-                        saved_line,
-                        flags,
-                        trunc_line,
-                        lnum,
-                        mincol,
-                        less_cols,
-                        less_cols_off,
-                        did_append,
-                    )
+                let split = Split {
+                    lnum,
+                    mincol,
+                    less_cols,
+                    less_cols_off,
                 };
                 // The buffer owns the line now.
-                saved_line = ::core::ptr::null_mut();
+                let line = core::mem::take(&mut saved_line);
+                truncate_old_line(line, flags, trunc_line, split, did_append);
                 did_append = false;
             }
             // Put the cursor on the new line. `old_cursor`, not
@@ -576,48 +560,26 @@ pub unsafe fn open_line(
         Win::current().w_cursor.col = newcol;
         Win::current().w_cursor.coladd = 0;
 
-        unsafe { reindent_new_line(leader, do_cindent) };
+        reindent_new_line(has_leader, do_cindent);
 
         if State.get() & VREPLACE_FLAG != 0 {
             // Take what ended up on the new line back off, put the
             // original line back, and insert the new text character by
             // character so that each replaced byte reaches the replace
             // stack.
-            let new_text = copy_cursor_line();
             let at = Win::current().w_cursor.lnum;
-            // SAFETY: `next_line` is this frame's allocation, which the buffer
-            // takes over.
-            let _ = unsafe { ml_replace(at, next_line, false) };
+            let new_text = Lines::current().line(at).to_vec();
+            if let Some(next_line) = next_line.take() {
+                let _ = ml_replace_owned(at, next_line);
+            }
             Win::current().w_cursor.col = 0;
             Win::current().w_cursor.coladd = 0;
-            // SAFETY: `new_text` is this frame's NUL-terminated allocation.
-            unsafe {
-                ins_bytes(new_text); // calls changed_bytes()
-                xfree(new_text.cast());
-            }
-            next_line = ::core::ptr::null_mut(); // the buffer owns it now
+            ins_bytes(&new_text); // calls changed_bytes()
         }
         retval = true;
     }
 
     Buf::current().b_p_pi = saved_pi;
-    free_str(saved_line);
-    free_str(next_line);
-    free_str(allocated);
-    free_str(prompt_moved);
     cmdmod_set_flags(old_cmod_flags);
     retval
-}
-
-/// A fresh copy of the line the cursor is on.
-fn copy_cursor_line() -> *mut c_char {
-    // SAFETY: the cursor is on a valid line, so the pointer and the length
-    // describe the same line.
-    unsafe { xstrnsave(get_cursor_line_ptr(), get_cursor_line_len() as size_t) }
-}
-
-/// Release one of [`open_line`]'s own strings; a null is fine.
-fn free_str(p: *mut c_char) {
-    // SAFETY: this frame's own allocation, or null.
-    unsafe { xfree(p.cast::<c_void>()) };
 }

@@ -20,11 +20,12 @@
 //! are the delete primitives that know about all of this: each has a
 //! Replace-mode arm that unwinds the stack instead of deleting text.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
+use crate::cstr::byte_at;
+use crate::mbyte::{c_cluster_len, char_len, head_off};
 use crate::winlayer::Win;
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use super::*;
 use crate::types::NUL;
@@ -42,22 +43,14 @@ pub(super) fn replace_stack_clear() {
 ///
 /// Only for use in an Insert mode: in `MODE_REPLACE`/`MODE_VREPLACE` each
 /// removed blank also drops one entry from the stack.
-///
-/// # Safety
-/// `line` must point to at least `len` writable bytes plus a byte for the
-/// NUL this writes.
-pub(crate) unsafe fn truncate_spaces(line: *mut c_char, len: size_t) {
-    // SAFETY: the caller promises `line` holds `len` writable bytes plus room
-    // for a NUL, so every index at or below `len` is inside it.
+pub(crate) fn truncate_spaces(line: &mut Vec<u8>) {
     // Walk back over the trailing white space.
-    let mut i = len as c_int - 1;
-    while i >= 0 && ascii_iswhite(unsafe { *line.offset(i as isize) } as c_int) {
+    while line.last().is_some_and(|&b| ascii_iswhite(c_int::from(b))) {
         if State.get() & REPLACE_FLAG != 0 {
             replace_join(0); // remove a NUL from the replace stack
         }
-        i -= 1;
+        line.pop();
     }
-    unsafe { *line.offset((i + 1) as isize) = NUL as c_char };
 }
 
 /// Backspace the cursor until column `col`, honouring Replace and Virtual
@@ -87,10 +80,6 @@ pub(crate) fn backspace_until_column(col: c_int) {
 ///
 /// Answers whether anything was deleted.
 fn del_char_after_col(limit_col: c_int) -> bool {
-    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
-    // precondition is the live `curwin`/`curbuf` this mode runs with.
-    // The strings walked below are NUL-terminated lines of that buffer, and
-    // every step stops at the NUL.
     if limit_col >= 0 {
         let ecol = Win::current().w_cursor.col + 1;
 
@@ -98,13 +87,14 @@ fn del_char_after_col(limit_col: c_int) -> bool {
         // again if a composing character took it too far back.
         mb_adjust_cursor();
         while Win::current().w_cursor.col < limit_col {
-            let l = unsafe { utf_ptr2len(get_cursor_pos_ptr()) };
+            let l = cursor_tail(char_len) as ColNr;
             if l == 0 {
                 break; // end of line
             }
             Win::current().w_cursor.col += l;
         }
-        if unsafe { *get_cursor_pos_ptr() } as c_int == NUL || Win::current().w_cursor.col == ecol {
+        if cursor_tail(|tail| byte_at(tail, 0)) == NUL as u8 || Win::current().w_cursor.col == ecol
+        {
             return false;
         }
         let _ = del_bytes(ecol - Win::current().w_cursor.col, false, true);
@@ -195,23 +185,15 @@ pub(crate) fn replace_pop_ins() {
 /// NUL: the length is measured *backwards* from the last byte, and on an
 /// empty entry `utf_head_off` would be reading the byte before it.
 pub(crate) fn mb_replace_pop_ins() {
-    // Taken off the stack *before* the insert: `ins_bytes_len` runs the
-    // whole change machinery, and the borrow must not be open across it.
+    // Taken off the stack *before* the insert: `ins_bytes` runs the whole
+    // change machinery, and the borrow must not be open across it.
     let character = replace_stack.with_mut(|stack| {
-        // SAFETY: the caller promises the top entry is not empty, so its
-        // last byte has a head byte inside the stack.
-        let base = stack.as_ptr().cast::<c_char>();
-        let last = unsafe { base.add(stack.len() - 1) };
-        let len = unsafe { utf_head_off(base, last) } as usize + 1;
+        // The caller promises the top entry is not empty, so its last byte
+        // has a head byte inside the stack.
+        let len = head_off(stack, stack.len() - 1) + 1;
         stack.split_off(stack.len() - len)
     });
-    // SAFETY: the character's own bytes, which nothing else holds.
-    unsafe {
-        ins_bytes_len(
-            character.as_ptr().cast_mut().cast::<c_char>(),
-            character.len(),
-        )
-    };
+    ins_bytes(&character);
 }
 
 /// One backspace in Replace mode.
@@ -234,9 +216,8 @@ pub(crate) fn replace_do_bs(limit_col: c_int) {
             // took.
             let win = Win::current();
             start_vcol = win.vcol_triple(win.cursor()).1;
-            // SAFETY: the cursor's character, in the cursor line.
-            let at = unsafe { cstr::prefix_at(get_cursor_pos_ptr(), CHAR_CELLS_SPAN) };
-            orig_vcols = win_chartabsize(win, at, start_vcol);
+            let at = cursor_tail(|tail| tail[..tail.len().min(CHAR_CELLS_SPAN)].to_vec());
+            orig_vcols = win_chartabsize(win, &at, start_vcol);
         }
         del_char_after_col(limit_col);
         let orig_len = if l_state & VREPLACE_FLAG != 0 {
@@ -248,19 +229,21 @@ pub(crate) fn replace_do_bs(limit_col: c_int) {
 
         if l_state & VREPLACE_FLAG != 0 {
             // How many screen cells the restored characters take.
-            let p = get_cursor_pos_ptr();
+            // A copy of the restored text and what follows: the width walk
+            // reads the memline.
+            let p = cursor_tail(<[u8]>::to_vec);
             let ins_len = get_cursor_pos_len() - orig_len;
+            // O-B15-22: upstream steps by the length of the *first*
+            // character every time (`utfc_ptr2len(p)`, not `p + i`), so a
+            // restored run of differently-sized characters is measured
+            // wrong.  Reproduced as it is.
+            let step = c_cluster_len(&p);
             let mut vcol = start_vcol;
             let mut i = 0;
-            while i < ins_len {
-                // SAFETY: `i` is within the restored text.
-                let at = unsafe { cstr::prefix_at(p.offset(i as isize), CHAR_CELLS_SPAN) };
+            while i < ins_len as usize {
+                let at = &p[i.min(p.len())..(i + CHAR_CELLS_SPAN).min(p.len())];
                 vcol += win_chartabsize(Win::current(), at, vcol);
-                // O-B15-22: upstream steps by the length of the *first*
-                // character every time (`utfc_ptr2len(p)`, not
-                // `p + i`), so a restored run of differently-sized
-                // characters is measured wrong.  Reproduced as it is.
-                i += unsafe { utfc_ptr2len(p) };
+                i += step;
             }
             vcol -= start_vcol;
 
@@ -279,4 +262,12 @@ pub(crate) fn replace_do_bs(limit_col: c_int) {
     } else if cc == 0 {
         del_char_after_col(limit_col);
     }
+}
+
+/// `f` of the cursor's line from the cursor's column on.
+fn cursor_tail<R>(f: impl FnOnce(&[u8]) -> R) -> R {
+    let cursor = Win::current().w_cursor;
+    let mut lines = Lines::current();
+    let line = lines.line(cursor.lnum);
+    f(&line[(cursor.col as usize).min(line.len())..])
 }

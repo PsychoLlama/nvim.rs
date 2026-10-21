@@ -36,7 +36,7 @@ pub(crate) fn match_is_code(line: &CStr, startp: usize) -> bool {
         let rest = &bytes[1..];
         rest[skip::white(rest)..].starts_with(b"define")
     };
-    if !hash_define && leader_len_of(line, false, true) != 0 {
+    if !hash_define && leader_len_of(bytes, false, true) != 0 {
         matched = false;
     }
 

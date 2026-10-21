@@ -20,10 +20,13 @@
 //! [`ins_del`] is `<Del>`, the forward case, and is much shorter because
 //! none of those rules apply to it.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
+use crate::cstr::byte_at;
+use crate::indent::StopList;
 use crate::keycodes::Key;
+use crate::mbyte::{c_char_info, c_next_cluster, char_at, char_len, class_in, iscomposing};
+use crate::types::CharInfo;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -54,7 +57,6 @@ pub(crate) enum Backspace {
 /// curwin->w_cursor.col;`: a deletion that went back past where the insert
 /// started drags that mark along with it.
 fn pull_insstart_orig_to_cursor() {
-    // SAFETY: the caller's contract.
     let cursor = Win::current().w_cursor;
     let orig = Insstart_orig.get();
     if cursor.lnum == orig.lnum && cursor.col < orig.col {
@@ -201,12 +203,12 @@ pub(crate) fn ins_bs(c: c_int, mode: Backspace, inserted_space_p: &mut c_int) ->
         // A closure, so that the byte before the cursor is only read once
         // 'smarttab' has had its say and the column has been checked.
         let soft_tab = || {
-            (get_sts_value() != 0 || unsafe { tabstop_count(Buf::current().b_p_vsts_array) } != 0)
+            (get_sts_value() != 0 || Buf::current().stop_count(StopList::SoftTab) != 0)
                 && Win::current().w_cursor.col > 0
                 && {
-                    // SAFETY: the cursor is past column 0, so the byte before
-                    // it is a byte of the cursor's own line.
-                    let before = unsafe { *get_cursor_pos_ptr().offset(-1) } as c_int;
+                    // The cursor is past column 0, so the byte before it is
+                    // a byte of the cursor's own line.
+                    let before = with_cursor_line(|line, col| c_int::from(byte_at(line, col - 1)));
                     before == TAB
                         || (before == ' ' as c_int && (*inserted_space_p == 0 || arrow_used.get()))
                 }
@@ -266,9 +268,6 @@ pub(crate) fn ins_bs(c: c_int, mode: Backspace, inserted_space_p: &mut c_int) ->
 fn bs_join_line() -> bool {
     let lnum = Insstart.get().lnum;
     if Win::current().w_cursor.lnum == lnum || revins_on.get() {
-        // SAFETY: every `unsafe` call in this function is an editor-wide
-        // routine whose only precondition is the live `curwin`/`curbuf`
-        // Insert mode runs with.
         if u_save(
             Win::current().w_cursor.lnum - 2,
             Win::current().w_cursor.lnum + 1,
@@ -303,15 +302,15 @@ fn bs_join_line() -> bool {
         // With `aw` in 'formatoptions' the space at the end of the line
         // has to go too, or auto-formatting would break the line again.
         if has_format_option(FoFlag::AUTO) && has_format_option(FoFlag::WHITE_PAR) {
-            let ptr = ml_get_buf(Buf::current(), Win::current().w_cursor.lnum);
-            let len = get_cursor_line_len();
-            // SAFETY: `ptr` is that line and `len` its length, so its last
-            // byte is in bounds, and `xmemdupz` copies that many bytes.
-            if len > 0 && unsafe { *ptr.offset((len - 1) as isize) } as c_int == ' ' as c_int {
-                let size = (len - 1) as size_t;
-                let mut newp =
-                    unsafe { core::slice::from_raw_parts(ptr.cast::<u8>(), size) }.to_vec();
-                newp.push(0);
+            let shorter = with_cursor_line(|line, _| {
+                line.strip_suffix(b" ").map(|head| {
+                    let mut newp = Vec::with_capacity(line.len());
+                    newp.extend_from_slice(head);
+                    newp.push(0);
+                    newp
+                })
+            });
+            if let Some(newp) = shorter {
                 Buf::current().b_ml.swap_cached_text(newp);
             }
         }
@@ -353,50 +352,45 @@ fn bs_join_line() -> bool {
 /// that virtual text and wrapping cannot change the answer.
 fn bs_one_shiftwidth(in_indent: bool) {
     let use_ts = Win::current().w_onebuf_opt.wo_list == 0 || Win::current().w_p_lcs_chars.tab1 != 0;
-    // SAFETY: the cursor's column is a byte of the cursor's line, so `line`
-    // and `cursor_ptr` address that line and the walk below stays inside it.
-    let line = get_cursor_line_ptr();
-    let cursor_ptr = unsafe { line.offset(Win::current().w_cursor.col as isize) };
-
-    // The cursor's virtual column, and the last white space before it
-    // that is preceded by non-white space.
-    let mut vcol: ColNr = 0;
-    let mut space_vcol: ColNr = 0;
-    let mut sci: StrCharInfo = unsafe { utf_ptr2str_char_info(line) };
-    let mut space_sci = sci;
-    let mut prev_space = false;
-    while sci.ptr < cursor_ptr {
-        let cur_space = ascii_iswhite(sci.chr.value);
-        if !prev_space && cur_space {
-            space_sci = sci;
-            space_vcol = vcol;
+    let (want_vcol, want_col, mut space_vcol) = with_cursor_line(|line, cursor_at| {
+        // The cursor's virtual column, and the last white space before it
+        // that is preceded by non-white space.
+        let mut vcol: ColNr = 0;
+        let mut space_vcol: ColNr = 0;
+        let (mut at, mut chr) = (0, c_char_info(line, 0));
+        let (mut space_at, mut space_chr) = (at, chr);
+        let mut prev_space = false;
+        while at < cursor_at {
+            let cur_space = ascii_iswhite(chr.value);
+            if !prev_space && cur_space {
+                (space_at, space_chr) = (at, chr);
+                space_vcol = vcol;
+            }
+            vcol += charsize_at(line, use_ts, vcol, at, chr);
+            (at, chr) = c_next_cluster(line, at, chr);
+            prev_space = cur_space;
         }
-        vcol += charsize_at(use_ts, vcol, sci);
-        sci = unsafe { utfc_next(sci) };
-        prev_space = cur_space;
-    }
 
-    // The virtual column to end up at.
-    let mut want_vcol = if vcol > 0 { vcol - 1 } else { 0 };
-    if p_sta() && in_indent {
-        want_vcol -= want_vcol % get_sw_value(Buf::current());
-    } else {
-        let sts = get_sts_value();
-        want_vcol = unsafe { tabstop_start(want_vcol, sts, Buf::current().b_p_vsts_array) };
-    }
-
-    // Where to stop backspacing.
-    loop {
-        let size = charsize_at(use_ts, space_vcol, space_sci);
-        if space_vcol + size > want_vcol {
-            break;
+        // The virtual column to end up at.
+        let mut want_vcol = if vcol > 0 { vcol - 1 } else { 0 };
+        if p_sta() && in_indent {
+            want_vcol -= want_vcol % get_sw_value(Buf::current());
+        } else {
+            let sts = get_sts_value();
+            want_vcol = Buf::current().stop_start(StopList::SoftTab, want_vcol, sts);
         }
-        space_vcol += size;
-        space_sci = unsafe { utfc_next(space_sci) };
-    }
-    // SAFETY: the walk never stepped past `cursor_ptr`, so `space_sci` is
-    // still inside the same line as `line`.
-    let want_col = unsafe { space_sci.ptr.offset_from(line) } as ColNr;
+
+        // Where to stop backspacing.
+        loop {
+            let size = charsize_at(line, use_ts, space_vcol, space_at, space_chr);
+            if space_vcol + size > want_vcol {
+                break;
+            }
+            space_vcol += size;
+            (space_at, space_chr) = c_next_cluster(line, space_at, space_chr);
+        }
+        (want_vcol, space_at as ColNr, space_vcol)
+    });
 
     // Delete until at or before `want_col`.
     while Win::current().w_cursor.col > want_col {
@@ -421,7 +415,7 @@ fn bs_one_shiftwidth(in_indent: bool) {
         if State.get() & VREPLACE_FLAG != 0 {
             ins_char(' ' as c_int);
         } else {
-            unsafe { ins_str(c" ".as_ptr().cast_mut(), 1) };
+            ins_str(b" ");
             if State.get() & REPLACE_FLAG != 0 {
                 replace_push_nul();
             }
@@ -474,11 +468,12 @@ fn bs_delete_chars(mut mode: Backspace, mincol: ColNr) {
         } else {
             let mut has_composing = false;
             if p_deco() {
-                // SAFETY: the cursor is on a character of its line, so the
-                // character after it is at most the line's NUL.
-                let p0 = get_cursor_pos_ptr();
-                let next = unsafe { p0.offset(utf_ptr2len(p0) as isize) };
-                has_composing = unsafe { utf_composinglike(p0, next, ::core::ptr::null_mut()) };
+                // The character after the cursor's is at most the line's NUL.
+                has_composing = with_cursor_line(|line, col| {
+                    let tail = &line[col.min(line.len())..];
+                    let next = &tail[char_len(tail)..];
+                    byte_at(next, 0) >= 0x80 && iscomposing(char_at(tail), char_at(next), None)
+                });
             }
             let _ = delete_one_char();
             // With combining characters and 'delcombine' set, move the
@@ -546,15 +541,22 @@ fn char_at_cursor() -> c_int {
 /// tells one word from the next for CTRL-W.
 #[inline(always)]
 fn cursor_char_class() -> c_int {
-    // SAFETY: `curwin`/`curbuf` are live for the whole session.
-    unsafe { mb_get_class(get_cursor_pos_ptr()) }
+    with_cursor_line(|line, col| class_in(&line[col.min(line.len())..], Buf::current()))
 }
 
-/// The screen width of the character `sci` names, standing at virtual
-/// column `vcol`.  `use_ts` says whether a TAB still advances to a tab stop.
+/// The screen width of the character `chr` at byte `at` of `line`, standing
+/// at virtual column `vcol`.  `use_ts` says whether a TAB still advances to a
+/// tab stop.
 #[inline(always)]
-fn charsize_at(use_ts: bool, vcol: ColNr, sci: StrCharInfo) -> c_int {
-    // SAFETY: `sci` names a character of a live line of `curbuf`.
-    let text = unsafe { cstr::prefix_at(sci.ptr, CHAR_CELLS_SPAN) };
-    charsize_nowrap(Buf::current(), text, use_ts, vcol, sci.chr.value)
+fn charsize_at(line: &[u8], use_ts: bool, vcol: ColNr, at: usize, chr: CharInfo) -> c_int {
+    let text = &line[at.min(line.len())..(at + CHAR_CELLS_SPAN).min(line.len())];
+    charsize_nowrap(Buf::current(), text, use_ts, vcol, chr.value)
+}
+
+/// `f` of the cursor's line and the cursor's column in it.
+#[inline(always)]
+fn with_cursor_line<R>(f: impl FnOnce(&[u8], usize) -> R) -> R {
+    let cursor = Win::current().w_cursor;
+    let mut lines = Lines::current();
+    f(lines.line(cursor.lnum), cursor.col as usize)
 }

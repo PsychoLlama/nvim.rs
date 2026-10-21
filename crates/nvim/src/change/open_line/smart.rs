@@ -12,8 +12,7 @@
 //! the answer, whether `did_si` should be cleared again once the indent has
 //! been applied.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -24,7 +23,7 @@
 
 use crate::cstr;
 use crate::memory::XString;
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use crate::change::*;
 use crate::types::NUL;
@@ -41,7 +40,6 @@ fn byte(text: &[u8], at: usize) -> c_int {
 
 /// The indent of the line the cursor is on.
 fn indent_here() -> c_int {
-    // SAFETY: the cursor is on a valid line of the current buffer.
     get_indent()
 }
 
@@ -56,21 +54,12 @@ fn line_copy(lnum: LineNr) -> XString {
 
 /// `findmatch` from the cursor, for `initc`.
 fn find_match(initc: c_int) -> Option<Pos> {
-    // SAFETY: the cursor is on a valid line of the current buffer.
     findmatch(None, initc)
 }
 
 /// [`get_leader_len`] when only the length is wanted.
-fn leader_len_of(text: &XString) -> c_int {
-    // SAFETY: an owned NUL-terminated line, and no flags are asked for.
-    unsafe {
-        get_leader_len(
-            text.as_ptr().cast_mut(),
-            ::core::ptr::null_mut(),
-            false,
-            true,
-        )
-    }
+fn leader_len_of(text: &[u8]) -> c_int {
+    get_leader_len(text, false, true).0
 }
 
 /// The offset of the first non-white byte of `text`.
@@ -246,17 +235,16 @@ fn smart_indent_backward(line: &XString, lead_len: c_int, mut newindent: c_int) 
 /// Answers the new indent and the `no_si` flag (see [`smart_indent_forward`]).
 /// The cursor is saved and restored around it.
 ///
-/// # Safety
-/// `saved_line` must be a NUL-terminated copy of the cursor line.
-pub(crate) unsafe fn smart_indent(
+/// `saved_line` is the copy of the cursor line, cut where text moves to the
+/// new one.
+pub(crate) fn smart_indent(
     dir: c_int,
     flags: c_int,
-    saved_line: *mut c_char,
+    saved_line: &[u8],
     newindent: c_int,
 ) -> (c_int, bool) {
     let old_cursor = Win::current().w_cursor;
-    // SAFETY: the caller's NUL-terminated copy of the cursor line.
-    let line = XString::from_bytes(unsafe { cstr::bytes_at(saved_line) });
+    let line = XString::from_bytes(saved_line);
     let lead_len = if flags & OPENLINE_DO_COM != 0 {
         leader_len_of(&line)
     } else {

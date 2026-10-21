@@ -17,15 +17,15 @@
 //! path that draws one has to unput it again before inserting -- which is
 //! what `did_putchar` tracks in three separate places here.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::cstr;
+use crate::cstr::{self, byte_at};
 use crate::keycodes::Key;
 use crate::keycodes::ModMask;
-use crate::vim_snprintf;
+use crate::mbyte::{c_char_info, c_next_cluster};
+use crate::os::cshim::ctype_bits;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use super::*;
 use crate::guard::Keys;
@@ -186,19 +186,16 @@ pub(crate) fn insert_special(mut c: c_int, mut allow_modmask: c_int, mut ctrlv: 
         allow_modmask = 1;
     }
     if c < 0 || (!mod_mask.get().is_empty() && allow_modmask != 0) {
-        let mut name = get_special_key_name(c, mod_mask.get());
-        let (p, len) = (
-            name.as_mut_ptr(),
-            unsafe { cstr::bytes_at(name.as_ptr()) }.len() as c_int,
-        );
-        c = unsafe { *p.offset((len - 1) as isize) } as uint8_t as c_int;
-        if len > 2 {
+        let name = get_special_key_name(c, mod_mask.get());
+        let name = cstr::until_nul(cstr::as_bytes(&name));
+        let (&last, head) = name.split_last().expect("a key name is never empty");
+        c = c_int::from(last);
+        if name.len() > 2 {
             if stop_arrow().is_err() {
                 return;
             }
-            unsafe { *p.offset((len - 1) as isize) = NUL as c_char };
-            unsafe { ins_str(p, (len - 1) as size_t) };
-            append_to_redobuff_literally(unsafe { cstr::bytes_at(p) });
+            ins_str(head);
+            append_to_redobuff_literally(head);
             ctrlv = 0;
         }
     }
@@ -217,12 +214,8 @@ pub(crate) fn insert_special(mut c: c_int, mut allow_modmask: c_int, mut ctrlv: 
 /// A digit has to go in as three digits, or the redo would read it as the
 /// start of a longer `i_CTRL-V_digit` sequence.
 pub(crate) fn redo_literal(c: c_int) {
-    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
-    // precondition is the live `curwin`/`curbuf` this mode runs with.
     if ascii_isdigit(c) {
-        let mut buf: [c_char; 10] = [0; 10];
-        unsafe { vim_snprintf!(buf.as_mut_ptr(), buf.len(), c"%03d".as_ptr(), c) };
-        append_to_redobuff(cstr::as_bytes(&buf));
+        append_to_redobuff(format!("{c:03}").as_bytes());
     } else {
         append_to_redobuff_char(c);
     }
@@ -307,26 +300,25 @@ pub(crate) fn ins_copychar(lnum: LineNr) -> c_int {
     // Try to advance to the cursor column.
     validate_virtcol(Win::current());
     let end_vcol = Win::current().w_virtcol;
-    let line = ml_get(lnum);
+    // A copy: the width walk is free to read the memline.
+    let line = Lines::current().line_copy(lnum);
 
-    // SAFETY: the line just fetched, which nothing below re-fetches.
-    let (mut csarg, cstype) =
-        CharsizeArg::new(Win::current(), lnum, unsafe { cstr::bytes_at(line) });
-    let mut ci: StrCharInfo = unsafe { utf_ptr2str_char_info(line) };
+    let (mut csarg, cstype) = CharsizeArg::new(Win::current(), lnum, &line);
+    let mut at = 0;
+    let mut chr = c_char_info(&line, 0);
     let mut vcol = 0;
-    while vcol < end_vcol && unsafe { *ci.ptr } as c_int != NUL {
-        let at = ci.ptr.addr() - line.addr();
-        vcol += win_charsize(cstype, vcol, at, ci.chr.value, &mut csarg).width;
+    while vcol < end_vcol && byte_at(&line, at) != NUL as u8 {
+        vcol += win_charsize(cstype, vcol, at, chr.value, &mut csarg).width;
         if vcol > end_vcol {
             break;
         }
-        ci = unsafe { utfc_next(ci) };
+        (at, chr) = c_next_cluster(&line, at, chr);
     }
 
-    let c = if ci.chr.value < 0 {
-        unsafe { *ci.ptr as uint8_t as c_int }
+    let c = if chr.value < 0 {
+        c_int::from(byte_at(&line, at))
     } else {
-        ci.chr.value as c_int
+        chr.value as c_int
     };
     if c == NUL {
         vim_beep(kOptBoFlagCopy as ::core::ffi::c_uint);
@@ -361,7 +353,7 @@ pub(crate) fn ins_ctrl_ey(tc: c_int) -> c_int {
 
     // A non-alphanumeric byte has to be recorded literally, or the redo
     // would read it as a command.
-    if c < 256 && unsafe { *(*__ctype_b_loc()).offset(c as isize) } & _ISalnum == 0 {
+    if c < 256 && ctype_bits(c as u8) & _ISalnum == 0 {
         append_to_redobuff(CTRL_V_STR.to_bytes());
     }
     let tw_save = Buf::current().b_p_tw;

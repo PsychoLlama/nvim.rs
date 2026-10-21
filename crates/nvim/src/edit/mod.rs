@@ -32,7 +32,7 @@
 //! are one family of keys each, and `replace`/`redraw`/`undo`/`prompt`/
 //! `lastins`/`cursor` are the pieces they share.
 
-#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -44,19 +44,15 @@ use crate::autocmd::{apply_autocmds, aucmd_prepbuf, aucmd_restbuf, has_event};
 use crate::buffer::{
     buf_get_changedtick, buf_is_empty, buf_is_prompt, buf_is_quickfix, buf_meta_total, current_buf,
 };
-use crate::change::ml_replace;
 use crate::change::{
     appended_lines_mark, change_warning, changed_bytes, del_bytes, del_char, get_leader_len,
-    ins_bytes_len, ins_char, ins_char_bytes, ins_str, inserted_bytes, open_line,
+    ins_bytes, ins_char, ins_char_bytes, ins_str, inserted_bytes, open_line,
 };
-use crate::charset::{
-    byte2cells, char2cells, hex2nr, ptr2cells, skipwhite, vim_isprintc, vim_iswordc,
-};
+use crate::charset::{byte2cells, char2cells, hex2nr, vim_isprintc, vim_iswordc};
 use crate::cstr;
 use crate::cursor::{
     char_before_cursor, check_cursor, check_cursor_col, check_visual_pos, coladvance, dec_cursor,
-    gchar_cursor, get_cursor_line_len, get_cursor_line_ptr, get_cursor_pos_len, get_cursor_pos_ptr,
-    getviscol, inc_cursor,
+    gchar_cursor, get_cursor_pos_len, getviscol, inc_cursor,
 };
 use crate::decoration::{decor_conceal_line, kMTMetaInline, win_lines_concealed};
 use crate::digraph::{digraph_get, do_digraph};
@@ -96,7 +92,7 @@ use crate::highlight::state::need_highlight_changed;
 use crate::highlight_group::{HLF_8, highlight_changed};
 use crate::indent::{
     change_indent, fix_indent, get_indent, get_sts_value, get_sw_value, inindent, ins_try_si,
-    may_do_si, tabstop_at, tabstop_count, tabstop_first, tabstop_padding, tabstop_start,
+    may_do_si,
 };
 use crate::indent_c::{cindent_on, do_c_expr_indent, in_cinkeys};
 use crate::insexpand::{
@@ -119,13 +115,9 @@ use crate::keycodes::{
     Ctrl_V, Ctrl_W, Ctrl_X, Ctrl_Y, K_SPECIAL, get_special_key_name, push_char_escaped,
 };
 use crate::mapping::{check_abbr, langmap_adjust_mb, map_to_exists_mode};
-use crate::mark::{free_fmark, mark_view_make};
-use crate::mbyte::{
-    mb_adjust_cursor, mb_get_class, utf_char2bytes, utf_char2len, utf_composinglike, utf_head_off,
-    utf_ptr2char, utf_ptr2len, utf_ptr2str_char_info, utf8len_tab, utfc_next, utfc_ptr2len,
-};
-use crate::memline::{Lines, gchar_pos, ml_append_cstr, ml_get, ml_get_buf, ml_get_len};
-use crate::memory::{strnequal, xfree, xmalloc};
+use crate::mark::{clear_mark, mark_view_make};
+use crate::mbyte::{mb_adjust_cursor, utf_char2len, utf8len_tab};
+use crate::memline::{Lines, gchar_pos, ml_append_text, ml_get_len, ml_replace_buf_text};
 use crate::message::state::{emsg_on_display, msg_scroll, msg_silent};
 use crate::message::{e_noinstext, e_sandbox, e_textlock};
 use crate::message::{emsg, msg_check_for_delay};
@@ -143,14 +135,12 @@ use crate::ops::do_join;
 use crate::option::vars::{
     P_RI, fdo_flags, p_ari, p_ch, p_deco, p_lrm, p_paste, p_ri, p_smd, p_sol, p_sta, p_ww,
 };
-use crate::option::{
-    can_bs, copy_option_part, get_scrolloff_value, get_ve_flags, set_iminsert_global,
-};
+use crate::option::{can_bs, get_scrolloff_value, get_ve_flags, set_iminsert_global};
 use crate::options::{
     kOptBoFlagBackspace, kOptBoFlagCopy, kOptBoFlagCtrlg, kOptBoFlagCursor, kOptBoFlagRegister,
     kOptFdoFlagAll, kOptFdoFlagHor, kOptFdoFlagInsert, kOptVeFlagAll, kOptVeFlagOnemore,
 };
-use crate::os::cshim::{__ctype_b_loc, gettext};
+use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
 use crate::os::time::os_time;
 use crate::plines::{
@@ -176,7 +166,6 @@ use crate::state::{
     REPLACE_FLAG, VREPLACE_FLAG, may_trigger_modechanged, may_trigger_safestate, state_enter,
     state_handle_k_event, virtual_active,
 };
-use crate::strings::xstrnsave;
 use crate::syntax::syntax_present;
 use crate::terminal::terminal_enter;
 use crate::textformat::{
@@ -187,8 +176,8 @@ use crate::types::AutoEvent;
 use crate::types::ui::kUIMessages;
 use crate::types::{
     AcoSave, CharsizeArg, CmdModFlags, ColNr, INSCHAR_CTRLV, INSCHAR_FORMAT, INSCHAR_NO_FEX,
-    LineNr, MB_MAXBYTES, OptInt, PUT_CURSEND, PUT_FIXINDENT, Pos, ScreenChar, StrCharInfo,
-    String_0, VarNumber, Vv, int32_t, int64_t, size_t, uint8_t,
+    LineNr, MB_MAXBYTES, OptInt, PUT_CURSEND, PUT_FIXINDENT, Pos, ScreenChar, String_0, Vv,
+    int32_t, int64_t, size_t, uint8_t,
 };
 use crate::ui::{ui_cursor_shape, ui_flush, ui_has, vim_beep};
 use crate::undo::u_sync_once;

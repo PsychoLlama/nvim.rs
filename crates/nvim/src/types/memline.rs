@@ -458,6 +458,20 @@ impl MemLine {
         }
     }
 
+    /// The cached line and its NUL, writable, when the memline owns it --
+    /// a replacement an `ml_replace` left that has not been written back.
+    /// `None` for a line still inside its block or a placeholder.
+    ///
+    /// The one shape an in-place edit can take: a block's line cannot
+    /// change length, and an owned one can shrink inside its allocation.
+    pub(crate) fn owned_bytes_with_nul_mut(&mut self) -> Option<&mut [u8]> {
+        let len = usize::try_from(self.ml_line.textlen).unwrap_or(0);
+        match &mut self.ml_line.text {
+            CachedText::Owned(text) => Some(&mut text[..len]),
+            _ => None,
+        }
+    }
+
     /// The cached line's length, NUL included: upstream's
     /// `ml_line_textlen`.
     pub fn cached_len(&self) -> ColNr {

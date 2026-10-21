@@ -6,8 +6,7 @@
 //! [`find_next_completion_match`] and asking for more when the list runs
 //! out.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::mbyte::{char_at, char_len, cluster_len};
@@ -26,9 +25,7 @@ pub(crate) fn cursor_line_part(from: ColNr, to: ColNr) -> String_0 {
 
 /// Insert `text` at the cursor.
 pub(crate) fn ins_compl_insert_text(text: &[u8]) {
-    // SAFETY: `text` is readable for its length, which is all
-    // `ins_bytes_len` reads; it writes nothing through the pointer.
-    unsafe { ins_bytes_len(text.as_ptr().cast_mut().cast(), text.len()) };
+    ins_bytes(text);
     compl_ins_end_col.set(Win::current().w_cursor.col);
 }
 
@@ -203,8 +200,7 @@ pub fn ins_compl_delete(new_leader: bool) {
 
     if let Some(remaining) = remaining {
         orig_col = Win::current().w_cursor.col;
-        // SAFETY: the string's own bytes, for its own length.
-        unsafe { ins_str(remaining.data(), remaining.len()) };
+        ins_str(remaining.as_bytes());
         Win::current().w_cursor.col = orig_col;
     }
 
@@ -222,9 +218,8 @@ pub(crate) fn ins_compl_expand_multiple(text: &[u8]) {
     let mut line = lines.next().unwrap_or_default();
     for next in lines {
         insert_chars(line);
-        // SAFETY: no comment leader is asked for.
         let flags = OPENLINE_KEEPTRAIL | OPENLINE_FORCE_INDENT;
-        unsafe { open_line(FORWARD, flags, base_indent, ptr::null_mut()) };
+        open_line(FORWARD, flags, base_indent, None);
         line = next;
     }
     // Handle remaining text after the last newline (if any).
@@ -235,9 +230,7 @@ pub(crate) fn ins_compl_expand_multiple(text: &[u8]) {
 /// `ins_char_bytes` over `text`, which C hands it whole whatever it holds.
 pub(crate) fn insert_chars(text: &[u8]) {
     if !text.is_empty() {
-        // SAFETY: `text` is readable for its length, which is all
-        // `ins_char_bytes` reads.
-        unsafe { ins_char_bytes(text.as_ptr().cast_mut().cast(), text.len()) };
+        ins_char_bytes(text);
     }
 }
 

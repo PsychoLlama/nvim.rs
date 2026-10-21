@@ -19,20 +19,21 @@
 #![allow(non_upper_case_globals)]
 
 use crate::winlayer::{Buf, Win};
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use super::*;
-use crate::change::ml_replace;
 use crate::change::{del_char, get_leader_len};
+use crate::cstr;
 use crate::cursor::{
     check_cursor, check_cursor_col, coladvance, dec_cursor, gchar_cursor, get_cursor_line_len,
     get_cursor_line_ptr, inc_cursor,
 };
 use crate::global_cell::GlobalCell;
+use crate::memline::{Lines, ml_replace_owned};
+use crate::memory::XString;
 use crate::pos::MAXCOL;
 use crate::state::MODE_INSERT;
 use crate::state::mode::{State, saved_cursor};
-use crate::strings::xstrnsave;
 use crate::types::NUL;
 use crate::undo::u_save_cursor;
 
@@ -108,7 +109,8 @@ pub fn auto_format(trailblank: bool, prev_line: bool) {
     // With `c` in 'formatoptions' and `t` missing, only comments format.
     if has_format_option(FoFlag::WRAP_COMS)
         && !has_format_option(FoFlag::WRAP)
-        && unsafe { get_leader_len(old, ::core::ptr::null_mut::<*mut c_char>(), false, true) } == 0
+        // SAFETY: the cursor line read above, which nothing has replaced.
+        && get_leader_len(unsafe { cstr::bytes_at(old) }, false, true).0 == 0
     {
         return;
     }
@@ -141,14 +143,12 @@ pub fn auto_format(trailblank: bool, prev_line: bool) {
     // rule above, `w` in 'formatoptions' then needs a space added to keep
     // the paragraph formatted.
     if !wasatend && has_format_option(FoFlag::WHITE_PAR) {
-        let linep = get_cursor_line_ptr();
+        let lnum = Win::current().w_cursor.lnum;
         let len = get_cursor_line_len();
         if Win::current().w_cursor.col == len {
-            let bytes = usize::try_from(len).expect("a line length is never negative");
-            let plinep = unsafe { xstrnsave(linep, bytes + 2) };
-            unsafe { *plinep.add(bytes) = ' ' as c_char };
-            unsafe { *plinep.add(bytes + 1) = 0 };
-            let _ = unsafe { ml_replace(Win::current().w_cursor.lnum, plinep, false) };
+            let mut spaced = XString::from_bytes(Lines::current().line(lnum));
+            spaced.push_byte(b' ');
+            let _ = ml_replace_owned(lnum, spaced);
             // Remove the space later.
             did_add_space.set(true);
         } else {
