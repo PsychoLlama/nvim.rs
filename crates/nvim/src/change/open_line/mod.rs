@@ -298,10 +298,9 @@ pub fn open_line(
     let saved_pi = Buf::current().b_p_pi;
     let lnum = Win::current().w_cursor.lnum;
     let mincol = Win::current().w_cursor.col + 1;
-    let col = Win::current().w_cursor.col as usize;
-
     // A copy of the current line, so that it can be cut in two.
     let mut saved_line = Lines::current().line(lnum).to_vec();
+    let col = (Win::current().w_cursor.col as usize).min(saved_line.len());
     let mut next_line = None;
 
     if State.get() & VREPLACE_FLAG != 0 {
