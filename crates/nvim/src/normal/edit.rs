@@ -189,7 +189,7 @@ pub(crate) fn nv_replace(cmd_arg: &mut CmdArg) {
     Buf::current().b_op_start = Win::current().w_cursor;
     let old_state = State.get();
     if cmd_arg.nchar_len > 0 {
-        append_to_redobuff(cstr::as_bytes(&cmd_arg.nchar_composing));
+        append_to_redobuff(cstr::until_nul(&cmd_arg.nchar_composing));
     } else {
         append_to_redobuff_char(cmd_arg.nchar);
     }
@@ -209,7 +209,7 @@ pub(crate) fn nv_replace(cmd_arg: &mut CmdArg) {
                 Win::current().w_cursor.col += 1;
             }
         } else if cmd_arg.nchar_len != 0 {
-            let bytes = cstr::as_bytes(&cmd_arg.nchar_composing);
+            let bytes = cstr::until_nul(&cmd_arg.nchar_composing);
             ins_char_bytes(&bytes[..cmd_arg.nchar_len as usize]);
         } else {
             ins_char(cmd_arg.nchar);

@@ -31,12 +31,13 @@ use crate::keycodes::{ModMask, unsimplify_key};
 use crate::mbyte::{utf_ptr2char, utf_ptr2len};
 use crate::memory::XString;
 use crate::mouse::{MousePos, do_mousescroll, find_win_inner};
+use crate::normal::with_scratch_cmd;
 use crate::option::vars::tpf_flags;
 use crate::options::{
     kOptTpfFlagBS, kOptTpfFlagC0, kOptTpfFlagC1, kOptTpfFlagDEL, kOptTpfFlagESC, kOptTpfFlagFF,
     kOptTpfFlagHT,
 };
-use crate::types::{CmdArg, OpArg, Terminal, VTermKey, VTermModifier};
+use crate::types::{Terminal, VTermKey, VTermModifier};
 use crate::vterm::keyboard::{
     vterm_keyboard_end_paste, vterm_keyboard_key, vterm_keyboard_start_paste,
     vterm_keyboard_unichar,
@@ -375,14 +376,11 @@ fn scroll_direction(c: c_int) -> Option<c_int> {
 fn scroll_window(mouse_win: Win, key: c_int, direction: c_int) {
     let saved = switch_to(mouse_win);
 
-    // SAFETY: all-zeroes is what the command argument starts from; every
-    // field is a scalar or a pointer.
-    let mut cap: CmdArg = unsafe { ::core::mem::zeroed() };
-    let mut oa = OpArg::ZERO;
-    cap.oap = &raw mut oa;
-    cap.cmdchar = key;
-    cap.arg = direction;
-    do_mousescroll(&mut cap);
+    with_scratch_cmd(|cap| {
+        cap.cmdchar = key;
+        cap.arg = direction;
+        do_mousescroll(cap);
+    });
 
     // Whatever the scroll left as the current window, which need not be the
     // one it started in.

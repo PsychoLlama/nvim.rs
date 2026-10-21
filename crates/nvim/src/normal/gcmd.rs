@@ -169,7 +169,7 @@ pub(crate) fn nv_g_dollar_cmd(cmd_arg: &mut CmdArg) {
             if win.w_cursor.col > 0 && win.w_onebuf_opt.wo_wrap != 0 && win.w_virtcol > i {
                 win.w_cursor.col -= 1;
             }
-        } else if !unsafe { nv_screengo(op.raw(), FORWARD as c_int, cmd_arg.count1 - 1, false) } {
+        } else if !nv_screengo(op, FORWARD as c_int, cmd_arg.count1 - 1, false) {
             clear_op_beep(op);
         }
     } else {
@@ -234,7 +234,7 @@ fn nv_g_screen_line(cmd_arg: &mut CmdArg, dir: c_int) {
             cursor_up(cmd_arg.count1 as LineNr, stop_at_end).is_ok()
         }
     } else {
-        unsafe { nv_screengo(op.raw(), dir, cmd_arg.count1, false) }
+        nv_screengo(op, dir, cmd_arg.count1, false)
     };
     if !moved {
         clear_op_beep(op);

@@ -10,8 +10,7 @@
 //!
 //! Original: `src/nvim/move.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 #![deny(
@@ -24,7 +23,6 @@
 
 use crate::winlayer::WinId;
 use core::ffi::c_int;
-use core::ptr;
 
 use super::*;
 use crate::cursor::check_cursor;
@@ -37,32 +35,17 @@ use crate::mbyte::mb_adjust_cursor;
 use crate::narrow::number_as_int;
 use crate::normal::{
     nv_g_home_m_cmd, nv_screengo, set_visual_active, set_visual_select, visual_active,
-    visual_select,
+    visual_select, with_scratch_cmd,
 };
+use crate::ops::Op;
 use crate::option::vars::{p_sol, p_window};
 use crate::pos::equalpos;
 use crate::search::FORWARD;
 use crate::state::mode::restart_edit;
-use crate::types::{CmdArg, ColNr, Direction, FAIL, LineNr, OK, OpArg, OptInt, Outcome, Pos};
+use crate::types::{CmdArg, ColNr, Direction, FAIL, LineNr, OK, OptInt, Pos};
 use crate::ui::state::Rows;
 use crate::winlayer::graph::{firstwin, lastwin};
 use crate::winlayer::{Buf, Win, first_window};
-
-/// A command with nothing set, as C's `CmdArg ca = { 0 }` leaves it.
-const CMDARG_ZERO: CmdArg = CmdArg {
-    oap: ptr::null_mut(),
-    cmdchar: 0,
-    nchar: 0,
-    nchar_composing: [0; 32],
-    nchar_len: 0,
-    extra_char: 0,
-    opcount: 0,
-    count0: 0,
-    count1: 0,
-    arg: 0,
-    outcome: Outcome::NONE,
-    searchbuf: ptr::null_mut(),
-};
 
 /// What `pagescroll` measured before it scrolled: the buffer's length, and
 /// the cursor position a half-page scroll puts back before moving it itself.
@@ -86,14 +69,24 @@ pub fn pagescroll(dir: Direction, count: c_int, half: bool) -> c_int {
     };
     // One operator and one command, shared by both arms as upstream shares
     // them: `nv_screengo()` fills in the operator that `nv_g_home_m_cmd()`
-    // reads back through `ca`.
-    let mut oa = OpArg::ZERO;
-    let mut ca = CMDARG_ZERO;
-    ca.oap = &raw mut oa;
+    // reads back through the command.
+    let did_move =
+        with_scratch_cmd(|cmd_arg| pagescroll_with(cmd_arg, win, dir, count, half, saved));
+    if did_move { OK } else { FAIL }
+}
 
+/// [`pagescroll`] with the command it shares between its arms. Answers
+/// whether the viewport or the cursor moved.
+fn pagescroll_with(
+    cmd_arg: &mut CmdArg,
+    win: Win,
+    dir: Direction,
+    count: c_int,
+    half: bool,
+    saved: Saved,
+) -> bool {
     let mut did_move = if half {
-        // SAFETY: the caller's promise; `oa` is an operator of this frame.
-        unsafe { half_page(win, dir, count, saved, &raw mut oa) }
+        half_page(win, dir, count, saved, cmd_arg.op())
     } else {
         whole_page(win, dir, count)
     };
@@ -115,24 +108,14 @@ pub fn pagescroll(dir: Direction, count: c_int, half: bool) -> c_int {
         // SAFETY: the caller's promise -- this moves `curwin`'s cursor.
         beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
     } else if p_sol() {
-        nv_g_home_m_cmd(&mut ca);
+        nv_g_home_m_cmd(cmd_arg);
     }
-
-    if did_move { OK } else { FAIL }
+    did_move
 }
 
 /// CTRL-D/CTRL-U: scroll 'scroll' screen lines without revealing lines past
 /// the end of the buffer, and move the cursor by as many screen lines.
-///
-/// # Safety
-/// `win` must be the current window and `op` an operator the caller owns.
-unsafe fn half_page(
-    mut win: Win,
-    dir: Direction,
-    count: c_int,
-    saved: Saved,
-    op: *mut OpArg,
-) -> bool {
+fn half_page(mut win: Win, dir: Direction, count: c_int, saved: Saved, op: Op) -> bool {
     // Scroll [count], 'scroll', or the window height in lines.
     let mut count = count;
     if count != 0 {
@@ -169,8 +152,7 @@ unsafe fn half_page(
     // Move the cursor by the same number of screen lines, skipping over
     // concealed lines as those were not counted in `curscount` either.
     if win.w_onebuf_opt.wo_wrap != 0 {
-        // SAFETY: the caller's promise.
-        unsafe { nv_screengo(op, dir, curscount, true) };
+        nv_screengo(op, dir, curscount, true);
     } else if dir == FORWARD {
         // SAFETY: a live window.
         cursor_down_inner(win, curscount, true);

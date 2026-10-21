@@ -42,7 +42,7 @@ use crate::search::{BACKWARD, FORWARD, findmatch, searchc};
 use crate::state::mode::{VIsual_select_exclu_adj, ins_at_eol, restart_edit};
 use crate::state::virtual_active;
 use crate::textobject::{bck_word, end_word, findpar, findsent, fwd_word};
-use crate::types::{CmdArg, ColNr, CpoFlag, Direction, LineNr, NUL, OpArg, OpType, Outcome};
+use crate::types::{CmdArg, ColNr, CpoFlag, Direction, LineNr, NUL, OpType, Outcome};
 use crate::winlayer::graph::{cmdwin_result, cmdwin_type};
 use core::ffi::{c_int, c_uint};
 
@@ -58,18 +58,7 @@ use crate::r#move::{
 /// long wrapped line and a short one keep the same apparent column. A closed
 /// fold counts as one screen line however tall its text is, so the walk steps
 /// over it rather than through it.
-///
-/// # Safety
-///
-/// `op` must point at a live `OpArg`, unaliased for the call.
-pub(crate) unsafe fn nv_screengo(
-    op: *mut OpArg,
-    dir: c_int,
-    mut dist: c_int,
-    skip_conceal: bool,
-) -> bool {
-    // SAFETY (throughout): `op` is the caller's live operator.
-    let mut op = unsafe { Op::new(op) };
+pub(crate) fn nv_screengo(mut op: Op, dir: c_int, mut dist: c_int, skip_conceal: bool) -> bool {
     let mut win = Win::current();
     let wp = win;
     let mut linelen = linetabsize(wp, win.w_cursor.lnum);
@@ -622,7 +611,7 @@ pub(crate) fn nv_brace(cmd_arg: &mut CmdArg) {
         clear_op_beep(cmd_arg.op());
         return;
     }
-    unsafe { adjust_cursor(cmd_arg.oap) };
+    adjust_cursor(cmd_arg.op());
     Win::current().w_cursor.coladd = 0;
     may_fold_open(cmd_arg, kOptFdoFlagBlock as c_uint);
 }
@@ -715,7 +704,7 @@ pub(crate) fn nv_wordcmd(cmd_arg: &mut CmdArg) {
         )
     };
     if lt(startpos, Win::current().w_cursor) {
-        unsafe { adjust_cursor(cmd_arg.oap) };
+        adjust_cursor(cmd_arg.op());
     }
     if moved.is_err() && cmd_arg.op().op_type == OpType::Nop {
         clear_op_beep(cmd_arg.op());
@@ -727,13 +716,7 @@ pub(crate) fn nv_wordcmd(cmd_arg: &mut CmdArg) {
 
 /// Pull the cursor back off the line's terminator, which is not a position an
 /// operator may include -- and say the operator now covers the last character.
-///
-/// # Safety
-///
-/// `op` must point at a live `OpArg`, unaliased for the call.
-pub(crate) unsafe fn adjust_cursor(op: *mut OpArg) {
-    // SAFETY (throughout): `op` is the caller's live operator.
-    let mut op = unsafe { Op::new(op) };
+pub(crate) fn adjust_cursor(mut op: Op) {
     if Win::current().w_cursor.col > 0
         && gchar_cursor() == NUL
         && (!visual_active() || P_SEL.first_byte() == b'o')

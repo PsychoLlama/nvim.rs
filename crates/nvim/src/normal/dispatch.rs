@@ -11,8 +11,7 @@
 //! iterator adaptors or closures-as-helpers -- at opt-level 0 nothing inlines
 //! but `#[inline(always)]`.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::autocmd::state::did_cursorhold;
 use crate::charset::vim_isprintc;
@@ -36,15 +35,14 @@ use crate::keycodes::ModMask;
 use crate::keycodes::{Ctrl_BSL, Ctrl_G, Ctrl_K, Ctrl_N, Ctrl_W, Key, simplify_mod_mask};
 use crate::mapping::langmap_adjust_mb;
 use crate::mark::checkpcmark;
-use crate::mbyte::{utf_char2bytes, utf_char2len, utf_iscomposing, utf8len_tab};
-use crate::memory::xfree;
+use crate::mbyte::{encode_char, iscomposing, utf_char2len, utf8len_tab};
 use crate::message::state::{msg_col, msg_didout, msg_nowait};
 use crate::normal::{
-    B_IMODE_LMAP, CAR, ESC, GRAPHEME_STATE_INIT, NL, NV_CMDS, NV_CMDS_SIZE, NormalState,
-    NormalStateRef, NvFlags, add_to_showcmd, check_text_or_curbuf_locked, clear_showcmd,
-    del_from_showcmd, do_check_scrollbind, normal_handle_special_visual_command,
-    normal_need_additional_char, normal_need_redraw_mode_message, normal_redraw_mode_message,
-    nv_cmds, set_vcount_ca, set_visual_select, start_selection, visual_active, visual_select,
+    B_IMODE_LMAP, CAR, ESC, GRAPHEME_STATE_INIT, NL, NV_CMDS, NV_CMDS_SIZE, NormalState, NvFlags,
+    add_to_showcmd, check_text_or_curbuf_locked, clear_showcmd, del_from_showcmd,
+    do_check_scrollbind, normal_handle_special_visual_command, normal_need_additional_char,
+    normal_need_redraw_mode_message, normal_redraw_mode_message, nv_cmds, set_vcount_ca,
+    set_visual_select, start_selection, visual_active, visual_select,
 };
 use crate::ops::{Op, do_pending_operator, get_op_type};
 use crate::option::vars::{P_LANGMAP, fdo_flags, p_lrm, p_tm, p_ttm};
@@ -62,7 +60,7 @@ use crate::types::{
 };
 use crate::ui::{ui_cursor_shape, ui_cursor_shape_no_check_conceal, ui_flush};
 use crate::winlayer::{Buf, Win};
-use core::ffi::{c_char, c_int, c_uint, c_void};
+use core::ffi::{c_int, c_uint};
 
 use crate::getchar::{
     append_to_redobuff, append_to_redobuff_char, append_to_redobuff_number, reset_redobuff,
@@ -220,14 +218,7 @@ enum Slot {
 /// Answers `(slot, literal, replace)`. `literal` suppresses digraphs and
 /// 'langmap'; `replace` puts the editor in Replace mode while waiting, so the
 /// cursor shape says what is about to happen.
-///
-/// # Safety
-///
-/// `s` must point at the Normal-mode state machine's state, unaliased for the
-/// call.
-unsafe fn additional_char_slot(s: *mut NormalState) -> (Slot, bool, bool) {
-    // SAFETY (throughout): `s` is the caller's live state.
-    let mut ns = unsafe { NormalStateRef::new(s) };
+fn additional_char_slot(ns: &mut NormalState) -> (Slot, bool, bool) {
     if ns.ca.cmdchar != 'g' as c_int {
         return (Slot::NChar, false, ns.ca.cmdchar == 'r' as c_int);
     }
@@ -247,14 +238,7 @@ unsafe fn additional_char_slot(s: *mut NormalState) -> (Slot, bool, bool) {
 ///
 /// `CTRL-\ CTRL-N` and `CTRL-\ CTRL-G` are commands of their own; anything
 /// else is put back for the next command to read.
-///
-/// # Safety
-///
-/// `s` must point at the Normal-mode state machine's state, unaliased for the
-/// call.
-unsafe fn resolve_ctrl_backslash(s: *mut NormalState) {
-    // SAFETY (throughout): `s` is the caller's live state.
-    let mut ns = unsafe { NormalStateRef::new(s) };
+fn resolve_ctrl_backslash(ns: &mut NormalState) {
     let mut towait = if p_ttm() >= 0 {
         p_ttm() as c_int
     } else {
@@ -285,15 +269,7 @@ unsafe fn resolve_ctrl_backslash(s: *mut NormalState) {
 ///
 /// Only for a command flagged `NV_LANG` -- `f`, `t`, `r` and friends, where
 /// the argument is a real character rather than a command key.
-///
-/// # Safety
-///
-/// `s` must point at the Normal-mode state machine's state, unaliased for the
-/// call.
-unsafe fn read_composing_tail(s: *mut NormalState) {
-    // SAFETY (throughout): `s` is the caller's live state; every write to
-    // `nchar_composing` is bounded by its own length below.
-    let mut ns = unsafe { NormalStateRef::new(s) };
+fn read_composing_tail(ns: &mut NormalState) {
     let mapped = Allow::mapping();
     let mut state: GraphemeState = GRAPHEME_STATE_INIT as GraphemeState;
     let mut prev_code = ns.ca.nchar;
@@ -303,24 +279,22 @@ unsafe fn read_composing_tail(s: *mut NormalState) {
             break;
         }
         ns.c = plain_vgetc();
-        if !unsafe { utf_iscomposing(prev_code, ns.c, &raw mut state) } {
+        if !iscomposing(prev_code, ns.c, Some(&mut state)) {
             vungetc(ns.c);
             break;
         }
         // The base character is only encoded once a tail turns up.
         if ns.ca.nchar_len == 0 {
-            ns.ca.nchar_len =
-                unsafe { utf_char2bytes(ns.ca.nchar, ns.ca.nchar_composing.as_mut_ptr()) };
+            ns.ca.nchar_len = encode_char(ns.ca.nchar, &mut ns.ca.nchar_composing) as c_int;
         }
-        if ns.ca.nchar_len + utf_char2len(ns.c) < size_of::<[c_char; 32]>() as c_int {
-            let at = ns.ca.nchar_len as isize;
-            let tail = unsafe { ns.ca.nchar_composing.as_mut_ptr().offset(at) };
-            ns.ca.nchar_len += unsafe { utf_char2bytes(ns.c, tail) };
+        if ns.ca.nchar_len + utf_char2len(ns.c) < size_of::<[u8; 32]>() as c_int {
+            let at = ns.ca.nchar_len as usize;
+            ns.ca.nchar_len += encode_char(ns.c, &mut ns.ca.nchar_composing[at..]) as c_int;
         }
         prev_code = ns.c;
     }
     let at = ns.ca.nchar_len as usize;
-    ns.ca.nchar_composing[at] = NUL as c_char;
+    ns.ca.nchar_composing[at] = NUL as u8;
     drop(mapped);
     // The keys are recorded for a redo, not fed through undo syncing.
     let _no_sync = Suppress::undo_sync();
@@ -328,28 +302,14 @@ unsafe fn read_composing_tail(s: *mut NormalState) {
 }
 
 /// Read the second (and sometimes third) character of a command.
-///
-/// # Safety
-///
-/// `s` must point at the Normal-mode state machine's state, unaliased for the
-/// call.
-pub(crate) unsafe fn normal_get_additional_char(s: *mut NormalState) {
-    // SAFETY (throughout): `s` is the caller's live state and `s.idx` is a valid row.
-    // Nothing read here is a mapping or a command; it is an argument.
-    let mut ns = unsafe { NormalStateRef::new(s) };
+pub(crate) fn normal_get_additional_char(ns: &mut NormalState) {
     let _raw_key = Keys::unmapped_with_codes();
     did_cursorhold.set(true);
 
-    let (slot, lit, repl) = unsafe { additional_char_slot(ns.raw()) };
+    let (slot, lit, repl) = additional_char_slot(ns);
     let lang = repl || nv_cmds[ns.idx as usize].cmd_flags.has(NvFlags::LANG);
 
     if slot != Slot::None {
-        // SAFETY: `s` is the caller's live state.
-        let cp: *mut c_int = match slot {
-            Slot::NChar => &raw mut ns.ca.nchar,
-            Slot::Extra => &raw mut ns.ca.extra_char,
-            Slot::None => unreachable!(),
-        };
         if repl {
             State.set(MODE_REPLACE);
             ui_cursor_shape_no_check_conceal();
@@ -361,31 +321,33 @@ pub(crate) unsafe fn normal_get_additional_char(s: *mut NormalState) {
         if langmap_active {
             State.set(if repl { MODE_LREPLACE } else { MODE_LANGMAP });
         }
-        unsafe { *cp = plain_vgetc() };
+        let mut cp = plain_vgetc();
         drop(mapped);
         State.set(MODE_NORMAL_BUSY);
-        ns.need_flushbuf |= add_to_showcmd(unsafe { *cp });
+        ns.need_flushbuf |= add_to_showcmd(cp);
 
         if !lit {
             // CTRL-K starts a digraph, unless 'cpoptions' says otherwise.
-            if unsafe { *cp } == Ctrl_K
+            if cp == Ctrl_K
                 && (nv_cmds[ns.idx as usize].cmd_flags.has(NvFlags::LANG) || slot == Slot::Extra)
                 && !cpo_has(CpoFlag::DIGRAPH)
             {
                 ns.c = get_digraph(false);
                 if ns.c > 0 {
-                    unsafe { *cp = ns.c };
+                    cp = ns.c;
                     // Take the CTRL-K and its two characters back out of
                     // the echoed command before showing the result.
                     del_from_showcmd(3);
-                    ns.need_flushbuf |= add_to_showcmd(unsafe { *cp });
+                    ns.need_flushbuf |= add_to_showcmd(cp);
                 }
             }
-            // SAFETY: `cp` is the slot this command's extra character was
-            // read into, a field of the live `CmdArg`. The borrow must be
-            // of the *place*, not of a copy: `langmap_adjust` writes through
-            // it.
-            unsafe { langmap_adjust(&mut *cp, !lang) };
+            langmap_adjust(&mut cp, !lang);
+        }
+        // The character goes into the slot it was read for.
+        match slot {
+            Slot::NChar => ns.ca.nchar = cp,
+            Slot::Extra => ns.ca.extra_char = cp,
+            Slot::None => unreachable!(),
         }
 
         if slot == Slot::Extra
@@ -400,26 +362,19 @@ pub(crate) unsafe fn normal_get_additional_char(s: *mut NormalState) {
             && ns.ca.cmdchar == 'g' as c_int
         {
             // `gn`/`gN` take the operator from the character after them.
-            unsafe { (*ns.ca.oap).op_type = get_op_type(*cp, NUL) };
-        } else if unsafe { *cp } == Ctrl_BSL {
-            unsafe { resolve_ctrl_backslash(ns.raw()) };
+            ns.ca.op().op_type = get_op_type(cp, NUL);
+        } else if cp == Ctrl_BSL {
+            resolve_ctrl_backslash(ns);
         }
 
         if lang {
-            unsafe { read_composing_tail(ns.raw()) };
+            read_composing_tail(ns);
         }
     }
 }
 
 /// Mirror a horizontal command for a right-to-left window.
-///
-/// # Safety
-///
-/// `s` must point at the Normal-mode state machine's state, unaliased for the
-/// call.
-pub(crate) unsafe fn normal_invert_horizontal(s: *mut NormalState) {
-    // SAFETY (throughout): `s` is the caller's live state.
-    let mut ns = unsafe { NormalStateRef::new(s) };
+pub(crate) fn normal_invert_horizontal(ns: &mut NormalState) {
     ns.ca.cmdchar = match Key::try_from(ns.ca.cmdchar) {
         Ok(Key::Right) => Key::Left.code(),
         Ok(Key::SRight) => Key::SLeft.code(),
@@ -442,14 +397,7 @@ pub(crate) unsafe fn normal_invert_horizontal(s: *mut NormalState) {
 ///
 /// Answers whether a CTRL-W was consumed, in which case the caller loops:
 /// `CTRL-W` takes a count of its own after it.
-///
-/// # Safety
-///
-/// `s` must point at the Normal-mode state machine's state, unaliased for the
-/// call.
-pub(crate) unsafe fn normal_get_command_count(s: *mut NormalState) -> bool {
-    // SAFETY: `s` is the caller's live normal-mode state.
-    let mut ns = unsafe { NormalStateRef::new(s) };
+pub(crate) fn normal_get_command_count(ns: &mut NormalState) -> bool {
     // Select mode swallows printable keys as replacement text, digits too.
     if visual_active() && visual_select() {
         return false;
@@ -502,15 +450,7 @@ pub(crate) unsafe fn normal_get_command_count(s: *mut NormalState) -> bool {
 }
 
 /// Everything that happens after the handler has run.
-///
-/// # Safety
-///
-/// `s` must point at the Normal-mode state machine's state, unaliased for the
-/// call.
-pub(crate) unsafe fn normal_finish_command(s: *mut NormalState) {
-    // SAFETY: `s` is the caller's live normal-mode state.
-    let mut ns = unsafe { NormalStateRef::new(s) };
-
+pub(crate) fn normal_finish_command(ns: &mut NormalState) {
     // SAFETY: `s` is the caller's live state.
     let mut did_visual_op = false;
     if !ns.command_finished {
@@ -532,7 +472,7 @@ pub(crate) unsafe fn normal_finish_command(s: *mut NormalState) {
             let old_col = ns.old_col;
             do_pending_operator(&mut ns.ca, old_col, false);
         }
-        if unsafe { normal_need_redraw_mode_message(ns.raw()) } {
+        if normal_need_redraw_mode_message(ns) {
             normal_redraw_mode_message();
         }
     }
@@ -558,7 +498,7 @@ pub(crate) unsafe fn normal_finish_command(s: *mut NormalState) {
         clear_showcmd();
     }
     checkpcmark();
-    unsafe { xfree(ns.ca.searchbuf.cast::<c_void>()) };
+    ns.ca.searchbuf = None;
     Win::current().snap_cursor_to_char();
 
     if Win::current().w_onebuf_opt.wo_scb != 0 && ns.toplevel {
@@ -598,14 +538,7 @@ pub(crate) unsafe fn normal_finish_command(s: *mut NormalState) {
 }
 
 /// One normal-mode command, from its first key to the end of its effects.
-///
-/// # Safety
-///
-/// `s` must point at the Normal-mode state machine's state, unaliased for
-/// the call.
-pub(crate) unsafe fn normal_execute(s: *mut NormalState, key: c_int) -> c_int {
-    // SAFETY: `s` is the caller's live normal-mode state.
-    let mut ns = unsafe { NormalStateRef::new(s) };
+pub(crate) fn normal_execute(ns: &mut NormalState, key: c_int) -> c_int {
     ns.command_finished = false;
     ns.ctrl_w = false;
     ns.old_col = Win::current().w_curswant as c_int;
@@ -644,7 +577,7 @@ pub(crate) unsafe fn normal_execute(s: *mut NormalState, key: c_int) -> c_int {
     }
 
     ns.need_flushbuf = add_to_showcmd(ns.c);
-    while unsafe { normal_get_command_count(ns.raw()) } {}
+    while normal_get_command_count(ns) {}
 
     if ns.c == Key::Event.code() {
         // An event is not a command: the count it interrupted is stashed
@@ -683,7 +616,7 @@ pub(crate) unsafe fn normal_execute(s: *mut NormalState, key: c_int) -> c_int {
         ns.command_finished = true;
     } else if (nv_cmds[ns.idx as usize].cmd_flags.has(NvFlags::NCW)
         && check_text_or_curbuf_locked(Some(ns.op())))
-        || (visual_active() && unsafe { normal_handle_special_visual_command(ns.raw()) })
+        || (visual_active() && normal_handle_special_visual_command(ns))
     {
         ns.command_finished = true;
     } else {
@@ -692,10 +625,10 @@ pub(crate) unsafe fn normal_execute(s: *mut NormalState, key: c_int) -> c_int {
             && KeyStuffed.get() == 0
             && nv_cmds[ns.idx as usize].cmd_flags.has(NvFlags::RL)
         {
-            unsafe { normal_invert_horizontal(ns.raw()) };
+            normal_invert_horizontal(ns);
         }
-        if unsafe { normal_need_additional_char(ns.raw()) } {
-            unsafe { normal_get_additional_char(ns.raw()) };
+        if normal_need_additional_char(ns) {
+            normal_get_additional_char(ns);
         }
         if ns.need_flushbuf {
             ui_flush();
@@ -734,7 +667,7 @@ pub(crate) unsafe fn normal_execute(s: *mut NormalState, key: c_int) -> c_int {
             (nv_cmds[ns.idx as usize].cmd_func)(&mut ns.ca);
         }
     }
-    unsafe { normal_finish_command(ns.raw()) };
+    normal_finish_command(ns);
     1
 }
 
@@ -751,7 +684,7 @@ pub(crate) fn prep_redo_cmd(cmd_arg: &mut CmdArg) {
     );
     // A character with a combining tail is replayed as its whole encoding.
     if cmd_arg.nchar_len > 0 {
-        append_to_redobuff(cstr::as_bytes(&cmd_arg.nchar_composing));
+        append_to_redobuff(cstr::until_nul(&cmd_arg.nchar_composing));
     } else {
         append_to_redobuff_char(cmd_arg.nchar);
     }
@@ -811,7 +744,7 @@ pub(crate) fn prep_redo_num2(
 // A live operator is all the `clear*` entry points need, and [`Op`] already
 // carries that promise, so they are safe functions. A caller holding the
 // state machine's frame asks it for the operator with
-// [`NormalStateRef::op`](crate::normal::NormalStateRef::op).
+// [`NormalState::op`](crate::normal::NormalState::op).
 
 /// Beep and clear the operator if one is pending. Answers whether it was.
 pub(crate) fn check_clear_op(op: Op) -> bool {

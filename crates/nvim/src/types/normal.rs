@@ -24,11 +24,17 @@ crate::flag_set! {
     /// Leave the operator's end where the handler put it.
     const NO_ADJ_OP_END = 2;
 }
+/// One normal-mode command as the dispatcher hands it to its handler.
 pub struct CmdArg {
-    pub oap: *mut OpArg,
+    /// The operator the command is pending on: the normal-mode frame's own,
+    /// held in the frame table so `op_pending` can read it from inside
+    /// whatever the handler re-enters.
+    pub(crate) oap: crate::winlayer::Live<OpArg>,
     pub cmdchar: ::core::ffi::c_int,
     pub nchar: ::core::ffi::c_int,
-    pub nchar_composing: [::core::ffi::c_char; 32],
+    /// `nchar` and its combining characters, encoded, NUL-terminated
+    /// (`nchar_len` bytes); empty when `nchar` has none.
+    pub nchar_composing: [u8; 32],
     pub nchar_len: ::core::ffi::c_int,
     pub extra_char: ::core::ffi::c_int,
     pub opcount: ::core::ffi::c_int,
@@ -36,8 +42,30 @@ pub struct CmdArg {
     pub count1: ::core::ffi::c_int,
     pub arg: ::core::ffi::c_int,
     pub outcome: Outcome,
-    pub searchbuf: *mut ::core::ffi::c_char,
+    /// The pattern `/` or `?` read, kept for the redo.
+    pub searchbuf: Option<crate::memory::XString>,
 }
+
+impl CmdArg {
+    /// A command with nothing read yet, pending on `op`.
+    pub(crate) fn new(op: crate::winlayer::Live<OpArg>) -> Self {
+        CmdArg {
+            oap: op,
+            cmdchar: 0,
+            nchar: 0,
+            nchar_composing: [0; 32],
+            nchar_len: 0,
+            extra_char: 0,
+            opcount: 0,
+            count0: 0,
+            count1: 0,
+            arg: 0,
+            outcome: Outcome::NONE,
+            searchbuf: None,
+        }
+    }
+}
+
 #[derive(Copy, Clone)]
 pub struct OpArg {
     pub op_type: OpType,

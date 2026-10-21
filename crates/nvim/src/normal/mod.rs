@@ -15,7 +15,6 @@
 
 use crate::edit::BeginlineOpts;
 use crate::global_cell::GlobalCell;
-use crate::id_table::{IdTable, TableId};
 use crate::keycodes::{
     Ctrl__, Ctrl_A, Ctrl_B, Ctrl_BSL, Ctrl_C, Ctrl_D, Ctrl_E, Ctrl_F, Ctrl_G, Ctrl_H, Ctrl_HAT,
     Ctrl_I, Ctrl_K, Ctrl_L, Ctrl_N, Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_RSB, Ctrl_S, Ctrl_T,
@@ -28,7 +27,7 @@ use crate::keycodes::{
 };
 use crate::mouse::{nv_mouse, nv_mousescroll};
 use crate::types::{
-    CmdArg, Direction, GetFileFlags, MarkGet, MarkMove, MarkMoveRes, MotionType, NUL, OpArg, Pos,
+    CmdArg, Direction, GetFileFlags, MarkGet, MarkMove, MarkMoveRes, MotionType, NUL, Pos,
     SpellAddType, SpellMoveType, int16_t, uint16_t,
 };
 use core::ffi::{CStr, c_int, c_uint};
@@ -125,6 +124,14 @@ pub(crate) const ACTION_SHOW_ALL: c_uint = 4;
 pub(crate) const FIND_ANY: c_uint = 1;
 pub(crate) const FIND_DEFINE: c_uint = 2;
 pub(crate) const DT_POP: c_uint = 2;
+/// The normal-mode state machine's own state: one per running
+/// `normal_enter` (lent to `state_enter` for the length of its loop) or
+/// `normal_cmd` (on that call's stack).
+///
+/// The operator is not in here. `op_pending` reads the innermost frame's
+/// operator from inside whatever a handler re-entered, while the handler
+/// holds this state mutably, so the operator lives in the frame table
+/// ([`Op`](crate::ops::Op), a handle to it) and this state only names it.
 pub(crate) struct NormalState {
     pub command_finished: bool,
     pub ctrl_w: bool,
@@ -134,7 +141,7 @@ pub(crate) struct NormalState {
     pub cmdwin: bool,
     pub noexmode: bool,
     pub toplevel: bool,
-    pub oa: OpArg,
+    pub oa: crate::ops::Op,
     pub ca: CmdArg,
     pub mapped_len: c_int,
     pub old_mapped_len: c_int,
@@ -675,19 +682,6 @@ pub(crate) const NV_CMDS_SIZE: usize = ::core::mem::size_of::<[NvCmd; 188]>()
         (::core::mem::size_of::<[NvCmd; 188]>().wrapping_rem(::core::mem::size_of::<NvCmd>()) == 0)
             as c_int as usize,
     );
-/// Every running `normal_enter`'s state, owned at a fixed address, and the
-/// innermost one's id: upstream's `current_oap`, the address of that state's
-/// operator, which `op_pending` reads from inside whatever the running
-/// command re-entered.
-struct NormalFrames {
-    table: IdTable<NormalState>,
-    current: Option<TableId<NormalState>>,
-}
-
-static NORMAL_FRAMES: GlobalCell<NormalFrames> = GlobalCell::new(NormalFrames {
-    table: IdTable::new(),
-    current: None,
-});
 static showcmd_is_clear: GlobalCell<bool> = GlobalCell::new(true);
 static showcmd_visual: GlobalCell<bool> = GlobalCell::new(false);
 pub(crate) const INT_MAX: c_int = __INT_MAX__;

@@ -11,16 +11,15 @@
 //! This is the per-keystroke path, so `GlobalCell` is read through `get`/`ptr`
 //! and never through `with`.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
+use crate::global_cell::GlobalCell;
+use crate::id_table::{IdTable, TableId};
 use crate::keycodes::ModMask;
 use crate::ops::Op;
 use crate::types::AutoEvent;
 use crate::winlayer::TabPage;
 use crate::winlayer::{Buf, Win};
-use core::ops::{Deref, DerefMut};
-use core::ptr;
 
 use crate::autocmd::state::{last_cursormoved, last_cursormoved_win};
 use crate::autocmd::{apply_autocmds, has_event};
@@ -53,12 +52,13 @@ use crate::message::state::{
 };
 use crate::message::{has_keep_msg, may_clear_sb_text, msg, msg_delay, wait_return};
 use crate::normal::{
-    NORMAL_FRAMES, NormalState, NvFlags, check_scrollbind, clear_op, clear_op_beep,
-    end_visual_mode, find_command, normal_execute, nv_cmds, unshift_special, visual_active,
+    NormalState, NvFlags, check_scrollbind, clear_op, clear_op_beep, end_visual_mode, find_command,
+    normal_execute, nv_cmds, unshift_special, visual_active,
 };
 use crate::option::shortmess;
 use crate::option::vars::{fdo_flags, p_smd};
 use crate::options::kOptFdoFlagAll;
+use crate::os::time::os_time_raw;
 use crate::pos::equalpos;
 use crate::profile::startup_timing;
 use crate::profile::{time_finish, time_msg_at};
@@ -70,94 +70,126 @@ use crate::state::{
     may_trigger_safestate, state_enter, state_no_longer_safe,
 };
 use crate::terminal::terminal_check_refresh;
-use crate::types::{CmdArg, NUL, OpArg, OpType, Outcome, ShmFlag, int64_t};
+use crate::types::{CmdArg, NUL, OpArg, OpType, Outcome, Pos, ShmFlag, int64_t};
 use crate::ui::{ui_cursor_shape, ui_flush};
 use crate::window::{may_make_initial_scroll_size_snapshot, may_trigger_win_scrolled_resized};
 use crate::winlayer::graph::cmdwin_result;
-use ::libc::time;
 use core::ffi::{c_int, c_uint};
 
 use crate::r#move::{update_curswant, update_topline, validate_cursor};
 
-/// The normal-mode state machine's own state, which the caller has promised
-/// is live. [`Op`]'s shape.
+/// Every running normal-mode frame's operator, owned at a fixed address,
+/// and the innermost `normal_enter`'s: upstream's `current_oap`, which
+/// [`op_pending`] reads from inside whatever the running command re-entered.
 ///
-/// **This is why the state is not a `&mut`.** `normal_enter`'s state lives in
-/// the normal-mode frame table, and `op_pending` -- which `state()` and
-/// `may_trigger_safestate` both reach -- reads its `oa` field from inside
-/// whatever the running handler re-entered. A `&mut NormalState` spanning a handler is
-/// `noalias` to LLVM and covers `oa`, so it is a promise the editor breaks
-/// on the first `state()` call inside an autocommand. Every borrow this
-/// hands out lives for one field access, which is the same rule
-/// [`Live`](crate::winlayer::Live) is built on.
-#[derive(Clone, Copy)]
-pub(crate) struct NormalStateRef(*mut NormalState);
-
-impl NormalStateRef {
-    /// # Safety
-    /// `s` must stay a live `NormalState` for as long as the value is used.
-    pub(crate) const unsafe fn new(s: *mut NormalState) -> Self {
-        Self(s)
-    }
-    /// The pointer, for a callee that still takes one.
-    pub(crate) fn raw(self) -> *mut NormalState {
-        self.0
-    }
-
-    /// The operator the frame carries, which is the one `op_pending` reads.
-    ///
-    /// [`Op::start`]'s trick one level up: a live state's `oa` field is a live
-    /// operator, and saying where it is needs no dereference.
-    pub(crate) fn op(self) -> Op {
-        // SAFETY: the constructor's promise -- a live state, so its `oa` is a
-        // live operator.
-        unsafe { Op::new(&raw mut (*self.0).oa) }
-    }
+/// The operators live here rather than in their [`NormalState`]s because
+/// the state is lent to the handler mutably for the whole command, and
+/// `op_pending` must still be able to read the operator meanwhile: a handle
+/// ([`Op`]) to a table slot is read one field access at a time, as every
+/// other handle in the tree is.
+struct NormalFrames {
+    table: IdTable<OpArg>,
+    current: Option<TableId<OpArg>>,
 }
 
-impl Deref for NormalStateRef {
-    type Target = NormalState;
-    fn deref(&self) -> &NormalState {
-        // SAFETY: the constructor's promise -- a live state.
-        unsafe { &*self.0 }
-    }
-}
+static NORMAL_FRAMES: GlobalCell<NormalFrames> = GlobalCell::new(NormalFrames {
+    table: IdTable::new(),
+    current: None,
+});
 
-impl DerefMut for NormalStateRef {
-    fn deref_mut(&mut self) -> &mut NormalState {
-        // SAFETY: as `deref`; the borrow lasts only as long as the field
-        // access that asked for it.
-        unsafe { &mut *self.0 }
-    }
-}
-
-/// The operator a normal-mode command is pending on.
+/// File `op` in the frame table, answering its slot and a handle to it.
 ///
-/// `oap` is a raw pointer because the operator lives in a *sibling* field of
-/// the state machine's frame -- `NormalState::oa`, which `op_pending` also
-/// reads -- so a `&mut` to it would have to span the handler and alias what
-/// [`op_pending`] reads. [`Op`] is that promise written down; this is the one
-/// place a `CmdArg` makes one.
+/// Private, non-generic and out of line: the table's cell must not be
+/// reached from a generic or inlined front (`just state-exports`).
+#[inline(never)]
+fn frame_insert(op: OpArg) -> (TableId<OpArg>, Op) {
+    NORMAL_FRAMES.with_mut(|frames| {
+        let (id, _) = frames.table.insert((), op);
+        (id, frames.table.view(id))
+    })
+}
+
+/// Empty `id`'s slot, answering the operator it held.
+#[inline(never)]
+fn frame_remove(id: TableId<OpArg>) -> OpArg {
+    NORMAL_FRAMES.with_mut(|frames| frames.table.remove(id))
+}
+
+/// Empty `id`'s slot.
+#[inline(never)]
+fn frame_free(id: TableId<OpArg>) {
+    NORMAL_FRAMES.with_mut(|frames| frames.table.free(id));
+}
+
+/// Make `id` the innermost frame, answering the one it replaces.
+#[inline(never)]
+fn frame_make_current(id: Option<TableId<OpArg>>) -> Option<TableId<OpArg>> {
+    NORMAL_FRAMES.with_mut(|frames| core::mem::replace(&mut frames.current, id))
+}
+
+/// The innermost `normal_enter`'s operator, if one is running.
+#[inline(never)]
+fn innermost_op() -> Option<Op> {
+    NORMAL_FRAMES.with(|frames| frames.current.map(|id| frames.table.view(id)))
+}
+
+/// Run `f` on an operator of its own, starting as `op`, filed in the frame
+/// table for the call -- for a command built outside a normal-mode frame
+/// (`:normal`, a mouse scroll, `CTRL-W ]`). Answers what `f` answered and
+/// the operator as `f` left it. Not the innermost frame: `op_pending` keeps
+/// reading the one that was.
+pub(crate) fn with_frame_op<R>(op: OpArg, f: impl FnOnce(Op) -> R) -> (R, OpArg) {
+    let (id, handle) = frame_insert(op);
+    let result = f(handle);
+    (result, frame_remove(id))
+}
+
+/// Run `f` on a fresh command pending on an operator of its own; see
+/// [`with_frame_op`].
+pub(crate) fn with_scratch_cmd<R>(f: impl FnOnce(&mut CmdArg) -> R) -> R {
+    with_frame_op(OpArg::ZERO, |op| f(&mut CmdArg::new(op))).0
+}
+
 impl CmdArg {
+    /// The operator this command is pending on.
+    #[inline(always)]
     pub(crate) fn op(&self) -> Op {
-        // SAFETY: a live command argument's operator is live: `normal_prepare`
-        // aims `oap` at the frame that owns the `CmdArg` and nothing moves it.
-        unsafe { Op::new(self.oap) }
+        self.oap
     }
 }
 
-/// A zeroed state.
-///
-/// Upstream declares the structure and memsets it; the transpile spelled the
-/// declaration as a 70-line literal naming every field, all of which the
-/// memset immediately overwrote. `zeroed()` is that memset, and
-/// `kMTCharWise` -- the one field the literal gave a name rather than a zero
-/// -- is itself 0.
-fn new_state() -> NormalState {
-    // SAFETY: `NormalState` is scalars, raw pointers and nested C structs
-    // with no niche; all-zero is a valid value for every field, and it is
-    // exactly what the C original memsets it to.
-    unsafe { core::mem::zeroed() }
+/// A fresh state whose commands are pending on `oa`.
+fn new_state(oa: Op) -> NormalState {
+    NormalState {
+        command_finished: false,
+        ctrl_w: false,
+        need_flushbuf: false,
+        set_prevcount: false,
+        previous_got_int: false,
+        cmdwin: false,
+        noexmode: false,
+        toplevel: false,
+        oa,
+        ca: CmdArg::new(oa),
+        mapped_len: 0,
+        old_mapped_len: 0,
+        idx: 0,
+        c: 0,
+        old_col: 0,
+        old_pos: Pos {
+            lnum: 0,
+            col: 0,
+            coladd: 0,
+        },
+    }
+}
+
+impl NormalState {
+    /// The operator the frame carries, which is the one `op_pending` reads.
+    #[inline(always)]
+    pub(crate) fn op(&self) -> Op {
+        self.oa
+    }
 }
 
 /// Refuse a command that would change text while the text is locked.
@@ -194,20 +226,11 @@ pub(crate) fn check_text_or_curbuf_locked(op: Option<Op>) -> bool {
 ///
 /// Reads the operator the innermost `normal_enter`/`normal_cmd` installed.
 pub(crate) fn op_pending() -> bool {
-    let Some(state) = innermost_normal_state() else {
+    let Some(op) = innermost_op() else {
         return true;
     };
-    // SAFETY: the innermost `normal_enter`'s state, which the table owns
-    // while it runs; its operator's fields are copied out, not borrowed.
-    let (prev_opcount, prev_count0, op_type, regname) = unsafe {
-        let op = &raw const (*state).oa;
-        (
-            (*op).prev_opcount,
-            (*op).prev_count0,
-            (*op).op_type,
-            (*op).regname,
-        )
-    };
+    let (prev_opcount, prev_count0, op_type, regname) =
+        (op.prev_opcount, op.prev_count0, op.op_type, op.regname);
     !(!finish_op.get()
         && prev_opcount == 0
         && prev_count0 == 0
@@ -222,40 +245,22 @@ pub(crate) fn op_pending() -> bool {
 /// that is neither is "toplevel", which is what decides whether `v:count` is
 /// published.
 pub(crate) fn normal_enter(cmdwin: bool, noexmode: bool) {
-    let mut fresh = new_state();
-    fresh.cmdwin = cmdwin;
-    fresh.noexmode = noexmode;
-    fresh.toplevel = (!cmdwin || cmdwin_result.get() == 0) && !noexmode;
-    // The innermost state is the one `op_pending` reports on; the outer one
-    // is put back on the way out.
-    let (id, state, outer) = NORMAL_FRAMES.with_mut(|frames| {
-        let (id, state) = frames.table.insert((), fresh);
-        (id, state, frames.current.replace(id))
-    });
-    // SAFETY: the table keeps `state` where it is until it is freed below.
-    state_enter(unsafe { ModeState::normal(state) });
-    NORMAL_FRAMES.with_mut(|frames| {
-        frames.current = outer;
-        frames.table.free(id);
-    });
-}
-
-/// The innermost `normal_enter`'s state, if one is running.
-fn innermost_normal_state() -> Option<*mut NormalState> {
-    NORMAL_FRAMES.with(|frames| frames.current.map(|id| frames.table.address(id)))
+    let (id, op) = frame_insert(OpArg::ZERO);
+    let mut state = new_state(op);
+    state.cmdwin = cmdwin;
+    state.noexmode = noexmode;
+    state.toplevel = (!cmdwin || cmdwin_result.get() == 0) && !noexmode;
+    // The innermost operator is the one `op_pending` reports on; the outer
+    // one is put back on the way out.
+    let outer = frame_make_current(Some(id));
+    state_enter(ModeState::normal(&mut state));
+    frame_make_current(outer);
+    frame_free(id);
 }
 
 /// Set up `s.ca` for the command about to be read.
-///
-/// # Safety
-///
-/// `s` must point at the Normal-mode state machine's state, unaliased for the
-/// call.
-pub(crate) unsafe fn normal_prepare(s: *mut NormalState) {
-    // SAFETY (throughout): `s` is the caller's live state.
-    let mut ns = unsafe { NormalStateRef::new(s) };
-    ns.ca = unsafe { core::mem::zeroed() };
-    ns.ca.oap = &raw mut ns.oa;
+pub(crate) fn normal_prepare(ns: &mut NormalState) {
+    ns.ca = CmdArg::new(ns.oa);
     ns.ca.opcount = opcount.get();
 
     // 'finish_op' drives the cursor shape, so a change to it is a redraw.
@@ -293,14 +298,7 @@ pub(crate) unsafe fn normal_prepare(s: *mut NormalState) {
 ///
 /// Answers whether the command was rejected outright, which happens when
 /// unshifting a special key leaves a character no table row claims.
-///
-/// # Safety
-///
-/// `s` must point at the Normal-mode state machine's state, unaliased for the
-/// call.
-pub(crate) unsafe fn normal_handle_special_visual_command(s: *mut NormalState) -> bool {
-    // SAFETY (throughout): `s` is the caller's live state and `s.idx` is a valid row.
-    let mut ns = unsafe { NormalStateRef::new(s) };
+pub(crate) fn normal_handle_special_visual_command(ns: &mut NormalState) -> bool {
     let flags = nv_cmds[ns.idx as usize].cmd_flags;
     // "stopsel": an unshifted movement ends the selection.
     if km_stopsel.get() && flags.has(NvFlags::STS) && !mod_mask.get().has(ModMask::SHIFT) {
@@ -331,14 +329,7 @@ pub(crate) unsafe fn normal_handle_special_visual_command(s: *mut NormalState) -
 /// state rather than on the row: `q` only starts a recording when none is
 /// running, and `a`/`i` are text objects rather than insert commands only
 /// while an operator or Visual mode is waiting for them.
-///
-/// # Safety
-///
-/// `s` must point at the Normal-mode state machine's state, unaliased for the
-/// call.
-pub(crate) unsafe fn normal_need_additional_char(s: *mut NormalState) -> bool {
-    // SAFETY (throughout): `s` is the caller's live state and `s.idx` is a valid row.
-    let ns = unsafe { NormalStateRef::new(s) };
+pub(crate) fn normal_need_additional_char(ns: &mut NormalState) -> bool {
     let flags = nv_cmds[ns.idx as usize].cmd_flags;
     let pending_op = ns.oa.op_type != OpType::Nop;
     let cmdchar = ns.ca.cmdchar;
@@ -355,14 +346,7 @@ pub(crate) unsafe fn normal_need_additional_char(s: *mut NormalState) -> bool {
 
 /// Whether the mode message the last command scrolled away has to be put
 /// back before the next key is read.
-///
-/// # Safety
-///
-/// `s` must point at the Normal-mode state machine's state, unaliased for the
-/// call.
-pub(crate) unsafe fn normal_need_redraw_mode_message(s: *mut NormalState) -> bool {
-    // SAFETY (throughout): `s` is the caller's live state.
-    let ns = unsafe { NormalStateRef::new(s) };
+pub(crate) fn normal_need_redraw_mode_message(ns: &mut NormalState) -> bool {
     let showing_mode = p_smd()
         && msg_silent.get() == 0
         && (restart_edit.get() != 0
@@ -441,14 +425,7 @@ fn normal_check_stuff_buffer() {
 /// A second CTRL-C while `:global` is running and Ex mode was asked for is
 /// what gets you into Ex mode; otherwise the interrupt is swallowed, along
 /// with the key that caused it when the more-prompt is not up.
-///
-/// # Safety
-///
-/// `s` must point at the Normal-mode state machine's state, unaliased for the
-/// call.
-unsafe fn normal_check_interrupt(s: *mut NormalState) {
-    // SAFETY (throughout): `s` is the caller's live state.
-    let mut ns = unsafe { NormalStateRef::new(s) };
+fn normal_check_interrupt(ns: &mut NormalState) {
     if !got_int.get() {
         ns.previous_got_int = false;
         return;
@@ -535,7 +512,7 @@ fn normal_redraw() {
             showmode();
         }
     }
-    Buf::current().b_last_used = unsafe { time(ptr::null_mut()) };
+    Buf::current().b_last_used = os_time_raw();
     // `msg` replaces the kept message, so it is handed a copy -- and the
     // message is not added to the history a second time.
     if let Some(copy) = keep_msg.with(Clone::clone) {
@@ -558,16 +535,9 @@ fn normal_redraw() {
 ///
 /// Answers 1 to go on and read a command, 0 to leave normal mode, and -1 to
 /// leave it because Ex mode ran instead.
-///
-/// # Safety
-///
-/// `s` must point at the Normal-mode state machine's state, unaliased for
-/// the call.
-pub(crate) unsafe fn normal_check(s: *mut NormalState) -> c_int {
-    // SAFETY: `s` is the caller's live normal-mode state.
-    let ns = unsafe { NormalStateRef::new(s) };
+pub(crate) fn normal_check(ns: &mut NormalState) -> c_int {
     normal_check_stuff_buffer();
-    unsafe { normal_check_interrupt(ns.raw()) };
+    normal_check_interrupt(ns);
     if did_throw.get() && ex_normal_busy.get() == 0 {
         discard_current_exception();
     }
@@ -623,7 +593,7 @@ pub(crate) unsafe fn normal_check(s: *mut NormalState) -> c_int {
     if ns.cmdwin && cmdwin_result.get() != 0 {
         return 0;
     }
-    unsafe { normal_prepare(ns.raw()) };
+    normal_prepare(ns);
     1
 }
 
@@ -648,14 +618,12 @@ pub(crate) fn set_vcount_ca(cmd_arg: &CmdArg, set_prevcount: bool) {
 ///
 /// This is what `:normal` and the operator-pending machinery re-enter through.
 pub(crate) fn normal_cmd(op: &mut OpArg, toplevel: bool) {
-    let mut s = new_state();
-    s.toplevel = toplevel;
-    s.oa = *op;
-    // SAFETY: `s` is this frame's, and outlives both calls.
-    unsafe { normal_prepare(&raw mut s) };
-    // SAFETY: as above.
-    unsafe { normal_execute(&raw mut s, safe_vgetc()) };
-    *op = s.oa;
+    ((), *op) = with_frame_op(*op, |oa| {
+        let mut s = new_state(oa);
+        s.toplevel = toplevel;
+        normal_prepare(&mut s);
+        normal_execute(&mut s, safe_vgetc());
+    });
 }
 
 /// Fire `event` on the current buffer, with no file name to match against.

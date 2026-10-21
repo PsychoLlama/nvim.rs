@@ -5,6 +5,7 @@
 #![allow(unsafe_code)]
 
 use super::identfind::find_ident_under_cursor;
+use super::state::with_scratch_cmd;
 use crate::cstr;
 use crate::ex_cmds::EcmdFlags;
 use crate::ex_cmds::newlnum;
@@ -44,7 +45,7 @@ use crate::state::mode::restart_edit;
 use crate::strings::{shellescape, xstrnsave};
 use crate::tag::do_tag;
 use crate::tag::state::g_tag_at_cursor;
-use crate::types::{CmdArg, ColNr, LineNr, NUL, OpArg, int64_t, size_t, uint8_t};
+use crate::types::{CmdArg, ColNr, LineNr, NUL, int64_t, size_t, uint8_t};
 use crate::undo::curbuf_is_changed;
 use crate::window::check_can_set_curbuf_disabled;
 use ::libc::strcpy;
@@ -53,13 +54,11 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 /// Run one of the identifier commands from outside the command loop, with a
 /// command argument built for it. `CTRL-W ]` and friends use this.
 pub(crate) fn do_nv_ident(c1: c_int, c2: c_int) {
-    let mut oa = OpArg::ZERO;
-    // SAFETY: plain data, filled in before `nv_ident` reads it.
-    let mut ca: CmdArg = unsafe { core::mem::zeroed() };
-    ca.oap = &raw mut oa;
-    ca.cmdchar = c1;
-    ca.nchar = c2;
-    nv_ident(&mut ca);
+    with_scratch_cmd(|ca| {
+        ca.cmdchar = c1;
+        ca.nchar = c2;
+        nv_ident(ca);
+    });
 }
 
 /// The command line `nv_ident` builds: `size` writable bytes with the first

@@ -8,8 +8,7 @@
 //!
 //! Original: `src/nvim/mouse.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -29,7 +28,7 @@ use crate::getchar::state::mod_mask;
 use crate::mouse::state::{mouse_col, mouse_row};
 use crate::r#move::pagescroll;
 use crate::narrow::number_as_int;
-use crate::normal::nv_scroll_line;
+use crate::normal::{nv_scroll_line, with_scratch_cmd};
 use crate::option::vars::{P_MOUSEM, p_mousem, p_mousescroll_hor, p_mousescroll_vert};
 use crate::popupmenu::pum_visible;
 use crate::pos::equalpos;
@@ -37,7 +36,7 @@ use crate::search::{BACKWARD, FORWARD};
 use crate::siemsg;
 use crate::state::MODE_NORMAL;
 use crate::state::mode::State;
-use crate::types::{CmdArg, Direction, OpArg};
+use crate::types::{CmdArg, Direction};
 
 /// A mouse click in Insert mode: place the cursor, then get Insert mode's own
 /// bookkeeping back in order around the move.
@@ -123,11 +122,11 @@ pub(crate) fn do_mousescroll(cmd_arg: &mut CmdArg) {
 /// Scrolling in Insert mode in direction `dir`, which is one of the `MSCR_`
 /// values.
 pub(crate) fn ins_mousescroll(dir: c_int) {
-    // SAFETY: `CmdArg` is a C aggregate of scalars and pointers, which is
-    // what the C's `CLEAR_FIELD` zeroes.
-    let mut cmd_arg: CmdArg = unsafe { core::mem::zeroed() };
-    let mut oa = OpArg::ZERO;
-    cmd_arg.oap = &raw mut oa;
+    with_scratch_cmd(|cmd_arg| ins_mousescroll_with(cmd_arg, dir));
+}
+
+/// [`ins_mousescroll`] with the command it builds.
+fn ins_mousescroll_with(cmd_arg: &mut CmdArg, dir: c_int) {
     cmd_arg.arg = dir;
     cmd_arg.cmdchar = match dir {
         MSCR_UP => Key::Mouseup.code(),
@@ -164,7 +163,7 @@ pub(crate) fn ins_mousescroll(dir: c_int) {
     let orig_cursor = win.w_cursor;
 
     // Call the common mouse scroll function shared with other modes.
-    do_mousescroll(&mut cmd_arg);
+    do_mousescroll(cmd_arg);
 
     win = Win::current();
     win.w_redr_status = true;

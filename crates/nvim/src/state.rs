@@ -101,29 +101,31 @@ pub const MODE_NORMAL: ModeFlags = 1;
 /// checked. Naming the machine instead makes the dispatch a `match` and the
 /// layout nobody's business.
 ///
-/// The address is raw rather than a `&mut` for three of them, and the
+/// The address is raw rather than a `&mut` for two of them, and the
 /// promise that it is live is booked at the constructor the way every other
 /// handle in the tree books it: a `check` or an `execute` re-enters the
 /// editor, and the frames below it reach the same state through the globals
-/// that name it — `op_pending` reads the normal-mode frame's operator — so a
-/// `&mut` spanning the loop would be a promise the editor does not keep.
-/// Insert mode's state is the exception: no global names it, so it is lent
-/// for the length of the loop.
+/// that name it, so a `&mut` spanning the loop would be a promise the editor
+/// does not keep. Insert mode's and normal mode's states are lent for the
+/// length of the loop: no global names the first, and the one global that
+/// reaches into a normal-mode frame (`op_pending`) reads its operator, which
+/// the frame table owns.
 pub(crate) struct ModeState<'a>(Machine<'a>);
 
 /// [`ModeState`]'s arms. Private, so the only way to make one is through a
 /// constructor that takes the liveness promise.
 enum Machine<'a> {
-    Normal(*mut NormalState),
+    Normal(&'a mut NormalState),
     Insert(&'a mut InsertState),
     CommandLine(*mut CommandLineState),
     Terminal(*mut TerminalState),
 }
 
 impl<'a> ModeState<'a> {
-    /// # Safety
-    /// `s` must stay a live `NormalState` for the whole of [`state_enter`].
-    pub(crate) const unsafe fn normal(s: *mut NormalState) -> Self {
+    /// Normal mode's state, lent for the loop: the global that reaches into
+    /// a normal-mode frame (`op_pending`) reads the operator, which lives in
+    /// the frame table and not in here.
+    pub(crate) const fn normal(s: &'a mut NormalState) -> Self {
         Self(Machine::Normal(s))
     }
 
@@ -152,7 +154,7 @@ impl<'a> ModeState<'a> {
         // SAFETY (throughout): the constructor's promise -- a live state of
         // the named kind.
         match &mut self.0 {
-            Machine::Normal(s) => unsafe { normal_check(*s) },
+            Machine::Normal(s) => normal_check(s),
             Machine::Insert(s) => insert_check(s),
             Machine::CommandLine(s) => unsafe { command_line_check(*s) },
             Machine::Terminal(s) => unsafe { terminal_check(*s) },
@@ -163,7 +165,7 @@ impl<'a> ModeState<'a> {
     fn execute(&mut self, key: c_int) -> c_int {
         // SAFETY (throughout): as [`Self::check`].
         match &mut self.0 {
-            Machine::Normal(s) => unsafe { normal_execute(*s, key) },
+            Machine::Normal(s) => normal_execute(s, key),
             Machine::Insert(s) => insert_execute(s, key),
             Machine::CommandLine(s) => unsafe { command_line_execute(*s, key) },
             Machine::Terminal(s) => unsafe { terminal_execute(*s, key) },

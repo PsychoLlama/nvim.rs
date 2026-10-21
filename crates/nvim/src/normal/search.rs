@@ -8,13 +8,12 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use crate::cstr;
 use crate::keycodes::ModMask;
 use crate::winlayer::{Buf, Win};
 
 use crate::cursor::check_cursor;
 use crate::drawscreen::{UPD_SOME_VALID, redraw_later};
-use crate::ex_getln::getcmdline;
+use crate::ex_getln::search_cmdline;
 use crate::fold::fold_open_cursor;
 use crate::getchar::state::{KeyTyped, mod_mask};
 use crate::highlight::win_hl_attr;
@@ -60,8 +59,8 @@ pub(crate) fn nv_search(cmd_arg: &mut CmdArg) {
         nv_operator(cmd_arg);
         return;
     }
-    cmd_arg.searchbuf = getcmdline(cmd_arg.cmdchar, cmd_arg.count1, 0, true);
-    if cmd_arg.searchbuf.is_null() {
+    cmd_arg.searchbuf = search_cmdline(cmd_arg.cmdchar, cmd_arg.count1);
+    if cmd_arg.searchbuf.is_none() {
         clear_op(op);
         return;
     }
@@ -82,13 +81,7 @@ impl CmdArg {
     /// The pattern `/` or `?` read, which the command keeps for its redo;
     /// empty before one is read.
     pub(crate) fn search_text(&self) -> &[u8] {
-        if self.searchbuf.is_null() {
-            return &[];
-        }
-        // SAFETY: `nv_search` stores the NUL-terminated string `getcmdline`
-        // answered, which the frame owns until `normal_finish_command` frees
-        // it with the command.
-        unsafe { cstr::bytes_at(self.searchbuf) }
+        self.searchbuf.as_deref().unwrap_or_default()
     }
 }
 

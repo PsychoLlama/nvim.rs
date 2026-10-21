@@ -114,7 +114,7 @@ pub fn searchc(cmd_arg: &mut CmdArg, t_cmd: bool) -> Result<(), Failed> {
                 // one cell's worth, and upstream copies them all.
                 let len = usize::try_from(cmd_arg.nchar_len).unwrap_or(0);
                 for (to, &from) in bytes.iter_mut().zip(&cmd_arg.nchar_composing[..len]) {
-                    *to = from as u8;
+                    *to = from;
                 }
             } else {
                 let len = encode_char(c, &mut bytes);

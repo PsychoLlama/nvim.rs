@@ -283,6 +283,15 @@ pub(crate) fn cmdline_input(
     owned_cmdline(getcmdline(c, 0, indent, do_concat))
 }
 
+/// The pattern `/` or `?` reads, given `count`; `None` when it was
+/// abandoned.
+pub(crate) fn search_cmdline(
+    firstc: ::core::ffi::c_int,
+    count: ::core::ffi::c_int,
+) -> Option<XString> {
+    owned_cmdline(getcmdline(firstc, count, 0, true))
+}
+
 /// What `getcmdline` answered, taken over.
 fn owned_cmdline(line: *mut ::core::ffi::c_char) -> Option<XString> {
     // SAFETY: `getcmdline` answers null or a line allocated for its caller.
