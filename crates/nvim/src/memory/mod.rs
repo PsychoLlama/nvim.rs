@@ -163,6 +163,11 @@ pub unsafe fn try_malloc(size: usize) -> *mut c_void {
 /// vectorised search a reader scanning every byte of a file needs -- core's
 /// costs several times as much per byte.
 pub(crate) fn memchr_in(hay: &[u8], needle: u8) -> Option<usize> {
+    // An empty slice's pointer is dangling, and `memchr` is handed a pointer
+    // it may dereference whatever the length (Miri holds it to that).
+    if hay.is_empty() {
+        return None;
+    }
     // SAFETY: `hay` is readable for its length; the answer is null or a
     // pointer into it.
     let needle = ::core::ffi::c_int::from(needle);
