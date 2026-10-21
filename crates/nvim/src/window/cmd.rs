@@ -25,7 +25,6 @@ use crate::types::AutoEvent;
 use crate::vim_snprintf;
 use crate::winlayer::prev_window;
 use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
 
 use super::*;
 
@@ -44,8 +43,7 @@ use crate::memory::{XString, xmemdupz, xstrlcat, xstrlcpy};
 use crate::message::{e_buffer_nr_not_found, e_cmdwin, e_noalt};
 use crate::message_fmt::emsg_text;
 use crate::normal::{
-    add_to_showcmd, check_text_or_curbuf_locked, do_nv_ident, find_ident_under_cursor,
-    reset_visual_and_resel,
+    add_to_showcmd, check_text_or_curbuf_locked, do_nv_ident, reset_visual_and_resel,
 };
 use crate::option::vars::{P_LANGMAP, p_lrm, p_pvh, swb_flags};
 use crate::options::{kOptSwbFlagUseopen, kOptSwbFlagUsetab};
@@ -581,13 +579,13 @@ fn goto_file(nchar: c_int, prenum1: c_int) {
 /// CTRL-W i / d -- open a new window on the first line matching the identifier
 /// under the cursor, searching along `'path'`.
 fn find_in_path(kind: c_int, prenum: c_int, prenum1: c_int) {
-    let mut found = ptr::null_mut::<c_char>();
-    let len = ident_under_cursor(&mut found);
-    if len == 0 as size_t {
+    // A copy: if the line is changed it will be freed.
+    let mut found = crate::normal::ident_under_cursor(FIND_IDENT as c_int);
+    let len = found.len();
+    if len == 0 {
         return;
     }
-    // Make a copy: if the line is changed it will be freed.
-    let pat = dup_bytes(found, len);
+    let pat = dup_bytes(found.as_mut_ptr().cast::<c_char>(), len);
     search_path(pat, len, kind, prenum == 0, prenum1);
     free(pat);
     Win::current().w_set_curswant = true;
@@ -747,13 +745,6 @@ fn revalidate_cursor_lnum(window: Win) {
 fn first_non_blank() {
     // SAFETY: reads the current window's line.
     beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
-}
-
-/// The identifier under the cursor: its length, and a pointer into the line,
-/// which the caller must copy before the line can move.
-fn ident_under_cursor(found: &mut *mut c_char) -> size_t {
-    // SAFETY: writes only through `found`; a null column means "do not report".
-    unsafe { find_ident_under_cursor(found, FIND_IDENT as c_int, ptr::null_mut()) }
 }
 
 /// An owned NUL-terminated copy of the first `len` bytes of `src`.

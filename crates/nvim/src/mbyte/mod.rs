@@ -143,21 +143,13 @@ pub const INT_MAX: c_int = c_int::MAX;
 pub const MAX_SCHAR_SIZE: c_int = 32;
 /// The second byte of an escaped literal `K_SPECIAL`; see [`unescape_at`].
 pub const KS_SPECIAL: c_int = 254;
-/// The cursor line from the cursor on, as `get_cursor_pos_ptr` reads it.
-fn with_cursor_text<R>(f: impl FnOnce(&[u8]) -> R) -> R {
-    let cursor = Win::current().w_cursor;
-    let mut lines = Buf::current().lines();
-    let line = lines.line(cursor.lnum);
-    let col = usize::try_from(cursor.col).unwrap_or(0);
-    f(line.get(col..).unwrap_or_default())
-}
-
+use crate::cursor::with_cursor_rest;
 /// `g8`: show the bytes of the character under the cursor, in hex.
 ///
 /// A composing sequence is shown as its characters separated by `+`.
 pub fn show_utf8() {
     // The whole grapheme cluster, composing characters included.
-    let cluster = with_cursor_text(|text| text[..cluster_len(text)].to_vec());
+    let cluster = with_cursor_rest(|text| text[..cluster_len(text)].to_vec());
     if cluster.is_empty() {
         msg(c"NUL", 0);
         return;
@@ -224,16 +216,16 @@ pub fn utf_find_illegal() {
     Win::current().w_cursor.coladd = 0;
     let found = loop {
         let at = if vimconv.vc_type == CONV_NONE {
-            with_cursor_text(first_illegal).map(|at| ColNr::try_from(at).unwrap_or(MAXCOL))
+            with_cursor_rest(first_illegal).map(|at| ColNr::try_from(at).unwrap_or(MAXCOL))
         } else {
-            let Some(converted) = with_cursor_text(|text| vimconv.convert(text)) else {
+            let Some(converted) = with_cursor_rest(|text| vimconv.convert(text)) else {
                 break false;
             };
             // `at` is an offset into the *converted* line; step the real
             // line forward by that many bytes' worth of characters to find
             // the matching column.
             first_illegal(&converted).map(|at| {
-                with_cursor_text(|text| {
+                with_cursor_rest(|text| {
                     let mut col = 0;
                     for _ in 0..at {
                         let len = char_len(&text[col..]);

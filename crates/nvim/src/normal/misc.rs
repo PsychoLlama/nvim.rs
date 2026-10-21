@@ -1,8 +1,7 @@
 //! Commands that do not belong to a family: the no-ops, the error
 //! handler, `:`, the CTRL-key odds and ends, and leaving a mode.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -158,9 +157,7 @@ pub(crate) fn nv_clear(cmd_arg: &mut CmdArg) {
     // Upstream walks `firstwin` -- the *current* tab page's windows --
     // even though the loop reads as if it might walk another one's.
     for wp in windows() {
-        let block = wp.w_s;
-        // SAFETY: a live window's syntax block.
-        unsafe { (*block).b_syn_slow = false };
+        wp.syntax().b_syn_slow = false;
     }
     redraw_later(Win::current(), UPD_CLEAR);
 }

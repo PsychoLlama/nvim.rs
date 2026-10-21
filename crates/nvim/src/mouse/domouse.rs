@@ -27,7 +27,7 @@ use super::*;
 use crate::ascii::ascii_iswhite;
 use crate::buffer::buf_is_quickfix;
 use crate::charset::vim_iswordc;
-use crate::cursor::get_cursor_pos_ptr;
+use crate::cursor::with_cursor_rest;
 use crate::drawscreen::state::{mode_displayed, redraw_cmdline};
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later};
 use crate::eval::eval_has_provider;
@@ -271,13 +271,12 @@ pub(crate) fn do_mouse(
         && which_button == MOUSE_LEFT
     {
         // Open or close a fold at this line.
-        let fold: unsafe extern "C" fn(Pos, c_int) = if jump_flags & MOUSE_FOLD_OPEN != 0 {
+        let fold: fn(Pos, c_int) = if jump_flags & MOUSE_FOLD_OPEN != 0 {
             open_fold
         } else {
             close_fold
         };
-        // SAFETY: a live position in the current buffer.
-        unsafe { fold(win.w_cursor, 1) };
+        fold(win.w_cursor, 1);
         // Don't move the cursor if still in the same window.
         if win == old_curwin {
             win.w_cursor = save_cursor;
@@ -807,11 +806,8 @@ fn multi_click(mut win: Win, op: Option<Op>, is_click: bool, is_drag: bool, mods
                 with_visual(find_start_of_word);
                 // Bytes of the character under the cursor, `None` at the end
                 // of the line.
-                // SAFETY: the cursor is a live position in the current buffer.
-                let under = unsafe {
-                    let p = get_cursor_pos_ptr();
-                    (*p != NUL as c_char).then(|| utfc_ptr2len(p))
-                };
+                let under =
+                    with_cursor_rest(|rest| (!rest.is_empty()).then(|| cluster_len(rest) as c_int));
                 if let Some(bytes) = under.filter(|_| sel_exclusive()) {
                     win.w_cursor.col += bytes;
                 }

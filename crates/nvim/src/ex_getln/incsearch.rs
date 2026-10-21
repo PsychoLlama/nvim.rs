@@ -16,6 +16,7 @@ use crate::strings::vim_strchr;
 use crate::winlayer::{Buf, Win};
 
 use crate::guard::Suppress;
+use crate::mbyte::cluster_len;
 use crate::types::{Failed, NUL};
 use core::ffi::CStr;
 
@@ -568,8 +569,7 @@ pub(crate) fn may_add_char_to_search(
                 *c = '\\' as ::core::ffi::c_int;
             }
             // Add any composing characters.
-            // SAFETY: the cursor is on a character of the current line.
-            let cursor_len = || unsafe { utfc_ptr2len(get_cursor_pos_ptr()) };
+            let cursor_len = || with_cursor_rest(cluster_len) as ::core::ffi::c_int;
             if utf_char2len(*c) != cursor_len() {
                 let save_c = *c;
                 while utf_char2len(*c) != cursor_len() {

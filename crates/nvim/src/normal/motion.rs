@@ -1,8 +1,7 @@
 //! Cursor motions that are not searches: by character, word, line,
 //! screen line, paragraph and sentence.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::cstr;
 use crate::keycodes::ModMask;
@@ -13,8 +12,8 @@ use crate::winlayer::{Buf, Win};
 
 use crate::ascii::ascii_iswhite;
 use crate::buffer::{buf_is_prompt, buf_is_quickfix, current_buf};
-use crate::charset::{vim_isprintc, vim_strsize};
-use crate::cursor::{coladvance, gchar_cursor, get_cursor_pos_ptr};
+use crate::charset::vim_isprintc;
+use crate::cursor::{coladvance, gchar_cursor, with_cursor_rest};
 use crate::decoration::{decor_conceal_line, win_lines_concealed};
 use crate::edit::{
     BeginlineOpts, beginline, cursor_down, cursor_down_inner, cursor_up, cursor_up_inner, oneleft,
@@ -25,7 +24,7 @@ use crate::fold::has_folding;
 use crate::getchar::beep_flush;
 use crate::getchar::state::mod_mask;
 use crate::mark::setpcmark;
-use crate::mbyte::{mb_adjust_cursor, utf_ptr2char, utfc_ptr2len};
+use crate::mbyte::{cluster_len, mb_adjust_cursor};
 use crate::normal::{
     CAR, TAB, adjust_for_sel, clear_op_beep, kMTCharWise, kMTLineWise, may_fold_open, nv_page,
     unadjust_for_sel, visual_active, visual_mode,
@@ -158,9 +157,9 @@ pub(crate) fn nv_screengo(mut op: Op, dir: c_int, mut dist: c_int, skip_conceal:
         // 'showbreak' is drawn in front of every continuation row and is
         // not part of the text.
         if virtcol > width1 && wp.has_showbreak() {
-            virtcol -= unsafe { vim_strsize(wp.showbreak_leader()) };
+            virtcol -= wp.showbreak_cells();
         }
-        let c = unsafe { utf_ptr2char(get_cursor_pos_ptr()) };
+        let c = gchar_cursor();
         // A wide unprintable character is drawn as `<xxxx>`, which is
         // wider than the cell the column arithmetic assumed.
         if dir == FORWARD as c_int
@@ -308,9 +307,8 @@ pub(crate) fn nv_right(cmd_arg: &mut CmdArg) {
 
     let mut n = count1;
     while n > 0 {
-        // SAFETY: the cursor position is inside its own NUL-terminated line.
         let at_end = if past_line {
-            unsafe { *get_cursor_pos_ptr() as c_int == NUL }
+            gchar_cursor() == NUL
         } else {
             oneright().is_err()
         };
@@ -350,8 +348,7 @@ pub(crate) fn nv_right(cmd_arg: &mut CmdArg) {
             if virtual_active(win) {
                 let _ = oneright();
             } else {
-                // SAFETY: as above.
-                win.w_cursor.col += unsafe { utfc_ptr2len(get_cursor_pos_ptr()) };
+                win.w_cursor.col += with_cursor_rest(cluster_len) as ColNr;
             }
         }
         n -= 1;
@@ -402,10 +399,7 @@ pub(crate) fn nv_left(cmd_arg: &mut CmdArg) {
                     || cmd_arg.op().op_type == OpType::Change)
                     && !Buf::current().lines().line(win.w_cursor.lnum).is_empty()
                 {
-                    let cp = get_cursor_pos_ptr();
-                    if unsafe { *cp } as c_int != NUL {
-                        unsafe { win.w_cursor.col += utfc_ptr2len(cp) };
-                    }
+                    win.w_cursor.col += with_cursor_rest(cluster_len) as ColNr;
                     cmd_arg.outcome |= Outcome::NO_ADJ_OP_END;
                 }
             } else {

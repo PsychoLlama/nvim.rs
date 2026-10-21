@@ -4,7 +4,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use crate::cstr;
 use crate::keycodes::Key;
 use crate::strings::has_char;
 use crate::winlayer::Buf;
@@ -16,22 +15,20 @@ use crate::diff::diff_move_to;
 use crate::edit::{BeginlineOpts, beginline};
 use crate::fold::fold_move_to;
 use crate::mark::{getnextmark, pos_to_mark, setpcmark};
-use crate::memory::{xfree, xmemdupz};
 use crate::mouse::do_mouse;
 use crate::normal::{
-    _ISlower, _ISupper, ACTION_GOTO, ACTION_SHOW, ACTION_SHOW_ALL, FIND_ANY, FIND_DEFINE,
-    FIND_IDENT, FM_BACKWARD, FM_FORWARD, SMT_BAD, SMT_RARE, clear_op, clear_op_beep,
-    find_ident_under_cursor, kDirectionNotSet, kMTCharWise, kMarkBeginLine, kMarkContext,
-    may_fold_open, nv_gotofile, nv_mark_move_to, nv_put_opt,
+    ACTION_GOTO, ACTION_SHOW, ACTION_SHOW_ALL, FIND_ANY, FIND_DEFINE, FIND_IDENT, FM_BACKWARD,
+    FM_FORWARD, SMT_BAD, SMT_RARE, clear_op, clear_op_beep, ident_under_cursor, kDirectionNotSet,
+    kMTCharWise, kMarkBeginLine, kMarkContext, may_fold_open, nv_gotofile, nv_mark_move_to,
+    nv_put_opt,
 };
 use crate::options::{kOptFdoFlagBlock, kOptFdoFlagSearch};
-use crate::os::cshim::__ctype_b_loc;
 use crate::pos::MAXLNUM;
 use crate::search::{BACKWARD, FORWARD, find_pattern_in_path, findmatchlimit};
 use crate::spell::{SMT_ALL, spell_move_to};
 use crate::textobject::findpar;
 use crate::types::{CmdArg, FileMark, MarkMove, OpType, PUT_FIXINDENT, Pos, SpellMoveType};
-use core::ffi::{CStr, c_char, c_int, c_uint, c_ushort, c_void};
+use core::ffi::{CStr, c_int, c_uint};
 
 /// Which way a `[` or `]` command searches.
 fn direction(cmd_arg: &mut CmdArg) -> c_int {
@@ -60,12 +57,8 @@ fn match_direction(cmd_arg: &mut CmdArg) -> c_int {
 /// cursor is inside; the second walks back in from there, counting the braces
 /// the count asked for. `prev_pos` carries the second-outermost block between
 /// the two, which is what makes `2[m` mean "the method one level out".
-///
-/// # Safety
-///
-/// `old_pos` must point at an initialized position.
-unsafe fn nv_bracket_block(cmd_arg: &mut CmdArg, old_pos: *const Pos) {
-    // SAFETY: `old_pos` is the cursor position the caller saved.
+/// `old_pos` is the cursor position the caller saved.
+fn nv_bracket_block(cmd_arg: &mut CmdArg, old_pos: Pos) {
     let mut new_pos = Pos {
         lnum: 0,
         col: 0,
@@ -114,7 +107,7 @@ unsafe fn nv_bracket_block(cmd_arg: &mut CmdArg, old_pos: *const Pos) {
         new_pos = found;
         n -= 1;
     }
-    Win::current().w_cursor = unsafe { *old_pos };
+    Win::current().w_cursor = old_pos;
 
     if method {
         // `[m` and `]M` want the brace itself; `[M` and `]m` want the one
@@ -170,7 +163,7 @@ unsafe fn nv_bracket_block(cmd_arg: &mut CmdArg, old_pos: *const Pos) {
             }
             n -= 1;
         }
-        Win::current().w_cursor = unsafe { *old_pos };
+        Win::current().w_cursor = old_pos;
         // A position was found on the way out but lost on the way back in.
         if pos.is_none() && new_pos.lnum != 0 {
             clear_op_beep(cmd_arg.op());
@@ -193,19 +186,16 @@ unsafe fn nv_bracket_block(cmd_arg: &mut CmdArg, old_pos: *const Pos) {
 /// rather than for any occurrence, which is what the low-nibble comparison
 /// tests -- CTRL-D, `d` and `D` all end in the same four bits.
 fn nv_bracket_ident(cmd_arg: &mut CmdArg) {
-    let mut found: *mut c_char = ptr::null_mut();
-    let len =
-        unsafe { find_ident_under_cursor(&raw mut found, FIND_IDENT as c_int, ptr::null_mut()) };
-    if len == 0 {
+    // `find_pattern_in_path` keeps the name, so it is handed a copy.
+    let name = ident_under_cursor(FIND_IDENT as c_int);
+    if name.is_empty() {
         clear_op(cmd_arg.op());
         return;
     }
     let nchar = cmd_arg.nchar;
-    let ctype = unsafe { *(*__ctype_b_loc()).offset(nchar as isize) } as c_int;
-    let is_upper = ctype & _ISupper as c_ushort as c_int != 0;
-    let is_lower = ctype & _ISlower as c_ushort as c_int != 0;
-    // `find_pattern_in_path` keeps the name, so hand it a copy.
-    let name = unsafe { xmemdupz(found as *const c_void, len) } as *mut c_char;
+    // Only `i`, `I`, `d`, `D` and their control characters reach here.
+    let key = u8::try_from(nchar).unwrap_or(0);
+    let (is_upper, is_lower) = (key.is_ascii_uppercase(), key.is_ascii_lowercase());
     // Without a count, a lower-case key searches case-insensitively.
     let fold_case = if cmd_arg.count0 == 0 {
         !is_upper
@@ -232,12 +222,9 @@ fn nv_bracket_ident(cmd_arg: &mut CmdArg) {
     };
     let (dir, n) = (kDirectionNotSet, cmd_arg.count1);
     let last = MAXLNUM;
-    // SAFETY: `name` is the NUL-terminated identifier copied above.
-    let pat = unsafe { cstr::slice_at(name, len) };
     find_pattern_in_path(
-        pat, dir, true, fold_case, what, n, action, from, last, false, false,
+        &name, dir, true, fold_case, what, n, action, from, last, false, false,
     );
-    unsafe { xfree(name as *mut c_void) };
     Win::current().w_set_curswant = true;
 }
 
@@ -307,7 +294,7 @@ pub(crate) fn nv_brackets(cmd_arg: &mut CmdArg) {
     } else if has_char(c"iI\tdD\x04", nchar) {
         nv_bracket_ident(cmd_arg);
     } else if has_char(block_chars, nchar) {
-        unsafe { nv_bracket_block(cmd_arg, &raw const old_pos) };
+        nv_bracket_block(cmd_arg, old_pos);
     } else if nchar == '[' as c_int || nchar == ']' as c_int {
         // `[[` and `]]` look for a section start, `[]` and `][` for its
         // end.

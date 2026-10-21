@@ -1,35 +1,33 @@
 //! The identifier under the cursor, and the commands that look it up:
 //! tags, `:help`, 'keywordprg', a declaration, a file name.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::identfind::find_ident_under_cursor;
 use super::state::with_scratch_cmd;
+use crate::ascii::ascii_iswhite;
 use crate::cstr;
 use crate::ex_cmds::EcmdFlags;
 use crate::ex_cmds::newlnum;
 use crate::option::vars::P_KP;
-use crate::snprintf;
 use crate::strings::has_char;
 use crate::winlayer::{Buf, Win};
-use core::ptr;
 
 use crate::buffer::buf_hide;
-use crate::charset::{skipwhite, vim_iswordp};
+use crate::charset::is_word_at;
 use crate::cmdhist::{add_to_history, init_history};
-use crate::cursor::{check_cursor_lnum, get_cursor_line_ptr};
+use crate::cursor::check_cursor_lnum;
 use crate::edit::{BeginlineOpts, beginline};
 use crate::ex_cmds::do_ecmd;
 use crate::ex_cmds2::autowrite;
 use crate::ex_docmd::do_cmdline_cmd;
-use crate::ex_getln::vim_strsave_fnameescape;
+use crate::ex_getln::fnameescape;
 use crate::file_search::grab_file_name;
 use crate::keycodes::Ctrl_RSB;
 use crate::mapping::add_map;
 use crate::mark::setpcmark;
-use crate::mbyte::{mb_prevptr, utfc_ptr2len};
-use crate::memory::{xfree, xmalloc, xrealloc};
+use crate::mbyte::{cluster_len, head_off};
+use crate::memline::Lines;
 use crate::message::e_noident;
 use crate::message::emsg;
 use crate::normal::{
@@ -37,19 +35,18 @@ use crate::normal::{
     check_text_or_curbuf_locked, clear_op, get_visual_text, normal_search, visual_active,
 };
 use crate::option::magic_isset;
-use crate::optionstr::{OptString, local_or_global};
+use crate::optionstr::{OptString, OptStringRef, local_or_global};
 use crate::os::cshim::gettext;
 use crate::search::state::no_smartcase;
 use crate::state::MODE_TERMINAL;
 use crate::state::mode::restart_edit;
-use crate::strings::{shellescape, xstrnsave};
+use crate::strings::shellescape;
 use crate::tag::do_tag;
 use crate::tag::state::g_tag_at_cursor;
-use crate::types::{CmdArg, ColNr, LineNr, NUL, int64_t, size_t, uint8_t};
+use crate::types::{CmdArg, ColNr, LineNr, NUL, int64_t};
 use crate::undo::curbuf_is_changed;
 use crate::window::check_can_set_curbuf_disabled;
-use ::libc::strcpy;
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_int};
 
 /// Run one of the identifier commands from outside the command loop, with a
 /// command argument built for it. `CTRL-W ]` and friends use this.
@@ -61,164 +58,68 @@ pub(crate) fn do_nv_ident(c1: c_int, c2: c_int) {
     });
 }
 
-/// The command line `nv_ident` builds: `size` writable bytes with the first
-/// `len` in use, always NUL-terminated. Freed by hand -- `build_keywordprg_cmd`
-/// hands it back already freed when there is nothing to look up.
-struct CmdBuf {
-    ptr: *mut c_char,
-    size: size_t,
-    len: size_t,
-}
-
-impl CmdBuf {
-    /// An empty command of `size` bytes.
-    fn new(size: size_t) -> Self {
-        // SAFETY: `xmalloc` answers `size` writable bytes and never null.
-        let ptr = unsafe { xmalloc(size) } as *mut c_char;
-        // SAFETY: `size` is well over the one byte a terminator needs.
-        unsafe { *ptr = NUL as c_char };
-        Self { ptr, size, len: 0 }
-    }
-    /// The command so far, NUL-terminated.
-    fn as_ptr(&self) -> *mut c_char {
-        self.ptr
-    }
-    /// How many of its bytes are in use.
-    fn used(&self) -> size_t {
-        self.len
-    }
-    /// Where the next byte goes.
-    fn tail(&self) -> *mut c_char {
-        // SAFETY: `len` of the `size` bytes are in use, so this is in bounds.
-        unsafe { self.ptr.add(self.len) }
-    }
-    /// Replace the command with `s`.
-    fn set(&mut self, s: &CStr) {
-        self.len = 0;
-        self.append(s);
-    }
-    /// Append `s` as it stands.
-    fn append(&mut self, s: &CStr) {
-        // SAFETY: the buffer was sized for the whole command, `s` included.
-        unsafe { strcpy(self.tail(), s.as_ptr()) };
-        self.len += s.count_bytes() as size_t;
-    }
-    /// Append `s` through `snprintf`, which truncates rather than overruns.
-    fn push(&mut self, s: &CStr) {
-        self.push_str(c"%s", s.as_ptr());
-    }
-    /// Append `fmt` filled with one NUL-terminated string.
-    fn push_str(&mut self, fmt: &CStr, arg: *const c_char) {
-        // SAFETY: the tail has the `size - len` bytes `snprintf` is told of,
-        // and `arg` matches the one `%s` in `fmt`.
-        let wrote = unsafe { snprintf!(self.tail(), self.size - self.len, fmt.as_ptr(), arg) };
-        self.len += wrote as size_t;
-    }
-    /// Append `fmt` filled with one number.
-    fn push_num(&mut self, fmt: &CStr, arg: int64_t) {
-        // SAFETY: as `push_str`; `arg` matches the one `%ld` in `fmt`.
-        let wrote = unsafe { snprintf!(self.tail(), self.size - self.len, fmt.as_ptr(), arg) };
-        self.len += wrote as size_t;
-    }
-    /// Resize around what is in the buffer plus `n` more bytes, and append
-    /// them from `s`.
-    fn append_grown(&mut self, s: *const c_char, n: size_t) {
-        let size = self.len + n + 1;
-        // SAFETY: it came from `xmalloc`, and `size` holds what is in it now
-        // plus `s` and a terminator.
-        self.ptr = unsafe { xrealloc(self.ptr as *mut c_void, size) } as *mut c_char;
-        self.size = size;
-        // SAFETY: the tail now has room for `s`'s `n` bytes and its NUL.
-        unsafe { strcpy(self.tail(), s) };
-        self.len += n;
-    }
-    /// Take the length from where an in-place append stopped.
-    fn ends_at(&mut self, end: *mut c_char) {
-        // SAFETY: `end` is inside the same allocation `self.ptr` addresses.
-        self.len = unsafe { end.offset_from(self.ptr) } as size_t;
-    }
-    /// Release the buffer. The command must not be used again.
-    fn free(&mut self) {
-        // SAFETY: the buffer came from `xmalloc`/`xrealloc` above.
-        unsafe { xfree(self.ptr as *mut c_void) };
-        self.ptr = ptr::null_mut();
-        self.size = 0;
-        self.len = 0;
-    }
-}
-
-/// Build the command `K` should run into `out`. Answers the length of the
-/// identifier still to be appended, or 0 when there is nothing to look up --
-/// in which case `out` has already been freed.
+/// Add the command `K` should run to `out`. Answers the length of the
+/// identifier still to be appended, or 0 when there is nothing to look up.
 ///
-/// # Safety
-///
-/// `kp` must point at the NUL-terminated 'keywordprg', and `ptr_arg` at a
-/// `*mut c_char` holding the identifier's first of `n` bytes -- it is
-/// advanced past what is consumed, so both must stay live until the call
-/// returns.
+/// `text` is the identifier and the rest of its line, and `start` the offset
+/// in it the identifier's `n` bytes begin at -- advanced past the leading
+/// dashes a shell command would take for options.
 #[allow(clippy::too_many_arguments)]
-unsafe fn build_keywordprg_cmd(
-    cmd_arg: &mut CmdArg,
-    kp: *mut c_char,
+fn build_keywordprg_cmd(
+    count0: c_int,
+    kp: &[u8],
     kp_help: bool,
     kp_ex: bool,
-    ptr_arg: &mut *mut c_char,
-    mut n: size_t,
-    out: &mut CmdBuf,
-) -> size_t {
-    // SAFETY (throughout): `cmd_arg` is live, and nothing below reaches back into it.
-    let count0 = cmd_arg.count0;
+    text: &[u8],
+    start: &mut usize,
+    mut n: usize,
+    out: &mut Vec<u8>,
+) -> usize {
     if kp_help {
-        out.set(c"help! ");
+        out.clear();
+        out.extend_from_slice(b"help! ");
         return n;
     }
     if kp_ex {
         // An Ex 'keywordprg' takes the word as its argument, after an
         // optional count.
-        out.push_str(c"%s ", kp);
+        out.extend_from_slice(kp);
+        out.push(b' ');
         if count0 != 0 {
-            out.push_num(c"%ld ", count0 as int64_t);
+            out.extend_from_slice(format!("{count0} ").as_bytes());
         }
         return n;
     }
 
     // A shell 'keywordprg' runs in a terminal in a new tab. Leading
     // dashes would look like options to it.
-    let mut word = *ptr_arg;
-    // SAFETY: `word` walks the identifier, which is NUL-terminated.
-    while unsafe { *word } as c_int == '-' as c_int && n > 0 {
-        // SAFETY: the byte at `word` is a `-`, so the next one is in the line.
-        word = unsafe { word.offset(1) };
+    while cstr::byte_at(text, *start) == b'-' && n > 0 {
+        *start += 1;
         n -= 1;
     }
     if n == 0 {
         emsg(gettext(e_noident));
-        out.free();
-        *ptr_arg = word;
         return 0;
     }
     // `man` and `man -s` take the count as a section number, which goes
     // in front of the word rather than becoming a line range.
-    // SAFETY: 'keywordprg' is a NUL-terminated option string.
-    let isman = unsafe { cstr::eq_bytes(kp, b"man") };
-    let isman_s = unsafe { cstr::eq_bytes(kp, b"man -s") };
+    let isman = kp == b"man";
+    let isman_s = kp == b"man -s";
     if count0 != 0 && !(isman || isman_s) {
-        out.push_num(c".,.+%ld", (count0 - 1) as int64_t);
+        out.extend_from_slice(format!(".,.+{}", int64_t::from(count0) - 1).as_bytes());
     }
-    // SAFETY: a NUL-terminated literal command.
     let _ = do_cmdline_cmd(c"tabnew");
-    out.push(c"terminal ");
+    out.extend_from_slice(b"terminal ");
     if count0 == 0 && isman_s {
         // `man -s` with no section is just `man`.
-        out.push(c"man ");
+        out.extend_from_slice(b"man ");
     } else {
-        out.push_str(c"%s ", kp);
+        out.extend_from_slice(kp);
+        out.push(b' ');
     }
     if count0 != 0 && (isman || isman_s) {
-        out.push_num(c"%ld ", count0 as int64_t);
+        out.extend_from_slice(format!("{count0} ").as_bytes());
     }
-    *ptr_arg = word;
     n
 }
 
@@ -243,67 +144,39 @@ fn ident_escapes(cmdchar: c_int, tag_cmd: bool) -> &'static CStr {
         return c"\\|\"\n*?[";
     }
     // A help tag may contain any of these, so nothing is escaped.
-    // SAFETY: 'filetype' is a NUL-terminated option string.
-    if unsafe { cstr::eq_bytes(Buf::current().b_p_ft.value_ptr(), b"help") } {
+    if Buf::current().b_p_ft.bytes() == b"help" {
         c""
     } else {
         c"\\|\"\n["
     }
 }
 
-/// Copy the byte `src` points at to where `dst` points, advancing both.
-/// # Safety
-/// `*src` addresses a readable byte and `*dst` a writable one.
-unsafe fn copy_byte(dst: &mut *mut c_char, src: &mut *mut c_char) {
-    // SAFETY: the caller promises both bytes, and one past each is an
-    // address a pointer may hold.
-    unsafe { **dst = **src };
-    (*dst, *src) = unsafe { (dst.offset(1), src.offset(1)) };
-}
-
-/// Copy `n` bytes of the identifier into the command being built, escaping
-/// whatever the command cannot take literally.
-/// # Safety
-/// `dest` has room for twice `n` plus a terminator, which is what `nv_ident`
-/// sized the buffer for, and `*src` is `n` bytes of a NUL-terminated line.
-unsafe fn append_escaped(
-    dest: *mut c_char,
-    src: &mut *mut c_char,
-    mut n: size_t,
-    escapes: &CStr,
-) -> *mut c_char {
-    let mut out = dest;
-    // The caller reads the source pointer back: `*` and `#` ask whether
-    // the character *before* where this stopped was a word character, to
-    // decide whether the search anchors at the end too.
-    let p = src;
+/// Append `n` bytes of `text` from `start` on to `out`, escaping whatever
+/// the command cannot take literally.
+///
+/// A character's bytes go together: the escape is decided on its first. At
+/// the end of the line (`text` runs out) the bytes read as NUL and the copy
+/// runs on until `n` is spent -- upstream's `utfc_ptr2len` answering 0 there,
+/// which is what stops a NUL ending the copy early.
+fn append_escaped(out: &mut Vec<u8>, text: &[u8], start: usize, mut n: usize, escapes: &CStr) {
+    let mut at = start;
     while n > 0 {
         n -= 1;
-        // SAFETY: `p` walks the identifier, which is NUL-terminated.
-        let c = unsafe { **p } as uint8_t as c_int;
-        // SAFETY: `escapes` is a NUL-terminated literal.
-        if has_char(escapes, c) {
-            // SAFETY: the caller promises the room.
-            unsafe { *out = '\\' as c_char };
-            out = unsafe { out.offset(1) };
+        let c = cstr::byte_at(text, at);
+        if has_char(escapes, c_int::from(c)) {
+            out.push(b'\\');
         }
-        // `utfc_ptr2len` answers 0 at a NUL, so this is `(size_t)-1`
-        // there and the inner loop then runs until `n` is spent --
-        // upstream's behaviour, and what stops a NUL ending the copy
-        // early.
-        // SAFETY: `p` points at a character of a NUL-terminated line.
-        let trailing = (unsafe { utfc_ptr2len(*p) } - 1) as size_t;
-        let mut i: size_t = 0;
+        let trailing = cluster_len(text.get(at..).unwrap_or_default()).wrapping_sub(1);
+        let mut i = 0;
         while i < trailing && n > 0 {
-            // SAFETY: as above, and `out` still has the caller's room.
-            unsafe { copy_byte(&mut out, p) };
+            out.push(cstr::byte_at(text, at));
+            at += 1;
             i += 1;
             n -= 1;
         }
-        unsafe { copy_byte(&mut out, p) };
+        out.push(cstr::byte_at(text, at));
+        at += 1;
     }
-    unsafe { *out = NUL as c_char };
-    out
 }
 
 /// `*`, `#`, `K`, `]`, `CTRL-]` and their `g` forms: look up the identifier
@@ -317,64 +190,61 @@ pub(crate) fn nv_ident(cmd_arg: &mut CmdArg) {
         cmdchar = '#' as c_int;
     }
 
-    let mut word: *mut c_char = ptr::null_mut();
-    let mut n: size_t = 0;
-    // Three of the commands take a Visual selection instead of the word
-    // under the cursor. Its copy stays in this frame, because `word` names
-    // it -- the other source below is a pointer into the cursor's own line,
-    // and the two are told apart by `visual_sel`.
-    let selection;
+    // The identifier and the rest of its line, copied: three of the commands
+    // take a Visual selection instead of the word under the cursor, and the
+    // others the word under the cursor, which also says what column of the
+    // cursor's line it starts at.
+    let mut text: Option<Vec<u8>> = None;
+    let mut n: usize = 0;
+    let mut word_col: ColNr = 0;
     let mut visual_sel = false;
     if cmdchar == ']' as c_int || cmdchar == Ctrl_RSB || cmdchar == 'K' as c_int {
         if visual_active() {
-            let Some(text) = get_visual_text(Some(cmd_arg)) else {
+            let Some(selection) = get_visual_text(Some(cmd_arg)) else {
                 return;
             };
-            n = text.len();
-            selection = text;
-            word = selection.to_end_of_line().as_ptr().cast_mut();
+            n = selection.len();
+            text = Some(selection.to_end_of_line().to_bytes().to_vec());
             visual_sel = true;
         }
         if check_clear_op_quit(cmd_arg.op()) {
             return;
         }
     }
-    if word.is_null() {
-        let mut ident_offset: c_int = 0;
-        // `*` and `#` fall back to the string under the cursor when there
-        // is no identifier there.
-        let searchy = cmdchar == '*' as c_int || cmdchar == '#' as c_int;
-        let find_type = FIND_IDENT as c_int | if searchy { FIND_STRING as c_int } else { 0 };
-        // SAFETY: both out-parameters are this frame's own.
-        n = unsafe { find_ident_under_cursor(&raw mut word, find_type, &raw mut ident_offset) };
-        if n == 0 {
-            clear_op(cmd_arg.op());
-            return;
+    let text = match text {
+        Some(text) => text,
+        None => {
+            // `*` and `#` fall back to the string under the cursor when
+            // there is no identifier there.
+            let searchy = cmdchar == '*' as c_int || cmdchar == '#' as c_int;
+            let find_type = FIND_IDENT as c_int | if searchy { FIND_STRING as c_int } else { 0 };
+            let Some((col, len)) = find_ident_under_cursor(find_type) else {
+                clear_op(cmd_arg.op());
+                return;
+            };
+            (word_col, n) = (col, len);
+            let lnum = Win::current().w_cursor.lnum;
+            let from = usize::try_from(col).unwrap_or(0);
+            Lines::current().line(lnum)[from..].to_vec()
         }
-    }
+    };
+    let mut start = 0;
 
     // 'keywordprg', which decides what `K` does. A copy, because it is
     // built into a command line further down.
-    // SAFETY: `curbuf` is live and 'keywordprg' is NUL-terminated.
     let keywordprg = local_or_global(&Buf::current().b_p_kp, P_KP).get();
-    let kp = keywordprg.as_ptr().cast_mut();
+    let kp: &[u8] = &keywordprg;
     let kp_helpbang = keywordprg == c":help!";
     let kp_help =
         kp_helpbang || keywordprg.is_empty() || keywordprg == c":he" || keywordprg == c":help";
-    if kp_help && !kp_helpbang {
-        // SAFETY: `word` points into a NUL-terminated buffer line.
-        if unsafe { *skipwhite(word) } as c_int == NUL {
-            emsg(gettext(e_noident));
-            return;
-        }
+    if kp_help && !kp_helpbang && text.iter().all(|&b| ascii_iswhite(c_int::from(b))) {
+        emsg(gettext(e_noident));
+        return;
     }
-    // SAFETY: `kp` is NUL-terminated.
-    let kp_ex = unsafe { *kp } as c_int == ':' as c_int;
+    let kp_ex = cstr::byte_at(kp, 0) == b':';
 
-    // Room for the command, the word with every byte escaped, and a
-    // terminator.
-    let kplen = unsafe { cstr::bytes_at(kp) }.len();
-    let mut out = CmdBuf::new(n.wrapping_mul(2).wrapping_add(30).wrapping_add(kplen));
+    // Room for the command, the word with every byte escaped, and more.
+    let mut out: Vec<u8> = Vec::with_capacity(n.wrapping_mul(2).wrapping_add(30) + kp.len());
 
     // Whether the command being built is a tag lookup, which decides the
     // escaping below.
@@ -383,46 +253,44 @@ pub(crate) fn nv_ident(cmd_arg: &mut CmdArg) {
         Ok(b'*' | b'#') => {
             // These become a search, so the cursor moves to the start of
             // the word first.
-            // SAFETY: `word` points into the cursor's own line.
             setpcmark();
-            let col = unsafe { word.offset_from(get_cursor_line_ptr()) } as ColNr;
-            Win::current().w_cursor.col = col;
-            if !g_cmd && unsafe { vim_iswordp(word) } {
+            Win::current().w_cursor.col = word_col;
+            if !g_cmd && is_word_at(&text, Buf::current()) {
                 // The plain forms anchor at a word boundary.
-                out.set(c"\\<");
+                out.extend_from_slice(b"\\<");
             }
             no_smartcase.set(true);
         }
         Ok(b'K') => {
-            // SAFETY: all of these are live, and `word` is this frame's own.
-            n = unsafe {
-                build_keywordprg_cmd(cmd_arg, kp, kp_help, kp_ex, &mut word, n, &mut out)
-            };
+            let count0 = cmd_arg.count0;
+            n = build_keywordprg_cmd(count0, kp, kp_help, kp_ex, &text, &mut start, n, &mut out);
             if n == 0 {
                 return;
             }
         }
         Ok(b']') => {
             tag_cmd = true;
-            out.set(c"tselect ");
+            out.clear();
+            out.extend_from_slice(b"tselect ");
         }
         // CTRL-] and everything else: a plain tag jump.
         _ => {
             tag_cmd = true;
             let count0 = cmd_arg.count0;
-            let cmd: &CStr = if Buf::current().b_help {
-                c"help! "
+            let cmd: &[u8] = if Buf::current().b_help {
+                b"help! "
             } else if g_cmd {
-                c"tjump "
+                b"tjump "
             } else if count0 == 0 {
-                c"tag "
+                b"tag "
             } else {
                 // A count picks which of the matching tags to jump to.
-                out.push_num(c":%ldtag ", count0 as int64_t);
-                c""
+                out.extend_from_slice(format!(":{count0}tag ").as_bytes());
+                b""
             };
             if !cmd.is_empty() {
-                out.set(cmd);
+                out.clear();
+                out.extend_from_slice(cmd);
             }
         }
     }
@@ -430,52 +298,37 @@ pub(crate) fn nv_ident(cmd_arg: &mut CmdArg) {
     if cmdchar == 'K' as c_int && kp_helpbang && !visual_sel {
         // `:help!` with no selection opens the help index rather than
         // looking anything up.
-        out.set(c"help!");
+        out.clear();
+        out.extend_from_slice(b"help!");
     } else if cmdchar == 'K' as c_int && !kp_help {
         // A shell or Ex command takes the word quoted, not escaped
         // character by character.
-        // SAFETY: `word` is `n` bytes of a buffer line.
-        let owned = unsafe { xstrnsave(word, n) };
-        // SAFETY: `owned` is a NUL-terminated copy of the word.
+        let word = cstr::until_nul(text.get(start..).unwrap_or_default());
+        let word = &word[..n.min(word.len())];
         let quoted = if kp_ex {
-            unsafe { vim_strsave_fnameescape(owned, VSE_NONE as c_int) }
+            fnameescape(&cstr::owned(word), VSE_NONE as c_int)
         } else {
-            shellescape(unsafe { cstr::bytes_at(owned) }, true, true).into_raw()
+            shellescape(word, true, true)
         };
-        // SAFETY: `owned` and `quoted` came from the allocations above, and
-        // `quoted` is NUL-terminated.
-        unsafe { xfree(owned as *mut c_void) };
-        let plen = unsafe { cstr::bytes_at(quoted) }.len();
-        out.append_grown(quoted, plen);
-        unsafe { xfree(quoted as *mut c_void) };
+        out.extend_from_slice(&quoted);
     } else {
-        let escapes = ident_escapes(cmdchar, tag_cmd);
-        // SAFETY: the buffer holds twice the word; `word` is `n` line bytes.
-        let end = unsafe { append_escaped(out.tail(), &mut word, n, escapes) };
-        out.ends_at(end);
+        append_escaped(&mut out, &text, start, n, ident_escapes(cmdchar, tag_cmd));
     }
 
     if cmdchar == '*' as c_int || cmdchar == '#' as c_int {
-        // SAFETY: `word` points into the cursor's own line.
-        if !g_cmd && unsafe { vim_iswordp(mb_prevptr(get_cursor_line_ptr(), word)) } {
-            out.append(c"\\>");
+        if !g_cmd && word_end_is_word(word_col, n) {
+            out.extend_from_slice(b"\\>");
         }
         // The search goes into the history as if it had been typed.
         init_history();
-        // SAFETY: the command holds `used()` bytes.
-        let entry = unsafe { core::slice::from_raw_parts(out.as_ptr() as *const u8, out.used()) };
-        add_to_history(HIST_SEARCH as c_int, entry, true, NUL as u8);
-        let star = cmdchar == '*' as c_int;
-        let dir = if star { '/' as c_int } else { '?' as c_int };
-        // SAFETY: the command holds `used()` bytes.
-        let cmd = unsafe { core::slice::from_raw_parts(out.as_ptr().cast::<u8>(), out.used()) };
-        normal_search(cmd_arg, dir, cmd, 0, None);
+        add_to_history(HIST_SEARCH as c_int, &out, true, NUL as u8);
+        let dir = if cmdchar == '*' as c_int { '/' } else { '?' } as c_int;
+        normal_search(cmd_arg, dir, &out, 0, None);
     } else {
         // `taglist()` and friends need to know the tag came from under
         // the cursor rather than from a command line.
         g_tag_at_cursor.set(true);
-        // SAFETY: `CmdBuf` keeps its bytes NUL-terminated.
-        let _ = do_cmdline_cmd(unsafe { cstr::at(out.as_ptr()) });
+        let _ = do_cmdline_cmd(&cstr::owned(&out));
         g_tag_at_cursor.set(false);
         if cmdchar == 'K' as c_int && !kp_ex && !kp_help {
             // The terminal 'keywordprg' opened above: let <Esc> close it.
@@ -483,7 +336,22 @@ pub(crate) fn nv_ident(cmd_arg: &mut CmdArg) {
             add_map(b"<esc>", b"<Cmd>bdelete!<CR>", MODE_TERMINAL, true);
         }
     }
-    out.free();
+}
+
+/// Whether the character before byte `word_col + n` of the cursor's line --
+/// the last of the `n`-byte word at `word_col` -- is a word character, which
+/// is what decides whether `*` and `#` anchor the end of their pattern.
+fn word_end_is_word(word_col: ColNr, n: usize) -> bool {
+    let lnum = Win::current().w_cursor.lnum;
+    let mut lines = Lines::current();
+    let line = lines.line(lnum);
+    let end = usize::try_from(word_col).unwrap_or(0) + n;
+    let prev = if end == 0 {
+        0
+    } else {
+        end - 1 - head_off(line, (end - 1).min(line.len()))
+    };
+    is_word_at(line.get(prev..).unwrap_or_default(), Buf::current())
 }
 
 /// `CTRL-T`: back up the tag stack.

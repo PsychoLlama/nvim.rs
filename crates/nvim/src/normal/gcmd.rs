@@ -1,7 +1,6 @@
 //! The `g` prefix tree.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -15,16 +14,17 @@ use crate::keycodes::{Ctrl_H, Key};
 use crate::winlayer::{Buf, Win};
 
 use crate::ascii::{ascii_iswhite, ascii_iswhite_or_nul};
+use crate::cstr;
 use crate::cursor::{
-    check_cursor_lnum, coladvance, gchar_cursor, get_cursor_line_len, get_cursor_line_ptr,
-    get_cursor_pos_ptr,
+    check_cursor_lnum, coladvance, gchar_cursor, get_cursor_line_len, with_cursor_rest,
 };
 use crate::edit::{BeginlineOpts, beginline, cursor_down, cursor_up, oneleft, oneright};
 use crate::ex_cmds::describe_cursor_char;
 use crate::ex_docmd::{do_cmdline_cmd, do_exmode, do_sleep};
 use crate::fold::has_any_folding;
 use crate::getchar::state::mod_mask;
-use crate::mbyte::{show_utf8, utf_find_illegal, utf_ptr2cells};
+use crate::mbyte::{cells_at, show_utf8, utf_find_illegal};
+use crate::memline::Lines;
 use crate::memline::goto_byte;
 use crate::message::show_sb_text;
 use crate::mouse::do_mouse;
@@ -129,9 +129,9 @@ pub(crate) fn nv_g_underscore_cmd(cmd_arg: &mut CmdArg) {
         clear_op_beep(cmd_arg.op());
         return;
     }
-    let line = get_cursor_line_ptr();
-    // SAFETY: `line` is the NUL-terminated cursor line and `col` indexes it.
-    let byte_at = |col: ColNr| unsafe { *line.offset(col as isize) };
+    let mut lines = Lines::current();
+    let line = lines.line(win.w_cursor.lnum);
+    let byte_at = |col: ColNr| cstr::byte_at(line, usize::try_from(col).unwrap_or(0));
     // 'virtualedit' can leave the cursor on the terminator.
     if win.w_cursor.col > 0 && c_int::from(byte_at(win.w_cursor.col)) == NUL {
         win.w_cursor.col -= 1;
@@ -179,7 +179,7 @@ pub(crate) fn nv_g_dollar_cmd(cmd_arg: &mut CmdArg) {
         }
         let i = win.w_leftcol + win.w_view_width - col_off - 1;
         coladvance(win, i);
-        if win.w_cursor.col > 0 && unsafe { utf_ptr2cells(get_cursor_pos_ptr()) } > 1 {
+        if win.w_cursor.col > 0 && with_cursor_rest(cells_at) > 1 {
             let vcol = win.virtual_vcol_span(win.cursor()).1;
             if vcol >= win.w_leftcol + win.w_view_width - col_off {
                 win.w_cursor.col -= 1;
@@ -414,7 +414,7 @@ pub(crate) fn nv_g_cmd(cmd_arg: &mut CmdArg) {
         // The rest of the two-character operators: `g~ gu gU g? g@`.
         Ok(b'~' | b'u' | b'U' | b'?' | b'@') => nv_operator(cmd_arg),
         // `gd`/`gD`: jump to the local or global declaration.
-        Ok(b'd' | b'D') => unsafe { nv_gd(op.raw(), nchar, cmd_arg.count0) },
+        Ok(b'd' | b'D') => nv_gd(op, nchar, cmd_arg.count0),
         // `gp`/`gP`: put and leave the cursor after the new text.
         Ok(b'p' | b'P') => nv_put(cmd_arg),
         // `go`: to a byte offset in the buffer.

@@ -1,8 +1,7 @@
 //! Finding the identifier a command is about to act on: the word under
 //! the cursor, the one at a given position, and the local declaration
 //! `gd`/`gD` jumps to.
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 /// The `mb_get_class` classes this file cares about: 0 is white space, 1 is
 /// punctuation, 2 and up are the word classes (one per script).
@@ -11,21 +10,18 @@ const CLASS_PUNCT: c_int = 1;
 const CLASS_WORD: c_int = 2;
 
 use crate::ops::Op;
-use crate::snprintf;
 use crate::winlayer::{Buf, Win};
-use core::ptr;
 
+use crate::ascii::ascii_iswhite;
 use crate::change::get_leader_len;
-use crate::charset::{skipwhite, vim_iswordp};
+use crate::charset::is_word_at;
 use crate::cstr;
-use crate::cursor::get_cursor_line_ptr;
 use crate::drawscreen::state::clear_cmdline;
 use crate::fold::fold_open_cursor;
 use crate::getchar::state::KeyTyped;
 use crate::mark::setpcmark;
-use crate::mbyte::{cluster_len, head_off, mb_get_class};
+use crate::mbyte::{class_in, cluster_len, head_off};
 use crate::memline::Lines;
-use crate::memory::{xfree, xmalloc};
 use crate::message::e_noident;
 use crate::message::state::msg_silent;
 use crate::message::{emsg, messaging};
@@ -38,32 +34,23 @@ use crate::pos::clearpos;
 use crate::regexp::RE_LAST;
 use crate::search::{BACKWARD, FORWARD, SEARCH_START, findmatchlimit, reset_search_dir, searchit};
 use crate::textobject::findpar;
-use crate::types::{ColNr, LineNr, NUL, OpArg, OpType, Pos, ShmFlag, int64_t, size_t, uint8_t};
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use crate::types::{ColNr, LineNr, NUL, OpType, Pos, ShmFlag, int64_t};
+use core::ffi::{CStr, c_int, c_uint};
 
-/// Whether this character continues a `FIND_EVAL` expression rather than
-/// ending it -- `.`, `->` and a balanced `[...]` subscript.
+/// Whether the character at `col` of `line` continues a `FIND_EVAL`
+/// expression rather than ending it -- `.`, `->` and a balanced `[...]`
+/// subscript.
 ///
-/// `colp` is advanced past the second byte of `->`, and `bnp` is the depth of
-/// unclosed brackets, counted from whichever end the walk started at.
-///
-/// # Safety
-///
-/// `p` must point at a NUL-terminated string. `colp` must point at a writable
-/// `int` the caller owns. `bnp` must point at a writable `int` the caller
-/// owns.
-pub(crate) unsafe fn find_is_eval_item(
-    p: *const c_char,
-    colp: *mut c_int,
-    bnp: *mut c_int,
-    dir: c_int,
-) -> bool {
+/// `col` is advanced past the second byte of `->`, and `bn` is the depth of
+/// unclosed brackets, counted from whichever end the walk started at. A
+/// backwards walk is only asked past column 0.
+fn find_is_eval_item(line: &[u8], col: &mut c_int, bn: &mut c_int, dir: c_int) -> bool {
     let backward = dir == BACKWARD as c_int;
     // Walking backwards, a `]` opens a subscript and a `[` closes it.
-    let opener = if backward { ']' } else { '[' } as c_int;
-    let closer = if backward { '[' } else { ']' } as c_int;
-    // SAFETY: `p` is in the line being scanned; `colp`/`bnp` are the caller's.
-    let (c, col, bn) = unsafe { (*p as c_int, &mut *colp, &mut *bnp) };
+    let opener = if backward { b']' } else { b'[' };
+    let closer = if backward { b'[' } else { b']' };
+    let at = usize::try_from(*col).unwrap_or(0);
+    let c = cstr::byte_at(line, at);
     if c == opener {
         *bn += 1;
     }
@@ -73,16 +60,17 @@ pub(crate) unsafe fn find_is_eval_item(
         }
         return true;
     }
-    if c == '.' as c_int {
+    if c == b'.' {
         return true;
     }
     // `->` read from either end: backwards the cursor is on the `>`,
     // forwards on the `-`.
-    let (arrow_head, arrow_tail) = if backward { (0, -1) } else { (1, 0) };
-    // SAFETY: both arrow bytes are in `p`'s line -- forwards `p` is not the
-    // terminator, backwards the caller stopped short of column 0.
-    let (head, tail) = unsafe { (*p.offset(arrow_head), *p.offset(arrow_tail)) };
-    if head as c_int == '>' as c_int && tail as c_int == '-' as c_int {
+    let (head, tail) = if backward {
+        (c, cstr::byte_at(line, at - 1))
+    } else {
+        (cstr::byte_at(line, at + 1), c)
+    };
+    if head == b'>' && tail == b'-' {
         *col += dir;
         return true;
     }
@@ -92,51 +80,27 @@ pub(crate) unsafe fn find_is_eval_item(
 /// A copy of the identifier or string under the cursor -- empty when there
 /// is none -- as [`find_ident_under_cursor`] finds it.
 pub(crate) fn ident_under_cursor(find_type: c_int) -> Vec<u8> {
-    let mut text: *mut c_char = ptr::null_mut();
-    // SAFETY: a slot of this frame's own and no offset wanted; the answer
-    // is `len` bytes of the cursor's line, copied before anything can
-    // change it.
-    unsafe {
-        let len = find_ident_under_cursor(&raw mut text, find_type, ptr::null_mut());
-        if len == 0 {
-            return Vec::new();
-        }
-        core::slice::from_raw_parts(text.cast::<u8>(), len).to_vec()
-    }
-}
-
-/// The identifier or string under the cursor. Answers its length and, through
-/// `text`, a pointer into the line; `offset` gets the cursor's offset in it.
-///
-/// # Safety
-///
-/// `text` must point at a writable `*mut c_char` slot the caller owns for the
-/// call. `offset` must point at a writable `int` the caller owns.
-pub(crate) unsafe fn find_ident_under_cursor(
-    text: *mut *mut c_char,
-    find_type: c_int,
-    offset: *mut c_int,
-) -> size_t {
-    let mut textcol: c_int = 0;
-    let textcolp = if offset.is_null() {
-        ptr::null_mut()
-    } else {
-        &raw mut textcol
+    let Some((col, len)) = find_ident_under_cursor(find_type) else {
+        return Vec::new();
     };
-    let win = Win::current();
-    let pos = Win::current().w_cursor;
-    // SAFETY: `win` is live; `text`/`textcolp` have room for one value each.
-    let len = unsafe { find_ident_at_pos(win, pos.lnum, pos.col, text, textcolp, find_type) };
-    if !offset.is_null() {
-        // SAFETY: `offset` is the caller's own out-parameter.
-        unsafe { *offset = Win::current().w_cursor.col - textcol };
-    }
-    len
+    let cursor = Win::current().w_cursor;
+    let mut lines = Lines::current();
+    let line = lines.line(cursor.lnum);
+    let from = usize::try_from(col).unwrap_or(0);
+    line[from..from + len].to_vec()
 }
 
-/// The buffer line `find_ident_at_pos` walks, addressed by byte column. Every
-/// method's precondition is the constructor's: the pointer addresses a
-/// NUL-terminated line, and the walk never steps past its terminator.
+/// The identifier or string under the cursor: the column it starts at in
+/// the cursor's line and its length in bytes, or `None` (with the error
+/// given) when there is none.
+pub(crate) fn find_ident_under_cursor(find_type: c_int) -> Option<(ColNr, usize)> {
+    let win = Win::current();
+    let pos = win.w_cursor;
+    find_ident_at_pos(win, pos.lnum, pos.col, find_type)
+}
+
+/// The buffer line `find_ident_at_pos` walks, addressed by byte column; a
+/// column at or past its end reads as the terminator.
 #[derive(Clone, Copy)]
 struct ScanLine<'a>(&'a [u8]);
 
@@ -145,22 +109,16 @@ impl<'a> ScanLine<'a> {
     fn at(self, col: c_int) -> c_int {
         c_int::from(cstr::byte_at(self.0, Self::index(col)))
     }
-    /// The address of the byte at `col`.
-    fn ptr(self, col: c_int) -> *mut c_char {
-        self.0[Self::index(col)..]
-            .as_ptr()
-            .cast::<c_char>()
-            .cast_mut()
-    }
     /// The rest of the line from `col` on.
     fn from(self, col: c_int) -> Self {
         ScanLine(&self.0[Self::index(col)..])
     }
     /// The character class of the character starting at `col`.
     fn class(self, col: c_int) -> c_int {
-        // SAFETY: a column of the line, whose bytes end in the memline's own
-        // terminator.
-        unsafe { mb_get_class(self.ptr(col)) }
+        class_in(
+            self.0.get(Self::index(col)..).unwrap_or_default(),
+            Buf::current(),
+        )
     }
     /// The length of the character at `col`, its combining marks included.
     fn char_len(self, col: c_int) -> c_int {
@@ -173,9 +131,7 @@ impl<'a> ScanLine<'a> {
     }
     /// `find_is_eval_item` at `col`, advancing `col` and the bracket depth.
     fn is_eval_item(self, col: &mut c_int, bn: &mut c_int, dir: c_int) -> bool {
-        // SAFETY: a column of the line; `col`/`bn` are the walk's own, and a
-        // backwards walk is only asked past column 0.
-        unsafe { find_is_eval_item(self.ptr(*col), col, bn, dir) }
+        find_is_eval_item(self.0, col, bn, dir)
     }
     /// A column as an index, clamped: the walks ask about the terminator.
     fn index(col: c_int) -> usize {
@@ -190,18 +146,14 @@ impl<'a> ScanLine<'a> {
 /// accepts anything that is not white space. Each pass scans forward from the
 /// position for a character it will take, then backs up to that run's start.
 ///
-/// # Safety
-///
-/// `text` must point at a writable `*mut c_char` slot the caller owns for the
-/// call. `textcol` must point at a writable `int` the caller owns.
-pub(crate) unsafe fn find_ident_at_pos(
+/// Answers the column the run starts at and its length, or `None` (with the
+/// error given) when there is nothing there.
+pub(crate) fn find_ident_at_pos(
     window: Win,
     lnum: LineNr,
     mut startcol: ColNr,
-    text: *mut *mut c_char,
-    textcol: *mut c_int,
     find_type: c_int,
-) -> size_t {
+) -> Option<(ColNr, usize)> {
     let eval = find_type & FIND_EVAL as c_int != 0;
     let mut lines = window.buffer().lines();
     let mut line = ScanLine(lines.line(lnum));
@@ -228,8 +180,7 @@ pub(crate) unsafe fn find_ident_at_pos(
         if eval && line.at(col) == ']' as c_int {
             // A subscript belongs to the name in front of it, so pretend
             // the `]` is a word character.
-            // SAFETY: a NUL-terminated literal.
-            this_class = unsafe { mb_get_class(c"a".as_ptr()) };
+            this_class = class_in(b"a", Buf::current());
         } else {
             this_class = line.class(col);
         }
@@ -260,18 +211,11 @@ pub(crate) unsafe fn find_ident_at_pos(
         } else {
             emsg(gettext(e_noident));
         }
-        return 0;
+        return None;
     }
 
     line = line.from(col);
-    // SAFETY: `text` is the caller's own out-parameter. It answers a pointer
-    // *into* the buffer's line, which is what every caller here wants and
-    // what none of them holds across a change.
-    unsafe { *text = line.ptr(0) };
-    if !textcol.is_null() {
-        // SAFETY: `textcol` is the caller's own out-parameter.
-        unsafe { *textcol = col };
-    }
+    let textcol = col;
     // Now walk forward to the run's end. `startcol` becomes the cursor's
     // offset within the run, which is how far the `FIND_EVAL` walk is
     // allowed to keep taking subscripts.
@@ -291,33 +235,23 @@ pub(crate) unsafe fn find_ident_at_pos(
         col += line.char_len(col);
     }
     debug_assert!(col >= 0);
-    col as size_t
+    Some((textcol, col as usize))
 }
 
 /// `gd` and `gD`: jump to the local or global declaration of the identifier
 /// under the cursor.
-///
-/// # Safety
-///
-/// `op` must point at a live `OpArg`, unaliased for the call.
-pub(crate) unsafe fn nv_gd(op: *mut OpArg, nchar: c_int, thisblock: c_int) {
-    let mut word: *mut c_char = ptr::null_mut();
-    let out = &raw mut word;
-    // SAFETY: `out` points at this frame's own `word`.
-    let len = unsafe { find_ident_under_cursor(out, FIND_IDENT as c_int, ptr::null_mut()) };
+pub(crate) fn nv_gd(op: Op, nchar: c_int, thisblock: c_int) {
+    let word = ident_under_cursor(FIND_IDENT as c_int);
     let locally = nchar == 'd' as c_int;
-    // SAFETY: `word` is `len` bytes of the cursor's line.
     let found =
-        len != 0 && unsafe { find_decl(word, len, locally, thisblock != 0, SEARCH_START as c_int) };
+        !word.is_empty() && find_decl(&word, locally, thisblock != 0, SEARCH_START as c_int);
     if !found {
-        // SAFETY: `op` is the caller's live operator.
-        clear_op_beep(unsafe { Op::new(op) });
+        clear_op_beep(op);
         return;
     }
     if fdo_flags.get() & kOptFdoFlagSearch as c_uint != 0
         && KeyTyped.get()
-        // SAFETY: `op` is the caller's live operator.
-        && unsafe { (*op).op_type } == OpType::Nop
+        && op.op_type == OpType::Nop
     {
         fold_open_cursor();
     }
@@ -331,90 +265,54 @@ pub(crate) unsafe fn nv_gd(op: *mut OpArg, nchar: c_int, thisblock: c_int) {
 /// Whether the byte at `offset` is ordinary code rather than inside a string
 /// or a comment. A very rough C-shaped scan: it knows `"`, `'`, `/* */` and
 /// `//`, and it only ever looks at the one line.
-///
-/// # Safety
-///
-/// `line` must point at a NUL-terminated string.
-pub(crate) unsafe fn is_ident(line: *const c_char, offset: c_int) -> bool {
+pub(crate) fn is_ident(line: &[u8], offset: c_int) -> bool {
     let mut incomment = false;
     // The quote that opened the string we are inside, or 0.
-    let mut instring: c_int = 0;
-    let mut prev: c_int = 0;
-    let mut i = 0;
-    while i < offset {
-        // SAFETY: `line` is NUL-terminated and the walk stops at its NUL.
-        let c = unsafe { *line.offset(i as isize) } as uint8_t as c_int;
-        if c == NUL {
-            break;
-        }
+    let mut instring: u8 = 0;
+    let mut prev: u8 = 0;
+    let end = usize::try_from(offset).unwrap_or(0).min(line.len());
+    for &c in &line[..end] {
         if instring != 0 {
-            if prev != '\\' as c_int && c == instring {
+            if prev != b'\\' && c == instring {
                 instring = 0;
             }
-        } else if (c == '"' as c_int || c == '\'' as c_int) && !incomment {
+        } else if (c == b'"' || c == b'\'') && !incomment {
             instring = c;
         } else if incomment {
-            if prev == '*' as c_int && c == '/' as c_int {
+            if prev == b'*' && c == b'/' {
                 incomment = false;
             }
-        } else if prev == '/' as c_int && c == '*' as c_int {
+        } else if prev == b'/' && c == b'*' {
             incomment = true;
-        } else if prev == '/' as c_int && c == '/' as c_int {
+        } else if prev == b'/' && c == b'/' {
             // The rest of the line is a comment, so the offset is too.
             return false;
         }
         prev = c;
-        i += 1;
     }
     !incomment && instring == 0
 }
 
 /// [`find_decl`] of a word held as text: `searchdecl()`'s entry point.
 pub(crate) fn find_decl_of(word: &CStr, locally: bool, thisblock: bool, flags: c_int) -> bool {
-    // A copy, because the search asks for bytes it may write to.
-    let mut owned = word.to_bytes_with_nul().to_vec();
-    // SAFETY: `owned` is the word's bytes and a NUL, this frame's own.
-    unsafe {
-        find_decl(
-            owned.as_mut_ptr().cast(),
-            word.count_bytes(),
-            locally,
-            thisblock,
-            flags,
-        )
-    }
+    find_decl(word.to_bytes(), locally, thisblock, flags)
 }
 
-/// Search backwards for where `ptr` is declared: the first occurrence that is
+/// Search backwards for where `word` is declared: the first occurrence that is
 /// not inside a comment or a string, above the cursor. `locally` limits the
 /// search to the current `{}` block (`gd`); `thisblock` further refuses a
 /// match whose block closes before the cursor.
-///
-/// # Safety
-///
-/// `word` must point at `len` bytes the caller owns, readable and writable,
-/// unaliased for the call.
-pub(crate) unsafe fn find_decl(
-    word: *mut c_char,
-    len: size_t,
-    locally: bool,
-    thisblock: bool,
-    flags_arg: c_int,
-) -> bool {
+pub(crate) fn find_decl(word: &[u8], locally: bool, thisblock: bool, flags_arg: c_int) -> bool {
     let mut searchflags = flags_arg;
-    // `\V` plus the word plus `\<`, `\>` and a terminator.
-    let patsize = len.wrapping_add(7);
-    // SAFETY: `xmalloc` answers `patsize` writable bytes and never null.
-    let pat = unsafe { xmalloc(patsize) } as *mut c_char;
-    debug_assert!(patsize <= c_int::MAX as size_t);
-    // SAFETY: `word` is `len` bytes of a NUL-terminated line, and `pat` is
-    // `patsize` writable bytes that `fmt`'s conversion fits in.
-    let fmt = if unsafe { vim_iswordp(word) } {
-        c"\\V\\<%.*s\\>".as_ptr()
-    } else {
-        c"\\V%.*s".as_ptr()
-    };
-    let patlen = unsafe { snprintf!(pat, patsize, fmt, len as c_int, word) } as size_t;
+    // `\V` plus the word, between `\<` and `\>` when it starts with a word
+    // character.
+    let mut pat = Vec::with_capacity(word.len() + 6);
+    let anchored = is_word_at(word, Buf::current());
+    pat.extend_from_slice(if anchored { b"\\V\\<" } else { b"\\V" });
+    pat.extend_from_slice(word);
+    if anchored {
+        pat.extend_from_slice(b"\\>");
+    }
 
     let old_pos = Win::current().w_cursor;
     let save_p_ws = p_ws();
@@ -435,8 +333,12 @@ pub(crate) unsafe fn find_decl(
         par_pos = Win::current().w_cursor;
         // Back up over the function's own header lines.
         while Win::current().w_cursor.lnum > 1 {
-            // SAFETY: the cursor line is a NUL-terminated buffer line.
-            if unsafe { *skipwhite(get_cursor_line_ptr()) } as c_int == NUL {
+            let lnum = Win::current().w_cursor.lnum;
+            if Lines::current()
+                .line(lnum)
+                .iter()
+                .all(|&b| ascii_iswhite(c_int::from(b)))
+            {
                 break;
             }
             Win::current().w_cursor.lnum -= 1;
@@ -458,9 +360,7 @@ pub(crate) unsafe fn find_decl(
         let (win, buf) = (Some(wp), Buf::current());
         let opts = searchflags;
         let re = RE_LAST as c_int;
-        // SAFETY: `pat` is `patlen` bytes.
-        let text = unsafe { core::slice::from_raw_parts(pat.cast::<u8>(), patlen) };
-        let hit = searchit(win, buf, &mut pos, None, FORWARD, text, 1, opts, re, None);
+        let hit = searchit(win, buf, &mut pos, None, FORWARD, &pat, 1, opts, re, None);
         Win::current().w_cursor = pos;
         found = hit != 0;
         if Win::current().w_cursor.lnum >= old_pos.lnum {
@@ -497,8 +397,8 @@ pub(crate) unsafe fn find_decl(
             Win::current().w_cursor.col = 0;
             continue;
         }
-        // SAFETY: as above.
-        let valid = unsafe { is_ident(get_cursor_line_ptr(), Win::current().w_cursor.col) };
+        let cursor = Win::current().w_cursor;
+        let valid = is_ident(Lines::current().line(cursor.lnum), cursor.col);
         if !valid && found_pos.lnum != 0 {
             // Nothing better than what was already found.
             Win::current().w_cursor = found_pos;
@@ -530,8 +430,6 @@ pub(crate) unsafe fn find_decl(
         Win::current().w_set_curswant = true;
         reset_search_dir();
     }
-    // SAFETY: `pat` came from `xmalloc` above and is not used again.
-    unsafe { xfree(pat as *mut c_void) };
     P_WS.set(save_p_ws);
     P_SCS.set(save_p_scs);
     found

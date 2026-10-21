@@ -1,8 +1,7 @@
 //! Commands that change the text without entering insert mode, and the
 //! ones whose whole job is to enter it.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::cstr;
 use crate::keycodes::{Ctrl_A, Ctrl_E, Ctrl_Q, Ctrl_V, Ctrl_Y, Key};
@@ -14,8 +13,8 @@ use crate::ascii::ascii_isdigit;
 use crate::buffer::{buf_get_changedtick, buf_is_prompt, current_buf};
 use crate::change::{changed_lines, del_chars, deleted_lines, ins_char, ins_char_bytes, open_line};
 use crate::cursor::{
-    check_cursor, coladvance, coladvance_force, gchar_cursor, get_cursor_pos_len,
-    get_cursor_pos_ptr, getviscol, inc_cursor,
+    check_cursor, coladvance, coladvance_force, gchar_cursor, get_cursor_pos_len, getviscol,
+    inc_cursor, with_cursor_rest,
 };
 use crate::diff::nv_diffgetput;
 use crate::drawscreen::win_cursorline_standout;
@@ -30,7 +29,7 @@ use crate::getchar::{
     stuff_readbuf_number,
 };
 use crate::guard::Suppress;
-use crate::mbyte::{mb_adjust_cursor, mb_charlen};
+use crate::mbyte::{char_count, mb_adjust_cursor};
 use crate::memline::{inc, ml_delete_flags};
 use crate::message::e_modifiable;
 use crate::message::emsg;
@@ -147,7 +146,7 @@ pub(crate) fn nv_replace(cmd_arg: &mut CmdArg) {
     // There have to be `count1` characters left on the line, counted both
     // ways: the byte length rules out a short line cheaply.
     if (get_cursor_pos_len() as size_t) < cmd_arg.count1 as c_uint as size_t
-        || unsafe { mb_charlen(get_cursor_pos_ptr()) } < cmd_arg.count1
+        || with_cursor_rest(char_count) < cmd_arg.count1 as usize
     {
         clear_op_beep(cmd_arg.op());
         return;
@@ -470,8 +469,7 @@ pub(crate) fn set_cursor_for_append_to_line() {
         coladvance(Win::current(), MAXCOL as c_int);
         State.set(save_state);
     } else {
-        Win::current().w_cursor.col +=
-            unsafe { cstr::bytes_at(get_cursor_pos_ptr()) }.len() as ColNr;
+        Win::current().w_cursor.col += with_cursor_rest(<[u8]>::len) as ColNr;
     }
 }
 
@@ -509,11 +507,11 @@ pub(crate) fn nv_edit(cmd_arg: &mut CmdArg) {
             // inside a tab or past the end of the line moves by a cell.
             if virtual_active(Win::current())
                 && (Win::current().w_cursor.coladd > 0
-                    || unsafe { *get_cursor_pos_ptr() } as c_int == NUL
-                    || unsafe { *get_cursor_pos_ptr() } as c_int == TAB)
+                    || gchar_cursor() == NUL
+                    || gchar_cursor() == TAB)
             {
                 Win::current().w_cursor.coladd += 1;
-            } else if unsafe { *get_cursor_pos_ptr() } as c_int != NUL {
+            } else if gchar_cursor() != NUL {
                 inc_cursor();
             }
         }
@@ -731,7 +729,10 @@ pub(crate) fn nv_put_opt(cmd_arg: &mut CmdArg, fix_indent: bool) {
         Buf::current().b_visual.vi_start = Buf::current().b_op_start;
         Buf::current().b_visual.vi_end = Buf::current().b_op_end;
         if P_SEL.first_byte() == b'e' {
-            unsafe { inc(&mut (*Buf::current_raw()).b_visual.vi_end) };
+            // A copy: `inc` reads the buffer the field is in.
+            let mut end = Buf::current().b_visual.vi_end;
+            inc(&mut end);
+            Buf::current().b_visual.vi_end = end;
         }
     }
     let last = Buf::current().b_ml.ml_line_count;

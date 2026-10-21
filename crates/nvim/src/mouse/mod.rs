@@ -31,7 +31,7 @@ pub(crate) mod state;
 use crate::strings::has_char;
 use crate::window::tab_index;
 use crate::winlayer::{TabPage, WinId};
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 use core::{ptr, slice};
 
 use crate::charset::vim_iswordc;

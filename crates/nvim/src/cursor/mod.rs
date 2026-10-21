@@ -620,38 +620,23 @@ pub fn pchar_cursor(c: c_char) {
     }
 }
 
-/// The cursor's line.
-///
-/// Safe: the only promise is that the editor exists, which
-/// `Win::current()`/`Buf::current()` carry. The answer is a raw pointer;
-/// reading through it is still the caller's business.
-pub fn get_cursor_line_ptr() -> *mut c_char {
-    Buf::current()
-        .line_raw(Win::current().cursor().lnum())
-        .raw()
-}
-
-/// The cursor's line, from the cursor onwards.
-///
-/// Safe: as [`get_cursor_line_ptr`] -- an address, computed, not read.
-pub fn get_cursor_pos_ptr() -> *mut c_char {
-    let cursor = Win::current().cursor();
-    Buf::current()
-        .line_raw(cursor.lnum())
-        .raw()
-        .wrapping_offset(cursor.col() as isize)
+/// `f` of the cursor's line from the cursor on: empty at (or past) the end
+/// of the line, where the pointer form reads the terminator.
+pub(crate) fn with_cursor_rest<R>(f: impl FnOnce(&[u8]) -> R) -> R {
+    let cursor = Win::current().w_cursor;
+    let mut lines = Lines::current();
+    let line = lines.line(cursor.lnum);
+    f(line
+        .get(usize::try_from(cursor.col).unwrap_or(0)..)
+        .unwrap_or_default())
 }
 
 /// The length of the cursor's line.
-///
-/// Safe: as [`get_cursor_line_ptr`].
 pub fn get_cursor_line_len() -> ColNr {
     Buf::current().line_len_raw(Win::current().cursor().lnum())
 }
 
 /// The number of bytes from the cursor to the end of its line.
-///
-/// Safe: as [`get_cursor_line_ptr`].
 pub fn get_cursor_pos_len() -> ColNr {
     let cursor = Win::current().cursor();
     Buf::current().line_len_raw(cursor.lnum()) - cursor.col()

@@ -7,12 +7,10 @@
 //! length beside it -- which the cell hands out by copy, so no caller holds
 //! a borrow of it across the redraw the display functions run.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::memory::xstrlcpy;
 use crate::winlayer::{Buf, Win};
 
 use crate::charset::{transchar, vim_isprintc};
@@ -24,8 +22,7 @@ use crate::fold::has_folding;
 use crate::getchar::char_avail;
 use crate::global_cell::GlobalCell;
 use crate::grid::{grid_line_flush, grid_line_puts, grid_line_start};
-use crate::highlight::namespace::hl_attr_table;
-use crate::mbyte::{cluster_len, utf_char2bytes};
+use crate::mbyte::{cluster_len, encode_char};
 use crate::message::state::msg_silent;
 use crate::message::{msg_grid_validate, msg_grid_view};
 use crate::normal::{
@@ -35,7 +32,7 @@ use crate::normal::{
 use crate::option::vars::{P_SBR, P_SEL, p_ch, p_sc, p_sloc};
 use crate::plines::getvcols;
 use crate::pos::lt;
-use crate::statusline::{draw_tabline, win_redr_status};
+use crate::statusline::{draw_tabline, hl_attr, win_redr_status};
 use crate::types::{Array, LineNr, NUL, Object, OptInt, String_0};
 use crate::ui::state::Rows;
 use crate::ui::{ui_call_msg_showcmd, ui_has};
@@ -311,29 +308,24 @@ pub(crate) fn add_to_showcmd(c: c_int) -> bool {
         return false;
     }
 
-    let mut mbyte_buf: [c_char; 7] = [0; 7];
-    let mut display;
-    // SAFETY: `transchar` answers a NUL-terminated rendering; the multibyte
-    // branch writes at most MB_MAXBYTES + 1 into `mbyte_buf`, and both
-    // outlive the borrow.
-    // SAFETY: `c` is a plain character value.
-    let extra = if c <= 0x7f || !vim_isprintc(c) {
+    let mut mbyte_buf = [0u8; 7];
+    let display;
+    let extra: &[u8] = if c <= 0x7f || !vim_isprintc(c) {
         display = transchar(c);
         // A space is shown as its byte value, so it is not lost in the
         // padding the area is drawn with.
         if display[0] as c_int == ' ' as c_int {
-            let room = display.len();
-            unsafe { xstrlcpy(display.as_mut_ptr(), c"<20>".as_ptr(), room) };
+            b"<20>"
+        } else {
+            cstr::in_chars(&display).to_bytes()
         }
-        unsafe { CStr::from_ptr(display.as_ptr()) }
     } else {
-        let n = unsafe { utf_char2bytes(c, mbyte_buf.as_mut_ptr()) };
-        mbyte_buf[n as usize] = NUL as c_char;
-        unsafe { CStr::from_ptr(mbyte_buf.as_ptr()) }
+        let n = encode_char(c, &mut mbyte_buf);
+        &mbyte_buf[..n]
     };
 
     let mut sc = showcmd_buf.get();
-    sc.append(extra.to_bytes(), showcmd_limit());
+    sc.append(extra, showcmd_limit());
     showcmd_buf.set(sc);
 
     // SAFETY: reads the typeahead state.
@@ -442,7 +434,7 @@ fn draw_on_last_line(clear: bool) {
     msg_grid_validate();
     let showcmd_row = Rows.get() - 1;
     grid_line_start(msg_grid_view(), showcmd_row);
-    let attr = unsafe { *hl_attr_table().offset(HLF_MSG as isize) };
+    let attr = hl_attr(HLF_MSG as c_int);
     let mut len = 0;
     if !clear {
         len = grid_line_puts(sc_col.get(), sc.as_cstr().to_bytes(), attr);

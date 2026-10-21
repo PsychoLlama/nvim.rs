@@ -29,11 +29,7 @@ use super::*;
 
 /// Close fold for current window at position "pos".
 /// Repeat "count" times.
-///
-/// # Safety
-/// The current window must be live.
-pub unsafe extern "C" fn close_fold(pos: Pos, count: c_int) {
-    // SAFETY: the caller's promise.
+pub fn close_fold(pos: Pos, count: c_int) {
     set_fold_repeat(pos, count, 0);
 }
 
@@ -84,11 +80,7 @@ pub fn op_fold_range(
 
 /// Open fold for current window at position "pos".
 /// Repeat "count" times.
-///
-/// # Safety
-/// The current window must be live.
-pub unsafe extern "C" fn open_fold(pos: Pos, count: c_int) {
-    // SAFETY: the caller's promise.
+pub fn open_fold(pos: Pos, count: c_int) {
     set_fold_repeat(pos, count, 1);
 }
 
@@ -304,8 +296,7 @@ pub fn fold_create(window: Win, start_pos: Pos, end_pos: Pos) {
     fold.set_top(top);
     fold.set_len(bot - top + 1);
     if use_level && !closed && (level as OptInt) < win.w_onebuf_opt.wo_fdl {
-        // SAFETY: the caller's promise.
-        unsafe { close_fold(start, 1) };
+        close_fold(start, 1);
     }
     if !use_level {
         win.w_fold_manual = true;

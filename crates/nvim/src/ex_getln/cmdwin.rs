@@ -342,10 +342,14 @@ pub(crate) fn open_cmdwin() -> ::core::ffi::c_int {
             // modify the cmdline window.
             Cc::current().close();
         } else {
-            let n = get_cursor_line_len() as ::core::ffi::c_int;
-            Cc::current().set_text(unsafe {
-                ::core::slice::from_raw_parts(get_cursor_line_ptr(), n.max(0) as usize)
-            });
+            let lnum = Win::current().w_cursor.lnum;
+            let line: Vec<::core::ffi::c_char> = Buf::current()
+                .lines()
+                .line(lnum)
+                .iter()
+                .map(|&b| b as ::core::ffi::c_char)
+                .collect();
+            Cc::current().set_text(&line);
         }
 
         let mut cc = Cc::current();

@@ -24,9 +24,7 @@ use crate::cmdexpand::{
 use crate::cmdhist::{
     add_to_history, get_hisidx, get_hislen, hist_char2type, hist_entry_text, init_history,
 };
-use crate::cursor::{
-    coladvance, gchar_cursor, get_cursor_line_len, get_cursor_line_ptr, get_cursor_pos_ptr,
-};
+use crate::cursor::{coladvance, gchar_cursor, with_cursor_rest};
 use crate::digraph::{do_digraph, get_digraph};
 use crate::drawscreen::state::{cmdline_row, redraw_cmdline, redraw_tabline, skip_redraw};
 use crate::drawscreen::{
