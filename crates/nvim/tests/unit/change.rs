@@ -281,3 +281,293 @@ fn get_leader_len_measures_the_leader_and_names_its_item() {
     assert_eq!(offset("no comment"), -1);
     restore(&fx);
 }
+
+/// Run `keys` with `normal!` over `lines` under the buffer-local `opts`, and
+/// note the buffer if it is not `want`.
+fn key_case(fx: &Probe<'_>, moved: &mut Vec<String>, case: (&str, &str, &str, &str)) {
+    let (lines, opts, keys, want) = case;
+    fresh(fx, lines);
+    if !opts.is_empty() {
+        fx.run(&format!("setlocal {opts}"));
+    }
+    fx.run("call cursor(1, 1)");
+    fx.run(&format!("silent execute \"normal! {keys}\""));
+    let got = fx.eval("getline(1, '$')");
+    if got != want {
+        moved.push(format!("({lines:?}, {opts:?}, {keys:?}, {got:?})"));
+    }
+}
+
+#[test]
+fn open_line_shapes_the_leader() {
+    let sandbox = Sandbox::globals();
+    let fx = Probe::new(sandbox.editor());
+    let three = "comments=s1:/*,mb:*,ex:*/ formatoptions=ro";
+    let cases: &[(&str, &str, &str, &str)] = &[
+        // (lines, options, keys, buffer after)
+        // `O` on the end part puts the middle part above, with a space.
+        (
+            "['/*', ' * one', ' */']",
+            three,
+            "GOup",
+            "['/*', ' * one', ' * up', ' */']",
+        ),
+        // `O` on the start part inserts no leader.
+        ("['/* one']", three, "Oup", "['up', '/* one']"),
+        // `o` after a comment that ends on its line: no leader.
+        ("['/* one */']", three, "onext", "['/* one */', 'next']"),
+        // `x`: typing the end's last character after the middle closes it.
+        ("['/* one']", three, "o/", "['/* one', ' */']"),
+        // <CR> straight after the start leader gets a space after the
+        // middle one.
+        ("['/*']", three, "A\\<CR>x", "['/*', ' * x']"),
+        // Right-aligned middle under a wider start.
+        (
+            "['/** one']",
+            "comments=sr:/**,mb:*,ex:*/ formatoptions=ro",
+            "onext",
+            "['/** one', '  * next']",
+        ),
+        // Left-aligned middle under a wider start.
+        (
+            "['/** one']",
+            "comments=sl:/**,mb:*,ex:*/ formatoptions=ro",
+            "onext",
+            "['/** one', '*   next']",
+        ),
+        // A numeric offset in the start item shifts the middle -- and eats
+        // the space after it, as upstream does.
+        (
+            "['/* one']",
+            "comments=s3:/*,mb:*,ex:*/ formatoptions=ro",
+            "onext",
+            "['/* one', '   *next']",
+        ),
+        // A negative offset with 'autoindent'.
+        (
+            "['    /* one']",
+            "comments=s-2:/*,mb:*,ex:*/ formatoptions=ro autoindent",
+            "onext",
+            "['    /* one', '  *  next']",
+        ),
+        // Double-width leaders: blanked out as spaces.
+        (
+            "['日本 one']",
+            "comments=s:日本,m:本,e:語 formatoptions=ro",
+            "onext",
+            "['日本 one', '本   next']",
+        ),
+        // Right-aligned over a double-width leader: upstream blanks the
+        // first half of `日` and keeps a stray trail byte of it (0.12.6
+        // answers the same bytes).
+        (
+            "['日本 one']",
+            "comments=sr:日本,mr:x,er:語 formatoptions=ro",
+            "onext",
+            "['日本 one', ' \u{fffd}x next']",
+        ),
+        (
+            "['x one']",
+            "comments=sr:x,mr:日本,er:語 formatoptions=ro",
+            "onext",
+            "['x one', '日本 next']",
+        ),
+        // A TAB after the leader is kept, and the byte in front of it is
+        // dropped rather than blanked.
+        (
+            "[\"/*\\t one\"]",
+            "comments=sl:/*,mb:*,ex:*/ formatoptions=ro",
+            "onext",
+            "['/*\t one', '*\t next']",
+        ),
+        // A trailing line comment after code, with 'cindent'.
+        (
+            "['int x; // why']",
+            "comments=:// formatoptions=ro cindent",
+            "A\\<CR>more",
+            "['int x; // why', '       // more']",
+        ),
+        // 'formatlistpat' under a comment leader: the text lines up.
+        (
+            "['// 1. first item']",
+            "comments=:// formatoptions=tcqn textwidth=20 autoindent",
+            "A and some more words",
+            "['// 1. first item and', '//    some more', '//    words']",
+        ),
+        // Virtual Replace: <CR> starts replacing the next line.
+        (
+            "['abc def', 'xyz uvw']",
+            "",
+            "4|gR\\<CR>q\\<Esc>",
+            "['abc', 'qyz uvw']",
+        ),
+        (
+            "['  // abc', 'xyz uvw']",
+            "comments=:// formatoptions=ro autoindent",
+            "8|gR\\<CR>q\\<Esc>",
+            "['  // ab', '  // qw']",
+        ),
+    ];
+    let mut moved = Vec::new();
+    for &case in cases {
+        key_case(&fx, &mut moved, case);
+    }
+    restore(&fx);
+    assert!(moved.is_empty(), "rows moved:\n{}", moved.join("\n"));
+}
+
+#[test]
+fn insert_keys_edit_the_line() {
+    let sandbox = Sandbox::globals();
+    let fx = Probe::new(sandbox.editor());
+    let sts = "softtabstop=4 tabstop=8";
+    let cases: &[(&str, &str, &str, &str)] = &[
+        // 'softtabstop' with 'noexpandtab': spaces turn back into TABs.
+        ("['']", sts, "i\\<Tab>x\\<Tab>y", "['\tx   y']"),
+        ("['']", sts, "i\\<Tab>\\<Tab>x", "['\t\tx']"),
+        ("['ab']", sts, "A\\<Tab>\\<Tab>x", "['ab\tx']"),
+        ("['']", sts, "a  \\<Tab>x", "['\tx']"),
+        // Backspace over a 'softtabstop' stop.
+        ("['']", sts, "i\\<Tab>\\<Tab>\\<Tab>\\<BS>x", "['\t\tx']"),
+        ("['']", sts, "i\\<Tab>\\<Tab>\\<BS>x", "['\tx']"),
+        (
+            "['a  ']",
+            "softtabstop=4 tabstop=8 backspace=2",
+            "A\\<BS>x",
+            "['ax']",
+        ),
+        // 'vartabstop' and 'varsofttabstop'.
+        (
+            "['']",
+            "vartabstop=4,8 tabstop=8",
+            "i\\<Tab>x\\<Tab>y",
+            "['\t    x\ty']",
+        ),
+        (
+            "['']",
+            "varsofttabstop=2,6 tabstop=8",
+            "i\\<Tab>\\<Tab>x",
+            "['\t\t    x']",
+        ),
+        // Replace and Virtual Replace with 'softtabstop'.
+        (
+            "['abcdefghij']",
+            sts,
+            "R\\<Tab>\\<Tab>\\<Esc>",
+            "['\t\t    cdefghij']",
+        ),
+        (
+            "['abcdefghij']",
+            sts,
+            "gR\\<Tab>\\<Tab>\\<Esc>",
+            "['\t\t    ']",
+        ),
+        (
+            "['abcdefghij']",
+            sts,
+            "R\\<Tab>\\<BS>\\<Esc>",
+            "['abcdefghij']",
+        ),
+        (
+            "['ab  cdefgh']",
+            sts,
+            "3|gR\\<Tab>x\\<Esc>",
+            "['ab\t    xh']",
+        ),
+        // CTRL-V: decimal, hex, Unicode and a key name.
+        ("['']", "", "i\\<C-V>065\\<C-V>x41\\<C-V>u00e9", "['AAé']"),
+        ("['']", "", "i\\<C-V>\\<Home>", "['<Home>']"),
+        ("['']", "", "i\\<C-V>\\<S-Home>", "['<S-Home>']"),
+        ("['']", "", "i\\<C-V>\\<C-A>", "['\x01']"),
+        // CTRL-A inserts the last insert again; CTRL-@ also leaves.
+        ("['']", "", "ifoo\\<Esc>o\\<C-A>bar", "['foo', 'foobar']"),
+        ("['']", "", "ifoo\\<Esc>o\\<C-@>x", "['foo', 'fo']"),
+        // 'delcombine' off: `x` takes the whole character.
+        ("['e\u{301}\u{302}x']", "", "x", "['x']"),
+        // `0 CTRL-D` and `^ CTRL-D` in the indent.
+        ("[\"\\tone\"]", "", "A\\<CR>0\\<C-D>x", "['\tone', 'x']"),
+        (
+            "[\"\\tone\"]",
+            "autoindent",
+            "A\\<CR>^\\<C-D>x\\<CR>y",
+            "['\tone', 'x', '\ty']",
+        ),
+        // Typing past the end of a line in 'virtualedit' insert.
+        ("['ab']", "virtualedit=all", "5|ix", "['ab  x']"),
+        // `i_CTRL-O` at the end of a line comes back after the last
+        // character -- in this harness only for a one-byte one.
+        ("['abc']", "", "A\\<C-O>:\\<CR>x", "['abcx']"),
+        ("['ab\u{e9}']", "", "A\\<C-O>:\\<CR>x", "['abx\u{e9}']"),
+        // 'smartindent' after `{`.
+        (
+            "['if (x) {']",
+            "smartindent shiftwidth=4 expandtab",
+            "o  y\\<CR>}",
+            "['if (x) {', '      y', '}']",
+        ),
+    ];
+    let mut moved = Vec::new();
+    for &case in cases {
+        key_case(&fx, &mut moved, case);
+    }
+    fx.run("setlocal softtabstop& vartabstop& varsofttabstop& virtualedit&");
+    // The global ones.
+    fx.run("set delcombine");
+    key_case(
+        &fx,
+        &mut moved,
+        ("['e\u{301}\u{302}x']", "", "x", "['e\u{301}x']"),
+    );
+    key_case(
+        &fx,
+        &mut moved,
+        ("['ab\u{301}\u{302}']", "", "$x", "['ab\u{301}']"),
+    );
+    fx.run("set delcombine& smarttab");
+    key_case(
+        &fx,
+        &mut moved,
+        (
+            "['']",
+            "shiftwidth=4 tabstop=8",
+            "i\\<Tab>x\\<Tab>y",
+            "['    x\ty']",
+        ),
+    );
+    key_case(
+        &fx,
+        &mut moved,
+        (
+            "['  a']",
+            "shiftwidth=4 tabstop=8",
+            "I\\<Tab>\\<Tab>",
+            "['\ta']",
+        ),
+    );
+    fx.run("set smarttab& revins");
+    key_case(&fx, &mut moved, ("['']", "", "iabc", "['cba']"));
+    fx.run("set revins&");
+    restore(&fx);
+    assert!(moved.is_empty(), "rows moved:\n{}", moved.join("\n"));
+}
+
+#[test]
+fn insert_char_pre_replaces_the_character() {
+    let sandbox = Sandbox::globals();
+    let fx = Probe::new(sandbox.editor());
+    let mut moved = Vec::new();
+    fx.run(
+        "augroup change_icp | autocmd! | autocmd InsertCharPre * if v:char ==# 'a' | \
+         let v:char = 'x\u{e9}y' | endif | augroup END",
+    );
+    key_case(&fx, &mut moved, ("['']", "", "iab", "['x\u{e9}yb']"));
+    // While completion is active the replacement extends the leader.
+    key_case(
+        &fx,
+        &mut moved,
+        ("['xéyz', '']", "", "Gix\\<C-N>\\<C-E>a", "['xéyz', 'xxéy']"),
+    );
+    fx.run("autocmd! change_icp | augroup! change_icp");
+    restore(&fx);
+    assert!(moved.is_empty(), "rows moved:\n{}", moved.join("\n"));
+}
