@@ -59,7 +59,11 @@ impl Reg {
     /// `f` must not reach the register store again -- no user code, no
     /// clipboard provider: the borrow is the cell's (a debug build panics on
     /// a nested one).
-    pub fn read<R>(self, f: impl FnOnce(&YankReg) -> R) -> R {
+    ///
+    /// Crate-private, as [`write`](Self::write) is: a `pub` generic is
+    /// instantiated by whichever crate calls it, which makes `y_regs` an
+    /// exported symbol (`just state-exports`).
+    pub(crate) fn read<R>(self, f: impl FnOnce(&YankReg) -> R) -> R {
         match self {
             Reg::Slot(slot) => y_regs.with(|regs| f(&regs[slot])),
             Reg::Empty => f(&YankReg::EMPTY),
@@ -68,7 +72,7 @@ impl Reg {
 
     /// Run `f` on the register, to change it. As [`read`](Self::read); a
     /// write to the empty register is dropped, as nothing reads it back.
-    pub fn write<R>(self, f: impl FnOnce(&mut YankReg) -> R) -> R {
+    pub(crate) fn write<R>(self, f: impl FnOnce(&mut YankReg) -> R) -> R {
         match self {
             Reg::Slot(slot) => y_regs.with_mut(|regs| f(&mut regs[slot])),
             Reg::Empty => f(&mut YankReg::EMPTY.clone()),
