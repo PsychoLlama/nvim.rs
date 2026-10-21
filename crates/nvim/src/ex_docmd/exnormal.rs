@@ -32,7 +32,8 @@ use crate::state::mode::{
 
 use crate::mouse::setmouse;
 use crate::r#move::check_cursor_moved;
-use crate::normal::{normal_cmd, set_cursor_for_append_to_line, visual_active};
+use crate::normal::{normal_cmd, set_cursor_for_append_to_line, visual_active, with_frame_op};
+use crate::ops::Op;
 
 use crate::state::{MODE_INSERT, MODE_TERMINAL};
 use crate::types::{ColNr, ExArg, NUL, OpArg, SaveState};
@@ -220,8 +221,14 @@ pub fn exec_normal_cmd(cmd: &CStr, remap: c_int, silent: bool) {
 
 /// Run normal-mode commands until the typeahead is spent.
 pub fn exec_normal(was_typed: bool, use_vpeekc: bool) {
-    let mut oa = OpArg::default();
     finish_op.set(false);
+    with_frame_op(OpArg::default(), |op| {
+        exec_normal_on(op, was_typed, use_vpeekc)
+    });
+}
+
+/// [`exec_normal`]'s loop, every command pending on `op`.
+fn exec_normal_on(op: Op, was_typed: bool, use_vpeekc: bool) {
     let mut c: c_int;
     while (!stuff_empty()
         || (was_typed || typeahead().maplen() != 0) && !typeahead().is_empty()
@@ -234,6 +241,6 @@ pub fn exec_normal(was_typed: bool, use_vpeekc: bool) {
         && !got_int.get()
     {
         update_topline_cursor();
-        normal_cmd(&mut oa, true);
+        normal_cmd(op, true);
     }
 }

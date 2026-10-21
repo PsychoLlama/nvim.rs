@@ -28,7 +28,7 @@ use crate::change::inserted_bytes;
 use crate::cstr;
 use crate::drawscreen::UPD_NOT_VALID;
 use crate::mark::mark_mb_adjustpos;
-use crate::mbyte::{c_char_info, c_next_cluster, char_at, head_off};
+use crate::mbyte::{c_char_info, c_next_cluster, char_at, cluster_len, head_off};
 use crate::memline::ml_replace_owned;
 use crate::memline::{Lines, dec, inc, ml_get_len};
 use crate::memory::XString;
@@ -417,6 +417,52 @@ pub fn dec_cursor() -> c_int {
     let moved = dec(&mut at);
     win.w_cursor = at;
     moved
+}
+
+/// [`dec_cursor`] and then [`gchar_cursor`]: answers what `dec_cursor` did
+/// and the character the cursor lands on, reading the line once when the
+/// step stays inside it (a walk that does both per character paid for two
+/// reads).
+pub(crate) fn dec_cursor_gchar() -> (c_int, c_int) {
+    let mut win = Win::current();
+    let mut pos = win.w_cursor;
+    if pos.col > 0 && pos.col != MAXCOL {
+        // `dec`'s "still within the line" step.
+        let mut lines = Lines::current();
+        let line = lines.line(pos.lnum);
+        pos.coladd = 0;
+        pos.col -= 1;
+        let at = usize::try_from(pos.col).unwrap_or(0);
+        pos.col -= head_off(line, at) as ColNr;
+        let c = char_at(
+            line.get(usize::try_from(pos.col).unwrap_or(0)..)
+                .unwrap_or_default(),
+        );
+        win.w_cursor = pos;
+        return (0, c);
+    }
+    let moved = dec_cursor();
+    (moved, gchar_cursor())
+}
+
+/// [`inc_cursor`] and then [`gchar_cursor`], as [`dec_cursor_gchar`].
+pub(crate) fn inc_cursor_gchar() -> (c_int, c_int) {
+    let mut win = Win::current();
+    let pos = win.w_cursor;
+    if pos.col != MAXCOL {
+        let mut lines = Lines::current();
+        let line = lines.line(pos.lnum);
+        let at = usize::try_from(pos.col).unwrap_or(0);
+        if at < line.len() {
+            // `inc`'s "still within the line" step.
+            let next = at + cluster_len(&line[at..]);
+            let c = char_at(line.get(next..).unwrap_or_default());
+            win.w_cursor.col = ColNr::try_from(next).unwrap_or(ColNr::MAX);
+            return (if next < line.len() { 0 } else { 2 }, c);
+        }
+    }
+    let moved = inc_cursor();
+    (moved, gchar_cursor())
 }
 
 /// How far `lnum` is from the cursor, counting each closed fold in between

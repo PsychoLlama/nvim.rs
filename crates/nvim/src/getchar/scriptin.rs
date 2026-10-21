@@ -92,16 +92,17 @@ pub fn openscript(name: &CStr, directly: bool) {
     State.set(MODE_NORMAL);
     msg_scroll.set(0); // no message scrolling in Normal mode
     restart_edit.set(0); // don't go to Insert mode
-    let mut oa = OpArg::default();
     finish_op.set(false);
 
     let started_at = curscript.get();
-    while {
-        update_topline_cursor(); // cursor position and topline
-        normal_cmd(&mut oa, false); // one command
-        vpeekc(); // check for end of file
-        curscript.get() >= started_at
-    } {}
+    crate::normal::with_frame_op(OpArg::default(), |op| {
+        while {
+            update_topline_cursor(); // cursor position and topline
+            normal_cmd(op, false); // one command
+            vpeekc(); // check for end of file
+            curscript.get() >= started_at
+        } {}
+    });
 
     State.set(save_state);
     msg_scroll.set(save_msg_scroll);

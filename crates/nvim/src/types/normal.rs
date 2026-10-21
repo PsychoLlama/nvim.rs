@@ -47,6 +47,24 @@ pub struct CmdArg {
 }
 
 impl CmdArg {
+    /// Back to [`CmdArg::new`]'s state, still pending on the same operator.
+    /// Field by field: the dispatcher does this once per command, and
+    /// building a whole new value to move over this one costs a copy and a
+    /// drop.
+    pub(crate) fn reset(&mut self) {
+        self.cmdchar = 0;
+        self.nchar = 0;
+        self.nchar_composing = [0; 32];
+        self.nchar_len = 0;
+        self.extra_char = 0;
+        self.opcount = 0;
+        self.count0 = 0;
+        self.count1 = 0;
+        self.arg = 0;
+        self.outcome = Outcome::NONE;
+        self.searchbuf = None;
+    }
+
     /// A command with nothing read yet, pending on `op`.
     pub(crate) fn new(op: crate::winlayer::Live<OpArg>) -> Self {
         CmdArg {

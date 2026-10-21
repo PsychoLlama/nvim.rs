@@ -260,7 +260,7 @@ pub(crate) fn normal_enter(cmdwin: bool, noexmode: bool) {
 
 /// Set up `s.ca` for the command about to be read.
 pub(crate) fn normal_prepare(ns: &mut NormalState) {
-    ns.ca = CmdArg::new(ns.oa);
+    ns.ca.reset();
     ns.ca.opcount = opcount.get();
 
     // 'finish_op' drives the cursor shape, so a change to it is a redraw.
@@ -614,16 +614,16 @@ pub(crate) fn set_vcount_ca(cmd_arg: &CmdArg, set_prevcount: bool) {
     set_vcount(count, if count == 0 { 1 } else { count }, set_prevcount);
 }
 
-/// Run exactly one normal-mode command, from an operator the caller owns.
+/// Run exactly one normal-mode command, pending on `op` -- an operator the
+/// caller filed for its whole run of commands ([`with_frame_op`]), which
+/// carries what one command leaves pending into the next.
 ///
 /// This is what `:normal` and the operator-pending machinery re-enter through.
-pub(crate) fn normal_cmd(op: &mut OpArg, toplevel: bool) {
-    ((), *op) = with_frame_op(*op, |oa| {
-        let mut s = new_state(oa);
-        s.toplevel = toplevel;
-        normal_prepare(&mut s);
-        normal_execute(&mut s, safe_vgetc());
-    });
+pub(crate) fn normal_cmd(op: Op, toplevel: bool) {
+    let mut s = new_state(op);
+    s.toplevel = toplevel;
+    normal_prepare(&mut s);
+    normal_execute(&mut s, safe_vgetc());
 }
 
 /// Fire `event` on the current buffer, with no file name to match against.

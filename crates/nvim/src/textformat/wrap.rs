@@ -15,7 +15,9 @@ use core::ffi::{c_char, c_int};
 use super::*;
 use crate::change::{get_leader_len, ins_bytes, ins_str, open_line};
 use crate::charset::char2cells;
-use crate::cursor::{dec_cursor, gchar_cursor, get_cursor_line_len, inc_cursor, pchar_cursor};
+use crate::cursor::{
+    dec_cursor_gchar, gchar_cursor, get_cursor_line_len, inc_cursor, inc_cursor_gchar, pchar_cursor,
+};
 use crate::drawscreen::{UPD_VALID, redraw_curbuf_later};
 use crate::edit::{backspace_until_column, get_nolist_virtcol, set_can_cindent, undisplay_dollar};
 use crate::getchar::state::got_int;
@@ -95,8 +97,7 @@ impl BreakSearch {
         while Win::current().w_cursor.col > 0
             && (::core::mem::take(&mut known_white) || whitechar(cc))
         {
-            dec_cursor();
-            cc = gchar_cursor();
+            cc = dec_cursor_gchar().1;
             if wcc < 2 {
                 wcc += 1;
             }
@@ -124,8 +125,7 @@ impl BreakSearch {
                 return Step::Stop;
             }
             let col = Win::current().w_cursor.col;
-            dec_cursor();
-            cc = gchar_cursor();
+            cc = dec_cursor_gchar().1;
             if whitechar(cc) {
                 return Step::Again; // one letter: keep looking
             }
@@ -151,8 +151,7 @@ impl BreakSearch {
                 return Step::Stop;
             }
             col = Win::current().w_cursor.col;
-            inc_cursor();
-            let ncc = gchar_cursor();
+            let ncc = inc_cursor_gchar().1;
             let allow_break = utf_allow_break(cc, ncc);
             if Win::current().w_cursor.col != self.skip_pos && allow_break {
                 self.foundcol = Win::current().w_cursor.col as c_int;
@@ -170,8 +169,7 @@ impl BreakSearch {
         // Then breaking *before* it.
         let mut ncc = cc;
         col = Win::current().w_cursor.col;
-        dec_cursor();
-        cc = gchar_cursor();
+        cc = dec_cursor_gchar().1;
         if whitechar(cc) {
             return Step::Again; // break with a space instead
         }
@@ -206,9 +204,8 @@ impl BreakSearch {
                 // Neither `cc` nor `ncc` is NUL here, so stepping forward
                 // is safe.
                 col = Win::current().w_cursor.col;
-                inc_cursor();
                 cc = ncc;
-                ncc = gchar_cursor();
+                ncc = inc_cursor_gchar().1;
                 // At end of line, the character being inserted is next.
                 ncc = if ncc != NUL { ncc } else { self.c };
                 allow_break = utf_allow_break(cc, ncc);
@@ -235,15 +232,18 @@ impl BreakSearch {
     /// may go: outside an explicit format, 'formatoptions' `v`/`b` stop it at
     /// the first character the user actually typed in this insert.
     fn run(&mut self, flags: c_int, fo_ins_blank: bool) {
+        // The character the last step back landed on, read with the step.
+        let mut landed: Option<c_int> = None;
         while (!fo_ins_blank && !has_format_option(FoFlag::INS_VI))
             || flags & INSCHAR_FORMAT as c_int != 0
             || Win::current().w_cursor.lnum != Insstart.get().lnum
             || Win::current().w_cursor.col >= Insstart.get().col
         {
+            let under = landed.take();
             let cc = if Win::current().w_cursor.col == self.startcol as ColNr && self.c != NUL {
                 self.c
             } else {
-                gchar_cursor()
+                under.unwrap_or_else(gchar_cursor)
             };
             let step = if whitechar(cc) {
                 self.at_white(cc)
@@ -260,7 +260,7 @@ impl BreakSearch {
             if Win::current().w_cursor.col == 0 {
                 return;
             }
-            dec_cursor();
+            landed = Some(dec_cursor_gchar().1);
         }
     }
 }
