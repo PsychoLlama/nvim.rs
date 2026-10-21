@@ -33,6 +33,7 @@ use crate::cstr::byte_at;
 use crate::guard::Suppress;
 use crate::memline::{Lines, ml_append_terminated};
 use crate::memory::XString;
+use crate::types::Indenter;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -262,7 +263,7 @@ fn reindent_new_line(has_leader: bool, do_cindent: bool) {
             && Buf::current().b_p_lisp != 0
             && Buf::current().b_p_ai != 0
         {
-            fixthisline(Some(get_lisp_indent as unsafe fn() -> c_int));
+            fixthisline(Indenter::Lisp);
             ai_col.set(getwhitecols_curline() as ColNr);
         } else if do_cindent || (Buf::current().b_p_ai != 0 && use_indentexpr_for_lisp()) {
             do_c_expr_indent();

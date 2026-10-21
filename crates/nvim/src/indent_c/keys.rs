@@ -15,6 +15,7 @@ use super::*;
 use crate::cstr;
 use crate::optionstr::{OptString, OptStringRef};
 use crate::strings::vim_strchr;
+use crate::types::Indenter;
 use crate::types::NUL;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
@@ -358,9 +359,9 @@ unsafe fn word_matches(
 /// Reindent the current line with 'indentexpr' or the C indent.
 pub fn do_c_expr_indent() {
     if !Buf::current().b_p_inde.bytes().is_empty() {
-        fixthisline(Some(get_expr_indent));
+        fixthisline(Indenter::Expr);
     } else {
-        fixthisline(Some(get_c_indent));
+        fixthisline(Indenter::C);
     }
 }
 

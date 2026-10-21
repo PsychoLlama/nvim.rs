@@ -163,6 +163,16 @@ impl LocalOrGlobal<'_> {
     fn local(&self) -> Option<&XString> {
         self.local.as_ref().filter(|value| !value.is_empty())
     }
+
+    /// `f` over the bytes of the value in force, the terminator left out,
+    /// borrowed for exactly that long; see [`StrOpt::with_bytes`]. `f` must
+    /// not set an option.
+    pub(crate) fn with_bytes<R>(&self, f: impl FnOnce(&[u8]) -> R) -> R {
+        match self.local() {
+            Some(value) => f(value),
+            None => self.global.with_bytes(f),
+        }
+    }
 }
 
 impl OptString for LocalOrGlobal<'_> {

@@ -1,21 +1,17 @@
 //! Reindenting text: the `=` operator, `:retab`, the `<C-t>`/`<C-d>`
 //! shifts, Insert-mode smart indent, and copying an existing line's indent.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::cstr;
 use crate::memory::XString;
 use core::ffi::CStr;
-use core::ptr;
 
 use super::*;
-use crate::ascii::{ascii_isdigit, ascii_iswhite, ascii_iswhite_or_nul};
+use crate::ascii::{ascii_iswhite, ascii_iswhite_or_nul};
 use crate::change::{changed_lines, ins_bytes, ins_str};
 use crate::charset::skip;
-use crate::charset::skipwhite;
 use crate::cstr::byte_at;
-use crate::cursor::{coladvance, get_cursor_line_len, get_cursor_line_ptr};
+use crate::cursor::coladvance;
 use crate::drawscreen::{UPD_INVERTED, UPD_NOT_VALID, redraw_curbuf_later};
 use crate::edit::{
     BeginlineOpts, backspace_until_column, beginline, replace_join, replace_push_nul,
@@ -26,10 +22,9 @@ use crate::extmark::extmark_splice_cols;
 use crate::getchar::state::got_int;
 use crate::guard::Suppress;
 use crate::indent_c::in_cinkeys;
-use crate::mbyte::{utf_ptr2str_char_info, utfc_next, utfc_ptr2len};
+use crate::mbyte::{c_char_info, c_cluster_len, c_next_cluster};
+use crate::memline::Lines;
 use crate::memline::ml_replace_owned;
-use crate::memline::{Lines, ml_get, ml_get_len};
-use crate::memory::{xfree, xmalloc, xmemdupz};
 use crate::message::{e_interr, e_modifiable, e_resulting_text_too_long};
 use crate::message::{emsg, msg_progress};
 use crate::r#move::changed_cline_bef_curs;
@@ -44,7 +39,6 @@ use crate::pos::MAXCOL;
 use crate::search::findmatch;
 use crate::state::mode::{Insstart, State, ai_col, can_si, can_si_back, did_si, old_indent};
 use crate::state::{MODE_INSERT, REPLACE_FLAG, VREPLACE_FLAG};
-use crate::strings::xstrnsave;
 use crate::types::CmdModFlags;
 use crate::undo::{u_clearline, u_save, u_savecommon};
 use crate::winlayer::{Buf, Win};
@@ -52,15 +46,9 @@ use crate::winlayer::{Buf, Win};
 /// Whether the cursor is before (or, with `extra` zero, on) the first
 /// non-blank of the line.
 pub fn inindent(extra: c_int) -> bool {
-    // SAFETY: the caller's contract; the walk is stopped by the NUL, which
-    // is not white space.
-    let mut ptr = get_cursor_line_ptr();
-    let mut col = 0;
-    while ascii_iswhite(unsafe { *ptr } as c_int) {
-        ptr = unsafe { ptr.add(1) };
-        col += 1;
-    }
-    col >= Win::current().w_cursor.col as c_int + extra
+    let cursor = Win::current().w_cursor;
+    let col = skip::white(Lines::current().line(cursor.lnum)) as c_int;
+    col >= cursor.col as c_int + extra
 }
 
 /// Shows `fmt` formatted with `n` as `:indent` progress, cut where
@@ -114,17 +102,16 @@ pub fn op_reindent(op: &OpArg, how: Indenter) {
             }
             // Vi-compatible: with Lisp indenting the first line is not
             // indented, unless it is the only line.
-            let lisp_first = i as LineNr == line_count - 1
-                && line_count != 1
-                && how.is_some_and(|f| ptr::fn_addr_eq(f, get_lisp_indent as unsafe fn() -> c_int));
+            let lisp_first =
+                i as LineNr == line_count - 1 && line_count != 1 && how == Indenter::Lisp;
             if !lisp_first {
                 // A blank line gets no indent rather than the engine's.
-                let blank = unsafe { *skipwhite(get_cursor_line_ptr()) } == 0;
-                let amount = if blank {
-                    0
-                } else {
-                    unsafe { how.expect("non-null function pointer")() }
+                let blank = {
+                    let mut lines = Lines::current();
+                    let line = lines.line(win.w_cursor.lnum);
+                    skip::white(line) == line.len()
                 };
+                let amount = if blank { 0 } else { how.amount() };
                 if amount >= 0 && set_indent(amount, 0) {
                     if first_changed == 0 {
                         first_changed = win.w_cursor.lnum;
@@ -314,29 +301,30 @@ fn apply_indent(type_0: c_int, amount: c_int, round: c_int, call_changed_bytes: 
 /// the line with spaces when no character starts exactly there. Answers the
 /// byte column the cursor should take.
 fn place_cursor_in_indent(end_vcol: c_int) -> c_int {
-    // SAFETY: the caller's contract; the walk is over the cursor line and
-    // stopped by its NUL.
     let mut win = Win::current();
     win.w_virtcol = end_vcol as ColNr;
-    let line = get_cursor_line_ptr();
     let mut new_cursor_col = 0;
     let mut vcol = 0;
-    if unsafe { *line } != 0 {
-        let (mut csarg, cstype) = CharsizeArg::new(win, 0, unsafe { cstr::bytes_at(line) });
-        let mut ci: StrCharInfo = unsafe { utf_ptr2str_char_info(line) };
-        loop {
-            let at = ci.ptr.addr() - line.addr();
-            let next_vcol = vcol + win_charsize(cstype, vcol, at, ci.chr.value, &mut csarg).width;
-            if next_vcol > end_vcol {
-                break;
+    {
+        let mut lines = Lines::current();
+        let line = lines.line(win.w_cursor.lnum);
+        if !line.is_empty() {
+            let (mut csarg, cstype) = CharsizeArg::new(win, 0, line);
+            let mut at = 0;
+            let mut chr = c_char_info(line, 0);
+            loop {
+                let next_vcol = vcol + win_charsize(cstype, vcol, at, chr.value, &mut csarg).width;
+                if next_vcol > end_vcol {
+                    break;
+                }
+                vcol = next_vcol;
+                (at, chr) = c_next_cluster(line, at, chr);
+                if byte_at(line, at) == 0 {
+                    break;
+                }
             }
-            vcol = next_vcol;
-            ci = unsafe { utfc_next(ci) };
-            if unsafe { *ci.ptr } == 0 {
-                break;
-            }
+            new_cursor_col = at as c_int;
         }
-        new_cursor_col = unsafe { ci.ptr.offset_from(line) } as c_int;
     }
     if vcol == win.w_virtcol as c_int {
         return new_cursor_col;
@@ -385,24 +373,22 @@ fn fix_replace_stack(mut start_col: c_int) {
 
 /// Fixes the Virtual Replace stack: put the original line back, then
 /// backspace over it and type the new one — always possible, because the
-/// whole line is replayed. Takes ownership of `orig_line`.
-///
-/// # Safety
-/// `orig_line`/`orig_col` must be what [`change_indent`] saved.
-unsafe fn vreplace_restore(orig_line: *mut c_char, orig_col: ColNr) {
-    // SAFETY: the caller's saved line, which `ml_replace` takes over.
+/// whole line is replayed. `orig_line`/`orig_col` are what [`change_indent`]
+/// saved.
+fn vreplace_restore(orig_line: XString, orig_col: ColNr) {
     let mut win = Win::current();
     // The new line, but only up to the cursor.
-    let new_line = unsafe { xstrnsave(get_cursor_line_ptr(), get_cursor_line_len() as size_t) };
     let new_col = win.w_cursor.col;
-    unsafe { *new_line.offset(new_col as isize) = 0 };
-    let _ = ml_replace_owned(win.w_cursor.lnum, unsafe { XString::from_raw(orig_line) });
+    let new_line = {
+        let mut lines = Lines::current();
+        let line = lines.line(win.w_cursor.lnum);
+        line[..(new_col as usize).min(line.len())].to_vec()
+    };
+    let _ = ml_replace_owned(win.w_cursor.lnum, orig_line);
     win.w_cursor.col = orig_col;
     let splice = Suppress::splice();
     backspace_until_column(0);
-    // SAFETY: the copy just made, cut at the cursor.
-    ins_bytes(unsafe { cstr::bytes_at(new_line) });
-    unsafe { xfree(new_line.cast()) };
+    ins_bytes(&new_line);
     drop(splice);
     let delta = orig_col as c_int - new_col as c_int;
     extmark_splice_cols(
@@ -420,12 +406,11 @@ unsafe fn vreplace_restore(orig_line: *mut c_char, orig_col: ColNr) {
 /// and applies only to the two shifts; `call_changed_bytes` asks for
 /// `changed_bytes()`.
 pub fn change_indent(type_0: c_int, amount: c_int, round: c_int, call_changed_bytes: bool) {
-    // SAFETY: the caller's contract; every deref is the current window.
     let mut win = Win::current();
     // Virtual Replace needs to know what the line looked like before.
     let orig = (State.get() & VREPLACE_FLAG != 0).then(|| {
         (
-            unsafe { xstrnsave(get_cursor_line_ptr(), get_cursor_line_len() as size_t) },
+            XString::from_bytes(Lines::current().line(win.w_cursor.lnum)),
             win.w_cursor.col,
         )
     });
@@ -483,7 +468,7 @@ pub fn change_indent(type_0: c_int, amount: c_int, round: c_int, call_changed_by
         fix_replace_stack(start_col);
     }
     if let Some((orig_line, orig_col)) = orig {
-        unsafe { vreplace_restore(orig_line, orig_col) };
+        vreplace_restore(orig_line, orig_col);
     }
 }
 
@@ -498,9 +483,6 @@ pub fn change_indent(type_0: c_int, amount: c_int, round: c_int, call_changed_by
 /// read.
 pub fn copy_indent(size: c_int, src: &[u8]) -> bool {
     let buf = Buf::current();
-    // SAFETY: `b_p_ts`/`b_p_vts_array` are the buffer's own tabstop
-    // settings. Written as a closure inside the `unsafe`, so that the walk
-    // below — which is the whole of this function — stays checked code.
     let pad = |col: c_int| buf.tab_padding(col as ColNr);
     let expandtab = buf.b_p_et != 0;
     let src_indent = src;
@@ -572,50 +554,44 @@ fn emsg_text_too_long() {
 
 /// The tabstops `:retab` was asked to retabulate to.
 struct RetabTabs {
-    /// The list to measure against.
-    vts: *mut ColNr,
-    /// Owned argument text, when it named a *new* list that must also be set
-    /// on the buffer afterwards; null when the buffer's own list is reused,
-    /// in which case no option is touched.
-    ts_str: *mut c_char,
+    /// The list to measure against: the one given, or a copy of the
+    /// buffer's own.
+    vts: TabStopArray,
+    /// The argument text, when it named a *new* list that must also be set
+    /// on the buffer afterwards; `None` when the buffer's own list is
+    /// reused, in which case no option is touched.
+    ts_str: Option<XString>,
     /// `:retab -indentonly`: stop at the end of each line's indent.
     indent_only: bool,
 }
 
 /// Parses `:retab`'s argument. `None` is a malformed tabstop list, which
 /// `tabstop_set` has already reported.
-///
-/// # Safety
-/// `arg` must be a NUL-terminated string.
-unsafe fn parse_retab_arg(arg: *mut c_char) -> Option<RetabTabs> {
-    // SAFETY: the caller's argument, walked to its NUL.
-    let mut ptr = arg;
-    let indent_only = unsafe { cstr::starts_with(ptr, b"-indentonly") }
-        && ascii_iswhite_or_nul(unsafe { *ptr.offset(11) } as c_int);
+fn parse_retab_arg(arg: &[u8]) -> Option<RetabTabs> {
+    let mut at = 0;
+    let indent_only =
+        arg.starts_with(b"-indentonly") && ascii_iswhite_or_nul(c_int::from(byte_at(arg, 11)));
     if indent_only {
-        ptr = unsafe { skipwhite(ptr.offset(11)) };
+        at = 11 + skip::white(&arg[11..]);
     }
-    let ts_start = ptr;
-    let vts = tabstop_set(unsafe { cstr::bytes_at(ptr) })?;
-    while ascii_isdigit(unsafe { *ptr } as c_int) || unsafe { *ptr } == b',' as c_char {
-        ptr = unsafe { ptr.add(1) };
+    let ts_start = at;
+    let vts = tabstop_set(&arg[at..])?;
+    while byte_at(arg, at).is_ascii_digit() || byte_at(arg, at) == b',' {
+        at += 1;
     }
-    // Either both are freshly allocated, or `vts` is the buffer's own
-    // array and `ts_str` is null.
-    if vts.is_null() {
-        Some(RetabTabs {
-            vts: Buf::current().b_p_vts_array,
-            ts_str: ptr::null_mut(),
+    Some(match vts {
+        // No list given: measure against the buffer's own.
+        None => RetabTabs {
+            vts: Buf::current().b_p_vts_array.clone(),
+            ts_str: None,
             indent_only,
-        })
-    } else {
-        Some(RetabTabs {
-            vts,
-            ts_str: unsafe { xmemdupz(ts_start.cast(), ptr.offset_from(ts_start) as size_t) }
-                .cast(),
+        },
+        Some(vts) => RetabTabs {
+            vts: Some(vts),
+            ts_str: Some(XString::from_bytes(&arg[ts_start..at])),
             indent_only,
-        })
-    }
+        },
+    })
 }
 
 /// How one white-space run's retabulation ended.
@@ -647,8 +623,8 @@ struct Retab {
 /// One line's walk: where the scan has got to, and the line as it stands.
 struct LineScan {
     lnum: LineNr,
-    ptr: *mut c_char,
-    old_len: c_int,
+    /// The line's text, a copy: the walk rewrites the line under it.
+    text: Vec<u8>,
     /// Byte and screen column the scan has reached.
     col: c_int,
     vcol: int64_t,
@@ -661,27 +637,21 @@ impl Retab {
     /// shorter than what is there (or 'expandtab' or a tab demands it).
     /// `scan` is moved onto the rewritten line.
     fn retabulate(&mut self, scan: &mut LineScan, tabs: &RetabTabs) -> Retabulated {
-        // SAFETY: the caller's line; the replacement is sized from its
-        // length and handed to `ml_replace`, which takes it over.
         let buf = Buf::current();
         // The run's width on screen.
         let width = (scan.vcol - self.start_vcol) as c_int;
         self.num_spaces = width;
         let mut num_tabs = 0;
         if buf.b_p_et == 0 {
-            let (mut t, mut s) = (0, 0);
-            unsafe {
-                tabstop_fromto(
-                    self.start_vcol as ColNr,
-                    scan.vcol as ColNr,
-                    buf.b_p_ts as c_int,
-                    tabs.vts,
-                    &raw mut t,
-                    &raw mut s,
-                )
+            let (start, end) = (self.start_vcol as ColNr, scan.vcol as ColNr);
+            (num_tabs, self.num_spaces) = match tabstops(tabs.vts.as_deref()) {
+                Some(stops) => stops.from_to(start, end),
+                None => {
+                    let ts = buf.b_p_ts as c_int;
+                    debug_assert!(ts != 0);
+                    tabstop::uniform_from_to(start, end, ts)
+                }
             };
-            num_tabs = t;
-            self.num_spaces = s;
         }
         if !(buf.b_p_et != 0 || self.got_tab || self.num_spaces + num_tabs < width) {
             return Retabulated::Done;
@@ -694,77 +664,56 @@ impl Retab {
         }
         // How many characters the run will actually take.
         let len = self.num_spaces + num_tabs;
-        let new_len = scan.old_len - scan.col + self.start_col + len + 1;
+        let old_len = scan.text.len() as c_int;
+        let new_len = old_len - scan.col + self.start_col + len + 1;
         if new_len <= 0 || new_len >= MAXCOL as c_int {
             emsg_text_too_long();
             return Retabulated::TooLong;
         }
-        let new_line: *mut c_char = unsafe { xmalloc(new_len as size_t) }.cast();
-        if self.start_col > 0 {
-            let into = new_line.cast::<u8>();
-            unsafe { into.copy_from(scan.ptr.cast(), self.start_col as size_t) };
-        }
-        unsafe {
-            (new_line.offset((self.start_col + len) as isize))
-                .cast::<u8>()
-                .copy_from(
-                    (scan.ptr.offset(scan.col as isize)).cast(),
-                    (scan.old_len - scan.col + 1) as size_t,
-                )
-        };
-        let run = unsafe { new_line.offset(self.start_col as isize) };
-        for i in 0..len {
-            unsafe { *run.offset(i as isize) = if i < num_tabs { b'\t' } else { b' ' } as c_char };
-        }
-        let mut line = new_line;
-        // SAFETY: the line just built, which the memline takes over.
-        if ml_replace_owned(scan.lnum, unsafe { XString::from_raw(new_line) }).is_ok() {
-            // `new_line` may have been copied.
-            line = { buf }.b_ml.cached_text();
+        let mut new_line = Vec::with_capacity(new_len as usize);
+        new_line.extend_from_slice(&scan.text[..self.start_col as usize]);
+        new_line.extend((0..len).map(|i| if i < num_tabs { b'\t' } else { b' ' }));
+        new_line.extend_from_slice(&scan.text[scan.col as usize..]);
+        if ml_replace_owned(scan.lnum, XString::from_bytes(&new_line)).is_ok() {
             let lnum = scan.lnum as c_int - 1;
-            let (old, new) = (scan.old_len, new_len - 1);
+            let (old, new) = (old_len, new_len - 1);
             extmark_splice_cols(buf, lnum, 0, old, new, kExtmarkUndo);
         }
         if self.first_line == 0 {
             self.first_line = scan.lnum;
         }
         self.last_line = scan.lnum;
-        scan.ptr = line;
-        scan.old_len = new_len - 1;
+        scan.text = new_line;
         scan.col = self.start_col + len;
         Retabulated::Done
     }
 
     /// Retabulates one line. Answers false when the command has to stop.
     fn line(&mut self, lnum: LineNr, tabs: &RetabTabs, forceit: bool) -> bool {
-        // SAFETY: the caller's line. The three closures below are the only
-        // places it is read, `col` never passes its NUL, and `retabulate`
-        // moves the scan onto whatever line it leaves behind.
         let mut scan = LineScan {
             lnum,
-            ptr: ml_get(lnum),
-            old_len: ml_get_len(lnum),
+            text: Lines::current().line(lnum).to_vec(),
             col: 0,
             vcol: 0,
             did_undo: false,
         };
-        // Written inside `unsafe` blocks so that the walk stays checked code.
-        let byte = |s: &LineScan| unsafe { *s.ptr.offset(s.col as isize) };
+        let byte = |s: &LineScan| byte_at(&s.text, s.col as usize);
         let win = Win::current();
         let width = |s: &LineScan| {
-            let text = unsafe { cstr::prefix_at(s.ptr.offset(s.col as isize), CHAR_CELLS_SPAN) };
+            let at = s.col as usize;
+            let text = &s.text[at..(at + CHAR_CELLS_SPAN).min(s.text.len())];
             win_chartabsize(win, text, s.vcol as ColNr)
         };
-        let charlen = |s: &LineScan| unsafe { utfc_ptr2len(s.ptr.offset(s.col as isize)) };
+        let charlen = |s: &LineScan| c_cluster_len(&s.text[s.col as usize..]) as c_int;
         loop {
             let at = byte(&scan);
-            if ascii_iswhite(at as c_int) {
+            if ascii_iswhite(c_int::from(at)) {
                 if !self.got_tab && self.num_spaces == 0 {
                     // The first character of a run of white space.
                     self.start_vcol = scan.vcol;
                     self.start_col = scan.col;
                 }
-                if at == b' ' as c_char {
+                if at == b' ' {
                     self.num_spaces += 1;
                 } else {
                     self.got_tab = true;
@@ -797,49 +746,32 @@ impl Retab {
     }
 }
 
-/// Applies the tabstop list `:retab` was given to the buffer, releasing
-/// whichever of the two arrays is no longer wanted.
-///
-/// # Safety
-/// `tabs.ts_str` must be non-null and owned.
-unsafe fn set_retab_tabstop(tabs: &RetabTabs) {
-    // SAFETY: the caller's contract; the buffer takes over `tabs.vts` on the
-    // 'vartabstop' path and the old array is freed instead.
+/// Applies the tabstop list `:retab` was given (`vts`, spelled `ts_str`) to
+/// the buffer.
+fn set_retab_tabstop(vts: TabStopArray, ts_str: &XString) {
     let mut buf = Buf::current();
-    let old_vts_ary = buf.b_p_vts_array;
-    if unsafe { tabstop_count(old_vts_ary) } > 0 || unsafe { tabstop_count(tabs.vts) } > 1 {
+    if stop_count(buf.b_p_vts_array.as_deref()) > 0 || stop_count(vts.as_deref()) > 1 {
         // 'vartabstop' is in use, or more than one stop was given.
-        // A copy: the caller owns `ts_str`.
-        // SAFETY: the caller's contract -- `ts_str` is NUL-terminated.
         set_option_direct(
             kOptVartabstop,
-            OptVal::from_cstr(unsafe { CStr::from_ptr(tabs.ts_str) }),
+            OptVal::from_cstr(ts_str.as_cstr()),
             OptionSetFlags::LOCAL,
             0,
         );
-        buf.b_p_vts_array = tabs.vts;
-        unsafe { xfree(old_vts_ary.cast()) };
+        buf.b_p_vts_array = vts;
     } else {
         // A single stop with 'vartabstop' unused is 'tabstop'.
-        unsafe { buf.b_p_ts = tabstop_first(tabs.vts) as OptInt };
-        unsafe { xfree(tabs.vts.cast()) };
+        buf.b_p_ts = first_stop(vts.as_deref()) as OptInt;
     }
-    unsafe { xfree(tabs.ts_str.cast()) };
 }
 
 /// `:retab`.
 pub fn ex_retab(excmd: &mut ExArg) {
-    // SAFETY: the caller's Ex-command argument; the line range it names is
-    // the current buffer's.
     let mut win = Win::current();
     let buf = Buf::current();
     let save_list = win.w_onebuf_opt.wo_list;
     win.w_onebuf_opt.wo_list = 0; // 'list' mode is not wanted here
-    let mut arg = excmd.line.arg().to_vec();
-    arg.push(0);
-    // SAFETY: a NUL-terminated copy of the argument.
-    let __v = unsafe { parse_retab_arg(arg.as_mut_ptr().cast()) };
-    let Some(tabs) = __v else {
+    let Some(tabs) = parse_retab_arg(excmd.line.arg()) else {
         // Upstream returns here without restoring 'list', which it has
         // already cleared. Kept: a `:retab` with a malformed tabstop
         // list leaves 'list' off, and that is observable.
@@ -866,11 +798,10 @@ pub fn ex_retab(excmd: &mut ExArg) {
     }
     // A single value given is equal to either 'tabstop' or 'vartabstop',
     // and then nothing on screen changed.
-    let unchanged = unsafe { tabstop_count(buf.b_p_vts_array) } == 0
-        && unsafe { tabstop_count(tabs.vts) } == 1
-        && buf.b_p_ts == unsafe { tabstop_first(tabs.vts) } as OptInt
-        || unsafe { tabstop_count(buf.b_p_vts_array) } > 0
-            && unsafe { tabstop_eq(buf.b_p_vts_array, tabs.vts) };
+    let (own, given) = (buf.b_p_vts_array.as_deref(), tabs.vts.as_deref());
+    let unchanged =
+        stop_count(own) == 0 && stop_count(given) == 1 && buf.b_p_ts == first_stop(given) as OptInt
+            || stop_count(own) > 0 && tabstop::eq(own, given);
     if !unchanged {
         redraw_curbuf_later(UPD_NOT_VALID);
     }
@@ -878,8 +809,8 @@ pub fn ex_retab(excmd: &mut ExArg) {
         changed_lines(buf, retab.first_line, 0, retab.last_line + 1, 0, true);
     }
     win.w_onebuf_opt.wo_list = save_list; // restore 'list'
-    if !tabs.ts_str.is_null() {
-        unsafe { set_retab_tabstop(&tabs) };
+    if let Some(ts_str) = &tabs.ts_str {
+        set_retab_tabstop(tabs.vts, ts_str);
     }
     coladvance(win, win.w_curswant);
     u_clearline(buf);

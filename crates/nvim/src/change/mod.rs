@@ -43,7 +43,7 @@ use crate::extmark::{extmark_adjust, extmark_splice, extmark_splice_cols};
 use crate::fold::{find_wl_entry, fold_update, has_folding_win};
 use crate::highlight_group::HLF_W;
 use crate::indent::{
-    copy_indent, fixthisline, get_indent, get_lisp_indent, get_sw_value, may_do_si, set_indent,
+    copy_indent, fixthisline, get_indent, get_sw_value, may_do_si, set_indent,
     use_indentexpr_for_lisp,
 };
 use crate::indent_c::{do_c_expr_indent, in_cinkeys, starts_with_cinword};

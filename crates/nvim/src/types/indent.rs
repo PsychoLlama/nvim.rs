@@ -10,5 +10,14 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 
-pub type IndentGetter = Option<unsafe fn() -> ::core::ffi::c_int>;
-pub type Indenter = Option<unsafe fn() -> ::core::ffi::c_int>;
+/// One of the three engines that answer "what indent does the cursor line
+/// want": 'indentexpr', the Lisp indenter and the C indenter.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Indenter {
+    /// 'indentexpr' (`get_expr_indent`).
+    Expr,
+    /// 'lisp' (`get_lisp_indent`).
+    Lisp,
+    /// 'cindent' (`get_c_indent`).
+    C,
+}

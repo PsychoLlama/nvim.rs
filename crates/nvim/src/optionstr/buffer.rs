@@ -30,7 +30,7 @@ use crate::fold::{
     foldmethod_is_marker, new_fold_level,
 };
 use crate::guard::secure;
-use crate::indent::{install_tabstop_array, replace_tabstop_array, tabstop_set};
+use crate::indent::{TabStopArray, replace_tabstop_array, tabstop_set};
 use crate::indent_c::parse_cino_for;
 use crate::mark::reset_fmark;
 use crate::mbyte::canonize;
@@ -499,7 +499,7 @@ pub fn did_set_vartabstop(args: &mut OptSet) -> Result<(), OptError> {
 /// An empty value and a lone `0` both mean "no list", and free the array
 /// rather than replacing it. The array is reached after the parse, which
 /// may report, so nothing holds the buffer while it does.
-fn did_set_vartabs(args: &OptSet, array: Field<Buffer, *mut ColNr>) -> Result<(), OptError> {
+fn did_set_vartabs(args: &OptSet, array: Field<Buffer, TabStopArray>) -> Result<(), OptError> {
     let mut buf = args.os_buf;
     let value = new_bytes(args);
     if value.is_empty() || value == b"0" {
@@ -519,6 +519,6 @@ fn did_set_vartabs(args: &OptSet, array: Field<Buffer, *mut ColNr>) -> Result<()
     let Some(stops) = tabstop_set(value) else {
         return invalid();
     };
-    install_tabstop_array(array.of(&mut buf), stops);
+    *array.of(&mut buf) = stops;
     Ok(())
 }

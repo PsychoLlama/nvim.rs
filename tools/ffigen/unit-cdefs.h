@@ -307,8 +307,6 @@ typedef unsigned int HlKind;
 typedef struct HlMessage HlMessage;
 typedef unsigned int HlMode;
 typedef int Hlf;
-typedef int (*IndentGetter)(void);
-typedef int (*Indenter)(void);
 typedef unsigned int InscharFlags;
 typedef struct ItemList ItemList;
 typedef unsigned int KeyEncoding;

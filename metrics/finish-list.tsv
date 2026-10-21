@@ -175,11 +175,6 @@ highlight_group/	highlight_group/list.rs	1	2	0	2	-	-	-	at:1 vim_strsize:1
 highlight_group/	highlight_group/mod.rs	1	2	0	2	-	-	-	CStr::from_ptr:1 cstr_to_string:1
 highlight_group/	highlight_group/query.rs	1	4	0	4	-	-	-	hlattrs2dict:2 bytes_at:1 cstr_to_string:1
 highlight_group/	highlight_group/table.rs	1	1	1	1	-	str:1	-	CStr::from_ptr:1
-indent/	*	4	147	21	88	deref:42 expr:12 compound:1	other:16 str:10	other:2	.add:10 xfree:7 .offset_from:4 bytes_at:4 utfc_next:4 CStr::from_ptr:3 XString::from_raw:3 skipwhite:3
-indent/	indent/breakindent.rs	1	14	4	13	expr:1	str:4	-	.offset_from:1 CStr::from_ptr:1 getdigits:1 getdigits_int:1 xfree:1 xstrdup:1
-indent/	indent/edit.rs	1	51	3	36	deref:10 expr:3	str:2	-	xfree:4 bytes_at:3 .add:2 XString::from_raw:2 xstrnsave:2 .copy_from:1 .offset:1 .offset_from:1
-indent/	indent/expr.rs	1	34	3	16	deref:16 expr:2	str:3	-	utfc_next:3 .add:2 CStr::from_ptr:1 bytes_at:1 copy_option_part:1 prefix_eq:1 utf_ptr2char_info:1 utf_ptr2str_char_info:1
-indent/	indent/mod.rs	1	48	11	23	deref:16 expr:6 compound:1	other:16 str:1	other:2	.add:6 .offset_from:2 skipwhite:2 xfree:2 XString::from_raw:1 abort:1 xmalloc:1
 indent_c/	*	4	64	2	34	deref:16 compound:3 expr:3 ref:1	str:1	-	.add:16 bytes_at:3 .offset:1 .offset_from:1 .sub:1 CStr::from_ptr:1 atoi:1 copy_option_part:1
 indent_c/	indent_c/cino.rs	1	8	1	3	compound:1 ref:1	-	-	CStr::from_ptr:1 atoi:1
 indent_c/	indent_c/incomment.rs	1	11	0	7	deref:4	-	-	.add:4 copy_option_part:1 getdigits_int:1 vim_strsize:1

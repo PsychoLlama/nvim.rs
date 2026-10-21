@@ -1,8 +1,7 @@
 //! 'breakindent': the indent a wrapped line's continuation carries, and
 //! the 'breakindentopt' value that shapes it.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -16,14 +15,16 @@ use core::ffi::CStr;
 
 use super::*;
 use crate::buffer::buf_get_changedtick;
-use crate::charset::{getdigits, getdigits_int};
+use crate::charset::{getdigits_at, getdigits_int_at};
 use crate::global_cell::GlobalCell;
 use crate::mbyte::c_cluster_len;
-use crate::memory::{XString, xfree, xstrdup};
+use crate::memory::XString;
 use crate::r#move::win_col_off2;
 use crate::narrow::number_as_int;
+use crate::option::vars::P_FLP;
 use crate::option::vars::dy_flags;
-use crate::optionstr::OptString;
+use crate::optionstr::local_or_global;
+use crate::optionstr::{OptString, OptStringRef};
 use crate::plines::win_chartabsize;
 use crate::regexp::{RE_AUTO, RE_MAGIC, RE_STRICT, RE_STRING};
 use crate::winlayer::Win;
@@ -61,25 +62,16 @@ impl Default for Briopt {
 /// what upstream reports as `FAIL`.
 ///
 /// Keep this in sync with `opt_briopt_values`, which is what completes it.
-///
-/// # Safety
-/// `value` must be a NUL-terminated string.
-unsafe fn parse_briopt(value: *const c_char) -> Option<Briopt> {
+fn parse_briopt(bytes: &[u8]) -> Option<Briopt> {
     let mut opt = Briopt::default();
-    // SAFETY: the caller's NUL-terminated option value.
-    let bytes = unsafe { CStr::from_ptr(value) }.to_bytes();
-    // `getdigits` walks a `char *` of its own, so the cursor is kept here as
-    // an offset and handed over as a pointer only for the digits themselves.
     let number = |at: &mut usize, strict: bool| -> c_int {
-        // SAFETY: `at` is an offset into `value`, so the cursor starts inside
-        // the string, and `getdigits` only advances it over digits.
-        let mut p = unsafe { value.cast_mut().add(*at) };
-        let n = if strict {
-            unsafe { getdigits_int(&raw mut p, true, 0) }
+        let n;
+        (n, *at) = if strict {
+            getdigits_int_at(bytes, *at, true, 0)
         } else {
-            number_as_int(unsafe { getdigits(&raw mut p, false, 0) })
+            let (n, past) = getdigits_at(bytes, *at, false, 0);
+            (number_as_int(n), past)
         };
-        *at = unsafe { p.offset_from(value) }.cast_unsigned();
         n
     };
     let mut i = 0;
@@ -127,15 +119,14 @@ pub(crate) fn check_window_briopt(window: Win) -> bool {
 pub fn briopt_check(briopt: Option<&CStr>, window: Option<Win>) -> bool {
     // The caller's option string, or the window's own copy of it, which the
     // parse reads before anything below writes the window.
-    let value = match (briopt, window) {
-        (Some(briopt), _) => briopt.as_ptr(),
-        (None, Some(w)) => w.w_onebuf_opt.wo_briopt.value_ptr().cast_const(),
+    let parsed = match (briopt, window) {
+        (Some(briopt), _) => parse_briopt(briopt.to_bytes()),
+        (None, Some(w)) => parse_briopt(w.w_onebuf_opt.wo_briopt.bytes()),
         // Upstream reads `empty_string_option` here, which is only ever
         // the empty string and is never written through.
-        (None, None) => c"".as_ptr(),
+        (None, None) => parse_briopt(b""),
     };
-    // SAFETY: `value` is one of three NUL-terminated strings.
-    let Some(opt) = (unsafe { parse_briopt(value) }) else {
+    let Some(opt) = parsed else {
         return false;
     };
     let Some(mut window) = window else {
@@ -149,13 +140,13 @@ pub fn briopt_check(briopt: Option<&CStr>, window: Option<Win>) -> bool {
     true
 }
 
-/// Everything the cached indent depends on that is a plain value. The two
-/// that are not — the line and 'formatlistpat' — are compared as strings.
+/// Everything the cached indent depends on that is a plain value. The three
+/// that are not — the line, 'vartabstop' and 'formatlistpat' — are compared
+/// by content.
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct BreakindentKey {
     fnum: c_int,
     ts: OptInt,
-    vts: *mut ColNr,
     tick: VarNumber,
     /// 'breakindentopt' "list".
     listopt: c_int,
@@ -177,17 +168,17 @@ struct BreakindentCache {
     indent: c_int,
     /// The extra indent 'breakindentopt' "list" asked for.
     list: c_int,
-    /// Owned copies of the line and of 'formatlistpat'; absent and null
-    /// before the first miss.
+    /// Owned copies of the line, 'vartabstop' and 'formatlistpat'; the line
+    /// and the pattern are absent before the first miss.
     line: Option<XString>,
-    flp: *mut c_char,
+    vts: TabStopArray,
+    flp: Option<XString>,
 }
 
 static CACHE: GlobalCell<BreakindentCache> = GlobalCell::new(BreakindentCache {
     key: BreakindentKey {
         fnum: 0,
         ts: 0,
-        vts: ::core::ptr::null_mut(),
         tick: 0,
         listopt: 0,
         no_ts: false,
@@ -196,41 +187,38 @@ static CACHE: GlobalCell<BreakindentCache> = GlobalCell::new(BreakindentCache {
     indent: 0,
     list: 0,
     line: None,
-    flp: ::core::ptr::null_mut(),
+    vts: None,
+    flp: None,
 });
 
 impl BreakindentCache {
     /// Whether the cached indent still answers for this line under these
     /// options.
-    ///
-    /// # Safety
-    /// `flp` must be a NUL-terminated string.
-    unsafe fn answers(&self, key: &BreakindentKey, line: &[u8], flp: *const c_char) -> bool {
-        // SAFETY: the cache's own copy is NUL-terminated when non-null, and
-        // the caller's is as well.
+    fn answers(
+        &self,
+        key: &BreakindentKey,
+        line: &[u8],
+        vts: Option<&[ColNr]>,
+        flp: &[u8],
+    ) -> bool {
         self.key == *key
-            && !self.flp.is_null()
-            && unsafe { cstr::eq(self.flp, flp) }
+            && self.flp.as_deref() == Some(flp)
             && self.line.as_deref() == Some(line)
+            && self.vts.as_deref() == vts
     }
 
     /// Measures `line`'s indent and stores it against `key`.
     ///
-    /// # Safety
-    /// `window` must be a window whose buffer `key` was read from, and `flp`
-    /// a NUL-terminated string.
-    unsafe fn refill(
+    /// `window` is the window whose buffer `key` and `vts` were read from.
+    fn refill(
         &mut self,
         window: Win,
         key: &BreakindentKey,
         line: &[u8],
-        flp: *const c_char,
+        vts: TabStopArray,
+        flp: XString,
     ) {
         let owned = XString::from_bytes(line);
-        // SAFETY: the caller's string; the copy this replaces is the cache's
-        // own allocation.
-        unsafe { xfree(self.flp.cast()) };
-        self.flp = unsafe { xstrdup(flp) };
         self.key = *key;
         self.list = 0;
         // A fixed column needs no measurement.
@@ -238,29 +226,23 @@ impl BreakindentCache {
             self.indent = if key.no_ts {
                 indent_size_no_ts(line)
             } else {
-                // SAFETY: the key's 'vartabstop' array, the buffer's own.
-                unsafe { indent_size_ts(line, key.ts, key.vts) }
+                indent_size_ts(line, key.ts, vts.as_deref())
             };
             if window.w_briopt_list != 0 {
-                unsafe { self.add_list_indent(window, owned.as_cstr(), flp) };
+                self.add_list_indent(window, owned.as_cstr(), flp.as_cstr());
             }
         }
         self.line = Some(owned);
+        self.vts = vts;
+        self.flp = Some(flp);
     }
 
     /// The extra indent a numbered list asks for: either the flat
     /// 'breakindentopt' "list" value, or — when that is negative — the width
     /// of what 'formatlistpat' matched, which then *replaces* the indent.
-    ///
-    /// # Safety
-    /// `flp` must be the current 'formatlistpat', NUL-terminated.
-    unsafe fn add_list_indent(&mut self, window: Win, line: &CStr, flp: *const c_char) {
-        // SAFETY: the caller's pattern.
+    fn add_list_indent(&mut self, window: Win, line: &CStr, flp: &CStr) {
         let mut regmatch: RegMatch = RegMatch::new(
-            vim_regcomp(
-                unsafe { cstr::at(flp) },
-                RE_MAGIC + RE_STRING + RE_AUTO + RE_STRICT,
-            ),
+            vim_regcomp(flp, RE_MAGIC + RE_STRING + RE_AUTO + RE_STRICT),
             false,
         );
         if regmatch.regprog.is_none() {
@@ -300,7 +282,6 @@ pub fn get_breakindent_win(window: Win, line: &[u8]) -> c_int {
     let key = BreakindentKey {
         fnum: buf.handle,
         ts: buf.b_p_ts,
-        vts: buf.b_p_vts_array,
         tick: buf_get_changedtick(buf),
         listopt: win.w_briopt_list,
         no_ts: win.w_onebuf_opt.wo_list != 0 && win.w_p_lcs_chars.tab1 == NUL as ScreenChar,
@@ -314,17 +295,20 @@ pub fn get_breakindent_win(window: Win, line: &[u8]) -> c_int {
         vcol: win.w_briopt_vcol,
     };
     // SAFETY: a live window.
-    let (col_off2, flp) = (win_col_off2(win), buf.formatlistpat());
+    let col_off2 = win_col_off2(win);
+    let flp = local_or_global(&buf.b_p_flp, P_FLP);
     // The window width minus its margins: what is left for text.
     let eff_wwidth = win.w_view_width - (window).col_off() + col_off2;
     // One exclusive borrow for the whole computation: nothing below calls
     // back into this function (the regex engine and chartabsize helpers run
     // no user code), and debug builds will catch it if that ever changes.
+    let vts = buf.b_p_vts_array.as_deref();
+    let hit = flp.with_bytes(|flp| CACHE.with(|prev| prev.answers(&key, line, vts, flp)));
+    // Copies of what the cache keys on, taken only on a miss.
+    let fill = (!hit).then(|| (vts.map(Box::from), flp.get()));
     let mut bri = CACHE.with_mut(|prev| {
-        // SAFETY: `flp` is NUL-terminated, and `window` is the caller's
-        // window, which `key` was just read from.
-        if !unsafe { prev.answers(&key, line, flp) } {
-            unsafe { prev.refill(window, &key, line, flp) };
+        if let Some((vts, flp)) = fill {
+            prev.refill(window, &key, line, vts, flp);
         }
         let mut bri = if opt.vcol != 0 {
             // A column value has priority over the measured indent.

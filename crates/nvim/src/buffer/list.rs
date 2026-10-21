@@ -29,7 +29,6 @@ use crate::ex_eval::aborting;
 use crate::ex_getln::text_or_buf_locked;
 use crate::fileio::file_pat_to_reg_pat;
 use crate::guard::Suppress;
-use crate::indent::replace_tabstop_array;
 use crate::insexpand::clear_buffer_cpt_callbacks;
 use crate::mark::{clrallmarks, fmarks_check_names, mark_view_restore};
 use crate::message::e_noalt;
@@ -420,9 +419,9 @@ pub fn free_buf_options(mut buffer: Buf, free_p_ff: bool) {
     buffer.b_p_isk = None;
     buffer.b_p_vsts = None;
     buffer.b_p_vsts_nopaste = None;
-    replace_tabstop_array(&mut buffer.b_p_vsts_array, None);
+    buffer.b_p_vsts_array = None;
     buffer.b_p_vts = None;
-    replace_tabstop_array(&mut buffer.b_p_vts_array, None);
+    buffer.b_p_vts_array = None;
     buffer.b_p_keymap = None;
     buffer.b_kmap_ga = Vec::new();
     buffer.b_p_com = None;
@@ -826,6 +825,7 @@ mod tests {
             assert!(b.b_u_store.is_none());
             assert!(b.b_u_line.is_none());
             assert!(b.b_maps.is_none());
+            assert!(b.b_p_vts_array.is_none() && b.b_p_vsts_array.is_none());
             assert!(b.b_next.is_none() && b.b_prev.is_none());
         }
         free_bare_buffer(buffer);

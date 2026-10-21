@@ -14,27 +14,25 @@
 //! | `expr` | 'indentexpr', `lispindent()`, `indent()` |
 //! | `breakindent` | 'breakindentopt' and the wrapped-line indent |
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use crate::cstr;
 use crate::semsg;
 use crate::winlayer::Buf;
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_int, c_uint};
 
 use crate::ascii::ascii_iswhite;
 use crate::change::{changed_bytes, get_leader_len};
-use crate::charset::{byte2cells, char2cells, getwhitecols_curline, skipwhite};
+use crate::charset::{byte2cells, char2cells, getwhitecols_curline, skip};
 use crate::cstr::byte_at;
-use crate::cursor::{get_cursor_line_len, get_cursor_line_ptr};
 use crate::edit::get_nolist_virtcol;
 use crate::extmark::extmark_splice_cols;
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::memline::Lines;
 use crate::memline::ml_replace_owned;
-use crate::memory::{XString, xfree, xmalloc};
+use crate::memory::XString;
 use crate::message::e_positive;
 use crate::message::emsg;
 use crate::message_fmt::{msg_bytes, msg_cstr};
@@ -44,7 +42,6 @@ use crate::plines::getvcol;
 use crate::state::mode::{State, saved_cursor};
 use crate::textformat::has_format_option;
 use crate::types::*;
-use ::libc::abort;
 
 // `regexp.rs` keeps its own copy of `RegProg`, so these stay declarations
 // rather than imports. `breakindent.rs` reaches them through `use super::*`.
@@ -84,6 +81,28 @@ const SIN_INSERT: c_uint = 2;
 const SIN_UNDO: c_uint = 4;
 const SIN_NOMARK: c_uint = 8;
 
+impl Indenter {
+    /// The indent this engine answers for the cursor line; negative when it
+    /// has no answer and the line should be left alone.
+    pub fn amount(self) -> c_int {
+        match self {
+            Indenter::Expr => get_expr_indent(),
+            Indenter::Lisp => get_lisp_indent(),
+            Indenter::C => crate::indent_c::get_c_indent(),
+        }
+    }
+}
+
+/// How many stops a tab-stop array names, or zero when it names none.
+fn stop_count(vts: Option<&[ColNr]>) -> c_int {
+    tabstops(vts).map_or(0, tabstop::TabStops::count)
+}
+
+/// A tab-stop array's first width, or the default of eight.
+fn first_stop(vts: Option<&[ColNr]>) -> c_int {
+    tabstops(vts).map_or(8, tabstop::TabStops::first)
+}
+
 /// The screen column byte `col` of line `lnum` sits at.
 ///
 /// `getvcol` needs a `Pos` and three out-parameters to answer one
@@ -98,83 +117,49 @@ pub(crate) fn line_vcol(lnum: LineNr, col: ColNr) -> c_int {
     getvcol(Win::current(), &mut fp).0
 }
 
-/// Borrow a 'vartabstop' array as a slice. `None` when the option is unset
+/// A 'vartabstop' array as a list of stops. `None` when the option is unset
 /// or names no stops, which is every caller's "use the uniform width" case.
 ///
-/// # Safety
-/// `vts`, if not null, must point at a count-prefixed array of that length.
-unsafe fn tabstops<'a>(vts: *const ColNr) -> Option<tabstop::TabStops<'a>> {
-    if vts.is_null() {
-        return None;
-    }
-    let count = unsafe { *vts };
-    tabstop::TabStops::new(unsafe { ::core::slice::from_raw_parts(vts, count as usize + 1) })
+/// The array is count-prefixed: `vts[0]` stops follow it.
+fn tabstops(vts: Option<&[ColNr]>) -> Option<tabstop::TabStops<'_>> {
+    vts.and_then(tabstop::TabStops::new)
 }
+
+/// A buffer's 'vartabstop' or 'varsofttabstop' array: its count first, the
+/// widths after it; `None` for a value that names no stops.
+pub type TabStopArray = Option<Box<[ColNr]>>;
 
 /// Parse a 'vartabstop'-style option value into a fresh tab-stop array,
 /// reporting the message the option code expects when it is malformed.
 ///
-/// `None` for a value that does not parse; `Some(null)` for one that names
-/// no stops. The array is the caller's, an `xmalloc` block, because that is
-/// what the buffer's option arrays hold.
-pub fn tabstop_set(text: &[u8]) -> Option<*mut ColNr> {
-    let parsed = match tabstop::parse(text) {
-        Ok(parsed) => parsed,
+/// `None` for a value that does not parse; `Some(None)` for one that names
+/// no stops.
+pub fn tabstop_set(text: &[u8]) -> Option<TabStopArray> {
+    match tabstop::parse(text) {
+        Ok(parsed) => Some(parsed.map(Vec::into_boxed_slice)),
         Err(tabstop::ParseError::NotPositive(_)) => {
             emsg(gettext(e_positive));
-            return None;
+            None
         }
         Err(tabstop::ParseError::Malformed(at) | tabstop::ParseError::OutOfRange(at)) => {
             let arg0 = msg_bytes(&text[at..]);
             semsg!("E475: Invalid argument: {arg0}");
-            return None;
+            None
         }
-    };
-    // The option owns a malloc'd array, so hand one over rather than a Vec.
-    Some(match parsed {
-        None => ::core::ptr::null_mut(),
-        // SAFETY: `xmalloc` answers room for `stops.len()` stops or aborts,
-        // and the copy fills exactly that.
-        Some(stops) => unsafe {
-            let out = xmalloc(size_of::<ColNr>() * stops.len()) as *mut ColNr;
-            ::core::ptr::copy_nonoverlapping(stops.as_ptr(), out, stops.len());
-            out
-        },
-    })
+    }
 }
 
-/// The tab-stop array a 'vartabstop'-style value describes, or null for a
+/// The tab-stop array a 'vartabstop'-style value describes, or `None` for a
 /// value that names none -- or does not parse, which [`tabstop_set`] has
 /// then reported.
-pub(crate) fn tabstop_array_of(value: &CStr) -> *mut ColNr {
-    tabstop_set(value.to_bytes()).unwrap_or(::core::ptr::null_mut())
+pub(crate) fn tabstop_array_of(value: &CStr) -> TabStopArray {
+    tabstop_set(value.to_bytes()).flatten()
 }
 
-/// Give `slot` the tab-stop array `value` describes, freeing the one it
-/// held. A value that does not parse leaves it null rather than dangling.
-pub(crate) fn replace_tabstop_array(slot: &mut *mut ColNr, value: Option<&CStr>) {
-    install_tabstop_array(
-        slot,
-        value.map_or(::core::ptr::null_mut(), tabstop_array_of),
-    );
-}
-
-/// Give `slot` the array [`tabstop_set`] answered, freeing the one it held.
-pub(crate) fn install_tabstop_array(slot: &mut *mut ColNr, array: *mut ColNr) {
-    // SAFETY: a buffer's tab-stop array is its own `xmalloc` block, or null.
-    unsafe { xfree((*slot).cast::<c_void>()) };
-    *slot = array;
-}
-
-/// How many columns from `col` to the next tabstop.
-///
-/// # Safety
-/// `vts` must be a valid tabstop array or null.
-pub unsafe fn tabstop_padding(col: ColNr, ts: OptInt, vts: *const ColNr) -> c_int {
-    match unsafe { tabstops(vts) } {
-        Some(stops) => stops.padding(col),
-        None => tabstop::uniform_padding(col, ts),
-    }
+/// Give `slot` the tab-stop array `value` describes. A value that does not
+/// parse leaves it empty.
+pub(crate) fn replace_tabstop_array(slot: &mut TabStopArray, value: Option<&CStr>) {
+    *slot = value.and_then(tabstop_array_of);
 }
 
 /// Which of a buffer's two tab-stop lists.
@@ -198,12 +183,10 @@ impl Buf {
         f: impl FnOnce(Option<tabstop::TabStops<'_>>) -> R,
     ) -> R {
         let vts = match which {
-            StopList::Tab => self.b_p_vts_array,
-            StopList::SoftTab => self.b_p_vsts_array,
+            StopList::Tab => self.b_p_vts_array.as_deref(),
+            StopList::SoftTab => self.b_p_vsts_array.as_deref(),
         };
-        // SAFETY: the buffer's own tab-stop array, or null, for the length of
-        // a call that cannot write it.
-        f(unsafe { tabstops(vts) })
+        f(tabstops(vts))
     }
 
     /// How many columns from `col` to this buffer's next tabstop, by its
@@ -286,88 +269,6 @@ impl Buf {
     }
 }
 
-/// The width of the tabstop at `col`; with `left`, of the one a cursor
-/// moving back would cross.
-///
-/// # Safety
-/// `vts` must be a valid tabstop array or null.
-pub unsafe fn tabstop_at(col: ColNr, ts: OptInt, vts: *const ColNr, left: bool) -> c_int {
-    match unsafe { tabstops(vts) } {
-        Some(stops) => stops.at(col, left),
-        None => ts as c_int,
-    }
-}
-
-/// The column the tabstop containing `col` starts at.
-///
-/// # Safety
-/// `vts` must be a valid tabstop array or null.
-pub unsafe fn tabstop_start(col: ColNr, ts: c_int, vts: *mut ColNr) -> ColNr {
-    match unsafe { tabstops(vts) } {
-        Some(stops) => stops.start(col),
-        None => col - col % ts,
-    }
-}
-
-/// The tabs and trailing spaces that fill the columns `start_col` to
-/// `end_col`. A zero `ts_arg` means the current buffer's 'tabstop'.
-///
-/// # Safety
-/// `vts` must be a valid tabstop array or null; the out-pointers must be
-/// writable.
-pub unsafe fn tabstop_fromto(
-    start_col: ColNr,
-    end_col: ColNr,
-    ts_arg: c_int,
-    vts: *const ColNr,
-    ntabs: *mut c_int,
-    nspcs: *mut c_int,
-) {
-    let ts = if ts_arg == 0 {
-        Buf::current().b_p_ts as c_int
-    } else {
-        ts_arg
-    };
-    debug_assert!(ts != 0);
-    let (tabs, spaces) = match unsafe { tabstops(vts) } {
-        Some(stops) => stops.from_to(start_col, end_col),
-        None => tabstop::uniform_from_to(start_col, end_col, ts),
-    };
-    unsafe { *ntabs = tabs };
-    unsafe { *nspcs = spaces };
-}
-
-/// Whether two 'vartabstop' arrays name the same stops.
-///
-/// # Safety
-/// Both must be valid tabstop arrays or null.
-unsafe fn tabstop_eq(ts1: *const ColNr, ts2: *const ColNr) -> bool {
-    let borrow = |ts: *const ColNr| {
-        (!ts.is_null()).then(|| unsafe { ::core::slice::from_raw_parts(ts, *ts as usize + 1) })
-    };
-    tabstop::eq(borrow(ts1), borrow(ts2))
-}
-
-/// How many stops `ts` names, or zero when it names none.
-///
-/// # Safety
-/// `ts` must be a valid tabstop array or null.
-pub unsafe fn tabstop_count(ts: *mut ColNr) -> c_int {
-    if ts.is_null() { 0 } else { unsafe { *ts } }
-}
-
-/// The first stop's width, or the default of eight.
-///
-/// # Safety
-/// `ts` must be a valid tabstop array or null.
-pub unsafe fn tabstop_first(ts: *mut ColNr) -> c_int {
-    if ts.is_null() {
-        8
-    } else {
-        unsafe { *ts.offset(1) }
-    }
-}
-
 /// `buffer`'s 'shiftwidth': the option, or the width of the tabstop at column
 /// zero when the option is 0.
 pub fn get_sw_value(buffer: Buf) -> c_int {
@@ -377,12 +278,11 @@ pub fn get_sw_value(buffer: Buf) -> c_int {
 /// `buffer`'s 'shiftwidth' as seen from `pos`, which only differs from
 /// [`get_sw_value`] under 'vartabstop'.
 ///
-/// # Safety
-/// `buffer` must be a live buffer and `pos` a position in the current one: the
-/// cursor is moved there and restored.
-unsafe fn get_sw_value_pos(buffer: Buf, pos: *mut Pos, left: bool) -> c_int {
+/// The cursor is moved to `pos` (a position in the current buffer) and
+/// restored.
+fn get_sw_value_pos(buffer: Buf, pos: Pos, left: bool) -> c_int {
     let save_cursor = Win::current().w_cursor;
-    unsafe { Win::current().w_cursor = *pos };
+    Win::current().w_cursor = pos;
     let sw_value = get_sw_value_col(buffer, get_nolist_virtcol(), left);
     Win::current().w_cursor = save_cursor;
     sw_value
@@ -392,7 +292,7 @@ unsafe fn get_sw_value_pos(buffer: Buf, pos: *mut Pos, left: bool) -> c_int {
 pub fn get_sw_value_indent(buffer: Buf, left: bool) -> c_int {
     let mut pos = Win::current().w_cursor;
     pos.col = getwhitecols_curline() as ColNr;
-    unsafe { get_sw_value_pos(buffer, &raw mut pos, left) }
+    get_sw_value_pos(buffer, pos, left)
 }
 
 /// `buffer`'s 'shiftwidth' at screen column `col`.
@@ -531,17 +431,10 @@ fn indent_width(text: &[u8], stops: Option<&[ColNr]>, ts: OptInt) -> c_int {
 }
 
 /// The screen width of the indent at `text` under 'tabstop' `ts` and
-/// 'vartabstop' `vts`.
-///
-/// # Safety
-/// `vts` must be a valid tabstop array or null.
-pub unsafe fn indent_size_ts(text: &[u8], ts: OptInt, vts: *mut ColNr) -> c_int {
+/// 'vartabstop' `vts`, a count-prefixed array.
+pub fn indent_size_ts(text: &[u8], ts: OptInt, vts: Option<&[ColNr]>) -> c_int {
     debug_assert!(char2cells(' ' as c_int) == 1);
-    // `vts[0]` is the count and `vts[1..=count]` the widths.
-    // SAFETY: the caller's array, read for the length of this call.
-    let stops = (!vts.is_null() && unsafe { *vts } >= 1)
-        .then(|| unsafe { ::core::slice::from_raw_parts(vts.add(1), *vts as usize) });
-    indent_width(text, stops, ts)
+    indent_width(text, tabstops(vts).map(tabstop::TabStops::widths), ts)
 }
 
 /// What [`set_indent`] is going to write, measured before anything is
@@ -557,8 +450,8 @@ struct IndentPlan {
     /// Bytes of the existing indent to copy verbatim, when 'preserveindent'
     /// *and* 'expandtab' are both set; -1 when they are not.
     orig_char_len: c_int,
-    /// The first byte of the line the plan did not account for.
-    rest: *mut c_char,
+    /// The offset of the first byte of the line the plan did not account for.
+    rest: usize,
 }
 
 /// Measure the indent `set_indent(size, flags)` needs, without writing one.
@@ -568,18 +461,18 @@ struct IndentPlan {
 /// an indent that is already right is left alone, which is what keeps
 /// `set_indent` from marking every line changed.
 ///
-/// # Safety
-/// `oldline` must be the current line, NUL-terminated.
-unsafe fn plan_indent(size: c_int, flags: c_int, oldline: *mut c_char) -> IndentPlan {
+/// `oldline` is the current line; reading past its end reads its NUL.
+fn plan_indent(size: c_int, flags: c_int, oldline: &[u8]) -> IndentPlan {
     let buf = Buf::current();
     let preserve = flags & SIN_INSERT as c_int == 0 && buf.b_p_pi != 0;
     let pad = |col: c_int| buf.tab_padding(col as ColNr);
+    let at = |i: usize| c_int::from(byte_at(oldline, i));
     let mut plan = IndentPlan {
         doit: false,
         ind_len: 0,
         ind_done: 0,
         orig_char_len: -1,
-        rest: oldline,
+        rest: 0,
     };
     let mut todo = size;
 
@@ -587,8 +480,8 @@ unsafe fn plan_indent(size: c_int, flags: c_int, oldline: *mut c_char) -> Indent
         let mut ind_col = 0;
         if preserve {
             // Reuse as much of the existing indent's structure as fits.
-            while todo > 0 && ascii_iswhite(unsafe { *plan.rest } as c_int) {
-                if unsafe { *plan.rest } as c_int == TAB {
+            while todo > 0 && ascii_iswhite(at(plan.rest)) {
+                if at(plan.rest) == TAB {
                     let tab_pad = pad(plan.ind_done);
                     // Stop if this tab would overshoot the target.
                     if todo < tab_pad {
@@ -602,7 +495,7 @@ unsafe fn plan_indent(size: c_int, flags: c_int, oldline: *mut c_char) -> Indent
                     plan.ind_len += 1;
                     plan.ind_done += 1;
                 }
-                plan.rest = unsafe { plan.rest.add(1) };
+                plan.rest += 1;
             }
             // The two counts diverge from here: `ind_col` goes on to
             // drive the tab fill, `ind_done` records what was kept.
@@ -627,10 +520,10 @@ unsafe fn plan_indent(size: c_int, flags: c_int, oldline: *mut c_char) -> Indent
             if todo < tab_pad {
                 break;
             }
-            if unsafe { *plan.rest } as c_int != TAB {
+            if at(plan.rest) != TAB {
                 plan.doit = true;
             } else {
-                plan.rest = unsafe { plan.rest.add(1) };
+                plan.rest += 1;
             }
             todo -= tab_pad;
             plan.ind_len += 1;
@@ -639,10 +532,10 @@ unsafe fn plan_indent(size: c_int, flags: c_int, oldline: *mut c_char) -> Indent
     }
     // Count the spaces the indent needs.
     while todo > 0 {
-        if unsafe { *plan.rest } as c_int != ' ' as c_int {
+        if at(plan.rest) != ' ' as c_int {
             plan.doit = true;
         } else {
-            plan.rest = unsafe { plan.rest.add(1) };
+            plan.rest += 1;
         }
         todo -= 1;
         plan.ind_len += 1;
@@ -650,29 +543,35 @@ unsafe fn plan_indent(size: c_int, flags: c_int, oldline: *mut c_char) -> Indent
     plan
 }
 
-/// Set the current line's indent to `size` screen columns.
-///
-/// `flags` is a `SIN_*` set: `CHANGED` reports the change, `INSERT` says the
-/// line is being typed (so the text after the indent is kept rather than
-/// skipped), `UNDO` saves the line first, `NOMARK` leaves extmarks alone.
-///
-/// Answers whether the line was changed.
-pub fn set_indent(size: c_int, flags: c_int) -> bool {
+/// The line [`set_indent`] writes, and where its text starts in both lines.
+struct Reindented {
+    line: Vec<u8>,
+    /// The new indent's length in bytes, which is where the cursor goes.
+    ind_len: c_int,
+    /// Bytes of the old indent kept in place, which extmarks must not move by.
+    skipcols: ColNr,
+    /// Where the kept text starts in the old line and in the new one.
+    old_offset: ColNr,
+    new_offset: ColNr,
+}
+
+/// Build the line `set_indent(size, flags)` writes over `oldline`, or `None`
+/// when its indent is already right.
+fn reindent_line(size: c_int, flags: c_int, oldline: &[u8]) -> Option<Reindented> {
     let buf = Buf::current();
-    let oldline = get_cursor_line_ptr();
     // The size of the line, including the NUL.
-    let mut line_len = get_cursor_line_len() + 1;
+    let mut line_len = oldline.len() as c_int + 1;
     let pad = |col: c_int| buf.tab_padding(col as ColNr);
+    let at = |i: usize| c_int::from(byte_at(oldline, i));
     // `STRICT_ADD`/`STRICT_SUB` (`macros.h`): the arithmetic sizing the
     // replacement line must not wrap, and upstream logs and aborts rather
     // than trusting a wrapped answer. `line` is the site in
-    // `v0.12.4:indent.c`. A closure, because one written inside an
-    // `unsafe` block inherits it and so costs the ratchet nothing.
+    // `v0.12.4:indent.c`.
     let strict = |v: Option<c_int>, line: c_int, what: &CStr| -> c_int {
         v.unwrap_or_else(|| {
             let what = msg_cstr(what);
             logmsg!(LOGLVL_ERR, c"set_indent", line, "{what}");
-            unsafe { abort() }
+            std::process::abort()
         })
     };
 
@@ -680,21 +579,21 @@ pub fn set_indent(size: c_int, flags: c_int) -> bool {
         doit,
         mut ind_len,
         mut ind_done,
-        mut orig_char_len,
+        orig_char_len,
         rest,
-    } = unsafe { plan_indent(size, flags, oldline) };
+    } = plan_indent(size, flags, oldline);
     let mut p = rest;
 
     // Return if the indent is OK already.
-    if !doit && !ascii_iswhite(unsafe { *p } as c_int) && flags & SIN_INSERT as c_int == 0 {
-        return false;
+    if !doit && !ascii_iswhite(at(p)) && flags & SIN_INSERT as c_int == 0 {
+        return None;
     }
 
     if flags & SIN_INSERT as c_int != 0 {
-        p = oldline;
+        p = 0;
     } else {
-        p = unsafe { skipwhite(p) };
-        line_len -= unsafe { p.offset_from(oldline) } as c_int;
+        p += skip::white(oldline.get(p..).unwrap_or_default());
+        line_len -= p as c_int;
     }
 
     // Columns (in bytes) of the old indent that were preserved, and so
@@ -722,23 +621,16 @@ pub fn set_indent(size: c_int, flags: c_int) -> bool {
         let n = strict(ind_len.checked_add(line_len), 626, c"STRICT_ADD overflow");
         newline_size = n as usize;
     }
-    let newline = unsafe { xmalloc(newline_size as size_t) } as *mut c_char;
-    // The rest of the build is ordinary indexing over the allocation.
-    let out = unsafe { ::core::slice::from_raw_parts_mut(newline as *mut u8, newline_size) };
-    let mut n = 0usize;
+    // The terminator is `XString::from_vec`'s, inside the size counted.
+    let mut out: Vec<u8> = Vec::with_capacity(newline_size);
 
     if orig_char_len != -1 {
-        p = oldline;
-        while orig_char_len > 0 {
-            out[n] = unsafe { *p } as u8;
-            n += 1;
-            p = unsafe { p.add(1) };
-            orig_char_len -= 1;
-        }
+        out.extend_from_slice(&oldline[..orig_char_len as usize]);
+        p = orig_char_len as usize;
         // Skip any further white space, which is there when the new
         // indent is smaller than the old one.
-        while ascii_iswhite(unsafe { *p } as c_int) {
-            p = unsafe { p.add(1) };
+        while ascii_iswhite(at(p)) {
+            p += 1;
         }
     }
 
@@ -746,10 +638,10 @@ pub fn set_indent(size: c_int, flags: c_int) -> bool {
     if buf.b_p_et == 0 {
         if flags & SIN_INSERT as c_int == 0 && buf.b_p_pi != 0 {
             // Reuse as much of the existing indent's structure as fits.
-            p = oldline;
+            p = 0;
             ind_done = 0;
-            while todo > 0 && ascii_iswhite(unsafe { *p } as c_int) {
-                if unsafe { *p } as c_int == TAB {
+            while todo > 0 && ascii_iswhite(at(p)) {
+                if at(p) == TAB {
                     let tab_pad = pad(ind_done);
                     // Stop if this tab would overshoot the target.
                     if todo < tab_pad {
@@ -761,54 +653,72 @@ pub fn set_indent(size: c_int, flags: c_int) -> bool {
                     todo -= 1;
                     ind_done += 1;
                 }
-                out[n] = unsafe { *p } as u8;
-                n += 1;
-                p = unsafe { p.add(1) };
+                out.push(oldline[p]);
+                p += 1;
                 skipcols += 1;
             }
             // Fill to the next tabstop with a tab, if possible.
             let tab_pad = pad(ind_done);
             if todo >= tab_pad {
-                out[n] = b'\t';
-                n += 1;
+                out.push(b'\t');
                 todo -= tab_pad;
                 ind_done += tab_pad;
             }
-            p = unsafe { skipwhite(p) };
+            p += skip::white(oldline.get(p..).unwrap_or_default());
         }
         loop {
             let tab_pad = pad(ind_done);
             if todo < tab_pad {
                 break;
             }
-            out[n] = b'\t';
-            n += 1;
+            out.push(b'\t');
             todo -= tab_pad;
             ind_done += tab_pad;
         }
     }
-    while todo > 0 {
-        out[n] = b' ';
-        n += 1;
-        todo -= 1;
-    }
-    out[n..n + line_len as usize].copy_from_slice(unsafe {
-        ::core::slice::from_raw_parts(p as *const u8, line_len as usize)
-    });
+    let new_offset = (out.len() + todo.max(0) as usize) as ColNr;
+    out.resize(new_offset as usize, b' ');
+    out.extend_from_slice(oldline.get(p..).unwrap_or_default());
+    Some(Reindented {
+        line: out,
+        ind_len,
+        skipcols,
+        old_offset: p as ColNr,
+        new_offset,
+    })
+}
 
-    let old_offset = unsafe { p.offset_from(oldline) } as ColNr;
-    let new_offset = n as ColNr;
+/// Set the current line's indent to `size` screen columns.
+///
+/// `flags` is a `SIN_*` set: `CHANGED` reports the change, `INSERT` says the
+/// line is being typed (so the text after the indent is kept rather than
+/// skipped), `UNDO` saves the line first, `NOMARK` leaves extmarks alone.
+///
+/// Answers whether the line was changed.
+pub fn set_indent(size: c_int, flags: c_int) -> bool {
+    let buf = Buf::current();
+    let lnum = Win::current().w_cursor.lnum;
+    // One read of the line: the new one is built from it before anything
+    // writes the memline.
+    let Some(Reindented {
+        line,
+        ind_len,
+        skipcols,
+        old_offset,
+        new_offset,
+    }) = reindent_line(size, flags, Lines::current().line(lnum))
+    else {
+        return false;
+    };
+
     let mut retval = false;
     // Replace the line, unless undo fails.
-    if flags & SIN_UNDO as c_int == 0 || u_savesub(Win::current().w_cursor.lnum).is_ok() {
-        // This may free `newline`.
-        let _ = ml_replace_owned(Win::current().w_cursor.lnum, unsafe {
-            XString::from_raw(newline)
-        });
+    if flags & SIN_UNDO as c_int == 0 || u_savesub(lnum).is_ok() {
+        let _ = ml_replace_owned(lnum, XString::from_vec(line));
         if flags & SIN_NOMARK as c_int == 0 {
             extmark_splice_cols(
                 buf,
-                Win::current().w_cursor.lnum as c_int - 1,
+                lnum as c_int - 1,
                 skipcols,
                 old_offset - skipcols,
                 new_offset - skipcols,
@@ -816,11 +726,11 @@ pub fn set_indent(size: c_int, flags: c_int) -> bool {
             );
         }
         if flags & SIN_CHANGED as c_int != 0 {
-            changed_bytes(Win::current().w_cursor.lnum, 0);
+            changed_bytes(lnum, 0);
         }
         // Correct the saved cursor position if it is on this line.
         let saved = saved_cursor.get();
-        if saved.lnum == Win::current().w_cursor.lnum {
+        if saved.lnum == lnum {
             if saved.col >= old_offset {
                 // It was after the indent: shift it by the byte delta.
                 saved_cursor.set(saved.with_col(saved.col + ind_len - old_offset));
@@ -831,8 +741,6 @@ pub fn set_indent(size: c_int, flags: c_int) -> bool {
             }
         }
         retval = true;
-    } else {
-        unsafe { xfree(newline as *mut c_void) };
     }
     Win::current().w_cursor.col = ind_len as ColNr;
     retval
@@ -862,9 +770,8 @@ pub fn get_number_indent(lnum: LineNr) -> c_int {
     if State.get() & MODE_INSERT != 0 || has_format_option(FoFlag::Q_COMS) {
         lead_len = get_leader_len(&line, false, true).0;
     }
-    let flp = Buf::current().b_p_flp.value_ptr();
-    // SAFETY: 'formatlistpat' is a NUL-terminated option value.
-    let mut regmatch = RegMatch::new(vim_regcomp(unsafe { cstr::at(flp) }, RE_MAGIC), false);
+    let flp = Buf::current().b_p_flp.get();
+    let mut regmatch = RegMatch::new(vim_regcomp(flp.as_cstr(), RE_MAGIC), false);
     if regmatch.regprog.is_some() {
         regmatch.rm_ic = false;
         // The match starts past the comment leader, so its offsets are

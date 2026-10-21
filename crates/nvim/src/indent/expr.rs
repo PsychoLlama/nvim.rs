@@ -1,18 +1,14 @@
 //! Indent computed by running something: 'indentexpr', and the built-in
 //! Lisp indenter behind 'lisp'.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::cstr;
-use crate::memory::XString;
 use crate::strings::has_char;
 use crate::winlayer::Buf;
-use core::ffi::CStr;
 
 use super::*;
 use crate::ascii::{ascii_iswhite, ascii_iswhite_or_nul};
-use crate::cursor::{check_cursor, get_cursor_line_ptr};
+use crate::cursor::check_cursor;
 use crate::eval::eval_to_number;
 use crate::eval::typval::tv_get_lnum;
 use crate::eval::vars::set_vim_var_nr;
@@ -20,10 +16,12 @@ use crate::ex_docmd::handle_did_throw;
 use crate::ex_eval::state::{did_throw, trylevel};
 use crate::guard::Lock;
 use crate::indent_c::{cindent_on, do_c_expr_indent};
-use crate::mbyte::{utf_ptr2char_info, utf_ptr2str_char_info, utfc_next};
+use crate::mbyte::{c_char_info, c_next_cluster};
+use crate::memline::Lines;
+use crate::option::split_option_part;
 use crate::option::vars::{P_LISPWORDS, p_debug, p_paste};
-use crate::option::{copy_option_part, was_set_insecurely};
-use crate::optionstr::OptString;
+use crate::option::was_set_insecurely;
+use crate::optionstr::{OptString, OptStringRef};
 use crate::plines::win_charsize;
 use crate::pos::lt;
 use crate::runtime::state::current_sctx;
@@ -53,8 +51,7 @@ pub fn get_expr_indent() -> c_int {
         current_sctx.set(buf.b_p_script_ctx[kBufOptIndentexpr as usize]);
         // The expression is evaluated from a copy, because 'indentexpr' can
         // be changed while it is running.
-        // SAFETY: 'indentexpr' is a NUL-terminated option value.
-        let expression = XString::from_cstr(unsafe { cstr::at(buf.b_p_inde.value_ptr()) });
+        let expression = buf.b_p_inde.get();
         eval_to_number(&expression, true) as c_int
     };
     current_sctx.set(save_sctx);
@@ -163,88 +160,80 @@ fn same_level_indent(open: &Pos) -> Option<c_int> {
         if linewhite(win.w_cursor.lnum) {
             continue;
         }
-        count_parens(
-            unsafe { CStr::from_ptr(get_cursor_line_ptr()) }.to_bytes(),
-            &mut parencount,
-        );
+        count_parens(Lines::current().line(win.w_cursor.lnum), &mut parencount);
         if parencount == 0 {
             return Some(get_indent());
         }
     }
 }
 
-/// Advances `that` over white space, adding what it is worth on screen to
-/// `amount`. Both loops in [`indent_after_open`] are this.
+/// Advances `that` over white space in `line`, adding what it is worth on
+/// screen to `amount`. Both loops in [`indent_after_open`] are this.
 ///
-/// # Safety
-/// `that` must address a NUL-terminated string, and `csarg`/`cstype` must
-/// describe the line it points into.
-unsafe fn skip_white_measuring(
-    that: &mut *mut c_char,
+/// `csarg`/`cstype` describe `line`.
+fn skip_white_measuring(
+    line: &[u8],
+    that: &mut usize,
     amount: &mut c_int,
     cstype: CharsizeKind,
     csarg: &mut CharsizeArg<'_>,
 ) {
-    // SAFETY: the caller's line, walked one byte at a time and stopped by
-    // the NUL, which is not white space.
-    while ascii_iswhite(unsafe { **that } as c_int) {
-        let (at, byte) = (that.addr() - csarg.line.as_ptr().addr(), unsafe { **that });
-        *amount += win_charsize(cstype, *amount, at, byte as uint8_t as int32_t, csarg).width;
-        *that = unsafe { that.add(1) };
+    // Past the end reads NUL, which is not white space.
+    while ascii_iswhite(c_int::from(byte_at(line, *that))) {
+        let byte = byte_at(line, *that);
+        *amount += win_charsize(cstype, *amount, *that, int32_t::from(byte), csarg).width;
+        *that += 1;
     }
 }
 
 /// The indent for a line that opens a new form: the column just after
 /// `open`, plus whatever the form's own convention adds.
 fn indent_after_open(open: &Pos) -> c_int {
-    // SAFETY: the caller's position; the cursor is moved onto it first, so
-    // `get_cursor_line_ptr` is the line `open.col` indexes into.
     let mut win = Win::current();
     win.w_cursor.lnum = open.lnum;
     win.w_cursor.col = open.col;
-    let line = get_cursor_line_ptr();
-    // SAFETY: the cursor line, which nothing below re-fetches.
-    let (mut csarg, cstype) = CharsizeArg::new(win, open.lnum, unsafe { cstr::bytes_at(line) });
+    // The line `open` is on, which nothing below changes.
+    let mut lines = Lines::current();
+    let line = lines.line(open.lnum);
+    let (mut csarg, cstype) = CharsizeArg::new(win, open.lnum, line);
 
     // Walk to `open`'s column, measuring what is before it.
-    let mut sci: StrCharInfo = unsafe { utf_ptr2str_char_info(line) };
+    let mut that = 0;
+    let mut chr = c_char_info(line, 0);
     let mut amount = 0;
     let mut col = open.col;
-    while unsafe { *sci.ptr } != 0 && col > 0 {
-        let at = sci.ptr.addr() - line.addr();
-        amount += win_charsize(cstype, amount, at, sci.chr.value, &mut csarg).width;
-        sci = unsafe { utfc_next(sci) };
+    while byte_at(line, that) != 0 && col > 0 {
+        amount += win_charsize(cstype, amount, that, chr.value, &mut csarg).width;
+        (that, chr) = c_next_cluster(line, that, chr);
         col -= 1;
     }
-    let mut that = sci.ptr;
+    let at = |i: usize| byte_at(line, i);
 
     // Some keywords indent their body rather than their arguments (the
     // non-standard-Lisp ones are Scheme special forms):
     //     (let ((a 1))       instead of    (let ((a 1))
     //       (...))                              (...))
-    if (unsafe { *that } == b'(' as c_char || unsafe { *that } == b'[' as c_char)
-        && unsafe { lisp_match(that.add(1)) }
-    {
+    if (at(that) == b'(' || at(that) == b'[') && lisp_match(&line[that + 1..]) {
         return amount + 2;
     }
-    if unsafe { *that } != 0 {
-        that = unsafe { that.add(1) };
+    if at(that) != 0 {
+        that += 1;
         amount += 1;
     }
     let mut firsttry = amount;
-    unsafe { skip_white_measuring(&mut that, &mut amount, cstype, &mut csarg) };
-    if unsafe { *that } == 0 || unsafe { *that } == b';' as c_char {
+    skip_white_measuring(line, &mut that, &mut amount, cstype, &mut csarg);
+    if at(that) == 0 || at(that) == b';' {
         // A comment line, or nothing after the bracket at all.
         return amount;
     }
     // Not a comment. `(` is tested for so that the first argument of a
     // `let`/`do` can span more than one line.
-    if unsafe { *that } != b'(' as c_char && unsafe { *that } != b'[' as c_char {
+    if at(that) != b'(' && at(that) != b'[' {
         firsttry += 1;
     }
-    amount = unsafe { measure_first_argument(&mut that, amount, cstype, &mut csarg) };
-    unsafe { skip_white_measuring(&mut that, &mut amount, cstype, &mut csarg) };
-    if unsafe { *that } == 0 || unsafe { *that } == b';' as c_char {
+    amount = measure_first_argument(line, &mut that, amount, cstype, &mut csarg);
+    skip_white_measuring(line, &mut that, &mut amount, cstype, &mut csarg);
+    if at(that) == 0 || at(that) == b';' {
         // Nothing followed the first argument on this line, so line the
         // continuation up with the argument instead of past it.
         firsttry
@@ -253,25 +242,22 @@ fn indent_after_open(open: &Pos) -> c_int {
     }
 }
 
-/// Walks over the form's first argument, measuring it, and answers where
-/// that leaves `amount`.
+/// Walks over the form's first argument, starting at byte `that` of `line`,
+/// measuring it, and answers where that leaves `amount`.
 ///
 /// A quoted, `#`-prefixed or numeric argument is not walked at all — those
 /// are values rather than forms, and upstream lines the rest up with the
 /// bracket instead.
 ///
-/// # Safety
-/// `that` must address a NUL-terminated string, and `csarg`/`cstype` must
-/// describe the line it points into.
-unsafe fn measure_first_argument(
-    that: &mut *mut c_char,
+/// `csarg`/`cstype` describe `line`.
+fn measure_first_argument(
+    line: &[u8],
+    that: &mut usize,
     mut amount: c_int,
     cstype: CharsizeKind,
     csarg: &mut CharsizeArg<'_>,
 ) -> c_int {
-    // SAFETY: the caller's line, walked one character at a time by
-    // `utfc_next` and stopped by the NUL.
-    let mut ci: CharInfo = unsafe { utf_ptr2char_info(*that) };
+    let mut ci: CharInfo = c_char_info(line, *that);
     if ci.value == '"' as int32_t
         || ci.value == '\'' as int32_t
         || ci.value == '#' as int32_t
@@ -281,7 +267,7 @@ unsafe fn measure_first_argument(
     }
     let mut parencount = 0;
     let mut quotecount = 0;
-    while unsafe { **that } != 0
+    while byte_at(line, *that) != 0
         && (!ascii_iswhite(ci.value as c_int) || quotecount != 0 || parencount != 0)
     {
         if ci.value == '"' as int32_t {
@@ -295,28 +281,12 @@ unsafe fn measure_first_argument(
             }
         }
         // A backslash and the character it escapes are one step.
-        if ci.value == '\\' as int32_t && unsafe { *that.add(1) } != 0 {
-            let at = that.addr() - csarg.line.as_ptr().addr();
-            amount += win_charsize(cstype, amount, at, ci.value, csarg).width;
-            let next = unsafe {
-                utfc_next(StrCharInfo {
-                    ptr: *that,
-                    chr: ci,
-                })
-            };
-            *that = next.ptr;
-            ci = next.chr;
+        if ci.value == '\\' as int32_t && byte_at(line, *that + 1) != 0 {
+            amount += win_charsize(cstype, amount, *that, ci.value, csarg).width;
+            (*that, ci) = c_next_cluster(line, *that, ci);
         }
-        let at = that.addr() - csarg.line.as_ptr().addr();
-        amount += win_charsize(cstype, amount, at, ci.value, csarg).width;
-        let next = unsafe {
-            utfc_next(StrCharInfo {
-                ptr: *that,
-                chr: ci,
-            })
-        };
-        *that = next.ptr;
-        ci = next.chr;
+        amount += win_charsize(cstype, amount, *that, ci.value, csarg).width;
+        (*that, ci) = c_next_cluster(line, *that, ci);
     }
     amount
 }
@@ -346,34 +316,20 @@ pub fn get_lisp_indent() -> c_int {
 
 /// Whether `p` begins with one of 'lispwords', followed by white space or
 /// the end of the line.
-///
-/// # Safety
-/// `p` must be a NUL-terminated string.
-unsafe fn lisp_match(p: *mut c_char) -> bool {
-    // SAFETY: the caller's string, and `buf` is this frame's;
-    // `copy_option_part` bounds its copy by the size it is given.
-    let mut buf: [c_char; 512] = [0; 512];
-    // A copy: the cursor below walks past the end of a projection's borrow.
-    let lispwords = P_LISPWORDS.get();
-    // The buffer's own 'lispwords' where it has one, else the copy above:
-    // the cursor below walks it to the end of the value.
-    let mut word = if Buf::current().b_p_lw.first_byte() != 0 {
-        Buf::current().b_p_lw.value_ptr()
+fn lisp_match(p: &[u8]) -> bool {
+    // The buffer's own 'lispwords' where it has one, else the global value.
+    let buf = Buf::current();
+    let lispwords = if buf.b_p_lw.first_byte() != 0 {
+        buf.b_p_lw.get()
     } else {
-        lispwords.as_ptr().cast_mut()
+        P_LISPWORDS.get()
     };
-    while unsafe { *word } != 0 {
-        let len = unsafe {
-            copy_option_part(
-                &raw mut word,
-                buf.as_mut_ptr(),
-                buf.len(),
-                c",".as_ptr().cast_mut(),
-            )
-        };
-        if unsafe { cstr::prefix_eq(buf.as_ptr(), p, len) }
-            && ascii_iswhite_or_nul(unsafe { *p.add(len) } as c_int)
-        {
+    let mut rest: &[u8] = &lispwords;
+    while !rest.is_empty() {
+        // Upstream copies each word into a 512-byte buffer.
+        let (word, after) = split_option_part(rest, 512, b",");
+        rest = after;
+        if p.starts_with(&word) && ascii_iswhite_or_nul(c_int::from(byte_at(p, word.len()))) {
             return true;
         }
     }
@@ -382,10 +338,8 @@ unsafe fn lisp_match(p: *mut c_char) -> bool {
 
 /// Re-indents the cursor line to whatever `get_the_indent` says, which is
 /// one of `get_c_indent`, [`get_expr_indent`] and [`get_lisp_indent`].
-pub fn fixthisline(get_the_indent: IndentGetter) {
-    // SAFETY: the caller's contract; `get_the_indent` is one of the three
-    // indent engines, all of which read the current buffer.
-    let amount = unsafe { get_the_indent.expect("non-null function pointer")() };
+pub fn fixthisline(get_the_indent: Indenter) {
+    let amount = get_the_indent.amount();
     if amount < 0 {
         return;
     }
@@ -399,13 +353,8 @@ pub fn fixthisline(get_the_indent: IndentGetter) {
 /// Whether 'indentexpr' should be used for Lisp indenting. The caller may
 /// want to check 'autoindent' as well.
 pub fn use_indentexpr_for_lisp() -> bool {
-    // SAFETY: the caller's contract.
     let buf = Buf::current();
-    unsafe {
-        buf.b_p_lisp != 0
-            && buf.b_p_inde.first_byte() != 0
-            && cstr::eq_bytes(buf.b_p_lop.value_ptr(), b"expr:1")
-    }
+    buf.b_p_lisp != 0 && buf.b_p_inde.first_byte() != 0 && buf.b_p_lop.bytes() == b"expr:1"
 }
 
 /// Fixes the cursor line's indent for 'lisp' and 'cindent'.
@@ -419,7 +368,7 @@ pub fn fix_indent() {
         if use_indentexpr_for_lisp() {
             do_c_expr_indent();
         } else {
-            fixthisline(Some(get_lisp_indent));
+            fixthisline(Indenter::Lisp);
         }
     } else if cindent_on() {
         do_c_expr_indent();

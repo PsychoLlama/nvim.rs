@@ -30,6 +30,7 @@
 
 use crate::keycodes::Key;
 use crate::option::vars::{P_FP, P_SEL};
+use crate::types::Indenter;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -787,21 +788,21 @@ fn indent_or_colon(op: Op) {
     }
     if Buf::current().b_p_lisp != 0 {
         let indent = if use_indentexpr_for_lisp() {
-            get_expr_indent as unsafe fn() -> c_int
+            Indenter::Expr
         } else {
-            get_lisp_indent as unsafe fn() -> c_int
+            Indenter::Lisp
         };
         let arg = *op;
-        op_reindent(&arg, Some(indent));
+        op_reindent(&arg, indent);
         return;
     }
     let indent = if Buf::current().b_p_inde.first_byte() as c_int != NUL {
-        get_expr_indent as unsafe fn() -> c_int
+        Indenter::Expr
     } else {
-        get_c_indent as unsafe fn() -> c_int
+        Indenter::C
     };
     let arg = *op;
-    op_reindent(&arg, Some(indent));
+    op_reindent(&arg, indent);
 }
 
 /// The `c` arm: run `op_change`, which enters Insert mode.

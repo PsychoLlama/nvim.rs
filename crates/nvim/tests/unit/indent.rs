@@ -68,16 +68,13 @@ fn a_negative_softtabstop_is_the_effective_shiftwidth() {
 
 /// `indent_size_ts` over a line's bytes, with the 'vartabstop' array
 /// spelled the way the option code spells it: `vts[0]` is how many widths
-/// follow, and a null array or a count of zero means the uniform `ts`.
+/// follow, and no array or a count of zero means the uniform `ts`.
 ///
 /// The [`Editor`] token is not decoration: `indent_size_ts` opens with a
 /// `debug_assert!` that a space is one cell wide, which reads the character
 /// table the editor's startup fills in.
 fn indent_size(_editor: &Editor, line: &str, ts: OptInt, vts: Option<&mut [ColNr]>) -> c_int {
-    let vts = vts.map_or(std::ptr::null_mut(), <[ColNr]>::as_mut_ptr);
-    // SAFETY: `vts` is null or a slice whose first element is the count of
-    // the ones after it.
-    unsafe { indent_size_ts(line.as_bytes(), ts, vts) }
+    indent_size_ts(line.as_bytes(), ts, vts.as_deref())
 }
 
 #[test]
@@ -97,7 +94,7 @@ fn tabs_advance_to_the_next_uniform_stop() {
 }
 
 /// An array whose count is zero is not a 'vartabstop': the uniform `ts`
-/// applies, exactly as for a null array. `ffi.new('int[1]')` is how the spec
+/// applies, exactly as for no array. `ffi.new('int[1]')` is how the spec
 /// spelled it, and the value it leaves in element 0 is the count.
 #[test]
 fn a_vartabstop_array_with_no_entries_falls_back_to_tabstop() {

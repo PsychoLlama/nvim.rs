@@ -150,7 +150,7 @@ pub(crate) fn did_set_paste(_args: &mut OptSet) -> Result<(), OptError> {
             buf.b_p_ai = 0;
             buf.b_p_et = 0;
             buf.b_p_vsts = None;
-            replace_tabstop_array(&mut buf.b_p_vsts_array, None);
+            buf.b_p_vsts_array = None;
         }
         P_SM.set(false);
         P_STA.set(false);

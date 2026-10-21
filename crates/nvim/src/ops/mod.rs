@@ -43,10 +43,9 @@ use crate::getchar::{
 };
 use crate::global_cell::GlobalCell;
 use crate::indent::{
-    change_indent, fix_indent, get_expr_indent, get_indent, get_lisp_indent, get_sw_value_indent,
-    inindent, may_do_si, op_reindent, preprocs_left, set_indent, use_indentexpr_for_lisp,
+    change_indent, fix_indent, get_indent, get_sw_value_indent, inindent, may_do_si, op_reindent,
+    preprocs_left, set_indent, use_indentexpr_for_lisp,
 };
-use crate::indent_c::get_c_indent;
 use crate::keycodes::Ctrl_V;
 use crate::mark::mark_col_adjust;
 use crate::mbyte::{

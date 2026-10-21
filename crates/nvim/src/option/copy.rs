@@ -12,12 +12,11 @@
 #![forbid(unsafe_code)]
 
 use core::ffi::{CStr, c_int, c_uint};
-use core::ptr;
 
 use crate::buffer::free_buf_options;
 use crate::charset::buf_init_chartab;
 use crate::ex_docmd::cmdmod_has;
-use crate::indent::{check_window_briopt, tabstop_array_of};
+use crate::indent::{TabStopArray, check_window_briopt, tabstop_array_of};
 use crate::insexpand::{
     set_buflocal_cfu_callback, set_buflocal_cpt_callbacks, set_buflocal_ofu_callback,
 };
@@ -378,7 +377,7 @@ pub(crate) fn buf_copy_options(buffer: Buf, flags: c_int) {
         b.b_p_vsts = p_vsts(dup);
         copy_sctx(b, kBufOptVarsofttabstop);
         b.b_p_vsts_array = if P_VSTS.is_unset() {
-            ptr::null_mut()
+            None
         } else {
             p_vsts(tabstop_array_of)
         };
@@ -526,15 +525,14 @@ pub(crate) fn buf_copy_options(buffer: Buf, flags: c_int) {
 /// The buffer's 'vartabstop' array after a copy: built from the global value
 /// when the buffer has none yet, and otherwise **dropped**.
 ///
-/// The drop is upstream behaviour and leaks the old array; it is here rather
-/// than inline so that the two identical call sites cannot drift.
-///
-fn vts_array(buffer: Buf) -> *mut ColNr {
+/// The drop is upstream behaviour (which leaks the old array); it is here
+/// rather than inline so that the two identical call sites cannot drift.
+fn vts_array(buffer: Buf) -> TabStopArray {
     p_vts(|vts| {
-        if !vts.is_empty() && buffer.b_p_vts_array.is_null() {
+        if !vts.is_empty() && buffer.b_p_vts_array.is_none() {
             tabstop_array_of(vts)
         } else {
-            ptr::null_mut()
+            None
         }
     })
 }

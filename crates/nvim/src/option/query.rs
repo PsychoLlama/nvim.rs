@@ -190,16 +190,6 @@ pub(crate) fn get_bkc_flags(buffer: Buf) -> c_uint {
     }
 }
 
-impl Buf {
-    /// 'formatlistpat', local where set.
-    ///
-    /// The answer is the option's own buffer; the callers read it straight
-    /// through `vim_regcomp`.
-    pub(crate) fn formatlistpat(self) -> *mut c_char {
-        local_or_global(&self.b_p_flp, P_FLP).value_ptr()
-    }
-}
-
 /// 'virtualedit' as flags, local where set. The two "none" bits only exist
 /// so a window can spell out that it overrides the global value with
 /// nothing, so they never reach a caller.

@@ -401,7 +401,8 @@ pub(crate) fn alloc_unregistered_buffer() -> Owned<Buffer> {
     // positions, the buffer's syntax block (`SynBlock::new`), what the
     // memline owns, the two
     // extmark tables, the ShaDa extra data (a vector inside an `Option`), the
-    // `U` line, the string options and the file name. The unit case
+    // `U` line, the two 'vartabstop' arrays, the string options and the file
+    // name. The unit case
     // `buffer::a_fresh_buffer_holds_valid_owners` reads each of them back.
     // SAFETY: all are inside the block just allocated, nothing has read or
     // dropped them, and `write` does not drop what was there.
@@ -414,6 +415,10 @@ pub(crate) fn alloc_unregistered_buffer() -> Owned<Buffer> {
     unsafe { (&raw mut (*at).b_extmark_ns).write(id_map()) };
     unsafe { (&raw mut (*at).additional_data).write(None) };
     unsafe { (&raw mut (*at).b_u_line).write(None) };
+    // The 'vartabstop' arrays: a boxed slice's `None` is a null data
+    // pointer, but only a `Sized` box's niche is promised.
+    unsafe { (&raw mut (*at).b_p_vts_array).write(None) };
+    unsafe { (&raw mut (*at).b_p_vsts_array).write(None) };
     // ... and the string options, which are `Option<XString>`s.
     for field in BUF_STRING_OPTIONS {
         let slot = at.wrapping_byte_add(field.field_offset());
