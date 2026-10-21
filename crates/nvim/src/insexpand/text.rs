@@ -5,13 +5,13 @@
 //! prefix `'longest'` inserts, and the `find_word_*` / `find_line_end`
 //! helpers are the scans every buffer source walks with.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
-use crate::cstr;
+use crate::cstr::{self, byte_at};
+use crate::mbyte::c_cluster_len;
 use crate::mbyte::{char_at, class_in, cluster_len, encode_char};
-use crate::types::NUL;
+use crate::memline::Lines;
 use crate::winlayer::buffers;
 use crate::winlayer::{Buf, Win};
 
@@ -161,63 +161,20 @@ pub(crate) fn line_end(text: &[u8]) -> usize {
     end
 }
 
-/// The first character of the next word, stopping at a NUL.
-///
-/// # Safety
-///
-/// `text` must point at a NUL-terminated string, unaliased for the call.
-pub unsafe fn find_word_start(mut text: *mut c_char) -> *mut c_char {
-    while unsafe { *text } as c_int != NUL
-        && unsafe { *text } as c_int != '\n' as c_int
-        && unsafe { mb_get_class(text) } <= 1
-    {
-        text = unsafe { text.offset(utfc_ptr2len(text) as isize) };
-    }
-    text
-}
-
-/// Just after the word `text` points inside of.
-///
-/// # Safety
-///
-/// `text` must point at a NUL-terminated string, unaliased for the call.
-pub unsafe fn find_word_end(mut text: *mut c_char) -> *mut c_char {
-    let start_class = unsafe { mb_get_class(text) };
-    if start_class > 1 {
-        while unsafe { *text } as c_int != NUL {
-            text = unsafe { text.offset(utfc_ptr2len(text) as isize) };
-            if unsafe { mb_get_class(text) } != start_class {
-                break;
-            }
-        }
-    }
-    text
-}
-
-/// Just after the line, omitting the CR and NL at its end.
-///
-/// # Safety
-///
-/// `text` must point at a NUL-terminated string, unaliased for the call.
-pub unsafe fn find_line_end(text: *mut c_char) -> *mut c_char {
-    let mut s = unsafe { text.add(cstr::bytes_at(text).len()) };
-    while s > text && matches!(unsafe { *s.offset(-1) } as c_int, c if c == CAR || c == NL) {
-        s = unsafe { s.offset(-1) };
-    }
-    s
-}
-
 /// Add every listed buffer's file name that starts with what was typed.
 pub(crate) fn get_next_bufname_token() {
     for b in buffers() {
         if b.b_p_bl == 0 || b.name.short().is_none() {
             continue;
         }
-        // SAFETY: a live buffer from the editor's own list, whose short name
-        // is a NUL-terminated string.
-        let tail = unsafe { path_tail(cstr::at(b.name.short_ptr())) };
-        let (orig_data, orig_len) = compl_orig_text().parts();
-        if unsafe { cstr::prefix_eq(tail.as_ptr(), orig_data, orig_len) } {
+        let Some(short) = b.name.short() else {
+            continue;
+        };
+        let tail = path_tail(short);
+        // C's `strncmp(tail, compl_orig_text, len) == 0`.
+        let starts =
+            compl_orig_text().with_bytes(|orig| cstr::ncmp_eq(tail.to_bytes(), orig, orig.len()));
+        if starts {
             let flags = if p_ic() { CP_ICASE } else { 0 };
             let (dir, score) = (kDirectionNotSet, FUZZY_SCORE_NONE);
             let tail = tail.to_bytes();
@@ -326,14 +283,13 @@ pub(crate) fn find_common_prefix(curbuf_only: bool) -> Option<(XString, usize)> 
     let first = first.expect("a prefix longer than the leader came from a match");
     // Avoid inserting text that duplicates the text already after the cursor.
     if len == first.len() {
-        let line = get_cursor_line_ptr();
-        // SAFETY: the cursor column is inside the cursor line.
-        let p = unsafe { line.offset(Win::current().w_cursor.col as isize) };
-        if !p.is_null() && !ascii_iswhite_or_nul(unsafe { *p } as c_int) {
-            // SAFETY: `find_word_end` answers a pointer into the same line.
-            let text_len = unsafe { find_word_end(p).offset_from(p) } as usize;
-            // SAFETY: `p` has `text_len` bytes of the word.
-            let word = unsafe { cstr::slice_at(p, text_len) };
+        let cursor = Win::current().w_cursor;
+        let mut lines = Lines::current();
+        let line = lines.line(cursor.lnum);
+        let p = usize::try_from(cursor.col).unwrap_or(0);
+        if !ascii_iswhite_or_nul(c_int::from(byte_at(line, p))) {
+            let text_len = word_end(line, p) - p;
+            let word = &line[p..p + text_len];
             if text_len > 0
                 && text_len < len - typed.len()
                 && first[len - text_len..].starts_with(word)
@@ -369,22 +325,12 @@ fn shared_prefix_len(prefix: &[u8], len: usize, text: &[u8]) -> usize {
     j
 }
 
-/// Look in the first `len` characters of `src` for search metacharacters.
+/// Append the first `len` characters of `src` to `dest`, quoting the search
+/// metacharacters among them with a backslash.
 ///
-/// When `dest` is not null they are copied there, quoting the metacharacters
-/// with a backslash, and `dest` is NUL terminated. Answers the length `dest`
-/// needs either way.
-///
-/// # Safety
-///
-/// `dest` must point at a NUL-terminated string, unaliased for the call.
-/// `src` must point at a NUL-terminated string, unaliased for the call.
-pub(crate) unsafe fn quote_meta(
-    mut dest: *mut c_char,
-    mut src: *mut c_char,
-    mut len: c_int,
-) -> c_uint {
-    let mut m = len as c_uint + 1; // one extra for the NUL
+/// `src` is read as the C string it stands for: past its end is NUL.
+pub(crate) fn quote_meta(dest: &mut Vec<u8>, src: &[u8], mut len: c_int) {
+    let mut at = 0;
     loop {
         len -= 1;
         if len < 0 {
@@ -397,7 +343,8 @@ pub(crate) unsafe fn quote_meta(
         // former, and `^`/`$` neither. Both queries read a global, so the
         // two orders agree.
         let dict_or_thesaurus = || ctrl_x_mode_dictionary() || ctrl_x_mode_thesaurus();
-        let quote = match unsafe { *src } as u8 {
+        let byte = byte_at(src, at);
+        let quote = match byte {
             b'.' | b'*' | b'[' | b'~' => magic_isset() && !dict_or_thesaurus(),
             b'\\' => !dict_or_thesaurus(),
             // Currently `^` is not needed.
@@ -405,32 +352,18 @@ pub(crate) unsafe fn quote_meta(
             _ => false,
         };
         if quote {
-            m += 1;
-            if !dest.is_null() {
-                unsafe { *dest = '\\' as c_char };
-                dest = unsafe { dest.offset(1) };
-            }
+            dest.push(b'\\');
         }
-        if !dest.is_null() {
-            unsafe { *dest = *src };
-            dest = unsafe { dest.offset(1) };
-        }
+        dest.push(byte);
         // Copy the remaining bytes of a multibyte character.
-        let mb_len = unsafe { utfc_ptr2len(src) } - 1;
+        let mb_len = c_cluster_len(src.get(at..).unwrap_or_default()) as c_int - 1;
         if mb_len > 0 && len >= mb_len {
             for _ in 0..mb_len {
                 len -= 1;
-                src = unsafe { src.offset(1) };
-                if !dest.is_null() {
-                    unsafe { *dest = *src };
-                    dest = unsafe { dest.offset(1) };
-                }
+                at += 1;
+                dest.push(byte_at(src, at));
             }
         }
-        src = unsafe { src.offset(1) };
+        at += 1;
     }
-    if !dest.is_null() {
-        unsafe { *dest = NUL as c_char };
-    }
-    m
 }

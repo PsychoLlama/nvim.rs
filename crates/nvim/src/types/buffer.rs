@@ -485,8 +485,9 @@ pub struct Buffer {
     pub b_p_cot: Option<XString>,
     pub b_cot_flags: ::core::ffi::c_uint,
     pub b_p_cpt: Option<XString>,
-    pub b_p_cpt_cb: *mut Callback,
-    pub b_p_cpt_count: ::core::ffi::c_int,
+    /// One callback per `'complete'` entry, `None` for an entry that is not
+    /// an `F{func}`.
+    pub b_p_cpt_cb: Vec<Callback>,
     pub b_p_cfu: Option<XString>,
     pub b_cfu_cb: Callback,
     pub b_p_ofu: Option<XString>,

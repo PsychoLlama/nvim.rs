@@ -6,52 +6,46 @@
 //! [`ins_compl_next_buf`]; [`get_register_completion`] is the `CTRL-X
 //! CTRL-R` source.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::charset::skip;
 use crate::cstr;
+use crate::fileio::Fgets;
+use crate::formatted;
 use crate::guard::Suppress;
 use crate::mbyte::{char_at, cluster_len};
 use crate::memline::Lines;
+use crate::option::split_option_part;
 use crate::path::ExpandFlags;
-use crate::strings::{escaped_bytes, has_char};
+use crate::strings::escaped_bytes;
 use crate::types::{FAIL, Failed, IOSIZE, NUL, OK, ShmFlag};
-use crate::vim_snprintf;
 use crate::winlayer::BufId;
 use crate::winlayer::{Buf, Win, first_buffer, first_window};
+use std::ffi::OsStr;
+use std::fs::File;
+use std::os::unix::ffi::OsStrExt;
 
 /// Add every identifier matching `pat` in the `'dictionary'`-style list
 /// `dict_start` to the completions.
 ///
 /// `flags` is `DICT_FIRST` and/or `DICT_EXACT`; `thesaurus` selects thesaurus
-/// completion.
-///
-/// # Safety
-///
-/// `dict_start` must point at a NUL-terminated string, unaliased for the
-/// call. `pat` must point at a NUL-terminated string, unaliased for the call.
-pub(crate) unsafe fn ins_compl_dictionaries(
-    dict_start: *mut c_char,
-    pat: *mut c_char,
-    flags: c_int,
-    thesaurus: bool,
-) {
-    let mut dict = dict_start;
+/// completion. `dict_start` is read up to its first NUL, as the C string it
+/// was.
+pub(crate) fn ins_compl_dictionaries(dict_start: &[u8], pat: &CStr, flags: c_int, thesaurus: bool) {
+    let mut dict: &[u8] = cstr::until_nul(dict_start);
     let mut dir = compl_direction.get();
 
-    if unsafe { *dict } as c_int == NUL {
+    if dict.is_empty() {
         // When 'dictionary' is empty and spell checking is enabled use
         // "spell".
         if !thesaurus && Win::current().w_onebuf_opt.wo_spell != 0 {
-            dict = c"spell".as_ptr().cast_mut();
+            dict = b"spell";
         } else {
             return;
         }
     }
 
-    let buf = unsafe { xmalloc(LSIZE as size_t) }.cast::<c_char>();
     // So that we can leave through 'theend.
     let mut regmatch = RegMatch::new(None, false);
 
@@ -67,84 +61,54 @@ pub(crate) unsafe fn ins_compl_dictionaries(
         // pattern to only match at the start of a line.  Otherwise just
         // match the pattern.  Also need to double backslashes.
         if ctrl_x_mode_line_or_eval() {
-            let pat_esc = unsafe { escaped_bytes(cstr::bytes_at(pat), b"\\") }.into_raw();
-            let len = unsafe { cstr::bytes_at(pat_esc) }.len() + 10;
-            let ptr = unsafe { xmalloc(len) }.cast::<c_char>();
-            unsafe { vim_snprintf!(ptr, len, c"^\\s*\\zs\\V%s".as_ptr(), pat_esc) };
-            regmatch.regprog = vim_regcomp(unsafe { cstr::at(ptr) }, RE_MAGIC);
-            unsafe { xfree(pat_esc.cast::<c_void>()) };
-            unsafe { xfree(ptr.cast::<c_void>()) };
+            // Upstream sizes the buffer to fit exactly, so nothing is cut.
+            let mut anchored = XString::from_bytes(b"^\\s*\\zs\\V");
+            anchored.push_bytes(&escaped_bytes(pat.to_bytes(), b"\\"));
+            regmatch.regprog = vim_regcomp(anchored.as_cstr(), RE_MAGIC);
         } else {
-            regmatch.regprog = vim_regcomp(
-                unsafe { cstr::at(pat) },
-                if magic_isset() { RE_MAGIC } else { 0 },
-            );
+            regmatch.regprog = vim_regcomp(pat, if magic_isset() { RE_MAGIC } else { 0 });
             if regmatch.regprog.is_none() {
                 break 'theend;
             }
         }
 
         // Ignore case depends on 'ignorecase', 'smartcase' and "pat".
-        regmatch.rm_ic = ignorecase(unsafe { cstr::bytes_at(pat) });
-        while unsafe { *dict } as c_int != NUL && !got_int.get() && !compl_interrupted.get() {
-            // Copy one dictionary file name into buf.
-            // Upstream leaves both uninitialised: every path that reads
-            // them either assigns first or is guarded by `count > 0`.
-            let mut files: *mut *mut c_char = ptr::null_mut();
-            let mut count = 0;
-            // What the expansion found, and the `char **` view the scan reads.
-            let mut expanded: Vec<XString>;
-            let mut expanded_names: Vec<*mut c_char>;
-            if flags == DICT_EXACT {
-                count = 1;
-                files = &raw mut dict;
+        regmatch.rm_ic = ignorecase(pat.to_bytes());
+        while !dict.is_empty() && !got_int.get() && !compl_interrupted.get() {
+            // The files to scan; `None` is "complete from active spelling".
+            let files: Option<Vec<XString>> = if flags == DICT_EXACT {
+                // The whole rest of the list is one name.
+                Some(vec![XString::from_bytes(dict)])
             } else {
-                // Expand wildcards in the dictionary name, but do not allow
-                // backticks (for security, the 'dict' option may have been
-                // set in a modeline).
-                let comma = c",".as_ptr().cast_mut();
-                // SAFETY: `dict` walks the option string and `buf` has
-                // `LSIZE` writable bytes.
-                unsafe { copy_option_part(&raw mut dict, buf, LSIZE as size_t, comma) };
-                // SAFETY: `buf` now holds one NUL-terminated file pattern.
-                if !thesaurus && unsafe { cstr::eq_bytes(buf, b"spell") } {
-                    count = -1;
+                // Copy one dictionary file name, cut where upstream's
+                // `LSIZE` buffer cuts it, and expand wildcards in it -- but
+                // do not allow backticks (for security, the 'dict' option
+                // may have been set in a modeline).
+                let (part, rest) = split_option_part(dict, LSIZE as usize, b",");
+                dict = rest;
+                if !thesaurus && part == b"spell" {
+                    None
+                } else if part.contains(&b'`') {
+                    Some(Vec::new())
                 } else {
-                    // SAFETY: as above.
-                    let backtick = has_char(unsafe { cstr::at(buf) }, '`' as c_int);
-                    let failed = !backtick && {
-                        let flags = ExpandFlags::FILE | ExpandFlags::SILENT;
-                        // SAFETY: `buf` is one NUL-terminated pattern.
-                        match expand_wildcards(&[unsafe { cstr::at(buf) }], flags) {
-                            Ok(found) => {
-                                expanded = found;
-                                expanded_names =
-                                    expanded.iter_mut().map(XString::as_mut_ptr).collect();
-                                count = c_int::try_from(expanded_names.len()).unwrap_or(c_int::MAX);
-                                files = expanded_names.as_mut_ptr();
-                                false
-                            }
-                            Err(Failed) => true,
-                        }
-                    };
-                    if backtick || failed {
-                        count = 0;
-                    }
+                    let flags = ExpandFlags::FILE | ExpandFlags::SILENT;
+                    let part = XString::from_vec(part);
+                    Some(expand_wildcards(&[part.as_cstr()], flags).unwrap_or_default())
                 }
-            }
+            };
 
-            if count == -1 {
-                // Complete from active spelling.  Skip "\<" in the pattern,
-                // we don't use it as a RE.
-                let pat = unsafe { cstr::bytes_at(pat) };
-                let word = pat.strip_prefix(b"\\<").unwrap_or(pat);
-                spell_dump_compl(Some(word), regmatch.rm_ic as c_int, Some(&mut dir), 0);
-            } else if count > 0 {
-                // SAFETY: `files` is `count` NUL-terminated names and `buf`
-                // a scratch buffer of `LSIZE`.
-                unsafe {
-                    ins_compl_files(count, files, thesaurus, flags, &mut regmatch, buf, &mut dir)
-                };
+            match files {
+                None => {
+                    // Complete from active spelling.  Skip "\<" in the
+                    // pattern, we don't use it as a RE.
+                    let pat = pat.to_bytes();
+                    let word = pat.strip_prefix(b"\\<").unwrap_or(pat);
+                    spell_dump_compl(Some(word), regmatch.rm_ic as c_int, Some(&mut dir), 0);
+                }
+                Some(files) if !files.is_empty() => {
+                    ins_compl_files(&files, thesaurus, flags, &mut regmatch, &mut dir);
+                }
+                Some(_) => {}
             }
             if flags != 0 {
                 break;
@@ -154,7 +118,6 @@ pub(crate) unsafe fn ins_compl_dictionaries(
 
     P_SCS.set(save_p_scs);
     drop(regmatch);
-    unsafe { xfree(buf.cast::<c_void>()) };
 }
 
 /// Add all the words in `line` from the thesaurus file `fname`, skipping the
@@ -201,59 +164,52 @@ fn thesaurus_add_words_in_line(
     (status, at)
 }
 
-/// Read `count` dictionary/thesaurus `files` and add the text matching
-/// `regmatch`, reading each line into `buf`.
-///
-/// # Safety
-///
-/// `files` must point at `count` NUL-terminated names. `buf` must have
-/// `LSIZE` writable bytes.
-pub(crate) unsafe fn ins_compl_files(
-    count: c_int,
-    files: *mut *mut c_char,
+/// Read the dictionary/thesaurus `files` and add the text matching
+/// `regmatch`.
+pub(crate) fn ins_compl_files(
+    files: &[XString],
     thesaurus: bool,
     flags: c_int,
     regmatch: &mut RegMatch,
-    buf: *mut c_char,
     dir: &mut Direction,
 ) {
-    let mut progress = [0 as c_char; IOSIZE as usize];
     // The leader is copied: the scan checks for typed keys between lines.
     let leader = cot_fuzzy().then(|| ins_compl_leader_str().to_owned());
     let leader = leader
         .as_ref()
         .map(String_0::as_cstr)
         .filter(|l| !l.is_empty());
+    // One line at a time, with the terminator `vim_regexec` wants.
+    let mut raw: Vec<u8> = Vec::with_capacity(LSIZE as usize);
 
-    let mut i = 0;
-    while i < count as usize && !got_int.get() && !ins_compl_interrupted() {
-        // SAFETY: the caller's `count` names.
-        let file = unsafe { *files.add(i) };
-        // SAFETY: a NUL-terminated name.
-        let fname = unsafe { cstr::at(file) };
-        let fp = unsafe { os_fopen(file, c"r".as_ptr()) }; // open dictionary file
+    for file in files {
+        if got_int.get() || ins_compl_interrupted() {
+            break;
+        }
+        let fname = file.as_cstr();
+        // Open the dictionary file.
+        let fp = File::open(OsStr::from_bytes(fname.to_bytes()));
         let quiet = shortmess(ShmFlag::COMPLETIONSCAN);
         if flags != DICT_EXACT && !quiet && !compl_autocomplete.get() {
+            // Upstream formats into `IObuff`, which cuts it there.
             let fmt = gettext(c"Scanning dictionary: %s");
-            let (out, size) = (progress.as_mut_ptr(), IOSIZE as size_t);
-            // SAFETY: `out` addresses all `size` bytes and `file` is a
-            // NUL-terminated name.
-            unsafe { vim_snprintf!(out, size, fmt.as_ptr(), file) };
-            // SAFETY: `vim_snprintf` NUL-terminated `out`.
-            unsafe { scan_progress(out) };
+            let message = formatted!(IOSIZE as usize, fmt.to_bytes(), fname);
+            scan_progress(XString::from_vec(message).as_cstr());
         }
 
-        if fp.is_null() {
-            i += 1;
+        let Ok(fp) = fp else {
             continue;
-        }
+        };
+        let mut reader = Fgets::new(fp);
 
         // Read the dictionary file line by line, checking each for a match.
-        // SAFETY: `buf` has `LSIZE` bytes and `fp` is open.
-        while !got_int.get() && !ins_compl_interrupted() && !unsafe { vim_fgets(buf, LSIZE, fp) } {
-            // SAFETY: `vim_fgets` left one NUL-terminated line in `buf`,
-            // which nothing else writes while it is read here.
-            let line_cstr = unsafe { cstr::at(buf) };
+        while !got_int.get()
+            && !ins_compl_interrupted()
+            && reader.line_capped(&mut raw, LSIZE as usize)
+        {
+            // Read as the C string `vim_fgets` left: up to a NUL in it.
+            raw.push(NUL as u8);
+            let line_cstr = cstr::in_bytes(&raw);
             let line = line_cstr.to_bytes();
             if let Some(leader) = leader {
                 let end = line_end(line);
@@ -308,9 +264,6 @@ pub(crate) unsafe fn ins_compl_files(
             line_breakcheck();
             ins_compl_check_keys(50, false);
         }
-        // SAFETY: the file opened above.
-        unsafe { fclose(fp) };
-        i += 1;
     }
 }
 
@@ -646,9 +599,9 @@ pub(crate) fn get_register_completion() {
         };
         let orig = orig.as_bytes();
         if p_ic() {
-            // SAFETY: `s` runs to the end of a NUL-terminated register line,
-            // and `strncasecmp` reads `orig` no further than its length.
-            unsafe { strncasecmp(s.as_ptr().cast(), orig.as_ptr().cast(), orig.len()) == 0 }
+            // `strncasecmp` over the original's length, reading `s` as the
+            // NUL-terminated register line it is.
+            cstr::ncase_eq_ascii(s, orig, orig.len())
         } else {
             // `strncmp` over the original's length, which holds no NUL.
             s.starts_with(orig)

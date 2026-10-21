@@ -398,7 +398,7 @@ pub(crate) fn alloc_unregistered_buffer() -> Owned<Buffer> {
     // holds a seeded hasher, and an `Option<XString>`'s niche is the
     // vector's capacity, so all-zero bytes are `Some` of a null vector --
     // are the user-command list, the keymap, the remembered window
-    // positions, the buffer's syntax block (`SynBlock::new`), what the
+    // positions, the `'complete'` function callbacks, the buffer's syntax block (`SynBlock::new`), what the
     // memline owns, the two
     // extmark tables, the ShaDa extra data (a vector inside an `Option`), the
     // `U` line, the two 'vartabstop' arrays, the string options and the file
@@ -409,6 +409,7 @@ pub(crate) fn alloc_unregistered_buffer() -> Owned<Buffer> {
     unsafe { (&raw mut (*at).b_ucmds).write(Vec::new()) };
     unsafe { (&raw mut (*at).b_kmap_ga).write(Vec::new()) };
     unsafe { (&raw mut (*at).b_wininfo).write(Vec::new()) };
+    unsafe { (&raw mut (*at).b_p_cpt_cb).write(Vec::new()) };
     unsafe { (&raw mut (*at).b_s).write(crate::types::SynBlock::new()) };
     unsafe { (&raw mut (*at).b_ml).write(MemLine::closed()) };
     unsafe { (&raw mut (*at).b_marktree).write(MarkTree::EMPTY) };

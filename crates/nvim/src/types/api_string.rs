@@ -87,6 +87,22 @@ impl String_0 {
         self.data.is_null()
     }
 
+    /// The null string with a byte count of `size` all the same: upstream's
+    /// `XFREE_CLEAR(s)` written on the *struct* rather than on its `.data`,
+    /// which frees the bytes and nulls the pointer but leaves the length
+    /// stale.
+    ///
+    /// It owns nothing, so the readers that touch bytes see the null string
+    /// ([`as_bytes`](Self::as_bytes) answers the empty slice); only
+    /// [`len`](Self::len) and [`is_empty`](Self::is_empty) see the stale
+    /// count, as upstream's `.size` readers did.
+    pub const fn null_with_stale_len(size: size_t) -> Self {
+        Self {
+            data: ptr::null_mut(),
+            size,
+        }
+    }
+
     /// Take the allocation out of the string, leaving it
     /// [`NULL`](Self::NULL). The caller frees it with `xfree`.
     ///

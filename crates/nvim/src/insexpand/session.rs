@@ -5,16 +5,18 @@
 //! asking the per-mode `get_*_compl_info` function, then hands over to
 //! [`super::getexp::ins_compl_get_exp`].
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
+use crate::charset::display::foldcase;
+use crate::charset::is_word_at;
 use crate::charset::skip;
+use crate::cstr::{self, byte_at};
 use crate::guard::Lock;
 use crate::keycodes::{Ctrl_N, Ctrl_P, Ctrl_R};
+use crate::mbyte::{char_at, class_in, head_off};
 use crate::memline::Lines;
 use crate::memory::XString;
-use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::types::{ExpandContext, Failed, IOSIZE, ShmFlag};
 use crate::winlayer::{Buf, Win};
@@ -31,41 +33,41 @@ fn set_compl_startpos_here(col: ColNr) {
 /// Sets `compl_col`, `compl_length` and `compl_pattern`; reads
 /// `compl_cont_status` and `ctrl_x_mode`.
 pub(crate) fn get_normal_compl_info(mut startcol: c_int, curs_col: ColNr) -> Result<(), Failed> {
-    // The cursor line, taken here rather than handed in: the `'complete'`
-    // functions called at the bottom run user code, and every caller of the
-    // `get_*_compl_info` family used to re-fetch the line afterwards for
-    // exactly that reason.
-    let mut lines = Lines::current();
-    let line = lines
-        .line_cstr(Win::current().w_cursor.lnum, 0)
-        .as_ptr()
-        .cast_mut();
+    // A copy of the cursor line, taken here rather than handed in: the
+    // `'complete'` functions called at the bottom run user code, and every
+    // caller of the `get_*_compl_info` family used to re-fetch the line
+    // afterwards for exactly that reason.
+    let line: Vec<u8> = Lines::current().line(Win::current().w_cursor.lnum).to_vec();
+    let line: &[u8] = &line;
+    let buffer = Buf::current();
+    // The text from column `col`, read as the C string it was: past the end
+    // is NUL.
+    let from = |col: c_int| line.get(col as usize..).unwrap_or_default();
+    // The start of the character before column `col`: C's `mb_prevptr`.
+    let prev = |col: c_int| {
+        let col = col as usize;
+        if col == 0 {
+            0
+        } else {
+            col - 1 - head_off(line, col - 1)
+        }
+    };
+    let is_word = |col: usize| is_word_at(line.get(col..).unwrap_or_default(), buffer);
     // The pattern under construction: `prefix`, then `quote_meta` of the
-    // `len` bytes at `compl_col` — the size `quote_meta` answers for a
-    // null destination is exactly the room the second call needs.
-    let build_pattern = |prefix: &'static CStr, len: c_int| {
-        let at = prefix.count_bytes();
-        // SAFETY: `line` is the caller's NUL-terminated line and `compl_col`
-        // a column in it; a null destination asks for the size only.
-        let quoted =
-            unsafe { quote_meta(ptr::null_mut(), line.offset(compl_col.get() as isize), len) }
-                as size_t;
-        XString::filled(at + quoted - 1, |buffer| {
-            // SAFETY: `buffer` has the room `quote_meta` just asked for,
-            // prefix included, and the line is as above.
-            unsafe {
-                ptr::copy_nonoverlapping(prefix.as_ptr(), buffer, at);
-                quote_meta(buffer.add(at), line.offset(compl_col.get() as isize), len);
-            }
-        })
+    // `len` bytes at `compl_col`, measured at the first NUL as upstream's
+    // `strlen` measured it.
+    let build_pattern = |prefix: &[u8], len: c_int| {
+        let mut pattern = prefix.to_vec();
+        quote_meta(&mut pattern, from(compl_col.get()), len);
+        pattern.truncate(cstr::until_nul(&pattern).len());
+        pattern
     };
 
     if compl_cont_status.get() & CONT_SOL != 0 || ctrl_x_mode_path_defines() {
         if !compl_status_adding() {
             while {
                 startcol -= 1;
-                startcol >= 0
-                    && unsafe { vim_is_ident_char(*line.offset(startcol as isize) as u8 as c_int) }
+                startcol >= 0 && vim_is_ident_char(c_int::from(byte_at(line, startcol as usize)))
             } {}
             startcol += 1;
             compl_col.set(compl_col.get() + startcol);
@@ -74,24 +76,22 @@ pub(crate) fn get_normal_compl_info(mut startcol: c_int, curs_col: ColNr) -> Res
         compl_pattern().set(compl_pattern_from_line());
     } else if compl_status_adding() {
         // We need up to 2 extra chars for the prefix.
-        let word_start = unsafe { line.offset(compl_col.get() as isize) };
-        let prefix = if !unsafe { vim_iswordp(word_start) }
-            || (compl_col.get() > 0 && unsafe { vim_iswordp(mb_prevptr(line, word_start)) })
-        {
-            c""
-        } else {
-            c"\\<"
-        };
-        compl_pattern().set_string(build_pattern(prefix, compl_length.get()));
+        let word_start = compl_col.get();
+        let prefix: &[u8] =
+            if !is_word(word_start as usize) || (word_start > 0 && is_word(prev(word_start))) {
+                b""
+            } else {
+                b"\\<"
+            };
+        let pattern = build_pattern(prefix, compl_length.get());
+        compl_pattern().set_string(XString::from_vec(pattern));
     } else {
         // Upstream decrements in the `else if` test itself, so only these
         // two branches see the smaller column.
         startcol -= 1;
-        if startcol < 0
-            || !unsafe { vim_iswordp(mb_prevptr(line, line.offset(startcol as isize + 1))) }
-        {
+        if startcol < 0 || !is_word(prev(startcol + 1)) {
             // Match any word of at least two chars.
-            compl_pattern().set(unsafe { cbuf_to_string(c"\\<\\k\\k".as_ptr(), 6) });
+            compl_pattern().set(String_0::from_bytes(b"\\<\\k\\k"));
             compl_col.set(compl_col.get() + curs_col);
             compl_length.set(0);
             compl_from_nonkeyword.set(true);
@@ -99,17 +99,15 @@ pub(crate) fn get_normal_compl_info(mut startcol: c_int, curs_col: ColNr) -> Res
             // Search backwards for the point where the character class
             // changes, or for a single-byte character that is not a word
             // character.
-            startcol -= unsafe { utf_head_off(line, line.offset(startcol as isize)) };
-            let base_class = unsafe { mb_get_class(line.offset(startcol as isize)) };
+            startcol -= head_off(line, startcol as usize) as c_int;
+            let base_class = class_in(from(startcol), buffer);
             loop {
                 startcol -= 1;
                 if startcol < 0 {
                     break;
                 }
-                let head_off = unsafe { utf_head_off(line, line.offset(startcol as isize)) };
-                if base_class
-                    != unsafe { mb_get_class(line.offset((startcol - head_off) as isize)) }
-                {
+                let head_off = head_off(line, startcol as usize) as c_int;
+                if base_class != class_in(from(startcol - head_off), buffer) {
                     break;
                 }
                 startcol -= head_off;
@@ -117,24 +115,16 @@ pub(crate) fn get_normal_compl_info(mut startcol: c_int, curs_col: ColNr) -> Res
             startcol += 1;
             compl_col.set(compl_col.get() + startcol);
             compl_length.set(curs_col - startcol);
-            if compl_length.get() == 1 {
+            let mut pattern = if compl_length.get() == 1 {
                 // Only match a word with at least two chars -- webb.
-                // There's no need to call quote_meta for the size,
-                // xmalloc(7) is enough -- Acevedo.
-                let mut pattern = XString::filled(6, |buffer| {
-                    // SAFETY: six bytes of room, which is what upstream's
-                    // `xmalloc(7)` said the two-byte prefix and a single
-                    // quoted character need; the line is as above.
-                    unsafe {
-                        ptr::copy_nonoverlapping(c"\\<".as_ptr(), buffer, 2);
-                        quote_meta(buffer.add(2), line.offset(compl_col.get() as isize), 1);
-                    }
-                });
-                pattern.push_str("\\k");
-                compl_pattern().set_string(pattern);
+                build_pattern(b"\\<", 1)
             } else {
-                compl_pattern().set_string(build_pattern(c"\\<", compl_length.get()));
+                build_pattern(b"\\<", compl_length.get())
+            };
+            if compl_length.get() == 1 {
+                pattern.extend_from_slice(b"\\k");
             }
+            compl_pattern().set_string(XString::from_vec(pattern));
         }
     }
 
@@ -165,40 +155,30 @@ pub(crate) fn get_wholeline_compl_info(curs_col: ColNr) -> Result<(), Failed> {
 /// The pattern, column and length for filename completion.
 pub(crate) fn get_filename_compl_info(mut startcol: c_int, curs_col: ColNr) -> Result<(), Failed> {
     let mut lines = Lines::current();
-    let line = lines
-        .line_cstr(Win::current().w_cursor.lnum, 0)
-        .as_ptr()
-        .cast_mut();
+    let line = lines.line(Win::current().w_cursor.lnum);
     // Go back to just before the first filename character.
     if startcol > 0 {
         // C's MB_PTR_BACK: step back over one whole character.
-        let back = |p: *mut c_char| unsafe {
-            p.offset(-((utf_head_off(line, p.offset(-1)) + 1) as isize))
-        };
-        let mut p = back(unsafe { line.offset(startcol as isize) });
-        while p > line && unsafe { vim_isfilec(utf_ptr2char(p)) } {
+        let back = |p: usize| p - (head_off(line, p - 1) + 1);
+        let is_filec = |p: usize| vim_isfilec(char_at(line.get(p..).unwrap_or_default()));
+        let mut p = back(startcol as usize);
+        while p > 0 && is_filec(p) {
             p = back(p);
         }
         // The MSWIN half of upstream's guard — a drive letter — is not
         // compiled here, so this is just the one test.
-        let p_is_filec = unsafe { vim_isfilec(utf_ptr2char(p)) };
-        startcol = if p == line && p_is_filec {
+        startcol = if p == 0 && is_filec(p) {
             0
         } else {
-            unsafe { p.offset_from(line) as c_int + 1 }
+            p as c_int + 1
         };
     }
 
     compl_col.set(compl_col.get() + startcol);
     compl_length.set(curs_col - startcol);
-    // SAFETY: the column and length are inside the cursor line, which is
-    // still where `line` points.
-    let typed = unsafe {
-        core::slice::from_raw_parts(
-            line.offset(compl_col.get() as isize).cast::<u8>(),
-            compl_length.get() as size_t,
-        )
-    };
+    let start = (compl_col.get() as usize).min(line.len());
+    let end = (start + compl_length.get().max(0) as usize).min(line.len());
+    let typed = &line[start..end];
     compl_pattern().set(String_0::from_bytes(&addstar(typed, ExpandContext::Files)));
     Ok(())
 }
@@ -259,46 +239,43 @@ pub(crate) fn set_compl_globals(mut startcol: c_int, curs_col: ColNr, is_cpt_com
 /// The pattern, column and length for user-defined completion
 /// (`'omnifunc'`, `'completefunc'` and `'thesaurusfunc'`).
 ///
-/// `cb` is set when a function in `'complete'` triggered this, null otherwise;
-/// `startcol`, when not null, receives the column the function answered.
-///
-/// # Safety
-///
-/// `cb` must point at an initialized callback, unaliased for the call.
-/// `startcol` must point at a writable `int` the caller owns.
-pub(crate) unsafe fn get_userdefined_compl_info(
+/// `cb` is set when a function in `'complete'` triggered this (the caller
+/// holds it for the call), `None` otherwise. Answers whether to go on, and
+/// the column the function answered -- 0 when it was not reached.
+pub(crate) fn get_userdefined_compl_info(
     curs_col: ColNr,
-    mut cb: *mut Callback,
-    startcol: *mut c_int,
-) -> Result<(), Failed> {
+    cb: Option<&Callback>,
+) -> (Result<(), Failed>, c_int) {
     // Call the user-defined function with "a:findstart" set to 1 to obtain
     // the length of the text to complete.
     let save_state = State.get();
 
-    let is_cpt_function = !cb.is_null();
-    if !is_cpt_function {
-        if get_complete_funcname(ctrl_x_mode.get()).is_empty() {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg0 = unsafe {
-                c_str(if ctrl_x_mode_function() {
-                    c"completefunc".as_ptr()
+    let is_cpt_function = cb.is_some();
+    let held;
+    let cb = match cb {
+        Some(cb) => cb,
+        None => {
+            if get_complete_funcname(ctrl_x_mode.get()).is_empty() {
+                let arg0 = if ctrl_x_mode_function() {
+                    "completefunc"
                 } else {
-                    c"omnifunc".as_ptr()
-                })
-            };
-            semsg!("E764: Option '{arg0}' is not set");
-            return Err(Failed);
+                    "omnifunc"
+                };
+                semsg!("E764: Option '{arg0}' is not set");
+                return (Err(Failed), 0);
+            }
+            // A second reference: the function may reset the option.
+            held = get_insert_callback(ctrl_x_mode.get());
+            &*held
         }
-        cb = get_insert_callback(ctrl_x_mode.get());
-    }
+    };
 
     // The empty string is the argument's own, released with it.
     let args = [TypVal::Number(1), TypVal::string_from(b"")];
 
     let pos = Win::current().w_cursor;
     let locked = Lock::text();
-    // SAFETY: `cb` is the buffer's live callback.
-    let col = unsafe { callback_call_retnr(&*cb, &args) } as ColNr;
+    let col = callback_call_retnr(cb, &args) as ColNr;
     drop(locked);
 
     State.set(save_state);
@@ -307,30 +284,26 @@ pub(crate) unsafe fn get_userdefined_compl_info(
     validate_cursor(Win::current());
     if !equalpos(Win::current().w_cursor, pos) {
         emsg(gettext(E_COMPLDEL));
-        return Err(Failed);
-    }
-
-    if !startcol.is_null() {
-        unsafe { *startcol = col };
+        return (Err(Failed), 0);
     }
 
     // -2 means the function wants to cancel the completion without an
     // error; do the same if it did not execute successfully.
     if col == -2 || aborting() {
-        return Err(Failed);
+        return (Err(Failed), col);
     }
 
     // -3 does the same as -2 and leaves CTRL-X mode.
     if col == -3 {
         if is_cpt_function {
-            return Err(Failed);
+            return (Err(Failed), col);
         }
         ctrl_x_mode.set(CTRL_X_NORMAL);
         edit_submode.set(None);
         if !shortmess(ShmFlag::COMPLETIONMENU) {
             msg_clr_cmdline();
         }
-        return Err(Failed);
+        return (Err(Failed), col);
     }
 
     // Reset the extended parameters of completion when starting a new one.
@@ -339,7 +312,7 @@ pub(crate) unsafe fn get_userdefined_compl_info(
     if !is_cpt_function {
         set_compl_globals(col, curs_col, false);
     }
-    Ok(())
+    (Ok(()), col)
 }
 
 /// The pattern, column and length for spell completion; reads `spell_bad_len`.
@@ -387,9 +360,9 @@ pub(crate) fn compl_get_info(startcol: c_int, curs_col: ColNr) -> Result<(), Fai
         || ctrl_x_mode_omni()
         || thesaurus_func_complete(ctrl_x_mode.get())
     {
-        // SAFETY: a null callback is "no 'complete' function asked for this"
-        // and a null slot is "the column is not wanted".
-        unsafe { get_userdefined_compl_info(curs_col, ptr::null_mut(), ptr::null_mut()) }
+        // No 'complete' function asked for this, and the column is not
+        // wanted.
+        get_userdefined_compl_info(curs_col, None).0
     } else if ctrl_x_mode_spell() {
         get_spell_compl_info(startcol, curs_col)
     } else {
@@ -714,17 +687,7 @@ pub(crate) fn compl_pattern_from_line() -> String_0 {
     let mut lines = Lines::current();
     let text = compl_range(lines.line(Win::current().w_cursor.lnum));
     if p_ic() {
-        let len = c_int::try_from(text.len()).unwrap_or(0);
-        // SAFETY: the bytes just named, and `str_foldcase` with a null arena
-        // answers a fresh NUL-terminated allocation.
-        unsafe {
-            cstr_to_string(str_foldcase(
-                text.as_ptr().cast::<c_char>().cast_mut(),
-                len,
-                ptr::null_mut(),
-                0,
-            ))
-        }
+        String_0::from_bytes(&foldcase(text, None))
     } else {
         String_0::from_bytes(text)
     }

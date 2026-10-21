@@ -1,5 +1,4 @@
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -9,23 +8,19 @@ use crate::types::AutoEvent;
 use crate::types::CAR;
 use crate::types::NL;
 use crate::types::TAB;
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
-use core::ptr;
+use core::ffi::{CStr, c_char, c_int, c_uint};
+
 use std::rc::Rc;
 
-use crate::api::private::helpers::{cbuf_to_string, cstr_to_string};
 use crate::ascii::{ascii_iswhite, ascii_iswhite_or_nul};
 use crate::autocmd::has_event;
 use crate::buffer::buf_spname;
 use crate::change::{deleted_lines_mark, ins_bytes, ins_char, ins_char_bytes, ins_str, open_line};
 use crate::charset::{
-    ptr2cells, str_foldcase, vim_is_ident_char, vim_isfilec, vim_isprintc, vim_iswordc,
-    vim_iswordp, vim_strsize,
+    ptr2cells_at, strsize, vim_is_ident_char, vim_isfilec, vim_isprintc, vim_iswordc,
 };
 use crate::cmdexpand::{addstar, expand_cmdline, set_cmd_context};
-use crate::cursor::{
-    check_cursor, dec_cursor, get_cursor_line_len, get_cursor_line_ptr, inc_cursor,
-};
+use crate::cursor::{check_cursor, dec_cursor, get_cursor_line_len, inc_cursor};
 use crate::drawscreen::state::{dollar_vcol, redraw_cmdline, redraw_mode, sc_col};
 use crate::drawscreen::{
     UPD_VALID, redraw_later, redraw_win_line, setcursor, showmode, update_screen,
@@ -35,7 +30,7 @@ use crate::edit::{
     ins_need_undo_get, ins_redraw, insertchar, start_arrow, stop_arrow,
 };
 use crate::eval::typval::{
-    callback_copy, callback_free, dict_find, dict_get_number, dict_get_tv, tv_clear, tv_dict_alloc,
+    callback_free, dict_find, dict_get_number, dict_get_tv, tv_clear, tv_dict_alloc,
     tv_dict_alloc_lock, tv_dict_alloc_ret, tv_get_number_chk, tv_list_alloc,
 };
 use crate::eval::userfunc::callback_call_retnr;
@@ -44,7 +39,6 @@ use crate::eval::{callback_call, get_v_event, restore_v_event, set_ref_in_callba
 use crate::ex_docmd::state::{ex_normal_busy, global_busy};
 use crate::ex_eval::aborting;
 use crate::extmark::{extmark_apply_undo, extmark_splice_delete};
-use crate::fileio::vim_fgets;
 use crate::fuzzy::fuzzy_match_str;
 use crate::getchar::state::{KeyTyped, got_int, test_disable_char_avail};
 use crate::getchar::{
@@ -57,11 +51,9 @@ use crate::indent::{get_indent, inindent};
 use crate::indent_c::{cindent_on, do_c_expr_indent, in_cinkeys};
 use crate::lua::executor::nlua_expand_pat;
 use crate::mbyte::{
-    mb_get_class, mb_islower, mb_isupper, mb_prevptr, mb_tolower, mb_toupper, utf_char2len,
-    utf_head_off, utf_ptr2char, utf8len_tab, utfc_ptr2len,
+    c_cluster_len, mb_islower, mb_isupper, mb_tolower, mb_toupper, utf_char2len, utf8len_tab,
 };
 use crate::memline::{dec, ml_delete};
-use crate::memory::{strequal, xcalloc, xfree, xmalloc};
 use crate::message::state::{did_emsg, emsg_silent, in_assert_fails, msg_hist_off};
 use crate::message::{e_invarg, e_listreq, e_patnotf};
 use crate::message::{
@@ -72,16 +64,13 @@ use crate::option::vars::{
     P_IC, P_SCS, P_WS, cot_flags, p_ac, p_acl, p_act, p_cto, p_dict, p_fic, p_ic, p_inf, p_js,
     p_paste, p_scs, p_smd, p_tsr, p_tsrfu, p_wic, p_ws,
 };
-use crate::option::{
-    callback_from_option, can_bs, copy_option_part, install_callback, magic_isset, shortmess,
-};
+use crate::option::{callback_from_option, can_bs, install_callback, magic_isset, shortmess};
 use crate::options::{
     kOptBoFlagComplete, kOptCotFlagFuzzy, kOptCotFlagLongest, kOptCotFlagMenu, kOptCotFlagMenuone,
     kOptCotFlagNearest, kOptCotFlagNoinsert, kOptCotFlagNoselect, kOptCotFlagNosort,
     kOptCotFlagPreinsert,
 };
-use crate::os::cshim::{gettext, strncasecmp};
-use crate::os::fs::os_fopen;
+use crate::os::cshim::gettext;
 use crate::os::input::{fast_breakcheck, line_breakcheck, os_breakcheck};
 use crate::os::time::{os_delay, os_hrtime};
 use crate::path::{expand_wildcards, path_tail, vim_ispathsep};
@@ -119,7 +108,6 @@ use crate::window::win_valid;
 use crate::winfloat::win_float_find_preview;
 use crate::winlayer::graph::cmdwin_type;
 use crate::winlayer::{BufId, WinId};
-use ::libc::{fclose, strrchr};
 
 // The carve of the transpiled module; see each child's docs.
 mod mode;
@@ -277,7 +265,9 @@ pub(crate) struct InsComplNextState {
     /// name: a copy, because the scan runs code that can wipe the buffer.
     pub dict: Option<XString>,
     pub dict_f: ::core::ffi::c_int,
-    pub func_cb: *mut Callback,
+    /// The `'complete'` function the current entry names, held for the
+    /// scan.
+    pub func_cb: Option<HeldCallback>,
     /// Where [`get_next_default_completion`] copies the match it found,
     /// kept so its allocation serves the whole scan.
     pub(crate) found: Vec<u8>,
@@ -310,7 +300,7 @@ pub(crate) const INS_COMPL_NEXT_STATE_INIT: InsComplNextState = InsComplNextStat
     found_all: false,
     dict: None,
     dict_f: 0,
-    func_cb: ptr::null_mut(),
+    func_cb: None,
     found: Vec::new(),
 };
 /// An unset `TypVal`, which the transpile writes out at every declaration
@@ -405,28 +395,16 @@ pub(crate) fn ctrl_x_msg(mode: c_int) -> Option<&'static CStr> {
 /// `ComplStr` is the one owner of each. It names the cell rather than
 /// pointing into it, and every read takes the cell's borrow only for the
 /// length of that read — which matters because completion runs user
-/// callbacks, and a callback can reach the same string. The *bytes* are
-/// still handed out raw, because every consumer of them is C-shaped; they
-/// stay valid until the next [`set`](ComplStr::set) or
-/// [`replace`](ComplStr::replace), exactly as upstream's did.
+/// callbacks, and a callback can reach the same string. The bytes are only
+/// lent to a closure ([`with_bytes`](ComplStr::with_bytes),
+/// [`with_cstr`](ComplStr::with_cstr)) or copied out.
 #[derive(Clone, Copy)]
 pub(crate) struct ComplStr(ComplField<String_0>);
 
 impl ComplStr {
-    /// The bytes, or null while the string is unset.
-    pub(crate) fn data(self) -> *mut c_char {
-        self.0.with(String_0::data)
-    }
-
     /// The byte count.
     pub(crate) fn len(self) -> size_t {
         self.0.with(String_0::len)
-    }
-
-    /// Both words, read under one borrow, for the callers that want a
-    /// snapshot rather than two separate reads.
-    pub(crate) fn parts(self) -> (*mut c_char, size_t) {
-        self.0.with(|s| (s.data(), s.len()))
     }
 
     /// Look at the bytes (empty while unset). `f` must not reach back into
@@ -482,20 +460,6 @@ impl ComplStr {
         self.0.set(String_0::NULL);
     }
 
-    /// Release the bytes and take over `data`, an `xmalloc`ed block of
-    /// `len + 1` bytes with a NUL at `len`.
-    ///
-    /// The two-step build in `get_normal_compl_info` sizes the pattern and
-    /// fills it in one go now, because a string that owns its bytes has no
-    /// half-set state to go through.
-    ///
-    /// # Safety
-    /// `data` must be such a block, which nothing else frees.
-    pub(crate) unsafe fn set_owned(self, data: *mut c_char, len: size_t) {
-        // SAFETY: the caller's promise.
-        self.0.set(unsafe { String_0::from_owned_parts(data, len) });
-    }
-
     /// Take over an [`XString`]'s block.
     pub(crate) fn set_string(self, pattern: XString) {
         self.0.set(String_0::from_xstring(pattern));
@@ -513,11 +477,7 @@ impl ComplStr {
     /// reader guards on the pointer.
     pub(crate) fn free_bytes_keep_len(self) {
         let stale = self.len();
-        // SAFETY: a null pointer owns nothing, so the string has nothing to
-        // free; the stale length is the whole point of this spelling and is
-        // only ever read behind a null check.
-        self.0
-            .set(unsafe { String_0::from_owned_parts(ptr::null_mut(), stale) });
+        self.0.set(String_0::null_with_stale_len(stale));
     }
 }
 

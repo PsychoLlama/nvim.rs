@@ -6,21 +6,19 @@
 //! `pum_display`, and [`trigger_complete_changed_event`] fires
 //! `CompleteChanged` with the selected item.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::autocmd::fire_autocmds;
+use crate::formatted;
 use crate::guard::{Allow, Lock};
 use crate::memline::Lines;
 use crate::memory::XString;
 use crate::message::msg;
 use crate::tr;
-use crate::types::{IOSIZE, NUL, ShmFlag};
-use crate::vim_snprintf;
+use crate::types::{IOSIZE, ShmFlag};
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
-use core::slice;
 
 /// The popup menu's view of the match list.
 ///
@@ -102,8 +100,6 @@ impl ComplMatchArray {
 /// The highlight attribute for the inserted-but-not-accepted text at
 /// `lnum`/`col`, or −1 where there is none.
 pub fn ins_compl_col_range_attr(lnum: LineNr, col: c_int) -> c_int {
-    // SAFETY: neither query has a precondition left; both are still
-    // `unsafe fn`s for their call sites outside this family.
     let (preinsert, longest) = (ins_compl_has_preinsert(), ins_compl_preinsert_longest());
     if cot_fuzzy() || (!compl_hi_on_autocompl_longest.get() && longest) {
         return -1;
@@ -111,12 +107,11 @@ pub fn ins_compl_col_range_attr(lnum: LineNr, col: c_int) -> c_int {
     // Either kind of preview takes `PreInsert`; only an accepted match that
     // has not been confirmed yet takes `ComplMatchIns`.
     let name = if preinsert || longest {
-        c"PreInsert".as_ptr()
+        c"PreInsert"
     } else {
-        c"ComplMatchIns".as_ptr()
+        c"ComplMatchIns"
     };
-    // SAFETY: a static NUL-terminated highlight group name.
-    let attr = unsafe { syn_name2attr(name) };
+    let attr = syn_name2attr(name);
     if attr == 0 {
         return -1;
     }
@@ -225,11 +220,8 @@ pub(crate) fn prepend_startcol_text(dest: ComplStr, src: ComplStr, startcol: c_i
         let at = usize::try_from(startcol).unwrap_or(0).min(line.len());
         text.push_bytes(&line[at..at.saturating_add(prepend_len).min(line.len())]);
     }
-    let (src_data, src_len) = src.parts();
-    // SAFETY: `src` is a completion string, which holds the bytes it reports.
-    text.push_bytes(unsafe { slice::from_raw_parts(src_data.cast::<u8>(), src_len) });
-    // SAFETY: the block just built, filled and terminated.
-    unsafe { dest.set_owned(text.into_raw(), new_length) };
+    src.with_bytes(|src| text.push_bytes(src));
+    dest.set_string(text);
 }
 
 /// Drop the cached [`adjusted_leader`] — upstream's
@@ -315,9 +307,14 @@ pub(crate) fn ins_compl_build_pum() -> c_int {
     // match after it and don't highlight anything.
     let mut shown_match_ok = shown_match().is_some_and(MatchId::is_original);
 
-    // SAFETY: both strings are NUL-terminated or null, which `strequal`
-    // takes.
-    let leader_is_orig = unsafe { strequal(compl_leader().data(), compl_orig_text().data()) };
+    // C's `strequal`: both unset, or both set to the same C string.
+    let leader_is_orig = match (compl_leader().is_unset(), compl_orig_text().is_unset()) {
+        (true, true) => true,
+        (false, false) => {
+            compl_leader().with_cstr(|leader| compl_orig_text().with_cstr(|orig| leader == orig))
+        }
+        _ => false,
+    };
     if leader_is_orig && !shown_match_ok {
         // Upstream dereferences `compl_first_match` here without checking.
         let head = first_match().expect("a menu is built from a non-empty list");
@@ -536,64 +533,37 @@ pub(crate) fn compl_match_curr_select(selected: c_int) -> bool {
 /// Report which file the shown match came from, truncating the name on the
 /// left to whatever room the status line leaves.
 pub(crate) fn ins_compl_show_filename() {
-    let mut line = [0 as c_char; IOSIZE as usize];
     let lead = gettext(c"match in file");
-    // SAFETY: as above.
-    let mut space = sc_col.get() - unsafe { vim_strsize(lead.as_ptr()) } - 2;
+    let mut space = sc_col.get() - strsize(lead.to_bytes()) - 2;
     if space <= 0 {
         return;
     }
 
-    // Find `s` such that `s..e` fits in `space` cells. The name is held here
-    // for the rest of the function, so its address stays good.
+    // Find `s` such that `s..e` fits in `space` cells.
     let shown = shown_match().expect("the file name of a shown match");
     let Some(name) = shown.with(|m| m.fname.clone()) else {
         return;
     };
-    let fname = name.as_ptr().cast_mut();
-    let mut s = fname;
-    let mut e = fname;
-    loop {
-        // SAFETY: `e` walks the NUL-terminated file name and stops at its
-        // NUL.
-        if unsafe { *e } as c_int == NUL {
-            break;
-        }
-        // SAFETY: `e` points at a character of the name.
-        space -= unsafe { ptr2cells(e) };
+    let fname: &[u8] = &name;
+    let mut s = 0;
+    let mut e = 0;
+    while e < fname.len() {
+        space -= ptr2cells_at(&fname[e..]);
         while space < 0 {
-            // SAFETY: `s` trails `e` inside the same name.
-            space += unsafe { ptr2cells(s) };
-            // SAFETY: as above -- a character is `utfc_ptr2len` bytes.
-            s = unsafe { s.offset(utfc_ptr2len(s) as isize) };
+            space += ptr2cells_at(&fname[s..]);
+            s += c_cluster_len(&fname[s..]);
         }
-        // SAFETY: as above.
-        e = unsafe { e.offset(utfc_ptr2len(e) as isize) };
+        e += c_cluster_len(&fname[e..]);
     }
 
     if compl_autocomplete.get() {
         return;
     }
     msg_hist_off.set(true);
-    let ellipsis = if s > fname {
-        c"<".as_ptr()
-    } else {
-        c"".as_ptr()
-    };
-    let buf = line.as_mut_ptr();
-    // SAFETY: `buf` addresses all `IOSIZE` bytes and the three `%s` are
-    // NUL-terminated strings.
-    unsafe {
-        vim_snprintf!(
-            buf,
-            IOSIZE as size_t,
-            c"%s %s%s".as_ptr(),
-            lead.as_ptr(),
-            ellipsis,
-            s,
-        );
-        msg(crate::cstr::at(buf), 0);
-    }
+    let ellipsis: &[u8] = if s > 0 { b"<" } else { b"" };
+    // Upstream formats into `IObuff`, which cuts it there.
+    let text = formatted!(IOSIZE as usize, b"%s %s%s", lead, ellipsis, &fname[s..]);
+    msg(XString::from_vec(text).as_cstr(), 0);
     msg_hist_off.set(false);
     redraw_cmdline.set(false);
 }

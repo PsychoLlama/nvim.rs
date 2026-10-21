@@ -11,10 +11,10 @@
 //! over the list that runs under one borrow and calls nothing outside it;
 //! everything else reaches a match one access at a time.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
+use crate::cstr;
 use crate::mbyte::{char_at, cluster_len};
 use crate::memory::XString;
 use crate::types::{FAIL, Failed, OK, VarLock};
@@ -488,11 +488,8 @@ fn starts_with_leader(item: &ComplItem, leader: &[u8]) -> bool {
         return true;
     }
     if item.flags & CP_ICASE != 0 {
-        // SAFETY: the text is NUL-terminated and `leader` readable for its
-        // own length, which is as far as `strncasecmp` reads it.
-        let differ =
-            unsafe { strncasecmp(item.text.as_ptr(), leader.as_ptr().cast(), leader.len()) };
-        return differ == 0;
+        // `strncasecmp` over the leader's length.
+        return cstr::ncase_eq_ascii(&item.text, leader, leader.len());
     }
     // `strncmp` stops at a NUL in either: the text has none inside it, so a
     // NUL in the leader matches only the text's terminator.

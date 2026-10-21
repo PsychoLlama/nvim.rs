@@ -1759,4 +1759,81 @@ describe('completion', function()
       {5:-- File name completion (^F^N^P) }{9:Pattern not found}          |
     ]])
   end)
+
+  describe('a completion function that resets its own option', function()
+    -- The function's callback is freed by the reset while the call runs;
+    -- the call must hold a reference of its own.
+    it("'completefunc' as a lambda", function()
+      source([[
+        let g:calls = 0
+        function! Reset(findstart)
+          let g:calls += 1
+          set completefunc=
+          return a:findstart ? 0 : ['alpha', 'alphabet']
+        endfunction
+        let &completefunc = '{findstart, base -> Reset(findstart)}'
+      ]])
+      feed('i<C-x><C-u>')
+      poke_eventloop()
+      feed('<Esc>')
+      assert_alive()
+      eq(1, eval('g:calls'))
+      eq('', eval('&completefunc'))
+    end)
+
+    it("'omnifunc' as a function name", function()
+      source([[
+        let g:calls = []
+        function! Ofu(findstart, base)
+          call add(g:calls, a:findstart)
+          if a:findstart
+            return 0
+          endif
+          set omnifunc=
+          return ['beta', 'betamax']
+        endfunction
+        set omnifunc=Ofu
+      ]])
+      feed('i<C-x><C-o>')
+      poke_eventloop()
+      feed('<Esc>')
+      assert_alive()
+      eq({ 1, 0 }, eval('g:calls'))
+      expect('beta')
+    end)
+
+    it("an F{func} entry in 'complete' that resets 'complete'", function()
+      source([[
+        let g:calls = []
+        function! Cpt(findstart, base)
+          call add(g:calls, a:findstart)
+          set complete=.
+          if a:findstart
+            return 0
+          endif
+          return ['gamma', 'gammaray']
+        endfunction
+        set complete=FCpt
+      ]])
+      feed('i<C-n>')
+      poke_eventloop()
+      feed('<Esc>')
+      assert_alive()
+      eq('.', eval('&complete'))
+      eq(1, eval('g:calls[0]'))
+    end)
+
+    it('complete() over a list the matches came from', function()
+      source([[
+        let g:words = ['delta', 'deltoid']
+        inoremap <F5> <Cmd>call complete(col('.'), g:words)<CR>
+      ]])
+      feed('i<F5>')
+      poke_eventloop()
+      command('let g:words = []')
+      feed('<C-n><Esc>')
+      assert_alive()
+      expect('deltoid')
+    end)
+  end)
 end)

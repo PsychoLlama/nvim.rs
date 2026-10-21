@@ -19,6 +19,7 @@
 
 use super::*;
 use crate::charset::{getdigits_int_at, strsize};
+use crate::cstr::ncmp_eq;
 use crate::option::split_option_part;
 use crate::optionstr::OptStringRef;
 use crate::winlayer::{Buf, Win};
@@ -26,26 +27,6 @@ use core::ffi::c_int;
 
 /// How long a 'comments' leader part may be.
 const LEN: usize = COM_MAX_LEN as usize;
-
-/// Whether `a` and `b` agree for `n` bytes -- `strncmp(a, b, n) == 0` over
-/// two NUL-terminated strings held as slices.
-///
-/// Not `starts_with`: a comparison that reaches the NUL in *both* stops there
-/// and succeeds, which is how an empty line matches an as-yet-unset comment
-/// leader.  That case is reachable -- a blank line inside a comment, before
-/// any `s:`/`m:` item has been seen -- and `starts_with` answers differently.
-fn ncmp_eq(a: &[u8], b: &[u8], n: usize) -> bool {
-    for i in 0..n {
-        let (x, y) = (byte_at(a, i), byte_at(b, i));
-        if x != y {
-            return false;
-        }
-        if x == 0 {
-            return true;
-        }
-    }
-    true
-}
 
 /// The column of the nearest `//` comment above the cursor, or `None`.
 ///

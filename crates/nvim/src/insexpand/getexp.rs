@@ -5,13 +5,13 @@
 //! that entry names, and keeps going until it has enough matches or runs out
 //! of sources.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::cmdexpand::Expanded;
 use crate::cstr;
 use crate::ex_getln::tilde_replace_matches;
+use crate::formatted;
 use crate::memory::XString;
 use crate::option::next_option_part;
 use crate::option::vars::{P_DICT, P_TSR, P_TSRFU};
@@ -19,7 +19,6 @@ use crate::optionstr::{OptString, OptStringRef, local_or_global};
 use crate::path::ExpandFlags;
 use crate::strings::has_char;
 use crate::types::{FAIL, Failed, IOSIZE, NUL, OK, ShmFlag};
-use crate::vim_snprintf;
 use crate::winlayer::BufId;
 use crate::winlayer::{Buf, buffers};
 
@@ -129,8 +128,6 @@ pub(crate) fn process_next_cpt_value(
     start_match_pos: Pos,
     fuzzy_collect: bool,
 ) -> CptValue {
-    // The progress message. Upstream shares `IObuff` for it.
-    let mut scratch = [0 as c_char; IOSIZE as usize];
     let mut compl_type = -1;
     let mut status = INS_COMPL_CPT_OK;
     let mut advance = false;
@@ -206,19 +203,17 @@ pub(crate) fn process_next_cpt_value(
             }
             if !shortmess(ShmFlag::COMPLETIONSCAN) && !compl_autocomplete.get() {
                 let name = if buf.name.is_unnamed() {
-                    buf_spname(&buf).map_or(ptr::null_mut(), |n| n.as_ptr().cast_mut())
+                    buf_spname(&buf)
                 } else if buf.name.short().is_none() {
-                    buf.name.shown_ptr()
+                    buf.name.shown()
                 } else {
-                    buf.name.short_ptr()
+                    buf.name.short()
                 };
+                // Upstream formats into `IObuff`, which cuts it there. The
+                // name is copied into the message before anything runs.
                 let fmt = gettext(c"Scanning: %s");
-                let (out, size) = (scratch.as_mut_ptr(), IOSIZE as size_t);
-                // SAFETY: `out` addresses all `size` bytes and `%s` takes a
-                // NUL-terminated string, which `name` is.
-                unsafe { vim_snprintf!(out, size, fmt.as_ptr(), name) };
-                // SAFETY: `vim_snprintf` NUL-terminated `out`.
-                unsafe { scan_progress(out) };
+                let message = formatted!(IOSIZE as usize, fmt.to_bytes(), name);
+                scan_progress(XString::from_vec(message).as_cstr());
             }
         } else if flag == NUL as u8 {
             status = INS_COMPL_CPT_END;
@@ -228,7 +223,7 @@ pub(crate) fn process_next_cpt_value(
             } else if flag == b'F' || flag == b'o' {
                 compl_type = CTRL_X_FUNCTION;
                 st.func_cb = get_callback_if_cpt_func(st.cpt.rest(), cpt_sources().index());
-                if st.func_cb.is_null() {
+                if st.func_cb.is_none() {
                     compl_type = -1;
                 }
             } else if !skip_source {
@@ -253,12 +248,10 @@ pub(crate) fn process_next_cpt_value(
                 } else if flag == b']' || flag == b't' {
                     compl_type = CTRL_X_TAGS;
                     if !shortmess(ShmFlag::COMPLETIONSCAN) && !compl_autocomplete.get() {
-                        let text = gettext(c"Scanning tags.");
-                        let (out, size) = (scratch.as_mut_ptr(), IOSIZE as size_t);
-                        // SAFETY: `out` addresses all `size` bytes.
-                        unsafe { vim_snprintf!(out, size, c"%s".as_ptr(), text.as_ptr()) };
-                        // SAFETY: `vim_snprintf` NUL-terminated `out`.
-                        unsafe { scan_progress(out) };
+                        // Upstream copies it through `IObuff`, which cuts it there.
+                        let text = gettext(c"Scanning tags.").to_bytes();
+                        let text = &text[..text.len().min(IOSIZE as usize - 1)];
+                        scan_progress(XString::from_bytes(text).as_cstr());
                     }
                 }
             }
@@ -283,19 +276,18 @@ pub(crate) fn process_next_cpt_value(
 
 /// Identifiers (`i`) or defines (`d`) from included files.
 pub(crate) fn get_next_include_file_completion(compl_type: c_int) {
-    let (pattern_data, pattern_len) = compl_pattern().parts();
+    // A copy: the search checks for typed keys, and what that runs can
+    // reset the completion's pattern.
+    let pattern = compl_pattern().to_vec();
     let what = if compl_type == CTRL_X_PATH_DEFINES && compl_cont_status.get() & CONT_SOL == 0 {
         FIND_DEFINE
     } else {
         FIND_ANY
     };
-    let (pat, len) = (pattern_data, pattern_len);
+    let pat: &[u8] = &pattern;
     let dir = compl_direction.get();
     let end = MAXLNUM;
     let auto = compl_autocomplete.get();
-    // SAFETY: `pat` is `len` readable bytes of the running completion's
-    // pattern, and the search runs over the current buffer's include path.
-    let pat = unsafe { cstr::slice_at(pat, len) };
     {
         let action = ACTION_EXPAND;
         find_pattern_in_path(pat, dir, false, false, what, 1, action, 1, end, false, auto)
@@ -310,9 +302,8 @@ pub(crate) fn get_next_dict_tsr_completion(
     dict_f: c_int,
 ) {
     if thesaurus_func_complete(compl_type) {
-        // SAFETY: the running completion's NUL-terminated pattern, and no
-        // `'complete'` callback.
-        unsafe { expand_by_function(compl_type, compl_pattern(), ptr::null_mut()) };
+        // No `'complete'` callback.
+        expand_by_function(compl_type, compl_pattern(), None);
         return;
     }
     let thesaurus = compl_type == CTRL_X_THESAURUS;
@@ -326,10 +317,8 @@ pub(crate) fn get_next_dict_tsr_completion(
     });
     // A copy: the scan checks for typed keys, and what that runs can reset
     // the completion's pattern.
-    let pattern = compl_pattern().to_owned();
-    // SAFETY: `files` is a NUL-terminated option-style list and `pattern`
-    // a NUL-terminated copy of the completion's pattern.
-    unsafe { ins_compl_dictionaries(files.as_ptr().cast_mut(), pattern.data(), flags, thesaurus) };
+    let pattern = compl_pattern().with_cstr(CStr::to_owned);
+    ins_compl_dictionaries(&files, &pattern, flags, thesaurus);
 }
 
 /// Tag names matching `compl_pattern`, up to `TAG_MANY` of them.
@@ -359,7 +348,9 @@ pub(crate) fn get_next_tag_completion() {
 
 /// File names matching `compl_pattern`, fuzzily when `'completeopt'` asks.
 pub(crate) fn get_next_filename_completion() {
-    let mut leader = ins_compl_leader();
+    // A copy: the expansion below can run user code.
+    let full_leader = ins_compl_leader_str().to_vec();
+    let mut leader: &[u8] = cstr::until_nul(&full_leader);
     let mut in_fuzzy_collect = cot_fuzzy() && ins_compl_leader_len() > 0;
     let need_collect_bests = in_fuzzy_collect && compl_get_longest.get();
     let mut max_score = 0;
@@ -368,30 +359,26 @@ pub(crate) fn get_next_filename_completion() {
     // Fuzzy matching is done over the whole directory, so the pattern is
     // widened to a wildcard and the leader keeps only the last component.
     if in_fuzzy_collect {
-        let last_sep = unsafe { strrchr(leader, PATHSEP) };
-        if last_sep.is_null() {
+        let last_sep = leader.iter().rposition(|&b| c_int::from(b) == PATHSEP);
+        match last_sep {
             // No path separator: match everything in the current dir.
-            compl_pattern().replace(unsafe { cbuf_to_string(c"*".as_ptr(), 1) });
-        } else if unsafe { *last_sep.offset(1) } as c_int == NUL {
+            None => compl_pattern().replace(String_0::from_bytes(b"*")),
             // The leader ends in a separator: nothing to fuzzy-match.
-            in_fuzzy_collect = false;
-        } else {
-            let path_len = unsafe { last_sep.offset_from(leader) } as size_t + 1;
-            // The directory part of the leader, then a `*`.
-            // SAFETY: `leader` is NUL-terminated and at least `path_len`
-            // bytes long -- the separator is inside it.
-            let mut with_wildcard =
-                XString::from_bytes(unsafe { cstr::prefix_at(leader, path_len) });
-            with_wildcard.push_byte(b'*');
-            compl_pattern().set_string(with_wildcard);
-            // Restrict the leader to the file-name part.
-            leader = unsafe { last_sep.offset(1) };
+            Some(sep) if sep + 1 == leader.len() => in_fuzzy_collect = false,
+            Some(sep) => {
+                // The directory part of the leader, then a `*`.
+                let mut with_wildcard = XString::from_bytes(&leader[..=sep]);
+                with_wildcard.push_byte(b'*');
+                compl_pattern().set_string(with_wildcard);
+                // Restrict the leader to the file-name part.
+                leader = &leader[sep + 1..];
+            }
         }
     }
+    let leader = XString::from_bytes(leader);
 
     // A copy: the expansion can run user code, which may complete again.
-    // SAFETY: the running completion's NUL-terminated pattern.
-    let pattern = XString::from_cstr(unsafe { cstr::at(compl_pattern().data()) });
+    let pattern = compl_pattern().with_cstr(XString::from_cstr);
     let flags = ExpandFlags::FILE | ExpandFlags::DIR | ExpandFlags::ADDSLASH | ExpandFlags::SILENT;
     let Ok(mut matches) = expand_wildcards(&[pattern.as_cstr()], flags) else {
         return;
@@ -406,8 +393,7 @@ pub(crate) fn get_next_filename_completion() {
         let mut scores = vec![FUZZY_SCORE_NONE; matches.len()];
         let mut fuzzy_indices: Vec<c_int> = Vec::new();
         for (i, candidate) in matches.iter().enumerate() {
-            // SAFETY: `leader` is NUL-terminated.
-            let score = fuzzy_match_str(candidate.as_cstr(), unsafe { cstr::at(leader) });
+            let score = fuzzy_match_str(candidate.as_cstr(), leader.as_cstr());
             if score != FUZZY_SCORE_NONE {
                 fuzzy_indices.push(i as c_int);
                 scores[i] = score;
@@ -494,17 +480,17 @@ pub(crate) fn get_next_completion_match(
         CTRL_X_CMDLINE | CTRL_X_CMDLINE_CTRL_X => get_next_cmdline_completion(),
         CTRL_X_FUNCTION => {
             if ctrl_x_mode_normal() {
-                // Invoked by an `F`/`o` entry in 'complete'.
-                // SAFETY: the callback `process_next_cpt_value` found.
-                unsafe { get_cpt_func_completion_matches(st.func_cb) };
+                // Invoked by an `F`/`o` entry in 'complete': the callback
+                // `process_next_cpt_value` found, held by the scan.
+                if let Some(cb) = &st.func_cb {
+                    get_cpt_func_completion_matches(cb);
+                }
             } else {
-                // SAFETY: the running completion's NUL-terminated pattern.
-                unsafe { expand_by_function(type_0, compl_pattern(), ptr::null_mut()) };
+                expand_by_function(type_0, compl_pattern(), None);
             }
         }
         CTRL_X_OMNI => {
-            // SAFETY: as above.
-            unsafe { expand_by_function(type_0, compl_pattern(), ptr::null_mut()) };
+            expand_by_function(type_0, compl_pattern(), None);
         }
         CTRL_X_SPELL => get_next_spell_completion(st.first_match_pos.lnum),
         CTRL_X_BUFNAMES => get_next_bufname_token(),
@@ -785,11 +771,6 @@ pub(crate) fn check_elapsed_time() {
 
 /// `msg_progress` for the scan, with the kind and state every caller here
 /// passes.
-///
-/// # Safety
-/// `msg` is a NUL-terminated string.
-pub(crate) unsafe fn scan_progress(msg: *mut c_char) {
-    // SAFETY: the caller's message.
-    let msg = unsafe { cstr::at(msg) };
+pub(crate) fn scan_progress(msg: &CStr) {
     msg_progress(msg, c"completion", c"running", HLF_R, false, true);
 }

@@ -295,16 +295,6 @@ pub fn ins_compl_preinsert_longest() -> bool {
             == kOptCotFlagLongest
 }
 
-/// The text matches are filtered against: what the user typed since the
-/// completion started, or the original text when nothing was typed.
-pub fn ins_compl_leader() -> *mut c_char {
-    if compl_leader().is_unset() {
-        compl_orig_text().data()
-    } else {
-        compl_leader().data()
-    }
-}
-
 /// [`ins_compl_leader`] as the string itself.
 pub(crate) fn ins_compl_leader_str() -> ComplStr {
     if compl_leader().is_unset() {
@@ -586,16 +576,13 @@ pub(crate) fn set_ctrl_x_mode(c: c_int) -> bool {
 
 /// The `mode` string `complete_info()` reports, empty when no completion is
 /// running.
-pub(crate) fn ins_compl_mode() -> *mut c_char {
+pub(crate) fn ins_compl_mode() -> Option<&'static CStr> {
     if ctrl_x_mode_not_defined_yet() || ctrl_x_mode_scroll() || compl_started.get() {
         // Upstream indexes unconditionally: the two NULL rows of the table
         // answer a null pointer, which is what the caller then handles.
-        return match CTRL_X_MODE_NAMES[(ctrl_x_mode.get() & !CTRL_X_WANT_IDENT) as usize] {
-            Some(name) => name.as_ptr().cast_mut(),
-            None => ptr::null_mut(),
-        };
+        return CTRL_X_MODE_NAMES[(ctrl_x_mode.get() & !CTRL_X_WANT_IDENT) as usize];
     }
-    c"".as_ptr().cast_mut()
+    Some(c"")
 }
 
 /// Which way the key typed moves through the matches: BACKWARD or FORWARD.

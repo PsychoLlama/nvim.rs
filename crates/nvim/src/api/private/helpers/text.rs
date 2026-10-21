@@ -205,17 +205,6 @@ pub(crate) unsafe fn cstr_to_string(str: *const c_char) -> String_0 {
     String_0::from_bytes(unsafe { cstr::bytes_at(str) })
 }
 
-/// A copy of `size` bytes of `buf`, owned by the caller and NUL-terminated
-/// however many NULs the bytes themselves hold.
-///
-/// # Safety
-///
-/// `buf` must point at `size` readable bytes.
-pub(crate) unsafe fn cbuf_to_string(buf: *const c_char, size: size_t) -> String_0 {
-    // SAFETY: `buf` has `size` readable bytes.
-    unsafe { String_0::from_raw_bytes(buf, size) }
-}
-
 /// A copy of `str`'s bytes, stopping at a terminator within `maxsize` bytes
 /// or at `maxsize`, whichever comes first.
 ///

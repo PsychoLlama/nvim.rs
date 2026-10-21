@@ -6,8 +6,7 @@
 //! does.  The `cpt_sources_*` half tracks the per-`'complete'`-entry state
 //! those functions need.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::option::vars::P_TSRFU;
@@ -17,24 +16,45 @@ use crate::guard::Lock;
 use crate::option::next_option_part;
 use crate::optionstr::OptStringRef;
 use crate::semsg;
-use crate::types::{DictRef, Failed, ListRef, NUL, OptError, OptionSetFlags, VAR_DICT, VAR_LIST};
+use crate::types::{DictRef, Failed, ListRef, OptError, OptionSetFlags, VAR_DICT, VAR_LIST};
 use crate::winlayer::{Buf, Win};
+
+/// A second reference to a completion callback, released when it drops.
+///
+/// Every call of a completion function goes through one: the function may
+/// reset the option whose callback it is (`:set completefunc=` from inside
+/// the completefunc), which frees the original while the call is still
+/// running. The copy keeps the function alive for the length of the call,
+/// as `'operatorfunc'` does.
+pub(crate) struct HeldCallback(Callback);
+
+impl HeldCallback {
+    /// A second owner of what `cb` holds.
+    pub(crate) fn of(cb: &Callback) -> HeldCallback {
+        HeldCallback(cb.duplicate())
+    }
+}
+
+impl ::core::ops::Deref for HeldCallback {
+    type Target = Callback;
+
+    fn deref(&self) -> &Callback {
+        &self.0
+    }
+}
+
+impl Drop for HeldCallback {
+    fn drop(&mut self) {
+        self.0.clear();
+    }
+}
 
 /// One of the three global completion-function callbacks.
 ///
 /// `'completefunc'`, `'omnifunc'` and `'thesaurusfunc'` each compile to a
-/// `Callback` the editor *calls*, so `get`/`set` cannot own one: the value
-/// holds a funcref or a Lua reference, and a copy would be a second owner of
-/// it. Every helper that touches a callback -- `option_set_callback_func`,
-/// `callback_copy`, `callback_free`, `set_ref_in_callback` -- is C-shaped
-/// and takes the *slot's* address so it can free what is there and write the
-/// new value in place; the buffer-local twin of each of these lives in a
-/// `Buffer` field, and the same helpers serve both.
-///
-/// `CompleteFuncCb` names the cell rather than pointing into it, so it is
-/// `Copy` and needs no `unsafe` to make. The one thing it cannot avoid is
-/// the address, and that is produced at exactly one place --
-/// [`slot`](Self::slot) -- rather than at nine call sites.
+/// `Callback` the editor *calls*. The cell is only ever borrowed for the
+/// length of one helper; a call takes a [`HeldCallback`] of it, so nothing
+/// borrows the cell while user code runs.
 #[derive(Clone, Copy)]
 pub(crate) struct CompleteFuncCb(&'static GlobalCell<Callback>);
 
@@ -54,37 +74,32 @@ pub(crate) fn tsrfu_cb() -> CompleteFuncCb {
 }
 
 impl CompleteFuncCb {
-    /// The slot's address, which is what the C-shaped callback helpers take.
-    /// It stands where a buffer-local callback would answer
-    /// `&raw mut buf.b_cfu_cb`.
-    pub(crate) fn slot(self) -> *mut Callback {
-        self.0.ptr()
+    /// A second reference to the callback, for a call.
+    pub(crate) fn held(self) -> HeldCallback {
+        self.0.with(HeldCallback::of)
     }
 
     /// Compile `value` into this callback, freeing what was there. C's
     /// `option_set_callback_func`, answering whether the value was accepted.
     pub(crate) fn set_from_option(self, value: &CStr) -> Result<(), Failed> {
         let cb = callback_from_option(value)?;
-        // SAFETY: the slot is this cell's own, reached once the value has
-        // been evaluated, and nothing else borrows it meanwhile.
-        install_callback(unsafe { &mut *self.slot() }, cb);
+        self.0.with_mut(|slot| install_callback(slot, cb));
         Ok(())
     }
 
-    /// Copy this callback into a buffer-local slot, freeing what was there.
-    ///
-    /// # Safety
-    /// `bufcb` must point at a live buffer's callback field.
-    pub(crate) unsafe fn copy_to_buflocal(self, bufcb: *mut Callback) {
-        // SAFETY: the caller's promise.
-        unsafe { copy_global_to_buflocal_cb(self.slot(), bufcb) };
+    /// Copy this callback into the buffer-local slot `bufcb`, freeing what
+    /// was there.
+    pub(crate) fn copy_to_buflocal(self, bufcb: &mut Callback) {
+        let copy = self.0.with(Callback::duplicate);
+        bufcb.clear();
+        *bufcb = copy;
     }
 
     /// Mark what this callback references with `copy_id`, so the garbage
     /// collector leaves it alone. Answers whether to abort.
     pub(crate) fn set_ref(self, copy_id: c_int) -> bool {
-        // SAFETY: the caller's promise; the slot is this cell's own.
-        set_ref_in_callback(unsafe { &*self.slot() }, copy_id, None, None)
+        self.0
+            .with(|cb| set_ref_in_callback(cb, copy_id, None, None))
     }
 }
 
@@ -94,9 +109,9 @@ impl CompleteFuncCb {
 /// This is the cached copy `:set complete=` leaves behind so a buffer that
 /// has never had `:setlocal complete=` can be given the same array; the
 /// live one a completion reads is always `curbuf`'s `b_p_cpt_cb`. Upstream
-/// keeps it as a `Callback *` with `cpt_cb_count` beside it; here it is a
-/// `Vec` in [`ComplState`], and a `Callback` owns what it names without a
-/// destructor, so replacing the cache frees the old slots by hand.
+/// keeps both as a `Callback *` with a count beside it; here both are a
+/// `Vec`, and a `Callback` owns what it names without a destructor, so
+/// replacing either frees the old slots by hand.
 #[derive(Clone, Copy)]
 pub(crate) struct CptCallbacks(());
 
@@ -112,46 +127,28 @@ impl CptCallbacks {
         CPT_CB.with(Vec::len) as c_int
     }
 
-    /// Replace the cached array with a copy of `src`'s `count` callbacks.
-    /// A `count` of zero leaves the cache alone, as upstream's did.
-    ///
-    /// # Safety
-    /// `src` must hold `count` live callbacks.
-    pub(crate) unsafe fn replace_from(self, src: *mut Callback, count: c_int) {
-        if count == 0 {
+    /// Replace the cached array with a copy of `src`. An empty `src`
+    /// leaves the cache alone, as upstream's did.
+    pub(crate) fn replace_from(self, src: &[Callback]) {
+        if src.is_empty() {
             return;
         }
-        let copy = |i: usize| {
-            let mut slot = Callback::None;
-            // SAFETY: the caller's `count` live callbacks.
-            unsafe {
-                let from = src.add(i);
-                if (*from).is_set() {
-                    callback_copy(&mut slot, &*from);
-                }
-            }
-            slot
-        };
-        let fresh: Vec<Callback> = (0..count as usize).map(copy).collect();
+        let fresh: Vec<Callback> = src.iter().map(Callback::duplicate).collect();
         for mut old in CPT_CB.replace(fresh) {
-            callback_free(&mut old);
+            old.clear();
         }
     }
 
-    /// Copy the cache into `buffer`'s array, freeing what was there.
-    pub(crate) fn copy_to_buffer(self, buffer: Buf) {
-        let raw = buffer.raw();
-        CPT_CB.with_mut(|slots| {
-            let count = slots.len() as c_int;
-            // SAFETY: a live buffer owns its callback array and count; the
-            // two fields are addressed from its raw pointer rather than
-            // through `DerefMut`, so taking the second does not invalidate
-            // the first; the cache's own slots are only read.
-            unsafe {
-                let (dst, dst_count) = (&raw mut (*raw).b_p_cpt_cb, &raw mut (*raw).b_p_cpt_count);
-                copy_cpt_callbacks(dst, dst_count, slots.as_mut_ptr(), count);
-            }
-        });
+    /// Copy the cache into `buffer`'s array, freeing what was there. An
+    /// empty cache leaves the buffer's array alone.
+    pub(crate) fn copy_to_buffer(self, mut buffer: Buf) {
+        let fresh: Vec<Callback> =
+            CPT_CB.with(|slots| slots.iter().map(Callback::duplicate).collect());
+        if fresh.is_empty() {
+            return;
+        }
+        clear_buffer_cpt_callbacks(buffer);
+        buffer.b_p_cpt_cb = fresh;
     }
 
     /// Mark what the cache references with `copy_id`. Answers whether to
@@ -324,19 +321,6 @@ pub(crate) fn get_cpt_sources_count() -> c_int {
     cpt_entries(Buf::current().b_p_cpt.bytes()).count() as c_int
 }
 
-/// Copy a global callback function to a buffer-local callback.
-///
-/// # Safety
-///
-/// `globcb` must point at an initialized callback, unaliased for the call.
-/// `bufcb` must point at an initialized callback, unaliased for the call.
-pub(crate) unsafe fn copy_global_to_buflocal_cb(globcb: *mut Callback, bufcb: *mut Callback) {
-    unsafe { callback_free(&mut *bufcb) };
-    if unsafe { &*globcb }.is_set() {
-        unsafe { callback_copy(&mut *bufcb, &*globcb) };
-    }
-}
-
 /// Parse the `'completefunc'` value and set the callback function; the value
 /// may be a function name, `function(<name>)`, `funcref(<name>)` or a lambda.
 ///
@@ -368,8 +352,7 @@ pub fn did_set_completefunc(args: &mut OptSet) -> Result<(), OptError> {
 ///
 /// Safe: [`Buf`] is the live buffer whose own callback field this writes.
 pub fn set_buflocal_cfu_callback(mut buffer: Buf) {
-    // SAFETY: a live buffer owns its callback field.
-    unsafe { cfu_cb().copy_to_buflocal(&raw mut buffer.b_cfu_cb) }
+    cfu_cb().copy_to_buflocal(&mut buffer.b_cfu_cb);
 }
 
 /// Parse the `'omnifunc'` value and set the callback function; an
@@ -401,61 +384,13 @@ pub fn did_set_omnifunc(args: &mut OptSet) -> Result<(), OptError> {
 ///
 /// Safe: [`Buf`] is the live buffer whose own callback field this writes.
 pub fn set_buflocal_ofu_callback(mut buffer: Buf) {
-    // SAFETY: a live buffer owns its callback field.
-    unsafe { ofu_cb().copy_to_buflocal(&raw mut buffer.b_ofu_cb) }
+    ofu_cb().copy_to_buflocal(&mut buffer.b_ofu_cb);
 }
 
 /// Free `buffer`'s `'complete'` `F{func}` callbacks.
 pub(crate) fn clear_buffer_cpt_callbacks(mut buffer: Buf) {
-    let count = buffer.b_p_cpt_count;
-    // SAFETY: the buffer's own array of `count` callbacks, or null.
-    unsafe { clear_cpt_callbacks(&raw mut buffer.b_p_cpt_cb, count) };
-    buffer.b_p_cpt_count = 0;
-}
-
-/// Free an array of `'complete'` `F{func}` callbacks and null the pointer.
-///
-/// # Safety
-///
-/// `callbacks` must point at a writable `*mut Callback` slot the caller owns
-/// for the call.
-pub unsafe fn clear_cpt_callbacks(callbacks: *mut *mut Callback, count: c_int) {
-    if callbacks.is_null() || unsafe { *callbacks }.is_null() {
-        return;
-    }
-    for i in 0..count as isize {
-        unsafe { callback_free(&mut *(*callbacks).offset(i)) };
-    }
-    unsafe { xfree((*callbacks).cast::<c_void>()) };
-    unsafe { *callbacks = ptr::null_mut() };
-}
-
-/// Copy `cnt` `Callback`s from `src` to `*dest`, clearing what was there and
-/// allocating the destination.
-///
-/// # Safety
-///
-/// `dest` must point at a writable `*mut Callback` slot the caller owns for
-/// the call. `dest_cnt` must point at a writable `int` the caller owns. `src`
-/// must point at an initialized callback, unaliased for the call.
-pub(crate) unsafe fn copy_cpt_callbacks(
-    dest: *mut *mut Callback,
-    dest_cnt: *mut c_int,
-    src: *mut Callback,
-    cnt: c_int,
-) {
-    if cnt == 0 {
-        return;
-    }
-    unsafe { clear_cpt_callbacks(dest, *dest_cnt) };
-    // `xcalloc`, not `xmalloc`: an entry nothing fills has to read back as
-    // `Callback::None`, which is discriminant 0.
-    unsafe { *dest = xcalloc(cnt as size_t, size_of::<Callback>()).cast::<Callback>() };
-    unsafe { *dest_cnt = cnt };
-    for i in 0..cnt as isize {
-        if unsafe { &*src.offset(i) }.is_set() {
-            unsafe { callback_copy(&mut *(*dest).offset(i), &*src.offset(i)) };
-        }
+    for mut cb in ::core::mem::take(&mut buffer.b_p_cpt_cb) {
+        cb.clear();
     }
 }
 
@@ -487,10 +422,8 @@ pub fn set_cpt_callbacks(local: bool) -> Result<(), Failed> {
     if count == 0 {
         return Ok(());
     }
-    // Zeroed for the reason `copy_cpt_callbacks` zeroes.
-    Buf::current().b_p_cpt_cb =
-        unsafe { xcalloc(count as size_t, size_of::<Callback>()) }.cast::<Callback>();
-    Buf::current().b_p_cpt_count = count;
+    // An entry nothing fills reads back as `Callback::None`.
+    Buf::current().b_p_cpt_cb = (0..count).map(|_| Callback::None).collect();
 
     // A copy: the walk writes the buffer's callback array.
     let option = Buf::current().b_p_cpt.bytes().to_vec();
@@ -501,19 +434,21 @@ pub fn set_cpt_callbacks(local: bool) -> Result<(), Failed> {
             let end = part.iter().position(|&b| b == b'^').unwrap_or(part.len());
             let name = XString::from_bytes(&part[1..end]);
             let cb = callback_from_option(name.as_cstr());
-            // SAFETY: `idx` counts the entries, which is the array's length.
-            let slot = unsafe { Buf::current().b_p_cpt_cb.add(idx) };
-            // SAFETY: a slot of the array just allocated.
-            match cb {
-                Ok(cb) => install_callback(unsafe { &mut *slot }, cb),
-                Err(_) => unsafe { *slot = Callback::None },
+            // `idx` counts the entries, which is the array's length.
+            let mut buf = Buf::current();
+            if let Some(slot) = buf.b_p_cpt_cb.get_mut(idx) {
+                match cb {
+                    Ok(cb) => install_callback(slot, cb),
+                    Err(_) => *slot = Callback::None,
+                }
             }
         }
     }
 
     if !local {
         // ':set' was used instead of ':setlocal': cache the callback array.
-        unsafe { cpt_cb().replace_from(Buf::current().b_p_cpt_cb, Buf::current().b_p_cpt_count) };
+        let buf = Buf::current();
+        cpt_cb().replace_from(&buf.b_p_cpt_cb);
     }
     Ok(())
 }
@@ -546,17 +481,8 @@ pub fn did_set_thesaurusfunc(args: &mut OptSet) -> Result<(), OptError> {
 /// Mark `copy_id` references in `buffer`'s `F{func}` `'complete'` callbacks
 /// so they are not garbage collected.
 pub fn mark_cpt_callbacks(buffer: Buf, copy_id: c_int) -> bool {
-    let (callbacks, count) = (buffer.b_p_cpt_cb, buffer.b_p_cpt_count);
-    if callbacks.is_null() {
-        return false;
-    }
-    let mut abort = false;
-    for i in 0..count as isize {
-        // SAFETY: the buffer's own array of `count` live callbacks.
-        let slot = unsafe { &*callbacks.offset(i) };
-        abort = abort || set_ref_in_callback(slot, copy_id, None, None);
-    }
-    abort
+    let mark = |slot: &Callback| set_ref_in_callback(slot, copy_id, None, None);
+    buffer.b_p_cpt_cb.iter().any(mark)
 }
 
 /// Mark the global `'completefunc'`, `'omnifunc'` and `'thesaurusfunc'`
@@ -582,19 +508,21 @@ pub(crate) fn get_complete_funcname(type_0: c_int) -> XString {
     local.clone().unwrap_or_default()
 }
 
-/// The callback to use for insert-mode completion of `type_0`.
-pub(crate) fn get_insert_callback(type_0: c_int) -> *mut Callback {
+/// The callback to use for insert-mode completion of `type_0`, held for a
+/// call.
+pub(crate) fn get_insert_callback(type_0: c_int) -> HeldCallback {
+    let buf = Buf::current();
     if type_0 == CTRL_X_FUNCTION {
-        return unsafe { &raw mut (*Buf::current_raw()).b_cfu_cb };
+        return HeldCallback::of(&buf.b_cfu_cb);
     }
     if type_0 == CTRL_X_OMNI {
-        return unsafe { &raw mut (*Buf::current_raw()).b_ofu_cb };
+        return HeldCallback::of(&buf.b_ofu_cb);
     }
     // CTRL_X_THESAURUS
-    if !Buf::current().b_p_tsrfu.bytes().is_empty() {
-        unsafe { &raw mut (*Buf::current_raw()).b_tsrfu_cb }
+    if !buf.b_p_tsrfu.bytes().is_empty() {
+        HeldCallback::of(&buf.b_tsrfu_cb)
     } else {
-        tsrfu_cb().slot()
+        tsrfu_cb().held()
     }
 }
 
@@ -602,21 +530,22 @@ pub(crate) fn get_insert_callback(type_0: c_int) -> *mut Callback {
 /// it answers to the match list.
 ///
 /// `type_0` is one of `CTRL_X_OMNI`, `CTRL_X_FUNCTION` or `CTRL_X_THESAURUS`;
-/// `cb` is set when a function in `'complete'` triggered this, null otherwise.
-///
-/// # Safety
-///
-/// `cb` must point at an initialized callback, unaliased for the call.
-pub(crate) unsafe fn expand_by_function(type_0: c_int, base: ComplStr, mut cb: *mut Callback) {
+/// `cb` is set when a function in `'complete'` triggered this (the caller
+/// holds it for the call), `None` otherwise.
+pub(crate) fn expand_by_function(type_0: c_int, base: ComplStr, cb: Option<&Callback>) {
     debug_assert!(Buf::current_or_none().is_some());
 
-    let is_cpt_function = !cb.is_null();
-    if !is_cpt_function {
-        if get_complete_funcname(type_0).is_empty() {
-            return;
+    let held;
+    let cb = match cb {
+        Some(cb) => cb,
+        None => {
+            if get_complete_funcname(type_0).is_empty() {
+                return;
+            }
+            held = get_insert_callback(type_0);
+            &*held
         }
-        cb = get_insert_callback(type_0);
-    }
+    };
 
     // Call the function to obtain the list of matches.
     // The argument owns a copy of the base, released with it.
@@ -632,7 +561,7 @@ pub(crate) unsafe fn expand_by_function(type_0: c_int, base: ComplStr, mut cb: *
     // switching to another window: it should not be needed and may end up
     // in Insert mode in another buffer.
     let locked = Lock::text();
-    if unsafe { callback_call(&*cb, &args, &mut rettv) } {
+    if callback_call(cb, &args, &mut rettv) {
         // The two container arms take the reference out of `rettv`; it is
         // given back when the handle drops below.
         match rettv.v_type() {
@@ -651,9 +580,9 @@ pub(crate) unsafe fn expand_by_function(type_0: c_int, base: ComplStr, mut cb: *
     if !equalpos(Win::current().w_cursor, pos) {
         emsg(gettext(E_COMPLDEL));
     } else if let Some(list) = &matchlist {
-        unsafe { ins_compl_add_list(list.as_ptr()) };
+        ins_compl_add_list(list);
     } else if let Some(dict) = &matchdict {
-        unsafe { ins_compl_add_dict(dict.as_ptr()) };
+        ins_compl_add_dict(dict);
     }
 
     // Restore State, it might have been changed.
@@ -663,40 +592,31 @@ pub(crate) unsafe fn expand_by_function(type_0: c_int, base: ComplStr, mut cb: *
 }
 
 /// The attribute of the named highlight group, or `-1` for no name.
-///
-/// # Safety
-///
-/// `hlname` must point at a NUL-terminated string.
 #[inline]
-pub(crate) unsafe fn get_user_highlight_attr(hlname: *const c_char) -> c_int {
-    if !hlname.is_null() && unsafe { *hlname } as c_int != NUL {
-        return unsafe { syn_name2attr(hlname) };
+pub(crate) fn get_user_highlight_attr(hlname: Option<&CStr>) -> c_int {
+    match hlname {
+        Some(name) if !name.is_empty() => syn_name2attr(name),
+        _ => -1,
     }
-    -1
 }
 
-/// The callback the `'complete'` entry at the start of `entry` names, if it
-/// refers to a user-defined function; `idx` indexes the callback array.
-pub(crate) fn get_callback_if_cpt_func(entry: &[u8], idx: c_int) -> *mut Callback {
-    let buffer = Buf::current_raw();
+/// The callback the `'complete'` entry at the start of `entry` names, held
+/// for a call, if it refers to a user-defined function; `idx` indexes the
+/// callback array.
+pub(crate) fn get_callback_if_cpt_func(entry: &[u8], idx: c_int) -> Option<HeldCallback> {
+    let buffer = Buf::current();
     match entry.first() {
-        // SAFETY: the current buffer's own callback field.
-        Some(b'o') => unsafe { &raw mut (*buffer).b_ofu_cb },
+        Some(b'o') => Some(HeldCallback::of(&buffer.b_ofu_cb)),
         Some(b'F') if !matches!(entry.get(1), None | Some(b',')) => {
-            // 'F{func}' case.
-            // SAFETY: the entry's index is in range of the array
-            // `set_cpt_callbacks` sized to the entries.
-            let slot = unsafe { Buf::current().b_p_cpt_cb.offset(idx as isize) };
-            // SAFETY: a slot of that array.
-            if unsafe { &*slot }.is_set() {
-                slot
-            } else {
-                ptr::null_mut()
-            }
+            // 'F{func}' case. An index past the array (the option changed
+            // since `set_cpt_callbacks` sized it) names no function.
+            let slot = usize::try_from(idx)
+                .ok()
+                .and_then(|i| buffer.b_p_cpt_cb.get(i));
+            slot.filter(|cb| cb.is_set()).map(HeldCallback::of)
         }
-        // SAFETY: as for `o`.
-        Some(b'F') => unsafe { &raw mut (*buffer).b_cfu_cb }, // 'cfu'
-        _ => ptr::null_mut(),
+        Some(b'F') => Some(HeldCallback::of(&buffer.b_cfu_cb)), // 'cfu'
+        _ => None,
     }
 }
 
@@ -707,15 +627,13 @@ pub(crate) fn prepare_cpt_compl_funcs() {
     let cpt = strip_caret_numbers(Buf::current().b_p_cpt.bytes());
     for (idx, entry) in cpt_entries(&cpt).enumerate() {
         let idx = idx as c_int;
-        let cb = get_callback_if_cpt_func(entry.at, idx);
-        if cb.is_null() {
+        let Some(cb) = get_callback_if_cpt_func(entry.at, idx) else {
             cpt_sources().update(idx, |source| source.cs_startcol = -3);
             continue;
-        }
-        let mut startcol = 0;
+        };
         let col = Win::current().w_cursor.col;
-        // SAFETY: a live callback, and `startcol` is this frame's own.
-        if unsafe { get_userdefined_compl_info(col, cb, &raw mut startcol) }.is_err() {
+        let (ret, mut startcol) = get_userdefined_compl_info(col, Some(&cb));
+        if ret.is_err() {
             if startcol == -3 {
                 cpt_sources().update(idx, |source| source.cs_refresh_always = false);
             } else {
@@ -765,12 +683,9 @@ pub(crate) fn is_cpt_func_refresh_always() -> bool {
     cpt_sources().any_refresh_always()
 }
 
-/// Collect matches through `cb` and record its `refresh:always` flag.
-///
-/// # Safety
-///
-/// `cb` must point at an initialized callback, unaliased for the call.
-pub(crate) unsafe fn get_cpt_func_completion_matches(cb: *mut Callback) {
+/// Collect matches through `cb` (held by the caller for the call) and record
+/// its `refresh:always` flag.
+pub(crate) fn get_cpt_func_completion_matches(cb: &Callback) {
     let idx = cpt_sources().index();
     let startcol = cpt_sources().row(idx).cs_startcol;
     if startcol == -2 || startcol == -3 {
@@ -786,7 +701,7 @@ pub(crate) unsafe fn get_cpt_func_completion_matches(cb: *mut Callback) {
         ins_compl_insert_text(&ins_compl_leader_str().to_vec());
     }
 
-    unsafe { expand_by_function(0, cpt_compl_pattern(), cb) };
+    expand_by_function(0, cpt_compl_pattern(), Some(cb));
 
     if !cpt_sources().row(idx).cs_refresh_always {
         ins_compl_delete(false);
@@ -811,14 +726,12 @@ pub(crate) fn cpt_compl_refresh() {
         let cb = if cpt_sources().row(idx).cs_refresh_always {
             get_callback_if_cpt_func(entry.at, idx)
         } else {
-            ptr::null_mut()
+            None
         };
-        if !cb.is_null() {
+        if let Some(cb) = cb {
             remove_old_matches();
-            let mut startcol = 0;
             let col = Win::current().w_cursor.col;
-            // SAFETY: a live callback, and `startcol` is this frame's own.
-            let ret = unsafe { get_userdefined_compl_info(col, cb, &raw mut startcol) };
+            let (ret, mut startcol) = get_userdefined_compl_info(col, Some(&cb));
             if ret.is_err() {
                 if startcol == -3 {
                     cpt_sources().update(idx, |source| source.cs_refresh_always = false);
@@ -831,8 +744,7 @@ pub(crate) fn cpt_compl_refresh() {
             cpt_sources().update(idx, |source| source.cs_startcol = startcol);
             if ret.is_ok() {
                 compl_source_start_timer(idx);
-                // SAFETY: as above.
-                unsafe { get_cpt_func_completion_matches(cb) };
+                get_cpt_func_completion_matches(&cb);
             }
         }
         if may_advance_cpt_index(entry.after) {

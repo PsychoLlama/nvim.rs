@@ -1,5 +1,5 @@
 module	file	files	unsafe_stmts	unsafe_fns	wrappers	regions	raw_params	raw_returns	outside_callees
-api/	*	59	491	64	313	deref:64 compound:26 expr:18 ref:1	other:52 str:15	other:3 str:3 value:1	at:22 CStr::from_ptr:9 from_raw_parts:6 ManuallyDrop::take:5 nlua_exec:5 xfree:5 bytes_at:4 c_str:3
+api/	*	59	490	63	312	deref:64 compound:26 expr:18 ref:1	other:52 str:14	other:3 str:3 value:1	at:22 CStr::from_ptr:9 from_raw_parts:6 ManuallyDrop::take:5 nlua_exec:5 xfree:5 bytes_at:4 c_str:3
 api/	api/autocmd/create.rs	1	8	0	8	-	-	-	at:2
 api/	api/autocmd/exec.rs	1	3	0	3	-	-	-	-
 api/	api/autocmd/group.rs	1	5	0	5	-	-	-	-
@@ -30,7 +30,7 @@ api/	api/private/dispatch/mod.rs	1	3	2	3	-	str:2	-	c_str_len:1 from_raw_parts:1
 api/	api/private/dispatch_wrappers/buffer.rs	1	2	0	2	-	-	-	-
 api/	api/private/dispatch_wrappers/ui.rs	1	2	0	2	-	-	-	-
 api/	api/private/helpers/mod.rs	1	9	2	4	deref:5	other:2	str:1	at:2
-api/	api/private/helpers/text.rs	1	19	7	13	deref:3 compound:1	str:5 other:1	str:1	from_raw_parts:2 CStr::from_ptr:1 bytes_at:1 memchrsub:1 strnlen:1 xfree:1 xmemdupz:1 xstrndup:1
+api/	api/private/helpers/text.rs	1	18	6	12	deref:3 compound:1	str:4 other:1	str:1	from_raw_parts:2 CStr::from_ptr:1 bytes_at:1 memchrsub:1 strnlen:1 xfree:1 xmemdupz:1 xstrndup:1
 api/	api/private/helpers/value.rs	1	9	0	9	-	-	-	ManuallyDrop::take:5 abort:1 api_free_luaref:1 unpack:1
 api/	api/private/helpers/vimdict.rs	1	8	0	4	expr:2 deref:1 ref:1	-	value:1	tv_copy:2 dict_watcher_notify:1 tv_clear:1
 api/	api/tabpage.rs	1	1	0	1	-	-	-	abort:1
@@ -167,26 +167,16 @@ highlight/	*	3	33	5	13	deref:8 compound:2	str:2 other:1	other:3 str:1	cstr_to_st
 highlight/	highlight/dict.rs	1	2	2	2	-	-	-	strcasecmp:1
 highlight/	highlight/mod.rs	1	9	3	8	deref:1	str:2 other:1	other:1 str:1	cstr_to_string:2 CStr::from_ptr:1 remote_ui_hl_attr_define:1 remote_ui_hl_group_set:1
 highlight/	highlight/namespace.rs	1	22	0	3	deref:7 compound:2	-	other:2	bytes_at:1 nlua_call_ref:1
-highlight_group/	*	7	29	4	29	-	str:4	str:1	c_str:8 nlua_set_sctx:6 CStr::from_ptr:3 cstr_to_string:2 hlattrs2dict:2 .add:1 at:1 bytes_at:1
+highlight_group/	*	7	28	3	28	-	str:3	str:1	c_str:8 nlua_set_sctx:6 CStr::from_ptr:2 cstr_to_string:2 hlattrs2dict:2 .add:1 at:1 bytes_at:1
 highlight_group/	highlight_group/apply.rs	1	3	0	3	-	-	-	nlua_set_sctx:3
 highlight_group/	highlight_group/command.rs	1	17	3	17	-	str:3	str:1	c_str:8 nlua_set_sctx:3 .add:1 CStr::from_ptr:1 transmute:1
 highlight_group/	highlight_group/defaults.rs	1	0	0	0	-	-	-	-
 highlight_group/	highlight_group/list.rs	1	2	0	2	-	-	-	at:1 vim_strsize:1
 highlight_group/	highlight_group/mod.rs	1	2	0	2	-	-	-	CStr::from_ptr:1 cstr_to_string:1
 highlight_group/	highlight_group/query.rs	1	4	0	4	-	-	-	hlattrs2dict:2 bytes_at:1 cstr_to_string:1
-highlight_group/	highlight_group/table.rs	1	1	1	1	-	str:1	-	CStr::from_ptr:1
+highlight_group/	highlight_group/table.rs	1	0	0	0	-	-	-	-
 input.rs	*	1	12	0	3	compound:3	-	-	at:1 getcmdline_prompt:1 utf_ptr2char:1
 input.rs	input.rs	1	12	0	3	compound:3	-	-	at:1 getcmdline_prompt:1 utf_ptr2char:1
-insexpand/	*	9	182	21	119	deref:27 expr:14 ref:7 compound:6	value:13 str:11 other:2 pp:2 pp_str:1	str:5 value:3	.offset:16 mb_get_class:5 .as_ref:4 vim_snprintf:4 xfree:4 bytes_at:3 vim_iswordp:3 String_0::from_owned_parts:2
-insexpand/	insexpand/callbacks.rs	1	45	8	17	expr:10 ref:7 deref:6 compound:2	value:7 pp:2 other:1 str:1	value:3	callback_copy:2 callback_free:2 callback_call:1 syn_name2attr:1 xcalloc:1 xfree:1
-insexpand/	insexpand/getexp.rs	1	19	1	18	deref:1	str:1	-	vim_snprintf:2 .offset:1 .offset_from:1 cbuf_to_string:1 prefix_at:1 slice_at:1 strrchr:1
-insexpand/	insexpand/matchlist.rs	1	1	0	1	-	-	-	strncasecmp:1
-insexpand/	insexpand/mod.rs	1	2	1	2	-	str:1	str:2	String_0::from_owned_parts:2
-insexpand/	insexpand/pum.rs	1	12	0	9	compound:1 deref:1	-	-	.offset:2 ptr2cells:2 from_raw_parts:1 strequal:1 syn_name2attr:1 vim_strsize:1
-insexpand/	insexpand/session.rs	1	28	1	20	compound:2 deref:1 expr:1	other:1 value:1	-	.offset:3 vim_iswordp:3 mb_get_class:2 utf_head_off:2 vim_isfilec:2 c_str:1 callback_call_retnr:1 cbuf_to_string:1
-insexpand/	insexpand/sources.rs	1	28	2	24	deref:3 expr:1	str:3 pp_str:1	-	bytes_at:3 xfree:3 vim_snprintf:2 xmalloc:2 copy_option_part:1 eq_bytes:1 escaped_bytes:1 fclose:1
-insexpand/	insexpand/text.rs	1	28	4	17	deref:10 expr:1	str:5	str:3	.offset:9 mb_get_class:3 path_tail:1 prefix_eq:1 slice_at:1 utfc_ptr2len:1
-insexpand/	insexpand/vimscript.rs	1	19	4	11	deref:5 compound:1 expr:1	value:5	-	.as_ref:4 .offset:1
 kvec.rs	*	1	7	2	0	compound:2	other:1	-	-
 kvec.rs	kvec.rs	1	7	2	0	compound:2	other:1	-	-
 map/	*	2	40	17	24	ref:5 compound:4 deref:1 expr:1	other:21 pp:3	other:6	xrealloc:2 CStr::from_ptr:1 from_raw_parts:1 from_raw_parts_mut:1 strequal:1

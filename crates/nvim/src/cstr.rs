@@ -389,6 +389,46 @@ pub(crate) fn byte_at(s: &[u8], i: usize) -> u8 {
     s.get(i).copied().unwrap_or(0)
 }
 
+/// Whether `a` and `b` agree for `n` bytes -- `strncmp(a, b, n) == 0` over
+/// two NUL-terminated strings held as slices.
+///
+/// Not `starts_with`: a comparison that reaches the NUL in *both* stops there
+/// and succeeds, which is how an empty line matches an as-yet-unset comment
+/// leader.  That case is reachable -- a blank line inside a comment, before
+/// any `s:`/`m:` item has been seen -- and `starts_with` answers differently.
+pub(crate) fn ncmp_eq(a: &[u8], b: &[u8], n: usize) -> bool {
+    for i in 0..n {
+        let (x, y) = (byte_at(a, i), byte_at(b, i));
+        if x != y {
+            return false;
+        }
+        if x == 0 {
+            return true;
+        }
+    }
+    true
+}
+
+/// Whether `a` and `b` agree for `n` bytes ignoring ASCII case:
+/// `strncasecmp(a, b, n) == 0` over two C strings held as slices, each read
+/// as NUL past its end. A comparison that reaches a NUL in both stops there
+/// and succeeds.
+pub(crate) fn ncase_eq_ascii(a: &[u8], b: &[u8], n: usize) -> bool {
+    for i in 0..n {
+        let (x, y) = (
+            byte_at(a, i).to_ascii_lowercase(),
+            byte_at(b, i).to_ascii_lowercase(),
+        );
+        if x != y {
+            return false;
+        }
+        if x == 0 {
+            return true;
+        }
+    }
+    true
+}
+
 /// `bytes` up to their first NUL, or all of them: what a C reader handed
 /// them as a string sees.
 pub(crate) fn until_nul(bytes: &[u8]) -> &[u8] {

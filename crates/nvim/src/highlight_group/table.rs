@@ -18,7 +18,7 @@
 #![allow(unsafe_code)]
 
 use crate::winlayer::Win;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 use std::collections::HashMap;
 use std::ffi::CString;
 use std::hash::{BuildHasherDefault, DefaultHasher};
@@ -341,12 +341,8 @@ fn lookup(name: &[u8]) -> c_int {
 }
 
 /// The attributes of the group named `name`, or 0 if there is no such group.
-///
-/// # Safety
-/// See [`syn_name2id`].
-pub(crate) unsafe fn syn_name2attr(name: *const c_char) -> c_int {
-    // SAFETY: the caller's NUL-terminated name.
-    match syn_name2id(unsafe { CStr::from_ptr(name) }) {
+pub(crate) fn syn_name2attr(name: &CStr) -> c_int {
+    match syn_name2id(name) {
         0 => 0,
         id => syn_id2attr(id),
     }

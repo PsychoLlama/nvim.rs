@@ -802,6 +802,7 @@ mod tests {
             assert!(b.b_ucmds.is_empty());
             assert!(b.b_kmap_ga.is_empty());
             assert!(b.b_wininfo.is_empty());
+            assert!(b.b_p_cpt_cb.is_empty());
             assert!(b.b_s.b_syn_patterns.is_empty());
             assert!(b.b_s.b_syn_clusters.is_empty());
             assert!(b.b_s.b_syn_linecont_pat.is_none());
