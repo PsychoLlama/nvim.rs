@@ -552,3 +552,20 @@ fn insert_char_pre_replaces_the_character() {
     restore(&fx);
     assert!(moved.is_empty(), "rows moved:\n{}", moved.join("\n"));
 }
+
+#[test]
+fn a_comments_offset_without_digits_reads_as_zero() {
+    // `-` with no digits after it is accepted by 'comments' but is no
+    // number; upstream's offset parser read nothing there and `o` hung.
+    let sandbox = Sandbox::globals();
+    let fx = Probe::new(sandbox.editor());
+    let mut moved = Vec::new();
+    // The same leader as no offset at all.
+    let same = "['/* one', '*  next']";
+    for com in ["s:/*,mb:*,ex:*/", "s-:/*,mb:*,ex:*/"] {
+        let opts = format!("comments={com} formatoptions=ro");
+        key_case(&fx, &mut moved, ("['/* one']", &opts, "onext", same));
+    }
+    restore(&fx);
+    assert!(moved.is_empty(), "rows moved:\n{}", moved.join("\n"));
+}
