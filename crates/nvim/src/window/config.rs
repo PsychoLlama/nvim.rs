@@ -73,8 +73,7 @@ fn set_buf(win: Win, buffer: Buf) -> Result<(), Error> {
         sw_visual_active: false,
     };
     let mut tstate = TRY_STATE;
-    // SAFETY: `tstate` is ours and live across the switch.
-    unsafe { try_enter(&raw mut tstate) };
+    try_enter(&mut tstate);
     let win_result = switch_win_noblock(&mut switchwin, win, tab, true);
     if win_result.is_ok() {
         // Do not trigger 'autochdir' in the window we switched to.
@@ -89,8 +88,7 @@ fn set_buf(win: Win, buffer: Buf) -> Result<(), Error> {
             P_ACD.set(save_acd);
         }
     }
-    // SAFETY: `tstate` is the state `try_enter` saved.
-    let mut caught = unsafe { try_leave(&raw mut tstate) };
+    let mut caught = try_leave(&tstate);
     if win_result.is_err() && caught.is_ok() {
         let handle = win.id().handle();
         caught = Err(api_error!(

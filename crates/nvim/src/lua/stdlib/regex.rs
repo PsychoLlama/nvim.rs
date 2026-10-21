@@ -209,14 +209,14 @@ pub unsafe extern "C-unwind" fn nlua_regex(lstate: *mut lua_State) -> c_int {
 
         // vim_regcomp reports a bad pattern by throwing, so it runs bracketed.
         let mut tstate = TRY_STATE_INIT;
-        try_enter(&raw mut tstate);
+        try_enter(&mut tstate);
         // Pick the engine automatically, honour 'magic', reject what the
         // automaton cannot take -- and never check for CTRL-C: that polls
         // the event loop, which aborts when the match runs inside a luv
         // callback (the loop is already running), and `vim.regex` is
         // allowed in a fast context.
         let prog = vim_regcomp(cstr::at(text), RE_AUTO | RE_MAGIC | RE_STRICT | RE_NOBREAK);
-        err.absorb(try_leave(&raw mut tstate));
+        err.absorb(try_leave(&tstate));
 
         if err.is_set() {
             nlua_push_errstr(lstate, b"couldn't parse regex: ", err.message_or_empty());

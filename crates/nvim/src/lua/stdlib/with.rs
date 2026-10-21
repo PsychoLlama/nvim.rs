@@ -130,7 +130,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_with(lstate: *mut lua_State) -> c_in
 
         let mut err = Error::none();
         let mut tstate = TRY_STATE_INIT;
-        try_enter(&raw mut tstate);
+        try_enter(&mut tstate);
         {
             let mut aco = AcoSave::default();
             let mut win_execute_args = WIN_EXECUTE_INIT;
@@ -160,7 +160,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_with(lstate: *mut lua_State) -> c_in
                 }
             }
         }
-        err.absorb(try_leave(&raw mut tstate));
+        err.absorb(try_leave(&tstate));
 
         drop(mods);
         if log_level >= 0 {

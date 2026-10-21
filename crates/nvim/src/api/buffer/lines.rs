@@ -131,7 +131,7 @@ pub fn nvim_buf_set_lines(
         owned.iter_mut().map(|l| l.as_mut_ptr().cast()).collect();
     let lines = line_ptrs.as_ptr();
     let mut tstate: TryState = TryState::INIT;
-    unsafe { try_enter(&raw mut tstate) };
+    try_enter(&mut tstate);
     let buf = buffer;
     's_382: {
         if buf.b_p_ma == 0 {
@@ -267,7 +267,7 @@ pub fn nvim_buf_set_lines(
     }
     // The bracket outranks whatever the body wrote into `error`, which is
     // the order the two had when both went through one slot.
-    unsafe { try_leave(&raw mut tstate) }?;
+    try_leave(&tstate)?;
     ().reported(error)
 }
 

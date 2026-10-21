@@ -129,11 +129,7 @@ pub(crate) fn find_tab_by_handle(tabpage: TabpageHandle) -> Result<Option<TabPag
 
 /// Start catching what Vimscript throws, saving the state to put back into
 /// `tstate`. Pairs with [`try_leave`].
-///
-/// # Safety
-///
-/// `tstate` must point at the caller's `TryState`, unaliased for the call.
-pub(crate) unsafe fn try_enter(tstate: *mut TryState) {
+pub(crate) fn try_enter(tstate: &mut TryState) {
     let saved = TryState {
         current_exception: current_exception.get(),
         got_int: got_int.get() as c_int,
@@ -141,8 +137,7 @@ pub(crate) unsafe fn try_enter(tstate: *mut TryState) {
         need_rethrow: need_rethrow.get() as c_int,
         did_emsg: did_emsg.get(),
     };
-    // SAFETY: `tstate` is the caller's, and lives until `try_leave`.
-    unsafe { *tstate = saved };
+    *tstate = saved;
     // Errors go to a list of the call's own from here on, so that an
     // `:echoerr` inside the call does not reach an enclosing `:try`.
     push_msg_list();
@@ -156,11 +151,7 @@ pub(crate) unsafe fn try_enter(tstate: *mut TryState) {
 
 /// Stop catching, answer whatever was caught, and restore what
 /// [`try_enter`] saved into `tstate`.
-///
-/// # Safety
-///
-/// `tstate` must point at the caller's `TryState`.
-pub(crate) unsafe fn try_leave(tstate: *const TryState) -> Result<(), Error> {
+pub(crate) fn try_leave(tstate: &TryState) -> Result<(), Error> {
     debug_assert!(trylevel.get() > 0);
     trylevel.set(trylevel.get() - 1);
     did_emsg.set(0);
@@ -203,8 +194,8 @@ pub(crate) unsafe fn try_leave(tstate: *const TryState) -> Result<(), Error> {
         discard_current_exception();
     }
 
-    // SAFETY: `tstate` is what the matching `try_enter` filled in.
-    let saved = unsafe { *tstate };
+    // What the matching `try_enter` filled in.
+    let saved = *tstate;
     pop_msg_list();
     current_exception.set(saved.current_exception);
     got_int.set(saved.got_int != 0);
@@ -222,11 +213,8 @@ pub(crate) unsafe fn try_leave(tstate: *const TryState) -> Result<(), Error> {
 /// the [`try_enter`]/[`try_leave`] pair as one safe call.
 ///
 /// The `TryState` the two halves communicate through is this frame's own and
-/// nothing else can name it, which is the whole of what they ask of a caller
-/// -- so every call site that spelled the bracket out by hand was writing
-/// eleven lines of `unsafe` to say what this says in one. `try_enter`
-/// overwrites the state before `try_leave` reads it, so the value handed in
-/// is never read.
+/// nothing else can name it. `try_enter` overwrites the state before
+/// `try_leave` reads it, so the value handed in is never read.
 ///
 /// `body` runs between the two, exactly as the statements between a
 /// hand-written pair did. What it *answers* is discarded when something was
@@ -234,11 +222,9 @@ pub(crate) unsafe fn try_leave(tstate: *const TryState) -> Result<(), Error> {
 /// which is what a hand-written pair did too by overwriting the slot.
 pub(crate) fn api_try<T>(body: impl FnOnce() -> T) -> Result<T, Error> {
     let mut tstate = TryState::default();
-    // SAFETY: `tstate` is this frame's local, live until `try_leave` below.
-    unsafe { try_enter(&raw mut tstate) };
+    try_enter(&mut tstate);
     let value = body();
-    // SAFETY: `tstate` is what the `try_enter` above filled in.
-    unsafe { try_leave(&raw const tstate) }?;
+    try_leave(&tstate)?;
     Ok(value)
 }
 

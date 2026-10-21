@@ -105,7 +105,7 @@ pub unsafe extern "C-unwind" fn nlua_call(lstate: *mut lua_State) -> c_int {
 
             let sctx = api_set_sctx(LUA_INTERNAL_CALL);
             let mut tstate = TRY_STATE_INIT;
-            try_enter(&raw mut tstate);
+            try_enter(&mut tstate);
             let args = vim_args.args();
             let _ = call_func_with(
                 cstr::at(name),
@@ -114,7 +114,7 @@ pub unsafe extern "C-unwind" fn nlua_call(lstate: *mut lua_State) -> c_int {
                 args,
                 CallWith::at_cursor(true),
             );
-            err.absorb(try_leave(&raw mut tstate));
+            err.absorb(try_leave(&tstate));
             drop(sctx);
 
             if !err.is_set() {

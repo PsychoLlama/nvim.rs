@@ -159,11 +159,9 @@ impl Opening {
             self.config.height
         };
         let mut tstate = TryState::default();
-        // SAFETY: `tstate` is this frame's own, live until `try_leave`.
-        unsafe { try_enter(&raw mut tstate) };
+        try_enter(&mut tstate);
         let made = self.split_ins(size, flags);
-        // SAFETY: `tstate` is what the `try_enter` above filled in.
-        *raised = unsafe { try_leave(&raw mut tstate) }.err();
+        *raised = try_leave(&tstate).err();
 
         if let Some(mut new) = made {
             new.w_config = self.config.clone();

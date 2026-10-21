@@ -52,22 +52,22 @@ pub fn nvim_create_augroup(
 
 pub fn nvim_del_augroup_by_id(id: Integer) -> Result<(), Error> {
     let mut tstate: TryState = TryState::INIT;
-    unsafe { try_enter(&raw mut tstate) };
+    try_enter(&mut tstate);
     let name = if id == 0 as Integer {
         None
     } else {
         augroup_name(number_as_int(id))
     };
     augroup_del(name.as_deref(), false);
-    unsafe { try_leave(&raw mut tstate) }?;
+    try_leave(&tstate)?;
     Ok(())
 }
 
 pub fn nvim_del_augroup_by_name(name: String_0) -> Result<(), Error> {
     let mut tstate: TryState = TryState::INIT;
-    unsafe { try_enter(&raw mut tstate) };
+    try_enter(&mut tstate);
     augroup_del(Some(crate::cstr::until_nul(name.as_bytes())), false);
-    unsafe { try_leave(&raw mut tstate) }?;
+    try_leave(&tstate)?;
     Ok(())
 }
 

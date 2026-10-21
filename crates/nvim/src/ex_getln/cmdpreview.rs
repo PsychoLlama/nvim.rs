@@ -89,7 +89,7 @@ pub(crate) fn cmdpreview_open_win(cmdpreview_buf: Buf) -> Option<Win> {
 
     // Switch to the preview buffer. C's TRY_WRAP.
     let mut tstate: TryState = TRY_STATE_INIT;
-    unsafe { try_enter(&raw mut tstate) };
+    try_enter(&mut tstate);
     let result = do_buffer(
         DOBUF_GOTO as ::core::ffi::c_int,
         DOBUF_FIRST as ::core::ffi::c_int,
@@ -97,7 +97,7 @@ pub(crate) fn cmdpreview_open_win(cmdpreview_buf: Buf) -> Option<Win> {
         cmdpreview_buf.handle,
         0,
     );
-    err.absorb(unsafe { try_leave(&raw mut tstate) });
+    err.absorb(try_leave(&tstate));
 
     if err.is_set() || result.is_err() {
         err.clear();
@@ -390,9 +390,9 @@ pub(crate) fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
         // makes the changes and highlights the preview shows.
         let mut err: Error = Error::none();
         let mut tstate: TryState = TRY_STATE_INIT;
-        unsafe { try_enter(&raw mut tstate) };
+        try_enter(&mut tstate);
         cmdpreview_type = execute_cmd(&mut ea, &cmdinfo, true);
-        err.absorb(unsafe { try_leave(&raw mut tstate) });
+        err.absorb(try_leave(&tstate));
         if err.is_set() {
             err.clear();
             cmdpreview_type = 0;

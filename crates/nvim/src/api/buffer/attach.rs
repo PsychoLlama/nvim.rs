@@ -72,7 +72,7 @@ pub fn nvim_buf_call(buf: BufferHandle, fun: LuaRef) -> Result<Object, Error> {
         return Ok(Object::Nil);
     };
     let mut tstate: TryState = TryState::INIT;
-    unsafe { try_enter(&raw mut tstate) };
+    try_enter(&mut tstate);
     let mut aco: AcoSave = AcoSave::default();
     aucmd_prepbuf(&mut aco, b);
     let args: Array = Array::EMPTY;
@@ -87,7 +87,7 @@ pub fn nvim_buf_call(buf: BufferHandle, fun: LuaRef) -> Result<Object, Error> {
     aucmd_restbuf(&mut aco);
     // The bracket outranks the call's own failure, as it did when both went
     // through one slot.
-    unsafe { try_leave(&raw mut tstate) }?;
+    try_leave(&tstate)?;
     res
 }
 

@@ -630,8 +630,7 @@ fn run_cmd(
     let outer_capture = capture.then(capture_start);
 
     let mut tstate = TryState::default();
-    // SAFETY: `tstate` is paired with the `try_leave` below.
-    unsafe { try_enter(&raw mut tstate) };
+    try_enter(&mut tstate);
     // Captured output must not also reach the message grid.
     let silenced = capture.then(Suppress::messages_saved);
     if capture {
@@ -649,8 +648,7 @@ fn run_cmd(
         redir_off.set(save_redir_off);
         msg_col.set(save_msg_col);
     }
-    // SAFETY: paired with the `try_enter` above.
-    let caught = unsafe { try_leave(&raw mut tstate) };
+    let caught = try_leave(&tstate);
 
     let mut retv = String_0::NULL;
     if let Some(captured) = captured.filter(|captured| captured.len() > 1)

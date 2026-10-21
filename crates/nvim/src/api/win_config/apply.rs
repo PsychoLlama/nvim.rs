@@ -283,11 +283,9 @@ impl Relayout {
             Some(parent) => win_find_tabpage(parent),
         };
         let mut tstate = TryState::default();
-        // SAFETY: `tstate` is this frame's own, live until `try_leave`.
-        unsafe { try_enter(&raw mut tstate) };
+        try_enter(&mut tstate);
         let split_ok = self.split_ins(flags);
-        // SAFETY: `tstate` is what the `try_enter` above filled in.
-        let raised = unsafe { try_leave(&raw mut tstate) }.err();
+        let raised = try_leave(&tstate).err();
 
         if split_ok {
             let mut tp = expect_tab(self.win_tp);

@@ -94,7 +94,7 @@ pub fn nvim_buf_set_name(buf: BufferHandle, name: String_0) -> Result<(), Error>
         return Ok(());
     };
     let mut tstate: TryState = TryState::INIT;
-    unsafe { try_enter(&raw mut tstate) };
+    try_enter(&mut tstate);
     let is_curbuf: bool = b == Buf::current();
     let save_acd = p_acd();
     let redraw_off = (!is_curbuf).then(Suppress::redraw);
@@ -110,7 +110,7 @@ pub fn nvim_buf_set_name(buf: BufferHandle, name: String_0) -> Result<(), Error>
     if !is_curbuf {
         P_ACD.set(save_acd);
     }
-    error.absorb(unsafe { try_leave(&raw mut tstate) });
+    error.absorb(try_leave(&tstate));
     if error.kind() as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
         return ().reported(error);
     }

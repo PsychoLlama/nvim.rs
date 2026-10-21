@@ -484,10 +484,10 @@ pub(crate) fn do_autocmd_cmdlinechanged(firstc: ::core::ffi::c_int) {
 
     // C's TRY_WRAP, with restore_v_event() inside it.
     let mut tstate: TryState = TRY_STATE_INIT;
-    unsafe { try_enter(&raw mut tstate) };
+    try_enter(&mut tstate);
     cmdline_autocmd(AutoEvent::CmdlineChanged, cstr::in_chars(&firstcbuf));
     restore_v_event(dict, &mut save_v_event);
-    err.absorb(unsafe { try_leave(&raw mut tstate) });
+    err.absorb(try_leave(&tstate));
 
     if err.is_set() {
         if !ui_has(kUIMessages) {

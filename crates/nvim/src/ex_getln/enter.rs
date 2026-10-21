@@ -322,10 +322,10 @@ pub(crate) fn command_line_enter(
             // and outside it at CmdlineLeave below; that asymmetry is
             // upstream's.
             let mut tstate: TryState = TRY_STATE_INIT;
-            unsafe { try_enter(&raw mut tstate) };
+            try_enter(&mut tstate);
             cmdline_autocmd(AutoEvent::CmdlineEnter, cstr::in_chars(&firstcbuf));
             restore_v_event(dict, &mut save_v_event);
-            err.absorb(unsafe { try_leave(&raw mut tstate) });
+            err.absorb(try_leave(&tstate));
 
             if err.is_set() {
                 if !ui_has(kUIMessages) {
@@ -406,9 +406,9 @@ pub(crate) fn command_line_enter(
             // C's TRY_WRAP; the error is printed further below, to avoid
             // redraw issues.
             let mut tstate: TryState = TRY_STATE_INIT;
-            unsafe { try_enter(&raw mut tstate) };
+            try_enter(&mut tstate);
             cmdline_autocmd(AutoEvent::CmdlineLeave, cstr::in_chars(&firstcbuf));
-            err.absorb(unsafe { try_leave(&raw mut tstate) });
+            err.absorb(try_leave(&tstate));
 
             if dict_get_number(Some(&dict), b"abort") != 0 {
                 s.gotesc = true;

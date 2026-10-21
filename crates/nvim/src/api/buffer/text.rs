@@ -125,7 +125,7 @@ pub fn nvim_buf_set_text(
     last.extend_from_slice(tail);
     last.push(0);
     let mut tstate: TryState = TryState::INIT;
-    unsafe { try_enter(&raw mut tstate) };
+    try_enter(&mut tstate);
     let edit = Replacement {
         buffer,
         start_row,
@@ -140,7 +140,7 @@ pub fn nvim_buf_set_text(
     let outcome = edit.apply();
     // The bracket outranks whatever the body answered, which is the order the
     // two had when both went through one slot.
-    unsafe { try_leave(&raw mut tstate) }?;
+    try_leave(&tstate)?;
     outcome
 }
 

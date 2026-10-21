@@ -31,8 +31,6 @@ count	callee	no_raw	defs	def
 19	NulTerminated::new	0	1	crates/nvim/src/mbyte/utf8/text.rs
 19	channel_decref	0	1	crates/nvim/src/channel/mod.rs
 18	at_opt	0	1	crates/nvim/src/cstr.rs
-18	try_enter	0	1	crates/nvim/src/api/private/helpers/mod.rs
-18	try_leave	0	1	crates/nvim/src/api/private/helpers/mod.rs
 17	.as_ref	0	0	
 17	Reader::new	0	1	crates/nvim/src/event/rstream.rs
 17	nlua_pop_object	0	1	crates/nvim/src/lua/converter/pop_object.rs

@@ -177,11 +177,11 @@ msg_putchar('\n' as ::core::ffi::c_int);
         } else if colored_ccline.cmdfirstc == ':' as ::core::ffi::c_int {
             // C's TRY_WRAP.
             let mut tstate: TryState = TRY_STATE_INIT;
-            unsafe { try_enter(&raw mut tstate) };
+            try_enter(&mut tstate);
             err_errmsg = c"E5408: Unable to get g:Nvim_color_cmdline callback: %s".as_ptr();
             dgc_ret =
                 dict_get_callback(Some(&globvar_dict()), b"Nvim_color_cmdline", &mut color_cb);
-            err.absorb(unsafe { try_leave(&raw mut tstate) });
+            err.absorb(try_leave(&tstate));
             can_free_cb = true;
         } else if colored_ccline.cmdfirstc == '=' as ::core::ffi::c_int {
             unsafe { color_expr_cmdline(colored_ccline, ccline_colors) };
@@ -209,7 +209,7 @@ msg_putchar('\n' as ::core::ffi::c_int);
         // the typed command line.
         getln_interrupted_highlight.set(false);
         let mut tstate: TryState = TRY_STATE_INIT;
-        unsafe { try_enter(&raw mut tstate) };
+        try_enter(&mut tstate);
         err_errmsg = c"E5407: Callback has thrown an exception: %s".as_ptr();
         let saved_msg_col = msg_col.get();
         let silenced = Suppress::messages();
@@ -219,7 +219,7 @@ msg_putchar('\n' as ::core::ffi::c_int);
         if got_int.get() {
             getln_interrupted_highlight.set(true);
         }
-        err.absorb(unsafe { try_leave(&raw mut tstate) });
+        err.absorb(try_leave(&tstate));
 
         if err.is_set() || !cbcall_ret {
             break 'body Label::Error;
