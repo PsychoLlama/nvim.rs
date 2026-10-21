@@ -306,12 +306,24 @@ pub fn get_leader_len(
 /// The item is the one that matched last, kept when a later round finds
 /// nothing; `None` when nothing ever matched.
 pub fn get_last_leader_offset(line: &[u8]) -> (c_int, Option<ComFlags>) {
-    let buffer = Buf::current();
-    let com = buffer.b_p_com.bytes();
+    // Every byte of the line is tried against every item, so the items are
+    // copied out of the option once rather than once per byte.
+    let items = {
+        let buffer = Buf::current();
+        let com = buffer.b_p_com.bytes();
+        let mut list = com;
+        let mut items = Vec::new();
+        while !list.is_empty() {
+            let at = ComFlags(com.len() - list.len());
+            let mut item = ComItem::new();
+            let has_colon = item.take(&mut list);
+            items.push((at, item, has_colon));
+        }
+        items
+    };
     let mut result = -1;
     let mut found_flags = None;
     let mut lower_check_bound = 0;
-    let mut item = ComItem::new();
 
     let mut i = line.len();
     loop {
@@ -324,20 +336,16 @@ pub fn get_last_leader_offset(line: &[u8]) -> (c_int, Option<ComFlags>) {
         }
 
         // Scan 'comments' for an item whose leader starts at `i`.
-        let mut found_one = false;
-        let mut com_flags = None;
-        let mut list = com;
-        while !list.is_empty() {
-            let flags_save = ComFlags(com.len() - list.len());
-            if !item.take(&mut list) {
-                continue; // cannot happen for a well-formed 'comments'
+        let found = items.iter().find(|(_, item, has_colon)| {
+            // No ':' cannot happen for a well-formed 'comments'.
+            if !has_colon {
+                return false;
             }
-
             let Some(j) = leader_match(line, i, item.leader()) else {
-                continue;
+                return false;
             };
             if item.has(COM_BLANK) && !blank_after(line, i + j) {
-                continue;
+                return false;
             }
             if item.has(COM_MIDDLE) {
                 // A middle part only counts when everything in front of it
@@ -348,18 +356,15 @@ pub fn get_last_leader_offset(line: &[u8]) -> (c_int, Option<ComFlags>) {
                     k += 1;
                 }
                 if k < i {
-                    continue;
+                    return false;
                 }
             }
-
-            found_one = true;
-            found_flags = Some(flags_save);
-            com_flags = Some(flags_save);
-            break;
-        }
-        if !found_one {
+            true
+        });
+        let Some(&(com_flags, ref item, _)) = found else {
             continue;
-        }
+        };
+        found_flags = Some(com_flags);
 
         result = len_as_int(i);
         // A nesting comment can have another one in front of it.
@@ -375,17 +380,10 @@ pub fn get_last_leader_offset(line: &[u8]) -> (c_int, Option<ComFlags>) {
         let com_leader = &found_leader[white_run(found_leader, 0)..];
         let len1 = com_leader.len();
 
-        let mut other = ComItem::new();
-        let mut list = com;
-        while !list.is_empty() {
-            let flags_save = ComFlags(com.len() - list.len());
-            let taken = other.take(&mut list);
-            if Some(flags_save) == com_flags {
-                continue;
-            }
+        for (flags_save, other, has_colon) in &items {
             // Upstream does not test for a missing ':' here; a
             // well-formed 'comments' always has one.
-            if !taken {
+            if *flags_save == com_flags || !has_colon {
                 continue;
             }
             let leader = other.leader();

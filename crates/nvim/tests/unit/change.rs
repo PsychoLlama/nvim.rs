@@ -260,6 +260,26 @@ fn get_leader_len_measures_the_leader_and_names_its_item() {
     // The last leader is the closed comment's end part, not its start.
     assert_eq!(offset("a = b; /* why */"), 14);
     assert_eq!(offset("no comment"), -1);
+    // A leader that is the tail of a longer one: the longer one wins.
+    fx.run("setlocal comments=b:#,:##,n:>,fb:-");
+    let last = |line: &str| {
+        let (at, flags) = get_last_leader_offset(line.as_bytes());
+        (
+            at,
+            flags.map(|f| String::from_utf8_lossy(&f.letters()).into_owned()),
+        )
+    };
+    let cases: &[(&str, (i32, Option<&str>))] = &[
+        ("x = 1 ## why", (6, Some(""))),
+        ("x = 1 # why", (6, Some("b"))),
+        ("x > > y", (2, Some("n"))),
+        ("a - b", (2, Some("fb"))),
+        ("plain", (-1, None)),
+    ];
+    for &(line, (want_at, want_flags)) in cases {
+        let got = last(line);
+        assert_eq!((got.0, got.1.as_deref()), (want_at, want_flags), "{line:?}");
+    }
     restore(&fx);
 }
 
