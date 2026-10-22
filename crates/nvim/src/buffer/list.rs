@@ -15,7 +15,6 @@
 use crate::cstr;
 use crate::types::AutoEvent;
 use core::ffi::{CStr, c_int};
-use core::ptr;
 
 use super::*;
 use crate::allocator::Owned;
@@ -46,8 +45,8 @@ use crate::regexp::RE_MAGIC;
 use crate::semsg;
 use crate::types::RegMatch;
 use crate::types::{
-    AdditionalData, Buffer, Callback, ColNr, Failed, FileID, FileMark, FileMarkView, Handle,
-    LineNr, OptInt, Pos, Timestamp, VAR_SCOPE, WinInfo, int16_t, uint64_t,
+    Buffer, Callback, ColNr, Failed, FileID, FileMark, FileMarkView, Handle, LineNr, OptInt, Pos,
+    Timestamp, VAR_SCOPE, WinInfo, int16_t, uint64_t,
 };
 use crate::undo::curbuf_is_changed;
 use crate::window::{WSP_VERT, swbuf_goto_win_with_buf, win_split};
@@ -70,7 +69,7 @@ pub(crate) const INIT_FMARK: FileMark = FileMark {
         topline_offset: MAXLNUM,
         skipcol: 0 as ColNr,
     },
-    additional_data: ptr::null_mut::<AdditionalData>(),
+    extra: None,
 };
 
 // ---------------------------------------------------------------------------

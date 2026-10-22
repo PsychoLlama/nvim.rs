@@ -21,8 +21,6 @@ use crate::winlayer::Win;
 
 pub fn nvim_buf_del_mark(buf: BufferHandle, name: String_0) -> Result<Boolean, Error> {
     let mut error = Error::none();
-    // The record `mark_get` answers into; see `mark_get`.
-    let mut slot = FileMark::UNSET;
     let mut res: bool = false;
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(res as Boolean);
@@ -32,20 +30,12 @@ pub fn nvim_buf_del_mark(buf: BufferHandle, name: String_0) -> Result<Boolean, E
         error = err_bad_value(c"mark name (must be a single char)", name);
         return (res as Boolean).reported(error);
     }
-    let fm: *mut FileMark = unsafe {
-        mark_get(
-            b,
-            Win::current(),
-            &raw mut slot,
-            kMarkAllNoResolve,
-            ::core::ffi::c_int::from(*name.data()),
-        )
-    };
-    if fm.is_null() {
+    let mark = ::core::ffi::c_int::from(unsafe { *name.data() });
+    let Some(fm) = mark_get(b, Win::current(), kMarkAllNoResolve, mark) else {
         error = err_bad_value(c"mark name", name.as_cstr());
         return (res as Boolean).reported(error);
-    }
-    if unsafe { (*fm).mark.lnum } != 0 as LineNr && unsafe { (*fm).fnum } == b.handle {
+    };
+    if fm.mark.lnum != 0 as LineNr && fm.fnum == b.handle {
         set_mark(Some(b), name, 0 as Integer, 0 as Integer)?;
         res = true;
     }
@@ -76,8 +66,6 @@ pub fn nvim_buf_set_mark(
 
 pub fn nvim_buf_get_mark(buf: BufferHandle, name: String_0) -> Result<Array, Error> {
     let mut error = Error::none();
-    // The record `mark_get` answers into; see `mark_get`.
-    let mut slot = FileMark::UNSET;
     let mut rv: Array = Array::EMPTY;
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(rv);
@@ -93,24 +81,20 @@ pub fn nvim_buf_get_mark(buf: BufferHandle, name: String_0) -> Result<Array, Err
         coladd: 0,
     };
     let mark: ::core::ffi::c_char = unsafe { *name.data() };
-    let fm: *mut FileMark = unsafe {
-        mark_get(
-            b,
-            Win::current(),
-            &raw mut slot,
-            kMarkAllNoResolve,
-            ::core::ffi::c_int::from(mark),
-        )
-    };
-    if fm.is_null() {
+    let Some(fm) = mark_get(
+        b,
+        Win::current(),
+        kMarkAllNoResolve,
+        ::core::ffi::c_int::from(mark),
+    ) else {
         error = err_bad_value(c"mark name", name.as_cstr());
         return rv.reported(error);
-    }
-    if unsafe { (*fm).fnum } != b.handle {
+    };
+    if fm.fnum != b.handle {
         pos.lnum = 0 as ::core::ffi::c_int as LineNr;
         pos.col = 0 as ::core::ffi::c_int as ColNr;
     } else {
-        pos = unsafe { (*fm).mark };
+        pos = fm.mark;
     }
     rv = Array::with_capacity(2 as size_t);
     rv.push(Object::integer(Integer::from(pos.lnum)));

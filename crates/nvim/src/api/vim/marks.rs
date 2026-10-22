@@ -18,6 +18,7 @@ use super::*;
 use crate::api::private::validate::err_bad_value;
 use crate::ascii::ascii_isdigit;
 use crate::cstr;
+use crate::memory::XString;
 use core::ffi::{CStr, c_char, c_int};
 
 /// The one character `name` spells, when it names a global mark: an
@@ -56,35 +57,32 @@ pub fn nvim_del_mark(name: String_0) -> Result<Boolean, Error> {
 /// `[0, 0, 0, ""]` rather than an error.
 pub fn nvim_get_mark(name: String_0, _opts: &mut KeyDict_empty) -> Result<Array, Error> {
     let mark = global_mark_name(&name)?;
-    // SAFETY: `mark_get_global` answers a live global mark for every name
-    // this one accepts -- the slot exists whether or not it is set.
-    let (pos, fnum, fname) = unsafe {
-        let mark = mark_get_global(false, c_int::from(mark));
-        ((*mark).fmark.mark, (*mark).fmark.fnum, (*mark).fname)
-    };
+    // A copy of the slot, which exists whether or not it is set.
+    let mark = mark_get_global(false, c_int::from(mark));
+    let (pos, fnum) = (mark.fmark.mark, mark.fmark.fnum);
     // A mark in a buffer names the buffer; one restored from ShaDa names
-    // only the file it was in, and `fname` is the mark's own storage.
+    // only the file it was in.
     let mut bufnr = fnum;
-    let owned = (fnum != 0).then(|| buflist_nr2name(bufnr, 1, 1)).flatten();
-    let mut filename = if fnum != 0 {
-        owned
-            .as_ref()
-            .map_or(core::ptr::null_mut(), |name| name.as_ptr().cast_mut())
+    let filename = if fnum != 0 {
+        buflist_nr2name(bufnr, 1, 1)
     } else {
-        fname
+        mark.file_name().map(XString::from_cstr)
     };
     let mut row: Integer = 0;
     let mut col: Integer = 0;
-    if filename.is_null() || pos.lnum <= 0 as LineNr {
-        filename = c"".as_ptr().cast_mut();
-        bufnr = 0;
-    } else {
-        row = Integer::from(pos.lnum);
-        col = Integer::from(pos.col);
-    }
+    let filename = match filename {
+        Some(name) if pos.lnum > 0 as LineNr => {
+            row = Integer::from(pos.lnum);
+            col = Integer::from(pos.col);
+            name
+        }
+        _ => {
+            bufnr = 0;
+            XString::new()
+        }
+    };
     let mut rv = Array::with_capacity(4 as size_t);
-    // SAFETY: `filename` is NUL-terminated; the answer owns its copy.
-    let path = unsafe { Object::string(cstr_to_string(filename)) };
+    let path = Object::string(String_0::from_bytes(filename.as_cstr().to_bytes()));
     rv.push(Object::integer(row));
     rv.push(Object::integer(col));
     rv.push(Object::integer(Integer::from(bufnr)));

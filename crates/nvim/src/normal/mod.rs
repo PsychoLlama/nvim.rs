@@ -9,7 +9,7 @@
 //! and the constants at least one family imports by name. Nothing here is
 //! code.
 
-#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 

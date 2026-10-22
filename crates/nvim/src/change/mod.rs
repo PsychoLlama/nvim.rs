@@ -49,7 +49,7 @@ use crate::indent::{
 };
 use crate::indent_c::{do_c_expr_indent, in_cinkeys, starts_with_cinword};
 use crate::insexpand::ins_compl_active;
-use crate::mark::{clear_mark, mark_adjust, mark_col_adjust, mark_view_make};
+use crate::mark::{fresh_mark, mark_adjust, mark_col_adjust, mark_view_make};
 use crate::mbyte::{mb_adjust_cursor, utf_iscomposing_first};
 use crate::memline::{
     ml_add_deleted_len, ml_delete_flags, ml_line_alloced, ml_open_file, ml_replace_buf_text,
@@ -69,7 +69,6 @@ use crate::r#move::{
 use crate::option::get_ve_flags;
 use crate::option::vars::{p_deco, p_paste, p_ri, p_sm, p_sr};
 use crate::options::kOptVeFlagOnemore;
-use crate::os::time::os_time;
 use crate::plines::{linetabsize_eol, win_chartabsize};
 use crate::pos::{MAXCOL, MAXLNUM};
 use crate::search::state::highlight_match;

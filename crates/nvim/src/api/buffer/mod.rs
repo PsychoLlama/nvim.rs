@@ -35,7 +35,7 @@ use crate::state::MODE_INSERT;
 use crate::state::mode::State;
 use crate::types::{
     AcoSave, AlignTextPos, ApiDict, Array, BCount, Boolean, BufUpdateCallbacks, BufferHandle,
-    ColNr, DoBufAction, DoBufStart, Error, ExtmarkOp, FileMark, Integer, KeyDict_buf_attach,
+    ColNr, DoBufAction, DoBufStart, Error, ExtmarkOp, Integer, KeyDict_buf_attach,
     KeyDict_buf_delete, KeyDict_empty, KeyDict_keymap, LineNr, LuaRef, MarkAdjustMode, MarkGet,
     Object, Pos, String_0, TryState, UndoObjectType, WinSplit, WinStyle, int64_t, kErrorTypeNone,
     lua_State, ptrdiff_t, size_t, uint64_t,

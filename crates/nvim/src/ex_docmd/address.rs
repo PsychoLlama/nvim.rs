@@ -17,10 +17,7 @@ use super::addrtype::{arglist_len, get_cmd_default_range, loaded_buffer_range};
 use crate::cstr::byte_at;
 use crate::ex_docmd::ex_msg;
 use crate::ex_docmd::is_user_cmd;
-use crate::mark::current_mark;
-use crate::mark::current_visual_mark;
-use crate::mark::mark_checked;
-use crate::mark::move_to_mark;
+use crate::mark::{mark_check, mark_get, mark_get_visual, mark_move_to};
 use crate::search::do_search_in;
 use crate::search::search_last_pattern;
 use crate::strings::has_char;
@@ -51,8 +48,8 @@ use crate::quickfix::{qf_get_cur_idx, qf_get_cur_valid_idx, qf_get_size, qf_get_
 use crate::regexp::{RE_SEARCH, RE_SUBST, skip_regexp_at};
 use crate::search::{BACKWARD, FORWARD, SEARCH_HIS, SEARCH_KEEP, SEARCH_MSG};
 use crate::types::{
-    CmdAddr, ColNr, Direction, ExArg, ExArgt, ExpandContext, FAIL, FileMark, LineNr, MarkGet,
-    MarkMove, OK, Pos, size_t,
+    CmdAddr, ColNr, Direction, ExArg, ExArgt, ExpandContext, FAIL, LineNr, MarkGet, MarkMove, OK,
+    Pos, size_t,
 };
 use crate::winlayer::{Buf, Win, first_buffer, last_buffer};
 
@@ -126,9 +123,6 @@ pub(crate) fn find_excmd_after_range(excmd: &mut ExArg) -> Option<usize> {
 /// the second is resolved, which is what makes `:.;+3` mean "three lines
 /// from here" however the first address was spelled.
 pub fn parse_cmd_address(excmd: &mut ExArg, errormsg: &mut Option<CString>, silent: bool) -> c_int {
-    // The records `:*` reads the Visual marks into: they are never adjusted
-    // and have no store, so each is computed into a record of its own.
-    let (mut first, mut last) = (FileMark::UNSET, FileMark::UNSET);
     let mut address_count = 1;
     let mut lnum: LineNr;
     let mut need_check_cursor = false;
@@ -182,16 +176,18 @@ pub fn parse_cmd_address(excmd: &mut ExArg, errormsg: &mut Option<CString>, sile
                 }
                 excmd.line.cmd += 1;
                 if !excmd.skip {
-                    let found = current_visual_mark(&mut first, '<' as c_int);
-                    if !mark_checked(found.then_some(&mut first), errormsg) {
+                    // The Visual marks are never adjusted and have no
+                    // store: each is computed on the spot.
+                    let first = mark_get_visual(Buf::current(), '<' as c_int);
+                    if !mark_check(first.as_ref(), errormsg) {
                         break 'theend;
                     }
-                    excmd.line1 = first.mark.lnum;
-                    let found = current_visual_mark(&mut last, '>' as c_int);
-                    if !mark_checked(found.then_some(&mut last), errormsg) {
+                    excmd.line1 = first.map_or(0, |fm| fm.mark.lnum);
+                    let last = mark_get_visual(Buf::current(), '>' as c_int);
+                    if !mark_check(last.as_ref(), errormsg) {
                         break 'theend;
                     }
-                    excmd.line2 = last.mark.lnum;
+                    excmd.line2 = last.map_or(0, |fm| fm.mark.lnum);
                     excmd.addr_count += 1;
                 }
             }
@@ -387,8 +383,6 @@ pub fn get_address(
     address_count: c_int,
     errormsg: &mut Option<CString>,
 ) -> LineNr {
-    // The record a `'m` address answers into; see `mark_get`.
-    let mut slot = FileMark::UNSET;
     let mut cmd = at.expect("an address is read from somewhere in its own text");
     cmd = cmd + skip::white(&text[cmd.min(text.len())..]);
     let mut lnum: LineNr = MAXLNUM;
@@ -446,16 +440,18 @@ pub fn get_address(
                     // so a mark named with a high byte is a negative
                     // number and matches nothing.
                     let name = c_int::from(byte_at(text, cmd).cast_signed());
-                    let found = current_mark(&mut slot, flag, name);
+                    let found = mark_get(Buf::current(), Win::current(), flag, name);
                     cmd += 1;
-                    if found && slot.fnum != Buf::current().handle {
-                        move_to_mark(&mut slot, 0 as MarkMove);
-                        lnum = Win::current().w_cursor.lnum;
-                    } else if !mark_checked(found.then_some(&mut slot), errormsg) {
-                        failed = true;
-                        break;
-                    } else {
-                        lnum = slot.mark.lnum;
+                    match &found {
+                        Some(fm) if fm.fnum != Buf::current().handle => {
+                            mark_move_to(Some(fm), 0 as MarkMove);
+                            lnum = Win::current().w_cursor.lnum;
+                        }
+                        _ if !mark_check(found.as_ref(), errormsg) => {
+                            failed = true;
+                            break;
+                        }
+                        _ => lnum = found.as_ref().map_or(0, |fm| fm.mark.lnum),
                     }
                 }
             }

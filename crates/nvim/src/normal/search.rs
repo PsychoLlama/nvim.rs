@@ -5,8 +5,7 @@
 //! the fold-opening tail: whether 'foldopen' lets the destination's fold
 //! spring open depends on the command having been *typed*, not replayed.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::keycodes::ModMask;
 use crate::winlayer::{Buf, Win};
@@ -167,16 +166,13 @@ pub(crate) fn nv_mark(cmd_arg: &mut CmdArg) {
 
 /// Jump to a mark, and describe the jump to the operator that may be pending.
 ///
-/// # Safety
-///
-/// `fm` must point at a live `FileMark`, unaliased for the call.
-pub(crate) unsafe fn nv_mark_move_to(
+/// `None` is a name that named no mark, which the jump reports.
+pub(crate) fn nv_mark_move_to(
     cmd_arg: &mut CmdArg,
     flags: MarkMove,
-    fm: *mut FileMark,
+    fm: Option<&FileMark>,
 ) -> MarkMoveRes {
-    // SAFETY: `fm` is null or a mark `mark_move_to` may read.
-    let res = unsafe { mark_move_to(fm, flags) };
+    let res = mark_move_to(fm, flags);
     if res & kMarkMoveFailed as MarkMoveRes != 0 {
         clear_op(cmd_arg.op());
     }
@@ -245,11 +241,9 @@ pub(crate) fn nv_gomark(cmd_arg: &mut CmdArg) {
         flags |= kMarkSetView as MarkMove;
     }
 
-    // The record the lookup answers into; it outlives the jump below.
-    let mut slot = FileMark::UNSET;
-    let (buffer, win) = (Buf::current(), Win::current());
-    let fm = unsafe { mark_get(buffer, win, &raw mut slot, kMarkAll, name) };
-    let move_res = unsafe { nv_mark_move_to(cmd_arg, flags, fm) };
+    // A copy of the mark, which outlives the jump below.
+    let fm = mark_get(Buf::current(), Win::current(), kMarkAll, name);
+    let move_res = nv_mark_move_to(cmd_arg, flags, fm.as_ref());
     if !virtual_active(Win::current()) {
         Win::current().w_cursor.coladd = 0;
     }
@@ -280,11 +274,11 @@ pub(crate) fn nv_pcmark(cmd_arg: &mut CmdArg) {
         get_changelist(Buf::current(), Win::current(), cmd_arg.count1)
     } else {
         flags |= (KMarkNoContext as c_int | kMarkJumpList as c_int) as MarkMove;
-        unsafe { get_jumplist(Win::current(), cmd_arg.count1) }
+        get_jumplist(Win::current(), cmd_arg.count1)
     };
 
-    if !fm.is_null() {
-        move_res = unsafe { nv_mark_move_to(cmd_arg, flags, fm) };
+    if let Some(fm) = &fm {
+        move_res = nv_mark_move_to(cmd_arg, flags, Some(fm));
     } else if cmd_arg.cmdchar == 'g' as c_int {
         // Three different reasons the change list had nothing.
         if Buf::current().b_changelistlen == 0 {

@@ -1,14 +1,12 @@
 //! The `[` and `]` commands: the block, comment, define and method
 //! searches, the mark and fold jumps, and the paste variants.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::keycodes::Key;
 use crate::strings::has_char;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
-use core::ptr;
 
 use crate::cursor::{dec_cursor, gchar_cursor, inc_cursor};
 use crate::diff::diff_move_to;
@@ -27,7 +25,7 @@ use crate::pos::MAXLNUM;
 use crate::search::{BACKWARD, FORWARD, find_pattern_in_path, findmatchlimit};
 use crate::spell::{SMT_ALL, spell_move_to};
 use crate::textobject::findpar;
-use crate::types::{CmdArg, FileMark, MarkMove, OpType, PUT_FIXINDENT, Pos, SpellMoveType};
+use crate::types::{CmdArg, MarkMove, OpType, PUT_FIXINDENT, Pos, SpellMoveType};
 use core::ffi::{CStr, c_int, c_uint};
 
 /// Which way a `[` or `]` command searches.
@@ -231,31 +229,22 @@ fn nv_bracket_ident(cmd_arg: &mut CmdArg) {
 /// `['`, `` [` ``, `]'` and `` ]` ``: jump to the next or previous lower-case
 /// mark in this buffer.
 fn nv_bracket_mark(cmd_arg: &mut CmdArg) {
-    // The walk starts from a mark standing for the cursor itself, in this
-    // frame's own record — every later `fm` is a store's address instead.
-    let mut here = FileMark::UNSET;
-    let mut fm = unsafe { pos_to_mark(Buf::current(), &raw mut here, Win::current().w_cursor) };
-    debug_assert!(!fm.is_null());
+    // The walk starts from a mark standing for the cursor itself; every
+    // later one is a copy of a buffer mark. Running out of marks stops at the
+    // last one found rather than failing.
+    let mut fm = pos_to_mark(Buf::current(), Win::current().w_cursor);
     let linewise = cmd_arg.nchar == '\'' as c_int;
-    let mut prev_fm = ptr::null_mut();
-    let mut n = cmd_arg.count1;
-    while n > 0 {
-        prev_fm = fm;
-        fm = unsafe { getnextmark(&raw mut (*fm).mark, direction(cmd_arg), linewise as c_int) };
-        if fm.is_null() {
-            break;
+    for _ in 0..cmd_arg.count1 {
+        match getnextmark(fm.mark, direction(cmd_arg), linewise) {
+            Some(next) => fm = next,
+            None => break,
         }
-        n -= 1;
-    }
-    // Running out of marks stops at the last one rather than failing.
-    if fm.is_null() {
-        fm = prev_fm;
     }
     let mut flags = kMarkContext as MarkMove;
     if linewise {
         flags |= kMarkBeginLine as MarkMove;
     }
-    unsafe { nv_mark_move_to(cmd_arg, flags, fm) };
+    nv_mark_move_to(cmd_arg, flags, Some(&fm));
 }
 
 /// `[s`, `[r`, `[S`, `]s`, `]r` and `]S`: jump to a misspelled word.

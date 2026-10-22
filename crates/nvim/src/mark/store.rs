@@ -1,4 +1,4 @@
-//! The mark stores, wrapped so that reaching one is not an unsafe operation.
+//! The mark stores, and the names the rest of `mark/` reaches them by.
 //!
 //! `mark/` owns six containers of the same two record types, spread across
 //! three lifetimes:
@@ -12,31 +12,24 @@
 //! | `w_jumplist` | `XFileMark` | a window |
 //! | `w_tagstack` | `Taggy`, whose `fmark` is one | a window |
 //!
-//! Every walk over any of them was written out as a cast-and-offset —
-//! `(&raw mut (*buf).b_namedm as *mut FileMark).offset(i as isize)` and its
-//! seven siblings — inside an `unsafe fn` whose whole body was therefore
-//! unchecked. [`Fmark`] and [`Xfmark`] make that step once: *constructing* a
-//! handle is the unsafe part, and every accessor on it is a safe method. It
-//! is the same lever as [`crate::winlayer`]'s `Win`/`Buf` and `undo::store`'s
-//! `Header` (and was `fold::list`'s, before the fold tree became nested
-//! vectors) — the third container family to pay for it, and the one where the
-//! arithmetic was most repeated.
+//! Every record owns what it holds -- its ShaDa extra data, and an
+//! `XFileMark`'s file name -- so a store is written by assignment and read
+//! by copy: [`FileMark`]'s `Clone` is deep and its drop releases the extra
+//! data. A record is reached for one statement at a time, through the
+//! buffer's or window's handle or through one closure over the global table,
+//! and nothing holds a reference into a store across code that may run
+//! autocommands: the stores are walked while the editor is re-entered
+//! through them (an adjustment fires autocommands, a jump list walk loads a
+//! file), so a walk keeps an index and re-reads.
 //!
-//! The handles are raw-pointer-shaped rather than `&mut FileMark` because the
-//! stores are walked while the editor is re-entered through them: an
-//! adjustment fires autocommands, a jumplist walk loads a file, and a global
-//! mark and a jumplist entry can name the same buffer. Each accessor raises a
-//! reference for the length of one field access, exactly as `winlayer`'s
-//! `Deref` does.
-//!
-//! `namedfm` is reached through [`GlobalMarks`] rather than through
-//! `namedfm.ptr()` at thirty call sites; the escape hatch is taken once, here,
-//! and the index arithmetic that names a slot stays with its five callers
-//! (see `mark/lookup.rs`'s `mark_global_index`) because turning the fixed
-//! array into a keyed map is a later phase's change, not this module's.
+//! [`LocalMark`] names one of a buffer's stores by the mark's name, for the
+//! four places that choose a store that way. The global table is
+//! [`namedfm`], reached through `GlobalCell`'s closures; the index
+//! arithmetic that names a slot stays with its callers (see
+//! `mark/lookup.rs`'s `mark_global_index`) because turning the fixed array
+//! into a keyed map is a later change, not this module's.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -45,18 +38,15 @@
     clippy::ptr_as_ptr
 )]
 
-use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
+use core::ffi::{c_char, c_int};
 
-use crate::mark::namedfm;
+use crate::ascii::ascii_islower;
 use crate::os::time::os_time;
-use crate::types::{ColNr, FileMark, FileMarkView, LineNr, Pos, Timestamp, XFileMark};
-use crate::winlayer::{Buf, Win};
-
-use super::{NGLOBALMARKS, NMARKS, free_fmark, free_xfmark};
+use crate::types::{FileMark, FileMarkView, Pos, XFileMark};
+use crate::winlayer::Buf;
 
 /// The position a mark that has never been set reports, and what
-/// [`Fmark::clear`] puts back.
+/// [`FileMark::clear`] puts back.
 pub(super) const UNSET_POS: Pos = Pos {
     lnum: 0,
     col: 0,
@@ -64,20 +54,8 @@ pub(super) const UNSET_POS: Pos = Pos {
 };
 
 /// The view an unset mark carries. The module's spelling of
-/// [`FileMarkView::NONE`], which is where the value itself lives — callers
-/// outside `mark` need it too, to initialise the slot they lend `mark_get`.
+/// [`FileMarkView::NONE`].
 pub(super) const NO_VIEW: FileMarkView = FileMarkView::NONE;
-
-/// An `FileMark` that is not set, timestamped now by the caller. The module's
-/// spelling of [`FileMark::UNSET`].
-pub(super) const UNSET_FMARK: FileMark = FileMark::UNSET;
-
-/// An `XFileMark` that is not set.
-#[cfg(test)]
-pub(super) const UNSET_XFMARK: XFileMark = XFileMark {
-    fmark: UNSET_FMARK,
-    fname: ptr::null_mut(),
-};
 
 /// `NUL` in the stores' own byte type: `NUL` itself is a `c_int`, and every
 /// mark name lives in a `c_char`.
@@ -92,392 +70,114 @@ pub(super) fn mark_name(c: c_int) -> c_char {
     c_char::try_from(c).expect("mark name is one ASCII byte")
 }
 
-/// The `i`th slot of a fixed-size mark array, bounds-checked.
+/// A position in one of the fixed-size stores, bounds-checked.
 ///
 /// Every caller works `i` out from a mark name or a list length that has
 /// already been range tested, so a failure here is a bug in that arithmetic
-/// rather than in the user's input. It is checked anyway, in release as well
-/// as debug, because the alternative is a read past the array — which is what
-/// the transpiled `(&raw mut (*buf).b_namedm as *mut FileMark).offset(i)` did.
-fn slot(i: c_int, len: usize) -> usize {
-    usize::try_from(i)
-        .ok()
-        .filter(|&idx| idx < len)
-        .expect("mark store index in range")
+/// rather than in the user's input.
+pub(super) fn slot(i: c_int) -> usize {
+    usize::try_from(i).expect("mark store index in range")
 }
 
-// ---------------------------------------------------------------------------
-// The two records
-
-/// One `FileMark` in place.
+/// A mark at `pos` in buffer `fnum`, stamped now, carrying nothing else:
+/// what upstream's `SET_FMARK`/`RESET_FMARK` write. The timestamp is taken
+/// here rather than passed in, because it is what the ShaDa merge compares.
 ///
-/// `Copy`, because it is a handle and not an owner: dropping one frees
-/// nothing, and [`Fmark::clear`] is what releases the record's
-/// `additional_data`.
-#[derive(Copy, Clone, PartialEq, Eq)]
-pub(super) struct Fmark(*mut FileMark);
-
-impl Fmark {
-    /// # Safety
-    /// `fm` must stay a live, writable `FileMark` for as long as the handle is
-    /// used.
-    #[inline(always)]
-    pub(super) const unsafe fn new(fm: *mut FileMark) -> Self {
-        Self(fm)
-    }
-
-    /// The record's address, for the calls that still take a `*mut FileMark`
-    /// across a module boundary (`mark_check`, `fm_getname`, `tv_dict_add_*`).
-    #[inline(always)]
-    pub(super) fn raw(self) -> *mut FileMark {
-        self.0
-    }
-
-    /// The whole record, copied out.
-    #[inline(always)]
-    pub(super) fn read(self) -> FileMark {
-        // SAFETY: `new`'s caller promised a live record.
-        unsafe { (*self.0).clone() }
-    }
-
-    /// Overwrite the whole record. Does not free what was there; see
-    /// [`Fmark::place`].
-    #[inline(always)]
-    pub(super) fn write(self, fm: FileMark) {
-        // SAFETY: as `read`.
-        unsafe { *self.0 = fm };
-    }
-
-    #[inline(always)]
-    pub(super) fn pos(self) -> Pos {
-        // SAFETY: as `read`.
-        unsafe { (*self.0).mark }
-    }
-
-    #[inline(always)]
-    pub(super) fn set_pos(self, pos: Pos) {
-        // SAFETY: as `read`.
-        unsafe { (*self.0).mark = pos };
-    }
-
-    #[inline(always)]
-    pub(super) fn lnum(self) -> LineNr {
-        // SAFETY: as `read`.
-        unsafe { (*self.0).mark.lnum }
-    }
-
-    #[inline(always)]
-    pub(super) fn set_lnum(self, lnum: LineNr) {
-        // SAFETY: as `read`.
-        unsafe { (*self.0).mark.lnum = lnum };
-    }
-
-    #[inline(always)]
-    pub(super) fn col(self) -> ColNr {
-        // SAFETY: as `read`.
-        unsafe { (*self.0).mark.col }
-    }
-
-    #[inline(always)]
-    pub(super) fn fnum(self) -> c_int {
-        // SAFETY: as `read`.
-        unsafe { (*self.0).fnum }
-    }
-
-    #[inline(always)]
-    pub(super) fn set_fnum(self, fnum: c_int) {
-        // SAFETY: as `read`.
-        unsafe { (*self.0).fnum = fnum };
-    }
-
-    #[inline(always)]
-    pub(super) fn timestamp(self) -> Timestamp {
-        // SAFETY: as `read`.
-        unsafe { (*self.0).timestamp }
-    }
-
-    #[inline(always)]
-    pub(super) fn set_timestamp(self, timestamp: Timestamp) {
-        // SAFETY: as `read`.
-        unsafe { (*self.0).timestamp = timestamp };
-    }
-
-    /// Whether the mark names a line. Line 0 is how every store spells "not
-    /// set", and what `mark_check` turns into `E20`.
-    #[inline(always)]
-    pub(super) fn is_set(self) -> bool {
-        self.lnum() != 0
-    }
-
-    /// Put the mark at `pos` in buffer `fnum`, **abandoning** whatever was
-    /// there: upstream's `SET_FMARK`.
-    ///
-    /// The timestamp is taken here rather than passed in, because it is what
-    /// `mark_set_global`/`mark_set_local` compare when a shada file is merged.
-    ///
-    /// The old record's `additional_data` is NOT freed. Only `setpcmark` uses
-    /// this arm, and it writes over a jump list entry the caller has already
-    /// dealt with; every other store wants [`Fmark::replace`]. The two are one
-    /// `free_fmark` apart and upstream keeps them as two macros for the same
-    /// reason.
-    pub(super) fn place(self, pos: Pos, fnum: c_int, view: FileMarkView) {
-        self.write(FileMark {
-            mark: pos,
-            fnum,
-            timestamp: os_time(),
-            view,
-            additional_data: ptr::null_mut(),
-        });
-    }
-
-    /// [`Fmark::place`], releasing what was there first: upstream's
-    /// `RESET_FMARK`.
-    pub(super) fn replace(self, pos: Pos, fnum: c_int, view: FileMarkView) {
-        // SAFETY: `new`'s caller promised a live record, so the old value is
-        // readable and its `additional_data` is this store's to free.
-        unsafe { free_fmark(self.read()) };
-        self.place(pos, fnum, view);
-    }
-
-    /// Release the record and put an unset one in its place, stamped
-    /// `timestamp` so a later shada merge can tell the clearing from the
-    /// records it is merging.
-    pub(super) fn clear(self, timestamp: Timestamp) {
-        // SAFETY: as `place`.
-        unsafe { free_fmark(self.read()) };
-        self.write(FileMark {
-            timestamp,
-            ..UNSET_FMARK
-        });
+/// Assigning it over a store's record is `RESET_FMARK`: the old record's
+/// extra data goes with it. Upstream's `SET_FMARK` -- the same write without
+/// the release -- only differs where the record was a shallow duplicate,
+/// which an owned record never is.
+pub(crate) fn fresh_mark(pos: Pos, fnum: c_int, view: FileMarkView) -> FileMark {
+    FileMark {
+        mark: pos,
+        fnum,
+        timestamp: os_time(),
+        view,
+        extra: None,
     }
 }
 
-/// One `XFileMark` in place: an [`Fmark`] plus the file name a mark read out of
-/// the shada file carries until its buffer is loaded and `fname2fnum` swaps
-/// the two.
-#[derive(Copy, Clone, PartialEq, Eq)]
-pub(super) struct Xfmark(*mut XFileMark);
-
-impl Xfmark {
-    /// # Safety
-    /// `xfm` must stay a live, writable `XFileMark` for as long as the handle
-    /// is used.
-    #[inline(always)]
-    pub(super) const unsafe fn new(xfm: *mut XFileMark) -> Self {
-        Self(xfm)
-    }
-
-    /// The record's address, for the calls that still take a `*mut XFileMark`
-    /// (`fname2fnum`, the shada iterators).
-    #[inline(always)]
-    pub(super) fn raw(self) -> *mut XFileMark {
-        self.0
-    }
-
-    /// The file mark inside the record.
-    #[inline(always)]
-    pub(super) fn fmark(self) -> Fmark {
-        // SAFETY: a live `XFileMark` holds a live `FileMark`.
-        unsafe { Fmark::new(&raw mut (*self.0).fmark) }
-    }
-
-    #[inline(always)]
-    pub(super) fn read(self) -> XFileMark {
-        // SAFETY: `new`'s caller promised a live record.
-        unsafe { (*self.0).clone() }
-    }
-
-    #[inline(always)]
-    pub(super) fn write(self, xfm: XFileMark) {
-        // SAFETY: as `read`.
-        unsafe { *self.0 = xfm };
-    }
-
-    /// The remembered file name, null once the mark names a live buffer.
-    #[inline(always)]
-    pub(super) fn fname(self) -> *mut c_char {
-        // SAFETY: as `read`.
-        unsafe { (*self.0).fname }
-    }
-
-    #[inline(always)]
-    pub(super) fn set_fname(self, fname: *mut c_char) {
-        // SAFETY: as `read`.
-        unsafe { (*self.0).fname = fname };
-    }
-
-    /// Free the remembered file name and forget it.
-    pub(super) fn clear_fname(self) {
-        // SAFETY: the name is this record's to free, and nothing else holds
-        // it: `fname2fnum` copies into `NameBuff` before this runs.
-        unsafe { crate::memory::xfree(self.fname().cast()) };
-        self.set_fname(ptr::null_mut());
-    }
-
-    /// Put the mark at `pos` in buffer `fnum` and forget the remembered file
-    /// name, **abandoning** whatever was there: upstream's `SET_XFMARK`.
-    ///
-    /// As [`Fmark::place`], nothing is freed. `setpcmark` is the one caller.
-    pub(super) fn place(self, pos: Pos, fnum: c_int, view: FileMarkView) {
-        self.set_fname(ptr::null_mut());
-        self.fmark().place(pos, fnum, view);
-    }
-
-    /// [`Xfmark::place`], releasing both halves of what was there first:
-    /// upstream's `RESET_XFMARK`.
-    pub(super) fn replace(self, pos: Pos, fnum: c_int, view: FileMarkView) {
-        // SAFETY: `new`'s caller promised a live record; the name and the
-        // `additional_data` are this store's to free.
-        unsafe { free_xfmark(self.read()) };
-        self.place(pos, fnum, view);
-    }
-}
-
-// ---------------------------------------------------------------------------
-// The containers
-
-/// The global mark table: `'A`-`'Z` at 0..[`NMARKS`] and `'0`-`'9` above it,
-/// up to [`NGLOBALMARKS`].
-///
-/// A zero-sized handle rather than a pointer: the table is one `static`, live
-/// from startup to exit, so naming a slot needs no promise from the caller.
-/// The single `namedfm.ptr()` in the module is [`GlobalMarks::at`]'s.
-pub(super) struct GlobalMarks;
-
-impl GlobalMarks {
-    /// The `idx`th slot. `idx` must be in `0..NGLOBALMARKS`; the five places
-    /// that work one out from a mark name all clamp it first, and the debug
-    /// assertion is what says so at run time.
-    pub(super) fn at(idx: c_int) -> Xfmark {
-        let idx = slot(idx, NGLOBALMARKS as usize);
-        // SAFETY: `namedfm` is a live `[XFileMark; 36]` for the whole run and
-        // `idx` is inside it, so the projection names a live record. The
-        // handle borrows nothing: every access through it is one field at a
-        // time, which is the contract `GlobalCell::ptr` documents.
-        unsafe { Xfmark::new(&raw mut (*namedfm.ptr())[idx]) }
-    }
-
-    /// Every slot, in table order — `'A` first, `'9` last.
-    pub(super) fn all() -> impl Iterator<Item = Xfmark> {
-        (0..NGLOBALMARKS).map(Self::at)
-    }
-
-    /// Every slot with its index, for the callers that turn the index back
-    /// into a mark name.
-    pub(super) fn indexed() -> impl Iterator<Item = (c_int, Xfmark)> {
-        (0..NGLOBALMARKS).map(|i| (i, Self::at(i)))
-    }
-}
-
-/// The mark stores that hang off a buffer.
-impl Buf {
-    /// The buffer-local mark `'a` + `i`.
-    pub(super) fn named_mark(self, i: c_int) -> Fmark {
-        let i = slot(i, self.b_namedm.len());
-        // SAFETY: a live buffer holds a live `[FileMark; 26]`, and `i` is
-        // inside it.
-        unsafe { Fmark::new(&raw mut (*self.raw()).b_namedm[i]) }
-    }
-
-    /// Every buffer-local mark, `'a` first.
-    pub(super) fn named_marks(self) -> impl Iterator<Item = Fmark> {
-        (0..NMARKS).map(move |i| self.named_mark(i))
-    }
-
-    /// `'"` — where the cursor was when the buffer was last left.
-    pub(super) fn last_cursor(self) -> Fmark {
-        // SAFETY: a live buffer holds a live `FileMark` here.
-        unsafe { Fmark::new(&raw mut (*self.raw()).b_last_cursor) }
-    }
-
-    /// `'^` — where the last insert ended.
-    pub(super) fn last_insert(self) -> Fmark {
-        // SAFETY: as `last_cursor`.
-        unsafe { Fmark::new(&raw mut (*self.raw()).b_last_insert) }
-    }
-
-    /// `'.` — where the last change was made.
-    pub(super) fn last_change(self) -> Fmark {
-        // SAFETY: as `last_cursor`.
-        unsafe { Fmark::new(&raw mut (*self.raw()).b_last_change) }
-    }
-
-    /// `':` — where a prompt buffer's prompt starts. Only meaningful when
+/// One of a buffer's own mark stores, named by the mark it holds.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub(super) enum LocalMark {
+    /// `'a` + the index.
+    Named(usize),
+    /// `'"` -- where the cursor was when the buffer was last left.
+    LastCursor,
+    /// `'^` -- where the last insert ended.
+    LastInsert,
+    /// `'.` -- where the last change was made.
+    LastChange,
+    /// `':` -- where a prompt buffer's prompt starts. Only meaningful when
     /// `bt_prompt(buf)`, which every caller checks first.
-    pub(super) fn prompt_start(self) -> Fmark {
-        // SAFETY: as `last_cursor`.
-        unsafe { Fmark::new(&raw mut (*self.raw()).b_prompt_start) }
+    PromptStart,
+}
+
+impl LocalMark {
+    /// The store `name` names: `'a`-`'z`, `'"`, `'^`, `'.` or `':`, or
+    /// `None` for any other name.
+    pub(super) fn named(name: c_int) -> Option<LocalMark> {
+        Some(if ascii_islower(name) {
+            LocalMark::Named(slot(name - 'a' as c_int))
+        } else if name == '"' as c_int {
+            LocalMark::LastCursor
+        } else if name == '^' as c_int {
+            LocalMark::LastInsert
+        } else if name == '.' as c_int {
+            LocalMark::LastChange
+        } else if name == ':' as c_int {
+            LocalMark::PromptStart
+        } else {
+            return None;
+        })
     }
 
-    /// How many entries the change list holds.
-    pub(super) fn changelist_len(self) -> c_int {
-        self.b_changelistlen
-    }
-
-    /// The `i`th change list entry.
-    pub(super) fn change(self, i: c_int) -> Fmark {
-        let i = slot(i, self.b_changelist.len());
-        // SAFETY: a live buffer holds a live `[FileMark; 100]`, and `i` is
-        // inside it.
-        unsafe { Fmark::new(&raw mut (*self.raw()).b_changelist[i]) }
-    }
-
-    /// The change list, oldest first.
-    ///
-    /// `b_changelistlen` is re-read before each step, so a walk that shortens
-    /// the list under itself still terminates.
-    pub(super) fn changes(self) -> impl Iterator<Item = Fmark> {
-        (0..)
-            .take_while(move |&i| i < self.changelist_len())
-            .map(move |i| self.change(i))
+    /// Run `f` on the record in `buffer`, which it must not re-enter the
+    /// editor from: the record is lent for the call and no longer.
+    pub(super) fn with<R>(self, mut buffer: Buf, f: impl FnOnce(&mut FileMark) -> R) -> R {
+        let b = &mut *buffer;
+        f(match self {
+            LocalMark::Named(i) => &mut b.b_namedm[i],
+            LocalMark::LastCursor => &mut b.b_last_cursor,
+            LocalMark::LastInsert => &mut b.b_last_insert,
+            LocalMark::LastChange => &mut b.b_last_change,
+            LocalMark::PromptStart => &mut b.b_prompt_start,
+        })
     }
 }
 
-/// The mark stores that hang off a window.
-impl Win {
-    /// How many entries the jump list holds. `w_jumplistidx` may legally be
-    /// this value — that one-past-the-end state is what makes `:jumps` print
-    /// its trailing bare `>` and the first `<C-o>` reach the newest entry.
-    pub(super) fn jumplist_len(self) -> c_int {
-        self.w_jumplistlen
-    }
+/// Every slot of the global table, `'A` first, `'9` last, with its mark
+/// name.
+pub(super) fn global_mark_names() -> impl Iterator<Item = (usize, c_char)> {
+    (0..super::NGLOBALMARKS).map(|i| {
+        // `'A`-`'Z` occupy `0..NMARKS` and `'0`-`'9` the rest.
+        let name = if i < super::NMARKS {
+            'A' as c_int + i
+        } else {
+            '0' as c_int + i - super::NMARKS
+        };
+        (slot(i), mark_name(name))
+    })
+}
 
-    /// The `i`th jump list entry.
-    pub(super) fn jump(self, i: c_int) -> Xfmark {
-        let i = slot(i, self.w_jumplist.len());
-        // SAFETY: a live window holds a live `[XFileMark; 100]`, and `i` is
-        // inside it.
-        unsafe { Xfmark::new(&raw mut (*self.raw()).w_jumplist[i]) }
-    }
+/// A copy of global mark slot `idx`.
+#[inline(never)]
+pub(super) fn global_mark(idx: usize) -> XFileMark {
+    super::namedfm.with(|table| table[idx].clone())
+}
 
-    /// The jump list, oldest first. As [`Buf::changes`], the length is
-    /// re-read every step.
-    pub(super) fn jumps(self) -> impl Iterator<Item = Xfmark> {
-        (0..)
-            .take_while(move |&i| i < self.jumplist_len())
-            .map(move |i| self.jump(i))
-    }
-
-    /// The file mark of the `i`th tag stack entry.
-    pub(super) fn tag_mark(self, i: c_int) -> Fmark {
-        let i = slot(i, self.w_tagstack.len());
-        // SAFETY: a live window holds a live `[Taggy; 20]`, and `i` is
-        // inside it.
-        unsafe { Fmark::new(&raw mut (*self.raw()).w_tagstack[i].fmark) }
-    }
-
-    /// The tag stack's file marks, oldest first.
-    pub(super) fn tag_marks(self) -> impl Iterator<Item = Fmark> {
-        let len = self.w_tagstacklen;
-        (0..len).map(move |i| self.tag_mark(i))
-    }
+/// Replace global mark slot `idx` with `mark`, releasing what it held.
+#[inline(never)]
+pub(super) fn set_global_mark(idx: usize, mark: XFileMark) {
+    super::namedfm.with_mut(|table| table[idx] = mark);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::shada::ShadaExtra;
 
-    fn at(lnum: LineNr, col: ColNr) -> Pos {
+    fn at(lnum: i32, col: i32) -> Pos {
         Pos {
             lnum,
             col,
@@ -485,82 +185,76 @@ mod tests {
         }
     }
 
-    /// A detached record, as every store's entry is one.
-    fn record() -> Box<FileMark> {
-        Box::new(UNSET_FMARK)
-    }
-
-    fn handle(fm: &mut FileMark) -> Fmark {
-        // SAFETY: the box outlives the handle, and nothing else names it.
-        unsafe { Fmark::new(&raw mut *fm) }
-    }
-
     #[test]
     fn an_unset_mark_reports_line_zero() {
-        let mut record = record();
-        let fm = handle(&mut record);
+        let fm = FileMark::UNSET;
         assert!(!fm.is_set());
-        assert_eq!(fm.lnum(), 0);
-        assert_eq!(
-            (fm.pos().lnum, fm.pos().col),
-            (UNSET_POS.lnum, UNSET_POS.col)
-        );
+        assert_eq!((fm.mark.lnum, fm.mark.col), (UNSET_POS.lnum, UNSET_POS.col));
+        assert!(fm.extra.is_none());
     }
 
-    #[test]
-    fn writes_go_through_to_the_record() {
-        let mut record = record();
-        let fm = handle(&mut record);
-        fm.set_pos(at(12, 3));
-        fm.set_fnum(7);
-        assert!(fm.is_set());
-        assert_eq!((fm.lnum(), fm.col(), fm.fnum()), (12, 3, 7));
-        assert_eq!(record.mark.lnum, 12);
-        assert_eq!(record.fnum, 7);
-    }
-
-    #[test]
-    fn setting_only_the_line_leaves_the_column_alone() {
-        let mut record = record();
-        let fm = handle(&mut record);
-        fm.set_pos(at(12, 3));
-        fm.set_lnum(40);
-        assert_eq!((fm.lnum(), fm.col()), (40, 3));
-    }
-
-    /// What `clear_fmark` promises: the position goes, the timestamp stays as
-    /// given, and the view is the "remember nothing" one.
+    /// What `clear` promises: the position and the extra data go, the
+    /// timestamp stays as given, and the view is the "remember nothing" one.
     #[test]
     fn clearing_keeps_the_timestamp_it_is_given() {
-        let mut record = record();
-        let fm = handle(&mut record);
-        fm.set_pos(at(12, 3));
-        fm.set_fnum(7);
+        let mut fm = FileMark {
+            mark: at(12, 3),
+            fnum: 7,
+            timestamp: 1,
+            view: FileMarkView {
+                topline_offset: 4,
+                skipcol: 2,
+            },
+            extra: Some(Box::new(ShadaExtra::from_parts(1, vec![0xa1, b'k', 7]))),
+        };
         fm.clear(4242);
         assert!(!fm.is_set());
-        assert_eq!(fm.fnum(), 0);
-        assert_eq!(fm.timestamp(), 4242);
-        assert_eq!(fm.read().view.topline_offset, NO_VIEW.topline_offset);
+        assert_eq!(fm.fnum, 0);
+        assert_eq!(fm.timestamp, 4242);
+        assert_eq!(fm.view.topline_offset, NO_VIEW.topline_offset);
+        assert!(fm.extra.is_none());
+    }
+
+    /// A copy owns its own extra data: clearing the original leaves the copy
+    /// with all of it.
+    #[test]
+    fn a_copy_keeps_its_own_extra_data() {
+        let extra = ShadaExtra::from_parts(2, vec![0xa1, b'a', 1, 0xa1, b'b', 2]);
+        let mut original = XFileMark {
+            fmark: FileMark {
+                mark: at(5, 1),
+                extra: Some(Box::new(extra.clone())),
+                ..FileMark::UNSET
+            },
+            fname: Some(crate::memory::ThinCString::from_bytes(b"/a/file")),
+        };
+        let copy = original.clone();
+        original.fmark.clear(9);
+        original.fname = None;
+        assert_eq!(copy.fmark.extra.as_deref(), Some(&extra));
+        assert_eq!(copy.file_name(), Some(c"/a/file"));
+        assert_eq!(copy.fmark.mark.lnum, 5);
+        assert!(original.fmark.extra.is_none());
     }
 
     #[test]
-    fn an_xfmark_handle_reaches_both_halves() {
-        let mut record = Box::new(UNSET_XFMARK);
-        // SAFETY: the box outlives the handle.
-        let xfm = unsafe { Xfmark::new(&raw mut *record) };
-        xfm.fmark().set_pos(at(5, 1));
-        assert_eq!(record.fmark.mark.lnum, 5);
-        assert!(xfm.fname().is_null());
-        assert_eq!(xfm.read().fmark.mark.col, 1);
+    fn local_stores_are_named_by_their_mark() {
+        assert_eq!(LocalMark::named('a' as c_int), Some(LocalMark::Named(0)));
+        assert_eq!(LocalMark::named('z' as c_int), Some(LocalMark::Named(25)));
+        assert_eq!(LocalMark::named('"' as c_int), Some(LocalMark::LastCursor));
+        assert_eq!(LocalMark::named('^' as c_int), Some(LocalMark::LastInsert));
+        assert_eq!(LocalMark::named('.' as c_int), Some(LocalMark::LastChange));
+        assert_eq!(LocalMark::named(':' as c_int), Some(LocalMark::PromptStart));
+        assert_eq!(LocalMark::named('A' as c_int), None);
+        assert_eq!(LocalMark::named('[' as c_int), None);
     }
-}
 
-impl XFileMark {
-    /// The file name a mark read out of the shada file carries until its
-    /// buffer is loaded, if it carries one.
-    pub(crate) fn file_name(&self) -> Option<&CStr> {
-        // SAFETY: `fname` is null or the NUL-terminated allocation the
-        // record owns, which lives as long as the borrow of the record.
-        unsafe { crate::cstr::at_opt(self.fname) }
+    #[test]
+    fn the_global_table_is_named_upper_case_then_digits() {
+        let names: Vec<u8> = global_mark_names()
+            .map(|(_, name)| name.cast_unsigned())
+            .collect();
+        assert_eq!(names, b"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789");
+        assert_eq!(global_mark_names().nth(26).map(|(i, _)| i), Some(26));
     }
 }

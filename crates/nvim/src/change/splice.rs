@@ -143,19 +143,14 @@ fn record_change_mark(mut buffer: Buf, lnum: LineNr, col: ColNr) {
         view = mark_view_make(win, at);
     }
 
-    // RESET_FMARK: the old mark's additional data is freed first.
-    clear_mark(&mut buffer.b_last_change, 0);
+    // RESET_FMARK: the old mark's extra data goes with it.
     let handle = buffer.handle;
-    let now = os_time();
-    buffer.b_last_change.mark = Pos {
+    let at = Pos {
         lnum,
         col,
         coladd: 0,
     };
-    buffer.b_last_change.fnum = handle;
-    buffer.b_last_change.timestamp = now;
-    buffer.b_last_change.view = view;
-    buffer.b_last_change.additional_data = ::core::ptr::null_mut();
+    buffer.b_last_change = fresh_mark(at, handle, view);
 
     if buffer.b_new_change || buffer.b_changelistlen == 0 {
         let add = if buffer.b_changelistlen == 0 {

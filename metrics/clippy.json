@@ -12,7 +12,6 @@
     "crates/nvim/src/extmark/undo.rs": 1,
     "crates/nvim/src/insexpand/getexp.rs": 1,
     "crates/nvim/src/mark/adjust.rs": 1,
-    "crates/nvim/src/mark/store.rs": 1,
     "crates/nvim/src/os/env/mod.rs": 1
   }
 }

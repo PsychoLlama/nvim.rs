@@ -59,9 +59,8 @@ use crate::types::AutoEvent;
 use crate::types::TAB;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    AdditionalData, Callback, ColNr, Dict, ExArg, Expand, FileMark, FileMarkView, FileOffset,
-    GetFileFlags, GetFileRet, LineNr, List, OptMagic, OptSet, Pos, Taggy, Timestamp, VarNumber,
-    VimConv,
+    Callback, ColNr, Dict, ExArg, Expand, FileMark, FileMarkView, FileOffset, GetFileFlags,
+    GetFileRet, LineNr, List, OptMagic, OptSet, Pos, Taggy, Timestamp, VarNumber, VimConv,
 };
 use crate::ui::state::Columns;
 use crate::ui::ui_has;
@@ -195,7 +194,7 @@ static PREVIEW_ENTRY: GlobalCell<Taggy> = GlobalCell::new(Taggy {
             topline_offset: MAXLNUM as LineNr,
             skipcol: 0 as ColNr,
         },
-        additional_data: ::core::ptr::null_mut::<AdditionalData>(),
+        extra: None,
     },
     cur_match: 0 as ::core::ffi::c_int,
     cur_fnum: 0 as ::core::ffi::c_int,

@@ -32,7 +32,6 @@ typedef struct __pthread_mutex_s __pthread_mutex_s;
 typedef struct __pthread_rwlock_arch_t __pthread_rwlock_arch_t;
 typedef struct termios termios;
 typedef struct winsize winsize;
-typedef struct AdditionalData AdditionalData;
 typedef struct Callback Callback;
 typedef struct InternalState InternalState;
 typedef struct uv__queue uv__queue;
@@ -520,11 +519,6 @@ typedef s_xdemitcb xdemitcb_t;
 typedef s_xdemitconf xdemitconf_t;
 typedef int (*xdl_emit_hunk_consume_func_t)(int, int, int, int, void *);
 typedef s_xpparam xpparam_t;
-struct AdditionalData {
-  uint32_t nitems;
-  uint32_t nbytes;
-  char data[0];
-};
 struct Callback {
   unsigned int tag;
   union {

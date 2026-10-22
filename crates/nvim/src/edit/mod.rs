@@ -115,7 +115,7 @@ use crate::keycodes::{
     Ctrl_V, Ctrl_W, Ctrl_X, Ctrl_Y, K_SPECIAL, get_special_key_name, push_char_escaped,
 };
 use crate::mapping::{check_abbr, langmap_adjust_mb, map_to_exists_mode};
-use crate::mark::{clear_mark, mark_view_make};
+use crate::mark::{fresh_mark, mark_view_make};
 use crate::mbyte::{mb_adjust_cursor, utf_char2len, utf8len_tab};
 use crate::memline::{Lines, gchar_pos, ml_append_text, ml_get_len, ml_replace_buf_text};
 use crate::message::state::{emsg_on_display, msg_scroll, msg_silent};
@@ -142,7 +142,6 @@ use crate::options::{
 };
 use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
-use crate::os::time::os_time;
 use crate::plines::{
     CHAR_CELLS_SPAN, charsize_nowrap, getvcol, getvcol_nolist, linetabsize_str, win_charsize,
     win_chartabsize,

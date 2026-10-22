@@ -9,7 +9,7 @@ use crate::ascii::ascii_isdigit;
 use crate::buffer::find_buf;
 use crate::eval::kMarkAll;
 use crate::eval::typval::{NumBuf, list_find_nr, list_len};
-use crate::mark::mark_lookup;
+use crate::mark::mark_get;
 use crate::mbyte::{char_count, cluster_len};
 use crate::memline::{Lines, ml_get_buf_len};
 use crate::r#move::{check_cursor_moved, update_topline, validate_botline_win};
@@ -155,7 +155,7 @@ pub fn var2fpos(
         }
     } else if first == b'\'' {
         let mname = c_int::from(second);
-        let fm = mark_lookup(bp, wp, kMarkAll, mname)?;
+        let fm = mark_get(bp, wp, kMarkAll, mname)?;
         if fm.mark.lnum <= 0 {
             return None;
         }

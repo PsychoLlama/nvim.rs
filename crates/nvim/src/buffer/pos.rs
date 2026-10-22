@@ -31,9 +31,7 @@ use crate::mark::mark_view_make;
 use crate::option::vars::p_fdls;
 use crate::option::{clear_winopt, copy_winopt, didset_window_options};
 use crate::pos::MAXLNUM;
-use crate::types::{
-    AdditionalData, ColNr, FileMark, FileMarkView, LineNr, OptInt, Pos, Timestamp, WinInfo,
-};
+use crate::types::{ColNr, FileMark, FileMarkView, LineNr, OptInt, Pos, Timestamp, WinInfo};
 use crate::winfloat::win_set_minimal_style;
 use crate::winlayer::{Buf, Win, windows};
 
@@ -224,7 +222,7 @@ pub fn buflist_findfmark(buffer: Buf) -> FileMark {
                 topline_offset: MAXLNUM,
                 skipcol: 0 as ColNr,
             },
-            additional_data: ptr::null_mut::<AdditionalData>(),
+            extra: None,
         },
     }
 }

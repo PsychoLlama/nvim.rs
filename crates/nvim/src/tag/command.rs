@@ -185,7 +185,7 @@ impl DoTag {
                 fnum: 0,
                 timestamp: 0,
                 view: NO_VIEW,
-                additional_data: core::ptr::null_mut(),
+                extra: None,
             },
             buf_ffname: Buf::current().name.full().map(XString::from_cstr),
             prev_num_matches: match_count(),

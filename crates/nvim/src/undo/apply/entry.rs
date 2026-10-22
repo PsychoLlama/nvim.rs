@@ -121,7 +121,7 @@ pub(crate) fn u_undoredo(undo: bool, do_buf_event: bool) {
 
     // The marks and visual area from before the move; they go into the header
     // at the end, swapped with the ones it was carrying.
-    zero_fmark_additional_data(&mut buf.b_namedm);
+    drop_named_mark_extras(&mut buf.b_namedm);
     let saved_marks = buf.b_namedm.clone();
     let saved_visual = buf.b_visual;
     buf.b_op_start.lnum = buf.b_ml.ml_line_count;
@@ -362,8 +362,7 @@ fn swap_marks(
     };
     for (i, saved) in saved.iter().enumerate() {
         if header.named_marks[i].mark.lnum != 0 {
-            // The buffer's mark is about to be replaced: its payload goes.
-            drop_mark_extra(&mut b.b_namedm[i]);
+            // The buffer's mark is replaced, and its payload goes with it.
             b.b_namedm[i] = header.named_marks[i].clone();
         }
         if saved.mark.lnum != 0 {

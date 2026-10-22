@@ -11,7 +11,7 @@ use crate::regexp::NfaOp;
 use core::ffi::c_int;
 
 use super::run::nfa_re_num_cmp;
-use crate::mark::mark_lookup;
+use crate::mark::mark_get;
 use crate::plines::win_linetabsize;
 use crate::pos::MAXCOL;
 use crate::regexp::{Rex, kMarkBufLocal, reg_getline, reg_getline_len, reg_match_visual};
@@ -90,8 +90,8 @@ pub(crate) fn at_vcol(rex: Rex, state: &NfaState) -> bool {
 pub(crate) fn at_mark(rex: Rex, state: &NfaState) -> bool {
     let col = if rex.multi() { col(rex) } else { 0 };
     let name = state.val;
-    // `mark_lookup` computes a motion mark (`'{`, `'(`) on the spot.
-    let fm = mark_lookup(rex.reg_buf(), Win::current(), kMarkBufLocal, name);
+    // `mark_get` computes a motion mark (`'{`, `'(`) on the spot.
+    let fm = mark_get(rex.reg_buf(), Win::current(), kMarkBufLocal, name);
     // Looking a mark up can move the memline's buffer out from under
     // the match.
     if rex.multi() {

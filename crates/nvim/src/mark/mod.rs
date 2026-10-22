@@ -5,16 +5,15 @@
 //! `namedfm[n].fname` is the file name. The global set is `'A`-`'Z`, which
 //! the user sets, plus `'0`-`'9`, which are written when shada is saved.
 //!
-//! The stores split by concern: [`store`] is the handle layer every other
-//! module here reaches a record through, [`adjust`] rewrites every mark's line
+//! The stores split by concern: [`store`] names the stores and builds their
+//! records, [`adjust`] rewrites every mark's line
 //! and column when the buffer's lines move (`mark_adjust` is on the path of
 //! every `:d`, `:m` and undo), [`jumplist`] owns the jumplist and the
 //! changelist, [`lookup`] resolves a mark's name and moves the cursor to it,
 //! [`show`] is `:marks`/`:delmarks`, [`shada`] is the iterator surface the
 //! shada writer walks, and [`builtins`] is `getmarklist()`.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -33,22 +32,21 @@ use crate::cstr;
 use crate::ex_docmd::ex_msg;
 use crate::fold::has_folding;
 use crate::mbyte::{char_at, head_off};
-use crate::memory::{xfree, xstrlcpy};
+use crate::memory::XString;
 use crate::message::{e_markinval, e_marknotset, e_umark};
 use crate::r#move::set_topline;
 use crate::options::kOptJopFlagStack;
-use crate::os::env::expand_env;
-use crate::os::fs::os_dirname;
+use crate::os::env::expand_env_esc_of;
+use crate::os::fs::dirname_within;
 use crate::path::{path_fnamecmp, path_shorten_fname, vim_ispathsep_nocolon};
 use crate::plines::linetabsize_eol;
 use crate::tag::tagstack_clear_entry;
 use crate::types::Failed;
 use crate::types::TAB;
 use crate::types::*;
-use crate::types::{AdditionalData, AutoEvent, FileMark, FileMarkView, LineNr, Pos, XFileMark};
+use crate::types::{AutoEvent, FileMark, FileMarkView, LineNr, Pos, XFileMark};
 use crate::winlayer::{Buf, Win, windows};
-use core::ffi::{c_char, c_int};
-use core::ptr;
+use core::ffi::{CStr, c_char, c_int};
 use std::ffi::CString;
 
 mod adjust;
@@ -65,9 +63,6 @@ pub use jumplist::{
     checkpcmark, cleanup_jumplist, copy_jumplist, ex_changes, ex_clearjumps, ex_jumps,
     free_jumplist, get_changelist, get_jumplist, mark_jumplist_forget_file, setpcmark,
 };
-pub(crate) use lookup::{
-    current_mark, current_visual_mark, mark_checked, mark_lookup, move_to_mark,
-};
 pub use lookup::{
     getnextmark, mark_get, mark_get_global, mark_get_local, mark_get_motion, mark_get_visual,
     mark_move_to,
@@ -79,7 +74,8 @@ pub(crate) use shada::{
 };
 pub use show::{ex_delmarks, ex_marks, fm_getname};
 
-use store::{Fmark, GlobalMarks, NO_VIEW, NUL_BYTE, Xfmark, mark_name};
+pub(crate) use store::fresh_mark;
+use store::{NO_VIEW, NUL_BYTE, mark_name, slot};
 
 pub const GETF_SETMARK: GetFileFlags = 1;
 pub const AUGROUP_ALL: c_int = -3;
@@ -123,98 +119,15 @@ pub const JUMPLISTSIZE: c_int = 100;
 use crate::global_cell::GlobalCell;
 use crate::quickfix::{BUF_HAS_LL_ENTRY, BUF_HAS_QF_ENTRY};
 
-/// An unset entry of [`namedfm`]; a `const` because `XFileMark` is not `Copy`.
-const UNSET_NAMED_MARK: XFileMark = XFileMark {
-    fmark: FileMark {
-        mark: Pos {
-            lnum: 0 as LineNr,
-            col: 0,
-            coladd: 0,
-        },
-        fnum: 0,
-        timestamp: 0,
-        view: FileMarkView {
-            topline_offset: 0,
-            skipcol: 0,
-        },
-        additional_data: ::core::ptr::null_mut::<AdditionalData>(),
-    },
-    fname: ::core::ptr::null_mut::<c_char>(),
-};
-pub(crate) static namedfm: GlobalCell<[XFileMark; 36]> = GlobalCell::new([UNSET_NAMED_MARK; 36]);
+/// The global marks: `'A`-`'Z` at `0..NMARKS`, then `'0`-`'9`.
+pub(crate) static namedfm: GlobalCell<[XFileMark; 36]> = GlobalCell::new([XFileMark::UNSET; 36]);
 
 /// Set named mark "c" at current cursor position.
 /// Answers `Ok` on success, `Err` if bad name given.
 pub fn setmark(c: c_int) -> Result<(), Failed> {
     let (win, buf) = (Win::current(), Buf::current());
-    let mut view = mark_view_make_at(win, win.w_cursor);
-    // SAFETY: the cursor and the view live on the stack for the call, and
-    // `curbuf`'s handle names a live buffer.
-    unsafe {
-        setmark_pos(
-            c,
-            &raw mut (*win.raw()).w_cursor,
-            buf.handle as c_int,
-            &raw mut view,
-        )
-    }
-}
-
-/// Free FileMark item
-///
-/// # Safety
-/// `fm.additional_data` must be an owned allocation or null, and must not be
-/// reachable from anywhere else afterwards.
-pub unsafe fn free_fmark(fm: FileMark) {
-    // SAFETY: forwarded from the caller.
-    unsafe { xfree(fm.additional_data.cast()) };
-}
-
-/// Free XFileMark item
-///
-/// # Safety
-/// As [`free_fmark`], plus `fm.fname` must be an owned allocation or null.
-pub unsafe fn free_xfmark(fm: XFileMark) {
-    // SAFETY: forwarded from the caller.
-    unsafe { xfree(fm.fname.cast()) };
-    unsafe { free_fmark(fm.fmark) };
-}
-
-/// Free and clear FileMark item.
-///
-/// Does not trigger "MarkSet" event.
-///
-/// # Safety
-/// `fm` must point at a live, writable `FileMark` whose `additional_data` is
-/// this store's to free.
-pub unsafe fn clear_fmark(fm: *mut FileMark, timestamp: Timestamp) {
-    // SAFETY: forwarded from the caller.
-    unsafe { Fmark::new(fm) }.clear(timestamp);
-}
-
-/// [`clear_fmark`] of a mark the caller holds in place, which owns the
-/// `additional_data` it carries.
-pub(crate) fn clear_mark(mark: &mut FileMark, timestamp: Timestamp) {
-    // SAFETY: a mark held by `&mut` is live and writable, and a mark in place
-    // owns its `additional_data`.
-    unsafe { Fmark::new(mark) }.clear(timestamp);
-}
-
-/// Release the ShaDa payload a mark the caller holds in place carries, and
-/// leave it carrying none; the position stays.
-pub(crate) fn drop_mark_extra(mark: &mut FileMark) {
-    // SAFETY: a mark held by `&mut` in place owns its `additional_data`,
-    // which is nulled right after it is freed.
-    unsafe { xfree(mark.additional_data.cast()) };
-    mark.additional_data = ptr::null_mut();
-}
-
-/// Put `mark` at `pos` in file `fnum`, stamped now, releasing what it held:
-/// upstream's `RESET_FMARK` for a mark the caller holds in place.
-pub(crate) fn reset_fmark(mark: &mut FileMark, pos: Pos, fnum: c_int, view: FileMarkView) {
-    // SAFETY: a mark held by `&mut` is live and writable, and a mark in place
-    // owns the `additional_data` it carries.
-    unsafe { Fmark::new(mark) }.replace(pos, fnum, view);
+    let view = mark_view_make_at(win, win.w_cursor);
+    setmark_pos(c, win.w_cursor, true, buf.handle, view)
 }
 
 /// Schedules "MarkSet" event.
@@ -222,16 +135,10 @@ pub(crate) fn reset_fmark(mark: &mut FileMark, pos: Pos, fnum: c_int, view: File
 /// `c` — The name of the mark, e.g., 'a'.
 /// `pos` — Position of the mark in the buffer.
 /// `buffer` — The buffer of the mark.
-///
-/// # Safety
-/// `pos` must point at a live position and `buffer` at a live buffer.
-unsafe fn do_markset_autocmd(c: c_char, pos: *mut Pos, buffer: Buf) {
-    // SAFETY: the autocommand tables are the editor's own, live from startup.
+fn do_markset_autocmd(c: c_char, pos: Pos, buffer: Buf) {
     if !has_event(AutoEvent::MarkSet) {
         return;
     }
-    // SAFETY: the caller promised a live position.
-    let pos = unsafe { *pos };
     let mark_str: [c_char; 2] = [c, NUL_BYTE];
     let items: Vec<KeyValuePair> = vec![
         key_value_pair {
@@ -263,17 +170,16 @@ unsafe fn do_markset_autocmd(c: c_char, pos: *mut Pos, buffer: Buf) {
 /// When "c" is upper case use file "fnum".
 /// Answers `Ok` on success, `Err` if bad name given.
 ///
-/// # Safety
-/// `pos` must point at a live position; `view_pt` must be null or point at a
-/// live `FileMarkView`.
-pub unsafe fn setmark_pos(
+/// `from_cursor` says `pos` is the current window's cursor itself, which is
+/// what makes setting `''` push a jump list entry rather than just move the
+/// context mark (upstream compares the pointer against `&curwin->w_cursor`).
+fn setmark_pos(
     c: c_int,
-    pos: *mut Pos,
+    at: Pos,
+    from_cursor: bool,
     fnum: c_int,
-    view_pt: *mut FileMarkView,
+    view: FileMarkView,
 ) -> Result<(), Failed> {
-    // SAFETY: the caller promised a live position, and a live view or null.
-    let (at, view) = unsafe { (*pos, if view_pt.is_null() { NO_VIEW } else { *view_pt }) };
     if c < 0 {
         return Err(Failed);
     }
@@ -282,8 +188,7 @@ pub unsafe fn setmark_pos(
     // setting it from anywhere else just moves it.
     if c == '\'' as c_int || c == '`' as c_int {
         let mut win = Win::current();
-        if ptr::eq(pos, &raw const win.w_cursor) {
-            // SAFETY: the editor's globals are live.
+        if from_cursor {
             setpcmark();
             win.w_prev_pcmark = win.w_pcmark;
         } else {
@@ -294,10 +199,10 @@ pub unsafe fn setmark_pos(
     let Some(mut buf) = find_buf(fnum) else {
         return Err(Failed);
     };
-    let handle = buf.handle as c_int;
+    let handle = buf.handle;
 
     // The tick family and the Visual range are not adjusted and not saved, so
-    // they are stored raw rather than through `Fmark::place`.
+    // they are stored as bare positions rather than as marks.
     if c == '[' as c_int {
         buf.b_op_start = at;
     } else if c == ']' as c_int {
@@ -312,12 +217,12 @@ pub unsafe fn setmark_pos(
             buf.b_visual.vi_mode = 'v' as c_int;
         }
     } else if c == '"' as c_int {
-        buf.last_cursor().replace(at, handle, view);
+        buf.b_last_cursor = fresh_mark(at, handle, view);
     } else if c == ':' as c_int {
         if !buf_is_prompt(Some(buf)) {
             return Err(Failed);
         }
-        buf.prompt_start().replace(at, handle, view);
+        buf.b_prompt_start = fresh_mark(at, handle, view);
         // The prompt mark is the one store that does NOT announce itself:
         // it moves on every prompt redraw, and a MarkSet per keystroke is
         // not what the event is for.
@@ -325,14 +230,20 @@ pub unsafe fn setmark_pos(
     } else if ascii_islower(c) {
         // A buffer-local mark keeps the *caller's* `fnum` rather than the
         // buffer's own handle. The two agree everywhere but `nvim_buf_set_mark`.
-        buf.named_mark(c - 'a' as c_int).replace(at, fnum, view);
+        buf.b_namedm[slot(c - 'a' as c_int)] = fresh_mark(at, fnum, view);
     } else if ascii_isupper(c) || ascii_isdigit(c) {
-        GlobalMarks::at(lookup::mark_global_index(mark_name(c))).replace(at, fnum, view);
+        let idx = slot(lookup::mark_global_index(mark_name(c)));
+        store::set_global_mark(
+            idx,
+            XFileMark {
+                fmark: fresh_mark(at, fnum, view),
+                fname: None,
+            },
+        );
     } else {
         return Err(Failed);
     }
-    // SAFETY: `pos` and `buf` are the caller's, both live.
-    unsafe { do_markset_autocmd(mark_name(c), pos, buf) };
+    do_markset_autocmd(mark_name(c), at, buf);
     Ok(())
 }
 
@@ -341,10 +252,8 @@ pub unsafe fn setmark_pos(
 ///
 /// A position held by value is never the cursor itself, so `''` set this way
 /// just moves the context mark rather than pushing a jumplist entry.
-pub(crate) fn setmark_at(c: c_int, mut pos: Pos, fnum: c_int) -> Result<(), Failed> {
-    // SAFETY: `pos` is this frame's local, live for the call, and a null
-    // view means "no view".
-    unsafe { setmark_pos(c, &raw mut pos, fnum, ptr::null_mut()) }
+pub(crate) fn setmark_at(c: c_int, pos: Pos, fnum: c_int) -> Result<(), Failed> {
+    setmark_pos(c, pos, false, fnum, NO_VIEW)
 }
 
 /// Delete every entry referring to file "fnum" from both the jumplist and the
@@ -353,11 +262,11 @@ pub fn mark_forget_file(mut window: Win, fnum: c_int) {
     mark_jumplist_forget_file(window, fnum);
     // Backwards, so removing an entry cannot skip the one after it.
     for i in (0..window.w_tagstacklen).rev() {
-        if window.tag_mark(i).fnum() != fnum {
+        let at = slot(i);
+        if window.w_tagstack[at].fmark.fnum != fnum {
             continue;
         }
-        let at = usize::try_from(i).expect("tag stack index in range");
-        let len = usize::try_from(window.w_tagstacklen).expect("tag stack length in range");
+        let len = slot(window.w_tagstacklen);
         if window.w_tagstackidx > i {
             window.w_tagstackidx -= 1;
         }
@@ -370,32 +279,18 @@ pub fn mark_forget_file(mut window: Win, fnum: c_int) {
     }
 }
 
-/// Wrap a `Pos` into a `FileMark`, used to abstract marks handling.
+/// Wrap a `Pos` into a `FileMark`, used to abstract marks handling: the
+/// mark at `pos` in `buffer`, unset in every other field.
 ///
-/// `fmp` is the caller's own record and is where the answer is written; the
-/// address handed back is `fmp` itself, so the mark lives exactly as long as
-/// the caller's slot does. Only `fnum` and `mark` are touched — `view`,
-/// `timestamp` and `additional_data` are left as the caller found them, which
-/// is why a slot starts life as [`FileMark::UNSET`].
-///
-/// The C had a single `static` here that every `fmp`-less caller shared, so
-/// two motion-mark lookups invalidated each other; the slot is the caller's
-/// now precisely so they cannot.
-///
-/// `buffer` — for fmark->fnum.
-/// `pos` — for fmark->mark.
-/// `fmp` — the record to write.
-///
-/// # Safety
-/// `buffer` must be a live buffer and `fmp` must point at a live, writable
-/// `FileMark` that outlives every use of the answer.
-pub unsafe fn pos_to_mark(buffer: Buf, fmp: *mut FileMark, pos: Pos) -> *mut FileMark {
-    debug_assert!(!fmp.is_null(), "pos_to_mark needs the caller's record");
-    // SAFETY: the caller promised a live, writable record.
-    let fm = unsafe { Fmark::new(fmp) };
-    fm.set_fnum(buffer.handle as c_int);
-    fm.set_pos(pos);
-    fm.raw()
+/// The C answered a `static` here that every caller without a record of its
+/// own shared, so two motion-mark lookups invalidated each other; the
+/// answer is the caller's value now.
+pub fn pos_to_mark(buffer: Buf, pos: Pos) -> FileMark {
+    FileMark {
+        mark: pos,
+        fnum: buffer.handle,
+        ..FileMark::UNSET
+    }
 }
 
 /// Restore the mark view.
@@ -448,81 +343,72 @@ fn mark_view_make_at(window: Win, pos: Pos) -> FileMarkView {
 /// This is used for marks obtained from the .shada file.  It's postponed
 /// until the mark is used to avoid a long startup delay.
 ///
-/// # Safety
-/// `fm` must point at a live `XFileMark` whose `fname`, if set, is a
-/// NUL-terminated string.
-pub(super) unsafe fn fname2fnum(fm: *mut XFileMark) {
-    // SAFETY: the caller promised a live record.
-    let fm = unsafe { Xfmark::new(fm) };
-    let fname = fm.fname();
-    if fname.is_null() {
-        return;
-    }
-    let mut name = [0 as c_char; MAXPATHL as usize];
-    let mut dir = [0 as c_char; IOSIZE as usize];
-    let (name_buf, dir_buf) = (name.as_mut_ptr(), dir.as_mut_ptr());
-    // SAFETY: `fname` is a NUL-terminated string with at least one byte, and
-    // `name`/`dir` are `MAXPATHL`/`IOSIZE` bytes of this frame's own storage.
-    // Upstream shares `NameBuff`/`IObuff`, which `buflist_new` runs
-    // autocommands over.
+/// `fname` is a copy of the mark's name: loading the buffer runs
+/// autocommands, and the new buffer's `fmarks_check_names` is what turns
+/// every mark naming this file -- this one included -- into a number.
+pub(super) fn fname2fnum(fname: &CStr) {
+    let bytes = fname.to_bytes();
+    let room = usize::try_from(MAXPATHL).map_or(0, |n| n - 1);
     // `~/` is expanded here rather than by `buflist_new`, because the
     // shada file stores the tilde form and two spellings of one path
     // would open two buffers.
-    if unsafe { *fname } == '~' as c_char
-        && vim_ispathsep_nocolon(c_int::from(unsafe { *fname.offset(1) }))
+    let mut name = if bytes.first() == Some(&b'~')
+        && vim_ispathsep_nocolon(c_int::from(bytes.get(1).copied().unwrap_or(0)))
     {
-        let len = unsafe { expand_env(c"~/".as_ptr().cast_mut(), name_buf, MAXPATHL) };
-        unsafe {
-            xstrlcpy(
-                name_buf.add(len),
-                fname.offset(2),
-                (MAXPATHL as size_t).wrapping_sub(len),
-            )
-        };
+        let mut home = expand_env_esc_of(c"~/", false, false, None)
+            .as_cstr()
+            .to_bytes()
+            .to_vec();
+        home.truncate(room);
+        home.extend_from_slice(&bytes[2..]);
+        home
     } else {
-        unsafe { xstrlcpy(name_buf, fname, MAXPATHL as size_t) };
-    }
-    let _ = unsafe { os_dirname(dir_buf, IOSIZE as size_t) };
-    // SAFETY: both buffers were just filled with NUL-terminated names.
-    let short = unsafe { path_shorten_fname(cstr::at(name_buf), cstr::bytes_at(dir_buf)) };
-    unsafe { buflist_new(Some(cstr::at(name_buf)), short, 1, 0) };
+        bytes.to_vec()
+    };
+    // `MAXPATHL` bytes with the NUL, as upstream's `NameBuff` copy.
+    name.truncate(room);
+    let name = XString::from_vec(name);
+    // Upstream asks into `IObuff` and goes on with whatever is there when
+    // the system will not say -- the error message.
+    let room = usize::try_from(IOSIZE).unwrap_or(0);
+    let dir = dirname_within(room).unwrap_or_else(|message| message);
+    let short = path_shorten_fname(name.as_cstr(), &dir);
+    buflist_new(Some(name.as_cstr()), short, 1, 0);
 }
 
 /// Check all file marks for a name that matches the file name in buf.
 /// May replace the name with an fnum.
 /// Used for marks that come from the .shada file.
 pub fn fmarks_check_names(buffer: Buf) {
-    let name = buffer.name.full_ptr();
-    if name.is_null() {
+    let Some(name) = buffer.name.full() else {
         return;
-    }
-    for mark in GlobalMarks::all() {
-        // SAFETY: `name` is the buffer's own file name, live while it is.
-        unsafe { fmarks_check_one(mark, name, buffer) };
-    }
+    };
+    let (name, handle) = (name.to_bytes(), buffer.handle);
+    namedfm.with_mut(|table| {
+        for mark in table.iter_mut() {
+            fmarks_check_one(mark, name, handle);
+        }
+    });
     // The current tab page's windows only, as upstream: a mark in another
     // tab page's jumplist keeps its file name until that window is used.
-    for win in windows() {
-        for jump in win.jumps() {
-            // SAFETY: as above.
-            unsafe { fmarks_check_one(jump, name, buffer) };
+    for mut win in windows() {
+        let len = slot(win.w_jumplistlen);
+        for jump in &mut win.w_jumplist[..len] {
+            fmarks_check_one(jump, name, handle);
         }
     }
 }
 
-/// # Safety
-/// `name` must be a NUL-terminated string that outlives the call.
-unsafe fn fmarks_check_one(fm: Xfmark, name: *mut c_char, buffer: Buf) {
-    let fname = fm.fname();
-    // SAFETY: both names are NUL-terminated strings.
-    if fm.fmark().fnum() != 0
-        || fname.is_null()
-        || unsafe { path_fnamecmp(cstr::bytes_at(name), cstr::bytes_at(fname)) } != 0
-    {
+fn fmarks_check_one(fm: &mut XFileMark, name: &[u8], handle: c_int) {
+    if fm.fmark.fnum != 0 {
         return;
     }
-    fm.fmark().set_fnum(buffer.handle as c_int);
-    fm.clear_fname();
+    match fm.file_name() {
+        Some(fname) if path_fnamecmp(name, fname.to_bytes()) == 0 => {}
+        _ => return,
+    }
+    fm.fmark.fnum = handle;
+    fm.fname = None;
 }
 
 /// Check the position in @a fm is valid.
@@ -536,29 +422,21 @@ unsafe fn fmarks_check_one(fm: Xfmark, name: *mut c_char, buffer: Buf) {
 /// `errormsg[out]` — Error message, if any.
 ///
 /// Returns true if the mark passes all the above checks, else false.
-///
-/// # Safety
-/// `fm` must be null or point at a live `FileMark`.
-pub(crate) unsafe fn mark_check(fm: *mut FileMark, errormsg: &mut Option<CString>) -> bool {
-    if fm.is_null() {
-        // SAFETY: a NUL-terminated message static.
+pub(crate) fn mark_check(fm: Option<&FileMark>, errormsg: &mut Option<CString>) -> bool {
+    let Some(fm) = fm else {
         *errormsg = Some(ex_msg(e_umark));
         return false;
-    }
-    // SAFETY: the caller promised a live record.
-    let fm = unsafe { Fmark::new(fm) };
-    if fm.lnum() <= 0 {
+    };
+    if fm.mark.lnum <= 0 {
         // A negative line number is a mark the shada file mangled; it is not
         // "not set", so it gets no message at all.
-        if fm.lnum() == 0 {
-            // SAFETY: as above.
+        if fm.mark.lnum == 0 {
             *errormsg = Some(ex_msg(e_marknotset));
         }
         return false;
     }
     let buf = Buf::current();
-    // SAFETY: as above; the record and the out-parameter are the caller's.
-    fm.fnum() != buf.handle || unsafe { mark_check_line_bounds(Some(buf), fm.raw(), errormsg) }
+    fm.fnum != buf.handle || mark_check_line_bounds(Some(buf), fm, errormsg)
 }
 
 /// Check if a mark line number is greater than the buffer line count, and set e_markinval.
@@ -568,24 +446,17 @@ pub(crate) unsafe fn mark_check(fm: *mut FileMark, errormsg: &mut Option<CString
 /// `fm` — Mark to check.
 /// `errormsg[out]` — Error message, if any.
 /// Returns true if below line count else false.
-///
-/// # Safety
-/// `buf` must be null or a live buffer, and `fm` must point at a live
-/// `FileMark`.
-pub(crate) unsafe fn mark_check_line_bounds(
+pub(crate) fn mark_check_line_bounds(
     buffer: Option<Buf>,
-    fm: *mut FileMark,
+    fm: &FileMark,
     errormsg: &mut Option<CString>,
 ) -> bool {
-    // SAFETY: the caller promised a live buffer or null.
     let Some(buf) = buffer else {
         return true;
     };
-    // SAFETY: the caller promised a live record.
-    if unsafe { Fmark::new(fm) }.lnum() <= buf.b_ml.ml_line_count {
+    if fm.mark.lnum <= buf.b_ml.ml_line_count {
         return true;
     }
-    // SAFETY: a NUL-terminated message static.
     *errormsg = Some(ex_msg(e_markinval));
     false
 }
@@ -598,31 +469,33 @@ pub(crate) unsafe fn mark_check_line_bounds(
 ///
 /// `buffer` — Buffer to clear marks in.
 pub fn clrallmarks(mut buffer: Buf, timestamp: Timestamp) {
-    for mark in buffer.named_marks() {
+    let b: &mut Buffer = &mut buffer;
+    for mark in &mut b.b_namedm {
         mark.clear(timestamp);
     }
-    buffer.last_cursor().clear(timestamp);
+    b.b_last_cursor.clear(timestamp);
     // `'"` is the one store that is cleared to line 1 rather than to 0: the
     // whole point of it is where to put the cursor when the file is opened
     // again, and "the top" is a better answer than "nowhere".
-    buffer.last_cursor().set_lnum(1);
-    buffer.last_insert().clear(timestamp);
-    buffer.last_change().clear(timestamp);
-    buffer.b_op_start.lnum = 0;
-    buffer.b_op_end.lnum = 0;
-    for change in buffer.changes() {
+    b.b_last_cursor.mark.lnum = 1;
+    b.b_last_insert.clear(timestamp);
+    b.b_last_change.clear(timestamp);
+    b.b_op_start.lnum = 0;
+    b.b_op_end.lnum = 0;
+    let len = slot(b.b_changelistlen);
+    for change in &mut b.b_changelist[..len] {
         change.clear(timestamp);
     }
-    buffer.b_changelistlen = 0;
+    b.b_changelistlen = 0;
 }
 
 pub fn set_last_cursor(win: Win) {
-    let Some(buf) = win.buffer_or_none() else {
+    let Some(mut buf) = win.buffer_or_none() else {
         return;
     };
     // `fnum` 0, not the buffer's handle: this mark is written when the buffer
     // is left, and the shada writer is what fills the file name in.
-    buf.last_cursor().replace(win.w_cursor, 0, NO_VIEW);
+    buf.b_last_cursor = fresh_mark(win.w_cursor, 0, NO_VIEW);
 }
 
 /// Adjust position to point to the first byte of a multi-byte character

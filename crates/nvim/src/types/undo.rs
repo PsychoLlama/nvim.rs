@@ -157,7 +157,7 @@ impl Default for UndoHeader {
                 topline_offset: 0,
                 skipcol: 0,
             },
-            additional_data: ::core::ptr::null_mut(),
+            extra: None,
         };
         Self {
             next: UndoLink::NONE,

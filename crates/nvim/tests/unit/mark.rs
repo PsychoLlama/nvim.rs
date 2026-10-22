@@ -250,3 +250,46 @@ fn local_marks_and_the_change_list_under_edits() {
     fx.run("delmarks A");
     restore(&fx);
 }
+
+/// A jump read with extra data, copied into a split's jump list and freed
+/// with the split, three times over: each window owns its own copy. The
+/// list once shared one payload between the copies, and the second close
+/// freed it again.
+#[test]
+fn a_split_owns_its_copy_of_a_jumps_extra_data() {
+    let sandbox = Sandbox::dir("mark_jump_extra_split");
+    let fx = Probe::new(sandbox.editor());
+    fx.home();
+    fx.run("clearjumps");
+    let mut file = Vec::new();
+    for i in 0..3u8 {
+        let name = format!("/nonexistent/x{i}");
+        file.extend(entry_bytes(
+            8,
+            1_000_000 + u32::from(i),
+            &map(&[
+                (b"f", bin(name.as_bytes())),
+                (b"l", vec![i + 1]),
+                (b"zz", vec![0x07]),
+            ]),
+        ));
+    }
+    let path = sandbox.write("jumps.shada", &file);
+    fx.run("set shada='100,f1");
+    fx.check_error(&format!("rshada! {}", path.display()), "none");
+    for _ in 0..3 {
+        fx.run("split");
+        fx.check("len(getjumplist()[0])", "3");
+        fx.run("close");
+    }
+    let out = sandbox.path("out.shada");
+    fx.check_error(&format!("wshada! {}", out.display()), "none");
+    let bytes = std::fs::read(&out).expect("the written file");
+    // Every jump kept its `zz` key: fixstr 'zz', fixint 7.
+    let extras = bytes
+        .windows(4)
+        .filter(|w| *w == [0xa2, b'z', b'z', 0x07])
+        .count();
+    assert_eq!(extras, 3);
+    restore(&fx);
+}

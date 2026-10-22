@@ -11,12 +11,6 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 
-#[repr(C)]
-pub struct AdditionalData {
-    pub nitems: uint32_t,
-    pub nbytes: uint32_t,
-    pub data: [::core::ffi::c_char; 0],
-}
 /// A one-argument float operation, as `float_op_wrapper` calls it. The
 /// implementations are `eval::funcs::math`'s, wrapping `f64`'s methods.
 pub type FloatFunc = Option<fn(Float) -> Float>;

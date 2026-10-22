@@ -22,7 +22,6 @@ use crate::message_fmt::msg_cstr_opt;
 use crate::types::AutoEvent;
 use crate::winlayer::WinId;
 use core::ffi::c_int;
-use core::ptr;
 
 use super::*;
 use crate::allocator::Owned;
@@ -36,7 +35,7 @@ use crate::eval::typval::{callback_free, tv_dict_item_copy, unlink_buf_changedti
 use crate::eval::vars::{release_var_scope, vars_clear};
 use crate::extmark::extmark_free_all;
 use crate::mapping::map_clear_mode;
-use crate::mark::{clear_mark, mark_adjust_buf, mark_forget_file, set_last_cursor};
+use crate::mark::{mark_adjust_buf, mark_forget_file, set_last_cursor};
 use crate::memline::ml_close;
 use crate::message::e_auabort;
 use crate::normal::visual_active;
@@ -70,7 +69,7 @@ const ZERO_FMARK: FileMark = FileMark {
         topline_offset: 0 as LineNr,
         skipcol: 0 as ColNr,
     },
-    additional_data: ptr::null_mut(),
+    extra: None,
 };
 
 // ---------------------------------------------------------------------------
@@ -751,15 +750,15 @@ fn free_buffer(mut buffer: Buf) {
     buffer.b_wininfo = Vec::new();
     free_callback(&mut buffer.b_prompt_callback);
     free_callback(&mut buffer.b_prompt_interrupt);
-    clear_mark(&mut buffer.b_last_cursor, 0);
-    clear_mark(&mut buffer.b_last_insert, 0);
-    clear_mark(&mut buffer.b_last_change, 0);
-    clear_mark(&mut buffer.b_prompt_start, 0);
+    buffer.b_last_cursor.clear(0);
+    buffer.b_last_insert.clear(0);
+    buffer.b_last_change.clear(0);
+    buffer.b_prompt_start.clear(0);
     for i in 0..NMARKS as usize {
-        clear_mark(&mut buffer.b_namedm[i], 0);
+        buffer.b_namedm[i].clear(0);
     }
     for i in 0..buffer.b_changelistlen as usize {
-        clear_mark(&mut buffer.b_changelist[i], 0);
+        buffer.b_changelist[i].clear(0);
     }
     if autocmd_busy.get() {
         // Do not free the buffer structure while autocommands are executing,

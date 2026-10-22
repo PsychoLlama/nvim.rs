@@ -7,8 +7,7 @@
 //! surfaces and not the other is what `1787242636-jmarksweep`'s `K` and `X`
 //! lines are laid out side by side to catch.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -19,49 +18,37 @@
 
 use crate::ascii::{ascii_isdigit, ascii_islower, ascii_isupper};
 use crate::buffer::{buf_is_prompt, buflist_nr2name, find_buf};
-use crate::charset::{ptr2cells, skipwhite};
-use crate::cstr;
+use crate::charset::ptr2cells_at;
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
-use crate::mbyte::utfc_ptr2len;
-use crate::memline::ml_get;
-use crate::memory::{XString, xfree, xstrdup};
+use crate::mbyte::{c_cells_at, c_cluster_len};
+use crate::memory::XString;
 use crate::message::{e_argreq, e_invarg};
 use crate::message::{
     emsg, message_filtered, msg, msg_display, msg_ext_set_kind, msg_putchar, msg_title,
 };
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_bytes;
 use crate::os::cshim::gettext;
 use crate::os::time::os_time;
 use crate::pos::lt;
 use crate::semsg;
-use crate::snprintf;
-use crate::strings::has_char;
-use crate::strings::xstrnsave;
+use crate::strings::find_char;
 use crate::ui::state::Columns;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
 
-use super::store::{GlobalMarks, NUL_BYTE, UNSET_POS, mark_name};
+use super::store::{UNSET_POS, global_mark_names, mark_name, slot};
 use super::*;
 use crate::highlight_group::HLF_D;
 
 /// print the marks
 pub fn ex_marks(excmd: &mut ExArg) {
     // A copy of the filter: listing a mark reads buffers, and runs nothing
-    // that may not reach the command line.
-    let mut filter = excmd.line.arg().to_vec();
-    filter.push(0);
-    let mut arg = filter.as_mut_ptr().cast::<c_char>();
-    // An empty argument is the same as none: `:marks` with a trailing space
-    // must not filter everything out.
-    // SAFETY: `arg` is a NUL-terminated string or null.
-    if !arg.is_null() && c_int::from(unsafe { *arg }) == NUL {
-        arg = ptr::null_mut();
-    }
+    // that may not reach the command line. An empty argument is the same as
+    // none: `:marks` with a trailing space must not filter everything out.
+    let filter = excmd.line.arg().to_vec();
+    let arg = (!filter.is_empty()).then_some(&filter[..]);
     let (win, buf) = (Win::current(), Buf::current());
-    // SAFETY: a `'static` C string.
     msg_ext_set_kind(c"list_cmd");
 
     // `'<` is whichever end of the Visual range comes FIRST, so a selection
@@ -77,77 +64,68 @@ pub fn ex_marks(excmd: &mut ExArg) {
     // Every row that carries no file name, in listing order. The global table
     // goes between the locals and the tick family, which is why it is not one
     // list.
-    let locals = (0..NMARKS).map(|i| (i + 'a' as c_int, buf.named_mark(i).pos()));
+    let locals: Vec<(c_int, Pos)> = (0..NMARKS)
+        .map(|i| (i + 'a' as c_int, buf.b_namedm[slot(i)].mark))
+        .collect();
     let ticks = [
-        ('"' as c_int, buf.last_cursor().pos()),
+        ('"' as c_int, buf.b_last_cursor.mark),
         ('[' as c_int, buf.b_op_start),
         (']' as c_int, buf.b_op_end),
-        ('^' as c_int, buf.last_insert().pos()),
-        ('.' as c_int, buf.last_change().pos()),
+        ('^' as c_int, buf.b_last_insert.mark),
+        ('.' as c_int, buf.b_last_change.mark),
     ];
-    let prompt = buf_is_prompt(Some(buf)).then(|| (':' as c_int, buf.prompt_start().pos()));
+    let prompt = buf_is_prompt(Some(buf)).then(|| (':' as c_int, buf.b_prompt_start.mark));
     let visual = [('<' as c_int, first), ('>' as c_int, second)];
 
-    // SAFETY: `arg` is a NUL-terminated string or null, every name below is
-    // one too, and `show_one_mark` allocates and frees its own line text.
-    unsafe { show_one_mark('\'' as c_int, arg, win.w_pcmark, ptr::null_mut(), 1) };
+    show_one_mark('\'' as c_int, arg, win.w_pcmark, None, true);
     for (c, pos) in locals {
-        unsafe { show_one_mark(c, arg, pos, ptr::null_mut(), 1) };
+        show_one_mark(c, arg, pos, None, true);
     }
     // The global table, whose rows carry a FILE NAME rather than the
-    // line's text when the mark is in another buffer. A slot whose buffer
-    // is loaded allocates its name here; one that came out of the shada
-    // file lends the name it still carries, which must not be freed.
-    for (i, mark) in GlobalMarks::indexed() {
-        let fnum = mark.fmark().fnum();
-        let owned = if fnum != 0 {
-            fm_getname(&mark.fmark().read(), 15)
+    // line's text when the mark is in another buffer: the loaded buffer's
+    // name, or the one a mark out of the shada file still carries.
+    for (i, name) in global_mark_names() {
+        let mark = store::global_mark(i);
+        let fnum = mark.fmark.fnum;
+        let file = if fnum != 0 {
+            fm_getname(&mark.fmark, 15)
         } else {
-            None
+            mark.file_name().map(XString::from_cstr)
         };
-        let name = if fnum != 0 {
-            owned
-                .as_ref()
-                .map_or(ptr::null_mut(), |name| name.as_ptr().cast_mut())
-        } else {
-            mark.fname()
-        };
-        if name.is_null() {
+        let Some(file) = file else {
             continue;
-        }
-        let c = if i >= NMARKS {
-            i - NMARKS + '0' as c_int
-        } else {
-            i + 'A' as c_int
         };
-        let current = c_int::from(fnum == buf.handle);
-        unsafe { show_one_mark(c, arg, mark.fmark().pos(), name, current) };
+        let current = fnum == buf.handle;
+        show_one_mark(
+            c_int::from(name),
+            arg,
+            mark.fmark.mark,
+            Some(file.as_cstr()),
+            current,
+        );
     }
     for (c, pos) in ticks.into_iter().chain(prompt).chain(visual) {
-        unsafe { show_one_mark(c, arg, pos, ptr::null_mut(), 1) };
+        show_one_mark(c, arg, pos, None, true);
     }
     // The footer: "No marks set" (or E283) if nothing above printed a
     // title.
-    unsafe { finish_marks(arg) };
+    finish_marks(arg);
 }
 
 /// The `-1` row of upstream's `show_one_mark`: whatever `:marks` prints when
 /// it printed nothing else.
-///
-/// # Safety
-/// `arg` must be null or a NUL-terminated string, and the editor's globals
-/// must be live.
-unsafe fn finish_marks(arg: *mut c_char) {
+fn finish_marks(arg: Option<&[u8]>) {
     if DID_TITLE.replace(false) {
         return;
     }
-    // SAFETY: `'static` C strings, and `arg` is the caller's.
-    if arg.is_null() {
-        msg(gettext(c"No marks set"), 0);
-    } else {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = unsafe { c_str(arg) };
-        semsg!("E283: No marks matching \"{arg}\"");
+    match arg {
+        None => {
+            msg(gettext(c"No marks set"), 0);
+        }
+        Some(arg) => {
+            let arg = msg_bytes(arg);
+            semsg!("E283: No marks matching \"{arg}\"");
+        }
     }
 }
 
@@ -157,75 +135,54 @@ static DID_TITLE: GlobalCell<bool> = GlobalCell::new(false);
 
 /// One `:marks` row.
 ///
-/// `current` — in current file
-///
-/// # Safety
-/// `arg` must be null or a NUL-terminated string, and `name_arg` must be null
-/// or a NUL-terminated string this function does not own.
-pub(super) unsafe fn show_one_mark(
+/// `arg` is the filter, `name_arg` the file name a row in another file
+/// shows, and `current` says the mark is in the current file -- a row there
+/// with no name shows the LINE'S TEXT.
+pub(super) fn show_one_mark(
     c: c_int,
-    arg: *mut c_char,
+    arg: Option<&[u8]>,
     pos: Pos,
-    name_arg: *mut c_char,
-    current: c_int,
+    name_arg: Option<&CStr>,
+    current: bool,
 ) {
-    // SAFETY: the caller promised a NUL-terminated `arg` or null.
-    let wanted = unsafe { arg.is_null() || has_char(cstr::at(arg), c) };
+    let wanted = arg.is_none_or(|arg| find_char(arg, c).is_some());
     if got_int.get() || !wanted || pos.lnum == 0 {
         return;
     }
 
-    // A row in the current file shows the LINE'S TEXT; one in another file
-    // shows the file name, which the caller allocated and still owns.
-    let mut name = name_arg;
-    let mustfree = name.is_null() && current != 0;
-    if mustfree {
-        // SAFETY: `mark_line` allocates its answer.
-        name = unsafe { mark_line(pos, 15) };
-    }
-    let mut prefix = [0 as c_char; IOSIZE as usize];
-    // SAFETY: `name` is null or a NUL-terminated string, and `prefix` is
-    // `IOSIZE` bytes of live storage.
-    if !message_filtered(unsafe { cstr::at(name) }) {
-        if !DID_TITLE.replace(true) {
-            msg_title(gettext(c"\nmark line  col file/text"));
+    let text;
+    let name = match name_arg {
+        Some(name) => Some(name),
+        None if current => {
+            text = mark_line(pos, 15);
+            Some(text.as_cstr())
         }
-        msg_putchar('\n' as c_int);
-        if !got_int.get() {
-            unsafe {
-                snprintf!(
-                    prefix.as_mut_ptr(),
-                    IOSIZE as size_t,
-                    c" %c %6d %4d ".as_ptr(),
-                    c,
-                    pos.lnum,
-                    pos.col,
-                )
-            };
-            msg_display(cstr::in_chars(&prefix), 0, false);
-            if !name.is_null() {
-                msg_display(
-                    unsafe { cstr::at(name) },
-                    if current != 0 { HLF_D } else { 0 },
-                    false,
-                );
-            }
-        }
+        None => None,
+    };
+    if message_filtered(name.unwrap_or(c"")) {
+        return;
     }
-    if mustfree {
-        unsafe { xfree(name.cast()) };
+    if !DID_TITLE.replace(true) {
+        msg_title(gettext(c"\nmark line  col file/text"));
+    }
+    msg_putchar('\n' as c_int);
+    if got_int.get() {
+        return;
+    }
+    let prefix = crate::formatted!(IOSIZE as usize, b" %c %6d %4d ", c, pos.lnum, pos.col);
+    msg_display(XString::from_vec(prefix).as_cstr(), 0, false);
+    if let Some(name) = name {
+        msg_display(name, if current { HLF_D } else { 0 }, false);
     }
 }
 
 /// `:delmarks[!] [marks]`
 pub fn ex_delmarks(excmd: &mut ExArg) {
-    // A copy, which the messages below point into.
-    let mut names = excmd.line.arg().to_vec();
-    names.push(0);
-    let (arg, forceit) = (names.as_mut_ptr().cast::<c_char>(), excmd.forceit);
+    // A copy, which the messages below quote from.
+    let names = excmd.line.arg().to_vec();
+    let forceit = excmd.forceit;
     let mut buf = Buf::current();
-    // SAFETY: `arg` is a NUL-terminated string.
-    let empty = c_int::from(unsafe { *arg }) == NUL;
+    let empty = names.is_empty();
 
     if empty && forceit {
         delmarks_all(buf);
@@ -245,29 +202,19 @@ pub fn ex_delmarks(excmd: &mut ExArg) {
     let timestamp = os_time();
     // The MarkSet payload's position, shared by every announcement here: a
     // deletion reports the mark at line 0, not where it used to be.
-    let mut gone = UNSET_POS;
-    // The argument as bytes, so the walk below is ordinary slice indexing
-    // rather than pointer arithmetic. The `-` form looks two bytes ahead,
-    // which on a raw pointer is only in bounds because a NUL is not `-` and a
-    // NUL fails every class test; over a slice it is a bounds check.
-    // SAFETY: the caller promised a NUL-terminated string.
-    let names = unsafe { CStr::from_ptr(arg) }.to_bytes();
+    let gone = UNSET_POS;
 
     let mut i = 0;
     while i < names.len() {
         let here = c_int::from(names[i]);
         // Where the message points: the rest of the argument from here, which
         // is what upstream's `%s` prints.
-        let rest = arg.wrapping_add(i);
+        let rest = msg_bytes(&names[i..]);
         let lower = ascii_islower(here);
         let digit = ascii_isdigit(here);
         let upper = ascii_isupper(here);
         if !(lower || digit || upper) {
-            // SAFETY: `buf` and `gone` are live, and `rest` points inside the
-            // NUL-terminated argument.
-            if !delmarks_one(&mut buf, mark_name(here), &mut gone, timestamp) {
-                // SAFETY: as above.
-                let rest = unsafe { c_str(rest) };
+            if !delmarks_one(&mut buf, mark_name(here), timestamp) {
                 semsg!("E475: Invalid argument: {rest}");
                 return;
             }
@@ -275,7 +222,8 @@ pub fn ex_delmarks(excmd: &mut ExArg) {
             continue;
         }
         // A range `x-y`: both ends must be in the same class, and the second
-        // must not come before the first.
+        // must not come before the first. The `-` form looks two bytes
+        // ahead, which over a slice is a bounds check.
         let from = here;
         let to = if names.get(i + 1) == Some(&b'-') {
             let end = names.get(i + 2).map_or(-1, |&b| c_int::from(b));
@@ -287,8 +235,6 @@ pub fn ex_delmarks(excmd: &mut ExArg) {
                 ascii_isupper(end)
             };
             if !same_class || end < from {
-                // SAFETY: `rest` points inside the NUL-terminated argument.
-                let rest = unsafe { c_str(rest) };
                 semsg!("E475: Invalid argument: {rest}");
                 return;
             }
@@ -299,37 +245,42 @@ pub fn ex_delmarks(excmd: &mut ExArg) {
         };
         for c in from..=to {
             if lower {
-                let mark = buf.named_mark(c - 'a' as c_int);
-                if mark.is_set() {
-                    // SAFETY: `gone` is on this stack and `buf` is live.
-                    unsafe { do_markset_autocmd(mark_name(c), &raw mut gone, buf) };
+                let at = slot(c - 'a' as c_int);
+                if buf.b_namedm[at].is_set() {
+                    do_markset_autocmd(mark_name(c), gone, buf);
                 }
                 // Only the line and the timestamp are cleared, not the whole
                 // record: `:delmarks a` is not `clear_fmark`, and the shada
                 // writer wants the stamp to say when.
-                mark.set_lnum(0);
-                mark.set_timestamp(timestamp);
+                let mark = &mut buf.b_namedm[at];
+                mark.mark.lnum = 0;
+                mark.timestamp = timestamp;
             } else {
                 // The fourth and fifth writings of the `namedfm` index
                 // formula; see `lookup::mark_global_index`.
-                let n = if digit {
+                let n = slot(if digit {
                     c - '0' as c_int + NMARKS
                 } else {
                     c - 'A' as c_int
-                };
-                let slot = GlobalMarks::at(n);
-                if slot.fmark().is_set() {
+                });
+                let fnum = namedfm.with(|table| {
+                    let mark = &table[n].fmark;
+                    mark.is_set().then_some(mark.fnum)
+                });
+                if let Some(fnum) = fnum {
                     // The event is announced against the mark's OWN buffer
                     // where it still exists, so an autocommand sees the file
                     // the mark was in.
-                    let owner = find_buf(slot.fmark().fnum()).unwrap_or(buf);
-                    // SAFETY: `gone` is on this stack.
-                    unsafe { do_markset_autocmd(mark_name(c), &raw mut gone, owner) };
+                    let owner = find_buf(fnum).unwrap_or(buf);
+                    do_markset_autocmd(mark_name(c), gone, owner);
                 }
-                slot.fmark().set_lnum(0);
-                slot.fmark().set_fnum(0);
-                slot.fmark().set_timestamp(timestamp);
-                slot.clear_fname();
+                namedfm.with_mut(|table| {
+                    let slot = &mut table[n];
+                    slot.fmark.mark.lnum = 0;
+                    slot.fmark.fnum = 0;
+                    slot.fmark.timestamp = timestamp;
+                    slot.fname = None;
+                });
             }
         }
         i += 1;
@@ -338,26 +289,23 @@ pub fn ex_delmarks(excmd: &mut ExArg) {
 
 /// `:delmarks!` — every buffer-local mark, plus the tick family.
 fn delmarks_all(buffer: Buf) {
-    let mut gone = UNSET_POS;
     // Announced before the clearing, so an autocommand can still read the
     // buffer the mark was in. `'<`/`'>` are NOT announced and not cleared:
     // `clrallmarks` leaves the Visual range alone.
     for i in 0..NMARKS {
-        if buffer.named_mark(i).is_set() {
-            // SAFETY: `gone` is on this stack and `buffer` is live.
-            unsafe { do_markset_autocmd(mark_name('a' as c_int + i), &raw mut gone, buffer) };
+        if buffer.b_namedm[slot(i)].is_set() {
+            do_markset_autocmd(mark_name('a' as c_int + i), UNSET_POS, buffer);
         }
     }
     for (name, set) in [
-        ('"', buffer.last_cursor().is_set()),
-        ('^', buffer.last_insert().is_set()),
-        ('.', buffer.last_change().is_set()),
+        ('"', buffer.b_last_cursor.is_set()),
+        ('^', buffer.b_last_insert.is_set()),
+        ('.', buffer.b_last_change.is_set()),
         ('[', buffer.b_op_start.lnum != 0),
         (']', buffer.b_op_end.lnum != 0),
     ] {
         if set {
-            // SAFETY: as above.
-            unsafe { do_markset_autocmd(name as c_char, &raw mut gone, buffer) };
+            do_markset_autocmd(name as c_char, UNSET_POS, buffer);
         }
     }
     clrallmarks(buffer, os_time());
@@ -365,13 +313,13 @@ fn delmarks_all(buffer: Buf) {
 
 /// One non-alphanumeric `:delmarks` name. `false` means the name is not a
 /// mark at all, which is E474 in the caller.
-fn delmarks_one(buffer: &mut Buf, name: c_char, gone: &mut Pos, timestamp: Timestamp) -> bool {
+fn delmarks_one(buffer: &mut Buf, name: c_char, timestamp: Timestamp) -> bool {
     // `:` and a space are accepted and do nothing: the prompt mark is not the
     // user's to delete, and a space is how `:delmarks a b` separates names.
     let lnum = match c_int::from(name) {
-        34 => buffer.last_cursor().lnum(),
-        94 => buffer.last_insert().lnum(),
-        46 => buffer.last_change().lnum(),
+        34 => buffer.b_last_cursor.mark.lnum,
+        94 => buffer.b_last_insert.mark.lnum,
+        46 => buffer.b_last_change.mark.lnum,
         91 => buffer.b_op_start.lnum,
         93 => buffer.b_op_end.lnum,
         60 => buffer.b_visual.vi_start.lnum,
@@ -380,18 +328,14 @@ fn delmarks_one(buffer: &mut Buf, name: c_char, gone: &mut Pos, timestamp: Times
         _ => return false,
     };
     if lnum != 0 {
-        // SAFETY: `gone` and `buffer` are the caller's, both live.
-        unsafe { do_markset_autocmd(name, &raw mut *gone, *buffer) };
+        do_markset_autocmd(name, UNSET_POS, *buffer);
     }
     // The three fmark stores are released; the four positions are only
     // invalidated, because they own nothing.
     match c_int::from(name) {
-        // SAFETY: the store is live and its allocation is the buffer's.
-        34 => unsafe { clear_fmark(buffer.last_cursor().raw(), timestamp) },
-        // SAFETY: as above.
-        94 => unsafe { clear_fmark(buffer.last_insert().raw(), timestamp) },
-        // SAFETY: as above.
-        46 => unsafe { clear_fmark(buffer.last_change().raw(), timestamp) },
+        34 => buffer.b_last_cursor.clear(timestamp),
+        94 => buffer.b_last_insert.clear(timestamp),
+        46 => buffer.b_last_change.clear(timestamp),
         91 => buffer.b_op_start.lnum = 0,
         93 => buffer.b_op_end.lnum = 0,
         60 => buffer.b_visual.vi_start.lnum = 0,
@@ -401,50 +345,46 @@ fn delmarks_one(buffer: &mut Buf, name: c_char, gone: &mut Pos, timestamp: Times
 }
 
 /// Return the line at mark "mp".  Truncate to fit in window.
-/// The returned string has been allocated.
-///
-/// # Safety
-/// `curbuf` must be live, which it is from startup to exit.
-pub(super) unsafe fn mark_line(pos: Pos, lead_len: c_int) -> *mut c_char {
+pub(super) fn mark_line(pos: Pos, lead_len: c_int) -> XString {
     let buf = Buf::current();
     if pos.lnum == 0 || pos.lnum > buf.b_ml.ml_line_count {
-        // SAFETY: a `'static` C string.
-        return unsafe { xstrdup(c"-invalid-".as_ptr()) };
+        return XString::from_cstr(c"-invalid-");
     }
     debug_assert!(Columns.get() >= 0, "Columns >= 0");
+    let mut lines = buf.lines();
+    let line = lines.line(pos.lnum);
+    let start = line
+        .iter()
+        .position(|&b| b != b' ' && b != b'\t')
+        .unwrap_or(line.len());
     // Five bytes per column is the widest a displayed cell can be, so the
     // copy can never be shorter than what the truncation below keeps.
-    // SAFETY: `pos.lnum` is a line of the current buffer.
-    let s = unsafe {
-        xstrnsave(
-            skipwhite(ml_get(pos.lnum)),
-            size_t::try_from(Columns.get()).unwrap_or(0) * 5,
-        )
-    };
+    let room = usize::try_from(Columns.get()).unwrap_or(0) * 5;
+    let s = &line[start..line.len().min(start + room)];
     // Truncate to the screen width, measured in CELLS rather than bytes so a
     // multi-byte or double-width character is not cut in half.
-    let mut p = s;
+    let mut at = 0;
     let mut len: c_int = 0;
-    // SAFETY: `s` is a NUL-terminated allocation, so the walk stops at its
-    // end; `utfc_ptr2len` never steps past the NUL.
-    while c_int::from(unsafe { *p }) != NUL {
-        len += unsafe { ptr2cells(p) };
+    while at < s.len() {
+        let rest = &s[at..];
+        len += if rest[0] >= 0x80 {
+            c_cells_at(rest)
+        } else {
+            ptr2cells_at(rest)
+        };
         if len >= Columns.get() - lead_len {
             break;
         }
-        p = unsafe { p.offset(utfc_ptr2len(p) as isize) };
+        at += c_cluster_len(rest).max(1);
     }
-    unsafe { *p = NUL_BYTE };
-    s
+    XString::from_bytes(&s[..at.min(s.len())])
 }
 
 /// The name of the file a filemark is in — or, when it is in the current
 /// buffer, the text at the mark. `None` when its buffer is gone.
 pub fn fm_getname(fm: &FileMark, lead_len: c_int) -> Option<XString> {
     if fm.fnum == Buf::current().handle {
-        // SAFETY: `curbuf` is live; `mark_line` answers an allocation that
-        // is ours.
-        return Some(unsafe { XString::from_raw(mark_line(fm.mark, lead_len)) });
+        return Some(mark_line(fm.mark, lead_len));
     }
     buflist_nr2name(fm.fnum, 0, 1)
 }

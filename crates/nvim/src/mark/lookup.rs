@@ -6,8 +6,7 @@
 //! `'<`, `'>`) and *motions* (`'(`, `')`, `'{`, `'}`) computed from the cursor
 //! on every call and handed back through a shared scratch record.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -16,7 +15,7 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::ascii::{ascii_isdigit, ascii_islower, ascii_isupper};
+use crate::ascii::{ascii_isdigit, ascii_isupper};
 use crate::buffer::{buf_is_prompt, buflist_getfile};
 use crate::cursor::check_cursor;
 use crate::edit::{BeginlineOpts, beginline};
@@ -26,124 +25,46 @@ use crate::pos::{MAXCOL, lt};
 use crate::textobject::{findpar, findsent};
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_uint};
-use core::ptr;
 
 use super::jumplist::*;
-use super::store::{Fmark, GlobalMarks, UNSET_POS};
+use super::store::{LocalMark, UNSET_POS, global_mark, slot};
 use super::*;
 use crate::search::{BACKWARD, FORWARD};
 
-/// [`mark_get`] in the current buffer and window, into the caller's own
-/// record: whether `name` named a mark (the record then holds it).
-pub(crate) fn current_mark(slot: &mut FileMark, flag: MarkGet, name: c_int) -> bool {
-    // SAFETY: the current buffer and window are live, and the answer is the
-    // slot itself or null.
-    !unsafe { mark_get(Buf::current(), Win::current(), slot, flag, name) }.is_null()
-}
-
-/// [`mark_get_visual`] of the current buffer into the caller's record.
-pub(crate) fn current_visual_mark(slot: &mut FileMark, name: c_int) -> bool {
-    // SAFETY: the current buffer is live; the answer is the slot or null.
-    !unsafe { mark_get_visual(Buf::current(), slot, name) }.is_null()
-}
-
-/// [`mark_check`] of a record the caller holds, or of none.
-pub(crate) fn mark_checked(fm: Option<&mut FileMark>, errormsg: &mut Option<CString>) -> bool {
-    let fm = fm.map_or(ptr::null_mut(), |fm| fm);
-    // SAFETY: null or the caller's live record.
-    unsafe { mark_check(fm, errormsg) }
-}
-
-/// [`mark_move_to`] a record the caller holds.
-pub(crate) fn move_to_mark(fm: &mut FileMark, flags: MarkMove) -> MarkMoveRes {
-    // SAFETY: the caller's live record.
-    unsafe { mark_move_to(fm, flags) }
-}
-
-/// Resolve a mark of any name.
+/// Resolve a mark of any name: a copy of the mark, or `None` for a name that
+/// names no mark.
 ///
-/// `fmp` is the caller's own record, and it serves two purposes. The marks
+/// A mark that comes from a store is copied out, so the caller holds a
+/// snapshot rather than a reference into a store the next edit moves -- and
+/// can run user code (a jump loading a file) while it holds it. The marks
 /// that are really *motions* or never-adjusted positions have no store of
-/// their own, so they are computed straight into it; and a mark that does
-/// come from a store is copied into it before the address is answered, so
-/// the caller holds a snapshot rather than a pointer into a store that the
-/// next edit will move. Either way the answer is `fmp` and outlives the call
-/// exactly as long as the caller's slot does.
-///
-/// Start the slot at [`FileMark::UNSET`]: the fields a motion mark does not
-/// compute (`view`, `timestamp`) are read back from it as-is.
-///
-/// # Safety
-/// `buffer` must be a live buffer and `win` a live window; `fmp` must point at a
-/// live, writable `FileMark` that outlives every use of the answer.
-pub unsafe fn mark_get(
-    buffer: Buf,
-    win: Win,
-    fmp: *mut FileMark,
-    flag: MarkGet,
-    name: c_int,
-) -> *mut FileMark {
-    debug_assert!(!fmp.is_null(), "mark_get needs the caller's record");
-    // SAFETY: the caller promised a live buffer.
+/// their own and are computed; their `view` and `timestamp` are unset.
+pub fn mark_get(buffer: Buf, win: Win, flag: MarkGet, name: c_int) -> Option<FileMark> {
     let handle = buffer.handle;
-    let mut fm: *mut FileMark = ptr::null_mut();
     if ascii_isupper(name) || ascii_isdigit(name) {
-        // SAFETY: `name` is a digit or an upper-case letter, which is what
-        // `mark_get_global` needs; the editor's globals are live.
-        let xfm = unsafe { mark_get_global(flag as c_uint != kMarkAllNoResolve as c_uint, name) };
-        // SAFETY: `mark_get_global` answers a slot of the global table.
-        let xfm = unsafe { Xfmark::new(xfm) };
+        let xfm = mark_get_global(flag as c_uint != kMarkAllNoResolve as c_uint, name);
         // A global mark that names another buffer is *not* this buffer's
         // mark: `kMarkBufLocal` answers an unset record rather than a
         // position the caller would then apply to the wrong file.
-        if flag as c_uint == kMarkBufLocal as c_uint && xfm.fmark().fnum() != handle {
-            // SAFETY: `buffer` is live and `fmp` is the caller's record.
-            return unsafe { pos_to_mark(buffer, fmp, UNSET_POS) };
+        if flag as c_uint == kMarkBufLocal as c_uint && xfm.fmark.fnum != handle {
+            return Some(pos_to_mark(buffer, UNSET_POS));
         }
-        fm = xfm.fmark().raw();
-    } else if name > 0 && name < NMARK_LOCAL_MAX {
-        // SAFETY: the caller promised a live buffer and window, and `fmp` is
-        // the caller's record.
-        fm = unsafe { mark_get_local(buffer, win, fmp, name) };
+        return Some(xfm.fmark);
     }
-    if fm.is_null() {
-        return fm;
+    if name > 0 && name < NMARK_LOCAL_MAX {
+        return mark_get_local(buffer, win, name);
     }
-    if fm != fmp {
-        // A store's own record: snapshot it, so the caller is not left
-        // holding a pointer the next edit moves. The motion and
-        // never-adjusted marks already answered `fmp` itself.
-        // SAFETY: both records are live and do not overlap.
-        unsafe { *fmp = (*fm).clone() };
-    }
-    fmp
+    None
 }
 
-/// [`mark_get`] answering the record by value: `None` for a name that
-/// resolves to nothing.
+/// Get a global mark {A-Z0-9}: a copy of the slot.
 ///
-/// The record is the snapshot [`mark_get`] makes, so it is the caller's to
-/// keep; a motion mark is computed into it from [`FileMark::UNSET`].
-pub(crate) fn mark_lookup(buffer: Buf, win: Win, flag: MarkGet, name: c_int) -> Option<FileMark> {
-    let mut slot = FileMark::UNSET;
-    // SAFETY: `slot` is this frame's record and outlives the answer, which
-    // is either null or `slot` itself.
-    let found = unsafe { mark_get(buffer, win, &raw mut slot, flag, name) };
-    (!found.is_null()).then_some(slot)
-}
-
-/// Get a global mark {A-Z0-9}.
-///
-/// `name` — the name of the mark.
+/// `name` — the name of the mark; a digit or an upper-case letter, and
+///          anything else panics rather than reading out of the global
+///          table.
 /// `resolve` — Whether to try resolving the mark fnum (i.e., load the buffer stored in
 ///                 the mark fname and update the XFileMark (expensive)).
-///
-/// Returns mark
-///
-/// # Safety
-/// `name` must be a digit or an upper-case letter; anything else panics rather
-/// than reading out of the global table. The editor's globals must be live.
-pub unsafe fn mark_get_global(resolve: bool, name: c_int) -> *mut XFileMark {
+pub fn mark_get_global(resolve: bool, name: c_int) -> XFileMark {
     // Spelled out rather than handed to `mark_global_index` because that
     // takes a `c_char`, and narrowing `name` first would turn `'A' + 256`
     // into a valid index instead of the abort below. See p20-12's trap 9:
@@ -161,14 +82,19 @@ pub unsafe fn mark_get_global(resolve: bool, name: c_int) -> *mut XFileMark {
         // digit or an uppercase letter before they get here.
         unreachable!("mark name is neither a digit nor an uppercase letter");
     };
-    let mark = GlobalMarks::at(idx);
+    let idx = slot(idx);
+    let mark = global_mark(idx);
     // A mark read out of the shada file names its buffer by file name until
-    // something asks for it; loading that file is what `resolve` pays for.
-    if resolve && mark.fmark().fnum() == 0 {
-        // SAFETY: the slot is live and its name, if any, is a C string.
-        unsafe { fname2fnum(mark.raw()) };
+    // something asks for it; loading that file is what `resolve` pays for,
+    // and it rewrites the slot -- so the answer is read again after.
+    if resolve
+        && mark.fmark.fnum == 0
+        && let Some(fname) = &mark.fname
+    {
+        fname2fnum(fname.as_cstr());
+        return global_mark(idx);
     }
-    mark.raw()
+    mark
 }
 
 /// Get a local mark (lowercase and symbols).
@@ -177,65 +103,38 @@ pub unsafe fn mark_get_global(resolve: bool, name: c_int) -> *mut XFileMark {
 /// marks. Search first for marks and fallback to finding motion type marks. If it's known
 /// ahead of time that the mark is actually a motion use the mark_get_motion() directly.
 ///
-/// @note  Lowercase, last_cursor '"', last insert '^', last change '.' are not statically
-/// allocated, everything else is.
 /// `name` — the name of the mark.
 /// `win` — window to retrieve marks that belong to it (motions and context mark).
 /// `buffer` — buf to retrieve marks that belong to it.
-/// `fmp` — the caller's record, where the marks that have no store of their
-///         own (`'[`, `']`, `'<`, `'>` and the motions) are computed. The
-///         marks that *do* have a store answer that store's address and leave
-///         `fmp` alone; comparing the answer against `fmp` tells the two
-///         apart.
 ///
-/// Returns mark, NULL if not found.
-///
-/// # Safety
-/// `buffer` must be a live buffer, `win` a live window, and `fmp` a live,
-/// writable `FileMark` that outlives every use of the answer.
-pub unsafe fn mark_get_local(
-    buffer: Buf,
-    win: Win,
-    fmp: *mut FileMark,
-    name: c_int,
-) -> *mut FileMark {
-    let (bufh, winh) = (buffer, win);
-    let mark: *mut FileMark = if ascii_islower(name) {
-        bufh.named_mark(name - 'a' as c_int).raw()
-    } else if name == '[' as c_int {
-        // SAFETY: `buffer` is live and `fmp` is the caller's record.
-        unsafe { pos_to_mark(buffer, fmp, bufh.b_op_start) }
-    } else if name == ']' as c_int {
-        // SAFETY: as above.
-        unsafe { pos_to_mark(buffer, fmp, bufh.b_op_end) }
-    } else if name == '<' as c_int || name == '>' as c_int {
-        // SAFETY: as above.
-        unsafe { mark_get_visual(buffer, fmp, name) }
-    } else if name == '\'' as c_int || name == '`' as c_int {
-        // The context mark is the WINDOW's, but it is reported against the
-        // current buffer rather than against `buffer` — upstream reads `curbuf`
-        // here and `nvim_buf_get_mark` relies on it.
-        // SAFETY: `curbuf` is live from startup to exit and `fmp` is the
-        // caller's record.
-        unsafe { pos_to_mark(Buf::current(), fmp, winh.w_pcmark) }
-    } else if name == '"' as c_int {
-        bufh.last_cursor().raw()
-    } else if name == '^' as c_int {
-        bufh.last_insert().raw()
-    } else if name == '.' as c_int {
-        bufh.last_change().raw()
-    } else if name == ':' as c_int && buf_is_prompt(Some(bufh)) {
-        bufh.prompt_start().raw()
-    } else {
-        // SAFETY: the caller promised a live buffer and window, and `fmp` is
-        // the caller's record.
-        unsafe { mark_get_motion(buffer, win, fmp, name) }
-    };
-    if !mark.is_null() {
-        // SAFETY: every arm above answers a live record or null.
-        unsafe { Fmark::new(mark) }.set_fnum(bufh.handle as c_int);
+/// Returns a copy of the mark, `None` if not found. Whatever it is, it is
+/// reported against `buffer`: a store's record has its `fnum` set to the
+/// buffer's in place, as upstream writes it through the pointer it answers.
+pub fn mark_get_local(buffer: Buf, win: Win, name: c_int) -> Option<FileMark> {
+    let handle = buffer.handle;
+    let store = LocalMark::named(name)
+        .filter(|store| *store != LocalMark::PromptStart || buf_is_prompt(Some(buffer)));
+    if let Some(store) = store {
+        return Some(store.with(buffer, |mark| {
+            mark.fnum = handle;
+            mark.clone()
+        }));
     }
-    mark
+    let mut mark = if name == '[' as c_int {
+        pos_to_mark(buffer, buffer.b_op_start)
+    } else if name == ']' as c_int {
+        pos_to_mark(buffer, buffer.b_op_end)
+    } else if name == '<' as c_int || name == '>' as c_int {
+        mark_get_visual(buffer, name)?
+    } else if name == '\'' as c_int || name == '`' as c_int {
+        // The context mark is the WINDOW's; its number is overwritten with
+        // `buffer`'s below, as upstream does after reading `curbuf`'s.
+        pos_to_mark(Buf::current(), win.w_pcmark)
+    } else {
+        mark_get_motion(buffer, win, name)?
+    };
+    mark.fnum = handle;
+    Some(mark)
 }
 
 /// Get marks that are actually motions but return them as marks
@@ -244,28 +143,18 @@ pub unsafe fn mark_get_local(
 /// `name` — name of the mark
 /// `win` — window to retrieve the cursor to calculate the mark.
 /// `buffer` — buf to wrap motion marks with it's buffer number (fm->fnum).
-/// `fmp` — the caller's record, which the motion is computed into.
 ///
-/// Returns `fmp`, or NULL when `name` names no motion or the motion found
-/// nothing.
-///
-/// # Safety
-/// `buffer` must be a live buffer, `win` a live window, and `fmp` a live,
-/// writable `FileMark` that outlives every use of the answer.
-pub unsafe fn mark_get_motion(
-    buffer: Buf,
-    win: Win,
-    fmp: *mut FileMark,
-    name: c_int,
-) -> *mut FileMark {
-    let (winh, mut cur) = (win, Win::current());
+/// Returns the mark, or `None` when `name` names no motion or the motion
+/// found nothing.
+pub fn mark_get_motion(buffer: Buf, win: Win, name: c_int) -> Option<FileMark> {
+    let mut cur = Win::current();
     // The motion is computed by *moving the cursor* and reading where it
     // landed, so the cursor is put back before answering. `listcmd_busy`
     // suppresses the jumplist entry the move would otherwise push.
     let saved = cur.w_cursor;
     let was_busy = listcmd_busy.get();
     listcmd_busy.set(true);
-    let mut mark: *mut FileMark = ptr::null_mut();
+    let mut mark = None;
     if name == '{' as c_int || name == '}' as c_int {
         let dir = if name == '}' as c_int {
             FORWARD
@@ -273,8 +162,7 @@ pub unsafe fn mark_get_motion(
             BACKWARD
         };
         if findpar(dir as c_int, 1, NUL, false).is_some() {
-            // SAFETY: `buffer` is live and `fmp` is the caller's record.
-            mark = unsafe { pos_to_mark(buffer, fmp, winh.w_cursor) };
+            mark = Some(pos_to_mark(buffer, win.w_cursor));
         }
     } else if name == '(' as c_int || name == ')' as c_int {
         let dir = if name == ')' as c_int {
@@ -282,10 +170,8 @@ pub unsafe fn mark_get_motion(
         } else {
             BACKWARD
         };
-        // SAFETY: the editor's globals are live.
         if findsent(dir as Direction, 1).is_ok() {
-            // SAFETY: as above.
-            mark = unsafe { pos_to_mark(buffer, fmp, winh.w_cursor) };
+            mark = Some(pos_to_mark(buffer, win.w_cursor));
         }
     }
     cur.w_cursor = saved;
@@ -302,20 +188,14 @@ pub unsafe fn mark_get_motion(
 /// 4. Re-ordered when defined in reverse.
 ///
 /// `buffer` — Buffer to get the mark from.
-/// `fmp` — the caller's record, which the mark is written into.
 /// `name` — Mark name '<' or '>'.
 ///
-/// Returns `fmp`, or NULL when `name` is neither `'<` nor `'>`.
-///
-/// # Safety
-/// `buffer` must be a live buffer and `fmp` a live, writable `FileMark` that
-/// outlives every use of the answer.
-pub unsafe fn mark_get_visual(buffer: Buf, fmp: *mut FileMark, name: c_int) -> *mut FileMark {
+/// Returns the mark, or `None` when `name` is neither `'<` nor `'>`.
+pub fn mark_get_visual(buffer: Buf, name: c_int) -> Option<FileMark> {
     if name != '<' as c_int && name != '>' as c_int {
-        return ptr::null_mut();
+        return None;
     }
-    let bufh = buffer;
-    let (start, end) = (bufh.b_visual.vi_start, bufh.b_visual.vi_end);
+    let (start, end) = (buffer.b_visual.vi_start, buffer.b_visual.vi_end);
     // `'<` is whichever end comes FIRST, not whichever was set first: a
     // Visual selection made backwards still reports its marks in order.
     let wants_start = (name == '<' as c_int) == lt(start, end) || end.lnum == 0;
@@ -324,23 +204,18 @@ pub unsafe fn mark_get_visual(buffer: Buf, fmp: *mut FileMark, name: c_int) -> *
     } else {
         end
     };
-    // SAFETY: `buffer` is live and `fmp` is the caller's record.
-    let mark = unsafe { pos_to_mark(buffer, fmp, at) };
-    if bufh.b_visual.vi_mode == 'V' as c_int {
+    let mut mark = pos_to_mark(buffer, at);
+    if buffer.b_visual.vi_mode == 'V' as c_int {
         // A linewise selection has no columns of its own; `'<` is the start
         // of the line and `'>` the end of it.
-        // SAFETY: `pos_to_mark` answered a live record.
-        let mark = unsafe { Fmark::new(mark) };
-        let mut pos = mark.pos();
-        pos.col = if name == '<' as c_int {
+        mark.mark.col = if name == '<' as c_int {
             0
         } else {
             MAXCOL as ColNr
         };
-        pos.coladd = 0;
-        mark.set_pos(pos);
+        mark.mark.coladd = 0;
     }
-    mark
+    Some(mark)
 }
 
 /// Search for the next named mark in the current file from a start position.
@@ -348,17 +223,13 @@ pub unsafe fn mark_get_visual(buffer: Buf, fmp: *mut FileMark, name: c_int) -> *
 /// `startpos` — where to start.
 /// `dir` — direction for search.
 ///
-/// Returns next mark or NULL if no mark is found.
-///
-/// # Safety
-/// `startpos` must point at a live position, and `curbuf` must be live.
-pub unsafe fn getnextmark(startpos: *mut Pos, dir: c_int, begin_line: c_int) -> *mut FileMark {
-    // SAFETY: the caller promised a live position.
-    let mut pos = unsafe { *startpos };
+/// Returns a copy of the next mark, `None` if no mark is found.
+pub fn getnextmark(startpos: Pos, dir: c_int, begin_line: bool) -> Option<FileMark> {
+    let mut pos = startpos;
     // `]'` and `['` are line motions: they land on a mark on another LINE, so
     // the column the search starts from is pushed to the far end of the
     // current one.
-    if begin_line != 0 {
+    if begin_line {
         pos.col = if dir == BACKWARD as c_int {
             0
         } else {
@@ -366,28 +237,28 @@ pub unsafe fn getnextmark(startpos: *mut Pos, dir: c_int, begin_line: c_int) -> 
         };
     }
     let buf = Buf::current();
-    let mut result: Option<Fmark> = None;
-    for mark in buf.named_marks() {
+    let mut result: Option<&FileMark> = None;
+    for mark in &buf.b_namedm {
         // `> 0` rather than `!= 0`: a negative line number is what a mangled
         // shada record leaves behind, and it is not a mark to jump to.
-        if mark.lnum() <= 0 {
+        if mark.mark.lnum <= 0 {
             continue;
         }
         let nearer = match result {
             None => true,
-            Some(best) if dir == FORWARD as c_int => lt(mark.pos(), best.pos()),
-            Some(best) => lt(best.pos(), mark.pos()),
+            Some(best) if dir == FORWARD as c_int => lt(mark.mark, best.mark),
+            Some(best) => lt(best.mark, mark.mark),
         };
         let beyond = if dir == FORWARD as c_int {
-            lt(pos, mark.pos())
+            lt(pos, mark.mark)
         } else {
-            lt(mark.pos(), pos)
+            lt(mark.mark, pos)
         };
         if nearer && beyond {
             result = Some(mark);
         }
     }
-    result.map_or(ptr::null_mut(), Fmark::raw)
+    result.cloned()
 }
 
 /// Move to the given file mark, changing the buffer and cursor position.
@@ -396,47 +267,32 @@ pub unsafe fn getnextmark(startpos: *mut Pos, dir: c_int, begin_line: c_int) -> 
 /// `fm` — Mark, can be NULL will raise E78: Unknown mark
 /// `flags` — MarkMove flags to configure the movement to the mark.
 ///
-/// Returns markMovekRes flags representing the outcome
+/// The mark is the caller's own copy, so loading another file -- which can
+/// free the store it came from, and runs autocommands that may jump to
+/// marks of their own -- leaves it as it was.
 ///
-/// # Safety
-/// `fm` must be null or point at a live `FileMark`, and the editor's globals
-/// must be live.
-pub unsafe fn mark_move_to(mut fm: *mut FileMark, flags: MarkMove) -> MarkMoveRes {
-    // The mark being jumped to, copied out before the buffer switch: loading
-    // another file can free the store `fm` points into (a jumplist entry, a
-    // global slot whose buffer is wiped), and the position is still needed
-    // afterwards.
-    //
-    // This frame's own, not a `static` as the C has it: the file the switch
-    // loads runs autocommands, and one of those jumping to a mark of its own
-    // would otherwise overwrite the copy this call is still holding.
-    let mut in_flight;
-
+/// Returns markMovekRes flags representing the outcome
+pub fn mark_move_to(fm: Option<&FileMark>, flags: MarkMove) -> MarkMoveRes {
     let mut errormsg = None;
-    // SAFETY: the caller promised a live record or null.
-    if !unsafe { mark_check(fm, &mut errormsg) } {
+    if !mark_check(fm, &mut errormsg) {
         if let Some(msg) = &errormsg {
             emsg(msg);
         }
         return kMarkMoveFailed;
     }
+    let Some(fm) = fm else {
+        return kMarkMoveFailed;
+    };
 
-    // SAFETY: `mark_check` said the record is live, and `curbuf`/`curwin` are
-    // live from startup to exit.
-    let (mark, buf) = unsafe { (Fmark::new(fm), Buf::current()) };
     let mut res: MarkMoveRes = kMarkMoveSuccess;
-    if mark.fnum() != buf.handle {
-        in_flight = mark.read();
-        fm = &raw mut in_flight;
-        // SAFETY: `in_flight` outlives every use of `fm` below.
-        res |= unsafe { switch_to_mark_buf(fm, flags as c_uint & kMarkJumpList as c_uint == 0) };
+    if fm.fnum != Buf::current().handle {
+        res |= switch_to_mark_buf(fm, flags as c_uint & kMarkJumpList as c_uint == 0);
         if res & kMarkMoveFailed != 0 {
             return res;
         }
         // The mark's line was checked against the OLD buffer above; now that
         // the file is loaded, ask again against the real one.
-        // SAFETY: `curbuf` is live and the record is the static.
-        if !unsafe { mark_check_line_bounds(Buf::current_or_none(), fm, &mut errormsg) } {
+        if !mark_check_line_bounds(Buf::current_or_none(), fm, &mut errormsg) {
             if let Some(msg) = &errormsg {
                 emsg(msg);
             }
@@ -447,8 +303,7 @@ pub unsafe fn mark_move_to(mut fm: *mut FileMark, flags: MarkMove) -> MarkMoveRe
     }
 
     let mut win = Win::current();
-    // SAFETY: `fm` is either the caller's live record or `in_flight`.
-    let pos = unsafe { Fmark::new(fm) }.pos();
+    let pos = fm.mark;
     let prev_pos = win.w_cursor;
     win.w_cursor = pos;
     if flags as c_uint & kMarkBeginLine as c_uint != 0 {
@@ -461,8 +316,7 @@ pub unsafe fn mark_move_to(mut fm: *mut FileMark, flags: MarkMove) -> MarkMoveRe
         res |= kMarkChangedCol | kMarkChangedCursor;
     }
     if flags as c_uint & kMarkSetView as c_uint != 0 {
-        // SAFETY: as above.
-        mark_view_restore(unsafe { fm.as_ref() });
+        mark_view_restore(Some(fm));
     }
     if res & (kMarkSwitchedBuf | kMarkChangedCursor) != 0 {
         check_cursor(win);
@@ -475,18 +329,13 @@ pub unsafe fn mark_move_to(mut fm: *mut FileMark, flags: MarkMove) -> MarkMoveRe
 /// `fm`
 /// `pcmark_on_switch` — leave a context mark when switching buffer.
 /// Returns whether the buffer was switched or not.
-///
-/// # Safety
-/// `fm` must point at a live `FileMark`, and the editor's globals must be live.
-pub(super) unsafe fn switch_to_mark_buf(fm: *mut FileMark, pcmark_on_switch: bool) -> MarkMoveRes {
-    // SAFETY: the caller promised a live record.
-    let fm = unsafe { Fmark::new(fm) };
-    if fm.fnum() == Buf::current().handle {
+fn switch_to_mark_buf(fm: &FileMark, pcmark_on_switch: bool) -> MarkMoveRes {
+    if fm.fnum == Buf::current().handle {
         return 0;
     }
     let getfile_flag = if pcmark_on_switch { GETF_SETMARK } else { 0 };
-    // SAFETY: the editor's globals are live; `buflist_getfile` loads the file.
-    let ok = buflist_getfile(fm.fnum(), fm.lnum(), getfile_flag.cast_signed(), 0).is_ok();
+    // `buflist_getfile` loads the file.
+    let ok = buflist_getfile(fm.fnum, fm.mark.lnum, getfile_flag.cast_signed(), 0).is_ok();
     if ok {
         kMarkSwitchedBuf
     } else {

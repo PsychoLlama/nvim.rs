@@ -36,7 +36,7 @@ use crate::getchar::beep_flush;
 use crate::getchar::state::{KeyTyped, got_int};
 use crate::global_cell::GlobalCell;
 use crate::guard::{sandbox, textlock};
-use crate::mark::{drop_mark_extra, mark_adjust, setpcmark};
+use crate::mark::{mark_adjust, setpcmark};
 use crate::mbyte::c_cluster_len;
 use crate::memline::MlFlags;
 use crate::memline::{ml_delete, resolve_symlink};
@@ -242,12 +242,14 @@ fn get_undolevel(buffer: Buf) -> OptInt {
 
 /// Drops the shada payload hanging off a buffer's named marks.
 ///
-/// The undo header takes a *copy* of the marks, and two owners of one
-/// `additional_data` allocation is one too many; neither copy keeps it.
+/// The undo header takes a copy of the marks. Upstream drops the payload
+/// because its copy is shallow and two owners of one allocation is one too
+/// many; the copy here is deep, but the payload goes all the same, so what
+/// a ShaDa file is written with stays upstream's.
 #[inline]
-fn zero_fmark_additional_data(fmarks: &mut [FileMark; NMARKS as usize]) {
+fn drop_named_mark_extras(fmarks: &mut [FileMark; NMARKS as usize]) {
     for mark in fmarks {
-        drop_mark_extra(mark);
+        mark.extra = None;
     }
 }
 
@@ -391,7 +393,7 @@ fn start_new_header(mut b: Buf) -> bool {
         } else {
             0
         };
-    zero_fmark_additional_data(&mut b.b_namedm);
+    drop_named_mark_extras(&mut b.b_namedm);
     let named_marks = b.b_namedm.clone();
     let visual = b.b_visual;
     if let Some(uh) = b.header_mut(link) {

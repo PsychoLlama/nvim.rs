@@ -6,8 +6,7 @@
 //! internal 0-based one, and a mark that is not set is simply absent rather
 //! than reported at line 0.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -21,7 +20,7 @@ use crate::eval::typval::{tv_dict_alloc, tv_list_alloc};
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_int};
 
-use super::store::GlobalMarks;
+use super::store::{global_mark, global_mark_names, slot};
 use super::*;
 use crate::pos::MAXCOL;
 use crate::types::Failed;
@@ -76,17 +75,17 @@ pub fn get_buf_local_marks(buffer: Buf, l: &mut List) {
     for i in 0..NMARKS {
         mname[1] = u8::try_from('a' as c_int + i).expect("mark name is one ASCII byte");
         let name = CStr::from_bytes_with_nul(&mname).expect("a two-byte mark name");
-        let _ = add_mark(l, name, buf.named_mark(i).pos(), handle, None);
+        let _ = add_mark(l, name, buf.b_namedm[slot(i)].mark, handle, None);
     }
     // The context mark is the WINDOW's and is reported against the CURRENT
     // buffer, which is why it is the one row here that does not use `handle`.
     let _ = add_mark(l, c"''", win.w_pcmark, cur.handle as c_int, None);
     let positions: [(&CStr, Pos); 7] = [
-        (c"'\"", buf.last_cursor().pos()),
+        (c"'\"", buf.b_last_cursor.mark),
         (c"'[", buf.b_op_start),
         (c"']", buf.b_op_end),
-        (c"'^", buf.last_insert().pos()),
-        (c"'.", buf.last_change().pos()),
+        (c"'^", buf.b_last_insert.mark),
+        (c"'.", buf.b_last_change.mark),
         (c"'<", buf.b_visual.vi_start),
         (c"'>", buf.b_visual.vi_end),
     ];
@@ -100,33 +99,19 @@ pub fn get_buf_local_marks(buffer: Buf, l: &mut List) {
 /// `l` — List to store global marks
 pub fn get_global_marks(l: &mut List) {
     let mut mname: [u8; 3] = *b"' \0";
-    for (i, mark) in GlobalMarks::indexed() {
-        let fnum = mark.fmark().fnum();
-        // A slot whose buffer is loaded reports the buffer's name (allocated
-        // here); one that came out of the shada file reports the name it
-        // still carries, which belongs to the slot and must not be freed.
-        let owned;
-        let name = if fnum != 0 {
-            owned = buflist_nr2name(fnum, 1, 1);
-            owned
-                .as_ref()
-                .map_or(ptr::null_mut(), |name| name.as_ptr().cast_mut())
+    for (i, name) in global_mark_names() {
+        let mark = global_mark(i);
+        let fnum = mark.fmark.fnum;
+        let file = if fnum != 0 {
+            buflist_nr2name(fnum, 1, 1)
         } else {
-            mark.fname()
+            mark.file_name().map(XString::from_cstr)
         };
-        if name.is_null() {
+        let Some(file) = file else {
             continue;
-        }
-        mname[1] = u8::try_from(if i >= NMARKS {
-            i - NMARKS + '0' as c_int
-        } else {
-            i + 'A' as c_int
-        })
-        .expect("mark name is one ASCII byte");
+        };
+        mname[1] = name.cast_unsigned();
         let mark_text = CStr::from_bytes_with_nul(&mname).expect("a two-byte mark name");
-        // SAFETY: `name` is a NUL-terminated string, the buffer's name just
-        // allocated or the slot's own, live for the call.
-        let file = unsafe { cstr::at(name) };
-        let _ = add_mark(l, mark_text, mark.fmark().pos(), fnum, Some(file));
+        let _ = add_mark(l, mark_text, mark.fmark.mark, fnum, Some(file.as_cstr()));
     }
 }

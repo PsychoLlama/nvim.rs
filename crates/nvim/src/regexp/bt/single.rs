@@ -11,7 +11,7 @@ use super::exec::re_num_cmp;
 use super::op::BtOp;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::{vim_is_ident_char, vim_isfilec, vim_isprintc};
-use crate::mark::mark_lookup;
+use crate::mark::mark_get;
 use crate::mbyte::{class_in, utf_iscomposing_legacy};
 use crate::plines::win_linetabsize;
 use crate::pos::MAXCOL;
@@ -237,8 +237,8 @@ fn at_mark(rex: Rex, prog: BtProg<'_>, scan: usize) -> c_int {
         c_int::from(prog.byte(scan, 4)),
     );
     let col = if rex.multi() { rex.col() } else { 0 };
-    // `mark_lookup` computes a motion mark (`'{`, `'(`) on the spot.
-    let fm = mark_lookup(rex.reg_buf(), Win::current(), kMarkBufLocal, mark);
+    // `mark_get` computes a motion mark (`'{`, `'(`) on the spot.
+    let fm = mark_get(rex.reg_buf(), Win::current(), kMarkBufLocal, mark);
     // Looking the mark up can move the buffer's line, so fetch it again.
     if rex.multi() {
         rex.seek(reg_getline(rex, rex.lnum()).unwrap_or(b"\0"), col);

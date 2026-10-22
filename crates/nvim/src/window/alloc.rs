@@ -314,8 +314,7 @@ pub(crate) fn win_free(window: Win, tabpage: Option<TabPage>) {
     // SAFETY: as above.
     unsafe { clear_virttext(&raw mut window.w_config.footer_chunks) };
     clear_matches(window);
-    // SAFETY: as above.
-    unsafe { free_jumplist(window) };
+    free_jumplist(window);
     window.free_location_lists();
     free(window.w_p_cc_cols);
     free_grid(window, false);

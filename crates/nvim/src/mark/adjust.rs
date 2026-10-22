@@ -19,8 +19,7 @@
 //! functions and a rewrite that merges the line half must not drop the column
 //! half.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -39,7 +38,7 @@ use crate::state::mode::saved_cursor;
 use crate::winlayer::{Buf, Win, tab_windows, windows};
 use core::ffi::{c_int, c_uint};
 
-use super::store::{Fmark, GlobalMarks};
+use super::store::slot;
 use super::*;
 use crate::types::CmdModFlags;
 
@@ -107,24 +106,20 @@ impl LineShift {
     }
 
     /// [`LineShift::line`] applied to a mark store.
-    fn mark(self, fm: Fmark) {
-        let mut lnum = fm.lnum();
-        self.line(&mut lnum);
-        fm.set_lnum(lnum);
+    fn mark(self, fm: &mut FileMark) {
+        self.line(&mut fm.mark.lnum);
     }
 
     /// [`LineShift::line_nodel`] applied to a mark store.
-    fn mark_nodel(self, fm: Fmark) {
-        let mut lnum = fm.lnum();
-        self.line_nodel(&mut lnum);
-        fm.set_lnum(lnum);
+    fn mark_nodel(self, fm: &mut FileMark) {
+        self.line_nodel(&mut fm.mark.lnum);
     }
 
     /// [`LineShift::line_nodel`], but only for a mark that names buffer
     /// `fnum`. The global table, every jump list and every tag stack hold
     /// marks in other buffers, which this adjustment must not touch.
-    fn mark_nodel_in(self, fm: Fmark, fnum: c_int) {
-        if fm.fnum() == fnum {
+    fn mark_nodel_in(self, fm: &mut FileMark, fnum: c_int) {
+        if fm.fnum == fnum {
             self.mark_nodel(fm);
         }
     }
@@ -157,15 +152,13 @@ impl ColShift {
     }
 
     /// [`ColShift::col`] applied to a mark store.
-    fn mark(self, fm: Fmark) {
-        let mut pos = fm.pos();
-        self.col(&mut pos);
-        fm.set_pos(pos);
+    fn mark(self, fm: &mut FileMark) {
+        self.col(&mut fm.mark);
     }
 
     /// [`ColShift::col`], but only for a mark that names buffer `fnum`.
-    fn mark_in(self, fm: Fmark, fnum: c_int) {
-        if fm.fnum() == fnum {
+    fn mark_in(self, fm: &mut FileMark, fnum: c_int) {
+        if fm.fnum == fnum {
             self.mark(fm);
         }
     }
@@ -240,7 +233,7 @@ pub fn mark_adjust_buf(
         return;
     }
 
-    let fnum = buffer.handle as c_int;
+    let fnum = buffer.handle;
     let shift = LineShift {
         line1,
         line2,
@@ -256,33 +249,36 @@ pub fn mark_adjust_buf(
         // global mark is the user's bookmark and losing it outright is worse
         // than moving it. Both halves of the table are walked, but only the
         // slots naming *this* buffer are touched.
-        for i in 0..NMARKS {
-            shift.mark(buffer.named_mark(i));
-            shift.mark_nodel_in(GlobalMarks::at(i).fmark(), fnum);
+        namedfm.with_mut(|table| {
+            for mark in table.iter_mut() {
+                shift.mark_nodel_in(&mut mark.fmark, fnum);
+            }
+        });
+        let prompt = buf_is_prompt(Some(buffer));
+        let b: &mut Buffer = &mut buffer;
+        for mark in &mut b.b_namedm {
+            shift.mark(mark);
         }
-        for i in NMARKS..NGLOBALMARKS {
-            shift.mark_nodel_in(GlobalMarks::at(i).fmark(), fnum);
-        }
-
-        shift.mark(buffer.last_insert());
-        shift.mark(buffer.last_change());
+        shift.mark(&mut b.b_last_insert);
+        shift.mark(&mut b.b_last_change);
         // `'"` is skipped while it still sits where `clrallmarks` left it —
         // shifting that would invent a position the user never visited — and,
         // for a terminal buffer, while it names the last line, which the
         // terminal is about to rewrite anyway.
-        if !equalpos(buffer.last_cursor().pos(), INIT_POS)
-            && (!by_term || buffer.last_cursor().lnum() < buffer.b_ml.ml_line_count)
+        if !equalpos(b.b_last_cursor.mark, INIT_POS)
+            && (!by_term || b.b_last_cursor.mark.lnum < b.b_ml.ml_line_count)
         {
-            shift.mark(buffer.last_cursor());
+            shift.mark(&mut b.b_last_cursor);
         }
-        if buf_is_prompt(Some(buffer)) {
-            shift.mark_nodel(buffer.prompt_start());
+        if prompt {
+            shift.mark_nodel(&mut b.b_prompt_start);
         }
-        for change in buffer.changes() {
+        let len = slot(b.b_changelistlen);
+        for change in &mut b.b_changelist[..len] {
             shift.mark_nodel(change);
         }
-        shift.line_nodel(&mut buffer.b_visual.vi_start.lnum);
-        shift.line_nodel(&mut buffer.b_visual.vi_end.lnum);
+        shift.line_nodel(&mut b.b_visual.vi_start.lnum);
+        shift.line_nodel(&mut b.b_visual.vi_end.lnum);
 
         // The quickfix list is asked once for the buffer and then once per
         // window for that window's location list; a buffer with no surviving
@@ -321,16 +317,18 @@ pub fn mark_adjust_buf(
 
     for mut win in tab_windows() {
         if !cmdmod_has(CmdModFlags::LOCKMARKS) {
-            for jump in win.jumps() {
-                shift.mark_nodel_in(jump.fmark(), fnum);
+            let len = slot(win.w_jumplistlen);
+            for jump in &mut win.w_jumplist[..len] {
+                shift.mark_nodel_in(&mut jump.fmark, fnum);
             }
         }
         if win.w_buffer != buffer {
             continue;
         }
         if !cmdmod_has(CmdModFlags::LOCKMARKS) {
-            for tag in win.tag_marks() {
-                shift.mark_nodel_in(tag, fnum);
+            let len = slot(win.w_tagstacklen);
+            for tag in &mut win.w_tagstack[..len] {
+                shift.mark_nodel_in(&mut tag.fmark, fnum);
             }
         }
         // The remembered Visual range of a window that is not the current
@@ -386,14 +384,11 @@ pub fn mark_adjust_buf(
 
     // The per-window remembered cursor of every window that has ever shown
     // this buffer, including ones that no longer exist.
-    for i in 0..buffer.b_wininfo.len() {
-        // SAFETY: an entry of the buffer's own list, so its `wi_mark` is
-        // live; the handle reads and writes one position.
-        let mark = unsafe { Fmark::new(&raw mut buffer.b_wininfo[i].wi_mark) };
-        if !by_term || mark.lnum() < buffer.b_ml.ml_line_count {
-            let mut pos = mark.pos();
-            shift.cursor(&mut pos);
-            mark.set_pos(pos);
+    let line_count = buffer.b_ml.ml_line_count;
+    for info in &mut buffer.b_wininfo {
+        let pos = &mut info.wi_mark.mark;
+        if !by_term || pos.lnum < line_count {
+            shift.cursor(pos);
         }
     }
 }
@@ -436,7 +431,7 @@ pub fn mark_col_adjust(
     }
 
     let (mut buf, mut cur) = (Buf::current(), Win::current());
-    let fnum = buf.handle as c_int;
+    let fnum = buf.handle;
     let shift = ColShift {
         lnum,
         mincol,
@@ -445,23 +440,27 @@ pub fn mark_col_adjust(
         spaces_removed,
     };
 
-    for i in 0..NMARKS {
-        shift.mark(buf.named_mark(i));
-        shift.mark_in(GlobalMarks::at(i).fmark(), fnum);
+    namedfm.with_mut(|table| {
+        for mark in table.iter_mut() {
+            shift.mark_in(&mut mark.fmark, fnum);
+        }
+    });
+    let prompt = buf_is_prompt(Some(buf));
+    let b: &mut Buffer = &mut buf;
+    for mark in &mut b.b_namedm {
+        shift.mark(mark);
     }
-    for i in NMARKS..NGLOBALMARKS {
-        shift.mark_in(GlobalMarks::at(i).fmark(), fnum);
+    shift.mark(&mut b.b_last_insert);
+    shift.mark(&mut b.b_last_change);
+    if prompt {
+        shift.mark(&mut b.b_prompt_start);
     }
-    shift.mark(buf.last_insert());
-    shift.mark(buf.last_change());
-    if buf_is_prompt(Some(buf)) {
-        shift.mark(buf.prompt_start());
-    }
-    for change in buf.changes() {
+    let len = slot(b.b_changelistlen);
+    for change in &mut b.b_changelist[..len] {
         shift.mark(change);
     }
-    shift.col(&mut buf.b_visual.vi_start);
-    shift.col(&mut buf.b_visual.vi_end);
+    shift.col(&mut b.b_visual.vi_start);
+    shift.col(&mut b.b_visual.vi_end);
     shift.col(&mut cur.w_pcmark);
     shift.col(&mut cur.w_prev_pcmark);
     let mut saved = saved_cursor.get();
@@ -472,14 +471,16 @@ pub fn mark_col_adjust(
     // `curtab == curtab ? firstwin : curtab->tp_firstwin`, a transpiler
     // tautology that always takes `firstwin`.
     for mut win in windows() {
-        for jump in win.jumps() {
-            shift.mark_in(jump.fmark(), fnum);
+        let len = slot(win.w_jumplistlen);
+        for jump in &mut win.w_jumplist[..len] {
+            shift.mark_in(&mut jump.fmark, fnum);
         }
         if win.w_buffer != buf {
             continue;
         }
-        for tag in win.tag_marks() {
-            shift.mark_in(tag, fnum);
+        let len = slot(win.w_tagstacklen);
+        for tag in &mut win.w_tagstack[..len] {
+            shift.mark_in(&mut tag.fmark, fnum);
         }
         if !win.is_current() {
             let mut cursor = win.w_cursor;
