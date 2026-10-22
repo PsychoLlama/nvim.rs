@@ -116,6 +116,18 @@ fn init_editor() {
         }
         neovim::lua::executor::nlua_init(&[], -1);
         neovim::drawscreen::default_grid_alloc();
+        // The first change to the shared buffer opens a swap file, and the
+        // process exits without closing it. In the user's own 'directory'
+        // every run left one more `crates%nvim.s??` behind, until the names
+        // ran out and the next case to edit stopped at E326's hit-enter
+        // prompt. A directory of the suite's own, emptied per run, instead;
+        // the option oracle pins 'directory' and puts it back.
+        let swap = Path::new(env!("CARGO_TARGET_TMPDIR")).join("unit-swap");
+        let _ = std::fs::remove_dir_all(&swap);
+        if std::fs::create_dir_all(&swap).is_ok() {
+            let line = format!("set directory={}//", swap.display());
+            let _ = neovim::ex_docmd::do_cmdline_cmd(&cstr(line));
+        }
     });
 }
 
