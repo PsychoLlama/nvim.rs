@@ -57,6 +57,7 @@ mod log;
 mod map;
 mod mapping;
 mod mapping_oracle;
+mod mark;
 mod marktree;
 // `match/` is a keyword's directory: the raw identifier names `match.rs`.
 mod r#match;

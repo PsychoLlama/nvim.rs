@@ -585,7 +585,7 @@ fn reading_a_file_packed_by_hand() {
 
 /// One entry of a hand-built file: `typ`, the timestamp `ts` as a uint32,
 /// and the payload's length as a fixint, uint8 or uint16.
-fn entry_bytes(typ: u8, ts: u32, payload: &[u8]) -> Vec<u8> {
+pub(crate) fn entry_bytes(typ: u8, ts: u32, payload: &[u8]) -> Vec<u8> {
     let mut out = vec![typ, 0xce];
     out.extend_from_slice(&ts.to_be_bytes());
     let len = payload.len();
@@ -602,14 +602,14 @@ fn entry_bytes(typ: u8, ts: u32, payload: &[u8]) -> Vec<u8> {
 }
 
 /// A msgpack bin8 holding `bytes`.
-fn bin(bytes: &[u8]) -> Vec<u8> {
+pub(crate) fn bin(bytes: &[u8]) -> Vec<u8> {
     let mut out = vec![0xc4, u8::try_from(bytes.len()).expect("short")];
     out.extend_from_slice(bytes);
     out
 }
 
 /// A fixmap of `pairs`, each already encoded.
-fn map(pairs: &[(&[u8], Vec<u8>)]) -> Vec<u8> {
+pub(crate) fn map(pairs: &[(&[u8], Vec<u8>)]) -> Vec<u8> {
     let mut out = vec![0x80 | u8::try_from(pairs.len()).expect("few")];
     for (key, value) in pairs {
         out.push(0xa0 | u8::try_from(key.len()).expect("short"));
@@ -1267,4 +1267,158 @@ fn writing_over_an_unreadable_file() {
     );
     assert_eq!(left, ["locked.shada"]);
     restore(&fx);
+}
+
+/// Marks read with extra data (a global mark, a local one, a change and a
+/// jump, all in one file), then moved by `:move`, undo, redo and a
+/// deletion before the file is written back: which extras survive, and
+/// where each mark ends up. A local mark's extra is dropped the first time
+/// an undo step is saved -- the undo header keeps a copy of the marks, and
+/// upstream will not let two copies own one payload.
+#[test]
+fn mark_extra_data_under_edits() {
+    let sandbox = Sandbox::dir("shada_mark_extra");
+    let dir = sandbox.as_str().to_owned();
+    let fname = format!("{dir}/f.txt");
+    sandbox.write("f.txt", b"l1\nl2\nl3\nl4\nl5\nl6\n");
+    let extra = (&b"zz"[..], vec![0x07]);
+    let ts = 1_000_000_000;
+    let mut file = Vec::new();
+    for (typ, name, line) in [
+        (7, Some(b'G'), 4),
+        (10, Some(b'b'), 4),
+        (10, Some(b'c'), 5),
+        (11, None, 4),
+        (8, None, 5),
+    ] {
+        let mut pairs = vec![(&b"f"[..], bin(fname.as_bytes())), (b"l", vec![line])];
+        if let Some(name) = name {
+            pairs.push((b"n", vec![name]));
+        }
+        pairs.push(extra.clone());
+        file.extend(entry_bytes(typ, ts, &map(&pairs)));
+    }
+    sandbox.write("in.shada", &file);
+    let sync = "let &undolevels = &undolevels";
+    let stderr = child(
+        sandbox.root(),
+        &[
+            "-i",
+            "in.shada",
+            "--cmd",
+            "set shada='10,f1",
+            "-c",
+            "edit f.txt",
+            "-c",
+            "3,4move 6",
+            "-c",
+            sync,
+            "-c",
+            "silent undo",
+            "-c",
+            "silent redo",
+            "-c",
+            "1delete",
+            "-c",
+            sync,
+            "-c",
+            "wshada! out.shada",
+            "-c",
+            "set shada=",
+            "-c",
+            "qa!",
+        ],
+    );
+    assert_eq!(stderr, "");
+    let got: Vec<String> = file_entries(&sandbox.path("out.shada"), &dir)
+        .into_iter()
+        .filter(|entry| entry.contains("<DIR>/f.txt"))
+        .collect();
+    assert_eq!(
+        got.join("\n").lines().collect::<Vec<_>>(),
+        [
+            "type=7 masked <TS> len=<DIR>+21",
+            "  fixmap {4}",
+            "    fixstr 'f'",
+            "    bin8 '<DIR>/f.txt'",
+            "    fixstr 'l'",
+            "    fixint 6",
+            "    fixstr 'n'",
+            "    fixint 71",
+            "    fixstr 'zz'",
+            "    fixint 7",
+            "type=7 masked <TS> len=<DIR>+14",
+            "  fixmap {2}",
+            "    fixstr 'f'",
+            "    bin8 '<DIR>/f.txt'",
+            "    fixstr 'n'",
+            "    fixint 48",
+            "type=8 masked <TS> len=<DIR>+14",
+            "  fixmap {2}",
+            "    fixstr 'f'",
+            "    bin8 '<DIR>/f.txt'",
+            "    fixstr 'l'",
+            "    fixint 6",
+            "type=8 masked <TS> len=<DIR>+14",
+            "  fixmap {2}",
+            "    fixstr 'f'",
+            "    bin8 '<DIR>/f.txt'",
+            "    fixstr 'l'",
+            "    fixint 2",
+            "type=8 masked <TS> len=<DIR>+14",
+            "  fixmap {2}",
+            "    fixstr 'f'",
+            "    bin8 '<DIR>/f.txt'",
+            "    fixstr 'l'",
+            "    fixint 5",
+            "type=8 masked <TS> len=<DIR>+11",
+            "  fixmap {1}",
+            "    fixstr 'f'",
+            "    bin8 '<DIR>/f.txt'",
+            "type=10 masked <TS> len=<DIR>+17",
+            "  fixmap {3}",
+            "    fixstr 'f'",
+            "    bin8 '<DIR>/f.txt'",
+            "    fixstr 'l'",
+            "    fixint 5",
+            "    fixstr 'n'",
+            "    fixint 98",
+            "type=10 masked <TS> len=<DIR>+17",
+            "  fixmap {3}",
+            "    fixstr 'f'",
+            "    bin8 '<DIR>/f.txt'",
+            "    fixstr 'l'",
+            "    fixint 2",
+            "    fixstr 'n'",
+            "    fixint 99",
+            "type=10 masked <TS> len=<DIR>+11",
+            "  fixmap {1}",
+            "    fixstr 'f'",
+            "    bin8 '<DIR>/f.txt'",
+            "type=10 masked <TS> len=<DIR>+14",
+            "  fixmap {2}",
+            "    fixstr 'f'",
+            "    bin8 '<DIR>/f.txt'",
+            "    fixstr 'n'",
+            "    fixint 46",
+            "type=11 masked <TS> len=<DIR>+18",
+            "  fixmap {3}",
+            "    fixstr 'f'",
+            "    bin8 '<DIR>/f.txt'",
+            "    fixstr 'l'",
+            "    fixint 6",
+            "    fixstr 'zz'",
+            "    fixint 7",
+            "type=11 masked <TS> len=<DIR>+14",
+            "  fixmap {2}",
+            "    fixstr 'f'",
+            "    bin8 '<DIR>/f.txt'",
+            "    fixstr 'l'",
+            "    fixint 2",
+            "type=11 masked <TS> len=<DIR>+11",
+            "  fixmap {1}",
+            "    fixstr 'f'",
+            "    bin8 '<DIR>/f.txt'",
+        ]
+    );
 }
