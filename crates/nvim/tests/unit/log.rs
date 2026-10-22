@@ -33,7 +33,12 @@ use crate::support::Sandbox;
 /// wherever this left it. A deleted sandbox directory would make each of
 /// them fail to open and complain on stderr, so the way out is a file in the
 /// system temp directory that outlives every case.
-struct Logging;
+///
+/// It also opens every level for the case — a release build starts at WRN —
+/// and puts the build's own minimum back on the way out.
+struct Logging {
+    min_level: c_int,
+}
 
 impl Logging {
     /// `$NVIM_LOG_FILE` = `path`, then re-decide the log file.
@@ -41,12 +46,15 @@ impl Logging {
         sandbox.set_env("NVIM_LOG_FILE", path.to_str().expect("a temp path is text"));
         sandbox.remember_env("__NVIM_LOG_FILE_WANT");
         log_init();
-        Logging
+        let min_level = g_min_log_level.get();
+        g_min_log_level.set(0);
+        Logging { min_level }
     }
 }
 
 impl Drop for Logging {
     fn drop(&mut self) {
+        g_min_log_level.set(self.min_level);
         let parking = std::env::temp_dir().join("nvim-unit-log-parking.log");
         // SAFETY-free: this is the test's own process environment, and the
         // editor lock is still held by the case's sandbox.
@@ -303,7 +311,9 @@ fn resolve(_sandbox: &mut Sandbox) -> (Option<PathBuf>, Option<PathBuf>) {
 #[test]
 fn the_log_file_falls_back_one_step_at_a_time() {
     let mut sandbox = Sandbox::dir("log-fallback");
-    let _logging = Logging {};
+    let _logging = Logging {
+        min_level: g_min_log_level.get(),
+    };
     let root = sandbox.root().to_path_buf();
     sandbox.remember_env("NVIM_LOG_FILE");
     sandbox.remember_env("__NVIM_LOG_FILE_WANT");

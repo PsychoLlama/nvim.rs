@@ -44,7 +44,7 @@ use crate::getchar::{
 };
 use crate::global_cell::GlobalCell;
 use crate::insexpand::{ctrl_x_mode_not_defined_yet, ins_compl_active};
-use crate::log::{LOGLVL_DBG, logmsg};
+use crate::log::{LOG_DEBUG, LOGLVL_DBG, logmsg};
 use crate::message::state::need_wait_return;
 use crate::message_fmt::{c_str, msg_cstr};
 use crate::normal::{
@@ -191,16 +191,20 @@ pub(crate) fn state_enter(mut s: ModeState<'_>) {
                 check_end_reg_executing(true);
                 may_sync_undo();
             }
-            let keyname_buf;
-            let keyname = if key == Key::Event.code() {
-                c"K_EVENT".as_ptr()
-            } else {
-                keyname_buf = get_special_key_name(key, mod_mask.get());
-                keyname_buf.as_ptr()
-            };
-            // SAFETY: the name just rendered into this frame's buffer.
-            let keyname = unsafe { c_str(keyname) };
-            logmsg!(LOGLVL_DBG, c"state_enter", 97, "input: {keyname}");
+            // Upstream's `#ifdef NVIM_LOG_DEBUG`: the key's name is rendered
+            // only for a build that logs it.
+            if LOG_DEBUG {
+                let keyname_buf;
+                let keyname = if key == Key::Event.code() {
+                    c"K_EVENT".as_ptr()
+                } else {
+                    keyname_buf = get_special_key_name(key, mod_mask.get());
+                    keyname_buf.as_ptr()
+                };
+                // SAFETY: the name just rendered into this frame's buffer.
+                let keyname = unsafe { c_str(keyname) };
+                logmsg!(LOGLVL_DBG, c"state_enter", 97, "input: {keyname}");
+            }
             let execute_result = s.execute(key);
             if execute_result == 0 {
                 break 'state;

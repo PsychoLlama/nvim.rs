@@ -73,7 +73,27 @@ use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
-pub static g_min_log_level: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
+/// Whether DBG and INF lines exist at all: upstream's `NVIM_LOG_DEBUG`,
+/// which its CMake defines for Debug builds only. Without it `DLOG`/`ILOG`
+/// expand to nothing and the level starts at WRN, so a release build never
+/// renders, opens or writes a line below WRN (the per-key `input:` line made
+/// a long session's log grow without bound, and cost a `getenv` and a file
+/// open per key).
+pub(crate) const LOG_DEBUG: bool = cfg!(debug_assertions);
+
+/// Whether a [`logmsg!`]/[`logmsg_tagged!`] line at `log_level` is compiled
+/// in. Every call site names its level as a constant, so this folds and the
+/// line, its payload and whatever it formats vanish from a release build.
+/// A level only known at run time (upstream's `LOG(level, …)`) goes to
+/// [`logmsg_line`] directly instead, which filters by [`g_min_log_level`].
+#[inline(always)]
+pub(crate) const fn compiled_in(log_level: c_int) -> bool {
+    LOG_DEBUG || log_level >= LOGLVL_WRN
+}
+
+/// The lowest level written. Lowered at run time only by `vim._with`.
+pub static g_min_log_level: GlobalCell<c_int> =
+    GlobalCell::new(if LOG_DEBUG { 0 } else { LOGLVL_WRN });
 pub(crate) static g_stats: GlobalCell<nvim_stats_s> = GlobalCell::new(nvim_stats_s {
     fsync: 0 as int64_t,
     redraw: 0 as int64_t,
@@ -414,17 +434,24 @@ pub fn logmsg_line(
 ///
 /// `who` is a `CStr` literal — the upstream function name, which the log
 /// prefix prints with the line number.
+///
+/// `$level` is a constant: a DBG or INF line is upstream's `DLOG`/`ILOG`
+/// and is compiled out without [`LOG_DEBUG`](crate::log::LOG_DEBUG).
 #[macro_export]
 macro_rules! logmsg {
     ($level:expr, $who:expr, $line:expr, $($fmt:tt)*) => {
-        $crate::log::logmsg_line(
-            $level,
-            ::core::option::Option::None,
-            ::core::option::Option::Some($who),
-            $line,
-            true,
-            || ::std::format!($($fmt)*),
-        )
+        if $crate::log::compiled_in($level) {
+            $crate::log::logmsg_line(
+                $level,
+                ::core::option::Option::None,
+                ::core::option::Option::Some($who),
+                $line,
+                true,
+                || ::std::format!($($fmt)*),
+            )
+        } else {
+            false
+        }
     };
 }
 
@@ -437,14 +464,18 @@ macro_rules! logmsg {
 #[macro_export]
 macro_rules! logmsg_tagged {
     ($level:expr, $tag:expr, $eol:expr, $($fmt:tt)*) => {
-        $crate::log::logmsg_line(
-            $level,
-            ::core::option::Option::Some($tag),
-            ::core::option::Option::None,
-            -1,
-            $eol,
-            || ::std::format!($($fmt)*),
-        )
+        if $crate::log::compiled_in($level) {
+            $crate::log::logmsg_line(
+                $level,
+                ::core::option::Option::Some($tag),
+                ::core::option::Option::None,
+                -1,
+                $eol,
+                || ::std::format!($($fmt)*),
+            )
+        } else {
+            false
+        }
     };
 }
 

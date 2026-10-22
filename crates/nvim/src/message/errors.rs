@@ -29,7 +29,7 @@
 use super::*;
 use crate::event::r#loop::schedule_deferred_job;
 use crate::guard::Suppress;
-use crate::log::logmsg;
+use crate::log::{LOG_DEBUG, logmsg};
 use crate::message_fmt::{msg_bytes as text_arg, msg_cstr};
 use crate::runtime::{estack_sfile, sourcing_lnum, sourcing_name_copy, with_sourcing_name};
 use crate::strings::has_char;
@@ -184,41 +184,45 @@ pub fn emsg_multiline(s: &CStr, kind: Option<&CStr>, hl_id: c_int, multiline: bo
                 write_line(emsg_lnum_line());
                 redir_write(s.to_bytes());
             }
+            if LOG_DEBUG {
+                let text = msg_cstr(s);
+                let lnum = sourcing_lnum();
+                with_sourcing_name(|name| match name {
+                    Some(name) if lnum != 0 => {
+                        let name = text_arg(name);
+                        logmsg!(
+                            LOGLVL_DBG,
+                            c"emsg_multiline",
+                            845,
+                            "(:silent) {text} ({name} (line {lnum}))"
+                        );
+                    }
+                    _ => {
+                        logmsg!(LOGLVL_DBG, c"emsg_multiline", 847, "(:silent) {text}");
+                    }
+                });
+            }
+            return true;
+        }
+
+        if LOG_DEBUG {
             let text = msg_cstr(s);
             let lnum = sourcing_lnum();
             with_sourcing_name(|name| match name {
                 Some(name) if lnum != 0 => {
                     let name = text_arg(name);
                     logmsg!(
-                        LOGLVL_DBG,
+                        LOGLVL_INF,
                         c"emsg_multiline",
-                        845,
-                        "(:silent) {text} ({name} (line {lnum}))"
+                        855,
+                        "{text} ({name} (line {lnum}))"
                     );
                 }
                 _ => {
-                    logmsg!(LOGLVL_DBG, c"emsg_multiline", 847, "(:silent) {text}");
+                    logmsg!(LOGLVL_INF, c"emsg_multiline", 857, "{text}");
                 }
             });
-            return true;
         }
-
-        let text = msg_cstr(s);
-        let lnum = sourcing_lnum();
-        with_sourcing_name(|name| match name {
-            Some(name) if lnum != 0 => {
-                let name = text_arg(name);
-                logmsg!(
-                    LOGLVL_INF,
-                    c"emsg_multiline",
-                    855,
-                    "{text} ({name} (line {lnum}))"
-                );
-            }
-            _ => {
-                logmsg!(LOGLVL_INF, c"emsg_multiline", 857, "{text}");
-            }
-        });
 
         ex_exitval.set(1);
 

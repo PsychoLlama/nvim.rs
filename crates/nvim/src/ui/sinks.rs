@@ -176,6 +176,11 @@ pub(super) fn log_event(name: &'static CStr) {
     static seen: GlobalCell<usize> = GlobalCell::new(0);
     static last_event: GlobalCell<Option<&'static CStr>> = GlobalCell::new(None);
 
+    // Upstream's `UI_LOG` is empty without `NVIM_LOG_DEBUG`, run tracking
+    // included.
+    if !crate::log::LOG_DEBUG {
+        return;
+    }
     if last_event
         .get()
         .is_some_and(|previous| core::ptr::eq(previous, name))

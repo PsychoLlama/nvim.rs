@@ -131,7 +131,7 @@ use crate::api_error;
 use crate::ex_docmd::expr_map_locked;
 use crate::ex_getln::{get_text_locked_msg, text_locked};
 use crate::guard::textlock;
-use crate::log::logmsg_line;
+use crate::log::logmsg;
 use crate::message::e_textlock;
 use crate::message_fmt::msg_cstr;
 use crate::types::{
@@ -163,13 +163,16 @@ mod known {
 
 use known::*;
 
-/// One "RPC: ch N: invoke nvim_foo" debug line. Below the configured log
-/// level — the default — this is a load and a compare.
+/// One "RPC: ch N: invoke nvim_foo" debug line: upstream's `DLOG` under
+/// `#ifdef NVIM_LOG_DEBUG`, so a release build compiles it out.
 fn log_invoke(handler: &'static CStr, method: &CStr, line: c_int, channel_id: uint64_t) {
     let method = msg_cstr(method);
-    logmsg_line(LOGLVL_DBG, None, Some(handler), line, true, || {
-        format!("RPC: ch {channel_id}: invoke {method}")
-    });
+    logmsg!(
+        LOGLVL_DBG,
+        handler,
+        line,
+        "RPC: ch {channel_id}: invoke {method}"
+    );
 }
 
 /// Refuses a call that arrived with the wrong number of arguments.

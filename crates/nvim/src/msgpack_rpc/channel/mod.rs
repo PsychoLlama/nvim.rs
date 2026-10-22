@@ -47,7 +47,7 @@ use crate::event::multiqueue::multiqueue_put_event;
 use crate::event::proc::exit_on_closed_chan;
 use crate::event::rstream::rstream_start;
 use crate::event::wstream::{wstream_release_wbuffer, wstream_write};
-use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_INF, logmsg};
+use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_INF, logmsg, logmsg_line};
 use crate::memory::{arena_finish, arena_mem_free, xcalloc, xfree};
 use crate::msgpack_rpc::unpacker::{unpacker_init, unpacker_teardown};
 use crate::registry::SlotTable;
@@ -338,7 +338,16 @@ unsafe fn chan_close_on_err(chan: Chan, msg: *mut c_char, loglevel: c_int) {
     unsafe { channel_close(chan.id, kChannelPartRpc, ptr::null_mut()) };
     // SAFETY: the caller's message, NUL-terminated.
     let msg = unsafe { c_str(msg) };
-    logmsg!(loglevel, c"chan_close_on_err", 545, "RPC: {msg}");
+    // Upstream's `LOG(loglevel, …)`: a level known only at run time, so the
+    // line is filtered by the minimum level rather than compiled out.
+    logmsg_line(
+        loglevel,
+        None,
+        Some(c"chan_close_on_err"),
+        545,
+        true,
+        || format!("RPC: {msg}"),
+    );
 }
 
 // ---------------------------------------------------------------------------
