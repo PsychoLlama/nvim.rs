@@ -1,13 +1,12 @@
 //! Keeping the fold tree in step with the buffer: the motions that jump
-//! between folds, and the arithmetic that repairs `fd_top`/`fd_len` after
-//! lines are inserted, deleted or moved.
+//! between folds, and the arithmetic that repairs `top`/`len` after lines are
+//! inserted, deleted or moved.
 //!
-//! Every entry point here walks the tree through [`FoldList`] and [`FoldRef`],
-//! so the pointer arithmetic that used to be spelled out at each site now
-//! happens once, in [`super::list`].
+//! The arithmetic is pure: every function below that takes a `&mut Vec<Fold>`
+//! touches that list and its nested ones and nothing else, which is what lets
+//! a caller lend it a window's `w_folds` for the length of the call.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -16,7 +15,6 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::garray::{ga_grow, ga_init};
 use crate::mark::setpcmark;
 use crate::mbyte::mb_adjust_cursor;
 use crate::option::vars::P_SEL;
@@ -24,7 +22,6 @@ use crate::pos::{MAXLNUM, ltoreq};
 use crate::state::mode::State;
 use crate::winlayer::Win;
 use core::ffi::c_int;
-use core::ptr;
 
 use super::open_close::*;
 use super::*;
@@ -39,97 +36,95 @@ use crate::state::MODE_INSERT;
 /// `dir` — FORWARD or BACKWARD
 pub fn fold_move_to(updown: bool, dir: c_int, count: c_int) -> c_int {
     let mut retval: c_int = FAIL;
+    let forward = dir == FORWARD as c_int;
     checkupdate(Win::current());
     for _ in 0..count {
-        let mut folds = window_folds(Win::current());
-        if folds.is_empty() {
+        let win = Win::current();
+        if win.w_folds.is_empty() {
             break;
         }
-        let cursor = Win::current().w_cursor.lnum;
+        let cursor = win.w_cursor.lnum;
         let mut lnum_off: LineNr = 0;
         let mut use_level = false;
         let mut maybe_small = false;
         let mut lnum_found = cursor;
         let mut level = 0;
-        let mut last = false;
+        // The walk only descends through folds that contain the cursor, so
+        // the cursor line and the depth find its list again after the
+        // tree has been let go of.
+        let mut depth = 0;
         loop {
-            let idx = match folds.find(cursor - lnum_off) {
-                Ok(i) => i,
-                Err(i) => {
-                    if !updown || folds.is_empty() {
-                        break;
-                    }
-                    last = true;
-                    if dir == FORWARD as c_int {
-                        if i >= folds.len() {
-                            break;
+            // What this level says: the entry the walk stands on (`None`
+            // once there is none to move by), and whether it contains the
+            // cursor.
+            let step = win.with_folds(|root| {
+                let (folds, lnum_rel) = list::list_on_line(root, cursor, depth)?;
+                match find(folds, lnum_rel) {
+                    Ok(i) => Some((i, true)),
+                    Err(i) => {
+                        if !updown || folds.is_empty() {
+                            return None;
                         }
-                        // `i` may be zero, which names the entry one *before*
-                        // the array. Upstream steps the pointer the same way
-                        // and only ever reads its `[1]` afterwards, which is
-                        // the fold the cursor sits above.
-                        i - 1
-                    } else {
-                        if i == 0 {
-                            break;
+                        // `i` is the first fold below the cursor. Upstream
+                        // steps to the entry before it going forward -- one
+                        // before the array when `i` is zero -- and only ever
+                        // reads the entry after that, which is `i` again.
+                        if forward {
+                            (i < folds.len()).then_some((i, false))
+                        } else {
+                            (i > 0).then_some((i, false))
                         }
-                        i
                     }
                 }
-            };
-            let fold = folds.at(idx);
-            if !last {
-                // SAFETY: the current window is live, and `fold` is one of
-                // its own folds, `lnum_off` lines down the tree.
+            });
+            let Some((i, contains)) = step else { break };
+            let mut last = !contains;
+            if contains {
                 let (ul, ms) = (&mut use_level, &mut maybe_small);
-                let closed = check_closed(Win::current(), fold, ul, level, ms, lnum_off);
-                if closed {
+                if closed_at(win, cursor, depth, ul, level, ms, lnum_off) {
                     last = true;
                 }
                 if last && !updown {
                     break;
                 }
             }
-            if updown {
-                if dir == FORWARD as c_int {
-                    if idx + 1 < folds.len() {
-                        let lnum = folds.at(idx + 1).top() + lnum_off;
-                        if lnum > cursor {
-                            lnum_found = lnum;
-                        }
-                    }
-                } else if idx > 0 {
-                    let lnum = folds.at(idx - 1).last() + lnum_off;
-                    if lnum < cursor {
-                        lnum_found = lnum;
-                    }
-                }
-            } else if dir == FORWARD as c_int {
-                let lnum = fold.last() + lnum_off;
-                if lnum > cursor {
-                    lnum_found = lnum;
-                }
-            } else {
-                let lnum = fold.top() + lnum_off;
-                if lnum < cursor {
-                    lnum_found = lnum;
-                }
+            let (found, top) = win.with_folds(|root| {
+                let (folds, _) = list::list_on_line(root, cursor, depth).expect("the walk's list");
+                let found = if updown && forward {
+                    // After a miss `i` is the entry after upstream's `fp`.
+                    let next = if contains { i + 1 } else { i };
+                    folds
+                        .get(next)
+                        .map(|fold| fold.top + lnum_off)
+                        .filter(|&lnum| lnum > cursor)
+                } else if updown {
+                    i.checked_sub(1)
+                        .map(|prev| folds[prev].last() + lnum_off)
+                        .filter(|&lnum| lnum < cursor)
+                } else if forward {
+                    Some(folds[i].last() + lnum_off).filter(|&lnum| lnum > cursor)
+                } else {
+                    Some(folds[i].top + lnum_off).filter(|&lnum| lnum < cursor)
+                };
+                // A miss may stand one past the end; it ends the walk anyway.
+                (found, if contains { folds[i].top } else { 0 })
+            });
+            if let Some(lnum) = found {
+                lnum_found = lnum;
             }
             if last {
                 break;
             }
-            folds = fold.nested();
-            lnum_off += fold.top();
+            lnum_off += top;
             level += 1;
+            depth += 1;
         }
         if lnum_found == cursor {
             break;
         }
         if retval == FAIL {
-            // SAFETY: the caller's promise.
             setpcmark();
         }
-        // SAFETY: the caller's promise.
         Win::current().w_cursor.lnum = lnum_found;
         Win::current().w_cursor.col = 0;
         retval = OK;
@@ -180,7 +175,6 @@ pub fn fold_adjust_visual() {
         true
     });
     if stretched {
-        // SAFETY: the caller's promise.
         mb_adjust_cursor();
     }
 }
@@ -214,10 +208,13 @@ pub fn fold_mark_adjust(
     if State.get() & MODE_INSERT != 0 && amount == 1 && line2 == MAXLNUM {
         line1 -= 1;
     }
-    adjust_fold_list(window_folds(window), line1, line2, amount, amount_after);
+    let insert_mode = State.get() & MODE_INSERT != 0;
+    window.with_folds(|folds| {
+        adjust_folds(folds, line1, line2, amount, amount_after, insert_mode);
+    });
 }
 
-/// Shift and truncate the folds of `gap` for a change to lines
+/// Shift and truncate the folds of `folds` for a change to lines
 /// `line1..=line2`.
 ///
 /// `amount` is how far a fold *inside* the range moves, or [`LINES_DELETED`]
@@ -225,95 +222,104 @@ pub fn fold_mark_adjust(
 /// the range moves. Every fold falls into one of six situations, marked in
 /// the body.
 ///
-/// Safe: [`FoldList`] already carries the promise that the growarray really
-/// is a live list of folds, which was this function's whole precondition --
-/// see [`fold_mark_adjust_recurse`] for the entry point that still takes the
-/// growarray itself.
-pub(super) fn adjust_fold_list(
-    folds: FoldList,
+/// Upstream's `foldMarkAdjustRecurse`, and what the unit lane reaches
+/// (`crates/nvim/tests/unit/fold.rs`).
+pub fn adjust_fold_list(
+    folds: &mut Vec<Fold>,
     line1: LineNr,
     line2: LineNr,
     amount: LineNr,
     amount_after: LineNr,
+) {
+    let insert_mode = State.get() & MODE_INSERT != 0;
+    adjust_folds(folds, line1, line2, amount, amount_after, insert_mode);
+}
+
+/// [`adjust_fold_list`] with the Insert-mode test made once, by the caller.
+fn adjust_folds(
+    folds: &mut Vec<Fold>,
+    line1: LineNr,
+    line2: LineNr,
+    amount: LineNr,
+    amount_after: LineNr,
+    insert_mode: bool,
 ) {
     if folds.is_empty() {
         return;
     }
     // In Insert mode a fold that starts exactly where the line is being
     // inserted keeps its top, so the new line lands above it.
-    let top = if State.get() & MODE_INSERT != 0 && amount == 1 && line2 == MAXLNUM {
+    let top = if insert_mode && amount == 1 && line2 == MAXLNUM {
         line1 + 1
     } else {
         line1
     };
-    let mut i = match folds.find(line1) {
-        Ok(i) | Err(i) => i,
-    };
+    let mut i = find_at_or_below(folds, line1);
     while i < folds.len() {
-        // Re-derived rather than stepped, because the delete branch below
-        // leaves `i` naming a *different* fold. Upstream walked a pointer and
-        // wrote `fp--` after deleting entry zero, which is one before the
-        // array — out of bounds even though it never dereferenced it.
-        let fold = folds.at(i);
+        let fold = &mut folds[i];
         let last = fold.last();
         if last >= line1 {
-            if fold.top() > line2 {
+            if fold.top > line2 {
                 // 1: entirely below the change, so only its start moves.
                 if amount_after == 0 {
                     break;
                 }
-                fold.set_top(fold.top() + amount_after);
-            } else if fold.top() >= top && last <= line2 {
+                fold.top += amount_after;
+            } else if fold.top >= top && last <= line2 {
                 // 2: entirely inside the change.
                 if amount == LINES_DELETED {
-                    // SAFETY: `i` names an entry of `folds`.
-                    drop_fold(folds, i, true);
+                    delete_fold_entry(folds, i, true);
                     // The fold that took its place is next; do not advance.
-                    // `folds.len()` shrank, so the walk still terminates.
                     continue;
                 }
-                fold.set_top(fold.top() + amount);
-            } else if fold.top() < top {
+                fold.top += amount;
+            } else if fold.top < top {
                 // 3: starts above the change and reaches into it.
-                adjust_fold_list(
-                    fold.nested(),
-                    line1 - fold.top(),
-                    line2 - fold.top(),
+                let ft = fold.top;
+                adjust_folds(
+                    &mut fold.nested,
+                    line1 - ft,
+                    line2 - ft,
                     amount,
                     amount_after,
+                    insert_mode,
                 );
                 if last <= line2 {
                     if amount == LINES_DELETED {
-                        fold.set_len(line1 - fold.top());
+                        fold.len = line1 - ft;
                     } else {
-                        fold.set_len(fold.len() + amount);
+                        fold.len += amount;
                     }
                 } else {
-                    fold.set_len(fold.len() + amount_after);
+                    fold.len += amount_after;
                 }
             } else if amount == LINES_DELETED {
                 // 4: starts inside the change and ends below it, and the
                 //    lines it loses are gone for good.
-                adjust_fold_list(
-                    fold.nested(),
+                let ft = fold.top;
+                adjust_folds(
+                    &mut fold.nested,
                     0,
-                    line2 - fold.top(),
+                    line2 - ft,
                     amount,
-                    amount_after + (fold.top() - top),
+                    amount_after + (ft - top),
+                    insert_mode,
                 );
-                fold.set_len(fold.len() - (line2 - fold.top() + 1));
-                fold.set_top(line1);
+                fold.len -= line2 - ft + 1;
+                fold.top = line1;
             } else {
                 // 5: the same, but the lines only moved.
-                adjust_fold_list(
-                    fold.nested(),
+                let ft = fold.top;
+                adjust_folds(
+                    &mut fold.nested,
                     0,
-                    line2 - fold.top(),
+                    line2 - ft,
                     amount,
                     amount_after - amount,
+                    insert_mode,
                 );
-                fold.set_len(fold.len() + amount_after - amount);
-                fold.set_top(fold.top() + amount);
+                fold.len += amount_after - amount;
+                fold.top += amount;
             }
         }
         // 6: entirely above the change — nothing to do.
@@ -321,65 +327,32 @@ pub(super) fn adjust_fold_list(
     }
 }
 
-/// Insert a new fold in `folds` at position `i`.
-///
-/// # Safety
-/// `i` must be in `0..=folds.len()`.
-pub(super) unsafe fn fold_insert(folds: FoldList, i: c_int) {
-    // SAFETY: a live fold list.
-    unsafe { ga_grow(folds.gap(), 1) };
-    let fold = folds.at(i);
-    if !folds.is_empty() && i < folds.len() {
-        // SAFETY: `ga_grow` just made room for one more entry, so the tail
-        // has somewhere to slide to.
-        let tail = usize::try_from(folds.len() - i)
-            .expect("the guard keeps the sliding tail non-negative");
-        unsafe { ptr::copy(fold.entry(), fold.entry().add(1), tail) };
-    }
-    folds.set_len(folds.len() + 1);
-    let item_size = c_int::try_from(size_of::<Fold>()).expect("a fold is smaller than an int");
-    // SAFETY: the entry is the zeroed storage `ga_grow` handed out; this is
-    // the call that makes its `fd_nested` a fold list.
-    unsafe { ga_init(fold.nested().gap(), item_size, 10) };
-}
-
 /// Split the "i"th fold in `folds`, which starts before "top" and ends below
 /// "bot" in two pieces, one ending above "top" and the other starting below
 /// "bot".
 /// The caller must first have taken care of any nested folds from "top" to
 /// "bot"!
-///
-/// # Safety
-/// `i` must name an entry of `folds`.
-pub(super) unsafe fn fold_split(folds: FoldList, i: c_int, top: LineNr, bot: LineNr) {
-    // SAFETY: `i + 1` is in `0..=folds.len()`.
-    unsafe { fold_insert(folds, i + 1) };
-    let fold = folds.at(i);
-    let below = folds.at(i + 1);
-    below.set_top(bot + 1);
-    debug_assert!(below.top() > bot, "below.top() > bot");
-    below.set_len(fold.len() - (below.top() - fold.top()));
-    below.set_flags(fold.flags());
-    below.set_small(None);
-    fold.set_small(None);
-    // Hand the nested folds that start below "bot" to the new second half.
-    let (inner, outer) = (fold.nested(), below.nested());
-    let first = match inner.find(bot + 1 - fold.top()) {
-        Ok(k) | Err(k) => k,
-    };
-    let moved = inner.len() - first;
-    if moved > 0 {
-        // SAFETY: a live fold list.
-        unsafe { ga_grow(outer.gap(), moved) };
-        for k in 0..moved {
-            let dst = outer.at(k);
-            dst.write(inner.at(first + k).read());
-            dst.set_top(dst.top() - (below.top() - fold.top()));
-        }
-        outer.set_len(moved);
-        inner.set_len(inner.len() - moved);
+pub(super) fn fold_split(folds: &mut Vec<Fold>, i: usize, top: LineNr, bot: LineNr) {
+    let fold = &mut folds[i];
+    let below_top = bot + 1;
+    debug_assert!(below_top > bot, "below.top > bot");
+    // Hand the nested folds that start below "bot" to the new second half,
+    // relative to it.
+    let first = find_at_or_below(&fold.nested, below_top - fold.top);
+    let mut moved = fold.nested.split_off(first);
+    for child in &mut moved {
+        child.top -= below_top - fold.top;
     }
-    fold.set_len(top - fold.top());
+    let below = Fold {
+        top: below_top,
+        len: fold.len - (below_top - fold.top),
+        nested: moved,
+        state: fold.state,
+        small: None,
+    };
+    fold.small = None;
+    fold.len = top - fold.top;
+    folds.insert(i + 1, below);
     fold_changed.set(true);
 }
 
@@ -399,28 +372,25 @@ pub(super) unsafe fn fold_split(folds: FoldList, i: c_int, top: LineNr, bot: Lin
 /// 4: deleted
 /// 5: made to start below "bot".
 /// 6: not changed
-///
-/// Safe: [`FoldList`] carries the promise about the array, and every index
-/// below is one this function's own search produced.
-pub(super) fn fold_remove(folds: FoldList, top: LineNr, bot: LineNr) {
+pub(super) fn fold_remove(folds: &mut Vec<Fold>, top: LineNr, bot: LineNr) {
     if bot < top {
         return;
     }
     while !folds.is_empty() {
-        let found = folds.find(top);
+        let found = find(folds, top);
         if let Ok(i) = found
-            && folds.at(i).top() < top
+            && folds[i].top < top
         {
-            let fold = folds.at(i);
-            fold_remove(fold.nested(), top - fold.top(), bot - fold.top());
+            let fold = &mut folds[i];
+            let ft = fold.top;
+            fold_remove(&mut fold.nested, top - ft, bot - ft);
             if fold.last() > bot {
                 // 3: split in two, one stopping above "top" and one starting
                 //    below "bot".
-                // SAFETY: `i` names an entry of `folds`.
-                unsafe { fold_split(folds, i, top, bot) };
+                fold_split(folds, i, top, bot);
             } else {
                 // 2: truncate to stop above "top".
-                fold.set_len(top - fold.top());
+                fold.len = top - ft;
             }
             fold_changed.set(true);
             continue;
@@ -428,12 +398,11 @@ pub(super) fn fold_remove(folds: FoldList, top: LineNr, bot: LineNr) {
         let i = match found {
             Ok(i) | Err(i) => i,
         };
-        let fold = folds.at(i);
         // 1 and 6: nothing left in the range.
-        if !folds.has_data() || i >= folds.len() || fold.top() > bot {
+        let Some(fold) = folds.get_mut(i).filter(|fold| fold.top <= bot) else {
             break;
-        }
-        if fold.top() < top {
+        };
+        if fold.top < top {
             // Unreachable: the branch above took every fold that starts above
             // "top", and a miss lands on one that starts strictly below it.
             // Kept because upstream has it, and because it is the shape that
@@ -443,43 +412,22 @@ pub(super) fn fold_remove(folds: FoldList, top: LineNr, bot: LineNr) {
         fold_changed.set(true);
         if fold.last() > bot {
             // 5: made to start below "bot".
-            adjust_fold_list(
-                fold.nested(),
-                0,
-                bot - fold.top(),
-                LINES_DELETED,
-                fold.top() - bot - 1,
-            );
-            fold.set_len(fold.len() - (bot - fold.top() + 1));
-            fold.set_top(bot + 1);
+            let ft = fold.top;
+            adjust_fold_list(&mut fold.nested, 0, bot - ft, LINES_DELETED, ft - bot - 1);
+            fold.len -= bot - ft + 1;
+            fold.top = bot + 1;
             break;
         }
         // 4: deleted.
-        // SAFETY: `i` names an entry of `folds`.
-        drop_fold(folds, i, true);
-    }
-}
-
-/// Reverse the entries `start_arg..=end_arg` of `folds`.
-///
-/// # Safety
-/// Both must name entries of `folds`, unless the range is empty.
-pub(super) unsafe fn fold_reverse_order(folds: FoldList, start_arg: c_int, end_arg: c_int) {
-    let (mut start, mut end) = (start_arg, end_arg);
-    while start < end {
-        // SAFETY: both name entries of the list.
-        unsafe { ptr::swap(folds.at(start).entry(), folds.at(end).entry()) };
-        start += 1;
-        end -= 1;
+        delete_fold_entry(folds, i, true);
     }
 }
 
 /// Drop everything in `fold` below line `end`, nested folds included.
-///
-pub(super) fn truncate_fold(fold: FoldRef, end: LineNr) {
+pub(super) fn truncate_fold(fold: &mut Fold, end: LineNr) {
     let end = end + 1;
-    fold_remove(fold.nested(), end - fold.top(), MAXLNUM);
-    fold.set_len(end - fold.top());
+    fold_remove(&mut fold.nested, end - fold.top, MAXLNUM);
+    fold.len = end - fold.top;
 }
 
 /// Move folds within the inclusive range "line1" to "line2" to after "dest"
@@ -512,35 +460,29 @@ pub(super) fn truncate_fold(fold: FoldRef, end: LineNr) {
 /// 9. shifted up
 /// 10. not changed
 ///
-pub fn fold_move_range(gap: &mut GArray, line1: LineNr, line2: LineNr, dest: LineNr) {
-    // SAFETY: the caller's fold list, lent for the call.
-    let folds = unsafe { FoldList::new(gap) };
+pub fn fold_move_range(folds: &mut [Fold], line1: LineNr, line2: LineNr, dest: LineNr) {
     let range_len = line2 - line1 + 1;
     let move_len = dest - line2;
-    let mut i = match folds.find(line1 - 1) {
+    let mut i = match find(folds, line1 - 1) {
         Ok(i) => {
-            let fold = folds.at(i);
+            let fold = &mut folds[i];
+            let ft = fold.top;
             if fold.last() > dest {
                 // 4: the whole move happens inside this one fold.
-                let inner = fold.nested().gap();
-                let (a, b, d) = (line1 - fold.top(), line2 - fold.top(), dest - fold.top());
-                // SAFETY: the fold's own nested list, which nothing else
-                // holds while the move runs.
-                fold_move_range(unsafe { &mut *inner }, a, b, d);
+                fold_move_range(&mut fold.nested, line1 - ft, line2 - ft, dest - ft);
                 return;
             } else if fold.last() > line2 {
                 // 3: shortened by the lines that left it.
                 adjust_fold_list(
-                    fold.nested(),
-                    line1 - fold.top(),
-                    line2 - fold.top(),
+                    &mut fold.nested,
+                    line1 - ft,
+                    line2 - ft,
                     LINES_DELETED,
                     -range_len,
                 );
-                fold.set_len(fold.len() - range_len);
+                fold.len -= range_len;
             } else {
                 // 2: truncated above line1.
-                // SAFETY: a live window, and one of its folds.
                 truncate_fold(fold, line1 - 1);
             }
             i + 1
@@ -548,60 +490,58 @@ pub fn fold_move_range(gap: &mut GArray, line1: LineNr, line2: LineNr, dest: Lin
         Err(i) => i,
     };
     // 1 and 10: nothing of interest at or below "line1".
-    if folds.is_empty() || i >= folds.len() || folds.at(i).top() > dest {
+    if i >= folds.len() || folds[i].top > dest {
         return;
     }
-    if folds.at(i).top() > line2 {
+    if folds[i].top > line2 {
         // 8 and 9: no fold covers the moved lines, so the folds between them
         // and "dest" simply shift up.
-        while i < folds.len() && folds.at(i).last() <= dest {
-            let fold = folds.at(i);
-            fold.set_top(fold.top() - range_len);
+        while i < folds.len() && folds[i].last() <= dest {
+            folds[i].top -= range_len;
             i += 1;
         }
-        if i < folds.len() && folds.at(i).top() <= dest {
-            let fold = folds.at(i);
-            // SAFETY: a live window, and one of its folds.
+        if let Some(fold) = folds.get_mut(i)
+            && fold.top <= dest
+        {
             truncate_fold(fold, dest);
-            fold.set_top(fold.top() - range_len);
+            fold.top -= range_len;
         }
         return;
     }
-    if folds.at(i).last() > dest {
+    if folds[i].last() > dest {
         // 7: the fold straddles "dest", so it loses the lines that jumped it.
-        let fold = folds.at(i);
+        let fold = &mut folds[i];
+        let ft = fold.top;
         adjust_fold_list(
-            fold.nested(),
-            line2 + 1 - fold.top(),
-            dest - fold.top(),
+            &mut fold.nested,
+            line2 + 1 - ft,
+            dest - ft,
             LINES_DELETED,
             -move_len,
         );
-        fold.set_len(fold.len() - move_len);
-        fold.set_top(fold.top() + move_len);
+        fold.len -= move_len;
+        fold.top += move_len;
         return;
     }
     // 5 and 6: the folds inside the range move down past the ones between
     // them and "dest", which shift up.
     let move_start = i;
     let mut move_end = 0;
-    while i < folds.len() && folds.at(i).top() <= dest {
-        let fold = folds.at(i);
-        if fold.top() <= line2 {
+    while i < folds.len() && folds[i].top <= dest {
+        let fold = &mut folds[i];
+        if fold.top <= line2 {
             if fold.last() > line2 {
-                // SAFETY: a live window, and one of its folds.
                 truncate_fold(fold, line2);
             }
-            fold.set_top(fold.top() + move_len);
+            fold.top += move_len;
         } else {
             if move_end == 0 {
                 move_end = i;
             }
             if fold.last() > dest {
-                // SAFETY: a live window, and one of its folds.
                 truncate_fold(fold, dest);
             }
-            fold.set_top(fold.top() - range_len);
+            fold.top -= range_len;
         }
         i += 1;
     }
@@ -609,69 +549,39 @@ pub fn fold_move_range(gap: &mut GArray, line1: LineNr, line2: LineNr, dest: Lin
     if move_end == 0 {
         return;
     }
-    // Rotate `move_start..dest_index` left by `move_end - move_start`, so the
-    // moved block ends up after the folds it jumped: reverse the whole span,
-    // then reverse each of the two halves back.
-    // SAFETY: all three ranges lie inside `move_start..dest_index`, which the
-    // walk above established as entries of `folds`.
-    unsafe { fold_reverse_order(folds, move_start, dest_index - 1) };
-    unsafe { fold_reverse_order(folds, move_start, move_start + dest_index - move_end - 1) };
-    unsafe { fold_reverse_order(folds, move_start + dest_index - move_end, dest_index - 1) };
+    // The moved block ends up after the folds it jumped. Upstream rotates by
+    // reversing the whole span and then each half back; one rotation is the
+    // same permutation.
+    folds[move_start..dest_index].rotate_left(move_end - move_start);
 }
 
-/// Merge two adjacent folds (and the nested ones in them).
-/// This only works correctly when the folds are really adjacent!  Thus `fold1`
-/// must end just above `fold2`.
-/// The resulting fold is `fold1`, nested folds are moved from `fold2` to
-/// `fold1`. Entry `fold2` in `folds` is deleted.
-///
-/// # Safety
-/// Both must be entries of `folds`.
-pub(super) unsafe fn fold_merge(fold1: FoldRef, folds: FoldList, fold2: FoldRef) {
-    let (inner1, inner2) = (fold1.nested(), fold2.nested());
-    // If the last fold nested in `fold1` touches the first one nested in
-    // `fold2`, those two merge as well.
-    if let (Ok(a), Ok(b)) = (inner1.find(fold1.len() - 1), inner2.find(0)) {
-        // SAFETY: both name entries of their own lists.
-        unsafe { fold_merge(inner1.at(a), inner2, inner2.at(b)) };
-    }
-    if !inner2.is_empty() {
-        // SAFETY: a live fold list.
-        unsafe { ga_grow(inner1.gap(), inner2.len()) };
-        for k in 0..inner2.len() {
-            let dst = inner1.at(inner1.len());
-            dst.write(inner2.at(k).read());
-            dst.set_top(dst.top() + fold1.len());
-            inner1.set_len(inner1.len() + 1);
-        }
-        inner2.set_len(0);
-    }
-    fold1.set_len(fold1.len() + fold2.len());
-    // SAFETY: `fold2` is an entry of `folds`.
-    drop_fold(folds, folds.index_of(fold2), true);
+/// Merge `folds[i]` with the fold after it (and the nested ones in them).
+/// This only works correctly when the folds are really adjacent!  Thus
+/// `folds[i]` must end just above `folds[i + 1]`.
+/// The resulting fold is `folds[i]`, nested folds are moved from the second
+/// to it, and the second is deleted.
+pub(super) fn fold_merge(folds: &mut Vec<Fold>, i: usize) {
+    let mut second = folds.remove(i + 1);
+    merge_into(&mut folds[i], &mut second);
     fold_changed.set(true);
 }
 
-/// C's `deleteFoldEntry`, whose only precondition is that `i` names an entry.
-fn drop_fold(folds: FoldList, i: c_int, recursive: bool) {
-    debug_assert!(i >= 0 && i < folds.len(), "i names an entry of folds");
-    // SAFETY: the assertion above.
-    unsafe { delete_fold_entry(folds, i, recursive) };
-}
-
-/// [`adjust_fold_list`] over a bare growarray: upstream's own entry point,
-/// and what the unit lane reaches (`crates/nvim/tests/unit/fold.rs`).
-///
-/// # Safety
-/// `gap` must be a live fold list -- see [`FoldList::new`].
-pub unsafe fn fold_mark_adjust_recurse(
-    gap: *mut GArray,
-    line1: LineNr,
-    line2: LineNr,
-    amount: LineNr,
-    amount_after: LineNr,
-) {
-    // SAFETY: the caller's promise, which is `FoldList`'s.
-    let folds = unsafe { FoldList::new(gap) };
-    adjust_fold_list(folds, line1, line2, amount, amount_after);
+/// The body of [`fold_merge`]: fold `second`, which starts just below `first`,
+/// into it. `second` is left empty.
+fn merge_into(first: &mut Fold, second: &mut Fold) {
+    // If the last fold nested in `first` touches the first one nested in
+    // `second`, those two merge as well.
+    if let (Ok(a), Ok(b)) = (find(&first.nested, first.len - 1), find(&second.nested, 0)) {
+        let mut touching = second.nested.remove(b);
+        merge_into(&mut first.nested[a], &mut touching);
+        fold_changed.set(true);
+    }
+    let shift = first.len;
+    first
+        .nested
+        .extend(second.nested.drain(..).map(|mut child| {
+            child.top += shift;
+            child
+        }));
+    first.len += second.len;
 }

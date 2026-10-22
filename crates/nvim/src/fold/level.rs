@@ -9,12 +9,22 @@
 //! All of this would be a lot simpler if every fold in the changed range were
 //! deleted and built again, but then a change that does not affect the
 //! folding (`vj~`, say) would still throw away every open/closed state.
+//!
+//! # Holding a place in the tree
+//!
+//! Asking for a level is user code: 'foldexpr' runs Vimscript, and the
+//! syntax and diff getters can run 'diffexpr' or reach the tree through
+//! `foldlevel()`. So the update never holds a reference into the tree across
+//! one. Each level of the recursion names its list by a *path* — the indices
+//! of the folds above it — and the fold it is growing by an index, and takes
+//! the list again from the window after every call out. A 'foldexpr' that
+//! switched to "manual" and ran `zE` leaves a path that no longer resolves;
+//! the update then stops ([`TreeLost`]) rather than write into folds that are
+//! gone, which is what upstream's `fold_T *` did.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::charset::skip;
-use crate::cstr;
 use crate::cstr::byte_at;
 use crate::diff::diff_infold;
 use crate::diff::state::diff_context;
@@ -32,25 +42,54 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::adjust::*;
+use super::list::list_at;
 use super::marker::*;
 use super::*;
-use crate::optionstr::OptString;
 use crate::pos::MAXLNUM;
 
-// The fold-level strategy is dispatched by comparing function addresses, as
-// the C code did; the helper spells the address comparison out so the intent
-// survives the `unpredictable_function_pointer_comparisons` lint.
-pub(super) fn getlevel_is(getlevel: LevelGetter, f: unsafe fn(FLine)) -> bool {
-    getlevel.is_some_and(|g| ::core::ptr::fn_addr_eq(g, f))
+/// Which computed 'foldmethod' an update asks for levels.
+#[derive(Copy, Clone, PartialEq, Eq)]
+enum Method {
+    Indent,
+    Expr,
+    Marker,
+    Syntax,
+    Diff,
 }
 
-/// Whether `getlevel` is one of the three methods whose folds can end
-/// somewhere the line levels alone do not say — so an update has to keep
-/// looking past the changed range.
-fn getlevel_is_open_ended(getlevel: LevelGetter) -> bool {
-    getlevel_is(getlevel, foldlevel_marker)
-        || getlevel_is(getlevel, foldlevel_expr)
-        || getlevel_is(getlevel, foldlevel_syntax)
+impl Method {
+    /// Ask for the level at `line`.
+    fn level(self, line: &mut FoldLine) {
+        match self {
+            Self::Indent => foldlevel_indent(line),
+            Self::Expr => foldlevel_expr(line),
+            Self::Marker => foldlevel_marker(line),
+            Self::Syntax => foldlevel_syntax(line),
+            Self::Diff => foldlevel_diff(line),
+        }
+    }
+
+    /// Whether this is one of the three methods whose folds can end
+    /// somewhere the line levels alone do not say — so an update has to keep
+    /// looking past the changed range.
+    fn is_open_ended(self) -> bool {
+        matches!(self, Self::Marker | Self::Expr | Self::Syntax)
+    }
+}
+
+/// The tree changed shape while a level getter ran, and the update's
+/// positions no longer name anything.
+struct TreeLost;
+
+/// Lend the list `path` names in `win`'s tree to `f`; [`TreeLost`] when the
+/// path no longer resolves.
+fn with_list<R>(
+    win: Win,
+    path: &[usize],
+    f: impl FnOnce(&mut Vec<Fold>) -> R,
+) -> Result<R, TreeLost> {
+    win.with_folds(|root| list_at(root, path).map(f))
+        .ok_or(TreeLost)
 }
 
 /// Update the folding for window "wp", at least from lines "top" to "bot".
@@ -63,7 +102,7 @@ pub(super) fn fold_update_computed(mut win: Win, mut top: LineNr, mut bot: LineN
         top = 1;
         bot = win.buffer().b_ml.ml_line_count;
         win.w_foldinvalid = false;
-        forget_small_flags(window_folds(win));
+        win.with_folds(|folds| forget_small_flags(folds));
     }
     if foldmethod_is_diff(win) {
         // 'diffopt' context lines belong to the same fold as the change.
@@ -71,7 +110,7 @@ pub(super) fn fold_update_computed(mut win: Win, mut top: LineNr, mut bot: LineN
         bot += diff_context.get();
     }
     top = top.min(win.buffer().b_ml.ml_line_count);
-    let mut fline = FoldLine {
+    let mut line = FoldLine {
         win,
         lnum: 0,
         off: 0,
@@ -82,91 +121,85 @@ pub(super) fn fold_update_computed(mut win: Win, mut top: LineNr, mut bot: LineN
         end: MAX_LEVEL + 1,
         had_end: MAX_LEVEL + 1,
     };
-    // SAFETY: `fline` is this frame's, and names the live window `win`. Every
-    // `line.*()` below is safe because of this one construction.
-    let line = unsafe { FLine::new(&raw mut fline) };
     fold_changed.set(false);
     invalid_top.set(top);
     invalid_bot.set(bot);
 
-    // Pick the level getter and prime `fline` with a level for `top`.
-    let getlevel: LevelGetter;
-    // SAFETY (throughout): the level getters want a line of the window's own
-    // buffer, and `parse_marker` has run for it by then.
+    // Pick the level getter and prime `line` with a level for `top`.
+    let method;
     if foldmethod_is_marker(win) {
-        getlevel = Some(foldlevel_marker as unsafe fn(FLine) -> ());
+        method = Method::Marker;
         parse_marker(win);
         if top > 1 {
             // The marker method needs the previous line's level, and the
             // markers on that line, before it can read `top`.
             let level = fold_level_win(win, top - 1);
-            fline.lnum = top - 1;
-            fline.lvl = level;
-            foldlevel_marker(line);
-            fline.lvl = if fline.lvl > level {
-                level - (fline.lvl - fline.lvl_next)
+            line.lnum = top - 1;
+            line.lvl = level;
+            foldlevel_marker(&mut line);
+            line.lvl = if line.lvl > level {
+                level - (line.lvl - line.lvl_next)
             } else {
-                fline.lvl_next
+                line.lvl_next
             };
         }
-        fline.lnum = top;
-        foldlevel_marker(line);
+        line.lnum = top;
+        foldlevel_marker(&mut line);
     } else {
-        fline.lnum = top;
+        line.lnum = top;
         if foldmethod_is_expr(win) {
-            getlevel = Some(foldlevel_expr as unsafe fn(FLine) -> ());
+            method = Method::Expr;
             if top > 1 {
-                fline.lnum -= 1;
+                line.lnum -= 1;
             }
         } else if foldmethod_is_syntax(win) {
-            getlevel = Some(foldlevel_syntax as unsafe fn(FLine) -> ());
+            method = Method::Syntax;
         } else if foldmethod_is_diff(win) {
-            getlevel = Some(foldlevel_diff as unsafe fn(FLine) -> ());
+            method = Method::Diff;
         } else {
-            getlevel = Some(foldlevel_indent as unsafe fn(FLine) -> ());
+            method = Method::Indent;
             if top > 1 {
-                fline.lnum -= 1;
+                line.lnum -= 1;
             }
         }
         // Indent and expr can answer "undefined" (-1); walk back until a
         // line has a level of its own.
-        fline.lvl = -1;
+        line.lvl = -1;
         while !got_int.get() {
-            fline.lvl_next = -1;
-            get_level(getlevel, line);
-            if fline.lvl >= 0 {
+            line.lvl_next = -1;
+            method.level(&mut line);
+            if line.lvl >= 0 {
                 break;
             }
-            fline.lnum -= 1;
+            line.lnum -= 1;
         }
     }
 
-    if getlevel_is(getlevel, foldlevel_syntax) {
+    if method == Method::Syntax {
         // A syntax fold can reach past `bot`, and the whole of it has to be
         // updated or its end is left dangling.
-        // SAFETY: the caller's promise.
-        let mut folds = window_folds(win);
+        let mut folds: &[Fold] = &win.w_folds;
         let mut innermost = None;
         let mut current_fdl = 0;
         let mut fold_start_lnum: LineNr = 0;
-        let mut lnum_rel = fline.lnum;
-        while current_fdl < fline.lvl {
-            let Ok(i) = folds.find(lnum_rel) else { break };
-            let fold = folds.at(i);
+        let mut lnum_rel = line.lnum;
+        while current_fdl < line.lvl {
+            let Ok(i) = find(folds, lnum_rel) else { break };
+            let fold = &folds[i];
             current_fdl += 1;
-            fold_start_lnum += fold.top();
-            lnum_rel -= fold.top();
-            innermost = Some(fold);
-            folds = fold.nested();
+            fold_start_lnum += fold.top;
+            lnum_rel -= fold.top;
+            innermost = Some(fold.len);
+            folds = &fold.nested;
         }
-        if let Some(fold) = innermost
-            && current_fdl == fline.lvl
+        if let Some(len) = innermost
+            && current_fdl == line.lvl
         {
-            bot = bot.max(fold_start_lnum + fold.len());
+            bot = bot.max(fold_start_lnum + len);
         }
     }
 
-    let mut start = fline.lnum;
+    let mut start = line.lnum;
     let mut end = bot;
     // Re-read rather than kept: 'foldexpr' is user code, and it can change
     // the buffer under this loop.
@@ -174,71 +207,97 @@ pub(super) fn fold_update_computed(mut win: Win, mut top: LineNr, mut bot: LineN
     if start > end && end < line_count() {
         end = start;
     }
+    let mut path = Vec::new();
+    let mut lost = false;
     while !got_int.get() {
-        if fline.lnum > line_count() {
+        if line.lnum > line_count() {
             break;
         }
-        if fline.lnum > end {
-            if !getlevel_is_open_ended(getlevel) {
+        if line.lnum > end {
+            if !method.is_open_ended() {
                 break;
             }
-            let folds = window_folds(win);
             // A fold that straddles the end of the range drags the range out
             // to cover the whole of it.
-            let straddling = if start <= end
-                && let Ok(i) = folds.find(end)
-                && folds.at(i).last() > end
-            {
-                Some(folds.at(i))
-            } else if fline.lvl == 0
-                && let Ok(i) = folds.find(fline.lnum)
-                && folds.at(i).top() < fline.lnum
-            {
-                Some(folds.at(i))
-            } else {
-                None
-            };
-            if let Some(fold) = straddling {
-                end = fold.last();
-            } else {
-                if !(getlevel_is(getlevel, foldlevel_syntax)
-                    && fold_level_win(win, fline.lnum) != fline.lvl)
+            let (lvl, lnum) = (line.lvl, line.lnum);
+            let straddling = win.with_folds(|folds| {
+                if start <= end
+                    && let Ok(i) = find(folds, end)
+                    && folds[i].last() > end
                 {
+                    Some(folds[i].last())
+                } else if lvl == 0
+                    && let Ok(i) = find(folds, lnum)
+                    && folds[i].top < lnum
+                {
+                    Some(folds[i].last())
+                } else {
+                    None
+                }
+            });
+            if let Some(last) = straddling {
+                end = last;
+            } else {
+                if !(method == Method::Syntax && fold_level_win(win, line.lnum) != line.lvl) {
                     break;
                 }
-                end = fline.lnum;
+                end = line.lnum;
             }
         }
-        if fline.lvl > 0 {
-            invalid_top.set(fline.lnum);
+        if line.lvl > 0 {
+            invalid_top.set(line.lnum);
             invalid_bot.set(end);
-            end = fold_update_computed_recurse(
-                window_folds(win),
+            let update = fold_update_computed_recurse(
+                win,
+                &mut path,
                 1,
                 start,
-                line,
-                getlevel,
+                &mut line,
+                method,
                 end,
-                FD_LEVEL,
+                FoldState::Level,
             );
-            start = fline.lnum;
+            let Ok(new_end) = update else {
+                lost = true;
+                break;
+            };
+            end = new_end;
+            start = line.lnum;
         } else {
-            if fline.lnum == line_count() {
+            if line.lnum == line_count() {
                 break;
             }
-            fline.lnum += 1;
-            fline.lvl = fline.lvl_next;
-            get_level(getlevel, line);
+            line.lnum += 1;
+            line.lvl = line.lvl_next;
+            method.level(&mut line);
         }
     }
-    fold_remove(window_folds(win), start, end);
+    if !lost {
+        win.with_folds(|folds| fold_remove(folds, start, end));
+    }
     if fold_changed.get() && win.w_onebuf_opt.wo_fen != 0 {
         changed_window_setting(win);
     }
-    if end != bot {
+    if end != bot && !lost {
         redraw_win_range_later(win, top, end);
     }
     invalid_top.set(0);
+}
+
+/// What one pass of [`fold_update_computed_recurse`]'s loop does once the
+/// tree has had its say.
+enum Next {
+    /// Leave the loop.
+    Break,
+    /// The levels go deeper here: recurse into the nested list of fold
+    /// `index`, whose `top` and `state` are given.
+    Recurse {
+        index: usize,
+        top: LineNr,
+        state: FoldState,
+    },
+    /// Step on to the next line with a level.
+    Step,
 }
 
 /// Update a fold that starts at "line->lnum".  At this line there is always a
@@ -257,476 +316,537 @@ pub(super) fn fold_update_computed(mut win: Win, mut top: LineNr, mut bot: LineN
 /// outer fold.
 /// "line->off" is the offset to the real line number in the buffer.
 ///
+/// `path` names the list being updated (see the module docs); it is pushed
+/// and popped around each recursion and comes back as it was handed in.
+///
 /// `topflags` — containing fold flags
 ///
 /// Returns bot, which may have been increased for lines that also need to be
 /// updated as a result of a detected change in the fold.
-pub(super) fn fold_update_computed_recurse(
-    folds: FoldList,
+#[allow(clippy::too_many_arguments)]
+fn fold_update_computed_recurse(
+    win: Win,
+    path: &mut Vec<usize>,
     level: c_int,
     startlnum: LineNr,
-    line: FLine,
-    getlevel: LevelGetter,
+    line: &mut FoldLine,
+    method: Method,
     mut bot: LineNr,
-    topflags: c_int,
-) -> LineNr {
-    // The fold this call is building, once there is one. `None` means "not
-    // started yet", which is what the whole first half of the loop is about.
-    let mut fold: Option<FoldRef> = None;
-    if getlevel_is(getlevel, foldlevel_marker)
-        && line.start() <= line.lvl() - level
-        && line.lvl() > 0
-    {
+    topflags: FoldState,
+) -> Result<LineNr, TreeLost> {
+    let open_ended = method.is_open_ended();
+    // The fold this call is building, once there is one, as its index in the
+    // list. `None` means "not started yet", which is what the whole first
+    // half of the loop is about.
+    let mut fold: Option<usize> = None;
+    if method == Method::Marker && line.start <= line.lvl - level && line.lvl > 0 {
         // A marker fold may already start above `startlnum`; continue it
         // rather than opening a second one.
-        let i = match folds.find(startlnum - 1) {
-            Ok(i) | Err(i) => i,
-        };
-        if i < folds.len() && folds.at(i).top() < startlnum {
-            fold = Some(folds.at(i));
-        }
+        fold = with_list(win, path, |folds| {
+            let i = find_at_or_below(folds, startlnum - 1);
+            folds.get(i).filter(|f| f.top < startlnum).map(|_| i)
+        })?;
     }
     let mut lvl = level;
     let mut startlnum2 = startlnum;
-    let firstlnum = line.lnum();
-    // SAFETY: a live window has a live buffer.
-    let linecount = line.win().buffer().b_ml.ml_line_count - line.off();
+    let firstlnum = line.lnum;
+    let linecount = line.win.buffer().b_ml.ml_line_count - line.off;
     let mut finish = false;
-    line.set_lnum_save(line.lnum());
+    line.lnum_save = line.lnum;
     while !got_int.get() {
         line_breakcheck();
-        lvl = line.lvl().min(MAX_LEVEL);
-        if line.lnum() > firstlnum && (level > lvl - line.start() || level >= line.had_end()) {
+        lvl = line.lvl.min(MAX_LEVEL);
+        if line.lnum > firstlnum && (level > lvl - line.start || level >= line.had_end) {
             // The fold ended above this line.
             lvl = 0;
         }
-        if line.lnum() > bot
-            && !finish
-            && let Some(current) = fold
-        {
-            // Past the changed text. For the three open-ended methods a fold
-            // may still have grown or shrunk, so keep going until the tree
-            // agrees with the levels again.
-            if !getlevel_is_open_ended(getlevel) {
-                break;
+        let mut manual = false;
+        let next = with_list(win, path, |folds| {
+            if fold.is_some_and(|i| i >= folds.len()) {
+                return Err(TreeLost);
             }
-            let mut depth = 0;
-            if lvl >= level {
-                // How deep the existing tree says this line is.
-                let mut inner = current.nested();
-                let mut ll = line.lnum() - current.top();
-                while let Ok(k) = inner.find(ll) {
-                    let nested = inner.at(k);
-                    depth += 1;
-                    ll -= nested.top();
-                    inner = nested.nested();
+            if line.lnum > bot
+                && !finish
+                && let Some(ci) = fold
+            {
+                // Past the changed text. For the three open-ended methods a
+                // fold may still have grown or shrunk, so keep going until
+                // the tree agrees with the levels again.
+                if !open_ended {
+                    return Ok(Next::Break);
+                }
+                let current = &folds[ci];
+                let mut depth = 0;
+                if lvl >= level {
+                    // How deep the existing tree says this line is.
+                    let mut inner: &[Fold] = &current.nested;
+                    let mut ll = line.lnum - current.top;
+                    while let Ok(k) = find(inner, ll) {
+                        depth += 1;
+                        ll -= inner[k].top;
+                        inner = &inner[k].nested;
+                    }
+                }
+                if lvl < level + depth {
+                    // The tree is deeper than the levels are: the nested fold
+                    // that has to go also has to be redrawn.
+                    let inner = &current.nested;
+                    let k = find_at_or_below(inner, line.lnum - current.top);
+                    // UPSTREAM BUG: `k` may be `inner.len()`, and `fold.c`
+                    // reads that entry anyway (guarding only against a list
+                    // that never had storage). Upstream reads whatever bytes
+                    // sit there -- usually the zeroed slack `ga_grow` left,
+                    // sometimes a stale copy of a deleted fold, sometimes
+                    // past the block. The zeroed case is reproduced: a fold
+                    // at 0 of length 0 puts `bot` one above this fold. See
+                    // ~/agents/context/1786212071-upstream-neovim-bugs/
+                    // fold-iems-recurse-fp2-past-end.md.
+                    match inner.get(k) {
+                        Some(nested) => bot = nested.last() + current.top,
+                        None if inner.capacity() > 0 => bot = current.top - 1,
+                        None => {}
+                    }
+                } else {
+                    if !(current.top + current.len <= line.lnum && lvl >= level) {
+                        return Ok(Next::Break);
+                    }
+                    finish = true;
                 }
             }
-            if lvl < level + depth {
-                // The tree is deeper than the levels are: the nested fold that
-                // has to go also has to be redrawn.
-                let inner = current.nested();
-                let k = match inner.find(line.lnum() - current.top()) {
-                    Ok(k) | Err(k) => k,
+            if fold.is_none()
+                && (lvl != level
+                    || line.lnum_save >= bot
+                    || line.start != 0
+                    || line.had_end <= MAX_LEVEL
+                    || line.lnum == linecount)
+            {
+                // No fold started yet, and this line says one should have.
+                // Reuse, truncate, split or delete whatever is in the way,
+                // then leave `fold` naming the one to grow.
+                let mut ctx = Reuse {
+                    folds,
+                    line,
+                    level,
+                    lvl,
+                    startlnum,
+                    firstlnum,
+                    bot,
+                    topflags,
+                    open_ended,
+                    finish: &mut finish,
+                    manual: &mut manual,
                 };
-                // UPSTREAM BUG, preserved: `k` may be `inner.len()`, and
-                // `fold.c` reads it anyway. It is the one `foldFind` caller
-                // that guards its out-parameter against NULL (which is what
-                // `has_data` is here) but not against the end of the array,
-                // though `foldFind`'s own comment warns about it. See
-                // ~/agents/context/1786212071-upstream-neovim-bugs/
-                // fold-iems-recurse-fp2-past-end.md. Fixing it would change
-                // `bot`, i.e. behaviour, which this slice may not do.
-                if inner.has_data() {
-                    bot = inner.at(k).last() + current.top();
+                fold = ctx.find_or_make();
+            }
+            if lvl < level || line.lnum > linecount {
+                return Ok(Next::Break);
+            }
+            Ok(match fold {
+                Some(index) if lvl > level => Next::Recurse {
+                    index,
+                    top: folds[index].top,
+                    state: folds[index].state,
+                },
+                _ => Next::Step,
+            })
+        })??;
+        if manual {
+            line.win.w_fold_manual = true;
+        }
+        match next {
+            Next::Break => break,
+            Next::Recurse { index, top, state } => {
+                // Deeper than this level: the nested list takes over.
+                bot = bot.max(line.lnum);
+                line.lnum = line.lnum_save - top;
+                line.off += top;
+                let (from, to) = (startlnum2 - top, bot - top);
+                path.push(index);
+                let inner = fold_update_computed_recurse(
+                    win,
+                    path,
+                    level + 1,
+                    from,
+                    line,
+                    method,
+                    to,
+                    state,
+                );
+                path.pop();
+                bot = inner?;
+                // The recursion and the getters it ran may have moved the
+                // list; read the fold's top again.
+                let top = with_list(win, path, |folds| folds.get(index).map(|f| f.top))?
+                    .ok_or(TreeLost)?;
+                fold = Some(index);
+                line.lnum += top;
+                line.lnum_save += top;
+                line.off -= top;
+                bot += top;
+                startlnum2 = line.lnum;
+            }
+            Next::Step => {
+                // Step to the next line with a level of its own, remembering
+                // where that search started so the caller sees both.
+                line.lnum = line.lnum_save;
+                let next = line.lnum + 1;
+                while !got_int.get() {
+                    // 'foldexpr' may ask for the level of this line while we
+                    // are working out the next one; park the answer.
+                    prev_lnum.set(line.lnum);
+                    prev_lnum_lvl.set(line.lvl);
+                    line.lnum += 1;
+                    if line.lnum > linecount {
+                        break;
+                    }
+                    line.lvl = line.lvl_next;
+                    method.level(line);
+                    if line.lvl >= 0 || line.had_end <= MAX_LEVEL {
+                        break;
+                    }
                 }
-            } else {
-                if !(current.top() + current.len() <= line.lnum() && lvl >= level) {
+                prev_lnum.set(0);
+                if line.lnum > linecount {
                     break;
                 }
-                finish = true;
+                line.lnum_save = line.lnum;
+                line.lnum = next;
             }
         }
-        if fold.is_none()
-            && (lvl != level
-                || line.lnum_save() >= bot
-                || line.start() != 0
-                || line.had_end() <= MAX_LEVEL
-                || line.lnum() == linecount)
-        {
-            // No fold started yet, and this line says one should have. Reuse,
-            // truncate, split or delete whatever is in the way, then leave
-            // `fold` naming the one to grow.
-            while !got_int.get() {
-                // Whether an existing fold that ends just above `firstlnum`
-                // may be joined onto this one.
-                let concat = if line.start() != 0 || line.had_end() <= MAX_LEVEL {
-                    0
-                } else {
-                    1
+    }
+    let Some(index) = fold else {
+        return Ok(bot);
+    };
+    with_list(win, path, |folds| {
+        if index >= folds.len() {
+            return Err(TreeLost);
+        }
+        Ok(finish_fold(
+            folds, index, line.lnum, lvl, level, bot, startlnum2, linecount, open_ended,
+        ))
+    })?
+}
+
+/// The tail of [`fold_update_computed_recurse`]: give fold `index` of `folds`
+/// the length the walk ended up at (`lnum` is the line just below it), drop
+/// what it no longer holds, and absorb or drop the folds it now overlaps.
+/// Answers the new `bot`.
+#[allow(clippy::too_many_arguments)]
+fn finish_fold(
+    folds: &mut Vec<Fold>,
+    index: usize,
+    lnum: LineNr,
+    lvl: c_int,
+    level: c_int,
+    mut bot: LineNr,
+    startlnum2: LineNr,
+    linecount: LineNr,
+    open_ended: bool,
+) -> LineNr {
+    let fold = &mut folds[index];
+    if fold.len < lnum - fold.top {
+        fold.len = lnum - fold.top;
+        fold.small = None;
+        fold_changed.set(true);
+    } else if fold.top + fold.len > linecount {
+        fold.len = linecount - fold.top + 1;
+    }
+    let (from, to) = (startlnum2 - fold.top, lnum - 1 - fold.top);
+    fold_remove(&mut fold.nested, from, to);
+    if lvl < level && fold.len != lnum - fold.top {
+        // It used to reach further down than the levels now say.
+        if fold.top + fold.len - 1 > bot {
+            if open_ended {
+                // The rest of it still has to be looked at.
+                bot = fold.top + fold.len - 1;
+                fold.len = lnum - fold.top;
+            } else {
+                fold_split(folds, index, lnum, bot);
+            }
+        } else {
+            fold.len = lnum - fold.top;
+        }
+        fold_changed.set(true);
+    }
+    // Absorb or drop the folds the new one now overlaps.
+    while let Some(next) = folds.get_mut(index + 1) {
+        if next.top > lnum {
+            break;
+        }
+        if next.top + next.len > lnum {
+            if next.top < lnum {
+                let nt = next.top;
+                adjust_fold_list(&mut next.nested, 0, lnum - nt - 1, LINES_DELETED, nt - lnum);
+                next.len -= lnum - nt;
+                next.top = lnum;
+                fold_changed.set(true);
+            }
+            if lvl >= level {
+                fold_merge(folds, index);
+            }
+            break;
+        }
+        fold_changed.set(true);
+        delete_fold_entry(folds, index + 1, true);
+    }
+    bot.max(lnum - 1)
+}
+
+/// The state [`Reuse::find_or_make`] works with: one level of
+/// [`fold_update_computed_recurse`], at the line where a fold should start.
+struct Reuse<'a> {
+    folds: &'a mut Vec<Fold>,
+    line: &'a mut FoldLine,
+    level: c_int,
+    lvl: c_int,
+    startlnum: LineNr,
+    firstlnum: LineNr,
+    bot: LineNr,
+    topflags: FoldState,
+    open_ended: bool,
+    finish: &'a mut bool,
+    /// Set when the new fold makes the window's folds manual.
+    manual: &'a mut bool,
+}
+
+impl Reuse<'_> {
+    /// Find the existing fold the new one should be (reusing, truncating,
+    /// splitting or deleting whatever is in the way), or insert one, and
+    /// answer its index. `None` only if CTRL-C cut the search short.
+    fn find_or_make(&mut self) -> Option<usize> {
+        let (line, firstlnum, startlnum) = (&*self.line, self.firstlnum, self.startlnum);
+        let (level, lvl) = (self.level, self.lvl);
+        while !got_int.get() {
+            let folds = &mut *self.folds;
+            // Whether an existing fold that ends just above `firstlnum` may
+            // be joined onto this one.
+            let concat = if line.start != 0 || line.had_end <= MAX_LEVEL {
+                0
+            } else {
+                1
+            };
+            // `fold.c` threads one out-parameter through four tests here; the
+            // first that hits names the entry to work on, and a miss leaves
+            // the index the fold would be inserted at.
+            let mut i = 0;
+            let mut matched = false;
+            if !folds.is_empty() {
+                i = match find(folds, startlnum) {
+                    Ok(k) => {
+                        matched = true;
+                        k
+                    }
+                    Err(k) => k,
                 };
-                // `fold.c` threads one out-parameter through four tests here;
-                // the first that hits names the entry to work on, and a miss
-                // leaves the index the fold would be inserted at.
-                let mut i = 0;
-                let mut matched = false;
-                if !folds.is_empty() {
-                    i = match folds.find(startlnum) {
+                if !matched && folds.get(i).is_some_and(|f| f.top <= firstlnum) {
+                    matched = true;
+                }
+                if !matched {
+                    i = match find(folds, firstlnum - concat) {
                         Ok(k) => {
                             matched = true;
                             k
                         }
                         Err(k) => k,
                     };
-                    if !matched && i < folds.len() && folds.at(i).top() <= firstlnum {
-                        matched = true;
-                    }
-                    if !matched {
-                        i = match folds.find(firstlnum - concat) {
-                            Ok(k) => {
-                                matched = true;
-                                k
-                            }
-                            Err(k) => k,
-                        };
-                    }
-                    if !matched
-                        && i < folds.len()
-                        && (lvl < level && folds.at(i).top() < line.lnum()
-                            || lvl >= level && folds.at(i).top() <= line.lnum_save())
-                    {
-                        matched = true;
-                    }
                 }
-                if !matched {
-                    // Nothing usable: make a new fold covering the rest of the
-                    // changed range.
-                    let at = if folds.is_empty() { 0 } else { i };
-                    // SAFETY: `at` is in `0..=folds.len()`.
-                    unsafe { fold_insert(folds, at) };
-                    let new = folds.at(at);
-                    new.set_top(firstlnum);
-                    new.set_len(bot - firstlnum + 1);
-                    if topflags == FD_OPEN {
-                        // SAFETY: a live window.
-                        line.win().w_fold_manual = true;
-                        new.set_flags(FD_OPEN);
-                    } else if at <= 0 {
-                        new.set_flags(topflags);
-                        if topflags != FD_LEVEL {
-                            // SAFETY: a live window.
-                            line.win().w_fold_manual = true;
-                        }
-                    } else {
-                        new.set_flags(folds.at(at - 1).flags());
-                    }
-                    new.set_small(None);
-                    if getlevel_is_open_ended(getlevel) {
-                        finish = true;
-                    }
-                    fold_changed.set(true);
-                    fold = Some(new);
-                    break;
-                }
-                let mut current = folds.at(i);
-                if current.top() + current.len() + concat <= firstlnum {
-                    // It ends above the new fold.
-                    if current.top() >= startlnum {
-                        // Entirely inside the removed range.
-                        drop_fold(folds, i, true);
-                    } else {
-                        current.set_len(startlnum - current.top());
-                        adjust_fold_list(
-                            current.nested(),
-                            current.len(),
-                            MAXLNUM,
-                            LINES_DELETED,
-                            0,
-                        );
-                        fold_changed.set(true);
-                    }
-                    continue;
-                }
-                if current.top() != firstlnum {
-                    if current.top() >= startlnum {
-                        // It starts below the new fold: pull its top up,
-                        // dragging the nested folds with it.
-                        // SAFETY: a live fold's nested list is a live fold list.
-                        if current.top() > firstlnum {
-                            adjust_fold_list(
-                                current.nested(),
-                                0,
-                                MAXLNUM,
-                                current.top() - firstlnum,
-                                0,
-                            );
-                        } else {
-                            adjust_fold_list(
-                                current.nested(),
-                                0,
-                                firstlnum - current.top() - 1,
-                                LINES_DELETED,
-                                current.top() - firstlnum,
-                            );
-                        }
-                        current.set_len(current.len() + current.top() - firstlnum);
-                        current.set_top(firstlnum);
-                        current.set_small(None);
-                        fold_changed.set(true);
-                    } else if line.start() != 0 && lvl == level || firstlnum != startlnum {
-                        // It starts above: break it in two so the new fold can
-                        // start where the levels say it does.
-                        let (breakstart, breakend) = if firstlnum != startlnum {
-                            (startlnum, firstlnum)
-                        } else {
-                            (line.lnum(), line.lnum())
-                        };
-                        let (bs, be) = (breakstart - current.top(), breakend - current.top());
-                        fold_remove(current.nested(), bs, be);
-                        // SAFETY: `i` names an entry of `folds`.
-                        unsafe { fold_split(folds, i, breakstart, breakend - 1) };
-                        current = folds.at(i + 1);
-                        if getlevel_is_open_ended(getlevel) {
-                            finish = true;
-                        }
-                    }
-                }
-                if current.top() == startlnum && concat != 0 {
-                    // It now touches the fold above it, so they are one.
-                    let k = folds.index_of(current);
-                    if k != 0 {
-                        let above = folds.at(k - 1);
-                        if above.top() + above.len() == current.top() {
-                            // SAFETY: both are entries of `folds`.
-                            unsafe { fold_merge(above, folds, current) };
-                            current = above;
-                        }
-                    }
-                }
-                fold = Some(current);
-                break;
-            }
-        }
-        if lvl < level || line.lnum() > linecount {
-            break;
-        }
-        if lvl > level
-            && let Some(current) = fold
-        {
-            // Deeper than this level: the nested list takes over.
-            bot = bot.max(line.lnum());
-            line.set_lnum(line.lnum_save() - current.top());
-            line.set_off(line.off() + current.top());
-            let i = folds.index_of(current);
-            // SAFETY: the fold's own nested list, and the caller's `line`.
-            let (inner, lvl) = (current.nested(), level + 1);
-            let (from, to) = (startlnum2 - current.top(), bot - current.top());
-            let flags = current.flags();
-            bot = fold_update_computed_recurse(inner, lvl, from, line, getlevel, to, flags);
-            // The recursion may have grown the array under us.
-            let current = folds.at(i);
-            fold = Some(current);
-            line.set_lnum(line.lnum() + current.top());
-            line.set_lnum_save(line.lnum_save() + current.top());
-            line.set_off(line.off() - current.top());
-            bot += current.top();
-            startlnum2 = line.lnum();
-        } else {
-            // Step to the next line with a level of its own, remembering where
-            // that search started so the caller sees both.
-            line.set_lnum(line.lnum_save());
-            let next = line.lnum() + 1;
-            while !got_int.get() {
-                // 'foldexpr' may ask for the level of this line while we are
-                // working out the next one; park the answer.
-                prev_lnum.set(line.lnum());
-                prev_lnum_lvl.set(line.lvl());
-                line.set_lnum(line.lnum() + 1);
-                if line.lnum() > linecount {
-                    break;
-                }
-                line.set_lvl(line.lvl_next());
-                // SAFETY: the caller's `line`.
-                get_level(getlevel, line);
-                if line.lvl() >= 0 || line.had_end() <= MAX_LEVEL {
-                    break;
+                if !matched
+                    && folds.get(i).is_some_and(|f| {
+                        lvl < level && f.top < line.lnum || lvl >= level && f.top <= line.lnum_save
+                    })
+                {
+                    matched = true;
                 }
             }
-            prev_lnum.set(0);
-            if line.lnum() > linecount {
-                break;
-            }
-            line.set_lnum_save(line.lnum());
-            line.set_lnum(next);
-        }
-    }
-    let Some(mut fold) = fold else {
-        return bot;
-    };
-    // Give the fold the length the walk ended up at.
-    if fold.len() < line.lnum() - fold.top() {
-        fold.set_len(line.lnum() - fold.top());
-        fold.set_small(None);
-        fold_changed.set(true);
-    } else if fold.top() + fold.len() > linecount {
-        fold.set_len(linecount - fold.top() + 1);
-    }
-    let (from, to) = (startlnum2 - fold.top(), line.lnum() - 1 - fold.top());
-    fold_remove(fold.nested(), from, to);
-    if lvl < level && fold.len() != line.lnum() - fold.top() {
-        // It used to reach further down than the levels now say.
-        if fold.top() + fold.len() - 1 > bot {
-            if getlevel_is_open_ended(getlevel) {
-                // The rest of it still has to be looked at.
-                bot = fold.top() + fold.len() - 1;
-                fold.set_len(line.lnum() - fold.top());
-            } else {
-                let i = folds.index_of(fold);
-                // SAFETY: `i` names an entry of `folds`.
-                unsafe { fold_split(folds, i, line.lnum(), bot) };
-                fold = folds.at(i);
-            }
-        } else {
-            fold.set_len(line.lnum() - fold.top());
-        }
-        fold_changed.set(true);
-    }
-    // Absorb or drop the folds the new one now overlaps.
-    loop {
-        let next = fold.offset(1);
-        if !folds.holds(next) || next.top() > line.lnum() {
-            break;
-        }
-        if next.top() + next.len() > line.lnum() {
-            if next.top() < line.lnum() {
-                adjust_fold_list(
-                    next.nested(),
-                    0,
-                    line.lnum() - next.top() - 1,
-                    LINES_DELETED,
-                    next.top() - line.lnum(),
-                );
-                next.set_len(next.len() - (line.lnum() - next.top()));
-                next.set_top(line.lnum());
+            if !matched {
+                // Nothing usable: make a new fold covering the rest of the
+                // changed range.
+                let at = if folds.is_empty() { 0 } else { i };
+                let state = if self.topflags == FoldState::Open {
+                    *self.manual = true;
+                    FoldState::Open
+                } else if at == 0 {
+                    if self.topflags != FoldState::Level {
+                        *self.manual = true;
+                    }
+                    self.topflags
+                } else {
+                    folds[at - 1].state
+                };
+                let mut new = Fold::new(firstlnum, self.bot - firstlnum + 1);
+                new.state = state;
+                folds.insert(at, new);
+                if self.open_ended {
+                    *self.finish = true;
+                }
                 fold_changed.set(true);
+                return Some(at);
             }
-            if lvl >= level {
-                // SAFETY: both are entries of `folds`.
-                unsafe { fold_merge(fold, folds, next) };
+            let mut ci = i;
+            let current = &mut folds[ci];
+            if current.top + current.len + concat <= firstlnum {
+                // It ends above the new fold.
+                if current.top >= startlnum {
+                    // Entirely inside the removed range.
+                    delete_fold_entry(folds, ci, true);
+                } else {
+                    current.len = startlnum - current.top;
+                    let len = current.len;
+                    adjust_fold_list(&mut current.nested, len, MAXLNUM, LINES_DELETED, 0);
+                    fold_changed.set(true);
+                }
+                continue;
             }
-            break;
+            if current.top != firstlnum {
+                if current.top >= startlnum {
+                    // It starts below the new fold: pull its top up,
+                    // dragging the nested folds with it.
+                    let ct = current.top;
+                    if ct > firstlnum {
+                        adjust_fold_list(&mut current.nested, 0, MAXLNUM, ct - firstlnum, 0);
+                    } else {
+                        adjust_fold_list(
+                            &mut current.nested,
+                            0,
+                            firstlnum - ct - 1,
+                            LINES_DELETED,
+                            ct - firstlnum,
+                        );
+                    }
+                    current.len += ct - firstlnum;
+                    current.top = firstlnum;
+                    current.small = None;
+                    fold_changed.set(true);
+                } else if line.start != 0 && lvl == level || firstlnum != startlnum {
+                    // It starts above: break it in two so the new fold can
+                    // start where the levels say it does.
+                    let (breakstart, breakend) = if firstlnum != startlnum {
+                        (startlnum, firstlnum)
+                    } else {
+                        (line.lnum, line.lnum)
+                    };
+                    let ct = current.top;
+                    fold_remove(&mut current.nested, breakstart - ct, breakend - ct);
+                    fold_split(folds, ci, breakstart, breakend - 1);
+                    ci += 1;
+                    if self.open_ended {
+                        *self.finish = true;
+                    }
+                }
+            }
+            if folds[ci].top == startlnum && concat != 0 && ci != 0 {
+                // It now touches the fold above it, so they are one.
+                let above = &folds[ci - 1];
+                if above.top + above.len == folds[ci].top {
+                    fold_merge(folds, ci - 1);
+                    ci -= 1;
+                }
+            }
+            return Some(ci);
         }
-        fold_changed.set(true);
-        // SAFETY: `next` is an entry of `folds`.
-        drop_fold(folds, folds.index_of(next), true);
+        None
     }
-    bot.max(line.lnum() - 1)
 }
 
 /// Low level function to get the foldlevel for the "indent" method.
 /// Doesn't use any caching.
 ///
 /// Returns a level of -1 if the foldlevel depends on surrounding lines.
-pub(super) fn foldlevel_indent(line: FLine) {
-    let lnum = line.lnum() + line.off();
-    // SAFETY: a live window has a live buffer, and `lnum` is inside it.
-    let buf = line.win().buffer();
+pub(super) fn foldlevel_indent(line: &mut FoldLine) {
+    let lnum = line.lnum + line.off;
+    let win = line.win;
+    let buf = win.buffer();
     let mut lines = buf.lines();
     let text = lines.line(lnum);
     let first = byte_at(text, skip::white(text));
     // A blank line, or one starting with a 'foldignore' character, takes
     // its level from its neighbours.
-    if c_int::from(first) == NUL
-        || has_char(
-            unsafe { cstr::at(line.win().w_onebuf_opt.wo_fdi.value_ptr()) },
-            c_int::from(first),
-        )
-    {
-        line.set_lvl(if lnum == 1 || lnum == buf.b_ml.ml_line_count {
+    if c_int::from(first) == NUL || has_char(win.w_onebuf_opt.wo_fdi.cstr(), c_int::from(first)) {
+        line.lvl = if lnum == 1 || lnum == buf.b_ml.ml_line_count {
             0
         } else {
             -1
-        });
+        };
     } else {
-        line.set_lvl(get_indent_buf(buf, lnum) / get_sw_value(buf));
+        line.lvl = get_indent_buf(buf, lnum) / get_sw_value(buf);
     }
-    let foldnestmax = line.win().w_onebuf_opt.wo_fdn.max(0) as c_int;
-    line.set_lvl(line.lvl().min(foldnestmax));
+    let foldnestmax = win.w_onebuf_opt.wo_fdn.max(0) as c_int;
+    line.lvl = line.lvl.min(foldnestmax);
 }
 
 /// Low level function to get the foldlevel for the "diff" method.
 /// Doesn't use any caching.
-pub(super) fn foldlevel_diff(line: FLine) {
-    let infold = diff_infold(line.win(), line.lnum() + line.off());
-    line.set_lvl(c_int::from(infold));
+pub(super) fn foldlevel_diff(line: &mut FoldLine) {
+    let infold = diff_infold(line.win, line.lnum + line.off);
+    line.lvl = c_int::from(infold);
 }
 
 /// Low level function to get the foldlevel for the "expr" method.
 /// Doesn't use any caching.
 ///
 /// Returns a level of -1 if the foldlevel depends on surrounding lines.
-pub(super) fn foldlevel_expr(line: FLine) {
-    let lnum = line.lnum() + line.off();
+pub(super) fn foldlevel_expr(line: &mut FoldLine) {
+    let lnum = line.lnum + line.off;
     // The current window is restored below.
-    let saved = switch_to(line.win());
+    let saved = switch_to(line.win);
     set_vim_var_nr(Vv::Lnum, lnum as VarNumber);
-    line.set_start(0);
-    line.set_had_end(line.end());
-    line.set_end(MAX_LEVEL + 1);
+    line.start = 0;
+    line.had_end = line.end;
+    line.end = MAX_LEVEL + 1;
     if lnum <= 1 {
-        line.set_lvl(0);
+        line.lvl = 0;
     }
     // 'foldexpr' must not count as typed input.
     let save_keytyped = KeyTyped.get();
-    let (n, verdict) = eval_foldexpr(line.win());
+    let (n, verdict) = eval_foldexpr(line.win);
     KeyTyped.set(save_keytyped);
     // `eval_foldexpr` writes one byte of the expression's answer, so the
     // truncation below is exact.
     match verdict as u8 {
         b'a' => {
             // "a1": one level deeper from here on.
-            if line.lvl() >= 0 {
-                line.set_lvl(line.lvl() + n);
-                line.set_lvl_next(line.lvl());
+            if line.lvl >= 0 {
+                line.lvl += n;
+                line.lvl_next = line.lvl;
             }
-            line.set_start(n);
+            line.start = n;
         }
         b's' => {
             // "s1": one level shallower from the next line.
-            if line.lvl() >= 0 {
-                line.set_lvl_next(if n > line.lvl() { 0 } else { line.lvl() - n });
-                line.set_end(line.lvl_next() + 1);
+            if line.lvl >= 0 {
+                line.lvl_next = if n > line.lvl { 0 } else { line.lvl - n };
+                line.end = line.lvl_next + 1;
             }
         }
         b'>' => {
             // ">1": a fold of level 1 starts here.
-            line.set_lvl(n);
-            line.set_lvl_next(n);
-            line.set_start(1);
+            line.lvl = n;
+            line.lvl_next = n;
+            line.start = 1;
         }
         b'<' => {
             // "<1": a fold of level 1 ends here.
-            line.set_lvl_next(line.lvl().min(n - 1));
-            line.set_end(n);
+            line.lvl_next = line.lvl.min(n - 1);
+            line.end = n;
         }
         b'=' => {
             // "=": the same level as the line above.
-            line.set_lvl_next(line.lvl());
+            line.lvl_next = line.lvl;
         }
         _ => {
-            line.set_lvl_next(if n < 0 { line.lvl() } else { n });
-            line.set_lvl(n);
+            line.lvl_next = if n < 0 { line.lvl } else { n };
+            line.lvl = n;
         }
     }
-    if line.lvl() < 0 {
+    if line.lvl < 0 {
         // An undefined level at either end of the buffer has nothing to
         // inherit from.
         if lnum <= 1 {
-            line.set_lvl(0);
-            line.set_lvl_next(0);
+            line.lvl = 0;
+            line.lvl_next = 0;
         }
         if lnum == Buf::current().b_ml.ml_line_count {
-            line.set_lvl_next(0);
+            line.lvl_next = 0;
         }
     }
     saved.restore();
@@ -734,31 +854,17 @@ pub(super) fn foldlevel_expr(line: FLine) {
 
 /// Low level function to get the foldlevel for the "syntax" method.
 /// Doesn't use any caching.
-pub(super) fn foldlevel_syntax(line: FLine) {
-    let lnum = line.lnum() + line.off();
-    line.set_lvl(syn_get_foldlevel(line.win(), lnum));
-    line.set_start(0);
-    if lnum < line.win().buffer().b_ml.ml_line_count {
+pub(super) fn foldlevel_syntax(line: &mut FoldLine) {
+    let lnum = line.lnum + line.off;
+    line.lvl = syn_get_foldlevel(line.win, lnum);
+    line.start = 0;
+    if lnum < line.win.buffer().b_ml.ml_line_count {
         // A fold that starts on the next line starts here as far as the
         // tree is concerned, so the syntax item's first line is inside.
-        let n = syn_get_foldlevel(line.win(), lnum + 1);
-        if n > line.lvl() {
-            line.set_start(n - line.lvl());
-            line.set_lvl(n);
+        let n = syn_get_foldlevel(line.win, lnum + 1);
+        if n > line.lvl {
+            line.start = n - line.lvl;
+            line.lvl = n;
         }
     }
-}
-
-/// Ask the chosen 'foldmethod' getter for the level at `line`.
-fn get_level(getlevel: LevelGetter, line: FLine) {
-    // SAFETY: `line` names a live window and a line of its buffer -- the
-    // promise [`fold_update_computed_recurse`] is given.
-    unsafe { getlevel.expect("non-null function pointer")(line) };
-}
-
-/// C's `deleteFoldEntry`, whose only precondition is that `i` names an entry.
-fn drop_fold(folds: FoldList, i: c_int, recursive: bool) {
-    debug_assert!(i >= 0 && i < folds.len(), "i names an entry of folds");
-    // SAFETY: the assertion above.
-    unsafe { delete_fold_entry(folds, i, recursive) };
 }

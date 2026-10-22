@@ -22,6 +22,7 @@
 )]
 
 use super::{mark_virt_chain, ns_in_win};
+use crate::decoration::clear_virttext;
 use crate::decoration::{kMTMetaConcealLines, kMTMetaLines};
 use crate::decoration_provider::decor_providers_invoke_conceal_line;
 use crate::drawscreen::conceal_cursor_line;
@@ -30,6 +31,7 @@ use crate::highlight_group::syn_id2attr;
 use crate::marktree::cursor::Cursor;
 use crate::marktree::key::{kMTFilterSelect, mt_conceal_lines, mt_invalid};
 use crate::marktree::meta::MetaCount;
+use crate::memory::XString;
 use crate::memory::xrealloc;
 use crate::narrow::len_as_int;
 use crate::types::{
@@ -57,6 +59,23 @@ impl Win {
     fn providers_conceal_line(self, row: c_int) -> bool {
         decor_providers_invoke_conceal_line(self, row)
     }
+}
+
+/// The texts of every chunk of `vt`, joined, with `vt` given back: how a
+/// reader that wants flat text takes a chunked answer it owns (a list
+/// 'foldtext' asked of by `foldtextresult()`).
+///
+/// `vt` is an owned kvec of chunks under [`next_virt_text_chunk`]'s
+/// invariant, which is what makes freeing it here sound.
+pub(crate) fn virt_text_into_string(mut vt: VirtText) -> XString {
+    let mut text = XString::new();
+    let (mut at, mut attr) = (0, 0);
+    while let Some(chunk) = next_virt_text_chunk(&vt, &mut at, &mut attr) {
+        text.push_bytes(chunk.to_bytes());
+    }
+    // SAFETY: the caller's own virtual text, handed over with its chunks.
+    unsafe { clear_virttext(&raw mut vt) };
+    text
 }
 
 /// The text of the next chunk of `vt`, or `None` when there are no more.

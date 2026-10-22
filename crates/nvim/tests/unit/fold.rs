@@ -1,148 +1,75 @@
-//! The fold tree's line-number bookkeeping.
+//! The fold tree's line-number bookkeeping, and the tree the editor builds.
 //!
-//! `fold_mark_adjust_recurse` is what every buffer change that inserts, deletes
-//! or moves lines eventually reaches, and it is the only part of the fold
-//! machinery that runs without a window: it walks a `GArray` of `Fold`
-//! and rewrites `fd_top`/`fd_len` in place, recursing into `fd_nested`. The
-//! cases below are the four shapes its `if` chain distinguishes, with the
-//! expected results derived from `v0.12.4`'s `src/nvim/fold.c` rather than
-//! from this port.
-//!
-//! Miri watches the `folds()`/`fold_at()` pointer arithmetic here — a fold
-//! list is an untyped growarray, so nothing else in the tree type-checks it.
+//! `adjust_fold_list` is what every buffer change that inserts, deletes or
+//! moves lines eventually reaches, and it is the only part of the fold
+//! machinery that runs without a window: it walks a `Vec<Fold>` and rewrites
+//! `top`/`len` in place, recursing into `nested`. The first cases are the
+//! shapes its `if` chain distinguishes, with the expected results derived
+//! from `v0.12.4`'s `src/nvim/fold.c` rather than from this port; Miri runs
+//! them.
 
-use std::ffi::c_int;
-use std::mem::size_of;
-use std::ptr;
-
-use neovim::fold::Fold;
-use neovim::fold::adjust::fold_mark_adjust_recurse;
-use neovim::garray::{ga_clear, ga_grow, ga_init};
+use neovim::fold::{Fold, adjust_fold_list};
 use neovim::pos::MAXLNUM;
-use neovim::types::{GArray, LineNr};
+use neovim::types::LineNr;
 
 /// The sentinel `mark_adjust` passes as `amount` to mean "these lines are
 /// gone".
 const DELETED: LineNr = MAXLNUM;
 
-fn empty_list() -> GArray {
-    let mut gap = GArray {
-        ga_len: 0,
-        ga_maxlen: 0,
-        ga_itemsize: 0,
-        ga_growsize: 0,
-        ga_data: ptr::null_mut(),
-    };
-    unsafe { ga_init(&raw mut gap, size_of::<Fold>() as c_int, 10) };
-    gap
-}
-
-/// Append a fold covering `top..top + len - 1`, and hand back its nested list
-/// so a caller can build a second level under it.
-unsafe fn push(gap: &mut GArray, top: LineNr, len: LineNr) -> *mut GArray {
-    ga_grow(gap, 1);
-    let fp = (gap.ga_data as *mut Fold).add(gap.ga_len as usize);
-    (*fp).fd_top = top;
-    (*fp).fd_len = len;
-    (*fp).fd_flags = 0;
-    (*fp).fd_small = None;
-    ga_init(&raw mut (*fp).fd_nested, size_of::<Fold>() as c_int, 10);
-    gap.ga_len += 1;
-    &raw mut (*fp).fd_nested
-}
-
-/// Every fold in `gap` as `(fd_top, fd_len)`.
-unsafe fn spans(gap: &GArray) -> Vec<(LineNr, LineNr)> {
-    (0..gap.ga_len)
-        .map(|i| {
-            let fp = (gap.ga_data as *const Fold).offset(i as isize);
-            ((*fp).fd_top, (*fp).fd_len)
-        })
-        .collect()
-}
-
-unsafe fn free_list(gap: &mut GArray) {
-    for i in 0..gap.ga_len {
-        let fp = (gap.ga_data as *mut Fold).offset(i as isize);
-        free_list(&mut (*fp).fd_nested);
-    }
-    ga_clear(gap);
+/// Every fold in `folds` as `(top, len)`.
+fn spans(folds: &[Fold]) -> Vec<(LineNr, LineNr)> {
+    folds.iter().map(|fold| (fold.top, fold.len)).collect()
 }
 
 #[test]
 fn lines_inserted_above_a_fold_push_it_down() {
-    unsafe {
-        let mut gap = empty_list();
-        push(&mut gap, 10, 5);
-        // `:normal 3O` at line 5 -> mark_adjust(5, MAXLNUM, 3, 0).
-        fold_mark_adjust_recurse(&raw mut gap, 5, DELETED, 3, 0);
-        assert_eq!(spans(&gap), [(13, 5)]);
-        free_list(&mut gap);
-    }
+    let mut folds = vec![Fold::new(10, 5)];
+    // `:normal 3O` at line 5 -> mark_adjust(5, MAXLNUM, 3, 0).
+    adjust_fold_list(&mut folds, 5, DELETED, 3, 0);
+    assert_eq!(spans(&folds), [(13, 5)]);
 }
 
 #[test]
 fn a_fold_swallowed_whole_is_deleted() {
-    unsafe {
-        let mut gap = empty_list();
-        push(&mut gap, 10, 5);
-        push(&mut gap, 20, 2);
-        // `:10,14d` -> the first fold's every line is gone, and the second
-        // one slides up by the five removed lines.
-        fold_mark_adjust_recurse(&raw mut gap, 10, 14, DELETED, -5);
-        assert_eq!(spans(&gap), [(15, 2)]);
-        free_list(&mut gap);
-    }
+    let mut folds = vec![Fold::new(10, 5), Fold::new(20, 2)];
+    // `:10,14d` -> the first fold's every line is gone, and the second
+    // one slides up by the five removed lines.
+    adjust_fold_list(&mut folds, 10, 14, DELETED, -5);
+    assert_eq!(spans(&folds), [(15, 2)]);
 }
 
 #[test]
 fn a_deletion_inside_a_fold_only_shortens_it() {
-    unsafe {
-        let mut gap = empty_list();
-        push(&mut gap, 10, 5);
-        // `:12,13d` -> the fold still starts at 10 and is two lines shorter.
-        fold_mark_adjust_recurse(&raw mut gap, 12, 13, DELETED, -2);
-        assert_eq!(spans(&gap), [(10, 3)]);
-        free_list(&mut gap);
-    }
+    let mut folds = vec![Fold::new(10, 5)];
+    // `:12,13d` -> the fold still starts at 10 and is two lines shorter.
+    adjust_fold_list(&mut folds, 12, 13, DELETED, -2);
+    assert_eq!(spans(&folds), [(10, 3)]);
 }
 
 #[test]
 fn a_deletion_reaches_nested_folds() {
-    unsafe {
-        let mut gap = empty_list();
-        let nested = push(&mut gap, 10, 10);
-        // Absolute 12..14, i.e. 2..4 relative to the parent.
-        push(&mut *nested, 2, 3);
-        fold_mark_adjust_recurse(&raw mut gap, 12, 13, DELETED, -2);
-        assert_eq!(spans(&gap), [(10, 8)]);
-        let child = &*((gap.ga_data as *const Fold).offset(0));
-        assert_eq!(spans(&child.fd_nested), [(2, 1)]);
-        free_list(&mut gap);
-    }
+    let mut parent = Fold::new(10, 10);
+    // Absolute 12..14, i.e. 2..4 relative to the parent.
+    parent.nested.push(Fold::new(2, 3));
+    let mut folds = vec![parent];
+    adjust_fold_list(&mut folds, 12, 13, DELETED, -2);
+    assert_eq!(spans(&folds), [(10, 8)]);
+    assert_eq!(spans(&folds[0].nested), [(2, 1)]);
 }
 
 #[test]
 fn a_fold_entirely_below_the_change_only_shifts() {
-    unsafe {
-        let mut gap = empty_list();
-        push(&mut gap, 10, 3);
-        push(&mut gap, 30, 4);
-        // `:15,19d` touches neither fold's lines; only the later one moves.
-        fold_mark_adjust_recurse(&raw mut gap, 15, 19, DELETED, -5);
-        assert_eq!(spans(&gap), [(10, 3), (25, 4)]);
-        free_list(&mut gap);
-    }
+    let mut folds = vec![Fold::new(10, 3), Fold::new(30, 4)];
+    // `:15,19d` touches neither fold's lines; only the later one moves.
+    adjust_fold_list(&mut folds, 15, 19, DELETED, -5);
+    assert_eq!(spans(&folds), [(10, 3), (25, 4)]);
 }
 
 #[test]
 fn an_empty_list_is_left_alone() {
-    unsafe {
-        let mut gap = empty_list();
-        fold_mark_adjust_recurse(&raw mut gap, 1, 10, DELETED, -10);
-        assert_eq!(gap.ga_len, 0);
-        free_list(&mut gap);
-    }
+    let mut folds: Vec<Fold> = Vec::new();
+    adjust_fold_list(&mut folds, 1, 10, DELETED, -10);
+    assert!(folds.is_empty());
 }
 
 /// The fold tree as the editor builds it: manual folds under `:move`, the
@@ -387,6 +314,39 @@ mod editor {
                 "l1/l2/l3/l4/l5/l6/l7/l8",
             ]
             .map(String::from)
+        );
+    }
+
+    /// A 'foldexpr' that switches to "manual" and deletes every fold while
+    /// the update is inside one. Upstream (and the `GArray` tree before the
+    /// vectors) went on writing through the `fold_T *` it held into the
+    /// freed array: heap-use-after-free under ASan. The update now notices
+    /// its place is gone and stops, leaving what `zE` left.
+    #[test]
+    fn foldexpr_that_deletes_every_fold_mid_update() {
+        let editor = editor_lock();
+        let _restore = Restore;
+        run(&editor, "silent! keepjumps keepmarks %delete _");
+        run(
+            &editor,
+            "call setline(1, ['a', '  b', '  c', 'd', '  e', '  f', 'g', '  h'])",
+        );
+        run(
+            &editor,
+            "function! g:FoldUnitExpr()\n\
+               if v:lnum == 5 | set foldmethod=manual | silent! normal! zE\n\
+               endif\n\
+               return getline(v:lnum) =~ '^\\s' ? '1' : '>1'\n\
+             endfunction",
+        );
+        run(
+            &editor,
+            "set foldminlines=0 foldexpr=g:FoldUnitExpr() foldmethod=expr",
+        );
+        let got = shape(&editor);
+        assert_eq!(
+            [got, string(&editor, "&foldmethod")],
+            ["0 0 0 0 0 0 0 0", "manual"].map(String::from)
         );
     }
 

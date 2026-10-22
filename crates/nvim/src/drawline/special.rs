@@ -118,17 +118,17 @@ impl Cells {
         {
             let at = self.byte_col();
             let lnume = wlv.lnum + wlv.foldinfo.fi_lines - 1;
-            let into = f.fold_buf.cast::<u8>();
-            unsafe { into.write_bytes(b' ', FOLD_TEXT_LEN as size_t) };
-            wlv.extra_text = unsafe {
-                get_foldtext(
-                    window,
-                    wlv.lnum,
-                    lnume,
-                    wlv.foldinfo,
-                    f.fold_buf,
-                    &raw mut self.fold_vt,
-                )
+            // SAFETY: `fold_buf` is the frame's `FOLD_TEXT_LEN`-byte scratch,
+            // which nothing else holds while the line is drawn.
+            let scratch = unsafe { &mut *f.fold_buf.cast::<[u8; FOLD_TEXT_LEN as usize]>() };
+            scratch.fill(b' ');
+            wlv.extra_text = match get_foldtext(window, wlv.lnum, lnume, wlv.foldinfo, scratch) {
+                FoldText::Scratch => f.fold_buf,
+                FoldText::Chunks(chunks) => {
+                    self.fold_vt = chunks;
+                    f.fold_buf
+                }
+                FoldText::Owned(text) => text.into_raw(),
             };
             wlv.extra_todo = unsafe { cstr::bytes_at(wlv.extra_text) }.len() as ::core::ffi::c_int;
             if wlv.extra_text != f.fold_buf {

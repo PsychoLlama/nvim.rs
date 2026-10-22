@@ -256,7 +256,7 @@ pub struct Window {
     pub w_lines_valid: ::core::ffi::c_int,
     pub w_lines: *mut WLine,
     pub w_lines_size: ::core::ffi::c_int,
-    pub w_folds: GArray,
+    pub w_folds: Vec<crate::fold::Fold>,
     pub w_fold_manual: bool,
     pub w_foldinvalid: bool,
     pub w_nrwidth: ::core::ffi::c_int,
@@ -347,7 +347,7 @@ pub struct WinInfo {
     pub wi_optset: bool,
     pub wi_opt: WinOpt,
     pub wi_fold_manual: bool,
-    pub wi_folds: GArray,
+    pub wi_folds: Vec<crate::fold::Fold>,
     pub wi_changelistidx: ::core::ffi::c_int,
 }
 
@@ -374,7 +374,7 @@ impl WinInfo {
             wi_optset: false,
             wi_opt: WinOpt::UNSET,
             wi_fold_manual: false,
-            wi_folds: GArray::EMPTY,
+            wi_folds: Vec::new(),
             wi_changelistidx: 0,
         }
     }

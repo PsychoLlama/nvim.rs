@@ -1,13 +1,27 @@
 //! Folding.
 //!
-//! The toplevel folds of a window live in its `w_folds` growarray. Each of
-//! them can hold an array of second-level folds in `fd_nested`, and so on:
-//! every level is the same `GArray` of [`Fold`], so the whole tree is
-//! reached through [`list`]'s [`FoldList`] and [`FoldRef`] handles.
+//! The toplevel folds of a window live in its `w_folds` vector. Each of them
+//! can hold a vector of second-level folds in `nested`, and so on: every
+//! level is a `Vec<Fold>` sorted by `top`, searched with [`list::find`].
 //!
-//! A fold's `fd_top` is relative to its parent, which is what makes
-//! inserting and deleting lines cheap — only the folds on the changed line's
-//! own path need adjusting.
+//! A fold's `top` is relative to its parent, which is what makes inserting
+//! and deleting lines cheap — only the folds on the changed line's own path
+//! need adjusting.
+//!
+//! # Reaching the tree
+//!
+//! The tree is a field of the window record, reached through the [`Win`]
+//! handle. Its pure operations — the line-number arithmetic in [`adjust`],
+//! the inserts, splits and merges the update makes — take `&mut Vec<Fold>`
+//! and touch nothing else, so a caller lends them the field for the length
+//! of the call (`Win::with_folds`). Everything that also has to ask the
+//! window, the buffer or the user something — a fold's screen-line count for
+//! 'foldminlines', 'foldexpr', the syntax and diff level getters — runs
+//! *between* such loans, and the walk holds positions (indices, a depth, a
+//! line) rather than a reference across it, re-deriving its place afterwards.
+//! That is what lets a 'foldexpr' that deletes every fold (`zE` after
+//! switching to "manual") end the update instead of writing into freed
+//! storage.
 //!
 //! The per-'foldmethod' level computations live in [`level`], the manual
 //! fold commands and the open/closed state in [`open_close`], the
@@ -15,24 +29,21 @@
 //! [`text`], line-number bookkeeping in [`adjust`], `:mkview` output in
 //! [`session`], and the Vimscript builtins in [`builtins`].
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use crate::diff::state::need_diff_redraw;
-use crate::drawscreen::UPD_NOT_VALID;
-use crate::garray::{ga_clear, ga_grow, ga_init};
+use crate::drawscreen::{UPD_NOT_VALID, find_wl_entry};
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
-use crate::memory::xfree;
 use crate::plines::plines_win_nofold;
 use crate::state::mode::State;
 use crate::types::TAB;
 use crate::types::*;
 use crate::winlayer::Win;
-use core::ffi::{c_char, c_int, c_uint, c_void};
-use core::{ptr, slice};
+use core::ffi::{c_int, c_uint};
+use core::ptr;
 
 pub mod adjust;
 mod builtins;
@@ -44,7 +55,8 @@ mod session;
 mod text;
 
 pub use adjust::{
-    fold_adjust_cursor, fold_adjust_visual, fold_mark_adjust, fold_move_range, fold_move_to,
+    adjust_fold_list, fold_adjust_cursor, fold_adjust_visual, fold_mark_adjust, fold_move_range,
+    fold_move_to,
 };
 pub use builtins::{f_foldclosed, f_foldclosedend, f_foldlevel, f_foldtext, f_foldtextresult};
 pub use open_close::{
@@ -53,14 +65,14 @@ pub use open_close::{
     open_fold_recurse,
 };
 pub use session::put_folds;
-pub use text::get_foldtext;
+pub(crate) use text::{FoldText, get_foldtext};
 
 use crate::pos::MAXLNUM;
 use crate::state::MODE_INSERT;
 
 use crate::optionstr::OptStringRef;
 use level::fold_update_computed;
-use list::{FLine, FoldList, FoldRef};
+use list::{find, find_at_or_below, fold_on_line};
 use open_close::check_closed;
 
 pub(crate) static disable_fold_update: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
@@ -77,12 +89,6 @@ pub const MAX_LEVEL: c_int = 20;
 /// Size of the buffer `get_foldtext` renders the default fold text into.
 pub const FOLD_TEXT_LEN: c_uint = 51;
 
-/// `Fold::fd_flags` — whether a fold is drawn open, closed, or takes its
-/// state from 'foldlevel'.
-pub const FD_OPEN: c_int = 0;
-pub const FD_CLOSED: c_int = 1;
-pub const FD_LEVEL: c_int = 2;
-
 /// What `set_manual_fold` and friends did, so the caller knows whether to
 /// keep looking for a fold to act on.
 pub const DONE_NOTHING: c_int = 0;
@@ -92,22 +98,51 @@ pub const DONE_FOLD: c_int = 2;
 /// The `amount` `mark_adjust` passes to mean "these lines are gone".
 const LINES_DELETED: LineNr = MAXLNUM;
 
-/// One of the six per-'foldmethod' level computations in [`level`].
-pub(in crate::fold) type LevelGetter = Option<unsafe fn(FLine) -> ()>;
+/// Whether a fold is drawn open or closed, or takes its state from
+/// 'foldlevel' — upstream's `FD_OPEN`, `FD_CLOSED` and `FD_LEVEL`.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum FoldState {
+    Open,
+    Closed,
+    Level,
+}
 
-#[derive(Copy, Clone)]
+#[derive(Clone, Debug)]
 pub struct Fold {
     /// First line of the fold; relative to the parent for a nested fold.
-    pub fd_top: LineNr,
+    pub top: LineNr,
     /// Number of lines in the fold.
-    pub fd_len: LineNr,
+    pub len: LineNr,
     /// The folds nested inside this one.
-    pub fd_nested: GArray,
-    /// `FD_OPEN`, `FD_CLOSED` or `FD_LEVEL`.
-    pub fd_flags: c_char,
+    pub nested: Vec<Fold>,
+    /// Drawn open, closed, or as 'foldlevel' says.
+    pub state: FoldState,
     /// Whether the fold is smaller than 'foldminlines'. `None` means "not
     /// worked out yet", and applies to the nested folds too.
-    pub fd_small: Option<bool>,
+    pub small: Option<bool>,
+}
+
+impl Fold {
+    /// A fold over `top..top + len`, open, with nothing inside.
+    pub fn new(top: LineNr, len: LineNr) -> Self {
+        Self {
+            top,
+            len,
+            nested: Vec::new(),
+            state: FoldState::Open,
+            small: None,
+        }
+    }
+
+    /// The fold's last line, in the same frame as [`Fold::top`].
+    pub fn last(&self) -> LineNr {
+        self.top + self.len - 1
+    }
+
+    /// Whether the fold is drawn as `state` says.
+    pub fn is(&self, state: FoldState) -> bool {
+        self.state == state
+    }
 }
 
 /// What the per-'foldmethod' level computations are handed, and what they
@@ -153,23 +188,16 @@ static prev_lnum: GlobalCell<LineNr> = GlobalCell::new(0);
 static prev_lnum_lvl: GlobalCell<c_int> = GlobalCell::new(-1);
 
 /// 'foldmarker' split into its two halves, refreshed by `parse_marker`.
-static foldstartmarkerlen: GlobalCell<size_t> = GlobalCell::new(0);
-static foldendmarkerlen: GlobalCell<size_t> = GlobalCell::new(0);
-
-/// A window's toplevel fold list.
-fn window_folds(mut window: Win) -> FoldList {
-    // SAFETY: `w_folds` is initialised by `fold_init_win` when the window is
-    // allocated and lives as long as the window does.
-    unsafe { FoldList::new(&raw mut window.w_folds) }
-}
+static foldstartmarkerlen: GlobalCell<usize> = GlobalCell::new(0);
+static foldendmarkerlen: GlobalCell<usize> = GlobalCell::new(0);
 
 /// Copy the folding state from window `wp_from` to window `wp_to`.
 pub fn copy_folding_state(wp_from: Win, mut wp_to: Win) {
     wp_to.w_fold_manual = wp_from.w_fold_manual;
     wp_to.w_foldinvalid = wp_from.w_foldinvalid;
-    // The header is copied out, so the two windows may be one.
-    let from = wp_from.w_folds;
-    clone_fold_list(&from, &mut wp_to.w_folds);
+    // Cloned before the assignment, so the two windows may be one.
+    let folds = wp_from.w_folds.clone();
+    wp_to.w_folds = folds;
 }
 
 /// The fold questions a caller asks *of a window*, as [`Win`] methods.
@@ -220,6 +248,18 @@ impl Win {
     pub fn has_any_folding(self) -> bool {
         has_any_folding(self) != 0
     }
+
+    /// Lend the window's toplevel fold list to `f`.
+    ///
+    /// The loan is the field and nothing else: `f` must not reach the window
+    /// (or anything that reads its folds) while it holds the list, which is
+    /// why the closures handed to this are the pure tree operations and why
+    /// every option they need is read before the call.
+    #[inline(always)]
+    fn with_folds<R>(self, f: impl FnOnce(&mut Vec<Fold>) -> R) -> R {
+        let mut window = self;
+        f(&mut window.w_folds)
+    }
 }
 
 /// Returns true if there may be folded lines in window "win".
@@ -229,7 +269,7 @@ impl Win {
 pub fn has_any_folding(win: Win) -> c_int {
     (win.buffer().terminal.is_null()
         && win.w_onebuf_opt.wo_fen != 0
-        && (!foldmethod_is_manual(win) || win.w_folds.ga_len > 0)) as c_int
+        && (!foldmethod_is_manual(win) || !win.w_folds.is_empty())) as c_int
 }
 
 /// When returning true, `firstp` and `lastp` are set to the first and last
@@ -243,6 +283,92 @@ pub fn has_folding(
     lastp: Option<&mut LineNr>,
 ) -> bool {
     has_folding_win(win, lnum, firstp, lastp, true, None)
+}
+
+/// Where [`has_folding_win`]'s walk down the tree has got to.
+struct ClosedWalk {
+    /// `lnum` relative to the list the walk is in.
+    lnum_rel: LineNr,
+    /// Depth of that list; 0 is the window's toplevel.
+    level: c_int,
+    /// The shallowest level whose fold starts at `lnum`, plus one; 0 for none.
+    low_level: c_int,
+    use_level: bool,
+    maybe_small: bool,
+    /// The absolute first and last line of the fold the walk stands in.
+    first: LineNr,
+    last: LineNr,
+}
+
+/// What a stretch of [`ClosedWalk::descend`] ended on.
+enum WalkEnd {
+    /// The walk ran out of folds containing the line, or found it closed
+    /// (`closed`).
+    Done { closed: bool },
+    /// A closed fold whose 'foldminlines' answer needs its screen lines
+    /// counted, which needs the window: the walk lets go of the tree first.
+    /// `top` is relative to the list the walk is in, as [`Fold::top`] is.
+    CountRows { top: LineNr, len: LineNr },
+}
+
+impl ClosedWalk {
+    /// Walk down from depth `self.level` towards `lnum` until a fold says
+    /// "closed here", accumulating each fold's `top` — relative to its parent
+    /// — into the absolute `first`/`last`.
+    #[inline(always)]
+    fn descend(
+        &mut self,
+        root: &mut [Fold],
+        lnum: LineNr,
+        foldlevel: OptInt,
+        foldminlines: OptInt,
+    ) -> WalkEnd {
+        let mut folds = root;
+        if self.level > 0 {
+            // Resuming after a row count: find the list again.
+            let mut lnum_rel = lnum;
+            for _ in 0..self.level {
+                let Ok(i) = find(folds, lnum_rel) else {
+                    return WalkEnd::Done { closed: false };
+                };
+                lnum_rel -= folds[i].top;
+                folds = &mut folds[i].nested;
+            }
+        }
+        while let Ok(i) = find(folds, self.lnum_rel) {
+            let fold = &mut folds[i];
+            if self.lnum_rel == fold.top && self.low_level == 0 {
+                self.low_level = self.level + 1;
+            }
+            self.first += fold.top;
+            self.last += fold.top;
+            let verdict = check_closed(
+                fold,
+                &mut self.use_level,
+                self.level,
+                &mut self.maybe_small,
+                foldlevel,
+                foldminlines,
+            );
+            match verdict {
+                Closed::Yes => {
+                    self.last += fold.len - 1;
+                    return WalkEnd::Done { closed: true };
+                }
+                Closed::CountRows => {
+                    return WalkEnd::CountRows {
+                        top: fold.top,
+                        len: fold.len,
+                    };
+                }
+                Closed::No => {}
+            }
+            self.lnum_rel -= fold.top;
+            self.level += 1;
+            folds = &mut fold.nested;
+        }
+        WalkEnd::Done { closed: false }
+    }
 }
 
 /// Search folds starting at lnum
@@ -272,51 +398,58 @@ pub fn has_folding_win(
     let mut had_folded = false;
     let mut first: LineNr = 0;
     let mut last: LineNr = 0;
-    if cache {
-        let x = find_wl_entry(win, lnum);
-        if x >= 0 {
-            // SAFETY: `find_wl_entry` only ever answers with an index of a
-            // valid `w_lines` entry.
-            let entry = unsafe { &*win.w_lines.offset(x as isize) };
-            first = entry.wl_lnum;
-            last = entry.wl_foldend;
-            had_folded = entry.wl_folded;
-        }
+    if cache && let Some(entry) = find_wl_entry(win, lnum) {
+        first = entry.wl_lnum;
+        last = entry.wl_foldend;
+        had_folded = entry.wl_folded;
     }
-    let mut lnum_rel = lnum;
-    let mut level = 0;
-    let mut low_level = 0;
-    let mut maybe_small = false;
-    let mut use_level = false;
+    let mut walk = ClosedWalk {
+        lnum_rel: lnum,
+        level: 0,
+        low_level: 0,
+        use_level: false,
+        maybe_small: false,
+        first,
+        last,
+    };
     if first == 0 {
-        let mut folds = window_folds(win);
-        // Walk down the tree until a level says "closed here", accumulating
-        // each fold's `fd_top` — which is relative to its parent — into the
-        // absolute `first`.
-        while let Ok(i) = folds.find(lnum_rel) {
-            let fold = folds.at(i);
-            if lnum_rel == fold.top() && low_level == 0 {
-                low_level = level + 1;
+        let (foldlevel, foldminlines) = (win.w_onebuf_opt.wo_fdl, win.w_onebuf_opt.wo_fml);
+        loop {
+            let end = win.with_folds(|root| walk.descend(root, lnum, foldlevel, foldminlines));
+            match end {
+                WalkEnd::Done { closed } => {
+                    had_folded = closed;
+                    break;
+                }
+                WalkEnd::CountRows { top, len } => {
+                    let lnum_off = lnum - walk.lnum_rel;
+                    let small = fits_in_rows(win, top + lnum_off, len, foldminlines);
+                    let level = usize::try_from(walk.level).unwrap_or(0);
+                    win.with_folds(|root| {
+                        if let Some(fold) = fold_on_line(root, lnum, level) {
+                            fold.small = Some(small);
+                        }
+                    });
+                    if !small {
+                        walk.last += len - 1;
+                        had_folded = true;
+                        break;
+                    }
+                    // 'foldminlines' vetoes it: look further down.
+                    walk.lnum_rel -= top;
+                    walk.level += 1;
+                }
             }
-            first += fold.top();
-            last += fold.top();
-            had_folded = check_closed(
-                win,
-                fold,
-                &mut use_level,
-                level,
-                &mut maybe_small,
-                lnum - lnum_rel,
-            );
-            if had_folded {
-                last += fold.len() - 1;
-                break;
-            }
-            folds = fold.nested();
-            lnum_rel -= fold.top();
-            level += 1;
         }
+        first = walk.first;
+        last = walk.last;
     }
+    let ClosedWalk {
+        lnum_rel,
+        level,
+        low_level,
+        ..
+    } = walk;
     if !had_folded {
         if let Some(info) = infop.as_mut() {
             info.fi_level = level;
@@ -432,7 +565,7 @@ pub fn foldmethod_is_diff(window: Win) -> bool {
 /// Remove all folding for window "win".
 ///
 pub fn clear_folding(mut win: Win) {
-    delete_fold_recurse(&mut win.w_folds);
+    win.w_folds = Vec::new();
     win.w_foldinvalid = false;
 }
 
@@ -450,21 +583,15 @@ pub fn fold_update(window: Win, top: LineNr, bot: LineNr) {
     if need_diff_redraw.get() {
         return;
     }
-    let folds = window_folds(window);
-    if !folds.is_empty() {
+    window.with_folds(|folds| {
         // Every fold that starts inside the changed range may have changed
         // size, so its 'foldminlines' answer has to be worked out again.
         let (start, end) = (top.min(bot), top.max(bot));
-        let first = match folds.find(start) {
-            Ok(i) | Err(i) => i,
-        };
-        for fold in (first..folds.len())
-            .map(|i| folds.at(i))
-            .take_while(|fold| fold.top() <= end)
-        {
-            fold.set_small(None);
+        let first = find_at_or_below(folds, start);
+        for fold in folds[first..].iter_mut().take_while(|fold| fold.top <= end) {
+            fold.small = None;
         }
-    }
+    });
     if foldmethod_is_indent(window)
         || foldmethod_is_expr(window)
         || foldmethod_is_marker(window)
@@ -501,93 +628,17 @@ pub fn fold_update_all(mut win: Win) {
     win.redraw_later(UPD_NOT_VALID);
 }
 
-/// Init the fold info in a new window.
-pub fn fold_init_win(mut new_win: Win) {
-    // SAFETY: the caller's promise. This is the call that makes `w_folds` a
-    // fold list, i.e. the one every `FoldList::new` leans on.
-    unsafe { ga_init(&raw mut new_win.w_folds, size_of::<Fold>() as c_int, 10) };
-}
-
-/// Find an entry in the win->w_lines[] array for buffer line "lnum".
-/// Only valid entries are considered (for entries where wl_valid is false the
-/// line number can be wrong).
-///
-/// Returns index of entry or -1 if not found.
-///
-pub fn find_wl_entry(win: Win, lnum: LineNr) -> c_int {
-    let valid = win.w_lines_valid;
-    // SAFETY: a live window's `w_lines` holds at least `w_lines_valid`
-    // initialised entries, and is only null while that count is zero.
-    let lines = unsafe {
-        if valid <= 0 {
-            &[][..]
-        } else {
-            slice::from_raw_parts(win.w_lines, valid as usize)
-        }
-    };
-    for (i, entry) in lines.iter().enumerate() {
-        if entry.wl_valid {
-            if lnum < entry.wl_lnum {
-                return -1;
-            }
-            if lnum <= entry.wl_foldend {
-                return i as c_int;
-            }
-        }
-    }
-    -1
-}
-
-/// Will "clone" (i.e deep copy) a GArray of folds into `to`, which is
-/// re-initialised, so anything it held is leaked.
-pub fn clone_fold_list(from: &GArray, to: &mut GArray) {
-    // SAFETY: a fold list (every `GArray` this is handed is one -- a
-    // window's `w_folds` or a remembered entry's `wi_folds`), read only, and
-    // a writable one.
-    unsafe { clone_fold_list_at(::core::ptr::from_ref(from).cast_mut(), to) }
-}
-
-/// [`clone_fold_list`] over the raw arrays the nested folds hold.
-///
-/// # Safety
-/// `from` must be a live fold list; `to` must be writable and is
-/// re-initialised, so anything it held is leaked.
-unsafe fn clone_fold_list_at(from: *mut GArray, to: *mut GArray) {
-    // SAFETY: the caller's promise; `ga_init` is what makes `to` a fold list.
-    let (src, dst) = unsafe {
-        ga_init(to, (*from).ga_itemsize, (*from).ga_growsize);
-        (FoldList::new(from), FoldList::new(to))
-    };
-    if src.is_empty() {
-        return;
-    }
-    // SAFETY: `to` is a fold list, as of the `ga_init` above.
-    unsafe { ga_grow(to, src.len()) };
-    for (i, fold) in src.folds().enumerate() {
-        let copy = dst.at(i as c_int);
-        copy.set_top(fold.top());
-        copy.set_len(fold.len());
-        copy.set_flags(fold.flags());
-        copy.set_small(fold.small());
-        // SAFETY: the source fold's nested list is live, and the destination
-        // entry is the zeroed storage `ga_grow` just handed out.
-        unsafe { clone_fold_list_at(fold.nested().gap(), copy.nested().gap()) };
-        // Grown one at a time so an interrupted clone still frees cleanly.
-        dst.set_len(dst.len() + 1);
-    }
-}
-
 /// Returns fold level at line number "lnum" in window "wp".
 ///
 fn fold_level_win(window: Win, lnum: LineNr) -> c_int {
-    let mut folds = window_folds(window);
+    let mut folds: &[Fold] = &window.w_folds;
     let mut lnum_rel = lnum;
     let mut level = 0;
-    while let Ok(i) = folds.find(lnum_rel) {
-        let fold = folds.at(i);
-        lnum_rel -= fold.top();
+    while let Ok(i) = find(folds, lnum_rel) {
+        let fold = &folds[i];
+        lnum_rel -= fold.top;
         level += 1;
-        folds = fold.nested();
+        folds = &fold.nested;
     }
     level
 }
@@ -606,86 +657,24 @@ fn checkupdate(mut window: Win) {
 ///
 /// `recursive` — when true, also delete all the folds contained in it.
 ///                   when false, contained folds are moved one level up.
-///
-/// # Safety
-/// `idx` must name an entry of `folds`.
-unsafe fn delete_fold_entry(folds: FoldList, idx: c_int, recursive: bool) {
-    let fold = folds.at(idx);
-    if recursive || fold.nested().is_empty() {
-        // SAFETY: `fd_nested` of a live fold is a live fold list.
-        unsafe { delete_fold_recurse_at(fold.nested().gap()) };
-        folds.set_len(folds.len() - 1);
-        if idx < folds.len() {
-            // SAFETY: the entries above `idx` slide down over the hole, and
-            // `ga_len` has already been shortened by the one that went.
-            unsafe {
-                ptr::copy(
-                    fold.entry().add(1),
-                    fold.entry(),
-                    (folds.len() - idx) as usize,
-                )
-            };
-        }
+fn delete_fold_entry(folds: &mut Vec<Fold>, idx: usize, recursive: bool) {
+    let mut fold = folds.remove(idx);
+    if recursive || fold.nested.is_empty() {
         return;
     }
-    // Not recursive and it has children: the children take its place, so the
-    // list grows by `moved - 1`.
-    let moved = fold.nested().len();
-    // SAFETY: a live fold list.
-    unsafe { ga_grow(folds.gap(), moved - 1) };
-    // `ga_grow` may have moved the storage, so re-derive the entry.
-    let fold = folds.at(idx);
-    let nested = fold.nested();
-    let children = nested.at(0).entry();
-    for child in nested.folds() {
+    // Not recursive and it has children: the children take its place.
+    let mut children = core::mem::take(&mut fold.nested);
+    for child in &mut children {
         // The children were relative to the fold that is going away.
-        child.set_top(child.top() + fold.top());
-        if fold.is(FD_LEVEL) {
-            child.set_flags(FD_LEVEL);
+        child.top += fold.top;
+        if fold.is(FoldState::Level) {
+            child.state = FoldState::Level;
         }
-        if fold.small().is_none() {
-            child.set_small(None);
-        }
-    }
-    // SAFETY: both moves stay inside the array `ga_grow` just sized for
-    // `moved - 1` more entries; the second reads the nested array, which is a
-    // separate allocation.
-    if idx + 1 < folds.len() {
-        unsafe {
-            ptr::copy(
-                fold.entry().add(1),
-                fold.entry().add(moved as usize),
-                (folds.len() - (idx + 1)) as usize,
-            )
-        };
-    }
-    unsafe { ptr::copy(children, fold.entry(), moved as usize) };
-    unsafe { xfree(children as *mut c_void) };
-    folds.set_len(folds.len() + moved - 1);
-}
-
-/// Free the fold list `gap` and every fold nested inside it. It is left
-/// empty, not freed.
-pub fn delete_fold_recurse(gap: &mut GArray) {
-    // SAFETY: a fold list, as every `GArray` this is handed is.
-    unsafe { delete_fold_recurse_at(gap) }
-}
-
-/// [`delete_fold_recurse`] over the raw arrays the nested folds hold.
-///
-/// # Safety
-/// `gap` must be a live fold list. It is left empty, not freed.
-unsafe fn delete_fold_recurse_at(gap: *mut GArray) {
-    // SAFETY: the caller's promise.
-    let folds = unsafe { FoldList::new(gap) };
-    if folds.has_data() {
-        for fold in folds.folds() {
-            // SAFETY: `fd_nested` of a live fold is a live fold list.
-            unsafe { delete_fold_recurse_at(fold.nested().gap()) };
+        if fold.small.is_none() {
+            child.small = None;
         }
     }
-    // SAFETY: the caller's promise.
-    unsafe { ga_clear(gap) };
+    folds.splice(idx..idx, children);
 }
 
 /// Get the lowest 'foldlevel' value that makes the deepest nested fold in
@@ -693,51 +682,48 @@ unsafe fn delete_fold_recurse_at(gap: *mut GArray) {
 ///
 pub fn deepest_fold_nesting(window: Win) -> c_int {
     checkupdate(window);
-    deepest_nesting_of(window_folds(window))
+    deepest_nesting_of(&window.w_folds)
 }
 
 /// How many levels of fold `folds` holds, counting itself.
-fn deepest_nesting_of(folds: FoldList) -> c_int {
+fn deepest_nesting_of(folds: &[Fold]) -> c_int {
     folds
-        .folds()
-        .map(|fold| deepest_nesting_of(fold.nested()) + 1)
+        .iter()
+        .map(|fold| deepest_nesting_of(&fold.nested) + 1)
         .max()
         .unwrap_or(0)
 }
 
-/// Work out `fold`'s `fd_small` — whether it is shorter than 'foldminlines',
-/// and so should be drawn open however it is flagged.
-///
-/// This is the one answer in `fold/` that is not a function of the tree:
-/// 'foldminlines' counts *screen* lines, so `plines_win_nofold` makes it
-/// depend on the window's width and 'wrap' too.
-///
-/// `lnum_off` — offset for fold->top()
-fn check_small(window: Win, fold: FoldRef, lnum_off: LineNr) {
-    if fold.small().is_some() {
-        return;
-    }
-    forget_small_flags(fold.nested());
-    let foldminlines = window.w_onebuf_opt.wo_fml;
-    if fold.len() as OptInt > foldminlines {
-        fold.set_small(Some(false));
-        return;
-    }
+/// Whether the `len` lines from `first` take no more than `foldminlines`
+/// screen lines in `window` — the half of a fold's `small` answer that is
+/// not a function of the tree: 'foldminlines' counts *screen* lines, so
+/// `plines_win_nofold` makes it depend on the window's width and 'wrap' too.
+fn fits_in_rows(window: Win, first: LineNr, len: LineNr, foldminlines: OptInt) -> bool {
     let mut count = 0;
-    for n in 0..fold.len() {
-        count += plines_win_nofold(window, fold.top() + lnum_off + n);
-        if count as OptInt > foldminlines {
-            fold.set_small(Some(false));
-            return;
+    for n in 0..len {
+        count += plines_win_nofold(window, first + n);
+        if OptInt::from(count) > foldminlines {
+            return false;
         }
     }
-    fold.set_small(Some(true));
+    true
 }
 
-/// Forget the `fd_small` answer for every fold in `folds`, so the next
-/// `check_small` works it out again.
-fn forget_small_flags(folds: FoldList) {
-    for fold in folds.folds() {
-        fold.set_small(None);
+/// Forget the `small` answer for every fold in `folds`, so the next
+/// [`check_closed`] works it out again.
+fn forget_small_flags(folds: &mut [Fold]) {
+    for fold in folds {
+        fold.small = None;
     }
+}
+
+/// [`check_closed`]'s answer.
+#[derive(Copy, Clone, PartialEq, Eq)]
+enum Closed {
+    No,
+    Yes,
+    /// Closed by its flags, but whether 'foldminlines' vetoes it depends on
+    /// how many screen lines it takes: the caller counts them with
+    /// [`fits_in_rows`] and stores the answer in the fold's `small`.
+    CountRows,
 }

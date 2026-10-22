@@ -18,7 +18,7 @@ use crate::decoration::{DecorStateRef, SIGN_WIDTH};
 use crate::r#move::WinValid;
 use crate::option::cpo_has;
 use crate::optionstr::OptString;
-use crate::types::CpoFlag;
+use crate::types::{CpoFlag, WLine};
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 
@@ -57,6 +57,31 @@ struct Walk {
     scrolled_for_mod: bool,
     /// What the previous iteration did.
     did_update: DidUpdate,
+}
+
+/// The valid `w_lines` entry for buffer line `lnum`, copied out; `None` when
+/// no valid entry covers it.
+///
+/// Only valid entries are considered (for entries where `wl_valid` is false
+/// the line number can be wrong), and the walk stops at the first valid entry
+/// below `lnum`, as upstream's `find_wl_entry` does.
+pub(crate) fn find_wl_entry(win: Win, lnum: LineNr) -> Option<WLine> {
+    let valid = usize::try_from(win.w_lines_valid).unwrap_or(0);
+    if valid == 0 {
+        return None;
+    }
+    // SAFETY: a live window's `w_lines` holds at least `w_lines_valid`
+    // initialised entries, and is only null while that count is zero.
+    let lines = unsafe { core::slice::from_raw_parts(win.w_lines, valid) };
+    for entry in lines.iter().filter(|entry| entry.wl_valid) {
+        if lnum < entry.wl_lnum {
+            return None;
+        }
+        if lnum <= entry.wl_foldend {
+            return Some(*entry);
+        }
+    }
+    None
 }
 
 /// Draw window `window`, and answer the `w_botline` it had on entry.

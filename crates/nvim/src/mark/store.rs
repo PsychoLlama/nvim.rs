@@ -17,9 +17,10 @@
 //! seven siblings — inside an `unsafe fn` whose whole body was therefore
 //! unchecked. [`Fmark`] and [`Xfmark`] make that step once: *constructing* a
 //! handle is the unsafe part, and every accessor on it is a safe method. It
-//! is the same lever as [`crate::winlayer`]'s `Win`/`Buf`, `undo::store`'s
-//! `Header` and `fold::list`'s `FoldList` — the third container family to
-//! pay for it, and the one where the arithmetic was most repeated.
+//! is the same lever as [`crate::winlayer`]'s `Win`/`Buf` and `undo::store`'s
+//! `Header` (and was `fold::list`'s, before the fold tree became nested
+//! vectors) — the third container family to pay for it, and the one where the
+//! arithmetic was most repeated.
 //!
 //! The handles are raw-pointer-shaped rather than `&mut FileMark` because the
 //! stores are walked while the editor is re-entered through them: an

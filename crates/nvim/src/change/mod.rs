@@ -30,6 +30,7 @@ use crate::charset::getwhitecols_curline;
 use crate::cursor::{check_cursor_lnum, check_visual_pos, coladvance_force, getviscol};
 use crate::decoration::{kMTMetaInline, kMTMetaLines};
 use crate::diff::{diff_internal, diff_lnum_win, diff_update_line};
+use crate::drawscreen::find_wl_entry;
 use crate::drawscreen::state::{
     need_maketitle, redraw_cmdline, redraw_not_allowed, redraw_tabline, search_hl_has_cursor_lnum,
 };
@@ -40,7 +41,7 @@ use crate::edit::{replace_push, replace_push_nul, truncate_spaces};
 use crate::eval::vars::set_vim_var_string;
 use crate::extmark::curbuf_splice_pending;
 use crate::extmark::{extmark_adjust, extmark_splice, extmark_splice_cols};
-use crate::fold::{find_wl_entry, fold_update, has_folding_win};
+use crate::fold::{fold_update, has_folding_win};
 use crate::highlight_group::HLF_W;
 use crate::indent::{
     copy_indent, fixthisline, get_indent, get_sw_value, may_do_si, set_indent,

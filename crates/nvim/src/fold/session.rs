@@ -31,11 +31,11 @@ fn put_line(out: &mut dyn Write, args: core::fmt::Arguments<'_>) -> Result<(), F
 pub fn put_folds(out: &mut dyn Write, window: Win) -> Result<(), Failed> {
     if foldmethod_is_manual(window) {
         put_line(out, format_args!("silent! normal! zE"))?;
-        put_folds_recurse(out, window_folds(window), 0)?;
+        put_folds_recurse(out, &window.w_folds, 0)?;
         put_line(out, format_args!("let &fdl = &fdl"))?;
     }
     if window.w_fold_manual {
-        return put_foldopen_recurse(out, window, window_folds(window), 0);
+        return put_foldopen_recurse(out, window, &window.w_folds, 0);
     }
     Ok(())
 }
@@ -45,15 +45,15 @@ pub fn put_folds(out: &mut dyn Write, window: Win) -> Result<(), Failed> {
 /// Answers `Err` when writing failed.
 pub(super) fn put_folds_recurse(
     out: &mut dyn Write,
-    folds: FoldList,
+    folds: &[Fold],
     off: LineNr,
 ) -> Result<(), Failed> {
-    for fold in folds.folds() {
+    for fold in folds {
         // The nested folds are written first, because `:fold` over a range
         // that already holds folds swallows them.
-        put_folds_recurse(out, fold.nested(), off + fold.top())?;
+        put_folds_recurse(out, &fold.nested, off + fold.top)?;
         let (top, last) = (
-            int64_t::from(fold.top() + off),
+            int64_t::from(fold.top + off),
             int64_t::from(fold.last() + off),
         );
         put_line(out, format_args!("sil! {top},{last}fold"))?;
@@ -67,29 +67,29 @@ pub(super) fn put_folds_recurse(
 pub(super) fn put_foldopen_recurse(
     out: &mut dyn Write,
     window: Win,
-    folds: FoldList,
+    folds: &[Fold],
     off: LineNr,
 ) -> Result<(), Failed> {
-    for fold in folds.folds() {
-        if fold.is(FD_LEVEL) {
+    for fold in folds {
+        if fold.is(FoldState::Level) {
             // It follows 'foldlevel', so there is nothing to remember.
             continue;
         }
-        if !fold.nested().is_empty() {
+        if !fold.nested.is_empty() {
             // Open it first, so the nested commands can reach inside.
-            put_line(out, format_args!("{}", int64_t::from(fold.top() + off)))?;
+            put_line(out, format_args!("{}", int64_t::from(fold.top + off)))?;
             put_line(out, format_args!("sil! normal! zo"))?;
-            put_foldopen_recurse(out, window, fold.nested(), off + fold.top())?;
-            if fold.is(FD_CLOSED) {
+            put_foldopen_recurse(out, window, &fold.nested, off + fold.top)?;
+            if fold.is(FoldState::Closed) {
                 put_fold_open_close(out, fold, off)?;
             }
             continue;
         }
         // A leaf: only write the command when its state differs from what
         // 'foldlevel' would give it anyway.
-        let level = fold_level_win(window, off + fold.top());
+        let level = fold_level_win(window, off + fold.top);
         let foldlevel = window.w_onebuf_opt.wo_fdl;
-        let differs = if fold.is(FD_CLOSED) {
+        let differs = if fold.is(FoldState::Closed) {
             foldlevel >= OptInt::from(level)
         } else {
             foldlevel < OptInt::from(level)
@@ -106,10 +106,10 @@ pub(super) fn put_foldopen_recurse(
 /// Answers `Err` when writing failed.
 pub(super) fn put_fold_open_close(
     out: &mut dyn Write,
-    fold: FoldRef,
+    fold: &Fold,
     off: LineNr,
 ) -> Result<(), Failed> {
-    put_line(out, format_args!("{}", fold.top() + off))?;
-    let action = if fold.is(FD_CLOSED) { 'c' } else { 'o' };
+    put_line(out, format_args!("{}", fold.top + off))?;
+    let action = if fold.is(FoldState::Closed) { 'c' } else { 'o' };
     put_line(out, format_args!("sil! normal! z{action}"))
 }

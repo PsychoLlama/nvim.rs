@@ -20,7 +20,7 @@ use crate::diff::{diff_change_parse, diff_check_with_linestatus, diff_find_chang
 use crate::drawscreen::state::{dollar_vcol, win_extmark_arr};
 use crate::drawscreen::{compute_foldcolumn, conceal_cursor_line, number_width, win_draw_end};
 use crate::eval::vars::set_vim_var_nr;
-use crate::fold::{FOLD_TEXT_LEN, VIRTTEXT_EMPTY, get_foldtext};
+use crate::fold::{FOLD_TEXT_LEN, FoldText, VIRTTEXT_EMPTY, get_foldtext};
 use crate::global_cell::GlobalCell;
 use crate::grid::{
     LineAttrs, LineSpan, SLF_RIGHTLEFT, grid_adjust, grid_put_linebuf, linebuf_mirror, schar_cells,

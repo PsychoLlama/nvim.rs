@@ -63,8 +63,8 @@ autocmd/	*	1	0	0	0	-	-	-	-
 autocmd/	autocmd/block.rs	1	0	0	0	-	-	-	-
 buffer_updates.rs	*	1	10	0	8	deref:1 expr:1	-	-	arena_mem_free:2 api_free_luaref:1 buf_collect_lines:1 from_raw_parts:1 rpc_send_event:1 xfree:1 xrealloc:1
 buffer_updates.rs	buffer_updates.rs	1	10	0	8	deref:1 expr:1	-	-	arena_mem_free:2 api_free_luaref:1 buf_collect_lines:1 from_raw_parts:1 rpc_send_event:1 xfree:1 xrealloc:1
-change/	*	1	2	0	0	deref:1 ref:1	-	-	-
-change/	change/splice.rs	1	2	0	0	deref:1 ref:1	-	-	-
+change/	*	1	1	0	0	ref:1	-	-	-
+change/	change/splice.rs	1	1	0	0	ref:1	-	-	-
 channel/	*	5	300	48	151	deref:115 expr:28 ref:3 compound:1	other:42 str:10 void:10 pp:4 pp_str:4 value:1	other:10 str:3	multiqueue_put_event:6 rpc_start:5 rstream_may_close:4 rstream_start:4 xfree:4 rstream_init:3 DictRef::owning:2 bytes_at:2
 channel/	channel/info.rs	1	28	4	13	deref:13 expr:1 ref:1	other:2 pp:1 pp_str:1 str:1	-	cstr_to_string:2 DictRef::retained:1 multiqueue_put_event:1 terminal_buf:1 xfree:1
 channel/	channel/mod.rs	1	91	19	43	deref:34 expr:11 compound:1	other:16 pp_str:2 str:2 pp:1 void:1	other:9 str:3	rstream_may_close:4 multiqueue_put_event:2 stream_may_close:2 xfree:2 zeroed:2 Box::from_raw:1 api_free_luaref:1 callback_free:1
@@ -77,11 +77,11 @@ cstr.rs	*	1	17	9	10	deref:5 expr:2	str:11	-	CStr::from_ptr:3 from_raw_parts:3 CS
 cstr.rs	cstr.rs	1	17	9	10	deref:5 expr:2	str:11	-	CStr::from_ptr:3 from_raw_parts:3 CStr::from_bytes_with_nul_unchecked:1
 cursor_shape.rs	*	1	7	2	4	compound:1	str:2	-	cstr_to_string:2
 cursor_shape.rs	cursor_shape.rs	1	7	2	4	compound:1	str:2	-	cstr_to_string:2
-decoration/	*	6	125	25	56	deref:40 expr:19 ref:10	other:23	other:10	xfree:8 from_raw_parts_mut:2 .copy_from_nonoverlapping:1 CStr::from_ptr:1 Object::string:1 at_opt:1 from_raw_parts:1 hl_add_url:1
+decoration/	*	6	126	25	57	deref:40 expr:19 ref:10	other:23	other:10	xfree:8 from_raw_parts_mut:2 .copy_from_nonoverlapping:1 CStr::from_ptr:1 Object::string:1 at_opt:1 from_raw_parts:1 hl_add_url:1
 decoration/	decoration/dict.rs	1	24	3	5	deref:13 expr:6	-	-	Object::string:1 put:1 schar_get:1
 decoration/	decoration/handles.rs	1	12	7	2	ref:8 expr:2	other:7	other:5	-
 decoration/	decoration/mod.rs	1	53	6	20	deref:27 expr:6	other:4	other:3	xfree:6 xmalloc:1
-decoration/	decoration/query.rs	1	4	0	4	-	-	other:1	.copy_from_nonoverlapping:1 CStr::from_ptr:1 from_raw_parts:1 xrealloc:1
+decoration/	decoration/query.rs	1	5	0	5	-	-	other:1	.copy_from_nonoverlapping:1 CStr::from_ptr:1 from_raw_parts:1 xrealloc:1
 decoration/	decoration/signs.rs	1	8	3	3	expr:5	other:6	-	at_opt:1
 decoration/	decoration/state.rs	1	24	6	22	ref:2	other:6	other:1	from_raw_parts_mut:2 xfree:2 hl_add_url:1 marktree_get_altpos:1 marktree_itr_current:1 marktree_itr_get:1 marktree_itr_get_overlap:1 marktree_itr_next:1
 decoration_provider.rs	*	1	17	3	11	deref:2 expr:2 compound:1	str:3 other:1	other:1	decor_check_to_be_deleted:1 nlua_call_ref:1
@@ -99,7 +99,7 @@ diff/	diff/lmatch.rs	1	16	3	4	deref:11 expr:1	other:3	-	xfree:1
 diff/	diff/opts.rs	1	6	1	4	deref:2	other:2	-	.add:1 .offset_from:1 getdigits_int:1
 diff/	diff/refine.rs	1	57	5	14	deref:14 expr:1 ref:1	other:6	-	mb_get_class_tab:1 utf_char2bytes:1 utf_ptr2char:1 utfc_ptr2len:1
 diff/	diff/update.rs	1	39	6	35	deref:2 expr:2	other:7	-	Live::new:4 xfree:4 os_remove:2 Self::new:1 at:1 emsg:1 memchrsub:1 utf_char2bytes:1
-drawline/	*	10	277	18	134	deref:126 expr:8 ref:1	other:9	-	.offset:18 .offset_from:12 .add:7 bytes_at:7 utfc_ptr2len:7 utf_ptr2cells:6 rl_mirror_ascii:3 utfc_ptr2schar:3
+drawline/	*	10	277	18	132	deref:126 expr:8 ref:2	other:9	-	.offset:18 .offset_from:12 .add:7 bytes_at:7 utfc_ptr2len:7 utf_ptr2cells:6 rl_mirror_ascii:3 utfc_ptr2schar:3
 drawline/	drawline/attrs.rs	1	11	0	8	deref:3	-	-	utf_ptr2cells:3 .offset:1 .offset_from:1 diff_change_parse:1 utfc_ptr2len:1
 drawline/	drawline/cells.rs	1	7	0	6	deref:1	-	-	xfree:2 .offset:1 .offset_from:1 clear_virttext:1
 drawline/	drawline/chars.rs	1	49	3	25	deref:22 expr:2	-	-	.offset:8 .offset_from:5 utfc_ptr2len:3 utfc_ptr2schar:2 bytes_at:1 rl_mirror_ascii:1 utf_head_off:1 utf_ptr2char:1
@@ -107,14 +107,14 @@ drawline/	drawline/columns.rs	1	45	3	23	deref:17 expr:3	other:4	-	.add:3 build_s
 drawline/	drawline/mod.rs	1	4	1	3	deref:1	other:1	-	mb_off_next:1 terminal_get_line_attributes:1
 drawline/	drawline/prologue.rs	1	49	4	22	deref:25 expr:2	other:3	-	.offset_from:5 .offset:4 bytes_at:2 decor_redraw_signs:1 diff_change_parse:1 diff_check_with_linestatus:1 diff_find_change:1 skipwhite:1
 drawline/	drawline/rows.rs	1	21	0	9	deref:8	-	-	decor_redraw_eol:1 hl_combine_attr:1
-drawline/	drawline/special.rs	1	26	0	15	deref:10 expr:1	-	-	.offset:4 bytes_at:2 .copy_from_nonoverlapping:1 .write_bytes:1 from_raw_parts_mut:1 get_foldtext:1 mb_charlen:1 rl_mirror_ascii:1
+drawline/	drawline/special.rs	1	26	0	13	deref:10 expr:1 ref:1	-	-	.offset:4 bytes_at:2 .copy_from_nonoverlapping:1 from_raw_parts_mut:1 mb_charlen:1 rl_mirror_ascii:1
 drawline/	drawline/state.rs	1	8	4	2	deref:6	-	-	.add:1
 drawline/	drawline/virttext.rs	1	57	3	21	deref:33 ref:1	other:1	-	.add:3 utf_ptr2cells:3 utfc_ptr2len:3 decor_virt_pos:2 decor_virt_pos_kind:2 decor_init_draw_col:1 mb_charlen:1 mb_string2cells:1
-drawscreen/	*	5	93	1	24	deref:65 expr:4	other:1	-	.add:8 vim_strsize:3 win_line:3 at:1 decor_conceal_line:1 decor_range_add_virt:1 terminal_check_size:1 terminal_suspended:1
+drawscreen/	*	5	94	1	25	deref:65 expr:4	other:1	-	.add:8 vim_strsize:3 win_line:3 at:1 decor_conceal_line:1 decor_range_add_virt:1 from_raw_parts:1 terminal_check_size:1
 drawscreen/	drawscreen/mod.rs	1	8	1	2	deref:3 expr:3	other:1	-	utf_ptr2cells:1 vim_isprintc:1
 drawscreen/	drawscreen/mode.rs	1	5	0	5	-	-	-	vim_strsize:3 at:1 vim_snprintf:1
 drawscreen/	drawscreen/state.rs	1	0	0	0	-	-	-	-
-drawscreen/	drawscreen/winlines.rs	1	41	0	8	deref:32 expr:1	-	-	.add:4 win_line:3 decor_conceal_line:1
+drawscreen/	drawscreen/winlines.rs	1	42	0	9	deref:32 expr:1	-	-	.add:4 win_line:3 decor_conceal_line:1 from_raw_parts:1
 drawscreen/	drawscreen/winupdate.rs	1	39	0	9	deref:30	-	-	.add:4 decor_range_add_virt:1 terminal_check_size:1 terminal_suspended:1
 eval/	*	6	236	21	152	deref:40 expr:21 ref:15 compound:2	other:10 value:7 void:4 str:2	value:7 other:2	c_str:11 xfree:9 .as_ref:8 time_watcher_start:4 time_watcher_stop:4 Box::from_raw:3 channel_decref:3 time_watcher_close:3
 eval/	eval/collect.rs	1	18	1	11	deref:4 ref:2 expr:1	other:1	-	.as_ref:2
@@ -128,15 +128,6 @@ extmark/	extmark/mod.rs	1	5	0	3	deref:1 expr:1	other:1	-	decor_free:1 marktree_c
 extmark/	extmark/undo.rs	1	0	0	0	-	-	-	-
 fileio/	*	1	11	1	4	deref:6 expr:1	other:1 str:1	-	feof:1 ferror:1
 fileio/	fileio/legacy_stream.rs	1	11	1	4	deref:6 expr:1	other:1 str:1	-	feof:1 ferror:1
-fold/	*	8	143	12	73	deref:44 expr:7 compound:3 ref:2	other:7 str:2	other:4 str:1	ga_grow:7 copy:6 bytes_at:5 ga_init:3 slice_at:2 utfc_ptr2len:2 xfree:2 .offset_from:1
-fold/	fold/adjust.rs	1	16	5	15	ref:1	other:1	-	ga_grow:3 copy:1 ga_init:1 swap:1
-fold/	fold/builtins.rs	1	10	0	8	expr:2	-	-	XString::from_raw:1 bytes_at:1 clear_virttext:1 snprintf:1
-fold/	fold/level.rs	1	9	0	8	expr:1	-	-	-
-fold/	fold/list.rs	1	33	2	2	deref:31	other:2	other:4	-
-fold/	fold/marker.rs	1	26	0	8	deref:8 expr:3	-	-	bytes_at:3 slice_at:2 .offset_from:1 vim_strchr:1
-fold/	fold/mod.rs	1	21	3	15	compound:1 expr:1 ref:1	other:3	-	copy:3 ga_grow:2 ga_clear:1 ga_init:1 xfree:1
-fold/	fold/open_close.rs	1	8	0	7	deref:1	-	-	copy:2 ga_grow:2 ga_init:1
-fold/	fold/text.rs	1	20	2	10	deref:4 compound:2	str:2 other:1	str:1	utfc_ptr2len:2 bytes_at:1 prefix_eq:1 ptr2cells:1 skipwhite:1 strstr:1 transstr:1 vim_isprintc:1
 garray.rs	*	1	38	14	25	ref:11 deref:1 expr:1	other:11 str:4	str:2 void:1	xfree:3 from_raw_parts_mut:2 CStr::from_ptr:1 copy_nonoverlapping:1 from_raw_parts:1 path_fnamecmp:1 sort_strings:1 write_bytes:1
 garray.rs	garray.rs	1	38	14	25	ref:11 deref:1 expr:1	other:11 str:4	str:2 void:1	xfree:3 from_raw_parts_mut:2 CStr::from_ptr:1 copy_nonoverlapping:1 from_raw_parts:1 path_fnamecmp:1 sort_strings:1 write_bytes:1
 getchar/	*	1	0	0	0	-	-	-	-
@@ -241,8 +232,8 @@ ui_compositor/	*	1	10	6	5	deref:3 compound:1	other:5	other:1	GridRef::new:2 ui_c
 ui_compositor/	ui_compositor/mod.rs	1	10	6	5	deref:3 compound:1	other:5	other:1	GridRef::new:2 ui_composed_call_raw_line:2 from_raw_parts:1
 version/	*	1	14	0	11	deref:2 expr:1	-	-	utfc_ptr2len:3 vim_strsize:3 utf_ptr2char:2 at:1 nlua_exec:1
 version/	version/mod.rs	1	14	0	11	deref:2 expr:1	-	-	utfc_ptr2len:3 vim_strsize:3 utf_ptr2char:2 at:1 nlua_exec:1
-window/	*	11	55	2	28	compound:6 deref:6 ref:1	str:8 other:6	str:3	vim_snprintf:5 clear_virttext:4 at:3 terminal_check_size:2 .offset:1 at_opt:1 emsg:1 free_jumplist:1
-window/	window/alloc.rs	1	11	0	3	compound:1 ref:1	other:1	-	clear_virttext:2 free_jumplist:1
+window/	*	11	56	2	28	compound:6 deref:6 ref:1	str:8 other:6	str:3	vim_snprintf:5 clear_virttext:4 at:3 terminal_check_size:2 .offset:1 at_opt:1 emsg:1 free_jumplist:1
+window/	window/alloc.rs	1	12	0	3	compound:1 ref:1	other:1	-	clear_virttext:2 free_jumplist:1
 window/	window/cmd.rs	1	8	0	8	-	str:4	str:2	vim_snprintf:2 at:1 at_opt:1 slice_at:1 xmemdupz:1 xstrlcat:1 xstrlcpy:1
 window/	window/config.rs	1	9	2	5	compound:2	other:3	-	clear_virttext:2 emsg:1
 window/	window/goto.rs	1	0	0	0	-	-	-	-

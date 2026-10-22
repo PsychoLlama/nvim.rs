@@ -26,7 +26,7 @@
 use crate::winlayer::WinId;
 
 use super::*;
-use crate::fold::{clear_folding, clone_fold_list, delete_fold_recurse};
+use crate::fold::clear_folding;
 use crate::mark::mark_view_make;
 use crate::option::vars::p_fdls;
 use crate::option::{clear_winopt, copy_winopt, didset_window_options};
@@ -74,7 +74,7 @@ pub fn buflist_setfpos(
             let mut entry = buffer.b_wininfo.remove(i);
             if copy_options && entry.wi_optset {
                 clear_winopt(&mut entry.wi_opt);
-                delete_fold_recurse(&mut entry.wi_folds);
+                entry.wi_folds = Vec::new();
             }
             entry
         }
@@ -94,7 +94,7 @@ pub fn buflist_setfpos(
         // Save the window-specific option values.
         copy_winopt(&win.w_onebuf_opt, &mut entry.wi_opt);
         entry.wi_fold_manual = win.w_fold_manual;
-        clone_fold_list(&win.w_folds, &mut entry.wi_folds);
+        entry.wi_folds = win.w_folds.clone();
         entry.wi_optset = true;
     }
 
@@ -165,7 +165,7 @@ pub fn get_winopts(buffer: Buf) {
             copy_winopt(&wp.w_onebuf_opt, &mut cur.w_onebuf_opt);
             cur.w_fold_manual = wp.w_fold_manual;
             cur.w_foldinvalid = true;
-            clone_fold_list(&wp.w_folds, &mut cur.w_folds);
+            cur.w_folds = wp.w_folds.clone();
         }
         (Some(entry), win)
             if entry.wi_optset
@@ -174,7 +174,7 @@ pub fn get_winopts(buffer: Buf) {
             copy_winopt(&entry.wi_opt, &mut cur.w_onebuf_opt);
             cur.w_fold_manual = entry.wi_fold_manual;
             cur.w_foldinvalid = true;
-            clone_fold_list(&entry.wi_folds, &mut cur.w_folds);
+            cur.w_folds = entry.wi_folds.clone();
         }
         _ => {
             let window: &mut crate::types::Window = &mut cur;

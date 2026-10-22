@@ -14,8 +14,8 @@
 //! a field of `Buffer`, a `static`, a local the transpile never borrowed.
 //! Each shim turns that pointer into a `&mut GArray` once, at the top, and
 //! the rest of the body is ordinary Rust. The *contract* the callers rely on
-//! is unchanged and load-bearing: many of them (`FoldList` and friends)
-//! re-read `ga_len` on every step of a loop that also grows the array, so
+//! is unchanged and load-bearing: many of them re-read `ga_len` on every
+//! step of a loop that also grows the array, so
 //! growth must stay in place through `xrealloc` and must keep zeroing the
 //! tail it adds.
 

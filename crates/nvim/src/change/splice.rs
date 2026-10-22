@@ -51,11 +51,8 @@ fn changed_lines_invalidate_win(
     xtra: LineNr,
 ) {
     if window.w_cursor.lnum <= lnum {
-        // SAFETY: a live window; the answer is an index into `w_lines` or -1.
-        let i = find_wl_entry(window, lnum);
-        // SAFETY: as above, and the short circuit is what bounds it.
-        let below = i >= 0
-            && window.w_cursor.lnum > unsafe { (*window.w_lines.offset(i as isize)).wl_lnum };
+        let below =
+            find_wl_entry(window, lnum).is_some_and(|entry| window.w_cursor.lnum > entry.wl_lnum);
         if below {
             changed_line_abv_curs_win(window);
         }

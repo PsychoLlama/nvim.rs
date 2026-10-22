@@ -24,7 +24,7 @@ use crate::autocmd::{block_autocmds, unblock_autocmds};
 use crate::buffer::buflist_new;
 use crate::decoration::clear_virttext;
 use crate::eval::vars::{new_var_scope, release_var_scope, vars_clear};
-use crate::fold::{clear_folding, delete_fold_recurse, fold_init_win};
+use crate::fold::clear_folding;
 use crate::grid::grid_assign_handle;
 use crate::mark::free_jumplist;
 use crate::r#match::clear_matches;
@@ -54,8 +54,9 @@ use crate::winlayer::{
 /// `Vec`s, whose pointers are never null -- nor a valid `w_ns_set`, which is
 /// a `HashSet` and carries a hasher, nor either `WinOpt`'s string options,
 /// for the reason `optionstr::BUF_STRING_OPTIONS` states, nor the two
-/// directories, which are `Option<XString>`s. All of them are written before
-/// anything can read or drop them.
+/// directories, which are `Option<XString>`s, nor the match list and the
+/// fold tree, which are `Vec`s. All of them are written before anything can
+/// read or drop them.
 fn zeroed_window() -> Win {
     Win::alloc_zeroed(|wp| {
         // SAFETY: a fresh allocation this thread alone holds; the zeroed
@@ -66,6 +67,7 @@ fn zeroed_window() -> Win {
             (&raw mut (*wp).w_onebuf_opt).write(WinOpt::UNSET);
             (&raw mut (*wp).w_allbuf_opt).write(WinOpt::UNSET);
             (&raw mut (*wp).w_matches).write(Vec::new());
+            (&raw mut (*wp).w_folds).write(Vec::new());
             (&raw mut (*wp).w_localdir).write(None);
             (&raw mut (*wp).w_prevdir).write(None);
         }
@@ -240,7 +242,6 @@ pub(crate) fn win_alloc(after: Option<Win>, hidden: bool) -> Win {
     new_wp.w_allbuf_opt.wo_siso = new_wp.w_onebuf_opt.wo_siso;
     new_wp.w_fraction = 0;
     new_wp.w_prev_fraction_row = -1;
-    fold_init_win(new_wp);
     unblock_autocmds();
     // Up to 1000 can be picked by the user.
     new_wp.w_next_match_id = 1000;
@@ -257,7 +258,7 @@ fn win_tabpage(win: Win) -> Option<TabPage> {
 pub fn free_wininfo(entry: &mut WinInfo) {
     if entry.wi_optset {
         clear_winopt(&mut entry.wi_opt);
-        delete_fold_recurse(&mut entry.wi_folds);
+        entry.wi_folds = Vec::new();
     }
 }
 
@@ -360,7 +361,7 @@ fn forget_wininfo(buffer: Buf, window: Win) {
     // Discard saved options if the style is minimal.
     if window.w_config.style == kWinStyleMinimal && entry.wi_optset {
         clear_winopt(&mut entry.wi_opt);
-        delete_fold_recurse(&mut entry.wi_folds);
+        entry.wi_folds = Vec::new();
         entry.wi_optset = false;
     }
     if pos_null < len {
