@@ -120,6 +120,7 @@ pub(super) fn fold_update_computed(mut win: Win, mut top: LineNr, mut bot: LineN
         start: 0,
         end: MAX_LEVEL + 1,
         had_end: MAX_LEVEL + 1,
+        markers: (Vec::new(), Vec::new()),
     };
     fold_changed.set(false);
     invalid_top.set(top);
@@ -130,6 +131,8 @@ pub(super) fn fold_update_computed(mut win: Win, mut top: LineNr, mut bot: LineN
     if foldmethod_is_marker(win) {
         method = Method::Marker;
         parse_marker(win);
+        let (start, end) = markers(win.w_onebuf_opt.wo_fmr.bytes());
+        line.markers = (start.to_vec(), end.to_vec());
         if top > 1 {
             // The marker method needs the previous line's level, and the
             // markers on that line, before it can read `top`.
@@ -361,95 +364,114 @@ fn fold_update_computed_recurse(
             lvl = 0;
         }
         let mut manual = false;
-        let next = with_list(win, path, |folds| {
-            if fold.is_some_and(|i| i >= folds.len()) {
-                return Err(TreeLost);
+        // Most lines need nothing from the tree: the fold is under way, the
+        // line is inside the changed range and no deeper. Only the three
+        // cases below look at it, and only they borrow it.
+        let past_bot = line.lnum > bot && !finish && fold.is_some();
+        let starts = fold.is_none()
+            && (lvl != level
+                || line.lnum_save >= bot
+                || line.start != 0
+                || line.had_end <= MAX_LEVEL
+                || line.lnum == linecount);
+        let deeper = lvl > level && fold.is_some();
+        let next = if !(past_bot || starts || deeper) {
+            if lvl < level || line.lnum > linecount {
+                Next::Break
+            } else {
+                Next::Step
             }
-            if line.lnum > bot
-                && !finish
-                && let Some(ci) = fold
-            {
-                // Past the changed text. For the three open-ended methods a
-                // fold may still have grown or shrunk, so keep going until
-                // the tree agrees with the levels again.
-                if !open_ended {
-                    return Ok(Next::Break);
+        } else {
+            with_list(win, path, |folds| {
+                if fold.is_some_and(|i| i >= folds.len()) {
+                    return Err(TreeLost);
                 }
-                let current = &folds[ci];
-                let mut depth = 0;
-                if lvl >= level {
-                    // How deep the existing tree says this line is.
-                    let mut inner: &[Fold] = &current.nested;
-                    let mut ll = line.lnum - current.top;
-                    while let Ok(k) = find(inner, ll) {
-                        depth += 1;
-                        ll -= inner[k].top;
-                        inner = &inner[k].nested;
-                    }
-                }
-                if lvl < level + depth {
-                    // The tree is deeper than the levels are: the nested fold
-                    // that has to go also has to be redrawn.
-                    let inner = &current.nested;
-                    let k = find_at_or_below(inner, line.lnum - current.top);
-                    // UPSTREAM BUG: `k` may be `inner.len()`, and `fold.c`
-                    // reads that entry anyway (guarding only against a list
-                    // that never had storage). Upstream reads whatever bytes
-                    // sit there -- usually the zeroed slack `ga_grow` left,
-                    // sometimes a stale copy of a deleted fold, sometimes
-                    // past the block. The zeroed case is reproduced: a fold
-                    // at 0 of length 0 puts `bot` one above this fold. See
-                    // ~/agents/context/1786212071-upstream-neovim-bugs/
-                    // fold-iems-recurse-fp2-past-end.md.
-                    match inner.get(k) {
-                        Some(nested) => bot = nested.last() + current.top,
-                        None if inner.capacity() > 0 => bot = current.top - 1,
-                        None => {}
-                    }
-                } else {
-                    if !(current.top + current.len <= line.lnum && lvl >= level) {
+                if line.lnum > bot
+                    && !finish
+                    && let Some(ci) = fold
+                {
+                    // Past the changed text. For the three open-ended methods a
+                    // fold may still have grown or shrunk, so keep going until
+                    // the tree agrees with the levels again.
+                    if !open_ended {
                         return Ok(Next::Break);
                     }
-                    finish = true;
+                    let current = &folds[ci];
+                    let mut depth = 0;
+                    if lvl >= level {
+                        // How deep the existing tree says this line is.
+                        let mut inner: &[Fold] = &current.nested;
+                        let mut ll = line.lnum - current.top;
+                        while let Ok(k) = find(inner, ll) {
+                            depth += 1;
+                            ll -= inner[k].top;
+                            inner = &inner[k].nested;
+                        }
+                    }
+                    if lvl < level + depth {
+                        // The tree is deeper than the levels are: the nested fold
+                        // that has to go also has to be redrawn.
+                        let inner = &current.nested;
+                        let k = find_at_or_below(inner, line.lnum - current.top);
+                        // UPSTREAM BUG: `k` may be `inner.len()`, and `fold.c`
+                        // reads that entry anyway (guarding only against a list
+                        // that never had storage). Upstream reads whatever bytes
+                        // sit there -- usually the zeroed slack `ga_grow` left,
+                        // sometimes a stale copy of a deleted fold, sometimes
+                        // past the block. The zeroed case is reproduced: a fold
+                        // at 0 of length 0 puts `bot` one above this fold. See
+                        // ~/agents/context/1786212071-upstream-neovim-bugs/
+                        // fold-iems-recurse-fp2-past-end.md.
+                        match inner.get(k) {
+                            Some(nested) => bot = nested.last() + current.top,
+                            None if inner.capacity() > 0 => bot = current.top - 1,
+                            None => {}
+                        }
+                    } else {
+                        if !(current.top + current.len <= line.lnum && lvl >= level) {
+                            return Ok(Next::Break);
+                        }
+                        finish = true;
+                    }
                 }
-            }
-            if fold.is_none()
-                && (lvl != level
-                    || line.lnum_save >= bot
-                    || line.start != 0
-                    || line.had_end <= MAX_LEVEL
-                    || line.lnum == linecount)
-            {
-                // No fold started yet, and this line says one should have.
-                // Reuse, truncate, split or delete whatever is in the way,
-                // then leave `fold` naming the one to grow.
-                let mut ctx = Reuse {
-                    folds,
-                    line,
-                    level,
-                    lvl,
-                    startlnum,
-                    firstlnum,
-                    bot,
-                    topflags,
-                    open_ended,
-                    finish: &mut finish,
-                    manual: &mut manual,
-                };
-                fold = ctx.find_or_make();
-            }
-            if lvl < level || line.lnum > linecount {
-                return Ok(Next::Break);
-            }
-            Ok(match fold {
-                Some(index) if lvl > level => Next::Recurse {
-                    index,
-                    top: folds[index].top,
-                    state: folds[index].state,
-                },
-                _ => Next::Step,
-            })
-        })??;
+                if fold.is_none()
+                    && (lvl != level
+                        || line.lnum_save >= bot
+                        || line.start != 0
+                        || line.had_end <= MAX_LEVEL
+                        || line.lnum == linecount)
+                {
+                    // No fold started yet, and this line says one should have.
+                    // Reuse, truncate, split or delete whatever is in the way,
+                    // then leave `fold` naming the one to grow.
+                    let mut ctx = Reuse {
+                        folds,
+                        line,
+                        level,
+                        lvl,
+                        startlnum,
+                        firstlnum,
+                        bot,
+                        topflags,
+                        open_ended,
+                        finish: &mut finish,
+                        manual: &mut manual,
+                    };
+                    fold = ctx.find_or_make();
+                }
+                if lvl < level || line.lnum > linecount {
+                    return Ok(Next::Break);
+                }
+                Ok(match fold {
+                    Some(index) if lvl > level => Next::Recurse {
+                        index,
+                        top: folds[index].top,
+                        state: folds[index].state,
+                    },
+                    _ => Next::Step,
+                })
+            })??
+        };
         if manual {
             line.win.w_fold_manual = true;
         }

@@ -229,7 +229,9 @@ pub(super) fn parse_marker(window: Win) {
 pub(super) fn foldlevel_marker(line: &mut FoldLine) {
     let window = line.win;
     let start_lvl = line.lvl;
-    let (startmarker, endmarker) = markers(window.w_onebuf_opt.wo_fmr.bytes());
+    // Taken for the call and put back, so the scan can write `line`.
+    let markers = core::mem::take(&mut line.markers);
+    let (startmarker, endmarker) = (&markers.0[..], &markers.1[..]);
     line.start = 0;
     line.lvl_next = line.lvl;
 
@@ -272,6 +274,7 @@ pub(super) fn foldlevel_marker(line: &mut FoldLine) {
         }
     }
     line.lvl_next = line.lvl_next.max(0);
+    line.markers = markers;
 }
 
 /// The positive number a `{{{N` marker carries, if it carries one.

@@ -168,6 +168,10 @@ pub struct FoldLine {
     /// Level of the fold forced to end above this line — the previous line's
     /// `end`.
     pub had_end: c_int,
+    /// 'foldmarker''s two halves, copied once per update for the marker
+    /// method (which runs no user code, so the option cannot change under
+    /// it); empty for the others.
+    pub(super) markers: (Vec<u8>, Vec<u8>),
 }
 
 /// Set when the folds changed and the window needs redrawing.
