@@ -101,15 +101,17 @@ pub const MODE_NORMAL: ModeFlags = 1;
 /// checked. Naming the machine instead makes the dispatch a `match` and the
 /// layout nobody's business.
 ///
-/// The address is raw rather than a `&mut` for two of them, and the
+/// The address is raw rather than a `&mut` for the terminal's, and the
 /// promise that it is live is booked at the constructor the way every other
 /// handle in the tree books it: a `check` or an `execute` re-enters the
 /// editor, and the frames below it reach the same state through the globals
 /// that name it, so a `&mut` spanning the loop would be a promise the editor
-/// does not keep. Insert mode's and normal mode's states are lent for the
-/// length of the loop: no global names the first, and the one global that
-/// reaches into a normal-mode frame (`op_pending`) reads its operator, which
-/// the frame table owns.
+/// does not keep. Insert mode's, normal mode's and the command line's states
+/// are lent for the length of the loop: no global names the first, the one
+/// global that reaches into a normal-mode frame (`op_pending`) reads its
+/// operator, which the frame table owns, and the command line's completion,
+/// which the Vimscript functions read, belongs to the command line rather
+/// than to its key loop.
 pub(crate) struct ModeState<'a>(Machine<'a>);
 
 /// [`ModeState`]'s arms. Private, so the only way to make one is through a
@@ -117,7 +119,7 @@ pub(crate) struct ModeState<'a>(Machine<'a>);
 enum Machine<'a> {
     Normal(&'a mut NormalState),
     Insert(&'a mut InsertState),
-    CommandLine(*mut CommandLineState),
+    CommandLine(&'a mut CommandLineState),
     Terminal(*mut TerminalState),
 }
 
@@ -134,10 +136,8 @@ impl<'a> ModeState<'a> {
         Self(Machine::Insert(s))
     }
 
-    /// # Safety
-    /// `s` must stay a live `CommandLineState` for the whole of
-    /// [`state_enter`].
-    pub(crate) const unsafe fn command_line(s: *mut CommandLineState) -> Self {
+    /// The command line's key-loop state, lent for the loop.
+    pub(crate) const fn command_line(s: &'a mut CommandLineState) -> Self {
         Self(Machine::CommandLine(s))
     }
 
@@ -151,23 +151,23 @@ impl<'a> ModeState<'a> {
     /// again (something it did invalidated what came after), anything else
     /// goes on to read a key.
     fn check(&mut self) -> c_int {
-        // SAFETY (throughout): the constructor's promise -- a live state of
-        // the named kind.
+        // SAFETY (the terminal's arm): the constructor's promise -- a live
+        // state of the named kind.
         match &mut self.0 {
             Machine::Normal(s) => normal_check(s),
             Machine::Insert(s) => insert_check(s),
-            Machine::CommandLine(s) => unsafe { command_line_check(*s) },
+            Machine::CommandLine(s) => command_line_check(s),
             Machine::Terminal(s) => unsafe { terminal_check(*s) },
         }
     }
 
     /// The key, answered the same three ways as [`Self::check`].
     fn execute(&mut self, key: c_int) -> c_int {
-        // SAFETY (throughout): as [`Self::check`].
+        // SAFETY (the terminal's arm): as [`Self::check`].
         match &mut self.0 {
             Machine::Normal(s) => normal_execute(s, key),
             Machine::Insert(s) => insert_execute(s, key),
-            Machine::CommandLine(s) => unsafe { command_line_execute(*s, key) },
+            Machine::CommandLine(s) => command_line_execute(s, key),
             Machine::Terminal(s) => unsafe { terminal_execute(*s, key) },
         }
     }

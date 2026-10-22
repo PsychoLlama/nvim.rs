@@ -12,7 +12,7 @@ use crate::cmdexpand::state::{save_p_ls, save_p_wmh, wild_menu_showing};
 use crate::drawscreen::state::cmdline_row;
 use crate::drawscreen::{redraw_statuslines, update_screen, win_redraw_last_status};
 use crate::ex_docmd::set_no_hlsearch;
-use crate::ex_getln::{put_on_cmdline_bytes, redrawcmd};
+use crate::ex_getln::{put_on_cmdline, redrawcmd};
 use crate::getchar::state::KeyTyped;
 use crate::guard::Allow;
 use crate::keycodes::{Ctrl_N, Ctrl_P, Key};
@@ -51,7 +51,7 @@ fn line_byte(cclp: Cc, i: c_int) -> u8 {
 pub(crate) fn wildmenu_translate_key(
     cclp: Cc,
     key: c_int,
-    expand: &Expand,
+    context: ExpandContext,
     did_wild_list: bool,
 ) -> c_int {
     let mut c = key;
@@ -64,7 +64,7 @@ pub(crate) fn wildmenu_translate_key(
     }
 
     // Hitting CR after "emenu Name.": complete the submenu.
-    if expand.context == ExpandContext::Menunames
+    if context == ExpandContext::Menunames
         && cclp.cmdpos > 1
         && line_byte(cclp, cclp.cmdpos - 1) == b'.'
         && line_byte(cclp, cclp.cmdpos - 2) != b'\\'
@@ -231,7 +231,7 @@ fn wildmenu_process_key_filenames(cclp: Cc, key: c_int, expand: &Expand) -> c_in
         // TODO(tarruda): this is only for DOS/Unix systems - need to put
         // in machine-specific stuff here and in UPSEG.
         cmdline_del(cclp, j);
-        put_on_cmdline_bytes(UPSEG_TAIL, false);
+        put_on_cmdline(UPSEG_TAIL, false);
     } else if cclp.cmdpos > i {
         cmdline_del(cclp, i);
     }

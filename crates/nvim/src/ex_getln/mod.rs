@@ -1,10 +1,10 @@
-#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 pub(crate) mod state;
 use crate::api::extmark::nvim_create_namespace;
-use crate::api::private::helpers::{cstr_to_string, try_enter, try_leave};
+use crate::api::private::helpers::{try_enter, try_leave};
 use crate::api::vim::nvim_create_buf;
 use crate::ascii::{ascii_isalpha, ascii_isspace, ascii_iswhite};
 use crate::autocmd::{
@@ -14,7 +14,7 @@ use crate::buffer::{
     buf_clear, buf_get_changedtick, buf_open_scratch, buf_set_changedtick, buf_valid, close_buffer,
     do_buffer, find_buf,
 };
-use crate::charset::{ptr2cells, skipwhite, vim_is_ident_char, vim_isprintc, vim_iswordc};
+use crate::charset::{ptr2cells_at, vim_is_ident_char, vim_isprintc, vim_iswordc};
 use crate::cmdexpand::state::wild_menu_showing;
 use crate::cmdexpand::{
     clear_cmdline_orig, cmdline_pum_active, cmdline_pum_cleanup, cmdline_pum_remove,
@@ -63,13 +63,12 @@ use crate::keycodes::{K_SPECIAL, get_special_key_name};
 use crate::mapping::{add_map, check_abbr, map_to_exists_mode};
 use crate::mark::setpcmark;
 use crate::mbyte::{
-    mb_get_class, mb_off_next, mb_prevptr, mb_tolower, utf_char2bytes, utf_char2len, utf_head_off,
-    utf_iscomposing_first, utf_ptr2cells, utf_ptr2char, utf_ptr2len, utf8len_tab_zero,
-    utfc_ptr2len,
+    c_cells_at, c_char_info, c_cluster_len, class_in, encode_char, head_off, mb_tolower,
+    utf_char2len, utf_iscomposing_first, utf8len_tab_zero,
 };
 use crate::memline::ml_replace_buf_text;
 use crate::memline::{decl, incl, ml_append_cstr};
-use crate::memory::{XString, xfree, xmalloc, xmallocz, xstrdup};
+use crate::memory::XString;
 use crate::message::state::{
     cmd_silent, cmdmsg_rl, did_emsg, emsg_on_display, lines_left, msg_col, msg_didout, msg_no_more,
     msg_row, msg_scroll, msg_scrolled, need_wait_return, quit_more, redir_off,
@@ -102,7 +101,7 @@ use crate::options::{
     kOptBoFlagError, kOptBoFlagWildmode, kOptBufhidden, kOptFiletype, kOptInccommand,
     kOptWimFlagFull, kOptWimFlagLastused, kOptWimFlagList, kOptWimFlagLongest, kOptWimFlagNoselect,
 };
-use crate::os::cshim::{gettext, strncasecmp, strncmp};
+use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
 use crate::path::vim_ispathsep;
 use crate::popupmenu::state::pum_want;
@@ -130,7 +129,7 @@ use crate::state::{
     MODE_CMDLINE, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL, ModeState, may_trigger_modechanged,
     may_trigger_safestate, state_enter, state_handle_k_event,
 };
-use crate::strings::{escaped_bytes, xstrnsave};
+use crate::strings::escaped_bytes;
 use crate::types::AutoEvent;
 use crate::types::CAR;
 use crate::types::CmdIdx;
@@ -169,11 +168,10 @@ use crate::winlayer::graph::{
     cmdwin_buf, cmdwin_level, cmdwin_old_curwin, cmdwin_result, cmdwin_type, cmdwin_win,
 };
 use crate::winlayer::{BufId, WinId};
-use ::libc::{abort, strcpy, strrchr};
 
 // The carve of the transpiled module; see each child's docs.
 mod incsearch;
-pub use self::incsearch::*;
+pub(crate) use self::incsearch::*;
 mod enter;
 pub use self::enter::*;
 mod execute;
@@ -225,6 +223,12 @@ pub const REMAP_NONE: RemapValues = -1;
 pub const VSE_NONE: ::core::ffi::c_int = 0;
 pub const VSE_BUFFER: ::core::ffi::c_int = 2;
 pub const VSE_SHELL: ::core::ffi::c_int = 1;
+/// The command-line key loop's own state: C's `CommandLineState`.
+///
+/// It lives in [`command_line_enter`]'s frame and is lent `&mut` to the key
+/// loop, which hands it down. Nothing outside the loop reaches it: the one
+/// field C's globals pointed into, the completion, belongs to the command
+/// line ([`CmdlineInfo::xpc`]) instead.
 pub struct CommandLineState {
     pub firstc: ::core::ffi::c_int,
     pub count: ::core::ffi::c_int,
@@ -232,8 +236,10 @@ pub struct CommandLineState {
     pub c: ::core::ffi::c_int,
     pub gotesc: bool,
     pub do_abbr: bool,
-    pub lookfor: *mut ::core::ffi::c_char,
-    pub lookforlen: ::core::ffi::c_int,
+    /// What was typed before the first history key, up to the cursor: the
+    /// prefix the history walk matches, and the line `<Down>` gives back
+    /// past the newest entry. C's `lookfor`/`lookforlen`.
+    pub(crate) lookfor: Option<Vec<u8>>,
     pub hiscnt: ::core::ffi::c_int,
     pub save_hiscnt: ::core::ffi::c_int,
     pub histype: ::core::ffi::c_int,
@@ -243,21 +249,32 @@ pub struct CommandLineState {
     pub save_msg_scroll: ::core::ffi::c_int,
     pub save_state: ::core::ffi::c_int,
     pub prev_cmdpos: ::core::ffi::c_int,
-    pub prev_cmdbuff: *mut ::core::ffi::c_char,
-    pub save_p_icm: *mut ::core::ffi::c_char,
+    /// The line as it was before the key, for `CmdlineChanged`: kept from
+    /// key to key so that copying it reuses the room.
+    pub(crate) prev_cmdbuff: Option<Vec<u8>>,
+    /// `'inccommand'` as it was on entry, put back on the way out.
+    pub(crate) save_p_icm: XString,
     pub skip_pum_redraw: bool,
     pub some_key_typed: bool,
     pub ignore_drag_release: bool,
     pub break_ctrl_c: bool,
-    pub xpc: Expand,
-    pub b_im_ptr: *mut OptInt,
-    /// The buffer `b_im_ptr` points into, as a handle: the command line can
-    /// run user code that wipes it.
-    pub(crate) b_im_ptr_buf: Option<BufId>,
+    /// Which of the buffer's `'iminsert'`/`'imsearch'` the line's `:lmap`
+    /// state is kept in, and the buffer: C's `b_im_ptr`, a pointer into it.
+    /// An id, because the command line can run user code that wipes it.
+    pub(crate) b_im: Option<(ImOption, BufId)>,
     pub cmdline_type: ::core::ffi::c_int,
     pub event_cmdlineleavepre_triggered: bool,
     pub did_hist_navigate: bool,
 }
+/// The buffer option a command line keeps its `:lmap` state in.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub(crate) enum ImOption {
+    /// `'iminsert'`.
+    Insert,
+    /// `'imsearch'`.
+    Search,
+}
+
 pub struct IncsearchState {
     pub search_start: Pos,
     pub save_cursor: Pos,
@@ -408,22 +425,18 @@ pub const B_IMODE_NONE: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const B_IMODE_LMAP: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 static last_prompt_id: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0 as ::core::ffi::c_uint);
 
-/// An all-zero [`CmdlineInfo`].
-///
-/// This is C's `CLEAR_FIELD(ccline)`, and what [`save_cmdline`] leaves behind
-/// when it moves the command line onto the saved stack.
-/// `Callback::None` is discriminant 0, so this really is the
-/// zero value and the C's `CLEAR_FIELD` and this constant agree bit for bit.
+/// No command line: C's `CLEAR_FIELD(ccline)`, and what [`save_cmdline`]
+/// leaves behind when it moves the command line onto the saved stack.
 pub(crate) const CMDLINE_INFO_INIT: CmdlineInfo = CmdlineInfo {
     cmdbuff: CmdBuff::NONE,
     cmdpos: 0,
     cmdspos: 0,
     cmdfirstc: 0,
     cmdindent: 0,
-    cmdprompt: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+    cmdprompt: None,
     hl_id: 0,
     overstrike: 0,
-    xpc: ::core::ptr::null_mut::<Expand>(),
+    xpc: None,
     xp_context: ExpandContext::Nothing,
     xp_arg: None,
     input_fn: 0,
@@ -436,7 +449,8 @@ pub(crate) const CMDLINE_INFO_INIT: CmdlineInfo = CmdlineInfo {
     special_shift: false,
     redraw_state: kCmdRedrawNone,
     one_key: false,
-    mouse_used: ::core::ptr::null_mut::<bool>(),
+    mouse_prompt: false,
+    mouse_used: false,
 };
 
 /// An all-zero [`Pos`].
@@ -580,7 +594,9 @@ pub(crate) const SAVE_V_EVENT_INIT: SaveVEvent = SaveVEvent {
     sve_hashtab: HashTab::new(),
 };
 
-static ccline: GlobalCell<CmdlineInfo> = GlobalCell::new(CMDLINE_INFO_INIT);
+/// The command line being edited. Reached through [`Cc::current`], whose
+/// constructor lives beside `Cc` in the handle perimeter.
+pub(crate) static ccline: GlobalCell<CmdlineInfo> = GlobalCell::new(CMDLINE_INFO_INIT);
 /// The command lines suspended under [`ccline`], innermost last.
 ///
 /// C threads these on a `prev_ccline` pointer through the stack frame of
@@ -593,7 +609,7 @@ static ccline: GlobalCell<CmdlineInfo> = GlobalCell::new(CMDLINE_INFO_INIT);
 // address of an entry to the Vimscript functions, and a bare `Vec` would move
 // every entry the next `save_cmdline` grows it.
 #[allow(clippy::vec_box)]
-static saved_cmdlines: GlobalCell<Vec<Box<CmdlineInfo>>> = GlobalCell::new(Vec::new());
+pub(crate) static saved_cmdlines: GlobalCell<Vec<Box<CmdlineInfo>>> = GlobalCell::new(Vec::new());
 static new_cmdpos: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static cmdline_block: GlobalCell<CmdlineBlock> = GlobalCell::new(CmdlineBlock::EMPTY);
 static getln_interrupted_highlight: GlobalCell<bool> = GlobalCell::new(false);

@@ -30,14 +30,12 @@ pub struct CmdlineColorChunk {
 /// called for one command line and applied to another.
 ///
 /// The `Vec` is kept at its full allocated length rather than at the text's,
-/// so `text.len()` is exactly C's `cmdbufflen`. That is what lets the editing
-/// code keep C's order of work: open a gap by writing past `len`, then close
-/// it with [`CmdBuff::set_len`]. Growing the `Vec` instead would fill those
-/// bytes with NULs after the gap had been written.
+/// so `text.len()` is exactly C's `cmdbufflen`, and a command line opened
+/// for `n` bytes grows when C's did.
 #[derive(Clone, Default)]
 pub(crate) struct CmdBuff {
     /// The allocation. Empty exactly when no command line is in use.
-    text: Vec<::core::ffi::c_char>,
+    text: Vec<u8>,
     /// C's `cmdlen`: `text[..len]` is the command line, `text[len]` a NUL.
     len: usize,
 }
@@ -78,19 +76,21 @@ impl CmdBuff {
     }
 
     /// The text, without its terminator.
-    pub(crate) fn bytes(&self) -> &[::core::ffi::c_char] {
+    pub(crate) fn bytes(&self) -> &[u8] {
         &self.text[..self.len]
     }
 
-    /// The allocation, terminator and slack included: what a `cmdbuff`
-    /// pointer used to reach.  NULL when no command line is in use, because
-    /// that is the distinction every caller tests.
-    pub(crate) fn as_mut_ptr(&mut self) -> *mut ::core::ffi::c_char {
-        if self.text.is_empty() {
-            ::core::ptr::null_mut()
-        } else {
-            self.text.as_mut_ptr()
-        }
+    /// The byte at `i`, reading the terminator -- and anything past it --
+    /// as the NUL C's walks stopped at.
+    pub(crate) fn byte_at(&self, i: usize) -> u8 {
+        self.bytes().get(i).copied().unwrap_or(0)
+    }
+
+    /// The byte at `i` of the allocation, the terminator and the slack past
+    /// it included: what C read through `cmdbuff + i` when `i` may be past
+    /// the text.  0 past the allocation, and with no command line in use.
+    pub(crate) fn raw_byte_at(&self, i: usize) -> u8 {
+        self.text.get(i).copied().unwrap_or(0)
     }
 
     /// Open an empty command line with room for `want` bytes: C's
@@ -118,16 +118,34 @@ impl CmdBuff {
         self.text.resize(CmdBuff::alloc_size(want), 0);
     }
 
-    /// Set C's `cmdlen`, writing the terminator that goes with it.
-    ///
-    /// The bytes below `n` are whatever is there — the caller has usually
-    /// just memmoved them into place, which is why this does not fill them.
-    /// [`CmdBuff::reserve`] must have made the room.
-    pub(crate) fn set_len(&mut self, n: ::core::ffi::c_int) {
-        let n = CmdBuff::index(n);
+    /// Write `with` over the start of the buffer and make it the whole text:
+    /// C's `STRCPY(cmdbuff, ..)` with the `cmdlen` that followed.
+    /// [`CmdBuff::open`] or [`CmdBuff::reserve`] must have made the room.
+    pub(crate) fn write_text(&mut self, with: &[u8]) {
+        assert!(
+            with.len() < self.text.len(),
+            "command line longer than its buffer"
+        );
+        self.text[..with.len()].copy_from_slice(with);
+        self.len = with.len();
+        self.text[with.len()] = 0;
+    }
+
+    /// Fill the start of the buffer with `n` copies of `byte` and make that
+    /// the text: the indent `:insert` starts its lines with.
+    pub(crate) fn fill(&mut self, n: usize, byte: u8) {
         assert!(n < self.text.len(), "command line longer than its buffer");
+        self.text[..n].fill(byte);
         self.len = n;
         self.text[n] = 0;
+    }
+
+    /// Write one byte of the text in place, leaving the length alone: C's
+    /// `cmdbuff[i] = c`.  A NUL written this way ends the line for every
+    /// reader that stops at one, as it did in C.
+    pub(crate) fn set_byte(&mut self, i: usize, byte: u8) {
+        assert!(i < self.text.len(), "a byte of the command line");
+        self.text[i] = byte;
     }
 
     /// Replace `text[from..to]` with `with`, moving the rest of the line --
@@ -142,15 +160,13 @@ impl CmdBuff {
             "command line longer than its buffer"
         );
         self.text.copy_within(to..=self.len, from + with.len());
-        for (dst, &src) in self.text[from..from + with.len()].iter_mut().zip(with) {
-            *dst = src.cast_signed();
-        }
+        self.text[from..from + with.len()].copy_from_slice(with);
         self.len = new_len;
     }
 
     /// Replace the text with `bytes`, opening a command line if none was in
     /// use.
-    pub(crate) fn set(&mut self, bytes: &[::core::ffi::c_char]) {
+    pub(crate) fn set(&mut self, bytes: &[u8]) {
         self.text.clear();
         self.text.extend_from_slice(bytes);
         self.text.push(0);
@@ -170,7 +186,7 @@ pub(crate) struct ColoredCmdline {
     prompt_id: ::core::ffi::c_uint,
     /// The line they were computed from, without a terminator. Empty is C's
     /// NULL `cmdbuff`: nothing is cached.
-    text: Vec<::core::ffi::c_char>,
+    text: Vec<u8>,
     /// C's `colors`, in the order they were pushed.
     chunks: Vec<CmdlineColorChunk>,
 }
@@ -189,11 +205,7 @@ impl ColoredCmdline {
     /// C spelled this a NULL check and a `strcmp`; an empty `text` is the
     /// NULL, and comparing the whole slice rather than up to a NUL can only
     /// turn a false hit into a miss.
-    pub(crate) fn is_current(
-        &self,
-        prompt_id: ::core::ffi::c_uint,
-        text: &[::core::ffi::c_char],
-    ) -> bool {
+    pub(crate) fn is_current(&self, prompt_id: ::core::ffi::c_uint, text: &[u8]) -> bool {
         self.prompt_id == prompt_id && !self.text.is_empty() && self.text == text
     }
 
@@ -230,26 +242,31 @@ impl ColoredCmdline {
     }
 
     /// Remember `text` as the line the chunks describe.
-    pub(crate) fn remember(
-        &mut self,
-        prompt_id: ::core::ffi::c_uint,
-        text: &[::core::ffi::c_char],
-    ) {
+    pub(crate) fn remember(&mut self, prompt_id: ::core::ffi::c_uint, text: &[u8]) {
         self.prompt_id = prompt_id;
         self.text.clear();
         self.text.extend_from_slice(text);
     }
 }
+/// One command line: the one being edited (`ccline`), or one suspended under
+/// it on the saved stack.
 pub struct CmdlineInfo {
     pub(crate) cmdbuff: CmdBuff,
     pub cmdpos: ::core::ffi::c_int,
     pub cmdspos: ::core::ffi::c_int,
     pub cmdfirstc: ::core::ffi::c_int,
     pub cmdindent: ::core::ffi::c_int,
-    pub cmdprompt: *mut ::core::ffi::c_char,
+    /// The text shown before the line, a copy of the caller's: C's
+    /// `cmdprompt`, which borrowed it.
+    pub(crate) cmdprompt: Option<crate::memory::XString>,
     pub hl_id: ::core::ffi::c_int,
     pub overstrike: ::core::ffi::c_int,
-    pub xpc: *mut Expand,
+    /// The completion in progress, owned by the command line while its key
+    /// loop runs and `None` outside it: C's `xpc`, which pointed into the
+    /// loop's stack frame. The loop moves it out for the length of each call
+    /// into the completion machinery (`Cc::with_xpc`), so user code that
+    /// asks about it then finds an empty one rather than one held mutably.
+    pub(crate) xpc: Option<Expand>,
     pub xp_context: ExpandContext,
     pub xp_arg: Option<crate::memory::XString>,
     pub input_fn: ::core::ffi::c_int,
@@ -262,5 +279,9 @@ pub struct CmdlineInfo {
     pub special_shift: bool,
     pub redraw_state: CmdRedraw,
     pub one_key: bool,
-    pub mouse_used: *mut bool,
+    /// Whether a click may answer the prompt (C's `mouse_used != NULL`, a
+    /// number prompt), and whether one did (`*mouse_used = true`): the
+    /// prompt's caller reads the answer back when it returns.
+    pub(crate) mouse_prompt: bool,
+    pub(crate) mouse_used: bool,
 }

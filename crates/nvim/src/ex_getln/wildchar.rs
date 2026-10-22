@@ -5,15 +5,15 @@
 //! `nextwild` once per configured stage, and decides whether the popup menu
 //! or the wildmenu comes up.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::cmdexpand::{WildMode, WildOpts};
+use crate::cstr;
 use crate::keycodes::{Ctrl_Z, Key};
 use crate::option::vars::P_WIM;
 use crate::options::OptWimFlags;
-use crate::types::{ExpandContext, Failed, NUL, OK};
+use crate::types::{ExpandContext, Failed, OK};
 
 /// Whether stage `idx` of `'wildmode'` carries `flag` (a `kOptWimFlag*`).
 ///
@@ -25,38 +25,29 @@ pub(crate) fn wim_has(idx: ::core::ffi::c_int, flag: OptWimFlags) -> bool {
 }
 
 /// One `'wildchar'` press: run the current `'wildmode'` stage.
-///
-/// # Safety
-///
-/// `s` must point at a live `CommandLineState`, unaliased for the call.
-pub(crate) unsafe fn command_line_wildchar_complete(s: *mut CommandLineState) -> KeyOutcome {
+pub(crate) fn command_line_wildchar_complete(s: &mut CommandLineState) -> KeyOutcome {
     let cc = Cc::current();
-    // SAFETY: the caller's live state, for the length of this call.
-    let cls = unsafe { Cls::new(s) };
     let res;
     let mut options = WildOpts::NO_BEEP;
-    let redraw_if_menu_empty = unsafe { (*s).c } == Key::Wild.code();
+    let redraw_if_menu_empty = s.c == Key::Wild.code();
     let wim_noselect = p_wmnu() && wim_has(0, kOptWimFlagNoselect);
 
-    if wim_has(unsafe { (*s).wim_index }, kOptWimFlagLastused) {
+    if wim_has(s.wim_index, kOptWimFlagLastused) {
         options |= WildOpts::BUFLASTUSED;
     }
 
-    if cls.xpc.match_count() > 0 {
+    if match_count() > 0 {
         // Typed 'wildchar' at least twice. If "list" is present, list the
         // matches unless they are already listed.
-        if cls.xpc.match_count() > 1
-            && !unsafe { (*s).did_wild_list }
-            && wim_has(unsafe { (*s).wim_index }, kOptWimFlagList)
-        {
-            cls.show_matches(false, true, wim_noselect);
+        if match_count() > 1 && !s.did_wild_list && wim_has(s.wim_index, kOptWimFlagList) {
+            show_matches(false, true, wim_noselect);
             redrawcmd();
-            unsafe { (*s).did_wild_list = true };
+            s.did_wild_list = true;
         }
-        if wim_has(unsafe { (*s).wim_index }, kOptWimFlagLongest) {
-            res = cls.next_wild(WildMode::Longest, options);
-        } else if wim_has(unsafe { (*s).wim_index }, kOptWimFlagFull) {
-            res = cls.next_wild(WildMode::Next, options);
+        if wim_has(s.wim_index, kOptWimFlagLongest) {
+            res = s.next_wild(WildMode::Longest, options);
+        } else if wim_has(s.wim_index, kOptWimFlagFull) {
+            res = s.next_wild(WildMode::Next, options);
         } else {
             res = OK; // don't insert 'wildchar' now
         }
@@ -66,33 +57,34 @@ pub(crate) unsafe fn command_line_wildchar_complete(s: *mut CommandLineState) ->
         let wim_list = wim_has(0, kOptWimFlagList);
         let wim_full = wim_has(0, kOptWimFlagFull);
 
-        unsafe { (*s).wim_index = 0 };
-        if unsafe { (*s).c } as OptInt == p_wc()
-            || unsafe { (*s).c } as OptInt == p_wcm()
-            || unsafe { (*s).c } == Key::Wild.code()
-            || unsafe { (*s).c } == Ctrl_Z
+        s.wim_index = 0;
+        if s.c as OptInt == p_wc()
+            || s.c as OptInt == p_wcm()
+            || s.c == Key::Wild.code()
+            || s.c == Ctrl_Z
         {
             options |= WildOpts::MAY_EXPAND_PATTERN;
-            if unsafe { (*s).c } == Key::Wild.code() {
+            if s.c == Key::Wild.code() {
                 options |= WildOpts::FUNC_TRIGGER;
             }
-            unsafe { (*s).xpc.pre_incsearch_pos = (*s).is_state.search_start };
+            let start = s.is_state.search_start;
+            completion_mut(|xpc| xpc.pre_incsearch_pos = start);
         }
         let cmdpos_before = cc.cmdpos;
 
         // If 'wildmode' starts with "longest", get the longest common
         // part.
         if wim_longest {
-            res = cls.next_wild(WildMode::Longest, options);
+            res = s.next_wild(WildMode::Longest, options);
         } else {
             if wim_noselect || wim_list {
                 options |= WildOpts::NOSELECT;
             }
-            res = cls.next_wild(WildMode::ExpandKeep, options);
+            res = s.next_wild(WildMode::ExpandKeep, options);
         }
 
         // Remove the popup menu if no completion items are available.
-        if redraw_if_menu_empty && cls.xpc.match_count() <= 0 {
+        if redraw_if_menu_empty && match_count() <= 0 {
             pum_check_clear();
         }
 
@@ -100,17 +92,17 @@ pub(crate) unsafe fn command_line_wildchar_complete(s: *mut CommandLineState) ->
         if got_int.get() {
             vpeekc(); // remove <C-C> from the input stream
             got_int.set(false); // don't abandon the command line
-            cls.expand(WildOpts::NONE, WildMode::Free);
-            unsafe { (*s).xpc.context = ExpandContext::Nothing };
+            expand_completion(WildOpts::NONE, WildMode::Free);
+            completion_mut(|xpc| xpc.context = ExpandContext::Nothing);
             return KeyOutcome::Changed;
         }
 
         // Display the matches.
-        if res == OK && cls.xpc.match_count() > if wim_noselect { 0 } else { 1 } {
+        if res == OK && match_count() > if wim_noselect { 0 } else { 1 } {
             if wim_longest {
                 let found_longest_prefix = cc.cmdpos != cmdpos_before;
                 if wim_list || (p_wmnu() && wim_full) {
-                    cls.show_matches(p_wmnu(), wim_list, true);
+                    show_matches(p_wmnu(), wim_list, true);
                 } else if !found_longest_prefix {
                     // Nothing was inserted, so look at what the *next*
                     // 'wildmode' stage asks for and do that now.
@@ -119,36 +111,36 @@ pub(crate) unsafe fn command_line_wildchar_complete(s: *mut CommandLineState) ->
                     let wim_noselect_next = wim_has(1, kOptWimFlagNoselect);
                     if wim_list_next || (p_wmnu() && (wim_full_next || wim_noselect_next)) {
                         if wim_full_next && !wim_noselect_next {
-                            cls.next_wild(WildMode::Next, options);
+                            s.next_wild(WildMode::Next, options);
                         } else {
-                            cls.show_matches(p_wmnu(), wim_list_next, wim_noselect_next);
+                            show_matches(p_wmnu(), wim_list_next, wim_noselect_next);
                         }
                         if wim_list_next {
-                            unsafe { (*s).did_wild_list = true };
+                            s.did_wild_list = true;
                         }
                     }
                 }
             } else if wim_list || (p_wmnu() && (wim_full || wim_noselect)) {
-                cls.show_matches(p_wmnu(), wim_list, wim_noselect);
+                show_matches(p_wmnu(), wim_list, wim_noselect);
             } else {
                 vim_beep(kOptBoFlagWildmode as ::core::ffi::c_int as ::core::ffi::c_uint);
             }
 
             redrawcmd();
             if wim_list {
-                unsafe { (*s).did_wild_list = true };
+                s.did_wild_list = true;
             }
-        } else if cls.xpc.match_count() == -1 {
-            unsafe { (*s).xpc.context = ExpandContext::Nothing };
+        } else if match_count() == -1 {
+            completion_mut(|xpc| xpc.context = ExpandContext::Nothing);
         }
     }
 
-    if unsafe { (*s).wim_index } < 3 {
-        unsafe { (*s).wim_index += 1 };
+    if s.wim_index < 3 {
+        s.wim_index += 1;
     }
 
-    if unsafe { (*s).c } == ESC {
-        unsafe { (*s).gotesc = true };
+    if s.c == ESC {
+        s.gotesc = true;
     }
 
     if res == OK {
@@ -174,39 +166,39 @@ pub fn check_opt_wim() -> Result<(), Failed> {
     let mut new_wim_flags: [uint8_t; 4] = [0; 4];
     let mut idx = 0usize;
 
-    // A copy: the cursor below walks past the end of a projection's borrow.
+    // A copy: the walk below outlives a projection's borrow.
     let wim = P_WIM.get();
-    let mut p = wim.as_ptr().cast_mut();
-    while unsafe { *p } != 0 {
+    let wim = wim.as_cstr().to_bytes();
+    let mut p = 0;
+    while p < wim.len() {
         // The stage name runs to the first non-alphabetic byte, which has
         // to be one of the separators.
-        let mut len = 0isize;
-        while ascii_isalpha(unsafe { *p.offset(len) } as ::core::ffi::c_int) {
-            len += 1;
-        }
-        let after = unsafe { *p.offset(len) } as ::core::ffi::c_int;
-        if after != NUL && after != ',' as ::core::ffi::c_int && after != ':' as ::core::ffi::c_int
-        {
+        let len = wim[p..]
+            .iter()
+            .take_while(|b| b.is_ascii_alphabetic())
+            .count();
+        let after = cstr::byte_at(wim, p + len);
+        if !matches!(after, 0 | b',' | b':') {
             return Err(Failed);
         }
 
-        let word = unsafe { ::core::slice::from_raw_parts(p as *const u8, len as usize) };
+        let word = &wim[p..p + len];
         let Some(&(_, flag)) = WIM_WORDS.iter().find(|(name, _)| *name == word) else {
             return Err(Failed);
         };
         new_wim_flags[idx] |= flag as uint8_t;
 
-        p = unsafe { p.offset(len) };
-        if unsafe { *p } as ::core::ffi::c_int == NUL {
+        p += len;
+        if after == 0 {
             break;
         }
-        if unsafe { *p } as ::core::ffi::c_int == ',' as ::core::ffi::c_int {
+        if after == b',' {
             if idx == 3 {
                 return Err(Failed);
             }
             idx += 1;
         }
-        p = unsafe { p.offset(1) };
+        p += 1;
     }
 
     // Fill the remaining entries with the last flag.

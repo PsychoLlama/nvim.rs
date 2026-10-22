@@ -5,15 +5,14 @@
 //! either in place or in a split preview window, and restores.  The
 //! `cmdpreview_save_*` / `cmdpreview_restore_*` pairs are that save-restore.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::ex_docmd::{cmdmod_add_flags, cmdmod_set_split, cmdmod_set_tab};
 use crate::guard::{Allow, Suppress};
 use crate::option::vars::P_ICM;
 use crate::types::{CmdLine, CmdModFlags, ExArgt, OptionSetFlags};
-use crate::winlayer::{Buf, Live, TabPage, Win, windows_in_tab};
+use crate::winlayer::{Buf, TabPage, Win, windows_in_tab};
 use crate::winlayer::{BufId, WinId};
 
 /// The buffer `'inccommand'` previews into, or 0 when there is none yet.
@@ -162,7 +161,7 @@ pub(crate) fn cmdpreview_restore_undo(cp_undoinfo: CpUndoInfo, mut buffer: Buf) 
 
 /// Save the state of every window and buffer in the current tab page, and put
 /// the options the preview must not be disturbed by out of the way.
-pub(crate) fn cmdpreview_prepare(mut cpinfo: Cp) {
+pub(crate) fn cmdpreview_prepare(cpinfo: &mut CpInfo) {
     let mut saved_bufs: IdSet<*mut Buffer> = id_set();
 
     cpinfo.buf_info = Vec::new();
@@ -231,8 +230,8 @@ pub(crate) fn cmdpreview_prepare(mut cpinfo: Cp) {
 
 /// Put back everything [`cmdpreview_prepare`] saved, undoing the preview's
 /// changes to every buffer it touched.
-pub(crate) fn cmdpreview_restore_state(mut cpinfo: Cp) {
-    // Taken out: the undo below runs the editor, which may reach `cpinfo`.
+pub(crate) fn cmdpreview_restore_state(cpinfo: &mut CpInfo) {
+    // Taken out: the undo below runs the editor.
     for cp_bufinfo in core::mem::take(&mut cpinfo.buf_info) {
         // Autocommands were blocked throughout the preview, but its Lua
         // callback was not: a buffer it wiped has nothing to restore.
@@ -255,18 +254,15 @@ pub(crate) fn cmdpreview_restore_state(mut cpinfo: Cp) {
             let count = chain.count() as ::core::ffi::c_int;
 
             let mut aco = AcoSave::default();
-            // SAFETY: `aco` is this frame's, and every `prepbuf` below is
-            // paired with the `restbuf` that follows it.
+            // Paired with the `restbuf` that follows.
             aucmd_prepbuf(&mut aco, buf);
             if Buf::current().b_u_synced as ::core::ffi::c_int == 0 {
                 u_sync(true);
             }
-            // SAFETY: undoing `count` states of the buffer just entered.
+            // Undo `count` states of the buffer just entered.
             if !u_undo_and_forget(count, false) {
-                // SAFETY: `abort` never returns.
-                unsafe { abort() };
+                ::std::process::abort();
             }
-            // SAFETY: pairs with the `aucmd_prepbuf` above.
             aucmd_restbuf(&mut aco);
         }
 
@@ -308,13 +304,12 @@ pub(crate) fn cmdpreview_restore_state(mut cpinfo: Cp) {
 /// Run the command being typed as a preview, if it supports one.
 ///
 /// Answers true when a preview was shown.
-pub(crate) fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
+pub(crate) fn cmdpreview_may_show() -> bool {
     let mut ea: ExArg = EXARG_T_INIT;
     let mut cmdinfo: CmdParseInfo = CMD_PARSE_INFO_INIT;
     let mut cmdpreview_type = 0;
     // A copy of the command line: the parse writes into it.
-    // SAFETY: the command line is NUL-terminated for as long as it is shown.
-    let line = CmdLine::from_bytes(unsafe { crate::cstr::bytes_at(Cc::current().text()) });
+    let line = CmdLine::from_bytes(crate::cstr::until_nul(Cc::current().bytes()));
     let mut errormsg = None;
 
     // C's `goto end`: everything below happens only when the command line
@@ -361,8 +356,7 @@ pub(crate) fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
         let silenced = Suppress::messages();
         block_autocmds();
 
-        // SAFETY: `cpinfo` lives in this frame for the whole preview.
-        cmdpreview_prepare(unsafe { Cp::new(&raw mut cpinfo) });
+        cmdpreview_prepare(&mut cpinfo);
 
         // Open the preview buffer if 'inccommand' is "split".
         if icm_split && {
@@ -419,8 +413,7 @@ pub(crate) fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
             cmdpreview_close_win();
         }
 
-        // SAFETY: as the `cmdpreview_prepare` above.
-        cmdpreview_restore_state(unsafe { Cp::new(&raw mut cpinfo) });
+        cmdpreview_restore_state(&mut cpinfo);
 
         unblock_autocmds();
         drop(silenced);
@@ -430,7 +423,3 @@ pub(crate) fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
 
     cmdpreview_type != 0
 }
-
-/// [`Live`]'s shape for the save/restore state of one `'inccommand'` run,
-/// which lives in [`cmdpreview_may_show`]'s frame.
-pub(crate) type Cp = Live<CpInfo>;

@@ -31,7 +31,6 @@ use crate::state::mode::State;
 use crate::types::ui::kUIMessages;
 use crate::types::{Callback, ExpandContext, IOSIZE, NUL};
 use crate::ui::{ui_flush, ui_has};
-use ::libc::atoi;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
 const ESC: c_int = 0x1b;
@@ -217,28 +216,25 @@ pub(crate) fn prompt_for_input(
 
     // Don't map prompt input, but do allow special keys.
     let raw_key = Keys::unmapped_with_codes();
-    // SAFETY: the caller's prompt and mouse flag; the answer is an owned
-    // NUL-terminated string, freed here.
-    let resp = unsafe {
-        getcmdline_prompt(
-            -1,
-            prompt.as_ptr().cast_mut(),
-            hl_id,
-            ExpandContext::Nothing,
-            core::ptr::null(),
-            CALLBACK_NONE,
-            one_key,
-            mouse_used.map_or(core::ptr::null_mut(), core::ptr::from_mut),
-        )
-    };
+    let resp = getcmdline_prompt(
+        -1,
+        Some(prompt),
+        hl_id,
+        ExpandContext::Nothing,
+        None,
+        CALLBACK_NONE,
+        one_key,
+        mouse_used,
+    );
     drop(raw_key);
 
-    if !resp.is_null() {
-        // SAFETY: non-null, so it is the owned answer.
-        unsafe {
-            ret = if one_key { *resp as c_int } else { atoi(resp) };
-            xfree(resp as *mut c_void);
-        }
+    if let Some(resp) = resp {
+        let text = resp.as_cstr().to_bytes();
+        ret = if one_key {
+            c_int::from(text.first().copied().unwrap_or(0) as c_char)
+        } else {
+            crate::charset::atoi(text)
+        };
     }
     if let Some(kmsg) = kmsg {
         set_keep_msg(Some(kmsg.as_cstr()), keep_msg_hl_id.get());

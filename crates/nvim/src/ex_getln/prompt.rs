@@ -5,8 +5,7 @@
 //! (or the option dict), and drives a command line through
 //! [`super::enter::getcmdline_prompt`].
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::cstr;
@@ -66,8 +65,8 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
         return;
     }
 
-    let prompt: *const ::core::ffi::c_char;
-    let mut defstr: *const ::core::ffi::c_char = c"".as_ptr();
+    let prompt: &::core::ffi::CStr;
+    let mut defstr: &::core::ffi::CStr = c"";
     // A copy of the positional cancel value; `tv_copy` puts another copy
     // in the answer, and this one is released with the frame.
     let mut cancelreturn: Option<TypVal> = None;
@@ -75,71 +74,55 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
     // once the prompt is done: the prompt runs user code, which may change
     // or remove the entry.
     let mut cancelreturn_in_opts = false;
-    let mut xp_name: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
+    let mut xp_name: Option<&::core::ffi::CStr> = None;
     let mut input_callback = Callback::None;
     let mut prompt_buf = NumBuf::new();
     let mut defstr_buf = NumBuf::new();
     let mut cancelreturn_buf = NumBuf::new();
     let mut xp_name_buf = NumBuf::new();
-    // Its *address* is the "argument absent" answer below, so it has to be
-    // a distinct object from the `""` literal `defstr` starts as.
-    let def_block = [0u8; 1];
-    let def = ::core::ffi::CStr::from_bytes_with_nul(&def_block).expect("a lone terminator");
 
     if args[0].v_type() == VAR_DICT {
         if args.len() > 1 {
             emsg(gettext(c"E5050: {opts} must be the only argument"));
             return;
         }
-        let dict = args[0].dict_or_null();
-        // C's `S_LEN(key)`: the key pointer and its length, spelled once.
-        let dict_str =
-            |key: &::core::ffi::CStr, numbuf: &mut NumBuf, def: Option<&::core::ffi::CStr>| {
-                // SAFETY: the argument's own dictionary.
-                dict_get_string_buf_chk(unsafe { dict.as_ref() }, key.to_bytes(), numbuf, def)
-                    .map_or(::core::ptr::null(), ::core::ffi::CStr::as_ptr)
-            };
+        let dict = args[0].dict_ref();
 
-        prompt = dict_str(c"prompt", &mut prompt_buf, Some(c""));
-        if prompt.is_null() {
+        let Some(text) = dict_get_string_buf_chk(dict, b"prompt", &mut prompt_buf, Some(c""))
+        else {
             return;
-        }
-        defstr = dict_str(c"default", &mut defstr_buf, Some(c""));
-        if defstr.is_null() {
+        };
+        prompt = text;
+        let Some(text) = dict_get_string_buf_chk(dict, b"default", &mut defstr_buf, Some(c""))
+        else {
             return;
-        }
+        };
+        defstr = text;
         // `v:_null_dict` is a `VAR_DICT` holding nothing, so the lookup has
         // to tolerate it -- `input(v:_null_dict)` reaches here.
         cancelreturn_in_opts = opts_cancelreturn(&args[0]).is_some();
-        xp_name = dict_str(c"completion", &mut xp_name_buf, Some(def));
-        if xp_name.is_null() {
-            // error
-            return;
+        // A key that is absent leaves the completion off; one whose value
+        // is not a string is an error.
+        if dict.and_then(|d| d.find(b"completion")).is_some() {
+            let Some(text) = dict_get_string_buf_chk(dict, b"completion", &mut xp_name_buf, None)
+            else {
+                return;
+            };
+            xp_name = Some(text);
         }
-        if xp_name == def.as_ptr() {
-            // key absent: default to NULL
-            xp_name = ::core::ptr::null::<::core::ffi::c_char>();
-        }
-        // SAFETY: the argument's own dictionary, and this frame's callback.
-        if !unsafe {
-            dict_get_callback(
-                crate::types::DictRef::retained(dict).as_ref(),
-                b"highlight",
-                &mut input_callback,
-            )
-        } {
+        if !dict_get_callback(args[0].dict_shared(), b"highlight", &mut input_callback) {
             return;
         }
     } else {
         let Some(text) = prompt_buf.string_chk(&args[0]) else {
             return;
         };
-        prompt = text.as_ptr();
+        prompt = text;
         if args.len() > 1 {
             let Some(text) = defstr_buf.string_chk(&args[1]) else {
                 return;
             };
-            defstr = text.as_ptr();
+            defstr = text;
             if args.len() > 2 {
                 let Some(strarg2) = cancelreturn_buf.string_chk(&args[2]) else {
                     return;
@@ -147,7 +130,7 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
                 if inputdialog {
                     cancelreturn = Some(TypVal::string_from(strarg2.to_bytes()));
                 } else {
-                    xp_name = strarg2.as_ptr();
+                    xp_name = Some(strarg2);
                 }
             }
         }
@@ -155,10 +138,9 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
 
     let mut xp_type = ExpandContext::Nothing;
     let mut xp_arg = None;
-    if !xp_name.is_null() {
+    if let Some(name) = xp_name {
         // input() with a third argument: completion
-        // SAFETY: `xp_name` is the third argument's string, live for the call.
-        let name = unsafe { cstr::bytes_at(xp_name) };
+        let name = name.to_bytes();
         let mut argt = ExArgt::NONE;
         if parse_compl_arg(name, name, &mut xp_type, &mut argt, &mut xp_arg).is_err() {
             return;
@@ -169,47 +151,39 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
     // line's prompt, unless the command line is externalised.
     let mut p = prompt;
     if !ui_has(kUICmdline) {
-        let lastnl = unsafe { strrchr(prompt, '\n' as ::core::ffi::c_int) };
-        if !lastnl.is_null() {
-            p = unsafe { lastnl.offset(1) };
+        let text = prompt.to_bytes();
+        if let Some(lastnl) = text.iter().rposition(|&b| b == b'\n') {
+            p = cstr::suffix(prompt, lastnl + 1);
             msg_start();
             msg_clr_eos();
-            // SAFETY: `p` was found inside the prompt, so the span is
-            // readable.
-            let head = unsafe { cstr::slice_at(prompt, p.offset_from(prompt).cast_unsigned()) };
-            msg_bytes(head, get_echo_hl_id(), false);
+            msg_bytes(&text[..lastnl + 1], get_echo_hl_id(), false);
             msg_didout.set(false);
             msg_starthere();
         }
     }
     cmdline_row.set(msg_row.get());
 
-    stuff_readbuf_one_line(unsafe { cstr::bytes_at(defstr) });
+    stuff_readbuf_one_line(defstr.to_bytes());
 
     let save_ex_normal_busy = ex_normal_busy.get();
     ex_normal_busy.set(0);
-    // SAFETY: `getcmdline_prompt` answers an allocation of its own, or
-    // NULL, which the answer takes over.
-    result.write_string(unsafe {
-        ThinCString::from_raw(getcmdline_prompt(
-            if secret {
-                NUL
-            } else {
-                '@' as ::core::ffi::c_int
-            },
-            p,
-            get_echo_hl_id(),
-            xp_type,
-            xp_arg
-                .as_deref()
-                .map_or(::core::ptr::null(), ::core::ffi::CStr::as_ptr),
-            // The prompt takes the callback over, and releases it when it
-            // returns.
-            input_callback,
-            false,
-            ::core::ptr::null_mut::<bool>(),
-        ))
-    });
+    let line = getcmdline_prompt(
+        if secret {
+            NUL
+        } else {
+            '@' as ::core::ffi::c_int
+        },
+        Some(p),
+        get_echo_hl_id(),
+        xp_type,
+        xp_arg.as_deref(),
+        // The prompt takes the callback over, and releases it when it
+        // returns.
+        input_callback,
+        false,
+        None,
+    );
+    result.write_string(line.map(|line| ThinCString::from_cstr(line.as_cstr())));
     ex_normal_busy.set(save_ex_normal_busy);
 
     if result.string_ref().is_none() {

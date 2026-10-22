@@ -57,7 +57,7 @@
 //! | C | slice |
 //! | --- | --- |
 //! | `strlen(p)` | [`bytes_at(p)`](bytes_at)`.len()` |
-//! | `strcmp(a, b)` | [`eq(a, b)`](eq), or [`cmp`] |
+//! | `strcmp(a, b) == 0` | [`eq_bytes(a, b)`](eq_bytes) against a literal, else slices compared |
 //! | `strncmp(a, b, n)` | [`prefix_eq(a, b, n)`](prefix_eq), or [`prefix_cmp`] |
 //! | `strchr(s, c)` | `bytes_at(s).iter().position(…)` |
 //! | `strstr(h, n)` | `bytes_at(h).windows(n.len()).position(…)` |
@@ -91,7 +91,7 @@
 //!    call stops at the first difference. Where the caller is a filter
 //!    rejecting candidates — completion's duplicate scan, a maphash bucket
 //!    walk — that turns an O(match) test into O(length) and doubles the
-//!    loop. Use [`eq`]/[`cmp`]/[`prefix_eq`]/[`prefix_cmp`]/[`starts_with`],
+//!    loop. Use [`eq_bytes`]/[`prefix_eq`]/[`prefix_cmp`]/[`starts_with`],
 //!    which walk the two together. [`prefix_at`] is for the sites that want
 //!    the *span* itself, not a comparison.
 
@@ -179,24 +179,11 @@ pub(crate) unsafe fn prefix_at<'a>(p: *const c_char, n: usize) -> &'a [u8] {
     unsafe { slice::from_raw_parts(p.cast::<u8>(), len) }
 }
 
-/// Whether two NUL-terminated strings are equal -- `strcmp(a, b) == 0`.
-///
-/// Where one side is a literal, [`eq_bytes`] says which operand is the
-/// constant. **Not `bytes_at(p) == b"..."`**: that measures `p` to its
-/// terminator before it looks at a single byte.
-///
-/// # Safety
-/// [`bytes_at`]'s contract, for both.
-pub(crate) unsafe fn eq(a: *const c_char, b: *const c_char) -> bool {
-    // SAFETY: caller's contract.
-    unsafe { cmp(a, b) }.is_eq()
-}
-
 /// Whether the string at `p` is exactly `want` -- `strcmp` against a
 /// literal, without spelling the literal as a pointer.
 ///
-/// **Walks `p` against `want` and stops at the first difference**, as
-/// [`cmp`] does and for the reason written on [`prefix_cmp`]: the obvious
+/// **Walks `p` against `want` and stops at the first difference**, for the
+/// reason written on [`prefix_cmp`]: the obvious
 /// `bytes_at(p) == want` reads every byte of `p` first, so a test that a
 /// one-byte mismatch settles costs the length of whatever `p` happens to
 /// hold.
@@ -216,29 +203,6 @@ pub(crate) unsafe fn eq_bytes(p: *const c_char, want: &[u8]) -> bool {
     // SAFETY: `want.len()` bytes of `p` just matched, so `p` is at least
     // that long and the byte after them is readable.
     unsafe { *p.cast::<u8>().add(want.len()) == 0 }
-}
-
-/// How two NUL-terminated strings order -- `strcmp(a, b)`, as an
-/// [`Ordering`] rather than a sign.
-///
-/// Walks the two together and stops at the first difference, as
-/// [`prefix_cmp`] does and for the same reason: `bytes_at(a).cmp(bytes_at(b))`
-/// measures both operands in full before it looks at a single byte.
-///
-/// # Safety
-/// [`bytes_at`]'s contract, for both.
-pub(crate) unsafe fn cmp(a: *const c_char, b: *const c_char) -> Ordering {
-    let mut i = 0;
-    loop {
-        // SAFETY: caller's contract -- both are NUL-terminated, and the
-        // terminator ends the walk.
-        let (x, y) = unsafe { (*a.cast::<u8>().add(i), *b.cast::<u8>().add(i)) };
-        let ord = x.cmp(&y);
-        if ord != Ordering::Equal || x == 0 {
-            return ord;
-        }
-        i += 1;
-    }
 }
 
 /// Whether two NUL-terminated strings agree over their first `n` bytes --

@@ -6,13 +6,12 @@
 //! whether the line being typed *is* such a command, and the `ViewState`
 //! pair saves and restores the window the preview scrolled.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
+use crate::charset::skip;
 use crate::cstr;
 use crate::strings::has_char;
-use crate::strings::vim_strchr;
 use crate::winlayer::{Buf, Win};
 
 use crate::guard::Suppress;
@@ -23,9 +22,8 @@ use core::ffi::CStr;
 /// Fire a `Cmdline*` / `Cmdwin*` autocommand whose `<afile>` and `<amatch>`
 /// are the command-line type character.
 pub(crate) fn trigger_cmd_autocmd(typechar: ::core::ffi::c_int, evt: AutoEvent) {
-    let typestr: [::core::ffi::c_char; 2] =
-        [typechar as ::core::ffi::c_char, NUL as ::core::ffi::c_char];
-    cmdline_autocmd(evt, cstr::in_chars(&typestr));
+    let typestr = [typechar as u8, 0];
+    cmdline_autocmd(evt, cstr::in_bytes(&typestr));
 }
 
 /// C's `apply_autocmds(evt, fname, fname, false, curbuf)`: the one shape
@@ -63,7 +61,7 @@ pub(crate) fn restore_viewstate(mut window: Win, vs: ViewState) {
 }
 
 /// Start an incremental search from where the cursor and view are now.
-pub(crate) fn init_incsearch_state(mut s: Is) {
+pub(crate) fn init_incsearch_state(s: &mut IncsearchState) {
     s.winid = Win::current().handle;
     s.match_start = Win::current().w_cursor;
     s.did_incsearch = false;
@@ -87,53 +85,27 @@ pub(crate) fn set_search_match(t: &mut Pos) {
     }
 }
 
+/// Where `'incsearch'` finds the pattern in the command line: the
+/// delimiter, how many bytes come before the pattern, and its length.
+pub(crate) struct PatternSpan {
+    pub(crate) delim: ::core::ffi::c_int,
+    pub(crate) skiplen: ::core::ffi::c_int,
+    pub(crate) patlen: ::core::ffi::c_int,
+}
+
 /// Parse a `:[range]s/foo`-style command line into the parts `'incsearch'`
 /// and wildmenu completion need.
 ///
-/// Answers true when the line holds a valid pattern, having set `skiplen`
-/// (bytes before the pattern), `patlen`, `search_delim`, `search_first_line`
-/// and `search_last_line`.
-///
-/// # Safety
-///
-/// `search_delim` must point at a writable `int` the caller owns. `skiplen`
-/// must point at a writable `int` the caller owns. `patlen` must point at a
-/// writable `int` the caller owns.
-pub unsafe fn parse_pattern_and_range(
-    incsearch_start: Pos,
-    search_delim: *mut ::core::ffi::c_int,
-    skiplen: *mut ::core::ffi::c_int,
-    patlen: *mut ::core::ffi::c_int,
-) -> bool {
+/// Answers where the pattern is when the line holds a valid one, having set
+/// `search_first_line` and `search_last_line`.
+pub(crate) fn parse_pattern_and_range(incsearch_start: Pos) -> Option<PatternSpan> {
     let mut delim_optional = false;
     let mut dummy = None;
     let mut magic: Magic = 0;
 
-    // The three out-parameters, taken once. Both callers own three plain
-    // `c_int` locals apiece that nothing else in the editor can reach, so
-    // there is no re-entry to alias them.
-    // A copy of what is typed so far comes with them: the scan below only
-    // reads it, and an offset into the copy is the same offset into the line.
-    // SAFETY: the caller's obligation -- three live, distinct `c_int`s -- and
-    // the command line, which is NUL-terminated while it is being shown.
-    let (search_delim, skiplen, patlen, line) = unsafe {
-        (
-            &mut *search_delim,
-            &mut *skiplen,
-            &mut *patlen,
-            CmdLine::from_bytes(cstr::bytes_at(Cc::current().text())),
-        )
-    };
-
-    // `cmd`, `p` and `end` all point into the command line, which is one
-    // NUL-terminated allocation, and the walk below stops at its terminator;
-    // reading a byte is stated here once instead of at twenty-odd sites.
-    let at = |q: *const ::core::ffi::c_char| unsafe { *q } as ::core::ffi::c_int;
-    // C's `skipwhite` over the same string.
-    let skip_ws = |q: *mut ::core::ffi::c_char| unsafe { skipwhite(q) };
-
-    *skiplen = 0;
-    *patlen = Cc::current().len();
+    // A copy of what is typed so far: the scan below only reads it, and an
+    // offset into the copy is the same offset into the line.
+    let line = CmdLine::from_bytes(cstr::until_nul(Cc::current().bytes()));
 
     // Default range: all lines.
     search_first_line.set(0);
@@ -152,125 +124,111 @@ pub unsafe fn parse_pattern_and_range(
     let _ = parse_command_modifiers(&mut ea, &mut dummy, &mut dummy_cmdmod, true);
 
     // Skip over the range to find the command.
-    let at_cmd = ea.line.cmd + skip_range(ea.line.tail(ea.line.cmd), None);
-    // The walk below is by pointer, over the line's own bytes, and ends
-    // before anything else reaches the line; what outlives it is offsets.
-    let base = ea
-        .line
-        .buffer_mut()
-        .as_mut_ptr()
-        .cast::<::core::ffi::c_char>();
-    let cmd = base.wrapping_add(at_cmd);
-    if !has_char(c"sgvlu", at(cmd) as uint8_t as ::core::ffi::c_int) {
-        return false;
-    }
+    let cmd = ea.line.cmd + skip_range(ea.line.tail(ea.line.cmd), None);
+    let span = {
+        // The walk is over the line's own bytes, terminator included, and
+        // ends before anything else reaches the line; what outlives it is
+        // offsets.
+        let buf = ea.line.buffer();
+        let at = |q: usize| ::core::ffi::c_int::from(cstr::byte_at(buf, q));
+        // C's `skipwhite` over the same string.
+        let skip_ws = |q: usize| q + skip::white(buf.get(q..).unwrap_or_default());
+        if !has_char(c"sgvlu", at(cmd)) {
+            return None;
+        }
 
-    // Skip over the command name to find the pattern separator.
-    let mut p = cmd;
-    while ascii_isalpha(at(p)) {
-        p = p.wrapping_offset(1);
-    }
-    if at(skip_ws(p)) == NUL {
-        return false;
-    }
+        // Skip over the command name to find the pattern separator.
+        let mut p = cmd;
+        while ascii_isalpha(at(p)) {
+            p += 1;
+        }
+        if at(skip_ws(p)) == NUL {
+            return None;
+        }
 
-    // C's `strncmp(cmd, name, MAX(p - cmd, min))`: is what has been typed
-    // an abbreviation of `name`?  `min` is the shortest form upstream
-    // accepts, and 0 where it imposes none (`p` never precedes `cmd`, so
-    // `MAX(p - cmd, 0)` is just `p - cmd`).
-    let namelen = p.addr().wrapping_sub(cmd.addr()) as isize;
-    let width = |min: isize| namelen.max(min) as size_t;
-    let abbreviates =
-        |name: &CStr, min: isize| unsafe { cstr::prefix_eq(cmd, name.as_ptr(), width(min)) };
+        // C's `strncmp(cmd, name, MAX(p - cmd, min))`: is what has been
+        // typed an abbreviation of `name`?  `min` is the shortest form
+        // upstream accepts, and 0 where it imposes none.
+        let namelen = p - cmd;
+        let typed = &buf[cmd..];
+        let abbreviates =
+            |name: &CStr, min: usize| cstr::ncmp_eq(typed, name.to_bytes(), namelen.max(min));
 
-    if abbreviates(c"substitute", 0)
-        || abbreviates(c"smagic", 0)
-        || abbreviates(c"snomagic", 3)
-        || abbreviates(c"vglobal", 0)
-    {
-        if at(cmd) == 's' as ::core::ffi::c_int
-            && at(cmd.wrapping_offset(1)) == 'm' as ::core::ffi::c_int
+        if abbreviates(c"substitute", 0)
+            || abbreviates(c"smagic", 0)
+            || abbreviates(c"snomagic", 3)
+            || abbreviates(c"vglobal", 0)
         {
-            magic_overruled.set(OPTION_MAGIC_ON);
-        } else if at(cmd) == 's' as ::core::ffi::c_int
-            && at(cmd.wrapping_offset(1)) == 'n' as ::core::ffi::c_int
+            if at(cmd) == 's' as ::core::ffi::c_int && at(cmd + 1) == 'm' as ::core::ffi::c_int {
+                magic_overruled.set(OPTION_MAGIC_ON);
+            } else if at(cmd) == 's' as ::core::ffi::c_int
+                && at(cmd + 1) == 'n' as ::core::ffi::c_int
+            {
+                magic_overruled.set(OPTION_MAGIC_OFF);
+            }
+        } else if abbreviates(c"sort", 3) || abbreviates(c"uniq", 3) {
+            // Skip over "!" and the flags.
+            if at(p) == '!' as ::core::ffi::c_int {
+                p = skip_ws(p + 1);
+            }
+            loop {
+                p = skip_ws(p);
+                if !ascii_isalpha(at(p)) {
+                    break;
+                }
+                p += 1;
+            }
+            if at(p) == NUL {
+                return None;
+            }
+        } else if abbreviates(c"vimgrep", 3)
+            || abbreviates(c"vimgrepadd", 8)
+            || abbreviates(c"lvimgrep", 2)
+            || abbreviates(c"lvimgrepadd", 9)
+            || abbreviates(c"global", 0)
         {
-            magic_overruled.set(OPTION_MAGIC_OFF);
-        }
-    } else if abbreviates(c"sort", 3) || abbreviates(c"uniq", 3) {
-        // Skip over "!" and the flags.
-        if at(p) == '!' as ::core::ffi::c_int {
-            p = skip_ws(p.wrapping_offset(1));
-        }
-        // C's `while (ASCII_ISALPHA(*(p = skipwhite(p)))) p++;` — the
-        // macro evaluates its argument up to four times, which is a no-op
-        // because `skipwhite` is idempotent.
-        loop {
-            p = skip_ws(p);
-            if !ascii_isalpha(at(p)) {
-                break;
+            // Skip an optional "!".
+            if at(p) == '!' as ::core::ffi::c_int {
+                p += 1;
+                if at(skip_ws(p)) == NUL {
+                    return None;
+                }
             }
-            p = p.wrapping_offset(1);
-        }
-        if at(p) == NUL {
-            return false;
-        }
-    } else if abbreviates(c"vimgrep", 3)
-        || abbreviates(c"vimgrepadd", 8)
-        || abbreviates(c"lvimgrep", 2)
-        || abbreviates(c"lvimgrepadd", 9)
-        || abbreviates(c"global", 0)
-    {
-        // Skip an optional "!".
-        if at(p) == '!' as ::core::ffi::c_int {
-            p = p.wrapping_offset(1);
-            if at(skip_ws(p)) == NUL {
-                return false;
+            if at(cmd) != 'g' as ::core::ffi::c_int {
+                delim_optional = true;
             }
+        } else {
+            return None;
         }
-        if at(cmd) != 'g' as ::core::ffi::c_int {
-            delim_optional = true;
-        }
-    } else {
-        return false;
-    }
 
-    p = skip_ws(p);
-    let delim = if delim_optional && vim_is_ident_char(at(p) as uint8_t as ::core::ffi::c_int) {
-        ' ' as ::core::ffi::c_int
-    } else {
-        let c = at(p);
-        p = p.wrapping_offset(1);
-        c
-    };
-    *search_delim = delim;
-
-    let end = skip_pattern(p, delim, &mut magic);
-    let use_last_pat = end == p && at(end) == delim;
-
-    if end == p && !use_last_pat {
-        return false;
-    }
-
-    // Skip if the pattern matches everything (e.g. for 'hlsearch').
-    if !use_last_pat {
-        // SAFETY: `end` is inside the command line, so the terminator can
-        // be moved there and put back around the one call that reads it.
-        let empty = unsafe {
-            let c = *end;
-            *end = NUL as ::core::ffi::c_char;
-            let empty = empty_pattern_magic(p, end.offset_from(p) as size_t, magic);
-            *end = c;
-            empty
+        p = skip_ws(p);
+        let delim = if delim_optional && vim_is_ident_char(at(p) as uint8_t as ::core::ffi::c_int) {
+            ' ' as ::core::ffi::c_int
+        } else {
+            let c = at(p);
+            p += 1;
+            c
         };
-        if empty {
-            return false;
-        }
-    }
 
-    // Found a non-empty pattern, or "//".
-    *skiplen = p.addr().wrapping_sub(base.addr()) as ::core::ffi::c_int;
-    *patlen = end.addr().wrapping_sub(p.addr()) as ::core::ffi::c_int;
+        let end = p + skip_pattern(&buf[p.min(buf.len())..], delim, &mut magic);
+        let use_last_pat = end == p && at(end) == delim;
+
+        if end == p && !use_last_pat {
+            return None;
+        }
+
+        // Skip if the pattern matches everything (e.g. for 'hlsearch').
+        if !use_last_pat && empty_pattern_magic(&buf[p..end], magic) {
+            return None;
+        }
+
+        // Found a non-empty pattern, or "//".
+        PatternSpan {
+            delim,
+            skiplen: p as ::core::ffi::c_int,
+            patlen: (end - p) as ::core::ffi::c_int,
+        }
+    };
 
     // Parse the address range.
     let save_cursor = Win::current().w_cursor;
@@ -282,14 +240,14 @@ pub unsafe fn parse_pattern_and_range(
         // Allow for a reverse match.
         search_first_line.set(ea.line2.min(ea.line1));
         search_last_line.set(ea.line2.max(ea.line1));
-    } else if ea.line.byte_at(at_cmd) == b's' && ea.line.byte_at(at_cmd + 1) != b'o' {
+    } else if ea.line.byte_at(cmd) == b's' && ea.line.byte_at(cmd + 1) != b'o' {
         // :s defaults to the current line.
         search_last_line.set(Win::current().w_cursor.lnum);
         search_first_line.set(search_last_line.get());
     }
 
     Win::current().w_cursor = save_cursor;
-    true
+    Some(span)
 }
 
 /// [`parse_pattern_and_range`] for a caller that wants only where the
@@ -298,35 +256,19 @@ pub unsafe fn parse_pattern_and_range(
 pub(crate) fn parse_pattern_and_range_of(
     incsearch_start: Pos,
 ) -> Option<(::core::ffi::c_int, ::core::ffi::c_int)> {
-    let (mut delim, mut skiplen, mut patlen) = (0, 0, 0);
-    // SAFETY: three locals this frame owns.
-    let found = unsafe {
-        parse_pattern_and_range(
-            incsearch_start,
-            &raw mut delim,
-            &raw mut skiplen,
-            &raw mut patlen,
-        )
-    };
-    found.then_some((skiplen, patlen))
+    parse_pattern_and_range(incsearch_start).map(|span| (span.skiplen, span.patlen))
 }
 
 /// Whether `'incsearch'` highlighting should be done for this command line,
-/// and if so what its pattern and address range are.
+/// and if so where its pattern is (having set its address range).
 ///
 /// May change the last search pattern.
 pub(crate) fn do_incsearch_highlighting(
     firstc: ::core::ffi::c_int,
-    search_delim: &mut ::core::ffi::c_int,
-    is_state: Is,
-    skiplen: &mut ::core::ffi::c_int,
-    patlen: &mut ::core::ffi::c_int,
-) -> bool {
-    *skiplen = 0;
-    *patlen = Cc::current().len();
-
+    is_state: &IncsearchState,
+) -> Option<PatternSpan> {
     if !p_is() || cmd_silent.get() {
-        return false;
+        return None;
     }
 
     // By default search all lines.
@@ -334,39 +276,43 @@ pub(crate) fn do_incsearch_highlighting(
     search_last_line.set(MAXLNUM);
 
     if firstc == '/' as ::core::ffi::c_int || firstc == '?' as ::core::ffi::c_int {
-        *search_delim = firstc;
-        return true;
+        return Some(PatternSpan {
+            delim: firstc,
+            skiplen: 0,
+            patlen: Cc::current().len(),
+        });
     }
 
     if firstc != ':' as ::core::ffi::c_int {
-        return false;
+        return None;
     }
 
     let _no_emsg = Suppress::emsg();
-    // SAFETY: the three out-parameters are this frame's own borrows.
-    unsafe { parse_pattern_and_range(is_state.search_start, search_delim, skiplen, patlen) }
+    parse_pattern_and_range(is_state.search_start)
 }
 
 /// Do the `'incsearch'` preview, if it is wanted here.
 pub(crate) fn may_do_incsearch_highlighting(
     firstc: ::core::ffi::c_int,
     count: ::core::ffi::c_int,
-    mut s: Is,
+    s: &mut IncsearchState,
 ) {
     let cc = Cc::current();
-    let mut skiplen = 0;
-    let mut patlen = 0;
-    let mut search_delim = 0;
 
     // Parsing the range may already set the last search pattern.
     // NOTE: restore_last_search_pattern() must run before every return.
     save_last_search_pattern();
 
-    if !do_incsearch_highlighting(firstc, &mut search_delim, s, &mut skiplen, &mut patlen) {
+    let Some(PatternSpan {
+        delim: search_delim,
+        skiplen,
+        patlen,
+    }) = do_incsearch_highlighting(firstc, s)
+    else {
         restore_last_search_pattern();
         finish_incsearch_highlighting(false, s, true);
         return;
-    }
+    };
 
     // If there is a character waiting, search and redraw later.
     if char_avail() {
@@ -377,8 +323,8 @@ pub(crate) fn may_do_incsearch_highlighting(
     s.incsearch_postponed = false;
 
     // Use the previous pattern for ":s//".
-    let mut next_char = cmd_byte(cc, skiplen + patlen);
-    let use_last_pat = patlen == 0 && skiplen > 0 && cmd_byte(cc, skiplen - 1) == next_char;
+    let next_char = cc.byte_at(skiplen + patlen);
+    let use_last_pat = patlen == 0 && skiplen > 0 && cc.byte_at(skiplen - 1) == next_char;
 
     if patlen != 0 || use_last_pat {
         ui_busy_start();
@@ -422,11 +368,9 @@ pub(crate) fn may_do_incsearch_highlighting(
         } else {
             firstc
         };
-        let len = usize::try_from(patlen).unwrap_or(0);
         // A copy of the pattern: the `patlen` bytes of the command line
         // from `skiplen`.
-        // SAFETY: the command line holds them.
-        let pat = unsafe { core::slice::from_raw_parts(cc.at(skiplen).cast::<u8>(), len) }.to_vec();
+        let pat = pattern_of(cc, skiplen, patlen);
         let flags = search_flags;
         found = do_search(None, dir, search_delim, &pat, count, flags, Some(&mut sia));
         drop(no_emsg);
@@ -468,9 +412,7 @@ pub(crate) fn may_do_incsearch_highlighting(
     let mut end_pos = Win::current().w_cursor;
     if found != 0 {
         s.match_start = Win::current().w_cursor;
-        // SAFETY: `curwin`'s cursor lives as long as the window, and
-        // `coladvance` inside writes through the same place.
-        set_search_match(unsafe { &mut *Win::current().cursor().raw() });
+        set_cursor_to_search_match();
         validate_curwin_cursor();
         s.match_end = Win::current().w_cursor;
         Win::current().w_cursor = end_pos;
@@ -479,16 +421,12 @@ pub(crate) fn may_do_incsearch_highlighting(
 
     // Disable 'hlsearch' highlighting if the pattern matches everything.
     // Avoids a flash when typing "foo\|".
-    if !use_last_pat {
-        next_char = cmd_byte(cc, skiplen + patlen);
-        set_cmd_byte(cc, skiplen + patlen, NUL as ::core::ffi::c_char);
-        if unsafe { empty_pattern(cc.at(skiplen), patlen as size_t, search_delim) }
-            && !no_hlsearch.get()
-        {
-            redraw_all_later(UPD_SOME_VALID);
-            set_no_hlsearch(true);
-        }
-        set_cmd_byte(cc, skiplen + patlen, next_char);
+    if !use_last_pat
+        && empty_pattern(&pattern_of(cc, skiplen, patlen), search_delim)
+        && !no_hlsearch.get()
+    {
+        redraw_all_later(UPD_SOME_VALID);
+        set_no_hlsearch(true);
     }
 
     validate_curwin_cursor();
@@ -505,7 +443,7 @@ pub(crate) fn may_do_incsearch_highlighting(
 
     // Leave the cursor at the end so CTRL-R CTRL-W works — but not when
     // it is beyond the end of the pattern, as for ":s/pat/".
-    if cmd_byte(cc, skiplen + patlen) as ::core::ffi::c_int != NUL {
+    if cc.byte_at(skiplen + patlen) != 0 {
         Win::current().w_cursor = s.search_start;
     } else if found != 0 {
         Win::current().w_cursor = end_pos;
@@ -525,20 +463,21 @@ pub(crate) fn may_do_incsearch_highlighting(
 pub(crate) fn may_add_char_to_search(
     firstc: ::core::ffi::c_int,
     c: &mut ::core::ffi::c_int,
-    s: Is,
+    s: &mut IncsearchState,
 ) -> Result<(), Failed> {
-    let mut skiplen = 0;
-    let mut patlen = 0;
-    let mut search_delim = 0;
-
     // Parsing the range may already set the last search pattern.
     // NOTE: restore_last_search_pattern() must run before every return.
     save_last_search_pattern();
 
-    if !do_incsearch_highlighting(firstc, &mut search_delim, s, &mut skiplen, &mut patlen) {
+    let Some(PatternSpan {
+        delim: search_delim,
+        skiplen,
+        ..
+    }) = do_incsearch_highlighting(firstc, s)
+    else {
         restore_last_search_pattern();
         return Err(Failed);
-    }
+    };
     restore_last_search_pattern();
 
     if s.did_incsearch {
@@ -550,20 +489,13 @@ pub(crate) fn may_add_char_to_search(
             // the command line, lowercase the character.
             if p_ic()
                 && p_scs()
-                // SAFETY: the pattern starts `skiplen` bytes into the
-                // command line, which is NUL-terminated.
-                && !pat_has_uppercase(unsafe { cstr::bytes_at(Cc::current().at(skiplen)) })
+                // The pattern starts `skiplen` bytes into the command line.
+                && !pat_has_uppercase(&pattern_of(Cc::current(), skiplen, ::core::ffi::c_int::MAX))
             {
                 *c = mb_tolower(*c);
             }
-            let magics = if magic_isset() {
-                c"\\~^$.*[".as_ptr()
-            } else {
-                c"\\^$".as_ptr()
-            };
-            // SAFETY: a static NUL-terminated string and a character.
-            let special = unsafe { vim_strchr(magics, *c) };
-            if *c == search_delim || !special.is_null() {
+            let magics = if magic_isset() { c"\\~^$.*[" } else { c"\\^$" };
+            if *c == search_delim || has_char(magics, *c) {
                 // Put a backslash before the special characters.
                 stuff_readbuf_char(*c);
                 *c = '\\' as ::core::ffi::c_int;
@@ -588,7 +520,11 @@ pub(crate) fn may_add_char_to_search(
 
 /// Undo the preview: put the cursor and the view back where the command line
 /// found them, and clear the match highlight.
-pub(crate) fn finish_incsearch_highlighting(gotesc: bool, mut s: Is, call_update_screen: bool) {
+pub(crate) fn finish_incsearch_highlighting(
+    gotesc: bool,
+    s: &mut IncsearchState,
+    call_update_screen: bool,
+) {
     if !s.did_incsearch {
         return;
     }
@@ -630,23 +566,25 @@ pub(crate) fn finish_incsearch_highlighting(gotesc: bool, mut s: Is, call_update
 pub(crate) fn may_do_command_line_next_incsearch(
     firstc: ::core::ffi::c_int,
     count: ::core::ffi::c_int,
-    mut s: Is,
+    s: &mut IncsearchState,
     next_match: bool,
 ) -> Result<(), Failed> {
     let cc = Cc::current();
-    let mut skiplen = 0;
-    let mut patlen = 0;
-    let mut search_delim = 0;
 
     // Parsing the range may already set the last search pattern.
     // NOTE: restore_last_search_pattern() must run before every return.
     save_last_search_pattern();
 
-    if !do_incsearch_highlighting(firstc, &mut search_delim, s, &mut skiplen, &mut patlen) {
+    let Some(PatternSpan {
+        delim: search_delim,
+        skiplen,
+        patlen,
+    }) = do_incsearch_highlighting(firstc, s)
+    else {
         restore_last_search_pattern();
         return Ok(());
-    }
-    if patlen == 0 && cmd_byte(cc, skiplen) as ::core::ffi::c_int == NUL {
+    };
+    if patlen == 0 && cc.byte_at(skiplen) == 0 {
         restore_last_search_pattern();
         return Err(Failed);
     }
@@ -657,17 +595,14 @@ pub(crate) fn may_do_command_line_next_incsearch(
     let mut search_flags = SEARCH_NOOF;
 
     // A copy of the pattern, which is changed below for the search.
-    let mut pat: Vec<u8> = if search_delim == cmd_byte(cc, skiplen) as ::core::ffi::c_int {
+    let mut pat: Vec<u8> = if search_delim == ::core::ffi::c_int::from(cc.byte_at(skiplen)) {
         let Some(last) = last_search_pattern() else {
             restore_last_search_pattern();
             return Err(Failed);
         };
         last.to_vec()
     } else {
-        let len = usize::try_from(patlen).unwrap_or(0);
-        // SAFETY: the pattern is the `patlen` bytes of the command line
-        // from `skiplen`.
-        unsafe { core::slice::from_raw_parts(cc.at(skiplen).cast::<u8>(), len) }.to_vec()
+        pattern_of(cc, skiplen, patlen)
     };
 
     // Do not search for the search end delimiter, unless it is part of
@@ -748,53 +683,34 @@ pub(crate) fn may_do_command_line_next_incsearch(
     Err(Failed)
 }
 
-/// Guess whether the pattern matches everything.
+/// Guess whether the pattern `pat` matches everything.
 ///
-/// Only finds specific cases, such as a trailing `\|`, which can happen while
+/// Only finds specific cases, such as a trailing `\\|`, which can happen while
 /// a pattern is being typed.
-///
-/// # Safety
-///
-/// `p` must point at `len` bytes the caller owns, readable and writable,
-/// unaliased for the call.
-pub(crate) unsafe fn empty_pattern(
-    p: *mut ::core::ffi::c_char,
-    len: size_t,
-    delim: ::core::ffi::c_int,
-) -> bool {
-    let mut magic_val: Magic = MAGIC_ON;
-
-    if len > 0 {
-        skip_pattern(p, delim, &mut magic_val);
-    } else {
+pub(crate) fn empty_pattern(pat: &[u8], delim: ::core::ffi::c_int) -> bool {
+    if pat.is_empty() {
         return true;
     }
-
-    unsafe { empty_pattern_magic(p, len, magic_val) }
+    // The 'magic' the pattern ends under, read up to its end as C read it
+    // up to the NUL it wrote there.
+    let mut text = Vec::with_capacity(pat.len() + 1);
+    text.extend_from_slice(pat);
+    text.push(0);
+    let mut magic_val: Magic = MAGIC_ON;
+    skip_pattern(&text, delim, &mut magic_val);
+    empty_pattern_magic(pat, magic_val)
 }
 
 /// [`empty_pattern`] with the `'magic'` level already known.
-///
-/// # Safety
-///
-/// `p` must point at a NUL-terminated string, unaliased for the call.
-pub(crate) unsafe fn empty_pattern_magic(
-    p: *mut ::core::ffi::c_char,
-    mut len: size_t,
-    magic_val: Magic,
-) -> bool {
-    // `p[..len]` is the pattern, inside the command line's own allocation;
-    // every index below is `len - 1` or `len - 2` with `len >= 2`.
-    // SAFETY: the caller's obligation -- `len` bytes readable at `p`.
-    let at = |i: size_t| unsafe { *p.add(i) } as ::core::ffi::c_int;
+pub(crate) fn empty_pattern_magic(pat: &[u8], magic_val: Magic) -> bool {
+    let mut len = pat.len();
+    let at = |i: usize| ::core::ffi::c_int::from(pat[i]);
 
     // Remove a trailing \v and the like.
-    while len >= 2 && at(len - 2) == '\\' as ::core::ffi::c_int && {
-        // SAFETY: a static NUL-terminated string and a byte.
-        let byte = at(len - 1) as uint8_t as ::core::ffi::c_int;
-        let flag = unsafe { vim_strchr(c"mMvVcCZ".as_ptr(), byte) };
-        !flag.is_null()
-    } {
+    while len >= 2
+        && at(len - 2) == '\\' as ::core::ffi::c_int
+        && has_char(c"mMvVcCZ", ::core::ffi::c_int::from(pat[len - 1]))
+    {
         len -= 2;
     }
 
@@ -807,34 +723,40 @@ pub(crate) unsafe fn empty_pattern_magic(
                 || at(len - 2) != '\\' as ::core::ffi::c_int && magic_val == MAGIC_ALL)
 }
 
-/// C's `skip_regexp_ex(p, delim, magic_isset(), NULL, NULL, &magic)`: find
-/// the end of the pattern `p` and say what magicness it ended under.
-fn skip_pattern(
-    p: *mut ::core::ffi::c_char,
-    delim: ::core::ffi::c_int,
-    magic: &mut Magic,
-) -> *mut ::core::ffi::c_char {
+/// C's `skip_regexp_ex(p, delim, magic_isset(), NULL, NULL, &magic)`: how
+/// long the pattern `text` starts with is, and what magicness it ended
+/// under. `text` holds a NUL.
+fn skip_pattern(text: &[u8], delim: ::core::ffi::c_int, magic: &mut Magic) -> usize {
     let is_magic = magic_isset() as ::core::ffi::c_int;
-    // SAFETY: `p` points into a live NUL-terminated pattern.
-    let text = unsafe { ::core::ffi::CStr::from_ptr(p) }.to_bytes_with_nul();
     let (end, ended) = skip_regexp_magic(text, delim, is_magic);
     *magic = ended;
-    p.wrapping_add(end)
+    end
 }
 
-/// The command line's byte at `i`.
-///
-/// [`Cc::at`] computes an address without reading; every caller here has an
-/// `i` inside the line the pattern parse has just measured.
-fn cmd_byte(cc: Cc, i: ::core::ffi::c_int) -> ::core::ffi::c_char {
-    // SAFETY: `i` is at or before the command line's terminator.
-    unsafe { *cc.at(i) }
+/// A copy of `len` bytes of the command line from `start`, cut at its end.
+fn pattern_of(cc: Cc, start: ::core::ffi::c_int, len: ::core::ffi::c_int) -> Vec<u8> {
+    let line = cc.bytes();
+    let from = usize::try_from(start).unwrap_or(0).min(line.len());
+    let to = from
+        .saturating_add(usize::try_from(len).unwrap_or(0))
+        .min(line.len());
+    line[from..to].to_vec()
 }
 
-/// Write the command line's byte at `i`; see [`cmd_byte`].
-fn set_cmd_byte(cc: Cc, i: ::core::ffi::c_int, b: ::core::ffi::c_char) {
-    // SAFETY: as [`cmd_byte`].
-    unsafe { *cc.at(i) = b };
+/// [`set_search_match`] on the window's own cursor: move it to the end of
+/// the match, clamping it to the last line with the column advanced there.
+fn set_cursor_to_search_match() {
+    let mut t = Win::current().w_cursor;
+    t.lnum += search_match_lines.get();
+    t.col = search_match_endcol.get();
+    let past_end = t.lnum > Buf::current().b_ml.ml_line_count;
+    if past_end {
+        t.lnum = Buf::current().b_ml.ml_line_count;
+    }
+    Win::current().w_cursor = t;
+    if past_end {
+        coladvance(Win::current(), MAXCOL);
+    }
 }
 
 /// C's `changed_cline_bef_curs(curwin); update_topline(curwin);`, the pair

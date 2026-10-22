@@ -11,15 +11,13 @@
 //! derived afresh at each use because the register and abbreviation machinery
 //! re-enters and can replace the whole structure.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::cstr;
 use crate::guard::Lock;
 use crate::keycodes::{Ctrl_A, Ctrl_BSL, Ctrl_C, Ctrl_F, Ctrl_L, Ctrl_N, Ctrl_P, Ctrl_V, Ctrl_W};
 use crate::memory::XString;
-use crate::types::NUL;
 use core::ffi::CStr;
 
 // ---------------------------------------------------------------------------
@@ -32,47 +30,63 @@ use core::ffi::CStr;
 // the handle instead.
 
 impl Cc {
-    /// The command line the editor is on.
-    ///
-    /// Safe: `ccline` is a `&'static GlobalCell`, which is exactly the
-    /// promise [`Live::new`] has to be told. The *cell* never moves; its
-    /// contents do, which is why the handle is derived afresh at each use
-    /// rather than held across a call that can re-enter command-line mode --
-    /// [`save_cmdline`] moves the whole structure onto the saved stack, and
-    /// [`realloc_cmdbuff`] moves the text out from under any pointer into it.
-    pub(crate) fn current() -> Self {
-        // SAFETY: a `&'static GlobalCell`'s address is live for the whole
-        // run, which is the promise.
-        unsafe { Cc::new(ccline.ptr()) }
-    }
-
     /// Whether the command line is waiting for a single key: C's `one_key`.
     pub(crate) fn one_key(self) -> bool {
         self.one_key
     }
 
     /// Whether a `:[N]` style number prompt is up: C's `mouse_used != NULL`.
-    pub(crate) fn mouse_used(self) -> bool {
-        !self.mouse_used.is_null()
+    pub(crate) fn mouse_prompt(self) -> bool {
+        self.mouse_prompt
     }
 
     /// Run `f` on the completion in progress, or on `None` when there is
-    /// none.
+    /// none, for a reader that runs no user code.
     ///
-    /// The command line moves its completion out of `xpc` for the length of
-    /// every call into the completion machinery, so what `f` is handed here
-    /// is never one that machinery holds.
-    pub(crate) fn with_xpc<R>(self, f: impl FnOnce(Option<&mut Expand>) -> R) -> R {
-        // SAFETY: `xpc` is null or the completion inside the live
-        // `CommandLineState` that set it, which clears it before that state
-        // goes; and nothing else holds that completion while `f` runs.
-        f(unsafe { self.xpc.as_mut() })
+    /// The completion is moved out of the command line for the call, so `f`
+    /// may read the rest of the line through any handle without reaching
+    /// what it is handed.
+    pub(crate) fn with_xpc<R>(mut self, f: impl FnOnce(Option<&mut Expand>) -> R) -> R {
+        let mut xpc = self.xpc.take();
+        let answer = f(xpc.as_mut());
+        self.xpc = xpc;
+        answer
     }
 
-    /// The command line's own bytes, as bytes: [`Cc::bytes`] for a slice
-    /// reader.
-    pub(crate) fn text_bytes<'a>(self) -> &'a [u8] {
-        cstr::as_bytes(self.bytes())
+    /// Run `f` on the command line's completion, which its key loop holds,
+    /// moved out of the line for the length of the call.
+    ///
+    /// The completion runs user code -- `customlist` functions, Lua
+    /// `ui_attach` callbacks, backtick expressions in file names -- and
+    /// that code can ask about the command line's completion. While `f`
+    /// holds it, it finds an empty one in its place instead of one this code
+    /// holds mutably, which is what upstream's own readers would mostly have
+    /// seen mid-expansion anyway.
+    pub(crate) fn with_completion<R>(mut self, f: impl FnOnce(&mut Expand) -> R) -> R {
+        let mut xpc = core::mem::take(self.xpc_mut());
+        let answer = f(&mut xpc);
+        // Back into the line the loop is on: the cell, which a command line
+        // the call suspended has been restored into by now.
+        if let Some(slot) = self.xpc.as_mut() {
+            *slot = xpc;
+        }
+        answer
+    }
+
+    /// The completion the key loop holds, for a read that runs no user code.
+    pub(crate) fn xpc(&self) -> &Expand {
+        self.xpc.as_ref().expect("a command line in its key loop")
+    }
+
+    /// [`Cc::xpc`] for a write.
+    pub(crate) fn xpc_mut(&mut self) -> &mut Expand {
+        self.xpc.as_mut().expect("a command line in its key loop")
+    }
+
+    /// The command line's own bytes, as bytes: [`Cc::bytes`] by its older
+    /// name, which the completion code reads by.
+    pub(crate) fn text_bytes(&self) -> &[u8] {
+        self.cmdbuff.bytes()
     }
 
     /// Replace `[from, to)` of the text with `with`, moving the rest of the
@@ -92,15 +106,19 @@ impl Cc {
 
     /// The command line's own bytes: C's `cmdbuff[..cmdlen]`.
     ///
-    /// The slice must not outlive the next [`Cc::reserve`] or
-    /// [`put_on_cmdline`] -- both may move the allocation -- which is why
-    /// every caller takes it inside the expression that reads it rather than
-    /// binding it across a call. That is also why the lifetime is free: the
-    /// handle is a pointer, so a borrow it carried would say nothing true.
-    pub(crate) fn bytes<'a>(self) -> &'a [::core::ffi::c_char] {
-        let text = self.cmdbuff.bytes();
-        // SAFETY: the borrow is the caller's obligation, stated above.
-        unsafe { ::core::slice::from_raw_parts(text.as_ptr(), text.len()) }
+    /// The borrow is of this handle, not of the line: the line moves under
+    /// [`Cc::reserve`] and [`put_on_cmdline`], and the register and
+    /// abbreviation machinery can replace it outright, so a reader takes the
+    /// slice inside the expression that reads it, or copies it, rather than
+    /// holding it across a call.
+    pub(crate) fn bytes(&self) -> &[u8] {
+        self.cmdbuff.bytes()
+    }
+
+    /// The byte at `i`, the terminator and what follows it reading as NUL.
+    pub(crate) fn byte_at(&self, i: ::core::ffi::c_int) -> u8 {
+        self.cmdbuff
+            .byte_at(usize::try_from(i).unwrap_or(usize::MAX))
     }
 
     /// C's `cmdlen`.
@@ -121,47 +139,15 @@ impl Cc {
         self.cmdbuff.in_use()
     }
 
-    /// C's `cmdbuff`: the text and its terminator, NULL when no command line
-    /// is in use.
-    pub(crate) fn text(mut self) -> *mut ::core::ffi::c_char {
-        self.cmdbuff.as_mut_ptr()
-    }
-
-    /// C's `cmdbuff + i`.
-    ///
-    /// `wrapping_offset`, not `offset`: with no command line in use the base
-    /// is NULL, and several callers compute an address they then compare
-    /// rather than read.
-    pub(crate) fn at(mut self, i: ::core::ffi::c_int) -> *mut ::core::ffi::c_char {
-        self.cmdbuff.as_mut_ptr().wrapping_offset(i as isize)
-    }
-
     /// C's `realloc_cmdbuff`: make room for `want` bytes, terminator
     /// included.
     pub(crate) fn reserve(mut self, want: ::core::ffi::c_int) {
         self.cmdbuff.reserve(want);
     }
 
-    /// C's `cmdlen = n`, with the terminator that goes with it.
-    pub(crate) fn set_len(mut self, n: ::core::ffi::c_int) {
-        self.cmdbuff.set_len(n);
-    }
-
     /// Replace the text, opening a command line if none was in use.
-    pub(crate) fn set_text(mut self, bytes: &[::core::ffi::c_char]) {
+    pub(crate) fn set_text(mut self, bytes: &[u8]) {
         self.cmdbuff.set(bytes);
-    }
-
-    /// Replace the text with a NUL-terminated string's bytes.
-    ///
-    /// # Safety
-    ///
-    /// `s` must be a live NUL-terminated string that does not point into this
-    /// command line's own buffer.
-    pub(crate) unsafe fn set_cstr(self, s: *const ::core::ffi::c_char) {
-        // SAFETY: the caller's promise -- a NUL-terminated string.
-        let text = unsafe { ::core::slice::from_raw_parts(s, len(s)) };
-        self.set_text(text);
     }
 
     /// C's `alloc_cmdbuff`: an empty command line with room for `want` bytes.
@@ -176,75 +162,24 @@ impl Cc {
 
     /// Hand the text to a caller that owns it, closing the command line.
     ///
-    /// `getcmdline()`'s answer is an `xmalloc`ed C string its caller frees,
-    /// so the bytes are copied out rather than the `Vec` released: an
-    /// allocation the editor made is not one `xfree` may take. Answers NULL
-    /// when no command line was in use, which is what the callers test.
-    pub(crate) fn release(self) -> *mut ::core::ffi::c_char {
+    /// `None` when no command line was in use, which is what the callers
+    /// test. The answer is the text up to its first NUL: what C's caller
+    /// read of the `char *` it was handed.
+    pub(crate) fn release(self) -> Option<XString> {
         if !self.in_use() {
-            return ::core::ptr::null_mut();
+            return None;
         }
-        let text = self.bytes();
-        let out = alloc(text.len() as size_t + 1);
-        // SAFETY: `text.len() + 1` bytes were just asked for, and `xmalloc`
-        // aborts rather than answering null.
-        let copy = unsafe { ::core::slice::from_raw_parts_mut(out, text.len() + 1) };
-        copy[..text.len()].copy_from_slice(text);
-        copy[text.len()] = NUL as ::core::ffi::c_char;
+        let text = XString::from_bytes(cstr::until_nul(self.bytes()));
         self.close();
-        out
-    }
-
-    /// The byte offset the cursor is on.
-    fn cursor(self) -> isize {
-        self.cmdpos as isize
+        Some(text)
     }
 }
 
 // ---------------------------------------------------------------------------
 // The neighbours that are still transpiled, one wrapper each.
 
-fn free<T>(p: *mut T) {
-    // SAFETY: `xmalloc`ed, or null.
-    unsafe { xfree(p as *mut ::core::ffi::c_void) };
-}
-
-fn alloc(len: size_t) -> *mut ::core::ffi::c_char {
-    // SAFETY: aborts rather than answering null.
-    unsafe { xmalloc(len) as *mut ::core::ffi::c_char }
-}
-
-/// The byte `p` points at, as the C's `*p` reads it.
-fn byte(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
-    // SAFETY: a NUL-terminated string.
-    unsafe { *p as ::core::ffi::c_int }
-}
-
-fn len(p: *const ::core::ffi::c_char) -> size_t {
-    // SAFETY: a NUL-terminated string.
-    unsafe { cstr::bytes_at(p) }.len()
-}
-
-/// `STRCPY(dst, src)`: copy `src` and its NUL.
-fn copy_str(dst: *mut ::core::ffi::c_char, src: *const ::core::ffi::c_char) {
-    // SAFETY: a NUL-terminated source, and room for it and its NUL.
-    unsafe { strcpy(dst, src) };
-}
-
 fn is_word_char(c: ::core::ffi::c_int) -> bool {
     vim_iswordc(c)
-}
-
-/// Whether `a` and `b` agree over their first `n` bytes.
-fn same_prefix(
-    a: *const ::core::ffi::c_char,
-    b: *const ::core::ffi::c_char,
-    n: size_t,
-    ignore_case: bool,
-) -> bool {
-    let cmp = if ignore_case { strncasecmp } else { strncmp };
-    // SAFETY: two strings of at least `n` bytes.
-    unsafe { cmp(a, b, n) == 0 }
 }
 
 fn stuff_char(c: ::core::ffi::c_int) {
@@ -270,7 +205,7 @@ pub fn getexline(
         // SAFETY: consumes the byte `vpeekc` just reported.
         vgetc();
     }
-    owned_cmdline(getcmdline(c, 1, indent, do_concat))
+    getcmdline(c, 1, indent, do_concat)
 }
 
 /// A command line read for a command that wants more of its body and has no
@@ -280,7 +215,7 @@ pub(crate) fn cmdline_input(
     indent: ::core::ffi::c_int,
     do_concat: bool,
 ) -> Option<XString> {
-    owned_cmdline(getcmdline(c, 0, indent, do_concat))
+    getcmdline(c, 0, indent, do_concat)
 }
 
 /// The pattern `/` or `?` reads, given `count`; `None` when it was
@@ -289,13 +224,7 @@ pub(crate) fn search_cmdline(
     firstc: ::core::ffi::c_int,
     count: ::core::ffi::c_int,
 ) -> Option<XString> {
-    owned_cmdline(getcmdline(firstc, count, 0, true))
-}
-
-/// What `getcmdline` answered, taken over.
-fn owned_cmdline(line: *mut ::core::ffi::c_char) -> Option<XString> {
-    // SAFETY: `getcmdline` answers null or a line allocated for its caller.
-    (!line.is_null()).then(|| unsafe { XString::from_raw(line) })
+    getcmdline(firstc, count, 0, true)
 }
 
 pub fn cmdline_overstrike() -> bool {
@@ -354,20 +283,12 @@ pub(crate) fn restore_cmdline() {
 
 /// The command line `depth` levels out: 0 is the one being edited, 1 the one
 /// suspended under it, and so on.  `None` past the bottom of the stack.
-///
-/// The closure is a leaf that takes the address of a `Box`'s target -- which
-/// the `Vec` cannot move, however it grows -- and does nothing else.
 pub(crate) fn cmdline_at(depth: usize) -> Option<Cc> {
     if depth == 0 {
-        return Some(Cc::current());
+        Some(Cc::current())
+    } else {
+        Cc::saved(depth)
     }
-    saved_cmdlines.with_mut(|stack| {
-        let i = stack.len().checked_sub(depth)?;
-        // SAFETY: the address of a `Box`'s target, which the `Vec` cannot
-        // move however it grows; the entry lives until it is popped, and a
-        // `Cc` is derived afresh at each use.
-        Some(unsafe { Cc::new(&raw mut *stack[i]) })
-    })
 }
 
 // ---------------------------------------------------------------------------
@@ -418,7 +339,7 @@ pub(crate) fn cmdline_paste(regname: ::core::ffi::c_int, literally: bool, remcr:
     // With 'incsearch' set and CTRL-R CTRL-W used: skip the duplicate
     // part of the word.
     if p_is() && regname == Ctrl_W {
-        skip = duplicate_word_len(arg.as_ptr()) as usize;
+        skip = duplicate_word_len(&arg);
     }
 
     cmdline_paste_str(arg.cstr_at(skip), literally);
@@ -429,34 +350,27 @@ pub(crate) fn cmdline_paste(regname: ::core::ffi::c_int, literally: bool, remcr:
 ///
 /// The word is looked for in `cmdbuff` afresh: nothing above has moved it,
 /// but nothing below may hold it either.
-fn duplicate_word_len(arg: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
+fn duplicate_word_len(arg: &[u8]) -> usize {
     let cc = Cc::current();
+    let line = cc.bytes();
     // Locate the start of the last word in the cmd buffer.
-    let end = cc.text().wrapping_offset(cc.cursor());
+    let end = usize::try_from(cc.cmdpos).unwrap_or(0).min(line.len());
     let mut w = end;
-    while w > cc.text() {
-        let len = head_off(cc.text(), w.wrapping_offset(-1)) + 1;
-        if !is_word_char(char_at(w.wrapping_offset(-(len as isize)))) {
+    while w > 0 {
+        let len = head_off(line, w - 1) + 1;
+        if !is_word_char(c_char_info(line, w - len).value) {
             break;
         }
-        w = w.wrapping_offset(-(len as isize));
+        w -= len;
     }
-    let len = end.addr().wrapping_sub(w.addr()) as ::core::ffi::c_int;
-    if same_prefix(w, arg, len as size_t, p_ic()) {
-        len
+    let len = end - w;
+    let word = &line[w..end];
+    let same = if p_ic() {
+        cstr::ncase_eq_ascii(word, arg, len)
     } else {
-        0
-    }
-}
-
-fn head_off(base: *const ::core::ffi::c_char, p: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
-    // SAFETY: `p` points into the string starting at `base`.
-    unsafe { utf_head_off(base, p) }
-}
-
-fn char_at(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
-    // SAFETY: the start of a character in a NUL-terminated string.
-    unsafe { utf_ptr2char(p) }
+        cstr::ncmp_eq(word, arg, len)
+    };
+    if same { len } else { 0 }
 }
 
 fn is_yank_reg(regname: ::core::ffi::c_int) -> bool {
@@ -478,27 +392,27 @@ fn special_reg(regname: ::core::ffi::c_int) -> Option<Option<XString>> {
 /// back as if typed — which does not leave the command line, but does mean
 /// every character that would end it has to be quoted with CTRL-V.
 pub fn cmdline_paste_str(s: &CStr, literally: bool) {
-    let mut s = s.as_ptr();
+    let text = s.to_bytes();
     if literally {
-        // SAFETY: a NUL-terminated string, whose length it works out itself.
-        unsafe { put_on_cmdline(s, -1, true) };
+        put_on_cmdline(text, true);
         return;
     }
-    while byte(s) != NUL {
-        let cv = byte(s) as uint8_t as ::core::ffi::c_int;
-        if cv == Ctrl_V && byte(s.wrapping_add(1)) != 0 {
-            s = s.wrapping_add(1);
+    let mut at = 0;
+    while at < text.len() {
+        let cv = ::core::ffi::c_int::from(text[at]);
+        if cv == Ctrl_V && at + 1 < text.len() {
+            at += 1;
         }
-        // SAFETY: a NUL-terminated string; `s` is left on the next character.
-        let c = unsafe { utf_ptr2char(s) };
-        s = s.wrapping_add(unsafe { utf_ptr2len(s) } as usize);
+        let info = c_char_info(text, at);
+        let c = info.value;
+        at += usize::try_from(info.len).unwrap_or(1).max(1);
         if cv == Ctrl_V
             || c == ESC
             || c == Ctrl_C
             || c == CAR
             || c == NL
             || c == Ctrl_L
-            || (c == Ctrl_BSL && byte(s) == Ctrl_N)
+            || (c == Ctrl_BSL && cstr::byte_at(text, at) == Ctrl_N as u8)
         {
             stuff_char(Ctrl_V);
         }
@@ -522,9 +436,9 @@ pub(crate) fn ccheck_abbr(c: ::core::ffi::c_int) -> bool {
         .position(|&ch| !ascii_iswhite(ch as ::core::ffi::c_int))
         .unwrap_or(line.len());
     if line.len() - spos > 5
-        && line[spos] == '\'' as ::core::ffi::c_char
-        && line[spos + 2] == ',' as ::core::ffi::c_char
-        && line[spos + 3] == '\'' as ::core::ffi::c_char
+        && line[spos] == b'\''
+        && line[spos + 2] == b','
+        && line[spos + 3] == b'\''
     {
         spos += 5;
     } else {
@@ -545,79 +459,32 @@ pub(crate) fn ccheck_abbr(c: ::core::ffi::c_int) -> bool {
 
 /// Escape the special characters in `fname`, depending on `what`:
 /// `VSE_NONE` for a file-name argument after a Vim command, `VSE_SHELL` for
-/// a shell command, `VSE_BUFFER` for `:buffer`.  Answers allocated memory.
-///
-/// # Safety
-///
-/// `fname` must point at a NUL-terminated string.
-pub unsafe fn vim_strsave_fnameescape(
-    fname: *const ::core::ffi::c_char,
-    what: ::core::ffi::c_int,
-) -> *mut ::core::ffi::c_char {
+/// a shell command, `VSE_BUFFER` for `:buffer`: upstream's
+/// `vim_strsave_fnameescape`.
+pub(crate) fn fnameescape(fname: &CStr, what: ::core::ffi::c_int) -> XString {
     let esc = if what == VSE_SHELL {
-        SHELL_ESC_CHARS.as_ptr()
+        SHELL_ESC_CHARS
     } else if what == VSE_BUFFER {
-        BUFFER_ESC_CHARS.as_ptr()
+        BUFFER_ESC_CHARS
     } else {
-        PATH_ESC_CHARS.as_ptr()
+        PATH_ESC_CHARS
     };
-    let mut p = escaped(fname, esc);
+    let mut p = escaped_bytes(fname.to_bytes(), esc.to_bytes());
     if what == VSE_SHELL && csh_like_shell() {
         // csh and similar shells need two backslashes before '!': one
         // is taken by Vim, one by the shell.
-        let s = escaped(p, c"!".as_ptr());
-        free(p);
-        p = s;
+        p = escaped_bytes(&p, b"!");
     }
     // '>' and '+' are special at the start of some commands, e.g.
     // ":edit" and ":write". "cd -" has a special meaning.
-    let first = byte(p);
-    if first == '>' as ::core::ffi::c_int
-        || first == '+' as ::core::ffi::c_int
-        || (first == '-' as ::core::ffi::c_int && byte(p.wrapping_add(1)) == NUL)
-    {
-        p = with_backslash(p);
+    let name: &[u8] = &p;
+    if matches!(name.first(), Some(b'>' | b'+')) || name == b"-" {
+        let mut quoted = Vec::with_capacity(name.len() + 1);
+        quoted.push(b'\\');
+        quoted.extend_from_slice(name);
+        p = XString::from_vec(quoted);
     }
     p
-}
-
-/// `vim_strsave_escaped()`: a copy of `s` with a backslash before every byte
-/// in `esc_chars`.
-fn escaped(
-    s: *const ::core::ffi::c_char,
-    esc_chars: *const ::core::ffi::c_char,
-) -> *mut ::core::ffi::c_char {
-    // SAFETY: two NUL-terminated strings.
-    let (s, esc_chars) = unsafe { (cstr::bytes_at(s), cstr::bytes_at(esc_chars)) };
-    escaped_bytes(s, esc_chars).into_raw()
-}
-
-/// Put a backslash before the file name in `fname`, which is allocated memory.
-///
-/// # Safety
-///
-/// `fname` must point at a writable `*mut c_char` slot the caller owns for
-/// the call.
-pub unsafe fn escape_fname(fname: *mut *mut ::core::ffi::c_char) {
-    // SAFETY: the caller's promise -- a slot holding allocated memory.
-    unsafe { *fname = with_backslash(*fname) };
-}
-
-/// A fresh copy of `name` with a backslash in front, `name` freed.
-fn with_backslash(name: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
-    let p = alloc(len(name).wrapping_add(2));
-    // SAFETY: two bytes were asked for beyond the name's own length.
-    unsafe { *p = '\\' as ::core::ffi::c_char };
-    copy_str(p.wrapping_add(1), name);
-    free(name);
-    p
-}
-
-/// [`vim_strsave_fnameescape`] of a name the caller owns.
-pub(crate) fn fnameescape(fname: &CStr, what: ::core::ffi::c_int) -> XString {
-    // SAFETY: a NUL-terminated name; the answer is owned and taken over
-    // once.
-    unsafe { XString::from_raw(vim_strsave_fnameescape(fname.as_ptr(), what)) }
 }
 
 /// If `orig_pat` starts with `~/`, put the home directory back as `~` in

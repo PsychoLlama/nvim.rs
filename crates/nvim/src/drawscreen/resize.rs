@@ -128,7 +128,7 @@ pub fn screenclear() {
 /// stored to be re-emitted, so it must not be cleared from the message grid --
 /// which is why redrawing is refused entirely while one is up.
 pub(crate) fn cmdline_number_prompt() -> bool {
-    !ui_has(kUIMessages) && State.get() & MODE_CMDLINE != 0 && Cc::current().mouse_used()
+    !ui_has(kUIMessages) && State.get() & MODE_CMDLINE != 0 && Cc::current().mouse_prompt()
 }
 
 /// Set the dimensions of the Nvim application "screen".

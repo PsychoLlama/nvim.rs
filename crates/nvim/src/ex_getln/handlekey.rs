@@ -5,13 +5,13 @@
 //! digraph insertions, history, and the keys that end the line.  The arms
 //! long enough to need it have a helper of their own next to it.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use super::*;
 use crate::cmdexpand::{Expanded, WildMode, WildOpts};
+use crate::cstr;
 use crate::getchar::typeahead;
 use crate::guard::Keys;
 use crate::keycodes::ModMask;
@@ -23,11 +23,21 @@ use crate::keycodes::{
 use crate::types::{ExpandContext, FAIL, MB_MAXCHAR, NUL};
 use crate::winlayer::Buf;
 
+/// Where the character before byte `at` of `line` starts: C's
+/// `mb_prevptr`, which stays put at the start of the line.
+fn prev_char(line: &[u8], at: usize) -> usize {
+    if at == 0 {
+        0
+    } else {
+        at - 1 - head_off(line, at - 1)
+    }
+}
+
 /// Handle the erase keys: backspace, delete and CTRL-W.
 ///
 /// Answers [`KeyOutcome::GotoNormalMode`] when erasing emptied a bare `:`
 /// line, which leaves the command line altogether.
-pub(crate) fn command_line_erase_chars(mut s: Cls) -> KeyOutcome {
+pub(crate) fn command_line_erase_chars(s: &mut CommandLineState) -> KeyOutcome {
     let mut cc = Cc::current();
     if s.c == Key::Kdel.code() {
         s.c = Key::Del.code();
@@ -39,32 +49,41 @@ pub(crate) fn command_line_erase_chars(mut s: Cls) -> KeyOutcome {
         cc.cmdpos += 1;
     }
     if s.c == Key::Del.code() {
-        cc.cmdpos += unsafe { mb_off_next(cc.text(), cc.text().offset(cc.cmdpos as isize)) };
+        // C's `mb_off_next`: forward to the start of the next character
+        // when the cursor is inside one.
+        let line = cc.bytes();
+        let at = usize::try_from(cc.cmdpos).unwrap_or(0).min(line.len());
+        let back = head_off(line, at);
+        let fwd = if back == 0 {
+            0
+        } else {
+            c_cluster_len(&line[at - back..]) - back
+        };
+        cc.cmdpos += fwd as ::core::ffi::c_int;
     }
 
     if cc.cmdpos > 0 {
         let j = cc.cmdpos;
-        let mut p = unsafe { mb_prevptr(cc.text(), cc.at(j)) };
+        let line = cc.bytes();
+        let mut p = prev_char(line, usize::try_from(j).unwrap_or(0).min(line.len()));
 
         if s.c == Ctrl_W {
-            while p > cc.text() && ascii_isspace(unsafe { *p } as ::core::ffi::c_int) {
-                p = unsafe { mb_prevptr(cc.text(), p) };
+            while p > 0 && ascii_isspace(::core::ffi::c_int::from(line[p])) {
+                p = prev_char(line, p);
             }
-            let class = unsafe { mb_get_class(p) };
-            while p > cc.text() && unsafe { mb_get_class(p) } == class {
-                p = unsafe { mb_prevptr(cc.text(), p) };
+            let class = class_in(&line[p..], Buf::current());
+            while p > 0 && class_in(&line[p..], Buf::current()) == class {
+                p = prev_char(line, p);
             }
-            if unsafe { mb_get_class(p) } != class {
-                p = unsafe { p.offset(utfc_ptr2len(p) as isize) };
+            if class_in(&line[p..], Buf::current()) != class {
+                p += c_cluster_len(&line[p..]);
             }
         }
 
-        cc.cmdpos = unsafe { p.offset_from(cc.text()) } as ::core::ffi::c_int;
-        // Shift the tail down over the deleted bytes; `set_len` writes the
-        // terminator, which is why it comes after the move and not before.
-        let tail = (cc.len() - j).max(0) as usize;
-        unsafe { ::core::ptr::copy(cc.at(j), cc.at(cc.cmdpos), tail) };
-        cc.set_len(cc.len() - (j - cc.cmdpos));
+        cc.cmdpos = p as ::core::ffi::c_int;
+        // Take the deleted bytes out; the tail and its terminator move down.
+        let pos = cc.cmdpos;
+        cc.cmdbuff.splice(pos, j, &[]);
         if cc.is_empty() {
             s.is_state.search_start = s.is_state.save_cursor;
             // Save the view settings, so that the screen won't be
@@ -72,7 +91,7 @@ pub(crate) fn command_line_erase_chars(mut s: Cls) -> KeyOutcome {
             s.is_state.old_viewstate = s.is_state.init_viewstate;
         }
         redrawcmd();
-    } else if cc.is_empty() && s.c != Ctrl_W && cc.cmdprompt.is_null() && s.indent == 0 {
+    } else if cc.is_empty() && s.c != Ctrl_W && cc.cmdprompt.is_none() && s.indent == 0 {
         // In ex and debug mode it doesn't make sense to return.
         if exmode_active.get() || cc.cmdfirstc == '>' as ::core::ffi::c_int {
             return KeyOutcome::NotChanged;
@@ -93,28 +112,28 @@ pub(crate) fn command_line_erase_chars(mut s: Cls) -> KeyOutcome {
 
 /// Handle CTRL-^: toggle the use of the language `:lmap` mappings and/or the
 /// Input Method.
-pub(crate) fn command_line_toggle_langmap(s: Cls) {
-    let b_im_ptr = if s.b_im_ptr_buf.is_some_and(buf_valid) {
-        s.b_im_ptr
-    } else {
-        ::core::ptr::null_mut::<OptInt>()
-    };
+pub(crate) fn command_line_toggle_langmap(s: &CommandLineState) {
+    let b_im = s
+        .b_im
+        .filter(|&(_, id)| buf_valid(id))
+        .and_then(|(which, id)| id.get().map(|buffer| (which, buffer)));
     if map_to_exists_mode(b"", MODE_LANGMAP, false) {
         // ":lmap" mappings exist; toggle the use of mappings.
         State.set(State.get() ^ MODE_LANGMAP);
-        if !b_im_ptr.is_null() {
-            unsafe {
-                *b_im_ptr = if State.get() & MODE_LANGMAP != 0 {
-                    B_IMODE_LMAP as OptInt
-                } else {
-                    B_IMODE_NONE as OptInt
-                }
+        if let Some((which, buffer)) = b_im {
+            let value = if State.get() & MODE_LANGMAP != 0 {
+                B_IMODE_LMAP as OptInt
+            } else {
+                B_IMODE_NONE as OptInt
             };
+            set_im_value(buffer, which, value);
         }
     }
 
-    if !b_im_ptr.is_null() {
-        if b_im_ptr == cur_buf_iminsert() {
+    if let Some((which, buffer)) = b_im {
+        // C compared `b_im_ptr` with `&curbuf->b_p_iminsert`: the global
+        // follows `'iminsert'` only when the option is the current buffer's.
+        if which == ImOption::Insert && buffer == Buf::current() {
             set_iminsert_global(Buf::current());
         } else {
             set_imsearch_global(Buf::current());
@@ -126,7 +145,7 @@ pub(crate) fn command_line_toggle_langmap(s: Cls) {
 }
 
 /// Handle CTRL-R: insert the contents of a numbered or named register.
-pub(crate) fn command_line_insert_reg(mut s: Cls) -> KeyOutcome {
+pub(crate) fn command_line_insert_reg(s: &mut CommandLineState) -> KeyOutcome {
     let mut cc = Cc::current();
     let save_new_cmdpos = new_cmdpos.get();
 
@@ -189,7 +208,7 @@ pub(crate) fn command_line_insert_reg(mut s: Cls) -> KeyOutcome {
 }
 
 /// Handle a left or right mouse click: put the cursor where it landed.
-pub(crate) fn command_line_left_right_mouse(mut s: Cls) {
+pub(crate) fn command_line_left_right_mouse(s: &mut CommandLineState) {
     let mut cc = Cc::current();
     s.ignore_drag_release = s.c == Key::Leftrelease.code() || s.c == Key::Rightrelease.code();
 
@@ -204,8 +223,8 @@ pub(crate) fn command_line_left_right_mouse(mut s: Cls) {
         }
 
         // Count ">" for a double-wide character that doesn't fit.
-        unsafe { correct_screencol(cc.cmdpos, cells, &raw mut cc.cmdspos) };
-        cc.cmdpos += unsafe { utfc_ptr2len(cc.text().offset(cc.cmdpos as isize)) } - 1;
+        cc.cmdspos = correct_screencol(cc.cmdpos, cells, cc.cmdspos);
+        cc.cmdpos += cluster_len_at(cc, cc.cmdpos) - 1;
         cc.cmdspos += cells;
         cc.cmdpos += 1;
     }
@@ -217,7 +236,7 @@ pub(crate) fn command_line_left_right_mouse(mut s: Cls) {
 /// C's `break` out of that switch: the key was not handled specially — or its
 /// handler asked for it to be treated as ordinary text — and falls through to
 /// the abbreviation check and then to inserting it into the line.
-fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
+fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<::core::ffi::c_int> {
     let mut cc = Cc::current();
     match Key::try_from(s.c) {
         Ok(Key::Bs | Key::Del | Key::Kdel) | Err(NotAKey(Ctrl_H | Ctrl_W)) => {
@@ -247,10 +266,8 @@ fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
             // Shift the tail down over everything left of the cursor;
             // `set_len` writes the terminator, so it comes after the move.
             let j = cc.cmdpos;
-            let tail = (cc.len() - j).max(0) as usize;
-            unsafe { ::core::ptr::copy(cc.at(j), cc.at(0), tail) };
+            cc.cmdbuff.splice(0, j, &[]);
             cc.cmdpos = 0;
-            cc.set_len(cc.len() - j);
             if cc.is_empty() {
                 s.is_state.search_start = s.is_state.save_cursor;
             }
@@ -282,7 +299,7 @@ fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
         }),
 
         Err(NotAKey(Ctrl_D)) => {
-            if s.show_matches(false, true, wim_has(0, kOptWimFlagNoselect)) == Expanded::Nothing {
+            if show_matches(false, true, wim_has(0, kOptWimFlagNoselect)) == Expanded::Nothing {
                 return None; // use ^D as a normal character instead
             }
             redrawcmd();
@@ -296,12 +313,11 @@ fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
                     break;
                 }
                 cc.cmdspos += cells;
-                cc.cmdpos += unsafe { utfc_ptr2len(cc.text().offset(cc.cmdpos as isize)) };
+                cc.cmdpos += cluster_len_at(cc, cc.cmdpos);
                 if !((s.c == Key::SRight.code()
                     || s.c == Key::CRight.code()
                     || mod_mask.get().has(ModMask::SHIFT | ModMask::CTRL))
-                    && unsafe { *cc.text().offset(cc.cmdpos as isize) } as ::core::ffi::c_int
-                        != ' ' as ::core::ffi::c_int)
+                    && cc.cmdbuff.raw_byte_at(cc.cmdpos as usize) != b' ')
                 {
                     break;
                 }
@@ -317,15 +333,13 @@ fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
             loop {
                 cc.cmdpos -= 1;
                 // Move to the first byte of a possibly multibyte char.
-                cc.cmdpos -=
-                    unsafe { utf_head_off(cc.text(), cc.text().offset(cc.cmdpos as isize)) };
+                cc.cmdpos -= head_off(cc.bytes(), cc.cmdpos as usize) as ::core::ffi::c_int;
                 cc.cmdspos -= cmdline_charsize(cc.cmdpos);
                 if !(cc.cmdpos > 0
                     && (s.c == Key::SLeft.code()
                         || s.c == Key::CLeft.code()
                         || mod_mask.get().has(ModMask::SHIFT | ModMask::CTRL))
-                    && unsafe { *cc.at(cc.cmdpos - 1) } as ::core::ffi::c_int
-                        != ' ' as ::core::ffi::c_int)
+                    && cc.byte_at(cc.cmdpos - 1) != b' ')
                 {
                     break;
                 }
@@ -379,10 +393,10 @@ fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
             }
             // Return on a left click above a number prompt.
             if s.c != Key::Rightmouse.code()
-                && !cc.mouse_used.is_null()
+                && cc.mouse_prompt
                 && mouse_row.get() < cmdline_row.get()
             {
-                unsafe { *cc.mouse_used = true };
+                cc.mouse_used = true;
                 return Some(0);
             }
             command_line_left_right_mouse(s);
@@ -430,14 +444,13 @@ fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
             if s.next_wild(WildMode::All, WildOpts::NONE) == FAIL {
                 return None;
             }
-            s.xpc.context = ExpandContext::Nothing;
+            completion_mut(|xpc| xpc.context = ExpandContext::Nothing);
             s.did_wild_list = false;
             Some(command_line_changed(s))
         }
 
         Err(NotAKey(Ctrl_L)) => {
-            let (firstc, is_state) = (s.firstc, s.is_state());
-            if may_add_char_to_search(firstc, &mut s.c, is_state).is_ok() {
+            if may_add_char_to_search(s.firstc, &mut s.c, &mut s.is_state).is_ok() {
                 return Some(command_line_not_changed(s));
             }
             // Completion: the longest common part.
@@ -460,7 +473,7 @@ fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
             | Key::Kpagedown,
         )
         | Err(NotAKey(Ctrl_N | Ctrl_P)) => {
-            if (s.c == Ctrl_N || s.c == Ctrl_P) && s.xpc.match_count() > 0 {
+            if (s.c == Ctrl_N || s.c == Ctrl_P) && match_count() > 0 {
                 let wild_type = if s.c == Ctrl_P {
                     WildMode::Prev
                 } else {
@@ -490,7 +503,7 @@ fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
                 }
                 Some(command_line_changed(s))
             } else {
-                Some(match unsafe { command_line_browse_history(s.raw()) } {
+                Some(match command_line_browse_history(s) {
                     KeyOutcome::Changed => {
                         s.did_hist_navigate = true;
                         command_line_changed(s)
@@ -503,8 +516,8 @@ fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
 
         // Next (CTRL-G) or previous (CTRL-T) 'incsearch' match.
         Err(NotAKey(Ctrl_G | Ctrl_T)) => {
-            if may_do_command_line_next_incsearch(s.firstc, s.count, s.is_state(), s.c == Ctrl_G)
-                .is_err()
+            let next = s.c == Ctrl_G;
+            if may_do_command_line_next_incsearch(s.firstc, s.count, &mut s.is_state, next).is_err()
             {
                 return Some(command_line_not_changed(s));
             }
@@ -561,8 +574,8 @@ fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
             let c = s.c;
             // Number prompts use the mouse and return on a 'q' press;
             // otherwise 'q' FALLS THROUGH to the default arm.
-            if c == 'q' as ::core::ffi::c_int && !cc.mouse_used.is_null() {
-                unsafe { *cc.at(0) = NUL as ::core::ffi::c_char };
+            if c == 'q' as ::core::ffi::c_int && cc.mouse_prompt {
+                cc.cmdbuff.set_byte(0, 0);
                 return Some(0);
             }
             // A normal character with no special meaning. Just set
@@ -577,10 +590,7 @@ fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
     }
 }
 
-pub(crate) fn command_line_handle_key(s: Cls) -> ::core::ffi::c_int {
-    // One character, its own buffer: `put_on_cmdline` reaches the message
-    // machinery, which writes upstream's shared `IObuff`.
-    let mut ch = [0 as ::core::ffi::c_char; MB_MAXCHAR + 1];
+pub(crate) fn command_line_handle_key(s: &mut CommandLineState) -> ::core::ffi::c_int {
     let cc = Cc::current();
     // For a one-key prompt, avoid putting ESC and Ctrl-C onto the cmdline.
     // For all other keys, just put it onto the cmdline and exit — which is
@@ -608,15 +618,24 @@ pub(crate) fn command_line_handle_key(s: Cls) -> ::core::ffi::c_int {
     // C's `end:` — put the character in the command line.
     if is_special(s.c) || !mod_mask.get().is_empty() {
         let name = get_special_key_name(s.c, mod_mask.get());
-        unsafe { put_on_cmdline(name.as_ptr().cast_mut(), -1, true) };
+        put_on_cmdline(cstr::in_chars(&name).to_bytes(), true);
     } else {
-        let j = unsafe { utf_char2bytes(s.c, ch.as_mut_ptr()) };
-        ch[j as usize] = NUL as ::core::ffi::c_char; // exclude composing chars
-        unsafe { put_on_cmdline(ch.as_mut_ptr(), j, true) };
+        // One character, its own buffer, without its composing characters.
+        let mut ch = [0u8; MB_MAXCHAR];
+        let j = encode_char(s.c, &mut ch);
+        put_on_cmdline(&ch[..j], true);
     }
-    if cc.one_key {
+    if Cc::current().one_key {
         0
     } else {
         command_line_changed(s)
     }
+}
+
+/// The length of the character cluster at byte `i` of the command line: C's
+/// `utfc_ptr2len(cmdbuff + i)`, 0 at the end.
+pub(crate) fn cluster_len_at(cc: Cc, i: ::core::ffi::c_int) -> ::core::ffi::c_int {
+    let line = cc.bytes();
+    let at = usize::try_from(i).unwrap_or(0).min(line.len());
+    c_cluster_len(&line[at..]) as ::core::ffi::c_int
 }

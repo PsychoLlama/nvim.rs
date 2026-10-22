@@ -5,8 +5,7 @@
 //! command line's answer.  The `*_locked` guards are here because they are
 //! what stops that window being opened from somewhere it cannot unwind.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::buffer::{BufRef, current_buf};
@@ -254,10 +253,12 @@ pub(crate) fn open_cmdwin() -> ::core::ffi::c_int {
 
     // Replace the empty last line with the current command line and put
     // the cursor there.
-    let (last, text) = (Buf::current().b_ml.ml_line_count, Cc::current().text());
-    if !text.is_null() {
-        // SAFETY: the command line's own NUL-terminated text, copied.
-        let _ = ml_replace_buf_text(Buf::current(), last, unsafe { cstr::bytes_at(text) });
+    let last = Buf::current().b_ml.ml_line_count;
+    let cc = Cc::current();
+    if cc.in_use() {
+        // A copy of the command line's text, up to its first NUL.
+        let text = cstr::until_nul(cc.bytes()).to_vec();
+        let _ = ml_replace_buf_text(Buf::current(), last, &text);
     }
     Win::current().w_cursor.lnum = Buf::current().b_ml.ml_line_count;
     Win::current().w_cursor.col = Cc::current().cmdpos as ColNr;
@@ -329,7 +330,7 @@ pub(crate) fn open_cmdwin() -> ::core::ffi::c_int {
 
             if histtype == HIST_CMD {
                 // Execute the command directly.
-                unsafe { Cc::current().set_cstr(p.as_ptr()) };
+                Cc::current().set_text(p.to_bytes());
                 cmdwin_result.set(CAR);
             } else {
                 // First need to cancel what we were doing.
@@ -343,13 +344,7 @@ pub(crate) fn open_cmdwin() -> ::core::ffi::c_int {
             Cc::current().close();
         } else {
             let lnum = Win::current().w_cursor.lnum;
-            let line: Vec<::core::ffi::c_char> = Buf::current()
-                .lines()
-                .line(lnum)
-                .iter()
-                .map(|&b| b as ::core::ffi::c_char)
-                .collect();
-            Cc::current().set_text(&line);
+            Cc::current().set_text(Buf::current().lines().line(lnum));
         }
 
         let mut cc = Cc::current();

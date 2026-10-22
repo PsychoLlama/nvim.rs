@@ -5,10 +5,10 @@
 //! multi-line block a `:if`/`:function` body builds up.  A UI that took over
 //! the command line gets these instead of anything [`super::draw`] writes.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
+use crate::cstr;
 
 /// Send `cmdline_show` for one command line: its content as
 /// `[[attr, text, hl_id], …]`, the cursor position and the prompt.
@@ -17,13 +17,17 @@ pub(crate) fn ui_ext_cmdline_show(line: Cc) {
     if cmdline_star.get() != 0 {
         // Obscured (`inputsecret()`): one '*' per *character*.
         content = Array::with_capacity(1);
-        let mut len: size_t = 0;
-        let mut p = Cc::current().text();
-        while unsafe { *p } != 0 {
-            len += 1;
-            p = unsafe { p.offset(utfc_ptr2len(p) as isize) };
-        }
-        let stars = vec![b'*'; len];
+        let stars = {
+            let cc = Cc::current();
+            let line = cstr::until_nul(cc.bytes());
+            let mut len: size_t = 0;
+            let mut p = 0;
+            while p < line.len() {
+                len += 1;
+                p += c_cluster_len(&line[p..]).max(1);
+            }
+            vec![b'*'; len]
+        };
 
         let mut item = Array::with_capacity(3);
         item.push(Object::integer(0));
@@ -43,14 +47,12 @@ pub(crate) fn ui_ext_cmdline_show(line: Cc) {
             }));
 
             debug_assert!(chunk.end >= chunk.start);
-            // SAFETY: the chunk names a run of the command line's own text.
-            let text = unsafe {
-                core::slice::from_raw_parts(
-                    line.at(chunk.start).cast::<u8>(),
-                    (chunk.end - chunk.start) as size_t,
-                )
-            };
-            item.push(Object::string(String_0::from_bytes(text)));
+            let text = line.bytes();
+            let from = usize::try_from(chunk.start).unwrap_or(0).min(text.len());
+            let to = usize::try_from(chunk.end)
+                .unwrap_or(0)
+                .clamp(from, text.len());
+            item.push(Object::string(String_0::from_bytes(&text[from..to])));
             item.push(Object::integer(chunk.hl_id as Integer));
             content.push(Object::array(item));
             i += 1;
@@ -58,26 +60,31 @@ pub(crate) fn ui_ext_cmdline_show(line: Cc) {
     } else {
         let mut item = Array::with_capacity(3);
         item.push(Object::integer(0));
-        item.push(Object::string(unsafe { cstr_to_string(line.text()) }));
+        item.push(Object::string(String_0::from_bytes(cstr::until_nul(
+            line.bytes(),
+        ))));
         item.push(Object::integer(0));
         content = Array::with_capacity(1);
         content.push(Object::array(item));
     }
 
-    let mut charbuf: [::core::ffi::c_char; 2] = [line.cmdfirstc as ::core::ffi::c_char, 0];
+    let firstc = [line.cmdfirstc as u8];
+    // C's `cstr_to_string`: the null string when there is no prompt.
+    let prompt = line.cmdprompt.as_ref().map_or(String_0::NULL, |prompt| {
+        String_0::from_bytes(prompt.as_cstr().to_bytes())
+    });
     ui_call_cmdline_show(
         content,
         line.cmdpos as Integer,
-        unsafe { cstr_to_string(charbuf.as_mut_ptr()) },
-        unsafe { cstr_to_string(line.cmdprompt) },
+        String_0::from_bytes(cstr::until_nul(&firstc)),
+        prompt,
         line.cmdindent as Integer,
         line.level as Integer,
         line.hl_id as Integer,
     );
     if line.special_char != 0 {
-        charbuf[0] = line.special_char;
         ui_call_cmdline_special_char(
-            unsafe { cstr_to_string(charbuf.as_mut_ptr()) },
+            String_0::from_bytes(&[line.special_char as u8]),
             line.special_shift as Boolean,
             line.level as Integer,
         );
@@ -119,21 +126,13 @@ impl Default for CmdlineBlock {
 /// `:function` accumulates while it is being typed.
 ///
 pub fn ui_ext_cmdline_block_append(indent: size_t, line: &[u8]) {
-    let line_len = line.len();
-    // SAFETY: `xmallocz` answers `indent + line_len + 1` zeroed bytes, so
-    // the fill and the copy stay inside it and the terminator stays.
-    let buf = unsafe { xmallocz(indent + line_len) } as *mut ::core::ffi::c_char;
-    unsafe { buf.cast::<u8>().write_bytes(b' ', indent) };
-    let into = unsafe { buf.add(indent) }.cast::<u8>();
-    unsafe { into.copy_from_nonoverlapping(line.as_ptr(), line_len) };
+    let mut text = Vec::with_capacity(indent + line.len());
+    text.resize(indent, b' ');
+    text.extend_from_slice(line);
 
     let mut item = Array::with_capacity(3);
     item.push(Object::integer(0));
-    // SAFETY: `buf` is the NUL-terminated allocation just filled in, which
-    // the string takes over.
-    item.push(Object::string(unsafe {
-        String_0::from_owned_parts(buf, indent + line_len)
-    }));
+    item.push(Object::string(String_0::from_bytes(&text)));
     item.push(Object::integer(0));
 
     let mut content = Array::with_capacity(1);

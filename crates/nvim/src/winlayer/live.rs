@@ -200,3 +200,35 @@ impl<T, M> IdTable<T, M> {
 /// rather than holding one across a call that can re-enter command-line
 /// mode. Its projections are in [`crate::ex_getln`].
 pub(crate) type Cc = Live<CmdlineInfo>;
+
+impl Cc {
+    /// The command line the editor is on.
+    ///
+    /// Safe: `ccline` is a `&'static GlobalCell`, which is exactly the
+    /// promise [`Live::new`] has to be told. The *cell* never moves; its
+    /// contents do, which is why the handle is derived afresh at each use
+    /// rather than held across a call that can re-enter command-line mode --
+    /// `save_cmdline` moves the whole structure onto the saved stack, and
+    /// `realloc_cmdbuff` moves the text out from under any slice of it.
+    pub(crate) fn current() -> Self {
+        // SAFETY: a `&'static GlobalCell`'s address is live for the whole
+        // run, which is the promise.
+        unsafe { Cc::new(crate::ex_getln::ccline.ptr()) }
+    }
+
+    /// The command line suspended `depth` levels under the current one
+    /// (`depth` >= 1), or `None` past the bottom of the saved stack.
+    ///
+    /// The closure is a leaf that takes the address of a `Box`'s target --
+    /// which the `Vec` cannot move, however it grows -- and does nothing
+    /// else.
+    pub(crate) fn saved(depth: usize) -> Option<Self> {
+        crate::ex_getln::saved_cmdlines.with_mut(|stack| {
+            let i = stack.len().checked_sub(depth)?;
+            // SAFETY: the address of a `Box`'s target, which the `Vec`
+            // cannot move however it grows; the entry lives until it is
+            // popped, and a `Cc` is derived afresh at each use.
+            Some(unsafe { Cc::new(&raw mut *stack[i]) })
+        })
+    }
+}

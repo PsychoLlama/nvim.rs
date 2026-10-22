@@ -7,10 +7,10 @@
 //! The `f_*` rows are the `VimLFunc` function pointers in
 //! `eval/funcs/table`.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
+use crate::cstr;
 use crate::eval::list::string_tv;
 use crate::eval::typval::NumBuf;
 use crate::keycodes::KE_WILD;
@@ -61,16 +61,14 @@ pub(crate) fn get_cmdline_type() -> ::core::ffi::c_int {
     p.cmdfirstc
 }
 
-/// The current command line, allocated; NULL when there is none or the line
-/// is obscured (`inputsecret()`).
-pub(crate) fn get_cmdline_str() -> *mut ::core::ffi::c_char {
+/// A copy of the current command line, up to its first NUL; `None` when
+/// there is none or the line is obscured (`inputsecret()`).
+pub(crate) fn get_cmdline_str() -> Option<ThinCString> {
     if cmdline_star.get() > 0 {
-        return ::core::ptr::null_mut::<::core::ffi::c_char>();
+        return None;
     }
-    let Some(p) = get_ccline_ptr() else {
-        return ::core::ptr::null_mut::<::core::ffi::c_char>();
-    };
-    unsafe { xstrnsave(p.text(), p.len() as size_t) }
+    let p = get_ccline_ptr()?;
+    Some(ThinCString::from_bytes(cstr::until_nul(p.bytes())))
 }
 
 /// The completion state of the current command line, computed on demand:
@@ -138,9 +136,7 @@ pub fn f_getcmdcompltype(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncD
 
 /// `getcmdline()` function.
 pub fn f_getcmdline(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: `get_cmdline_str` answers a copy of its own, or NULL, which
-    // the answer takes over.
-    result.write_string(unsafe { ThinCString::from_raw(get_cmdline_str()) });
+    result.write_string(get_cmdline_str());
 }
 
 /// `getcmdpos()` function.
@@ -150,13 +146,11 @@ pub fn f_getcmdpos(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `getcmdprompt()` function.
 pub fn f_getcmdprompt(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_string(
-        get_ccline_ptr()
-            .filter(|p| !p.cmdprompt.is_null())
-            // SAFETY: a command line's prompt, tested non-null, is a
-            // NUL-terminated string it holds for as long as it is current.
-            .map(|p| ThinCString::from_cstr(unsafe { ::core::ffi::CStr::from_ptr(p.cmdprompt) })),
-    );
+    result.write_string(get_ccline_ptr().and_then(|p| {
+        p.cmdprompt
+            .as_ref()
+            .map(|prompt| ThinCString::from_cstr(prompt.as_cstr()))
+    }));
 }
 
 /// `getcmdscreenpos()` function.
@@ -172,18 +166,11 @@ pub fn f_getcmdtype(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     result.write_string(Some(ThinCString::from_bytes(&[kind])));
 }
 
-/// Replace the command line with `str` and put the cursor at `pos`.
+/// Replace the command line with `text` and put the cursor at `pos`.
 ///
 /// A negative or out-of-range `pos` means the end of the line.  Answers 1
 /// when there is no command line to set, 0 on success.
-///
-/// # Safety
-///
-/// `str` must point at a NUL-terminated string.
-pub(crate) unsafe fn set_cmdline_str(
-    str: *const ::core::ffi::c_char,
-    pos: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+pub(crate) fn set_cmdline_str(text: &[u8], pos: ::core::ffi::c_int) -> ::core::ffi::c_int {
     let Some(mut p) = get_ccline_ptr() else {
         return 1;
     };
@@ -192,7 +179,7 @@ pub(crate) unsafe fn set_cmdline_str(
     // one level out. C resized `ccline` here whichever line it then wrote
     // to, and overran the other one -- see the upstream note on
     // `set_cmdline_str`.
-    unsafe { p.set_cstr(str) };
+    p.set_text(text);
 
     p.cmdpos = if pos < 0 || pos > p.len() {
         p.len()
@@ -243,9 +230,8 @@ pub fn f_setcmdline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
 
     // tv_get_string() so that a NULL string reads as an empty one.
-    unsafe {
-        (*result).write_number(set_cmdline_str(numbuf.string(&args[0]).as_ptr(), pos) as VarNumber)
-    };
+    let answer = set_cmdline_str(numbuf.string(&args[0]).to_bytes(), pos);
+    result.write_number(answer as VarNumber);
 }
 
 /// `setcmdpos()` function.
