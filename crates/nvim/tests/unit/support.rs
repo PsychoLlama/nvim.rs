@@ -107,8 +107,18 @@ fn init_editor() {
         for name in TEMP_VARS {
             std::env::remove_var(name);
         }
+        // The defaults built from the state directory ('directory' above
+        // all, see below) point into the suite's own while `early_init`
+        // computes them; the option oracles pin every one of them.
+        let saved_state = std::env::var_os("XDG_STATE_HOME");
+        let _ = std::fs::remove_dir_all(suite_state_dir());
+        std::env::set_var("XDG_STATE_HOME", suite_state_dir());
         neovim::startup::event_init();
         neovim::startup::early_init(false);
+        match saved_state {
+            Some(value) => std::env::set_var("XDG_STATE_HOME", value),
+            None => std::env::remove_var("XDG_STATE_HOME"),
+        }
         for (name, value) in saved {
             if let Some(value) = value {
                 std::env::set_var(name, value);
@@ -120,14 +130,22 @@ fn init_editor() {
         // process exits without closing it. In the user's own 'directory'
         // every run left one more `crates%nvim.s??` behind, until the names
         // ran out and the next case to edit stopped at E326's hit-enter
-        // prompt. A directory of the suite's own, emptied per run, instead;
-        // the option oracle pins 'directory' and puts it back.
+        // prompt. A directory of the suite's own, emptied per run, instead --
+        // set outright, and the default (`set directory&`) under the suite's
+        // state directory too; the option oracle pins 'directory' and puts
+        // it back.
         let swap = suite_swap_dir();
         let _ = std::fs::remove_dir_all(&swap);
         if std::fs::create_dir_all(&swap).is_ok() {
             let _ = neovim::ex_docmd::do_cmdline_cmd(&cstr(set_suite_directory()));
         }
     });
+}
+
+/// The `$XDG_STATE_HOME` the unit editor's defaults are computed under.
+#[cfg(not(miri))]
+fn suite_state_dir() -> PathBuf {
+    Path::new(env!("CARGO_TARGET_TMPDIR")).join("unit-state")
 }
 
 /// Where the unit editor keeps its swap files: see [`init_editor`].
