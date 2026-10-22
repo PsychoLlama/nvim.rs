@@ -115,26 +115,42 @@ pub(crate) fn draw_cmdline(start: ::core::ffi::c_int, len: ::core::ffi::c_int) {
             let chunk: CmdlineColorChunk = cc.last_colors.chunks()[i];
             if chunk.end > start {
                 let chunk_start = chunk.start.max(start);
-                // A copy: the display re-enters the editor.
-                let text = span(cc, chunk_start, chunk.end - chunk_start);
-                msg_display_bytes(&text, chunk.hl_id, false);
+                display_span(cc, chunk_start, chunk.end - chunk_start, chunk.hl_id);
             }
             i += 1;
         }
     } else {
-        msg_display_bytes(&span(cc, start, len), 0, false);
+        display_span(cc, start, len, 0);
     }
 }
 
-/// A copy of `len` bytes of the command line from `start`, cut at the end of
-/// the text: what C handed the message code as a pointer and a length.
-fn span(cc: Cc, start: ::core::ffi::c_int, len: ::core::ffi::c_int) -> Vec<u8> {
+/// Show `len` bytes of the command line from `start`, cut at the end of the
+/// text, in `hl_id`: what C handed the message code as a pointer and a
+/// length.
+///
+/// The bytes are copied first, because the message code re-enters the
+/// editor (a UI's flush can run Lua), which may change the line under it.
+/// A typed line fits the buffer on the stack; this runs for every key.
+fn display_span(
+    cc: Cc,
+    start: ::core::ffi::c_int,
+    len: ::core::ffi::c_int,
+    hl_id: ::core::ffi::c_int,
+) {
+    let mut room = [0u8; 128];
     let line = cc.bytes();
     let from = usize::try_from(start).unwrap_or(0).min(line.len());
     let to = from
         .saturating_add(usize::try_from(len).unwrap_or(0))
         .min(line.len());
-    line[from..to].to_vec()
+    let text = &line[from..to];
+    if let Some(copy) = room.get_mut(..text.len()) {
+        copy.copy_from_slice(text);
+        msg_display_bytes(copy, hl_id, false);
+    } else {
+        let copy = text.to_vec();
+        msg_display_bytes(&copy, hl_id, false);
+    }
 }
 
 /// Put character `c` on the command line, shifting the text after the cursor
