@@ -325,8 +325,9 @@ msg_putchar('\n' as ::core::ffi::c_int);
     if arg_allocated {
         colored_ccline.last_colors.remember(id, arg.string_bytes());
     } else {
-        let text = colored_ccline.bytes().to_vec();
-        colored_ccline.last_colors.remember(id, &text);
+        // Two fields of the one line: the cache takes a copy of the text.
+        let line = &mut *colored_ccline;
+        line.last_colors.remember(id, line.cmdbuff.bytes());
     }
     tv_clear(&mut tv);
     ret
