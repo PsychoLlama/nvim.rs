@@ -637,5 +637,13 @@ pub(crate) fn command_line_handle_key(s: &mut CommandLineState) -> ::core::ffi::
 pub(crate) fn cluster_len_at(cc: Cc, i: ::core::ffi::c_int) -> ::core::ffi::c_int {
     let line = cc.bytes();
     let at = usize::try_from(i).unwrap_or(0).min(line.len());
-    c_cluster_len(&line[at..]) as ::core::ffi::c_int
+    let rest = &line[at..];
+    // An ASCII character with no composing character after it: what nearly
+    // every key typed on the command line is.
+    match rest {
+        [] => 0,
+        [first, next, ..] if (1..0x80).contains(first) && *next < 0x80 => 1,
+        [first] if (1..0x80).contains(first) => 1,
+        _ => c_cluster_len(rest) as ::core::ffi::c_int,
+    }
 }

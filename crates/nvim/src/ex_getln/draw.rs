@@ -78,6 +78,10 @@ pub(crate) fn correct_screencol(
     let cc = Cc::current();
     let line = cc.bytes();
     let at = &line[usize::try_from(idx).unwrap_or(0).min(line.len())..];
+    // An ASCII character takes one cell, composing characters or not.
+    if at.first().is_none_or(|&b| b < 0x80) {
+        return col;
+    }
     if c_cluster_len(at) > 1 && c_cells_at(at) > 1 && col % Columns.get() + cells > Columns.get() {
         col + 1
     } else {
@@ -137,7 +141,7 @@ fn display_span(
     len: ::core::ffi::c_int,
     hl_id: ::core::ffi::c_int,
 ) {
-    let mut room = [0u8; 128];
+    let mut room = [0u8; 64];
     let line = cc.bytes();
     let from = usize::try_from(start).unwrap_or(0).min(line.len());
     let to = from
