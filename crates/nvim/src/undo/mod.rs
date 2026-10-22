@@ -394,7 +394,7 @@ fn start_new_header(mut b: Buf) -> bool {
             0
         };
     drop_named_mark_extras(&mut b.b_namedm);
-    let named_marks = b.b_namedm.clone();
+    let named_marks = b.b_namedm.each_ref().map(SavedMark::of);
     let visual = b.b_visual;
     if let Some(uh) = b.header_mut(link) {
         uh.next = next;

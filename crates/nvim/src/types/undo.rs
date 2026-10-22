@@ -119,7 +119,8 @@ pub struct UndoHeader {
     pub cursor: Pos,
     pub cursor_vcol: ColNr,
     pub flags: ::core::ffi::c_int,
-    pub named_marks: [FileMark; 26],
+    /// The named marks before the change, without their ShaDa extra data.
+    pub named_marks: [SavedMark; 26],
     /// What the change did to extmarks, in the order it did it.
     pub extmarks: Vec<ExtmarkUndoObject>,
     pub visual: VisualInfo,
@@ -143,22 +144,6 @@ impl Default for UndoHeader {
     /// A header linked to nothing, holding nothing, with every other field
     /// zero.
     fn default() -> Self {
-        // A `const`, not a `let`: `FileMark` is not `Copy`, and only a
-        // constant may be repeated into an array without it.
-        const UNSET_MARK: FileMark = FileMark {
-            mark: Pos {
-                lnum: 0,
-                col: 0,
-                coladd: 0,
-            },
-            fnum: 0,
-            timestamp: 0,
-            view: FileMarkView {
-                topline_offset: 0,
-                skipcol: 0,
-            },
-            extra: None,
-        };
         Self {
             next: UndoLink::NONE,
             prev: UndoLink::NONE,
@@ -171,7 +156,7 @@ impl Default for UndoHeader {
             cursor: Pos::default(),
             cursor_vcol: 0,
             flags: 0,
-            named_marks: [UNSET_MARK; 26],
+            named_marks: [SavedMark::ZERO; 26],
             extmarks: Vec::new(),
             visual: VisualInfo {
                 vi_start: Pos::default(),

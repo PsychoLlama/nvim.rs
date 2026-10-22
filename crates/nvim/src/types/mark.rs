@@ -82,6 +82,58 @@ impl FileMark {
     }
 }
 
+/// A [`FileMark`] without its ShaDa extra data: what an undo header keeps of
+/// a named mark, to put back when the change is undone. `Copy`, because a
+/// header is saved per change and a deep copy of twenty-six marks each time
+/// costs more than the save.
+#[derive(Copy, Clone)]
+pub struct SavedMark {
+    pub mark: Pos,
+    pub fnum: ::core::ffi::c_int,
+    pub timestamp: Timestamp,
+    pub view: FileMarkView,
+}
+
+impl SavedMark {
+    /// A mark that is not set, with every field zero.
+    pub const ZERO: Self = Self {
+        mark: Pos {
+            lnum: 0,
+            col: 0,
+            coladd: 0,
+        },
+        fnum: 0,
+        timestamp: 0,
+        view: FileMarkView {
+            topline_offset: 0,
+            skipcol: 0,
+        },
+    };
+
+    /// What `fm` holds, but its extra data.
+    #[inline]
+    pub fn of(fm: &FileMark) -> Self {
+        Self {
+            mark: fm.mark,
+            fnum: fm.fnum,
+            timestamp: fm.timestamp,
+            view: fm.view,
+        }
+    }
+
+    /// The mark it saved, carrying no extra data.
+    #[inline]
+    pub fn to_mark(self) -> FileMark {
+        FileMark {
+            mark: self.mark,
+            fnum: self.fnum,
+            timestamp: self.timestamp,
+            view: self.view,
+            extra: None,
+        }
+    }
+}
+
 /// A [`FileMark`] that may name a file instead of a buffer: the global marks
 /// and the jump list, whose entries read out of a ShaDa file carry the file
 /// name until a buffer for it is loaded and the name becomes a number.

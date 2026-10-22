@@ -26,7 +26,8 @@ use crate::ex_docmd::state::{global_busy, listcmd_busy};
 use crate::getchar::state::got_int;
 use crate::memory::XString;
 use crate::message::{
-    message_filtered, msg_display, msg_ext_set_kind, msg_putchar, msg_str, msg_title,
+    message_filtered, msg_display, msg_display_bytes, msg_ext_set_kind, msg_putchar, msg_str,
+    msg_title,
 };
 use crate::option::vars::jop_flags;
 use crate::os::cshim::gettext;
@@ -305,11 +306,18 @@ pub fn free_jumplist(mut window: Win) {
     window.w_jumplistlen = 0;
 }
 
-/// One `:jumps`/`:changes` row's numbers, as `fmt` lays them out.
-fn list_row(fmt: &[u8], current: bool, distance: c_int, pos: Pos) -> XString {
-    let marker = if current { '>' as c_int } else { ' ' as c_int };
-    let row = crate::formatted!(IOSIZE as usize, fmt, marker, distance, pos.lnum, pos.col);
-    XString::from_vec(row)
+/// One `:jumps`/`:changes` row's numbers: `%c %<width>d %5d %4d `.
+fn list_row(width: usize, current: bool, distance: c_int, pos: Pos) -> Row {
+    let mut row = Row::new();
+    row.push(if current { b'>' } else { b' ' });
+    row.push(b' ');
+    row.number(distance, width);
+    row.push(b' ');
+    row.number(pos.lnum, 5);
+    row.push(b' ');
+    row.number(pos.col, 4);
+    row.push(b' ');
+    row
 }
 
 /// print the jumplist
@@ -335,12 +343,12 @@ pub fn ex_jumps(_excmd: &mut ExArg) {
                 }
                 let here = Buf::current().handle;
                 let row = list_row(
-                    b"%c %2d %5d %4d ",
+                    2,
                     i == win.w_jumplistidx,
                     (i - win.w_jumplistidx).abs(),
                     fmark.mark,
                 );
-                msg_display(row.as_cstr(), 0, false);
+                msg_display_bytes(row.bytes(), 0, false);
                 let attr = if fmark.fnum == here { HLF_D } else { 0 };
                 msg_display(name.as_cstr(), attr, false);
                 os_breakcheck();
@@ -376,12 +384,12 @@ pub fn ex_changes(_excmd: &mut ExArg) {
                 break;
             }
             let row = list_row(
-                b"%c %3d %5d %4d ",
+                3,
                 i == win.w_changelistidx,
                 (i - win.w_changelistidx).abs(),
                 pos,
             );
-            msg_display(row.as_cstr(), 0, false);
+            msg_display_bytes(row.bytes(), 0, false);
             let text = mark_line(pos, 17);
             msg_display(text.as_cstr(), HLF_D, false);
             os_breakcheck();

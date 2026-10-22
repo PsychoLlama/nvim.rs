@@ -25,7 +25,8 @@ use crate::mbyte::{c_cells_at, c_cluster_len};
 use crate::memory::XString;
 use crate::message::{e_argreq, e_invarg};
 use crate::message::{
-    emsg, message_filtered, msg, msg_display, msg_ext_set_kind, msg_putchar, msg_title,
+    emsg, message_filtered, msg, msg_display, msg_display_bytes, msg_ext_set_kind, msg_putchar,
+    msg_title,
 };
 use crate::message_fmt::msg_bytes;
 use crate::os::cshim::gettext;
@@ -169,10 +170,72 @@ pub(super) fn show_one_mark(
     if got_int.get() {
         return;
     }
-    let prefix = crate::formatted!(IOSIZE as usize, b" %c %6d %4d ", c, pos.lnum, pos.col);
-    msg_display(XString::from_vec(prefix).as_cstr(), 0, false);
+    // ` %c %6d %4d `
+    let mut row = Row::new();
+    row.push(b' ');
+    row.push(u8::try_from(c).unwrap_or(b'?'));
+    row.push(b' ');
+    row.number(pos.lnum, 6);
+    row.push(b' ');
+    row.number(pos.col, 4);
+    row.push(b' ');
+    msg_display_bytes(row.bytes(), 0, false);
     if let Some(name) = name {
         msg_display(name, if current { HLF_D } else { 0 }, false);
+    }
+}
+
+/// The numbers at the start of a `:marks`, `:jumps` or `:changes` row, laid
+/// out as upstream's `snprintf` into `IObuff` lays them -- by hand, in a
+/// stack buffer: the crate's `printf` makes two passes, which cost a
+/// `:marks` loop twice what the listing itself does.
+pub(super) struct Row {
+    bytes: [u8; 48],
+    len: usize,
+}
+
+impl Row {
+    pub(super) fn new() -> Row {
+        Row {
+            bytes: [0; 48],
+            len: 0,
+        }
+    }
+
+    pub(super) fn push(&mut self, byte: u8) {
+        if let Some(at) = self.bytes.get_mut(self.len) {
+            *at = byte;
+            self.len += 1;
+        }
+    }
+
+    /// `%<width>d` of `n`.
+    pub(super) fn number(&mut self, n: c_int, width: usize) {
+        let mut digits = [0u8; 11];
+        let mut at = digits.len();
+        let mut rest = n.unsigned_abs();
+        loop {
+            at -= 1;
+            digits[at] = b'0' + u8::try_from(rest % 10).unwrap_or(0);
+            rest /= 10;
+            if rest == 0 {
+                break;
+            }
+        }
+        if n < 0 {
+            at -= 1;
+            digits[at] = b'-';
+        }
+        for _ in digits.len() - at..width {
+            self.push(b' ');
+        }
+        for &digit in &digits[at..] {
+            self.push(digit);
+        }
+    }
+
+    pub(super) fn bytes(&self) -> &[u8] {
+        &self.bytes[..self.len]
     }
 }
 
@@ -387,4 +450,36 @@ pub fn fm_getname(fm: &FileMark, lead_len: c_int) -> Option<XString> {
         return Some(mark_line(fm.mark, lead_len));
     }
     buflist_nr2name(fm.fnum, 0, 1)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Row;
+
+    fn row(fill: impl FnOnce(&mut Row)) -> String {
+        let mut row = Row::new();
+        fill(&mut row);
+        String::from_utf8(row.bytes().to_vec()).unwrap()
+    }
+
+    /// What `%6d`, `%2d` and friends print: right-aligned, the sign counted,
+    /// never cut when the number is wider than the field.
+    #[test]
+    fn numbers_are_laid_out_as_printf_pads_them() {
+        assert_eq!(row(|r| r.number(42, 6)), "    42");
+        assert_eq!(row(|r| r.number(0, 4)), "   0");
+        assert_eq!(row(|r| r.number(-7, 4)), "  -7");
+        assert_eq!(row(|r| r.number(1_234_567, 2)), "1234567");
+        assert_eq!(row(|r| r.number(i32::MIN, 1)), "-2147483648");
+    }
+
+    #[test]
+    fn a_full_row_stops_at_its_buffer() {
+        let text = row(|r| {
+            for _ in 0..10 {
+                r.number(1_000_000, 6);
+            }
+        });
+        assert_eq!(text.len(), 48);
+    }
 }

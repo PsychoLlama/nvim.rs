@@ -64,6 +64,7 @@ struct LineShift {
 
 impl LineShift {
     /// `ONE_ADJUST`: a deleted mark is invalidated.
+    #[inline(always)]
     fn line(self, lnum: &mut LineNr) {
         if *lnum >= self.line1 && *lnum <= self.line2 {
             *lnum = if self.amount == MAXLNUM {
@@ -78,6 +79,7 @@ impl LineShift {
 
     /// `ONE_ADJUST_NODEL`: a deleted mark lands on the first deleted line
     /// rather than being invalidated.
+    #[inline(always)]
     fn line_nodel(self, lnum: &mut LineNr) {
         if *lnum >= self.line1 && *lnum <= self.line2 {
             *lnum = if self.amount == MAXLNUM {
@@ -92,6 +94,7 @@ impl LineShift {
 
     /// `ONE_ADJUST_CURSOR`: a cursor inside the deleted range moves to the
     /// start of the line before it.
+    #[inline(always)]
     fn cursor(self, posp: &mut Pos) {
         if posp.lnum >= self.line1 && posp.lnum <= self.line2 {
             if self.amount == MAXLNUM {
@@ -106,11 +109,13 @@ impl LineShift {
     }
 
     /// [`LineShift::line`] applied to a mark store.
+    #[inline(always)]
     fn mark(self, fm: &mut FileMark) {
         self.line(&mut fm.mark.lnum);
     }
 
     /// [`LineShift::line_nodel`] applied to a mark store.
+    #[inline(always)]
     fn mark_nodel(self, fm: &mut FileMark) {
         self.line_nodel(&mut fm.mark.lnum);
     }
@@ -118,6 +123,7 @@ impl LineShift {
     /// [`LineShift::line_nodel`], but only for a mark that names buffer
     /// `fnum`. The global table, every jump list and every tag stack hold
     /// marks in other buffers, which this adjustment must not touch.
+    #[inline(always)]
     fn mark_nodel_in(self, fm: &mut FileMark, fnum: c_int) {
         if fm.fnum == fnum {
             self.mark_nodel(fm);
@@ -137,6 +143,7 @@ struct ColShift {
 }
 
 impl ColShift {
+    #[inline(always)]
     fn col(self, posp: &mut Pos) {
         if posp.lnum != self.lnum || posp.col < self.mincol {
             return;
@@ -152,11 +159,13 @@ impl ColShift {
     }
 
     /// [`ColShift::col`] applied to a mark store.
+    #[inline(always)]
     fn mark(self, fm: &mut FileMark) {
         self.col(&mut fm.mark);
     }
 
     /// [`ColShift::col`], but only for a mark that names buffer `fnum`.
+    #[inline(always)]
     fn mark_in(self, fm: &mut FileMark, fnum: c_int) {
         if fm.fnum == fnum {
             self.mark(fm);
