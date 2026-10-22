@@ -122,13 +122,26 @@ fn init_editor() {
         // ran out and the next case to edit stopped at E326's hit-enter
         // prompt. A directory of the suite's own, emptied per run, instead;
         // the option oracle pins 'directory' and puts it back.
-        let swap = Path::new(env!("CARGO_TARGET_TMPDIR")).join("unit-swap");
+        let swap = suite_swap_dir();
         let _ = std::fs::remove_dir_all(&swap);
         if std::fs::create_dir_all(&swap).is_ok() {
-            let line = format!("set directory={}//", swap.display());
-            let _ = neovim::ex_docmd::do_cmdline_cmd(&cstr(line));
+            let _ = neovim::ex_docmd::do_cmdline_cmd(&cstr(set_suite_directory()));
         }
     });
+}
+
+/// Where the unit editor keeps its swap files: see [`init_editor`].
+#[cfg(not(miri))]
+fn suite_swap_dir() -> PathBuf {
+    Path::new(env!("CARGO_TARGET_TMPDIR")).join("unit-swap")
+}
+
+/// The `:set` that points 'directory' back at the suite's own swap
+/// directory. A case that changes 'directory' restores it with this rather
+/// than `set directory&`, whose default is the user's own state directory.
+#[cfg(not(miri))]
+pub(crate) fn set_suite_directory() -> String {
+    format!("set directory={}//", suite_swap_dir().display())
 }
 
 /// Everything a case has to claim before it can touch process-wide state,

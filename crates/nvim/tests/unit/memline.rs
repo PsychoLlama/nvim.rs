@@ -515,10 +515,10 @@ fn the_terminated_views_carry_the_line_s_own_nul() {
 // The cases below drive the editor through commands, so they read the tree
 // only through what a user can see: the lines, their byte offsets, and what
 // `:recover` makes of a swap file. Each sets 'directory' to its own sandbox
-// so a swap file never lands in the user's state directory, and puts it back
-// on the way out.
+// so a swap file never lands in the user's state directory, and puts the
+// suite's own back on the way out (`set directory&` would be the user's).
 
-use crate::support::Probe;
+use crate::support::{Probe, set_suite_directory};
 
 /// `count` lines `width` bytes long, each starting with its own number so a
 /// line that moved shows up as the wrong number in the wrong place.
@@ -605,7 +605,7 @@ fn scratch(fx: &Probe) {
 
 fn unscratch(fx: &Probe) {
     fx.run("silent! bwipeout!");
-    fx.run("set directory& swapfile&");
+    fx.run(&format!("{} swapfile&", set_suite_directory()));
     fx.home();
 }
 
@@ -727,7 +727,7 @@ fn preserve_then_recover_a_multi_block_file() {
     fx.check("&modified", "1");
     fx.run("silent! bwipeout!");
     let _ = std::fs::remove_file(sandbox.path(".f.txt.swp"));
-    fx.run("set directory& swapfile&");
+    fx.run(&format!("{} swapfile&", set_suite_directory()));
     fx.home();
 }
 
@@ -801,7 +801,7 @@ fn a_swap_file_with_a_wrong_magic_or_page_size_is_refused() {
         fx.run("silent! bwipeout!");
         let _ = std::fs::remove_file(sandbox.path(".f.txt.swp"));
     }
-    fx.run("set directory& swapfile&");
+    fx.run(&format!("{} swapfile&", set_suite_directory()));
     fx.home();
 }
 
