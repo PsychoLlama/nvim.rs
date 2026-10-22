@@ -2,7 +2,7 @@
 //! the drawer reads off it.
 //!
 //! The thirteen children hold the code; this file holds the surface they
-//! share -- the `DiffIn`/`DiffOut`/`DiffIo` triple a diff run is
+//! share -- the owned `DiffIn`/`DiffOut`/`DiffIo` triple a diff run is
 //! carried in, the `DIFF_*` bits of `'diffopt'`, and the module's
 //! **process-wide state**, which is seven cells and nothing else:
 //!
@@ -65,7 +65,7 @@ use crate::mbyte::{
     head_off, mb_get_class_tab, utf_char2bytes, utf_char2len, utf_fold, utf_ptr2char, utfc_ptr2len,
 };
 use crate::memline::{Lines, ml_append_cstr, ml_delete};
-use crate::memory::{XString, memchrsub, xfree, xmalloc};
+use crate::memory::{XString, xfree};
 use crate::message::emsg;
 use crate::message::{
     e_diff_anchors_with_hidden_windows, e_failed_to_find_all_diff_anchors, e_invrange, e_prev_dir,
@@ -91,14 +91,13 @@ use crate::types::NL;
 use crate::types::{
     AcoSave, CmdAddr, CmdModFlags, ColNr, DiffBlock, DiffLine, DiffLineChange, EvalFuncData, ExArg,
     ExtmarkOp, FILE, FileInfo, Hlf, LineNr, OptInt, OptScope, OptVal, ScriptId, String_0, TypVal,
-    VarNumber, mmfile_t, size_t, uint64_t, xdemitcb_t, xdemitconf_t, xpparam_t,
+    VarNumber, size_t, uint64_t,
 };
 use crate::ui::vim_beep;
 use crate::undo::{u_save, u_sync};
 use crate::window::{
     WSP_VERT, frames_locked, scroll_to_fraction, set_fraction, win_split, win_valid,
 };
-use crate::xdiff::ffi::xdl_diff;
 use crate::xdiff::xtypes::{
     XDF_HISTOGRAM_DIFF, XDF_IGNORE_BLANK_LINES, XDF_IGNORE_WHITESPACE,
     XDF_IGNORE_WHITESPACE_AT_EOL, XDF_IGNORE_WHITESPACE_CHANGE, XDF_INDENT_HEURISTIC,
@@ -138,34 +137,46 @@ pub const _ISdigit: ::core::ffi::c_uint = 2048;
 pub const kOptScopeWin: OptScope = 1;
 pub const kExtmarkUndo: ExtmarkOp = 1;
 pub const kExtmarkNOOP: ExtmarkOp = 0;
-/// An empty memory image: no bytes, no allocation.
-pub(crate) const MMFILE_INIT: mmfile_t = mmfile_t {
-    ptr: ::core::ptr::null_mut(),
-    size: 0,
-};
-
-/// One side of a diff before either the file name or the memory image is
-/// filled in; which one is used depends on `dio_internal`.
-pub(crate) const DIFFIN_INIT: DiffIn = DiffIn {
-    din_fname: ::core::ptr::null_mut(),
-    din_mmfile: MMFILE_INIT,
-};
-
+/// One diff run: the two sides and the answer.
+///
+/// `internal` picks the engine: the built-in one reads each side's `text`
+/// and fills `diff.hunks`; the external one (or `'diffexpr'`) reads the temp
+/// files named by each side's `fname` and writes the one `diff.fname` names.
+#[derive(Default)]
 pub struct DiffIo {
-    pub dio_orig: DiffIn,
-    pub dio_new: DiffIn,
-    pub dio_diff: DiffOut,
-    pub dio_internal: ::core::ffi::c_int,
+    pub orig: DiffIn,
+    pub new: DiffIn,
+    pub diff: DiffOut,
+    pub internal: bool,
 }
+/// An external run's temp files: the two sides, then the output.
+pub(crate) type TempNames<'a> = [&'a core::ffi::CStr; 3];
+
+impl DiffIo {
+    /// The three temp file names, once all three are made.
+    pub(crate) fn temp_names(&self) -> Option<TempNames<'_>> {
+        Some([
+            self.orig.fname.as_ref()?.as_cstr(),
+            self.new.fname.as_ref()?.as_cstr(),
+            self.diff.fname.as_ref()?.as_cstr(),
+        ])
+    }
+}
+#[derive(Default)]
 pub struct DiffOut {
-    pub dout_fname: *mut ::core::ffi::c_char,
+    /// The temp file the external diff writes; `None` for the internal one.
+    pub fname: Option<XString>,
     /// The hunks the internal engine produced; empty when the run went
-    /// through a temp file named by `dout_fname` instead.
-    pub dout_ga: Vec<DiffHunk>,
+    /// through a temp file named by `fname` instead.
+    pub hunks: Vec<DiffHunk>,
 }
+#[derive(Default)]
 pub struct DiffIn {
-    pub din_fname: *mut ::core::ffi::c_char,
-    pub din_mmfile: mmfile_t,
+    /// The temp file the buffer is written to; `None` for the internal
+    /// engine, which reads `text`.
+    pub fname: Option<XString>,
+    /// The buffer's lines as one NL-terminated memory image.
+    pub text: Vec<u8>,
 }
 #[derive(Copy, Clone)]
 pub struct DiffHunk {

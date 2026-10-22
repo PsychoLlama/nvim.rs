@@ -40,27 +40,6 @@ struct Walk {
     notset: bool,
 }
 
-/// Take the next hunk the internal engine produced.  Answers end of input.
-///
-/// # Safety
-///
-/// `dout` must point at a live `DiffOut`, unaliased for the call. `hunk` must
-/// point at a live `DiffHunk`, unaliased for the call.
-unsafe fn extract_hunk_internal(
-    dout: *mut DiffOut,
-    hunk: *mut DiffHunk,
-    line_idx: &mut c_int,
-) -> bool {
-    // SAFETY: the caller's output side; the index is checked against it.
-    let hunks = unsafe { &(*dout).dout_ga };
-    let Some(&next) = hunks.get(*line_idx as usize) else {
-        return true;
-    };
-    unsafe { *hunk = next };
-    *line_idx += 1;
-    false
-}
-
 /// Read lines from `fd` until one parses as a hunk header.  Answers end of
 /// input.
 ///
@@ -228,17 +207,16 @@ unsafe fn process_hunk(walk: &mut Walk, idx_orig: usize, idx_new: usize, hunk: *
 }
 
 /// Read a whole diff's worth of hunks into the current tabpage's block list.
-///
-/// # Safety
-///
-/// `dio` must point at a live `DiffIo`, unaliased for the call.
-pub(crate) unsafe fn diff_read(idx_orig: c_int, idx_new: c_int, dio: *mut DiffIo) {
+pub(crate) fn diff_read(idx_orig: c_int, idx_new: c_int, dio: &DiffIo) {
     let (idx_orig, idx_new) = (idx_orig as usize, idx_new as usize);
-    let dout = unsafe { &raw mut (*dio).dio_diff };
-    let internal = unsafe { (*dio).dio_internal } != 0;
     let mut fd = ::core::ptr::null_mut::<FILE>();
-    if !internal {
-        fd = unsafe { os_fopen((*dout).dout_fname, c"r".as_ptr()) };
+    if !dio.internal {
+        let name = dio
+            .diff
+            .fname
+            .as_ref()
+            .map_or(::core::ptr::null(), |n| n.as_ptr());
+        fd = unsafe { os_fopen(name, c"r".as_ptr()) };
         if fd.is_null() {
             emsg(gettext(c"E98: Cannot read diff output"));
             return;
@@ -250,7 +228,7 @@ pub(crate) unsafe fn diff_read(idx_orig: c_int, idx_new: c_int, dio: *mut DiffIo
         dprev: ::core::ptr::null_mut(),
         notset: true,
     };
-    let mut line_hunk_idx = 0;
+    let mut internal_hunks = dio.diff.hunks.iter();
     let mut diffstyle = DiffStyle::Unknown;
     loop {
         let mut hunk = DiffHunk {
@@ -259,8 +237,14 @@ pub(crate) unsafe fn diff_read(idx_orig: c_int, idx_new: c_int, dio: *mut DiffIo
             lnum_new: 0,
             count_new: 0,
         };
-        let eof = if internal {
-            unsafe { extract_hunk_internal(dout, &raw mut hunk, &mut line_hunk_idx) }
+        let eof = if dio.internal {
+            match internal_hunks.next() {
+                Some(&next) => {
+                    hunk = next;
+                    false
+                }
+                None => true,
+            }
         } else {
             unsafe { extract_hunk(fd, &raw mut hunk, &mut diffstyle) }
         };

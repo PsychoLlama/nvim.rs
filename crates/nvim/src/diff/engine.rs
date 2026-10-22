@@ -1,10 +1,10 @@
 //! Running one diff, internal or external.
 //!
 //! [`diff_file`] picks between the three: `'diffexpr'`, the external
-//! `diff(1)` and the built-in `xdl_diff`.  [`check_external_diff`] is the
+//! `diff(1)` and the built-in xdiff engine.  [`check_external_diff`] is the
 //! probe that decides whether the host's `diff` is usable at all (and caches
-//! the answer in `diff_a_works`); [`diff_file_internal`] is the `xdl_diff`
-//! call, with [`xdiff_out`] as its hunk callback.
+//! the answer in `diff_a_works`); [`diff_file_internal`] runs the engine
+//! over two memory images and collects its hunks.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
@@ -20,6 +20,8 @@ use super::*;
 use crate::cstr;
 use crate::option::vars::P_DEX;
 use crate::types::Failed;
+use crate::xdiff::ffi::diff_hunks;
+use crate::xdiff::xtypes::Aborted;
 use core::ffi::{c_char, c_int};
 
 /// Diff two one-line files and see whether the answer is recognisable.
@@ -28,19 +30,13 @@ use core::ffi::{c_char, c_int};
 /// saying whether it accepts `-a`.  The probe runs at most twice: the first
 /// attempt passes `-a`, and if that produces nothing recognisable the flag is
 /// remembered as unsupported and the whole thing is tried again without it.
-///
-/// # Safety
-///
-/// `diffio` must point at a live `DiffIo`, unaliased for the call.
-pub(crate) unsafe fn check_external_diff(diffio: *mut DiffIo) -> Result<(), Failed> {
-    let orig = unsafe { (*diffio).dio_orig.din_fname };
-    let new = unsafe { (*diffio).dio_new.din_fname };
-    let out = unsafe { (*diffio).dio_diff.dout_fname };
+pub(crate) fn check_external_diff(names: TempNames<'_>) -> Result<(), Failed> {
+    let [orig, new, out] = names;
     let mut io_error = false;
     let mut ok;
     loop {
         ok = false;
-        let mut fd = unsafe { os_fopen(orig, c"w".as_ptr()) };
+        let mut fd = unsafe { os_fopen(orig.as_ptr(), c"w".as_ptr()) };
         if fd.is_null() {
             io_error = true;
         } else {
@@ -48,7 +44,7 @@ pub(crate) unsafe fn check_external_diff(diffio: *mut DiffIo) -> Result<(), Fail
                 io_error = true;
             }
             unsafe { fclose(fd) };
-            fd = unsafe { os_fopen(new, c"w".as_ptr()) };
+            fd = unsafe { os_fopen(new.as_ptr(), c"w".as_ptr()) };
             if fd.is_null() {
                 io_error = true;
             } else {
@@ -56,8 +52,8 @@ pub(crate) unsafe fn check_external_diff(diffio: *mut DiffIo) -> Result<(), Fail
                     io_error = true;
                 }
                 unsafe { fclose(fd) };
-                fd = if unsafe { diff_file(diffio) }.is_ok() {
-                    unsafe { os_fopen(out, c"r".as_ptr()) }
+                fd = if diff_file_external(names).is_ok() {
+                    unsafe { os_fopen(out.as_ptr(), c"r".as_ptr()) }
                 } else {
                     ::core::ptr::null_mut()
                 };
@@ -76,10 +72,10 @@ pub(crate) unsafe fn check_external_diff(diffio: *mut DiffIo) -> Result<(), Fail
                     }
                     unsafe { fclose(fd) };
                 }
-                unsafe { os_remove(cstr::at(out)) };
-                unsafe { os_remove(cstr::at(new)) };
+                os_remove(out);
+                os_remove(new);
             }
-            unsafe { os_remove(cstr::at(orig)) };
+            os_remove(orig);
         }
         // With `'diffexpr'` set there is no `-a` to retry without.
         if P_DEX.first_byte() != 0 || diff_a_works.get().is_some() {
@@ -101,70 +97,41 @@ pub(crate) unsafe fn check_external_diff(diffio: *mut DiffIo) -> Result<(), Fail
     Err(Failed)
 }
 
-/// Diff the two memory images with `xdl_diff`, collecting hunks into
-/// `dio_diff.dout_ga`.
-///
-/// # Safety
-///
-/// `diffio` must point at a live `DiffIo`, unaliased for the call.
-pub(crate) unsafe fn diff_file_internal(diffio: *mut DiffIo) -> Result<(), Failed> {
+/// Diff the two memory images with the built-in engine, appending the hunks
+/// to `hunks`.
+pub(crate) fn diff_file_internal(
+    orig: &[u8],
+    new: &[u8],
+    hunks: &mut Vec<DiffHunk>,
+) -> Result<(), Failed> {
     let flags = diff_flags.get();
-    let mut param = xpparam_t {
-        // `'diffopt'`'s ignore flags map onto xdiff's own; `icase` does
-        // not, and is applied while writing the buffers out instead.
-        flags: diff_algorithm.get()
-            | if flags & DIFF_IWHITE != 0 {
-                XDF_IGNORE_WHITESPACE_CHANGE
-            } else {
-                0
-            }
-            | if flags & DIFF_IWHITEALL != 0 {
-                XDF_IGNORE_WHITESPACE
-            } else {
-                0
-            }
-            | if flags & DIFF_IWHITEEOL != 0 {
-                XDF_IGNORE_WHITESPACE_AT_EOL
-            } else {
-                0
-            }
-            | if flags & DIFF_IBLANK != 0 {
-                XDF_IGNORE_BLANK_LINES
-            } else {
-                0
-            },
-        // `'diffanchors'` is implemented by splitting the buffers, not
-        // by xdiff's anchor list.
-        anchors: ::core::ptr::null_mut(),
-        anchors_nr: 0,
+    // `'diffopt'`'s ignore flags map onto xdiff's own; `icase` does not, and
+    // is applied while writing the buffers out instead. `'diffanchors'` is
+    // implemented by splitting the buffers, not by xdiff's anchor list.
+    let xdiff_flags = diff_algorithm.get()
+        | [
+            (DIFF_IWHITE, XDF_IGNORE_WHITESPACE_CHANGE),
+            (DIFF_IWHITEALL, XDF_IGNORE_WHITESPACE),
+            (DIFF_IWHITEEOL, XDF_IGNORE_WHITESPACE_AT_EOL),
+            (DIFF_IBLANK, XDF_IGNORE_BLANK_LINES),
+        ]
+        .into_iter()
+        .filter(|&(bit, _)| flags & bit != 0)
+        .fold(0, |all, (_, xdf)| all | xdf);
+    let too_big = |text: &[u8]| i64::try_from(text.len()).map_or(true, |n| n > MAX_XDIFF_SIZE);
+    // Each hunk comes back with zero-based starts; the list wants line
+    // numbers.
+    let mut push = |start_a: i64, count_a: i64, start_b: i64, count_b: i64| {
+        let int = |n: i64| c_int::try_from(n).map_err(|_| Aborted);
+        hunks.push(DiffHunk {
+            lnum_orig: int(start_a + 1)?,
+            count_orig: int(count_a)?,
+            lnum_new: int(start_b + 1)?,
+            count_new: int(count_b)?,
+        });
+        Ok(())
     };
-    let mut emit_cfg = xdemitconf_t {
-        // No context lines: nvim wants the hunks, not a patch.
-        ctxlen: 0,
-        interhunkctxlen: 0,
-        flags: 0,
-        find_func: None,
-        find_func_priv: ::core::ptr::null_mut(),
-        hunk_func: Some(xdiff_out),
-    };
-    let mut emit_cb = xdemitcb_t {
-        priv_0: unsafe { &raw mut (*diffio).dio_diff }.cast(),
-        out_hunk: None,
-        out_line: None,
-    };
-
-    if ::core::ffi::c_long::from(unsafe { (*diffio).dio_orig.din_mmfile.size }) > MAX_XDIFF_SIZE
-        || ::core::ffi::c_long::from(unsafe { (*diffio).dio_new.din_mmfile.size }) > MAX_XDIFF_SIZE
-        || unsafe {
-            xdl_diff(
-                &raw mut (*diffio).dio_orig.din_mmfile,
-                &raw mut (*diffio).dio_new.din_mmfile,
-                &raw mut param,
-                &raw mut emit_cfg,
-                &raw mut emit_cb,
-            )
-        } < 0
-    {
+    if too_big(orig) || too_big(new) || diff_hunks(orig, new, xdiff_flags, &mut push).is_err() {
         emsg(gettext(e_problem_creating_internal_diff));
         return Err(Failed);
     }
@@ -173,21 +140,22 @@ pub(crate) unsafe fn diff_file_internal(diffio: *mut DiffIo) -> Result<(), Faile
 
 /// Diff whichever way `'diffopt'` and `'diffexpr'` say.
 ///
-/// # Safety
-///
-/// `dio` must point at a live `DiffIo`, unaliased for the call.
-pub(crate) unsafe fn diff_file(dio: *mut DiffIo) -> Result<(), Failed> {
-    let tmp_orig = unsafe { (*dio).dio_orig.din_fname };
-    let tmp_new = unsafe { (*dio).dio_new.din_fname };
-    let tmp_diff = unsafe { (*dio).dio_diff.dout_fname };
-    if P_DEX.first_byte() != 0 {
-        // SAFETY: the three temp file names `dio` holds, NUL-terminated.
-        let names = unsafe { (cstr::at(tmp_orig), cstr::at(tmp_new), cstr::at(tmp_diff)) };
-        eval_diff(names.0, names.1, names.2);
-        return Ok(());
+/// A run that has no temp files is diffed internally whatever `'diffexpr'`
+/// says by now: upstream would hand `'diffexpr'` three null names.
+pub(crate) fn diff_file(dio: &mut DiffIo) -> Result<(), Failed> {
+    match dio.temp_names() {
+        Some(names) if !dio.internal || P_DEX.first_byte() != 0 => diff_file_external(names),
+        _ => diff_file_internal(&dio.orig.text, &dio.new.text, &mut dio.diff.hunks),
     }
-    if unsafe { (*dio).dio_internal } != 0 {
-        return unsafe { diff_file_internal(dio) };
+}
+
+/// Diff the first two temp files into the third, through `'diffexpr'` or
+/// the host's `diff`.
+fn diff_file_external(names: TempNames<'_>) -> Result<(), Failed> {
+    let [tmp_orig, tmp_new, tmp_diff] = names;
+    if P_DEX.first_byte() != 0 {
+        eval_diff(tmp_orig, tmp_new, tmp_diff);
+        return Ok(());
     }
 
     // The user's own `diff` options would corrupt the output format.
@@ -212,14 +180,10 @@ pub(crate) unsafe fn diff_file(dio: *mut DiffIo) -> Result<(), Failed> {
             cmd.extend_from_slice(text);
         }
     }
-    // SAFETY: the three temp file names are the caller's own allocations, and
-    // 'shellredir' is a live option string.
-    unsafe {
-        cmd.extend_from_slice(cstr::bytes_at(tmp_orig));
-        cmd.push(b' ');
-        cmd.extend_from_slice(cstr::bytes_at(tmp_new));
-    }
-    p_srr(|srr| unsafe { append_redir(&mut cmd, srr, cstr::at(tmp_diff)) });
+    cmd.extend_from_slice(tmp_orig.to_bytes());
+    cmd.push(b' ');
+    cmd.extend_from_slice(tmp_new.to_bytes());
+    p_srr(|srr| append_redir(&mut cmd, srr, tmp_diff));
     let cmd = cstr::owned(&cmd);
 
     block_autocmds();
@@ -232,31 +196,4 @@ pub(crate) unsafe fn diff_file(dio: *mut DiffIo) -> Result<(), Failed> {
     };
     unblock_autocmds();
     Ok(())
-}
-
-/// `xdl_diff`'s hunk callback: append one hunk to the `DiffOut` behind
-/// `priv_0`, converting xdiff's zero-based starts to line numbers.
-///
-/// # Safety
-///
-/// `priv_0` must be the payload this callback was registered with, live for
-/// the call.
-unsafe extern "C" fn xdiff_out(
-    start_a: c_int,
-    count_a: c_int,
-    start_b: c_int,
-    count_b: c_int,
-    priv_0: *mut ::core::ffi::c_void,
-) -> c_int {
-    let dout = priv_0.cast::<DiffOut>();
-    // SAFETY: `priv_0` is the output side `xdl_diff` was started with.
-    unsafe {
-        (*dout).dout_ga.push(DiffHunk {
-            lnum_orig: start_a + 1,
-            count_orig: count_a,
-            lnum_new: start_b + 1,
-            count_new: count_b,
-        });
-    };
-    0
 }

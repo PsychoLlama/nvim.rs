@@ -100,42 +100,29 @@ unsafe fn apply_linematch_results(dp: *mut DiffBlock, decisions: &[c_int]) {
 /// `dp` must point at a live diff block, unaliased for the call.
 pub(crate) unsafe fn run_linematch_algorithm(dp: *mut DiffBlock) {
     let tp = TabPage::current();
-    let mut images = [MMFILE_INIT; DB_COUNT as usize];
+    let mut images: [Vec<u8>; DB_COUNT as usize] = ::core::array::from_fn(|_| Vec::new());
     let mut lengths = [0 as c_int; DB_COUNT as usize];
     let mut ndiffs = 0;
     for i in 0..DB_COUNT as usize {
         if tp.tp_diffbuf[i].is_none() {
             continue;
         }
-        if unsafe { (*dp).df_count[i] } > 0 {
-            let _ = unsafe {
-                diff_write_buffer(
-                    tp.used_diffbuf(i),
-                    &raw mut images[ndiffs],
-                    (*dp).df_lnum[i],
-                    (*dp).df_lnum[i] + (*dp).df_count[i] - 1,
-                )
-            };
+        let (lnum, count) = unsafe { ((*dp).df_lnum[i], (*dp).df_count[i]) };
+        if count > 0 {
+            diff_write_buffer(
+                tp.used_diffbuf(i),
+                &mut images[ndiffs],
+                lnum,
+                lnum + count - 1,
+            );
         }
-        lengths[ndiffs] = unsafe { (*dp).df_count[i] };
+        lengths[ndiffs] = count;
         ndiffs += 1;
     }
 
     let iwhite = diff_flags.get() & (DIFF_IWHITEALL | DIFF_IWHITE) != 0;
-    // `diff_write_buffer` leaves an empty block as a NULL pointer, which
-    // `from_raw_parts` may not see; those axes have zero length anyway.
-    let mut blocks: [&[u8]; DB_COUNT as usize] = [&[]; DB_COUNT as usize];
-    for (block, image) in blocks.iter_mut().zip(&images[..ndiffs]) {
-        if !image.ptr.is_null() {
-            let size = usize::try_from(image.size).expect("a diff image length is never negative");
-            *block = unsafe { ::core::slice::from_raw_parts(image.ptr.cast(), size) };
-        }
-    }
+    let blocks: [&[u8]; DB_COUNT as usize] = ::core::array::from_fn(|i| images[i].as_slice());
     let decisions = linematch_nbuffers(&blocks[..ndiffs], &lengths[..ndiffs], iwhite);
-
-    for image in &mut images[..ndiffs] {
-        unsafe { xfree(image.ptr.cast()) };
-        image.ptr = ::core::ptr::null_mut();
-    }
+    drop(images);
     unsafe { apply_linematch_results(dp, &decisions) };
 }

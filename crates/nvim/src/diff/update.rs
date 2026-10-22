@@ -14,7 +14,6 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::cstr;
 use crate::ex_docmd::{cmdmod_add_flags, cmdmod_flags, cmdmod_set_flags};
 use crate::memline::MlFlags;
 use crate::os::cshim::gettext_ptr;
@@ -22,7 +21,6 @@ use crate::types::{Failed, NUL};
 use crate::winlayer::{Buf, Live, TabPage, Win};
 use core::ffi::CStr;
 use core::ffi::{c_char, c_int};
-use core::mem::offset_of;
 
 /// One block of a tab page's diff list, as a pointer the caller has promised
 /// is live.
@@ -114,87 +112,58 @@ pub(crate) fn diff_still_listed(dp: *mut DiffBlock) -> bool {
 
 /// Release one side of a diff: the temp file if there is one, else the
 /// memory image.
-///
-/// # Safety
-/// `din` must be a live input side of a diff run.
-unsafe fn clear_diffin(din: *mut DiffIn) {
-    // SAFETY: the caller's input side.
-    let mut din = unsafe { Live::<DiffIn>::new(din) };
-    if din.din_fname.is_null() {
-        // SAFETY: the memory image is this module's own allocation.
-        unsafe { xfree(din.din_mmfile.ptr.cast()) };
-        din.din_mmfile.ptr = ::core::ptr::null_mut();
-    } else {
-        // SAFETY: one of this module's own temp file names.
-        unsafe { os_remove(cstr::at(din.din_fname)) };
+fn clear_diffin(din: &mut DiffIn) {
+    match &din.fname {
+        None => din.text = Vec::new(),
+        Some(name) => {
+            os_remove(name.as_cstr());
+        }
     }
 }
 
 /// Release the diff's output: the temp file if there is one, else the hunk
 /// array.
-///
-/// # Safety
-/// `dout` must be a live output side of a diff run.
-pub(crate) unsafe fn clear_diffout(dout: *mut DiffOut) {
-    // SAFETY: the caller's output side.
-    let mut dout = unsafe { Live::<DiffOut>::new(dout) };
-    if dout.dout_fname.is_null() {
-        dout.dout_ga = Vec::new();
-    } else {
-        // SAFETY: one of this module's own temp file names.
-        unsafe { os_remove(cstr::at(dout.dout_fname)) };
+fn clear_diffout(dout: &mut DiffOut) {
+    match &dout.fname {
+        None => dout.hunks = Vec::new(),
+        Some(name) => {
+            os_remove(name.as_cstr());
+        }
     }
 }
 
-/// Write lines `start`..`end` of `buffer` into a memory image for `xdl_diff`.
+/// Write lines `start`..`end` of `buffer` into `out` as one memory image for
+/// the internal engine.
 ///
 /// The image is one NL-terminated line after another.  A NL *inside* a line
 /// stands for a NUL byte in the file -- `ml_get_buf` answers the two swapped
 /// -- and is written back as one, so the terminators are unambiguous.
 /// `icase` is applied here, by folding each character, because xdiff has no
 /// flag for it.
-///
-/// # Safety
-/// `m` must be a writable `mmfile_t`.
-pub(crate) unsafe fn diff_write_buffer(
-    buffer: Buf,
-    m: *mut mmfile_t,
-    start: LineNr,
-    mut end: LineNr,
-) -> Result<(), Failed> {
+pub(crate) fn diff_write_buffer(buffer: Buf, out: &mut Vec<u8>, start: LineNr, mut end: LineNr) {
+    out.clear();
     if end < 0 {
         end = buffer.b_ml.ml_line_count;
     }
     if buffer.b_ml.ml_flags.has(MlFlags::EMPTY) || end < start {
-        // SAFETY: the caller's out-parameter.
-        unsafe { *m = MMFILE_INIT };
-        return Ok(());
+        return;
     }
 
     let mut lines = buffer.lines();
     let len = (start..=end)
         .map(|lnum| lines.line(lnum).len() + 1)
         .sum::<usize>();
-    // SAFETY: `xmalloc` aborts rather than answer null.
-    let ptr = unsafe { xmalloc(len) }.cast::<c_char>();
-    let image = mmfile_t {
-        ptr,
-        size: len as c_int,
-    };
-    // SAFETY: the caller's out-parameter.
-    unsafe { *m = image };
-    // SAFETY: `len` bytes were just allocated, and nothing else holds them
-    // until the caller frees the image.
-    let out = unsafe { ::core::slice::from_raw_parts_mut(ptr.cast::<u8>(), len) };
+    out.resize(len, 0);
 
     let mut at = 0;
     for lnum in start..=end {
         let line = lines.line(lnum);
         if diff_flags.get() & DIFF_ICASE == 0 {
-            out[at..at + line.len()].copy_from_slice(line);
-            let from = out[at..].as_mut_ptr().cast();
-            // SAFETY: the `line.len()` bytes just copied to `at`.
-            unsafe { memchrsub(from, NL as c_char, NUL as c_char, line.len()) };
+            let copy = &mut out[at..at + line.len()];
+            copy.copy_from_slice(line);
+            for byte in copy.iter_mut().filter(|byte| **byte == NL as u8) {
+                *byte = 0;
+            }
             at += line.len();
         } else {
             at += fold_line(line, &mut out[at..]);
@@ -202,7 +171,6 @@ pub(crate) unsafe fn diff_write_buffer(
         out[at] = NL as u8;
         at += 1;
     }
-    Ok(())
 }
 
 /// Copy `line` into `out` with every character case-folded, answering how
@@ -246,26 +214,20 @@ fn fold_line(line: &[u8], out: &mut [u8]) -> usize {
     at
 }
 
-/// Write lines `start`..`end` of `buffer` out for the external diff.
+/// Write lines `start`..`end` of `buffer` out for the diff.
 ///
-/// The internal engine wants a memory image, which is what `din_fname` being
-/// NULL selects; otherwise the lines go through a temp file.
-///
-/// # Safety
-/// `din` must be a live input side.
-unsafe fn diff_write(
+/// The internal engine wants a memory image, which is what `din.fname`
+/// being `None` selects; otherwise the lines go through a temp file.
+fn diff_write(
     mut buffer: Buf,
-    din: *mut DiffIn,
+    din: &mut DiffIn,
     start: LineNr,
     mut end: LineNr,
 ) -> Result<(), Failed> {
-    // SAFETY: the caller's input side.
-    let din = unsafe { Live::<DiffIn>::new(din) };
-    if din.din_fname.is_null() {
-        let image = din.field_ptr(offset_of!(DiffIn, din_mmfile));
-        // SAFETY: the caller's buffer, and `din`'s own image field.
-        return unsafe { diff_write_buffer(buffer, image, start, end) };
-    }
+    let Some(name) = &din.fname else {
+        diff_write_buffer(buffer, &mut din.text, start, end);
+        return Ok(());
+    };
     // Writing a buffer runs `aucmd_prepbuf`/`aucmd_restbuf`, which can
     // change the window layout -- and re-entering `winframe_remove` is a
     // use after free.
@@ -293,10 +255,16 @@ unsafe fn diff_write(
         buffer.b_ml.ml_flags |= MlFlags::EMPTY;
     }
     let req = WriteRequest::filter();
-    // SAFETY: one of this module's temp file names, NUL-terminated and
-    // alive for the call; no short name and no `ExArg` are wanted.
-    let name = unsafe { cstr::at(din.din_fname) };
-    let r = buf_write(buffer, WriteName::Other(name), None, start, end, None, req);
+    // No short name and no `ExArg` are wanted.
+    let r = buf_write(
+        buffer,
+        WriteName::Other(name.as_cstr()),
+        None,
+        start,
+        end,
+        None,
+        req,
+    );
     cmdmod_set_flags(CmdModFlags::SANDBOX.when(save_cmod_flags));
     // The forced "unix" goes when the saved value moves back in.
     buffer.b_p_ff = save_ff;
@@ -312,30 +280,20 @@ unsafe fn diff_write(
 /// `anchor` the whole thing runs once per segment between anchors, and the
 /// segments' block lists are shifted back into place and chained together.
 ///
-/// # Safety
-/// `dio` must be a live diff run, and `excmd` null or a live command.
-unsafe fn diff_try_update(dio: *mut DiffIo, idx_orig: c_int, excmd: Option<&mut ExArg>) {
-    // SAFETY: the caller's diff run.
-    let mut dio = unsafe { Live::<DiffIo>::new(dio) };
-    let orig_in: *mut DiffIn = dio.field_ptr(offset_of!(DiffIo, dio_orig));
-    let new_in: *mut DiffIn = dio.field_ptr(offset_of!(DiffIo, dio_new));
-    let diff_out: *mut DiffOut = dio.field_ptr(offset_of!(DiffIo, dio_diff));
+fn diff_try_update(dio: &mut DiffIo, idx_orig: c_int, excmd: Option<&mut ExArg>) {
     let mut tp = TabPage::current();
     let idx_orig = idx_orig as usize;
     let mut anchors = [[0 as LineNr; MAX_DIFF_ANCHORS as usize]; DB_COUNT as usize];
     'theend: {
-        if dio.dio_internal != 0 {
-            dio.dio_diff.dout_ga.clear();
+        if dio.internal {
+            dio.diff.hunks.clear();
         } else {
-            let temp = || temp_name().map_or(core::ptr::null_mut(), XString::into_raw);
-            dio.dio_orig.din_fname = temp();
-            dio.dio_new.din_fname = temp();
-            dio.dio_diff.dout_fname = temp();
-            if dio.dio_orig.din_fname.is_null()
-                || dio.dio_new.din_fname.is_null()
-                || dio.dio_diff.dout_fname.is_null()
-                // SAFETY: the caller's diff run.
-                || unsafe { check_external_diff(dio.raw()) }.is_err()
+            dio.orig.fname = temp_name();
+            dio.new.fname = temp_name();
+            dio.diff.fname = temp_name();
+            if dio
+                .temp_names()
+                .is_none_or(|names| check_external_diff(names).is_err())
             {
                 break 'theend;
             }
@@ -414,8 +372,7 @@ unsafe fn diff_try_update(dio: *mut DiffIo, idx_orig: c_int, excmd: Option<&mut 
             };
 
             let (start, end) = segment(idx_orig);
-            // SAFETY: a live buffer of the diff, and `dio`'s own input side.
-            let wrote = unsafe { diff_write(tp.used_diffbuf(idx_orig), orig_in, start, end) };
+            let wrote = diff_write(tp.used_diffbuf(idx_orig), &mut dio.orig, start, end);
             if wrote.is_err() {
                 if !orig_diff.is_null() {
                     tp.tp_first_diff = orig_diff;
@@ -429,17 +386,13 @@ unsafe fn diff_try_update(dio: *mut DiffIo, idx_orig: c_int, excmd: Option<&mut 
                     continue;
                 };
                 let (start, end) = segment(idx_new);
-                // SAFETY: a live buffer, and `dio`'s own sides.
-                if unsafe { diff_write(buf, new_in, start, end) }.is_ok()
-                    && unsafe { diff_file(dio.raw()) }.is_ok()
-                {
-                    unsafe { diff_read(idx_orig as c_int, idx_new as c_int, dio.raw()) };
-                    unsafe { clear_diffin(new_in) };
-                    unsafe { clear_diffout(diff_out) };
+                if diff_write(buf, &mut dio.new, start, end).is_ok() && diff_file(dio).is_ok() {
+                    diff_read(idx_orig as c_int, idx_new as c_int, dio);
+                    clear_diffin(&mut dio.new);
+                    clear_diffout(&mut dio.diff);
                 }
             }
-            // SAFETY: `dio`'s own input side.
-            unsafe { clear_diffin(orig_in) };
+            clear_diffin(&mut dio.orig);
 
             if anchor_i == 0 {
                 continue;
@@ -466,10 +419,9 @@ unsafe fn diff_try_update(dio: *mut DiffIo, idx_orig: c_int, excmd: Option<&mut 
             }
         }
     }
-    // SAFETY: `dio`'s own temp file names, or null.
-    unsafe { xfree(dio.dio_orig.din_fname.cast()) };
-    unsafe { xfree(dio.dio_new.din_fname.cast()) };
-    unsafe { xfree(dio.dio_diff.dout_fname.cast()) };
+    dio.orig.fname = None;
+    dio.new.fname = None;
+    dio.diff.fname = None;
 }
 
 /// Whether the built-in diff engine is what a recompute would use.
@@ -510,18 +462,11 @@ pub(crate) fn diff_update(excmd: Option<&mut ExArg>) {
         .find(|&i| tp.tp_diffbuf[i as usize].is_some())
         .filter(|&idx_orig| (idx_orig + 1..DB_COUNT).any(|i| tp.tp_diffbuf[i as usize].is_some()));
     if let Some(idx_orig) = first_two {
-        let internal = diff_internal();
         let mut diffio = DiffIo {
-            dio_orig: DIFFIN_INIT,
-            dio_new: DIFFIN_INIT,
-            dio_diff: DiffOut {
-                dout_fname: ::core::ptr::null_mut(),
-                dout_ga: Vec::new(),
-            },
-            dio_internal: internal,
+            internal: diff_internal() != 0,
+            ..DiffIo::default()
         };
-        // SAFETY: `diffio` is a local, and `excmd` is the caller's command.
-        unsafe { diff_try_update(&raw mut diffio, idx_orig, excmd) };
+        diff_try_update(&mut diffio, idx_orig, excmd);
         Win::current().w_valid_cursor.lnum = 0;
     }
 

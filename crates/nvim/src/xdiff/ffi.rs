@@ -5,7 +5,8 @@
 //! `mmbuffer_t`, `xpparam_t`, `xdemitconf_t` and `xdemitcb_t` — keep their C
 //! layout because `diff.rs` and `lua/xdiff.rs` build them. This module reads
 //! them once, at [`xdl_diff`], and hands the engine the safe mirrors in
-//! [`super::xtypes`]; results go back out through [`Emit`].
+//! [`super::xtypes`]; results go back out through [`Emit`]. [`diff_hunks`] is
+//! the same engine for a caller holding slices, with no C struct at all.
 //!
 //! There are exactly three reasons this module is not safe: turning an
 //! `mmfile_t` into a slice, calling a caller-supplied `extern "C"` callback,
@@ -72,34 +73,56 @@ unsafe fn file_bytes<'a>(mf: *const mmfile_t) -> &'a [u8] {
     }
 }
 
-/// `xdemitcb_t` plus `xdemitconf_t.hunk_func`: the three ways the engine
-/// reports a result, behind safe methods.
+/// Where the engine reports a result: a C caller's `xdemitcb_t` plus
+/// `xdemitconf_t.hunk_func`, or a Rust caller's hunk closure.
 ///
 /// Holding the `xdemitcb_t` by shared reference is what keeps the function
 /// pointers out of this module's own types. It is sound because nothing
-/// writes the block during a diff — both callers build it on their stack and
-/// hand the callbacks a *separate* `priv` pointer to accumulate into.
-pub(crate) struct Emit<'a> {
-    cb: &'a xdemitcb_t,
-    hunk_func: xdl_emit_hunk_consume_func_t,
+/// writes the block during a diff — every C caller builds it on its stack and
+/// hands the callbacks a *separate* `priv` pointer to accumulate into.
+pub(crate) enum Emit<'a> {
+    /// `xdl_diff`'s callbacks.
+    C {
+        cb: &'a xdemitcb_t,
+        hunk_func: xdl_emit_hunk_consume_func_t,
+    },
+    /// [`diff_hunks`]'s closure: hunk extents only, never a line.
+    Hunks(&'a mut dyn FnMut(i64, i64, i64, i64) -> XdResult),
 }
 
 impl Emit<'_> {
-    /// Did the caller install `xdemitconf_t.hunk_func`? That is what picks
-    /// between the unified-diff writer and the hunk-extent walk, and both
-    /// `:diffupdate` and `vim.diff{on_hunk=}` take it.
+    /// Is there a hunk consumer? That is what picks between the
+    /// unified-diff writer and the hunk-extent walk, and `:diffupdate`,
+    /// the inline refiner and `vim.diff{on_hunk=}` all take it.
     pub(crate) fn has_hunk_func(&self) -> bool {
-        self.hunk_func.is_some()
+        match self {
+            Emit::C { hunk_func, .. } => hunk_func.is_some(),
+            Emit::Hunks(_) => true,
+        }
     }
 
     /// Did the caller install `xdemitcb_t.out_hunk`? Nothing in nvim does,
     /// but the field is public and a caller that sets it wants its headers.
     pub(crate) fn has_out_hunk(&self) -> bool {
-        self.cb.out_hunk.is_some()
+        matches!(self, Emit::C { cb, .. } if cb.out_hunk.is_some())
     }
 
     /// `ecb->out_line`, with each part as one `mmbuffer_t`.
     pub(crate) fn line(&mut self, parts: &[&[u8]]) -> XdResult {
+        // Upstream calls through the pointer unconditionally; every caller
+        // that can reach an emit path installs it.
+        let Emit::C {
+            cb:
+                xdemitcb_t {
+                    out_line: Some(out_line),
+                    priv_0,
+                    ..
+                },
+            ..
+        } = self
+        else {
+            return Err(Aborted);
+        };
         let mut bufs: [mmbuffer_t; 3] = core::array::from_fn(|_| mmbuffer_t {
             ptr: core::ptr::null_mut(),
             size: 0,
@@ -108,12 +131,7 @@ impl Emit<'_> {
             buf.ptr = part.as_ptr().cast::<c_char>().cast_mut();
             buf.size = part.len() as c_int;
         }
-        // Upstream calls through the pointer unconditionally; every caller
-        // that can reach an emit path installs it.
-        let Some(out_line) = self.cb.out_line else {
-            return Err(Aborted);
-        };
-        let rc = unsafe { out_line(self.cb.priv_0, bufs.as_mut_ptr(), parts.len() as c_int) };
+        let rc = unsafe { out_line(*priv_0, bufs.as_mut_ptr(), parts.len() as c_int) };
         if rc < 0 { Err(Aborted) } else { Ok(()) }
     }
 
@@ -121,12 +139,21 @@ impl Emit<'_> {
     /// `XDL_EMIT_FUNCNAMES` machinery is `#if 0`-ed out of the vendored
     /// source, so `xdl_emit_diff`'s `func_line.len` never leaves zero.
     pub(crate) fn out_hunk(&mut self, s1: i64, c1: i64, s2: i64, c2: i64) -> XdResult {
-        let Some(out_hunk) = self.cb.out_hunk else {
+        let Emit::C {
+            cb:
+                xdemitcb_t {
+                    out_hunk: Some(out_hunk),
+                    priv_0,
+                    ..
+                },
+            ..
+        } = self
+        else {
             return Err(Aborted);
         };
         let rc = unsafe {
             out_hunk(
-                self.cb.priv_0,
+                *priv_0,
                 s1 as c_long,
                 c1 as c_long,
                 s2 as c_long,
@@ -138,7 +165,8 @@ impl Emit<'_> {
         if rc < 0 { Err(Aborted) } else { Ok(()) }
     }
 
-    /// `xecfg->hunk_func`, called with `ecb->priv` as upstream does.
+    /// `xecfg->hunk_func`, called with `ecb->priv` as upstream does, or the
+    /// closure.
     pub(crate) fn hunk(
         &mut self,
         start_a: i64,
@@ -146,8 +174,15 @@ impl Emit<'_> {
         start_b: i64,
         count_b: i64,
     ) -> XdResult {
-        let Some(hunk_func) = self.hunk_func else {
-            return Err(Aborted);
+        let (hunk_func, priv_0) = match self {
+            Emit::Hunks(on_hunk) => return on_hunk(start_a, count_a, start_b, count_b),
+            Emit::C {
+                hunk_func: Some(hunk_func),
+                cb,
+            } => (*hunk_func, cb.priv_0),
+            Emit::C {
+                hunk_func: None, ..
+            } => return Err(Aborted),
         };
         let rc = unsafe {
             hunk_func(
@@ -155,11 +190,35 @@ impl Emit<'_> {
                 count_a as c_int,
                 start_b as c_int,
                 count_b as c_int,
-                self.cb.priv_0,
+                priv_0,
             )
         };
         if rc < 0 { Err(Aborted) } else { Ok(()) }
     }
+}
+
+/// Diff `text1` against `text2` with the `XDF_*` bits `flags` and no context,
+/// reporting each hunk's zero-based start and count on either side to
+/// `on_hunk`.
+///
+/// The safe front `xdl_diff`'s C interface sits in front of, for callers that
+/// hold the texts as slices and want the extents rather than a patch.
+pub(crate) fn diff_hunks(
+    text1: &[u8],
+    text2: &[u8],
+    flags: u64,
+    on_hunk: &mut dyn FnMut(i64, i64, i64, i64) -> XdResult,
+) -> XdResult {
+    let params = Params {
+        flags,
+        anchors: Vec::new(),
+    };
+    let conf = EmitConf {
+        ctxlen: 0,
+        interhunkctxlen: 0,
+        flags: 0,
+    };
+    diff(text1, text2, &params, &conf, &mut Emit::Hunks(on_hunk))
 }
 
 /// `xdl_diff`: diff `mf1` against `mf2` and report through `ecb`.
@@ -215,7 +274,7 @@ pub(crate) unsafe fn xdl_diff(
         interhunkctxlen: xecfg.interhunkctxlen,
         flags: xecfg.flags,
     };
-    let mut emit = Emit {
+    let mut emit = Emit::C {
         cb,
         hunk_func: xecfg.hunk_func,
     };

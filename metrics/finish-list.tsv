@@ -86,19 +86,19 @@ decoration/	decoration/signs.rs	1	8	3	3	expr:5	other:6	-	at_opt:1
 decoration/	decoration/state.rs	1	24	6	22	ref:2	other:6	other:1	from_raw_parts_mut:2 xfree:2 hl_add_url:1 marktree_get_altpos:1 marktree_itr_current:1 marktree_itr_get:1 marktree_itr_get_overlap:1 marktree_itr_next:1
 decoration_provider.rs	*	1	17	3	11	deref:2 expr:2 compound:1	str:3 other:1	other:1	decor_check_to_be_deleted:1 nlua_call_ref:1
 decoration_provider.rs	decoration_provider.rs	1	17	3	11	deref:2 expr:2 compound:1	str:3 other:1	other:1	decor_check_to_be_deleted:1 nlua_call_ref:1
-diff/	*	12	382	37	157	deref:163 expr:13 compound:2 ref:2	other:47 str:8	other:2	Live::new:9 starts_with:8 getdigits_int:7 os_remove:6 xfree:6 .offset:5 bytes_at:4 fclose:4
+diff/	*	12	321	26	120	deref:147 expr:8 ref:2 compound:1	other:36 str:8	other:2	starts_with:8 getdigits_int:7 .offset:5 Live::new:5 bytes_at:4 fclose:4 os_fopen:4 utf_ptr2char:4
 diff/	diff/block.rs	1	74	8	8	deref:62 expr:1 ref:1	other:11	other:2	-
 diff/	diff/compare.rs	1	11	1	7	deref:3 expr:1	other:1	-	tolower:2 utf_ptr2char:2 utfc_ptr2len:2
-diff/	diff/engine.rs	1	36	4	21	deref:10 expr:2 compound:1	other:3	-	fclose:3 os_fopen:3 os_remove:3 fwrite:2 starts_with:2 append_redir:1 call_shell:1 os_env_exists:1
+diff/	diff/engine.rs	1	14	0	14	-	-	-	fclose:3 os_fopen:3 fwrite:2 starts_with:2 call_shell:1 os_env_exists:1 os_unsetenv:1 vim_fgets:1
 diff/	diff/excmd.rs	1	21	0	12	expr:2 compound:1	str:5	-	bytes_at:4 at:1 call_shell:1 emsg:1 os_chdir:1 os_fileinfo:1 os_fileinfo_size:1 os_remove:1
 diff/	diff/fold.rs	1	4	1	3	deref:1	other:1	-	-
 diff/	diff/getput.rs	1	5	0	5	-	str:1	-	emsg:1
-diff/	diff/hunk.rs	1	99	6	35	deref:53 expr:3	other:8 str:2	-	getdigits_int:6 starts_with:6 .offset:5 vim_fgets:3 .add:2 getdigits_int32:2 fclose:1 os_fopen:1
+diff/	diff/hunk.rs	1	94	4	34	deref:51 expr:1	other:5 str:2	-	getdigits_int:6 starts_with:6 .offset:5 vim_fgets:3 .add:2 getdigits_int32:2 fclose:1 os_fopen:1
 diff/	diff/inline.rs	1	14	2	9	deref:5	other:5	-	Live::new:5
-diff/	diff/lmatch.rs	1	16	3	4	deref:11 expr:1	other:3	-	xfree:1
+diff/	diff/lmatch.rs	1	12	3	2	deref:9 expr:1	other:3	-	-
 diff/	diff/opts.rs	1	6	1	4	deref:2	other:2	-	.add:1 .offset_from:1 getdigits_int:1
-diff/	diff/refine.rs	1	57	5	14	deref:14 expr:1 ref:1	other:6	-	mb_get_class_tab:1 utf_char2bytes:1 utf_ptr2char:1 utfc_ptr2len:1
-diff/	diff/update.rs	1	39	6	35	deref:2 expr:2	other:7	-	Live::new:4 xfree:4 os_remove:2 Self::new:1 at:1 emsg:1 memchrsub:1 utf_char2bytes:1
+diff/	diff/refine.rs	1	53	5	10	deref:14 expr:1 ref:1	other:6	-	mb_get_class_tab:1 utf_char2bytes:1 utf_ptr2char:1 utfc_ptr2len:1
+diff/	diff/update.rs	1	13	1	12	expr:1	other:2	-	Self::new:1 emsg:1 utf_char2bytes:1 utf_ptr2char:1 utfc_ptr2len:1
 drawline/	*	10	277	18	132	deref:126 expr:8 ref:2	other:9	-	.offset:18 .offset_from:12 .add:7 bytes_at:7 utfc_ptr2len:7 utf_ptr2cells:6 rl_mirror_ascii:3 utfc_ptr2schar:3
 drawline/	drawline/attrs.rs	1	11	0	8	deref:3	-	-	utf_ptr2cells:3 .offset:1 .offset_from:1 diff_change_parse:1 utfc_ptr2len:1
 drawline/	drawline/cells.rs	1	7	0	6	deref:1	-	-	xfree:2 .offset:1 .offset_from:1 clear_virttext:1

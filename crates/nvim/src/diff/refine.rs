@@ -410,15 +410,11 @@ fn change_for(new_diff: &DiffBlock, linemap: &LineMap) -> DiffLineChange {
 /// `dp` must point at a live diff block, unaliased for the call.
 pub(crate) unsafe fn diff_find_change_inline_diff(dp: *mut DiffBlock) {
     let save_diff_algorithm = diff_algorithm.get();
+    // The inline diff only supports the internal algorithm; its two sides
+    // are `file1`/`file2` below rather than the run's own images.
     let mut dio = DiffIo {
-        dio_orig: DIFFIN_INIT,
-        dio_new: DIFFIN_INIT,
-        dio_diff: DiffOut {
-            dout_fname: ::core::ptr::null_mut(),
-            dout_ga: Vec::new(),
-        },
-        // The inline diff only supports the internal algorithm.
-        dio_internal: 1,
+        internal: true,
+        ..DiffIo::default()
     };
     // Always slide diff splits along whitespace.
     diff_algorithm.set(save_diff_algorithm | XDF_INDENT_HEURISTIC);
@@ -436,7 +432,7 @@ pub(crate) unsafe fn diff_find_change_inline_diff(dp: *mut DiffBlock) {
 
     'done: {
         for (i, map) in linemap.iter_mut().enumerate() {
-            dio.dio_diff.dout_ga.clear();
+            dio.diff.hunks.clear();
             let Some(buf) = tp.diffbuf(i).filter(|b| b.b_ml.ml_mfp.is_some()) else {
                 continue; // not loaded
             };
@@ -472,19 +468,10 @@ pub(crate) unsafe fn diff_find_change_inline_diff(dp: *mut DiffBlock) {
             if first {
                 continue;
             }
-            dio.dio_orig.din_mmfile = mmfile_t {
-                ptr: file1.as_mut_ptr().cast(),
-                size: file1.len() as c_int,
-            };
-            dio.dio_new.din_mmfile = mmfile_t {
-                ptr: file2.as_mut_ptr().cast(),
-                size: file2.len() as c_int,
-            };
-            if unsafe { diff_file_internal(&raw mut dio) }.is_err() {
+            if diff_file_internal(&file1, &file2, &mut dio.diff.hunks).is_err() {
                 break 'done;
             }
-            unsafe { diff_read(0, i as c_int, &raw mut dio) };
-            unsafe { clear_diffout(&raw mut dio.dio_diff) };
+            diff_read(0, i as c_int, &dio);
         }
 
         let head = tp.tp_first_diff;
@@ -510,7 +497,4 @@ pub(crate) unsafe fn diff_find_change_inline_diff(dp: *mut DiffBlock) {
     diff_clear(tp);
     tp.tp_first_diff = orig_diff;
     tp.tp_diffbuf = orig_diffbuf;
-    // `dio.dio_orig`/`dio_new` point into `file1`/`file2`, which go out of
-    // scope here; only the hunk array is separately owned.
-    unsafe { clear_diffout(&raw mut dio.dio_diff) };
 }
