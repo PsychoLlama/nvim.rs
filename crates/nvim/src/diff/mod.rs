@@ -41,7 +41,7 @@ use crate::autocmd::{
 use crate::buffer::{buf_get_changedtick, buf_is_empty, buf_is_prompt, current_buf, find_buf};
 use crate::bufwrite::{WriteName, WriteRequest, buf_write};
 use crate::change::{change_warning, changed_lines};
-use crate::charset::{getdigits_int, getdigits_int32};
+use crate::charset::getdigits_int;
 use crate::cursor::check_cursor;
 use crate::decoration::decor_conceal_line;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, UPD_VALID, redraw_later};
@@ -50,7 +50,7 @@ use crate::eval::vars::{eval_diff, eval_patch};
 use crate::ex_cmds::{append_redir, ex_file};
 use crate::ex_docmd::{do_cmdline_cmd, do_exedit, get_address};
 use crate::extmark::extmark_adjust;
-use crate::fileio::{buf_check_timestamp, shorten_fnames, temp_name, vim_fgets, vim_gettempdir};
+use crate::fileio::{buf_check_timestamp, shorten_fnames, temp_name, vim_gettempdir};
 use crate::fold::{
     fold_update, fold_update_all, foldmethod_is_diff, foldmethod_is_manual, new_fold_level,
 };
@@ -81,7 +81,7 @@ use crate::option::{OptionTarget, set_option_direct_for, set_option_value_give_e
 use crate::options::{kOptBoFlagOperator, kOptDiff, kOptFoldmethod};
 use crate::os::cshim::gettext;
 use crate::os::env::{os_env_exists, os_unsetenv};
-use crate::os::fs::{os_chdir, os_dirname, os_fileinfo, os_fileinfo_size, os_fopen, os_remove};
+use crate::os::fs::{os_chdir, os_dirname, os_fileinfo, os_fileinfo_size, os_remove};
 use crate::os::shell::{ShellOpts, call_shell};
 use crate::pos::{MAXCOL, MAXLNUM};
 use crate::search::{BACKWARD, FORWARD};
@@ -90,7 +90,7 @@ use crate::types::AutoEvent;
 use crate::types::NL;
 use crate::types::{
     AcoSave, CmdAddr, CmdModFlags, ColNr, DiffBlock, DiffLine, DiffLineChange, EvalFuncData, ExArg,
-    ExtmarkOp, FILE, FileInfo, Hlf, LineNr, OptInt, OptScope, OptVal, ScriptId, String_0, TypVal,
+    ExtmarkOp, FileInfo, Hlf, LineNr, OptInt, OptScope, OptVal, ScriptId, String_0, TypVal,
     VarNumber, size_t, uint64_t,
 };
 use crate::ui::vim_beep;
@@ -103,7 +103,7 @@ use crate::xdiff::xtypes::{
     XDF_IGNORE_WHITESPACE_AT_EOL, XDF_IGNORE_WHITESPACE_CHANGE, XDF_INDENT_HEURISTIC,
     XDF_NEED_MINIMAL, XDF_PATIENCE_DIFF,
 };
-use ::libc::{fclose, fwrite, tolower};
+use ::libc::tolower;
 
 // The carve of the transpiled module; see each child's docs.
 mod block;

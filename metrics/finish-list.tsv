@@ -73,8 +73,8 @@ channel/	channel/reader.rs	1	54	12	24	deref:23 expr:5 ref:2	other:17 str:4 void:
 channel/	channel/term.rs	1	26	7	13	deref:9 expr:4	void:5 other:1 pp:1 str:1	-	multiqueue_put_event:2 proc_stop:1 pty_proc_resize:1 pty_proc_resume:1 rstream_start_inner:1 rstream_stop_inner:1 terminal_destroy:1 wstream_write:1
 charset/	*	1	49	25	30	deref:10 expr:2 compound:1	str:24 other:6 pp_str:4	str:10	bytes_at:5 from_raw_parts_mut:3 prefix_at:3 from_raw_parts:2 slice_at:2 utf_ptr2cells:1
 charset/	charset/walk.rs	1	49	25	30	deref:10 expr:2 compound:1	str:24 other:6 pp_str:4	str:10	bytes_at:5 from_raw_parts_mut:3 prefix_at:3 from_raw_parts:2 slice_at:2 utf_ptr2cells:1
-cstr.rs	*	1	17	9	10	deref:5 expr:2	str:11	-	CStr::from_ptr:3 from_raw_parts:3 CStr::from_bytes_with_nul_unchecked:1
-cstr.rs	cstr.rs	1	17	9	10	deref:5 expr:2	str:11	-	CStr::from_ptr:3 from_raw_parts:3 CStr::from_bytes_with_nul_unchecked:1
+cstr.rs	*	1	16	8	10	deref:4 expr:2	str:10	-	CStr::from_ptr:3 from_raw_parts:3 CStr::from_bytes_with_nul_unchecked:1
+cstr.rs	cstr.rs	1	16	8	10	deref:4 expr:2	str:10	-	CStr::from_ptr:3 from_raw_parts:3 CStr::from_bytes_with_nul_unchecked:1
 cursor_shape.rs	*	1	7	2	4	compound:1	str:2	-	cstr_to_string:2
 cursor_shape.rs	cursor_shape.rs	1	7	2	4	compound:1	str:2	-	cstr_to_string:2
 decoration/	*	6	126	25	57	deref:40 expr:19 ref:10	other:23	other:10	xfree:8 from_raw_parts_mut:2 .copy_from_nonoverlapping:1 CStr::from_ptr:1 Object::string:1 at_opt:1 from_raw_parts:1 hl_add_url:1
@@ -86,14 +86,14 @@ decoration/	decoration/signs.rs	1	8	3	3	expr:5	other:6	-	at_opt:1
 decoration/	decoration/state.rs	1	24	6	22	ref:2	other:6	other:1	from_raw_parts_mut:2 xfree:2 hl_add_url:1 marktree_get_altpos:1 marktree_itr_current:1 marktree_itr_get:1 marktree_itr_get_overlap:1 marktree_itr_next:1
 decoration_provider.rs	*	1	17	3	11	deref:2 expr:2 compound:1	str:3 other:1	other:1	decor_check_to_be_deleted:1 nlua_call_ref:1
 decoration_provider.rs	decoration_provider.rs	1	17	3	11	deref:2 expr:2 compound:1	str:3 other:1	other:1	decor_check_to_be_deleted:1 nlua_call_ref:1
-diff/	*	12	321	26	120	deref:147 expr:8 ref:2 compound:1	other:36 str:8	other:2	starts_with:8 getdigits_int:7 .offset:5 Live::new:5 bytes_at:4 fclose:4 os_fopen:4 utf_ptr2char:4
+diff/	*	12	257	23	81	deref:131 expr:7 ref:2 compound:1	other:31 str:6	other:2	Live::new:5 bytes_at:4 utf_ptr2char:4 utfc_ptr2len:4 emsg:3 call_shell:2 tolower:2 utf_char2bytes:2
 diff/	diff/block.rs	1	74	8	8	deref:62 expr:1 ref:1	other:11	other:2	-
 diff/	diff/compare.rs	1	11	1	7	deref:3 expr:1	other:1	-	tolower:2 utf_ptr2char:2 utfc_ptr2len:2
-diff/	diff/engine.rs	1	14	0	14	-	-	-	fclose:3 os_fopen:3 fwrite:2 starts_with:2 call_shell:1 os_env_exists:1 os_unsetenv:1 vim_fgets:1
+diff/	diff/engine.rs	1	3	0	3	-	-	-	call_shell:1 os_env_exists:1 os_unsetenv:1
 diff/	diff/excmd.rs	1	21	0	12	expr:2 compound:1	str:5	-	bytes_at:4 at:1 call_shell:1 emsg:1 os_chdir:1 os_fileinfo:1 os_fileinfo_size:1 os_remove:1
 diff/	diff/fold.rs	1	4	1	3	deref:1	other:1	-	-
 diff/	diff/getput.rs	1	5	0	5	-	str:1	-	emsg:1
-diff/	diff/hunk.rs	1	94	4	34	deref:51 expr:1	other:5 str:2	-	getdigits_int:6 starts_with:6 .offset:5 vim_fgets:3 .add:2 getdigits_int32:2 fclose:1 os_fopen:1
+diff/	diff/hunk.rs	1	41	1	6	deref:35	-	-	-
 diff/	diff/inline.rs	1	14	2	9	deref:5	other:5	-	Live::new:5
 diff/	diff/lmatch.rs	1	12	3	2	deref:9 expr:1	other:3	-	-
 diff/	diff/opts.rs	1	6	1	4	deref:2	other:2	-	.add:1 .offset_from:1 getdigits_int:1
@@ -126,8 +126,6 @@ eval/	eval/typval/handle.rs	1	67	10	30	expr:16 ref:9 deref:4 compound:2	value:7	
 extmark/	*	2	5	0	3	deref:1 expr:1	other:1	-	decor_free:1 marktree_clear:1 xrealloc:1
 extmark/	extmark/mod.rs	1	5	0	3	deref:1 expr:1	other:1	-	decor_free:1 marktree_clear:1 xrealloc:1
 extmark/	extmark/undo.rs	1	0	0	0	-	-	-	-
-fileio/	*	1	11	1	4	deref:6 expr:1	other:1 str:1	-	feof:1 ferror:1
-fileio/	fileio/legacy_stream.rs	1	11	1	4	deref:6 expr:1	other:1 str:1	-	feof:1 ferror:1
 garray.rs	*	1	38	14	25	ref:11 deref:1 expr:1	other:11 str:4	str:2 void:1	xfree:3 from_raw_parts_mut:2 CStr::from_ptr:1 copy_nonoverlapping:1 from_raw_parts:1 path_fnamecmp:1 sort_strings:1 write_bytes:1
 garray.rs	garray.rs	1	38	14	25	ref:11 deref:1 expr:1	other:11 str:4	str:2 void:1	xfree:3 from_raw_parts_mut:2 CStr::from_ptr:1 copy_nonoverlapping:1 from_raw_parts:1 path_fnamecmp:1 sort_strings:1 write_bytes:1
 getchar/	*	1	0	0	0	-	-	-	-

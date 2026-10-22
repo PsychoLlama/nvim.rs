@@ -18,11 +18,17 @@
 
 use super::*;
 use crate::cstr;
+use crate::fileio::Fgets;
 use crate::option::vars::P_DEX;
 use crate::types::Failed;
 use crate::xdiff::ffi::diff_hunks;
 use crate::xdiff::xtypes::Aborted;
-use core::ffi::{c_char, c_int};
+use core::ffi::{CStr, c_int};
+use std::ffi::OsStr;
+use std::fs::File;
+use std::io::Write;
+use std::os::unix::ffi::OsStrExt;
+use std::path::Path;
 
 /// Diff two one-line files and see whether the answer is recognisable.
 ///
@@ -32,50 +38,50 @@ use core::ffi::{c_char, c_int};
 /// remembered as unsupported and the whole thing is tried again without it.
 pub(crate) fn check_external_diff(names: TempNames<'_>) -> Result<(), Failed> {
     let [orig, new, out] = names;
+    fn path(name: &CStr) -> &Path {
+        OsStr::from_bytes(name.to_bytes()).as_ref()
+    }
+    // `fopen(name, "w")` and one `fwrite`: whether the write failed.
+    let write = |name: &CStr, text: &[u8]| {
+        File::create(path(name)).map(|mut file| file.write_all(text).is_err())
+    };
     let mut io_error = false;
     let mut ok;
     loop {
         ok = false;
-        let mut fd = unsafe { os_fopen(orig.as_ptr(), c"w".as_ptr()) };
-        if fd.is_null() {
-            io_error = true;
-        } else {
-            if unsafe { fwrite(c"line1\n".as_ptr().cast(), 6, 1, fd) } != 1 {
-                io_error = true;
-            }
-            unsafe { fclose(fd) };
-            fd = unsafe { os_fopen(new.as_ptr(), c"w".as_ptr()) };
-            if fd.is_null() {
-                io_error = true;
-            } else {
-                if unsafe { fwrite(c"line2\n".as_ptr().cast(), 6, 1, fd) } != 1 {
-                    io_error = true;
-                }
-                unsafe { fclose(fd) };
-                fd = if diff_file_external(names).is_ok() {
-                    unsafe { os_fopen(out.as_ptr(), c"r".as_ptr()) }
-                } else {
-                    ::core::ptr::null_mut()
-                };
-                if fd.is_null() {
-                    io_error = true;
-                } else {
-                    // The two spellings a working `diff` can answer with:
-                    // ed-style and unified.
-                    let mut linebuf = [0 as c_char; LBUFLEN as usize];
-                    while !unsafe { vim_fgets(linebuf.as_mut_ptr(), LBUFLEN, fd) } {
-                        if unsafe { cstr::starts_with(linebuf.as_ptr(), b"1c1") }
-                            || unsafe { cstr::starts_with(linebuf.as_ptr(), b"@@ -1 +1 @@") }
-                        {
-                            ok = true;
+        match write(orig, b"line1\n") {
+            Err(_) => io_error = true,
+            Ok(failed) => {
+                io_error |= failed;
+                match write(new, b"line2\n") {
+                    Err(_) => io_error = true,
+                    Ok(failed) => {
+                        io_error |= failed;
+                        let answer = diff_file_external(names)
+                            .ok()
+                            .and_then(|()| File::open(path(out)).ok());
+                        match answer {
+                            None => io_error = true,
+                            Some(file) => {
+                                // The two spellings a working `diff` can
+                                // answer with: ed-style and unified.
+                                let mut lines = Fgets::new(file);
+                                let mut buf = Vec::new();
+                                while lines.line_capped(&mut buf, LBUFLEN as usize) {
+                                    let line = cstr::until_nul(&buf);
+                                    if line.starts_with(b"1c1") || line.starts_with(b"@@ -1 +1 @@")
+                                    {
+                                        ok = true;
+                                    }
+                                }
+                            }
                         }
+                        os_remove(out);
+                        os_remove(new);
                     }
-                    unsafe { fclose(fd) };
                 }
-                os_remove(out);
-                os_remove(new);
+                os_remove(orig);
             }
-            os_remove(orig);
         }
         // With `'diffexpr'` set there is no `-a` to retry without.
         if P_DEX.first_byte() != 0 || diff_a_works.get().is_some() {

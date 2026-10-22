@@ -91,7 +91,7 @@
 //!    call stops at the first difference. Where the caller is a filter
 //!    rejecting candidates — completion's duplicate scan, a maphash bucket
 //!    walk — that turns an O(match) test into O(length) and doubles the
-//!    loop. Use [`eq_bytes`]/[`prefix_eq`]/[`prefix_cmp`]/[`starts_with`],
+//!    loop. Use [`eq_bytes`]/[`prefix_eq`]/[`prefix_cmp`],
 //!    which walk the two together. [`prefix_at`] is for the sites that want
 //!    the *span* itself, not a comparison.
 
@@ -243,29 +243,6 @@ pub(crate) unsafe fn prefix_cmp(a: *const c_char, b: *const c_char, n: usize) ->
         }
     }
     Ordering::Equal
-}
-
-/// Whether the string at `p` starts with `prefix` -- `strncmp(p, prefix,
-/// prefix.len()) == 0`, without the length that has to be kept in step with
-/// the literal.
-///
-/// Short-circuits like [`prefix_cmp`], and for the same reason.
-///
-/// # Safety
-/// [`prefix_at`]'s contract.
-pub(crate) unsafe fn starts_with(p: *const c_char, prefix: &[u8]) -> bool {
-    for (i, &want) in prefix.iter().enumerate() {
-        // SAFETY: caller's contract -- `p`'s terminator is readable and ends
-        // the walk, since `prefix` reaching a NUL means `want` matched it.
-        let got = unsafe { *p.cast::<u8>().add(i) };
-        if got != want {
-            return false;
-        }
-        if got == 0 {
-            break;
-        }
-    }
-    true
 }
 
 /// Exactly `n` bytes at `p`, terminator or not.

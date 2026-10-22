@@ -4,12 +4,9 @@
 //! `report`); `timestamp` notices a file changing underneath its buffer,
 //! `names` derives and moves file names, `tempfile` owns the temporary
 //! directory, and `stream` holds `Fgets`, the line reader over any
-//! `BufRead`. `legacy_stream` is the one child on `allow(unsafe_code)`:
-//! [`vim_fgets`], the same reader over a C `FILE *`, kept while its callers
-//! hold one. `forbid` would reach it from here, so this file allows nothing
-//! and forbids nothing: the crate's `deny(unsafe_code)` holds.
+//! `BufRead`.
 
-#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unsafe_code)]
 
 pub(crate) mod state;
 use crate::autocmd::state::autocmd_busy;
@@ -117,8 +114,6 @@ mod tempfile;
 pub use self::tempfile::*;
 mod stream;
 pub(crate) use self::stream::*;
-mod legacy_stream;
-pub use self::legacy_stream::*;
 pub const BLN_DUMMY: BlnFlags = 4;
 pub const BAD_REPLACE: c_int = b'?' as c_int;
 pub const BAD_KEEP: c_int = -1;

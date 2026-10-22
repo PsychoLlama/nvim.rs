@@ -3,8 +3,7 @@
 //!
 //! [`Fgets`] is C's `fgets` -- one line, or as much of it as fits -- with
 //! [`Fgets::line_capped`] the editor's `vim_fgets`, which throws the rest of
-//! an over-long line away. `legacy_stream` keeps `vim_fgets` itself over a
-//! C stream for the readers that still hold one.
+//! an over-long line away.
 
 #![forbid(unsafe_code)]
 #![deny(

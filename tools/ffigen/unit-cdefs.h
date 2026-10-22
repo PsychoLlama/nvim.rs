@@ -3743,7 +3743,6 @@ static const int TAG_REGEXP = 4;
 static const int TAG_SEP = 2;
 static const int TAG_VERBOSE = 32;
 static const int TBUFFER_LEN = 256;
-static const int TBUF_LEN = 200;
 static const int TEMP_FILE_PATH_MAXLEN = 256;
 static const int TERMINFO_SEQ_LIMIT = 128;
 static const int TERMKEY_CANON_DELBS = 2;
