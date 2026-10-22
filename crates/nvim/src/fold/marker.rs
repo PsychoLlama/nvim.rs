@@ -226,12 +226,11 @@ pub(super) fn parse_marker(window: Win) {
 /// Careful: This means you can't call this function twice on the same line.
 /// Doesn't use any caching.
 /// Sets flp->start when a start marker was found.
-pub(super) fn foldlevel_marker(line: &mut FoldLine) {
+///
+/// `startmarker`/`endmarker` are 'foldmarker''s halves, cut once per update.
+pub(super) fn foldlevel_marker(line: &mut FoldLine, startmarker: &[u8], endmarker: &[u8]) {
     let window = line.win;
     let start_lvl = line.lvl;
-    // Taken for the call and put back, so the scan can write `line`.
-    let markers = core::mem::take(&mut line.markers);
-    let (startmarker, endmarker) = (&markers.0[..], &markers.1[..]);
     line.start = 0;
     line.lvl_next = line.lvl;
 
@@ -274,7 +273,6 @@ pub(super) fn foldlevel_marker(line: &mut FoldLine) {
         }
     }
     line.lvl_next = line.lvl_next.max(0);
-    line.markers = markers;
 }
 
 /// The positive number a `{{{N` marker carries, if it carries one.

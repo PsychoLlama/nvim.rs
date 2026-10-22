@@ -31,23 +31,27 @@ use crate::types::LineNr;
 ///
 /// The search is written out rather than handed to `slice::binary_search_by`
 /// so that a malformed list — a zero-length entry, say — lands on exactly the
-/// entry `fold.c`'s loop would have landed on: `high` is upstream's inclusive
-/// bound plus one, and the midpoint is computed from the inclusive bound.
+/// entry `fold.c`'s loop would have landed on. `rest` is upstream's
+/// `low..=high` and `base` its `low`; the probe `(low + high) / 2` is `base`
+/// plus `(rest.len() - 1) / 2`, which the slice keeps in bounds without a
+/// check.
+#[inline]
 pub(super) fn find(folds: &[Fold], lnum: LineNr) -> Result<usize, usize> {
-    let mut low = 0;
-    let mut high = folds.len();
-    while low < high {
-        let i = (low + high - 1) / 2;
-        let fold = &folds[i];
+    let mut base = 0;
+    let mut rest = folds;
+    while !rest.is_empty() {
+        let mid = (rest.len() - 1) / 2;
+        let fold = &rest[mid];
         if fold.top > lnum {
-            high = i;
+            rest = &rest[..mid];
         } else if fold.top + fold.len <= lnum {
-            low = i + 1;
+            base += mid + 1;
+            rest = &rest[mid + 1..];
         } else {
-            return Ok(i);
+            return Ok(base + mid);
         }
     }
-    Err(low)
+    Err(base)
 }
 
 /// [`find`]'s answer whichever way it went: the fold containing `lnum`, or
