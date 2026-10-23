@@ -72,8 +72,8 @@ fn hlgroup2dict(hl: &mut ApiDict, ns_id: NS, hl_id: c_int) -> bool {
         put(hl, c"link", value);
     }
     let mut cterm = ApiDict::with_capacity(HLATTRS_DICT_SIZE);
-    unsafe { hlattrs2dict(hl, None, attr, true, true) };
-    unsafe { hlattrs2dict(hl, Some(&mut cterm), attr, false, true) };
+    hlattrs2dict(hl, None, attr, true, true);
+    hlattrs2dict(hl, Some(&mut cterm), attr, false, true);
     if !cterm.is_empty() {
         put(hl, c"cterm", Object::dict(cterm));
     }

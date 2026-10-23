@@ -28,7 +28,7 @@ use crate::grid::{
     schar_len, with_linebuf,
 };
 use crate::highlight::default_hl_attr;
-use crate::highlight::namespace::hl_attr_table;
+use crate::highlight::namespace::hl_attr;
 use crate::highlight::state::{cterm_normal_bg_color, normal_bg};
 use crate::highlight::{
     hl_blend_attrs, hl_combine_attr, hl_get_underline, syn_attr2entry, win_bg_attr, win_hl_attr,
@@ -286,7 +286,7 @@ fn wlv_put_linebuf(
         // ... nor the 'listchars' "precedes" text.
         && !(window.w_onebuf_opt.wo_list != 0 && window.w_p_lcs_chars.prec != 0)
     {
-        let at_attr = unsafe { *hl_attr_table().add(HLF_AT as usize) } as ScreenAttr;
+        let at_attr = hl_attr(HLF_AT) as ScreenAttr;
         with_linebuf(|line| {
             let mut off = 0;
             if window.w_onebuf_opt.wo_nu != 0 && window.w_onebuf_opt.wo_rnu != 0 {

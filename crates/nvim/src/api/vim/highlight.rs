@@ -42,7 +42,7 @@ pub fn nvim_set_hl(
         base_attrs = attrs;
         base = Some(&base_attrs);
     }
-    let attrs: HlAttrs = unsafe { dict2hlattrs(&*val, true, Some(&mut link_id), base) }?;
+    let attrs: HlAttrs = dict2hlattrs(&*val, true, Some(&mut link_id), base)?;
     let _sctx = api_set_sctx(channel_id);
     ns_hl_def(ns_id as NS, hl_id, attrs, link_id, Some(&*val));
     Ok(())

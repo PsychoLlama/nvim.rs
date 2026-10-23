@@ -1,5 +1,4 @@
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -41,8 +40,6 @@
 //! * [`namespace`] — per-namespace group definitions and the `HLF_*` tables.
 
 pub(crate) mod state;
-use crate::api::private::helpers::cstr_to_string;
-use crate::api::ui::{remote_ui_hl_attr_define, remote_ui_hl_group_set};
 use crate::drawscreen::screen_invalidate_highlights;
 use crate::global_cell::GlobalCell;
 use crate::highlight::state::{highlight_attr, highlight_attr_last};
@@ -51,10 +48,10 @@ use crate::highlight_group::{
 };
 use crate::message::emsg;
 use crate::os::cshim::gettext;
-use crate::types::{ApiDict, Array, HlAttrs, HlEntry, HlKind, Integer, Object, RemoteUI, uint32_t};
+use crate::types::{ApiDict, Array, HlAttrs, HlEntry, HlKind, Integer, Object, String_0, uint32_t};
 use crate::ui::ui_call_hl_attr_define;
 use cache::AttrCache;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 use core::hash::BuildHasherDefault;
 use std::collections::HashMap;
 use std::ffi::CString;
@@ -155,22 +152,12 @@ static ATTRS: GlobalCell<AttrTable> = GlobalCell::new(AttrTable::new());
 /// Results of [`hl_combine_attr`], by the pair that produced them.
 static COMBINE: GlobalCell<AttrCache> = GlobalCell::new(AttrCache::new());
 
-/// The built-in highlight table, by address: a window's
-/// `w_ns_hl_attr` *holds* it, switching between this table and a
-/// namespace's own, so the address is what the family works from. This is
-/// the one place it is taken.
-pub(crate) fn default_hl_attr_table() -> *mut c_int {
-    highlight_attr.ptr().cast::<c_int>()
-}
-
 /// The attribute the built-in highlight group `hlf` resolves to.
 ///
 /// One `c_int` out of the table rather than a copy of all 76 of them: this
 /// is asked per spell run and per UI group.
 pub(crate) fn default_hl_attr(hlf: usize) -> c_int {
-    debug_assert!(hlf < HLF_COUNT as usize);
-    // SAFETY: reads one element of the table, whose length is `HLF_COUNT`.
-    unsafe { *default_hl_attr_table().add(hlf) }
+    highlight_attr.get_field(|attrs| &attrs[hlf])
 }
 
 /// The URLs entries refer to by index (OSC 8 hyperlinks).
@@ -345,13 +332,14 @@ pub(crate) fn get_attr_entry(mut entry: HlEntry) -> c_int {
     id
 }
 
-/// Sends a newly connected UI the whole table, plus the current attribute of
-/// every builtin group.
-///
-/// # Safety
-/// `ui` is a live remote UI; main thread only.
-pub unsafe fn ui_send_all_hls(ui: *mut RemoteUI) {
-    // SAFETY: the caller's UI; each iteration's arena is local to it.
+/// What a newly connected UI is sent: the whole table, as one
+/// `define(id, attrs, info)` per entry, then the current attribute of every
+/// builtin group, as one `group_set(name, attr)` each. The caller owns the
+/// UI the events go to.
+pub fn ui_send_all_hls(
+    mut define: impl FnMut(Integer, HlAttrs, Array),
+    mut group_set: impl FnMut(String_0, Integer),
+) {
     // The bound is re-read each time round, as upstream's `for` did:
     // sending an event is not supposed to touch the table, and if one
     // ever did this stops rather than reading past the end.
@@ -359,13 +347,12 @@ pub unsafe fn ui_send_all_hls(ui: *mut RemoteUI) {
     while i < ATTRS.with(AttrTable::len) {
         let inspect = hl_inspect(i as c_int);
         let attr = ATTRS.with(|attrs| attrs.at(i as c_int)).attr;
-        unsafe { remote_ui_hl_attr_define(ui, i as Integer, attr, attr, inspect) };
+        define(i as Integer, attr, inspect);
         i += 1;
     }
     for hlf in 0..HLF_COUNT as usize {
-        let name = unsafe { cstr_to_string(hlf_names[hlf]) };
-        let attr = Integer::from(default_hl_attr(hlf));
-        unsafe { remote_ui_hl_group_set(ui, name, attr) };
+        let name = String_0::from_cstr(hlf_names[hlf]);
+        group_set(name, Integer::from(default_hl_attr(hlf)));
     }
 }
 
@@ -442,10 +429,9 @@ pub fn hl_add_url(attr: c_int, url: &CStr) -> c_int {
 /// The URL at `index`. Panics on an index no entry ever stored (upstream
 /// asserted the table was allocated and then read it unchecked).
 ///
-/// The pointer borrows the table, which is stable until [`clear_hl_tables`]
-/// runs — the same lifetime upstream's had.
-pub fn hl_get_url(index: uint32_t) -> *const c_char {
-    URLS.with(|urls| urls.urls[index as usize].as_ptr())
+/// A copy: the table is emptied by [`clear_hl_tables`].
+pub fn hl_get_url(index: uint32_t) -> String_0 {
+    URLS.with(|urls| String_0::from_cstr(&urls.urls[index as usize]))
 }
 
 /// The id for attributes a `:terminal` program asked for directly.
@@ -628,10 +614,7 @@ fn hl_inspect_impl(arr: &mut Array, attr: c_int) {
         kHlSyntax => {
             let mut item = ApiDict::with_capacity(3);
             put(&mut item, c"kind", Object::literal("syntax"));
-            // SAFETY: `syn_id2name` answers a NUL-terminated group name.
-            put(&mut item, c"hi_name", unsafe {
-                name_object(syn_id2name(entry.id1).as_ptr())
-            });
+            put(&mut item, c"hi_name", name_object(syn_id2name(entry.id1)));
             item
         }
         kHlUI => {
@@ -639,16 +622,12 @@ fn hl_inspect_impl(arr: &mut Array, attr: c_int) {
             put(&mut item, c"kind", Object::literal("ui"));
             // -1 is `Normal`, which is not one of the `hlf_names`.
             let ui_name = if entry.id1 == -1 {
-                c"Normal".as_ptr()
+                c"Normal"
             } else {
                 hlf_names[entry.id1 as usize]
             };
-            // SAFETY: both spellings are NUL-terminated names.
-            put(&mut item, c"ui_name", unsafe { name_object(ui_name) });
-            // SAFETY: `syn_id2name` answers a NUL-terminated group name.
-            put(&mut item, c"hi_name", unsafe {
-                name_object(syn_id2name(entry.id2).as_ptr())
-            });
+            put(&mut item, c"ui_name", name_object(ui_name));
+            put(&mut item, c"hi_name", name_object(syn_id2name(entry.id2)));
             item
         }
         kHlTerminal => {
@@ -670,12 +649,8 @@ fn hl_inspect_impl(arr: &mut Array, attr: c_int) {
 }
 
 /// A group name, copied into the object that carries it.
-///
-/// # Safety
-/// `name` is null or NUL-terminated.
-unsafe fn name_object(name: *const c_char) -> Object {
-    // SAFETY: the caller's string.
-    Object::string(unsafe { cstr_to_string(name) })
+fn name_object(name: &CStr) -> Object {
+    Object::string(String_0::from_cstr(name))
 }
 
 /// Appends `key: value`, with the key copied out of the literal.

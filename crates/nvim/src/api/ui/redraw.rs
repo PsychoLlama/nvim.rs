@@ -31,7 +31,6 @@
 use super::Ui;
 use super::events::{count, linegrid, send};
 use super::packer::push_call;
-use crate::api::private::helpers::cstr_to_string;
 use crate::highlight::{HLATTRS_DICT_SIZE, hl_get_url, hlattrs2dict, syn_attr2entry};
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
 use crate::narrow::number_as_int;
@@ -67,13 +66,13 @@ pub unsafe fn remote_ui_hl_attr_define(
     let mut cterm_buf = DictBuf::<HLATTRS_DICT_SIZE>::new();
     let mut rgb = rgb_buf.dict();
     let mut cterm = cterm_buf.dict();
-    unsafe {
-        hlattrs2dict(&mut rgb, None, rgb_attrs, true, false);
-        hlattrs2dict(&mut cterm, None, rgb_attrs, false, false);
-        if rgb_attrs.url >= 0 {
-            let url = hl_get_url(rgb_attrs.url.cast_unsigned());
-            rgb.insert(c"url", Object::string(cstr_to_string(url)));
-        }
+    hlattrs2dict(&mut rgb, None, rgb_attrs, true, false);
+    hlattrs2dict(&mut cterm, None, rgb_attrs, false, false);
+    if rgb_attrs.url >= 0 {
+        rgb.insert(
+            c"url",
+            Object::string(hl_get_url(rgb_attrs.url.cast_unsigned())),
+        );
     }
 
     // `info` says which highlight groups produced the attributes, which is
@@ -252,7 +251,7 @@ unsafe fn translate_contents(ui: *mut RemoteUI, contents: &Array) -> Array {
         let attrs = if attr != 0 {
             let mut dict = ApiDict::with_capacity(HLATTRS_DICT_SIZE);
             // SAFETY: `attr` is a resolved attribute id.
-            unsafe { hlattrs2dict(&mut dict, None, syn_attr2entry(attr), rgb, false) };
+            hlattrs2dict(&mut dict, None, syn_attr2entry(attr), rgb, false);
             dict
         } else {
             ApiDict::EMPTY

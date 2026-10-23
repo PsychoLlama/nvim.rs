@@ -1,5 +1,4 @@
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 //! Highlight attributes as API values.
 //!
@@ -27,7 +26,6 @@ use crate::types::{
     ApiDict, Boolean, Error, HlAttrs, Integer, KeyDict_highlight, KeyDict_highlight_cterm, Object,
     int16_t, int32_t, kErrorTypeException, kErrorTypeValidation, size_t,
 };
-use ::libc::strcasecmp;
 use core::ffi::{CStr, c_int};
 
 /// Most entries [`hlattrs2dict`] can write, and so the capacity every caller
@@ -63,8 +61,7 @@ pub fn hl_get_attr_by_id(attr_id: Integer, rgb: Boolean) -> Result<ApiDict, Erro
     }
     let mut retval = ApiDict::with_capacity(HLATTRS_DICT_SIZE);
     let attrs = syn_attr2entry(attr_id as c_int);
-    // SAFETY: the dict was just reserved for every key `hlattrs2dict` writes.
-    unsafe { hlattrs2dict(&mut retval, None, attrs, rgb, false) };
+    hlattrs2dict(&mut retval, None, attrs, rgb, false);
     Ok(retval)
 }
 
@@ -78,9 +75,9 @@ pub fn hl_get_attr_by_id(attr_id: Integer, rgb: Boolean) -> Result<ApiDict, Erro
 /// the `nvim_get_hl` spelling (`fg`/`bg`/`sp`, and `ctermfg`/`ctermbg` for the
 /// cterm half) over the UI event's (`foreground`/`background`/`special`).
 ///
-/// # Safety
-/// Both dicts must have room for [`HLATTRS_DICT_SIZE`] entries.
-pub unsafe fn hlattrs2dict(
+/// Both dicts must have been reserved for [`HLATTRS_DICT_SIZE`] entries
+/// (checked).
+pub fn hlattrs2dict(
     hl: &mut ApiDict,
     hl_attrs: Option<&mut ApiDict>,
     ae: HlAttrs,
@@ -255,10 +252,7 @@ fn set_flag(mask: &mut HlAttrFlags, on: bool, flag: HlAttrFlags) {
 /// error, which is how the UI-side caller rejects them.
 ///
 /// Refuses at the first bad value.
-///
-/// # Safety
-/// The `Object` fields of `dict` must carry values matching their tags.
-pub unsafe fn dict2hlattrs(
+pub fn dict2hlattrs(
     dict: &KeyDict_highlight,
     use_rgb: bool,
     link_id: Option<&mut c_int>,
@@ -436,8 +430,7 @@ fn object_to_color(val: &Object, key: &CStr, rgb: bool) -> Result<int32_t, Error
         let expected = c"String or Integer";
         return Err(err_expected(key, expected, None));
     };
-    // SAFETY: an API string is NUL-terminated, so it is a C string too.
-    if str.is_empty() || unsafe { strcasecmp(str.data(), c"NONE".as_ptr()) } == 0 {
+    if str.is_empty() || str.as_bytes().eq_ignore_ascii_case(b"NONE") {
         return Ok(-1);
     }
     let name = str.as_cstr();

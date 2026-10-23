@@ -745,7 +745,7 @@ unsafe fn dict_to_hlattrs(d: &ApiDict, rgb: bool) -> HlAttrs {
     if api_dict_to_keydict(&mut dict, d.clone()).is_err() {
         return HLATTRS_INIT;
     }
-    let Ok(mut attrs) = (unsafe { dict2hlattrs(&dict, rgb, None, None) }) else {
+    let Ok(mut attrs) = dict2hlattrs(&dict, rgb, None, None) else {
         return HLATTRS_INIT;
     };
     // A URL is not an attribute the terminal understands; the TUI

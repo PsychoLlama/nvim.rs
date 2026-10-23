@@ -10,26 +10,20 @@
 //!
 //! Original: `src/nvim/window.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use core::ffi::{CStr, c_char, c_int, c_uint};
-use core::mem::size_of;
-use core::{ptr, slice};
+use core::ffi::{CStr, c_int};
 
 use super::*;
-use crate::ascii::ascii_isdigit;
-use crate::charset::getdigits_int;
+use crate::charset::getdigits_int_at;
 use crate::drawscreen::UPD_NOT_VALID;
-use crate::memory::xmalloc;
 use crate::message::e_invarg;
 use crate::message::msg_ui_flush;
 use crate::r#move::WinValid;
-use crate::optionstr::OptString;
-use crate::optionstr::empty_option;
+use crate::optionstr::OptStringRef;
 use crate::popupmenu::pum_ui_flush;
 use crate::pos::equalpos;
-use crate::types::{Handle, Integer, LineNr, NUL, OptError, OptInt};
+use crate::types::{Handle, Integer, LineNr, OptError, OptInt};
 use crate::ui::ui_call_win_hide;
 use crate::winlayer::{
     Buf, FrameId, FrameRef, TabPage, Win, WinId, last_window, tab_windows, tabs, windows_in_tab,
@@ -273,34 +267,46 @@ pub(crate) fn check_window_colorcolumn(window: Win) -> Result<(), OptError> {
 /// Parse 'colorcolumn' -- `cc`, or the window's own value when there is
 /// none -- and, given a window, store the columns it names.
 ///
-/// The walk only reads the value, and it is done before the window is
-/// written; the cursor is mutable because the digit reader's is.
+/// The value is parsed whole before the window is written.
 pub fn check_colorcolumn(cc: Option<&CStr>, window: Option<Win>) -> Result<(), OptError> {
-    let win = window;
-    if win.is_some_and(|w| w.w_buffer.is_null()) {
+    if window.is_some_and(|w| w.w_buffer.is_null()) {
         return Ok(()); // buffer was closed
     }
-    let mut s = match (cc, win) {
-        (Some(cc), _) => cc.as_ptr().cast_mut(),
-        (None, Some(w)) => w.w_onebuf_opt.wo_cc.value_ptr(),
-        (None, None) => empty_option(),
+    let text: &[u8] = match (cc, &window) {
+        (Some(cc), _) => cc.to_bytes(),
+        (None, Some(w)) => w.w_onebuf_opt.wo_cc.bytes(),
+        (None, None) => b"",
     };
-    let tw = win.map_or(0 as OptInt, |w| w.buffer().b_p_tw);
+    let tw = window.map_or(0 as OptInt, |w| w.buffer().b_p_tw);
+    let cols = parse_colorcolumn(text, tw)?;
 
-    let mut count = 0 as c_uint;
-    let mut color_cols = [0 as c_int; 256];
+    let Some(mut win) = window else {
+        return Ok(()); // only parse the value, do not store it
+    };
+    win.w_p_cc_cols = cols;
+    Ok(())
+}
+
+/// The columns a 'colorcolumn' value names, 0-based, sorted, without
+/// duplicates and ended by `-1` -- or empty when it names none. `tw` is the
+/// 'textwidth' the `-N`/`+N` items are relative to.
+fn parse_colorcolumn(text: &[u8], tw: OptInt) -> Result<Vec<c_int>, OptError> {
+    let at = |i: usize| text.get(i).copied().unwrap_or(0);
+    let mut i = 0;
+    let mut cols: Vec<c_int> = Vec::new();
     // Upstream's `color_cols` holds 256 entries and stops one short of them.
-    while peek(s) != NUL && count < 255 as c_uint {
+    while at(i) != 0 && cols.len() < 255 {
         let mut skip = false;
         let mut col;
-        if peek(s) == '-' as c_int || peek(s) == '+' as c_int {
+        if at(i) == b'-' || at(i) == b'+' {
             // -N and +N: relative to 'textwidth'.
-            col = if peek(s) == '-' as c_int { -1 } else { 1 };
-            s = step(s);
-            if !ascii_isdigit(peek(s)) {
+            col = if at(i) == b'-' { -1 } else { 1 };
+            i += 1;
+            if !at(i).is_ascii_digit() {
                 return Err((e_invarg).into());
             }
-            col *= digits(&mut s);
+            let (n, past) = getdigits_int_at(text, i, true, 0);
+            (col, i) = (col * n, past);
             if tw == 0 {
                 skip = true; // 'textwidth' not set, skip this item
             } else {
@@ -312,72 +318,33 @@ pub fn check_colorcolumn(cc: Option<&CStr>, window: Option<Win>) -> Result<(), O
                 col += tw as c_int;
                 skip = col < 0;
             }
-        } else if ascii_isdigit(peek(s)) {
-            col = digits(&mut s);
+        } else if at(i).is_ascii_digit() {
+            (col, i) = getdigits_int_at(text, i, true, 0);
         } else {
             return Err((e_invarg).into());
         }
         if !skip {
-            color_cols[count as usize] = col - 1; // 1-based to 0-based
-            count += 1;
+            cols.push(col - 1); // 1-based to 0-based
         }
-        if peek(s) == NUL {
+        if at(i) == 0 {
             break;
         }
-        if peek(s) != ',' as c_int {
+        if at(i) != b',' {
             return Err((e_invarg).into());
         }
-        s = step(s);
-        if peek(s) == NUL {
+        i += 1;
+        if at(i) == 0 {
             return Err((e_invarg).into()); // illegal trailing comma
         }
     }
 
-    let Some(mut win) = win else {
-        return Ok(()); // only parse the value, do not store it
-    };
-    free(win.w_p_cc_cols);
-    if count == 0 {
-        win.w_p_cc_cols = ptr::null_mut::<c_int>();
-        return Ok(());
+    if cols.is_empty() {
+        return Ok(cols);
     }
-    let cols = &mut color_cols[..count as usize];
-    arith::sort_columns(cols);
-    // SAFETY: `xmalloc` aborts rather than answering null, so this is an array
-    // of `count + 1` `int`s that nothing else has a reference to.
-    let out = unsafe {
-        let ptr = xmalloc(size_of::<c_int>() * (count as usize + 1)).cast::<c_int>();
-        slice::from_raw_parts_mut(ptr, count as usize + 1)
-    };
-    win.w_p_cc_cols = out.as_mut_ptr();
-    let mut j = 0;
-    for col in cols.iter().copied() {
-        // Skip duplicates.
-        if j == 0 || out[j - 1] != col {
-            out[j] = col;
-            j += 1;
-        }
-    }
-    out[j] = -1; // end marker
-    Ok(())
-}
-
-/// The byte `s` points at, as the C reads it.
-fn peek(s: *const c_char) -> c_int {
-    // SAFETY: `s` walks a NUL-terminated option string and stops at its NUL.
-    (unsafe { *s }) as c_int
-}
-
-/// `s` advanced one byte, which the caller has checked is not the NUL.
-fn step(s: *mut c_char) -> *mut c_char {
-    // SAFETY: as [`peek`]; one past a non-NUL byte is still inside the string.
-    unsafe { s.offset(1) }
-}
-
-/// The number `s` starts with, advancing it past the digits.
-fn digits(s: &mut *mut c_char) -> c_int {
-    // SAFETY: as [`peek`]; `getdigits_int` leaves `s` on the first non-digit.
-    unsafe { getdigits_int(s, true, 0) }
+    arith::sort_columns(&mut cols);
+    cols.dedup();
+    cols.push(-1); // end marker
+    Ok(cols)
 }
 
 // ---------------------------------------------------------------------------

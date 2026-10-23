@@ -68,6 +68,7 @@ fn zeroed_window() -> Win {
             (&raw mut (*wp).w_matches).write(Vec::new());
             (&raw mut (*wp).w_folds).write(Vec::new());
             (&raw mut (*wp).w_lines).write(Vec::new());
+            (&raw mut (*wp).w_p_cc_cols).write(Vec::new());
             (&raw mut (*wp).w_config).write(WIN_CONFIG_INIT);
             (&raw mut (*wp).w_localdir).write(None);
             (&raw mut (*wp).w_prevdir).write(None);
@@ -315,7 +316,7 @@ pub(crate) fn win_free(window: Win, tabpage: Option<TabPage>) {
     clear_matches(window);
     free_jumplist(window);
     window.free_location_lists();
-    free(window.w_p_cc_cols);
+    window.w_p_cc_cols = Vec::new();
     free_grid(window, false);
     if win_valid_any_tab(window.id()) {
         win_remove(window, tabpage);

@@ -36,7 +36,7 @@ use core::ptr;
 use crate::global_cell::GlobalCell;
 use crate::grid::{GridRef, default_grid_ref, schar_from_ascii, schar_from_buf};
 use crate::highlight::hl_blend_attrs;
-use crate::highlight::namespace::hl_attr_table;
+use crate::highlight::namespace::hl_attr;
 use crate::highlight_group::{HLF_MSGSEP, syn_check_group, syn_id2attr};
 use crate::log::{LOGLVL_DBG, logmsg};
 use crate::message::msg_grid_ref;
@@ -522,7 +522,7 @@ fn compose_into(
             // just be one around the message grid.
             grid = msg_layer();
             // SAFETY: the highlight table is built before anything draws.
-            let sep_attr = unsafe { *hl_attr_table().add(HLF_MSGSEP as usize) };
+            let sep_attr = hl_attr(HLF_MSGSEP);
             line[at..at + n].fill(msg_sep_char.get());
             attrbuf[at..at + n].fill(sep_attr);
         } else {

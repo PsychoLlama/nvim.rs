@@ -6,7 +6,6 @@
 use crate::cstr;
 use core::ffi::{CStr, c_int, c_uint};
 
-use crate::api::private::helpers::cstr_to_string;
 use crate::decoration_provider::decor_provider_invalidate_hl;
 use crate::drawscreen::state::clear_cmdline;
 use crate::highlight::state::{
@@ -14,7 +13,7 @@ use crate::highlight::state::{
 };
 use crate::highlight::{HlAttrFlags, hl_get_ui_attr, syn_attr2entry};
 use crate::message::msg_grid_ref;
-use crate::types::Integer;
+use crate::types::{Integer, String_0};
 use crate::ui::ui_call_hl_group_set;
 mod hlf;
 
@@ -164,7 +163,7 @@ pub(crate) fn highlight_changed() {
     for hlf in 1..HLF_COUNT {
         let name = hlf_names[hlf as usize];
         // SAFETY: a builtin group name, NUL-terminated.
-        let id = syn_check_group(unsafe { CStr::from_ptr(name) }.to_bytes());
+        let id = syn_check_group(name.to_bytes());
         assert!(id != 0, "builtin highlight group {hlf} could not be added");
 
         let mut ns_id = -1;
@@ -185,7 +184,7 @@ pub(crate) fn highlight_changed() {
             clear_cmdline.set(true);
             msg_grid.blending = syn_attr2entry(attr).hl_blend > -1;
         }
-        ui_call_hl_group_set(unsafe { cstr_to_string(name) }, Integer::from(attr));
+        ui_call_hl_group_set(String_0::from_cstr(name), Integer::from(attr));
         highlight_attr_last.with_mut(|last| last[hlf as usize] = attr);
     }
 

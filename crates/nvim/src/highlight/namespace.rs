@@ -1,5 +1,4 @@
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -16,21 +15,20 @@
 //! also gets a resolved table — one attribute id per `HLF_*` builtin — built
 //! by [`update_ns_hl`] and cached until the provider invalidates it.
 //! `hl_attr_active` refers to the one `HL_ATTR` reads, and each window's
-//! `w_ns_hl_attr` points at the one [`win_hl_attr`] reads. That is why the tables are boxed and handed out as
-//! raw pointers — the pointers outlive
-//! any borrow of the map, and nothing ever removes an entry.
+//! `w_ns_hl_attr` to the one [`win_hl_attr`] reads. That is why the tables
+//! are leaked cells handed out as `&'static` references — they outlive any
+//! borrow of the map, and nothing ever removes an entry.
 //!
 //! Which namespace is "active" is itself a small resolution ([`hl_check_ns`]):
 //! a namespace forced by a fast callback wins, then the current window's,
 //! then the global one.
 
+use super::default_hl_attr;
 use super::{
     HLATTRS_INIT, dict2hlattrs, get_attr_entry, hl_apply_winblend, hl_combine_attr,
     hl_get_syn_attr, kHlUI, syn_attr2entry,
 };
-use super::{default_hl_attr, default_hl_attr_table};
 use crate::api::private::helpers::api_dict_to_keydict;
-use crate::cstr;
 use crate::decoration_provider::with_decor_provider;
 use crate::global_cell::GlobalCell;
 use crate::guard::Depth;
@@ -43,7 +41,7 @@ use crate::highlight_group::{
     HLF_BORDER, HLF_COUNT, HLF_INACTIVE, HLF_NFLOAT, HLF_NONE, HLF_PNI, HLF_PST, hlf_names,
     set_hl_group, syn_check_group, syn_id2name, syn_ns_id2attr,
 };
-use crate::lua::executor::nlua_call_ref;
+use crate::lua::executor::nlua_call_ref_reporting;
 use crate::option::check_blending;
 use crate::option::vars::p_pb;
 use crate::popupmenu::pum_drawn;
@@ -88,24 +86,18 @@ static NS_HLS: GlobalCell<Table<ColorKey, ColorItem>> =
     GlobalCell::new(HashMap::with_hasher(BuildHasherDefault::new()));
 
 /// The resolved `HLF_*` table per namespace. See the module docs for why the
-/// entries are boxed and handed out raw.
+/// entries are leaked cells.
 static NS_HL_ATTR: GlobalCell<Table<c_int, NsHlTable>> =
     GlobalCell::new(HashMap::with_hasher(BuildHasherDefault::new()));
 
 /// One namespace's builtin-group table: `HLF_COUNT` attribute ids.
 ///
-/// Owned here, but reached from [`hl_attr_active`] and, by address, from
-/// every window's `w_ns_hl_attr`. Those outlive any borrow of
+/// Owned here, but reached from [`hl_attr_active`] and from every window's
+/// `w_ns_hl_attr`. Those outlive any borrow of
 /// [`NS_HL_ATTR`], which is why the storage is a separate allocation rather
 /// than inline in the map. Nothing removes an entry, so the table is leaked
 /// on purpose: it lives for the process, as its `'static` says.
 struct NsHlTable(&'static HlAttrTable);
-
-impl NsHlTable {
-    fn as_ptr(&self) -> *mut c_int {
-        self.0.ptr().cast()
-    }
-}
 
 impl Default for NsHlTable {
     fn default() -> Self {
@@ -115,9 +107,17 @@ impl Default for NsHlTable {
     }
 }
 
-/// The `HLF_*` table in force, by address.
-pub(crate) fn hl_attr_table() -> *mut c_int {
-    hl_attr_active.get().ptr().cast()
+/// The attribute builtin group `hlf` resolves to in the table in force,
+/// i.e. C's `HL_ATTR`.
+#[inline]
+pub(crate) fn hl_attr(hlf: c_int) -> c_int {
+    table_attr(hl_attr_active.get(), hlf)
+}
+
+/// One entry of an `HLF_*` table.
+#[inline(always)]
+fn table_attr(table: &HlAttrTable, hlf: c_int) -> c_int {
+    table.get_field(|attrs| &attrs[hlf as usize])
 }
 
 /// Forgets every namespace's group definitions. Only the free-all-memory
@@ -219,12 +219,10 @@ pub fn ns_get_hl(ns_hl: &mut NS, hl_id: c_int, link: bool, nodefault: bool) -> c
         args.push(Object::boolean(link));
 
         let recursing = Depth::of(&RECURSIVE);
-        let name = c"hl_def".as_ptr();
-        let args = args.array();
-        // SAFETY: the namespace's own callback reference. A callback that
-        // failed is a callback that declined, which the fallback below is.
-        let ret = unsafe { nlua_call_ref(hl_def, name, args, kRetObject) };
-        let ret = ret.unwrap_or(Object::Nil);
+        // A callback that failed is a callback that declined, which the
+        // fallback below is.
+        let ret = nlua_call_ref_reporting(hl_def, Some(c"hl_def"), args.array(), kRetObject)
+            .unwrap_or(Object::Nil);
         drop(recursing);
 
         // Anything but a dict means the callback declined; fall back.
@@ -239,7 +237,7 @@ pub fn ns_get_hl(ns_hl: &mut NS, hl_id: c_int, link: bool, nodefault: bool) -> c
             let mut dict = KeyDict_highlight::default();
             if api_dict_to_keydict(&mut dict, answer).is_ok() {
                 let link_id = &mut item.link_id;
-                attrs = unsafe { dict2hlattrs(&dict, true, Some(link_id), None) }.unwrap_or(attrs);
+                attrs = dict2hlattrs(&dict, true, Some(link_id), None).unwrap_or(attrs);
                 fallback = dict.fallback.unwrap_or(true);
                 provisional = dict.fallback.unwrap_or(false);
                 if item.link_id >= 0 {
@@ -384,16 +382,20 @@ pub fn hl_get_ui_attr(ns_id: c_int, idx: c_int, final_id: c_int, optional: bool)
 ///
 /// `invalid` forces the work even when the window has not asked for it.
 pub fn update_window_hl(mut window: Win, invalid: bool) {
-    // SAFETY: the caller's promise -- see this function's `# Safety`.
     let ns_id = window.w_ns_hl;
     update_ns_hl(ns_id);
-    if ns_id != window.w_ns_hl_active || window.w_ns_hl_attr.is_null() {
-        window.w_ns_hl_active = ns_id;
-        let table = NS_HL_ATTR.with(|tables| tables.get(&ns_id).map(NsHlTable::as_ptr));
-        // No namespace table: read the global one.
-        window.w_ns_hl_attr = table.unwrap_or_else(default_hl_attr_table);
-    }
-    let hl_def = window.w_ns_hl_attr;
+    let hl_def = match window.w_ns_hl_attr {
+        Some(table) if ns_id == window.w_ns_hl_active => table,
+        _ => {
+            window.w_ns_hl_active = ns_id;
+            let table = NS_HL_ATTR.with(|tables| tables.get(&ns_id).map(|table| table.0));
+            // No namespace table: read the global one.
+            let table = table.unwrap_or(&highlight_attr);
+            window.w_ns_hl_attr = Some(table);
+            table
+        }
+    };
+    let hl_def = |hlf: c_int| table_attr(hl_def, hlf);
 
     if !window.w_hl_needs_update && !invalid {
         return;
@@ -403,22 +405,19 @@ pub fn update_window_hl(mut window: Win, invalid: bool) {
     // A blending float always has a *named* normal group, because
     // `NormalFloat` always is one.
     let float_win = window.w_floating && !window.w_config.external;
-    unsafe {
-        window.w_hl_attr_normal = if float_win && *hl_def.add(HLF_NFLOAT as usize) != 0 && ns_id > 0
-        {
-            *hl_def.add(HLF_NFLOAT as usize)
-        } else if *hl_def.add(HLF_NONE as usize) > 0 {
-            *hl_def.add(HLF_NONE as usize)
-        } else if float_win {
-            let active = *hl_attr_table().add(HLF_NFLOAT as usize);
-            if active > 0 {
-                active
-            } else {
-                default_hl_attr(HLF_NFLOAT as usize)
-            }
+    window.w_hl_attr_normal = if float_win && hl_def(HLF_NFLOAT) != 0 && ns_id > 0 {
+        hl_def(HLF_NFLOAT)
+    } else if hl_def(HLF_NONE) > 0 {
+        hl_def(HLF_NONE)
+    } else if float_win {
+        let active = hl_attr(HLF_NFLOAT);
+        if active > 0 {
+            active
         } else {
-            0
+            default_hl_attr(HLF_NFLOAT as usize)
         }
+    } else {
+        0
     };
     if window.w_floating {
         let winbl = window.w_onebuf_opt.wo_winbl as c_int;
@@ -433,7 +432,7 @@ pub fn update_window_hl(mut window: Win, invalid: bool) {
             let mut attr = if id != 0 {
                 hl_get_ui_attr(ns_id, HLF_BORDER, id, false)
             } else {
-                unsafe { *hl_def.add(HLF_BORDER as usize) }
+                hl_def(HLF_BORDER)
             };
             attr = hl_apply_winblend(winbl, attr);
             if syn_attr2entry(attr).hl_blend > 0 {
@@ -448,14 +447,11 @@ pub fn update_window_hl(mut window: Win, invalid: bool) {
 
     // TODO(bfredl): this a bit ad-hoc. move it from highlight ns logic
     // to 'winhl' implementation?
-    let inactive = unsafe { *hl_def.add(HLF_INACTIVE as usize) };
-    unsafe {
-        window.w_hl_attr_normalnc = if inactive == 0 {
-            let global = *hl_attr_table().add(HLF_INACTIVE as usize);
-            hl_combine_attr(global, window.w_hl_attr_normal)
-        } else {
-            inactive
-        }
+    let inactive = hl_def(HLF_INACTIVE);
+    window.w_hl_attr_normalnc = if inactive == 0 {
+        hl_combine_attr(hl_attr(HLF_INACTIVE), window.w_hl_attr_normal)
+    } else {
+        inactive
     };
     if window.w_floating {
         let winbl = window.w_onebuf_opt.wo_winbl as c_int;
@@ -473,16 +469,16 @@ pub fn update_ns_hl(ns_id: c_int) {
         return;
     }
 
-    // The pointer, not a borrow: resolving a group below can re-enter and
-    // insert into the map, and the table's own allocation does not move.
-    let table = NS_HL_ATTR.with_mut(|tables| tables.entry(ns_id).or_default().as_ptr());
+    // The table, not a borrow of the map: resolving a group below can
+    // re-enter and insert into the map, and the table does not move. Each
+    // entry is resolved before the table is written.
+    let table = NS_HL_ATTR.with_mut(|tables| tables.entry(ns_id).or_default().0);
     for hlf in 1..HLF_COUNT {
-        let name = hlf_names[hlf as usize];
-        // SAFETY: a builtin group name, NUL-terminated.
-        let id = syn_check_group(unsafe { cstr::bytes_at(name) });
+        let id = syn_check_group(hlf_names[hlf as usize].to_bytes());
         // These two are the groups where "undefined" is meaningful.
         let optional = hlf == HLF_INACTIVE || hlf == HLF_NFLOAT;
-        unsafe { *table.add(hlf as usize) = hl_get_ui_attr(ns_id, hlf, id, optional) };
+        let attr = hl_get_ui_attr(ns_id, hlf, id, optional);
+        table.with_mut(|attrs| attrs[hlf as usize] = attr);
     }
 
     // NOOOO! You cannot just pretend that "Normal" is just like any other
@@ -490,7 +486,8 @@ pub fn update_ns_hl(ns_id: c_int) {
     //
     // haha, tema engine go brrr
     let normality = syn_check_group(b"Normal");
-    unsafe { *table.add(HLF_NONE as usize) = hl_get_ui_attr(ns_id, -1, normality, true) };
+    let attr = hl_get_ui_attr(ns_id, -1, normality, true);
+    table.with_mut(|attrs| attrs[HLF_NONE as usize] = attr);
 
     // hl_get_ui_attr might have invalidated the decor provider.
     provider_field(ns_id, |p| p.hl_cached = true);
@@ -498,8 +495,6 @@ pub fn update_ns_hl(ns_id: c_int) {
 
 /// The attribute a window's background cells are drawn with.
 pub fn win_bg_attr(window: Win) -> c_int {
-    // SAFETY: the caller's promise -- see this function's `# Safety`.
-    // SAFETY: the caller's window and the active namespace table.
     // A fast callback's namespace overrides the window's own cache.
     if ns_hl_fast.get() < 0 {
         let local = if window.raw() == Win::current_raw() {
@@ -511,9 +506,9 @@ pub fn win_bg_attr(window: Win) -> c_int {
             return local;
         }
     }
-    let inactive = unsafe { *hl_attr_table().add(HLF_INACTIVE as usize) };
+    let inactive = hl_attr(HLF_INACTIVE);
     if window.raw() == Win::current_raw() || inactive == 0 {
-        unsafe { *hl_attr_table().add(HLF_NONE as usize) }
+        hl_attr(HLF_NONE)
     } else {
         inactive
     }
@@ -523,13 +518,11 @@ pub fn win_bg_attr(window: Win) -> c_int {
 /// own namespace's table when one is active, otherwise the global one.
 #[inline]
 pub(crate) fn win_hl_attr(window: Win, hlf: c_int) -> c_int {
-    // SAFETY: the caller's promise -- see this function's `# Safety`.
-    // SAFETY: the caller's window. `w_ns_hl_attr` may still be null if
-    // highlights are checked before the first redraw.
-    let table = if !window.w_ns_hl_attr.is_null() && ns_hl_fast.get() < 0 {
-        window.w_ns_hl_attr
-    } else {
-        hl_attr_table()
+    // `w_ns_hl_attr` is still `None` if highlights are checked before the
+    // first redraw.
+    let table = match window.w_ns_hl_attr {
+        Some(table) if ns_hl_fast.get() < 0 => table,
+        _ => hl_attr_active.get(),
     };
-    unsafe { *table.add(hlf as usize) }
+    table_attr(table, hlf)
 }

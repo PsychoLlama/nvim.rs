@@ -53,7 +53,7 @@ use crate::grid::{
     GridRef, grid_adjust, grid_line_fill, grid_line_flush, grid_line_put_schar, grid_line_puts,
     grid_line_start, screengrid_line_start,
 };
-use crate::highlight::namespace::hl_attr_table;
+pub(crate) use crate::highlight::namespace::hl_attr;
 use crate::highlight::{hl_combine_attr, win_hl_attr};
 use crate::highlight_group::{HLF_S, HLF_SNC};
 use crate::memory::{xcalloc, xfree, xstrdup};
@@ -505,13 +505,6 @@ pub(crate) fn paint_flush() {
 /// only reads globals.
 pub(crate) fn is_redrawing() -> bool {
     redrawing()
-}
-
-/// The active attribute of highlight group `hlf`, i.e. C's `HL_ATTR`.
-pub(crate) fn hl_attr(hlf: c_int) -> c_int {
-    // SAFETY: the attribute table is built before the first redraw and is
-    // indexed by every `HLF_*`.
-    unsafe { *hl_attr_table().add(hlf as usize) }
 }
 
 /// The attribute `group` has in `win`, i.e. C's `win_hl_attr` -- [`hl_attr`]

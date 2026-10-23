@@ -159,7 +159,9 @@ pub struct Window {
     pub w_ns_hl: ::core::ffi::c_int,
     pub w_ns_hl_winhl: ::core::ffi::c_int,
     pub w_ns_hl_active: ::core::ffi::c_int,
-    pub w_ns_hl_attr: *mut ::core::ffi::c_int,
+    /// The `HLF_*` table the window draws with: its namespace's, or the
+    /// global one. `None` until `update_window_hl` first resolves it.
+    pub w_ns_hl_attr: Option<&'static crate::highlight::state::HlAttrTable>,
     /// The namespaces this window shows, when they are window-local.
     /// Membership only.
     pub(crate) w_ns_set: IdSet<uint32_t>,
@@ -298,7 +300,9 @@ pub struct Window {
     pub w_prevdir: Option<XString>,
     pub w_onebuf_opt: WinOpt,
     pub w_allbuf_opt: WinOpt,
-    pub w_p_cc_cols: *mut ::core::ffi::c_int,
+    /// The 'colorcolumn' columns, 0-based, sorted and ended by `-1`; empty
+    /// when the option names none. Set by `check_colorcolumn`.
+    pub w_p_cc_cols: Vec<::core::ffi::c_int>,
     pub w_p_culopt_flags: uint8_t,
     pub w_briopt_min: ::core::ffi::c_int,
     pub w_briopt_shift: ::core::ffi::c_int,

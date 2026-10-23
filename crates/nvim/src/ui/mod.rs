@@ -39,7 +39,7 @@ pub use mouse::{ui_check_mouse, ui_mouse_has};
 pub use sinks::*;
 
 use crate::api::private::helpers::cstr_to_string;
-use crate::api::ui::remote_ui_option_set;
+use crate::api::ui::{remote_ui_hl_attr_define, remote_ui_hl_group_set, remote_ui_option_set};
 use crate::autocmd::do_autocmd_uienter;
 use crate::buffer::resettitle;
 use crate::cstr;
@@ -454,7 +454,11 @@ pub unsafe fn ui_attach_impl(ui: *mut RemoteUI, chanid: u64) {
     // resent by `highlight_use_hlstate` itself.
     let sent = unsafe { (*ui).ui_ext[kUIHlState as usize] } && highlight_use_hlstate();
     if !sent {
-        unsafe { ui_send_all_hls(ui) };
+        // SAFETY: `ui` is the live UI being attached, as above.
+        ui_send_all_hls(
+            |id, attr, info| unsafe { remote_ui_hl_attr_define(ui, id, attr, attr, info) },
+            |name, attr| unsafe { remote_ui_hl_group_set(ui, name, attr) },
+        );
     }
     ui_refresh();
     do_autocmd_uienter(chanid, true);

@@ -465,18 +465,13 @@ pub fn update_screen() -> Result<(), Failed> {
         win_grid_alloc(wp);
 
         if wp.w_redr_border || wp.w_redr_type >= UPD_NOT_VALID {
-            // SAFETY: a window's `w_ns_hl_attr` is null or one of the
-            // `HLF_COUNT` tables `highlight::namespace` never frees.
-            let hl_attr = unsafe {
-                (!wp.w_ns_hl_attr.is_null())
-                    .then(|| core::slice::from_raw_parts(wp.w_ns_hl_attr, HLF_COUNT as usize))
-            };
+            let hl_attr = wp.w_ns_hl_attr.map(GlobalCell::get);
             grid_draw_border(
                 win_grid(wp),
                 &wp.w_config,
                 Some(wp.w_border_adj),
                 wp.w_onebuf_opt.wo_winbl as c_int,
-                hl_attr,
+                hl_attr.as_ref().map(|table| &table[..]),
             );
         }
 

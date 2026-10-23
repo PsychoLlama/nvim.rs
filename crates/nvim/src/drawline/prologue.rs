@@ -59,8 +59,8 @@ pub(crate) unsafe fn prepare_line(
         s.check_decor_providers = true;
 
         // 'colorcolumn'; a terminal buffer never shows one.
-        wlv.color_cols = if window.w_buffer.terminal.is_null() {
-            window.w_p_cc_cols
+        wlv.color_cols = if window.w_buffer.terminal.is_null() && !window.w_p_cc_cols.is_empty() {
+            window.w_p_cc_cols.as_ptr().cast_mut()
         } else {
             ::core::ptr::null_mut()
         };
