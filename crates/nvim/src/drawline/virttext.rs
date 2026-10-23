@@ -20,9 +20,10 @@
 
 use super::*;
 use crate::decoration::{
-    DECOR_ID_INVALID, VirtChunks, kDecorKindUIWatched, kDecorKindVirtText, kHlModeBlend,
-    kHlModeCombine, kVPosEndOfLine, kVPosEndOfLineRightAlign, kVPosInline, kVPosRightAlign,
-    kVPosWinCol, kVTRepeatLinebreak, with_decor_virt,
+    DECOR_ID_INVALID, VirtChunks, decor_lists, decor_range, kDecorKindUIWatched,
+    kDecorKindVirtText, kHlModeBlend, kHlModeCombine, kVPosEndOfLine, kVPosEndOfLineRightAlign,
+    kVPosInline, kVPosRightAlign, kVPosWinCol, kVTRepeatLinebreak, set_decor_eol_col,
+    set_decor_range_draw_col, with_decor_virt,
 };
 use crate::grid::with_linebuf;
 use crate::types::NUL;
@@ -100,8 +101,7 @@ fn push_win_extmark(m: WinExtmark) {
 /// `col_off` is where the buffer text starts (past the left columns), and the
 /// answer is `end_col` raised to the rightmost column anything was drawn at,
 /// so the caller knows how much of the line buffer to flush. `wlv` carries the
-/// window row to report a `ui_watched` mark at and the decoration state the
-/// redraw is walking.
+/// window row to report a `ui_watched` mark at.
 pub(crate) fn draw_virt_text(
     window: Win,
     buffer: Buf,
@@ -109,11 +109,13 @@ pub(crate) fn draw_virt_text(
     mut end_col: ::core::ffi::c_int,
     wlv: &WinLineVars,
 ) -> ::core::ffi::c_int {
-    let (win_row, mut state) = (wlv.row, wlv.decor);
-    // SAFETY: the caller's window and decoration state.
+    let win_row = wlv.row;
     let max_col = window.w_view_width;
-    let end = state.current_end;
-    let do_eol = state.eol_col > -1;
+    let lists = decor_lists();
+    let (row, end) = (lists.row, lists.current_end);
+    // Where the next end-of-line text goes; drawing one moves it.
+    let mut eol_col = lists.eol_col;
+    let do_eol = eol_col > -1;
 
     // Walks leftwards as window-right-aligned texts are placed.
     let mut right_pos = max_col;
@@ -124,14 +126,15 @@ pub(crate) fn draw_virt_text(
     let mut total_eol_right_width = 0;
 
     for i in 0..end {
-        let item = decor_range_at(state, i);
-        if unsafe { (*item).start_row } != state.row || !unsafe { decor_virt_pos(item) } {
+        // A copy: drawing reads it, and `draw_col` is written back.
+        let mut item = decor_range(i);
+        if item.start_row != row || !decor_virt_pos(&item) {
             continue;
         }
 
         // The link, and a copy of the fields read off it below.
-        let vt = (unsafe { (*item).kind } == kDecorKindVirtText).then(|| {
-            let link = unsafe { (*item).data.virt() };
+        let vt = (item.kind == kDecorKindVirtText).then(|| {
+            let link = item.data.virt();
             with_decor_virt(link, |vt| VirtShape {
                 link,
                 width: vt.width,
@@ -142,44 +145,44 @@ pub(crate) fn draw_virt_text(
             })
         });
 
-        if unsafe { (*item).draw_col } == -1 {
-            let placed = match unsafe { decor_virt_pos_kind(item) } {
+        if item.draw_col == -1 {
+            let placed = match decor_virt_pos_kind(&item) {
                 kVPosEndOfLineRightAlign if do_eol => {
                     let mut eol_offset = 0;
                     if total_eol_right_width == 0 {
                         for j in i..end {
-                            let ahead = decor_range_at(state, j);
-                            if unsafe { (*ahead).start_row } != state.row
-                                || !unsafe { decor_virt_pos(ahead) }
-                                || unsafe { (*ahead).draw_col } != -1
+                            let ahead = decor_range(j);
+                            if ahead.start_row != row
+                                || !decor_virt_pos(&ahead)
+                                || ahead.draw_col != -1
                             {
                                 continue;
                             }
-                            if unsafe { decor_virt_pos_kind(ahead) } == kVPosEndOfLineRightAlign {
+                            if decor_virt_pos_kind(&ahead) == kVPosEndOfLineRightAlign {
                                 // Only virtual texts can report this
                                 // position: a `ui_watched` range's is
                                 // always eol or overlay
                                 // (`decor_range_add_sh`). Upstream
                                 // dereferences unconditionally here.
-                                debug_assert!(unsafe { (*ahead).kind } == kDecorKindVirtText);
+                                debug_assert!(ahead.kind == kDecorKindVirtText);
                                 // One space between neighbours.
-                                let link = unsafe { (*ahead).data.virt() };
+                                let link = ahead.data.virt();
                                 total_eol_right_width += with_decor_virt(link, |vt| vt.width) + 1;
                             }
                         }
                         // ...but none after the last one.
                         total_eol_right_width -= 1;
-                        if total_eol_right_width <= right_pos - state.eol_col {
-                            eol_offset = right_pos - total_eol_right_width - state.eol_col;
+                        if total_eol_right_width <= right_pos - eol_col {
+                            eol_offset = right_pos - total_eol_right_width - eol_col;
                         }
                     }
-                    Some(state.eol_col + eol_offset)
+                    Some(eol_col + eol_offset)
                 }
                 kVPosRightAlign => {
                     right_pos -= vt.map_or(0, |vt| vt.width);
                     Some(right_pos)
                 }
-                kVPosEndOfLine if do_eol => Some(state.eol_col),
+                kVPosEndOfLine if do_eol => Some(eol_col),
                 kVPosWinCol => Some((col_off + vt.map_or(0, |vt| vt.col)).max(0)),
                 // Inline, overlay, or an eol form with no end of line to
                 // hang off: placed elsewhere, or not at all.
@@ -187,26 +190,26 @@ pub(crate) fn draw_virt_text(
             };
             if let Some(col) = placed {
                 // Out of the window: do not draw it at all.
-                unsafe {
-                    (*item).draw_col = if col < 0 || col >= window.w_view_width {
-                        INT_MIN
-                    } else {
-                        col
-                    }
+                item.draw_col = if col < 0 || col >= window.w_view_width {
+                    INT_MIN
+                } else {
+                    col
                 };
+                set_decor_range_draw_col(i, item.draw_col);
             }
         }
 
-        if unsafe { (*item).draw_col } < 0 {
+        if item.draw_col < 0 {
             continue;
         }
 
-        if unsafe { (*item).kind } == kDecorKindUIWatched {
+        if item.kind == kDecorKindUIWatched {
+            let ui = item.data.ui_watched();
             push_win_extmark(WinExtmark {
-                ns_id: unsafe { (*item).data.ui_watched() }.ns_id as NS,
-                mark_id: unsafe { (*item).data.ui_watched() }.mark_id as uint64_t,
+                ns_id: ui.ns_id as NS,
+                mark_id: ui.mark_id as uint64_t,
                 win_row,
-                win_col: unsafe { (*item).draw_col },
+                win_col: item.draw_col,
             });
         }
 
@@ -214,17 +217,18 @@ pub(crate) fn draw_virt_text(
             let col = unsafe {
                 draw_virt_text_item(
                     buffer,
-                    (*item).draw_col,
+                    item.draw_col,
                     VirtChunks::Text(vt.link),
                     vt.hl_mode as HlMode,
                     max_col,
-                    (*item).draw_col - col_off,
+                    item.draw_col - col_off,
                     0,
                 )
             };
             if do_eol && (vt.pos == kVPosEndOfLine || vt.pos == kVPosEndOfLineRightAlign) {
                 // The next end-of-line text starts one cell further on.
-                state.eol_col = col + 1;
+                eol_col = col + 1;
+                set_decor_eol_col(eol_col);
             }
             end_col = end_col.max(col);
         }
@@ -232,7 +236,7 @@ pub(crate) fn draw_virt_text(
         // Deactivate, unless it is to be repeated on every screen row of
         // a wrapped line.
         if vt.is_none_or(|vt| vt.flags & kVTRepeatLinebreak == 0) {
-            unsafe { (*item).draw_col = INT_MIN };
+            set_decor_range_draw_col(i, INT_MIN);
         }
     }
     end_col
@@ -364,22 +368,15 @@ pub(crate) unsafe fn draw_virt_text_item(
 // Inline virtual text
 // ---------------------------------------------------------------------------
 
-/// Whether an active range describes inline virtual text at or after byte `v`
-/// of the line.
-///
-/// # Safety
-/// `item` must be a live decoration range.
+/// Whether an active range describes inline virtual text on `row`.
 #[inline]
-unsafe fn inline_virt_at(item: *const DecorRange, row: ::core::ffi::c_int) -> bool {
-    // SAFETY: the caller's range.
-    unsafe {
-        (*item).start_row == row
-            && (*item).kind == kDecorKindVirtText
-            && with_decor_virt((*item).data.virt(), |vt| {
-                vt.pos == kVPosInline && vt.width != 0
-            })
-            && (*item).draw_col >= -1
-    }
+fn inline_virt_at(item: &DecorRange, row: ::core::ffi::c_int) -> bool {
+    item.start_row == row
+        && item.kind == kDecorKindVirtText
+        && with_decor_virt(item.data.virt(), |vt| {
+            vt.pos == kVPosInline && vt.width != 0
+        })
+        && item.draw_col >= -1
 }
 
 impl WinLineVars {
@@ -389,24 +386,18 @@ impl WinLineVars {
     /// The character loop asks this to decide whether it may take its fast
     /// path to the end of the line.
     pub(crate) fn has_more_inline_virt(&self, v: ptrdiff_t) -> bool {
-        // SAFETY: the redraw's decoration state, threaded in `self`.
         if self.virt_inline_i < self.virt_inline_len {
             return true;
         }
-        let state = self.decor;
-        let row = state.row;
+        let lists = decor_lists();
+        let row = lists.row;
         // Both halves of `ranges_i`: the ranges active now, and the ones
         // that start later on this row.
-        let spans = [
-            (0, state.current_end),
-            (state.future_begin, decor_range_count(state)),
-        ];
+        let spans = [(0, lists.current_end), (lists.future_begin, lists.count)];
         for (from, to) in spans {
             for i in from..to {
-                let item = decor_range_at(state, i);
-                if unsafe { inline_virt_at(item, row) }
-                    && unsafe { (*item).start_col } as ptrdiff_t >= v
-                {
+                let item = decor_range(i);
+                if inline_virt_at(&item, row) && item.start_col as ptrdiff_t >= v {
                     return true;
                 }
             }
@@ -422,34 +413,30 @@ impl WinLineVars {
     /// empty, and a chunk entirely left of the first visible column is dropped
     /// and the next one tried.
     pub(crate) fn handle_inline_virtual_text(&mut self, v: ptrdiff_t, selected: bool) {
-        // SAFETY: the redraw's decoration state, threaded in `self`;
-        // `extra_text` borrows the chunk, which that state owns for the rest
-        // of the redraw.
+        // SAFETY (for the pointer walks below): `extra_text` borrows the
+        // chunk, which its decoration owns for the rest of the redraw.
         while self.extra_todo == 0 {
             if self.virt_inline_i >= self.virt_inline_len {
                 // Find the next inline text to start.
                 self.virt_inline = DECOR_ID_INVALID;
                 self.virt_inline_len = 0;
                 self.virt_inline_i = 0;
-                let state = self.decor;
-                let row = state.row;
-                for i in 0..state.current_end {
-                    let item = decor_range_at(state, i);
-                    if unsafe { (*item).draw_col } == -3 {
+                let lists = decor_lists();
+                for i in 0..lists.current_end {
+                    if decor_range(i).draw_col == -3 {
                         // Nothing inline can precede this non-inline text
                         // any more, so its column can be fixed now.
-                        unsafe { decor_init_draw_col(self.off, selected, item) };
+                        decor_init_draw_col(self.off, selected, i);
                     }
-                    if unsafe { inline_virt_at(item, row) }
-                        && unsafe { (*item).start_col } as ptrdiff_t == v
-                    {
-                        let link = unsafe { (*item).data.virt() };
+                    let item = decor_range(i);
+                    if inline_virt_at(&item, lists.row) && item.start_col as ptrdiff_t == v {
+                        let link = item.data.virt();
                         let (len, hl_mode) =
                             with_decor_virt(link, |vt| (vt.data.text().len(), vt.hl_mode));
                         self.virt_inline = link;
                         self.virt_inline_len = len;
                         self.virt_inline_hl_mode = hl_mode as HlMode;
-                        unsafe { (*item).draw_col = INT_MIN };
+                        set_decor_range_draw_col(i, INT_MIN);
                         break;
                     }
                 }

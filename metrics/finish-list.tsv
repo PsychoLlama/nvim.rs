@@ -1,5 +1,5 @@
 module	file	files	unsafe_stmts	unsafe_fns	wrappers	regions	raw_params	raw_returns	outside_callees
-api/	*	59	430	60	279	deref:58 compound:21 expr:16 ref:1	other:50 str:14	other:3 str:3 value:1	at:22 CStr::from_ptr:9 from_raw_parts:6 ManuallyDrop::take:5 nlua_exec:5 xfree:5 bytes_at:4 c_str:3
+api/	*	59	420	60	277	deref:55 compound:20 expr:16 ref:1	other:50 str:14	other:3 str:3 value:1	at:22 CStr::from_ptr:9 from_raw_parts:6 ManuallyDrop::take:5 nlua_exec:5 xfree:5 bytes_at:4 c_str:3
 api/	api/autocmd/create.rs	1	8	0	8	-	-	-	at:2
 api/	api/autocmd/exec.rs	1	3	0	3	-	-	-	-
 api/	api/autocmd/group.rs	1	1	0	1	-	-	-	-
@@ -20,10 +20,10 @@ api/	api/deprecated/lines.rs	1	2	0	2	-	-	-	-
 api/	api/deprecated/vars.rs	1	0	0	0	-	-	-	-
 api/	api/deprecated/write.rs	1	11	0	1	deref:5 compound:1 expr:1	-	-	nlua_exec:1
 api/	api/events.rs	1	1	0	1	-	-	-	c_str:1
-api/	api/extmark/decor.rs	1	9	0	1	deref:3 compound:1	-	-	decor_provider_clear:1
+api/	api/extmark/decor.rs	1	0	0	0	-	-	-	-
 api/	api/extmark/ns.rs	1	4	0	1	expr:3	-	-	bytes_at:1
 api/	api/extmark/query.rs	1	6	0	5	expr:1	-	-	at_opt:1 mt_inspect:1 xfree:1
-api/	api/extmark/set.rs	1	4	0	3	deref:1	-	-	DecorStateRef::current:1 utfc_ptr2schar:1
+api/	api/extmark/set.rs	1	3	0	2	deref:1	-	-	utfc_ptr2schar:1
 api/	api/options.rs	1	9	2	9	-	str:2	-	CStr::from_ptr:2 c_str:2 at:1
 api/	api/private/converter.rs	1	1	0	1	-	-	-	arena_mem_free:1
 api/	api/private/dispatch/mod.rs	1	3	2	3	-	str:2	-	c_str_len:1 from_raw_parts:1
@@ -77,30 +77,23 @@ cstr.rs	*	1	16	8	10	deref:4 expr:2	str:10	-	CStr::from_ptr:3 from_raw_parts:3 CS
 cstr.rs	cstr.rs	1	16	8	10	deref:4 expr:2	str:10	-	CStr::from_ptr:3 from_raw_parts:3 CStr::from_bytes_with_nul_unchecked:1
 cursor_shape.rs	*	1	7	2	4	compound:1	str:2	-	cstr_to_string:2
 cursor_shape.rs	cursor_shape.rs	1	7	2	4	compound:1	str:2	-	cstr_to_string:2
-decoration/	*	4	21	7	15	ref:6	other:6	other:3	from_raw_parts_mut:2 marktree_get_altpos:1 marktree_itr_current:1 marktree_itr_get:1 marktree_itr_get_overlap:1 marktree_itr_next:1 marktree_itr_step_overlap:1
-decoration/	decoration/handles.rs	1	4	2	0	ref:4	other:2	other:2	-
-decoration/	decoration/mod.rs	1	2	1	2	-	-	-	-
-decoration/	decoration/query.rs	1	0	0	0	-	-	-	-
-decoration/	decoration/state.rs	1	15	4	13	ref:2	other:4	other:1	from_raw_parts_mut:2 marktree_get_altpos:1 marktree_itr_current:1 marktree_itr_get:1 marktree_itr_get_overlap:1 marktree_itr_next:1 marktree_itr_step_overlap:1
-decoration_provider.rs	*	1	16	3	10	deref:2 expr:2 compound:1	str:3 other:1	other:1	nlua_call_ref:1
-decoration_provider.rs	decoration_provider.rs	1	16	3	10	deref:2 expr:2 compound:1	str:3 other:1	other:1	nlua_call_ref:1
-drawline/	*	10	261	18	124	deref:118 expr:8 ref:1	other:9	-	.offset:18 .offset_from:12 .add:7 bytes_at:7 utfc_ptr2len:7 utf_ptr2cells:6 rl_mirror_ascii:3 utfc_ptr2schar:3
+drawline/	*	10	229	17	116	deref:97 expr:8 ref:1	other:8	-	.offset:18 .offset_from:12 .add:7 bytes_at:7 utfc_ptr2len:7 utf_ptr2cells:6 rl_mirror_ascii:3 utfc_ptr2schar:3
 drawline/	drawline/attrs.rs	1	9	0	7	deref:2	-	-	utf_ptr2cells:3 .offset:1 .offset_from:1 utfc_ptr2len:1
 drawline/	drawline/cells.rs	1	5	0	4	deref:1	-	-	.offset:1 .offset_from:1 xfree:1
 drawline/	drawline/chars.rs	1	49	3	25	deref:22 expr:2	-	-	.offset:8 .offset_from:5 utfc_ptr2len:3 utfc_ptr2schar:2 bytes_at:1 rl_mirror_ascii:1 utf_head_off:1 utf_ptr2char:1
 drawline/	drawline/columns.rs	1	44	3	22	deref:17 expr:3	other:4	-	.add:3 build_statuscol_str:2 bytes_at:2 transstr_buf:2 abs:1 hl_combine_attr:1 rl_mirror_ascii:1 skipwhite:1
 drawline/	drawline/mod.rs	1	4	1	3	deref:1	other:1	-	mb_off_next:1 terminal_get_line_attributes:1
 drawline/	drawline/prologue.rs	1	45	4	18	deref:25 expr:2	other:3	-	.offset_from:5 .offset:4 bytes_at:2 skipwhite:1 utf_ptr2str_char_info:1 utfc_next:1
-drawline/	drawline/rows.rs	1	20	0	9	deref:7	-	-	decor_redraw_eol:1 hl_combine_attr:1
+drawline/	drawline/rows.rs	1	19	0	8	deref:7	-	-	hl_combine_attr:1
 drawline/	drawline/special.rs	1	26	0	13	deref:10 expr:1 ref:1	-	-	.offset:4 bytes_at:2 .copy_from_nonoverlapping:1 from_raw_parts_mut:1 mb_charlen:1 rl_mirror_ascii:1
 drawline/	drawline/state.rs	1	8	4	2	deref:6	-	-	.add:1
-drawline/	drawline/virttext.rs	1	51	3	21	deref:27	other:1	-	.add:3 utf_ptr2cells:3 utfc_ptr2len:3 decor_virt_pos:2 decor_virt_pos_kind:2 decor_init_draw_col:1 mb_charlen:1 mb_string2cells:1
-drawscreen/	*	5	93	1	24	deref:65 expr:4	other:1	-	.add:8 vim_strsize:3 win_line:3 at:1 decor_conceal_line:1 from_raw_parts:1 terminal_check_size:1 terminal_suspended:1
+drawline/	drawline/virttext.rs	1	20	2	14	deref:6	-	-	.add:3 utf_ptr2cells:3 utfc_ptr2len:3 mb_charlen:1 mb_string2cells:1 utfc_ptr2schar:1
+drawscreen/	*	5	92	1	23	deref:65 expr:4	other:1	-	.add:8 vim_strsize:3 win_line:3 at:1 decor_conceal_line:1 from_raw_parts:1 terminal_check_size:1 terminal_suspended:1
 drawscreen/	drawscreen/mod.rs	1	8	1	2	deref:3 expr:3	other:1	-	utf_ptr2cells:1 vim_isprintc:1
 drawscreen/	drawscreen/mode.rs	1	5	0	5	-	-	-	vim_strsize:3 at:1 vim_snprintf:1
 drawscreen/	drawscreen/state.rs	1	0	0	0	-	-	-	-
 drawscreen/	drawscreen/winlines.rs	1	42	0	9	deref:32 expr:1	-	-	.add:4 win_line:3 decor_conceal_line:1 from_raw_parts:1
-drawscreen/	drawscreen/winupdate.rs	1	38	0	8	deref:30	-	-	.add:4 terminal_check_size:1 terminal_suspended:1
+drawscreen/	drawscreen/winupdate.rs	1	37	0	7	deref:30	-	-	.add:4 terminal_check_size:1 terminal_suspended:1
 eval/	*	6	236	21	152	deref:40 expr:21 ref:15 compound:2	other:10 value:7 void:4 str:2	value:7 other:2	c_str:11 xfree:9 .as_ref:8 time_watcher_start:4 time_watcher_stop:4 Box::from_raw:3 channel_decref:3 time_watcher_close:3
 eval/	eval/collect.rs	1	18	1	11	deref:4 ref:2 expr:1	other:1	-	.as_ref:2
 eval/	eval/funcs/channel.rs	1	39	1	34	deref:3 expr:1 ref:1	-	-	c_str:8 .as_ref:4 xfree:4 server_address_list:2 ThinCString::from_raw:1 arena_mem_free:1 at_opt:1 channel_close:1

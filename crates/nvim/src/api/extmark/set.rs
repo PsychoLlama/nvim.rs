@@ -14,8 +14,7 @@ use super::*;
 use crate::api::private::validate::{
     Bad, err_bad_number, err_bad_value, err_expected, err_invalid, err_out_of_range,
 };
-use crate::decoration::DecorStateRef;
-use crate::winlayer::WinId;
+use crate::decoration::decor_drawing_window;
 use crate::winlayer::{Buf, Live};
 
 /// The keyset this call was handed, with checked field access: the pointer the
@@ -273,11 +272,9 @@ impl Decoration {
     }
 
     /// Hand the decoration to the redraw that asked for it, rather than
-    /// storing a mark: what `ephemeral` means.  `state` is the redraw's own,
-    /// which is what makes the ranges below the right ones to add to.
+    /// storing a mark: what `ephemeral` means.
     fn add_to_redraw(
         &mut self,
-        state: DecorStateRef,
         at: Range,
         opts: &Opts,
         ns_id: Integer,
@@ -300,11 +297,11 @@ impl Decoration {
         // Each part of the decoration is handed over exactly once.
         if !self.virt_text.data.text().is_empty() {
             let vt = decor_put_vt(take_virt(&mut self.virt_text), DECOR_ID_INVALID);
-            decor_range_add_virt(state, row, col, end_row, end_col, vt, true);
+            decor_range_add_virt(row, col, end_row, end_col, vt, true);
         }
         if !self.virt_lines.data.lines().is_empty() {
             let vt = decor_put_vt(take_virt(&mut self.virt_lines), DECOR_ID_INVALID);
-            decor_range_add_virt(state, row, col, end_row, end_col, vt, true);
+            decor_range_add_virt(row, col, end_row, end_col, vt, true);
         }
         if self.has_hl {
             let mut sh = HlSource::inline(self.hl);
@@ -316,7 +313,6 @@ impl Decoration {
                 });
             }
             decor_range_add_sh(
-                state,
                 row,
                 col,
                 end_row,
@@ -518,19 +514,14 @@ fn set_extmark(
     let at = clamp(b, line, col, line2, col2, strict, ephemeral)?;
 
     if ephemeral {
-        // SAFETY: nothing here holds a `decor_state` borrow.
-        let state = unsafe { DecorStateRef::current() };
         // A provider is running exactly when the redraw has a window, and it
         // has to be drawing this buffer.
-        let drawing = state
-            .win
-            .and_then(WinId::get)
-            .is_some_and(|win| win.buffer() == b);
+        let drawing = decor_drawing_window().is_some_and(|win| win.buffer() == b);
         if !drawing {
             let why = c"cannot set emphemeral mark outside of a decoration provider";
             return Err(Error::exception(why));
         }
-        decor.add_to_redraw(state, at, opts, ns_id, id)?;
+        decor.add_to_redraw(at, opts, ns_id, id)?;
     } else {
         decor.store(b, at, opts, ns_id, &mut id, right_gravity);
     }

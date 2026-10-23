@@ -89,7 +89,6 @@ impl Cells {
                 self.byte_col(),
                 -1,
                 false,
-                wlv.decor,
                 self.decor_provider_end_col - 1,
             );
         }
@@ -490,7 +489,7 @@ impl Cells {
             || self.decor_conceal > 1;
         let have_char = (syntax_conceal && syn_get_sub_char() != NUL)
             || (self.has_match_conc != 0 && self.match_conc != 0)
-            || (self.decor_conceal != 0 && wlv.decor.conceal_char != 0)
+            || (self.decor_conceal != 0 && decor_conceal().1 != 0)
             || window.w_onebuf_opt.wo_cole == 1;
         if first_of_run && have_char && window.w_onebuf_opt.wo_cole != 3 {
             if schar_cells(self.cell_char) > 1 {
@@ -500,11 +499,12 @@ impl Cells {
             }
             self.cell_char = if self.has_match_conc != 0 && self.match_conc != 0 {
                 schar_from_char(self.match_conc)
-            } else if self.decor_conceal != 0 && wlv.decor.conceal_char != 0 {
-                if wlv.decor.conceal_attr != 0 {
-                    wlv.char_attr = wlv.decor.conceal_attr;
+            } else if self.decor_conceal != 0 && decor_conceal().1 != 0 {
+                let (_, conceal_char, conceal_attr) = decor_conceal();
+                if conceal_attr != 0 {
+                    wlv.char_attr = conceal_attr;
                 }
-                wlv.decor.conceal_char
+                conceal_char
             } else if syntax_conceal && syn_get_sub_char() != NUL {
                 schar_from_char(syn_get_sub_char())
             } else if window.w_p_lcs_chars.conceal != NUL as ScreenChar {

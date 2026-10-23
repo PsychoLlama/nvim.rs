@@ -1,5 +1,4 @@
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -26,15 +25,15 @@
 
 use crate::api::extmark::describe_ns;
 use crate::api::private::helpers::api_object_to_bool;
-use crate::decoration::{DecorStateRef, decor_check_to_be_deleted, decor_range_count};
+use crate::decoration::{decor_check_to_be_deleted, decor_lists};
 use crate::drawscreen::state::display_tick;
 use crate::global_cell::GlobalCell;
 use crate::guard::Lock;
 use crate::highlight::hl_check_ns;
 use crate::highlight::state::ns_hl_active;
 use crate::log::{LOGLVL_ERR, logmsg};
-use crate::lua::executor::{api_free_luaref, nlua_call_ref};
-use crate::message_fmt::{c_str, msg_bytes};
+use crate::lua::executor::{nlua_call_ref_reporting, release_luaref};
+use crate::message_fmt::msg_bytes;
 use crate::r#move::validate_botline_win;
 use crate::msg_schedule_semsg_multiline;
 use crate::types::builders::ArrayBuf;
@@ -45,8 +44,7 @@ use crate::types::{
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 
-use core::ffi::{c_char, c_int};
-use core::ptr;
+use core::ffi::{CStr, c_int};
 
 // The provider's own lifecycle state. `Disabled` is sticky (only a fresh
 // `nvim_set_decoration_provider` clears it); the other two are per-redraw.
@@ -97,14 +95,10 @@ fn set_state(idx: usize, state: DecorProvider_state) {
 }
 
 /// Report a provider's error, both to the log and to the message area.
-///
-/// # Safety
-/// `name` and `msg` must be NUL-terminated.
-unsafe fn decor_provider_error(ns_id: NS, name: *const c_char, msg: *const c_char) {
+fn decor_provider_error(ns_id: NS, name: &CStr, msg: &CStr) {
     let ns = describe_ns(ns_id, b"(UNKNOWN PLUGIN)");
     let shown_ns = msg_bytes(&ns);
-    // SAFETY: the caller's strings.
-    let (shown_name, shown_msg) = unsafe { (c_str(name), c_str(msg)) };
+    let (shown_name, shown_msg) = (msg_bytes(name.to_bytes()), msg_bytes(msg.to_bytes()));
     logmsg!(
         LOGLVL_ERR,
         c"decor_provider_error",
@@ -123,14 +117,11 @@ unsafe fn decor_provider_error(ns_id: NS, name: *const c_char, msg: *const c_cha
 /// `default_true` standing in for `nil`.
 ///
 /// The provider is named by *index*, not by pointer: the call below can
-/// register another provider and move the vector out from under us.
-///
-/// # Safety
-/// `name` must be NUL-terminated; `args` must be a live `Array` the callee
-/// may consume.
-unsafe fn decor_provider_invoke(
+/// register another provider and move the vector out from under us. The
+/// callee consumes `args`.
+fn decor_provider_invoke(
     idx: usize,
-    name: *const c_char,
+    name: &CStr,
     callback: LuaRef,
     args: Array,
     default_true: bool,
@@ -141,9 +132,9 @@ unsafe fn decor_provider_invoke(
 
     let locked = Lock::text();
     let mode = if want_list { kRetMulti } else { kRetNilBool };
-    // SAFETY: the caller's callback and name; `nlua_call_ref` owns `args`
-    // from here, and `err` is this frame's own.
-    let ret = match unsafe { nlua_call_ref(callback, name, args, mode) } {
+    // The call owns `args` from here; a reference that names nothing pushes
+    // nil, which the protected call reports.
+    let ret = match nlua_call_ref_reporting(callback, Some(name), args, mode) {
         Ok(value) => value,
         Err(e) => {
             err = e;
@@ -170,7 +161,7 @@ unsafe fn decor_provider_invoke(
     if err.is_set() {
         let (ns_id, count) = with_provider(idx, |p| (p.ns_id, p.error_count));
         if count < CB_MAX_ERROR {
-            unsafe { decor_provider_error(ns_id, name, err.message_or_empty().as_ptr()) };
+            decor_provider_error(ns_id, name, err.message_or_empty());
             // The report can reach Lua through the message area, so the
             // count is bumped through a fresh borrow.
             with_provider(idx, |p| {
@@ -197,7 +188,7 @@ pub(crate) fn decor_providers_invoke_spell(
     end_row: c_int,
     end_col: c_int,
 ) {
-    // SAFETY: the caller's window; the callbacks re-enter the editor.
+    // the caller's window; the callbacks re-enter the editor.
     for idx in 0..provider_count() {
         let p = provider(idx);
         if p.state != kDecorProviderDisabled && p.spell_nav != LUA_NOREF {
@@ -208,10 +199,10 @@ pub(crate) fn decor_providers_invoke_spell(
             args.push(Object::integer(start_col.into()));
             args.push(Object::integer(end_row.into()));
             args.push(Object::integer(end_col.into()));
-            let (name, cb, args) = (c"spell".as_ptr(), p.spell_nav, args.array());
-            // SAFETY: the provider is named by index, so the vector may
-            // move under the call; `args` is handed over.
-            unsafe { decor_provider_invoke(idx, name, cb, args, true, None) };
+            let (name, cb, args) = (c"spell", p.spell_nav, args.array());
+            // The provider is named by index, so the vector may move under
+            // the call; `args` is handed over.
+            decor_provider_invoke(idx, name, cb, args, true, None);
         }
     }
 }
@@ -226,10 +217,10 @@ pub(crate) fn decor_providers_invoke_conceal_line(window: Win, row: c_int) -> bo
             args.push(Object::integer(window.handle.into()));
             args.push(Object::integer(window.w_buffer.handle().into()));
             args.push(Object::integer(row.into()));
-            let (name, cb, args) = (c"conceal_line".as_ptr(), p.conceal_line, args.array());
-            // SAFETY: the provider is named by index, so the vector may
-            // move under the call; `args` is handed over.
-            unsafe { decor_provider_invoke(idx, name, cb, args, true, None) };
+            let (name, cb, args) = (c"conceal_line", p.conceal_line, args.array());
+            // The provider is named by index, so the vector may move under
+            // the call; `args` is handed over.
+            decor_provider_invoke(idx, name, cb, args, true, None);
         }
     }
     let now = window.buffer().b_marktree.n_keys;
@@ -239,7 +230,7 @@ pub(crate) fn decor_providers_invoke_conceal_line(window: Win, row: c_int) -> bo
 /// Start a redraw: run every `on_start` callback and put the providers that
 /// did not decline into the active state.
 pub(crate) fn decor_providers_start() {
-    // SAFETY: the callbacks re-enter the editor.
+    // the callbacks re-enter the editor.
     for idx in 0..provider_count() {
         let p = provider(idx);
         if p.state == kDecorProviderDisabled {
@@ -248,10 +239,10 @@ pub(crate) fn decor_providers_start() {
         if p.redraw_start != LUA_NOREF {
             let mut args = ArrayBuf::<2>::new();
             args.push(Object::integer(display_tick.get() as c_int as Integer));
-            let (name, cb, args) = (c"start".as_ptr(), p.redraw_start, args.array());
-            // SAFETY: the provider is named by index, so the vector may move
+            let (name, cb, args) = (c"start", p.redraw_start, args.array());
+            // the provider is named by index, so the vector may move
             // under the call; `args` is handed over.
-            let active = unsafe { decor_provider_invoke(idx, name, cb, args, true, None) };
+            let active = decor_provider_invoke(idx, name, cb, args, true, None);
             set_state(
                 idx,
                 if active {
@@ -291,11 +282,13 @@ fn set_provider_running(running: bool) {
 
 /// Start a window: run every `on_win` callback. A provider that declines is
 /// skipped for the rest of this window.
-pub(crate) fn decor_providers_invoke_win(window: Win, state: DecorStateRef) {
-    // SAFETY: the caller's window; the callbacks re-enter the editor.
+pub(crate) fn decor_providers_invoke_win(window: Win) {
     // This might change in the future; then this would need
     // `set_provider_running` just like "on_line" below.
-    debug_assert!(state.current_end == 0 && state.future_begin == decor_range_count(state));
+    debug_assert!({
+        let lists = decor_lists();
+        lists.current_end == 0 && lists.future_begin == lists.count
+    });
 
     if provider_count() > 0 {
         validate_botline_win(window);
@@ -320,9 +313,7 @@ pub(crate) fn decor_providers_invoke_win(window: Win, state: DecorStateRef) {
             args.push(Object::integer((window.w_topline - 1).into()));
             args.push(Object::integer((botline - 1).into()));
             // TODO(bfredl): could skip a call if retval was interpreted like range?
-            if !unsafe {
-                decor_provider_invoke(idx, c"win".as_ptr(), p.redraw_win, args.array(), true, None)
-            } {
+            if !decor_provider_invoke(idx, c"win", p.redraw_win, args.array(), true, None) {
                 set_state(idx, kDecorProviderWinDisabled);
             }
         }
@@ -331,7 +322,7 @@ pub(crate) fn decor_providers_invoke_win(window: Win, state: DecorStateRef) {
 
 /// Run every `on_line` callback for one window row.
 pub(crate) fn decor_providers_invoke_line(window: Win, row: c_int) {
-    // SAFETY: the caller's window; the callbacks re-enter the editor and may
+    // the caller's window; the callbacks re-enter the editor and may
     // place ephemeral decorations, which is what the flag below announces.
     set_provider_running(true);
     for idx in 0..provider_count() {
@@ -341,9 +332,9 @@ pub(crate) fn decor_providers_invoke_line(window: Win, row: c_int) {
             args.push(Object::window(window.handle));
             args.push(Object::buffer(window.w_buffer.handle()));
             args.push(Object::integer(row.into()));
-            let (name, cb, args) = (c"line".as_ptr(), p.redraw_line, args.array());
-            // SAFETY: as above.
-            if !unsafe { decor_provider_invoke(idx, name, cb, args, true, None) } {
+            let (name, cb, args) = (c"line", p.redraw_line, args.array());
+            // as above.
+            if !decor_provider_invoke(idx, name, cb, args, true, None) {
                 // returned 'false' or errored: skip the rest of this window
                 set_state(idx, kDecorProviderWinDisabled);
             }
@@ -384,9 +375,9 @@ pub(crate) fn decor_providers_invoke_range(
         args.push(Object::integer(end_col.into()));
 
         let mut res = Array::EMPTY;
-        let (name, cb, args) = (c"range".as_ptr(), p.redraw_range, args.array());
-        // SAFETY: as above; `res` receives the callback's return list.
-        let status = unsafe { decor_provider_invoke(idx, name, cb, args, true, Some(&mut res)) };
+        let (name, cb, args) = (c"range", p.redraw_range, args.array());
+        // as above; `res` receives the callback's return list.
+        let status = decor_provider_invoke(idx, name, cb, args, true, Some(&mut res));
 
         // The Lua call may have reallocated the provider vector, so
         // everything below goes through the index again.
@@ -421,16 +412,14 @@ pub(crate) fn decor_providers_invoke_range(
 
 /// Run every `on_buf` callback for one buffer.
 pub(crate) fn decor_providers_invoke_buf(buffer: Buf) {
-    // SAFETY: the caller's buffer; the callbacks re-enter the editor.
+    // the caller's buffer; the callbacks re-enter the editor.
     for idx in 0..provider_count() {
         let p = provider(idx);
         if p.state == kDecorProviderActive && p.redraw_buf != LUA_NOREF {
             let mut args = ArrayBuf::<2>::new();
             args.push(Object::buffer(buffer.handle));
             args.push(Object::integer(display_tick.get() as Integer));
-            unsafe {
-                decor_provider_invoke(idx, c"buf".as_ptr(), p.redraw_buf, args.array(), true, None)
-            };
+            decor_provider_invoke(idx, c"buf", p.redraw_buf, args.array(), true, None);
         }
     }
 }
@@ -438,15 +427,13 @@ pub(crate) fn decor_providers_invoke_buf(buffer: Buf) {
 /// Finish a redraw: run every `on_end` callback, then free the decorations a
 /// callback asked to delete while they were still being drawn.
 pub(crate) fn decor_providers_invoke_end() {
-    // SAFETY: the callbacks re-enter the editor.
+    // the callbacks re-enter the editor.
     for idx in 0..provider_count() {
         let p = provider(idx);
         if p.state != kDecorProviderDisabled && p.redraw_end != LUA_NOREF {
             let mut args = ArrayBuf::<1>::new();
             args.push(Object::integer(display_tick.get() as c_int as Integer));
-            unsafe {
-                decor_provider_invoke(idx, c"end".as_ptr(), p.redraw_end, args.array(), true, None)
-            };
+            decor_provider_invoke(idx, c"end", p.redraw_end, args.array(), true, None);
         }
     }
     decor_check_to_be_deleted();
@@ -470,12 +457,13 @@ pub(crate) fn decor_provider_invalidate_hl() {
     }
 }
 
-/// The provider for namespace `ns_id`, registering an empty one if `force`
-/// and there is none.
+/// Runs `f` on the provider for namespace `ns_id`, registering an empty one
+/// if `force` and there is none. Answers `None` when there is no provider and
+/// `force` is false.
 ///
-/// The pointer is into the provider vector and is invalidated by anything
-/// that can register a provider — that is, by any Lua call. Callers that keep
-/// it across one must use [`with_decor_provider`] instead.
+/// It resolves the provider afresh, so a callback that registered another
+/// provider in between cannot leave a stale index behind; `f` must not run
+/// Lua.
 ///
 /// Namespace 0 is the global one and has no provider, so a caller asking for
 /// a non-positive id is a bug — but only a `debug_assert!`, because upstream
@@ -483,24 +471,6 @@ pub(crate) fn decor_provider_invalidate_hl() {
 /// and that vanishes under `NDEBUG`. A release upstream nvim reached through
 /// `nvim_set_hl(-2, …)` appends a provider with a negative id and carries on;
 /// aborting instead would be a divergence, not a fix.
-pub(crate) fn get_decor_provider(ns_id: NS, force: bool) -> *mut DecorProvider {
-    debug_assert!(ns_id > 0);
-    match provider_index(ns_id, force) {
-        Some(idx) => PROVIDERS.with(|providers| providers.as_ptr().cast_mut().wrapping_add(idx)),
-        None => ptr::null_mut(),
-    }
-}
-
-/// Runs `f` on the provider for namespace `ns_id`, registering an empty one
-/// if `force` and there is none. Answers `None` when there is no provider and
-/// `force` is false.
-///
-/// This is the form to use around anything that can run Lua: it resolves the
-/// provider afresh, so a callback that registered another provider in between
-/// cannot leave a stale pointer behind.
-///
-/// Carries [`get_decor_provider`]'s `ns_id > 0` assertion, and for the same
-/// reason it is a `debug_assert!` there.
 pub(crate) fn with_decor_provider<R>(
     ns_id: NS,
     force: bool,
@@ -556,35 +526,24 @@ const fn new_provider(ns_id: NS) -> DecorProvider {
 
 /// Drop every callback `p` holds and disable it.
 ///
-/// # Safety
-/// `p` must be null or point to a live provider.
-pub(crate) unsafe fn decor_provider_clear(p: *mut DecorProvider) {
-    if p.is_null() {
-        return;
-    }
-    // SAFETY: the caller's provider. `api_free_luaref` only touches the Lua
-    // registry, so the provider vector cannot move under this.
-    let slots = unsafe {
-        [
-            &raw mut (*p).redraw_start,
-            &raw mut (*p).redraw_buf,
-            &raw mut (*p).redraw_win,
-            &raw mut (*p).redraw_line,
-            &raw mut (*p).redraw_range,
-            &raw mut (*p).redraw_end,
-            &raw mut (*p).spell_nav,
-            &raw mut (*p).conceal_line,
-        ]
-    };
+/// Giving a reference up only touches the Lua registry, so this runs no Lua
+/// and is fine inside [`with_decor_provider`].
+pub(crate) fn decor_provider_clear(p: &mut DecorProvider) {
+    let slots = [
+        &mut p.redraw_start,
+        &mut p.redraw_buf,
+        &mut p.redraw_win,
+        &mut p.redraw_line,
+        &mut p.redraw_range,
+        &mut p.redraw_end,
+        &mut p.spell_nav,
+        &mut p.conceal_line,
+    ];
     for slot in slots {
-        // SAFETY: each slot names one `LuaRef` field of the live provider.
-        if unsafe { *slot } != LUA_NOREF {
-            unsafe {
-                api_free_luaref(*slot);
-                *slot = LUA_NOREF;
-            }
+        if *slot != LUA_NOREF {
+            release_luaref(*slot);
+            *slot = LUA_NOREF;
         }
     }
-    // SAFETY: the caller's provider.
-    unsafe { (*p).state = kDecorProviderDisabled };
+    p.state = kDecorProviderDisabled;
 }

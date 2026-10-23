@@ -14,7 +14,7 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::decoration::{DecorStateRef, SIGN_WIDTH};
+use crate::decoration::SIGN_WIDTH;
 use crate::r#move::WinValid;
 use crate::option::cpo_has;
 use crate::optionstr::OptString;
@@ -94,7 +94,6 @@ pub(crate) fn draw_window_lines(
     rg: &mut Regions,
     cursorline_fi: FoldInfo,
     spv: &mut SpellVars,
-    decor: DecorStateRef,
 ) -> LineNr {
     // Plain construction but for the one field, so it sits outside the
     // promise below.
@@ -140,18 +139,18 @@ pub(crate) fn draw_window_lines(
             w.srow = w.row;
 
             if line_needs_drawing(window, buffer, rg, &w) {
-                if !draw_one_line(window, buffer, rg, &mut w, cursorline_fi, spv, decor) {
+                if !draw_one_line(window, buffer, rg, &mut w, cursorline_fi, spv) {
                     break;
                 }
             } else {
-                skip_one_line(window, buffer, rg, &mut w, cursorline_fi, spv, decor);
+                skip_one_line(window, buffer, rg, &mut w, cursorline_fi, spv);
                 if w.row > window.w_view_height {
                     break;
                 }
             }
 
             if window.w_redr_statuscol {
-                restart_for_statuscol(window, decor);
+                restart_for_statuscol(window);
                 continue 'restart;
             }
             if w.lnum > buffer.b_ml.ml_line_count {
@@ -200,12 +199,11 @@ pub(crate) fn draw_window_lines(
                             false,
                             &raw mut zero_spv,
                             FoldInfo::default(),
-                            decor,
                         )
                     };
                     if window.w_redr_statuscol {
                         w.eof = false;
-                        restart_for_statuscol(window, decor);
+                        restart_for_statuscol(window);
                         continue 'restart;
                     }
                 }
@@ -279,7 +277,6 @@ fn draw_one_line(
     w: &mut Walk,
     cursorline_fi: FoldInfo,
     spv: &mut SpellVars,
-    decor: DecorStateRef,
 ) -> bool {
     if w.lnum == rg.mod_top {
         rg.top_to_mod = false;
@@ -353,7 +350,6 @@ fn draw_one_line(
                 concealed,
                 spv_arg,
                 foldinfo,
-                decor,
             )
         };
 
@@ -597,7 +593,6 @@ fn skip_one_line(
     w: &mut Walk,
     cursorline_fi: FoldInfo,
     spv: &mut SpellVars,
-    decor: DecorStateRef,
 ) {
     // SAFETY: the caller's window, buffer and `w_lines` array.
     let wl = unsafe { window.w_lines.add(w.idx as usize) };
@@ -625,7 +620,6 @@ fn skip_one_line(
                 false,
                 &raw mut *spv,
                 info,
-                decor,
             )
         };
     }
@@ -641,13 +635,12 @@ fn skip_one_line(
 }
 
 /// Reset the walk state so the window is drawn again from its top line.
-fn restart_for_statuscol(mut window: Win, decor: DecorStateRef) {
-    // SAFETY: the caller's window and decoration state.
+fn restart_for_statuscol(mut window: Win) {
     window.w_redr_statuscol = false;
     window.w_lines_valid = 0;
     window.w_valid.clear(WinValid::WCOL);
-    window.decor_redraw_reset(decor);
-    decor_providers_invoke_win(window, decor);
+    window.decor_redraw_reset();
+    decor_providers_invoke_win(window);
 }
 
 /// The last line did not fit in the window: say so, per `'display'`.

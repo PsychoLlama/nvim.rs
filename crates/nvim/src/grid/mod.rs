@@ -34,8 +34,8 @@
 //! grid by address, checked once at its `unsafe` constructor, after which
 //! every borrow of the cells lasts exactly one accessor call. It is the one
 //! handle -- the compositor's layer, the statusline's canvas and the line
-//! batch's target are all `GridRef`, not wrappers around it. `DecorStateRef`
-//! and `Rex` are the same shape for the same reason.
+//! batch's target are all `GridRef`, not wrappers around it. `Rex` is the
+//! same shape for the same reason.
 
 use crate::arabic::arabic_shape;
 use crate::decoration::{decor_check_invalid_glyphs, next_virt_text_chunk};

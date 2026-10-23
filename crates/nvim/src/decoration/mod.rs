@@ -1,5 +1,4 @@
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -35,6 +34,7 @@
 //! over.
 
 use crate::api::extmark::ns_is_local;
+use crate::buffer::buf_meta_total;
 use crate::change::changed_lines_invalidate_buf;
 use crate::decoration_provider::decor_provider_running;
 use crate::drawscreen::{redraw_buf_line_later, redraw_buf_range_later};
@@ -45,14 +45,13 @@ use crate::marktree::key::MtFlags;
 use crate::r#move::changed_window_setting;
 use crate::types::{
     ColNr, DecorHighlightInline, DecorInline, DecorPriority, DecorRangeKind, DecorSignHighlight,
-    DecorState, DecorVirtText, HlMode, LPos, LineNr, MTKey, MTNode, MTPos, MarkTreeIter,
-    MarkTreeIterLevel, MetaIndex, VirtTextPos, int32_t, uint8_t, uint16_t, uint32_t,
+    DecorVirtText, HlMode, LPos, LineNr, MTKey, MetaIndex, VirtTextPos, uint8_t, uint16_t,
+    uint32_t,
 };
 use crate::winlayer::{self, Buf, Win};
 use core::ffi::c_int;
 
 mod dict;
-mod handles;
 mod query;
 mod signs;
 mod state;
@@ -61,88 +60,9 @@ mod store;
 use self::store::Store;
 
 pub use self::dict::*;
-pub use self::handles::*;
 pub use self::query::*;
 pub use self::signs::*;
 pub use self::state::*;
-
-pub(crate) static decor_state: GlobalCell<DecorState> = GlobalCell::new(DecorState {
-    itr: [MarkTreeIter {
-        pos: MTPos {
-            row: 0 as int32_t,
-            col: 0,
-        },
-        lvl: 0,
-        x: ::core::ptr::null_mut::<MTNode>(),
-        i: 0,
-        s: [MarkTreeIterLevel { oldcol: 0, i: 0 }; 20],
-        intersect_idx: 0,
-        intersect_pos: MTPos { row: 0, col: 0 },
-        intersect_pos_x: MTPos { row: 0, col: 0 },
-    }],
-    slots: Vec::new(),
-    ranges_i: Vec::new(),
-    current_end: 0,
-    future_begin: 0,
-    free_slot_i: 0,
-    new_range_ordering: 0,
-    win: None,
-    top_row: 0,
-    row: 0,
-    col_last: 0,
-    current: 0,
-    eol_col: 0,
-    conceal: 0,
-    conceal_char: 0,
-    conceal_attr: 0,
-    spell: Some(false),
-    itr_valid: false,
-});
-
-// ---------------------------------------------------------------------------
-// The one state, named
-// ---------------------------------------------------------------------------
-
-impl DecorStateRef {
-    /// The decoration state the redraw is walking.
-    ///
-    /// There is exactly one, and it is a `static`, so its *address* is always
-    /// valid — which is why this is where the family's single `decor_state`
-    /// escape hatch lives. `handles.rs` deliberately knows nothing about
-    /// *which* state a handle names; the relationship with the global is this
-    /// module's.
-    ///
-    /// **Almost every caller should take the state from its own caller
-    /// instead.** The draw pass acquires it once, in
-    /// [`win_update`](crate::drawscreen::win_update), and threads it down
-    /// through `drawline/`; this is for the three places that are genuinely
-    /// outside that thread — the deferred free, the spelling-navigation scan
-    /// that puts the state aside and rebuilds it per line, and the ephemeral
-    /// extmark a provider's Lua callback sets, which re-enters the draw pass
-    /// from the API.
-    ///
-    /// # Safety
-    /// No `with`/`with_mut` borrow of `decor_state` may be outstanding: the
-    /// handle dereferences the cell directly and is exempt from borrow
-    /// tracking, exactly as [`GlobalCell::ptr`] is.
-    #[inline(always)]
-    pub unsafe fn current() -> Self {
-        // SAFETY: a `static`'s address is valid for the whole process; the
-        // caller's promise is the borrow half.
-        unsafe { Self::new(decor_state.ptr()) }
-    }
-
-    /// Put the decoration state aside, answering what it held and a handle
-    /// to the now empty state: the spelling-navigation scan rebuilds it per
-    /// line and puts the old one back when it is done.
-    pub(crate) fn set_aside() -> (DecorState, Self) {
-        // `take` is a checked exclusive borrow, so it returning at all says
-        // no `with`/`with_mut` borrow is outstanding -- `current`'s promise.
-        let saved = decor_state.take();
-        // SAFETY: as just said.
-        (saved, unsafe { Self::current() })
-    }
-}
 
 // ---------------------------------------------------------------------------
 // The shapes a decoration is made of
@@ -268,6 +188,17 @@ pub(crate) fn mt_decor_virt(mark: MTKey) -> uint32_t {
     match mark.decor_data {
         DecorInline::Ext(ext) if mark.flags.has(MtFlags::DECOR_EXT) => ext.vt_idx,
         _ => DECOR_ID_INVALID,
+    }
+}
+
+impl Buf {
+    /// How many marks of `kind` the whole buffer holds.
+    ///
+    /// The cheap test every per-row question starts with: a buffer with none
+    /// of the kind in question never touches the marktree.
+    #[inline(always)]
+    pub fn meta_total(self, kind: MetaIndex) -> uint32_t {
+        buf_meta_total(self, kind)
     }
 }
 
@@ -440,7 +371,7 @@ pub fn decor_check_to_be_deleted() {
     DECOR_VIRT.with_mut(|links| links.release(vt));
     let sh = TO_FREE_SH.replace(DECOR_ID_INVALID);
     DECOR_ITEMS.with_mut(|items| items.release(sh));
-    decor_state.with_mut(|state| state.win = None);
+    decor_forget_window();
 }
 
 /// Replaces any sign or conceal character that the glyph cache no longer

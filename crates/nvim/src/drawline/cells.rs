@@ -465,7 +465,7 @@ impl Cells {
             self.has_match_conc = 0;
             self.decor_conceal = 0;
             self.did_decrement_ptr = false;
-            self.provider_chunk(window, wlv.lnum, wlv.decor);
+            self.provider_chunk(window, wlv.lnum);
 
             'row_full: {
                 if self.columns_todo {
@@ -561,14 +561,14 @@ impl Cells {
 
     /// Ask the decoration providers for the next chunk of the line once the
     /// read cursor has walked past what their last answer covered.
-    pub(super) fn provider_chunk(&mut self, window: Win, lnum: LineNr, decor: DecorStateRef) {
+    pub(super) fn provider_chunk(&mut self, window: Win, lnum: LineNr) {
         if !self.check_decor_providers || self.byte_col() < self.decor_provider_end_col {
             return;
         }
         let at = self.byte_col();
         self.decor_provider_end_col = invoke_range_next(window, lnum, at, 100);
         self.refetch_line(window, lnum, at);
-        if !self.has_decor && decor_has_more_decorations(decor, lnum - 1) {
+        if !self.has_decor && decor_has_more_decorations(lnum - 1) {
             self.has_decor = true;
             self.extra_check = true;
         }
@@ -723,7 +723,6 @@ impl Cells {
                 self.byte_col(),
                 -3,
                 false,
-                wlv.decor,
                 self.decor_provider_end_col - 1,
             );
             // Where they go has to be decided again on the next row.
@@ -731,13 +730,12 @@ impl Cells {
         } else if !self.is_wrapped {
             // Without wrapping, "right_align" and "win_col" virtual texts
             // for the whole line still have to be placed.
-            decor_recheck_draw_col(-1, true, wlv.decor);
+            decor_recheck_draw_col(-1, true);
             decor_redraw_col(
                 window,
                 MAXCOL as ::core::ffi::c_int,
                 -1,
                 true,
-                wlv.decor,
                 self.decor_provider_end_col - 1,
             );
         }

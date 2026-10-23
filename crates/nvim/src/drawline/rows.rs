@@ -123,7 +123,6 @@ impl Cells {
                 self.byte_col() - 1,
                 wlv.off,
                 true,
-                wlv.decor,
                 self.decor_provider_end_col - 1,
             );
         }
@@ -349,14 +348,7 @@ impl Cells {
         // 'listchars'.
         let eol_skip = ::core::ffi::c_int::from(self.lcs_eol_todo && self.eol_extra_cell == 0);
         if self.has_decor {
-            unsafe {
-                decor_redraw_eol(
-                    window,
-                    wlv.decor,
-                    &raw mut wlv.line_attr,
-                    wlv.col + eol_skip,
-                )
-            };
+            decor_redraw_eol(window, &mut wlv.line_attr, wlv.col + eol_skip);
         }
 
         // Increasing virtual columns past the end of the line, so a click

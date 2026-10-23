@@ -22,7 +22,7 @@
 //! region is not spell-checked. Decorations win where they have an
 //! opinion; otherwise syntax decides, and with `'spelloptions'`
 //! `noplainbuffer` a region nothing claims is not checked at all.
-//! Ephemeral decorations live in the global `decor_state`, so the scan
+//! Ephemeral decorations live in the one decoration state, so the scan
 //! saves it, drives the `_on_spell_nav` callbacks itself, and restores it
 //! on the way out.
 
@@ -34,8 +34,9 @@ use crate::winlayer::Win;
 use core::ffi::c_int;
 
 use crate::charset::skip;
-use crate::decoration::decor_state;
-use crate::decoration::{DecorStateRef, decor_redraw_col, decor_redraw_line, decor_state_free};
+use crate::decoration::{
+    decor_redraw_col, decor_redraw_line, decor_spell, decor_state_restore, decor_state_set_aside,
+};
 use crate::decoration_provider::decor_providers_invoke_spell;
 use crate::getchar::state::got_int;
 use crate::message::give_warning;
@@ -63,16 +64,15 @@ fn decor_spell_nav_col(
     lnum: LineNr,
     decor_lnum: &mut LineNr,
     col: c_int,
-    state: DecorStateRef,
 ) -> Option<bool> {
     if *decor_lnum != lnum {
-        window.decor_redraw_reset(state);
+        window.decor_redraw_reset();
         decor_providers_invoke_spell(window, lnum as c_int - 1, col, lnum as c_int - 1, -1);
-        decor_redraw_line(window, lnum as c_int - 1, state);
+        decor_redraw_line(window, lnum as c_int - 1);
         *decor_lnum = lnum;
     }
-    decor_redraw_col(window, col, 0, false, state, MAXCOL as c_int);
-    state.spell
+    decor_redraw_col(window, col, 0, false, MAXCOL as c_int);
+    decor_spell()
 }
 
 /// Whether the syntax at this position is one that gets spell-checked.
@@ -124,13 +124,11 @@ pub fn spell_move_to(
     let mut lnum = window.w_cursor.lnum;
     clearpos(&mut found_pos);
 
-    // Ephemeral extmarks live in the global decor_state, so it has to be
+    // Ephemeral extmarks live in the one decoration state, so it has to be
     // put aside and rebuilt per line here, then restored. The scan's own
     // state occupies the same cell -- a provider's ephemeral mark reaches
-    // it from the API side, exactly as during a redraw -- so this is the
-    // one acquisition, and the address it names does not move when the
-    // contents are swapped.
-    let (saved_decor_start, decor) = DecorStateRef::set_aside();
+    // it from the API side, exactly as during a redraw.
+    let saved_decor_start = decor_state_set_aside();
     let mut decor_lnum: LineNr = -1;
 
     let mut lines = window.buffer().lines();
@@ -201,7 +199,7 @@ pub fn spell_move_to(
                     let no_plain_buffer =
                         window.syn_block().b_p_spo_flags & kOptSpoFlagNoplainbuffer != 0;
                     let mut can_spell = !no_plain_buffer;
-                    let decor_says = decor_spell_nav_col(window, lnum, &mut decor_lnum, col, decor);
+                    let decor_says = decor_spell_nav_col(window, lnum, &mut decor_lnum, col);
                     if decor_says == Some(true) {
                         can_spell = true;
                     } else if decor_says == Some(false) {
@@ -315,8 +313,7 @@ pub fn spell_move_to(
         line_breakcheck();
     }
 
-    decor_state_free(decor);
-    decor_state.with_mut(|state| *state = saved_decor_start);
+    decor_state_restore(saved_decor_start);
     ret
 }
 

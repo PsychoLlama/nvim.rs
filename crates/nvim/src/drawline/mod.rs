@@ -10,10 +10,10 @@ use crate::charset::{
 use crate::cursor::get_cursor_rel_lnum;
 use crate::cursor_shape::cursor_is_block_during_visual;
 use crate::decoration::{
-    DECOR_ID_INVALID, DecorStateRef, VirtChunks, VirtLineRef, decor_has_more_decorations,
-    decor_init_draw_col, decor_range_at, decor_range_count, decor_recheck_draw_col,
-    decor_redraw_col, decor_redraw_eol, decor_redraw_line, decor_redraw_signs, decor_virt_lines,
-    decor_virt_pos, decor_virt_pos_kind, kHlModeUnknown, with_decor_virt,
+    DECOR_ID_INVALID, VirtChunks, VirtLineRef, decor_conceal, decor_has_more_decorations,
+    decor_init_draw_col, decor_recheck_draw_col, decor_redraw_col, decor_redraw_eol,
+    decor_redraw_line, decor_redraw_signs, decor_spell, decor_virt_lines, decor_virt_pos,
+    decor_virt_pos_kind, kHlModeUnknown, with_decor_virt,
 };
 use crate::decoration_provider::{decor_providers_invoke_line, decor_providers_invoke_range};
 use crate::diff::{diff_check_with_linestatus, diff_find_change};
@@ -133,13 +133,11 @@ pub unsafe fn win_line(
     concealed: bool,
     spv: *mut SpellVars,
     foldinfo: FoldInfo,
-    decor: DecorStateRef,
 ) -> ::core::ffi::c_int {
     debug_assert!(startrow < endrow);
 
     // Plain construction, so it sits outside the promise below.
     let mut wlv = WinLineVars {
-        decor,
         lnum,
         foldinfo,
         startrow,

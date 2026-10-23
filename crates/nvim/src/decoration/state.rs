@@ -24,54 +24,96 @@
 //!
 //! [`decor_redraw_col_impl`] is the one that moves both: it pulls in the
 //! marks the column has reached, promotes the ranges that have started,
-//! drops the ones that have ended, and answers the combined attribute. It
-//! runs per column of every drawn line, so it works through slices of the
-//! two vectors rather than re-indexing them.
+//! drops the ones that have ended, and answers the combined attribute.
 //!
-//! # The state's own walk
+//! # One state, borrowed per step
 //!
-//! Unlike everywhere else in `decoration/`, the marktree walk here is **not**
-//! a [`Cursor`](crate::marktree::cursor::Cursor). The iterator is
-//! a *field of the state*, kept between rows of a redraw, and a `Cursor` would
-//! have to hold a pointer to it across the state's own field writes — which
-//! `DecorStateRef`'s `DerefMut` invalidates, because that reborrows the whole struct.
-//! So the four walk steps are [`DecorStateRef`] accessors that derive the iterator
-//! afresh each call, out of the raw pointer and inside the one statement that
-//! uses it. Same promise, taken at the same place; it just cannot be cached.
+//! There is one state, [`DECOR_STATE`], and nothing holds a borrow of it
+//! across a call that can run Lua. That rule is what makes it a cell rather
+//! than a lent `&mut`: the redraw calls decoration providers between and
+//! inside lines, and their callbacks come back — an ephemeral extmark adds a
+//! range, any extmark change invalidates the walk
+//! ([`Buf::invalidate_decor_state`]), and resolving a highlight id can run a
+//! provider's `hl_def`. So every function here borrows the state for the
+//! pure part of its work and resolves highlights outside it, and the drawing
+//! code reads the state through the small accessors at the bottom rather
+//! than through a handle.
+//!
+//! The marktree walk is the state's own iterator, a field kept between rows
+//! of a redraw; each step is a [`Cursor`] built over it for that one call.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use super::{
-    DECOR_ID_INVALID, DecorStateRef, Range, decor_release_sh, decor_release_vt, kSHConceal,
-    kSHHlEol, kSHIsSign, kSHSpellOff, kSHSpellOn, kSHUIWatched, kSHUIWatchedOverlay, kVTHide,
-    kVTIsLines, ns_in_win, sh_chain, slot_range, virt_chain, with_decor_item, with_decor_virt,
+    DECOR_ID_INVALID, decor_release_sh, decor_release_vt, kSHConceal, kSHHlEol, kSHIsSign,
+    kSHSpellOff, kSHSpellOn, kSHUIWatched, kSHUIWatchedOverlay, kVTHide, kVTIsLines, ns_in_win,
+    sh_chain, virt_chain, with_decor_item, with_decor_virt,
 };
-use crate::decoration::decor_state;
 use crate::decoration::{
     kDecorKindHighlight, kDecorKindUIWatched, kDecorKindVirtLines, kDecorKindVirtText,
     kVPosEndOfLine, kVPosInline, kVPosOverlay,
 };
+use crate::global_cell::GlobalCell;
 use crate::highlight::{hl_add_url, hl_combine_attr};
 use crate::highlight_group::syn_id2attr;
-use crate::marktree::cursor::tree_of;
-use crate::marktree::key::{MT_INVALID_KEY, mt_decor, mt_decor_any, mt_end, mt_invalid};
-use crate::marktree::{
-    marktree_get_altpos, marktree_itr_current, marktree_itr_get, marktree_itr_get_overlap,
-    marktree_itr_next, marktree_itr_step_overlap,
-};
+use crate::marktree::cursor::Cursor;
+use crate::marktree::key::{mt_decor, mt_decor_any, mt_end, mt_invalid};
+use crate::marktree::marktree_itr_current;
 use crate::pos::MAXCOL;
 use crate::types::{
     DecorHighlightInline, DecorInline, DecorPriority, DecorPriorityInternal, DecorRange,
-    DecorRange_data, DecorRange_data_ui, DecorRangeSlot, MTKey, MTPair, MTPos, RangeHighlight,
-    ScreenChar, VirtTextPos, uint16_t, uint32_t,
+    DecorRange_data, DecorRange_data_ui, DecorRangeSlot, DecorState, MTKey, MTNode, MTPos,
+    MarkTreeIter, MarkTreeIterLevel, RangeHighlight, ScreenChar, VirtTextPos, uint16_t, uint32_t,
 };
 use crate::winlayer::WinId;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
-use core::slice;
+
+/// The decoration state the redraw walks. See the module docs for why it is
+/// borrowed per step.
+static DECOR_STATE: GlobalCell<DecorState> = GlobalCell::new(DecorState {
+    itr: [MarkTreeIter {
+        pos: MTPos { row: 0, col: 0 },
+        lvl: 0,
+        x: ::core::ptr::null_mut::<MTNode>(),
+        i: 0,
+        s: [MarkTreeIterLevel { oldcol: 0, i: 0 }; 20],
+        intersect_idx: 0,
+        intersect_pos: MTPos { row: 0, col: 0 },
+        intersect_pos_x: MTPos { row: 0, col: 0 },
+    }],
+    slots: Vec::new(),
+    ranges_i: Vec::new(),
+    current_end: 0,
+    future_begin: 0,
+    free_slot_i: 0,
+    new_range_ordering: 0,
+    win: None,
+    top_row: 0,
+    row: 0,
+    col_last: 0,
+    current: 0,
+    eol_col: 0,
+    conceal: 0,
+    conceal_char: 0,
+    conceal_attr: 0,
+    spell: Some(false),
+    itr_valid: false,
+});
+
+/// Runs `f` on the state. `f` must not run Lua or reach the state again.
+#[inline(always)]
+fn with_state<R>(f: impl FnOnce(&mut DecorState) -> R) -> R {
+    DECOR_STATE.with_mut(f)
+}
+
+/// Reads one thing off the state.
+#[inline(always)]
+fn read_state<R>(f: impl FnOnce(&DecorState) -> R) -> R {
+    DECOR_STATE.with(f)
+}
 
 /// `draw_col` sentinels, in the order the drawing code goes through them.
 /// A new virtual-position range starts at [`DRAW_COL_NEW`]; the column loop
@@ -87,112 +129,86 @@ const DRAW_COL_NEVER: c_int = c_int::MIN;
 // The state's walk, and its slab
 // ---------------------------------------------------------------------------
 
-impl DecorStateRef {
+impl DecorState {
+    /// The state's walk over `buffer`'s marks, for one step.
+    fn walk(&mut self, buffer: Buf) -> Cursor<'_> {
+        Cursor::in_buffer(buffer, &mut self.itr[0])
+    }
+
     /// The mark the state's walk is on — an invalid key once it has run off
-    /// the end.
-    fn mark(self) -> MTKey {
-        // SAFETY: the state is live and its iterator is empty or positioned
-        // in the tree of the buffer being drawn. Derived from the raw
-        // pointer and spent in this statement, so a later field write
-        // through the state cannot invalidate it.
-        unsafe { marktree_itr_current(&mut (*self.raw()).itr[0]) }
-    }
-
-    /// Positions the walk at the first mark of `buffer` at or after `row`.
-    fn seek(self, buffer: Buf, row: c_int) {
-        // SAFETY: as [`DecorStateRef::mark`]; this is what positions the iterator.
-        unsafe { marktree_itr_get(&mut *tree_of(buffer), row, 0, &mut (*self.raw()).itr[0]) };
-    }
-
-    /// Steps the walk to the next mark of `buffer`.
-    fn step(self, buffer: Buf) {
-        // SAFETY: as [`DecorStateRef::mark`].
-        unsafe { marktree_itr_next(&mut *tree_of(buffer), &mut (*self.raw()).itr[0]) };
-    }
-
-    /// Positions the walk to enumerate the ranges *covering* (`row`, 0).
-    fn seek_overlap(self, buffer: Buf, row: c_int) -> bool {
-        // SAFETY: as [`DecorStateRef::mark`].
-        unsafe {
-            marktree_itr_get_overlap(&mut *tree_of(buffer), row, 0, &mut (*self.raw()).itr[0])
-        }
-    }
-
-    /// One more range covering the position [`DecorStateRef::seek_overlap`] was given.
-    fn step_overlap(self, buffer: Buf, pair: &mut MTPair) -> bool {
-        // SAFETY: as [`DecorStateRef::mark`].
-        unsafe { marktree_itr_step_overlap(&mut *tree_of(buffer), &mut (*self.raw()).itr[0], pair) }
+    /// the end. Reads only the iterator.
+    fn mark(&mut self) -> MTKey {
+        marktree_itr_current(&mut self.itr[0])
     }
 
     /// The range `ranges_i[i]` names.
-    fn range_at(self, i: c_int) -> Range {
+    fn range_at(&mut self, i: c_int) -> &mut DecorRange {
         let slot = self.ranges_i[i as usize] as usize;
-        assert!(slot < self.slots.len());
-        let state = self.raw();
-        // SAFETY: the slab lives on the heap, so the pointer survives any
-        // later write through the state itself; what invalidates it is a
-        // range being *added*, which is why every caller re-derives after
-        // one.
-        let slot = unsafe { &mut *(*state).slots.as_mut_ptr().add(slot) };
-        unsafe { Range::new(&raw mut *slot_range(slot)) }
+        slot_range(&mut self.slots[slot])
     }
 
     /// The indices of every live entry of `ranges_i` — the active list and
     /// the future list, skipping the gap between them.
-    fn list_spans(self) -> impl Iterator<Item = c_int> {
+    fn list_spans(&self) -> impl Iterator<Item = c_int> + use<> {
         let count = self.ranges_i.len() as c_int;
         (0..self.current_end).chain(self.future_begin..count)
     }
+
+    /// Frees what every owned range still in the lists holds.
+    fn free_all_owned(&mut self) {
+        for i in self.list_spans() {
+            free_owned(self.range_at(i));
+        }
+    }
 }
 
-impl Range {
-    /// The highlight item this range draws, for a `kDecorKindHighlight`.
-    fn sh(self) -> RangeHighlight {
-        self.data.highlight()
+/// The range in a slab slot.
+///
+/// Every caller has an index out of one of the two sorted lists, and those
+/// name occupied slots; a freed slot holds a freelist link instead.
+#[inline(always)]
+fn slot_range(slot: &mut DecorRangeSlot) -> &mut DecorRange {
+    match slot {
+        DecorRangeSlot::Range(range) => range,
+        DecorRangeSlot::Free(_) => unreachable!("decor: a sorted index names a freed slot"),
     }
+}
 
-    /// The virtual-text link this range draws, if it is one at all.
-    fn virt_opt(self) -> Option<uint32_t> {
-        (self.kind == kDecorKindVirtText).then(|| self.virt())
+/// The virtual-text link a range draws, if it is a virtual *text* at all.
+fn virt_opt(range: &DecorRange) -> Option<uint32_t> {
+    (range.kind == kDecorKindVirtText).then(|| range.data.virt())
+}
+
+/// Whether `range` occupies a position of its own rather than colouring the
+/// text under it — virtual text, or a mark a UI wants told about.
+#[inline]
+pub(crate) fn decor_virt_pos(range: &DecorRange) -> bool {
+    range.kind == kDecorKindVirtText || range.kind == kDecorKindUIWatched
+}
+
+/// Where a virtual-position range wants to be drawn.
+pub(crate) fn decor_virt_pos_kind(range: &DecorRange) -> VirtTextPos {
+    match range.kind {
+        kDecorKindVirtText => with_decor_virt(range.data.virt(), |vt| vt.pos),
+        kDecorKindUIWatched => range.data.ui_watched().pos,
+        // Not used; answer whatever.
+        _ => kVPosEndOfLine,
     }
+}
 
-    /// The UI-watched position this range reports, for a
-    /// `kDecorKindUIWatched`.
-    fn ui(self) -> DecorRange_data_ui {
-        self.data.ui_watched()
+/// Frees whatever an *owned* range carries — the ephemeral virtual text or
+/// virtual lines a decoration provider left behind, or the store entry
+/// holding an ephemeral highlight's URL.
+fn free_owned(range: &DecorRange) {
+    if !range.owned {
+        return;
     }
-
-    /// Whether this range occupies a position of its own rather than
-    /// colouring the text under it — virtual text, or a mark a UI wants told
-    /// about.
-    fn is_virt_pos(self) -> bool {
-        self.kind == kDecorKindVirtText || self.kind == kDecorKindUIWatched
-    }
-
-    /// Where a virtual-position range wants to be drawn.
-    fn virt_pos_kind(self) -> VirtTextPos {
-        match self.kind {
-            kDecorKindVirtText => with_decor_virt(self.virt(), |vt| vt.pos),
-            kDecorKindUIWatched => self.ui().pos,
-            // Not used; answer whatever.
-            _ => kVPosEndOfLine,
+    match range.kind {
+        kDecorKindVirtText | kDecorKindVirtLines => decor_release_vt(range.data.virt()),
+        kDecorKindHighlight if range.data.highlight().url != DECOR_ID_INVALID => {
+            decor_release_sh(range.data.highlight().url);
         }
-    }
-
-    /// Frees whatever an *owned* range carries — the ephemeral virtual text
-    /// or virtual lines a decoration provider left behind, or the store entry
-    /// holding an ephemeral highlight's URL.
-    fn free_owned(self) {
-        if !self.owned {
-            return;
-        }
-        match self.kind {
-            kDecorKindVirtText | kDecorKindVirtLines => decor_release_vt(self.virt()),
-            kDecorKindHighlight if self.sh().url != DECOR_ID_INVALID => {
-                decor_release_sh(self.sh().url);
-            }
-            _ => {}
-        }
+        _ => {}
     }
 }
 
@@ -200,28 +216,26 @@ impl Range {
 // The lists
 // ---------------------------------------------------------------------------
 
-/// How many entries `ranges_i` has, active and future together.
-pub fn decor_range_count(state: DecorStateRef) -> c_int {
-    state.ranges_i.len() as c_int
-}
-
-/// The range `ranges_i[i]` names.
-///
-/// A pointer, not a borrow: the drawing code holds several of these at once
-/// and writes `draw_col` through them while reading the rest of the state.
+/// A copy of the range `ranges_i[i]` names. Write its `draw_col` back with
+/// [`set_decor_range_draw_col`].
 ///
 /// # Panics
 /// If `i` is not an index into `ranges_i`.
-pub fn decor_range_at(state: DecorStateRef, i: c_int) -> *mut DecorRange {
-    state.range_at(i).raw()
+pub(crate) fn decor_range(i: c_int) -> DecorRange {
+    with_state(|state| *state.range_at(i))
+}
+
+/// Sets the `draw_col` of the range `ranges_i[i]` names.
+pub(crate) fn set_decor_range_draw_col(i: c_int, draw_col: c_int) {
+    with_state(|state| state.range_at(i).draw_col = draw_col);
 }
 
 impl Buf {
     /// Called whenever a public API function adds or deletes marks, in case that
     /// happened in a callback the drawing code is inside: the marktree iterator
-    /// `state` is holding cannot be trusted across a structural change.
+    /// the state is holding cannot be trusted across a structural change.
     pub fn invalidate_decor_state(self) {
-        decor_state.with_mut(|state| {
+        with_state(|state| {
             // The provider that called in may have closed the window.
             if let Some(win) = state.win.and_then(WinId::get) {
                 state.itr_valid &= win.buffer() != self;
@@ -230,85 +244,81 @@ impl Buf {
     }
 }
 
-/// Releases the two vectors, and what the ephemeral ranges still in them
-/// own.
-pub fn decor_state_free(mut state: DecorStateRef) {
-    for i in state.list_spans() {
-        state.range_at(i).free_owned();
-    }
-    state.slots = Vec::new();
-    state.ranges_i = Vec::new();
+/// Puts the state aside, answering what it held and leaving an empty one:
+/// the spelling-navigation scan rebuilds it per line and puts the old one
+/// back with [`decor_state_restore`] when it is done.
+pub(crate) fn decor_state_set_aside() -> DecorState {
+    DECOR_STATE.take()
+}
+
+/// Puts back what [`decor_state_set_aside`] answered, releasing what the
+/// ephemeral ranges of the state it replaces own.
+pub(crate) fn decor_state_restore(saved: DecorState) {
+    let replaced = with_state(|state| {
+        state.free_all_owned();
+        core::mem::replace(state, saved)
+    });
+    drop(replaced);
 }
 
 impl Win {
-    /// Starts a fresh window: empties both lists, freeing the ephemeral virtual
-    /// texts a decoration provider left behind.
+    /// Starts a fresh window: empties both lists, freeing what the ephemeral
+    /// ranges a decoration provider left behind own.
     ///
     /// Answers whether the buffer has any marks at all, which is the caller's cue
     /// to bother with the rest of the machinery.
-    pub fn decor_redraw_reset(self, mut state: DecorStateRef) -> bool {
-        state.row = -1;
-        state.win = Some(self.id());
+    pub fn decor_redraw_reset(self) -> bool {
+        with_state(|state| {
+            state.row = -1;
+            state.win = Some(self.id());
 
-        for i in state.list_spans() {
-            state.range_at(i).free_owned();
-        }
+            state.free_all_owned();
 
-        state.slots.clear();
-        state.ranges_i.clear();
-        state.free_slot_i = -1;
-        state.current_end = 0;
-        state.future_begin = 0;
-        state.new_range_ordering = 0;
+            state.slots.clear();
+            state.ranges_i.clear();
+            state.free_slot_i = -1;
+            state.current_end = 0;
+            state.future_begin = 0;
+            state.new_range_ordering = 0;
+        });
 
         self.buffer().b_marktree.n_keys != 0
     }
 }
 
-/// Whether `decor` occupies a position of its own rather than colouring the
-/// text under it — virtual text, or a mark a UI wants told about.
-///
-/// # Safety
-/// `decor` must be live.
-pub unsafe fn decor_virt_pos(decor: *const DecorRange) -> bool {
-    // SAFETY: the caller's range.
-    unsafe { Range::new(decor.cast_mut()) }.is_virt_pos()
+/// The window the redraw is drawing, between [`Win::decor_redraw_reset`] and
+/// the end of the redraw — `None` once that window is gone, or outside a
+/// redraw.
+pub(crate) fn decor_drawing_window() -> Option<Win> {
+    read_state(|state| state.win).and_then(WinId::get)
 }
 
-/// Where a virtual-position range wants to be drawn.
-///
-/// # Safety
-/// `decor` must be live.
-pub unsafe fn decor_virt_pos_kind(decor: *const DecorRange) -> VirtTextPos {
-    // SAFETY: the caller's range.
-    unsafe { Range::new(decor.cast_mut()) }.virt_pos_kind()
+/// Forgets the window the redraw was drawing: the redraw is over.
+pub(crate) fn decor_forget_window() {
+    with_state(|state| state.win = None);
 }
 
 /// Seeds the state at the top of a window with the marks that start *above*
 /// `top_row` and reach into it.
-pub fn decor_redraw_start(window: Win, top_row: c_int, mut state: DecorStateRef) -> bool {
+pub fn decor_redraw_start(window: Win, top_row: c_int) -> bool {
     let buf = window.buffer();
-    state.top_row = top_row;
-    state.itr_valid = true;
-
-    if !state.seek_overlap(buf, top_row) {
+    let found = with_state(|state| {
+        state.top_row = top_row;
+        state.itr_valid = true;
+        state.walk(buf).seek_overlap(top_row, 0)
+    });
+    if !found {
         return false;
     }
 
-    // Only read back when the step answers true, which is when it has
-    // written every field.
-    let mut pair = MTPair {
-        start: MT_INVALID_KEY,
-        end_pos: MTPos::default(),
-        end_right_gravity: false,
-    };
-    while state.step_overlap(buf, &mut pair) {
+    // Each step borrows the state on its own: adding a range resolves its
+    // highlight, which can run Lua.
+    while let Some(pair) = with_state(|state| state.walk(buf).step_overlap()) {
         let m = pair.start;
         if mt_invalid(m) || !mt_decor_any(m) {
             continue;
         }
         decor_range_add_from_inline(
-            state,
             m.pos.row,
             m.pos.col,
             pair.end_pos.row,
@@ -326,8 +336,7 @@ pub fn decor_redraw_start(window: Win, top_row: c_int, mut state: DecorStateRef)
 /// Squeezes the gap between the active list and the future list out of
 /// `ranges_i`, so that the future list does not walk off to infinity as the
 /// window is drawn.
-///
-pub(crate) fn decor_state_pack(mut state: DecorStateRef) {
+fn decor_state_pack(state: &mut DecorState) {
     let count = state.ranges_i.len();
     let cur_end = state.current_end as usize;
     let fut_beg = state.future_begin as usize;
@@ -342,29 +351,35 @@ pub(crate) fn decor_state_pack(mut state: DecorStateRef) {
 }
 
 /// Moves the state on to `row`.
-pub fn decor_redraw_line(window: Win, row: c_int, mut state: DecorStateRef) {
-    decor_state_pack(state);
+pub fn decor_redraw_line(window: Win, row: c_int) {
+    let fresh = with_state(|state| {
+        decor_state_pack(state);
+        state.row == -1
+    });
 
-    if state.row == -1 {
-        decor_redraw_start(window, row, state);
-    } else if !state.itr_valid {
-        state.seek(window.buffer(), row);
-        state.itr_valid = true;
+    if fresh {
+        decor_redraw_start(window, row);
     }
-
-    state.row = row;
-    state.col_last = -1;
-    state.eol_col = -1;
+    with_state(|state| {
+        if !fresh && !state.itr_valid {
+            state.walk(window.buffer()).seek(row, 0);
+            state.itr_valid = true;
+        }
+        state.row = row;
+        state.col_last = -1;
+        state.eol_col = -1;
+    });
 }
 
 /// Whether there are (likely) more decorations on `row`.
-///
-pub fn decor_has_more_decorations(state: DecorStateRef, row: c_int) -> bool {
-    if state.current_end != 0 || state.future_begin != state.ranges_i.len() as c_int {
-        return true;
-    }
-    let k = state.mark();
-    k.pos.row >= 0 && k.pos.row <= row
+pub fn decor_has_more_decorations(row: c_int) -> bool {
+    with_state(|state| {
+        if state.current_end != 0 || state.future_begin != state.ranges_i.len() as c_int {
+            return true;
+        }
+        let k = state.mark();
+        k.pos.row >= 0 && k.pos.row <= row
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -375,7 +390,6 @@ pub fn decor_has_more_decorations(state: DecorStateRef, row: c_int) -> bool {
 /// carry a chain of virtual texts and a chain of sign/highlight items.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn decor_range_add_from_inline(
-    state: DecorStateRef,
     start_row: c_int,
     start_col: c_int,
     end_row: c_int,
@@ -389,7 +403,7 @@ pub(crate) fn decor_range_add_from_inline(
         DecorInline::Hl(hl) => {
             let sh = HlSource::inline(hl);
             add_sh(
-                state, start_row, start_col, end_row, end_col, sh, owned, ns, mark_id, 0,
+                start_row, start_col, end_row, end_col, sh, owned, ns, mark_id, 0,
             );
             return;
         }
@@ -397,7 +411,7 @@ pub(crate) fn decor_range_add_from_inline(
     };
 
     for vt in virt_chain(ext.vt_idx) {
-        decor_range_add_virt(state, start_row, start_col, end_row, end_col, vt, owned);
+        decor_range_add_virt(start_row, start_col, end_row, end_col, vt, owned);
     }
 
     for idx in sh_chain(decor) {
@@ -413,7 +427,7 @@ pub(crate) fn decor_range_add_from_inline(
             },
         });
         add_sh(
-            state, start_row, start_col, end_row, end_col, sh, owned, ns, mark_id, 0,
+            start_row, start_col, end_row, end_col, sh, owned, ns, mark_id, 0,
         );
     }
 }
@@ -446,7 +460,7 @@ impl HlSource {
 
 /// Files `range` in a slot and puts its index in the future list, which stays
 /// sorted by starting position.
-fn decor_range_insert(mut state: DecorStateRef, range: &mut DecorRange) {
+fn decor_range_insert(state: &mut DecorState, mut range: DecorRange) {
     range.ordering = state.new_range_ordering;
     state.new_range_ordering += 1;
 
@@ -458,10 +472,10 @@ fn decor_range_insert(mut state: DecorStateRef, range: &mut DecorRange) {
             unreachable!("decor: the freelist names an occupied slot")
         };
         state.free_slot_i = next;
-        state.slots[index] = DecorRangeSlot::Range(*range);
+        state.slots[index] = DecorRangeSlot::Range(range);
         index
     } else {
-        state.slots.push(DecorRangeSlot::Range(*range));
+        state.slots.push(DecorRangeSlot::Range(range));
         state.slots.len() - 1
     };
 
@@ -492,7 +506,6 @@ fn decor_range_insert(mut state: DecorStateRef, range: &mut DecorRange) {
 /// `vt` of the virtual-text store, which the range takes over when `owned`
 /// and otherwise borrows from its mark.
 pub fn decor_range_add_virt(
-    state: DecorStateRef,
     start_row: c_int,
     start_col: c_int,
     end_row: c_int,
@@ -501,7 +514,7 @@ pub fn decor_range_add_virt(
     owned: bool,
 ) {
     let (priority, flags) = with_decor_virt(vt, |link| (link.priority, link.flags));
-    let mut range = DecorRange {
+    let range = DecorRange {
         start_row,
         start_col,
         end_row,
@@ -521,7 +534,7 @@ pub fn decor_range_add_virt(
         attr_id: 0,
         draw_col: DRAW_COL_NEW,
     };
-    decor_range_insert(state, &mut range);
+    with_state(|state| decor_range_insert(state, range));
 }
 
 /// Adds the range a highlight (or a `ui_watched` mark) occupies. A sign is
@@ -532,7 +545,6 @@ pub fn decor_range_add_virt(
 /// An `owned` range takes over the store entry holding `sh`'s URL.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn decor_range_add_sh(
-    state: DecorStateRef,
     start_row: c_int,
     start_col: c_int,
     end_row: c_int,
@@ -544,7 +556,6 @@ pub(crate) fn decor_range_add_sh(
     subpriority: DecorPriority,
 ) {
     add_sh(
-        state,
         start_row,
         start_col,
         end_row,
@@ -557,10 +568,9 @@ pub(crate) fn decor_range_add_sh(
     );
 }
 
-/// [`decor_range_add_sh`] for a state the caller has already promised.
+/// [`decor_range_add_sh`].
 #[allow(clippy::too_many_arguments)]
 fn add_sh(
-    state: DecorStateRef,
     start_row: c_int,
     start_col: c_int,
     end_row: c_int,
@@ -600,9 +610,10 @@ fn add_sh(
         || flags & (kSHConceal | kSHSpellOn | kSHSpellOff) != 0
     {
         if sh.hl_id != 0 {
+            // Outside the state's borrow: this can run a provider's `hl_def`.
             range.attr_id = syn_id2attr(sh.hl_id);
         }
-        decor_range_insert(state, &mut range);
+        with_state(|state| decor_range_insert(state, range));
     }
 
     if flags & kSHUIWatched != 0 {
@@ -616,7 +627,7 @@ fn add_sh(
                 kVPosEndOfLine
             },
         });
-        decor_range_insert(state, &mut range);
+        with_state(|state| decor_range_insert(state, range));
     }
 }
 
@@ -624,25 +635,21 @@ fn add_sh(
 // Drawing positions
 // ---------------------------------------------------------------------------
 
-/// Decides where a newly-started virtual-position range goes.
-///
-/// # Safety
-/// `item` must be live.
-pub unsafe fn decor_init_draw_col(win_col: c_int, hidden: bool, item: *mut DecorRange) {
-    // SAFETY: the caller's range.
-    init_draw_col(win_col, hidden, unsafe { Range::new(item) });
+/// Decides where the newly-started virtual-position range `ranges_i[i]`
+/// goes.
+pub(crate) fn decor_init_draw_col(win_col: c_int, hidden: bool, i: c_int) {
+    with_state(|state| init_draw_col(win_col, hidden, state.range_at(i)));
 }
 
-/// [`decor_init_draw_col`] for a range already promised live.
-fn init_draw_col(win_col: c_int, hidden: bool, mut item: Range) {
-    let pos = item.virt_pos_kind();
+/// [`decor_init_draw_col`] for a range in hand.
+fn init_draw_col(win_col: c_int, hidden: bool, item: &mut DecorRange) {
+    let pos = decor_virt_pos_kind(item);
     item.draw_col = if win_col < 0 && pos != kVPosInline {
         // A negative `win_col` is itself a sentinel the caller passes in.
         win_col
     } else if pos == kVPosOverlay {
-        let hides = item
-            .virt_opt()
-            .is_some_and(|vt| with_decor_virt(vt, |link| link.flags & kVTHide != 0));
+        let hides =
+            virt_opt(item).is_some_and(|vt| with_decor_virt(vt, |link| link.flags & kVTHide != 0));
         if hides && hidden {
             DRAW_COL_NEVER
         } else {
@@ -655,14 +662,15 @@ fn init_draw_col(win_col: c_int, hidden: bool, mut item: Range) {
 
 /// Assigns a column to every range still waiting for one, now that the
 /// caller knows where it is.
-///
-pub fn decor_recheck_draw_col(win_col: c_int, hidden: bool, state: DecorStateRef) {
-    for i in 0..state.current_end {
-        let r = state.range_at(i);
-        if r.draw_col == DRAW_COL_PENDING {
-            init_draw_col(win_col, hidden, r);
+pub fn decor_recheck_draw_col(win_col: c_int, hidden: bool) {
+    with_state(|state| {
+        for i in 0..state.current_end {
+            let r = state.range_at(i);
+            if r.draw_col == DRAW_COL_PENDING {
+                init_draw_col(win_col, hidden, r);
+            }
         }
-    }
+    });
 }
 
 /// Advances the state to `col` and answers the attribute the cell there is
@@ -679,16 +687,15 @@ pub fn decor_redraw_col_impl(
     col: c_int,
     win_col: c_int,
     hidden: bool,
-    mut state: DecorStateRef,
     max_col_last: c_int,
 ) -> c_int {
     let buf = window.buffer();
-    let row = state.row;
+    let row = read_state(|state| state.row);
     let mut col_last = max_col_last;
 
     loop {
         // TODO(bfredl): check duplicate entry in "intersection" branch
-        let mark = state.mark();
+        let mark = with_state(DecorState::mark);
         if mark.pos.row < 0 || mark.pos.row > row {
             break;
         } else if mark.pos.row == row && mark.pos.col > col {
@@ -697,10 +704,10 @@ pub fn decor_redraw_col_impl(
         }
 
         if !mt_invalid(mark) && !mt_end(mark) && mt_decor_any(mark) && ns_in_win(mark.ns, window) {
-            // SAFETY: `mark` was read out of this buffer's live tree.
-            let endpos: MTPos = unsafe { marktree_get_altpos(&mut *tree_of(buf), mark, None) };
+            let endpos: MTPos = with_state(|state| state.walk(buf).altpos(mark));
+            // Outside the state's borrow: adding a range resolves its
+            // highlight, which can run Lua.
             decor_range_add_from_inline(
-                state,
                 mark.pos.row,
                 mark.pos.col,
                 endpos.row,
@@ -711,24 +718,30 @@ pub fn decor_redraw_col_impl(
                 mark.id,
             );
         }
-        state.step(buf);
+        with_state(|state| state.walk(buf).step());
     }
 
-    // Slices of the two vectors for the rest of the function, as upstream
-    // takes raw pointers: nothing below adds a range, and `hl_combine_attr`
-    // does not reach back here.
-    let (n_idx, n_slots) = (state.ranges_i.len(), state.slots.len());
-    let s = state.raw();
-    // SAFETY: the state's own two vectors, neither of which is grown below.
-    // Both keep their entries on the heap, so the slices survive the field
-    // writes at the bottom of this function.
-    let indices = unsafe { slice::from_raw_parts_mut((*s).ranges_i.as_mut_ptr(), n_idx) };
-    // SAFETY: as above.
-    let slots = unsafe { slice::from_raw_parts_mut((*s).slots.as_mut_ptr(), n_slots) };
+    // The rest adds no range and runs no Lua (the attribute table it combines
+    // into reaches no decoration), so it is one borrow.
+    with_state(|state| columns_reached(state, row, col, win_col, hidden, col_last))
+}
 
-    let mut count = indices.len() as c_int;
+/// [`decor_redraw_col_impl`] once the marks up to `col` are ranges: promote,
+/// combine, drop, and record the answer.
+fn columns_reached(
+    state: &mut DecorState,
+    row: c_int,
+    col: c_int,
+    win_col: c_int,
+    hidden: bool,
+    mut col_last: c_int,
+) -> c_int {
+    let mut count = state.ranges_i.len() as c_int;
     let mut cur_end = state.current_end;
     let mut fut_beg = state.future_begin;
+    let mut free_slot_i = state.free_slot_i;
+    let indices = &mut state.ranges_i[..];
+    let slots = &mut state.slots[..];
 
     // Promote the ranges the column has reached into the active list, each
     // inserted at its place in priority order.
@@ -777,15 +790,13 @@ pub fn decor_redraw_col_impl(
 
     for i in 0..cur_end {
         let index = indices[i as usize];
-        // SAFETY: an index out of the active list names an occupied slot of
-        // the slab, which lives on the heap and is not grown here.
-        let r = unsafe { Range::new(&raw mut *slot_range(&mut slots[index as usize])) };
+        let r = slot_range(&mut slots[index as usize]);
 
         let ended = r.end_row < row || (r.end_row == row && r.end_col <= col);
         let keep = if ended {
             // A virtual position that starts on this row is kept even past
             // its end: it has not been drawn yet.
-            r.start_row >= row && r.is_virt_pos()
+            r.start_row >= row && decor_virt_pos(r)
         } else {
             if r.end_row == row && r.end_col > col {
                 col_last = col_last.min(r.end_col - 1);
@@ -794,9 +805,8 @@ pub fn decor_redraw_col_impl(
                 attr = hl_combine_attr(attr, r.attr_id);
             }
             if r.kind == kDecorKindHighlight {
-                let sh = r.sh();
-                let sh_flags = sh.flags as c_int;
-                if sh_flags & kSHConceal as c_int != 0 {
+                let sh = r.data.highlight();
+                if sh.flags & kSHConceal != 0 {
                     conceal = 1;
                     // The replacement character only shows at the very first
                     // cell of the concealed range.
@@ -807,9 +817,9 @@ pub fn decor_redraw_col_impl(
                         conceal_attr = r.attr_id;
                     }
                 }
-                if sh_flags & kSHSpellOn as c_int != 0 {
+                if sh.flags & kSHSpellOn != 0 {
                     spell = Some(true);
-                } else if sh_flags & kSHSpellOff as c_int != 0 {
+                } else if sh.flags & kSHSpellOff != 0 {
                     spell = Some(false);
                 }
                 if sh.url != DECOR_ID_INVALID {
@@ -823,7 +833,10 @@ pub fn decor_redraw_col_impl(
             true
         };
 
-        if r.start_row == row && r.start_col <= col && r.is_virt_pos() && r.draw_col == DRAW_COL_NEW
+        if r.start_row == row
+            && r.start_col <= col
+            && decor_virt_pos(r)
+            && r.draw_col == DRAW_COL_NEW
         {
             init_draw_col(win_col, hidden, r);
         }
@@ -832,10 +845,10 @@ pub fn decor_redraw_col_impl(
             indices[new_cur_end as usize] = index;
             new_cur_end += 1;
         } else {
-            r.free_owned();
+            free_owned(r);
             // The slot becomes the head of the freelist.
-            slots[index as usize] = DecorRangeSlot::Free(state.free_slot_i);
-            state.free_slot_i = index;
+            slots[index as usize] = DecorRangeSlot::Free(free_slot_i);
+            free_slot_i = index;
         }
     }
     cur_end = new_cur_end;
@@ -846,6 +859,7 @@ pub fn decor_redraw_col_impl(
     }
 
     state.ranges_i.truncate(count as usize);
+    state.free_slot_i = free_slot_i;
     state.future_begin = fut_beg;
     state.current_end = cur_end;
     state.col_last = col_last;
@@ -861,43 +875,86 @@ pub fn decor_redraw_col_impl(
 /// The attribute of the cell at `col`, answered from the cached one when the
 /// column has not passed the point the last answer holds to.
 #[inline(always)]
-pub fn decor_redraw_col(
+pub(crate) fn decor_redraw_col(
     window: Win,
     col: c_int,
     win_col: c_int,
     hidden: bool,
-    state: DecorStateRef,
     max_col_last: c_int,
 ) -> c_int {
-    if col <= state.col_last {
-        return state.current;
+    let (col_last, current) = read_state(|state| (state.col_last, state.current));
+    if col <= col_last {
+        return current;
     }
-    decor_redraw_col_impl(window, col, win_col, hidden, state, max_col_last)
+    decor_redraw_col_impl(window, col, win_col, hidden, max_col_last)
 }
 
-/// Finishes the line: folds in the `hl_eol` highlights that colour past the
-/// end of the text, and says whether anything virtual still wants drawing.
-///
-/// # Safety
-/// `window` must be live and `eol_attr` writable.
-pub unsafe fn decor_redraw_eol(
-    window: Win,
-    mut state: DecorStateRef,
-    eol_attr: *mut c_int,
-    eol_col: c_int,
-) -> bool {
-    // SAFETY: the caller's out-parameter.
-    let eol_attr = unsafe { &mut *eol_attr };
-    decor_redraw_col(window, MAXCOL, MAXCOL, false, state, MAXCOL);
-    state.eol_col = eol_col;
-
-    let mut has_virt_pos = false;
-    for i in 0..state.current_end {
-        let r = state.range_at(i);
-        has_virt_pos |= r.start_row == state.row && r.is_virt_pos();
-        if r.kind == kDecorKindHighlight && r.sh().flags as c_int & kSHHlEol as c_int != 0 {
-            *eol_attr = hl_combine_attr(*eol_attr, r.attr_id);
+/// Finishes the line: folds into `eol_attr` the `hl_eol` highlights that
+/// colour past the end of the text, and says whether anything virtual still
+/// wants drawing.
+pub fn decor_redraw_eol(window: Win, eol_attr: &mut c_int, eol_col: c_int) -> bool {
+    decor_redraw_col(window, MAXCOL, MAXCOL, false, MAXCOL);
+    with_state(|state| {
+        state.eol_col = eol_col;
+        let row = state.row;
+        let mut has_virt_pos = false;
+        for i in 0..state.current_end {
+            let r = state.range_at(i);
+            has_virt_pos |= r.start_row == row && decor_virt_pos(r);
+            if r.kind == kDecorKindHighlight && r.data.highlight().flags & kSHHlEol != 0 {
+                *eol_attr = hl_combine_attr(*eol_attr, r.attr_id);
+            }
         }
-    }
-    has_virt_pos
+        has_virt_pos
+    })
+}
+
+// ---------------------------------------------------------------------------
+// What the drawing code reads
+// ---------------------------------------------------------------------------
+
+/// Where the state stands, for the drawing code: the row it is on, the
+/// active list `ranges_i[..current_end]`, the later-starting list
+/// `ranges_i[future_begin..count]`, and the column the end-of-line virtual
+/// texts start at (-1 for none yet).
+#[derive(Copy, Clone)]
+pub(crate) struct DecorLists {
+    pub(crate) row: c_int,
+    pub(crate) current_end: c_int,
+    pub(crate) future_begin: c_int,
+    pub(crate) count: c_int,
+    pub(crate) eol_col: c_int,
+}
+
+/// A copy of where the state stands; see [`DecorLists`].
+#[inline]
+pub(crate) fn decor_lists() -> DecorLists {
+    read_state(|state| DecorLists {
+        row: state.row,
+        current_end: state.current_end,
+        future_begin: state.future_begin,
+        count: state.ranges_i.len() as c_int,
+        eol_col: state.eol_col,
+    })
+}
+
+/// Moves where the next end-of-line virtual text goes.
+#[inline]
+pub(crate) fn set_decor_eol_col(eol_col: c_int) {
+    with_state(|state| state.eol_col = eol_col);
+}
+
+/// What the last [`decor_redraw_col`] said about concealing: 0 not
+/// concealed, 1 concealed, 2 the first cell of a concealed range; with the
+/// replacement character and its attribute, for the first cell.
+#[inline]
+pub(crate) fn decor_conceal() -> (c_int, ScreenChar, c_int) {
+    read_state(|state| (state.conceal, state.conceal_char, state.conceal_attr))
+}
+
+/// What the last [`decor_redraw_col`] said about spell checking: forced on,
+/// forced off, or `None` for "as the window says".
+#[inline]
+pub(crate) fn decor_spell() -> Option<bool> {
+    read_state(|state| state.spell)
 }

@@ -41,10 +41,6 @@ binary as well as the default one.
 
 - `neovim::cmdhist::HISTORY`
 
-## `decoration`
-
-- `neovim::decoration::decor_state`
-
 ## `diff`
 
 - `neovim::diff::diff_flags`

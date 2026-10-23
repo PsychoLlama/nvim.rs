@@ -13,7 +13,7 @@ use crate::decoration::{
     kVPosEndOfLineRightAlign, kVPosInline, kVPosOverlay, kVPosRightAlign, kVPosWinCol, kVTHide,
     kVTIsLines, kVTLinesAbove, kVTRepeatLinebreak,
 };
-use crate::decoration_provider::{decor_provider_clear, get_decor_provider, kDecorProviderActive};
+use crate::decoration_provider::{decor_provider_clear, kDecorProviderActive, with_decor_provider};
 use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later};
 use crate::extmark::{extmark_clear, extmark_del_id, extmark_from_id, extmark_get, extmark_set};
 use crate::grid::schar_high;
@@ -28,10 +28,10 @@ use crate::pos::{MAXCOL, MAXLNUM};
 use crate::sign::init_sign_text;
 use crate::types::{
     ApiDict, Array, Boolean, BufferHandle, ColNr, DecorExt, DecorHighlightInline, DecorInline,
-    DecorPriority, DecorProvider, DecorSignHighlight, DecorVirtText, DecorVirtText_data, Error,
-    ExtmarkInfoArray, ExtmarkType, Integer, KeyDict_get_extmark, KeyDict_get_extmarks,
-    KeyDict_ns_opts, KeyDict_set_decoration_provider, KeyDict_set_extmark, LineNr, LuaRef, MTKey,
-    MTPair, NS, Object, String_0, VirtLine, VirtText, VirtTextChunk, Window, WindowHandle, int32_t,
+    DecorPriority, DecorSignHighlight, DecorVirtText, DecorVirtText_data, Error, ExtmarkInfoArray,
+    ExtmarkType, Integer, KeyDict_get_extmark, KeyDict_get_extmarks, KeyDict_ns_opts,
+    KeyDict_set_decoration_provider, KeyDict_set_extmark, LineNr, LuaRef, MTKey, MTPair, NS,
+    Object, String_0, VirtLine, VirtText, VirtTextChunk, Window, WindowHandle, int32_t,
     kObjectTypeArray, size_t, uint8_t, uint16_t, uint32_t,
 };
 

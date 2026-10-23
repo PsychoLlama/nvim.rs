@@ -15,7 +15,7 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::decoration::{DECOR_ID_INVALID, DecorStateRef, decor_put_vt, kVPosWinCol};
+use crate::decoration::{DECOR_ID_INVALID, decor_put_vt, kVPosWinCol};
 use crate::grid::default_grid_ref;
 use crate::r#move::WinValid;
 use crate::normal::{VisualSelection, visual_selection};
@@ -146,16 +146,14 @@ pub(crate) fn win_update(window: Win) {
 
     win_extmark_arr.with_mut(Vec::clear);
 
-    // The redraw's decoration state, acquired ONCE here and threaded all
-    // the way down `drawline/`. A handle rather than a borrow because the
-    // provider callbacks below re-enter: an `on_line` that sets an
-    // ephemeral extmark comes back through `nvim_buf_set_extmark`, which
-    // reaches the same state from the API side.
-    let decor = unsafe { DecorStateRef::current() };
-    window.decor_redraw_reset(decor);
-    decor_providers_invoke_win(window, decor);
+    // The redraw's decoration state is the one cell `decoration::state`
+    // keeps, borrowed per step: the provider callbacks below re-enter it (an
+    // `on_line` that sets an ephemeral extmark comes back through
+    // `nvim_buf_set_extmark`).
+    window.decor_redraw_reset();
+    decor_providers_invoke_win(window);
 
-    add_suspended_terminal_note(buf, decor);
+    add_suspended_terminal_note(buf);
 
     // The sign column width is per buffer, so a change to it invalidates
     // every window showing that buffer -- including this one.
@@ -240,7 +238,7 @@ pub(crate) fn win_update(window: Win) {
         spv.spv_unchanged = rg.mod_top == 0;
     }
 
-    let old_botline = draw_window_lines(window, buf, &mut rg, cursorline_fi, &mut spv, decor);
+    let old_botline = draw_window_lines(window, buf, &mut rg, cursorline_fi, &mut spv);
 
     if win.w_redr_type >= UPD_REDRAW_TOP {
         draw_vsep_win(window);
@@ -268,7 +266,7 @@ pub(crate) fn win_update(window: Win) {
 /// The note is a decoration rather than drawn text, so it goes through the
 /// decoration state the rest of the redraw already reads: an owned range,
 /// which frees it when the redraw drops it.
-fn add_suspended_terminal_note(buffer: Buf, state: DecorStateRef) {
+fn add_suspended_terminal_note(buffer: Buf) {
     // SAFETY: the caller's buffer.
     if buffer.terminal.is_null() || !unsafe { terminal_suspended(buffer.terminal) } {
         return;
@@ -288,7 +286,7 @@ fn add_suspended_terminal_note(buffer: Buf, state: DecorStateRef) {
     };
     let vt = decor_put_vt(note, DECOR_ID_INVALID);
     let last = buffer.b_ml.ml_line_count - 1;
-    decor_range_add_virt(state, last, 0, last, 0, vt, true);
+    decor_range_add_virt(last, 0, last, 0, vt, true);
 }
 
 /// Round `w_skipcol` down to a column a wrapped line actually starts a screen
