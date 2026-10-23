@@ -884,6 +884,124 @@ describe('decorations providers', function()
     ]])
   end)
 
+  it('keeps drawing a mark that on_line deletes while its range is live', function()
+    insert(mulholland)
+    feed('gg')
+    screen:add_extra_attr_ids {
+      u = { url = 'https://example.com', foreground = Screen.colors.Grey100, background = Screen.colors.Red },
+      us = { url = 'https://example.com', foreground = Screen.colors.Grey100, background = Screen.colors.Yellow1 },
+    }
+    exec_lua([[
+      local api = vim.api
+      _G.ns2 = api.nvim_create_namespace('ns2')
+      api.nvim_buf_set_extmark(0, _G.ns2, 0, 3, {
+        end_row = 3,
+        end_col = 4,
+        hl_group = 'ErrorMsg',
+        url = 'https://example.com',
+        virt_text = { { 'EOL', 'Comment' }, { '!', 'ErrorMsg' } },
+        virt_text_pos = 'eol',
+      })
+      api.nvim_buf_set_extmark(0, _G.ns2, 1, 2, {
+        virt_text = { { 'IN', 'Comment' } },
+        virt_text_pos = 'inline',
+        end_row = 2,
+        hl_group = 'Search',
+      })
+      api.nvim_buf_set_extmark(0, _G.ns2, 4, 0, {
+        virt_lines = { { { 'below', 'Comment' } } },
+        sign_text = 'S',
+      })
+      _G.deleted = 0
+    ]])
+    setup_provider([[
+      local function on_do(kind, winid, bufnr, row)
+        if kind == 'line' and row == 2 and _G.deleted == 0 then
+          _G.deleted = 1
+          api.nvim_buf_clear_namespace(bufnr, _G.ns2, 0, -1)
+        end
+      end
+    ]])
+    -- The marks starting above row 2 were already being drawn when it was
+    -- deleted, so this redraw still shows them; the sign and the virtual
+    -- line below row 4 had not been reached yet.
+    screen:expect([[
+      {7:  }^// {u:just to see if there was an acciden}|
+      {7:  }{u:t} {18:EOL}{9:!}                                |
+      {7:  }{u://}{18:IN}{us: on Mulholland Drive}              |
+      {7:  }{u:try_start();}                          |
+      {7:  }{u:bufr}ef_T save_buf;                    |
+      {7:  }switch_buffer(&save_buf, buf);        |
+      {7:  }posp = getmark(mark, false);          |
+                                              |
+    ]])
+    eq(1, exec_lua('return _G.deleted'))
+    command('redraw!')
+    screen:expect([[
+      ^// just to see if there was an accident |
+      // on Mulholland Drive                  |
+      try_start();                            |
+      bufref_T save_buf;                      |
+      switch_buffer(&save_buf, buf);          |
+      posp = getmark(mark, false);            |
+      restore_buffer(&save_buf);              |
+                                              |
+    ]])
+    eq({}, api.nvim_buf_get_extmarks(0, exec_lua('return _G.ns2'), 0, -1, {}))
+  end)
+
+  it('frees ephemeral urls and virtual text a redraw drops', function()
+    insert(mulholland)
+    screen:add_extra_attr_ids {
+      u = { url = 'https://example.com/x' },
+    }
+    setup_provider([[
+      local function on_do(kind, winid, bufnr, row)
+        if kind == 'line' then
+          api.nvim_buf_set_extmark(bufnr, ns1, row, 0, {
+            end_row = row + 1,
+            url = 'https://example.com/x',
+            ephemeral = true,
+          })
+          api.nvim_buf_set_extmark(bufnr, ns1, row, 3, {
+            virt_text = { { '<', 'Comment' }, { '>', 'ErrorMsg' } },
+            virt_text_pos = 'inline',
+            ephemeral = true,
+          })
+          api.nvim_buf_set_extmark(bufnr, ns1, row, 0, {
+            virt_text = { { '#' .. row, 'Comment' } },
+            virt_text_pos = 'right_align',
+            ephemeral = true,
+          })
+        end
+      end
+    ]])
+    -- An ephemeral inline virtual text is never drawn: the line's
+    -- inline-text flag comes from the marktree, which an ephemeral mark
+    -- never enters.
+    screen:expect([[
+      {u:// just to see if there was an acciden}{18:#0}|
+      {u:// on Mulholland Drive}                {18:#1}|
+      {u:try_start();}                          {18:#2}|
+      {u:bufref_T save_buf;}                    {18:#3}|
+      {u:switch_buffer(&save_buf, buf);}        {18:#4}|
+      {u:posp = getmark(mark, false);}          {18:#5}|
+      {u:restore_buffer(&save_buf);^ }           {18:#6}|
+                                              |
+    ]])
+    feed('gg')
+    screen:expect([[
+      {u:^// just to see if there was an acciden}{18:#0}|
+      {u:// on Mulholland Drive}                {18:#1}|
+      {u:try_start();}                          {18:#2}|
+      {u:bufref_T save_buf;}                    {18:#3}|
+      {u:switch_buffer(&save_buf, buf);}        {18:#4}|
+      {u:posp = getmark(mark, false);}          {18:#5}|
+      {u:restore_buffer(&save_buf); }           {18:#6}|
+                                              |
+    ]])
+  end)
+
   it('on_line is invoked only for buffer lines', function()
     insert(mulholland)
     command('vnew')
