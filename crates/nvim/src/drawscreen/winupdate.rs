@@ -225,7 +225,7 @@ pub(crate) fn win_update(window: Win) {
     remember_visual_area(window, buf);
 
     let mut cursorline_fi = FoldInfo::default();
-    unsafe { win_update_cursorline(window, &raw mut cursorline_fi) };
+    win_update_cursorline(window, &mut cursorline_fi);
     if window.raw() == Win::current_raw() {
         conceal_cursor_used.set(conceal_cursor_line(Win::current()));
     }

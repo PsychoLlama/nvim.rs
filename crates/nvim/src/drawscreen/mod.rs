@@ -740,20 +740,16 @@ pub fn win_cursorline_standout(window: Win) -> bool {
 /// On a closed fold the whole fold is the cursor line, so `w_cursorline` is
 /// moved to its first line -- otherwise the fold would not be redrawn when the
 /// cursor moves onto it.
-///
-/// # Safety
-///
-/// `foldinfo` must point at a live `FoldInfo`, unaliased for the call.
-pub unsafe fn win_update_cursorline(mut window: Win, foldinfo: *mut FoldInfo) {
+pub fn win_update_cursorline(mut window: Win, foldinfo: &mut FoldInfo) {
     window.w_cursorline = if win_cursorline_standout(window) {
         window.w_cursor.lnum
     } else {
         0
     };
     if window.w_onebuf_opt.wo_cul != 0 {
-        unsafe { *foldinfo = fold_info(window, window.w_cursor.lnum) };
-        if unsafe { (*foldinfo).fi_level } != 0 && unsafe { (*foldinfo).fi_lines } > 0 {
-            unsafe { window.w_cursorline = (*foldinfo).fi_lnum };
+        *foldinfo = fold_info(window, window.w_cursor.lnum);
+        if foldinfo.fi_level != 0 && foldinfo.fi_lines > 0 {
+            window.w_cursorline = foldinfo.fi_lnum;
         }
     }
 }

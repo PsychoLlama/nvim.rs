@@ -808,7 +808,6 @@ count	callee	no_raw	defs	def
 1	vterm_state_set_unrecognised_fallbacks	0	1	crates/nvim/src/vterm/state/entry.rs
 1	waitpid	0	0	
 1	watcher_addr	0	1	crates/nvim/src/msgpack_rpc/server.rs
-1	win_update_cursorline	0	1	crates/nvim/src/drawscreen/mod.rs
 1	write_bytes	0	0	
 1	write_chunk	1	1	crates/nvim/src/mpack/mpack_core.rs
 1	wstream_init_fd	0	1	crates/nvim/src/event/wstream.rs

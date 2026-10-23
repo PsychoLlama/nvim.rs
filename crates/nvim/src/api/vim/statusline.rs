@@ -239,12 +239,9 @@ fn statuscol_state(
         Some(&mut cul_id),
         Some(&mut num_id),
     );
-    // SAFETY: as above.
-    let (foldinfo, on_cursorline) = unsafe {
-        let foldinfo = fold_info(win, lnum);
-        win_update_cursorline(win, &raw mut cursorline_fi);
-        (foldinfo, use_cursor_line_highlight(win, lnum))
-    };
+    let foldinfo = fold_info(win, lnum);
+    win_update_cursorline(win, &mut cursorline_fi);
+    let on_cursorline = use_cursor_line_highlight(win, lnum);
     statuscol.foldinfo = foldinfo;
     statuscol.sign_cul_id = if on_cursorline { cul_id } else { 0 };
 
