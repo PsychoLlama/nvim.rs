@@ -99,6 +99,36 @@ describe('autocmd', function()
     assert_visible(3, true)
   end)
 
+  it('WinClosed may redraw the closing window and reset its state', function()
+    local screen = Screen.new(40, 8)
+    command('set laststatus=2')
+    exec([=[
+      function! Clicked(...)
+      endfunction
+      let &statusline = '%1@Clicked@%{winnr()}:%{bufnr()}%X'
+      let &winbar = '%2@Clicked@bar %{winnr()}%X'
+      let g:closed = []
+      autocmd WinClosed * call add(g:closed, str2nr(expand('<amatch>')))
+            \ | call win_execute(str2nr(expand('<amatch>')),
+            \     'setlocal colorcolumn=2,4 winhighlight=Normal:Search statusline=%{winnr()}!')
+            \ | redrawstatus! | redraw
+    ]=])
+    command('vsplit | split')
+    local wins = api.nvim_list_wins()
+    command('redraw!')
+    command('close')
+    command('close')
+    eq({ wins[1], wins[2] }, eval('g:closed'))
+    screen:expect([[
+      {5:bar 1                                   }|
+      ^                                        |
+      {1:~                                       }|*4
+      {3:1:1                                     }|
+                                              |
+    ]])
+    assert_alive()
+  end)
+
   it('WinClosed from a different tabpage', function()
     command('let g:evs = []')
     command('edit tesfile1')

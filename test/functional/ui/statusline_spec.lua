@@ -291,6 +291,91 @@ for _, model in ipairs(mousemodels) do
   end)
 end
 
+describe('statusline click handler', function()
+  local screen
+  before_each(function()
+    clear()
+    screen = Screen.new(40, 8)
+    command('set laststatus=2')
+    exec([=[
+      function! Second(minwid, clicks, button, mods)
+        let g:testvar = 'second ' .. a:minwid
+      endfunction
+      " Replaces the very definitions the click is being served from, and
+      " has them rebuilt before it returns.
+      function! Rebuild(minwid, clicks, button, mods)
+        let &l:statusline = '%7@Second@' .. repeat('x', 20) .. '%X%=%{g:testvar}'
+        let &l:winbar = '%8@Second@' .. repeat('y', 20) .. '%X'
+        let &tabline = '%9@Second@' .. repeat('z', 20) .. '%X'
+        redrawstatus! | redrawtabline | redraw
+        let g:testvar = 'rebuilt ' .. a:minwid
+      endfunction
+      " Closes the window whose status line was clicked.
+      function! CloseIt(minwid, clicks, button, mods)
+        close
+        redraw
+        let g:testvar = 'closed ' .. a:minwid
+      endfunction
+      let g:testvar = ''
+    ]=])
+  end)
+
+  it('may rebuild the click definitions it was called from', function()
+    command([[let &l:statusline = '%1@Rebuild@' .. repeat('a', 20) .. '%X%=%{g:testvar}']])
+    command([[let &l:winbar = '%2@Rebuild@' .. repeat('b', 20) .. '%X']])
+    command([[let &tabline = '%3@Rebuild@' .. repeat('c', 20) .. '%X']])
+    command('set showtabline=2')
+    command('redraw!')
+    api.nvim_input_mouse('left', 'press', '', 0, 6, 3)
+    eq('rebuilt 1', eval('g:testvar'))
+    api.nvim_input_mouse('left', 'press', '', 0, 6, 3)
+    eq('second 7', eval('g:testvar'))
+    api.nvim_input_mouse('left', 'press', '', 0, 1, 3)
+    eq('second 8', eval('g:testvar'))
+    api.nvim_input_mouse('left', 'press', '', 0, 0, 3)
+    eq('second 9', eval('g:testvar'))
+    -- From the winbar and the tab line, each rebuilding the others.
+    command([[let &l:winbar = '%2@Rebuild@' .. repeat('b', 20) .. '%X']])
+    command('redraw!')
+    api.nvim_input_mouse('left', 'press', '', 0, 1, 3)
+    eq('rebuilt 2', eval('g:testvar'))
+    api.nvim_input_mouse('left', 'press', '', 0, 1, 3)
+    eq('second 8', eval('g:testvar'))
+    command([[let &tabline = '%3@Rebuild@' .. repeat('c', 20) .. '%X']])
+    command('redraw!')
+    api.nvim_input_mouse('left', 'press', '', 0, 0, 3)
+    eq('rebuilt 3', eval('g:testvar'))
+    api.nvim_input_mouse('left', 'press', '', 0, 0, 3)
+    eq('second 9', eval('g:testvar'))
+    -- The status line was last drawn before the tab line click.
+    screen:expect([[
+      {2:zzzzzzzzzzzzzzzzzzzz                    }|
+      {5:yyyyyyyyyyyyyyyyyyyy                    }|
+      ^                                        |
+      {1:~                                       }|*3
+      {3:xxxxxxxxxxxxxxxxxxxx            second 8}|
+                                              |
+    ]])
+    assert_alive()
+  end)
+
+  it('may close the window it was clicked in', function()
+    command([[set statusline=%4@CloseIt@close\ me%X]])
+    command('split')
+    command('redraw!')
+    api.nvim_input_mouse('left', 'press', '', 0, 3, 2)
+    eq('closed 4', eval('g:testvar'))
+    eq(1, fn.winnr('$'))
+    screen:expect([[
+      ^                                        |
+      {1:~                                       }|*5
+      {3:close me                                }|
+                                              |
+    ]])
+    assert_alive()
+  end)
+end)
+
 describe('global statusline', function()
   local screen
 
