@@ -938,6 +938,36 @@ pub(crate) fn decor_lists() -> DecorLists {
     })
 }
 
+/// Whether a range on the state's row draws inline virtual text at or
+/// after byte `v` and is not drawn yet — in the active list or among the
+/// ranges that start later.
+///
+/// The character loop asks this per character, so it is one borrow, and it
+/// reads the store only for a range that could answer yes.
+pub(crate) fn decor_inline_virt_from(v: isize) -> bool {
+    read_state(|state| {
+        let row = state.row;
+        let count = state.ranges_i.len() as c_int;
+        let spans = [(0, state.current_end), (state.future_begin, count)];
+        spans.into_iter().any(|(from, to)| {
+            state.ranges_i[from as usize..to as usize]
+                .iter()
+                .any(|&slot| {
+                    let DecorRangeSlot::Range(item) = &state.slots[slot as usize] else {
+                        unreachable!("decor: a sorted index names a freed slot")
+                    };
+                    item.start_row == row
+                        && item.kind == kDecorKindVirtText
+                        && item.draw_col >= -1
+                        && item.start_col as isize >= v
+                        && with_decor_virt(item.data.virt(), |vt| {
+                            vt.pos == kVPosInline && vt.width != 0
+                        })
+                })
+        })
+    })
+}
+
 /// Moves where the next end-of-line virtual text goes.
 #[inline]
 pub(crate) fn set_decor_eol_col(eol_col: c_int) {

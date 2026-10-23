@@ -46,25 +46,11 @@ struct Decoration {
 impl Decoration {
     /// Nothing set: what every key below writes into.
     fn new() -> Decoration {
-        let empty = DecorVirtText {
-            flags: 0,
-            hl_mode: kHlModeUnknown as uint8_t,
-            priority: DECOR_PRIORITY_BASE as DecorPriority,
-            width: 0,
-            col: 0,
-            pos: kVPosEndOfLine,
-            data: DecorVirtText_data::Text(VirtText::new()),
-            next: DECOR_ID_INVALID,
-        };
         Decoration {
             hl: DECOR_HIGHLIGHT_INLINE_INIT,
             sign: DECOR_SIGN_HIGHLIGHT_INIT,
-            virt_lines: DecorVirtText {
-                flags: kVTIsLines as uint8_t,
-                data: DecorVirtText_data::Lines(Vec::new()),
-                ..empty.clone()
-            },
-            virt_text: empty,
+            virt_text: blank_virt(false),
+            virt_lines: blank_virt(true),
             url: None,
             has_hl: false,
             has_hl_multiple: false,
@@ -433,16 +419,29 @@ impl Decoration {
     }
 }
 
-/// The link `vt` holds, leaving it empty: the store takes it over.
-fn take_virt(vt: &mut DecorVirtText) -> DecorVirtText {
-    let empty = match vt.data {
-        DecorVirtText_data::Text(_) => DecorVirtText_data::Text(Vec::new()),
-        DecorVirtText_data::Lines(_) => DecorVirtText_data::Lines(Vec::new()),
-    };
+/// An unset virtual text, or block of virtual lines when `lines`.
+fn blank_virt(lines: bool) -> DecorVirtText {
     DecorVirtText {
-        data: core::mem::replace(&mut vt.data, empty),
-        ..vt.clone()
+        flags: if lines { kVTIsLines as uint8_t } else { 0 },
+        hl_mode: kHlModeUnknown as uint8_t,
+        priority: DECOR_PRIORITY_BASE as DecorPriority,
+        width: 0,
+        col: 0,
+        pos: kVPosEndOfLine,
+        data: if lines {
+            DecorVirtText_data::Lines(Vec::new())
+        } else {
+            DecorVirtText_data::Text(VirtText::new())
+        },
+        next: DECOR_ID_INVALID,
     }
+}
+
+/// The link `vt` holds, leaving an unset one of the same kind: the store
+/// takes it over.
+fn take_virt(vt: &mut DecorVirtText) -> DecorVirtText {
+    let lines = matches!(vt.data, DecorVirtText_data::Lines(_));
+    core::mem::replace(vt, blank_virt(lines))
 }
 
 /// Where the mark goes, once both ends have been clamped against the buffer.

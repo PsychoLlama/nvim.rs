@@ -20,10 +20,10 @@
 
 use super::*;
 use crate::decoration::{
-    DECOR_ID_INVALID, VirtChunks, decor_lists, decor_range, kDecorKindUIWatched,
-    kDecorKindVirtText, kHlModeBlend, kHlModeCombine, kVPosEndOfLine, kVPosEndOfLineRightAlign,
-    kVPosInline, kVPosRightAlign, kVPosWinCol, kVTRepeatLinebreak, set_decor_eol_col,
-    set_decor_range_draw_col, with_decor_virt,
+    DECOR_ID_INVALID, VirtChunks, decor_inline_virt_from, decor_lists, decor_range,
+    kDecorKindUIWatched, kDecorKindVirtText, kHlModeBlend, kHlModeCombine, kVPosEndOfLine,
+    kVPosEndOfLineRightAlign, kVPosInline, kVPosRightAlign, kVPosWinCol, kVTRepeatLinebreak,
+    set_decor_eol_col, set_decor_range_draw_col, with_decor_virt,
 };
 use crate::grid::with_linebuf;
 use crate::types::NUL;
@@ -389,20 +389,7 @@ impl WinLineVars {
         if self.virt_inline_i < self.virt_inline_len {
             return true;
         }
-        let lists = decor_lists();
-        let row = lists.row;
-        // Both halves of `ranges_i`: the ranges active now, and the ones
-        // that start later on this row.
-        let spans = [(0, lists.current_end), (lists.future_begin, lists.count)];
-        for (from, to) in spans {
-            for i in from..to {
-                let item = decor_range(i);
-                if inline_virt_at(&item, row) && item.start_col as ptrdiff_t >= v {
-                    return true;
-                }
-            }
-        }
-        false
+        decor_inline_virt_from(v)
     }
 
     /// Load the inline virtual text that starts at byte `v` into

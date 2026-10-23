@@ -549,8 +549,7 @@ impl Cells {
             }
         }
 
-        drop(core::mem::take(&mut *self.fold_vt));
-        drop(core::mem::take(&mut *self.virt_lines));
+        self.free_line_decorations();
         unsafe { xfree(self.foldtext_free.cast::<::core::ffi::c_void>()) };
         wlv.row
     }
@@ -561,6 +560,15 @@ impl Cells {
 
     /// Ask the decoration providers for the next chunk of the line once the
     /// read cursor has walked past what their last answer covered.
+    /// Free the line's `'foldtext'` chunks and its collected virtual
+    /// lines. Out of line: the drop code would otherwise sit in `win_line`
+    /// for a once-per-line call.
+    #[inline(never)]
+    fn free_line_decorations(&mut self) {
+        drop(core::mem::take(&mut *self.fold_vt));
+        drop(core::mem::take(&mut *self.virt_lines));
+    }
+
     pub(super) fn provider_chunk(&mut self, window: Win, lnum: LineNr) {
         if !self.check_decor_providers || self.byte_col() < self.decor_provider_end_col {
             return;
