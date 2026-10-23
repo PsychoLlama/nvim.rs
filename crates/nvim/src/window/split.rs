@@ -11,11 +11,9 @@
 //!
 //! Original: `src/nvim/window.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use core::ffi::{c_char, c_int, c_void};
-use core::mem::size_of;
+use core::ffi::{c_char, c_int};
 
 use super::arith::NextCurwin;
 use super::*;
@@ -488,11 +486,8 @@ fn insert_window(flags: c_int, new_wp: Option<Win>, oldwin: Win, _vertical: bool
     wp.w_floating = false;
     attach_frame(wp);
     // A non-floating window doesn't store a float config or have a border.
-    let adj = (&raw mut wp.w_border_adj).cast::<c_void>();
-    // SAFETY: the window's own config.
-    unsafe { clear_float_config(&raw mut wp.w_config, true) };
-    // SAFETY: the window's own border array.
-    unsafe { adj.cast::<u8>().write_bytes(0, size_of::<[c_int; 4]>()) };
+    clear_float_config(&mut wp.w_config, true);
+    wp.w_border_adj = [0; 4];
     Some(wp)
 }
 

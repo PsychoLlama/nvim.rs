@@ -39,7 +39,7 @@ use super::{Buf, BufId, FrameId, TabId, TabPage, Win, WinId};
 use crate::allocator::Owned;
 use crate::global_cell::GlobalCell;
 use crate::memory::XString;
-use crate::memory::{xcalloc, xfree};
+use crate::memory::xfree;
 use crate::optionstr::BUF_STRING_OPTIONS;
 use crate::registry::id_map;
 use crate::types::MemLine;
@@ -348,27 +348,22 @@ impl Saved {
     }
 }
 
-/// Give back the block [`Win::alloc_zeroed`] allocated for a window the
+/// Give back the block [`Win::alloc`] took over for a window the
 /// deferred-free list parked: the window's fields were released when it was
 /// given up, so this is the `xfree` alone.
 pub(crate) fn free_window_block(raw: *mut Window) {
-    // SAFETY: an `xcalloc` block of a window nothing reaches any more, freed
-    // once.
+    // SAFETY: a window's block, which the global allocator (`malloc`) gave
+    // the `Box` that `Win::alloc` took, nothing reaches any more; freed once.
     unsafe { xfree(raw.cast()) };
 }
 
 impl Win {
-    /// A window freshly allocated by `xcalloc`, before the allocator has
-    /// given it a handle -- so nothing is read and the handle is zero until
-    /// [`Win::set_handle`].
-    ///
-    /// `init` gets the bare address first, to write the fields all-zero bytes
-    /// are not a valid value for; it must leave a `Window` behind.
-    pub(crate) fn alloc_zeroed(init: impl FnOnce(*mut Window)) -> Self {
-        // SAFETY: `xcalloc` aborts rather than answering null.
-        let raw = unsafe { xcalloc(1, size_of::<Window>()) }.cast::<Window>();
-        init(raw);
-        Self::at(raw, 0)
+    /// The handle of a freshly built window, before the allocator has given
+    /// it a handle -- so nothing is read and the handle is zero until
+    /// [`Win::set_handle`]. The block is the window list's from here on:
+    /// [`free_window_block`] gives it back, without running its destructor.
+    pub(crate) fn alloc(window: Box<Window>) -> Self {
+        Self::at(Box::into_raw(window), 0)
     }
 }
 

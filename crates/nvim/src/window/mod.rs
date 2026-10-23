@@ -32,8 +32,7 @@
 //!
 //! Original: `src/nvim/window.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -54,7 +53,6 @@ use crate::ex_docmd::do_cmdline_cmd;
 use crate::ex_getln::is_in_cmdwin;
 use crate::getchar::beep_flush;
 use crate::global_cell::GlobalCell;
-use crate::memory::xfree;
 use crate::message::{
     e_not_allowed_to_change_window_layout_in_this_autocmd, e_winfixbuf_cannot_go_to_buffer,
 };
@@ -62,7 +60,7 @@ use crate::message::{emsg, msg};
 use crate::option::vars::swb_flags;
 use crate::options::{kOptSwbFlagUseopen, kOptSwbFlagUsetab};
 use crate::os::cshim::gettext;
-use crate::terminal::terminal_check_size;
+use crate::terminal::buf_terminal_check_size;
 use crate::types::{
     AlignTextPos, BlnFlags, CdCause, Direction, DoBufAction, DoBufStart, Error, GetFileFlags,
     Handle, MotionType, OptInt, WinSplit, WinStyle, Window, kErrorTypeException,
@@ -239,9 +237,9 @@ fn locked_err(cmd: CmdIdx) -> Result<(), Error> {
         return Ok(());
     }
     let msg = if close_disallowed.get() == 0 && cmd == CmdIdx::tabnew {
-        e_cannot_split_window_when_closing_buffer.as_ptr()
+        e_cannot_split_window_when_closing_buffer
     } else {
-        e_not_allowed_to_change_window_layout_in_this_autocmd.as_ptr()
+        e_not_allowed_to_change_window_layout_in_this_autocmd
     };
     Err(make_err(msg))
 }
@@ -392,12 +390,6 @@ fn is_autocmd_window(win: Option<Win>) -> bool {
     win.is_some_and(is_aucmd_win)
 }
 
-/// `xfree`, for the frames and click definitions the family owns.
-fn free<T>(raw: *mut T) {
-    // SAFETY: every caller passes a pointer from the `xmalloc` family, or null.
-    unsafe { xfree(raw as *mut ::core::ffi::c_void) };
-}
-
 /// The first window of the current tab page.
 fn first_win() -> Win {
     crate::winlayer::first_window().expect("the editor always has a window")
@@ -416,10 +408,9 @@ fn first_tab() -> TabPage {
     crate::winlayer::first_tab().expect("the editor always has a tab page")
 }
 
-/// An exception whose whole message is the string at `msg`.
-pub(crate) fn make_err(msg: *const ::core::ffi::c_char) -> Error {
-    // SAFETY: the message the caller handed over, live for this call.
-    Error::from_message(kErrorTypeException, unsafe { cstr::at(msg) })
+/// An exception whose whole message is `msg`.
+pub(crate) fn make_err(msg: &::core::ffi::CStr) -> Error {
+    Error::from_message(kErrorTypeException, msg)
 }
 
 /// `apply_autocmds(event, NULL, NULL, false, buf)`.
@@ -458,17 +449,12 @@ fn revalidate_cursor(win: Win) {
 
 /// Tell a terminal buffer its window changed size, if `buffer` has one.
 fn resize_terminal(buffer: Buf) {
-    let term = buffer.terminal;
-    if !term.is_null() {
-        // SAFETY: a live buffer's terminal.
-        unsafe { terminal_check_size(term) };
-    }
+    buf_terminal_check_size(buffer);
 }
 
 /// Run one Ex command line, as if the user had typed it.
-fn run_cmd(cmd: *const ::core::ffi::c_char) {
-    // SAFETY: a NUL-terminated command line.
-    let _ = do_cmdline_cmd(unsafe { cstr::at(cmd) });
+fn run_cmd(cmd: &::core::ffi::CStr) {
+    let _ = do_cmdline_cmd(cmd);
 }
 
 /// Drop `win`'s external grid, which the compositor still holds.

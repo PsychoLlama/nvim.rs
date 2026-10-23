@@ -10,16 +10,14 @@
 //!
 //! Original: `src/nvim/window.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use crate::types::AutoEvent;
-use crate::vim_snprintf;
 use crate::winlayer::Buf;
-use core::ffi::{c_char, c_int};
-use core::mem::size_of;
+use core::ffi::c_int;
+use std::ffi::CString;
 
 use super::arith::NextCurwin;
 use super::*;
@@ -33,7 +31,7 @@ use crate::option::option_was_set;
 use crate::option::vars::{P_WINDOW, p_ch, p_window};
 use crate::options::kOptWindow;
 use crate::optionstr::OptStringRef;
-use crate::types::{Dict, LineNr, List, OptInt, SaveVEvent, TypVal, VarNumber, ptrdiff_t, size_t};
+use crate::types::{LineNr, OptInt, SaveVEvent, TypVal, VarNumber, ptrdiff_t};
 use crate::ui::state::{Columns, Rows};
 use crate::window::state::skip_win_fix_scroll;
 use crate::winfloat::win_reconfig_floats;
@@ -139,10 +137,9 @@ pub fn may_make_initial_scroll_size_snapshot() {
 }
 
 /// A dictionary with the six numbers a `WinScrolled`/`WinResized` `v:event`
-/// entry carries, or null when one of them could not be added.
+/// entry carries.
 fn win_info_dict(deltas: [c_int; 6]) -> DictRef {
     let d_held = new_dict();
-    let d = d_held.as_ptr();
     let keys = [
         c"width".to_bytes(),
         c"height".to_bytes(),
@@ -153,9 +150,8 @@ fn win_info_dict(deltas: [c_int; 6]) -> DictRef {
     ];
     for (key, value) in keys.iter().zip(deltas) {
         let tv = TypVal::Number(value as VarNumber);
-        // SAFETY: a live dictionary, and a value the copy is taken from.
         // The key is a distinct literal, so the add cannot fail.
-        let added = unsafe { (*d).add_tv(key, &tv) };
+        let added = d_held.edit().add_tv(key, &tv);
         debug_assert!(added.is_ok(), "a fresh dictionary rejected a key");
     }
     d_held
@@ -164,8 +160,6 @@ fn win_info_dict(deltas: [c_int; 6]) -> DictRef {
 /// A fresh dictionary with one reference held, which is how upstream's
 /// `v:event` entries start.
 fn new_dict() -> DictRef {
-    // SAFETY: `tv_dict_alloc` answers a fresh live dictionary the handle
-    // owns.
     tv_dict_alloc()
 }
 
@@ -181,9 +175,9 @@ enum Scan<'a> {
         first_size: &'a mut Option<Win>,
     },
     /// A list of the handles of every window that changed size.
-    Winlist(*mut List),
+    Winlist(&'a ListRef),
     /// A dictionary of per-window deltas, plus an `all` entry.
-    Deltas(*mut Dict),
+    Deltas(&'a DictRef),
 }
 
 /// Look for windows whose size or view has moved since the last snapshot, and
@@ -205,8 +199,7 @@ fn scan_windows(what: &mut Scan) {
             match what {
                 Scan::Winlist(list) => {
                     let tv = TypVal::Number(wp.handle as VarNumber);
-                    // SAFETY: a live list, which takes ownership of `tv`.
-                    unsafe { (**list).push(tv) };
+                    list.edit().push(tv);
                 }
                 Scan::Counts {
                     size_count,
@@ -245,15 +238,8 @@ fn scan_windows(what: &mut Scan) {
             wp.w_skipcol as c_int - wp.w_last_skipcol as c_int,
         ];
         let d = win_info_dict(deltas);
-        let mut winid = [0 as c_char; NUMBUFLEN as usize];
-        let name = (&raw mut winid).cast::<c_char>();
-        // SAFETY: `winid` is 65 bytes, which holds any window handle.
-        let key_len =
-            unsafe { vim_snprintf!(name, size_of::<[c_char; 65]>(), c"%d".as_ptr(), wp.handle) };
-        // SAFETY: a live dictionary, and a live dictionary to add to it.
-        if unsafe { (**v_event).add_dict(cstr::slice_at(name, key_len as size_t), Some(d)) }
-            .is_err()
-        {
+        let winid = wp.handle.to_string();
+        if v_event.edit().add_dict(winid.as_bytes(), Some(d)).is_err() {
             break;
         }
         for (total, delta) in tot.iter_mut().zip(deltas) {
@@ -264,26 +250,21 @@ fn scan_windows(what: &mut Scan) {
         return;
     };
     let alldict = win_info_dict(tot);
-    // SAFETY: two live dictionaries.
-    let _ = unsafe { (**v_event).add_dict(b"all", Some(alldict)) };
+    let _ = v_event.edit().add_dict(b"all", Some(alldict));
 }
 
 /// The window whose id and buffer an event is reported against.
 struct Subject {
-    winid: [c_char; NUMBUFLEN as usize],
+    winid: CString,
     bufref: BufRef,
 }
 
 impl Subject {
     fn of(win: Win) -> Self {
-        let mut subject = Subject {
-            winid: [0; NUMBUFLEN as usize],
+        Subject {
+            winid: CString::new(win.handle.to_string()).expect("digits"),
             bufref: BufRef::of_opt(win.buffer_or_none()),
-        };
-        let name = (&raw mut subject.winid).cast::<c_char>();
-        // SAFETY: a 65-byte buffer, which holds any window handle.
-        unsafe { vim_snprintf!(name, size_of::<[c_char; 65]>(), c"%d".as_ptr(), win.handle) };
-        subject
+        }
     }
 
     /// The buffer to fire the event for: the window's own if it is still
@@ -321,13 +302,13 @@ pub fn may_trigger_win_scrolled_resized() {
     let mut windows_list = None;
     if trigger_resize {
         let held = tv_list_alloc(size_count as ptrdiff_t);
-        scan_windows(&mut Scan::Winlist(held.as_ptr()));
+        scan_windows(&mut Scan::Winlist(&held));
         windows_list = Some(held);
     }
     let mut scroll_dict = None;
     if trigger_scroll {
         let held = new_dict();
-        scan_windows(&mut Scan::Deltas(held.as_ptr()));
+        scan_windows(&mut Scan::Deltas(&held));
         scroll_dict = Some(held);
     }
 
@@ -353,7 +334,7 @@ fn fire_resized(resize: &mut Subject, windows_list: Option<ListRef>) {
     let v_event = get_v_event(&mut save);
     if v_event.edit().add_list(b"windows", windows_list).is_ok() {
         let buf = resize.buffer();
-        let name = cstr::in_chars(&resize.winid);
+        let name = resize.winid.as_c_str();
         v_event.edit().set_keys_readonly();
 
         let __hoisted_0 = Some(buf);
@@ -379,7 +360,7 @@ fn fire_scrolled(scroll: &mut Subject, scroll_dict: Option<DictRef>) {
     v_event.edit().set_keys_readonly();
     drop(scroll_dict);
     let buf = scroll.buffer();
-    let name = cstr::in_chars(&scroll.winid);
+    let name = scroll.winid.as_c_str();
 
     let __hoisted_0 = Some(buf);
 

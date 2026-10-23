@@ -17,15 +17,11 @@
 #![allow(non_upper_case_globals)]
 
 use crate::global_cell::GlobalCell;
-use core::ffi::{c_char, c_int};
+use core::ffi::{CStr, c_int};
 
 pub(crate) static skip_win_fix_cursor: GlobalCell<bool> = GlobalCell::new(false);
 pub(crate) static skip_win_fix_scroll: GlobalCell<bool> = GlobalCell::new(false);
 pub(crate) static skip_update_topline: GlobalCell<bool> = GlobalCell::new(false);
 pub(crate) static tabpage_move_disallowed: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub(crate) static float_anchor_str: GlobalCell<[*const c_char; 4]> = GlobalCell::new([
-    c"NW".as_ptr(),
-    c"NE".as_ptr(),
-    c"SW".as_ptr(),
-    c"SE".as_ptr(),
-]);
+/// A float's anchor as the UI is told it, indexed by `FloatAnchor`.
+pub(crate) static FLOAT_ANCHOR_STR: [&CStr; 4] = [c"NW", c"NE", c"SW", c"SE"];

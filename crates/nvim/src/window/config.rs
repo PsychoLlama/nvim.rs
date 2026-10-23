@@ -12,28 +12,28 @@
 //!
 //! Original: `src/nvim/window.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use core::ffi::{c_char, c_int, c_uint};
+use core::ffi::{c_int, c_uint};
 
 use super::*;
-use crate::api::private::helpers::{cstr_to_string, find_window_by_handle, try_enter, try_leave};
+use crate::api::private::helpers::{find_window_by_handle, try_enter, try_leave};
 use crate::buffer::do_buffer;
 use crate::drawscreen::UPD_NOT_VALID;
 use crate::eval::window::{restore_win_noblock, switch_win_noblock};
 use crate::fold::deepest_fold_nesting;
+use crate::grid::GridRef;
 use crate::grid::{default_grid_ref, grid_adjust, win_grid_alloc};
 use crate::guard::Suppress;
 use crate::r#move::textpos2screenpos;
 use crate::option::vars::{P_ACD, p_acd, p_ch};
-use crate::os::cshim::gettext_ptr;
+use crate::os::cshim::gettext_owned;
 use crate::plines::win_text_height;
 use crate::pos::MAXCOL;
 use crate::search::FORWARD;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
-    Boolean, ColNr, Error, FAIL, Float, Integer, LineNr, OK, Pos, ScreenGrid, SwitchWin, TryState,
+    Boolean, ColNr, Error, FAIL, Float, Integer, LineNr, OK, Pos, String_0, SwitchWin, TryState,
     WinConfig, WinStyle, WindowHandle, int64_t, kErrorTypeException, kFloatAnchorEast,
     kFloatAnchorSouth, kFloatRelativeLaststatus, kFloatRelativeTabline, kFloatRelativeWindow,
     size_t,
@@ -46,7 +46,7 @@ use crate::ui::{
 use crate::ui_compositor::{
     ui_comp_layers_adjust, ui_comp_put_grid, ui_comp_remove_grid, win_grid,
 };
-use crate::window::state::float_anchor_str;
+use crate::window::state::FLOAT_ANCHOR_STR;
 use crate::winfloat::WIN_CONFIG_INIT;
 use crate::winlayer::{Buf, Win};
 
@@ -123,35 +123,19 @@ fn fdccol_count(window: Win) -> c_int {
     fdccol.min(deepest_fold_nesting(window))
 }
 
-/// # Safety
-///
-/// `dst` must point at a live `WinConfig`, unaliased for the call.
-pub unsafe fn merge_win_config(dst: *mut WinConfig, src: WinConfig) {
-    // SAFETY: the caller's promise -- a live config to overwrite.
-    unsafe { merge(&mut *dst, src) };
-}
-
 /// Overwrite `dst` with `src`, dropping the title and footer text `dst`
 /// owned: `src` owns its own.
-fn merge(dst: &mut WinConfig, src: WinConfig) {
+pub fn merge_win_config(dst: &mut WinConfig, src: WinConfig) {
     *dst = src;
-}
-
-/// # Safety
-///
-/// `fconfig` must point at a live `WinConfig`, unaliased for the call.
-pub unsafe fn clear_float_config(fconfig: *mut WinConfig, free_fields: bool) {
-    // SAFETY: the caller's promise -- a live config.
-    unsafe { clear_float(&mut *fconfig, free_fields) };
 }
 
 /// Put `fconfig` back to the defaults, keeping the two fields a window carries
 /// across becoming an ordinary window.
-fn clear_float(fconfig: &mut WinConfig, free_fields: bool) {
+pub fn clear_float_config(fconfig: &mut WinConfig, free_fields: bool) {
     let saved_style: WinStyle = fconfig.style;
     let saved_cmdline_offset = fconfig._cmdline_offset;
     if free_fields {
-        merge(fconfig, WIN_CONFIG_INIT);
+        merge_win_config(fconfig, WIN_CONFIG_INIT);
     } else {
         *fconfig = WIN_CONFIG_INIT;
     }
@@ -195,7 +179,7 @@ fn ext_win_position(window: Win, validate: bool) {
         return;
     }
 
-    let mut grid = default_grid_ref().raw();
+    let mut grid = default_grid_ref();
     let mut row = c.row as Float;
     let mut col = c.col as Float;
     if c.relative as c_uint == kFloatRelativeWindow as c_uint {
@@ -234,11 +218,8 @@ fn ext_win_position(window: Win, validate: bool) {
     } else {
         0
     };
-    // SAFETY: `grid` is the default grid or the parent window's, both live.
-    unsafe {
-        comp_row += (*grid).comp_row;
-        comp_col += (*grid).comp_col;
-    }
+    comp_row += grid.comp_row;
+    comp_col += grid.comp_col;
     comp_row = comp_row
         .min(Rows.get() - wp.w_height_outer - above_ch)
         .max(0);
@@ -258,15 +239,8 @@ fn ext_win_position(window: Win, validate: bool) {
     let (h, w) = (wp.w_height_outer, wp.w_width_outer);
     ui_comp_put_grid(win_grid(wp), comp_row, comp_col, h, w, valid, false);
     if ui_has(kUIMultigrid) {
-        // SAFETY: `float_anchor_str` is an array of static strings indexed by
-        // the anchor, and `grid` is a live grid.
-        let (anchor, anchor_grid) = unsafe {
-            let names = (&raw const float_anchor_str).cast::<*const c_char>();
-            (
-                cstr_to_string(*names.offset(c.anchor as isize)),
-                (*grid).handle,
-            )
-        };
+        let anchor = String_0::from_cstr(FLOAT_ANCHOR_STR[c.anchor as usize]);
+        let anchor_grid = grid.handle;
         ui_call_win_float_pos(
             wp.w_grid_alloc.handle as Integer,
             wp.handle as WindowHandle,
@@ -301,7 +275,7 @@ fn anchor_to_window(
     parent: Win,
     c: &WinConfig,
     validate: bool,
-    grid: &mut *mut ScreenGrid,
+    grid: &mut GridRef,
     row: &mut Float,
     col: &mut Float,
 ) {
@@ -312,7 +286,7 @@ fn anchor_to_window(
     let (mut row_off, mut col_off) = (0, 0);
     win_grid_alloc(parent);
     let own = parent.w_grid;
-    *grid = grid_adjust(own, &mut row_off, &mut col_off).raw();
+    *grid = grid_adjust(own, &mut row_off, &mut col_off);
     *row += row_off as Float;
     *col += col_off as Float;
     if c.bufpos.lnum < 0 as LineNr {
@@ -448,8 +422,7 @@ pub fn check_split_disallowed(window: Win) -> c_int {
     match check_split_disallowed_err(window) {
         Ok(()) => OK,
         Err(e) => {
-            // SAFETY: the message the check just wrote, owned by `e`.
-            unsafe { emsg(gettext_ptr(e.message_or_empty().as_ptr())) };
+            emsg(&gettext_owned(e.message_or_empty()));
             FAIL
         }
     }

@@ -388,12 +388,10 @@ fn apply_split(mut win: Win, config: CfgKeys, mut fconfig: WinCfg) -> Result<App
         win_setheight_win(fconfig.height, win);
     }
     if !was_split {
-        // SAFETY: the caller's config.
-        unsafe { clear_float_config(fconfig.raw(), false) };
+        clear_float_config(&mut fconfig, false);
     }
     let merged = (*fconfig).clone();
-    // SAFETY: the caller's window, whose config field is live with it.
-    unsafe { merge_win_config(&raw mut win.w_config, merged) };
+    merge_win_config(&mut win.w_config, merged);
     Ok(applied)
 }
 

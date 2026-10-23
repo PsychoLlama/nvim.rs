@@ -259,7 +259,7 @@ fn cmdwin_allows(win: Win) -> Result<bool, Error> {
             cmdwin_result.set(Ctrl_C);
             return Ok(false);
         } else if cmdwin_old_curwin.get() == Some(win.id()) {
-            return Err(make_err(e_cmdwin.as_ptr()));
+            return Err(make_err(e_cmdwin));
         }
     }
     Ok(true)

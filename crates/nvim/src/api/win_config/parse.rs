@@ -339,8 +339,8 @@ impl Decode {
     /// does not exist yet -- back over whatever was filled in.
     fn restore(&self) {
         let base = self.window.map_or(WIN_CONFIG_INIT, |w| w.w_config.clone());
-        // SAFETY: `self.fconfig` names the live config its builder promised.
-        unsafe { merge_win_config(self.fconfig.raw(), base) };
+        let mut fconfig = self.fconfig;
+        merge_win_config(&mut fconfig, base);
     }
 
     /// Whether `window` is a float, which several keys read differently.

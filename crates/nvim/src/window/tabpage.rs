@@ -10,8 +10,7 @@
 //!
 //! Original: `src/nvim/window.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
@@ -41,7 +40,8 @@ use crate::options::kOptCmdheight;
 use crate::startup::starting;
 use crate::tag::state::postponed_split_tab;
 use crate::types::{
-    Failed, Handle, OptInt, OptVal, OptionSetFlags, SwitchWin, Tabpage, VAR_SCOPE, int64_t,
+    Failed, Handle, OptInt, OptVal, OptionSetFlags, ScopeDictItem, SwitchWin, Tabpage, VAR_SCOPE,
+    int64_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::window::state::{skip_win_fix_scroll, tabpage_move_disallowed};
@@ -84,20 +84,29 @@ pub(crate) fn adopt_tabpage(tabpage: TabPage) {
 /// Allocate a `Tabpage` and fill in its defaults.
 pub(crate) fn alloc_tabpage() -> TabPage {
     static LAST_TP_HANDLE: GlobalCell<c_int> = GlobalCell::new(0);
-    let mut zeroed = Box::<Tabpage>::new_zeroed();
-    let raw = zeroed.as_mut_ptr();
-    // SAFETY: all-zero bytes are what upstream's `xcalloc(1, sizeof(Tabpage))`
-    // hands a fresh tab page, and every field of `tabpage_S` that owns an
-    // allocation is null when zeroed -- but for the two directories, which
-    // are `Option<XString>`s, and the diff block list, a `Vec`: none of the
-    // three is promised valid as zero bytes, so they are written here before
-    // the box is.
-    let owned = Owned::new(unsafe {
-        (&raw mut (*raw).tp_localdir).write(None);
-        (&raw mut (*raw).tp_prevdir).write(None);
-        (&raw mut (*raw).tp_diff).write(Vec::new());
-        zeroed.assume_init()
-    });
+    // What upstream's `xcalloc(1, sizeof(tabpage_T))` zero bytes stand for.
+    let owned = Owned::new(Box::new(Tabpage {
+        handle: 0,
+        tp_next: None,
+        tp_topframe: None,
+        tp_curwin: None,
+        tp_prevwin: None,
+        tp_firstwin: None,
+        tp_lastwin: None,
+        tp_old_rows_avail: 0,
+        tp_old_columns: 0,
+        tp_ch_used: 0,
+        tp_did_tabclosedpre: false,
+        tp_diff: Vec::new(),
+        tp_diff_gen: 0,
+        tp_diffbuf: [None; 8],
+        tp_diff_invalid: 0,
+        tp_diff_update: 0,
+        tp_snapshot: [None; 3],
+        tp_winvar: ScopeDictItem::EMPTY,
+        tp_localdir: None,
+        tp_prevdir: None,
+    }));
     // `owned` keeps it alive until the registry takes it over two lines
     // below.
     let mut tp = TabPage::owned_by(&owned);
@@ -181,7 +190,9 @@ pub(crate) fn new_tabpage(
     // of `stash_tabpage` when not entering.
     if enter {
         if leave_tab(Some(Buf::current()), true).is_err() {
-            free(newtp.raw());
+            // Through the registry, which holds it: upstream's `xfree` of
+            // the bare block.
+            free_tab(newtp);
             return None;
         }
     } else {

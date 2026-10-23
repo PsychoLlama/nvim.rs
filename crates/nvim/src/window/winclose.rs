@@ -9,13 +9,12 @@
 //!
 //! Original: `src/nvim/window.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
-use crate::vim_snprintf;
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
+use std::ffi::CString;
 
 use super::*;
 use crate::autocmd::has_event;
@@ -32,7 +31,7 @@ use crate::normal::reset_visual_and_resel;
 use crate::option::vars::{p_ea, p_ead, p_ru};
 use crate::startup::getout;
 use crate::types::ui::kUIMultigrid;
-use crate::types::{FAIL, Integer, OK, size_t};
+use crate::types::{FAIL, Integer, OK};
 use crate::ui::{ui_call_win_close, ui_has};
 use crate::winfloat::win_float_find_altwin;
 use crate::winlayer::graph::{first_tabpage, firstwin, lastwin};
@@ -264,7 +263,7 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
     if diffopt_closeoff() && had_diffmode && prev_curtab.is_current() {
         let diffcount = windows().filter(|w| w.w_onebuf_opt.wo_diff != 0).count();
         if diffcount == 1 {
-            run_cmd(c"diffoff!".as_ptr());
+            run_cmd(c"diffoff!");
         }
     }
 
@@ -407,13 +406,8 @@ fn fire_winclosed(win: Win) {
         return;
     }
     RECURSIVE.set(true);
-    let mut winid = [0 as c_char; NUMBUFLEN as usize];
-    number_into(&mut winid, c"%d".as_ptr(), win.handle);
-    fire_named(
-        AutoEvent::WinClosed,
-        Some(cstr::in_chars(&winid)),
-        win.buffer_or_none(),
-    );
+    let winid = number_name(win.handle);
+    fire_named(AutoEvent::WinClosed, Some(&winid), win.buffer_or_none());
     RECURSIVE.set(false);
 }
 
@@ -583,14 +577,9 @@ pub(crate) fn close_othertab(win: Win, free_buf: bool, tabpage: TabPage, force: 
         if free_tp_idx > 0 {
             free_tab(tabpage);
             if event_wanted(AutoEvent::TabClosed) {
-                let mut prev_idx = [0 as c_char; NUMBUFLEN as usize];
-                number_into(&mut prev_idx, c"%i".as_ptr(), free_tp_idx);
+                let prev_idx = number_name(free_tp_idx);
                 let buf = bufref.get().unwrap_or_else(Buf::current);
-                fire_named(
-                    AutoEvent::TabClosed,
-                    Some(cstr::in_chars(&prev_idx)),
-                    Some(buf),
-                );
+                fire_named(AutoEvent::TabClosed, Some(&prev_idx), Some(buf));
             }
         }
         return true;
@@ -617,11 +606,9 @@ fn event_wanted(event: AutoEvent) -> bool {
     has_event(event)
 }
 
-/// `vim_snprintf(buf, sizeof(buf), fmt, n)` for the one-number event names.
-fn number_into(buf: &mut [c_char; NUMBUFLEN as usize], fmt: *const c_char, n: c_int) {
-    let (dst, len) = (buf.as_mut_ptr(), buf.len() as size_t);
-    // SAFETY: a buffer of its own length, and a format taking one `int`.
-    unsafe { vim_snprintf!(dst, len, fmt, n) };
+/// `n` in decimal, for the one-number event names.
+fn number_name(n: c_int) -> CString {
+    CString::new(n.to_string()).expect("digits")
 }
 
 /// Exit the editor: every window is gone.

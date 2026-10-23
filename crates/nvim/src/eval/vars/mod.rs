@@ -66,10 +66,10 @@ use crate::runtime::{
 use crate::search::set_search_direction;
 use crate::search::state::no_hlsearch;
 use crate::types::{
-    BoolVarValue, Dict, DictItem, DictKey, EvalFuncData, ExArg, Expand, GRegFlags, List, OptIndex,
-    OptVal, Partial, ScopeDictItem, ScopeType, ScriptId, ScriptVar, SpecialVarValue, TypVal,
-    VAR_BLOB, VAR_BOOL, VAR_DEF_SCOPE, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
-    VAR_PARTIAL, VAR_SCOPE, VAR_SPECIAL, VAR_STRING, VAR_TYPE_BLOB, VAR_TYPE_BOOL, VAR_TYPE_DICT,
+    BoolVarValue, Dict, DictItem, EvalFuncData, ExArg, Expand, GRegFlags, List, OptIndex, OptVal,
+    Partial, ScopeDictItem, ScopeType, ScriptId, ScriptVar, SpecialVarValue, TypVal, VAR_BLOB,
+    VAR_BOOL, VAR_DEF_SCOPE, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
+    VAR_SCOPE, VAR_SPECIAL, VAR_STRING, VAR_TYPE_BLOB, VAR_TYPE_BOOL, VAR_TYPE_DICT,
     VAR_TYPE_FLOAT, VAR_TYPE_FUNC, VAR_TYPE_LIST, VAR_TYPE_NUMBER, VAR_TYPE_STRING, VAR_UNKNOWN,
     VarLock, VarNumber, VarType, VimVarFlags, Vv, int64_t, kBoolVarFalse, kBoolVarTrue,
     kListLenUnknown, kSpecialVarNull, ptrdiff_t, size_t, uint8_t, uint32_t,
@@ -166,12 +166,7 @@ pub const e_cannot_use_heredoc_here: &CStr = c"E991: Cannot use =<< here";
 
 /// A scope's entry before its dictionary exists: what a bare `g:` or `v:`
 /// names until [`globvar_dict`] or [`vimvar_dict`] first builds the scope.
-const EMPTY_SCOPE_VAR: ScopeDictItem = ScopeDictItem(ManuallyDrop::new(DictItem {
-    di_tv: TypVal::empty(VAR_UNKNOWN),
-    di_lock: VarLock::Unlocked,
-    di_flags: 0,
-    di_key: DictKey::EMPTY,
-}));
+const EMPTY_SCOPE_VAR: ScopeDictItem = ScopeDictItem::EMPTY;
 
 state_record! {
     /// The editor-wide variable scopes: `g:`, `v:` and what hangs off `v:`.

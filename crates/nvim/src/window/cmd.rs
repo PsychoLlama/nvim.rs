@@ -9,8 +9,7 @@
 //!
 //! Original: `src/nvim/window.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -22,9 +21,9 @@ use crate::keycodes::{
     Ctrl_X, Ctrl_Z, Key, NotAKey,
 };
 use crate::types::AutoEvent;
-use crate::vim_snprintf;
 use crate::winlayer::prev_window;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
+use std::ffi::CString;
 
 use super::*;
 
@@ -39,7 +38,7 @@ use crate::getchar::state::{KeyStuffed, KeyTyped, langmap_mapchar, vgetc_busy};
 use crate::getchar::{plain_vgetc, typeahead};
 use crate::guard::Keys;
 use crate::mapping::langmap_adjust_mb;
-use crate::memory::{XString, xmemdupz, xstrlcat, xstrlcpy};
+use crate::memory::XString;
 use crate::message::{e_buffer_nr_not_found, e_cmdwin, e_noalt};
 use crate::message_fmt::emsg_text;
 use crate::normal::{
@@ -53,7 +52,7 @@ use crate::search::find_pattern_in_path;
 use crate::tag::state::{g_do_tagpreview, postponed_split};
 use crate::tr_c;
 use crate::types::ui::kUIMultigrid;
-use crate::types::{Failed, LineNr, NUL, WinConfig, int64_t, size_t};
+use crate::types::{Failed, LineNr, NUL, WinConfig, int64_t};
 use crate::ui::state::{Columns, Rows};
 use crate::ui::ui_has;
 use crate::winfloat::{WIN_CONFIG_INIT, win_new_float};
@@ -104,10 +103,6 @@ const IDENT_ANY: c_int = const { b'i' as c_int };
 const IDENT_DEFINE: c_int = const { b'd' as c_int };
 const EXTENDED: c_int = const { b'g' as c_int };
 const DETACH: c_int = const { b'e' as c_int };
-
-/// The 40-byte buffer the letters that delegate to an Ex command build their
-/// command line in.
-type CmdBuf = [c_char; 40];
 
 pub fn do_window(nchar: c_int, prenum: c_int, xchar: c_int) {
     window_command(nchar, prenum, xchar);
@@ -176,7 +171,7 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
                 return;
             }
             reset_visual_and_resel();
-            run_cmd(c"pclose".as_ptr());
+            run_cmd(c"pclose");
         }
         // cursor to the preview window
         Err(NotAKey(PREVIEW)) => match windows().find(|wp| wp.w_onebuf_opt.wo_pvw != 0) {
@@ -377,26 +372,27 @@ fn split_alternate(prenum: c_int) {
 /// CTRL-W n, and the quickfix arm of CTRL-W s / CTRL-W v: delegate to `:new`,
 /// `:vnew`, or the counted form of either.
 fn new_window(nchar: c_int, prenum: c_int) {
-    let mut cbuf: CmdBuf = [0; 40];
+    let mut cmd = Vec::new();
     if prenum != 0 {
-        write_count(&mut cbuf, prenum as int64_t); // window height
+        cmd.extend_from_slice(prenum.to_string().as_bytes()); // window height
     }
     if nchar == b'v' as c_int || nchar == Ctrl_V {
-        append_str(&mut cbuf, c"v");
+        cmd.push(b'v');
     }
-    append_str(&mut cbuf, c"new");
-    run_cmd(cbuf.as_ptr());
+    cmd.extend_from_slice(b"new");
+    run_cmd(&CString::new(cmd).expect("a count and letters"));
 }
 
 /// CTRL-W q / c / o -- delegate to `:quit`, `:close` or `:only`, with the
 /// count appended when there is one.
 fn run_with_count(cmd: &CStr, prenum: c_int) {
-    let mut cbuf: CmdBuf = [0; 40];
-    let len = copy_str(&mut cbuf, cmd);
-    if prenum > 0 && len < cbuf.len() as size_t {
-        write_count_at(&mut cbuf, len, prenum as int64_t);
+    if prenum <= 0 {
+        run_cmd(cmd);
+        return;
     }
-    run_cmd(cbuf.as_ptr());
+    let mut line = cmd.to_bytes().to_vec();
+    line.extend_from_slice(prenum.to_string().as_bytes());
+    run_cmd(&CString::new(line).expect("a command name and a count"));
 }
 
 /// CTRL-W w / CTRL-W W -- the `prenum`th window, or the next or previous one,
@@ -540,10 +536,9 @@ fn goto_file(nchar: c_int, prenum1: c_int) {
         return;
     }
     let mut lnum = -1 as LineNr;
-    let ptr = grab_filename(prenum1, &mut lnum);
-    if ptr.is_null() {
+    let Some(name) = grab_filename(prenum1, &mut lnum) else {
         return;
-    }
+    };
     let oldtab = TabPage::current();
     let oldwin = Win::current();
     set_pcmark();
@@ -553,13 +548,13 @@ fn goto_file(nchar: c_int, prenum1: c_int) {
     let jump = (kOptSwbFlagUseopen as c_int | kOptSwbFlagUsetab as c_int) as ::core::ffi::c_uint;
     let mut wp = None;
     if swb_flags.get() & jump != 0 && cmdmod.with(|m| m.cmod_tab) == 0 {
-        wp = find_buffer_by_name(ptr).and_then(swbuf_goto_win);
+        wp = find_buffer_by_name(name.as_cstr()).and_then(swbuf_goto_win);
     }
     if wp.is_none() && split(0, 0).is_ok() {
         let mut cur = Win::current();
         cur.w_onebuf_opt.wo_scb = 0;
         cur.w_onebuf_opt.wo_crb = 0;
-        if edit_file(ptr).is_err() {
+        if edit_file(name.as_cstr()).is_err() {
             // Failed to open the file: close the window opened for it.
             close(Win::current(), false, false);
             goto_tab_win(oldtab, oldwin);
@@ -573,21 +568,17 @@ fn goto_file(nchar: c_int, prenum1: c_int) {
         revalidate_cursor_lnum(cur);
         first_non_blank();
     }
-    free(ptr);
 }
 
 /// CTRL-W i / d -- open a new window on the first line matching the identifier
 /// under the cursor, searching along `'path'`.
 fn find_in_path(kind: c_int, prenum: c_int, prenum1: c_int) {
     // A copy: if the line is changed it will be freed.
-    let mut found = crate::normal::ident_under_cursor(FIND_IDENT as c_int);
-    let len = found.len();
-    if len == 0 {
+    let found = crate::normal::ident_under_cursor(FIND_IDENT as c_int);
+    if found.is_empty() {
         return;
     }
-    let pat = dup_bytes(found.as_mut_ptr().cast::<c_char>(), len);
-    search_path(pat, len, kind, prenum == 0, prenum1);
-    free(pat);
+    search_path(&found, kind, prenum == 0, prenum1);
     Win::current().w_set_curswant = true;
 }
 
@@ -700,9 +691,8 @@ fn find_buffer(fnum: c_int) -> Option<Buf> {
 }
 
 /// The buffer whose name `name` expands to, if there is one.
-fn find_buffer_by_name(name: *mut c_char) -> Option<Buf> {
-    // SAFETY: a NUL-terminated file name.
-    crate::buffer::find_buffer_by_name(unsafe { cstr::at(name) })
+fn find_buffer_by_name(name: &CStr) -> Option<Buf> {
+    crate::buffer::find_buffer_by_name(name)
 }
 
 /// Edit buffer `fnum` in the current window, remembering the alternate file.
@@ -723,16 +713,14 @@ fn text_or_buffer_locked() -> bool {
 
 /// The file name under the cursor, `prenum1` names in from it, with the line
 /// number that follows it written to `lnum`.
-fn grab_filename(prenum1: c_int, lnum: &mut LineNr) -> *mut c_char {
-    grab_file_name(prenum1, Some(lnum)).map_or(::core::ptr::null_mut(), XString::into_raw)
+fn grab_filename(prenum1: c_int, lnum: &mut LineNr) -> Option<XString> {
+    grab_file_name(prenum1, Some(lnum))
 }
 
 /// `do_ecmd()`: edit file `name` in the current window, keeping the alternate.
-fn edit_file(name: *mut c_char) -> Result<(), Failed> {
+fn edit_file(name: &CStr) -> Result<(), Failed> {
     let lnum = newlnum::LASTL as LineNr;
-    // SAFETY: this command's own NUL-terminated file name, or null.
-    let name = unsafe { cstr::at_opt(name) };
-    do_ecmd(0, name, None, None, lnum, EcmdFlags::HIDE, None)
+    do_ecmd(0, Some(name), None, None, lnum, EcmdFlags::HIDE, None)
 }
 
 /// Clamp `window`'s cursor line into its buffer.
@@ -747,19 +735,11 @@ fn first_non_blank() {
     beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
 }
 
-/// An owned NUL-terminated copy of the first `len` bytes of `src`.
-fn dup_bytes(src: *mut c_char, len: size_t) -> *mut c_char {
-    // SAFETY: `len` bytes the caller has just measured.
-    unsafe { xmemdupz(src.cast(), len) }.cast::<c_char>()
-}
-
 /// `find_pattern_in_path()` as CTRL-W i / d asks it: split a window on the
 /// first, or the `prenum1`th, match of `pat` along `'path'`.
-fn search_path(pat: *mut c_char, len: size_t, kind: c_int, skip_comments: bool, prenum1: c_int) {
+fn search_path(pat: &[u8], kind: c_int, skip_comments: bool, prenum1: c_int) {
     let (first, last) = (1 as LineNr, MAXLNUM);
     let action = ACTION_SPLIT as c_int;
-    // SAFETY: a pattern of `len` readable bytes.
-    let pat = unsafe { cstr::slice_at(pat, len) };
     find_pattern_in_path(
         pat,
         kDirectionNotSet,
@@ -783,36 +763,4 @@ fn view_quickfix_result() {
 /// `semsg(_(fmt), n)`, for the one error that names a buffer number.
 fn err_number(fmt: &'static CStr, n: c_int) {
     emsg_text(tr_c!(fmt, int64_t::from(n)));
-}
-
-/// `xstrlcpy(buf, s, sizeof(buf))`, answering the length it wanted.
-fn copy_str(buf: &mut CmdBuf, s: &CStr) -> size_t {
-    let (dst, room) = (buf.as_mut_ptr(), buf.len() as size_t);
-    // SAFETY: a buffer of its own length and a NUL-terminated string.
-    unsafe { xstrlcpy(dst, s.as_ptr(), room) }
-}
-
-/// `xstrlcat(buf, s, sizeof(buf))`.
-fn append_str(buf: &mut CmdBuf, s: &CStr) {
-    let (dst, room) = (buf.as_mut_ptr(), buf.len() as size_t);
-    // SAFETY: as above; `xstrlcat` keeps the buffer NUL-terminated.
-    unsafe { xstrlcat(dst, s.as_ptr(), room) };
-}
-
-/// Print `n` at the start of `buf`, leaving room for the longest suffix
-/// [`new_window`] appends.
-fn write_count(buf: &mut CmdBuf, n: int64_t) {
-    let (dst, room) = (buf.as_mut_ptr(), buf.len() as size_t - 5);
-    // SAFETY: a buffer of at least `room` bytes, and a format taking a number.
-    unsafe { vim_snprintf!(dst, room, c"%ld".as_ptr(), n) };
-}
-
-/// Print `n` `at` bytes into `buf`, which [`run_with_count`] has filled to
-/// there.
-fn write_count_at(buf: &mut CmdBuf, at: size_t, n: int64_t) {
-    let room = buf.len() as size_t - at;
-    // A pointer to the rest of the buffer, not to the one element at `at`.
-    let dst = buf[at..].as_mut_ptr();
-    // SAFETY: `at` is within the buffer, which has `room` bytes left.
-    unsafe { vim_snprintf!(dst, room, c"%ld".as_ptr(), n) };
 }

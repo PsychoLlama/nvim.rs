@@ -12,8 +12,7 @@
 //!
 //! Original: `src/nvim/window.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use core::ffi::c_int;
 
@@ -40,7 +39,7 @@ use crate::optionstr::OptString;
 use crate::plines::{plines_win, plines_win_col, plines_win_nofill};
 use crate::startup::{exiting, full_screen};
 use crate::state::{MODE_CMDLINE, MODE_NORMAL, MODE_TERMINAL, get_real_state};
-use crate::terminal::terminal_check_size;
+use crate::terminal::buf_terminal_check_size;
 use crate::types::ui::{kUIMessages, kUIMultigrid, kUITabline};
 use crate::types::{ColNr, FAIL, Integer, LineNr, NUL, OK, OptInt, ScriptId, WindowHandle};
 use crate::ui::state::{Columns, Rows};
@@ -379,10 +378,7 @@ pub(crate) fn set_inner_size(window: Win, valid_cursor: bool) {
         }
         window.redraw_later(UPD_NOT_VALID);
     }
-    if !window.buffer().terminal.is_null() {
-        // SAFETY: the buffer's own terminal.
-        unsafe { terminal_check_size(window.buffer().terminal) };
-    }
+    buf_terminal_check_size(window.buffer());
 
     // SAFETY: a live window; both read its border configuration.
     let (border_height, border_width) = (win_border_height(window), win_border_width(window));
@@ -648,13 +644,8 @@ pub fn set_winbar_win(window: Win, make_room: bool, valid_cursor: bool) -> c_int
 /// Give `window` the window bar `'winbar'` asks for, or take it away.
 fn winbar_win(window: Win, make_room: bool, valid_cursor: bool) -> c_int {
     let mut window = window;
-    // SAFETY: both are NUL-terminated option strings.
-    let (global, local) = p_wbr(|value| unsafe {
-        (
-            *value.as_ptr().cast_mut() as c_int,
-            window.w_onebuf_opt.wo_wbr.first_byte() as c_int,
-        )
-    });
+    let global = p_wbr(|value| c_int::from(value.to_bytes().first().copied().unwrap_or(0)));
+    let local = c_int::from(window.w_onebuf_opt.wo_wbr.first_byte());
     let winbar_height = if window.w_floating {
         (local != NUL) as c_int
     } else {

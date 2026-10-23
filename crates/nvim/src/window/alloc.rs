@@ -10,10 +10,13 @@
 //!
 //! Original: `src/nvim/window.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use crate::types::{ArgListId, VirtText, WinClickDefs};
+use crate::r#move::WinValid;
+use crate::types::{
+    ArgListId, FcsChars, FileMark, FileMarkView, GridView, LcsChars, Pos, PosSave, ScopeDictItem,
+    Taggy, VirtText, WinClickDefs, Window, XFileMark,
+};
 use core::ffi::{c_char, c_int};
 
 use super::*;
@@ -38,7 +41,9 @@ use crate::types::{
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{ui_call_grid_destroy, ui_has};
 use crate::winfloat::{WIN_CONFIG_INIT, win_new_float};
-use crate::winlayer::graph::{firstwin, lastwin, leave_curbuf, prevwin, topframe};
+use crate::winlayer::graph::{
+    firstwin, free_window_block, lastwin, leave_curbuf, prevwin, topframe,
+};
 use crate::winlayer::{
     Buf, FrameRef, TabPage, Win, WinId, buffers, defer_free_window, forget_window, register_window,
     tabs,
@@ -47,34 +52,256 @@ use crate::winlayer::{
 // ---------------------------------------------------------------------------
 // The neighbours only this file reaches
 
-/// A fresh window, zeroed but for the fields that own an allocation.
-///
-/// All-zero bytes are not a valid `ScreenGrid` -- its cell buffers are
-/// `Vec`s, whose pointers are never null -- nor a valid `w_ns_set`, which is
-/// a `HashSet` and carries a hasher, nor either `WinOpt`'s string options,
-/// for the reason `optionstr::BUF_STRING_OPTIONS` states, nor the two
-/// directories, which are `Option<XString>`s, nor the match list, the fold
-/// tree and the config's border texts, which are `Vec`s. All of them are
-/// written before anything can read or drop them.
+/// A position that is all zero bytes.
+const ZERO_POS: Pos = Pos {
+    lnum: 0,
+    col: 0,
+    coladd: 0,
+};
+
+/// A mark that is all zero bytes -- unlike [`FileMark::UNSET`], whose view
+/// says "remember nothing" -- which is what the C's `xcalloc` gave every
+/// jump list and tag stack slot.
+const ZERO_FILEMARK: FileMark = FileMark {
+    mark: ZERO_POS,
+    fnum: 0,
+    timestamp: 0,
+    view: FileMarkView {
+        topline_offset: 0,
+        skipcol: 0,
+    },
+    extra: None,
+};
+
+/// A jump list slot as a fresh window holds it.
+const ZERO_XFILEMARK: XFileMark = XFileMark {
+    fmark: ZERO_FILEMARK,
+    fname: None,
+};
+
+/// A tag stack slot as a fresh window holds it.
+const ZERO_TAGGY: Taggy = Taggy {
+    tagname: None,
+    fmark: ZERO_FILEMARK,
+    cur_match: 0,
+    cur_fnum: 0,
+    user_data: None,
+};
+
+/// `'listchars'` before the window's value is parsed: no characters.
+const ZERO_LCS: LcsChars = LcsChars {
+    eol: 0,
+    ext: 0,
+    prec: 0,
+    nbsp: 0,
+    space: 0,
+    tab1: 0,
+    tab2: 0,
+    tab3: 0,
+    leadtab1: 0,
+    leadtab2: 0,
+    leadtab3: 0,
+    lead: 0,
+    trail: 0,
+    multispace: None,
+    leadmultispace: None,
+    conceal: 0,
+};
+
+/// `'fillchars'` before the window's value is parsed: no characters.
+const ZERO_FCS: FcsChars = FcsChars {
+    stl: 0,
+    stlnc: 0,
+    wbr: 0,
+    horiz: 0,
+    horizup: 0,
+    horizdown: 0,
+    vert: 0,
+    vertleft: 0,
+    vertright: 0,
+    verthoriz: 0,
+    fold: 0,
+    foldopen: 0,
+    foldclosed: 0,
+    foldsep: 0,
+    foldinner: 0,
+    diff: 0,
+    msgsep: 0,
+    eob: 0,
+    lastline: 0,
+    trunc: 0,
+    truncrl: 0,
+};
+
+/// A fresh window, every field what upstream's `xcalloc(1, sizeof(win_T))`
+/// zero bytes stand for -- an empty grid, set, option block, list, config
+/// and string where the field owns one. Unregistered, with handle zero.
 fn zeroed_window() -> Win {
-    Win::alloc_zeroed(|wp| {
-        // SAFETY: a fresh allocation this thread alone holds; the zeroed
-        // grid, set and option strings are overwritten, never read.
-        unsafe {
-            (&raw mut (*wp).w_grid_alloc).write(ScreenGrid::empty());
-            (&raw mut (*wp).w_ns_set).write(id_set());
-            (&raw mut (*wp).w_onebuf_opt).write(WinOpt::UNSET);
-            (&raw mut (*wp).w_allbuf_opt).write(WinOpt::UNSET);
-            (&raw mut (*wp).w_matches).write(Vec::new());
-            (&raw mut (*wp).w_folds).write(Vec::new());
-            (&raw mut (*wp).w_lines).write(Vec::new());
-            (&raw mut (*wp).w_p_cc_cols).write(Vec::new());
-            (&raw mut (*wp).w_click_defs).write(WinClickDefs::default());
-            (&raw mut (*wp).w_config).write(WIN_CONFIG_INIT);
-            (&raw mut (*wp).w_localdir).write(None);
-            (&raw mut (*wp).w_prevdir).write(None);
-        }
-    })
+    Win::alloc(Box::new(Window {
+        handle: 0,
+        w_buffer: Buf::NULL,
+        w_s: ::core::ptr::null_mut(),
+        w_own_syntax: None,
+        w_ns_hl: 0,
+        w_ns_hl_winhl: 0,
+        w_ns_hl_active: 0,
+        w_ns_hl_attr: None,
+        w_ns_set: id_set(),
+        w_hl_id_normal: 0,
+        w_hl_attr_normal: 0,
+        w_hl_attr_normalnc: 0,
+        w_hl_needs_update: false,
+        w_prev: None,
+        w_next: None,
+        w_locked: false,
+        w_frame: None,
+        w_cursor: ZERO_POS,
+        w_curswant: 0,
+        w_set_curswant: false,
+        w_cursorline: 0,
+        w_last_cursorline: 0,
+        w_old_visual_mode: 0,
+        w_old_cursor_lnum: 0,
+        w_old_cursor_fcol: 0,
+        w_old_cursor_lcol: 0,
+        w_old_visual_lnum: 0,
+        w_old_visual_col: 0,
+        w_old_curswant: 0,
+        w_last_cursor_lnum_rnu: 0,
+        w_p_lcs_chars: ZERO_LCS,
+        w_p_fcs_chars: ZERO_FCS,
+        w_topline: 0,
+        w_topline_was_set: false,
+        w_topfill: 0,
+        w_old_topfill: 0,
+        w_botfill: false,
+        w_old_botfill: false,
+        w_leftcol: 0,
+        w_skipcol: 0,
+        w_last_topline: 0,
+        w_last_topfill: 0,
+        w_last_leftcol: 0,
+        w_last_skipcol: 0,
+        w_last_width: 0,
+        w_last_height: 0,
+        w_winrow: 0,
+        w_height: 0,
+        w_prev_winrow: 0,
+        w_prev_height: 0,
+        w_status_height: 0,
+        w_winbar_height: 0,
+        w_wincol: 0,
+        w_width: 0,
+        w_hsep_height: 0,
+        w_vsep_width: 0,
+        w_save_cursor: PosSave {
+            w_topline_save: 0,
+            w_topline_corr: 0,
+            w_cursor_save: ZERO_POS,
+            w_cursor_corr: ZERO_POS,
+        },
+        w_do_win_fix_cursor: false,
+        w_winrow_off: 0,
+        w_wincol_off: 0,
+        w_view_height: 0,
+        w_view_width: 0,
+        w_height_request: 0,
+        w_width_request: 0,
+        w_border_adj: [0; 4],
+        w_height_outer: 0,
+        w_width_outer: 0,
+        w_valid: WinValid::NONE,
+        w_valid_cursor: ZERO_POS,
+        w_valid_leftcol: 0,
+        w_valid_skipcol: 0,
+        w_viewport_invalid: false,
+        w_viewport_last_topline: 0,
+        w_viewport_last_botline: 0,
+        w_viewport_last_topfill: 0,
+        w_viewport_last_skipcol: 0,
+        w_cline_height: 0,
+        w_cline_folded: false,
+        w_cline_row: 0,
+        w_virtcol: 0,
+        w_wrow: 0,
+        w_wcol: 0,
+        w_botline: 0,
+        w_empty_rows: 0,
+        w_filler_rows: 0,
+        w_lines_valid: 0,
+        w_lines: Vec::new(),
+        w_folds: Vec::new(),
+        w_fold_manual: false,
+        w_foldinvalid: false,
+        w_nrwidth: 0,
+        w_scwidth: 0,
+        w_minscwidth: 0,
+        w_maxscwidth: 0,
+        w_redr_type: 0,
+        w_upd_rows: 0,
+        w_redraw_top: 0,
+        w_redraw_bot: 0,
+        w_redr_status: false,
+        w_redr_border: false,
+        w_redr_statuscol: false,
+        w_display_tick: 0,
+        w_stl_cursor: ZERO_POS,
+        w_stl_virtcol: 0,
+        w_stl_topline: 0,
+        w_stl_line_count: 0,
+        w_stl_topfill: 0,
+        w_stl_empty: false,
+        w_stl_recording: 0,
+        w_stl_state: 0,
+        w_stl_visual_mode: 0,
+        w_stl_visual_pos: ZERO_POS,
+        w_alt_fnum: 0,
+        w_alist: ArgListId::GLOBAL,
+        w_arg_idx: 0,
+        w_arg_idx_invalid: false,
+        w_localdir: None,
+        w_prevdir: None,
+        w_onebuf_opt: WinOpt::UNSET,
+        w_allbuf_opt: WinOpt::UNSET,
+        w_p_cc_cols: Vec::new(),
+        w_p_culopt_flags: 0,
+        w_briopt_min: 0,
+        w_briopt_shift: 0,
+        w_briopt_sbr: false,
+        w_briopt_list: 0,
+        w_briopt_vcol: 0,
+        w_scbind_pos: 0,
+        w_winvar: ScopeDictItem::EMPTY,
+        w_pcmark: ZERO_POS,
+        w_prev_pcmark: ZERO_POS,
+        w_jumplist: [ZERO_XFILEMARK; 100],
+        w_jumplistlen: 0,
+        w_jumplistidx: 0,
+        w_changelistidx: 0,
+        w_matches: Vec::new(),
+        w_next_match_id: 0,
+        w_tagstack: [ZERO_TAGGY; 20],
+        w_tagstackidx: 0,
+        w_tagstacklen: 0,
+        w_grid: GridView {
+            target: ::core::ptr::null_mut(),
+            row_offset: 0,
+            col_offset: 0,
+        },
+        w_grid_alloc: ScreenGrid::empty(),
+        w_pos_changed: false,
+        w_floating: false,
+        w_float_is_info: false,
+        w_config: WIN_CONFIG_INIT,
+        w_fraction: 0,
+        w_prev_fraction_row: 0,
+        w_nrwidth_line_count: 0,
+        w_statuscol_line_count: 0,
+        w_nrwidth_width: 0,
+        w_llist: None,
+        w_llist_ref: None,
+        w_click_defs: WinClickDefs::default(),
+    }))
 }
 
 /// A registered window with nothing in it but zeroed fields: [`win_alloc`]'s
@@ -101,13 +328,7 @@ pub(crate) fn free_bare_window(mut win: Win) {
     clear_winopt(&mut win.w_onebuf_opt);
     clear_winopt(&mut win.w_allbuf_opt);
     forget_window(win.handle());
-    free(win.raw());
-}
-
-/// Free a window's option block and the folds saved with it.
-fn clear_options(opt: *mut WinOpt) {
-    // SAFETY: an option block inside a live window or entry.
-    clear_winopt(unsafe { &mut *opt });
+    free_window_block(win.raw());
 }
 
 // ---------------------------------------------------------------------------
@@ -276,8 +497,8 @@ pub(crate) fn win_free(window: Win, tabpage: Option<TabPage>) {
     // rather than `drop_in_place`: what is left is a valid empty set, which
     // the deferred-free path may still be handed.
     drop(core::mem::take(&mut window.w_ns_set));
-    clear_options(&raw mut window.w_onebuf_opt);
-    clear_options(&raw mut window.w_allbuf_opt);
+    clear_winopt(&mut window.w_onebuf_opt);
+    clear_winopt(&mut window.w_allbuf_opt);
     // Like the set above: the block is freed without its destructors.
     window.w_p_lcs_chars.multispace = None;
     window.w_p_lcs_chars.leadmultispace = None;
@@ -327,7 +548,7 @@ pub(crate) fn win_free(window: Win, tabpage: Option<TabPage>) {
     if autocmd_busy.get() {
         defer_free_window(window);
     } else {
-        free(window.raw());
+        free_window_block(window.raw());
     }
     unblock_autocmds();
 }

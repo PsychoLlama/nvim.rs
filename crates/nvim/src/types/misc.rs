@@ -47,6 +47,14 @@ pub type OptIndex = ::core::ffi::c_int;
 pub struct ScopeDictItem(pub ManuallyDrop<DictItem>);
 
 impl ScopeDictItem {
+    /// A scope's entry before its dictionary exists.
+    pub const EMPTY: Self = ScopeDictItem(ManuallyDrop::new(DictItem {
+        di_tv: TypVal::empty(VAR_UNKNOWN),
+        di_lock: VarLock::Unlocked,
+        di_flags: 0,
+        di_key: DictKey::EMPTY,
+    }));
+
     /// The item itself, which is what a hashtab slot names.
     pub fn item(&mut self) -> *mut DictItem {
         &raw mut *self.0

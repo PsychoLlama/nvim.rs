@@ -211,8 +211,7 @@ fn set_inner_size(win: Win) {
     win_set_inner_size(win, true);
 }
 fn merge_config(win: &mut Win, fconfig: WinConfig) {
-    // SAFETY: a live window's own config.
-    unsafe { merge_win_config(&raw mut win.w_config, fconfig) };
+    merge_win_config(&mut win.w_config, fconfig);
 }
 
 /// Whether `win` is still a window of the current tab page.
