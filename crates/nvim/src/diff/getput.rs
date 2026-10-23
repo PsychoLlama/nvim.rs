@@ -177,17 +177,14 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
     if excmd.addr_count == 0 {
         // Without a range the block *above* the cursor is meant, except at
         // the very end of the buffer where the filler below it is.
-        let mut linestatus = 0;
-        let status = &raw mut linestatus;
         let line1 = excmd.line1;
-        // SAFETY: the current window is live and `linestatus` is a local, in
-        // both calls; the short circuit is upstream's.
+        // The short circuit is upstream's.
         let below_end = line1 == Buf::current().b_ml.ml_line_count
-            && unsafe { diff_check_with_linestatus(Win::current(), line1, status) } == 0
-            && linestatus == 0
-            && (line1 == 1 as LineNr
-                || unsafe { diff_check_with_linestatus(Win::current(), line1 - 1, status) } >= 0
-                    && linestatus == 0);
+            && diff_check_with_linestatus(Win::current(), line1) == (0, 0)
+            && (line1 == 1 as LineNr || {
+                let (fill, linestatus) = diff_check_with_linestatus(Win::current(), line1 - 1);
+                fill >= 0 && linestatus == 0
+            });
         if below_end {
             excmd.line2 += 1;
         } else if line1 > 0 as LineNr {
@@ -235,7 +232,7 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
     // SAFETY: the current window is live, in both calls.
     check_cursor(Win::current());
     changed_line_abv_curs();
-    if tp.tp_first_diff.is_null() {
+    if tp.tp_diff.is_empty() {
         // The last block went away: the diff folds have nothing left to
         // describe, so every window folding by `diff` is rebuilt.
         for wp in windows() {
@@ -262,6 +259,10 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
 /// line numbers instead of rebuilding the block list underneath it; the
 /// blocks are then patched up here as each one is copied. `start_skip` and
 /// `end_skip` are how much of the first and last block the range cuts off.
+///
+/// The walk holds an index, never a block: `u_save` and `changed_lines` run
+/// user code, and the list's generation says whether the index still means
+/// what it did. Any change of shape stops the walk there.
 fn diffgetput(
     addr_count: c_int,
     idx_cur: c_int,
@@ -271,42 +272,42 @@ fn diffgetput(
     line2: LineNr,
 ) {
     let (idx_cur, idx_from, idx_to) = (idx_cur as usize, idx_from as usize, idx_to as usize);
-    let tp = TabPage::current();
+    let mut tp = TabPage::current();
     let mut off = 0 as LineNr;
-    let mut dprev = ::core::ptr::null_mut::<DiffBlock>();
-    let mut cursor = Df::first(tp);
-    while let Some(mut dp) = cursor {
+    let mut at = 0;
+    while at < tp.tp_diff.len() {
         if addr_count == 0 {
             // Without a range, a run of blocks that touch is taken as one.
-            while let Some(next) = dp.next()
-                && next.df_lnum[idx_cur] == dp.end(idx_cur)
+            while let Some(next) = tp.tp_diff.get(at + 1)
+                && next.df_lnum[idx_cur] == tp.tp_diff[at].end(idx_cur)
                 && next.df_lnum[idx_cur] == line1 + off + 1 as LineNr
             {
-                dprev = dp.raw();
-                dp = next;
+                at += 1;
             }
         }
-        if dp.df_lnum[idx_cur] > line2 + off {
+        let (df_lnum, df_count) = (tp.tp_diff[at].df_lnum, tp.tp_diff[at].df_count);
+        let end = |idx: usize| df_lnum[idx] + df_count[idx];
+        if df_lnum[idx_cur] > line2 + off {
             break;
         }
-        cursor = Some(dp);
-        // The freed block's ranges, taken before it goes: the fold update at
-        // the tail still needs its line numbers. Only the two arrays, never
-        // the block -- a `DiffBlock` also carries a `GArray` and its list
-        // links, and `diff_free` releases all three.
-        let mut freed: Option<([LineNr; DB_COUNT as usize], [LineNr; DB_COUNT as usize])> = None;
-        let mut lnum = dp.df_lnum[idx_to];
-        let mut count = dp.df_count[idx_to];
-        // SAFETY: the editor exists; the short circuit is upstream's.
+        let mut freed = false;
+        let mut lnum = df_lnum[idx_to];
+        let mut count = df_count[idx_to];
+        let generation = tp.tp_diff_gen;
+        // The short circuit is upstream's.
         let undoable =
-            dp.end(idx_cur) > line1 + off && u_save(lnum - 1 as LineNr, lnum + count).is_ok();
+            end(idx_cur) > line1 + off && u_save(lnum - 1 as LineNr, lnum + count).is_ok();
+        // `u_save` can run `FileChangedRO`.
+        if tp.tp_diff_gen != generation {
+            break;
+        }
         if undoable {
             // With a range, the first and last block of it are only partly
             // copied; `start_skip`/`end_skip` are the parts left out.
             let mut start_skip = 0 as LineNr;
             let mut end_skip = 0 as LineNr;
             if addr_count > 0 {
-                start_skip = line1 + off - dp.df_lnum[idx_cur];
+                start_skip = line1 + off - df_lnum[idx_cur];
                 if start_skip > 0 as LineNr {
                     if start_skip > count {
                         lnum += count;
@@ -318,13 +319,13 @@ fn diffgetput(
                 } else {
                     start_skip = 0 as LineNr;
                 }
-                end_skip = dp.end(idx_cur) - 1 as LineNr - (line2 + off);
+                end_skip = end(idx_cur) - 1 as LineNr - (line2 + off);
                 if end_skip > 0 as LineNr {
                     if idx_cur == idx_from {
-                        count = count.min(dp.df_count[idx_cur] - start_skip - end_skip);
+                        count = count.min(df_count[idx_cur] - start_skip - end_skip);
                     } else {
                         count -= end_skip;
-                        end_skip = (dp.df_count[idx_from] - start_skip - count).max(0);
+                        end_skip = (df_count[idx_from] - start_skip - count).max(0);
                     }
                 } else {
                     end_skip = 0 as LineNr;
@@ -340,9 +341,9 @@ fn diffgetput(
                 }
             }
             let mut i = 0 as LineNr;
-            while i < dp.df_count[idx_from] - start_skip - end_skip {
+            while i < df_count[idx_from] - start_skip - end_skip {
                 let src = tp.used_diffbuf(idx_from);
-                let nr = dp.df_lnum[idx_from] + start_skip + i;
+                let nr = df_lnum[idx_from] + start_skip + i;
                 if nr > src.b_ml.ml_line_count {
                     break;
                 }
@@ -359,27 +360,30 @@ fn diffgetput(
                 }
                 i += 1;
             }
-            let new_count = dp.df_count[idx_to] + added as LineNr;
-            dp.df_count[idx_to] = new_count;
+            let new_count = df_count[idx_to] + added as LineNr;
+            tp.tp_diff[at].df_count[idx_to] = new_count;
 
             // A block that now reads the same in every buffer is not a
             // difference any more.
+            let mut freed_ranges = None;
             if start_skip == 0 as LineNr && end_skip == 0 as LineNr {
+                let slots = tp.tp_diffbuf;
+                let dp = &tp.tp_diff[at];
                 let all_equal = (0..DB_COUNT as usize).all(|i| {
-                    tp.tp_diffbuf[i].is_none()
+                    slots[i].is_none()
                         || i == idx_from
                         || i == idx_to
-                        || dp.equal_entry(idx_from, i)
+                        || diff_equal_entry(dp, &slots, idx_from, i)
                 });
                 if all_equal {
-                    freed = Some((dp.df_lnum, dp.df_count));
-                    // SAFETY: a live block and its predecessor in the list;
-                    // the answer is the following block, or null.
-                    let next = unsafe { diff_free(tp, dprev, dp.raw()) };
-                    // SAFETY: as above.
-                    cursor = unsafe { Df::from_raw(next) };
+                    // The ranges, kept for the fold update below; the block
+                    // itself goes now.
+                    let dp = tp.with_diff(|blocks| blocks.remove(at));
+                    freed_ranges = Some((dp.df_lnum, dp.df_count));
+                    freed = true;
                 }
             }
+            let generation = tp.tp_diff_gen;
 
             let last = lnum + count - 1 as LineNr;
             let max = MAXLNUM as LineNr;
@@ -398,24 +402,27 @@ fn diffgetput(
             let cb = Buf::current();
             extmark_adjust(cb, lnum, last, max, amount, kExtmarkUndo);
             changed_lines(cb, lnum, 0 as ColNr, lnum + count, amount, true);
-            if let Some((lnum, count)) = &freed {
+            if let Some((lnum, count)) = &freed_ranges {
                 diff_fold_update(lnum, count, idx_to as c_int);
             }
-            // `changed_lines` runs autocommands, which can rebuild the list.
-            let still = cursor.map_or(::core::ptr::null_mut(), Df::raw);
-            if added != 0 && !diff_still_listed(still) {
+            // `mark_adjust` may drop blocks, and `changed_lines` runs
+            // autocommands and buffer-update callbacks: if either changed
+            // the list's shape, the index no longer means this block.
+            // Upstream re-checks only when lines were added or removed, and
+            // otherwise writes through a block that may be gone.
+            if tp.tp_diff_gen != generation {
                 break;
             }
-            if freed.is_none() {
-                dp.df_count[idx_to] = new_count;
+            if !freed {
+                // `mark_adjust` may have changed the count in a wrong way.
+                tp.tp_diff[at].df_count[idx_to] = new_count;
             }
             if idx_cur == idx_to {
                 off += amount;
             }
         }
-        if freed.is_none() {
-            dprev = dp.raw();
-            cursor = dp.next();
+        if !freed {
+            at += 1;
         }
     }
 }

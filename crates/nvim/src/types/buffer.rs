@@ -109,12 +109,13 @@ pub struct BufferRef {
     pub br_buf: Buf,
     pub br_buf_free_count: ::core::ffi::c_int,
 }
-/// Not `Copy` and not `Clone`: a block is a node of the tab page's list and
-/// `df_changes` is an array it allocates, so a by-value duplicate would name
-/// a `ga_data` and a `df_next` it does not own. Code that wants a block's
-/// ranges past the block's lifetime copies the two `LineNr` arrays.
+/// One change of a tab page's diff: a line range in every buffer of it.
+///
+/// Not `Copy` and not `Clone`: a block owns its cached `df_changes`, and
+/// nothing wants two of one. Code that wants a block's ranges past a call
+/// that may rebuild the list copies the two `LineNr` arrays.
+#[derive(Default)]
 pub struct DiffBlock {
-    pub df_next: *mut DiffBlock,
     pub df_lnum: [LineNr; 8],
     pub df_count: [LineNr; 8],
     pub is_linematched: bool,
@@ -125,25 +126,40 @@ pub struct DiffBlock {
 }
 
 impl DiffBlock {
-    /// A block with no ranges and no cached changes -- `xcalloc`'s answer,
-    /// which is what every caller wanted from it.
-    pub fn new(df_next: *mut DiffBlock) -> Self {
-        Self {
-            df_next,
-            df_lnum: [0; 8],
-            df_count: [0; 8],
-            is_linematched: false,
-            has_changes: false,
-            df_changes: Vec::new(),
-        }
+    /// The line one past this block's last, in buffer `idx`.
+    ///
+    /// A block covers `df_count[idx]` lines from `df_lnum[idx]`, so this is
+    /// the line the next block may start at -- the sum the walks all compare
+    /// against.
+    #[inline]
+    pub(crate) fn end(&self, idx: usize) -> LineNr {
+        self.df_lnum[idx] + self.df_count[idx]
     }
 }
+
+/// The changed column ranges of one drawn line, as `diff_find_change`
+/// answers them.
+///
+/// Owned: the drawer holds it across decoration providers, which run Lua
+/// that may rebuild the block list the ranges were read from.
 #[derive(Default)]
-pub struct DiffLine {
-    pub changes: *mut DiffLineChange,
-    pub num_changes: ::core::ffi::c_int,
-    pub bufidx: ::core::ffi::c_int,
-    pub lineoff: ::core::ffi::c_int,
+pub(crate) struct DiffLine {
+    pub(crate) changes: DiffLineChanges,
+    pub(crate) bufidx: ::core::ffi::c_int,
+    pub(crate) lineoff: ::core::ffi::c_int,
+}
+
+/// Which ranges a [`DiffLine`] carries.
+#[derive(Default)]
+pub(crate) enum DiffLineChanges {
+    /// None: the line is an addition, or was never looked at.
+    #[default]
+    None,
+    /// `inline:simple`'s one range on this line, `start..end` in bytes.
+    Simple { start: ColNr, end: ColNr },
+    /// `inline:char`/`inline:word`: the block's changes that cover this
+    /// line, copied out of it.
+    Inline(Vec<DiffLineChange>),
 }
 #[derive(Copy, Clone)]
 pub struct DiffLineChange {

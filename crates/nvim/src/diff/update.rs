@@ -18,97 +18,9 @@ use crate::ex_docmd::{cmdmod_add_flags, cmdmod_flags, cmdmod_set_flags};
 use crate::memline::MlFlags;
 use crate::os::cshim::gettext_ptr;
 use crate::types::{Failed, NUL};
-use crate::winlayer::{Buf, Live, TabPage, Win};
+use crate::winlayer::{Buf, TabPage, Win};
 use core::ffi::CStr;
 use core::ffi::{c_char, c_int};
-
-/// One block of a tab page's diff list, as a pointer the caller has promised
-/// is live.
-///
-/// The list hangs off `Tabpage::tp_first_diff` and is chained through
-/// `df_next`; every reader of it walks the chain asking each block for its
-/// `df_lnum`/`df_count` in one buffer or another. Naming the pointer makes
-/// those ordinary field accesses, and leaves the two places the chain is
-/// really dereferenced -- [`Df::next`] and [`diff_blocks`] -- as the only
-/// unchecked ones.
-///
-/// A `Df` is a record of the caller's promise and not evidence for one: the
-/// list is rebuilt by `ex_diffupdate` and blocks are freed by `diff_free`, so
-/// a `Df` held across either is dangling. See [`Live`]'s module docs.
-pub(crate) type Df = Live<DiffBlock>;
-
-impl Df {
-    /// The block `dp` names, `None` for null.
-    ///
-    /// # Safety
-    /// `dp` must be null, or stay a live block for as long as the value is
-    /// used.
-    pub(crate) unsafe fn from_raw(dp: *mut DiffBlock) -> Option<Self> {
-        // SAFETY: the caller's promise, for the non-null half.
-        (!dp.is_null()).then(|| unsafe { Self::new(dp) })
-    }
-
-    /// The first block of `tabpage`'s list, if any.
-    pub(crate) fn first(tabpage: TabPage) -> Option<Self> {
-        // SAFETY: a live tab page's block list is live.
-        unsafe { Self::from_raw(tabpage.tp_first_diff) }
-    }
-
-    /// The next block in the list, if any.
-    pub(crate) fn next(self) -> Option<Self> {
-        // SAFETY: a live block's `df_next` is a live block or null.
-        unsafe { Self::from_raw(self.df_next) }
-    }
-
-    /// The line one past this block's last, in buffer `idx`.
-    ///
-    /// A block covers `df_count[idx]` lines from `df_lnum[idx]`, so this is
-    /// the line the next block may start at -- the sum the walks all compare
-    /// against.
-    pub(crate) fn end(self, idx: usize) -> LineNr {
-        self.df_lnum[idx] + self.df_count[idx]
-    }
-
-    /// The block's longest side, in lines: how many screen rows it takes in
-    /// every window showing it. [`get_max_diff_length`].
-    pub(crate) fn max_len(self) -> c_int {
-        // SAFETY: a live block.
-        unsafe { get_max_diff_length(self.raw()) }
-    }
-
-    /// Whether buffers `idx1` and `idx2` hold the same text over this block.
-    /// [`diff_equal_entry`].
-    pub(crate) fn equal_entry(self, idx1: usize, idx2: usize) -> bool {
-        // SAFETY: a live block.
-        unsafe { diff_equal_entry(self.raw(), idx1, idx2) }
-    }
-
-    /// Whether the block's line numbers still fit the buffers it names.
-    /// [`diff_check_sanity`].
-    pub(crate) fn is_sane(self, tabpage: TabPage) -> bool {
-        // SAFETY: a live block and a live tab page.
-        unsafe { diff_check_sanity(tabpage, self.raw()).is_ok() }
-    }
-}
-
-/// A tab page's diff blocks, first to last.
-///
-/// Nothing re-reads `tp_first_diff`, exactly as the C's own walks do not: a
-/// loop that can free or rebuild the list underneath itself keeps its own
-/// cursor instead.
-pub(crate) fn diff_blocks(tabpage: TabPage) -> impl Iterator<Item = Df> {
-    core::iter::successors(Df::first(tabpage), |dp| dp.next())
-}
-
-/// Whether `dp` is still in the current tab page's block list.
-///
-/// [`valid_diff`], likewise safe: the walk compares `dp` against the live
-/// list without reading it, which is the point -- it is asked exactly when
-/// `dp` may have been freed underneath the caller.
-pub(crate) fn diff_still_listed(dp: *mut DiffBlock) -> bool {
-    // SAFETY: the current tab page is live; `dp` is compared, never read.
-    unsafe { valid_diff(dp) }
-}
 
 /// Release one side of a diff: the temp file if there is one, else the
 /// memory image.
@@ -281,7 +193,7 @@ fn diff_write(
 /// segments' block lists are shifted back into place and chained together.
 ///
 fn diff_try_update(dio: &mut DiffIo, idx_orig: c_int, excmd: Option<&mut ExArg>) {
-    let mut tp = TabPage::current();
+    let tp = TabPage::current();
     let idx_orig = idx_orig as usize;
     let mut anchors = [[0 as LineNr; MAX_DIFF_ANCHORS as usize]; DB_COUNT as usize];
     'theend: {
@@ -363,20 +275,19 @@ fn diff_try_update(dio: &mut DiffIo, idx_orig: c_int, excmd: Option<&mut ExArg>)
             };
             // Each segment builds its own list, which is appended to the
             // ones before it once its line numbers have been corrected.
-            let orig_diff = if anchor_i == 0 {
-                ::core::ptr::null_mut()
+            let earlier = if anchor_i == 0 {
+                Vec::new()
             } else {
-                let head = tp.tp_first_diff;
-                tp.tp_first_diff = ::core::ptr::null_mut();
-                head
+                tp.with_diff(::core::mem::take)
             };
 
             let (start, end) = segment(idx_orig);
             let wrote = diff_write(tp.used_diffbuf(idx_orig), &mut dio.orig, start, end);
             if wrote.is_err() {
-                if !orig_diff.is_null() {
-                    tp.tp_first_diff = orig_diff;
-                    // SAFETY: the current tab page is live.
+                if anchor_i != 0 {
+                    // Upstream puts the earlier segments back only to
+                    // clear the lot.
+                    drop(earlier);
                     diff_clear(tp);
                 }
                 break 'theend;
@@ -387,7 +298,13 @@ fn diff_try_update(dio: &mut DiffIo, idx_orig: c_int, excmd: Option<&mut ExArg>)
                 };
                 let (start, end) = segment(idx_new);
                 if diff_write(buf, &mut dio.new, start, end).is_ok() && diff_file(dio).is_ok() {
-                    diff_read(idx_orig as c_int, idx_new as c_int, dio);
+                    if let Some(hunks) = HunkSource::open(dio) {
+                        let current = TabPage::current();
+                        let slots = current.tp_diffbuf;
+                        current.with_diff(|blocks| {
+                            diff_read(blocks, &slots, idx_orig as c_int, idx_new as c_int, hunks);
+                        });
+                    }
                     clear_diffin(&mut dio.new);
                     clear_diffout(&mut dio.diff);
                 }
@@ -398,25 +315,20 @@ fn diff_try_update(dio: &mut DiffIo, idx_orig: c_int, excmd: Option<&mut ExArg>)
                 continue;
             }
             // This segment's diff was computed over lines starting at 1;
-            // shift it down to where the segment really begins.
-            for mut dp in diff_blocks(tp) {
-                for (idx, row) in anchors.iter().enumerate() {
-                    let anchor = row[anchor_i - 1];
-                    if anchor > 0 {
-                        dp.df_lnum[idx] += anchor - 1;
+            // shift it down to where the segment really begins, and put the
+            // earlier segments in front of it.
+            tp.with_diff(|blocks| {
+                for dp in blocks.iter_mut() {
+                    for (idx, row) in anchors.iter().enumerate() {
+                        let anchor = row[anchor_i - 1];
+                        if anchor > 0 {
+                            dp.df_lnum[idx] += anchor - 1;
+                        }
                     }
                 }
-            }
-            // SAFETY: the head of the previous segments' list, which this
-            // function built and has not freed.
-            if let Some(head) = unsafe { Df::from_raw(orig_diff) } {
-                let mut last = head;
-                while let Some(next) = last.next() {
-                    last = next;
-                }
-                last.df_next = tp.tp_first_diff;
-                tp.tp_first_diff = orig_diff;
-            }
+                let this_segment = ::core::mem::replace(blocks, earlier);
+                blocks.extend(this_segment);
+            });
         }
     }
     dio.orig.fname = None;
@@ -451,8 +363,7 @@ pub(crate) fn diff_update(excmd: Option<&mut ExArg>) {
         return;
     }
     let mut tp = TabPage::current();
-    let had_diffs = !tp.tp_first_diff.is_null();
-    // SAFETY: the current tab page is live.
+    let had_diffs = !tp.tp_diff.is_empty();
     diff_clear(tp);
     tp.tp_diff_invalid = 0;
 
@@ -470,7 +381,7 @@ pub(crate) fn diff_update(excmd: Option<&mut ExArg>) {
         Win::current().w_valid_cursor.lnum = 0;
     }
 
-    if had_diffs || !tp.tp_first_diff.is_null() {
+    if had_diffs || !tp.tp_diff.is_empty() {
         diff_redraw(true);
         let buffer = Buf::current_or_none();
         apply_autocmds(AutoEvent::DiffUpdated, None, None, false, buffer);

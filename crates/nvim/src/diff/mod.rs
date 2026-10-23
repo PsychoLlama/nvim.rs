@@ -4,7 +4,7 @@
 //! The thirteen children hold the code; this file holds the surface they
 //! share -- the owned `DiffIn`/`DiffOut`/`DiffIo` triple a diff run is
 //! carried in, the `DIFF_*` bits of `'diffopt'`, and the module's
-//! **process-wide state**, which is seven cells and nothing else:
+//! **process-wide state**, which is six cells and nothing else:
 //!
 //! | cell | written by | meaning |
 //! | --- | --- | --- |
@@ -14,20 +14,19 @@
 //! | `diff_a_works` | `check_external_diff` | does the host's `diff(1)` take `-a`? |
 //! | `diff_busy` | `diff_try_update` | a recompute is on the stack |
 //! | `diff_need_update` | `diff_buf_*`, `ex_diffupdate` | one was asked for while busy |
-//! | `simple_diffline_change` | `diff_find_change_simple` | the one-element answer buffer |
 //!
 //! The first four are option state and are only interesting because
-//! `'diffopt'` is global; the last three are the ones that carry state
-//! *across* calls. `diff_busy`/`diff_need_update` are a reentrancy guard:
-//! `diff_try_update` runs autocommands, which can ask for another
-//! recompute, and the pair defers it to the outer call's tail.
-//! `simple_diffline_change` is a returned-pointer buffer, alive only until
-//! the next `diff_find_change` -- the one cell whose lifetime is a real
-//! obligation rather than a global option.
+//! `'diffopt'` is global; the last two are the ones that carry state
+//! *across* calls, a reentrancy guard: `diff_try_update` runs autocommands,
+//! which can ask for another recompute, and the pair defers it to the outer
+//! call's tail.
 //!
 //! Everything a *window* knows about its diff lives on `Window`/`Tabpage`
-//! instead (`w_p_diff`, `tp_diffbuf`, `tp_first_diff`, `tp_diff_invalid`),
-//! so there is no per-window state here to narrow.
+//! instead (`w_p_diff`, `tp_diffbuf`, `tp_diff`, `tp_diff_invalid`), so
+//! there is no per-window state here to narrow. The block list `tp_diff` is
+//! lent by `TabPage::with_diff` to pure list operations only; code that holds
+//! a position in it across user code holds an index and the list's
+//! generation, `tp_diff_gen`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.

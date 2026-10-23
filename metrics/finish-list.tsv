@@ -86,26 +86,21 @@ decoration/	decoration/signs.rs	1	8	3	3	expr:5	other:6	-	at_opt:1
 decoration/	decoration/state.rs	1	24	6	22	ref:2	other:6	other:1	from_raw_parts_mut:2 xfree:2 hl_add_url:1 marktree_get_altpos:1 marktree_itr_current:1 marktree_itr_get:1 marktree_itr_get_overlap:1 marktree_itr_next:1
 decoration_provider.rs	*	1	17	3	11	deref:2 expr:2 compound:1	str:3 other:1	other:1	decor_check_to_be_deleted:1 nlua_call_ref:1
 decoration_provider.rs	decoration_provider.rs	1	17	3	11	deref:2 expr:2 compound:1	str:3 other:1	other:1	decor_check_to_be_deleted:1 nlua_call_ref:1
-diff/	*	12	257	23	81	deref:131 expr:7 ref:2 compound:1	other:31 str:6	other:2	Live::new:5 bytes_at:4 utf_ptr2char:4 utfc_ptr2len:4 emsg:3 call_shell:2 tolower:2 utf_char2bytes:2
-diff/	diff/block.rs	1	74	8	8	deref:62 expr:1 ref:1	other:11	other:2	-
-diff/	diff/compare.rs	1	11	1	7	deref:3 expr:1	other:1	-	tolower:2 utf_ptr2char:2 utfc_ptr2len:2
+diff/	*	7	48	2	36	expr:3 deref:2 compound:1	str:6 other:3	-	bytes_at:4 utf_ptr2char:4 utfc_ptr2len:4 emsg:3 call_shell:2 tolower:2 utf_char2bytes:2 .add:1
+diff/	diff/compare.rs	1	6	0	6	-	-	-	tolower:2 utf_ptr2char:2 utfc_ptr2len:2
 diff/	diff/engine.rs	1	3	0	3	-	-	-	call_shell:1 os_env_exists:1 os_unsetenv:1
 diff/	diff/excmd.rs	1	21	0	12	expr:2 compound:1	str:5	-	bytes_at:4 at:1 call_shell:1 emsg:1 os_chdir:1 os_fileinfo:1 os_fileinfo_size:1 os_remove:1
-diff/	diff/fold.rs	1	4	1	3	deref:1	other:1	-	-
-diff/	diff/getput.rs	1	5	0	5	-	str:1	-	emsg:1
-diff/	diff/hunk.rs	1	41	1	6	deref:35	-	-	-
-diff/	diff/inline.rs	1	14	2	9	deref:5	other:5	-	Live::new:5
-diff/	diff/lmatch.rs	1	12	3	2	deref:9 expr:1	other:3	-	-
+diff/	diff/getput.rs	1	1	0	1	-	str:1	-	emsg:1
 diff/	diff/opts.rs	1	6	1	4	deref:2	other:2	-	.add:1 .offset_from:1 getdigits_int:1
-diff/	diff/refine.rs	1	53	5	10	deref:14 expr:1 ref:1	other:6	-	mb_get_class_tab:1 utf_char2bytes:1 utf_ptr2char:1 utfc_ptr2len:1
-diff/	diff/update.rs	1	13	1	12	expr:1	other:2	-	Self::new:1 emsg:1 utf_char2bytes:1 utf_ptr2char:1 utfc_ptr2len:1
-drawline/	*	10	277	18	132	deref:126 expr:8 ref:2	other:9	-	.offset:18 .offset_from:12 .add:7 bytes_at:7 utfc_ptr2len:7 utf_ptr2cells:6 rl_mirror_ascii:3 utfc_ptr2schar:3
-drawline/	drawline/attrs.rs	1	11	0	8	deref:3	-	-	utf_ptr2cells:3 .offset:1 .offset_from:1 diff_change_parse:1 utfc_ptr2len:1
+diff/	diff/refine.rs	1	6	1	5	expr:1	other:1	-	mb_get_class_tab:1 utf_char2bytes:1 utf_ptr2char:1 utfc_ptr2len:1
+diff/	diff/update.rs	1	5	0	5	-	-	-	emsg:1 utf_char2bytes:1 utf_ptr2char:1 utfc_ptr2len:1
+drawline/	*	10	272	18	128	deref:125 expr:8 ref:2	other:9	-	.offset:18 .offset_from:12 .add:7 bytes_at:7 utfc_ptr2len:7 utf_ptr2cells:6 rl_mirror_ascii:3 utfc_ptr2schar:3
+drawline/	drawline/attrs.rs	1	9	0	7	deref:2	-	-	utf_ptr2cells:3 .offset:1 .offset_from:1 utfc_ptr2len:1
 drawline/	drawline/cells.rs	1	7	0	6	deref:1	-	-	xfree:2 .offset:1 .offset_from:1 clear_virttext:1
 drawline/	drawline/chars.rs	1	49	3	25	deref:22 expr:2	-	-	.offset:8 .offset_from:5 utfc_ptr2len:3 utfc_ptr2schar:2 bytes_at:1 rl_mirror_ascii:1 utf_head_off:1 utf_ptr2char:1
 drawline/	drawline/columns.rs	1	45	3	23	deref:17 expr:3	other:4	-	.add:3 build_statuscol_str:2 bytes_at:2 transstr_buf:2 abs:1 decor_redraw_signs:1 hl_combine_attr:1 rl_mirror_ascii:1
 drawline/	drawline/mod.rs	1	4	1	3	deref:1	other:1	-	mb_off_next:1 terminal_get_line_attributes:1
-drawline/	drawline/prologue.rs	1	49	4	22	deref:25 expr:2	other:3	-	.offset_from:5 .offset:4 bytes_at:2 decor_redraw_signs:1 diff_change_parse:1 diff_check_with_linestatus:1 diff_find_change:1 skipwhite:1
+drawline/	drawline/prologue.rs	1	46	4	19	deref:25 expr:2	other:3	-	.offset_from:5 .offset:4 bytes_at:2 decor_redraw_signs:1 skipwhite:1 utf_ptr2str_char_info:1 utfc_next:1
 drawline/	drawline/rows.rs	1	21	0	9	deref:8	-	-	decor_redraw_eol:1 hl_combine_attr:1
 drawline/	drawline/special.rs	1	26	0	13	deref:10 expr:1 ref:1	-	-	.offset:4 bytes_at:2 .copy_from_nonoverlapping:1 from_raw_parts_mut:1 mb_charlen:1 rl_mirror_ascii:1
 drawline/	drawline/state.rs	1	8	4	2	deref:6	-	-	.add:1
@@ -218,7 +213,7 @@ ui_compositor/	*	1	10	6	5	deref:3 compound:1	other:5	other:1	GridRef::new:2 ui_c
 ui_compositor/	ui_compositor/mod.rs	1	10	6	5	deref:3 compound:1	other:5	other:1	GridRef::new:2 ui_composed_call_raw_line:2 from_raw_parts:1
 version/	*	1	14	0	11	deref:2 expr:1	-	-	utfc_ptr2len:3 vim_strsize:3 utf_ptr2char:2 at:1 nlua_exec:1
 version/	version/mod.rs	1	14	0	11	deref:2 expr:1	-	-	utfc_ptr2len:3 vim_strsize:3 utf_ptr2char:2 at:1 nlua_exec:1
-window/	*	11	55	2	27	compound:6 deref:6 ref:1	str:8 other:6	str:3	vim_snprintf:5 clear_virttext:4 at:3 terminal_check_size:2 .offset:1 at_opt:1 emsg:1 getdigits_int:1
+window/	*	11	56	2	27	compound:6 deref:6 ref:1	str:8 other:6	str:3	vim_snprintf:5 clear_virttext:4 at:3 terminal_check_size:2 .offset:1 at_opt:1 emsg:1 getdigits_int:1
 window/	window/alloc.rs	1	11	0	2	compound:1 ref:1	other:1	-	clear_virttext:2
 window/	window/cmd.rs	1	8	0	8	-	str:4	str:2	vim_snprintf:2 at:1 at_opt:1 slice_at:1 xmemdupz:1 xstrlcat:1 xstrlcpy:1
 window/	window/config.rs	1	9	2	5	compound:2	other:3	-	clear_virttext:2 emsg:1
@@ -228,7 +223,7 @@ window/	window/resize.rs	1	3	0	2	deref:1	other:1	-	stl_clear_click_defs:1 termin
 window/	window/screensize.rs	1	8	0	2	deref:4	-	-	vim_snprintf:2
 window/	window/snapshot.rs	1	5	0	2	compound:1 deref:1	str:3	str:1	.offset:1 getdigits_int:1
 window/	window/split.rs	1	3	0	1	compound:1	-	-	-
-window/	window/tabpage.rs	1	3	0	0	compound:1	-	-	-
+window/	window/tabpage.rs	1	4	0	0	compound:1	-	-	-
 window/	window/winclose.rs	1	1	0	1	-	str:1	-	vim_snprintf:1
 winfloat.rs	*	1	4	1	3	expr:1	void:2 str:1	-	at:1 merge_win_config:1 qsort:1
 winfloat.rs	winfloat.rs	1	4	1	3	expr:1	void:2 str:1	-	at:1 merge_win_config:1 qsort:1

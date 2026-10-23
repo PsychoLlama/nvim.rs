@@ -1005,7 +1005,6 @@ CELL_PTR_KEEPERS = {
     "cell": "not one cell — a local bound from an option slot (S3) or a grid (S13)",
     "buf": "F-P22-49: `TSInput.read`'s contract needs a buffer surviving the return",
     "CELL": "`GlobalCell`'s own tests of `ptr`/`as_raw`; they must call them",
-    "simple_diffline_change": "F-P22-37: the address goes into `diffline.changes` and is compared back",
     "highlight_attr": "the attribute table `hl_attr_active` holds; one site is its const initialiser",
 }
 # Every `.ptr()`/`.as_raw()` site with its receiver, for the partition. The

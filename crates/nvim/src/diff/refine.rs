@@ -23,7 +23,8 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::winlayer::TabPage;
+use crate::mbyte::class_in;
+use crate::winlayer::BufId;
 use core::ffi::{c_char, c_int};
 
 /// One entry per token written into the fake file, per buffer.
@@ -40,7 +41,7 @@ const CLASS_WORD: c_int = 2;
 ///
 /// Both `inline:` modes run the same walk over the sub-diff's block list;
 /// they differ only in what makes a gap small enough to swallow, which is
-/// what this decides.  `Merge` unlinks `dp->df_next` into `dp`; `Keep` moves
+/// what this decides.  `Merge` folds the next block into this one; `Keep` moves
 /// on; the `bool` is "this gap was a candidate but was left alone", which
 /// only `inline:char` uses.
 enum Gap {
@@ -54,32 +55,28 @@ enum Gap {
 /// alone.  `entry_back` is how far back from the *next* block's first line the
 /// mode's first line-map entry sits: `inline:char` compares the last token of
 /// the left block, `inline:word` the one before it.
-///
-/// # Safety
-///
-/// `dp_orig` must point at a live diff block, unaliased for the call.
-unsafe fn merge_gaps(
-    dp_orig: *mut DiffBlock,
+fn merge_gaps(
+    blocks: &mut Vec<DiffBlock>,
     linemap: &LineMap,
     idx1: usize,
     entry_back: LineNr,
-    mut decide: impl FnMut(*mut DiffBlock, &LinemapEntry, &LinemapEntry) -> Gap,
+    mut decide: impl FnMut(&DiffBlock, &DiffBlock, &LinemapEntry, &LinemapEntry) -> Gap,
 ) -> (bool, bool) {
     let (mut merged, mut unmerged) = (false, false);
     let map = &linemap[idx1];
-    let mut dp = dp_orig;
-    while !dp.is_null() && !unsafe { (*dp).df_next }.is_null() {
-        let next = unsafe { (*dp).df_next };
+    let mut at = 0;
+    while at + 1 < blocks.len() {
+        let (dp, next) = (&blocks[at], &blocks[at + 1]);
         // Both indices are into the token file, so a block ending past the
         // map has no entry to compare and the gap cannot be judged.  The
         // bound upstream tests is the block's *last* token either way,
         // even where `entry_back` then steps one further back than that; a
         // negative index is upstream's own out-of-bounds read, refused
         // here rather than reproduced.
-        let last = unsafe { (*dp).df_lnum[idx1] } + unsafe { (*dp).df_count[idx1] } - 1;
-        let right = unsafe { (*next).df_lnum[idx1] } - 1;
+        let last = dp.end(idx1) - 1;
+        let right = next.df_lnum[idx1] - 1;
         if last >= map.len() as LineNr || right >= map.len() as LineNr {
-            dp = next;
+            at += 1;
             continue;
         }
         let left = last + 1 - entry_back;
@@ -87,30 +84,27 @@ unsafe fn merge_gaps(
             map.get(usize::try_from(left).unwrap_or(usize::MAX)),
             map.get(usize::try_from(right).unwrap_or(usize::MAX)),
         ) else {
-            dp = next;
+            at += 1;
             continue;
         };
         // Two tokens on different source lines are not a gap *within* a
         // line, which is the only thing either mode merges across.
         if entry1.lineoff != entry2.lineoff {
-            dp = next;
+            at += 1;
             continue;
         }
-        match decide(dp, entry1, entry2) {
+        match decide(dp, next, entry1, entry2) {
             Gap::Merge => {
+                let next = blocks.remove(at + 1);
+                let dp = &mut blocks[at];
                 for i in 0..DB_COUNT as usize {
-                    unsafe {
-                        (*dp).df_count[i] =
-                            (*next).df_lnum[i] + (*next).df_count[i] - (*dp).df_lnum[i]
-                    };
+                    dp.df_count[i] = next.end(i) - dp.df_lnum[i];
                 }
-                unsafe { (*dp).df_next = (*next).df_next };
-                unsafe { clear_diffblock(next) };
                 merged = true;
             }
             Gap::Keep(candidate) => {
                 unmerged |= candidate;
-                dp = next;
+                at += 1;
             }
         }
     }
@@ -123,30 +117,23 @@ unsafe fn merge_gaps(
 /// Repeated until nothing more merges, because merging two blocks can make
 /// the next gap worth swallowing too -- but at most four passes, and only
 /// while the last pass both merged something and left something alone.
-///
-/// # Safety
-///
-/// `dp_orig` must point at a live diff block, unaliased for the call.
-unsafe fn refine_inline_char(dp_orig: *mut DiffBlock, linemap: &LineMap, idx1: usize) {
+fn refine_inline_char(blocks: &mut Vec<DiffBlock>, linemap: &LineMap, idx1: usize) {
     for _ in 0..4 {
-        let (merged, unmerged) = unsafe {
-            merge_gaps(dp_orig, linemap, idx1, 1, |dp, _, _| {
-                let next = (*dp).df_next;
-                let gap = (*next).df_lnum[idx1] - ((*dp).df_lnum[idx1] + (*dp).df_count[idx1]);
-                if gap > 3 {
-                    return Gap::Keep(false);
-                }
-                let longest = (0..DB_COUNT as usize)
-                    .map(|i| (*dp).df_count[i] + (*next).df_count[i])
-                    .max()
-                    .unwrap_or(0);
-                if longest >= gap * 4 {
-                    Gap::Merge
-                } else {
-                    Gap::Keep(true)
-                }
-            })
-        };
+        let (merged, unmerged) = merge_gaps(blocks, linemap, idx1, 1, |dp, next, _, _| {
+            let gap = next.df_lnum[idx1] - dp.end(idx1);
+            if gap > 3 {
+                return Gap::Keep(false);
+            }
+            let longest = (0..DB_COUNT as usize)
+                .map(|i| dp.df_count[i] + next.df_count[i])
+                .max()
+                .unwrap_or(0);
+            if longest >= gap * 4 {
+                Gap::Merge
+            } else {
+                Gap::Keep(true)
+            }
+        });
         if !unmerged || !merged {
             break;
         }
@@ -159,66 +146,59 @@ unsafe fn refine_inline_char(dp_orig: *mut DiffBlock, linemap: &LineMap, idx1: u
 ///
 /// Always four passes: unlike `inline:char` there is no cheap test for
 /// "nothing left to do", and merging can expose a new short gap.
-///
-/// # Safety
-///
-/// `dp_orig` must point at a live diff block, unaliased for the call.
-unsafe fn refine_inline_word(
-    dp_orig: *mut DiffBlock,
+fn refine_inline_word(
+    blocks: &mut Vec<DiffBlock>,
+    slots: &DiffSlots,
     linemap: &LineMap,
     idx1: usize,
     start_lnum: LineNr,
 ) {
-    let buf = TabPage::current().used_diffbuf(idx1);
+    let buf = used_slot(slots, idx1);
     for _ in 0..4 {
-        unsafe {
-            merge_gaps(dp_orig, linemap, idx1, 2, |dp, entry1, entry2| {
-                let gap_start = entry1.byte_start + entry1.num_bytes;
-                let gap_size = entry2.byte_start - gap_start;
-                if gap_size <= 0 || gap_size > DIFF_WORD_GAP {
-                    return Gap::Keep(false);
+        merge_gaps(blocks, linemap, idx1, 2, |dp, next, entry1, entry2| {
+            let gap_start = entry1.byte_start + entry1.num_bytes;
+            let gap_size = entry2.byte_start - gap_start;
+            if gap_size <= 0 || gap_size > DIFF_WORD_GAP {
+                return Gap::Keep(false);
+            }
+            // The gap is only worth swallowing if it is *punctuation*
+            // between two changed words; a word in the gap is a real
+            // unchanged word and splitting there is the point.
+            let mut lines = buf.lines();
+            let line = lines.line(start_lnum + entry1.lineoff as LineNr);
+            let from = (gap_start as usize).min(line.len());
+            let gap_len = (gap_size as usize).min(line.len() - from);
+            // Each character is classed as the line holds it, so one that
+            // runs past the gap's end still decodes whole.
+            if gap_len == 0
+                || (from..from + gap_len).any(|i| class_in(&line[i..], buf) == CLASS_WORD)
+            {
+                return Gap::Keep(false);
+            }
+            // How much text the two blocks either side of the gap cover:
+            // a gap is only worth swallowing next to a substantial change.
+            let mut changed: i64 = 0;
+            for (i, map) in linemap.iter().enumerate() {
+                if slots[i].is_none() {
+                    continue;
                 }
-                // The gap is only worth swallowing if it is *punctuation*
-                // between two changed words; a word in the gap is a real
-                // unchanged word and splitting there is the point.
-                let mut lines = buf.lines();
-                let line = lines.line(start_lnum + entry1.lineoff as LineNr);
-                let gap = &line[(gap_start as usize).min(line.len())..];
-                let gap = &gap[..(gap_size as usize).min(gap.len())];
-                if gap.is_empty()
-                    || gap.iter().enumerate().any(|(i, _)| {
-                        mb_get_class_tab(gap.as_ptr().add(i).cast(), buf.b_chartab.as_ptr())
-                            == CLASS_WORD
-                    })
-                {
-                    return Gap::Keep(false);
-                }
-                // How much text the two blocks either side of the gap cover:
-                // a gap is only worth swallowing next to a substantial change.
-                let next = (*dp).df_next;
-                let mut changed: i64 = 0;
-                for (i, map) in linemap.iter().enumerate() {
-                    if TabPage::current().tp_diffbuf[i].is_none() {
-                        continue;
-                    }
-                    for block in [dp, next] {
-                        for k in 0..(*block).df_count[i] {
-                            let at = (*block).df_lnum[i] + k - 1;
-                            if let Ok(at) = usize::try_from(at)
-                                && let Some(e) = map.get(at)
-                            {
-                                changed += e.num_bytes as i64;
-                            }
+                for block in [dp, next] {
+                    for k in 0..block.df_count[i] {
+                        let at = block.df_lnum[i] + k - 1;
+                        if let Ok(at) = usize::try_from(at)
+                            && let Some(e) = map.get(at)
+                        {
+                            changed += e.num_bytes as i64;
                         }
                     }
                 }
-                if changed >= (gap_size * 2) as i64 {
-                    Gap::Merge
-                } else {
-                    Gap::Keep(false)
-                }
-            })
-        };
+            }
+            if changed >= (gap_size * 2) as i64 {
+                Gap::Merge
+            } else {
+                Gap::Keep(false)
+            }
+        });
     }
 }
 
@@ -399,16 +379,12 @@ fn change_for(new_diff: &DiffBlock, linemap: &LineMap) -> DiffLineChange {
 
 /// Diff one changed block again, token by token, and cache the column ranges.
 ///
-/// The result is `dp->df_changes`, which [`diff_find_change`] then windows
-/// per line.  The whole thing runs *inside* the tabpage's diff state: the sub
-/// diff is built by pointing `tp_first_diff` at a fresh list and calling the
-/// ordinary `diff_file_internal`/`diff_read` pair, so the real block list and
-/// buffer table are saved and put back at the end.
-///
-/// # Safety
-///
-/// `dp` must point at a live diff block, unaliased for the call.
-pub(crate) unsafe fn diff_find_change_inline_diff(dp: *mut DiffBlock) {
+/// The result is `dp.df_changes`, which [`diff_find_change`] then windows
+/// per line.  The sub-diff runs the ordinary `diff_file_internal`/
+/// [`diff_read`] pair over a scratch block list of its own, with `slots` --
+/// the tab page's buffer table -- copied so that a buffer with no text in
+/// the block can be left out of it.
+pub(crate) fn diff_find_change_inline_diff(dp: &mut DiffBlock, slots: &DiffSlots) {
     let save_diff_algorithm = diff_algorithm.get();
     // The inline diff only supports the internal algorithm; its two sides
     // are `file1`/`file2` below rather than the run's own images.
@@ -419,13 +395,9 @@ pub(crate) unsafe fn diff_find_change_inline_diff(dp: *mut DiffBlock) {
     // Always slide diff splits along whitespace.
     diff_algorithm.set(save_diff_algorithm | XDF_INDENT_HEURISTIC);
 
-    // `diff_read` reads both of these: the list it appends to, and the
-    // table that says which buffers are active.
-    let mut tp = TabPage::current();
-    let orig_diff = tp.tp_first_diff;
-    let orig_diffbuf = tp.tp_diffbuf;
-    tp.tp_first_diff = ::core::ptr::null_mut();
-
+    // The table `diff_read` and the refinement read: which buffers take part.
+    let mut slots = *slots;
+    let mut blocks = Vec::new();
     let mut linemap: LineMap = ::core::array::from_fn(|_| Vec::new());
     let (mut file1, mut file2) = (Vec::<u8>::new(), Vec::<u8>::new());
     let mut file1_idx = usize::MAX;
@@ -433,13 +405,16 @@ pub(crate) unsafe fn diff_find_change_inline_diff(dp: *mut DiffBlock) {
     'done: {
         for (i, map) in linemap.iter_mut().enumerate() {
             dio.diff.hunks.clear();
-            let Some(buf) = tp.diffbuf(i).filter(|b| b.b_ml.ml_mfp.is_some()) else {
+            let Some(buf) = slots[i]
+                .and_then(BufId::get)
+                .filter(|b| b.b_ml.ml_mfp.is_some())
+            else {
                 continue; // not loaded
             };
-            if unsafe { (*dp).df_count[i] } == 0 {
+            if dp.df_count[i] == 0 {
                 // A buffer with no text in this block must not be left in
                 // the table, or the whole block reads as modified in it.
-                tp.tp_diffbuf[i] = None;
+                slots[i] = None;
                 continue;
             }
             if file1_idx == usize::MAX {
@@ -450,10 +425,11 @@ pub(crate) unsafe fn diff_find_change_inline_diff(dp: *mut DiffBlock) {
             out.clear();
             // Deliberately the *first* buffer's 'iskeyword', so that
             // every buffer is segmented the same way.
-            let chartab = tp.used_diffbuf(file1_idx).b_chartab.as_ptr();
+            let chartab = used_slot(&slots, file1_idx).b_chartab.as_ptr();
             let mut lines = buf.lines();
-            for off in 0..unsafe { (*dp).df_count[i] } {
-                let line = lines.line(unsafe { (*dp).df_lnum[i] + off });
+            for off in 0..dp.df_count[i] {
+                let line = lines.line(dp.df_lnum[i] + off);
+                // SAFETY: the first buffer's own `'iskeyword'` table.
                 unsafe {
                     tokenize_line(
                         line,
@@ -471,30 +447,25 @@ pub(crate) unsafe fn diff_find_change_inline_diff(dp: *mut DiffBlock) {
             if diff_file_internal(&file1, &file2, &mut dio.diff.hunks).is_err() {
                 break 'done;
             }
-            diff_read(0, i as c_int, &dio);
-        }
-
-        let head = tp.tp_first_diff;
-        if file1_idx != usize::MAX {
-            if diff_flags.get() & DIFF_INLINE_WORD != 0 {
-                unsafe { refine_inline_word(head, &linemap, file1_idx, (*dp).df_lnum[file1_idx]) };
-            } else if diff_flags.get() & DIFF_INLINE_CHAR != 0 {
-                unsafe { refine_inline_char(head, &linemap, file1_idx) };
+            if let Some(hunks) = HunkSource::open(&dio) {
+                diff_read(&mut blocks, &slots, 0, i as c_int, hunks);
             }
         }
 
-        unsafe { (*dp).df_changes.clear() }; // already empty
-        let mut new_diff = head;
-        while !new_diff.is_null() {
-            let change = change_for(unsafe { &*new_diff }, &linemap);
-            unsafe { (*dp).df_changes.push(change) };
-            new_diff = unsafe { (*new_diff).df_next };
+        if file1_idx != usize::MAX {
+            if diff_flags.get() & DIFF_INLINE_WORD != 0 {
+                let start = dp.df_lnum[file1_idx];
+                refine_inline_word(&mut blocks, &slots, &linemap, file1_idx, start);
+            } else if diff_flags.get() & DIFF_INLINE_CHAR != 0 {
+                refine_inline_char(&mut blocks, &linemap, file1_idx);
+            }
         }
+
+        dp.df_changes.clear(); // already empty
+        dp.df_changes
+            .extend(blocks.iter().map(|new_diff| change_for(new_diff, &linemap)));
     }
 
     diff_algorithm.set(save_diff_algorithm);
-    unsafe { (*dp).has_changes = true };
-    diff_clear(tp);
-    tp.tp_first_diff = orig_diff;
-    tp.tp_diffbuf = orig_diffbuf;
+    dp.has_changes = true;
 }

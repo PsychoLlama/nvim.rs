@@ -122,7 +122,11 @@ pub struct Tabpage {
     pub tp_old_columns: int64_t,
     pub tp_ch_used: OptInt,
     pub tp_did_tabclosedpre: bool,
-    pub tp_first_diff: *mut DiffBlock,
+    /// The diff blocks, in line order. Lent by `TabPage::with_diff`.
+    pub tp_diff: Vec<DiffBlock>,
+    /// Bumped whenever a block is added to or taken out of `tp_diff`, so a
+    /// walk that holds an index across user code can tell it went stale.
+    pub(crate) tp_diff_gen: u32,
     /// The buffers in this tab page's diff, by slot (`DB_COUNT` of them).
     /// Ids: a slot is cleared when its buffer is unloaded, but the diff
     /// code reads the slots after calls that run autocommands, and a stale

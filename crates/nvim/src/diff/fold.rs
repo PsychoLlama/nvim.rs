@@ -7,8 +7,7 @@
 //! and [`diff_redraw`] is what marks the diffed windows dirty after the block
 //! list moves.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -91,90 +90,88 @@ pub fn diff_redraw(dofold: bool) {
 
 /// How many filler lines belong above `lnum`, and what its diff status is.
 ///
-/// The return is the filler count, which is only ever positive at a block
-/// boundary.  `linestatus`, if given, is [`LINE_CHANGED`] or
-/// [`LINE_INSERTED`]; zero means the line is not part of a change at all.
-/// The two are independent: a line can carry filler *and* be changed.
-///
-/// # Safety
-/// `linestatus` must be null or writable.
-pub unsafe fn diff_check_with_linestatus(
-    window: Win,
-    lnum: LineNr,
-    linestatus: *mut c_int,
-) -> c_int {
-    let set_status = |status| {
-        if !linestatus.is_null() {
-            // SAFETY: the caller's out-parameter, and it is not null.
-            unsafe { *linestatus = status };
-        }
-    };
-    set_status(0);
-
+/// The answer is `(fill, linestatus)`. `fill` is the filler count, which is
+/// only ever positive at a block boundary; `linestatus` is [`LINE_CHANGED`]
+/// or [`LINE_INSERTED`], and zero when the line is not part of a change at
+/// all. The two are independent: a line can carry filler *and* be changed.
+pub fn diff_check_with_linestatus(window: Win, lnum: LineNr) -> (c_int, c_int) {
     let tp = TabPage::current();
-    // SAFETY: a live window's buffer is live; a diffed window always has one.
+    // A live window's buffer is live; a diffed window always has one.
     let buf = window.buffer();
     if tp.tp_diff_invalid != 0 {
-        // SAFETY: the editor exists.
         diff_update(None);
     }
-    if tp.tp_first_diff.is_null() || window.w_onebuf_opt.wo_diff == 0 {
-        return 0;
+    if tp.tp_diff.is_empty() || window.w_onebuf_opt.wo_diff == 0 {
+        return (0, 0);
     }
     // One past the last line is legal: that is where the filler for a
     // deletion at end of buffer goes.
     if lnum < 1 || lnum > buf.b_ml.ml_line_count + 1 {
-        return 0;
+        return (0, 0);
     }
     let idx = tp.diff_index(buf);
     if idx == DB_COUNT {
-        return 0;
+        return (0, 0);
     }
     let idx = usize::try_from(idx).expect("a diff-buffer index is never negative");
     // A line inside a closed fold or concealed away has no status of its
     // own to report.
     //
     if window.fold_span(lnum).0 || decor_conceal_line(window, lnum - 1, false) {
-        return 0;
-    }
-
-    // The first block ending at or below `lnum`; anything above it is behind
-    // the line and anything below has not started yet.
-    let Some(mut dp) = diff_blocks(tp).find(|dp| lnum <= dp.end(idx)) else {
-        return 0;
-    };
-    if lnum < dp.df_lnum[idx] {
-        return 0;
+        return (0, 0);
     }
 
     // Line matching is deferred until a block is actually on screen.
-    // SAFETY: a live block and a live tab page, in all three calls.
-    let match_now = lnum >= window.w_topline
-        && lnum < window.w_botline
+    let on_screen = lnum >= window.w_topline && lnum < window.w_botline;
+    let slots = tp.tp_diffbuf;
+    tp.with_diff(|blocks| line_status(blocks, &slots, idx, lnum, on_screen))
+}
+
+/// [`diff_check_with_linestatus`]'s answer, read off the block list.
+fn line_status(
+    blocks: &mut Vec<DiffBlock>,
+    slots: &DiffSlots,
+    idx: usize,
+    lnum: LineNr,
+    on_screen: bool,
+) -> (c_int, c_int) {
+    // The first block ending at or below `lnum`; anything above it is behind
+    // the line and anything below has not started yet.
+    let Some(mut at) = blocks.iter().position(|dp| lnum <= dp.end(idx)) else {
+        return (0, 0);
+    };
+    let dp = &blocks[at];
+    if lnum < dp.df_lnum[idx] {
+        return (0, 0);
+    }
+    if on_screen
         && !dp.is_linematched
-        && unsafe { diff_linematch(dp.raw()) }
-        && dp.is_sane(tp);
-    if match_now {
-        // SAFETY: a live block.
-        unsafe { run_linematch_algorithm(dp.raw()) };
+        && diff_linematch(dp, slots)
+        && diff_check_sanity(slots, dp).is_ok()
+    {
+        run_linematch_algorithm(blocks, at, slots);
     }
 
     // At a block boundary, `lnum` is the line *after* the block, and the
     // filler is how many lines the longest buffer has there that this one
     // does not. Several blocks can end on the same line.
     let mut num_fill = 0;
-    while lnum == dp.end(idx) {
+    while lnum == blocks[at].end(idx) {
+        let dp = &blocks[at];
         if diff_flags.get() & DIFF_FILLER != 0 {
-            num_fill += dp.max_len() - dp.df_count[idx];
+            num_fill += dp.max_len(slots) - dp.df_count[idx];
         }
-        let Some(next) = dp.next() else { break };
+        let Some(next) = blocks.get(at + 1) else {
+            break;
+        };
         if lnum < next.df_lnum[idx] || lnum > next.end(idx) {
             break;
         }
-        dp = next;
+        at += 1;
     }
+    let dp = &blocks[at];
     if lnum >= dp.end(idx) {
-        return num_fill;
+        return (num_fill, 0);
     }
 
     // The line is inside the block. It is changed if any other buffer has
@@ -182,15 +179,11 @@ pub unsafe fn diff_check_with_linestatus(
     // text; it is an insertion if any other buffer has none.
     let mut zero = false;
     let mut cmp = false;
-    for i in 0..DB_COUNT as usize {
-        if i == idx || tp.tp_diffbuf[i].is_none() {
-            continue;
-        }
+    for i in used_slots(slots).filter(|&i| i != idx) {
         if dp.df_count[i] == 0 {
             zero = true;
         } else if dp.df_count[i] != dp.df_count[idx] {
-            set_status(LINE_CHANGED);
-            return num_fill;
+            return (num_fill, LINE_CHANGED);
         } else {
             cmp = true;
         }
@@ -198,39 +191,30 @@ pub unsafe fn diff_check_with_linestatus(
     if cmp {
         for i in 0..DB_COUNT as usize {
             if i != idx
-                && tp.tp_diffbuf[i].is_some()
+                && slots[i].is_some()
                 && dp.df_count[i] != 0
-                && !dp.equal_entry(idx, i)
+                && !diff_equal_entry(dp, slots, idx, i)
             {
-                set_status(LINE_CHANGED);
-                return num_fill;
+                return (num_fill, LINE_CHANGED);
             }
         }
     }
-    if zero {
-        set_status(LINE_INSERTED);
-    }
-    num_fill
+    (num_fill, if zero { LINE_INSERTED } else { 0 })
 }
 
 /// The number of filler lines above `lnum`, or 0 when `'diffopt'` has no
 /// `filler`.
-///
-/// Safe: a [`Win`] carries the whole of the promise this needs.
 pub fn diff_check_fill(window: Win, lnum: LineNr) -> c_int {
     if diff_flags.get() & DIFF_FILLER == 0 {
         return 0;
     }
-    // SAFETY: no status is asked for, so there is nothing to write through.
-    unsafe { diff_check_with_linestatus(window, lnum, ::core::ptr::null_mut()) }.max(0)
+    diff_check_with_linestatus(window, lnum).0.max(0)
 }
 
 /// Whether `lnum` belongs inside a closed diff fold.
 ///
 /// Unchanged, and further than `'diffopt'`'s `context:` from any change.  A
 /// window whose buffer is the only one in the diff folds nothing.
-///
-/// Safe: a [`Win`] carries the whole of the promise this needs.
 pub fn diff_infold(window: Win, lnum: LineNr) -> bool {
     if window.w_onebuf_opt.wo_diff == 0 {
         return false;
@@ -250,16 +234,12 @@ pub fn diff_infold(window: Win, lnum: LineNr) -> bool {
     };
 
     if tp.tp_diff_invalid != 0 {
-        // SAFETY: the editor exists.
         diff_update(None);
     }
-    if tp.tp_first_diff.is_null() {
-        return true;
-    }
     let context = diff_context.get() as LineNr;
-    for dp in diff_blocks(tp) {
-        // The blocks are in line order, so the first one starting below
-        // the context window ends the search.
+    // The blocks are in line order, so the first one starting below the
+    // context window ends the search. No blocks at all folds everything.
+    for dp in &tp.tp_diff {
         if dp.df_lnum[idx] - context > lnum {
             break;
         }
@@ -274,8 +254,7 @@ pub fn diff_infold(window: Win, lnum: LineNr) -> bool {
 /// that just changed.
 ///
 /// Takes the ranges, not the block: the one caller reads them off a block it
-/// is about to free, and a `DiffBlock` carries a `GArray` and two list links
-/// that a copy taken across the free would leave dangling.
+/// has already taken out of the list.
 pub(crate) fn diff_fold_update(
     lnum: &[LineNr; DB_COUNT as usize],
     count: &[LineNr; DB_COUNT as usize],

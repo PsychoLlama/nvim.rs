@@ -241,35 +241,20 @@ impl Cells {
     pub(super) fn diff_highlight(&mut self, wlv: &mut WinLineVars, window: Win) {
         // SAFETY: the caller's window and the diff answer for this line.
         let at = unsafe { self.ptr.offset_from(self.line) };
-        let bufidx = usize::try_from(self.line_changes.bufidx)
-            .expect("a diff buffer index is never negative");
-        if self.line_changes.num_changes > 0
+        let num_changes = self.line_changes.num_changes();
+        if num_changes > 0
             && self.change_index >= 0
-            && self.change_index < self.line_changes.num_changes - 1
-            && at
-                >= unsafe {
-                    *self
-                        .line_changes
-                        .changes
-                        .offset(self.change_index as isize + 1)
-                }
-                .dc_start[bufidx] as isize
+            && self.change_index < num_changes - 1
+            && at >= self.line_changes.raw_start(self.change_index + 1) as isize
         {
             self.change_index += 1;
         }
         let mut added = false;
-        if self.line_changes.num_changes > 0
-            && self.change_index >= 0
-            && self.change_index < self.line_changes.num_changes
-        {
-            added = unsafe {
-                diff_change_parse(
-                    &raw mut self.line_changes,
-                    self.line_changes.changes.offset(self.change_index as isize),
-                    &raw mut self.change_start,
-                    &raw mut self.change_end,
-                )
-            };
+        if num_changes > 0 && self.change_index >= 0 && self.change_index < num_changes {
+            let (start, end, is_added) = self.line_changes.change(self.change_index);
+            self.change_start = start;
+            self.change_end = end;
+            added = is_added;
         }
         // Extra text (virtual text, say) takes the *line's* diff
         // highlight, never the changed-text one.

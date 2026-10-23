@@ -189,7 +189,7 @@ impl<T, M> IdTable<T, M> {
 //
 // A pointee two or more families pass around gets its name here rather than in
 // whichever module needed it first: the private copies shadowed each other.
-// A family that owns its pointee (`Op`, `Sug`, `Df`) still names it at home.
+// A family that owns its pointee (`Op`, `Sug`) still names it at home.
 
 /// The command line being edited, whose caller has promised it outlives the
 /// value.

@@ -6,7 +6,7 @@
 //! [`diff_get_corresponding_line`] the line-number mapping the two share.
 //!
 //! The unit these all work in is the *virtual* line: a run of adjacent diff
-//! blocks occupies `get_max_diff_length` rows on screen whichever buffer is
+//! blocks occupies `DiffBlock::max_len` rows on screen whichever buffer is
 //! being looked at, because the shorter side is padded with filler.  Lining
 //! two windows up means counting virtual lines on one side and spending them
 //! on the other.
@@ -19,19 +19,23 @@ use crate::winlayer::{Buf, TabPage, Win};
 use core::ffi::c_int;
 
 /// The first block of the adjacent run containing `topline`, and the first
-/// block *after* that run.
+/// block *after* that run, as indices into `blocks` (the list's length when
+/// there is none).
 ///
 /// Blocks are adjacent when one ends exactly where the next begins, and a run
 /// of them is one unbroken stretch of screen rows -- the unit both windows
 /// have to agree on.
-fn find_top_diff_block(fromidx: usize, topline: LineNr) -> (Option<Df>, Option<Df>) {
+fn find_top_diff_block(
+    blocks: &[DiffBlock],
+    fromidx: usize,
+    topline: LineNr,
+) -> (Option<usize>, usize) {
     let mut thistopdiff = None;
     let mut runstart = None;
     let mut start_next_run = true;
-    let mut cur = Df::first(TabPage::current());
-    while let Some(topdiff) = cur {
+    for (at, topdiff) in blocks.iter().enumerate() {
         if runstart.is_none() || start_next_run {
-            runstart = Some(topdiff);
+            runstart = Some(at);
             start_next_run = false;
         }
         if topline >= topdiff.df_lnum[fromidx]
@@ -40,16 +44,15 @@ fn find_top_diff_block(fromidx: usize, topline: LineNr) -> (Option<Df>, Option<D
         {
             thistopdiff = runstart;
         }
-        let next = topdiff.next();
+        let next = blocks.get(at + 1);
         if next.is_none_or(|n| n.df_lnum[fromidx] != topdiff.end(fromidx)) {
             start_next_run = true;
             if thistopdiff.is_some() {
-                return (thistopdiff, next);
+                return (thistopdiff, at + 1);
             }
         }
-        cur = next;
     }
-    (thistopdiff, None)
+    (thistopdiff, blocks.len())
 }
 
 /// Where the other window's top belongs, given this one's: the topfill to use
@@ -61,28 +64,28 @@ fn find_top_diff_block(fromidx: usize, topline: LineNr) -> (Option<Df>, Option<D
 /// is the remainder -- the virtual lines the destination has no real line
 /// for.
 fn calculate_topfill_and_topline(
+    blocks: &[DiffBlock],
+    slots: &DiffSlots,
     fromidx: usize,
     toidx: usize,
     from_topline: LineNr,
     from_topfill: c_int,
 ) -> (Option<c_int>, LineNr) {
-    let (thistopdiff, next_adjacent_blocks) = find_top_diff_block(fromidx, from_topline);
-    // The run ends here; `Df` has no equality of its own, so the comparison
-    // the walks below make is against the raw pointer.
-    let after_run = next_adjacent_blocks.map_or(::core::ptr::null_mut(), Df::raw);
+    let (thistopdiff, after_run) = find_top_diff_block(blocks, fromidx, from_topline);
+    let from_top = thistopdiff.unwrap_or(blocks.len());
 
     // Whole blocks above the topline, plus the part of the block it sits
     // inside; `from_topfill` rows of that were filler, not text.
     let mut passed = 0;
-    let mut curdif = thistopdiff;
-    while let Some(dp) = curdif
+    let mut at = from_top;
+    while let Some(dp) = blocks.get(at)
         && dp.end(fromidx) <= from_topline
     {
-        passed += dp.max_len();
-        curdif = dp.next();
+        passed += dp.max_len(slots);
+        at += 1;
     }
-    if let Some(dp) = curdif
-        && dp.raw() != after_run
+    if let Some(dp) = blocks.get(at)
+        && at != after_run
     {
         passed += from_topline - dp.df_lnum[fromidx];
     }
@@ -90,26 +93,24 @@ fn calculate_topfill_and_topline(
 
     // Spend them on the other side, which runs out of real lines first
     // wherever it is the shorter one.
-    let mut to_lnum = thistopdiff.map_or(1, |dp| dp.df_lnum[toidx]);
+    let mut to_lnum = blocks.get(from_top).map_or(1, |dp| dp.df_lnum[toidx]);
     let mut left = passed;
-    let mut curdif = thistopdiff;
+    let mut at = from_top;
     while left > 0
-        && let Some(dp) = curdif
-        && dp.raw() != after_run
+        && let Some(dp) = blocks.get(at)
+        && at != after_run
     {
         to_lnum += left.min(dp.df_count[toidx]);
-        left -= left.min(dp.max_len());
-        curdif = dp.next();
+        left -= left.min(dp.max_len(slots));
+        at += 1;
     }
 
     // How many virtual lines that landing place is worth, which is what
     // the filler has to make up.
     let mut max_virt_lines = 0;
-    let mut cur = thistopdiff;
-    while let Some(dp) = cur {
+    for dp in &blocks[from_top..] {
         if dp.end(toidx) <= to_lnum {
-            max_virt_lines += dp.max_len();
-            cur = dp.next();
+            max_virt_lines += dp.max_len(slots);
         } else {
             if dp.df_lnum[toidx] <= to_lnum {
                 max_virt_lines += to_lnum - dp.df_lnum[toidx];
@@ -132,7 +133,6 @@ pub fn diff_set_topline(fromwin: Win, mut towin: Win) {
         return;
     }
     if tp.tp_diff_invalid != 0 {
-        // SAFETY: the editor exists.
         diff_update(None);
     }
     let fromidx = fromidx as usize;
@@ -143,7 +143,8 @@ pub fn diff_set_topline(fromwin: Win, mut towin: Win) {
 
     let lnum = fromwin.w_topline;
     towin.w_topfill = 0;
-    match diff_blocks(tp).find(|dp| lnum <= dp.end(fromidx)) {
+    let blocks = &tp.tp_diff;
+    match blocks.iter().find(|dp| lnum <= dp.end(fromidx)) {
         // Below every block: the two buffers' tails line up by counting
         // back from the end.
         None => {
@@ -158,8 +159,14 @@ pub fn diff_set_topline(fromwin: Win, mut towin: Win) {
             towin.w_topline = lnum + (dp.df_lnum[toidx] - dp.df_lnum[fromidx]);
             if lnum >= dp.df_lnum[fromidx] {
                 let from_topfill = fromwin.w_topfill;
-                let (topfill, topline) =
-                    calculate_topfill_and_topline(fromidx, toidx, lnum, from_topfill);
+                let (topfill, topline) = calculate_topfill_and_topline(
+                    blocks,
+                    &tp.tp_diffbuf,
+                    fromidx,
+                    toidx,
+                    lnum,
+                    from_topfill,
+                );
                 if let Some(topfill) = topfill {
                     towin.w_topfill = topfill;
                 }
@@ -192,14 +199,14 @@ pub fn diff_move_to(dir: c_int, mut count: c_int) -> Result<(), Failed> {
     let tp = TabPage::current();
     let mut lnum = Win::current().w_cursor.lnum;
     let idx = tp.diff_index(Buf::current());
-    if idx == DB_COUNT || tp.tp_first_diff.is_null() {
+    if idx == DB_COUNT || tp.tp_diff.is_empty() {
         return Err(Failed);
     }
     if tp.tp_diff_invalid != 0 {
-        // SAFETY: the editor exists.
         diff_update(None);
     }
-    let Some(first) = Df::first(tp) else {
+    let blocks = &tp.tp_diff;
+    let Some(first) = blocks.first() else {
         return Err(Failed);
     };
     let idx = idx as usize;
@@ -212,10 +219,12 @@ pub fn diff_move_to(dir: c_int, mut count: c_int) -> Result<(), Failed> {
         // Forwards: the first block starting below the cursor.
         // Backwards: the last block starting at or above it, which is
         // the one whose successor is already at or below the cursor.
-        for dp in diff_blocks(tp) {
+        for (at, dp) in blocks.iter().enumerate() {
             let hit = dir == FORWARD as c_int && lnum < dp.df_lnum[idx]
                 || dir == BACKWARD as c_int
-                    && dp.next().is_none_or(|next| lnum <= next.df_lnum[idx]);
+                    && blocks
+                        .get(at + 1)
+                        .is_none_or(|next| lnum <= next.df_lnum[idx]);
             if hit {
                 lnum = dp.df_lnum[idx];
                 break;
@@ -242,20 +251,20 @@ fn diff_get_corresponding_line_int(buf1: Buf, lnum1: LineNr) -> LineNr {
     let tp = TabPage::current();
     let idx1 = tp.diff_index(buf1);
     let idx2 = tp.diff_index(Buf::current());
-    if idx1 == DB_COUNT || idx2 == DB_COUNT || tp.tp_first_diff.is_null() {
+    if idx1 == DB_COUNT || idx2 == DB_COUNT || tp.tp_diff.is_empty() {
         return lnum1;
     }
     if tp.tp_diff_invalid != 0 {
-        // SAFETY: the editor exists.
         diff_update(None);
     }
-    if tp.tp_first_diff.is_null() {
+    if tp.tp_diff.is_empty() {
         return lnum1;
     }
     let (idx1, idx2) = (idx1 as usize, idx2 as usize);
+    let cursor = Win::current().w_cursor.lnum;
 
     let mut baseline = 0;
-    for dp in diff_blocks(tp) {
+    for dp in &tp.tp_diff {
         if dp.df_lnum[idx1] > lnum1 {
             return lnum1 - baseline;
         }
@@ -269,10 +278,10 @@ fn diff_get_corresponding_line_int(buf1: Buf, lnum1: LineNr) -> LineNr {
         // were deleted: stay where the cursor is.
         if dp.df_lnum[idx1] == lnum1
             && dp.df_count[idx1] == 0
-            && dp.df_lnum[idx2] <= Win::current().w_cursor.lnum
-            && dp.end(idx2) > Win::current().w_cursor.lnum
+            && dp.df_lnum[idx2] <= cursor
+            && dp.end(idx2) > cursor
         {
-            return Win::current().w_cursor.lnum;
+            return cursor;
         }
         baseline = dp.end(idx1) - dp.end(idx2);
     }
@@ -300,14 +309,13 @@ pub fn diff_lnum_win(lnum: LineNr, window: Win) -> LineNr {
         return 0;
     }
     if tp.tp_diff_invalid != 0 {
-        // SAFETY: the editor exists.
         diff_update(None);
     }
     let idx = idx as usize;
 
     // SAFETY: a live window's buffer is live.
     let buf = window.buffer();
-    let Some(dp) = diff_blocks(tp).find(|dp| lnum <= dp.end(idx)) else {
+    let Some(dp) = tp.tp_diff.iter().find(|dp| lnum <= dp.end(idx)) else {
         return buf.b_ml.ml_line_count - (Buf::current().b_ml.ml_line_count - lnum);
     };
     let i = tp.diff_index(buf);

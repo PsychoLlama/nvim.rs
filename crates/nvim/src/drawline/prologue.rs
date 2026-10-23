@@ -371,28 +371,19 @@ impl LineSetup {
     /// Diff-mode state for this line: how many filler lines it needs above it
     /// and which diff highlight its text takes.
     fn diff_state(&mut self, wlv: &mut WinLineVars, window: Win) {
-        // SAFETY: `linestatus` and `line_changes` are writable.
-        let mut linestatus = 0;
-        wlv.filler_lines =
-            unsafe { diff_check_with_linestatus(window, wlv.lnum, &raw mut linestatus) };
+        let (filler_lines, linestatus) = diff_check_with_linestatus(window, wlv.lnum);
+        wlv.filler_lines = filler_lines;
         if linestatus >= 0 {
             return;
         }
         // An added line, either because the status says so or because
         // the change scan found nothing to narrow it to.
-        if linestatus != -1
-            || unsafe { diff_find_change(window, wlv.lnum, &raw mut self.line_changes) }
-        {
+        if linestatus != -1 || diff_find_change(window, wlv.lnum, &mut self.line_changes) {
             wlv.diff_hlf = HLF_ADD;
-        } else if self.line_changes.num_changes > 0 {
-            let added = unsafe {
-                diff_change_parse(
-                    &raw mut self.line_changes,
-                    self.line_changes.changes,
-                    &raw mut self.change_start,
-                    &raw mut self.change_end,
-                )
-            };
+        } else if self.line_changes.num_changes() > 0 {
+            let (start, end, added) = self.line_changes.change(0);
+            self.change_start = start;
+            self.change_end = end;
             wlv.diff_hlf = if self.change_start != 0 {
                 HLF_CHD // unchanged text on a changed line
             } else if added {

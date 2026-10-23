@@ -16,7 +16,7 @@ use crate::decoration::{
     kHlModeUnknown, next_virt_text_chunk,
 };
 use crate::decoration_provider::{decor_providers_invoke_line, decor_providers_invoke_range};
-use crate::diff::{diff_change_parse, diff_check_with_linestatus, diff_find_change};
+use crate::diff::{diff_check_with_linestatus, diff_find_change};
 use crate::drawscreen::state::{dollar_vcol, win_extmark_arr};
 use crate::drawscreen::{compute_foldcolumn, conceal_cursor_line, number_width, win_draw_end};
 use crate::eval::vars::set_vim_var_nr;

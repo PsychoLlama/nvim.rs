@@ -23,7 +23,6 @@ use core::ffi::c_int;
 use super::*;
 use crate::allocator::Owned;
 use crate::autocmd::{block_autocmds, unblock_autocmds};
-use crate::diff::diff_clear;
 use crate::diff::state::diff_need_scrollbind;
 use crate::drawscreen::UPD_NOT_VALID;
 use crate::drawscreen::state::redraw_tabline;
@@ -90,10 +89,13 @@ pub(crate) fn alloc_tabpage() -> TabPage {
     // SAFETY: all-zero bytes are what upstream's `xcalloc(1, sizeof(Tabpage))`
     // hands a fresh tab page, and every field of `tabpage_S` that owns an
     // allocation is null when zeroed -- but for the two directories, which
-    // are `Option<XString>`s and are written here before the box is valid.
+    // are `Option<XString>`s, and the diff block list, a `Vec`: none of the
+    // three is promised valid as zero bytes, so they are written here before
+    // the box is.
     let owned = Owned::new(unsafe {
         (&raw mut (*raw).tp_localdir).write(None);
         (&raw mut (*raw).tp_prevdir).write(None);
+        (&raw mut (*raw).tp_diff).write(Vec::new());
         zeroed.assume_init()
     });
     // `owned` keeps it alive until the registry takes it over two lines
@@ -123,7 +125,6 @@ pub(crate) fn free_tab(tabpage: TabPage) {
     // Every tab page reaching here was registered by `alloc_tabpage`.
     let owned =
         forget_tabpage(tabpage.handle()).expect("a tab page being freed is a registered one");
-    diff_clear(tabpage);
     for idx in 0..SNAP_COUNT {
         drop_snapshot(tabpage, idx);
     }
@@ -135,7 +136,8 @@ pub(crate) fn free_tab(tabpage: TabPage) {
     if lastused_tabpage.get() == Some(tabpage.id()) {
         lastused_tabpage.set(None);
     }
-    // The free: `tabpage_S`'s destructor runs and the memory goes back.
+    // The free: `tabpage_S`'s destructor runs -- the diff blocks go with it
+    // -- and the memory goes back.
     drop(owned);
 }
 

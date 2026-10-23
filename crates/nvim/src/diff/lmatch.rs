@@ -5,8 +5,7 @@
 //! the individual lines inside it, and [`apply_linematch_results`] replaces
 //! the one block with the several the alignment implies.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -16,101 +15,93 @@
 )]
 
 use super::*;
-use crate::winlayer::TabPage;
 use core::ffi::c_int;
 
 /// Whether `dp` is short enough for the line-matching pass.
 ///
 /// `linematch:N` is a budget on the block's *total* size across every buffer,
 /// because the algorithm is exponential in the number of buffers.
-///
-/// # Safety
-///
-/// `dp` must point at a live diff block, unaliased for the call.
-pub unsafe fn diff_linematch(dp: *mut DiffBlock) -> bool {
+pub fn diff_linematch(dp: &DiffBlock, slots: &DiffSlots) -> bool {
     if diff_flags.get() & DIFF_LINEMATCH == 0 {
         return false;
     }
     let mut total = 0;
-    for i in 0..DB_COUNT as usize {
-        if TabPage::current().tp_diffbuf[i].is_none() {
-            continue;
-        }
-        if unsafe { (*dp).df_count[i] } < 0 {
+    for i in used_slots(slots) {
+        if dp.df_count[i] < 0 {
             return false;
         }
-        total += unsafe { (*dp).df_count[i] };
+        total += dp.df_count[i];
     }
     total <= linematch_lines.get()
 }
 
-/// Split `dp` into one block per run of equal decisions.
+/// Split `blocks[at]` into one block per run of equal decisions.
 ///
 /// A decision is a bit set over the *active* buffers, one entry per output
 /// line: bit `j` says buffer `outputmap[j]` contributes a line there.  A run
 /// of identical decisions is one diff block, so the block list grows by one
 /// every time the set changes.
-///
-/// # Safety
-///
-/// `dp` must point at a live diff block, unaliased for the call.
-unsafe fn apply_linematch_results(dp: *mut DiffBlock, decisions: &[c_int]) {
-    let tp = TabPage::current();
+fn apply_linematch_results(
+    blocks: &mut Vec<DiffBlock>,
+    at: usize,
+    slots: &DiffSlots,
+    decisions: &[c_int],
+) {
     let mut line_numbers = [0 as LineNr; DB_COUNT as usize];
     let mut outputmap = [0usize; DB_COUNT as usize];
     let mut ndiffs = 0;
+    let dp = &mut blocks[at];
     for (i, lnum) in line_numbers.iter_mut().enumerate() {
-        if tp.tp_diffbuf[i].is_some() {
-            *lnum = unsafe { (*dp).df_lnum[i] };
-            unsafe { (*dp).df_count[i] = 0 };
+        if slots[i].is_some() {
+            *lnum = dp.df_lnum[i];
+            dp.df_count[i] = 0;
             outputmap[ndiffs] = i;
             ndiffs += 1;
         }
     }
-    let mut cur = dp;
-    for (at, &decision) in decisions.iter().enumerate() {
-        if at != 0 && decisions[at - 1] != decision {
-            cur = unsafe { diff_alloc_new(tp, cur, (*cur).df_next) };
-            unsafe { (*cur).is_linematched = true };
+    let mut cur = at;
+    for (k, &decision) in decisions.iter().enumerate() {
+        if k != 0 && decisions[k - 1] != decision {
+            let mut next = DiffBlock {
+                is_linematched: true,
+                ..DiffBlock::default()
+            };
             for (i, &lnum) in line_numbers.iter().enumerate() {
-                if tp.tp_diffbuf[i].is_some() {
-                    unsafe { (*cur).df_lnum[i] = lnum };
-                    unsafe { (*cur).df_count[i] = 0 };
+                if slots[i].is_some() {
+                    next.df_lnum[i] = lnum;
                 }
             }
+            cur += 1;
+            blocks.insert(cur, next);
         }
         for (j, &buf) in outputmap[..ndiffs].iter().enumerate() {
             if decision & (1 << j) != 0 {
-                unsafe { (*cur).df_count[buf] += 1 };
+                blocks[cur].df_count[buf] += 1;
                 line_numbers[buf] += 1;
             }
         }
     }
-    unsafe { (*dp).is_linematched = true };
+    blocks[at].is_linematched = true;
 }
 
-/// Re-align `dp`'s lines across every active buffer.
+/// Re-align `blocks[at]`'s lines across every active buffer.
 ///
 /// Each buffer's share of the block is written out as one memory image, the
 /// alignment is computed over all of them at once, and the answer replaces
 /// the block.
-///
-/// # Safety
-///
-/// `dp` must point at a live diff block, unaliased for the call.
-pub(crate) unsafe fn run_linematch_algorithm(dp: *mut DiffBlock) {
-    let tp = TabPage::current();
+pub(crate) fn run_linematch_algorithm(blocks: &mut Vec<DiffBlock>, at: usize, slots: &DiffSlots) {
     let mut images: [Vec<u8>; DB_COUNT as usize] = ::core::array::from_fn(|_| Vec::new());
     let mut lengths = [0 as c_int; DB_COUNT as usize];
     let mut ndiffs = 0;
+    let dp = &blocks[at];
     for i in 0..DB_COUNT as usize {
-        if tp.tp_diffbuf[i].is_none() {
+        if slots[i].is_none() {
             continue;
         }
-        let (lnum, count) = unsafe { ((*dp).df_lnum[i], (*dp).df_count[i]) };
+        let (lnum, count) = (dp.df_lnum[i], dp.df_count[i]);
         if count > 0 {
             diff_write_buffer(
-                tp.used_diffbuf(i),
+                used_slot(slots, i),
                 &mut images[ndiffs],
                 lnum,
                 lnum + count - 1,
@@ -121,8 +112,8 @@ pub(crate) unsafe fn run_linematch_algorithm(dp: *mut DiffBlock) {
     }
 
     let iwhite = diff_flags.get() & (DIFF_IWHITEALL | DIFF_IWHITE) != 0;
-    let blocks: [&[u8]; DB_COUNT as usize] = ::core::array::from_fn(|i| images[i].as_slice());
-    let decisions = linematch_nbuffers(&blocks[..ndiffs], &lengths[..ndiffs], iwhite);
+    let images_in: [&[u8]; DB_COUNT as usize] = ::core::array::from_fn(|i| images[i].as_slice());
+    let decisions = linematch_nbuffers(&images_in[..ndiffs], &lengths[..ndiffs], iwhite);
     drop(images);
-    unsafe { apply_linematch_results(dp, &decisions) };
+    apply_linematch_results(blocks, at, slots, &decisions);
 }

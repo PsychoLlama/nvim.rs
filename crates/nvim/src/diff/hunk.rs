@@ -1,19 +1,16 @@
 //! Turning diff output back into blocks.
 //!
 //! [`diff_read`] walks whatever the engine produced -- unified or `ed`-style
-//! text from an external diff, or the hunks `xdiff_out` collected from the
-//! internal one -- and [`process_hunk`] merges each into the tabpage's block
-//! list, growing, splitting or joining the existing blocks as the new range
-//! overlaps them.
+//! text from an external diff, or the hunks the internal one collected -- and
+//! [`process_hunk`] merges each into a block list, growing, splitting or
+//! joining the existing blocks as the new range overlaps them.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::charset::getdigits_int_at;
 use crate::cstr;
 use crate::fileio::Fgets;
-use crate::winlayer::TabPage;
 use core::ffi::c_int;
 use std::ffi::OsStr;
 use std::fs::File;
@@ -24,7 +21,7 @@ use std::os::unix::ffi::OsStrExt;
 /// Not known until the first line that says so, which is why it is threaded
 /// through [`extract_hunk`] rather than decided once.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum DiffStyle {
+pub(crate) enum DiffStyle {
     /// Not yet decided.
     Unknown,
     /// `2,4c2,4`.
@@ -35,13 +32,26 @@ enum DiffStyle {
 
 /// Where the walk over the block list has got to.
 ///
-/// `notset` says the block `dp` points at has *not* yet had `idx_new`'s
-/// range written into it, which is what tells the merge whether it is
-/// looking at a block from an earlier pass or one it just made.
+/// `at` is the block the walk is on (the list's length past the end); the
+/// one before it is always the block it stepped past last. `notset` says
+/// the block at `at` has *not* yet had `idx_new`'s range written into it,
+/// which is what tells the merge whether it is looking at a block from an
+/// earlier pass or one it just made.
 struct Walk {
-    dp: *mut DiffBlock,
-    dprev: *mut DiffBlock,
+    at: usize,
     notset: bool,
+}
+
+impl Walk {
+    /// Step past the block at `at`, filling in its `idx_new` range first if
+    /// no hunk did.
+    fn step(&mut self, blocks: &mut [DiffBlock], idx_orig: usize, idx_new: usize) {
+        if self.notset {
+            diff_copy_entry(blocks, self.at, idx_orig, idx_new);
+        }
+        self.at += 1;
+        self.notset = true;
+    }
 }
 
 /// The next line of the external diff's output, as the C string
@@ -95,125 +105,115 @@ fn extract_hunk(fd: &mut Fgets, diffstyle: &mut DiffStyle) -> Option<DiffHunk> {
 /// `idx_new`.  Three things can happen: the hunk falls past the blocks the
 /// walk has reached (they are copied forward and skipped), it overlaps one or
 /// more existing blocks (they are widened to cover it and the extra ones
-/// freed), or it touches none (a new block).
-///
-/// # Safety
-///
-/// `walk`'s blocks must be live blocks of the current tab page's list.
-unsafe fn process_hunk(walk: &mut Walk, idx_orig: usize, idx_new: usize, hunk: &DiffHunk) {
-    let tp = TabPage::current();
+/// dropped), or it touches none (a new block).
+fn process_hunk(
+    blocks: &mut Vec<DiffBlock>,
+    slots: &DiffSlots,
+    walk: &mut Walk,
+    idx_orig: usize,
+    idx_new: usize,
+    hunk: &DiffHunk,
+) {
     let end_orig = hunk.lnum_orig + hunk.count_orig;
 
     // Blocks entirely above the hunk: they keep whatever an earlier pass
     // gave them, but `idx_new` still has to be filled in.
-    while !walk.dp.is_null()
-        && hunk.lnum_orig
-            > unsafe { (*walk.dp).df_lnum[idx_orig] } + unsafe { (*walk.dp).df_count[idx_orig] }
-    {
-        if walk.notset {
-            unsafe { diff_copy_entry(walk.dprev, walk.dp, idx_orig, idx_new) };
-        }
-        walk.dprev = walk.dp;
-        walk.dp = unsafe { (*walk.dp).df_next };
-        walk.notset = true;
+    while walk.at < blocks.len() && hunk.lnum_orig > blocks[walk.at].end(idx_orig) {
+        walk.step(blocks, idx_orig, idx_new);
     }
 
-    let dp = walk.dp;
-    let overlaps = !dp.is_null()
-        && hunk.lnum_orig
-            <= unsafe { (*dp).df_lnum[idx_orig] } + unsafe { (*dp).df_count[idx_orig] }
-        && end_orig >= unsafe { (*dp).df_lnum[idx_orig] };
+    let at = walk.at;
+    let overlaps = blocks
+        .get(at)
+        .is_some_and(|dp| hunk.lnum_orig <= dp.end(idx_orig) && end_orig >= dp.df_lnum[idx_orig]);
     if !overlaps {
         // A change of its own.
-        let dp = unsafe { diff_alloc_new(tp, walk.dprev, dp) };
-        unsafe { (*dp).df_lnum[idx_orig] = hunk.lnum_orig };
-        unsafe { (*dp).df_count[idx_orig] = hunk.count_orig };
-        unsafe { (*dp).df_lnum[idx_new] = hunk.lnum_new };
-        unsafe { (*dp).df_count[idx_new] = hunk.count_new };
-        for i in idx_orig + 1..idx_new {
-            if tp.tp_diffbuf[i].is_some() {
-                unsafe { diff_copy_entry(walk.dprev, dp, idx_orig, i) };
-            }
+        let mut dp = DiffBlock::default();
+        dp.df_lnum[idx_orig] = hunk.lnum_orig;
+        dp.df_count[idx_orig] = hunk.count_orig;
+        dp.df_lnum[idx_new] = hunk.lnum_new;
+        dp.df_count[idx_new] = hunk.count_new;
+        blocks.insert(at, dp);
+        for i in used_slots(slots).filter(|i| (idx_orig + 1..idx_new).contains(i)) {
+            diff_copy_entry(blocks, at, idx_orig, i);
         }
-        walk.dp = dp;
         walk.notset = false;
         return;
     }
 
-    // The last existing block this hunk reaches; everything from `dp` to
-    // `dpl` becomes one block.
-    let mut dpl = dp;
-    while !unsafe { (*dpl).df_next }.is_null()
-        && end_orig >= unsafe { (*(*dpl).df_next).df_lnum[idx_orig] }
+    // The last existing block this hunk reaches; everything from `at` to
+    // `last` becomes one block.
+    let mut last = at;
+    while blocks
+        .get(last + 1)
+        .is_some_and(|next| end_orig >= next.df_lnum[idx_orig])
     {
-        dpl = unsafe { (*dpl).df_next };
+        last += 1;
     }
 
-    let mut off = unsafe { (*dp).df_lnum[idx_orig] } - hunk.lnum_orig;
+    let dp = &mut blocks[at];
+    let mut off = dp.df_lnum[idx_orig] - hunk.lnum_orig;
     if off > 0 {
         // The hunk starts above the block: every buffer up to `idx_new`
         // grows upwards by the same amount.
-        for i in idx_orig..idx_new {
-            if tp.tp_diffbuf[i].is_some() {
-                unsafe { (*dp).df_lnum[i] -= off };
-                unsafe { (*dp).df_count[i] += off };
-            }
+        for i in used_slots(slots).filter(|i| (idx_orig..idx_new).contains(i)) {
+            dp.df_lnum[i] -= off;
+            dp.df_count[i] += off;
         }
-        unsafe { (*dp).df_lnum[idx_new] = hunk.lnum_new };
-        unsafe { (*dp).df_count[idx_new] = hunk.count_new };
+        dp.df_lnum[idx_new] = hunk.lnum_new;
+        dp.df_count[idx_new] = hunk.count_new;
     } else if walk.notset {
         // First hunk to touch this block: it starts `off` lines into it.
-        unsafe { (*dp).df_lnum[idx_new] = hunk.lnum_new + off };
-        unsafe { (*dp).df_count[idx_new] = hunk.count_new - off };
+        dp.df_lnum[idx_new] = hunk.lnum_new + off;
+        dp.df_count[idx_new] = hunk.count_new - off;
     } else {
         // A second hunk inside a block this pass already wrote: extend
         // `idx_new` by however much longer the new text is than the part
         // of the block the hunk covers.
-        let orig_size_in_dp = hunk.count_orig.min(
-            unsafe { (*dp).df_lnum[idx_orig] } + unsafe { (*dp).df_count[idx_orig] }
-                - hunk.lnum_orig,
-        );
-        unsafe { (*dp).df_count[idx_new] += hunk.count_new - orig_size_in_dp };
-        let past = hunk.lnum_new + hunk.count_new
-            - (unsafe { (*dp).df_lnum[idx_new] } + unsafe { (*dp).df_count[idx_new] });
+        let orig_size_in_dp = hunk.count_orig.min(dp.end(idx_orig) - hunk.lnum_orig);
+        dp.df_count[idx_new] += hunk.count_new - orig_size_in_dp;
+        let past = hunk.lnum_new + hunk.count_new - dp.end(idx_new);
         if past > 0 {
-            unsafe { (*dp).df_count[idx_new] += past };
+            dp.df_count[idx_new] += past;
         }
     }
 
-    // How far the hunk reaches past the last block it touches.
-    off = end_orig - (unsafe { (*dpl).df_lnum[idx_orig] } + unsafe { (*dpl).df_count[idx_orig] });
+    // How far the hunk reaches past the last block it touches -- which may
+    // be the one just widened, read as it now stands.
+    let (last_lnum, last_count) = (blocks[last].df_lnum, blocks[last].df_count);
+    let dp = &mut blocks[at];
+    off = end_orig - (last_lnum[idx_orig] + last_count[idx_orig]);
     if off < 0 {
-        if walk.notset || dp != dpl {
-            unsafe { (*dp).df_count[idx_new] += -off };
+        if walk.notset || at != last {
+            dp.df_count[idx_new] += -off;
         }
         off = 0;
     }
     for i in idx_orig..idx_new {
-        if tp.tp_diffbuf[i].is_some() {
-            unsafe {
-                (*dp).df_count[i] = (*dpl).df_lnum[i] + (*dpl).df_count[i] - (*dp).df_lnum[i] + off
-            };
+        if slots[i].is_some() {
+            dp.df_count[i] = last_lnum[i] + last_count[i] - dp.df_lnum[i] + off;
         }
     }
 
-    // Everything between `dp` and `dpl` is now covered by `dp`.
-    let mut dn = unsafe { (*dp).df_next };
-    unsafe { (*dp).df_next = (*dpl).df_next };
-    while dn != unsafe { (*dp).df_next } {
-        let next = unsafe { (*dn).df_next };
-        unsafe { clear_diffblock(dn) };
-        dn = next;
-    }
-    walk.dp = dp;
+    // Everything after `at` up to `last` is now covered by it.
+    blocks.drain(at + 1..=last);
     walk.notset = false;
 }
 
-/// Read a whole diff's worth of hunks into the current tabpage's block list.
-pub(crate) fn diff_read(idx_orig: c_int, idx_new: c_int, dio: &DiffIo) {
-    let (idx_orig, idx_new) = (idx_orig as usize, idx_new as usize);
-    let mut fd = None;
-    if !dio.internal {
+/// Where a run of hunks comes from: the internal engine's answer, or an
+/// external diff's output file.
+pub(crate) enum HunkSource<'a> {
+    Internal(core::slice::Iter<'a, DiffHunk>),
+    External(Fgets, DiffStyle),
+}
+
+impl<'a> HunkSource<'a> {
+    /// The hunks of `dio`'s run, `None` (and E98) when the external diff's
+    /// output cannot be opened.
+    pub(crate) fn open(dio: &'a DiffIo) -> Option<Self> {
+        if dio.internal {
+            return Some(Self::Internal(dio.diff.hunks.iter()));
+        }
         let file = dio
             .diff
             .fname
@@ -221,37 +221,46 @@ pub(crate) fn diff_read(idx_orig: c_int, idx_new: c_int, dio: &DiffIo) {
             .and_then(|name| File::open(OsStr::from_bytes(name.as_cstr().to_bytes())).ok());
         let Some(file) = file else {
             emsg(gettext(c"E98: Cannot read diff output"));
-            return;
+            return None;
         };
-        fd = Some(Fgets::new(file));
+        Some(Self::External(Fgets::new(file), DiffStyle::Unknown))
     }
+}
 
+impl Iterator for HunkSource<'_> {
+    type Item = DiffHunk;
+
+    fn next(&mut self) -> Option<DiffHunk> {
+        match self {
+            Self::Internal(hunks) => hunks.next().copied(),
+            Self::External(fd, diffstyle) => extract_hunk(fd, diffstyle),
+        }
+    }
+}
+
+/// Read a whole diff's worth of hunks into `blocks`.
+///
+/// `slots` says which buffers are in the diff. Both are the caller's, so the
+/// inline diff can run this over a scratch list of its own.
+pub(crate) fn diff_read(
+    blocks: &mut Vec<DiffBlock>,
+    slots: &DiffSlots,
+    idx_orig: c_int,
+    idx_new: c_int,
+    hunks: HunkSource<'_>,
+) {
+    let (idx_orig, idx_new) = (idx_orig as usize, idx_new as usize);
     let mut walk = Walk {
-        dp: TabPage::current().tp_first_diff,
-        dprev: ::core::ptr::null_mut(),
+        at: 0,
         notset: true,
     };
-    let mut internal_hunks = dio.diff.hunks.iter();
-    let mut diffstyle = DiffStyle::Unknown;
-    loop {
-        let next = match &mut fd {
-            None => internal_hunks.next().copied(),
-            Some(fd) => extract_hunk(fd, &mut diffstyle),
-        };
-        let Some(hunk) = next else {
-            break;
-        };
-        unsafe { process_hunk(&mut walk, idx_orig, idx_new, &hunk) };
+    for hunk in hunks {
+        process_hunk(blocks, slots, &mut walk, idx_orig, idx_new, &hunk);
     }
 
     // Blocks below the last hunk still need `idx_new` filled in.
-    while !walk.dp.is_null() {
-        if walk.notset {
-            unsafe { diff_copy_entry(walk.dprev, walk.dp, idx_orig, idx_new) };
-        }
-        walk.dprev = walk.dp;
-        walk.dp = unsafe { (*walk.dp).df_next };
-        walk.notset = true;
+    while walk.at < blocks.len() {
+        walk.step(blocks, idx_orig, idx_new);
     }
 }
 

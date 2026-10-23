@@ -19,7 +19,6 @@
 
 use super::*;
 use crate::cstr::byte_at;
-use crate::winlayer::TabPage;
 use core::ffi::{c_char, c_int};
 
 /// Skip a run of spaces and tabs: `charset.rs`'s `skipwhite` over a slice.
@@ -116,27 +115,27 @@ pub(crate) fn lines_equal(b1: &[u8], b2: &[u8]) -> bool {
 }
 
 /// Whether a whole diff block holds the same text in two buffers.
-///
-/// # Safety
-///
-/// `dp` must point at a live diff block, unaliased for the call.
-pub(crate) unsafe fn diff_equal_entry(dp: *mut DiffBlock, idx1: usize, idx2: usize) -> bool {
-    if unsafe { (*dp).df_count[idx1] } != unsafe { (*dp).df_count[idx2] } {
+pub(crate) fn diff_equal_entry(
+    dp: &DiffBlock,
+    slots: &DiffSlots,
+    idx1: usize,
+    idx2: usize,
+) -> bool {
+    if dp.df_count[idx1] != dp.df_count[idx2] {
         return false;
     }
-    let tp = TabPage::current();
-    if unsafe { diff_check_sanity(tp, dp) }.is_err() {
+    if diff_check_sanity(slots, dp).is_err() {
         return false;
     }
     let (mut b1, mut b2) = (
-        Lines::in_buffer(tp.used_diffbuf(idx1)),
-        Lines::in_buffer(tp.used_diffbuf(idx2)),
+        Lines::in_buffer(used_slot(slots, idx1)),
+        Lines::in_buffer(used_slot(slots, idx2)),
     );
-    for i in 0..unsafe { (*dp).df_count[idx1] } {
+    for i in 0..dp.df_count[idx1] {
         // Two handles, two buffers: `tp_diffbuf`'s entries are distinct
         // buffers, so each cache holds its own line and neither read
         // disturbs the other.
-        let (l1, l2) = unsafe { ((*dp).df_lnum[idx1] + i, (*dp).df_lnum[idx2] + i) };
+        let (l1, l2) = (dp.df_lnum[idx1] + i, dp.df_lnum[idx2] + i);
         if !lines_equal(b1.line(l1), b2.line(l2)) {
             return false;
         }
