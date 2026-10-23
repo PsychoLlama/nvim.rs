@@ -62,13 +62,13 @@ unsafe fn nlua_get_var_scope(lstate: *mut lua_State) -> *mut Dict {
             b"v" => vimvar_dict().as_ptr(),
             b"b" => find_buffer_by_handle(handle as BufferHandle)
                 .unwrap_or_default()
-                .map_or(ptr::null_mut(), |buf| buf.b_vars),
+                .map_or(ptr::null_mut(), |buf| buf.b_bufvar.dict_ptr()),
             b"w" => find_window_by_handle(handle as WindowHandle)
                 .unwrap_or_default()
-                .map_or(ptr::null_mut(), |win| win.w_vars),
+                .map_or(ptr::null_mut(), |win| win.w_winvar.dict_ptr()),
             b"t" => find_tab_by_handle(handle as TabpageHandle)
                 .unwrap_or_default()
-                .map_or(ptr::null_mut(), |tabpage| tabpage.tp_vars),
+                .map_or(ptr::null_mut(), |tabpage| tabpage.tp_winvar.dict_ptr()),
             _ => {
                 luaL_error(lstate, c"invalid scope".as_ptr());
                 ptr::null_mut()

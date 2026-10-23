@@ -94,7 +94,7 @@ pub struct Frame {
     pub(crate) fr_win: Option<WinId>,
 }
 /// Deliberately neither `Copy` nor `Clone`: a tab page owns three
-/// allocations (`tp_vars`, `tp_localdir`, `tp_diffbuf`'s memlines) and a
+/// allocations (`tp_winvar`'s scope, `tp_localdir`, `tp_diffbuf`'s memlines) and a
 /// window list, so a bitwise copy would be a second owner of all of them.
 /// Tab pages are reached through `winlayer::TabPage`, which is the `Copy`
 /// handle naming this one.
@@ -137,7 +137,6 @@ pub struct Tabpage {
     pub tp_diff_update: ::core::ffi::c_int,
     pub(crate) tp_snapshot: [Option<FrameId>; 3],
     pub tp_winvar: ScopeDictItem,
-    pub tp_vars: *mut Dict,
     /// `:tcd`'s directory, and the one `:tcd -` goes back to.
     pub tp_localdir: Option<XString>,
     pub tp_prevdir: Option<XString>,
@@ -306,7 +305,6 @@ pub struct Window {
     pub w_briopt_vcol: ::core::ffi::c_int,
     pub w_scbind_pos: ::core::ffi::c_int,
     pub w_winvar: ScopeDictItem,
-    pub w_vars: *mut Dict,
     pub w_pcmark: Pos,
     pub w_prev_pcmark: Pos,
     pub w_jumplist: [XFileMark; 100],

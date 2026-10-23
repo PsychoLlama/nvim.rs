@@ -215,9 +215,8 @@ pub(crate) fn win_alloc(after: Option<Win>, hidden: bool) -> Win {
     register_window(new_wp);
     new_wp.w_grid_alloc.mouse_enabled = true;
     grid_assign_handle(&mut new_wp.w_grid_alloc);
-    // The window's `w:` scope; `w_vars` mirrors the entry's dictionary.
+    // The window's `w:` scope.
     new_wp.w_winvar = new_var_scope(VAR_SCOPE);
-    new_wp.w_vars = new_wp.w_winvar.dict_ptr();
     block_autocmds();
     if !hidden {
         // A window in another tab page goes on that tab page's list.

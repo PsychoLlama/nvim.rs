@@ -106,9 +106,8 @@ pub(crate) fn alloc_tabpage() -> TabPage {
     let mut tp = register_tabpage(tp.handle(), owned);
 
     // Init t: variables.
-    // The tab page's `t:` scope; `tp_vars` mirrors the entry's dictionary.
+    // The tab page's `t:` scope.
     tp.tp_winvar = new_var_scope(VAR_SCOPE);
-    tp.tp_vars = tp.tp_winvar.dict_ptr();
     tp.tp_diff_invalid = 1;
     tp.tp_ch_used = p_ch();
     tp

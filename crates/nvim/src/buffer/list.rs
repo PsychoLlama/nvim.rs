@@ -281,9 +281,8 @@ fn new_buffer() -> Owned<Buffer> {
     let owned = alloc_unregistered_buffer();
     let mut buf = Buf::owned_by(&owned);
     // Init the b: variables. The entry holds the dictionary until
-    // `release_var_scope`; `b_vars` mirrors it for the raw readers.
+    // `release_var_scope`.
     buf.b_bufvar = new_var_scope(VAR_SCOPE);
-    buf.b_vars = buf.b_bufvar.dict_ptr();
     buf_init_changedtick(buf);
     owned
 }

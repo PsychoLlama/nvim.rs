@@ -52,8 +52,8 @@ impl ScopeDictItem {
         &raw mut *self.0
     }
 
-    /// The scope dictionary's address, for the raw `b_vars`/`w_vars`/
-    /// `tp_vars` fields that mirror the entry; null before the scope exists.
+    /// The scope dictionary's address, for `vim.b`/`vim.w`/`vim.t`; null
+    /// before the scope exists.
     pub fn dict_ptr(&self) -> *mut Dict {
         self.di_tv
             .dict_shared()

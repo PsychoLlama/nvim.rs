@@ -642,7 +642,6 @@ pub struct Buffer {
     pub b_bad_char: ::core::ffi::c_int,
     pub b_start_bomb: ::core::ffi::c_int,
     pub b_bufvar: ScopeDictItem,
-    pub b_vars: *mut Dict,
     pub b_may_swap: bool,
     pub b_did_warn: bool,
     pub b_help: bool,
