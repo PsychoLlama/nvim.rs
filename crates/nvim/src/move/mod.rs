@@ -29,8 +29,7 @@
 //!
 //! Original: `src/nvim/move.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -286,8 +285,7 @@ impl Win {
     /// calls back into the fold and decoration layers between reads.
     pub(super) fn remembered_line(self, i: c_int) -> WLine {
         debug_assert!(i >= 0 && i < self.w_lines_valid, "i < wp->w_lines_valid");
-        // SAFETY: `w_lines` holds at least `w_lines_valid` live entries.
-        unsafe { *self.w_lines.offset(i as isize) }
+        self.w_lines[i as usize]
     }
 }
 

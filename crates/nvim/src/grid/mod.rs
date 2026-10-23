@@ -44,7 +44,7 @@ use crate::global_cell::GlobalCell;
 use crate::highlight::{hl_apply_winblend, hl_combine_attr};
 use crate::log::LOGLVL_DBG;
 use crate::mbyte::{cluster_len, utf_char2len};
-use crate::memory::{xcalloc, xfree};
+
 use crate::option::vars::{p_arshape, p_tbidi, rdb_flags};
 use crate::options::{kOptRdbFlagInvalid, kOptRdbFlagNodelta};
 use crate::optionstr::check_chars_options;
@@ -61,8 +61,7 @@ use crate::ui::{
 };
 use crate::winlayer::{Win, windows};
 
-use core::ffi::{c_char, c_int, c_void};
-use core::mem::size_of;
+use core::ffi::{c_char, c_int};
 
 // Split out for size; the rest of the tree calls all of it as `grid::*`.
 pub mod border;
@@ -257,16 +256,10 @@ pub fn win_grid_alloc(mut window: Win) {
     let want_allocation = ui_has(kUIMultigrid) || window.w_floating;
     let has_allocation = window.w_grid_alloc.is_allocated();
 
-    if window.w_view_height > window.w_lines_size {
+    let rows = usize::try_from(window.w_view_height).unwrap_or(0) + 1;
+    if rows > window.w_lines.len() {
         window.w_lines_valid = 0;
-        // SAFETY: `w_lines` is the window's own allocation (or null), and
-        // nothing holds a row of it across a resize.
-        window.w_lines = unsafe {
-            xfree(window.w_lines.cast::<c_void>());
-            xcalloc(window.w_view_height as size_t + 1, size_of::<WLine>())
-        }
-        .cast::<WLine>();
-        window.w_lines_size = window.w_view_height;
+        window.w_lines = vec![WLine::default(); rows];
     }
 
     let mut was_resized = false;

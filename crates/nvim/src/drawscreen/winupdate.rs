@@ -201,7 +201,7 @@ pub(crate) fn win_update(window: Win) {
     if rg.redr_type == UPD_REDRAW_TOP {
         let mut rows = 0;
         for i in 0..win.w_lines_valid {
-            rows += unsafe { *win.w_lines.add(i as usize) }.wl_size as c_int;
+            rows += c_int::from(win.w_lines[i as usize].wl_size);
             if rows >= win.w_upd_rows {
                 rg.top_end = rows;
                 break;
@@ -393,21 +393,20 @@ fn find_changed_lines(win: Win, buffer: Buf, rg: &mut Regions) {
 /// higher of the fold `mod_top` is in and the line after the last still-valid
 /// `w_lines[]` entry above it, and symmetrically below.
 fn widen_over_folds(win: Win, rg: &mut Regions) {
-    // SAFETY: the caller's window and its `w_lines` array.
     // The line below the last valid entry above `mod_top`, and the first
     // valid entry at or below `mod_bot`.
     let mut lnumt = win.w_topline;
     let mut lnumb = MAXLNUM;
     for i in 0..win.w_lines_valid {
-        let wl = unsafe { win.w_lines.add(i as usize) };
-        if !unsafe { (*wl).wl_valid } {
+        let wl = win.w_lines[i as usize];
+        if !wl.wl_valid {
             continue;
         }
-        if unsafe { (*wl).wl_lastlnum } < rg.mod_top {
-            lnumt = unsafe { (*wl).wl_lastlnum } + 1;
+        if wl.wl_lastlnum < rg.mod_top {
+            lnumt = wl.wl_lastlnum + 1;
         }
-        if lnumb == MAXLNUM && unsafe { (*wl).wl_lnum } >= rg.mod_bot {
-            lnumb = unsafe { (*wl).wl_lnum };
+        if lnumb == MAXLNUM && wl.wl_lnum >= rg.mod_bot {
+            lnumb = wl.wl_lnum;
             // A fold column may need updating on the next line as well
             // ("J" just above an open fold).
             if compute_foldcolumn(win, 0) > 0 {
@@ -437,7 +436,6 @@ fn widen_over_folds(win: Win, rg: &mut Regions) {
 /// Each one either moves rows on the grid and records which rows are now stale,
 /// or gives up and marks the whole window.
 fn plan_scroll(win: Win, buffer: Buf, rg: &mut Regions) {
-    // SAFETY: the caller's window, its buffer and its `w_lines` array.
     // `w_lines[0].wl_lnum` can be below `w_topline` when the top line is
     // concealed, which would read as a scroll that did not happen. Compare
     // against a topline adjusted the same way.
@@ -464,17 +462,16 @@ fn plan_scroll(win: Win, buffer: Buf, rg: &mut Regions) {
         return;
     }
 
-    let first = win.w_lines;
+    let first = win.w_lines[0];
     if rg.mod_top != 0
         && win.w_topline == rg.mod_top
-        && (!unsafe { (*first).wl_valid } || topline_conceal == unsafe { (*first).wl_lnum })
+        && (!first.wl_valid || topline_conceal == first.wl_lnum)
     {
         // `w_topline` is the first changed line and the window did not
         // scroll: the line loop scrolls for the changed lines instead.
-    } else if unsafe { (*first).wl_valid }
-        && (topline_conceal < unsafe { (*first).wl_lnum }
-            || (topline_conceal == unsafe { (*first).wl_lnum }
-                && win.w_topfill > win.w_old_topfill))
+    } else if first.wl_valid
+        && (topline_conceal < first.wl_lnum
+            || (topline_conceal == first.wl_lnum && win.w_topfill > win.w_old_topfill))
     {
         scroll_down(win, rg);
     } else {
@@ -489,8 +486,7 @@ fn plan_scroll(win: Win, buffer: Buf, rg: &mut Regions) {
 
 /// The new topline is above the old one: insert rows at the top.
 fn scroll_down(mut win: Win, rg: &mut Regions) {
-    // SAFETY: the caller's window and its `w_lines` array.
-    let first_lnum = unsafe { (*win.w_lines).wl_lnum };
+    let first_lnum = win.w_lines[0].wl_lnum;
 
     // How many lines the window is off by, counting a run of folded lines
     // as one and skipping concealed ones.
@@ -541,12 +537,12 @@ fn scroll_down(mut win: Win, rg: &mut Regions) {
     win.w_lines_valid = (win.w_lines_valid + off).min(win.w_view_height);
     let mut idx = win.w_lines_valid;
     while idx - off >= 0 {
-        unsafe { *win.w_lines.add(idx as usize) = *win.w_lines.add((idx - off) as usize) };
+        win.w_lines[idx as usize] = win.w_lines[(idx - off) as usize];
         idx -= 1;
     }
     // The entries the scrolled ones vacated describe lines that are gone.
     while idx >= 0 {
-        unsafe { (*win.w_lines.add(idx as usize)).wl_valid = false };
+        win.w_lines[idx as usize].wl_valid = false;
         idx -= 1;
     }
 }
@@ -557,14 +553,13 @@ fn scroll_up(mut win: Win, rg: &mut Regions) {
     // Find `w_topline` in `w_lines[]`, counting the rows above it.
     let mut at = -1;
     let mut rows = 0;
-    // SAFETY: the caller's window and its `w_lines` array.
     for i in 0..win.w_lines_valid {
-        let wl = unsafe { win.w_lines.add(i as usize) };
-        if unsafe { (*wl).wl_valid } && unsafe { (*wl).wl_lnum } == win.w_topline {
+        let wl = win.w_lines[i as usize];
+        if wl.wl_valid && wl.wl_lnum == win.w_topline {
             at = i;
             break;
         }
-        rows += unsafe { (*wl).wl_size } as c_int;
+        rows += c_int::from(wl.wl_size);
     }
     let Ok(mut at) = usize::try_from(at) else {
         // Not displayed at all: redraw everything.
@@ -574,7 +569,7 @@ fn scroll_up(mut win: Win, rg: &mut Regions) {
 
     // Delete the filler lines of the old topline if it did not move, of the
     // new one otherwise -- but keep the new topline's own filler lines.
-    if unsafe { (*win.w_lines).wl_lnum } == win.w_topline {
+    if win.w_lines[0].wl_lnum == win.w_topline {
         rows += win.w_old_topfill;
     } else {
         rows += win_get_fill(win, win.w_topline);
@@ -596,17 +591,15 @@ fn scroll_up(mut win: Win, rg: &mut Regions) {
     rg.bot_start = 0;
     let mut idx = 0usize;
     loop {
-        unsafe { *win.w_lines.add(idx) = *win.w_lines.add(at) };
+        win.w_lines[idx] = win.w_lines[at];
+        let size = c_int::from(win.w_lines[idx].wl_size);
         // Stop at a line that did not fit -- unless nothing was deleted, in
         // which case it is still valid where it is.
-        if rows > 0
-            && rg.bot_start + rows + unsafe { (*win.w_lines.add(at)).wl_size } as c_int
-                > win.w_view_height
-        {
+        if rows > 0 && rg.bot_start + rows + size > win.w_view_height {
             win.w_lines_valid = idx as c_int + 1;
             break;
         }
-        rg.bot_start += unsafe { (*win.w_lines.add(idx)).wl_size } as c_int;
+        rg.bot_start += size;
         idx += 1;
         at += 1;
         // Stop at the last valid entry.
@@ -619,9 +612,7 @@ fn scroll_up(mut win: Win, rg: &mut Regions) {
     // Correct the first entry for filler lines at the top when it is not
     // going to be drawn below.
     if win_may_fill(win) && rg.bot_start > 0 {
-        unsafe {
-            (*win.w_lines).wl_size = plines_correct_topline(win, win.w_topline, true).0 as uint16_t
-        };
+        win.w_lines[0].wl_size = plines_correct_topline(win, win.w_topline, true).0 as uint16_t;
     }
 }
 
@@ -663,15 +654,15 @@ fn plan_visual_area(win: Win, buffer: Buf, rg: &mut Regions) {
     rg.mid_start = if rg.scrolled_down { rg.top_end } else { 0 };
 
     while lnum < from && idx < win.w_lines_valid {
-        let wl = unsafe { win.w_lines.add(idx as usize) };
-        if unsafe { (*wl).wl_valid } {
-            rg.mid_start += unsafe { (*wl).wl_size } as c_int;
+        let wl = win.w_lines[idx as usize];
+        if wl.wl_valid {
+            rg.mid_start += c_int::from(wl.wl_size);
         } else if !rg.scrolled_down {
-            srow += unsafe { (*wl).wl_size } as c_int;
+            srow += c_int::from(wl.wl_size);
         }
         idx += 1;
-        lnum = if idx < win.w_lines_valid && unsafe { *win.w_lines.add(idx as usize) }.wl_valid {
-            unsafe { *win.w_lines.add(idx as usize) }.wl_lnum
+        lnum = if idx < win.w_lines_valid && win.w_lines[idx as usize].wl_valid {
+            win.w_lines[idx as usize].wl_lnum
         } else {
             lnum + 1
         };
@@ -680,13 +671,13 @@ fn plan_visual_area(win: Win, buffer: Buf, rg: &mut Regions) {
 
     rg.mid_end = win.w_view_height;
     while idx < win.w_lines_valid {
-        let wl = unsafe { win.w_lines.add(idx as usize) };
-        if unsafe { (*wl).wl_valid } && unsafe { (*wl).wl_lnum } > to {
+        let wl = win.w_lines[idx as usize];
+        if wl.wl_valid && wl.wl_lnum > to {
             // Only update to the first row of this line.
             rg.mid_end = srow;
             break;
         }
-        srow += unsafe { (*wl).wl_size } as c_int;
+        srow += c_int::from(wl.wl_size);
         idx += 1;
     }
 }

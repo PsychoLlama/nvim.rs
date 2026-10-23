@@ -21,8 +21,7 @@
 //! `_buf` suffix means "a buffer that may not be the current one" and the
 //! `_mark` suffix "adjust the marks first".
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -44,7 +43,7 @@ use crate::winlayer::{Buf, TabPage, Win, tab_windows, windows};
 /// Drop the cached display information one window holds about the lines a
 /// change covered, and shift what is below it by `xtra`.
 fn changed_lines_invalidate_win(
-    window: Win,
+    mut window: Win,
     lnum: LineNr,
     col: ColNr,
     mut lnume: LineNr,
@@ -82,11 +81,8 @@ fn changed_lines_invalidate_win(
         lnume += 1;
     }
 
-    let lines = window.w_lines;
-    for i in 0..window.w_lines_valid {
-        // SAFETY: `w_lines` holds at least `w_lines_valid` entries, and is
-        // only null while that count is zero.
-        let wl = unsafe { &mut *lines.offset(i as isize) };
+    let valid = usize::try_from(window.w_lines_valid).unwrap_or(0);
+    for (i, wl) in window.w_lines[..valid].iter_mut().enumerate() {
         if !wl.wl_valid {
             continue;
         }

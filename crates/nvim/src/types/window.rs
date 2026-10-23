@@ -257,8 +257,10 @@ pub struct Window {
     pub w_empty_rows: ::core::ffi::c_int,
     pub w_filler_rows: ::core::ffi::c_int,
     pub w_lines_valid: ::core::ffi::c_int,
-    pub w_lines: *mut WLine,
-    pub w_lines_size: ::core::ffi::c_int,
+    /// What each screen line of the window showed when it was last drawn,
+    /// one entry per text row and one more; the first `w_lines_valid` are
+    /// meaningful. Sized by `win_grid_alloc`.
+    pub w_lines: Vec<WLine>,
     pub w_folds: Vec<crate::fold::Fold>,
     pub w_fold_manual: bool,
     pub w_foldinvalid: bool,
@@ -534,7 +536,7 @@ impl WinOpt {
         wo_script_ctx: [ScriptCtx::NONE; 51],
     };
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 pub struct WLine {
     pub wl_lnum: LineNr,
     pub wl_size: uint16_t,

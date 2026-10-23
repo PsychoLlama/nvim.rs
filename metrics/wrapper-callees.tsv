@@ -5,13 +5,13 @@ count	callee	no_raw	defs	def
 67	CStr::from_ptr	0	1	crates/nvim/src/marktree/node.rs
 66	xfree	0	1	crates/nvim/src/memory/mod.rs
 62	nlua_pop_integer	0	1	crates/nvim/src/lua/converter/pop.rs
-58	from_raw_parts	0	0	
+57	from_raw_parts	0	0	
 45	c_str	0	1	crates/nvim/src/message_fmt/mod.rs
 44	pop_keydict	0	1	crates/nvim/src/lua/api_wrappers/mod.rs
 43	at	0	2	
-38	.add	0	0	
 36	from_raw_parts_mut	0	0	
 31	bytes_at	0	1	crates/nvim/src/cstr.rs
+30	.add	0	0	
 29	Term::new	0	1	crates/nvim/src/terminal/mod.rs
 29	f	0	0	
 29	multiqueue_put_event	0	1	crates/nvim/src/event/multiqueue.rs
@@ -501,7 +501,6 @@ count	callee	no_raw	defs	def
 1	copy_option_part	0	1	crates/nvim/src/strings/raw.rs
 1	damage	0	0	
 1	decode	0	2	
-1	decor_conceal_line	0	0	
 1	deliver_buffered	0	1	crates/nvim/src/channel/reader.rs
 1	deliver_streaming	0	1	crates/nvim/src/channel/reader.rs
 1	destination	0	2	

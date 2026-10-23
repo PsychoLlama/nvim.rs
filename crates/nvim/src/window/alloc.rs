@@ -67,6 +67,7 @@ fn zeroed_window() -> Win {
             (&raw mut (*wp).w_allbuf_opt).write(WinOpt::UNSET);
             (&raw mut (*wp).w_matches).write(Vec::new());
             (&raw mut (*wp).w_folds).write(Vec::new());
+            (&raw mut (*wp).w_lines).write(Vec::new());
             (&raw mut (*wp).w_config).write(WIN_CONFIG_INIT);
             (&raw mut (*wp).w_localdir).write(None);
             (&raw mut (*wp).w_prevdir).write(None);
@@ -290,7 +291,7 @@ pub(crate) fn win_free(window: Win, tabpage: Option<TabPage>) {
             ttp.tp_prevwin = None;
         }
     }
-    free(window.w_lines);
+    window.w_lines = Vec::new();
     for i in 0..window.w_tagstacklen {
         tagstack_clear_entry(&mut window.w_tagstack[i as usize]);
     }
