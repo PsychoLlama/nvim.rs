@@ -31,7 +31,6 @@ mod scratch;
 
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int, c_uint};
-use core::ptr;
 
 use crate::global_cell::GlobalCell;
 use crate::grid::{GridRef, default_grid_ref, schar_from_ascii, schar_from_buf};
@@ -371,14 +370,11 @@ pub fn ui_comp_grid_cursor_goto(grid_handle: Integer, r: Integer, c: Integer) {
     ui_composed_call_grid_cursor_goto(1, cursor_row.into(), cursor_col.into());
 }
 
-/// The grid that owns screen cell (`row`, `col`) for mouse purposes, or null
-/// if none does.
-///
-/// # Safety
-/// The window list must be live.
-pub unsafe fn ui_comp_mouse_focus(row: c_int, col: c_int) -> *mut ScreenGrid {
+/// The grid that owns screen cell (`row`, `col`) for mouse purposes, if any
+/// does.
+pub(crate) fn ui_comp_mouse_focus(row: c_int, col: c_int) -> Option<GridRef> {
     if let Some(grid) = topmost_at(row, col, |grid| grid.mouse_enabled) {
-        return grid.raw();
+        return Some(grid);
     }
     if ui_has(kUIMultigrid) {
         // With `ext_multigrid` a window's grid is not composed and so has no
@@ -392,11 +388,11 @@ pub unsafe fn ui_comp_mouse_focus(row: c_int, col: c_int) -> *mut ScreenGrid {
                 && col >= wincol
                 && col < wincol + grid.cols
             {
-                return grid.raw();
+                return Some(grid);
             }
         }
     }
-    ptr::null_mut()
+    None
 }
 
 /// The topmost grid at screen coordinates (`row`, `col`).

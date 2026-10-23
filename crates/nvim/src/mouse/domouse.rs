@@ -16,12 +16,9 @@
 //!
 //! Original: `src/nvim/mouse.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
-
-use core::mem::offset_of;
 
 use super::*;
 use crate::ascii::ascii_iswhite;
@@ -62,7 +59,7 @@ use crate::state::{MODE_INSERT, MODE_NORMAL, REPLACE_FLAG};
 use crate::statusline::{
     kStlClickDisabled, kStlClickFuncRun, kStlClickTabClose, kStlClickTabSwitch,
 };
-use crate::types::{NUL, OpArg, PUT_CURSEND, PUT_FIXINDENT};
+use crate::types::{NUL, PUT_CURSEND, PUT_FIXINDENT};
 use crate::ui::state::Columns;
 use crate::ui::ui_mouse_has;
 use crate::window::{goto_tabpage, tabpage_move};
@@ -77,15 +74,6 @@ static orig_cursor: GlobalCell<Pos> = GlobalCell::new(Pos {
     col: 0,
     coladd: 0,
 });
-
-/// Where `jump_to_mouse` records whether the motion is inclusive.
-///
-/// [`Live::field_ptr`](crate::winlayer::Live::field_ptr)'s trick: a field's
-/// address is the object's plus a constant, so saying where it is needs no
-/// dereference.
-fn op_inclusive(op: Op) -> *mut bool {
-    op.field_ptr(offset_of!(OpArg, inclusive))
-}
 
 /// Do the appropriate action for the current mouse click in the current mode.
 /// Not used for Command-line mode.
@@ -183,8 +171,7 @@ pub(crate) fn do_mouse(
     // shift-left button -> right button
     // alt-left button   -> alt-right button
     if mouse_model_popup() {
-        // SAFETY: a live local position.
-        m_pos_flag = get_fpos_of_mouse(unsafe { PosRef::new(&raw mut m_pos) });
+        m_pos_flag = get_fpos_of_mouse(&mut m_pos);
         let over_text = m_pos_flag & (IN_STATUS_LINE | MOUSE_WINBAR | MOUSE_STATUSCOL) == 0;
         if over_text
             && which_button == MOUSE_RIGHT
@@ -235,10 +222,13 @@ pub(crate) fn do_mouse(
     // Even though we gate *_VIS flags above, we want to make sure the cursor
     // doesn't move in visual mode unless it is set as a mouse option.
     if !visual_active() || mouse_can_visual {
-        let inclusive = op.map_or(ptr::null_mut(), op_inclusive);
-        // SAFETY: `inclusive` is a field of the live operator, or null.
-        let inclusive = unsafe { inclusive.as_mut() };
-        jump_flags = jump_to_mouse(jump_flags, inclusive, which_button);
+        // Through a copy, put back after the jump: the jump can run
+        // autocommands, which may read the pending operator.
+        let mut inclusive = op.map(|op| op.inclusive);
+        jump_flags = jump_to_mouse(jump_flags, inclusive.as_mut(), which_button);
+        if let (Some(mut op), Some(inclusive)) = (op, inclusive) {
+            op.inclusive = inclusive;
+        }
     }
 
     let moved = jump_flags & CURSOR_MOVED != 0;
@@ -798,7 +788,7 @@ fn multi_click(mut win: Win, op: Option<Op>, is_click: bool, is_drag: bool, mods
             // When not found a match or when dragging: extend to include a
             // word.
             if lt(win.w_cursor, orig_cursor.get()) {
-                find_start_of_word(win.cursor());
+                with_cursor(win, find_start_of_word);
                 with_visual(find_end_of_word);
             } else {
                 with_visual(find_start_of_word);
@@ -809,7 +799,7 @@ fn multi_click(mut win: Win, op: Option<Op>, is_click: bool, is_drag: bool, mods
                 if let Some(bytes) = under.filter(|_| sel_exclusive()) {
                     win.w_cursor.col += bytes;
                 }
-                find_end_of_word(win.cursor());
+                with_cursor(win, find_end_of_word);
             }
         }
         win.w_set_curswant = true;
@@ -825,11 +815,9 @@ fn multi_click(mut win: Win, op: Option<Op>, is_click: bool, is_drag: bool, mods
 /// character, try finding a match and select a (), {}, [], #if/#endif, etc.
 /// block.  Answers whether one was found.
 fn select_matching_block(mut win: Win, op: Option<Op>) -> bool {
-    let mut end_visual = win.w_cursor;
-    // SAFETY: a live local position in the current buffer.
-    let probe = unsafe { PosRef::new(&raw mut end_visual) };
-    while ascii_iswhite(char_at(probe)) {
-        advance(probe);
+    let mut probe = win.w_cursor;
+    while ascii_iswhite(gchar_pos(&probe)) {
+        inc(&mut probe);
     }
 
     let Some(mut op) = op else {
@@ -840,7 +828,7 @@ fn select_matching_block(mut win: Win, op: Option<Op>) -> bool {
     if !visual_mode().is_char() {
         return false;
     }
-    if vim_iswordc(char_at(probe)) {
+    if vim_iswordc(gchar_pos(&probe)) {
         return false;
     }
     if !equalpos(win.w_cursor, visual_anchor()) {
@@ -871,18 +859,6 @@ fn stuff_char(c: c_int) {
     stuff_readbuf_char(c);
 }
 
-/// The character at `pos`, or NUL past the end of the line.
-fn char_at(pos: PosRef) -> c_int {
-    // SAFETY: a live position in the current buffer.
-    gchar_pos(&pos)
-}
-
-/// Step `pos` one character forward, over a line break if need be.
-fn advance(pos: PosRef) {
-    // SAFETY: a live position in the current buffer.
-    unsafe { inc(&mut *pos.raw()) };
-}
-
 /// Whether a clipboard provider is loaded, so that an unnamed register should
 /// become the `*` one.
 fn has_clipboard_provider() -> bool {
@@ -892,9 +868,15 @@ fn has_clipboard_provider() -> bool {
 
 /// Run `f` over the Visual anchor through a copy: the word walk it is used for
 /// reads the buffer line, which must not happen with the cell borrowed.
-fn with_visual(f: unsafe fn(PosRef)) {
+fn with_visual(f: fn(&mut Pos)) {
     let mut visual = visual_anchor();
-    // SAFETY: a live local position in the current buffer.
-    unsafe { f(PosRef::new(&raw mut visual)) };
+    f(&mut visual);
     set_visual_anchor(visual);
+}
+
+/// Run `f` over `win`'s cursor through a copy, put back afterwards.
+fn with_cursor(mut win: Win, f: fn(&mut Pos)) {
+    let mut cursor = win.w_cursor;
+    f(&mut cursor);
+    win.w_cursor = cursor;
 }

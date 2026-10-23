@@ -145,11 +145,6 @@ mbyte/	mbyte/utf8/tables.rs	1	0	0	0	-	-	-	-
 mbyte/	mbyte/utf8/text.rs	1	1	1	0	deref:1	str:1	-	-
 message_fmt/	*	1	2	2	2	-	other:1 str:1	str:3	at_opt:1 from_raw_parts:1
 message_fmt/	message_fmt/mod.rs	1	2	2	2	-	other:1 str:1	str:3	at_opt:1 from_raw_parts:1
-mouse/	*	4	19	0	13	deref:4 compound:1	-	other:1	PosRef::new:3 .as_mut:1 .ended:1 .next_char:1 bytes_at:1 f:1 inc:1 mb_get_class:1
-mouse/	mouse/click.rs	1	1	0	1	-	-	-	PosRef::new:1
-mouse/	mouse/domouse.rs	1	5	0	5	-	-	other:1	PosRef::new:2 .as_mut:1 f:1 inc:1
-mouse/	mouse/find.rs	1	8	0	4	deref:4	-	-	.ended:1 .next_char:1 bytes_at:1 ui_comp_mouse_focus:1
-mouse/	mouse/mod.rs	1	5	0	3	compound:1	-	-	mb_get_class:1 utf_head_off:1 utfc_ptr2len:1
 mpack/	*	4	158	26	28	deref:101 expr:17 ref:5	other:48 pp_str:10 str:1	other:3	from_raw_parts:3 from_raw_parts_mut:2 .sub:1 .write:1
 mpack/	mpack/conv.rs	1	5	0	0	expr:5	str:1	-	-
 mpack/	mpack/mpack_core.rs	1	29	5	6	deref:19 expr:2 ref:2	other:9 pp_str:3	-	from_raw_parts:3 .write:1 from_raw_parts_mut:1
@@ -178,8 +173,8 @@ ui/	ui/mouse.rs	1	4	0	2	deref:2	-	-	.add:1 at:1
 ui/	ui/sinks.rs	1	8	3	7	expr:1	other:7	-	remote_ui_chdir:1 remote_ui_raw_line:1 remote_ui_set_title:1 ui_comp_msg_set_pos:1 ui_comp_raw_line:1
 ui_client.rs	*	1	41	12	27	deref:6 expr:3 compound:2	str:2 other:1 pp:1	-	rpc_send_event:4 CStr::from_ptr:2 xfree:2 c_str:1 channel_job_start:1 cstr_to_string:1 from_raw_parts:1 multiqueue_put_event:1
 ui_client.rs	ui_client.rs	1	41	12	27	deref:6 expr:3 compound:2	str:2 other:1 pp:1	-	rpc_send_event:4 CStr::from_ptr:2 xfree:2 c_str:1 channel_job_start:1 cstr_to_string:1 from_raw_parts:1 multiqueue_put_event:1
-ui_compositor/	*	1	9	6	5	deref:2 compound:1	other:5	other:1	GridRef::new:2 ui_composed_call_raw_line:2 from_raw_parts:1
-ui_compositor/	ui_compositor/mod.rs	1	9	6	5	deref:2 compound:1	other:5	other:1	GridRef::new:2 ui_composed_call_raw_line:2 from_raw_parts:1
+ui_compositor/	*	1	9	5	5	deref:2 compound:1	other:5	-	GridRef::new:2 ui_composed_call_raw_line:2 from_raw_parts:1
+ui_compositor/	ui_compositor/mod.rs	1	9	5	5	deref:2 compound:1	other:5	-	GridRef::new:2 ui_composed_call_raw_line:2 from_raw_parts:1
 version/	*	1	13	0	11	deref:1 expr:1	-	-	utfc_ptr2len:3 vim_strsize:3 utf_ptr2char:2 at:1 nlua_exec:1
 version/	version/mod.rs	1	13	0	11	deref:1 expr:1	-	-	utfc_ptr2len:3 vim_strsize:3 utf_ptr2char:2 at:1 nlua_exec:1
 window/	*	10	50	2	20	compound:5 deref:5 ref:1	other:5 str:5	str:2	vim_snprintf:5 at:3 terminal_check_size:2 at_opt:1 emsg:1 slice_at:1 xfree:1 xmemdupz:1

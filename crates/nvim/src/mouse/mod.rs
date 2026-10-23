@@ -22,8 +22,7 @@
 //!
 //! Original: `src/nvim/mouse.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -32,7 +31,6 @@ use crate::strings::has_char;
 use crate::window::tab_index;
 use crate::winlayer::{TabPage, WinId};
 use core::ffi::{CStr, c_int};
-use core::{ptr, slice};
 
 use crate::charset::vim_iswordc;
 use crate::cursor::set_leftcol;
@@ -40,7 +38,7 @@ use crate::eval::typval::tv_dict_alloc_ret;
 use crate::ex_docmd::{tabpage_close, tabpage_close_other};
 use crate::global_cell::GlobalCell;
 use crate::grid::grid_adjust;
-use crate::mbyte::{cluster_len, mb_get_class, utf_head_off, utf8len_tab, utfc_ptr2len};
+use crate::mbyte::{c_cluster_len, char_at, class_of, cluster_len, utf8len_tab};
 use crate::mouse::state::{mouse_col, mouse_row};
 use crate::normal::sel_exclusive;
 use crate::optionstr::OptString;
@@ -58,7 +56,7 @@ use crate::window::{
     self, find_tabpage, tabpage_move, win_drag_status_line, win_drag_vsep_line, win_enter,
     win_valid,
 };
-use crate::winlayer::{Buf, PosRef, Win, first_tab};
+use crate::winlayer::{Buf, Win, first_tab};
 
 // The carve of the transpiled module; see each child's docs.
 mod click;
@@ -303,16 +301,9 @@ impl ClickDefs {
 /// included: a click may land on the position just past the last character,
 /// and [`mouse_class`] answers for the NUL there.
 fn with_line<R>(lnum: LineNr, f: impl FnOnce(&[u8]) -> R) -> R {
-    // SAFETY: the caller's promise; `ml_get_buf` answers a NUL-terminated
-    // line of `ml_get_buf_len` bytes, so one byte more is still in bounds.
-    let line = unsafe {
-        let buf = Buf::current();
-        slice::from_raw_parts(
-            buf.line_raw(lnum).raw().cast(),
-            buf.line_len_raw(lnum) as usize + 1,
-        )
-    };
-    f(line)
+    let mut line = Buf::current().lines().line(lnum).to_vec();
+    line.push(NUL as u8);
+    f(&line)
 }
 
 /// Class of the character at `idx` for the purpose of selection: same class
@@ -321,8 +312,7 @@ fn with_line<R>(lnum: LineNr, f: impl FnOnce(&[u8]) -> R) -> R {
 fn mouse_class(line: &[u8], idx: usize) -> c_int {
     let rest = &line[idx..];
     if utf8len_tab[rest[0] as usize] > 1 {
-        // SAFETY: a NUL-terminated line, indexed within it.
-        return unsafe { mb_get_class(rest.as_ptr().cast()) };
+        return class_of(rest[0], || char_at(rest), &Buf::current().b_chartab);
     }
 
     let c = rest[0] as c_int;
@@ -345,22 +335,20 @@ fn mouse_class(line: &[u8], idx: usize) -> c_int {
 
 /// Bytes the character at `idx` takes, composing characters included.
 fn char_len(line: &[u8], idx: usize) -> c_int {
-    // SAFETY: a NUL-terminated line, indexed within it.
-    unsafe { utfc_ptr2len(line[idx..].as_ptr().cast()) }
+    c_cluster_len(&line[idx..]) as c_int
 }
 
 /// Bytes `idx` sits past the start of the character it is inside.
 fn head_off(line: &[u8], idx: usize) -> c_int {
-    // SAFETY: a NUL-terminated line, indexed within it.
-    unsafe { utf_head_off(line.as_ptr().cast(), line[idx..].as_ptr().cast()) }
+    crate::mbyte::head_off(line, idx) as c_int
 }
 
 /// Move `pos` back to the start of the word it is in.
-fn find_start_of_word(pos: PosRef) {
+fn find_start_of_word(pos: &mut Pos) {
     with_line(pos.lnum, |line| start_of_word(pos, line));
 }
 
-fn start_of_word(mut pos: PosRef, line: &[u8]) {
+fn start_of_word(pos: &mut Pos, line: &[u8]) {
     let cclass = mouse_class(line, pos.col as usize);
     while pos.col > 0 {
         let col = pos.col - 1 - head_off(line, pos.col as usize - 1);
@@ -373,11 +361,11 @@ fn start_of_word(mut pos: PosRef, line: &[u8]) {
 
 /// Move `pos` forward to the end of the word it is in.  When `'selection'` is
 /// "exclusive", to just after the word.
-fn find_end_of_word(pos: PosRef) {
+fn find_end_of_word(pos: &mut Pos) {
     with_line(pos.lnum, |line| end_of_word(pos, line));
 }
 
-fn end_of_word(mut pos: PosRef, line: &[u8]) {
+fn end_of_word(pos: &mut Pos, line: &[u8]) {
     let exclusive = sel_exclusive();
     if exclusive && pos.col > 0 {
         pos.col = pos.col - 1 - head_off(line, pos.col as usize - 1);

@@ -14,8 +14,7 @@
 //!
 //! Original: `src/nvim/mouse.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -25,16 +24,17 @@
 )]
 
 use core::ffi::c_int;
-use core::ptr;
 
 use super::*;
 use crate::cstr;
 use crate::grid::get_win_by_grid_handle;
+use crate::mbyte::{c_char_info, c_next_cluster};
 use crate::message::state::{msg_grid, msg_grid_pos};
 use crate::plines::win_charsize;
 use crate::popupmenu::pum_grid_ref;
 use crate::types::{CharsizeArg, Handle, LineNr};
 use crate::ui_compositor::ui_comp_mouse_focus;
+use crate::ui_compositor::win_grid;
 use crate::winlayer::{current_topframe, first_window, windows};
 
 /// The screen row the first window starts at: the tab page line's height.
@@ -113,25 +113,18 @@ fn find_grid_win(pos: &mut MousePos) -> Option<Win> {
             return Some(wp);
         }
     } else if pos.grid == 0 {
-        // SAFETY: the compositor's layer stack is live; the grid it answers is
-        // one of the layers, or null.
-        let grid = unsafe { ui_comp_mouse_focus(pos.row, pos.col) };
-        if ptr::eq(grid, pum_grid_ref().raw()) {
-            // SAFETY: the popup menu's grid is live.
-            pos.grid = unsafe { (*grid).handle } as c_int;
-            (pos.row, pos.col) = (
-                pos.row - unsafe { (*grid).comp_row },
-                pos.col - unsafe { (*grid).comp_col },
-            );
+        let grid = ui_comp_mouse_focus(pos.row, pos.col);
+        if let Some(grid) = grid.filter(|grid| grid.same(pum_grid_ref())) {
+            pos.grid = grid.handle as c_int;
+            (pos.row, pos.col) = (pos.row - grid.comp_row, pos.col - grid.comp_col);
             // The popup menu doesn't have a window, so answer None.
             return None;
         }
         for wp in windows() {
-            if !ptr::eq(&raw const wp.w_grid_alloc, grid) {
+            let Some(grid) = grid.filter(|grid| grid.same(win_grid(wp))) else {
                 continue;
-            }
-            // SAFETY: the grid a window drew on is live.
-            pos.grid = unsafe { (*grid).handle } as c_int;
+            };
+            pos.grid = grid.handle as c_int;
             pos.row -= wp.w_winrow + wp.w_grid.row_offset;
             pos.col -= wp.w_wincol + wp.w_grid.col_offset;
             return Some(wp);
@@ -225,22 +218,21 @@ pub(crate) fn comp_pos(win: Win, row: &mut c_int, col: &mut c_int) -> (LineNr, b
 /// being zero.  Answers the byte index and the columns left over inside the
 /// character it landed in.
 pub(crate) fn vcol_to_col(win: Win, lnum: LineNr, vcol: ColNr) -> (ColNr, ColNr) {
-    let line = win.buffer().line_raw(lnum);
-    // SAFETY: a NUL-terminated line of the window's buffer, which nothing
-    // below re-fetches.
-    let (mut csarg, cstype) = CharsizeArg::new(win, lnum, unsafe { cstr::bytes_at(line.raw()) });
-    let mut ci = line.first_char();
+    let mut lines = win.buffer().lines();
+    let line = lines.line(lnum);
+    let (mut csarg, cstype) = CharsizeArg::new(win, lnum, line);
+    let mut at = 0;
+    let mut chr = c_char_info(line, 0);
     let mut cur_vcol: c_int = 0;
-    // Try to advance to the specified column.
-    // SAFETY: `ci` walks that line and the loop stops at its terminating NUL.
-    while cur_vcol < vcol && !unsafe { line.ended(ci) } {
-        let at = ci.ptr.addr() - line.raw().addr();
-        let width = win_charsize(cstype, cur_vcol, at, ci.chr.value, &mut csarg).width;
+    // Try to advance to the specified column, stopping at the line's end.
+    while cur_vcol < vcol && cstr::byte_at(line, at) != 0 {
+        let width = win_charsize(cstype, cur_vcol, at, chr.value, &mut csarg).width;
         if cur_vcol + width > vcol {
             break;
         }
         cur_vcol += width;
-        ci = unsafe { line.next_char(ci) };
+        (at, chr) = c_next_cluster(line, at, chr);
     }
-    (line.index_of(ci), vcol - cur_vcol)
+    let col = ColNr::try_from(at).expect("a column of the line");
+    (col, vcol - cur_vcol)
 }

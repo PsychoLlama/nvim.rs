@@ -10,8 +10,7 @@
 //!
 //! Original: `src/nvim/mouse.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::eval::typval::TV_INITIAL_VALUE;
 
@@ -25,6 +24,7 @@ use crate::menu::show_popupmenu;
 use crate::mouse::state::{mouse_grid, mouse_row};
 use crate::normal::{visual_active, visual_anchor, visual_mode};
 use crate::option::vars::p_ch;
+use crate::plines::getvcol;
 use crate::pos::{lt, ltoreq};
 use crate::types::{OptInt, TypVal};
 use crate::ui::state::Rows;
@@ -62,7 +62,7 @@ pub(crate) fn call_click_def_func(click_defs: ClickDefs, col: c_int, which_butto
 ///
 /// Returns `IN_BUFFER` and sets `mpos.col` to the column when in buffer text.
 /// The column is one for the first column.
-pub(crate) fn get_fpos_of_mouse(mut mpos: PosRef) -> c_int {
+pub(crate) fn get_fpos_of_mouse(mpos: &mut Pos) -> c_int {
     let mut pos = MousePos::current();
     if pos.row < 0 || pos.col < 0 {
         return IN_UNKNOWN; // check if it makes sense
@@ -171,8 +171,7 @@ fn leaves_selection(m_pos_flag: c_int, mut m_pos: Pos) -> bool {
     if visual_mode().is_block() {
         let (leftcol, rightcol) = vcols_between(win, cursor, visual);
         // The click's own virtual column, as the cursor would show it.
-        // SAFETY: a live local position in the current buffer.
-        m_pos.col = win.vcol_triple(unsafe { PosRef::new(&raw mut m_pos) }).1;
+        m_pos.col = getvcol(win, &mut m_pos).1;
         return m_pos.col < leftcol || m_pos.col > rightcol;
     }
     false
