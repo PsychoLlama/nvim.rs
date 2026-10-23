@@ -43,24 +43,44 @@ pub fn diff_update_line(lnum: LineNr) {
 impl DiffLine {
     /// How many changed ranges the line has.
     pub(crate) fn num_changes(&self) -> c_int {
-        match &self.changes {
+        match self.changes {
             DiffLineChanges::None => 0,
             DiffLineChanges::Simple { .. } => 1,
-            DiffLineChanges::Inline(changes) => changes.len() as c_int,
+            DiffLineChanges::Inline { num, .. } => num as c_int,
         }
+    }
+
+    /// Change `i` of an `inline:char`/`inline:word` line, read back out of
+    /// its block -- `None` once the list has changed shape, or the block's
+    /// cache has been dropped, since the line was looked at.
+    fn inline_change(&self, i: c_int) -> Option<DiffLineChange> {
+        let DiffLineChanges::Inline {
+            block,
+            first,
+            num,
+            generation,
+        } = self.changes
+        else {
+            return None;
+        };
+        let i = u32::try_from(i).ok().filter(|&i| i < num)?;
+        let tp = TabPage::current();
+        if tp.tp_diff_gen != generation {
+            return None;
+        }
+        let block = tp.tp_diff.get(block as usize)?;
+        block.df_changes.get((first + i) as usize).copied()
     }
 
     /// Where change `i` starts in this line's buffer, as the block stored
     /// it: the column the drawer compares against to step to the next one.
-    ///
-    /// # Panics
-    ///
-    /// When there is no change `i`.
+    /// A change that can no longer be read starts past every column.
     pub(crate) fn raw_start(&self, i: c_int) -> c_int {
-        match &self.changes {
-            DiffLineChanges::None => panic!("a line with no changes"),
-            DiffLineChanges::Simple { start, .. } => *start,
-            DiffLineChanges::Inline(changes) => changes[i as usize].dc_start[self.bufidx as usize],
+        match self.changes {
+            DiffLineChanges::Simple { start, .. } => start,
+            _ => self
+                .inline_change(i)
+                .map_or(c_int::MAX, |ch| ch.dc_start[self.bufidx as usize]),
         }
     }
 
@@ -70,16 +90,15 @@ impl DiffLine {
     /// line begins at column 0 and one that ends below it runs to the end of
     /// the line. `added` says the range is an *addition* rather than a
     /// change, which the caller paints `DiffTextAdd` instead of `DiffText`;
-    /// `inline:simple`'s one range never is.
-    ///
-    /// # Panics
-    ///
-    /// When there is no change `i`.
+    /// `inline:simple`'s one range never is. A change that can no longer be
+    /// read -- Lua run by the drawer rebuilt the list -- is an empty range
+    /// past every column.
     pub(crate) fn change(&self, i: c_int) -> (c_int, c_int, bool) {
-        let ch = match &self.changes {
-            DiffLineChanges::None => panic!("a line with no changes"),
-            DiffLineChanges::Simple { start, end } => return (*start, *end, false),
-            DiffLineChanges::Inline(changes) => &changes[i as usize],
+        if let DiffLineChanges::Simple { start, end } = self.changes {
+            return (start, end, false);
+        }
+        let Some(ch) = self.inline_change(i) else {
+            return (c_int::MAX, c_int::MAX, false);
         };
         let buf = self.bufidx as usize;
         let lineoff = self.lineoff;
@@ -238,11 +257,13 @@ pub(crate) fn diff_find_change(window: Win, lnum: LineNr, diffline: &mut DiffLin
         return false;
     }
     let slots = tp.tp_diffbuf;
+    let generation = tp.tp_diff_gen;
     tp.with_diff(|blocks| {
         // The first block this line is not already past.
-        let Some(dp) = blocks.iter_mut().find(|dp| lnum < dp.end(idx as usize)) else {
+        let Some(block) = blocks.iter().position(|dp| lnum < dp.end(idx as usize)) else {
             return false;
         };
+        let dp = &mut blocks[block];
         if diff_check_sanity(&slots, dp).is_err() {
             return false;
         }
@@ -285,7 +306,12 @@ pub(crate) fn diff_find_change(window: Win, lnum: LineNr, diffline: &mut DiffLin
             change_idx += 1;
         }
         let first = first.unwrap_or(0);
-        diffline.changes = DiffLineChanges::Inline(changes[first..first + num_changes].to_vec());
+        diffline.changes = DiffLineChanges::Inline {
+            block: u32::try_from(block).expect("fewer blocks than lines"),
+            first: u32::try_from(first).expect("fewer changes than lines"),
+            num: u32::try_from(num_changes).expect("fewer changes than lines"),
+            generation,
+        };
 
         // The line is an addition when the block's *last* change is the only
         // one covering it and it is empty in every other buffer, which the

@@ -140,8 +140,10 @@ impl DiffBlock {
 /// The changed column ranges of one drawn line, as `diff_find_change`
 /// answers them.
 ///
-/// Owned: the drawer holds it across decoration providers, which run Lua
-/// that may rebuild the block list the ranges were read from.
+/// No borrow and nothing to drop: the drawer holds it across decoration
+/// providers, which run Lua that may rebuild the block list the ranges live
+/// in, so it names them by position and the list's generation, and reads
+/// them back only while that generation stands.
 #[derive(Default)]
 pub(crate) struct DiffLine {
     pub(crate) changes: DiffLineChanges,
@@ -150,16 +152,22 @@ pub(crate) struct DiffLine {
 }
 
 /// Which ranges a [`DiffLine`] carries.
-#[derive(Default)]
+#[derive(Clone, Copy, Default)]
 pub(crate) enum DiffLineChanges {
     /// None: the line is an addition, or was never looked at.
     #[default]
     None,
     /// `inline:simple`'s one range on this line, `start..end` in bytes.
     Simple { start: ColNr, end: ColNr },
-    /// `inline:char`/`inline:word`: the block's changes that cover this
-    /// line, copied out of it.
-    Inline(Vec<DiffLineChange>),
+    /// `inline:char`/`inline:word`: `num` of the cached changes of the
+    /// current tab page's block `block`, from `first`, as the list stood at
+    /// `generation`.
+    Inline {
+        block: u32,
+        first: u32,
+        num: u32,
+        generation: u32,
+    },
 }
 #[derive(Copy, Clone)]
 pub struct DiffLineChange {
