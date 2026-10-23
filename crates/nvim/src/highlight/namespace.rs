@@ -286,7 +286,7 @@ const UNSET: ColorItem = ColorItem {
 };
 
 /// Re-resolves which namespace is active and makes its table the one
-/// [`hl_attr_table`] answers. Answers whether it changed, which is the caller's cue to redraw.
+/// [`hl_attr`] reads. Answers whether it changed, which is the caller's cue to redraw.
 pub fn hl_check_ns() -> bool {
     let ns = if ns_hl_fast.get() > 0 {
         ns_hl_fast.get()
