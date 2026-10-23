@@ -1,5 +1,4 @@
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -151,8 +150,6 @@ fn combine_stl_hlt(
 pub(crate) fn highlight_changed() {
     // `HLF_MSG`'s blend flag lives on the message grid; acquired once.
     let mut msg_grid = msg_grid_ref();
-    // SAFETY (whole body): the editor's own tables and UI, on the main
-    // thread; `hlf_names` is static and NUL-terminated.
     need_highlight_changed.set(false);
 
     // Sentinel: used when no highlight is active.
@@ -162,7 +159,6 @@ pub(crate) fn highlight_changed() {
     let mut id_snc = 0;
     for hlf in 1..HLF_COUNT {
         let name = hlf_names[hlf as usize];
-        // SAFETY: a builtin group name, NUL-terminated.
         let id = syn_check_group(name.to_bytes());
         assert!(id != 0, "builtin highlight group {hlf} could not be added");
 

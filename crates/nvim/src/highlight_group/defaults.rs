@@ -5,8 +5,7 @@
 //! command per line — straight to [`do_highlight`]. They are compiled in so
 //! that a build with no runtime files still has usable colours.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,

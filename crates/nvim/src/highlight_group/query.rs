@@ -4,8 +4,7 @@
 //! [`hlgroup2dict`]; [`highlight_has_attr`] and [`highlight_color`] are what
 //! `synIDattr()` calls for one attribute at a time.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -16,11 +15,10 @@
 
 use core::ffi::{CStr, c_int};
 
-use crate::api::private::helpers::cstr_to_string;
 use crate::highlight::dict::put;
 use crate::highlight::{HLATTRS_DICT_SIZE, HlAttrFlags, hlattrs2dict, ns_get_hl, syn_attr2entry};
 use crate::narrow::number_as_int;
-use crate::types::{ApiDict, Error, KeyDict_get_highlight, NS, Object};
+use crate::types::{ApiDict, Error, KeyDict_get_highlight, NS, Object, String_0};
 use crate::ui::ui_rgb_attached;
 
 use super::{
@@ -67,8 +65,7 @@ fn hlgroup2dict(hl: &mut ApiDict, ns_id: NS, hl_id: c_int) -> bool {
     }
     if link > 0 {
         assert!(link <= highlight_num_groups(), "link out of bounds");
-        // SAFETY: the group's own name, which outlives the answer.
-        let value = Object::string(unsafe { cstr_to_string(group(link).name.as_ptr()) });
+        let value = Object::string(String_0::from_cstr(group(link).name));
         put(hl, c"link", value);
     }
     let mut cterm = ApiDict::with_capacity(HLATTRS_DICT_SIZE);
@@ -126,8 +123,7 @@ pub(crate) fn ns_get_hl_defs(
             continue;
         }
         let named = if link { id } else { syn_get_final_id(id) };
-        // SAFETY: a group's name is a NUL-terminated string.
-        let key = unsafe { crate::cstr::bytes_at(group(named).name.as_ptr()) };
+        let key = group(named).name.to_bytes();
         rv.insert(key, Object::dict(attrs));
     }
     Ok(rv)

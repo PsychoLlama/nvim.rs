@@ -6,13 +6,12 @@
 //! already-set value, which is why they are one function each rather than a
 //! table.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::highlight::HlAttrFlags;
 use crate::option::vars::P_BG;
 use crate::semsg;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 
 use crate::ascii::ascii_isdigit;
 use crate::drawscreen::state::updating_screen;
@@ -24,9 +23,9 @@ use crate::highlight::state::{
     cterm_normal_bg_color, cterm_normal_fg_color, need_highlight_changed, normal_bg, normal_fg,
     normal_sp,
 };
-use crate::lua::executor::nlua_set_sctx;
+use crate::lua::executor::nlua_set_sctx_in;
 use crate::message::{emsg, msg_ext_set_kind};
-use crate::message_fmt::{c_str, msg_bytes};
+use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::option::{option_was_set, reset_option_was_set, set_option_value_give_err};
 use crate::options::kOptBackground;
 use crate::os::cshim::gettext;
@@ -46,26 +45,20 @@ use super::{
 };
 use crate::highlight_group::highlight_changed;
 
-/// The command line being parsed, as bytes plus the pointer the error
+/// The command line being parsed, as bytes plus the C string the error
 /// messages need: several of them print the rest of the line from the key
-/// that failed, so a slice is not enough.
-struct Line {
-    base: *const c_char,
-    bytes: &'static [u8],
+/// that failed.
+struct Line<'a> {
+    text: &'a CStr,
+    bytes: &'a [u8],
     at: usize,
 }
 
-impl Line {
-    /// # Safety
-    /// `line` outlives the parse.
-    unsafe fn new(line: *const c_char) -> Self {
-        // SAFETY: the caller's NUL-terminated command line.
-        let bytes = unsafe { CStr::from_ptr(line) }.to_bytes();
+impl<'a> Line<'a> {
+    fn new(text: &'a CStr) -> Self {
         Self {
-            base: line,
-            // The borrow lives as long as the parse, which is inside the
-            // caller's own borrow of the line.
-            bytes: unsafe { core::mem::transmute::<&[u8], &'static [u8]>(bytes) },
+            text,
+            bytes: text.to_bytes(),
             at: 0,
         }
     }
@@ -78,11 +71,9 @@ impl Line {
         ends_excmd(c_int::from(self.peek())) != 0
     }
 
-    /// A pointer at offset `at`, for `%s` in an error message.
-    fn ptr(&self, at: usize) -> *const c_char {
-        // SAFETY: `at` is an offset this parse produced, so it is inside the
-        // line or on its terminator.
-        unsafe { self.base.add(at) }
+    /// The rest of the line from offset `at`, for `%s` in an error message.
+    fn tail(&self, at: usize) -> &'a CStr {
+        &self.text[at.min(self.bytes.len())..]
     }
 
     fn skip_white(&mut self) {
@@ -92,7 +83,7 @@ impl Line {
     }
 
     /// Consumes up to the next white space and answers what was skipped.
-    fn word(&mut self) -> &'static [u8] {
+    fn word(&mut self) -> &'a [u8] {
         let start = self.at;
         while !matches!(self.peek(), 0 | b' ' | b'\t') {
             self.at += 1;
@@ -101,7 +92,7 @@ impl Line {
     }
 
     /// [`Self::word`] followed by the white space after it.
-    fn word_then_space(&mut self) -> &'static [u8] {
+    fn word_then_space(&mut self) -> &'a [u8] {
         let word = self.word();
         self.skip_white();
         word
@@ -121,9 +112,7 @@ fn is_prefix(word: &[u8], full: &[u8]) -> bool {
 /// do not overwrite anything the user set. `:highlight clear` calls back in
 /// with both set for every group.
 pub(crate) fn do_highlight(text: &CStr, forceit: bool, init: bool) {
-    // SAFETY: a NUL-terminated command line, live for the parse -- `Line`
-    // takes a pointer until p32-8 gives the highlight parse a slice.
-    let mut line = unsafe { Line::new(text.as_ptr()) };
+    let mut line = Line::new(text);
 
     // No argument: list all highlighting.
     if !init && line.at_end() {
@@ -237,7 +226,7 @@ pub(crate) fn do_highlight(text: &CStr, forceit: bool, init: bool) {
     with_group(id, |entry| {
         entry.script_ctx = current_sctx.get();
         entry.script_ctx.sc_lnum += sourcing_lnum();
-        unsafe { nlua_set_sctx(&raw mut entry.script_ctx) };
+        nlua_set_sctx_in(&mut entry.script_ctx);
     });
 
     // Call `highlight_changed` once after a sequence of `:highlight`
@@ -264,14 +253,12 @@ fn highlight_link(line: &mut Line, forceit: bool, init: bool, dodefault: bool) {
     let from = line.word_then_space();
     let to = line.word_then_space();
     if from.is_empty() || to.is_empty() {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg0 = unsafe { c_str(line.ptr(from_at)) };
+        let arg0 = msg_cstr(line.tail(from_at));
         semsg!("E412: Not enough arguments: \":highlight link {arg0}\"");
         return;
     }
     if !line.at_end() {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg0 = unsafe { c_str(line.ptr(from_at)) };
+        let arg0 = msg_cstr(line.tail(from_at));
         semsg!("E413: Too many arguments: \":highlight link {arg0}\"");
         return;
     }
@@ -291,7 +278,7 @@ fn highlight_link(line: &mut Line, forceit: bool, init: bool, dodefault: bool) {
             entry.deflink = to_id;
             entry.deflink_sctx = current_sctx.get();
             entry.deflink_sctx.sc_lnum += sourcing_lnum();
-            unsafe { nlua_set_sctx(&raw mut entry.deflink_sctx) };
+            nlua_set_sctx_in(&mut entry.deflink_sctx);
         });
     }
 
@@ -316,7 +303,7 @@ fn highlight_link(line: &mut Line, forceit: bool, init: bool, dodefault: bool) {
             entry.link = to_id;
             entry.script_ctx = current_sctx.get();
             entry.script_ctx.sc_lnum += sourcing_lnum();
-            unsafe { nlua_set_sctx(&raw mut entry.script_ctx) };
+            nlua_set_sctx_in(&mut entry.script_ctx);
             entry.cleared = false;
         });
         redraw_all_later(UPD_SOME_VALID);
@@ -346,8 +333,7 @@ impl KeyLoop {
         while !line.at_end() {
             let key_at = line.at;
             if line.peek() == b'=' {
-                // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                let arg0 = unsafe { c_str(line.ptr(key_at)) };
+                let arg0 = msg_cstr(line.tail(key_at));
                 semsg!("E415: Unexpected equal sign: {arg0}");
                 break;
             }
@@ -375,8 +361,7 @@ impl KeyLoop {
             }
 
             if line.peek() != b'=' {
-                // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                let arg0 = unsafe { c_str(line.ptr(key_at)) };
+                let arg0 = msg_cstr(line.tail(key_at));
                 semsg!("E416: Missing equal sign: {arg0}");
                 break;
             }
@@ -390,8 +375,7 @@ impl KeyLoop {
                 match line.bytes[arg_at..].iter().position(|&b| b == b'\'') {
                     Some(at) => arg_at + at,
                     None => {
-                        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                        let arg0 = unsafe { c_str(line.ptr(key_at)) };
+                        let arg0 = msg_cstr(line.tail(key_at));
                         semsg!("E475: Invalid argument: {arg0}");
                         break;
                     }
@@ -405,8 +389,7 @@ impl KeyLoop {
             };
             line.at = end;
             if end == arg_at {
-                // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                let arg0 = unsafe { c_str(line.ptr(key_at)) };
+                let arg0 = msg_cstr(line.tail(key_at));
                 semsg!("E417: Missing argument: {arg0}");
                 break;
             }
@@ -419,7 +402,7 @@ impl KeyLoop {
                 line.at += 1;
             }
 
-            if !unsafe { self.store(&key, arg, line.ptr(key_at)) } {
+            if !self.store(&key, arg, line.tail(key_at)) {
                 break;
             }
 
@@ -436,15 +419,12 @@ impl KeyLoop {
     }
 
     /// Applies one `key=arg` pair. Answers false to stop the loop, having set
-    /// [`Self::error`] and reported it.
-    ///
-    /// # Safety
-    /// See [`do_highlight`]. `key_start` points into the command line.
-    unsafe fn store(&mut self, key: &[u8], arg: &[u8], key_start: *const c_char) -> bool {
-        // SAFETY: the caller's line, and the editor's own tables.
+    /// [`Self::error`] and reported it. `key_start` is the rest of the
+    /// command line from the key, for the messages.
+    fn store(&mut self, key: &[u8], arg: &[u8], key_start: &CStr) -> bool {
         match key {
             b"TERM" | b"CTERM" | b"GUI" => self.set_attrs(key, arg),
-            b"CTERMFG" | b"CTERMBG" => unsafe { self.set_cterm_color(key, arg, key_start) },
+            b"CTERMFG" | b"CTERMBG" => self.set_cterm_color(key, arg, key_start),
             b"GUIFG" | b"GUIBG" | b"GUISP" => {
                 self.set_gui_color(key, arg);
                 true
@@ -458,7 +438,7 @@ impl KeyLoop {
             }
             _ => {
                 // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                let key_start = unsafe { c_str(key_start) };
+                let key_start = msg_cstr(key_start);
                 semsg!("E423: Illegal argument: {key_start}");
                 self.error = true;
                 false
@@ -518,10 +498,7 @@ impl KeyLoop {
 
     /// `ctermfg=`/`ctermbg=`: a number, `fg`/`bg`, or one of the sixteen
     /// colour names.
-    ///
-    /// # Safety
-    /// See [`do_highlight`].
-    unsafe fn set_cterm_color(&mut self, key: &[u8], arg: &[u8], key_start: *const c_char) -> bool {
+    fn set_cterm_color(&mut self, key: &[u8], arg: &[u8], key_start: &CStr) -> bool {
         let foreground = key[5] == b'F';
         if self.init && group(self.id).set & SG_CTERM as c_int != 0 {
             return true;
@@ -562,7 +539,7 @@ impl KeyLoop {
             let idx = name.ok().and_then(|name| cterm_color_index(&name));
             let Some(idx) = idx else {
                 // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                let key_start = unsafe { c_str(key_start) };
+                let key_start = msg_cstr(key_start);
                 semsg!("E421: Color name or number not recognized: {key_start}");
                 self.error = true;
                 return false;

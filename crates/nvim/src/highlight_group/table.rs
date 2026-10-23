@@ -14,8 +14,7 @@
 //! lets `HlGroup` stay `Copy` for the scratch entries `highlight_changed`
 //! builds.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};

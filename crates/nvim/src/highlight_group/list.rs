@@ -5,15 +5,14 @@
 //! [`syn_list_header`] does the column arithmetic that keeps the output in
 //! line. The `get_highlight_name*` pair is command-line completion.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::charset::skip;
 use crate::cstr;
 use crate::types::Candidate;
 use core::ffi::{CStr, c_int};
 
-use crate::charset::vim_strsize;
+use crate::charset::vim_strsize_cstr;
 use crate::eval::last_set_msg;
 use crate::getchar::state::got_int;
 use crate::highlight::HlAttrFlags;
@@ -142,8 +141,7 @@ fn list_arg(id: c_int, didh: bool, value: ListValue, name: &CStr) -> bool {
         return didh;
     };
 
-    // SAFETY: main-thread message calls with NUL-terminated strings.
-    let width = unsafe { vim_strsize(text.as_ptr()) } + name.count_bytes() as c_int + 1;
+    let width = vim_strsize_cstr(text) + name.count_bytes() as c_int + 1;
     syn_list_header(didh, width, id, false);
     if !got_int.get() {
         if !name.is_empty() {
@@ -164,8 +162,7 @@ fn color(idx: c_int, value: c_int, buf: &mut HexBuf) -> ListValue<'_> {
 /// Prints the group with id `id` the way `:highlight {group}` does.
 pub(crate) fn highlight_list_one(id: c_int) {
     let entry = group(id);
-    // SAFETY: the name is a live static string.
-    if message_filtered(unsafe { cstr::at(entry.name.as_ptr().cast_mut()) }) {
+    if message_filtered(entry.name) {
         return;
     }
     // Don't list a specialized `@a.b` group if its parent is used instead.

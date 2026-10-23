@@ -4,8 +4,7 @@
 //! already parsed out of its dictionary, so this is the same work
 //! [`super::do_highlight`] does key by key, done all at once.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -24,7 +23,7 @@ use crate::highlight::state::{
     normal_sp,
 };
 use crate::highlight::{HlAttrFlags, hl_get_syn_attr};
-use crate::lua::executor::nlua_set_sctx;
+use crate::lua::executor::nlua_set_sctx_in;
 use crate::runtime::state::current_sctx;
 use crate::types::{HlAttrs, KeyDict_highlight, Object};
 use crate::ui::{ui_default_colors_set, ui_mode_info_set};
@@ -57,13 +56,13 @@ pub(crate) fn set_hl_group(id: c_int, attrs: HlAttrs, dict: &KeyDict_highlight, 
             entry.link = link_id;
             entry.script_ctx = current_sctx.get();
             entry.script_ctx.sc_lnum += sourcing_lnum();
-            unsafe { nlua_set_sctx(&raw mut entry.script_ctx) };
+            nlua_set_sctx_in(&mut entry.script_ctx);
             entry.set |= SG_LINK.cast_signed();
             if is_default {
                 entry.deflink = link_id;
                 entry.deflink_sctx = current_sctx.get();
                 entry.deflink_sctx.sc_lnum += sourcing_lnum();
-                unsafe { nlua_set_sctx(&raw mut entry.deflink_sctx) };
+                nlua_set_sctx_in(&mut entry.deflink_sctx);
             }
         } else {
             entry.link = 0;
@@ -156,7 +155,7 @@ pub(crate) fn set_hl_group(id: c_int, attrs: HlAttrs, dict: &KeyDict_highlight, 
 
         entry.script_ctx = current_sctx.get();
         entry.script_ctx.sc_lnum += sourcing_lnum();
-        unsafe { nlua_set_sctx(&raw mut entry.script_ctx) };
+        nlua_set_sctx_in(&mut entry.script_ctx);
     });
 
     let attr = hl_get_syn_attr(0, id, attrs);
