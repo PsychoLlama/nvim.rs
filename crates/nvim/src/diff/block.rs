@@ -513,6 +513,16 @@ fn diff_check_unchanged(slots: &DiffSlots, dp: &mut DiffBlock) {
     }
 }
 
+/// A slot number [`TabPage::diff_index`] answered, once the caller has
+/// ruled out `DB_COUNT`.
+///
+/// # Panics
+///
+/// When `idx` is negative, which no slot number is.
+pub(crate) fn slot_index(idx: c_int) -> usize {
+    usize::try_from(idx).expect("a diff-buffer index is never negative")
+}
+
 /// The slots of `slots` in use, in order.
 pub(crate) fn used_slots(slots: &DiffSlots) -> impl Iterator<Item = usize> + '_ {
     slots

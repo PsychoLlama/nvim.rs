@@ -7,8 +7,7 @@
 //! `'diffanchors'` grammar, which names line ranges the diff must be split
 //! at.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -18,6 +17,7 @@
 )]
 
 use super::*;
+use crate::charset::getdigits_int_at;
 use crate::option::vars::P_DIA;
 use crate::option::vars::P_DIP;
 use crate::optionstr::{OptString, OptStringRef};
@@ -91,16 +91,13 @@ fn number_item<'a>(text: &'a [u8], prefix: &[u8]) -> Option<&'a [u8]> {
 /// marks, patterns and the cursor.  `check_only` is the option validator,
 /// which runs before the buffer is necessarily in a window.
 ///
-/// # Safety
-///
-/// `anchors` must point at a writable line number the caller owns.
-/// `num_anchors` must point at a writable `int` the caller owns.
-pub(crate) unsafe fn parse_diffanchors(
+/// The answer is how many anchors were found; `anchors`, when given, gets
+/// their line numbers.
+pub(crate) fn parse_diffanchors(
     check_only: bool,
     buffer: Buf,
-    anchors: *mut LineNr,
-    num_anchors: *mut c_int,
-) -> Result<(), Failed> {
+    mut anchors: Option<&mut [LineNr; MAX_DIFF_ANCHORS as usize]>,
+) -> Result<c_int, Failed> {
     // A copy, for two reasons: the walk below outlives a projection's
     // borrow, and `get_address` needs a *writable* buffer -- a `/pat/`
     // anchor goes to `do_search`, which terminates the pattern in place.
@@ -171,8 +168,8 @@ pub(crate) unsafe fn parse_diffanchors(
             emsg(gettext(e_invrange));
             return Err(Failed);
         }
-        if !anchors.is_null() {
-            unsafe { *anchors.offset(i as isize) = lnum };
+        if let Some(anchors) = anchors.as_deref_mut() {
+            anchors[usize::try_from(i).expect("an anchor count is never negative")] = lnum;
         }
         if dia[at] == b',' {
             at += 1;
@@ -186,10 +183,7 @@ pub(crate) unsafe fn parse_diffanchors(
         );
         return Err(Failed);
     }
-    if !num_anchors.is_null() {
-        unsafe { *num_anchors = i };
-    }
-    Ok(())
+    Ok(i)
 }
 
 /// `'diffanchors'` was set: validate it, and invalidate the diffs it reaches.
@@ -197,14 +191,7 @@ pub(crate) unsafe fn parse_diffanchors(
 /// `buflocal` says the buffer-local value changed rather than the global one,
 /// so only tabpages showing the current buffer need recomputing.
 pub fn diffanchors_changed(buflocal: bool) -> Result<(), Failed> {
-    let result = unsafe {
-        parse_diffanchors(
-            true,
-            Buf::current(),
-            ::core::ptr::null_mut(),
-            ::core::ptr::null_mut(),
-        )
-    };
+    let result = parse_diffanchors(true, Buf::current(), None).map(drop);
     if result.is_err() || diff_flags.get() & DIFF_ANCHOR == 0 {
         return result;
     }
@@ -228,15 +215,8 @@ pub fn diffopt_changed() -> Result<(), Failed> {
     // A copy: `number_at` below walks it past the end of a projection's
     // borrow.
     let dip = P_DIP.get();
-    let base = dip.as_ptr().cast_mut();
     let text = dip.as_cstr().to_bytes();
-    // `getdigits_int` walks a `char *`, so the parse tracks an offset and
-    // hands it the matching pointer where it needs one.
-    let number_at = |at: usize, default| {
-        let mut p = unsafe { base.add(at) };
-        let n = unsafe { getdigits_int(&raw mut p, false, default) };
-        (n, unsafe { p.offset_from(base) }.cast_unsigned())
-    };
+    let number_at = |at: usize, default| getdigits_int_at(text, at, false, default);
 
     let mut at = 0;
     while at < text.len() {

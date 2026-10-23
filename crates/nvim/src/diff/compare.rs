@@ -9,17 +9,23 @@
 //! answers are read on both paths.
 //!
 //! Every line here arrives as the byte range of a **NUL-terminated** line, so
-//! a tail slice's `as_ptr()` is still a valid C string.  That is what lets the
-//! three mbyte calls (`utfc_ptr2len`, `utf_ptr2char`, `utf_head_off`) keep
-//! their pointer signatures while the arithmetic around them is ordinary
-//! slice indexing.
+//! a tail slice reads as the C string it came from: the cluster and character
+//! readers are the slice forms that stop where the terminator was.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::cstr::byte_at;
-use core::ffi::{c_char, c_int};
+use crate::mbyte::{c_cluster_len, char_at};
+use crate::os::cshim::byte_tolower;
+use core::ffi::c_int;
 
 /// Skip a run of spaces and tabs: `charset.rs`'s `skipwhite` over a slice.
 ///
@@ -44,21 +50,17 @@ pub(crate) fn skip_white(s: &[u8]) -> &[u8] {
 /// folds through `utf_fold` for a multibyte character but through the
 /// locale's `tolower` for a single-byte one, which are not the same map.
 pub(crate) fn char_len(p1: &[u8], p2: &[u8]) -> Option<usize> {
-    // SAFETY: both slices are the tail of a NUL-terminated line, so the mbyte
-    // walks stop at the terminator and never leave the allocation.  A length
-    // longer than the slice is therefore impossible; were it not, the
-    // indexing below would panic rather than read out of bounds.
-    let s1 = p1.as_ptr().cast::<c_char>();
-    let s2 = p2.as_ptr().cast::<c_char>();
-    let l = unsafe { utfc_ptr2len(s1) };
-    if l != unsafe { utfc_ptr2len(s2) } {
+    // Both slices are the tail of a NUL-terminated line, read as the C
+    // string they are: the cluster ends at the terminator, so it is never
+    // longer than the slice.
+    let l = c_cluster_len(p1);
+    if l != c_cluster_len(p2) {
         return None;
     }
     if l > 1 {
-        let l = l as usize;
         if p1[..l] != p2[..l]
             && (diff_flags.get() & DIFF_ICASE == 0
-                || utf_fold(unsafe { utf_ptr2char(s1) }) != utf_fold(unsafe { utf_ptr2char(s2) }))
+                || utf_fold(char_at(p1)) != utf_fold(char_at(p2)))
         {
             return None;
         }
@@ -67,7 +69,7 @@ pub(crate) fn char_len(p1: &[u8], p2: &[u8]) -> Option<usize> {
         let (b1, b2) = (byte_at(p1, 0), byte_at(p2, 0));
         if b1 != b2
             && (diff_flags.get() & DIFF_ICASE == 0
-                || unsafe { tolower(b1 as c_int) } != unsafe { tolower(b2 as c_int) })
+                || byte_tolower(c_int::from(b1)) != byte_tolower(c_int::from(b2)))
         {
             return None;
         }
@@ -98,7 +100,10 @@ pub(crate) fn lines_equal(b1: &[u8], b2: &[u8]) -> bool {
 
     let (mut p1, mut p2) = (b1, b2);
     while !p1.is_empty() && !p2.is_empty() {
-        let (w1, w2) = (ascii_iswhite(p1[0] as c_int), ascii_iswhite(p2[0] as c_int));
+        let (w1, w2) = (
+            ascii_iswhite(c_int::from(p1[0])),
+            ascii_iswhite(c_int::from(p2[0])),
+        );
         if flags & DIFF_IWHITE != 0 && w1 && w2 || flags & DIFF_IWHITEALL != 0 && (w1 || w2) {
             p1 = skip_white(p1);
             p2 = skip_white(p2);

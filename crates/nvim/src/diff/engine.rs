@@ -6,8 +6,7 @@
 //! the answer in `diff_a_works`); [`diff_file_internal`] runs the engine
 //! over two memory images and collects its hunks.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -20,6 +19,8 @@ use super::*;
 use crate::cstr;
 use crate::fileio::Fgets;
 use crate::option::vars::P_DEX;
+use crate::os::env::{env_exists, env_unset};
+use crate::os::shell::call_shell_text;
 use crate::types::Failed;
 use crate::xdiff::ffi::diff_hunks;
 use crate::xdiff::xtypes::Aborted;
@@ -165,8 +166,8 @@ fn diff_file_external(names: TempNames<'_>) -> Result<(), Failed> {
     }
 
     // The user's own `diff` options would corrupt the output format.
-    if unsafe { os_env_exists(c"DIFF_OPTIONS".as_ptr(), true) } {
-        unsafe { os_unsetenv(c"DIFF_OPTIONS".as_ptr()) };
+    if env_exists(c"DIFF_OPTIONS", true) {
+        env_unset(c"DIFF_OPTIONS");
     }
 
     // `diff`, its flags, the two input files and the output redirection.
@@ -193,13 +194,10 @@ fn diff_file_external(names: TempNames<'_>) -> Result<(), Failed> {
     let cmd = cstr::owned(&cmd);
 
     block_autocmds();
-    unsafe {
-        call_shell(
-            cmd.as_ptr().cast_mut(),
-            ShellOpts::FILTER | ShellOpts::SILENT | ShellOpts::DO_OUT,
-            ::core::ptr::null_mut(),
-        )
-    };
+    call_shell_text(
+        &cmd,
+        ShellOpts::FILTER | ShellOpts::SILENT | ShellOpts::DO_OUT,
+    );
     unblock_autocmds();
     Ok(())
 }

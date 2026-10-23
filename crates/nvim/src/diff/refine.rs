@@ -19,13 +19,12 @@
 //! `iwhiteall` drops white space entirely, and `iwhiteeol` rewinds the
 //! trailing run at end of line by truncating both arrays.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
-use crate::mbyte::class_in;
+use crate::mbyte::{c_cluster_len, char_at, class_in, class_of, encode_char};
 use crate::winlayer::BufId;
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 /// One entry per token written into the fake file, per buffer.
 type LineMap = [Vec<LinemapEntry>; DB_COUNT as usize];
@@ -211,16 +210,12 @@ fn refine_inline_word(
 ///
 /// The tokens are NL-separated because that is what xdiff reads; a real NL in
 /// the text (which cannot occur in a line, but `ml_get_buf` can answer one for
-/// a NUL byte) is written as the NUL it stands for.
-///
-/// # Safety
-///
-/// `chartab` must point at the buffer's `b_chartab`, the 256-bit word table
-/// `buf_init_chartab` filled in — it is indexed by every byte of `line`.
-unsafe fn tokenize_line(
+/// a NUL byte) is written as the NUL it stands for. Each character is read
+/// from the line's tail as the C string it is the end of.
+fn tokenize_line(
     bytes: &[u8],
     off: c_int,
-    chartab: *const uint64_t,
+    chartab: &[uint64_t; 4],
     word: bool,
     out: &mut Vec<u8>,
     map: &mut Vec<LinemapEntry>,
@@ -236,8 +231,8 @@ unsafe fn tokenize_line(
 
     let mut i = 0;
     while i < bytes.len() {
-        let at = unsafe { bytes.as_ptr().add(i) }.cast::<c_char>();
-        let new_in_keyword = word && unsafe { mb_get_class_tab(at, chartab) } == CLASS_WORD;
+        let rest = &bytes[i..];
+        let new_in_keyword = word && class_of(rest[0], || char_at(rest), chartab) == CLASS_WORD;
         if in_keyword && !new_in_keyword {
             out.push(NL as u8);
         }
@@ -262,20 +257,19 @@ unsafe fn tokenize_line(
             // NL is the internal stand-in for NUL.
             out.push(0);
         } else {
-            tok_len = unsafe { utfc_ptr2len(at) };
+            tok_len = c_cluster_len(rest) as c_int;
             if ascii_iswhite(bytes[i] as c_int) && flags & DIFF_IWHITE != 0 {
                 // The whole run of white space is one token.
                 tok_len = (bytes.len() - skip_white(&bytes[i..]).len() - i) as c_int;
             }
             if flags & DIFF_ICASE != 0 {
                 // xdiff cannot ignore case, so fold the text instead.
-                let c = unsafe { utf_ptr2char(at) };
+                let c = char_at(rest);
                 let c_len = utf_char2len(c);
                 // MB_MAXBYTES + 1.
                 let mut cbuf = [0u8; 22];
-                let folded =
-                    unsafe { utf_char2bytes(utf_fold(c), cbuf.as_mut_ptr().cast::<c_char>()) };
-                out.extend_from_slice(&cbuf[..folded as usize]);
+                let folded = encode_char(utf_fold(c), &mut cbuf);
+                out.extend_from_slice(&cbuf[..folded]);
                 if tok_len > c_len {
                     // Composing characters follow, and are not folded.
                     out.extend_from_slice(&bytes[i + c_len as usize..i + tok_len as usize]);
@@ -425,21 +419,12 @@ pub(crate) fn diff_find_change_inline_diff(dp: &mut DiffBlock, slots: &DiffSlots
             out.clear();
             // Deliberately the *first* buffer's 'iskeyword', so that
             // every buffer is segmented the same way.
-            let chartab = used_slot(&slots, file1_idx).b_chartab.as_ptr();
+            let chartab = used_slot(&slots, file1_idx).b_chartab;
             let mut lines = buf.lines();
             for off in 0..dp.df_count[i] {
                 let line = lines.line(dp.df_lnum[i] + off);
-                // SAFETY: the first buffer's own `'iskeyword'` table.
-                unsafe {
-                    tokenize_line(
-                        line,
-                        off,
-                        chartab,
-                        diff_flags.get() & DIFF_INLINE_WORD != 0,
-                        out,
-                        map,
-                    )
-                };
+                let word = diff_flags.get() & DIFF_INLINE_WORD != 0;
+                tokenize_line(line, off, &chartab, word, out, map);
             }
             if first {
                 continue;
@@ -448,7 +433,7 @@ pub(crate) fn diff_find_change_inline_diff(dp: &mut DiffBlock, slots: &DiffSlots
                 break 'done;
             }
             if let Some(hunks) = HunkSource::open(&dio) {
-                diff_read(&mut blocks, &slots, 0, i as c_int, hunks);
+                diff_read(&mut blocks, &slots, 0, i, hunks);
             }
         }
 

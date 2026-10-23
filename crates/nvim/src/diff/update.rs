@@ -10,17 +10,16 @@
 //! own, then the resulting block lists are shifted back into place and
 //! concatenated.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::ex_docmd::{cmdmod_add_flags, cmdmod_flags, cmdmod_set_flags};
+use crate::mbyte::{c_cluster_len, char_at, encode_char};
 use crate::memline::MlFlags;
-use crate::os::cshim::gettext_ptr;
 use crate::types::{Failed, NUL};
 use crate::winlayer::{Buf, TabPage, Win};
 use core::ffi::CStr;
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 /// Release one side of a diff: the temp file if there is one, else the
 /// memory image.
@@ -95,24 +94,19 @@ pub(crate) fn diff_write_buffer(buffer: Buf, out: &mut Vec<u8>, start: LineNr, m
 fn fold_line(line: &[u8], out: &mut [u8]) -> usize {
     let mut at = 0;
     while at < line.len() {
-        let s = line[at..].as_ptr().cast::<c_char>();
+        // The line's tail, read as the C string it is the end of.
+        let rest = &line[at..];
         let (folded, c_len) = if line[at] == NL as u8 {
             (NUL, 1)
         } else {
-            // SAFETY: `s` points into a NUL-terminated line, which is what
-            // the multibyte readers walk.
-            let c = unsafe { utf_ptr2char(s) };
-            (utf_fold(c), utf_char2len(c))
+            let c = char_at(rest);
+            (utf_fold(c), utf_char2len(c) as usize)
         };
-        // SAFETY: as above.
-        let orig_len = unsafe { utfc_ptr2len(s) } as usize;
+        let orig_len = c_cluster_len(rest);
         // MB_MAXBYTES + 1.
         let mut cbuf = [0u8; 22];
-        let dst = cbuf.as_mut_ptr().cast();
-        // SAFETY: `cbuf` is longer than the longest encoding.
-        let same_len = unsafe { utf_char2bytes(folded, dst) } == c_len;
+        let same_len = encode_char(folded, &mut cbuf) == c_len;
         if same_len {
-            let c_len = c_len as usize;
             out[at..at + c_len].copy_from_slice(&cbuf[..c_len]);
             if orig_len > c_len {
                 // Composing characters follow; they are not folded.
@@ -233,20 +227,13 @@ fn diff_try_update(dio: &mut DiffIo, idx_orig: c_int, excmd: Option<&mut ExArg>)
                 if tp.tp_diffbuf[idx].is_none() {
                     continue;
                 }
-                let mut buf_num_anchors = 0;
-                let into = anchors[idx].as_mut_ptr();
-                let count = &raw mut buf_num_anchors;
-                // SAFETY: a live buffer, and two locals of this frame with
-                // room for `MAX_DIFF_ANCHORS` line numbers.
-                let ok = unsafe { parse_diffanchors(false, tp.used_diffbuf(idx), into, count) };
-                if ok.is_err() {
-                    let msg = e_failed_to_find_all_diff_anchors.as_ptr();
-                    // SAFETY: a static message string.
-                    unsafe { emsg(gettext_ptr(msg)) };
+                let found = parse_diffanchors(false, tp.used_diffbuf(idx), Some(&mut anchors[idx]));
+                let Ok(buf_num_anchors) = found else {
+                    emsg(gettext(e_failed_to_find_all_diff_anchors));
                     num_anchors = 0;
                     anchors = [[0; MAX_DIFF_ANCHORS as usize]; DB_COUNT as usize];
                     break;
-                }
+                };
                 num_anchors = num_anchors.min(buf_num_anchors);
                 if buf_num_anchors > 0 {
                     anchors[idx][..buf_num_anchors as usize].sort_unstable();
@@ -302,7 +289,7 @@ fn diff_try_update(dio: &mut DiffIo, idx_orig: c_int, excmd: Option<&mut ExArg>)
                         let current = TabPage::current();
                         let slots = current.tp_diffbuf;
                         current.with_diff(|blocks| {
-                            diff_read(blocks, &slots, idx_orig as c_int, idx_new as c_int, hunks);
+                            diff_read(blocks, &slots, idx_orig, idx_new, hunks);
                         });
                     }
                     clear_diffin(&mut dio.new);

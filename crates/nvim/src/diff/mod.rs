@@ -28,6 +28,7 @@
 //! a position in it across user code holds an index and the list's
 //! generation, `tp_diff_gen`.
 
+#![forbid(unsafe_code)]
 #![deny(unsafe_op_in_unsafe_fn)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
@@ -40,7 +41,6 @@ use crate::autocmd::{
 use crate::buffer::{buf_get_changedtick, buf_is_empty, buf_is_prompt, current_buf, find_buf};
 use crate::bufwrite::{WriteName, WriteRequest, buf_write};
 use crate::change::{change_warning, changed_lines};
-use crate::charset::getdigits_int;
 use crate::cursor::check_cursor;
 use crate::decoration::decor_conceal_line;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, UPD_VALID, redraw_later};
@@ -60,11 +60,9 @@ use crate::global_cell::GlobalCell;
 use crate::highlight_group::{HLF_ADD, HLF_CHD, HLF_NONE, HLF_TXA, HLF_TXD};
 use crate::linematch::linematch_nbuffers;
 use crate::mark::{mark_adjust, setpcmark};
-use crate::mbyte::{
-    head_off, mb_get_class_tab, utf_char2bytes, utf_char2len, utf_fold, utf_ptr2char, utfc_ptr2len,
-};
+use crate::mbyte::{head_off, utf_char2len, utf_fold};
 use crate::memline::{Lines, ml_append_cstr, ml_delete};
-use crate::memory::{XString, xfree};
+use crate::memory::XString;
 use crate::message::emsg;
 use crate::message::{
     e_diff_anchors_with_hidden_windows, e_failed_to_find_all_diff_anchors, e_invrange, e_prev_dir,
@@ -79,9 +77,8 @@ use crate::option::vars::{p_dex, p_sbo, p_srr};
 use crate::option::{OptionTarget, set_option_direct_for, set_option_value_give_err};
 use crate::options::{kOptBoFlagOperator, kOptDiff, kOptFoldmethod};
 use crate::os::cshim::gettext;
-use crate::os::env::{os_env_exists, os_unsetenv};
-use crate::os::fs::{os_chdir, os_dirname, os_fileinfo, os_fileinfo_size, os_remove};
-use crate::os::shell::{ShellOpts, call_shell};
+use crate::os::fs::{os_chdir, os_remove};
+use crate::os::shell::ShellOpts;
 use crate::pos::{MAXCOL, MAXLNUM};
 use crate::search::{BACKWARD, FORWARD};
 use crate::strings::shellescape;
@@ -89,8 +86,8 @@ use crate::types::AutoEvent;
 use crate::types::NL;
 use crate::types::{
     AcoSave, CmdAddr, CmdModFlags, ColNr, DiffBlock, DiffLine, DiffLineChange, EvalFuncData, ExArg,
-    ExtmarkOp, FileInfo, Hlf, LineNr, OptInt, OptScope, OptVal, ScriptId, String_0, TypVal,
-    VarNumber, size_t, uint64_t,
+    ExtmarkOp, Hlf, LineNr, OptInt, OptScope, OptVal, ScriptId, String_0, TypVal, VarNumber,
+    size_t, uint64_t,
 };
 use crate::ui::vim_beep;
 use crate::undo::{u_save, u_sync};
@@ -102,7 +99,6 @@ use crate::xdiff::xtypes::{
     XDF_IGNORE_WHITESPACE_AT_EOL, XDF_IGNORE_WHITESPACE_CHANGE, XDF_INDENT_HEURISTIC,
     XDF_NEED_MINIMAL, XDF_PATIENCE_DIFF,
 };
-use ::libc::tolower;
 
 // The carve of the transpiled module; see each child's docs.
 mod block;

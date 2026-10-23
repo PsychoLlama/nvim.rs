@@ -6,26 +6,23 @@
 //! copy; `nv_diffgetput` is the Normal-mode form, where the range is the block
 //! under the cursor.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::buffer::buflist_findpat_prefix;
 use crate::charset::skip;
 use crate::message_fmt::msg_bytes;
 use crate::optionstr::OptString;
-use crate::os::cshim::gettext_ptr;
 use crate::semsg;
 use crate::types::CmdIdx;
 use crate::types::EcmdCmd;
 use crate::types::{CmdLine, ExArgt, NUL};
 use crate::winlayer::{Buf, TabPage, Win, windows};
-use core::ffi::{c_char, c_int, c_uint};
+use core::ffi::{CStr, c_int, c_uint};
 
 /// `emsg(gettext(msg))`, the pair every error here is reported through.
-fn emsg_gettext(msg: *const c_char) {
-    // SAFETY: a static message string, and the editor exists.
-    unsafe { emsg(gettext_ptr(msg)) };
+fn emsg_gettext(msg: &'static CStr) {
+    emsg(gettext(msg));
 }
 
 /// Whether `:diffput` may write into `buffer` -- or the command is not
@@ -94,7 +91,7 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
     let tp = TabPage::current();
     let idx_cur = tp.diff_index(Buf::current());
     if idx_cur == DB_COUNT {
-        emsg_gettext(c"E99: Current buffer is not in diff mode".as_ptr());
+        emsg_gettext(c"E99: Current buffer is not in diff mode");
         return;
     }
     let cmdidx = excmd.cmdidx;
@@ -115,9 +112,9 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
         }
         if idx_other == DB_COUNT {
             if found_not_ma {
-                emsg_gettext(c"E793: No other buffer in diff mode is modifiable".as_ptr());
+                emsg_gettext(c"E793: No other buffer in diff mode is modifiable");
             } else {
-                emsg_gettext(c"E100: No other buffer in diff mode".as_ptr());
+                emsg_gettext(c"E100: No other buffer in diff mode");
             }
             return;
         }
@@ -126,7 +123,7 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
                 && writable_target(buf, cmdidx)
             {
                 let msg = c"E101: More than two buffers in diff mode, don't know which one to use";
-                emsg_gettext(msg.as_ptr());
+                emsg_gettext(msg);
                 return;
             }
         }
@@ -210,7 +207,7 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
             change_warning(Buf::current(), 0);
             // The warning can run autocommands, which can move us.
             if tp.diff_index(Buf::current()) != idx_to {
-                emsg_gettext(c"E787: Buffer changed unexpectedly".as_ptr());
+                emsg_gettext(c"E787: Buffer changed unexpectedly");
                 break '_theend;
             }
         }

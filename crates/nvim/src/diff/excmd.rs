@@ -12,8 +12,7 @@
 //! mode gave it, so an option the user changed in between survives
 //! `:diffoff`.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -24,41 +23,23 @@
 
 use super::*;
 use crate::buffer::BufRef;
-use crate::cstr;
 use crate::ex_docmd::cmdmod_set_tab;
 use crate::memory::XString;
 use crate::option::boolean_optval;
 use crate::option::vars::P_PEX;
-use crate::os::cshim::gettext_ptr;
+use crate::os::fs::{current_dir, file_info};
+use crate::os::shell::call_shell_text;
 use crate::path::full_name_save;
 use crate::strings::has_char;
 use crate::types::CmdIdx;
-use crate::types::{Failed, MAXPATHL, NUL, OptionSetFlags};
+use crate::types::{Failed, OptionSetFlags};
 use crate::winlayer::graph::{switch_to, switch_window};
 use crate::winlayer::{Buf, TabPage, Win, windows};
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
-
-/// Release one of this module's owned strings; a null is fine, as `xfree`'s
-/// own contract says.
-fn free_str(p: *mut c_char) {
-    // SAFETY: this module's own allocation, or null.
-    unsafe { xfree(p.cast::<c_void>()) };
-}
-
-/// Delete the file `path` names, if there is one, and release the name.
-fn remove_and_free(path: *mut c_char) {
-    if !path.is_null() {
-        // SAFETY: one of this module's own temp file names.
-        unsafe { os_remove(cstr::at(path)) };
-    }
-    free_str(path);
-}
+use core::ffi::{CStr, c_int};
 
 /// `emsg(gettext(msg))`, the pair every error here is reported through.
-fn emsg_gettext(msg: *const c_char) {
-    // SAFETY: a static message string, and the editor exists.
-    unsafe { emsg(gettext_ptr(msg)) };
+fn emsg_gettext(msg: &'static CStr) {
+    emsg(gettext(msg));
 }
 
 /// `:diffpatch {file}`: apply a patch to a copy of the current buffer and
@@ -69,148 +50,115 @@ fn emsg_gettext(msg: *const c_char) {
 /// not the place for them; the original directory is restored afterwards.
 /// `'patchexpr'` replaces the shell-out entirely.
 pub fn ex_diffpatch(excmd: &mut ExArg) {
+    let (tmp_orig, tmp_new) = (temp_name(), temp_name());
+    if let (Some(orig), Some(new)) = (&tmp_orig, &tmp_new)
+        && write_orig(orig.as_cstr()).is_ok()
+    {
+        patch_into(excmd, orig.as_cstr(), new.as_cstr());
+    }
+    for name in [&tmp_orig, &tmp_new].into_iter().flatten() {
+        os_remove(name.as_cstr());
+    }
+}
+
+/// [`ex_diffpatch`] once the buffer is written to `tmp_orig`: patch it into
+/// `tmp_new` and open that beside the current window.
+fn patch_into(excmd: &mut ExArg, tmp_orig: &CStr, tmp_new: &CStr) {
     let old_curwin = Win::current();
-    let mut newname: Option<XString> = None;
-    let mut esc_name: *mut c_char = ptr::null_mut();
-    let mut fullname: *mut c_char = ptr::null_mut();
-    let temp = || temp_name().map_or(ptr::null_mut(), XString::into_raw);
-    let (tmp_orig, tmp_new) = (temp(), temp());
+    // Owned: the command's line is replaced before the name is done
+    // with. A name that cannot be made absolute comes back as itself.
+    let fullname = full_name_save(excmd.line.cstr_from(excmd.line.arg), false);
+    let esc_name = shellescape(&fullname, true, true);
+    // Run the patch from the temp directory, so its `.orig`/`.rej`
+    // droppings do not land in the user's.
+    let saved_dir = save_cwd();
+    if saved_dir.is_some() {
+        let tempdir = vim_gettempdir();
+        os_chdir(tempdir.as_deref().unwrap_or(c"/tmp"));
+        shorten_fnames(true);
+    }
 
-    if !(tmp_orig.is_null() || tmp_new.is_null()) && write_orig(tmp_orig).is_ok() {
-        // Owned: the command's line is replaced before the name is done
-        // with. A name that cannot be made absolute comes back as itself.
-        fullname = full_name_save(excmd.line.cstr_from(excmd.line.arg), false).into_raw();
-        let name = fullname;
-        // SAFETY: a NUL-terminated file name.
-        esc_name = shellescape(unsafe { cstr::bytes_at(name) }, true, true).into_raw();
-        // Run the patch from the temp directory, so its `.orig`/`.rej`
-        // droppings do not land in the user's.
-        let mut dirbuf: [c_char; 4096] = [0; 4096];
-        let saved_dir = save_cwd(&mut dirbuf);
-        if saved_dir {
-            let tempdir = vim_gettempdir();
-            os_chdir(tempdir.as_deref().unwrap_or(c"/tmp"));
-            shorten_fnames(true);
+    if P_PEX.first_byte() != 0 {
+        eval_patch(tmp_orig, fullname.as_cstr(), tmp_new);
+    } else {
+        let mut command = XString::from_bytes(b"patch -o ");
+        command.push_bytes(tmp_new.to_bytes());
+        command.push_byte(b' ');
+        command.push_bytes(tmp_orig.to_bytes());
+        command.push_bytes(b" < ");
+        command.push_bytes(&esc_name);
+        block_autocmds();
+        call_shell_text(command.as_cstr(), ShellOpts::FILTER);
+        unblock_autocmds();
+    }
+
+    if let Some(dir) = &saved_dir {
+        if os_chdir(dir.as_cstr()) != 0 {
+            emsg_gettext(e_prev_dir);
         }
+        shorten_fnames(true);
+    }
+    remove_suffixed(tmp_new, c".orig");
+    remove_suffixed(tmp_new, c".rej");
 
-        if P_PEX.first_byte() != 0 {
-            // SAFETY: three NUL-terminated file names.
-            let names = unsafe { (cstr::at(tmp_orig), cstr::at(name), cstr::at(tmp_new)) };
-            eval_patch(names.0, names.1, names.2);
-        } else {
-            // SAFETY: three NUL-terminated names.
-            let mut command = unsafe {
-                let mut line = XString::from_bytes(b"patch -o ");
-                line.push_bytes(cstr::bytes_at(tmp_new));
-                line.push_byte(b' ');
-                line.push_bytes(cstr::bytes_at(tmp_orig));
-                line.push_bytes(b" < ");
-                line.push_bytes(cstr::bytes_at(esc_name));
-                line
-            };
-            block_autocmds();
-            // SAFETY: the command line just built, which `call_shell` only
-            // reads, and no extra arguments.
-            unsafe {
-                call_shell(
-                    command.as_mut_ptr(),
-                    ShellOpts::FILTER,
-                    ptr::null_mut::<c_char>(),
-                )
-            };
-            unblock_autocmds();
-        }
-
-        if saved_dir {
-            // SAFETY: the directory name `save_cwd` filled in.
-            if unsafe { os_chdir(cstr::at(dirbuf.as_mut_ptr())) } != 0 {
-                emsg_gettext(e_prev_dir.as_ptr());
-            }
-            shorten_fnames(true);
-        }
-        remove_suffixed(tmp_new, c".orig");
-        remove_suffixed(tmp_new, c".rej");
-
-        let mut file_info = FileInfo::default();
-        // SAFETY: a NUL-terminated file name and a live `FileInfo`.
-        let info_ok = unsafe { os_fileinfo(tmp_new, &raw mut file_info) };
-        // SAFETY: as above.
-        let filesize = unsafe { os_fileinfo_size(&raw mut file_info) };
-        if !info_ok || filesize == 0 {
-            emsg_gettext(c"E816: Cannot read patch output".as_ptr());
-        } else {
-            if !Buf::current().name.is_unnamed() {
-                let fname = Buf::current().name.shown_ptr();
-                // SAFETY: the buffer's own file name, NUL-terminated.
-                let mut patched = XString::from_bytes(unsafe { cstr::bytes_at(fname) });
-                patched.push_str(".new");
-                newname = Some(patched);
-            }
-            cmdmod_set_tab(0);
-            let vertical = diff_flags.get() & DIFF_VERTICAL != 0;
-            let flags = if vertical { WSP_VERT.cast_signed() } else { 0 };
-            if win_split(0, flags).is_ok() {
-                excmd.cmdidx = CmdIdx::split;
-                // SAFETY: the temporary's name, NUL-terminated.
-                excmd.set_arg_text(unsafe { cstr::bytes_at(tmp_new) });
-                // SAFETY: the caller's command, and a window that was live
-                // when it was read.
-                do_exedit(excmd, Some(old_curwin.id()));
-                if !old_curwin.is_current() && win_valid(old_curwin.id()) {
-                    // SAFETY: both windows are live, as just checked.
-                    diff_win_options(Win::current(), true);
-                    diff_win_options(old_curwin, true);
-                    if let Some(patched) = newname.as_mut() {
-                        excmd.set_arg_text(patched);
-                        // SAFETY: the caller's command; the group name and
-                        // the command line are static strings.
-                        ex_file(excmd);
-                        if augroup_exists(b"filetypedetect") {
-                            let _ = do_cmdline_cmd(c":doau filetypedetect BufRead");
-                        }
-                    }
-                }
+    let filesize = file_info(tmp_new).map(|info| info.stat.st_size);
+    if filesize.is_none_or(|size| size == 0) {
+        emsg_gettext(c"E816: Cannot read patch output");
+        return;
+    }
+    let mut newname = None;
+    if !Buf::current().name.is_unnamed() {
+        let mut patched = Buf::current()
+            .name
+            .shown()
+            .map_or_else(XString::new, XString::from_cstr);
+        patched.push_str(".new");
+        newname = Some(patched);
+    }
+    cmdmod_set_tab(0);
+    let vertical = diff_flags.get() & DIFF_VERTICAL != 0;
+    let flags = if vertical { WSP_VERT.cast_signed() } else { 0 };
+    if win_split(0, flags).is_err() {
+        return;
+    }
+    excmd.cmdidx = CmdIdx::split;
+    excmd.set_arg_text(tmp_new.to_bytes());
+    do_exedit(excmd, Some(old_curwin.id()));
+    if !old_curwin.is_current() && win_valid(old_curwin.id()) {
+        diff_win_options(Win::current(), true);
+        diff_win_options(old_curwin, true);
+        if let Some(patched) = newname.as_mut() {
+            excmd.set_arg_text(patched);
+            ex_file(excmd);
+            if augroup_exists(b"filetypedetect") {
+                let _ = do_cmdline_cmd(c":doau filetypedetect BufRead");
             }
         }
     }
-    remove_and_free(tmp_orig);
-    remove_and_free(tmp_new);
-    free_str(fullname);
-    free_str(esc_name);
 }
 
 /// Write the current buffer out to `tmp_orig`, the patch's input.
-fn write_orig(tmp_orig: *mut c_char) -> Result<(), Failed> {
+fn write_orig(tmp_orig: &CStr) -> Result<(), Failed> {
     let cb = Buf::current();
     let end = Buf::current().b_ml.ml_line_count;
     let req = WriteRequest::filter();
-    // SAFETY: our own temp file's NUL-terminated name, alive for the call;
-    // no shortname and no `ExArg` are wanted.
-    let name = unsafe { cstr::at(tmp_orig) };
-    buf_write(cb, WriteName::Other(name), None, 1, end, None, req)
+    // No shortname and no `ExArg` are wanted.
+    buf_write(cb, WriteName::Other(tmp_orig), None, 1, end, None, req)
 }
 
-/// Record the working directory into `dirbuf`, answering whether it can be
-/// changed back later.
+/// The working directory, if it can be named and changed back to later.
 ///
 /// A directory that cannot be named, or cannot be re-entered right now, is
-/// recorded as the empty string and the caller leaves the cwd alone.
-fn save_cwd(dirbuf: &mut [c_char; 4096]) -> bool {
-    let at = dirbuf.as_mut_ptr();
-    // SAFETY: `dirbuf` holds `MAXPATHL` bytes, which is what `os_dirname` is
-    // told, and `os_chdir` gets the NUL-terminated name it wrote there.
-    let ok = unsafe { os_dirname(at, MAXPATHL as size_t).is_ok() && os_chdir(cstr::at(at)) == 0 };
-    if !ok {
-        dirbuf[0] = c_char::try_from(NUL).expect("NUL is zero");
-    }
-    ok
+/// `None`, and the caller leaves the cwd alone.
+fn save_cwd() -> Option<XString> {
+    let dir = current_dir()?;
+    (os_chdir(dir.as_cstr()) == 0).then_some(dir)
 }
 
 /// Delete `name` with `suffix` glued on -- `patch(1)`'s `.orig` and `.rej`
 /// leftovers.
-fn remove_suffixed(name: *mut c_char, suffix: &CStr) {
-    // SAFETY: a NUL-terminated temp file name.
-    let mut suffixed = XString::from_bytes(unsafe { cstr::bytes_at(name) });
+fn remove_suffixed(name: &CStr, suffix: &CStr) {
+    let mut suffixed = XString::from_cstr(name);
     suffixed.push_cstr(suffix);
     os_remove(suffixed.as_cstr());
 }

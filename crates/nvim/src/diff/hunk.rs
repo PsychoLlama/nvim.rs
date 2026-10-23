@@ -6,6 +6,13 @@
 //! joining the existing blocks as the new range overlaps them.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::charset::getdigits_int_at;
@@ -245,11 +252,10 @@ impl Iterator for HunkSource<'_> {
 pub(crate) fn diff_read(
     blocks: &mut Vec<DiffBlock>,
     slots: &DiffSlots,
-    idx_orig: c_int,
-    idx_new: c_int,
+    idx_orig: usize,
+    idx_new: usize,
     hunks: HunkSource<'_>,
 ) {
-    let (idx_orig, idx_new) = (idx_orig as usize, idx_new as usize);
     let mut walk = Walk {
         at: 0,
         notset: true,

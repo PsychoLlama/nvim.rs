@@ -12,6 +12,13 @@
 //! on the other.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::types::Failed;
@@ -135,7 +142,7 @@ pub fn diff_set_topline(fromwin: Win, mut towin: Win) {
     if tp.tp_diff_invalid != 0 {
         diff_update(None);
     }
-    let fromidx = fromidx as usize;
+    let fromidx = slot_index(fromidx);
     // Read after the recompute, which runs `DiffUpdated` autocommands.
     //
     // SAFETY: a live window's buffer is live.
@@ -155,7 +162,7 @@ pub fn diff_set_topline(fromwin: Win, mut towin: Win) {
             if toidx == DB_COUNT {
                 return;
             }
-            let toidx = toidx as usize;
+            let toidx = slot_index(toidx);
             towin.w_topline = lnum + (dp.df_lnum[toidx] - dp.df_lnum[fromidx]);
             if lnum >= dp.df_lnum[fromidx] {
                 let from_topfill = fromwin.w_topfill;
@@ -209,7 +216,7 @@ pub fn diff_move_to(dir: c_int, mut count: c_int) -> Result<(), Failed> {
     let Some(first) = blocks.first() else {
         return Err(Failed);
     };
-    let idx = idx as usize;
+    let idx = slot_index(idx);
 
     while count > 0 {
         count -= 1;
@@ -260,7 +267,7 @@ fn diff_get_corresponding_line_int(buf1: Buf, lnum1: LineNr) -> LineNr {
     if tp.tp_diff.is_empty() {
         return lnum1;
     }
-    let (idx1, idx2) = (idx1 as usize, idx2 as usize);
+    let (idx1, idx2) = (slot_index(idx1), slot_index(idx2));
     let cursor = Win::current().w_cursor.lnum;
 
     let mut baseline = 0;
@@ -311,7 +318,7 @@ pub fn diff_lnum_win(lnum: LineNr, window: Win) -> LineNr {
     if tp.tp_diff_invalid != 0 {
         diff_update(None);
     }
-    let idx = idx as usize;
+    let idx = slot_index(idx);
 
     // SAFETY: a live window's buffer is live.
     let buf = window.buffer();
@@ -322,6 +329,6 @@ pub fn diff_lnum_win(lnum: LineNr, window: Win) -> LineNr {
     if i == DB_COUNT {
         return 0;
     }
-    let i = i as usize;
+    let i = slot_index(i);
     (lnum + (dp.df_lnum[i] - dp.df_lnum[idx])).min(dp.end(i))
 }
