@@ -44,7 +44,6 @@ use crate::normal::{set_visual_active, showcmd_buf, visual_active};
 use core::cell::Cell;
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
-use std::rc::Rc;
 
 use super::*;
 use crate::buffer::{append_arg_number, buf_is_quickfix, buf_spname, calc_percentage, get_rel_pos};
@@ -424,9 +423,9 @@ pub(super) fn as_number(text: &[u8]) -> Option<c_int> {
 
 /// A copy of `bytes` as a C string, cut at a NUL as upstream's `xmemdupz`
 /// copy reads: what a `%@Func@` item hands to the caller's click table.
-pub(super) fn dup_cstring(bytes: &[u8]) -> Rc<CStr> {
-    let name = &bytes[..bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len())];
-    Rc::from(CString::new(name).expect("cut at the first NUL"))
+pub(super) fn dup_cstring(bytes: &[u8]) -> CString {
+    let name = crate::cstr::until_nul(bytes);
+    CString::new(name).expect("cut at the first NUL")
 }
 
 // ---------------------------------------------------------------------------
@@ -652,9 +651,7 @@ pub fn build_stl_str_hl(
 
     // The format is read as the C string it stands for: to its first NUL.
     let mut fmt_bytes = fmt;
-    if let Some(nul) = fmt_bytes.iter().position(|&b| b == 0) {
-        fmt_bytes.truncate(nul);
-    }
+    fmt_bytes.truncate(crate::cstr::until_nul(&fmt_bytes).len());
     // A format starting with "%!" is itself an expression, whose result is
     // the format actually used. Evaluating it can fail, in which case the
     // literal text is what gets rendered.
@@ -717,6 +714,10 @@ pub fn build_stl_str_hl(
         } else {
             Vec::new()
         };
+        if built.evalstart == 0 {
+            // The outermost expansion: no item refers to a name any more.
+            s.clear_cmds();
+        }
         (runs, recs)
     });
 
@@ -731,7 +732,7 @@ pub fn build_stl_str_hl(
 
     // A user function may reset KeyTyped; restore it.
     KeyTyped.set(save_key_typed);
-    out.truncate(out.iter().position(|&b| b == 0).unwrap_or(room));
+    out.truncate(crate::cstr::until_nul(&out).len());
     StlOutput {
         text: out,
         width: built.width,

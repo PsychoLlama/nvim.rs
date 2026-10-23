@@ -228,8 +228,9 @@ pub(super) fn run(
             }
             // The name is only copied when the caller asked for the click
             // records; otherwise the region is recorded without one.
-            let cmd = (!discard_clicks).then(|| dup_cstring(&fmt[from..p]));
+            let name = (!discard_clicks).then(|| dup_cstring(&fmt[from..p]));
             with_scratch(|s| {
+                let cmd = name.map_or(0, |name| s.add_cmd(name));
                 s.push_item(StlItem {
                     start: pos,
                     cmd,

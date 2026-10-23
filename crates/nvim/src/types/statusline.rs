@@ -15,33 +15,49 @@ use super::*;
 
 /// What a click on one statusline column does.
 ///
-/// Not `Copy`: the `func` of a `kStlClickFuncRun` definition is a shared
-/// name. Every cell of a click region holds the same one, and a definition
-/// read out for a click keeps it alive while the handler runs -- which may
-/// redraw the line and replace the region it was read from.
-#[derive(Clone, Default)]
+/// `func` names the `%@Func@` handler of a `kStlClickFuncRun` definition
+/// by its place in the line's [`ClickLine::funcs`], one more than the
+/// index; 0 for none. Every cell of a click region holds the same one.
+#[derive(Copy, Clone, Default)]
 pub struct StlClickDefinition {
     pub type_0: StlClickDefinition_type_0,
     pub tabnr: ::core::ffi::c_int,
-    pub func: Option<::std::rc::Rc<::core::ffi::CStr>>,
+    pub func: u32,
 }
 pub type StlClickDefinition_type_0 = ::core::ffi::c_uint;
-/// A click definition and the byte of the built line it starts at.
-///
-/// Not `Copy`, following [`StlClickDefinition`].
+/// A click definition, the handler name it carries, and the byte of the
+/// built line it starts at.
 #[derive(Clone, Default)]
 pub struct StlClickRecord {
     pub def: StlClickDefinition,
+    pub func: Option<::std::ffi::CString>,
     pub start: usize,
 }
-/// A window's click definitions, one per screen cell of the line each
-/// describes, kept from the redraw that built them until the click that
-/// reads them. Empty until the line is first drawn.
+/// One line's click definitions -- a status line's, a winbar's, a
+/// `'statuscolumn'`'s or the tab page line's -- kept from the redraw that
+/// built them until the click that reads them: one per screen cell, and
+/// the handler names they refer to. Empty until the line is first drawn.
+#[derive(Default)]
+pub struct ClickLine {
+    pub cells: Vec<StlClickDefinition>,
+    pub funcs: Vec<::std::ffi::CString>,
+}
+
+impl ClickLine {
+    /// The handler `def` names, if it names one.
+    pub fn func_of(&self, def: StlClickDefinition) -> Option<&::core::ffi::CStr> {
+        let at = usize::try_from(def.func).ok()?.checked_sub(1)?;
+        self.funcs.get(at).map(::std::ffi::CString::as_c_str)
+    }
+}
+
+/// A window's click definitions, for the click that lands on one of its
+/// lines.
 #[derive(Default)]
 pub struct WinClickDefs {
-    pub status: Vec<StlClickDefinition>,
-    pub winbar: Vec<StlClickDefinition>,
-    pub statuscol: Vec<StlClickDefinition>,
+    pub status: ClickLine,
+    pub winbar: ClickLine,
+    pub statuscol: ClickLine,
 }
 /// A letter of the statusline format language.
 ///

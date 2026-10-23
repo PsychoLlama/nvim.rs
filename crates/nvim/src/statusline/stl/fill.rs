@@ -61,7 +61,8 @@ pub(super) fn truncate(
             if s.items[i].start > trunc {
                 for j in i..last {
                     if s.items[j].kind == Kind::ClickFunc {
-                        s.items[j].cmd = None;
+                        let _ = s.take_cmd(s.items[j].cmd);
+                        s.items[j].cmd = 0;
                     }
                 }
                 // Upstream stores the absolute index here where the count

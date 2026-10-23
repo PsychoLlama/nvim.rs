@@ -20,8 +20,8 @@
     clippy::ptr_as_ptr
 )]
 
-use core::ffi::{CStr, c_int};
-use std::rc::Rc;
+use core::ffi::c_int;
+use std::ffi::CString;
 
 use super::{kStlClickDisabled, kStlClickFuncRun, kStlClickTabClose, kStlClickTabSwitch};
 use crate::global_cell::GlobalCell;
@@ -30,14 +30,15 @@ use crate::types::{StlClickDefinition, StlClickRecord, StlHlRun, StlOpt};
 /// What one `%` item turned into. Upstream's `StlItem`, with the `char *`
 /// into the output buffer replaced by a byte offset into it -- which is what
 /// lets every stage that shifts the text around be safe code.
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub(super) struct StlItem {
     /// Where the item starts in the output buffer.
     pub start: usize,
-    /// `%@Func@`'s function name, which this item holds until it is handed
-    /// to the caller's click records or dropped by the truncation pass.
-    /// `None` for every other kind.
-    pub cmd: Option<Rc<CStr>>,
+    /// `%@Func@`'s function name, as one more than its slot in
+    /// [`StlScratch::cmds`], which holds it until it is handed to the
+    /// caller's click records or dropped by the truncation pass. 0 for every
+    /// other kind.
+    pub cmd: u32,
     /// The item's minimum width, or the argument of the kinds that overload
     /// it -- a user highlight number, a negative syntax id, a tab page
     /// number (negative to close it), a `%@Func@` click id.
@@ -51,7 +52,7 @@ impl Default for StlItem {
     fn default() -> Self {
         StlItem {
             start: 0,
-            cmd: None,
+            cmd: 0,
             minwid: 0,
             maxwid: 0,
             kind: Kind::Normal,
@@ -134,6 +135,9 @@ pub(super) struct StlScratch {
     pub groupitems: Vec<usize>,
     /// The indices of the `%=` items, filled by the spread pass.
     pub separators: Vec<usize>,
+    /// The `%@Func@` names the items refer to, taken as they are handed
+    /// out or dropped. Emptied when the outermost expansion is done.
+    cmds: Vec<Option<CString>>,
     /// One past the last item written, across all recursion levels.
     pub curitem: usize,
 }
@@ -147,6 +151,7 @@ impl StlScratch {
             items: Vec::new(),
             groupitems: Vec::new(),
             separators: Vec::new(),
+            cmds: Vec::new(),
             curitem: 0,
         }
     }
@@ -179,6 +184,23 @@ impl StlScratch {
         let at = self.curitem;
         self.items[at] = item;
         self.curitem = at + 1;
+    }
+
+    /// Keep `name` for a `%@Func@` item, answering what its `cmd` is.
+    pub(super) fn add_cmd(&mut self, name: CString) -> u32 {
+        self.cmds.push(Some(name));
+        u32::try_from(self.cmds.len()).expect("fewer names than items")
+    }
+
+    /// Take the name an item's `cmd` refers to, if it is still there.
+    pub(super) fn take_cmd(&mut self, cmd: u32) -> Option<CString> {
+        let at = usize::try_from(cmd).ok()?.checked_sub(1)?;
+        self.cmds.get_mut(at)?.take()
+    }
+
+    /// Forget every name, once no expansion is running.
+    pub(super) fn clear_cmds(&mut self) {
+        self.cmds.clear();
     }
 
     /// Record `kind` starting at `start`, which is all the items that carry
@@ -259,20 +281,21 @@ pub(super) fn collect_highlights(s: &StlScratch, len: usize, built: &Built) -> V
 pub(super) fn collect_clicks(s: &mut StlScratch, len: usize, built: &Built) -> Vec<StlClickRecord> {
     let mut recs = Vec::new();
     for i in built.items(s.items.len()) {
-        let item = &mut s.items[i];
+        let item = s.items[i];
         let (type_0, tabnr, func) = match item.kind {
             Kind::TabPage if item.minwid == 0 => (kStlClickDisabled, 0, None),
             Kind::TabPage if item.minwid > 0 => (kStlClickTabSwitch, item.minwid, None),
             Kind::TabPage => (kStlClickTabClose, -item.minwid, None),
-            Kind::ClickFunc => (kStlClickFuncRun, item.minwid, item.cmd.take()),
+            Kind::ClickFunc => (kStlClickFuncRun, item.minwid, s.take_cmd(item.cmd)),
             _ => continue,
         };
         recs.push(StlClickRecord {
             def: StlClickDefinition {
                 type_0,
                 tabnr,
-                func,
+                func: 0,
             },
+            func,
             start: start_of(len, item.start),
         });
     }

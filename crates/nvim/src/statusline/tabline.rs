@@ -112,7 +112,7 @@ pub fn draw_tabline() {
     // Clicking outside of any tab has no effect, so the whole line is
     // cleared first.
     debug_assert!(
-        tab_page_click_defs.with(Vec::len) >= Columns.get() as usize,
+        tab_page_click_defs.with(|line| line.cells.len()) >= Columns.get() as usize,
         "tab_page_click_defs_size >= (size_t)Columns"
     );
     with_tab_click_defs(|defs| clear_click_defs(defs));

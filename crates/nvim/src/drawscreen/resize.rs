@@ -14,8 +14,7 @@ use super::*;
 use crate::autocmd::fire_autocmds;
 use crate::grid::default_grid_ref;
 use crate::guard::Suppress;
-use crate::statusline::clear_click_defs;
-use crate::types::StlClickDefinition;
+use crate::statusline::{NO_CLICK, clear_click_defs};
 use crate::winlayer::{self, Win};
 use crate::winlayer::{Buf, TabPage};
 
@@ -54,10 +53,10 @@ pub fn default_grid_alloc() -> bool {
     grid_alloc(&mut grid, Rows.get(), Columns.get(), true, true);
 
     let columns = Columns.get() as usize;
-    tab_page_click_defs.with_mut(|defs| {
-        clear_click_defs(defs);
-        if defs.len() < columns {
-            defs.resize(columns, StlClickDefinition::default());
+    tab_page_click_defs.with_mut(|line| {
+        clear_click_defs(line);
+        if line.cells.len() < columns {
+            line.cells.resize(columns, NO_CLICK);
         }
     });
 

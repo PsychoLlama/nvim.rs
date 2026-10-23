@@ -16,11 +16,12 @@
 #![allow(non_upper_case_globals)]
 
 use crate::global_cell::GlobalCell;
-use crate::types::{StlClickDefinition, StlSyntax};
+use crate::types::{ClickLine, StlSyntax};
 
 pub(crate) static stl_syntax: GlobalCell<StlSyntax> = GlobalCell::new(StlSyntax::NONE);
 /// The tab page line's click definitions, one per screen column; sized by
-/// the screen resize. Each `func` string is owned by the run of cells that
-/// holds it (see `ClickArena`).
-pub(crate) static tab_page_click_defs: GlobalCell<Vec<StlClickDefinition>> =
-    GlobalCell::new(Vec::new());
+/// the screen resize.
+pub(crate) static tab_page_click_defs: GlobalCell<ClickLine> = GlobalCell::new(ClickLine {
+    cells: Vec::new(),
+    funcs: Vec::new(),
+});

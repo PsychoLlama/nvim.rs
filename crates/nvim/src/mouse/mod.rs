@@ -31,6 +31,7 @@ use crate::strings::has_char;
 use crate::window::tab_index;
 use crate::winlayer::{TabPage, WinId};
 use core::ffi::{CStr, c_int};
+use std::ffi::CString;
 
 use crate::charset::vim_iswordc;
 use crate::cursor::set_leftcol;
@@ -48,8 +49,8 @@ use crate::state::virtual_active;
 use crate::statusline::state::tab_page_click_defs;
 use crate::statusline::stl_connected;
 use crate::types::{
-    CmdArg, ColNr, EvalFuncData, LineNr, MotionType, NUL, Pos, StlClickDefinition, TypVal,
-    VarNumber,
+    ClickLine, CmdArg, ColNr, EvalFuncData, LineNr, MotionType, NUL, Pos, StlClickDefinition,
+    TypVal, VarNumber,
 };
 use crate::ui::{ui_check_mouse, ui_cursor_shape};
 use crate::window::{
@@ -240,17 +241,17 @@ impl Win {
     /// The click definitions drawn for this window's status line, winbar and
     /// `'statuscolumn'`, with the number of columns each covers.
     fn status_click_defs(self) -> (Option<ClickDefs>, c_int) {
-        let defs = &self.w_click_defs.status;
+        let defs = &self.w_click_defs.status.cells;
         let len = c_int::try_from(defs.len()).unwrap_or(c_int::MAX);
         ((!defs.is_empty()).then_some(ClickDefs::Status(self)), len)
     }
 
     fn winbar_click_defs(self) -> Option<ClickDefs> {
-        (!self.w_click_defs.winbar.is_empty()).then_some(ClickDefs::Winbar(self))
+        (!self.w_click_defs.winbar.cells.is_empty()).then_some(ClickDefs::Winbar(self))
     }
 
     fn statuscol_click_defs(self) -> (Option<ClickDefs>, c_int) {
-        let defs = &self.w_click_defs.statuscol;
+        let defs = &self.w_click_defs.statuscol.cells;
         let len = c_int::try_from(defs.len()).unwrap_or(c_int::MAX);
         (
             (!defs.is_empty()).then_some(ClickDefs::Statuscol(self)),
@@ -274,23 +275,34 @@ pub(crate) enum ClickDefs {
 impl ClickDefs {
     /// The tab page line's click definitions, once the tabline has been drawn.
     fn tabline() -> Option<Self> {
-        (!tab_page_click_defs.with(Vec::is_empty)).then_some(Self::Tabline)
+        (!tab_page_click_defs.with(|line| line.cells.is_empty())).then_some(Self::Tabline)
     }
 
-    /// The definition recorded for screen column `col`, copied out (its
-    /// function name is shared, so the copy keeps it alive). A column past
-    /// the line's end has none: upstream reads past the array there.
+    /// Run `f` over the line these definitions are.
+    fn with_line<R>(self, f: impl FnOnce(&ClickLine) -> R) -> R {
+        match self {
+            Self::Tabline => tab_page_click_defs.with(f),
+            Self::Status(win) => f(&win.w_click_defs.status),
+            Self::Winbar(win) => f(&win.w_click_defs.winbar),
+            Self::Statuscol(win) => f(&win.w_click_defs.statuscol),
+        }
+    }
+
+    /// The definition recorded for screen column `col`. A column past the
+    /// line's end has none: upstream reads past the array there.
     fn at(self, col: c_int) -> StlClickDefinition {
         let Ok(col) = usize::try_from(col) else {
             return StlClickDefinition::default();
         };
-        let def = match self {
-            Self::Tabline => tab_page_click_defs.with(|defs| defs.get(col).cloned()),
-            Self::Status(win) => win.w_click_defs.status.get(col).cloned(),
-            Self::Winbar(win) => win.w_click_defs.winbar.get(col).cloned(),
-            Self::Statuscol(win) => win.w_click_defs.statuscol.get(col).cloned(),
-        };
-        def.unwrap_or_default()
+        self.with_line(|line| line.cells.get(col).copied())
+            .unwrap_or_default()
+    }
+
+    /// A copy of the handler name the definition at `col` names: the
+    /// handler may redraw the line and replace the definitions.
+    fn func_at(self, col: c_int) -> Option<CString> {
+        let def = self.at(col);
+        self.with_line(|line| line.func_of(def).map(CStr::to_owned))
     }
 }
 

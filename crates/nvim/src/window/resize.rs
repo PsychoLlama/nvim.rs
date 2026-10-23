@@ -40,6 +40,7 @@ use crate::plines::{plines_win, plines_win_col, plines_win_nofill};
 use crate::startup::{exiting, full_screen};
 use crate::state::{MODE_CMDLINE, MODE_NORMAL, MODE_TERMINAL, get_real_state};
 use crate::terminal::buf_terminal_check_size;
+use crate::types::ClickLine;
 use crate::types::ui::{kUIMessages, kUIMultigrid, kUITabline};
 use crate::types::{ColNr, FAIL, Integer, LineNr, NUL, OK, OptInt, ScriptId, WindowHandle};
 use crate::ui::state::{Columns, Rows};
@@ -552,7 +553,7 @@ pub(crate) fn remove_status_line(window: Win, add_hsep: bool) {
         new_win_height(window, text + STATUS_HEIGHT as c_int);
     }
     comp_col();
-    window.w_click_defs.status = Vec::new();
+    window.w_click_defs.status = ClickLine::default();
 }
 
 /// The nearest frame at or above `fr` that has a row to spare, from
@@ -663,7 +664,7 @@ fn winbar_win(window: Win, make_room: bool, valid_cursor: bool) -> c_int {
         window.w_winbar_height = winbar_height;
         set_inner_size(window, valid_cursor);
         if winbar_height == 0 {
-            window.w_click_defs.winbar = Vec::new();
+            window.w_click_defs.winbar = ClickLine::default();
         }
     }
     OK

@@ -46,10 +46,10 @@ pub(crate) fn call_click_def_func(click_defs: ClickDefs, col: c_int, which_butto
     ];
     let mut rettv = TV_INITIAL_VALUE;
 
-    // The name is the definition's own reference, so the handler may
-    // redraw the line and replace the definitions it was read from.
-    if let Some(func) = def.func.as_deref() {
-        let _ = call_vim_function(func, &argv, &mut rettv);
+    // A copy of the name, so the handler may redraw the line and replace
+    // the definitions it was read from.
+    if let Some(func) = click_defs.func_at(col) {
+        let _ = call_vim_function(&func, &argv, &mut rettv);
     }
     tv_clear(&mut rettv);
 

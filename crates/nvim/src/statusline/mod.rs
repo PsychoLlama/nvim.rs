@@ -39,6 +39,7 @@ use crate::statusline::state::tab_page_click_defs;
 use crate::types::CAR;
 use crate::types::NL;
 use core::ffi::{CStr, c_int};
+use std::ffi::CString;
 
 use crate::charset::strnsize;
 use crate::drawscreen::redrawing;
@@ -54,7 +55,7 @@ use crate::highlight_group::{HLF_S, HLF_SNC};
 use crate::options::kOptStatuscolumn;
 use crate::optionstr::OptStringRef;
 use crate::types::{
-    AlignTextPos, ApiDict, Array, GridView, Hlf, LineNr, MAXPATHL, Object, OptIndex,
+    AlignTextPos, ApiDict, Array, ClickLine, GridView, Hlf, LineNr, MAXPATHL, Object, OptIndex,
     OptionSetFlags, ScreenChar, SignTextAttrs, StatusCol, StlClickDefinition,
     StlClickDefinition_type_0, StlClickRecord, VarNumber, Vv, WinSplit, WinStyle,
 };
@@ -150,17 +151,25 @@ impl StlJob<'_> {
 // The click definitions
 // ---------------------------------------------------------------------------
 
-/// Blank every definition: what a cell nobody claimed holds.
-pub(crate) fn clear_click_defs(defs: &mut [StlClickDefinition]) {
-    defs.fill(StlClickDefinition::default());
+/// A cell nobody claimed.
+pub(crate) const NO_CLICK: StlClickDefinition = StlClickDefinition {
+    type_0: kStlClickDisabled,
+    tabnr: 0,
+    func: 0,
+};
+
+/// Blank every definition, and forget the handler names they referred to.
+pub(crate) fn clear_click_defs(line: &mut ClickLine) {
+    line.cells.fill(NO_CLICK);
+    line.funcs.clear();
 }
 
 /// Make room for `width` cells, replacing the definitions when there are
 /// fewer: a cleared line's are blank, and so are the new ones.
-pub(crate) fn reserve_click_defs(defs: &mut Vec<StlClickDefinition>, width: c_int) {
+pub(crate) fn reserve_click_defs(line: &mut ClickLine, width: c_int) {
     let width = usize::try_from(width).unwrap_or(0);
-    if defs.len() < width {
-        *defs = vec![StlClickDefinition::default(); width];
+    if line.cells.len() < width {
+        line.cells = vec![NO_CLICK; width];
     }
 }
 
@@ -170,18 +179,18 @@ pub(crate) fn reserve_click_defs(defs: &mut Vec<StlClickDefinition>, width: c_in
 /// An empty or backwards range claims nothing, which is what upstream's
 /// `while (scol < col)` does when the line is already full.
 pub(crate) fn set_click_defs(
-    defs: &mut [StlClickDefinition],
+    line: &mut ClickLine,
     cols: core::ops::Range<c_int>,
     kind: StlClickDefinition_type_0,
     tabnr: c_int,
 ) {
-    if defs.is_empty() || cols.start >= cols.end {
+    if line.cells.is_empty() || cols.start >= cols.end {
         return;
     }
-    defs[cols.start as usize..cols.end as usize].fill(StlClickDefinition {
+    line.cells[cols.start as usize..cols.end as usize].fill(StlClickDefinition {
         type_0: kind,
         tabnr,
-        func: None,
+        func: 0,
     });
 }
 
@@ -189,24 +198,26 @@ pub(crate) fn set_click_defs(
 ///
 /// `text` is the expanded line the records name bytes of; each record claims
 /// everything from where the previous one started up to its own start,
-/// measured in screen cells rather than bytes.
+/// measured in screen cells rather than bytes. A handler name is kept only
+/// when its region claims at least one cell.
 ///
 /// `tabline` keeps the tab-page kinds; everywhere else only a click
 /// *function* is honoured, because nothing else has a tab to name.
 pub(crate) fn fill_click_defs(
-    defs: &mut [StlClickDefinition],
+    line: &mut ClickLine,
     recs: Vec<StlClickRecord>,
     text: &[u8],
     width: c_int,
     tabline: bool,
 ) {
-    if defs.is_empty() {
+    if line.cells.is_empty() {
         return;
     }
     let mut col = 0;
     let mut len = 0;
     let mut from = 0;
-    let mut cur = StlClickDefinition::default();
+    let mut cur = NO_CLICK;
+    let mut cur_name = None;
     // The slice bounds below are C's `assert(len <= width)` made real:
     // upstream writes past the array when a record claims more cells than
     // the line has, and the reserve before the expansion guarantees `width`
@@ -216,25 +227,39 @@ pub(crate) fn fill_click_defs(
         len += strnsize(text.get(from..).unwrap_or_default(), bytes as c_int);
         debug_assert!(len <= width, "len <= width");
         if col < len {
-            defs[col as usize..len as usize].fill(cur);
+            claim(line, col..len, cur, cur_name.take());
             col = len;
         }
         // Otherwise this run is zero cells wide, and the name it carries is
         // dropped with it.
         from = rec.start;
-        cur = rec.def;
+        (cur, cur_name) = (rec.def, rec.func);
         if !tabline && !(cur.type_0 == kStlClickDisabled || cur.type_0 == kStlClickFuncRun) {
             cur.type_0 = kStlClickDisabled;
         }
     }
     if col < width {
-        defs[col as usize..width as usize].fill(cur);
+        claim(line, col..width, cur, cur_name);
     }
+}
+
+/// Fill `cols` with `def`, naming `name` as its handler when there is one.
+fn claim(
+    line: &mut ClickLine,
+    cols: core::ops::Range<c_int>,
+    mut def: StlClickDefinition,
+    name: Option<CString>,
+) {
+    if let Some(name) = name {
+        line.funcs.push(name);
+        def.func = u32::try_from(line.funcs.len()).unwrap_or(0);
+    }
+    line.cells[cols.start as usize..cols.end as usize].fill(def);
 }
 
 /// Run `f` over the tab page line's definitions, which the screen resize
 /// sizes to `Columns`.
-pub(crate) fn with_tab_click_defs<R>(f: impl FnOnce(&mut Vec<StlClickDefinition>) -> R) -> R {
+pub(crate) fn with_tab_click_defs<R>(f: impl FnOnce(&mut ClickLine) -> R) -> R {
     tab_page_click_defs.with_mut(f)
 }
 
