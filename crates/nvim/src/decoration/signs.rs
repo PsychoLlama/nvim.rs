@@ -14,6 +14,13 @@
 //! *on* it.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::cmp::{Ordering, Reverse};
 
@@ -197,7 +204,7 @@ pub fn decor_redraw_signs(
     let num_text = signs
         .iter()
         .filter(|item| with_decor_item(item.idx, DecorSignHighlight::has_text))
-        .count() as c_int;
+        .count();
 
     if signs.is_empty() {
         return;
@@ -210,7 +217,7 @@ pub fn decor_redraw_signs(
     } else {
         wp.w_scwidth
     };
-    let len = width.min(num_text).max(0) as usize;
+    let len = usize::try_from(width).unwrap_or(0).min(num_text);
 
     // A stable sort, and the comparator is a total order on distinct signs:
     // `sign_add_id` is handed out one per placement, so two entries can only
@@ -278,6 +285,11 @@ pub enum SignCountHalf {
     Add,
 }
 
+/// The histogram slot of rows that show `width` signs, which is positive.
+fn width_index(width: c_int) -> usize {
+    usize::try_from(width - 1).expect("a positive sign column width")
+}
+
 /// Re-counts the signs on rows `row1..=row2` and folds the difference into
 /// `buffer.b_signcols`, the histogram `'signcolumn'`'s `auto:N` reads.
 pub fn buf_signcols_count_range(
@@ -301,7 +313,9 @@ fn buf_signcols_count(mut buffer: Buf, row1: c_int, row2: c_int, add: c_int, hal
         return;
     }
 
-    let mut count = vec![0 as c_int; (row2 + 1 - row1) as usize];
+    // Row `row1 + i` is `count[i]`; the test above made the range non-empty.
+    let row_index = |row: c_int| usize::try_from(row - row1).expect("a row of the range");
+    let mut count = vec![0 as c_int; row_index(row2) + 1];
     let mut itr = MarkTreeIter::default();
     let mut walk = Cursor::in_buffer(buffer, &mut itr);
 
@@ -310,7 +324,7 @@ fn buf_signcols_count(mut buffer: Buf, row1: c_int, row2: c_int, add: c_int, hal
     while let Some(pair) = walk.step_overlap() {
         if pair.start.flags.has(MtFlags::DECOR_SIGNTEXT) && !mt_invalid(pair.start) {
             for i in row1..=row2.min(pair.end_pos.row) {
-                count[(i - row1) as usize] += 1;
+                count[row_index(i)] += 1;
             }
         }
     }
@@ -325,7 +339,7 @@ fn buf_signcols_count(mut buffer: Buf, row1: c_int, row2: c_int, add: c_int, hal
         if mark.flags.has(MtFlags::DECOR_SIGNTEXT) && !mt_invalid(mark) && !mt_end(mark) {
             let end: MTPos = walk.altpos(mark);
             for i in mark.pos.row..=row2.min(end.row) {
-                count[(i - row1) as usize] += 1;
+                count[row_index(i)] += 1;
             }
         }
         walk.step_filter(row2 + 1, 0, &SIGNTEXT_FILTER);
@@ -334,14 +348,14 @@ fn buf_signcols_count(mut buffer: Buf, row1: c_int, row2: c_int, add: c_int, hal
     for &rowcount in &count {
         let prevwidth = SIGN_SHOW_MAX.min(rowcount - add);
         if half != SignCountHalf::Add && prevwidth > 0 {
-            let slot = &mut buffer.b_signcols.count[(prevwidth - 1) as usize];
+            let slot = &mut buffer.b_signcols.count[width_index(prevwidth)];
             *slot -= 1;
             // TODO(bfredl): correct marktree splicing so that this doesn't fail
             debug_assert!(*slot >= 0);
         }
         let width = SIGN_SHOW_MAX.min(rowcount);
         if half != SignCountHalf::Subtract && width > 0 {
-            buffer.b_signcols.count[(width - 1) as usize] += 1;
+            buffer.b_signcols.count[width_index(width)] += 1;
             if width > buffer.b_signcols.max {
                 buffer.b_signcols.max = width;
             }

@@ -1,4 +1,11 @@
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -36,6 +43,7 @@ use crate::lua::executor::{nlua_call_ref_reporting, release_luaref};
 use crate::message_fmt::msg_bytes;
 use crate::r#move::validate_botline_win;
 use crate::msg_schedule_semsg_multiline;
+use crate::narrow::number_as_int;
 use crate::types::builders::ArrayBuf;
 use crate::types::{
     Array, DecorProvider, DecorProvider_state, Error, Integer, LineNr, LuaRef, LuaRetMode, NS,
@@ -238,7 +246,9 @@ pub(crate) fn decor_providers_start() {
         }
         if p.redraw_start != LUA_NOREF {
             let mut args = ArrayBuf::<2>::new();
-            args.push(Object::integer(display_tick.get() as c_int as Integer));
+            args.push(Object::integer(Integer::from(number_as_int(
+                display_tick.get().cast_signed(),
+            ))));
             let (name, cb, args) = (c"start", p.redraw_start, args.array());
             // the provider is named by index, so the vector may move
             // under the call; `args` is handed over.
@@ -396,8 +406,8 @@ pub(crate) fn decor_providers_invoke_range(
                         col = n;
                     }
                     with_provider(idx, |p| {
-                        p.win_skip_row = row as c_int;
-                        p.win_skip_col = col as c_int;
+                        p.win_skip_row = number_as_int(row);
+                        p.win_skip_col = number_as_int(col);
                     });
                 }
                 _ => {}
@@ -418,7 +428,7 @@ pub(crate) fn decor_providers_invoke_buf(buffer: Buf) {
         if p.state == kDecorProviderActive && p.redraw_buf != LUA_NOREF {
             let mut args = ArrayBuf::<2>::new();
             args.push(Object::buffer(buffer.handle));
-            args.push(Object::integer(display_tick.get() as Integer));
+            args.push(Object::integer(display_tick.get().cast_signed()));
             decor_provider_invoke(idx, c"buf", p.redraw_buf, args.array(), true, None);
         }
     }
@@ -432,7 +442,9 @@ pub(crate) fn decor_providers_invoke_end() {
         let p = provider(idx);
         if p.state != kDecorProviderDisabled && p.redraw_end != LUA_NOREF {
             let mut args = ArrayBuf::<1>::new();
-            args.push(Object::integer(display_tick.get() as c_int as Integer));
+            args.push(Object::integer(Integer::from(number_as_int(
+                display_tick.get().cast_signed(),
+            ))));
             decor_provider_invoke(idx, c"end", p.redraw_end, args.array(), true, None);
         }
     }

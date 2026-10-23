@@ -58,7 +58,7 @@
   "untested_dirs": 10,
   "cchar_scratch": 105,
   "files_without_deny_unsafe_op": 0,
-  "files_without_deny_casts": 682,
+  "files_without_deny_casts": 679,
   "files_allowing_non_camel_case_types": 23,
   "files_allowing_non_snake_case": 5,
   "files_allowing_non_upper_case_globals": 263,
