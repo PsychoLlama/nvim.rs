@@ -17,7 +17,6 @@
 
 use crate::memline::MlFlags;
 use core::ffi::c_int;
-use core::ptr;
 
 use super::{
     Env, Fill, Kind, MAX_STL_EVAL_DEPTH, NumberBase, StlItem, StlScratch, TMPLEN, as_number,
@@ -229,11 +228,7 @@ pub(super) fn run(
             }
             // The name is only copied when the caller asked for the click
             // records; otherwise the region is recorded without one.
-            let cmd = if discard_clicks {
-                ptr::null_mut()
-            } else {
-                dup_cstring(&fmt[from..p])
-            };
+            let cmd = (!discard_clicks).then(|| dup_cstring(&fmt[from..p]));
             with_scratch(|s| {
                 s.push_item(StlItem {
                     start: pos,

@@ -13,7 +13,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use crate::types::{ArgListId, VirtText};
+use crate::types::{ArgListId, VirtText, WinClickDefs};
 use core::ffi::{c_char, c_int};
 
 use super::*;
@@ -69,6 +69,7 @@ fn zeroed_window() -> Win {
             (&raw mut (*wp).w_folds).write(Vec::new());
             (&raw mut (*wp).w_lines).write(Vec::new());
             (&raw mut (*wp).w_p_cc_cols).write(Vec::new());
+            (&raw mut (*wp).w_click_defs).write(WinClickDefs::default());
             (&raw mut (*wp).w_config).write(WIN_CONFIG_INIT);
             (&raw mut (*wp).w_localdir).write(None);
             (&raw mut (*wp).w_prevdir).write(None);
@@ -298,12 +299,7 @@ pub(crate) fn win_free(window: Win, tabpage: Option<TabPage>) {
     }
     window.w_localdir = None;
     window.w_prevdir = None;
-    free_click_defs(window.w_status_click_defs, window.w_status_click_defs_size);
-    free_click_defs(window.w_winbar_click_defs, window.w_winbar_click_defs_size);
-    free_click_defs(
-        window.w_statuscol_click_defs,
-        window.w_statuscol_click_defs_size,
-    );
+    window.w_click_defs = WinClickDefs::default();
 
     for buf in buffers() {
         forget_wininfo(buf, window);

@@ -22,7 +22,7 @@ use crate::fileio::Report;
 use crate::formatted;
 use crate::memline::MlFlags;
 use crate::strings::has_char;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 
 use super::*;
 use crate::charset::{strsize, trans_characters_in};
@@ -72,19 +72,10 @@ fn has_flag(arg: &CStr, c: u8) -> bool {
     has_char(arg, c_int::from(c))
 }
 
-/// Copy as much of `text` into `out` as fits with a terminator after it, as
-/// `snprintf` would: answers how many bytes went in. Nothing at all for an
-/// empty `out`.
-fn put_cut(out: &mut [c_char], text: &[u8]) -> usize {
-    let Some(room) = out.len().checked_sub(1) else {
-        return 0;
-    };
-    let len = text.len().min(room);
-    for (to, &from) in out.iter_mut().zip(&text[..len]) {
-        *to = from.cast_signed();
-    }
-    out[len] = 0;
-    len
+/// As much of `text` as a `room`-byte buffer holds with a terminator after
+/// it, as `snprintf` would cut it.
+fn cut(text: &[u8], room: usize) -> Vec<u8> {
+    text[..text.len().min(room.saturating_sub(1))].to_vec()
 }
 
 // ---------------------------------------------------------------------------
@@ -407,19 +398,11 @@ pub(crate) fn col_text(col: c_int, vcol: c_int) -> String {
     }
 }
 
-/// [`col_text`] written into a caller's buffer, cut to fit with its
-/// terminator. Answers what was written.
-pub fn col_print(buf: &mut [c_char], col: c_int, vcol: c_int) -> c_int {
-    put_cut(buf, col_text(col, vcol).as_bytes()) as c_int
-}
-
 // ---------------------------------------------------------------------------
 // 'title' and 'icon'
 
 /// Build `'title'` and `'icon'` and, when either changed, tell the UI.
 pub fn maketitle() {
-    let mut scratch: [c_char; IOSIZE as usize] = [0; IOSIZE as usize];
-
     if !redrawing() {
         // Postpone updating the title when 'lazyredraw' is set.
         need_maketitle.set(true);
@@ -443,18 +426,16 @@ pub fn maketitle() {
         }
         let title = if !titlestring.is_empty() {
             if stl_syntax.get().has(StlSyntax::TITLE) {
-                build_stl(&mut scratch, titlestring.as_cstr(), kOptTitlestring, maxlen);
-                cstr::in_chars(&scratch)
+                build_stl(&titlestring, kOptTitlestring, maxlen)
             } else {
-                titlestring.as_cstr()
+                titlestring.to_vec()
             }
         } else {
             // Format: "fname + (path) (1 of 2) - Nvim".
-            let default = c"%t%( %M%)%( (%{expand('%:p:~:h')})%)%a - Nvim";
-            build_stl(&mut scratch, default, kOptTitlestring, maxlen);
-            cstr::in_chars(&scratch)
+            let default = b"%t%( %M%)%( (%{expand('%:p:~:h')})%)%a - Nvim";
+            build_stl(default, kOptTitlestring, maxlen)
         };
-        mustset = value_change(Some(title), &lasttitle);
+        mustset = value_change(Some(&title), &lasttitle);
     } else {
         value_change(None, &lasttitle);
     }
@@ -462,16 +443,14 @@ pub fn maketitle() {
     if p_icon() {
         let icon = if !iconstring.is_empty() {
             if stl_syntax.get().has(StlSyntax::ICON) {
-                build_stl(&mut scratch, iconstring.as_cstr(), kOptIconstring, 0);
-                cstr::in_chars(&scratch)
+                build_stl(&iconstring, kOptIconstring, 0)
             } else {
-                iconstring.as_cstr()
+                iconstring.to_vec()
             }
         } else {
-            fill_icon(&mut scratch);
-            cstr::in_chars(&scratch)
+            default_icon()
         };
-        mustset |= value_change(Some(icon), &lasticon);
+        mustset |= value_change(Some(&icon), &lasticon);
     } else {
         mustset |= value_change(None, &lasticon);
     }
@@ -482,19 +461,19 @@ pub fn maketitle() {
 }
 
 /// `build_stl_str_hl` for the title and icon, which want the text and
-/// nothing else it can report.
-fn build_stl(dst: &mut [c_char; IOSIZE as usize], fmt: &CStr, opt: OptIndex, maxlen: c_int) {
+/// nothing else it can report, as an `IOSIZE` buffer holds it.
+fn build_stl(fmt: &[u8], opt: OptIndex, maxlen: c_int) -> Vec<u8> {
     // The title and icon are global: neither names a scope.
     let from = FmtSource {
         opt_idx: opt,
         opt_scope: OptionSetFlags::NONE,
     };
-    build_stl_text(current_win(), dst, fmt, from, maxlen);
+    build_stl_text(current_win(), IOSIZE as usize, fmt.to_vec(), from, maxlen)
 }
 
 /// The default icon text: the buffer's name, its last 100 bytes cut at a
 /// character boundary.
-fn fill_icon(dst: &mut [c_char; IOSIZE as usize]) {
+fn default_icon() -> Vec<u8> {
     let buf = Buf::current();
     let name = match buf_spname(&buf) {
         Some(name) => name.to_bytes(),
@@ -509,13 +488,13 @@ fn fill_icon(dst: &mut [c_char; IOSIZE as usize]) {
     let mut out = [0u8; IOSIZE as usize];
     out[..name.len() - start].copy_from_slice(&name[start..]);
     trans_characters_in(&mut out);
-    put_cut(dst, cstr::until_nul(&out));
+    cstr::until_nul(&out).to_vec()
 }
 
 /// Whether `now` differs from what the cell holds, replacing it if it does.
 /// Answers whether [`resettitle`] should be called.
-fn value_change(now: Option<&CStr>, last: &GlobalCell<Option<XString>>) -> bool {
-    if last.with(|old| old.as_deref() == now.map(CStr::to_bytes)) {
+fn value_change(now: Option<&[u8]>, last: &GlobalCell<Option<XString>>) -> bool {
+    if last.with(|old| old.as_deref() == now) {
         return false;
     }
     let Some(now) = now else {
@@ -523,7 +502,7 @@ fn value_change(now: Option<&CStr>, last: &GlobalCell<Option<XString>>) -> bool 
         resettitle();
         return false;
     };
-    last.set(Some(XString::from_cstr(now)));
+    last.set(Some(XString::from_bytes(now)));
     true
 }
 
@@ -542,10 +521,10 @@ pub fn resettitle() {
 
 /// The relative cursor position -- "All", "Top", "Bot" or a percentage --
 /// into `buf`, cut to fit with its terminator. Answers what was written.
-pub fn get_rel_pos(window: Win, buf: &mut [c_char]) -> c_int {
+pub fn get_rel_pos(window: Win, room: usize) -> Vec<u8> {
     // At least three characters are needed to write anything.
-    if buf.len() < 3 {
-        return 0;
+    if room < 3 {
+        return Vec::new();
     }
     let win = window;
 
@@ -565,10 +544,10 @@ pub fn get_rel_pos(window: Win, buf: &mut [c_char]) -> c_int {
         } else {
             gettext(c"Bot")
         };
-        return put_cut(buf, all_or_bot.to_bytes()) as c_int;
+        return cut(all_or_bot.to_bytes(), room);
     }
     if above <= 0 {
-        return put_cut(buf, gettext(c"Top").to_bytes()) as c_int;
+        return cut(gettext(c"Top").to_bytes(), room);
     }
 
     // The localized percentage value, as an eight-byte buffer held it. Read
@@ -579,11 +558,10 @@ pub fn get_rel_pos(window: Win, buf: &mut [c_char]) -> c_int {
     static PADDED: &CStr = c"%3s";
     let (percent, padded) = (gettext(PERCENT), gettext(PADDED));
     if ptr::eq(percent, PERCENT) && ptr::eq(padded, PADDED) {
-        return put_cut(buf, format!("{perc:>2}%").as_bytes()) as c_int;
+        return cut(format!("{perc:>2}%").as_bytes(), room);
     }
     let value = formatted!(8, percent.to_bytes(), perc);
-    let text = formatted!(buf.len(), padded.to_bytes(), value.as_slice());
-    put_cut(buf, &text) as c_int
+    formatted!(room, padded.to_bytes(), value.as_slice())
 }
 
 /// The "(2 of 8)" format and its two numbers, when more than one file is
@@ -604,12 +582,11 @@ fn arg_number(window: Win) -> Option<(&'static CStr, c_int, c_int)> {
     Some((fmt, window.w_arg_idx + 1, argcount))
 }
 
-/// Write "(2 of 8)" into `buf`, cut to fit with its terminator, when more
-/// than one file is being edited. Answers how many characters that took.
-pub fn append_arg_number(window: Win, buf: &mut [c_char]) -> c_int {
+/// "(2 of 8)", cut as a `room`-byte buffer with its terminator would cut
+/// it, when more than one file is being edited.
+pub fn append_arg_number(window: Win, room: usize) -> Vec<u8> {
     let Some((fmt, idx, count)) = arg_number(window) else {
-        return 0;
+        return Vec::new();
     };
-    let text = formatted!(buf.len(), fmt.to_bytes(), idx, count);
-    put_cut(buf, &text) as c_int
+    formatted!(room, fmt.to_bytes(), idx, count)
 }

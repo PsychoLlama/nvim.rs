@@ -14,27 +14,23 @@
 //! the expander and its callers both name them (the format language's own
 //! alphabet is [`crate::types::StlOpt`]); [`build_statuscol_str`]
 //! (`'statuscolumn'`, which is the same language with a different item set)
-//! and the two small entry points -- [`fillchar_status`] and
-//! [`redraw_custom_statusline`] -- the drawing layer calls in; and four
-//! wrappers that are what makes the three children safe code:
+//! and the small entry points -- [`fillchar_status_of`] and
+//! [`redraw_custom_statusline`] -- the drawing layer calls in; and the
+//! pieces the three children share:
 //!
 //! * [`StlJob`] gathers everything one call into [`build_stl_str_hl`] is
-//!   parameterised by, so the four callers each spell one `run()` instead
-//!   of a twelve-argument call with four pointer-shaped out-parameters.
-//!   [`HlRuns`] and [`ClickRecs`] wrap the two NUL-terminated arrays it
-//!   answers through, and iterating one is then safe.
-//! * [`ClickArena`] is a window's (or the tab line's) `%@Func@` click
-//!   definitions: one entry per screen cell, sized to the line's width.
-//!   Allocating, clearing and filling it are the three C entry points, of
-//!   which the first two are still called from `window.rs` by pointer.
+//!   parameterised by, so the callers each spell one `run()`, which answers
+//!   the text and the records the caller asked for, owned.
+//! * The click-definition functions keep a window's (or the tab line's)
+//!   `%@Func@` click definitions: one entry per screen cell, sized to the
+//!   line's width.
 //! * [`GridRef`] is the screen grid a line is painted on, and the `paint_*`
 //!   family below is the one-line batch API with its "a batch is in
 //!   progress" obligation discharged once here.
 //!
 //! Original: `src/nvim/statusline.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -42,10 +38,9 @@ pub(crate) mod state;
 use crate::statusline::state::tab_page_click_defs;
 use crate::types::CAR;
 use crate::types::NL;
-use core::ffi::{CStr, c_char, c_int};
-use core::{ptr, slice};
+use core::ffi::{CStr, c_int};
 
-use crate::charset::vim_strnsize;
+use crate::charset::strnsize;
 use crate::drawscreen::redrawing;
 use crate::eval::vars::set_vim_var_nr;
 use crate::global_cell::GlobalCell;
@@ -56,13 +51,12 @@ use crate::grid::{
 pub(crate) use crate::highlight::namespace::hl_attr;
 use crate::highlight::{hl_combine_attr, win_hl_attr};
 use crate::highlight_group::{HLF_S, HLF_SNC};
-use crate::memory::{xcalloc, xfree, xstrdup};
 use crate::options::kOptStatuscolumn;
-use crate::optionstr::OptString;
+use crate::optionstr::OptStringRef;
 use crate::types::{
     AlignTextPos, ApiDict, Array, GridView, Hlf, LineNr, MAXPATHL, Object, OptIndex,
-    OptionSetFlags, ScreenChar, StatusCol, StlClickDefinition, StlClickDefinition_type_0,
-    StlClickRecord, VarNumber, Vv, WinSplit, WinStyle, size_t, stl_hlrec_t,
+    OptionSetFlags, ScreenChar, SignTextAttrs, StatusCol, StlClickDefinition,
+    StlClickDefinition_type_0, StlClickRecord, VarNumber, Vv, WinSplit, WinStyle,
 };
 use crate::window::global_stl_height;
 use crate::winlayer::Win;
@@ -105,120 +99,13 @@ pub const TMPLEN: ::core::ffi::c_int = 70 as ::core::ffi::c_int;
 // The format expander, wrapped
 // ---------------------------------------------------------------------------
 
-/// The format string one expansion runs over.
-///
-/// Every drawing caller hands over a private *copy*: expanding a format can
-/// run a function that `:set`s the very option the format came from, which
-/// frees the string out from under the expander. `nvim_eval_statusline()`
-/// is the exception -- its format is an API argument nobody can reach.
-pub(crate) struct Fmt {
-    text: *mut c_char,
-    owned: bool,
-}
-
-impl Fmt {
-    /// A heap copy of `src`, freed when the value is dropped.
-    ///
-    /// # Safety
-    /// `src` must be a NUL-terminated string.
-    pub(crate) unsafe fn copy_of(src: *const c_char) -> Self {
-        Fmt {
-            // SAFETY: the caller's promise.
-            text: unsafe { xstrdup(src) },
-            owned: true,
-        }
-    }
-
-    /// A format the caller already owns a stable buffer for.
-    ///
-    /// # Safety
-    /// `text` must be a NUL-terminated string that outlives the expansion.
-    pub(crate) const unsafe fn borrowed(text: *mut c_char) -> Self {
-        Fmt { text, owned: false }
-    }
-}
-
-impl Drop for Fmt {
-    fn drop(&mut self) {
-        if self.owned {
-            // SAFETY: the copy this value made, freed exactly once.
-            unsafe { xfree(self.text.cast()) };
-        }
-    }
-}
-
-/// The highlight runs `build_stl_str_hl()` recorded: one per group change,
-/// terminated by a run with a null `start`.
-#[derive(Clone, Copy)]
-pub(crate) struct HlRuns(*mut stl_hlrec_t);
-
-impl HlRuns {
-    /// The runs, in order. The terminator is not one of them.
-    pub(crate) fn iter(self) -> impl Iterator<Item = stl_hlrec_t> {
-        (0..).map_while(move |i| {
-            // SAFETY: the expander wrote a terminating run, so the walk
-            // stops inside the array it allocated.
-            let run = unsafe { *self.0.add(i) };
-            (!run.start.is_null()).then_some(run)
-        })
-    }
-
-    /// Where the first run starts, when it starts anywhere.
-    pub(crate) fn first_start(self) -> Option<*mut c_char> {
-        // SAFETY: the array holds at least the terminator.
-        let start = unsafe { (*self.0).start };
-        (!start.is_null()).then_some(start)
-    }
-}
-
-/// The `%@Func@` click records `build_stl_str_hl()` recorded, terminated by
-/// a record with a null `start`.
-#[derive(Clone, Copy)]
-pub(crate) struct ClickRecs(*mut StlClickRecord);
-
-impl ClickRecs {
-    /// The records, in order. The terminator is not one of them.
-    pub(crate) fn iter(self) -> impl Iterator<Item = StlClickRecord> {
-        (0..).map_while(move |i| {
-            // SAFETY: as [`HlRuns::iter`].
-            let rec = unsafe { (*self.0.add(i)).clone() };
-            (!rec.start.is_null()).then_some(rec)
-        })
-    }
-}
-
-/// Where the highlight runs go.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) enum HlDest {
-    /// Nowhere: the caller only wants the text.
-    Discard,
-    /// Back to the caller, in [`StlBuilt::hl`].
-    Runs,
-    /// Into the `'statuscolumn'` state's own `hlrec` field, which is where
-    /// the column drawer reads them from. C passes `&stcp->hlrec` as the
-    /// same out-parameter, so this is one destination and not two.
-    StatusCol,
-}
-
-/// What one expansion answered.
-pub(crate) struct StlBuilt {
-    /// The width of the result in screen cells.
-    pub width: c_int,
-    /// The highlight runs, for [`HlDest::Runs`].
-    pub hl: Option<HlRuns>,
-    /// How many of them there are, which only `nvim_eval_statusline()` uses.
-    pub hl_len: size_t,
-    /// The click records, when [`StlJob::want_clicks`] asked for them.
-    pub clicks: Option<ClickRecs>,
-}
-
-/// One expansion of a `%`-format: everything `build_stl_str_hl()` takes
-/// apart from the buffer it writes into.
+/// One expansion of a `%`-format: everything `build_stl_str_hl()` takes.
 pub(crate) struct StlJob<'a> {
     /// The window the items describe. For `'tabline'` this is `curwin`.
     pub win: Win,
-    /// The format itself.
-    pub fmt: Fmt,
+    /// The format itself, the caller's own copy: expanding a format can run
+    /// a function that `:set`s the very option the format came from.
+    pub fmt: Vec<u8>,
     /// Which option the format came from, and in which scope. `kOptInvalid`
     /// means "no option", which is also what switches the sandbox off --
     /// `nvim_eval_statusline()` can therefore never reach it.
@@ -226,235 +113,129 @@ pub(crate) struct StlJob<'a> {
     /// What to pad with, and how many cells there are to fill.
     pub fillchar: ScreenChar,
     pub maxwidth: c_int,
-    /// Where the highlight runs go, and whether to record click records.
-    pub hl: HlDest,
+    /// The size of the buffer the expansion works in, which is where the
+    /// text is cut: `MAXPATHL` for everything drawn.
+    pub room: usize,
+    /// Whether to record the highlight runs and the click records.
+    pub want_hl: bool,
     pub want_clicks: bool,
-    /// The `'statuscolumn'` state, when that is what is being built.
-    pub stcp: Option<&'a mut StatusCol>,
+    /// The `'statuscolumn'` line, when that is what is being built.
+    pub stc: Option<StcLine<'a>>,
 }
 
 impl StlJob<'_> {
-    /// Expand the format into `out`.
-    ///
-    /// # Safety
-    /// This re-enters the editor -- a `%{}` item evaluates arbitrary Vim
-    /// script -- so nothing may be held across it, and `out` must not alias
-    /// `NameBuff` (the expander uses it as scratch).
-    pub(crate) unsafe fn run(self, out: &mut [c_char]) -> StlBuilt {
-        let mut runs = ptr::null_mut();
-        let mut hl_len: size_t = 0;
-        let mut clicks = ptr::null_mut();
-        let stcp = self.stcp.map_or(ptr::null_mut(), ptr::from_mut);
-        let hltab = match self.hl {
-            HlDest::Discard => ptr::null_mut(),
-            HlDest::Runs => &raw mut runs,
-            // SAFETY: `stcp` is the caller's live status-column state.
-            HlDest::StatusCol => unsafe { &raw mut (*stcp).hlrec },
-        };
-        let clk = if self.want_clicks {
-            &raw mut clicks
-        } else {
-            ptr::null_mut()
-        };
+    /// Expand the format. This re-enters the editor -- a `%{}` item
+    /// evaluates arbitrary Vim script -- so nothing may be held across it.
+    pub(crate) fn run(self) -> StlOutput {
         let (opt_idx, opt_scope) = self.opt;
-        let from = FmtSource { opt_idx, opt_scope };
-        let sinks = StlSinks {
-            hltab,
-            hltab_len: &raw mut hl_len,
-            tabtab: clk,
-            stcp,
+        let wants = StlWants {
+            hl: self.want_hl,
+            clicks: self.want_clicks,
+            stc: self.stc,
         };
-        let (w, f, fc, mw) = (self.win, self.fmt.text, self.fillchar, self.maxwidth);
-        // SAFETY: `fmt` is NUL-terminated by [`Fmt`]'s constructors, the
-        // window is live, and every sink is null or a local of this frame.
-        let width = unsafe { build_stl_str_hl(w, out, f, from, fc, mw, sinks) };
-        StlBuilt {
-            width,
-            hl: (self.hl == HlDest::Runs).then_some(HlRuns(runs)),
-            hl_len,
-            clicks: self.want_clicks.then_some(ClickRecs(clicks)),
-        }
+        let from = FmtSource { opt_idx, opt_scope };
+        build_stl_str_hl(
+            self.win,
+            self.room,
+            self.fmt,
+            from,
+            self.fillchar,
+            self.maxwidth,
+            wants,
+        )
     }
 }
 
 // ---------------------------------------------------------------------------
-// The click-definition arenas
+// The click definitions
 // ---------------------------------------------------------------------------
 
-/// A blank click definition: what a cell nobody claimed holds.
-pub(crate) const NO_CLICK: StlClickDefinition = StlClickDefinition {
-    type_0: kStlClickDisabled,
-    tabnr: 0,
-    func: ptr::null_mut(),
-};
+/// Blank every definition: what a cell nobody claimed holds.
+pub(crate) fn clear_click_defs(defs: &mut [StlClickDefinition]) {
+    defs.fill(StlClickDefinition::default());
+}
 
-/// A `%@Func@` click-definition array: one entry per screen cell of the line
-/// it describes.
+/// Make room for `width` cells, replacing the definitions when there are
+/// fewer: a cleared line's are blank, and so are the new ones.
+pub(crate) fn reserve_click_defs(defs: &mut Vec<StlClickDefinition>, width: c_int) {
+    let width = usize::try_from(width).unwrap_or(0);
+    if defs.len() < width {
+        *defs = vec![StlClickDefinition::default(); width];
+    }
+}
+
+/// Claim `cols` for tab page `tabnr`, the tab line's own way of filling its
+/// definitions.
 ///
-/// The array outlives the redraw that filled it -- `jump_to_mouse()` reads it
-/// when the click arrives -- so it is a plain C allocation the window (or the
-/// `tab_page_click_defs` global) owns, not a `Vec`. Each `func` string is
-/// owned by the *run* of cells holding it, which is why clearing compares
-/// each entry with its predecessor before freeing.
-pub(crate) struct ClickArena {
-    defs: *mut StlClickDefinition,
-    size: size_t,
+/// An empty or backwards range claims nothing, which is what upstream's
+/// `while (scol < col)` does when the line is already full.
+pub(crate) fn set_click_defs(
+    defs: &mut [StlClickDefinition],
+    cols: core::ops::Range<c_int>,
+    kind: StlClickDefinition_type_0,
+    tabnr: c_int,
+) {
+    if defs.is_empty() || cols.start >= cols.end {
+        return;
+    }
+    defs[cols.start as usize..cols.end as usize].fill(StlClickDefinition {
+        type_0: kind,
+        tabnr,
+        func: None,
+    });
 }
 
-impl ClickArena {
-    /// # Safety
-    /// `defs` must be null or an allocation of `size` entries.
-    pub(crate) unsafe fn new(defs: *mut StlClickDefinition, size: size_t) -> Self {
-        ClickArena { defs, size }
-    }
-
-    /// The allocation and its size, to store back into whatever owns them.
-    pub(crate) fn parts(&self) -> (*mut StlClickDefinition, size_t) {
-        (self.defs, self.size)
-    }
-
-    /// The whole allocation, when there is one.
-    fn entries(&mut self) -> Option<&mut [StlClickDefinition]> {
-        (!self.defs.is_null()).then(|| {
-            // SAFETY: the constructor's promise.
-            unsafe { slice::from_raw_parts_mut(self.defs, self.size) }
-        })
-    }
-
-    /// Free the strings the array holds and blank it.
-    pub(crate) fn clear(&mut self) {
-        let Some(defs) = self.entries() else { return };
-        for i in 0..defs.len() {
-            if i == 0 || defs[i].func != defs[i - 1].func {
-                // SAFETY: one allocation per run of equal `func`s, made by
-                // the expander and released exactly here.
-                unsafe { xfree(defs[i].func.cast()) };
-            }
-        }
-        // Blanking is a second pass on purpose: the comparison above reads
-        // the entry before this one.
-        defs.fill(NO_CLICK);
-    }
-
-    /// Make room for `width` cells, growing the allocation if it is smaller.
-    pub(crate) fn reserve(&mut self, width: c_int) {
-        if self.size >= width as size_t {
-            return;
-        }
-        // SAFETY: the constructor's promise -- this allocation is ours.
-        unsafe { xfree(self.defs.cast()) };
-        self.size = width as size_t;
-        // SAFETY: a fresh zeroed allocation of the size just recorded.
-        self.defs = unsafe { xcalloc(self.size, size_of::<StlClickDefinition>()) }.cast();
-    }
-
-    /// Claim `cols` for tab page `tabnr`, the tab line's own way of filling
-    /// the arena: no strings are involved, so nothing has to be freed.
-    ///
-    /// An empty or backwards range claims nothing, which is what upstream's
-    /// `while (scol < col)` does when the line is already full.
-    pub(crate) fn set(
-        &mut self,
-        cols: core::ops::Range<c_int>,
-        kind: StlClickDefinition_type_0,
-        tabnr: c_int,
-    ) {
-        let Some(defs) = self.entries() else { return };
-        if cols.start >= cols.end {
-            return;
-        }
-        defs[cols.start as usize..cols.end as usize].fill(StlClickDefinition {
-            type_0: kind,
-            tabnr,
-            func: ptr::null_mut(),
-        });
-    }
-
-    /// Spread `recs` over the first `width` cells.
-    ///
-    /// `buf` is the expanded line the records point into; each record claims
-    /// everything from where the previous one started up to its own start,
-    /// measured in screen cells rather than bytes.
-    ///
-    /// `tabline` keeps the tab-page kinds; everywhere else only a click
-    /// *function* is honoured, because nothing else has a tab to name.
-    pub(crate) fn fill(
-        &mut self,
-        recs: ClickRecs,
-        buf: *const c_char,
-        width: c_int,
-        tabline: bool,
-    ) {
-        let Some(defs) = self.entries() else { return };
-        let mut col = 0;
-        let mut len = 0;
-        let mut from = buf;
-        let mut cur = NO_CLICK;
-        // The slice bounds below are C's `assert(len <= width)` made real:
-        // upstream writes past the array when a record claims more cells
-        // than the line has, and the reserve above guarantees `width` of
-        // them.
-        for rec in recs.iter() {
-            // SAFETY: `from` and `rec.start` are positions in the expanded
-            // line, `from` at or before `rec.start`.
-            len += unsafe { vim_strnsize(from, rec.start.offset_from(from) as c_int) };
-            debug_assert!(len <= width, "len <= width");
-            if col < len {
-                defs[col as usize..len as usize].fill(cur);
-                col = len;
-            } else {
-                // Nothing to claim: this run is zero cells wide, so the
-                // string it carries has no owner.
-                // SAFETY: as [`ClickArena::clear`].
-                unsafe { xfree(cur.func.cast()) };
-            }
-            from = rec.start;
-            cur = rec.def;
-            if !tabline && !(cur.type_0 == kStlClickDisabled || cur.type_0 == kStlClickFuncRun) {
-                cur.type_0 = kStlClickDisabled;
-            }
-        }
-        if col < width {
-            defs[col as usize..width as usize].fill(cur);
-        } else {
-            // SAFETY: as above.
-            unsafe { xfree(cur.func.cast()) };
-        }
-    }
-}
-
-/// The tab page line's definitions as an arena, for the redraw that fills
-/// them. Never `reserve`d: the screen resize sizes the vector.
-pub(crate) fn tab_click_defs_arena() -> ClickArena {
-    let (defs, size) = tab_page_click_defs.with_mut(|defs| (defs.as_mut_ptr(), defs.len()));
-    // SAFETY: the vector's `size` entries; it only changes size on a screen
-    // resize, which no arena is held across.
-    unsafe { ClickArena::new(defs, size) }
-}
-
-/// C's `stl_clear_click_defs()`, for the callers in `window.rs` that hold
-/// the array and its size as two separate fields.
+/// Spread `recs` over the first `width` cells.
 ///
-/// # Safety
-/// `click_defs` must be null or an allocation of `click_defs_size` entries.
-pub unsafe fn stl_clear_click_defs(click_defs: *mut StlClickDefinition, click_defs_size: size_t) {
-    // SAFETY: the caller's promise.
-    unsafe { ClickArena::new(click_defs, click_defs_size) }.clear();
+/// `text` is the expanded line the records name bytes of; each record claims
+/// everything from where the previous one started up to its own start,
+/// measured in screen cells rather than bytes.
+///
+/// `tabline` keeps the tab-page kinds; everywhere else only a click
+/// *function* is honoured, because nothing else has a tab to name.
+pub(crate) fn fill_click_defs(
+    defs: &mut [StlClickDefinition],
+    recs: Vec<StlClickRecord>,
+    text: &[u8],
+    width: c_int,
+    tabline: bool,
+) {
+    if defs.is_empty() {
+        return;
+    }
+    let mut col = 0;
+    let mut len = 0;
+    let mut from = 0;
+    let mut cur = StlClickDefinition::default();
+    // The slice bounds below are C's `assert(len <= width)` made real:
+    // upstream writes past the array when a record claims more cells than
+    // the line has, and the reserve before the expansion guarantees `width`
+    // of them.
+    for rec in recs {
+        let bytes = rec.start as isize - from as isize;
+        len += strnsize(text.get(from..).unwrap_or_default(), bytes as c_int);
+        debug_assert!(len <= width, "len <= width");
+        if col < len {
+            defs[col as usize..len as usize].fill(cur);
+            col = len;
+        }
+        // Otherwise this run is zero cells wide, and the name it carries is
+        // dropped with it.
+        from = rec.start;
+        cur = rec.def;
+        if !tabline && !(cur.type_0 == kStlClickDisabled || cur.type_0 == kStlClickFuncRun) {
+            cur.type_0 = kStlClickDisabled;
+        }
+    }
+    if col < width {
+        defs[col as usize..width as usize].fill(cur);
+    }
 }
 
-/// C's `stl_alloc_click_defs()`: the grown array and its new size.
-///
-/// # Safety
-/// As [`stl_clear_click_defs`]; `size` must be the owner's own record.
-pub unsafe fn stl_alloc_click_defs(
-    cdp: *mut StlClickDefinition,
-    width: ::core::ffi::c_int,
-    size: size_t,
-) -> (*mut StlClickDefinition, size_t) {
-    // SAFETY: the caller's promise -- `size` is what `cdp` was allocated at.
-    let mut arena = unsafe { ClickArena::new(cdp, size) };
-    arena.reserve(width);
-    arena.parts()
+/// Run `f` over the tab page line's definitions, which the screen resize
+/// sizes to `Columns`.
+pub(crate) fn with_tab_click_defs<R>(f: impl FnOnce(&mut Vec<StlClickDefinition>) -> R) -> R {
+    tab_page_click_defs.with_mut(f)
 }
 
 // ---------------------------------------------------------------------------
@@ -478,17 +259,8 @@ pub(crate) fn paint_schar(col: c_int, sc: ScreenChar, attr: c_int) {
 }
 
 /// Put `text` in the open batch, answering how many cells it took.
-pub(crate) fn paint_text(col: c_int, text: &[c_char], attr: c_int) -> c_int {
-    grid_line_puts(col, crate::cstr::as_bytes(text), attr)
-}
-
-/// [`paint_text`] up to the string's NUL rather than to a byte count.
-///
-/// Not the same call: with a length the expander measures each character
-/// against what is left of the slice, without one it measures against the
-/// terminator.
-pub(crate) fn paint_cstr(col: c_int, text: &CStr, attr: c_int) -> c_int {
-    grid_line_puts(col, text.to_bytes(), attr)
+pub(crate) fn paint_text(col: c_int, text: &[u8], attr: c_int) -> c_int {
+    grid_line_puts(col, text, attr)
 }
 
 /// Fill `col..end_col` with one glyph, answering where it stopped.
@@ -551,17 +323,6 @@ pub(crate) fn fillchar_status_of(win: Win) -> (Hlf, ScreenChar) {
     }
 }
 
-/// C's `fillchar_status()`, for the three callers outside this module.
-///
-/// # Safety
-/// `window` must be a live window and `group` a writable `Hlf`.
-pub unsafe fn fillchar_status(group: *mut Hlf, window: Win) -> ScreenChar {
-    let (g, fillchar) = fillchar_status_of(window);
-    // SAFETY: the caller's out-parameter.
-    unsafe { *group = g };
-    fillchar
-}
-
 /// Redraw `window`'s status line from `'statusline'`.
 pub fn redraw_custom_statusline(window: Win) {
     static ENTERED: GlobalCell<bool> = GlobalCell::new(false);
@@ -574,25 +335,21 @@ pub fn redraw_custom_statusline(window: Win) {
     ENTERED.set(false);
 }
 
-/// Build the `'statuscolumn'` string for line `lnum` into `buf`, answering
-/// its width in screen cells.
+/// Build the `'statuscolumn'` string for line `lnum`.
 ///
 /// `relnum` of -1 means the caller has already set `v:lnum`/`v:relnum` and
 /// only wants the text -- which is also what keeps the click definitions
-/// from being rebuilt for every line of the window.
-///
-/// # Safety
-/// `window` must be a live window, `lnum` one of its buffer's lines, `buf` a
-/// buffer of `MAXPATHL` bytes and `stcp` this line's status-column state.
-pub unsafe fn build_statuscol_str(
+/// from being rebuilt for every line of the window. `stcp` is this line's
+/// status-column state, whose `fold_vcol` the expansion writes, and `signs`
+/// the line's signs. The answer's `hl` is the highlight runs over its text.
+pub(crate) fn build_statuscol_str(
     window: Win,
     lnum: LineNr,
     relnum: LineNr,
-    buf: *mut ::core::ffi::c_char,
-    stcp: *mut StatusCol,
-) -> ::core::ffi::c_int {
-    // SAFETY: the caller's promise.
-    let (mut win, stcp) = unsafe { (window, &mut *stcp) };
+    stcp: &mut StatusCol,
+    signs: &[SignTextAttrs],
+) -> StlOutput {
+    let mut win = window;
     // Only update the click definitions once per window per redraw, and not
     // at all while the column is empty -- it is redrawn again once it is not.
     let fillclick = relnum >= 0 && stcp.width > 0 && lnum == win.w_topline;
@@ -604,31 +361,33 @@ pub unsafe fn build_statuscol_str(
 
     let job = StlJob {
         win,
-        // SAFETY: the window's own option string.
-        fmt: unsafe { Fmt::copy_of(win.w_onebuf_opt.wo_stc.value_ptr()) },
+        fmt: win.w_onebuf_opt.wo_stc.bytes().to_vec(),
         opt: (kOptStatuscolumn, OptionSetFlags::LOCAL),
         fillchar: 0,
         maxwidth: stcp.width,
-        hl: HlDest::StatusCol,
+        room: MAXPATHL as usize,
+        want_hl: true,
         want_clicks: fillclick,
-        stcp: Some(stcp),
+        stc: Some(StcLine {
+            foldinfo: stcp.foldinfo,
+            lnum: stcp.lnum,
+            sign_cul_id: stcp.sign_cul_id,
+            signs,
+            fold_vcol: core::cell::Cell::new(stcp.fold_vcol),
+        }),
     };
-    // SAFETY: `buf` is the caller's `MAXPATHL` buffer, and is never
-    // `NameBuff` (the drawing layer keeps its own).
-    let out = unsafe { slice::from_raw_parts_mut(buf, MAXPATHL as usize) };
-    // SAFETY: the expander re-enters the editor; nothing is held across it.
-    let built = unsafe { job.run(out) };
-
-    if let Some(clicks) = built.clicks {
-        // SAFETY: the window's own arena and its recorded size.
-        let mut arena =
-            unsafe { ClickArena::new(win.w_statuscol_click_defs, win.w_statuscol_click_defs_size) };
-        arena.clear();
-        arena.reserve(built.width);
-        arena.fill(clicks, buf, built.width, false);
-        let (defs, size) = arena.parts();
-        win.w_statuscol_click_defs = defs;
-        win.w_statuscol_click_defs_size = size;
+    // The expander re-enters the editor; nothing is held across it.
+    let mut built = job.run();
+    if let Some(fold_vcol) = built.fold_vcol {
+        stcp.fold_vcol = fold_vcol;
     }
-    built.width
+
+    if fillclick {
+        let defs = &mut win.w_click_defs.statuscol;
+        clear_click_defs(defs);
+        reserve_click_defs(defs, built.width);
+        let recs = core::mem::take(&mut built.clicks);
+        fill_click_defs(defs, recs, &built.text, built.width, false);
+    }
+    built
 }

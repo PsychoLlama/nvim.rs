@@ -18,30 +18,25 @@
 //!
 //! Original: `src/nvim/statusline.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::memline::MlFlags;
 use crate::optionstr::{OptString, local_or_global};
-use crate::vim_snprintf;
-use core::ffi::{c_char, c_int};
-use core::slice;
+use core::ffi::c_int;
 
 use super::*;
-use crate::api::private::helpers::cstr_to_string;
 use crate::ascii::ascii_isdigit;
 use crate::autocmd::is_aucmd_win;
-use crate::buffer::{col_print, get_rel_pos};
-use crate::charset::{transstr_buf, vim_strsize};
-use crate::cstr;
+use crate::buffer::{col_text, get_rel_pos};
+use crate::charset::{strsize, transstr_into};
 use crate::drawscreen::state::ru_col;
 use crate::global_cell::GlobalCell;
-use crate::grid::{default_grid_ref, schar_from_ascii, schar_get};
+use crate::grid::{SCHAR_BUF_SIZE, default_grid_ref, schar_copy, schar_from_ascii};
 use crate::highlight::state::{highlight_stlnc, highlight_user};
 use crate::highlight_group::{
     HLF_MSG, HLF_TPF, HLF_WBR, HLF_WBRNC, syn_id2attr, syn_name2id_bytes,
 };
-use crate::mbyte::{utf_ptr2cells, utfc_ptr2len};
+use crate::mbyte::c_cluster_len;
 use crate::message::state::{msg_col, msg_row};
 use crate::message::{msg_clr_eos, msg_grid_view};
 use crate::option::vars::{P_RUF, P_STL, P_WBR, p_ch, p_ru, p_ruf, p_tal};
@@ -50,16 +45,16 @@ use crate::optionstr::OptStringRef;
 use crate::os::cshim::gettext;
 use crate::state::MODE_INSERT;
 use crate::state::mode::{State, edit_submode};
-use crate::statusline::tab_click_defs_arena;
+use crate::strings::{FmtArg, formatted};
 use crate::types::ui::kUIMessages;
 use crate::types::{
     Array, ColNr, Hlf, Integer, MAXPATHL, NUL, Object, OptIndex, OptInt, OptionSetFlags,
-    ScreenChar, StlOpt, String_0, int64_t, ssize_t,
+    ScreenChar, StlHlRun, StlOpt, String_0, int64_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{ui_call_msg_ruler, ui_has};
+use crate::ui_compositor::win_grid;
 use crate::window::lastwin_nofloating;
-use ::libc::atoi;
 
 static DID_SHOW_EXT_RULER: GlobalCell<bool> = GlobalCell::new(false);
 
@@ -83,9 +78,10 @@ struct Target {
     attr: c_int,
 }
 
-/// The format to expand, and which option it came from.
+/// The format to expand, a copy of the option's value, and which option it
+/// came from.
 struct Source {
-    fmt: Fmt,
+    fmt: Vec<u8>,
     opt: (OptIndex, OptionSetFlags),
 }
 
@@ -99,9 +95,8 @@ impl Target {
     fn of(win: Option<Win>, draw_winbar: bool, draw_ruler: bool) -> Option<(Target, Source)> {
         let is_stl_global = stl_is_global();
         let floating = win.is_some_and(|w| w.w_floating) && !is_stl_global;
-        // SAFETY: a floating window owns its grid allocation.
-        let own =
-            || unsafe { GridRef::new(&raw mut win.expect("a float is a window").w_grid_alloc) };
+        // A floating window owns its grid allocation.
+        let own = || win_grid(win.expect("a float is a window"));
         let mut canvas = if floating { own() } else { screen_canvas() };
         let mut col = 0;
 
@@ -117,8 +112,7 @@ impl Target {
                 attr: hl_attr(HLF_TPF),
             };
             let source = Source {
-                // SAFETY: the option's own string.
-                fmt: p_tal(|value| unsafe { Fmt::copy_of(value.as_ptr().cast_mut()) }),
+                fmt: p_tal(|value| value.to_bytes().to_vec()),
                 opt: (kOptTabline, OptionSetFlags::NONE),
             };
             return (target.maxwidth > 0).then_some((target, source));
@@ -145,8 +139,7 @@ impl Target {
             };
             let wbr = local_or_global(&win.w_onebuf_opt.wo_wbr, P_WBR).get();
             let source = Source {
-                // SAFETY: the copy is NUL-terminated.
-                fmt: unsafe { Fmt::copy_of(wbr.as_ptr().cast_mut()) },
+                fmt: wbr.to_vec(),
                 opt: (
                     kOptWinbar,
                     if local {
@@ -183,8 +176,7 @@ impl Target {
         reset_click_defs(win, ClickKind::Status, maxwidth);
 
         let source = if draw_ruler {
-            // SAFETY: the option's own string.
-            let fmt = p_ruf(|value| unsafe { Fmt::copy_of(ruler_body(value.as_ptr().cast_mut())) });
+            let fmt = p_ruf(|value| ruler_body(value.to_bytes()).to_vec());
             col = (ru_col.get() - (Columns.get() - maxwidth)).max((maxwidth + 1) / 2);
             maxwidth -= col;
             if !in_status_line {
@@ -202,8 +194,7 @@ impl Target {
             let local = !win.w_onebuf_opt.wo_stl.bytes().is_empty();
             let stl = local_or_global(&win.w_onebuf_opt.wo_stl, P_STL).get();
             Source {
-                // SAFETY: the copy is NUL-terminated.
-                fmt: unsafe { Fmt::copy_of(stl.as_ptr().cast_mut()) },
+                fmt: stl.to_vec(),
                 opt: (
                     kOptStatusline,
                     if local {
@@ -236,36 +227,36 @@ impl Target {
 /// columns; `ru_col` already accounts for it, so the group spec is stepped
 /// over here rather than expanded. Anything else after the `%` is a plain
 /// item and the whole format is used.
-///
-/// # Safety
-/// `ruf` must be a NUL-terminated string.
-unsafe fn ruler_body(ruf: *mut c_char) -> *mut c_char {
-    // SAFETY: the caller's promise.
-    let text = unsafe { CStr::from_ptr(ruf) }.to_bytes();
-    let Some(&b'%') = text.first() else {
+fn ruler_body(ruf: &[u8]) -> &[u8] {
+    let Some(&b'%') = ruf.first() else {
         return ruf;
     };
-    let mut at = 1 + usize::from(text.get(1) == Some(&b'-'));
-    // SAFETY: `at` is inside the string, so the number starts there. C reads
-    // it with `atoi`, which stops at the first byte that is not a digit --
-    // and answers 0 for a leading zero run, which then is not skipped.
-    if unsafe { atoi(ruf.add(at)) } != 0 {
-        while text.get(at).is_some_and(|&b| ascii_isdigit(c_int::from(b))) {
-            at += 1;
-        }
+    let mut at = 1 + usize::from(ruf.get(1) == Some(&b'-'));
+    // C reads the number with `atoi`, which stops at the first byte that is
+    // not a digit -- and answers 0 for a leading zero run, which then is not
+    // skipped. (A sign or blanks `atoi` would also take cannot start a
+    // width here: the parser would not have accepted the option.)
+    let digits = ruf[at..]
+        .iter()
+        .take_while(|&&b| ascii_isdigit(c_int::from(b)));
+    // glibc's `atoi` is `(int) strtol`: saturated at a `long`, then cut.
+    let value = digits.clone().fold(0i64, |acc, &digit| {
+        acc.saturating_mul(10)
+            .saturating_add(i64::from(digit - b'0'))
+    });
+    if value as c_int != 0 {
+        at += digits.count();
     }
     // Upstream reads the byte and steps past it in one `*stl++ != '('`, so a
-    // format that is only a group spec ends up pointing at the terminator.
-    // SAFETY: `at` is at most the terminator's index, so `at + 1` is at most
-    // one past it, which is still a valid pointer.
-    if text.get(at) == Some(&b'(') {
-        unsafe { ruf.add(at + 1) }
+    // format that is only a group spec ends up at the terminator.
+    if ruf.get(at) == Some(&b'(') {
+        &ruf[at + 1..]
     } else {
         ruf
     }
 }
 
-/// Which of a window's click-definition arenas is meant.
+/// Which of a window's click definitions are meant.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ClickKind {
     Status,
@@ -275,46 +266,35 @@ enum ClickKind {
 /// Free the click definitions recorded last time and make room for `width`
 /// cells of new ones.
 fn reset_click_defs(mut win: Win, kind: ClickKind, width: c_int) {
-    let (defs, size) = match kind {
-        ClickKind::Status => (win.w_status_click_defs, win.w_status_click_defs_size),
-        ClickKind::Winbar => (win.w_winbar_click_defs, win.w_winbar_click_defs_size),
+    let defs = match kind {
+        ClickKind::Status => &mut win.w_click_defs.status,
+        ClickKind::Winbar => &mut win.w_click_defs.winbar,
     };
-    // SAFETY: the window's own arena and its recorded size.
-    let mut arena = unsafe { ClickArena::new(defs, size) };
-    arena.clear();
-    arena.reserve(width);
-    let (defs, size) = arena.parts();
-    match kind {
-        ClickKind::Status => {
-            win.w_status_click_defs = defs;
-            win.w_status_click_defs_size = size;
-        }
-        ClickKind::Winbar => {
-            win.w_winbar_click_defs = defs;
-            win.w_winbar_click_defs_size = size;
+    clear_click_defs(defs);
+    reserve_click_defs(defs, width);
+}
+
+/// Spread this draw's click records over the definitions they belong in:
+/// the tab page line's, or one of the window's two.
+fn record_clicks(
+    win: Option<Win>,
+    draw_winbar: bool,
+    recs: Vec<StlClickRecord>,
+    text: &[u8],
+    width: c_int,
+) {
+    match win {
+        None => with_tab_click_defs(|defs| fill_click_defs(defs, recs, text, width, true)),
+        // `Target::of` sized the window's definitions a moment ago.
+        Some(mut w) => {
+            let defs = if draw_winbar {
+                &mut w.w_click_defs.winbar
+            } else {
+                &mut w.w_click_defs.status
+            };
+            fill_click_defs(defs, recs, text, width, false);
         }
     }
-}
-
-/// The arena this draw's click records belong in: the tab page line's, or
-/// one of the window's two.
-fn click_arena(win: Option<Win>, draw_winbar: bool) -> ClickArena {
-    let (defs, size) = match win {
-        None => return tab_click_defs_arena(),
-        Some(w) if draw_winbar => (w.w_winbar_click_defs, w.w_winbar_click_defs_size),
-        Some(w) => (w.w_status_click_defs, w.w_status_click_defs_size),
-    };
-    // SAFETY: `Target::of` sized the window's arenas a moment ago, and the
-    // tab line's is sized by the screen resize.
-    unsafe { ClickArena::new(defs, size) }
-}
-
-/// The expanded line, as the painter walks it: a NUL-terminated buffer and
-/// how far into it the text runs.
-#[derive(Clone, Copy)]
-struct Expanded {
-    start: *mut c_char,
-    len: isize,
 }
 
 /// Paint the expanded line, one stretch per highlight run.
@@ -327,34 +307,28 @@ struct Expanded {
 /// both of which the fill after it needs.
 fn paint_chunks(
     target: &Target,
-    line: Expanded,
-    runs: HlRuns,
+    line: &[u8],
+    runs: &[StlHlRun],
     win: Option<Win>,
     mut content: Option<&mut Array>,
 ) -> (c_int, c_int) {
-    let mut transbuf = [0 as c_char; MAXPATHL as usize];
+    let mut transbuf = [0u8; MAXPATHL as usize];
     let mut col = target.col;
     let mut curattr = target.attr;
     let mut curgroup = target.group as c_int;
-    // SAFETY: one past the last byte of the expanded line, which is where
-    // its terminator sits.
-    let end = unsafe { line.start.offset(line.len) };
-    let mut p = line.start;
+    let end = line.len();
+    let mut p = 0;
 
-    // The terminating run -- the one whose `start` is null -- closes the
-    // last stretch, so it takes one more turn than there are runs.
+    // A last turn past the runs closes the last stretch, at the end of the
+    // line.
     for run in runs.iter().map(Some).chain(core::iter::once(None)) {
         let stop = run.map_or(end, |r| r.start);
-        // SAFETY: `p` and `stop` are positions in the expanded line.
-        let textlen = unsafe { stop.offset_from(p) } as c_int;
+        let textlen = stop as isize - p as isize;
         // Make all characters printable. `p` can be past the end of the
         // line -- the expander records a run at the truncation point -- and
         // there is then nothing left to transform.
-        let src = if p >= end { c"".as_ptr() } else { p };
-        let (out, room) = (transbuf.as_mut_ptr(), transbuf.len());
-        // SAFETY: `src` holds `textlen` readable bytes, and `transbuf` is
-        // told its own length.
-        let tsize = unsafe { transstr_buf(src, textlen as ssize_t, out, room, true) };
+        let src = line.get(p..).unwrap_or_default();
+        let tsize = transstr_into(src, usize::try_from(textlen).ok(), &mut transbuf, true);
         match content.as_deref_mut() {
             None => col += paint_text(col, &transbuf[..tsize], curattr),
             Some(content) => push_chunk(content, curattr, &transbuf[..tsize], curgroup),
@@ -362,7 +336,7 @@ fn paint_chunks(
 
         let Some(run) = run else { break };
         p = run.start;
-        (curattr, curgroup) = run_highlight(run, target, curattr, win);
+        (curattr, curgroup) = run_highlight(*run, target, curattr, win);
         if curattr != target.attr {
             curattr = combine_attr(target.attr, curattr);
         }
@@ -372,7 +346,7 @@ fn paint_chunks(
 
 /// The attribute and highlight group one run switches to.
 fn run_highlight(
-    run: stl_hlrec_t,
+    run: StlHlRun,
     target: &Target,
     curattr: c_int,
     win: Option<Win>,
@@ -400,21 +374,17 @@ fn run_highlight(
     } else {
         highlight_user.with(|hl| hl[idx])
     };
-    let mut name = *b"User\0";
-    name[4] = run.userhl as u8 + b'0';
-    // SAFETY: five bytes of a local array.
-    let group = syn_name2id_bytes(&name[..5]);
+    let name = [b'U', b's', b'e', b'r', run.userhl as u8 + b'0'];
+    let group = syn_name2id_bytes(&name);
     (attr, group)
 }
 
 /// Append one `[attr, text, group]` chunk to an `ext_messages` array.
-fn push_chunk(content: &mut Array, attr: c_int, text: &[c_char], group: c_int) {
+fn push_chunk(content: &mut Array, attr: c_int, text: &[u8], group: c_int) {
     let mut chunk = Array::with_capacity(3);
     // The text is copied: the event outlives the buffer it was built in.
-    // SAFETY: `text` holds its own length in readable bytes.
-    let bytes = unsafe { slice::from_raw_parts(text.as_ptr().cast::<u8>(), text.len()) };
     chunk.push(Object::integer(attr as Integer));
-    chunk.push(Object::string(String_0::from_bytes(bytes)));
+    chunk.push(Object::string(String_0::from_bytes(text)));
     chunk.push(Object::integer(group as Integer));
     content.push(Object::array(chunk));
 }
@@ -449,48 +419,39 @@ fn draw_custom(window: Option<Win>, draw_winbar: bool, draw_ruler: bool, ui_even
     // away and back is not wanted.
     let crb_save = ewp.w_onebuf_opt.wo_crb;
     ewp.w_onebuf_opt.wo_crb = 0;
-    let mut buf = [0 as c_char; MAXPATHL as usize];
     let job = StlJob {
         win: ewp,
         fmt: source.fmt,
         opt: source.opt,
         fillchar: target.fillchar,
         maxwidth: target.maxwidth,
-        hl: HlDest::Runs,
+        room: MAXPATHL as usize,
+        want_hl: true,
         want_clicks: true,
-        stcp: None,
+        stc: None,
     };
-    // SAFETY: `buf` is this frame's own and is not `NameBuff`. The expander
-    // re-enters the editor; nothing is held across it.
-    let built = unsafe { job.run(&mut buf) };
+    // The expander re-enters the editor; nothing is held across it.
+    let built = job.run();
     ewp.w_onebuf_opt.wo_crb = crb_save;
 
-    let line = Expanded {
-        start: buf.as_mut_ptr(),
-        // SAFETY: the expander NUL-terminates its output.
-        len: unsafe { cstr::bytes_at(buf.as_ptr()) }.len() as isize,
-    };
-    let runs = built.hl.expect("hltab was asked for");
     let start_col = target.col;
 
     if ui_event {
         let mut content = Array::EMPTY;
-        paint_chunks(&target, line, runs, win, Some(&mut content));
+        paint_chunks(&target, &built.text, &built.hl, win, Some(&mut content));
         ui_call_msg_ruler(content);
         DID_SHOW_EXT_RULER.set(true);
         return;
     }
 
     screengrid_line_start(target.canvas, target.row, 0);
-    let (col, curattr) = paint_chunks(&target, line, runs, win, None);
+    let (col, curattr) = paint_chunks(&target, &built.text, &built.hl, win, None);
     paint_fill(col, start_col + target.maxwidth, target.fillchar, curattr);
     paint_flush();
 
     // Record where each click in the tab page line, status line or window
     // bar lands.
-    if let Some(clicks) = built.clicks {
-        click_arena(win, draw_winbar).fill(clicks, line.start, target.maxwidth, win.is_none());
-    }
+    record_clicks(win, draw_winbar, built.clicks, &built.text, target.maxwidth);
 }
 
 /// Redraw `window`'s window bar from `'winbar'`.
@@ -602,15 +563,14 @@ pub fn redraw_ruler() {
         win.w_onebuf_opt.wo_list = 1;
     }
 
-    let mut buffer = [0 as c_char; RULER_BUF_LEN as usize];
-    let mut bufferlen = ruler_position(win, virtcol, &mut buffer);
+    // The text as upstream's `RULER_BUF_LEN` buffer would hold it.
+    let room = RULER_BUF_LEN as usize;
+    let mut buffer = ruler_position(win, virtcol);
 
     // Add a "50%" if there is room for it. On the last line, don't print in
     // the last column: that scrolls the screen up on some terminals.
-    let mut rel_pos = [0 as c_char; RULER_BUF_LEN as usize];
-    let rel_poslen = get_rel_pos(win, &mut rel_pos);
-    // SAFETY: as above.
-    let mut n1 = bufferlen + unsafe { vim_strsize(rel_pos.as_ptr()) };
+    let rel_pos = get_rel_pos(win, room);
+    let mut n1 = buffer.len() as c_int + strsize(&rel_pos);
     if win.w_status_height == 0 && !is_stl_global {
         n1 += 1; // Can't use the last character of the screen.
     }
@@ -620,21 +580,15 @@ pub fn redraw_ruler() {
     let this_ru_col = (ru_col.get() - (Columns.get() - width)).max((width + 1) / 2);
     if this_ru_col + n1 < width {
         // Pad up to `this_ru_col`, but leave room for rel_pos and its NUL.
-        while this_ru_col + n1 < width && RULER_BUF_LEN > bufferlen + rel_poslen + 1 {
-            let at = &mut buffer[bufferlen as usize..];
-            // SAFETY: the loop's own bound leaves room for the glyph.
-            bufferlen += unsafe { schar_get(at.as_mut_ptr(), fillchar) } as c_int;
+        let mut glyph = [0u8; SCHAR_BUF_SIZE];
+        let glyph_len = schar_copy(&mut glyph, fillchar);
+        while this_ru_col + n1 < width && room > buffer.len() + rel_pos.len() + 1 {
+            buffer.extend_from_slice(&glyph[..glyph_len]);
             n1 += 1;
         }
-        let (at, room) = (
-            &mut buffer[bufferlen as usize..],
-            (RULER_BUF_LEN as size_t).wrapping_sub(bufferlen as size_t),
-        );
-        // SAFETY: `room` bytes of `buffer` and a NUL-terminated `rel_pos`.
-        bufferlen +=
-            unsafe { vim_snprintf!(at.as_mut_ptr(), room, c"%s".as_ptr(), rel_pos.as_ptr()) };
+        let keep = rel_pos.len().min(room.saturating_sub(buffer.len() + 1));
+        buffer.extend_from_slice(&rel_pos[..keep]);
     }
-    let _ = bufferlen;
 
     if ui_has(kUIMessages) && !part_of_status {
         show_ext_ruler(&buffer, attr);
@@ -648,16 +602,16 @@ pub fn redraw_ruler() {
 
     view_line_start(msg_grid_view(), Rows.get() - 1);
     DID_RULER_COL.set(off + this_ru_col);
-    let w = paint_cstr(DID_RULER_COL.get(), cstr::in_chars(&buffer), attr);
+    let w = paint_text(DID_RULER_COL.get(), &buffer, attr);
     paint_fill(DID_RULER_COL.get() + w, off + width, fillchar, attr);
     paint_flush();
 }
 
-/// Write `line,col` into `buffer`, answering how many bytes that took.
+/// `line,col`, as the start of a `RULER_BUF_LEN` buffer holds it.
 ///
 /// The line number is 0 for an empty buffer, and the column is 0 outside
 /// Insert mode on an empty line -- which is what makes that read "0-1".
-fn ruler_position(win: Win, virtcol: ColNr, buffer: &mut [c_char]) -> c_int {
+fn ruler_position(win: Win, virtcol: ColNr) -> Vec<u8> {
     let empty_buffer = win.buffer().b_ml.ml_flags.has(MlFlags::EMPTY);
     let cursor_line_empty = win.buffer().lines().line(win.w_cursor.lnum).is_empty();
     let empty_line = State.get() & MODE_INSERT == 0 && cursor_line_empty;
@@ -666,48 +620,41 @@ fn ruler_position(win: Win, virtcol: ColNr, buffer: &mut [c_char]) -> c_int {
     } else {
         win.w_cursor.lnum as int64_t
     };
+    let room = RULER_BUF_LEN as usize;
     // l10n: leave as-is unless a space after the comma is preferred
     // l10n: do not add any row/column label, due to the limited space
-    let fmt = gettext(c"%ld,");
-    let (out, room) = (buffer.as_mut_ptr(), RULER_BUF_LEN as size_t);
-    // SAFETY: `buffer` is `RULER_BUF_LEN` bytes of the caller's frame, and
-    // the format takes exactly the one integer.
-    let mut len = unsafe { vim_snprintf!(out, room, fmt.as_ptr(), lnum) };
+    let mut text = formatted(room, gettext(c"%ld,").to_bytes(), &[FmtArg::from(lnum)]);
     let col = if empty_line { 0 } else { win.w_cursor.col + 1 };
-    len += col_print(&mut buffer[len as usize..], col, virtcol + 1);
-    len
+    let col = col_text(col, virtcol + 1);
+    let keep = col.len().min(room.saturating_sub(text.len() + 1));
+    text.extend_from_slice(&col.as_bytes()[..keep]);
+    text
 }
 
 /// Cut `buffer` short at the first character that would not fit.
-fn truncate_at_width(buffer: &mut [c_char], this_ru_col: c_int, width: c_int) {
+fn truncate_at_width(buffer: &mut Vec<u8>, this_ru_col: c_int, width: c_int) {
     let mut at = 0;
     let mut cells = 0;
-    while buffer[at as usize] != 0 {
-        let p = buffer[at as usize..].as_ptr();
-        // SAFETY: `at` is a character boundary inside the NUL-terminated
-        // buffer, which is where the step below leaves it.
-        cells += unsafe { utf_ptr2cells(p) };
+    while at < buffer.len() {
+        cells += crate::mbyte::cells_at(&buffer[at..]);
         if this_ru_col + cells > width {
-            buffer[at as usize] = NUL as c_char;
+            buffer.truncate(at);
             return;
         }
-        // SAFETY: as above.
-        at += unsafe { utfc_ptr2len(p) };
+        at += c_cluster_len(&buffer[at..]);
     }
 }
 
 /// Send the ruler to a UI that has taken the message area over.
-fn show_ext_ruler(buffer: &[c_char], attr: c_int) {
+fn show_ext_ruler(buffer: &[u8], attr: c_int) {
     let mut content = Array::with_capacity(1);
     let mut chunk = Array::with_capacity(3);
     debug_assert!(
         attr == hl_attr(HLF_MSG as c_int),
         "attr == HL_ATTR(HLF_MSG)"
     );
-    // SAFETY: `buffer` is NUL-terminated, and its bytes are copied.
-    let text = unsafe { cstr_to_string(buffer.as_ptr().cast_mut()) };
     chunk.push(Object::integer(attr as Integer));
-    chunk.push(Object::string(text));
+    chunk.push(Object::string(String_0::from_bytes(buffer)));
     chunk.push(Object::integer(HLF_MSG as Integer));
     content.push(Object::array(chunk));
     ui_call_msg_ruler(content);

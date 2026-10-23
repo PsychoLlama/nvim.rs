@@ -15,30 +15,23 @@
 //!
 //! Original: `src/nvim/statusline.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::option::vars::{P_SLOC, P_TAL, p_sc};
-use crate::vim_snprintf;
 use crate::winlayer::Buf;
-use core::ffi::{CStr, c_int};
+use core::ffi::c_int;
 
 use super::*;
-use crate::api::private::helpers::cstr_to_string;
-use crate::charset::{ptr2cells, vim_strsize};
-use crate::cstr;
+use crate::charset::{ptr2cells_at, strsize};
 use crate::drawscreen::state::redraw_tabline;
 use crate::grid::{default_grid_ref, default_gridview, schar_from_ascii};
 use crate::highlight_group::{HLF_T, HLF_TP, HLF_TPF, HLF_TPS};
-use crate::mbyte::utfc_ptr2len;
+use crate::mbyte::c_cluster_len;
 use crate::normal::showcmd_buf;
 use crate::path::shorten_dir;
 use crate::statusline::state::tab_page_click_defs;
-use crate::statusline::tab_click_defs_arena;
 use crate::types::ui::kUITabline;
-use crate::types::{
-    BufferHandle, MAXPATHL, Object, StlClickDefinition_type_0, String_0, TabpageHandle,
-};
+use crate::types::{BufferHandle, Object, StlClickDefinition_type_0, String_0, TabpageHandle};
 use crate::ui::state::{Columns, t_colors};
 use crate::ui::{ui_call_tabline_update, ui_has};
 use crate::undo::buf_is_changed;
@@ -63,36 +56,32 @@ fn current_window_of(tabpage: TabPage) -> Win {
 /// Push the tab pages and the listed buffers to a UI that draws the tab line
 /// itself.
 fn ui_ext_tabline_update() {
-    let mut name = [0 as c_char; MAXPATHL as usize];
-
-    // SAFETY: every list walk, handle read and name copy below is of the
-    // editor's own live objects (the caller's promise), and each container
-    // is sized by the same walk that fills it.
+    // Each container is sized by the same walk that fills it.
     let mut tab_infos = Array::with_capacity(tabs().count());
     for tp in tabs() {
         let mut info = ApiDict::with_capacity(2);
         let (handle, cwp) = (tp.handle as TabpageHandle, current_window_of(tp));
         put(&mut info, c"tab", Object::tabpage(handle));
-        get_trans_bufname(cwp.buffer(), &mut name);
+        let name = trans_bufname(cwp.buffer());
         put(
             &mut info,
             c"name",
-            Object::string(unsafe { name_in(&name) }),
+            Object::string(String_0::from_bytes(&name)),
         );
         push(&mut tab_infos, Object::dict(info));
     }
 
-    // Unlisted buffers are left out of the event. SAFETY: as above.
+    // Unlisted buffers are left out of the event.
     let listed = || buffers().filter(|buf| buf.b_p_bl != 0);
     let mut bufs = Array::with_capacity(listed().count());
     for buf in listed() {
         let mut info = ApiDict::with_capacity(2);
         put(&mut info, c"buffer", Object::buffer(buf.handle));
-        get_trans_bufname(buf, &mut name);
+        let name = trans_bufname(buf);
         put(
             &mut info,
             c"name",
-            Object::string(unsafe { name_in(&name) }),
+            Object::string(String_0::from_bytes(&name)),
         );
         push(&mut bufs, Object::dict(info));
     }
@@ -104,19 +93,9 @@ fn ui_ext_tabline_update() {
     ui_call_tabline_update(tab, tab_infos, buf, bufs);
 }
 
-/// A copy of `name`, owned by the answer.
-///
-/// # Safety
-/// `name` must be NUL-terminated.
-unsafe fn name_in(name: &[c_char; MAXPATHL as usize]) -> String_0 {
-    // SAFETY: the caller's promise.
-    unsafe { cstr_to_string(name.as_ptr()) }
-}
-
 /// Draw the tab pages line at the top of the editor.
 pub fn draw_tabline() {
-    // SAFETY: `default_grid` is live for the process's lifetime; before the
-    // first resize it has no cells yet.
+    // Before the first resize the screen grid has no cells yet.
     if !default_grid_ref().is_allocated() {
         return;
     }
@@ -136,7 +115,7 @@ pub fn draw_tabline() {
         tab_page_click_defs.with(Vec::len) >= Columns.get() as usize,
         "tab_page_click_defs_size >= (size_t)Columns"
     );
-    tab_click_arena().clear();
+    with_tab_click_defs(|defs| clear_click_defs(defs));
 
     if P_TAL.first_byte() != 0 {
         // Use the 'tabline' option instead.
@@ -151,7 +130,6 @@ pub fn draw_tabline() {
 
 /// The built-in tab line: one label per tab page.
 fn draw_default_tabline() {
-    let mut name = [0 as c_char; MAXPATHL as usize];
     let attr_nosel = hl_attr(HLF_TP);
     let attr_fill = hl_attr(HLF_TPF);
     // Without colours the tabs are separated by `|` and underlined with `_`.
@@ -197,7 +175,6 @@ fn draw_default_tabline() {
         for win in windows_in_tab(tp) {
             if !win.w_config.focusable || win.w_config.hide {
                 wincount -= 1;
-            // SAFETY: a live window's buffer.
             } else if buf_is_changed(win.buffer()) {
                 modified = true;
             }
@@ -221,9 +198,7 @@ fn draw_default_tabline() {
 
         let room = scol - col + tabwidth - 1;
         if room > 0 {
-            // SAFETY: a live window's buffer.
-            get_trans_bufname(cwp.buffer(), &mut name);
-            col += paint_bufname(col, room, attr, &mut name);
+            col += paint_bufname(col, room, attr, trans_bufname(cwp.buffer()));
         }
         paint_schar(col, schar_from_ascii(b' '), attr);
         col += 1;
@@ -256,51 +231,31 @@ fn draw_default_tabline() {
 /// Draw the window count of a tab page, answering how many cells it took --
 /// or `None` when it does not fit, which ends the whole line.
 fn paint_wincount(col: c_int, wincount: c_int, attr: c_int, cwp: Win) -> Option<c_int> {
-    let mut name = [0 as c_char; MAXPATHL as usize];
-    let (out, room, fmt) = (name.as_mut_ptr(), MAXPATHL as size_t, c"%d".as_ptr());
-    // SAFETY: `name` is `MAXPATHL` bytes and the format takes exactly the
-    // one integer.
-    let len = unsafe { vim_snprintf!(out, room, fmt, wincount) };
+    let name = wincount.to_string();
+    let len = name.len() as c_int;
     if col + len >= Columns.get() - 3 {
         return None;
     }
-    paint_text(
-        col,
-        &name[..len as usize],
-        combine_attr(attr, win_hl(cwp, HLF_T)),
-    );
+    paint_text(col, name.as_bytes(), combine_attr(attr, win_hl(cwp, HLF_T)));
     Some(len)
 }
 
-/// Draw the buffer name `get_trans_bufname()` left in `name`, shortened to
-/// fit in `room` cells, answering how many cells it took.
+/// Draw the buffer name `name`, its directories shortened and cut to fit in
+/// `room` cells, answering how many cells it took.
 ///
 /// The name is cut from the *front*: what matters about a path is its tail.
-fn paint_bufname(
-    col: c_int,
-    room: c_int,
-    attr: c_int,
-    name: &mut [c_char; MAXPATHL as usize],
-) -> c_int {
-    // SAFETY: `name` holds a NUL-terminated path, and every walk below
-    // stops at that terminator.
-    let mut shortened = cstr::as_bytes(name).to_vec();
-    shorten_dir(&mut shortened);
-    for (slot, &byte) in name.iter_mut().zip(&shortened) {
-        *slot = byte as c_char;
-    }
-    let mut len = unsafe { vim_strsize(name.as_ptr()) };
+fn paint_bufname(col: c_int, room: c_int, attr: c_int, mut name: Vec<u8>) -> c_int {
+    name.push(0);
+    shorten_dir(&mut name);
+    let name = crate::cstr::until_nul(&name);
+    let mut len = strsize(name);
     let mut at = 0;
+    // The walk cannot pass the end: what is left there is zero cells wide.
     while len > room {
-        // SAFETY: `at` is a character boundary inside the path, and the
-        // walk cannot pass the terminator: its width is zero.
-        unsafe {
-            len -= ptr2cells(name[at..].as_ptr());
-            at += utfc_ptr2len(name[at..].as_ptr()) as usize;
-        }
+        len -= ptr2cells_at(&name[at..]);
+        at += c_cluster_len(&name[at..]);
     }
-    // SAFETY: `at` is a character boundary inside the path.
-    paint_cstr(col, unsafe { CStr::from_ptr(name[at..].as_ptr()) }, attr);
+    paint_text(col, &name[at..], attr);
     len.min(Columns.get() - col - 1)
 }
 
@@ -315,17 +270,12 @@ fn paint_showcmd(col: c_int, tabcount: c_int, attr: c_int) {
     let sc = showcmd_buf.get();
     paint_text(
         Columns.get() - width - c_int::from(tabcount > 1) * 2,
-        sc.cells(width as usize),
+        crate::cstr::as_bytes(sc.cells(width as usize)),
         attr,
     );
 }
 
 /// Claim `cols` of the tab page line for tab page `tabnr`.
 fn set_tab_clicks(cols: core::ops::Range<c_int>, kind: StlClickDefinition_type_0, tabnr: c_int) {
-    tab_click_arena().set(cols, kind, tabnr);
-}
-
-/// The tab page line's click definitions.
-fn tab_click_arena() -> ClickArena {
-    tab_click_defs_arena()
+    with_tab_click_defs(|defs| set_click_defs(defs, cols, kind, tabnr));
 }

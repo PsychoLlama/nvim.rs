@@ -20,14 +20,13 @@
 #![cfg(not(miri))]
 
 use neovim::winlayer::Win;
-use std::ffi::{CStr, c_char, c_int};
+use std::ffi::c_int;
 
 use neovim::buffer::setfname;
 use neovim::grid::schar_from_str;
-use neovim::statusline::{FmtSource, StlSinks, build_stl_str_hl};
+use neovim::statusline::{FmtSource, StlWants, build_stl_str_hl};
 use neovim::types::ScreenChar;
 use neovim::winlayer::Buf;
-use neovim::winlayer::graph::curwin;
 
 use crate::support::{Sandbox, cstr};
 
@@ -111,7 +110,6 @@ impl Statusline {
     /// rows whose format is built at run time.
     fn check_owned(&self, case: &Case, format: &str, want: &str, fill: &str) {
         self.name(case.file);
-        let mut out = vec![b' ' as c_char; BUF_BYTES];
         let fmt = cstr(format);
         let fill_str = cstr(fill);
         let fillchar: ScreenChar = if fill.is_empty() {
@@ -119,25 +117,20 @@ impl Statusline {
         } else {
             schar_from_str(&fill_str)
         };
-        // SAFETY: `fmt` is NUL-terminated and outlives the call, `curwin`
-        // is the editor's window, and no sink is asked for.
-        let cells = unsafe {
-            build_stl_str_hl(
-                Win::new(curwin.get()),
-                &mut out,
-                fmt.as_ptr().cast_mut(),
-                FmtSource::NONE,
-                fillchar,
-                case.cells,
-                StlSinks::NONE,
-            )
-        };
+        let out = build_stl_str_hl(
+            Win::current(),
+            BUF_BYTES,
+            fmt.to_bytes().to_vec(),
+            FmtSource::NONE,
+            fillchar,
+            case.cells,
+            StlWants::NONE,
+        );
+        let cells = out.width;
         // The whole rendering, not a prefix of it: the spec compared only
         // the first `#expected` bytes, so a renderer that wrote *more* than
         // it should went unnoticed.
-        // SAFETY: `build_stl_str_hl` NUL-terminates within `BUF_BYTES`.
-        let got = unsafe { CStr::from_ptr(out.as_ptr().cast::<c_char>()) };
-        let got = String::from_utf8_lossy(got.to_bytes());
+        let got = String::from_utf8_lossy(&out.text);
         let what = format!("/{format}/ in {} cells, fill {fill:?}", case.cells);
         assert_eq!(got, want, "{what}");
         assert_eq!(

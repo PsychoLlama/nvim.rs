@@ -5,7 +5,7 @@ use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::buffer::{buf_is_quickfix, buf_meta_total};
 use crate::charset::{
     byte2cells, rl_mirror_ascii, skiptowhite, skipwhite, transchar_buf, transchar_hex_into,
-    transstr_buf, vim_isbreak, vim_isprintc,
+    transstr_into, vim_isbreak, vim_isprintc,
 };
 use crate::cursor::get_cursor_rel_lnum;
 use crate::cursor_shape::cursor_is_block_during_visual;
@@ -72,7 +72,7 @@ use crate::types::TAB;
 use crate::types::{
     CharSize, CharsizeArg, ColNr, DecorRange, DiffLine, FoldInfo, GridView, HlMode, Hlf, LineNr,
     NS, NUL, Pos, RgbValue, ScreenAttr, ScreenChar, SignTextAttrs, SpellVars, StatusCol, VarNumber,
-    VirtText, VirtTextPos, WinExtmark, ptrdiff_t, size_t, ssize_t, uint8_t, uint32_t, uint64_t,
+    VirtText, VirtTextPos, WinExtmark, ptrdiff_t, size_t, uint8_t, uint32_t, uint64_t,
 };
 use crate::ui::ui_rgb_attached;
 use crate::winlayer::Win;
@@ -221,11 +221,7 @@ pub unsafe fn win_line(
         };
     }
 
-    // `sattrs` is attached here rather than by the setup half: it points
-    // into `wlv`, which lives in this frame, and a pointer derived from
-    // the borrow the setup half takes would not outlive it.
     let mut statuscol = setup.statuscol;
-    statuscol.sattrs = &raw mut wlv.sign_attrs as *mut SignTextAttrs;
 
     let frame = LineFrame {
         endrow,

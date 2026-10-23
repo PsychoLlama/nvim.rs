@@ -339,12 +339,9 @@ pub struct Window {
     pub(crate) w_llist: Option<QfId>,
     /// The location list stack this location list window shows.
     pub(crate) w_llist_ref: Option<QfId>,
-    pub w_status_click_defs: *mut StlClickDefinition,
-    pub w_status_click_defs_size: size_t,
-    pub w_winbar_click_defs: *mut StlClickDefinition,
-    pub w_winbar_click_defs_size: size_t,
-    pub w_statuscol_click_defs: *mut StlClickDefinition,
-    pub w_statuscol_click_defs_size: size_t,
+    /// The status line's, winbar's and `'statuscolumn'`'s click
+    /// definitions, for the click that lands on one of them.
+    pub w_click_defs: WinClickDefs,
 }
 #[derive(Clone)]
 pub struct WinInfo {

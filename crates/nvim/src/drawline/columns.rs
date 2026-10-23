@@ -229,24 +229,22 @@ fn fold_column_cells(
     cells
 }
 
-/// Fill a caller's arrays with the fold column, for `'statuscolumn'`'s `%C`.
-///
-/// # Safety
-/// `window` must be live, `fdc` may not exceed [`MAX_FOLDCOLUMN`], and both arrays
-/// must have `fdc` entries.
-pub unsafe fn fill_foldcolumn(
+/// Fill a caller's arrays with the fold column's first `fdc` cells, for
+/// `'statuscolumn'`'s `%C`. `fdc` may not exceed [`MAX_FOLDCOLUMN`], and
+/// both arrays must have `fdc` entries.
+pub fn fill_foldcolumn(
     window: Win,
     foldinfo: FoldInfo,
     lnum: LineNr,
     fdc: ::core::ffi::c_int,
     is_virt: bool,
-    out_vcol: *mut ColNr,
-    out_buffer: *mut ScreenChar,
+    out_vcol: &mut [ColNr],
+    out_buffer: &mut [ScreenChar],
 ) {
     let cells = fold_column_cells(window, foldinfo, lnum, fdc, is_virt);
     for (i, &(symbol, vcol)) in cells.iter().enumerate().take(fdc as usize) {
-        unsafe { *out_vcol.add(i) = vcol };
-        unsafe { *out_buffer.add(i) = symbol };
+        out_vcol[i] = vcol;
+        out_buffer[i] = symbol;
     }
 }
 
@@ -538,22 +536,20 @@ impl WinLineVars {
             -1
         };
 
-        let mut buf: [::core::ffi::c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
         if window.w_statuscol_line_count != window.w_nrwidth_line_count {
             // The line count changed. Estimate the full width by building
             // with the largest line number there can be, and widen before
             // anything is drawn.
             window.w_statuscol_line_count = window.w_nrwidth_line_count;
             set_vim_var_nr(Vv::Virtnum, 0);
-            let width = unsafe {
-                build_statuscol_str(
-                    window,
-                    window.w_nrwidth_line_count,
-                    window.w_nrwidth_line_count,
-                    buf.as_mut_ptr(),
-                    stcp,
-                )
-            };
+            let width = build_statuscol_str(
+                window,
+                window.w_nrwidth_line_count,
+                window.w_nrwidth_line_count,
+                unsafe { &mut *stcp },
+                &self.sign_attrs,
+            )
+            .width;
             if width > unsafe { (*stcp).width } {
                 let addwidth =
                     (width - unsafe { (*stcp).width }).min(MAX_STCWIDTH - unsafe { (*stcp).width });
@@ -571,7 +567,14 @@ impl WinLineVars {
         }
 
         set_vim_var_nr(Vv::Virtnum, virtnum as VarNumber);
-        let width = unsafe { build_statuscol_str(window, lnum, relnum, buf.as_mut_ptr(), stcp) };
+        let built = build_statuscol_str(
+            window,
+            lnum,
+            relnum,
+            unsafe { &mut *stcp },
+            &self.sign_attrs,
+        );
+        let width = built.width;
         let was_reset = window.w_onebuf_opt.wo_stc.first_byte() == 0;
         if was_reset
             || (width > unsafe { (*stcp).width } && unsafe { (*stcp).width } < MAX_STCWIDTH)
@@ -608,79 +611,51 @@ impl WinLineVars {
         let num_attr = self.line_number_attr(window);
         let mut cur_attr = num_attr;
         let mut fold_vcol: *const ColNr = ::core::ptr::null();
-        let mut transbuf: [::core::ffi::c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
-        let mut p = buf.as_ptr();
-        let mut sp = unsafe { (*stcp).hlrec };
-        while !unsafe { (*sp).start }.is_null() {
-            let textlen = unsafe { (*sp).start.offset_from(p) };
-            let translen = unsafe {
-                transstr_buf(
-                    p,
-                    textlen as ssize_t,
-                    transbuf.as_mut_ptr(),
-                    MAXPATHL as size_t,
-                    true,
-                )
-            };
+        let mut transbuf = [0u8; MAXPATHL as usize];
+        let text = &built.text;
+        let mut p = 0;
+        // A last turn past the runs draws the rest of the text.
+        for run in built.hl.iter().map(Some).chain(core::iter::once(None)) {
+            // A negative length is "to the end", as upstream's `ssize_t`.
+            let textlen = run.map_or(text.len(), |run| run.start) as isize - p as isize;
+            let src = text.get(p..).unwrap_or_default();
+            let translen = transstr_into(src, usize::try_from(textlen).ok(), &mut transbuf, true);
+            // `transbuf` is NUL-terminated after `translen`.
             unsafe {
                 self.draw_col_buf(
                     window,
-                    transbuf.as_ptr(),
+                    transbuf.as_ptr().cast(),
                     translen,
                     cur_attr,
                     fold_vcol,
                     false,
                 )
             };
+            let Some(run) = run else { break };
             // The sign segment takes the sign column's highlight and the
             // number segments the number column's; the fold segment takes
             // none, because `fill_foldcolumn` gave it its own through the
             // user highlight below.
-            let base = if unsafe { (*sp).item } == Some(StlOpt::SignCol) {
+            let base = if run.item == Some(StlOpt::SignCol) {
                 scl_attr
-            } else if unsafe { (*sp).item } == Some(StlOpt::FoldCol) {
+            } else if run.item == Some(StlOpt::FoldCol) {
                 0
             } else {
                 num_attr
             };
-            cur_attr = unsafe {
-                hl_combine_attr(
-                    base,
-                    if (*sp).userhl < 0 {
-                        syn_id2attr(-(*sp).userhl)
-                    } else {
-                        0
-                    },
-                )
+            let user = if run.userhl < 0 {
+                syn_id2attr(-run.userhl)
+            } else {
+                0
             };
-            fold_vcol = if unsafe { (*sp).item } == Some(StlOpt::FoldCol) {
+            cur_attr = hl_combine_attr(base, user);
+            fold_vcol = if run.item == Some(StlOpt::FoldCol) {
                 unsafe { &raw const (*stcp).fold_vcol }.cast::<ColNr>()
             } else {
                 ::core::ptr::null()
             };
-            p = unsafe { (*sp).start };
-            sp = unsafe { sp.add(1) };
+            p = run.start;
         }
-        let len = unsafe { cstr::bytes_at(buf.as_ptr()) }.len();
-        let translen = unsafe {
-            transstr_buf(
-                p,
-                buf.as_ptr().add(len).offset_from(p) as ssize_t,
-                transbuf.as_mut_ptr(),
-                MAXPATHL as size_t,
-                true,
-            )
-        };
-        unsafe {
-            self.draw_col_buf(
-                window,
-                transbuf.as_ptr(),
-                translen,
-                cur_attr,
-                fold_vcol,
-                false,
-            )
-        };
         unsafe { self.draw_col_fill(schar_from_ascii(b' '), (*stcp).width - width, cur_attr) };
     }
 }

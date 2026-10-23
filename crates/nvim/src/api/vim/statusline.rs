@@ -7,11 +7,10 @@
 //! `nvim__complete_set` shares the window plumbing.
 //!
 //! The expansion itself goes through [`StlJob`], the same wrapper the
-//! drawing side uses -- with two differences that are the whole reason this
-//! entry point exists as a separate arm of `build_stl_str_hl`: the format is
-//! [`Fmt::borrowed`] (it is an API argument, not an option something can
-//! `:set` underneath), and the option index is `kOptInvalid`, which makes
-//! `use_sandbox` unconditionally false here.
+//! drawing side uses -- with one difference that is the whole reason this
+//! entry point exists as a separate arm of `build_stl_str_hl`: the option
+//! index is `kOptInvalid`, which makes `use_sandbox` unconditionally false
+//! here.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
@@ -27,9 +26,9 @@ use crate::api::private::helpers::Reported;
 use crate::api::private::validate::{Bad, err_expected, err_invalid};
 use crate::api_error;
 use crate::statusline::{
-    Fmt, HlDest, HlRuns, SIGN_SHOW_MAX, StlJob, fillchar_status_of, push, put, stl_is_global,
+    SIGN_SHOW_MAX, StcLine, StlJob, fillchar_status_of, push, put, stl_is_global,
 };
-use crate::types::{MAXPATHL, OptionSetFlags, StlOpt};
+use crate::types::{MAXPATHL, OptionSetFlags, StlHlRun, StlOpt};
 use crate::winlayer::Win;
 
 /// Everything `nvim_eval_statusline()` needs to have settled before it can
@@ -77,34 +76,34 @@ pub fn nvim_eval_statusline(
     let ctx = Context::of(opts, &mut statuscol, &mut sattrs)?;
 
     let mut result = ApiDict::with_capacity(3);
-    // The expander's output, which is not `NameBuff`.
-    let mut out = vec![0 as c_char; MAXPATHL as usize];
 
     // Temporarily reset 'cursorbind' to prevent side effects from moving the
     // cursor away and back.
     let mut win = ctx.win;
     let crb_save = win.w_onebuf_opt.wo_crb;
     win.w_onebuf_opt.wo_crb = 0;
+    let want_hl = opts.highlights.unwrap_or(false);
     let job = StlJob {
         win,
-        // The API's own string: nothing can free it under the expander, so
-        // unlike the drawing side this needs no private copy.
-        // SAFETY: a checked API string.
-        fmt: unsafe { Fmt::borrowed(str.data()) },
+        fmt: str.as_bytes().to_vec(),
         opt: (kOptInvalid, OptionSetFlags::NONE),
         fillchar: ctx.fillchar,
         maxwidth: ctx.maxwidth,
-        hl: if opts.highlights.unwrap_or(false) {
-            HlDest::Runs
-        } else {
-            HlDest::Discard
-        },
+        room: MAXPATHL as usize,
+        // The `'statuscolumn'` arm records its runs whether or not they are
+        // reported, as upstream's shared `hlrec` did.
+        want_hl,
         want_clicks: false,
-        stcp: (ctx.statuscol_lnum != 0).then_some(&mut statuscol),
+        stc: (ctx.statuscol_lnum != 0).then(|| StcLine {
+            foldinfo: statuscol.foldinfo,
+            lnum: statuscol.lnum,
+            sign_cul_id: statuscol.sign_cul_id,
+            signs: &sattrs,
+            fold_vcol: core::cell::Cell::new(statuscol.fold_vcol),
+        }),
     };
-    // SAFETY: the expander re-enters the editor; nothing is held across it.
-    let built = unsafe { job.run(&mut out) };
-    let buf = out.as_ptr();
+    // The expander re-enters the editor; nothing is held across it.
+    let built = job.run();
     put(
         &mut result,
         c"width",
@@ -112,15 +111,14 @@ pub fn nvim_eval_statusline(
     );
     win.w_onebuf_opt.wo_crb = crb_save;
 
-    if let Some(runs) = built.hl {
-        let hl = highlight_dicts(&ctx, opts, buf, runs, built.hl_len);
+    if want_hl {
+        let hl = highlight_dicts(&ctx, opts, &built.hl, built.item_count);
         put(&mut result, c"highlights", Object::array(hl));
     }
-    // SAFETY: `buf` is NUL-terminated by the expander.
     put(
         &mut result,
         c"str",
-        Object::string(unsafe { cstr_to_string(buf) }),
+        Object::string(String_0::from_bytes(&built.text)),
     );
     result.reported(error)
 }
@@ -241,7 +239,6 @@ fn statuscol_state(
         Some(&mut cul_id),
         Some(&mut num_id),
     );
-    statuscol.sattrs = sattrs.as_mut_ptr();
     // SAFETY: as above.
     let (foldinfo, on_cursorline) = unsafe {
         let foldinfo = fold_info(win, lnum);
@@ -277,8 +274,7 @@ fn statuscol_state(
 fn highlight_dicts(
     ctx: &Context,
     opts: &KeyDict_eval_statusline,
-    buf: *const c_char,
-    runs: HlRuns,
+    runs: &[StlHlRun],
     runs_len: size_t,
 ) -> Array {
     let mut values = Array::with_capacity(runs_len + 1);
@@ -288,7 +284,7 @@ fn highlight_dicts(
 
     // If the first character has no highlight of its own, the default one
     // opens the list.
-    if runs.first_start().is_none_or(|start| !ptr::eq(start, buf)) {
+    if runs.first().is_none_or(|run| run.start != 0) {
         let mut info = ApiDict::with_capacity(3);
         put(&mut info, c"start", Object::integer(0));
         // SAFETY: a static group name.
@@ -311,7 +307,7 @@ fn highlight_dicts(
     // The `User%d` names, each kept for the rest of the walk: a group is
     // compared by address below, so each needs one of its own.
     let mut user_names: Vec<CString> = Vec::new();
-    for run in runs.iter() {
+    for run in runs {
         let grpname = if run.userhl == 0 {
             get_default_stl_hl(ctxwin, opts.use_winbar.unwrap_or(false), ctx.stc_hl_id)
         } else if run.userhl < 0 {
@@ -341,9 +337,7 @@ fn highlight_dicts(
         };
 
         let mut info = ApiDict::with_capacity(3);
-        // SAFETY: `run.start` is a position in `buf`.
-        let start = unsafe { run.start.offset_from(buf) };
-        put(&mut info, c"start", Object::integer(start as Integer));
+        put(&mut info, c"start", Object::integer(run.start as Integer));
         // SAFETY: both are NUL-terminated group names outliving the reply.
         let (grp, comb) = unsafe { (cstr_to_string(grpname), cstr_to_string(combine)) };
         put(&mut info, c"group", Object::string(grp.clone()));

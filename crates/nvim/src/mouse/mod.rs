@@ -242,60 +242,57 @@ impl Win {
     /// The click definitions drawn for this window's status line, winbar and
     /// `'statuscolumn'`, with the number of columns each covers.
     fn status_click_defs(self) -> (Option<ClickDefs>, c_int) {
-        // SAFETY: the statusline builder sizes the array as it records it.
-        (
-            unsafe { ClickDefs::new(self.w_status_click_defs) },
-            self.w_status_click_defs_size as c_int,
-        )
+        let defs = &self.w_click_defs.status;
+        let len = c_int::try_from(defs.len()).unwrap_or(c_int::MAX);
+        ((!defs.is_empty()).then_some(ClickDefs::Status(self)), len)
     }
 
     fn winbar_click_defs(self) -> Option<ClickDefs> {
-        // SAFETY: as `status_click_defs`.
-        unsafe { ClickDefs::new(self.w_winbar_click_defs) }
+        (!self.w_click_defs.winbar.is_empty()).then_some(ClickDefs::Winbar(self))
     }
 
     fn statuscol_click_defs(self) -> (Option<ClickDefs>, c_int) {
-        // SAFETY: as `status_click_defs`.
+        let defs = &self.w_click_defs.statuscol;
+        let len = c_int::try_from(defs.len()).unwrap_or(c_int::MAX);
         (
-            unsafe { ClickDefs::new(self.w_statuscol_click_defs) },
-            self.w_statuscol_click_defs_size as c_int,
+            (!defs.is_empty()).then_some(ClickDefs::Statuscol(self)),
+            len,
         )
     }
 }
 
-/// A `%@Func@` click-definition array: one entry per screen column of the line
-/// it describes.
+/// Which `%@Func@` click definitions a click is read from: one entry per
+/// screen column of the line they describe. Named rather than borrowed, and
+/// read a definition at a time: the handler a definition names can redraw
+/// the line and replace them all.
 #[derive(Clone, Copy)]
-pub(crate) struct ClickDefs(*mut StlClickDefinition);
+pub(crate) enum ClickDefs {
+    Tabline,
+    Status(Win),
+    Winbar(Win),
+    Statuscol(Win),
+}
 
 impl ClickDefs {
-    /// # Safety
-    /// `defs` must cover every column [`ClickDefs::at`] is asked for.
-    unsafe fn new(defs: *mut StlClickDefinition) -> Option<Self> {
-        (!defs.is_null()).then_some(Self(defs))
-    }
-
     /// The tab page line's click definitions, once the tabline has been drawn.
-    ///
-    /// # Safety
-    /// The array must cover every column asked for, which it does for columns
-    /// below `Columns`.
-    unsafe fn tabline() -> Option<Self> {
-        // SAFETY: the caller's promise.
-        let defs = tab_page_click_defs.with_mut(|defs| {
-            if defs.is_empty() {
-                ptr::null_mut()
-            } else {
-                defs.as_mut_ptr()
-            }
-        });
-        unsafe { Self::new(defs) }
+    fn tabline() -> Option<Self> {
+        (!tab_page_click_defs.with(Vec::is_empty)).then_some(Self::Tabline)
     }
 
-    /// The definition recorded for screen column `col`.
+    /// The definition recorded for screen column `col`, copied out (its
+    /// function name is shared, so the copy keeps it alive). A column past
+    /// the line's end has none: upstream reads past the array there.
     fn at(self, col: c_int) -> StlClickDefinition {
-        // SAFETY: the constructor's promise.
-        unsafe { (*self.0.offset(col as isize)).clone() }
+        let Ok(col) = usize::try_from(col) else {
+            return StlClickDefinition::default();
+        };
+        let def = match self {
+            Self::Tabline => tab_page_click_defs.with(|defs| defs.get(col).cloned()),
+            Self::Status(win) => win.w_click_defs.status.get(col).cloned(),
+            Self::Winbar(win) => win.w_click_defs.winbar.get(col).cloned(),
+            Self::Statuscol(win) => win.w_click_defs.statuscol.get(col).cloned(),
+        };
+        def.unwrap_or_default()
     }
 }
 

@@ -16,7 +16,6 @@
 #![allow(unsafe_code)]
 
 use core::ffi::c_int;
-use core::ptr;
 
 use super::arith::NextCurwin;
 use super::*;
@@ -41,13 +40,9 @@ use crate::optionstr::OptString;
 use crate::plines::{plines_win, plines_win_col, plines_win_nofill};
 use crate::startup::{exiting, full_screen};
 use crate::state::{MODE_CMDLINE, MODE_NORMAL, MODE_TERMINAL, get_real_state};
-use crate::statusline::stl_clear_click_defs;
 use crate::terminal::terminal_check_size;
 use crate::types::ui::{kUIMessages, kUIMultigrid, kUITabline};
-use crate::types::{
-    ColNr, FAIL, Integer, LineNr, NUL, OK, OptInt, ScriptId, StlClickDefinition, WindowHandle,
-    size_t,
-};
+use crate::types::{ColNr, FAIL, Integer, LineNr, NUL, OK, OptInt, ScriptId, WindowHandle};
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{ui_call_win_viewport_margins, ui_has};
 use crate::window::state::{skip_update_topline, skip_win_fix_cursor};
@@ -112,13 +107,6 @@ fn cursor_up(window: Win, n: LineNr) {
 fn scrolloff(window: Win) -> ::core::ffi::c_long {
     // SAFETY: a live window.
     get_scrolloff_value(window) as ::core::ffi::c_long
-}
-
-/// Free a window's status line or window bar click definitions.
-pub(crate) fn free_click_defs(defs: *mut StlClickDefinition, size: size_t) {
-    // SAFETY: the window's own array and its length.
-    unsafe { stl_clear_click_defs(defs, size) };
-    free(defs);
 }
 
 // ---------------------------------------------------------------------------
@@ -568,9 +556,7 @@ pub(crate) fn remove_status_line(window: Win, add_hsep: bool) {
         new_win_height(window, text + STATUS_HEIGHT as c_int);
     }
     comp_col();
-    free_click_defs(window.w_status_click_defs, window.w_status_click_defs_size);
-    window.w_status_click_defs_size = 0 as size_t;
-    window.w_status_click_defs = ptr::null_mut::<StlClickDefinition>();
+    window.w_click_defs.status = Vec::new();
 }
 
 /// The nearest frame at or above `fr` that has a row to spare, from
@@ -686,9 +672,7 @@ fn winbar_win(window: Win, make_room: bool, valid_cursor: bool) -> c_int {
         window.w_winbar_height = winbar_height;
         set_inner_size(window, valid_cursor);
         if winbar_height == 0 {
-            free_click_defs(window.w_winbar_click_defs, window.w_winbar_click_defs_size);
-            window.w_winbar_click_defs_size = 0 as size_t;
-            window.w_winbar_click_defs = ptr::null_mut::<StlClickDefinition>();
+            window.w_click_defs.winbar = Vec::new();
         }
     }
     OK

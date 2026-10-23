@@ -79,7 +79,7 @@ fn erase_if_empty(s: &mut StlScratch, gi: usize, start: usize) -> Option<i64> {
     let mut group_start_userhl = 0;
     let mut group_end_userhl = 0;
     for n in (0..gi).rev() {
-        let item = s.items[n];
+        let item = &s.items[n];
         if matches!(item.kind, Kind::Highlight | Kind::HighlightCombining) {
             group_end_userhl = item.minwid;
             group_start_userhl = group_end_userhl;
@@ -90,7 +90,7 @@ fn erase_if_empty(s: &mut StlScratch, gi: usize, start: usize) -> Option<i64> {
     // Walk forward for a Normal item, which is text and stops the erasure.
     let mut n = gi + 1;
     while n < s.curitem {
-        let item = s.items[n];
+        let item = &s.items[n];
         if item.kind == Kind::Normal {
             break;
         }

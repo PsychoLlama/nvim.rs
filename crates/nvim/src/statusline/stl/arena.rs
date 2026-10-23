@@ -20,24 +20,24 @@
     clippy::ptr_as_ptr
 )]
 
-use core::ffi::{c_char, c_int};
-use core::ptr;
+use core::ffi::{CStr, c_int};
+use std::rc::Rc;
 
 use super::{kStlClickDisabled, kStlClickFuncRun, kStlClickTabClose, kStlClickTabSwitch};
 use crate::global_cell::GlobalCell;
-use crate::types::{StlClickDefinition, StlClickRecord, StlOpt, stl_hlrec_t};
+use crate::types::{StlClickDefinition, StlClickRecord, StlHlRun, StlOpt};
 
 /// What one `%` item turned into. Upstream's `StlItem`, with the `char *`
 /// into the output buffer replaced by a byte offset into it -- which is what
 /// lets every stage that shifts the text around be safe code.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub(super) struct StlItem {
     /// Where the item starts in the output buffer.
     pub start: usize,
-    /// `%@Func@`'s function name: an `xmalloc`ed C string this item owns
-    /// until it is handed to the caller's click table or freed by the
-    /// truncation pass. Null for every other kind.
-    pub cmd: *mut c_char,
+    /// `%@Func@`'s function name, which this item holds until it is handed
+    /// to the caller's click records or dropped by the truncation pass.
+    /// `None` for every other kind.
+    pub cmd: Option<Rc<CStr>>,
     /// The item's minimum width, or the argument of the kinds that overload
     /// it -- a user highlight number, a negative syntax id, a tab page
     /// number (negative to close it), a `%@Func@` click id.
@@ -51,7 +51,7 @@ impl Default for StlItem {
     fn default() -> Self {
         StlItem {
             start: 0,
-            cmd: ptr::null_mut(),
+            cmd: None,
             minwid: 0,
             maxwid: 0,
             kind: Kind::Normal,
@@ -132,10 +132,6 @@ pub(super) struct StlScratch {
     pub items: Vec<StlItem>,
     /// For each open group depth, the index of its `%(` item.
     pub groupitems: Vec<usize>,
-    /// The highlight runs handed back through `hltab`.
-    hltab: Vec<stl_hlrec_t>,
-    /// The click records handed back through `tabtab`.
-    tabtab: Vec<StlClickRecord>,
     /// The indices of the `%=` items, filled by the spread pass.
     pub separators: Vec<usize>,
     /// One past the last item written, across all recursion levels.
@@ -150,8 +146,6 @@ impl StlScratch {
         StlScratch {
             items: Vec::new(),
             groupitems: Vec::new(),
-            hltab: Vec::new(),
-            tabtab: Vec::new(),
             separators: Vec::new(),
             curitem: 0,
         }
@@ -159,11 +153,6 @@ impl StlScratch {
 
     /// Make room for one more item, growing the arenas by half when the
     /// cursor has reached the end of them.
-    ///
-    /// The highlight and click tables get one entry more than there are
-    /// items, because the last one is the terminator the caller stops at.
-    /// This is the only place any arena is reallocated, which is what keeps
-    /// a live `hltab`/`tabtab` pointer valid for as long as it is in C.
     ///
     /// Every recording call asks first. Upstream checked once per format
     /// item until v0.12.6, which overran the arena when a `'statuscolumn'`
@@ -182,8 +171,6 @@ impl StlScratch {
         self.items.resize(len, StlItem::default());
         self.groupitems.resize(len, 0);
         self.separators.resize(len, 0);
-        self.hltab.resize(len + 1, EMPTY_HLREC);
-        self.tabtab.resize(len + 1, EMPTY_CLICKREC);
     }
 
     /// Record `item` and advance the cursor.
@@ -204,23 +191,6 @@ impl StlScratch {
         });
     }
 }
-
-/// A highlight run that is not one: the table's terminator.
-const EMPTY_HLREC: stl_hlrec_t = stl_hlrec_t {
-    start: ptr::null_mut(),
-    userhl: 0,
-    item: None,
-};
-
-/// A click record that is not one: the table's terminator.
-const EMPTY_CLICKREC: StlClickRecord = StlClickRecord {
-    def: StlClickDefinition {
-        type_0: kStlClickDisabled,
-        tabnr: 0,
-        func: ptr::null_mut(),
-    },
-    start: ptr::null(),
-};
 
 /// The arenas. See the module docs for the borrow discipline.
 static SCRATCH: GlobalCell<StlScratch> = GlobalCell::new(StlScratch::new());
@@ -256,78 +226,55 @@ impl Built {
 }
 
 // ---------------------------------------------------------------------------
-// The out-parameter tables
-// ---------------------------------------------------------------------------
+// What an expansion hands back
 
-/// Where an item starts, as the caller's tables spell it.
+/// Where an item starts, as the caller's records spell it: a byte of the
+/// built text, or the end of it.
 ///
 /// The bound matches [`Built::items`]: a stale slot reached through
 /// upstream's index-for-count store can hold an offset from a *previous*
 /// expansion's buffer, and that offset may be past this one.
-fn start_of(out: &[u8], at: usize) -> *const c_char {
-    out[at.min(out.len())..].as_ptr().cast::<c_char>()
+fn start_of(len: usize, at: usize) -> usize {
+    at.min(len)
 }
 
-/// Fill the highlight table from this level's items and answer it.
-pub(super) fn collect_highlights(
-    s: &mut StlScratch,
-    out: &[u8],
-    built: &Built,
-) -> *mut stl_hlrec_t {
-    let mut n = 0;
-    for i in built.items(s.items.len()) {
-        let item = s.items[i];
-        if !item.kind.is_highlight() {
-            continue;
-        }
-        s.hltab[n] = stl_hlrec_t {
-            start: start_of(out, item.start).cast_mut(),
+/// The highlight runs of this level's items, in order.
+pub(super) fn collect_highlights(s: &StlScratch, len: usize, built: &Built) -> Vec<StlHlRun> {
+    built
+        .items(s.items.len())
+        .map(|i| &s.items[i])
+        .filter(|item| item.kind.is_highlight())
+        .map(|item| StlHlRun {
+            start: start_of(len, item.start),
             userhl: item.minwid,
             item: item.kind.hl_item(),
-        };
-        n += 1;
-    }
-    s.hltab[n] = EMPTY_HLREC;
-    s.hltab.as_mut_ptr()
+        })
+        .collect()
 }
 
-/// Fill the click table from this level's items and answer it.
+/// The click records of this level's items, in order.
 ///
-/// A `%@Func@` name's ownership moves into the table here; the caller frees
-/// it when it clears its click definitions.
-pub(super) fn collect_clicks(s: &mut StlScratch, out: &[u8], built: &Built) -> *mut StlClickRecord {
-    let mut n = 0;
+/// A `%@Func@` name moves from its item into the record here; the caller
+/// keeps it in its click definitions.
+pub(super) fn collect_clicks(s: &mut StlScratch, len: usize, built: &Built) -> Vec<StlClickRecord> {
+    let mut recs = Vec::new();
     for i in built.items(s.items.len()) {
-        let item = s.items[i];
-        let def = match item.kind {
-            Kind::TabPage if item.minwid == 0 => StlClickDefinition {
-                type_0: kStlClickDisabled,
-                tabnr: 0,
-                func: ptr::null_mut(),
-            },
-            Kind::TabPage if item.minwid > 0 => StlClickDefinition {
-                type_0: kStlClickTabSwitch,
-                tabnr: item.minwid,
-                func: ptr::null_mut(),
-            },
-            Kind::TabPage => StlClickDefinition {
-                type_0: kStlClickTabClose,
-                tabnr: -item.minwid,
-                func: ptr::null_mut(),
-            },
-            Kind::ClickFunc => StlClickDefinition {
-                type_0: kStlClickFuncRun,
-                tabnr: item.minwid,
-                func: item.cmd,
-            },
+        let item = &mut s.items[i];
+        let (type_0, tabnr, func) = match item.kind {
+            Kind::TabPage if item.minwid == 0 => (kStlClickDisabled, 0, None),
+            Kind::TabPage if item.minwid > 0 => (kStlClickTabSwitch, item.minwid, None),
+            Kind::TabPage => (kStlClickTabClose, -item.minwid, None),
+            Kind::ClickFunc => (kStlClickFuncRun, item.minwid, item.cmd.take()),
             _ => continue,
         };
-        s.tabtab[n] = StlClickRecord {
-            def,
-            start: start_of(out, item.start),
-        };
-        n += 1;
+        recs.push(StlClickRecord {
+            def: StlClickDefinition {
+                type_0,
+                tabnr,
+                func,
+            },
+            start: start_of(len, item.start),
+        });
     }
-    s.tabtab[n] = EMPTY_CLICKREC;
-    s.tabtab.as_mut_ptr()
+    recs
 }

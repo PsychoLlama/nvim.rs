@@ -15,8 +15,7 @@
 //!
 //! All five forbid unsafe code. What stays here is everything that talks to
 //! the editor: the entry point, the window and buffer queries the item stage
-//! asks ([`Env`] and the wrappers below it), and the writes through the four
-//! out-parameters the caller passed.
+//! asks ([`Env`] and the wrappers below it), and what the expansion answers.
 //!
 //! # Re-entrancy
 //!
@@ -30,33 +29,26 @@
 //! `%!` prologue) are called from outside every such borrow. B18-11's
 //! `TvRef` and B19-6's momentary accessors are the same rule.
 //!
-//! # The out-parameters
+//! # What it answers
 //!
-//! `hltab` and `tabtab` answer *raw pointers into two of the arenas*, and the
-//! caller reads through them after the call returns -- `'statuscolumn'`
-//! stores its `hlrec` in the `StatusCol` and reads it again while drawing.
-//! The arenas may therefore not be reallocated while such a pointer is live.
-//! They only ever grow, and only when an item is recorded (see
-//! [`arena::StlScratch::grow`]), which is exactly upstream's `xrealloc`
-//! window; a
-//! caller that holds a table across a *later* expansion has the same dangling
-//! read it has in C.
+//! The text is the expander's own buffer, sized by the caller and cut at its
+//! terminator; the highlight runs and click records are owned copies that
+//! name their positions as byte offsets into it, so nothing the caller keeps
+//! points into the arenas or the text.
 //!
 //! Original: `src/nvim/statusline.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::normal::{set_visual_active, showcmd_buf, visual_active};
-use crate::vim_snprintf_safelen;
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::{ptr, slice};
+use core::cell::Cell;
+use core::ffi::{CStr, c_int};
 use std::ffi::CString;
+use std::rc::Rc;
 
 use super::*;
 use crate::buffer::{append_arg_number, buf_is_quickfix, buf_spname, calc_percentage, get_rel_pos};
-use crate::charset::{ptr2cells, trans_characters, vim_strsize};
-use crate::cstr;
+use crate::charset::{ptr2cells_at, strsize, trans_characters_in};
 use crate::decoration::SIGN_WIDTH;
 use crate::digraph::keymap_str;
 use crate::drawline::{fill_foldcolumn, use_cursor_line_highlight};
@@ -67,31 +59,29 @@ use crate::eval::vars::{do_unlet, get_vim_var_nr, set_internal_string_var, set_v
 use crate::getchar::state::KeyTyped;
 use crate::grid::{SCHAR_BUF_SIZE, SCharBuf, schar_copy, schar_get_adv};
 use crate::highlight_group::{HLF_CLF, HLF_FC, syn_name2id_bytes};
-use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
-use crate::memline::{ml_find_line_or_offset, ml_get_buf_len};
-use crate::memory::{xfree, xmemdupz, xstrlcpy};
+use crate::mbyte::{c_cluster_len, char_at};
+use crate::memline::ml_find_line_or_offset;
 use crate::message::state::did_emsg;
 use crate::option::vars::{p_sc, p_sloc};
 use crate::option::{
     find_option, get_fileformat, get_option_default, set_option_direct, was_set_insecurely,
 };
 use crate::options::kOptInvalid;
-use crate::optionstr::OptString;
-use crate::os::cshim::{gettext, gettext_ptr};
-use crate::os::env::home_replace;
+use crate::os::cshim::{byte_toupper, gettext};
+use crate::os::env::home_replace_in;
 use crate::path::tail_index;
 use crate::quickfix::{msg_loclist, msg_qflist};
 use crate::sign::push_sign_text;
 use crate::state::MODE_INSERT;
 use crate::state::mode::State;
+use crate::strings::{FmtArg, format_into};
 use crate::types::{
-    ColNr, LineNr, MAXPATHL, OptIndex, ScreenChar, StatusCol, StlClickRecord, TypVal, VarNumber,
-    Vv, int64_t, size_t, stl_hlrec_t,
+    ColNr, FoldInfo, LineNr, MAXPATHL, OptIndex, ScreenChar, SignTextAttrs, StlClickRecord,
+    StlHlRun, TypVal, VarNumber, Vv, int64_t,
 };
 use crate::undo::buf_is_changed;
 use crate::winlayer::graph::{switch_buffer, switch_window};
 use crate::winlayer::{Buf, Win};
-use ::libc::{atoi, toupper};
 
 // The stages of one expansion; see the module docs.
 mod arena;
@@ -118,13 +108,13 @@ const MAX_STCWIDTH: c_int = MAX_NUMBERWIDTH + SIGN_SHOW_MAX * SIGN_WIDTH as c_in
 /// fields as ordinary Rust fields; everything that calls back into the
 /// editor goes through a method here, which is what lets that stage forbid
 /// unsafe code.
-pub(super) struct Env {
+pub(super) struct Env<'a> {
     /// The window the items describe. For `'tabline'` this is `curwin`.
     pub win: Win,
     /// Its buffer, which every item that names a file asks about.
     pub buf: Buf,
-    /// The `'statuscolumn'` state, or null when this is not one.
-    pub stcp: *mut StatusCol,
+    /// The `'statuscolumn'` line, or `None` when this is not one.
+    pub stc: Option<StcLine<'a>>,
     /// The option the format came from, or `kOptInvalid`.
     pub opt_idx: OptIndex,
     /// Whether `%{}` and `%!` evaluate in the sandbox.
@@ -135,10 +125,30 @@ pub(super) struct Env {
     pub byteval: c_int,
 }
 
-impl Env {
+/// What a `'statuscolumn'` expansion reads about its line, and the fold
+/// column's virtual columns it answers.
+pub struct StcLine<'a> {
+    /// The line's fold, and the line `%C` draws the fold column for.
+    pub foldinfo: FoldInfo,
+    pub lnum: LineNr,
+    /// The cursor line's sign highlight, or 0 when this is not it.
+    pub sign_cul_id: c_int,
+    /// The line's signs, one per sign column; never empty.
+    pub signs: &'a [SignTextAttrs],
+    /// Written by `%C`, read back by the caller once the expansion is done.
+    pub fold_vcol: Cell<[ColNr; 9]>,
+}
+
+impl Env<'_> {
     /// Whether this is a `'statuscolumn'` expansion.
     pub(super) fn is_statuscol(&self) -> bool {
-        !self.stcp.is_null()
+        self.stc.is_some()
+    }
+
+    /// The `'statuscolumn'` line, on a path only a `'statuscolumn'`
+    /// expansion reaches.
+    fn stc(&self) -> &StcLine<'_> {
+        self.stc.as_ref().expect("a 'statuscolumn' item")
     }
 
     /// Evaluate `expr` for a `%{}` item, with the window and buffer the
@@ -182,35 +192,28 @@ impl Env {
     /// otherwise its path with `$HOME` folded away, made printable and
     /// optionally cut down to its last component.
     pub(super) fn file_name(&self, full: bool, tail: bool, text: &mut Vec<u8>) {
-        let name = buf_spname(&self.buf);
-        let mut buf = [0 as c_char; MAXPATHL as usize];
-        {
-            let nb = &mut buf;
-            if let Some(name) = name {
-                // SAFETY: as above; `name` is NUL-terminated.
-                unsafe { xstrlcpy(nb.as_mut_ptr(), name.as_ptr(), MAXPATHL as size_t) };
-            } else {
+        let room = MAXPATHL as usize;
+        // Into a `MAXPATHL` buffer, where upstream's cuts the name.
+        let mut buf = [0u8; MAXPATHL as usize];
+        let name = match buf_spname(&self.buf) {
+            Some(name) => name.to_bytes().to_vec(),
+            None => {
                 let path = if full {
-                    self.buf.name.full_ptr()
+                    self.buf.name.full()
                 } else {
-                    self.buf.name.shown_ptr()
+                    self.buf.name.shown()
                 };
-
-                let __hoisted_0 = Some(self.buf);
-
-                unsafe {
-                    home_replace(__hoisted_0, path, nb.as_mut_ptr(), MAXPATHL as size_t, true)
-                };
+                path.map_or_else(Vec::new, |path| {
+                    home_replace_in(Some(self.buf), path, room, true).to_vec()
+                })
             }
-            // SAFETY: as above.
-            unsafe { trans_characters(nb.as_mut_ptr(), MAXPATHL) };
-        }
-        {
-            let nb = &mut buf;
-            let bytes = cstr::in_chars(nb).to_bytes();
-            let from = if tail { tail_index(bytes) } else { 0 };
-            text.extend_from_slice(&bytes[from.min(bytes.len())..]);
-        }
+        };
+        let len = name.len().min(room - 1);
+        buf[..len].copy_from_slice(&name[..len]);
+        trans_characters_in(&mut buf);
+        let bytes = &buf[..buf.iter().position(|&b| b == 0).unwrap_or(room)];
+        let from = if tail { tail_index(bytes) } else { 0 };
+        text.extend_from_slice(&bytes[from.min(bytes.len())..]);
     }
 
     /// The byte offset of the cursor line, for `%o`/`%O`.
@@ -228,17 +231,12 @@ impl Env {
 
     /// `%P`: the same, but as `Top`/`Bot`/`All` when it has a name.
     pub(super) fn rel_pos(&self, text: &mut Vec<u8>) {
-        let mut buf = [0 as c_char; TMPLEN as usize];
-        get_rel_pos(self.win, &mut buf);
-        text.extend_from_slice(cstr::in_chars(&buf).to_bytes());
+        text.extend_from_slice(&get_rel_pos(self.win, TMPLEN as usize));
     }
 
     /// `%a`: the argument list position, when there is one.
     pub(super) fn arg_number(&self, text: &mut Vec<u8>) {
-        let mut buf = [0 as c_char; TMPLEN as usize];
-        if append_arg_number(self.win, &mut buf) > 0 {
-            text.extend_from_slice(cstr::in_chars(&buf).to_bytes());
-        }
+        text.extend_from_slice(&append_arg_number(self.win, TMPLEN as usize));
     }
 
     /// `%k`: the active `'keymap'`, in angle brackets.
@@ -262,18 +260,15 @@ impl Env {
             return;
         }
         let msg = if self.win.w_llist_ref.is_none() {
-            msg_qflist.as_ptr().cast_mut()
+            msg_qflist
         } else {
-            msg_loclist.as_ptr().cast_mut()
+            msg_loclist
         };
-        // SAFETY: both globals hold a NUL-terminated message, and `gettext`
-        // answers one for it.
-        text.extend_from_slice(unsafe { CStr::from_ptr(gettext_ptr(msg).as_ptr()) }.to_bytes());
+        text.extend_from_slice(gettext(msg).to_bytes());
     }
 
     /// `%m`/`%M`: whether the buffer has unsaved changes.
     pub(super) fn is_changed(&self) -> bool {
-        // SAFETY: a live buffer.
         buf_is_changed(self.buf)
     }
 
@@ -302,10 +297,7 @@ impl Env {
             return;
         }
         if self.opt_idx as c_int != kOptInvalid as c_int {
-            // SAFETY: `p_sloc` holds a NUL-terminated option value.
-            let loc = find_option(p_sloc(|value| unsafe {
-                CStr::from_ptr(value.as_ptr().cast_mut())
-            }));
+            let loc = p_sloc(find_option);
             if loc as c_int != self.opt_idx as c_int {
                 return;
             }
@@ -324,20 +316,18 @@ impl Env {
         let mut glyphs = [0 as ScreenChar; 9];
         // The line the fold item describes is `v:lnum`, not the cursor line.
         let lnum = vim_var(Vv::Lnum) as LineNr;
-        // SAFETY: `stcp` is non-null on every path that reaches a fold item,
-        // `glyphs` is this frame's, and `fdc` is what `compute_foldcolumn`
-        // just answered.
-        unsafe {
-            fill_foldcolumn(
-                self.win,
-                (*self.stcp).foldinfo,
-                (*self.stcp).lnum,
-                fdc,
-                vim_var(Vv::Virtnum) < 0,
-                &raw mut (*self.stcp).fold_vcol as *mut ColNr,
-                glyphs.as_mut_ptr(),
-            );
-        }
+        let stc = self.stc();
+        let mut fold_vcol = stc.fold_vcol.get();
+        fill_foldcolumn(
+            self.win,
+            stc.foldinfo,
+            stc.lnum,
+            fdc,
+            vim_var(Vv::Virtnum) < 0,
+            &mut fold_vcol,
+            &mut glyphs,
+        );
+        stc.fold_vcol.set(fold_vcol);
         let mut buf = [0u8; TMPLEN as usize];
         let mut len = 0usize;
         for &glyph in &glyphs[..fdc as usize] {
@@ -350,9 +340,8 @@ impl Env {
 
     /// The buffer's `'filetype'`, which `%y` and `%Y` bracket.
     pub(super) fn with_filetype<R>(&self, f: impl FnOnce(&[u8]) -> R) -> R {
-        // SAFETY: a string option always holds a NUL-terminated string, and
-        // the borrow ends before anything can `:set` it.
-        f(unsafe { CStr::from_ptr(self.buf.b_p_ft.value_ptr()) }.to_bytes())
+        // The borrow ends before anything can `:set` it.
+        f(self.buf.b_p_ft.bytes())
     }
 
     /// The sign in column `i`, and the highlight id it draws in.
@@ -360,24 +349,23 @@ impl Env {
     /// Answers `None` where there is no sign, which is drawn as two blanks
     /// in the default highlight.
     pub(super) fn sign_text(&self, i: usize, text: &mut Vec<u8>) -> Option<c_int> {
-        // SAFETY: `stcp` is non-null here, and `sattrs` holds at least
-        // `w_scwidth` entries -- which is the loop bound the caller uses.
-        let sattr = unsafe { *(*self.stcp).sattrs.add(i) };
+        // The caller's loop is bounded by `w_scwidth`, which the signs
+        // cover.
+        let stc = self.stc();
+        let sattr = stc.signs[i];
         if sattr.text[0] == 0 || vim_var(Vv::Virtnum) != 0 {
             text.extend_from_slice(b"  ");
             return None;
         }
         push_sign_text(&sattr.text, text);
-        // SAFETY: `stcp` is non-null here.
-        let cul = unsafe { (*self.stcp).sign_cul_id };
+        let cul = stc.sign_cul_id;
         Some(-if cul != 0 { cul } else { sattr.hl_id })
     }
 
     /// Whether the sign column is the number column and already has a sign
     /// in it, which is what makes `%l` draw the sign instead.
     pub(super) fn number_column_has_sign(&self) -> bool {
-        // SAFETY: `stcp` is non-null here, and `sattrs` is never empty.
-        unsafe { (*(*self.stcp).sattrs).text[0] != 0 }
+        self.stc().signs[0].text[0] != 0
     }
 }
 
@@ -389,7 +377,6 @@ fn set_str_var(name: &CStr, value: c_int) {
 
 /// `:unlet!` a variable this expansion published.
 fn unlet(name: &CStr) {
-    // SAFETY: `name` is a NUL-terminated string with its own length.
     let _ = do_unlet(name.to_bytes(), true);
 }
 
@@ -405,21 +392,17 @@ pub(super) fn in_insert_mode() -> bool {
 
 /// The syntax group `name` names, for `%#name#` and `%$name$`.
 pub(super) fn syntax_id(name: &[u8]) -> c_int {
-    // SAFETY: the name is a run of the format string, with its own length.
     syn_name2id_bytes(name)
 }
 
 /// A translated message, as bytes.
 pub(super) fn tr(msg: &'static CStr) -> &'static [u8] {
-    // SAFETY: `gettext` answers either its argument or a string owned by the
-    // message catalogue; both outlive the expansion.
-    unsafe { CStr::from_ptr(gettext(msg).as_ptr()) }.to_bytes()
+    gettext(msg).to_bytes()
 }
 
 /// `toupper()` in the current locale, which is what `%Y` upper-cases with.
 pub(super) fn upper(byte: u8) -> u8 {
-    // SAFETY: a plain `ctype` call on one byte.
-    unsafe { toupper(c_int::from(byte)) as u8 }
+    byte_toupper(c_int::from(byte)) as u8
 }
 
 /// The number `text` spells, when it spells one at all.
@@ -430,46 +413,39 @@ pub(super) fn as_number(text: &[u8]) -> Option<c_int> {
     if text.is_empty() || !text.iter().all(u8::is_ascii_digit) {
         return None;
     }
-    let cstr = CString::new(text).ok()?;
-    // SAFETY: a NUL-terminated string this frame owns.
-    Some(unsafe { atoi(cstr.as_ptr()) })
+    // `atoi`, which is glibc's `(int) strtol`: the digits saturate at a
+    // `long`, and the `long` is then cut to an `int`.
+    let value = text.iter().fold(0i64, |acc, &digit| {
+        acc.saturating_mul(10)
+            .saturating_add(i64::from(digit - b'0'))
+    });
+    Some(value as c_int)
 }
 
-/// A private `xmalloc`ed copy of `bytes`, NUL-terminated: what a `%@Func@`
-/// item hands to the caller's click table.
-pub(super) fn dup_cstring(bytes: &[u8]) -> *mut c_char {
-    // SAFETY: `bytes` is a run of the format string with its own length.
-    unsafe { xmemdupz(bytes.as_ptr().cast::<c_void>(), bytes.len()) }.cast::<c_char>()
-}
-
-/// Release a `%@Func@` name the caller will never see.
-pub(super) fn free_cstring(cmd: *mut c_char) {
-    // SAFETY: [`dup_cstring`]'s allocation, freed exactly once -- the item it
-    // came from is dropped from the table in the same step.
-    unsafe { xfree(cmd.cast::<c_void>()) };
+/// A copy of `bytes` as a C string, cut at a NUL as upstream's `xmemdupz`
+/// copy reads: what a `%@Func@` item hands to the caller's click table.
+pub(super) fn dup_cstring(bytes: &[u8]) -> Rc<CStr> {
+    let name = &bytes[..bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len())];
+    Rc::from(CString::new(name).expect("cut at the first NUL"))
 }
 
 // ---------------------------------------------------------------------------
 // The output buffer, wrapped
 // ---------------------------------------------------------------------------
 
-/// How many screen cells the string at `at` takes.
+/// How many screen cells the string at `at` takes, up to its terminator.
 pub(super) fn strsize_at(out: &[u8], at: usize) -> c_int {
-    // SAFETY: [`cstr::in_bytes`] has established the terminator.
-    unsafe { vim_strsize(cstr::in_bytes(&out[at..]).as_ptr()) }
+    strsize(&out[at..])
 }
 
 /// How many screen cells the *character* at `at` takes.
 pub(super) fn cells_at(out: &[u8], at: usize) -> c_int {
-    // SAFETY: the buffer is NUL-terminated at or after `at`, so the read
-    // stops inside it.
-    unsafe { ptr2cells(out[at..].as_ptr().cast::<c_char>()) }
+    ptr2cells_at(&out[at..])
 }
 
 /// How many bytes the character at `at` takes, combining marks included.
 pub(super) fn char_len_at(out: &[u8], at: usize) -> usize {
-    // SAFETY: as [`cells_at`].
-    unsafe { utfc_ptr2len(out[at..].as_ptr().cast::<c_char>()) as usize }
+    c_cluster_len(&out[at..])
 }
 
 /// The character an expansion pads with, resolved to bytes once.
@@ -536,20 +512,26 @@ fn put_schar(buf: &mut [u8], at: usize, sc: ScreenChar) -> usize {
 /// value, or a value and an exponent for the reduced form.
 fn put_number(out: &mut [u8], at: usize, plan: &parse::NumPlan) -> usize {
     let room = out.len() - at;
-    let dst = out[at..].as_mut_ptr().cast::<c_char>();
-    let template = plan.template();
-    // SAFETY: `dst` has `room` bytes, `template` is NUL-terminated, and
-    // [`parse::NumPlan`] built it to take exactly the two arguments below.
-    let len = match plan.exp {
-        Some(exp) => unsafe {
-            vim_snprintf_safelen!(dst, room as size_t, template.as_ptr(), 0, plan.num, exp)
-        },
-        // SAFETY: as above.
-        None => unsafe {
-            vim_snprintf_safelen!(dst, room as size_t, template.as_ptr(), plan.width, plan.num)
-        },
+    if room == 0 {
+        return at;
+    }
+    let template = plan.template().to_bytes();
+    // [`parse::NumPlan`] built the template to take exactly these two.
+    let args = match plan.exp {
+        Some(exp) => [FmtArg::from(0), FmtArg::from(plan.num), FmtArg::from(exp)],
+        None => [
+            FmtArg::from(plan.width),
+            FmtArg::from(plan.num),
+            FmtArg::from(0),
+        ],
     };
-    at + len
+    let len = format_into(
+        &mut out[at..],
+        template,
+        &args[..2 + usize::from(plan.exp.is_some())],
+    );
+    // `vim_snprintf_safelen`: never past the last byte, the terminator's.
+    at + len.min(room - 1)
 }
 
 // ---------------------------------------------------------------------------
@@ -577,30 +559,44 @@ impl FmtSource {
     };
 }
 
-/// Where [`build_stl_str_hl`] puts what it recorded on the way, beyond the
-/// text itself. Each is optional: a null says the caller does not want it.
-///
-/// `hltab` and `tabtab` answer raw pointers into two of the expander's
-/// arenas, which the next expansion reuses — see this module's header.
-pub struct StlSinks {
+/// What [`build_stl_str_hl`] is asked to record on the way, beyond the text
+/// itself.
+pub struct StlWants<'a> {
     /// The highlight runs, one per group change.
-    pub hltab: *mut *mut stl_hlrec_t,
-    /// How many of them, which only `nvim_eval_statusline()` reads.
-    pub hltab_len: *mut size_t,
-    /// The `%@Func@` click records.
-    pub tabtab: *mut *mut StlClickRecord,
-    /// The `'statuscolumn'` state, in and out.
-    pub stcp: *mut StatusCol,
+    pub hl: bool,
+    /// The `%@Func@` and tab page click records.
+    pub clicks: bool,
+    /// The `'statuscolumn'` line, when that is what is being built.
+    pub stc: Option<StcLine<'a>>,
 }
 
-impl StlSinks {
+impl StlWants<'_> {
     /// A caller that wants the text and nothing else.
-    pub const NONE: StlSinks = StlSinks {
-        hltab: ptr::null_mut(),
-        hltab_len: ptr::null_mut(),
-        tabtab: ptr::null_mut(),
-        stcp: ptr::null_mut(),
+    pub const NONE: StlWants<'static> = StlWants {
+        hl: false,
+        clicks: false,
+        stc: None,
     };
+}
+
+/// What one expansion answered.
+pub struct StlOutput {
+    /// The text, without a terminator.
+    pub text: Vec<u8>,
+    /// Its width in screen cells.
+    pub width: c_int,
+    /// The highlight runs, when they were asked for. A run's `start` is a
+    /// byte of the expander's buffer, which can be past the end of the text
+    /// (the truncation pass records one at the cut).
+    pub hl: Vec<StlHlRun>,
+    /// How many *items* this expansion wrote, which is what
+    /// `nvim_eval_statusline()` sizes its answer by -- upstream's
+    /// `hltab_len`, not the number of runs.
+    pub item_count: usize,
+    /// The click records, when they were asked for.
+    pub clicks: Vec<StlClickRecord>,
+    /// The fold column's virtual columns a `'statuscolumn'` `%C` wrote.
+    pub fold_vcol: Option<[ColNr; 9]>,
 }
 
 /// [`build_stl_str_hl`] for a caller that wants the text and nothing else it
@@ -608,57 +604,34 @@ impl StlSinks {
 /// format it holds: `'titlestring'` and `'iconstring'`.
 pub(crate) fn build_stl_text(
     window: Win,
-    out: &mut [c_char],
-    fmt: &CStr,
+    room: usize,
+    fmt: Vec<u8>,
     from: FmtSource,
     maxwidth: c_int,
-) -> c_int {
-    // SAFETY: a NUL-terminated format, which the builder copies before it
-    // runs anything, and no sinks.
-    unsafe {
-        build_stl_str_hl(
-            window,
-            out,
-            fmt.as_ptr().cast_mut(),
-            from,
-            0,
-            maxwidth,
-            StlSinks::NONE,
-        )
-    }
+) -> Vec<u8> {
+    build_stl_str_hl(window, room, fmt, from, 0, maxwidth, StlWants::NONE).text
 }
 
-/// Build a string from the status line items in `fmt`, answering its width in
-/// screen cells.
+/// Build a string from the status line items in `fmt`, the expansion working
+/// in a `room`-byte buffer (whose size decides where the text is cut and
+/// whether the separators spread).
 ///
-/// Normally works for window `window`, except when working for `'tabline'`, when
-/// it is `curwin`. `out` is the buffer to write into and must not be
-/// `NameBuff`, which the expander uses as scratch.
-///
-/// # Safety
-/// `window` must be a live window, `fmt` must be NUL-terminated, and every
-/// pointer in `sinks` must be null or writable. This re-enters the editor,
-/// so nothing may be held across it.
-pub unsafe fn build_stl_str_hl(
+/// Normally works for window `window`, except when working for `'tabline'`,
+/// when it is `curwin`. `fmt` is the caller's own copy: expanding it can run
+/// a function that `:set`s the option it came from. This re-enters the
+/// editor, so nothing may be held across it.
+pub fn build_stl_str_hl(
     window: Win,
-    out: &mut [c_char],
-    fmt: *mut c_char,
+    room: usize,
+    fmt: Vec<u8>,
     from: FmtSource,
     fillchar: ScreenChar,
     maxwidth: c_int,
-    sinks: StlSinks,
-) -> c_int {
-    let StlSinks {
-        hltab,
-        hltab_len,
-        tabtab,
-        stcp,
-    } = sinks;
+    wants: StlWants<'_>,
+) -> StlOutput {
+    let StlWants { hl, clicks, stc } = wants;
     let FmtSource { opt_idx, opt_scope } = from;
-    // SAFETY: the caller's buffer with its own length. The expander works in
-    // bytes; the caller's slice spells them `char`.
-    let out = unsafe { slice::from_raw_parts_mut(out.as_mut_ptr().cast::<u8>(), out.len()) };
-    // SAFETY: the caller's live window.
+    let mut out = vec![0u8; room];
     let win = window;
     let save_redraw_not_allowed = redraw_not_allowed.get();
     let save_key_typed = KeyTyped.get();
@@ -677,10 +650,11 @@ pub unsafe fn build_stl_str_hl(
         was_set_insecurely(window, opt_idx, opt_scope)
     };
 
-    // A copy: a `%!` expression may set the option the format is, and free
-    // it while it is being read.
-    // SAFETY: the caller's NUL-terminated format string.
-    let fmt_bytes = unsafe { CStr::from_ptr(fmt) }.to_bytes().to_vec();
+    // The format is read as the C string it stands for: to its first NUL.
+    let mut fmt_bytes = fmt;
+    if let Some(nul) = fmt_bytes.iter().position(|&b| b == 0) {
+        fmt_bytes.truncate(nul);
+    }
     // A format starting with "%!" is itself an expression, whose result is
     // the format actually used. Evaluating it can fail, in which case the
     // literal text is what gets rendered.
@@ -704,12 +678,11 @@ pub unsafe fn build_stl_str_hl(
     let lnum = win.w_cursor.lnum.min(buf.b_ml.ml_line_count);
     win.w_cursor.lnum = lnum;
 
-    // Read the byte under the cursor now, in case an item needs it: cheaper
-    // than copying the line.
-    let line_ptr = buf.line_raw(lnum).raw();
-    // SAFETY: `ml_get_buf` answers a NUL-terminated line.
-    let empty_line = unsafe { *line_ptr } == 0;
-    let len = ml_get_buf_len(buf, lnum);
+    // Read the byte under the cursor now, in case an item needs it.
+    let mut lines = buf.lines();
+    let line = lines.line(lnum);
+    let empty_line = line.is_empty();
+    let len = line.len() as ColNr;
     let byteval = if win.w_cursor.col > len {
         // The line may have changed since the cursor column was checked, or
         // the line number was adjusted above.
@@ -717,39 +690,34 @@ pub unsafe fn build_stl_str_hl(
         win.w_cursor.coladd = 0 as ColNr;
         0
     } else {
-        // SAFETY: the cursor column is now inside the line.
-        unsafe { utf_ptr2char(line_ptr.add(win.w_cursor.col as usize)) }
+        char_at(&line[win.w_cursor.col as usize..])
     };
 
     let env = Env {
         win,
         buf,
-        stcp,
+        stc,
         opt_idx,
         sandbox,
         empty_line,
         byteval,
     };
-    let built = expand(&env, out, usefmt, &fill, maxwidth, tabtab.is_null());
+    let built = expand(&env, &mut out, usefmt, &fill, maxwidth, !clicks);
 
-    // Hand back the highlight runs and the click records, which are views
-    // into two of the arenas.
-    with_scratch(|s| {
-        if !hltab.is_null() {
-            let runs = collect_highlights(s, out, &built);
-            // SAFETY: the caller's out-parameter.
-            unsafe { *hltab = runs };
-        }
-        if !hltab_len.is_null() {
-            // Upstream answers the item count, not the run count.
-            // SAFETY: the caller's out-parameter.
-            unsafe { *hltab_len = built.itemcnt as size_t };
-        }
-        if !tabtab.is_null() {
-            let recs = collect_clicks(s, out, &built);
-            // SAFETY: the caller's out-parameter.
-            unsafe { *tabtab = recs };
-        }
+    // Hand back the highlight runs and the click records, which name their
+    // places in the expander's buffer.
+    let (hl, clicks) = with_scratch(|s| {
+        let runs = if hl {
+            collect_highlights(s, room, &built)
+        } else {
+            Vec::new()
+        };
+        let recs = if clicks {
+            collect_clicks(s, room, &built)
+        } else {
+            Vec::new()
+        };
+        (runs, recs)
     });
 
     redraw_not_allowed.set(save_redraw_not_allowed);
@@ -763,7 +731,15 @@ pub unsafe fn build_stl_str_hl(
 
     // A user function may reset KeyTyped; restore it.
     KeyTyped.set(save_key_typed);
-    built.width
+    out.truncate(out.iter().position(|&b| b == 0).unwrap_or(room));
+    StlOutput {
+        text: out,
+        width: built.width,
+        hl,
+        item_count: built.itemcnt,
+        clicks,
+        fold_vcol: env.stc.map(|stc| stc.fold_vcol.get()),
+    }
 }
 
 /// Expand `usefmt` into `out`: the item loop, then the post-processing that

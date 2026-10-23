@@ -15,22 +15,33 @@ use super::*;
 
 /// What a click on one statusline column does.
 ///
-/// Not `Copy`: the `func` of a `kStlClickFuncRun` definition is an owned
-/// string that `stl_clear_click_defs` frees.
-#[derive(Clone)]
+/// Not `Copy`: the `func` of a `kStlClickFuncRun` definition is a shared
+/// name. Every cell of a click region holds the same one, and a definition
+/// read out for a click keeps it alive while the handler runs -- which may
+/// redraw the line and replace the region it was read from.
+#[derive(Clone, Default)]
 pub struct StlClickDefinition {
     pub type_0: StlClickDefinition_type_0,
     pub tabnr: ::core::ffi::c_int,
-    pub func: *mut ::core::ffi::c_char,
+    pub func: Option<::std::rc::Rc<::core::ffi::CStr>>,
 }
 pub type StlClickDefinition_type_0 = ::core::ffi::c_uint;
-/// A click definition and the column it starts at.
+/// A click definition and the byte of the built line it starts at.
 ///
 /// Not `Copy`, following [`StlClickDefinition`].
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct StlClickRecord {
     pub def: StlClickDefinition,
-    pub start: *const ::core::ffi::c_char,
+    pub start: usize,
+}
+/// A window's click definitions, one per screen cell of the line each
+/// describes, kept from the redraw that built them until the click that
+/// reads them. Empty until the line is first drawn.
+#[derive(Default)]
+pub struct WinClickDefs {
+    pub status: Vec<StlClickDefinition>,
+    pub winbar: Vec<StlClickDefinition>,
+    pub statuscol: Vec<StlClickDefinition>,
 }
 /// A letter of the statusline format language.
 ///
@@ -196,27 +207,26 @@ impl PartialEq for StlOpt {
         *self as u8 == *other as u8
     }
 }
+/// What `win_line` and `nvim_eval_statusline` tell a `'statuscolumn'`
+/// expansion about the line, and the fold column's virtual columns it
+/// answers.
 #[derive(Copy, Clone, Default)]
 pub struct StatusCol {
     pub width: ::core::ffi::c_int,
     pub lnum: LineNr,
     pub sign_cul_id: ::core::ffi::c_int,
     pub draw: bool,
-    pub hlrec: *mut stl_hlrec_t,
     pub foldinfo: FoldInfo,
     pub fold_vcol: [ColNr; 9],
-    pub sattrs: *mut SignTextAttrs,
 }
-/// One highlight run of a built statusline.
-///
-/// `Copy`: `start` points into the built string, which the caller owns.
+/// One highlight run of a built statusline: where it starts, as a byte
+/// offset into the built text, and what it switches to.
 #[derive(Copy, Clone)]
-pub struct stl_hlrec {
-    pub start: *mut ::core::ffi::c_char,
+pub struct StlHlRun {
+    pub start: usize,
     pub userhl: ::core::ffi::c_int,
     /// The item the run came from, for the two drawers that tell the sign
     /// and fold columns' runs apart. `None` for a run that is not one of
     /// those -- upstream's zero, which is not a letter.
     pub item: Option<StlOpt>,
 }
-pub type stl_hlrec_t = stl_hlrec;

@@ -10,7 +10,6 @@
     "crates/nvim/src/extmark/mod.rs": 2,
     "crates/nvim/src/extmark/set.rs": 1,
     "crates/nvim/src/extmark/undo.rs": 1,
-    "crates/nvim/src/highlight/mod.rs": 1,
     "crates/nvim/src/insexpand/getexp.rs": 1,
     "crates/nvim/src/mark/adjust.rs": 1,
     "crates/nvim/src/os/env/mod.rs": 1

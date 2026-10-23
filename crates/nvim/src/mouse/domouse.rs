@@ -166,9 +166,7 @@ pub(crate) fn do_mouse(
     let old_curwin = Win::current();
 
     // Only when initialized.
-    // SAFETY: the tabline's definitions cover the screen's columns, which is
-    // all the arms below index with.
-    if let Some(defs) = unsafe { ClickDefs::tabline() }
+    if let Some(defs) = ClickDefs::tabline()
         && let Some(answer) = tab_line_click(defs, is_click, is_drag, which_button, old_curwin)
     {
         return answer;

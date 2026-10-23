@@ -6,13 +6,12 @@
 //! status line the format language has nothing to say about.
 //! [`stl_connected`] answers whether a window's status line runs on into the
 //! window right of it, which decides whether that cell is a fill character or
-//! a separator. [`get_trans_bufname`] puts a buffer's displayable name in
-//! `NameBuff`, for the tab line and for `:ls`.
+//! a separator. [`trans_bufname`] is a buffer's displayable name, for the
+//! tab line.
 //!
 //! Original: `src/nvim/statusline.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -26,15 +25,12 @@ use core::ffi::c_int;
 
 use super::*;
 use crate::buffer::buf_spname;
-use crate::charset::trans_characters;
 use crate::cmdexpand::state::wild_menu_showing;
 use crate::drawscreen::state::redraw_cmdline;
 use crate::global_cell::GlobalCell;
 use crate::grid::default_gridview;
 use crate::highlight_group::HLF_C;
-use crate::memory::xstrlcpy;
 use crate::optionstr::OptStringRef;
-use crate::os::env::home_replace;
 use crate::types::MAXPATHL;
 use crate::types::ui::kUIWildmenu;
 use crate::ui::ui_has;
@@ -107,8 +103,10 @@ pub fn stl_connected(window: Win) -> bool {
     false
 }
 
-/// [`get_trans_bufname`], answered owned: the displayable name of `buffer`
-/// as the same `MAXPATHL` buffer would have held it.
+/// The displayable name of `buffer`, as a `MAXPATHL` buffer would have held
+/// it: its special name if it has one, else its file name with `$HOME`
+/// folded back to `~`, with the unprintable characters replaced by their
+/// display forms.
 pub(crate) fn trans_bufname(buffer: Buf) -> Vec<u8> {
     let room = MAXPATHL as usize;
     let mut name = match buf_spname(&buffer) {
@@ -122,24 +120,4 @@ pub(crate) fn trans_bufname(buffer: Buf) -> Vec<u8> {
     name.resize(room, 0);
     crate::charset::trans_characters_in(&mut name);
     crate::cstr::until_nul(&name).to_vec()
-}
-
-/// Put the displayable name of `buffer` in `name`: its special name if it has
-/// one, else its file name with `$HOME` folded back to `~`, with the
-/// unprintable characters replaced by their display forms.
-///
-/// Upstream fills the shared `NameBuff` and leaves the readers to find it
-/// there, which is why the fill and each read had to be separate borrows.
-pub(crate) fn get_trans_bufname(buffer: Buf, name: &mut [c_char; MAXPATHL as usize]) {
-    let (out, room) = (name.as_mut_ptr(), MAXPATHL as size_t);
-    // SAFETY: the caller's promise, and `name` is `MAXPATHL` bytes, which
-    // each of the three writes below is told.
-    unsafe {
-        if let Some(spname) = buf_spname(&buffer) {
-            xstrlcpy(out, spname.as_ptr(), room);
-        } else {
-            home_replace(Some(buffer), buffer.name.shown_ptr(), out, room, true);
-        }
-        trans_characters(out, MAXPATHL);
-    }
 }

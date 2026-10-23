@@ -14,7 +14,7 @@ use core::ffi::c_int;
 
 use crate::cstr;
 
-use super::{Built, Fill, Kind, StlScratch, cells_at, char_len_at, free_cstring, strsize_at};
+use super::{Built, Fill, Kind, StlScratch, cells_at, char_len_at, strsize_at};
 
 /// Cut the line down to `maxwidth` cells.
 pub(super) fn truncate(
@@ -61,8 +61,7 @@ pub(super) fn truncate(
             if s.items[i].start > trunc {
                 for j in i..last {
                     if s.items[j].kind == Kind::ClickFunc {
-                        free_cstring(s.items[j].cmd);
-                        s.items[j].cmd = core::ptr::null_mut();
+                        s.items[j].cmd = None;
                     }
                 }
                 // Upstream stores the absolute index here where the count

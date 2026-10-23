@@ -14,6 +14,8 @@ use super::*;
 use crate::autocmd::fire_autocmds;
 use crate::grid::default_grid_ref;
 use crate::guard::Suppress;
+use crate::statusline::clear_click_defs;
+use crate::types::StlClickDefinition;
 use crate::winlayer::{self, Win};
 use crate::winlayer::{Buf, TabPage};
 
@@ -51,11 +53,11 @@ pub fn default_grid_alloc() -> bool {
     // at the old size, because the wrong size is a crash.
     grid_alloc(&mut grid, Rows.get(), Columns.get(), true, true);
 
-    tab_click_defs_arena().clear();
     let columns = Columns.get() as usize;
     tab_page_click_defs.with_mut(|defs| {
+        clear_click_defs(defs);
         if defs.len() < columns {
-            defs.resize(columns, NO_CLICK);
+            defs.resize(columns, StlClickDefinition::default());
         }
     });
 

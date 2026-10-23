@@ -92,9 +92,7 @@ use crate::state::{
     MODE_NORMAL, MODE_SETWSIZE, MODE_TERMINAL, MODE_VISUAL, REPLACE_FLAG, VREPLACE_FLAG,
     get_real_state,
 };
-use crate::statusline::NO_CLICK;
 use crate::statusline::state::{stl_syntax, tab_page_click_defs};
-use crate::statusline::tab_click_defs_arena;
 use crate::statusline::{draw_tabline, redraw_ruler, win_redr_status, win_redr_winbar};
 use crate::syntax::{
     syn_set_timeout, syn_stack_apply_changes, syntax_check_changed, syntax_end_parsing,

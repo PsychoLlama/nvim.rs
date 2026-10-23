@@ -350,9 +350,11 @@ pub fn ui_send_all_hls(
         define(i as Integer, attr, inspect);
         i += 1;
     }
-    for hlf in 0..HLF_COUNT as usize {
-        let name = String_0::from_cstr(hlf_names[hlf]);
-        group_set(name, Integer::from(default_hl_attr(hlf)));
+    for (hlf, name) in hlf_names.iter().enumerate() {
+        group_set(
+            String_0::from_cstr(name),
+            Integer::from(default_hl_attr(hlf)),
+        );
     }
 }
 
