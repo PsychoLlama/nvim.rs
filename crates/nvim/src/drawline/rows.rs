@@ -50,10 +50,11 @@ impl Cells {
             // rather than diff filler: the virtual ones come last.
             let index = wlv.filler_todo - (wlv.filler_lines - wlv.n_virt_lines);
             if index > 0 {
-                self.virt_line_index = self.virt_lines.size as ::core::ffi::c_int - index;
+                self.virt_line_index = self.virt_lines.len() as ::core::ffi::c_int - index;
                 debug_assert!(self.virt_line_index >= 0);
+                let at = self.virt_lines[self.virt_line_index as usize];
                 self.virt_line_flags =
-                    unsafe { *self.virt_lines.items.offset(self.virt_line_index as isize) }.flags;
+                    with_decor_virt(at.link, |vt| vt.data.lines()[at.line as usize].flags);
             }
         }
 
@@ -239,7 +240,7 @@ impl Cells {
                     } else {
                         self.text_start_col
                     },
-                    (*self.virt_lines.items.offset(self.virt_line_index as isize)).line,
+                    VirtChunks::Line(self.virt_lines[self.virt_line_index as usize]),
                     kHlModeReplace,
                     self.view_width,
                     0,
@@ -381,12 +382,12 @@ impl Cells {
             self.fill_past_eol(wlv, window, f);
         }
 
-        if self.fold_vt.size > 0 {
+        if !self.fold_vt.is_empty() {
             unsafe {
                 draw_virt_text_item(
                     buffer,
                     self.text_start_col,
-                    self.fold_vt,
+                    VirtChunks::Owned(&self.fold_vt),
                     kHlModeCombine,
                     self.view_width,
                     0,

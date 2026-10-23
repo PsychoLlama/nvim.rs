@@ -186,8 +186,9 @@ pub(crate) struct Cells {
     pub(super) change_end: ::core::ffi::c_int,
 
     // -- decorations ----------------------------------------------------------
-    /// Virtual lines to draw above or below this buffer line.
-    pub(super) virt_lines: VirtLines,
+    /// Virtual lines to draw above or below this buffer line. Freed by hand
+    /// at the end of the line: this state is drop-free.
+    pub(super) virt_lines: ManuallyDrop<Vec<VirtLineRef>>,
     /// Decoration providers are being driven for this line.
     pub(super) check_decor_providers: bool,
     /// Byte column their last answer covered up to.
@@ -222,8 +223,9 @@ pub(crate) struct Cells {
     pub(super) virt_line_flags: ::core::ffi::c_int,
     /// This row is the one that shows a closed fold.
     pub(super) draw_folded: bool,
-    /// `'foldtext'` virtual text, drawn after the fold text itself.
-    pub(super) fold_vt: VirtText,
+    /// `'foldtext'` virtual text, drawn after the fold text itself. Freed by
+    /// hand at the end of the line, like `virt_lines`.
+    pub(super) fold_vt: ManuallyDrop<VirtText>,
     /// `'foldtext'` result that has to be freed, when it did not fit
     /// [`LineFrame::fold_buf`].
     pub(super) foldtext_free: *mut ::core::ffi::c_char,
@@ -371,7 +373,7 @@ impl Cells {
             virt_line_index: -1,
             virt_line_flags: 0,
             draw_folded: false,
-            fold_vt: VIRTTEXT_EMPTY,
+            fold_vt: ManuallyDrop::new(VIRTTEXT_EMPTY),
             foldtext_free: ::core::ptr::null_mut(),
             fold_attr: 0,
 
@@ -547,13 +549,8 @@ impl Cells {
             }
         }
 
-        unsafe { clear_virttext(&raw mut self.fold_vt) };
-        unsafe { xfree(self.virt_lines.items.cast::<::core::ffi::c_void>()) };
-        self.virt_lines = VirtLines {
-            size: 0,
-            capacity: 0,
-            items: ::core::ptr::null_mut::<virt_line>(),
-        };
+        drop(core::mem::take(&mut *self.fold_vt));
+        drop(core::mem::take(&mut *self.virt_lines));
         unsafe { xfree(self.foldtext_free.cast::<::core::ffi::c_void>()) };
         wlv.row
     }

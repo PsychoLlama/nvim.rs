@@ -45,13 +45,14 @@
 #![allow(non_upper_case_globals)]
 
 use super::{
-    DecorStateRef, Range, Sh, Virt, decor_sh_from_inline, kSHConceal, kSHHlEol, kSHIsSign,
-    kSHSpellOff, kSHSpellOn, kSHUIWatched, kSHUIWatchedOverlay, ns_in_win, slot_range,
+    DECOR_ID_INVALID, DecorStateRef, Range, decor_release_sh, decor_release_vt, kSHConceal,
+    kSHHlEol, kSHIsSign, kSHSpellOff, kSHSpellOn, kSHUIWatched, kSHUIWatchedOverlay, kVTHide,
+    kVTIsLines, ns_in_win, sh_chain, slot_range, virt_chain, with_decor_item, with_decor_virt,
 };
 use crate::decoration::decor_state;
 use crate::decoration::{
-    clear_virttext, kDecorKindHighlight, kDecorKindUIWatched, kDecorKindVirtLines,
-    kDecorKindVirtText, kVPosEndOfLine, kVPosInline, kVPosOverlay,
+    kDecorKindHighlight, kDecorKindUIWatched, kDecorKindVirtLines, kDecorKindVirtText,
+    kVPosEndOfLine, kVPosInline, kVPosOverlay,
 };
 use crate::highlight::{hl_add_url, hl_combine_attr};
 use crate::highlight_group::syn_id2attr;
@@ -61,12 +62,11 @@ use crate::marktree::{
     marktree_get_altpos, marktree_itr_current, marktree_itr_get, marktree_itr_get_overlap,
     marktree_itr_next, marktree_itr_step_overlap,
 };
-use crate::memory::xfree;
 use crate::pos::MAXCOL;
 use crate::types::{
-    DecorInline, DecorPriority, DecorPriorityInternal, DecorRange, DecorRange_data,
-    DecorRange_data_ui, DecorRangeSlot, DecorSignHighlight, DecorVirtText, MTKey, MTPair, MTPos,
-    VirtTextPos, uint32_t,
+    DecorHighlightInline, DecorInline, DecorPriority, DecorPriorityInternal, DecorRange,
+    DecorRange_data, DecorRange_data_ui, DecorRangeSlot, MTKey, MTPair, MTPos, RangeHighlight,
+    ScreenChar, VirtTextPos, uint16_t, uint32_t,
 };
 use crate::winlayer::WinId;
 use crate::winlayer::{Buf, Win};
@@ -147,17 +147,13 @@ impl DecorStateRef {
 
 impl Range {
     /// The highlight item this range draws, for a `kDecorKindHighlight`.
-    fn sh(self) -> DecorSignHighlight {
+    fn sh(self) -> RangeHighlight {
         self.data.highlight()
     }
 
-    /// The virtual text this range draws, if it is one at all — `data.vt` is
-    /// the union's own branch and may itself be null.
-    fn virt_opt(self) -> Option<Virt> {
-        // SAFETY: a range's virtual text is live for as long as the range is.
-        (self.kind == kDecorKindVirtText)
-            .then(|| unsafe { Virt::from_raw(self.data.virt()) })
-            .flatten()
+    /// The virtual-text link this range draws, if it is one at all.
+    fn virt_opt(self) -> Option<uint32_t> {
+        (self.kind == kDecorKindVirtText).then(|| self.virt())
     }
 
     /// The UI-watched position this range reports, for a
@@ -176,7 +172,7 @@ impl Range {
     /// Where a virtual-position range wants to be drawn.
     fn virt_pos_kind(self) -> VirtTextPos {
         match self.kind {
-            kDecorKindVirtText => self.virt().pos,
+            kDecorKindVirtText => with_decor_virt(self.virt(), |vt| vt.pos),
             kDecorKindUIWatched => self.ui().pos,
             // Not used; answer whatever.
             _ => kVPosEndOfLine,
@@ -184,20 +180,18 @@ impl Range {
     }
 
     /// Frees whatever an *owned* range carries — the ephemeral virtual text
-    /// a decoration provider left behind, or a URL.
+    /// or virtual lines a decoration provider left behind, or the store entry
+    /// holding an ephemeral highlight's URL.
     fn free_owned(self) {
         if !self.owned {
             return;
         }
-        if self.kind == kDecorKindVirtText {
-            let vt = self.virt();
-            // SAFETY: an owned range owns its virtual text outright.
-            unsafe { clear_virttext(vt.text_ptr()) };
-            // SAFETY: as above.
-            unsafe { xfree(vt.raw().cast()) };
-        } else if self.kind == kDecorKindHighlight {
-            // SAFETY: an owned highlight owns its URL string.
-            unsafe { xfree(self.sh().url.cast_mut().cast()) };
+        match self.kind {
+            kDecorKindVirtText | kDecorKindVirtLines => decor_release_vt(self.virt()),
+            kDecorKindHighlight if self.sh().url != DECOR_ID_INVALID => {
+                decor_release_sh(self.sh().url);
+            }
+            _ => {}
         }
     }
 }
@@ -236,10 +230,12 @@ impl Buf {
     }
 }
 
-/// Releases the two vectors. The ranges themselves are not owned here — see
-/// [`Win::decor_redraw_reset`], which is what frees the ephemeral ones.
-///
+/// Releases the two vectors, and what the ephemeral ranges still in them
+/// own.
 pub fn decor_state_free(mut state: DecorStateRef) {
+    for i in state.list_spans() {
+        state.range_at(i).free_owned();
+    }
     state.slots = Vec::new();
     state.ranges_i = Vec::new();
 }
@@ -255,12 +251,7 @@ impl Win {
         state.win = Some(self.id());
 
         for i in state.list_spans() {
-            // Only the ephemeral virtual texts: an owned URL belongs to a range
-            // the column loop is still holding, and is freed there.
-            let r = state.range_at(i);
-            if r.kind == kDecorKindVirtText {
-                r.free_owned();
-            }
+            state.range_at(i).free_owned();
         }
 
         state.slots.clear();
@@ -394,25 +385,62 @@ pub(crate) fn decor_range_add_from_inline(
     ns: uint32_t,
     mark_id: uint32_t,
 ) {
-    if !decor.ext {
-        // SAFETY: an inline decoration's highlight is the union's own data.
-        let mut sh = unsafe { decor_sh_from_inline(decor.data.hl) };
-        add_sh(
-            state, start_row, start_col, end_row, end_col, &mut sh, owned, ns, mark_id, 0,
-        );
-        return;
+    let ext = match decor {
+        DecorInline::Hl(hl) => {
+            let sh = HlSource::inline(hl);
+            add_sh(
+                state, start_row, start_col, end_row, end_col, sh, owned, ns, mark_id, 0,
+            );
+            return;
+        }
+        DecorInline::Ext(ext) => ext,
+    };
+
+    for vt in virt_chain(ext.vt_idx) {
+        decor_range_add_virt(state, start_row, start_col, end_row, end_col, vt, owned);
     }
 
-    // SAFETY: `ext` says the union holds the chain head, which belongs to a
-    // live mark.
-    for vt in unsafe { Virt::chain(decor.data.ext.vt) } {
-        decor_range_add_virt_h(state, start_row, start_col, end_row, end_col, vt, owned);
-    }
-
-    for mut sh in Sh::chain(decor) {
+    for idx in sh_chain(decor) {
+        let sh = with_decor_item(idx, |item| HlSource {
+            flags: item.flags,
+            priority: item.priority,
+            hl_id: item.hl_id,
+            conceal_char: item.text[0],
+            url: if item.url.is_some() {
+                idx
+            } else {
+                DECOR_ID_INVALID
+            },
+        });
         add_sh(
-            state, start_row, start_col, end_row, end_col, &mut sh, owned, ns, mark_id, 0,
+            state, start_row, start_col, end_row, end_col, sh, owned, ns, mark_id, 0,
         );
+    }
+}
+
+/// What a highlight range is made from: one sign/highlight item's fields,
+/// and the store entry holding its URL (`DECOR_ID_INVALID` for none).
+#[derive(Copy, Clone)]
+pub(crate) struct HlSource {
+    pub(crate) flags: uint16_t,
+    pub(crate) priority: DecorPriority,
+    pub(crate) hl_id: c_int,
+    pub(crate) conceal_char: ScreenChar,
+    pub(crate) url: uint32_t,
+}
+
+impl HlSource {
+    /// An inline highlight, which has no URL.
+    pub(crate) fn inline(hl: DecorHighlightInline) -> Self {
+        // A sign is never inline; see `decor_sh_from_inline`.
+        debug_assert!(hl.flags & kSHIsSign == 0);
+        Self {
+            flags: hl.flags,
+            priority: hl.priority,
+            hl_id: hl.hl_id,
+            conceal_char: hl.conceal_char,
+            url: DECOR_ID_INVALID,
+        }
     }
 }
 
@@ -460,35 +488,19 @@ fn decor_range_insert(mut state: DecorStateRef, range: &mut DecorRange) {
     state.ranges_i.insert(begin, index as c_int);
 }
 
-/// Adds the range a virtual text or virtual-lines block occupies.
-///
-/// # Safety
-/// `vt` must be live; it is borrowed for as long as the range is, unless
-/// `owned` says the range took it over.
-pub unsafe fn decor_range_add_virt(
+/// Adds the range a virtual text or virtual-lines block occupies: link
+/// `vt` of the virtual-text store, which the range takes over when `owned`
+/// and otherwise borrows from its mark.
+pub fn decor_range_add_virt(
     state: DecorStateRef,
     start_row: c_int,
     start_col: c_int,
     end_row: c_int,
     end_col: c_int,
-    vt: *mut DecorVirtText,
+    vt: uint32_t,
     owned: bool,
 ) {
-    // SAFETY: the caller's virtual text.
-    let vt = unsafe { Virt::new(vt) };
-    decor_range_add_virt_h(state, start_row, start_col, end_row, end_col, vt, owned);
-}
-
-/// [`decor_range_add_virt`] for handles the caller has already promised.
-fn decor_range_add_virt_h(
-    state: DecorStateRef,
-    start_row: c_int,
-    start_col: c_int,
-    end_row: c_int,
-    end_col: c_int,
-    vt: Virt,
-    owned: bool,
-) {
+    let (priority, flags) = with_decor_virt(vt, |link| (link.priority, link.flags));
     let mut range = DecorRange {
         start_row,
         start_col,
@@ -498,14 +510,14 @@ fn decor_range_add_virt_h(
         // Virtual texts carry no subpriority, so the low 16 bits are zero;
         // `decor_range_add_sh` fills them in. Both sides must use the same
         // shift or the two kinds no longer interleave.
-        priority_internal: DecorPriorityInternal::from(vt.priority) << 16,
+        priority_internal: DecorPriorityInternal::from(priority) << 16,
         owned,
-        kind: if vt.is_lines() {
+        kind: if flags & kVTIsLines != 0 {
             kDecorKindVirtLines
         } else {
             kDecorKindVirtText
         },
-        data: DecorRange_data::Virt(vt.raw()),
+        data: DecorRange_data::Virt(vt),
         attr_id: 0,
         draw_col: DRAW_COL_NEW,
     };
@@ -517,31 +529,27 @@ fn decor_range_add_virt_h(
 /// dropped here.
 ///
 /// One `sh` can produce two ranges: a highlight and a UI-watched position.
-///
-/// # Safety
-/// `sh` must be live.
+/// An `owned` range takes over the store entry holding `sh`'s URL.
 #[allow(clippy::too_many_arguments)]
-pub unsafe fn decor_range_add_sh(
+pub(crate) fn decor_range_add_sh(
     state: DecorStateRef,
     start_row: c_int,
     start_col: c_int,
     end_row: c_int,
     end_col: c_int,
-    sh: *mut DecorSignHighlight,
+    sh: HlSource,
     owned: bool,
     ns: uint32_t,
     mark_id: uint32_t,
     subpriority: DecorPriority,
 ) {
-    // SAFETY: the caller's sign/highlight item.
-    let mut sh = unsafe { Sh::new(sh) };
     add_sh(
         state,
         start_row,
         start_col,
         end_row,
         end_col,
-        &mut sh,
+        sh,
         owned,
         ns,
         mark_id,
@@ -557,14 +565,14 @@ fn add_sh(
     start_col: c_int,
     end_row: c_int,
     end_col: c_int,
-    sh: &mut DecorSignHighlight,
+    sh: HlSource,
     owned: bool,
     ns: uint32_t,
     mark_id: uint32_t,
     subpriority: DecorPriority,
 ) {
-    let flags = sh.flags as c_int;
-    if flags & kSHIsSign as c_int != 0 {
+    let flags = sh.flags;
+    if flags & kSHIsSign != 0 {
         return;
     }
 
@@ -578,14 +586,18 @@ fn add_sh(
             + DecorPriorityInternal::from(subpriority),
         owned,
         kind: kDecorKindHighlight,
-        data: DecorRange_data::Highlight(*sh),
+        data: DecorRange_data::Highlight(RangeHighlight {
+            flags,
+            conceal_char: sh.conceal_char,
+            url: sh.url,
+        }),
         attr_id: 0,
         draw_col: DRAW_COL_NEW,
     };
 
     if sh.hl_id != 0
-        || !sh.url.is_null()
-        || flags & (kSHConceal | kSHSpellOn | kSHSpellOff) as c_int != 0
+        || sh.url != DECOR_ID_INVALID
+        || flags & (kSHConceal | kSHSpellOn | kSHSpellOff) != 0
     {
         if sh.hl_id != 0 {
             range.attr_id = syn_id2attr(sh.hl_id);
@@ -593,12 +605,12 @@ fn add_sh(
         decor_range_insert(state, &mut range);
     }
 
-    if flags & kSHUIWatched as c_int != 0 {
+    if flags & kSHUIWatched != 0 {
         range.kind = kDecorKindUIWatched;
         range.data = DecorRange_data::UIWatched(DecorRange_data_ui {
             ns_id: ns,
             mark_id,
-            pos: if flags & kSHUIWatchedOverlay as c_int != 0 {
+            pos: if flags & kSHUIWatchedOverlay != 0 {
                 kVPosOverlay
             } else {
                 kVPosEndOfLine
@@ -628,7 +640,9 @@ fn init_draw_col(win_col: c_int, hidden: bool, mut item: Range) {
         // A negative `win_col` is itself a sentinel the caller passes in.
         win_col
     } else if pos == kVPosOverlay {
-        let hides = item.virt_opt().is_some_and(Virt::hides_over_concealed);
+        let hides = item
+            .virt_opt()
+            .is_some_and(|vt| with_decor_virt(vt, |link| link.flags & kVTHide != 0));
         if hides && hidden {
             DRAW_COL_NEVER
         } else {
@@ -788,7 +802,7 @@ pub fn decor_redraw_col_impl(
                     // cell of the concealed range.
                     if r.start_row == row && r.start_col == col {
                         conceal = 2;
-                        conceal_char = sh.text[0];
+                        conceal_char = sh.conceal_char;
                         col_last = col_last.min(r.start_col);
                         conceal_attr = r.attr_id;
                     }
@@ -798,9 +812,12 @@ pub fn decor_redraw_col_impl(
                 } else if sh_flags & kSHSpellOff as c_int != 0 {
                     spell = Some(false);
                 }
-                if !sh.url.is_null() {
-                    // SAFETY: an item's URL is a live NUL-terminated string.
-                    attr = unsafe { hl_add_url(attr, sh.url) };
+                if sh.url != DECOR_ID_INVALID {
+                    attr = with_decor_item(sh.url, |item| {
+                        item.url
+                            .as_deref()
+                            .map_or(attr, |url| hl_add_url(attr, url))
+                    });
                 }
             }
             true

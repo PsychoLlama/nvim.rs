@@ -21,6 +21,7 @@ use crate::charset::{byte2cells, vim_isbreak, vim_isprintc};
 use crate::cstr::byte_at;
 use crate::decoration::{
     decor_conceal_line, decor_virt_lines, kMTMetaInline, mark_virt_chain, ns_in_win,
+    with_decor_virt,
 };
 use crate::diff::{diff_check_fill, diffopt_filler};
 use crate::fold::{has_folding, has_folding_win, line_folded};
@@ -393,16 +394,20 @@ fn add_inline_virt_text(
             break;
         }
         if mark.pos.col == col && !mt_invalid(mark) && ns_in_win(mark.ns, wp) {
-            let inline = mark_virt_chain(mark)
-                .filter(|vt| vt.flags as c_int & VT_IS_LINES == 0)
-                .filter(|vt| vt.pos as uint32_t == VPOS_INLINE);
-            for vt in inline {
+            let inline = mark_virt_chain(mark).filter_map(|link| {
+                with_decor_virt(link, |vt| {
+                    let inline =
+                        vt.flags as c_int & VT_IS_LINES == 0 && vt.pos as uint32_t == VPOS_INLINE;
+                    inline.then_some(vt.width)
+                })
+            });
+            for width in inline {
                 if mt_right(mark) {
-                    *cur_text_width_right += vt.width;
+                    *cur_text_width_right += width;
                 } else {
-                    *cur_text_width_left += vt.width;
+                    *cur_text_width_left += width;
                 }
-                size += vt.width;
+                size += width;
                 if expand_tab {
                     // The tab's width changes with the inserted text.
                     size -= tab_size;

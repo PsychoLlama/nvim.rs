@@ -426,12 +426,8 @@ pub fn hl_get_underline() -> c_int {
 /// The URL is interned, so the same target used a thousand times costs one
 /// string and one attribute entry.
 ///
-/// # Safety
-/// `url` is NUL-terminated; as [`get_attr_entry`] otherwise.
-pub unsafe fn hl_add_url(attr: c_int, url: *const c_char) -> c_int {
+pub fn hl_add_url(attr: c_int, url: &CStr) -> c_int {
     let mut attrs = HLATTRS_INIT;
-    // SAFETY: the caller's string.
-    let url = unsafe { CStr::from_ptr(url) };
     attrs.url = URLS.with_mut(|urls| urls.intern(url)) as i32;
     let entry = HlEntry {
         attr: attrs,

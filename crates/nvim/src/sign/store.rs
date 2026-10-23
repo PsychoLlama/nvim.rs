@@ -211,24 +211,24 @@ pub(crate) fn sign_define_by_name(name: &[u8], attrs: SignAttrs) -> Result<(), F
 /// thing that makes a `:sign define` of an already-placed sign visible.
 fn update_placements(def: &Sign) {
     let name = def.name.as_bytes();
-    let mut did_redraw = false;
-    for mut sh in decor_items() {
+    let mut placed = false;
+    for_each_decor_item(|sh| {
         if sh.sign_name_cstr().is_none_or(|own| own.to_bytes() != name) {
-            continue;
+            return;
         }
         sh.text = def.text;
         sh.hl_id = def.text_hl;
         sh.line_hl_id = def.line_hl;
         sh.number_hl_id = def.num_hl;
         sh.cursorline_hl_id = def.cul_hl;
-        if !did_redraw {
-            for wp in windows() {
-                let buf = wp.buffer();
-                if buf_has_signs(buf) {
-                    redraw_buf_later(buf, UPD_NOT_VALID);
-                }
+        placed = true;
+    });
+    if placed {
+        for wp in windows() {
+            let buf = wp.buffer();
+            if buf_has_signs(buf) {
+                redraw_buf_later(buf, UPD_NOT_VALID);
             }
-            did_redraw = true;
         }
     }
 }

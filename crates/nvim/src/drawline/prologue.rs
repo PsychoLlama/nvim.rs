@@ -230,11 +230,7 @@ impl LineSetup {
             change_end: -1,
 
             statuscol: StatusCol::default(),
-            virt_lines: VirtLines {
-                size: 0,
-                capacity: 0,
-                items: ::core::ptr::null_mut(),
-            },
+            virt_lines: ManuallyDrop::new(Vec::new()),
             check_decor_providers: false,
             decor_provider_end_col: 0,
 
@@ -450,17 +446,15 @@ impl LineSetup {
         let mut sign_line_attr = 0;
         // TODO(bfredl, vigoux): line_attr should not take priority over
         // decoration.
-        unsafe {
-            decor_redraw_signs(
-                window,
-                window.buffer(),
-                wlv.lnum - 1,
-                &raw mut wlv.sign_attrs as *mut SignTextAttrs,
-                &raw mut sign_line_attr,
-                &raw mut wlv.sign_cul_attr,
-                &raw mut wlv.sign_num_attr,
-            )
-        };
+        decor_redraw_signs(
+            window,
+            window.buffer(),
+            wlv.lnum - 1,
+            Some(&mut wlv.sign_attrs),
+            Some(&mut sign_line_attr),
+            Some(&mut wlv.sign_cul_attr),
+            Some(&mut wlv.sign_num_attr),
+        );
 
         if window.w_onebuf_opt.wo_stc.first_byte() != 0 {
             // 'statuscolumn' replaces the fold, sign and number columns;

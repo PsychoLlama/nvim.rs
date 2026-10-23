@@ -40,7 +40,7 @@ use crate::marktree::pair::marktree_intersect_pair;
 use crate::memory::{xfree, xmemdup};
 use crate::registry::{IdMap, id_map};
 use crate::types::{
-    DecorInlineData, MTKey, MTNode, MTPos, MarkTree, MarkTreeIter, size_t, uint32_t, uint64_t,
+    DecorInline, MTKey, MTNode, MTPos, MarkTree, MarkTreeIter, size_t, uint32_t, uint64_t,
 };
 
 use super::{NULL, marktree_del_itr, marktree_lookup, marktree_lookup_ns, marktree_put};
@@ -292,9 +292,7 @@ pub fn marktree_put_test(
         ns,
         id,
         flags,
-        decor_data: DecorInlineData {
-            hl: DECOR_HIGHLIGHT_INLINE_INIT,
-        },
+        decor_data: DecorInline::Hl(DECOR_HIGHLIGHT_INLINE_INIT),
     };
     let end = end.unwrap_or(MarkEnd {
         row: -1,

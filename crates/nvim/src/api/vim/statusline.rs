@@ -231,11 +231,16 @@ fn statuscol_state(
     let lnum = lnum as LineNr;
     let (mut line_id, mut cul_id, mut num_id) = (0, 0, 0);
     let mut cursorline_fi = FoldInfo::default();
-    let (buf, signs) = (win.buffer(), sattrs.as_mut_ptr());
-    let ids = (&raw mut line_id, &raw mut cul_id, &raw mut num_id);
-    // SAFETY: the caller's promise; the three ids `ids` names and the sign
-    // array are out-parameters of this frame.
-    unsafe { decor_redraw_signs(win, buf, lnum - 1, signs, ids.0, ids.1, ids.2) };
+    let buf = win.buffer();
+    decor_redraw_signs(
+        win,
+        buf,
+        lnum - 1,
+        Some(sattrs),
+        Some(&mut line_id),
+        Some(&mut cul_id),
+        Some(&mut num_id),
+    );
     statuscol.sattrs = sattrs.as_mut_ptr();
     // SAFETY: as above.
     let (foldinfo, on_cursorline) = unsafe {

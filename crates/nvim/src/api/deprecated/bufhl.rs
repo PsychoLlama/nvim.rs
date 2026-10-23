@@ -37,12 +37,9 @@ fn src2ns(src_id: &mut Integer) -> uint32_t {
 
 /// `extmark_set` as the three shims here use it: one decoration over one
 /// range of `buffer`, created rather than moved, so it needs no id of its own
-/// and has nowhere to report.
-///
-/// # Safety
-/// `buffer` must be a live buffer and `decor` must own whatever it points at.
+/// and has nowhere to report. The mark takes `decor` over.
 #[expect(clippy::too_many_arguments, reason = "one per extmark_set parameter")]
-unsafe fn set_decor(
+fn set_decor(
     buffer: Buf,
     ns: uint32_t,
     line: ::core::ffi::c_int,
@@ -109,21 +106,16 @@ pub fn nvim_buf_add_highlight(
         col_end = 0 as Integer;
         end_line += 1;
     }
-    let mut decor: DecorInline = DECOR_INLINE_INIT;
-    decor.data.hl.hl_id = hl_id;
-    // SAFETY: `buf` is live, and an inline highlight owns nothing.
-    unsafe {
-        set_decor(
-            buf,
-            ns,
-            line as ::core::ffi::c_int,
-            col_start as ColNr,
-            end_line,
-            col_end as ColNr,
-            decor,
-            MtFlags::DECOR_HL,
-        );
-    }
+    set_decor(
+        buf,
+        ns,
+        line as ::core::ffi::c_int,
+        col_start as ColNr,
+        end_line,
+        col_end as ColNr,
+        decor_inline_hl(hl_id),
+        MtFlags::DECOR_HL,
+    );
     ns_id.reported(error)
 }
 
@@ -147,56 +139,39 @@ pub fn nvim_buf_set_virtual_text(
     let virt_text: VirtText = parse_virt_text(&chunks, Some(&mut width))?;
 
     let lnum = line as ::core::ffi::c_int;
-    let existing = decor_find_virttext(buf, lnum, ns_id as uint64_t);
-    if !existing.is_null() {
+    if let Some(existing) = decor_find_virttext(buf, lnum, ns_id as uint64_t) {
         // Replacing what this namespace already put on the line, rather than
         // stacking a second decoration on it.
-        // SAFETY: `existing` is that decoration, which owns its text.
-        unsafe {
-            clear_virttext(&raw mut *(*existing).data.text_mut());
-            *(*existing).data.text_mut() = virt_text;
-            (*existing).width = width;
-        }
+        with_decor_virt_mut(existing, |vt| {
+            *vt.data.text_mut() = virt_text;
+            vt.width = width;
+        });
         return src_id.reported(error);
     }
 
-    // SAFETY: `xmalloc` answers a block of exactly this size, which nothing
-    // else names yet.
-    let vt: *mut DecorVirtText = unsafe { xmalloc(size_of::<DecorVirtText>()).cast() };
-    // SAFETY: as above -- the whole struct is written before it is read.
-    unsafe {
-        *vt = DecorVirtText {
-            flags: 0 as uint8_t,
-            hl_mode: kHlModeUnknown as ::core::ffi::c_int as uint8_t,
-            priority: 0 as DecorPriority,
-            width,
-            col: 0 as ::core::ffi::c_int,
-            pos: kVPosEndOfLine,
-            data: DecorVirtText_data::Text(virt_text),
-            next: ::core::ptr::null_mut::<DecorVirtText>(),
-        };
-    }
-    let decor: DecorInline = DecorInline {
-        ext: true,
-        data: DecorInlineData {
-            ext: DecorExt {
-                sh_idx: DECOR_ID_INVALID as uint32_t,
-                vt,
-            },
-        },
+    let vt = DecorVirtText {
+        flags: 0 as uint8_t,
+        hl_mode: kHlModeUnknown as ::core::ffi::c_int as uint8_t,
+        priority: 0 as DecorPriority,
+        width,
+        col: 0 as ::core::ffi::c_int,
+        pos: kVPosEndOfLine,
+        data: DecorVirtText_data::Text(virt_text),
+        next: DECOR_ID_INVALID,
     };
-    // SAFETY: `buf` is live and `decor` owns `vt`, which it hands over.
-    unsafe {
-        set_decor(
-            buf,
-            ns_id,
-            lnum,
-            0 as ColNr,
-            -1 as ::core::ffi::c_int,
-            -1 as ColNr,
-            decor,
-            MtFlags::NONE,
-        );
-    }
+    let decor = DecorInline::Ext(DecorExt {
+        sh_idx: DECOR_ID_INVALID,
+        vt_idx: decor_put_vt(vt, DECOR_ID_INVALID),
+    });
+    set_decor(
+        buf,
+        ns_id,
+        lnum,
+        0 as ColNr,
+        -1 as ::core::ffi::c_int,
+        -1 as ColNr,
+        decor,
+        MtFlags::NONE,
+    );
     src_id.reported(error)
 }

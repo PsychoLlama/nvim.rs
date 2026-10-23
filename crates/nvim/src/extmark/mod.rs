@@ -260,9 +260,7 @@ fn redraw_decor(buffer: Buf, row1: c_int, row2: c_int, col1: c_int, decor: Decor
 }
 
 fn free_decor(decor: DecorInline) {
-    // SAFETY: an inline decoration, or an index into the decoration arena
-    // that this releases exactly once -- the caller's business, not ours.
-    unsafe { decor_free(decor) }
+    decor_free(decor)
 }
 
 fn type_flags(decor: DecorInline) -> uint16_t {

@@ -28,7 +28,6 @@ use crate::cstr;
 use crate::winlayer::cmdwin_window;
 use crate::winlayer::prev_window;
 use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
 
 use crate::api::private::helpers::{find_buffer_by_handle, find_window_by_handle};
 use crate::api::vim::nvim_create_buf;
@@ -74,12 +73,8 @@ const kWinStyleUnused: WinStyle = 0;
 const kWinStyleMinimal: WinStyle = 1;
 const STATUS_HEIGHT: c_int = 1;
 
-/// An unset title/footer, and an error slot holding no error.
-const NO_VIRT_TEXT: VirtText = VirtText {
-    size: 0,
-    capacity: 0,
-    items: ptr::null_mut(),
-};
+/// An unset title/footer.
+const NO_VIRT_TEXT: VirtText = VirtText::new();
 
 /// `WIN_CONFIG_INIT`, the config a float starts from before the caller sets
 /// the fields it cares about. (`popupmenu/draw.rs` keeps its own copy of the

@@ -26,7 +26,7 @@ pub struct MTKey {
     pub ns: uint32_t,
     pub id: uint32_t,
     pub flags: crate::marktree::key::MtFlags,
-    pub decor_data: DecorInlineData,
+    pub decor_data: DecorInline,
 }
 #[derive(Copy, Clone)]
 pub struct MTPair {

@@ -461,7 +461,7 @@ pub fn find_key(keys: &[MTKey], k: MTKey) -> (c_int, bool) {
 mod tests {
     use super::*;
     use crate::marktree::key::{DECOR_HIGHLIGHT_INLINE_INIT, MtFlags};
-    use crate::types::{DecorInlineData, MTPos};
+    use crate::types::{DecorInline, MTPos};
 
     fn key(row: i32, col: i32, flags: MtFlags) -> MTKey {
         MTKey {
@@ -469,9 +469,7 @@ mod tests {
             ns: 0,
             id: 0,
             flags,
-            decor_data: DecorInlineData {
-                hl: DECOR_HIGHLIGHT_INLINE_INIT,
-            },
+            decor_data: DecorInline::Hl(DECOR_HIGHLIGHT_INLINE_INIT),
         }
     }
 

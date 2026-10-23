@@ -20,12 +20,14 @@
 
 use super::*;
 use crate::decoration::{
-    kDecorKindUIWatched, kDecorKindVirtText, kHlModeBlend, kHlModeCombine, kVPosEndOfLine,
-    kVPosEndOfLineRightAlign, kVPosInline, kVPosRightAlign, kVPosWinCol, kVTRepeatLinebreak,
+    DECOR_ID_INVALID, VirtChunks, kDecorKindUIWatched, kDecorKindVirtText, kHlModeBlend,
+    kHlModeCombine, kVPosEndOfLine, kVPosEndOfLineRightAlign, kVPosInline, kVPosRightAlign,
+    kVPosWinCol, kVTRepeatLinebreak, with_decor_virt,
 };
 use crate::grid::with_linebuf;
 use crate::types::NUL;
 use crate::winlayer::Buf;
+use core::ffi::CStr;
 
 /// Put one character of `*pp` into `dest`, and advance `*pp` past it.
 ///
@@ -127,12 +129,18 @@ pub(crate) fn draw_virt_text(
             continue;
         }
 
-        let vt = if unsafe { (*item).kind } == kDecorKindVirtText {
-            debug_assert!(!unsafe { (*item).data.virt() }.is_null());
-            unsafe { (*item).data.virt() }
-        } else {
-            ::core::ptr::null_mut::<DecorVirtText>()
-        };
+        // The link, and a copy of the fields read off it below.
+        let vt = (unsafe { (*item).kind } == kDecorKindVirtText).then(|| {
+            let link = unsafe { (*item).data.virt() };
+            with_decor_virt(link, |vt| VirtShape {
+                link,
+                width: vt.width,
+                col: vt.col,
+                hl_mode: vt.hl_mode,
+                pos: vt.pos,
+                flags: vt.flags,
+            })
+        });
 
         if unsafe { (*item).draw_col } == -1 {
             let placed = match unsafe { decor_virt_pos_kind(item) } {
@@ -155,8 +163,8 @@ pub(crate) fn draw_virt_text(
                                 // dereferences unconditionally here.
                                 debug_assert!(unsafe { (*ahead).kind } == kDecorKindVirtText);
                                 // One space between neighbours.
-                                total_eol_right_width +=
-                                    unsafe { (*(*ahead).data.virt()).width } + 1;
+                                let link = unsafe { (*ahead).data.virt() };
+                                total_eol_right_width += with_decor_virt(link, |vt| vt.width) + 1;
                             }
                         }
                         // ...but none after the last one.
@@ -168,11 +176,11 @@ pub(crate) fn draw_virt_text(
                     Some(state.eol_col + eol_offset)
                 }
                 kVPosRightAlign => {
-                    right_pos -= unsafe { (*vt).width };
+                    right_pos -= vt.map_or(0, |vt| vt.width);
                     Some(right_pos)
                 }
                 kVPosEndOfLine if do_eol => Some(state.eol_col),
-                kVPosWinCol => Some((col_off + unsafe { (*vt).col }).max(0)),
+                kVPosWinCol => Some((col_off + vt.map_or(0, |vt| vt.col)).max(0)),
                 // Inline, overlay, or an eol form with no end of line to
                 // hang off: placed elsewhere, or not at all.
                 _ => None,
@@ -202,22 +210,19 @@ pub(crate) fn draw_virt_text(
             });
         }
 
-        if !vt.is_null() {
+        if let Some(vt) = vt {
             let col = unsafe {
                 draw_virt_text_item(
                     buffer,
                     (*item).draw_col,
-                    (*vt).data.text(),
-                    (*vt).hl_mode as HlMode,
+                    VirtChunks::Text(vt.link),
+                    vt.hl_mode as HlMode,
                     max_col,
                     (*item).draw_col - col_off,
                     0,
                 )
             };
-            if do_eol
-                && (unsafe { (*vt).pos } == kVPosEndOfLine
-                    || unsafe { (*vt).pos } == kVPosEndOfLineRightAlign)
-            {
+            if do_eol && (vt.pos == kVPosEndOfLine || vt.pos == kVPosEndOfLineRightAlign) {
                 // The next end-of-line text starts one cell further on.
                 state.eol_col = col + 1;
             }
@@ -226,15 +231,23 @@ pub(crate) fn draw_virt_text(
 
         // Deactivate, unless it is to be repeated on every screen row of
         // a wrapped line.
-        if vt.is_null()
-            || unsafe { (*vt).flags } as ::core::ffi::c_int
-                & kVTRepeatLinebreak as ::core::ffi::c_int
-                == 0
-        {
+        if vt.is_none_or(|vt| vt.flags & kVTRepeatLinebreak == 0) {
             unsafe { (*item).draw_col = INT_MIN };
         }
     }
     end_col
+}
+
+/// The fields of a virtual-text link [`draw_virt_text`] reads, copied out of
+/// the store.
+#[derive(Copy, Clone)]
+struct VirtShape {
+    link: uint32_t,
+    width: ::core::ffi::c_int,
+    col: ::core::ffi::c_int,
+    hl_mode: uint8_t,
+    pos: VirtTextPos,
+    flags: uint8_t,
 }
 
 /// Paint one virtual text into the line buffer starting at `col`, and answer
@@ -246,12 +259,12 @@ pub(crate) fn draw_virt_text(
 /// spaces are owed before the text resumes.
 ///
 /// # Safety
-/// `vt`'s chunks are raw `char *`: each must point at NUL-terminated bytes
-/// that outlive the call. Nothing in [`VirtText`] says so.
+/// `vt`'s chunks must outlive the call: the walk holds their texts by
+/// address.
 pub(crate) unsafe fn draw_virt_text_item(
     buffer: Buf,
     mut col: ::core::ffi::c_int,
-    vt: VirtText,
+    vt: VirtChunks<'_>,
     hl_mode: HlMode,
     max_col: ::core::ffi::c_int,
     mut vcol: ::core::ffi::c_int,
@@ -266,14 +279,14 @@ pub(crate) unsafe fn draw_virt_text_item(
     with_linebuf(|line| {
         while col < max_col {
             if skip_cells >= 0 && unsafe { *virt_str } as ::core::ffi::c_int == NUL {
-                if virt_pos >= vt.size {
+                if virt_pos >= vt.len() {
                     break;
                 }
                 virt_attr = 0;
-                let Some(chunk) = next_virt_text_chunk(&vt, &mut virt_pos, &mut virt_attr) else {
+                let Some(chunk) = vt.next(&mut virt_pos, &mut virt_attr, CStr::as_ptr) else {
                     break;
                 };
-                virt_str = chunk.as_ptr();
+                virt_str = chunk;
             }
 
             // Skip cells at the front of this chunk.
@@ -362,8 +375,9 @@ unsafe fn inline_virt_at(item: *const DecorRange, row: ::core::ffi::c_int) -> bo
     unsafe {
         (*item).start_row == row
             && (*item).kind == kDecorKindVirtText
-            && (*(*item).data.virt()).pos == kVPosInline
-            && (*(*item).data.virt()).width != 0
+            && with_decor_virt((*item).data.virt(), |vt| {
+                vt.pos == kVPosInline && vt.width != 0
+            })
             && (*item).draw_col >= -1
     }
 }
@@ -376,7 +390,7 @@ impl WinLineVars {
     /// path to the end of the line.
     pub(crate) fn has_more_inline_virt(&self, v: ptrdiff_t) -> bool {
         // SAFETY: the redraw's decoration state, threaded in `self`.
-        if self.virt_inline_i < self.virt_inline.size {
+        if self.virt_inline_i < self.virt_inline_len {
             return true;
         }
         let state = self.decor;
@@ -412,9 +426,10 @@ impl WinLineVars {
         // `extra_text` borrows the chunk, which that state owns for the rest
         // of the redraw.
         while self.extra_todo == 0 {
-            if self.virt_inline_i >= self.virt_inline.size {
+            if self.virt_inline_i >= self.virt_inline_len {
                 // Find the next inline text to start.
-                self.virt_inline = VIRTTEXT_EMPTY;
+                self.virt_inline = DECOR_ID_INVALID;
+                self.virt_inline_len = 0;
                 self.virt_inline_i = 0;
                 let state = self.decor;
                 let row = state.row;
@@ -428,14 +443,17 @@ impl WinLineVars {
                     if unsafe { inline_virt_at(item, row) }
                         && unsafe { (*item).start_col } as ptrdiff_t == v
                     {
-                        self.virt_inline = unsafe { &*(*item).data.virt() }.data.text();
-                        self.virt_inline_hl_mode =
-                            unsafe { (*(*item).data.virt()).hl_mode } as HlMode;
+                        let link = unsafe { (*item).data.virt() };
+                        let (len, hl_mode) =
+                            with_decor_virt(link, |vt| (vt.data.text().len(), vt.hl_mode));
+                        self.virt_inline = link;
+                        self.virt_inline_len = len;
+                        self.virt_inline_hl_mode = hl_mode as HlMode;
                         unsafe { (*item).draw_col = INT_MIN };
                         break;
                     }
                 }
-                if self.virt_inline.size == 0 {
+                if self.virt_inline_len == 0 {
                     // No more inline virtual text here.
                     break;
                 }
@@ -444,12 +462,13 @@ impl WinLineVars {
 
             // Already inside a text with several chunks.
             let mut attr = 0;
-            let vt = self.virt_inline;
-            let Some(text) = next_virt_text_chunk(&vt, &mut self.virt_inline_i, &mut attr) else {
+            let vt = VirtChunks::Text(self.virt_inline);
+            let chunk = |text: &CStr| (text.as_ptr(), text.to_bytes().len());
+            let Some((text, len)) = vt.next(&mut self.virt_inline_i, &mut attr, chunk) else {
                 continue;
             };
-            self.extra_todo = text.to_bytes().len() as ::core::ffi::c_int;
-            self.extra_text = text.as_ptr().cast_mut();
+            self.extra_todo = len as ::core::ffi::c_int;
+            self.extra_text = text.cast_mut();
             if self.extra_todo == 0 {
                 continue;
             }

@@ -10,10 +10,10 @@ use crate::charset::{
 use crate::cursor::get_cursor_rel_lnum;
 use crate::cursor_shape::cursor_is_block_during_visual;
 use crate::decoration::{
-    DecorStateRef, clear_virttext, decor_has_more_decorations, decor_init_draw_col, decor_range_at,
-    decor_range_count, decor_recheck_draw_col, decor_redraw_col, decor_redraw_eol,
-    decor_redraw_line, decor_redraw_signs, decor_virt_lines, decor_virt_pos, decor_virt_pos_kind,
-    kHlModeUnknown, next_virt_text_chunk,
+    DECOR_ID_INVALID, DecorStateRef, VirtChunks, VirtLineRef, decor_has_more_decorations,
+    decor_init_draw_col, decor_range_at, decor_range_count, decor_recheck_draw_col,
+    decor_redraw_col, decor_redraw_eol, decor_redraw_line, decor_redraw_signs, decor_virt_lines,
+    decor_virt_pos, decor_virt_pos_kind, kHlModeUnknown, with_decor_virt,
 };
 use crate::decoration_provider::{decor_providers_invoke_line, decor_providers_invoke_range};
 use crate::diff::{diff_check_with_linestatus, diff_find_change};
@@ -70,15 +70,15 @@ use crate::syntax::{SynFlags, get_syntax_attr, syn_get_sub_char, syntax_present}
 use crate::terminal::terminal_get_line_attributes;
 use crate::types::TAB;
 use crate::types::{
-    CharSize, CharsizeArg, ColNr, DecorRange, DecorVirtText, DiffLine, FoldInfo, GridView, HlMode,
-    Hlf, LineNr, NS, NUL, Pos, RgbValue, ScreenAttr, ScreenChar, SignTextAttrs, SpellVars,
-    StatusCol, VarNumber, VirtLines, VirtText, WinExtmark, ptrdiff_t, size_t, ssize_t, uint8_t,
-    uint32_t, uint64_t, virt_line,
+    CharSize, CharsizeArg, ColNr, DecorRange, DiffLine, FoldInfo, GridView, HlMode, Hlf, LineNr,
+    NS, NUL, Pos, RgbValue, ScreenAttr, ScreenChar, SignTextAttrs, SpellVars, StatusCol, VarNumber,
+    VirtText, VirtTextPos, WinExtmark, ptrdiff_t, size_t, ssize_t, uint8_t, uint32_t, uint64_t,
 };
 use crate::ui::ui_rgb_attached;
 use crate::winlayer::Win;
 use crate::winlayer::graph::{cmdwin_type, cmdwin_win};
 use ::libc::abs;
+use core::mem::ManuallyDrop;
 
 // The carve of the transpiled module; see each child's docs.
 mod state;
@@ -181,7 +181,8 @@ pub unsafe fn win_line(
             hl_id: 0,
         }; 9],
         linebreak_armed: false,
-        virt_inline: VIRTTEXT_EMPTY,
+        virt_inline: DECOR_ID_INVALID,
+        virt_inline_len: 0,
         virt_inline_i: 0,
         virt_inline_hl_mode: kHlModeUnknown,
         reset_extra_attr: false,

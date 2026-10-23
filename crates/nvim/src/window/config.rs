@@ -20,7 +20,6 @@ use core::ffi::{c_char, c_int, c_uint};
 use super::*;
 use crate::api::private::helpers::{cstr_to_string, find_window_by_handle, try_enter, try_leave};
 use crate::buffer::do_buffer;
-use crate::decoration::clear_virttext;
 use crate::drawscreen::UPD_NOT_VALID;
 use crate::eval::window::{restore_win_noblock, switch_win_noblock};
 use crate::fold::deepest_fold_nesting;
@@ -132,17 +131,9 @@ pub unsafe fn merge_win_config(dst: *mut WinConfig, src: WinConfig) {
     unsafe { merge(&mut *dst, src) };
 }
 
-/// Overwrite `dst` with `src`, freeing the title and footer text `dst` owned
-/// and `src` does not take over.
+/// Overwrite `dst` with `src`, dropping the title and footer text `dst`
+/// owned: `src` owns its own.
 fn merge(dst: &mut WinConfig, src: WinConfig) {
-    if dst.title_chunks.items != src.title_chunks.items {
-        // SAFETY: the config's own virtual-text array.
-        unsafe { clear_virttext(&raw mut dst.title_chunks) };
-    }
-    if dst.footer_chunks.items != src.footer_chunks.items {
-        // SAFETY: as above.
-        unsafe { clear_virttext(&raw mut dst.footer_chunks) };
-    }
     *dst = src;
 }
 

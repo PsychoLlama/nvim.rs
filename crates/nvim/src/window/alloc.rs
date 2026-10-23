@@ -13,7 +13,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use crate::types::ArgListId;
+use crate::types::{ArgListId, VirtText};
 use core::ffi::{c_char, c_int};
 
 use super::*;
@@ -22,7 +22,6 @@ use crate::autocmd::set_aucmd_window;
 use crate::autocmd::state::autocmd_busy;
 use crate::autocmd::{block_autocmds, unblock_autocmds};
 use crate::buffer::buflist_new;
-use crate::decoration::clear_virttext;
 use crate::eval::vars::{new_var_scope, release_var_scope, vars_clear};
 use crate::fold::clear_folding;
 use crate::grid::grid_assign_handle;
@@ -54,9 +53,9 @@ use crate::winlayer::{
 /// `Vec`s, whose pointers are never null -- nor a valid `w_ns_set`, which is
 /// a `HashSet` and carries a hasher, nor either `WinOpt`'s string options,
 /// for the reason `optionstr::BUF_STRING_OPTIONS` states, nor the two
-/// directories, which are `Option<XString>`s, nor the match list and the
-/// fold tree, which are `Vec`s. All of them are written before anything can
-/// read or drop them.
+/// directories, which are `Option<XString>`s, nor the match list, the fold
+/// tree and the config's border texts, which are `Vec`s. All of them are
+/// written before anything can read or drop them.
 fn zeroed_window() -> Win {
     Win::alloc_zeroed(|wp| {
         // SAFETY: a fresh allocation this thread alone holds; the zeroed
@@ -68,6 +67,7 @@ fn zeroed_window() -> Win {
             (&raw mut (*wp).w_allbuf_opt).write(WinOpt::UNSET);
             (&raw mut (*wp).w_matches).write(Vec::new());
             (&raw mut (*wp).w_folds).write(Vec::new());
+            (&raw mut (*wp).w_config).write(WIN_CONFIG_INIT);
             (&raw mut (*wp).w_localdir).write(None);
             (&raw mut (*wp).w_prevdir).write(None);
         }
@@ -308,11 +308,10 @@ pub(crate) fn win_free(window: Win, tabpage: Option<TabPage>) {
         forget_wininfo(buf, window);
     }
 
-    // Free the border text.
-    // SAFETY: the window's own virtual-text arrays.
-    unsafe { clear_virttext(&raw mut window.w_config.title_chunks) };
-    // SAFETY: as above.
-    unsafe { clear_virttext(&raw mut window.w_config.footer_chunks) };
+    // Free the border text: the window's block is freed without dropping
+    // its fields.
+    window.w_config.title_chunks = VirtText::new();
+    window.w_config.footer_chunks = VirtText::new();
     clear_matches(window);
     free_jumplist(window);
     window.free_location_lists();

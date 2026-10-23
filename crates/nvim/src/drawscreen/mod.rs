@@ -104,8 +104,8 @@ use crate::terminal::{terminal_check_size, terminal_suspended};
 use crate::types::ui::{kUICmdline, kUIMessages, kUIMultigrid};
 use crate::types::{
     ColNr, DecorPriority, DecorVirtText, DecorVirtText_data, Failed, FoldInfo, Handle, Hlf,
-    Integer, LineNr, OptInt, Pos, ProfTime, ScreenChar, SpellVars, VarNumber, VirtText,
-    VirtTextChunk, WindowHandle, int64_t, size_t, uint16_t,
+    Integer, LineNr, OptInt, Pos, ProfTime, ScreenChar, SpellVars, VarNumber, VirtTextChunk,
+    WindowHandle, int64_t, size_t, uint16_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{

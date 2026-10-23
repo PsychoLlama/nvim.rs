@@ -13,7 +13,8 @@
 use super::*;
 use crate::api::private::helpers::Reported;
 use crate::api::private::validate::{err_bad_number, err_expected, err_out_of_range};
-use crate::kvec::Kvec;
+use crate::charset::transstr_owned;
+use crate::mbyte::c_string_cells;
 
 pub fn nvim_buf_del_extmark(
     buf: BufferHandle,
@@ -97,19 +98,10 @@ pub fn parse_virt_text(
     chunks: &Array,
     width: Option<&mut ::core::ffi::c_int>,
 ) -> Result<VirtText, Error> {
-    let mut virt_text = VirtText {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut(),
-    };
+    let mut virt_text = VirtText::new();
     let mut cells = 0;
     for chunk in chunks.iter() {
-        if let Err(refused) = push_chunk(chunk, &mut virt_text, &mut cells) {
-            // The half-built text has to be released on the way out.
-            // SAFETY: this frame's own vector, which nothing else names.
-            unsafe { clear_virttext(&raw mut virt_text) };
-            return Err(refused);
-        }
+        push_chunk(chunk, &mut virt_text, &mut cells)?;
     }
     if let Some(width) = width {
         *width = cells;
@@ -146,30 +138,26 @@ fn push_chunk(
                 for (n, group) in groups.iter().enumerate() {
                     hl_id = object_to_hl_id(group, what)?;
                     if n + 1 < groups.len() {
-                        let text = ::core::ptr::null_mut();
-                        push(into, VirtTextChunk { text, hl_id });
+                        into.push(VirtTextChunk { text: None, hl_id });
                     }
                 }
             }
             None => hl_id = object_to_hl_id(hl, what)?,
         }
     }
-    let src = if str.is_empty() {
-        c"".as_ptr()
-    } else {
-        str.data().cast_const()
-    };
-    // SAFETY: `src` is a C string -- the chunk's own bytes or a literal.
-    let text = unsafe { transstr(src, false) };
-    // SAFETY: `transstr` answers a NUL-terminated allocation.
-    *cells += unsafe { mb_string2cells(text) } as ::core::ffi::c_int;
-    push(into, VirtTextChunk { text, hl_id });
+    let text = printable_text(str.as_bytes());
+    *cells += c_string_cells(text.to_bytes()) as ::core::ffi::c_int;
+    into.push(VirtTextChunk {
+        text: Some(text),
+        hl_id,
+    });
     Ok(())
 }
 
-/// `kv_push`, whose growth step c2rust expanded inline.
-fn push(into: &mut VirtText, chunk: VirtTextChunk) {
-    let mut vt = Kvec::new(&mut into.size, &mut into.capacity, &mut into.items);
-    // SAFETY: `items` is this vector's own allocation.
-    unsafe { vt.push(chunk) };
+/// `bytes` made printable for the screen, up to the first NUL as upstream's
+/// `transstr` of the C string reads it.
+pub(crate) fn printable_text(bytes: &[u8]) -> ::std::ffi::CString {
+    let shown = transstr_owned(crate::cstr::until_nul(bytes), false);
+    ::std::ffi::CString::from_vec_with_nul(shown.into_vec())
+        .expect("transstr writes no NUL before its terminator")
 }

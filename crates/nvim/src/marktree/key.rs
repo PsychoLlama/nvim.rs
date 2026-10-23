@@ -14,8 +14,8 @@
 //! position, which is what `relative`/`unrelative`/`compose` translate between.
 
 use crate::types::{
-    DecorHighlightInline, DecorInline, DecorInlineData, DecorPriority, MTKey, MTPair, MTPos,
-    ScreenChar, uint16_t, uint32_t, uint64_t,
+    DecorHighlightInline, DecorInline, DecorPriority, MTKey, MTPair, MTPos, ScreenChar, uint16_t,
+    uint32_t, uint64_t,
 };
 
 /// Minimum fill of a node. The maximum branch is twice this.
@@ -111,9 +111,7 @@ pub const MT_INVALID_KEY: MTKey = MTKey {
     ns: 0,
     id: 0,
     flags: MtFlags::NONE,
-    decor_data: DecorInlineData {
-        hl: DECOR_HIGHLIGHT_INLINE_INIT,
-    },
+    decor_data: DecorInline::Hl(DECOR_HIGHLIGHT_INLINE_INIT),
 };
 
 /// The 64-bit handle the `id2node` map is keyed by. The namespace occupies the
@@ -174,10 +172,7 @@ pub fn mt_conceal_lines(key: MTKey) -> bool {
 }
 
 pub fn mt_decor(key: MTKey) -> DecorInline {
-    DecorInline {
-        ext: key.flags.has(MtFlags::DECOR_EXT),
-        data: key.decor_data,
-    }
+    key.decor_data
 }
 
 pub fn mt_flags(right_gravity: bool, no_undo: bool, invalidate: bool, decor_ext: bool) -> MtFlags {
@@ -270,9 +265,7 @@ mod tests {
             ns: 0,
             id: 0,
             flags,
-            decor_data: DecorInlineData {
-                hl: DECOR_HIGHLIGHT_INLINE_INIT,
-            },
+            decor_data: DecorInline::Hl(DECOR_HIGHLIGHT_INLINE_INIT),
         }
     }
 

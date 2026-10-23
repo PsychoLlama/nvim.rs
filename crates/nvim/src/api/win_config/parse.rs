@@ -15,11 +15,9 @@
 
 use super::*;
 use crate::api::private::validate::{Bad, err_conflict, err_expected, err_invalid, err_required};
-use crate::kvec::Kvec;
 use crate::winfloat::WIN_CONFIG_INIT;
 use crate::winlayer::{Live, Win};
 use core::ffi::{CStr, c_int};
-use core::ptr;
 
 // ---------------------------------------------------------------------------
 // The two pointers the family passes around
@@ -172,10 +170,9 @@ struct BorderText {
 impl BorderText {
     /// Write the three fields `which` names.
     ///
-    /// The chunks the config already held are dropped on the floor rather
-    /// than released, as upstream drops them: whatever reaches the window
-    /// takes them over, and a refusal on the way there has
-    /// [`merge_win_config`] free them.
+    /// The chunks the config already held are dropped: they are the
+    /// builder's own copy, and the window keeps its until whatever reaches
+    /// it replaces them.
     fn apply(self, config: &mut WinConfig, which: BorderTextType) {
         let (present, chunks, width) = if which == kBorderTextFooter {
             (
@@ -243,26 +240,12 @@ fn set_border_text(mut config: WinCfg, which: BorderTextType, text: &Object) -> 
 }
 
 /// One border text holding `string` and no highlight of its own.
-///
-/// `kv_init` and then the `kv_push` whose growth step c2rust expanded inline,
-/// on this frame's own vector rather than in place: three `&mut`s into the
-/// config at once is what [`Live`] cannot give.
 fn one_chunk(string: &String_0) -> VirtText {
-    let mut text = VirtText {
-        size: 0,
-        capacity: 0,
-        items: ptr::null_mut::<VirtTextChunk>(),
-    };
-    // SAFETY: the string owns its NUL-terminated bytes, and `text` is this
-    // frame's own empty vector.
-    unsafe {
-        let chunk = VirtTextChunk {
-            text: xstrdup(string.data()),
-            hl_id: -1,
-        };
-        Kvec::new(&mut text.size, &mut text.capacity, &mut text.items).push(chunk);
-    }
-    text
+    let text = crate::cstr::until_nul(string.as_bytes());
+    vec![VirtTextChunk {
+        text: Some(::std::ffi::CString::new(text).expect("cut at the first NUL")),
+        hl_id: -1,
+    }]
 }
 
 /// Write the `title_pos`/`footer_pos` field `which` names.

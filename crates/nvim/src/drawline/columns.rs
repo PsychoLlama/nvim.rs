@@ -399,17 +399,15 @@ impl WinLineVars {
             // A virtual line belonging to the line above takes *its* sign
             // numhl. Looked up once and cached: this runs per row.
             if self.prev_num_attr == -1 {
-                unsafe {
-                    decor_redraw_signs(
-                        window,
-                        window.buffer(),
-                        self.lnum - 2,
-                        ::core::ptr::null_mut(),
-                        ::core::ptr::null_mut(),
-                        ::core::ptr::null_mut(),
-                        &raw mut self.prev_num_attr,
-                    )
-                };
+                decor_redraw_signs(
+                    window,
+                    window.buffer(),
+                    self.lnum - 2,
+                    None,
+                    None,
+                    None,
+                    Some(&mut self.prev_num_attr),
+                );
                 if self.prev_num_attr > 0 {
                     self.prev_num_attr = syn_id2attr(self.prev_num_attr);
                 }

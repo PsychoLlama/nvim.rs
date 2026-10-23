@@ -146,7 +146,7 @@ pub fn f_foldtextresult(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDat
             FoldText::Scratch => XString::from_bytes(cstr::in_bytes(&buf).to_bytes()),
             FoldText::Owned(text) => text,
             // A virtual-text 'foldtext' answers in chunks; flatten them.
-            FoldText::Chunks(vt) => virt_text_into_string(vt),
+            FoldText::Chunks(vt) => virt_text_into_string(&vt),
         };
         rv.write_string(Some(text.into()));
     }

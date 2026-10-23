@@ -449,7 +449,7 @@ pub(crate) fn decor_providers_invoke_end() {
             };
         }
     }
-    unsafe { decor_check_to_be_deleted() };
+    decor_check_to_be_deleted();
 }
 
 /// Mark all cached state of per-namespace highlights as invalid, and

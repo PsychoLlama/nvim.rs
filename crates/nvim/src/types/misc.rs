@@ -143,18 +143,10 @@ pub type TermKey_Terminfo_Getstr_Hook = unsafe extern "C" fn(
 ) -> *const ::core::ffi::c_char;
 pub type VTermOutputCallback =
     unsafe extern "C" fn(*const ::core::ffi::c_char, size_t, *mut ::core::ffi::c_void) -> ();
-#[derive(Copy, Clone)]
-pub struct VirtLines {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut virt_line,
-}
-#[derive(Copy, Clone)]
-pub struct VirtText {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut VirtTextChunk,
-}
+/// A block of virtual lines, each one a [`VirtText`] of its own.
+pub type VirtLines = Vec<VirtLine>;
+/// A virtual text: chunks of text, each with its highlight.
+pub type VirtText = Vec<VirtTextChunk>;
 /// What a provider call reaches back into: the context of the script that
 /// started it.
 pub(crate) struct CallerScope {
@@ -392,8 +384,9 @@ pub struct nvim_stats_s {
     pub redraw: int64_t,
     pub log_skip: int16_t,
 }
-#[derive(Copy, Clone)]
-pub struct virt_line {
+/// One line of a virtual-lines block, and its `kVL*` flags.
+#[derive(Clone, Default)]
+pub struct VirtLine {
     pub line: VirtText,
     pub flags: ::core::ffi::c_int,
 }

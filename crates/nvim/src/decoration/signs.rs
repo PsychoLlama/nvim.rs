@@ -13,12 +13,11 @@
 //! [`Cursor::step_out_filter`] leaves the walk ready for the marks that start
 //! *on* it.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use core::cmp::{Ordering, Reverse};
 
-use super::{Sh, kSHIsSign, ns_in_win};
+use super::{kSHIsSign, ns_in_win, sh_chain, with_decor_item, with_decor_item_mut};
 use crate::decoration::{SCL_NUM, SIGN_WIDTH, kMTMetaSignText};
 use crate::global_cell::GlobalCell;
 use crate::marktree::cursor::Cursor;
@@ -27,27 +26,26 @@ use crate::marktree::meta::MetaCount;
 use crate::sign::buf_has_signs;
 use crate::statusline::SIGN_SHOW_MAX;
 use crate::types::{
-    DecorInline, DecorPriority, DecorSignHighlight, LineNr, MTPos, MarkTreeIter, SignItem,
+    DecorInline, DecorPriority, DecorSignHighlight, LineNr, MTKey, MTPos, MarkTreeIter, SignItem,
     SignTextAttrs, uint32_t,
 };
 use crate::winlayer::{Buf, Win, tab_windows};
 use core::ffi::{CStr, c_int};
-use core::{ptr, slice};
 
 /// Marktree filters: which meta counts a walk is allowed to descend into.
 /// The index is a `MetaIndex`; `kMTMetaSignText` is 3 and `kMTMetaSignHL` 2.
 static SIGN_FILTER: MetaCount = [0, 0, kMTFilterSelect, kMTFilterSelect, 0];
 static SIGNTEXT_FILTER: MetaCount = [0, 0, 0, kMTFilterSelect, 0];
 
-impl Sh {
+impl DecorSignHighlight {
     /// Whether this item is a sign rather than a bare highlight.
-    fn is_sign(self) -> bool {
-        self.flags as c_int & kSHIsSign as c_int != 0
+    fn is_sign(&self) -> bool {
+        self.flags & kSHIsSign != 0
     }
 
     /// Whether the sign has text of its own, which is what takes a cell of
     /// the sign column. A sign with none only contributes highlights.
-    fn has_text(self) -> bool {
+    fn has_text(&self) -> bool {
         self.text[0] != 0
     }
 }
@@ -72,47 +70,37 @@ fn may_force_numberwidth_recompute(buffer: Buf, unplace: bool) {
 /// order they were placed in.
 static SIGN_ADD_ID: GlobalCell<c_int> = GlobalCell::new(0);
 
-/// Accounts for a sign that has just been placed on rows `row1..=row2`.
-///
-/// # Safety
-/// `buf` and `sh` must be live.
-pub unsafe fn buf_put_decor_sh(buffer: Buf, sh: *mut DecorSignHighlight, row1: c_int, row2: c_int) {
-    // SAFETY: the caller's buffer and sign.
-    let (buf, mut sh) = unsafe { (buffer, Sh::new(sh)) };
-    if !sh.is_sign() {
-        return;
-    }
-    sh.sign_add_id = SIGN_ADD_ID.replace(SIGN_ADD_ID.get() + 1);
-    if sh.has_text() {
-        buf_signcols_count(buf, row1, row2, 1, SignCountHalf::Both);
-        may_force_numberwidth_recompute(buf, false);
+/// Accounts for sign/highlight item `idx`, which has just been placed on
+/// rows `row1..=row2`.
+pub fn buf_put_decor_sh(buffer: Buf, idx: uint32_t, row1: c_int, row2: c_int) {
+    let has_text = with_decor_item_mut(idx, |sh| {
+        if !sh.is_sign() {
+            return false;
+        }
+        sh.sign_add_id = SIGN_ADD_ID.replace(SIGN_ADD_ID.get() + 1);
+        sh.has_text()
+    });
+    if has_text {
+        buf_signcols_count(buffer, row1, row2, 1, SignCountHalf::Both);
+        may_force_numberwidth_recompute(buffer, false);
     }
 }
 
-/// Accounts for a sign that is about to be removed from rows `row1..=row2`.
+/// Accounts for sign/highlight item `idx`, which is about to be removed from
+/// rows `row1..=row2`.
 ///
 /// When it was the last sign in the buffer the histogram is zeroed outright
 /// rather than decremented, because there is nothing left to count.
-///
-/// # Safety
-/// `buf` and `sh` must be live.
-pub unsafe fn buf_remove_decor_sh(
-    buffer: Buf,
-    row1: c_int,
-    row2: c_int,
-    sh: *mut DecorSignHighlight,
-) {
-    // SAFETY: the caller's buffer and sign.
-    let (mut buf, sh) = unsafe { (buffer, Sh::new(sh)) };
-    if !sh.is_sign() || !sh.has_text() {
+pub fn buf_remove_decor_sh(mut buffer: Buf, row1: c_int, row2: c_int, idx: uint32_t) {
+    if !with_decor_item(idx, |sh| sh.is_sign() && sh.has_text()) {
         return;
     }
-    if buf.meta_total(kMTMetaSignText) != 0 {
-        buf_signcols_count(buf, row1, row2, -1, SignCountHalf::Both);
+    if buffer.meta_total(kMTMetaSignText) != 0 {
+        buf_signcols_count(buffer, row1, row2, -1, SignCountHalf::Both);
     } else {
-        may_force_numberwidth_recompute(buf, true);
-        buf.b_signcols.count[0] = 0;
-        buf.b_signcols.max = 0;
+        may_force_numberwidth_recompute(buffer, true);
+        buffer.b_signcols.count[0] = 0;
+        buffer.b_signcols.max = 0;
     }
 }
 
@@ -129,9 +117,19 @@ fn sign_rank(priority: DecorPriority, id: uint32_t, add_id: c_int) -> impl Ord {
 /// Orders two signs on the same row, highest priority first. See
 /// [`sign_rank`].
 pub fn sign_item_cmp(a: &SignItem, b: &SignItem) -> Ordering {
-    // SAFETY: the caller's signs.
-    let (sa, sb) = unsafe { (Sh::new(a.sh), Sh::new(b.sh)) };
-    sign_rank(sa.priority, a.id, sa.sign_add_id).cmp(&sign_rank(sb.priority, b.id, sb.sign_add_id))
+    sign_rank(a.priority, a.id, a.sign_add_id).cmp(&sign_rank(b.priority, b.id, b.sign_add_id))
+}
+
+/// The sort key and store index of the sign `mark` carries, if it carries
+/// one.
+pub(crate) fn sign_item(mark: MTKey) -> Option<SignItem> {
+    let idx = decor_sign(mt_decor(mark))?;
+    Some(with_decor_item(idx, |sh| SignItem {
+        idx,
+        id: mark.id,
+        priority: sh.priority,
+        sign_add_id: sh.sign_add_id,
+    }))
 }
 
 /// Every sign on `row` of `buffer` that `window` can see, in marktree order.
@@ -146,13 +144,12 @@ fn row_signs(buffer: Buf, window: Win, row: c_int) -> Vec<SignItem> {
 
     walk.seek_overlap(row, 0);
     while let Some(pair) = walk.step_overlap() {
-        if !mt_invalid(pair.start) && mt_decor_sign(pair.start) && ns_in_win(pair.start.ns, window)
+        if !mt_invalid(pair.start)
+            && mt_decor_sign(pair.start)
+            && ns_in_win(pair.start.ns, window)
+            && let Some(item) = sign_item(pair.start)
         {
-            let sh = decor_sign(mt_decor(pair.start)).map_or(ptr::null_mut(), Sh::raw);
-            signs.push(SignItem {
-                sh,
-                id: pair.start.id,
-            });
+            signs.push(item);
         }
     }
 
@@ -162,9 +159,13 @@ fn row_signs(buffer: Buf, window: Win, row: c_int) -> Vec<SignItem> {
         if mark.pos.row != row {
             break;
         }
-        if !mt_invalid(mark) && !mt_end(mark) && mt_decor_sign(mark) && ns_in_win(mark.ns, window) {
-            let sh = decor_sign(mt_decor(mark)).map_or(ptr::null_mut(), Sh::raw);
-            signs.push(SignItem { sh, id: mark.id });
+        if !mt_invalid(mark)
+            && !mt_end(mark)
+            && mt_decor_sign(mark)
+            && ns_in_win(mark.ns, window)
+            && let Some(item) = sign_item(mark)
+        {
+            signs.push(item);
         }
         walk.step_filter(row + 1, 0, &SIGN_FILTER);
     }
@@ -177,18 +178,14 @@ fn row_signs(buffer: Buf, window: Win, row: c_int) -> Vec<SignItem> {
 /// `sattrs` receives the sign texts that fit in the sign column, highest
 /// priority first; the three `*_id` out-parameters are only written when they
 /// are still unset, so a caller can pre-seed them and this will not override.
-///
-/// # Safety
-/// `wp` and `buf` must be live; `sattrs`, when not null, must have room for
-/// `wp`'s sign column width; the `*_id` pointers must be null or writable.
-pub unsafe fn decor_redraw_signs(
+pub fn decor_redraw_signs(
     window: Win,
     buffer: Buf,
     row: c_int,
-    sattrs: *mut SignTextAttrs,
-    line_id: *mut c_int,
-    cul_id: *mut c_int,
-    num_id: *mut c_int,
+    mut sattrs: Option<&mut [SignTextAttrs]>,
+    line_id: Option<&mut c_int>,
+    cul_id: Option<&mut c_int>,
+    num_id: Option<&mut c_int>,
 ) {
     let (wp, buf) = (window, buffer);
     if !buf.has_signs() {
@@ -197,10 +194,9 @@ pub unsafe fn decor_redraw_signs(
 
     let mut signs = row_signs(buf, wp, row);
     // How many of them have sign *text*; the rest only carry highlights.
-    // SAFETY: every `sh` came out of the decoration store.
     let num_text = signs
         .iter()
-        .filter(|item| unsafe { Sh::new(item.sh) }.has_text())
+        .filter(|item| with_decor_item(item.idx, DecorSignHighlight::has_text))
         .count() as c_int;
 
     if signs.is_empty() {
@@ -221,33 +217,29 @@ pub unsafe fn decor_redraw_signs(
     // tie when they are the same sign.
     signs.sort_by(sign_item_cmp);
 
-    // SAFETY: the caller's out-parameter — null, or room for `wp`'s sign
-    // column width, which `len` is at most.
-    let mut texts = unsafe { (!sattrs.is_null()).then(|| slice::from_raw_parts_mut(sattrs, len)) };
-    // SAFETY: the caller's out-parameters, each null or writable.
-    let mut ids = unsafe { [num_id.as_mut(), line_id.as_mut(), cul_id.as_mut()] };
+    let mut ids = [num_id, line_id, cul_id];
     let mut idx = 0;
     for item in &signs {
-        // SAFETY: as above.
-        let sh = unsafe { Sh::new(item.sh) };
-        if let Some(texts) = texts.as_deref_mut()
-            && idx < len
-            && sh.has_text()
-        {
-            texts[idx]
-                .text
-                .copy_from_slice(&sh.text[..SIGN_WIDTH as usize]);
-            texts[idx].hl_id = sh.hl_id;
-            idx += 1;
-        }
-        let wanted = [sh.number_hl_id, sh.line_hl_id, sh.cursorline_hl_id];
-        for (out, hl_id) in ids.iter_mut().zip(wanted) {
-            if let Some(out) = out.as_deref_mut()
-                && *out <= 0
+        with_decor_item(item.idx, |sh| {
+            if let Some(texts) = sattrs.as_deref_mut()
+                && idx < len.min(texts.len())
+                && sh.has_text()
             {
-                *out = hl_id;
+                texts[idx]
+                    .text
+                    .copy_from_slice(&sh.text[..SIGN_WIDTH as usize]);
+                texts[idx].hl_id = sh.hl_id;
+                idx += 1;
             }
-        }
+            let wanted = [sh.number_hl_id, sh.line_hl_id, sh.cursorline_hl_id];
+            for (out, hl_id) in ids.iter_mut().zip(wanted) {
+                if let Some(out) = out.as_deref_mut()
+                    && *out <= 0
+                {
+                    *out = hl_id;
+                }
+            }
+        });
     }
 }
 
@@ -258,20 +250,16 @@ impl Buf {
     }
 }
 
-/// The first sign item in `decor`'s chain, if it has one.
-///
-/// Safe: the chain is indices into the decoration store, which checks them.
-pub fn decor_sign(decor: DecorInline) -> Option<Sh> {
-    Sh::chain(decor).find(|sh| sh.is_sign())
+/// The store index of the first sign item in `decor`'s chain, if it has one.
+pub fn decor_sign(decor: DecorInline) -> Option<uint32_t> {
+    sh_chain(decor).find(|&idx| with_decor_item(idx, DecorSignHighlight::is_sign))
 }
 
 impl DecorSignHighlight {
     /// The name of the `:sign` definition this placement was copied from;
     /// `None` for a sign `nvim_buf_set_extmark` placed.
     pub fn sign_name_cstr(&self) -> Option<&CStr> {
-        // SAFETY: a sign item's name is null or the NUL-terminated copy it
-        // owns until the item is freed, which also nulls it.
-        unsafe { crate::cstr::at_opt(self.sign_name) }
+        self.sign_name.as_deref()
     }
 }
 

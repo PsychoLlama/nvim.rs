@@ -7,7 +7,6 @@ typedef struct Array Array;
 typedef struct Blob Blob;
 typedef struct ConsumedBlk ConsumedBlk;
 typedef struct DecorRange_data DecorRange_data;
-typedef struct DecorVirtText DecorVirtText;
 typedef struct Dict Dict;
 typedef struct DictItem DictItem;
 typedef struct Expand Expand;
@@ -60,10 +59,9 @@ typedef union Channel_stream Channel_stream;
 typedef struct CharInfo CharInfo;
 typedef struct DecorExt DecorExt;
 typedef struct DecorHighlightInline DecorHighlightInline;
-typedef union DecorInlineData DecorInlineData;
+typedef struct DecorInline DecorInline;
 typedef struct DecorRange DecorRange;
 typedef struct DecorRange_data_ui DecorRange_data_ui;
-typedef struct DecorSignHighlight DecorSignHighlight;
 typedef struct DictKey DictKey;
 typedef struct ExtmarkMove ExtmarkMove;
 typedef struct ExtmarkSavePos ExtmarkSavePos;
@@ -412,6 +410,8 @@ typedef unsigned int VarTypeCode;
 typedef void *VimAcl;
 typedef struct VimLFunc VimLFunc;
 typedef int VimVarFlags;
+typedef struct VirtLines VirtLines;
+typedef struct VirtText VirtText;
 typedef unsigned int VirtTextPos;
 typedef unsigned int Vv;
 typedef wbuffer WBuffer;
@@ -753,7 +753,7 @@ struct CharInfo {
 };
 struct DecorExt {
   uint32_t sh_idx;
-  DecorVirtText *vt;
+  uint32_t vt_idx;
 };
 struct DecorHighlightInline {
   uint16_t flags;
@@ -761,27 +761,17 @@ struct DecorHighlightInline {
   int hl_id;
   ScreenChar conceal_char;
 };
-union DecorInlineData {
-  DecorHighlightInline hl;
-  DecorExt ext;
+struct DecorInline {
+  unsigned int tag;
+  union {
+    DecorHighlightInline hl_;
+    DecorExt ext_;
+  } payload;
 };
 struct DecorRange_data_ui {
   uint32_t ns_id;
   uint32_t mark_id;
   VirtTextPos pos;
-};
-struct DecorSignHighlight {
-  uint16_t flags;
-  DecorPriority priority;
-  int hl_id;
-  ScreenChar text[2];
-  char *sign_name;
-  int sign_add_id;
-  int number_hl_id;
-  int line_hl_id;
-  int cursorline_hl_id;
-  uint32_t next;
-  const char *url;
 };
 struct ExtmarkMove {
   int start_row;
@@ -840,7 +830,7 @@ struct MTKey {
   uint32_t ns;
   uint32_t id;
   MtFlags flags;
-  DecorInlineData decor_data;
+  DecorInline decor_data;
 };
 struct mtnode_inner_s {
   MTNode *i_ptr[20];
@@ -2105,7 +2095,6 @@ static const int DBG_FUNC = 1;
 static const int DB_COUNT = 8;
 static const int DEBUG_BREAK_ALL = 9999;
 static const int DECODE_MAX_DEPTH = 1000;
-static const unsigned int DECOR_ID_INVALID = 4294967295u;
 static const int DECOR_PRIORITY_BASE = 4096;
 static const int DEFAULT_GRID_HANDLE = 1;
 static const int DEFAULT_INTERVAL = 200;

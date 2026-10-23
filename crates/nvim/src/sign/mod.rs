@@ -37,8 +37,8 @@ use crate::buffer::find_buf;
 use crate::charset::vim_isprintc;
 use crate::cursor::check_cursor_lnum;
 use crate::decoration::{
-    DECOR_SIGN_HIGHLIGHT_INIT, Sh, decor_items, decor_put_sh, kMTMetaSignHL, kMTMetaSignText,
-    kSHIsSign, sign_item_cmp,
+    DECOR_ID_INVALID, DECOR_SIGN_HIGHLIGHT_INIT, decor_put_sh, for_each_decor_item, kMTMetaSignHL,
+    kMTMetaSignText, kSHIsSign, sign_item, sign_item_cmp, with_decor_item,
 };
 use crate::drawscreen::{UPD_NOT_VALID, redraw_buf_later};
 use crate::edit::{BeginlineOpts, beginline};
@@ -61,9 +61,9 @@ use crate::message::{e_argreq, e_dictreq, e_invarg, e_listreq};
 use crate::message::{emsg, msg_putchar, msg_str, msg_title};
 use crate::os::cshim::gettext;
 use crate::types::{
-    DecorExt, DecorInline, DecorInlineData, DecorPriority, DecorSignHighlight, DecorVirtText, Dict,
-    EvalFuncData, ExArg, Expand, FAIL, Integer, LineNr, List, MTKey, MarkTreeIter, OK, ScreenChar,
-    Sign, SignItem, String_0, TypVal, VarNumber, int32_t, int64_t, ptrdiff_t, uint32_t,
+    DecorExt, DecorInline, DecorPriority, DecorSignHighlight, Dict, EvalFuncData, ExArg, Expand,
+    FAIL, Integer, LineNr, List, MTKey, MarkTreeIter, OK, ScreenChar, Sign, String_0, TypVal,
+    VarNumber, int32_t, int64_t, ptrdiff_t, uint32_t,
 };
 use crate::window::buf_jump_open_win;
 use crate::winlayer::{Buf, Win, buffers, first_buffer, windows};

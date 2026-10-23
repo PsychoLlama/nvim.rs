@@ -58,7 +58,7 @@ pub fn extmark_set(
     ns_counter(buffer.extmark_ns(), ns_id);
     let mut id = idp.as_deref().copied().unwrap_or(0);
 
-    let flags = mt_flags(right_gravity, no_undo, invalidate, decor.ext) | decor_flags;
+    let flags = mt_flags(right_gravity, no_undo, invalidate, decor.is_ext()) | decor_flags;
     let mut revised = false;
     if id == 0 {
         id = ns_counter(buffer.extmark_ns(), ns_id) + 1;
@@ -78,7 +78,7 @@ pub fn extmark_set(
                         decor_remove(buffer, row, row, col, mt_decor(old_mark), true);
                     }
                     itr_rawkey(&mut itr).flags |= flags;
-                    itr_rawkey(&mut itr).decor_data = decor.data;
+                    itr_rawkey(&mut itr).decor_data = decor;
                     tree_revise_meta(buffer.marktree(), &mut itr, old_mark);
                     revised = true;
                 } else {
@@ -107,13 +107,13 @@ pub fn extmark_set(
             ns: ns_id,
             id,
             flags,
-            decor_data: decor.data,
+            decor_data: decor,
         };
         tree_put(buffer.marktree(), mark, end_row, end_col, end_right_gravity);
         invalidate_decor_state(buffer);
     }
 
-    if !decor_flags.is_empty() || decor.ext {
+    if !decor_flags.is_empty() || decor.is_ext() {
         let last_row = if end_row > -1 { end_row } else { row };
         put_decor(buffer, decor, row, last_row);
         redraw_decor(buffer, row, last_row, col, decor);

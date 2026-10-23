@@ -56,9 +56,9 @@ fn config_put_bordertext(
 ) {
     let footer = bordertext_type == kBorderTextFooter;
     let (vt, align) = if footer {
-        (fconfig.footer_chunks, fconfig.footer_pos)
+        (&fconfig.footer_chunks, fconfig.footer_pos)
     } else {
-        (fconfig.title_chunks, fconfig.title_pos)
+        (&fconfig.title_chunks, fconfig.title_pos)
     };
     let bordertext = Object::array(virt_text_to_array(vt, true));
     let pos = String_0::from_cstr(ALIGN_TEXT_STR[align as usize]);

@@ -14,13 +14,16 @@
 use super::*;
 use crate::winlayer::WinId;
 
-#[derive(Copy, Clone)]
+/// The two chains an `ext` decoration names: indices of the first
+/// sign/highlight item and of the first virtual-text link in the
+/// decoration stores, either `DECOR_ID_INVALID` for none.
+#[derive(Copy, Clone, PartialEq, Eq)]
 #[repr(C)]
 pub struct DecorExt {
     pub sh_idx: uint32_t,
-    pub vt: *mut DecorVirtText,
+    pub vt_idx: uint32_t,
 }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 #[repr(C)]
 pub struct DecorHighlightInline {
     pub flags: uint16_t,
@@ -28,25 +31,32 @@ pub struct DecorHighlightInline {
     pub hl_id: ::core::ffi::c_int,
     pub conceal_char: ScreenChar,
 }
-/// A mark's decoration: either a whole highlight held inline, or -- when
-/// `ext` -- a pair of indices into the process-wide decoration store.
+/// A mark's decoration: a whole highlight held inline, or the chains of an
+/// `ext` decoration in the decoration stores.
 ///
-/// `Copy` stays. Both arms are *handles*: the inline arm is a plain value,
-/// and the indexed arm names entries the store owns, acquired through
-/// `decor_put_sh` and released through `decor_free`. Copying one is a second
-/// name for the same entries, not a second owner of them -- which is why a
-/// range of marks all carry the same decoration and only the mark that
-/// outlives the rest frees it.
-#[derive(Copy, Clone)]
-pub struct DecorInline {
-    pub ext: bool,
-    pub data: DecorInlineData,
+/// `Copy` stays. Both arms are *values*: the inline arm owns nothing, and
+/// the `ext` arm names store entries the store owns, acquired through
+/// `decor_put_sh`/`decor_put_vt` and released through `decor_free`.
+/// Copying one is a second name for the same entries, not a second owner of
+/// them -- which is why both keys of a paired mark carry the decoration and
+/// only the start key's removal frees it.
+///
+/// `repr(C, u32)` so that `MTKey`, which stores one, keeps a C layout the
+/// unit suite's declarations can spell.
+#[derive(Copy, Clone, PartialEq, Eq)]
+#[repr(C, u32)]
+pub enum DecorInline {
+    Hl(DecorHighlightInline),
+    Ext(DecorExt),
 }
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union DecorInlineData {
-    pub hl: DecorHighlightInline,
-    pub ext: DecorExt,
+
+impl DecorInline {
+    /// Whether this is the `ext` arm, which is what the mark's
+    /// `MtFlags::DECOR_EXT` says too.
+    #[inline(always)]
+    pub fn is_ext(self) -> bool {
+        matches!(self, DecorInline::Ext(_))
+    }
 }
 pub type DecorPriority = uint16_t;
 pub type DecorPriorityInternal = uint32_t;
@@ -102,16 +112,27 @@ pub enum DecorRangeSlot {
 #[derive(Copy, Clone)]
 pub enum DecorRange_data {
     /// A highlight, a conceal, a spell override or a URL.
-    Highlight(DecorSignHighlight),
-    /// A virtual-text link, inline or lines by its own flags. May be null.
-    Virt(*mut DecorVirtText),
+    Highlight(RangeHighlight),
+    /// A virtual-text link, inline or lines by its own flags: an index into
+    /// the virtual-text store.
+    Virt(uint32_t),
     /// A position reported to the UI rather than drawn.
     UIWatched(DecorRange_data_ui),
 }
 
+/// What a highlight range needs of the item it came from, which is not all
+/// of it: the item's own strings stay in the store, and `url` names the
+/// store entry holding the URL (`DECOR_ID_INVALID` for none).
+#[derive(Copy, Clone)]
+pub struct RangeHighlight {
+    pub flags: uint16_t,
+    pub conceal_char: ScreenChar,
+    pub url: uint32_t,
+}
+
 impl DecorRange_data {
     /// The highlight item, for a highlight range.
-    pub fn highlight(&self) -> DecorSignHighlight {
+    pub fn highlight(&self) -> RangeHighlight {
         match self {
             DecorRange_data::Highlight(sh) => *sh,
             _ => unreachable!("decor: this range draws no highlight"),
@@ -119,7 +140,7 @@ impl DecorRange_data {
     }
 
     /// The virtual-text link, for a virtual-text or virtual-lines range.
-    pub fn virt(&self) -> *mut DecorVirtText {
+    pub fn virt(&self) -> uint32_t {
         match self {
             DecorRange_data::Virt(vt) => *vt,
             _ => unreachable!("decor: this range draws no virtual text"),
@@ -141,20 +162,23 @@ pub struct DecorRange_data_ui {
     pub mark_id: uint32_t,
     pub pos: VirtTextPos,
 }
-#[derive(Copy, Clone)]
-#[repr(C)]
+/// One sign/highlight item of the decoration store.
+///
+/// Not `Copy`: the definition name a `:sign` placement was copied from and
+/// a `url` are the item's own strings, dropped when its slot is freed.
+#[derive(Clone)]
 pub struct DecorSignHighlight {
     pub flags: uint16_t,
     pub priority: DecorPriority,
     pub hl_id: ::core::ffi::c_int,
     pub text: [ScreenChar; 2],
-    pub sign_name: *mut ::core::ffi::c_char,
+    pub sign_name: Option<::std::ffi::CString>,
     pub sign_add_id: ::core::ffi::c_int,
     pub number_hl_id: ::core::ffi::c_int,
     pub line_hl_id: ::core::ffi::c_int,
     pub cursorline_hl_id: ::core::ffi::c_int,
     pub next: uint32_t,
-    pub url: *const ::core::ffi::c_char,
+    pub url: Option<::std::ffi::CString>,
 }
 /// Not `Copy`: the two vectors below own their storage. `spell/navigate.rs`
 /// puts the state aside for the length of a scan, which is a `mem::take`
@@ -184,7 +208,9 @@ pub struct DecorState {
     pub spell: Option<bool>,
     pub itr_valid: bool,
 }
-#[derive(Copy, Clone)]
+/// One link of a decoration's virtual-text chain, in the virtual-text store.
+/// `next` is the index of the next link, `DECOR_ID_INVALID` at the end.
+#[derive(Clone)]
 pub struct DecorVirtText {
     pub flags: uint8_t,
     pub hl_mode: uint8_t,
@@ -193,12 +219,12 @@ pub struct DecorVirtText {
     pub col: ::core::ffi::c_int,
     pub pos: VirtTextPos,
     pub data: DecorVirtText_data,
-    pub next: *mut DecorVirtText,
+    pub next: uint32_t,
 }
 /// What one link of a virtual-text chain carries: inline chunks, or whole
 /// virtual lines. `kVTIsLines` in the link's `flags` says which, and the
 /// two are always set together.
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub enum DecorVirtText_data {
     Text(VirtText),
     Lines(VirtLines),
@@ -206,11 +232,7 @@ pub enum DecorVirtText_data {
 
 impl DecorVirtText_data {
     /// The inline chunks, for a link that carries them.
-    pub fn text(&self) -> VirtText {
-        *self.text_ref()
-    }
-
-    fn text_ref(&self) -> &VirtText {
+    pub fn text(&self) -> &VirtText {
         match self {
             DecorVirtText_data::Text(text) => text,
             DecorVirtText_data::Lines(_) => {
@@ -219,8 +241,7 @@ impl DecorVirtText_data {
         }
     }
 
-    /// [`Self::text`], to write to -- the code that fills a link in and the
-    /// code that frees one.
+    /// [`Self::text`], to write to -- the code that fills a link in.
     pub fn text_mut(&mut self) -> &mut VirtText {
         match self {
             DecorVirtText_data::Text(text) => text,
@@ -231,11 +252,7 @@ impl DecorVirtText_data {
     }
 
     /// The block of virtual lines, for a link that carries one.
-    pub fn lines(&self) -> VirtLines {
-        *self.lines_ref()
-    }
-
-    fn lines_ref(&self) -> &VirtLines {
+    pub fn lines(&self) -> &VirtLines {
         match self {
             DecorVirtText_data::Lines(lines) => lines,
             DecorVirtText_data::Text(_) => {
@@ -254,9 +271,12 @@ impl DecorVirtText_data {
         }
     }
 }
-#[derive(Copy, Clone)]
+/// One chunk of a virtual text: its text, already made printable, and the
+/// highlight group it is drawn in (-1 for none). A chunk with no text only
+/// stacks its highlight onto the next one.
+#[derive(Clone)]
 pub struct VirtTextChunk {
-    pub text: *mut ::core::ffi::c_char,
+    pub text: Option<::std::ffi::CString>,
     pub hl_id: ::core::ffi::c_int,
 }
 pub type VirtTextPos = ::core::ffi::c_uint;

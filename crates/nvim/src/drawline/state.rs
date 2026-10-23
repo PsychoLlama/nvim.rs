@@ -145,8 +145,11 @@ pub struct WinLineVars {
     /// arm it, or every long word would be broken at column zero.
     pub linebreak_armed: bool,
 
-    /// Inline virtual text being fed to the character loop.
-    pub virt_inline: VirtText,
+    /// Inline virtual text being fed to the character loop: its link in the
+    /// virtual-text store, or `DECOR_ID_INVALID`.
+    pub virt_inline: uint32_t,
+    /// How many chunks it has.
+    pub virt_inline_len: size_t,
     /// How far into `virt_inline` that feed has got.
     pub virt_inline_i: size_t,
     /// `hl_mode` of `virt_inline`.
@@ -294,8 +297,9 @@ pub(crate) struct LineSetup {
     /// `win_line`'s own frame, and a pointer derived from the `&mut` the
     /// setup half borrows would not outlive that borrow.
     pub(crate) statuscol: StatusCol,
-    /// Virtual lines to draw above or below this buffer line.
-    pub(crate) virt_lines: VirtLines,
+    /// Virtual lines to draw above or below this buffer line. Freed by hand
+    /// at the end of the line: this state is drop-free.
+    pub(crate) virt_lines: ManuallyDrop<Vec<VirtLineRef>>,
     /// Decoration providers are being driven for this line.
     pub(crate) check_decor_providers: bool,
     /// Byte column their last answer covered up to; past it the loop asks for

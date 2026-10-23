@@ -17,7 +17,6 @@
 
 use super::*;
 use crate::decoration::decor_sign;
-use crate::memory::ThinCString;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::types::Failed;
@@ -40,8 +39,8 @@ fn buf_set_sign(
     let mut sign = DECOR_SIGN_HIGHLIGHT_INIT;
     sign.flags |= kSHIsSign;
     sign.text = def.text;
-    // The decoration store frees it with the placement.
-    sign.sign_name = ThinCString::from_cstr(&def.name).into_raw();
+    // The decoration store drops it with the placement.
+    sign.sign_name = Some(def.name.clone());
     sign.hl_id = def.text_hl;
     sign.line_hl_id = def.line_hl;
     sign.number_hl_id = def.num_hl;
@@ -56,15 +55,10 @@ fn buf_set_sign(
     let decor_flags =
         MtFlags::DECOR_SIGNTEXT.when(def.text[0] != 0) | MtFlags::DECOR_SIGNHL.when(has_hl);
 
-    let decor = DecorInline {
-        ext: true,
-        data: DecorInlineData {
-            ext: DecorExt {
-                sh_idx: decor_put_sh(sign),
-                vt: ::core::ptr::null_mut::<DecorVirtText>(),
-            },
-        },
-    };
+    let decor = DecorInline::Ext(DecorExt {
+        sh_idx: decor_put_sh(sign),
+        vt_idx: DECOR_ID_INVALID,
+    });
     let row = buffer.line_count().min(lnum) - 1;
     extmark_set(
         buffer,
@@ -128,12 +122,13 @@ fn buf_findsign(buffer: Buf, id: c_int, group: Option<&[u8]>) -> c_int {
     lookup_ns(buffer, ns, id.cast_unsigned(), false).pos.row + 1
 }
 
-/// The sign decoration `mark` carries.
+/// A copy of the sign decoration `mark` carries.
 ///
 /// # Panics
 /// When it carries none: every walk here only keeps sign marks.
-pub(super) fn sign_of(mark: MTKey) -> Sh {
-    decor_sign(mt_decor(mark)).expect("sign mark without a sign")
+pub(super) fn sign_of(mark: MTKey) -> DecorSignHighlight {
+    let idx = decor_sign(mt_decor(mark)).expect("sign mark without a sign");
+    with_decor_item(idx, DecorSignHighlight::clone)
 }
 
 /// Orders marks the way `:sign` reports them and removes them: by row, then
@@ -148,17 +143,8 @@ pub(crate) fn sort_signs(signs: &mut [MTKey]) {
         if a.pos.row != b.pos.row {
             return a.pos.row.cmp(&b.pos.row);
         }
-        let (ia, ib) = (
-            SignItem {
-                sh: sign_of(*a).raw(),
-                id: a.id,
-            },
-            SignItem {
-                sh: sign_of(*b).raw(),
-                id: b.id,
-            },
-        );
-        sign_item_cmp(&ia, &ib)
+        let item = |mark: MTKey| sign_item(mark).expect("sign mark without a sign");
+        sign_item_cmp(&item(*a), &item(*b))
     });
 }
 

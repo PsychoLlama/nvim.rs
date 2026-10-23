@@ -125,7 +125,8 @@ impl Cells {
             wlv.extra_text = match get_foldtext(window, wlv.lnum, lnume, wlv.foldinfo, scratch) {
                 FoldText::Scratch => f.fold_buf,
                 FoldText::Chunks(chunks) => {
-                    self.fold_vt = chunks;
+                    // The line's own, freed when it is done.
+                    *self.fold_vt = chunks;
                     f.fold_buf
                 }
                 FoldText::Owned(text) => text.into_raw(),

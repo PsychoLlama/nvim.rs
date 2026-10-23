@@ -16,7 +16,6 @@ use crate::global_cell::field;
 use crate::memory::XString;
 use crate::strings::has_char;
 use core::ffi::{CStr, c_int, c_uint};
-use core::ptr;
 
 use crate::api::win_config::parse_winborder_in;
 use crate::ascii::ascii_isdigit;
@@ -391,19 +390,11 @@ pub(crate) fn parse_border_opt(border_opt: &CStr) -> bool {
         border_attr: [0; 8],
         title: false,
         title_pos: kAlignLeft,
-        title_chunks: VirtText {
-            size: 0,
-            capacity: 0,
-            items: ptr::null_mut(),
-        },
+        title_chunks: VirtText::new(),
         title_width: 0,
         footer: false,
         footer_pos: kAlignLeft,
-        footer_chunks: VirtText {
-            size: 0,
-            capacity: 0,
-            items: ptr::null_mut(),
-        },
+        footer_chunks: VirtText::new(),
         footer_width: 0,
         noautocmd: false,
         fixed: false,

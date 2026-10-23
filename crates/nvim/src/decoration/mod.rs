@@ -21,17 +21,17 @@
 //!
 //! Small ones live *inline* in the marktree key: a `DecorHighlightInline` is
 //! a highlight id, a priority and a conceal character, and fits in the space
-//! the mark already has. Anything bigger is `ext`: the mark then holds a
-//! pointer to a chain of [`DecorVirtText`] and an index into
-//! [`DECOR_ITEMS`], the one global store of `DecorSignHighlight`s that every
-//! mark's chain runs through.
+//! the mark already has. Anything bigger is `ext`: the mark then holds the
+//! heads of two chains in the [`store`]s — one of [`DecorSignHighlight`]
+//! items, one of [`DecorVirtText`] links — which own everything the
+//! decoration holds.
 //!
 //! # Deleting while drawing
 //!
 //! A decoration can be deleted by a decoration provider's Lua callback in the
 //! middle of the redraw that is reading it. [`decor_free`] therefore asks
 //! [`decor_provider_running`], and puts anything freed at such a moment on a
-//! to-free list that [`decor_check_to_be_deleted`] drains once the redraw is
+//! to-free chain that [`decor_check_to_be_deleted`] frees once the redraw is
 //! over.
 
 use crate::api::extmark::ns_is_local;
@@ -42,23 +42,23 @@ use crate::extmark::extmark_set;
 use crate::global_cell::GlobalCell;
 use crate::grid::{schar_from_char, schar_get_first_codepoint, schar_high};
 use crate::marktree::key::MtFlags;
-use crate::memory::{xfree, xmalloc};
 use crate::r#move::changed_window_setting;
 use crate::types::{
-    ColNr, DecorHighlightInline, DecorInline, DecorInlineData, DecorPriority, DecorRangeKind,
-    DecorSignHighlight, DecorState, DecorVirtText, HlMode, LPos, LineNr, MTKey, MTNode, MTPos,
-    MarkTreeIter, MarkTreeIterLevel, MetaIndex, VirtLines, VirtText, VirtTextChunk, VirtTextPos,
-    int32_t, uint8_t, uint16_t, uint32_t, virt_line,
+    ColNr, DecorHighlightInline, DecorInline, DecorPriority, DecorRangeKind, DecorSignHighlight,
+    DecorState, DecorVirtText, HlMode, LPos, LineNr, MTKey, MTNode, MTPos, MarkTreeIter,
+    MarkTreeIterLevel, MetaIndex, VirtTextPos, int32_t, uint8_t, uint16_t, uint32_t,
 };
 use crate::winlayer::{self, Buf, Win};
 use core::ffi::c_int;
-use core::ptr;
 
 mod dict;
 mod handles;
 mod query;
 mod signs;
 mod state;
+mod store;
+
+use self::store::Store;
 
 pub use self::dict::*;
 pub use self::handles::*;
@@ -223,7 +223,7 @@ pub(crate) const SIGN_WIDTH: c_int = 2;
 pub(crate) const SCL_NUM: c_int = -2;
 
 /// The index that ends a decoration's chain of items.
-pub(crate) const DECOR_ID_INVALID: uint32_t = uint32_t::MAX;
+pub(crate) const DECOR_ID_INVALID: uint32_t = store::NO_ENTRY;
 /// The priority a decoration gets when its creator did not name one.
 const DECOR_PRIORITY_BASE: DecorPriority = 0x1000;
 
@@ -241,34 +241,33 @@ pub(crate) const DECOR_SIGN_HIGHLIGHT_INIT: DecorSignHighlight = DecorSignHighli
     priority: DECOR_PRIORITY_BASE,
     hl_id: 0,
     text: [0; 2],
-    sign_name: ptr::null_mut(),
+    sign_name: None,
     sign_add_id: 0,
     number_hl_id: 0,
     line_hl_id: 0,
     cursorline_hl_id: 0,
     next: DECOR_ID_INVALID,
-    url: ptr::null(),
+    url: None,
 };
 
 /// "No decoration": by convention that is always the inline branch with an
 /// unset highlight, never an `ext` one with empty chains.
-pub const DECOR_INLINE_INIT: DecorInline = DecorInline {
-    ext: false,
-    data: DecorInlineData {
-        hl: DECOR_HIGHLIGHT_INLINE_INIT,
-    },
-};
+pub const DECOR_INLINE_INIT: DecorInline = DecorInline::Hl(DECOR_HIGHLIGHT_INLINE_INIT);
 
-/// The virtual-text chain of `mark`, or null if it has no `ext` decoration.
-///
-/// Safe: the flag decides which branch of the union is read, and the answer
-/// is a pointer, which dereferencing is what needs a promise.
-pub(crate) fn mt_decor_virt(mark: MTKey) -> *mut DecorVirtText {
-    if mark.flags.has(MtFlags::DECOR_EXT) {
-        // SAFETY: the flag says the union holds the `ext` branch.
-        unsafe { mark.decor_data.ext.vt }
-    } else {
-        ptr::null_mut()
+/// An inline decoration that is just highlight `hl_id`.
+pub(crate) const fn decor_inline_hl(hl_id: c_int) -> DecorInline {
+    DecorInline::Hl(DecorHighlightInline {
+        hl_id,
+        ..DECOR_HIGHLIGHT_INLINE_INIT
+    })
+}
+
+/// The head of `mark`'s virtual-text chain, [`DECOR_ID_INVALID`] when it has
+/// no `ext` decoration.
+pub(crate) fn mt_decor_virt(mark: MTKey) -> uint32_t {
+    match mark.decor_data {
+        DecorInline::Ext(ext) if mark.flags.has(MtFlags::DECOR_EXT) => ext.vt_idx,
+        _ => DECOR_ID_INVALID,
     }
 }
 
@@ -285,78 +284,99 @@ pub fn ns_in_win(ns_id: uint32_t, window: Win) -> bool {
 }
 
 // ---------------------------------------------------------------------------
-// The item store
+// The stores
 // ---------------------------------------------------------------------------
 
-/// Every `DecorSignHighlight` that any extmark anywhere points at, in one
-/// array. A mark stores the *index* of the first item of its decoration and
-/// each item the index of the next, so one decoration is a chain through this
-/// store and [`DECOR_ID_INVALID`] ends it.
-///
-/// Entries are never removed. An index handed to a marktree entry has to stay
-/// valid until that entry is deleted, so a freed item goes on a freelist
-/// threaded through the same `next` field ([`DECOR_FREELIST`]) and is reused
-/// in place.
-static DECOR_ITEMS: GlobalCell<Vec<DecorSignHighlight>> = GlobalCell::new(Vec::new());
+/// Every `DecorSignHighlight` that any extmark anywhere names, chained by
+/// index; see [`store`].
+static DECOR_ITEMS: GlobalCell<Store<DecorSignHighlight>> = GlobalCell::new(Store::new());
 
-/// Index of the first free slot of [`DECOR_ITEMS`], or [`DECOR_ID_INVALID`].
-static DECOR_FREELIST: GlobalCell<uint32_t> = GlobalCell::new(DECOR_ID_INVALID);
+/// Every link of every virtual-text chain, likewise.
+static DECOR_VIRT: GlobalCell<Store<DecorVirtText>> = GlobalCell::new(Store::new());
 
-/// A pointer to decoration item `idx`.
-///
-/// A pointer and not a borrow, because callers walk a `next` chain writing
-/// through it, across calls that can add another item — see [`decor_put_sh`],
-/// which is what invalidates them. Panics on an index no [`decor_put_sh`]
-/// handed out, where upstream would read past the array.
-pub(crate) fn decor_item(idx: uint32_t) -> *mut DecorSignHighlight {
-    DECOR_ITEMS.with(|items| {
-        let items = &items[..];
-        assert!((idx as usize) < items.len(), "decoration item out of range");
-        items.as_ptr().cast_mut().wrapping_add(idx as usize)
+/// Runs `f` on sign/highlight item `idx`. Panics on an index the store never
+/// handed out. `f` must not reach the store again.
+pub(crate) fn with_decor_item<R>(idx: uint32_t, f: impl FnOnce(&DecorSignHighlight) -> R) -> R {
+    DECOR_ITEMS.with(|items| f(items.get(idx)))
+}
+
+/// [`with_decor_item`], to write to.
+pub(crate) fn with_decor_item_mut<R>(
+    idx: uint32_t,
+    f: impl FnOnce(&mut DecorSignHighlight) -> R,
+) -> R {
+    DECOR_ITEMS.with_mut(|items| f(items.get_mut(idx)))
+}
+
+/// Runs `f` on every slot of the item store, free ones included, in index
+/// order. `f` must not reach the store again.
+pub(crate) fn for_each_decor_item(mut f: impl FnMut(&mut DecorSignHighlight)) {
+    DECOR_ITEMS.with_mut(|items| items.entries_mut().for_each(&mut f));
+}
+
+/// Runs `f` on virtual-text link `idx`. Panics on an index the store never
+/// handed out. `f` must not reach the store again.
+pub(crate) fn with_decor_virt<R>(idx: uint32_t, f: impl FnOnce(&DecorVirtText) -> R) -> R {
+    DECOR_VIRT.with(|links| f(links.get(idx)))
+}
+
+/// [`with_decor_virt`], to write to.
+pub(crate) fn with_decor_virt_mut<R>(idx: uint32_t, f: impl FnOnce(&mut DecorVirtText) -> R) -> R {
+    DECOR_VIRT.with_mut(|links| f(links.get_mut(idx)))
+}
+
+/// The indices of chain `head`, read one link at a time: nothing is
+/// borrowed between steps, so the caller may do anything in between but
+/// free the chain.
+fn chain_indices(head: uint32_t, next: fn(uint32_t) -> uint32_t) -> impl Iterator<Item = uint32_t> {
+    let first = (head != DECOR_ID_INVALID).then_some(head);
+    core::iter::successors(first, move |&idx| {
+        let after = next(idx);
+        (after != DECOR_ID_INVALID).then_some(after)
     })
 }
 
-/// How many slots [`DECOR_ITEMS`] has handed out, free ones included.
-pub(crate) fn decor_item_count() -> usize {
-    DECOR_ITEMS.with(Vec::len)
+/// Every sign/highlight item of `decor`, in chain order. Empty for an
+/// inline decoration, which has no store entry at all.
+pub(crate) fn sh_chain(decor: DecorInline) -> impl Iterator<Item = uint32_t> {
+    let head = match decor {
+        DecorInline::Ext(ext) => ext.sh_idx,
+        DecorInline::Hl(_) => DECOR_ID_INVALID,
+    };
+    chain_indices(head, |idx| with_decor_item(idx, |sh| sh.next))
 }
 
-/// Every slot of the store, in index order, free ones included.
-///
-/// A snapshot of the *count*, not of the items: the two walks that use this
-/// both write through what they are handed, and neither adds a slot, so the
-/// length cannot move underneath them.
-pub(crate) fn decor_items() -> impl Iterator<Item = Sh> {
-    let count = u32::try_from(decor_item_count()).expect("the store is indexed by a u32");
-    (0..count).map(Sh::at)
+/// Every virtual-text link of chain `head`, in chain order.
+pub(crate) fn virt_chain(head: uint32_t) -> impl Iterator<Item = uint32_t> {
+    chain_indices(head, |idx| with_decor_virt(idx, |vt| vt.next))
+}
+
+/// Every virtual text `mark` carries, in chain order.
+pub(crate) fn mark_virt_chain(mark: MTKey) -> impl Iterator<Item = uint32_t> {
+    virt_chain(mt_decor_virt(mark))
 }
 
 /// Stores `item` and answers the index other code refers to it by, reusing a
 /// freed slot when there is one.
-///
-/// Invalidates every pointer [`decor_item`] has handed out.
 pub fn decor_put_sh(item: DecorSignHighlight) -> uint32_t {
-    let free = DECOR_FREELIST.get();
-    if free != DECOR_ID_INVALID {
-        // SAFETY: a freelist index is one this store handed out.
-        DECOR_FREELIST.set(unsafe { (*decor_item(free)).next });
-        DECOR_ITEMS.with_mut(|items| items[free as usize] = item);
-        return free;
-    }
-    DECOR_ITEMS.with_mut(|items| {
-        items.push(item);
-        u32::try_from(items.len() - 1).expect("the store is indexed by a u32")
-    })
+    DECOR_ITEMS.with_mut(|items| items.put(item))
 }
 
-/// Heap-allocates a copy of `vt` with `next` as its tail, which is how a
-/// virtual-text chain is built. Freed by [`decor_free`].
-pub fn decor_put_vt(vt: DecorVirtText, next: *mut DecorVirtText) -> *mut DecorVirtText {
-    // SAFETY: `xmalloc` never answers null and the size is this type's.
-    let alloc: *mut DecorVirtText = unsafe { xmalloc(size_of::<DecorVirtText>()) }.cast();
-    unsafe { *alloc = vt };
-    unsafe { (*alloc).next = next };
-    alloc
+/// Stores `vt` with `next` as its tail, which is how a virtual-text chain is
+/// built, and answers its index. Freed by [`decor_free`].
+pub fn decor_put_vt(mut vt: DecorVirtText, next: uint32_t) -> uint32_t {
+    vt.next = next;
+    DECOR_VIRT.with_mut(|links| links.put(vt))
+}
+
+/// Frees the one item `idx` an owned range took over.
+pub(crate) fn decor_release_sh(idx: uint32_t) {
+    DECOR_ITEMS.with_mut(|items| items.release(idx));
+}
+
+/// Frees the one virtual-text link `idx` an owned range took over.
+pub(crate) fn decor_release_vt(idx: uint32_t) {
+    DECOR_VIRT.with_mut(|links| links.release(idx));
 }
 
 /// The stored form of an inline highlight — the same thing with the fields a
@@ -383,154 +403,51 @@ pub fn decor_sh_from_inline(item: DecorHighlightInline) -> DecorSignHighlight {
 // ---------------------------------------------------------------------------
 
 /// Decorations a callback asked to delete in the middle of a redraw, which
-/// may still be referenced by the `DecorState` the redraw is walking: the
-/// heads of their virtual-text chains, and (below) their highlight items
-/// spliced into one chain. Drained by [`decor_check_to_be_deleted`] once the
-/// redraw is over.
-static TO_FREE_VIRT: GlobalCell<Vec<*mut DecorVirtText>> = GlobalCell::new(Vec::new());
+/// may still be named by the `DecorState` the redraw is walking: their
+/// sign/highlight chains and their virtual-text chains, each spliced into
+/// one chain. Freed by [`decor_check_to_be_deleted`] once the redraw is over.
 static TO_FREE_SH: GlobalCell<uint32_t> = GlobalCell::new(DECOR_ID_INVALID);
+static TO_FREE_VT: GlobalCell<uint32_t> = GlobalCell::new(DECOR_ID_INVALID);
 
 /// Frees `decor`, or defers it when a decoration provider is running.
 ///
-/// Deferring keeps the virtual-text chain's head, and splices the highlight
-/// items onto the to-free chain: the last link takes the old head.
-///
-/// # Safety
-/// `decor` must be live and must not be reachable from any mark afterwards.
-pub unsafe fn decor_free(decor: DecorInline) {
-    if !decor.ext {
+/// Its entries must not be reachable from any mark afterwards; an inline
+/// decoration owns nothing.
+pub fn decor_free(decor: DecorInline) {
+    let DecorInline::Ext(ext) = decor else {
         return;
-    }
-    // SAFETY: `ext` says the union holds the two chain heads.
-    let (head_vt, head_idx) = unsafe { (decor.data.ext.vt, decor.data.ext.sh_idx) };
-
+    };
     if !decor_provider_running() {
         // Safe to delete right now.
-        // SAFETY: the caller's chains, unreachable from any mark.
-        unsafe { decor_free_inner(head_vt, head_idx) };
+        DECOR_VIRT.with_mut(|links| links.release(ext.vt_idx));
+        DECOR_ITEMS.with_mut(|items| items.release(ext.sh_idx));
         return;
     }
-
-    if !head_vt.is_null() {
-        TO_FREE_VIRT.with_mut(|heads| heads.push(head_vt));
-    }
-    // SAFETY: the caller's chain; the to-free chain is this file's.
-    let mut idx: uint32_t = head_idx;
-    while idx != DECOR_ID_INVALID {
-        let sh = decor_item(idx);
-        if unsafe { (*sh).next } == DECOR_ID_INVALID {
-            unsafe { (*sh).next = TO_FREE_SH.get() };
-            TO_FREE_SH.set(head_idx);
-            break;
-        }
-        idx = unsafe { (*sh).next };
-    }
+    let vt = DECOR_VIRT.with_mut(|links| links.splice(ext.vt_idx, TO_FREE_VT.get()));
+    TO_FREE_VT.set(vt);
+    let sh = DECOR_ITEMS.with_mut(|items| items.splice(ext.sh_idx, TO_FREE_SH.get()));
+    TO_FREE_SH.set(sh);
 }
 
-/// Frees a virtual-text chain and returns a chain of items to the freelist.
+/// Frees what [`decor_free`] deferred, at the end of a redraw, and forgets
+/// the window the `DecorState` was drawing.
 ///
-/// # Safety
-/// Both chains must be live and unreachable.
-unsafe fn decor_free_inner(mut vt: *mut DecorVirtText, first_idx: uint32_t) {
-    // SAFETY: the caller's chains.
-    while !vt.is_null() {
-        if c_int::from(unsafe { (*vt).flags }) & c_int::from(kVTIsLines) != 0 {
-            unsafe { clear_virtlines(&raw mut *(*vt).data.lines_mut()) };
-        } else {
-            unsafe { clear_virttext(&raw mut *(*vt).data.text_mut()) };
-        }
-        let tofree = vt;
-        vt = unsafe { (*vt).next };
-        unsafe { xfree(tofree.cast()) };
-    }
-
-    let mut idx = first_idx;
-    while idx != DECOR_ID_INVALID {
-        let sh = decor_item(idx);
-        if unsafe { (*sh).flags } & kSHIsSign != 0 {
-            unsafe { xfree((*sh).sign_name.cast()) };
-            unsafe { (*sh).sign_name = ptr::null_mut() };
-        }
-        unsafe { (*sh).flags = 0 };
-        if !unsafe { (*sh).url }.is_null() {
-            unsafe { xfree((*sh).url as *mut _) };
-            unsafe { (*sh).url = ptr::null() };
-        }
-        // The whole chain goes on the freelist at once, head first.
-        if unsafe { (*sh).next } == DECOR_ID_INVALID {
-            unsafe { (*sh).next = DECOR_FREELIST.get() };
-            DECOR_FREELIST.set(first_idx);
-            break;
-        }
-        idx = unsafe { (*sh).next };
-    }
-}
-
-/// Drains the to-free lists at the end of a redraw, and forgets the window
-/// the `DecorState` was drawing.
-///
-/// # Safety
 /// Must not be called while a decoration provider is running.
-pub unsafe fn decor_check_to_be_deleted() {
-    // SAFETY: the redraw is over, so nothing holds a borrow of the state.
-    let mut state = unsafe { DecorStateRef::current() };
+pub fn decor_check_to_be_deleted() {
     // The caller's precondition, restated as upstream's `assert()` does.
     debug_assert!(!decor_provider_running());
-    // SAFETY: the two lists are this file's, and everything on them was put
-    // there by `decor_free` and is unreachable from any mark.
-    // The item chain goes with the first call; an empty virtual-text chain
-    // at the end makes sure there is one.
-    let mut items = TO_FREE_SH.replace(DECOR_ID_INVALID);
-    for head_vt in TO_FREE_VIRT.take().into_iter().chain([ptr::null_mut()]) {
-        let items = core::mem::replace(&mut items, DECOR_ID_INVALID);
-        unsafe { decor_free_inner(head_vt, items) };
-    }
-    state.win = None;
-}
-
-/// Frees the chunks of a virtual text and empties it.
-///
-/// # Safety
-/// `text` must point to a live `VirtText` that owns its chunks.
-pub unsafe fn clear_virttext(text: *mut VirtText) {
-    // SAFETY: the caller's virtual text.
-    for i in 0..unsafe { (*text).size } {
-        unsafe { xfree((*(*text).items.add(i)).text.cast()) };
-    }
-    unsafe { xfree((*text).items.cast()) };
-    let empty = VirtText {
-        size: 0,
-        capacity: 0,
-        items: ptr::null_mut::<VirtTextChunk>(),
-    };
-    // SAFETY: the caller's block, whose items have just been freed.
-    unsafe { *text = empty };
-}
-
-/// [`clear_virttext`] for a block of virtual lines.
-///
-/// # Safety
-/// `lines` must point to a live `VirtLines` that owns its lines.
-pub unsafe fn clear_virtlines(lines: *mut VirtLines) {
-    // SAFETY: the caller's virtual lines.
-    for i in 0..unsafe { (*lines).size } {
-        unsafe { clear_virttext(&raw mut (*(*lines).items.add(i)).line) };
-    }
-    unsafe { xfree((*lines).items.cast()) };
-    let empty = VirtLines {
-        size: 0,
-        capacity: 0,
-        items: ptr::null_mut::<virt_line>(),
-    };
-    // SAFETY: the caller's block, whose items have just been freed.
-    unsafe { *lines = empty };
+    let vt = TO_FREE_VT.replace(DECOR_ID_INVALID);
+    DECOR_VIRT.with_mut(|links| links.release(vt));
+    let sh = TO_FREE_SH.replace(DECOR_ID_INVALID);
+    DECOR_ITEMS.with_mut(|items| items.release(sh));
+    decor_state.with_mut(|state| state.win = None);
 }
 
 /// Replaces any sign or conceal character that the glyph cache no longer
 /// holds — called when the cache is rebuilt, since a `ScreenChar` is an index
 /// into it once the character is longer than four bytes.
 pub fn decor_check_invalid_glyphs() {
-    for mut it in decor_items() {
+    for_each_decor_item(|it| {
         let width = if it.flags & kSHIsSign != 0 {
             SIGN_WIDTH as usize
         } else if it.flags & kSHConceal != 0 {
@@ -543,7 +460,7 @@ pub fn decor_check_invalid_glyphs() {
                 it.text[j] = schar_from_char(schar_get_first_codepoint(it.text[j]));
             }
         }
-    }
+    });
 }
 
 // ---------------------------------------------------------------------------
@@ -566,10 +483,8 @@ pub fn bufhl_add_hl_pos_offset(
     pos_end: LPos,
     offset: ColNr,
 ) {
-    let mut decor = DECOR_INLINE_INIT;
-    decor.data.hl.hl_id = hl_id;
+    let decor = decor_inline_hl(hl_id);
 
-    // SAFETY: the caller's buffer.
     // TODO(bfredl): if decoration had blocky mode, we could avoid this loop
     for lnum in pos_start.lnum..=pos_end.lnum {
         let first = lnum == pos_start.lnum;
@@ -594,7 +509,6 @@ pub fn bufhl_add_hl_pos_offset(
         let ns = u32::try_from(src_id).expect("a namespace id fits its own handle type");
         let (row, end_row) = (lnum as c_int - 1, lnum as c_int - 1 + end_off);
         let flags = MtFlags::DECOR_HL;
-        // The mark takes over the inline decoration built above.
         extmark_set(
             buffer, ns, None, row, hl_start, end_row, hl_end, decor, flags, true, false, true,
             false,
@@ -602,41 +516,59 @@ pub fn bufhl_add_hl_pos_offset(
     }
 }
 
+/// What [`decor_redraw_sh`] needs to know about one sign/highlight item.
+#[derive(Copy, Clone)]
+pub(crate) struct ShRedraw {
+    flags: uint16_t,
+    hl_id: c_int,
+    has_url: bool,
+}
+
+impl ShRedraw {
+    fn of(sh: &DecorSignHighlight) -> Self {
+        Self {
+            flags: sh.flags,
+            hl_id: sh.hl_id,
+            has_url: sh.url.is_some(),
+        }
+    }
+}
+
 /// Marks the screen lines `decor` affects as needing a redraw.
 pub fn decor_redraw(buffer: Buf, row1: c_int, row2: c_int, col1: c_int, decor: DecorInline) {
-    // SAFETY: the caller's buffer and decoration.
-    if !decor.ext {
-        unsafe { decor_redraw_sh(buffer, row1, row2, decor_sh_from_inline(decor.data.hl)) };
-        return;
-    }
+    let ext = match decor {
+        DecorInline::Hl(hl) => {
+            let sh = ShRedraw::of(&decor_sh_from_inline(hl));
+            decor_redraw_sh(buffer, row1, row2, sh);
+            return;
+        }
+        DecorInline::Ext(ext) => ext,
+    };
 
-    let mut vt = unsafe { decor.data.ext }.vt;
-    while !vt.is_null() {
-        let is_lines = unsafe { (*vt).flags } & kVTIsLines != 0;
-        let below = is_lines && unsafe { (*vt).flags } & kVTLinesAbove == 0;
+    for idx in virt_chain(ext.vt_idx) {
+        let (flags, pos) = with_decor_virt(idx, |vt| (vt.flags, vt.pos));
+        let is_lines = flags & kVTIsLines != 0;
+        let below = is_lines && flags & kVTLinesAbove == 0;
         let vt_lnum = row1 as LineNr + 1 + LineNr::from(below);
         redraw_buf_line_later(buffer, vt_lnum, true);
         // Virtual lines and inline virtual text change how much room the
         // line takes, so the cached line sizes have to go as well.
-        if is_lines || unsafe { (*vt).pos } == kVPosInline {
+        if is_lines || pos == kVPosInline {
             let vt_col: ColNr = if is_lines { 0 } else { col1 };
             changed_lines_invalidate_buf(buffer, vt_lnum, vt_col, vt_lnum + 1, 0);
         }
-        vt = unsafe { (*vt).next };
     }
 
-    let mut idx: uint32_t = unsafe { decor.data.ext }.sh_idx;
-    while idx != DECOR_ID_INVALID {
-        let sh = decor_item(idx);
-        unsafe { decor_redraw_sh(buffer, row1, row2, *sh) };
-        idx = unsafe { (*sh).next };
+    for idx in sh_chain(decor) {
+        let sh = with_decor_item(idx, ShRedraw::of);
+        decor_redraw_sh(buffer, row1, row2, sh);
     }
 }
 
 /// [`decor_redraw`] for one sign/highlight item.
-pub fn decor_redraw_sh(buffer: Buf, row1: c_int, row2: c_int, sh: DecorSignHighlight) {
+pub(crate) fn decor_redraw_sh(buffer: Buf, row1: c_int, row2: c_int, sh: ShRedraw) {
     let paints = sh.flags & (kSHIsSign | kSHSpellOn | kSHSpellOff | kSHConceal) != 0;
-    if (sh.hl_id != 0 || !sh.url.is_null() || paints) && row2 >= row1 {
+    if (sh.hl_id != 0 || sh.has_url || paints) && row2 >= row1 {
         redraw_buf_range_later(buffer, row1 as LineNr + 1, row2 as LineNr + 1);
     }
 
@@ -657,15 +589,12 @@ pub fn decor_redraw_sh(buffer: Buf, row1: c_int, row2: c_int, sh: DecorSignHighl
 
 /// Accounts for a decoration that has just been placed on rows `row..=row2`.
 pub fn buf_put_decor(buffer: Buf, decor: DecorInline, row: c_int, mut row2: c_int) {
-    if !decor.ext || row as LineNr >= buffer.b_ml.ml_line_count {
+    if !decor.is_ext() || row as LineNr >= buffer.b_ml.ml_line_count {
         return;
     }
     row2 = (buffer.b_ml.ml_line_count - 1).min(row2 as LineNr) as c_int;
-    let mut idx: uint32_t = unsafe { decor.data.ext }.sh_idx;
-    while idx != DECOR_ID_INVALID {
-        let sh = decor_item(idx);
-        unsafe { buf_put_decor_sh(buffer, sh, row, row2) };
-        idx = unsafe { (*sh).next };
+    for idx in sh_chain(decor) {
+        buf_put_decor_sh(buffer, idx, row, row2);
     }
 }
 
@@ -680,16 +609,13 @@ pub fn buf_decor_remove(
     free: bool,
 ) {
     decor_redraw(buffer, row1, row2, col1, decor);
-    if decor.ext && (row1 as LineNr) < buffer.b_ml.ml_line_count {
+    if decor.is_ext() && (row1 as LineNr) < buffer.b_ml.ml_line_count {
         row2 = (buffer.b_ml.ml_line_count - 1).min(row2 as LineNr) as c_int;
-        let mut idx: uint32_t = unsafe { decor.data.ext }.sh_idx;
-        while idx != DECOR_ID_INVALID {
-            let sh = decor_item(idx);
-            unsafe { buf_remove_decor_sh(buffer, row1, row2, sh) };
-            idx = unsafe { (*sh).next };
+        for idx in sh_chain(decor) {
+            buf_remove_decor_sh(buffer, row1, row2, idx);
         }
     }
     if free {
-        unsafe { decor_free(decor) };
+        decor_free(decor);
     }
 }

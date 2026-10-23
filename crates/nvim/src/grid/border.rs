@@ -41,7 +41,7 @@ fn grid_draw_bordertext(
     }
 
     let mut i: size_t = 0;
-    while i < vt.size {
+    while i < vt.len() {
         let mut attr = -1;
         let Some(text) = next_virt_text_chunk(vt, &mut i, &mut attr) else {
             break;

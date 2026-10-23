@@ -244,8 +244,7 @@ fn parse_osc8(payload: &[u8]) -> Option<c_int> {
     let mut terminated = uri.to_vec();
     terminated.push(0);
     let uri = CStr::from_bytes_with_nul(&terminated).expect("NUL-terminated, no interior NUL");
-    // SAFETY: `uri` is NUL-terminated and outlives the call, which copies.
-    Some(unsafe { hl_add_url(0, uri.as_ptr()) })
+    Some(hl_add_url(0, uri))
 }
 
 /// Apply a finished OSC 8 to vterm's pen, so that the cells written after

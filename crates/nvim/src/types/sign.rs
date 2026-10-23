@@ -11,9 +11,15 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 
+/// One sign on a row, as the sign column sorts it: the sign item's index in
+/// the decoration store, its mark's id, and the two fields of the item the
+/// order reads.
+#[derive(Copy, Clone)]
 pub struct SignItem {
-    pub sh: *mut DecorSignHighlight,
+    pub idx: uint32_t,
     pub id: uint32_t,
+    pub priority: DecorPriority,
+    pub sign_add_id: ::core::ffi::c_int,
 }
 #[derive(Copy, Clone)]
 pub struct SignTextAttrs {

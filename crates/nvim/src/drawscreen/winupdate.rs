@@ -15,7 +15,7 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::decoration::{DecorStateRef, kVPosWinCol};
+use crate::decoration::{DECOR_ID_INVALID, DecorStateRef, decor_put_vt, kVPosWinCol};
 use crate::grid::default_grid_ref;
 use crate::r#move::WinValid;
 use crate::normal::{VisualSelection, visual_selection};
@@ -266,36 +266,29 @@ pub(crate) fn win_update(window: Win) {
 /// Show `[Process suspended]` over the last line of a suspended `:terminal`.
 ///
 /// The note is a decoration rather than drawn text, so it goes through the
-/// decoration state the rest of the redraw already reads.
+/// decoration state the rest of the redraw already reads: an owned range,
+/// which frees it when the redraw drops it.
 fn add_suspended_terminal_note(buffer: Buf, state: DecorStateRef) {
-    // Both live for the whole process: `decor_range_add_virt` stores the
-    // pointer and the range is dropped at the end of the redraw. Declarations,
-    // so they sit outside the promise below.
-    static CHUNK: GlobalCell<VirtTextChunk> = GlobalCell::new(VirtTextChunk {
-        text: c"[Process suspended]".as_ptr().cast_mut(),
-        hl_id: -1,
-    });
-    static VIRT_TEXT: GlobalCell<DecorVirtText> = GlobalCell::new(DecorVirtText {
+    // SAFETY: the caller's buffer.
+    if buffer.terminal.is_null() || !unsafe { terminal_suspended(buffer.terminal) } {
+        return;
+    }
+    let note = DecorVirtText {
         flags: 0,
         hl_mode: 0,
         priority: DECOR_PRIORITY_BASE as DecorPriority,
         width: 0,
         col: 0,
         pos: kVPosWinCol,
-        data: DecorVirtText_data::Text(VirtText {
-            size: 1,
-            capacity: 0,
-            items: CHUNK.as_raw().cast::<VirtTextChunk>(),
-        }),
-        next: ::core::ptr::null_mut(),
-    });
-
-    // SAFETY: the caller's buffer.
-    if buffer.terminal.is_null() || !unsafe { terminal_suspended(buffer.terminal) } {
-        return;
-    }
+        data: DecorVirtText_data::Text(vec![VirtTextChunk {
+            text: Some(c"[Process suspended]".to_owned()),
+            hl_id: -1,
+        }]),
+        next: DECOR_ID_INVALID,
+    };
+    let vt = decor_put_vt(note, DECOR_ID_INVALID);
     let last = buffer.b_ml.ml_line_count - 1;
-    unsafe { decor_range_add_virt(state, last, 0, last, 0, VIRT_TEXT.ptr(), false) };
+    decor_range_add_virt(state, last, 0, last, 0, vt, true);
 }
 
 /// Round `w_skipcol` down to a column a wrapped line actually starts a screen

@@ -43,7 +43,6 @@ use crate::types::TAB;
 use crate::types::*;
 use crate::winlayer::Win;
 use core::ffi::{c_int, c_uint};
-use core::ptr;
 
 pub mod adjust;
 mod builtins;
@@ -77,11 +76,7 @@ use open_close::check_closed;
 
 pub(crate) static disable_fold_update: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 
-pub const VIRTTEXT_EMPTY: VirtText = VirtText {
-    size: 0,
-    capacity: 0,
-    items: ptr::null_mut(),
-};
+pub const VIRTTEXT_EMPTY: VirtText = VirtText::new();
 pub const kExtmarkUndo: ExtmarkOp = 1;
 
 /// The deepest nesting 'foldnestmax' will accept.

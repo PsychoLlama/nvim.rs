@@ -15,7 +15,6 @@ use crate::api::private::validate::{
     Bad, err_bad_number, err_bad_value, err_expected, err_invalid, err_out_of_range,
 };
 use crate::decoration::DecorStateRef;
-use crate::kvec::Kvec;
 use crate::winlayer::WinId;
 use crate::winlayer::{Buf, Live};
 
@@ -29,16 +28,15 @@ const MAX_PRIORITY: Integer = 65535;
 
 /// The decoration one call builds, before anything has taken it over.
 ///
-/// Every allocation below is this call's until the mark or the redraw's
-/// decor state takes it; a refusal on the way releases them with
-/// [`Decoration::release`].
+/// Everything below is this call's until the mark or the redraw's decor
+/// state takes it; a refusal on the way drops it.
 struct Decoration {
     hl: DecorHighlightInline,
     sign: DecorSignHighlight,
     virt_text: DecorVirtText,
     virt_lines: DecorVirtText,
-    /// The `url` key's copy, or null.
-    url: *mut ::core::ffi::c_char,
+    /// The `url` key's copy.
+    url: Option<::std::ffi::CString>,
     /// Whether anything went into `hl`.
     has_hl: bool,
     /// Whether `hl_group` named more than one group, which needs a chain of
@@ -56,42 +54,21 @@ impl Decoration {
             width: 0,
             col: 0,
             pos: kVPosEndOfLine,
-            data: DecorVirtText_data::Text(VirtText {
-                size: 0,
-                capacity: 0,
-                items: ::core::ptr::null_mut(),
-            }),
-            next: ::core::ptr::null_mut(),
+            data: DecorVirtText_data::Text(VirtText::new()),
+            next: DECOR_ID_INVALID,
         };
         Decoration {
             hl: DECOR_HIGHLIGHT_INLINE_INIT,
             sign: DECOR_SIGN_HIGHLIGHT_INIT,
-            virt_text: empty,
             virt_lines: DecorVirtText {
                 flags: kVTIsLines as uint8_t,
-                data: DecorVirtText_data::Lines(VirtLines {
-                    size: 0,
-                    capacity: 0,
-                    items: ::core::ptr::null_mut(),
-                }),
-                ..empty
+                data: DecorVirtText_data::Lines(Vec::new()),
+                ..empty.clone()
             },
-            url: ::core::ptr::null_mut(),
+            virt_text: empty,
+            url: None,
             has_hl: false,
             has_hl_multiple: false,
-        }
-    }
-
-    /// Release what was built, for a refusal that handed it to nobody.
-    fn release(&mut self) {
-        // SAFETY: both vectors and the url copy are this call's own, and
-        // nothing has taken them over.
-        unsafe {
-            clear_virttext(&raw mut *self.virt_text.data.text_mut());
-            clear_virtlines(&raw mut *self.virt_lines.data.lines_mut());
-            if !self.url.is_null() {
-                xfree(self.url.cast::<::core::ffi::c_void>());
-            }
         }
     }
 
@@ -229,15 +206,11 @@ impl Decoration {
                     let got = api_typename(item.kind());
                     return Err(err_expected(c"virt_text_line", want, Some(got)));
                 };
-                let line = virt_line {
+                let line = VirtLine {
                     line: parse_virt_text(chunks, None)?,
                     flags,
                 };
-                // `kv_push`, whose growth step c2rust expanded inline.
-                let lines = self.virt_lines.data.lines_mut();
-                let mut vl = Kvec::new(&mut lines.size, &mut lines.capacity, &mut lines.items);
-                // SAFETY: `items` is this vector's own allocation.
-                unsafe { vl.push(line) };
+                self.virt_lines.data.lines_mut().push(line);
             }
         }
         if opts.virt_lines_above.unwrap_or(false) {
@@ -285,7 +258,9 @@ impl Decoration {
             self.has_hl = true;
         }
         if let Some(given) = opts.url.as_ref() {
-            self.url = string_to_cstr(given);
+            // Up to a NUL, as the C string upstream copies reads it.
+            let url = crate::cstr::until_nul(given.as_bytes());
+            self.url = Some(::std::ffi::CString::new(url).expect("cut at the first NUL"));
             self.has_hl = true;
         }
         if opts.ui_watched.unwrap_or(false) {
@@ -322,33 +297,36 @@ impl Decoration {
             }
             subpriority = given as DecorPriority;
         }
-        // SAFETY: `state` is the redraw's own, and each part of the
-        // decoration is handed over exactly once.
-        unsafe {
-            if self.virt_text.data.text().size != 0 {
-                let vt = decor_put_vt(self.virt_text, ::core::ptr::null_mut());
-                decor_range_add_virt(state, row, col, end_row, end_col, vt, true);
+        // Each part of the decoration is handed over exactly once.
+        if !self.virt_text.data.text().is_empty() {
+            let vt = decor_put_vt(take_virt(&mut self.virt_text), DECOR_ID_INVALID);
+            decor_range_add_virt(state, row, col, end_row, end_col, vt, true);
+        }
+        if !self.virt_lines.data.lines().is_empty() {
+            let vt = decor_put_vt(take_virt(&mut self.virt_lines), DECOR_ID_INVALID);
+            decor_range_add_virt(state, row, col, end_row, end_col, vt, true);
+        }
+        if self.has_hl {
+            let mut sh = HlSource::inline(self.hl);
+            if let Some(url) = self.url.take() {
+                // The range takes the store entry holding the URL over.
+                sh.url = decor_put_sh(DecorSignHighlight {
+                    url: Some(url),
+                    ..DECOR_SIGN_HIGHLIGHT_INIT
+                });
             }
-            if self.virt_lines.data.lines().size != 0 {
-                let vt = decor_put_vt(self.virt_lines, ::core::ptr::null_mut());
-                decor_range_add_virt(state, row, col, end_row, end_col, vt, true);
-            }
-            if self.has_hl {
-                let mut sh: DecorSignHighlight = decor_sh_from_inline(self.hl);
-                sh.url = self.url;
-                decor_range_add_sh(
-                    state,
-                    row,
-                    col,
-                    end_row,
-                    end_col,
-                    &raw mut sh,
-                    true,
-                    ns_id as uint32_t,
-                    id,
-                    subpriority,
-                );
-            }
+            decor_range_add_sh(
+                state,
+                row,
+                col,
+                end_row,
+                end_col,
+                sh,
+                true,
+                ns_id as uint32_t,
+                id,
+                subpriority,
+            );
         }
         Ok(())
     }
@@ -365,21 +343,19 @@ impl Decoration {
         right_gravity: bool,
     ) {
         let mut decor_flags = MtFlags::NONE;
-        let mut decor_alloc: *mut DecorVirtText = ::core::ptr::null_mut();
-        if self.virt_text.data.text().size != 0 {
-            decor_alloc = decor_put_vt(self.virt_text, decor_alloc);
+        let mut decor_alloc = DECOR_ID_INVALID;
+        if !self.virt_text.data.text().is_empty() {
             if self.virt_text.pos == kVPosInline {
                 decor_flags |= MtFlags::DECOR_VIRT_TEXT_INLINE;
             }
+            decor_alloc = decor_put_vt(take_virt(&mut self.virt_text), decor_alloc);
         }
-        if self.virt_lines.data.lines().size != 0 {
-            decor_alloc = decor_put_vt(self.virt_lines, decor_alloc);
+        if !self.virt_lines.data.lines().is_empty() {
+            decor_alloc = decor_put_vt(take_virt(&mut self.virt_lines), decor_alloc);
             decor_flags |= MtFlags::DECOR_VIRT_LINES;
         }
         let mut decor_indexed: uint32_t = DECOR_ID_INVALID;
         if self.sign.flags & kSHIsSign as uint16_t != 0 {
-            self.sign.next = decor_indexed;
-            decor_indexed = decor_put_sh(self.sign);
             if self.sign.text[0] != 0 {
                 decor_flags |= MtFlags::DECOR_SIGNTEXT;
             }
@@ -389,6 +365,8 @@ impl Decoration {
             {
                 decor_flags |= MtFlags::DECOR_SIGNHL;
             }
+            self.sign.next = decor_indexed;
+            decor_indexed = decor_put_sh(self.sign.clone());
         }
         if self.has_hl_multiple {
             let Some(groups) = opts.hl_group.as_ref().and_then(Object::as_array) else {
@@ -419,26 +397,24 @@ impl Decoration {
         if self.hl.flags & kSHConcealLines as uint16_t != 0 {
             decor_flags |= MtFlags::DECOR_CONCEAL_LINES;
         }
-        let mut decor: DecorInline = DECOR_INLINE_INIT;
-        if !decor_alloc.is_null()
+        let decor = if decor_alloc != DECOR_ID_INVALID
             || decor_indexed != DECOR_ID_INVALID
-            || !self.url.is_null()
+            || self.url.is_some()
             || schar_high(self.hl.conceal_char)
         {
             if self.has_hl {
                 let mut sh: DecorSignHighlight = decor_sh_from_inline(self.hl);
-                sh.url = self.url;
+                sh.url = self.url.take();
                 sh.next = decor_indexed;
                 decor_indexed = decor_put_sh(sh);
             }
-            decor.ext = true;
-            decor.data.ext = DecorExt {
+            DecorInline::Ext(DecorExt {
                 sh_idx: decor_indexed,
-                vt: decor_alloc,
-            };
+                vt_idx: decor_alloc,
+            })
         } else {
-            decor.data.hl = self.hl;
-        }
+            DecorInline::Hl(self.hl)
+        };
         if self.has_hl {
             decor_flags |= MtFlags::DECOR_HL;
         }
@@ -458,6 +434,18 @@ impl Decoration {
             !opts.undo_restore.unwrap_or(true),
             opts.invalidate.unwrap_or(false),
         );
+    }
+}
+
+/// The link `vt` holds, leaving it empty: the store takes it over.
+fn take_virt(vt: &mut DecorVirtText) -> DecorVirtText {
+    let empty = match vt.data {
+        DecorVirtText_data::Text(_) => DecorVirtText_data::Text(Vec::new()),
+        DecorVirtText_data::Lines(_) => DecorVirtText_data::Lines(Vec::new()),
+    };
+    DecorVirtText {
+        data: core::mem::replace(&mut vt.data, empty),
+        ..vt.clone()
     }
 }
 
@@ -486,15 +474,9 @@ pub fn nvim_buf_set_extmark(
     if !ns_initialized(ns_id as uint32_t) {
         return Err(err_bad_number(c"ns_id", ns_id));
     }
+    // A refusal drops the half-built decoration, which nothing took over.
     let mut decor = Decoration::new();
-    match set_extmark(&mut decor, b, ns_id, line, col, &mut opts) {
-        Ok(id) => Ok(id),
-        Err(refused) => {
-            // Nothing took the half-built decoration over.
-            decor.release();
-            Err(refused)
-        }
-    }
+    set_extmark(&mut decor, b, ns_id, line, col, &mut opts)
 }
 
 /// Read every key into `decor`, clamp the positions, and place the mark.

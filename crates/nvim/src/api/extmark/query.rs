@@ -15,6 +15,7 @@ use crate::api::private::helpers::Reported;
 use crate::api::private::validate::{err_bad_number, err_expected};
 use crate::winlayer::Buf;
 use crate::winlayer::Live;
+use core::ffi::CStr;
 
 /// How many keys a mark's `details` dictionary can grow to.
 const DETAILS_KEYS: size_t = 36;
@@ -24,19 +25,11 @@ const DETAILS_KEYS: size_t = 36;
 ///
 /// A run of text-less chunks is the stack of highlights the chunk that ends
 /// it carries, so those become one array rather than chunks of their own.
-pub fn virt_text_to_array(vt: VirtText, hl_name: bool) -> Array {
-    // SAFETY: the caller's promise: `size` initialized chunks. An empty
-    // vector has never allocated, so its `items` is null and Rust will not
-    // make a slice over one.
-    let items: &[VirtTextChunk] = if vt.items.is_null() {
-        &[]
-    } else {
-        unsafe { ::core::slice::from_raw_parts(vt.items, vt.size) }
-    };
-    let mut chunks = Array::with_capacity(vt.size);
+pub fn virt_text_to_array(items: &[VirtTextChunk], hl_name: bool) -> Array {
+    let mut chunks = Array::with_capacity(items.len());
     let mut i = 0;
     while i < items.len() {
-        let Some(run) = items[i..].iter().position(|chunk| !chunk.text.is_null()) else {
+        let Some(run) = items[i..].iter().position(|chunk| chunk.text.is_some()) else {
             break;
         };
         let stack_end = i + run;
@@ -46,10 +39,10 @@ pub fn virt_text_to_array(vt: VirtText, hl_name: bool) -> Array {
                 groups.push(hl_group_name(chunk.hl_id, hl_name));
             }
         }
-        let last = items[stack_end];
+        let last = &items[stack_end];
         let mut chunk = Array::with_capacity(2);
-        // SAFETY: the chunk's text is NUL-terminated.
-        chunk.push(Object::string(unsafe { cstr_to_string(last.text) }));
+        let text = last.text.as_deref().map_or(&b""[..], CStr::to_bytes);
+        chunk.push(Object::string(String_0::from_bytes(text)));
         if groups.is_empty() {
             if last.hl_id >= 0 {
                 chunk.push(hl_group_name(last.hl_id, hl_name));
@@ -99,8 +92,7 @@ fn extmark_to_array(extmark: MTPair, id: bool, add_dict: bool, hl_name: bool) ->
         if mt_invalid(start) {
             dict.insert(c"invalid", Object::boolean(true));
         }
-        // SAFETY: the mark's own decoration.
-        unsafe { decor_to_dict_legacy(&mut dict, mt_decor(start), hl_name) };
+        decor_to_dict_legacy(&mut dict, mt_decor(start), hl_name);
         rv.push(Object::dict(dict));
     }
     rv
@@ -156,7 +148,7 @@ pub fn nvim_buf_get_extmarks(
     if let Some(named) = opts.type_0.as_ref() {
         // SAFETY: the keyset's string names its own NUL-terminated bytes.
         let name = unsafe { crate::cstr::at_opt(named.data()) };
-        type_0 = match name.map(core::ffi::CStr::to_bytes) {
+        type_0 = match name.map(CStr::to_bytes) {
             Some(b"sign") => kExtmarkSign,
             Some(b"virt_text") => kExtmarkVirtText,
             Some(b"virt_lines") => kExtmarkVirtLines,

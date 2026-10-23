@@ -38,8 +38,8 @@ use crate::marktree::key::{
 use crate::marktree::meta::{MetaCount, filtered_key_flags, meta_has};
 use crate::marktree::node::{Node, find_key, id2node};
 use crate::types::{
-    DecorHighlightInline, DecorInlineData, MTKey, MTPair, MTPos, MarkTree, MarkTreeIter,
-    MetaFilter, int32_t,
+    DecorHighlightInline, DecorInline, MTKey, MTPair, MTPos, MarkTree, MarkTreeIter, MetaFilter,
+    int32_t,
 };
 
 use super::marktree_lookup;
@@ -65,14 +65,12 @@ fn search_key(pos: MTPos, flags: MtFlags) -> MTKey {
         ns: 0,
         id: 0,
         flags,
-        decor_data: DecorInlineData {
-            hl: DecorHighlightInline {
-                flags: 0,
-                priority: 0,
-                hl_id: 0,
-                conceal_char: 0,
-            },
-        },
+        decor_data: DecorInline::Hl(DecorHighlightInline {
+            flags: 0,
+            priority: 0,
+            hl_id: 0,
+            conceal_char: 0,
+        }),
     }
 }
 

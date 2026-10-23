@@ -115,7 +115,7 @@ mod tests {
         kMTMetaConcealLines, kMTMetaInline, kMTMetaLines, kMTMetaSignHL, kMTMetaSignText,
     };
     use crate::marktree::key::{DECOR_HIGHLIGHT_INLINE_INIT, kMTFilterSelect};
-    use crate::types::{DecorInlineData, MTPos};
+    use crate::types::{DecorInline, MTPos};
 
     fn key(flags: MtFlags) -> MTKey {
         MTKey {
@@ -123,9 +123,7 @@ mod tests {
             ns: 0,
             id: 0,
             flags,
-            decor_data: DecorInlineData {
-                hl: DECOR_HIGHLIGHT_INLINE_INIT,
-            },
+            decor_data: DecorInline::Hl(DECOR_HIGHLIGHT_INLINE_INIT),
         }
     }
 
