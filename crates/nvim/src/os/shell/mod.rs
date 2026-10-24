@@ -618,35 +618,28 @@ unsafe fn write_output(output: *mut c_char, remaining: size_t, eof: bool) -> siz
 /// # Safety
 /// `cmd` must be a NUL-terminated string.
 unsafe fn shell_xescape_xquote(cmd: *const c_char) -> *mut c_char {
-    // Copies: `vim_snprintf` below reads both past the end of a projection.
     let (sxq, sxe) = (P_SXQ.get(), P_SXE.get());
+    // SAFETY: the caller's contract.
+    let cmd = unsafe { cstr::bytes_at(cmd) };
     if sxq.is_empty() {
-        // SAFETY: the caller's contract.
-        return unsafe { xstrdup(cmd) };
+        return XString::from(cmd).into_raw();
     }
-    // SAFETY: the caller's contract, and `ecmd` is only freed when
-    // `vim_strsave_escaped_ext` allocated it.
-    unsafe {
-        let mut ecmd = cmd;
-        if !sxe.is_empty() && sxq == c"(" {
-            ecmd = escaped_with(cstr::bytes_at(cmd), &sxe, b'^', false).into_raw();
-        }
-        let ncmd_size = cstr::bytes_at(ecmd).len() + sxq.len() * 2 + 1;
-        let ncmd = xmalloc(ncmd_size) as *mut c_char;
+    let escaped = (!sxe.is_empty() && sxq == c"(").then(|| escaped_with(cmd, &sxe, b'^', false));
+    let ecmd = escaped
+        .as_ref()
+        .map_or(cmd, |escaped| escaped.as_cstr().to_bytes());
 
-        // 'shellxquote' of "(" appends ")", of "\"(" appends ")\"".
-        if sxq == c"(" {
-            crate::vim_snprintf!(ncmd, ncmd_size, c"(%s)".as_ptr(), ecmd);
-        } else if sxq == c"\"(" {
-            crate::vim_snprintf!(ncmd, ncmd_size, c"\"(%s)\"".as_ptr(), ecmd);
-        } else {
-            let q = sxq.as_ptr();
-            crate::vim_snprintf!(ncmd, ncmd_size, c"%s%s%s".as_ptr(), q, ecmd, q);
-        }
-
-        if ecmd != cmd {
-            xfree(ecmd.cast_mut().cast());
-        }
-        ncmd
-    }
+    // 'shellxquote' of "(" appends ")", of "\"(" appends ")\"".
+    let (open, close): (&[u8], &[u8]) = if sxq == c"(" {
+        (b"(", b")")
+    } else if sxq == c"\"(" {
+        (b"\"(", b")\"")
+    } else {
+        (&sxq, &sxq)
+    };
+    let mut ncmd = XString::with_capacity(open.len() + ecmd.len() + close.len());
+    ncmd.push_bytes(open);
+    ncmd.push_bytes(ecmd);
+    ncmd.push_bytes(close);
+    ncmd.into_raw()
 }

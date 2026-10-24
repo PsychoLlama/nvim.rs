@@ -18,12 +18,10 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::cstr;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
 use super::{get_global_lstate, kRetNilBool, lua_Debug, lua_getinfo, nlua_error, nlua_exec};
-use crate::api::private::helpers::cstr_to_string;
 use crate::eval::userfunc::register_luafunc;
 use crate::getchar::state::{got_int, mod_mask};
 use crate::global_cell::GlobalCell;
@@ -34,7 +32,7 @@ use crate::lua::ffi::{
     lua_getmetatable, lua_gettop, lua_pcall, lua_pop, lua_pushlstring, lua_toboolean, lua_type,
     luaL_checktype,
 };
-use crate::memory::{xfree, xmalloc};
+use crate::memory::xfree;
 use crate::os::cshim::gettext;
 use crate::os::env::home_replace_save;
 
@@ -227,25 +225,18 @@ pub unsafe fn nlua_funcref_str(ref_0: LuaRef) -> *mut c_char {
 
 /// `exists('v:lua.f')`: whether the Lua expression names a function.
 pub fn nlua_func_exists(lua_funcname: &CStr) -> bool {
-    let lua_funcname = lua_funcname.as_ptr();
-    // SAFETY: a terminated expression, formatted into an allocation sized
-    // for it and released below.
-    unsafe {
-        // `return %s` plus the terminator: the name is evaluated as an
-        // expression rather than looked up, so `v:lua.pkg.fn` works.
-        let length = cstr::bytes_at(lua_funcname).len().wrapping_add(8);
-        let str = xmalloc(length).cast::<c_char>();
-        crate::vim_snprintf!(str, length, c"return %s".as_ptr(), lua_funcname);
-
-        let args = Array::from(vec![Object::string(cstr_to_string(str))]);
-
-        let result = nlua_exec(
+    // The name is evaluated as an expression rather than looked up, so
+    // `v:lua.pkg.fn` works.
+    let expr = [b"return ".as_slice(), lua_funcname.to_bytes()].concat();
+    let args = Array::from(vec![Object::string(String_0::from_bytes(&expr))]);
+    // SAFETY: a null `chunkname`, which the contract allows.
+    let result = unsafe {
+        nlua_exec(
             &String_0::from_cstr(c"return type(loadstring(...)()) == 'function'"),
             ptr::null::<c_char>(),
             args,
             kRetNilBool,
-        );
-        xfree(str.cast::<c_void>());
-        result.is_ok_and(|value| value.as_boolean() == Some(true))
-    }
+        )
+    };
+    result.is_ok_and(|value| value.as_boolean() == Some(true))
 }

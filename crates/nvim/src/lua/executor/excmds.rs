@@ -26,7 +26,7 @@ use crate::lua::ffi::{
 };
 use crate::memline::ml_replace_owned;
 use crate::memory::XString;
-use crate::memory::{strequal, xfree, xmalloc, xmallocz, xrealloc};
+use crate::memory::{strequal, xfree, xmalloc, xrealloc};
 use crate::message::e_argreq;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
@@ -39,8 +39,25 @@ use crate::undo::u_save;
 const DOSTART: &CStr = c"return function(line, linenr) ";
 const DOEND: &CStr = c" end";
 
-/// `:lua =expr` and `:= expr` are shorthand for this.
-const PRINT_WRAPPER: &CStr = c"vim._print(true, %s)";
+/// `:lua =expr` and `:= expr` are shorthand for `vim._print(true, expr)`:
+/// the text before the expression and after it.
+const PRINT_OPEN: &[u8] = b"vim._print(true, ";
+const PRINT_CLOSE: &[u8] = b")";
+
+/// `code` as `:lua` runs it: wrapped in [`PRINT_OPEN`]/[`PRINT_CLOSE`] for
+/// `:=expr` and `:lua =expr`, as it is otherwise.
+fn print_wrapped(cmdidx: CmdIdx, code: XString) -> XString {
+    if cmdidx != CmdIdx::equal && code.first() != Some(&b'=') {
+        return code;
+    }
+    // `:=expr` has no `=` to skip; `:lua =expr` does.
+    let rest = &code[usize::from(cmdidx != CmdIdx::equal)..];
+    let mut wrapped = XString::with_capacity(PRINT_OPEN.len() + rest.len() + PRINT_CLOSE.len());
+    wrapped.push_bytes(PRINT_OPEN);
+    wrapped.push_bytes(rest);
+    wrapped.push_bytes(PRINT_CLOSE);
+    wrapped
+}
 
 /// How much [`nlua_exec_file`] reads from stdin at a time.
 const STDIN_CHUNK: size_t = 64;
@@ -61,20 +78,16 @@ pub fn ex_lua(excmd: &mut ExArg) {
         let Some(code) = script_get(excmd).filter(|_| !excmd.skip) else {
             return;
         };
-        let (mut len, mut code): (size_t, *mut c_char) = (code.len(), code.into_raw());
+        let code = print_wrapped(excmd.cmdidx, code);
 
-        if excmd.cmdidx == CmdIdx::equal || *code == b'=' as c_char {
-            // `:=expr` has no `=` to skip; `:lua =expr` does.
-            let off: size_t = if excmd.cmdidx == CmdIdx::equal { 0 } else { 1 };
-            len += PRINT_WRAPPER.count_bytes() - 2 - off;
-            let code_buf = xmallocz(len).cast::<c_char>();
-            crate::vim_snprintf!(code_buf, len + 1, PRINT_WRAPPER.as_ptr(), code.add(off));
-            xfree(code.cast::<c_void>());
-            code = code_buf;
-        }
-
-        nlua_typval_exec(code, len, c":lua".as_ptr(), &[], false, None);
-        xfree(code.cast::<c_void>());
+        nlua_typval_exec(
+            code.as_ptr(),
+            code.len(),
+            c":lua".as_ptr(),
+            &[],
+            false,
+            None,
+        );
     }
 }
 
