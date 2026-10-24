@@ -338,7 +338,7 @@ impl Cells {
         // to the right edge.
         wlv.col -= wlv.boguscols;
         wlv.boguscols = 0;
-        unsafe { wlv.advance_color_col(wlv.hl_vcol()) };
+        wlv.advance_color_col(window, wlv.hl_vcol());
 
         // Keep the alignment the same whether or not "eol" is in
         // 'listchars'.
@@ -361,7 +361,7 @@ impl Cells {
                 < self.view_width as ptrdiff_t * (wlv.row - wlv.startrow + 1) as ptrdiff_t
                     + self.start_vcol as ptrdiff_t
             && wlv.lnum != window.w_cursor.lnum)
-            || !wlv.color_cols.is_null()
+            || wlv.color_col != NO_COLOR_COL
             || wlv.line_attr_lowprio != 0
             || wlv.line_attr != 0
             || wlv.diff_hlf != HLF_NONE
@@ -415,7 +415,7 @@ impl Cells {
         f: &mut LineFrame<'_>,
     ) {
         // SAFETY: the caller's window and frame.
-        let mut rightmost_vcol = unsafe { get_rightmost_vcol(window, wlv.color_cols) };
+        let mut rightmost_vcol = get_rightmost_vcol(window, wlv.color_col);
         let cuc_attr = win_hl_attr(window, HLF_CUC);
         let mc_attr = win_hl_attr(window, HLF_MC);
 
@@ -437,7 +437,7 @@ impl Cells {
 
         while wlv.col < self.view_width {
             with_linebuf(|line| line.chars_mut()[wlv.off as usize] = schar_from_ascii(b' '));
-            unsafe { wlv.advance_color_col(wlv.hl_vcol()) };
+            wlv.advance_color_col(window, wlv.hl_vcol());
 
             let mut col_attr = base_attr;
             if window.w_onebuf_opt.wo_cuc != 0
@@ -445,7 +445,7 @@ impl Cells {
                 && wlv.lnum != window.w_cursor.lnum
             {
                 col_attr = hl_combine_attr(col_attr, cuc_attr);
-            } else if !wlv.color_cols.is_null() && wlv.hl_vcol() == unsafe { *wlv.color_cols } {
+            } else if wlv.is_color_col(window, wlv.hl_vcol()) {
                 col_attr = hl_combine_attr(col_attr, mc_attr);
             }
             if !window.w_buffer.terminal.is_null()

@@ -529,7 +529,7 @@ impl Cells {
                 }
 
                 self.draw_extends(wlv, window);
-                unsafe { wlv.advance_color_col(wlv.hl_vcol()) };
+                wlv.advance_color_col(window, wlv.hl_vcol());
                 self.column_highlight(wlv, window);
                 self.apply_line_attr_lowprio(wlv);
                 if wlv.filler_todo <= 0 {

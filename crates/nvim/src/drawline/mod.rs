@@ -181,7 +181,7 @@ pub fn win_line(
         reset_extra_attr: false,
         skip_cells: 0,
         skipped_cells: 0,
-        color_cols: ::core::ptr::null_mut::<::core::ffi::c_int>(),
+        color_col: NO_COLOR_COL,
     };
 
     // The two scratch buffers the loop needs but never owns: the spell

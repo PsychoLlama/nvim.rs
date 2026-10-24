@@ -13,10 +13,10 @@ count	callee	no_raw	defs	def
 29	Term::new	0	1	crates/nvim/src/terminal/mod.rs
 29	multiqueue_put_event	0	1	crates/nvim/src/event/multiqueue.rs
 28	f	0	0	
-26	.add	0	0	
 26	Node::new	0	1	crates/nvim/src/marktree/node.rs
 26	bytes_at	0	1	crates/nvim/src/cstr.rs
 26	nlua_pop_boolean	0	1	crates/nvim/src/lua/converter/pop.rs
+25	.add	0	0	
 25	.offset	0	0	
 24	nlua_push_array	0	1	crates/nvim/src/lua/converter/push_object.rs
 21	nlua_push_dict	0	1	crates/nvim/src/lua/converter/push_object.rs
@@ -92,7 +92,6 @@ count	callee	no_raw	defs	def
 6	rstream_may_close	0	1	crates/nvim/src/event/rstream.rs
 6	rstream_start	0	1	crates/nvim/src/event/rstream.rs
 6	snprintf	0	1	crates/nvim/src/os/cshim.rs
-5	.advance_color_col	1	1	crates/nvim/src/drawline/state.rs
 5	.next_arg::<::core::ffi::c_ulong>	0	0	
 5	.write	0	0	
 5	Chan::new	0	1	crates/nvim/src/msgpack_rpc/channel/mod.rs
@@ -219,7 +218,6 @@ count	callee	no_raw	defs	def
 2	.append_number	0	1	crates/nvim/src/cjson/lua_cjson/encode.rs
 2	.append_string	0	1	crates/nvim/src/cjson/lua_cjson/encode.rs
 2	.bit_copy	1	1	crates/nvim/src/eval/typval/handle.rs
-2	.color_col_attr	1	1	crates/nvim/src/drawline/state.rs
 2	.copy_from	0	0	
 2	.has_more_inline_virt	0	0	
 2	.next_arg::<::core::ffi::c_long>	0	0	
@@ -496,7 +494,6 @@ count	callee	no_raw	defs	def
 1	get_client_info	0	1	crates/nvim/src/msgpack_rpc/channel/mod.rs
 1	get_config_string	0	1	crates/nvim/src/terminal/mod.rs
 1	get_linematch_results	0	1	crates/nvim/src/lua/xdiff.rs
-1	get_rightmost_vcol	0	1	crates/nvim/src/drawline/state.rs
 1	getdigits_int	0	1	crates/nvim/src/charset/walk.rs
 1	getgid	0	0	
 1	getxattr	0	0	

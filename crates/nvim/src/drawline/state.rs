@@ -155,10 +155,14 @@ pub struct WinLineVars {
     /// Cells skipped for virtual text, to be added to `vcol` later.
     pub skipped_cells: ::core::ffi::c_int,
 
-    /// Cursor into `w_p_cc_cols`, or null once it is past the last one. The
-    /// array is terminated by a negative entry.
-    pub color_cols: *mut ::core::ffi::c_int,
+    /// Index of the next `'colorcolumn'` in the window's `w_p_cc_cols`, or
+    /// [`NO_COLOR_COL`] once the list is spent (or when there is none). The
+    /// list is ended by a negative entry.
+    pub color_col: usize,
 }
+
+/// [`WinLineVars::color_col`] when no `'colorcolumn'` is left to draw.
+pub(crate) const NO_COLOR_COL: usize = usize::MAX;
 
 /// How many bytes of the next line the spell checker joins on, as a `usize`.
 pub(crate) const SPELL_LOOKAHEAD: usize = SPWORDLEN as usize;
@@ -380,26 +384,17 @@ pub(crate) fn get_lcs_ext(window: Win) -> ScreenChar {
 /// The rightmost virtual column anything wants drawn at, so `win_line` knows
 /// how far past the end of a short line it still has work to do.
 ///
-/// `color_cols` is `w_p_cc_cols`: an array of `'colorcolumn'` virtual columns
-/// terminated by a negative entry, or null when the option is empty.
-///
-/// # Safety
-/// `window` must be live and `color_cols` must be null or so terminated.
-pub(crate) unsafe fn get_rightmost_vcol(
-    window: Win,
-    color_cols: *const ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    // SAFETY: the caller's window and terminated array.
+/// `color_col` is [`WinLineVars::color_col`]: the `'colorcolumn'` entries
+/// from it on count, none when it is [`NO_COLOR_COL`].
+pub(crate) fn get_rightmost_vcol(window: Win, color_col: usize) -> ::core::ffi::c_int {
     let mut ret = if window.w_onebuf_opt.wo_cuc != 0 {
         window.w_virtcol
     } else {
         0
     };
-    if !color_cols.is_null() {
-        let mut i = 0;
-        while unsafe { *color_cols.add(i) } >= 0 {
-            ret = ret.max(unsafe { *color_cols.add(i) });
-            i += 1;
+    if let Some(cols) = window.w_p_cc_cols.get(color_col..) {
+        for &col in cols.iter().take_while(|&&col| col >= 0) {
+            ret = ret.max(col);
         }
     }
     ret
@@ -496,26 +491,37 @@ impl WinLineVars {
         self.boguscols = 0;
     }
 
-    /// Advance [`WinLineVars::color_cols`] past every `'colorcolumn'` left of
+    /// Advance [`WinLineVars::color_col`] past every `'colorcolumn'` left of
     /// `vcol`, and drop it entirely once the list is exhausted.
-    ///
-    /// # Safety
-    /// [`WinLineVars::color_cols`] is a cursor into the window's
-    /// `w_p_cc_cols` array, which only its negative terminator ends: it must
-    /// be null, or point at an entry of an array that still holds one.
     #[inline]
-    pub(crate) unsafe fn advance_color_col(&mut self, vcol: ::core::ffi::c_int) {
-        // SAFETY: the caller's array, walked only while its entries are
-        // non-negative — the terminator stops it.
-        if self.color_cols.is_null() {
+    pub(crate) fn advance_color_col(&mut self, window: Win, vcol: ::core::ffi::c_int) {
+        if self.color_col == NO_COLOR_COL {
             return;
         }
-        while unsafe { *self.color_cols } >= 0 && vcol > unsafe { *self.color_cols } {
-            self.color_cols = unsafe { self.color_cols.add(1) };
+        self.advance_color_col_in(&window.w_p_cc_cols, vcol);
+    }
+
+    /// [`WinLineVars::advance_color_col`] over the window's list.
+    #[inline]
+    fn advance_color_col_in(&mut self, cols: &[::core::ffi::c_int], vcol: ::core::ffi::c_int) {
+        let mut at = self.color_col;
+        while let Some(&col) = cols.get(at)
+            && col >= 0
+            && vcol > col
+        {
+            at += 1;
         }
-        if unsafe { *self.color_cols } < 0 {
-            self.color_cols = ::core::ptr::null_mut();
-        }
+        self.color_col = if cols.get(at).is_some_and(|&col| col >= 0) {
+            at
+        } else {
+            NO_COLOR_COL
+        };
+    }
+
+    /// Whether `vcol` is the `'colorcolumn'` [`WinLineVars::color_col`] is at.
+    #[inline]
+    pub(crate) fn is_color_col(&self, window: Win, vcol: ::core::ffi::c_int) -> bool {
+        self.color_col != NO_COLOR_COL && window.w_p_cc_cols.get(self.color_col) == Some(&vcol)
     }
 
     /// `attr` with `ColorColumn` combined in if the current
@@ -524,20 +530,14 @@ impl WinLineVars {
     /// The padding drawn before a wrapped line's text (`'breakindent'`,
     /// `'showbreak'`) participates in `'colorcolumn'` exactly like buffer
     /// text does, so both go through here.
-    ///
-    /// # Safety
-    /// [`WinLineVars::color_cols`] is a cursor into the window's
-    /// `w_p_cc_cols` array, which only its negative terminator ends: it must
-    /// be null, or point at an entry of an array that still holds one.
     #[inline]
-    pub(crate) unsafe fn color_col_attr(
+    pub(crate) fn color_col_attr(
         &mut self,
         window: Win,
         attr: ::core::ffi::c_int,
     ) -> ::core::ffi::c_int {
-        // SAFETY: the caller's window and array.
-        unsafe { self.advance_color_col(self.vcol) };
-        if !self.color_cols.is_null() && self.vcol == unsafe { *self.color_cols } {
+        self.advance_color_col(window, self.vcol);
+        if self.is_color_col(window, self.vcol) {
             hl_combine_attr(win_hl_attr(window, HLF_MC), attr)
         } else {
             attr

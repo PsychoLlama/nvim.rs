@@ -309,7 +309,7 @@ impl Cells {
         {
             self.attr_before_vcol_hl = wlv.char_attr;
             wlv.char_attr = hl_combine_attr(win_hl_attr(window, HLF_CUC), wlv.char_attr);
-        } else if !wlv.color_cols.is_null() && wlv.hl_vcol() == unsafe { *wlv.color_cols } {
+        } else if wlv.is_color_col(window, wlv.hl_vcol()) {
             self.attr_before_vcol_hl = wlv.char_attr;
             wlv.char_attr = hl_combine_attr(win_hl_attr(window, HLF_MC), wlv.char_attr);
         }

@@ -84,7 +84,7 @@ impl WinLineVars {
                 )
             });
             let myattr = if inc_vcol {
-                unsafe { self.color_col_attr(window, attr) }
+                self.color_col_attr(window, attr)
             } else {
                 attr
             };
@@ -664,7 +664,7 @@ impl WinLineVars {
             for _ in 0..num {
                 // These really are vcols: the indent counts as part of the
                 // line for 'colorcolumn' and for the highlighted area.
-                let myattr = unsafe { self.color_col_attr(window, attr) };
+                let myattr = self.color_col_attr(window, attr);
                 put_cell(self.off, schar_from_ascii(b' '), myattr, self.vcol);
                 self.vcol += 1;
                 self.off += 1;

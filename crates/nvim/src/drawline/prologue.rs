@@ -58,12 +58,12 @@ pub(crate) fn prepare_line(
         s.check_decor_providers = true;
 
         // 'colorcolumn'; a terminal buffer never shows one.
-        wlv.color_cols = if window.w_buffer.terminal.is_null() && !window.w_p_cc_cols.is_empty() {
-            window.w_p_cc_cols.as_ptr().cast_mut()
+        wlv.color_col = if window.w_buffer.terminal.is_null() && !window.w_p_cc_cols.is_empty() {
+            0
         } else {
-            ::core::ptr::null_mut()
+            NO_COLOR_COL
         };
-        unsafe { wlv.advance_color_col(wlv.vcol - wlv.vcol_off_co) };
+        wlv.advance_color_col(window, wlv.vcol - wlv.vcol_off_co);
 
         if window.w_buffer == Win::current().w_buffer
             && let Some(sel) = visual_selection()
@@ -655,7 +655,7 @@ impl LineSetup {
         // which still have something to draw out there.
         if wlv.vcol < start_vcol
             && (window.w_onebuf_opt.wo_cuc != 0
-                || !wlv.color_cols.is_null()
+                || wlv.color_col != NO_COLOR_COL
                 || virtual_active(window)
                 || (visual_active() && window.w_buffer == Win::current().w_buffer)
                 || self.has_fold)
