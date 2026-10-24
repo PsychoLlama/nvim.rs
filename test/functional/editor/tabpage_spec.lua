@@ -156,4 +156,22 @@ describe('tabpage', function()
       quit
     ]])
   end)
+
+  it('no crash if :tabnew is abandoned because WinLeave changed tabpage', function()
+    exec([[
+      tabnew
+      tabfirst
+      autocmd WinLeave * ++once tabnext
+      tabnew
+    ]])
+    -- The page :tabnew allocated was never linked in, and freeing it must
+    -- also forget its handle: the next handle names nothing.
+    eq(2, fn.tabpagenr('$'))
+    eq(2, #api.nvim_list_tabpages())
+    eq(false, api.nvim_tabpage_is_valid(3))
+    command('tabnew')
+    eq(3, fn.tabpagenr('$'))
+    eq(false, api.nvim_tabpage_is_valid(3))
+    assert_alive()
+  end)
 end)
