@@ -336,9 +336,13 @@ pub(crate) fn get_attr_entry(mut entry: HlEntry) -> c_int {
 /// `define(id, attrs, info)` per entry, then the current attribute of every
 /// builtin group, as one `group_set(name, attr)` each. The caller owns the
 /// UI the events go to.
+///
+/// The senders are trait objects rather than generic parameters: a generic
+/// `pub` fn is instantiated wherever it is called, which would export the
+/// attribute table its body reads (`just state-exports`).
 pub fn ui_send_all_hls(
-    mut define: impl FnMut(Integer, HlAttrs, Array),
-    mut group_set: impl FnMut(String_0, Integer),
+    define: &mut dyn FnMut(Integer, HlAttrs, Array),
+    group_set: &mut dyn FnMut(String_0, Integer),
 ) {
     // The bound is re-read each time round, as upstream's `for` did:
     // sending an event is not supposed to touch the table, and if one

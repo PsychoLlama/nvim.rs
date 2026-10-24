@@ -81,7 +81,6 @@ binary as well as the default one.
 ## `highlight`
 
 - `neovim::highlight::ATTRS`
-- `neovim::highlight::URLS`
 
 ## `log`
 

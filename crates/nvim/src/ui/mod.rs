@@ -456,8 +456,8 @@ pub unsafe fn ui_attach_impl(ui: *mut RemoteUI, chanid: u64) {
     if !sent {
         // SAFETY: `ui` is the live UI being attached, as above.
         ui_send_all_hls(
-            |id, attr, info| unsafe { remote_ui_hl_attr_define(ui, id, attr, attr, info) },
-            |name, attr| unsafe { remote_ui_hl_group_set(ui, name, attr) },
+            &mut |id, attr, info| unsafe { remote_ui_hl_attr_define(ui, id, attr, attr, info) },
+            &mut |name, attr| unsafe { remote_ui_hl_group_set(ui, name, attr) },
         );
     }
     ui_refresh();
