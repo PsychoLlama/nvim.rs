@@ -8,8 +8,7 @@
 //! which starts the next one) or because the text ran out
 //! ([`Cells::finish_line`], which does not).
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::decoration::{kHlModeCombine, kHlModeReplace, kVLLeftcol, kVLScroll};
@@ -183,8 +182,7 @@ impl Cells {
                     && window.w_p_lcs_chars.eol != NUL as ScreenChar
                     && self.lcs_eol_todo)
                 || (wlv.extra_todo != 0
-                    && (wlv.extra_fill != NUL as ScreenChar
-                        || unsafe { *wlv.extra_text } as ::core::ffi::c_int != NUL))
+                    && (wlv.extra_fill != NUL as ScreenChar || wlv.extra.byte() != b'\0'))
                 || (self.may_have_inline_virt && wlv.has_more_inline_virt(self.byte_col())))
     }
 
@@ -226,25 +224,23 @@ impl Cells {
         }
 
         if self.virt_line_index >= 0 {
-            unsafe {
-                draw_virt_text_item(
-                    buffer,
-                    if self.virt_line_flags & kVLLeftcol as ::core::ffi::c_int != 0 {
-                        0
-                    } else {
-                        self.text_start_col
-                    },
-                    VirtChunks::Line(self.virt_lines[self.virt_line_index as usize]),
-                    kHlModeReplace,
-                    self.view_width,
-                    0,
-                    if self.virt_line_flags & kVLScroll as ::core::ffi::c_int != 0 {
-                        window.w_leftcol
-                    } else {
-                        0
-                    },
-                )
-            };
+            draw_virt_text_item(
+                buffer,
+                if self.virt_line_flags & kVLLeftcol as ::core::ffi::c_int != 0 {
+                    0
+                } else {
+                    self.text_start_col
+                },
+                VirtChunks::Line(self.virt_lines[self.virt_line_index as usize]),
+                kHlModeReplace,
+                self.view_width,
+                0,
+                if self.virt_line_flags & kVLScroll as ::core::ffi::c_int != 0 {
+                    window.w_leftcol
+                } else {
+                    0
+                },
+            );
         } else if wlv.filler_todo <= 0 {
             draw_col = draw_virt_text(window, buffer, self.text_start_col, draw_col, wlv);
         }
@@ -368,17 +364,15 @@ impl Cells {
         }
 
         if !self.fold_vt.is_empty() {
-            unsafe {
-                draw_virt_text_item(
-                    buffer,
-                    self.text_start_col,
-                    VirtChunks::Owned(&self.fold_vt),
-                    kHlModeCombine,
-                    self.view_width,
-                    0,
-                    0,
-                )
-            };
+            draw_virt_text_item(
+                buffer,
+                self.text_start_col,
+                VirtChunks::Owned(&self.fold_vt),
+                kHlModeCombine,
+                self.view_width,
+                0,
+                0,
+            );
         }
         wlv.col = draw_virt_text(window, buffer, self.text_start_col, wlv.col, wlv);
         // SLF_INC_VCOL fills grid->vcols[] with increasing columns, so
@@ -411,7 +405,6 @@ impl Cells {
         window: Win,
         f: &mut LineFrame<'_>,
     ) {
-        // SAFETY: the caller's window and frame.
         let mut rightmost_vcol = get_rightmost_vcol(window, wlv.color_col);
         let cuc_attr = win_hl_attr(window, HLF_CUC);
         let mc_attr = win_hl_attr(window, HLF_MC);

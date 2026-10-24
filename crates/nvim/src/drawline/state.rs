@@ -19,8 +19,7 @@
 //! [`WinLineVars::off`] is the write cursor into them; [`put_cell`] is the one
 //! place all three are written together.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 #![deny(
@@ -95,7 +94,7 @@ pub struct WinLineVars {
     /// Attribute for the next character.
     pub char_attr: ::core::ffi::c_int,
 
-    /// How much of the run in [`WinLineVars::extra_text`] or
+    /// How much of the run in [`WinLineVars::extra`] or
     /// [`WinLineVars::extra_fill`] is still to be drawn — bytes for the
     /// former, repeats for the latter.
     pub extra_todo: ::core::ffi::c_int,
@@ -103,8 +102,8 @@ pub struct WinLineVars {
     pub n_attr: ::core::ffi::c_int,
     /// Text to draw instead of buffer text; only used when `extra_fill` and
     /// `extra_last` are NUL.
-    pub extra_text: *mut ::core::ffi::c_char,
-    /// Attribute for `extra_text`.
+    pub(crate) extra: ExtraText,
+    /// Attribute for `extra`.
     pub extra_attr: ::core::ffi::c_int,
     /// One character repeated `extra_todo` times.
     pub extra_fill: ScreenChar,
@@ -115,10 +114,6 @@ pub struct WinLineVars {
     /// buffer's own text, which is what decides whether the diff and Visual
     /// highlighting apply to it.
     pub extra_is_virt_text: bool,
-
-    /// Scratch for the `<xx>` form of one character; must be as large as
-    /// `transchar_charbuf` in charset.c.
-    pub escape_buf: [::core::ffi::c_char; 11],
 
     /// Kind of diff highlighting, `HLF_NONE` for none.
     pub diff_hlf: Hlf,
@@ -341,7 +336,7 @@ pub(crate) struct HeldLine(ManuallyDrop<Vec<u8>>);
 struct Pool {
     /// [`HeldLine`]'s.
     line: Vec<u8>,
-    /// [`get_extra_buf`]'s.
+    /// [`ExtraText`]'s.
     extra: Vec<u8>,
 }
 
@@ -406,6 +401,81 @@ impl HeldLine {
     }
 }
 
+/// The text of the run [`WinLineVars::extra_todo`] counts down when it is a
+/// string rather than one repeated character: an unprintable character's
+/// `^X`/`<xx>` form, a Tab spelled out under `'linebreak'` + `'list'`, the
+/// `'foldtext'`, a chunk of inline virtual text. Upstream points into
+/// whichever buffer holds it; this holds a copy and a read cursor, the copy
+/// NUL-terminated so that reading at the cursor answers NUL once the text is
+/// spent -- which is what upstream's pointer does, and what the tests for
+/// "is there more" read.
+///
+/// The allocation is lent from the [`Pool`] for the line, as
+/// [`HeldLine`]'s is: this state is drop-free.
+pub(crate) struct ExtraText {
+    bytes: ManuallyDrop<Vec<u8>>,
+    at: usize,
+}
+
+impl ExtraText {
+    /// The pool's allocation holding the empty text.
+    #[inline(never)]
+    pub(crate) fn take() -> Self {
+        let mut bytes = POOL.with_mut(|pool| core::mem::take(&mut pool.extra));
+        bytes.clear();
+        bytes.push(b'\0');
+        ExtraText {
+            bytes: ManuallyDrop::new(bytes),
+            at: 0,
+        }
+    }
+
+    /// Return the allocation to the pool, freeing whichever of the two a
+    /// nested line left there.
+    #[inline(never)]
+    pub(crate) fn give_back(&mut self) {
+        let bytes = core::mem::take(&mut *self.bytes);
+        drop(POOL.with_mut(|pool| core::mem::replace(&mut pool.extra, bytes)));
+    }
+
+    /// Replace the text with `text` up to its first NUL, read from its
+    /// start.
+    pub(crate) fn set(&mut self, text: &[u8]) {
+        let text = &text[..text.iter().position(|&c| c == 0).unwrap_or(text.len())];
+        self.bytes.clear();
+        self.bytes.extend_from_slice(text);
+        self.bytes.push(b'\0');
+        self.at = 0;
+    }
+
+    /// Replace the text with `len` bytes to be written in place, read from
+    /// their start: answers them, the NUL after them included.
+    pub(crate) fn set_room(&mut self, len: usize) -> &mut [u8] {
+        self.bytes.clear();
+        self.bytes.resize(len + 1, b'\0');
+        self.at = 0;
+        &mut self.bytes
+    }
+
+    /// The text from the cursor on, its NUL included.
+    #[inline(always)]
+    pub(crate) fn rest(&self) -> &[u8] {
+        self.bytes.get(self.at..).unwrap_or_default()
+    }
+
+    /// The byte under the cursor: NUL once the text is spent.
+    #[inline(always)]
+    pub(crate) fn byte(&self) -> u8 {
+        self.bytes.get(self.at).copied().unwrap_or(b'\0')
+    }
+
+    /// Move the cursor `len` bytes on.
+    #[inline(always)]
+    pub(crate) fn advance(&mut self, len: usize) {
+        self.at += len;
+    }
+}
+
 // ---------------------------------------------------------------------------
 // The line buffer
 // ---------------------------------------------------------------------------
@@ -433,23 +503,6 @@ pub(crate) fn put_cell(
 // ---------------------------------------------------------------------------
 // Scratch and small window queries
 // ---------------------------------------------------------------------------
-
-/// A scratch buffer of at least `size` bytes, valid until the next call.
-///
-/// # Safety
-/// The answer may not be held across another call.
-pub(crate) unsafe fn get_extra_buf(size: size_t) -> *mut ::core::ffi::c_char {
-    let size = size.max(64);
-    // The buffer is only ever reached through this function, so nothing can
-    // hold the old pointer across the reallocation.
-    POOL.with_mut(|pool| {
-        let buf = &mut pool.extra;
-        if buf.len() < size {
-            *buf = vec![0; size];
-        }
-        buf.as_mut_ptr().cast()
-    })
-}
 
 /// The `'listchars'` "extends" character for `window`, or NUL if it should not be
 /// used.

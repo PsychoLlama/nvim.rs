@@ -15,8 +15,7 @@
 //! whole grid's attribute numbering shifts. Every lookup here is where
 //! upstream put it.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::decoration::kMTMetaInline;
@@ -45,7 +44,6 @@ pub(crate) fn prepare_line(
     spv: &mut SpellVars,
     nextline: &mut SpellLookahead,
 ) -> LineSetup {
-    // SAFETY: the caller's window, spell state and line.
     let lnum = wlv.lnum;
     let mut s = LineSetup::new(window, wlv, concealed);
 
@@ -240,10 +238,9 @@ impl LineSetup {
     /// An error raised while parsing disables syntax for the buffer rather
     /// than being reported once per redraw.
     fn start_syntax(&mut self, mut window: Win, lnum: LineNr) {
-        // SAFETY: the caller's window.
         if !syntax_present(window)
-            || unsafe { (*window.w_s).b_syn_error }
-            || unsafe { (*window.w_s).b_syn_slow }
+            || window.syn_block().b_syn_error
+            || window.syn_block().b_syn_slow
             || self.has_foldtext
         {
             return;
@@ -252,10 +249,10 @@ impl LineSetup {
         did_emsg.set(0);
         window.syntax_start(lnum);
         if did_emsg.get() != 0 {
-            unsafe { (*window.w_s).b_syn_error = true };
+            window.syn_block_mut().b_syn_error = true;
         } else {
             did_emsg.set(save_did_emsg);
-            if !unsafe { (*window.w_s).b_syn_slow } {
+            if !window.syn_block().b_syn_slow {
                 self.has_syntax = true;
                 self.extra_check = true;
             }
@@ -265,8 +262,7 @@ impl LineSetup {
     /// The inverted range for an active Visual selection.
     fn visual_area(&mut self, wlv: &mut WinLineVars, window: Win, sel: VisualSelection) {
         let lnum = wlv.lnum;
-        // Both ends by value: nothing here writes through either, and copying
-        // the cursor keeps the ordering out of the unsafe region.
+        // Both ends by value: nothing here writes through either.
         let cursor = Win::current().w_cursor;
         let (mut top, bot) = if ltoreq(cursor, sel.anchor) {
             (cursor, sel.anchor)
@@ -274,7 +270,6 @@ impl LineSetup {
             (sel.anchor, cursor)
         };
         self.lnum_in_visual_area = lnum >= top.lnum && lnum <= bot.lnum;
-        // SAFETY: the caller's window.
         if sel.mode.is_block() {
             // Blockwise: the columns were worked out for the whole
             // selection when it last moved.
@@ -496,7 +491,6 @@ impl LineSetup {
         spv: &mut SpellVars,
         nextline: &mut SpellLookahead,
     ) {
-        // SAFETY: the caller's window and spell state.
         self.extra_check = true;
 
         // A word wrapped from the previous line leaves the start of this

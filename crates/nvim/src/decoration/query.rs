@@ -305,16 +305,16 @@ impl VirtChunks<'_> {
     /// [`next_virt_text_chunk`], handing the chunk's text to `take` rather
     /// than answering it: a stored chunk is borrowed for that call only.
     /// `take` must not reach the store.
-    pub(crate) fn next<R: Copy>(
+    pub(crate) fn next<R>(
         self,
         pos: &mut size_t,
         attr: &mut c_int,
-        take: impl Fn(&CStr) -> R,
+        mut take: impl FnMut(&CStr) -> R,
     ) -> Option<R> {
         loop {
             let (hl_id, text) = self.with(|chunks| {
                 let chunk = chunks.get(*pos)?;
-                Some((chunk.hl_id, chunk.text.as_deref().map(&take)))
+                Some((chunk.hl_id, chunk.text.as_deref().map(&mut take)))
             })?;
             if hl_id >= 0 {
                 *attr = (*attr).max(0);

@@ -11,7 +11,7 @@
 use crate::optionstr::{OptString, local_or_global};
 use crate::strings::find_bytes;
 use crate::winlayer::Buf;
-use core::ffi::{CStr, c_char, c_int, c_uint};
+use core::ffi::{CStr, c_int, c_uint};
 
 use crate::buffer::{buf_is_prompt, current_buf};
 use crate::drawscreen::redraw_buf_status_later;
@@ -23,7 +23,7 @@ use crate::option::vars::{
     P_BS, P_CPO, P_FFS, P_SHM, P_SISO, P_SO, bkc_flags, p_magic, p_sh, p_siso, p_so, ve_flags,
 };
 use crate::options::*;
-use crate::optionstr::{OptStringRef, empty_option};
+use crate::optionstr::OptStringRef;
 use crate::os::env::{env_set, vim_getenv_owned};
 use crate::path::{full_name_save, tail_index};
 use crate::regexp::state::{OPTION_MAGIC_OFF, OPTION_MAGIC_ON};
@@ -203,17 +203,15 @@ pub(crate) fn get_ve_flags(window: Win) -> c_uint {
 }
 
 impl Win {
-    /// 'showbreak', local where set. `"NONE"` is how a window says "no
-    /// leader" against a global value that has one.
-    ///
-    /// The answer is the option's own buffer, and the draw path reads it
-    /// before anything can set an option.
-    pub(crate) fn showbreak_leader(self) -> *mut c_char {
+    /// `f` over 'showbreak', local where set: the bytes, read in place.
+    /// `"NONE"` is how a window says "no leader" against a global value that
+    /// has one, and reads as empty.
+    pub(crate) fn with_showbreak<R>(self, f: impl FnOnce(&[u8]) -> R) -> R {
         let local = &self.w_onebuf_opt.wo_sbr;
         if local.bytes() == b"NONE" {
-            return empty_option();
+            return f(b"");
         }
-        local_or_global(local, P_SBR).value_ptr()
+        local_or_global(local, P_SBR).with_bytes(f)
     }
 
     /// Whether the window draws a 'showbreak' leader at all: upstream's

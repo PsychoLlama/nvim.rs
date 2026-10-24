@@ -23,12 +23,12 @@
     clippy::ptr_as_ptr
 )]
 
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use crate::global_cell::{Field, field};
 use crate::memory::XString;
 use crate::options::vars::{BoolOpt, NumOpt, StrOpt};
-use crate::optionstr::{OptString, empty_option};
+use crate::optionstr::OptString;
 use crate::types::{Buffer, OptIndex, OptInt, OptStr, OptVal, SynBlock, WinOpt};
 use crate::winlayer::{Buf, Win};
 
@@ -194,26 +194,8 @@ pub(crate) enum StrVar {
 }
 
 /// The questions any string value answers, asked of whichever variable this
-/// names. **[`value_ptr`](OptString::value_ptr) is the variable's own
-/// buffer and lives until the variable is written** -- the promise
-/// [`StrOpt::value_ptr`] makes for a global, and the reason a caller that
-/// keeps it across anything that can `:set` takes [`get`](OptString::get).
+/// names.
 impl OptString for StrVar {
-    fn value_ptr(&self) -> *mut c_char {
-        match *self {
-            // Installing the defaults reads each option's old value before
-            // it has one -- upstream reads its `NULL` there -- and that is
-            // the protocol's own business, so it answers the empty string
-            // rather than tripping `StrOpt`'s read-before-defaults check.
-            StrVar::Global(field) if field.is_uninit() => empty_option(),
-            StrVar::Global(field) => field.value_ptr(),
-            StrVar::OwnDefault(idx) => {
-                with_option_default(idx, |default| own_string(default).data().cast_mut())
-            }
-            StrVar::Local(local) => local.with(|value| value.value_ptr()),
-        }
-    }
-
     fn first_byte(&self) -> u8 {
         self.with_bytes(|bytes| bytes.first().copied().unwrap_or(0))
     }

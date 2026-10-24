@@ -44,9 +44,9 @@ pub mod transchar;
 // dozen modules and name it as `charset::*`.
 pub use display::transchar_hex_into;
 pub(crate) use display::{
-    CharDisplay, ptr2cells_at, strnsize, strsize, trans_characters_in, transchar, transchar_buf,
-    transchar_byte, transchar_byte_buf, transchar_nonprint_form, transstr_into, transstr_owned,
-    vim_strsize_cstr,
+    CHAR_DISPLAY_LEN, CharDisplay, mirror_ascii, ptr2cells_at, strnsize, strsize,
+    trans_characters_in, transchar, transchar_buf, transchar_byte, transchar_byte_buf,
+    transchar_nonprint_form, transstr_into, transstr_owned, vim_strsize_cstr,
 };
 pub use display::{byte2cells, char2cells};
 

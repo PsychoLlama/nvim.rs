@@ -13,8 +13,7 @@
 //! [`line_putchar`] is the single-character primitive under both of them (and
 //! under the column drawing in `columns.rs`).
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -28,41 +27,37 @@ use crate::decoration::{
 use crate::grid::with_linebuf;
 use crate::types::NUL;
 use crate::winlayer::Buf;
-use core::ffi::CStr;
 
-/// Put one character of `*pp` into `dest`, and advance `*pp` past it.
+/// Put the character at the start of `text` into `dest`, and answer how many
+/// cells it used and how many bytes of `text` it took.
 ///
-/// Answers how many cells were used. A double-width character with only one
-/// cell left is replaced by a space and `*pp` is *not* advanced, so the caller
-/// gets another go at it on the next row. A Tab expands to its padding.
+/// A double-width character with only one cell left is replaced by a space
+/// and *not* taken, so the caller gets another go at it on the next row. A
+/// Tab expands to its padding. `text` ends at its end or a NUL in it.
 ///
-/// # Safety
-/// `*pp` must be a live NUL-terminated string, `dest` must have `maxcells`
-/// writable cells (with one more readable, which is how the right half of a
-/// double-width character being overwritten is found), and `maxcells` must be
-/// positive.
-pub(crate) unsafe fn line_putchar(
+/// `dest` must have `maxcells` writable cells, and one more readable when
+/// there are more: that is how the right half of a double-width character
+/// being overwritten is found. `maxcells` must be positive.
+pub(crate) fn line_putchar(
     buffer: Buf,
-    cursor: &mut *const ::core::ffi::c_char,
+    text: &[u8],
     dest: &mut [ScreenChar],
     maxcells: ::core::ffi::c_int,
     vcol: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+) -> (::core::ffi::c_int, usize) {
     // The caller handles overwriting the right half of a double-width
     // character; a zero here means it did not.
     debug_assert!(dest[0] != 0);
     debug_assert!(maxcells > 0);
 
-    // SAFETY: the caller's string and buffer.
-    let p = *cursor;
-    let mut cells = unsafe { utf_ptr2cells(p) };
-    let c_len = unsafe { utfc_ptr2len(p) };
+    let mut cells = c_cells_at(text);
     if cells > maxcells {
         dest[0] = schar_from_ascii(b' ');
-        return 1;
+        return (1, 0);
     }
+    let (c_len, cell, _) = c_cluster_cell(text);
 
-    let is_tab = unsafe { *p } as ::core::ffi::c_int == TAB;
+    let is_tab = text.first() == Some(&b'\t');
     if is_tab {
         cells = buffer.tab_padding(vcol).min(maxcells);
     }
@@ -74,16 +69,13 @@ pub(crate) unsafe fn line_putchar(
     if is_tab {
         dest[..cells as usize].fill(schar_from_ascii(b' '));
     } else {
-        let mut u8c: ::core::ffi::c_int = 0;
-        dest[0] = unsafe { utfc_ptr2schar(p, &raw mut u8c) };
+        dest[0] = cell;
         if cells > 1 {
             // The right half of a double-width glyph is a zero cell.
             dest[1] = 0;
         }
     }
-
-    *cursor = unsafe { p.add(c_len as usize) };
-    cells
+    (cells, c_len)
 }
 
 // ---------------------------------------------------------------------------
@@ -214,17 +206,15 @@ pub(crate) fn draw_virt_text(
         }
 
         if let Some(vt) = vt {
-            let col = unsafe {
-                draw_virt_text_item(
-                    buffer,
-                    item.draw_col,
-                    VirtChunks::Text(vt.link),
-                    vt.hl_mode as HlMode,
-                    max_col,
-                    item.draw_col - col_off,
-                    0,
-                )
-            };
+            let col = draw_virt_text_item(
+                buffer,
+                item.draw_col,
+                VirtChunks::Text(vt.link),
+                vt.hl_mode as HlMode,
+                max_col,
+                item.draw_col - col_off,
+                0,
+            );
             if do_eol && (vt.pos == kVPosEndOfLine || vt.pos == kVPosEndOfLineRightAlign) {
                 // The next end-of-line text starts one cell further on.
                 eol_col = col + 1;
@@ -262,10 +252,11 @@ struct VirtShape {
 /// double-width character or Tab was cut in half by the skip, and that many
 /// spaces are owed before the text resumes.
 ///
-/// # Safety
-/// `vt`'s chunks must outlive the call: the walk holds their texts by
-/// address.
-pub(crate) unsafe fn draw_virt_text_item(
+/// Each chunk's text is copied out of its store before it is drawn: reading
+/// the next chunk resolves its highlight, which can run a provider's Lua.
+/// Out of line, for the copy's allocation: the callers are `win_line`.
+#[inline(never)]
+pub(crate) fn draw_virt_text_item(
     buffer: Buf,
     mut col: ::core::ffi::c_int,
     vt: VirtChunks<'_>,
@@ -274,47 +265,48 @@ pub(crate) unsafe fn draw_virt_text_item(
     mut vcol: ::core::ffi::c_int,
     mut skip_cells: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
-    // SAFETY: the caller's buffer, chunks and line-buffer width.
-    let mut virt_str = c"".as_ptr();
+    // The chunk being drawn, and how far into it the drawing has got.
+    let mut chunk: Vec<u8> = Vec::new();
+    let mut at = 0;
     let mut virt_attr = 0;
     let mut virt_pos: size_t = 0;
 
-    // The line buffer for the whole walk: nothing below draws or calls out.
+    // The line buffer for the whole walk: nothing below draws.
     with_linebuf(|line| {
         while col < max_col {
-            if skip_cells >= 0 && unsafe { *virt_str } as ::core::ffi::c_int == NUL {
+            if skip_cells >= 0 && at >= chunk.len() {
                 if virt_pos >= vt.len() {
                     break;
                 }
                 virt_attr = 0;
-                let Some(chunk) = vt.next(&mut virt_pos, &mut virt_attr, CStr::as_ptr) else {
+                let copied = vt.next(&mut virt_pos, &mut virt_attr, |text| {
+                    chunk.clear();
+                    chunk.extend_from_slice(text.to_bytes());
+                });
+                if copied.is_none() {
                     break;
-                };
-                virt_str = chunk;
+                }
+                at = 0;
             }
 
             // Skip cells at the front of this chunk.
-            while skip_cells > 0 && unsafe { *virt_str } as ::core::ffi::c_int != NUL {
-                let c_len = unsafe { utfc_ptr2len(virt_str) };
-                let cells = if unsafe { *virt_str } as ::core::ffi::c_int == TAB {
+            while skip_cells > 0 && at < chunk.len() {
+                let rest = &chunk[at..];
+                let cells = if rest[0] == b'\t' {
                     buffer.tab_padding(vcol)
                 } else {
-                    unsafe { utf_ptr2cells(virt_str) }
+                    c_cells_at(rest)
                 };
                 skip_cells -= cells;
                 vcol += cells;
-                virt_str = unsafe { virt_str.add(c_len as usize) };
+                at += c_cluster_len(rest);
             }
 
             // A wide character the skip cut in half is paid back as spaces.
-            let mut draw_str = if skip_cells < 0 {
-                c" ".as_ptr()
-            } else {
-                virt_str
-            };
-            if unsafe { *draw_str } as ::core::ffi::c_int == NUL {
+            let draw_text: &[u8] = if skip_cells < 0 { b" " } else { &chunk[at..] };
+            let Some(&first) = draw_text.first() else {
                 continue;
-            }
+            };
             debug_assert!(skip_cells <= 0);
 
             let mut through = false;
@@ -324,8 +316,7 @@ pub(crate) unsafe fn draw_virt_text_item(
                 kHlModeBlend => {
                     // A space blends the cell underneath through, rather than
                     // painting over it.
-                    through =
-                        unsafe { *draw_str } as ::core::ffi::c_int == ' ' as ::core::ffi::c_int;
+                    through = first == b' ';
                     hl_blend_attrs(under, virt_attr, &mut through)
                 }
                 _ => virt_attr,
@@ -346,7 +337,7 @@ pub(crate) unsafe fn draw_virt_text_item(
             } else {
                 &mut line.chars_mut()[col as usize..]
             };
-            let cells = unsafe { line_putchar(buffer, &mut draw_str, dest, max_col - col, vcol) };
+            let (cells, taken) = line_putchar(buffer, draw_text, dest, max_col - col, vcol);
             let attrs = line.attrs_mut();
             for _ in 0..cells {
                 attrs[col as usize] = attr as ScreenAttr;
@@ -357,7 +348,7 @@ pub(crate) unsafe fn draw_virt_text_item(
                 skip_cells += 1;
             } else {
                 vcol += cells;
-                virt_str = draw_str;
+                at += taken;
             }
         }
     });
@@ -400,8 +391,6 @@ impl WinLineVars {
     /// empty, and a chunk entirely left of the first visible column is dropped
     /// and the next one tried.
     pub(crate) fn handle_inline_virtual_text(&mut self, v: ::core::ffi::c_int, selected: bool) {
-        // SAFETY (for the pointer walks below): `extra_text` borrows the
-        // chunk, which its decoration owns for the rest of the redraw.
         while self.extra_todo == 0 {
             if self.virt_inline_i >= self.virt_inline_len {
                 // Find the next inline text to start.
@@ -434,26 +423,32 @@ impl WinLineVars {
                 continue;
             }
 
-            // Already inside a text with several chunks.
+            // Already inside a text with several chunks: copy the next one
+            // in as the run.
             let mut attr = 0;
             let vt = VirtChunks::Text(self.virt_inline);
-            let chunk = |text: &CStr| (text.as_ptr(), text.to_bytes().len());
-            let Some((text, len)) = vt.next(&mut self.virt_inline_i, &mut attr, chunk) else {
+            let extra = &mut self.extra;
+            let copied = vt.next(&mut self.virt_inline_i, &mut attr, |text| {
+                extra.set(text.to_bytes());
+                text.to_bytes().len()
+            });
+            let Some(len) = copied else {
                 continue;
             };
             self.extra_todo = len as ::core::ffi::c_int;
-            self.extra_text = text.cast_mut();
             if self.extra_todo == 0 {
                 continue;
             }
             self.extra_fill = NUL as ScreenChar;
             self.extra_last = NUL as ScreenChar;
             self.extra_attr = attr;
-            self.n_attr = unsafe { mb_charlen(self.extra_text) };
+            let text = self.extra.rest();
+            let text = &text[..text.len() - 1];
+            self.n_attr = char_count(text) as ::core::ffi::c_int;
 
             if self.skip_cells > 0 {
                 // The text starts left of the first visible column.
-                let width = unsafe { mb_string2cells(self.extra_text) } as ::core::ffi::c_int;
+                let width = c_string_cells(text) as ::core::ffi::c_int;
                 if width <= self.skip_cells {
                     // Entirely off-screen: drop it and take the next
                     // chunk. The cells it would have taken still count
@@ -469,14 +464,15 @@ impl WinLineVars {
                 // the skip to the character loop.
                 let mut remaining = self.skip_cells;
                 while remaining > 0 {
-                    let cells = unsafe { utf_ptr2cells(self.extra_text) };
+                    let rest = self.extra.rest();
+                    let cells = c_cells_at(rest);
                     if cells > remaining {
                         break;
                     }
-                    let c_len = unsafe { utfc_ptr2len(self.extra_text) };
+                    let c_len = c_cluster_len(rest);
                     remaining -= cells;
-                    self.extra_text = unsafe { self.extra_text.add(c_len as usize) };
-                    self.extra_todo -= c_len;
+                    self.extra.advance(c_len);
+                    self.extra_todo -= c_len as ::core::ffi::c_int;
                     self.n_attr -= 1;
                 }
                 self.skipped_cells += self.skip_cells - remaining;

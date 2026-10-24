@@ -19,11 +19,9 @@
 //!    `'linebreak'`, `'listchars'`, the non-printable forms and finally
 //!    concealment each get a look at it.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
-use crate::cstr;
 use crate::pos::MAXCOL;
 use crate::types::NUL;
 
@@ -47,8 +45,6 @@ impl Cells {
 
     /// Take one cell from the run in [`WinLineVars::extra_todo`].
     pub(super) fn char_from_extra(&mut self, wlv: &mut WinLineVars, window: Win) {
-        // SAFETY: the caller's window; `extra_text` is NUL-terminated whenever
-        // `extra_fill` and `extra_last` are not set.
         if wlv.extra_fill != NUL as ScreenChar
             || (wlv.extra_todo == 1 && wlv.extra_last != NUL as ScreenChar)
         {
@@ -61,9 +57,7 @@ impl Cells {
             self.char_code = schar_get_first_codepoint(self.cell_char);
             wlv.extra_todo -= 1;
         } else {
-            debug_assert!(!wlv.extra_text.is_null());
-            self.char_len = unsafe { utfc_ptr2len(wlv.extra_text) };
-            self.cell_char = unsafe { utfc_ptr2schar(wlv.extra_text, &raw mut self.char_code) };
+            (self.char_len, self.cell_char, self.char_code) = cluster_at(wlv.extra.rest());
             // `char_len` is 0 at the end-of-line NUL.
             if self.char_len > wlv.extra_todo || self.char_len == 0 {
                 self.char_len = 1;
@@ -86,7 +80,8 @@ impl Cells {
                 }
             } else {
                 wlv.extra_todo -= self.char_len;
-                wlv.extra_text = unsafe { wlv.extra_text.offset(self.char_len as isize) };
+                wlv.extra
+                    .advance(usize::try_from(self.char_len).unwrap_or(0));
             }
 
             if wlv.filler_todo <= 0 && wlv.skip_cells > 0 && self.char_len > 1 {
@@ -136,7 +131,6 @@ impl Cells {
             debug_assert!(
                 wlv.extra_fill != NUL as ScreenChar || wlv.extra_last != NUL as ScreenChar
             );
-            debug_assert!(!wlv.extra_text.is_null());
             wlv.extra_fill = NUL as ScreenChar;
             wlv.extra_last = NUL as ScreenChar;
             wlv.extra_todo = self.extra_todo_next;
@@ -180,17 +174,20 @@ impl Cells {
         {
             // An illegal UTF-8 byte shows as `<xx>`; an unprintable
             // character as `?` or its fullwidth form.
-            transchar_hex_into(&mut wlv.escape_buf, self.char_code);
+            let mut hex: CharDisplay = [0; CHAR_DISPLAY_LEN];
+            let len = transchar_hex_into(&mut hex, self.char_code);
+            let mut text = hex.map(|c| c as u8);
+            let text = &mut text[..len];
             if window.w_onebuf_opt.wo_rl != 0 {
-                unsafe { rl_mirror_ascii(wlv.escape_buf.as_mut_ptr(), ::core::ptr::null_mut()) };
+                mirror_ascii(text);
             }
-            wlv.extra_text = wlv.escape_buf.as_mut_ptr();
-            let mut p: *const ::core::ffi::c_char = wlv.extra_text;
-            self.char_code = unsafe { utf_ptr2char(p) };
-            p = p.wrapping_add(unsafe { utfc_ptr2len(p) } as usize);
-            wlv.extra_text = p as *mut ::core::ffi::c_char;
+            // The first character is this cell; the rest is the run.
+            self.char_code = c_char_info(text, 0).value;
+            let first = c_cluster_len(text);
+            wlv.extra.set(text);
+            wlv.extra.advance(first);
             self.cell_char = schar_from_char(self.char_code);
-            wlv.extra_todo = unsafe { cstr::bytes_at(wlv.extra_text) }.len() as ::core::ffi::c_int;
+            wlv.extra_todo = ::core::ffi::c_int::try_from(len - first).unwrap_or(0);
             wlv.extra_fill = NUL as ScreenChar;
             wlv.extra_last = NUL as ScreenChar;
             if self.area_attr == 0 && self.search_attr == 0 {
@@ -452,7 +449,6 @@ impl Cells {
     /// will not fit, pad out to the end of the row so the word starts on the
     /// next one.
     pub(super) fn linebreak(&mut self, wlv: &mut WinLineVars, window: Win, c0: ::core::ffi::c_int) {
-        // SAFETY: the caller's window and the loop's line pointers.
         if window.w_onebuf_opt.wo_lbr == 0 {
             return;
         }

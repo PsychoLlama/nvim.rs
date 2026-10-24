@@ -1,10 +1,9 @@
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::buffer::{buf_is_quickfix, buf_meta_total};
 use crate::charset::{
-    byte2cells, rl_mirror_ascii, skiptowhite, skipwhite, transchar_buf, transchar_hex_into,
+    CHAR_DISPLAY_LEN, CharDisplay, byte2cells, mirror_ascii, transchar_buf, transchar_hex_into,
     transstr_into, vim_isbreak, vim_isprintc,
 };
 use crate::cursor::get_cursor_rel_lnum;
@@ -44,11 +43,10 @@ use crate::r#match::{
     get_prevcol_hl_flag, get_search_match_hl, prepare_search_hl_line, update_search_hl,
 };
 use crate::mbyte::{
-    c_cells_at, c_char_info, c_cluster_cell, c_cluster_len, c_next_cluster, head_off, mb_charlen,
-    mb_string2cells, utf_ptr2cells, utf_ptr2char, utfc_ptr2len, utfc_ptr2schar,
+    c_cells_at, c_char_info, c_cluster_cell, c_cluster_len, c_next_cluster, c_string_cells,
+    char_count, head_off,
 };
 use crate::memline::gchar_pos;
-use crate::memory::xfree;
 use crate::message::state::did_emsg;
 use crate::r#move::{set_empty_rows, validate_virtcol, win_col_off2};
 use crate::option::kOptFlagInsecure;
@@ -77,7 +75,6 @@ use crate::types::{
 use crate::ui::ui_rgb_attached;
 use crate::winlayer::Win;
 use crate::winlayer::graph::{cmdwin_type, cmdwin_win};
-use ::libc::abs;
 use core::mem::ManuallyDrop;
 
 // The carve of the transpiled module; see each child's docs.
@@ -158,12 +155,11 @@ pub fn win_line(
         char_attr: 0,
         extra_todo: 0,
         n_attr: 0,
-        extra_text: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+        extra: ExtraText::take(),
         extra_attr: 0,
         extra_fill: 0,
         extra_last: 0,
         extra_is_virt_text: false,
-        escape_buf: [0; 11],
         diff_hlf: HLF_NONE,
         n_virt_lines: 0,
         n_virt_below: 0,
@@ -184,10 +180,8 @@ pub fn win_line(
         color_col: NO_COLOR_COL,
     };
 
-    // The two scratch buffers the loop needs but never owns: the spell
-    // look-ahead, filled by the setup half, and the fold text.
+    // The spell look-ahead, filled by the setup half and read by the loop.
     let mut nextline: SpellLookahead = [0; SPELL_LOOKAHEAD * 2];
-    let mut fold_buf: [::core::ffi::c_char; FOLD_TEXT_LEN as usize] = [0; FOLD_TEXT_LEN as usize];
 
     let setup = prepare_line(
         &mut wlv,
@@ -214,7 +208,6 @@ pub fn win_line(
         statuscol: setup.statuscol,
         term_attrs: &term_attrs,
         nextline: &nextline,
-        fold_buf: fold_buf.as_mut_ptr(),
     };
     Cells::new(setup).run(&mut wlv, window, window.buffer(), &mut frame)
 }

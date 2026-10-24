@@ -32,8 +32,8 @@ use core::ffi::{CStr, c_char};
 use crate::memory::XString;
 use crate::options::vars::StrOpt;
 
-/// What [`OptString::value_ptr`] answers for a variable that owns nothing:
-/// the empty C string.
+/// What [`StrOpt::value_ptr`] answers for a variable that owns nothing: the
+/// empty C string.
 ///
 /// Upstream points every such option at one writable `char[1]` and compares
 /// addresses against it. Nothing here compares -- [`OptString::is_unset`]
@@ -46,16 +46,6 @@ pub(crate) const fn empty_option() -> *mut c_char {
 
 /// The questions every string option's value answers, wherever it lives.
 pub(crate) trait OptString {
-    /// The value as the `char *` the option protocol and the C callees
-    /// still speak, which is the shared empty string when the variable owns
-    /// nothing.
-    ///
-    /// **The pointer is the variable's own buffer**, and lives until the
-    /// variable is written — not until the end of the caller's statement. A
-    /// reader that keeps it across anything that can set an option is
-    /// reading freed bytes; take [`get`](Self::get) instead.
-    fn value_ptr(&self) -> *mut c_char;
-
     /// The value's first byte, which is 0 for an empty value — upstream's
     /// `*p` on a variable that is never null. Constant time.
     fn first_byte(&self) -> u8;
@@ -80,18 +70,12 @@ pub(crate) trait OptStringRef: OptString {
     /// The value's bytes, without the terminator.
     fn bytes(&self) -> &[u8];
 
-    /// The value as a borrowed C string, which is the shared empty one when
-    /// the field owns nothing -- [`OptString::value_ptr`] with the
-    /// terminator's whereabouts written into the type.
+    /// The value as a borrowed C string, which is the empty one when the
+    /// field owns nothing.
     fn cstr(&self) -> &CStr;
 }
 
 impl OptString for Option<XString> {
-    fn value_ptr(&self) -> *mut c_char {
-        self.as_ref()
-            .map_or_else(empty_option, |value| value.as_ptr().cast_mut())
-    }
-
     fn first_byte(&self) -> u8 {
         self.bytes().first().copied().unwrap_or(0)
     }
@@ -121,10 +105,6 @@ impl OptStringRef for Option<XString> {
 
 /// The global value, through the generated accessors on the selector.
 impl OptString for StrOpt {
-    fn value_ptr(&self) -> *mut c_char {
-        StrOpt::value_ptr(*self)
-    }
-
     fn first_byte(&self) -> u8 {
         StrOpt::first_byte(*self)
     }
@@ -176,13 +156,6 @@ impl LocalOrGlobal<'_> {
 }
 
 impl OptString for LocalOrGlobal<'_> {
-    fn value_ptr(&self) -> *mut c_char {
-        match self.local() {
-            Some(value) => value.as_ptr().cast_mut(),
-            None => self.global.value_ptr(),
-        }
-    }
-
     fn first_byte(&self) -> u8 {
         match self.local() {
             Some(value) => value[0],

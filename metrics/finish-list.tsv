@@ -75,19 +75,7 @@ cstr.rs	*	1	16	8	10	deref:4 expr:2	str:10	-	CStr::from_ptr:3 from_raw_parts:3 CS
 cstr.rs	cstr.rs	1	16	8	10	deref:4 expr:2	str:10	-	CStr::from_ptr:3 from_raw_parts:3 CStr::from_bytes_with_nul_unchecked:1
 cursor_shape.rs	*	1	7	2	4	compound:1	str:2	-	cstr_to_string:2
 cursor_shape.rs	cursor_shape.rs	1	7	2	4	compound:1	str:2	-	cstr_to_string:2
-drawline/	*	10	70	4	44	deref:19 expr:1 ref:1	-	-	utfc_ptr2len:5 .add:4 bytes_at:4 utf_ptr2cells:4 rl_mirror_ascii:3 .offset:2 mb_charlen:2 utfc_ptr2schar:2
-drawline/	drawline/attrs.rs	1	1	0	1	-	-	-	utf_ptr2cells:1
-drawline/	drawline/cells.rs	1	1	0	1	-	-	-	xfree:1
-drawline/	drawline/chars.rs	1	7	0	7	-	-	-	utfc_ptr2len:2 .offset:1 bytes_at:1 rl_mirror_ascii:1 utf_ptr2char:1 utfc_ptr2schar:1
-drawline/	drawline/columns.rs	1	11	1	10	deref:1	-	-	.add:1 abs:1 bytes_at:1 rl_mirror_ascii:1 skipwhite:1 snprintf:1
-drawline/	drawline/mod.rs	1	0	0	0	-	-	-	-
-drawline/	drawline/prologue.rs	1	4	0	0	deref:4	-	-	-
-drawline/	drawline/rows.rs	1	7	0	2	deref:1	-	-	-
-drawline/	drawline/special.rs	1	19	0	9	deref:7 expr:1 ref:1	-	-	bytes_at:2 .copy_from_nonoverlapping:1 .offset:1 from_raw_parts_mut:1 mb_charlen:1 rl_mirror_ascii:1
-drawline/	drawline/state.rs	1	0	1	0	-	-	-	-
-drawline/	drawline/virttext.rs	1	20	2	14	deref:6	-	-	.add:3 utf_ptr2cells:3 utfc_ptr2len:3 mb_charlen:1 mb_string2cells:1 utfc_ptr2schar:1
-drawscreen/	*	2	0	0	0	-	-	-	-
-drawscreen/	drawscreen/mod.rs	1	0	0	0	-	-	-	-
+drawscreen/	*	1	0	0	0	-	-	-	-
 drawscreen/	drawscreen/state.rs	1	0	0	0	-	-	-	-
 eval/	*	6	236	21	152	deref:40 expr:21 ref:15 compound:2	other:10 value:7 void:4 str:2	value:7 other:2	c_str:11 xfree:9 .as_ref:8 time_watcher_start:4 time_watcher_stop:4 Box::from_raw:3 channel_decref:3 time_watcher_close:3
 eval/	eval/collect.rs	1	18	1	11	deref:4 ref:2 expr:1	other:1	-	.as_ref:2

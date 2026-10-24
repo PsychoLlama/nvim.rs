@@ -10,11 +10,9 @@
 //! What these have in common is that they all set up a run in
 //! [`WinLineVars::extra_todo`] and hand the first cell of it back to the loop.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
-use crate::cstr;
 use crate::grid::with_linebuf;
 use crate::normal::{visual_active, visual_anchor, visual_mode};
 use crate::optionstr::OptStringRef;
@@ -26,7 +24,6 @@ impl Cells {
     /// Show the `'listchars'` "precedes" character in column zero of a row
     /// that starts part-way into the line.
     pub(super) fn draw_precedes(&mut self, wlv: &mut WinLineVars, window: Win) {
-        // SAFETY: the caller's window.
         let scrolled = if window.w_onebuf_opt.wo_wrap != 0 {
             let skipcol = window.w_skipcol;
             skipcol > 0 && wlv.row == 0
@@ -49,7 +46,6 @@ impl Cells {
             wlv.extra_fill = schar_from_ascii(MB_FILLER_CHAR);
             wlv.extra_last = NUL as ScreenChar;
             if wlv.extra_todo > 0 {
-                debug_assert!(!wlv.extra_text.is_null());
                 self.extra_todo_next = wlv.extra_todo;
                 self.extra_attr_next = wlv.extra_attr;
                 wlv.n_attr = (wlv.n_attr + 1).max(2);
@@ -91,8 +87,7 @@ impl Cells {
         if self.byte() != b'\0'
             || (self.lcs_eol > 0 && self.lcs_eol_todo)
             || (wlv.extra_todo > 0
-                && (wlv.extra_fill != NUL as ScreenChar
-                    || unsafe { *wlv.extra_text } as ::core::ffi::c_int != NUL))
+                && (wlv.extra_fill != NUL as ScreenChar || wlv.extra.byte() != b'\0'))
             || (self.may_have_inline_virt && wlv.has_more_inline_virt(self.byte_col()))
         {
             self.cell_char = lcs_ext;
@@ -103,36 +98,28 @@ impl Cells {
 
     /// Render `'foldtext'` into the scratch buffer and set up the `'fold'`
     /// fill that follows it.
-    pub(super) fn fold_text(&mut self, wlv: &mut WinLineVars, window: Win, f: &mut LineFrame<'_>) {
-        // SAFETY: the caller's window, frame and fold scratch.
+    pub(super) fn fold_text(&mut self, wlv: &mut WinLineVars, window: Win) {
         if self.draw_folded
             && self.has_foldtext
             && wlv.extra_todo == 0
             && wlv.col == self.text_start_col
         {
             let lnume = wlv.lnum + wlv.foldinfo.fi_lines - 1;
-            // SAFETY: `fold_buf` is the frame's `FOLD_TEXT_LEN`-byte scratch,
-            // which nothing else holds while the line is drawn.
-            let scratch = unsafe { &mut *f.fold_buf.cast::<[u8; FOLD_TEXT_LEN as usize]>() };
-            scratch.fill(b' ');
-            wlv.extra_text = match get_foldtext(window, wlv.lnum, lnume, wlv.foldinfo, scratch) {
-                FoldText::Scratch => f.fold_buf,
+            let mut scratch = [b' '; FOLD_TEXT_LEN as usize];
+            match get_foldtext(window, wlv.lnum, lnume, wlv.foldinfo, &mut scratch) {
+                FoldText::Scratch => wlv.extra.set(&scratch),
                 FoldText::Chunks(chunks) => {
                     // The line's own, freed when it is done; nothing was
                     // in the slot, so nothing is dropped here.
                     self.fold_vt = ManuallyDrop::new(chunks);
-                    f.fold_buf
+                    wlv.extra.set(&scratch);
                 }
-                FoldText::Owned(text) => text.into_raw(),
-            };
-            wlv.extra_todo = unsafe { cstr::bytes_at(wlv.extra_text) }.len() as ::core::ffi::c_int;
-            if wlv.extra_text != f.fold_buf {
-                debug_assert!(self.foldtext_free.is_null());
-                self.foldtext_free = wlv.extra_text;
+                FoldText::Owned(text) => wlv.extra.set(text.as_bytes_with_nul()),
             }
+            let text_len = wlv.extra.rest().len() - 1;
+            wlv.extra_todo = ::core::ffi::c_int::try_from(text_len).unwrap_or(0);
             wlv.extra_fill = NUL as ScreenChar;
             wlv.extra_last = NUL as ScreenChar;
-            unsafe { *wlv.extra_text.offset(wlv.extra_todo as isize) = NUL as ::core::ffi::c_char };
             // Evaluating 'foldtext' may have changed the line.
             self.recopy_line(window, wlv.lnum);
         }
@@ -164,7 +151,6 @@ impl Cells {
     /// Invert one cell past the end of the text, for a Visual selection that
     /// includes the line break or an `'hlsearch'` match that ends there.
     pub(super) fn highlight_at_eol(&mut self, wlv: &mut WinLineVars, window: Win) {
-        // SAFETY: the caller's window and the redraw's match state.
         if self.cell_char != NUL as ScreenChar || self.eol_extra_cell != 0 {
             return;
         }
@@ -211,7 +197,6 @@ impl Cells {
     /// A character that cannot be put on the screen as itself: a Tab, the NUL
     /// that ends the line, or something that shows as `^X` or `<xx>`.
     pub(super) fn unprintable(&mut self, wlv: &mut WinLineVars, window: Win) {
-        // SAFETY: the caller's window and the loop's line pointers.
         if self.char_code == TAB
             && (window.w_onebuf_opt.wo_list == 0 || window.w_p_lcs_chars.tab1 != 0)
         {
@@ -238,8 +223,6 @@ impl Cells {
 
     /// Turn a Tab into the cells it occupies.
     pub(super) fn tab(&mut self, wlv: &mut WinLineVars, window: Win) {
-        // SAFETY: the caller's window and the scratch buffer, which is not
-        // held across another `get_extra_buf`.
         let lcs = &window.w_p_lcs_chars;
         let (mut lcs_tab1, mut lcs_tab2, mut lcs_tab3) = (lcs.tab1, lcs.tab2, lcs.tab3);
         if window.w_onebuf_opt.wo_list != 0
@@ -253,12 +236,12 @@ impl Cells {
 
         // The Tab's width depends on the column, with `'showbreak'`
         // removed: it is not part of the buffer line.
-        let sbr = window.showbreak_leader();
-        let vcol_adjusted = if unsafe { *sbr } != NUL as ::core::ffi::c_char
+        let vcol_adjusted = if window.has_showbreak()
             && wlv.vcol == wlv.showbreak_vcol
             && window.w_onebuf_opt.wo_wrap != 0
         {
-            wlv.vcol - unsafe { mb_charlen(sbr) }
+            let sbr_chars = window.with_showbreak(char_count);
+            wlv.vcol - ::core::ffi::c_int::try_from(sbr_chars).unwrap_or(0)
         } else {
             wlv.vcol
         };
@@ -296,13 +279,8 @@ impl Cells {
                 let len = len as size_t;
                 self.cell_char = lcs_tab1;
                 self.char_code = schar_get_first_codepoint(self.cell_char);
-                let p = unsafe { get_extra_buf(len + 1) };
-                // SAFETY: `get_extra_buf` answers `len + 1` bytes of its
-                // own buffer, which nothing else reads until this is done.
-                let buf = unsafe { core::slice::from_raw_parts_mut(p.cast::<u8>(), len + 1) };
+                let buf = wlv.extra.set_room(len);
                 buf[..len].fill(b' ');
-                buf[len] = b'\0';
-                wlv.extra_text = p;
                 let mut rest: &mut [u8] = buf;
                 for i in 0..tab_len {
                     if rest[0] == b'\0' {
@@ -349,11 +327,8 @@ impl Cells {
             } else {
                 lcs_tab1
             };
-            if window.w_onebuf_opt.wo_lbr != 0
-                && !wlv.extra_text.is_null()
-                && unsafe { *wlv.extra_text } != NUL as ::core::ffi::c_char
-            {
-                // Using `extra_text` from above.
+            if window.w_onebuf_opt.wo_lbr != 0 && wlv.extra.byte() != b'\0' {
+                // Using the run's text from above.
                 wlv.extra_fill = NUL as ScreenChar;
             } else {
                 wlv.extra_fill = lcs_tab2;
@@ -372,32 +347,34 @@ impl Cells {
 
     /// Draw an unprintable character in its `^X` or `<xx>` form.
     pub(super) fn escaped(&mut self, wlv: &mut WinLineVars, window: Win) {
-        // An owned copy: evaluating 'statuscolumn' mid-escape cannot clobber it.
-        wlv.escape_buf = transchar_buf(window.buffer_or_none(), self.char_code);
-        wlv.extra_text = wlv.escape_buf.as_mut_ptr();
+        let shown = transchar_buf(window.buffer_or_none(), self.char_code).map(|c| c as u8);
+        let len = shown.iter().position(|&c| c == 0).unwrap_or(shown.len());
+        let mut shown = shown;
+        let text = &mut shown[..len];
         if wlv.extra_todo == 0 {
             wlv.extra_todo = byte2cells(self.char_code) - 1;
         }
         if dy_flags.get() & kOptDyFlagUhex as uint32_t != 0 && window.w_onebuf_opt.wo_rl != 0 {
             // Reverse "<12>".
-            unsafe { rl_mirror_ascii(wlv.extra_text, ::core::ptr::null_mut()) };
+            mirror_ascii(text);
         }
         (wlv.extra_fill, wlv.extra_last) = (NUL as ScreenChar, NUL as ScreenChar);
+        // The first byte is this cell; the rest is the run.
+        let unprintable = self.char_code;
+        self.char_code = ::core::ffi::c_int::from(text.first().copied().unwrap_or(0));
+        let tail = text.get(1..).unwrap_or_default();
         if window.w_onebuf_opt.wo_lbr != 0 {
             // With 'linebreak' the escape has to be padded out to the
-            // width the character would have had.
-            self.char_code = unsafe { *wlv.extra_text } as uint8_t as ::core::ffi::c_int;
-            let p = unsafe { get_extra_buf(wlv.extra_todo as size_t + 1) };
-            unsafe { p.cast::<u8>().write_bytes(b' ', wlv.extra_todo as size_t) };
-            let text_len = unsafe { cstr::bytes_at(wlv.extra_text) }.len();
-            let into = p.cast::<u8>();
-            unsafe { into.copy_from_nonoverlapping(wlv.extra_text.offset(1).cast(), text_len - 1) };
-            unsafe { *p.offset(wlv.extra_todo as isize) = NUL as ::core::ffi::c_char };
-            wlv.extra_text = p;
+            // width the character would have had -- or cut to it, as
+            // upstream's terminator cuts it.
+            let room = usize::try_from(wlv.extra_todo).unwrap_or(0);
+            let buf = wlv.extra.set_room(room);
+            buf[..room].fill(b' ');
+            let kept = tail.len().min(room);
+            buf[..kept].copy_from_slice(&tail[..kept]);
         } else {
-            wlv.extra_todo = byte2cells(self.char_code) - 1;
-            self.char_code = unsafe { *wlv.extra_text } as uint8_t as ::core::ffi::c_int;
-            wlv.extra_text = unsafe { wlv.extra_text.offset(1) };
+            wlv.extra_todo = byte2cells(unprintable) - 1;
+            wlv.extra.set(tail);
         }
         wlv.n_attr = wlv.extra_todo + 1;
         wlv.extra_attr = win_hl_attr(window, HLF_8);
@@ -425,7 +402,6 @@ impl Cells {
     /// Draw the `'listchars'` "eol" character, or a highlighted blank standing
     /// for the line break.
     pub(super) fn eol_cell(&mut self, wlv: &mut WinLineVars, window: Win) {
-        // SAFETY: the caller's window.
         // For a diff line the highlighting continues after the "$".
         if wlv.diff_hlf == HLF_NONE && wlv.line_attr == 0 && wlv.line_attr_lowprio == 0 {
             if !(self.area_highlighting
@@ -435,7 +411,7 @@ impl Cells {
             {
                 // Under 'virtualedit' a Visual selection may extend past
                 // the end of the line, and then the run has to survive.
-                wlv.extra_text = c"".as_ptr() as *mut ::core::ffi::c_char;
+                wlv.extra.set(b"");
             }
             wlv.extra_todo = 0;
         }
@@ -455,7 +431,6 @@ impl Cells {
     /// Concealment: either replace the first character of a concealed run with
     /// one stand-in character, or drop the cell entirely.
     pub(super) fn conceal(&mut self, wlv: &mut WinLineVars, window: Win) {
-        // SAFETY: the caller's window and the redraw's decoration state.
         let wants_conceal = window.w_onebuf_opt.wo_cole > 0
             && (window.raw() != Win::current_raw()
                 || wlv.lnum != window.w_cursor.lnum

@@ -33,8 +33,7 @@
 //! buffers through [`put_cell`], and `wlv_put_linebuf` diffs the result
 //! against what the grid already holds.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -68,10 +67,6 @@ pub(crate) enum Step {
 
 /// The parts of `win_line`'s own frame the character loop borrows, and the
 /// `'statuscolumn'` request it owns.
-///
-/// `fold_buf` is still a raw pointer: its address is stored in
-/// [`WinLineVars::extra_text`] and read again on later passes, so it may not
-/// be derived from a `&mut` that ends when the method does.
 pub(crate) struct LineFrame<'a> {
     /// Row after the last one this buffer line may use.
     pub(crate) endrow: ::core::ffi::c_int,
@@ -88,8 +83,6 @@ pub(crate) struct LineFrame<'a> {
     pub(crate) term_attrs: &'a [::core::ffi::c_int; TERM_ATTRS_MAX as usize],
     /// This line joined with the start of the next one, for spell checking.
     pub(crate) nextline: &'a SpellLookahead,
-    /// [`FOLD_TEXT_LEN`] bytes of scratch for `'foldtext'`.
-    pub(crate) fold_buf: *mut ::core::ffi::c_char,
 }
 
 /// The character loop's state.
@@ -228,9 +221,6 @@ pub(crate) struct Cells {
     /// `'foldtext'` virtual text, drawn after the fold text itself. Freed by
     /// hand at the end of the line, like `virt_lines`.
     pub(super) fold_vt: ManuallyDrop<VirtText>,
-    /// `'foldtext'` result that has to be freed, when it did not fit
-    /// [`LineFrame::fold_buf`].
-    pub(super) foldtext_free: *mut ::core::ffi::c_char,
     /// `Folded` attribute while a fold is being drawn.
     pub(super) fold_attr: ::core::ffi::c_int,
 
@@ -376,7 +366,6 @@ impl Cells {
             virt_line_flags: 0,
             draw_folded: false,
             fold_vt: ManuallyDrop::new(VIRTTEXT_EMPTY),
-            foldtext_free: ::core::ptr::null_mut(),
             fold_attr: 0,
 
             cell_char: 0,
@@ -470,7 +459,6 @@ impl Cells {
         buffer: Buf,
         f: &mut LineFrame<'_>,
     ) -> ::core::ffi::c_int {
-        // SAFETY: the caller's window, buffer, line state and frame.
         let grid: GridView = window.w_grid;
         'row: loop {
             self.has_match_conc = 0;
@@ -526,7 +514,7 @@ impl Cells {
                     self.cell_attributes(wlv, window);
                 }
 
-                self.fold_text(wlv, window, f);
+                self.fold_text(wlv, window);
                 self.next_char(wlv, window, f);
                 self.correct_cursor_col(wlv, window);
                 self.apply_extra_attr(wlv);
@@ -558,8 +546,7 @@ impl Cells {
             }
         }
 
-        self.free_line_decorations();
-        unsafe { xfree(self.foldtext_free.cast::<::core::ffi::c_void>()) };
+        self.free_line_decorations(wlv);
         wlv.row
     }
 
@@ -568,13 +555,14 @@ impl Cells {
     // -----------------------------------------------------------------------
 
     /// Free the line's `'foldtext'` chunks and its collected virtual
-    /// lines, and hand the line's copy back. Out of line: the drop code would otherwise sit in `win_line`
+    /// lines, and hand the line's copy and run text back. Out of line: the drop code would otherwise sit in `win_line`
     /// for a once-per-line call.
     #[inline(never)]
-    fn free_line_decorations(&mut self) {
+    fn free_line_decorations(&mut self, wlv: &mut WinLineVars) {
         drop(core::mem::take(&mut *self.fold_vt));
         drop(core::mem::take(&mut *self.virt_lines));
         self.line.give_back();
+        wlv.extra.give_back();
     }
 
     /// Ask the decoration providers for the next chunk of the line once the
@@ -621,7 +609,6 @@ impl Cells {
     /// Write the cell — or, when it is being concealed or skipped over, count
     /// it without writing anything.
     pub(super) fn store_cell(&mut self, wlv: &mut WinLineVars, window: Win) {
-        // SAFETY: the caller's window; `off` is bounded by `view_width`.
         if wlv.filler_todo > 0 {
             // TODO(bfredl): the main render loop should get called with
             // the virtual line chunks too, so they get line wrapping and

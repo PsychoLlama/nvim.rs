@@ -15,19 +15,17 @@
 //! [`WinLineVars::off`], so the order the callers run in *is* the column order
 //! on screen.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
-use crate::cstr;
 use crate::decoration::{SCL_NUM, SIGN_WIDTH};
 use crate::grid::with_linebuf;
 use crate::r#move::WinValid;
 use crate::option::cpo_has;
 use crate::optionstr::OptString;
-use crate::snprintf;
 use crate::types::{CpoFlag, MAXPATHL, NUL, StlOpt, Vv};
 use crate::winlayer::Win;
+use std::io::Write as _;
 
 /// The widest a `'statuscolumn'` may grow the number column to.
 ///
@@ -45,8 +43,10 @@ const MAX_FOLDCOLUMN: usize = 9;
 // ---------------------------------------------------------------------------
 
 impl WinLineVars {
-    /// Copy `len` bytes of `text` into the line buffer, one character per cell
-    /// (a Tab expanding to its padding), stopping at the right edge.
+    /// Copy the first `len` bytes of `text` into the line buffer, one
+    /// character per cell (a Tab expanding to its padding), stopping at the
+    /// right edge. A multibyte character starting just before `len` is drawn
+    /// whole from the bytes after it; `text` ends at its end or a NUL.
     ///
     /// `inc_vcol` says the text counts as buffer virtual columns — true only
     /// for `'showbreak'`, which is the one thing in the left columns that
@@ -54,35 +54,28 @@ impl WinLineVars {
     /// entries in turn when there is one (the fold column's `-2`/`-3` markers,
     /// so a `'statuscolumn'` `%C` segment stays clickable; `-1` past its end)
     /// and `-1` when there is not.
-    ///
-    /// # Safety
-    /// `text` must hold `len` readable bytes *and* be NUL-terminated at or
-    /// after `len`: a multibyte character starting just before the limit is
-    /// read whole.
-    pub(crate) unsafe fn draw_col_buf(
+    pub(crate) fn draw_col_buf(
         &mut self,
         window: Win,
-        text: *const ::core::ffi::c_char,
-        len: size_t,
+        text: &[u8],
+        len: usize,
         attr: ::core::ffi::c_int,
         fold_vcol: Option<&[ColNr]>,
         inc_vcol: bool,
     ) {
         let mut fold_vcol = fold_vcol.map(<[ColNr]>::iter);
-        // SAFETY: the caller's buffer, and `off` is kept under the view width
-        // by the loop condition.
-        let end = unsafe { text.add(len) };
-        let mut ptr = text;
-        while ptr < end && self.off < window.w_view_width {
-            let cells = with_linebuf(|line| unsafe {
+        let mut at = 0;
+        while at < len && self.off < window.w_view_width {
+            let (cells, taken) = with_linebuf(|line| {
                 line_putchar(
                     window.buffer(),
-                    &mut ptr,
+                    text.get(at..).unwrap_or_default(),
                     &mut line.chars_mut()[self.off as usize..],
                     window.w_view_width - self.off,
                     self.off,
                 )
             });
+            at += taken;
             let myattr = if inc_vcol {
                 self.color_col_attr(window, attr)
             } else {
@@ -283,7 +276,6 @@ impl WinLineVars {
     /// `number`), which is wider and is only ever asked for when there really
     /// is a sign — [`WinLineVars::draw_lnum_col`] tests that first.
     pub(crate) fn draw_sign(&mut self, nrcol: bool, window: Win, sign_idx: ::core::ffi::c_int) {
-        // SAFETY: the caller's window and index.
         let sattr = self.sign_attrs[sign_idx as usize];
         let scl_attr = win_hl_attr(
             window,
@@ -350,27 +342,27 @@ impl WinLineVars {
 /// absolute number *left*-aligned instead — that is what makes it stand out
 /// from the relative numbers around it.
 #[inline]
-fn line_number_str(window: Win, lnum: LineNr, buf: &mut [::core::ffi::c_char; 32]) {
-    // SAFETY: the caller's window; `snprintf` is bounded by the array size.
-    let (num, fmt) = if window.w_onebuf_opt.wo_nu != 0 && window.w_onebuf_opt.wo_rnu == 0 {
-        (lnum, c"%*d ")
+fn line_number_str(window: Win, lnum: LineNr, buf: &mut [u8; 32]) {
+    let (num, left) = if window.w_onebuf_opt.wo_nu != 0 && window.w_onebuf_opt.wo_rnu == 0 {
+        (lnum, false)
     } else {
-        let rel = unsafe { abs(get_cursor_rel_lnum(window, lnum)) } as LineNr;
+        let rel = get_cursor_rel_lnum(window, lnum).abs();
         if rel == 0 && window.w_onebuf_opt.wo_nu != 0 && window.w_onebuf_opt.wo_rnu != 0 {
-            (lnum, c"%-*d ")
+            (lnum, true)
         } else {
-            (rel, c"%*d ")
+            (rel, false)
         }
     };
-    unsafe {
-        snprintf!(
-            buf.as_mut_ptr(),
-            buf.len() as size_t,
-            fmt.as_ptr(),
-            number_width(window),
-            num,
-        )
+    let width = usize::try_from(number_width(window)).unwrap_or(0);
+    // `snprintf`'s bound: the text is cut to leave room for the NUL.
+    let mut out = &mut buf[..31];
+    let _ = if left {
+        write!(out, "{num:<width$} ")
+    } else {
+        write!(out, "{num:>width$} ")
     };
+    let end = 31 - out.len();
+    buf[end] = b'\0';
 }
 
 impl WinLineVars {
@@ -468,23 +460,37 @@ impl WinLineVars {
             return;
         }
 
-        let mut buf: [::core::ffi::c_char; 32] = [0; 32];
+        let mut buf = [0u8; 32];
         line_number_str(window, self.lnum, &mut buf);
         if window.w_skipcol > 0 && self.startrow == 0 {
             // Part of this line is scrolled off above: say so by filling
             // the number's padding with dashes.
             for c in buf.iter_mut() {
-                if *c != b' ' as ::core::ffi::c_char {
+                if *c != b' ' {
                     break;
                 }
-                *c = b'-' as ::core::ffi::c_char;
+                *c = b'-';
             }
         }
         if window.w_onebuf_opt.wo_rl != 0 {
-            let num = unsafe { skipwhite(buf.as_mut_ptr()) };
-            unsafe { rl_mirror_ascii(num, skiptowhite(num)) };
+            // Mirror the number itself, between its padding and the space
+            // after it.
+            let is_white = |c: &u8| *c == b' ' || *c == b'\t';
+            let start = buf.iter().position(|c| !is_white(c)).unwrap_or(buf.len());
+            let len = buf[start..]
+                .iter()
+                .position(|c| is_white(c) || *c == b'\0')
+                .unwrap_or(buf.len() - start);
+            mirror_ascii(&mut buf[start..start + len]);
         }
-        unsafe { self.draw_col_buf(window, buf.as_ptr(), width as size_t, attr, None, false) };
+        self.draw_col_buf(
+            window,
+            &buf,
+            usize::try_from(width).unwrap_or(0),
+            attr,
+            None,
+            false,
+        );
     }
 }
 
@@ -598,16 +604,7 @@ impl WinLineVars {
             let src = text.get(p..).unwrap_or_default();
             let translen = transstr_into(src, usize::try_from(textlen).ok(), &mut transbuf, true);
             // `transbuf` is NUL-terminated after `translen`.
-            unsafe {
-                self.draw_col_buf(
-                    window,
-                    transbuf.as_ptr().cast(),
-                    translen,
-                    cur_attr,
-                    fold_vcol,
-                    false,
-                )
-            };
+            self.draw_col_buf(window, &transbuf, translen, cur_attr, fold_vcol, false);
             let Some(run) = run else { break };
             // The sign segment takes the sign column's highlight and the
             // number segments the number column's; the fold segment takes
@@ -713,15 +710,14 @@ impl WinLineVars {
             );
         }
 
-        let sbr = window.showbreak_leader();
-        if unsafe { *sbr } != NUL as ::core::ffi::c_char && self.need_showbreak {
+        if window.has_showbreak() && self.need_showbreak {
             // 'showbreak' over the still-active highlight over
             // 'cursorline', 'showbreak' winning.
             let attr = hl_combine_attr(self.cursorline_attr, gap_attr);
             let attr = hl_combine_attr(attr, win_hl_attr(window, HLF_AT));
             let vcol_before = self.vcol;
-            let sbr_len = unsafe { cstr::bytes_at(sbr) }.len();
-            unsafe { self.draw_col_buf(window, sbr, sbr_len, attr, None, true) };
+            window
+                .with_showbreak(|sbr| self.draw_col_buf(window, sbr, sbr.len(), attr, None, true));
             self.showbreak_vcol = self.vcol;
 
             // As in `handle_breakindent`: move the highlighted area past

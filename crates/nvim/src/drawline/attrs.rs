@@ -13,8 +13,7 @@
 //! underneath everything — except where the character has only Normal's
 //! background, which is the one case where the order is reversed.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -120,9 +119,7 @@ impl Cells {
         wlv.vcol == wlv.fromcol
             || (wlv.vcol + 1 == wlv.fromcol
                 && ((wlv.extra_todo == 0 && c_cells_at(self.rest()) > 1)
-                    || (wlv.extra_todo > 0
-                        && !wlv.extra_text.is_null()
-                        && unsafe { utf_ptr2cells(wlv.extra_text) } > 1)))
+                    || (wlv.extra_todo > 0 && c_cells_at(wlv.extra.rest()) > 1)))
             || (self.prev_vcol == self.fromcol_prev
                 && self.prev_vcol < wlv.vcol
                 && wlv.vcol < wlv.tocol)
@@ -132,7 +129,7 @@ impl Cells {
     /// virtual text starts here.
     pub(super) fn decorations_at(&mut self, wlv: &mut WinLineVars, window: Win) {
         // The Visual-area test below is repeated here rather than shared,
-        // because this one may not look inside `extra_text`.
+        // because this one may not look inside the run's text.
         if wlv.vcol == wlv.fromcol
             || (wlv.vcol + 1 == wlv.fromcol && wlv.extra_todo == 0 && c_cells_at(self.rest()) > 1)
             || (self.prev_vcol == self.fromcol_prev
@@ -281,7 +278,6 @@ impl Cells {
     /// Overlay `'cursorcolumn'` or `'colorcolumn'` on this cell, remembering
     /// what to put back afterwards.
     pub(super) fn column_highlight(&mut self, wlv: &mut WinLineVars, window: Win) {
-        // SAFETY: the caller's window and 'colorcolumn' list.
         self.attr_before_vcol_hl = -1;
         if self.lnum_in_visual_area
             || self.search_attr != 0
