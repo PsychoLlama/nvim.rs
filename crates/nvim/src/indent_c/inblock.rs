@@ -127,11 +127,8 @@ pub(crate) fn indent_in_block(line: &Line, brace: Pos) -> c_int {
             is_case_label(text, skip::white(text), false)
         };
         let amount = if starts_case {
-            // SAFETY: the cursor is still on a line of the current buffer.
             get_indent()
         } else if Buf::current().b_ind_js != 0 {
-            // SAFETY: `lnum` is a line of the current buffer -- either
-            // `ourscope` or the line a paren match reported.
             get_indent_lnum(lnum)
         } else {
             skip_label(lnum).0
@@ -160,7 +157,6 @@ pub(crate) fn indent_in_block(line: &Line, brace: Pos) -> c_int {
     if lookfor != LOOKFOR_INITIAL {
         Win::current().w_cursor.lnum = line.cur_curpos.lnum;
         if find_match(lookfor, ourscope) {
-            // SAFETY: a successful match left the cursor on a line of it.
             return get_indent();
         }
     }

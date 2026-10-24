@@ -207,9 +207,7 @@ pub fn getexline(
     do_concat: bool,
 ) -> Option<XString> {
     // When executing a register, remove the ':' in front of each line.
-    // SAFETY: peeks at the typeahead.
     if exec_from_reg.get() && vpeekc() == ':' as ::core::ffi::c_int {
-        // SAFETY: consumes the byte `vpeekc` just reported.
         vgetc();
     }
     getcmdline(c, 1, indent, do_concat)

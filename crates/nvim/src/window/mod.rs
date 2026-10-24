@@ -431,7 +431,6 @@ fn fire_named(event: AutoEvent, name: Option<&::core::ffi::CStr>, buffer: Option
 /// Ring the bell and drop the typeahead, the family's answer to a move that
 /// cannot be made.
 fn beep() {
-    // SAFETY: reads no argument of ours.
     beep_flush();
 }
 
@@ -443,7 +442,6 @@ fn hides(buffer: Buf) -> bool {
 
 /// Clamp the cursor of `win` back into its buffer.
 fn revalidate_cursor(win: Win) {
-    // SAFETY: a live window.
     check_cursor(win);
 }
 

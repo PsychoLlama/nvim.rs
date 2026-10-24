@@ -460,7 +460,6 @@ fn normal_check_window_scrolled() {
 }
 
 fn normal_check_cursor_moved() {
-    // SAFETY (throughout): reads the current window and fires an autocommand.
     if !finish_op.get()
         && has_event(AutoEvent::CursorMoved)
         && (last_cursormoved_win.get() != Win::current_or_none().map(Win::id)
@@ -473,7 +472,6 @@ fn normal_check_cursor_moved() {
 }
 
 fn normal_check_text_changed() {
-    // SAFETY (throughout): reads the current buffer and fires an autocommand.
     if !finish_op.get()
         && has_event(AutoEvent::TextChanged)
         && Buf::current().b_last_changedtick != buf_get_changedtick(Buf::current())
@@ -484,7 +482,6 @@ fn normal_check_text_changed() {
 }
 
 fn normal_check_buffer_modified() {
-    // SAFETY (throughout): reads the current buffer and fires an autocommand.
     if !finish_op.get() && has_event(AutoEvent::BufModifiedSet) && Buf::current().b_changed_invalid
     {
         fire_on_curbuf(AutoEvent::BufModifiedSet);
@@ -509,7 +506,6 @@ fn normal_check_folds() {
 /// The idle redraw: scroll the cursor into view, update the screen, and put
 /// back the message the last command left to be shown.
 fn normal_redraw() {
-    // SAFETY (throughout): all of this is the current window's and buffer's own state.
     update_topline(Win::current());
     validate_cursor(Win::current());
     show_cursor_info_later(false);

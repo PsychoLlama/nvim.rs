@@ -147,7 +147,6 @@ pub(crate) fn nv_dot(cmd_arg: &mut CmdArg) {
 /// should go to.
 pub(crate) fn nv_redo_or_register(cmd_arg: &mut CmdArg) {
     if visual_select() && visual_active() {
-        // SAFETY: reads one key with mappings suppressed.
         let unmapped = Keys::unmapped();
         let mut reg = plain_vgetc();
         langmap_adjust(&mut reg, true);

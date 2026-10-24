@@ -129,14 +129,12 @@ pub(crate) fn do_popup(which_button: c_int, m_pos_flag: c_int, m_pos: Pos) -> c_
     };
 
     if jump_flags != 0 {
-        // SAFETY: `inclusive` is allowed to be null.
         jump_flags = jump_to_mouse(jump_flags, None, which_button);
         let redraw = if visual_active() {
             UPD_INVERTED
         } else {
             UPD_VALID
         };
-        // SAFETY: all four only touch the screen and the current buffer.
         redraw_curbuf_later(redraw);
         let _ = update_screen();
         setcursor();

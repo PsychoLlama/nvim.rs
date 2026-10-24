@@ -428,7 +428,6 @@ pub(crate) fn n_opencmd(cmd_arg: &mut CmdArg) {
     } else {
         FORWARD as c_int
     };
-    // SAFETY: reads the current buffer's 'formatoptions'.
     let flags = if has_format_option(FoFlag::OPEN_COMS) {
         OPENLINE_DO_COM as c_int
     } else {
@@ -459,7 +458,6 @@ pub(crate) fn nv_tilde(cmd_arg: &mut CmdArg) {
 /// Put the cursor where `A` starts inserting: past the last character, or
 /// past the last *cell* when 'virtualedit' is "all".
 pub(crate) fn set_cursor_for_append_to_line() {
-    // SAFETY (throughout): reads and writes the current window's cursor.
     Win::current().w_set_curswant = true;
     if get_ve_flags(Win::current()) == kOptVeFlagAll as c_uint {
         // Insert mode is what makes `coladvance` allow the position one

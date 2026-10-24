@@ -402,7 +402,6 @@ pub(crate) fn normal_get_command_count(ns: &mut NormalState) -> bool {
     if visual_active() && visual_select() {
         return false;
     }
-    // SAFETY: `s` is the caller's live state.
     while (ns.c >= '1' as c_int && ns.c <= '9' as c_int)
         || (ns.ca.count0 != 0
             && (ns.c == Key::Del.code() || ns.c == Key::Kdel.code() || ns.c == '0' as c_int))
@@ -451,7 +450,6 @@ pub(crate) fn normal_get_command_count(ns: &mut NormalState) -> bool {
 
 /// Everything that happens after the handler has run.
 pub(crate) fn normal_finish_command(ns: &mut NormalState) {
-    // SAFETY: `s` is the caller's live state.
     let mut did_visual_op = false;
     if !ns.command_finished {
         // A command that is not itself an operator, and does not claim
@@ -780,7 +778,6 @@ pub(crate) fn clear_op(mut op: Op) {
 /// abandon the rest of a mapping or a `:normal` argument.
 pub(crate) fn clear_op_beep(op: Op) {
     clear_op(op);
-    // SAFETY: touches only message and typeahead state.
     beep_flush();
 }
 

@@ -248,8 +248,6 @@ pub(crate) fn while_closes_do(lnum: LineNr) -> bool {
     Win::current().w_cursor.col = ColNr::try_from(w).unwrap_or(ColNr::MAX);
 
     let maxparen = int64_t::from(Buf::current().b_ind_maxparen);
-    // SAFETY: the cursor is on a line of the current buffer, which is where
-    // the match search starts.
     let matched = findmatchlimit(None, 0, 0, maxparen);
     let retval = matched.is_some_and(|pos| {
         // The match is a position in this buffer, so the cache answers with

@@ -180,7 +180,6 @@ fn no_move(flags: c_int) -> c_int {
 /// Leave Visual mode and delete the inversion.
 fn stop_visual() {
     end_visual_mode();
-    // SAFETY: only schedules a redraw of the current buffer.
     redraw_curbuf_later(UPD_INVERTED);
 }
 

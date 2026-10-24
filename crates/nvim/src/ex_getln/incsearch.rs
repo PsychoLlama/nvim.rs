@@ -482,7 +482,6 @@ pub(crate) fn may_add_char_to_search(
 
     if s.did_incsearch {
         Win::current().w_cursor = s.match_end;
-        // SAFETY: the cursor was just put on a match of the current buffer.
         *c = gchar_cursor();
         if *c != NUL {
             // With 'ignorecase' and 'smartcase' set and no uppercase in
@@ -506,7 +505,6 @@ pub(crate) fn may_add_char_to_search(
                 let save_c = *c;
                 while utf_char2len(*c) != cursor_len() {
                     Win::current().w_cursor.col += utf_char2len(*c);
-                    // SAFETY: as the `gchar_cursor` above.
                     *c = gchar_cursor();
                     stuff_readbuf_char(*c);
                 }

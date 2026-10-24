@@ -236,8 +236,6 @@ fn wants_info_window(cot_flags: c_uint, repeat: c_int) -> bool {
 /// redo the whole placement. Autocommands run from here, which is why `info`
 /// is the caller's own copy.
 fn pum_show_info(info: &[u8], repeat: c_int, use_float: bool, prev_selected: c_int) -> bool {
-    // SAFETY: every window pointer below is re-checked with `win_valid`
-    // after anything that can run autocommands.
     let mut resized = false;
     // The identities, taken while both are live: opening the preview window
     // fires autocommands that can free either, which is what every

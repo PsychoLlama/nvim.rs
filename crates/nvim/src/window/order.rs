@@ -86,7 +86,6 @@ pub(crate) fn exchange(prenum: c_int) {
         return;
     }
     if is_only_window(cur, None) || text_or_buf_locked() {
-        // SAFETY: as above.
         beep_flush();
         return;
     }
@@ -171,7 +170,6 @@ pub(crate) fn rotate(upwards: bool, count: c_int) {
         return;
     }
     if count <= 0 || is_only_window(Win::current(), None) {
-        // SAFETY: beeps.
         beep_flush();
         return;
     }

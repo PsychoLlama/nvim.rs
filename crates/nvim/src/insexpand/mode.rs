@@ -669,8 +669,6 @@ pub fn ins_compl_enable_autocomplete() {
 
 /// `preinserted()`: is a previewed match currently in the buffer?
 pub fn f_preinserted(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: `ins_compl_preinsert_effect` has no precondition left, and
-    // `result` is the live return value the caller allocated.
     if ins_compl_preinsert_effect() {
         result.write_number(1);
     }

@@ -56,7 +56,6 @@ pub(crate) fn find_start_brace() -> Option<Pos> {
     let cursor_save = Win::current().w_cursor;
     let mut trypos;
     loop {
-        // SAFETY: on the main thread, with a current window and buffer.
         trypos = findmatchlimit(None, c_int::from(b'{'), FM_BLOCKSTOP, 0);
         let Some(brace) = trypos else {
             break;
@@ -100,7 +99,6 @@ pub(crate) fn find_match_char(c: u8, ind_maxparen: c_int) -> Option<Pos> {
 
     let found = loop {
         let limit = int64_t::from(ind_maxp_wk);
-        // SAFETY: on the main thread, with a current window and buffer.
         let found = findmatchlimit(None, c_int::from(c), 0, limit);
         let Some(trypos) = found else {
             break None;

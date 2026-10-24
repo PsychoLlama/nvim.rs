@@ -222,7 +222,6 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
         // If the last window has a status line now and we do not want one,
         // remove it. Do this before `equal()`, which may change a height.
         update_last_status(false);
-        // SAFETY: `'eadirection'` is a NUL-terminated option string.
         let ead = p_ead(|value| c_int::from(cstr::first(value)));
         if !Win::current().w_floating && p_ea() && (ead == 'b' as c_int || ead == dir) {
             // If the frame of the closed window contains the new current
@@ -558,7 +557,6 @@ pub(crate) fn close_othertab(win: Win, free_buf: bool, tabpage: TabPage, force: 
                 first_tabpage.set(tabpage.tp_next);
             } else {
                 let Some(mut ptp) = tabs().find(|ptp| ptp.tp_next == Some(tabpage.id())) else {
-                    // SAFETY: a static message naming the caller.
                     internal_error(c"win_close_othertab()");
                     return false;
                 };
@@ -616,7 +614,6 @@ fn tab_last_win(tabpage: TabPage) -> Win {
 
 /// Whether any autocommand is listening for `event`.
 fn event_wanted(event: AutoEvent) -> bool {
-    // SAFETY: reads the autocommand tables.
     has_event(event)
 }
 

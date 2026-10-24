@@ -42,8 +42,6 @@ use crate::winlayer::Win;
 pub fn get_expr_indent() -> c_int {
     let mut win = Win::current();
     let buf = Buf::current();
-    // SAFETY: the caller's contract; `curwin` and `curbuf` are the current
-    // window and buffer for the whole of this call.
     let use_sandbox = was_set_insecurely(win, kOptIndentexpr, OptionSetFlags::LOCAL);
     let save_sctx = current_sctx.get();
     // Saved because the expression can move the cursor via `:normal`.
@@ -54,7 +52,6 @@ pub fn get_expr_indent() -> c_int {
     let mut indent = {
         let _sandboxed = use_sandbox.then(Lock::sandbox);
         let _locked = Lock::text();
-        // SAFETY: as above.
         current_sctx.set(buf.b_p_script_ctx[kBufOptIndentexpr as usize]);
         // The expression is evaluated from a copy, because 'indentexpr' can
         // be changed while it is running.
@@ -78,7 +75,6 @@ pub fn get_expr_indent() -> c_int {
 
     // Reset `did_throw`, unless 'debug' has "throw" and we are inside a
     // try/catch.
-    // SAFETY: 'debug' is a NUL-terminated option string.
     let debug_throw = p_debug(|value| has_char(value, 't' as c_int));
     if did_throw.get() && (!debug_throw || trylevel.get() == 0) {
         handle_did_throw();
@@ -139,8 +135,6 @@ fn count_parens(line: &[u8], parencount: &mut c_int) {
 
 /// The `(` or `[` that encloses the cursor line, whichever starts later.
 fn enclosing_open() -> Option<Pos> {
-    // SAFETY: the caller's contract; `findmatch` answers a pointer into
-    // static storage that stays valid until the next call.
     let __v = findmatch(None, '(' as c_int);
     let Some(paren) = __v else {
         return findmatch(None, '[' as c_int);
@@ -157,8 +151,6 @@ fn enclosing_open() -> Option<Pos> {
 /// Leaves the cursor on the line it answered for, which is what makes
 /// `get_indent` the answer.
 fn same_level_indent(open: &Pos) -> Option<c_int> {
-    // SAFETY: the caller's contract; the cursor stays on a real line because
-    // the walk stops at `open`, which `findmatch` answered.
     let mut win = Win::current();
     let mut parencount = 0;
     loop {
@@ -306,8 +298,6 @@ fn measure_first_argument(
 /// same bracket level, and failing that, line up after the bracket that
 /// encloses this one.
 pub fn get_lisp_indent() -> c_int {
-    // SAFETY: the caller's contract; the cursor is put back before returning
-    // whichever path answers.
     let mut win = Win::current();
     let realpos = win.w_cursor;
     win.w_cursor.col = 0;
@@ -371,7 +361,6 @@ pub fn fix_indent() {
     if p_paste() {
         return; // no auto-indenting when 'paste' is set
     }
-    // SAFETY: the caller's contract.
     let buf = Buf::current();
     if buf.b_p_lisp != 0 && buf.b_p_ai != 0 {
         if use_indentexpr_for_lisp() {
@@ -395,8 +384,6 @@ pub fn f_indent(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 }
 /// `lispindent(lnum)`.
 pub fn f_lispindent(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the caller's typvals; the cursor is moved onto the asked-for
-    // line and put back.
     let mut win = Win::current();
     let pos = win.w_cursor;
     let lnum = tv_get_lnum(&args[0]);

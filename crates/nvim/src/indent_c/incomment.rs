@@ -37,8 +37,6 @@ pub(crate) fn align_with_line_comment() -> Option<c_int> {
     if trypos.is_none() && Win::current().w_cursor.lnum > 1 {
         // There may be a statement before the comment; search from the
         // end of the line above for a comment start.
-        // SAFETY: the test in front says `lnum - 1` is at least 1, so it is a
-        // line of the buffer, and `ml_get` hands back a NUL-terminated one.
         let lnum = Win::current().w_cursor.lnum - 1;
         let col = check_linecomment(Lines::current().line(lnum));
         if col != MAXCOL {
@@ -72,10 +70,7 @@ pub(crate) fn align_in_comment(line: &Line, comment: &mut Pos) -> c_int {
     // More than one line below the opener: take the indent of the
     // previous non-empty line.
     for lnum in (comment.lnum + 1..line.cur_curpos.lnum).rev() {
-        // SAFETY: `lnum` sits between the comment opener and the cursor, so
-        // it is a line of the current buffer.
         if !linewhite(lnum) {
-            // SAFETY: the same line number.
             return get_indent_lnum(lnum);
         }
     }
@@ -194,10 +189,8 @@ fn align_with_comment_leader(line: &Line, comment: &Pos, amount: &mut c_int) -> 
                 let above = lines.line(prev);
                 let above = &above[skip::white(above)..];
                 if ncmp_eq(above, &lead_start, lead_start_len) {
-                    // SAFETY: the same line number.
                     *amount = get_indent_lnum(prev);
                 } else if ncmp_eq(above, &lead_middle, lead_middle_len) {
-                    // SAFETY: the same.
                     *amount = get_indent_lnum(prev);
                     break;
                 } else {
@@ -227,8 +220,6 @@ fn align_with_comment_leader(line: &Line, comment: &Pos, amount: &mut c_int) -> 
         if !ncmp_eq(theline, &lead_middle, lead_middle_len)
             && ncmp_eq(theline, &lead_end, lead_end_len)
         {
-            // SAFETY: on the main thread with a current buffer; a bad line
-            // number is `ml_get`'s own to report, as upstream leaves it.
             *amount = get_indent_lnum(Win::current().w_cursor.lnum - 1);
             if off != 0 {
                 *amount += off;

@@ -366,7 +366,6 @@ pub(crate) fn compl_get_info(startcol: c_int, curs_col: ColNr) -> Result<(), Fai
     } else if ctrl_x_mode_spell() {
         get_spell_compl_info(startcol, curs_col)
     } else {
-        // SAFETY: a static NUL-terminated name.
         internal_error(c"ins_complete()");
         Err(Failed)
     }

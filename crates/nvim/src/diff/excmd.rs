@@ -168,7 +168,6 @@ fn remove_suffixed(name: &CStr, suffix: &CStr) {
 pub fn ex_diffsplit(excmd: &mut ExArg) {
     let old_curwin = Win::current();
     let old_curbuf = BufRef::of_opt(current_buf());
-    // SAFETY: the current window is live, in both calls.
     validate_cursor(old_curwin);
     set_fraction(old_curwin);
     cmdmod_set_tab(0);
@@ -179,17 +178,14 @@ pub fn ex_diffsplit(excmd: &mut ExArg) {
     }
     excmd.cmdidx = CmdIdx::split;
     Win::current().w_onebuf_opt.wo_diff = 1;
-    // SAFETY: the caller's command, and a window that was live when read.
     do_exedit(excmd, Some(old_curwin.id()));
     if old_curwin.is_current() {
         return;
     }
     diff_win_options(Win::current(), true);
     if win_valid(old_curwin.id()) {
-        // SAFETY: the window is live, as just checked.
         diff_win_options(old_curwin, true);
         if let Some(old_buf) = old_curbuf.get() {
-            // SAFETY: the old window is live and its buffer reference valid.
             let lnum = diff_get_corresponding_line(old_buf, old_curwin.w_cursor.lnum);
             Win::current().w_cursor.lnum = lnum;
         }
@@ -275,7 +271,6 @@ pub fn diff_win_options(mut window: Win, addbuf: bool) {
     window.w_onebuf_opt.wo_fdc = Some(XString::from_bytes(&[b'0' + digit]));
     window.w_onebuf_opt.wo_fen = 1;
     window.w_onebuf_opt.wo_fdl = 0 as OptInt;
-    // SAFETY: a live window, in all three calls.
     fold_update_all(window);
     changed_window_setting(window);
     if !p_sbo(|value| has_char(value, 'h' as c_int)) {
@@ -284,7 +279,6 @@ pub fn diff_win_options(mut window: Win, addbuf: bool) {
     window.w_onebuf_opt.wo_diff_saved = 1;
     set_diff_option(window, true);
     if addbuf {
-        // SAFETY: a live window's buffer is live.
         diff_buf_add(window.buffer());
     }
     window.redraw_later(UPD_NOT_VALID);
@@ -327,7 +321,6 @@ pub fn ex_diffoff(excmd: &mut ExArg) {
                     wp.w_onebuf_opt.wo_fdl = wp.w_onebuf_opt.wo_fdl_save;
                 }
                 if wp.w_onebuf_opt.wo_fen != 0 {
-                    // SAFETY: a live window.
                     let manual = foldmethod_is_manual(wp);
                     wp.w_onebuf_opt.wo_fen = if manual {
                         0
@@ -335,7 +328,6 @@ pub fn ex_diffoff(excmd: &mut ExArg) {
                         wp.w_onebuf_opt.wo_fen_save
                     };
                 }
-                // SAFETY: a live window.
                 fold_update_all(wp);
             }
             wp.w_topfill = 0;
@@ -352,12 +344,9 @@ pub fn ex_diffoff(excmd: &mut ExArg) {
         diff_need_update.set(false);
         tp.tp_diff_invalid = 0;
         tp.tp_diff_update = 0;
-        // SAFETY: the current tab page is live.
         diff_clear(tp);
     }
-    // SAFETY: `p_sbo` is the `'scrollopt'` option string.
     if !diffwin && p_sbo(|value| has_char(value, 'h' as c_int)) {
-        // SAFETY: a static command line.
         let _ = do_cmdline_cmd(c"set sbo-=hor");
     }
 }

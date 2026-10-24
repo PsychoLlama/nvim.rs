@@ -69,43 +69,36 @@ fn plines_nofill(window: Win, lnum: LineNr, limit_winheight: bool) -> c_int {
 
 /// Columns of `window` the text does not start in: `'number'`, signs and folds.
 fn col_off(window: Win) -> c_int {
-    // SAFETY: a live window.
     window.col_off()
 }
 
 /// The extra indent a wrapped line gets from `'cpoptions'`'s `n` flag.
 fn col_off2(window: Win) -> c_int {
-    // SAFETY: a live window.
     win_col_off2(window)
 }
 
 /// Forget everything cached below the window's last drawn line.
 fn invalidate_botline(window: Win) {
-    // SAFETY: a live window.
     invalidate_botline_win(window);
 }
 
 /// Recompute the window's last drawn line.
 fn validate_botline(window: Win) {
-    // SAFETY: a live window.
     validate_botline_win(window);
 }
 
 /// Move the cursor `n` lines down (or up, for [`cursor_up`]) without touching
 /// the view, as `'splitkeep'` needs to measure it.
 fn cursor_down(window: Win, n: c_int) {
-    // SAFETY: a live window.
     cursor_down_inner(window, n, false);
 }
 
 fn cursor_up(window: Win, n: LineNr) {
-    // SAFETY: a live window.
     cursor_up_inner(window, n, false);
 }
 
 /// The effective `'scrolloff'` for `window`.
 fn scrolloff(window: Win) -> ::core::ffi::c_long {
-    // SAFETY: a live window.
     get_scrolloff_value(window) as ::core::ffi::c_long
 }
 
@@ -310,12 +303,10 @@ pub(crate) fn to_fraction(window: Win, prev_height: c_int) {
                 window.w_wrow -= sline;
             }
         }
-        // SAFETY: a live window and a line of its buffer.
         set_topline(window, lnum);
     }
 
     if window.is_current() {
-        // SAFETY: a live window; validates `w_wrow`.
         curs_columns(window, 0);
     }
     if prev_height > 0 {
@@ -369,11 +360,9 @@ pub(crate) fn set_inner_size(window: Win, valid_cursor: bool) {
         window.w_view_width = width;
         window.w_lines_valid = 0;
         if valid_cursor {
-            // SAFETY: a live window.
             changed_line_abv_curs_win(window);
             invalidate_botline(window);
             if window.is_current() && (keeps_cursor || window.w_floating) {
-                // SAFETY: a live window.
                 curs_columns(window, 1);
             }
         }
@@ -381,7 +370,6 @@ pub(crate) fn set_inner_size(window: Win, valid_cursor: bool) {
     }
     buf_terminal_check_size(window.buffer());
 
-    // SAFETY: a live window; both read its border configuration.
     let (border_height, border_width) = (win_border_height(window), win_border_width(window));
     let float_stl = if window.w_floating && window.w_status_height != 0 {
         STATUS_HEIGHT as c_int

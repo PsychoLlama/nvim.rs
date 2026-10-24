@@ -120,7 +120,6 @@ fn split_ins(
         return None;
     }
     if new_wp.is_none() {
-        // SAFETY: fires `WinNewPre`, which reads no argument of ours.
         trigger_winnewpre();
     }
 
@@ -395,7 +394,6 @@ fn split_room_horizontal(
 
 /// The first character of `'eadirection'`.
 fn ead() -> c_int {
-    // SAFETY: `'eadirection'` is a NUL-terminated option string.
     p_ead(|value| c_int::from(cstr::first(value)))
 }
 
@@ -787,7 +785,6 @@ fn init(newp: Win, oldp: Win, flags: c_int) {
     newp.w_localdir = oldp.w_localdir.clone();
     newp.w_prevdir = oldp.w_prevdir.clone();
 
-    // SAFETY: `'splitkeep'` is a NUL-terminated option string.
     let spk = p_spk(|value| c_int::from(cstr::first(value)));
     if spk != 'c' as c_int {
         if spk == 't' as c_int {

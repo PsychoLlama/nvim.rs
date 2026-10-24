@@ -102,10 +102,8 @@ fn pagescroll_with(
 
     // An error when neither the viewport nor the cursor changed.
     if !did_move {
-        // SAFETY: beeping reads editor state, not a pointer of ours.
         beep_flush();
     } else if win.w_onebuf_opt.wo_sms == 0 {
-        // SAFETY: the caller's promise -- this moves `curwin`'s cursor.
         beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
     } else if p_sol() {
         nv_g_home_m_cmd(cmd_arg);
@@ -154,10 +152,8 @@ fn half_page(mut win: Win, dir: Direction, count: c_int, saved: Saved, op: Op) -
     if win.w_onebuf_opt.wo_wrap != 0 {
         nv_screengo(op, dir, curscount, true);
     } else if dir == FORWARD {
-        // SAFETY: a live window.
         cursor_down_inner(win, curscount, true);
     } else {
-        // SAFETY: a live window.
         cursor_up_inner(win, curscount as LineNr, true);
     }
     did_move
@@ -248,7 +244,6 @@ pub fn do_check_cursorbind() {
             // set for the duration so that it may sit beyond the end of line.
             let restart_edit_save = restart_edit.get();
             restart_edit.set(1);
-            // SAFETY: a live window.
             check_cursor(win);
             // Avoid a scroll here for the cursor position: 'scrollbind' is
             // more important.

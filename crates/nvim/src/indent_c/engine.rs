@@ -169,7 +169,6 @@ fn c_indent(line: &Line) -> Option<c_int> {
         .then(|| find_match_char(b'[', Buf::current().b_ind_maxparen))
         .flatten();
     if let Some(trypos) = bracket {
-        // SAFETY: `trypos` is a position in the current buffer.
         return Some(get_indent_lnum(trypos.lnum));
     }
 

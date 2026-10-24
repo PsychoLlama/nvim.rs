@@ -169,7 +169,6 @@ const IGNORED: [c_int; 22] = [
 /// The two lines the Visual selection spans, with any fold at either end
 /// opened out to its whole range.
 fn visual_line_range(sel: VisualSelection, cursor_bot: bool) -> (LineNr, LineNr) {
-    // SAFETY (throughout): `curwin` is the current window.
     let (mut top, mut bot) = if cursor_bot {
         (sel.anchor.lnum, Win::current().w_cursor.lnum)
     } else {
@@ -245,12 +244,10 @@ fn charwise_extent(sel: VisualSelection, cursor_bot: bool) -> (c_int, c_int) {
 
 /// Describe the Visual selection into the 'showcmd' buffer.
 fn show_visual_size(sel: VisualSelection) {
-    // SAFETY: `curwin` is the current window.
     let cursor_bot = lt(sel.anchor, Win::current().w_cursor);
     let (top, bot) = visual_line_range(sel, cursor_bot);
     let lines = (bot - top + 1) as c_int;
 
-    // SAFETY: `curwin` is the current window.
     let same_line = sel.anchor.lnum == Win::current().w_cursor.lnum;
     let text = if sel.mode.is_block() {
         format!("{lines}x{}", blockwise_width(sel))
@@ -278,7 +275,6 @@ pub(crate) fn clear_showcmd() {
     if !p_sc() {
         return;
     }
-    // SAFETY: reads the typeahead state.
     if let Some(sel) = visual_selection().filter(|_| !char_avail()) {
         show_visual_size(sel);
     } else {
@@ -328,7 +324,6 @@ pub(crate) fn add_to_showcmd(c: c_int) -> bool {
     sc.append(extra, showcmd_limit());
     showcmd_buf.set(sc);
 
-    // SAFETY: reads the typeahead state.
     if char_avail() {
         return false;
     }
@@ -350,7 +345,6 @@ pub(crate) fn del_from_showcmd(len: c_int) {
     let mut sc = showcmd_buf.get();
     sc.truncate(sc.len.saturating_sub(len as usize));
     showcmd_buf.set(sc);
-    // SAFETY: reads the typeahead state.
     if !char_avail() {
         display_showcmd();
     }
@@ -378,10 +372,8 @@ pub(crate) fn display_showcmd() {
     let clear = showcmd_buf.get().is_empty();
     showcmd_is_clear.set(clear);
 
-    // SAFETY: 'showcmdloc' is a non-empty string option.
     let loc = p_sloc(|value| c_int::from(cstr::first(value)));
     if loc == 's' as c_int {
-        // SAFETY: `curwin` is the current window.
         if clear {
             Win::current().w_redr_status = true;
         } else {

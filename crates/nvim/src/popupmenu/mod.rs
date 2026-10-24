@@ -204,7 +204,6 @@ struct PumAnchor {
 /// `cmd_startcol` is the column of the completed match, and only means
 /// anything for a cmdline menu.
 fn pum_compute_anchor(cmd_startcol: c_int) -> PumAnchor {
-    // SAFETY: `curwin`, `cmdline_win` and the window tree are the editor's.
     let win = Win::current();
     let cmdline = State.get() & MODE_CMDLINE != 0;
     let target_win = if cmdline { cmdline_window() } else { Some(win) };
@@ -416,7 +415,6 @@ pub fn pum_undisplay(immediate: bool) {
 /// of a redraw, where the grid may not be freed yet.
 pub fn pum_check_clear() {
     let mut grid = pum_grid_ref();
-    // SAFETY: `pum_grid` is the editor's own grid.
     if pum_is_visible.get() || !pum_is_drawn.get() {
         return;
     }
@@ -535,7 +533,6 @@ fn pum_send_float_pos() {
     let above = pum_above.get();
     let anchor = if above { c"SW" } else { c"NW" };
     let row_off = if above { -pum_height.get() } else { 0 };
-    // SAFETY: the anchor is a literal.
     let anchor = String_0::from_cstr(anchor);
     ui_call_win_float_pos(
         grid.handle as Integer,

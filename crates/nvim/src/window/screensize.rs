@@ -286,7 +286,6 @@ impl Subject {
 
 pub fn may_trigger_win_scrolled_resized() {
     static recursive: GlobalCell<bool> = GlobalCell::new(false);
-    // SAFETY: reads the autocommand tables.
     let (do_resize, do_scroll) = (
         has_event(AutoEvent::WinResized),
         has_event(AutoEvent::WinScrolled),

@@ -71,8 +71,6 @@ fn changed_lines_invalidate_win(
 
     // Inline virtual text under 'wrap', and virtual lines, make the line
     // after the change part of it as far as the display cache goes.
-    // SAFETY: a live window's buffer is live, in both calls; the short
-    // circuits are upstream's.
     let widen = xtra < 0
         && window.w_onebuf_opt.wo_wrap != 0
         && buf_meta_total(window.buffer(), kMTMetaInline) != 0
@@ -241,7 +239,6 @@ fn redraw_win_for_change(
 
     // Can't postpone the fold update: a following operator might work on
     // the whole fold, as `>>dd` does.
-    // SAFETY: a live window.
     fold_update(window, lnum, last);
 
     // The change may pull the lines above or below it into a fold, so widen
@@ -265,7 +262,6 @@ fn redraw_win_for_change(
     // especially when the buffer was changed in another window.
     if window.has_any_folding() {
         let top = window.w_topline;
-        // SAFETY: a live window.
         set_topline(window, top);
     }
 

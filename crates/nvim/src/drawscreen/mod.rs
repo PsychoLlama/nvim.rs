@@ -206,7 +206,6 @@ pub fn redrawing() -> bool {
 /// multigrid the message grid is a grid of its own, so there is nothing on the
 /// default grid to repair -- which is what the `kUIMultigrid` test is for.
 fn restore_scrolled_messages(redr_type: c_int, is_stl_global: bool) {
-    // SAFETY: the screen and message grids, on the main thread.
     clear_cmdline.set(true);
 
     // `msg_scrollsize` is a pure function of `msg_scrolled` and 'cmdheight',
@@ -649,7 +648,6 @@ pub fn compute_foldcolumn(window: Win, col: c_int) -> c_int {
 /// column would be. The answer is cached against the line count it was computed
 /// for, since it only changes when that crosses a power of ten.
 pub fn number_width(mut window: Win) -> c_int {
-    // SAFETY: a live window and its buffer, on the main thread.
     // With 'relativenumber' alone the largest number shown is the window
     // height (the cursor line shows "0"); otherwise it is the line count.
     let largest = if window.w_onebuf_opt.wo_rnu != 0 && window.w_onebuf_opt.wo_nu == 0 {

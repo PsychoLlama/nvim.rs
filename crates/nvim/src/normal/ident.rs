@@ -376,7 +376,6 @@ pub(crate) fn nv_tagpop(cmd_arg: &mut CmdArg) {
 
 /// `gf`, `gF` and `[f`: edit the file named under the cursor.
 pub(crate) fn nv_gotofile(cmd_arg: &mut CmdArg) {
-    // SAFETY: `oap` is the live operator this command is pending on.
     if check_text_or_curbuf_locked(Some(cmd_arg.op())) || !check_can_set_curbuf_disabled() {
         return;
     }

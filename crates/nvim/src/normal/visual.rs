@@ -256,7 +256,6 @@ pub(crate) fn with_visual_anchor<R>(f: impl FnOnce(&mut Pos) -> R) -> R {
 pub(crate) fn end_visual_mode() {
     VIsual_select_exclu_adj.set(false);
     set_visual_active(false);
-    // SAFETY: all of this is the current buffer's and window's own state.
     setmouse();
     mouse_dragging.set(0);
     Buf::current().b_visual.vi_mode = visual_mode().raw();
@@ -276,7 +275,6 @@ pub(crate) fn end_visual_mode() {
 pub(crate) fn reset_visual_and_resel() {
     if visual_active() {
         end_visual_mode();
-        // SAFETY: schedules a redraw of the current buffer.
         redraw_curbuf_later(UPD_INVERTED);
     }
     VIsual_reselect.set(0);
@@ -286,7 +284,6 @@ pub(crate) fn reset_visual_and_resel() {
 pub(crate) fn reset_visual() {
     if visual_active() {
         end_visual_mode();
-        // SAFETY: schedules a redraw of the current buffer.
         redraw_curbuf_later(UPD_INVERTED);
         VIsual_reselect.set(0);
     }
@@ -296,7 +293,6 @@ pub(crate) fn reset_visual() {
 /// operator.
 pub(crate) fn restore_visual_mode() {
     if VIsual_mode_orig.get() != VisualMode::NONE {
-        // SAFETY: `curbuf` is the current buffer.
         Buf::current().b_visual.vi_mode = VIsual_mode_orig.get().raw();
         VIsual_mode_orig.set(VisualMode::NONE);
     }
@@ -411,7 +407,6 @@ pub(crate) fn v_swap_corners(cmdchar: c_int) {
     // Only the blockwise `O` path below reads this; the charwise path returns
     // first, having set the anchor itself.
     let mut anchor = visual_anchor();
-    // SAFETY: `curwin` is the current window and `VIsual` a live position.
     if cmdchar != 'O' as c_int || !visual_mode().is_block() {
         let old_cursor = Win::current().w_cursor;
         Win::current().w_cursor = visual_anchor();
@@ -633,7 +628,6 @@ pub(crate) fn start_selection() {
 /// 'selectmode' says which of those mean Select. A command-started selection
 /// only counts as typed when nothing is being replayed.
 pub(crate) fn may_start_select(c: c_int) {
-    // SAFETY: 'selectmode' is a C string option.
     let by_selectmode = p_slm(|value| has_char(value, c));
     let typed = c == 'o' as c_int || (stuff_empty() && typeahead().maplen() == 0);
     set_visual_select(typed && by_selectmode);
@@ -644,7 +638,6 @@ pub(crate) fn n_start_visual_mode(c: c_int) {
     set_visual_mode(VisualMode::from_raw(c));
     set_visual_active(true);
     VIsual_reselect.set(1);
-    // SAFETY: `curwin` is the current window.
     // A block selection starting inside a TAB starts at the column the
     // cursor is displayed at, not at the TAB's first column.
     if c == Ctrl_V && get_ve_flags(Win::current()) & kOptVeFlagBlock != 0 && gchar_cursor() == TAB {
@@ -762,7 +755,6 @@ pub(crate) fn unadjust_for_sel_inner(pos: &mut Pos) -> bool {
         mark_mb_adjustpos(Buf::current(), pos);
         // Inside a TAB, stepping back a byte means stepping to the last
         // screen column the TAB covers.
-        // SAFETY: `curwin` is set from startup to exit.
         if virtual_active(Win::current()) {
             let (cs, _, ce) = getvcol(Win::current(), pos);
             pos.coladd = ce - cs;

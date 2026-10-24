@@ -57,7 +57,6 @@ impl WindowCorner {
 /// expression can read the sign count, so a change to it invalidates the cached
 /// width estimate even when the column itself did not move.
 pub(crate) fn win_redraw_signcols(mut window: Win) -> bool {
-    // SAFETY: the caller's live window; its buffer is live with it.
     let mut buf = window.buffer();
 
     // 'signcolumn' with a range, or a 'statuscolumn' that may ask for the
@@ -83,7 +82,6 @@ pub(crate) fn win_redraw_signcols(mut window: Win) -> bool {
     }
 
     let mut width = window.w_maxscwidth.min(buf.b_signcols.max);
-    // SAFETY: as above -- the window's own 'statuscolumn' string.
     let rebuild_stc = buf.b_signcols.max != buf.b_signcols.last_max
         && window.w_onebuf_opt.wo_stc.first_byte() != 0;
 

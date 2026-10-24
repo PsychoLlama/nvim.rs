@@ -89,8 +89,6 @@ pub(crate) fn do_check_scrollbind(check: bool) {
 /// on `curwin`. Any Visual selection is put down for the duration so that
 /// nothing extends it.
 pub(crate) fn check_scrollbind(vtopline_diff: LineNr, leftcol_diff: c_int) {
-    // SAFETY (throughout): walks the current tab page's window list, restoring `curwin`
-    // and `curbuf` before returning.
     let (old_curwin, old_curbuf) = (Win::current(), Buf::current());
     let old_visual_select = visual_select();
     let old_visual_active = visual_active();
@@ -119,7 +117,6 @@ pub(crate) fn check_scrollbind(vtopline_diff: LineNr, leftcol_diff: c_int) {
                     // window's buffer; the *position* keeps the overshoot
                     // so that scrolling back lines up again.
                     win.w_scbind_pos += vtopline_diff as c_int;
-                    // SAFETY: a live window of the walk above.
                     let curr_vtopline = get_vtopline(win);
                     let last = Buf::current().b_ml.ml_line_count;
                     let filled = plines_m_win_fill(win, win.w_topline + 1, last);

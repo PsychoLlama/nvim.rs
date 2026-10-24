@@ -179,8 +179,6 @@ pub fn may_do_si() -> bool {
 /// holding the matching `(`, which is what makes an `if (..\n..) {`
 /// spanning several lines come out right (Webb).
 fn si_indent_like_open_brace(pos: Pos) {
-    // SAFETY: the caller's position, and the cursor is put back before the
-    // indent is applied.
     let mut win = Win::current();
     let old_pos = win.w_cursor;
     let mut i = pos.col as c_int;
@@ -213,8 +211,6 @@ fn si_indent_like_open_brace(pos: Pos) {
 /// Whether a `{` typed after an `O` should reduce this line's indent: it may
 /// not go below the indent of the previous real line.
 fn si_should_shift_back() -> bool {
-    // SAFETY: the caller's contract; the walk stops at line 1 and the cursor
-    // is put back before answering.
     let mut win = Win::current();
     let old_pos = win.w_cursor;
     let here = get_indent();
@@ -236,8 +232,6 @@ fn si_should_shift_back() -> bool {
 /// Very smart auto-indenting for a "normal" character typed in Insert mode:
 /// `{`, `}` and `#`.
 pub fn ins_try_si(c: c_int) {
-    // SAFETY: the caller's contract; every helper below reads and restores
-    // the cursor itself.
     let win = Win::current();
     if (did_si.get() || can_si_back.get()) && c == '{' as c_int
         || can_si.get() && c == '}' as c_int && inindent(0)

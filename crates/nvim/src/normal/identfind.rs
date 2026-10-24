@@ -382,7 +382,6 @@ pub(crate) fn find_decl(word: &[u8], locally: bool, thisblock: bool, flags_arg: 
             // cursor: it is a different scope.
             let travel = int64_t::from(old_pos.lnum - Win::current().w_cursor.lnum + 1);
             let brace = '}' as c_int;
-            // SAFETY: the current window and buffer are live.
             let close = findmatchlimit(None, brace, FM_FORWARD.cast_signed(), travel);
             if let Some(close) = close
                 && close.lnum < old_pos.lnum

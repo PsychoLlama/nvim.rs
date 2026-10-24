@@ -26,7 +26,6 @@ impl Win {
     /// Put the cursor at virtual column `wcol`, or as close as the line
     /// allows. Answers whether it got there.
     pub(crate) fn coladvance(self, wcol: ColNr) -> bool {
-        // SAFETY: a live window.
         coladvance(self, wcol)
     }
 }

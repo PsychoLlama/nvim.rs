@@ -335,7 +335,6 @@ fn diff_try_update(dio: &mut DiffIo, idx_orig: c_int, excmd: Option<&mut ExArg>)
 ///
 /// `'diffexpr'` overrides `'diffopt'`'s `internal`.
 pub fn diff_internal() -> c_int {
-    // SAFETY: `p_dex` is the `'diffexpr'` option string.
     let no_diffexpr = p_dex(CStr::is_empty);
     c_int::from(diff_flags.get() & DIFF_INTERNAL != 0 && no_diffexpr)
 }

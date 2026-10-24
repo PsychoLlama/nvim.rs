@@ -154,7 +154,6 @@ fn search_backwards(line: &Line) -> c_int {
                 Win::current().w_cursor.col = 0;
             }
 
-            // SAFETY: reads the cursor's line of the current buffer.
             amount = get_indent();
             if amount == 0 {
                 amount = first_id_amount();
@@ -191,7 +190,6 @@ fn search_backwards(line: &Line) -> c_int {
             return amount;
         }
         if opens_array {
-            // SAFETY: reads the cursor's line of the current buffer.
             return get_indent() + Buf::current().b_ind_continuation;
         }
 
@@ -252,7 +250,6 @@ fn search_backwards(line: &Line) -> c_int {
         if let Some(trypos) = find_match_paren(Buf::current().b_ind_maxparen) {
             Win::current().w_cursor = trypos;
         }
-        // SAFETY: reads the cursor's line of the current buffer.
         return get_indent();
     }
     amount

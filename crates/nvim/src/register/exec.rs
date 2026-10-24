@@ -75,8 +75,6 @@ fn fire_recording_leave(regname: c_int, contents: &XString) {
     let name = [regname as u8, NUL as u8];
     let _ = dict.edit().add_str(b"regname", Some(cstr::in_bytes(&name)));
     dict.edit().set_keys_readonly();
-    // SAFETY: the event carries no file name; running the autocommands is
-    // what this function is for, and the caller allows it.
     apply_autocmds(
         AutoEvent::RecordingLeave,
         None,
@@ -109,8 +107,6 @@ pub fn do_record(c: c_int) -> Result<(), Failed> {
         reg_recording.set(c);
         showmode();
         regname.set(c);
-        // SAFETY: the event carries no file name, and this function's own
-        // caller allows the autocommands it fires.
         apply_autocmds(
             AutoEvent::RecordingEnter,
             None,

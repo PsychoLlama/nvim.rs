@@ -77,7 +77,6 @@ pub fn nv_diffgetput(put: bool, count: size_t) {
     }
     ea.line1 = Win::current().w_cursor.lnum;
     ea.line2 = Win::current().w_cursor.lnum;
-    // SAFETY: `ea` is a local of this frame.
     ex_diffgetput(&mut ea);
 }
 
@@ -96,7 +95,6 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
     }
     let cmdidx = excmd.cmdidx;
     let mut idx_other = 0;
-    // SAFETY: the command's own NUL-terminated argument.
     if c_int::from(excmd.line.byte_at(excmd.line.arg)) == NUL {
         // No argument: the other side is the one other buffer in the diff,
         // and it is an error if there are two of them to choose from.
@@ -153,7 +151,6 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
             found
         };
         let Some(buf) = find_buf(nr) else {
-            // SAFETY: the command's own argument, for the one `%s`.
             let arg = msg_bytes(excmd.line.arg());
             semsg!("E102: Can't find buffer \"{arg}\"");
             return;
@@ -163,7 +160,6 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
         }
         idx_other = tp.diff_index(buf);
         if idx_other == DB_COUNT {
-            // SAFETY: as above.
             let arg = msg_bytes(excmd.line.arg());
             semsg!("E103: Buffer \"{arg}\" is not in diff mode");
             return;
@@ -194,7 +190,6 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
     let mut aco = AcoSave::default();
     let put = cmdidx != CmdIdx::diffget;
     if put {
-        // SAFETY: `aco` is a local, and `other` a live buffer of the diff.
         aucmd_prepbuf(&mut aco, tp.used_diffbuf(idx_other as usize));
     }
     let (idx_from, idx_to) = if put {
@@ -217,16 +212,13 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
             if KeyTyped.get() {
                 u_sync(false);
             }
-            // SAFETY: `aco` was filled in by `aucmd_prepbuf` above.
             aucmd_restbuf(&mut aco);
         }
     }
     diff_busy.set(false);
     if diff_need_update.get() {
-        // SAFETY: no `ExArg` is being passed on.
         diff_update(None);
     }
-    // SAFETY: the current window is live, in both calls.
     check_cursor(Win::current());
     changed_line_abv_curs();
     if tp.tp_diff.is_empty() {
@@ -235,7 +227,6 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
         for wp in windows() {
             let by_diff = wp.w_onebuf_opt.wo_fdm.first_byte() as c_int == 'd' as c_int;
             if wp.w_onebuf_opt.wo_diff != 0 && by_diff && wp.w_onebuf_opt.wo_fen != 0 {
-                // SAFETY: a live window.
                 fold_update_all(wp);
             }
         }

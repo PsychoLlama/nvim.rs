@@ -41,7 +41,6 @@ pub fn default_grid_alloc() -> bool {
     // back here; break the loop rather than recursing.
     static RESIZING: GlobalCell<bool> = GlobalCell::new(false);
 
-    // SAFETY: `default_grid` is the editor's screen grid, on the main thread.
     if RESIZING.get() {
         return false;
     }
@@ -141,8 +140,6 @@ pub(crate) fn cmdline_number_prompt() -> bool {
 
 /// Set the dimensions of the Nvim application "screen".
 pub extern "C" fn screen_resize(width: c_int, height: c_int) {
-    // SAFETY: the screen, the window layout and the autocommand machinery, all
-    // on the main thread.
     // Setting the window size can produce another window-changed signal.
     if updating_screen.get() || resizing_screen.get() || cmdline_number_prompt() {
         return;

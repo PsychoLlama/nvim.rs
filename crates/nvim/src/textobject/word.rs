@@ -113,9 +113,6 @@ pub fn fwd_word(mut count: c_int, bigword: bool, eol: bool) -> Result<(), Failed
         // Always move at least one character, unless this is the last one
         // in the buffer.
         let last_line = Win::current().w_cursor.lnum == Buf::current().b_ml.ml_line_count;
-        // SAFETY, for every cursor step below: the caller guarantees a current
-        // window with its cursor on a line of the current buffer, and each
-        // step leaves it on one.
         let mut i = inc_cursor();
         if i == -1 || (i >= 1 && last_line) {
             return Err(Failed); // started on the last character of the file
@@ -167,9 +164,6 @@ pub fn bck_word(mut count: c_int, bigword: bool, mut stop: bool) -> Result<(), F
             Win::current().w_cursor.col = 0;
         }
         let sclass = cls();
-        // SAFETY, for every step below: the caller guarantees a current window
-        // with its cursor on a line of the current buffer, and each step
-        // leaves it on one.
         if dec_cursor() == -1 {
             return Err(Failed); // started at the start of the file
         }
@@ -242,9 +236,6 @@ pub fn end_word(
             coladvance(Win::current(), MAXCOL);
         }
         let sclass = cls();
-        // SAFETY, for every step below: the caller guarantees a current window
-        // with its cursor on a line of the current buffer, and each step
-        // leaves it on one.
         if inc_cursor() == -1 {
             return Err(Failed);
         }
@@ -294,9 +285,6 @@ pub fn bckend_word(mut count: c_int, bigword: bool, eol: bool) -> Result<(), Fai
             break;
         }
         let sclass = cls();
-        // SAFETY, for every step below: the caller guarantees a current window
-        // with its cursor on a line of the current buffer, and each step
-        // leaves it on one.
         let mut i = dec_cursor();
         if i == -1 {
             return Err(Failed);

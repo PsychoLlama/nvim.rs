@@ -340,6 +340,5 @@ pub fn f_cindent(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     } else {
         -1
     };
-    // SAFETY: the caller's promise -- `result` is a number typval to fill in.
     result.write_number(amount);
 }

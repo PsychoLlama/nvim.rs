@@ -357,14 +357,11 @@ fn virtcol2col(win: Win, lnum: LineNr, vcol: c_int) -> c_int {
 
 /// `virtcol2col({winid}, {lnum}, {col})`.
 pub fn f_virtcol2col(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the evaluator's calling convention.
     result.write_number(-1);
-    // SAFETY: the evaluator's calling convention: three arguments.
     let typed = (0..3).all(|n| tv_check_for_number_arg(args, n).is_ok());
     if !typed {
         return;
     }
-    // SAFETY: the evaluator's calling convention.
     let Some(win) = find_win_by_nr_or_id(&args[0]) else {
         return;
     };
@@ -383,6 +380,5 @@ pub fn f_virtcol2col(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         return;
     }
     let col = virtcol2col(win, lnum, screencol);
-    // SAFETY: the evaluator's calling convention.
     result.write_number(col as VarNumber);
 }

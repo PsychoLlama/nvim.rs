@@ -275,8 +275,6 @@ impl BreakindentCache {
 /// `line` is the text up to its first NUL, as the C string it stands for.
 pub fn get_breakindent_win(window: Win, line: &[u8]) -> c_int {
     let line = cstr::until_nul(line);
-    // SAFETY: the caller's window and its buffer.
-    // SAFETY: the caller's window; a live window has a live buffer.
     let win = window;
     let buf = win.buffer();
     let key = BreakindentKey {
@@ -294,7 +292,6 @@ pub fn get_breakindent_win(window: Win, line: &[u8]) -> c_int {
         list: win.w_briopt_list,
         vcol: win.w_briopt_vcol,
     };
-    // SAFETY: a live window.
     let col_off2 = win_col_off2(win);
     let flp = local_or_global(&buf.b_p_flp, P_FLP);
     // The window width minus its margins: what is left for text.

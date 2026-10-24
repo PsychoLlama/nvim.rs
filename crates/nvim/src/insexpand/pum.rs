@@ -117,7 +117,6 @@ pub fn ins_compl_col_range_attr(lnum: LineNr, col: c_int) -> c_int {
     }
 
     let start_col = compl_col.get() + ins_compl_leader_len() as c_int;
-    // SAFETY: the caller's promise -- a completion with a shown match.
     if !ins_compl_has_multiple() {
         return if col >= start_col && col < compl_ins_end_col.get() {
             attr

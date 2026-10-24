@@ -41,7 +41,6 @@ pub(crate) fn opens_namespace(line: &[u8], at: usize) -> bool {
     // Skip over "inline" and "export" in any order.
     loop {
         let tail = &line[at.min(line.len())..];
-        // SAFETY: `vim_iswordc` reads the current buffer's 'iskeyword' table.
         if !(tail.starts_with(b"inline") || tail.starts_with(b"export"))
             || vim_iswordc(c_int::from(byte_at(line, at + 6)))
         {
@@ -69,7 +68,6 @@ pub(crate) fn opens_namespace(line: &[u8], at: usize) -> bool {
             at = code_at(line, at + skip::white(&line[at.min(line.len())..]));
         } else if c == b'{' {
             break;
-        // SAFETY: `vim_iswordc` reads the current buffer's 'iskeyword' table.
         } else if vim_iswordc(c_int::from(c)) {
             if has_name {
                 return false; // a word character after a finished name
@@ -95,7 +93,6 @@ pub(crate) fn opens_namespace(line: &[u8], at: usize) -> bool {
 /// -- 'cinoptions' `E`.
 pub(crate) fn opens_extern_c(line: &[u8], at: usize) -> bool {
     let at = code_at(line, at);
-    // SAFETY: `vim_iswordc` reads the current buffer's 'iskeyword' table.
     if !line[at.min(line.len())..].starts_with(b"extern")
         || vim_iswordc(c_int::from(byte_at(line, at + 6)))
     {
@@ -310,7 +307,6 @@ pub(crate) fn in_baseclass_list(cached: &mut CppBaseclassCache) -> bool {
 /// column [`in_baseclass_list`] chose (0 meaning "nothing to line up with").
 pub(crate) fn get_baseclass_amount(col: c_int) -> c_int {
     let mut amount = if col == 0 {
-        // SAFETY: reads the cursor's line of the current buffer.
         let mut amount = get_indent();
         // The borrow ends with the statement: the match search reads other
         // lines, and only runs when a paren was found, as upstream has it.
@@ -320,7 +316,6 @@ pub(crate) fn get_baseclass_amount(col: c_int) -> c_int {
             .then(|| find_match_paren(Buf::current().b_ind_maxparen))
             .flatten()
         {
-            // SAFETY: `trypos` is a position in the current buffer.
             amount = get_indent_lnum(trypos.lnum);
         }
         let cursor_lnum = Win::current().w_cursor.lnum;

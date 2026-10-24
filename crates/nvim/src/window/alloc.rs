@@ -502,7 +502,6 @@ pub fn free_wininfo(entry: &mut WinInfo) {
 
 pub(crate) fn win_free(window: Win, tabpage: Option<TabPage>) {
     let mut window = window;
-    // SAFETY: a live window; reduces the reference count to its argument list.
     clear_folding(window);
     alist_unlink(window.w_alist);
     // Don't execute autocommands while the window is halfway deleted.

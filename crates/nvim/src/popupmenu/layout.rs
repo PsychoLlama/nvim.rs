@@ -230,7 +230,6 @@ pub(crate) fn pum_compute_horizontal_placement(
 /// `min_width` is the width the caller wants even for narrow items.
 pub(crate) fn pum_position_at_mouse(min_width: c_int) {
     let pum_handle = pum_grid_ref().handle;
-    // SAFETY: `get_win_by_grid_handle` answers a live window or null.
     let (min_row, min_col) = (0, 0);
     let mut max_row = Rows.get();
     let mut max_col = Columns.get();

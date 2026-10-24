@@ -383,12 +383,10 @@ pub fn mark_adjust_buf(
             win.w_cursor = cursor;
         }
         if adjust_folds {
-            // SAFETY: `win` came out of the editor's own window list.
             fold_mark_adjust(win, line1, line2, amount, amount_after);
         }
     }
 
-    // SAFETY: `buffer` is live and the tab page list is the editor's own.
     diff_mark_adjust(buffer, line1, line2, amount, amount_after);
 
     // The per-window remembered cursor of every window that has ever shown

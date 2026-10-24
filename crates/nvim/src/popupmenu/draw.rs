@@ -666,8 +666,6 @@ fn pum_draw_row(style: &RowStyle, items: &[PumItem], i: c_int, grid_row: c_int) 
 /// Redraw the popup menu, using `pum_first` and `pum_selected`.
 pub fn pum_redraw() {
     let mut grid = pum_grid_ref();
-    // SAFETY: the placement functions have filled the state cells and the
-    // item array is live.
     let win = Win::current();
 
     // Room for one padding cell beside the text, when there is any.

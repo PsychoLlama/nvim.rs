@@ -291,7 +291,6 @@ pub(crate) fn enter_ext(window: Win, flags: c_int) {
 
     // sync undo before leaving the current buffer
     if flags & WEE_UNDO_SYNC as c_int != 0 && !window.w_buffer.is_current() {
-        // SAFETY: reads the current buffer's undo state.
         u_sync(false);
     }
     // Might need to scroll the old window before switching, e.g. when the
@@ -312,7 +311,6 @@ pub(crate) fn enter_ext(window: Win, flags: c_int) {
     window.buffer().make_current();
 
     revalidate_cursor(Win::current());
-    // SAFETY: a live window.
     if !virtual_active(Win::current()) {
         Win::current().w_cursor.coladd = 0;
     }

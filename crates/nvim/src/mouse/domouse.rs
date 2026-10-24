@@ -342,14 +342,12 @@ pub(crate) fn do_mouse(
 fn coalesce_drags(c: c_int) -> (c_int, bool, bool) {
     loop {
         let (which_button, is_click, is_drag) = mouse_button(key_extra(c));
-        // SAFETY: `vpeekc` only looks at the typeahead.
         if !is_drag || KeyStuffed.get() != 0 || vpeekc() == NUL {
             return (which_button, is_click, is_drag);
         }
 
         let saved = MousePos::current();
         // Need to get the character, peeking doesn't get the actual one.
-        // SAFETY: takes one key from the typeahead.
         let nc = safe_vgetc();
         if c == nc {
             // The next character is the same mouse event: use that one.
@@ -709,7 +707,6 @@ fn dispatch_action(a: Action, win: Win) {
         } else {
             c".ll"
         };
-        // SAFETY: a NUL-terminated literal.
         let _ = do_cmdline_cmd(cmd);
         got_click.set(false); // ignore drag&release now
         return;
@@ -815,7 +812,6 @@ fn multi_click(mut win: Win, op: Option<Op>, is_click: bool, is_drag: bool, mods
     }
 
     if is_click {
-        // SAFETY: only schedules a redraw of the current buffer.
         redraw_curbuf_later(UPD_INVERTED); // update the inversion
     }
 }
@@ -871,7 +867,6 @@ fn stuff_char(c: c_int) {
 /// Whether a clipboard provider is loaded, so that an unnamed register should
 /// become the `*` one.
 fn has_clipboard_provider() -> bool {
-    // SAFETY: a NUL-terminated literal; `throw_if_fast` is false.
     eval_has_provider(c"clipboard", false)
 }
 

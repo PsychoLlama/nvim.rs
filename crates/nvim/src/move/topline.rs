@@ -180,7 +180,6 @@ fn check_topline(win: Win) -> bool {
             // Is the cursor's own column visible? Add the columns the
             // top-left marker covers.
             let vcol = win.virtual_vcol(win.cursor());
-            // SAFETY: a live window.
             let overlap = sms_marker_overlap(win, -1);
             if win.w_skipcol + overlap > vcol {
                 return true;

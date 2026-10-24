@@ -98,25 +98,21 @@ impl Win {
 
     #[inline(always)]
     fn note_virtcol(self, vcol: ColNr) {
-        // SAFETY: a live window.
         set_valid_virtcol(self, vcol);
     }
 
     #[inline(always)]
     fn cursor_line_changed(self) {
-        // SAFETY: a live window.
         changed_cline_bef_curs(self);
     }
 
     #[inline(always)]
     fn ve_flags(self) -> c_uint {
-        // SAFETY: a live window.
         get_ve_flags(self)
     }
 
     #[inline(always)]
     fn virtual_active(self) -> bool {
-        // SAFETY: a live window.
         virtual_active(self)
     }
 

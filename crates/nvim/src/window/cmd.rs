@@ -641,7 +641,6 @@ fn detach_window() {
         Ok(Some(_)) => {}
         Ok(None) => beep(),
         Err(e) => {
-            // SAFETY: the refusal owns its message.
             err_raw(e.message_or_empty());
             beep();
         }
@@ -671,7 +670,6 @@ fn langmap_adjust(c: c_int) -> c_int {
 
 /// Read one character with no mapping applied.
 fn read_char() -> c_int {
-    // SAFETY: reads from the type-ahead buffer.
     plain_vgetc()
 }
 
@@ -707,7 +705,6 @@ fn buffer_locked() -> bool {
 
 /// [`buffer_locked`] with the text lock as well, saying why when it holds.
 fn text_or_buffer_locked() -> bool {
-    // SAFETY: reads the editor's lock state; a null operator means "none".
     check_text_or_curbuf_locked(None)
 }
 
@@ -725,13 +722,11 @@ fn edit_file(name: &CStr) -> Result<(), Failed> {
 
 /// Clamp `window`'s cursor line into its buffer.
 fn revalidate_cursor_lnum(window: Win) {
-    // SAFETY: a live window.
     check_cursor_lnum(window);
 }
 
 /// Put the cursor on the first non-blank of its line.
 fn first_non_blank() {
-    // SAFETY: reads the current window's line.
     beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
 }
 

@@ -119,7 +119,6 @@ fn fdccol_count(window: Win) -> c_int {
     } else {
         1
     };
-    // SAFETY: a live window.
     fdccol.min(deepest_fold_nesting(window))
 }
 
@@ -279,7 +278,6 @@ fn anchor_to_window(
     row: &mut Float,
     col: &mut Float,
 ) {
-    // SAFETY: only compares the pointer against the window list.
     if parent.w_pos_changed && parent.w_grid_alloc.is_allocated() && win_valid(parent.id()) {
         ext_win_position(parent, validate);
     }

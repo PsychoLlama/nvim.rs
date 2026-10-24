@@ -145,7 +145,6 @@ pub fn diff_set_topline(fromwin: Win, mut towin: Win) {
     let fromidx = slot_index(fromidx);
     // Read after the recompute, which runs `DiffUpdated` autocommands.
     //
-    // SAFETY: a live window's buffer is live.
     let tobuf = towin.buffer();
 
     let lnum = fromwin.w_topline;
@@ -243,7 +242,6 @@ pub fn diff_move_to(dir: c_int, mut count: c_int) -> Result<(), Failed> {
     if lnum == Win::current().w_cursor.lnum {
         return Err(Failed);
     }
-    // SAFETY: the editor exists.
     setpcmark();
     Win::current().w_cursor.lnum = lnum;
     Win::current().w_cursor.col = 0;
@@ -320,7 +318,6 @@ pub fn diff_lnum_win(lnum: LineNr, window: Win) -> LineNr {
     }
     let idx = slot_index(idx);
 
-    // SAFETY: a live window's buffer is live.
     let buf = window.buffer();
     let Some(dp) = tp.tp_diff.iter().find(|dp| lnum <= dp.end(idx)) else {
         return buf.b_ml.ml_line_count - (Buf::current().b_ml.ml_line_count - lnum);

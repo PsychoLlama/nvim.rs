@@ -190,6 +190,5 @@ pub(crate) fn mouse_model_popup() -> bool {
 /// Whether `'mousemodel'` is exactly "popup_setpos", which moves the cursor
 /// before showing the menu.
 pub(crate) fn mouse_model_popup_setpos() -> bool {
-    // SAFETY: an option string is NUL-terminated, never null.
     p_mousem(|value| value == c"popup_setpos")
 }

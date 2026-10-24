@@ -163,7 +163,6 @@ impl BlockScan<'_> {
                 return Step::Done;
             }
             // An enum declaration or an assignment: done.
-            // SAFETY: reads the cursor's line of the current buffer.
             if terminated != b';' && is_enum_or_init() {
                 return Step::Done;
             }
@@ -233,7 +232,6 @@ impl BlockScan<'_> {
         }
 
         // Ignore jump labels with nothing after them.
-        // SAFETY: reads the cursor's line of the current buffer.
         if Buf::current().b_ind_js == 0 && is_jump_label() {
             // `is_jump_label` may have unlocked the line, so it is read again.
             let cursor_lnum = Win::current().w_cursor.lnum;
@@ -311,7 +309,6 @@ impl BlockScan<'_> {
             }
         }
         if self.lookfor == LOOKFOR_JS_KEY && has_js_key(Lines::current().line(cursor_lnum), 0) {
-            // SAFETY: reads the cursor's line of the current buffer.
             self.amount = get_indent();
             return Step::Done;
         }
@@ -324,7 +321,6 @@ impl BlockScan<'_> {
                 // broken) line ending in a comma.
                 return Step::Done;
             }
-            // SAFETY: reads the cursor's line of the current buffer.
             self.amount = get_indent();
             if Win::current().w_cursor.lnum - 1 == self.ourscope {
                 // The line above starts the scope, so this line is the
@@ -371,7 +367,6 @@ impl BlockScan<'_> {
             // Check that this label is not for another switch().
             let brace = find_start_brace();
             if brace.is_none_or(|trypos| trypos.lnum == self.ourscope) {
-                // SAFETY: reads the cursor's line of the current buffer.
                 self.amount = get_indent();
                 return Step::Done;
             }
@@ -424,7 +419,6 @@ impl BlockScan<'_> {
         //      break;              <- may line up with this line
         //   case xx:
         // ->   y = 1;
-        // SAFETY: reads the cursor's line of the current buffer.
         self.scope_amount = get_indent()
             + if iscase {
                 Buf::current().b_ind_case_code
@@ -453,7 +447,6 @@ impl BlockScan<'_> {
         }
         if self.whilelevel == 0 {
             self.lookfor = LOOKFOR_TERM;
-            // SAFETY: reads the cursor's line of the current buffer.
             self.amount = get_indent();
             if self.line.starts_with(b'{') {
                 self.amount += Buf::current().b_ind_open_extra;
@@ -482,7 +475,6 @@ impl BlockScan<'_> {
             return Step::Again;
         }
         if isdo {
-            // SAFETY: reads the cursor's line of the current buffer.
             self.amount = get_indent();
             self.whilelevel -= 1;
             return Step::Again;
@@ -880,7 +872,6 @@ impl BlockScan<'_> {
         if self.lookfor == LOOKFOR_INITIAL && terminated == b',' {
             if Buf::current().b_ind_js == 0 {
                 self.lookfor = LOOKFOR_ENUM_OR_INIT;
-                // SAFETY: reads the cursor's line of the current buffer.
                 self.cont_amount = first_id_amount();
                 return Step::Again;
             }

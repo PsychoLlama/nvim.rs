@@ -274,7 +274,6 @@ pub(crate) fn nv_scroll(cmd_arg: &mut CmdArg) {
         win.w_cursor.lnum = (win.w_topline + n as LineNr).min(Buf::current().b_ml.ml_line_count);
     }
     if op.op_type == OpType::Nop {
-        // SAFETY: `wp` is the live window.
         cursor_correct(wp);
     }
     beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
@@ -297,7 +296,6 @@ pub(crate) fn nv_right(cmd_arg: &mut CmdArg) {
     op.inclusive = false;
     // With an inclusive selection the cursor may sit one past the last
     // character; 'virtualedit' handles that itself.
-    // SAFETY: 'selection' is a NUL-terminated option string.
     let sel = p_sel(|value| c_int::from(cstr::first(value)));
     let past_line = visual_active() && sel != 'o' as c_int && !virtual_active(win);
 
@@ -566,7 +564,6 @@ pub(crate) fn nv_percent(cmd_arg: &mut CmdArg) {
     op.inclusive = true;
     if count0 != 0 {
         if count0 > 100 {
-            // SAFETY: `op` is the command's live operator.
             clear_op_beep(op);
         } else {
             op.motion_type = kMTLineWise;
@@ -580,7 +577,6 @@ pub(crate) fn nv_percent(cmd_arg: &mut CmdArg) {
                 (count * count0 as LineNr + 99) / 100
             };
             win.w_cursor.lnum = win.w_cursor.lnum.max(1).min(count);
-            // SAFETY: the editor's text state is live.
             beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
         }
     } else {
@@ -588,14 +584,12 @@ pub(crate) fn nv_percent(cmd_arg: &mut CmdArg) {
         op.use_reg_one = true;
         let pos = findmatch(Some(&mut op), NUL);
         if let Some(pos) = pos {
-            // SAFETY: the jump list is live and `cmd_arg` is the caller's.
             setpcmark();
             win.w_cursor = pos;
             win.w_set_curswant = true;
             win.w_cursor.coladd = 0;
             adjust_for_sel(cmd_arg);
         } else {
-            // SAFETY: `op` is the command's live operator.
             clear_op_beep(op);
         }
     }

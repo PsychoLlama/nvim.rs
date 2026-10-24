@@ -83,7 +83,6 @@ pub(crate) fn skip_label(lnum: LineNr) -> (c_int, usize) {
         let mut lines = Lines::current();
         let line = lines.line(lnum);
         is_case_label(line, 0, false) || is_scope_decl(line, 0)
-        // SAFETY: the cursor sits on `lnum`, a line of the current buffer.
     } || is_jump_label();
 
     let answer = if labelled {
@@ -95,7 +94,6 @@ pub(crate) fn skip_label(lnum: LineNr) -> (c_int, usize) {
             after_label(Lines::current().line(lnum)).unwrap_or(0),
         )
     } else {
-        // SAFETY: reads the cursor's line, which is `lnum`.
         (get_indent(), 0)
     };
 

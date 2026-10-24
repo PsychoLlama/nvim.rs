@@ -33,7 +33,6 @@ pub fn win_equal(next_curwin: Option<Win>, current: bool, dir: c_int) {
 /// or 0 to take it from `'eadirection'`.
 pub(crate) fn equal(next_curwin: Option<Win>, current: bool, dir: c_int) {
     let dir = if dir == 0 {
-        // SAFETY: `'eadirection'` is a NUL-terminated option string.
         p_ead(|value| c_int::from(cstr::first(value)))
     } else {
         dir

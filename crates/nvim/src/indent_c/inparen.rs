@@ -32,8 +32,6 @@ pub(crate) fn indent_in_parens(line: &Line, our_paren_pos: Pos) -> c_int {
 
     let mut amount = if line.starts_with(b')') && Buf::current().b_ind_paren_prev != 0 {
         // Line up with the start of the matching paren's line.
-        // SAFETY: on the main thread with a current buffer; a bad line number
-        // is `ml_get`'s own to report, as upstream leaves it.
         get_indent_lnum(Win::current().w_cursor.lnum - 1)
     } else {
         // If the matching paren is more than one line away, use the
@@ -94,7 +92,6 @@ fn previous_line_under_same_paren(
                     && trypos.lnum == our_paren_pos.lnum
                     && trypos.col == our_paren_pos.col
                 {
-                    // SAFETY: `lnum` is still a line of the current buffer.
                     amount = get_indent_lnum(lnum);
                     if line.starts_with(b')') {
                         if our_paren_pos.lnum != lnum && *cur_amount > amount {
@@ -155,9 +152,6 @@ fn align_with_unclosed_paren(
         Win::current().w_cursor.lnum = our_paren_pos.lnum;
         Win::current().w_cursor.col = ColNr::try_from(look_col).unwrap_or(ColNr::MAX - 1) + 1;
         let maxparen = int64_t::from(Buf::current().b_ind_maxparen);
-        // SAFETY: the cursor is just past that `(`, which is where the match
-        // search starts; `findmatchlimit` takes a null `oparg` for "no
-        // operator pending".
         let trypos = findmatchlimit(None, c_int::from(b')'), 0, maxparen);
         if let Some(trypos) = trypos
             && trypos.lnum == our_paren_pos.lnum

@@ -554,6 +554,5 @@ pub(crate) fn nv_zet(cmd_arg: &mut CmdArg) {
 
 /// Whether `lnum` is inside a closed fold of the current window.
 fn folded(lnum: LineNr) -> bool {
-    // SAFETY: `cur_win()` is the live window.
     has_folding(Win::current(), lnum, None, None)
 }

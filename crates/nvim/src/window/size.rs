@@ -102,7 +102,6 @@ pub(crate) fn setheight_win(height: c_int, win: Win) {
 
     if win.w_floating {
         win.w_config.height = height.max(1);
-        // SAFETY: a live window.
         win_config_float(win, win.w_config.clone());
         win.redraw_later(UPD_VALID);
     } else {
@@ -270,7 +269,6 @@ pub(crate) fn setwidth_win(width: c_int, window: Win) {
     };
     if window.w_floating {
         window.w_config.width = width;
-        // SAFETY: a live window.
         win_config_float(window, window.w_config.clone());
         window.redraw_later(UPD_NOT_VALID);
     } else {

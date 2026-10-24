@@ -69,7 +69,6 @@ pub fn hl_blend_attrs(back_attr: c_int, front_attr: c_int, through: &mut bool) -
     if front_attr < 0 || back_attr < 0 {
         return front_attr;
     }
-    // SAFETY: the attribute table is the editor's own.
     let front_raw = syn_attr2entry(front_attr);
     let front = get_colors_force(front_raw);
     let ratio = front.hl_blend;
