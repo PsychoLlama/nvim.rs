@@ -25,47 +25,15 @@
 //! long as the `&mut Lines` it came from, so the next line, any `ml_*`
 //! mutation and any re-entry into the editor all need it dropped first.
 //!
-//! # The pointer forms that stay
+//! # No pointer form
 //!
-//! Four of upstream's `ml_get*` spellings are left, and the ratchet's
-//! `ml_get_raw` needle counts every call to one -- *including* the calls
-//! spelled through an alias: [`Buf::line_raw`], [`Buf::line_mut_raw`],
-//! [`Buf::line_len_raw`] and `cursor`'s four `get_cursor_{line,pos}_{ptr,len}`
-//! accessors are the same read with a shorter name, and the needle sees them
-//! by name. This is what each form is for; anything not on this list has been
-//! deleted (`ml_get_pos`, `ml_get_pos_len`, and `ml_get_cursor`, which never
-//! had a caller here).
-//!
-//! | form | why it stays |
-//! | --- | --- |
-//! | [`ml_get_buf`] | **the floor** of the pointer form: it unpacks the line
-//!   and answers where it lives. [`Lines::line`] unpacks the same way and
-//!   answers the bytes instead. |
-//! | [`ml_get_buf_mut`] | the same read, marking the line dirty.
-//!   [`Buf::line_mut_raw`] is written on top of it, as [`Lines::line_mut`] is
-//!   on the same unpacking, and the read also books the old text as deleted —
-//!   so a caller that wants only the bytes must *not* reach for it. |
-//! | [`ml_get_buf_len`] | a line's length without a slice to measure. It
-//!   dispatches through `ml_get_buf` and then reads the cache's own length,
-//!   which is why a caller that is about to read the line should take
-//!   [`Lines::line`] and ask the slice instead of paying two dispatches. |
-//! | [`ml_get`], [`ml_get_len`] | the current buffer's spelling of the two
-//!   above. They exist for the callers that still hold a line as a pointer,
-//!   and they go when those do. |
-//!
-//! The count that is *not* the floor is the call sites outside this module.
-//! Those are the pointer walks that have not been rewritten yet; the ones
-//! left are listed in the phase's handoff, and each is a walk whose *callee*
-//! still takes a `*mut c_char`.
-//!
-//! **The floor is 22 calls.** Five are in this file -- the forms above,
-//! written in terms of `ml_get_buf_impl` and `fetch_line` -- and seventeen
-//! are in `cursor/mod.rs`, where the `get_cursor_{line,pos}_{ptr,len}`
-//! accessors spell the same read for the line the cursor is on. Nothing under those can
-//! answer a slice, so the number does not go to zero; everything the needle
-//! counts beyond 22 is a call site elsewhere, and each one retires when the
-//! callee it feeds stops taking a pointer. `ml_replace` and `ml_append` are
-//! the two that most of them are walking toward.
+//! Upstream's `ml_get`, `ml_get_buf` and `ml_get_buf_mut` answered the
+//! line's *address*, good until the next memline call; they are gone, and
+//! with them the page address the line cache kept beside the block id.
+//! What is left of the family answers a length ([`ml_get_len`],
+//! [`ml_get_buf_len`]) or a slice ([`Lines`]), and a caller that has to hold
+//! text across a call that re-enters the editor takes
+//! [`Lines::line_copy`].
 
 #![forbid(unsafe_code)]
 
@@ -76,32 +44,7 @@ use crate::memory::XString;
 use crate::pos::MAXCOL;
 use crate::types::{Failed, NUL};
 use crate::winlayer::Buf;
-use core::ffi::{CStr, c_char, c_int};
-
-/// A read-only pointer to line `lnum` of the current buffer. Never NULL.
-///
-/// Safe: the only promise is that the editor exists, which `curbuf` carries
-/// from startup to exit, and the read clamps `lnum` into the buffer itself.
-/// The answer is a raw pointer, so *reading* through it is still the
-/// caller's business.
-///
-/// Prefer [`Lines::line`]: see [the module's floor](self#the-pointer-forms-that-stay).
-pub fn ml_get(lnum: LineNr) -> *mut c_char {
-    ml_get_buf_impl(Buf::current(), lnum, false)
-}
-
-/// [`ml_get`] for an arbitrary buffer.
-pub fn ml_get_buf(buffer: Buf, lnum: LineNr) -> *mut c_char {
-    ml_get_buf_impl(buffer, lnum, false)
-}
-
-/// [`ml_get_buf`], but the line may be changed through the pointer.
-///
-/// Very limited: only the bytes already there can be rewritten. Use
-/// [`ml_replace_buf_text`] for anything else.
-pub fn ml_get_buf_mut(buffer: Buf, lnum: LineNr) -> *mut c_char {
-    ml_get_buf_impl(buffer, lnum, true)
-}
+use core::ffi::{CStr, c_int};
 
 /// A buffer's one-line cache, borrowed.
 ///
@@ -140,9 +83,6 @@ pub fn ml_get_buf_mut(buffer: Buf, lnum: LineNr) -> *mut c_char {
 /// used to step one past the last character and read the terminator want
 /// [`crate::cstr::byte_at`], which answers `NUL` past the end.
 ///
-/// [`Buf::line_raw`] is the same read as a raw pointer, for callers that still
-/// want one; [`ml_get`] and kin are the free-function spelling. Both stay
-/// while any caller still holds a line as a pointer.
 pub struct Lines(Buf);
 
 impl Lines {
@@ -168,9 +108,8 @@ impl Lines {
 
     /// Line `lnum`, without its NUL.
     ///
-    /// Out-of-range line numbers answer the `???` placeholder [`ml_get`]
-    /// hands back, and complain the same way; there is no failure case here
-    /// that the pointer form does not have.
+    /// Out-of-range line numbers answer the `???` placeholder, after the
+    /// E315 complaint upstream's `ml_get` gives.
     pub fn line(&mut self, lnum: LineNr) -> &[u8] {
         fetch_line(self.0, lnum, false);
         self.0.b_ml.cached_bytes()
@@ -178,9 +117,9 @@ impl Lines {
 
     /// Line `lnum`, writable in place.
     ///
-    /// Exactly as limited as [`ml_get_buf_mut`]: the bytes already there can
-    /// be rewritten and nothing else, which is what a slice of the line's own
-    /// length says. Use `ml_replace` to change a line's length.
+    /// The bytes already there can be rewritten and nothing else, which is
+    /// what a slice of the line's own length says; the old text is booked as
+    /// deleted. Use `ml_replace` to change a line's length.
     pub fn line_mut(&mut self, lnum: LineNr) -> &mut [u8] {
         fetch_line(self.0, lnum, true);
         self.0.b_ml.cached_bytes_mut()
@@ -302,8 +241,7 @@ impl LineCopy {
 
 /// Length of line `lnum` of the current buffer, excluding the NUL.
 ///
-/// Safe: as [`ml_get`] -- the editor exists, and the line number is
-/// clamped.
+/// Safe: the editor exists, and the line number is clamped.
 pub fn ml_get_len(lnum: LineNr) -> ColNr {
     ml_get_buf_len(Buf::current(), lnum)
 }

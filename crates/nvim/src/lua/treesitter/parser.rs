@@ -116,8 +116,9 @@ unsafe extern "C" fn input_cb(
             return c"".as_ptr();
         }
         let lnum: LineNr = position.row as LineNr + 1 as LineNr;
-        let line: *mut ::core::ffi::c_char = ml_get_buf(bp, lnum);
-        let len: size_t = ml_get_buf_len(bp, lnum) as size_t;
+        let mut lines = bp.lines();
+        let line = lines.line(lnum);
+        let len: size_t = line.len();
         if position.column as size_t > len {
             *bytes_read = 0 as uint32_t;
             return c"".as_ptr();
@@ -127,9 +128,10 @@ unsafe extern "C" fn input_cb(
         } else {
             256 as size_t
         };
+        let from = &line[position.column as usize..][..tocopy];
         (buf.ptr() as *mut ::core::ffi::c_char)
             .cast::<u8>()
-            .copy_from_nonoverlapping((line.add(position.column as usize)).cast(), tocopy);
+            .copy_from_nonoverlapping(from.as_ptr(), tocopy);
         memchrsub(
             buf.ptr() as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
             '\n' as ::core::ffi::c_char,

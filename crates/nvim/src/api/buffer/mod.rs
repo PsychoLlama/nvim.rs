@@ -22,7 +22,7 @@ use crate::lua::ffi::{lua_createtable, lua_pushlstring, lua_rawseti};
 use crate::mapping::{keymap_array, modify_keymap};
 use crate::mark::{mark_adjust_buf, mark_get};
 use crate::memline::{
-    ml_append_buf_terminated, ml_delete_buf, ml_find_line_or_offset, ml_get_buf, ml_get_buf_len,
+    ml_append_buf_terminated, ml_delete_buf, ml_find_line_or_offset, ml_get_buf_len,
     ml_replace_buf_now,
 };
 use crate::memory::{strchrsub, xfree, xmemdupz};

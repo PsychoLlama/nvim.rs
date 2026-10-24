@@ -216,17 +216,7 @@ pub(crate) enum CachedText {
     /// necessarily the block that is locked now -- a walk for a line
     /// elsewhere can lock another one under a cached line -- which is why
     /// the block is named.
-    ///
-    /// `text` is the same place as the pointer form answers it, taken when
-    /// the line was unpacked: a page never moves while its block is in
-    /// memory, so handing it out again costs no lookup. Only
-    /// [`MemLine::cached_text`] reads it, and only to answer it; the bytes
-    /// themselves are always reached through `id`.
-    Block {
-        id: BlockId,
-        start: u32,
-        text: *mut ::core::ffi::c_char,
-    },
+    Block { id: BlockId, start: u32 },
     /// A replacement the memline owns, waiting for `ml_flush_line` to write
     /// it back: the bytes, the NUL among them.
     Owned(Vec<u8>),
@@ -397,20 +387,6 @@ impl MemLine {
         self.ml_line.lnum
     }
 
-    /// The cached line's text, NUL-terminated: upstream's `ml_line_ptr`.
-    /// Null when nothing is cached.
-    ///
-    /// The pointer form, for the callers that still hold a line as one; it
-    /// is good until the next call into the memline.
-    pub fn cached_text(&mut self) -> *mut ::core::ffi::c_char {
-        match &mut self.ml_line.text {
-            CachedText::None => ::core::ptr::null_mut(),
-            CachedText::Owned(text) => text.as_mut_ptr().cast(),
-            CachedText::Placeholder(text) => text.as_ptr().cast_mut(),
-            CachedText::Block { text, .. } => *text,
-        }
-    }
-
     /// The cached line's bytes, its NUL left out. Empty when nothing is
     /// cached.
     #[inline]
@@ -498,19 +474,14 @@ impl MemLine {
     /// Cache line `idx` of data block `id` as line `lnum`: a line that
     /// lives *inside* the block, so nothing here owns it.
     pub(crate) fn cache_block_line(&mut self, id: BlockId, idx: usize, lnum: LineNr) {
-        let page = self
-            .ml_mfp
-            .as_deref_mut()
-            .expect("an open memline")
-            .page_mut(id);
-        let data = crate::memline::DataBlock(&*page);
+        let page = self.ml_mfp.as_deref().expect("an open memline").page(id);
+        let data = crate::memline::DataBlock(page);
         let start = data.line_start(idx);
         // The text ends where the previous line starts; the first line of
         // the block ends at the end of the block.
         let textlen = data.line_end(idx).wrapping_sub(start).cast_signed();
-        let text = page[start as usize..].as_mut_ptr().cast();
         self.ml_line.lnum = lnum;
-        self.ml_line.text = CachedText::Block { id, start, text };
+        self.ml_line.text = CachedText::Block { id, start };
         self.ml_line.textlen = textlen;
     }
 
@@ -887,12 +858,6 @@ mod tests {
         assert_eq!(ml.cached_len(), 6);
         assert!(!ml.line_is_dirty());
         assert!(ml.take_replacement().is_none());
-        // The pointer form reads the same bytes, in the page.
-        let text = ml.cached_text();
-        assert_eq!(
-            text.cast::<u8>(),
-            ml.memfile().page_mut(id)[100..].as_mut_ptr()
-        );
 
         ml.cache_replacement(b"bye\0".to_vec(), 3);
         assert!(ml.line_is_dirty());
@@ -935,6 +900,6 @@ mod tests {
         assert_eq!(ml.cached_lnum(), 0);
         assert_eq!(ml.cached_offset(), 0);
         assert!(!ml.line_is_dirty());
-        assert!(ml.cached_text().is_null());
+        assert!(ml.cached_bytes().is_empty());
     }
 }

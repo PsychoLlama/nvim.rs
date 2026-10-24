@@ -156,7 +156,6 @@ pub(crate) use walk::{
     window_at, windows, windows_back, windows_in_tab,
 };
 
-use core::ffi::c_char;
 use core::mem::offset_of;
 use core::num::NonZero;
 use core::ops::{Deref, DerefMut};
@@ -165,11 +164,8 @@ use core::ptr;
 use crate::allocator::Owned;
 use crate::drawscreen::redraw_later;
 use crate::mark::mark_mb_adjustpos;
-use crate::mbyte::{utf_ptr2str_char_info, utfc_next};
-use crate::memline::{ml_get_buf, ml_get_buf_len, ml_get_buf_mut};
-use crate::types::{
-    Buffer, ColNr, Frame, Handle, LineNr, Pos, StrCharInfo, SynBlock, Tabpage, Window,
-};
+use crate::memline::ml_get_buf_len;
+use crate::types::{Buffer, ColNr, Frame, Handle, LineNr, Pos, SynBlock, Tabpage, Window};
 use crate::winlayer::graph::{curbuf, curtab, curwin};
 
 // ---------------------------------------------------------------------------
@@ -260,10 +256,6 @@ address_eq!(Win, Buf, FrameRef, TabPage);
 /// A cursor or mark position the caller has promised is live.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct PosRef(*mut Pos);
-
-/// A NUL-terminated buffer line, as `ml_get_buf` hands it back.
-#[derive(Clone, Copy)]
-pub struct Line(*mut c_char);
 
 impl Deref for Win {
     type Target = Window;
@@ -739,31 +731,10 @@ impl Buf {
         crate::memline::Lines::in_buffer(self)
     }
 
-    /// Line `lnum` as a raw pointer -- [`ml_get_buf`] spelled as a method.
-    ///
-    /// The `_raw` in the name is not decoration: this is the pointer form of
-    /// the memline read, it carries the pointer form's whole contract (the
-    /// answer is invalidated by the next memline call), and the `ml_get_raw`
-    /// needle in `scripts/ratchet.py` matches the name so that the debt is
-    /// counted where it is *spent*. Reading text is [`Buf::lines`].
-    #[inline(always)]
-    pub fn line_raw(self, lnum: LineNr) -> Line {
-        Line(ml_get_buf(self, lnum))
-    }
-
-    /// [`Buf::line_raw`], marking the line dirty so the caller may write to
-    /// it.
-    #[inline(always)]
-    pub fn line_mut_raw(self, lnum: LineNr) -> Line {
-        Line(ml_get_buf_mut(self, lnum))
-    }
-
     /// Bytes in line `lnum`, the terminating NUL excluded.
     ///
-    /// Named `_raw` for the same reason as [`Buf::line_raw`]: `ml_get_buf_len`
-    /// walks the block tree exactly as `ml_get_buf` does, so a caller pairing
-    /// the two walks it twice, and the needle has to see both halves of that
-    /// pair. [`Lines::line_len`](crate::memline::Lines::line_len) measures the
+    /// Named `_raw` because `ml_get_buf_len` walks the block tree as a line
+    /// read does, so a caller pairing it with a read walks it twice. [`Lines::line_len`](crate::memline::Lines::line_len) measures the
     /// slice it already holds.
     #[inline(always)]
     pub fn line_len_raw(self, lnum: LineNr) -> ColNr {
@@ -931,61 +902,5 @@ impl PosRef {
     #[inline(always)]
     pub fn raw(self) -> *mut Pos {
         self.0
-    }
-}
-
-impl Line {
-    /// # Safety
-    /// `line` must stay a live NUL-terminated buffer line for as long as the
-    /// value is used.
-    #[inline(always)]
-    pub const unsafe fn new(line: *mut c_char) -> Self {
-        Self(line)
-    }
-
-    #[inline(always)]
-    pub fn raw(self) -> *mut c_char {
-        self.0
-    }
-
-    /// The byte `idx` bytes into the line.
-    ///
-    /// # Safety
-    /// `idx` must be within the line, the terminating NUL included.
-    #[inline(always)]
-    pub unsafe fn byte(self, idx: ::core::ffi::c_int) -> c_char {
-        unsafe { *self.0.offset(idx as isize) }
-    }
-
-    /// The first character of the line, and the walk state to step it with.
-    #[inline(always)]
-    pub fn first_char(self) -> StrCharInfo {
-        // SAFETY: a NUL-terminated line.
-        unsafe { utf_ptr2str_char_info(self.0) }
-    }
-
-    /// The character after `ci`.
-    ///
-    /// # Safety
-    /// `ci` must be a character of this line, and not its terminating NUL.
-    #[inline(always)]
-    pub unsafe fn next_char(self, ci: StrCharInfo) -> StrCharInfo {
-        unsafe { utfc_next(ci) }
-    }
-
-    /// Whether `ci` has reached the line's terminating NUL.
-    ///
-    /// # Safety
-    /// `ci` must be a character of this line.
-    #[inline(always)]
-    pub unsafe fn ended(self, ci: StrCharInfo) -> bool {
-        unsafe { *ci.ptr == 0 }
-    }
-
-    /// How many bytes into the line `ci` sits.
-    #[inline(always)]
-    pub fn index_of(self, ci: StrCharInfo) -> ::core::ffi::c_int {
-        let offset = ci.ptr.addr().wrapping_sub(self.0.addr());
-        ::core::ffi::c_int::try_from(offset).expect("`ci` is a character of this line")
     }
 }

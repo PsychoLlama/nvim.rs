@@ -1709,11 +1709,12 @@ ARGUMENT_MACROS = VARIADIC_CALLEES + (
 
 # Counted over every masked file, tree-wide.
 INSTRUMENTS = {
-    # The forms that hand back a line's *address*: `ml_get(`, `ml_get_buf(`
+    # The forms that handed back a line's *address*: `ml_get(`, `ml_get_buf(`
     # and `ml_get_buf_mut(`, and their aliases -- `Buf::line_raw`/
-    # `line_mut_raw` and `get_cursor_line_ptr`/`get_cursor_pos_ptr` are thin
-    # wrappers a caller reaches for instead of the free function, so a needle
-    # blind to them books a rename as progress (p31-e). The length forms
+    # `line_mut_raw` and `get_cursor_line_ptr`/`get_cursor_pos_ptr` were thin
+    # wrappers a caller reached for instead of the free function, so a needle
+    # blind to them would book a rename as progress (p31-e). All of them are
+    # deleted; the needle stays at 0 so none comes back. The length forms
     # (`ml_get_len`, `ml_get_buf_len`, `Buf::line_len_raw`,
     # `get_cursor_{line,pos}_len`) answer a number, are safe, and stay when
     # the pointer forms go, so they are not debt and are not matched.

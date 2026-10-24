@@ -440,15 +440,15 @@ pub unsafe fn buf_collect_lines(
     l: *mut Array,
     lstate: *mut lua_State,
 ) {
+    let mut lines = buffer.lines();
     let mut i: size_t = 0 as size_t;
     while i < n {
         let lnum: LineNr = start + i as LineNr;
-        let bufstr: *mut ::core::ffi::c_char = ml_get_buf(buffer, lnum);
-        let len: size_t = ml_get_buf_len(buffer, lnum) as size_t;
+        let text = lines.line(lnum);
         let at = start_idx + i as ::core::ffi::c_int;
-        // SAFETY: `bufstr` holds `len` bytes, and `l`/`lstate` are the
-        // caller's.
-        unsafe { push_linestr(lstate, l, bufstr, len, at, replace_nl) };
+        // SAFETY: `text` is the line's own bytes, borrowed for the push, and
+        // `l`/`lstate` are the caller's.
+        unsafe { push_linestr(lstate, l, text.as_ptr().cast(), text.len(), at, replace_nl) };
         i = i.wrapping_add(1);
     }
 }

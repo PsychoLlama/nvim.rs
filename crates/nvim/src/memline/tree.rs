@@ -21,7 +21,7 @@ use crate::message_fmt::msg_cstr;
 use crate::siemsg;
 use crate::statusline::trans_bufname;
 use crate::types::MemLine;
-use core::ffi::{c_char, c_int, c_uint};
+use core::ffi::{c_int, c_uint};
 
 use super::*;
 
@@ -147,15 +147,6 @@ fn line_not_found(mut buffer: Buf, lnum: LineNr) {
         ml_get_recursive.set(0);
     }
     buffer.b_ml.cache_placeholder(c"???", lnum);
-}
-
-/// Line `lnum` of `buffer` as a NUL-terminated pointer into the data block
-/// holding it (or into the replacement a pending `ml_replace` left): the
-/// pointer form of [`fetch_line`], for the callers that still hold a line as
-/// one. Never null: the failure paths answer "???".
-pub(crate) fn ml_get_buf_impl(mut buffer: Buf, lnum: LineNr, will_change: bool) -> *mut c_char {
-    fetch_line(buffer, lnum, will_change);
-    buffer.b_ml.cached_text()
 }
 
 /// Set while a line is being written back: the write can append and delete

@@ -11,7 +11,7 @@
 
 use crate::cstr;
 use crate::winlayer::{self, Buf};
-use core::ffi::{c_char, c_int};
+use core::ffi::{CStr, c_int};
 
 use super::{TRY_STATE_INIT, nlua_push_errstr};
 use crate::api::private::helpers::{try_enter, try_leave};
@@ -22,7 +22,6 @@ use crate::lua::ffi::{
     luaL_error,
 };
 use crate::luaL_reg_table;
-use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::regexp::{
     OwnedProg, RE_AUTO, RE_MAGIC, RE_NOBREAK, RE_STRICT, vim_regcomp, vim_regexec,
 };
@@ -30,7 +29,7 @@ use crate::types::{Error, Handle, LineNr, RegMatch, lua_State, luaL_Reg};
 
 /// The registry key the metatable is stored under, and the type name
 /// `luaL_checkudata` matches against.
-const REGEX_TYPE: &core::ffi::CStr = c"nvim_regex";
+const REGEX_TYPE: &CStr = c"nvim_regex";
 
 /// The compiled program behind the userdatum at slot 1, or a throw. The
 /// userdatum holds an `Option<OwnedProg>`, which [`nlua_regex`] wrote and
@@ -50,15 +49,14 @@ unsafe fn regex_check(lstate: *mut lua_State) -> *mut Option<OwnedProg> {
 /// is what both callers report as an internal error.
 ///
 /// # Safety
-/// `lstate` must be a live Lua state and `str` a NUL-terminated subject.
+/// `lstate` must be a live Lua state.
 unsafe fn regex_match(
     lstate: *mut lua_State,
     prog: &mut Option<OwnedProg>,
-    str: *mut c_char,
+    subject: &CStr,
 ) -> c_int {
     let mut rm = RegMatch::new(prog.take(), false);
-    // SAFETY: the caller's NUL-terminated subject.
-    let matched = vim_regexec(&mut rm, unsafe { cstr::at(str) }, 0);
+    let matched = vim_regexec(&mut rm, subject, 0);
     *prog = rm.regprog.take();
 
     match rm.group(0).filter(|_| matched) {
@@ -78,8 +76,10 @@ unsafe fn regex_match(
 unsafe extern "C-unwind" fn regex_match_str(lstate: *mut lua_State) -> c_int {
     unsafe {
         let prog = regex_check(lstate);
-        let str = luaL_checkstring(lstate, 2);
-        let nret = regex_match(lstate, &mut *prog, str.cast_mut());
+        // SAFETY: `luaL_checkstring` answers a NUL-terminated string or
+        // throws.
+        let str = cstr::at(luaL_checkstring(lstate, 2));
+        let nret = regex_match(lstate, &mut *prog, str);
 
         if (*prog).is_none() {
             return luaL_error(lstate, c"regex: internal error".as_ptr());
@@ -100,9 +100,10 @@ fn loaded_buffer(bufnr: Handle) -> Option<Buf> {
 
 /// `regex:match_line(bufnr, rownr[, start[, end]])`.
 ///
-/// The line is matched in place, so an `end` shorter than the line is applied
-/// by writing a NUL over the buffer's own memory and putting the byte back
-/// afterwards — which is why the error checks all happen before it.
+/// The `start..end` stretch of the line is matched as a string of its own,
+/// copied out of the buffer: upstream writes a NUL over the buffer's memory
+/// at `end` and puts the byte back afterwards, which the copy makes
+/// unnecessary.
 ///
 /// # Safety
 /// `lstate` must be a live Lua state holding this method's arguments.
@@ -137,27 +138,20 @@ unsafe extern "C-unwind" fn regex_match_line(lstate: *mut lua_State) -> c_int {
             return luaL_error(lstate, c"invalid row".as_ptr());
         }
 
-        let line = ml_get_buf(buf, rownr + 1);
-        let len = ml_get_buf_len(buf, rownr + 1);
+        let line = buf.lines().line_copy(rownr + 1);
+        let len = line.len();
 
-        if start < 0 || start > len {
+        let Some(start) = usize::try_from(start).ok().filter(|&start| start <= len) else {
             return luaL_error(lstate, c"invalid start".as_ptr());
-        }
+        };
+        let end = match usize::try_from(end) {
+            Err(_) => len,
+            Ok(end) if end <= len && end >= start => end,
+            Ok(_) => return luaL_error(lstate, c"invalid end".as_ptr()),
+        };
 
-        let mut save: c_char = 0;
-        if end >= 0 {
-            if end > len || end < start {
-                return luaL_error(lstate, c"invalid end".as_ptr());
-            }
-            save = *line.add(end as usize);
-            *line.add(end as usize) = 0;
-        }
-
-        let nret = regex_match(lstate, &mut *prog, line.add(start as usize));
-
-        if end >= 0 {
-            *line.add(end as usize) = save;
-        }
+        let subject = cstr::owned(&line[start..end]);
+        let nret = regex_match(lstate, &mut *prog, &subject);
 
         if (*prog).is_none() {
             return luaL_error(lstate, c"regex: internal error".as_ptr());

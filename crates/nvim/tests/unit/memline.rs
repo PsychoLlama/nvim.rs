@@ -32,7 +32,7 @@ use neovim::buffer::{BLN_LISTED, DOBUF_WIPE, buflist_new, close_buffer};
 use neovim::memline::{
     B0_FNAME_SIZE_CRYPT, B0_FNAME_SIZE_NOCRYPT, B0_FNAME_SIZE_ORG, B0_HNAME_SIZE, B0_MAGIC_CHAR,
     B0_MAGIC_INT, B0_MAGIC_LONG, B0_MAGIC_SHORT, B0_UNAME_SIZE, BLOCK0_ID0, BLOCK0_ID1, Lines,
-    ZeroBlockLayout, ml_append_bytes, ml_close, ml_get_buf, ml_open, ml_open_file, ml_preserve,
+    ZeroBlockLayout, ml_append_bytes, ml_close, ml_open, ml_open_file, ml_preserve,
 };
 use neovim::memory::XString;
 use neovim::option::vars::P_DIR;
@@ -389,26 +389,22 @@ fn a_modified_buffer_marks_its_swap_file_dirty() {
 
     // The line set is still what was written, so the flag is the only thing
     // that moved.
-    // SAFETY: the buffer's memline holds `LINES`.
+    // SAFETY: the fixture's buffer is live and has a memline.
+    let mut handle = unsafe { Lines::in_buffer(Buf::new(swapped.buf)) };
     let lines: Vec<String> = (1..=LINES.len() as LineNr)
-        .map(|lnum| unsafe {
-            std::ffi::CStr::from_ptr(ml_get_buf(Buf::new(swapped.buf), lnum))
-                .to_string_lossy()
-                .into_owned()
-        })
+        .map(|lnum| String::from_utf8_lossy(handle.line(lnum)).into_owned())
         .collect();
     assert_eq!(lines, LINES);
 }
 
-/// `Lines` reads the same bytes the pointer form does, and writes through
-/// the line the memline already holds.
+/// `Lines` reads the bytes the buffer was built from, and writes through the
+/// line the memline already holds.
 ///
-/// The slice's length is the one thing a `*mut c_char` cannot carry, so this
-/// is where it is checked against `ml_get_buf_len` and against the text the
-/// buffer was built from. The in-place write then goes back out through
-/// `ml_get_buf`, which is the path every other reader in the tree takes: a
-/// `line_mut` that wrote somewhere else would show up here as an unchanged
-/// line.
+/// The slice's length is checked against `ml_get_buf_len` and against the
+/// text the buffer was built from. The in-place write is then read back
+/// after another line has been unpacked in between, so the second read comes
+/// out of the data block again: a `line_mut` that wrote somewhere else would
+/// show up here as an unchanged line.
 #[test]
 fn the_line_handle_reads_and_writes_the_line_the_memline_holds() {
     let swapped = Swapped::new("lines-handle");
@@ -436,21 +432,19 @@ fn the_line_handle_reads_and_writes_the_line_the_memline_holds() {
         LINES[LINES.len() - 1].to_uppercase().as_bytes()
     );
 
-    // ... and the pointer form sees it, so the write landed in the memline
-    // and not in a copy.
-    // SAFETY: a line of this buffer, NUL-terminated as `ml_get_buf` promises.
-    let through_pointer = unsafe {
-        std::ffi::CStr::from_ptr(ml_get_buf(Buf::new(swapped.buf), last))
-            .to_string_lossy()
-            .into_owned()
-    };
-    assert_eq!(through_pointer, LINES[LINES.len() - 1].to_uppercase());
+    // ... and it is still there once another line has been read, so the
+    // write landed in the memline's block and not in a copy.
+    assert_eq!(lines.line(1), LINES[0].as_bytes());
+    assert_eq!(
+        lines.line(last),
+        LINES[LINES.len() - 1].to_uppercase().as_bytes()
+    );
 }
 
 /// What the line handle answers for a line that is not there, and for the
 /// two shapes that carry the terminator with them.
 ///
-/// `ml_get_buf` cannot fail — every failure path hands back the `???`
+/// A line read cannot fail — every failure path hands back the `???`
 /// placeholder instead, and the cache is set to describe it — which is why
 /// `Lines::line` has no error case either. That placeholder used to be a
 /// `static mut` buffer rewritten on every call; this pins that it still

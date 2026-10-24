@@ -21,10 +21,10 @@ use crate::drawscreen::{UPD_NOT_VALID, redraw_curbuf_later};
 use crate::ex_getln::script_get;
 use crate::getchar::state::got_int;
 use crate::lua::ffi::{
-    LUA_TNIL, lua_getglobal, lua_isnil, lua_isstring, lua_pop, lua_pushnumber, lua_pushstring,
-    lua_pushvalue, lua_tolstring, lua_type, luaL_loadbuffer,
+    LUA_TNIL, lua_getglobal, lua_isnil, lua_isstring, lua_pop, lua_pushlstring, lua_pushnumber,
+    lua_pushstring, lua_pushvalue, lua_tolstring, lua_type, luaL_loadbuffer,
 };
-use crate::memline::{ml_get_buf, ml_get_buf_len, ml_replace_owned};
+use crate::memline::ml_replace_owned;
 use crate::memory::XString;
 use crate::memory::{strequal, xfree, xmalloc, xmallocz, xrealloc};
 use crate::message::e_argreq;
@@ -136,9 +136,12 @@ pub fn ex_luado(excmd: &mut ExArg) {
                 break;
             }
             lua_pushvalue(lstate, -1);
-            let old_line = ml_get_buf(Buf::current(), l);
-            let old_line_len = ml_get_buf_len(Buf::current(), l);
-            lua_pushstring(lstate, old_line);
+            let mut lines = Buf::current().lines();
+            let old_line = lines.line(l);
+            let old_line_len = old_line.len() as c_int;
+            // A memline line holds no NUL (it stores one as an NL), so its
+            // length is where `lua_pushstring` would have stopped.
+            lua_pushlstring(lstate, old_line.as_ptr().cast(), old_line.len());
             lua_pushnumber(lstate, l as lua_Number);
             if nlua_pcall(lstate, 2, 1) != 0 {
                 nlua_error(lstate, gettext(c"E5111: Lua: %.*s").as_ptr());

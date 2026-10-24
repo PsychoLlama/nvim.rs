@@ -71,7 +71,7 @@ use std::ffi::CString;
 use crate::event::r#loop::main_loop_is_recursing;
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
-use crate::memline::{ml_get_buf, ml_open_file};
+use crate::memline::ml_open_file;
 use crate::message::e_swapclose;
 use crate::message::{emsg, iemsg};
 use crate::os::cshim::gettext;
@@ -784,8 +784,11 @@ pub(crate) fn mf_close_file(mut buffer: Buf, getlines: bool) {
     }
 
     if getlines {
-        for lnum in 1..=buffer.b_ml.ml_line_count {
-            ml_get_buf(buffer, lnum);
+        // Read every line once, which pulls each block into memory before
+        // the file under them goes.
+        let mut lines = buffer.lines();
+        for lnum in 1..=lines.count() {
+            lines.line(lnum);
         }
     }
 
