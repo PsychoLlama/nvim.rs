@@ -27,7 +27,6 @@ use super::*;
 use crate::decoration::kHlModeReplace;
 use crate::highlight::HlAttrFlags;
 use crate::pos::MAXCOL;
-use crate::types::NUL;
 
 /// Whether `attr` draws an underline (of any style), a strikethrough or an
 /// overline: a line tied to the glyphs, which looks broken drawn over blank
@@ -118,10 +117,9 @@ impl Cells {
     /// or resuming after the cursor that "noinvcur" skipped, which is what
     /// `prev_vcol == fromcol_prev` says.
     pub(super) fn area_starts_here(&self, wlv: &WinLineVars) -> bool {
-        // SAFETY: the loop's own pointers.
         wlv.vcol == wlv.fromcol
             || (wlv.vcol + 1 == wlv.fromcol
-                && ((wlv.extra_todo == 0 && unsafe { utf_ptr2cells(self.ptr) } > 1)
+                && ((wlv.extra_todo == 0 && c_cells_at(self.rest()) > 1)
                     || (wlv.extra_todo > 0
                         && !wlv.extra_text.is_null()
                         && unsafe { utf_ptr2cells(wlv.extra_text) } > 1)))
@@ -133,13 +131,10 @@ impl Cells {
     /// Run the decoration walk for this cell and feed the loop whatever inline
     /// virtual text starts here.
     pub(super) fn decorations_at(&mut self, wlv: &mut WinLineVars, window: Win) {
-        // SAFETY: the caller's window and the redraw's decoration state.
         // The Visual-area test below is repeated here rather than shared,
         // because this one may not look inside `extra_text`.
         if wlv.vcol == wlv.fromcol
-            || (wlv.vcol + 1 == wlv.fromcol
-                && wlv.extra_todo == 0
-                && unsafe { utf_ptr2cells(self.ptr) } > 1)
+            || (wlv.vcol + 1 == wlv.fromcol && wlv.extra_todo == 0 && c_cells_at(self.rest()) > 1)
             || (self.prev_vcol == self.fromcol_prev
                 && self.prev_vcol < wlv.vcol
                 && wlv.vcol < wlv.tocol)
@@ -176,7 +171,7 @@ impl Cells {
         if !self.may_have_inline_virt {
             return;
         }
-        unsafe { wlv.handle_inline_virtual_text(self.ptr.offset_from(self.line), selected) };
+        wlv.handle_inline_virtual_text(self.byte_col(), selected);
         if wlv.extra_todo > 0 && wlv.virt_inline_hl_mode <= kHlModeReplace {
             // Park the attributes the virtual text replaces; they come
             // back when `extra_todo` is spent.
@@ -194,14 +189,12 @@ impl Cells {
     /// Check for the start or end of an `'hlsearch'` or `:match` run, and for
     /// the insert-mode completion highlight.
     pub(super) fn search_highlight(&mut self, wlv: &mut WinLineVars, window: Win) {
-        // SAFETY: the caller's window and the redraw's match state.
         let at = self.byte_col();
-        let ptr = self.ptr;
-        // SAFETY: `ptr` points into the line `win_line` holds, which is
-        // good until the callee searches again -- and it reads the line
-        // itself after that.
-        let char_len_here = || usize::try_from(unsafe { utfc_ptr2len(ptr) }).unwrap_or(0);
-        let (attr, line_moved) = update_search_hl(
+        let here = self.line.from(self.pos);
+        let char_len_here = || c_cluster_len(here);
+        // The second answer says a multi-line regexp moved the memline's
+        // line; the copy stays where it is.
+        let (attr, _) = update_search_hl(
             window,
             wlv.lnum,
             at,
@@ -213,14 +206,9 @@ impl Cells {
             &mut self.search_attr_from_match,
         );
         self.search_attr = attr;
-        if line_moved {
-            // A multi-line regexp may have moved the line.
-            self.line = ml_get_buf(window.buffer(), wlv.lnum);
-            self.ptr = unsafe { self.line.offset(at as isize) };
-        }
 
         // A conceal over the end of the line would hide the eol itself.
-        if ::core::ffi::c_int::from(unsafe { *self.ptr }) == NUL {
+        if self.byte() == b'\0' {
             self.has_match_conc = 0;
         }
 
@@ -238,13 +226,12 @@ impl Cells {
     /// Move the diff highlight between "this line changed" and "this text
     /// changed" as the read cursor enters and leaves each changed range.
     pub(super) fn diff_highlight(&mut self, wlv: &mut WinLineVars, window: Win) {
-        // SAFETY: the caller's window and the diff answer for this line.
-        let at = unsafe { self.ptr.offset_from(self.line) };
+        let at = self.byte_col();
         let num_changes = self.line_changes.num_changes();
         if num_changes > 0
             && self.change_index >= 0
             && self.change_index < num_changes - 1
-            && at >= self.line_changes.raw_start(self.change_index + 1) as isize
+            && at >= self.line_changes.raw_start(self.change_index + 1)
         {
             self.change_index += 1;
         }
@@ -257,11 +244,11 @@ impl Cells {
         }
         // Extra text (virtual text, say) takes the *line's* diff
         // highlight, never the changed-text one.
-        if wlv.diff_hlf == HLF_CHD && at >= self.change_start as isize && wlv.extra_todo == 0 {
+        if wlv.diff_hlf == HLF_CHD && at >= self.change_start && wlv.extra_todo == 0 {
             wlv.diff_hlf = if added { HLF_TXA } else { HLF_TXD };
         }
         if (wlv.diff_hlf == HLF_TXD || wlv.diff_hlf == HLF_TXA)
-            && ((at >= self.change_end as isize && wlv.extra_todo == 0)
+            && ((at >= self.change_end && wlv.extra_todo == 0)
                 || (wlv.extra_todo > 0 && wlv.extra_is_virt_text))
         {
             wlv.diff_hlf = HLF_CHD;

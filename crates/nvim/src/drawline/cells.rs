@@ -127,10 +127,11 @@ pub(crate) struct Cells {
     pub(super) may_have_inline_virt: bool,
 
     // -- the text ------------------------------------------------------------
-    /// The buffer line. Re-fetched after anything that can run Lua.
-    pub(super) line: *mut ::core::ffi::c_char,
-    /// Read cursor into [`Cells::line`].
-    pub(super) ptr: *mut ::core::ffi::c_char,
+    /// The buffer line, copied again after anything that can run Lua.
+    pub(super) line: HeldLine,
+    /// Read cursor into [`Cells::line`]: a byte offset, which steps one past
+    /// the NUL and back again the way upstream's pointer does.
+    pub(super) pos: usize,
     /// Byte index the `'listchars'` "trail" applies from, or `MAXCOL`.
     pub(super) trailcol: ColNr,
     /// Byte index one past the leading whitespace, or 0.
@@ -332,7 +333,7 @@ impl Cells {
             conceal_attr: s.conceal_attr,
             may_have_inline_virt: s.may_have_inline_virt,
             line: s.line,
-            ptr: s.ptr,
+            pos: s.pos,
             trailcol: s.trailcol,
             leadcol: s.leadcol,
             lcs_eol: s.lcs_eol,
@@ -422,18 +423,27 @@ impl Cells {
     /// Byte index of the read cursor in the line.
     #[inline(always)]
     pub(super) fn byte_col(&self) -> ::core::ffi::c_int {
-        // SAFETY: `ptr` always points into `line`.
-        let at = unsafe { self.ptr.offset_from(self.line) };
-        ::core::ffi::c_int::try_from(at).expect("a buffer line is never longer than an int")
+        // A buffer line is never longer than an int.
+        ::core::ffi::c_int::try_from(self.pos).unwrap_or(::core::ffi::c_int::MAX)
     }
 
-    /// Re-fetch the line after something that could have freed it, keeping the
-    /// read cursor where it was.
+    /// The byte under the read cursor: NUL at the end of the line.
+    #[inline(always)]
+    pub(super) fn byte(&self) -> u8 {
+        self.line.byte(self.pos)
+    }
+
+    /// The line from the read cursor on, its NUL included.
+    #[inline(always)]
+    pub(super) fn rest(&self) -> &[u8] {
+        self.line.from(self.pos)
+    }
+
+    /// Copy the line again after something that ran Lua, which may have
+    /// changed it, keeping the read cursor where it was.
     #[inline]
-    pub(super) fn refetch_line(&mut self, window: Win, lnum: LineNr, at: ::core::ffi::c_int) {
-        // SAFETY: the caller's window and line.
-        self.line = ml_get_buf(window.buffer(), lnum);
-        self.ptr = unsafe { self.line.offset(at as isize) };
+    pub(super) fn recopy_line(&mut self, window: Win, lnum: LineNr) {
+        self.line.fill(window.buffer(), lnum);
     }
 
     // -----------------------------------------------------------------------
@@ -557,24 +567,25 @@ impl Cells {
     // Phases
     // -----------------------------------------------------------------------
 
-    /// Ask the decoration providers for the next chunk of the line once the
-    /// read cursor has walked past what their last answer covered.
     /// Free the line's `'foldtext'` chunks and its collected virtual
-    /// lines. Out of line: the drop code would otherwise sit in `win_line`
+    /// lines, and hand the line's copy back. Out of line: the drop code would otherwise sit in `win_line`
     /// for a once-per-line call.
     #[inline(never)]
     fn free_line_decorations(&mut self) {
         drop(core::mem::take(&mut *self.fold_vt));
         drop(core::mem::take(&mut *self.virt_lines));
+        self.line.give_back();
     }
 
+    /// Ask the decoration providers for the next chunk of the line once the
+    /// read cursor has walked past what their last answer covered.
     pub(super) fn provider_chunk(&mut self, window: Win, lnum: LineNr) {
         if !self.check_decor_providers || self.byte_col() < self.decor_provider_end_col {
             return;
         }
         let at = self.byte_col();
         self.decor_provider_end_col = invoke_range_next(window, lnum, at, 100);
-        self.refetch_line(window, lnum, at);
+        self.recopy_line(window, lnum);
         if !self.has_decor && decor_has_more_decorations(lnum - 1) {
             self.has_decor = true;
             self.extra_check = true;

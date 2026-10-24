@@ -62,7 +62,6 @@ impl Cells {
         {
             // A virtual line pinned to the left edge covers the columns.
         } else if f.statuscol.draw {
-            let at = self.byte_col();
             wlv.draw_statuscol(
                 window,
                 wlv.row - wlv.startrow - wlv.filler_lines,
@@ -73,8 +72,8 @@ impl Cells {
                 return Step::Done;
             }
             if self.draw_text {
-                // Evaluating 'statuscolumn' may have freed the line.
-                self.refetch_line(window, wlv.lnum, at);
+                // Evaluating 'statuscolumn' may have changed the line.
+                self.recopy_line(window, wlv.lnum);
             }
         } else {
             wlv.draw_foldcolumn(window);
@@ -175,11 +174,10 @@ impl Cells {
 
     /// Is the screen row full, with more of the line still to come?
     pub(super) fn row_is_full(&self, wlv: &WinLineVars, window: Win) -> bool {
-        // SAFETY: the caller's window and the loop's own pointers.
         wlv.col >= self.view_width
             && (!self.has_foldtext || wlv.filler_todo > 0)
             && (wlv.col <= self.left_columns_width
-                || unsafe { *self.ptr } as ::core::ffi::c_int != NUL
+                || self.byte() != b'\0'
                 || wlv.filler_todo > 0
                 || (window.w_onebuf_opt.wo_list != 0
                     && window.w_p_lcs_chars.eol != NUL as ScreenChar
@@ -187,8 +185,7 @@ impl Cells {
                 || (wlv.extra_todo != 0
                     && (wlv.extra_fill != NUL as ScreenChar
                         || unsafe { *wlv.extra_text } as ::core::ffi::c_int != NUL))
-                || (self.may_have_inline_virt
-                    && unsafe { wlv.has_more_inline_virt(self.ptr.offset_from(self.line)) }))
+                || (self.may_have_inline_virt && wlv.has_more_inline_virt(self.byte_col())))
     }
 
     /// Hand the finished screen row to the grid and set up the next one.

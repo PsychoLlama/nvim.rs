@@ -385,11 +385,11 @@ impl WinLineVars {
     ///
     /// The character loop asks this to decide whether it may take its fast
     /// path to the end of the line.
-    pub(crate) fn has_more_inline_virt(&self, v: ptrdiff_t) -> bool {
+    pub(crate) fn has_more_inline_virt(&self, v: ::core::ffi::c_int) -> bool {
         if self.virt_inline_i < self.virt_inline_len {
             return true;
         }
-        decor_inline_virt_from(v)
+        decor_inline_virt_from(v as ptrdiff_t)
     }
 
     /// Load the inline virtual text that starts at byte `v` into
@@ -399,7 +399,7 @@ impl WinLineVars {
     /// Runs until something is loaded or there is nothing left: a chunk may be
     /// empty, and a chunk entirely left of the first visible column is dropped
     /// and the next one tried.
-    pub(crate) fn handle_inline_virtual_text(&mut self, v: ptrdiff_t, selected: bool) {
+    pub(crate) fn handle_inline_virtual_text(&mut self, v: ::core::ffi::c_int, selected: bool) {
         // SAFETY (for the pointer walks below): `extra_text` borrows the
         // chunk, which its decoration owns for the rest of the redraw.
         while self.extra_todo == 0 {
@@ -416,7 +416,7 @@ impl WinLineVars {
                         decor_init_draw_col(self.off, selected, i);
                     }
                     let item = decor_range(i);
-                    if inline_virt_at(&item, lists.row) && item.start_col as ptrdiff_t == v {
+                    if inline_virt_at(&item, lists.row) && item.start_col == v {
                         let link = item.data.virt();
                         let (len, hl_mode) =
                             with_decor_virt(link, |vt| (vt.data.text().len(), vt.hl_mode));

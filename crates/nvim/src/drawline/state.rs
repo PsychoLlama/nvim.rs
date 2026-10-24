@@ -34,6 +34,7 @@
 use super::*;
 use crate::grid::with_linebuf;
 use crate::types::NUL;
+use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use crate::winlayer::WinId;
 
@@ -220,11 +221,11 @@ pub(crate) struct LineSetup {
 
     // -- the text ------------------------------------------------------------
     /// The buffer line, or the empty string when there is no text to draw.
-    /// Anything that can run Lua invalidates it, so it is re-fetched after.
-    pub(crate) line: *mut ::core::ffi::c_char,
+    /// Copied again after anything that can run Lua, which may change it.
+    pub(crate) line: HeldLine,
     /// Read cursor into [`LineSetup::line`], already advanced past whatever is
     /// scrolled off to the left.
-    pub(crate) ptr: *mut ::core::ffi::c_char,
+    pub(crate) pos: usize,
     /// Byte index where the trailing whitespace `'listchars'` "trail" applies
     /// to starts, or `MAXCOL` when it does not apply.
     pub(crate) trailcol: ColNr,
@@ -316,6 +317,96 @@ pub(crate) struct LineSetup {
     pub(crate) cur_checked_col: ::core::ffi::c_int,
 }
 // ---------------------------------------------------------------------------
+// The text being drawn
+// ---------------------------------------------------------------------------
+
+/// The buffer line `win_line` draws, copied out of the memline with its NUL.
+///
+/// Upstream holds the line by address and re-reads the address after
+/// everything that can read another line -- the syntax engine, the search
+/// highlighting, the spell checker -- because any of them can move the one
+/// line the memline keeps unpacked. A copy is moved by none of them, so it
+/// is taken once per buffer line and again only where *Lua* can run and
+/// change the text itself: the decoration providers, `'statuscolumn'` and
+/// `'foldtext'`.
+///
+/// The bytes come from one process-wide allocation, lent for the line and
+/// handed back by [`HeldLine::give_back`]: this state is drop-free (an owned
+/// `Vec` here would put its drop glue in `win_line`). A nested `win_line` --
+/// a redraw from inside `'statuscolumn'` -- finds the pool empty and allocates
+/// its own.
+pub(crate) struct HeldLine(ManuallyDrop<Vec<u8>>);
+
+/// The allocations `win_line`'s scratch buffers are lent between lines.
+struct Pool {
+    /// [`HeldLine`]'s.
+    line: Vec<u8>,
+    /// [`get_extra_buf`]'s.
+    extra: Vec<u8>,
+}
+
+/// See [`Pool`].
+static POOL: GlobalCell<Pool> = GlobalCell::new(Pool {
+    line: Vec::new(),
+    extra: Vec::new(),
+});
+
+impl HeldLine {
+    /// The pool's allocation holding the empty line.
+    #[inline(never)]
+    pub(crate) fn take() -> Self {
+        let mut bytes = POOL.with_mut(|pool| core::mem::take(&mut pool.line));
+        bytes.clear();
+        bytes.push(b'\0');
+        HeldLine(ManuallyDrop::new(bytes))
+    }
+
+    /// Copy line `lnum` of `buffer` in, replacing what was held.
+    #[inline(never)]
+    pub(crate) fn fill(&mut self, buffer: Buf, lnum: LineNr) {
+        let mut lines = buffer.lines();
+        let line = lines.line(lnum);
+        self.0.clear();
+        self.0.reserve(line.len() + 1);
+        self.0.extend_from_slice(line);
+        self.0.push(b'\0');
+    }
+
+    /// Return the allocation to the pool, freeing whichever of the two a
+    /// nested line left there.
+    #[inline(never)]
+    pub(crate) fn give_back(&mut self) {
+        let bytes = core::mem::take(&mut *self.0);
+        drop(POOL.with_mut(|pool| core::mem::replace(&mut pool.line, bytes)));
+    }
+
+    /// The line's bytes and the NUL after them.
+    #[inline(always)]
+    pub(crate) fn with_nul(&self) -> &[u8] {
+        &self.0
+    }
+
+    /// The line's bytes, its NUL left out.
+    #[inline(always)]
+    pub(crate) fn text(&self) -> &[u8] {
+        self.0.split_last().map_or(&[], |(_, text)| text)
+    }
+
+    /// The byte at `at`: NUL at the end of the line and past it, which is
+    /// where upstream's walks read their terminator.
+    #[inline(always)]
+    pub(crate) fn byte(&self, at: usize) -> u8 {
+        self.0.get(at).copied().unwrap_or(b'\0')
+    }
+
+    /// The line from byte `at` on, its NUL included; empty past the NUL.
+    #[inline(always)]
+    pub(crate) fn from(&self, at: usize) -> &[u8] {
+        self.0.get(at..).unwrap_or_default()
+    }
+}
+
+// ---------------------------------------------------------------------------
 // The line buffer
 // ---------------------------------------------------------------------------
 
@@ -343,10 +434,6 @@ pub(crate) fn put_cell(
 // Scratch and small window queries
 // ---------------------------------------------------------------------------
 
-/// The scratch buffer `win_line` renders a fold text or a `'listchars'`
-/// replacement into. One allocation for the process, grown as needed.
-static extra_buf: GlobalCell<Vec<u8>> = GlobalCell::new(Vec::new());
-
 /// A scratch buffer of at least `size` bytes, valid until the next call.
 ///
 /// # Safety
@@ -355,7 +442,8 @@ pub(crate) unsafe fn get_extra_buf(size: size_t) -> *mut ::core::ffi::c_char {
     let size = size.max(64);
     // The buffer is only ever reached through this function, so nothing can
     // hold the old pointer across the reallocation.
-    extra_buf.with_mut(|buf| {
+    POOL.with_mut(|pool| {
+        let buf = &mut pool.extra;
         if buf.len() < size {
             *buf = vec![0; size];
         }

@@ -77,11 +77,7 @@ impl Cells {
         {
             return;
         }
-        if self.has_decor
-            && unsafe { *self.ptr } as ::core::ffi::c_int == NUL
-            && self.lcs_eol == 0
-            && self.lcs_eol_todo
-        {
+        if self.has_decor && self.byte() == b'\0' && self.lcs_eol == 0 && self.lcs_eol_todo {
             // Tricky: there might be a virtual text just *after* the last
             // character.
             decor_redraw_col(
@@ -92,13 +88,12 @@ impl Cells {
                 self.decor_provider_end_col - 1,
             );
         }
-        if unsafe { *self.ptr } as ::core::ffi::c_int != NUL
+        if self.byte() != b'\0'
             || (self.lcs_eol > 0 && self.lcs_eol_todo)
             || (wlv.extra_todo > 0
                 && (wlv.extra_fill != NUL as ScreenChar
                     || unsafe { *wlv.extra_text } as ::core::ffi::c_int != NUL))
-            || (self.may_have_inline_virt
-                && unsafe { wlv.has_more_inline_virt(self.ptr.offset_from(self.line)) })
+            || (self.may_have_inline_virt && wlv.has_more_inline_virt(self.byte_col()))
         {
             self.cell_char = lcs_ext;
             wlv.char_attr = win_hl_attr(window, HLF_AT);
@@ -115,7 +110,6 @@ impl Cells {
             && wlv.extra_todo == 0
             && wlv.col == self.text_start_col
         {
-            let at = self.byte_col();
             let lnume = wlv.lnum + wlv.foldinfo.fi_lines - 1;
             // SAFETY: `fold_buf` is the frame's `FOLD_TEXT_LEN`-byte scratch,
             // which nothing else holds while the line is drawn.
@@ -139,8 +133,8 @@ impl Cells {
             wlv.extra_fill = NUL as ScreenChar;
             wlv.extra_last = NUL as ScreenChar;
             unsafe { *wlv.extra_text.offset(wlv.extra_todo as isize) = NUL as ::core::ffi::c_char };
-            // Evaluating 'foldtext' may have freed the line.
-            self.refetch_line(window, wlv.lnum, at);
+            // Evaluating 'foldtext' may have changed the line.
+            self.recopy_line(window, wlv.lnum);
         }
 
         // Fill the rest of the row with the 'fold' fillchar — after the
@@ -149,7 +143,7 @@ impl Cells {
             && wlv.extra_todo == 0
             && wlv.col < self.view_width
             && (self.has_foldtext
-                || (unsafe { *self.ptr } as ::core::ffi::c_int == NUL
+                || (self.byte() == b'\0'
                     && (window.w_onebuf_opt.wo_list == 0
                         || !self.lcs_eol_todo
                         || self.lcs_eol == NUL as ScreenChar)))
@@ -238,7 +232,7 @@ impl Cells {
             self.char_code = ' ' as ::core::ffi::c_int;
             self.cell_char = schar_from_char(self.char_code);
             // Put the pointer back at the NUL.
-            self.ptr = unsafe { self.ptr.offset(-1) };
+            self.pos -= 1;
         }
     }
 
@@ -250,7 +244,7 @@ impl Cells {
         let (mut lcs_tab1, mut lcs_tab2, mut lcs_tab3) = (lcs.tab1, lcs.tab2, lcs.tab3);
         if window.w_onebuf_opt.wo_list != 0
             && lcs.leadtab1 != NUL as ScreenChar
-            && self.ptr < unsafe { self.line.offset(self.leadcol as isize) }
+            && self.byte_col() < self.leadcol
         {
             lcs_tab1 = lcs.leadtab1;
             lcs_tab2 = lcs.leadtab2;
@@ -307,11 +301,11 @@ impl Cells {
                 // own buffer, which nothing else reads until this is done.
                 let buf = unsafe { core::slice::from_raw_parts_mut(p.cast::<u8>(), len + 1) };
                 buf[..len].fill(b' ');
-                buf[len] = NUL as u8;
+                buf[len] = b'\0';
                 wlv.extra_text = p;
                 let mut rest: &mut [u8] = buf;
                 for i in 0..tab_len {
-                    if rest[0] == NUL as u8 {
+                    if rest[0] == b'\0' {
                         tab_len = i;
                         break;
                     }
@@ -452,7 +446,7 @@ impl Cells {
         };
         self.lcs_eol_todo = false;
         // Put the pointer back at the NUL.
-        self.ptr = unsafe { self.ptr.offset(-1) };
+        self.pos -= 1;
         wlv.extra_attr = win_hl_attr(window, HLF_AT);
         wlv.n_attr = 1;
         self.char_code = schar_get_first_codepoint(self.cell_char);

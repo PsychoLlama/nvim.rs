@@ -44,10 +44,10 @@ use crate::r#match::{
     get_prevcol_hl_flag, get_search_match_hl, prepare_search_hl_line, update_search_hl,
 };
 use crate::mbyte::{
-    mb_charlen, mb_off_next, mb_string2cells, utf_head_off, utf_ptr2cells, utf_ptr2char,
-    utf_ptr2char_info, utf_ptr2str_char_info, utfc_next, utfc_ptr2len, utfc_ptr2schar,
+    c_cells_at, c_char_info, c_cluster_cell, c_cluster_len, c_next_cluster, head_off, mb_charlen,
+    mb_string2cells, utf_ptr2cells, utf_ptr2char, utfc_ptr2len, utfc_ptr2schar,
 };
-use crate::memline::{gchar_pos, ml_get_buf, ml_get_buf_len};
+use crate::memline::gchar_pos;
 use crate::memory::xfree;
 use crate::message::state::did_emsg;
 use crate::r#move::{set_empty_rows, validate_virtcol, win_col_off2};
@@ -333,7 +333,6 @@ fn decor_providers_setup(
     col: ColNr,
     window: Win,
 ) -> ::core::ffi::c_int {
-    // SAFETY: the caller's window and line; the callbacks re-enter the editor.
     let rem_vcols = if window.w_onebuf_opt.wo_wrap != 0 {
         let width = window.w_view_width - window.col_off();
         let width2 = width + win_col_off2(window);
@@ -360,15 +359,28 @@ fn invoke_range_next(
     begin_col: ColNr,
     col_off: ColNr,
 ) -> ::core::ffi::c_int {
-    // SAFETY: the caller's window and line; the callbacks re-enter the editor.
-    let line = ml_get_buf(window.buffer(), lnum);
-    let line_len = ml_get_buf_len(window.buffer(), lnum);
     let col_off = col_off.max(1);
+    // The line only for the arithmetic: the callbacks re-enter the editor.
+    let end_col = {
+        let mut lines = window.buffer().lines();
+        let line = lines.line(lnum);
+        let line_len = ColNr::try_from(line.len()).unwrap_or(ColNr::MAX);
+        (col_off <= line_len - begin_col).then(|| {
+            let end_col = begin_col + col_off;
+            // Do not cut a character in half: forward to the start of the
+            // next one when `end_col` is inside one.
+            let at = usize::try_from(end_col).unwrap_or(0);
+            let back = head_off(line, at);
+            let fwd = if back == 0 {
+                0
+            } else {
+                c_cluster_len(&line[at - back..]) - back
+            };
+            end_col + ColNr::try_from(fwd).unwrap_or(0)
+        })
+    };
 
-    if col_off <= line_len - begin_col {
-        let mut end_col = begin_col + col_off;
-        // Do not cut a character in half.
-        end_col += unsafe { mb_off_next(line, line.offset(end_col as isize)) };
+    if let Some(end_col) = end_col {
         decor_providers_invoke_range(window, lnum - 1, begin_col, lnum - 1, end_col);
         validate_virtcol(window);
         end_col

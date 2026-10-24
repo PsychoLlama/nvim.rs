@@ -19,7 +19,6 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::cstr;
 use crate::decoration::kMTMetaInline;
 use crate::normal::{VisualSelection, visual_active, visual_selection};
 use crate::option::vars::P_SEL;
@@ -87,20 +86,17 @@ pub(crate) fn prepare_line(
     s.line_attr_save = wlv.line_attr;
     s.line_attr_lowprio_save = wlv.line_attr_lowprio;
 
+    if s.draw_text {
+        s.line.fill(window.buffer(), lnum);
+    }
     if spv.spv_has_spell && col_rows == 0 && s.draw_text {
         s.spell_line_start(window, lnum, spv, nextline);
     }
 
-    s.line = if s.draw_text {
-        ml_get_buf(window.buffer(), lnum)
-    } else {
-        c"".as_ptr().cast_mut()
-    };
-    s.ptr = s.line;
     s.lcs_eol = window.w_p_lcs_chars.eol;
     s.lcs_prec_todo = window.w_p_lcs_chars.prec;
     if window.w_onebuf_opt.wo_list != 0 && !s.has_foldtext && s.draw_text {
-        s.listchars_columns(window, lnum);
+        s.listchars_columns(window);
     }
 
     // 'nowrap', or 'wrap' with a line scrolled sideways: advance to the
@@ -121,12 +117,11 @@ pub(crate) fn prepare_line(
     }
 
     if s.check_decor_providers {
-        let at = unsafe { s.ptr.offset_from(s.line) } as ::core::ffi::c_int;
+        let at = ColNr::try_from(s.pos).unwrap_or(ColNr::MAX);
         s.decor_provider_end_col =
             decor_providers_setup(endrow - wlv.startrow, s.start_vcol == 0, lnum, at, window);
         // A provider is Lua and may have changed the buffer under us.
-        s.line = ml_get_buf(window.buffer(), lnum);
-        s.ptr = unsafe { s.line.offset(at as isize) };
+        s.line.fill(window.buffer(), lnum);
     }
 
     decor_redraw_line(window, lnum - 1);
@@ -138,8 +133,9 @@ pub(crate) fn prepare_line(
     s.keep_cursor_visible(wlv, window);
 
     if col_rows == 0 && s.draw_text && !s.has_foldtext {
-        let at = unsafe { s.ptr.offset_from(s.line) } as ::core::ffi::c_int;
-        // `|=`, not `||`: `prepare_search_hl_line` runs either way.
+        let at = ColNr::try_from(s.pos).unwrap_or(ColNr::MAX);
+        // `|=`, not `||`: `prepare_search_hl_line` runs either way. A
+        // multi-line regexp may move the memline's line, but not the copy.
         s.area_highlighting |= prepare_search_hl_line(
             window,
             lnum,
@@ -147,9 +143,6 @@ pub(crate) fn prepare_line(
             &mut s.search_attr,
             &mut s.search_attr_from_match,
         );
-        // A multi-line regexp may have moved the line.
-        s.line = ml_get_buf(window.buffer(), lnum);
-        s.ptr = unsafe { s.line.offset(at as isize) };
     }
 
     // Insert-mode completion highlights the text it inserted.
@@ -198,8 +191,8 @@ impl LineSetup {
             may_have_inline_virt: false,
             has_terminal: false,
 
-            line: ::core::ptr::null_mut(),
-            ptr: ::core::ptr::null_mut(),
+            line: HeldLine::take(),
+            pos: 0,
             trailcol: MAXCOL as ColNr,
             leadcol: 0,
             lcs_eol: 0,
@@ -529,16 +522,20 @@ impl LineSetup {
             let next = lines.line(lnum + 1);
             spell_cat_line(&mut nextline[SPELL_LOOKAHEAD..], next, SPWORDLEN);
         }
-        let line = ml_get_buf(window.buffer(), lnum);
+        let line = self.line.text();
 
         // An empty line: check the first word of the next one for a
         // capital instead.
-        let first = unsafe { skipwhite(line) };
-        if unsafe { *first } == 0 {
+        let first = line
+            .iter()
+            .take_while(|&&c| c == b' ' || c == b'\t')
+            .count();
+        if first == line.len() {
             spv.spv_cap_col = 0;
             spv.spv_capcol_lnum = lnum + 1;
         } else if spv.spv_cap_col == 0 {
-            spv.spv_cap_col = unsafe { first.offset_from(line) } as ::core::ffi::c_int;
+            spv.spv_cap_col =
+                ::core::ffi::c_int::try_from(first).unwrap_or(::core::ffi::c_int::MAX);
         }
 
         if nextline[SPELL_LOOKAHEAD] == 0 {
@@ -547,7 +544,7 @@ impl LineSetup {
             self.nextline_idx = 0;
             return;
         }
-        let line_len = ml_get_buf_len(window.buffer(), lnum) as usize;
+        let line_len = line.len();
         if line_len < SPELL_LOOKAHEAD {
             // Short line: use all of it, then move the next line's start
             // up against it.
@@ -555,29 +552,21 @@ impl LineSetup {
                 .iter()
                 .position(|&c| c == 0)
                 .unwrap_or(SPELL_LOOKAHEAD - 1);
-            unsafe {
-                ::core::ptr::copy_nonoverlapping(line.cast(), nextline.as_mut_ptr(), line_len)
-            };
+            nextline[..line_len].copy_from_slice(line);
             nextline.copy_within(SPELL_LOOKAHEAD..SPELL_LOOKAHEAD + tail + 1, line_len);
             self.nextlinecol = 0;
             self.nextline_idx = line_len as ::core::ffi::c_int + 1;
         } else {
             // Long line: only its last `SPWORDLEN` bytes can matter.
             self.nextlinecol = (line_len - SPELL_LOOKAHEAD) as ::core::ffi::c_int;
-            unsafe {
-                ::core::ptr::copy_nonoverlapping(
-                    line.add(self.nextlinecol as usize).cast(),
-                    nextline.as_mut_ptr(),
-                    SPELL_LOOKAHEAD,
-                )
-            };
+            nextline[..SPELL_LOOKAHEAD].copy_from_slice(&line[line_len - SPELL_LOOKAHEAD..]);
             self.nextline_idx = SPWORDLEN + 1;
         }
     }
 
     /// Find the leading and trailing whitespace the `'listchars'` "lead" and
     /// "trail" marks apply to.
-    fn listchars_columns(&mut self, window: Win, lnum: LineNr) {
+    fn listchars_columns(&mut self, window: Win) {
         if window.w_p_lcs_chars.space != 0
             || window.w_p_lcs_chars.multispace.is_some()
             || window.w_p_lcs_chars.leadmultispace.is_some()
@@ -588,66 +577,65 @@ impl LineSetup {
             self.extra_check = true;
         }
         if window.w_p_lcs_chars.trail != 0 {
-            let mut trailcol = ml_get_buf_len(window.buffer(), lnum);
-            while trailcol > 0
-                && ascii_iswhite(
-                    unsafe { *self.ptr.offset(trailcol as isize - 1) } as ::core::ffi::c_int
-                )
-            {
-                trailcol -= 1;
-            }
-            self.trailcol = trailcol + unsafe { self.ptr.offset_from(self.line) } as ColNr;
+            let rest = self.line.from(self.pos);
+            let text = &rest[..rest.len().saturating_sub(1)];
+            let trailcol = text.len()
+                - text
+                    .iter()
+                    .rev()
+                    .take_while(|&&c| ascii_iswhite(::core::ffi::c_int::from(c)))
+                    .count();
+            self.trailcol = ColNr::try_from(trailcol + self.pos).unwrap_or(ColNr::MAX);
         }
         if window.w_p_lcs_chars.lead != 0
             || window.w_p_lcs_chars.leadmultispace.is_some()
             || window.w_p_lcs_chars.leadtab1 != 0
         {
-            let mut leadcol: ColNr = 0;
-            while ascii_iswhite(unsafe { *self.ptr.offset(leadcol as isize) } as ::core::ffi::c_int)
-            {
-                leadcol += 1;
-            }
-            self.leadcol = if unsafe { *self.ptr.offset(leadcol as isize) } == 0 {
+            let rest = self.line.from(self.pos);
+            let leadcol = rest
+                .iter()
+                .take_while(|&&c| ascii_iswhite(::core::ffi::c_int::from(c)))
+                .count();
+            self.leadcol = if rest.get(leadcol).is_none_or(|&c| c == 0) {
                 // In a line of nothing but spaces they all count as
                 // trailing.
                 0
             } else {
                 // The first column not filled with spaces.
-                leadcol + (unsafe { self.ptr.offset_from(self.line) } + 1) as ColNr
+                ColNr::try_from(leadcol + self.pos + 1).unwrap_or(ColNr::MAX)
             };
         }
     }
 
-    /// Advance [`LineSetup::ptr`] and `wlv.vcol` to the first character that is
+    /// Advance [`LineSetup::pos`] and `wlv.vcol` to the first character that is
     /// on screen, when the line is scrolled sideways or `w_skipcol` is set.
-    ///
-    /// [`LineSetup::line`] must hold the line, with [`LineSetup::ptr`] in it.
     fn skip_to_start_vcol(&mut self, wlv: &mut WinLineVars, window: Win, spv: &mut SpellVars) {
         let start_vcol = self.start_vcol;
-        let mut prev_ptr = self.ptr;
         let mut cs = CharSize { width: 0, head: 0 };
-        // SAFETY: the line being drawn, which nothing below re-fetches.
-        let (mut csarg, cstype) =
-            CharsizeArg::new(window, wlv.lnum, unsafe { cstr::bytes_at(self.line) });
+        let line = self.line.with_nul();
+        let (mut csarg, cstype) = CharsizeArg::new(window, wlv.lnum, self.line.text());
         csarg.max_head_vcol = start_vcol;
         let mut vcol = wlv.vcol;
-        let mut ci = unsafe { utf_ptr2str_char_info(self.ptr) };
+        let mut at = self.pos;
+        let mut prev_at = at;
+        let mut ci = c_char_info(line, at);
+        let mut multispace = (self.in_multispace, self.multispace_pos);
         while vcol < start_vcol {
-            // SAFETY: `ci` walks the line.
-            let at = ci.ptr.addr() - self.line.addr();
-            cs = win_charsize(cstype, vcol, at, ci.chr.value, &mut csarg);
+            cs = win_charsize(cstype, vcol, at, ci.value, &mut csarg);
             vcol += cs.width;
-            prev_ptr = ci.ptr;
-            if unsafe { *prev_ptr } == 0 {
+            prev_at = at;
+            if line.get(prev_at).is_none_or(|&c| c == 0) {
                 break;
             }
-            ci = unsafe { utfc_next(ci) };
+            (at, ci) = c_next_cluster(line, at, ci);
             if window.w_onebuf_opt.wo_list != 0 {
-                unsafe { self.track_multispace(window, prev_ptr, ci.ptr) };
+                multispace = track_multispace(window, line, self.leadcol, multispace, prev_at, at);
             }
         }
+        drop(csarg);
+        (self.in_multispace, self.multispace_pos) = multispace;
         wlv.vcol = vcol;
-        self.ptr = ci.ptr;
+        self.pos = at;
 
         // The end of the line can be left of the first displayed column
         // when 'cursorcolumn' or 'colorcolumn' is set, when 'virtualedit'
@@ -667,7 +655,7 @@ impl LineSetup {
         // the cells of it that are not.
         if wlv.vcol > start_vcol {
             wlv.vcol -= cs.width;
-            self.ptr = prev_ptr;
+            self.pos = prev_at;
         }
         if start_vcol > wlv.vcol {
             wlv.skip_cells = start_vcol - wlv.vcol - cs.head;
@@ -691,65 +679,24 @@ impl LineSetup {
         }
     }
 
-    /// Track where in a run of consecutive spaces the skipped-over text has
-    /// got to, so that `'listchars'` "multispace" resumes at the right glyph.
-    ///
-    /// # Safety
-    /// `window` must be a live window and both pointers must point into
-    /// [`LineSetup::line`].
-    unsafe fn track_multispace(
-        &mut self,
-        window: Win,
-        prev_ptr: *const ::core::ffi::c_char,
-        next_ptr: *const ::core::ffi::c_char,
-    ) {
-        // SAFETY: the caller's window and line.
-        self.in_multispace = unsafe { *prev_ptr } == b' ' as ::core::ffi::c_char
-            && (unsafe { *next_ptr } == b' ' as ::core::ffi::c_char
-                || (prev_ptr > self.line
-                    && unsafe { *prev_ptr.offset(-1) } == b' ' as ::core::ffi::c_char));
-        if !self.in_multispace {
-            self.multispace_pos = 0;
-            return;
-        }
-        let lead = unsafe { self.line.offset(self.leadcol as isize) };
-        let lcs = &window.w_p_lcs_chars;
-        let pattern = if next_ptr >= lead {
-            lcs.multispace.as_deref()
-        } else {
-            lcs.leadmultispace.as_deref()
-        };
-        let Some(pattern) = pattern else {
-            return;
-        };
-        self.multispace_pos += 1;
-        // Past the run's end is where upstream's terminator stops it.
-        if usize::try_from(self.multispace_pos).is_ok_and(|pos| pos >= pattern.len()) {
-            self.multispace_pos = 0;
-        }
-    }
-
     /// Work out whether the first character on screen is inside a badly
     /// spelled word, since the loop only ever starts a spell check at a word
     /// boundary.
     fn spell_at_start_vcol(&mut self, mut window: Win, lnum: LineNr) {
-        // SAFETY: the caller's window and line.
-        let linecol = unsafe { self.ptr.offset_from(self.line) } as ColNr;
+        let linecol = ColNr::try_from(self.pos).unwrap_or(ColNr::MAX);
         let mut spell_hlf: Hlf = HLF_COUNT;
 
         let saved_cursor = window.w_cursor;
         window.w_cursor.lnum = lnum;
         window.w_cursor.col = linecol;
+        // Reads lines of its own, which moves the memline's but not the copy.
         let len = spell_move_to(window, FORWARD, SMT_ALL, true, Some(&mut spell_hlf));
-
-        // `spell_move_to` may call `ml_get` and invalidate "line".
-        self.line = ml_get_buf(window.buffer(), lnum);
-        self.ptr = unsafe { self.line.offset(linecol as isize) };
 
         if len == 0 || window.w_cursor.col > linecol {
             // No bad word at the line start: do not check again until the
             // end of a word.
-            let end = spell_to_word_end(unsafe { cstr::bytes_at(self.ptr) }, window);
+            let end =
+                spell_to_word_end(self.line.text().get(self.pos..).unwrap_or_default(), window);
             self.word_end = (linecol as usize + end + 1) as ::core::ffi::c_int;
         } else {
             // Bad word found: its attribute applies to the end of it.
@@ -789,4 +736,41 @@ impl LineSetup {
             wlv.fromcol = -1;
         }
     }
+}
+
+/// Track where in a run of consecutive spaces the skipped-over text has got
+/// to, so that `'listchars'` "multispace" resumes at the right glyph.
+///
+/// `state` is (inside a run, how far into the pattern), `prev` the byte the
+/// character just skipped starts at and `next` the next one's, both in
+/// `line`, whose NUL is included.
+fn track_multispace(
+    window: Win,
+    line: &[u8],
+    leadcol: ColNr,
+    state: (bool, ::core::ffi::c_int),
+    prev: usize,
+    next: usize,
+) -> (bool, ::core::ffi::c_int) {
+    let byte = |at: usize| line.get(at).copied().unwrap_or(0);
+    let in_multispace =
+        byte(prev) == b' ' && (byte(next) == b' ' || (prev > 0 && byte(prev - 1) == b' '));
+    if !in_multispace {
+        return (false, 0);
+    }
+    let lcs = &window.w_p_lcs_chars;
+    let pattern = if next >= usize::try_from(leadcol).unwrap_or(0) {
+        lcs.multispace.as_deref()
+    } else {
+        lcs.leadmultispace.as_deref()
+    };
+    let Some(pattern) = pattern else {
+        return (true, state.1);
+    };
+    let mut pos = state.1 + 1;
+    // Past the run's end is where upstream's terminator stops it.
+    if usize::try_from(pos).is_ok_and(|pos| pos >= pattern.len()) {
+        pos = 0;
+    }
+    (true, pos)
 }

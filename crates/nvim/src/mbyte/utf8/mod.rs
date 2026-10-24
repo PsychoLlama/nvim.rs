@@ -283,6 +283,41 @@ pub(crate) fn c_cluster_schar(bytes: &[u8]) -> (ScreenChar, c_int) {
     )
 }
 
+/// [`c_cluster_len`] and [`c_cluster_schar`] of the cluster at the start of
+/// `bytes`, the bytes of a C string, in one walk: its length (0 at the end),
+/// the cell it makes and its base codepoint.
+///
+/// The cell is the cluster cut to what a `ScreenChar` holds. A cluster that
+/// ends a whole sequence's worth short of that limit is the one the capped
+/// walk finds too -- nothing either walk reads lies past the limit -- so only
+/// a longer one is walked a second time.
+#[inline]
+pub(crate) fn c_cluster_cell(bytes: &[u8]) -> (usize, ScreenChar, c_int) {
+    let text = CBytes(bytes);
+    let len = cluster_len_in(text, 0);
+    let c = char_at_in(text, 0);
+    let first_compose = utf_iscomposing_first(c);
+    let maxlen = (MAX_SCHAR_SIZE - 1) as usize - usize::from(first_compose);
+    let cell_len = if len + 6 <= maxlen {
+        len
+    } else {
+        cluster_len_in(Prefix::new(text, 0, maxlen), 0)
+    };
+    if cell_len == 1 && text.byte(0) >= 0x80 {
+        return (len, 0, c);
+    }
+    // A cluster never runs past the end of the text it is read from.
+    let cluster = &bytes[..cell_len];
+    if !first_compose {
+        return (len, schar_from_buf(cluster), c);
+    }
+    // A cell has to have something to compose onto; `maxlen` left room.
+    let mut cbuf = [0u8; MAX_SCHAR_SIZE as usize];
+    cbuf[0] = b' ';
+    cbuf[1..=cell_len].copy_from_slice(cluster);
+    (len, schar_from_buf(&cbuf[..cell_len + 1]), c)
+}
+
 /// [`utf_ptr2cells`] over the bytes of a C string, the way
 /// [`c_cluster_schar`] reads them.
 pub(crate) fn c_cells_at(bytes: &[u8]) -> c_int {

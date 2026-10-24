@@ -117,7 +117,7 @@ impl Cells {
                 self.search_attr = self.saved_search_attr;
                 self.saved_search_attr = 0;
             }
-            if self.area_attr == 0 && unsafe { *self.ptr } as ::core::ffi::c_int != NUL {
+            if self.area_attr == 0 && self.byte() != b'\0' {
                 self.area_attr = self.saved_area_attr;
                 self.saved_area_attr = 0;
             }
@@ -156,19 +156,17 @@ impl Cells {
         window: Win,
         f: &mut LineFrame<'_>,
     ) {
-        // SAFETY: the caller's window and frame; `ptr` walks a NUL-terminated
-        // buffer line.
-        let mut prev_ptr: *mut ::core::ffi::c_char = self.ptr;
+        let prev_at = self.pos;
 
         // First byte of the next character.
-        let mut c0 = unsafe { *self.ptr } as uint8_t as ::core::ffi::c_int;
+        let first = self.byte();
+        let mut c0 = ::core::ffi::c_int::from(first);
         if c0 == NUL {
             // No more cells to skip.
             wlv.skip_cells = 0;
         }
 
-        self.char_len = unsafe { utfc_ptr2len(self.ptr) };
-        self.cell_char = unsafe { utfc_ptr2schar(self.ptr, &raw mut self.char_code) };
+        (self.char_len, self.cell_char, self.char_code) = cluster_at(self.rest());
 
         // Overlong-encoded ASCII, or ASCII with a composing character, is
         // displayed normally — except a NUL.
@@ -213,10 +211,13 @@ impl Cells {
             self.char_code = '>' as ::core::ffi::c_int;
             self.char_len = 1;
             self.overflow_attr = win_hl_attr(window, HLF_AT);
-            self.ptr = unsafe { self.ptr.offset(-1) };
+            // Steps back before the line when the character is its first;
+            // the step forward below undoes it.
+            self.pos = self.pos.wrapping_sub(1);
             self.did_decrement_ptr = true;
-        } else if unsafe { *self.ptr } as ::core::ffi::c_int != NUL {
-            self.ptr = unsafe { self.ptr.offset(self.char_len as isize - 1) };
+        } else if first != b'\0' {
+            // Not 0: the character is not the end of the line.
+            self.pos += usize::try_from(self.char_len - 1).unwrap_or(0);
         }
 
         if wlv.skip_cells > 0 && self.char_len > 1 && wlv.extra_todo == 0 {
@@ -235,11 +236,11 @@ impl Cells {
                 self.attr_before_run = wlv.char_attr;
             }
         }
-        self.ptr = unsafe { self.ptr.offset(1) };
+        self.pos = self.pos.wrapping_add(1);
 
         self.decor_attr = 0;
         if self.extra_check {
-            unsafe { self.slow_path(wlv, window, f, &mut prev_ptr, c0) };
+            self.slow_path(wlv, window, f, prev_at, c0);
         }
 
         if !vim_isprintc(self.char_code) {
@@ -251,7 +252,7 @@ impl Cells {
         if wlv.skip_cells > 0 && self.did_decrement_ptr {
             // The `>` is not being shown, so put the pointer back or the
             // loop would not move on.
-            self.ptr = unsafe { self.ptr.offset(1) };
+            self.pos += 1;
         }
     }
 
@@ -260,32 +261,25 @@ impl Cells {
     /// the `'listchars'` space replacements.
     ///
     /// Reached only when the setup half decided the line needs it, which is
-    /// what keeps a plain line's inner loop short.
-    ///
-    /// # Safety
-    /// `window` must be live, `f` must hold the caller's frame and `prev_ptr` must
-    /// point into the line.
-    pub(super) unsafe fn slow_path(
+    /// what keeps a plain line's inner loop short. `prev_at` is where the
+    /// character starts.
+    pub(super) fn slow_path(
         &mut self,
         wlv: &mut WinLineVars,
         window: Win,
         f: &mut LineFrame<'_>,
-        prev_ptr: &mut *mut ::core::ffi::c_char,
+        prev_at: usize,
         c0: ::core::ffi::c_int,
     ) {
-        // SAFETY: the caller's window, frame and line pointers.
         let no_plain_buffer =
-            unsafe { (*window.w_s).b_p_spo_flags } & kOptSpoFlagNoplainbuffer as uint32_t != 0;
+            window.syn_block().b_p_spo_flags & kOptSpoFlagNoplainbuffer as uint32_t != 0;
         let mut can_spell = !no_plain_buffer;
 
         // Not at the start of the line only because a double-width
         // character did not fit: then there is nothing to ask about yet.
         let at = self.byte_col();
         if self.has_syntax && at > 0 {
-            let prev_at = unsafe { prev_ptr.offset_from(self.line) };
-            self.syntax_attr(wlv, window, f, at, &mut can_spell);
-            // The syntax walk may have re-fetched the line.
-            *prev_ptr = unsafe { self.line.offset(prev_at) };
+            self.syntax_attr(window, f, at, &mut can_spell);
         }
 
         if self.has_decor && at > 0 {
@@ -299,7 +293,7 @@ impl Cells {
         self.attr_base = hl_combine_attr(self.fold_attr, self.decor_attr);
         wlv.char_attr = hl_combine_attr(self.attr_base, self.attr_pri);
 
-        unsafe { self.spell_at(wlv, window, f, *prev_ptr, can_spell) };
+        self.spell_at(wlv, window, f, prev_at, can_spell);
         if self.spell_attr != 0 {
             self.attr_base = hl_combine_attr(self.attr_base, self.spell_attr);
             wlv.char_attr = hl_combine_attr(self.attr_base, self.attr_pri);
@@ -316,16 +310,15 @@ impl Cells {
 
         self.gap_decor_attr = self.decor_attr;
         self.linebreak(wlv, window, c0);
-        unsafe { self.listchars(wlv, window, *prev_ptr) };
+        self.listchars(wlv, window, prev_at);
     }
 
     /// Ask the syntax state machine for this character's attribute, and for
     /// whether it is in the `@Spell` cluster.
     pub(super) fn syntax_attr(
         &mut self,
-        wlv: &WinLineVars,
         mut window: Win,
-        f: &mut LineFrame<'_>,
+        f: &LineFrame<'_>,
         at: ::core::ffi::c_int,
         can_spell: &mut bool,
     ) {
@@ -334,7 +327,6 @@ impl Cells {
         let save_did_emsg = did_emsg.get();
         did_emsg.set(0);
 
-        // SAFETY: the line's spell state, live for the line.
         let has_spell = f.spv.spv_has_spell;
         let cell = get_syntax_attr(
             window.buffer(),
@@ -345,17 +337,16 @@ impl Cells {
         self.decor_attr = cell.attr;
 
         if did_emsg.get() != 0 {
-            unsafe { (*window.w_s).b_syn_error = true };
+            window.syn_block_mut().b_syn_error = true;
             self.has_syntax = false;
         } else {
             did_emsg.set(save_did_emsg);
         }
-        if unsafe { (*window.w_s).b_syn_slow } {
+        if window.syn_block().b_syn_slow {
             self.has_syntax = false;
         }
-
-        // A multi-line regexp may have invalidated the line.
-        self.refetch_line(window, wlv.lnum, at);
+        // A multi-line regexp may have moved the memline's line, but not
+        // the copy.
 
         // No concealing past the end of the line: it would interfere with
         // the line highlighting.
@@ -373,20 +364,16 @@ impl Cells {
     /// The answer covers a whole word, so this runs once per word rather than
     /// once per cell: [`Cells::word_end`] is where the last answer reached and
     /// [`Cells::cur_checked_col`] is how far a word carried over from the
-    /// previous buffer line already reached.
-    ///
-    /// # Safety
-    /// `window` must be live, `f` must hold the caller's frame and `prev_ptr` must
-    /// point into the line.
-    pub(super) unsafe fn spell_at(
+    /// previous buffer line already reached. `prev_at` is where the character
+    /// starts.
+    pub(super) fn spell_at(
         &mut self,
         wlv: &WinLineVars,
         window: Win,
         f: &mut LineFrame<'_>,
-        prev_ptr: *mut ::core::ffi::c_char,
+        prev_at: usize,
         can_spell: bool,
     ) {
-        // SAFETY: the caller's window, frame and line pointers.
         let mut at = self.byte_col();
         if !f.spv.spv_has_spell || at < self.word_end || at <= self.cur_checked_col {
             return;
@@ -394,10 +381,8 @@ impl Cells {
         self.spell_attr = 0;
         // No capital column at the end of the line, or when only white
         // space follows.
-        if self.cell_char == 0
-            || unsafe { *skipwhite(prev_ptr) } as ::core::ffi::c_int == NUL
-            || !can_spell
-        {
+        let rest = self.line.text().get(prev_at..).unwrap_or_default();
+        if self.cell_char == 0 || rest.iter().all(|&c| c == b' ' || c == b'\t') || !can_spell {
             return;
         }
 
@@ -406,52 +391,43 @@ impl Cells {
 
         // Use the look-ahead buffer where it reaches: it carries the start
         // of the next line, so a word at the end of this one is checked
-        // against what follows it.
-        let prev_at = unsafe { prev_ptr.offset_from(self.line) };
-        let nextline = f.nextline.as_ptr().cast::<::core::ffi::c_char>().cast_mut();
-        let p = if prev_at - self.nextlinecol as isize >= 0 {
-            unsafe { nextline.offset(prev_at - self.nextlinecol as isize) }
-        } else {
-            prev_ptr
-        };
-
-        f.spv.spv_cap_col -= prev_at as ::core::ffi::c_int;
+        // against what follows it. `in_next` is where in it the word starts.
+        let prev_col = ::core::ffi::c_int::try_from(prev_at).unwrap_or(::core::ffi::c_int::MAX);
+        let in_next = usize::try_from(prev_col - self.nextlinecol).ok();
+        f.spv.spv_cap_col -= prev_col;
         // The text to the end of the buffer it is in, terminator included:
         // the look-ahead buffer, or the line.
-        let room = if p == prev_ptr {
-            ml_get_buf_len(window.buffer(), wlv.lnum) as usize + 1 - prev_at as usize
-        } else {
-            SPELL_LOOKAHEAD * 2 - (prev_at - self.nextlinecol as isize) as usize
+        let text = match in_next {
+            Some(off) => &f.nextline[off..],
+            None => self.line.from(prev_at),
         };
-        let text = unsafe { ::core::slice::from_raw_parts(p.cast::<u8>(), room) };
         let spv = &mut *f.spv;
         let tmplen;
         (tmplen, spell_hlf) =
             spell_check(window, text, Some(&mut spv.spv_cap_col), spv.spv_unchanged);
-        debug_assert!(tmplen <= ::core::ffi::c_int::MAX as size_t);
-        let len = tmplen as ::core::ffi::c_int;
+        let len = ::core::ffi::c_int::try_from(tmplen).unwrap_or(::core::ffi::c_int::MAX);
         self.word_end = at + len;
 
         // In Insert mode do not highlight a word the cursor is touching.
         if spell_hlf != HLF_COUNT
             && State.get() & MODE_INSERT != 0
             && window.w_cursor.lnum == wlv.lnum
-            && window.w_cursor.col >= prev_at as ColNr
+            && window.w_cursor.col >= prev_col
             && window.w_cursor.col < self.word_end
         {
             spell_hlf = HLF_COUNT;
             spell_redraw_lnum.set(wlv.lnum);
         }
 
+        // Where in the look-ahead buffer the word starts, as a column of it.
+        let next_col = in_next.map(|off| ::core::ffi::c_int::try_from(off).unwrap_or(0));
         if spell_hlf == HLF_COUNT
-            && p != prev_ptr
-            && unsafe { p.offset_from(nextline) } + len as isize > self.nextline_idx as isize
+            && let Some(next_col) = next_col
+            && next_col + len > self.nextline_idx
         {
             // The good word continues at the start of the next line.
             f.spv.spv_checked_lnum = wlv.lnum + 1;
-            f.spv.spv_checked_col = (unsafe { p.offset_from(nextline) } + len as isize
-                - self.nextline_idx as isize)
-                as ::core::ffi::c_int;
+            f.spv.spv_checked_col = next_col + len - self.nextline_idx;
         }
 
         if spell_hlf != HLF_COUNT {
@@ -459,18 +435,15 @@ impl Cells {
         }
 
         if f.spv.spv_cap_col > 0 {
-            if p != prev_ptr
-                && unsafe { p.offset_from(nextline) } + f.spv.spv_cap_col as isize
-                    >= self.nextline_idx as isize
+            if let Some(next_col) = next_col
+                && next_col + f.spv.spv_cap_col >= self.nextline_idx
             {
                 // The word on the next line must start with a capital.
                 f.spv.spv_capcol_lnum = wlv.lnum + 1;
-                f.spv.spv_cap_col =
-                    (unsafe { p.offset_from(nextline) } + f.spv.spv_cap_col as isize
-                        - self.nextline_idx as isize) as ::core::ffi::c_int;
+                f.spv.spv_cap_col = next_col + f.spv.spv_cap_col - self.nextline_idx;
             } else {
                 // Turn it back into a column of this line.
-                f.spv.spv_cap_col += prev_at as ::core::ffi::c_int;
+                f.spv.spv_cap_col += prev_col;
             }
         }
     }
@@ -489,7 +462,7 @@ impl Cells {
         // character outside 'breakat' has been seen.
         if !wlv.linebreak_armed
             && self.cell_char != NUL as ScreenChar
-            && !vim_isbreak(unsafe { *self.ptr } as uint8_t as ::core::ffi::c_int)
+            && !vim_isbreak(::core::ffi::c_int::from(self.byte()))
         {
             wlv.linebreak_armed = true;
         }
@@ -498,18 +471,20 @@ impl Cells {
             && self.char_code < 128
             && wlv.linebreak_armed
             && vim_isbreak(self.char_code)
-            && !vim_isbreak(unsafe { *self.ptr } as uint8_t as ::core::ffi::c_int))
+            && !vim_isbreak(::core::ffi::c_int::from(self.byte())))
         {
             return;
         }
-        let mb_off = unsafe { utf_head_off(self.line, self.ptr.offset(-1)) };
-        let p = unsafe { self.ptr.offset(-(mb_off as isize + 1)) };
+        // The character just read starts this far before its last byte.
+        let Some(last) = self.pos.checked_sub(1) else {
+            return;
+        };
+        let mb_off = head_off(self.line.with_nul(), last);
+        let at = last - mb_off;
 
         // `lnum` 0: virtual text is not to be counted here.
-        // SAFETY: the line being drawn, and `p` a character in it.
-        let at = p.addr() - self.line.addr();
-        let (line, chr) = unsafe { (cstr::bytes_at(self.line), utf_ptr2char_info(p).value) };
-        let (mut csarg, cstype) = CharsizeArg::new(window, 0, line);
+        let chr = c_char_info(self.line.with_nul(), at).value;
+        let (mut csarg, cstype) = CharsizeArg::new(window, 0, self.line.text());
         wlv.extra_todo = win_charsize(cstype, wlv.vcol, at, chr, &mut csarg).width - 1;
 
         // Do not bleed an underline, strikethrough or overline into the
@@ -546,30 +521,19 @@ impl Cells {
     }
 
     /// `'list'`: replace a space, a non-breaking space or a run of spaces with
-    /// the `'listchars'` character that stands for it.
-    ///
-    /// # Safety
-    /// `window` must be live and `prev_ptr` point into the line.
-    pub(super) unsafe fn listchars(
-        &mut self,
-        wlv: &mut WinLineVars,
-        window: Win,
-        prev_ptr: *mut ::core::ffi::c_char,
-    ) {
-        // SAFETY: the caller's window and line pointers.
+    /// the `'listchars'` character that stands for it. `prev_at` is where the
+    /// character starts.
+    pub(super) fn listchars(&mut self, wlv: &mut WinLineVars, window: Win, prev_at: usize) {
         if window.w_onebuf_opt.wo_list != 0 {
             self.in_multispace = self.char_code == ' ' as ::core::ffi::c_int
-                && (unsafe { *self.ptr } as ::core::ffi::c_int == ' ' as ::core::ffi::c_int
-                    || (prev_ptr > self.line
-                        && unsafe { *prev_ptr.offset(-1) } as ::core::ffi::c_int
-                            == ' ' as ::core::ffi::c_int));
+                && (self.byte() == b' ' || (prev_at > 0 && self.line.byte(prev_at - 1) == b' '));
             if !self.in_multispace {
                 self.multispace_pos = 0;
             }
         }
 
         let lcs = &window.w_p_lcs_chars;
-        let at = unsafe { self.ptr.offset_from(self.line) };
+        let at = self.pos as isize;
 
         // 'list': change 160 to "nbsp" and a space to "space" — but not
         // when a composing character follows, which `char_len` reveals.
@@ -639,4 +603,21 @@ fn cycle_run(run: &[ScreenChar], pos: &mut ::core::ffi::c_int) -> ScreenChar {
         *pos = 0;
     }
     c
+}
+
+/// The grapheme cluster at the start of `rest` -- the line from the read
+/// cursor on, its NUL included: its length in bytes (0 at the NUL), the cell
+/// it makes, and its first codepoint. `utfc_ptr2len` and `utfc_ptr2schar` in
+/// one, with the cell for a lone printable-or-control ASCII byte read off
+/// directly: a byte under 0x80 followed by another is a cluster of one.
+#[inline(always)]
+fn cluster_at(rest: &[u8]) -> (::core::ffi::c_int, ScreenChar, ::core::ffi::c_int) {
+    if let [b, next, ..] = *rest
+        && b.wrapping_sub(1) < 0x7f
+        && next < 0x80
+    {
+        return (1, schar_from_ascii(b), ::core::ffi::c_int::from(b));
+    }
+    let (len, cell, first) = c_cluster_cell(rest);
+    (::core::ffi::c_int::try_from(len).unwrap_or(0), cell, first)
 }
