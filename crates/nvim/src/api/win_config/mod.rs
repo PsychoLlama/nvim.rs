@@ -13,7 +13,7 @@ use crate::eval::window::{restore_win, restore_win_noblock, switch_win, switch_w
 use crate::ex_docmd::expr_map_locked;
 use crate::guard::textlock;
 use crate::highlight_group::{syn_check_group, syn_id2name};
-use crate::mbyte::{mb_string2cells, mb_string2cells_len};
+use crate::mbyte::{c_string_cells, c_string_cells_len};
 use crate::message::{e_cmdwin, e_textlock};
 use crate::r#move::changed_window_setting;
 use crate::option::vars::{p_sb, p_spr, p_winborder};

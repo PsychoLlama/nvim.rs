@@ -138,16 +138,14 @@ impl Context {
         let mut fillchar = 0 as ScreenChar;
         if let Some(given) = opts.fillchar.as_ref() {
             // A fill character is one whole character, however wide.
-            // SAFETY: a checked API string.
-            let single = unsafe {
-                *given.data() != 0 && utfc_ptr2len(given.data()) as size_t == given.len()
-            };
+            let bytes = given.as_bytes();
+            let single =
+                bytes.first().is_some_and(|&b| b != 0) && c_cluster_len(bytes) == bytes.len();
             if !single {
                 return Err(err_expected(c"fillchar", c"single character", None));
             }
-            let mut c = 0;
-            // SAFETY: as above. TODO(bfredl): actually check c is single width.
-            fillchar = unsafe { utfc_ptr2schar(given.data(), &raw mut c) };
+            // TODO(bfredl): actually check c is single width.
+            fillchar = c_cluster_schar(bytes).0;
         }
 
         let mut use_bools = c_int::from(use_winbar) + c_int::from(use_tabline);

@@ -20,9 +20,10 @@ use std::ffi::{c_char, c_int};
 
 use neovim::grid::{
     MAX_SCHAR_SIZE, line_do_arabic_shape, schar_cells, schar_from_buf, schar_from_char,
-    schar_from_str, schar_get, schar_get_adv, schar_get_ascii, schar_get_first_codepoint,
-    schar_high, schar_len,
+    schar_from_str, schar_get_adv, schar_get_ascii, schar_get_first_codepoint, schar_high,
+    schar_len,
 };
+use neovim::harness::schar_get;
 use neovim::types::ScreenChar;
 
 #[cfg(not(miri))]

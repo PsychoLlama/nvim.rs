@@ -188,11 +188,11 @@ pub fn nvim__inspect_cell(grid: Integer, row: Integer, col: Integer) -> Result<A
     }
     ret = Array::with_capacity(3 as size_t);
     let off: size_t = g.cell_offset(row as ::core::ffi::c_int, col as ::core::ffi::c_int);
-    let mut sc_buf = [0 as ::core::ffi::c_char; MAX_SCHAR_SIZE as usize];
-    // SAFETY: `sc_buf` has room for any cell's text and its NUL.
-    unsafe { schar_get(sc_buf.as_mut_ptr(), g.char_at(off)) };
-    // SAFETY: `sc_buf` is the NUL-terminated cell buffer filled above.
-    ret.push(Object::string(unsafe { cstr_to_string(sc_buf.as_ptr()) }));
+    let mut sc_buf: SCharBuf = [0; SCHAR_BUF_SIZE];
+    ret.push(Object::string(String_0::from_bytes(schar_text(
+        g.char_at(off),
+        &mut sc_buf,
+    ))));
     let attr: ::core::ffi::c_int = g.attr_at(off) as ::core::ffi::c_int;
     let hl = Object::dict(hl_get_attr_by_id(attr as Integer, true)?);
     ret.push(hl);

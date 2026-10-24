@@ -18,9 +18,11 @@
 #![allow(unsafe_code)]
 
 use crate::event::r#loop::{loop_purge, loop_size};
-use crate::grid::{schar_cache_clear_if_full, schar_get, schar_get_ascii};
+use crate::grid::{
+    SCHAR_BUF_SIZE, SCharBuf, schar_cache_clear_if_full, schar_get_ascii, schar_text,
+};
 use crate::log::{LOGLVL_WRN, logmsg};
-use crate::mbyte::{utf_ambiguous_width, utf_char2cells, utf_ptr2char};
+use crate::mbyte::{ambiguous_width_at, char_at, utf_char2cells};
 use crate::tui::attrs::{attrs_differ, update_attrs};
 use crate::tui::events::tui_busy_stop;
 use crate::tui::negotiate::{LEFT_AND_RIGHT_MARGINS, tui_set_term_mode};
@@ -39,7 +41,7 @@ use crate::types::{
     FILE, Integer, LineFlags, Rect, ScreenAttr, ScreenChar, String_0, TUIData, UCell,
 };
 use ::libc::{fclose, fopen, fprintf};
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 /// The `ScreenChar` value of a cell nothing has been drawn into, and of the
 /// second half of a double-width character.
@@ -249,24 +251,17 @@ fn print_cell_at_pos(tui: &mut TUIData, row: c_int, col: c_int, cell: UCell, is_
         return;
     }
     cursor_goto(tui, row, col);
-    let mut buf = [0u8; 32];
-    // SAFETY: `schar_get` writes at most 32 bytes including its NUL, and the
-    // three readers stop at that NUL.
-    let (len, c, mut is_ambiwidth) = unsafe {
-        let text = buf.as_mut_ptr().cast::<c_char>();
-        (
-            schar_get(text, cell.data),
-            utf_ptr2char(text),
-            utf_ambiguous_width(text),
-        )
-    };
+    let mut buf: SCharBuf = [0; SCHAR_BUF_SIZE];
+    let text = schar_text(cell.data, &mut buf);
+    let c = char_at(text);
+    let mut is_ambiwidth = ambiguous_width_at(text);
     if is_doublewidth && (is_ambiwidth || utf_char2cells(c) == 1) {
         is_ambiwidth = true;
         update_attrs(tui, cell.attr as c_int);
         print_spaces(tui, 2);
         cursor_goto(tui, row, col);
     }
-    print_cell(tui, &buf[..len], cell.attr);
+    print_cell(tui, text, cell.attr);
     if is_ambiwidth {
         tui.grid.row = -1;
     }
@@ -653,10 +648,8 @@ pub unsafe fn tui_screenshot(tui: &mut TUIData, path: String_0) {
         cursor_goto(tui, row, 0);
         for col in 0..tui.grid.width {
             let cell = tui.grid.cell(row, col);
-            let mut buf = [0u8; 32];
-            // SAFETY: `schar_get` writes at most 32 bytes including its NUL.
-            let len = unsafe { schar_get(buf.as_mut_ptr().cast::<c_char>(), cell.data) };
-            print_cell(tui, &buf[..len], cell.attr);
+            let mut buf: SCharBuf = [0; SCHAR_BUF_SIZE];
+            print_cell(tui, schar_text(cell.data, &mut buf), cell.attr);
         }
     }
     flush(tui);

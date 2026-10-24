@@ -19,7 +19,7 @@ use crate::guard::{Keys, Suppress};
 use crate::highlight_group::HLF_R;
 use crate::keycodes::ModMask;
 use crate::keycodes::{Ctrl_C, K_SPECIAL, KS_MODIFIER, Key, key_unescape};
-use crate::mbyte::{utf_ptr2char, utf8len_tab};
+use crate::mbyte::{char_at, utf8len_tab};
 use crate::memory::{xfree, xstrdup};
 use crate::message::state::{keep_msg, keep_msg_hl_id, msg_row, msg_scrolled, need_wait_return};
 use crate::message::{msg_putchar, set_keep_msg};
@@ -29,7 +29,7 @@ use crate::os::input::{InputEvents, input_get};
 use crate::snprintf;
 use crate::state::mode::State;
 use crate::types::ui::kUIMessages;
-use crate::types::{Callback, ExpandContext, IOSIZE, NUL};
+use crate::types::{Callback, ExpandContext, IOSIZE};
 use crate::ui::{ui_flush, ui_has};
 use core::ffi::{CStr, c_char, c_int, c_void};
 
@@ -154,9 +154,7 @@ pub(crate) fn get_keystroke(events: Option<&'static GlobalCell<Option<ChildQueue
                 continue; // More bytes to get.
             }
             let end = if len >= buflen { buflen - 1 } else { len };
-            buf[end as usize] = NUL as u8;
-            // SAFETY: `buf` was just NUL-terminated at or before `buflen`.
-            break unsafe { utf_ptr2char(buf.as_ptr() as *const c_char) };
+            break char_at(&buf[..end as usize]);
         }
 
         let key = key_unescape(buf[1], buf[2]);

@@ -456,9 +456,9 @@ pub fn char2cells(c: c_int) -> c_int {
     table_cells((c & 0xff) as uint8_t)
 }
 
-/// [`ptr2cells`] over a slice: the cells the character at the start of
+/// Upstream's `ptr2cells` over a slice: the cells the character at the start of
 /// `bytes` takes. An empty slice reads as the NUL the pointer form stops at.
-pub(crate) fn ptr2cells_at(bytes: &[u8]) -> c_int {
+pub fn ptr2cells_at(bytes: &[u8]) -> c_int {
     let first = bytes.first().copied().unwrap_or(0);
     if first >= 0x80 {
         return crate::mbyte::cells_at(bytes);
@@ -467,7 +467,7 @@ pub(crate) fn ptr2cells_at(bytes: &[u8]) -> c_int {
 }
 
 /// The display width of the whole of `s`, the bytes of a C string.
-pub(crate) fn strsize(s: &[u8]) -> c_int {
+pub fn strsize(s: &[u8]) -> c_int {
     strnsize(s, MAXCOL)
 }
 
@@ -479,6 +479,6 @@ pub(crate) fn vim_strsize_cstr(s: &CStr) -> c_int {
 /// The display width of the characters starting in the first `len` bytes of
 /// `s`, the bytes of a C string: a character that starts inside the bound is
 /// counted whole.
-pub(crate) fn strnsize(s: &[u8], len: c_int) -> c_int {
+pub fn strnsize(s: &[u8], len: c_int) -> c_int {
     crate::mbyte::c_display_width(s, len)
 }

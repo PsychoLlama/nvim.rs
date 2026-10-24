@@ -117,7 +117,7 @@ fn an_exact_fit_is_only_recognised_for_single_width_characters() {
 }
 
 /// A composing character rides along with the base it belongs to, because
-/// the head copies `utfc_ptr2len` bytes at a time.
+/// the head copies a whole cluster at a time.
 #[test]
 fn a_composing_character_is_not_separated_from_its_base() {
     let editor = editor_lock();

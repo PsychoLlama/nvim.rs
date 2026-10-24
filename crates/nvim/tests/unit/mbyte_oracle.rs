@@ -8,23 +8,29 @@
 //! caller moved onto the twin and the pointer form deleted -- has to
 //! reproduce it. A digest that changes is a behaviour change, to be
 //! explained or fixed, never re-recorded to make the test pass.
+//!
+//! The pointer forms are gone now except the two the C harness resolves by
+//! name (`utf_ptr2char`, `utf_ptr2len`): every other reader below is its
+//! `c_*` twin over the same bytes -- the bytes of a C string, ending at the
+//! first NUL -- and reproduced the digest recorded from the pointer form.
 
 #![cfg(not(miri))]
 
 use std::ffi::{c_char, c_int};
 
 use neovim::ex_docmd::do_cmdline_cmd;
-use neovim::grid::{MAX_SCHAR_SIZE, schar_get};
+use neovim::grid::MAX_SCHAR_SIZE;
+use neovim::harness::schar_get;
 use neovim::mbyte::{
-    cluster_len, mb_charlen, mb_charlen_len, mb_get_class, mb_off_next, mb_prevptr, mb_strcmp_ic,
-    mb_string2cells, mb_string2cells_len, mb_strnicmp, mb_utf_index_to_bytes, mb_utflen,
-    utf_ambiguous_width, utf_char2bytes, utf_cp_bounds, utf_cp_bounds_len, utf_head_off,
-    utf_ptr2cells, utf_ptr2cells_len, utf_ptr2char, utf_ptr2char_info, utf_ptr2len,
-    utf_ptr2len_len, utf_ptr2str_char_info, utf_strnicmp, utfc_next, utfc_ptr2len, utfc_ptr2schar,
-    utfc_ptrlen2schar, valid_utf8,
+    c_ambiguous_width, c_cells_at, c_char_info, c_cluster_len, c_cluster_schar, c_head_off,
+    c_next_cluster, c_off_next, c_partial_cells_in, c_prev_start, c_string_cells,
+    c_string_cells_len, c_utf_index_to_byte, c_utf_lengths, char_count, class_in, cluster_len,
+    cp_bounds, encode_char, promised_char_len, strcmp_ic_in, strnicmp_in, utf_ptr2char,
+    utf_ptr2len, valid_utf8,
 };
 use neovim::memory::XString;
 use neovim::option::vars::{P_AMBW, P_ARSHAPE, P_EMOJI};
+use neovim::winlayer::Buf;
 
 use crate::support::corpus::{Digest, corpus};
 use crate::support::editor_lock;
@@ -76,6 +82,23 @@ fn digest(f: impl Fn(&mut Digest, &[u8], &[c_char])) -> u64 {
     digest.value()
 }
 
+/// `buf`'s bytes, its terminator included.
+fn cstr_bytes(buf: &[c_char]) -> Vec<u8> {
+    buf.iter().map(|&b| b as u8).collect()
+}
+
+/// The bytes of `text` up to its first NUL, as a C string would have them.
+fn until_nul(text: &[u8]) -> &[u8] {
+    text.split(|&b| b == 0).next().unwrap_or(text)
+}
+
+/// The drawing walk's digest. It was `0x8245ccc2ae2e9065` with the
+/// length-taking packer (`utfc_ptrlen2schar`) folded in too; that packer's
+/// last caller went, and with it the packer. This value was recorded from
+/// the pointer forms with only that packer's lines taken out, and the twins
+/// reproduce it.
+const DRAWING_WALK: u64 = 0xad76c89878a519dd;
+
 /// The lengths a bounded reader is asked about at offset `at` of `text`:
 /// nothing, the first few bytes, and everything left.
 fn bounds(text: &[u8], at: usize) -> impl Iterator<Item = usize> {
@@ -94,12 +117,12 @@ fn the_codepoint_readers() {
             unsafe {
                 d.add(i64::from(utf_ptr2char(p.add(i))));
                 d.add(i64::from(utf_ptr2len(p.add(i))));
-                let info = utf_ptr2char_info(p.add(i));
-                d.add(i64::from(info.value));
-                d.add(i64::from(info.len));
-                for n in bounds(text, i).filter(|&n| n > 0) {
-                    d.add(i64::from(utf_ptr2len_len(p.add(i), n as c_int)));
-                }
+            }
+            let info = c_char_info(text, i);
+            d.add(i64::from(info.value));
+            d.add(i64::from(info.len));
+            for n in bounds(text, i).filter(|&n| n > 0) {
+                d.add(promised_char_len(&text[i..i + n]) as i64);
             }
         }
     });
@@ -109,88 +132,66 @@ fn the_codepoint_readers() {
 #[test]
 fn the_cluster_readers() {
     let got = digest(|d, text, buf| {
-        let p = buf.as_ptr();
+        let _ = buf;
         for i in 0..=text.len() {
-            // SAFETY: as above; every bound is inside the string.
-            unsafe {
-                d.add(i64::from(utfc_ptr2len(p.add(i))));
-                d.add(i64::from(utf_head_off(p, p.add(i))));
-                d.add(i64::from(mb_off_next(p, p.add(i))));
-                let prev = mb_prevptr(p.cast_mut(), p.add(i).cast_mut());
-                d.add(prev.offset_from(p) as i64);
-                for n in bounds(text, i) {
-                    d.add(cluster_len(&text[i..i + n]) as i64);
-                    d.add(i64::from(mb_charlen_len(p.add(i), n as c_int)));
-                }
+            d.add(c_cluster_len(&text[i..]) as i64);
+            d.add(c_head_off(text, i) as i64);
+            d.add(c_off_next(text, i) as i64);
+            d.add(c_prev_start(text, i) as i64);
+            for n in bounds(text, i) {
+                d.add(cluster_len(&text[i..i + n]) as i64);
+                d.add(char_count(until_nul(&text[i..i + n])) as i64);
             }
         }
-        // SAFETY: as above.
-        unsafe { d.add(i64::from(mb_charlen(p))) };
+        d.add(char_count(until_nul(text)) as i64);
     });
     assert_eq!(got, 0xc865c1fa01f61725, "cluster readers");
 }
 
-/// The drawing path's walk: `utf_ptr2str_char_info` then `utfc_next` to the
-/// NUL, and the two cluster-to-`ScreenChar` packers at every offset.
+/// The drawing path's walk: the first character, then the next cluster to
+/// the NUL, and the cluster-to-`ScreenChar` packer at every offset.
 #[test]
 fn the_drawing_walk() {
-    let got = digest(|d, text, buf| {
-        let p = buf.as_ptr();
-        // SAFETY: as above; each step lands inside `buf`.
-        unsafe {
-            for i in 0..text.len() {
-                let mut cur = utf_ptr2str_char_info(p.add(i).cast_mut());
-                while *cur.ptr != 0 {
-                    d.add(cur.ptr.offset_from(p) as i64);
-                    d.add(i64::from(cur.chr.value));
-                    d.add(i64::from(cur.chr.len));
-                    cur = utfc_next(cur);
-                }
-                d.add(cur.ptr.offset_from(p) as i64);
+    let got = digest(|d, text, _buf| {
+        let byte = |at: usize| text.get(at).copied().unwrap_or(0);
+        for i in 0..text.len() {
+            let (mut at, mut chr) = (i, c_char_info(text, i));
+            while byte(at) != 0 {
+                d.add(at as i64);
+                d.add(i64::from(chr.value));
+                d.add(i64::from(chr.len));
+                (at, chr) = c_next_cluster(text, at, chr);
             }
-            let mut out = [0 as c_char; MAX_SCHAR_SIZE as usize];
-            for i in 0..=text.len() {
-                let mut firstc: c_int = 0;
-                let sc = utfc_ptr2schar(p.add(i), &raw mut firstc);
-                let n = schar_get(out.as_mut_ptr(), sc);
-                d.add(i64::from(firstc));
-                d.add(n as i64);
-                for &b in &out[..n] {
-                    d.add(i64::from(b as u8));
-                }
-                // As `grid_line_puts` calls it: with the cluster's length.
-                for left in bounds(text, i) {
-                    let len = cluster_len(&text[i..i + left]) as c_int;
-                    let sc = utfc_ptrlen2schar(p.add(i), len, &raw mut firstc);
-                    let n = schar_get(out.as_mut_ptr(), sc);
-                    d.add(i64::from(firstc));
-                    for &b in &out[..n] {
-                        d.add(i64::from(b as u8));
-                    }
-                }
+            d.add(at as i64);
+        }
+        let mut out = [0 as c_char; MAX_SCHAR_SIZE as usize + 1];
+        for i in 0..=text.len() {
+            let (sc, firstc) = c_cluster_schar(&text[i..]);
+            // SAFETY: `out` has room for any glyph and its NUL.
+            let n = unsafe { schar_get(out.as_mut_ptr(), sc) };
+            d.add(i64::from(firstc));
+            d.add(n as i64);
+            for &b in &out[..n] {
+                d.add(i64::from(b as u8));
             }
         }
     });
-    assert_eq!(got, 0x8245ccc2ae2e9065, "drawing walk");
+    assert_eq!(got, DRAWING_WALK, "drawing walk");
 }
 
 #[test]
 fn the_width_readers() {
     let got = digest(|d, text, buf| {
-        let p = buf.as_ptr();
+        let _ = buf;
         for i in 0..=text.len() {
-            // SAFETY: as above.
-            unsafe {
-                d.add(i64::from(utf_ptr2cells(p.add(i))));
-                d.add(i64::from(utf_ambiguous_width(p.add(i))));
-                for n in bounds(text, i) {
-                    d.add(i64::from(utf_ptr2cells_len(p.add(i), n as c_int)));
-                    d.add(mb_string2cells_len(p.add(i), n) as i64);
-                }
+            d.add(i64::from(c_cells_at(&text[i..])));
+            d.add(i64::from(c_ambiguous_width(&text[i..])));
+            for n in bounds(text, i) {
+                d.add(i64::from(c_partial_cells_in(&text[i..], 0, n)));
+                d.add(c_string_cells_len(&text[i..], n) as i64);
             }
         }
-        // SAFETY: as above.
-        unsafe { d.add(mb_string2cells(p) as i64) };
+        d.add(c_string_cells(text) as i64);
     });
     assert_eq!(got, 0x30bc2fa857ad5ffb, "width readers");
 }
@@ -198,34 +199,29 @@ fn the_width_readers() {
 #[test]
 fn the_bounds_and_class_readers() {
     let got = digest(|d, text, buf| {
-        let p = buf.as_ptr();
+        // The string and its terminator: the unbounded form looked a
+        // sequence's worth past `i`, and the NUL is what it found there.
+        let with_nul = cstr_bytes(buf);
         for i in 0..text.len() {
-            // SAFETY: as above; `i` is a byte of the string.
-            unsafe {
-                let b = utf_cp_bounds(p, p.add(i));
+            let b = cp_bounds(&with_nul[..(i + 6).min(with_nul.len())], i);
+            d.add(i64::from(b.begin_off));
+            d.add(i64::from(b.end_off));
+            for n in bounds(text, i).filter(|&n| n > 0) {
+                let b = cp_bounds(&text[..i + n.min(6)], i);
                 d.add(i64::from(b.begin_off));
                 d.add(i64::from(b.end_off));
-                for n in bounds(text, i).filter(|&n| n > 0) {
-                    let b = utf_cp_bounds_len(p, p.add(i), n as c_int);
-                    d.add(i64::from(b.begin_off));
-                    d.add(i64::from(b.end_off));
-                }
-                d.add(i64::from(mb_get_class(p.add(i))));
             }
+            d.add(i64::from(class_in(&text[i..], Buf::current())));
         }
         for i in 0..=text.len() {
             for n in bounds(text, i) {
-                let (mut points, mut units) = (0, 0);
-                // SAFETY: `n` bytes from `i` are inside the string, and a
-                // sequence they cut short is completed by the bytes after.
-                unsafe {
-                    mb_utflen(p.add(i), n, &raw mut points, &raw mut units);
-                    d.add(points as i64);
-                    d.add(units as i64);
-                    for index in 0..4 {
-                        for utf16 in [false, true] {
-                            d.add(mb_utf_index_to_bytes(p.add(i), n, index, utf16) as i64);
-                        }
+                let (points, units) = c_utf_lengths(&text[i..], n);
+                d.add(points as i64);
+                d.add(units as i64);
+                for index in 0..4 {
+                    for utf16 in [false, true] {
+                        let at = c_utf_index_to_byte(&text[i..], n, index, utf16);
+                        d.add(at.map_or(-1, |at| at as i64));
                     }
                 }
             }
@@ -240,23 +236,22 @@ fn the_bounds_and_class_readers() {
 
 #[test]
 fn the_advancing_readers() {
-    let got = digest(|d, _text, buf| {
+    let got = digest(|d, text, buf| {
         // What `mb_ptr2char_adv` and `mb_cptr2char_adv` did, as their
         // callers now spell it: decode, then step a cluster or a character.
-        // SAFETY (both): the pointer the walk below hands them.
-        let steps: [fn(*const c_char) -> c_int; 2] = [
-            |p| unsafe { utfc_ptr2len(p) },
-            |p| unsafe { utf_ptr2len(p) },
+        let p = buf.as_ptr();
+        // SAFETY (the second): `at` is inside the NUL-terminated `buf`.
+        let steps: [&dyn Fn(usize) -> usize; 2] = [
+            &|at| c_cluster_len(&text[at..]),
+            &|at| unsafe { utf_ptr2len(p.add(at)) } as usize,
         ];
         for step in steps {
-            let mut cursor = buf.as_ptr();
-            // SAFETY: each step stays inside the NUL-terminated `buf`.
-            unsafe {
-                while *cursor != 0 {
-                    d.add(i64::from(utf_ptr2char(cursor)));
-                    cursor = cursor.add(step(cursor) as usize);
-                    d.add(cursor.offset_from(buf.as_ptr()) as i64);
-                }
+            let mut at = 0;
+            while at < text.len() && text[at] != 0 {
+                // SAFETY: as above.
+                d.add(i64::from(unsafe { utf_ptr2char(p.add(at)) }));
+                at += step(at);
+                d.add(at as i64);
             }
         }
     });
@@ -287,23 +282,18 @@ fn case_insensitive_comparison() {
         let (a, b) = (&pair[0], &pair[1]);
         let a_up = upper(a);
         for (x, y) in [(a, b), (b, a), (a, &a_up), (&a_up, a)] {
-            let (bx, by) = (cbuf(x), cbuf(y));
+            // At most `n` bytes, and never past a NUL: a C string's prefix.
+            let prefix =
+                |s: &'_ [u8], n: usize| -> Vec<u8> { until_nul(&s[..n.min(s.len())]).to_vec() };
             for n1 in [0, 1, 3, x.len(), x.len() + 1] {
                 for n2 in [0, 2, y.len(), y.len() + 1] {
-                    // SAFETY: `n1`/`n2` reach at most the terminator.
-                    let c = unsafe { utf_strnicmp(bx.as_ptr(), by.as_ptr(), n1, n2) };
+                    let c = strnicmp_in(&prefix(x, n1), &prefix(y, n2));
                     d.add(i64::from(c.signum()));
                     d.add(i64::from(c));
                 }
-                // SAFETY: as above.
-                d.add(i64::from(unsafe {
-                    mb_strnicmp(bx.as_ptr(), by.as_ptr(), n1)
-                }));
+                d.add(i64::from(strnicmp_in(&prefix(x, n1), &prefix(y, n1))));
             }
-            // SAFETY: both are NUL-terminated.
-            d.add(i64::from(unsafe {
-                mb_strcmp_ic(true, bx.as_ptr(), by.as_ptr())
-            }));
+            d.add(i64::from(strcmp_ic_in(true, until_nul(x), until_nul(y))));
         }
     }
     assert_eq!(d.value(), 0x3d00abbaa93d7f04, "case-insensitive comparison");
@@ -321,12 +311,12 @@ fn the_encoder() {
     codes.extend((0x10000..0x7fff_ffff).step_by(0x3_1d31));
     codes.push(c_int::MAX);
     for c in codes {
-        let mut buf = [0 as c_char; 8];
-        // SAFETY: eight bytes hold the longest sequence.
-        let len = unsafe { utf_char2bytes(c, buf.as_mut_ptr()) };
-        d.add(i64::from(len));
-        for &b in &buf[..len as usize] {
-            d.add(i64::from(b as u8));
+        let mut buf = [0u8; 8];
+        // Eight bytes hold the longest sequence.
+        let len = encode_char(c, &mut buf);
+        d.add(len as i64);
+        for &b in &buf[..len] {
+            d.add(i64::from(b));
         }
     }
     assert_eq!(d.value(), 0xa19c0fe513221d76, "encoder");

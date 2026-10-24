@@ -236,8 +236,7 @@ fn parse_border_array(arr: &Array) -> Result<Slots, Error> {
     for i in 0..size {
         let item = &arr[i];
         let (string, hl_id) = parse_border_item(item)?;
-        // SAFETY: a live API string.
-        if !string.is_empty() && unsafe { mb_string2cells_len(string.data(), string.len()) } > 1 {
+        if !string.is_empty() && c_string_cells_len(string.as_bytes(), string.len()) > 1 {
             return Err(err_border(c"only one-cell chars", None));
         }
         chars[i] = cell_of(string);

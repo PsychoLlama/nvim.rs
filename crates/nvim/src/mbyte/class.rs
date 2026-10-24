@@ -282,7 +282,7 @@ pub(crate) fn class_of(
 /// `'iskeyword'`. An empty slice is `CLASS_BLANK`, which is what the pointer
 /// form answers at a NUL.
 #[inline]
-pub(crate) fn class_in(bytes: &[u8], buffer: Buf) -> c_int {
+pub fn class_in(bytes: &[u8], buffer: Buf) -> c_int {
     let first = bytes.first().copied().unwrap_or(0);
     class_of(first, || char_at(bytes), &buffer.b_chartab)
 }

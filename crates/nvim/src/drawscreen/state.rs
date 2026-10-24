@@ -19,15 +19,14 @@
     clippy::cast_sign_loss,
     clippy::ptr_as_ptr
 )]
-#![deny(unsafe_op_in_unsafe_fn)]
-// The exports here are metrics/abi-ledger.jsonl rows (`display_tick`), and
-// `#[unsafe(no_mangle)]` is itself an unsafe attribute.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use crate::global_cell::GlobalCell;
-use crate::types::{ColNr, DispTick, LPos, LineNr, MatchState, RegMMatch, WinExtmark};
+/// Exported by name for the FFI spec, so the cell lives in the harness.
+pub use crate::harness::display_tick;
+use crate::types::{ColNr, LPos, LineNr, MatchState, RegMMatch, WinExtmark};
 use core::ffi::c_int;
 
 /// The `ui_watched` extmarks the redraw in progress has passed positions for.
@@ -75,6 +74,4 @@ pub(crate) static RedrawingDisabled: GlobalCell<c_int> = GlobalCell::new(0 as c_
 pub(crate) static must_redraw: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub(crate) static skip_redraw: GlobalCell<bool> = GlobalCell::new(false);
 pub(crate) static do_redraw: GlobalCell<bool> = GlobalCell::new(false);
-#[unsafe(no_mangle)]
-pub static display_tick: GlobalCell<DispTick> = GlobalCell::new(0 as DispTick);
 pub(crate) static resizing_screen: GlobalCell<bool> = GlobalCell::new(false);

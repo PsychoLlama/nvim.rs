@@ -33,7 +33,7 @@ pub fn nvim_strwidth(text: String_0) -> Result<Integer, Error> {
     if text.len() > ::core::ffi::c_int::MAX as size_t {
         return Err(too_long(c"text length"));
     }
-    Ok(unsafe { mb_string2cells(text.data()) } as Integer)
+    Ok(c_string_cells(text.as_bytes()) as Integer)
 }
 
 /// Every directory of 'runtimepath'.

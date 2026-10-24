@@ -19,7 +19,7 @@ use std::ffi::CString;
 
 use self::vim_patches::VIM_BASELINES;
 use crate::buffer::buf_is_empty;
-use crate::charset::vim_strsize;
+use crate::charset::vim_strsize_cstr;
 use crate::drawscreen::screenclear;
 use crate::getchar::plain_vgetc;
 use crate::getchar::state::got_int;
@@ -27,7 +27,7 @@ use crate::grid::{default_gridview, grid_line_flush, grid_line_puts, grid_line_s
 use crate::highlight::namespace::hl_attr;
 use crate::highlight_group::{HLF_8, syn_id2attr, syn_name2id};
 use crate::lua::executor::{kRetObject, nlua_exec};
-use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
+use crate::mbyte::{c_cluster_len, char_at};
 use crate::message::state::msg_col;
 use crate::message::{msg_ext_set_kind, msg_putchar, msg_str};
 use crate::option::vars::{P_SHM, p_ls, p_verbose};
@@ -189,8 +189,7 @@ pub(crate) fn ex_version(excmd: &mut ExArg) {
 /// Print `s`, moving to the next line first if it would otherwise wrap, and
 /// bracketing it when `wrap` marks it as the current item.
 fn version_msg_wrap(s: &CStr, wrap: bool) {
-    // SAFETY: `s` is NUL-terminated by construction.
-    let len = unsafe { vim_strsize(s.as_ptr()) } + if wrap { 2 } else { 0 };
+    let len = vim_strsize_cstr(s) + if wrap { 2 } else { 0 };
     if !got_int.get()
         && len < Columns.get()
         && msg_col.get() + len >= Columns.get()
@@ -224,7 +223,7 @@ pub(crate) fn list_in_columns(items: &[&CStr], current: c_int) {
     let width = 1 + items
         .iter()
         .enumerate()
-        .map(|(i, item)| unsafe { vim_strsize(item.as_ptr()) } + if i as c_int == current { 2 } else { 0 })
+        .map(|(i, item)| vim_strsize_cstr(item) + if i as c_int == current { 2 } else { 0 })
         .max()
         .unwrap_or(0);
 
@@ -453,16 +452,13 @@ pub(crate) fn intro_message(colon: bool) {
 /// and `<key>` mentions in the instructions.
 fn do_intro_line(row: c_int, mesg: &CStr, colon: bool, is_logo: bool) {
     let text = mesg.to_bytes();
-    // SAFETY: `mesg` is NUL-terminated and `text.len()` bytes long, so every
-    // pointer below stays within it.
-    let mut col = ((Columns.get() - unsafe { vim_strsize(mesg.as_ptr()) }) / 2).max(0);
+    let mut col = ((Columns.get() - vim_strsize_cstr(mesg)) / 2).max(0);
     let grid = if !colon && ui_has(kUIMultigrid) {
         first_window().map_or_else(default_gridview, |wp| wp.w_grid)
     } else {
         default_gridview()
     };
     grid_line_start(grid, row);
-    let byte_at = |at: usize| unsafe { mesg.as_ptr().add(at) };
 
     let attr_of = |group: &CStr| syn_id2attr(syn_name2id(group));
 
@@ -473,18 +469,18 @@ fn do_intro_line(row: c_int, mesg: &CStr, colon: bool, is_logo: bool) {
         let mut seen_diagonal = false;
         let mut at = 0;
         while at < text.len() {
-            let clen = unsafe { utfc_ptr2len(byte_at(at)) };
+            let clen = c_cluster_len(&text[at..]);
             let mut attr = 0;
             if text[at] >= 0x80 {
-                seen_diagonal |= clen == 3 && unsafe { utf_ptr2char(byte_at(at)) } == 0x2572;
+                seen_diagonal |= clen == 3 && char_at(&text[at..]) == 0x2572;
                 attr = if seen_diagonal {
                     letter_attr
                 } else {
                     frame_attr
                 };
             }
-            col += grid_line_puts(col, &text[at..at + clen as usize], attr);
-            at += clen as usize;
+            col += grid_line_puts(col, &text[at..at + clen], attr);
+            at += clen;
         }
         grid_line_flush();
         return;
@@ -494,8 +490,7 @@ fn do_intro_line(row: c_int, mesg: &CStr, colon: bool, is_logo: bool) {
     // lowercase "nvim" of `nvim.rs …`, which no other intro line starts
     // with ("Nvim is open source…" capitalizes it) -- and the horizontal
     // rules, drawn one U+2500 at a time.
-    let is_sep = unsafe { utfc_ptr2len(mesg.as_ptr()) } == 3
-        && unsafe { utf_ptr2char(mesg.as_ptr()) } == 0x2500;
+    let is_sep = c_cluster_len(text) == 3 && char_at(text) == 0x2500;
     if text.starts_with(b"nvim") || is_sep {
         let clen = if is_sep { 3 } else { 1 };
         let attr = attr_of(if is_sep { c"NonText" } else { c"String" });
@@ -518,7 +513,7 @@ fn do_intro_line(row: c_int, mesg: &CStr, colon: bool, is_logo: bool) {
         while at + len < text.len()
             && (len == 0 || (text[at + len] != b'<' && text[at + len - 1] != b'>'))
         {
-            len += unsafe { utfc_ptr2len(byte_at(at + len)) } as usize;
+            len += c_cluster_len(&text[at + len..]);
         }
         let special_attr = hl_attr(HLF_8);
         let colon_at = text[at..at + len].iter().position(|&byte| byte == b':');

@@ -10,7 +10,8 @@
 
 use crate::support::corpus::{Digest, corpus};
 use crate::support::{Probe, Sandbox};
-use neovim::grid::{MAX_SCHAR_SIZE, schar_get};
+use neovim::grid::MAX_SCHAR_SIZE;
+use neovim::harness::schar_get;
 use neovim::types::ScreenChar;
 use neovim::winlayer::Win;
 use std::ffi::c_char;

@@ -38,7 +38,10 @@ use crate::fold::fold_info;
 use crate::getchar::state::{typebuf_was_filled, vgetc_busy};
 use crate::getchar::{ins_typebuf, paste_store};
 use crate::global_cell::GlobalCell;
-use crate::grid::{GridRef, get_win_by_grid_handle, schar_cache_clear, schar_get, win_grid_alloc};
+use crate::grid::{
+    GridRef, SCHAR_BUF_SIZE, SCharBuf, get_win_by_grid_handle, schar_cache_clear, schar_text,
+    win_grid_alloc,
+};
 use crate::highlight::state::{ns_hl_fast, ns_hl_global};
 use crate::highlight::{
     dict2hlattrs, highlight_use_hlstate, hl_check_ns, hl_get_attr_by_id, hl_inspect,
@@ -58,7 +61,7 @@ use crate::lua::executor::{
 use crate::lua::state::tslua_query_parse_count;
 use crate::mapping::{keymap_array, modify_keymap};
 use crate::mark::mark_get_global;
-use crate::mbyte::{mb_string2cells, utfc_ptr2len, utfc_ptr2schar};
+use crate::mbyte::{c_cluster_len, c_cluster_schar, c_string_cells};
 use crate::memline::ml_open;
 use crate::memory::arena_alloc_count;
 use crate::memory::strequal;
@@ -173,7 +176,6 @@ pub const DOBUF_DEL: DoBufAction = 3;
 pub const DOBUF_UNLOAD: DoBufAction = 2;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
-pub const MAX_SCHAR_SIZE: ::core::ffi::c_int = 32 as ::core::ffi::c_int;
 /// The top bit of a channel id: an API call made by the editor itself
 /// rather than by a client.
 pub const INTERNAL_CALL_MASK: uint64_t = 1 << (::core::mem::size_of::<uint64_t>() * 8 - 1);

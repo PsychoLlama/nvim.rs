@@ -37,7 +37,7 @@ use core::slice;
 use self::entry::vterm_state_set_termprop;
 use crate::global_cell::GlobalCell;
 use crate::grid::schar_from_buf;
-use crate::mbyte::{utf_char2bytes, utf_iscomposing, utf_ptr2cells_len};
+use crate::mbyte::{c_partial_cells_in, encode_char, iscomposing};
 use crate::types::{
     GraphemeState, ScreenChar, VTerm, VTermGlyphInfo, VTermLineInfo, VTermPos, VTermProp,
     VTermRect, VTermSelectionCallbacks, VTermSelectionMask, VTermState, VTermState_tmp_selection,
@@ -101,8 +101,7 @@ pub(super) const BLANK_LINE: VTermLineInfo = VTermLineInfo {
 
 /// Whether `next` extends the grapheme that `prev` ended.
 pub(super) fn is_composing(prev: u32, next: u32, grapheme: &mut GraphemeState) -> bool {
-    // SAFETY: two codepoints and the caller's own grapheme scratch.
-    unsafe { utf_iscomposing(prev as c_int, next as c_int, grapheme) }
+    iscomposing(prev as c_int, next as c_int, Some(grapheme))
 }
 
 /// How many bytes the tab-stop bit vector needs for `cols` columns.
@@ -425,20 +424,20 @@ impl VTermState {
     /// six-byte one write past its end; anything that does not fit is dropped
     /// here instead.
     pub(super) fn append_grapheme(&mut self, at: usize, codepoint: u32) -> usize {
-        let mut encoded = [0 as c_char; 8];
-        // SAFETY: `encoded` is eight bytes, more than any encoding needs.
-        let len = unsafe { utf_char2bytes(codepoint as c_int, encoded.as_mut_ptr()) } as usize;
+        let mut encoded = [0u8; 8];
+        // Eight bytes, more than any encoding needs.
+        let len = encode_char(codepoint as c_int, &mut encoded);
         let len = len.min(self.grapheme_buf.len() - at);
-        self.grapheme_buf[at..at + len].copy_from_slice(&encoded[..len]);
+        for (to, &from) in self.grapheme_buf[at..at + len].iter_mut().zip(&encoded) {
+            *to = from as c_char;
+        }
         len
     }
 
     /// How many columns the first `len` bytes of the pending grapheme occupy,
     /// and the handle the screen stores that grapheme under.
     pub(super) fn grapheme_metrics(&self, len: usize) -> (c_int, ScreenChar) {
-        let buf = self.grapheme_buf.as_ptr();
-        // SAFETY: `len` bytes of the pending grapheme, which is this array.
-        let cells = unsafe { utf_ptr2cells_len(buf, len as c_int) };
+        let cells = c_partial_cells_in(cstr::as_bytes(&self.grapheme_buf), 0, len);
         (
             cells,
             schar_from_buf(cstr::as_bytes(&self.grapheme_buf[..len])),

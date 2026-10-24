@@ -28,7 +28,7 @@ use crate::getchar::state::{KeyTyped, mod_mask, vgetc_char, vgetc_mod_mask};
 use crate::getchar::{ins_char_typebuf, ungetchars};
 use crate::keycodes::{Ctrl_AT, Ctrl_M, Key, NotAKey};
 use crate::keycodes::{ModMask, unsimplify_key};
-use crate::mbyte::{utf_ptr2char, utf_ptr2len};
+use crate::mbyte::{char_at, char_len};
 use crate::memory::XString;
 use crate::mouse::{MousePos, do_mousescroll, find_win_inner};
 use crate::normal::with_scratch_cmd;
@@ -45,7 +45,7 @@ use crate::vterm::keyboard::{
 use crate::vterm::mouse::{vterm_mouse_button, vterm_mouse_move};
 use crate::winlayer::graph::switch_to;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use super::refresh::invalidate_terminal;
 use super::{Term, terminal_send};
@@ -309,10 +309,7 @@ pub(crate) fn terminal_paste(lines: &[XString], count: c_int) {
             let bytes = line.as_cstr().to_bytes();
             let mut at = 0;
             while at < bytes.len() {
-                let src = bytes[at..].as_ptr().cast::<c_char>();
-                // SAFETY: the tail of a NUL-terminated line, which is what
-                // both of these read; neither can run past the NUL.
-                let (len, c) = unsafe { (utf_ptr2len(src) as usize, utf_ptr2char(src)) };
+                let (len, c) = (char_len(&bytes[at..]), char_at(&bytes[at..]));
                 if !is_filter_char(c) {
                     filtered.extend_from_slice(&bytes[at..at + len]);
                 }

@@ -3,26 +3,26 @@
 //! A port of `test/unit/mbyte_spec.lua`. The leaf arithmetic — the lead-byte
 //! masking, the encode/decode round trip, the fold table — has in-crate tests
 //! already. What the spec was the only oracle for is `mbyte/walk.rs` (520
-//! lines, no tests) and the composing-character rules in
-//! `utfc_ptr2schar`/`utfc_ptr2len`, which is where every sequence below is
-//! aimed.
+//! lines, no tests) and the composing-character rules of upstream's
+//! `utfc_ptr2schar`/`utfc_ptr2len` -- [`c_cluster_schar`]/[`c_cluster_len`]
+//! here, the same readers over the bytes of a C string -- which is where
+//! every sequence below is aimed.
 //!
-//! `vim_iswordc` reads `curbuf` and `utf_head_off` reads `'arabicshape'`, so
-//! every case here holds the editor lock.
+//! `vim_iswordc` reads `curbuf` and the cluster walk reads `'arabicshape'`,
+//! so every case here holds the editor lock.
 
 #![cfg(not(miri))]
 
 use std::ffi::{c_char, c_int};
 
 use neovim::charset::{vim_iswordc, vim_iswordp};
-use neovim::grid::{MAX_SCHAR_SIZE, schar_get};
+use neovim::grid::MAX_SCHAR_SIZE;
+use neovim::harness::schar_get;
 use neovim::mbyte::{
-    cells_at, char_at, char_count, char_info_at, char_len, cluster_len, cp_bounds, encode_char,
-    mb_charlen, mb_charlen_len, mb_off_next, mb_prevptr, mb_string2cells, mb_string2cells_len,
-    promised_char_len, strict_char_at, string_cells, utf_char2bytes, utf_char2len,
-    utf_cp_bounds_len, utf_fold, utf_head_off, utf_ptr2cells, utf_ptr2cells_len, utf_ptr2char,
-    utf_ptr2char_info, utf_ptr2len, utf_ptr2len_len, utf_ptr2str_char_info, utfc_next,
-    utfc_ptr2len, utfc_ptr2schar,
+    c_cells_at, c_char_info, c_cluster_len, c_cluster_schar, c_head_off, c_next_cluster,
+    c_off_next, c_partial_cells_in, c_prev_start, c_string_cells, c_string_cells_len, cells_at,
+    char_at, char_count, char_info_at, char_len, cluster_len, cp_bounds, encode_char,
+    strict_char_at, string_cells, utf_fold, utf_ptr2char, utf_ptr2len,
 };
 use neovim::option::vars::P_ARSHAPE;
 
@@ -37,10 +37,10 @@ fn cbuf(s: &[u8]) -> Vec<c_char> {
         .collect()
 }
 
-/// `utfc_ptr2schar` unpacked: (the cluster's bytes, its first codepoint).
+/// [`c_cluster_schar`] unpacked: (the cluster's bytes, its first codepoint).
 ///
 /// Known blind spot, inherited from the spec: nothing here reaches the byte
-/// `utfc_ptr2schar` holds back for the space it synthesises in front of a
+/// the packer holds back for the space it synthesises in front of a
 /// cluster that opens with a composing character. Removing that reservation
 /// changes no answer below, because no fixture is anywhere near
 /// `MAX_SCHAR_SIZE` long.
@@ -49,17 +49,12 @@ fn cbuf(s: &[u8]) -> Vec<c_char> {
 /// long to sit inline, so reading it back goes through `schar_get`. That
 /// makes this a statement about the pair, which is how the editor uses them.
 fn cluster(seq: &[u8]) -> (Vec<u8>, c_int) {
-    let src = cbuf(seq);
-    let mut firstc: c_int = 0;
-    let mut out = [0 as c_char; MAX_SCHAR_SIZE as usize];
-    // SAFETY: `src` is NUL-terminated; `out` is `MAX_SCHAR_SIZE` bytes, which
-    // is the most `schar_get` writes including the terminator.
-    unsafe {
-        let sc = utfc_ptr2schar(src.as_ptr(), &raw mut firstc);
-        let len = schar_get(out.as_mut_ptr(), sc);
-        let text = out[..len].iter().map(|&b| b as u8).collect();
-        (text, firstc)
-    }
+    let mut out = [0 as c_char; MAX_SCHAR_SIZE as usize + 1];
+    let (sc, firstc) = c_cluster_schar(seq);
+    // SAFETY: `out` has room for any glyph and the terminator.
+    let len = unsafe { schar_get(out.as_mut_ptr(), sc) };
+    let text = out[..len].iter().map(|&b| b as u8).collect();
+    (text, firstc)
 }
 
 /// What a one-byte ASCII cluster looks like: itself.
@@ -99,12 +94,13 @@ fn a_lone_byte_below_0x80_decodes_to_itself_and_so_does_every_other_lead() {
 #[test]
 fn every_codepoint_round_trips_and_both_word_tests_agree() {
     let _editor = editor_lock();
-    let mut buf = [0 as c_char; 8];
+    let mut buf = [0u8; 8];
     for c in 0..0x10000_i32 {
-        // SAFETY: `buf` is eight bytes and `utf_char2bytes` writes at most
-        // four; the read back stops at the sequence it just wrote.
+        // Eight bytes, and the encoder writes at most four here.
+        encode_char(c, &mut buf);
+        let buf: [c_char; 8] = buf.map(|b| b as c_char);
+        // SAFETY: the read back stops at the sequence just written.
         unsafe {
-            utf_char2bytes(c, buf.as_mut_ptr());
             assert_eq!(utf_ptr2char(buf.as_ptr()), c, "round trip of {c:#x}");
             assert_eq!(
                 vim_iswordc(c),
@@ -262,7 +258,7 @@ fn clusters_of_five_bytes_and_more() {
     );
 }
 
-/// `utf_cp_bounds_len` answers, for every byte of a string, how far back the
+/// `cp_bounds` answers, for every byte of a string, how far back the
 /// codepoint it belongs to starts and how far forward it ends. The three
 /// fixtures are a well-formed string, one that ends mid-sequence, and one
 /// with stray continuation bytes.
@@ -276,13 +272,9 @@ fn the_codepoint_bounds_of_every_byte() {
     #[track_caller]
     fn check(raw: &[u8], want_begin: &[i8], want_end: &[i8]) {
         assert_eq!(raw.len(), want_begin.len(), "one answer per byte");
-        let buf = cbuf(raw);
         let (mut begin, mut end) = (Vec::new(), Vec::new());
         for i in 0..raw.len() {
-            let left = c_int::try_from(raw.len() - i).expect("the fixtures are short");
-            // SAFETY: `buf` holds `raw.len()` bytes plus a terminator, `i` is
-            // inside it, and `left` is exactly what remains.
-            let bounds = unsafe { utf_cp_bounds_len(buf.as_ptr(), buf.as_ptr().add(i), left) };
+            let bounds = cp_bounds(raw, i);
             begin.push(bounds.begin_off);
             end.push(bounds.end_off);
         }
@@ -315,14 +307,13 @@ fn the_codepoint_bounds_of_every_byte() {
 #[test]
 fn the_bounds_walk_stays_inside_what_it_was_given() {
     let _editor = editor_lock();
-    let whole = cbuf("\u{10000}".as_bytes());
+    let whole = "\u{10000}".as_bytes();
     for base_at in [1, 0] {
-        let base = &whole[base_at..];
+        // Three bytes from the base: the walk is given no more.
+        let base = &whole[base_at..base_at + 3];
         let (mut begin, mut end) = (Vec::new(), Vec::new());
         for i in 0..3 {
-            let left = 3 - c_int::try_from(i).expect("three");
-            // SAFETY: `base` has at least three bytes plus a terminator.
-            let bounds = unsafe { utf_cp_bounds_len(base.as_ptr(), base.as_ptr().add(i), left) };
+            let bounds = cp_bounds(base, i);
             begin.push(bounds.begin_off);
             end.push(bounds.end_off);
         }
@@ -334,7 +325,7 @@ fn the_bounds_walk_stays_inside_what_it_was_given() {
     }
 }
 
-/// `utf_head_off` answers how far back the *grapheme cluster* containing a
+/// [`c_head_off`] answers how far back the *grapheme cluster* containing a
 /// byte starts — a different question from the one above, because a cluster
 /// can span several codepoints. The fixtures are the awkward ones: ZWJ
 /// sequences, regional indicators, tag sequences, invalid bytes wedged
@@ -344,18 +335,16 @@ fn the_bounds_walk_stays_inside_what_it_was_given() {
 fn every_byte_points_back_at_the_start_of_its_grapheme_cluster() {
     let _editor = editor_lock();
 
-    /// Walk `raw` with `utfc_ptr2len`, collect the multi-byte clusters, then
-    /// check that every byte reports its offset from its cluster's first.
+    /// Walk `raw` with [`c_cluster_len`], collect the multi-byte clusters,
+    /// then check that every byte reports its offset from its cluster's
+    /// first.
     #[track_caller]
     fn check(raw: &[u8], want_clusters: &[&[u8]]) {
-        let buf = cbuf(raw);
         let mut breaks = vec![0_usize];
         let mut clusters: Vec<&[u8]> = Vec::new();
         let mut pos = 0;
         while pos < raw.len() {
-            // SAFETY: `buf` is NUL-terminated and `pos` is inside it.
-            let answered = unsafe { utfc_ptr2len(buf.as_ptr().add(pos)) };
-            let mut len = usize::try_from(answered).expect("never negative");
+            let mut len = c_cluster_len(&raw[pos..]);
             if len == 0 {
                 assert_eq!(raw[pos], 0, "only a NUL has length zero");
                 len = 1; // ...but step over it, or the walk never ends.
@@ -372,18 +361,14 @@ fn every_byte_points_back_at_the_start_of_its_grapheme_cluster() {
         for pair in breaks.windows(2) {
             let (start, next) = (pair[0], pair[1]);
             for p in start..next {
-                // SAFETY: both pointers are inside `buf`.
-                let back = unsafe { utf_head_off(buf.as_ptr(), buf.as_ptr().add(p)) };
-                assert_eq!(
-                    usize::try_from(back).expect("never negative"),
-                    p - start,
-                    "at byte {p} of {raw:x?}"
-                );
+                assert_eq!(c_head_off(raw, p), p - start, "at byte {p} of {raw:x?}");
             }
         }
-        // SAFETY: the terminator is inside `buf`.
-        let at_nul = unsafe { utf_head_off(buf.as_ptr(), buf.as_ptr().add(raw.len())) };
-        assert_eq!(at_nul, 0, "the NUL past the end is its own cluster");
+        assert_eq!(
+            c_head_off(raw, raw.len()),
+            0,
+            "the NUL past the end is its own cluster"
+        );
     }
 
     // "hej och hå 🧑‍🌾!"
@@ -541,53 +526,27 @@ const SLICE_CASES: &[&[u8]] = &[
     b"\xe0\xae\xb9\xe0\xaf\x8di",
 ];
 
-/// The `&[u8]` codec answers what the pointer codec answers for the same
+/// The `&[u8]` codec answers what the C-string codec (the pointer readers'
+/// spelling, and the two the harness still resolves) answers for the same
 /// bytes. This is the whole contract phase 26's rewrites lean on: a walk
 /// converted from `*const c_char` to a slice and an index decodes text the
 /// same way, so the conversion cannot change what the editor displays.
 ///
-/// The pointer forms need a NUL to stop at and the slice forms need only
-/// their length, so the fixtures below carry no embedded NUL; that one
-/// deliberate difference is stated in `mbyte/utf8/slice.rs`'s own tests.
+/// The C-string forms stop at a NUL and the slice forms only at their
+/// length, so the fixtures below carry no embedded NUL; that one deliberate
+/// difference is stated in `mbyte/utf8/slice.rs`'s own tests.
 #[test]
 fn the_slice_codec_answers_what_the_pointer_codec_answers() {
     let _editor = editor_lock();
     for case in SLICE_CASES {
         let buf = cbuf(case);
         // SAFETY: `buf` is NUL-terminated, which is all these forms ask for.
-        let (want_len, want_char, want_cluster) = unsafe {
-            (
-                utf_ptr2len(buf.as_ptr()),
-                utf_ptr2char(buf.as_ptr()),
-                utfc_ptr2len(buf.as_ptr()),
-            )
-        };
+        let (want_len, want_char) =
+            unsafe { (utf_ptr2len(buf.as_ptr()), utf_ptr2char(buf.as_ptr())) };
+        let want_cluster = c_cluster_len(case);
         assert_eq!(char_len(case), want_len as usize, "char_len {case:x?}");
         assert_eq!(char_at(case), want_char, "char_at {case:x?}");
-        assert_eq!(
-            cluster_len(case),
-            want_cluster as usize,
-            "cluster_len {case:x?}"
-        );
-    }
-}
-
-/// `encode_char` writes the bytes `utf_char2bytes` writes, over the whole
-/// range the codec covers -- including the five- and six-byte sequences
-/// nothing but this port's ancestor still encodes.
-#[test]
-fn the_slice_encoder_writes_what_the_pointer_encoder_writes() {
-    let _editor = editor_lock();
-    let mut want = [0 as c_char; 8];
-    let mut got = [0u8; 8];
-    for c in (0..0x11000_i32).chain([0x1f_ffff, 0x20_0000, 0x3ff_ffff, 0x400_0000, 0x7fff_ffff]) {
-        // SAFETY: eight bytes is more than `MB_MAXCHAR`.
-        let len = unsafe { utf_char2bytes(c, want.as_mut_ptr()) };
-        assert_eq!(encode_char(c, &mut got), len as usize, "length of {c:#x}");
-        assert_eq!(len, utf_char2len(c), "utf_char2len of {c:#x}");
-        for i in 0..len as usize {
-            assert_eq!(got[i], want[i] as u8, "byte {i} of {c:#x}");
-        }
+        assert_eq!(cluster_len(case), want_cluster, "cluster_len {case:x?}");
     }
 }
 
@@ -598,7 +557,7 @@ fn the_slice_encoder_writes_what_the_pointer_encoder_writes() {
 /// is part of a cluster), an emoji, an emoji requested with VS-16, and the
 /// three ways a byte can fail to be a character.
 ///
-/// Bounded widths come with it: `utf_ptr2cells_len` is asked for every prefix
+/// Bounded widths come with it: [`c_partial_cells_in`] is asked for every prefix
 /// length, which is where its truncation rule shows. That rule is not the one
 /// its comment claims -- see [`a_sequence_cut_short_is_measured_past_the_cut`].
 #[test]
@@ -606,13 +565,9 @@ fn the_cells_a_character_occupies() {
     let _editor = editor_lock();
     #[track_caller]
     fn check(raw: &[u8], want: c_int) {
-        let buf = cbuf(raw);
-        // SAFETY: `buf` is NUL-terminated and `size` never exceeds its bytes.
-        let got = unsafe { utf_ptr2cells(buf.as_ptr()) };
-        assert_eq!(got, want, "utf_ptr2cells {raw:x?}");
-        let size = c_int::try_from(raw.len()).expect("the fixtures are short");
-        let bounded = unsafe { utf_ptr2cells_len(buf.as_ptr(), size) };
-        assert_eq!(bounded, want, "utf_ptr2cells_len {raw:x?}");
+        assert_eq!(c_cells_at(raw), want, "c_cells_at {raw:x?}");
+        let bounded = c_partial_cells_in(raw, 0, raw.len());
+        assert_eq!(bounded, want, "c_partial_cells_in {raw:x?}");
     }
 
     check(b"a", 1);
@@ -634,8 +589,8 @@ fn the_cells_a_character_occupies() {
 /// The one place the bounded width parts company with the terminated one: a
 /// sequence the size cuts short.
 ///
-/// `utf_ptr2cells_len`'s comment says such a sequence answers 1, and it
-/// cannot: `utf_ptr2len_len` reports a truncated sequence's *full* length, so
+/// Upstream's `utf_ptr2cells_len` comment says such a sequence answers 1, and
+/// it cannot: `utf_ptr2len_len` reports a truncated sequence's *full* length, so
 /// the `len < utf8len_tab[*p]` test never fires for one, and the decode that
 /// follows reads past the cut. Upstream has the same body. What the size
 /// really bounds is therefore only the VS-16 lookahead; the character itself
@@ -645,45 +600,25 @@ fn a_sequence_cut_short_is_measured_past_the_cut() {
     let _editor = editor_lock();
     // The bytes are all present, so cutting the size does not change the
     // answer -- the decode reads them anyway.
-    let whole = cbuf(b"\xe4\xb8\xad");
+    let whole = b"\xe4\xb8\xad";
     for size in 1..=3 {
-        // SAFETY: `whole` holds three bytes plus a terminator.
-        assert_eq!(
-            unsafe { utf_ptr2cells_len(whole.as_ptr(), size) },
-            2,
-            "{size}"
-        );
+        assert_eq!(c_partial_cells_in(whole, 0, size), 2, "{size}");
     }
     // Cut in the buffer rather than by the size: now the byte the decode
     // reaches is the terminator, and the sequence is illegal.
-    let cut = cbuf(b"\xe4\xb8");
+    let cut = b"\xe4\xb8";
     for size in 1..=2 {
-        // SAFETY: `cut` holds two bytes plus a terminator.
-        assert_eq!(
-            unsafe { utf_ptr2cells_len(cut.as_ptr(), size) },
-            4,
-            "{size}"
-        );
+        assert_eq!(c_partial_cells_in(cut, 0, size), 4, "{size}");
     }
     // The VS-16 lookahead is bounded only by whether it *starts* inside the
     // size: `size > len` is the whole test, and the same full-length report
     // then lets the decode read the rest of it.
-    let heart = cbuf(b"\xe2\x9d\xa4\xef\xb8\x8f");
+    let heart = b"\xe2\x9d\xa4\xef\xb8\x8f";
     for size in 1..=3 {
-        // SAFETY: `heart` holds six bytes plus a terminator.
-        assert_eq!(
-            unsafe { utf_ptr2cells_len(heart.as_ptr(), size) },
-            1,
-            "{size}"
-        );
+        assert_eq!(c_partial_cells_in(heart, 0, size), 1, "{size}");
     }
     for size in 4..=6 {
-        // SAFETY: as above.
-        assert_eq!(
-            unsafe { utf_ptr2cells_len(heart.as_ptr(), size) },
-            2,
-            "{size}"
-        );
+        assert_eq!(c_partial_cells_in(heart, 0, size), 2, "{size}");
     }
 }
 
@@ -697,28 +632,14 @@ fn a_sequence_cut_short_is_measured_past_the_cut() {
 fn counting_characters_and_cells_across_a_string() {
     let _editor = editor_lock();
     #[track_caller]
-    fn check(raw: &[u8], want_chars: c_int, want_cells: usize) {
-        let buf = cbuf(raw);
-        let size = c_int::try_from(raw.len()).expect("the fixtures are short");
-        // SAFETY: `buf` is NUL-terminated and holds `raw.len()` bytes.
-        unsafe {
-            assert_eq!(mb_charlen(buf.as_ptr()), want_chars, "mb_charlen {raw:x?}");
-            assert_eq!(
-                mb_charlen_len(buf.as_ptr(), size),
-                want_chars,
-                "mb_charlen_len {raw:x?}"
-            );
-            assert_eq!(
-                mb_string2cells(buf.as_ptr()),
-                want_cells,
-                "mb_string2cells {raw:x?}"
-            );
-            assert_eq!(
-                mb_string2cells_len(buf.as_ptr(), raw.len()),
-                want_cells,
-                "mb_string2cells_len {raw:x?}"
-            );
-        }
+    fn check(raw: &[u8], want_chars: usize, want_cells: usize) {
+        assert_eq!(char_count(raw), want_chars, "char_count {raw:x?}");
+        assert_eq!(c_string_cells(raw), want_cells, "c_string_cells {raw:x?}");
+        assert_eq!(
+            c_string_cells_len(raw, raw.len()),
+            want_cells,
+            "c_string_cells_len {raw:x?}"
+        );
     }
 
     check(b"", 0, 0);
@@ -730,10 +651,10 @@ fn counting_characters_and_cells_across_a_string() {
     check(b"\xf0\x9f\x91\xa8\xe2\x80\x8d\xf0\x9f\x91\xa9!", 2, 3); // ZWJ
 }
 
-/// The character walk: `utf_ptr2str_char_info` opens it and `utfc_next` steps
+/// The character walk: [`c_char_info`] opens it and [`c_next_cluster`] steps
 /// it, one step per *cluster* but carrying the *base* character's codepoint
-/// and length. `mb_off_next` and `mb_prevptr` are the same geometry asked
-/// from a byte in the middle.
+/// and length. [`c_off_next`] and [`c_prev_start`] are the same geometry
+/// asked from a byte in the middle.
 ///
 /// The last fixture is the one that says the two lengths are different
 /// questions: the step from the heart to the `z` is six bytes, and the
@@ -742,38 +663,26 @@ fn counting_characters_and_cells_across_a_string() {
 fn the_character_walk_steps_over_whole_clusters() {
     let _editor = editor_lock();
     #[track_caller]
-    fn check(raw: &[u8], want_walk: &[(isize, i32, c_int)], want_prev: &[isize]) {
-        let buf = cbuf(raw);
+    fn check(raw: &[u8], want_walk: &[(usize, i32, c_int)], want_prev: &[usize]) {
         let mut walk = Vec::new();
-        // SAFETY: `buf` is NUL-terminated and every position below is a
-        // character start within it.
-        unsafe {
-            let mut ci = utf_ptr2str_char_info(buf.as_ptr().cast_mut());
-            while *ci.ptr != 0 {
-                walk.push((ci.ptr.offset_from(buf.as_ptr()), ci.chr.value, ci.chr.len));
-                ci = utfc_next(ci);
-            }
+        let (mut at, mut chr) = (0, c_char_info(raw, 0));
+        while at < raw.len() && raw[at] != 0 {
+            walk.push((at, chr.value, chr.len));
+            (at, chr) = c_next_cluster(raw, at, chr);
         }
         assert_eq!(walk, want_walk, "the walk over {raw:x?}");
 
-        // `mb_prevptr` from every byte, the terminator included, and
-        // `mb_off_next` from every byte: how far the *next* character start
+        // `c_prev_start` from every byte, the terminator included, and
+        // `c_off_next` from every byte: how far the *next* character start
         // is, which is zero at a character start.
-        let starts: Vec<isize> = walk.iter().map(|&(at, _, _)| at).collect();
-        let mut prev = Vec::new();
-        for i in 0..=raw.len() {
-            // SAFETY: `buf` holds `raw.len()` bytes plus the terminator.
-            let q = unsafe { mb_prevptr(buf.as_ptr().cast_mut(), buf.as_ptr().cast_mut().add(i)) };
-            prev.push(unsafe { q.offset_from(buf.as_ptr()) });
-        }
-        assert_eq!(prev, want_prev, "mb_prevptr over {raw:x?}");
+        let starts: Vec<usize> = walk.iter().map(|&(at, _, _)| at).collect();
+        let prev: Vec<usize> = (0..=raw.len()).map(|i| c_prev_start(raw, i)).collect();
+        assert_eq!(prev, want_prev, "c_prev_start over {raw:x?}");
 
         for i in 0..raw.len() {
-            // SAFETY: as above.
-            let off = unsafe { mb_off_next(buf.as_ptr(), buf.as_ptr().add(i)) };
-            let next = starts.iter().copied().find(|&s| s >= i as isize);
-            let want = next.map_or(0, |s| c_int::try_from(s - i as isize).expect("short"));
-            assert_eq!(off, want, "mb_off_next at {i} of {raw:x?}");
+            let next = starts.iter().copied().find(|&s| s >= i);
+            let want = next.map_or(0, |s| s - i);
+            assert_eq!(c_off_next(raw, i), want, "c_off_next at {i} of {raw:x?}");
         }
     }
 
@@ -798,48 +707,28 @@ fn the_character_walk_steps_over_whole_clusters() {
     );
 }
 
-/// The rest of the `&[u8]` API answers what its pointer twin answers, over
+/// The rest of the `&[u8]` API answers what its C-string twin answers, over
 /// the same fixtures the codec equivalence uses.
 ///
-/// Everything here is measured against the *NUL-terminated* pointer form,
+/// Everything here is measured against the form that stops at a NUL,
 /// because "the end of the slice is the end of the string" is the slice
-/// convention. `utf_ptr2cells_len` is deliberately absent: it is not the
-/// pointer twin of [`cells_at`] but a different function, as
+/// convention. [`c_partial_cells_in`] is deliberately absent: it is not the
+/// twin of [`cells_at`] but a different function, as
 /// [`a_sequence_cut_short_is_measured_past_the_cut`] shows.
 #[test]
 fn the_slice_api_answers_what_the_pointer_api_answers() {
     let _editor = editor_lock();
     for case in SLICE_CASES {
-        let buf = cbuf(case);
-        let size = c_int::try_from(case.len()).expect("the fixtures are short");
-        // SAFETY: `buf` is NUL-terminated and holds `case.len()` bytes, which
-        // is what every form below is given.
-        unsafe {
-            assert_eq!(
-                cells_at(case),
-                utf_ptr2cells(buf.as_ptr()),
-                "cells {case:x?}"
-            );
-            assert_eq!(
-                string_cells(case),
-                mb_string2cells(buf.as_ptr()),
-                "string_cells {case:x?}"
-            );
-            assert_eq!(
-                char_count(case),
-                usize::try_from(mb_charlen(buf.as_ptr())).expect("never negative"),
-                "char_count {case:x?}"
-            );
-            if !case.is_empty() {
-                assert_eq!(
-                    promised_char_len(case),
-                    usize::try_from(utf_ptr2len_len(buf.as_ptr(), size)).expect("positive"),
-                    "promised_char_len {case:x?}"
-                );
-                let info = utf_ptr2char_info(buf.as_ptr());
-                assert_eq!(char_info_at(case).value, info.value, "value {case:x?}");
-                assert_eq!(char_info_at(case).len, info.len, "info len {case:x?}");
-            }
+        assert_eq!(cells_at(case), c_cells_at(case), "cells {case:x?}");
+        assert_eq!(
+            string_cells(case),
+            c_string_cells(case),
+            "string_cells {case:x?}"
+        );
+        if !case.is_empty() {
+            let info = c_char_info(case, 0);
+            assert_eq!(char_info_at(case).value, info.value, "value {case:x?}");
+            assert_eq!(char_info_at(case).len, info.len, "info len {case:x?}");
         }
     }
 }
@@ -870,30 +759,5 @@ fn the_strict_decoder_rejects_what_the_forgiving_one_passes_through() {
     ] {
         assert!(strict_char_at(case) < 0, "{case:x?}");
         assert_eq!(char_at(case), i32::from(case.first().copied().unwrap_or(0)));
-    }
-}
-
-/// `cp_bounds` answers what `utf_cp_bounds_len` answers, for every byte of
-/// the three fixtures [`the_codepoint_bounds_of_every_byte`] pins.
-#[test]
-fn the_slice_bounds_answer_what_the_pointer_bounds_answer() {
-    let _editor = editor_lock();
-    for raw in [
-        b"i\xc3\x80ii\xe2\xb1\xa0i\xe2\xb1\xa0\xe2\xb1\xa0\xf0\x90\x80\x80i".as_slice(),
-        b"i\xc3i\xc3\x80\xe2\xb1\xa0i\xc3\x80\xe2\xb1\xe2\xb1\xa0\xf0\x90\x80",
-        b"i\xc3\x80\xa0\xe2\xb1\xa0\xa0\xe2\xb1\xa0\xf0\x90\x80\x80\xa0i",
-    ] {
-        let buf = cbuf(raw);
-        for at in 0..raw.len() {
-            let left = c_int::try_from(raw.len() - at).expect("the fixtures are short");
-            // SAFETY: `buf` holds `raw.len()` bytes plus a terminator.
-            let want = unsafe { utf_cp_bounds_len(buf.as_ptr(), buf.as_ptr().add(at), left) };
-            let got = cp_bounds(raw, at);
-            assert_eq!(
-                (got.begin_off, got.end_off),
-                (want.begin_off, want.end_off),
-                "byte {at} of {raw:x?}"
-            );
-        }
     }
 }

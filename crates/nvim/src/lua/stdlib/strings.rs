@@ -19,7 +19,7 @@ use crate::lua::ffi::{
     lua_tostring, lua_type, luaL_argerror, luaL_checkinteger, luaL_checklstring, luaL_error,
 };
 use crate::mbyte::{
-    canonize, mb_utf_index_to_bytes, mb_utflen, skip_len, utf_cp_bounds_len, utf_ptr2len_len,
+    c_utf_index_to_byte, c_utf_lengths, canonize, cp_bounds, promised_char_len, skip_len,
 };
 
 use crate::types::{CONV_NONE_INIT, intptr_t, lua_Integer, lua_Number, lua_State, size_t};
@@ -48,9 +48,7 @@ pub unsafe extern "C-unwind" fn nlua_str_utfindex(lstate: *mut lua_State) -> c_i
             idx
         };
 
-        let mut codepoints: size_t = 0;
-        let mut codeunits: size_t = 0;
-        mb_utflen(s1, idx as size_t, &raw mut codepoints, &raw mut codeunits);
+        let (codepoints, codeunits) = c_utf_lengths(cstr::slice_at(s1, s1_len), idx as size_t);
 
         lua_pushinteger(lstate, codepoints as lua_Integer);
         lua_pushinteger(lstate, codeunits as lua_Integer);
@@ -72,7 +70,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_str_utf_pos(lstate: *mut lua_State) 
         let mut idx: size_t = 1;
         let mut i: size_t = 0;
         while i < s1_len && *s1.add(i) != 0 {
-            let clen = utf_ptr2len_len(s1.add(i), s1_len.wrapping_sub(i) as c_int) as size_t;
+            let clen = promised_char_len(&cstr::slice_at(s1, s1_len)[i..]);
             lua_pushinteger(lstate, i as lua_Integer + 1);
             lua_rawseti(lstate, -2, idx as c_int);
             idx = idx.wrapping_add(1);
@@ -96,7 +94,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_str_utf_start(lstate: *mut lua_State
             return luaL_error(lstate, c"index out of range".as_ptr());
         }
         let off = (offset - 1) as size_t;
-        let bounds = utf_cp_bounds_len(s1, s1.add(off), s1_len.wrapping_sub(off) as c_int);
+        let bounds = cp_bounds(cstr::slice_at(s1, s1_len), off);
         lua_pushinteger(lstate, -(bounds.begin_off as lua_Integer));
         1
     }
@@ -116,7 +114,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_str_utf_end(lstate: *mut lua_State) 
             return luaL_error(lstate, c"index out of range".as_ptr());
         }
         let off = (offset - 1) as size_t;
-        let bounds = utf_cp_bounds_len(s1, s1.add(off), s1_len.wrapping_sub(off) as c_int);
+        let bounds = cp_bounds(cstr::slice_at(s1, s1_len), off);
         lua_pushinteger(lstate, bounds.end_off as lua_Integer - 1);
         1
     }
@@ -138,11 +136,12 @@ pub unsafe extern "C-unwind" fn nlua_str_byteindex(lstate: *mut lua_State) -> c_
         }
         let use_utf16 = lua_gettop(lstate) >= 3 && lua_toboolean(lstate, 3) != 0;
 
-        let byteidx = mb_utf_index_to_bytes(s1, s1_len, idx as size_t, use_utf16);
-        if byteidx == -1 {
+        let Some(byteidx) =
+            c_utf_index_to_byte(cstr::slice_at(s1, s1_len), s1_len, idx as size_t, use_utf16)
+        else {
             lua_pushnil(lstate);
             return 1;
-        }
+        };
         lua_pushinteger(lstate, byteidx as lua_Integer);
         1
     }

@@ -16,7 +16,7 @@
 //! when 'textwidth' asks for a wrap, and `internal_format` calls it back to
 //! break the line.  Its `did_do_comment` out-parameter is how the second
 //! half of a broken line is stopped from starting a *new* comment leader.
-#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 

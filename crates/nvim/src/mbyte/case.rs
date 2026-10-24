@@ -14,7 +14,7 @@
 //! locale-sensitive `towupper`/`towlower`, and `keepascii` pins ASCII to the
 //! ASCII answer whatever the locale thinks.
 //!
-//! **Comparison** ([`utf_strnicmp`]) is built on folding, and has to decode
+//! **Comparison** ([`strnicmp_in`]) is built on folding, and has to decode
 //! both sides rather than walk bytes: two characters that fold together can
 //! encode to different numbers of bytes.
 
@@ -149,7 +149,7 @@ fn read_char(text: &mut &[u8]) -> c_int {
 /// incomparable" answer would not.
 ///
 /// The slice form of `utf_strnicmp`.
-pub(crate) fn strnicmp_in(mut s1: &[u8], mut s2: &[u8]) -> c_int {
+pub fn strnicmp_in(mut s1: &[u8], mut s2: &[u8]) -> c_int {
     let (c1, c2) = loop {
         let c1 = read_char(&mut s1);
         let c2 = read_char(&mut s2);
@@ -203,7 +203,7 @@ pub(crate) fn strnicmp_in(mut s1: &[u8], mut s2: &[u8]) -> c_int {
 
 /// `strcmp` or [`strnicmp_in`], whichever `ic` asks for. The slice form of
 /// `mb_strcmp_ic`.
-pub(crate) fn strcmp_ic_in(ic: bool, s1: &[u8], s2: &[u8]) -> c_int {
+pub fn strcmp_ic_in(ic: bool, s1: &[u8], s2: &[u8]) -> c_int {
     if ic {
         strnicmp_in(s1, s2)
     } else {

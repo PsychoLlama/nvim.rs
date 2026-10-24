@@ -21,7 +21,7 @@ use crate::marktree::key::{
     MtFlags, mt_decor, mt_invalid, mt_invalidate, mt_no_undo, mt_paired, mt_right,
 };
 use crate::marktree::mt_inspect;
-use crate::mbyte::utfc_ptr2schar;
+use crate::mbyte::c_cluster_schar;
 use crate::memory::xfree;
 use crate::r#move::changed_window_setting;
 use crate::pos::{MAXCOL, MAXLNUM};

@@ -31,8 +31,8 @@
 use super::Ui;
 use super::events::{linegrid, remote_ui_cursor_goto, remote_ui_highlight_set, remote_ui_put};
 use super::packer::{MAX_CELLS_PENDING, UI_BUF_SIZE, prepare_call, push_call, ui_flush_buf};
-use crate::grid::{schar_get, schar_get_adv};
-use crate::mbyte::utf_ambiguous_width;
+use crate::grid::{SCHAR_BUF_SIZE, SCharBuf, schar_copy, schar_get_adv};
+use crate::mbyte::ambiguous_width_at;
 use crate::msgpack_rpc::packer::{
     mpack_array, mpack_array_dyn16, mpack_be16, mpack_bool, mpack_str_small, mpack_uint,
 };
@@ -47,7 +47,7 @@ use core::ffi::{c_char, c_int};
 /// closing `wrap` byte is what has to be free before a cell is emitted.
 const MAX_CELL_SIZE: usize = 1 + 2 + MAX_SCHAR_SIZE + 5 + 5;
 
-/// The longest a single cell's text can be, as [`schar_get`] writes it.
+/// The longest a single cell's text can be, as [`schar_get_adv`] writes it.
 const MAX_SCHAR_SIZE: usize = 32;
 
 /// The event this module packs. Named once, because the mid-run flush has
@@ -284,19 +284,15 @@ unsafe fn raw_line_legacy(
     for i in 0..(endcol - startcol) {
         // SAFETY: the caller's promise -- both arrays hold this many.
         let (hl, text) = unsafe { (*attrs.offset(i as isize), *chunk.offset(i as isize)) };
-        let mut cell = [0 as c_char; MAX_SCHAR_SIZE];
-        // SAFETY: `cell` is `MAX_SCHAR_SIZE` bytes, which is what
-        // `schar_get` writes at most.
-        unsafe { schar_get(cell.as_mut_ptr(), text) };
-        // SAFETY: `ui` is live, and `cell` is NUL-terminated by the write
-        // above.
+        let mut cell: SCharBuf = [0; SCHAR_BUF_SIZE];
+        let len = schar_copy(&mut cell, text);
+        // SAFETY: `ui` is live, and `cell` is NUL-terminated by the copy.
         unsafe {
             remote_ui_cursor_goto(ui, row, startcol + i);
             remote_ui_highlight_set(ui, hl as c_int);
-            remote_ui_put(ui, cell.as_ptr());
+            remote_ui_put(ui, cell.as_ptr().cast());
         }
-        // SAFETY: as above.
-        if unsafe { utf_ambiguous_width(cell.as_ptr()) } {
+        if ambiguous_width_at(&cell[..len]) {
             // The UI and the server disagree about how wide that cell
             // was drawn, so the tracked column is no longer usable and
             // the next cell must move the cursor explicitly.

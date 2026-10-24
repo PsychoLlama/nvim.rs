@@ -42,19 +42,18 @@ pub mod transchar;
 
 // The display half was split out for size; its callers are spread over three
 // dozen modules and name it as `charset::*`.
-pub use display::transchar_hex_into;
 pub(crate) use display::{
-    CHAR_DISPLAY_LEN, CharDisplay, mirror_ascii, ptr2cells_at, strnsize, strsize,
-    trans_characters_in, transchar, transchar_buf, transchar_byte, transchar_byte_buf,
-    transchar_nonprint_form, transstr_into, transstr_owned, vim_strsize_cstr,
+    CHAR_DISPLAY_LEN, CharDisplay, mirror_ascii, trans_characters_in, transchar, transchar_buf,
+    transchar_byte, transchar_byte_buf, transchar_nonprint_form, transstr_into, transstr_owned,
+    vim_strsize_cstr,
 };
 pub use display::{byte2cells, char2cells};
+pub use display::{ptr2cells_at, strnsize, strsize, transchar_hex_into};
 
 // The pointer spellings, for the callers whose cursor is still a pointer.
 // The module itself is private: its names are re-exported here.
 mod walk;
 
-pub use crate::mbyte::{vim_strnsize, vim_strsize};
 pub use walk::{
     backslash_halve, backslash_halve_save, getdigits, getdigits_int, getdigits_int32,
     rem_backslash, skipbin, skipdigits, skiphex, skiptowhite, skiptowhite_esc, skipwhite,
@@ -63,9 +62,7 @@ pub use walk::{
 pub(crate) use walk::{
     getdigits_at, getdigits_int_at, getwhitecols_curline, try_getdigits, try_getdigits_at,
 };
-pub use walk::{
-    ptr2cells, rl_mirror_ascii, str_foldcase, trans_characters, transstr, transstr_buf,
-};
+pub use walk::{rl_mirror_ascii, str_foldcase, trans_characters, transstr, transstr_buf};
 
 /// Bits of a `g_chartab` entry.
 const CT_CELL_MASK: uint8_t = 0x7;

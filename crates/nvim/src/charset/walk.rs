@@ -27,8 +27,8 @@ use core::ffi::{c_char, c_int};
 
 use super::display::{foldcase, mirror_ascii, trans_characters_in, transstr_into, transstr_owned};
 use super::{
-    Str2NrBases, backslash_halved, byte2cells, escapes_next, is_bdigit, is_digit, is_white,
-    is_word_at, is_xdigit, skip, str2nr_scan,
+    Str2NrBases, backslash_halved, escapes_next, is_bdigit, is_digit, is_white, is_word_at,
+    is_xdigit, skip, str2nr_scan,
 };
 use crate::cstr;
 use crate::memory::ThinCString;
@@ -478,16 +478,4 @@ pub unsafe fn rl_mirror_ascii(str: *mut c_char, end: *mut c_char) {
         end.addr() - str.addr()
     };
     mirror_ascii(unsafe { slice::from_raw_parts_mut(str.cast::<u8>(), len) });
-}
-
-/// The display width of the character at `p`.
-///
-/// # Safety
-/// `p` must point into a NUL-terminated string.
-pub unsafe fn ptr2cells(p: *const c_char) -> c_int {
-    let byte = unsafe { *p.cast::<uint8_t>() };
-    if byte >= 0x80 {
-        return unsafe { crate::mbyte::utf_ptr2cells(p) };
-    }
-    byte2cells(c_int::from(byte))
 }

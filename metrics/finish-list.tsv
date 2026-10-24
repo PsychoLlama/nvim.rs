@@ -1,5 +1,5 @@
 module	file	files	unsafe_stmts	unsafe_fns	wrappers	regions	raw_params	raw_returns	outside_callees
-api/	*	59	403	60	268	deref:55 compound:18 expr:16 ref:1	other:50 str:13	other:3 str:3 value:1	at:22 CStr::from_ptr:9 from_raw_parts:6 ManuallyDrop::take:5 nlua_exec:5 xfree:5 bytes_at:4 c_str:3
+api/	*	59	393	60	259	deref:54 compound:18 expr:16 ref:1	other:50 str:13	other:3 str:3 value:1	at:22 CStr::from_ptr:9 from_raw_parts:6 ManuallyDrop::take:5 nlua_exec:5 xfree:5 bytes_at:4 c_str:3
 api/	api/autocmd/create.rs	1	8	0	8	-	-	-	at:2
 api/	api/autocmd/exec.rs	1	3	0	3	-	-	-	-
 api/	api/autocmd/group.rs	1	1	0	1	-	-	-	-
@@ -23,7 +23,7 @@ api/	api/events.rs	1	1	0	1	-	-	-	c_str:1
 api/	api/extmark/decor.rs	1	0	0	0	-	-	-	-
 api/	api/extmark/ns.rs	1	4	0	1	expr:3	-	-	bytes_at:1
 api/	api/extmark/query.rs	1	6	0	5	expr:1	-	-	at_opt:1 mt_inspect:1 xfree:1
-api/	api/extmark/set.rs	1	3	0	2	deref:1	-	-	utfc_ptr2schar:1
+api/	api/extmark/set.rs	1	2	0	1	deref:1	-	-	-
 api/	api/options.rs	1	9	2	9	-	str:2	-	CStr::from_ptr:2 c_str:2 at:1
 api/	api/private/converter.rs	1	1	0	1	-	-	-	arena_mem_free:1
 api/	api/private/dispatch/mod.rs	1	3	2	3	-	str:2	-	c_str_len:1 from_raw_parts:1
@@ -35,7 +35,7 @@ api/	api/private/helpers/value.rs	1	9	0	9	-	-	-	ManuallyDrop::take:5 abort:1 api
 api/	api/private/helpers/vimdict.rs	1	8	0	4	expr:2 deref:1 ref:1	-	value:1	tv_copy:2 dict_watcher_notify:1 tv_clear:1
 api/	api/tabpage.rs	1	1	0	1	-	-	-	abort:1
 api/	api/ui/events.rs	1	30	13	9	deref:9 compound:4 expr:1	other:12 str:1	-	hlattrs2dict:1
-api/	api/ui/line.rs	1	29	5	19	compound:3 deref:3	other:11	str:1	from_raw_parts_mut:1 schar_get:1 utf_ambiguous_width:1
+api/	api/ui/line.rs	1	27	5	17	compound:3 deref:3	other:11	str:1	from_raw_parts_mut:1
 api/	api/ui/mod.rs	1	26	4	19	deref:5 compound:1	other:2	other:2	Box::from_raw:2 xfree:2 process_events_until:1 strequal:1 ui_attach_impl:1 ui_detach_impl:1 ui_set_ext_option:1
 api/	api/ui/packer.rs	1	17	7	15	deref:1 expr:1	other:7	-	mpack_object_array:1 rpc_write_raw:1 strequal:1
 api/	api/ui/redraw.rs	1	17	5	15	compound:1	other:5	-	arena_mem_free:1
@@ -45,22 +45,20 @@ api/	api/vim/echo.rs	1	16	0	1	compound:1	-	-	-
 api/	api/vim/handles.rs	1	0	0	0	-	-	-	-
 api/	api/vim/highlight.rs	1	1	0	0	expr:1	-	-	-
 api/	api/vim/input.rs	1	4	0	1	deref:2 expr:1	-	-	slice_at:1
-api/	api/vim/inspect.rs	1	10	0	9	deref:1	-	-	at:3 nlua_exec:2 schar_get:1 unpack:1
+api/	api/vim/inspect.rs	1	8	0	7	deref:1	-	-	at:3 nlua_exec:2 unpack:1
 api/	api/vim/marks.rs	1	3	0	2	deref:1	-	-	at:2
 api/	api/vim/paste.rs	1	4	0	4	-	-	other:1	terminal_set_streamed_paste:2 at:1 nlua_exec:1
 api/	api/vim/redraw.rs	1	3	0	1	compound:1	-	-	-
-api/	api/vim/runtime.rs	1	4	0	4	-	-	-	from_raw_parts:1 mb_string2cells:1 nlua_exec:1
-api/	api/vim/statusline.rs	1	10	0	6	deref:2 expr:2	-	-	CStr::from_ptr:1 labs:1 snprintf:1 utfc_ptr2schar:1
+api/	api/vim/runtime.rs	1	3	0	3	-	-	-	from_raw_parts:1 nlua_exec:1
+api/	api/vim/statusline.rs	1	8	0	5	expr:2 deref:1	-	-	CStr::from_ptr:1 labs:1 snprintf:1
 api/	api/vim/term.rs	1	25	2	14	deref:7 compound:1	-	-	at:3 channel_decref:2 channel_send:2 api_free_luaref:1 channel_alloc:1 channel_incref:1 terminal_check_size:1 terminal_destroy:1
 api/	api/vim/vars.rs	1	0	0	0	-	-	-	-
 api/	api/win_config/apply.rs	1	2	0	2	-	-	-	-
-api/	api/win_config/border.rs	1	14	4	10	compound:1 deref:1 expr:1	other:2 str:2	-	CStr::from_ptr:1 at:1 copy_option_part:1 mb_string2cells_len:1
+api/	api/win_config/border.rs	1	13	4	9	compound:1 deref:1 expr:1	other:2 str:2	-	CStr::from_ptr:1 at:1 copy_option_part:1
 api/	api/win_config/get.rs	1	3	0	1	compound:1	-	-	-
 api/	api/win_config/open.rs	1	2	0	2	-	-	-	-
-api/	api/win_config/parse.rs	1	4	0	4	-	-	-	mb_string2cells:1 striequal:1
+api/	api/win_config/parse.rs	1	3	0	3	-	-	-	striequal:1
 api/	api/window.rs	1	4	0	4	-	-	-	emsg:1 nlua_call_ref:1
-autocmd/	*	1	0	0	0	-	-	-	-
-autocmd/	autocmd/block.rs	1	0	0	0	-	-	-	-
 buffer_updates.rs	*	1	10	0	8	deref:1 expr:1	-	-	arena_mem_free:2 api_free_luaref:1 buf_collect_lines:1 from_raw_parts:1 rpc_send_event:1 xfree:1 xrealloc:1
 buffer_updates.rs	buffer_updates.rs	1	10	0	8	deref:1 expr:1	-	-	arena_mem_free:2 api_free_luaref:1 buf_collect_lines:1 from_raw_parts:1 rpc_send_event:1 xfree:1 xrealloc:1
 channel/	*	5	300	48	151	deref:115 expr:28 ref:3 compound:1	other:42 str:10 void:10 pp:4 pp_str:4 value:1	other:10 str:3	multiqueue_put_event:6 rpc_start:5 rstream_may_close:4 rstream_start:4 xfree:4 rstream_init:3 DictRef::owning:2 bytes_at:2
@@ -69,14 +67,12 @@ channel/	channel/mod.rs	1	91	19	43	deref:34 expr:11 compound:1	other:16 pp_str:2
 channel/	channel/open.rs	1	101	6	58	deref:36 expr:7	other:6 str:2 void:2 pp_str:1 value:1	other:1	rpc_start:5 rstream_start:4 rstream_init:3 DictRef::owning:2 dup2:2 fcntl:2 wstream_init:2 at:1
 channel/	channel/reader.rs	1	54	12	24	deref:23 expr:5 ref:2	other:17 str:4 void:2 pp:1	-	bytes_at:2 callback_call:1 dict_find:1 from_raw_parts:1 multiqueue_put_event:1 terminal_receive:1
 channel/	channel/term.rs	1	26	7	13	deref:9 expr:4	void:5 other:1 pp:1 str:1	-	multiqueue_put_event:2 proc_stop:1 pty_proc_resize:1 pty_proc_resume:1 rstream_start_inner:1 rstream_stop_inner:1 terminal_destroy:1 wstream_write:1
-charset/	*	1	49	25	30	deref:10 expr:2 compound:1	str:24 other:6 pp_str:4	str:10	bytes_at:5 from_raw_parts_mut:3 prefix_at:3 from_raw_parts:2 slice_at:2 utf_ptr2cells:1
-charset/	charset/walk.rs	1	49	25	30	deref:10 expr:2 compound:1	str:24 other:6 pp_str:4	str:10	bytes_at:5 from_raw_parts_mut:3 prefix_at:3 from_raw_parts:2 slice_at:2 utf_ptr2cells:1
+charset/	*	1	47	24	29	deref:9 expr:2 compound:1	str:23 other:6 pp_str:4	str:10	bytes_at:5 from_raw_parts_mut:3 prefix_at:3 from_raw_parts:2 slice_at:2
+charset/	charset/walk.rs	1	47	24	29	deref:9 expr:2 compound:1	str:23 other:6 pp_str:4	str:10	bytes_at:5 from_raw_parts_mut:3 prefix_at:3 from_raw_parts:2 slice_at:2
 cstr.rs	*	1	16	8	10	deref:4 expr:2	str:10	-	CStr::from_ptr:3 from_raw_parts:3 CStr::from_bytes_with_nul_unchecked:1
 cstr.rs	cstr.rs	1	16	8	10	deref:4 expr:2	str:10	-	CStr::from_ptr:3 from_raw_parts:3 CStr::from_bytes_with_nul_unchecked:1
 cursor_shape.rs	*	1	7	2	4	compound:1	str:2	-	cstr_to_string:2
 cursor_shape.rs	cursor_shape.rs	1	7	2	4	compound:1	str:2	-	cstr_to_string:2
-drawscreen/	*	1	0	0	0	-	-	-	-
-drawscreen/	drawscreen/state.rs	1	0	0	0	-	-	-	-
 eval/	*	6	236	21	152	deref:40 expr:21 ref:15 compound:2	other:10 value:7 void:4 str:2	value:7 other:2	c_str:11 xfree:9 .as_ref:8 time_watcher_start:4 time_watcher_stop:4 Box::from_raw:3 channel_decref:3 time_watcher_close:3
 eval/	eval/collect.rs	1	18	1	11	deref:4 ref:2 expr:1	other:1	-	.as_ref:2
 eval/	eval/funcs/channel.rs	1	39	1	34	deref:3 expr:1 ref:1	-	-	c_str:8 .as_ref:4 xfree:4 server_address_list:2 ThinCString::from_raw:1 arena_mem_free:1 at_opt:1 channel_close:1
@@ -91,13 +87,14 @@ garray.rs	*	1	38	14	25	ref:11 deref:1 expr:1	other:11 str:4	str:2 void:1	xfree:3
 garray.rs	garray.rs	1	38	14	25	ref:11 deref:1 expr:1	other:11 str:4	str:2 void:1	xfree:3 from_raw_parts_mut:2 CStr::from_ptr:1 copy_nonoverlapping:1 from_raw_parts:1 path_fnamecmp:1 sort_strings:1 write_bytes:1
 getchar/	*	1	0	0	0	-	-	-	-
 getchar/	getchar/state.rs	1	0	0	0	-	-	-	-
-grid/	*	2	4	2	2	ref:2	other:1 str:1	other:1	copy_nonoverlapping:1
+grid/	*	1	3	1	1	ref:2	other:1	other:1	-
 grid/	grid/mod.rs	1	3	1	1	ref:2	other:1	other:1	-
-grid/	grid/schar.rs	1	1	1	1	-	str:1	-	copy_nonoverlapping:1
+harness.rs	*	1	1	1	1	-	str:1	-	copy_nonoverlapping:1
+harness.rs	harness.rs	1	1	1	1	-	str:1	-	copy_nonoverlapping:1
 hashtab.rs	*	1	23	15	15	ref:6	value:10 str:5	str:2	CStr::from_ptr:2 from_raw_parts:2 .write:1 c_str:1 xfree:1
 hashtab.rs	hashtab.rs	1	23	15	15	ref:6	value:10 str:5	str:2	CStr::from_ptr:2 from_raw_parts:2 .write:1 c_str:1 xfree:1
-input.rs	*	1	7	0	2	compound:2	-	-	at:1 utf_ptr2char:1
-input.rs	input.rs	1	7	0	2	compound:2	-	-	at:1 utf_ptr2char:1
+input.rs	*	1	6	0	1	compound:2	-	-	at:1
+input.rs	input.rs	1	6	0	1	compound:2	-	-	at:1
 kvec.rs	*	1	7	2	0	compound:2	other:1	-	-
 kvec.rs	kvec.rs	1	7	2	0	compound:2	other:1	-	-
 map/	*	2	40	17	24	ref:5 compound:4 deref:1 expr:1	other:21 pp:3	other:6	xrealloc:2 CStr::from_ptr:1 from_raw_parts:1 from_raw_parts_mut:1 strequal:1
@@ -116,8 +113,8 @@ marktree/	marktree/node.rs	1	21	7	7	deref:9 expr:4 ref:1	other:9	other:4	xfree:2
 marktree/	marktree/pair.rs	1	3	0	2	expr:1	-	-	-
 marktree/	marktree/rebalance.rs	1	5	0	5	-	-	-	xfree:1
 marktree/	marktree/splice.rs	1	13	0	10	deref:1 expr:1 ref:1	other:1	-	xfree:3
-mbyte/	*	3	76	37	46	deref:9 expr:3 compound:1 ref:1	str:44 other:7	str:2	.offset_from:3 prefix_at:3 .as_mut:2 slice_at:2 at_opt:1 bytes_at:1 from_raw_parts:1 from_raw_parts_mut:1
-mbyte/	mbyte/utf8/mod.rs	1	75	36	46	deref:8 expr:3 compound:1 ref:1	str:43 other:7	str:2	.offset_from:3 prefix_at:3 .as_mut:2 slice_at:2 at_opt:1 bytes_at:1 from_raw_parts:1 from_raw_parts_mut:1
+mbyte/	*	3	11	4	5	deref:3 compound:1	str:4	-	-
+mbyte/	mbyte/utf8/mod.rs	1	10	3	5	deref:2 compound:1	str:3	-	-
 mbyte/	mbyte/utf8/tables.rs	1	0	0	0	-	-	-	-
 mbyte/	mbyte/utf8/text.rs	1	1	1	0	deref:1	str:1	-	-
 message_fmt/	*	1	2	2	2	-	other:1 str:1	str:3	at_opt:1 from_raw_parts:1
@@ -152,7 +149,7 @@ ui_client.rs	*	1	41	12	27	deref:6 expr:3 compound:2	str:2 other:1 pp:1	-	rpc_sen
 ui_client.rs	ui_client.rs	1	41	12	27	deref:6 expr:3 compound:2	str:2 other:1 pp:1	-	rpc_send_event:4 CStr::from_ptr:2 xfree:2 c_str:1 channel_job_start:1 cstr_to_string:1 from_raw_parts:1 multiqueue_put_event:1
 ui_compositor/	*	1	9	5	5	deref:2 compound:1	other:5	-	GridRef::new:2 ui_composed_call_raw_line:2 from_raw_parts:1
 ui_compositor/	ui_compositor/mod.rs	1	9	5	5	deref:2 compound:1	other:5	-	GridRef::new:2 ui_composed_call_raw_line:2 from_raw_parts:1
-version/	*	1	13	0	11	deref:1 expr:1	-	-	utfc_ptr2len:3 vim_strsize:3 utf_ptr2char:2 at:1 nlua_exec:1
-version/	version/mod.rs	1	13	0	11	deref:1 expr:1	-	-	utfc_ptr2len:3 vim_strsize:3 utf_ptr2char:2 at:1 nlua_exec:1
+version/	*	1	4	0	3	deref:1	-	-	at:1 nlua_exec:1
+version/	version/mod.rs	1	4	0	3	deref:1	-	-	at:1 nlua_exec:1
 winfloat.rs	*	1	3	1	2	expr:1	void:2 str:1	-	at:1 qsort:1
 winfloat.rs	winfloat.rs	1	3	1	2	expr:1	void:2 str:1	-	at:1 qsort:1

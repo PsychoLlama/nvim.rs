@@ -35,44 +35,45 @@
 //! their callers convert and (for four of them) because something outside
 //! the crate resolves the symbol.
 //!
-//! | upstream | slice form | answers |
-//! | --- | --- | --- |
-//! | `utf_ptr2char` | [`char_at`] | the codepoint, or the lead byte's own value |
-//! | `utf_ptr2char_info_impl` | [`strict_char_at`] | the codepoint, or a negative "not a character" |
-//! | `utf_ptr2char_info` | [`char_info_at`] | both of the above, as a [`CharInfo`] |
-//! | `utf_ptr2len` | [`char_len`] | bytes in the character, never past the end |
-//! | `utf_ptr2len_len` | [`promised_char_len`] | bytes the lead byte *promised* |
-//! | `utfc_ptr2len`, `utfc_ptr2len_len` | [`cluster_len`] | bytes in the whole grapheme cluster |
-//! | `utf_ptr2cells` | [`cells_at`] | screen cells the character occupies |
-//! | `mb_string2cells`, `..._len` | [`string_cells`] | screen cells the whole text occupies |
-//! | `mb_charlen`, `mb_charlen_len` | [`char_count`] | grapheme clusters in the text |
-//! | `utf_cp_bounds`, `utf_cp_bounds_len` | [`cp_bounds`] | both ends of the codepoint covering a byte |
-//! | `utf_head_off` | [`head_off`] | how far back the cluster covering a byte starts |
-//! | `utf_iscomposing` | [`iscomposing`] | whether two codepoints cluster |
-//! | the `MB_PTR_ADV` loop | [`clusters`], [`chars`] | one item per cluster |
+//! | upstream | slice form | C-string form | answers |
+//! | --- | --- | --- | --- |
+//! | `utf_ptr2char` | [`char_at`] | (the export) | the codepoint, or the lead byte's own value |
+//! | `utf_ptr2char_info_impl` | [`strict_char_at`] | | the codepoint, or a negative "not a character" |
+//! | `utf_ptr2char_info` | [`char_info_at`] | [`c_char_info`] | both of the above, as a [`CharInfo`] |
+//! | `utf_ptr2len` | [`char_len`] | (the export) | bytes in the character, never past the end |
+//! | `utf_ptr2len_len` | [`promised_char_len`] | | bytes the lead byte *promised* |
+//! | `utfc_ptr2len` | [`cluster_len`] | [`c_cluster_len`] | bytes in the whole grapheme cluster |
+//! | `utfc_ptr2schar` | | [`c_cluster_schar`] | the cluster as a screen cell |
+//! | `utfc_next` | | [`c_next_cluster`] | the character after a cluster |
+//! | `utf_ptr2cells`, `..._len` | [`cells_at`] | [`c_cells_at`], [`c_partial_cells_in`] | screen cells the character occupies |
+//! | `mb_string2cells`, `..._len` | [`string_cells`] | [`c_string_cells`], [`c_string_cells_len`] | screen cells the whole text occupies |
+//! | `vim_strnsize` | | [`c_display_width`] | display width, `'isprint'` included |
+//! | `mb_charlen`, `mb_charlen_len` | [`char_count`] | | grapheme clusters in the text |
+//! | `utf_cp_bounds`, `utf_cp_bounds_len` | [`cp_bounds`] | | both ends of the codepoint covering a byte |
+//! | `utf_head_off`, `mb_off_next`, `mb_prevptr` | [`head_off`] | [`c_head_off`], [`c_off_next`], [`c_prev_start`] | where the cluster covering a byte starts and ends |
+//! | `mb_utflen`, `mb_utf_index_to_bytes` | [`utf_lengths`], [`utf_index_to_byte`] | [`c_utf_lengths`], [`c_utf_index_to_byte`] | codepoint and UTF-16 counts |
+//! | `utf_ambiguous_width` | [`ambiguous_width_at`] | [`c_ambiguous_width`] | whether the drawn width may differ |
+//! | `utf_strnicmp`, `mb_strcmp_ic` | [`strnicmp_in`], [`strcmp_ic_in`] | | case-insensitive comparison |
+//! | `utf_iscomposing` | [`iscomposing`] | | whether two codepoints cluster |
+//! | the `MB_PTR_ADV` loop | [`clusters`], [`chars`] | | one item per cluster |
 //!
-//! One rule covers the whole table, and it is the only behavioural
-//! difference: **the end of the slice is the end of the string**. A NUL
-//! inside a slice is an ordinary byte -- one character, one cell -- where the
-//! pointer forms would stop there. That is what keeps a walk written against
-//! these moving instead of standing still on an embedded NUL, and it is the
-//! reason a caller passes the bytes it *means*, terminator excluded.
+//! One rule covers the slice column, and it is the only behavioural
+//! difference from the C-string column: **the end of the slice is the end of
+//! the string**. A NUL inside a slice is an ordinary byte -- one character,
+//! one cell -- where the C-string forms (and the pointer forms before them)
+//! stop there. That is what keeps a walk written against the slice forms
+//! moving instead of standing still on an embedded NUL, and it is the reason
+//! a caller passes the bytes it *means*, terminator excluded.
 //!
-//! # The pointer forms that stay
+//! # The pointer forms
 //!
-//! Every reader is written once, in `utf8/text.rs`, over either kind of text,
-//! and every pointer spelling that still has callers outside this family is
-//! a one-line shim over it in [`utf8`] -- `utfc_ptr2len`, `utf_head_off`,
-//! `utf_ptr2cells`, `utf_char2bytes`, `mb_prevptr`, `utfc_next` and the rest
-//! -- so the two spellings are the same code and cannot drift. They stay
-//! while their callers' cursors are pointers (the regexp engine, spell, the
-//! drawing path) and go as those convert; nothing else in this family
-//! touches a raw pointer. `utfc_ptr2schar` is what happens when one of them
-//! stops being inlined on the drawing path.
+//! Gone, but for the two exports in the table: every reader is written once,
+//! in `utf8/text.rs`, over either kind of text, and the pointer spellings
+//! that were one-line shims over it were deleted with their last callers.
 
 // No `unsafe` here, and none allowed: the crate denies it. Not `forbid`,
 // because a `forbid` reaches the whole subtree and `utf8/` keeps the
-// family's exported symbols and pointer shims, which need the allow.
+// family's exported symbols, which need the allow.
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use core::fmt::Write as _;
@@ -103,8 +104,8 @@ use crate::pos::MAXCOL;
 use crate::types::{
     CONV_9_TO_UTF8, CONV_ICONV, CONV_NONE, CONV_NONE_INIT, CONV_TO_LATIN1, CONV_TO_LATIN9,
     CONV_TO_UTF8, CharBoundsOff, CharInfo, ColNr, EvalFuncData, Expand, GraphemeState, IOSIZE,
-    List, MB_MAXCHAR, ScreenChar, StrCharInfo, TypVal, VarNumber, VimConv, int8_t, int32_t,
-    ptrdiff_t, size_t, ssize_t, uint8_t, uint64_t, uintptr_t, utf8proc_int32_t,
+    List, MB_MAXCHAR, ScreenChar, TypVal, VarNumber, VimConv, int8_t, int32_t, ptrdiff_t, size_t,
+    uint8_t, uint64_t, uintptr_t, utf8proc_int32_t,
 };
 use crate::utf8proc::{
     UTF8PROC_CASEFOLD, UTF8PROC_CATEGORY_ME, UTF8PROC_CATEGORY_MN, utf8proc_decompose_char,

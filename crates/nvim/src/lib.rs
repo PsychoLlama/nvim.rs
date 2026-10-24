@@ -57,6 +57,7 @@ pub mod getchar;
 pub mod global_cell;
 pub mod grid;
 pub mod guard;
+pub mod harness;
 pub mod hashtab;
 pub(crate) mod help;
 pub mod highlight;

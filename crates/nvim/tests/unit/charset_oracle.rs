@@ -9,9 +9,9 @@ use std::ffi::{c_char, c_int};
 
 use neovim::charset::{
     Str2NrBases, backslash_halve, backslash_halve_save, getdigits, getdigits_int, getdigits_int32,
-    hexhex_at, ptr2cells, rem_backslash, skip, skipbin, skipdigits, skiphex, skiptowhite,
-    skiptowhite_esc, skipwhite, str_foldcase, trans_characters, transchar_hex_into, transstr,
-    transstr_buf, vim_iswordp, vim_str2nr, vim_strnsize, vim_strsize,
+    hexhex_at, ptr2cells_at, rem_backslash, skip, skipbin, skipdigits, skiphex, skiptowhite,
+    skiptowhite_esc, skipwhite, str_foldcase, strnsize, strsize, trans_characters,
+    transchar_hex_into, transstr, transstr_buf, vim_iswordp, vim_str2nr,
 };
 use neovim::ex_docmd::do_cmdline_cmd;
 use neovim::types::typval::{UVarNumber, VarNumber};
@@ -140,7 +140,7 @@ fn the_skippers() {
                     d.add(i64::from(hexhex_at(&text[i..])));
                 }
                 d.add(i64::from(vim_iswordp(at)));
-                d.add(i64::from(ptr2cells(at)));
+                d.add(i64::from(ptr2cells_at(&text[i..])));
             }
         }
     });
@@ -213,9 +213,9 @@ fn the_display_forms() {
         // SAFETY: every call below reads `buf` to its NUL and writes only
         // into buffers sized as each documents.
         unsafe {
-            d.add(i64::from(vim_strsize(p)));
+            d.add(i64::from(strsize(text)));
             for n in [0, 1, 2, 5, text.len() as c_int, 1000] {
-                d.add(i64::from(vim_strnsize(p, n)));
+                d.add(i64::from(strnsize(text, n)));
             }
             for untab in [false, true] {
                 // `transstr_len`, gone with its one caller: the length

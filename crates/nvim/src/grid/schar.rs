@@ -1,7 +1,4 @@
-#![deny(unsafe_op_in_unsafe_fn)]
-// The exports here are metrics/abi-ledger.jsonl rows (`schar_get`), and
-// `#[unsafe(no_mangle)]` is itself an unsafe attribute.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 //! `ScreenChar`: the glyph in a screen cell.
 //!
@@ -155,24 +152,6 @@ pub fn schar_cache_clear() {
     if check_chars_options().is_err() {
         std::process::abort();
     }
-}
-
-/// Write `sc` to `buf_out` and terminate it, answering the byte length.
-///
-/// The C harness's spelling (`test/unit/fixtures/vterm_test.c`,
-/// `vterm_spec.lua`, the battery's `vtsweep`); Rust copies a glyph out with
-/// [`schar_copy`] or [`schar_text`].
-///
-/// # Safety
-/// `buf_out` must have room for [`MAX_SCHAR_SIZE`] bytes.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn schar_get(buf_out: *mut c_char, sc: ScreenChar) -> size_t {
-    let mut buf: SCharBuf = [0; SCHAR_BUF_SIZE];
-    let len = schar_copy(&mut buf, sc);
-    // SAFETY: the caller's room, which holds any glyph this process could
-    // intern in a debug build, and its terminator.
-    unsafe { core::ptr::copy_nonoverlapping(buf.as_ptr().cast::<c_char>(), buf_out, len + 1) };
-    len
 }
 
 /// Copy `sc` into `buf` and terminate it, answering the byte length.

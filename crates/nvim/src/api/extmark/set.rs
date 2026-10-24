@@ -101,9 +101,8 @@ impl Decoration {
             self.hl.flags |= kSHConceal as uint16_t;
             self.has_hl = true;
             if !conceal.is_empty() {
-                let mut ch: ::core::ffi::c_int = 0;
-                // SAFETY: the keyset's own NUL-terminated bytes.
-                self.hl.conceal_char = unsafe { utfc_ptr2schar(conceal.data(), &raw mut ch) };
+                let (conceal_char, ch) = c_cluster_schar(conceal.as_bytes());
+                self.hl.conceal_char = conceal_char;
                 if self.hl.conceal_char == 0 || !vim_isprintc(ch) {
                     return Err(Error::validation(c"conceal char has to be printable"));
                 }

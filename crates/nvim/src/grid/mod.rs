@@ -78,8 +78,8 @@ pub use line::{
 };
 pub use schar::{
     MAX_SCHAR_SIZE, line_do_arabic_shape, schar_cache_clear, schar_cache_clear_if_full,
-    schar_cells, schar_from_ascii, schar_from_buf, schar_from_char, schar_from_str, schar_get,
-    schar_get_adv, schar_get_ascii, schar_get_first_codepoint, schar_high, schar_len,
+    schar_cells, schar_from_ascii, schar_from_buf, schar_from_char, schar_from_str, schar_get_adv,
+    schar_get_ascii, schar_get_first_codepoint, schar_high, schar_len,
 };
 pub(crate) use schar::{
     SCHAR_BUF_SIZE, SCharBuf, schar_bytes, schar_copy, schar_put_scratch, schar_text,

@@ -214,8 +214,7 @@ fn set_border_text(mut config: WinCfg, which: BorderTextType, text: &Object) -> 
         Object::String(string) => BorderText {
             present: true,
             chunks: Some(one_chunk(string)),
-            // SAFETY: the string owns its NUL-terminated bytes.
-            width: Some(unsafe { mb_string2cells(string.data()) } as c_int),
+            width: Some(c_string_cells(string.as_bytes()) as c_int),
         },
         Object::Array(array) => {
             let mut cells = 0;
