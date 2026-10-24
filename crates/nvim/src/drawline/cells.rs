@@ -66,27 +66,28 @@ pub(crate) enum Step {
     RowFull,
 }
 
-/// The parts of `win_line`'s own frame the character loop borrows.
+/// The parts of `win_line`'s own frame the character loop borrows, and the
+/// `'statuscolumn'` request it owns.
 ///
-/// All raw pointers on purpose: `fold_buf` in particular has its address
-/// stored in [`WinLineVars::extra_text`] and read again on later passes, so it
-/// may not be derived from a `&mut` that ends when the method does.
-pub(crate) struct LineFrame {
+/// `fold_buf` is still a raw pointer: its address is stored in
+/// [`WinLineVars::extra_text`] and read again on later passes, so it may not
+/// be derived from a `&mut` that ends when the method does.
+pub(crate) struct LineFrame<'a> {
     /// Row after the last one this buffer line may use.
     pub(crate) endrow: ::core::ffi::c_int,
     /// Non-zero when only the info columns are being redrawn, over this many
     /// screen rows.
     pub(crate) col_rows: ::core::ffi::c_int,
     /// The redraw's spell state.
-    pub(crate) spv: *mut SpellVars,
-    /// `'statuscolumn'` request. Its `sattrs` points into
+    pub(crate) spv: &'a mut SpellVars,
+    /// `'statuscolumn'` request, built per row from
     /// [`WinLineVars::sign_attrs`].
-    pub(crate) statuscol: *mut StatusCol,
-    /// Per-column attributes of a `:terminal` buffer's line,
-    /// [`TERM_ATTRS_MAX`] of them, all zero for any other buffer.
-    pub(crate) term_attrs: *const ::core::ffi::c_int,
+    pub(crate) statuscol: StatusCol,
+    /// Per-column attributes of a `:terminal` buffer's line, all zero for any
+    /// other buffer.
+    pub(crate) term_attrs: &'a [::core::ffi::c_int; TERM_ATTRS_MAX as usize],
     /// This line joined with the start of the next one, for spell checking.
-    pub(crate) nextline: *mut ::core::ffi::c_char,
+    pub(crate) nextline: &'a SpellLookahead,
     /// [`FOLD_TEXT_LEN`] bytes of scratch for `'foldtext'`.
     pub(crate) fold_buf: *mut ::core::ffi::c_char,
 }
@@ -457,7 +458,7 @@ impl Cells {
         wlv: &mut WinLineVars,
         window: Win,
         buffer: Buf,
-        f: &LineFrame,
+        f: &mut LineFrame<'_>,
     ) -> ::core::ffi::c_int {
         // SAFETY: the caller's window, buffer, line state and frame.
         let grid: GridView = window.w_grid;
@@ -510,9 +511,7 @@ impl Cells {
 
                 self.extmark_attr = 0;
                 if wlv.filler_todo <= 0
-                    && (self.area_highlighting
-                        || unsafe { (*f.spv).spv_has_spell }
-                        || self.extra_check)
+                    && (self.area_highlighting || f.spv.spv_has_spell || self.extra_check)
                 {
                     self.cell_attributes(wlv, window);
                 }

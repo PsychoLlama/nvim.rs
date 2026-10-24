@@ -29,7 +29,7 @@ use crate::types::NUL;
 
 impl Cells {
     /// Put the next character in [`Cells::cell_char`].
-    pub(super) fn next_char(&mut self, wlv: &mut WinLineVars, window: Win, f: &LineFrame) {
+    pub(super) fn next_char(&mut self, wlv: &mut WinLineVars, window: Win, f: &mut LineFrame<'_>) {
         if wlv.extra_todo > 0 {
             self.char_from_extra(wlv, window);
         } else if wlv.filler_todo > 0 {
@@ -150,7 +150,12 @@ impl Cells {
 
     /// Read the next character out of the buffer line and work out what it
     /// looks like on screen.
-    pub(super) fn char_from_buffer(&mut self, wlv: &mut WinLineVars, window: Win, f: &LineFrame) {
+    pub(super) fn char_from_buffer(
+        &mut self,
+        wlv: &mut WinLineVars,
+        window: Win,
+        f: &mut LineFrame<'_>,
+    ) {
         // SAFETY: the caller's window and frame; `ptr` walks a NUL-terminated
         // buffer line.
         let mut prev_ptr: *mut ::core::ffi::c_char = self.ptr;
@@ -264,7 +269,7 @@ impl Cells {
         &mut self,
         wlv: &mut WinLineVars,
         window: Win,
-        f: &LineFrame,
+        f: &mut LineFrame<'_>,
         prev_ptr: &mut *mut ::core::ffi::c_char,
         c0: ::core::ffi::c_int,
     ) {
@@ -301,11 +306,11 @@ impl Cells {
         }
 
         if !window.w_buffer.terminal.is_null() {
-            let term_attr = if wlv.vcol < TERM_ATTRS_MAX as ::core::ffi::c_int {
-                unsafe { *f.term_attrs.offset(wlv.vcol as isize) }
-            } else {
-                0
-            };
+            let term_attr = usize::try_from(wlv.vcol)
+                .ok()
+                .and_then(|vcol| f.term_attrs.get(vcol))
+                .copied()
+                .unwrap_or(0);
             wlv.char_attr = hl_combine_attr(term_attr, wlv.char_attr);
         }
 
@@ -320,7 +325,7 @@ impl Cells {
         &mut self,
         wlv: &WinLineVars,
         mut window: Win,
-        f: &LineFrame,
+        f: &mut LineFrame<'_>,
         at: ::core::ffi::c_int,
         can_spell: &mut bool,
     ) {
@@ -330,7 +335,7 @@ impl Cells {
         did_emsg.set(0);
 
         // SAFETY: the line's spell state, live for the line.
-        let has_spell = unsafe { (*f.spv).spv_has_spell };
+        let has_spell = f.spv.spv_has_spell;
         let cell = get_syntax_attr(
             window.buffer(),
             at - 1,
@@ -377,13 +382,13 @@ impl Cells {
         &mut self,
         wlv: &WinLineVars,
         window: Win,
-        f: &LineFrame,
+        f: &mut LineFrame<'_>,
         prev_ptr: *mut ::core::ffi::c_char,
         can_spell: bool,
     ) {
         // SAFETY: the caller's window, frame and line pointers.
         let mut at = self.byte_col();
-        if !unsafe { (*f.spv).spv_has_spell } || at < self.word_end || at <= self.cur_checked_col {
+        if !f.spv.spv_has_spell || at < self.word_end || at <= self.cur_checked_col {
             return;
         }
         self.spell_attr = 0;
@@ -403,13 +408,14 @@ impl Cells {
         // of the next line, so a word at the end of this one is checked
         // against what follows it.
         let prev_at = unsafe { prev_ptr.offset_from(self.line) };
+        let nextline = f.nextline.as_ptr().cast::<::core::ffi::c_char>().cast_mut();
         let p = if prev_at - self.nextlinecol as isize >= 0 {
-            unsafe { f.nextline.offset(prev_at - self.nextlinecol as isize) }
+            unsafe { nextline.offset(prev_at - self.nextlinecol as isize) }
         } else {
             prev_ptr
         };
 
-        unsafe { (*f.spv).spv_cap_col -= prev_at as ::core::ffi::c_int };
+        f.spv.spv_cap_col -= prev_at as ::core::ffi::c_int;
         // The text to the end of the buffer it is in, terminator included:
         // the look-ahead buffer, or the line.
         let room = if p == prev_ptr {
@@ -417,12 +423,8 @@ impl Cells {
         } else {
             SPELL_LOOKAHEAD * 2 - (prev_at - self.nextlinecol as isize) as usize
         };
-        let (text, spv) = unsafe {
-            (
-                ::core::slice::from_raw_parts(p.cast::<u8>(), room),
-                &mut *f.spv,
-            )
-        };
+        let text = unsafe { ::core::slice::from_raw_parts(p.cast::<u8>(), room) };
+        let spv = &mut *f.spv;
         let tmplen;
         (tmplen, spell_hlf) =
             spell_check(window, text, Some(&mut spv.spv_cap_col), spv.spv_unchanged);
@@ -443,37 +445,32 @@ impl Cells {
 
         if spell_hlf == HLF_COUNT
             && p != prev_ptr
-            && unsafe { p.offset_from(f.nextline) } + len as isize > self.nextline_idx as isize
+            && unsafe { p.offset_from(nextline) } + len as isize > self.nextline_idx as isize
         {
             // The good word continues at the start of the next line.
-            unsafe { (*f.spv).spv_checked_lnum = wlv.lnum + 1 };
-            unsafe {
-                (*f.spv).spv_checked_col = (p.offset_from(f.nextline) + len as isize
-                    - self.nextline_idx as isize)
-                    as ::core::ffi::c_int
-            };
+            f.spv.spv_checked_lnum = wlv.lnum + 1;
+            f.spv.spv_checked_col = (unsafe { p.offset_from(nextline) } + len as isize
+                - self.nextline_idx as isize)
+                as ::core::ffi::c_int;
         }
 
         if spell_hlf != HLF_COUNT {
             self.spell_attr = default_hl_attr(spell_hlf as usize);
         }
 
-        if unsafe { (*f.spv).spv_cap_col } > 0 {
+        if f.spv.spv_cap_col > 0 {
             if p != prev_ptr
-                && unsafe { p.offset_from(f.nextline) } + unsafe { (*f.spv).spv_cap_col } as isize
+                && unsafe { p.offset_from(nextline) } + f.spv.spv_cap_col as isize
                     >= self.nextline_idx as isize
             {
                 // The word on the next line must start with a capital.
-                unsafe { (*f.spv).spv_capcol_lnum = wlv.lnum + 1 };
-                unsafe {
-                    (*f.spv).spv_cap_col = (p.offset_from(f.nextline)
-                        + (*f.spv).spv_cap_col as isize
-                        - self.nextline_idx as isize)
-                        as ::core::ffi::c_int
-                };
+                f.spv.spv_capcol_lnum = wlv.lnum + 1;
+                f.spv.spv_cap_col =
+                    (unsafe { p.offset_from(nextline) } + f.spv.spv_cap_col as isize
+                        - self.nextline_idx as isize) as ::core::ffi::c_int;
             } else {
                 // Turn it back into a column of this line.
-                unsafe { (*f.spv).spv_cap_col += prev_at as ::core::ffi::c_int };
+                f.spv.spv_cap_col += prev_at as ::core::ffi::c_int;
             }
         }
     }

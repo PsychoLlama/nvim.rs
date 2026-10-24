@@ -11,8 +11,7 @@
 //! That is why a bug here shows up as STALE CELLS: every shortcut is a promise
 //! that some rows do not have to be redrawn.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::decoration::{DECOR_ID_INVALID, decor_put_vt, kVPosWinCol};
@@ -86,7 +85,6 @@ impl Regions {
 
     /// Redraw every row of the window.
     fn redraw_all(&mut self, window: Win) {
-        // SAFETY: a live window.
         self.mid_start = 0;
         self.mid_end = window.w_view_height;
     }
@@ -108,9 +106,7 @@ impl Regions {
 /// - `UPD_VALID` -- scroll for a changed `w_topline`, redraw changed text, and
 ///   redraw the lines a scroll brought in at either end.
 pub(crate) fn win_update(window: Win) {
-    // SAFETY: the caller's promise, taken once for the whole body.
     let mut win = window;
-    // SAFETY: a live window of the current layout, during a redraw.
     // Return early when the window would overflow a shrunk terminal, which
     // would draw out of bounds and trip an assertion.
     if win.w_grid.target == default_grid_ref().raw() && win.w_wincol >= Columns.get() {
@@ -267,8 +263,7 @@ pub(crate) fn win_update(window: Win) {
 /// decoration state the rest of the redraw already reads: an owned range,
 /// which frees it when the redraw drops it.
 fn add_suspended_terminal_note(buffer: Buf) {
-    // SAFETY: the caller's buffer.
-    if buffer.terminal.is_null() || !unsafe { terminal_suspended(buffer.terminal) } {
+    if !buf_terminal_suspended(buffer) {
         return;
     }
     let note = DecorVirtText {
@@ -324,7 +319,6 @@ fn clamp_skipcol(mut window: Win) {
 /// the number column kept its width -- otherwise the whole window is redrawn
 /// and none of this matters.
 fn find_changed_lines(win: Win, buffer: Buf, rg: &mut Regions) {
-    // SAFETY: the caller's window and buffer.
     // What `redraw_win_range_later` asked for.
     rg.mod_top = win.w_redraw_top;
     rg.mod_bot = if win.w_redraw_bot != 0 {
@@ -688,7 +682,6 @@ fn plan_visual_area(win: Win, buffer: Buf, rg: &mut Regions) {
 /// it) or just the lines between where the cursor and the anchor were and where
 /// they are now.
 fn visual_line_range(mut win: Win, sel: VisualSelection, redr_type: c_int) -> (LineNr, LineNr) {
-    // SAFETY: the caller's window.
     let cursor = Win::current().w_cursor.lnum;
     let anchor = sel.anchor.lnum;
 
@@ -852,7 +845,7 @@ fn finish_botline(mut window: Win, buffer: Buf, old_botline: LineNr, nrwidth_bef
         }
     }
 
-    if nrwidth_before != window.w_nrwidth && !buffer.terminal.is_null() {
-        unsafe { terminal_check_size(buffer.terminal) };
+    if nrwidth_before != window.w_nrwidth {
+        buf_terminal_check_size(buffer);
     }
 }

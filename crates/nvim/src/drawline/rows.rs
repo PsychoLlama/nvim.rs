@@ -28,7 +28,7 @@ impl Cells {
         &mut self,
         wlv: &mut WinLineVars,
         window: Win,
-        f: &LineFrame,
+        f: &mut LineFrame<'_>,
     ) -> Step {
         if self.cul_screenline {
             wlv.cursorline_attr = 0;
@@ -61,16 +61,14 @@ impl Cells {
         if self.virt_line_index >= 0 && self.virt_line_flags & kVLLeftcol as ::core::ffi::c_int != 0
         {
             // A virtual line pinned to the left edge covers the columns.
-        } else if unsafe { (*f.statuscol).draw } {
+        } else if f.statuscol.draw {
             let at = self.byte_col();
-            unsafe {
-                wlv.draw_statuscol(
-                    window,
-                    wlv.row - wlv.startrow - wlv.filler_lines,
-                    f.col_rows,
-                    f.statuscol,
-                )
-            };
+            wlv.draw_statuscol(
+                window,
+                wlv.row - wlv.startrow - wlv.filler_lines,
+                f.col_rows,
+                &mut f.statuscol,
+            );
             if window.w_redr_statuscol {
                 return Step::Done;
             }
@@ -139,7 +137,7 @@ impl Cells {
         &mut self,
         wlv: &mut WinLineVars,
         window: Win,
-        f: &LineFrame,
+        f: &mut LineFrame<'_>,
     ) -> Step {
         wlv_put_linebuf(
             window,
@@ -153,7 +151,7 @@ impl Cells {
         // LineNrAbove or LineNrBelow differ from LineNr, or while there is
         // still filler.
         let more_rows = wlv.row + 1 - wlv.startrow < f.col_rows
-            && (unsafe { (*f.statuscol).draw }
+            && (f.statuscol.draw
                 || win_hl_attr(window, HLF_LNA) != win_hl_attr(window, HLF_N)
                 || win_hl_attr(window, HLF_LNB) != win_hl_attr(window, HLF_N));
         if !more_rows && wlv.filler_todo <= 0 {
@@ -199,7 +197,7 @@ impl Cells {
         wlv: &mut WinLineVars,
         window: Win,
         buffer: Buf,
-        f: &LineFrame,
+        f: &mut LineFrame<'_>,
         grid: GridView,
     ) -> Step {
         let grid_width = grid_of_view(window.w_grid).cols;
@@ -308,13 +306,11 @@ impl Cells {
         if wlv.filler_todo <= 0 {
             wlv.need_showbreak = true;
         }
-        if unsafe { (*f.statuscol).draw }
-            && cpo_has(CpoFlag::NUMCOL)
-            && wlv.row > wlv.startrow + wlv.filler_lines
+        if f.statuscol.draw && cpo_has(CpoFlag::NUMCOL) && wlv.row > wlv.startrow + wlv.filler_lines
         {
             // "n" in 'cpo': the status column is drawn on the first row
             // only.
-            unsafe { (*f.statuscol).draw = false };
+            f.statuscol.draw = false;
         }
         wlv.filler_todo -= 1;
         self.virt_line_index = -1;
@@ -335,7 +331,7 @@ impl Cells {
         wlv: &mut WinLineVars,
         window: Win,
         buffer: Buf,
-        f: &LineFrame,
+        f: &mut LineFrame<'_>,
     ) {
         wlv.vcol = wlv.vcol.max(self.start_vcol + wlv.col - window.col_off());
         // Drop the bogus columns: 'cursorcolumn' wants drawing all the way
@@ -412,7 +408,12 @@ impl Cells {
     }
 
     /// Draw the blanks past the end of the line that still carry a highlight.
-    pub(super) fn fill_past_eol(&mut self, wlv: &mut WinLineVars, window: Win, f: &LineFrame) {
+    pub(super) fn fill_past_eol(
+        &mut self,
+        wlv: &mut WinLineVars,
+        window: Win,
+        f: &mut LineFrame<'_>,
+    ) {
         // SAFETY: the caller's window and frame.
         let mut rightmost_vcol = unsafe { get_rightmost_vcol(window, wlv.color_cols) };
         let cuc_attr = win_hl_attr(window, HLF_CUC);
@@ -448,10 +449,11 @@ impl Cells {
                 col_attr = hl_combine_attr(col_attr, mc_attr);
             }
             if !window.w_buffer.terminal.is_null()
-                && wlv.vcol < TERM_ATTRS_MAX as ::core::ffi::c_int
+                && let Some(&term_attr) = usize::try_from(wlv.vcol)
+                    .ok()
+                    .and_then(|vcol| f.term_attrs.get(vcol))
             {
-                col_attr =
-                    unsafe { hl_combine_attr(col_attr, *f.term_attrs.offset(wlv.vcol as isize)) };
+                col_attr = hl_combine_attr(col_attr, term_attr);
             }
             col_attr = hl_combine_attr(col_attr, wlv.line_attr);
 

@@ -9,8 +9,7 @@
 //! columns at the right of the last line belong to the ruler and to `'showcmd'`,
 //! which is what bounds every message printed there.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -21,9 +20,9 @@
 
 use crate::cstr;
 use crate::option::vars::P_SLOC;
-use crate::vim_snprintf;
 use crate::winlayer::{Buf, Win};
 use core::ffi::CStr;
+use std::ffi::CString;
 
 use super::*;
 use crate::normal::{visual_active, visual_mode, visual_select};
@@ -51,11 +50,6 @@ pub fn skip_showmode() -> bool {
 /// `redraw_mode` asks for the mode to be shown or taken away even when there is
 /// none to show.
 pub fn showmode() -> c_int {
-    // Where the keymap name is wrapped in parentheses; upstream shares
-    // `NameBuff`, which the message machinery writes again.
-    let mut keymap = [0 as c_char; MAXPATHL as usize];
-    // SAFETY: the message layer on the main thread; every pointer read below is
-    // a global the editor keeps live.
     let mut length = 0;
 
     // A message that has not been flushed must not become part of this one.
@@ -116,15 +110,14 @@ pub fn showmode() -> c_int {
                 let pre = edit_submode_pre.get();
                 // A copy: drawing it runs the message machinery.
                 let extra = edit_submode_extra.with(Clone::clone);
-                // SAFETY (the three widths): NUL-terminated by their types.
                 if let Some(extra) = &extra {
-                    length -= unsafe { vim_strsize(extra.as_ptr()) };
+                    length -= vim_strsize_cstr(extra.as_cstr());
                 }
                 if length > 0 {
                     if let Some(pre) = pre {
-                        length -= unsafe { vim_strsize(pre.as_ptr()) };
+                        length -= vim_strsize_cstr(pre);
                     }
-                    if length - unsafe { vim_strsize(submode.as_ptr()) } > 0 {
+                    if length - vim_strsize_cstr(submode) > 0 {
                         if let Some(pre) = pre {
                             msg_str_hl(pre, hl_id, false);
                         }
@@ -173,17 +166,16 @@ pub fn showmode() -> c_int {
                     if Win::current().w_onebuf_opt.wo_arab != 0 {
                         put_translated(c" Arabic");
                     } else if let Some(keymap_name) = keymap_str(Win::current()) {
-                        let buf = keymap.as_mut_ptr();
-                        let plen = unsafe {
-                            vim_snprintf!(
-                                buf,
-                                MAXPATHL as size_t,
-                                c" (%s)".as_ptr(),
-                                keymap_name.as_ptr(),
-                            )
-                        };
-                        if plen > 0 && plen < MAXPATHL {
-                            msg_str_hl(unsafe { cstr::at(buf) }, hl_id, false);
+                        // Shown only when it would have fitted upstream's
+                        // `MAXPATHL` buffer.
+                        let name = keymap_name.as_bytes();
+                        if name.len() + 3 < MAXPATHL as usize {
+                            let mut text = Vec::with_capacity(name.len() + 4);
+                            text.extend_from_slice(b" (");
+                            text.extend_from_slice(name);
+                            text.extend_from_slice(b")");
+                            let text = CString::new(text).expect("a keymap name holds no NUL");
+                            msg_str_hl(&text, hl_id, false);
                         }
                     }
                 }
@@ -280,7 +272,6 @@ pub fn unshowmode(force: bool) {
 
 /// Clear the mode message, keeping the message cursor where it was.
 pub fn clearmode() {
-    // SAFETY: the message layer on the main thread.
     let save_msg_row = msg_row.get();
     let save_msg_col = msg_col.get();
 
@@ -320,7 +311,6 @@ pub const COL_RULER: c_int = 17;
 /// last window has a status line the ruler lives there instead, so the two are
 /// independent.
 pub fn comp_col() {
-    // SAFETY: `last_stl_height` walks the window layout on the main thread.
     let last_has_status = last_stl_height(false) > 0;
 
     // Both start as *widths* counted from the right edge and are turned

@@ -10,8 +10,7 @@
 //! for a last line that does not fit, and the `'fillchars'` "eob" area below the
 //! last line.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::decoration::SIGN_WIDTH;
@@ -95,7 +94,6 @@ pub(crate) fn draw_window_lines(
         idx: 0,
         row: 0,
         srow: 0,
-        // SAFETY: the caller's window.
         lnum: window.w_topline,
         eof: false,
         didline: false,
@@ -104,7 +102,6 @@ pub(crate) fn draw_window_lines(
         did_update: DidUpdate::None,
     };
 
-    // SAFETY: the caller's window and buffer, during a redraw.
     // A 'statuscolumn' whose width changed (or errored) restarts the walk
     // from the top. Upstream spells that as a `goto` into the loop, from
     // two places -- the bottom of the loop and the filler-line draw in the
@@ -183,18 +180,16 @@ pub(crate) fn draw_window_lines(
                 let fill = win_get_fill(window, window.w_botline);
                 if fill > 0 && !window.w_botfill && w.row < window.w_view_height {
                     let mut zero_spv = SpellVars::default();
-                    w.row = unsafe {
-                        win_line(
-                            window,
-                            window.w_botline,
-                            w.row,
-                            window.w_view_height,
-                            0,
-                            false,
-                            &raw mut zero_spv,
-                            FoldInfo::default(),
-                        )
-                    };
+                    w.row = win_line(
+                        window,
+                        window.w_botline,
+                        w.row,
+                        window.w_view_height,
+                        0,
+                        false,
+                        &mut zero_spv,
+                        FoldInfo::default(),
+                    );
                     if window.w_redr_statuscol {
                         w.eof = false;
                         restart_for_statuscol(window);
@@ -328,23 +323,21 @@ fn draw_one_line(
             !concealed && (foldinfo.fi_lines == 0 || window.w_onebuf_opt.wo_fdt.first_byte() == 0);
 
         let mut zero_spv = SpellVars::default();
-        let spv_arg: *mut SpellVars = if display_buf_line {
-            &raw mut *spv
+        let spv_arg: &mut SpellVars = if display_buf_line {
+            &mut *spv
         } else {
-            &raw mut zero_spv
+            &mut zero_spv
         };
-        w.row = unsafe {
-            win_line(
-                window,
-                w.lnum,
-                w.srow,
-                window.w_view_height,
-                0,
-                concealed,
-                spv_arg,
-                foldinfo,
-            )
-        };
+        w.row = win_line(
+            window,
+            w.lnum,
+            w.srow,
+            window.w_view_height,
+            0,
+            concealed,
+            spv_arg,
+            foldinfo,
+        );
 
         if display_buf_line {
             w.syntax_last_parsed = w.lnum;
@@ -598,18 +591,16 @@ fn skip_one_line(
             fold_info(window, w.lnum)
         };
         // A non-zero `col_rows` tells `win_line` to draw only the columns.
-        unsafe {
-            win_line(
-                window,
-                w.lnum,
-                w.srow,
-                window.w_view_height,
-                size,
-                false,
-                &raw mut *spv,
-                info,
-            )
-        };
+        win_line(
+            window,
+            w.lnum,
+            w.srow,
+            window.w_view_height,
+            size,
+            false,
+            spv,
+            info,
+        );
     }
 
     w.row += size;
@@ -697,7 +688,6 @@ fn draw_unfinished_last_line(mut window: Win, w: &Walk) {
 /// to be covered even though no line was drawn over them, which is what
 /// `bot_scroll_start` records.
 fn draw_end_of_buffer(window: Win, buffer: Buf, rg: &Regions, w: &Walk) {
-    // SAFETY: the caller's window and buffer.
     let mut lastline = rg.bot_scroll_start;
     if rg.mid_end >= w.row {
         lastline = lastline.min(rg.mid_start);
@@ -778,7 +768,6 @@ pub fn win_draw_end(
     hl: Hlf,
 ) {
     debug_assert!((0..HLF_COUNT).contains(&hl), "hl >= 0 && hl < HLF_COUNT");
-    // SAFETY: a live window; each grid batch is opened and flushed per row.
     let view_width = window.w_view_width;
     let fdc = compute_foldcolumn(window, 0);
     let scwidth = window.w_scwidth;

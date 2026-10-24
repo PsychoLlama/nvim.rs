@@ -108,7 +108,7 @@ impl Cells {
 
     /// Render `'foldtext'` into the scratch buffer and set up the `'fold'`
     /// fill that follows it.
-    pub(super) fn fold_text(&mut self, wlv: &mut WinLineVars, window: Win, f: &LineFrame) {
+    pub(super) fn fold_text(&mut self, wlv: &mut WinLineVars, window: Win, f: &mut LineFrame<'_>) {
         // SAFETY: the caller's window, frame and fold scratch.
         if self.draw_folded
             && self.has_foldtext

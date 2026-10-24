@@ -51,22 +51,24 @@ impl WinLineVars {
     /// `inc_vcol` says the text counts as buffer virtual columns — true only
     /// for `'showbreak'`, which is the one thing in the left columns that
     /// participates in `'colorcolumn'`. Otherwise the cells take `fold_vcol`'s
-    /// entries when it is non-null (the fold column's `-2`/`-3` markers, so a
-    /// `'statuscolumn'` `%C` segment stays clickable) and `-1` when it is not.
+    /// entries in turn when there is one (the fold column's `-2`/`-3` markers,
+    /// so a `'statuscolumn'` `%C` segment stays clickable; `-1` past its end)
+    /// and `-1` when there is not.
     ///
     /// # Safety
     /// `text` must hold `len` readable bytes *and* be NUL-terminated at or
     /// after `len`: a multibyte character starting just before the limit is
-    /// read whole. `fold_vcol` must be null or have an entry per cell drawn.
+    /// read whole.
     pub(crate) unsafe fn draw_col_buf(
         &mut self,
         window: Win,
         text: *const ::core::ffi::c_char,
         len: size_t,
         attr: ::core::ffi::c_int,
-        mut fold_vcol: *const ColNr,
+        fold_vcol: Option<&[ColNr]>,
         inc_vcol: bool,
     ) {
+        let mut fold_vcol = fold_vcol.map(<[ColNr]>::iter);
         // SAFETY: the caller's buffer, and `off` is kept under the view width
         // by the loop condition.
         let end = unsafe { text.add(len) };
@@ -91,10 +93,8 @@ impl WinLineVars {
                     let at = self.vcol;
                     self.vcol += 1;
                     at
-                } else if !fold_vcol.is_null() {
-                    let at = unsafe { *fold_vcol };
-                    fold_vcol = unsafe { fold_vcol.add(1) };
-                    at
+                } else if let Some(fold_vcol) = &mut fold_vcol {
+                    fold_vcol.next().copied().unwrap_or(-1)
                 } else {
                     -1
                 };
@@ -484,16 +484,7 @@ impl WinLineVars {
             let num = unsafe { skipwhite(buf.as_mut_ptr()) };
             unsafe { rl_mirror_ascii(num, skiptowhite(num)) };
         }
-        unsafe {
-            self.draw_col_buf(
-                window,
-                buf.as_ptr(),
-                width as size_t,
-                attr,
-                ::core::ptr::null(),
-                false,
-            )
-        };
+        unsafe { self.draw_col_buf(window, buf.as_ptr(), width as size_t, attr, None, false) };
     }
 }
 
@@ -512,17 +503,14 @@ impl WinLineVars {
     /// than truncating; an expression that *errors* resets `'statuscolumn'`
     /// altogether, and the number column goes back to `number_width`.
     ///
-    /// # Safety
-    /// `window` must be live and `stcp` must point at the caller's `StatusCol`,
-    /// which `build_statuscol_str` fills in.
-    pub(crate) unsafe fn draw_statuscol(
+    /// `stc` is the line's request, which `build_statuscol_str` fills in.
+    pub(crate) fn draw_statuscol(
         &mut self,
         mut window: Win,
         virtnum: ::core::ffi::c_int,
         col_rows: ::core::ffi::c_int,
-        stcp: *mut StatusCol,
+        stc: &mut StatusCol,
     ) {
-        // SAFETY: the caller's window and status-column state.
         // Filler lines belonging to the line above report that line's
         // number; `v:relnum` is only set on the first row of each of the
         // three groups (filler, buffer line, virtual lines below).
@@ -531,7 +519,7 @@ impl WinLineVars {
             || virtnum == 0
             || virtnum == self.n_virt_below - self.filler_lines
         {
-            unsafe { abs(get_cursor_rel_lnum(window, lnum)) as LineNr }
+            get_cursor_rel_lnum(window, lnum).abs()
         } else {
             -1
         };
@@ -546,13 +534,12 @@ impl WinLineVars {
                 window,
                 window.w_nrwidth_line_count,
                 window.w_nrwidth_line_count,
-                unsafe { &mut *stcp },
+                stc,
                 &self.sign_attrs,
             )
             .width;
-            if width > unsafe { (*stcp).width } {
-                let addwidth =
-                    (width - unsafe { (*stcp).width }).min(MAX_STCWIDTH - unsafe { (*stcp).width });
+            if width > stc.width {
+                let addwidth = (width - stc.width).min(MAX_STCWIDTH - stc.width);
                 window.w_nrwidth += addwidth;
                 window.w_nrwidth_width = window.w_nrwidth;
                 if col_rows > 0 {
@@ -561,24 +548,16 @@ impl WinLineVars {
                     window.w_redr_statuscol = true;
                     return;
                 }
-                unsafe { (*stcp).width += addwidth };
+                stc.width += addwidth;
                 window.w_valid.clear(WinValid::WCOL);
             }
         }
 
         set_vim_var_nr(Vv::Virtnum, virtnum as VarNumber);
-        let built = build_statuscol_str(
-            window,
-            lnum,
-            relnum,
-            unsafe { &mut *stcp },
-            &self.sign_attrs,
-        );
+        let built = build_statuscol_str(window, lnum, relnum, stc, &self.sign_attrs);
         let width = built.width;
         let was_reset = window.w_onebuf_opt.wo_stc.first_byte() == 0;
-        if was_reset
-            || (width > unsafe { (*stcp).width } && unsafe { (*stcp).width } < MAX_STCWIDTH)
-        {
+        if was_reset || (width > stc.width && stc.width < MAX_STCWIDTH) {
             if was_reset {
                 // 'statuscolumn' was reset because the expression failed.
                 window.w_nrwidth_line_count = 0;
@@ -587,9 +566,7 @@ impl WinLineVars {
                     as ::core::ffi::c_int
                     * number_width(window);
             } else {
-                unsafe {
-                    window.w_nrwidth += (width - (*stcp).width).min(MAX_STCWIDTH - (*stcp).width)
-                };
+                window.w_nrwidth += (width - stc.width).min(MAX_STCWIDTH - stc.width);
                 window.w_nrwidth_width = window.w_nrwidth;
             }
             window.w_redr_statuscol = true;
@@ -610,7 +587,7 @@ impl WinLineVars {
         );
         let num_attr = self.line_number_attr(window);
         let mut cur_attr = num_attr;
-        let mut fold_vcol: *const ColNr = ::core::ptr::null();
+        let mut fold_vcol: Option<&[ColNr]> = None;
         let mut transbuf = [0u8; MAXPATHL as usize];
         let text = &built.text;
         let mut p = 0;
@@ -649,14 +626,10 @@ impl WinLineVars {
                 0
             };
             cur_attr = hl_combine_attr(base, user);
-            fold_vcol = if run.item == Some(StlOpt::FoldCol) {
-                unsafe { &raw const (*stcp).fold_vcol }.cast::<ColNr>()
-            } else {
-                ::core::ptr::null()
-            };
+            fold_vcol = (run.item == Some(StlOpt::FoldCol)).then_some(&stc.fold_vcol[..]);
             p = run.start;
         }
-        unsafe { self.draw_col_fill(schar_from_ascii(b' '), (*stcp).width - width, cur_attr) };
+        self.draw_col_fill(schar_from_ascii(b' '), stc.width - width, cur_attr);
     }
 }
 
@@ -748,7 +721,7 @@ impl WinLineVars {
             let attr = hl_combine_attr(attr, win_hl_attr(window, HLF_AT));
             let vcol_before = self.vcol;
             let sbr_len = unsafe { cstr::bytes_at(sbr) }.len();
-            unsafe { self.draw_col_buf(window, sbr, sbr_len, attr, ::core::ptr::null(), true) };
+            unsafe { self.draw_col_buf(window, sbr, sbr_len, attr, None, true) };
             self.showbreak_vcol = self.vcol;
 
             // As in `handle_breakindent`: move the highlighted area past

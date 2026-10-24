@@ -117,21 +117,16 @@ pub const MAX_NUMBERWIDTH: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
 /// `startrow` is the first window row the line may use and `endrow` one past
 /// the last; `col_rows` is non-zero when only the info columns are being
 /// redrawn, over that many rows. `concealed` says the whole line is hidden by
-/// a decoration, `spv` carries the redraw's spell state, `foldinfo` whatever
-/// `win_update` found out about folds here, and `decor` is the decoration
-/// state the redraw acquired once and threads down.
-///
-/// # Safety
-/// `window` must be a live window, `lnum` one of its buffer's lines, and `spv` a
-/// live `SpellVars`.
-pub unsafe fn win_line(
+/// a decoration, `spv` carries the redraw's spell state and `foldinfo`
+/// whatever `win_update` found out about folds here.
+pub fn win_line(
     window: Win,
     lnum: LineNr,
     startrow: ::core::ffi::c_int,
     endrow: ::core::ffi::c_int,
     col_rows: ::core::ffi::c_int,
     concealed: bool,
-    spv: *mut SpellVars,
+    spv: &mut SpellVars,
     foldinfo: FoldInfo,
 ) -> ::core::ffi::c_int {
     debug_assert!(startrow < endrow);
@@ -194,45 +189,34 @@ pub unsafe fn win_line(
     let mut nextline: SpellLookahead = [0; SPELL_LOOKAHEAD * 2];
     let mut fold_buf: [::core::ffi::c_char; FOLD_TEXT_LEN as usize] = [0; FOLD_TEXT_LEN as usize];
 
-    let setup = unsafe {
-        prepare_line(
-            &mut wlv,
-            window,
-            endrow,
-            col_rows,
-            concealed,
-            spv,
-            &mut nextline,
-        )
-    };
+    let setup = prepare_line(
+        &mut wlv,
+        window,
+        endrow,
+        col_rows,
+        concealed,
+        spv,
+        &mut nextline,
+    );
 
     // Zeroed here rather than in the setup half so that it is zeroed only
     // for a `:terminal` buffer; see `LineSetup::has_terminal`.
     let mut term_attrs: [::core::ffi::c_int; TERM_ATTRS_MAX as usize] =
         [0; TERM_ATTRS_MAX as usize];
     if setup.has_terminal {
-        unsafe {
-            terminal_get_line_attributes(
-                window.buffer().terminal,
-                window,
-                lnum,
-                term_attrs.as_mut_ptr(),
-            )
-        };
+        terminal_get_line_attributes(window.buffer(), lnum, &mut term_attrs);
     }
 
-    let mut statuscol = setup.statuscol;
-
-    let frame = LineFrame {
+    let mut frame = LineFrame {
         endrow,
         col_rows,
         spv,
-        statuscol: &raw mut statuscol,
-        term_attrs: term_attrs.as_ptr(),
-        nextline: nextline.as_mut_ptr().cast(),
+        statuscol: setup.statuscol,
+        term_attrs: &term_attrs,
+        nextline: &nextline,
         fold_buf: fold_buf.as_mut_ptr(),
     };
-    Cells::new(setup).run(&mut wlv, window, window.buffer(), &frame)
+    Cells::new(setup).run(&mut wlv, window, window.buffer(), &mut frame)
 }
 
 /// How many bytes of the next line the spell checker joins onto this one, so

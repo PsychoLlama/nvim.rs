@@ -35,16 +35,15 @@ use crate::types::NUL;
 /// redrawn, which skips most of this; `concealed` says the line is hidden
 /// behind a decoration.
 ///
-/// # Safety
-/// `window` must be a live window, `spv` a live `SpellVars`, and `wlv` must have
-/// been initialised for this line (`lnum`, `foldinfo`, `startrow`).
-pub(crate) unsafe fn prepare_line(
+/// `wlv` must have been initialised for this line (`lnum`, `foldinfo`,
+/// `startrow`).
+pub(crate) fn prepare_line(
     wlv: &mut WinLineVars,
     window: Win,
     endrow: ::core::ffi::c_int,
     col_rows: ::core::ffi::c_int,
     concealed: bool,
-    spv: *mut SpellVars,
+    spv: &mut SpellVars,
     nextline: &mut SpellLookahead,
 ) -> LineSetup {
     // SAFETY: the caller's window, spell state and line.
@@ -88,8 +87,8 @@ pub(crate) unsafe fn prepare_line(
     s.line_attr_save = wlv.line_attr;
     s.line_attr_lowprio_save = wlv.line_attr_lowprio;
 
-    if unsafe { (*spv).spv_has_spell } && col_rows == 0 && s.draw_text {
-        unsafe { s.spell_line_start(window, lnum, spv, nextline) };
+    if spv.spv_has_spell && col_rows == 0 && s.draw_text {
+        s.spell_line_start(window, lnum, spv, nextline);
     }
 
     s.line = if s.draw_text {
@@ -118,7 +117,7 @@ pub(crate) unsafe fn prepare_line(
     if s.has_foldtext {
         wlv.vcol = s.start_vcol;
     } else if s.start_vcol > 0 && col_rows == 0 {
-        unsafe { s.skip_to_start_vcol(wlv, window, spv) };
+        s.skip_to_start_vcol(wlv, window, spv);
     }
 
     if s.check_decor_providers {
@@ -497,13 +496,11 @@ impl LineSetup {
     /// so that a word wrapping across the break ("et<line-break>al.") is still
     /// seen whole.
     ///
-    /// # Safety
-    /// `window` must be a live window and `spv` its spell state.
-    unsafe fn spell_line_start(
+    fn spell_line_start(
         &mut self,
         window: Win,
         lnum: LineNr,
-        spv: *mut SpellVars,
+        spv: &mut SpellVars,
         nextline: &mut SpellLookahead,
     ) {
         // SAFETY: the caller's window and spell state.
@@ -511,18 +508,18 @@ impl LineSetup {
 
         // A word wrapped from the previous line leaves the start of this
         // one already checked.
-        if lnum == unsafe { (*spv).spv_checked_lnum } {
-            self.cur_checked_col = unsafe { (*spv).spv_checked_col };
+        if lnum == spv.spv_checked_lnum {
+            self.cur_checked_col = spv.spv_checked_col;
         }
         // The previous line was not spell checked — the first line of an
         // updated region, or the line after a closed fold — so this one
         // has to decide for itself whether a capital is required.
-        if unsafe { (*spv).spv_capcol_lnum } == 0 && check_need_cap(window, lnum, 0) {
-            unsafe { (*spv).spv_cap_col = 0 };
-        } else if lnum != unsafe { (*spv).spv_capcol_lnum } {
-            unsafe { (*spv).spv_cap_col = -1 };
+        if spv.spv_capcol_lnum == 0 && check_need_cap(window, lnum, 0) {
+            spv.spv_cap_col = 0;
+        } else if lnum != spv.spv_capcol_lnum {
+            spv.spv_cap_col = -1;
         }
-        unsafe { (*spv).spv_checked_lnum = 0 };
+        spv.spv_checked_lnum = 0;
 
         // Trick: `spell_cat_line` skips a few characters for C/shell/Vim
         // comment leaders.
@@ -538,10 +535,10 @@ impl LineSetup {
         // capital instead.
         let first = unsafe { skipwhite(line) };
         if unsafe { *first } == 0 {
-            unsafe { (*spv).spv_cap_col = 0 };
-            unsafe { (*spv).spv_capcol_lnum = lnum + 1 };
-        } else if unsafe { (*spv).spv_cap_col } == 0 {
-            unsafe { (*spv).spv_cap_col = first.offset_from(line) as ::core::ffi::c_int };
+            spv.spv_cap_col = 0;
+            spv.spv_capcol_lnum = lnum + 1;
+        } else if spv.spv_cap_col == 0 {
+            spv.spv_cap_col = unsafe { first.offset_from(line) } as ::core::ffi::c_int;
         }
 
         if nextline[SPELL_LOOKAHEAD] == 0 {
@@ -624,15 +621,8 @@ impl LineSetup {
     /// Advance [`LineSetup::ptr`] and `wlv.vcol` to the first character that is
     /// on screen, when the line is scrolled sideways or `w_skipcol` is set.
     ///
-    /// # Safety
-    /// `window` must be a live window, `spv` its spell state, and
-    /// [`LineSetup::line`] its line.
-    unsafe fn skip_to_start_vcol(
-        &mut self,
-        wlv: &mut WinLineVars,
-        window: Win,
-        spv: *mut SpellVars,
-    ) {
+    /// [`LineSetup::line`] must hold the line, with [`LineSetup::ptr`] in it.
+    fn skip_to_start_vcol(&mut self, wlv: &mut WinLineVars, window: Win, spv: &mut SpellVars) {
         let start_vcol = self.start_vcol;
         let mut prev_ptr = self.ptr;
         let mut cs = CharSize { width: 0, head: 0 };
@@ -696,7 +686,7 @@ impl LineSetup {
             wlv.need_showbreak = true;
         }
 
-        if unsafe { (*spv).spv_has_spell } {
+        if spv.spv_has_spell {
             self.spell_at_start_vcol(window, wlv.lnum);
         }
     }

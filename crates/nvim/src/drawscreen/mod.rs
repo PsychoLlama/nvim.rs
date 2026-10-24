@@ -8,7 +8,7 @@ use crate::types::AutoEvent;
 use core::ffi::{c_char, c_int};
 
 use crate::buffer::{buf_meta_total, maketitle};
-use crate::charset::{vim_isprintc, vim_strsize};
+use crate::charset::{vim_isprintc, vim_strsize_cstr};
 use crate::cmdexpand::cmdline_pum_display;
 use crate::decoration::{
     SCL_NUM, buf_signcols_count_range, decor_conceal_line, decor_range_add_virt, decor_virt_lines,
@@ -51,8 +51,8 @@ use crate::highlight_group::{
 };
 use crate::insexpand::ins_compl_show_pum;
 use crate::r#match::prepare_search_hl;
-use crate::mbyte::{utf_ptr2cells, utf_ptr2char};
-use crate::memline::{ml_get_buf, ml_get_buf_len};
+use crate::mbyte::{c_cells_at, c_char_info};
+use crate::memline::ml_get_buf_len;
 use crate::message::state::{
     lines_left, msg_col, msg_did_scroll, msg_didany, msg_didout, msg_grid_scroll_discount,
     msg_no_more, msg_row, msg_scrolled, msg_scrolled_at_flush, msg_silent, need_wait_return,
@@ -98,12 +98,12 @@ use crate::syntax::{
     syn_set_timeout, syn_stack_apply_changes, syntax_check_changed, syntax_end_parsing,
     syntax_present,
 };
-use crate::terminal::{terminal_check_size, terminal_suspended};
+use crate::terminal::{buf_terminal_check_size, buf_terminal_suspended};
 use crate::types::ui::{kUICmdline, kUIMessages, kUIMultigrid};
 use crate::types::{
     ColNr, DecorPriority, DecorVirtText, DecorVirtText_data, Failed, FoldInfo, Handle, Hlf,
     Integer, LineNr, OptInt, Pos, ProfTime, ScreenChar, SpellVars, VarNumber, VirtTextChunk,
-    WindowHandle, int64_t, size_t, uint16_t,
+    WindowHandle, int64_t, uint16_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{
@@ -609,12 +609,12 @@ pub fn setcursor_mayforce(window: Win, force: bool) {
     if window.w_onebuf_opt.wo_rl != 0 {
         // With 'rightleft' and the cursor on a double-width character, the
         // cursor goes on its leftmost column.
-        let cursor = unsafe {
-            ml_get_buf(window.buffer(), window.w_cursor.lnum).add(window.w_cursor.col as usize)
-        };
-        let cells = if unsafe { utf_ptr2cells(cursor) } == 2
-            && unsafe { vim_isprintc(utf_ptr2char(cursor)) }
-        {
+        let mut lines = window.buffer().lines();
+        let line = lines.line(window.w_cursor.lnum);
+        let cursor = line
+            .get(usize::try_from(window.w_cursor.col).unwrap_or(0)..)
+            .unwrap_or_default();
+        let cells = if c_cells_at(cursor) == 2 && vim_isprintc(c_char_info(cursor, 0).value) {
             2
         } else {
             1

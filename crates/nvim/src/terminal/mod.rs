@@ -796,18 +796,16 @@ fn get_underline_hl_flag(attrs: VTermScreenCellAttrs) -> HlAttrFlags {
 /// that are scrollback rather than screen resolve through the scrollback,
 /// and lines below the screen are left alone.
 ///
-/// # Safety
-///
-/// `term` must point at a live `Terminal`, unaliased for the call.
-/// `term_attrs` must point at a writable `int` the caller owns.
-pub(crate) unsafe fn terminal_get_line_attributes(
-    term: *mut Terminal,
-    _window: Win,
+/// `buffer` must hold a terminal.
+pub(crate) fn terminal_get_line_attributes(
+    buffer: Buf,
     linenr: c_int,
-    term_attrs: *mut c_int,
+    term_attrs: &mut [c_int; TERM_ATTRS_MAX as usize],
 ) {
-    // SAFETY: the caller hands over a live terminal.
-    let term = unsafe { Term::new(term) };
+    debug_assert!(!buffer.terminal.is_null(), "buf->terminal");
+    // SAFETY: a live buffer's own terminal, which nothing else holds while
+    // a line of it is drawn.
+    let term = unsafe { Term::new(buffer.terminal) };
     let (height, width) = term.size();
     let state = term.state();
     debug_assert!(linenr != 0, "buffer line numbers are one-based");
@@ -886,9 +884,8 @@ pub(crate) unsafe fn terminal_get_line_attributes(
         if cell.uri > 0 {
             attr_id = hl_combine_attr(attr_id, cell.uri);
         }
-        // SAFETY: the caller's scratch array is `TERM_ATTRS_MAX` wide and
-        // `width` was clamped to it.
-        unsafe { *term_attrs.add(col as usize) = attr_id };
+        // `width` was clamped to the array.
+        term_attrs[col as usize] = attr_id;
     }
 }
 
@@ -923,12 +920,10 @@ pub(crate) unsafe fn terminal_running(term: *const Terminal) -> bool {
     unsafe { !(*term).closed }
 }
 
-/// # Safety
-///
-/// `term` must point at a live `Terminal`.
-pub(crate) unsafe fn terminal_suspended(term: *const Terminal) -> bool {
-    // SAFETY: the caller hands over a live terminal.
-    unsafe { (*term).suspended }
+/// Whether `buffer` holds a terminal whose job is suspended.
+pub(crate) fn buf_terminal_suspended(buffer: Buf) -> bool {
+    // SAFETY: a live buffer's own terminal.
+    !buffer.terminal.is_null() && unsafe { (*buffer.terminal).suspended }
 }
 
 /// Tell the child of `buffer`'s terminal, if it has one and asked for theme
