@@ -7,6 +7,28 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Rewrote the editing core and the screen over data they own: autocommands,
+  registers and the clipboard, insert mode and changes, operators, completion
+  and indenting, Normal mode and the command line, folds, marks, diff
+  (the block list), decorations, windows, the statusline and the drawing of
+  every buffer line. The fold, mark, diff and decoration stores are owned
+  collections that survive an autocommand or Lua callback changing them
+  mid-walk. Release builds now log as upstream's do: warnings and errors
+  only, with no line written per key.
+
+### Fixed
+
+- Shifting the numbered registers left `"1` and `"2` sharing their ShaDa
+  extra data, freed twice by the next yank or `:wshada`.
+- `o` hung forever when `'comments'` had an offset of a bare `-`
+  (`sr-:/*`).
+- A `'foldexpr'` that ran `set fdm=manual | normal! zE` used freed fold
+  memory.
+- `:tabnew` abandoned by a `WinLeave` autocommand that changed tab page left
+  a freed tab page registered.
+
 ## [2026.10.20-391bd79481]
 
 ### Changed
