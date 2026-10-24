@@ -35,7 +35,7 @@ use crate::types::CharInfo;
 /// The slice form of [`utf_ptr2len`](super::utf_ptr2len). Answers 1 for
 /// anything that is not a complete sequence *within the slice*, so a walk
 /// always makes progress and never steps past the end: unlike
-/// [`utf_ptr2len_len`](super::utf_ptr2len_len), which reports a truncated
+/// upstream's `utf_ptr2len_len`, which reports a truncated
 /// sequence's full length so its caller can tell "incomplete" from
 /// "invalid", the answer here is never larger than `bytes.len()`.
 #[inline]
@@ -53,7 +53,7 @@ pub fn char_len(bytes: &[u8]) -> usize {
 /// The length the lead byte at the start of `bytes` announces, whether or not
 /// the slice holds that much.
 ///
-/// The slice form of [`utf_ptr2len_len`](super::utf_ptr2len_len), and its
+/// The slice form of upstream's `utf_ptr2len_len`, and its
 /// body. The one answer that is *not* the announced length is 1, for a byte
 /// that leads nothing (ASCII, a continuation byte, `0xFE`/`0xFF`) or a
 /// sequence with a bad continuation byte inside the slice.
@@ -123,7 +123,7 @@ pub fn strict_char_at(bytes: &[u8]) -> i32 {
 /// the drawing path walks with. A byte that is not a character reports its
 /// negative value with a length of one, so a walk still advances.
 ///
-/// The slice form of [`utf_ptr2char_info`](super::utf_ptr2char_info).
+/// The slice form of upstream's `utf_ptr2char_info`.
 #[inline]
 pub fn char_info_at(bytes: &[u8]) -> CharInfo {
     let value = strict_char_at(bytes);
@@ -171,7 +171,7 @@ pub fn char_at(bytes: &[u8]) -> i32 {
 
 /// Encode `c` into `out`, answering how many bytes it took.
 ///
-/// The slice form of [`utf_char2bytes`](super::utf_char2bytes), which
+/// The slice form of upstream's `utf_char2bytes`, which
 /// delegates here. Panics if `out` is shorter than
 /// [`utf_char2len`](super::utf_char2len) -- up to `MB_MAXCHAR` bytes --
 /// which is the bound the pointer form asks its caller for and cannot check.

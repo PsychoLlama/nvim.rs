@@ -8,7 +8,7 @@
 //! `&mut` would invalidate a pointer the caller still holds.
 //!
 //! What does not have to stay raw is the *dereference*. [`Win`], [`Buf`],
-//! [`FrameRef`], [`TabPage`], [`PosRef`] and [`Line`] each wrap one pointer and
+//! [`FrameRef`], [`TabPage`] and [`PosRef`] each wrap one pointer and
 //! make its **construction** the unsafe step; from there [`Deref`]/[`DerefMut`]
 //! give ordinary field access and the accessors below give the projections a
 //! bare `&`/`&mut` cannot express — the buffer behind a window, a line of that
