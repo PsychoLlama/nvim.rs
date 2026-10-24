@@ -1059,6 +1059,75 @@ scenario('draw-conceal-virt', function()
   val('conceal-virt-screenpos', 'screenpos(0, 1, 20)')
 end)
 
+-- The runs `win_line` spends one cell at a time out of a buffer of its own
+-- rather than out of the line: an escape padded by 'linebreak', a Tab spelled
+-- out under 'linebreak' + 'list' and cut by the right edge, inline virtual
+-- text whose chunks start left of 'leftcol' (whole, and straddling it with a
+-- double-width character), a virtual line scrolled with the window, and the
+-- three 'foldtext' answers -- text that fits the fold scratch, text that does
+-- not, and chunks. Each run continues across a row boundary somewhere, which
+-- is where a run held by address and one held by offset part company.
+scenario('draw-runs', function()
+  local screen = start(30, 14)
+  n.api.nvim_buf_set_lines(0, 0, -1, true, {
+    'esc ' .. string.char(1) .. ' x ' .. string.char(255) .. string.char(200) .. ' y ' .. string.char(31) .. 'z',
+    string.rep('ab ', 7) .. '\t\ttabbed\t' .. string.char(2) .. 'end',
+    '\u{6f22}\u{5b57} wide then ' .. string.char(127) .. ' del',
+    string.rep('x', 27) .. string.char(255) .. string.char(1) .. 'tail',
+  })
+  n.command('set linebreak')
+  snap(screen, 'draw-runs-escape-lbr')
+  n.command('set list listchars=tab:<->,eol:$')
+  snap(screen, 'draw-runs-tab-lbr-list')
+  n.command('set display=uhex')
+  snap(screen, 'draw-runs-uhex-lbr')
+  n.command('set display= nolist nolinebreak')
+
+  local ns = n.api.nvim_create_namespace('runs')
+  n.api.nvim_buf_set_lines(0, 0, -1, true, {
+    'inline text scrolled off to the left of the window edge',
+    'second line with wide inline text and more words after',
+    'third',
+  })
+  n.api.nvim_buf_set_extmark(0, ns, 0, 6, {
+    virt_text = { { 'AAAA', 'Todo' }, { '', 'Search' }, { 'BB\u{6f22}CC', 'DiffAdd' } },
+    virt_text_pos = 'inline',
+  })
+  n.api.nvim_buf_set_extmark(0, ns, 1, 4, {
+    virt_text = { { '\u{6f22}\u{5b57}\u{6f22}', 'Search' }, { 'tail', 'Todo' } },
+    virt_text_pos = 'inline',
+  })
+  n.api.nvim_buf_set_extmark(0, ns, 2, 0, {
+    virt_lines = { { { 'virt \u{6f22}\u{5b57} line ' .. string.rep('v', 30), 'Comment' } } },
+    virt_lines_overflow = 'scroll',
+  })
+  n.command('set nowrap sidescroll=1')
+  for _, col in ipairs({ 3, 6, 7, 8, 9, 12, 14 }) do
+    n.command('normal! 0' .. col .. 'zl')
+    snap(screen, 'draw-runs-inline-leftcol-' .. col)
+  end
+  n.command('set wrap')
+  n.api.nvim_buf_clear_namespace(0, ns, 0, -1)
+
+  n.api.nvim_buf_set_lines(0, 0, -1, true, {
+    'fold one a', 'fold one b', 'between', 'fold two a', 'fold two b',
+    'between again', 'fold three a', 'fold three b', 'tail',
+  })
+  n.command('set foldmethod=manual')
+  n.command('1,2fold | 4,5fold | 7,8fold')
+  n.exec([=[
+    function! RunsFoldText() abort
+      if v:foldstart == 1 | return 'short' | endif
+      if v:foldstart == 4 | return repeat('long-', 20) | endif
+      return [['chunk', 'Todo'], [' ', 'Normal'], ['two', 'Search']]
+    endfunction
+  ]=])
+  n.command('set foldtext=RunsFoldText()')
+  snap(screen, 'draw-runs-foldtext')
+  n.command('set foldtext= list listchars=eol:$')
+  snap(screen, 'draw-runs-foldtext-empty')
+end)
+
 -- 'diffopt' "linematch" and "inline:" are the only settings that give one
 -- line more than one changed range, so `line_changes.num_changes > 1` and
 -- the loop's `change_index += 1` step was dead. Inline virtual text on a
