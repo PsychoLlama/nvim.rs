@@ -1,6 +1,13 @@
 //! Indent computed by running something: 'indentexpr', and the built-in
 //! Lisp indenter behind 'lisp'.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::strings::has_char;
@@ -42,7 +49,7 @@ pub fn get_expr_indent() -> c_int {
     // Saved because the expression can move the cursor via `:normal`.
     let (save_pos, save_curswant, save_set_curswant) =
         (win.w_cursor, win.w_curswant, win.w_set_curswant);
-    set_vim_var_nr(Vv::Lnum, save_pos.lnum as VarNumber);
+    set_vim_var_nr(Vv::Lnum, VarNumber::from(save_pos.lnum));
 
     let mut indent = {
         let _sandboxed = use_sandbox.then(Lock::sandbox);
@@ -52,7 +59,9 @@ pub fn get_expr_indent() -> c_int {
         // The expression is evaluated from a copy, because 'indentexpr' can
         // be changed while it is running.
         let expression = buf.b_p_inde.get();
-        eval_to_number(&expression, true) as c_int
+        #[allow(clippy::cast_possible_truncation, reason = "C's `(int)` narrowing")]
+        let indent = eval_to_number(&expression, true) as c_int;
+        indent
     };
     current_sctx.set(save_sctx);
 
@@ -271,7 +280,7 @@ fn measure_first_argument(
         && (!ascii_iswhite(ci.value as c_int) || quotecount != 0 || parencount != 0)
     {
         if ci.value == '"' as int32_t {
-            quotecount = (quotecount == 0) as c_int;
+            quotecount = c_int::from(quotecount == 0);
         }
         if quotecount == 0 {
             if ci.value == '(' as int32_t || ci.value == '[' as int32_t {
@@ -343,7 +352,7 @@ pub fn fixthisline(get_the_indent: Indenter) {
     if amount < 0 {
         return;
     }
-    change_indent(INDENT_SET as c_int, amount, 0, true);
+    change_indent(INDENT_SET.cast_signed(), amount, 0, true);
     if linewhite(Win::current().w_cursor.lnum) {
         // Delete the indent again if the line stays empty.
         did_ai.set(true);
@@ -379,7 +388,7 @@ pub fn fix_indent() {
 pub fn f_indent(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let lnum = tv_get_lnum(&args[0]);
     result.write_number(if (1..=Buf::current().b_ml.ml_line_count).contains(&lnum) {
-        get_indent_lnum(lnum) as VarNumber
+        VarNumber::from(get_indent_lnum(lnum))
     } else {
         -1
     });
@@ -393,7 +402,7 @@ pub fn f_lispindent(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let lnum = tv_get_lnum(&args[0]);
     (*result).write_number(if (1..=Buf::current().b_ml.ml_line_count).contains(&lnum) {
         win.w_cursor.lnum = lnum;
-        let amount = get_lisp_indent() as VarNumber;
+        let amount = VarNumber::from(get_lisp_indent());
         win.w_cursor = pos;
         amount
     } else {

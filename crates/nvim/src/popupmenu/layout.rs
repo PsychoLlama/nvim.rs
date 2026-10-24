@@ -11,6 +11,13 @@
 //! answering a value: `pum_display` computes the placement in three steps
 //! and the later ones read what the earlier ones decided.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use super::*;
@@ -24,7 +31,8 @@ const PUM_DEF_HEIGHT: c_int = 10;
 /// `'pumheight'`, `'pumwidth'` and `'pummaxwidth'` are all spelled this way.
 fn clamp_to_option(value: c_int, limit: OptInt) -> c_int {
     if limit > 0 && OptInt::from(value) > limit {
-        limit as c_int
+        // `limit` is below `value` here, so it fits.
+        c_int::try_from(limit).unwrap_or(c_int::MAX)
     } else {
         value
     }
@@ -97,8 +105,8 @@ pub(crate) fn pum_compute_vertical_placement(
         }
         if p_ph() > 0 && OptInt::from(height) > p_ph() {
             // Losing rows off the top keeps the bottom where it was.
-            row += height - p_ph() as c_int;
-            height = p_ph() as c_int;
+            row += height - c_int::try_from(p_ph()).unwrap_or(c_int::MAX);
+            height = c_int::try_from(p_ph()).unwrap_or(c_int::MAX);
         }
 
         if pum_border_size > 0 && pum_border_size + row + height >= pum_win_row {
@@ -147,11 +155,11 @@ fn set_pum_width_aligned_with_cursor(width: c_int, available_width: c_int) -> bo
     let mut end_padding = true;
 
     if OptInt::from(width) < p_pw() {
-        width = p_pw() as c_int;
+        width = c_int::try_from(p_pw()).unwrap_or(c_int::MAX);
         end_padding = false;
     }
     if p_pmw() > 0 && OptInt::from(width) > p_pmw() {
-        width = p_pmw() as c_int;
+        width = c_int::try_from(p_pmw()).unwrap_or(c_int::MAX);
         end_padding = false;
     }
 
@@ -201,7 +209,7 @@ pub(crate) fn pum_compute_horizontal_placement(
     }
 
     if OptInt::from(available_width) > p_pw() {
-        pum_width.set(p_pw() as c_int + 1); // truncate beyond 'pumwidth'
+        pum_width.set(c_int::try_from(p_pw()).unwrap_or(c_int::MAX - 1) + 1); // truncate beyond 'pumwidth'
         if pum_rl.get() {
             pum_col.set(pum_width.get() + pum_scrollbar.get() + border_width);
         } else {

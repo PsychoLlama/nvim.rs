@@ -11,6 +11,13 @@
 //! This is the per-keystroke path, so `GlobalCell` is read through `get`/`ptr`
 //! and never through `with`.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::global_cell::GlobalCell;
@@ -74,7 +81,7 @@ use crate::types::{CmdArg, NUL, OpArg, OpType, Outcome, Pos, ShmFlag, int64_t};
 use crate::ui::{ui_cursor_shape, ui_flush};
 use crate::window::{may_make_initial_scroll_size_snapshot, may_trigger_win_scrolled_resized};
 use crate::winlayer::graph::cmdwin_result;
-use core::ffi::{c_int, c_uint};
+use core::ffi::c_int;
 
 use crate::r#move::{update_curswant, update_topline, validate_cursor};
 
@@ -303,7 +310,7 @@ pub(crate) fn normal_prepare(ns: &mut NormalState) {
 /// Answers whether the command was rejected outright, which happens when
 /// unshifting a special key leaves a character no table row claims.
 pub(crate) fn normal_handle_special_visual_command(ns: &mut NormalState) -> bool {
-    let flags = nv_cmds[ns.idx as usize].cmd_flags;
+    let flags = nv_cmds[usize::try_from(ns.idx).unwrap_or(usize::MAX)].cmd_flags;
     // "stopsel": an unshifted movement ends the selection.
     if km_stopsel.get() && flags.has(NvFlags::STS) && !mod_mask.get().has(ModMask::SHIFT) {
         end_visual_mode();
@@ -334,7 +341,7 @@ pub(crate) fn normal_handle_special_visual_command(ns: &mut NormalState) -> bool
 /// running, and `a`/`i` are text objects rather than insert commands only
 /// while an operator or Visual mode is waiting for them.
 pub(crate) fn normal_need_additional_char(ns: &mut NormalState) -> bool {
-    let flags = nv_cmds[ns.idx as usize].cmd_flags;
+    let flags = nv_cmds[usize::try_from(ns.idx).unwrap_or(usize::MAX)].cmd_flags;
     let pending_op = ns.oa.op_type != OpType::Nop;
     let cmdchar = ns.ca.cmdchar;
     flags.has(NvFlags::NCH)
@@ -478,9 +485,7 @@ fn normal_check_text_changed() {
 
 fn normal_check_buffer_modified() {
     // SAFETY (throughout): reads the current buffer and fires an autocommand.
-    if !finish_op.get()
-        && has_event(AutoEvent::BufModifiedSet)
-        && Buf::current().b_changed_invalid as c_int == 1
+    if !finish_op.get() && has_event(AutoEvent::BufModifiedSet) && Buf::current().b_changed_invalid
     {
         fire_on_curbuf(AutoEvent::BufModifiedSet);
         Buf::current().b_changed_invalid = false;
@@ -495,7 +500,7 @@ fn normal_check_folds() {
     fold_adjust_visual();
     if has_any_folding(Win::current()) != 0 && !char_avail() {
         fold_check_close();
-        if fdo_flags.get() & kOptFdoFlagAll as c_int as c_uint != 0 {
+        if fdo_flags.get() & kOptFdoFlagAll != 0 {
             fold_open_cursor();
         }
     }
@@ -611,9 +616,9 @@ pub(crate) fn normal_check(ns: &mut NormalState) -> c_int {
 /// because the flag and the command are sibling fields of one frame and a
 /// callee cannot borrow both.
 pub(crate) fn set_vcount_ca(cmd_arg: &CmdArg, set_prevcount: bool) {
-    let mut count = cmd_arg.count0 as int64_t;
+    let mut count = int64_t::from(cmd_arg.count0);
     if cmd_arg.opcount != 0 {
-        count = cmd_arg.opcount as int64_t * if count == 0 { 1 } else { count };
+        count = int64_t::from(cmd_arg.opcount) * if count == 0 { 1 } else { count };
     }
     set_vcount(count, if count == 0 { 1 } else { count }, set_prevcount);
 }

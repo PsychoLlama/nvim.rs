@@ -17,6 +17,13 @@
 //! path that draws one has to unput it again before inserting -- which is
 //! what `did_putchar` tracks in three separate places here.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::cstr::{self, byte_at};
@@ -96,7 +103,7 @@ pub(crate) fn get_literal(no_simplify: bool) -> c_int {
         let byte_len = if !(0..=255).contains(&nc) {
             1
         } else {
-            utf8len_tab[nc as usize] as c_int
+            c_int::from(utf8len_tab[usize::try_from(nc).unwrap_or(0)])
         };
         if State.get() & MODE_CMDLINE == 0 && byte_len == 1 {
             add_to_showcmd(nc);
@@ -201,7 +208,7 @@ pub(crate) fn insert_special(mut c: c_int, mut allow_modmask: c_int, mut ctrlv: 
     }
     if stop_arrow().is_ok() {
         let flags = if ctrlv != 0 {
-            INSCHAR_CTRLV as c_int
+            INSCHAR_CTRLV.cast_signed()
         } else {
             0
         };
@@ -307,7 +314,7 @@ pub(crate) fn ins_copychar(lnum: LineNr) -> c_int {
     let mut at = 0;
     let mut chr = c_char_info(&line, 0);
     let mut vcol = 0;
-    while vcol < end_vcol && byte_at(&line, at) != NUL as u8 {
+    while vcol < end_vcol && byte_at(&line, at) != b'\0' {
         vcol += win_charsize(cstype, vcol, at, chr.value, &mut csarg).width;
         if vcol > end_vcol {
             break;
@@ -353,7 +360,7 @@ pub(crate) fn ins_ctrl_ey(tc: c_int) -> c_int {
 
     // A non-alphanumeric byte has to be recorded literally, or the redo
     // would read it as a command.
-    if c < 256 && ctype_bits(c as u8) & _ISalnum == 0 {
+    if c < 256 && ctype_bits(c.to_le_bytes()[0]) & _ISalnum == 0 {
         append_to_redobuff(CTRL_V_STR.to_bytes());
     }
     let tw_save = Buf::current().b_p_tw;

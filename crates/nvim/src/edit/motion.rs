@@ -16,6 +16,13 @@
 //! [`ins_updown`] and [`ins_page`] are each one function with a direction:
 //! upstream's four are the same body twice apiece.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::cstr;
@@ -56,10 +63,10 @@ pub(crate) fn ins_start_select(c: c_int) -> bool {
         // The modifiers have to be stuffed back too, as the three-byte
         // K_SPECIAL sequence that carries them.
         let buf: [c_char; 4] = [
-            K_SPECIAL as c_char,
-            KS_MODIFIER as c_char,
-            mod_mask.get().bits() as uint8_t as c_char,
-            NUL as c_char,
+            K_SPECIAL.to_le_bytes()[0].cast_signed(),
+            KS_MODIFIER.to_le_bytes()[0].cast_signed(),
+            mod_mask.get().bits().to_le_bytes()[0].cast_signed(),
+            0,
         ];
         stuff_readbuf_len(&cstr::as_bytes(&buf)[..3]);
     }
@@ -180,9 +187,13 @@ pub(crate) fn ins_right() {
             let step = {
                 let mut lines = Lines::current();
                 let line = lines.line(cursor.lnum);
-                c_cluster_len(&line[(cursor.col as usize).min(line.len())..])
+                c_cluster_len(
+                    &line[usize::try_from(cursor.col)
+                        .unwrap_or(usize::MAX)
+                        .min(line.len())..],
+                )
             };
-            Win::current().w_cursor.col += step as ColNr;
+            Win::current().w_cursor.col += ColNr::try_from(step).unwrap_or(ColNr::MAX);
         }
 
         revins_legal.set(revins_legal.get() + 1);

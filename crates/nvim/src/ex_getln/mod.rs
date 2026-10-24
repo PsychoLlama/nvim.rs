@@ -146,7 +146,7 @@ use crate::types::{
     ExprParserFlags, Handle, HashTab, HistoryType, Integer, LineNr, Magic, MotionType, Object,
     OptInt, OptMagic, OptSet, OptVal, ParserState, Pos, ProfTime, RemapValues, SaveVEvent,
     SearchItArg, String_0, TryState, TypVal, UndoLink, UndoObjectType, VarNumber, size_t, time_t,
-    uint8_t, uint32_t,
+    uint8_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{

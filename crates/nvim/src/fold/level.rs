@@ -22,6 +22,13 @@
 //! the update then stops ([`TreeLost`]) rather than write into folds that are
 //! gone, which is what upstream's `fold_T *` did.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::charset::skip;
@@ -778,7 +785,7 @@ pub(super) fn foldlevel_indent(line: &mut FoldLine) {
     } else {
         line.lvl = get_indent_buf(buf, lnum) / get_sw_value(buf);
     }
-    let foldnestmax = win.w_onebuf_opt.wo_fdn.max(0) as c_int;
+    let foldnestmax = c_int::try_from(win.w_onebuf_opt.wo_fdn.max(0)).unwrap_or(c_int::MAX);
     line.lvl = line.lvl.min(foldnestmax);
 }
 
@@ -797,7 +804,7 @@ pub(super) fn foldlevel_expr(line: &mut FoldLine) {
     let lnum = line.lnum + line.off;
     // The current window is restored below.
     let saved = switch_to(line.win);
-    set_vim_var_nr(Vv::Lnum, lnum as VarNumber);
+    set_vim_var_nr(Vv::Lnum, VarNumber::from(lnum));
     line.start = 0;
     line.had_end = line.end;
     line.end = MAX_LEVEL + 1;
@@ -809,8 +816,8 @@ pub(super) fn foldlevel_expr(line: &mut FoldLine) {
     let (n, verdict) = eval_foldexpr(line.win);
     KeyTyped.set(save_keytyped);
     // `eval_foldexpr` writes one byte of the expression's answer, so the
-    // truncation below is exact.
-    match verdict as u8 {
+    // conversion below is exact.
+    match u8::try_from(verdict).unwrap_or(0) {
         b'a' => {
             // "a1": one level deeper from here on.
             if line.lvl >= 0 {

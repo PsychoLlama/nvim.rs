@@ -12,6 +12,13 @@
 //! Every one of them ends in `adjust_skipcol` or `coladvance`, because the
 //! cursor is not allowed to come to rest on a column that is not there.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use core::ffi::c_int;
@@ -20,7 +27,7 @@ use super::*;
 use crate::charset::ptr2cells_at;
 use crate::cstr::byte_at;
 use crate::mbyte::{c_cluster_len, char_at};
-use crate::types::{Failed, NUL};
+use crate::types::Failed;
 use crate::winlayer::Win;
 
 crate::flag_set! {
@@ -57,7 +64,7 @@ pub(crate) fn beginline(flags: BeginlineOpts) {
             // `line[at + 1] == NUL` under `FIX` is what keeps an all-white
             // line from ending with the cursor on the NUL.
             while ascii_iswhite(c_int::from(byte_at(line, at)))
-                && !(flags.has(BeginlineOpts::FIX) && byte_at(line, at + 1) == NUL as u8)
+                && !(flags.has(BeginlineOpts::FIX) && byte_at(line, at + 1) == b'\0')
             {
                 win.w_cursor.col += 1;
                 at += 1;
@@ -97,17 +104,17 @@ pub(crate) fn oneright() -> Result<(), Failed> {
     // How far the next character is, and whether it is the last one.
     let Some((l, last)) = with_cursor_tail(|tail| {
         let l = c_cluster_len(tail);
-        (l != 0).then(|| (l, byte_at(tail, l) == NUL as u8))
+        (l != 0).then(|| (l, byte_at(tail, l) == b'\0'))
     }) else {
         return Err(Failed); // already at the very end
     };
 
     // Move "l" bytes right, but do not end up on the NUL unless
     // 'virtualedit' contains "onemore".
-    if last && get_ve_flags(win) & kOptVeFlagOnemore as c_int as ::core::ffi::c_uint == 0 {
+    if last && get_ve_flags(win) & kOptVeFlagOnemore == 0 {
         return Err(Failed);
     }
-    win.w_cursor.col += l as ColNr;
+    win.w_cursor.col += ColNr::try_from(l).unwrap_or(ColNr::MAX);
 
     win.w_set_curswant = true;
     adjust_skipcol_now();
@@ -184,7 +191,7 @@ pub(crate) fn cursor_up_inner(mut win: Win, mut n: LineNr, skip_conceal: bool) {
             if lnum <= 1 {
                 break;
             }
-            n += (skip_conceal && line_concealed(win, lnum)) as LineNr;
+            n += LineNr::from(skip_conceal && line_concealed(win, lnum));
             // On entering a fold, move to its beginning -- unless this is
             // the last step and the fold is about to open anyway.
             if n > 0
@@ -245,7 +252,7 @@ pub(crate) fn cursor_down_inner(mut win: Win, mut n: c_int, skip_conceal: bool) 
             if lnum >= line_count {
                 break;
             }
-            n += (skip_conceal && line_concealed(win, lnum)) as c_int;
+            n += c_int::from(skip_conceal && line_concealed(win, lnum));
         }
         lnum = lnum.min(line_count);
     } else {
@@ -296,7 +303,9 @@ fn with_cursor_tail<R>(f: impl FnOnce(&[u8]) -> R) -> R {
     let cursor = Win::current().w_cursor;
     let mut lines = Lines::current();
     let line = lines.line(cursor.lnum);
-    f(&line[(cursor.col as usize).min(line.len())..])
+    f(&line[usize::try_from(cursor.col)
+        .unwrap_or(usize::MAX)
+        .min(line.len())..])
 }
 
 /// Whether the character `tail` starts with is printable and not a TAB --

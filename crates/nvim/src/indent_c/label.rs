@@ -12,6 +12,13 @@
 //! | `cin_first_id_amount` | [`first_id_amount`] |
 //! | `cin_get_equal_amount` | [`equal_amount`] |
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use super::*;
@@ -57,7 +64,7 @@ pub(crate) fn get_indent_nolabel(lnum: LineNr) -> c_int {
     let Some(at) = after_label(Lines::current().line(lnum)) else {
         return 0;
     };
-    line_vcol(lnum, at as ColNr)
+    line_vcol(lnum, ColNr::try_from(at).unwrap_or(ColNr::MAX))
 }
 
 /// The indent of line `lnum` ignoring any case or jump label, with the offset
@@ -153,7 +160,7 @@ pub(crate) fn first_id_amount() -> c_int {
     }
 
     let at = at + len + skip::white(&line[at + len..]);
-    line_vcol(lnum, at as ColNr)
+    line_vcol(lnum, ColNr::try_from(at).unwrap_or(ColNr::MAX))
 }
 
 /// The screen column of the first non-blank after an `=` on line `lnum`.
@@ -193,5 +200,5 @@ pub(crate) fn equal_amount(lnum: LineNr) -> c_int {
     if byte_at(line, at) == b'"' {
         at += 1; // nice alignment for continued strings
     }
-    line_vcol(lnum, at as ColNr)
+    line_vcol(lnum, ColNr::try_from(at).unwrap_or(ColNr::MAX))
 }

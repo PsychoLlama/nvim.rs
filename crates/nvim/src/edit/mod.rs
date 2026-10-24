@@ -176,7 +176,7 @@ use crate::types::ui::kUIMessages;
 use crate::types::{
     AcoSave, CharsizeArg, CmdModFlags, ColNr, INSCHAR_CTRLV, INSCHAR_FORMAT, INSCHAR_NO_FEX,
     LineNr, MB_MAXBYTES, OptInt, PUT_CURSEND, PUT_FIXINDENT, Pos, ScreenChar, String_0, Vv,
-    int32_t, int64_t, size_t, uint8_t,
+    int32_t, int64_t, size_t,
 };
 use crate::ui::{ui_cursor_shape, ui_flush, ui_has, vim_beep};
 use crate::undo::u_sync_once;

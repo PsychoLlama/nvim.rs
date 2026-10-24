@@ -5,6 +5,13 @@
 //! command line's answer.  The `*_locked` guards are here because they are
 //! what stops that window being opened from somewhere it cannot unwind.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use super::*;
@@ -138,7 +145,12 @@ pub(crate) fn open_cmdwin() -> ::core::ffi::c_int {
     cmdmod_add_flags(CmdModFlags::NOSWAPFILE);
 
     // Create a window for the command-line buffer.
-    if win_split(p_cwh() as ::core::ffi::c_int, WSP_BOT as ::core::ffi::c_int).is_err() {
+    if win_split(
+        ::core::ffi::c_int::try_from(p_cwh()).unwrap_or(::core::ffi::c_int::MAX),
+        WSP_BOT.cast_signed(),
+    )
+    .is_err()
+    {
         beep_flush();
         return Key::Ignore.code();
     }
@@ -204,7 +216,7 @@ pub(crate) fn open_cmdwin() -> ::core::ffi::c_int {
     set_option_value_give_err(kOptBufhidden, static_optval(c"wipe"), OptionSetFlags::LOCAL);
     Buf::current().b_p_ma = 1;
     Win::current().w_onebuf_opt.wo_fen = 0;
-    Win::current().w_onebuf_opt.wo_rl = cmdmsg_rl.get() as ::core::ffi::c_int;
+    Win::current().w_onebuf_opt.wo_rl = ::core::ffi::c_int::from(cmdmsg_rl.get());
     cmdmsg_rl.set(false);
 
     // Don't allow switching to another buffer.
@@ -215,7 +227,7 @@ pub(crate) fn open_cmdwin() -> ::core::ffi::c_int {
 
     let histtype = hist_char2type(cmdwin_type.get());
     if histtype == HIST_CMD || histtype == HIST_DEBUG {
-        if p_wc() == TAB as OptInt {
+        if p_wc() == OptInt::from(TAB) {
             add_map(b"<Tab>", b"<C-X><C-V>", MODE_INSERT, true);
             add_map(b"<Tab>", b"a<C-X><C-V>", MODE_NORMAL, true);
         }
@@ -413,6 +425,6 @@ pub fn is_in_cmdwin() -> bool {
 /// C's `close_buffer(NULL, buf, DOBUF_WIPE, false, false)`: wipe the command
 /// window's buffer out, window-less and without forcing.
 fn wipe_buffer(buffer: Buf) {
-    let wipe = DOBUF_WIPE as ::core::ffi::c_int;
+    let wipe = DOBUF_WIPE.cast_signed();
     close_buffer(None, buffer, wipe, false, false);
 }

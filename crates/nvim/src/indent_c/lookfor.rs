@@ -19,6 +19,13 @@
 //! Each method here answers [`Step`]: `Again` is upstream's `continue`,
 //! `Done` its `break`, at which point `amount` is the answer.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use super::*;
@@ -804,7 +811,7 @@ impl BlockScan<'_> {
             // For "} else", find the opening brace of the enclosing
             // scope, not the one from "if () {".
             if is_else_line {
-                Win::current().w_cursor.col = at as ColNr + 1;
+                Win::current().w_cursor.col = ColNr::try_from(at).unwrap_or(ColNr::MAX - 1) + 1;
             }
             let unmatched = find_start_brace().is_none_or(|pos| !find_match(LOOKFOR_IF, pos.lnum));
             if unmatched {

@@ -15,6 +15,13 @@
 //! a mapping run from `vgetc` can delete it. The mouse position is read
 //! through [`MousePos`].
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
@@ -71,7 +78,9 @@ pub(crate) fn pum_select_mouse_pos() {
         pum_selected.set(-1);
         return;
     }
-    let empty = pum_items()[idx as usize].pum_text.is_empty();
+    let empty = pum_items()[usize::try_from(idx).unwrap_or(usize::MAX)]
+        .pum_text
+        .is_empty();
     if !empty {
         // A separator has empty text and cannot be selected; the selection
         // stays where it was.
@@ -102,7 +111,7 @@ fn pum_execute_menu(menu: MenuId, mode: c_int) {
             .filter(|mp| mp.modes & mp.enabled & mode != 0);
         enabled
             .enumerate()
-            .find(|(idx, _)| *idx as c_int == pum_selected.get())
+            .find(|(idx, _)| c_int::try_from(*idx).is_ok_and(|idx| idx == pum_selected.get()))
             .map(|(_, mp)| mp.id)
     })
     .flatten();
@@ -148,7 +157,10 @@ fn pum_menu_key(c: c_int, items: &[CString]) -> MenuStep {
             // Previous selectable item; separators are skipped over.
             while pum_selected.get() > 0 {
                 pum_selected.set(pum_selected.get() - 1);
-                if !items[pum_selected.get() as usize].as_bytes().is_empty() {
+                if !items[usize::try_from(pum_selected.get()).unwrap_or(usize::MAX)]
+                    .as_bytes()
+                    .is_empty()
+                {
                     break;
                 }
             }
@@ -157,7 +169,10 @@ fn pum_menu_key(c: c_int, items: &[CString]) -> MenuStep {
         _ if c == 'j' as c_int || c == Key::Down.code() || c == Key::Mousedown.code() => {
             while pum_selected.get() < pum_size.get() - 1 {
                 pum_selected.set(pum_selected.get() + 1);
-                if !items[pum_selected.get() as usize].as_bytes().is_empty() {
+                if !items[usize::try_from(pum_selected.get()).unwrap_or(usize::MAX)]
+                    .as_bytes()
+                    .is_empty()
+                {
                     break;
                 }
             }
@@ -203,7 +218,7 @@ pub(crate) fn pum_show_popupmenu(menu: MenuId) {
     let entries = with_menu(menu, |menu| pum_menu_entries(menu, mode)).unwrap_or_default();
 
     // "popup Edit" with only Terminal-mode entries lands here.
-    pum_size.set(entries.len() as c_int);
+    pum_size.set(c_int::try_from(entries.len()).unwrap_or(c_int::MAX));
     if entries.is_empty() {
         emsg(gettext(e_menu_only_exists_in_another_mode));
         return;
@@ -236,7 +251,7 @@ pub(crate) fn pum_show_popupmenu(menu: MenuId) {
         pum_is_drawn.set(true);
         // Above the cmdline area: #23275.
         let mut grid = pum_grid_ref();
-        grid.zindex = kZIndexCmdlinePopupMenu as c_int;
+        grid.zindex = kZIndexCmdlinePopupMenu.cast_signed();
         pum_redraw();
         setcursor_mayforce(Win::current(), true);
         let c = vgetc();

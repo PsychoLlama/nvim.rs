@@ -5,6 +5,13 @@
 //! [`has_folding_win`] — which is what makes them a usable oracle for the
 //! fold tree in a headless editor.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
@@ -37,7 +44,7 @@ pub(super) fn foldclosed_both(args: &[TypVal], result: &mut TypVal, end: bool) {
         let win = Win::current();
         let closed = has_folding_win(win, lnum, Some(&mut first), Some(&mut last), false, None);
         if closed {
-            rv.write_number((if end { last } else { first }) as VarNumber);
+            rv.write_number(VarNumber::from(if end { last } else { first }));
             return;
         }
     }
@@ -58,7 +65,7 @@ pub fn f_foldclosedend(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
 pub fn f_foldlevel(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let (rv, lnum) = (result, tv_get_lnum(&args[0]));
     if lnum >= 1 && lnum <= Buf::current().b_ml.ml_line_count {
-        rv.write_number(fold_level(lnum) as VarNumber);
+        rv.write_number(VarNumber::from(fold_level(lnum)));
     }
 }
 
@@ -73,7 +80,10 @@ pub fn f_foldtext(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         get_vim_var_nr(end),
         vim_var_string(dash).unwrap_or_else(ThinCString::empty),
     );
-    let (foldstart, foldend) = (foldstart as LineNr, foldend as LineNr);
+    let (foldstart, foldend) = (
+        LineNr::try_from(foldstart).unwrap_or(0),
+        LineNr::try_from(foldend).unwrap_or(LineNr::MAX),
+    );
     if !(foldstart > 0 && foldend <= Buf::current().b_ml.ml_line_count) {
         return;
     }
@@ -113,7 +123,7 @@ pub fn f_foldtext(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let count = foldend - foldstart + 1;
     let one = c"+-%s%3d line: ";
     let many = c"+-%s%3d lines: ";
-    let txt = ngettext(one, many, count as c_ulong);
+    let txt = ngettext(one, many, c_ulong::from(count.unsigned_abs()));
     // The prefix, then the title, then the cleanup.
     let args = [FmtArg::from(dashes.as_bytes()), FmtArg::from(count)];
     let mut text = formatted(usize::MAX, txt.to_bytes(), &args);

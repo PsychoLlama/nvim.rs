@@ -20,6 +20,13 @@
 //! [`ins_del`] is `<Del>`, the forward case, and is much shorter because
 //! none of those rules apply to it.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::cstr::byte_at;
@@ -389,7 +396,11 @@ fn bs_one_shiftwidth(in_indent: bool) {
             space_vcol += size;
             (space_at, space_chr) = c_next_cluster(line, space_at, space_chr);
         }
-        (want_vcol, space_at as ColNr, space_vcol)
+        (
+            want_vcol,
+            ColNr::try_from(space_at).unwrap_or(ColNr::MAX),
+            space_vcol,
+        )
     });
 
     // Delete until at or before `want_col`.
@@ -450,9 +461,11 @@ fn bs_delete_chars(mut mode: Backspace, mincol: ColNr) {
         if mode == Backspace::Word && !ascii_isspace(cc) {
             // The start of the word.
             mode = Backspace::WordNotSpace;
-            is_word = vim_iswordc(cc) as c_int;
+            is_word = c_int::from(vim_iswordc(cc));
         } else if mode == Backspace::WordNotSpace
-            && (ascii_isspace(cc) || vim_iswordc(cc) as c_int != is_word || prev_cclass != cclass)
+            && (ascii_isspace(cc)
+                || c_int::from(vim_iswordc(cc)) != is_word
+                || prev_cclass != cclass)
         {
             // The end of the word.
             if !revins_on.get() {
@@ -558,5 +571,8 @@ fn charsize_at(line: &[u8], use_ts: bool, vcol: ColNr, at: usize, chr: CharInfo)
 fn with_cursor_line<R>(f: impl FnOnce(&[u8], usize) -> R) -> R {
     let cursor = Win::current().w_cursor;
     let mut lines = Lines::current();
-    f(lines.line(cursor.lnum), cursor.col as usize)
+    f(
+        lines.line(cursor.lnum),
+        usize::try_from(cursor.col).unwrap_or(usize::MAX),
+    )
 }

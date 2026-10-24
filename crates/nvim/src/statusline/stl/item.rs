@@ -13,6 +13,13 @@
 //!
 //! Original: `src/nvim/statusline.c`, Vim/Neovim, Vim license.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::memline::MlFlags;
@@ -254,7 +261,7 @@ pub(super) fn run(
                 // The group stack is as long as the item arena, so the item
                 // that grows it must be made room for first.
                 s.grow();
-                s.groupitems[st.groupdepth as usize] = s.curitem;
+                s.groupitems[usize::try_from(st.groupdepth).unwrap_or(usize::MAX)] = s.curitem;
                 s.push_item(StlItem {
                     start: pos,
                     minwid: spec.minwid,
@@ -455,11 +462,11 @@ fn value_of(env: &Env, s: &mut StlScratch, opt: StlOpt, pos: usize, text: &mut V
                 if env.win.w_maxscwidth == SCL_NUM && env.number_column_has_sign() {
                     return statuscol_sign(env, s, opt, pos, text, v);
                 }
-                let relnum = vim_var(Vv::Relnum) as c_int;
+                let relnum = c_int::try_from(vim_var(Vv::Relnum)).unwrap_or(c_int::MAX);
                 let nu = env.win.w_onebuf_opt.wo_nu != 0;
                 let rnu = env.win.w_onebuf_opt.wo_rnu != 0;
                 v.num = if !rnu || (nu && relnum == 0) {
-                    vim_var(Vv::Lnum) as c_int
+                    c_int::try_from(vim_var(Vv::Lnum)).unwrap_or(c_int::MAX)
                 } else {
                     relnum
                 };
@@ -653,7 +660,7 @@ fn statuscol_sign(
         minwid = env.fold_glyphs(fdc, text);
     }
     let mut signlen = 0usize;
-    for i in 0..width as usize {
+    for i in 0..usize::try_from(width).unwrap_or(0) {
         let start = pos + signlen;
         if fdc == 0 {
             let before = text.len();
@@ -752,9 +759,9 @@ fn emit(
             // The `'statuscolumn'` sign and fold items were recorded before
             // the padding, so move them along with the text.
             if let Some(fs) = v.foldsignitem {
-                let offset = *pos as isize - s.items[fs].start as isize;
+                let (to, from) = (*pos, s.items[fs].start);
                 for i in fs..s.curitem {
-                    s.items[i].start = (s.items[i].start as isize + offset) as usize;
+                    s.items[i].start = s.items[i].start.wrapping_add(to).wrapping_sub(from);
                 }
             }
         } else {

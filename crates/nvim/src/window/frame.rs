@@ -13,6 +13,13 @@
 // Nothing here dereferences anything: the tree is walked by identity, and
 // `win_float_find_altwin` — the float's answer to the same question — is safe
 // too.
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::winlayer::last_used_tab;
@@ -100,7 +107,7 @@ pub(crate) fn winframe_remove(win: Win, tabpage: Option<TabPage>, keep_unflat: b
 
     // If `win` is the last window in a row, its separator column goes with it.
     if win.w_vsep_width == 0
-        && parent.fr_layout as c_int == FR_ROW
+        && c_int::from(parent.fr_layout) == FR_ROW
         && let Some(prev) = frp_close.prev()
     {
         set_vsep(prev, false);
@@ -151,7 +158,7 @@ pub(crate) fn find_altwin(win: Win, tabpage: Option<TabPage>) -> Option<AltWin> 
     let mut wp = frame2window(frame);
     let vertical = frp_close
         .parent()
-        .is_some_and(|p| p.fr_layout as c_int == FR_COL);
+        .is_some_and(|p| c_int::from(p.fr_layout) == FR_COL);
     // A leaf frame whose window is pinned along the axis the room moves.
     let pinned = |fr: FrameRef| {
         fr.win().is_some_and(|w| {
@@ -279,12 +286,12 @@ pub(crate) fn winframe_restore(window: Win, dir: c_int, unflat_altfr: FrameRef) 
     let parent = frp.parent().expect("a restored frame has a parent");
     // Restore the separator or status line the window gave up on the way out.
     if window.w_vsep_width == 0
-        && parent.fr_layout as c_int == FR_ROW
+        && c_int::from(parent.fr_layout) == FR_ROW
         && let Some(prev) = frp.prev()
     {
         set_vsep(prev, true);
     }
-    if parent.fr_layout as c_int == FR_COL
+    if c_int::from(parent.fr_layout) == FR_COL
         && let Some(prev) = frp.prev()
     {
         if global_stl_rows() == 0 && window.w_status_height == 0 {
@@ -331,8 +338,12 @@ pub(crate) fn alt_frame(win: Win, tabpage: Option<TabPage>) -> FrameRef {
     let (Some(next), Some(prev)) = (frp.next(), frp.prev()) else {
         return frp.next().or_else(|| frp.prev()).expect("not alone");
     };
-    let row = frp.parent().is_some_and(|p| p.fr_layout as c_int == FR_ROW);
-    let col = frp.parent().is_some_and(|p| p.fr_layout as c_int == FR_COL);
+    let row = frp
+        .parent()
+        .is_some_and(|p| c_int::from(p.fr_layout) == FR_ROW);
+    let col = frp
+        .parent()
+        .is_some_and(|p| c_int::from(p.fr_layout) == FR_COL);
     // Set a preference between the next and previous frame.
     let before = (col && p_sb()) || (row && p_spr());
     let (target, other) = if before { (prev, next) } else { (next, prev) };
@@ -382,7 +393,7 @@ pub(crate) fn frame2window(frp: FrameRef) -> Win {
 
 /// Whether `window` is one of the windows in frame `frp`.
 pub(crate) fn frame_has_win(frp: FrameRef, window: Option<Win>) -> bool {
-    if frp.fr_layout as c_int == FR_LEAF {
+    if c_int::from(frp.fr_layout) == FR_LEAF {
         return frp.win() == window;
     }
     frp.children().any(|child| frame_has_win(child, window))
@@ -393,7 +404,7 @@ pub(crate) fn frame_has_win(frp: FrameRef, window: Option<Win>) -> bool {
 pub(crate) fn is_bottom_window(window: Win) -> bool {
     let mut frp = window.frame();
     while let Some(parent) = frp.parent() {
-        if parent.fr_layout as c_int == FR_COL && frp.next().is_some() {
+        if c_int::from(parent.fr_layout) == FR_COL && frp.next().is_some() {
             return false;
         }
         frp = parent;

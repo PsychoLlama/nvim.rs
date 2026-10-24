@@ -42,6 +42,13 @@
 //! The marktree walk is the state's own iterator, a field kept between rows
 //! of a redraw; each step is a [`Cursor`] built over it for that one call.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
@@ -88,7 +95,7 @@ static DECOR_STATE: GlobalCell<DecorState> = GlobalCell::new(DecorState {
     ranges_i: Vec::new(),
     current_end: 0,
     future_begin: 0,
-    free_slot_i: 0,
+    free_slot_i: None,
     new_range_ordering: 0,
     win: None,
     top_row: 0,
@@ -142,15 +149,15 @@ impl DecorState {
     }
 
     /// The range `ranges_i[i]` names.
-    fn range_at(&mut self, i: c_int) -> &mut DecorRange {
-        let slot = self.ranges_i[i as usize] as usize;
+    fn range_at(&mut self, i: usize) -> &mut DecorRange {
+        let slot = self.ranges_i[i];
         slot_range(&mut self.slots[slot])
     }
 
     /// The indices of every live entry of `ranges_i` — the active list and
     /// the future list, skipping the gap between them.
-    fn list_spans(&self) -> impl Iterator<Item = c_int> + use<> {
-        let count = self.ranges_i.len() as c_int;
+    fn list_spans(&self) -> impl Iterator<Item = usize> + use<> {
+        let count = self.ranges_i.len();
         (0..self.current_end).chain(self.future_begin..count)
     }
 
@@ -221,12 +228,12 @@ fn free_owned(range: &DecorRange) {
 ///
 /// # Panics
 /// If `i` is not an index into `ranges_i`.
-pub(crate) fn decor_range(i: c_int) -> DecorRange {
+pub(crate) fn decor_range(i: usize) -> DecorRange {
     with_state(|state| *state.range_at(i))
 }
 
 /// Sets the `draw_col` of the range `ranges_i[i]` names.
-pub(crate) fn set_decor_range_draw_col(i: c_int, draw_col: c_int) {
+pub(crate) fn set_decor_range_draw_col(i: usize, draw_col: c_int) {
     with_state(|state| state.range_at(i).draw_col = draw_col);
 }
 
@@ -276,7 +283,7 @@ impl Win {
 
             state.slots.clear();
             state.ranges_i.clear();
-            state.free_slot_i = -1;
+            state.free_slot_i = None;
             state.current_end = 0;
             state.future_begin = 0;
             state.new_range_ordering = 0;
@@ -338,8 +345,8 @@ pub fn decor_redraw_start(window: Win, top_row: c_int) -> bool {
 /// window is drawn.
 fn decor_state_pack(state: &mut DecorState) {
     let count = state.ranges_i.len();
-    let cur_end = state.current_end as usize;
-    let fut_beg = state.future_begin as usize;
+    let cur_end = state.current_end;
+    let fut_beg = state.future_begin;
 
     if fut_beg == count {
         state.ranges_i.truncate(cur_end);
@@ -374,7 +381,7 @@ pub fn decor_redraw_line(window: Win, row: c_int) {
 /// Whether there are (likely) more decorations on `row`.
 pub fn decor_has_more_decorations(row: c_int) -> bool {
     with_state(|state| {
-        if state.current_end != 0 || state.future_begin != state.ranges_i.len() as c_int {
+        if state.current_end != 0 || state.future_begin != state.ranges_i.len() {
             return true;
         }
         let k = state.mark();
@@ -466,8 +473,7 @@ fn decor_range_insert(state: &mut DecorState, mut range: DecorRange) {
 
     // Reuse a freed slot if there is one; the freelist is threaded through
     // the slots themselves.
-    let index = if state.free_slot_i >= 0 {
-        let index = state.free_slot_i as usize;
+    let index = if let Some(index) = state.free_slot_i {
         let DecorRangeSlot::Free(next) = state.slots[index] else {
             unreachable!("decor: the freelist names an occupied slot")
         };
@@ -483,11 +489,11 @@ fn decor_range_insert(state: &mut DecorState, mut range: DecorRange) {
     // stopping early on an exact position match, which puts equal positions
     // in insertion order.
     let count = state.ranges_i.len();
-    let mut begin = state.future_begin as usize;
+    let mut begin = state.future_begin;
     let mut end = count;
     while begin < end {
         let mid = begin + ((end - begin) >> 1);
-        let mr = state.range_at(mid as c_int);
+        let mr = state.range_at(mid);
         let (mrow, mcol) = (mr.start_row, mr.start_col);
         if mrow < range.start_row || (mrow == range.start_row && mcol <= range.start_col) {
             begin = mid + 1;
@@ -499,7 +505,7 @@ fn decor_range_insert(state: &mut DecorState, mut range: DecorRange) {
         }
     }
 
-    state.ranges_i.insert(begin, index as c_int);
+    state.ranges_i.insert(begin, index);
 }
 
 /// Adds the range a virtual text or virtual-lines block occupies: link
@@ -637,7 +643,7 @@ fn add_sh(
 
 /// Decides where the newly-started virtual-position range `ranges_i[i]`
 /// goes.
-pub(crate) fn decor_init_draw_col(win_col: c_int, hidden: bool, i: c_int) {
+pub(crate) fn decor_init_draw_col(win_col: c_int, hidden: bool, i: usize) {
     with_state(|state| init_draw_col(win_col, hidden, state.range_at(i)));
 }
 
@@ -736,7 +742,7 @@ fn columns_reached(
     hidden: bool,
     mut col_last: c_int,
 ) -> c_int {
-    let mut count = state.ranges_i.len() as c_int;
+    let mut count = state.ranges_i.len();
     let mut cur_end = state.current_end;
     let mut fut_beg = state.future_begin;
     let mut free_slot_i = state.free_slot_i;
@@ -746,8 +752,8 @@ fn columns_reached(
     // Promote the ranges the column has reached into the active list, each
     // inserted at its place in priority order.
     while fut_beg < count {
-        let index = indices[fut_beg as usize];
-        let r = slot_range(&mut slots[index as usize]);
+        let index = indices[fut_beg];
+        let r = slot_range(&mut slots[index]);
         if r.start_row > row || (r.start_row == row && r.start_col > col) {
             break;
         }
@@ -757,7 +763,7 @@ fn columns_reached(
         let mut end = cur_end;
         while begin < end {
             let mid = begin + ((end - begin) >> 1);
-            let mr = slot_range(&mut slots[indices[mid as usize] as usize]);
+            let mr = slot_range(&mut slots[indices[mid]]);
             if mr.priority_internal < priority
                 || (mr.priority_internal == priority && mr.ordering < ordering)
             {
@@ -767,15 +773,15 @@ fn columns_reached(
             }
         }
 
-        indices.copy_within(begin as usize..cur_end as usize, begin as usize + 1);
-        indices[begin as usize] = index;
+        indices.copy_within(begin..cur_end, begin + 1);
+        indices[begin] = index;
         cur_end += 1;
         fut_beg += 1;
     }
 
     // The next range to start bounds how far this answer holds.
     if fut_beg < count {
-        let r = slot_range(&mut slots[indices[fut_beg as usize] as usize]);
+        let r = slot_range(&mut slots[indices[fut_beg]]);
         if r.start_row == row {
             col_last = col_last.min(r.start_col - 1);
         }
@@ -789,8 +795,8 @@ fn columns_reached(
     let mut spell = None;
 
     for i in 0..cur_end {
-        let index = indices[i as usize];
-        let r = slot_range(&mut slots[index as usize]);
+        let index = indices[i];
+        let r = slot_range(&mut slots[index]);
 
         let ended = r.end_row < row || (r.end_row == row && r.end_col <= col);
         let keep = if ended {
@@ -842,13 +848,13 @@ fn columns_reached(
         }
 
         if keep {
-            indices[new_cur_end as usize] = index;
+            indices[new_cur_end] = index;
             new_cur_end += 1;
         } else {
             free_owned(r);
             // The slot becomes the head of the freelist.
-            slots[index as usize] = DecorRangeSlot::Free(free_slot_i);
-            free_slot_i = index;
+            slots[index] = DecorRangeSlot::Free(free_slot_i);
+            free_slot_i = Some(index);
         }
     }
     cur_end = new_cur_end;
@@ -858,7 +864,7 @@ fn columns_reached(
         fut_beg = cur_end;
     }
 
-    state.ranges_i.truncate(count as usize);
+    state.ranges_i.truncate(count);
     state.free_slot_i = free_slot_i;
     state.future_begin = fut_beg;
     state.current_end = cur_end;
@@ -920,9 +926,9 @@ pub fn decor_redraw_eol(window: Win, eol_attr: &mut c_int, eol_col: c_int) -> bo
 #[derive(Copy, Clone)]
 pub(crate) struct DecorLists {
     pub(crate) row: c_int,
-    pub(crate) current_end: c_int,
-    pub(crate) future_begin: c_int,
-    pub(crate) count: c_int,
+    pub(crate) current_end: usize,
+    pub(crate) future_begin: usize,
+    pub(crate) count: usize,
     pub(crate) eol_col: c_int,
 }
 
@@ -933,7 +939,7 @@ pub(crate) fn decor_lists() -> DecorLists {
         row: state.row,
         current_end: state.current_end,
         future_begin: state.future_begin,
-        count: state.ranges_i.len() as c_int,
+        count: state.ranges_i.len(),
         eol_col: state.eol_col,
     })
 }
@@ -947,23 +953,21 @@ pub(crate) fn decor_lists() -> DecorLists {
 pub(crate) fn decor_inline_virt_from(v: isize) -> bool {
     read_state(|state| {
         let row = state.row;
-        let count = state.ranges_i.len() as c_int;
+        let count = state.ranges_i.len();
         let spans = [(0, state.current_end), (state.future_begin, count)];
         spans.into_iter().any(|(from, to)| {
-            state.ranges_i[from as usize..to as usize]
-                .iter()
-                .any(|&slot| {
-                    let DecorRangeSlot::Range(item) = &state.slots[slot as usize] else {
-                        unreachable!("decor: a sorted index names a freed slot")
-                    };
-                    item.start_row == row
-                        && item.kind == kDecorKindVirtText
-                        && item.draw_col >= -1
-                        && item.start_col as isize >= v
-                        && with_decor_virt(item.data.virt(), |vt| {
-                            vt.pos == kVPosInline && vt.width != 0
-                        })
-                })
+            state.ranges_i[from..to].iter().any(|&slot| {
+                let DecorRangeSlot::Range(item) = &state.slots[slot] else {
+                    unreachable!("decor: a sorted index names a freed slot")
+                };
+                item.start_row == row
+                    && item.kind == kDecorKindVirtText
+                    && item.draw_col >= -1
+                    && item.start_col as isize >= v
+                    && with_decor_virt(item.data.virt(), |vt| {
+                        vt.pos == kVPosInline && vt.width != 0
+                    })
+            })
         })
     })
 }

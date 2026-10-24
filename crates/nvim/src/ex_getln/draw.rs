@@ -6,6 +6,13 @@
 //! direction — inserting text into the buffer and recomputing the screen
 //! columns it now occupies.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use super::*;
@@ -98,7 +105,7 @@ pub(crate) fn draw_cmdline(start: ::core::ffi::c_int, len: ::core::ffi::c_int) {
     }
 
     if ui_has(kUICmdline) {
-        cc.special_char = NUL as ::core::ffi::c_char;
+        cc.special_char = 0;
         cc.redraw_state = kCmdRedrawAll;
         return;
     }
@@ -167,16 +174,16 @@ pub fn putcmdline(c: ::core::ffi::c_char, shift: bool) {
     let mut cc = Cc::current();
     if !ui_has(kUICmdline) {
         msg_no_more.set(true);
-        msg_putchar(c as ::core::ffi::c_int);
+        msg_putchar(::core::ffi::c_int::from(c));
         if shift {
             draw_cmdline(cc.cmdpos, cc.len() - cc.cmdpos);
         }
         msg_no_more.set(false);
     } else if cc.redraw_state != kCmdRedrawAll {
         ui_call_cmdline_special_char(
-            String_0::from_bytes(cstr::until_nul(&[c as u8])),
+            String_0::from_bytes(cstr::until_nul(&[c.cast_unsigned()])),
             shift as Boolean,
-            cc.level as Integer,
+            Integer::from(cc.level),
         );
     }
     cursorcmd();
@@ -199,7 +206,7 @@ pub fn unputcmdline() {
     }
     msg_no_more.set(false);
     cursorcmd();
-    cc.special_char = NUL as ::core::ffi::c_char;
+    cc.special_char = 0;
     ui_cursor_shape();
 }
 
@@ -240,7 +247,7 @@ pub fn put_on_cmdline(text: &[u8], redraw: bool) {
     // to the character before it.
     if cc.cmdpos > 0 && cc.byte_at(cc.cmdpos) >= 0x80 {
         let back = head_off(cc.bytes(), usize::try_from(cc.cmdpos).unwrap_or(0));
-        let back = back as ::core::ffi::c_int;
+        let back = ::core::ffi::c_int::try_from(back).unwrap_or(0);
         if back != 0 {
             cc.cmdpos -= back;
             len += back;
@@ -367,7 +374,7 @@ pub fn redrawcmd() {
 
     cc.cmdspos = cmd_screencol(cc.cmdpos);
 
-    if cc.special_char as ::core::ffi::c_int != NUL {
+    if ::core::ffi::c_int::from(cc.special_char) != NUL {
         putcmdline(cc.special_char, cc.special_shift);
     }
 

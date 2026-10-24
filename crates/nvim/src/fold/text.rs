@@ -5,6 +5,13 @@
 //! latches, so a broken 'foldtext' does not raise an error per fold) and
 //! sanitising whatever it answers.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
@@ -74,10 +81,10 @@ pub(crate) fn get_foldtext(
     if c_int::from(win.w_onebuf_opt.wo_fdt.first_byte()) != NUL {
         let level = foldinfo.fi_level.clamp(0, 21);
         let dashes = vec![b'-'; usize::try_from(level).unwrap_or(0)];
-        set_vim_var_nr(Vv::Foldstart, lnum as VarNumber);
-        set_vim_var_nr(Vv::Foldend, lnume as VarNumber);
+        set_vim_var_nr(Vv::Foldstart, VarNumber::from(lnum));
+        set_vim_var_nr(Vv::Foldend, VarNumber::from(lnume));
         set_vim_var_string(Vv::Folddashes, Some(&dashes));
-        set_vim_var_nr(Vv::Foldlevel, level as VarNumber);
+        set_vim_var_nr(Vv::Foldlevel, VarNumber::from(level));
         if !GOT_FDT_ERROR.get() {
             let saved = switch_to(window);
             let saved_sctx = current_sctx.get();
@@ -124,7 +131,7 @@ pub(crate) fn get_foldtext(
         let count = lnume - lnum + 1;
         let one = c"+--%3d line folded";
         let many = c"+--%3d lines folded ";
-        let fmt = ngettext(one, many, count as c_ulong);
+        let fmt = ngettext(one, many, c_ulong::from(count.unsigned_abs()));
         format_into(&mut buf[..], fmt.to_bytes(), &[FmtArg::from(count)]);
         FoldText::Scratch
     })

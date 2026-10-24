@@ -1,6 +1,13 @@
 //! The `[` and `]` commands: the block, comment, define and method
 //! searches, the mark and fold jumps, and the paste variants.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::keycodes::Key;
@@ -41,9 +48,9 @@ fn direction(cmd_arg: &mut CmdArg) -> c_int {
 /// `Direction` constants.
 fn match_direction(cmd_arg: &mut CmdArg) -> c_int {
     if cmd_arg.cmdchar == '[' as c_int {
-        FM_BACKWARD as c_int
+        FM_BACKWARD.cast_signed()
     } else {
-        FM_FORWARD as c_int
+        FM_FORWARD.cast_signed()
     }
 }
 
@@ -185,7 +192,7 @@ fn nv_bracket_block(cmd_arg: &mut CmdArg, old_pos: Pos) {
 /// tests -- CTRL-D, `d` and `D` all end in the same four bits.
 fn nv_bracket_ident(cmd_arg: &mut CmdArg) {
     // `find_pattern_in_path` keeps the name, so it is handed a copy.
-    let name = ident_under_cursor(FIND_IDENT as c_int);
+    let name = ident_under_cursor(FIND_IDENT.cast_signed());
     if name.is_empty() {
         clear_op(cmd_arg.op());
         return;
@@ -201,16 +208,16 @@ fn nv_bracket_ident(cmd_arg: &mut CmdArg) {
         false
     };
     let what = if nchar & 0xf == 'd' as c_int & 0xf {
-        FIND_DEFINE as c_int
+        FIND_DEFINE.cast_signed()
     } else {
-        FIND_ANY as c_int
+        FIND_ANY.cast_signed()
     };
     let action = if is_upper {
-        ACTION_SHOW_ALL as c_int
+        ACTION_SHOW_ALL.cast_signed()
     } else if is_lower {
-        ACTION_SHOW as c_int
+        ACTION_SHOW.cast_signed()
     } else {
-        ACTION_GOTO as c_int
+        ACTION_GOTO.cast_signed()
     };
     // `]` starts below the cursor line, `[` at the top of the file.
     let from = if cmd_arg.cmdchar == ']' as c_int {
@@ -321,7 +328,7 @@ pub(crate) fn nv_brackets(cmd_arg: &mut CmdArg) {
             nchar,
             dir,
             n,
-            PUT_FIXINDENT as c_int != 0,
+            PUT_FIXINDENT.cast_signed() != 0,
         );
     } else if nchar == 'z' as c_int {
         if fold_move_to(false, direction(cmd_arg), cmd_arg.count1) == 0 {

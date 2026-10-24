@@ -5,6 +5,13 @@
 //! the fold-opening tail: whether 'foldopen' lets the destination's fold
 //! spring open depends on the command having been *typed*, not replayed.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::keycodes::ModMask;
@@ -34,7 +41,7 @@ use crate::search::{SEARCH_ECHO, SEARCH_MARK, SEARCH_MSG, SEARCH_OPT, do_search}
 use crate::state::virtual_active;
 use crate::types::{CmdArg, FileMark, MarkMove, MarkMoveRes, OpType, SearchItArg};
 use crate::window::goto_tabpage_lastused;
-use core::ffi::{c_int, c_uint};
+use core::ffi::c_int;
 
 /// Whether the highlight of the previous match has to be redrawn.
 ///
@@ -140,10 +147,7 @@ pub(crate) fn normal_search(
             op.motion_type = kMTLineWise;
         }
         Win::current().w_cursor.coladd = 0;
-        if op.op_type == OpType::Nop
-            && fdo_flags.get() & kOptFdoFlagSearch as c_int as c_uint != 0
-            && KeyTyped.get()
-        {
+        if op.op_type == OpType::Nop && fdo_flags.get() & kOptFdoFlagSearch != 0 && KeyTyped.get() {
             fold_open_cursor();
         }
     }
@@ -194,7 +198,7 @@ pub(crate) fn nv_mark_move_to(
 /// The 'jumpoptions' half of a mark jump's flags: whether the view is
 /// restored along with the position.
 fn view_flag() -> MarkMove {
-    if jop_flags.get() & kOptJopFlagView as c_int as c_uint != 0 {
+    if jop_flags.get() & kOptJopFlagView != 0 {
         kMarkSetView as MarkMove
     } else {
         0
@@ -208,7 +212,7 @@ fn view_flag() -> MarkMove {
 fn may_open_fold(cmd_arg: &mut CmdArg, moved: bool, old_key_typed: bool) {
     if cmd_arg.op().op_type == OpType::Nop
         && moved
-        && fdo_flags.get() & kOptFdoFlagMark as c_int as c_uint != 0
+        && fdo_flags.get() & kOptFdoFlagMark != 0
         && old_key_typed
     {
         fold_open_cursor();
@@ -273,7 +277,7 @@ pub(crate) fn nv_pcmark(cmd_arg: &mut CmdArg) {
     let fm = if cmd_arg.cmdchar == 'g' as c_int {
         get_changelist(Buf::current(), Win::current(), cmd_arg.count1)
     } else {
-        flags |= (KMarkNoContext as c_int | kMarkJumpList as c_int) as MarkMove;
+        flags |= KMarkNoContext | kMarkJumpList;
         get_jumplist(Win::current(), cmd_arg.count1)
     };
 

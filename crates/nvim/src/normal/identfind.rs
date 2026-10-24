@@ -1,6 +1,13 @@
 //! Finding the identifier a command is about to act on: the word under
 //! the cursor, the one at a given position, and the local declaration
 //! `gd`/`gD` jumps to.
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 /// The `mb_get_class` classes this file cares about: 0 is white space, 1 is
@@ -154,13 +161,13 @@ pub(crate) fn find_ident_at_pos(
     mut startcol: ColNr,
     find_type: c_int,
 ) -> Option<(ColNr, usize)> {
-    let eval = find_type & FIND_EVAL as c_int != 0;
+    let eval = find_type & FIND_EVAL.cast_signed() != 0;
     let mut lines = window.buffer().lines();
     let mut line = ScanLine(lines.line(lnum));
     let mut col: c_int = 0;
     let mut this_class: c_int = 0;
     // Pass 0 wants a word character; pass 1 will take punctuation too.
-    let mut pass = c_int::from(find_type & FIND_IDENT as c_int == 0);
+    let mut pass = c_int::from(find_type & FIND_IDENT.cast_signed() == 0);
     while pass < 2 {
         col = startcol;
         while line.at(col) != NUL {
@@ -176,7 +183,7 @@ pub(crate) fn find_ident_at_pos(
             col += line.char_len(col);
         }
         // The bracket depth the backwards walk starts with.
-        let mut bn = (line.at(col) == ']' as c_int) as c_int;
+        let mut bn = c_int::from(line.at(col) == ']' as c_int);
         if eval && line.at(col) == ']' as c_int {
             // A subscript belongs to the name in front of it, so pretend
             // the `]` is a word character.
@@ -188,7 +195,9 @@ pub(crate) fn find_ident_at_pos(
             let mut prevcol = line.prev_col(col);
             let prev_class = line.class(prevcol);
             if this_class != prev_class
-                && (pass == 0 || prev_class == CLASS_WHITE || find_type & FIND_IDENT as c_int != 0)
+                && (pass == 0
+                    || prev_class == CLASS_WHITE
+                    || find_type & FIND_IDENT.cast_signed() != 0)
                 && (!eval
                     || prevcol == 0
                     || !line.is_eval_item(&mut prevcol, &mut bn, BACKWARD as c_int))
@@ -199,14 +208,14 @@ pub(crate) fn find_ident_at_pos(
         }
         // Every word script counts as the same class from here on.
         this_class = this_class.min(CLASS_WORD);
-        if find_type & FIND_STRING as c_int == 0 || this_class == CLASS_WORD {
+        if find_type & FIND_STRING.cast_signed() == 0 || this_class == CLASS_WORD {
             break;
         }
         pass += 1;
     }
 
     if line.at(col) == NUL || (pass == 0 && this_class != CLASS_WORD) {
-        if find_type & FIND_STRING as c_int != 0 {
+        if find_type & FIND_STRING.cast_signed() != 0 {
             emsg(gettext(c"E348: No string under cursor"));
         } else {
             emsg(gettext(e_noident));
@@ -235,13 +244,13 @@ pub(crate) fn find_ident_at_pos(
         col += line.char_len(col);
     }
     debug_assert!(col >= 0);
-    Some((textcol, col as usize))
+    Some((textcol, usize::try_from(col).unwrap_or(0)))
 }
 
 /// `gd` and `gD`: jump to the local or global declaration of the identifier
 /// under the cursor.
 pub(crate) fn nv_gd(op: Op, nchar: c_int, thisblock: c_int) {
-    let word = ident_under_cursor(FIND_IDENT as c_int);
+    let word = ident_under_cursor(FIND_IDENT.cast_signed());
     let locally = nchar == 'd' as c_int;
     let found =
         !word.is_empty() && find_decl(&word, locally, thisblock != 0, SEARCH_START as c_int);
@@ -371,10 +380,10 @@ pub(crate) fn find_decl(word: &[u8], locally: bool, thisblock: bool, flags_arg: 
         if thisblock && found {
             // Refuse a match whose enclosing block closes before the
             // cursor: it is a different scope.
-            let travel = (old_pos.lnum - Win::current().w_cursor.lnum + 1) as int64_t;
+            let travel = int64_t::from(old_pos.lnum - Win::current().w_cursor.lnum + 1);
             let brace = '}' as c_int;
             // SAFETY: the current window and buffer are live.
-            let close = findmatchlimit(None, brace, FM_FORWARD as c_int, travel);
+            let close = findmatchlimit(None, brace, FM_FORWARD.cast_signed(), travel);
             if let Some(close) = close
                 && close.lnum < old_pos.lnum
             {

@@ -17,6 +17,13 @@
 //! `"` it draws at the cursor has to be taken back again by hand, on every
 //! path, which is what `need_redraw` is for.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
@@ -74,7 +81,7 @@ pub(crate) fn ins_reg() {
         // would walk the value to hand out a `&CStr`.
         if P_LANGMAP.first_byte() != 0 && (p_lrm() || typed) && KeyStuffed.get() == 0 && c >= 0 {
             if c < 256 {
-                langmap_mapchar.with(|map| map[c as usize] as c_int)
+                langmap_mapchar.with(|map| c_int::from(map[usize::try_from(c).unwrap_or(0)]))
             } else {
                 langmap_adjust_mb(c)
             }
@@ -121,16 +128,16 @@ pub(crate) fn ins_reg() {
             append_to_redobuff_char(literally);
             append_to_redobuff_char(regname);
             let fix = if literally == Ctrl_P {
-                PUT_FIXINDENT as c_int
+                PUT_FIXINDENT.cast_signed()
             } else {
                 0
             };
-            let flags = fix | PUT_CURSEND as c_int;
+            let flags = fix | PUT_CURSEND.cast_signed();
             do_put(regname, None, BACKWARD, 1, flags);
         } else if reg.read(|reg| reg.lines.len()) > 1 && is_literal_register(regname) {
             append_to_redobuff_char(Ctrl_R);
             append_to_redobuff_char(regname);
-            let flags = PUT_CURSEND as c_int;
+            let flags = PUT_CURSEND.cast_signed();
             do_put(regname, None, BACKWARD, 1, flags);
         } else if insert_reg(regname, None, literally != 0).is_err() {
             beep(kOptBoFlagRegister as ::core::ffi::c_uint);
@@ -205,10 +212,10 @@ pub(crate) fn ins_ctrl_hat() {
     if map_to_exists_mode(b"", MODE_LANGMAP, false) {
         // `:lmap` mappings exist, so the key toggles their use.
         if State.get() & MODE_LANGMAP != 0 {
-            Buf::current().b_p_iminsert = B_IMODE_NONE as OptInt;
+            Buf::current().b_p_iminsert = OptInt::from(B_IMODE_NONE);
             State.set(State.get() & !MODE_LANGMAP);
         } else {
-            Buf::current().b_p_iminsert = B_IMODE_LMAP as OptInt;
+            Buf::current().b_p_iminsert = OptInt::from(B_IMODE_LMAP);
             State.set(State.get() | MODE_LANGMAP);
         }
     }
@@ -266,7 +273,7 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: c_int, nomove: bool) -> bool {
             disabled_redraw.set(true);
             return false;
         }
-        stop_insert(Some(InsertEnd::cursor()), 1, nomove as c_int);
+        stop_insert(Some(InsertEnd::cursor()), 1, c_int::from(nomove));
         undisplay_dollar();
     }
 

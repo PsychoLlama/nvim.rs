@@ -10,6 +10,13 @@
 //!
 //! Original: `src/nvim/window.c`, Vim/Neovim, Vim license.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
@@ -40,8 +47,11 @@ use crate::winlayer::{Win, windows};
 /// The rows the frame tree has to itself: the screen minus the command line,
 /// the tab line and a global status line.
 fn frame_rows() -> c_int {
-    (Rows.get() as OptInt - p_ch() - tabline_rows() as OptInt - global_stl_rows() as OptInt)
-        as c_int
+    let rows = OptInt::from(Rows.get())
+        - p_ch()
+        - OptInt::from(tabline_rows())
+        - OptInt::from(global_stl_rows());
+    c_int::try_from(rows).unwrap_or(c_int::MIN)
 }
 
 pub fn win_new_screensize() {
@@ -49,10 +59,10 @@ pub fn win_new_screensize() {
     static old_Columns: GlobalCell<c_int> = GlobalCell::new(0);
     if old_Rows.get() != Rows.get() {
         // If 'window' uses the whole screen, keep it using the whole screen.
-        if p_window() == (old_Rows.get() - 1) as OptInt
+        if p_window() == OptInt::from(old_Rows.get() - 1)
             || (old_Rows.get() == 0 && !option_was_set(kOptWindow))
         {
-            P_WINDOW.set((Rows.get() - 1) as OptInt);
+            P_WINDOW.set(OptInt::from(Rows.get() - 1));
         }
         old_Rows.set(Rows.get());
         new_screen_rows();
@@ -149,7 +159,7 @@ fn win_info_dict(deltas: [c_int; 6]) -> DictRef {
         c"skipcol".to_bytes(),
     ];
     for (key, value) in keys.iter().zip(deltas) {
-        let tv = TypVal::Number(value as VarNumber);
+        let tv = TypVal::Number(VarNumber::from(value));
         // The key is a distinct literal, so the add cannot fail.
         let added = d_held.edit().add_tv(key, &tv);
         debug_assert!(added.is_ok(), "a fresh dictionary rejected a key");
@@ -198,7 +208,7 @@ fn scan_windows(what: &mut Scan) {
         if size_changed {
             match what {
                 Scan::Winlist(list) => {
-                    let tv = TypVal::Number(wp.handle as VarNumber);
+                    let tv = TypVal::Number(VarNumber::from(wp.handle));
                     list.edit().push(tv);
                 }
                 Scan::Counts {
@@ -392,7 +402,8 @@ pub fn win_size_save() -> Vec<c_int> {
 
 pub fn win_size_restore(sizes: &[c_int]) {
     if windows().count() * 2 + 1 != sizes.len()
-        || sizes[0] as OptInt != (frame_rows() + global_stl_rows() - last_stl_rows(false)) as OptInt
+        || OptInt::from(sizes[0])
+            != OptInt::from(frame_rows() + global_stl_rows() - last_stl_rows(false))
     {
         return;
     }

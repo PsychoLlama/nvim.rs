@@ -10,6 +10,13 @@
 //! own, then the resulting block lists are shifted back into place and
 //! concatenated.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use super::*;
@@ -72,14 +79,14 @@ pub(crate) fn diff_write_buffer(buffer: Buf, out: &mut Vec<u8>, start: LineNr, m
         if diff_flags.get() & DIFF_ICASE == 0 {
             let copy = &mut out[at..at + line.len()];
             copy.copy_from_slice(line);
-            for byte in copy.iter_mut().filter(|byte| **byte == NL as u8) {
+            for byte in copy.iter_mut().filter(|byte| **byte == b'\n') {
                 *byte = 0;
             }
             at += line.len();
         } else {
             at += fold_line(line, &mut out[at..]);
         }
-        out[at] = NL as u8;
+        out[at] = b'\n';
         at += 1;
     }
 }
@@ -96,11 +103,11 @@ fn fold_line(line: &[u8], out: &mut [u8]) -> usize {
     while at < line.len() {
         // The line's tail, read as the C string it is the end of.
         let rest = &line[at..];
-        let (folded, c_len) = if line[at] == NL as u8 {
+        let (folded, c_len) = if line[at] == b'\n' {
             (NUL, 1)
         } else {
             let c = char_at(rest);
-            (utf_fold(c), utf_char2len(c) as usize)
+            (utf_fold(c), usize::try_from(utf_char2len(c)).unwrap_or(1))
         };
         let orig_len = c_cluster_len(rest);
         // MB_MAXBYTES + 1.
@@ -188,7 +195,7 @@ fn diff_write(
 ///
 fn diff_try_update(dio: &mut DiffIo, idx_orig: c_int, excmd: Option<&mut ExArg>) {
     let tp = TabPage::current();
-    let idx_orig = idx_orig as usize;
+    let idx_orig = usize::try_from(idx_orig).unwrap_or(usize::MAX);
     let mut anchors = [[0 as LineNr; MAX_DIFF_ANCHORS as usize]; DB_COUNT as usize];
     'theend: {
         if dio.internal {
@@ -236,7 +243,7 @@ fn diff_try_update(dio: &mut DiffIo, idx_orig: c_int, excmd: Option<&mut ExArg>)
                 };
                 num_anchors = num_anchors.min(buf_num_anchors);
                 if buf_num_anchors > 0 {
-                    anchors[idx][..buf_num_anchors as usize].sort_unstable();
+                    anchors[idx][..usize::try_from(buf_num_anchors).unwrap_or(0)].sort_unstable();
                 }
             }
         }
@@ -245,7 +252,8 @@ fn diff_try_update(dio: &mut DiffIo, idx_orig: c_int, excmd: Option<&mut ExArg>)
         }
 
         // One diff per segment: `[1, a1)`, `[a1, a2)`, … `[aN, end]`.
-        for anchor_i in 0..=num_anchors as usize {
+        let num_anchors = usize::try_from(num_anchors).unwrap_or(0);
+        for anchor_i in 0..=num_anchors {
             let segment = |idx: usize| {
                 (
                     if anchor_i == 0 {
@@ -253,7 +261,7 @@ fn diff_try_update(dio: &mut DiffIo, idx_orig: c_int, excmd: Option<&mut ExArg>)
                     } else {
                         anchors[idx][anchor_i - 1]
                     },
-                    if anchor_i == num_anchors as usize {
+                    if anchor_i == num_anchors {
                         -1
                     } else {
                         anchors[idx][anchor_i] - 1
@@ -357,8 +365,10 @@ pub(crate) fn diff_update(excmd: Option<&mut ExArg>) {
     // The first two buffers in the tabpage: everything is diffed against
     // the first, so there is nothing to do without a second.
     let first_two = (0..DB_COUNT)
-        .find(|&i| tp.tp_diffbuf[i as usize].is_some())
-        .filter(|&idx_orig| (idx_orig + 1..DB_COUNT).any(|i| tp.tp_diffbuf[i as usize].is_some()));
+        .find(|&i| tp.tp_diffbuf[i.cast_unsigned() as usize].is_some())
+        .filter(|&idx_orig| {
+            (idx_orig + 1..DB_COUNT).any(|i| tp.tp_diffbuf[i.cast_unsigned() as usize].is_some())
+        });
     if let Some(idx_orig) = first_two {
         let mut diffio = DiffIo {
             internal: diff_internal() != 0,

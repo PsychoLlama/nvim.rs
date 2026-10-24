@@ -6,6 +6,13 @@
 //! closes one by hand the window becomes `w_fold_manual` and stops following
 //! the option until 'foldlevel' is set again.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::buffer_updates::buf_updates_send_changes;
@@ -140,7 +147,10 @@ pub fn fold_check_close() {
     }
     let win = Win::current();
     checkupdate(win);
-    let (lnum, level) = (win.w_cursor.lnum, win.w_onebuf_opt.wo_fdl as c_int);
+    let (lnum, level) = (
+        win.w_cursor.lnum,
+        c_int::try_from(win.w_onebuf_opt.wo_fdl).unwrap_or(c_int::MAX),
+    );
     let changed = win.with_folds(|folds| close_folds_off_cursor(folds, lnum, level));
     if changed {
         changed_window_setting(win);
@@ -392,7 +402,7 @@ pub fn delete_fold(window: Win, start: LineNr, end: LineNr, recursive: c_int, ha
         check_cursor_col(window);
     }
     if last_lnum > 0 {
-        let num_changed = (last_lnum - first_lnum) as int64_t;
+        let num_changed = int64_t::from(last_lnum - first_lnum);
         let buf = win.buffer();
         changed_lines(buf, first_lnum, 0, last_lnum, 0, false);
         buf_updates_send_changes(buf, first_lnum, num_changed, num_changed);

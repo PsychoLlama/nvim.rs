@@ -8,7 +8,7 @@ use crate::types::AutoEvent;
 use crate::types::CAR;
 use crate::types::NL;
 use crate::types::TAB;
-use core::ffi::{CStr, c_char, c_int, c_uint};
+use core::ffi::{CStr, c_int, c_uint};
 
 use std::rc::Rc;
 

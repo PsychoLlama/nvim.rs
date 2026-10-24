@@ -29,6 +29,13 @@
 //! | `cin_ends_in` | [`ends_in`] |
 //! | `cin_isterminated` | [`terminator`] |
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::winlayer::{Buf, Win};
@@ -238,7 +245,7 @@ pub(crate) fn while_closes_do(lnum: LineNr) -> bool {
         let text = lines.line(lnum);
         text.iter().position(|&b| b == b'w').unwrap_or(text.len())
     };
-    Win::current().w_cursor.col = w as ColNr;
+    Win::current().w_cursor.col = ColNr::try_from(w).unwrap_or(ColNr::MAX);
 
     let maxparen = int64_t::from(Buf::current().b_ind_maxparen);
     // SAFETY: the cursor is on a line of the current buffer, which is where
@@ -265,14 +272,21 @@ pub(crate) fn control_clause_before(line: &[u8], offset: &mut c_int) -> bool {
         return false;
     }
     at -= 1;
-    while at > 2 && ascii_iswhite(c_int::from(byte_at(line, at as usize))) {
+    while at > 2
+        && ascii_iswhite(c_int::from(byte_at(
+            line,
+            usize::try_from(at).unwrap_or(usize::MAX),
+        )))
+    {
         at -= 1;
     }
 
     // Each keyword is tested at the offset its *last* character would sit at,
     // walking further left as the words get longer.
     let starts_at = |off: c_int, word: &[u8]| {
-        line.get(off as usize..)
+        usize::try_from(off)
+            .ok()
+            .and_then(|off| line.get(off..))
             .is_some_and(|tail| tail.starts_with(word))
     };
     at -= 1;
@@ -293,7 +307,7 @@ pub(crate) fn control_clause_before(line: &[u8], offset: &mut c_int) -> bool {
     }
 
     // It is only the keyword if nothing identifier-ish precedes it.
-    let before = byte_at(line, (at - 1) as usize);
+    let before = byte_at(line, usize::try_from(at - 1).unwrap_or(usize::MAX));
     if at != 0 && vim_is_ident_char(c_int::from(before)) {
         return false;
     }
@@ -333,7 +347,7 @@ pub(crate) fn ends_a_do_while(terminated: u8) -> bool {
         if closed {
             // Found ");" at end of the line; now check there is a "while"
             // before the matching '('.
-            Win::current().w_cursor.col = at as ColNr;
+            Win::current().w_cursor.col = ColNr::try_from(at).unwrap_or(ColNr::MAX);
             if let Some(trypos) = find_match_paren(Buf::current().b_ind_maxparen) {
                 // `trypos` is a position in this buffer, so the cache answers
                 // with the line the `(` sits on.

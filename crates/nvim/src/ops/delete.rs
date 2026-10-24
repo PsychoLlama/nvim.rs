@@ -18,6 +18,13 @@
 //! edits reach extmarks and the buffer-update RPC as the single splice
 //! [`get_region_bytecount`] measured up front.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::guard::Suppress;
@@ -257,9 +264,10 @@ fn delete_block(op: &mut OpArg) -> Result<(), UndoFailed> {
                 let oldp = lines.line(lnum);
                 let at = usize::try_from(bd.textcol).unwrap_or(0).min(oldp.len());
                 let after = at + usize::try_from(bd.textlen).unwrap_or(0);
-                let mut line = Vec::with_capacity(oldp.len() + pad.max(0) as usize + 1);
+                let mut line =
+                    Vec::with_capacity(oldp.len() + usize::try_from(pad).unwrap_or(0) + 1);
                 line.extend_from_slice(&oldp[..at]);
-                line.resize(line.len() + pad as usize, b' ');
+                line.resize(line.len() + usize::try_from(pad).unwrap_or(0), b' ');
                 line.extend_from_slice(&oldp[after.min(oldp.len())..]);
                 line
             };

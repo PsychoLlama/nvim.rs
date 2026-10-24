@@ -12,6 +12,13 @@
 //! one; and a blockwise write has to measure the widest line in **cells**
 //! rather than bytes.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
@@ -82,7 +89,7 @@ enum RegContents {
 /// rather than evaluating it, which is what `getreg('=', 1, ...)` wants.
 /// `"=` may run arbitrary Vimscript, and `"*`/`"+` the clipboard provider.
 fn get_reg_contents(regname: c_int, flags: c_int) -> Option<RegContents> {
-    let as_list = flags & kGRegList as c_int != 0;
+    let as_list = flags & kGRegList.cast_signed() != 0;
     // A computed register's one string, as a one-item list when lines were
     // asked for -- where even a missing string is an item.
     let one_line = |text: Option<XString>| {
@@ -96,10 +103,10 @@ fn get_reg_contents(regname: c_int, flags: c_int) -> Option<RegContents> {
     };
     let mut regname = regname;
     if regname == '=' as c_int {
-        if flags & kGRegNoExpr as c_int != 0 {
+        if flags & kGRegNoExpr.cast_signed() != 0 {
             return None;
         }
-        if flags & kGRegExprSrc as c_int != 0 {
+        if flags & kGRegExprSrc.cast_signed() != 0 {
             return one_line(get_expr_line_src());
         }
         // Evaluating the expression may run Vimscript, which this
@@ -123,7 +130,7 @@ fn get_reg_contents(regname: c_int, flags: c_int) -> Option<RegContents> {
         }
         let lines = reg.lines.as_slice();
         if as_list {
-            let list = tv_list_alloc(lines.len() as ptrdiff_t);
+            let list = tv_list_alloc(ptrdiff_t::try_from(lines.len()).unwrap_or(ptrdiff_t::MAX));
             for line in lines {
                 list.edit().push_bytes(Some(line));
             }
@@ -147,7 +154,10 @@ fn get_reg_contents(regname: c_int, flags: c_int) -> Option<RegContents> {
 /// [`get_reg_contents`] as one owned string, `None` when the register is
 /// empty or cannot be read. `flags` must not ask for a list.
 pub(crate) fn get_reg_contents_owned(regname: c_int, flags: c_int) -> Option<XString> {
-    debug_assert!(flags & kGRegList as c_int == 0, "a list is not a string");
+    debug_assert!(
+        flags & kGRegList.cast_signed() == 0,
+        "a list is not a string"
+    );
     match get_reg_contents(regname, flags)? {
         RegContents::Text(text) => Some(text),
         RegContents::Lines(_) => unreachable!("lines were not asked for"),
@@ -157,7 +167,7 @@ pub(crate) fn get_reg_contents_owned(regname: c_int, flags: c_int) -> Option<XSt
 /// [`get_reg_contents`] as a List of lines, `None` when the register is
 /// empty or cannot be read.
 pub(crate) fn get_reg_contents_list(regname: c_int, flags: c_int) -> Option<ListRef> {
-    match get_reg_contents(regname, flags | kGRegList as c_int)? {
+    match get_reg_contents(regname, flags | kGRegList.cast_signed())? {
         RegContents::Lines(list) => Some(list),
         RegContents::Text(_) => unreachable!("lines were asked for"),
     }

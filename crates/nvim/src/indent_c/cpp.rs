@@ -15,6 +15,13 @@
 //! | `cin_is_cpp_extern_c` | [`opens_extern_c`] |
 //! | `cin_is_cpp_baseclass` | [`in_baseclass_list`] |
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use super::*;
@@ -276,7 +283,7 @@ pub(crate) fn in_baseclass_list(cached: &mut CppBaseclassCache) -> bool {
                     lookfor_ctor_init = false;
                     // The first statement starts here; line up with it.
                     if cpp_base_class {
-                        cached.lpos.col = at as ColNr;
+                        cached.lpos.col = ColNr::try_from(at).unwrap_or(ColNr::MAX);
                     }
                 }
 

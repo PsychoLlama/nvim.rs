@@ -5,6 +5,13 @@
 //! [`starts_para`] is that test -- the rest of the tree asks it too -- and
 //! [`findpar`] and [`current_par`] are the two shapes built on it.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::winlayer::{Buf, Win};
@@ -87,10 +94,11 @@ pub fn findpar(dir: c_int, mut count: c_int, what: c_int, both: bool) -> Option<
         // the motion inclusive.
         let mut lines = Lines::current();
         let line = lines.line(curr);
-        Win::current().w_cursor.col = line.len() as ColNr;
+        Win::current().w_cursor.col = ColNr::try_from(line.len()).unwrap_or(ColNr::MAX);
         if Win::current().w_cursor.col != 0 {
             let col = Win::current().w_cursor.col - 1;
-            Win::current().w_cursor.col = col - head_off(line, col as usize) as ColNr;
+            let back = head_off(line, usize::try_from(col).unwrap_or(usize::MAX));
+            Win::current().w_cursor.col = col - ColNr::try_from(back).unwrap_or(0);
             inclusive = true;
         }
     } else {
@@ -186,13 +194,13 @@ fn extend_paragraphs(mut start_lnum: LineNr, count: c_int, include: bool) -> c_i
         let mut prev_start_is_white = -1;
         for _ in 0..2 {
             start_lnum += dir as LineNr;
-            let start_is_white = line_is_white(start_lnum) as c_int;
+            let start_is_white = c_int::from(line_is_white(start_lnum));
             if prev_start_is_white == start_is_white {
                 start_lnum -= dir as LineNr;
                 break;
             }
             while start_lnum != limit(dir) {
-                if start_is_white != line_is_white(start_lnum + dir as LineNr) as c_int
+                if start_is_white != c_int::from(line_is_white(start_lnum + dir as LineNr))
                     || (start_is_white == 0
                         && line_starts_para(start_lnum + if dir > 0 { 1 } else { 0 }, 0, false))
                 {

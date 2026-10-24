@@ -6,6 +6,13 @@
 //! [`ins_compl_next_buf`]; [`get_register_completion`] is the `CTRL-X
 //! CTRL-R` source.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use super::*;
@@ -19,7 +26,7 @@ use crate::memline::Lines;
 use crate::option::split_option_part;
 use crate::path::ExpandFlags;
 use crate::strings::escaped_bytes;
-use crate::types::{FAIL, Failed, IOSIZE, NUL, OK, ShmFlag};
+use crate::types::{FAIL, Failed, IOSIZE, OK, ShmFlag};
 use crate::winlayer::BufId;
 use crate::winlayer::{Buf, Win, first_buffer, first_window};
 use std::ffi::OsStr;
@@ -103,7 +110,7 @@ pub(crate) fn ins_compl_dictionaries(dict_start: &[u8], pat: &CStr, flags: c_int
                     // pattern, we don't use it as a RE.
                     let pat = pat.to_bytes();
                     let word = pat.strip_prefix(b"\\<").unwrap_or(pat);
-                    spell_dump_compl(Some(word), regmatch.rm_ic as c_int, Some(&mut dir), 0);
+                    spell_dump_compl(Some(word), c_int::from(regmatch.rm_ic), Some(&mut dir), 0);
                 }
                 Some(files) if !files.is_empty() => {
                     ins_compl_files(&files, thesaurus, flags, &mut regmatch, &mut dir);
@@ -208,7 +215,7 @@ pub(crate) fn ins_compl_files(
             && reader.line_capped(&mut raw, LSIZE as usize)
         {
             // Read as the C string `vim_fgets` left: up to a NUL in it.
-            raw.push(NUL as u8);
+            raw.push(b'\0');
             let line_cstr = cstr::in_bytes(&raw);
             let line = line_cstr.to_bytes();
             if let Some(leader) = leader {
@@ -347,9 +354,9 @@ pub(crate) fn next_word_or_line(
     out: &mut Vec<u8>,
 ) -> Option<(usize, bool)> {
     let mut lines = Lines::in_buffer(ins_buf);
-    let (lnum, col) = (pos.lnum, pos.col as usize);
+    let (lnum, col) = (pos.lnum, usize::try_from(pos.col).unwrap_or(usize::MAX));
     let line_count = ins_buf.b_ml.ml_line_count;
-    let typed_len = compl_length.get() as usize;
+    let typed_len = usize::try_from(compl_length.get()).unwrap_or(usize::MAX);
     out.clear();
 
     if ctrl_x_mode_line_or_eval() {
@@ -797,7 +804,7 @@ pub(super) fn search_for_fuzzy_match(
             let at = if whole_line {
                 0
             } else {
-                current_pos.col as usize
+                usize::try_from(current_pos.col).unwrap_or(usize::MAX)
             };
             let line = lines.line(current_pos.lnum);
             if at < line.len() {
@@ -812,7 +819,8 @@ pub(super) fn search_for_fuzzy_match(
                     }
                 } else {
                     if let Some(found) = fuzzy_match_in_line(line, at, pattern) {
-                        current_pos.col = (found.start + found.len) as ColNr;
+                        current_pos.col =
+                            ColNr::try_from(found.start + found.len).unwrap_or(ColNr::MAX);
                         *pos = current_pos;
                         out.clear();
                         out.extend_from_slice(&line[found.start..]);

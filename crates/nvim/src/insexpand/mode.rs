@@ -5,6 +5,13 @@
 //! it.  [`set_ctrl_x_mode`] is the chord dispatch itself.  The rest are the
 //! one-line queries the editor asks about a completion in progress.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![deny(unsafe_op_in_unsafe_fn)]
 #![forbid(unsafe_code)]
 
@@ -317,7 +324,7 @@ pub(crate) fn ins_compl_leader_len() -> size_t {
 /// Upstream dereferences `compl_shown_match` here without checking it; no
 /// shown match answers false.
 pub(crate) fn ins_compl_has_multiple() -> bool {
-    shown_match().is_some_and(|shown| shown.with(|m| m.text.contains(&(NL as u8))))
+    shown_match().is_some_and(|shown| shown.with(|m| m.text.contains(&b'\n')))
 }
 
 /// `lnum` is one of the lines a multi-line match is being inserted over.
@@ -341,7 +348,7 @@ pub(crate) fn ins_compl_long_shown_match() -> bool {
         return false;
     };
     let typed = Win::current().w_cursor.col - compl_col.get();
-    shown.text_len() as ColNr > typed
+    ColNr::try_from(shown.text_len()).unwrap_or(ColNr::MAX) > typed
 }
 
 /// `'completeopt'`, buffer-local value first.
@@ -580,7 +587,8 @@ pub(crate) fn ins_compl_mode() -> Option<&'static CStr> {
     if ctrl_x_mode_not_defined_yet() || ctrl_x_mode_scroll() || compl_started.get() {
         // Upstream indexes unconditionally: the two NULL rows of the table
         // answer a null pointer, which is what the caller then handles.
-        return CTRL_X_MODE_NAMES[(ctrl_x_mode.get() & !CTRL_X_WANT_IDENT) as usize];
+        return CTRL_X_MODE_NAMES
+            [(ctrl_x_mode.get() & !CTRL_X_WANT_IDENT).cast_unsigned() as usize];
     }
     Some(c"")
 }

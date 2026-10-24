@@ -21,6 +21,13 @@
 //! | `KEY_*` | the pseudo-keys `in_cinkeys` is asked about that are not typed characters |
 //! | `CppBaseclassCache` | one line's `in_baseclass_list` answer, cached across the scan |
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::ascii::{ascii_isdigit, ascii_iswhite};

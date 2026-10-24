@@ -5,6 +5,13 @@
 //! prefix `'longest'` inserts, and the `find_word_*` / `find_line_end`
 //! helpers are the scans every buffer source walks with.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use super::*;
@@ -247,14 +254,20 @@ pub(crate) fn find_common_prefix(curbuf_only: bool) -> Option<(XString, usize)> 
             && let Some(count) = match_count.get_mut(source)
         {
             *count += 1;
-            let max_matches = cpt_sources().row(source as c_int).cs_max_matches;
+            let max_matches = cpt_sources()
+                .row(c_int::try_from(source).unwrap_or(c_int::MAX))
+                .cs_max_matches;
             if max_matches > 0 && *count > max_matches {
                 match_limit_exceeded = true;
             }
         }
 
         let from_curbuf = cur_source.is_some_and(|source| {
-            cpt_sources().row(source as c_int).cs_flag as c_int == '.' as c_int
+            c_int::from(
+                cpt_sources()
+                    .row(c_int::try_from(source).unwrap_or(c_int::MAX))
+                    .cs_flag,
+            ) == '.' as c_int
         });
         if match_limit_exceeded || (curbuf_only && !from_curbuf) {
             continue;
@@ -356,7 +369,9 @@ pub(crate) fn quote_meta(dest: &mut Vec<u8>, src: &[u8], mut len: c_int) {
         }
         dest.push(byte);
         // Copy the remaining bytes of a multibyte character.
-        let mb_len = c_cluster_len(src.get(at..).unwrap_or_default()) as c_int - 1;
+        let mb_len = c_int::try_from(c_cluster_len(src.get(at..).unwrap_or_default()))
+            .unwrap_or(c_int::MAX)
+            - 1;
         if mb_len > 0 && len >= mb_len {
             for _ in 0..mb_len {
                 len -= 1;

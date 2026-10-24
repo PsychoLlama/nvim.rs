@@ -12,6 +12,13 @@
 //! paren is on, and `cur_amount`, the column of the paren (or of what follows
 //! it).  Which one wins is the whole of the second half.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use super::*;
@@ -146,7 +153,7 @@ fn align_with_unclosed_paren(
         // matching '(' -- a `(void)` cast, say.
         let save_lnum = Win::current().w_cursor.lnum;
         Win::current().w_cursor.lnum = our_paren_pos.lnum;
-        Win::current().w_cursor.col = look_col as ColNr + 1;
+        Win::current().w_cursor.col = ColNr::try_from(look_col).unwrap_or(ColNr::MAX - 1) + 1;
         let maxparen = int64_t::from(Buf::current().b_ind_maxparen);
         // SAFETY: the cursor is just past that `(`, which is where the match
         // search starts; `findmatchlimit` takes a null `oparg` for "no
@@ -190,7 +197,7 @@ fn align_with_unclosed_paren(
                 for col in 0..our_paren_pos.col {
                     // `col` is below `our_paren_pos.col`, the column of a
                     // `(` found on this line, so it indexes inside it.
-                    match byte_at(l, col as usize) {
+                    match byte_at(l, usize::try_from(col).unwrap_or(usize::MAX)) {
                         b'(' | b'{' => n += 1,
                         b')' | b'}' if n > 1 => {
                             n -= 1;
@@ -206,11 +213,14 @@ fn align_with_unclosed_paren(
                 let mut col = our_paren_pos.col + 1;
                 // `col` starts just past the `(`, and the terminator is not
                 // white space, so the walk cannot run off the end of `l`.
-                while ascii_iswhite(c_int::from(byte_at(l, col as usize))) {
+                while ascii_iswhite(c_int::from(byte_at(
+                    l,
+                    usize::try_from(col).unwrap_or(usize::MAX),
+                ))) {
                     col += 1;
                 }
                 // In case of trailing space, stay on the paren.
-                our_paren_pos.col = if byte_at(l, col as usize) == 0 {
+                our_paren_pos.col = if byte_at(l, usize::try_from(col).unwrap_or(usize::MAX)) == 0 {
                     our_paren_pos.col + 1
                 } else {
                     col
@@ -243,7 +253,7 @@ fn align_with_unclosed_paren(
             // with a byte of its own line.
             let byte = byte_at(
                 Lines::current().line(our_paren_pos.lnum),
-                our_paren_pos.col as usize,
+                usize::try_from(our_paren_pos.col).unwrap_or(usize::MAX),
             );
             match byte {
                 b'(' => {

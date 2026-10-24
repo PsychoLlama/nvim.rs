@@ -10,6 +10,13 @@
 //!
 //! Original: `src/nvim/mouse.c`, Vim/Neovim, Vim license.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::eval::typval::TV_INITIAL_VALUE;
@@ -39,7 +46,7 @@ pub(crate) fn call_click_def_func(click_defs: ClickDefs, col: c_int, which_butto
     // lock is never read, and with the lock on the slot there is none to set.
     // The two strings are copies the array owns and releases.
     let argv = [
-        TypVal::Number(def.tabnr as VarNumber),
+        TypVal::Number(VarNumber::from(def.tabnr)),
         TypVal::Number(click_count(mod_mask.get())),
         TypVal::string_from(button_name(which_button).to_bytes()),
         TypVal::string_from(cstr::in_chars(&modifiers).to_bytes()),
@@ -85,10 +92,10 @@ pub(crate) fn get_fpos_of_mouse(mpos: &mut Pos) -> c_int {
     // winpos and height may change in win_enter()!
     if winrow >= win.w_view_height + win.w_status_height {
         // Below the window; the global status line spans the whole screen.
-        let below_screen = Rows.get() as OptInt - p_ch();
+        let below_screen = OptInt::from(Rows.get()) - p_ch();
         if mouse_grid.get() <= 1
-            && (mouse_row.get() as OptInt) < below_screen
-            && mouse_row.get() as OptInt >= below_screen - global_stl_height() as OptInt
+            && OptInt::from(mouse_row.get()) < below_screen
+            && OptInt::from(mouse_row.get()) >= below_screen - OptInt::from(global_stl_height())
         {
             return IN_STATUS_LINE;
         }

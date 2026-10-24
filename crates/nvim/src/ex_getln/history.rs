@@ -5,6 +5,13 @@
 //! typed prefix where `'wildoptions'` asks for it.  [`get_list_range`] parses
 //! the `:history` style range argument.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use super::*;
@@ -109,7 +116,7 @@ pub(crate) fn command_line_browse_history(s: &mut CommandLineState) -> KeyOutcom
     let line = if s.histype == HIST_SEARCH && hist_sep.is_some() && old_firstc != s.firstc {
         // Correct for the separator character used when the history entry
         // was added versus the one used now.
-        let firstc = s.firstc as u8;
+        let firstc = s.firstc.to_le_bytes()[0];
         let unescaped = |j: usize| j == 0 || text[j - 1] != b'\\';
         let mut line = Vec::with_capacity(text.len() + 1);
         for (j, &b) in text.iter().enumerate() {
@@ -170,10 +177,12 @@ pub(crate) fn get_list_range(
     if c == b'-' || c.is_ascii_digit() {
         let (len, num) = number(*at);
         *at += len;
-        if num > INT_MAX as VarNumber {
+        if num > VarNumber::from(INT_MAX) {
             return Err(Failed);
         }
-        *num1 = num as ::core::ffi::c_int;
+        #[allow(clippy::cast_possible_truncation, reason = "C's `(int)` narrowing")]
+        let num = num as ::core::ffi::c_int;
+        *num1 = num;
         first = true;
     }
 
@@ -184,10 +193,12 @@ pub(crate) fn get_list_range(
         let (len, num) = number(*at);
         if len > 0 {
             *at = skipwhite(*at + len);
-            if num > INT_MAX as VarNumber {
+            if num > VarNumber::from(INT_MAX) {
                 return Err(Failed);
             }
-            *num2 = num as ::core::ffi::c_int;
+            #[allow(clippy::cast_possible_truncation, reason = "C's `(int)` narrowing")]
+            let num = num as ::core::ffi::c_int;
+            *num2 = num;
         } else if !first {
             return Err(Failed);
         }

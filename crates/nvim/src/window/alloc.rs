@@ -10,6 +10,13 @@
 //!
 //! Original: `src/nvim/window.c`, Vim/Neovim, Vim license.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::r#move::WinValid;
@@ -374,7 +381,7 @@ pub(crate) fn win_alloc_firstwin(oldwin: Option<Win>) -> Result<(), Failed> {
     match oldwin {
         None => {
             // Very first window: make a new empty buffer for it.
-            let buf = buflist_new(None, None, 1, BLN_LISTED as c_int);
+            let buf = buflist_new(None, None, 1, BLN_LISTED.cast_signed());
             let Some(mut buf) = buf else {
                 leave_curbuf();
                 return Err(Failed);
@@ -396,7 +403,8 @@ pub(crate) fn win_alloc_firstwin(oldwin: Option<Win>) -> Result<(), Failed> {
     let mut frame = attach_frame(win);
     topframe.set(Some(frame.id()));
     frame.fr_width = Columns.get();
-    frame.fr_height = Rows.get() - p_ch() as c_int - global_stl_rows();
+    frame.fr_height =
+        Rows.get() - c_int::try_from(p_ch()).unwrap_or(c_int::MAX) - global_stl_rows();
     Ok(())
 }
 
@@ -405,7 +413,7 @@ pub(crate) fn attach_frame(window: Win) -> FrameRef {
     let mut window = window;
     let mut frp = new_frame();
     window.w_frame = Some(frp.id());
-    frp.fr_layout = FR_LEAF as c_char;
+    frp.fr_layout = c_char::try_from(FR_LEAF).unwrap_or(0);
     frp.fr_win = Some(window.id());
     frp
 }
@@ -413,9 +421,11 @@ pub(crate) fn attach_frame(window: Win) -> FrameRef {
 pub fn win_init_size() {
     let mut win = first_win();
     let mut top = current_topframe();
-    let rows =
-        (Rows.get() as OptInt - p_ch() - tabline_rows() as OptInt - global_stl_rows() as OptInt)
-            as c_int;
+    let rows = OptInt::from(Rows.get())
+        - p_ch()
+        - OptInt::from(tabline_rows())
+        - OptInt::from(global_stl_rows());
+    let rows = c_int::try_from(rows).unwrap_or(c_int::MIN);
     win.w_height = rows;
     win.w_prev_height = rows;
     win.w_view_height = win.w_height - win.w_winbar_height;
@@ -521,7 +531,7 @@ pub(crate) fn win_free(window: Win, tabpage: Option<TabPage>) {
     }
     window.w_lines = Vec::new();
     for i in 0..window.w_tagstacklen {
-        tagstack_clear_entry(&mut window.w_tagstack[i as usize]);
+        tagstack_clear_entry(&mut window.w_tagstack[usize::try_from(i).unwrap_or(usize::MAX)]);
     }
     window.w_localdir = None;
     window.w_prevdir = None;
@@ -599,7 +609,7 @@ pub fn win_free_grid(window: Win, reinit: bool) {
 pub(crate) fn free_grid(window: Win, reinit: bool) {
     let mut window = window;
     if window.w_grid_alloc.handle != 0 && ui_has(kUIMultigrid) {
-        ui_call_grid_destroy(window.w_grid_alloc.handle as Integer);
+        ui_call_grid_destroy(Integer::from(window.w_grid_alloc.handle));
     }
     window.w_grid_alloc.free();
     if reinit {

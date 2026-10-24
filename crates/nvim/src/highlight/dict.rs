@@ -1,3 +1,10 @@
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 //! Highlight attributes as API values.
@@ -60,7 +67,8 @@ pub fn hl_get_attr_by_id(attr_id: Integer, rgb: Boolean) -> Result<ApiDict, Erro
         return Err(why);
     }
     let mut retval = ApiDict::with_capacity(HLATTRS_DICT_SIZE);
-    let attrs = syn_attr2entry(attr_id as c_int);
+    // The range check above keeps the id inside the table.
+    let attrs = syn_attr2entry(c_int::try_from(attr_id).unwrap_or(0));
     hlattrs2dict(&mut retval, None, attrs, rgb, false);
     Ok(retval)
 }
@@ -328,7 +336,7 @@ pub fn dict2hlattrs(
         if !(0..=100).contains(&given) {
             return Err(err_out_of_range(c"blend"));
         }
-        blend = given as int32_t;
+        blend = int32_t::try_from(given).unwrap_or(0);
     }
 
     if dict.link.is_some() || dict.link_global.is_some() {
@@ -344,10 +352,16 @@ pub fn dict2hlattrs(
         };
         match global {
             Some(id) => {
-                *link_id = id as c_int;
+                #[allow(clippy::cast_possible_truncation, reason = "C's `(int)` narrowing")]
+                let id = id as c_int;
+                *link_id = id;
                 mask |= HlAttrFlags::GLOBAL;
             }
-            None => *link_id = dict.link.unwrap_or(0) as c_int,
+            None => {
+                #[allow(clippy::cast_possible_truncation, reason = "C's `(int)` narrowing")]
+                let id = dict.link.unwrap_or(0) as c_int;
+                *link_id = id;
+            }
         }
     }
 
@@ -392,6 +406,7 @@ pub fn dict2hlattrs(
 
     // Re-bias a colour number for storage: 0 is "unset", so every real
     // number sits one higher.
+    #[allow(clippy::cast_possible_truncation, reason = "C's `(int16_t)` narrowing")]
     let bias = |c: int32_t| if c == -1 { 0 } else { (c + 1) as int16_t };
     let mut hlattrs = HLATTRS_INIT;
     if use_rgb {
@@ -424,7 +439,9 @@ pub fn dict2hlattrs(
 /// in the error message for a value that is neither a string nor an integer.
 fn object_to_color(val: &Object, key: &CStr, rgb: bool) -> Result<int32_t, Error> {
     if let Some(n) = val.as_integer() {
-        return Ok(n as int32_t);
+        #[allow(clippy::cast_possible_truncation, reason = "C's `(int)` narrowing")]
+        let n = n as int32_t;
+        return Ok(n);
     }
     let Some(str) = val.as_string() else {
         let expected = c"String or Integer";

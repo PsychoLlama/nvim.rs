@@ -5,6 +5,13 @@
 //! [`ins_compl_bs`] and [`ins_compl_addleader`] are the two that edit the
 //! leader and re-filter what is shown.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use super::*;
@@ -31,13 +38,16 @@ pub fn ins_compl_bs() -> c_int {
     let p_off = {
         let mut lines = Lines::current();
         let line = lines.line(Win::current().w_cursor.lnum);
-        let col = (Win::current().w_cursor.col as usize).min(line.len());
+        let col = usize::try_from(Win::current().w_cursor.col)
+            .unwrap_or(usize::MAX)
+            .min(line.len());
         let back = if col > 0 {
             head_off(line, col - 1) + 1
         } else {
             1
         };
-        col as c_int - back as c_int
+        let to_c = |n: usize| c_int::try_from(n).unwrap_or(c_int::MAX);
+        to_c(col) - to_c(back)
     };
     let from_start = p_off - compl_col.get();
 
@@ -209,7 +219,7 @@ pub(crate) fn ins_compl_set_original_text(text: &[u8]) {
 /// Append the next character of the shown match to the leader.
 pub fn ins_compl_addfrommatch() {
     let shown = shown_match().expect("a running completion has a shown match");
-    let len = (Win::current().w_cursor.col - compl_col.get()) as usize;
+    let len = usize::try_from(Win::current().w_cursor.col - compl_col.get()).unwrap_or(usize::MAX);
     let text = if shown.text_len() <= len {
         // The match is too short. When still at the original match use the
         // first entry that matches the leader.
@@ -318,7 +328,7 @@ pub(crate) fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool) -> bo
             None
         };
         if let Some(text) = text.map(ComplStr::to_vec) {
-            let compl_len = get_compl_len() as usize;
+            let compl_len = usize::try_from(get_compl_len()).unwrap_or(usize::MAX);
             if text.len() > compl_len {
                 ins_compl_insert_text(&text[compl_len..]);
             }

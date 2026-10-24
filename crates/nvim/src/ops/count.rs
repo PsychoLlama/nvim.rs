@@ -15,6 +15,13 @@
 //! API use to size a splice; it does not walk the text at all, only the line
 //! lengths.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::memline::MlFlags;
@@ -43,7 +50,7 @@ fn line_count_info(
 ) -> VarNumber {
     // The walk stops at the end of the line, which `byte_at` answers as the
     // NUL the pointer form stopped on.
-    let byte = |i: VarNumber| c_int::from(byte_at(line, i as usize));
+    let byte = |i: VarNumber| c_int::from(byte_at(line, usize::try_from(i).unwrap_or(usize::MAX)));
     let mut words = 0;
     let mut chars = 0;
     let mut is_word = false;
@@ -66,10 +73,10 @@ fn line_count_info(
         // every step: `cluster_len` opens with the same test, but it is too
         // large to inline into this loop and the call alone costs more than
         // the answer. Ask it here, and leave everything else to the callee.
-        let rest = &line[i as usize..];
+        let rest = &line[usize::try_from(i).unwrap_or(usize::MAX)..];
         i += match rest {
             [first, next, ..] if *first < 0x80 && *next < 0x80 => 1,
-            _ => cluster_len(rest) as VarNumber,
+            _ => VarNumber::try_from(cluster_len(rest)).unwrap_or(VarNumber::MAX),
         };
     }
 
@@ -328,7 +335,7 @@ fn count_selected_line(
     if lnum == Buf::current().line_count()
         && Buf::current().b_p_eol == 0
         && (Buf::current().b_p_bin != 0 || Buf::current().b_p_fixeol == 0)
-        && (tail as c_int) < len
+        && c_int::try_from(tail).unwrap_or(c_int::MAX) < len
     {
         counts.bytes_cursor -= VarNumber::from(eol_size);
     }
@@ -351,10 +358,10 @@ fn report_counts(counts: &PosCounts, selection: Option<&Selection>) -> String {
         words_cursor: wc,
     } = counts;
     let same_as_bytes = cc == bc && chars == bytes;
-    let lines = Buf::current().line_count() as int64_t;
+    let lines = int64_t::from(Buf::current().line_count());
 
     let Some(sel) = selection else {
-        let lnum = Win::current().w_cursor.lnum as int64_t;
+        let lnum = int64_t::from(Win::current().w_cursor.lnum);
         let (col, virtcol) = (
             Win::current().w_cursor.col + 1,
             Win::current().w_virtcol + 1,

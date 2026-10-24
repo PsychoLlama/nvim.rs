@@ -8,6 +8,13 @@
 //! indenting active at all" test 'cindent'/'indentexpr' share, and
 //! [`f_cindent`] is `cindent()`.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use super::*;
@@ -34,7 +41,7 @@ pub(crate) fn cindent_on() -> bool {
 /// reindent", and anything else the plain "reindent afterwards" form -- which
 /// matches every item that is *not* prefixed `*`.
 fn wants(when: c_int, look: u8) -> bool {
-    match when as u8 {
+    match when.to_le_bytes()[0] {
         b'*' => look == b'*',
         b'!' => look == b'!',
         _ => look != b'*',
@@ -165,7 +172,7 @@ pub fn in_cinkeys(keytyped: c_int, when: c_int, line_is_empty: bool) -> bool {
                 .map_or(look.len(), |comma| i + comma);
             let len = end - i;
             if (try_match || try_match_word)
-                && Win::current().w_cursor.col >= len as ColNr
+                && Win::current().w_cursor.col >= ColNr::try_from(len).unwrap_or(ColNr::MAX)
                 && word_matches(keytyped, look, i..end, icase, try_match, try_match_word)
             {
                 return true;
@@ -305,7 +312,8 @@ fn word_matches(
     // "0=word" also requires that only blanks precede the word.
     if matched && try_match_word && !try_match {
         let white = getwhitecols_curline();
-        return white == (Win::current().w_cursor.col as isize) - len as isize;
+        let col = isize::try_from(Win::current().w_cursor.col).unwrap_or(isize::MAX);
+        return white == col - len.cast_signed();
     }
     matched
 }

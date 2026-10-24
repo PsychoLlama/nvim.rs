@@ -6,6 +6,13 @@
 //! does.  The `cpt_sources_*` half tracks the per-`'complete'`-entry state
 //! those functions need.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use super::*;
@@ -124,7 +131,7 @@ impl CptCallbacks {
     /// The number of slots; zero when `'complete'` has never been set
     /// globally.
     pub(crate) fn count(self) -> c_int {
-        CPT_CB.with(Vec::len) as c_int
+        c_int::try_from(CPT_CB.with(Vec::len)).unwrap_or(c_int::MAX)
     }
 
     /// Replace the cached array with a copy of `src`. An empty `src`
@@ -318,7 +325,7 @@ pub(crate) fn leading_number(text: &[u8]) -> c_int {
 /// The number of entries in `'complete'` — every non-empty comma-separated
 /// segment counts as one.
 pub(crate) fn get_cpt_sources_count() -> c_int {
-    cpt_entries(Buf::current().b_p_cpt.bytes()).count() as c_int
+    c_int::try_from(cpt_entries(Buf::current().b_p_cpt.bytes()).count()).unwrap_or(c_int::MAX)
 }
 
 /// Parse the `'completefunc'` value and set the callback function; the value
@@ -626,7 +633,7 @@ pub(crate) fn prepare_cpt_compl_funcs() {
     // Make a copy of 'cpt' in case the buffer gets wiped out.
     let cpt = strip_caret_numbers(Buf::current().b_p_cpt.bytes());
     for (idx, entry) in cpt_entries(&cpt).enumerate() {
-        let idx = idx as c_int;
+        let idx = c_int::try_from(idx).unwrap_or(c_int::MAX);
         let Some(cb) = get_callback_if_cpt_func(entry.at, idx) else {
             cpt_sources().update(idx, |source| source.cs_startcol = -3);
             continue;
@@ -649,7 +656,7 @@ pub(crate) fn prepare_cpt_compl_funcs() {
 /// Advance `cpt_sources_index` by one, or report E684 and fail.
 pub(crate) fn advance_cpt_sources_index_safe() -> Result<(), Failed> {
     let idx = cpt_sources().index();
-    if idx >= 0 && idx < cpt_sources().len() as c_int - 1 {
+    if idx >= 0 && idx < c_int::try_from(cpt_sources().len()).unwrap_or(c_int::MAX) - 1 {
         cpt_sources().set_index(idx + 1);
         return Ok(());
     }
@@ -664,7 +671,7 @@ pub(crate) fn setup_cpt_sources() {
     let rows = cpt_entries(&option)
         .map(|entry| {
             let mut source = CptSource {
-                cs_flag: entry.at[0] as c_char,
+                cs_flag: entry.at[0].cast_signed(),
                 ..CPT_SOURCE_INIT
             };
             if let Some(caret) = entry.part.iter().position(|&b| b == b'^') {

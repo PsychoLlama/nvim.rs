@@ -11,12 +11,19 @@
 //! derived afresh at each use because the register and abbreviation machinery
 //! re-enters and can replace the whole structure.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use super::*;
 use crate::cstr;
 use crate::guard::Lock;
-use crate::keycodes::{Ctrl_A, Ctrl_BSL, Ctrl_C, Ctrl_F, Ctrl_L, Ctrl_N, Ctrl_P, Ctrl_V, Ctrl_W};
+use crate::keycodes::{Ctrl_A, Ctrl_BSL, Ctrl_C, Ctrl_F, Ctrl_L, Ctrl_P, Ctrl_V, Ctrl_W};
 use crate::memory::XString;
 use core::ffi::CStr;
 
@@ -412,7 +419,7 @@ pub fn cmdline_paste_str(s: &CStr, literally: bool) {
             || c == CAR
             || c == NL
             || c == Ctrl_L
-            || (c == Ctrl_BSL && cstr::byte_at(text, at) == Ctrl_N as u8)
+            || (c == Ctrl_BSL && cstr::byte_at(text, at) == 0x0e)
         {
             stuff_char(Ctrl_V);
         }
@@ -433,7 +440,7 @@ pub(crate) fn ccheck_abbr(c: ::core::ffi::c_int) -> bool {
     // whitespace first. This actually accepts any mark.
     let mut spos = line
         .iter()
-        .position(|&ch| !ascii_iswhite(ch as ::core::ffi::c_int))
+        .position(|&ch| !ascii_iswhite(::core::ffi::c_int::from(ch)))
         .unwrap_or(line.len());
     if line.len() - spos > 5
         && line[spos] == b'\''
@@ -451,7 +458,11 @@ pub(crate) fn ccheck_abbr(c: ::core::ffi::c_int) -> bool {
     let col = usize::try_from(cc.cmdpos).unwrap_or(0);
     let text = cc.text_bytes();
     let text = text[..col.min(text.len())].to_vec();
-    check_abbr(c, text, spos as ::core::ffi::c_int)
+    check_abbr(
+        c,
+        text,
+        ::core::ffi::c_int::try_from(spos).unwrap_or(::core::ffi::c_int::MAX),
+    )
 }
 
 // ---------------------------------------------------------------------------

@@ -1,3 +1,10 @@
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
@@ -117,7 +124,7 @@ pub(crate) fn hl_attr(hlf: c_int) -> c_int {
 /// One entry of an `HLF_*` table.
 #[inline(always)]
 fn table_attr(table: &HlAttrTable, hlf: c_int) -> c_int {
-    table.get_field(|attrs| &attrs[hlf as usize])
+    table.get_field(|attrs| &attrs[usize::try_from(hlf).unwrap_or(usize::MAX)])
 }
 
 /// Forgets every namespace's group definitions. Only the free-all-memory
@@ -358,7 +365,7 @@ pub fn hl_get_ui_attr(ns_id: c_int, idx: c_int, final_id: c_int, optional: bool)
     // set a blend itself.
     if (HLF_PNI..=HLF_PST).contains(&idx) {
         if attrs.hl_blend == -1 && p_pb() > 0 {
-            attrs.hl_blend = p_pb() as c_int;
+            attrs.hl_blend = c_int::try_from(p_pb()).unwrap_or(c_int::MAX);
         }
         if pum_drawn() {
             must_redraw_pum.set(true);
@@ -420,13 +427,13 @@ pub fn update_window_hl(mut window: Win, invalid: bool) {
         0
     };
     if window.w_floating {
-        let winbl = window.w_onebuf_opt.wo_winbl as c_int;
+        let winbl = c_int::try_from(window.w_onebuf_opt.wo_winbl).unwrap_or(c_int::MAX);
         window.w_hl_attr_normal = hl_apply_winblend(winbl, window.w_hl_attr_normal);
     }
 
     window.w_config.shadow = false;
     if window.w_floating && window.w_config.border {
-        let winbl = window.w_onebuf_opt.wo_winbl as c_int;
+        let winbl = c_int::try_from(window.w_onebuf_opt.wo_winbl).unwrap_or(c_int::MAX);
         for i in 0..8 {
             let id = window.w_config.border_hl_ids[i];
             let mut attr = if id != 0 {
@@ -454,7 +461,7 @@ pub fn update_window_hl(mut window: Win, invalid: bool) {
         inactive
     };
     if window.w_floating {
-        let winbl = window.w_onebuf_opt.wo_winbl as c_int;
+        let winbl = c_int::try_from(window.w_onebuf_opt.wo_winbl).unwrap_or(c_int::MAX);
         window.w_hl_attr_normalnc = hl_apply_winblend(winbl, window.w_hl_attr_normalnc);
     }
 }
@@ -474,11 +481,11 @@ pub fn update_ns_hl(ns_id: c_int) {
     // entry is resolved before the table is written.
     let table = NS_HL_ATTR.with_mut(|tables| tables.entry(ns_id).or_default().0);
     for hlf in 1..HLF_COUNT {
-        let id = syn_check_group(hlf_names[hlf as usize].to_bytes());
+        let id = syn_check_group(hlf_names[usize::try_from(hlf).unwrap_or(usize::MAX)].to_bytes());
         // These two are the groups where "undefined" is meaningful.
         let optional = hlf == HLF_INACTIVE || hlf == HLF_NFLOAT;
         let attr = hl_get_ui_attr(ns_id, hlf, id, optional);
-        table.with_mut(|attrs| attrs[hlf as usize] = attr);
+        table.with_mut(|attrs| attrs[usize::try_from(hlf).unwrap_or(usize::MAX)] = attr);
     }
 
     // NOOOO! You cannot just pretend that "Normal" is just like any other

@@ -15,6 +15,13 @@
 //!
 //! Original: `src/nvim/statusline.c`, Vim/Neovim, Vim license.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::option::vars::{P_SLOC, P_TAL, p_sc};
@@ -112,7 +119,8 @@ pub fn draw_tabline() {
     // Clicking outside of any tab has no effect, so the whole line is
     // cleared first.
     debug_assert!(
-        tab_page_click_defs.with(|line| line.cells.len()) >= Columns.get() as usize,
+        tab_page_click_defs.with(|line| line.cells.len())
+            >= usize::try_from(Columns.get()).unwrap_or(0),
         "tab_page_click_defs_size >= (size_t)Columns"
     );
     with_tab_click_defs(|defs| clear_click_defs(defs));
@@ -136,7 +144,7 @@ fn draw_default_tabline() {
     let use_sep_chars = t_colors.get() < 8;
 
     view_line_start(default_gridview(), 0);
-    let count = tabs().count() as c_int;
+    let count = c_int::try_from(tabs().count()).unwrap_or(c_int::MAX);
     let tabwidth = if count > 0 {
         (Columns.get() - 1 + count / 2) / count
     } else {
@@ -232,7 +240,7 @@ fn draw_default_tabline() {
 /// or `None` when it does not fit, which ends the whole line.
 fn paint_wincount(col: c_int, wincount: c_int, attr: c_int, cwp: Win) -> Option<c_int> {
     let name = wincount.to_string();
-    let len = name.len() as c_int;
+    let len = c_int::try_from(name.len()).unwrap_or(c_int::MAX);
     if col + len >= Columns.get() - 3 {
         return None;
     }
@@ -270,7 +278,7 @@ fn paint_showcmd(col: c_int, tabcount: c_int, attr: c_int) {
     let sc = showcmd_buf.get();
     paint_text(
         Columns.get() - width - c_int::from(tabcount > 1) * 2,
-        crate::cstr::as_bytes(sc.cells(width as usize)),
+        crate::cstr::as_bytes(sc.cells(usize::try_from(width).unwrap_or(0))),
         attr,
     );
 }

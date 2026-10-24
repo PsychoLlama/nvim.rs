@@ -9,6 +9,13 @@
 //!
 //! Original: `src/nvim/window.c`, Vim/Neovim, Vim license.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::types::AutoEvent;
@@ -111,7 +118,11 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
     }
 
     let bufref = BufRef::of_opt(win.buffer_or_none());
-    let action = if free_buf { DOBUF_UNLOAD as c_int } else { 0 };
+    let action = if free_buf {
+        DOBUF_UNLOAD.cast_signed()
+    } else {
+        0
+    };
     let did_decrement = close_win_buffer(win, action, true);
 
     if valid_win(win.id()).is_some()
@@ -156,7 +167,7 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
     let no_split = Lock::held(&split_disallowed);
     let was_floating = win.w_floating;
     if ui_has(kUIMultigrid) {
-        ui_call_win_close(win.w_grid_alloc.handle as Integer);
+        ui_call_win_close(Integer::from(win.w_grid_alloc.handle));
     }
     if win.w_floating {
         drop_grid(win);
@@ -230,9 +241,8 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
     }
 
     if close_curwin {
-        let flags = WEE_CURWIN_INVALID as c_int
-            | WEE_TRIGGER_ENTER_AUTOCMDS as c_int
-            | WEE_TRIGGER_LEAVE_AUTOCMDS as c_int;
+        let flags = (WEE_CURWIN_INVALID | WEE_TRIGGER_ENTER_AUTOCMDS | WEE_TRIGGER_LEAVE_AUTOCMDS)
+            .cast_signed();
         enter_ext(wp, flags);
         if other_buffer {
             // careful: after this `wp` and `win` may be invalid!
@@ -514,7 +524,11 @@ pub(crate) fn close_othertab(win: Win, free_buf: bool, tabpage: TabPage, force: 
         bufref = BufRef::of_opt(win.buffer_or_none());
         if let Some(buf) = win.buffer_or_none() {
             // Close the link to the buffer.
-            let action = if free_buf { DOBUF_UNLOAD as c_int } else { 0 };
+            let action = if free_buf {
+                DOBUF_UNLOAD.cast_signed()
+            } else {
+                0
+            };
             did_decrement = close_buffer(Some(win), buf, action, false, true);
         }
 
@@ -560,7 +574,7 @@ pub(crate) fn close_othertab(win: Win, free_buf: bool, tabpage: TabPage, force: 
         // must hear that its grid closed, and the compositor must not keep
         // a float's grid it would otherwise draw from after the free.
         if ui_has(kUIMultigrid) {
-            ui_call_win_close(win.w_grid_alloc.handle as Integer);
+            ui_call_win_close(Integer::from(win.w_grid_alloc.handle));
         }
         if win.w_floating {
             drop_grid(win);

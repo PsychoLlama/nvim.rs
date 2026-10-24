@@ -7,6 +7,13 @@
 //! out the windows, and fires `VimResized` -- up to three times, because an
 //! autocommand may change `'lines'` or `'columns'` again.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![deny(unsafe_op_in_unsafe_fn)]
 #![forbid(unsafe_code)]
 
@@ -52,7 +59,7 @@ pub fn default_grid_alloc() -> bool {
     // at the old size, because the wrong size is a crash.
     grid_alloc(&mut grid, Rows.get(), Columns.get(), true, true);
 
-    let columns = Columns.get() as usize;
+    let columns = usize::try_from(Columns.get()).unwrap_or(0);
     tab_page_click_defs.with_mut(|line| {
         clear_click_defs(line);
         if line.cells.len() < columns {
@@ -158,15 +165,15 @@ pub extern "C" fn screen_resize(width: c_int, height: c_int) {
         // Clamp 'cmdheight' so the windows still fit, on this tab page and
         // on every other one.
         let max_p_ch = Rows.get() - min_rows(TabPage::current()) + 1;
-        if p_ch() > 0 && p_ch() > max_p_ch as OptInt {
-            P_CH.set(max_p_ch.max(1) as OptInt);
+        if p_ch() > 0 && p_ch() > OptInt::from(max_p_ch) {
+            P_CH.set(OptInt::from(max_p_ch.max(1)));
             TabPage::current().tp_ch_used = p_ch();
         }
         for mut tp in winlayer::tabs() {
             if !tp.is_current() {
                 let max_tp_ch = Rows.get() - min_rows(tp) + 1;
-                if tp.tp_ch_used > 0 && tp.tp_ch_used > max_tp_ch as OptInt {
-                    tp.tp_ch_used = max_tp_ch.max(1) as OptInt;
+                if tp.tp_ch_used > 0 && tp.tp_ch_used > OptInt::from(max_tp_ch) {
+                    tp.tp_ch_used = OptInt::from(max_tp_ch.max(1));
                 }
             }
         }
@@ -175,10 +182,10 @@ pub extern "C" fn screen_resize(width: c_int, height: c_int) {
     // `check_screensize` may have clamped them.
     let height = Rows.get();
     let width = Columns.get();
-    P_LINES.set(height as OptInt);
-    P_COLUMNS.set(width as OptInt);
+    P_LINES.set(OptInt::from(height));
+    P_COLUMNS.set(OptInt::from(width));
 
-    ui_call_grid_resize(1, width as Integer, height as Integer);
+    ui_call_grid_resize(1, Integer::from(width), Integer::from(height));
 
     // An autocommand may change Rows or Columns again, so the allocation is
     // retried -- but at most three times, or an autocommand that always

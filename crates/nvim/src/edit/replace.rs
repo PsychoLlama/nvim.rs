@@ -20,6 +20,13 @@
 //! are the delete primitives that know about all of this: each has a
 //! Replace-mode arm that unwinds the stack instead of deleting text.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::cstr::byte_at;
@@ -87,14 +94,13 @@ fn del_char_after_col(limit_col: c_int) -> bool {
         // again if a composing character took it too far back.
         mb_adjust_cursor();
         while Win::current().w_cursor.col < limit_col {
-            let l = cursor_tail(char_len) as ColNr;
+            let l = ColNr::try_from(cursor_tail(char_len)).unwrap_or(ColNr::MAX);
             if l == 0 {
                 break; // end of line
             }
             Win::current().w_cursor.col += l;
         }
-        if cursor_tail(|tail| byte_at(tail, 0)) == NUL as u8 || Win::current().w_cursor.col == ecol
-        {
+        if cursor_tail(|tail| byte_at(tail, 0)) == b'\0' || Win::current().w_cursor.col == ecol {
             return false;
         }
         let _ = del_bytes(ecol - Win::current().w_cursor.col, false, true);
@@ -116,7 +122,7 @@ fn del_char_after_col(limit_col: c_int) -> bool {
 /// borrow checker cannot say so for us.
 pub(crate) fn replace_push(bytes: &[u8]) {
     replace_stack.with_mut(|stack| {
-        let above = replace_offset.get() as size_t;
+        let above = size_t::try_from(replace_offset.get()).unwrap_or(0);
         if stack.len() < above {
             return; // nothing to do
         }
@@ -127,7 +133,7 @@ pub(crate) fn replace_push(bytes: &[u8]) {
 
 /// Push a NUL, the separator between entries.
 pub(crate) fn replace_push_nul() {
-    replace_push(&[NUL as u8]);
+    replace_push(b"\0");
 }
 
 /// Look at the top of the stack, popping it if it is a NUL.
@@ -240,7 +246,7 @@ pub(crate) fn replace_do_bs(limit_col: c_int) {
             let step = c_cluster_len(&p);
             let mut vcol = start_vcol;
             let mut i = 0;
-            while i < ins_len as usize {
+            while i < usize::try_from(ins_len).unwrap_or(0) {
                 let at = &p[i.min(p.len())..(i + CHAR_CELLS_SPAN).min(p.len())];
                 vcol += win_chartabsize(Win::current(), at, vcol);
                 i += step;
@@ -269,5 +275,7 @@ fn cursor_tail<R>(f: impl FnOnce(&[u8]) -> R) -> R {
     let cursor = Win::current().w_cursor;
     let mut lines = Lines::current();
     let line = lines.line(cursor.lnum);
-    f(&line[(cursor.col as usize).min(line.len())..])
+    f(&line[usize::try_from(cursor.col)
+        .unwrap_or(usize::MAX)
+        .min(line.len())..])
 }

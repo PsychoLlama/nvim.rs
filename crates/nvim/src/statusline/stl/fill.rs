@@ -8,6 +8,13 @@
 //!
 //! Original: `src/nvim/statusline.c`, Vim/Neovim, Vim license.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use core::ffi::c_int;
@@ -95,10 +102,9 @@ pub(super) fn truncate(
 
         // Move the items back, less the byte the `<` took; anything inside
         // the removed run collapses onto the `<`.
-        let item_offset = trunc_len as isize - 1;
         for i in item_idx..built.evalstart + built.itemcnt {
             if s.items[i].start >= trunc_end {
-                s.items[i].start = (s.items[i].start as isize - item_offset) as usize;
+                s.items[i].start = (s.items[i].start + 1).wrapping_sub(trunc_len);
             } else {
                 s.items[i].start = trunc;
             }
@@ -144,8 +150,9 @@ pub(super) fn spread(
     // Every separator but the last gets an equal share; the last one takes
     // whatever the division left over.
     let slack = maxwidth - built.width;
-    let standard_spaces = slack / count as c_int;
-    let final_spaces = slack - standard_spaces * (count as c_int - 1);
+    let count_c = c_int::try_from(count).unwrap_or(c_int::MAX);
+    let standard_spaces = slack / count_c;
+    let final_spaces = slack - standard_spaces * (count_c - 1);
 
     for l in 0..count {
         let cells = if l == count - 1 {
@@ -153,7 +160,7 @@ pub(super) fn spread(
         } else {
             standard_spaces
         };
-        let dislocation = cells as usize * fill.len();
+        let dislocation = usize::try_from(cells).unwrap_or(0) * fill.len();
         let start = s.items[s.separators[l]].start;
         let seploc = start + dislocation;
 

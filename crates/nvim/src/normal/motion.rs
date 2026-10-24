@@ -1,6 +1,13 @@
 //! Cursor motions that are not searches: by character, word, line,
 //! screen line, paragraph and sentence.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::cstr;
@@ -208,7 +215,7 @@ pub(crate) fn nv_scroll(cmd_arg: &mut CmdArg) {
             while n > 0 && win.w_cursor.lnum > win.w_topline {
                 let lnum = win.w_cursor.lnum;
                 has_folding(win, lnum, Some(&mut win.w_cursor.lnum), None);
-                n += decor_conceal_line(wp, win.w_cursor.lnum as c_int, true) as c_int;
+                n += c_int::from(decor_conceal_line(wp, win.w_cursor.lnum as c_int, true));
                 if win.w_cursor.lnum > win.w_topline {
                     win.w_cursor.lnum -= 1;
                 }
@@ -348,7 +355,8 @@ pub(crate) fn nv_right(cmd_arg: &mut CmdArg) {
             if virtual_active(win) {
                 let _ = oneright();
             } else {
-                win.w_cursor.col += with_cursor_rest(cluster_len) as ColNr;
+                win.w_cursor.col +=
+                    ColNr::try_from(with_cursor_rest(cluster_len)).unwrap_or(ColNr::MAX);
             }
         }
         n -= 1;
@@ -399,7 +407,8 @@ pub(crate) fn nv_left(cmd_arg: &mut CmdArg) {
                     || cmd_arg.op().op_type == OpType::Change)
                     && !Buf::current().lines().line(win.w_cursor.lnum).is_empty()
                 {
-                    win.w_cursor.col += with_cursor_rest(cluster_len) as ColNr;
+                    win.w_cursor.col +=
+                        ColNr::try_from(with_cursor_rest(cluster_len)).unwrap_or(ColNr::MAX);
                     cmd_arg.outcome |= Outcome::NO_ADJ_OP_END;
                 }
             } else {

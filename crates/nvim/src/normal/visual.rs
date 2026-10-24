@@ -6,6 +6,13 @@
 //! covers, and `unadjust_for_sel` puts that back before anything reads the
 //! area again.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::ops::Op;
@@ -45,7 +52,7 @@ use crate::textobject::{
     current_block, current_par, current_quote, current_sent, current_tagblock, current_word,
 };
 use crate::types::{CmdArg, ColNr, LineNr, NUL, OpType, Outcome, Pos};
-use core::ffi::{c_int, c_uint};
+use core::ffi::c_int;
 
 use crate::keycodes::{Ctrl_Q, Ctrl_V};
 use crate::memory::XString;
@@ -354,9 +361,15 @@ pub(crate) fn get_visual_text(cmd_arg: Option<&mut CmdArg>) -> Option<VisualText
     let (at, mut len) = if visual_mode().is_line() {
         (0, line.len())
     } else if lt(cursor, anchor) {
-        (cursor.col, (anchor.col - cursor.col + 1) as usize)
+        (
+            cursor.col,
+            usize::try_from(anchor.col - cursor.col + 1).unwrap_or(usize::MAX),
+        )
     } else {
-        (anchor.col, (cursor.col - anchor.col + 1) as usize)
+        (
+            anchor.col,
+            usize::try_from(cursor.col - anchor.col + 1).unwrap_or(usize::MAX),
+        )
     };
     let from = usize::try_from(at).unwrap_or(0).min(line.len());
     let tail = &line[from..];
@@ -466,12 +479,14 @@ pub(crate) fn v_visop(cmd_arg: &mut CmdArg) {
             Win::current().w_curswant = MAXCOL as ColNr;
         }
     }
-    let typed = cmd_arg.cmdchar as u8;
-    cmd_arg.cmdchar = VISUAL_OPS
-        .iter()
-        .find(|(from, _)| *from == typed)
-        .expect("v_visop is only reached for a character in VISUAL_OPS")
-        .1 as c_int;
+    let typed = cmd_arg.cmdchar.to_le_bytes()[0];
+    cmd_arg.cmdchar = c_int::from(
+        VISUAL_OPS
+            .iter()
+            .find(|(from, _)| *from == typed)
+            .expect("v_visop is only reached for a character in VISUAL_OPS")
+            .1,
+    );
     nv_operator(cmd_arg);
 }
 
@@ -632,10 +647,7 @@ pub(crate) fn n_start_visual_mode(c: c_int) {
     // SAFETY: `curwin` is the current window.
     // A block selection starting inside a TAB starts at the column the
     // cursor is displayed at, not at the TAB's first column.
-    if c == Ctrl_V
-        && get_ve_flags(Win::current()) & kOptVeFlagBlock as c_int as c_uint != 0
-        && gchar_cursor() == TAB
-    {
+    if c == Ctrl_V && get_ve_flags(Win::current()) & kOptVeFlagBlock != 0 && gchar_cursor() == TAB {
         validate_virtcol(Win::current());
         coladvance(Win::current(), Win::current().w_virtcol);
     }

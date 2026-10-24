@@ -10,6 +10,13 @@
 //! `prepare_tagpreview` and edited into a scratch buffer. Both end up in
 //! [`pum_preview_set_text`].
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use super::*;
@@ -71,7 +78,7 @@ fn pum_preview_set_text(mut win: Win, info: &[u8]) -> (LineNr, c_int) {
         lines.push(Object::string(String_0::from_bytes(line)));
     }
 
-    let lnum = lines.len() as LineNr;
+    let lnum = LineNr::try_from(lines.len()).unwrap_or(LineNr::MAX);
     let replacement = Array::from(lines);
 
     // Setting the lines is the editor's own doing, not a plugin's.
@@ -245,7 +252,7 @@ fn pum_show_info(info: &[u8], repeat: c_int, use_float: bool, prev_selected: c_i
     // A preview split is 3 lines by default, less if 'previewheight' is.
     g_do_tagpreview.set(PUM_PREVIEW_HEIGHT);
     if p_pvh() > 0 && p_pvh() < OptInt::from(g_do_tagpreview.get()) {
-        g_do_tagpreview.set(p_pvh() as c_int);
+        g_do_tagpreview.set(c_int::try_from(p_pvh()).unwrap_or(c_int::MAX));
     }
     let redraw_off = Suppress::redraw();
     // An autocommand that syncs undo here does weird things to the tree.
@@ -321,7 +328,7 @@ fn pum_fill_info(
 
     // Grow a preview split to fit the text, up to 'previewheight'.
     if repeat == 0 && !use_float {
-        let lnum = lnum.min(p_pvh() as LineNr);
+        let lnum = lnum.min(LineNr::try_from(p_pvh()).unwrap_or(LineNr::MAX));
         if LineNr::from(Win::current().w_height) < lnum {
             win_setheight(lnum as c_int);
             resized = true;

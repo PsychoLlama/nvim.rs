@@ -5,6 +5,13 @@
 //! `nextwild` once per configured stage, and decides whether the popup menu
 //! or the wildmenu comes up.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use super::*;
@@ -21,7 +28,7 @@ use crate::types::{ExpandContext, Failed, OK};
 /// comma-separated stages — and [`check_opt_wim`] fills the unused tail with
 /// a copy of the last one, so every index answers something.
 pub(crate) fn wim_has(idx: ::core::ffi::c_int, flag: OptWimFlags) -> bool {
-    wim_flags.get()[idx as usize] as OptWimFlags & flag != 0
+    OptWimFlags::from(wim_flags.get()[usize::try_from(idx).unwrap_or(usize::MAX)]) & flag != 0
 }
 
 /// One `'wildchar'` press: run the current `'wildmode'` stage.
@@ -58,8 +65,8 @@ pub(crate) fn command_line_wildchar_complete(s: &mut CommandLineState) -> KeyOut
         let wim_full = wim_has(0, kOptWimFlagFull);
 
         s.wim_index = 0;
-        if s.c as OptInt == p_wc()
-            || s.c as OptInt == p_wcm()
+        if OptInt::from(s.c) == p_wc()
+            || OptInt::from(s.c) == p_wcm()
             || s.c == Key::Wild.code()
             || s.c == Ctrl_Z
         {
@@ -123,7 +130,7 @@ pub(crate) fn command_line_wildchar_complete(s: &mut CommandLineState) -> KeyOut
             } else if wim_list || (p_wmnu() && (wim_full || wim_noselect)) {
                 show_matches(p_wmnu(), wim_list, wim_noselect);
             } else {
-                vim_beep(kOptBoFlagWildmode as ::core::ffi::c_int as ::core::ffi::c_uint);
+                vim_beep(kOptBoFlagWildmode);
             }
 
             redrawcmd();
@@ -186,7 +193,8 @@ pub fn check_opt_wim() -> Result<(), Failed> {
         let Some(&(_, flag)) = WIM_WORDS.iter().find(|(name, _)| *name == word) else {
             return Err(Failed);
         };
-        new_wim_flags[idx] |= flag as uint8_t;
+        // Every 'wildmode' flag is a bit of the low byte.
+        new_wim_flags[idx] |= uint8_t::try_from(flag).unwrap_or(0);
 
         p += len;
         if after == 0 {

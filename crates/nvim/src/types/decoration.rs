@@ -104,8 +104,8 @@ pub type HlMode = ::core::ffi::c_uint;
 pub enum DecorRangeSlot {
     /// An occupied slot; one of the two sorted index lists names it.
     Range(DecorRange),
-    /// A free slot, holding the index of the next free one, or −1.
-    Free(::core::ffi::c_int),
+    /// A free slot, holding the index of the next free one, if any.
+    Free(Option<usize>),
 }
 /// What a `DecorRange` draws. Its `kind` says the same thing and more --
 /// it tells inline virtual text from virtual lines, which share a link.
@@ -189,10 +189,10 @@ pub struct DecorState {
     /// The `DecorRange` slab, with a freelist through `next_free_i`.
     pub slots: Vec<DecorRangeSlot>,
     /// Two sorted index lists over `slots`; see `decoration::state`.
-    pub ranges_i: Vec<::core::ffi::c_int>,
-    pub current_end: ::core::ffi::c_int,
-    pub future_begin: ::core::ffi::c_int,
-    pub free_slot_i: ::core::ffi::c_int,
+    pub ranges_i: Vec<usize>,
+    pub current_end: usize,
+    pub future_begin: usize,
+    pub free_slot_i: Option<usize>,
     pub new_range_ordering: ::core::ffi::c_int,
     /// The window being drawn, between `decor_redraw_reset` and the end of
     /// the redraw. An id: a decoration provider's Lua runs in between.

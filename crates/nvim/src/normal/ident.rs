@@ -1,6 +1,13 @@
 //! The identifier under the cursor, and the commands that look it up:
 //! tags, `:help`, 'keywordprg', a declaration, a file name.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use super::identfind::find_ident_under_cursor;
@@ -43,7 +50,7 @@ use crate::state::mode::restart_edit;
 use crate::strings::shellescape;
 use crate::tag::do_tag;
 use crate::tag::state::g_tag_at_cursor;
-use crate::types::{CmdArg, ColNr, LineNr, NUL, int64_t};
+use crate::types::{CmdArg, ColNr, LineNr, int64_t};
 use crate::undo::curbuf_is_changed;
 use crate::window::check_can_set_curbuf_disabled;
 use core::ffi::{CStr, c_int};
@@ -217,7 +224,12 @@ pub(crate) fn nv_ident(cmd_arg: &mut CmdArg) {
             // `*` and `#` fall back to the string under the cursor when
             // there is no identifier there.
             let searchy = cmdchar == '*' as c_int || cmdchar == '#' as c_int;
-            let find_type = FIND_IDENT as c_int | if searchy { FIND_STRING as c_int } else { 0 };
+            let find_type = FIND_IDENT.cast_signed()
+                | if searchy {
+                    FIND_STRING.cast_signed()
+                } else {
+                    0
+                };
             let Some((col, len)) = find_ident_under_cursor(find_type) else {
                 clear_op(cmd_arg.op());
                 return;
@@ -306,7 +318,7 @@ pub(crate) fn nv_ident(cmd_arg: &mut CmdArg) {
         let word = cstr::until_nul(text.get(start..).unwrap_or_default());
         let word = &word[..n.min(word.len())];
         let quoted = if kp_ex {
-            fnameescape(&cstr::owned(word), VSE_NONE as c_int)
+            fnameescape(&cstr::owned(word), VSE_NONE.cast_signed())
         } else {
             shellescape(word, true, true)
         };
@@ -321,7 +333,7 @@ pub(crate) fn nv_ident(cmd_arg: &mut CmdArg) {
         }
         // The search goes into the history as if it had been typed.
         init_history();
-        add_to_history(HIST_SEARCH as c_int, &out, true, NUL as u8);
+        add_to_history(HIST_SEARCH as c_int, &out, true, b'\0');
         let dir = if cmdchar == '*' as c_int { '/' } else { '?' } as c_int;
         normal_search(cmd_arg, dir, &out, 0, None);
     } else {
@@ -359,7 +371,7 @@ pub(crate) fn nv_tagpop(cmd_arg: &mut CmdArg) {
     if check_clear_op_quit(cmd_arg.op()) {
         return;
     }
-    do_tag(c"", DT_POP as c_int, cmd_arg.count1, 0, true);
+    do_tag(c"", DT_POP.cast_signed(), cmd_arg.count1, 0, true);
 }
 
 /// `gf`, `gF` and `[f`: edit the file named under the cursor.

@@ -16,6 +16,13 @@
 //!
 //! Original: `src/nvim/mouse.c`, Vim/Neovim, Vim license.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
@@ -280,7 +287,7 @@ pub(crate) fn do_mouse(
 
     // When dragging the mouse above the window, scroll down.
     if is_drag && mouse_row.get() < 0 && !landed.status_line {
-        scroll_redraw(false as c_int, 1);
+        scroll_redraw(0, 1);
         mouse_row.set(0);
     }
 
@@ -481,7 +488,7 @@ fn middle_button_insert(op: Option<Op>, mut regname: c_int, fixindent: bool) -> 
         return Some(false);
     }
 
-    let flags = if fixindent { PUT_FIXINDENT } else { 0 } as c_int | PUT_CURSEND as c_int;
+    let flags = (if fixindent { PUT_FIXINDENT } else { 0 } | PUT_CURSEND).cast_signed();
     do_put(regname, reg.as_ref(), BACKWARD as c_int, 1, flags);
     // Repeat it with CTRL-R CTRL-O r or CTRL-R CTRL-P r
     append_to_redobuff_char(Ctrl_R);
@@ -685,7 +692,7 @@ fn dispatch_action(a: Action, win: Win) {
         if restart_edit.get() != 0 {
             where_paste_started.set(win.w_cursor);
         }
-        let flags = if fixindent { PUT_FIXINDENT } else { 0 } as c_int | PUT_CURSEND as c_int;
+        let flags = (if fixindent { PUT_FIXINDENT } else { 0 } | PUT_CURSEND).cast_signed();
         do_put(regname, reg.as_ref(), dir, count, flags);
         return;
     }
@@ -794,8 +801,10 @@ fn multi_click(mut win: Win, op: Option<Op>, is_click: bool, is_drag: bool, mods
                 with_visual(find_start_of_word);
                 // Bytes of the character under the cursor, `None` at the end
                 // of the line.
-                let under =
-                    with_cursor_rest(|rest| (!rest.is_empty()).then(|| cluster_len(rest) as c_int));
+                let under = with_cursor_rest(|rest| {
+                    (!rest.is_empty())
+                        .then(|| c_int::try_from(cluster_len(rest)).unwrap_or(c_int::MAX))
+                });
                 if let Some(bytes) = under.filter(|_| sel_exclusive()) {
                     win.w_cursor.col += bytes;
                 }

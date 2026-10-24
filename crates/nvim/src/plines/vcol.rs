@@ -1,3 +1,10 @@
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 //! Virtual columns of a position.
@@ -13,6 +20,13 @@ use crate::option::vars::P_SEL;
 
 use crate::normal::{visual_active, visual_anchor};
 use crate::winlayer::PosRef;
+
+/// Whether byte offset `at` lies past column `end_col`; every offset is past
+/// a negative one.
+#[inline(always)]
+fn past_end(at: usize, end_col: ColNr) -> bool {
+    usize::try_from(end_col).map_or(true, |end| at > end)
+}
 
 /// Virtual columns of `pos`: the first column the character occupies,
 /// where the cursor sits on it (the last column of a tab, in Normal mode
@@ -44,7 +58,7 @@ pub(crate) fn getvcol(window: Win, pos: &mut Pos) -> (ColNr, ColNr, ColNr) {
             }
             char_size = charsize_fast_impl(window, line, at, use_tabstop, vcol, chr.value);
             let (next, next_chr) = c_next_cluster(line, at, chr);
-            if next as isize > end_col as isize {
+            if past_end(next, end_col) {
                 break;
             }
             (at, chr) = (next, next_chr);
@@ -62,7 +76,7 @@ pub(crate) fn getvcol(window: Win, pos: &mut Pos) -> (ColNr, ColNr, ColNr) {
                 break;
             }
             let (next, next_chr) = c_next_cluster(line, at, chr);
-            if next as isize > end_col as isize {
+            if past_end(next, end_col) {
                 break;
             }
             (at, chr) = (next, next_chr);
@@ -70,8 +84,12 @@ pub(crate) fn getvcol(window: Win, pos: &mut Pos) -> (ColNr, ColNr, ColNr) {
         }
     }
 
-    if byte_at(line, at) == NUL as u8 && end_col < MAXCOL && end_col as isize > at as isize {
-        pos.col = at as ColNr;
+    if byte_at(line, at) == b'\0'
+        && end_col < MAXCOL
+        && !past_end(at, end_col)
+        && usize::try_from(end_col) != Ok(at)
+    {
+        pos.col = ColNr::try_from(at).unwrap_or(ColNr::MAX);
     }
 
     let head = char_size.head;

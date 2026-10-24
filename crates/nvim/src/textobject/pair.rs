@@ -6,6 +6,13 @@
 //! start/end pattern to `do_searchpair`. The retry loops in both are
 //! Visual-mode extension -- an object already selected whole grows outwards.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::normal::{VisualMode, set_visual_anchor, set_visual_mode, visual_active, visual_anchor};
@@ -110,7 +117,7 @@ pub fn current_block(
             break;
         }
         pos = if unbounded {
-            findmatchlimit(None, what, FM_FORWARD as c_int, 0)
+            findmatchlimit(None, what, FM_FORWARD.cast_signed(), 0)
         } else {
             findmatch(None, what)
         };
@@ -249,7 +256,7 @@ fn in_html_tag(end_tag: bool) -> bool {
     };
     let mut pos = Pos {
         lnum: cursor.lnum,
-        col: at as ColNr,
+        col: ColNr::try_from(at).unwrap_or(ColNr::MAX),
         coladd: 0,
     };
     // The matching `>` must not be preceded by a `/`.
@@ -258,7 +265,10 @@ fn in_html_tag(end_tag: bool) -> bool {
             return false;
         }
         // `inc` left `pos` on a character of the current buffer.
-        let c = c_int::from(byte_at(Lines::current().line(pos.lnum), pos.col as usize));
+        let c = c_int::from(byte_at(
+            Lines::current().line(pos.lnum),
+            usize::try_from(pos.col).unwrap_or(usize::MAX),
+        ));
         if c == '>' as c_int {
             break;
         }

@@ -5,6 +5,13 @@
 //! [`super::handlekey::command_line_handle_key`].  [`command_line_changed`]
 //! is the other half: what runs after a key that edited the line.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
@@ -93,7 +100,7 @@ fn command_line_handle_ctrl_bsl(s: &mut CommandLineState) -> CtrlBsl {
 
         if let Some(p) = p {
             let text = p.as_cstr().to_bytes();
-            let len = text.len() as ::core::ffi::c_int;
+            let len = ::core::ffi::c_int::try_from(text.len()).unwrap_or(::core::ffi::c_int::MAX);
             realloc_cmdbuff(cc, len + 1);
             cc.cmdbuff.write_text(text);
 
@@ -265,7 +272,7 @@ pub(crate) fn command_line_execute(
 
     // When there are matching completions to select, <S-Tab> works like
     // CTRL-P (unless 'wildchar' is <S-Tab>).
-    if s.c as OptInt != p_wc() && s.c == Key::STab.code() && match_count() > 0 {
+    if OptInt::from(s.c) != p_wc() && s.c == Key::STab.code() && match_count() > 0 {
         s.c = Ctrl_P;
     }
 
@@ -276,7 +283,7 @@ pub(crate) fn command_line_execute(
 
     // Which wildmenu gesture, if any, the key was already used for.
     let mut wild_type = None;
-    let key_is_wc = (s.c as OptInt == p_wc() && KeyTyped.get()) || s.c as OptInt == p_wcm();
+    let key_is_wc = (OptInt::from(s.c) == p_wc() && KeyTyped.get()) || OptInt::from(s.c) == p_wcm();
     if (cmdline_pum_active() || wild_menu_showing.get() != 0 || s.did_wild_list)
         && !key_is_wc
         && match_count() > 0
@@ -386,8 +393,8 @@ pub(crate) fn command_line_execute(
     }
 
     // Completion for 'wildchar', 'wildcharm' and wildtrigger().
-    if (s.c as OptInt == p_wc() && !s.gotesc && KeyTyped.get())
-        || s.c as OptInt == p_wcm()
+    if (OptInt::from(s.c) == p_wc() && !s.gotesc && KeyTyped.get())
+        || OptInt::from(s.c) == p_wcm()
         || s.c == Key::Wild.code()
         || s.c == Ctrl_Z
     {
@@ -476,7 +483,7 @@ pub(crate) fn do_autocmd_cmdlinechanged(firstc: ::core::ffi::c_int) {
     }
     let mut err: Error = Error::none();
     let mut save_v_event: SaveVEvent = SAVE_V_EVENT_INIT;
-    let firstcbuf = [firstc as u8, 0];
+    let firstcbuf = [firstc.to_le_bytes()[0], 0];
     let firstcbuf = cstr::in_bytes(&firstcbuf);
     let dict = cmdline_event_dict(&mut save_v_event, firstcbuf);
 

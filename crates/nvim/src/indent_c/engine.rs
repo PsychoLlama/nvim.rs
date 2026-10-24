@@ -17,6 +17,13 @@
 //! Every one of them may move the cursor and unlock the current line; the
 //! cursor is put back here, once, on the way out.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use super::*;

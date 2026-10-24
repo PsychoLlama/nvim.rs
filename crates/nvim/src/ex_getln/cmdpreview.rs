@@ -5,6 +5,13 @@
 //! either in place or in a split preview window, and restores.  The
 //! `cmdpreview_save_*` / `cmdpreview_restore_*` pairs are that save-restore.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use super::*;
@@ -77,7 +84,12 @@ pub(crate) fn cmdpreview_open_buf() -> Option<Buf> {
 pub(crate) fn cmdpreview_open_win(cmdpreview_buf: Buf) -> Option<Win> {
     let save_curwin = Win::current();
 
-    if win_split(p_cwh() as ::core::ffi::c_int, WSP_BOT as ::core::ffi::c_int).is_err() {
+    if win_split(
+        ::core::ffi::c_int::try_from(p_cwh()).unwrap_or(::core::ffi::c_int::MAX),
+        WSP_BOT.cast_signed(),
+    )
+    .is_err()
+    {
         return None;
     }
 
@@ -90,8 +102,8 @@ pub(crate) fn cmdpreview_open_win(cmdpreview_buf: Buf) -> Option<Win> {
     let mut tstate: TryState = TRY_STATE_INIT;
     try_enter(&mut tstate);
     let result = do_buffer(
-        DOBUF_GOTO as ::core::ffi::c_int,
-        DOBUF_FIRST as ::core::ffi::c_int,
+        DOBUF_GOTO.cast_signed(),
+        DOBUF_FIRST.cast_signed(),
         FORWARD as ::core::ffi::c_int,
         cmdpreview_buf.handle,
         0,
@@ -193,7 +205,7 @@ pub(crate) fn cmdpreview_prepare(cpinfo: &mut CpInfo) {
 
             u_clearall(buf);
             // Make sure every change can be undone.
-            buf.b_p_ul = INT_MAX as OptInt;
+            buf.b_p_ul = OptInt::from(INT_MAX);
         }
 
         let mut cp_wininfo = CP_WIN_INFO_INIT;
@@ -241,7 +253,14 @@ pub(crate) fn cmdpreview_restore_state(cpinfo: &mut CpInfo) {
 
         buf.b_changed = cp_bufinfo.save_b_changed;
 
-        extmark_clear(buf, cmdpreview_ns.get() as uint32_t, 0, 0, MAXLNUM, MAXCOL);
+        extmark_clear(
+            buf,
+            cmdpreview_ns.get().cast_unsigned(),
+            0,
+            0,
+            MAXLNUM,
+            MAXCOL,
+        );
 
         // Undo all the changes the preview made to this buffer.
         if buf.b_u_seq_cur != cp_bufinfo.undo_info.save_b_u_seq_cur {
@@ -251,12 +270,13 @@ pub(crate) fn cmdpreview_restore_state(cpinfo: &mut CpInfo) {
                 buf.b_u_newhead
             };
             let chain = header_chain(buf, start, |uh| uh.next);
-            let count = chain.count() as ::core::ffi::c_int;
+            let count =
+                ::core::ffi::c_int::try_from(chain.count()).unwrap_or(::core::ffi::c_int::MAX);
 
             let mut aco = AcoSave::default();
             // Paired with the `restbuf` that follows.
             aucmd_prepbuf(&mut aco, buf);
-            if Buf::current().b_u_synced as ::core::ffi::c_int == 0 {
+            if !Buf::current().b_u_synced {
                 u_sync(true);
             }
             // Undo `count` states of the buffer just entered.
@@ -374,7 +394,8 @@ pub(crate) fn cmdpreview_may_show() -> bool {
         }
         // Set up the preview namespace if it is not already set.
         if cmdpreview_ns.get() == 0 {
-            cmdpreview_ns.set(nvim_create_namespace(String_0::NULL) as ::core::ffi::c_int);
+            let ns = nvim_create_namespace(String_0::NULL);
+            cmdpreview_ns.set(::core::ffi::c_int::try_from(ns).unwrap_or(0));
         }
 
         cmdpreview.set(true);

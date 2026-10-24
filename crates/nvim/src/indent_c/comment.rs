@@ -21,6 +21,13 @@
 //! | `cin_iscomment` | [`starts_comment`] |
 //! | `cin_islinecomment` | [`starts_line_comment`] |
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use super::*;
@@ -188,12 +195,12 @@ pub(crate) fn string_end_at(line: &[u8], at: usize) -> usize {
 /// Whether `line[col]` is inside a C string.
 pub fn is_pos_in_string(line: &[u8], col: ColNr) -> bool {
     let mut p = 0usize;
-    while p < line.len() && (p as ColNr) < col {
+    while p < line.len() && ColNr::try_from(p).unwrap_or(ColNr::MAX) < col {
         // `p < line.len()` is upstream's `*p`, so the walk below cannot be
         // the "back up off the terminator" case and `p` strictly grows.
         p = string_end_at(line, p) + 1;
     }
-    p as ColNr > col
+    ColNr::try_from(p).unwrap_or(ColNr::MAX) > col
 }
 
 /// Whether 'cinoptions' `#N` is on, i.e. a `#` starts a comment.
@@ -267,7 +274,7 @@ pub(crate) fn find_line_comment() -> Option<Pos> {
         let line = lines.line(pos.lnum);
         let col = skip::white(line);
         if starts_line_comment(line, col) {
-            return Some(pos.with_col(col as ColNr));
+            return Some(pos.with_col(ColNr::try_from(col).unwrap_or(ColNr::MAX)));
         }
         if col < line.len() {
             return None; // code before it: not a comment line
@@ -314,7 +321,7 @@ mod tests {
         if s.is_empty() {
             return -1;
         }
-        string_end_at(s.as_bytes(), 0) as isize
+        string_end_at(s.as_bytes(), 0).cast_signed()
     }
 
     fn skip_comment(s: &[u8], hash_comment: bool) -> usize {

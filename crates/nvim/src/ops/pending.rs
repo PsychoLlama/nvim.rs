@@ -26,6 +26,13 @@
 //! which is why `OpType::Function` saves and restores it around 'operatorfunc'
 //! (the callback may run another operator and overwrite it).
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use crate::keycodes::Key;
@@ -118,7 +125,7 @@ pub fn do_pending_operator(cmd_arg: &mut CmdArg, old_col: c_int, gui_yank: bool)
             let mut lines = Lines::current();
             let line = lines.line(op.end.lnum);
             let col = usize::try_from(op.end.col).unwrap_or(0).min(line.len());
-            cluster_len(&line[col..]) as c_int
+            c_int::try_from(cluster_len(&line[col..])).unwrap_or(c_int::MAX)
         };
         if l > 1 {
             op.end.col += l - 1;
@@ -618,7 +625,7 @@ fn run_operator(
             if Win::current().w_cursor.lnum + op.line_count - 1 > Buf::current().line_count() {
                 beep_flush();
             } else {
-                let count = op.line_count as size_t;
+                let count = size_t::try_from(op.line_count).unwrap_or(0);
                 let _ = do_join(count, op.op_type == OpType::Join, true, true, true);
                 auto_format(false, true);
             }
@@ -691,11 +698,13 @@ fn run_operator(
         }
 
         OpType::Format => {
-            if Buf::current().b_p_fex.first_byte() as c_int != NUL {
+            if c_int::from(Buf::current().b_p_fex.first_byte()) != NUL {
                 // A copy: the expression is user code.
                 let arg = *op;
                 op_formatexpr(&arg);
-            } else if P_FP.first_byte() != 0 || Buf::current().b_p_fp.first_byte() as c_int != NUL {
+            } else if P_FP.first_byte() != 0
+                || c_int::from(Buf::current().b_p_fp.first_byte()) != NUL
+            {
                 // An external program.
                 op_colon(&op);
             } else {
@@ -796,7 +805,7 @@ fn indent_or_colon(op: Op) {
         op_reindent(&arg, indent);
         return;
     }
-    let indent = if Buf::current().b_p_inde.first_byte() as c_int != NUL {
+    let indent = if c_int::from(Buf::current().b_p_inde.first_byte()) != NUL {
         Indenter::Expr
     } else {
         Indenter::C

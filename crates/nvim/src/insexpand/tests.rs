@@ -8,6 +8,13 @@
 //! breakcheck count reset, and `'completeopt'` is the global value, which is
 //! what [`completeopt_flags`] answers with no current buffer.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use super::*;
@@ -16,6 +23,7 @@ use crate::global_cell::{editor_state::Held, editor_state_lock};
 use crate::options::kOptCotFlagNearest;
 use crate::os::input::reset_breakcheck_count;
 use crate::types::{FAIL, OK};
+use core::ffi::c_char;
 use std::ffi::CString;
 
 /// The completion's list state cleared, `'completeopt'` set to `cot`, and

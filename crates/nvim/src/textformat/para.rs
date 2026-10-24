@@ -5,6 +5,13 @@
 //! and [`same_leader`] whether two lines carry leaders that let them be
 //! joined. [`paragraph_start`] is the pair asked about one line.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![forbid(unsafe_code)]
 
 use core::ffi::c_int;
@@ -77,8 +84,10 @@ pub(crate) fn fmt_check_par(lnum: LineNr, leader: &mut Leader, do_comments: bool
         } else {
             0
         };
-        let after = &line[(leader.len as usize).min(line.len())..];
-        byte_at(after, skip::white(after)) == NUL as u8
+        let after = &line[usize::try_from(leader.len)
+            .unwrap_or(usize::MAX)
+            .min(line.len())..];
+        byte_at(after, skip::white(after)) == b'\0'
     };
     let ends_a_comment = leader.len > 0 && leader.has_flag(COM_END);
     nothing_but_leader || ends_a_comment || starts_para(lnum, NUL, false)
@@ -134,7 +143,12 @@ pub(crate) fn same_leader(lnum: LineNr, first: Leader, second: Leader) -> bool {
     let mut lines = Lines::current();
     let line1 = lines.line_copy(lnum);
     let line2 = lines.line(lnum + 1);
-    leaders_match(&line1, first.len as usize, line2, second.len as usize)
+    leaders_match(
+        &line1,
+        usize::try_from(first.len).unwrap_or(0),
+        line2,
+        usize::try_from(second.len).unwrap_or(0),
+    )
 }
 
 /// Whether `second`'s leading `second_len` bytes are the same leader as
