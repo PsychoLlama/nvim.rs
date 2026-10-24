@@ -561,17 +561,17 @@ pub(crate) fn prepare_search_hl_line(
 }
 
 /// Advances every pattern past `col` and answers the attribute that wins
-/// there, and whether a pattern was searched again -- after which the line
-/// may have moved (a multi-line regexp reads other lines), and the caller
-/// reads it again.
+/// there.
 ///
 /// Called once per column. Each pattern is stepped until it either covers
 /// `col` or starts after it; then a second walk, in priority order, takes
 /// the last non-zero attribute, so the highest-priority pattern wins.
 ///
 /// `char_len_here` answers the length of the character at `col` (0 at the
-/// end of the line) from the caller's own view of the line, which is good
-/// until a pattern is searched again; after that the line is read afresh.
+/// end of the line) from the caller's own copy of the line. Upstream re-read
+/// the line after searching a pattern again, because a multi-line regexp
+/// reads other lines and its `ml_get` pointer could move; a copy cannot, so
+/// the answer stands for the whole column.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn update_search_hl(
     window: Win,
@@ -583,8 +583,7 @@ pub(crate) fn update_search_hl(
     lcs_eol_todo: bool,
     on_last_col: &mut bool,
     search_attr_from_match: &mut bool,
-) -> (c_int, bool) {
-    let mut line_moved = false;
+) -> c_int {
     // The attribute of the highest-priority pattern covering `col`: the
     // walk is in priority order and each pattern's state is final once the
     // walk leaves it, so the last non-zero attribute wins.
@@ -608,12 +607,7 @@ pub(crate) fn update_search_hl(
             } = peek;
             if startcol != MAXCOL && col >= startcol && col < endcol {
                 // Inside the match. Widen it to a whole character.
-                let here = if line_moved {
-                    char_len_at(window, lnum, col)
-                } else {
-                    col_len(char_len_here())
-                };
-                let next_col = col + here;
+                let next_col = col + col_len(char_len_here());
                 let cursor_attr = match which {
                     Which::Search if screen_search_hl.with(|shl| shl.has_cursor) => {
                         Some(win_hl_attr(window, HLF_LC))
@@ -654,7 +648,6 @@ pub(crate) fn update_search_hl(
             // Just past the end: look for the next match on this line.
             with_shl(window, which, |shl| shl.attr_cur = 0);
             next_search_hl(window, which, lnum, col);
-            line_moved = true;
             pos_inprogress = pos_in_progress(window, which);
 
             let found = with_shl(window, which, |shl| {
@@ -692,17 +685,10 @@ pub(crate) fn update_search_hl(
 
     // Under `'list'` the eol character is drawn from `'listchars'`, so
     // the match must not colour past the last real character.
-    if window.w_onebuf_opt.wo_list != 0 && !lcs_eol_todo {
-        let at_eol = if line_moved {
-            char_len_at(window, lnum, col) == 0
-        } else {
-            char_len_here() == 0
-        };
-        if at_eol {
-            search_attr = 0;
-        }
+    if window.w_onebuf_opt.wo_list != 0 && !lcs_eol_todo && char_len_here() == 0 {
+        search_attr = 0;
     }
-    (search_attr, line_moved)
+    search_attr
 }
 
 /// What [`update_search_hl`] reads of a pattern's state at each column.

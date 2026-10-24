@@ -189,9 +189,7 @@ impl Cells {
         let at = self.byte_col();
         let here = self.line.from(self.pos);
         let char_len_here = || c_cluster_len(here);
-        // The second answer says a multi-line regexp moved the memline's
-        // line; the copy stays where it is.
-        let (attr, _) = update_search_hl(
+        let attr = update_search_hl(
             window,
             wlv.lnum,
             at,

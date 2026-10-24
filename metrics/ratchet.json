@@ -5,7 +5,7 @@
   "cell_ptr_accessors": 6,
   "cell_copy_owner": 7,
   "unsafe_stmts_outside_perimeter": 1905,
-  "c_int_returns": 1616,
+  "c_int_returns": 1617,
   "ok_fail": 124,
   "error_out_params": 0,
   "semsg_c": 43,
