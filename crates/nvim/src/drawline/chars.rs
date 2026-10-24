@@ -20,6 +20,13 @@
 //!    concealment each get a look at it.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::pos::MAXCOL;
@@ -176,7 +183,7 @@ impl Cells {
             // character as `?` or its fullwidth form.
             let mut hex: CharDisplay = [0; CHAR_DISPLAY_LEN];
             let len = transchar_hex_into(&mut hex, self.char_code);
-            let mut text = hex.map(|c| c as u8);
+            let mut text = hex.map(|c| c.to_ne_bytes()[0]);
             let text = &mut text[..len];
             if window.w_onebuf_opt.wo_rl != 0 {
                 mirror_ascii(text);
@@ -428,7 +435,7 @@ impl Cells {
         }
 
         if spell_hlf != HLF_COUNT {
-            self.spell_attr = default_hl_attr(spell_hlf as usize);
+            self.spell_attr = default_hl_attr(usize::try_from(spell_hlf).unwrap_or(0));
         }
 
         if f.spv.spv_cap_col > 0 {
@@ -529,7 +536,7 @@ impl Cells {
         }
 
         let lcs = &window.w_p_lcs_chars;
-        let at = self.pos as isize;
+        let at = isize::try_from(self.pos).unwrap_or(isize::MAX);
 
         // 'list': change 160 to "nbsp" and a space to "space" — but not
         // when a composing character follows, which `char_len` reveals.
