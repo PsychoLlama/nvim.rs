@@ -4765,7 +4765,9 @@ describe('TUI client', function()
       ffi.C.ui_call_chdir(to_api_string('README.md'))
     ]])
     screen_client:expect_unchanged()
-    assert_log('Failed to chdir to README%.md: not a directory', testlog)
+    -- A debug build logs DBG lines, and under ASan the client writes about a
+    -- dozen redraw-batch lines after the error: look past the default tail.
+    assert_log('Failed to chdir to README%.md: not a directory', testlog, 100)
   end)
 
   it('nvim_ui_send works with remote client #36317', function()
