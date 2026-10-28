@@ -1,6 +1,6 @@
 # A/B benches
 
-Ten whole-binary timing canaries, each driving one family hard enough that a
+Eleven whole-binary timing canaries, each driving one family hard enough that a
 few percent of its work is visible in a total. They are not part of any gate:
 nothing runs them but a person asking whether a change cost something.
 
@@ -13,6 +13,7 @@ nothing runs them but a person asking whether a change cost something.
 | `mlbench`      | the memline hot path: `ml_get`, `ml_append`, `ml_delete`, byte/line offsets            |
 | `readbench`    | reading a file: `:edit` of 100 MB plain, Latin-1 and `'fileencodings'` input           |
 | `rebench`      | the regexp engines (`re=0/1/2`), `search()`, `:s` that writes, `matchlist()`           |
+| `rpcbench`     | msgpack-RPC to an `--embed` child, a job channel's reader, a remote UI, a Lua UI sink  |
 | `scrbench`     | the screen pipeline: grid diffing, `win_line`, syntax, statusline, the popup menu      |
 | `spellbench`   | spell checking and suggestion: the word tries, `z=`, the SAL engine                    |
 | `undobench`    | undo: recording steps, `:undo` walks, `:wundo`/`:rundo`, `undotree()`                  |
@@ -60,6 +61,10 @@ both sides in one sitting**, never against a stored number, and treat an
 Of the three added later, `rebench` (6 ppm) and `readbench` (14 ppm) are
 deterministic and `undobench` is not: two runs spread **1,250 ppm**, so treat
 an `undobench` difference under about 0.2 % the same way.
+`rpcbench` talks to child processes, and the event-loop turns it spends
+waiting on them are counted too: three runs spread **2,350 ppm** (0.24 %) on the
+whole and up to 0.39 % on its `chanjob` phase, so treat an `rpcbench`
+difference under about 0.5 % as none.
 `edbench` (added with the editing-core work) is deterministic phase by phase
 once its fixtures are built in Vimscript rather than in Lua: two runs of each
 phase alone spread at most **1,250 ppm** (`textobj`), `put` 313, `ctl` 416,

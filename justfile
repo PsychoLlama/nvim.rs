@@ -117,8 +117,8 @@ state-exports binary='target/release/nvim':
 
 # A/B two nvim binaries on one whole-binary bench, e.g.
 # `just bench-ab scrbench /tmp/a/nvim /tmp/b/nvim`. The bench is a name from
-# test/benchmark/ab (evalbench, inbench, mkspellbench, mlbench, readbench,
-# rebench, scrbench, spellbench, undobench);
+# test/benchmark/ab (edbench, evalbench, inbench, mkspellbench, mlbench,
+# readbench, rebench, rpcbench, scrbench, spellbench, undobench);
 # extra args go to the driver (`[rounds]`, or `--cachegrind <nvim>` in place
 # of the two binaries, which is the measurement that actually settles a perf
 # question). Nothing gates on these: read test/benchmark/ab/README.md before
