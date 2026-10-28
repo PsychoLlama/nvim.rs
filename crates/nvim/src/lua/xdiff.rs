@@ -19,7 +19,7 @@ use core::ffi::{c_char, c_int, c_long, c_void};
 use core::{ptr, slice};
 
 use crate::linematch::{block_from_lnum, linematch_nbuffers};
-use crate::lua::converter::nlua_pop_keydict;
+use crate::lua::converter::pop_keydict;
 use crate::lua::executor::{api_free_luaref, nlua_pushref};
 use crate::lua::ffi::{
     LUA_TFUNCTION, LUA_TSTRING, LUA_TTABLE, lua_concat, lua_createtable, lua_error, lua_gettop,
@@ -27,6 +27,7 @@ use crate::lua::ffi::{
     lua_rawseti, lua_settop, lua_tolstring, lua_tonumber, lua_type, luaL_argerror, luaL_buffinit,
     luaL_error, luaL_prepbuffer, luaL_pushresult, luaL_where,
 };
+use crate::lua::stack::Stack;
 use crate::types::{
     Error, KeyDict_xdl_diff, LineNr, Object, int64_t, kErrorTypeException, lua_Integer, lua_State,
     luaL_Buffer, mmbuffer_t, mmfile_t, size_t, xdemitcb_t, xdemitconf_t, xpparam_t,
@@ -340,9 +341,10 @@ unsafe fn process_xdl_diff_opts(
 ) -> (Mode, Option<Error>) {
     let mut opts = KeyDict_xdl_diff::default();
     let mut err_param: *mut c_char = ptr::null_mut::<c_char>();
-    // SAFETY: the caller's state and table; `opts` is a live keydict and
-    // owns whatever the pop puts in it, which is freed at the end.
-    let popped = unsafe { nlua_pop_keydict(lstate, &mut opts, &mut err_param) };
+    // SAFETY: the caller's state, and this frame's only `Stack`. `opts` owns
+    // whatever the pop puts in it, which is freed at the end.
+    let mut stack = unsafe { Stack::from_raw(lstate) };
+    let popped = pop_keydict(&mut stack, &mut opts, &mut err_param);
 
     // SAFETY: the keydict's two string fields are NUL-terminated or null.
     // A bad option outranks a failed pop, which is the order the two had

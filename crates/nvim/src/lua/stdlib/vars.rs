@@ -31,11 +31,12 @@ use crate::eval::typval::{
 };
 use crate::eval::vars::{VvarStore, before_set_vvar, globvar_dict, vimvar_dict};
 use crate::ex_eval::aborting;
-use crate::lua::converter::{nlua_pop_typval, nlua_push_typval};
+use crate::lua::converter::{pop_typval, push_typval};
 use crate::lua::ffi::{
     LUA_TNIL, lua_error, lua_gettop, lua_pushvalue, lua_type, luaL_checkinteger, luaL_checklstring,
     luaL_error,
 };
+use crate::lua::stack::Stack;
 use crate::narrow::number_as_int;
 use crate::runtime::script_autoload_named;
 use crate::types::{
@@ -134,7 +135,7 @@ pub unsafe extern "C-unwind" fn nlua_setvar(lstate: *mut lua_State) -> c_int {
 
         // Convert the Lua value into a temporary before anything is disturbed.
         lua_pushvalue(lstate, 4);
-        let Some(mut tv) = nlua_pop_typval(lstate) else {
+        let Some(mut tv) = pop_typval(&mut Stack::from_raw(lstate)) else {
             return luaL_error(lstate, c"Couldn't convert lua value".as_ptr());
         };
 
@@ -205,7 +206,7 @@ pub unsafe extern "C-unwind" fn nlua_getvar(lstate: *mut lua_State) -> c_int {
         let Some(di) = di else {
             return 0; // nil
         };
-        nlua_push_typval(lstate, &di.di_tv, 0);
+        push_typval(&mut Stack::from_raw(lstate), &di.di_tv, false);
         1
     }
 }

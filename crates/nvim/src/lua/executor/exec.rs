@@ -21,14 +21,12 @@ use super::{
     nlua_error, nlua_fast_cfpcall, nlua_pcall, nlua_pushref, nlua_ref_global,
 };
 use crate::ex_cmds::check_secure;
-use crate::lua::converter::{
-    kNluaPushSpecial, nlua_pop_object, nlua_pop_typval, nlua_push_object, nlua_push_typval,
-};
+use crate::lua::converter::{pop_object, pop_typval, push_object, push_typval};
 use crate::lua::ffi::{
     LUA_GLOBALSINDEX, LUA_MULTRET, LUA_TNIL, lua_getfield, lua_gettop, lua_pushinteger,
     lua_pushnil, lua_pushstring, lua_toboolean, lua_tolstring, lua_type, luaL_loadbuffer,
 };
-use crate::lua::stack::lua_pop;
+use crate::lua::stack::{Stack, lua_pop};
 use crate::memory::{xfree, xmalloc};
 use crate::message_fmt::c_str_len;
 use crate::os::cshim::gettext;
@@ -154,7 +152,7 @@ pub fn nlua_call_user_expand_func(
         }
         // A refusal has reported itself; the answer is then the zero
         // upstream left in the caller's slot.
-        nlua_pop_typval(lstate).unwrap_or(TypVal::Number(0))
+        pop_typval(&mut Stack::from_raw(lstate)).unwrap_or(TypVal::Number(0))
     }
 }
 
@@ -224,7 +222,7 @@ pub(crate) unsafe fn nlua_typval_exec(
             return;
         }
         if let Some(ret_tv) = ret_tv.take() {
-            ret_tv.overwrite(nlua_pop_typval(lstate).unwrap_or(TypVal::Number(0)));
+            ret_tv.overwrite(pop_typval(&mut Stack::from_raw(lstate)).unwrap_or(TypVal::Number(0)));
         }
     }
 }
@@ -235,16 +233,11 @@ pub(crate) unsafe fn nlua_typval_exec(
 /// `lstate` must be a live Lua state.
 unsafe fn push_typval_args(lstate: *mut lua_State, args: &[TypVal], special: bool) {
     unsafe {
-        let flags = if special {
-            kNluaPushSpecial as c_int
-        } else {
-            0
-        };
         for arg in args {
             if arg.v_type() == VAR_UNKNOWN {
                 lua_pushnil(lstate);
             } else {
-                nlua_push_typval(lstate, arg, flags);
+                push_typval(&mut Stack::from_raw(lstate), arg, special);
             }
         }
     }
@@ -285,7 +278,7 @@ pub fn typval_exec_lua_callable(lua_cb: LuaRef, argvars: &[TypVal], rettv: &mut 
             nlua_error(lstate, gettext(c"Lua callback: %.*s").as_ptr());
             return FCERR_OTHER as c_int;
         }
-        rettv.overwrite(nlua_pop_typval(lstate).unwrap_or(TypVal::Number(0)));
+        rettv.overwrite(pop_typval(&mut Stack::from_raw(lstate)).unwrap_or(TypVal::Number(0)));
         FCERR_NONE as c_int
     }
 }
@@ -315,7 +308,7 @@ pub unsafe fn nlua_exec(
         }
         let argc = args.len() as c_int;
         for item in args.iter_mut() {
-            nlua_push_object(lstate, item, 0);
+            push_object(&mut Stack::from_raw(lstate), item, false);
         }
         if nlua_pcall(lstate, argc, 1) != 0 {
             return Err(lua_error_of(kErrorTypeException, lstate));
@@ -413,7 +406,7 @@ pub unsafe fn nlua_call_ref_ctx(
             nargs += 1;
         }
         for item in args.iter_mut() {
-            nlua_push_object(lstate, item, 0);
+            push_object(&mut Stack::from_raw(lstate), item, false);
         }
 
         if fast {
@@ -463,7 +456,7 @@ unsafe fn nlua_call_pop_retval(
                 lua_pop(lstate, 1);
                 Ok(Object::luaref(ref_0))
             }
-            kRetObject => nlua_pop_object(lstate, false),
+            kRetObject => pop_object(&mut Stack::from_raw(lstate), false),
             kRetMulti => {
                 // The results come off the stack top-down, so they are stored
                 // back-to-front.
@@ -472,7 +465,7 @@ unsafe fn nlua_call_pop_retval(
                 // collected and then turned back into call order.
                 let mut res: Vec<Object> = Vec::with_capacity(nres as size_t);
                 for _ in 0..nres {
-                    res.push(nlua_pop_object(lstate, false)?);
+                    res.push(pop_object(&mut Stack::from_raw(lstate), false)?);
                 }
                 res.reverse();
                 Ok(Object::array(Array::from(res)))

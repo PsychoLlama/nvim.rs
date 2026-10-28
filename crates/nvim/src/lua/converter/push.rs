@@ -1,6 +1,6 @@
-//! `nlua_push_typval()`: a Vimscript value as a Lua one.
+//! `push_typval()`: a Vimscript value as a Lua one.
 //!
-//! One [`TypvalSink`] over a `lua_State`, replacing the `TYPVAL_ENCODE_NAME
+//! One [`TypvalSink`] over a [`Stack`], replacing the `TYPVAL_ENCODE_NAME
 //! lua` instantiation of `typval_encode.c.h`.  Every hook pushes exactly one
 //! Lua value, and the containers are assembled on the Lua stack itself rather
 //! than in a buffer of the sink's own: a list holds its table *and* the index
@@ -15,88 +15,55 @@
 //! It reads `{_TYPE, _VAL}` special dictionaries (`ALLOW_SPECIALS`), so a value
 //! that came from msgpack keeps its identity through Vimscript and back.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `lua/` row in docs/perimeter.md.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::semsg;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 
-use super::nlua_create_typed_table;
+use super::create_typed_table;
 use crate::eval::typval_encode::{Container, ConvPath, ConvType, Flow, TypvalSink, encode_typval};
 use crate::eval::userfunc::FuncFlags;
 use crate::eval::userfunc::find_func;
-use crate::lua::executor::nlua_pushref;
-use crate::lua::ffi::{
-    lua_checkstack, lua_createtable, lua_gettop, lua_pushboolean, lua_pushlstring, lua_pushnil,
-    lua_pushnumber, lua_pushvalue, lua_rawset, lua_setmetatable, lua_tonumber,
-};
-use crate::lua::state::nlua_global_refs;
-use crate::types::{Float, LuaRef, TypVal, kObjectTypeDict, lua_Number, lua_State};
+use crate::lua::stack::{At, Stack};
+use crate::types::{Float, TypVal, kObjectTypeDict, lua_Number};
 
 /// How many Lua slots opening a container needs: its table, the key or index
 /// it is about to set, and the value that will land on top of them.
 const CONTAINER_SLOTS: c_int = 3;
 
-/// The `nlua_push_typval()` sink.
-struct LuaSink {
-    lstate: *mut lua_State,
-    /// `kNluaPushSpecial`: push `nil` and a typed table for Vimscript's `null`
-    /// and empty dictionary, rather than the `vim.NIL` and `vim.empty_dict()`
+/// The `push_typval()` sink.
+struct LuaSink<'a> {
+    stack: &'a mut Stack,
+    /// Push `nil` and a typed table for Vimscript's `null` and empty
+    /// dictionary, rather than the `vim.NIL` and `vim.empty_dict()`
     /// singletons Lua code normally sees.
     special: bool,
 }
 
-/// The handful of Lua stack operations the sink is made of.
-///
-/// Each is one line of `lua_*` against [`LuaSink::lstate`], which the sink
-/// holds live for as long as it exists — so these are safe, and every hook
-/// below is then a safe one-liner in the shape of the macro it replaces.
-impl LuaSink {
-    fn createtable(&mut self, narr: c_int, nrec: c_int) {
-        unsafe { lua_createtable(self.lstate, narr, nrec) };
-    }
-
-    fn pushnumber(&mut self, num: lua_Number) {
-        unsafe { lua_pushnumber(self.lstate, num) };
-    }
-
-    fn pushboolean(&mut self, b: bool) {
-        unsafe { lua_pushboolean(self.lstate, b as c_int) };
-    }
-
-    fn pushref(&mut self, ref_: LuaRef) {
-        unsafe { nlua_pushref(self.lstate, ref_) };
-    }
-
+/// The few compound steps the hooks below are made of; everything else is
+/// one [`Stack`] call.
+impl LuaSink<'_> {
     /// Store the value on top of the stack under the key below it, in the
     /// table below that.
     fn rawset(&mut self) {
-        unsafe { lua_rawset(self.lstate, -3) };
+        self.stack.raw_set(At::from_top(3));
     }
 
     /// Push whatever stands for "no value": upstream's `TYPVAL_ENCODE_CONV_NIL`.
     fn push_nil(&mut self) {
         if self.special {
-            unsafe { lua_pushnil(self.lstate) };
+            self.stack.push_nil();
         } else {
-            self.pushref(unsafe { (*nlua_global_refs.get()).nil_ref });
+            self.stack.push_vim_nil();
         }
-    }
-
-    /// Push `bytes` as a Lua string, which copies them.
-    fn pushlstring(&mut self, bytes: &[u8]) {
-        unsafe { lua_pushlstring(self.lstate, bytes.as_ptr().cast::<c_char>(), bytes.len()) };
     }
 
     /// Make room for one more open container, or refuse with `E5102`.
     fn check_stack(&mut self) -> Flow {
-        unsafe {
-            let wanted = lua_gettop(self.lstate) + CONTAINER_SLOTS;
-            if lua_checkstack(self.lstate, wanted) == 0 {
-                semsg!("E5102: Lua failed to grow stack to {}", wanted);
-                return Flow::Fail;
-            }
+        let wanted = self.stack.top().index() + CONTAINER_SLOTS;
+        if !self.stack.reserve(wanted) {
+            semsg!("E5102: Lua failed to grow stack to {}", wanted);
+            return Flow::Fail;
         }
         Flow::Go
     }
@@ -105,7 +72,7 @@ impl LuaSink {
     /// built, as an index from the top.
     ///
     /// Every enclosing container occupies two slots, so the frame `n` levels
-    /// down from the top sits at `-2n`.  Unlike the text sinks' marker search,
+    /// down from the top sits `2n` below it.  Unlike the text sinks' marker search,
     /// this one *does* match a `Pairs` frame: upstream's ternary here reads
     /// `data.l.list` for everything that is not `kMPConvDict`, and a special
     /// map's `_VAL` list lives in that member.
@@ -117,7 +84,7 @@ impl LuaSink {
         path: &ConvPath<'_, '_>,
         container: Container<'_>,
         conv_type: ConvType,
-    ) -> Option<c_int> {
+    ) -> Option<At> {
         let depth = path.stack.len();
         // Upstream scans from the top down; a container can be on the stack
         // only once, so scanning up finds the same frame.
@@ -125,11 +92,11 @@ impl LuaSink {
             .stack
             .iter()
             .position(|frame| frame.walks(conv_type, container))?;
-        Some(-(((depth - found) * 2) as c_int))
+        Some(At::from_top(((depth - found) * 2) as c_int))
     }
 }
 
-impl TypvalSink for LuaSink {
+impl TypvalSink for LuaSink<'_> {
     const ALLOW_SPECIALS: bool = true;
     const CONVERT_FN_NAME: &'static CStr = c"_typval_encode_lua_convert_one_value()";
 
@@ -138,26 +105,26 @@ impl TypvalSink for LuaSink {
     }
 
     fn conv_bool(&mut self, num: bool) {
-        self.pushboolean(num);
+        self.stack.push_boolean(num);
     }
 
     fn conv_number(&mut self, num: i64) {
-        self.pushnumber(num as lua_Number);
+        self.stack.push_number(num as lua_Number);
     }
 
     fn conv_unsigned_number(&mut self, num: u64) {
-        self.pushnumber(num as lua_Number);
+        self.stack.push_number(num as lua_Number);
     }
 
     fn conv_float(&mut self, flt: Float) -> Flow {
-        self.pushnumber(flt);
+        self.stack.push_number(flt);
         Flow::Go
     }
 
     /// A Lua string is bytes, so this is the whole of it — NULs included.  It
     /// copies, which is why the walk's buffer-owning hooks need no override.
     fn conv_string(&mut self, bytes: &[u8]) -> Flow {
-        self.pushlstring(bytes);
+        self.stack.push_bytes(bytes);
         Flow::Go
     }
 
@@ -169,7 +136,7 @@ impl TypvalSink for LuaSink {
 
     /// A blob is bytes, and so is a Lua string.
     fn conv_blob(&mut self, bytes: &[u8]) {
-        self.pushlstring(bytes);
+        self.stack.push_bytes(bytes);
     }
 
     /// A Lua function that reached Vimscript as a funcref goes back as the
@@ -187,14 +154,14 @@ impl TypvalSink for LuaSink {
             .filter(|func| func.has_flag(FuncFlags::LUAREF))
             .map(|func| func.luaref.get());
         match luaref {
-            Some(ref_) => self.pushref(ref_),
+            Some(reference) => self.stack.push_reference(reference),
             None => self.push_nil(),
         }
         Flow::Stop
     }
 
     fn conv_empty_list(&mut self) {
-        self.createtable(0, 0);
+        self.stack.new_table(0, 0);
     }
 
     /// An empty table is ambiguous in Lua, so an empty dictionary carries a
@@ -202,11 +169,11 @@ impl TypvalSink for LuaSink {
     /// caller asked for the special form.
     fn conv_empty_dict(&mut self) {
         if self.special {
-            unsafe { nlua_create_typed_table(self.lstate, 0, 0, kObjectTypeDict) };
+            create_typed_table(self.stack, 0, 0, kObjectTypeDict);
         } else {
-            self.createtable(0, 0);
-            self.pushref(unsafe { (*nlua_global_refs.get()).empty_dict_ref });
-            unsafe { lua_setmetatable(self.lstate, -2) };
+            self.stack.new_table(0, 0);
+            self.stack.push_empty_dict_metatable();
+            self.stack.set_metatable(At::from_top(2));
         }
     }
 
@@ -216,17 +183,17 @@ impl TypvalSink for LuaSink {
         if self.check_stack() == Flow::Fail {
             return Flow::Fail;
         }
-        self.createtable(len, 0);
-        self.pushnumber(1.0);
+        self.stack.new_table(usize::try_from(len).unwrap_or(0), 0);
+        self.stack.push_number(1.0);
         Flow::Go
     }
 
     /// Store the item just converted and push the next index.
     ///
     fn conv_list_between_items(&mut self) {
-        let idx = unsafe { lua_tonumber(self.lstate, -2) };
+        let idx = self.stack.to_number(At::from_top(2));
         self.rawset();
-        self.pushnumber(idx + 1.0);
+        self.stack.push_number(idx + 1.0);
     }
 
     fn conv_list_end(&mut self) {
@@ -237,7 +204,7 @@ impl TypvalSink for LuaSink {
         if self.check_stack() == Flow::Fail {
             return Flow::Fail;
         }
-        self.createtable(0, len as c_int);
+        self.stack.new_table(0, len);
         Flow::Go
     }
 
@@ -260,8 +227,8 @@ impl TypvalSink for LuaSink {
         conv_type: ConvType,
         path: &ConvPath<'_, '_>,
     ) -> Flow {
-        if let Some(idx) = Self::backref(path, container, conv_type) {
-            unsafe { lua_pushvalue(self.lstate, idx) };
+        if let Some(at) = Self::backref(path, container, conv_type) {
+            self.stack.push_value(at);
         }
         Flow::Go
     }
@@ -269,28 +236,25 @@ impl TypvalSink for LuaSink {
 
 /// Convert a Vimscript value and leave it on the Lua stack.
 ///
-/// `flags` is `kNluaPushSpecial` or zero; the `kNluaPushFreeRefs` bit is the
-/// caller's business, not this walk's.
-///
-/// # Safety
-/// `lstate` must be a live Lua state and `tv` a live typval.
-pub unsafe fn nlua_push_typval(lstate: *mut lua_State, tv: &TypVal, flags: c_int) -> bool {
-    unsafe {
-        let initial_size = lua_gettop(lstate);
-        if lua_checkstack(lstate, initial_size + 2) == 0 {
-            // Upstream reports the size it would have needed for a container,
-            // not the two slots it just asked for.
-            semsg!("E1502: Lua failed to grow stack to {}", initial_size + 4);
-            return false;
-        }
-        let mut sink = LuaSink {
-            lstate,
-            special: flags & super::kNluaPushSpecial != 0,
-        };
-        if !encode_typval(&mut sink, tv, c"nlua_push_typval argument") {
-            return false;
-        }
-        debug_assert!(lua_gettop(lstate) == initial_size + 1);
-        true
+/// With `special`, Vimscript's `null` and an empty dictionary go as `nil` and
+/// a `{_TYPE = dictionary}` table; otherwise as `vim.NIL` and
+/// `vim.empty_dict()`. `false` when the stack could not grow, with the
+/// reason already reported.
+pub fn push_typval(stack: &mut Stack, tv: &TypVal, special: bool) -> bool {
+    let initial_size = stack.top().index();
+    if !stack.reserve(initial_size + 2) {
+        // Upstream reports the size it would have needed for a container,
+        // not the two slots it just asked for.
+        semsg!("E1502: Lua failed to grow stack to {}", initial_size + 4);
+        return false;
     }
+    let mut sink = LuaSink {
+        stack: &mut *stack,
+        special,
+    };
+    if !encode_typval(&mut sink, tv, c"nlua_push_typval argument") {
+        return false;
+    }
+    debug_assert!(stack.top().index() == initial_size + 1);
+    true
 }

@@ -82,7 +82,7 @@ enum Param {
     ChannelId,
     /// The request arena. Supplied by the dispatcher.
     Arena,
-    /// A Lua state. Only the Lua binding has one; the RPC wrapper passes null.
+    /// The Lua stack. Only the Lua binding has one; the RPC wrapper passes `None`.
     LuaState,
     /// A value the client sends, at 0-based position `index` of the argument
     /// array.
@@ -353,6 +353,23 @@ fn option_inner(ty: &syn::Type) -> Option<String> {
     }
 }
 
+/// Whether the type is `Option<&mut Stack>`: the Lua stack a function with a
+/// Lua implementation of its own is handed when Lua calls it.
+fn is_lua_stack(ty: &syn::Type) -> bool {
+    let syn::Type::Path(p) = ty else { return false };
+    let Some(last) = p.path.segments.last() else {
+        return false;
+    };
+    let syn::PathArguments::AngleBracketed(args) = &last.arguments else {
+        return false;
+    };
+    last.ident == "Option"
+        && matches!(
+            args.args.first(),
+            Some(syn::GenericArgument::Type(inner)) if pointee_name(inner).as_deref() == Some("Stack")
+        )
+}
+
 /// For `*mut T` / `*const T`, the name of `T`.
 fn pointee_name(ty: &syn::Type) -> Option<String> {
     match ty {
@@ -448,7 +465,7 @@ fn value_ret(ty: &syn::Type) -> Option<RetType> {
 
 /// Classify a signature's parameters, in declaration order. The dispatcher
 /// supplies `channel_id`, the arena, the error slot and (for functions with a
-/// Lua implementation) a null `lua_State`; everything else comes off the wire.
+/// Lua implementation) no Lua stack (`None`); everything else comes off the wire.
 fn classify(sig: &syn::Signature) -> Result<Vec<Param>, String> {
     let mut params = Vec::new();
     let mut index = 0;
@@ -461,6 +478,7 @@ fn classify(sig: &syn::Signature) -> Result<Vec<Param>, String> {
             _ => String::new(),
         };
         let param = match pointee_name(&arg.ty).as_deref() {
+            _ if is_lua_stack(&arg.ty) => Param::LuaState,
             Some("Arena") => Param::Arena,
             // An API function reports failure by answering `Err`. The
             // out-parameter is gone, and a signature that grows one back
@@ -470,7 +488,6 @@ fn classify(sig: &syn::Signature) -> Result<Vec<Param>, String> {
                     "parameter `{name}` is an `Error` out-parameter; answer `Result` instead"
                 ));
             }
-            Some("lua_State") => Param::LuaState,
             // Some channel-id parameters are unused by their function and
             // carry the leading underscore that says so.
             _ if name == "channel_id" || name == "_channel_id" => Param::ChannelId,
@@ -1145,7 +1162,7 @@ fn emit_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
         .map(|p| match p {
             Param::ChannelId => "channel_id".into(),
             Param::Arena => "arena".into(),
-            Param::LuaState => "core::ptr::null_mut()".into(),
+            Param::LuaState => "None".into(),
             Param::Value {
                 index,
                 ty: ApiType::KeyDict(_),
@@ -2211,14 +2228,12 @@ const LUA_HEADER: &str = r#"//! The `vim.api` Lua binding.
 
 /// The fixed part of the Lua binding support code.
 const LUA_SUPPORT: &str = r#"
-/// Flags for handing a result back to Lua.
-///
-/// `kNluaPushFreeRefs` always applies: the binding owns the value and
-/// releases the Lua references it holds as it converts. `kNluaPushSpecial`
-/// additionally converts `nil` and the other special values the pre-0.11
-/// way, which is what clients of methods older than API level 11 expect.
-const PUSH: c_int = kNluaPushFreeRefs;
-const PUSH_SPECIAL: c_int = kNluaPushSpecial | kNluaPushFreeRefs;
+/// How a result goes back to Lua: `PUSH_SPECIAL` converts `nil` and the
+/// other special values the pre-0.11 way, which is what clients of methods
+/// older than API level 11 expect. Either way the push borrows the result,
+/// and the binding releases the Lua references it holds by dropping it.
+const PUSH: bool = false;
+const PUSH_SPECIAL: bool = true;
 
 /// What one binding carries from its first conversion to its last release.
 struct Call {
@@ -2243,7 +2258,7 @@ impl Call {
 /// conversion — releases exactly the arguments that were converted, in
 /// declaration order, because each one's release is a guard dropped on the
 /// way out.
-type Convert = unsafe fn(*mut lua_State, &mut Call) -> Result<(), Error>;
+type Convert = fn(&mut Stack, &mut Call) -> Result<(), Error>;
 
 // -- keysets ---------------------------------------------------------------
 
@@ -2265,26 +2280,17 @@ impl<K: KeySet + Default> KeyDictArg<K> {
 
 /// Fill a keyset argument from the Lua value on top of the stack. On refusal
 /// `*err_param` names the key that failed.
-///
-/// # Safety
-/// `lstate` is the running Lua state with the argument on top; `err_param`
-/// is the binding's own.
-unsafe fn pop_keydict<K: KeySet + Default>(
-    lstate: *mut lua_State,
+fn pop_keydict<K: KeySet + Default>(
+    stack: &mut Stack,
     arg: &mut KeyDictArg<K>,
     err_param: &mut *mut c_char,
 ) -> Result<(), Error> {
-    // SAFETY: the caller's stack.
-    unsafe { nlua_pop_keydict(lstate, &mut arg.dict, err_param) }
+    converter::pop_keydict(stack, &mut arg.dict, err_param)
 }
 
 /// Hand a keyset result back as a Lua table.
-///
-/// # Safety
-/// `lstate` is the running Lua state.
-unsafe fn push_keydict(lstate: *mut lua_State, value: &mut dyn KeySet) {
-    // SAFETY: the caller's stack.
-    unsafe { nlua_push_keydict(lstate, value) };
+fn push_keydict(stack: &mut Stack, value: &mut dyn KeySet) {
+    converter::push_keydict(stack, value);
 }
 
 // -- argument guards -------------------------------------------------------
@@ -2362,8 +2368,9 @@ unsafe fn run(
             // and nothing is left to release.
             return unsafe { luaL_error(lstate, fmt, name) };
         }
-        // SAFETY: as above; `call` is this frame's own.
-        unsafe { convert(lstate, &mut call) }
+        // SAFETY: as above, and this is the frame's only `Stack`.
+        let mut stack = unsafe { Stack::from_raw(lstate) };
+        convert(&mut stack, &mut call)
     };
     // SAFETY: the arena is this frame's own, and every argument that borrowed
     // from it has been released.
@@ -2475,38 +2482,38 @@ fn expr_map_locked_error() -> Error {
     ),
 ];
 
-/// The `nlua_pop_*` that turns the top of the Lua stack into a parameter, and
-/// whatever leading argument it takes beyond the state.
+/// The `pop_*` that turns the top of the Lua stack into a parameter, and
+/// whatever leading argument it takes beyond the stack.
 fn popper(ty: &ApiType) -> (String, &'static str) {
     match ty {
-        ApiType::Boolean => ("nlua_pop_boolean".into(), ""),
-        ApiType::Integer => ("nlua_pop_integer".into(), ""),
-        ApiType::Float => ("nlua_pop_float".into(), ""),
-        ApiType::String => ("nlua_pop_string".into(), ""),
-        ApiType::Array => ("nlua_pop_array".into(), ""),
+        ApiType::Boolean => ("pop_boolean".into(), ""),
+        ApiType::Integer => ("pop_integer".into(), ""),
+        ApiType::Float => ("pop_float".into(), ""),
+        ApiType::String => ("pop_string".into(), ""),
+        ApiType::Array => ("pop_array".into(), ""),
         // The flag says whether to keep Lua references to the functions the
         // value holds. Only a `DictOf(LuaRef)` parameter wants them.
-        ApiType::Dict => ("nlua_pop_dict".into(), ", false"),
-        ApiType::Object => ("nlua_pop_object".into(), ", true"),
-        ApiType::LuaRef => ("nlua_pop_luaref".into(), ""),
-        ApiType::Handle(_) => ("nlua_pop_handle".into(), ""),
+        ApiType::Dict => ("pop_dict".into(), ", false"),
+        ApiType::Object => ("pop_object".into(), ", true"),
+        ApiType::LuaRef => ("pop_luaref".into(), ""),
+        ApiType::Handle(_) => ("pop_handle".into(), ""),
         ApiType::KeyDict(_) => unreachable!("keysets are filled in place"),
     }
 }
 
-/// The `nlua_push_*` that hands a result back, and how it names the value:
-/// a scalar by value, an owning one by borrow -- the push reads the tree and
-/// the binding goes on owning it.
-fn pusher(ret: &RetType) -> (String, &'static str) {
+/// The `push_*` that hands a result back, how it names the value -- a scalar
+/// by value, an owning one by borrow: the push reads the tree and the binding
+/// goes on owning it -- and whether it takes the special-values flag.
+fn pusher(ret: &RetType) -> (String, &'static str, bool) {
     match ret {
-        RetType::Boolean => ("nlua_push_boolean".into(), "ret"),
-        RetType::Integer => ("nlua_push_integer".into(), "ret"),
-        RetType::Float => ("nlua_push_float".into(), "ret"),
-        RetType::String => ("nlua_push_string".into(), "&ret"),
-        RetType::Array => ("nlua_push_array".into(), "&mut ret"),
-        RetType::Dict => ("nlua_push_dict".into(), "&mut ret"),
-        RetType::Object => ("nlua_push_object".into(), "&raw mut ret"),
-        RetType::Handle(_) => ("nlua_push_handle".into(), "ret"),
+        RetType::Boolean => ("push_boolean".into(), "ret", false),
+        RetType::Integer => ("push_integer".into(), "ret", false),
+        RetType::Float => ("push_float".into(), "ret", true),
+        RetType::String => ("push_string".into(), "&ret", false),
+        RetType::Array => ("push_array".into(), "&ret", true),
+        RetType::Dict => ("push_dict".into(), "&ret", true),
+        RetType::Object => ("push_object".into(), "&ret", true),
+        RetType::Handle(_) => ("push_handle".into(), "ret", false),
         RetType::Void | RetType::KeyDict(_) => unreachable!("handled separately"),
     }
 }
@@ -2605,22 +2612,9 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
         "    /// out releases exactly what was converted, in declaration order."
     )
     .unwrap();
-    writeln!(out, "    ///").unwrap();
-    writeln!(out, "    /// # Safety").unwrap();
     writeln!(
         out,
-        "    /// The dispatcher's contract, which is what every `unsafe` below rests"
-    )
-    .unwrap();
-    writeln!(
-        out,
-        "    /// on: `lstate` is the running Lua state with this binding's arguments"
-    )
-    .unwrap();
-    writeln!(out, "    /// on top, and `call` is the binding's own.").unwrap();
-    writeln!(
-        out,
-        "    unsafe fn convert(lstate: *mut lua_State, {}: &mut Call) -> Result<(), Error> {{",
+        "    fn convert(stack: &mut Stack, {}: &mut Call) -> Result<(), Error> {{",
         if fields.is_empty() { "_call" } else { "call" }
     )
     .unwrap();
@@ -2662,22 +2656,20 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
                 "        let mut arg_{slot} = KeyDictArg::<KeyDict_{keyset}>::unset();"
             )
             .unwrap();
-            writeln!(out, "        // SAFETY: as above.").unwrap();
             // The keyset pop names the offending key itself.
             writeln!(
                 out,
-                "        unsafe {{ pop_keydict(lstate, &mut arg_{slot}, err_param) }}?;"
+                "        pop_keydict(stack, &mut arg_{slot}, err_param)?;"
             )
             .unwrap();
             continue;
         }
         let (pop, extra) = popper(ty);
-        writeln!(out, "        // SAFETY: as above.").unwrap();
         // `inspect_err` names the parameter a failed conversion blamed, for
         // the message `run` stages; the failure itself passes through.
         writeln!(
             out,
-            "        let arg_{slot} = unsafe {{ {pop}(lstate{extra}) }}\n\
+            "        let arg_{slot} = {pop}(stack{extra})\n\
              \x20           .inspect_err(|_| *err_param = c\"{param}\".as_ptr().cast_mut())?;"
         )
         .unwrap();
@@ -2702,7 +2694,7 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
         .map(|p| match p {
             Param::ChannelId => "LUA_INTERNAL_CALL".into(),
             Param::Arena => "arena".into(),
-            Param::LuaState => "lstate".into(),
+            Param::LuaState => "Some(&mut *stack)".into(),
             Param::Value { index, ty, .. } => value(*index, ty),
         })
         .collect();
@@ -2716,15 +2708,12 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
     // way out, including the failed call below.
     writeln!(
         out,
-        "        let _lstate = Restore::of(&active_lstate, lstate);"
+        "        let _lstate = Restore::of(&active_lstate, stack.lua_state());"
     )
     .unwrap();
-    // A result the push borrows mutably has to be a `mut` binding: the two
-    // container pushes clear a released Lua reference in place.
-    let by_pointer = matches!(
-        f.ret,
-        RetType::Object | RetType::KeyDict(_) | RetType::Array | RetType::Dict
-    );
+    // A result the push borrows mutably has to be a `mut` binding: a keyset
+    // is read through its `KeySet` slots, which hand out `&mut`.
+    let by_pointer = matches!(f.ret, RetType::KeyDict(_));
     if f.is_unsafe {
         writeln!(
             out,
@@ -2751,22 +2740,19 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
     };
     let push = match &f.ret {
         RetType::Void => String::new(),
-        RetType::KeyDict(_) => "unsafe { push_keydict(lstate, &mut ret) };".to_string(),
-        ret => {
-            let (push, value) = pusher(ret);
-            format!("unsafe {{ {push}(lstate, {value}, {flags}) }};")
-        }
+        RetType::KeyDict(_) => "push_keydict(stack, &mut ret);".to_string(),
+        ret => match pusher(ret) {
+            (push, value, true) => format!("{push}(stack, {value}, {flags});"),
+            (push, value, false) => format!("{push}(stack, {value});"),
+        },
     };
     // A function with a Lua implementation of its own may have pushed the
     // result already; only convert what it left behind.
     if !push.is_empty() && has_lua_imp {
-        writeln!(out, "        // SAFETY: as above.").unwrap();
-        writeln!(out, "        if unsafe {{ lua_gettop(lstate) }} == 0 {{").unwrap();
-        writeln!(out, "            // SAFETY: as above.").unwrap();
+        writeln!(out, "        if stack.top() == At::arg(0) {{").unwrap();
         writeln!(out, "            {push}").unwrap();
         writeln!(out, "        }}").unwrap();
     } else if !push.is_empty() {
-        writeln!(out, "        // SAFETY: as above.").unwrap();
         writeln!(out, "        {push}").unwrap();
     }
     writeln!(out, "        Ok(())").unwrap();
@@ -2999,30 +2985,29 @@ fn generate_lua(
     if referenced.contains("text_locked") {
         uses.push("use crate::ex_getln::{get_text_locked_msg, text_locked};".into());
     }
+    // The keyset codec is reached by path: its support wrappers here take
+    // the same names.
+    uses.push("use crate::lua::converter;".into());
     uses.push(format!(
         "use crate::lua::converter::{{{}}};",
         referenced_names(&[
-            "kNluaPushFreeRefs",
-            "kNluaPushSpecial",
-            "nlua_pop_array",
-            "nlua_pop_boolean",
-            "nlua_pop_dict",
-            "nlua_pop_float",
-            "nlua_pop_integer",
-            "nlua_pop_luaref",
-            "nlua_pop_object",
-            "nlua_pop_string",
-            "nlua_pop_handle",
-            "nlua_pop_keydict",
-            "nlua_push_array",
-            "nlua_push_boolean",
-            "nlua_push_dict",
-            "nlua_push_float",
-            "nlua_push_integer",
-            "nlua_push_object",
-            "nlua_push_string",
-            "nlua_push_handle",
-            "nlua_push_keydict",
+            "pop_array",
+            "pop_boolean",
+            "pop_dict",
+            "pop_float",
+            "pop_integer",
+            "pop_luaref",
+            "pop_object",
+            "pop_string",
+            "pop_handle",
+            "push_array",
+            "push_boolean",
+            "push_dict",
+            "push_float",
+            "push_integer",
+            "push_object",
+            "push_string",
+            "push_handle",
         ])
         .join(", ")
     ));
@@ -3063,6 +3048,10 @@ fn generate_lua(
         }
     }
     uses.push("use crate::guard::Restore;".into());
+    uses.push(format!(
+        "use crate::lua::stack::{{{}}};",
+        referenced_names(&["At", "Stack"]).join(", ")
+    ));
     uses.push("use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};".into());
     let types: Vec<String> = referenced_names(&["Arena", "Error", "LuaRef", "Object", "lua_State"])
         .into_iter()

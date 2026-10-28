@@ -1,22 +1,20 @@
 module	file	files	unsafe_stmts	unsafe_fns	wrappers	regions	raw_params	raw_returns	outside_callees
-api/	*	59	393	60	259	deref:54 compound:18 expr:16 ref:1	other:50 str:13	other:3 str:3 value:1	at:22 CStr::from_ptr:9 from_raw_parts:6 ManuallyDrop::take:5 nlua_exec:5 xfree:5 bytes_at:4 c_str:3
+api/	*	56	353	54	223	deref:50 compound:18 expr:16 ref:1	other:41 str:13	other:3 str:3 value:1	at:20 CStr::from_ptr:9 from_raw_parts:6 ManuallyDrop::take:5 nlua_exec:5 xfree:4 c_str:3 Box::from_raw:2
 api/	api/autocmd/create.rs	1	8	0	8	-	-	-	at:2
 api/	api/autocmd/exec.rs	1	3	0	3	-	-	-	-
 api/	api/autocmd/group.rs	1	1	0	1	-	-	-	-
 api/	api/autocmd/pattern.rs	1	5	2	5	-	-	-	CStr::from_ptr:3 printf_string:1
 api/	api/autocmd/query.rs	1	1	0	1	-	-	-	-
 api/	api/buffer/attach.rs	1	2	0	2	-	-	-	nlua_call_ref:1
-api/	api/buffer/lines.rs	1	30	5	28	deref:2	other:8	-	at:2 bytes_at:2 lua_pushlstring:2 strchrsub:2 lua_createtable:1 lua_rawseti:1 memchr:1 xfree:1
 api/	api/buffer/marks.rs	1	2	0	0	deref:2	-	-	-
 api/	api/buffer/props.rs	1	2	0	2	-	-	-	at:1
-api/	api/buffer/text.rs	1	5	1	5	-	other:1	-	-
+api/	api/buffer/text.rs	1	3	1	3	-	other:1	-	-
 api/	api/command/cmd.rs	1	10	0	4	deref:3 compound:1	str:1	-	CStr::from_ptr:1 at_opt:1 strtol:1
 api/	api/command/cmdline.rs	1	3	2	2	expr:1	other:1 str:1	-	from_raw_parts:1
 api/	api/command/parse.rs	1	2	0	2	-	-	-	from_raw_parts:1
 api/	api/command/user.rs	1	3	0	1	deref:2	-	-	-
 api/	api/deprecated/bufhl.rs	1	2	0	2	-	-	-	at:2
 api/	api/deprecated/eval.rs	1	7	0	1	compound:1	-	-	-
-api/	api/deprecated/lines.rs	1	2	0	2	-	-	-	-
 api/	api/deprecated/vars.rs	1	0	0	0	-	-	-	-
 api/	api/deprecated/write.rs	1	11	0	1	deref:5 compound:1 expr:1	-	-	nlua_exec:1
 api/	api/events.rs	1	1	0	1	-	-	-	c_str:1
@@ -27,10 +25,9 @@ api/	api/extmark/set.rs	1	2	0	1	deref:1	-	-	-
 api/	api/options.rs	1	9	2	9	-	str:2	-	CStr::from_ptr:2 c_str:2 at:1
 api/	api/private/converter.rs	1	1	0	1	-	-	-	arena_mem_free:1
 api/	api/private/dispatch/mod.rs	1	3	2	3	-	str:2	-	c_str_len:1 from_raw_parts:1
-api/	api/private/dispatch_wrappers/buffer.rs	1	2	0	2	-	-	-	-
 api/	api/private/dispatch_wrappers/ui.rs	1	2	0	2	-	-	-	-
 api/	api/private/helpers/mod.rs	1	5	0	2	deref:3	-	str:1	at:2
-api/	api/private/helpers/text.rs	1	18	6	12	deref:3 compound:1	str:4 other:1	str:1	from_raw_parts:2 CStr::from_ptr:1 bytes_at:1 memchrsub:1 strnlen:1 xfree:1 xmemdupz:1 xstrndup:1
+api/	api/private/helpers/text.rs	1	16	5	12	compound:1 deref:1	str:4	str:1	from_raw_parts:2 CStr::from_ptr:1 bytes_at:1 memchrsub:1 strnlen:1 xfree:1 xmemdupz:1 xstrndup:1
 api/	api/private/helpers/value.rs	1	9	0	9	-	-	-	ManuallyDrop::take:5 abort:1 api_free_luaref:1 unpack:1
 api/	api/private/helpers/vimdict.rs	1	8	0	4	expr:2 deref:1 ref:1	-	value:1	tv_copy:2 dict_watcher_notify:1 tv_clear:1
 api/	api/tabpage.rs	1	1	0	1	-	-	-	abort:1
@@ -58,9 +55,9 @@ api/	api/win_config/border.rs	1	13	4	9	compound:1 deref:1 expr:1	other:2 str:2	-
 api/	api/win_config/get.rs	1	3	0	1	compound:1	-	-	-
 api/	api/win_config/open.rs	1	2	0	2	-	-	-	-
 api/	api/win_config/parse.rs	1	3	0	3	-	-	-	striequal:1
-api/	api/window.rs	1	4	0	4	-	-	-	emsg:1 nlua_call_ref:1
-buffer_updates.rs	*	1	10	0	8	deref:1 expr:1	-	-	arena_mem_free:2 api_free_luaref:1 buf_collect_lines:1 from_raw_parts:1 rpc_send_event:1 xfree:1 xrealloc:1
-buffer_updates.rs	buffer_updates.rs	1	10	0	8	deref:1 expr:1	-	-	arena_mem_free:2 api_free_luaref:1 buf_collect_lines:1 from_raw_parts:1 rpc_send_event:1 xfree:1 xrealloc:1
+api/	api/window.rs	1	2	0	2	-	-	-	emsg:1 nlua_call_ref:1
+buffer_updates.rs	*	1	9	0	7	deref:1 expr:1	-	-	arena_mem_free:2 api_free_luaref:1 from_raw_parts:1 rpc_send_event:1 xfree:1 xrealloc:1
+buffer_updates.rs	buffer_updates.rs	1	9	0	7	deref:1 expr:1	-	-	arena_mem_free:2 api_free_luaref:1 from_raw_parts:1 rpc_send_event:1 xfree:1 xrealloc:1
 channel/	*	5	300	48	151	deref:115 expr:28 ref:3 compound:1	other:42 str:10 void:10 pp:4 pp_str:4 value:1	other:10 str:3	multiqueue_put_event:6 rpc_start:5 rstream_may_close:4 rstream_start:4 xfree:4 rstream_init:3 DictRef::owning:2 bytes_at:2
 channel/	channel/info.rs	1	28	4	13	deref:13 expr:1 ref:1	other:2 pp:1 pp_str:1 str:1	-	cstr_to_string:2 DictRef::retained:1 multiqueue_put_event:1 terminal_buf:1 xfree:1
 channel/	channel/mod.rs	1	91	19	43	deref:34 expr:11 compound:1	other:16 pp_str:2 str:2 pp:1 void:1	other:9 str:3	rstream_may_close:4 multiqueue_put_event:2 stream_may_close:2 xfree:2 zeroed:2 Box::from_raw:1 api_free_luaref:1 callback_free:1

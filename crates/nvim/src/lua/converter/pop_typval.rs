@@ -1,10 +1,10 @@
-//! `nlua_pop_typval()`: a Lua value as a Vimscript one.
+//! `pop_typval()`: a Lua value as a Vimscript one.
 //!
 //! The Lua->typval direction, and the mirror of [`super::push`].  One
 //! explicit stack of [`OpenValue`]s rather than recursion, because a Lua
 //! table may nest arbitrarily deep and the conversion has to be able to
 //! refuse (`E5100`) rather than overflow.  Tables are classified by
-//! [`nlua_traverse_table`] first, so a table's *shape* -- list, dictionary,
+//! [`classify_table`] first, so a table's *shape* -- list, dictionary,
 //! empty-dict, or a `{_TYPE, _VAL}` special -- is decided once.
 //!
 //! A frame holds the **container it is filling**, as the owning handle:
@@ -15,9 +15,7 @@
 //! is open, and for a dictionary the key `lua_next` handed back waits one
 //! slot above it while its value is converted.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `lua/` row in docs/perimeter.md.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 #![deny(
@@ -32,25 +30,21 @@ use crate::semsg;
 use crate::types::DictItem;
 use core::ffi::CStr;
 
-use super::pop::{At, LuaStack, TURN_SLOTS};
-use super::{VARNUMBER_MAX, VARNUMBER_MIN, nlua_traverse_table};
+use super::pop::TURN_SLOTS;
+use super::{VARNUMBER_MAX, VARNUMBER_MIN, classify_table};
 use crate::eval::decode::{decode_create_map_special_dict, decode_string};
 use crate::eval::typval::{DictRef, ListRef, tv_dict_alloc, tv_list_alloc};
 use crate::eval::userfunc::register_luafunc;
-use crate::lua::executor::{nlua_pushref, nlua_ref_global};
-use crate::lua::ffi::{
-    LUA_NOREF, LUA_TBOOLEAN, LUA_TFUNCTION, LUA_TNIL, LUA_TNUMBER, LUA_TSTRING, LUA_TTABLE,
-    LUA_TUSERDATA,
-};
-use crate::lua::state::nlua_global_refs;
+use crate::global_cell::GlobalCell;
+use crate::lua::ffi::LUA_NOREF;
+use crate::lua::stack::{At, Kind, Stack};
 use crate::message::emsg;
 use crate::narrow::{float_as_i64, len_as_int};
 use crate::os::cshim::gettext;
 use crate::types::{
     ListItem, LuaRef, TypVal, kBoolVarFalse, kBoolVarTrue, kObjectTypeArray, kObjectTypeDict,
-    kObjectTypeFloat, kObjectTypeNil, kSpecialVarNull, lua_Number, lua_State, size_t,
+    kObjectTypeFloat, kObjectTypeNil, kSpecialVarNull, lua_Number, size_t,
 };
-use ::libc::abort;
 
 /// Refused for a table that is neither a list nor a dictionary.
 const E5100_MIXED_KEYS: &CStr = c"E5100: Cannot convert given Lua table: table should contain \
@@ -114,7 +108,7 @@ impl OpenValue {
     /// Put this container's next element on the Lua stack, or answer `false`
     /// once there is none left -- having popped whatever it was holding
     /// above its table.
-    fn advance(&mut self, lua: &LuaStack) -> bool {
+    fn advance(&mut self, stack: &mut Stack) -> bool {
         match self {
             OpenValue::List {
                 list,
@@ -124,17 +118,17 @@ impl OpenValue {
                 if list.lv_items.len() >= *wanted {
                     return false;
                 }
-                lua.push_item(*table, len_as_int(list.lv_items.len() + 1));
+                stack.raw_get_index(*table, len_as_int(list.lv_items.len() + 1));
                 true
             }
             OpenValue::Dict { table, .. } | OpenValue::Pairs { table, .. } => {
                 // Skip any non-string key: those are not part of the
                 // dictionary being built.
-                while lua.next_entry(*table) {
-                    if lua.entry_key_is_string() {
+                while stack.next(*table) {
+                    if stack.kind(At::from_top(2)) == Kind::String {
                         return true;
                     }
-                    lua.discard(1);
+                    stack.pop(1);
                 }
                 false
             }
@@ -146,23 +140,22 @@ impl OpenValue {
     ///
     /// The converted Lua value is already off the stack, so a dictionary's
     /// pending key is once again the top of it.
-    fn deliver(&mut self, lua: &LuaStack, value: TypVal) {
+    fn deliver(&mut self, stack: &mut Stack, value: TypVal) {
         match self {
             OpenValue::List { list, .. } => list.lv_items.push(ListItem::new(value)),
             OpenValue::Dict { dict, table } => {
-                let key = lua.string_at(At(table.0 + 1));
+                let key = stack.to_bytes(table.above(1)).unwrap_or_default();
                 let mut item = DictItem::boxed(key);
                 item.di_tv = value;
                 if dict.add_item(item).is_err() {
                     // A Lua table cannot hand the same key back twice,
                     // so the only refusal left is the funcref-name
                     // check, which a key from a table never trips.
-                    // SAFETY: `abort` only ever ends the process.
-                    unsafe { abort() };
+                    std::process::abort();
                 }
             }
             OpenValue::Pairs { pairs, table, .. } => {
-                let bytes = lua.string_at(At(table.0 + 1));
+                let bytes = stack.to_bytes(table.above(1)).unwrap_or_default();
                 // The `_VAL` of a map special is a list of two-element
                 // `[key, value]` lists, and the key is forced to a blob so
                 // that the NUL that put it here survives.
@@ -197,21 +190,23 @@ enum Converted {
 /// Convert the Lua value on top of the stack, or open the container it is.
 ///
 /// `None` refuses, with the reason already reported.
-fn convert_top(lua: &LuaStack, stack: &mut Vec<OpenValue>) -> Option<Converted> {
-    match lua.top_kind() {
-        LUA_TNIL => Some(Converted::Value(TypVal::Special(kSpecialVarNull))),
-        LUA_TBOOLEAN => Some(Converted::Value(TypVal::Bool(if lua.top_as_boolean() {
-            kBoolVarTrue
-        } else {
-            kBoolVarFalse
-        }))),
-        LUA_TSTRING => {
-            let bytes = lua.string_at(lua.top());
+fn convert_top(stack: &mut Stack, open: &mut Vec<OpenValue>) -> Option<Converted> {
+    match stack.kind(At::TOP) {
+        Kind::Nil => Some(Converted::Value(TypVal::Special(kSpecialVarNull))),
+        Kind::Boolean => Some(Converted::Value(TypVal::Bool(
+            if stack.to_boolean(At::TOP) {
+                kBoolVarTrue
+            } else {
+                kBoolVarFalse
+            },
+        ))),
+        Kind::String => {
+            let bytes = stack.to_bytes(At::TOP).unwrap_or_default();
             // `decode_string` copies the Lua string's bytes.
             Some(Converted::Value(decode_string(bytes, false)))
         }
-        LUA_TNUMBER => {
-            let n = lua.top_as_number();
+        Kind::Number => {
+            let n = stack.to_number(At::TOP);
             let no_integer = n > VARNUMBER_MAX as lua_Number
                 || n < VARNUMBER_MIN as lua_Number
                 || float_as_i64(n) as lua_Number != n;
@@ -221,19 +216,17 @@ fn convert_top(lua: &LuaStack, stack: &mut Vec<OpenValue>) -> Option<Converted> 
                 TypVal::Number(float_as_i64(n))
             }))
         }
-        LUA_TTABLE => convert_table(lua, stack),
-        LUA_TFUNCTION => {
-            // SAFETY: the function on top of the stack, registered under a
-            // name the value takes.
-            let name = register_luafunc(unsafe { nlua_ref_global(lua.lstate, -1) });
+        Kind::Table => convert_table(stack, open),
+        Kind::Function => {
+            // The function, registered under a name the value takes.
+            let name = register_luafunc(stack.reference(At::TOP));
             Some(Converted::Value(TypVal::func(Some(name))))
         }
-        LUA_TUSERDATA => {
+        Kind::Userdata => {
             // TODO(bfredl): check mt.__call and convert to a function?
-            // SAFETY: pushing the `vim.NIL` singleton to compare against.
-            unsafe { nlua_pushref(lua.lstate, (*nlua_global_refs.get()).nil_ref) };
-            let is_nil = lua.top_is(At(-2));
-            lua.discard(1);
+            stack.push_vim_nil();
+            let is_nil = stack.raw_equal(At::TOP, At::from_top(2));
+            stack.pop(1);
             if is_nil {
                 Some(Converted::Value(TypVal::Special(kSpecialVarNull)))
             } else {
@@ -250,30 +243,29 @@ fn convert_top(lua: &LuaStack, stack: &mut Vec<OpenValue>) -> Option<Converted> 
 
 /// Convert the Lua *table* on top of the stack: a value outright when it is
 /// empty or a self-reference, otherwise a container the walk descends into.
-fn convert_table(lua: &LuaStack, stack: &mut Vec<OpenValue>) -> Option<Converted> {
+fn convert_table(stack: &mut Stack, open: &mut Vec<OpenValue>) -> Option<Converted> {
     // Only worth tracking a table reference when the table has a metatable
     // of its own.
     let mut table_ref: LuaRef = LUA_NOREF;
-    if lua.push_metatable() {
-        lua.discard(1);
-        // SAFETY: the table itself, which the reference now names.
-        table_ref = unsafe { nlua_ref_global(lua.lstate, -1) };
+    if stack.get_metatable(At::TOP) {
+        stack.pop(1);
+        // The table itself, which the reference now names.
+        table_ref = stack.reference(At::TOP);
     }
 
-    // SAFETY: the table on top of the stack, which the traversal leaves
-    // where it found it.
-    let table_props = unsafe { nlua_traverse_table(lua.lstate) };
+    // The traversal leaves the table where it found it.
+    let table_props = classify_table(stack);
 
     // A container already open on this table is this same table: share it
     // rather than descend forever.
-    for open in stack.iter() {
-        if lua.top_is(open.table()) {
-            return Some(Converted::Value(open.reentered()));
+    for container in open.iter() {
+        if stack.raw_equal(At::TOP, container.table()) {
+            return Some(Converted::Value(container.reentered()));
         }
     }
 
     // A frame opened below names this slot for as long as it lives.
-    let table = lua.top();
+    let table = stack.top();
     match table_props.type_0 {
         kObjectTypeArray => {
             let mut list = tv_list_alloc(table_props.maxidx.cast_signed());
@@ -281,7 +273,7 @@ fn convert_table(lua: &LuaStack, stack: &mut Vec<OpenValue>) -> Option<Converted
             if table_props.maxidx == 0 {
                 return Some(Converted::Value(TypVal::list(Some(list))));
             }
-            stack.push(OpenValue::List {
+            open.push(OpenValue::List {
                 list,
                 wanted: table_props.maxidx,
                 table,
@@ -301,7 +293,7 @@ fn convert_table(lua: &LuaStack, stack: &mut Vec<OpenValue>) -> Option<Converted
                 let (special, mut pairs) =
                     decode_create_map_special_dict(table_props.string_keys_num.cast_signed());
                 pairs.lua_table_ref = table_ref;
-                stack.push(OpenValue::Pairs {
+                open.push(OpenValue::Pairs {
                     special,
                     pairs,
                     table,
@@ -309,10 +301,10 @@ fn convert_table(lua: &LuaStack, stack: &mut Vec<OpenValue>) -> Option<Converted
             } else {
                 let mut dict = tv_dict_alloc();
                 dict.lua_table_ref = table_ref;
-                stack.push(OpenValue::Dict { dict, table });
+                open.push(OpenValue::Dict { dict, table });
             }
             // Seed `lua_next`.
-            lua.push_nil();
+            stack.push_nil();
             Some(Converted::Opened)
         }
         kObjectTypeFloat => Some(Converted::Value(TypVal::Float(table_props.val))),
@@ -320,8 +312,7 @@ fn convert_table(lua: &LuaStack, stack: &mut Vec<OpenValue>) -> Option<Converted
             emsg(gettext(E5100_MIXED_KEYS));
             None
         }
-        // SAFETY: `abort` only ever ends the process.
-        _ => unsafe { abort() },
+        _ => std::process::abort(),
     }
 }
 
@@ -335,40 +326,54 @@ enum Step {
     Advance,
 }
 
+/// Room for one turn of the walk -- the next element, and what converting
+/// it pushes -- or `E1502`.
+///
+/// Asked before the first conversion and before each advance, which is
+/// where upstream's loop asks: an element is converted in the same turn that
+/// pushed it, so the depth at which a deep table is refused (and the refusal
+/// it gets) is upstream's.
+fn reserve_turn(stack: &mut Stack) -> Option<()> {
+    let need = stack.top().index() + TURN_SLOTS;
+    if !stack.reserve(need) {
+        semsg!("E1502: Lua failed to grow stack to {need}");
+        return None;
+    }
+    Some(())
+}
+
 /// Walk the Lua value on top of the stack, leaving it there.
 ///
 /// `None` refuses, with the reason already reported; whatever the walk had
 /// built is released with `stack`.
-fn walk(lua: &LuaStack, stack: &mut Vec<OpenValue>) -> Option<TypVal> {
+fn walk(stack: &mut Stack, open: &mut Vec<OpenValue>) -> Option<TypVal> {
+    reserve_turn(stack)?;
     let mut step = Step::Convert;
     loop {
-        if let Err(need) = lua.grow(TURN_SLOTS) {
-            semsg!("E1502: Lua failed to grow stack to {need}");
-            return None;
-        }
         step = match step {
-            Step::Convert => match convert_top(lua, stack)? {
+            Step::Convert => match convert_top(stack, open)? {
                 Converted::Value(value) => {
-                    lua.discard(1);
+                    stack.pop(1);
                     Step::Deliver(value)
                 }
                 Converted::Opened => Step::Advance,
             },
-            Step::Deliver(value) => match stack.last_mut() {
+            Step::Deliver(value) => match open.last_mut() {
                 None => return Some(value),
-                Some(open) => {
-                    open.deliver(lua, value);
+                Some(container) => {
+                    container.deliver(stack, value);
                     Step::Advance
                 }
             },
             Step::Advance => {
-                let open = stack.last_mut().expect("a container to advance");
-                if open.advance(lua) {
+                reserve_turn(stack)?;
+                let container = open.last_mut().expect("a container to advance");
+                if container.advance(stack) {
                     Step::Convert
                 } else {
-                    let done = stack.pop().expect("the container just advanced");
+                    let done = open.pop().expect("the container just advanced");
                     // Its table has served its purpose.
-                    lua.discard(1);
+                    stack.pop(1);
                     Step::Deliver(done.finish())
                 }
             }
@@ -376,25 +381,25 @@ fn walk(lua: &LuaStack, stack: &mut Vec<OpenValue>) -> Option<TypVal> {
     }
 }
 
+/// The walk's container stack, kept between conversions as `pop_object`'s
+/// is, so that converting a table does not allocate one afresh.
+static OPEN_VALUES: GlobalCell<Vec<OpenValue>> = GlobalCell::new(Vec::new());
+
 /// The Lua value on top of the stack as a Vimscript one, popping exactly one
 /// value.
 ///
 /// `None` when it will not convert, with the reason already reported.
-///
-/// # Safety
-/// `lstate` must be a live Lua state with a value on top.
-pub unsafe fn nlua_pop_typval(lstate: *mut lua_State) -> Option<TypVal> {
-    // The caller's promise, and the whole of what makes the walk safe: a
-    // state that stays live for as long as this handle.
-    let lua = LuaStack { lstate };
-    let initial_size = lua.top();
-    let mut stack: Vec<OpenValue> = Vec::new();
-    let converted = walk(&lua, &mut stack);
+pub fn pop_typval(stack: &mut Stack) -> Option<TypVal> {
+    let initial_size = stack.top();
+    let mut open = OPEN_VALUES.take();
+    let converted = walk(stack, &mut open);
     if converted.is_none() {
         // Every container the walk had open is released here.
-        drop(stack);
-        lua.discard(lua.top().0 - initial_size.0 + 1);
+        open.clear();
+        stack.pop(stack.top().index() - initial_size.index() + 1);
     }
-    debug_assert!(lua.top().0 == initial_size.0 - 1);
+    debug_assert!(open.is_empty());
+    OPEN_VALUES.set(open);
+    debug_assert!(stack.top().index() == initial_size.index() - 1);
     converted
 }

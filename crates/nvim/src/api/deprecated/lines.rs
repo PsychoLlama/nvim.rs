@@ -4,8 +4,7 @@
 //! the translation into the modern zero-based, end-exclusive spelling -- each
 //! forwarding to `nvim_buf_get_lines` or `nvim_buf_set_lines`.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -23,10 +22,8 @@ pub fn buffer_insert(buffer: BufferHandle, lnum: Integer, lines: Array) -> Resul
 
 pub fn buffer_get_line(buffer: BufferHandle, index: Integer) -> Result<String_0, Error> {
     let index = convert_index(index as int64_t) as Integer;
-    let no_lua = ::core::ptr::null_mut::<lua_State>();
-    // SAFETY: a null `lua_State` asks for the API
-    // representation rather than a Lua one.
-    let slice: Array = unsafe { nvim_buf_get_lines(0, buffer, index, index + 1, true, no_lua) }?;
+    // No Lua stack: the API representation rather than a Lua one.
+    let slice: Array = nvim_buf_get_lines(0, buffer, index, index + 1, true, None)?;
     if slice.is_empty() {
         return Ok(String_0::NULL);
     }
@@ -57,9 +54,7 @@ pub fn buffer_get_line_slice(
 ) -> Result<Array, Error> {
     let start = (convert_index(start as int64_t) + int64_t::from(!include_start)) as Integer;
     let end = (convert_index(end as int64_t) + int64_t::from(include_end)) as Integer;
-    let no_lua = ::core::ptr::null_mut::<lua_State>();
-    // SAFETY: as `buffer_get_line`.
-    unsafe { nvim_buf_get_lines(0, buffer, start, end, false, no_lua) }
+    nvim_buf_get_lines(0, buffer, start, end, false, None)
 }
 
 /// Replace a range of lines, the 0.1 API's way: each end may be in or out.

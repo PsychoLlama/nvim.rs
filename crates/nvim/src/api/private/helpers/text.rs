@@ -268,17 +268,13 @@ pub(crate) fn string_to_array(input: &String_0, crlf: bool) -> Array {
 ///
 /// `end_exclusive` allows one past the last line, which is what an
 /// end-of-range index means.
-///
-/// # Safety
-///
-/// `oob` must point at a writable `bool` the caller owns.
-pub(crate) unsafe fn normalize_index(
+pub(crate) fn normalize_index(
     buffer: Buf,
     index: int64_t,
     end_exclusive: bool,
-    oob: *mut bool,
+    oob: &mut bool,
 ) -> int64_t {
-    // SAFETY: the caller's promise -- `buffer` is a loaded buffer.
+    // The callers have checked that `buffer` is loaded.
     let line_count = buffer.b_ml.ml_line_count;
     debug_assert!(line_count > 0);
     let max_index = (line_count + end_exclusive as LineNr - 1) as int64_t;
@@ -288,12 +284,10 @@ pub(crate) unsafe fn normalize_index(
         index
     };
     if index > max_index {
-        // SAFETY: the caller's promise -- `oob` is their flag.
-        unsafe { *oob = true };
+        *oob = true;
         index = max_index;
     } else if index < 0 {
-        // SAFETY: as above.
-        unsafe { *oob = true };
+        *oob = true;
         index = 0;
     }
     index + 1

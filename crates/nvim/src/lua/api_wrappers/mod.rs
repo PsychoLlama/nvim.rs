@@ -45,7 +45,6 @@ mod tabpage;
 mod ui;
 mod vim;
 mod vim_2;
-mod vim_3;
 mod vimscript;
 mod win_config;
 mod window;
@@ -61,7 +60,6 @@ pub use self::tabpage::*;
 pub use self::ui::*;
 pub use self::vim::*;
 pub use self::vim_2::*;
-pub use self::vim_3::*;
 pub use self::vimscript::*;
 pub use self::win_config::*;
 pub use self::window::*;
@@ -138,12 +136,11 @@ use crate::ex_docmd::expr_map_locked;
 use crate::ex_getln::{get_text_locked_msg, text_locked};
 use crate::guard::Restore;
 use crate::guard::textlock;
+use crate::lua::converter;
 use crate::lua::converter::{
-    kNluaPushFreeRefs, kNluaPushSpecial, nlua_pop_array, nlua_pop_boolean, nlua_pop_dict,
-    nlua_pop_float, nlua_pop_handle, nlua_pop_integer, nlua_pop_keydict, nlua_pop_luaref,
-    nlua_pop_object, nlua_pop_string, nlua_push_array, nlua_push_boolean, nlua_push_dict,
-    nlua_push_float, nlua_push_handle, nlua_push_integer, nlua_push_keydict, nlua_push_object,
-    nlua_push_string,
+    pop_array, pop_boolean, pop_dict, pop_float, pop_handle, pop_integer, pop_luaref, pop_object,
+    pop_string, push_array, push_boolean, push_dict, push_float, push_handle, push_integer,
+    push_object, push_string,
 };
 use crate::lua::executor::{
     LUA_INTERNAL_CALL, active_lstate, api_free_luaref, nlua_is_deferred_safe,
@@ -152,6 +149,7 @@ use crate::lua::ffi::{
     lua_concat, lua_createtable, lua_error, lua_gettop, lua_pushcclosure, lua_pushstring,
     lua_setfield, luaL_error, luaL_where,
 };
+use crate::lua::stack::{At, Stack};
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
 use crate::message::{e_fast_api_disabled, e_textlock};
 use crate::types::{
@@ -178,14 +176,12 @@ mod known {
 
 use known::*;
 
-/// Flags for handing a result back to Lua.
-///
-/// `kNluaPushFreeRefs` always applies: the binding owns the value and
-/// releases the Lua references it holds as it converts. `kNluaPushSpecial`
-/// additionally converts `nil` and the other special values the pre-0.11
-/// way, which is what clients of methods older than API level 11 expect.
-const PUSH: c_int = kNluaPushFreeRefs;
-const PUSH_SPECIAL: c_int = kNluaPushSpecial | kNluaPushFreeRefs;
+/// How a result goes back to Lua: `PUSH_SPECIAL` converts `nil` and the
+/// other special values the pre-0.11 way, which is what clients of methods
+/// older than API level 11 expect. Either way the push borrows the result,
+/// and the binding releases the Lua references it holds by dropping it.
+const PUSH: bool = false;
+const PUSH_SPECIAL: bool = true;
 
 /// What one binding carries from its first conversion to its last release.
 struct Call {
@@ -210,7 +206,7 @@ impl Call {
 /// conversion — releases exactly the arguments that were converted, in
 /// declaration order, because each one's release is a guard dropped on the
 /// way out.
-type Convert = unsafe fn(*mut lua_State, &mut Call) -> Result<(), Error>;
+type Convert = fn(&mut Stack, &mut Call) -> Result<(), Error>;
 
 // -- keysets ---------------------------------------------------------------
 
@@ -230,26 +226,17 @@ impl<K: KeySet + Default> KeyDictArg<K> {
 
 /// Fill a keyset argument from the Lua value on top of the stack. On refusal
 /// `*err_param` names the key that failed.
-///
-/// # Safety
-/// `lstate` is the running Lua state with the argument on top; `err_param`
-/// is the binding's own.
-unsafe fn pop_keydict<K: KeySet + Default>(
-    lstate: *mut lua_State,
+fn pop_keydict<K: KeySet + Default>(
+    stack: &mut Stack,
     arg: &mut KeyDictArg<K>,
     err_param: &mut *mut c_char,
 ) -> Result<(), Error> {
-    // SAFETY: the caller's stack.
-    unsafe { nlua_pop_keydict(lstate, &mut arg.dict, err_param) }
+    converter::pop_keydict(stack, &mut arg.dict, err_param)
 }
 
 /// Hand a keyset result back as a Lua table.
-///
-/// # Safety
-/// `lstate` is the running Lua state.
-unsafe fn push_keydict(lstate: *mut lua_State, value: &mut dyn KeySet) {
-    // SAFETY: the caller's stack.
-    unsafe { nlua_push_keydict(lstate, value) };
+fn push_keydict(stack: &mut Stack, value: &mut dyn KeySet) {
+    converter::push_keydict(stack, value);
 }
 
 // -- argument guards -------------------------------------------------------
@@ -327,8 +314,9 @@ unsafe fn run(
             // and nothing is left to release.
             return unsafe { luaL_error(lstate, fmt, name) };
         }
-        // SAFETY: as above; `call` is this frame's own.
-        unsafe { convert(lstate, &mut call) }
+        // SAFETY: as above, and this is the frame's only `Stack`.
+        let mut stack = unsafe { Stack::from_raw(lstate) };
+        convert(&mut stack, &mut call)
     };
     // SAFETY: the arena is this frame's own, and every argument that borrowed
     // from it has been released.

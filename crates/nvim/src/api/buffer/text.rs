@@ -36,11 +36,11 @@ pub fn nvim_buf_set_text(
     };
     let buffer = b;
     let mut oob: bool = false;
-    start_row = unsafe { normalize_index(b, start_row as int64_t, false, &raw mut oob) } as Integer;
+    start_row = normalize_index(b, start_row as int64_t, false, &mut oob) as Integer;
     if oob {
         return Err(err_out_of_range(c"start_row"));
     }
-    end_row = unsafe { normalize_index(b, end_row as int64_t, false, &raw mut oob) } as Integer;
+    end_row = normalize_index(b, end_row as int64_t, false, &mut oob) as Integer;
     if oob {
         return Err(err_out_of_range(c"end_row"));
     }

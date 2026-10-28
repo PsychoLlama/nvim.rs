@@ -27,17 +27,11 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_ui_send(lstate: *mut lua_State) ->
     /// Pop the arguments, call the API function, hand the result back.
     /// Each argument that owns Lua references arms a guard, so every way
     /// out releases exactly what was converted, in declaration order.
-    ///
-    /// # Safety
-    /// The dispatcher's contract, which is what every `unsafe` below rests
-    /// on: `lstate` is the running Lua state with this binding's arguments
-    /// on top, and `call` is the binding's own.
-    unsafe fn convert(lstate: *mut lua_State, call: &mut Call) -> Result<(), Error> {
+    fn convert(stack: &mut Stack, call: &mut Call) -> Result<(), Error> {
         let Call { err_param, .. } = call;
-        // SAFETY: as above.
-        let arg_1 = unsafe { nlua_pop_string(lstate) }
-            .inspect_err(|_| *err_param = c"content".as_ptr().cast_mut())?;
-        let _lstate = Restore::of(&active_lstate, lstate);
+        let arg_1 =
+            pop_string(stack).inspect_err(|_| *err_param = c"content".as_ptr().cast_mut())?;
+        let _lstate = Restore::of(&active_lstate, stack.lua_state());
         nvim_ui_send(LUA_INTERNAL_CALL, arg_1);
         Ok(())
     }

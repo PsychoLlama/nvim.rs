@@ -18,7 +18,7 @@
 
 use crate::cstr;
 use crate::narrow::len_as_int;
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 use core::ptr;
 
 use super::{LUA_INTERNAL_CALL, MAX_FUNC_ARGS, nlua_is_deferred_safe, viml_func_is_fast};
@@ -28,11 +28,12 @@ use crate::eval::typval::{CallFrame, TV_INITIAL_VALUE, tv_clear};
 use crate::eval::userfunc::{CallWith, call_func_with};
 use crate::ex_eval::state::{did_throw, force_abort, suppress_errthrow};
 use crate::ex_getln::TRY_STATE_INIT;
-use crate::lua::converter::{nlua_pop_object, nlua_pop_typval, nlua_push_object, nlua_push_typval};
+use crate::lua::converter::{pop_object, pop_typval, push_object, push_typval};
 use crate::lua::ffi::{
     lua_error, lua_gettop, lua_pushstring, lua_pushvalue, luaL_checkinteger, luaL_checklstring,
     luaL_error,
 };
+use crate::lua::stack::{Raise, Stack};
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
 use crate::message::e_fast_api_disabled;
 use crate::message::state::did_emsg;
@@ -45,8 +46,25 @@ use crate::types::{
 /// How much of a rejected function's name the "not allowed in a fast event"
 /// message quotes.
 const NAME_LIMIT: size_t = 100;
-/// `Vimscript function "%s"` less the `%s`, plus its terminator.
-const QUOTED_FMT_LEN: size_t = size_of::<[c_char; 22]>();
+
+/// `E5560: Vimscript function "<name>" must not be called in a fast event
+/// context`.
+///
+/// Upstream formats the quoted part into a buffer sized for at most
+/// `NAME_LIMIT` bytes of the name plus the quotes and the terminator -- one
+/// byte short, so a name over the limit is cut to `NAME_LIMIT + 1` bytes
+/// and loses its closing quote. Kept, byte for byte.
+fn fast_call_refusal(name: &[u8]) -> Vec<u8> {
+    const PREFIX: &[u8] = b"Vimscript function \"";
+    let mut quoted = [PREFIX, name, b"\""].concat();
+    quoted.truncate(PREFIX.len() + name.len().min(NAME_LIMIT) + 1);
+    let template = e_fast_api_disabled.to_bytes();
+    let at = template
+        .windows(2)
+        .position(|w| w == b"%s")
+        .expect("the message has a slot for the name");
+    [&template[..at], &quoted[..], &template[at + 2..]].concat()
+}
 
 /// `vim.call(name, ...)`: call a Vimscript function.
 ///
@@ -57,22 +75,17 @@ const QUOTED_FMT_LEN: size_t = size_of::<[c_char; 22]>();
 /// # Safety
 /// `lstate` must be a live Lua state holding this function's arguments.
 pub unsafe extern "C-unwind" fn nlua_call(lstate: *mut lua_State) -> c_int {
-    let mut refused = [0 as c_char; NAME_LIMIT + QUOTED_FMT_LEN + 1];
     unsafe {
         let mut err = Error::none();
         let mut name_len: size_t = 0;
         let name = luaL_checklstring(lstate, 1, &raw mut name_len);
 
         if !nlua_is_deferred_safe() && !viml_func_is_fast(name) {
-            let length = cstr::bytes_at(name).len().min(NAME_LIMIT) + QUOTED_FMT_LEN;
-            crate::vim_snprintf!(
-                refused.as_mut_ptr(),
-                length,
-                c"Vimscript function \"%s\"".as_ptr(),
-                name,
-            );
-            let fmt = e_fast_api_disabled.as_ptr();
-            return luaL_error(lstate, fmt, refused.as_ptr());
+            // `%s` stops at a NUL, and so does the name the message quotes.
+            let message = fast_call_refusal(cstr::bytes_at(name));
+            // The refusal owns its message, and nothing else of this frame
+            // owns anything yet: the raise strands nothing.
+            return Stack::entry(lstate, |_| Err(Raise::message(message)));
         }
 
         let nargs = usize::try_from(lua_gettop(lstate) - 1).unwrap_or(0);
@@ -87,7 +100,7 @@ pub unsafe extern "C-unwind" fn nlua_call(lstate: *mut lua_State) -> c_int {
         'free_vim_args: {
             for i in 0..nargs {
                 lua_pushvalue(lstate, len_as_int(i) + 2);
-                let Some(arg) = nlua_pop_typval(lstate) else {
+                let Some(arg) = pop_typval(&mut Stack::from_raw(lstate)) else {
                     err = api_error!(kErrorTypeException, "error converting argument {}", i + 1);
                     break 'free_vim_args;
                 };
@@ -118,7 +131,7 @@ pub unsafe extern "C-unwind" fn nlua_call(lstate: *mut lua_State) -> c_int {
             drop(sctx);
 
             if !err.is_set() {
-                nlua_push_typval(lstate, &rettv, 0);
+                push_typval(&mut Stack::from_raw(lstate), &rettv, false);
             }
             tv_clear(&mut rettv);
         }
@@ -173,7 +186,7 @@ unsafe fn nlua_rpc(lstate: *mut lua_State, request: bool) -> c_int {
         'check_err: {
             for i in 0..nargs {
                 lua_pushvalue(lstate, i + 3);
-                let popped = nlua_pop_object(lstate, false);
+                let popped = pop_object(&mut Stack::from_raw(lstate), false);
                 let Ok(value) = popped.inspect_err(|e| err = e.clone()) else {
                     break 'check_err;
                 };
@@ -183,8 +196,8 @@ unsafe fn nlua_rpc(lstate: *mut lua_State, request: bool) -> c_int {
             if request {
                 let mut res_mem: ArenaMem = ptr::null_mut::<ConsumedBlk>();
                 match rpc_send_call(chan_id, name, args, &raw mut res_mem) {
-                    Ok(mut result) => {
-                        nlua_push_object(lstate, &raw mut result, 0);
+                    Ok(result) => {
+                        push_object(&mut Stack::from_raw(lstate), &result, false);
                         arena_mem_free(res_mem);
                     }
                     Err(e) => err = e,

@@ -27,26 +27,15 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_call_dict_function(lstate: *mut lu
     /// Pop the arguments, call the API function, hand the result back.
     /// Each argument that owns Lua references arms a guard, so every way
     /// out releases exactly what was converted, in declaration order.
-    ///
-    /// # Safety
-    /// The dispatcher's contract, which is what every `unsafe` below rests
-    /// on: `lstate` is the running Lua state with this binding's arguments
-    /// on top, and `call` is the binding's own.
-    unsafe fn convert(lstate: *mut lua_State, call: &mut Call) -> Result<(), Error> {
+    fn convert(stack: &mut Stack, call: &mut Call) -> Result<(), Error> {
         let Call { err_param, .. } = call;
-        // SAFETY: as above.
-        let arg_3 = unsafe { nlua_pop_array(lstate) }
-            .inspect_err(|_| *err_param = c"args".as_ptr().cast_mut())?;
-        // SAFETY: as above.
-        let arg_2 = unsafe { nlua_pop_string(lstate) }
-            .inspect_err(|_| *err_param = c"fn".as_ptr().cast_mut())?;
-        // SAFETY: as above.
-        let arg_1 = unsafe { nlua_pop_object(lstate, true) }
-            .inspect_err(|_| *err_param = c"dict".as_ptr().cast_mut())?;
-        let _lstate = Restore::of(&active_lstate, lstate);
-        let mut ret = nvim_call_dict_function(arg_1, arg_2, arg_3)?;
-        // SAFETY: as above.
-        unsafe { nlua_push_object(lstate, &raw mut ret, PUSH_SPECIAL) };
+        let arg_3 = pop_array(stack).inspect_err(|_| *err_param = c"args".as_ptr().cast_mut())?;
+        let arg_2 = pop_string(stack).inspect_err(|_| *err_param = c"fn".as_ptr().cast_mut())?;
+        let arg_1 =
+            pop_object(stack, true).inspect_err(|_| *err_param = c"dict".as_ptr().cast_mut())?;
+        let _lstate = Restore::of(&active_lstate, stack.lua_state());
+        let ret = nvim_call_dict_function(arg_1, arg_2, arg_3)?;
+        push_object(stack, &ret, PUSH_SPECIAL);
         Ok(())
     }
     // SAFETY: `lstate` is the state Lua called this binding on.
@@ -64,23 +53,13 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_call_function(lstate: *mut lua_Sta
     /// Pop the arguments, call the API function, hand the result back.
     /// Each argument that owns Lua references arms a guard, so every way
     /// out releases exactly what was converted, in declaration order.
-    ///
-    /// # Safety
-    /// The dispatcher's contract, which is what every `unsafe` below rests
-    /// on: `lstate` is the running Lua state with this binding's arguments
-    /// on top, and `call` is the binding's own.
-    unsafe fn convert(lstate: *mut lua_State, call: &mut Call) -> Result<(), Error> {
+    fn convert(stack: &mut Stack, call: &mut Call) -> Result<(), Error> {
         let Call { err_param, .. } = call;
-        // SAFETY: as above.
-        let arg_2 = unsafe { nlua_pop_array(lstate) }
-            .inspect_err(|_| *err_param = c"args".as_ptr().cast_mut())?;
-        // SAFETY: as above.
-        let arg_1 = unsafe { nlua_pop_string(lstate) }
-            .inspect_err(|_| *err_param = c"fn".as_ptr().cast_mut())?;
-        let _lstate = Restore::of(&active_lstate, lstate);
-        let mut ret = nvim_call_function(arg_1, arg_2)?;
-        // SAFETY: as above.
-        unsafe { nlua_push_object(lstate, &raw mut ret, PUSH_SPECIAL) };
+        let arg_2 = pop_array(stack).inspect_err(|_| *err_param = c"args".as_ptr().cast_mut())?;
+        let arg_1 = pop_string(stack).inspect_err(|_| *err_param = c"fn".as_ptr().cast_mut())?;
+        let _lstate = Restore::of(&active_lstate, stack.lua_state());
+        let ret = nvim_call_function(arg_1, arg_2)?;
+        push_object(stack, &ret, PUSH_SPECIAL);
         Ok(())
     }
     // SAFETY: `lstate` is the state Lua called this binding on.
@@ -98,17 +77,10 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_command(lstate: *mut lua_State) ->
     /// Pop the arguments, call the API function, hand the result back.
     /// Each argument that owns Lua references arms a guard, so every way
     /// out releases exactly what was converted, in declaration order.
-    ///
-    /// # Safety
-    /// The dispatcher's contract, which is what every `unsafe` below rests
-    /// on: `lstate` is the running Lua state with this binding's arguments
-    /// on top, and `call` is the binding's own.
-    unsafe fn convert(lstate: *mut lua_State, call: &mut Call) -> Result<(), Error> {
+    fn convert(stack: &mut Stack, call: &mut Call) -> Result<(), Error> {
         let Call { err_param, .. } = call;
-        // SAFETY: as above.
-        let arg_1 = unsafe { nlua_pop_string(lstate) }
-            .inspect_err(|_| *err_param = c"cmd".as_ptr().cast_mut())?;
-        let _lstate = Restore::of(&active_lstate, lstate);
+        let arg_1 = pop_string(stack).inspect_err(|_| *err_param = c"cmd".as_ptr().cast_mut())?;
+        let _lstate = Restore::of(&active_lstate, stack.lua_state());
         nvim_command(arg_1)?;
         Ok(())
     }
@@ -127,20 +99,12 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_eval(lstate: *mut lua_State) -> c_
     /// Pop the arguments, call the API function, hand the result back.
     /// Each argument that owns Lua references arms a guard, so every way
     /// out releases exactly what was converted, in declaration order.
-    ///
-    /// # Safety
-    /// The dispatcher's contract, which is what every `unsafe` below rests
-    /// on: `lstate` is the running Lua state with this binding's arguments
-    /// on top, and `call` is the binding's own.
-    unsafe fn convert(lstate: *mut lua_State, call: &mut Call) -> Result<(), Error> {
+    fn convert(stack: &mut Stack, call: &mut Call) -> Result<(), Error> {
         let Call { err_param, .. } = call;
-        // SAFETY: as above.
-        let arg_1 = unsafe { nlua_pop_string(lstate) }
-            .inspect_err(|_| *err_param = c"expr".as_ptr().cast_mut())?;
-        let _lstate = Restore::of(&active_lstate, lstate);
-        let mut ret = nvim_eval(arg_1)?;
-        // SAFETY: as above.
-        unsafe { nlua_push_object(lstate, &raw mut ret, PUSH_SPECIAL) };
+        let arg_1 = pop_string(stack).inspect_err(|_| *err_param = c"expr".as_ptr().cast_mut())?;
+        let _lstate = Restore::of(&active_lstate, stack.lua_state());
+        let ret = nvim_eval(arg_1)?;
+        push_object(stack, &ret, PUSH_SPECIAL);
         Ok(())
     }
     // SAFETY: `lstate` is the state Lua called this binding on.
@@ -158,23 +122,14 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_exec2(lstate: *mut lua_State) -> c
     /// Pop the arguments, call the API function, hand the result back.
     /// Each argument that owns Lua references arms a guard, so every way
     /// out releases exactly what was converted, in declaration order.
-    ///
-    /// # Safety
-    /// The dispatcher's contract, which is what every `unsafe` below rests
-    /// on: `lstate` is the running Lua state with this binding's arguments
-    /// on top, and `call` is the binding's own.
-    unsafe fn convert(lstate: *mut lua_State, call: &mut Call) -> Result<(), Error> {
+    fn convert(stack: &mut Stack, call: &mut Call) -> Result<(), Error> {
         let Call { err_param, .. } = call;
         let mut arg_2 = KeyDictArg::<KeyDict_exec_opts>::unset();
-        // SAFETY: as above.
-        unsafe { pop_keydict(lstate, &mut arg_2, err_param) }?;
-        // SAFETY: as above.
-        let arg_1 = unsafe { nlua_pop_string(lstate) }
-            .inspect_err(|_| *err_param = c"src".as_ptr().cast_mut())?;
-        let _lstate = Restore::of(&active_lstate, lstate);
-        let mut ret = nvim_exec2(LUA_INTERNAL_CALL, arg_1, &mut arg_2.dict)?;
-        // SAFETY: as above.
-        unsafe { nlua_push_dict(lstate, &mut ret, PUSH) };
+        pop_keydict(stack, &mut arg_2, err_param)?;
+        let arg_1 = pop_string(stack).inspect_err(|_| *err_param = c"src".as_ptr().cast_mut())?;
+        let _lstate = Restore::of(&active_lstate, stack.lua_state());
+        let ret = nvim_exec2(LUA_INTERNAL_CALL, arg_1, &mut arg_2.dict)?;
+        push_dict(stack, &ret, PUSH);
         Ok(())
     }
     // SAFETY: `lstate` is the state Lua called this binding on.
@@ -192,26 +147,14 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_parse_expression(lstate: *mut lua_
     /// Pop the arguments, call the API function, hand the result back.
     /// Each argument that owns Lua references arms a guard, so every way
     /// out releases exactly what was converted, in declaration order.
-    ///
-    /// # Safety
-    /// The dispatcher's contract, which is what every `unsafe` below rests
-    /// on: `lstate` is the running Lua state with this binding's arguments
-    /// on top, and `call` is the binding's own.
-    unsafe fn convert(lstate: *mut lua_State, call: &mut Call) -> Result<(), Error> {
+    fn convert(stack: &mut Stack, call: &mut Call) -> Result<(), Error> {
         let Call { err_param, .. } = call;
-        // SAFETY: as above.
-        let arg_3 = unsafe { nlua_pop_boolean(lstate) }
-            .inspect_err(|_| *err_param = c"hl".as_ptr().cast_mut())?;
-        // SAFETY: as above.
-        let arg_2 = unsafe { nlua_pop_string(lstate) }
-            .inspect_err(|_| *err_param = c"flags".as_ptr().cast_mut())?;
-        // SAFETY: as above.
-        let arg_1 = unsafe { nlua_pop_string(lstate) }
-            .inspect_err(|_| *err_param = c"expr".as_ptr().cast_mut())?;
-        let _lstate = Restore::of(&active_lstate, lstate);
-        let mut ret = nvim_parse_expression(arg_1, arg_2, arg_3)?;
-        // SAFETY: as above.
-        unsafe { nlua_push_dict(lstate, &mut ret, PUSH_SPECIAL) };
+        let arg_3 = pop_boolean(stack).inspect_err(|_| *err_param = c"hl".as_ptr().cast_mut())?;
+        let arg_2 = pop_string(stack).inspect_err(|_| *err_param = c"flags".as_ptr().cast_mut())?;
+        let arg_1 = pop_string(stack).inspect_err(|_| *err_param = c"expr".as_ptr().cast_mut())?;
+        let _lstate = Restore::of(&active_lstate, stack.lua_state());
+        let ret = nvim_parse_expression(arg_1, arg_2, arg_3)?;
+        push_dict(stack, &ret, PUSH_SPECIAL);
         Ok(())
     }
     // SAFETY: `lstate` is the state Lua called this binding on.

@@ -319,12 +319,10 @@ pub fn nvim_win_text_height(
     let mut oob: bool = false;
     // SAFETY: `buf` is live and `oob` is this frame's own.
     if let Some(row) = opts.start_row {
-        start_lnum =
-            number_as_int(unsafe { normalize_index(buf, row as int64_t, false, &raw mut oob) });
+        start_lnum = number_as_int(normalize_index(buf, row as int64_t, false, &mut oob));
     }
     if let Some(row) = opts.end_row {
-        end_lnum =
-            number_as_int(unsafe { normalize_index(buf, row as int64_t, false, &raw mut oob) });
+        end_lnum = number_as_int(normalize_index(buf, row as int64_t, false, &mut oob));
     }
     if oob {
         return Err(Error::validation(c"Line index out of bounds"));

@@ -12,8 +12,8 @@ the migration's debt, counted by the ratchet as
 `unsafe_stmts_outside_perimeter` and shrink-only like every other metric. That
 number is the one to drive to zero.
 
-Today: **7,089** unchecked statements inside the perimeter (140 files),
-**1,905** outside it (115 files, of 1,389 measured). It was 138,877 when this
+Today: **6,302** unchecked statements inside the perimeter (133 files),
+**1,864** outside it (112 files, of 1,388 measured). It was 138,877 when this
 file was written, at the end of phase 23's slice 15 — in _lines_, which is what
 this metric counted until phase 31 changed the unit to statements.
 
@@ -53,24 +53,24 @@ should move out of the module rather than be carved out of the list.
 
 ## The list
 
-| module                     | files | unchecked | why, and what would retire it                                                                                                                       |
-| -------------------------- | ----: | --------: | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `lua/`                     |    46 |     2,409 | LuaJIT's C API: a `lua_State`, its stack and the registry, plus luv and lpeg. Retires with the embedded interpreter, not before.                    |
-| `lua/stack.rs`             |     1 |         0 | (inside `lua/`, the exact path its row narrows to) the typed `Stack`: the one module that pushes, pops and reads the `lua_State` stack.             |
-| `lua/treesitter/`          |    10 |       875 | (inside `lua/`, listed for its own reason) the tree-sitter C library — parsers, trees, queries and cursors are opaque C objects with C lifetimes.   |
-| `mpack/lmpack/`            |     3 |       528 | libmpack-lua: a Lua C module, so every value it moves crosses the `lua_State` stack.                                                                |
-| `cjson/lua_cjson/`         |     3 |       178 | lua-cjson: a Lua C module, same stack.                                                                                                              |
-| `event/`                   |    11 |       574 | libuv: the loop, streams, timers, signals and processes are C objects registered by address.                                                        |
-| `os/`                      |    22 |     1,207 | The operating system: libc and libuv syscalls, the PTY, the shell, the environment.                                                                 |
-| `vterm/`                   |    11 |       279 | libvterm, ported with its C ABI intact — the callbacks it takes and the symbols it exports are that library's interface.                            |
-| `terminal/`                |     7 |       145 | The emulator's glue: a PTY on one side, libvterm's `extern "C"` callbacks on the other.                                                             |
-| `tui/`                     |    14 |       584 | The terminal: libuv tty handles, termkey's parser, the terminfo entry unibilium hands back.                                                         |
-| `xdiff/`                   |     1 |         8 | libxdiff, vendored: `mmfile_t` and the emit callbacks keep their C layout because the engine's interface is C.                                      |
-| `allocator.rs`             |     1 |        20 | The global allocator: malloc/realloc/free.                                                                                                          |
-| `memory/`                  |     4 |       135 | `xmalloc` and the arena — the floor under every owned type in the tree, and the C `strchr`/`strlen` scans over a terminated slice the matchers use. |
-| `global_cell.rs`           |     1 |        13 | The checked wrapper over c2rust's mutable statics; the raw static is touched here so it is nowhere else.                                            |
-| `winlayer.rs`, `winlayer/` |     3 |        44 | The window/buffer/position handles, and the window's syntax block (`w_s`): constructing one is the unsafe step, dereferencing it is not.            |
-| `memfile/`                 |     2 |        19 | The swap file's page store — the only thing that hands out the address of a `.swp` page.                                                            |
+| module                     | files | unchecked | why, and what would retire it                                                                                                                                                                                                     |
+| -------------------------- | ----: | --------: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lua/`                     |    39 |     1,611 | LuaJIT's C API: a `lua_State`, its stack and the registry, plus luv and lpeg. Retires with the embedded interpreter, not before. `lua/converter/` has left it: it reads the stack through `lua/stack.rs` and forbids unsafe code. |
+| `lua/stack.rs`             |     1 |        85 | (inside `lua/`, the exact path its row narrows to) the typed `Stack`: the one module that pushes, pops and reads the `lua_State` stack.                                                                                           |
+| `lua/treesitter/`          |    10 |       872 | (inside `lua/`, listed for its own reason) the tree-sitter C library — parsers, trees, queries and cursors are opaque C objects with C lifetimes.                                                                                 |
+| `mpack/lmpack/`            |     3 |       528 | libmpack-lua: a Lua C module, so every value it moves crosses the `lua_State` stack.                                                                                                                                              |
+| `cjson/lua_cjson/`         |     3 |       178 | lua-cjson: a Lua C module, same stack.                                                                                                                                                                                            |
+| `event/`                   |    11 |       574 | libuv: the loop, streams, timers, signals and processes are C objects registered by address.                                                                                                                                      |
+| `os/`                      |    22 |     1,207 | The operating system: libc and libuv syscalls, the PTY, the shell, the environment.                                                                                                                                               |
+| `vterm/`                   |    11 |       279 | libvterm, ported with its C ABI intact — the callbacks it takes and the symbols it exports are that library's interface.                                                                                                          |
+| `terminal/`                |     7 |       145 | The emulator's glue: a PTY on one side, libvterm's `extern "C"` callbacks on the other.                                                                                                                                           |
+| `tui/`                     |    14 |       584 | The terminal: libuv tty handles, termkey's parser, the terminfo entry unibilium hands back.                                                                                                                                       |
+| `xdiff/`                   |     1 |         8 | libxdiff, vendored: `mmfile_t` and the emit callbacks keep their C layout because the engine's interface is C.                                                                                                                    |
+| `allocator.rs`             |     1 |        20 | The global allocator: malloc/realloc/free.                                                                                                                                                                                        |
+| `memory/`                  |     4 |       135 | `xmalloc` and the arena — the floor under every owned type in the tree, and the C `strchr`/`strlen` scans over a terminated slice the matchers use.                                                                               |
+| `global_cell.rs`           |     1 |        13 | The checked wrapper over c2rust's mutable statics; the raw static is touched here so it is nowhere else.                                                                                                                          |
+| `winlayer.rs`, `winlayer/` |     3 |        44 | The window/buffer/position handles, and the window's syntax block (`w_s`): constructing one is the unsafe step, dereferencing it is not.                                                                                          |
+| `memfile/`                 |     2 |        19 | The swap file's page store — the only thing that hands out the address of a `.swp` page.                                                                                                                                          |
 
 Paths are relative to `crates/nvim/src/`. Counts are `unsafe_stmts` from
 `metrics/ratchet.json` and drift as work lands; the list, not the table, is

@@ -7,16 +7,13 @@
 //! `buf_collect_lines` the loop over a range that `buffer_updates.rs`
 //! reaches too, to build the `nvim_buf_attach` change notifications.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::api::private::helpers::Reported;
-use crate::cstr;
+use crate::lua::stack::{At, Stack};
 use crate::normal::{visual_active, visual_anchor, with_visual_anchor};
-use crate::types::NUL;
 use crate::winlayer::{Buf, tab_windows};
-use ::libc::memchr;
 
 pub fn nvim_buf_line_count(buf: BufferHandle) -> Result<Integer, Error> {
     let Some(b) = find_buffer_by_handle(buf)? else {
@@ -28,16 +25,15 @@ pub fn nvim_buf_line_count(buf: BufferHandle) -> Result<Integer, Error> {
     Ok(b.line_count() as Integer)
 }
 
-/// # Safety
-///
-/// `lstate` must point at the Lua state this call runs on.
-pub unsafe fn nvim_buf_get_lines(
+/// Lines `start..end` of `buf`. Called from Lua (`stack` is `Some`), the
+/// lines go straight into a table on the Lua stack and the answer is empty.
+pub fn nvim_buf_get_lines(
     channel_id: uint64_t,
     buf: BufferHandle,
     mut start: Integer,
     mut end: Integer,
     strict_indexing: Boolean,
-    lstate: *mut lua_State,
+    stack: Option<&mut Stack>,
 ) -> Result<Array, Error> {
     let mut error = Error::none();
     let mut rv: Array = Array::EMPTY;
@@ -49,8 +45,8 @@ pub unsafe fn nvim_buf_get_lines(
         return rv.reported(error);
     }
     let mut oob: bool = false;
-    start = unsafe { normalize_index(b, start as int64_t, true, &raw mut oob) } as Integer;
-    end = unsafe { normalize_index(b, end as int64_t, true, &raw mut oob) } as Integer;
+    start = normalize_index(b, start as int64_t, true, &mut oob) as Integer;
+    end = normalize_index(b, end as int64_t, true, &mut oob) as Integer;
     if !(!strict_indexing || !oob) {
         let why = c"Index out of bounds";
         error = Error::validation(why);
@@ -60,12 +56,10 @@ pub unsafe fn nvim_buf_get_lines(
         return rv.reported(error);
     }
     let size: size_t = (end - start) as size_t;
-    unsafe { init_line_array(lstate, &raw mut rv, size) };
     let at = start as LineNr;
     let nl = channel_id != VIML_INTERNAL_CALL;
-    let rvp = &raw mut rv;
-    // SAFETY: `b` is the live buffer and `rvp` this call's own array.
-    unsafe { buf_collect_lines(b, size, at, 0, nl, rvp, lstate) };
+    let mut lines = LineSink::new(stack, &mut rv, size);
+    buf_collect_lines(b, size, at, 0, nl, &mut lines);
     rv.reported(error)
 }
 
@@ -98,8 +92,8 @@ pub fn nvim_buf_set_lines(
         return Ok(());
     };
     let mut oob: bool = false;
-    start = unsafe { normalize_index(buffer, start as int64_t, true, &raw mut oob) } as Integer;
-    end = unsafe { normalize_index(buffer, end as int64_t, true, &raw mut oob) } as Integer;
+    start = normalize_index(buffer, start as int64_t, true, &mut oob) as Integer;
+    end = normalize_index(buffer, end as int64_t, true, &mut oob) as Integer;
     if !(!strict_indexing || !oob) {
         let why = c"Index out of bounds";
         error = Error::validation(why);
@@ -117,8 +111,9 @@ pub fn nvim_buf_set_lines(
     let mut extra: ptrdiff_t = 0 as ptrdiff_t;
     // Every item is a String: `check_string_array` above turned anything
     // else into an error. The memline borrows each line (`noalloc`), so they
-    // live in this frame until the edit is done.
-    let mut owned: Vec<Vec<u8>> = (0..new_len)
+    // live in this frame until the edit is done. Each is NUL-terminated, and
+    // `api_line` turned every NUL inside it into a newline.
+    let lines: Vec<Vec<u8>> = (0..new_len)
         .map(|i| {
             let l = replacement[i].as_string();
             api_line(
@@ -127,9 +122,6 @@ pub fn nvim_buf_set_lines(
             )
         })
         .collect();
-    let line_ptrs: Vec<*mut ::core::ffi::c_char> =
-        owned.iter_mut().map(|l| l.as_mut_ptr().cast()).collect();
-    let lines = line_ptrs.as_ptr();
     let mut tstate: TryState = TryState::INIT;
     try_enter(&mut tstate);
     let buf = buffer;
@@ -170,20 +162,13 @@ pub fn nvim_buf_set_lines(
                     let why = c"Index out of bounds";
                     error = Error::validation(why);
                     break 's_382;
-                } else if {
-                    // SAFETY: `i_1` is below `new_len`, and each line is
-                    // NUL-terminated.
-                    let line = unsafe { cstr::at(*lines.add(i_1)) };
-                    ml_replace_buf_now(buffer, lnum as LineNr, line.to_bytes_with_nul())
-                }
-                .is_err()
-                {
+                } else if ml_replace_buf_now(buffer, lnum as LineNr, &lines[i_1]).is_err() {
                     let why = c"Failed to replace line";
                     error = Error::exception(why);
                     break 's_382;
                 } else {
-                    inserted_bytes +=
-                        unsafe { cstr::bytes_at(*lines.add(i_1)) }.len() as BCount + 1 as BCount;
+                    // The line and its NUL.
+                    inserted_bytes += lines[i_1].len() as BCount;
                     i_1 = i_1.wrapping_add(1);
                 }
             }
@@ -194,21 +179,15 @@ pub fn nvim_buf_set_lines(
                     let why = c"Index out of bounds";
                     error = Error::validation(why);
                     break 's_382;
-                } else if {
-                    // SAFETY: `i_2` is below `new_len`, and each line is
-                    // NUL-terminated.
-                    let line = unsafe { cstr::at(*lines.add(i_2)) };
-                    let at = lnum_0 as LineNr;
-                    ml_append_buf_terminated(buffer, at, line.to_bytes_with_nul(), false)
-                }
-                .is_err()
+                } else if ml_append_buf_terminated(buffer, lnum_0 as LineNr, &lines[i_2], false)
+                    .is_err()
                 {
                     let why = c"Failed to insert line";
                     error = Error::exception(why);
                     break 's_382;
                 } else {
-                    inserted_bytes +=
-                        unsafe { cstr::bytes_at(*lines.add(i_2)) }.len() as BCount + 1 as BCount;
+                    // The line and its NUL.
+                    inserted_bytes += lines[i_2].len() as BCount;
                     extra += 1;
                     i_2 = i_2.wrapping_add(1);
                 }
@@ -271,10 +250,10 @@ pub fn nvim_buf_set_lines(
     ().reported(error)
 }
 
-/// # Safety
-///
-/// `lstate` must point at the Lua state this call runs on.
-pub unsafe fn nvim_buf_get_text(
+/// The text from `(start_row, start_col)` to `(end_row, end_col)`, a line
+/// per row. Called from Lua (`stack` is `Some`), the lines go straight into a
+/// table on the Lua stack and the answer is empty.
+pub fn nvim_buf_get_text(
     channel_id: uint64_t,
     buf: BufferHandle,
     mut start_row: Integer,
@@ -282,10 +261,9 @@ pub unsafe fn nvim_buf_get_text(
     mut end_row: Integer,
     end_col: Integer,
     _opts: &mut KeyDict_empty,
-    lstate: *mut lua_State,
+    stack: Option<&mut Stack>,
 ) -> Result<Array, Error> {
     let mut error = Error::none();
-    let mut str: String_0;
     let mut rv: Array = Array::EMPTY;
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(rv);
@@ -295,8 +273,8 @@ pub unsafe fn nvim_buf_get_text(
         return rv.reported(error);
     }
     let mut oob: bool = false;
-    start_row = unsafe { normalize_index(b, start_row as int64_t, false, &raw mut oob) } as Integer;
-    end_row = unsafe { normalize_index(b, end_row as int64_t, false, &raw mut oob) } as Integer;
+    start_row = normalize_index(b, start_row as int64_t, false, &mut oob) as Integer;
+    end_row = normalize_index(b, end_row as int64_t, false, &mut oob) as Integer;
     if oob {
         let why = c"Index out of bounds";
         error = Error::validation(why);
@@ -309,36 +287,28 @@ pub unsafe fn nvim_buf_get_text(
     }
     let replace_nl: bool = channel_id != VIML_INTERNAL_CALL;
     let size: size_t = ((end_row - start_row) as size_t).wrapping_add(1 as size_t);
-    unsafe { init_line_array(lstate, &raw mut rv, size) };
-    let rvp = &raw mut rv;
+    let mut lines = LineSink::new(stack, &mut rv, size);
     let first = start_row as int64_t;
     if start_row == end_row {
         let (from, to) = (start_col as int64_t, end_col as int64_t);
         let line: String_0 = buf_get_text(b, first, from, to)?;
-        let (data, len) = (line.data(), line.len());
-        // SAFETY: `data` holds `len` bytes; `rvp` is this call's array.
-        unsafe { push_linestr(lstate, rvp, data, len, 0, replace_nl) };
+        lines.push(line.as_bytes(), 0, replace_nl);
         return Ok(rv);
     }
     let from = start_col as int64_t;
     let to = (MAXCOL as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as int64_t;
-    str = buf_get_text(b, first, from, to)?;
-    let (data, len) = (str.data(), str.len());
-    // SAFETY: `data` holds `len` bytes; `rvp` is this call's array.
-    unsafe { push_linestr(lstate, rvp, data, len, 0, replace_nl) };
+    let line = buf_get_text(b, first, from, to)?;
+    lines.push(line.as_bytes(), 0, replace_nl);
     if size > 2 as size_t {
         let n = size.wrapping_sub(2 as size_t);
         let at = start_row as LineNr + 1 as LineNr;
-        // SAFETY: `b` is the live buffer and `rvp` this call's array.
-        unsafe { buf_collect_lines(b, n, at, 1, replace_nl, rvp, lstate) };
+        buf_collect_lines(b, n, at, 1, replace_nl, &mut lines);
     }
     let last = end_row as int64_t;
     let to = end_col as int64_t;
-    str = buf_get_text(b, last, 0 as int64_t, to)?;
-    let (data, len) = (str.data(), str.len());
+    let line = buf_get_text(b, last, 0 as int64_t, to)?;
     let at = size.wrapping_sub(1 as size_t) as ::core::ffi::c_int;
-    // SAFETY: `data` holds `len` bytes; `rvp` is this call's array.
-    unsafe { push_linestr(lstate, rvp, data, len, at, replace_nl) };
+    lines.push(line.as_bytes(), at, replace_nl);
     Ok(rv)
 }
 
@@ -360,95 +330,76 @@ pub fn nvim_buf_get_offset(buf: BufferHandle, index: Integer) -> Result<Integer,
     (offset as Integer).reported(error)
 }
 
-/// # Safety
-///
-/// `lstate` must point at the Lua state this call runs on. `a` must point at an
-/// API array the caller owns, unaliased for the call.
-#[inline]
-unsafe fn init_line_array(lstate: *mut lua_State, a: *mut Array, size: size_t) {
-    if !lstate.is_null() {
-        unsafe { lua_createtable(lstate, size as ::core::ffi::c_int, 0 as ::core::ffi::c_int) };
-    } else {
-        unsafe { *a = Array::with_capacity(size) };
-    };
+/// Where collected lines go: straight into the Lua table on top of the
+/// stack, when Lua asked, or into an API array.
+pub(crate) enum LineSink<'a> {
+    Lua(&'a mut Stack),
+    Api(&'a mut Array),
 }
 
-/// # Safety
-///
-/// `lstate` must point at the Lua state this call runs on. `a` must point at an
-/// API array the caller owns, unaliased for the call. `s` must point at `len`
-/// readable bytes.
-unsafe fn push_linestr(
-    lstate: *mut lua_State,
-    a: *mut Array,
-    s: *const ::core::ffi::c_char,
-    len: size_t,
-    idx: ::core::ffi::c_int,
-    replace_nl: bool,
-) {
-    if !lstate.is_null() {
-        // The question is only whether these `len` bytes hold a NL, and the
-        // caller already has the length: `memchr` answers it in one early-
-        // exiting pass, where reading `s` back as a C string pays a `strlen`
-        // over the whole line plus a scalar scan -- 860,000 lines a run on
-        // the memline bench, and 0.6 % of it.
-        //
-        // SAFETY: the caller's promise that `s` points at `len` readable
-        // bytes; a null `s` is ruled out first.
-        let holds_nl = !s.is_null()
-            && replace_nl
-            && !unsafe { memchr(s.cast::<::core::ffi::c_void>(), NL, len) }.is_null();
-        if holds_nl {
-            let tmp: *mut ::core::ffi::c_char =
-                unsafe { xmemdupz(s as *const ::core::ffi::c_void, len) }
-                    as *mut ::core::ffi::c_char;
-            unsafe { strchrsub(tmp, '\n' as ::core::ffi::c_char, NUL as ::core::ffi::c_char) };
-            unsafe { lua_pushlstring(lstate, tmp, len) };
-            unsafe { xfree(tmp as *mut ::core::ffi::c_void) };
-        } else {
-            unsafe { lua_pushlstring(lstate, s, len) };
-        }
-        let at = idx + 1 as ::core::ffi::c_int;
-        // SAFETY: the caller's Lua state, with the table on top.
-        unsafe { lua_rawseti(lstate, -2 as ::core::ffi::c_int, at) };
-    } else {
-        let mut str: String_0 = String_0::NULL;
-        if len > 0 as size_t {
-            // SAFETY: the caller's promise about `s` and `len`.
-            str = unsafe { String_0::from_raw_bytes(s, len) };
-            if replace_nl {
-                let (nl, nul) = ('\n' as ::core::ffi::c_char, NUL as ::core::ffi::c_char);
-                // SAFETY: `str` names its own bytes.
-                unsafe { strchrsub(str.data(), nl, nul) };
+impl<'a> LineSink<'a> {
+    /// A sink for `size` lines: a fresh Lua table pushed for them when there
+    /// is a `stack`, else `array` reserved for them.
+    pub(crate) fn new(stack: Option<&'a mut Stack>, array: &'a mut Array, size: size_t) -> Self {
+        match stack {
+            Some(stack) => {
+                stack.new_table(size, 0);
+                LineSink::Lua(stack)
+            }
+            None => {
+                *array = Array::with_capacity(size);
+                LineSink::Api(array)
             }
         }
-        // SAFETY: `a` is the caller's array.
-        unsafe { (*a).push(Object::string(str)) };
-    };
+    }
+
+    /// Store line `bytes` as item `idx` (0-based), each newline in it --
+    /// which is how a buffer line spells NUL -- turned back into a NUL when
+    /// `replace_nl`.
+    fn push(&mut self, bytes: &[u8], idx: ::core::ffi::c_int, replace_nl: bool) {
+        // The question is only whether the line holds a NL: `contains` answers
+        // it in one early-exiting `memchr` pass, and a line without one (860,000
+        // a run on the memline bench) is handed on as it is.
+        let restored = (replace_nl && bytes.contains(&b'\n')).then(|| -> Vec<u8> {
+            bytes
+                .iter()
+                .map(|&b| if b == b'\n' { 0 } else { b })
+                .collect()
+        });
+        let line = restored.as_deref().unwrap_or(bytes);
+        match self {
+            LineSink::Lua(stack) => {
+                stack.push_bytes(line);
+                stack.raw_set_index(At::from_top(2), idx + 1);
+            }
+            LineSink::Api(array) => {
+                // An empty line is the null string, as upstream's
+                // `STRING_INIT` is.
+                let line = if line.is_empty() {
+                    String_0::NULL
+                } else {
+                    String_0::from_bytes(line)
+                };
+                array.push(Object::string(line));
+            }
+        }
+    }
 }
 
-/// # Safety
-///
-/// `l` must point at an API array the caller owns, unaliased for the call.
-/// `lstate` must point at the Lua state this call runs on.
-pub unsafe fn buf_collect_lines(
+/// Collect `n` lines of `buffer` from `start` into `lines`, as items
+/// `start_idx..`.
+pub(crate) fn buf_collect_lines(
     buffer: Buf,
     n: size_t,
     start: LineNr,
     start_idx: ::core::ffi::c_int,
     replace_nl: bool,
-    l: *mut Array,
-    lstate: *mut lua_State,
+    lines: &mut LineSink<'_>,
 ) {
-    let mut lines = buffer.lines();
-    let mut i: size_t = 0 as size_t;
-    while i < n {
+    let mut text = buffer.lines();
+    for i in 0..n {
         let lnum: LineNr = start + i as LineNr;
-        let text = lines.line(lnum);
         let at = start_idx + i as ::core::ffi::c_int;
-        // SAFETY: `text` is the line's own bytes, borrowed for the push, and
-        // `l`/`lstate` are the caller's.
-        unsafe { push_linestr(lstate, l, text.as_ptr().cast(), text.len(), at, replace_nl) };
-        i = i.wrapping_add(1);
+        lines.push(text.line(lnum), at, replace_nl);
     }
 }

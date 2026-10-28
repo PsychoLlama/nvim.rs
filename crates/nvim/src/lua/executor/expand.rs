@@ -11,8 +11,9 @@
 
 use super::{get_global_lstate, nlua_error, nlua_pcall};
 use crate::global_cell::GlobalCell;
-use crate::lua::converter::{nlua_pop_array, nlua_pop_integer};
+use crate::lua::converter::{pop_array, pop_integer};
 use crate::lua::ffi::{LUA_TFUNCTION, lua_getfield, lua_pushlstring, luaL_checktype};
+use crate::lua::stack::Stack;
 use crate::lua::stack::lua_getglobal;
 use crate::memory::{ARENA_EMPTY, XString, arena_finish, arena_mem_free};
 use crate::os::cshim::gettext;
@@ -62,12 +63,12 @@ pub fn nlua_expand_pat(expand: &mut Expand) {
         }
 
         let mut arena: Arena = ARENA_EMPTY;
-        let prefix = nlua_pop_integer(lstate)
+        let prefix = pop_integer(&mut Stack::from_raw(lstate))
             .ok()
             .and_then(|n| usize::try_from(n).ok())
             .filter(|&n| n <= patlen);
         if let Some(prefix) = prefix {
-            let completions = nlua_pop_array(lstate);
+            let completions = pop_array(&mut Stack::from_raw(lstate));
             if let Ok(completions) = completions {
                 let strings: Option<Vec<XString>> = (0..completions.len())
                     .map(|i| {

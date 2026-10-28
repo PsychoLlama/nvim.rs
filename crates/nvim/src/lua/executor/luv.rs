@@ -28,13 +28,13 @@ use super::{
 use crate::event::r#loop::loop_schedule_deferred;
 use crate::event::multiqueue::multiqueue_put_event;
 use crate::guard::Depth;
-use crate::lua::converter::{kNluaPushSpecial, nlua_pop_array, nlua_push_array};
+use crate::lua::converter::{pop_array, push_array};
 use crate::lua::ffi::{
     LUA_MULTRET, LUA_REGISTRYINDEX, LUA_TBOOLEAN, LUA_TTABLE, lua_close, lua_concat, lua_error,
     lua_getfield, lua_gettop, lua_pcall, lua_pushcclosure, lua_pushlightuserdata, lua_pushstring,
     lua_toboolean, lua_type, luaL_checktype, luaL_error, luaL_where,
 };
-use crate::lua::stack::{lua_pop, lua_tostring};
+use crate::lua::stack::{Stack, lua_pop, lua_tostring};
 use crate::memory::xstrdup;
 use crate::message::e_outofmem;
 use crate::os::cshim::stderr;
@@ -224,7 +224,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_thr_api_nvim__get_runtime(
         let all = lua_toboolean(lstate, -1) != 0;
         lua_pop(lstate, 1);
 
-        let pat: Array = match nlua_pop_array(lstate) {
+        let pat: Array = match pop_array(&mut Stack::from_raw(lstate)) {
             Ok(pat) => pat,
             Err(e) => {
                 luaL_where(lstate, 1);
@@ -234,8 +234,8 @@ pub(crate) unsafe extern "C-unwind" fn nlua_thr_api_nvim__get_runtime(
             }
         };
 
-        let mut ret = runtime_get_named_thread(is_lua, &pat, all);
-        nlua_push_array(lstate, &mut ret, kNluaPushSpecial as c_int);
+        let ret = runtime_get_named_thread(is_lua, &pat, all);
+        push_array(&mut Stack::from_raw(lstate), &ret, true);
         drop(ret);
         drop(pat);
         1

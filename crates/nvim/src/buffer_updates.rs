@@ -28,7 +28,7 @@
 use core::ffi::{CStr, c_int};
 use core::{ptr, slice};
 
-use crate::api::buffer::buf_collect_lines;
+use crate::api::buffer::{LineSink, buf_collect_lines};
 use crate::buffer::buf_get_changedtick;
 use crate::ex_getln::state::cmdpreview;
 use crate::guard::Lock;
@@ -271,11 +271,9 @@ fn flush_deleted_bytes(buffer: Buf) -> Deleted {
 
 /// `linedata` for `nvim_buf_lines_event`: `n` lines from `first`.
 fn collect_lines(buffer: Buf, n: size_t, first: LineNr) -> Array {
-    let mut linedata = Array::with_capacity(n);
-    let (out, none) = (&raw mut linedata, ptr::null_mut());
-    // SAFETY: a live buffer holding lines `first ..= first + n - 1`, and an
-    // array reserved for `n` of them.
-    unsafe { buf_collect_lines(buffer, n, first, 0, true, out, none) };
+    let mut linedata = Array::EMPTY;
+    let mut lines = LineSink::new(None, &mut linedata, n);
+    buf_collect_lines(buffer, n, first, 0, true, &mut lines);
     linedata
 }
 

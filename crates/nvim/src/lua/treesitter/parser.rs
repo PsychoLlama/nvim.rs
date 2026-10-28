@@ -14,6 +14,7 @@
 
 use super::*;
 use crate::global_cell::ConstTable;
+use crate::lua::stack::{Raise, Stack};
 use crate::luaL_reg_table;
 use crate::types::NUL;
 use crate::winlayer::{self, Buf};
@@ -198,18 +199,10 @@ unsafe extern "C-unwind" fn parser_parse(L: *mut lua_State) -> ::core::ffi::c_in
                 // through the payload: the parse runs no editor code, so the
                 // buffer the registry answered stays live for all of it.
                 let Some(mut buf) = winlayer::buffer(bufnr as ::core::ffi::c_int) else {
-                    let mut ebuf: [::core::ffi::c_char; 256] = [0; 256];
-                    crate::vim_snprintf!(
-                        &raw mut ebuf as *mut ::core::ffi::c_char,
-                        BUFSIZE_0 as size_t,
-                        c"invalid buffer handle: %d".as_ptr(),
-                        bufnr,
-                    );
-                    return luaL_argerror(
-                        L,
-                        3 as ::core::ffi::c_int,
-                        &raw mut ebuf as *mut ::core::ffi::c_char,
-                    );
+                    // The refusal owns its message, and nothing of this frame
+                    // owns anything: the raise strands nothing.
+                    let message = format!("invalid buffer handle: {bufnr}");
+                    return Stack::entry(L, |_| Err(Raise::argument(3, message)));
                 };
                 input = TSInput {
                     payload: (&raw mut buf).cast::<::core::ffi::c_void>(),
@@ -275,8 +268,6 @@ unsafe extern "C-unwind" fn parser_parse(L: *mut lua_State) -> ::core::ffi::c_in
         2 as ::core::ffi::c_int
     }
 }
-
-pub const BUFSIZE_0: ::core::ffi::c_int = 256 as ::core::ffi::c_int;
 
 /// # Safety
 ///

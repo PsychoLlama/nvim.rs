@@ -1,21 +1,26 @@
 //! Values across the Lua boundary, in both directions and for both of the
 //! editor's value types.
 //!
-//! Four walks live here. [`push`] converts a `TypVal` to a Lua value and
-//! [`pop_typval`] converts one back; [`push_object`] and [`pop_object`] do
-//! the same for the api's [`Object`](crate::types::Object). The
-//! two `pop` directions are separate because the type systems disagree at
-//! the leaves — an `Object` has no `VAR_SPECIAL`, carries `LuaRef`s for
-//! functions, and allocates into an `Arena` — but they share [`pop`]'s
-//! [`LuaTableProps`], which is the one place a Lua table's *shape* is
-//! decided, and [`keysets`] is a fifth, generated-struct-shaped direction on
-//! top of them.
+//! Two value types, both directions, all of it over the typed
+//! [`Stack`](crate::lua::stack::Stack). [`push_typval`] converts a `TypVal`
+//! to a Lua value and [`pop_typval`] converts one back; [`push_object`] and
+//! [`pop_object`] do the same for the api's [`Object`](crate::types::Object),
+//! with one `push_*`/`pop_*` per api leaf type beside them for the bindings.
+//! The two `pop` directions are separate because the type systems disagree at
+//! the leaves — an `Object` has no `VAR_SPECIAL` and carries `LuaRef`s for
+//! functions — but they share [`classify_table`]'s [`LuaTableProps`], which
+//! is the one place a Lua table's *shape* is decided, and [`keysets`] is a
+//! fifth, generated-struct-shaped direction on top of them.
 //!
 //! Neither `pop` walk recurses: a Lua table may nest arbitrarily deep and
 //! the conversion has to be able to refuse rather than overflow the C stack,
-//! so each keeps an explicit stack of suspended containers.
+//! so each keeps an explicit stack of suspended containers — one kept
+//! between conversions, so that converting a table allocates none.
+//!
+//! A push borrows what it converts. The bindings hand back a value they own
+//! and drop it afterwards, which is what releases the Lua references in it.
 
-#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -24,7 +29,7 @@ use crate::types::{ObjectType, kObjectTypeNil, lua_Number, size_t};
 // The typval-to-Lua direction, carved out of this module's
 // `typval_encode.c.h` instantiation.
 mod push;
-pub use self::push::nlua_push_typval;
+pub use self::push::push_typval;
 
 mod keysets;
 mod pop;
@@ -37,15 +42,6 @@ pub use self::pop::*;
 pub use self::pop_object::*;
 pub use self::pop_typval::*;
 pub use self::push_object::*;
-
-/// `nlua_push_*` flags.
-pub type NluaPushFlags = ::core::ffi::c_int;
-/// Push Vimscript's `null` and empty dictionary as `nil` and a `{_TYPE,
-/// _VAL}` table, rather than as the `vim.NIL` and `vim.empty_dict()`
-/// singletons Lua code normally sees.
-pub const kNluaPushSpecial: NluaPushFlags = 1;
-/// Release each `LuaRef` as it is pushed: the object is being consumed.
-pub const kNluaPushFreeRefs: NluaPushFlags = 2;
 
 /// The two boolean keys a `{_TYPE, _VAL}` special table is built from: `true`
 /// holds the type tag, `false` the value.
@@ -60,7 +56,7 @@ pub(crate) const VARNUMBER_MAX: i64 = i64::MAX;
 pub(crate) const VARNUMBER_MIN: i64 = i64::MIN;
 
 /// What keys a Lua table turned out to contain — the answer
-/// [`nlua_traverse_table`] hands both `pop` walks.
+/// [`classify_table`] hands both `pop` walks.
 pub struct LuaTableProps {
     /// The largest positive integral key found.
     pub maxidx: size_t,
