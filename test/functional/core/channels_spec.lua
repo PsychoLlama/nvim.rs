@@ -613,7 +613,10 @@ describe('channel and timer callbacks that end their own owner', function()
       function! OnExit(id, code, event) abort
         call add(g:events, 'exit ' .. a:code)
       endfunction
-      let g:job = jobstart(['sh', '-c', 'echo hi; exit 3'],
+      " The sleep keeps the job running until `jobwait` starts: a job that
+      " has already exited when it is asked about answers -3 (upstream's
+      " `proc_is_stopped` counts an exit), which a slow build (ASan) reached.
+      let g:job = jobstart(['sh', '-c', 'echo hi; sleep 0.5; exit 3'],
             \ {'on_stdout': 'OnOut', 'on_exit': 'OnExit'})
     ]])
     retry(nil, 5000, function()
