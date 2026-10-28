@@ -106,6 +106,12 @@ pub fn common_job_callbacks(
     if on_stderr.buffered && !on_stderr.cb.is_set() {
         on_stderr.self_dict = options.cloned();
     }
+    // Upstream takes one more reference here and never gives it back: the
+    // options dictionary -- and every function its callbacks name -- lives
+    // until the collector frees it. Kept, because when a lambda goes decides
+    // where the next function lands in the function table, which `:function`
+    // lists in slot order.
+    core::mem::forget(options.cloned());
     true
 }
 
