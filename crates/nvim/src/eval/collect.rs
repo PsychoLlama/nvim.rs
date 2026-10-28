@@ -66,7 +66,7 @@ use crate::registry::SlotTable;
 use crate::runtime::EXESTACK;
 use crate::tag::set_ref_in_tagfunc;
 use crate::types::{
-    CONV_NONE, Callback, CallbackReader, Channel, Failed, List, OptInt, PartialRef, Timer, TypVal,
+    CONV_NONE, Callback, CallbackReader, Channel, Failed, List, OptInt, PartialRef, TypVal,
     VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
     VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VimConv,
 };
@@ -206,14 +206,13 @@ pub fn garbage_collect(testing: bool) -> bool {
         mark_cb(unsafe { &*on_exit }, copy_id);
     }
 
-    // Timers, likewise.
-    for timer in timers.with(SlotTable::snapshot_values) {
-        // SAFETY: the snapshot holds the registered live timers.
-        let cb: *mut Callback =
-            unsafe { Live::<Timer>::new(timer) }.field_ptr(offset_of!(Timer, callback));
-        // SAFETY: `cb` is the timer's own callback.
-        mark_cb(unsafe { &*cb }, copy_id);
-    }
+    // Timers, likewise. Marking runs no user code, so the table is walked
+    // in place.
+    timers.with(|map| {
+        for timer in map.values() {
+            mark_cb(&timer.callback, copy_id);
+        }
+    });
 
     // function call arguments, if v:testing is set
     abort = abort || set_ref_in_func_args(copy_id);

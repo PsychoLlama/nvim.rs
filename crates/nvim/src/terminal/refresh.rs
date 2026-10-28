@@ -21,22 +21,18 @@
 
 use crate::autocmd::{block_autocmds, unblock_autocmds};
 use crate::change::changed_lines;
-use crate::channel::main_loop_events;
 use crate::cursor_shape::{SHAPE_BLOCK, SHAPE_HOR, SHAPE_IDX_TERM, SHAPE_VER, update_shape_entry};
-use crate::event::multiqueue::{
-    multiqueue_free, multiqueue_move_events, multiqueue_new_child, multiqueue_process_events,
-};
-use crate::event::time::{
-    time_watcher_close, time_watcher_init, time_watcher_start, time_watcher_stop,
-};
+use crate::event::r#loop::main_loop_events;
+use crate::event::multiqueue::{multiqueue_move_events, multiqueue_process_events};
+use crate::event::time::{OwnedTimer, TimerQueue};
 use crate::global_cell::GlobalCell;
 use crate::memline::{ml_append_buf_terminated, ml_replace_buf_text};
 use crate::r#move::{curs_columns, set_topline};
-use crate::startup::{exiting, main_loop};
-use crate::types::{ColNr, LineNr, MultiQueue, Terminal, TimeWatcher, uint16_t, uint64_t};
+use crate::startup::exiting;
+use crate::types::{ColNr, LineNr, MultiQueue, Terminal, uint16_t, uint64_t};
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_mode_info_set};
 use crate::winlayer::{Buf, Win, tab_windows};
-use core::ffi::{c_int, c_void};
+use core::ffi::c_int;
 
 use super::mode::terminal_check_cursor;
 use super::scrollback::{fetch_row, refresh_scrollback};
@@ -46,9 +42,10 @@ use super::{Term, is_focused, row_to_linenr};
 /// in milliseconds.
 const REFRESH_DELAY: uint64_t = 10;
 
-/// The timer that drains [`INVALIDATED`]. Its own event queue is a child of
-/// the main loop's, so that draining it runs only refresh work.
-static REFRESH_TIMER: GlobalCell<TimeWatcher> = GlobalCell::new(TimeWatcher::EMPTY);
+/// The timer that drains [`INVALIDATED`], from `terminal_init` until
+/// `terminal_teardown`. Its own event queue is a child of the main loop's,
+/// so that draining it runs only refresh work.
+static REFRESH_TIMER: GlobalCell<Option<OwnedTimer>> = GlobalCell::new(None);
 
 /// Whether [`REFRESH_TIMER`] is already armed.
 static REFRESH_PENDING: GlobalCell<bool> = GlobalCell::new(false);
@@ -58,34 +55,23 @@ static REFRESH_PENDING: GlobalCell<bool> = GlobalCell::new(false);
 static INVALIDATED: GlobalCell<Vec<Term>> = GlobalCell::new(Vec::new());
 
 pub(crate) fn terminal_init() {
-    // SAFETY: the main loop is up, and the timer is this module's own,
-    // untouched until `terminal_teardown` closes it.
-    unsafe { time_watcher_init(main_loop.ptr(), timer(), ::core::ptr::null_mut()) };
-    // SAFETY: as above; the queue is a child of the main loop's.
-    unsafe { (*timer()).events = multiqueue_new_child(main_loop_events()) };
+    REFRESH_TIMER.set(Some(OwnedTimer::new(TimerQueue::OwnChild, false, 0)));
 }
 
 pub(crate) fn terminal_teardown() {
-    // SAFETY: the timer this module started, stopped and closed once.
-    unsafe { time_watcher_stop(timer()) };
-    // SAFETY: as above, freeing the queue `terminal_init` made.
-    unsafe { multiqueue_free((*timer()).events) };
-    // SAFETY: as above.
-    unsafe { time_watcher_close(timer(), None) };
+    // Dropping the timer stops and closes it; its queue goes with it.
+    drop(REFRESH_TIMER.take());
     INVALIDATED.with_mut(Vec::clear);
-}
-
-/// The refresh timer itself. One escape hatch for the whole module: the
-/// `time_watcher_*` entry points take the watcher by pointer.
-fn timer() -> *mut TimeWatcher {
-    REFRESH_TIMER.ptr()
 }
 
 /// The queue refresh work is deferred onto. Draining it is
 /// [`terminal_check_refresh`].
 pub(super) fn refresh_queue() -> *mut MultiQueue {
-    // SAFETY: read of a global on the main thread, as everywhere else.
-    unsafe { (*timer()).events }
+    REFRESH_TIMER.with(|timer| {
+        timer
+            .as_ref()
+            .map_or(core::ptr::null_mut(), OwnedTimer::events)
+    })
 }
 
 /// Mark `rows` as needing a redraw and arm the refresh timer.
@@ -110,8 +96,11 @@ pub(crate) fn invalidate_terminal(mut term: Term, rows: Option<(c_int, c_int)>) 
         }
     });
     if !REFRESH_PENDING.get() {
-        // SAFETY: this module's own timer, armed with its own callback.
-        unsafe { time_watcher_start(timer(), Some(refresh_timer_cb), REFRESH_DELAY, 0) };
+        REFRESH_TIMER.with_mut(|timer| {
+            if let Some(timer) = timer {
+                timer.start(refresh_timer_cb, REFRESH_DELAY, 0);
+            }
+        });
         REFRESH_PENDING.set(true);
     }
 }
@@ -123,7 +112,7 @@ pub(crate) fn terminal_check_refresh() {
     unsafe { multiqueue_process_events(refresh_queue()) };
 }
 
-fn refresh_timer_cb(_watcher: *mut TimeWatcher, _data: *mut c_void) {
+fn refresh_timer_cb(_owner: uint64_t) {
     REFRESH_PENDING.set(false);
     if exiting.get() {
         return;

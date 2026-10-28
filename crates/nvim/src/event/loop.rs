@@ -205,6 +205,19 @@ pub(crate) fn main_loop_raw() -> *mut Loop {
     crate::startup::main_loop.ptr()
 }
 
+/// The editor's main event queue, which is where deferred frees,
+/// autocommands and anything else a caller must not run inline are put.
+pub(crate) fn main_loop_events() -> *mut MultiQueue {
+    // SAFETY: the static loop; reading one field of it.
+    unsafe { (*main_loop_raw()).events }
+}
+
+/// The editor's fast queue, drained by every poll of its loop.
+pub(crate) fn main_loop_fast_events() -> *mut MultiQueue {
+    // SAFETY: the static loop; reading one field of it.
+    unsafe { (*main_loop_raw()).fast_events }
+}
+
 /// [`loop_init`] of the editor's own loop. Once, at startup.
 pub(crate) fn main_loop_init() {
     // SAFETY: the static loop, which does not move and is initialised here
@@ -426,6 +439,27 @@ pub unsafe fn process_events_until(
             break;
         }
     }
+}
+
+/// What a wait on the editor's own loop drains between polls.
+pub(crate) enum Drain {
+    /// The main queue: everything the editor has deferred.
+    Events,
+    /// Only the fast queue, which the poll itself drains.
+    FastOnly,
+}
+
+/// [`process_events_until`] on the editor's own loop: the safe spelling for
+/// a frame that waits on its own condition, `done`, which may read anything
+/// the events it lets run have changed.
+pub(crate) fn wait_on_main_loop(drain: Drain, ms: i64, done: impl FnMut() -> bool) {
+    let uv_loop = main_loop_raw();
+    let queue = match drain {
+        Drain::Events => main_loop_events(),
+        Drain::FastOnly => main_loop_fast_events(),
+    };
+    // SAFETY: the editor's loop and its queues, live from startup to exit.
+    unsafe { process_events_until(uv_loop, queue, ms, done) };
 }
 
 /// The millisecond budget of a wait loop.

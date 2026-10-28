@@ -145,6 +145,28 @@ impl<K: Eq + Hash, V> SlotTable<K, V> {
     pub(crate) fn entries(&self) -> &[(K, V)] {
         &self.slots
     }
+
+    /// The value under `key`, borrowed mutably.
+    ///
+    /// For an *owning* registry (the timers, the channels), whose values
+    /// are not `Copy`: the borrow lives inside the cell's `with_mut` closure
+    /// and ends with it, so it is a leaf by construction -- a caller that has
+    /// to run user code copies out what it needs and looks the value up
+    /// again afterwards.
+    pub(crate) fn get_mut<Q>(&mut self, key: &Q) -> Option<&mut V>
+    where
+        K: Borrow<Q>,
+        Q: Eq + Hash + ?Sized,
+    {
+        let i = *self.index.get(key)?;
+        Some(&mut self.slots[i].1)
+    }
+
+    /// Every value, borrowed, in order: for a walk that runs no user code
+    /// (the garbage collector's marking), under [`Self::get_mut`]'s rule.
+    pub(crate) fn values(&self) -> impl Iterator<Item = &V> {
+        self.slots.iter().map(|(_, value)| value)
+    }
 }
 
 impl<K: Eq + Hash + Clone, V> SlotTable<K, V> {

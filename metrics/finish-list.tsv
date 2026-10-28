@@ -70,12 +70,10 @@ cstr.rs	*	1	16	8	10	deref:4 expr:2	str:10	-	CStr::from_ptr:3 from_raw_parts:3 CS
 cstr.rs	cstr.rs	1	16	8	10	deref:4 expr:2	str:10	-	CStr::from_ptr:3 from_raw_parts:3 CStr::from_bytes_with_nul_unchecked:1
 cursor_shape.rs	*	1	7	2	4	compound:1	str:2	-	cstr_to_string:2
 cursor_shape.rs	cursor_shape.rs	1	7	2	4	compound:1	str:2	-	cstr_to_string:2
-eval/	*	6	236	21	152	deref:40 expr:21 ref:15 compound:2	other:10 value:7 void:4 str:2	value:7 other:2	c_str:11 xfree:9 .as_ref:8 time_watcher_start:4 time_watcher_stop:4 Box::from_raw:3 channel_decref:3 time_watcher_close:3
-eval/	eval/collect.rs	1	18	1	11	deref:4 ref:2 expr:1	other:1	-	.as_ref:2
+eval/	*	4	178	14	115	deref:24 expr:19 ref:12 compound:2	value:7 other:3 str:2	value:7	c_str:11 .as_ref:8 xfree:7 Box::from_raw:3 channel_decref:3 xcalloc:3 api_free_luaref:2 channel_close:2
+eval/	eval/collect.rs	1	16	1	10	deref:4 expr:1 ref:1	other:1	-	.as_ref:2
 eval/	eval/funcs/channel.rs	1	39	1	34	deref:3 expr:1 ref:1	-	-	c_str:8 .as_ref:4 xfree:4 server_address_list:2 ThinCString::from_raw:1 arena_mem_free:1 at_opt:1 channel_close:1
 eval/	eval/funcs/job.rs	1	56	2	41	deref:13 expr:1 ref:1	other:2 str:2	-	c_str:3 channel_decref:3 .as_ref:2 channel_create_event:2 channel_incref:2 multiqueue_process_events:2 multiqueue_replace_parent:2 proc_stop:2
-eval/	eval/funcs/timer.rs	1	28	2	15	deref:11 expr:1 ref:1	other:2 void:2	-	time_watcher_stop:3 time_watcher_close:2 time_watcher_start:2 process_events_until:1 time:1 time_watcher_init:1 xfree:1 xmalloc:1
-eval/	eval/timer.rs	1	28	5	21	deref:5 expr:1 ref:1	other:5 void:2	other:2	time_watcher_start:2 multiqueue_free:1 time_watcher_close:1 time_watcher_init:1 time_watcher_stop:1 xfree:1
 eval/	eval/typval/handle.rs	1	67	10	30	expr:16 ref:9 deref:4 compound:2	value:7	value:7	Box::from_raw:3 api_free_luaref:2 hash_add:2 hash_remove:2 xcalloc:2 xfree:2 hash_find_len:1 hash_init:1
 extmark/	*	2	4	0	2	deref:1 expr:1	other:1	-	marktree_clear:1 xrealloc:1
 extmark/	extmark/mod.rs	1	4	0	2	deref:1 expr:1	other:1	-	marktree_clear:1 xrealloc:1

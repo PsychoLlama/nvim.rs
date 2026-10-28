@@ -134,10 +134,6 @@ typedef struct TerminalCursor TerminalCursor;
 typedef struct TerminalOptions TerminalOptions;
 typedef struct TerminalPending TerminalPending;
 typedef struct terminal terminal;
-typedef union uv_timer_s_node uv_timer_s_node;
-typedef union uv_timer_s_u uv_timer_s_u;
-typedef struct uv_timer_s uv_timer_s;
-typedef struct time_watcher time_watcher;
 typedef struct TypVal TypVal;
 typedef struct VTerm_mode VTerm_mode;
 typedef struct VTerm_parser_v_csi VTerm_parser_v_csi;
@@ -214,6 +210,9 @@ typedef struct uv_random_s uv_random_s;
 typedef struct uv_shutdown_s uv_shutdown_s;
 typedef union uv_stream_s_u uv_stream_s_u;
 typedef struct uv_stream_s uv_stream_s;
+typedef union uv_timer_s_node uv_timer_s_node;
+typedef union uv_timer_s_u uv_timer_s_u;
+typedef struct uv_timer_s uv_timer_s;
 typedef struct uv_timespec64_t uv_timespec64_t;
 typedef struct uv_timeval64_t uv_timeval64_t;
 typedef union uv_tty_s_u uv_tty_s_u;
@@ -383,7 +382,6 @@ typedef unsigned int TermMode;
 typedef unsigned int TermModeState;
 typedef struct terminal Terminal;
 typedef char *ThinCString;
-typedef struct time_watcher TimeWatcher;
 typedef uint64_t Timestamp;
 typedef unsigned int UIExtension;
 typedef uint64_t UVarNumber;
@@ -458,7 +456,6 @@ typedef void (*terminal_read_pause_cb)(bool, void *);
 typedef void (*terminal_resize_cb)(uint16_t, uint16_t, void *);
 typedef void (*terminal_resume_cb)(void *);
 typedef void (*terminal_write_cb)(const char *, size_t, void *);
-typedef void (*time_cb)(TimeWatcher *, void *);
 typedef unsigned int uid_t;
 typedef void (*uv__io_cb)(uv_loop_s *, uv__io_s *, unsigned int);
 typedef struct uv__io_s uv__io_t;
@@ -965,37 +962,6 @@ struct TerminalOptions {
   terminal_resume_cb resume_cb;
   terminal_close_cb close_cb;
   bool force_crlf;
-};
-union uv_timer_s_node {
-  void *heap[3];
-  uv__queue queue;
-};
-union uv_timer_s_u {
-  int fd;
-  void *reserved[4];
-};
-struct uv_timer_s {
-  void *data;
-  uv_loop_t *loop;
-  uv_handle_type type;
-  uv_close_cb close_cb;
-  uv__queue handle_queue;
-  uv_timer_s_u u;
-  uv_handle_t *next_closing;
-  unsigned int flags;
-  uv_timer_cb timer_cb;
-  uv_timer_s_node node;
-  uint64_t timeout;
-  uint64_t repeat;
-  uint64_t start_id;
-};
-struct time_watcher {
-  uv_timer_t uv;
-  void *data;
-  time_cb cb;
-  time_cb close_cb;
-  MultiQueue *events;
-  bool blockable;
 };
 struct TypVal {
   unsigned int tag;
@@ -1647,6 +1613,29 @@ struct uv_stream_s {
   int delayed_error;
   int accepted_fd;
   void *queued_fds;
+};
+union uv_timer_s_node {
+  void *heap[3];
+  uv__queue queue;
+};
+union uv_timer_s_u {
+  int fd;
+  void *reserved[4];
+};
+struct uv_timer_s {
+  void *data;
+  uv_loop_t *loop;
+  uv_handle_type type;
+  uv_close_cb close_cb;
+  uv__queue handle_queue;
+  uv_timer_s_u u;
+  uv_handle_t *next_closing;
+  unsigned int flags;
+  uv_timer_cb timer_cb;
+  uv_timer_s_node node;
+  uint64_t timeout;
+  uint64_t repeat;
+  uint64_t start_id;
 };
 struct uv_timespec64_t {
   int64_t tv_sec;

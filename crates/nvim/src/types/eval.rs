@@ -398,11 +398,15 @@ pub struct SaveVEvent {
     pub sve_did_save: bool,
     pub sve_hashtab: DictTab,
 }
+/// A `timer_start()` timer, as the timer table owns it.
 pub struct Timer {
-    pub tw: TimeWatcher,
+    /// The libuv timer behind it; `None` once it has been closed.
+    pub(crate) watcher: Option<crate::event::time::OwnedTimer>,
     pub timer_id: ::core::ffi::c_int,
     pub repeat_count: ::core::ffi::c_int,
-    pub refcount: Refcount,
+    /// How many of its own callbacks are running. A stopped timer is still
+    /// listed by `timer_info()` while one is.
+    pub busy: u32,
     pub emsg_count: ::core::ffi::c_int,
     pub timeout: int64_t,
     pub stopped: bool,

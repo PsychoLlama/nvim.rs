@@ -1,72 +1,42 @@
 //! Time: the `timer_*()` family, `wait()` and the `reltime()` clock.
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::wrappers::arg_number;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
     dict_find, list_find_nr, list_len, tv_check_for_nonnull_dict_arg, tv_check_for_number_arg,
-    tv_check_for_opt_number_arg, tv_get_number, tv_get_number_chk, tv_list_alloc_ret,
+    tv_check_for_opt_number_arg, tv_get_number, tv_get_number_chk, tv_list_alloc,
+    tv_list_alloc_ret,
 };
 use crate::eval::{
-    add_timer_info, add_timer_info_all, callback_from_typval, eval_expr_typval, find_timer_by_nr,
-    timer_due_cb, timer_start, timer_stop, timer_stop_all,
+    add_timer_info, add_timer_info_all, callback_from_typval, eval_expr_typval, timer_pause,
+    timer_start, timer_stop, timer_stop_all,
 };
-use crate::event::r#loop::process_events_until;
-use crate::event::time::{
-    time_watcher_close, time_watcher_init, time_watcher_start, time_watcher_stop,
-};
+use crate::event::r#loop::{Drain, wait_on_main_loop};
+use crate::event::time::ScopedTimer;
 use crate::ex_cmds::check_secure;
 use crate::getchar::state::got_int;
 use crate::getchar::vgetc;
-use crate::memory::{ThinCString, xfree, xmalloc};
+use crate::memory::ThinCString;
 use crate::message::state::called_emsg;
+use crate::os::time::os_time;
 use crate::profile::{profile_end, profile_msg_str, profile_signed, profile_start, profile_sub};
 use crate::semsg;
-use crate::startup::main_loop;
 use crate::types::{
-    Callback, EvalFuncData, Float, MultiQueue, ProfTime, TimeWatcher, TypVal, VAR_LIST, VAR_NUMBER,
-    VarNumber, int32_t, kListLenUnknown, time_t,
+    Callback, EvalFuncData, Float, ProfTime, TypVal, VAR_LIST, VAR_NUMBER, VarNumber, int32_t,
+    kListLenUnknown,
 };
 use crate::ui::ui_flush;
-use ::libc::time;
-use core::ffi::{c_int, c_void};
-use core::ptr;
+use core::ffi::c_int;
 
 /// A cleared typval, the shape the evaluator's out-parameters start in.
 const EMPTY_TV: TypVal = TV_INITIAL_VALUE;
-
-/// `wait()`'s idle timer keeps the event loop turning; it is only closed
-/// here when the loop itself is shutting down, since `f_wait` cannot run to
-/// its own cleanup in that case.
-///
-/// # Safety
-/// A libuv callback: `tw` is the watcher this module allocated.
-unsafe fn dummy_timer_due_cb(tw: *mut TimeWatcher, _data: *mut c_void) {
-    // SAFETY: the caller's obligation; `main_loop` is live for the process.
-    if unsafe { (*main_loop.ptr()).closing } {
-        unsafe { time_watcher_stop(tw) };
-        unsafe { time_watcher_close(tw, Some(dummy_timer_close_cb)) };
-    }
-}
-
-/// Free the watcher `f_wait` allocated, once libuv is done with it.
-///
-/// # Safety
-/// A libuv callback: `tw` is the watcher this module allocated.
-unsafe fn dummy_timer_close_cb(tw: *mut TimeWatcher, _data: *mut c_void) {
-    // SAFETY: the caller's obligation; nothing else holds the watcher by
-    // the time libuv reports it closed.
-    unsafe { xfree(tw as *mut c_void) }
-}
 
 /// `wait({timeout}, {condition} [, {interval}])` — pump the event loop until
 /// `condition` evaluates true. 0 when it did, -1 on timeout, -2 on CTRL-C,
 /// -3 when evaluating `condition` failed.
 pub fn f_wait(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(-1);
-    // SAFETY throughout: the watcher is owned here and handed to libuv's close
-    // callback; every typval below is either from the frame or a local.
     if args[0].v_type() != VAR_NUMBER {
         semsg!("E475: Invalid value for argument 1");
         return;
@@ -86,41 +56,31 @@ pub fn f_wait(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let timeout = args[0].number_or_zero() as c_int;
     let expr = &args[1];
 
-    let tw = unsafe { xmalloc(size_of::<TimeWatcher>()) } as *mut TimeWatcher;
-    unsafe { time_watcher_init(main_loop.ptr(), tw, ptr::null_mut()) };
-    unsafe { (*tw).events = ptr::null_mut::<MultiQueue>() };
-    let every = interval as u64;
-    let due = dummy_timer_due_cb;
-    unsafe { time_watcher_start(tw, Some(due), every, every) };
+    // Keeps the loop turning, so that `condition` is evaluated at least
+    // every `interval` even when nothing else happens.
+    let waker = ScopedTimer::wake_every(interval as u64);
 
     let mut exprval = EMPTY_TV;
-    // A `Cell` because the closure below both writes it and is called
-    // through a `Fn` pointer the event loop holds.
-    let error = ::core::cell::Cell::new(false);
+    let mut error = false;
     let called_emsg_before = called_emsg.get();
     ui_flush();
-    let loop_ = main_loop.ptr();
-    let events = unsafe { (*loop_).events };
-    // SAFETY throughout: `expr` and `exprval` are this frame's locals, which
-    // outlive the wait, and the main loop is running.
     let done = || {
-        let out = &raw mut exprval;
-        // SAFETY: `out` is this frame's own local.
-        let got = unsafe { eval_expr_typval(expr, false, &[], &mut *out) };
+        let got = eval_expr_typval(expr, false, &[], &mut exprval);
         got.is_err()
-            || tv_get_number_chk(unsafe { &*out }).map_or_else(
+            || tv_get_number_chk(&exprval).map_or_else(
                 |_| {
-                    error.set(true);
+                    error = true;
                     false
                 },
                 |n| n != 0,
             )
             || called_emsg.get() > called_emsg_before
-            || error.get()
+            || error
             || got_int.get()
     };
-    unsafe { process_events_until(loop_, events, timeout as i64, done) };
-    if called_emsg.get() > called_emsg_before || error.get() {
+    wait_on_main_loop(Drain::Events, timeout as i64, done);
+    drop(waker);
+    if called_emsg.get() > called_emsg_before || error {
         result.write_number(-3);
     } else if got_int.get() {
         got_int.set(false);
@@ -129,14 +89,11 @@ pub fn f_wait(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     } else if tv_get_number_chk(&exprval).is_ok_and(|n| n != 0) {
         result.write_number(0);
     }
-    unsafe { time_watcher_stop(tw) };
-    unsafe { time_watcher_close(tw, Some(dummy_timer_close_cb)) };
 }
 
 /// `localtime()` — seconds since the epoch.
 pub fn f_localtime(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: `time(NULL)` writes nothing.
-    result.write_number(unsafe { time(ptr::null_mut::<time_t>()) } as VarNumber);
+    result.write_number(os_time() as VarNumber);
 }
 
 /// A `ProfTime` split into the pair of 32-bit halves `reltime()` reports.
@@ -196,9 +153,9 @@ pub fn f_reltime(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         profile_sub(end, start)
     };
     let (high, low) = proftime_halves(res);
-    tv_list_alloc_ret(result, 2);
-    unsafe { (*result.list_or_null()).push_number(high as VarNumber) };
-    unsafe { (*result.list_or_null()).push_number(low as VarNumber) };
+    let list = tv_list_alloc_ret(result, 2);
+    list.push_number(VarNumber::from(high));
+    list.push_number(VarNumber::from(low));
 }
 
 /// `reltimestr({time})` — the elapsed time as seconds with six decimals.
@@ -222,32 +179,21 @@ pub fn f_reltimefloat(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
 
 /// `timer_info([{id}])` — one timer's state, or every live timer's.
 pub fn f_timer_info(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY throughout: the timer list is main-thread state; the return value is the
-    // caller's cleared typval.
-    tv_list_alloc_ret(result, kListLenUnknown as c_int as isize);
+    let list = tv_list_alloc(kListLenUnknown as isize);
+    result.write_list(Some(list.clone()));
     if tv_check_for_opt_number_arg(args, 0).is_err() {
         return;
     }
     if args.is_empty() {
-        add_timer_info_all(result);
-        return;
-    }
-    let timer = find_timer_by_nr(arg_number(&args[0]));
-    // A stopped timer is still reported while a callback holds a
-    // reference to it.
-    if !timer.is_null()
-        && (!unsafe { (*timer).stopped } || unsafe { (*timer).refcount }.is_shared())
-    {
-        unsafe { add_timer_info(result, timer) };
+        add_timer_info_all(&list);
+    } else {
+        add_timer_info(&list, arg_number(&args[0]));
     }
 }
 
 /// `timer_pause({id}, {pause})` — stop or restart a timer's clock without
 /// forgetting it.
 pub fn f_timer_pause(args: &[TypVal], _unused: &mut TypVal, _fptr: EvalFuncData) {
-    let _rettv = _unused;
-    // SAFETY throughout: the timer comes from the main-thread timer table and its
-    // watcher is embedded in it.
     if args[0].v_type() != VAR_NUMBER {
         semsg!("E39: Number expected");
         return;
@@ -255,26 +201,13 @@ pub fn f_timer_pause(args: &[TypVal], _unused: &mut TypVal, _fptr: EvalFuncData)
     // Read before the timer is looked up, as the C does: the coercion
     // of the second argument can report its own error.
     let paused = arg_number(&args[1]) != 0;
-    let timer = find_timer_by_nr(arg_number(&args[0]));
-    if timer.is_null() {
-        return;
-    }
-    if !unsafe { (*timer).paused } && paused {
-        unsafe { time_watcher_stop(&raw mut (*timer).tw) };
-    } else if unsafe { (*timer).paused } && !paused {
-        let tw = unsafe { &raw mut (*timer).tw };
-        let every = unsafe { (*timer).timeout } as u64;
-        unsafe { time_watcher_start(tw, Some(timer_due_cb), every, every) };
-    }
-    unsafe { (*timer).paused = paused };
+    timer_pause(arg_number(&args[0]), paused);
 }
 
 /// `timer_start({time}, {callback} [, {options}])` — the new timer's id, or
 /// -1 when it could not be started.
 pub fn f_timer_start(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(-1);
-    // SAFETY throughout: the options dict and the callback typval are the frame's;
-    // `timer_start` takes the callback over.
     if check_secure() {
         return;
     }
@@ -300,15 +233,10 @@ pub fn f_timer_start(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
 
 /// `timer_stop({id})`.
 pub fn f_timer_stop(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
-    let _rettv = _result;
-    // SAFETY throughout: the timer comes from the main-thread timer table.
     if tv_check_for_number_arg(args, 0).is_err() {
         return;
     }
-    let timer = find_timer_by_nr(arg_number(&args[0]));
-    if !timer.is_null() {
-        unsafe { timer_stop(timer) };
-    }
+    timer_stop(arg_number(&args[0]));
 }
 
 /// `timer_stopall()`.

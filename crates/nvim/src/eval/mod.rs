@@ -33,9 +33,8 @@ pub(crate) use crate::message::e_invalblob;
 use crate::registry::SlotTable;
 use crate::types::{
     Array, ChannelStreamType, ExprType, Failed, GRegFlags, LuaRetMode, MarkGet, MotionType, Timer,
-    TypVal, uint64_t,
+    uint64_t,
 };
-use crate::winlayer::Live;
 use core::ffi::{CStr, c_int, c_long, c_uint, c_ulong};
 
 mod entry;
@@ -69,25 +68,6 @@ pub(crate) use self::vars::{get_v_event, restore_v_event};
 // `eval0` is reached from `crates/nvim/tests/unit`, which links the library
 // from outside; the rest of `expr` stays in-crate.
 pub use self::expr::eval0;
-/// The handles this tree passes around by pointer.
-///
-/// Each is a [`Live<T>`](crate::winlayer::Live) — a `Copy` newtype over a
-/// `*mut T` recording that whoever built it promised the pointee outlives
-/// the value. Construction is the one unsafe step; every `(*p).field` after
-/// it is ordinary checked code. See [`crate::winlayer::live`] for why this
-/// is not `&mut *p`: the evaluator re-enters itself through autocommands
-/// and Lua, and a `&mut` is `noalias` to LLVM.
-///
-/// They live here rather than in the module that needed each first because
-/// the same pointee crosses several of this family's files.
-///
-/// A value the evaluator is working on. The `*const TypVal` arguments the
-/// builtins take are wrapped with `cast_mut()` and only read.
-pub(crate) type Tv = Live<TypVal>;
-
-/// A registered timer. The promise is discharged by the reference count:
-/// nothing here holds one across a call that has not taken a reference.
-pub(crate) type Tm = Live<Timer>;
 
 pub const _ISalnum: c_uint = 8;
 pub const REGSUB_MAGIC: c_uint = 2;
@@ -189,7 +169,7 @@ static last_timer_id: GlobalCell<uint64_t> = GlobalCell::new(1 as uint64_t);
 /// this keeps and the reentrancy rule it answers: a timer's callback runs
 /// Vimscript, which can start and stop timers, so nothing holds a borrow of
 /// this across one.
-static timers: GlobalCell<SlotTable<uint64_t, *mut Timer>> = GlobalCell::new(SlotTable::new());
+static timers: GlobalCell<SlotTable<uint64_t, Timer>> = GlobalCell::new(SlotTable::new());
 static callback_depth: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub const TV_CSTRING: c_ulong = SIZE_MAX.wrapping_sub(1 as c_ulong);
 pub const PROF_YES: c_int = 1 as c_int;

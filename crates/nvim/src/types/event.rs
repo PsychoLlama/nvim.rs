@@ -52,7 +52,6 @@ pub type RStream = rstream;
 pub type SignalWatcher = signal_watcher;
 pub type SocketWatcher = socket_watcher;
 pub type Stream = stream;
-pub type TimeWatcher = time_watcher;
 pub type WBuffer = wbuffer;
 pub type argv_callback = Option<unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> ()>;
 pub type internal_proc_cb = Option<unsafe fn(*mut Proc) -> ()>;
@@ -198,49 +197,6 @@ pub union stream_uv {
 }
 pub type stream_write_cb =
     Option<unsafe fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> ()>;
-pub type time_cb = Option<unsafe fn(*mut TimeWatcher, *mut ::core::ffi::c_void) -> ()>;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct time_watcher {
-    pub uv: uv_timer_t,
-    pub data: *mut ::core::ffi::c_void,
-    pub cb: time_cb,
-    pub close_cb: time_cb,
-    pub events: *mut MultiQueue,
-    pub blockable: bool,
-}
-
-impl time_watcher {
-    /// An unarmed watcher, for a `static` that `time_watcher_init` fills
-    /// in. Every field is what C's zero-initialisation would have left.
-    pub const EMPTY: Self = Self {
-        uv: uv_timer_t {
-            data: ::core::ptr::null_mut(),
-            loop_0: ::core::ptr::null_mut(),
-            type_0: 0,
-            close_cb: None,
-            handle_queue: uv__queue {
-                next: ::core::ptr::null_mut(),
-                prev: ::core::ptr::null_mut(),
-            },
-            u: uv_timer_s_u { fd: 0 },
-            next_closing: ::core::ptr::null_mut(),
-            flags: 0,
-            timer_cb: None,
-            node: uv_timer_s_node {
-                heap: [::core::ptr::null_mut(); 3],
-            },
-            timeout: 0,
-            repeat: 0,
-            start_id: 0,
-        },
-        data: ::core::ptr::null_mut(),
-        cb: None,
-        close_cb: None,
-        events: ::core::ptr::null_mut(),
-        blockable: false,
-    };
-}
 pub struct wbuffer {
     pub size: size_t,
     pub refcount: RefcountSize,

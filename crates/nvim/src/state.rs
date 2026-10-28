@@ -27,12 +27,12 @@ use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
 
 use crate::autocmd::{apply_autocmds, has_event};
-use crate::channel::main_loop_events;
 use crate::debugger::state::debug_mode;
 use crate::drawscreen::state::must_redraw;
 use crate::drawscreen::{setcursor, update_screen};
 use crate::edit::{InsertState, insert_check, insert_execute};
 use crate::eval::{get_v_event, restore_v_event};
+use crate::event::r#loop::main_loop_events;
 use crate::event::multiqueue::{multiqueue_empty, multiqueue_get};
 use crate::ex_docmd::state::global_busy;
 use crate::ex_getln::cmdline_overstrike;

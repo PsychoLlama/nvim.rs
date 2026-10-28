@@ -47,13 +47,13 @@ use crate::autocmd::{
     is_aucmd_win, is_autocmd_blocked, unblock_autocmds,
 };
 use crate::change::deleted_lines_buf;
-use crate::channel::main_loop_events;
 use crate::cstr;
 use crate::cursor_shape::{SHAPE_IDX_TERM, shape_entry};
 use crate::drawscreen::redraw_buf_line_later;
 use crate::eval::typval::DictRef;
 use crate::eval::vars::globvar_dict;
 use crate::eval::{get_v_event, restore_v_event};
+use crate::event::r#loop::main_loop_events;
 use crate::event::multiqueue::{multiqueue_free, multiqueue_new, multiqueue_put_event};
 use crate::highlight::{HlAttrFlags, hl_combine_attr, hl_get_term_attr};
 use crate::highlight_group::name_to_color;

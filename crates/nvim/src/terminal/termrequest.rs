@@ -28,8 +28,8 @@
 )]
 
 use crate::autocmd::{apply_autocmds_group, has_event};
-use crate::channel::main_loop_events;
 use crate::eval::vars::set_vim_var_string;
+use crate::event::r#loop::main_loop_events;
 use crate::event::multiqueue::multiqueue_put_event;
 use crate::highlight::hl_add_url;
 use crate::types::AutoEvent;

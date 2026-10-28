@@ -15,11 +15,9 @@ use core::ptr;
 
 use super::{in_fast_callback, nlua_error, nlua_pcall, nlua_pushref, nlua_ref_global};
 use crate::eval::funcs::find_builtin;
-use crate::event::r#loop::process_events_until;
+use crate::event::r#loop::{Drain, wait_on_main_loop};
 use crate::event::multiqueue::multiqueue_put_event;
-use crate::event::time::{
-    time_watcher_close, time_watcher_init, time_watcher_start, time_watcher_stop,
-};
+use crate::event::time::ScopedTimer;
 use crate::getchar::state::got_int;
 use crate::getchar::vgetc;
 use crate::guard::Allow;
@@ -30,13 +28,11 @@ use crate::lua::ffi::{
     lua_toboolean, lua_type, luaL_checkinteger, luaL_checknumber, luaL_error, luaL_getmetafield,
 };
 use crate::lua::stack::lua_pop;
-use crate::memory::{xfree, xmalloc};
 use crate::message::e_fast_api_disabled;
 use crate::os::cshim::gettext;
 use crate::startup::main_loop;
 use crate::types::{
-    Event, LuaRef, MultiQueue, TimeWatcher, int64_t, intptr_t, lua_Integer, lua_State, ptrdiff_t,
-    uint32_t, uint64_t,
+    Event, LuaRef, int64_t, intptr_t, lua_Integer, lua_State, ptrdiff_t, uint32_t, uint64_t,
 };
 use crate::ui::state::ui_event_ns_id;
 use crate::ui::{ui_flush, ui_remove_cb};
@@ -123,26 +119,6 @@ unsafe fn push_str(lstate: *mut lua_State, s: &core::ffi::CStr) {
     unsafe { lua_pushlstring(lstate, s.as_ptr(), s.count_bytes()) };
 }
 
-/// The `vim.wait` heartbeat: it exists so that `process_events_until` wakes
-/// up at all, and only ever does anything when the loop is shutting down.
-///
-/// # Safety
-/// Called by the event loop with the watcher it was started on.
-unsafe fn dummy_timer_due_cb(tw: *mut TimeWatcher, _data: *mut c_void) {
-    unsafe {
-        if (*main_loop.ptr()).closing {
-            time_watcher_stop(tw);
-            time_watcher_close(tw, Some(dummy_timer_close_cb));
-        }
-    }
-}
-
-/// # Safety
-/// Called by the event loop with the watcher being closed.
-unsafe fn dummy_timer_close_cb(tw: *mut TimeWatcher, _data: *mut c_void) {
-    unsafe { xfree(tw.cast::<c_void>()) };
-}
-
 /// Call `vim.wait`'s condition once.
 ///
 /// `true` means stop waiting — either the call failed (`*status`) or it
@@ -227,30 +203,22 @@ pub(crate) unsafe extern "C-unwind" fn nlua_wait(lstate: *mut lua_State) -> c_in
         }
 
         let fast_only = lua_top >= 4 && lua_toboolean(lstate, 4) != 0;
-        let loop_events: *mut MultiQueue = if fast_only {
-            (*main_loop.ptr()).fast_events
+        let drain = if fast_only {
+            Drain::FastOnly
         } else {
-            (*main_loop.ptr()).events
+            Drain::Events
         };
 
         // The watcher is what makes the loop wake up on `interval`; it does
-        // nothing else, and it outlives this call if the loop is closing.
-        let tw = xmalloc(size_of::<TimeWatcher>()).cast::<TimeWatcher>();
-        time_watcher_init(main_loop.ptr(), tw, ptr::null_mut());
-        (*tw).events = ptr::null_mut::<MultiQueue>();
-        time_watcher_start(
-            tw,
-            Some(dummy_timer_due_cb),
-            interval as uint64_t,
-            interval as uint64_t,
-        );
+        // nothing else. It is dropped before anything below can raise.
+        let waker = ScopedTimer::wake_every(interval as uint64_t);
 
         let mut pcall_status: c_int = 0;
         let mut callback_result = false;
         let mut nresults: c_int = 0;
 
         ui_flush();
-        process_events_until(main_loop.ptr(), loop_events, timeout, || {
+        wait_on_main_loop(drain, timeout, || {
             got_int.get()
                 || is_function
                     && nlua_wait_condition(
@@ -261,8 +229,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_wait(lstate: *mut lua_State) -> c_in
                     )
         });
 
-        time_watcher_stop(tw);
-        time_watcher_close(tw, Some(dummy_timer_close_cb));
+        drop(waker);
 
         if pcall_status != 0 {
             lua_error(lstate)

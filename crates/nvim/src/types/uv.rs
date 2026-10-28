@@ -561,6 +561,34 @@ pub struct uv_timespec64_t {
     pub tv_nsec: int32_t,
 }
 pub type uv_timer_t = uv_timer_s;
+
+impl Default for uv_timer_s {
+    /// An uninitialised timer handle, every field what C's
+    /// zero-initialisation would have left: `uv_timer_init` writes the ones
+    /// libuv reads.
+    fn default() -> Self {
+        Self {
+            data: ::core::ptr::null_mut(),
+            loop_0: ::core::ptr::null_mut(),
+            type_0: 0,
+            close_cb: None,
+            handle_queue: uv__queue {
+                next: ::core::ptr::null_mut(),
+                prev: ::core::ptr::null_mut(),
+            },
+            u: uv_timer_s_u { fd: 0 },
+            next_closing: ::core::ptr::null_mut(),
+            flags: 0,
+            timer_cb: None,
+            node: uv_timer_s_node {
+                heap: [::core::ptr::null_mut(); 3],
+            },
+            timeout: 0,
+            repeat: 0,
+            start_id: 0,
+        }
+    }
+}
 /// libuv's own wall-clock struct, wide enough for a 64-bit `tv_sec` on every
 /// platform (`uv_gettimeofday` fills it).
 #[repr(C)]
