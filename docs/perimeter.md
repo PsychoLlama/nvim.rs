@@ -13,7 +13,7 @@ the migration's debt, counted by the ratchet as
 number is the one to drive to zero.
 
 Today: **7,018** unchecked statements inside the perimeter (139 files),
-**1,905** outside it (115 files, of 1,388 measured). It was 138,877 when this
+**1,905** outside it (115 files, of 1,389 measured). It was 138,877 when this
 file was written, at the end of phase 23's slice 15 — in _lines_, which is what
 this metric counted until phase 31 changed the unit to statements.
 
@@ -56,6 +56,7 @@ should move out of the module rather than be carved out of the list.
 | module                     | files | unchecked | why, and what would retire it                                                                                                                       |
 | -------------------------- | ----: | --------: | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `lua/`                     |    46 |     2,409 | LuaJIT's C API: a `lua_State`, its stack and the registry, plus luv and lpeg. Retires with the embedded interpreter, not before.                    |
+| `lua/stack.rs`             |     1 |         0 | (inside `lua/`, the exact path its row narrows to) the typed `Stack`: the one module that pushes, pops and reads the `lua_State` stack.             |
 | `lua/treesitter/`          |    10 |       875 | (inside `lua/`, listed for its own reason) the tree-sitter C library — parsers, trees, queries and cursors are opaque C objects with C lifetimes.   |
 | `mpack/lmpack/`            |     3 |       528 | libmpack-lua: a Lua C module, so every value it moves crosses the `lua_State` stack.                                                                |
 | `cjson/lua_cjson/`         |     3 |       178 | lua-cjson: a Lua C module, same stack.                                                                                                              |

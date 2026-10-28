@@ -49,7 +49,7 @@
   "char_as_c_int": 1407,
   "failed_uses": 1187,
   "labeled_blocks": 110,
-  "lua_raw_stack": 840,
+  "lua_raw_stack": 802,
   "raw_variadic_calls": 109,
   "long_fns": 52,
   "safety_on_safe_fns": 0,
@@ -62,7 +62,7 @@
   "files_allowing_non_camel_case_types": 23,
   "files_allowing_non_snake_case": 5,
   "files_allowing_non_upper_case_globals": 263,
-  "files_allowing_unsafe_code": 263,
+  "files_allowing_unsafe_code": 264,
   "files": {
     "crates/mainthread/lib.rs": {"pub_items": 3},
     "crates/nvim/src/allocator.rs": {"unsafe_stmts": 20},

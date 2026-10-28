@@ -755,11 +755,11 @@ plus these whole-tree metrics, which are not per-file:
                         (`'a: 'b`) cannot match: what follows the colon has to
                         open a block. Phase 34.
                       lua_raw_stack  `lua_push*`/`lua_pop`/`lua_to*`/
-                        `lua_get*`/`lua_set*` outside LUA_STACK_HOME, which is
-                        empty until phase 33 writes the typed `Stack`. So the
-                        count is tree-wide today, which is the honest reading:
-                        every site is outside a module that does not exist.
-                        Phase 33.
+                        `lua_get*`/`lua_set*` outside LUA_STACK_HOME:
+                        `lua/stack.rs`, the typed `Stack`, and `lua/ffi.rs`,
+                        whose hits are declarations and macro shims rather
+                        than call sites. Every other site moves into the
+                        `Stack`.
                       raw_variadic_calls  direct calls to the C printf-family
                         variadics (`snprintf`, `printf`, `fprintf`,
                         `sscanf`, `luaL_error`, `lua_pushfstring`). A variadic
@@ -1762,13 +1762,16 @@ INSTRUMENTS = {
         r"|\[\s*0\s+as\s+c_char\s*;"
     ),
 }
-# Phase 33's typed `Stack` over the `lua_State`, which does not exist yet.
-# When it lands, its module goes in here and `lua_raw_stack` becomes "raw
-# stack traffic outside the one module allowed to have it" -- the same shape
-# PERIMETER and WINLAYER use. Until then the home is empty and the count is
-# tree-wide, which is the honest reading: today every one of these sites is
-# outside a `Stack` that does not exist.
-LUA_STACK_HOME = {}
+# The typed `Stack` over the `lua_State` and the declarations it calls:
+# `lua_raw_stack` is "raw stack traffic outside the one module allowed to
+# have it" -- the same shape PERIMETER and WINLAYER use. `ffi.rs` is in the
+# home because its hits are the `extern` declarations and the inline shims
+# over LuaJIT's header macros, not call sites; `stack.rs` is where every call
+# site outside it moves.
+LUA_STACK_HOME = {
+    "crates/nvim/src/lua/stack.rs": "the typed `Stack` over the `lua_State`",
+    "crates/nvim/src/lua/ffi.rs": "LuaJIT's declarations and macro shims",
+}
 # The same, but only outside a home, the shape `curwin_raw` established.
 # name -> (needle, home).
 INSTRUMENTS_OUTSIDE = {
@@ -4973,8 +4976,8 @@ SELF_TEST_INSTRUMENTS = [
         },
         {"untested_dirs": 0},
     ),
-    # `types/` is counted by the file, and `lua_raw_stack` is tree-wide until
-    # LUA_STACK_HOME names the module phase 33 writes.
+    # `types/` is counted by the file, and `lua_raw_stack` counts outside
+    # LUA_STACK_HOME only.
     (
         {
             "crates/nvim/src/types/eval.rs": "pub struct A;\n",
@@ -4982,6 +4985,8 @@ SELF_TEST_INSTRUMENTS = [
             "crates/nvim/src/lua/executor/mod.rs": "fn f() {\n"
             "    lua_pushnil(l);\n    lua_pop(l, 1);\n    lua_tolstring(l, -1, &n);\n"
             "    luaL_error(l);\n}\n",
+            "crates/nvim/src/lua/stack.rs": "fn g() {\n    lua_pushnil(l);\n}\n",
+            "crates/nvim/src/lua/ffi.rs": "fn lua_pop(l) {\n    lua_settop(l, -2);\n}\n",
         },
         {"types_files": 2, "lua_raw_stack": 3},
     ),
