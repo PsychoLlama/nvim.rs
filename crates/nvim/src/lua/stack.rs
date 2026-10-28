@@ -150,19 +150,24 @@ impl At {
 }
 
 /// What kind of value a slot holds: `lua_type`'s answer.
+///
+/// The discriminants are LuaJIT's own `LUA_T*` numbers, so reading a kind
+/// off the stack is a range check rather than a table lookup -- it is on
+/// every step of every conversion.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[repr(i32)]
 pub enum Kind {
     /// The index is past the top of the stack.
-    None,
-    Nil,
-    Boolean,
-    LightUserdata,
-    Number,
-    String,
-    Table,
-    Function,
-    Userdata,
-    Thread,
+    None = LUA_TNONE,
+    Nil = LUA_TNIL,
+    Boolean = LUA_TBOOLEAN,
+    LightUserdata = LUA_TLIGHTUSERDATA,
+    Number = LUA_TNUMBER,
+    String = LUA_TSTRING,
+    Table = LUA_TTABLE,
+    Function = LUA_TFUNCTION,
+    Userdata = LUA_TUSERDATA,
+    Thread = LUA_TTHREAD,
 }
 
 impl Kind {
@@ -182,18 +187,7 @@ impl Kind {
     }
 
     const fn to_raw(self) -> c_int {
-        match self {
-            Kind::None => LUA_TNONE,
-            Kind::Nil => LUA_TNIL,
-            Kind::Boolean => LUA_TBOOLEAN,
-            Kind::LightUserdata => LUA_TLIGHTUSERDATA,
-            Kind::Number => LUA_TNUMBER,
-            Kind::String => LUA_TSTRING,
-            Kind::Table => LUA_TTABLE,
-            Kind::Function => LUA_TFUNCTION,
-            Kind::Userdata => LUA_TUSERDATA,
-            Kind::Thread => LUA_TTHREAD,
-        }
+        self as c_int
     }
 }
 

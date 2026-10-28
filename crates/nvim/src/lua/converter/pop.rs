@@ -71,8 +71,13 @@ pub(crate) fn classify_table(stack: &mut Stack) -> LuaTableProps {
             }
             Kind::Boolean => {
                 if stack.to_boolean(KEY) == TYPE_IDX_VALUE {
-                    let n = stack.to_number(VALUE);
-                    let recognised = stack.kind(VALUE) == Kind::Number
+                    let is_number = stack.kind(VALUE) == Kind::Number;
+                    let n = if is_number {
+                        stack.to_number(VALUE)
+                    } else {
+                        0.0
+                    };
+                    let recognised = is_number
                         && (n == kObjectTypeFloat as lua_Number
                             || n == kObjectTypeArray as lua_Number
                             || n == kObjectTypeDict as lua_Number);
