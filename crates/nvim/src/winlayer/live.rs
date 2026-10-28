@@ -57,8 +57,8 @@
 //! live example: `cur_match_pos` points at its own `first_match_pos` or
 //! `last_match_pos`, so a single `st.found_all = true` through a `Live` would
 //! poison the pointer the next `searchit` reads. Wrap the *fields* instead —
-//! [`Live::field_ptr`] computes an address without a borrow, which is the
-//! whole reason it exists — or leave the struct behind its raw pointer.
+//! [`Live::raw`] plus a field's `offset_of!` is an address without a borrow
+//! — or leave the struct behind its raw pointer.
 //!
 //! The same arithmetic forbids taking two `&raw mut` field addresses off one
 //! [`Deref`], `Win`'s and `Buf`'s included: the second borrow pops the first.
@@ -131,19 +131,6 @@ impl<T> Live<T> {
     #[inline(always)]
     pub(crate) fn raw(self) -> *mut T {
         self.0
-    }
-
-    /// The address of a field, `offset` bytes in, **without reading the
-    /// object**.
-    ///
-    /// [`Win::cursor`](crate::winlayer::Win::cursor)'s trick, shared: a
-    /// field's address is the object's plus a constant, so saying where one
-    /// is needs no dereference. Feed it `offset_of!(T, field)`; the result is
-    /// live exactly as long as the `Live<T>` it came from, which is why
-    /// wrapping it in a `PosRef`/`Line` is still the caller's unsafe step.
-    #[inline(always)]
-    pub(crate) fn field_ptr<F>(self, offset: usize) -> *mut F {
-        self.0.wrapping_byte_add(offset).cast()
     }
 }
 

@@ -24,7 +24,7 @@ use core::ffi::{c_char, c_void};
 use core::{mem, ptr};
 
 use crate::api::private::dispatch_wrappers::{handle_nvim_get_mode, handle_nvim_ui_try_resize};
-use crate::channel::{channel_decref, channel_incref};
+use crate::channel::{channel_decref, channel_incref, find_channel};
 use crate::event::r#loop::one_arg_event;
 use crate::event::multiqueue::{event_create_oneshot, multiqueue_put_event};
 use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_INF, logmsg};
@@ -35,8 +35,8 @@ use crate::msgpack_rpc::unpacker::unpacker_advance;
 use crate::os::input::input_blocking;
 use crate::startup::ui_client_attached;
 use crate::types::{
-    ApiDispatchFn, Array, Channel, Error, MessageType, MsgpackRpcRequestHandler, Object, RStream,
-    Unpacker, kErrorTypeException, size_t, uint32_t,
+    ApiDispatchFn, Array, Error, MessageType, MsgpackRpcRequestHandler, Object, RStream, Unpacker,
+    kErrorTypeException, size_t, uint32_t, uint64_t,
 };
 use crate::ui::state::resize_events;
 use crate::ui_client::ui_client_event_raw_line;
@@ -55,18 +55,19 @@ use super::{Chan, RequestEvent, chan_close_on_err, trace};
 /// # Safety
 /// libuv's contract: `rbuf` is `c` readable bytes and `data` is the channel
 /// [`rpc_start`] registered.
-pub(super) unsafe fn receive_msgpack(
+pub(crate) unsafe fn receive_msgpack(
     stream: *mut RStream,
     rbuf: *const c_char,
     c: size_t,
     data: *mut c_void,
     eof: bool,
 ) -> size_t {
-    // SAFETY: the channel this callback was registered with.
-    let chan = unsafe { Chan::new(data.cast::<Channel>()) };
-    // SAFETY: as above; the reference is dropped at the end.
-    unsafe { channel_incref(chan.as_ptr()) };
-    let id = chan.id;
+    // The channel this callback was registered with, by id; the reference
+    // is dropped at the end.
+    let id = data.addr() as uint64_t;
+    channel_incref(id);
+    // SAFETY: the channel just referenced.
+    let chan = unsafe { Chan::new(find_channel(id)) };
     let from = stream.cast::<c_void>();
     logmsg!(
         LOGLVL_DBG,
@@ -98,8 +99,8 @@ pub(super) unsafe fn receive_msgpack(
         unsafe { snprintf!(into, cap, fmt, id) };
         unsafe { chan_close_on_err(chan, buf.as_mut_ptr(), LOGLVL_INF) };
     }
-    // SAFETY: the reference taken above.
-    unsafe { channel_decref(chan.as_ptr()) };
+    // The reference taken above.
+    channel_decref(id);
     consumed
 }
 
@@ -248,7 +249,7 @@ fn handle_request(chan: Chan, p: &mut Unpacker, args: Array) {
             // frees it when it has run.
             used_mem: mem::replace(&mut p.arena, ARENA_EMPTY),
         });
-        channel_incref(chan.as_ptr());
+        channel_incref(chan.id);
         evdata
     };
 
@@ -275,12 +276,12 @@ fn handle_request(chan: Chan, p: &mut Unpacker, args: Array) {
     let is_resize = ptr::fn_addr_eq(handler_fn, handle_nvim_ui_try_resize as ApiDispatchFn);
     if is_resize {
         let ev = event_create_oneshot(event, 2);
-        unsafe { multiqueue_put_event(chan.events, ev.clone()) };
+        unsafe { multiqueue_put_event(chan.events.as_ptr(), ev.clone()) };
         unsafe { multiqueue_put_event(queue_in(&resize_events), ev) };
         return;
     }
     // SAFETY: the channel's queue is live.
-    unsafe { multiqueue_put_event(chan.events, event) };
+    unsafe { multiqueue_put_event(chan.events.as_ptr(), event) };
     // SAFETY: the handler name is a static string of at least
     // `method_name_len` bytes -- the parser measured it there.
     let name = unsafe { c_str_len(p.handler.name, p.method_name_len) };
@@ -335,7 +336,7 @@ unsafe extern "C" fn request_event(argv: *mut *mut c_void) {
     }
     // SAFETY: the arena, the reference and the allocation this event owned.
     unsafe { arena_mem_free(arena_finish(&raw mut (*e).used_mem)) };
-    unsafe { channel_decref(chan.as_ptr()) };
+    channel_decref(chan.id);
     unsafe { xfree(e.cast::<c_void>()) };
     error.clear();
 }

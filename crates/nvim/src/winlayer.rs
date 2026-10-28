@@ -105,8 +105,9 @@
 //! earlier is **invalidated by the next write through the handle**. Nothing
 //! warns but Miri, and only if a test walks that path (p23-5). So when a body
 //! holds an interior raw pointer across writes through a `Win`/`Buf`, derive
-//! the address with [`Win::cursor`] or [`Live::field_ptr`], which compute it
-//! from the base without forming a `&mut`, or re-derive it after each write.
+//! the address with [`Win::cursor`], or from [`Live::raw`] plus the field's
+//! offset, which compute it from the base without forming a `&mut`, or
+//! re-derive it after each write.
 //! Retyping a `*mut Window` parameter to `Win` is not by itself enough.
 //!
 //! Nothing here offers a scoped `with_mut` that would stretch a borrow across

@@ -312,8 +312,7 @@ pub(crate) fn terminal_enter() -> bool {
     let mut s = unsafe { Session::new(&raw mut session) };
 
     stop_insert_mode.set(false);
-    // SAFETY: a live terminal.
-    unsafe { terminal_check_size(s.term.raw()) };
+    terminal_check_size(s.term);
 
     let save_state = State.get();
     State.set(MODE_TERMINAL);
@@ -379,10 +378,8 @@ pub(crate) fn terminal_enter() -> bool {
         s.term.destroy = true;
         // Read out before the call: the channel's close callback is free to
         // free the terminal.
-        let (close_cb, data) = (s.term.opts.close_cb, s.term.opts.data);
-        // SAFETY: the callback the channel registered, taking the data it
-        // registered with it.
-        unsafe { close_cb.expect("non-null function pointer")(data) };
+        let (close_cb, owner) = (s.term.opts.close_cb, s.term.opts.owner);
+        close_cb.expect("non-null function pointer")(owner);
         if buf_handle != 0 {
             let _ = do_buffer(DOBUF_WIPE, DOBUF_FIRST, FORWARD, buf_handle, 1);
         }
@@ -449,10 +446,8 @@ fn terminal_check_focus(mut s: Session) -> bool {
             s.term.destroy = true;
             // Read out before the call: the channel's close callback is
             // free to free the terminal.
-            let (close_cb, data) = (s.term.opts.close_cb, s.term.opts.data);
-            // SAFETY: the callback the channel registered, taking the data
-            // it registered with it.
-            unsafe { close_cb.expect("non-null function pointer")(data) };
+            let (close_cb, owner) = (s.term.opts.close_cb, s.term.opts.owner);
+            close_cb.expect("non-null function pointer")(owner);
             s.close = false;
         }
         // SAFETY: the terminal of the buffer the user moved to.
@@ -603,12 +598,9 @@ pub(crate) unsafe fn terminal_execute(state: *mut TerminalState, key: c_int) -> 
         //
         // Read out before the call: the channel's resume callback may
         // re-enter.
-        let (resume_cb, data) = (s.term.opts.resume_cb, s.term.opts.data);
-        // SAFETY: the callback the channel registered, taking the data it
-        // registered with it.
-        unsafe { resume_cb.expect("non-null function pointer")(data) };
-        // SAFETY: a live terminal.
-        unsafe { terminal_set_state(s.term.raw(), false) };
+        let (resume_cb, owner) = (s.term.opts.resume_cb, s.term.opts.owner);
+        resume_cb.expect("non-null function pointer")(owner);
+        terminal_set_state(s.term, false);
     } else {
         if s.term.closed {
             s.close = true;

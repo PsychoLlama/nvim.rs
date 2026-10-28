@@ -6,8 +6,7 @@
 //! before that point unwind the half-built channel with
 //! [`channel_destroy_early`], which gives its id back.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -18,274 +17,219 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::message_fmt::c_str;
-use crate::semsg;
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
+use core::ffi::{CStr, c_int};
+use std::ffi::CString;
 
 use crate::eval::typval::DictRef;
-use crate::event::libuv::uv_strerror;
+use crate::event::channel::{
+    JobSpawn, Reads, accept_socket, attach_socket, connect_socket, init_job_streams, open_stdio,
+    owner_data, spawn_job, start_reads, unopened_rstream, unopened_stdio,
+};
 use crate::event::libuv_proc::libuv_proc_init;
-use crate::event::proc::{exit_on_closed_chan, proc_get_exepath, proc_spawn};
-use crate::event::rstream::{rstream_init, rstream_init_fd, rstream_start};
-use crate::event::socket::{socket_connect, socket_watcher_accept};
-use crate::event::wstream::{wstream_init, wstream_init_fd};
+use crate::event::r#loop::main_loop_raw;
+use crate::event::proc::exit_on_closed_chan;
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_ERR, logmsg};
-use crate::memory::{xfree, xstrdup};
+use crate::message_fmt::msg_cstr;
 use crate::msgpack_rpc::channel::rpc_start;
 use crate::msgpack_rpc::server::server_owns_pipe_address;
 use crate::os::cshim::gettext;
 use crate::os::fs::os_strerror;
+use crate::os::proc::{os_dup_above, os_dup2};
 use crate::os::pty_proc_unix::pty_proc_init;
-use crate::os::shell::shell_free_argv;
+use crate::os::shell::Argv;
+use crate::semsg;
 use crate::startup::{embedded_mode, exiting, headless_mode, ui_client_channel_id};
 use crate::terminal::{terminal_close, terminal_set_state};
 use crate::types::channel::kChannelStdinPipe;
 use crate::types::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
 use crate::types::{
-    Callback, CallbackReader, Channel, ChannelStdinMode, Dict, LuaRef, Proc, SocketWatcher,
-    VarNumber, uint16_t, uint64_t,
+    Callback, CallbackReader, ChannelStdinMode, ChannelStream, InternalState, JobProc, LuaRef,
+    SocketWatcher, VarNumber, uint16_t, uint64_t,
 };
 use crate::ui_client::ui_client_attach_to_restarted_server;
-use ::libc::{dup2, fcntl};
 
 use super::known::*;
-use super::reader::{
-    callback_reader_set, callback_reader_start, on_channel_data, on_job_stderr,
-    schedule_channel_event,
-};
+use super::reader::{callback_reader_start, schedule_channel_event};
 use super::{
-    channel_alloc, channel_create_event, channel_decref, channel_destroy_early, channel_internal,
-    channel_proc, close_cb, main_loop_ptr,
+    alloc_channel, channel_create_event, channel_decref, channel_destroy_early, with_channel,
 };
 
 /// Whether stdio has already been claimed. Only one channel may own it.
 static did_stdio: GlobalCell<bool> = GlobalCell::new(false);
 
-/// [`channel_job_start`] of an owned argument vector and environment
-/// (`None` inherits this process's), with no working directory or pty size
-/// of its own: answers the new channel's
-/// id, or `None` with `status` set as the start sets it.
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn channel_job_start_argv(
-    argv: crate::os::shell::Argv,
-    exepath: Option<&CStr>,
-    on_stdout: CallbackReader,
-    on_stderr: CallbackReader,
-    on_exit: Callback,
-    rpc: bool,
-    overlapped: bool,
-    detach: bool,
-    env: Option<DictRef>,
-    status: &mut VarNumber,
-) -> Option<uint64_t> {
-    // SAFETY: an owned vector in the shape the start takes over, a name or
-    // null, and a status slot of the caller's.
-    let chan = unsafe {
-        channel_job_start(
-            argv.into_raw(),
-            exepath.map_or(ptr::null(), CStr::as_ptr),
-            on_stdout,
-            on_stderr,
-            on_exit,
-            false,
-            rpc,
-            overlapped,
-            detach,
-            kChannelStdinPipe,
-            ptr::null(),
-            0,
-            0,
-            env.map_or(ptr::null_mut(), DictRef::into_raw),
-            status,
-        )
-    };
-    // SAFETY: the channel just started, live until the next event turn.
-    (!chan.is_null()).then(|| unsafe { (*chan).id })
+/// What a job is started with: [`channel_job_start`]'s arguments.
+pub struct JobOptions<'a> {
+    /// The command line, the program first.
+    pub argv: Argv,
+    /// The program to run, when not `argv[0]` looked up in `$PATH`.
+    pub exepath: Option<&'a CStr>,
+    pub on_stdout: CallbackReader,
+    pub on_stderr: CallbackReader,
+    pub on_exit: Callback,
+    pub pty: bool,
+    pub rpc: bool,
+    pub overlapped: bool,
+    pub detach: bool,
+    pub stdin_mode: ChannelStdinMode,
+    pub cwd: Option<&'a CStr>,
+    /// A pty's size; 0 keeps the default.
+    pub pty_width: uint16_t,
+    pub pty_height: uint16_t,
+    /// The environment; `None` inherits this process's.
+    pub env: Option<DictRef>,
+}
+
+impl<'a> JobOptions<'a> {
+    /// A plain job running `argv`: pipes, no callbacks, no pty.
+    pub fn new(argv: Argv) -> Self {
+        JobOptions {
+            argv,
+            exepath: None,
+            on_stdout: CallbackReader::none(),
+            on_stderr: CallbackReader::none(),
+            on_exit: Callback::None,
+            pty: false,
+            rpc: false,
+            overlapped: false,
+            detach: false,
+            stdin_mode: kChannelStdinPipe,
+            cwd: None,
+            pty_width: 0,
+            pty_height: 0,
+            env: None,
+        }
+    }
 }
 
 /// `rpcstart()`'s spawn: `argv` (the program first) started as a job that
 /// speaks RPC over its pipes, its channel announced. Answers the channel id,
-/// or why the spawn failed, as `channel_job_start`'s status does.
+/// or why the spawn failed, as [`channel_job_start`]'s status does.
 pub(crate) fn rpc_job_start(argv: &[&CStr]) -> VarNumber {
-    // The vector `channel_job_start` takes over: a copy of every string, and
-    // the null it ends with.
-    let vector: Vec<*mut c_char> = argv
+    let words = argv
         .iter()
-        .map(|arg| crate::memory::ThinCString::from_cstr(arg).into_raw())
-        .chain(core::iter::once(ptr::null_mut()))
+        .map(|arg| crate::memory::ThinCString::from_cstr(arg))
         .collect();
-    // The global allocator is `malloc`, so the boxed slice is a block the
-    // vector's eventual `xfree` releases.
-    let raw = Box::into_raw(vector.into_boxed_slice()).cast::<*mut c_char>();
-    let mut status: VarNumber = 0;
-    // SAFETY: an `xmalloc`ed, null-terminated vector of `xmalloc`ed strings,
-    // which the start takes over, and a status of this call's own.
-    let chan = unsafe {
-        channel_job_start(
-            raw,
-            ptr::null(),
-            CallbackReader::none(),
-            CallbackReader::none(),
-            Callback::None,
-            false,
-            true,
-            false,
-            false,
-            kChannelStdinPipe,
-            ptr::null(),
-            0,
-            0,
-            ptr::null_mut(),
-            &raw mut status,
-        )
-    };
-    if !chan.is_null() {
-        // SAFETY: the channel just created.
-        unsafe { channel_create_event(chan, ptr::null()) };
+    let mut opts = JobOptions::new(Argv::from_words(words));
+    opts.rpc = true;
+    match channel_job_start(opts) {
+        Ok(id) => {
+            channel_create_event(id, None);
+            id.cast_signed()
+        }
+        Err(status) => status,
     }
-    status
 }
 
-/// Spawns a child process and wires a channel to it.
+/// Spawns a child process and wires a channel to it, answering its id.
 ///
-/// Returns null and writes `status_out` on failure: 0 when the arguments were
-/// rejected, otherwise the spawn's libuv error.
-///
-/// # Safety
-/// The event loop exists; `argv`, `exepath`, `cwd`, `env` and `status_out` are
-/// this call's to consume.
-#[allow(clippy::too_many_arguments)]
-pub unsafe fn channel_job_start(
-    argv: *mut *mut c_char,
-    exepath: *const c_char,
-    on_stdout: CallbackReader,
-    on_stderr: CallbackReader,
-    on_exit: Callback,
-    pty: bool,
-    rpc: bool,
-    overlapped: bool,
-    detach: bool,
-    stdin_mode: ChannelStdinMode,
-    cwd: *const c_char,
-    pty_width: uint16_t,
-    pty_height: uint16_t,
-    env: *mut Dict,
-    status_out: *mut VarNumber,
-) -> *mut Channel {
+/// The error is the status `jobstart()` reports: 0 when the arguments were
+/// rejected, otherwise the spawn's (negative) libuv error.
+pub fn channel_job_start(opts: JobOptions<'_>) -> Result<uint64_t, VarNumber> {
     /// A detached child has no controlling terminal to hand a pty to.
     const PTY_DETACHED: &CStr = c"terminal/pty job cannot be detached";
 
-    // SAFETY: the caller's promise. The channel is this function's alone until
-    // the spawn succeeds, so the unwind paths below may destroy it outright.
-    let chan = unsafe { channel_alloc(kChannelStreamProc) };
-    unsafe { (*chan).on_data = on_stdout };
-    unsafe { (*chan).on_stderr = on_stderr };
-    unsafe { (*chan).on_exit = on_exit };
+    let JobOptions {
+        argv,
+        exepath,
+        on_stdout,
+        on_stderr,
+        on_exit,
+        pty,
+        rpc,
+        overlapped,
+        detach,
+        stdin_mode,
+        cwd,
+        pty_width,
+        pty_height,
+        env,
+    } = opts;
+
+    // The channel is this function's alone until the spawn succeeds, so the
+    // unwind paths below may destroy it outright.
+    let id = alloc_channel(None, |id| {
+        let data = owner_data(id);
+        ChannelStream::Job(if pty {
+            let mut pty = pty_proc_init(main_loop_raw(), data);
+            if pty_width > 0 {
+                pty.width = pty_width;
+            }
+            if pty_height > 0 {
+                pty.height = pty_height;
+            }
+            JobProc::Pty(pty)
+        } else {
+            JobProc::Uv(libuv_proc_init(main_loop_raw(), data))
+        })
+    });
+    let (has_out, has_err) = with_channel(id, |channel| {
+        channel.on_data = on_stdout;
+        channel.on_stderr = on_stderr;
+        channel.on_exit = on_exit;
+        // A pty multiplexes both directions onto the master, so it always
+        // reads and never has a separate stderr.
+        if pty {
+            (true, false)
+        } else {
+            (rpc || channel.on_data.is_set(), channel.on_stderr.is_set())
+        }
+    })
+    .expect("the channel just made");
 
     if pty && detach {
         let why = PTY_DETACHED.to_string_lossy();
         semsg!("E475: Invalid argument: {why}");
-        unsafe { shell_free_argv(argv) };
-        if !env.is_null() {
-            drop(unsafe { DictRef::owning(env) });
-        }
-        unsafe { channel_destroy_early(chan) };
-        unsafe { *status_out = 0 };
-        return ptr::null_mut();
+        drop((argv, env));
+        channel_destroy_early(id);
+        return Err(0);
     }
-
-    if pty {
-        unsafe { (*chan).stream.pty = pty_proc_init(main_loop_ptr(), chan.cast()) };
-        if pty_width > 0 {
-            unsafe { (*chan).stream.pty.width = pty_width };
-        }
-        if pty_height > 0 {
-            unsafe { (*chan).stream.pty.height = pty_height };
-        }
-    } else {
-        unsafe { (*chan).stream.uv = libuv_proc_init(main_loop_ptr(), chan.cast()) };
-    }
-
-    let proc = unsafe { channel_proc(chan) };
-    unsafe { (*proc).argv = argv };
-    unsafe { (*proc).exepath = exepath };
-    unsafe { (*proc).cb = Some(channel_proc_exit_cb) };
-    unsafe { (*proc).state_cb = Some(channel_proc_state_cb) };
-    unsafe { (*proc).events = (*chan).events };
-    unsafe { (*proc).detach = detach };
-    unsafe { (*proc).cwd = cwd };
-    unsafe { (*proc).env = env };
-    unsafe { (*proc).overlapped = overlapped };
-
-    // A pty multiplexes both directions onto the master, so it always
-    // reads and never has a separate stderr.
-    let (has_out, has_err) = if unsafe { (*proc).type_0 }.cast_signed() == kProcTypePty {
-        (true, false)
-    } else {
-        unsafe { (*proc).fwd_err = (*chan).on_stderr.fwd_err };
-        (
-            rpc || callback_reader_set(unsafe { &(*chan).on_data }),
-            callback_reader_set(unsafe { &(*chan).on_stderr }),
-        )
-    };
     let has_in = stdin_mode == kChannelStdinPipe;
 
     // The name is copied because the failure message is formatted after
     // the spawn has taken ownership of `argv`.
-    let cmd = unsafe { xstrdup(proc_get_exepath(proc)) };
-    let status = unsafe { proc_spawn(proc, has_in, has_out, has_err) };
-    if status != 0 {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-        let (arg0, cmd) = unsafe { (c_str(uv_strerror(status)), c_str(cmd)) };
-        semsg!("E903: Process failed to start: {arg0}: \"{cmd}\"");
-    }
-    unsafe { xfree(cmd.cast()) };
-    if !unsafe { (*proc).env }.is_null() {
-        drop(unsafe { DictRef::owning((*proc).env) });
-    }
-    if status != 0 {
-        unsafe { channel_destroy_early(chan) };
-        unsafe { *status_out = VarNumber::from((*proc).status) };
-        return ptr::null_mut();
+    let cmd: CString = exepath.unwrap_or_else(|| argv.program()).to_owned();
+    let spec = JobSpawn {
+        argv,
+        exepath,
+        cwd,
+        env,
+        detach,
+        overlapped,
+        // A pty has no separate stderr to forward.
+        fwd_err: !pty && with_channel(id, |channel| channel.on_stderr.fwd_err).unwrap_or(false),
+        has_in,
+        has_out,
+        has_err,
+    };
+    if let Err(status) = spawn_job(id, spec) {
+        let (why, cmd) = (msg_cstr(os_strerror(status)), msg_cstr(&cmd));
+        semsg!("E903: Process failed to start: {why}: \"{cmd}\"");
+        let status = with_channel(id, |channel| match &channel.stream {
+            ChannelStream::Job(job) => VarNumber::from(job.proc().status),
+            _ => VarNumber::from(status),
+        })
+        .unwrap_or(VarNumber::from(status));
+        channel_destroy_early(id);
+        return Err(status);
     }
 
-    unsafe { start_job_streams(chan, rpc, has_in, has_out, has_err) };
-    unsafe { *status_out = (*chan).id.cast_signed() };
-    chan
-}
-
-/// Attaches readers and writers to a job whose spawn succeeded.
-///
-/// # Safety
-/// `chan` is a live job channel whose process has just spawned.
-unsafe fn start_job_streams(
-    chan: *mut Channel,
-    rpc: bool,
-    has_in: bool,
-    has_out: bool,
-    has_err: bool,
-) {
-    // SAFETY: the caller's freshly spawned job.
-    let proc = unsafe { channel_proc(chan) };
-    if has_in {
-        unsafe { wstream_init(&raw mut (*proc).in_0, 0) };
-    }
-    if has_out {
-        unsafe { rstream_init(&raw mut (*proc).out) };
-    }
+    init_job_streams(id, has_in, has_out);
     if rpc {
-        unsafe { rpc_start(chan) };
+        rpc_start(id);
     } else if has_out {
-        unsafe { callback_reader_start(&raw mut (*chan).on_data, c"stdout".as_ptr()) };
-        unsafe { rstream_start(&raw mut (*proc).out, Some(on_channel_data), chan.cast()) };
+        with_channel(id, |channel| {
+            callback_reader_start(&mut channel.on_data, c"stdout");
+        });
+        start_reads(id, Reads::Output);
     }
     if has_err {
-        unsafe { callback_reader_start(&raw mut (*chan).on_stderr, c"stderr".as_ptr()) };
-        unsafe { rstream_init(&raw mut (*proc).err) };
-        unsafe { rstream_start(&raw mut (*proc).err, Some(on_job_stderr), chan.cast()) };
+        with_channel(id, |channel| {
+            callback_reader_start(&mut channel.on_stderr, c"stderr");
+        });
+        start_reads(id, Reads::Stderr);
     }
+    Ok(id)
 }
 
 /// Connects to a socket (or, for an address this process is itself listening
@@ -299,50 +243,44 @@ pub fn channel_connect(
     on_output: CallbackReader,
     timeout: c_int,
 ) -> Result<uint64_t, &'static CStr> {
-    let address = address.as_ptr();
-    // SAFETY: the editor's loop is up; `address` is NUL-terminated and
-    // copied by whatever keeps it.
     // Talking to our own listening socket would deadlock: the reply cannot
     // be read while this process is blocked writing the request. An
     // internal channel short-circuits the transport instead.
-    if !tcp && rpc && unsafe { server_owns_pipe_address(address) } {
-        let channel = unsafe { channel_alloc(kChannelStreamInternal) };
-        unsafe { (*channel_internal(channel)).cb = LUA_NOREF as LuaRef };
-        unsafe { rpc_start(channel) };
-        unsafe { channel_create_event(channel, address) };
-        return Ok(unsafe { (*channel).id });
+    if !tcp && rpc && server_owns_pipe_address(address) {
+        let id = alloc_channel(None, |_| {
+            ChannelStream::Internal(InternalState {
+                cb: LUA_NOREF as LuaRef,
+                closed: false,
+            })
+        });
+        rpc_start(id);
+        channel_create_event(id, Some(address));
+        return Ok(id);
     }
 
-    let channel = unsafe { channel_alloc(kChannelStreamSocket) };
-    let socket = unsafe { &raw mut (*channel).stream.socket };
-    let mut error: *const c_char = ptr::null();
-    let at_error = &raw mut error;
-    if !unsafe { socket_connect(main_loop_ptr(), socket, tcp, address, timeout, at_error) } {
-        unsafe { channel_decref(channel) };
-        // SAFETY: `socket_connect` names every failure with a static string.
-        return Err(unsafe { crate::cstr::at(error) });
+    let id = alloc_channel(None, |_| ChannelStream::Socket(unopened_rstream()));
+    if let Err(why) = connect_socket(id, tcp, address, timeout) {
+        channel_decref(id);
+        return Err(why);
     }
-    unsafe { attach_socket(channel) };
+    attach_socket(id);
     if rpc {
-        unsafe { rpc_start(channel) };
+        rpc_start(id);
     } else {
-        unsafe { (*channel).on_data = on_output };
-        unsafe { callback_reader_start(&raw mut (*channel).on_data, c"data".as_ptr()) };
-        unsafe { rstream_start(socket, Some(on_channel_data), channel.cast()) };
+        with_channel(id, |channel| {
+            channel.on_data = on_output;
+            callback_reader_start(&mut channel.on_data, c"data");
+        });
+        start_reads(id, Reads::Output);
     }
-    unsafe { channel_create_event(channel, address) };
-    Ok(unsafe { (*channel).id })
+    channel_create_event(id, Some(address));
+    Ok(id)
 }
 
 /// Takes over an accepted connection from a listening socket. Always RPC.
-///
-/// # Safety
-/// `watcher` is a live listening socket with a pending connection.
-pub unsafe fn channel_from_connection(watcher: *mut SocketWatcher) {
-    // SAFETY: the caller's live watcher.
-    let channel = unsafe { channel_alloc(kChannelStreamSocket) };
-    let result = unsafe { socket_watcher_accept(watcher, &raw mut (*channel).stream.socket) };
-    if result != 0 {
+pub fn channel_from_connection(watcher: &mut SocketWatcher) {
+    let id = alloc_channel(None, |_| ChannelStream::Socket(unopened_rstream()));
+    if let Err(result) = accept_socket(id, watcher) {
         // The client handle is already closed; the channel never got going.
         logmsg!(
             LOGLVL_ERR,
@@ -351,25 +289,13 @@ pub unsafe fn channel_from_connection(watcher: *mut SocketWatcher) {
             "Failed to accept connection: {}",
             os_strerror(result).to_string_lossy()
         );
-        unsafe { channel_destroy_early(channel) };
+        channel_destroy_early(id);
         return;
     }
-    unsafe { attach_socket(channel) };
-    unsafe { rpc_start(channel) };
-    unsafe { channel_create_event(channel, (&raw mut (*watcher).addr).cast()) };
-}
-
-/// Gives a connected socket its owner and its buffers.
-///
-/// # Safety
-/// `channel` is a live socket channel whose handle is connected.
-unsafe fn attach_socket(channel: *mut Channel) {
-    // SAFETY: the caller's live socket channel.
-    let socket = unsafe { &raw mut (*channel).stream.socket };
-    unsafe { (*socket).s.internal_close_cb = Some(close_cb) };
-    unsafe { (*socket).s.internal_data = channel.cast() };
-    unsafe { wstream_init(&raw mut (*socket).s, 0) };
-    unsafe { rstream_init(socket) };
+    attach_socket(id);
+    rpc_start(id);
+    let address = crate::cstr::in_chars(&watcher.addr).to_owned();
+    channel_create_event(id, Some(&address));
 }
 
 /// Wires a channel to this process's own stdin and stdout.
@@ -390,85 +316,65 @@ pub fn channel_from_stdio(rpc: bool, on_output: CallbackReader) -> Result<uint64
     }
     did_stdio.set(true);
 
-    // SAFETY: the editor's loop is up; the descriptors below are this
-    // process's.
-    let channel = unsafe { channel_alloc(kChannelStreamStdio) };
+    let id = alloc_channel(Some(CHAN_STDIO), |_| ChannelStream::Stdio(unopened_stdio()));
     let (stdin_fd, stdout_fd) = if embedded_mode.get() {
         // The embedder owns fds 0 and 1; move them aside and point what is
         // left at stderr, so a stray `print` cannot corrupt the protocol.
-        let stdin_fd = unsafe { fcntl(STDIN_FILENO, F_DUPFD_CLOEXEC, STDERR_FILENO + 1) };
-        let stdout_fd = unsafe { fcntl(STDOUT_FILENO, F_DUPFD_CLOEXEC, STDERR_FILENO + 1) };
-        unsafe { dup2(STDERR_FILENO, STDOUT_FILENO) };
-        unsafe { dup2(STDERR_FILENO, STDIN_FILENO) };
+        let stdin_fd = os_dup_above(STDIN_FILENO, STDERR_FILENO + 1);
+        let stdout_fd = os_dup_above(STDOUT_FILENO, STDERR_FILENO + 1);
+        os_dup2(STDERR_FILENO, STDOUT_FILENO);
+        os_dup2(STDERR_FILENO, STDIN_FILENO);
         (stdin_fd, stdout_fd)
     } else {
         (STDIN_FILENO, STDOUT_FILENO)
     };
-    let in_0 = unsafe { &raw mut (*channel).stream.stdio.in_0 };
-    unsafe { rstream_init_fd(main_loop_ptr(), in_0, stdin_fd) };
-    unsafe {
-        wstream_init_fd(
-            main_loop_ptr(),
-            &raw mut (*channel).stream.stdio.out,
-            stdout_fd,
-            0,
-        )
-    };
+    open_stdio(id, stdin_fd, stdout_fd);
     if rpc {
-        unsafe { rpc_start(channel) };
+        rpc_start(id);
     } else {
-        unsafe { (*channel).on_data = on_output };
-        unsafe { callback_reader_start(&raw mut (*channel).on_data, c"stdin".as_ptr()) };
-        unsafe { rstream_start(in_0, Some(on_channel_data), channel.cast()) };
+        with_channel(id, |channel| {
+            channel.on_data = on_output;
+            callback_reader_start(&mut channel.on_data, c"stdin");
+        });
+        start_reads(id, Reads::Output);
     }
-    Ok(unsafe { (*channel).id })
+    Ok(id)
 }
 
 // -------------------------------------------------------------------------
 // Process callbacks
 // -------------------------------------------------------------------------
 
-/// The child exited, or its handles closed. `status` is negative for the
-/// latter, which is what "closed without an exit status" means here.
-///
-/// # Safety
-///
-/// `data` must be the payload this callback was registered with, live for the
-/// call.
-unsafe fn channel_proc_exit_cb(_proc: *mut Proc, status: c_int, data: *mut c_void) {
-    // SAFETY: `data` is the channel the process was set up with, and the
-    // process held one reference to it.
-    let chan = data.cast::<Channel>();
-    if !unsafe { (*chan).term }.is_null() {
-        unsafe { terminal_close(&raw mut (*chan).term, status) };
+/// Job channel `id`'s child exited, or its handles closed. `status` is
+/// negative for the latter, which is what "closed without an exit status"
+/// means here.
+pub(crate) fn job_exited(id: uint64_t, status: c_int) {
+    // `TermClose` runs from here, with nothing of the channel borrowed.
+    if let Some(term) = with_channel(id, |channel| channel.term).flatten() {
+        terminal_close(term, status);
     }
     // A UI client whose server died: try to reconnect before following it.
-    if !exiting.get() && ui_client_channel_id.get() == unsafe { (*chan).id } {
+    if !exiting.get() && ui_client_channel_id.get() == id {
         ui_client_attach_to_restarted_server();
-        if ui_client_channel_id.get() == unsafe { (*chan).id } {
+        if ui_client_channel_id.get() == id {
             exit_on_closed_chan(status);
         }
     }
     let exited = status >= 0;
-    if exited && unsafe { &(*chan).on_exit }.is_set() {
-        unsafe { schedule_channel_event(chan) };
+    let wants_exit = with_channel(id, |channel| channel.on_exit.is_set()).unwrap_or(false);
+    if exited && wants_exit {
+        schedule_channel_event(id);
     }
     if exited {
-        unsafe { (*chan).exit_status = status };
+        with_channel(id, |channel| channel.exit_status = status);
     }
-    unsafe { channel_decref(chan) };
+    // The child's own reference.
+    channel_decref(id);
 }
 
-/// The child was stopped or continued; only a terminal cares.
-///
-/// # Safety
-///
-/// `data` must be the payload this callback was registered with, live for the
-/// call.
-unsafe fn channel_proc_state_cb(_proc: *mut Proc, suspended: bool, data: *mut c_void) {
-    // SAFETY: `data` is the channel the process was set up with.
-    let chan = data.cast::<Channel>();
-    if !unsafe { (*chan).term }.is_null() {
-        unsafe { terminal_set_state((*chan).term, suspended) };
+/// Job channel `id`'s child was stopped or continued; only a terminal cares.
+pub(crate) fn job_state_changed(id: uint64_t, suspended: bool) {
+    if let Some(term) = with_channel(id, |channel| channel.term).flatten() {
+        terminal_set_state(term, suspended);
     }
 }

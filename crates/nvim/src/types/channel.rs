@@ -11,11 +11,12 @@
 
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
-use core::ffi::{c_char, c_int};
+use core::ffi::{CStr, c_char, c_int};
 
 pub use crate::msgpack_rpc::channel::call_stack::CallStack;
 
 use super::*;
+use crate::eval::typval::DictRef;
 
 /// A channel's decoder. Zero-initialised by its owner, so every field has to
 /// mean something sensible as all-zero bytes.
@@ -48,17 +49,20 @@ pub struct Unpacker {
     pub has_grid_line_event: bool,
 }
 
+/// Where a channel's `on_stdout`/`on_stderr`/`on_data` output goes.
 pub struct CallbackReader {
     pub cb: Callback,
-    pub self_0: *mut Dict,
-    /// What the stream has produced since the last delivery. Owned: the
-    /// reader's `Drop` releases it, and `callback_reader_free` is where a
-    /// heap-allocated owner (a `Channel`) asks for that early.
+    /// The dictionary a buffered reader with no callback collects into
+    /// (the job's options), holding a reference of its own.
+    pub self_dict: Option<DictRef>,
+    /// What the stream has produced since the last delivery.
     pub buffer: Vec<u8>,
     pub eof: bool,
     pub buffered: bool,
     pub fwd_err: bool,
-    pub type_0: *const ::core::ffi::c_char,
+    /// The stream's name in the callback and in `self_dict`: `stdout`,
+    /// `stderr`, `data` or `stdin`.
+    pub stream_name: &'static CStr,
 }
 
 impl CallbackReader {
@@ -67,13 +71,18 @@ impl CallbackReader {
     pub const fn none() -> Self {
         Self {
             cb: Callback::None,
-            self_0: core::ptr::null_mut(),
+            self_dict: None,
             buffer: Vec::new(),
             eof: false,
             buffered: false,
             fwd_err: false,
-            type_0: core::ptr::null(),
+            stream_name: c"",
         }
+    }
+
+    /// Whether the reader has anywhere to deliver to.
+    pub fn is_set(&self) -> bool {
+        self.cb.is_set() || self.self_dict.is_some()
     }
 }
 
@@ -82,16 +91,28 @@ impl Default for CallbackReader {
         Self::none()
     }
 }
+
+/// A channel: a numbered connection over one of five transports, owned by
+/// the channel table (`channel::channels`) at a fixed address.
+///
+/// The transport is registered with libuv *by address* -- its handles'
+/// `data` fields point into it -- which is why the table boxes every
+/// channel and nothing moves one out of its box: `event/channel.rs` is the
+/// one module that hands those addresses to libuv, and it reaches the
+/// transport by the channel's id.
 pub struct Channel {
     pub id: uint64_t,
+    /// Who still stands on the channel: its transport's open handles, queued
+    /// events, a terminal, a waiting frame. The last release queues the free.
     pub refcount: RefcountSize,
-    pub events: *mut MultiQueue,
-    pub streamtype: ChannelStreamType,
-    pub stream: Channel_stream,
+    /// The channel's own event queue, a child of the main loop's.
+    pub(crate) events: crate::event::multiqueue::ChildQueue,
+    pub stream: ChannelStream,
     pub is_rpc: bool,
     pub detach: bool,
     pub rpc: RpcState,
-    pub term: *mut Terminal,
+    /// The terminal this channel drives, if any.
+    pub(crate) term: Option<crate::terminal::Term>,
     pub on_data: CallbackReader,
     pub on_stderr: CallbackReader,
     pub on_exit: Callback,
@@ -99,6 +120,79 @@ pub struct Channel {
     pub callback_busy: bool,
     pub callback_scheduled: bool,
 }
+
+impl Channel {
+    /// Which of the five transports this is, as the C enum numbers them.
+    pub fn streamtype(&self) -> ChannelStreamType {
+        self.stream.kind()
+    }
+}
+
+/// A channel's transport.
+///
+/// Inline, as upstream's union was: every channel is boxed by the table, so
+/// a socket or stdio channel carrying a job's size costs what it always did.
+#[allow(clippy::large_enum_variant)]
+pub enum ChannelStream {
+    /// A child process, with up to three pipes or a pty master.
+    Job(JobProc),
+    /// A socket this process dialled or accepted.
+    Socket(RStream),
+    /// This process's own stdin and stdout.
+    Stdio(StdioPair),
+    /// This process's own stderr, written synchronously.
+    Stderr(StderrState),
+    /// No transport: an `nvim_open_term()` terminal or a connection to this
+    /// process's own server.
+    Internal(InternalState),
+}
+
+impl ChannelStream {
+    /// The transport's kind, as the C enum numbers it.
+    pub fn kind(&self) -> ChannelStreamType {
+        match self {
+            ChannelStream::Job(_) => kChannelStreamProc,
+            ChannelStream::Socket(_) => kChannelStreamSocket,
+            ChannelStream::Stdio(_) => kChannelStreamStdio,
+            ChannelStream::Stderr(_) => kChannelStreamStderr,
+            ChannelStream::Internal(_) => kChannelStreamInternal,
+        }
+    }
+}
+
+/// A job's child, started through libuv or behind a pty. Both begin with
+/// the `Proc` the process layer works on.
+#[allow(clippy::large_enum_variant)]
+pub enum JobProc {
+    Uv(LibuvProc),
+    Pty(PtyProc),
+}
+
+impl JobProc {
+    /// The part of the child that does not depend on how it was started.
+    pub fn proc(&self) -> &Proc {
+        match self {
+            JobProc::Uv(uv) => &uv.proc,
+            JobProc::Pty(pty) => &pty.proc,
+        }
+    }
+
+    /// The pty, for a job started behind one.
+    pub fn pty(&self) -> Option<&PtyProc> {
+        match self {
+            JobProc::Pty(pty) => Some(pty),
+            JobProc::Uv(_) => None,
+        }
+    }
+}
+
+/// The kinds of transport, as the C enum numbers them.
+pub const kChannelStreamProc: ChannelStreamType = 0;
+pub const kChannelStreamSocket: ChannelStreamType = 1;
+pub const kChannelStreamStdio: ChannelStreamType = 2;
+pub const kChannelStreamStderr: ChannelStreamType = 3;
+pub const kChannelStreamInternal: ChannelStreamType = 4;
+
 pub struct ChannelCallFrame {
     pub request_id: uint32_t,
     pub returned: bool,
@@ -112,16 +206,6 @@ pub type ChannelStdinMode = ::core::ffi::c_uint;
 pub const kChannelStdinPipe: ChannelStdinMode = 0;
 pub const kChannelStdinNull: ChannelStdinMode = 1;
 pub type ChannelStreamType = ::core::ffi::c_uint;
-#[repr(C)]
-pub union Channel_stream {
-    pub proc: Proc,
-    pub uv: LibuvProc,
-    pub pty: PtyProc,
-    pub socket: RStream,
-    pub stdio: StdioPair,
-    pub err: StderrState,
-    pub internal: InternalState,
-}
 pub type ClientType = ::core::ffi::c_int;
 #[derive(Copy, Clone)]
 #[repr(C)]

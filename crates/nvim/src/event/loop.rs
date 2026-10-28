@@ -442,24 +442,35 @@ pub unsafe fn process_events_until(
 }
 
 /// What a wait on the editor's own loop drains between polls.
-pub(crate) enum Drain {
+pub(crate) enum Drain<'a> {
     /// The main queue: everything the editor has deferred.
     Events,
     /// Only the fast queue, which the poll itself drains.
     FastOnly,
+    /// A queue the waiting frame owns -- a job wait's parking queue.
+    Parked(&'a crate::event::multiqueue::ParkingQueue),
 }
 
 /// [`process_events_until`] on the editor's own loop: the safe spelling for
 /// a frame that waits on its own condition, `done`, which may read anything
 /// the events it lets run have changed.
-pub(crate) fn wait_on_main_loop(drain: Drain, ms: i64, done: impl FnMut() -> bool) {
+pub(crate) fn wait_on_main_loop(drain: Drain<'_>, ms: i64, done: impl FnMut() -> bool) {
     let uv_loop = main_loop_raw();
-    let queue = match drain {
-        Drain::Events => main_loop_events(),
-        Drain::FastOnly => main_loop_fast_events(),
-    };
-    // SAFETY: the editor's loop and its queues, live from startup to exit.
+    let queue = drain.queue();
+    // SAFETY: the editor's loop and its queues, live from startup to exit,
+    // or a queue the caller holds for the length of the wait.
     unsafe { process_events_until(uv_loop, queue, ms, done) };
+}
+
+impl Drain<'_> {
+    /// The queue this drains, which lives at least as long as `self`.
+    pub(crate) fn queue(&self) -> *mut MultiQueue {
+        match self {
+            Drain::Events => main_loop_events(),
+            Drain::FastOnly => main_loop_fast_events(),
+            Drain::Parked(queue) => queue.as_ptr(),
+        }
+    }
 }
 
 /// The millisecond budget of a wait loop.

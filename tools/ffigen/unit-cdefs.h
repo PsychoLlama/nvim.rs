@@ -15,6 +15,7 @@ typedef struct MultiQueue MultiQueue;
 typedef struct OptSet OptSet;
 typedef struct Partial Partial;
 typedef struct Scrollback Scrollback;
+typedef struct TerminalOptions TerminalOptions;
 typedef struct Window Window;
 typedef struct key_value_pair key_value_pair;
 typedef struct loop loop;
@@ -31,30 +32,6 @@ typedef struct __pthread_rwlock_arch_t __pthread_rwlock_arch_t;
 typedef struct termios termios;
 typedef struct winsize winsize;
 typedef struct Callback Callback;
-typedef struct InternalState InternalState;
-typedef struct uv__queue uv__queue;
-typedef union uv_idle_s_u uv_idle_s_u;
-typedef struct uv_idle_s uv_idle_s;
-typedef struct uv__io_s uv__io_s;
-typedef union uv_pipe_s_u uv_pipe_s_u;
-typedef struct uv_pipe_s uv_pipe_s;
-typedef union uv_tcp_s_u uv_tcp_s_u;
-typedef struct uv_tcp_s uv_tcp_s;
-typedef union stream_uv stream_uv;
-typedef struct stream stream;
-typedef struct uv_buf_t uv_buf_t;
-typedef struct rstream rstream;
-typedef struct proc proc;
-typedef struct uv_process_options_s uv_process_options_s;
-typedef union uv_process_s_u uv_process_s_u;
-typedef struct uv_process_s uv_process_s;
-typedef union uv_stdio_container_s_data uv_stdio_container_s_data;
-typedef struct uv_stdio_container_s uv_stdio_container_s;
-typedef struct LibuvProc LibuvProc;
-typedef struct PtyProc PtyProc;
-typedef struct StderrState StderrState;
-typedef struct StdioPair StdioPair;
-typedef union Channel_stream Channel_stream;
 typedef struct CharInfo CharInfo;
 typedef struct DecorExt DecorExt;
 typedef struct DecorHighlightInline DecorHighlightInline;
@@ -66,6 +43,7 @@ typedef struct ExtmarkMove ExtmarkMove;
 typedef struct ExtmarkSavePos ExtmarkSavePos;
 typedef struct ExtmarkSplice ExtmarkSplice;
 typedef struct GArray GArray;
+typedef struct InternalState InternalState;
 typedef struct Intersection Intersection;
 typedef struct String String;
 typedef struct KeyDict__shada_buflist_item KeyDict__shada_buflist_item;
@@ -111,12 +89,32 @@ typedef struct KeyDict_user_command KeyDict_user_command;
 typedef struct KeyDict_win_config KeyDict_win_config;
 typedef struct KeyDict_win_text_height KeyDict_win_text_height;
 typedef struct KeyDict_xdl_diff KeyDict_xdl_diff;
+typedef struct uv__queue uv__queue;
+typedef union uv_idle_s_u uv_idle_s_u;
+typedef struct uv_idle_s uv_idle_s;
+typedef struct uv__io_s uv__io_s;
+typedef union uv_pipe_s_u uv_pipe_s_u;
+typedef struct uv_pipe_s uv_pipe_s;
+typedef union uv_tcp_s_u uv_tcp_s_u;
+typedef struct uv_tcp_s uv_tcp_s;
+typedef union stream_uv stream_uv;
+typedef struct stream stream;
+typedef struct uv_buf_t uv_buf_t;
+typedef struct rstream rstream;
+typedef struct proc proc;
+typedef struct uv_process_options_s uv_process_options_s;
+typedef union uv_process_s_u uv_process_s_u;
+typedef struct uv_process_s uv_process_s;
+typedef union uv_stdio_container_s_data uv_stdio_container_s_data;
+typedef struct uv_stdio_container_s uv_stdio_container_s;
+typedef struct LibuvProc LibuvProc;
 typedef struct MTPos MTPos;
 typedef struct MTKey MTKey;
 typedef struct mtnode_inner_s mtnode_inner_s;
 typedef struct mtnode_s mtnode_s;
 typedef struct MapHash MapHash;
 typedef struct Pos Pos;
+typedef struct PtyProc PtyProc;
 typedef struct VTermColor_indexed VTermColor_indexed;
 typedef struct VTermColor_rgb VTermColor_rgb;
 typedef union VTermColor VTermColor;
@@ -128,10 +126,11 @@ typedef struct uv_signal_s_tree_entry uv_signal_s_tree_entry;
 typedef union uv_signal_s_u uv_signal_s_u;
 typedef struct uv_signal_s uv_signal_s;
 typedef struct signal_watcher signal_watcher;
+typedef struct StderrState StderrState;
+typedef struct StdioPair StdioPair;
 typedef struct StrCharInfo StrCharInfo;
 typedef union TermKeyKey_code TermKeyKey_code;
 typedef struct TerminalCursor TerminalCursor;
-typedef struct TerminalOptions TerminalOptions;
 typedef struct TerminalPending TerminalPending;
 typedef struct terminal terminal;
 typedef struct TypVal TypVal;
@@ -451,11 +450,11 @@ typedef unsigned int socklen_t;
 typedef void (*stream_close_cb)(Stream *, void *);
 typedef size_t (*stream_read_cb)(RStream *, const char *, size_t, void *, bool);
 typedef void (*stream_write_cb)(Stream *, void *, int);
-typedef void (*terminal_close_cb)(void *);
-typedef void (*terminal_read_pause_cb)(bool, void *);
-typedef void (*terminal_resize_cb)(uint16_t, uint16_t, void *);
-typedef void (*terminal_resume_cb)(void *);
-typedef void (*terminal_write_cb)(const char *, size_t, void *);
+typedef void (*terminal_close_cb)(uint64_t);
+typedef void (*terminal_read_pause_cb)(bool, uint64_t);
+typedef void (*terminal_resize_cb)(uint16_t, uint16_t, uint64_t);
+typedef void (*terminal_resume_cb)(uint64_t);
+typedef struct terminal_write_cb terminal_write_cb;
 typedef unsigned int uid_t;
 typedef void (*uv__io_cb)(uv_loop_s *, uv__io_s *, unsigned int);
 typedef struct uv__io_s uv__io_t;
@@ -522,9 +521,83 @@ struct Callback {
     LuaRef lua_;
   } payload;
 };
+struct CharInfo {
+  int32_t value;
+  int len;
+};
+struct DecorExt {
+  uint32_t sh_idx;
+  uint32_t vt_idx;
+};
+struct DecorHighlightInline {
+  uint16_t flags;
+  DecorPriority priority;
+  int hl_id;
+  ScreenChar conceal_char;
+};
+struct DecorInline {
+  unsigned int tag;
+  union {
+    DecorHighlightInline hl_;
+    DecorExt ext_;
+  } payload;
+};
+struct DecorRange_data_ui {
+  uint32_t ns_id;
+  uint32_t mark_id;
+  VirtTextPos pos;
+};
+struct ExtmarkMove {
+  int start_row;
+  int start_col;
+  int extent_row;
+  int extent_col;
+  int new_row;
+  int new_col;
+  BCount start_byte;
+  BCount extent_byte;
+  BCount new_byte;
+};
+struct ExtmarkSavePos {
+  uint64_t mark;
+  int old_row;
+  ColNr old_col;
+  bool invalidated;
+};
+struct ExtmarkSplice {
+  int start_row;
+  ColNr start_col;
+  int old_row;
+  ColNr old_col;
+  int new_row;
+  ColNr new_col;
+  BCount start_byte;
+  BCount old_byte;
+  BCount new_byte;
+};
+struct GArray {
+  int ga_len;
+  int ga_maxlen;
+  int ga_itemsize;
+  int ga_growsize;
+  void *ga_data;
+};
 struct InternalState {
   LuaRef cb;
   bool closed;
+};
+struct Intersection {
+  size_t size;
+  size_t capacity;
+  uint64_t *items;
+  uint64_t init_array[4];
+};
+struct String {
+  char *data;
+  size_t size;
+};
+struct KeyDict_empty {
+
 };
 struct uv__queue {
   uv__queue *next;
@@ -719,103 +792,6 @@ struct LibuvProc {
   uv_process_options_t uvopts;
   uv_stdio_container_t uvstdio[4];
 };
-struct PtyProc {
-  Proc proc;
-  uint16_t width;
-  uint16_t height;
-  winsize winsize;
-  int tty_fd;
-};
-struct StderrState {
-  bool closed;
-};
-struct StdioPair {
-  RStream in;
-  Stream out;
-};
-union Channel_stream {
-  Proc proc;
-  LibuvProc uv;
-  PtyProc pty;
-  RStream socket;
-  StdioPair stdio;
-  StderrState err;
-  InternalState internal;
-};
-struct CharInfo {
-  int32_t value;
-  int len;
-};
-struct DecorExt {
-  uint32_t sh_idx;
-  uint32_t vt_idx;
-};
-struct DecorHighlightInline {
-  uint16_t flags;
-  DecorPriority priority;
-  int hl_id;
-  ScreenChar conceal_char;
-};
-struct DecorInline {
-  unsigned int tag;
-  union {
-    DecorHighlightInline hl_;
-    DecorExt ext_;
-  } payload;
-};
-struct DecorRange_data_ui {
-  uint32_t ns_id;
-  uint32_t mark_id;
-  VirtTextPos pos;
-};
-struct ExtmarkMove {
-  int start_row;
-  int start_col;
-  int extent_row;
-  int extent_col;
-  int new_row;
-  int new_col;
-  BCount start_byte;
-  BCount extent_byte;
-  BCount new_byte;
-};
-struct ExtmarkSavePos {
-  uint64_t mark;
-  int old_row;
-  ColNr old_col;
-  bool invalidated;
-};
-struct ExtmarkSplice {
-  int start_row;
-  ColNr start_col;
-  int old_row;
-  ColNr old_col;
-  int new_row;
-  ColNr new_col;
-  BCount start_byte;
-  BCount old_byte;
-  BCount new_byte;
-};
-struct GArray {
-  int ga_len;
-  int ga_maxlen;
-  int ga_itemsize;
-  int ga_growsize;
-  void *ga_data;
-};
-struct Intersection {
-  size_t size;
-  size_t capacity;
-  uint64_t *items;
-  uint64_t init_array[4];
-};
-struct String {
-  char *data;
-  size_t size;
-};
-struct KeyDict_empty {
-
-};
 struct MTPos {
   int32_t row;
   int32_t col;
@@ -853,6 +829,13 @@ struct Pos {
   LineNr lnum;
   ColNr col;
   ColNr coladd;
+};
+struct PtyProc {
+  Proc proc;
+  uint16_t width;
+  uint16_t height;
+  winsize winsize;
+  int tty_fd;
 };
 struct VTermColor_indexed {
   uint8_t type;
@@ -935,6 +918,13 @@ struct signal_watcher {
   signal_close_cb close_cb;
   MultiQueue *events;
 };
+struct StderrState {
+  bool closed;
+};
+struct StdioPair {
+  RStream in;
+  Stream out;
+};
 struct StrCharInfo {
   char *ptr;
   CharInfo chr;
@@ -951,17 +941,6 @@ struct TerminalCursor {
   int shape;
   bool visible;
   bool blink;
-};
-struct TerminalOptions {
-  void *data;
-  uint16_t width;
-  uint16_t height;
-  terminal_read_pause_cb read_pause_cb;
-  terminal_write_cb write_cb;
-  terminal_resize_cb resize_cb;
-  terminal_resume_cb resume_cb;
-  terminal_close_cb close_cb;
-  bool force_crlf;
 };
 struct TypVal {
   unsigned int tag;
@@ -4365,6 +4344,9 @@ static const int kChannelStdinNull = 1;
 static const int kChannelStdinPipe = 0;
 static const int kChannelStreamInternal = 4;
 static const int kChannelStreamProc = 0;
+static const int kChannelStreamSocket = 1;
+static const int kChannelStreamStderr = 3;
+static const int kChannelStreamStdio = 2;
 static const int kCmdRedrawAll = 2;
 static const int kCmdRedrawNone = 0;
 static const int kCmdRedrawPos = 1;

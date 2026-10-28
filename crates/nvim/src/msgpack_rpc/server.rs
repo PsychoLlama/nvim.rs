@@ -24,14 +24,14 @@ use crate::event::socket::{socket_watcher_close, socket_watcher_init, socket_wat
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_ERR, LOGLVL_WRN, logmsg};
 use crate::memory::XString;
-use crate::memory::{strequal, xcalloc, xfree, xmalloc, xstrdup};
+use crate::memory::{strequal, xfree, xmalloc, xstrdup};
 use crate::message_fmt::{c_str, msg_bytes};
 use crate::os::env::{ENV_TEST_LOG, env_exists, env_unset, getenv_owned, os_get_pid};
 use crate::os::fs::os_strerror;
 use crate::os::stdpaths::{get_appname, stdpaths_get_xdg_var};
 use crate::path::fix_fname;
 use crate::startup::main_loop;
-use crate::types::{IOSIZE, SocketWatcher, Vv, size_t, uint32_t};
+use crate::types::{IOSIZE, SocketWatcher, Vv, uint32_t};
 use std::ffi::CString;
 
 use crate::event::socket::address::SOCKET_ADDR_LEN;
@@ -87,12 +87,7 @@ pub fn server_init(listen_addr: Option<&CStr>) -> Result<(), CString> {
         None if env_exists(ENV_LISTEN, true) => {
             (ListenSource::Environment, getenv_owned(ENV_LISTEN))
         }
-        None => {
-            // SAFETY: a null name means "use the editor's own"; the answer
-            // is a fresh allocation, taken over here.
-            let generated = unsafe { XString::from_raw(server_address_new(core::ptr::null())) };
-            (ListenSource::Generated, Some(generated))
-        }
+        None => (ListenSource::Generated, Some(server_address_generated())),
     };
     let listen_addr = given.or(made.as_ref().map(XString::as_cstr));
 
@@ -163,6 +158,13 @@ pub fn server_teardown() {
     }
 }
 
+/// [`server_address_new`] under the editor's own name.
+pub fn server_address_generated() -> XString {
+    // SAFETY: a null name means "use the editor's own"; the answer is a
+    // fresh allocation, taken over here.
+    unsafe { XString::from_raw(server_address_new(core::ptr::null())) }
+}
+
 /// Generates an address in the runtime directory, unique to this process.
 ///
 /// `name` names the socket; without one the editor's own name is used.
@@ -225,12 +227,8 @@ pub unsafe fn server_address_new(name: *const c_char) -> *mut c_char {
 ///
 /// Compared after resolving both sides, so a relative path or a symlink to a
 /// socket this process opened still counts.
-///
-/// # Safety
-/// `address` is a NUL-terminated string.
-pub unsafe fn server_owns_pipe_address(address: *const c_char) -> bool {
-    // SAFETY: the caller's NUL-terminated address.
-    let path = fix_fname(unsafe { cstr::at(address) });
+pub fn server_owns_pipe_address(address: &CStr) -> bool {
+    let path = fix_fname(address);
     WATCHERS.with(|watchers| {
         watchers.iter().any(|&watcher| {
             // SAFETY: a live watcher's NUL-terminated address.
@@ -381,26 +379,14 @@ pub fn server_stop(endpoint: &CStr, keep_vservername: bool) -> bool {
     true
 }
 
-/// Every address this instance is listening on, as an owned array of owned
-/// strings for `serverlist()`.
-///
-/// # Safety
-/// `size` points at a writable `size_t`.
-pub unsafe fn server_address_list(size: *mut size_t) -> *mut *mut c_char {
+/// Every address this instance is listening on, for `serverlist()`.
+pub fn server_addresses() -> Vec<CString> {
     WATCHERS.with(|watchers| {
-        // SAFETY: the caller's out-parameter.
-        unsafe { *size = watchers.len() };
-        if watchers.is_empty() {
-            return core::ptr::null_mut();
-        }
-        // SAFETY: `xcalloc` hands back one writable slot per watcher, and
-        // every watcher's address is NUL-terminated.
-        let addrs =
-            unsafe { xcalloc(watchers.len(), size_of::<*const c_char>()) }.cast::<*mut c_char>();
-        for (i, &watcher) in watchers.iter().enumerate() {
-            unsafe { *addrs.add(i) = xstrdup(watcher_addr(watcher)) };
-        }
-        addrs
+        let address = |&watcher| {
+            // SAFETY: every listening watcher's address is NUL-terminated.
+            unsafe { CStr::from_ptr(watcher_addr(watcher)) }.to_owned()
+        };
+        watchers.iter().map(address).collect()
     })
 }
 
@@ -420,7 +406,7 @@ unsafe fn connection_cb(watcher: *mut SocketWatcher, result: c_int, _data: *mut 
         return;
     }
     // SAFETY: the caller's watcher, which has a pending connection.
-    unsafe { channel_from_connection(watcher) };
+    channel_from_connection(unsafe { &mut *watcher });
 }
 
 /// Releases a watcher once libuv has finished closing it.

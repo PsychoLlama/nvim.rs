@@ -27,7 +27,7 @@
 
 use crate::cstr;
 use crate::event::multiqueue::ChildQueue;
-use crate::message_fmt::{c_str, msg_addr};
+use crate::message_fmt::c_str;
 use crate::os::uv_error::UV_EPIPE;
 use crate::snprintf;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -38,24 +38,22 @@ use crate::api::private::helpers::cstr_to_string;
 use crate::api::ui::remote_ui_disconnect;
 use crate::channel::channels;
 use crate::channel::{
-    channel_close, channel_decref, channel_incref, channel_info_changed, channel_instream,
-    channel_outstream, find_channel,
+    channel_close, channel_decref, channel_incref, channel_info_changed, find_channel, with_channel,
 };
+use crate::event::channel::{Reads, start_reads, write_wbuffer};
 use crate::event::libuv::uv_strerror;
 use crate::event::r#loop::{one_arg_event, process_events_until};
 use crate::event::multiqueue::multiqueue_put_event;
 use crate::event::proc::exit_on_closed_chan;
-use crate::event::rstream::rstream_start;
-use crate::event::wstream::{wstream_release_wbuffer, wstream_write};
+use crate::event::wstream::wstream_release_wbuffer;
 use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_INF, logmsg, logmsg_line};
 use crate::memory::{arena_finish, arena_mem_free, xcalloc, xfree};
 use crate::msgpack_rpc::unpacker::{unpacker_init, unpacker_teardown};
-use crate::registry::SlotTable;
 use crate::startup::{main_loop, ui_client_channel_id, ui_client_error_exit};
 use crate::types::{
-    ApiDict, Arena, ArenaMem, Array, Channel, ChannelCallFrame, ChannelPart, ChannelStreamType,
-    ClientType, Error, Integer, MessageType, MsgpackRpcRequestHandler, Object, Unpacker, WBuffer,
-    kErrorTypeException, kErrorTypeValidation, uint32_t, uint64_t,
+    ApiDict, Arena, ArenaMem, Array, Channel, ChannelCallFrame, ChannelPart, ClientType, Error,
+    Integer, MessageType, MsgpackRpcRequestHandler, Object, Unpacker, WBuffer, kErrorTypeException,
+    kErrorTypeValidation, uint32_t, uint64_t,
 };
 use crate::ui_client::ui_client_attach_to_restarted_server;
 
@@ -68,21 +66,18 @@ pub mod trace;
 use call_stack::CallStack;
 use client::classify_client;
 use envelope::serialize_request;
-use receive::{parse_msgpack, receive_msgpack};
+use receive::parse_msgpack;
 
 /// Values these belong to other modules; nested so they stay out of the flat
 /// namespace the unit-test header generator collects constants into.
 mod known {
-    use super::{ChannelPart, ChannelStreamType, ClientType, MessageType};
+    use super::{ChannelPart, ClientType, MessageType};
 
     pub(super) const kMessageTypeRequest: MessageType = 0;
     pub(super) const kMessageTypeResponse: MessageType = 1;
     pub(super) const kMessageTypeNotification: MessageType = 2;
     pub(super) const kMessageTypeRedrawEvent: MessageType = 3;
 
-    pub(super) const kChannelStreamProc: ChannelStreamType = 0;
-    pub(super) const kChannelStreamStdio: ChannelStreamType = 2;
-    pub(super) const kChannelStreamInternal: ChannelStreamType = 4;
     pub(super) const kChannelPartRpc: ChannelPart = 3;
 
     pub(super) const kClientTypeMsgpackRpc: ClientType = 5;
@@ -96,6 +91,7 @@ mod known {
     pub(super) const CLOSE_MSG_MAX: usize = 256;
 }
 
+use crate::types::channel::{kChannelStreamInternal, kChannelStreamProc, kChannelStreamStdio};
 use known::*;
 
 /// The all-nil `Object`, which is what an API call that produced nothing, or
@@ -183,19 +179,14 @@ pub fn rpc_init() {
     ch_before_blocking_events.set(Some(ChildQueue::of_main_loop()));
 }
 
-/// Turns `channel` into an RPC endpoint and starts reading from it.
+/// Turns channel `id` into an RPC endpoint and starts reading from it.
 ///
 /// The reference taken here is the channel's own: it is dropped by
 /// [`rpc_close_event`] once the peer is gone.
-///
-/// # Safety
-/// `channel` points at a live `Channel` that is not already an RPC endpoint.
-pub unsafe fn rpc_start(channel: *mut Channel) {
-    // SAFETY: the caller's channel.
-    let mut chan = unsafe {
-        channel_incref(channel);
-        Chan::new(channel)
-    };
+pub fn rpc_start(id: uint64_t) {
+    channel_incref(id);
+    // SAFETY: the channel just referenced, live while the reference is.
+    let mut chan = unsafe { Chan::new(find_channel(id)) };
     chan.is_rpc = true;
 
     // SAFETY: `xcalloc` hands back `size_of::<Unpacker>()` zeroed bytes, which
@@ -213,35 +204,20 @@ pub unsafe fn rpc_start(channel: *mut Channel) {
 
     // An internal channel has no transport to read from: its peer hands
     // messages straight to `rpc_write_raw`.
-    if chan.streamtype == kChannelStreamInternal {
+    if chan.streamtype() == kChannelStreamInternal {
         return;
     }
-    let id = chan.id;
-    // SAFETY: the channel is live and now an RPC endpoint, so it has both
-    // streams; `receive_msgpack` is handed the same pointer back.
-    let out = unsafe { channel_outstream(channel) };
-    let in_0 = unsafe { channel_instream(channel) };
-    logmsg!(
-        LOGLVL_DBG,
-        c"rpc_start",
-        93,
-        "rpc ch {} in-stream={} out-stream={}",
-        id,
-        msg_addr(in_0.cast::<c_void>()),
-        msg_addr(out.cast::<c_void>())
-    );
-    unsafe { rstream_start(out, Some(receive_msgpack), channel.cast::<c_void>()) };
+    logmsg!(LOGLVL_DBG, c"rpc_start", 93, "rpc ch {id}");
+    start_reads(id, Reads::Rpc);
 }
 
-/// Marks the channel closed and schedules the teardown.
+/// Marks channel `id` closed and schedules the teardown.
 ///
 /// The state has to survive until the queued event runs — anything still
 /// walking the channel gets a `closed` flag rather than freed memory.
-///
-/// # Safety
-/// `channel` points at a live RPC `Channel`.
-pub unsafe fn rpc_close(channel: *mut Channel) {
-    // SAFETY: the caller's channel.
+pub fn rpc_close(id: uint64_t) {
+    let channel = find_channel(id);
+    // SAFETY: a registered RPC channel.
     let mut chan = unsafe { Chan::new(channel) };
     if chan.rpc.closed {
         return;
@@ -263,7 +239,7 @@ unsafe extern "C" fn rpc_close_event(argv: *mut *mut c_void) {
     // SAFETY: `rpc_close` built this argument vector with one live channel.
     let chan = unsafe { Chan::new((*argv).cast::<Channel>()) };
     // SAFETY: as above.
-    unsafe { channel_decref(chan.as_ptr()) };
+    channel_decref(chan.id);
     // Nothing reads the reason a closing channel's UI could not be found.
     drop(remote_ui_disconnect(chan.id, false));
 
@@ -276,22 +252,20 @@ unsafe extern "C" fn rpc_close_event(argv: *mut *mut c_void) {
         }
         // An embedded server exits through its process-exit callback instead,
         // which is what carries the exit status.
-        if chan.streamtype == kChannelStreamProc && ui_client_error_exit.get() < 0 {
+        if chan.streamtype() == kChannelStreamProc && ui_client_error_exit.get() < 0 {
             return;
         }
         exit_on_closed_chan(0);
-    } else if chan.streamtype == kChannelStreamStdio && !chan.detach {
+    } else if chan.streamtype() == kChannelStreamStdio && !chan.detach {
         exit_on_closed_chan(0);
     }
 }
 
-/// Releases everything `rpc_start` allocated. Called from `channel_destroy`.
-///
-/// # Safety
-/// `channel` points at a `Channel` that has been through [`rpc_start`] and is
-/// about to be destroyed.
-pub unsafe fn rpc_free(channel: *mut Channel) {
-    // SAFETY: the caller's channel, whose unpacker and info dict this owns.
+/// Releases everything `rpc_start` allocated. Called from `channel_destroy`,
+/// with the channel out of the table.
+pub fn rpc_free(channel: &mut Channel) {
+    // SAFETY: the channel being destroyed, whose unpacker and info dict this
+    // owns.
     let mut chan = unsafe { Chan::new(channel) };
     // SAFETY: as above.
     unsafe { unpacker_teardown(chan.rpc.unpacker) };
@@ -335,7 +309,7 @@ unsafe fn chan_close_on_err(chan: Chan, msg: *mut c_char, loglevel: c_int) {
             unsafe { (*frame).result_mem = mem };
         }
     }
-    unsafe { channel_close(chan.id, kChannelPartRpc, ptr::null_mut()) };
+    let _ = channel_close(chan.id, kChannelPartRpc);
     // SAFETY: the caller's message, NUL-terminated.
     let msg = unsafe { c_str(msg) };
     // Upstream's `LOG(loglevel, …)`: a level known only at run time, so the
@@ -358,11 +332,8 @@ unsafe fn chan_close_on_err(chan: Chan, msg: *mut c_char, loglevel: c_int) {
 ///
 /// Returns false only when a named channel does not exist; a broadcast to
 /// nobody still succeeds.
-///
-/// # Safety
-/// `name` is a NUL-terminated string and `args` describes `args.size` live
-/// objects.
-pub unsafe fn rpc_send_event(id: uint64_t, name: *const c_char, args: Array) -> bool {
+pub fn rpc_send_event(id: uint64_t, name: &CStr, args: Array) -> bool {
+    let name = name.as_ptr();
     let channel = if id == 0 {
         None
     } else {
@@ -418,8 +389,8 @@ pub unsafe fn rpc_send_call(
     let Some(mut chan) = find_rpc_channel(id) else {
         return Err(api_error!(kErrorTypeException, "Invalid channel: {id}"));
     };
-    // SAFETY: the channel is live; this reference is dropped below.
-    unsafe { channel_incref(chan.as_ptr()) };
+    // Dropped below.
+    channel_incref(chan.id);
 
     let request_id = chan.rpc.next_request_id;
     chan.rpc.next_request_id = request_id.wrapping_add(1);
@@ -443,11 +414,11 @@ pub unsafe fn rpc_send_call(
     // below takes it as an ordinary one.
     let answered = || unsafe { (*frame_ptr).returned || chan.rpc.closed };
     // SAFETY: the main loop and the channel's queue are both live.
-    unsafe { process_events_until(main_loop.ptr(), chan.events, -1, answered) };
+    unsafe { process_events_until(main_loop.ptr(), chan.events.as_ptr(), -1, answered) };
     chan.rpc.call_stack.pop();
 
     if !frame.returned {
-        unsafe { channel_decref(chan.as_ptr()) };
+        channel_decref(id);
         return Err(api_error!(kErrorTypeException, "Invalid channel: {id}"));
     }
     let mut refusal = None;
@@ -457,8 +428,9 @@ pub unsafe fn rpc_send_call(
         unsafe { arena_mem_free(frame.result_mem) };
         frame.result_mem = ptr::null_mut();
     }
-    // SAFETY: the reference taken above, and the caller's out-parameter.
-    unsafe { channel_decref(chan.as_ptr()) };
+    // The reference taken above.
+    channel_decref(id);
+    // SAFETY: the caller's out-parameter.
     unsafe { *result_mem = frame.result_mem };
     match refusal {
         Some(refusal) => Err(refusal),
@@ -520,11 +492,13 @@ pub unsafe fn rpc_write_raw(id: uint64_t, buffer: *mut WBuffer) -> bool {
 /// # Safety
 /// [`rpc_send_event`]'s contract.
 unsafe fn broadcast_event(name: *const c_char, args: Array) {
-    // SAFETY: the channel table's values are live channels.
     let mut chans: Vec<*mut Channel> = channels
-        .with(SlotTable::snapshot_values)
+        .with(|table| {
+            let rpc = table.values().filter(|channel| channel.is_rpc);
+            rpc.map(|channel| channel.id).collect::<Vec<_>>()
+        })
         .into_iter()
-        .filter(|&channel| unsafe { (*channel).is_rpc })
+        .map(find_channel)
         .collect();
     if !chans.is_empty() {
         // SAFETY: the caller's name and arguments, and the channels just
@@ -549,21 +523,18 @@ unsafe fn channel_write(chan: Chan, buffer: *mut WBuffer) -> bool {
         return false;
     }
     let mut err = 0;
-    if chan.streamtype == kChannelStreamInternal {
-        // SAFETY: the reference is dropped by `internal_read_event`, which
-        // also releases the buffer.
-        unsafe { channel_incref(chan.as_ptr()) };
-        let mut argv = [chan.as_ptr().cast::<c_void>(), buffer.cast::<c_void>()];
-        if chan.events.is_null() {
-            unsafe { internal_read_event(argv.as_mut_ptr()) };
-        } else {
-            let mut event = one_arg_event(Some(internal_read_event), argv[0]);
-            event.argv[1] = argv[1];
-            unsafe { multiqueue_put_event(chan.events, event) };
-        }
+    if chan.streamtype() == kChannelStreamInternal {
+        // The reference is dropped by `internal_read_event`, which also
+        // releases the buffer.
+        channel_incref(chan.id);
+        let mut event = one_arg_event(Some(internal_read_event), chan.as_ptr().cast::<c_void>());
+        event.argv[1] = buffer.cast::<c_void>();
+        // SAFETY: the channel's own queue.
+        unsafe { multiqueue_put_event(chan.events.as_ptr(), event) };
     } else {
-        // SAFETY: an RPC channel that is not internal has an in-stream.
-        err = unsafe { wstream_write(channel_instream(chan.as_ptr()), buffer) };
+        // SAFETY: the caller's buffer, handed on; an RPC channel that is not
+        // internal has an in-stream.
+        err = unsafe { write_wbuffer(chan.id, buffer) };
     }
 
     if err != 0 {
@@ -615,8 +586,9 @@ unsafe extern "C" fn internal_read_event(argv: *mut *mut c_void) {
         let why = c"internal channel: internal error".as_ptr().cast_mut();
         unsafe { chan_close_on_err(chan, why, LOGLVL_ERR) };
     }
-    // SAFETY: the reference and the buffer `channel_write` handed over.
-    unsafe { channel_decref(chan.as_ptr()) };
+    // The reference and the buffer `channel_write` handed over.
+    channel_decref(chan.id);
+    // SAFETY: as above.
     unsafe { wstream_release_wbuffer(buffer) };
 }
 
@@ -638,7 +610,22 @@ pub fn rpc_set_client_info(id: uint64_t, info: ApiDict) {
     let name = unsafe { cstr::at_opt(get_client_info(chan.as_ptr(), c"type".as_ptr())) };
     chan.rpc.client_type = classify_client(name);
     // SAFETY: the channel is live.
-    unsafe { channel_info_changed(chan.as_ptr(), false) };
+    channel_info_changed(chan.id, false);
+}
+
+/// A copy of the string value `key` has in channel `id`'s client info, when
+/// it is an RPC channel that has one.
+pub(crate) fn client_info(id: uint64_t, key: &CStr) -> Option<std::ffi::CString> {
+    with_channel(id, |channel| {
+        if !channel.is_rpc {
+            return None;
+        }
+        channel.rpc.info.iter().find_map(|item| {
+            let value = item.value.as_string()?;
+            (item.key.as_c_str() == key).then(|| value.as_cstr().to_owned())
+        })
+    })
+    .flatten()
 }
 
 /// The string value `key` has in this channel's client info, or null.

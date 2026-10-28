@@ -275,10 +275,12 @@ pub struct TerminalCursor {
     pub blink: bool,
 }
 
+/// What a terminal is built with: its size and its driver's callbacks, each
+/// told the driver's id. Rust-only: no C code reads it.
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct TerminalOptions {
-    pub data: *mut ::core::ffi::c_void,
+    /// Who drives the terminal (a channel's id), handed to each callback.
+    pub owner: u64,
     pub width: uint16_t,
     pub height: uint16_t,
     pub read_pause_cb: terminal_read_pause_cb,
@@ -288,9 +290,8 @@ pub struct TerminalOptions {
     pub close_cb: terminal_close_cb,
     pub force_crlf: bool,
 }
-pub type terminal_close_cb = Option<unsafe fn(*mut ::core::ffi::c_void) -> ()>;
-pub type terminal_read_pause_cb = Option<unsafe fn(bool, *mut ::core::ffi::c_void) -> ()>;
-pub type terminal_resize_cb = Option<unsafe fn(uint16_t, uint16_t, *mut ::core::ffi::c_void) -> ()>;
-pub type terminal_resume_cb = Option<unsafe fn(*mut ::core::ffi::c_void) -> ()>;
-pub type terminal_write_cb =
-    Option<unsafe fn(*const ::core::ffi::c_char, size_t, *mut ::core::ffi::c_void) -> ()>;
+pub type terminal_close_cb = Option<fn(u64)>;
+pub type terminal_read_pause_cb = Option<fn(bool, u64)>;
+pub type terminal_resize_cb = Option<fn(uint16_t, uint16_t, u64)>;
+pub type terminal_resume_cb = Option<fn(u64)>;
+pub type terminal_write_cb = Option<fn(&[u8], u64)>;

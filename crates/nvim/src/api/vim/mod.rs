@@ -17,8 +17,8 @@ use crate::buffer::{
     read_buffer_into,
 };
 use crate::channel::{
-    channel_all_info, channel_alloc, channel_decref, channel_incref, channel_info,
-    channel_internal, channel_send, find_channel,
+    ChannelRef, alloc_channel, channel_all_info, channel_decref, channel_info, channel_send,
+    with_channel,
 };
 use crate::context::{CTX_ALL, ctx_free, ctx_from_dict, ctx_restore, ctx_save, ctx_to_dict};
 use crate::cursor::get_cursor_rel_lnum;
@@ -55,9 +55,7 @@ use crate::insexpand::get_cot_flags;
 use crate::keycodes::{name_to_mod_mask, replace_termcodes};
 use crate::log::LOGLVL_DBG;
 use crate::log::g_stats;
-use crate::lua::executor::{
-    api_free_luaref, nlua_exec, nlua_get_global_ref_count, nlua_is_deferred_safe,
-};
+use crate::lua::executor::{nlua_exec, nlua_get_global_ref_count, nlua_is_deferred_safe};
 use crate::lua::state::tslua_query_parse_count;
 use crate::mapping::{keymap_array, modify_keymap};
 use crate::mark::mark_get_global;
@@ -92,21 +90,20 @@ use crate::search::{BACKWARD, FORWARD};
 use crate::state::get_mode;
 use crate::statusline::{draw_tabline, win_redr_status, win_redr_winbar};
 use crate::terminal::{
-    terminal_alloc, terminal_buf, terminal_check_size, terminal_destroy, terminal_open,
-    terminal_running, terminal_set_streamed_paste,
+    buf_terminal_running, terminal_alloc, terminal_buf, terminal_check_size, terminal_destroy,
+    terminal_open, terminal_set_streamed_paste,
 };
 use crate::types::AutoEvent;
 use crate::types::{
-    ApiDict, Array, BlnFlags, Boolean, BufferHandle, Channel, ChannelStreamType, Context,
-    DoBufAction, DoBufStart, Error, Float, FoldInfo, Handle, HlAttrs, Integer,
-    KeyDict_complete_set, KeyDict_context, KeyDict_echo_opts, KeyDict_empty,
-    KeyDict_eval_statusline, KeyDict_get_highlight, KeyDict_get_ns, KeyDict_highlight,
-    KeyDict_keymap, KeyDict_open_term, KeyDict_redraw, KeyDict_runtime, LineNr, LuaRef, LuaRetMode,
-    MessageData, MessageType, MotionType, NS, Object, OptScope, OptVal, RemapValues, ScreenChar,
-    ScriptId, SignTextAttrs, StatusCol, String_0, TabpageHandle, TerminalOptions, VarNumber, Vv,
-    Window, WindowHandle, YankReg, int64_t, kCdScopeGlobal, kErrorTypeException, kErrorTypeNone,
-    kErrorTypeValidation, kObjectTypeString, mpack_token_type_t, size_t, uint8_t, uint16_t,
-    uint64_t,
+    ApiDict, Array, BlnFlags, Boolean, BufferHandle, Context, DoBufAction, DoBufStart, Error,
+    Float, FoldInfo, Handle, HlAttrs, Integer, KeyDict_complete_set, KeyDict_context,
+    KeyDict_echo_opts, KeyDict_empty, KeyDict_eval_statusline, KeyDict_get_highlight,
+    KeyDict_get_ns, KeyDict_highlight, KeyDict_keymap, KeyDict_open_term, KeyDict_redraw,
+    KeyDict_runtime, LineNr, LuaRef, LuaRetMode, MessageData, MessageType, MotionType, NS, Object,
+    OptScope, OptVal, RemapValues, ScreenChar, ScriptId, SignTextAttrs, StatusCol, String_0,
+    TabpageHandle, TerminalOptions, VarNumber, Vv, Window, WindowHandle, YankReg, int64_t,
+    kCdScopeGlobal, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeString,
+    mpack_token_type_t, size_t, uint8_t, uint16_t, uint64_t,
 };
 use crate::ui::state::Columns;
 use crate::ui::{ui_array, ui_call_screenshot, ui_flush};
@@ -162,7 +159,6 @@ pub const BLN_NOOPT: BlnFlags = 16;
 pub const BCO_NOHELP: ::core::ffi::c_uint = 4;
 pub const BCO_ENTER: ::core::ffi::c_uint = 1;
 pub const MPACK_TOKEN_SINT: mpack_token_type_t = 4;
-pub const kChannelStreamInternal: ChannelStreamType = 4;
 pub const kMTCharWise: MotionType = 0;
 pub const kCtxFuncs: ::core::ffi::c_uint = 32;
 pub const kCtxSFuncs: ::core::ffi::c_uint = 16;

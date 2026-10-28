@@ -475,6 +475,48 @@ pub unsafe fn tv_dict_free_dict(d: *mut Dict) {
     unsafe { xfree(d.cast()) };
 }
 
+// ---------------------------------------------------------------------------
+// The collector's free pass
+//
+// While `tv_in_free_unref_items` is set no release frees anything, so every
+// container the registry names stays live for the pass; these are the
+// views and frees the pass works with, so that `eval/collect.rs` holds no
+// pointer of its own.
+
+/// A view of the dictionary in the collector's registry slot `idx`, taking
+/// no reference: `None` for a hole or a slot past the end.
+pub(crate) fn registered_dict(idx: usize) -> Option<::core::mem::ManuallyDrop<DictRef>> {
+    let at = crate::eval::gc::dict_at(idx)?;
+    // SAFETY: a registered dictionary is live until it leaves the registry,
+    // and the view takes no reference, so dropping it changes nothing.
+    Some(::core::mem::ManuallyDrop::new(unsafe {
+        DictRef::from_owned(at)
+    }))
+}
+
+/// [`registered_dict`] for the list registry.
+pub(crate) fn registered_list(idx: usize) -> Option<::core::mem::ManuallyDrop<ListRef>> {
+    let at = crate::eval::gc::list_at(idx)?;
+    // SAFETY: as above.
+    Some(::core::mem::ManuallyDrop::new(unsafe {
+        ListRef::from_owned(at)
+    }))
+}
+
+/// Free the structure of a dictionary the pass has already emptied, taking
+/// it out of the registry.
+pub(crate) fn free_registered_dict(view: ::core::mem::ManuallyDrop<DictRef>) {
+    // SAFETY: an emptied, registered dictionary; the pass owns the registry
+    // and the view is the last thing naming it.
+    unsafe { tv_dict_free_dict(view.as_ptr()) };
+}
+
+/// [`free_registered_dict`] for a list.
+pub(crate) fn free_registered_list(view: ::core::mem::ManuallyDrop<ListRef>) {
+    // SAFETY: as above.
+    unsafe { list_free_list(view.as_ptr()) };
+}
+
 /// One reference to a [`Blob`], given back when the handle goes: the blob
 /// half of [`ListRef`].
 #[repr(transparent)]

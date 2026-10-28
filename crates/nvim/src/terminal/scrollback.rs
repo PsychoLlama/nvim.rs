@@ -264,10 +264,7 @@ fn mark_adjust_term(buffer: Buf, line1: LineNr, line2: LineNr, amount: LineNr) {
 /// wrong place.
 pub(crate) fn refresh_scrollback(mut term: Term, buffer: Buf) {
     let read_pause = term.opts.read_pause_cb.expect("non-null function pointer");
-    let data = term.opts.data;
-    // SAFETY: the callback the channel registered, taking the data it
-    // registered with it.
-    unsafe { read_pause(true, data) };
+    read_pause(true, term.opts.owner);
 
     // Rows evicted since the last refresh are gone from the buffer's top;
     // move the marks that were pointing at them.
@@ -306,7 +303,5 @@ pub(crate) fn refresh_scrollback(mut term: Term, buffer: Buf) {
     }
 
     adjust_scrollback(term, buffer);
-    let data = term.opts.data;
-    // SAFETY: the callback the channel registered, as above.
-    unsafe { read_pause(false, data) };
+    read_pause(false, term.opts.owner);
 }

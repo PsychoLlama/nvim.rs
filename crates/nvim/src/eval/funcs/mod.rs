@@ -1,17 +1,15 @@
 //! The builtin functions, one module per family, and the vocabulary they
 //! share.
 //!
-//! No `forbid(unsafe_code)` here: a lint attribute on a `mod.rs` reaches the
-//! whole subtree, and `forbid` cannot be lifted by a child, so it waits for
-//! the last family that still needs `unsafe` (the job, channel and timer
-//! builtins). Until then the crate's `deny` is what holds this file.
-#![deny(unsafe_op_in_unsafe_fn)]
+//! `forbid(unsafe_code)` here reaches the whole subtree: every family of
+//! builtins is safe code.
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use crate::types::{
-    Array, ChannelPart, ChannelStreamType, Context, GRegFlags, LuaRetMode, MotionType, ProcType,
-    String_0, XDGVarType, uint64_t,
+    Array, ChannelPart, Context, GRegFlags, LuaRetMode, MotionType, ProcType, String_0, XDGVarType,
+    uint64_t,
 };
 
 /// The generated builtin table: one row per builtin, plus the perfect-hash
@@ -79,7 +77,6 @@ pub const DI_FLAGS_LOCK: ::core::ffi::c_uint = 8;
 pub const MAX_FUNC_ARGS: ::core::ffi::c_uint = 20;
 pub const NUMBUFLEN: ::core::ffi::c_uint = 65;
 pub const NSUBEXP: ::core::ffi::c_uint = 10;
-pub const kChannelStreamProc: ChannelStreamType = 0;
 pub const kChannelPartAll: ChannelPart = 4;
 pub const kChannelPartRpc: ChannelPart = 3;
 pub const kChannelPartStderr: ChannelPart = 2;

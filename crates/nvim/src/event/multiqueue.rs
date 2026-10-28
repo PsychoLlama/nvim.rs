@@ -167,6 +167,35 @@ impl Drop for ChildQueue {
     }
 }
 
+/// A parent queue of a waiting frame's own, that the loop is woken for when
+/// a child of it is put to: `jobwait()` parks the jobs' queues here so that
+/// only their events run while it blocks. Dropping it frees the queue; the
+/// children must have been handed back to another parent first.
+pub(crate) struct ParkingQueue(ptr::NonNull<MultiQueue>);
+
+impl ParkingQueue {
+    /// A new parent queue whose puts wake the main loop.
+    pub(crate) fn on_main_loop() -> Self {
+        let main = crate::event::r#loop::main_loop_raw();
+        // SAFETY: `loop_on_put` is safe to call with the main loop, which
+        // outlives every queue made here.
+        let queue = unsafe { multiqueue_new(Some(crate::event::r#loop::loop_on_put), main.cast()) };
+        Self(ptr::NonNull::new(queue).expect("a new queue is never null"))
+    }
+
+    /// The queue, for a callee that takes one. It lives as long as `self`.
+    pub(crate) fn as_ptr(&self) -> *mut MultiQueue {
+        self.0.as_ptr()
+    }
+}
+
+impl Drop for ParkingQueue {
+    fn drop(&mut self) {
+        // SAFETY: the queue this value made and owns, freed once.
+        unsafe { multiqueue_free(self.0.as_ptr()) };
+    }
+}
+
 /// The queue `cell` holds, or null before it is made.
 pub(crate) fn queue_in(cell: &GlobalCell<Option<ChildQueue>>) -> *mut MultiQueue {
     cell.with(|queue| queue.as_ref().map_or(ptr::null_mut(), ChildQueue::as_ptr))
@@ -261,6 +290,55 @@ pub(crate) fn put_job_on_main_loop(job: Box<dyn FnOnce()>) {
             job_event(job),
         )
     };
+}
+
+/// Queue `handler(a, b)` on `queue`, to run once when that queue is
+/// processed: the allocation-free spelling of a job whose state is two ids
+/// (a channel's id and what to do with it). The handler finds its record
+/// again by id, so an event that outlives the record runs harmlessly.
+pub(crate) fn put_id_event(queue: &ChildQueue, handler: fn(u64, u64), a: u64, b: u64) {
+    // SAFETY: the child's own live queue; `run_id_event` takes back what
+    // `id_event` packed.
+    unsafe { multiqueue_put_event(queue.as_ptr(), id_event(handler, a, b)) };
+}
+
+/// [`put_id_event`] on the main loop's own queue.
+pub(crate) fn put_id_event_on_main_loop(handler: fn(u64, u64), a: u64, b: u64) {
+    // SAFETY: the main loop's queue, live from startup to exit.
+    unsafe {
+        multiqueue_put_event(
+            (*crate::event::r#loop::main_loop_raw()).events,
+            id_event(handler, a, b),
+        )
+    };
+}
+
+/// The event that runs `handler(a, b)`: the handler's address and the two
+/// ids, each in a word of its own.
+fn id_event(handler: fn(u64, u64), a: u64, b: u64) -> Event {
+    let word = |n: u64| ptr::without_provenance_mut(usize::try_from(n).expect("an id fits a word"));
+    Event::new(
+        Some(run_id_event),
+        [handler as *mut c_void, word(a), word(b)],
+    )
+}
+
+/// A queue reached an [`id_event`]: run its handler.
+///
+/// # Safety
+/// `argv` holds the handler and the two ids [`id_event`] packed.
+unsafe extern "C" fn run_id_event(argv: *mut *mut c_void) {
+    // SAFETY: the caller's promise: slot 0 is a `fn(u64, u64)` cast to a
+    // word, slots 1 and 2 its two ids.
+    let (handler, a, b) = unsafe {
+        let handler: fn(u64, u64) = core::mem::transmute::<*mut c_void, fn(u64, u64)>(*argv);
+        (
+            handler,
+            (*argv.add(1)).addr() as u64,
+            (*argv.add(2)).addr() as u64,
+        )
+    };
+    handler(a, b);
 }
 
 /// The event that runs `job`.

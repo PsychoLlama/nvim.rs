@@ -1,48 +1,42 @@
 //! Channels and servers: `chansend()`, `rpcrequest()`, `serverstart()` and
 //! the rest of the RPC and socket surface.
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::{
     kChannelPartAll, kChannelPartRpc, kChannelPartStderr, kChannelPartStdin, kChannelPartStdout,
     kRetObject,
 };
-use crate::api::private::helpers::cstr_to_string;
 use crate::autocmd::state::{autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match};
-use crate::channel::{
-    channel_close, channel_connect, channel_from_stdio, channel_send, find_channel,
-};
+use crate::channel::{channel_close, channel_connect, channel_from_stdio, channel_send};
 use crate::eval::provider::{provider_call_nesting, provider_caller_scope};
 use crate::eval::save_tv_as_string;
 use crate::eval::typval::{
-    NumBuf, blob_bytes, dict_get_bool, dict_get_callback, dict_get_number, tv_list_alloc_ret,
+    NumBuf, blob_bytes, dict_get_bool, dict_get_callback, dict_get_number, tv_list_alloc,
 };
 use crate::eval::userfunc::{CallStackAside, set_current_fc};
-use crate::event::libuv::uv_strerror;
 use crate::ex_cmds::check_secure;
 use crate::log::{LOGLVL_ERR, logmsg};
-use crate::lua::executor::nlua_exec;
+use crate::lua::executor::nlua_exec_cstr;
 use crate::memory::{ThinCString, XString};
-use crate::memory::{arena_mem_free, xfree, xmemdup};
 use crate::message::e_invarg;
 use crate::message::emsg;
-use crate::message::on_print_cb;
-use crate::message_fmt::{c_str, msg_cstr};
-use crate::msgpack_rpc::channel::{get_client_info, rpc_send_call, rpc_send_event};
+use crate::message::with_on_print;
+use crate::message_fmt::msg_cstr;
+use crate::msgpack_rpc::channel::{client_info, rpc_call_with, rpc_send_event};
 use crate::msgpack_rpc::server::{
-    server_address_list, server_address_new, server_start, server_stop,
+    server_address_generated, server_addresses, server_start, server_stop,
 };
 use crate::os::cshim::gettext;
+use crate::os::fs::os_strerror;
 use crate::runtime::EXESTACK;
 use crate::runtime::state::current_sctx;
 use crate::semsg;
 use crate::semsg_multiline;
 use crate::types::{
-    ArenaMem, Array, CallbackReader, ChannelPart, Error, EvalFuncData, Object, ScriptCtx, String_0,
-    TypVal, VAR_BLOB, VAR_DICT, VAR_NUMBER, VAR_STRING, VarNumber, uint64_t,
+    Array, CallbackReader, ChannelPart, EvalFuncData, Object, ScriptCtx, String_0, TypVal,
+    VAR_BLOB, VAR_DICT, VAR_NUMBER, VAR_STRING, VarNumber, uint64_t,
 };
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
+use core::ffi::{CStr, c_int};
 
 /// A cleared `CallbackReader`, which the option parsers fill in.
 const NO_READER: CallbackReader = CallbackReader::none();
@@ -69,7 +63,6 @@ fn trailing_args(args: &[TypVal], first: usize) -> Array {
 pub fn f_chanclose(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     result.write_number(0);
-    // SAFETY throughout: the frame is live; `error` is a borrowed static message.
     if check_secure() {
         return;
     }
@@ -94,21 +87,17 @@ pub fn f_chanclose(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         }
     }
 
-    let mut error = ptr::null::<c_char>();
-    result.write_number(unsafe {
-        channel_close(args[0].number_or_zero() as uint64_t, part, &raw mut error)
-    } as VarNumber);
-    if result.number_or_zero() == 0 {
-        // SAFETY: the channel's NUL-terminated error text.
-        emsg(unsafe { crate::cstr::at(error) });
+    match channel_close(args[0].number_or_zero() as uint64_t, part) {
+        Ok(()) => result.write_number(1),
+        Err(why) => {
+            emsg(why);
+        }
     }
 }
 
 /// `chansend({id}, {data})`
 pub fn f_chansend(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(0);
-    // SAFETY throughout: the frame is live; `input` is an allocation `channel_send`
-    // adopts.
     if check_secure() {
         return;
     }
@@ -117,42 +106,28 @@ pub fn f_chansend(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     }
 
-    let mut input_len = 0isize;
-    let input = if args[1].v_type() == VAR_BLOB {
+    let input: Vec<u8> = if args[1].v_type() == VAR_BLOB {
         // A Blob goes over byte for byte; an empty one sends nothing
         // and is reported as a failure below.
-        let bytes = blob_bytes(args[1].blob_ref());
-        input_len = isize::try_from(bytes.len()).expect("a short blob");
-        if bytes.is_empty() {
-            ptr::null_mut()
-        } else {
-            // SAFETY: the blob's own bytes, readable for their length.
-            unsafe { xmemdup(bytes.as_ptr().cast(), bytes.len()) }.cast::<c_char>()
-        }
+        blob_bytes(args[1].blob_ref()).to_vec()
     } else {
         // `false` for both: a List joins with NL, not CR-NL, and the
         // trailing NL is the caller's business.
         match save_tv_as_string(&args[1], false, false) {
-            Ok(Some(text)) => {
-                input_len = isize::try_from(text.len()).expect("a short input");
-                ThinCString::from_vec(text).into_raw()
-            }
-            Ok(None) | Err(_) => ptr::null_mut(),
+            Ok(Some(text)) => text,
+            Ok(None) | Err(_) => return,
         }
     };
-    if input.is_null() {
+    if args[1].v_type() == VAR_BLOB && input.is_empty() {
         return;
     }
 
-    let mut error = ptr::null::<c_char>();
     let id = args[0].number_or_zero() as uint64_t;
-    let len = input_len as usize;
-    let err = &raw mut error;
-    let sent = unsafe { channel_send(id, input, len, true, err) };
-    result.write_number(sent as VarNumber);
-    if !error.is_null() {
-        // SAFETY: the channel's NUL-terminated error text.
-        emsg(unsafe { crate::cstr::at(error) });
+    match channel_send(id, &input) {
+        Ok(sent) => result.write_number(sent as VarNumber),
+        Err(why) => {
+            emsg(why);
+        }
     }
 }
 
@@ -160,37 +135,26 @@ pub fn f_chansend(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 pub fn f_rpcnotify(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     result.write_number(0);
-    // SAFETY throughout: the frame is live; `items` outlives the `Array` that borrows
-    // it and the arena owns what the conversion allocates.
     if check_secure() {
         return;
     }
     // Channel 0 is the broadcast channel, so zero is allowed here where
     // `rpcrequest()` insists on a real one.
     if args[0].v_type() != VAR_NUMBER || args[0].number_or_zero() < 0 {
-        let what = c"Channel id must be a positive integer".as_ptr();
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let what = unsafe { c_str(what) };
-        semsg!("E475: Invalid argument: {what}");
+        semsg!("E475: Invalid argument: Channel id must be a positive integer");
         return;
     }
     if args[1].v_type() != VAR_STRING {
-        let what = c"Event type must be a string".as_ptr();
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let what = unsafe { c_str(what) };
-        semsg!("E475: Invalid argument: {what}");
+        semsg!("E475: Invalid argument: Event type must be a string");
         return;
     }
 
     let event_args = trailing_args(args, 2);
     let id = args[0].number_or_zero() as uint64_t;
-    let event = numbuf.string(&args[1]).as_ptr();
-    let ok = unsafe { rpc_send_event(id, event, event_args) };
+    let event = numbuf.string(&args[1]);
+    let ok = rpc_send_event(id, event, event_args);
     if !ok {
-        let what = c"Channel doesn't exist".as_ptr();
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let what = unsafe { c_str(what) };
-        semsg!("E475: Invalid argument: {what}");
+        semsg!("E475: Invalid argument: Channel doesn't exist");
         return;
     }
     result.write_number(1);
@@ -214,7 +178,6 @@ struct ProviderScope {
 
 impl ProviderScope {
     fn enter() -> Self {
-        // SAFETY throughout: the caller's obligation.
         let saved = ProviderScope {
             sctx: current_sctx.get(),
             autocmd_fname: autocmd_fname.take(),
@@ -243,11 +206,9 @@ impl ProviderScope {
         saved
     }
 
-    /// # Safety
-    /// `self` came from [`enter`](Self::enter) and nothing else has touched
-    /// the execution stack since.
-    unsafe fn leave(self) {
-        // SAFETY throughout: the caller's obligation.
+    /// Put back what [`enter`](Self::enter) saved, popping the execution
+    /// stack entry it pushed.
+    fn leave(self) {
         current_sctx.set(self.sctx);
         EXESTACK.with_mut(|stack| {
             stack.pop();
@@ -268,23 +229,15 @@ pub fn f_rpcrequest(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // this call rather than anything the request goes on to do.
     let nesting = provider_call_nesting.get();
 
-    // SAFETY throughout: the frame is live; `items` outlives the `Array` that borrows
-    // it, and both arenas own what they allocated until freed below.
     if check_secure() {
         return;
     }
     if args[0].v_type() != VAR_NUMBER || args[0].number_or_zero() <= 0 {
-        let what = c"Channel id must be a positive integer".as_ptr();
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let what = unsafe { c_str(what) };
-        semsg!("E475: Invalid argument: {what}");
+        semsg!("E475: Invalid argument: Channel id must be a positive integer");
         return;
     }
     if args[1].v_type() != VAR_STRING {
-        let what = c"Method name must be a string".as_ptr();
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let what = unsafe { c_str(what) };
-        semsg!("E475: Invalid argument: {what}");
+        semsg!("E475: Invalid argument: Method name must be a string");
         return;
     }
 
@@ -293,157 +246,122 @@ pub fn f_rpcrequest(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let scope = (nesting != 0).then(ProviderScope::enter);
 
     let chan_id = args[0].number_or_zero() as uint64_t;
-    let method = numbuf.string(&args[1]).as_ptr();
-    let mut res_mem: ArenaMem = ptr::null_mut();
-    let called = unsafe { rpc_send_call(chan_id, method, call_args, &raw mut res_mem) };
+    let method = numbuf.string(&args[1]);
+    // The response is this frame's, so its Lua references move into the
+    // value rather than being copied.
+    let called = rpc_call_with(chan_id, method, call_args, TypVal::from);
 
     if let Some(scope) = scope {
-        unsafe { scope.leave() };
+        scope.leave();
     }
 
-    if let Err(err) = &called {
-        // Name the peer when it told us what it is called.
-        let chan = find_channel(chan_id);
-        let name = if chan.is_null() {
-            ptr::null()
-        } else {
-            unsafe { get_client_info(chan, c"name".as_ptr()) }
-        };
-        if name.is_null() {
-            let why = err.message_or_empty();
-            // SAFETY: the method name is NUL-terminated.
-            let method = unsafe { c_str(method) };
-            let msg = msg_cstr(why);
-            semsg_multiline!(
-                c"rpc_error",
-                "Invoking '{method}' on channel {chan_id}:\n{msg}"
-            );
-        } else {
-            let why = err.message_or_empty();
-            // SAFETY: both names are NUL-terminated.
-            let (method, name) = unsafe { (c_str(method), c_str(name)) };
-            let msg = msg_cstr(why);
-            semsg_multiline!(
-                c"rpc_error",
-                "Invoking '{method}' on channel {chan_id} ({name}):\n{msg}"
-            );
+    match called {
+        Ok(value) => *result = value,
+        Err(err) => {
+            let (method, msg) = (msg_cstr(method), msg_cstr(err.message_or_empty()));
+            // Name the peer when it told us what it is called.
+            match client_info(chan_id, c"name") {
+                None => {
+                    semsg_multiline!(
+                        c"rpc_error",
+                        "Invoking '{method}' on channel {chan_id}:\n{msg}"
+                    );
+                }
+                Some(name) => {
+                    let name = msg_cstr(&name);
+                    semsg_multiline!(
+                        c"rpc_error",
+                        "Invoking '{method}' on channel {chan_id} ({name}):\n{msg}"
+                    );
+                }
+            }
         }
-    } else if let Ok(object) = called {
-        // The response is this frame's, so its Lua references move into the
-        // value rather than being copied.
-        *result = TypVal::from(object);
     }
-    unsafe { arena_mem_free(res_mem) };
 }
 
 /// `serverlist([{opts}])` — this instance's listen addresses, plus the
 /// peers Lua knows about when asked for them.
 pub fn f_serverlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY throughout: the frame is live; `addrs` is an allocation this body owns,
-    // and the strings in it are handed to the List one at a time.
-    let mut n = 0usize;
-    let addrs = unsafe { server_address_list(&raw mut n) };
-    // The same addresses twice: once handed to the List, once copied
-    // into the Array the Lua helper is passed.
-    let mut addrs_arr = Array::with_capacity(n);
-    let list: *mut crate::types::List = tv_list_alloc_ret(result, n as isize);
-    for i in 0..n {
-        unsafe { (*list).push(TypVal::string(ThinCString::from_raw(*addrs.add(i)))) };
-        let addr = unsafe { *addrs.add(i) };
-        addrs_arr.push(Object::string(unsafe { cstr_to_string(addr) }));
+    let addrs = server_addresses();
+    // The same addresses twice: once in the List, once copied into the
+    // Array the Lua helper is passed.
+    let list = tv_list_alloc(addrs.len() as isize);
+    result.write_list(Some(list.clone()));
+    let mut addrs_arr = Array::with_capacity(addrs.len());
+    for addr in &addrs {
+        list.edit().push_str(Some(addr));
+        addrs_arr.push(Object::string(String_0::from_cstr(addr)));
     }
 
     if args.first().is_some_and(|arg| arg.v_type() == VAR_DICT)
         && dict_get_bool(args[0].dict_ref(), b"peer", 0) != 0
     {
         let lua_args = Array::from(vec![Object::array(addrs_arr)]);
-
-        let mut err = Error::none();
-        const PEERS: &str = "return require('vim._core.server').serverlist(...)";
-        let code = String_0::from(PEERS);
-        let rv = match unsafe { nlua_exec(&code, ptr::null(), lua_args, kRetObject) } {
-            Ok(value) => value,
-            Err(e) => {
-                err = e;
-                Object::Nil
+        const PEERS: &CStr = c"return require('vim._core.server').serverlist(...)";
+        match nlua_exec_cstr(PEERS, lua_args, kRetObject) {
+            Err(err) => {
+                // A missing or broken helper is logged, not reported: the
+                // local addresses above are still a useful answer.
+                let why = msg_cstr(err.message_or_empty());
+                logmsg!(
+                    LOGLVL_ERR,
+                    c"f_serverlist",
+                    6338,
+                    "vim._core.serverlist failed: {why}"
+                );
             }
-        };
-        if err.is_set() {
-            // A missing or broken helper is logged, not reported: the
-            // local addresses above are still a useful answer.
-            // SAFETY: the error's own message, NUL-terminated.
-            let why = unsafe { c_str(err.message_or_empty().as_ptr()) };
-            logmsg!(
-                LOGLVL_ERR,
-                c"f_serverlist",
-                6338,
-                "vim._core.serverlist failed: {why}"
-            );
-        } else {
-            let peers = rv
-                .as_array()
-                .expect("`vim._core.server.serverlist()` answers with a list");
-            for item in peers {
-                let addr = item
-                    .as_string()
-                    .expect("`serverlist()` answers with a list of strings");
-                // SAFETY: the address is the object's own, NUL-terminated.
-                unsafe { (*list).push_str(crate::cstr::at_opt(addr.data())) };
+            Ok(rv) => {
+                let peers = rv
+                    .as_array()
+                    .expect("`vim._core.server.serverlist()` answers with a list");
+                for item in peers {
+                    let addr = item
+                        .as_string()
+                        .expect("`serverlist()` answers with a list of strings");
+                    let addr = (!addr.is_null()).then(|| addr.as_cstr());
+                    list.edit().push_str(addr);
+                }
             }
         }
     }
-
-    unsafe { xfree(addrs as *mut c_void) };
 }
 
 /// `serverstart([{address}])`
 pub fn f_serverstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     result.write_string(None);
-    // SAFETY throughout: the frame is live; `address` and `addrs` are allocations this
-    // body owns, bar the one entry handed to `result`.
     if check_secure() {
         return;
     }
     let address = if args.is_empty() {
-        unsafe { server_address_new(ptr::null()) }
+        server_address_generated()
     } else if !args.first().is_some_and(|arg| arg.v_type() == VAR_STRING) {
         emsg(gettext(e_invarg));
         return;
     } else {
-        ThinCString::from_cstr(numbuf.string(&args[0])).into_raw()
+        XString::from_cstr(numbuf.string(&args[0]))
     };
 
-    let status = server_start(unsafe { crate::cstr::at_opt(address) });
-    unsafe { xfree(address as *mut c_void) };
+    let status = server_start(Some(address.as_cstr()));
+    drop(address);
     if status != 0 {
         let why = if status > 0 {
-            c"Unknown system error".as_ptr()
+            c"Unknown system error"
         } else {
-            // SAFETY: `uv_strerror` answers a `'static` message for any code.
-            unsafe { uv_strerror(status) }
+            os_strerror(status)
         };
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let why = unsafe { c_str(why) };
+        let why = msg_cstr(why);
         semsg!("Failed to start server: {why}");
         return;
     }
 
-    // The address just started is the last one in the list; the rest
-    // are other people's and are released here.
-    let mut n = 0usize;
-    let addrs = unsafe { server_address_list(&raw mut n) };
-    // The last entry is an `xmalloc`ed string, which the result adopts.
-    result.write_string(unsafe { ThinCString::from_raw(*addrs.add(n - 1)) });
-    for i in 0..n - 1 {
-        unsafe { xfree(*addrs.add(i) as *mut c_void) };
-    }
-    unsafe { xfree(addrs as *mut c_void) };
+    // The address just started is the last one in the list.
+    let started = server_addresses().pop();
+    result.write_string(started.map(|addr| ThinCString::from_cstr(&addr)));
 }
 
 /// `serverstop({address})`
 pub fn f_serverstop(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY throughout: the frame is live.
     if check_secure() {
         return;
     }
@@ -465,8 +383,6 @@ pub fn f_serverstop(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 pub fn f_sockconnect(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
-    // SAFETY throughout: the frame is live; `on_data` is moved into `channel_connect`,
-    // which adopts its callback.
     if args[0].v_type() != VAR_STRING || args[1].v_type() != VAR_STRING {
         emsg(gettext(e_invarg));
         return;
@@ -492,17 +408,16 @@ pub fn f_sockconnect(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     let mut rpc = false;
     let mut on_data = NO_READER;
     if args.get(2).is_some_and(|arg| arg.v_type() == VAR_DICT) {
-        let opts = args[2].dict_or_null();
-        rpc = dict_get_number(unsafe { opts.as_ref() }, b"rpc") != 0;
-        // SAFETY: the argument's own dictionary, and this frame's reader.
+        let opts = args[2].dict_ref();
+        rpc = dict_get_number(opts, b"rpc") != 0;
         if !dict_get_callback(args[2].dict_shared(), b"on_data", &mut on_data.cb) {
             return;
         }
-        on_data.buffered = dict_get_number(unsafe { opts.as_ref() }, b"data_buffered") != 0;
+        on_data.buffered = dict_get_number(args[2].dict_ref(), b"data_buffered") != 0;
         // Buffered with no callback means "collect it on the Dict", so
         // the Dict has to be reachable from the reader.
         if on_data.buffered && !on_data.cb.is_set() {
-            on_data.self_0 = opts;
+            on_data.self_dict = args[2].dict_shared().cloned();
         }
     }
 
@@ -517,29 +432,23 @@ pub fn f_sockconnect(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
 /// `stdioopen({opts})` — turn this process's own stdin/stdout into a
 /// channel.
 pub fn f_stdioopen(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY throughout: the frame is live; `on_stdin` is moved into
-    // `channel_from_stdio`, which adopts its callback.
     if args[0].v_type() != VAR_DICT {
         emsg(gettext(e_invarg));
         return;
     }
-    let opts = args[0].dict_or_null();
     let mut on_stdin = NO_READER;
-    let rpc = dict_get_number(unsafe { opts.as_ref() }, b"rpc") != 0;
-    // SAFETY: the argument's own dictionary, and this frame's reader.
+    let rpc = dict_get_number(args[0].dict_ref(), b"rpc") != 0;
     if !dict_get_callback(args[0].dict_shared(), b"on_stdin", &mut on_stdin.cb) {
         return;
     }
     // `on_print` is a global: there is only one stdio channel.
-    // SAFETY: as above, with the one global callback slot.
-    if !dict_get_callback(args[0].dict_shared(), b"on_print", unsafe {
-        &mut *on_print_cb()
-    }) {
+    let options = args[0].dict_shared();
+    if !with_on_print(|cb| dict_get_callback(options, b"on_print", cb)) {
         return;
     }
-    on_stdin.buffered = dict_get_number(unsafe { opts.as_ref() }, b"stdin_buffered") != 0;
+    on_stdin.buffered = dict_get_number(args[0].dict_ref(), b"stdin_buffered") != 0;
     if on_stdin.buffered && !on_stdin.cb.is_set() {
-        on_stdin.self_0 = opts;
+        on_stdin.self_dict = args[0].dict_shared().cloned();
     }
 
     let id = channel_from_stdio(rpc, on_stdin).unwrap_or_else(|error| {

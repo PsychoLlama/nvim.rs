@@ -188,9 +188,7 @@ fn changedtick(buffer: Buf) -> Integer {
 
 /// `rpc_send_event`, which only ever reads `args`.
 fn send_event(channel_id: uint64_t, name: &'static CStr, args: Array) -> bool {
-    // SAFETY: a NUL-terminated event name and an array borrowing the
-    // caller's frame, which the callee serialises and returns.
-    unsafe { rpc_send_event(channel_id, name.as_ptr(), args) }
+    rpc_send_event(channel_id, name, args)
 }
 
 /// C's `TEXTLOCK_WRAP`: run `f` with the cursor saved and restored and

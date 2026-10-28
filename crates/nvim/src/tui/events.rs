@@ -292,14 +292,11 @@ pub unsafe fn tui_option_set(tui: &mut TUIData, name: String_0, value: Object) {
             let mut args = ArrayBuf::<2>::new();
             args.push(Object::literal("rgb"));
             args.push(Object::boolean(boolean()));
-            // SAFETY: the event borrows `args`, which outlives the call.
-            unsafe {
-                rpc_send_event(
-                    ui_client_channel_id.get(),
-                    c"nvim_ui_set_option".as_ptr(),
-                    args.array(),
-                )
-            };
+            rpc_send_event(
+                ui_client_channel_id.get(),
+                c"nvim_ui_set_option",
+                args.array(),
+            );
         }
     } else if is(c"ttimeout") {
         tui.input.ttimeout = boolean();
@@ -362,12 +359,5 @@ fn show_verbose_terminfo(tui: &TUIData) {
     args.push(Object::boolean(true));
     args.push(opts.object());
 
-    // SAFETY: the channel is this client's own.
-    unsafe {
-        rpc_send_event(
-            ui_client_channel_id.get(),
-            c"nvim_echo".as_ptr(),
-            args.array(),
-        );
-    }
+    rpc_send_event(ui_client_channel_id.get(), c"nvim_echo", args.array());
 }

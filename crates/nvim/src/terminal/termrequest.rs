@@ -166,10 +166,8 @@ fn report(request: &mut TermRequest, mut term: Term, buffer: Buf) {
         term.destroy = true;
         // Read out before the call: the channel's close callback is free to
         // free the terminal.
-        let (close_cb, data) = (term.opts.close_cb, term.opts.data);
-        // SAFETY: the callback the channel registered, taking the data it
-        // registered with it.
-        unsafe { close_cb.expect("non-null function pointer")(data) };
+        let (close_cb, owner) = (term.opts.close_cb, term.opts.owner);
+        close_cb.expect("non-null function pointer")(owner);
     }
 }
 

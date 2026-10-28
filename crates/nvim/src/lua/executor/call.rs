@@ -18,7 +18,7 @@
 
 use crate::cstr;
 use crate::narrow::len_as_int;
-use core::ffi::c_int;
+use core::ffi::{CStr, c_int};
 use core::ptr;
 
 use super::{LUA_INTERNAL_CALL, MAX_FUNC_ARGS, nlua_is_deferred_safe, viml_func_is_fast};
@@ -202,7 +202,7 @@ unsafe fn nlua_rpc(lstate: *mut lua_State, request: bool) -> c_int {
                     }
                     Err(e) => err = e,
                 }
-            } else if !rpc_send_event(chan_id, name, args) {
+            } else if !rpc_send_event(chan_id, CStr::from_ptr(name), args) {
                 err = api_error!(kErrorTypeValidation, "Invalid channel: {chan_id}");
             }
         }

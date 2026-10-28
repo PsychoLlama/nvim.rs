@@ -1,11 +1,11 @@
 //! The bridge between a pty job and the terminal emulator drawing it.
 //!
-//! `terminal.rs` owns the emulator and calls back here for everything that
+//! `terminal/` owns the emulator and calls back here for everything that
 //! touches the child: bytes typed into the window, window resizes, and the
-//! teardown that has to wait for the job's writes to drain.
+//! teardown that has to wait for the job's writes to drain. Each callback is
+//! told the channel's id.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -14,33 +14,34 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::winlayer::Buf;
-use core::ffi::{c_char, c_void};
-
-use crate::event::r#loop::one_arg_event;
-use crate::event::multiqueue::multiqueue_put_event;
-use crate::event::proc::proc_stop;
-use crate::event::rstream::{rstream_start_inner, rstream_stop_inner};
-use crate::event::wstream::{wstream_new_buffer, wstream_write};
+use crate::event::multiqueue::put_id_event;
 use crate::log::{LOGLVL_INF, logmsg};
-use crate::memory::{xfree, xmemdup};
-use crate::os::pty_proc_unix::{pty_proc_resize, pty_proc_resume};
 use crate::terminal::{terminal_alloc, terminal_destroy};
-use crate::types::{Channel, TerminalOptions, size_t, uint16_t};
+use crate::types::{ChannelStream, JobProc, TerminalOptions, uint16_t, uint64_t};
+use crate::winlayer::Buf;
 
-use super::{channel_decref, channel_incref, channel_proc, channel_pty};
+use super::{ChannelRef, channel_decref, with_channel};
 
-/// Gives `buffer` a terminal driven by this channel's pty.
-///
-/// # Safety
-/// `buffer` is a live buffer and `chan` a live pty job channel.
-pub unsafe fn channel_terminal_alloc(mut buffer: Buf, chan: *mut Channel) {
-    // SAFETY: the caller's live buffer and pty job.
-    let pty = unsafe { channel_pty(chan) };
+/// Run `f` on job channel `id`'s child, if it is still a registered job.
+fn with_job<R>(id: uint64_t, f: impl FnOnce(&mut JobProc) -> R) -> Option<R> {
+    with_channel(id, |channel| match &mut channel.stream {
+        ChannelStream::Job(job) => Some(f(job)),
+        _ => None,
+    })
+    .flatten()
+}
+
+/// Gives `buffer` a terminal driven by pty job channel `id`.
+pub fn channel_terminal_alloc(mut buffer: Buf, id: uint64_t) {
+    let Some((width, height)) = with_job(id, |job| {
+        job.pty().map_or((0, 0), |pty| (pty.width, pty.height))
+    }) else {
+        return;
+    };
     let topts = TerminalOptions {
-        data: chan.cast(),
-        width: unsafe { (*pty).width },
-        height: unsafe { (*pty).height },
+        owner: id,
+        width,
+        height,
         read_pause_cb: Some(term_read_pause),
         write_cb: Some(term_write),
         resize_cb: Some(term_resize),
@@ -48,115 +49,82 @@ pub unsafe fn channel_terminal_alloc(mut buffer: Buf, chan: *mut Channel) {
         close_cb: Some(term_close),
         force_crlf: false,
     };
-    unsafe { buffer.b_p_channel = (*chan).id.cast_signed() };
-    unsafe { channel_incref(chan) };
-    unsafe { (*chan).term = terminal_alloc(buffer, topts) };
+    buffer.b_p_channel = id.cast_signed();
+    // The terminal's own reference, dropped by `term_delayed_free`.
+    let Some(held) = ChannelRef::new(id) else {
+        return;
+    };
+    let _ = held.into_raw();
+    let term = terminal_alloc(buffer, topts);
+    with_channel(id, |channel| channel.term = Some(term));
 }
 
 /// Back-pressure from the terminal: stop reading while it catches up.
-///
-/// # Safety
-///
-/// `data` must be the payload this callback was registered with, live for the
-/// call.
-unsafe fn term_read_pause(pause: bool, data: *mut c_void) {
-    // SAFETY: `data` is the pty job channel the terminal was built on.
-    let out = unsafe { &raw mut (*data.cast::<Channel>()).stream.proc.out };
-    if unsafe { (*out).s.closed } {
-        return;
-    }
-    if pause {
-        unsafe { rstream_stop_inner(out) };
-    } else {
-        unsafe { rstream_start_inner(out) };
-    }
+fn term_read_pause(pause: bool, id: uint64_t) {
+    with_job(id, |job| job.pause_output(pause));
 }
 
 /// The user typed into the terminal; forward it to the child.
-///
-/// # Safety
-///
-/// `buf` must point at `size` readable bytes. `data` must be the payload this
-/// callback was registered with, live for the call.
-unsafe fn term_write(buf: *const c_char, size: size_t, data: *mut c_void) {
-    // SAFETY: `data` is the pty job channel the terminal was built on, and
-    // `buf` is `size` readable bytes for the duration of the call.
-    let in_0 = unsafe { &raw mut (*data.cast::<Channel>()).stream.proc.in_0 };
-    if unsafe { (*in_0).closed } {
+fn term_write(bytes: &[u8], id: uint64_t) {
+    let written = with_job(id, |job| {
+        let stdin = &mut job.proc_mut().in_0;
+        if stdin.closed {
+            return false;
+        }
+        let _ = stdin.write_bytes(bytes);
+        true
+    });
+    if written == Some(false) {
         logmsg!(
             LOGLVL_INF,
             c"term_write",
             918,
             "write failed: stream is closed"
         );
-        return;
     }
-    let wbuf = wstream_new_buffer(
-        unsafe { xmemdup(buf.cast(), size) }.cast(),
-        size,
-        1,
-        Some(xfree),
-    );
-    unsafe { wstream_write(in_0, wbuf) };
 }
 
-/// # Safety
-///
-/// `data` must be the payload this callback was registered with, live for the
-/// call.
-unsafe fn term_resize(width: uint16_t, height: uint16_t, data: *mut c_void) {
-    // SAFETY: `data` is the pty job channel the terminal was built on.
-    unsafe { pty_proc_resize(channel_pty(data.cast()), width, height) };
+fn term_resize(width: uint16_t, height: uint16_t, id: uint64_t) {
+    with_job(id, |job| job.resize(width, height));
 }
 
-/// # Safety
-///
-/// `data` must be the payload this callback was registered with, live for the
-/// call.
-unsafe fn term_resume(data: *mut c_void) {
-    // SAFETY: `data` is the pty job channel the terminal was built on.
-    unsafe { pty_proc_resume(channel_pty(data.cast())) };
+fn term_resume(id: uint64_t) {
+    with_job(id, JobProc::resume);
 }
 
 /// The terminal window went away: stop the child and wait for its streams.
-///
-/// # Safety
-///
-/// `data` must be the payload this callback was registered with, live for the
-/// call.
-unsafe fn term_close(data: *mut c_void) {
-    // SAFETY: `data` is the pty job channel the terminal was built on; its
-    // queue outlives the event this puts on it.
-    let chan = data.cast::<Channel>();
-    unsafe { proc_stop(channel_proc(chan)) };
-    unsafe { multiqueue_put_event((*chan).events, one_arg_event(Some(term_delayed_free), data)) };
+fn term_close(id: uint64_t) {
+    with_channel(id, |channel| {
+        if let ChannelStream::Job(job) = &mut channel.stream {
+            job.stop();
+        }
+        put_id_event(&channel.events, term_delayed_free, id, 0);
+    });
 }
 
 /// Frees the terminal once nothing is still writing through it.
 ///
 /// Re-queues itself while either stream has a request outstanding, because
 /// those requests hold buffers the terminal owns.
-///
-/// # Safety
-///
-/// `argv` must point at a writable `*mut c_void` slot the caller owns for the
-/// call.
-unsafe extern "C" fn term_delayed_free(argv: *mut *mut c_void) {
-    // SAFETY: the event carries the channel `term_close` queued it for, which
-    // holds a reference for exactly this.
-    let chan = unsafe { *argv }.cast::<Channel>();
-    let proc = unsafe { &raw mut (*chan).stream.proc };
-    if unsafe { (*proc).in_0.pending_reqs } != 0 || unsafe { (*proc).out.s.pending_reqs } != 0 {
-        unsafe {
-            multiqueue_put_event(
-                (*chan).events,
-                one_arg_event(Some(term_delayed_free), chan.cast()),
-            )
-        };
+fn term_delayed_free(id: uint64_t, _: u64) {
+    let Some(term) = with_channel(id, |channel| {
+        if let ChannelStream::Job(job) = &channel.stream
+            && job.has_pending_requests()
+        {
+            put_id_event(&channel.events, term_delayed_free, id, 0);
+            return Err(());
+        }
+        Ok(channel.term)
+    }) else {
         return;
+    };
+    let Ok(term) = term else {
+        return;
+    };
+    if let Some(term) = term
+        && terminal_destroy(term)
+    {
+        with_channel(id, |channel| channel.term = None);
     }
-    if !unsafe { (*chan).term }.is_null() {
-        unsafe { terminal_destroy(&raw mut (*chan).term) };
-    }
-    unsafe { channel_decref(chan) };
+    channel_decref(id);
 }

@@ -1,58 +1,53 @@
 //! Child processes: the `job*()` family and the environment it hands them.
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use super::{f_environ, kChannelPartRpc, kChannelStreamProc, kProcTypePty};
+use super::{f_environ, kChannelPartRpc};
 use crate::api::private::helpers::{dict_set_var, scope_vars};
 use crate::autocmd::apply_autocmds;
 use crate::buffer::{buf_close_terminal, setfname};
+use crate::channel::open::JobOptions;
 use crate::channel::{
-    channel_close, channel_create_event, channel_decref, channel_incref, channel_job_start,
-    channel_proc, channel_pty, channel_terminal_alloc, find_channel,
+    ChannelRef, channel_close, channel_create_event, channel_decref, channel_exists,
+    channel_job_start, channel_process_events, channel_terminal_alloc, with_channel,
 };
 use crate::cstr;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
-    DictRef, NumBuf, dict_extend, dict_find, dict_get_number, list_iter, list_len, tv_dict_alloc,
+    DictRef, NumBuf, dict_extend, dict_find, dict_get_number, list_iter, tv_dict_alloc,
     tv_list_alloc,
 };
 use crate::eval::vars::vim_var_bytes;
 use crate::eval::{ArgvRefusal, common_job_callbacks, find_job, tv_to_argv};
-use crate::event::r#loop::loop_on_put;
-use crate::event::multiqueue::{
-    multiqueue_free, multiqueue_new, multiqueue_process_events, multiqueue_replace_parent,
-};
-use crate::event::proc::{proc_is_stopped, proc_stop, proc_wait};
+use crate::event::channel::{park_channel_events, wait_job};
+use crate::event::multiqueue::ParkingQueue;
+use crate::event::proc::proc_is_stopped;
 use crate::ex_cmds::check_secure;
 use crate::ex_getln::{text_locked, text_locked_msg};
 use crate::memline::ml_open;
-use crate::memory::{xcalloc, xfree};
+use crate::memory::XString;
 use crate::message::emsg;
 use crate::message::{e_channotpty, e_invarg};
-use crate::message_fmt::{c_str, msg_cstr};
+use crate::message_fmt::msg_cstr;
 use crate::option::vars::p_tgc;
 use crate::os::cshim::gettext;
-use crate::os::env::{ENV_NVIM, getenv_owned, home_replace};
-use crate::os::fs::os_isdir;
-use crate::os::pty_proc_unix::pty_proc_resize;
+use crate::os::env::{ENV_NVIM, getenv_owned, home_replace_in};
+use crate::os::fs::dir_exists;
 use crate::os::time::os_hrtime;
 use crate::path::vim_full_name;
 use crate::semsg;
-use crate::snprintf;
-use crate::startup::main_loop;
-use crate::terminal::{terminal_buf, terminal_open, terminal_running};
+use crate::terminal::{Term, buf_terminal_running, terminal_buf, terminal_open};
 use crate::types::AutoEvent;
 use crate::types::channel::{kChannelStdinNull, kChannelStdinPipe};
 use crate::types::{
-    Callback, CallbackReader, Channel, ChannelStdinMode, Dict, EvalFuncData, IOSIZE, Integer, List,
-    MAXPATHL, NUL, Object, String_0, TypVal, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING,
-    VarNumber, Vv, uint16_t, uint64_t,
+    Callback, CallbackReader, ChannelStdinMode, ChannelStream, Dict, EvalFuncData, IOSIZE, Integer,
+    JobProc, MAXPATHL, Object, String_0, TypVal, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER,
+    VAR_STRING, VarNumber, Vv, uint16_t, uint64_t,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_flush};
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
+use core::ffi::{CStr, c_int};
+use std::ffi::CString;
 
 /// A cleared `CallbackReader`, which the option parser fills in.
 const NO_READER: CallbackReader = CallbackReader::none();
@@ -73,26 +68,32 @@ fn job_id(arg: &TypVal) -> Option<uint64_t> {
 /// `jobpid({job})`
 pub fn f_jobpid(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(0);
-    // SAFETY throughout: the frame is live; `find_job` answers with a live channel or
-    // null.
     if check_secure() {
         return;
     }
     let Some(id) = job_id(&args[0]) else {
         return;
     };
-    let data = find_job(id, true);
-    if data.is_null() {
+    if !find_job(id, true) {
         return;
     }
-    result.write_number(unsafe { (*channel_proc(data)).pid } as VarNumber);
+    if let Some(pid) = with_job(id, |job| job.proc().pid) {
+        result.write_number(VarNumber::from(pid));
+    }
+}
+
+/// Run `f` on job channel `id`'s child, if it is still a registered job.
+fn with_job<R>(id: uint64_t, f: impl FnOnce(&mut JobProc) -> R) -> Option<R> {
+    with_channel(id, |channel| match &mut channel.stream {
+        ChannelStream::Job(job) => Some(f(job)),
+        _ => None,
+    })
+    .flatten()
 }
 
 /// `jobresize({job}, {width}, {height})` — only for a pty job.
 pub fn f_jobresize(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(0);
-    // SAFETY throughout: the frame is live; `find_job` answers with a live channel or
-    // null.
     if check_secure() {
         return;
     }
@@ -105,28 +106,27 @@ pub fn f_jobresize(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         emsg(gettext(e_invarg));
         return;
     }
-    let data = find_job(args[0].number_or_zero() as uint64_t, true);
-    if data.is_null() {
+    let id = args[0].number_or_zero() as uint64_t;
+    if !find_job(id, true) {
         return;
     }
-    if unsafe { (*channel_proc(data)).type_0 } != kProcTypePty {
+    let width = args[1].number_or_zero() as uint16_t;
+    let height = args[2].number_or_zero() as uint16_t;
+    let resized = with_job(id, |job| {
+        let is_pty = job.pty().is_some();
+        job.resize(width, height);
+        is_pty
+    });
+    if resized != Some(true) {
         emsg(gettext(e_channotpty));
         return;
     }
-    // SAFETY: the tags checked above say both arguments are Numbers, and
-    // `data` is the live channel the id resolved to.
-    let width = args[1].number_or_zero() as uint16_t;
-    let height = args[2].number_or_zero() as uint16_t;
-    let pty = unsafe { channel_pty(data) };
-    unsafe { pty_proc_resize(pty, width, height) };
     result.write_number(1);
 }
 
 /// `jobstop({job})`
 pub fn f_jobstop(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(0);
-    // SAFETY throughout: the frame is live; `find_job` answers with a live channel or
-    // null, and `error` is a borrowed static message.
     if check_secure() {
         return;
     }
@@ -134,28 +134,26 @@ pub fn f_jobstop(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     };
     // `false`: a job that has already gone is not an error here.
-    let data = find_job(id, false);
-    if data.is_null() {
+    if !find_job(id, false) {
         return;
     }
-    let mut error = ptr::null::<c_char>();
-    if unsafe { (*data).is_rpc } {
-        unsafe { channel_close((*data).id, kChannelPartRpc, &raw mut error) };
-    }
-    unsafe { proc_stop(channel_proc(data)) };
+    let is_rpc = with_channel(id, |channel| channel.is_rpc).unwrap_or(false);
+    let refused = if is_rpc {
+        channel_close(id, kChannelPartRpc).err()
+    } else {
+        None
+    };
+    with_job(id, JobProc::stop);
     // Reported as a success even when closing the RPC half complained.
     result.write_number(1);
-    if !error.is_null() {
-        // SAFETY: the channel's NUL-terminated error text.
-        emsg(unsafe { cstr::at(error) });
+    if let Some(why) = refused {
+        emsg(why);
     }
 }
 
 /// `jobwait({jobs} [, {timeout}])`
 pub fn f_jobwait(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(0);
-    // SAFETY throughout: the frame is live; `jobs` is an allocation this body owns for
-    // its whole length, and every channel in it holds a reference.
     if check_secure() {
         return;
     }
@@ -166,40 +164,41 @@ pub fn f_jobwait(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     }
 
-    let list: *mut List = args[0].list_or_null();
-    let count = list_len(unsafe { list.as_ref() });
-    let jobs = unsafe { xcalloc(count as usize, size_of::<*mut Channel>()) } as *mut *mut Channel;
     // The waiting jobs' events are parked on a queue of our own so that
     // they do not run while we block.
-    let waiting_jobs = unsafe { multiqueue_new(Some(loop_on_put), main_loop.ptr() as *mut c_void) };
+    let waiting_jobs = ParkingQueue::on_main_loop();
 
-    let mut i = 0;
-    {
-        for arg in list_iter(unsafe { list.as_ref() }) {
-            let chan;
-            if arg.li_tv.v_type() != VAR_NUMBER
-                || {
-                    chan = find_channel(arg.li_tv.number_or_zero() as uint64_t);
-                    chan.is_null()
-                }
-                || unsafe { (*chan).streamtype } != kChannelStreamProc
-            {
-                // Not a job: reported as -3 below.
-                unsafe { *jobs.add(i as usize) = ptr::null_mut() };
-            } else if proc_is_stopped(unsafe { &*channel_proc(chan) }) {
+    // One slot per item: the job, with a reference held for the wait, or
+    // `None` for an item that is not a running job (reported as -3).
+    let mut jobs: Vec<Option<ChannelRef>> = Vec::new();
+    for arg in list_iter(args[0].list_ref()) {
+        let job = if arg.li_tv.v_type() == VAR_NUMBER {
+            let id = arg.li_tv.number_or_zero() as uint64_t;
+            with_job(id, |job| {
+                (id, proc_is_stopped(job.proc()), job.proc().status)
+            })
+        } else {
+            None
+        };
+        jobs.push(match job {
+            None => None,
+            Some((id, true, _)) => {
                 // Already gone; reap it and report -3 as well.
-                unsafe { proc_wait(channel_proc(chan), -1, ptr::null_mut()) };
-                unsafe { *jobs.add(i as usize) = ptr::null_mut() };
-            } else {
-                unsafe { *jobs.add(i as usize) = chan };
-                unsafe { channel_incref(chan) };
-                if unsafe { (*channel_proc(chan)).status } < 0 {
-                    unsafe { multiqueue_process_events((*chan).events) };
-                    unsafe { multiqueue_replace_parent((*chan).events, waiting_jobs) };
-                }
+                let _held = ChannelRef::new(id);
+                wait_job(id, -1, None);
+                None
             }
-            i += 1;
-        }
+            Some((id, false, status)) => {
+                let held = ChannelRef::new(id);
+                if status < 0 {
+                    channel_process_events(id);
+                    if channel_exists(id) {
+                        park_channel_events(id, Some(&waiting_jobs));
+                    }
+                }
+                held
+            }
+        });
     }
 
     // A negative or absent timeout means "no limit".
@@ -216,15 +215,11 @@ pub fn f_jobwait(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         ui_flush();
     }
 
-    for i in 0..count {
+    for job in jobs.iter().flatten() {
         if remaining == 0 {
             break;
         }
-        if unsafe { *jobs.add(i as usize) }.is_null() {
-            continue;
-        }
-        let status =
-            unsafe { proc_wait(channel_proc(*jobs.add(i as usize)), remaining, waiting_jobs) };
+        let status = wait_job(job.id(), remaining, Some(&waiting_jobs));
         if status < 0 {
             // Interrupted or timed out; the rest report -1.
             break;
@@ -240,27 +235,25 @@ pub fn f_jobwait(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         }
     }
 
-    let held = tv_list_alloc(count as isize);
-    let rv = held.as_ptr();
-    for i in 0..count {
-        let chan = unsafe { *jobs.add(i as usize) };
-        if chan.is_null() {
-            unsafe { (*rv).push_number(-3) };
+    let statuses = tv_list_alloc(jobs.len() as isize);
+    for job in jobs {
+        let Some(job) = job else {
+            statuses.edit().push_number(-3);
             continue;
-        }
+        };
         // Hand the parked events back before reporting.
-        unsafe { multiqueue_process_events((*chan).events) };
-        unsafe { multiqueue_replace_parent((*chan).events, (*main_loop.ptr()).events) };
-        unsafe { (*rv).push_number((*channel_proc(chan)).status as VarNumber) };
-        unsafe { channel_decref(chan) };
+        let id = job.id();
+        channel_process_events(id);
+        park_channel_events(id, None);
+        let status = with_job(id, |job| job.proc().status).unwrap_or(-1);
+        statuses.edit().push_number(VarNumber::from(status));
     }
 
-    unsafe { multiqueue_free(waiting_jobs) };
-    unsafe { xfree(jobs as *mut c_void) };
+    drop(waiting_jobs);
     if busy {
         ui_busy_stop();
     }
-    result.write_list(Some(held));
+    result.write_list(Some(statuses));
 }
 
 /// Variables a pty job must not inherit: they describe *our* terminal, and
@@ -384,10 +377,10 @@ pub fn f_jobstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     };
     // What a terminal buffer is named after: the command line as given, or
     // the resolved program of a List.
-    let cmd = if args[0].v_type() == VAR_STRING {
-        cmdbuf.string(&args[0]).as_ptr()
+    let cmd: CString = if args[0].v_type() == VAR_STRING {
+        cmdbuf.string(&args[0]).to_owned()
     } else {
-        argv.program().as_ptr()
+        argv.program().to_owned()
     };
     // Every early exit below releases `argv` by dropping it.
     if !args.get(1).is_some_and(|arg| arg.v_type() == VAR_DICT) && args.len() > 1 {
@@ -407,7 +400,7 @@ pub fn f_jobstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut on_stdout = NO_READER;
     let mut on_stderr = NO_READER;
     let mut on_exit = NO_CALLBACK;
-    let mut cwd = ptr::null::<c_char>();
+    let mut cwd: Option<&CStr> = None;
     // A reference to the env dictionary itself, not the item holding it:
     // the borrow the lookup answers does not survive `common_job_callbacks`,
     // which takes a reference to the options dictionary it was found in.
@@ -438,29 +431,20 @@ pub fn f_jobstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         // truthy string used to mean something else.
         let job_term = dict_find(job_opts, b"term");
         if job_term.is_some_and(|di| di.di_tv.v_type() != VAR_BOOL) {
-            let what = c"'term' must be Boolean".as_ptr();
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let what = unsafe { c_str(what) };
-            semsg!("E475: Invalid argument: {what}");
+            semsg!("E475: Invalid argument: 'term' must be Boolean");
             return;
         }
         if pty && rpc {
-            let what = c"job cannot have both 'pty' and 'rpc' options set".as_ptr();
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let what = unsafe { c_str(what) };
-            semsg!("E475: Invalid argument: {what}");
+            semsg!("E475: Invalid argument: job cannot have both 'pty' and 'rpc' options set");
             return;
         }
 
         if let Some(new_cwd) = numbuf2.dict_string(job_opts, b"cwd")
             && !new_cwd.is_empty()
         {
-            cwd = new_cwd.as_ptr();
-            if !unsafe { os_isdir(cwd) } {
-                let what = c"expected valid directory".as_ptr();
-                // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                let what = unsafe { c_str(what) };
-                semsg!("E475: Invalid argument: {what}");
+            cwd = Some(new_cwd);
+            if !dir_exists(new_cwd) {
+                semsg!("E475: Invalid argument: expected valid directory");
                 return;
             }
         }
@@ -501,7 +485,7 @@ pub fn f_jobstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             return;
         }
         if !Buf::current().terminal.is_null() {
-            if unsafe { terminal_running(Buf::current().terminal) } {
+            if buf_terminal_running(Buf::current()) {
                 let handle = Buf::current().handle;
                 semsg!("Terminal already connected to buffer {}", handle);
                 return;
@@ -512,8 +496,8 @@ pub fn f_jobstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         debug_assert!(!rpc);
 
         term_name = Some(c"xterm-256color");
-        if cwd.is_null() {
-            cwd = c".".as_ptr();
+        if cwd.is_none() {
+            cwd = Some(c".");
         }
         overlapped = false;
         detach = false;
@@ -529,123 +513,110 @@ pub fn f_jobstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         term_name = Some(numbuf3.dict_string(job_opts, b"TERM").unwrap_or(c"ansi"));
     }
 
-    let env = create_environment(job_env.as_ref(), clear_env, pty, true, term_name).into_raw();
-    // `channel_job_start` answers the channel id, or the reason it failed,
-    // through this slot on every path; it lands in the return value below.
-    let mut status: VarNumber = 0;
-    let status_out = &raw mut status;
-    // SAFETY: `argv` is a NUL-terminated vector this frame owns, `env` the
-    // environment built above, and `status_out` a local.
-    // The fifteen arguments are what upstream's `channel_job_start` takes;
-    // there is no shorter way to write the call.
-    let chan = unsafe {
-        channel_job_start(
-            argv.into_raw(),
-            ptr::null(),
-            on_stdout,
-            on_stderr,
-            on_exit,
-            pty,
-            rpc,
-            overlapped,
-            detach,
-            stdin_mode,
-            cwd,
-            width,
-            height,
-            env,
-            status_out,
-        )
+    let env = create_environment(job_env.as_ref(), clear_env, pty, true, term_name);
+    let options = JobOptions {
+        on_stdout,
+        on_stderr,
+        on_exit,
+        pty,
+        rpc,
+        overlapped,
+        detach,
+        stdin_mode,
+        cwd,
+        pty_width: width,
+        pty_height: height,
+        env: Some(env),
+        ..JobOptions::new(argv)
     };
-    result.write_number(status);
-    if chan.is_null() {
-        return;
-    }
+    // The id, or why the start failed, lands in the return value.
+    let id = match channel_job_start(options) {
+        Ok(id) => id,
+        Err(status) => {
+            result.write_number(status);
+            return;
+        }
+    };
+    result.write_number(id.cast_signed());
     if !term {
-        unsafe { channel_create_event(chan, ptr::null()) };
+        channel_create_event(id, None);
         return;
     }
-    if result.number_or_zero() <= 0 {
-        return;
-    }
-    unsafe { attach_terminal(chan, cwd, cmd) };
+    attach_terminal(id, cwd.unwrap_or(c"."), &cmd);
 }
 
-/// Give a `{term: v:true}` job the current buffer.
-///
-/// # Safety
-/// `chan` is a live channel with a running process, `cwd` and `cmd` are
-/// NUL-terminated strings.
-unsafe fn attach_terminal(chan: *mut Channel, cwd: *const c_char, cmd: *const c_char) {
-    // The autocommands below run while the name is half-built, which is why
-    // neither of these is the shared scratch buffer upstream uses.
-    let mut name = [0 as c_char; MAXPATHL as usize];
-    let mut shortened = [0 as c_char; IOSIZE as usize];
-    // SAFETY: the caller's obligation; both buffers outlive every call they
-    // are handed to below.
-    let pid = unsafe { (*channel_proc(chan)).pid };
+/// Give `{term: v:true}` job channel `id` the current buffer.
+fn attach_terminal(id: uint64_t, cwd: &CStr, cmd: &CStr) {
+    let pid = with_job(id, |job| job.proc().pid).unwrap_or(0);
     let mut buf = Buf::current();
     buf.b_p_swf = 0;
     if buf.b_ml.ml_mfp.is_none() && ml_open(buf).is_err() {
-        unsafe { proc_stop(channel_proc(chan)) };
-        unsafe { channel_decref(chan) };
+        with_job(id, JobProc::stop);
+        channel_decref(id);
         return;
     }
-    unsafe { channel_incref(chan) };
-    unsafe { channel_terminal_alloc(buf, chan) };
+    // Held for the autocommands below, which may close the terminal.
+    let held = ChannelRef::new(id);
+    channel_terminal_alloc(buf, id);
     apply_autocmds(AutoEvent::BufFilePre, None, None, false, Some(buf));
 
     // The autocommand may have closed the terminal out from under us,
     // which is what each of these three re-tests is for.
-    if unsafe { terminal_live(chan) } {
+    if terminal_live(id) {
         // Name the buffer `term://{cwd}//{pid}:{cmd}`.
-        // SAFETY: the job's NUL-terminated working directory.
-        let full = vim_full_name(unsafe { cstr::at(cwd) }, MAXPATHL as usize, false)
-            .unwrap_or_else(|name| name);
+        let full = vim_full_name(cwd, MAXPATHL as usize, false).unwrap_or_else(|name| name);
         let full = cstr::owned(&full);
-        let (src, dst) = (full.as_ptr(), shortened.as_mut_ptr());
-        let len = unsafe { home_replace(None, src, dst, IOSIZE as usize, true) };
+        let mut dir = home_replace_in(None, &full, IOSIZE as usize, true)
+            .as_cstr()
+            .to_bytes()
+            .to_vec();
         // Drop a trailing separator, but keep `/` itself meaningful by
         // spelling it `/.`.
-        if len != 1 && matches!(shortened[len - 1] as u8, b'\\' | b'/') {
-            shortened[len - 1] = NUL as c_char;
+        let len = dir.len();
+        if len != 1 && matches!(dir.last(), Some(b'\\' | b'/')) {
+            dir.pop();
         }
-        if len == 1 && shortened[0] as u8 == b'/' {
-            shortened[1] = b'.' as c_char;
-            shortened[2] = NUL as c_char;
+        if len == 1 && dir[0] == b'/' {
+            dir.push(b'.');
         }
-        let out = name.as_mut_ptr();
-        let fmt = c"term://%s//%d:%s".as_ptr();
-        let dir = shortened.as_ptr();
-        unsafe { snprintf!(out, MAXPATHL as usize, fmt, dir, pid, cmd) };
-        let _ = setfname(buf, Some(cstr::in_chars(&name)), None, true);
+        let mut name = b"term://".to_vec();
+        name.extend_from_slice(&dir);
+        name.extend_from_slice(format!("//{pid}:").as_bytes());
+        name.extend_from_slice(cmd.to_bytes());
+        // `snprintf` into a `MAXPATHL` buffer.
+        name.truncate(MAXPATHL as usize - 1);
+        let name = XString::from_bytes(&name);
+        let _ = setfname(buf, Some(name.as_cstr()), None, true);
         apply_autocmds(AutoEvent::BufFilePost, None, None, false, Some(buf));
 
-        if unsafe { terminal_live(chan) } {
+        if terminal_live(id) {
             // Locked so that the two variables cannot be swapped out
             // from under the terminal by a BufFilePost autocommand.
             buf.b_locked += 1;
-            unsafe { set_buf_var(buf, c"terminal_job_id", (*chan).id as Integer) };
-            set_buf_var(buf, c"terminal_job_pid", pid as Integer);
+            set_buf_var(buf, c"terminal_job_id", id.cast_signed());
+            set_buf_var(buf, c"terminal_job_pid", Integer::from(pid));
             buf.b_locked -= 1;
 
-            if unsafe { terminal_live(chan) } {
-                unsafe { terminal_open(&raw mut (*chan).term, buf) };
+            if let Some(term) = live_terminal(id) {
+                terminal_open(term, buf, &|| terminal_live(id));
             }
         }
     }
 
-    unsafe { channel_create_event(chan, ptr::null()) };
-    unsafe { channel_decref(chan) };
+    channel_create_event(id, None);
+    drop(held);
 }
 
-/// Whether the channel still has a terminal attached to a real buffer.
-///
-/// # Safety
-/// `chan` is a live channel.
-unsafe fn terminal_live(chan: *mut Channel) -> bool {
-    // SAFETY: the caller's obligation.
-    unsafe { !(*chan).term.is_null() && terminal_buf((*chan).term) != 0 }
+/// Channel `id`'s terminal, while it is still attached to a real buffer.
+fn live_terminal(id: uint64_t) -> Option<Term> {
+    with_channel(id, |channel| channel.term)
+        .flatten()
+        .filter(|&term| terminal_buf(term) != 0)
+}
+
+/// Whether channel `id` still has a terminal attached to a real buffer.
+fn terminal_live(id: uint64_t) -> bool {
+    live_terminal(id).is_some()
 }
 
 /// Set one buffer-local variable to an Integer, discarding any refusal.

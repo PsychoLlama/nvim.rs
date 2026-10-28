@@ -6,15 +6,15 @@
 //! purely virtual terminal possible.  `nvim_chan_send` is the other
 //! direction, and shares nothing but the channel.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::api::private::helpers::Reported;
 use crate::api_error;
-use crate::cstr;
 use crate::guard::Lock;
 use crate::lua::executor::nlua_call_ref_quiet;
+use crate::lua::executor::release_luaref;
+use crate::types::{ChannelStream, InternalState};
 use crate::winlayer::Win;
 
 pub fn nvim_open_term(buf: BufferHandle, opts: &mut KeyDict_open_term) -> Result<Integer, Error> {
@@ -23,14 +23,12 @@ pub fn nvim_open_term(buf: BufferHandle, opts: &mut KeyDict_open_term) -> Result
         return Ok(0 as Integer);
     };
     if cmdwin_buf.get() == Some(buffer.id()) {
-        let msg = e_cmdwin.as_ptr();
-        // SAFETY: the message the caller handed over, live for this call.
-        slot = Error::from_message(kErrorTypeException, unsafe { cstr::at(msg) });
+        slot = Error::from_message(kErrorTypeException, e_cmdwin);
         return (0 as Integer).reported(slot);
     }
     let mut may_read_buffer: bool = true;
     if !buffer.terminal.is_null() {
-        if unsafe { terminal_running(buffer.terminal) } {
+        if buf_terminal_running(buffer) {
             let handle = buffer.handle;
             slot = api_error!(
                 kErrorTypeException,
@@ -44,115 +42,101 @@ pub fn nvim_open_term(buf: BufferHandle, opts: &mut KeyDict_open_term) -> Result
     // The channel takes the callback's reference over, so the keyset must
     // not release it too.
     let cb: LuaRef = opts.on_input.take().unwrap_or(LUA_NOREF);
-    let chan: *mut Channel = unsafe { channel_alloc(kChannelStreamInternal) };
-    unsafe { (*channel_internal(chan)).cb = cb };
-    unsafe { (*channel_internal(chan)).closed = false };
+    let id = alloc_channel(None, |_| {
+        ChannelStream::Internal(InternalState { cb, closed: false })
+    });
     let (view_width, view_height, col_off) = (
         Win::current().w_view_width,
         Win::current().w_view_height,
         Win::current().col_off(),
     );
     let topts: TerminalOptions = TerminalOptions {
-        data: chan as *mut ::core::ffi::c_void,
+        owner: id,
         width: (view_width - col_off).max(0) as uint16_t,
         height: view_height as uint16_t,
-        read_pause_cb: Some(term_read_pause as unsafe fn(bool, *mut ::core::ffi::c_void) -> ()),
-        write_cb: Some(
-            term_write
-                as unsafe fn(*const ::core::ffi::c_char, size_t, *mut ::core::ffi::c_void) -> (),
-        ),
-        resize_cb: Some(
-            term_resize as unsafe fn(uint16_t, uint16_t, *mut ::core::ffi::c_void) -> (),
-        ),
-        resume_cb: Some(term_resume as unsafe fn(*mut ::core::ffi::c_void) -> ()),
-        close_cb: Some(term_close as unsafe fn(*mut ::core::ffi::c_void) -> ()),
+        read_pause_cb: Some(term_read_pause),
+        write_cb: Some(term_write),
+        resize_cb: Some(term_resize),
+        resume_cb: Some(term_resume),
+        close_cb: Some(term_close),
         force_crlf: opts.force_crlf.unwrap_or(true),
     };
     let mut contents: Vec<u8> = Vec::new();
     if may_read_buffer {
         read_buffer_into(buffer, 1, buffer.b_ml.ml_line_count, &mut contents);
     }
-    unsafe { channel_incref(chan) };
-    unsafe { (*chan).term = terminal_alloc(buffer, topts) };
-    unsafe { terminal_open(&raw mut (*chan).term, buffer) };
-    if !unsafe { (*chan).term }.is_null() {
-        unsafe { terminal_check_size((*chan).term) };
+    // Held across `TermOpen`, which may close the terminal.
+    let held = ChannelRef::new(id);
+    let term = terminal_alloc(buffer, topts);
+    with_channel(id, |channel| channel.term = Some(term));
+    let attached = || with_channel(id, |channel| channel.term.is_some()).unwrap_or(false);
+    terminal_open(term, buffer, &attached);
+    if let Some(term) = with_channel(id, |channel| channel.term).flatten() {
+        terminal_check_size(term);
     }
-    unsafe { channel_decref(chan) };
-    if !contents.is_empty() {
-        let mut error: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-        let (text, len, out) = (contents.as_mut_ptr().cast(), contents.len(), &raw mut error);
-        // SAFETY: `chan` is the channel just made, `contents` this frame's
-        // own lines, which the channel copies if it keeps them, and `error`
-        // its own out-parameter.
-        unsafe { channel_send((*chan).id, text, len, false, out) };
-        if !error.is_null() {
-            // SAFETY: `channel_send` left a NUL-terminated message there.
-            slot = Error::from_message(kErrorTypeValidation, unsafe { cstr::at(error) });
-        }
+    drop(held);
+    if !contents.is_empty()
+        && let Err(why) = channel_send(id, &contents)
+    {
+        slot = Error::from_message(kErrorTypeValidation, why);
     }
-    (unsafe { (*chan).id } as Integer).reported(slot)
+    (id as Integer).reported(slot)
 }
 
-fn term_read_pause(mut _pause: bool, mut _data: *mut ::core::ffi::c_void) {}
+fn term_read_pause(_pause: bool, _owner: uint64_t) {}
 
-/// # Safety
-///
-/// `buf` must point at `size` readable bytes and `data` at the `Channel` this
-/// terminal was opened for; libvterm's callback contract.
-unsafe fn term_write(
-    buf: *const ::core::ffi::c_char,
-    size: size_t,
-    data: *mut ::core::ffi::c_void,
-) {
-    let chan: *mut Channel = data as *mut Channel;
-    let cb: LuaRef = unsafe { (*channel_internal(chan)).cb };
+/// The user typed into the terminal: hand it to the `on_input` callback.
+fn term_write(bytes: &[u8], id: uint64_t) {
+    let Some((cb, term)) = with_channel(id, |channel| {
+        let cb = match &channel.stream {
+            ChannelStream::Internal(internal) => internal.cb,
+            _ => LUA_NOREF,
+        };
+        (cb, channel.term)
+    }) else {
+        return;
+    };
     if cb == LUA_NOREF {
         return;
     }
     let mut args: Array = Array::with_capacity(3);
-    // SAFETY: `buf` holds `size` readable bytes, and `chan` is the
-    // terminal's channel.
-    unsafe {
-        let text = String_0::from_raw_bytes(buf, size);
-        args.push(Object::integer((*chan).id as Integer));
-        args.push(Object::buffer(terminal_buf((*chan).term)));
-        args.push(Object::string(text));
-    }
+    args.push(Object::integer(id as Integer));
+    args.push(Object::buffer(term.map_or(0, terminal_buf)));
+    args.push(Object::string(String_0::from_bytes(bytes)));
     let _locked = Lock::text();
     // The handler reports nothing, so it is given no error slot.
     nlua_call_ref_quiet(cb, Some(c"input"), args, kRetNilBool);
 }
 
-fn term_resize(mut _width: uint16_t, mut _height: uint16_t, mut _data: *mut ::core::ffi::c_void) {}
+fn term_resize(_width: uint16_t, _height: uint16_t, _owner: uint64_t) {}
 
-fn term_resume(mut _data: *mut ::core::ffi::c_void) {}
+fn term_resume(_owner: uint64_t) {}
 
-/// # Safety
-///
-/// `data` must point at the `Channel` this terminal was opened for;
-/// libvterm's callback contract.
-unsafe fn term_close(data: *mut ::core::ffi::c_void) {
-    let chan: *mut Channel = data as *mut Channel;
-    unsafe { terminal_destroy(&raw mut (*chan).term) };
-    unsafe { api_free_luaref((*channel_internal(chan)).cb) };
-    unsafe { (*channel_internal(chan)).cb = LUA_NOREF as LuaRef };
-    unsafe { channel_decref(chan) };
+/// The terminal went away: free it, the callback, and the channel's
+/// reference.
+fn term_close(id: uint64_t) {
+    if let Some(term) = with_channel(id, |channel| channel.term).flatten()
+        && terminal_destroy(term)
+    {
+        with_channel(id, |channel| channel.term = None);
+    }
+    let cb = with_channel(id, |channel| match &mut channel.stream {
+        ChannelStream::Internal(internal) => core::mem::replace(&mut internal.cb, LUA_NOREF),
+        _ => LUA_NOREF,
+    });
+    if let Some(cb) = cb {
+        release_luaref(cb);
+    }
+    channel_decref(id);
 }
 
 pub fn nvim_chan_send(chan: Integer, data: String_0) -> Result<(), Error> {
     let mut slot = Error::none();
-    let mut error: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     if data.is_empty() {
         return ().reported(slot);
     }
-    let (id, text, len) = (chan as uint64_t, data.data(), data.len());
-    // SAFETY: `data` is the caller's, and `error` this frame's own
-    // out-parameter.
-    unsafe { channel_send(id, text, len, false, &raw mut error) };
-    if !error.is_null() {
-        // SAFETY: `channel_send` left a NUL-terminated message there.
-        slot = Error::from_message(kErrorTypeValidation, unsafe { cstr::at(error) });
+    if let Err(why) = channel_send(chan as uint64_t, data.as_bytes()) {
+        slot = Error::from_message(kErrorTypeValidation, why);
     }
     ().reported(slot)
 }

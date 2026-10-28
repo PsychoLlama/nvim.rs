@@ -5,8 +5,7 @@
 //! own queue, so that a callback which writes back to its channel cannot
 //! recurse into the read path.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -15,276 +14,252 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::cstr;
-use crate::eval::typval::TV_INITIAL_VALUE;
-use crate::memory::ThinCString;
-use crate::message_fmt::c_str;
-use crate::semsg;
-use core::ffi::{c_char, c_void};
-use core::{mem, ptr, slice};
+use core::ffi::CStr;
+use core::mem;
 
 use crate::eval::callback_call;
 use crate::eval::encode::encode_list_write;
-use crate::eval::typval::{ListRef, callback_free, dict_find, tv_clear, tv_list_alloc};
-use crate::event::r#loop::one_arg_event;
-use crate::event::multiqueue::multiqueue_put_event;
+use crate::eval::typval::TV_INITIAL_VALUE;
+use crate::eval::typval::{
+    ListRef, callback_copy, callback_free, dict_find, tv_clear, tv_list_alloc,
+};
+use crate::event::multiqueue::put_id_event;
+use crate::memory::ThinCString;
+use crate::semsg;
 use crate::terminal::terminal_receive;
-use crate::types::{CallbackReader, Channel, RStream, VarNumber, kListLenMayKnow, size_t};
+use crate::types::{Callback, CallbackReader, Channel, VarNumber, kListLenMayKnow, uint64_t};
 
-use super::{channel_decref, channel_incref};
+use super::{ChannelRef, channel_decref, with_channel};
 
-/// Starts buffering a reader's output under `type_0`, which names it in the
-/// callback and in the `self` dict.
-///
-/// # Safety
-/// `reader` is a live reader; `type_0` is a `'static` C string.
-pub unsafe fn callback_reader_start(reader: *mut CallbackReader, type_0: *const c_char) {
-    // SAFETY: the caller's reader, borrowed once for the whole setup.
-    let reader = unsafe { &mut *reader };
+/// Starts buffering a reader's output under `stream_name`, which names it in
+/// the callback and in the `self` dict.
+pub fn callback_reader_start(reader: &mut CallbackReader, stream_name: &'static CStr) {
     reader.buffer.clear();
-    reader.type_0 = type_0;
+    reader.stream_name = stream_name;
 }
 
-/// Release `reader`'s callback and buffer.
+/// Release `reader`'s callback, dictionary and buffer.
 pub fn callback_reader_free(reader: &mut CallbackReader) {
     callback_free(&mut reader.cb);
-    // The reader itself may live in `xmalloc` memory whose release never runs
-    // a destructor, so the buffer is handed back here rather than at drop.
+    drop(reader.self_dict.take());
     drop(mem::take(&mut reader.buffer));
 }
 
-/// Whether a reader has anywhere to deliver to.
-pub(super) fn callback_reader_set(reader: &CallbackReader) -> bool {
-    reader.cb.is_set() || !reader.self_0.is_null()
-}
-
-/// # Safety
-///
-/// As `RStream`'s read callback: `stream` must point at the stream this was
-/// registered on, `buf` at `count` readable bytes of it, and `data` at the
-/// payload it was registered with, live for the call.
-pub unsafe fn on_channel_data(
-    stream: *mut RStream,
-    buf: *const c_char,
-    count: size_t,
-    data: *mut c_void,
-    eof: bool,
-) -> size_t {
-    let chan: *mut Channel = data.cast();
-    // SAFETY: `data` is the channel the stream was started with.
-    unsafe { on_channel_output(stream, chan, buf, count, eof, &raw mut (*chan).on_data) }
-}
-
-/// # Safety
-///
-/// As `RStream`'s read callback: `stream` must point at the stream this was
-/// registered on, `buf` at `count` readable bytes of it, and `data` at the
-/// payload it was registered with, live for the call.
-pub unsafe fn on_job_stderr(
-    stream: *mut RStream,
-    buf: *const c_char,
-    count: size_t,
-    data: *mut c_void,
-    eof: bool,
-) -> size_t {
-    let chan: *mut Channel = data.cast();
-    // SAFETY: `data` is the channel the stream was started with.
-    unsafe { on_channel_output(stream, chan, buf, count, eof, &raw mut (*chan).on_stderr) }
-}
-
-/// Accepts everything the stream offers: a terminal gets it immediately, a
-/// reader accumulates it for the callback that runs on the channel's queue.
-///
-/// # Safety
-/// `chan` and `reader` are live; `buf` is `count` readable bytes.
-unsafe fn on_channel_output(
-    _stream: *mut RStream,
-    chan: *mut Channel,
-    buf: *const c_char,
-    count: size_t,
-    eof: bool,
-    reader: *mut CallbackReader,
-) -> size_t {
-    // SAFETY: the caller's live channel, reader and buffer, throughout.
-    let term = unsafe { (*chan).term };
-    if !term.is_null() {
-        unsafe { terminal_receive(term, buf, count) };
+/// The reader `stderr` picks out of `channel`.
+fn reader_of(channel: &mut Channel, stderr: bool) -> &mut CallbackReader {
+    if stderr {
+        &mut channel.on_stderr
+    } else {
+        &mut channel.on_data
     }
-    if eof {
-        unsafe { (*reader).eof = true };
-    }
-    if callback_reader_set(unsafe { &*reader }) {
-        // SAFETY: `buf` is `count` readable bytes that do not alias the
-        // reader's own buffer.
-        let chunk = unsafe { slice::from_raw_parts(buf.cast::<u8>(), count) };
-        unsafe { (*reader).buffer.extend_from_slice(chunk) };
-        unsafe { schedule_channel_event(chan) };
-    }
-    count
 }
 
-/// Asks for the channel's callbacks to run.
+/// Accepts everything a read stream offers channel `id`: a terminal gets it
+/// immediately, a reader accumulates it for the callback that runs on the
+/// channel's queue. `stderr` picks the job's stderr reader over its
+/// stdout/data one. Answers how much was consumed, which is all of it.
+pub(crate) fn on_channel_output(id: uint64_t, stderr: bool, bytes: &[u8], eof: bool) -> usize {
+    let Some(term) = with_channel(id, |channel| {
+        let term = channel.term;
+        let reader = reader_of(channel, stderr);
+        if eof {
+            reader.eof = true;
+        }
+        let deliver = reader.is_set();
+        if deliver {
+            reader.buffer.extend_from_slice(bytes);
+        }
+        (term, deliver)
+    }) else {
+        return bytes.len();
+    };
+    let (term, deliver) = term;
+    // The terminal sees the bytes before the callbacks are scheduled, as
+    // upstream's order has it; it re-enters the channel (its replies to the
+    // child), so nothing of the channel is borrowed meanwhile.
+    if let Some(term) = term {
+        terminal_receive(term, bytes);
+    }
+    if deliver {
+        schedule_channel_event(id);
+    }
+    bytes.len()
+}
+
+/// Asks for channel `id`'s callbacks to run.
 ///
 /// At most one such event is outstanding, and a request made while they are
 /// already running is deferred to the end of that run instead — otherwise a
 /// callback that writes to its own channel would recurse.
-///
-/// # Safety
-/// `chan` is a live channel.
-pub(super) unsafe fn schedule_channel_event(chan: *mut Channel) {
-    // SAFETY: the caller's live channel, throughout.
-    if unsafe { (*chan).callback_scheduled } {
-        return;
+pub(super) fn schedule_channel_event(id: uint64_t) {
+    let queue_now = with_channel(id, |channel| {
+        if channel.callback_scheduled {
+            return false;
+        }
+        channel.callback_scheduled = true;
+        !channel.callback_busy
+    });
+    if queue_now == Some(true) {
+        queue_channel_event(id);
     }
-    if unsafe { !(*chan).callback_busy } {
-        unsafe { queue_channel_event(chan) };
-    }
-    unsafe { (*chan).callback_scheduled = true };
 }
 
-/// Puts one callback-running event on the channel's own queue, with the
+/// Puts one callback-running event on channel `id`'s own queue, with the
 /// reference that event holds.
-///
-/// # Safety
-/// `chan` is a live channel.
-unsafe fn queue_channel_event(chan: *mut Channel) {
-    // SAFETY: the caller's live channel; its queue outlives the event.
-    let ev = one_arg_event(Some(on_channel_event), chan.cast());
-    unsafe { multiqueue_put_event((*chan).events, ev) };
-    unsafe { channel_incref(chan) };
+fn queue_channel_event(id: uint64_t) {
+    let Some(held) = ChannelRef::new(id) else {
+        return;
+    };
+    let id = held.into_raw();
+    with_channel(id, |channel| {
+        put_id_event(&channel.events, on_channel_event, id, 0)
+    });
 }
 
-/// # Safety
-///
-/// `args` must point at a writable `*mut c_void` slot the caller owns for the
-/// call.
-unsafe extern "C" fn on_channel_event(args: *mut *mut c_void) {
-    // SAFETY: the event carries the channel `queue_channel_event` queued it
-    // for, and the reference it took.
-    let chan = unsafe { *args }.cast::<Channel>();
-    unsafe { (*chan).callback_busy = true };
-    unsafe { (*chan).callback_scheduled = false };
-
+/// The channel's queue reached the event [`queue_channel_event`] put there:
+/// run its callbacks, then drop the event's reference.
+fn on_channel_event(id: uint64_t, _: u64) {
     // Latched before the reader callbacks run: one of them may start
     // another job on this channel and reset it.
-    let exit_status = unsafe { (*chan).exit_status };
-    unsafe { channel_reader_callbacks(chan, &raw mut (*chan).on_data) };
-    unsafe { channel_reader_callbacks(chan, &raw mut (*chan).on_stderr) };
+    let Some(exit_status) = with_channel(id, |channel| {
+        channel.callback_busy = true;
+        channel.callback_scheduled = false;
+        channel.exit_status
+    }) else {
+        return;
+    };
+    channel_reader_callbacks(id, false);
+    channel_reader_callbacks(id, true);
     if exit_status > -1 {
-        unsafe { channel_callback_call(chan, ptr::null_mut()) };
-        unsafe { (*chan).exit_status = -1 };
+        channel_callback_call(id, None);
+        with_channel(id, |channel| channel.exit_status = -1);
     }
 
-    unsafe { (*chan).callback_busy = false };
-    if unsafe { (*chan).callback_scheduled } {
-        unsafe { queue_channel_event(chan) };
+    let requeue = with_channel(id, |channel| {
+        channel.callback_busy = false;
+        channel.callback_scheduled
+    });
+    if requeue == Some(true) {
+        queue_channel_event(id);
     }
-    unsafe { channel_decref(chan) };
+    channel_decref(id);
 }
 
-/// Delivers whatever a reader has accumulated.
+/// Delivers whatever one of channel `id`'s readers has accumulated.
 ///
 /// A buffered reader delivers once, at EOF — into the `self` dict if it has
 /// one, otherwise through the callback. An unbuffered reader delivers as it
 /// goes, and again with an empty list at EOF.
-///
-/// # Safety
-/// `chan` and `reader` are live and `reader` belongs to `chan`.
-pub unsafe fn channel_reader_callbacks(chan: *mut Channel, reader: *mut CallbackReader) {
-    // SAFETY: the caller's live channel and reader, in both arms.
-    if unsafe { (*reader).buffered } {
-        unsafe { deliver_buffered(chan, reader) };
-    } else {
-        unsafe { deliver_streaming(chan, reader) };
+pub fn channel_reader_callbacks(id: uint64_t, stderr: bool) {
+    let buffered = with_channel(id, |channel| reader_of(channel, stderr).buffered);
+    match buffered {
+        Some(true) => deliver_buffered(id, stderr),
+        Some(false) => deliver_streaming(id, stderr),
+        None => {}
     }
 }
 
 /// A buffered reader's one delivery, at EOF.
-///
-/// # Safety
-/// As [`channel_reader_callbacks`].
-unsafe fn deliver_buffered(chan: *mut Channel, reader: *mut CallbackReader) {
-    // SAFETY: the caller's live channel and reader.
-    if !unsafe { (*reader).eof } {
-        return;
+fn deliver_buffered(id: uint64_t, stderr: bool) {
+    enum Into {
+        Callback,
+        Dict,
+        Taken(&'static CStr),
     }
-    if unsafe { (*reader).self_0 }.is_null() {
-        unsafe { channel_callback_call(chan, reader) };
-    } else if unsafe { dict_find((*reader).self_0.as_ref(), cstr::bytes_at((*reader).type_0)) }
-        .is_none()
-    {
-        let data = unsafe { reader_lines(reader) };
-        let n_len = unsafe { cstr::bytes_at((*reader).type_0) }.len();
-        let _ = unsafe {
-            (*(*reader).self_0).add_list(cstr::slice_at((*reader).type_0, n_len), Some(data))
-        };
-    } else {
-        // SAFETY: the reader's own stream name and the channel's id.
-        let (kind, id) = unsafe { (c_str((*reader).type_0), (*chan).id) };
-        semsg!("E5210: dict key '{kind}' already set for buffered stream in channel {id}");
+    let into = with_channel(id, |channel| {
+        let reader = reader_of(channel, stderr);
+        if !reader.eof {
+            return None;
+        }
+        Some(match &reader.self_dict {
+            None => Into::Callback,
+            Some(dict) => {
+                let name = reader.stream_name;
+                if dict_find(Some(dict), name.to_bytes()).is_none() {
+                    let lines = reader_lines(reader);
+                    let _ = dict.edit().add_list(name.to_bytes(), Some(lines));
+                    Into::Dict
+                } else {
+                    Into::Taken(name)
+                }
+            }
+        })
+    })
+    .flatten();
+    match into {
+        None => return,
+        Some(Into::Callback) => channel_callback_call(id, Some(stderr)),
+        Some(Into::Dict) => {}
+        Some(Into::Taken(name)) => {
+            let kind = name.to_string_lossy();
+            semsg!("E5210: dict key '{kind}' already set for buffered stream in channel {id}");
+        }
     }
-    unsafe { (*reader).eof = false };
+    with_channel(id, |channel| reader_of(channel, stderr).eof = false);
 }
 
 /// An unbuffered reader's delivery: whatever has arrived, plus an empty
 /// delivery to mark EOF.
-///
-/// # Safety
-/// As [`channel_reader_callbacks`].
-unsafe fn deliver_streaming(chan: *mut Channel, reader: *mut CallbackReader) {
-    // SAFETY: the caller's live channel and reader.
-    let is_eof = unsafe { (*reader).eof };
-    if !unsafe { (*reader).buffer.is_empty() } {
-        unsafe { channel_callback_call(chan, reader) };
+fn deliver_streaming(id: uint64_t, stderr: bool) {
+    let Some((is_eof, has_data)) = with_channel(id, |channel| {
+        let reader = reader_of(channel, stderr);
+        (reader.eof, !reader.buffer.is_empty())
+    }) else {
+        return;
+    };
+    if has_data {
+        channel_callback_call(id, Some(stderr));
     }
     if is_eof {
-        unsafe { channel_callback_call(chan, reader) };
-        unsafe { (*reader).eof = false };
+        channel_callback_call(id, Some(stderr));
+        with_channel(id, |channel| reader_of(channel, stderr).eof = false);
     }
 }
 
-/// Calls `on_stdout`/`on_stderr` for `reader`, or `on_exit` when it is null.
+/// Calls `on_stdout`/`on_stderr` for the reader `stderr` picks, or
+/// `on_exit` for `None`.
 ///
-/// # Safety
-/// `chan` is live; `reader` is null or one of its readers.
-unsafe fn channel_callback_call(chan: *mut Channel, reader: *mut CallbackReader) {
-    let mut argv = [TV_INITIAL_VALUE; 3];
-    let mut rettv = TV_INITIAL_VALUE;
-
-    // SAFETY: the caller's live channel and reader. Every slot is this
-    // frame's own value, released when the array goes out of scope --
-    // which is why the stream name is copied rather than borrowed.
-    argv[0].write_number(unsafe { (*chan).id }.cast_signed());
-    let cb = if reader.is_null() {
-        argv[1].write_number(VarNumber::from(unsafe { (*chan).exit_status }));
-        argv[2].write_string(Some(ThinCString::from_cstr(c"exit")));
-        unsafe { &raw mut (*chan).on_exit }
-    } else {
-        argv[1].write_list(Some(unsafe { reader_lines(reader) }));
-        unsafe { (*reader).buffer.clear() };
-        argv[2].write_string(Some(ThinCString::from_bytes(unsafe {
-            cstr::bytes_at((*reader).type_0)
-        })));
-        unsafe { &raw mut (*reader).cb }
+/// The callback is copied out and called with nothing of the channel
+/// borrowed: it runs Vimscript, which can close the channel or start
+/// another job on it.
+fn channel_callback_call(id: uint64_t, reader: Option<bool>) {
+    let mut argv = [TV_INITIAL_VALUE, TV_INITIAL_VALUE, TV_INITIAL_VALUE];
+    let Some(mut cb) = with_channel(id, |channel| {
+        let mut cb = Callback::None;
+        match reader {
+            None => {
+                argv[1].write_number(VarNumber::from(channel.exit_status));
+                argv[2].write_string(Some(ThinCString::from_cstr(c"exit")));
+                callback_copy(&mut cb, &channel.on_exit);
+            }
+            Some(stderr) => {
+                let reader = reader_of(channel, stderr);
+                argv[1].write_list(Some(reader_lines(reader)));
+                reader.buffer.clear();
+                argv[2].write_string(Some(ThinCString::from_cstr(reader.stream_name)));
+                callback_copy(&mut cb, &reader.cb);
+            }
+        }
+        cb
+    }) else {
+        return;
     };
+    argv[0].write_number(id.cast_signed());
 
-    unsafe { callback_call(&*cb, &argv, &mut rettv) };
+    let mut rettv = TV_INITIAL_VALUE;
+    callback_call(&cb, &argv, &mut rettv);
     tv_clear(&mut rettv);
+    callback_free(&mut cb);
 }
 
-/// Everything a reader has accumulated, as the list of lines its callback is
-/// handed.
+/// Everything a reader has accumulated, as the list of lines its callback
+/// is handed.
 ///
-/// The list always starts with one empty string, so a chunk that does not end
-/// in a newline leaves a partial last line the next chunk continues.
-///
-/// # Safety
-/// `reader` is live.
-pub unsafe fn reader_lines(reader: *mut CallbackReader) -> ListRef {
+/// The list always starts with one empty string, so a chunk that does not
+/// end in a newline leaves a partial last line the next chunk continues.
+pub fn reader_lines(reader: &CallbackReader) -> ListRef {
     let mut l = tv_list_alloc(kListLenMayKnow as isize);
     l.push_bytes(Some(b""));
-    // SAFETY: the caller's live reader.
-    let buffer = unsafe { &(*reader).buffer };
-    encode_list_write(&mut l, buffer);
+    encode_list_write(&mut l, &reader.buffer);
     l
 }

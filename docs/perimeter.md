@@ -12,8 +12,8 @@ the migration's debt, counted by the ratchet as
 `unsafe_stmts_outside_perimeter` and shrink-only like every other metric. That
 number is the one to drive to zero.
 
-Today: **6,084** unchecked statements inside the perimeter (120 files),
-**1,806** outside it (110 files, of 1,390 measured). It was 138,877 when this
+Today: **6,103** unchecked statements inside the perimeter (121 files),
+**1,345** outside it (100 files, of 1,391 measured). It was 138,877 when this
 file was written, at the end of phase 23's slice 15 — in _lines_, which is what
 this metric counted until phase 31 changed the unit to statements.
 
@@ -60,10 +60,10 @@ should move out of the module rather than be carved out of the list.
 | `lua/treesitter/`          |    10 |       872 | (inside `lua/`, listed for its own reason) the tree-sitter C library — parsers, trees, queries and cursors are opaque C objects with C lifetimes.                                                                                                                      |
 | `mpack/lmpack/`            |     3 |       528 | libmpack-lua: a Lua C module, so every value it moves crosses the `lua_State` stack.                                                                                                                                                                                   |
 | `cjson/lua_cjson/`         |     3 |       178 | lua-cjson: a Lua C module, same stack.                                                                                                                                                                                                                                 |
-| `event/`                   |    11 |       574 | libuv: the loop, streams, timers, signals and processes are C objects registered by address.                                                                                                                                                                           |
-| `os/`                      |    22 |     1,207 | The operating system: libc and libuv syscalls, the PTY, the shell, the environment.                                                                                                                                                                                    |
+| `event/`                   |    12 |       618 | libuv: the loop, streams, timers, signals and processes are C objects registered by address. `event/channel.rs` is the one place a channel's transport is handed to libuv, by channel id; callbacks carry ids, not addresses.                                          |
+| `os/`                      |    22 |     1,210 | The operating system: libc and libuv syscalls, the PTY, the shell, the environment.                                                                                                                                                                                    |
 | `vterm/`                   |    11 |       279 | libvterm, ported with its C ABI intact — the callbacks it takes and the symbols it exports are that library's interface.                                                                                                                                               |
-| `terminal/`                |     7 |       145 | The emulator's glue: a PTY on one side, libvterm's `extern "C"` callbacks on the other.                                                                                                                                                                                |
+| `terminal/`                |     7 |       115 | The emulator's glue: a PTY on one side, libvterm's `extern "C"` callbacks on the other.                                                                                                                                                                                |
 | `tui/`                     |    14 |       584 | The terminal: libuv tty handles, termkey's parser, the terminfo entry unibilium hands back.                                                                                                                                                                            |
 | `xdiff/`                   |     1 |         8 | libxdiff, vendored: `mmfile_t` and the emit callbacks keep their C layout because the engine's interface is C.                                                                                                                                                         |
 | `allocator.rs`             |     1 |        20 | The global allocator: malloc/realloc/free.                                                                                                                                                                                                                             |

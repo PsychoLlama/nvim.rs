@@ -240,9 +240,7 @@ fn tinput_enqueue(input: &mut TermInput, keys: &[u8]) {
 
 /// Send an event to the editor over the UI client's channel.
 fn send(name: &CStr, args: Array) {
-    // SAFETY: the array borrows the caller's frame, and `rpc_send_event`
-    // serialises it rather than taking it over.
-    unsafe { rpc_send_event(ui_client_channel_id.get(), name.as_ptr(), args) };
+    rpc_send_event(ui_client_channel_id.get(), name, args);
 }
 
 /// Tell the editor what the terminal said, verbatim.

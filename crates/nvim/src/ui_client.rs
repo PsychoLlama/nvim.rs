@@ -27,6 +27,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::api::private::helpers::{api_dict_to_keydict, api_metadata, cstr_to_string};
+use crate::channel::open::JobOptions;
 use crate::channel::{channel_connect, channel_job_start};
 use crate::event::r#loop::process_events;
 use crate::event::multiqueue::multiqueue_put_event;
@@ -38,6 +39,7 @@ use crate::memory::{xfree, xmemdupz};
 use crate::message_fmt::{c_str, msg_cstr};
 use crate::msgpack_rpc::channel::rpc_send_event;
 use crate::os::env::{ENV_TEST_LOG, env_exists, os_get_pid};
+use crate::os::shell::Argv;
 use crate::profile::{time_finish, time_msg_at};
 use crate::startup::{
     main_loop, os_exit, stderr_isatty, stdin_isatty, stdout_isatty, ui_client_attached,
@@ -56,14 +58,12 @@ use crate::tui::paint::{
 use crate::tui::tui::Tui;
 use crate::tui::tui::tui_suspend;
 use crate::types::builders::{ArrayBuf, DictBuf};
-use crate::types::channel::kChannelStdinPipe;
 use crate::types::libc::{STDERR_FILENO, STDOUT_FILENO};
 use crate::types::ui::kLineFlagWrap;
 use crate::types::{
-    ApiDict, Arena, Array, Callback, CallbackReader, Dict, Error, Event, GridLineEvent, HlAttrs,
-    Integer, KeyDict_highlight, Object, ObjectType, String_0, TUIData, UIClientHandler, Unpacker,
+    ApiDict, Arena, Array, CallbackReader, Error, Event, GridLineEvent, HlAttrs, Integer,
+    KeyDict_highlight, Object, ObjectType, String_0, TUIData, UIClientHandler, Unpacker,
     kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString,
-    uint16_t,
 };
 use crate::ui::state::t_colors;
 use ::libc::{close, dup};
@@ -103,70 +103,37 @@ static tui_height: GlobalCell<c_int> = GlobalCell::new(0);
 static tui_term: GlobalCell<String_0> = GlobalCell::new(String_0::NULL);
 static tui_rgb: GlobalCell<bool> = GlobalCell::new(false);
 
-/// A reader that discards what it is given, for the streams this client
-/// does not read.
-fn no_reader() -> CallbackReader {
-    CallbackReader {
-        cb: Callback::None,
-        self_0: core::ptr::null_mut::<Dict>(),
-        buffer: Vec::new(),
-        eof: false,
-        buffered: false,
-        fwd_err: false,
-        type_0: core::ptr::null(),
-    }
-}
-
 /// Spawns the server this client will talk to, returning its channel.
 ///
 /// The server gets this process's own argv with `--embed` inserted, so
 /// that every option the user typed reaches the process that will act on
 /// it.
 pub(crate) fn ui_client_start_server(exepath: &CStr, argv: &[CString]) -> u64 {
-    // The NULL-terminated vector the job takes over: a copy of `argv[0]`,
-    // `--embed`, then of the rest.
+    // A copy of `argv[0]`, `--embed`, then of the rest.
     let words = argv.iter().map(CString::as_c_str);
     let words = words
         .clone()
         .take(1)
         .chain([c"--embed"])
-        .chain(words.skip(1));
-    let vector: Vec<*mut c_char> = words
-        .map(|word| crate::memory::ThinCString::from_cstr(word).into_raw())
-        .chain([core::ptr::null_mut()])
+        .chain(words.skip(1))
+        .map(crate::memory::ThinCString::from_cstr)
         .collect();
-    // The global allocator is `malloc`, so the boxed slice is a block the
-    // vector's eventual `xfree` releases.
-    let args = Box::into_raw(vector.into_boxed_slice()).cast::<*mut c_char>();
-    let exepath = exepath.as_ptr();
 
     // The server's stderr is forwarded so that a Lua error at startup
     // is seen even though this process owns the terminal.
-    let mut on_err = no_reader();
+    let mut on_err = CallbackReader::none();
     on_err.fwd_err = true;
-
-    let mut exit_status = 0;
-    // The wide argument list is bound out here so that the region below is
-    // the call and nothing else: a call spread over rustfmt's line width is
-    // one unchecked line per argument.
-    let no_exit_cb = Callback::None;
-    let stdin_mode = kChannelStdinPipe;
-    let no_term = core::ptr::null();
-    let no_env = core::ptr::null_mut::<Dict>();
-    let (no_w, no_h) = (0 as uint16_t, 0 as uint16_t);
-    let status = &raw mut exit_status;
-    let (out, err) = (no_reader(), on_err);
-    // SAFETY: `args` is the NULL-terminated vector just built and `exepath`
-    // is the caller's C string; `exit_status` is this frame's own.
-    let channel = unsafe {
-        channel_job_start(
-            args, exepath, out, err, no_exit_cb, false, true, true, true, stdin_mode, no_term,
-            no_w, no_h, no_env, status,
-        )
+    let options = JobOptions {
+        exepath: Some(exepath),
+        on_stderr: on_err,
+        rpc: true,
+        overlapped: true,
+        detach: true,
+        ..JobOptions::new(Argv::from_words(words))
     };
-    if channel.is_null() {
+    let Ok(channel) = channel_job_start(options) else {
         return 0;
-    }
+    };
     if ui_client_forward_stdin.get() {
         // The user piped something in, which the server will read from
         // the descriptor `dup` lands on; this process needs slot 0 for
@@ -182,7 +149,7 @@ pub(crate) fn ui_client_start_server(exepath: &CStr, argv: &[CString]) -> u64 {
             dup(keep);
         };
     }
-    unsafe { (*channel).id }
+    channel
 }
 
 /// Attaches this client to the server as a UI, remembering the terminal
@@ -236,13 +203,7 @@ pub(crate) fn ui_client_reattach() {
     args.push(Object::integer(Integer::from(width)));
     args.push(Object::integer(Integer::from(height)));
     args.push(opts.object());
-    unsafe {
-        rpc_send_event(
-            ui_client_channel_id.get(),
-            c"nvim_ui_attach".as_ptr(),
-            args.array(),
-        )
-    };
+    rpc_send_event(ui_client_channel_id.get(), c"nvim_ui_attach", args.array());
     ui_client_attached.set(true);
     log_startup_step(c"nvim_ui_attach");
 
@@ -263,13 +224,11 @@ pub(crate) fn ui_client_reattach() {
     // A UI exposes no methods of its own.
     client.push(Object::array(Array::EMPTY));
     client.push(info.object());
-    unsafe {
-        rpc_send_event(
-            ui_client_channel_id.get(),
-            c"nvim_set_client_info".as_ptr(),
-            client.array(),
-        )
-    };
+    rpc_send_event(
+        ui_client_channel_id.get(),
+        c"nvim_set_client_info",
+        client.array(),
+    );
     log_startup_step(c"nvim_set_client_info");
 }
 
@@ -298,14 +257,7 @@ fn log_startup_step(step: &'static CStr) {
 
 /// Detaches from the server without stopping this process.
 pub(crate) fn ui_client_detach() {
-    let (id, name, no_args) = (
-        ui_client_channel_id.get(),
-        c"nvim_ui_detach".as_ptr(),
-        Array::EMPTY,
-    );
-    // SAFETY: the caller's promise -- a channel is set -- and the event
-    // carries no arguments to own.
-    unsafe { rpc_send_event(id, name, no_args) };
+    rpc_send_event(ui_client_channel_id.get(), c"nvim_ui_detach", Array::EMPTY);
     ui_client_attached.set(false);
 }
 
@@ -356,13 +308,11 @@ pub(crate) fn ui_client_set_size(width: c_int, height: c_int) {
         let mut args = ArrayBuf::<2>::new();
         args.push(Object::integer(Integer::from(width)));
         args.push(Object::integer(Integer::from(height)));
-        unsafe {
-            rpc_send_event(
-                ui_client_channel_id.get(),
-                c"nvim_ui_try_resize".as_ptr(),
-                args.array(),
-            )
-        };
+        rpc_send_event(
+            ui_client_channel_id.get(),
+            c"nvim_ui_try_resize",
+            args.array(),
+        );
     }
     tui_width.set(width);
     tui_height.set(height);
@@ -805,7 +755,13 @@ unsafe extern "C" fn channel_connect_event(argv: *mut *mut c_void) {
     let server_addr = unsafe { *argv }.cast::<c_char>();
     let address = unsafe { CStr::from_ptr(server_addr) };
     let is_tcp = socket_address_is_tcp(address);
-    let connected = channel_connect(is_tcp, address, true, no_reader(), UI_CONNECT_TIMEOUT_MS);
+    let connected = channel_connect(
+        is_tcp,
+        address,
+        true,
+        CallbackReader::none(),
+        UI_CONNECT_TIMEOUT_MS,
+    );
     let chan = match connected {
         Ok(chan) => chan,
         Err(err) => {
@@ -897,7 +853,13 @@ pub(crate) fn ui_client_attach_to_restarted_server() {
                 .data();
             let address = unsafe { CStr::from_ptr(listen_addr) };
             let tcp = socket_address_is_tcp(address);
-            let connected = channel_connect(tcp, address, true, no_reader(), UI_CONNECT_TIMEOUT_MS);
+            let connected = channel_connect(
+                tcp,
+                address,
+                true,
+                CallbackReader::none(),
+                UI_CONNECT_TIMEOUT_MS,
+            );
             match connected {
                 Err(err) => {
                     let line = line!() as c_int;

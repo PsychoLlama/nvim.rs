@@ -5,6 +5,9 @@
 //! `uv_kill` is libuv's `kill(2)`, returning a negated errno rather than
 //! setting one. Everything else is `/proc`, read through `std::fs`.
 //!
+//! The descriptor shuffles a channel over this process's own stdio needs
+//! (`os_dup_above`, `os_dup2`, `os_stderr_to_null`) live here too.
+//!
 //! This is the Linux build of upstream's `os/proc.c`; the Windows
 //! (toolhelp32) and BSD/macOS (`sysctl KERN_PROC`) implementations of
 //! [`os_proc_children`] were not transpiled, and with them went the
@@ -88,6 +91,37 @@ pub fn os_proc_running(pid: c_int) -> bool {
     // SAFETY: `uv_kill` takes no pointers. Signal 0 delivers nothing and
     // only probes for the process's existence.
     unsafe { uv_kill(pid, 0) != UV_ESRCH }
+}
+
+/// Moves `fd` aside: a duplicate at the lowest free descriptor at or above
+/// `min`, close-on-exec. Answers it, or -1.
+pub(crate) fn os_dup_above(fd: c_int, min: c_int) -> c_int {
+    /// `fcntl` command: dup to the lowest free descriptor at or above the
+    /// third argument, with close-on-exec set.
+    const F_DUPFD_CLOEXEC: c_int = 1030;
+    // SAFETY: `fcntl` on a descriptor number; a closed one answers -1.
+    unsafe { ::libc::fcntl(fd, F_DUPFD_CLOEXEC, min) }
+}
+
+/// Points descriptor `to` at whatever `fd` is open on, when it can.
+pub(crate) fn os_dup2(fd: c_int, to: c_int) {
+    // SAFETY: `dup2` on two descriptor numbers; a closed one fails, which
+    // leaves `to` as it was.
+    unsafe { ::libc::dup2(fd, to) };
+}
+
+/// Reopens this process's stderr on `/dev/null`, so that whatever is still
+/// written to it goes nowhere.
+pub(crate) fn os_stderr_to_null() {
+    // SAFETY: two NUL-terminated literals and the C library's own `stderr`
+    // stream.
+    unsafe {
+        ::libc::freopen(
+            c"/dev/null".as_ptr(),
+            c"w".as_ptr(),
+            crate::os::cshim::stderr,
+        )
+    };
 }
 
 #[cfg(test)]

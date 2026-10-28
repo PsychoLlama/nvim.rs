@@ -39,10 +39,11 @@
 //!   that took it. A registry lives in a [`GlobalCell`], and the
 //!   `with`/`with_mut` closure around one of these calls is a leaf: it
 //!   cannot re-enter, which is what phase 22's ruling 6 asks for.
-//! - Walking is done over a **snapshot** — [`SlotTable::snapshot_keys`] and
-//!   [`SlotTable::snapshot_values`] answer an owned `Vec`, so the table is
-//!   unborrowed by the time the first callback runs. The snapshot is a
-//!   `Vec`, not an iterator, precisely so that it cannot borrow.
+//! - Walking is done over a **snapshot** — [`SlotTable::snapshot_keys`]
+//!   answers an owned `Vec`, so the table is unborrowed by the time the
+//!   first callback runs. The snapshot is a `Vec`, not an iterator,
+//!   precisely so that it cannot borrow. A walk that runs no user code (the
+//!   collector's marking) borrows the values in place instead.
 //!
 //! The cost of the snapshot is one allocation on paths that fire callbacks
 //! (teardown, garbage collection, a broadcast, `timer_info()`); the lookups
@@ -141,7 +142,7 @@ impl<K: Eq + Hash, V> SlotTable<K, V> {
     /// their own keys, which a clone would dangle. Nothing reachable from
     /// walking either one starts or stops an entry, so the borrow is a
     /// leaf. A registry whose walk fires a callback uses
-    /// [`Self::snapshot_keys`]/[`Self::snapshot_values`] instead.
+    /// [`Self::snapshot_keys`] instead.
     pub(crate) fn entries(&self) -> &[(K, V)] {
         &self.slots
     }
@@ -218,6 +219,7 @@ impl<K: Eq + Hash, V: Copy> SlotTable<K, V> {
         Some(self.slots[i].1)
     }
 
+    #[cfg(test)]
     /// Every value, in order, as an owned `Vec`. As [`Self::snapshot_keys`].
     pub(crate) fn snapshot_values(&self) -> Vec<V> {
         self.slots.iter().map(|&(_, value)| value).collect()

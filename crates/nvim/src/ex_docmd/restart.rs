@@ -3,8 +3,9 @@
 #![forbid(unsafe_code)]
 
 use crate::channel::channel_close_or_report;
+use crate::channel::channel_job_start;
 use crate::channel::channel_job_stop_wait;
-use crate::channel::open::channel_job_start_argv;
+use crate::channel::open::JobOptions;
 use crate::eval::funcs::create_environment;
 use crate::ex_docmd::kRetNilBool;
 use crate::lua::executor::nlua_exec_cstr;
@@ -21,7 +22,7 @@ use crate::semsg;
 use crate::api::ui::{remote_ui_connect, remote_ui_disconnect};
 use crate::api::vim::nvim__chan_set_detach;
 use crate::api::vimscript::nvim_command;
-use crate::channel::find_channel;
+use crate::channel::channel_exists;
 
 use crate::eval::typval::{NumBuf, list_items, list_len};
 use crate::eval::vars::{get_vim_var_list_handle, set_vim_var_string, vim_var_bytes};
@@ -37,7 +38,7 @@ use crate::msgpack_rpc::server::{server_start, server_stop};
 use crate::strings::has_bytes;
 use crate::types::{
     ApiDict, Array, Callback, CallbackReader, CmdModFlags, Error, ExArg, KeyValuePair, Object,
-    String_0, VarNumber, Vv, key_value_pair,
+    String_0, Vv, key_value_pair,
 };
 use crate::ui::{ui_active, ui_call_restart, ui_flush};
 
@@ -133,23 +134,23 @@ fn restart_server(excmd: &mut ExArg) {
     // would see it too.
     let mut env = create_environment(None, false, false, false, None);
     let _ = env.add_str(ENV_STARTREASON.to_bytes(), Some(reason));
-    let mut exit_status: VarNumber = 0;
     // `v:argv` names at least the program; an empty one starts nothing, as
     // a vector with no program cannot.
     let channel = (!words.is_empty())
         .then(|| {
-            channel_job_start_argv(
-                Argv::from_words(words),
-                Some(exepath.as_cstr()),
-                blank_reader(),
-                on_err,
-                blank_callback(),
-                true,
-                true,
-                true, // detach: the new server outlives this one
-                Some(env),
-                &mut exit_status,
-            )
+            let options = JobOptions {
+                exepath: Some(exepath.as_cstr()),
+                on_stdout: blank_reader(),
+                on_stderr: on_err,
+                on_exit: blank_callback(),
+                rpc: true,
+                overlapped: true,
+                // The new server outlives this one.
+                detach: true,
+                env: Some(env),
+                ..JobOptions::new(Argv::from_words(words))
+            };
+            channel_job_start(options).ok()
         })
         .flatten();
 
@@ -397,7 +398,7 @@ fn detach_ui() {
         return;
     }
     let id = current_ui.get();
-    if find_channel(id).is_null() {
+    if !channel_exists(id) {
         emsg(e_invchan);
         return;
     }

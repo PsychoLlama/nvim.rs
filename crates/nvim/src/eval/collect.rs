@@ -25,21 +25,19 @@
 //!    "push and let the caller's loop get to it". `set_ref_in_ht` and
 //!    `set_ref_in_list_items` are the two loops that drain them.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::guard::Depth;
 use core::ffi::c_int;
-use core::mem::{ManuallyDrop, offset_of};
-use core::ptr::NonNull;
 
 use crate::autocmd::{aucmd_win_count, aucmd_window};
 use crate::channel::channels;
-use crate::eval::gc::{dict_at, dict_slots, list_at, list_slots};
+use crate::eval::gc::{dict_slots, list_slots};
 use crate::eval::gc::{garbage_collect_at_exit, may_garbage_collect, want_garbage_collect};
 use crate::eval::typval::{
-    DictRef, ListRef, blob_copy, dict_copy, list_copy, list_free_contents, list_free_list, tv_copy,
-    tv_dict_free_contents, tv_dict_free_dict, tv_in_free_unref_items,
+    DictRef, ListRef, blob_copy, dict_copy, free_registered_dict, free_registered_list, list_copy,
+    list_free_contents, registered_dict, registered_list, tv_copy, tv_dict_free_contents,
+    tv_in_free_unref_items,
 };
 use crate::eval::userfunc::{
     free_unref_funccal, set_ref_in_call_stack, set_ref_in_func, set_ref_in_func_args,
@@ -62,15 +60,14 @@ use crate::ops::set_ref_in_opfunc;
 use crate::option::vars::p_verbose;
 use crate::os::cshim::gettext;
 use crate::quickfix::set_ref_in_quickfix;
-use crate::registry::SlotTable;
 use crate::runtime::EXESTACK;
 use crate::tag::set_ref_in_tagfunc;
 use crate::types::{
-    CONV_NONE, Callback, CallbackReader, Channel, Failed, List, OptInt, PartialRef, TypVal,
-    VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
-    VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VimConv,
+    CONV_NONE, Callback, CallbackReader, Failed, List, OptInt, PartialRef, TypVal, VAR_BLOB,
+    VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL,
+    VAR_STRING, VAR_UNKNOWN, VimConv,
 };
-use crate::winlayer::{Live, buffers, tab_windows, tabs};
+use crate::winlayer::{buffers, tab_windows, tabs};
 
 /// How much slack the execution stack may keep before a collection trims
 /// it back.
@@ -101,23 +98,14 @@ fn mark_cb(cb: &Callback, copy_id: c_int) -> bool {
 
 /// Mark what a callback *reader* keeps alive, with neither stack: its
 /// callback, and the `self` dictionary it would be called with.
-///
-/// # Safety
-/// `reader` must be a live reader, whose `self` dictionary is null or live.
-unsafe fn mark_reader(reader: *mut CallbackReader, copy_id: c_int) -> bool {
-    // SAFETY: the caller's promise -- the reader outlives the call, and its
-    // `cb` is the callback it owns.
-    if mark_cb(unsafe { &(*reader).cb }, copy_id) {
+fn mark_reader(reader: &CallbackReader, copy_id: c_int) -> bool {
+    if mark_cb(&reader.cb, copy_id) {
         return true;
     }
-    // A view of the reader's dictionary, which takes no reference: the
-    // reader keeps the one it has.
-    // SAFETY: as above.
-    let Some(self_dict) = (unsafe { DictRef::owning((*reader).self_0) }).map(ManuallyDrop::new)
-    else {
-        return false;
-    };
-    set_ref_in_item_dict(&self_dict, copy_id, None, None)
+    reader
+        .self_dict
+        .as_ref()
+        .is_some_and(|dict| set_ref_in_item_dict(dict, copy_id, None, None))
 }
 
 /// Mark, then free. Answers whether anything was freed.
@@ -192,19 +180,14 @@ pub fn garbage_collect(testing: bool) -> bool {
     // Channels. Deliberately not `abort`ed on: upstream discards these
     // answers, and doing otherwise would change when a collection is
     // abandoned.
-    for data in channels.with(SlotTable::snapshot_values) {
-        // SAFETY: the snapshot holds the registered live channels.
-        let ch = unsafe { Live::<Channel>::new(data) };
-        let on_data = ch.field_ptr(offset_of!(Channel, on_data));
-        let on_stderr = ch.field_ptr(offset_of!(Channel, on_stderr));
-        let on_exit: *mut Callback = ch.field_ptr(offset_of!(Channel, on_exit));
-        // SAFETY: all three are the channel's own callbacks.
-        unsafe { mark_reader(on_data, copy_id) };
-        // SAFETY: as above.
-        unsafe { mark_reader(on_stderr, copy_id) };
-        // SAFETY: as above.
-        mark_cb(unsafe { &*on_exit }, copy_id);
-    }
+    // Marking runs no user code, so the table is walked in place.
+    channels.with(|table| {
+        for channel in table.values() {
+            mark_reader(&channel.on_data, copy_id);
+            mark_reader(&channel.on_stderr, copy_id);
+            mark_cb(&channel.on_exit, copy_id);
+        }
+    });
 
     // Timers, likewise. Marking runs no user code, so the table is walked
     // in place.
@@ -279,29 +262,22 @@ pub(crate) fn free_unref_items(copy_id: c_int) -> c_int {
     // slot is vacated under the walk, but emptying a container runs
     // arbitrary teardown and the registry must not be borrowed across that.
     for idx in 0..dict_slots() {
-        let Some(dd) = dict_at(idx).map(NonNull::as_ptr) else {
+        let Some(dict) = registered_dict(idx) else {
             continue;
         };
-        if stale(unsafe { (*dd).dv_copy_id }, copy_id) {
-            // SAFETY: a registered dictionary; the view takes no reference.
-            tv_dict_free_contents(&::core::mem::ManuallyDrop::new(
-                unsafe { DictRef::owning(dd) }.expect("a live dictionary"),
-            ));
+        if stale(dict.dv_copy_id, copy_id) {
+            tv_dict_free_contents(&dict);
             did_free = true;
         }
     }
     // …and the unreachable lists. A list with a watcher is left alone:
     // the watcher is a borrow the collector cannot see.
     for idx in 0..list_slots() {
-        let Some(ll) = list_at(idx).map(NonNull::as_ptr) else {
+        let Some(list) = registered_list(idx) else {
             continue;
         };
-        if stale(unsafe { (*ll).copy_id() }, copy_id) && !list_has_watchers(unsafe { ll.as_ref() })
-        {
-            // SAFETY: a registered list; the view takes no reference.
-            list_free_contents(&::core::mem::ManuallyDrop::new(
-                unsafe { ListRef::owning(ll) }.expect("a live list"),
-            ));
+        if stale(list.copy_id(), copy_id) && !list_has_watchers(Some(&list)) {
+            list_free_contents(&list);
             did_free = true;
         }
     }
@@ -310,20 +286,19 @@ pub(crate) fn free_unref_items(copy_id: c_int) -> c_int {
     // them. The walk reads each slot afresh, so a slot this pass vacates is
     // simply skipped when the index reaches it.
     for idx in 0..dict_slots() {
-        let Some(dd) = dict_at(idx).map(NonNull::as_ptr) else {
+        let Some(dict) = registered_dict(idx) else {
             continue;
         };
-        if stale(unsafe { (*dd).dv_copy_id }, copy_id) {
-            unsafe { tv_dict_free_dict(dd) };
+        if stale(dict.dv_copy_id, copy_id) {
+            free_registered_dict(dict);
         }
     }
     for idx in 0..list_slots() {
-        let Some(ll) = list_at(idx).map(NonNull::as_ptr) else {
+        let Some(list) = registered_list(idx) else {
             continue;
         };
-        if stale(unsafe { (*ll).lv_copy_id }, copy_id) && !list_has_watchers(unsafe { ll.as_ref() })
-        {
-            unsafe { list_free_list(ll) };
+        if stale(list.lv_copy_id, copy_id) && !list_has_watchers(Some(&list)) {
+            free_registered_list(list);
         }
     }
 

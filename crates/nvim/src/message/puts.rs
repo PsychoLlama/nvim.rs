@@ -18,13 +18,10 @@ use crate::types::{Callback, NUL};
 use core::ffi::{c_int, c_uint};
 use std::borrow::Cow;
 
-/// The `on_print` callback an RPC client installed.
-///
-/// The address, because every operation the tree has on a callback —
-/// parsing an option into it, marking it for the collector, copying it,
-/// calling it — takes a `*mut Callback`.
-pub(crate) fn on_print_cb() -> *mut Callback {
-    on_print.ptr()
+/// Run `f` on the `on_print` callback an RPC client installed. `f` must
+/// not run user code: the callback is borrowed for its length.
+pub(crate) fn with_on_print<R>(f: impl FnOnce(&mut Callback) -> R) -> R {
+    on_print.with_mut(f)
 }
 
 /// C's `ARRAY_DICT_INIT`: empty, and owning nothing.

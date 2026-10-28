@@ -22,6 +22,7 @@
 use core::ffi::{c_int, c_void};
 use core::ptr;
 
+pub mod channel;
 pub mod libuv;
 pub mod libuv_proc;
 pub mod r#loop;

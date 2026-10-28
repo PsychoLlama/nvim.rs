@@ -40,8 +40,8 @@ use neovim::eval::gc::rooted_lists;
 use neovim::eval::typval::tv_list_alloc;
 use neovim::types::{CallbackReader, kListLenUnknown};
 
+use crate::support::Sandbox;
 use crate::support::tv::{self, Tv};
-use crate::support::{Sandbox, cstr};
 
 /// A reader with nothing in it, set up as `channel_alloc` sets one up.
 fn reader() -> CallbackReader {
@@ -53,28 +53,21 @@ fn reader() -> CallbackReader {
 /// `channel_callback_call`.
 fn delivered(chunks: &[&[u8]]) -> Vec<Tv> {
     let _sandbox = Sandbox::globals();
-    let stdout = cstr("stdout");
     let mut reader = reader();
-    let at = &raw mut reader;
     let mut out = Vec::new();
-    // SAFETY: `reader` is this frame's, started and freed here; each chunk is
-    // readable for its own length; each list is referenced for as long as it
-    // is read and released straight after. The editor lock is held for the
-    // list allocator.
-    unsafe {
-        callback_reader_start(at, stdout.as_ptr());
-        for chunk in chunks {
-            // `on_channel_output`: accept the bytes into the accumulator.
-            (*at).buffer.extend_from_slice(chunk);
-            // `channel_callback_call`: build the list, then drop what it was
-            // built from.
-            let list = reader_lines(at);
-            out.push(tv::read_list(list.as_ptr()));
-            drop(list);
-            (*at).buffer.clear();
-        }
-        callback_reader_free(&mut *at);
+    callback_reader_start(&mut reader, c"stdout");
+    for chunk in chunks {
+        // `on_channel_output`: accept the bytes into the accumulator.
+        reader.buffer.extend_from_slice(chunk);
+        // `channel_callback_call`: build the list, then drop what it was
+        // built from.
+        let list = reader_lines(&reader);
+        // SAFETY: the list just built, referenced while it is read.
+        out.push(unsafe { tv::read_list(list.as_ptr()) });
+        drop(list);
+        reader.buffer.clear();
     }
+    callback_reader_free(&mut reader);
     out
 }
 
@@ -177,23 +170,18 @@ fn the_accumulator_is_a_byte_buffer_however_the_chunks_fall() {
     // One line arriving one byte at a time, delivered only at the end, is
     // the same line as one that arrived whole.
     let _sandbox = Sandbox::globals();
-    let stdout = cstr("stdout");
     let mut reader = reader();
-    let at = &raw mut reader;
-    // SAFETY: as `delivered`, with the delivery moved out of the loop.
-    let got = unsafe {
-        callback_reader_start(at, stdout.as_ptr());
-        for byte in b"one\ntwo" {
-            (*at).buffer.push(*byte);
-        }
-        assert_eq!((*at).buffer.len(), "one\ntwo".len());
-        let list = reader_lines(at);
-        let got = tv::read_list(list.as_ptr());
-        drop(list);
-        (*at).buffer.clear();
-        callback_reader_free(&mut *at);
-        got
-    };
+    callback_reader_start(&mut reader, c"stdout");
+    for byte in b"one\ntwo" {
+        reader.buffer.push(*byte);
+    }
+    assert_eq!(reader.buffer.len(), "one\ntwo".len());
+    let list = reader_lines(&reader);
+    // SAFETY: the list just built, referenced while it is read.
+    let got = unsafe { tv::read_list(list.as_ptr()) };
+    drop(list);
+    reader.buffer.clear();
+    callback_reader_free(&mut reader);
     assert_eq!(got, Tv::List(vec![line("one"), line("two")]));
 }
 
@@ -213,10 +201,9 @@ fn the_accumulator_is_a_byte_buffer_however_the_chunks_fall() {
 #[test]
 fn a_delivered_list_is_freed_again_when_the_callback_stores_nothing() {
     let _sandbox = Sandbox::globals();
-    let stdout = cstr("stdout");
     let mut reader = reader();
-    let at = &raw mut reader;
-    // SAFETY: as `delivered`. The sentinel is this case's own: it is never
+    let at = &mut reader;
+    // SAFETY: lists are read while referenced. The sentinel is this case's own: it is never
     // referenced, so nothing but dropping `held` at the end can free it.
     unsafe {
         let before = rooted_lists();
@@ -229,22 +216,22 @@ fn a_delivered_list_is_freed_again_when_the_callback_stores_nothing() {
             "a fresh list is registered"
         );
 
-        callback_reader_start(at, stdout.as_ptr());
+        callback_reader_start(at, c"stdout");
         for chunk in [&b"one\ntwo\n"[..], b"three\n", b""] {
-            (*at).buffer.extend_from_slice(chunk);
+            at.buffer.extend_from_slice(chunk);
             // `channel_callback_call` around a callback that reads the list
             // and keeps no reference to it.
             let list = reader_lines(at);
             let _ = tv::read_list(list.as_ptr());
             drop(list);
-            (*at).buffer.clear();
+            at.buffer.clear();
             assert_eq!(
                 rooted_lists(),
                 with_sentinel,
                 "the delivered list outlived its callback",
             );
         }
-        callback_reader_free(&mut *at);
+        callback_reader_free(at);
 
         drop(held);
         assert!(
@@ -260,9 +247,8 @@ fn a_delivered_list_is_freed_again_when_the_callback_stores_nothing() {
 #[test]
 fn a_delivered_list_the_callback_stored_stays_on_the_chain() {
     let _sandbox = Sandbox::globals();
-    let stdout = cstr("stdout");
     let mut reader = reader();
-    let at = &raw mut reader;
+    let at = &mut reader;
     // SAFETY: as above. The stored reference is released before the list is
     // freed, so this case owns everything it allocates.
     unsafe {
@@ -271,8 +257,8 @@ fn a_delivered_list_the_callback_stored_stays_on_the_chain() {
         let with_sentinel = rooted_lists();
         assert!(with_sentinel.contains(&sentinel));
 
-        callback_reader_start(at, stdout.as_ptr());
-        (*at).buffer.extend_from_slice(b"one\n");
+        callback_reader_start(at, c"stdout");
+        at.buffer.extend_from_slice(b"one\n");
         // The reference `channel_callback_call` holds for the length of the
         // callback.
         let list = reader_lines(at);
@@ -281,8 +267,8 @@ fn a_delivered_list_the_callback_stored_stays_on_the_chain() {
         // reference than `channel_callback_call` is about to drop.
         let stored = list.clone();
         drop(list);
-        (*at).buffer.clear();
-        callback_reader_free(&mut *at);
+        at.buffer.clear();
+        callback_reader_free(at);
 
         assert!(
             rooted_lists().contains(&at_list),

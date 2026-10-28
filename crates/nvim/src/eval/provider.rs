@@ -11,22 +11,19 @@ use crate::memory::ThinCString;
 use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::semsg;
 use core::ffi::{CStr, c_int};
-use core::ptr::null_mut;
 use std::ffi::CString;
 
 use crate::autocmd::state::{autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match};
 use crate::buffer::buf_is_prompt;
 use crate::change::appended_lines_mark;
-use crate::channel::{
-    callback_reader_free, channel_job_running, channel_stream_type, find_channel,
-};
+use crate::channel::{callback_reader_free, channel_job_running, channel_stream_type};
+use crate::eval::callback_call;
 use crate::eval::typval::{
     DictRef, ListRef, callback_free, dict_get_callback, dict_get_number, tv_list_alloc,
 };
 use crate::eval::userfunc::{CallStackAside, CallWith, call_func_with, current_fc_id, func_exists};
 use crate::eval::vars::eval_variable;
 use crate::eval::vars::{clear_local, emsg_static};
-use crate::eval::{callback_call, kChannelStreamProc};
 use crate::ex_cmds::check_secure;
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
@@ -37,9 +34,10 @@ use crate::option::vars::p_lpl;
 use crate::runtime::script_autoload_named;
 use crate::runtime::sourcing_name_copy;
 use crate::runtime::state::{ETYPE_TOP, current_sctx};
+use crate::types::channel::kChannelStreamProc;
 use crate::types::{
-    Callback, CallbackReader, CallerScope, Channel, EStack, EstackInfo, FAIL, ScriptCtx, TypVal,
-    VAR_NUMBER, VAR_STRING, VarNumber, ptrdiff_t, uint64_t,
+    Callback, CallbackReader, CallerScope, EStack, EstackInfo, FAIL, ScriptCtx, TypVal, VAR_NUMBER,
+    VAR_STRING, VarNumber, ptrdiff_t, uint64_t,
 };
 use crate::undo::u_clearallandblockfree;
 use crate::winlayer::{Buf, Win};
@@ -100,31 +98,28 @@ pub fn common_job_callbacks(
     on_stdout.buffered = dict_get_number(dict, b"stdout_buffered") != 0;
     on_stderr.buffered = dict_get_number(dict, b"stderr_buffered") != 0;
     // Buffered output with no callback is collected into the options
-    // dictionary itself, which is why it becomes the reader's `self`.
-    let own = options.map_or(null_mut(), DictRef::as_ptr);
+    // dictionary itself, which is why it becomes the reader's `self`, with
+    // a reference of its own.
     if on_stdout.buffered && !on_stdout.cb.is_set() {
-        on_stdout.self_0 = own;
+        on_stdout.self_dict = options.cloned();
     }
     if on_stderr.buffered && !on_stderr.cb.is_set() {
-        on_stderr.self_0 = own;
+        on_stderr.self_dict = options.cloned();
     }
-    // The reference the readers now share, given up to them: nothing here
-    // releases it.
-    core::mem::forget(options.cloned());
     true
 }
 
-/// The channel a job id names, or null.
-pub fn find_job(id: uint64_t, show_error: bool) -> *mut Channel {
+/// Whether `id` names a running job, reporting why not when `show_error`.
+pub fn find_job(id: uint64_t, show_error: bool) -> bool {
     if channel_job_running(id) {
-        return find_channel(id);
+        return true;
     }
     if show_error {
         // A channel that exists but is not a job gets its own message.
         let wrong_kind = channel_stream_type(id).is_some_and(|kind| kind != kChannelStreamProc);
         emsg_static(if wrong_kind { e_invchanjob } else { e_invchan });
     }
-    null_mut()
+    false
 }
 
 /// `py3eval()` and its relatives: hand one expression to a script host.

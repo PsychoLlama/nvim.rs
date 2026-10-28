@@ -18,7 +18,6 @@
 
 use super::*;
 use crate::api::private::helpers::Reported;
-use crate::cstr;
 
 pub fn nvim_get_api_info(channel_id: uint64_t) -> Array {
     let mut rv: Array = Array::with_capacity(2 as size_t);
@@ -57,14 +56,9 @@ pub fn nvim_set_client_info(
 #[allow(non_snake_case)]
 pub fn nvim__chan_set_detach(channel_id: uint64_t, detach: Boolean) -> Result<(), Error> {
     let mut error = Error::none();
-    let chan: *mut Channel = find_channel(channel_id);
-    if chan.is_null() {
-        let msg = e_invchan.as_ptr();
-        // SAFETY: the message the caller handed over, live for this call.
-        error = Error::from_message(kErrorTypeValidation, unsafe { cstr::at(msg) });
-        return ().reported(error);
+    if with_channel(channel_id, |channel| channel.detach = detach).is_none() {
+        error = Error::from_message(kErrorTypeValidation, e_invchan);
     }
-    unsafe { (*chan).detach = detach };
     ().reported(error)
 }
 

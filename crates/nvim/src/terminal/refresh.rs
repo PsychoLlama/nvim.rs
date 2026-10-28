@@ -184,11 +184,9 @@ fn refresh_size(mut term: Term) -> bool {
     term.invalid_start = 0;
     term.invalid_end = height;
     // Read out before the call: the channel is free to re-enter.
-    let (resize_cb, data) = (term.opts.resize_cb, term.opts.data);
+    let (resize_cb, owner) = (term.opts.resize_cb, term.opts.owner);
     let (width, height) = (width as uint16_t, height as uint16_t);
-    // SAFETY: the callback the channel registered, taking the data it
-    // registered with it.
-    unsafe { resize_cb.expect("non-null function pointer")(width, height, data) };
+    resize_cb.expect("non-null function pointer")(width, height, owner);
     true
 }
 

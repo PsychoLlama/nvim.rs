@@ -217,11 +217,11 @@ impl Term {
     /// Feed bytes of the child's output to the emulator. Re-entrant: vterm
     /// reports what changed through the screen callbacks, which reach this
     /// terminal again, so nothing of it is borrowed here.
-    fn write(self, bytes: &[c_char]) {
+    fn write(self, bytes: &[u8]) {
         let vt = self.vt;
         // SAFETY: the terminal's own emulator, and a slice of its caller's
         // readable bytes.
-        unsafe { vterm_input_write(vt, bytes.as_ptr(), bytes.len()) };
+        unsafe { vterm_input_write(vt, bytes.as_ptr().cast(), bytes.len()) };
     }
 
     /// Deliver whatever the emulator has been holding back. Re-entrant for
@@ -258,11 +258,9 @@ unsafe extern "C" fn term_output_callback(s: *const c_char, len: size_t, user_da
 /// emulator's screen, and anything already there would be taken for
 /// scrollback.
 ///
-/// # Safety
-///
-/// `opts` must be an initialized `TerminalOptions` whose pointer fields point
-/// at live data for the call.
-pub(crate) unsafe fn terminal_alloc(mut buffer: Buf, opts: TerminalOptions) -> *mut Terminal {
+/// The buffer owns the terminal from here; whoever drives it frees it with
+/// [`terminal_destroy`].
+pub(crate) fn terminal_alloc(mut buffer: Buf, opts: TerminalOptions) -> Term {
     // SAFETY: the caller hands over a live buffer that has no terminal yet.
     // Leaked here and reclaimed by terminal_destroy. The buffer is the
     // owner; every other reference reaches it through `Buffer::terminal`.
@@ -333,21 +331,16 @@ pub(crate) unsafe fn terminal_alloc(mut buffer: Buf, opts: TerminalOptions) -> *
         deleted_lines_buf(buffer, 1 as LineNr, line_count);
     }
     term.old_height = 1;
-    raw
+    term
 }
 
 /// Make `buffer` look and behave like a terminal buffer, and announce it.
 ///
 /// Runs `TermOpen`, which can wipe the buffer or close the terminal
-/// outright — hence the re-check before touching either again.
-///
-/// # Safety
-///
-/// `termpp` must point at a writable `*mut Terminal` slot the caller owns for
-/// the call.
-pub(crate) unsafe fn terminal_open(termpp: *mut *mut Terminal, mut buffer: Buf) {
-    // SAFETY: the caller hands over the buffer's own terminal slot.
-    let mut term = unsafe { Term::new(*termpp) };
+/// outright — hence the re-check before touching either again: `attached`
+/// answers whether the terminal's driver still holds it, and only then is
+/// it reached.
+pub(crate) fn terminal_open(mut term: Term, mut buffer: Buf, attached: &dyn Fn() -> bool) {
     assert!(!term.raw().is_null(), "terminal_open without a terminal");
     // SAFETY: the caller hands over a live buffer.
 
@@ -396,9 +389,9 @@ pub(crate) unsafe fn terminal_open(termpp: *mut *mut Terminal, mut buffer: Buf) 
     apply_autocmds(AutoEvent::TermOpen, None, None, false, Some(buffer));
     // SAFETY: paired with the `aucmd_prepbuf` above.
     aucmd_restbuf(&mut aco);
-    // SAFETY: the caller's slot, which TermOpen may have emptied. The
-    // terminal is only reached again once the slot says it is still there.
-    if unsafe { (*termpp).is_null() } || term.buf_handle == 0 {
+    // TermOpen may have closed and freed the terminal; it is only reached
+    // again once its driver says it still holds it.
+    if !attached() || term.buf_handle == 0 {
         return;
     }
     if !term_may_alloc_scrollback(term, Some(buffer)) {
@@ -445,13 +438,7 @@ pub(crate) unsafe fn terminal_open(termpp: *mut *mut Terminal, mut buffer: Buf) 
 /// stays, showing whatever the child left on screen, until something wipes
 /// it.
 ///
-/// # Safety
-///
-/// `termpp` must point at a writable `*mut Terminal` slot the caller owns for
-/// the call.
-pub(crate) unsafe fn terminal_close(termpp: *mut *mut Terminal, status: c_int) {
-    // SAFETY: the caller hands over a slot holding a live terminal.
-    let mut term = unsafe { Term::new(*termpp) };
+pub(crate) fn terminal_close(mut term: Term, status: c_int) {
     if term.destroy {
         return;
     }
@@ -483,10 +470,8 @@ pub(crate) unsafe fn terminal_close(termpp: *mut *mut Terminal, status: c_int) {
             term.destroy = true;
             // Read out before the call: the channel's close callback is free
             // to free the terminal.
-            let (close_cb, data) = (term.opts.close_cb, term.opts.data);
-            // SAFETY: the callback the channel registered, taking the data
-            // it registered with it.
-            unsafe { close_cb.expect("non-null function pointer")(data) };
+            let (close_cb, owner) = (term.opts.close_cb, term.opts.owner);
+            close_cb.expect("non-null function pointer")(owner);
         }
     } else if !only_destroy {
         // The status line says "running"; it no longer is.
@@ -546,13 +531,7 @@ unsafe extern "C" fn terminal_state_change_event(argv: *mut *mut c_void) {
 ///
 /// The redraw is deferred: this is reached from a process-status callback,
 /// which is no place to touch the screen.
-///
-/// # Safety
-///
-/// `term` must point at a live `Terminal`, unaliased for the call.
-pub(crate) unsafe fn terminal_set_state(term: *mut Terminal, suspended: bool) {
-    // SAFETY: the caller hands over a live terminal.
-    let mut term = unsafe { Term::new(term) };
+pub(crate) fn terminal_set_state(mut term: Term, suspended: bool) {
     if term.suspended != suspended {
         let event = Event::new(
             Some(terminal_state_change_event),
@@ -570,27 +549,21 @@ pub(crate) unsafe fn terminal_set_state(term: *mut Terminal, suspended: bool) {
 pub(crate) fn buf_terminal_check_size(buffer: Buf) {
     if !buffer.terminal.is_null() {
         // SAFETY: a live buffer's own terminal.
-        unsafe { terminal_check_size(buffer.terminal) };
+        terminal_check_size(unsafe { Term::new(buffer.terminal) });
     }
 }
 
 /// Whether `buffer` holds a terminal whose job is still running.
 pub(crate) fn buf_terminal_running(buffer: Buf) -> bool {
     // SAFETY: a live buffer's own terminal.
-    !buffer.terminal.is_null() && unsafe { terminal_running(buffer.terminal) }
+    !buffer.terminal.is_null() && terminal_running(unsafe { Term::new(buffer.terminal) })
 }
 
 /// Resize the emulator to fit the windows showing it.
 ///
 /// The largest of them, not the smallest: a narrower window scrolls
 /// sideways rather than making the child reflow for everyone else.
-///
-/// # Safety
-///
-/// `term` must point at a live `Terminal`, unaliased for the call.
-pub(crate) unsafe fn terminal_check_size(term: *mut Terminal) {
-    // SAFETY: the caller hands over a live terminal.
-    let mut term = unsafe { Term::new(term) };
+pub(crate) fn terminal_check_size(mut term: Term) {
     if term.closed {
         return;
     }
@@ -630,21 +603,15 @@ pub(crate) unsafe fn terminal_check_size(term: *mut Terminal) {
 /// Free the terminal, if nothing is still standing on it.
 ///
 /// Reached repeatedly — from the close callback, from the buffer being
-/// wiped — and does nothing until `refcount` reaches zero.
-///
-/// # Safety
-///
-/// `termpp` must point at a writable `*mut Terminal` slot the caller owns for
-/// the call.
-pub(crate) unsafe fn terminal_destroy(termpp: *mut *mut Terminal) {
-    // SAFETY: the caller hands over a slot holding a live terminal.
-    let mut term = unsafe { Term::new(*termpp) };
+/// wiped — and does nothing until `refcount` reaches zero. Answers whether
+/// it freed the terminal, after which the caller drops its handle.
+pub(crate) fn terminal_destroy(mut term: Term) -> bool {
     if let Some(mut buf) = term.buf() {
         term.buf_handle = 0 as Handle;
         buf.terminal = ::core::ptr::null_mut();
     }
     if term.refcount != RefcountSize::ZERO {
-        return;
+        return false;
     }
     let (raw, vt, events) = (term.raw(), term.vt, term.pending.events);
     refresh::refresh_before_destroy(term);
@@ -654,12 +621,10 @@ pub(crate) unsafe fn terminal_destroy(termpp: *mut *mut Terminal) {
     // SAFETY: as above.
     unsafe { multiqueue_free(events) };
     // SAFETY: the other half of `terminal_alloc`'s `Box::into_raw`;
-    // everything the terminal owns goes with it, and the caller's slot is
-    // emptied so that nothing reaches it again.
-    unsafe {
-        drop(Box::from_raw(raw));
-        *termpp = ::core::ptr::null_mut();
-    }
+    // everything the terminal owns goes with it, and the caller drops its
+    // handle so that nothing reaches it again.
+    drop(unsafe { Box::from_raw(raw) });
+    true
 }
 
 /// Write `data` to the child, or hold it if a `TermRequest` handler is
@@ -680,11 +645,8 @@ fn terminal_send(term: Term, data: &[u8]) {
         return;
     }
     // Read out before the call: the channel's write callback may re-enter.
-    let (write_cb, user) = (term.opts.write_cb, term.opts.data);
-    let (bytes, size) = (data.as_ptr().cast::<c_char>(), data.len());
-    // SAFETY: the callback the channel registered, taking the data it
-    // registered with it and the caller's own bytes.
-    unsafe { write_cb.expect("non-null function pointer")(bytes, size, user) };
+    let (write_cb, owner) = (term.opts.write_cb, term.opts.owner);
+    write_cb.expect("non-null function pointer")(data, owner);
 }
 
 /// Redraw after the child closed a synchronized-output frame.
@@ -716,30 +678,18 @@ unsafe extern "C" fn on_sync_flush(argv: *mut *mut c_void) {
 /// `force_crlf` is for channels that are not a pty: a bare newline from
 /// those means "next line, column zero", which to a terminal is CR LF.
 ///
-/// # Safety
-///
-/// `term` must point at a live `Terminal`, unaliased for the call. `data`
-/// must point at `len` readable bytes.
-pub(crate) unsafe fn terminal_receive(term: *mut Terminal, data: *const c_char, len: size_t) {
-    // SAFETY: the caller hands over a live terminal.
-    let mut term = unsafe { Term::new(term) };
-    if data.is_null() {
-        return;
-    }
+pub(crate) fn terminal_receive(mut term: Term, bytes: &[u8]) {
     if term.opts.force_crlf {
-        // SAFETY: `data` points at `len` readable bytes.
-        let bytes = unsafe { ::core::slice::from_raw_parts(data.cast::<u8>(), len) };
-        let mut crlf = Vec::with_capacity(len);
+        let mut crlf = Vec::with_capacity(bytes.len());
         for (i, &byte) in bytes.iter().enumerate() {
             if byte == b'\n' && (i == 0 || bytes[i - 1] != b'\r') {
-                crlf.push(b'\r' as c_char);
+                crlf.push(b'\r');
             }
-            crlf.push(byte as c_char);
+            crlf.push(byte);
         }
         term.write(&crlf);
     } else {
-        // SAFETY: as above.
-        term.write(unsafe { ::core::slice::from_raw_parts(data, len) });
+        term.write(bytes);
     }
     term.flush_damage();
 
@@ -889,35 +839,29 @@ pub(crate) fn terminal_get_line_attributes(
     }
 }
 
-/// # Safety
-///
-/// `term` must point at a live `Terminal`.
-pub(crate) unsafe fn terminal_buf(term: *const Terminal) -> BufferHandle {
-    // SAFETY: the caller hands over a live terminal.
-    unsafe { (*term).buf_handle as BufferHandle }
+/// The buffer `term` draws into, 0 once it has been detached.
+pub(crate) fn terminal_buf(term: Term) -> BufferHandle {
+    term.buf_handle as BufferHandle
 }
 
 /// [`terminal_close`] of `buffer`'s terminal, which must be set.
-pub(crate) fn close_buf_terminal(mut buffer: Buf) {
+pub(crate) fn close_buf_terminal(buffer: Buf) {
     debug_assert!(!buffer.terminal.is_null(), "buf->terminal");
-    // SAFETY: the buffer's own slot, holding its live terminal.
-    unsafe { terminal_close(&raw mut buffer.terminal, -1) };
+    // SAFETY: the buffer's own live terminal.
+    terminal_close(unsafe { Term::new(buffer.terminal) }, -1);
 }
 
 /// [`terminal_check_size`] of `buffer`'s terminal, when it has one.
 pub(crate) fn check_buf_terminal_size(buffer: Buf) {
     if !buffer.terminal.is_null() {
         // SAFETY: a buffer's terminal is live for as long as the buffer.
-        unsafe { terminal_check_size(buffer.terminal) };
+        terminal_check_size(unsafe { Term::new(buffer.terminal) });
     }
 }
 
-/// # Safety
-///
-/// `term` must point at a live `Terminal`.
-pub(crate) unsafe fn terminal_running(term: *const Terminal) -> bool {
-    // SAFETY: the caller hands over a live terminal.
-    unsafe { !(*term).closed }
+/// Whether `term`'s child is still running.
+pub(crate) fn terminal_running(term: Term) -> bool {
+    !term.closed
 }
 
 /// Whether `buffer` holds a terminal whose job is suspended.
