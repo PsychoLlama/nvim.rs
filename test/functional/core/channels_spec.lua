@@ -550,3 +550,121 @@ describe('loopback', function()
     eq(chans - 1, eval('len(nvim_list_chans())'))
   end)
 end)
+
+describe('channel and timer callbacks that end their own owner', function()
+  before_each(clear)
+
+  it('a job channel closed from its own on_stdout', function()
+    source([[
+      let g:events = []
+      function! OnOut(id, data, event) abort
+        call add(g:events, 'out')
+        call chanclose(a:id)
+        " The channel is gone for writing as soon as it is closed.
+        try
+          call chansend(a:id, "more\n")
+        catch
+          call add(g:events, v:exception)
+        endtry
+      endfunction
+      function! OnExit(id, code, event) abort
+        call add(g:events, 'exit')
+      endfunction
+      let g:job = jobstart(['cat'], {'on_stdout': 'OnOut', 'on_exit': 'OnExit'})
+      call chansend(g:job, "line\n")
+    ]])
+    retry(nil, 5000, function()
+      eq('exit', eval('g:events[-1]'))
+    end)
+    eq({ 'out', "Vim(call):Can't send data to closed stream" }, eval('g:events[0:1]'))
+    eq({ -3 }, eval('jobwait([g:job], 0)'))
+    assert_alive()
+  end)
+
+  it('a job stopped from its own on_stdout, then waited on', function()
+    source([[
+      let g:events = []
+      function! OnOut(id, data, event) abort
+        if a:data != ['']
+          call add(g:events, jobstop(a:id))
+          call add(g:events, jobwait([a:id], 5000)[0])
+        endif
+      endfunction
+      let g:job = jobstart(['cat'], {'on_stdout': 'OnOut'})
+      call chansend(g:job, "line\n")
+    ]])
+    retry(nil, 5000, function()
+      eq(2, eval('len(g:events)'))
+    end)
+    -- jobstop() answers 1 for a running job; a stopped job is no longer one
+    -- jobwait() will look up, so it answers -3 (find_job skips it).
+    eq({ 1, -3 }, eval('g:events'))
+    assert_alive()
+  end)
+
+  it('a job waited on from its own on_stdout across its exit', function()
+    source([[
+      let g:events = []
+      function! OnOut(id, data, event) abort
+        if a:data != [''] && empty(g:events)
+          call add(g:events, jobwait([a:id], 5000)[0])
+        endif
+      endfunction
+      function! OnExit(id, code, event) abort
+        call add(g:events, 'exit ' .. a:code)
+      endfunction
+      let g:job = jobstart(['sh', '-c', 'echo hi; exit 3'],
+            \ {'on_stdout': 'OnOut', 'on_exit': 'OnExit'})
+    ]])
+    retry(nil, 5000, function()
+      eq({ 3, 'exit 3' }, eval('g:events'))
+    end)
+    assert_alive()
+  end)
+
+  it('a timer stopped from its own callback, its partial the only reference', function()
+    source([[
+      let g:fired = []
+      function! s:Tick(state, timer) abort
+        call add(g:fired, a:state.n)
+        let a:state.n += 1
+        if a:state.n == 3
+          call timer_stop(a:timer)
+          call garbagecollect()
+        endif
+      endfunction
+      let s:state = {'n': 0}
+      let s:state.self = s:state
+      call timer_start(1, function('s:Tick', [s:state]), {'repeat': -1})
+      unlet s:state
+      call garbagecollect()
+    ]])
+    retry(nil, 5000, function()
+      eq({ 0, 1, 2 }, eval('g:fired'))
+    end)
+    eq({}, eval('timer_info()'))
+    assert_alive()
+  end)
+
+  it('garbagecollect() keeps a cycle only a job callback holds', function()
+    source([[
+      let g:got = []
+      let s:ctx = {'tag': 'kept'}
+      let s:ctx.self = s:ctx
+      function! s:ctx.on_stdout(id, data, event) abort
+        if a:data != ['']
+          call add(g:got, self.tag)
+        endif
+      endfunction
+      let g:job = jobstart(['cat'], s:ctx)
+      unlet s:ctx
+      call garbagecollect()
+      call chansend(g:job, "a\n")
+    ]])
+    retry(nil, 5000, function()
+      eq({ 'kept' }, eval('g:got'))
+    end)
+    command('call jobstop(g:job)')
+    assert_alive()
+  end)
+end)
