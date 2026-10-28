@@ -136,9 +136,12 @@ pub(crate) fn setvar(stack: &mut Stack) -> Result<c_int, Raise> {
             tv_copy(&tv, &mut item.di_tv);
         }
         None => {
-            let mut item = DictItem::boxed(key.as_bytes());
-            tv_copy(&tv, &mut item.di_tv);
-            let _ = dict.edit().add_item(item);
+            // Added empty and then filled, as upstream does: adding a
+            // Funcref under a lower-case name would be refused (E704).
+            let _ = dict.edit().add_item(DictItem::boxed(key.as_bytes()));
+            if let Some(item) = dict.edit().find_mut(key.as_bytes()) {
+                tv_copy(&tv, &mut item.di_tv);
+            }
         }
     }
 

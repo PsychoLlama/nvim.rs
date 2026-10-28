@@ -550,3 +550,24 @@ describe('v:lua', function()
     eq(NIL, exec_lua('return _G.seam_missing'))
   end)
 end)
+
+describe('vim.g and friends', function()
+  it('store a Lua function under a lower-case name', function()
+    -- The key is added empty and then filled, so the Funcref name check
+    -- (E704) never sees a function under a lower-case name.
+    exec_lua('vim.g.seam_cb = function(x) return x * 2 end')
+    eq(6, exec_lua('return vim.g.seam_cb(3)'))
+    eq(6, eval('g:seam_cb(3)'))
+  end)
+
+  it('name a handle that names nothing', function()
+    eq(
+      'scoped variable: Invalid buffer id: 9999',
+      pcall_err(exec_lua, 'return vim._getvar("b", 9999, "x")'):match('scoped variable: .*$')
+    )
+    eq(
+      'invalid scope',
+      pcall_err(exec_lua, 'return vim._getvar("q", 0, "x")'):match('invalid scope')
+    )
+  end)
+end)
