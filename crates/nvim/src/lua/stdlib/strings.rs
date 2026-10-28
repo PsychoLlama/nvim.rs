@@ -1,151 +1,139 @@
 //! The string helpers: UTF-8 indexing, comparison and `iconv`.
 //!
-//! [`nlua_str_utfindex`]/[`nlua_str_byteindex`] convert between byte and
-//! character offsets, [`nlua_str_utf_pos`]/[`nlua_str_utf_start`]/
-//! [`nlua_str_utf_end`] report codepoint boundaries, [`nlua_stricmp`] is the
-//! case-insensitive compare the Lua side cannot express, and [`nlua_iconv`]
-//! is `vim.iconv()`.
+//! [`str_utfindex`]/[`str_byteindex`] convert between byte and character
+//! offsets, [`str_utf_pos`]/[`str_utf_start`]/[`str_utf_end`] report
+//! codepoint boundaries, [`stricmp`] is the case-insensitive compare the Lua
+//! side cannot express, and [`iconv`] is `vim.iconv()`.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `lua/` row in docs/perimeter.md.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{CStr, c_int};
 
-use crate::cstr;
-use crate::lua::ffi::{
-    LUA_TSTRING, lua_createtable, lua_gettop, lua_pushinteger, lua_pushlstring, lua_pushnil,
-    lua_pushnumber, lua_rawseti, lua_toboolean, lua_tolstring, lua_type, luaL_argerror,
-    luaL_checkinteger, luaL_checklstring, luaL_error,
-};
-use crate::lua::stack::{lua_isnoneornil, lua_pop, lua_tostring};
+use crate::lua::stack::{At, Kind, Raise, Stack};
 use crate::mbyte::{
     c_utf_index_to_byte, c_utf_lengths, canonize, cp_bounds, promised_char_len, skip_len,
 };
+use crate::os::cshim::cstr_ncasecmp;
+use crate::types::{CONV_NONE_INIT, lua_Integer, lua_Number};
 
-use crate::types::{CONV_NONE_INIT, intptr_t, lua_Integer, lua_Number, lua_State, size_t};
-use ::libc::{memchr, strcasecmp};
+/// A count as the Lua integer it is pushed as.
+fn as_lua(n: usize) -> lua_Integer {
+    lua_Integer::try_from(n).unwrap_or(lua_Integer::MAX)
+}
+
+/// The string at slot 1, which a check has already made one.
+fn subject(stack: &Stack) -> &[u8] {
+    stack.string(At::arg(1)).unwrap_or_default()
+}
 
 /// `vim.str_utfindex()`: the UTF-32 and UTF-16 lengths of the string at slot 1
 /// up to the byte index at slot 2, or of the whole string when it is absent.
 ///
 /// Two nils for an index outside the string.
-///
-/// # Safety
-/// `lstate` must be a live Lua state holding this function's arguments.
-pub unsafe extern "C-unwind" fn nlua_str_utfindex(lstate: *mut lua_State) -> c_int {
-    unsafe {
-        let mut s1_len: size_t = 0;
-        let s1 = luaL_checklstring(lstate, 1, &raw mut s1_len);
-        let idx: intptr_t = if lua_isnoneornil(lstate, 2) {
-            s1_len as intptr_t
-        } else {
-            let idx = luaL_checkinteger(lstate, 2) as intptr_t;
-            if idx < 0 || idx > s1_len as intptr_t {
-                lua_pushnil(lstate);
-                lua_pushnil(lstate);
-                return 2;
+pub(crate) fn str_utfindex(stack: &mut Stack) -> Result<c_int, Raise> {
+    stack.check_bytes(At::arg(1))?;
+    let idx = if stack.is_none_or_nil(At::arg(2)) {
+        None
+    } else {
+        Some(stack.check_integer(At::arg(2))?)
+    };
+    let s1 = subject(stack);
+    let idx = match idx {
+        None => s1.len(),
+        Some(idx) => match usize::try_from(idx).ok().filter(|&idx| idx <= s1.len()) {
+            Some(idx) => idx,
+            None => {
+                stack.push_nil();
+                stack.push_nil();
+                return Ok(2);
             }
-            idx
-        };
+        },
+    };
 
-        let (codepoints, codeunits) = c_utf_lengths(cstr::slice_at(s1, s1_len), idx as size_t);
-
-        lua_pushinteger(lstate, codepoints as lua_Integer);
-        lua_pushinteger(lstate, codeunits as lua_Integer);
-        2
-    }
+    let (codepoints, codeunits) = c_utf_lengths(s1, idx);
+    stack.push_integer(as_lua(codepoints));
+    stack.push_integer(as_lua(codeunits));
+    Ok(2)
 }
 
 /// `vim.str_utf_pos()`: the 1-based byte index of every codepoint in the
-/// string at slot 1, as a list.
-///
-/// # Safety
-/// `lstate` must be a live Lua state holding this function's arguments.
-pub(crate) unsafe extern "C-unwind" fn nlua_str_utf_pos(lstate: *mut lua_State) -> c_int {
-    unsafe {
-        let mut s1_len: size_t = 0;
-        let s1 = luaL_checklstring(lstate, 1, &raw mut s1_len);
-        lua_createtable(lstate, 0, 0);
+/// string at slot 1, as a list. The walk stops at a NUL.
+pub(crate) fn str_utf_pos(stack: &mut Stack) -> Result<c_int, Raise> {
+    stack.check_bytes(At::arg(1))?;
+    let s1 = subject(stack);
+    let mut starts = Vec::new();
+    let mut i = 0;
+    while i < s1.len() && s1[i] != 0 {
+        starts.push(i);
+        i += promised_char_len(&s1[i..]);
+    }
+    stack.new_table(0, 0);
+    for (n, start) in (1..).zip(starts) {
+        stack.push_integer(as_lua(start) + 1);
+        stack.raw_set_index(At::from_top(2), n);
+    }
+    Ok(1)
+}
 
-        let mut idx: size_t = 1;
-        let mut i: size_t = 0;
-        while i < s1_len && *s1.add(i) != 0 {
-            let clen = promised_char_len(&cstr::slice_at(s1, s1_len)[i..]);
-            lua_pushinteger(lstate, i as lua_Integer + 1);
-            lua_rawseti(lstate, -2, idx as c_int);
-            idx = idx.wrapping_add(1);
-            i = i.wrapping_add(clen);
-        }
-        1
+/// The 0-based byte offset the 1-based offset at slot 2 names in the string
+/// at slot 1, refused outside it.
+fn checked_offset(stack: &mut Stack) -> Result<usize, Raise> {
+    stack.check_bytes(At::arg(1))?;
+    let offset = stack.check_integer(At::arg(2))?;
+    let len = subject(stack).len();
+    match usize::try_from(offset).ok().filter(|&n| n > 0 && n <= len) {
+        Some(offset) => Ok(offset - 1),
+        None => Err(Raise::message("index out of range")),
     }
 }
 
 /// `vim.str_utf_start()`: how far *back* from the 1-based byte offset at slot
 /// 2 the codepoint containing it begins, as a non-positive number.
-///
-/// # Safety
-/// `lstate` must be a live Lua state holding this function's arguments.
-pub(crate) unsafe extern "C-unwind" fn nlua_str_utf_start(lstate: *mut lua_State) -> c_int {
-    unsafe {
-        let mut s1_len: size_t = 0;
-        let s1 = luaL_checklstring(lstate, 1, &raw mut s1_len);
-        let offset = luaL_checkinteger(lstate, 2);
-        if offset <= 0 || offset > s1_len as intptr_t {
-            return luaL_error(lstate, c"index out of range".as_ptr());
-        }
-        let off = (offset - 1) as size_t;
-        let bounds = cp_bounds(cstr::slice_at(s1, s1_len), off);
-        lua_pushinteger(lstate, -(bounds.begin_off as lua_Integer));
-        1
-    }
+pub(crate) fn str_utf_start(stack: &mut Stack) -> Result<c_int, Raise> {
+    let off = checked_offset(stack)?;
+    let bounds = cp_bounds(subject(stack), off);
+    stack.push_integer(-lua_Integer::from(bounds.begin_off));
+    Ok(1)
 }
 
 /// `vim.str_utf_end()`: how far *on* from the 1-based byte offset at slot 2
 /// the codepoint containing it ends.
-///
-/// # Safety
-/// `lstate` must be a live Lua state holding this function's arguments.
-pub(crate) unsafe extern "C-unwind" fn nlua_str_utf_end(lstate: *mut lua_State) -> c_int {
-    unsafe {
-        let mut s1_len: size_t = 0;
-        let s1 = luaL_checklstring(lstate, 1, &raw mut s1_len);
-        let offset = luaL_checkinteger(lstate, 2);
-        if offset <= 0 || offset > s1_len as intptr_t {
-            return luaL_error(lstate, c"index out of range".as_ptr());
-        }
-        let off = (offset - 1) as size_t;
-        let bounds = cp_bounds(cstr::slice_at(s1, s1_len), off);
-        lua_pushinteger(lstate, bounds.end_off as lua_Integer - 1);
-        1
-    }
+pub(crate) fn str_utf_end(stack: &mut Stack) -> Result<c_int, Raise> {
+    let off = checked_offset(stack)?;
+    let bounds = cp_bounds(subject(stack), off);
+    stack.push_integer(lua_Integer::from(bounds.end_off) - 1);
+    Ok(1)
 }
 
 /// `vim.str_byteindex()`: the byte offset of the UTF-32 (or, with a truthy
 /// slot 3, UTF-16) index at slot 2, or nil when the string is shorter.
-///
-/// # Safety
-/// `lstate` must be a live Lua state holding this function's arguments.
-pub unsafe extern "C-unwind" fn nlua_str_byteindex(lstate: *mut lua_State) -> c_int {
-    unsafe {
-        let mut s1_len: size_t = 0;
-        let s1 = luaL_checklstring(lstate, 1, &raw mut s1_len);
-        let idx = luaL_checkinteger(lstate, 2) as intptr_t;
-        if idx < 0 {
-            lua_pushnil(lstate);
-            return 1;
-        }
-        let use_utf16 = lua_gettop(lstate) >= 3 && lua_toboolean(lstate, 3) != 0;
+pub(crate) fn str_byteindex(stack: &mut Stack) -> Result<c_int, Raise> {
+    stack.check_bytes(At::arg(1))?;
+    let idx = stack.check_integer(At::arg(2))?;
+    let Ok(idx) = usize::try_from(idx) else {
+        stack.push_nil();
+        return Ok(1);
+    };
+    let use_utf16 = stack.top().index() >= 3 && stack.to_boolean(At::arg(3));
 
-        let Some(byteidx) =
-            c_utf_index_to_byte(cstr::slice_at(s1, s1_len), s1_len, idx as size_t, use_utf16)
-        else {
-            lua_pushnil(lstate);
-            return 1;
-        };
-        lua_pushinteger(lstate, byteidx as lua_Integer);
-        1
+    let s1 = subject(stack);
+    match c_utf_index_to_byte(s1, s1.len(), idx, use_utf16) {
+        Some(byteidx) => stack.push_integer(as_lua(byteidx)),
+        None => stack.push_nil(),
     }
+    Ok(1)
+}
+
+/// `strcasecmp` on two NUL-terminated runs.
+fn casecmp(a: &CStr, b: &CStr) -> c_int {
+    cstr_ncasecmp(a, b, usize::MAX)
 }
 
 /// `vim.stricmp()`: -1, 0 or 1 for the two strings at slots 1 and 2, ignoring
@@ -155,85 +143,68 @@ pub unsafe extern "C-unwind" fn nlua_str_byteindex(lstate: *mut lua_State) -> c_
 /// the comparison runs NUL-separated run by NUL-separated run; a string that
 /// has one where the other has ended sorts after it. Uppercasing can change a
 /// byte's length, so the two sides cannot be advanced by a common amount.
-///
-/// Does no error handling: never call it with a non-string or with an
-/// argument missing.
-///
-/// # Safety
-/// `lstate` must be a live Lua state holding two strings.
-pub(crate) unsafe extern "C-unwind" fn nlua_stricmp(lstate: *mut lua_State) -> c_int {
-    unsafe {
-        let mut s1_len: size_t = 0;
-        let mut s2_len: size_t = 0;
-        let mut s1 = luaL_checklstring(lstate, 1, &raw mut s1_len);
-        let mut s2 = luaL_checklstring(lstate, 2, &raw mut s2_len);
-        debug_assert!(*s1.add(s1_len) == 0);
-        debug_assert!(*s2.add(s2_len) == 0);
-
-        let mut ret;
+pub(crate) fn stricmp(stack: &mut Stack) -> Result<c_int, Raise> {
+    stack.check_bytes(At::arg(1))?;
+    stack.check_bytes(At::arg(2))?;
+    let ret = {
+        // Each with its terminator, so every run is a C string in place.
+        let mut s1 = stack.string_with_nul(At::arg(1)).unwrap_or(b"\0");
+        let mut s2 = stack.string_with_nul(At::arg(2)).unwrap_or(b"\0");
         loop {
-            let nul1 = memchr(s1.cast::<c_void>(), 0, s1_len).cast::<c_char>();
-            let nul2 = memchr(s2.cast::<c_void>(), 0, s2_len).cast::<c_char>();
-            ret = strcasecmp(s1.cast_mut(), s2.cast_mut());
+            let run1 = CStr::from_bytes_until_nul(s1).expect("a Lua string ends in a NUL");
+            let run2 = CStr::from_bytes_until_nul(s2).expect("a Lua string ends in a NUL");
+            let ret = casecmp(run1, run2);
             if ret != 0 {
-                break;
+                break ret;
             }
+            // Whether the run ended at a NUL of the string's own rather than
+            // at its terminator.
+            let more1 = run1.count_bytes() + 1 < s1.len();
+            let more2 = run2.count_bytes() + 1 < s2.len();
             // Compare "a\0" greater than "a".
-            if nul1.is_null() != nul2.is_null() {
-                ret = !nul1.is_null() as c_int - !nul2.is_null() as c_int;
-                break;
+            if more1 != more2 {
+                break c_int::from(more1) - c_int::from(more2);
             }
-            if nul1.is_null() {
-                break;
+            if !more1 {
+                break 0;
             }
-            debug_assert!(!nul2.is_null());
-            s1_len = s1_len.wrapping_sub((nul1.offset_from(s1) as size_t).wrapping_add(1));
-            s2_len = s2_len.wrapping_sub((nul2.offset_from(s2) as size_t).wrapping_add(1));
-            s1 = nul1.add(1);
-            s2 = nul2.add(1);
+            s1 = &s1[run1.count_bytes() + 1..];
+            s2 = &s2[run2.count_bytes() + 1..];
         }
+    };
 
-        lua_pop(lstate, 2);
-        lua_pushnumber(
-            lstate,
-            ((ret > 0) as c_int - (ret < 0) as c_int) as lua_Number,
-        );
-        1
-    }
+    stack.pop(2);
+    stack.push_number(lua_Number::from(ret.signum()));
+    Ok(1)
 }
 
 /// `vim.iconv()`: the string at slot 1 recoded from the encoding at slot 2 to
 /// the one at slot 3, or nil when the conversion fails.
-///
-/// # Safety
-/// `lstate` must be a live Lua state holding this function's arguments.
-pub(crate) unsafe extern "C-unwind" fn nlua_iconv(lstate: *mut lua_State) -> c_int {
-    unsafe {
-        if lua_gettop(lstate) < 3 {
-            return luaL_error(lstate, c"Expected at least 3 arguments".as_ptr());
+pub(crate) fn iconv(stack: &mut Stack) -> Result<c_int, Raise> {
+    if stack.top().index() < 3 {
+        return Err(Raise::message("Expected at least 3 arguments"));
+    }
+    for i in 1..=3 {
+        if stack.kind(At::arg(i)) != Kind::String {
+            return Err(Raise::argument(i, "expected string"));
         }
-        for i in 1..=3 {
-            if lua_type(lstate, i) != LUA_TSTRING {
-                return luaL_argerror(lstate, i, c"expected string".as_ptr());
-            }
-        }
+    }
 
-        let mut str_len: size_t = 0;
-        let str = lua_tolstring(lstate, 1, &raw mut str_len);
-
+    let converted = {
+        // Each name as `lua_tostring`'s C string: up to its first NUL.
         let name = |at: c_int| {
-            let name = cstr::bytes_at(lua_tostring(lstate, at));
+            let name = stack.c_string(At::arg(at)).unwrap_or_default().to_bytes();
             canonize(&name[skip_len(name)..])
         };
         let (from, to) = (name(2), name(3));
 
         let mut vimconv = CONV_NONE_INIT;
         let _ = vimconv.setup_ext(Some(from.as_cstr()), false, Some(to.as_cstr()), false);
-        let text = cstr::slice_at(str, str_len);
-        match vimconv.convert(text) {
-            None => lua_pushnil(lstate),
-            Some(ret) => lua_pushlstring(lstate, ret.as_ptr().cast(), ret.len()),
-        }
-        1
+        vimconv.convert(subject(stack))
+    };
+    match converted {
+        None => stack.push_nil(),
+        Some(text) => stack.push_bytes(&text),
     }
+    Ok(1)
 }

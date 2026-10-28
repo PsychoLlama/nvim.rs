@@ -25,7 +25,7 @@ pub(super) fn convert_nvim_buf_create_user_command(
     let arg_3 = pop_object(stack, true).inspect_err(|_| *blame = Some(c"cmd"))?;
     let arg_2 = pop_string(stack).inspect_err(|_| *blame = Some(c"name"))?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"buf"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     nvim_buf_create_user_command(LUA_INTERNAL_CALL, arg_1, arg_2, arg_3, &mut arg_4)?;
     Ok(())
 }
@@ -38,7 +38,7 @@ pub(super) fn convert_nvim_buf_del_user_command(
 ) -> Result<(), Error> {
     let arg_2 = pop_string(stack).inspect_err(|_| *blame = Some(c"name"))?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"buf"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     nvim_buf_del_user_command(arg_1, arg_2)?;
     Ok(())
 }
@@ -52,7 +52,7 @@ pub(super) fn convert_nvim_buf_get_commands(
     let mut arg_2 = KeyDict_get_commands::default();
     pop_keydict(stack, &mut arg_2, blame)?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"buf"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_buf_get_commands(arg_1, &mut arg_2)?;
     push_dict(stack, &ret, PUSH_SPECIAL);
     Ok(())
@@ -65,7 +65,7 @@ pub(super) fn convert_nvim_cmd(stack: &mut Stack, blame: &mut Blame) -> Result<(
     pop_keydict(stack, &mut arg_2, blame)?;
     let mut arg_1 = KeyDict_cmd::default();
     pop_keydict(stack, &mut arg_1, blame)?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_cmd(LUA_INTERNAL_CALL, &mut arg_1, &mut arg_2)?;
     push_string(stack, &ret);
     Ok(())
@@ -81,7 +81,7 @@ pub(super) fn convert_nvim_create_user_command(
     pop_keydict(stack, &mut arg_3, blame)?;
     let arg_2 = pop_object(stack, true).inspect_err(|_| *blame = Some(c"cmd"))?;
     let arg_1 = pop_string(stack).inspect_err(|_| *blame = Some(c"name"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     nvim_create_user_command(LUA_INTERNAL_CALL, arg_1, arg_2, &mut arg_3)?;
     Ok(())
 }
@@ -93,7 +93,7 @@ pub(super) fn convert_nvim_del_user_command(
     blame: &mut Blame,
 ) -> Result<(), Error> {
     let arg_1 = pop_string(stack).inspect_err(|_| *blame = Some(c"name"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     nvim_del_user_command(arg_1)?;
     Ok(())
 }
@@ -103,7 +103,7 @@ pub(super) fn convert_nvim_del_user_command(
 pub(super) fn convert_nvim_get_commands(stack: &mut Stack, blame: &mut Blame) -> Result<(), Error> {
     let mut arg_1 = KeyDict_get_commands::default();
     pop_keydict(stack, &mut arg_1, blame)?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_get_commands(&mut arg_1)?;
     push_dict(stack, &ret, PUSH_SPECIAL);
     Ok(())
@@ -115,7 +115,7 @@ pub(super) fn convert_nvim_parse_cmd(stack: &mut Stack, blame: &mut Blame) -> Re
     let mut arg_2 = KeyDict_empty::default();
     pop_keydict(stack, &mut arg_2, blame)?;
     let arg_1 = pop_string(stack).inspect_err(|_| *blame = Some(c"str"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let mut ret = nvim_parse_cmd(arg_1, &mut arg_2)?;
     push_keydict(stack, &mut ret);
     Ok(())

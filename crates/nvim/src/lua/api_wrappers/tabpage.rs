@@ -24,7 +24,7 @@ pub(super) fn convert_nvim_open_tabpage(stack: &mut Stack, blame: &mut Blame) ->
     pop_keydict(stack, &mut arg_3, blame)?;
     let arg_2 = pop_boolean(stack).inspect_err(|_| *blame = Some(c"enter"))?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"buf"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_open_tabpage(arg_1, arg_2, &mut arg_3)?;
     push_handle(stack, ret);
     Ok(())
@@ -38,7 +38,7 @@ pub(super) fn convert_nvim_tabpage_del_var(
 ) -> Result<(), Error> {
     let arg_2 = pop_string(stack).inspect_err(|_| *blame = Some(c"name"))?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"tabpage"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     nvim_tabpage_del_var(arg_1, arg_2)?;
     Ok(())
 }
@@ -50,7 +50,7 @@ pub(super) fn convert_nvim_tabpage_get_number(
     blame: &mut Blame,
 ) -> Result<(), Error> {
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"tabpage"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_tabpage_get_number(arg_1)?;
     push_integer(stack, ret);
     Ok(())
@@ -64,7 +64,7 @@ pub(super) fn convert_nvim_tabpage_get_var(
 ) -> Result<(), Error> {
     let arg_2 = pop_string(stack).inspect_err(|_| *blame = Some(c"name"))?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"tabpage"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_tabpage_get_var(arg_1, arg_2)?;
     push_object(stack, &ret, PUSH_SPECIAL);
     Ok(())
@@ -77,7 +77,7 @@ pub(super) fn convert_nvim_tabpage_get_win(
     blame: &mut Blame,
 ) -> Result<(), Error> {
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"tabpage"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_tabpage_get_win(arg_1)?;
     push_handle(stack, ret);
     Ok(())
@@ -90,7 +90,7 @@ pub(super) fn convert_nvim_tabpage_is_valid(
     blame: &mut Blame,
 ) -> Result<(), Error> {
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"tabpage"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_tabpage_is_valid(arg_1);
     push_boolean(stack, ret);
     Ok(())
@@ -103,7 +103,7 @@ pub(super) fn convert_nvim_tabpage_list_wins(
     blame: &mut Blame,
 ) -> Result<(), Error> {
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"tabpage"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_tabpage_list_wins(arg_1)?;
     push_array(stack, &ret, PUSH_SPECIAL);
     Ok(())
@@ -118,7 +118,7 @@ pub(super) fn convert_nvim_tabpage_set_var(
     let arg_3 = pop_object(stack, true).inspect_err(|_| *blame = Some(c"value"))?;
     let arg_2 = pop_string(stack).inspect_err(|_| *blame = Some(c"name"))?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"tabpage"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     nvim_tabpage_set_var(arg_1, arg_2, arg_3)?;
     Ok(())
 }
@@ -131,7 +131,7 @@ pub(super) fn convert_nvim_tabpage_set_win(
 ) -> Result<(), Error> {
     let arg_2 = pop_handle(stack).inspect_err(|_| *blame = Some(c"win"))?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"tabpage"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     nvim_tabpage_set_win(arg_1, arg_2)?;
     Ok(())
 }

@@ -1,6 +1,4 @@
-#![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `lua/` row in docs/perimeter.md.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -10,48 +8,45 @@
 )]
 
 //! `vim.spell`: the Lua binding over the spell checker.
-//!
-//! # Boundary
-//!
-//! `nlua_spell_check` is a Lua C function, so it keeps the C-unwind ABI
-//! and the raw `lua_State`, and it drives `spell_check` over a raw
-//! `char *` the way the spell checker expects.
 
-use crate::global_cell::ConstTable;
+use core::ffi::{CStr, c_int};
+
 use crate::highlight_group::{HLF_COUNT, HLF_SPB, HLF_SPC, HLF_SPL, HLF_SPR};
-use crate::lua::ffi::{
-    LUA_TSTRING, lua_createtable, lua_gettop, lua_pushinteger, lua_pushlstring, lua_pushstring,
-    lua_rawseti, lua_tolstring, lua_type, luaL_argerror, luaL_error, luaL_register,
-};
-use crate::message::e_no_spell;
-use crate::message::emsg;
+use crate::lua::stack::{At, Kind, Raise, Stack};
+use crate::lua_functions;
+use crate::message::{e_no_spell, emsg};
 use crate::optionstr::OptString;
 use crate::os::cshim::gettext;
 use crate::spell::{parse_spelllang, spell_check};
-use crate::types::{Hlf, lua_State, luaL_Reg, size_t};
+use crate::types::{Hlf, lua_Integer};
 use crate::winlayer::Win;
-use core::ffi::{CStr, c_int};
-use core::ptr;
+
+lua_functions! {
+    /// `vim.spell`.
+    enum Spell in SPELL_FUNCTIONS {
+        0 => c"check": spell_check_text,
+    }
+}
+
+/// One misspelling `vim.spell.check` reports: the word, its kind, and the
+/// 0-based byte offset it starts at.
+struct Misspelling {
+    word: Vec<u8>,
+    kind: &'static CStr,
+    at: usize,
+}
 
 /// `vim.spell.check(str)`: the misspellings in `str`, each as a
 /// `{ word, kind, byte_index }` triple.
 ///
-/// # Safety
-/// Called by Lua with a live `lua_State`, from the editor's main thread —
-/// it reads `curwin` and turns 'spell' on for the duration.
-unsafe extern "C-unwind" fn nlua_spell_check(lstate: *mut lua_State) -> c_int {
-    // SAFETY: Lua calls this with a live state; `luaL_argerror` does not
-    // return, and the checked argument stays on the stack for the whole
-    // call, so its bytes outlive the walk below.
-    let text = unsafe {
-        if lua_gettop(lstate) < 1 {
-            return luaL_error(lstate, c"Expected 1 argument".as_ptr());
-        }
-        if lua_type(lstate, 1) != LUA_TSTRING {
-            luaL_argerror(lstate, 1, c"expected string".as_ptr());
-        }
-        CStr::from_ptr(lua_tolstring(lstate, 1, ptr::null_mut())).to_bytes_with_nul()
-    };
+/// It reads `curwin` and turns 'spell' on for the duration.
+fn spell_check_text(stack: &mut Stack) -> Result<c_int, Raise> {
+    if stack.top().index() < 1 {
+        return Err(Raise::message("Expected 1 argument"));
+    }
+    if stack.kind(At::arg(1)) != Kind::String {
+        return Err(Raise::argument(1, "expected string"));
+    }
 
     // spell.c insists 'spell' is on, so turn it on for the duration.
     let mut win = Win::current();
@@ -63,75 +58,66 @@ unsafe extern "C-unwind" fn nlua_spell_check(lstate: *mut lua_State) -> c_int {
     if win.syn_block().b_p_spl.first_byte() == 0 {
         emsg(gettext(e_no_spell));
         win.w_onebuf_opt.wo_spell = wo_spell_save;
-        return 0;
+        return Ok(0);
     }
 
-    let mut pos: size_t = 0;
-    let mut capcol: c_int = -1;
-    let mut nresults: c_int = 0;
-    // SAFETY: the caller's live state.
-    unsafe { lua_createtable(lstate, 0, 0) };
-    // `spell_check` never steps past the terminator, so `pos` stays inside
-    // the text.
-    while text[pos] != 0 {
-        let word = &text[pos..];
-        let (len, attr): (size_t, Hlf) = spell_check(win, word, Some(&mut capcol), false);
-        debug_assert!(len <= c_int::MAX as size_t);
-        if attr != HLF_COUNT {
-            let kind: &CStr = match attr {
-                HLF_SPB => c"bad",
-                HLF_SPR => c"rare",
-                HLF_SPL => c"local",
-                HLF_SPC => c"caps",
-                _ => unreachable!("spell_check reported an unknown attribute"),
-            };
-            nresults += 1;
-            // SAFETY: as above. The triple is built on top of the results
-            // table and `rawseti`'d into it, so the stack ends level.
-            unsafe {
-                lua_createtable(lstate, 3, 0);
-                lua_pushlstring(lstate, word.as_ptr().cast(), len);
-                lua_rawseti(lstate, -2, 1);
-                lua_pushstring(lstate, kind.as_ptr());
-                lua_rawseti(lstate, -2, 2);
-                // +1 for Lua's 1-based indexing.
-                lua_pushinteger(lstate, pos.cast_signed() + 1);
-                lua_rawseti(lstate, -2, 3);
-                lua_rawseti(lstate, -2, nresults);
+    let found = {
+        // The text as the C string it was read as, terminator and all: the
+        // argument stays in its slot, so its bytes outlive the walk.
+        let text = stack
+            .c_string(At::arg(1))
+            .unwrap_or_default()
+            .to_bytes_with_nul();
+        let mut found = Vec::new();
+        let mut pos = 0;
+        let mut capcol: c_int = -1;
+        // `spell_check` never steps past the terminator, so `pos` stays
+        // inside the text.
+        while text[pos] != 0 {
+            let word = &text[pos..];
+            let (len, attr): (usize, Hlf) = spell_check(win, word, Some(&mut capcol), false);
+            if attr != HLF_COUNT {
+                let kind: &CStr = match attr {
+                    HLF_SPB => c"bad",
+                    HLF_SPR => c"rare",
+                    HLF_SPL => c"local",
+                    HLF_SPC => c"caps",
+                    _ => unreachable!("spell_check reported an unknown attribute"),
+                };
+                found.push(Misspelling {
+                    word: word[..len].to_vec(),
+                    kind,
+                    at: pos,
+                });
             }
+            pos += len;
+            capcol -= c_int::try_from(len).expect("a spell_check length fits an int");
         }
-        pos += len;
-        capcol -= c_int::try_from(len).expect("a spell_check length fits an int");
+        found
+    };
+
+    stack.new_table(0, 0);
+    for (n, misspelling) in (1..).zip(found) {
+        // The triple is built on top of the results table and stored into
+        // it, so the stack ends level.
+        stack.new_table(3, 0);
+        stack.push_bytes(&misspelling.word);
+        stack.raw_set_index(At::from_top(2), 1);
+        stack.push_bytes(misspelling.kind.to_bytes());
+        stack.raw_set_index(At::from_top(2), 2);
+        // +1 for Lua's 1-based indexing.
+        stack.push_integer(lua_Integer::try_from(misspelling.at).unwrap_or(lua_Integer::MAX) + 1);
+        stack.raw_set_index(At::from_top(2), 3);
+        stack.raw_set_index(At::from_top(2), n);
     }
 
     // 'spell' goes back to what it was.
     win.w_onebuf_opt.wo_spell = wo_spell_save;
-    1
+    Ok(1)
 }
 
-/// What `luaL_register` copies into the table, terminated by a null name.
-/// The raw name pointers are what keep it out of a plain `static`.
-static SPELL_FUNCTIONS: ConstTable<[luaL_Reg; 2]> = ConstTable::new([
-    luaL_Reg {
-        name: c"check".as_ptr(),
-        func: Some(nlua_spell_check),
-    },
-    luaL_Reg {
-        name: ptr::null(),
-        func: None,
-    },
-]);
-
 /// Build the `vim.spell` table and leave it on the stack.
-///
-/// # Safety
-/// `lstate` must be a live Lua state with room for one more value.
-pub unsafe fn luaopen_spell(lstate: *mut lua_State) -> c_int {
-    // SAFETY: the caller's live state; the table is what `luaL_register`
-    // copies the (`'static`) registry into.
-    unsafe {
-        lua_createtable(lstate, 0, 0);
-        luaL_register(lstate, ptr::null(), SPELL_FUNCTIONS.as_ptr());
-    }
-    1
+pub(crate) fn push_spell(stack: &mut Stack) {
+    stack.new_table(0, 0);
+    stack.register_functions(SPELL_FUNCTIONS);
 }

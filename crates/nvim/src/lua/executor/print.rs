@@ -2,162 +2,153 @@
 //!
 //! Neovim replaces Lua's `print` so its output goes through the editor's
 //! message path rather than stdout, and defers it when called from a fast
-//! callback (`nlua_print_event`).  [`nlua_require`] is the wrapper that keeps
-//! `package.loaded` and the runtime path in step, and [`nlua_debug`] is the
-//! `vim.debug()` read-eval-print loop.
+//! callback or a luv thread. [`require`] is the wrapper that `--startuptime`
+//! times each module through, and [`debug`] is the `vim.debug()`
+//! read-eval-print loop.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `lua/` row in docs/perimeter.md.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
-use crate::cstr;
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
+use core::ffi::{CStr, c_int};
+use std::ffi::CString;
 
-use super::{in_fast_callback, nlua_error, nlua_pcall, nlua_pushref, require_ref};
+use super::{in_fast_callback, nlua_error, nlua_pcall, require_ref, until_nul};
 use crate::eval::typval::{TV_INITIAL_VALUE, tv_clear};
-use crate::event::r#loop::loop_schedule_deferred;
-use crate::event::multiqueue::multiqueue_put_event;
+use crate::event::r#loop::schedule_deferred_job;
+use crate::event::multiqueue::put_job_on_main_loop;
 use crate::ex_getln::{get_user_input, ui_ext_cmdline_block_append, ui_ext_cmdline_block_leave};
-use crate::lua::ffi::{
-    LUA_GLOBALSINDEX, LUA_REGISTRYINDEX, lua_call, lua_error, lua_getfield, lua_gettop, lua_insert,
-    lua_iscfunction, lua_pcall, lua_pushlstring, lua_pushvalue, lua_setfield, lua_settop,
-    lua_toboolean, lua_tocfunction, lua_tolstring, luaL_loadbuffer,
-};
-use crate::lua::stack::{lua_getglobal, lua_pop, luaL_checkstring};
-use crate::memory::{ThinCString, xfree, xmalloc};
+use crate::lua::stack::{At, CFunction, Function, Raise, Stack};
+use crate::lua_functions;
 use crate::message::{msg_multihl, msg_putchar};
-use crate::os::cshim::{gettext, snprintf};
+use crate::os::cshim::gettext;
 use crate::profile::startup_timing;
 use crate::profile::{time_msg, time_pop, time_push};
-use crate::startup::main_loop;
 use crate::types::ui::kUICmdline;
-use crate::types::{
-    Event, HlMessageChunk, IOSIZE, Object, ProfTime, String_0, TypVal, intptr_t, lua_State, size_t,
-};
+use crate::types::{HlMessageChunk, IOSIZE, Object, String_0, TypVal};
 use crate::ui::ui_has;
+
+lua_functions! {
+    /// The functions that replace or wrap Lua's own: `print`,
+    /// `debug.debug` and `require`.
+    pub(crate) enum Runtime in RUNTIME_FUNCTIONS {
+        0 => c"print": print,
+        1 => c"debug": debug,
+        2 => c"require": require,
+    }
+}
+
+/// `print`, for a state of any kind.
+pub(crate) fn print_function() -> CFunction {
+    RUNTIME_FUNCTIONS[0].entry()
+}
+
+/// The `--startuptime` wrapper of `require`.
+pub(crate) fn require_function() -> CFunction {
+    RUNTIME_FUNCTIONS[2].entry()
+}
+
+/// Replace the main state's `print` and `debug.debug`.
+pub(crate) fn register_runtime(stack: &mut Stack) {
+    let [print, debug, _]: &[Function; 3] = RUNTIME_FUNCTIONS.try_into().expect("three functions");
+    stack.push_function(print.entry());
+    stack.set_global(print.name());
+
+    stack.get_global(c"debug");
+    stack.push_function(debug.entry());
+    stack.set_field(At::from_top(2), debug.name());
+    stack.pop(1);
+}
 
 /// The message kind `print()`'s output is reported under.
 const LUA_PRINT_KIND: &CStr = c"lua_print";
+
 /// Show one `print()`'s worth of text.
-///
-/// `argv[0]` is the NUL-terminated buffer `nlua_print` built and `argv[1]`
-/// its length *including* that terminator, which the chunk excludes again.
-///
-/// # Safety
-/// `argv` must be the two-element array `nlua_print` built.
-unsafe extern "C" fn nlua_print_event(argv: *mut *mut c_void) {
-    unsafe {
-        // The buffer is `nlua_print`'s own allocation, NUL-terminated at the
-        // length below, and the chunk takes it over.
-        let chunk = HlMessageChunk {
-            text: String_0::from_owned_parts(
-                (*argv.add(0)).cast::<c_char>(),
-                ((*argv.add(1)).expose_provenance() as intptr_t as size_t).wrapping_sub(1),
-            ),
-            hl_id: 0,
-        };
-        let mut needs_clear = false;
-        msg_multihl(
-            Object::Nil,
-            &[chunk],
-            Some(LUA_PRINT_KIND),
-            true,
-            false,
-            None,
-            &mut needs_clear,
-        );
-    }
+fn show_printed(text: Vec<u8>) {
+    let chunk = HlMessageChunk {
+        text: String_0::from_bytes(&text),
+        hl_id: 0,
+    };
+    let mut needs_clear = false;
+    msg_multihl(
+        Object::Nil,
+        &[chunk],
+        Some(LUA_PRINT_KIND),
+        true,
+        false,
+        None,
+        &mut needs_clear,
+    );
 }
+
+/// What `print()` reports when `tostring` answers something that is not a
+/// string at all.
+const NULL_TOSTRING: &[u8] = b"<Unknown error: lua_tolstring returned NULL for tostring result>";
 
 /// Neovim's `print()`: every argument through `tostring`, space-separated,
 /// through the message path.
 ///
 /// A thread state and a fast callback both defer the message onto the main
-/// loop; everything else shows it directly. Either way the buffer's
-/// ownership passes to whoever shows it.
-///
-/// # Safety
-/// `lstate` must be a live Lua state holding this function's arguments.
-pub(crate) unsafe extern "C-unwind" fn nlua_print(lstate: *mut lua_State) -> c_int {
-    unsafe {
-        let nargs = lua_gettop(lstate);
-        lua_getglobal(lstate, c"tostring".as_ptr());
+/// loop; everything else shows it directly.
+fn print(stack: &mut Stack) -> Result<c_int, Raise> {
+    let nargs = stack.top().index();
+    stack.get_global(c"tostring");
 
-        let errmsg: *const c_char;
-        let mut errmsg_len: size_t = 0;
-        let mut msg_text = Vec::<u8>::new();
-
-        let mut curargidx: c_int = 1;
-        'nlua_print_error: {
-            while curargidx <= nargs {
-                lua_pushvalue(lstate, -1); // tostring
-                lua_pushvalue(lstate, curargidx);
-                if lua_pcall(lstate, 1, 1, 0) != 0 {
-                    errmsg = lua_tolstring(lstate, -1, &raw mut errmsg_len);
-                    break 'nlua_print_error;
-                }
-                let mut len: size_t = 0;
-                let s = lua_tolstring(lstate, -1, &raw mut len);
-                if s.is_null() {
-                    errmsg = NULL_TOSTRING.as_ptr();
-                    errmsg_len = NULL_TOSTRING.count_bytes();
-                    break 'nlua_print_error;
-                }
-                msg_text.extend_from_slice(core::slice::from_raw_parts(s.cast::<u8>(), len));
-                if curargidx < nargs {
-                    msg_text.push(b' ');
-                }
-                lua_pop(lstate, 1);
-                curargidx += 1;
-            }
-            msg_text.push(0);
-
-            lua_getfield(lstate, LUA_REGISTRYINDEX, c"nvim.thread".as_ptr());
-            let is_thread = lua_toboolean(lstate, -1) != 0;
-            lua_pop(lstate, 1);
-
-            // The event owns the buffer from here on and `xfree`s it, which
-            // a boxed slice may cross (`allocator.rs`). The length carried
-            // alongside it includes the terminator, as `ga_len` did.
-            let msg_len = msg_text.len();
-            let mut args = [
-                Box::into_raw(msg_text.into_boxed_slice()).cast::<c_void>(),
-                ptr::with_exposed_provenance_mut::<c_void>(msg_len as intptr_t as usize),
-            ];
-            if is_thread {
-                loop_schedule_deferred(main_loop.ptr(), Event::new(Some(nlua_print_event), args));
-            } else if in_fast_callback.get() != 0 {
-                multiqueue_put_event(
-                    (*main_loop.ptr()).events,
-                    Event::new(Some(nlua_print_event), args),
-                );
-            } else {
-                nlua_print_event(args.as_mut_ptr());
-            }
-            return 0;
+    let mut text = Vec::<u8>::new();
+    for arg in 1..=nargs {
+        stack.push_value(At::TOP); // tostring
+        stack.push_value(At::arg(arg));
+        if stack.pcall(1, 1, None).is_err() {
+            let error = stack
+                .to_bytes(At::TOP)
+                .map(|error| until_nul(error).to_vec());
+            return Err(conversion_failed(stack, arg, error.as_deref()));
         }
-
-        // The conversion failed: nothing is shown, and the failure is thrown
-        // at the Lua caller instead.
-        drop(msg_text);
-        let buff = xmalloc(IOSIZE as size_t).cast::<c_char>();
-        let fmt = gettext(c"E5114: Converting print argument #%i: %.*s");
-        // What the buffer holds, not what the message would have been:
-        // upstream pushes the would-be length, and reads past the buffer
-        // when the error is longer than it.
-        let len = crate::vim_snprintf_safelen!(
-            buff,
-            IOSIZE as size_t,
-            fmt.as_ptr(),
-            curargidx,
-            errmsg_len as c_int,
-            errmsg,
-        );
-        lua_pushlstring(lstate, buff, len);
-        xfree(buff.cast::<c_void>());
-        lua_error(lstate)
+        let Some(shown) = stack.to_bytes(At::TOP) else {
+            return Err(conversion_failed(stack, arg, Some(NULL_TOSTRING)));
+        };
+        text.extend_from_slice(shown);
+        if arg < nargs {
+            text.push(b' ');
+        }
+        stack.pop(1);
     }
+
+    stack.get_field(At::REGISTRY, c"nvim.thread");
+    let is_thread = stack.to_boolean(At::TOP);
+    stack.pop(1);
+
+    if is_thread {
+        schedule_deferred_job(Box::new(move || show_printed(text)));
+    } else if in_fast_callback.get() != 0 {
+        put_job_on_main_loop(Box::new(move || show_printed(text)));
+    } else {
+        show_printed(text);
+    }
+    Ok(0)
+}
+
+/// `print()` could not convert argument `arg`: nothing is shown, and the
+/// failure is thrown at the Lua caller instead. `error` is why, as the C
+/// string it was (`None` for no string at all).
+///
+/// The message is what upstream's `IOSIZE` buffer holds, not what the
+/// message would have been: upstream pushes the would-be length, and reads
+/// past the buffer when the error is longer than it.
+fn conversion_failed(stack: &mut Stack, arg: c_int, error: Option<&[u8]>) -> Raise {
+    let template = gettext(c"E5114: Converting print argument #%i: %.*s").to_bytes();
+    let error_len = c_int::try_from(error.map_or(0, <[u8]>::len)).unwrap_or(c_int::MAX);
+    let message = match error {
+        Some(error) => crate::formatted!(IOSIZE as usize, template, arg, error_len, error),
+        None => crate::formatted!(IOSIZE as usize, template, arg, error_len, None::<&CStr>),
+    };
+    stack.push_bytes(&message);
+    Raise::top_value()
 }
 
 /// The startuptime label for loading `module`: `require('module')`.
@@ -171,115 +162,94 @@ fn require_label(module: &CStr) -> Vec<u8> {
 /// Neovim's `require()`: the stock one, wrapped so that `--startuptime`
 /// records how long each module took.
 ///
-/// A module already in `package.loaded` short-circuits, and the wrapper
-/// re-installs itself as the global `require` if something replaced it.
-///
-/// # Safety
-/// `lstate` must be a live Lua state holding this function's arguments.
-pub(crate) unsafe extern "C-unwind" fn nlua_require(lstate: *mut lua_State) -> c_int {
-    unsafe {
-        let name = luaL_checkstring(lstate, 1);
-        lua_settop(lstate, 1);
-        lua_getfield(lstate, LUA_REGISTRYINDEX, c"_LOADED".as_ptr());
-        lua_getfield(lstate, 2, name);
-        if lua_toboolean(lstate, -1) != 0 {
-            return 1;
-        }
-        lua_pop(lstate, 2);
+/// A module already in `package.loaded` short-circuits, and once timing is
+/// over the wrapper puts the stock `require` back as the global and hands
+/// straight through to it.
+fn require(stack: &mut Stack) -> Result<c_int, Raise> {
+    // `luaL_checkstring`'s C string: up to the first NUL.
+    let name = until_nul(stack.check_bytes(At::arg(1))?).to_vec();
+    let name = CString::new(name).expect("cut at the first NUL");
+    stack.set_top(At::arg(1));
+    stack.get_field(At::REGISTRY, c"_LOADED");
+    stack.get_field(At::arg(2), &name);
+    if stack.to_boolean(At::TOP) {
+        return Ok(1);
+    }
+    stack.pop(2);
 
-        nlua_pushref(lstate, require_ref.get());
-        lua_insert(lstate, 1);
+    stack.push_reference(require_ref.get());
+    stack.insert(At::arg(1));
 
-        if !startup_timing() {
-            // Not profiling: hand straight through, restoring the global
-            // `require` if the stock one has taken it back.
-            lua_getglobal(lstate, c"require".as_ptr());
-            let is_this_wrapper = lua_iscfunction(lstate, -1) != 0
-                && lua_tocfunction(lstate, -1)
-                    .is_some_and(|f| ptr::fn_addr_eq(f, nlua_require as CFunction));
-            if is_this_wrapper {
-                lua_pushvalue(lstate, 1);
-                lua_setfield(lstate, LUA_GLOBALSINDEX, c"require".as_ptr());
-            }
-            lua_pop(lstate, 1);
-            lua_call(lstate, 1, 1);
-            return 1;
+    if !startup_timing() {
+        // Not profiling: hand straight through, restoring the global
+        // `require` if it is still this wrapper.
+        stack.get_global(c"require");
+        if stack.is_c_function(At::TOP, require_function()) {
+            stack.push_value(At::arg(1));
+            stack.set_global(c"require");
         }
+        stack.pop(1);
+        return Err(Raise::tail_call(1, 1));
+    }
 
-        let (rel_time, start_time): (ProfTime, ProfTime) = time_push();
-        let status = lua_pcall(lstate, 1, 1, 0);
-        if status == 0 {
-            time_msg(&require_label(CStr::from_ptr(name)), Some(start_time));
-        }
-        time_pop(rel_time);
-        if status == 0 { 1 } else { lua_error(lstate) }
+    let (rel_time, start_time) = time_push();
+    let loaded = stack.pcall(1, 1, None).is_ok();
+    if loaded {
+        time_msg(&require_label(&name), Some(start_time));
+    }
+    time_pop(rel_time);
+    if loaded {
+        Ok(1)
+    } else {
+        Err(Raise::top_value())
     }
 }
+
+/// The prompt `vim.debug()` reads each line with.
+const DEBUG_PROMPT: &[u8] = b"lua_debug> ";
 
 /// `vim.debug()`: read a line, run it, repeat until `cont` or an empty line.
-///
-/// # Safety
-/// `lstate` must be a live Lua state.
-pub(crate) unsafe extern "C-unwind" fn nlua_debug(lstate: *mut lua_State) -> c_int {
-    let mut line = [0 as c_char; IOSIZE as usize];
-    unsafe {
-        // The prompt is a copy the array owns and releases.
-        let input_args = [TypVal::string_from(b"lua_debug> ")];
-        loop {
-            lua_settop(lstate, 0);
-            let mut input = TV_INITIAL_VALUE;
-            get_user_input(&input_args, &mut input, false, false);
+fn debug(stack: &mut Stack) -> Result<c_int, Raise> {
+    // The prompt is a copy the array owns and releases.
+    let input_args = [TypVal::string_from(DEBUG_PROMPT)];
+    loop {
+        stack.set_top(At::arg(0));
+        let mut input = TV_INITIAL_VALUE;
+        get_user_input(&input_args, &mut input, false, false);
 
-            if ui_has(kUICmdline) {
-                snprintf(
-                    line.as_mut_ptr(),
-                    IOSIZE as size_t,
-                    c"lua_debug> %s".as_ptr(),
-                    // A null `%s` is printed the way the C library prints it.
-                    input.string_ref().map_or(ptr::null(), ThinCString::as_ptr),
-                );
-                ui_ext_cmdline_block_append(0, cstr::in_chars(&line).to_bytes());
-            } else {
-                msg_putchar(b'\n' as c_int);
-            }
-
-            // Done on anything but a String with text other than "cont".
-            let Some(text) = input
+        if ui_has(kUICmdline) {
+            // `snprintf(line, IOSIZE, "lua_debug> %s", input)`: a null
+            // string as the C library prints one.
+            let shown = input
                 .string_ref()
-                .filter(|s| !s.is_empty() && s.as_bytes() != b"cont")
-            else {
-                tv_clear(&mut input);
-                if ui_has(kUICmdline) {
-                    ui_ext_cmdline_block_leave();
-                }
-                return 0;
-            };
-
-            if luaL_loadbuffer(
-                lstate,
-                text.as_ptr(),
-                text.as_bytes().len(),
-                c"=(debug command)".as_ptr(),
-            ) != 0
-            {
-                nlua_error(
-                    lstate,
-                    gettext(c"E5115: Loading Lua debug string: %.*s").as_ptr(),
-                );
-            } else if nlua_pcall(lstate, 0, 0) != 0 {
-                nlua_error(
-                    lstate,
-                    gettext(c"E5116: Calling Lua debug string: %.*s").as_ptr(),
-                );
-            }
-            tv_clear(&mut input);
+                .map_or(&b"(null)"[..], |text| text.as_bytes());
+            let mut line = [DEBUG_PROMPT, until_nul(shown)].concat();
+            line.truncate(IOSIZE as usize - 1);
+            ui_ext_cmdline_block_append(0, &line);
+        } else {
+            msg_putchar(c_int::from(b'\n'));
         }
+
+        // Done on anything but a String with text other than "cont".
+        let Some(text) = input
+            .string_ref()
+            .filter(|s| !s.is_empty() && s.as_bytes() != b"cont")
+        else {
+            tv_clear(&mut input);
+            if ui_has(kUICmdline) {
+                ui_ext_cmdline_block_leave();
+            }
+            return Ok(0);
+        };
+
+        if stack
+            .load(text.as_bytes(), Some(c"=(debug command)"))
+            .is_err()
+        {
+            nlua_error(stack, c"E5115: Loading Lua debug string: %.*s");
+        } else if nlua_pcall(stack, 0, 0).is_err() {
+            nlua_error(stack, c"E5116: Calling Lua debug string: %.*s");
+        }
+        tv_clear(&mut input);
     }
 }
-
-/// What `print()` reports when `tostring` answers something that is not a
-/// string at all.
-const NULL_TOSTRING: &CStr = c"<Unknown error: lua_tolstring returned NULL for tostring result>";
-
-/// The signature `lua_tocfunction` answers with.
-type CFunction = unsafe extern "C-unwind" fn(*mut lua_State) -> c_int;

@@ -42,7 +42,7 @@ use crate::autocmd::{do_autocmd_focusgained, may_trigger_vim_suspend_resume};
 use crate::channel::find_channel;
 use crate::event::r#loop::process_events_until;
 use crate::global_cell::GlobalCell;
-use crate::memory::{XString, strequal, xfree};
+use crate::memory::{XString, xfree};
 use crate::option::set_tty_option;
 use crate::startup::{main_loop, starting, stdin_fd, stdin_isatty, stdout_isatty};
 use crate::types::builders::{ArrayBuf, DictBuf};
@@ -451,9 +451,8 @@ unsafe fn ui_set_option(
     // The extensions, by their protocol names. `popupmenu_external` is
     // the pre-0.3 spelling of `ext_popupmenu` and still accepted.
     let is_popupmenu = named(c"popupmenu_external");
-    for ext in 0..kUIExtCount as usize {
-        // SAFETY: `name` is the caller's and the table holds static names.
-        let matched = unsafe { strequal(name.data(), ui_ext_names[ext]) };
+    for (ext, ext_name) in ui_ext_names.iter().enumerate().take(kUIExtCount as usize) {
+        let matched = name.as_cstr() == *ext_name;
         if !matched && !(ext == kUIPopupmenu as usize && is_popupmenu) {
             continue;
         }

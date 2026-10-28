@@ -16,7 +16,7 @@ use crate::ex_cmds::rename_buffer;
 use crate::extmark::extmark_splice;
 
 use crate::decoration::kMTMetaLines;
-use crate::lua::executor::{kRetLuaref, nlua_call_ref};
+use crate::lua::executor::{kRetLuaref, nlua_call_ref_reporting};
 use crate::mapping::{keymap_array, modify_keymap};
 use crate::mark::{mark_adjust_buf, mark_get};
 use crate::memline::{

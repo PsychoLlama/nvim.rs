@@ -23,7 +23,7 @@ use crate::highlight::state::{
     cterm_normal_bg_color, cterm_normal_fg_color, need_highlight_changed, normal_bg, normal_fg,
     normal_sp,
 };
-use crate::lua::executor::nlua_set_sctx_in;
+use crate::lua::executor::nlua_set_sctx;
 use crate::message::{emsg, msg_ext_set_kind};
 use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::option::{option_was_set, reset_option_was_set, set_option_value_give_err};
@@ -226,7 +226,7 @@ pub(crate) fn do_highlight(text: &CStr, forceit: bool, init: bool) {
     with_group(id, |entry| {
         entry.script_ctx = current_sctx.get();
         entry.script_ctx.sc_lnum += sourcing_lnum();
-        nlua_set_sctx_in(&mut entry.script_ctx);
+        nlua_set_sctx(&mut entry.script_ctx);
     });
 
     // Call `highlight_changed` once after a sequence of `:highlight`
@@ -278,7 +278,7 @@ fn highlight_link(line: &mut Line, forceit: bool, init: bool, dodefault: bool) {
             entry.deflink = to_id;
             entry.deflink_sctx = current_sctx.get();
             entry.deflink_sctx.sc_lnum += sourcing_lnum();
-            nlua_set_sctx_in(&mut entry.deflink_sctx);
+            nlua_set_sctx(&mut entry.deflink_sctx);
         });
     }
 
@@ -303,7 +303,7 @@ fn highlight_link(line: &mut Line, forceit: bool, init: bool, dodefault: bool) {
             entry.link = to_id;
             entry.script_ctx = current_sctx.get();
             entry.script_ctx.sc_lnum += sourcing_lnum();
-            nlua_set_sctx_in(&mut entry.script_ctx);
+            nlua_set_sctx(&mut entry.script_ctx);
             entry.cleared = false;
         });
         redraw_all_later(UPD_SOME_VALID);

@@ -76,14 +76,7 @@ pub fn nvim_buf_call(buf: BufferHandle, fun: LuaRef) -> Result<Object, Error> {
     let mut aco: AcoSave = AcoSave::default();
     aucmd_prepbuf(&mut aco, b);
     let args: Array = Array::EMPTY;
-    let res = unsafe {
-        nlua_call_ref(
-            fun,
-            ::core::ptr::null::<::core::ffi::c_char>(),
-            args,
-            kRetLuaref,
-        )
-    };
+    let res = nlua_call_ref_reporting(fun, None, args, kRetLuaref);
     aucmd_restbuf(&mut aco);
     // The bracket outranks the call's own failure, as it did when both went
     // through one slot.

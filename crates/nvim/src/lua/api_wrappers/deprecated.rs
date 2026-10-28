@@ -26,7 +26,7 @@ pub(super) fn convert_nvim_buf_add_highlight(
     let arg_3 = pop_string(stack).inspect_err(|_| *blame = Some(c"hl_group"))?;
     let arg_2 = pop_integer(stack).inspect_err(|_| *blame = Some(c"ns_id"))?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"buffer"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_buf_add_highlight(arg_1, arg_2, arg_3, arg_4, arg_5, arg_6)?;
     push_integer(stack, ret);
     Ok(())
@@ -42,7 +42,7 @@ pub(super) fn convert_nvim_buf_clear_highlight(
     let arg_3 = pop_integer(stack).inspect_err(|_| *blame = Some(c"line_start"))?;
     let arg_2 = pop_integer(stack).inspect_err(|_| *blame = Some(c"ns_id"))?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"buffer"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     nvim_buf_clear_highlight(arg_1, arg_2, arg_3, arg_4)?;
     Ok(())
 }
@@ -54,7 +54,7 @@ pub(super) fn convert_nvim_buf_get_number(
     blame: &mut Blame,
 ) -> Result<(), Error> {
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"buffer"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_buf_get_number(arg_1)?;
     push_integer(stack, ret);
     Ok(())
@@ -68,7 +68,7 @@ pub(super) fn convert_nvim_buf_get_option(
 ) -> Result<(), Error> {
     let arg_2 = pop_string(stack).inspect_err(|_| *blame = Some(c"name"))?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"buffer"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_buf_get_option(arg_1, arg_2)?;
     push_object(stack, &ret, PUSH_SPECIAL);
     Ok(())
@@ -83,7 +83,7 @@ pub(super) fn convert_nvim_buf_set_option(
     let arg_3 = pop_object(stack, true).inspect_err(|_| *blame = Some(c"value"))?;
     let arg_2 = pop_string(stack).inspect_err(|_| *blame = Some(c"name"))?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"buffer"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     nvim_buf_set_option(LUA_INTERNAL_CALL, arg_1, arg_2, arg_3)?;
     Ok(())
 }
@@ -100,7 +100,7 @@ pub(super) fn convert_nvim_buf_set_virtual_text(
     let arg_3 = pop_integer(stack).inspect_err(|_| *blame = Some(c"line"))?;
     let arg_2 = pop_integer(stack).inspect_err(|_| *blame = Some(c"src_id"))?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"buffer"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_buf_set_virtual_text(arg_1, arg_2, arg_3, arg_4, &mut arg_5)?;
     push_integer(stack, ret);
     Ok(())
@@ -113,7 +113,7 @@ pub(super) fn convert_nvim_command_output(
     blame: &mut Blame,
 ) -> Result<(), Error> {
     let arg_1 = pop_string(stack).inspect_err(|_| *blame = Some(c"command"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_command_output(LUA_INTERNAL_CALL, arg_1)?;
     push_string(stack, &ret);
     Ok(())
@@ -123,7 +123,7 @@ pub(super) fn convert_nvim_command_output(
 /// function, hand the result back.
 pub(super) fn convert_nvim_err_write(stack: &mut Stack, blame: &mut Blame) -> Result<(), Error> {
     let arg_1 = pop_string(stack).inspect_err(|_| *blame = Some(c"str"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     nvim_err_write(arg_1);
     Ok(())
 }
@@ -132,7 +132,7 @@ pub(super) fn convert_nvim_err_write(stack: &mut Stack, blame: &mut Blame) -> Re
 /// function, hand the result back.
 pub(super) fn convert_nvim_err_writeln(stack: &mut Stack, blame: &mut Blame) -> Result<(), Error> {
     let arg_1 = pop_string(stack).inspect_err(|_| *blame = Some(c"str"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     nvim_err_writeln(arg_1);
     Ok(())
 }
@@ -142,7 +142,7 @@ pub(super) fn convert_nvim_err_writeln(stack: &mut Stack, blame: &mut Blame) -> 
 pub(super) fn convert_nvim_exec(stack: &mut Stack, blame: &mut Blame) -> Result<(), Error> {
     let arg_2 = pop_boolean(stack).inspect_err(|_| *blame = Some(c"output"))?;
     let arg_1 = pop_string(stack).inspect_err(|_| *blame = Some(c"src"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_exec(LUA_INTERNAL_CALL, arg_1, arg_2)?;
     push_string(stack, &ret);
     Ok(())
@@ -153,7 +153,7 @@ pub(super) fn convert_nvim_exec(stack: &mut Stack, blame: &mut Blame) -> Result<
 pub(super) fn convert_nvim_get_hl_by_id(stack: &mut Stack, blame: &mut Blame) -> Result<(), Error> {
     let arg_2 = pop_boolean(stack).inspect_err(|_| *blame = Some(c"rgb"))?;
     let arg_1 = pop_integer(stack).inspect_err(|_| *blame = Some(c"hl_id"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_get_hl_by_id(arg_1, arg_2)?;
     push_dict(stack, &ret, PUSH_SPECIAL);
     Ok(())
@@ -167,7 +167,7 @@ pub(super) fn convert_nvim_get_hl_by_name(
 ) -> Result<(), Error> {
     let arg_2 = pop_boolean(stack).inspect_err(|_| *blame = Some(c"rgb"))?;
     let arg_1 = pop_string(stack).inspect_err(|_| *blame = Some(c"name"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_get_hl_by_name(arg_1, arg_2)?;
     push_dict(stack, &ret, PUSH_SPECIAL);
     Ok(())
@@ -177,7 +177,7 @@ pub(super) fn convert_nvim_get_hl_by_name(
 /// function, hand the result back.
 pub(super) fn convert_nvim_get_option(stack: &mut Stack, blame: &mut Blame) -> Result<(), Error> {
     let arg_1 = pop_string(stack).inspect_err(|_| *blame = Some(c"name"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_get_option(arg_1)?;
     push_object(stack, &ret, PUSH_SPECIAL);
     Ok(())
@@ -190,7 +190,7 @@ pub(super) fn convert_nvim_get_option_info(
     blame: &mut Blame,
 ) -> Result<(), Error> {
     let arg_1 = pop_string(stack).inspect_err(|_| *blame = Some(c"name"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_get_option_info(arg_1)?;
     push_dict(stack, &ret, PUSH_SPECIAL);
     Ok(())
@@ -202,7 +202,7 @@ pub(super) fn convert_nvim_notify(stack: &mut Stack, blame: &mut Blame) -> Resul
     let arg_3 = pop_dict(stack, false).inspect_err(|_| *blame = Some(c"opts"))?;
     let arg_2 = pop_integer(stack).inspect_err(|_| *blame = Some(c"log_level"))?;
     let arg_1 = pop_string(stack).inspect_err(|_| *blame = Some(c"msg"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_notify(arg_1, arg_2, arg_3)?;
     push_object(stack, &ret, PUSH_SPECIAL);
     Ok(())
@@ -212,7 +212,7 @@ pub(super) fn convert_nvim_notify(stack: &mut Stack, blame: &mut Blame) -> Resul
 /// function, hand the result back.
 pub(super) fn convert_nvim_out_write(stack: &mut Stack, blame: &mut Blame) -> Result<(), Error> {
     let arg_1 = pop_string(stack).inspect_err(|_| *blame = Some(c"str"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     nvim_out_write(arg_1);
     Ok(())
 }
@@ -222,7 +222,7 @@ pub(super) fn convert_nvim_out_write(stack: &mut Stack, blame: &mut Blame) -> Re
 pub(super) fn convert_nvim_set_option(stack: &mut Stack, blame: &mut Blame) -> Result<(), Error> {
     let arg_2 = pop_object(stack, true).inspect_err(|_| *blame = Some(c"value"))?;
     let arg_1 = pop_string(stack).inspect_err(|_| *blame = Some(c"name"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     nvim_set_option(LUA_INTERNAL_CALL, arg_1, arg_2)?;
     Ok(())
 }
@@ -235,7 +235,7 @@ pub(super) fn convert_nvim_win_get_option(
 ) -> Result<(), Error> {
     let arg_2 = pop_string(stack).inspect_err(|_| *blame = Some(c"name"))?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"window"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_win_get_option(arg_1, arg_2)?;
     push_object(stack, &ret, PUSH_SPECIAL);
     Ok(())
@@ -250,7 +250,7 @@ pub(super) fn convert_nvim_win_set_option(
     let arg_3 = pop_object(stack, true).inspect_err(|_| *blame = Some(c"value"))?;
     let arg_2 = pop_string(stack).inspect_err(|_| *blame = Some(c"name"))?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"window"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     nvim_win_set_option(LUA_INTERNAL_CALL, arg_1, arg_2, arg_3)?;
     Ok(())
 }

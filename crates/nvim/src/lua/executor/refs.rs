@@ -1,16 +1,12 @@
-//! `LuaRef`s: the registry table every callback is held in.
+//! `LuaRef`s: the registry entries every callback is held in.
 //!
-//! A `LuaRef` is an index into a per-state reference table, allocated by
-//! [`nlua_ref`] and released by [`nlua_unref`]; [`nlua_ref_global`] and its
-//! `_global` twins are the same against the *main* state, which is what an
-//! api callback stored in a buffer or an autocommand needs.  The nil and
-//! empty-dict sentinels live here too: both are single refs to a unique
-//! table, which is how `vim.NIL` and `vim.empty_dict()` compare by
-//! identity.
+//! A `LuaRef` is an index into the main state's registry, taken by
+//! [`Stack::reference`] and given back by [`Stack::unreference`] (or by
+//! dropping the [`OwnedLuaRef`](crate::lua::stack::OwnedLuaRef) that holds
+//! it); [`MAIN_REFS`] counts them. This is the api's side of that: copying a
+//! reference, giving one back, and asking what it refers to.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `lua/` row in docs/perimeter.md.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -21,201 +17,44 @@
 
 use core::ffi::c_int;
 
-use super::get_global_lstate;
-use crate::lua::ffi::{
-    LUA_NOREF, LUA_REGISTRYINDEX, LUA_TFUNCTION, lua_getfield, lua_newuserdata, lua_pushstring,
-    lua_pushvalue, lua_rawgeti, lua_touserdata, lua_type, luaL_error, luaL_ref, luaL_unref,
-};
-use crate::lua::stack::lua_pop;
-use crate::lua::state::nlua_global_refs;
-use crate::types::{LuaRef, NluaRefState, lua_State};
-
-/// The registry key the per-state reference table is parked under.
-const REF_STATE_KEY: &core::ffi::CStr = c"nlua.ref_state";
-
-/// Allocate this state's reference bookkeeping, as a Lua userdatum so the
-/// state owns it.  The main state's also becomes the global one.
-///
-/// # Safety
-/// `lstate` must be a live Lua state with room for one more value.
-pub(crate) unsafe fn nlua_new_ref_state(
-    lstate: *mut lua_State,
-    is_thread: bool,
-) -> *mut NluaRefState {
-    unsafe {
-        let ref_state = lua_newuserdata(lstate, size_of::<NluaRefState>()).cast::<NluaRefState>();
-        ref_state
-            .cast::<u8>()
-            .write_bytes(0, size_of::<NluaRefState>());
-        (*ref_state).nil_ref = LUA_NOREF;
-        (*ref_state).empty_dict_ref = LUA_NOREF;
-        if !is_thread {
-            nlua_global_refs.set(ref_state);
-        }
-        ref_state
-    }
-}
-
-/// This state's reference bookkeeping.
-///
-/// # Safety
-/// `lstate` must be a live Lua state whose [`nlua_new_ref_state`] has run.
-pub(crate) unsafe fn nlua_get_ref_state(lstate: *mut lua_State) -> *mut NluaRefState {
-    unsafe {
-        lua_getfield(lstate, LUA_REGISTRYINDEX, REF_STATE_KEY.as_ptr());
-        let ref_state = lua_touserdata(lstate, -1).cast::<NluaRefState>();
-        lua_pop(lstate, 1);
-        ref_state
-    }
-}
-
-/// # Safety
-/// As [`nlua_get_ref_state`].
-pub unsafe fn nlua_get_nil_ref(lstate: *mut lua_State) -> LuaRef {
-    unsafe { (*nlua_get_ref_state(lstate)).nil_ref }
-}
-
-/// # Safety
-/// As [`nlua_get_ref_state`].
-pub unsafe fn nlua_get_empty_dict_ref(lstate: *mut lua_State) -> LuaRef {
-    unsafe { (*nlua_get_ref_state(lstate)).empty_dict_ref }
-}
+use super::main_stack;
+use crate::lua::ffi::LUA_NOREF;
+use crate::lua::stack::{At, Kind};
+use crate::lua::state::MAIN_REFS;
+use crate::types::LuaRef;
 
 /// How many references the main state is holding — what the functional tests
 /// assert against to catch a leak.
 pub fn nlua_get_global_ref_count() -> c_int {
-    unsafe { (*nlua_global_refs.get()).ref_count }
+    MAIN_REFS.get_field(|refs| &refs.ref_count)
 }
 
-/// `vim.NIL`'s `__tostring`.
-///
-/// # Safety
-/// `lstate` must be a live Lua state with room for one more value.
-pub(crate) unsafe extern "C-unwind" fn nlua_nil_tostring(lstate: *mut lua_State) -> c_int {
-    unsafe {
-        lua_pushstring(lstate, c"vim.NIL".as_ptr());
-        1
-    }
-}
-
-/// `vim.NIL`'s `__index` and `__newindex`: indexing a JSON `null` names
-/// what was indexed, rather than Lua's "attempt to index a userdata value".
-///
-/// # Safety
-/// `lstate` must be a live Lua state; the error does not return.
-pub(crate) unsafe extern "C-unwind" fn nlua_nil_index(lstate: *mut lua_State) -> c_int {
-    unsafe { luaL_error(lstate, c"attempt to index vim.NIL".as_ptr()) }
-}
-
-/// `vim.empty_dict()`'s `__tostring`.
-///
-/// # Safety
-/// As [`nlua_nil_tostring`].
-pub(crate) unsafe extern "C-unwind" fn nlua_empty_dict_tostring(lstate: *mut lua_State) -> c_int {
-    unsafe {
-        lua_pushstring(lstate, c"vim.empty_dict()".as_ptr());
-        1
-    }
-}
-
-/// Take a reference to the value at `index`, without popping it.
-///
-/// Only a *positive* reference counts: `LUA_REFNIL` and `LUA_NOREF` are
-/// sentinels, not registry entries.
-///
-/// # Safety
-/// `lstate` must be a live Lua state, `index` a valid index, and `ref_state`
-/// that state's own bookkeeping.
-pub unsafe fn nlua_ref(
-    lstate: *mut lua_State,
-    ref_state: *mut NluaRefState,
-    index: c_int,
-) -> LuaRef {
-    unsafe {
-        lua_pushvalue(lstate, index);
-        let ref_0 = luaL_ref(lstate, LUA_REGISTRYINDEX);
-        if ref_0 > 0 {
-            (*ref_state).ref_count += 1;
-        }
-        ref_0
-    }
-}
-
-/// [`nlua_ref`] against the main state's bookkeeping.
-///
-/// # Safety
-/// As [`nlua_ref`].
-pub unsafe fn nlua_ref_global(lstate: *mut lua_State, index: c_int) -> LuaRef {
-    unsafe { nlua_ref(lstate, nlua_global_refs.get(), index) }
-}
-
-/// Release a reference.  A sentinel is a no-op.
-///
-/// # Safety
-/// `ref_0` must have come from [`nlua_ref`] against `ref_state`.
-pub unsafe fn nlua_unref(lstate: *mut lua_State, ref_state: *mut NluaRefState, ref_0: LuaRef) {
-    unsafe {
-        if ref_0 > 0 {
-            (*ref_state).ref_count -= 1;
-            luaL_unref(lstate, LUA_REGISTRYINDEX, ref_0);
-        }
-    }
-}
-
-/// [`nlua_unref`] against the main state's bookkeeping.
-///
-/// # Safety
-/// As [`nlua_unref`].
-pub unsafe fn nlua_unref_global(lstate: *mut lua_State, ref_0: LuaRef) {
-    unsafe { nlua_unref(lstate, nlua_global_refs.get(), ref_0) };
-}
-
-/// [`nlua_unref_global`] against the main state, for api code that has no
-/// `lua_State` to hand.
-///
-/// # Safety
-/// The main state must exist and `ref_0` be one of its references.
-pub unsafe fn api_free_luaref(ref_0: LuaRef) {
-    unsafe { nlua_unref_global(get_global_lstate(), ref_0) };
-}
-
-/// Give up a reference the caller owns, against the main state.
+/// Give up a reference the caller owns, against the main state. A sentinel
+/// is a no-op.
 pub(crate) fn release_luaref(reference: LuaRef) {
-    // SAFETY: the main state lives as long as the editor, and a holder that
-    // gives a reference up owned it.
-    unsafe { api_free_luaref(reference) };
-}
-
-/// Push what `ref_0` refers to.
-///
-/// # Safety
-/// `lstate` must be a live Lua state with room for one more value.
-pub unsafe fn nlua_pushref(lstate: *mut lua_State, ref_0: LuaRef) {
-    unsafe { lua_rawgeti(lstate, LUA_REGISTRYINDEX, ref_0) };
+    if reference > 0 {
+        main_stack().unreference(reference);
+    }
 }
 
 /// A second, independently owned reference to the same value.
 pub fn api_new_luaref(original_ref: LuaRef) -> LuaRef {
-    unsafe {
-        if original_ref == LUA_NOREF {
-            return LUA_NOREF;
-        }
-        let lstate = get_global_lstate();
-        nlua_pushref(lstate, original_ref);
-        let new_ref = nlua_ref_global(lstate, -1);
-        lua_pop(lstate, 1);
-        new_ref
+    if original_ref == LUA_NOREF {
+        return LUA_NOREF;
     }
+    let mut stack = main_stack();
+    stack.push_reference(original_ref);
+    let new_ref = stack.reference(At::TOP);
+    stack.pop(1);
+    new_ref
 }
 
-/// Whether `ref_0` refers to something callable — the check an api argument
-/// that may be either a callback or a value needs.
-pub fn nlua_ref_is_function(ref_0: LuaRef) -> bool {
-    unsafe {
-        let lstate = get_global_lstate();
-        nlua_pushref(lstate, ref_0);
-        let is_function = lua_type(lstate, -1) == LUA_TFUNCTION;
-        lua_pop(lstate, 1);
-        is_function
-    }
+/// Whether `reference` refers to something callable — the check an api
+/// argument that may be either a callback or a value needs.
+pub fn nlua_ref_is_function(reference: LuaRef) -> bool {
+    let mut stack = main_stack();
+    stack.push_reference(reference);
+    let is_function = stack.kind(At::TOP) == Kind::Function;
+    stack.pop(1);
+    is_function
 }

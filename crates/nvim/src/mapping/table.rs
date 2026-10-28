@@ -28,7 +28,7 @@
 use super::*;
 use crate::ex_docmd::sourcing_lnum;
 use crate::keycodes::Ctrl_C;
-use crate::lua::executor::{nlua_set_sctx_in, release_luaref};
+use crate::lua::executor::{nlua_set_sctx, release_luaref};
 use crate::types::{MapId, MapTables, MapTwin};
 use crate::winlayer::Buf;
 use core::ffi::c_int;
@@ -334,7 +334,7 @@ pub(crate) fn map_add(
     } else {
         let mut ctx = current_sctx.get();
         ctx.sc_lnum += sourcing_lnum();
-        nlua_set_sctx_in(&mut ctx);
+        nlua_set_sctx(&mut ctx);
         ctx
     };
     let mp = MapBlock {

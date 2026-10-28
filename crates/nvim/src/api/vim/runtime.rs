@@ -16,10 +16,7 @@ use core::ffi::CStr;
 
 /// Run `code` as a Lua chunk with `args` as its `...`.
 pub fn nvim_exec_lua(code: String_0, args: Array) -> Result<Object, Error> {
-    let name = ::core::ptr::null::<::core::ffi::c_char>();
-    // SAFETY: `code` and `args` are this call's own, and there is no chunk
-    // name.
-    unsafe { nlua_exec(&code, name, args, kRetObject) }
+    nlua_exec(code.as_bytes(), None, args, kRetObject)
 }
 
 /// [`nvim_exec_lua`], marked fast for the RPC dispatcher.

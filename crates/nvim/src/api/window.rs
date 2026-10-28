@@ -22,7 +22,7 @@ use crate::ex_docmd::ex_win_close;
 use crate::winlayer::TabPage;
 
 use crate::api::private::validate::{Bad, err_expected, err_invalid, err_out_of_range};
-use crate::lua::executor::{kRetLuaref, nlua_call_ref};
+use crate::lua::executor::{kRetLuaref, nlua_call_ref_reporting};
 use crate::message::emsg;
 use crate::message::{e_autocmd_close, e_cmdwin};
 use crate::r#move::{update_topline, validate_cursor};
@@ -40,7 +40,6 @@ use crate::window::{
 };
 use crate::winlayer::Win;
 use crate::winlayer::graph::{cmdwin_buf, cmdwin_old_curwin, cmdwin_win};
-use core::ptr;
 
 /// The buffer `win` is showing.
 pub fn nvim_win_get_buf(win: WindowHandle) -> Result<BufferHandle, Error> {
@@ -272,9 +271,8 @@ pub fn nvim_win_call(win: WindowHandle, fun: LuaRef) -> Result<Object, Error> {
         let mut res = Ok(Object::Nil);
         let switched = win_execute_before(&mut switch_args, w, tabpage);
         if switched {
-            let name = ptr::null::<::core::ffi::c_char>();
-            // SAFETY: the call runs Lua, which `api_try` catches.
-            res = unsafe { nlua_call_ref(fun, name, Array::EMPTY, kRetLuaref) };
+            // The call runs Lua, which `api_try` catches.
+            res = nlua_call_ref_reporting(fun, None, Array::EMPTY, kRetLuaref);
         }
         win_execute_after(&mut switch_args);
         res

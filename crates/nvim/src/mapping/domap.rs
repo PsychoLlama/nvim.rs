@@ -18,7 +18,7 @@ use super::*;
 use crate::charset::is_word_at;
 use crate::ex_docmd::sourcing_lnum;
 use crate::keycodes::Ctrl_C;
-use crate::lua::executor::nlua_set_sctx_in;
+use crate::lua::executor::nlua_set_sctx;
 use crate::message_fmt::{emsg_text, msg_bytes};
 use crate::tr_c;
 use crate::types::{MapTables, MapTwin};
@@ -204,7 +204,7 @@ pub(crate) fn buf_do_map(
     let sctx = (has_rhs && !is_unmap).then(|| {
         let mut ctx = current_sctx.get();
         ctx.sc_lnum += sourcing_lnum();
-        nlua_set_sctx_in(&mut ctx);
+        nlua_set_sctx(&mut ctx);
         ctx
     });
 

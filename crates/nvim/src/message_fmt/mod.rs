@@ -230,6 +230,12 @@ pub(crate) fn msg_bytes(bytes: &[u8]) -> BytesDisplay<'_> {
     BytesDisplay(Some(bytes))
 }
 
+/// [`msg_bytes`], with `None` standing for the null pointer a C caller would
+/// have passed: `[NULL]`, as vim's printf writes one.
+pub(crate) fn msg_bytes_opt(bytes: Option<&[u8]>) -> BytesDisplay<'_> {
+    BytesDisplay(bytes)
+}
+
 // ---------------------------------------------------------------------------
 // Rendering
 

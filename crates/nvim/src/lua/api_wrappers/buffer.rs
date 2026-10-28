@@ -20,7 +20,7 @@ use super::*;
 #[allow(non_snake_case)]
 pub(super) fn convert_nvim__buf_stats(stack: &mut Stack, blame: &mut Blame) -> Result<(), Error> {
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"buf"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim__buf_stats(arg_1)?;
     push_dict(stack, &ret, PUSH_SPECIAL);
     Ok(())
@@ -33,7 +33,7 @@ pub(super) fn convert_nvim_buf_attach(stack: &mut Stack, blame: &mut Blame) -> R
     pop_keydict(stack, &mut arg_3, blame)?;
     let arg_2 = pop_boolean(stack).inspect_err(|_| *blame = Some(c"send_buffer"))?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"buf"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_buf_attach(LUA_INTERNAL_CALL, arg_1, arg_2, &mut arg_3)?;
     push_boolean(stack, ret);
     Ok(())
@@ -44,7 +44,7 @@ pub(super) fn convert_nvim_buf_attach(stack: &mut Stack, blame: &mut Blame) -> R
 pub(super) fn convert_nvim_buf_call(stack: &mut Stack, blame: &mut Blame) -> Result<(), Error> {
     let arg_2 = stack.take_reference();
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"buf"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_buf_call(arg_1, arg_2.get())?;
     push_object(stack, &ret, PUSH_SPECIAL);
     Ok(())
@@ -59,7 +59,7 @@ pub(super) fn convert_nvim_buf_del_keymap(
     let arg_3 = pop_string(stack).inspect_err(|_| *blame = Some(c"lhs"))?;
     let arg_2 = pop_string(stack).inspect_err(|_| *blame = Some(c"mode"))?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"buf"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     nvim_buf_del_keymap(LUA_INTERNAL_CALL, arg_1, arg_2, arg_3)?;
     Ok(())
 }
@@ -69,7 +69,7 @@ pub(super) fn convert_nvim_buf_del_keymap(
 pub(super) fn convert_nvim_buf_del_mark(stack: &mut Stack, blame: &mut Blame) -> Result<(), Error> {
     let arg_2 = pop_string(stack).inspect_err(|_| *blame = Some(c"name"))?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"buf"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_buf_del_mark(arg_1, arg_2)?;
     push_boolean(stack, ret);
     Ok(())
@@ -80,7 +80,7 @@ pub(super) fn convert_nvim_buf_del_mark(stack: &mut Stack, blame: &mut Blame) ->
 pub(super) fn convert_nvim_buf_del_var(stack: &mut Stack, blame: &mut Blame) -> Result<(), Error> {
     let arg_2 = pop_string(stack).inspect_err(|_| *blame = Some(c"name"))?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"buf"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     nvim_buf_del_var(arg_1, arg_2)?;
     Ok(())
 }
@@ -94,7 +94,7 @@ pub(super) fn convert_nvim_buf_delete(stack: &mut Stack, blame: &mut Blame) -> R
     let mut arg_2 = KeyDict_buf_delete::default();
     pop_keydict(stack, &mut arg_2, blame)?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"buf"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     nvim_buf_delete(arg_1, &mut arg_2)?;
     Ok(())
 }
@@ -106,7 +106,7 @@ pub(super) fn convert_nvim_buf_get_changedtick(
     blame: &mut Blame,
 ) -> Result<(), Error> {
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"buf"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_buf_get_changedtick(arg_1)?;
     push_integer(stack, ret);
     Ok(())
@@ -120,7 +120,7 @@ pub(super) fn convert_nvim_buf_get_keymap(
 ) -> Result<(), Error> {
     let arg_2 = pop_string(stack).inspect_err(|_| *blame = Some(c"mode"))?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"buf"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_buf_get_keymap(arg_1, arg_2)?;
     push_array(stack, &ret, PUSH_SPECIAL);
     Ok(())
@@ -136,7 +136,7 @@ pub(super) fn convert_nvim_buf_get_lines(
     let arg_3 = pop_integer(stack).inspect_err(|_| *blame = Some(c"end"))?;
     let arg_2 = pop_integer(stack).inspect_err(|_| *blame = Some(c"start"))?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"buf"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_buf_get_lines(
         LUA_INTERNAL_CALL,
         arg_1,
@@ -156,7 +156,7 @@ pub(super) fn convert_nvim_buf_get_lines(
 pub(super) fn convert_nvim_buf_get_mark(stack: &mut Stack, blame: &mut Blame) -> Result<(), Error> {
     let arg_2 = pop_string(stack).inspect_err(|_| *blame = Some(c"name"))?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"buf"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_buf_get_mark(arg_1, arg_2)?;
     push_array(stack, &ret, PUSH_SPECIAL);
     Ok(())
@@ -166,7 +166,7 @@ pub(super) fn convert_nvim_buf_get_mark(stack: &mut Stack, blame: &mut Blame) ->
 /// function, hand the result back.
 pub(super) fn convert_nvim_buf_get_name(stack: &mut Stack, blame: &mut Blame) -> Result<(), Error> {
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"buf"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_buf_get_name(arg_1)?;
     push_string(stack, &ret);
     Ok(())
@@ -180,7 +180,7 @@ pub(super) fn convert_nvim_buf_get_offset(
 ) -> Result<(), Error> {
     let arg_2 = pop_integer(stack).inspect_err(|_| *blame = Some(c"index"))?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"buf"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_buf_get_offset(arg_1, arg_2)?;
     push_integer(stack, ret);
     Ok(())
@@ -196,7 +196,7 @@ pub(super) fn convert_nvim_buf_get_text(stack: &mut Stack, blame: &mut Blame) ->
     let arg_3 = pop_integer(stack).inspect_err(|_| *blame = Some(c"start_col"))?;
     let arg_2 = pop_integer(stack).inspect_err(|_| *blame = Some(c"start_row"))?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"buf"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_buf_get_text(
         LUA_INTERNAL_CALL,
         arg_1,
@@ -218,7 +218,7 @@ pub(super) fn convert_nvim_buf_get_text(stack: &mut Stack, blame: &mut Blame) ->
 pub(super) fn convert_nvim_buf_get_var(stack: &mut Stack, blame: &mut Blame) -> Result<(), Error> {
     let arg_2 = pop_string(stack).inspect_err(|_| *blame = Some(c"name"))?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"buf"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_buf_get_var(arg_1, arg_2)?;
     push_object(stack, &ret, PUSH_SPECIAL);
     Ok(())
@@ -231,7 +231,7 @@ pub(super) fn convert_nvim_buf_is_loaded(
     blame: &mut Blame,
 ) -> Result<(), Error> {
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"buf"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_buf_is_loaded(arg_1);
     push_boolean(stack, ret);
     Ok(())
@@ -241,7 +241,7 @@ pub(super) fn convert_nvim_buf_is_loaded(
 /// function, hand the result back.
 pub(super) fn convert_nvim_buf_is_valid(stack: &mut Stack, blame: &mut Blame) -> Result<(), Error> {
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"buf"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_buf_is_valid(arg_1);
     push_boolean(stack, ret);
     Ok(())
@@ -254,7 +254,7 @@ pub(super) fn convert_nvim_buf_line_count(
     blame: &mut Blame,
 ) -> Result<(), Error> {
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"buf"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_buf_line_count(arg_1)?;
     push_integer(stack, ret);
     Ok(())
@@ -272,7 +272,7 @@ pub(super) fn convert_nvim_buf_set_keymap(
     let arg_3 = pop_string(stack).inspect_err(|_| *blame = Some(c"lhs"))?;
     let arg_2 = pop_string(stack).inspect_err(|_| *blame = Some(c"mode"))?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"buf"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     nvim_buf_set_keymap(LUA_INTERNAL_CALL, arg_1, arg_2, arg_3, arg_4, &mut arg_5)?;
     Ok(())
 }
@@ -291,7 +291,7 @@ pub(super) fn convert_nvim_buf_set_lines(
     let arg_3 = pop_integer(stack).inspect_err(|_| *blame = Some(c"end"))?;
     let arg_2 = pop_integer(stack).inspect_err(|_| *blame = Some(c"start"))?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"buf"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     nvim_buf_set_lines(LUA_INTERNAL_CALL, arg_1, arg_2, arg_3, arg_4, arg_5)?;
     Ok(())
 }
@@ -305,7 +305,7 @@ pub(super) fn convert_nvim_buf_set_mark(stack: &mut Stack, blame: &mut Blame) ->
     let arg_3 = pop_integer(stack).inspect_err(|_| *blame = Some(c"line"))?;
     let arg_2 = pop_string(stack).inspect_err(|_| *blame = Some(c"name"))?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"buf"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_buf_set_mark(arg_1, arg_2, arg_3, arg_4, &mut arg_5)?;
     push_boolean(stack, ret);
     Ok(())
@@ -316,7 +316,7 @@ pub(super) fn convert_nvim_buf_set_mark(stack: &mut Stack, blame: &mut Blame) ->
 pub(super) fn convert_nvim_buf_set_name(stack: &mut Stack, blame: &mut Blame) -> Result<(), Error> {
     let arg_2 = pop_string(stack).inspect_err(|_| *blame = Some(c"name"))?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"buf"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     nvim_buf_set_name(arg_1, arg_2)?;
     Ok(())
 }
@@ -333,7 +333,7 @@ pub(super) fn convert_nvim_buf_set_text(stack: &mut Stack, blame: &mut Blame) ->
     let arg_3 = pop_integer(stack).inspect_err(|_| *blame = Some(c"start_col"))?;
     let arg_2 = pop_integer(stack).inspect_err(|_| *blame = Some(c"start_row"))?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"buf"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     nvim_buf_set_text(LUA_INTERNAL_CALL, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6)?;
     Ok(())
 }
@@ -344,7 +344,7 @@ pub(super) fn convert_nvim_buf_set_var(stack: &mut Stack, blame: &mut Blame) -> 
     let arg_3 = pop_object(stack, true).inspect_err(|_| *blame = Some(c"value"))?;
     let arg_2 = pop_string(stack).inspect_err(|_| *blame = Some(c"name"))?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"buf"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     nvim_buf_set_var(arg_1, arg_2, arg_3)?;
     Ok(())
 }

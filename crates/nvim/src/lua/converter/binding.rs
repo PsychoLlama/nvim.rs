@@ -140,7 +140,7 @@ pub(crate) fn add_api_functions(stack: &mut Stack) {
 ///
 /// The arity check comes first and the fast-event refusal second, before any
 /// argument is converted, as upstream's generated bindings have them; the
-/// `active_lstate` switch is `convert`'s, around the API call alone.
+/// active-state switch is `convert`'s, around the API call alone.
 fn call(stack: &mut Stack, binding: &Binding) -> Result<c_int, Raise> {
     if stack.top() != At::arg(binding.arity) {
         return Err(refusal(&wrong_arity(binding.arity), None));

@@ -75,8 +75,8 @@ use crate::types::{Refcount, SlotEntry};
 /// reachable through a `*mut List` somewhere else at the same time.
 ///
 /// The two constructors are the two things a raw pointer can mean.  A handle
-/// is not null: `v:_null_list` is `TypVal::list(None)`, and every reader that
-/// wants the old spelling asks [`TypVal::list_or_null`].
+/// is not null: `v:_null_list` is `TypVal::list(None)`, which
+/// [`TypVal::list_ref`] answers as `None`.
 #[repr(transparent)]
 pub struct ListRef(NonNull<List>);
 
@@ -265,7 +265,7 @@ pub unsafe fn list_free_list(l: *mut List) {
 
     // NLUA_CLEAR_REF
     if list.lua_table_ref != LUA_NOREF {
-        unsafe { api_free_luaref((*l).lua_table_ref) };
+        release_luaref(unsafe { (*l).lua_table_ref });
         list.lua_table_ref = LUA_NOREF as LuaRef;
     }
     // The item array and the cursor array: `xfree` is the C's and runs no
@@ -469,7 +469,7 @@ pub unsafe fn tv_dict_free_dict(d: *mut Dict) {
 
     // NLUA_CLEAR_REF
     if dict.lua_table_ref != LUA_NOREF {
-        unsafe { api_free_luaref((*d).lua_table_ref) };
+        release_luaref(unsafe { (*d).lua_table_ref });
         dict.lua_table_ref = LUA_NOREF as LuaRef;
     }
     unsafe { xfree(d.cast()) };

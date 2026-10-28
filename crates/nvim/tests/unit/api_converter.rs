@@ -228,7 +228,7 @@ mod lua {
     use neovim::lua::converter::{
         pop_dict, pop_integer, pop_object, pop_string, pop_typval, push_object, push_typval,
     };
-    use neovim::lua::executor::get_global_lstate;
+    use neovim::lua::executor::main_stack;
     use neovim::lua::stack::{At, Kind, Raise, Stack};
     use neovim::types::{Object, lua_State};
 
@@ -238,15 +238,13 @@ mod lua {
     /// The editor's Lua stack. The token is the lock that makes this the
     /// only `Stack` over the main state's frame.
     fn lua(_editor: &Editor) -> Stack {
-        // SAFETY: the editor is up (the lock brought it up), its state lives
-        // as long as the process, and the lock serialises every case.
-        unsafe { Stack::from_raw(get_global_lstate()) }
+        main_stack()
     }
 
     /// Run `chunk` and leave its one result on top.
     fn eval(stack: &mut Stack, chunk: &str) {
         stack
-            .load(chunk.as_bytes(), c"=converter")
+            .load(chunk.as_bytes(), Some(c"=converter"))
             .expect("the chunk compiles");
         stack.pcall(0, 1, None).expect("the chunk runs");
     }

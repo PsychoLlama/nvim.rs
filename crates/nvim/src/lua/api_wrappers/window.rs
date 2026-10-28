@@ -19,7 +19,7 @@ use super::*;
 pub(super) fn convert_nvim_win_call(stack: &mut Stack, blame: &mut Blame) -> Result<(), Error> {
     let arg_2 = stack.take_reference();
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"win"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_win_call(arg_1, arg_2.get())?;
     push_object(stack, &ret, PUSH_SPECIAL);
     Ok(())
@@ -33,7 +33,7 @@ pub(super) fn convert_nvim_win_close(stack: &mut Stack, blame: &mut Blame) -> Re
     }
     let arg_2 = pop_boolean(stack).inspect_err(|_| *blame = Some(c"force"))?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"win"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     nvim_win_close(arg_1, arg_2)?;
     Ok(())
 }
@@ -43,7 +43,7 @@ pub(super) fn convert_nvim_win_close(stack: &mut Stack, blame: &mut Blame) -> Re
 pub(super) fn convert_nvim_win_del_var(stack: &mut Stack, blame: &mut Blame) -> Result<(), Error> {
     let arg_2 = pop_string(stack).inspect_err(|_| *blame = Some(c"name"))?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"win"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     nvim_win_del_var(arg_1, arg_2)?;
     Ok(())
 }
@@ -52,7 +52,7 @@ pub(super) fn convert_nvim_win_del_var(stack: &mut Stack, blame: &mut Blame) -> 
 /// function, hand the result back.
 pub(super) fn convert_nvim_win_get_buf(stack: &mut Stack, blame: &mut Blame) -> Result<(), Error> {
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"win"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_win_get_buf(arg_1)?;
     push_handle(stack, ret);
     Ok(())
@@ -65,7 +65,7 @@ pub(super) fn convert_nvim_win_get_cursor(
     blame: &mut Blame,
 ) -> Result<(), Error> {
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"win"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_win_get_cursor(arg_1)?;
     push_array(stack, &ret, PUSH_SPECIAL);
     Ok(())
@@ -78,7 +78,7 @@ pub(super) fn convert_nvim_win_get_height(
     blame: &mut Blame,
 ) -> Result<(), Error> {
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"win"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_win_get_height(arg_1)?;
     push_integer(stack, ret);
     Ok(())
@@ -91,7 +91,7 @@ pub(super) fn convert_nvim_win_get_number(
     blame: &mut Blame,
 ) -> Result<(), Error> {
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"win"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_win_get_number(arg_1)?;
     push_integer(stack, ret);
     Ok(())
@@ -104,7 +104,7 @@ pub(super) fn convert_nvim_win_get_position(
     blame: &mut Blame,
 ) -> Result<(), Error> {
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"win"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_win_get_position(arg_1)?;
     push_array(stack, &ret, PUSH_SPECIAL);
     Ok(())
@@ -117,7 +117,7 @@ pub(super) fn convert_nvim_win_get_tabpage(
     blame: &mut Blame,
 ) -> Result<(), Error> {
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"win"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_win_get_tabpage(arg_1)?;
     push_handle(stack, ret);
     Ok(())
@@ -128,7 +128,7 @@ pub(super) fn convert_nvim_win_get_tabpage(
 pub(super) fn convert_nvim_win_get_var(stack: &mut Stack, blame: &mut Blame) -> Result<(), Error> {
     let arg_2 = pop_string(stack).inspect_err(|_| *blame = Some(c"name"))?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"win"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_win_get_var(arg_1, arg_2)?;
     push_object(stack, &ret, PUSH_SPECIAL);
     Ok(())
@@ -141,7 +141,7 @@ pub(super) fn convert_nvim_win_get_width(
     blame: &mut Blame,
 ) -> Result<(), Error> {
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"win"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_win_get_width(arg_1)?;
     push_integer(stack, ret);
     Ok(())
@@ -154,7 +154,7 @@ pub(super) fn convert_nvim_win_hide(stack: &mut Stack, blame: &mut Blame) -> Res
         return Err(expr_map_locked_error());
     }
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"win"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     nvim_win_hide(arg_1)?;
     Ok(())
 }
@@ -163,7 +163,7 @@ pub(super) fn convert_nvim_win_hide(stack: &mut Stack, blame: &mut Blame) -> Res
 /// function, hand the result back.
 pub(super) fn convert_nvim_win_is_valid(stack: &mut Stack, blame: &mut Blame) -> Result<(), Error> {
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"win"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_win_is_valid(arg_1);
     push_boolean(stack, ret);
     Ok(())
@@ -177,7 +177,7 @@ pub(super) fn convert_nvim_win_set_buf(stack: &mut Stack, blame: &mut Blame) -> 
     }
     let arg_2 = pop_handle(stack).inspect_err(|_| *blame = Some(c"buf"))?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"win"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     nvim_win_set_buf(arg_1, arg_2)?;
     Ok(())
 }
@@ -190,7 +190,7 @@ pub(super) fn convert_nvim_win_set_cursor(
 ) -> Result<(), Error> {
     let arg_2 = pop_array(stack).inspect_err(|_| *blame = Some(c"pos"))?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"win"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     nvim_win_set_cursor(arg_1, arg_2)?;
     Ok(())
 }
@@ -203,7 +203,7 @@ pub(super) fn convert_nvim_win_set_height(
 ) -> Result<(), Error> {
     let arg_2 = pop_integer(stack).inspect_err(|_| *blame = Some(c"height"))?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"win"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     nvim_win_set_height(arg_1, arg_2)?;
     Ok(())
 }
@@ -216,7 +216,7 @@ pub(super) fn convert_nvim_win_set_hl_ns(
 ) -> Result<(), Error> {
     let arg_2 = pop_integer(stack).inspect_err(|_| *blame = Some(c"ns_id"))?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"win"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     nvim_win_set_hl_ns(arg_1, arg_2)?;
     Ok(())
 }
@@ -227,7 +227,7 @@ pub(super) fn convert_nvim_win_set_var(stack: &mut Stack, blame: &mut Blame) -> 
     let arg_3 = pop_object(stack, true).inspect_err(|_| *blame = Some(c"value"))?;
     let arg_2 = pop_string(stack).inspect_err(|_| *blame = Some(c"name"))?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"win"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     nvim_win_set_var(arg_1, arg_2, arg_3)?;
     Ok(())
 }
@@ -240,7 +240,7 @@ pub(super) fn convert_nvim_win_set_width(
 ) -> Result<(), Error> {
     let arg_2 = pop_integer(stack).inspect_err(|_| *blame = Some(c"width"))?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"win"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     nvim_win_set_width(arg_1, arg_2)?;
     Ok(())
 }
@@ -254,7 +254,7 @@ pub(super) fn convert_nvim_win_text_height(
     let mut arg_2 = KeyDict_win_text_height::default();
     pop_keydict(stack, &mut arg_2, blame)?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"win"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_win_text_height(arg_1, &mut arg_2)?;
     push_dict(stack, &ret, PUSH);
     Ok(())

@@ -1,13 +1,12 @@
 //! Installing all of the above onto a `lua_State`.
 //!
-//! [`nlua_state_add_stdlib`] is the one registration point: it pushes every
-//! `vim.*` C function this module implements onto the `vim` table, and
-//! `nlua_state_add_internal` the `vim._*` half that only the main state gets.
-//! [`nlua_push_errstr`] is the shared error formatter.
+//! [`add_editor_stdlib`] is the registration point for everything that
+//! reaches editor state, which only the main state gets: the string
+//! functions, `vim.regex`, `vim.spell`, `vim.iconv`, `vim.base64` and the
+//! `vim._*` internals. [`share_module`] is how a vendored library the state
+//! opens becomes both a `vim.*` field and a `package.loaded` entry.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `lua/` row in docs/perimeter.md.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -16,176 +15,112 @@
     clippy::ptr_as_ptr
 )]
 
-use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
+use core::ffi::{CStr, c_int};
 
 use super::{
-    REGEX_META, nlua_getvar, nlua_iconv, nlua_regex, nlua_setvar, nlua_str_byteindex,
-    nlua_str_utf_end, nlua_str_utf_pos, nlua_str_utf_start, nlua_str_utfindex, nlua_stricmp,
-    nlua_with,
+    add_regex_metatable, getvar, iconv, regex, setvar, str_byteindex, str_utf_end, str_utf_pos,
+    str_utf_start, str_utfindex, stricmp, with,
 };
-use crate::cjson::lua_cjson::lua_cjson_new;
 use crate::fold::fold_update;
-use crate::lua::base64::luaopen_base64;
-use crate::lua::ffi::{
-    lua_concat, lua_getfield, lua_pushlstring, lua_pushvalue, lua_setfield, luaL_checkinteger,
-    luaL_error, luaL_newmetatable, luaL_register, luaL_where,
-};
-use crate::lua::spell::luaopen_spell;
-use crate::lua::stack::{lua_getglobal, lua_pop, lua_pushcfunction};
-use crate::lua::xdiff::nlua_xdl_diff;
-use crate::mpack::lmpack::luaopen_mpack;
+use crate::lua::base64::push_base64;
+use crate::lua::spell::push_spell;
+use crate::lua::stack::{At, Raise, Stack};
+use crate::lua_functions;
 use crate::narrow::number_as_int;
-use crate::types::{Handle, LineNr, lua_State};
+use crate::types::LineNr;
 use crate::winlayer;
 
-unsafe extern "C-unwind" {
-    /// lpeg's own `luaopen_*`, linked in from the vendored library.
-    fn luaopen_lpeg(lstate: *mut lua_State) -> c_int;
+lua_functions! {
+    /// The string functions and `vim.regex`, in the order they are set.
+    enum StringFunctions in STRING_FUNCTIONS {
+        0 => c"stricmp": stricmp,
+        1 => c"_str_utfindex": str_utfindex,
+        2 => c"_str_byteindex": str_byteindex,
+        3 => c"str_utf_pos": str_utf_pos,
+        4 => c"str_utf_start": str_utf_start,
+        5 => c"str_utf_end": str_utf_end,
+        6 => c"regex": regex,
+    }
+}
+
+lua_functions! {
+    /// `vim.iconv`, which depends on 'ambiwidth' and 'emoji'.
+    enum IconvFunction in ICONV_FUNCTION {
+        0 => c"iconv": iconv,
+    }
+}
+
+lua_functions! {
+    /// Access to internal functions, for use in `runtime/`.
+    enum InternalFunctions in INTERNAL_FUNCTIONS {
+        0 => c"_getvar": getvar,
+        1 => c"_setvar": setvar,
+        2 => c"_foldupdate": foldupdate,
+        3 => c"_with_c": with,
+    }
+}
+
+/// An argument as the `int` a C cast narrows it to.
+fn int_arg(stack: &Stack, at: c_int) -> Result<c_int, Raise> {
+    let n = stack.check_integer(At::arg(at))?;
+    Ok(number_as_int(i64::try_from(n).unwrap_or_default()))
 }
 
 /// `vim._foldupdate(win, top, bot)`: recompute fold levels (which can mean
 /// evaluating 'foldexpr') over a zero-based end-exclusive line range, without
 /// any of `zx`'s other side effects.
-///
-/// # Safety
-/// `lstate` must be a live Lua state holding this function's arguments.
-unsafe extern "C-unwind" fn nlua_foldupdate(lstate: *mut lua_State) -> c_int {
-    unsafe {
-        let window: Handle = number_as_int(luaL_checkinteger(lstate, 1) as i64);
-        let Some(win) = winlayer::window(window) else {
-            return luaL_error(lstate, c"invalid window".as_ptr());
-        };
-        let top: LineNr = number_as_int(luaL_checkinteger(lstate, 2) as i64) + 1;
-        if top < 1 {
-            return luaL_error(lstate, c"invalid top".as_ptr());
-        }
-        let bot: LineNr = number_as_int(luaL_checkinteger(lstate, 3) as i64);
-        if top > bot {
-            return luaL_error(lstate, c"invalid bot".as_ptr());
-        }
-
-        fold_update(win, top, bot);
-        0
+fn foldupdate(stack: &mut Stack) -> Result<c_int, Raise> {
+    let Some(win) = winlayer::window(int_arg(stack, 1)?) else {
+        return Err(Raise::message("invalid window"));
+    };
+    let top: LineNr = int_arg(stack, 2)? + 1;
+    if top < 1 {
+        return Err(Raise::message("invalid top"));
     }
+    let bot: LineNr = int_arg(stack, 3)?;
+    if top > bot {
+        return Err(Raise::message("invalid bot"));
+    }
+
+    fold_update(win, top, bot);
+    Ok(0)
 }
 
-/// Store `f` under `name` in the table just below the top of the stack.
-///
-/// # Safety
-/// `lstate` must be a live Lua state with that table at -1.
-unsafe fn set_cfunction(
-    lstate: *mut lua_State,
-    name: &CStr,
-    f: unsafe extern "C-unwind" fn(*mut lua_State) -> c_int,
-) {
-    unsafe {
-        lua_pushcfunction(lstate, f);
-        lua_setfield(lstate, -2, name.as_ptr());
-    }
+/// Register every `vim.*` function that reaches editor state onto the `vim`
+/// table on top. Only the main state gets these: a thread's state is cut
+/// down to what is thread-safe.
+pub fn add_editor_stdlib(stack: &mut Stack) {
+    // TODO(bfredl): some of the basic string functions should already
+    // be (or be easy to make) threadsafe.
+    stack.register_functions(STRING_FUNCTIONS);
+    add_regex_metatable(stack);
+
+    // vim.spell
+    push_spell(stack);
+    stack.set_field(At::from_top(2), c"spell");
+
+    // vim.iconv -- depends on p_ambw, p_emoji
+    stack.register_functions(ICONV_FUNCTION);
+
+    // vim.base64
+    push_base64(stack);
+    stack.set_field(At::from_top(2), c"base64");
+
+    stack.register_functions(INTERNAL_FUNCTIONS);
 }
 
-/// Access to internal functions. For use in `runtime/`.
-///
-/// # Safety
-/// `lstate` must be a live Lua state with the `vim` table at -1.
-unsafe fn nlua_state_add_internal(lstate: *mut lua_State) {
-    unsafe {
-        set_cfunction(lstate, c"_getvar", nlua_getvar);
-        set_cfunction(lstate, c"_setvar", nlua_setvar);
-        set_cfunction(lstate, c"_foldupdate", nlua_foldupdate);
-        set_cfunction(lstate, c"_with_c", nlua_with);
-    }
-}
+/// Put the vendored library on top of the stack onto the `vim` table under
+/// `name` *and* into `package.loaded`, so `require` hands back this same
+/// table rather than initialising the library a second time. `depth` is how
+/// far below the library's table the `vim` table has sunk -- each library
+/// leaves its own table behind, so it grows.
+pub(crate) fn share_module(stack: &mut Stack, name: &CStr, depth: c_int) {
+    stack.push_value(At::TOP);
+    stack.set_field(At::from_top(depth + 1), name);
 
-/// Register every `vim.*` function this module implements.
-///
-/// `is_thread` states are cut down to what is thread-safe: they get the
-/// vendored libraries and nothing that reaches editor state.
-///
-/// # Safety
-/// `lstate` must be a live Lua state with the `vim` table on top.
-pub unsafe fn nlua_state_add_stdlib(lstate: *mut lua_State, is_thread: bool) {
-    unsafe {
-        if !is_thread {
-            // TODO(bfredl): some of the basic string functions should already
-            // be (or be easy to make) threadsafe.
-            set_cfunction(lstate, c"stricmp", nlua_stricmp);
-            set_cfunction(lstate, c"_str_utfindex", nlua_str_utfindex);
-            set_cfunction(lstate, c"_str_byteindex", nlua_str_byteindex);
-            set_cfunction(lstate, c"str_utf_pos", nlua_str_utf_pos);
-            set_cfunction(lstate, c"str_utf_start", nlua_str_utf_start);
-            set_cfunction(lstate, c"str_utf_end", nlua_str_utf_end);
-
-            set_cfunction(lstate, c"regex", nlua_regex);
-            luaL_newmetatable(lstate, c"nvim_regex".as_ptr());
-            luaL_register(lstate, ptr::null(), REGEX_META.as_ptr());
-            lua_pushvalue(lstate, -1); // [meta, meta]
-            lua_setfield(lstate, -2, c"__index".as_ptr()); // [meta]
-            lua_pop(lstate, 1); // don't use metatable now
-
-            // vim.spell
-            luaopen_spell(lstate);
-            lua_setfield(lstate, -2, c"spell".as_ptr());
-
-            // vim.iconv -- depends on p_ambw, p_emoji
-            set_cfunction(lstate, c"iconv", nlua_iconv);
-
-            // vim.base64
-            luaopen_base64(lstate);
-            lua_setfield(lstate, -2, c"base64".as_ptr());
-
-            nlua_state_add_internal(lstate);
-        }
-
-        // Put the vendored library on top of the stack onto the `vim` table
-        // under `name` *and* into `package.loaded`, so `require` hands back
-        // this same table rather than initialising the library a second time.
-        // `depth` is how far below the library's table the `vim` table has
-        // sunk -- each library leaves its own table behind, so it grows.
-        let share_module = |name: &CStr, depth: c_int| {
-            lua_pushvalue(lstate, -1);
-            lua_setfield(lstate, -depth - 1, name.as_ptr());
-
-            lua_getglobal(lstate, c"package".as_ptr());
-            lua_getfield(lstate, -1, c"loaded".as_ptr());
-            lua_pushvalue(lstate, -3);
-            lua_setfield(lstate, -2, name.as_ptr());
-            lua_pop(lstate, depth + 1);
-        };
-
-        // vim.mpack -- shared, or luv is reinitialised by require'mpack'.
-        luaopen_mpack(lstate);
-        share_module(c"mpack", 2);
-
-        // vim.lpeg
-        luaopen_lpeg(lstate);
-        share_module(c"lpeg", 3);
-
-        // vim.text.diff
-        // TODO(justinmk): set vim.text.diff here, or rename this to "_diff".
-        set_cfunction(lstate, c"diff", nlua_xdl_diff);
-
-        // vim.json
-        lua_cjson_new(lstate);
-        lua_setfield(lstate, -2, c"json".as_ptr());
-    }
-}
-
-/// Like `luaL_error`, but leaves the message -- the caller's location, then
-/// `prefix` and `message` -- on the stack instead of throwing, so the caller
-/// can clean up before its own `lua_error`.
-///
-/// Upstream formats it with `lua_pushvfstring`; every caller formatted a
-/// fixed prefix and one `%s`, so the text is put together here instead.
-///
-/// # Safety
-/// `lstate` must be a live Lua state with room for two more values.
-pub unsafe fn nlua_push_errstr(lstate: *mut lua_State, prefix: &[u8], message: &CStr) {
-    let text = [prefix, message.to_bytes()].concat();
-    unsafe {
-        luaL_where(lstate, 1);
-        lua_pushlstring(lstate, text.as_ptr().cast::<c_char>(), text.len());
-        lua_concat(lstate, 2);
-    }
+    stack.get_global(c"package");
+    stack.get_field(At::TOP, c"loaded");
+    stack.push_value(At::from_top(3));
+    stack.set_field(At::from_top(2), name);
+    stack.pop(depth + 1);
 }

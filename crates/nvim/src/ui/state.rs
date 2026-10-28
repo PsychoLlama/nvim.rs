@@ -19,22 +19,22 @@
 #![allow(non_upper_case_globals)]
 
 use crate::event::multiqueue::ChildQueue;
-use crate::global_cell::{ConstTable, GlobalCell};
+use crate::global_cell::GlobalCell;
 use crate::types::{uint32_t, uint64_t};
-use core::ffi::{c_char, c_int};
+use core::ffi::{CStr, c_int};
 
-pub(crate) static ui_ext_names: ConstTable<[*const c_char; 10]> = ConstTable::new([
-    c"ext_cmdline".as_ptr(),
-    c"ext_popupmenu".as_ptr(),
-    c"ext_tabline".as_ptr(),
-    c"ext_wildmenu".as_ptr(),
-    c"ext_messages".as_ptr(),
-    c"ext_linegrid".as_ptr(),
-    c"ext_multigrid".as_ptr(),
-    c"ext_hlstate".as_ptr(),
-    c"ext_termcolors".as_ptr(),
-    c"_debug_float".as_ptr(),
-]);
+pub(crate) static ui_ext_names: [&CStr; 10] = [
+    c"ext_cmdline",
+    c"ext_popupmenu",
+    c"ext_tabline",
+    c"ext_wildmenu",
+    c"ext_messages",
+    c"ext_linegrid",
+    c"ext_multigrid",
+    c"ext_hlstate",
+    c"ext_termcolors",
+    c"_debug_float",
+];
 pub(crate) static Rows: GlobalCell<c_int> = GlobalCell::new(24 as c_int);
 pub(crate) static Columns: GlobalCell<c_int> = GlobalCell::new(80 as c_int);
 pub(crate) static called_vim_beep: GlobalCell<bool> = GlobalCell::new(false);

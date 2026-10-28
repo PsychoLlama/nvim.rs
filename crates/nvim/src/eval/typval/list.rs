@@ -238,7 +238,9 @@ impl TypVal {
     /// reads a container in -- `list_len(NULL) == 0` and the rest of the
     /// null-tolerant entry points -- so the tag test and the `v:_null_list`
     /// case answer the same NULL, as the union read they replaced did.
-    #[inline(always)]
+    ///
+    /// Only the tests still ask for the pointer.
+    #[cfg(test)]
     pub(crate) fn list_or_null(&self) -> *mut List {
         match self {
             TypVal::List(list) => list

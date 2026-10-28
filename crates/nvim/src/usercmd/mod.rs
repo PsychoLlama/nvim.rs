@@ -56,7 +56,7 @@ use crate::cstr;
 use crate::ex_docmd::ends_excmd;
 use crate::global_cell::GlobalCell;
 use crate::keycodes::replace_termcodes;
-use crate::lua::executor::set_sctx_from_lua;
+use crate::lua::executor::nlua_set_sctx;
 use crate::memory::XString;
 use crate::message::emsg;
 use crate::message_fmt::{emsg_text, msg_bytes, msg_cstr};
@@ -346,7 +346,7 @@ impl Definition {
     fn into_command(mut self, name: Rc<CStr>, replacement: Rc<CStr>) -> UserCmd {
         let mut script_ctx = current_sctx.get();
         script_ctx.sc_lnum += sourcing_lnum();
-        set_sctx_from_lua(&mut script_ctx);
+        nlua_set_sctx(&mut script_ctx);
         UserCmd {
             name,
             argt: self.argt,

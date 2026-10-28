@@ -25,7 +25,7 @@ pub(super) fn convert_nvim__buf_debug_extmarks(
     let arg_3 = pop_boolean(stack).inspect_err(|_| *blame = Some(c"dot"))?;
     let arg_2 = pop_boolean(stack).inspect_err(|_| *blame = Some(c"keys"))?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"buf"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim__buf_debug_extmarks(arg_1, arg_2, arg_3)?;
     push_string(stack, &ret);
     Ok(())
@@ -37,7 +37,7 @@ pub(super) fn convert_nvim__buf_debug_extmarks(
 #[allow(non_snake_case)]
 pub(super) fn convert_nvim__ns_get(stack: &mut Stack, blame: &mut Blame) -> Result<(), Error> {
     let arg_1 = pop_integer(stack).inspect_err(|_| *blame = Some(c"ns_id"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let mut ret = nvim__ns_get(arg_1)?;
     push_keydict(stack, &mut ret);
     Ok(())
@@ -51,7 +51,7 @@ pub(super) fn convert_nvim__ns_set(stack: &mut Stack, blame: &mut Blame) -> Resu
     let mut arg_2 = KeyDict_ns_opts::default();
     pop_keydict(stack, &mut arg_2, blame)?;
     let arg_1 = pop_integer(stack).inspect_err(|_| *blame = Some(c"ns_id"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     nvim__ns_set(arg_1, &mut arg_2)?;
     Ok(())
 }
@@ -66,7 +66,7 @@ pub(super) fn convert_nvim_buf_clear_namespace(
     let arg_3 = pop_integer(stack).inspect_err(|_| *blame = Some(c"line_start"))?;
     let arg_2 = pop_integer(stack).inspect_err(|_| *blame = Some(c"ns_id"))?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"buf"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     nvim_buf_clear_namespace(arg_1, arg_2, arg_3, arg_4)?;
     Ok(())
 }
@@ -80,7 +80,7 @@ pub(super) fn convert_nvim_buf_del_extmark(
     let arg_3 = pop_integer(stack).inspect_err(|_| *blame = Some(c"id"))?;
     let arg_2 = pop_integer(stack).inspect_err(|_| *blame = Some(c"ns_id"))?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"buf"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_buf_del_extmark(arg_1, arg_2, arg_3)?;
     push_boolean(stack, ret);
     Ok(())
@@ -97,7 +97,7 @@ pub(super) fn convert_nvim_buf_get_extmark_by_id(
     let arg_3 = pop_integer(stack).inspect_err(|_| *blame = Some(c"id"))?;
     let arg_2 = pop_integer(stack).inspect_err(|_| *blame = Some(c"ns_id"))?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"buf"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_buf_get_extmark_by_id(arg_1, arg_2, arg_3, &mut arg_4)?;
     push_array(stack, &ret, PUSH_SPECIAL);
     Ok(())
@@ -115,7 +115,7 @@ pub(super) fn convert_nvim_buf_get_extmarks(
     let arg_3 = pop_object(stack, true).inspect_err(|_| *blame = Some(c"start"))?;
     let arg_2 = pop_integer(stack).inspect_err(|_| *blame = Some(c"ns_id"))?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"buf"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_buf_get_extmarks(arg_1, arg_2, arg_3, arg_4, &mut arg_5)?;
     push_array(stack, &ret, PUSH_SPECIAL);
     Ok(())
@@ -133,7 +133,7 @@ pub(super) fn convert_nvim_buf_set_extmark(
     let arg_3 = pop_integer(stack).inspect_err(|_| *blame = Some(c"line"))?;
     let arg_2 = pop_integer(stack).inspect_err(|_| *blame = Some(c"ns_id"))?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"buf"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_buf_set_extmark(arg_1, arg_2, arg_3, arg_4, &mut arg_5)?;
     push_integer(stack, ret);
     Ok(())
@@ -146,7 +146,7 @@ pub(super) fn convert_nvim_create_namespace(
     blame: &mut Blame,
 ) -> Result<(), Error> {
     let arg_1 = pop_string(stack).inspect_err(|_| *blame = Some(c"name"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_create_namespace(arg_1);
     push_integer(stack, ret);
     Ok(())
@@ -158,7 +158,7 @@ pub(super) fn convert_nvim_get_namespaces(
     stack: &mut Stack,
     _blame: &mut Blame,
 ) -> Result<(), Error> {
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_get_namespaces();
     push_dict(stack, &ret, PUSH_SPECIAL);
     Ok(())
@@ -173,7 +173,7 @@ pub(super) fn convert_nvim_set_decoration_provider(
     let mut arg_2 = KeyDict_set_decoration_provider::default();
     pop_keydict(stack, &mut arg_2, blame)?;
     let arg_1 = pop_integer(stack).inspect_err(|_| *blame = Some(c"ns_id"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     nvim_set_decoration_provider(arg_1, &mut arg_2);
     Ok(())
 }

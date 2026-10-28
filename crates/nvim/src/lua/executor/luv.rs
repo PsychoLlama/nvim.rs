@@ -3,13 +3,20 @@
 //! luv is given four function pointers (`cfpcall`, `cfcpcall`, and the
 //! acquire/release pair) so that a callback raised from a libuv thread is
 //! executed against *that* thread's `lua_State`, and one raised on the main
-//! loop against the global one.  [`nlua_fast_cfpcall`] is the main-loop half,
-//! and it is what sets `in_fast_callback` -- the flag every api function
-//! marked `fast` is allowed to run under.
+//! loop against the global one. [`nlua_fast_cfpcall`] is the main-loop half:
+//! its body is [`fast_pcall`](super::fast_pcall), which is what raises
+//! `in_fast_callback` -- the flag every api function marked `fast` is
+//! allowed to run under.
+//!
+//! What stays raw here is luv's C surface: the hooks it calls with a bare
+//! `lua_State`, and opening the library onto a state.
 
 #![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `lua/` row in docs/perimeter.md.
+// Unsafe perimeter: the `lua/` row in docs/perimeter.md (`lua/executor/luv.rs`).
 #![allow(unsafe_code)]
+// luv's C API: `luv_CFpcall` and its neighbours are that library's exported
+// names.
+#![allow(non_camel_case_types)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -18,100 +25,107 @@
     clippy::ptr_as_ptr
 )]
 
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{c_int, c_void};
 use core::ptr;
+use std::io::Write;
 
-use super::{
-    LUVF_CALLBACK_NOEXIT, in_fast_callback, kThread, kThreadCallback, nlua_get_error,
-    nlua_init_state, nlua_luv_error_event, nlua_pcall,
-};
-use crate::event::r#loop::loop_schedule_deferred;
-use crate::event::multiqueue::multiqueue_put_event;
-use crate::guard::Depth;
-use crate::lua::converter::{pop_array, push_array};
-use crate::lua::ffi::{
-    LUA_MULTRET, LUA_REGISTRYINDEX, LUA_TBOOLEAN, LUA_TTABLE, lua_close, lua_concat, lua_error,
-    lua_getfield, lua_gettop, lua_pcall, lua_pushcclosure, lua_pushlightuserdata, lua_pushstring,
-    lua_toboolean, lua_type, luaL_checktype, luaL_error, luaL_where,
-};
-use crate::lua::stack::{Stack, lua_pop, lua_tostring};
-use crate::memory::xstrdup;
+use super::{LuvError, fast_pcall, nlua_init_state, report_luv_error};
+use crate::event::r#loop::{main_loop_raw, schedule_deferred_job};
+use crate::lua::ffi::{LUA_MULTRET, lua_close, luaopen_luv, luv_set_loop};
+use crate::lua::stack::{At, Stack};
 use crate::message::e_outofmem;
-use crate::os::cshim::stderr;
-use crate::runtime::runtime_get_named_thread;
-use crate::startup::{main_loop, preserve_exit};
-use crate::types::{Array, Event, lua_CFunction, lua_State, size_t};
-use ::libc::{fprintf, pthread_exit};
+use crate::types::{lua_CFunction, lua_State};
+use ::libc::pthread_exit;
+
+unsafe extern "C" {
+    fn luv_set_callback(L: *mut lua_State, pcall: luv_CFpcall);
+    fn luv_set_thread(L: *mut lua_State, pcall: luv_CFpcall);
+    fn luv_set_cthread(L: *mut lua_State, cpcall: luv_CFcpcall);
+}
+
+/// luv's protected-call hook: `(L, nargs, nresults, flags)`.
+type luv_CFpcall =
+    Option<unsafe extern "C-unwind" fn(*mut lua_State, c_int, c_int, c_int) -> c_int>;
+/// luv's C-function protected-call hook.
+type luv_CFcpcall =
+    Option<unsafe extern "C-unwind" fn(*mut lua_State, lua_CFunction, *mut c_void, c_int) -> c_int>;
+
+/// luv's "do not `preserve_exit` on out of memory" flag.
+pub(crate) const LUVF_CALLBACK_NOEXIT: c_int = 0x1;
 
 /// `lua_pcall`'s "out of memory" status, the one failure that is not a
 /// recoverable Lua error.
-const LUA_ERRMEM: c_int = 4;
+pub(crate) const LUA_ERRMEM: c_int = 4;
 
-/// The main loop's `luv_set_callback`: run a libuv callback against the
-/// global state, with `in_fast_callback` raised for its duration.
-///
-/// A failure is *reported* rather than propagated — there is no caller to
-/// return an error to — so the message is copied and scheduled onto the
-/// event queue.
+/// Wire luv into the state with the `vim` table on top: the callback hooks
+/// (a thread's, or the main loop's), then `vim.uv`, `vim.loop` and
+/// `package.loaded.luv`, which are one table. A `-l` script gets the
+/// library but no hooks.
 ///
 /// # Safety
-/// `lstate` must be a live Lua state with a function and `nargs` arguments
-/// on top.
-pub(crate) unsafe extern "C-unwind" fn nlua_fast_cfpcall(
-    lstate: *mut lua_State,
-    nargs: c_int,
-    mut nresult: c_int,
-    flags: c_int,
-) -> c_int {
+/// `lstate` must be a live state with the `vim` table on top, on the thread
+/// it belongs to.
+pub(crate) unsafe fn install_luv(lstate: *mut lua_State, is_thread: bool, is_standalone: bool) {
+    // SAFETY: the caller's state; the hooks are functions of the shape luv
+    // calls, and the main loop is a static.
     unsafe {
-        let _fast = Depth::of(&in_fast_callback);
-        let top = lua_gettop(lstate);
-        let status = nlua_pcall(lstate, nargs, nresult);
-        if status != 0 {
-            if status == LUA_ERRMEM && flags & LUVF_CALLBACK_NOEXIT == 0 {
-                preserve_exit(Some(e_outofmem));
+        if !is_standalone {
+            if is_thread {
+                luv_set_callback(lstate, Some(nlua_luv_thread_cb_cfpcall));
+                luv_set_thread(lstate, Some(nlua_luv_thread_cfpcall));
+                luv_set_cthread(lstate, Some(nlua_luv_thread_cfcpcall));
+            } else {
+                luv_set_loop(lstate, &raw mut (*main_loop_raw()).uv);
+                luv_set_callback(lstate, Some(nlua_fast_cfpcall));
             }
-            let mut len: size_t = 0;
-            let error = nlua_get_error(lstate, &raw mut len);
-            multiqueue_put_event(
-                (*main_loop.ptr()).events,
-                Event::new(Some(nlua_luv_error_event), [dup_error(error)]),
-            );
-            lua_pop(lstate, 1);
-            -status
-        } else {
-            if nresult == LUA_MULTRET {
-                nresult = lua_gettop(lstate) - top + nargs + 1;
-            }
-            nresult
         }
+        luaopen_luv(lstate);
     }
+    // SAFETY: the caller's state; this function's own frame.
+    let mut stack = unsafe { Stack::from_raw(lstate) };
+    stack.push_value(At::TOP);
+    stack.set_field(At::from_top(3), c"uv");
+    stack.push_value(At::TOP);
+    stack.set_field(At::from_top(3), c"loop");
+
+    stack.get_global(c"package");
+    stack.get_field(At::TOP, c"loaded");
+    stack.push_value(At::from_top(3));
+    stack.set_field(At::from_top(2), c"luv");
+    stack.pop(3);
 }
 
-/// A copy of the error text for the event queue to own and free, or null.
+/// The main loop's `luv_set_callback`: [`fast_pcall`] on the global state.
 ///
 /// # Safety
-/// `error` must be null or a NUL-terminated string.
-unsafe fn dup_error(error: *const c_char) -> *mut c_void {
-    unsafe {
-        if error.is_null() {
-            ptr::null_mut()
-        } else {
-            xstrdup(error).cast::<c_void>()
-        }
-    }
+/// luv's contract: `lstate` is the live main state with a function and
+/// `nargs` arguments on top.
+unsafe extern "C-unwind" fn nlua_fast_cfpcall(
+    lstate: *mut lua_State,
+    nargs: c_int,
+    nresult: c_int,
+    flags: c_int,
+) -> c_int {
+    // SAFETY: the caller's state, and this function's own frame.
+    fast_pcall(
+        &mut unsafe { Stack::from_raw(lstate) },
+        nargs,
+        nresult,
+        flags,
+    )
 }
 
 /// A libuv *thread*'s `luv_set_callback`.
 ///
 /// # Safety
 /// As [`nlua_fast_cfpcall`], on that thread's own state.
-pub(crate) unsafe extern "C-unwind" fn nlua_luv_thread_cb_cfpcall(
+unsafe extern "C-unwind" fn nlua_luv_thread_cb_cfpcall(
     lstate: *mut lua_State,
     nargs: c_int,
     nresult: c_int,
     flags: c_int,
 ) -> c_int {
+    // SAFETY: the caller's promise.
     unsafe { nlua_luv_thread_common_cfpcall(lstate, nargs, nresult, flags, true) }
 }
 
@@ -119,12 +133,13 @@ pub(crate) unsafe extern "C-unwind" fn nlua_luv_thread_cb_cfpcall(
 ///
 /// # Safety
 /// As [`nlua_luv_thread_cb_cfpcall`].
-pub(crate) unsafe extern "C-unwind" fn nlua_luv_thread_cfpcall(
+unsafe extern "C-unwind" fn nlua_luv_thread_cfpcall(
     lstate: *mut lua_State,
     nargs: c_int,
     nresult: c_int,
     flags: c_int,
 ) -> c_int {
+    // SAFETY: the caller's promise.
     unsafe { nlua_luv_thread_common_cfpcall(lstate, nargs, nresult, flags, false) }
 }
 
@@ -133,17 +148,18 @@ pub(crate) unsafe extern "C-unwind" fn nlua_luv_thread_cfpcall(
 ///
 /// # Safety
 /// `lstate` must be a live Lua state and `func` a callable C function.
-pub(crate) unsafe extern "C-unwind" fn nlua_luv_thread_cfcpcall(
+unsafe extern "C-unwind" fn nlua_luv_thread_cfcpcall(
     lstate: *mut lua_State,
     func: lua_CFunction,
     ud: *mut c_void,
     flags: c_int,
 ) -> c_int {
-    unsafe {
-        lua_pushcclosure(lstate, func, 0);
-        lua_pushlightuserdata(lstate, ud);
-        nlua_luv_thread_cfpcall(lstate, 1, 0, flags)
-    }
+    // SAFETY: the caller's state, and this function's own frame.
+    let mut stack = unsafe { Stack::from_raw(lstate) };
+    stack.push_function(func.expect("luv hands over a function"));
+    stack.push_light_userdata(ud);
+    // SAFETY: the caller's promise.
+    unsafe { nlua_luv_thread_cfpcall(lstate, 1, 0, flags) }
 }
 
 /// The shared body of the two thread `cfpcall`s.
@@ -162,84 +178,38 @@ unsafe fn nlua_luv_thread_common_cfpcall(
     flags: c_int,
     is_callback: bool,
 ) -> c_int {
-    unsafe {
-        let top = lua_gettop(lstate);
-        let status = lua_pcall(lstate, nargs, nresult, 0);
-        if status != 0 {
-            if status == LUA_ERRMEM && flags & LUVF_CALLBACK_NOEXIT == 0 {
-                fprintf(stderr, c"%s\n".as_ptr(), e_outofmem.as_ptr());
+    // SAFETY: the caller's state, and this function's own frame.
+    let mut stack = unsafe { Stack::from_raw(lstate) };
+    let top = stack.top().index();
+    if let Err(failed) = stack.pcall(nargs, nresult, None) {
+        let status = failed.0;
+        if status == LUA_ERRMEM && flags & LUVF_CALLBACK_NOEXIT == 0 {
+            let _ = std::io::stderr().write_all(&[e_outofmem.to_bytes(), b"\n"].concat());
+            // SAFETY: the thread's own state, closed once, and the thread
+            // left without touching it again.
+            unsafe {
                 lua_close(lstate);
                 pthread_exit(ptr::null_mut());
             }
-            let error = lua_tostring(lstate, -1);
-            let kind = if is_callback {
-                kThreadCallback
-            } else {
-                kThread
-            };
-            loop_schedule_deferred(
-                main_loop.ptr(),
-                Event::new(
-                    Some(nlua_luv_error_event),
-                    [
-                        dup_error(error),
-                        ptr::with_exposed_provenance_mut::<c_void>(kind as usize),
-                    ],
-                ),
-            );
-            lua_pop(lstate, 1);
-            return -status;
         }
-        if nresult == LUA_MULTRET {
-            nresult = lua_gettop(lstate) - top + nargs + 1;
-        }
-        nresult
-    }
-}
-
-/// `nvim__get_runtime()` as a thread state sees it: the one api function a
-/// luv thread is allowed, because it reads only the runtime path.
-///
-/// # Safety
-/// `lstate` must be a live Lua state holding this function's arguments.
-// Named after `nvim__get_runtime`, whose double underscore is the API's.
-#[allow(non_snake_case)]
-pub(crate) unsafe extern "C-unwind" fn nlua_thr_api_nvim__get_runtime(
-    lstate: *mut lua_State,
-) -> c_int {
-    unsafe {
-        if lua_gettop(lstate) != 3 {
-            return luaL_error(lstate, c"Expected 3 arguments".as_ptr());
-        }
-
-        luaL_checktype(lstate, -1, LUA_TTABLE);
-        lua_getfield(lstate, -1, c"is_lua".as_ptr());
-        if lua_type(lstate, -1) != LUA_TBOOLEAN {
-            return luaL_error(lstate, c"is_lua is not a boolean".as_ptr());
-        }
-        let is_lua = lua_toboolean(lstate, -1) != 0;
-        lua_pop(lstate, 2);
-
-        luaL_checktype(lstate, -1, LUA_TBOOLEAN);
-        let all = lua_toboolean(lstate, -1) != 0;
-        lua_pop(lstate, 1);
-
-        let pat: Array = match pop_array(&mut Stack::from_raw(lstate)) {
-            Ok(pat) => pat,
-            Err(e) => {
-                luaL_where(lstate, 1);
-                lua_pushstring(lstate, e.message_or_empty().as_ptr());
-                lua_concat(lstate, 2);
-                return lua_error(lstate);
-            }
+        // `lua_tostring`'s copy: up to the first NUL, or nothing at all.
+        let error = stack.to_bytes(At::TOP).map(|text| {
+            let end = text.iter().position(|&b| b == 0).unwrap_or(text.len());
+            text[..end].to_vec()
+        });
+        let kind = if is_callback {
+            LuvError::ThreadCallback
+        } else {
+            LuvError::Thread
         };
-
-        let ret = runtime_get_named_thread(is_lua, &pat, all);
-        push_array(&mut Stack::from_raw(lstate), &ret, true);
-        drop(ret);
-        drop(pat);
-        1
+        schedule_deferred_job(Box::new(move || report_luv_error(kind, error.as_deref())));
+        stack.pop(1);
+        return -status;
     }
+    if nresult == LUA_MULTRET {
+        nresult = stack.top().index() - top + nargs + 1;
+    }
+    nresult
 }
 
 /// luv's `acquire_vm`: a thread that needs a state gets a fresh one.
@@ -247,16 +217,5 @@ pub(crate) unsafe extern "C-unwind" fn nlua_thr_api_nvim__get_runtime(
 /// # Safety
 /// Called by luv on a thread with no state of its own.
 pub(crate) unsafe extern "C-unwind" fn nlua_thread_acquire_vm() -> *mut lua_State {
-    unsafe { nlua_init_state(true) }
-}
-
-/// `vim.is_thread()`.
-///
-/// # Safety
-/// `lstate` must be a live Lua state with room for one more value.
-pub(crate) unsafe extern "C-unwind" fn nlua_is_thread(lstate: *mut lua_State) -> c_int {
-    unsafe {
-        lua_getfield(lstate, LUA_REGISTRYINDEX, c"nvim.thread".as_ptr());
-        1
-    }
+    nlua_init_state(true)
 }

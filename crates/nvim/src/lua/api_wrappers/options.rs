@@ -20,7 +20,7 @@ pub(super) fn convert_nvim_get_all_options_info(
     stack: &mut Stack,
     _blame: &mut Blame,
 ) -> Result<(), Error> {
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_get_all_options_info();
     push_dict(stack, &ret, PUSH_SPECIAL);
     Ok(())
@@ -35,7 +35,7 @@ pub(super) fn convert_nvim_get_option_info2(
     let mut arg_2 = KeyDict_option::default();
     pop_keydict(stack, &mut arg_2, blame)?;
     let arg_1 = pop_string(stack).inspect_err(|_| *blame = Some(c"name"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_get_option_info2(arg_1, &mut arg_2)?;
     push_dict(stack, &ret, PUSH);
     Ok(())
@@ -50,7 +50,7 @@ pub(super) fn convert_nvim_get_option_value(
     let mut arg_2 = KeyDict_option::default();
     pop_keydict(stack, &mut arg_2, blame)?;
     let arg_1 = pop_string(stack).inspect_err(|_| *blame = Some(c"name"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_get_option_value(arg_1, &mut arg_2)?;
     push_object(stack, &ret, PUSH_SPECIAL);
     Ok(())
@@ -66,7 +66,7 @@ pub(super) fn convert_nvim_set_option_value(
     pop_keydict(stack, &mut arg_3, blame)?;
     let arg_2 = pop_object(stack, true).inspect_err(|_| *blame = Some(c"value"))?;
     let arg_1 = pop_string(stack).inspect_err(|_| *blame = Some(c"name"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     nvim_set_option_value(LUA_INTERNAL_CALL, arg_1, arg_2, &mut arg_3)?;
     Ok(())
 }

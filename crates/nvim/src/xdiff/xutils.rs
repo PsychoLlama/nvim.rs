@@ -319,18 +319,10 @@ fn format_hunk_hdr(s1: i64, c1: i64, s2: i64, c2: i64, emit: &mut Emit) -> XdRes
     emit.line(&[&buf])
 }
 
-/// Report a hunk's extent, through `xdemitcb_t.out_hunk` if the caller
-/// installed one and as a formatted `@@` line otherwise.
+/// Report a hunk's extent as a formatted `@@` line. (libxdiff's
+/// `xdemitcb_t.out_hunk` hook, which would take it instead, has no caller.)
 pub(crate) fn emit_hunk_hdr(s1: i64, c1: i64, s2: i64, c2: i64, emit: &mut Emit) -> XdResult {
-    if !emit.has_out_hunk() {
-        return format_hunk_hdr(s1, c1, s2, c2, emit);
-    }
-    emit.out_hunk(
-        if c1 != 0 { s1 } else { s1 - 1 },
-        c1,
-        if c2 != 0 { s2 } else { s2 - 1 },
-        c2,
-    )
+    format_hunk_hdr(s1, c1, s2, c2, emit)
 }
 
 /// Write one body line: its ` `/`-`/`+` marker, the line, and the

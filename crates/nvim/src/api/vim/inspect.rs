@@ -97,11 +97,7 @@ pub fn nvim_get_proc_children(pid: Integer) -> Result<Array, Error> {
             );
             let mut a: Array = Array::with_capacity(1);
             a.push(Object::integer(pid));
-            let code = String_0::from_cstr(c"return vim._os_proc_children(...)");
-            let name = ::core::ptr::null::<::core::ffi::c_char>();
-            // SAFETY: `code` and `a` are this frame's own, and there is no
-            // chunk name.
-            let o = match unsafe { nlua_exec(&code, name, a, kRetObject) } {
+            let o = match nlua_exec(b"return vim._os_proc_children(...)", None, a, kRetObject) {
                 Ok(value) => value,
                 Err(e) => {
                     error = e;
@@ -139,10 +135,7 @@ pub fn nvim_get_proc(pid: Integer) -> Result<Object, Error> {
     }
     let mut a: Array = Array::with_capacity(1);
     a.push(Object::integer(pid));
-    let code = String_0::from_cstr(c"return vim._os_proc_info(...)");
-    let name = ::core::ptr::null::<::core::ffi::c_char>();
-    // SAFETY: `code` and `a` are this frame's own, and there is no chunk name.
-    let o = match unsafe { nlua_exec(&code, name, a, kRetObject) } {
+    let o = match nlua_exec(b"return vim._os_proc_info(...)", None, a, kRetObject) {
         Ok(value) => value,
         Err(e) => {
             error = e;

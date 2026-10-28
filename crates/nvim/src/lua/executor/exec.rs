@@ -1,132 +1,67 @@
 //! Running Lua from Vimscript, and calling a `LuaRef` back.
 //!
-//! [`nlua_typval_eval`]/[`nlua_typval_call`] are `luaeval()` and `v:lua`;
+//! [`nlua_typval_eval`]/[`typval_call_lua`] are `luaeval()` and `v:lua`;
 //! [`nlua_exec`] runs a chunk; [`nlua_call_ref_ctx`] is the callback path
 //! every api-registered Lua function is invoked through, and
 //! `nlua_call_pop_retval` is the shared conversion of whatever it left on
 //! the stack, governed by the `LuaRetMode` the caller asked for.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `lua/` row in docs/perimeter.md.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
+use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
 use super::{
-    FCERR_NONE, FCERR_OTHER, get_global_lstate, kRetLuaref, kRetMulti, kRetNilBool, kRetObject,
-    nlua_error, nlua_fast_cfpcall, nlua_pcall, nlua_pushref, nlua_ref_global,
+    FCERR_NONE, FCERR_OTHER, fast_pcall, kRetLuaref, kRetMulti, kRetNilBool, kRetObject,
+    main_stack, nlua_error, nlua_pcall,
 };
 use crate::ex_cmds::check_secure;
 use crate::lua::converter::{pop_object, pop_typval, push_object, push_typval};
-use crate::lua::ffi::{
-    LUA_GLOBALSINDEX, LUA_MULTRET, LUA_TNIL, lua_getfield, lua_gettop, lua_pushinteger,
-    lua_pushnil, lua_pushstring, lua_toboolean, lua_tolstring, lua_type, luaL_loadbuffer,
-};
-use crate::lua::stack::{Stack, lua_pop};
-use crate::memory::{xfree, xmalloc};
-use crate::message_fmt::c_str_len;
-use crate::os::cshim::gettext;
+use crate::lua::ffi::LUA_MULTRET;
+use crate::lua::stack::{At, Kind, Stack};
+use crate::message_fmt::msg_bytes_opt;
+use crate::narrow::len_as_int;
 use crate::types::{
-    Array, Error, ErrorType, IOSIZE, LuaRef, LuaRetMode, Object, String_0, TypVal, VAR_UNKNOWN,
-    VarNumber, kErrorTypeException, kErrorTypeValidation, lua_Integer, lua_State, size_t,
+    Array, Error, ErrorType, LuaRef, LuaRetMode, Object, TypVal, VAR_UNKNOWN, VarNumber,
+    kErrorTypeException, kErrorTypeValidation,
 };
 
 /// `luaeval("expr")` becomes this chunk with the expression appended and a
 /// `)` closed after it, so the expression is evaluated with `_A` bound to
 /// the second argument.
-const EVALHEADER: &CStr = c"local _A=select(1,...) return (";
+const EVALHEADER: &[u8] = b"local _A=select(1,...) return (";
 /// `v:lua.f(…)` becomes this, the name, and [`CALLSUFFIX`].
-const CALLHEADER: &CStr = c"return ";
-const CALLSUFFIX: &CStr = c"(...)";
-
-/// Where the assembled chunk goes: `scratch`, the caller's own `IOSIZE`
-/// buffer, when it fits; a fresh allocation otherwise. Upstream shares
-/// `IObuff` for it, which anything the chunk runs may overwrite.
-///
-/// # Safety
-/// `scratch` must be `IOSIZE` writable bytes and `len` the length the
-/// caller is about to write.
-unsafe fn chunk_buffer(scratch: *mut c_char, len: size_t) -> *mut c_char {
-    if len < IOSIZE as size_t {
-        return scratch;
-    }
-    // SAFETY: a plain allocation.
-    unsafe { xmalloc(len).cast::<c_char>() }
-}
-
-/// Free [`chunk_buffer`]'s answer, unless it was the caller's `scratch`.
-///
-/// # Safety
-/// `buf` must be [`chunk_buffer`]'s answer for `scratch`.
-unsafe fn free_chunk_buffer(scratch: *const c_char, buf: *mut c_char) {
-    if !ptr::eq(buf.cast_const(), scratch) {
-        // SAFETY: the caller's contract.
-        unsafe { xfree(buf.cast::<c_void>()) };
-    }
-}
+const CALLHEADER: &[u8] = b"return ";
+const CALLSUFFIX: &[u8] = b"(...)";
 
 /// The chunk name `luaeval()` errors carry.
 const EVALNAME: &CStr = c"luaeval()";
 
 /// `luaeval(str, arg)`.
-pub fn nlua_typval_eval(str: &[u8], arg: &TypVal, ret_tv: &mut TypVal) {
-    let mut chunk = [0 as c_char; IOSIZE as usize];
-    let scratch = chunk.as_mut_ptr();
-    unsafe {
-        let head = EVALHEADER.count_bytes();
-        let lcmd_len = head + str.len() + 1;
-        let lcmd = chunk_buffer(scratch, lcmd_len);
-        lcmd.cast::<u8>()
-            .copy_from_nonoverlapping(EVALHEADER.as_ptr().cast(), head);
-        lcmd.add(head)
-            .cast::<u8>()
-            .copy_from_nonoverlapping(str.as_ptr(), str.len());
-        *lcmd.add(lcmd_len - 1) = b')' as c_char;
-        let arg = ::core::slice::from_ref(arg);
-        nlua_typval_exec(lcmd, lcmd_len, EVALNAME.as_ptr(), arg, true, Some(ret_tv));
-        free_chunk_buffer(scratch, lcmd);
-    }
+pub fn nlua_typval_eval(expr: &[u8], arg: &TypVal, ret_tv: &mut TypVal) {
+    let chunk = [EVALHEADER, expr, b")"].concat();
+    nlua_typval_exec(
+        &chunk,
+        EVALNAME,
+        core::slice::from_ref(arg),
+        true,
+        Some(ret_tv),
+    );
 }
 
 /// `v:lua.name(...)`, `name` being the text after `v:lua.`.
 pub(crate) fn typval_call_lua(name: &[u8], args: &[TypVal], result: &mut TypVal) {
-    // SAFETY: `name` is `name.len()` readable bytes, and `result` the
-    // caller's own.
-    unsafe { nlua_typval_call(name.as_ptr().cast(), name.len(), args, result) }
-}
-
-/// `v:lua.name(...)`.
-///
-/// # Safety
-/// `str`/`len` must name a Lua expression and `ret_tv` be writable.
-pub unsafe fn nlua_typval_call(
-    str: *const c_char,
-    len: size_t,
-    args: &[TypVal],
-    ret_tv: &mut TypVal,
-) {
-    let mut chunk = [0 as c_char; IOSIZE as usize];
-    let scratch = chunk.as_mut_ptr();
-    unsafe {
-        let head = CALLHEADER.count_bytes();
-        let tail = CALLSUFFIX.count_bytes();
-        let lcmd_len = head + len + tail;
-        let lcmd = chunk_buffer(scratch, lcmd_len);
-        lcmd.cast::<u8>()
-            .copy_from_nonoverlapping(CALLHEADER.as_ptr().cast(), head);
-        lcmd.add(head)
-            .cast::<u8>()
-            .copy_from_nonoverlapping(str.cast(), len);
-        (lcmd.add(head + len))
-            .cast::<u8>()
-            .copy_from_nonoverlapping(CALLSUFFIX.as_ptr().cast(), tail);
-        nlua_typval_exec(lcmd, lcmd_len, c"v:lua".as_ptr(), args, false, Some(ret_tv));
-        free_chunk_buffer(scratch, lcmd);
-    }
+    let chunk = [CALLHEADER, name, CALLSUFFIX].concat();
+    nlua_typval_exec(&chunk, c"v:lua", args, false, Some(result));
 }
 
 /// The `customlist,v:lua.…` completion callback: the function `luaref`
@@ -138,22 +73,18 @@ pub fn nlua_call_user_expand_func(
     line: &CStr,
     col: c_int,
 ) -> TypVal {
-    // SAFETY: the global Lua state, used on the main thread, and three
-    // NUL-terminated strings.
-    unsafe {
-        let lstate = get_global_lstate();
-        nlua_pushref(lstate, luaref);
-        lua_pushstring(lstate, pattern.as_ptr());
-        lua_pushstring(lstate, line.as_ptr());
-        lua_pushinteger(lstate, col as lua_Integer);
-        if nlua_pcall(lstate, 3, 1) != 0 {
-            nlua_error(lstate, gettext(c"E5108: Lua function: %.*s").as_ptr());
-            return TypVal::Number(0);
-        }
-        // A refusal has reported itself; the answer is then the zero
-        // upstream left in the caller's slot.
-        pop_typval(&mut Stack::from_raw(lstate)).unwrap_or(TypVal::Number(0))
+    let mut stack = main_stack();
+    stack.push_reference(luaref);
+    stack.push_bytes(pattern.to_bytes());
+    stack.push_bytes(line.to_bytes());
+    stack.push_integer(col.try_into().unwrap_or_default());
+    if nlua_pcall(&mut stack, 3, 1).is_err() {
+        nlua_error(&mut stack, c"E5108: Lua function: %.*s");
+        return TypVal::Number(0);
     }
+    // A refusal has reported itself; the answer is then the zero
+    // upstream left in the caller's slot.
+    pop_typval(&mut stack).unwrap_or(TypVal::Number(0))
 }
 
 /// `require(module)` in the editor's state, through [`nlua_pcall`] so that a
@@ -162,83 +93,71 @@ pub fn nlua_call_user_expand_func(
 /// Answers the error's text when it fails -- `None` for an error object that
 /// is not a string -- and leaves the error on the stack, as upstream does.
 pub(crate) fn nlua_require_module(module: &CStr) -> Result<(), Option<Vec<u8>>> {
-    let lstate = get_global_lstate();
-    // A hard failure, not a `debug_assert!`: every call below dereferences
-    // the state.
-    assert!(!lstate.is_null(), "the Lua state is not initialised");
-    // SAFETY: the editor's live state; `module` is NUL-terminated and
-    // copied by Lua, and the error text is copied before anything can pop it.
-    unsafe {
-        lua_getfield(lstate, LUA_GLOBALSINDEX, c"require".as_ptr());
-        lua_pushstring(lstate, module.as_ptr());
-        if nlua_pcall(lstate, 1, 0) == 0 {
-            return Ok(());
-        }
-        let text = lua_tolstring(lstate, -1, ptr::null_mut());
-        Err(crate::cstr::at_opt(text).map(|text| text.to_bytes().to_vec()))
+    let mut stack = main_stack();
+    stack.get_global(c"require");
+    stack.push_bytes(module.to_bytes());
+    if nlua_pcall(&mut stack, 1, 0).is_ok() {
+        return Ok(());
     }
+    // `lua_tolstring`'s C string: up to its first NUL.
+    Err(stack
+        .to_bytes(At::TOP)
+        .map(|text| super::until_nul(text).to_vec()))
 }
 
 /// Run the Lua chunk `code` with `args`, answering its value converted as
 /// `mode` says.
 pub(crate) fn nlua_exec_cstr(code: &CStr, args: Array, mode: LuaRetMode) -> Result<Object, Error> {
-    // SAFETY: an owned argument array, no chunk name and no arena: the
-    // answer is allocated, not borrowed.
-    unsafe { nlua_exec(&String_0::from_cstr(code), ptr::null(), args, mode) }
+    nlua_exec(code.to_bytes(), None, args, mode)
 }
 
-/// Load and run one chunk with `args` as its arguments.
+/// Load and run one chunk with `args` as its arguments, the chunk named
+/// `name` in its messages.
 ///
 /// `special` decides how a Vimscript value with no Lua image is pushed; a
 /// `VAR_UNKNOWN` argument is `nil`, which is how a missing `luaeval()`
 /// argument reaches the chunk.
-///
-/// # Safety
-/// `lcmd`/`lcmd_len` must name a readable chunk.
-pub(crate) unsafe fn nlua_typval_exec(
-    lcmd: *const c_char,
-    lcmd_len: size_t,
-    name: *const c_char,
+pub(crate) fn nlua_typval_exec(
+    chunk: &[u8],
+    name: &CStr,
     args: &[TypVal],
     special: bool,
-    mut ret_tv: Option<&mut TypVal>,
+    ret_tv: Option<&mut TypVal>,
 ) {
-    unsafe {
-        if check_secure() {
-            if let Some(ret_tv) = ret_tv {
-                ret_tv.write_number(0 as VarNumber);
-            }
-            return;
+    if check_secure() {
+        if let Some(ret_tv) = ret_tv {
+            ret_tv.write_number(0 as VarNumber);
         }
-        let lstate = get_global_lstate();
-        if luaL_loadbuffer(lstate, lcmd, lcmd_len, name) != 0 {
-            nlua_error(lstate, gettext(c"E5107: Lua: %.*s").as_ptr());
-            return;
-        }
-        push_typval_args(lstate, args, special);
-        let argcount = args.len() as c_int;
-        if nlua_pcall(lstate, argcount, c_int::from(ret_tv.is_some())) != 0 {
-            nlua_error(lstate, gettext(c"E5108: Lua: %.*s").as_ptr());
-            return;
-        }
-        if let Some(ret_tv) = ret_tv.take() {
-            ret_tv.overwrite(pop_typval(&mut Stack::from_raw(lstate)).unwrap_or(TypVal::Number(0)));
-        }
+        return;
+    }
+    let mut stack = main_stack();
+    if stack.load(chunk, Some(name)).is_err() {
+        nlua_error(&mut stack, c"E5107: Lua: %.*s");
+        return;
+    }
+    push_typval_args(&mut stack, args, special);
+    if nlua_pcall(
+        &mut stack,
+        len_as_int(args.len()),
+        c_int::from(ret_tv.is_some()),
+    )
+    .is_err()
+    {
+        nlua_error(&mut stack, c"E5108: Lua: %.*s");
+        return;
+    }
+    if let Some(ret_tv) = ret_tv {
+        ret_tv.overwrite(pop_typval(&mut stack).unwrap_or(TypVal::Number(0)));
     }
 }
 
 /// Push the arguments, with `VAR_UNKNOWN` standing for `nil`.
-///
-/// # Safety
-/// `lstate` must be a live Lua state.
-unsafe fn push_typval_args(lstate: *mut lua_State, args: &[TypVal], special: bool) {
-    unsafe {
-        for arg in args {
-            if arg.v_type() == VAR_UNKNOWN {
-                lua_pushnil(lstate);
-            } else {
-                push_typval(&mut Stack::from_raw(lstate), arg, special);
-            }
+fn push_typval_args(stack: &mut Stack, args: &[TypVal], special: bool) {
+    for arg in args {
+        if arg.v_type() == VAR_UNKNOWN {
+            stack.push_nil();
+        } else {
+            push_typval(stack, arg, special);
         }
     }
 }
@@ -252,126 +171,82 @@ pub fn nlua_exec_lines(lines: &[CString], name: &CStr) {
         }
         code.extend_from_slice(line.to_bytes());
     }
-    let len = code.len();
-    code.push(0);
-    // SAFETY: the caller's chunk name; `code` outlives the call, and the
-    // executor is handed the length as well as the terminator.
-    unsafe {
-        nlua_typval_exec(
-            code.as_mut_ptr().cast::<c_char>(),
-            len,
-            name.as_ptr().cast_mut(),
-            &[],
-            false,
-            None,
-        );
-    };
+    nlua_typval_exec(&code, name, &[], false, None);
 }
 
 /// Call a Lua function stored as a Vimscript Funcref.
 pub fn typval_exec_lua_callable(lua_cb: LuaRef, argvars: &[TypVal], rettv: &mut TypVal) -> c_int {
-    unsafe {
-        let lstate = get_global_lstate();
-        nlua_pushref(lstate, lua_cb);
-        push_typval_args(lstate, argvars, false);
-        if nlua_pcall(lstate, argvars.len() as c_int, 1) != 0 {
-            nlua_error(lstate, gettext(c"Lua callback: %.*s").as_ptr());
-            return FCERR_OTHER as c_int;
-        }
-        rettv.overwrite(pop_typval(&mut Stack::from_raw(lstate)).unwrap_or(TypVal::Number(0)));
-        FCERR_NONE as c_int
+    let mut stack = main_stack();
+    stack.push_reference(lua_cb);
+    push_typval_args(&mut stack, argvars, false);
+    if nlua_pcall(&mut stack, len_as_int(argvars.len()), 1).is_err() {
+        nlua_error(&mut stack, c"Lua callback: %.*s");
+        return FCERR_OTHER.cast_signed();
     }
+    rettv.overwrite(pop_typval(&mut stack).unwrap_or(TypVal::Number(0)));
+    FCERR_NONE.cast_signed()
 }
 
-/// Run a chunk with api values as its arguments and its answer as one.
+/// Run a chunk with api values as its arguments and its answer as one. The
+/// chunk is named `chunkname` in its messages, `<nvim>` when that is absent
+/// or empty.
 ///
 /// The arguments are this call's: they are pushed and then released.
-///
-/// # Safety
-/// `chunkname` must be null or a NUL-terminated string.
-pub unsafe fn nlua_exec(
-    str: &String_0,
-    chunkname: *const c_char,
-    mut args: Array,
-    mode: LuaRetMode,
-) -> Result<Object, Error> {
-    unsafe {
-        let lstate = get_global_lstate();
-        let top = lua_gettop(lstate);
-        let name = if !chunkname.is_null() && *chunkname != 0 {
-            chunkname
-        } else {
-            c"<nvim>".as_ptr()
-        };
-        if luaL_loadbuffer(lstate, str.data(), str.len(), name) != 0 {
-            return Err(lua_error_of(kErrorTypeValidation, lstate));
-        }
-        let argc = args.len() as c_int;
-        for item in args.iter_mut() {
-            push_object(&mut Stack::from_raw(lstate), item, false);
-        }
-        if nlua_pcall(lstate, argc, 1) != 0 {
-            return Err(lua_error_of(kErrorTypeException, lstate));
-        }
-        nlua_call_pop_retval(lstate, mode, top)
-    }
-}
-
-/// The Lua error on top of the stack.
-///
-/// # Safety
-/// the error value be on top of the stack.
-unsafe fn lua_error_of(type_0: ErrorType, lstate: *mut lua_State) -> Error {
-    unsafe {
-        let mut len: size_t = 0;
-        let errstr = lua_tolstring(lstate, -1, &raw mut len);
-        let text = c_str_len(errstr, len);
-        Error::new(type_0, format_args!("Lua: {text}"))
-    }
-}
-
-/// [`nlua_call_ref_ctx`] outside a fast context.
-///
-/// # Safety
-/// As [`nlua_call_ref_ctx`].
-pub unsafe fn nlua_call_ref(
-    ref_0: LuaRef,
-    name: *const c_char,
+pub fn nlua_exec(
+    code: &[u8],
+    chunkname: Option<&CStr>,
     args: Array,
     mode: LuaRetMode,
 ) -> Result<Object, Error> {
-    unsafe { nlua_call_ref_ctx(false, ref_0, name, args, mode, true) }
+    let mut stack = main_stack();
+    let top = stack.top();
+    let name = chunkname
+        .filter(|name| !name.is_empty())
+        .unwrap_or(c"<nvim>");
+    if stack.load(code, Some(name)).is_err() {
+        // The message stays on the stack, as upstream leaves it.
+        return Err(lua_error_of(kErrorTypeValidation, &mut stack));
+    }
+    let argc = len_as_int(args.len());
+    for item in args.iter() {
+        push_object(&mut stack, item, false);
+    }
+    if nlua_pcall(&mut stack, argc, 1).is_err() {
+        return Err(lua_error_of(kErrorTypeException, &mut stack));
+    }
+    nlua_call_pop_retval(&mut stack, mode, top)
 }
 
-/// [`nlua_call_ref`] for a caller with nowhere to report to: a failing
+/// The Lua error on top of the stack, which stays there.
+fn lua_error_of(type_0: ErrorType, stack: &mut Stack) -> Error {
+    let text = stack.to_bytes(At::TOP);
+    Error::new(type_0, format_args!("Lua: {}", msg_bytes_opt(text)))
+}
+
+/// [`nlua_call_ref_ctx`] for a caller with nowhere to report to: a failing
 /// callback shows its error rather than answering with one. `name`, when
 /// given, is the first argument, as there.
 pub fn nlua_call_ref_quiet(
-    ref_0: LuaRef,
+    reference: LuaRef,
     name: Option<&CStr>,
     args: Array,
     mode: LuaRetMode,
 ) -> Object {
-    let name = name.map_or(ptr::null(), CStr::as_ptr);
-    // SAFETY: `name` is null or a terminated string that outlives the call.
     // A reference is an index into the registry, read with a raw get: one
     // that names nothing pushes nil, which the protected call reports, as
     // `nlua_ref_is_function` relies on.
-    unsafe { nlua_call_ref_ctx(false, ref_0, name, args, mode, false) }.unwrap_or(Object::Nil)
+    nlua_call_ref_ctx(false, reference, name, args, mode, false).unwrap_or(Object::Nil)
 }
 
-/// [`nlua_call_ref`] answering a failure to the caller, who reports it.
+/// [`nlua_call_ref_ctx`] outside a fast context, answering a failure to the
+/// caller, who reports it.
 pub(crate) fn nlua_call_ref_reporting(
-    ref_0: LuaRef,
+    reference: LuaRef,
     name: Option<&CStr>,
     args: Array,
     mode: LuaRetMode,
 ) -> Result<Object, Error> {
-    let name = name.map_or(ptr::null(), CStr::as_ptr);
-    // SAFETY: as [`nlua_call_ref_quiet`] -- `name` is null or a terminated
-    // string that outlives the call, and a reference that names nothing
-    // pushes nil, which the protected call reports.
-    unsafe { nlua_call_ref_ctx(false, ref_0, name, args, mode, true) }
+    nlua_call_ref_ctx(false, reference, name, args, mode, true)
 }
 
 /// How many results `mode` wants off the call.
@@ -379,98 +254,83 @@ fn mode_ret(mode: LuaRetMode) -> c_int {
     if mode == kRetMulti { LUA_MULTRET } else { 1 }
 }
 
-/// Call the function `ref_0` refers to.
+/// Call the function `reference` refers to.
 ///
 /// `name`, when given, is pushed as the *first* argument — that is how one
-/// registered callback serves several event names.  `fast` runs the call
+/// registered callback serves several event names. `fast` runs the call
 /// through the luv path instead, which is the only one allowed inside a fast
-/// callback and which reports rather than returns a failure.
-///
-/// # Safety
-/// `ref_0` must be a live reference.
-pub unsafe fn nlua_call_ref_ctx(
+/// callback and which reports rather than returns a failure. Without
+/// `reports`, a failure is shown and answered as nil.
+pub fn nlua_call_ref_ctx(
     fast: bool,
-    ref_0: LuaRef,
-    name: *const c_char,
-    mut args: Array,
+    reference: LuaRef,
+    name: Option<&CStr>,
+    args: Array,
     mode: LuaRetMode,
     reports: bool,
 ) -> Result<Object, Error> {
-    unsafe {
-        let lstate = get_global_lstate();
-        let top = lua_gettop(lstate);
-        nlua_pushref(lstate, ref_0);
-        let mut nargs = args.len() as c_int;
-        if !name.is_null() {
-            lua_pushstring(lstate, name);
-            nargs += 1;
-        }
-        for item in args.iter_mut() {
-            push_object(&mut Stack::from_raw(lstate), item, false);
-        }
+    let mut stack = main_stack();
+    let top = stack.top();
+    stack.push_reference(reference);
+    let mut nargs = len_as_int(args.len());
+    if let Some(name) = name {
+        stack.push_bytes(name.to_bytes());
+        nargs += 1;
+    }
+    for item in args.iter() {
+        push_object(&mut stack, item, false);
+    }
 
-        if fast {
-            if nlua_fast_cfpcall(lstate, nargs, mode_ret(mode), -1) < 0 {
-                if !reports {
-                    return Ok(Object::Nil);
-                }
-                return Err(Error::exception(c"fast context failure"));
-            }
-        } else if nlua_pcall(lstate, nargs, mode_ret(mode)) != 0 {
+    if fast {
+        if fast_pcall(&mut stack, nargs, mode_ret(mode), -1) < 0 {
             if !reports {
-                // Nobody to report to: show it instead.
-                nlua_error(lstate, gettext(c"Lua callback: %.*s").as_ptr());
                 return Ok(Object::Nil);
             }
-            return Err(lua_error_of(kErrorTypeException, lstate));
+            return Err(Error::exception(c"fast context failure"));
         }
-        nlua_call_pop_retval(lstate, mode, top)
+    } else if nlua_pcall(&mut stack, nargs, mode_ret(mode)).is_err() {
+        if !reports {
+            // Nobody to report to: show it instead.
+            nlua_error(&mut stack, c"Lua callback: %.*s");
+            return Ok(Object::Nil);
+        }
+        return Err(lua_error_of(kErrorTypeException, &mut stack));
     }
+    nlua_call_pop_retval(&mut stack, mode, top)
 }
 
 /// Convert whatever the call left on the stack, and pop it.
 ///
 /// A `nil` answer is nil whatever the mode asked for — except `kRetMulti`,
-/// where it is one element of the list.
-///
-/// # Safety
-/// `lstate` must hold the call's results down to `pretop`.
-unsafe fn nlua_call_pop_retval(
-    lstate: *mut lua_State,
-    mode: LuaRetMode,
-    pretop: c_int,
-) -> Result<Object, Error> {
-    unsafe {
-        if mode != kRetMulti && lua_type(lstate, -1) == LUA_TNIL {
-            lua_pop(lstate, 1);
-            return Ok(Object::Nil);
+/// where it is one element of the list. The results sit above `pretop`.
+fn nlua_call_pop_retval(stack: &mut Stack, mode: LuaRetMode, pretop: At) -> Result<Object, Error> {
+    if mode != kRetMulti && stack.kind(At::TOP) == Kind::Nil {
+        stack.pop(1);
+        return Ok(Object::Nil);
+    }
+    match mode {
+        kRetNilBool => {
+            let bool_value = stack.to_boolean(At::TOP);
+            stack.pop(1);
+            Ok(Object::boolean(bool_value))
         }
-        match mode {
-            kRetNilBool => {
-                let bool_value = lua_toboolean(lstate, -1) != 0;
-                lua_pop(lstate, 1);
-                Ok(Object::boolean(bool_value))
-            }
-            kRetLuaref => {
-                let ref_0 = nlua_ref_global(lstate, -1);
-                lua_pop(lstate, 1);
-                Ok(Object::luaref(ref_0))
-            }
-            kRetObject => pop_object(&mut Stack::from_raw(lstate), false),
-            kRetMulti => {
-                // The results come off the stack top-down, so they are stored
-                // back-to-front.
-                let nres = lua_gettop(lstate) - pretop;
-                // The values come off the stack topmost first, so they are
-                // collected and then turned back into call order.
-                let mut res: Vec<Object> = Vec::with_capacity(nres as size_t);
-                for _ in 0..nres {
-                    res.push(pop_object(&mut Stack::from_raw(lstate), false)?);
-                }
-                res.reverse();
-                Ok(Object::array(Array::from(res)))
-            }
-            _ => unreachable!(),
+        kRetLuaref => {
+            let reference = stack.reference(At::TOP);
+            stack.pop(1);
+            Ok(Object::luaref(reference))
         }
+        kRetObject => pop_object(stack, false),
+        kRetMulti => {
+            let nres = stack.top().index() - pretop.index();
+            // The values come off the stack topmost first, so they are
+            // collected and then turned back into call order.
+            let mut res: Vec<Object> = Vec::with_capacity(usize::try_from(nres).unwrap_or(0));
+            for _ in 0..nres {
+                res.push(pop_object(stack, false)?);
+            }
+            res.reverse();
+            Ok(Object::array(Array::from(res)))
+        }
+        _ => unreachable!(),
     }
 }

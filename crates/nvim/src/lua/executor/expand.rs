@@ -5,19 +5,21 @@
 //! -- the two-step shape exists because the caller wants the matches after
 //! the Lua state has been unwound.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `lua/` row in docs/perimeter.md.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
-use super::{get_global_lstate, nlua_error, nlua_pcall};
+use super::{main_stack, nlua_error, nlua_pcall};
 use crate::global_cell::GlobalCell;
 use crate::lua::converter::{pop_array, pop_integer};
-use crate::lua::ffi::{LUA_TFUNCTION, lua_getfield, lua_pushlstring, luaL_checktype};
-use crate::lua::stack::Stack;
-use crate::lua::stack::lua_getglobal;
-use crate::memory::{ARENA_EMPTY, XString, arena_finish, arena_mem_free};
-use crate::os::cshim::gettext;
-use crate::types::{Arena, Expand, Failed};
+use crate::lua::stack::At;
+use crate::memory::XString;
+use crate::types::{Expand, Failed};
 
 /// The matches [`nlua_expand_pat`] produced, waiting for
 /// [`nlua_expand_matches`] to take them.
@@ -46,43 +48,34 @@ pub fn nlua_expand_pat(expand: &mut Expand) {
 
     let mut matches = Vec::new();
     let mut prefix_len = None;
-    // SAFETY: the global Lua state, used on the main thread; the pattern is
-    // this frame's own copy.
-    unsafe {
-        let lstate = get_global_lstate();
 
-        lua_getglobal(lstate, c"vim".as_ptr());
-        lua_getfield(lstate, -1, c"_expand_pat".as_ptr());
-        luaL_checktype(lstate, -1, LUA_TFUNCTION);
+    let mut stack = main_stack();
+    stack.get_global(c"vim");
+    // Upstream checks the type and raises outside any protected call, which
+    // takes the editor down; one that is not a function is reported by the
+    // call below instead.
+    stack.get_field(At::TOP, c"_expand_pat");
+    stack.push_bytes(&pattern);
 
-        lua_pushlstring(lstate, pattern.as_ptr().cast(), patlen);
+    if nlua_pcall(&mut stack, 1, 2).is_err() {
+        nlua_error(&mut stack, c"vim._expand_pat: %.*s");
+        return;
+    }
 
-        if nlua_pcall(lstate, 1, 2) != 0 {
-            nlua_error(lstate, gettext(c"vim._expand_pat: %.*s").as_ptr());
-            return;
-        }
-
-        let mut arena: Arena = ARENA_EMPTY;
-        let prefix = pop_integer(&mut Stack::from_raw(lstate))
-            .ok()
-            .and_then(|n| usize::try_from(n).ok())
-            .filter(|&n| n <= patlen);
-        if let Some(prefix) = prefix {
-            let completions = pop_array(&mut Stack::from_raw(lstate));
-            if let Ok(completions) = completions {
-                let strings: Option<Vec<XString>> = (0..completions.len())
-                    .map(|i| {
-                        completions[i]
-                            .as_string()
-                            .map(|s| XString::from_cstr(s.as_cstr()))
-                    })
-                    .collect();
-                if let Some(strings) = strings {
-                    matches = strings;
-                    prefix_len = Some(prefix);
-                }
-            }
-            arena_mem_free(arena_finish(&raw mut arena));
+    let prefix = pop_integer(&mut stack)
+        .ok()
+        .and_then(|n| usize::try_from(n).ok())
+        .filter(|&n| n <= patlen);
+    if let Some(prefix) = prefix
+        && let Ok(completions) = pop_array(&mut stack)
+    {
+        let strings: Option<Vec<XString>> = completions
+            .iter()
+            .map(|item| item.as_string().map(|s| XString::from_cstr(s.as_cstr())))
+            .collect();
+        if let Some(strings) = strings {
+            matches = strings;
+            prefix_len = Some(prefix);
         }
     }
 

@@ -1,17 +1,21 @@
 //! `vim.*`: the C half of Neovim's Lua standard library.
 //!
-//! Everything here is a `lua_CFunction` registered onto the `vim` table by
-//! [`nlua_state_add_stdlib`], plus the two pieces of plumbing they share: the
-//! zero values for a [`crate::types::Error`] and a [`TryState`], and
-//! [`nlua_push_errstr`](register::nlua_push_errstr), which is `luaL_error`
-//! split in half so a caller can clean up between formatting the message and
-//! throwing it.
+//! Every function here is a safe body over a [`Stack`](crate::lua::stack::Stack),
+//! set on the `vim` table by [`add_editor_stdlib`], plus the zero value for a
+//! [`TryState`] they share.
 //!
-//! The four jobs are one child each — [`regex`] for `vim.regex()`, [`strings`]
+//! The four jobs are one child each — [`regex`](mod@regex) for `vim.regex()`, [`strings`]
 //! for the UTF-8 and `iconv` helpers, [`vars`] for the `vim.g`/`b`/`w`/`t`/`v`
-//! accessors, [`with`] for `vim._with()` — and [`register`] installs them.
+//! accessors, [`with`](mod@with) for `vim._with()` — and [`register`] installs them.
 
-#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::types::TryState;
 
@@ -21,10 +25,10 @@ mod strings;
 mod vars;
 mod with;
 
-pub use self::regex::*;
+pub(crate) use self::regex::*;
 pub use self::register::*;
-pub use self::strings::*;
-pub use self::vars::*;
+pub(crate) use self::strings::*;
+pub(crate) use self::vars::*;
 pub(crate) use self::with::*;
 
 /// An all-zero [`TryState`], which [`try_enter`] fills.

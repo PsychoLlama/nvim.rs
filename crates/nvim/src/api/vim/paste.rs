@@ -67,11 +67,8 @@ pub fn nvim_paste(
         let mut args = Array::with_capacity(2);
         args.push(Object::array(lines));
         args.push(Object::integer(phase));
-        let handler = String_0::from_cstr(c"return vim.paste(...)");
-        let name = ::core::ptr::null::<::core::ffi::c_char>();
-        // SAFETY: `handler` and `args` are this frame's own, and there is no
-        // chunk name; the handler re-enters the editor through Lua.
-        let rv = match unsafe { nlua_exec(&handler, name, args, kRetNilBool) } {
+        // The handler re-enters the editor through Lua.
+        let rv = match nlua_exec(b"return vim.paste(...)", None, args, kRetNilBool) {
             Ok(value) => value,
             Err(e) => {
                 error = e;

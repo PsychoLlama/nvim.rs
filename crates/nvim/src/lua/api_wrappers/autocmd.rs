@@ -22,7 +22,7 @@ pub(super) fn convert_nvim_clear_autocmds(
 ) -> Result<(), Error> {
     let mut arg_1 = KeyDict_clear_autocmds::default();
     pop_keydict(stack, &mut arg_1, blame)?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     nvim_clear_autocmds(&mut arg_1)?;
     Ok(())
 }
@@ -36,7 +36,7 @@ pub(super) fn convert_nvim_create_augroup(
     let mut arg_2 = KeyDict_create_augroup::default();
     pop_keydict(stack, &mut arg_2, blame)?;
     let arg_1 = pop_string(stack).inspect_err(|_| *blame = Some(c"name"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_create_augroup(LUA_INTERNAL_CALL, arg_1, &mut arg_2)?;
     push_integer(stack, ret);
     Ok(())
@@ -51,7 +51,7 @@ pub(super) fn convert_nvim_create_autocmd(
     let mut arg_2 = KeyDict_create_autocmd::default();
     pop_keydict(stack, &mut arg_2, blame)?;
     let arg_1 = pop_object(stack, true).inspect_err(|_| *blame = Some(c"event"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_create_autocmd(LUA_INTERNAL_CALL, arg_1, &mut arg_2)?;
     push_integer(stack, ret);
     Ok(())
@@ -64,7 +64,7 @@ pub(super) fn convert_nvim_del_augroup_by_id(
     blame: &mut Blame,
 ) -> Result<(), Error> {
     let arg_1 = pop_integer(stack).inspect_err(|_| *blame = Some(c"id"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     nvim_del_augroup_by_id(arg_1)?;
     Ok(())
 }
@@ -76,7 +76,7 @@ pub(super) fn convert_nvim_del_augroup_by_name(
     blame: &mut Blame,
 ) -> Result<(), Error> {
     let arg_1 = pop_string(stack).inspect_err(|_| *blame = Some(c"name"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     nvim_del_augroup_by_name(arg_1)?;
     Ok(())
 }
@@ -85,7 +85,7 @@ pub(super) fn convert_nvim_del_augroup_by_name(
 /// function, hand the result back.
 pub(super) fn convert_nvim_del_autocmd(stack: &mut Stack, blame: &mut Blame) -> Result<(), Error> {
     let arg_1 = pop_integer(stack).inspect_err(|_| *blame = Some(c"id"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     nvim_del_autocmd(arg_1)?;
     Ok(())
 }
@@ -99,7 +99,7 @@ pub(super) fn convert_nvim_exec_autocmds(
     let mut arg_2 = KeyDict_exec_autocmds::default();
     pop_keydict(stack, &mut arg_2, blame)?;
     let arg_1 = pop_object(stack, true).inspect_err(|_| *blame = Some(c"event"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     nvim_exec_autocmds(arg_1, &mut arg_2)?;
     Ok(())
 }
@@ -109,7 +109,7 @@ pub(super) fn convert_nvim_exec_autocmds(
 pub(super) fn convert_nvim_get_autocmds(stack: &mut Stack, blame: &mut Blame) -> Result<(), Error> {
     let mut arg_1 = KeyDict_get_autocmds::default();
     pop_keydict(stack, &mut arg_1, blame)?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_get_autocmds(&mut arg_1)?;
     push_array(stack, &ret, PUSH_SPECIAL);
     Ok(())

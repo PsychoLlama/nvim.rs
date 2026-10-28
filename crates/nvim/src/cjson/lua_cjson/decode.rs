@@ -32,11 +32,11 @@ use core::ffi::{CStr, c_char, c_int};
 
 use super::{Config, DECODE_MAX_DEPTH, fetch_config, unreachable_after_raise};
 use crate::cjson::fpconv::strtod;
-use crate::lua::executor::{nlua_get_empty_dict_ref, nlua_get_nil_ref, nlua_pushref};
 use crate::lua::ffi::{
-    LUA_TNIL, LUA_TTABLE, lua_checkstack, lua_getfield, lua_gettop, lua_pushboolean,
-    lua_pushinteger, lua_pushlstring, lua_pushnil, lua_pushnumber, lua_rawset, lua_rawseti,
-    lua_setmetatable, lua_toboolean, lua_type, luaL_checklstring, luaL_checktype, luaL_error,
+    LUA_REGISTRYINDEX, LUA_TNIL, LUA_TTABLE, lua_checkstack, lua_getfield, lua_gettop,
+    lua_pushboolean, lua_pushinteger, lua_pushlstring, lua_pushnil, lua_pushnumber, lua_rawset,
+    lua_rawseti, lua_setmetatable, lua_toboolean, lua_type, luaL_checklstring, luaL_checktype,
+    luaL_error,
 };
 use crate::lua::stack::{lua_newtable, lua_pop};
 use crate::narrow::number_as_int;
@@ -476,7 +476,7 @@ impl<'a> Parser<'a> {
             // back out, which is what `vim.empty_dict()`'s metatable is.
             // SAFETY: as above; the table is on top.
             unsafe {
-                nlua_pushref(l, nlua_get_empty_dict_ref(l));
+                lua_getfield(l, LUA_REGISTRYINDEX, c"mpack.empty_dict".as_ptr());
                 lua_setmetatable(l, -2);
             }
             self.depth -= 1;
@@ -560,7 +560,7 @@ impl<'a> Parser<'a> {
             Token::ObjBegin => unsafe { self.parse_object(l) },
             Token::ArrBegin => unsafe { self.parse_array(l) },
             Token::Null if use_luanil => unsafe { lua_pushnil(l) },
-            Token::Null => unsafe { nlua_pushref(l, nlua_get_nil_ref(l)) },
+            Token::Null => unsafe { lua_getfield(l, LUA_REGISTRYINDEX, c"mpack.NIL".as_ptr()) },
             _ => self.throw(l, c"value", token),
         }
     }

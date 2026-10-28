@@ -31,7 +31,7 @@ use crate::api::ui::remote_ui_event;
 use crate::global_cell::GlobalCell;
 use crate::guard::Allow;
 use crate::log::{LOGLVL_ERR, logmsg};
-use crate::lua::executor::{api_free_luaref, nlua_call_ref_ctx};
+use crate::lua::executor::{nlua_call_ref_ctx, release_luaref};
 use crate::message_fmt::{c_str, msg_bytes};
 use crate::msg_schedule_semsg;
 use crate::msg_schedule_semsg_multiline;
@@ -71,16 +71,9 @@ static registered: GlobalCell<Vec<Handler>> = GlobalCell::new(Vec::new());
 /// The union of every handler's [`Handler::ext_widgets`].
 pub static ui_cb_ext: GlobalCell<[bool; 10]> = GlobalCell::new([false; 10]);
 
-/// Registers `cb` for `ns_id`, replacing any handler it already had.
-///
-/// # Safety
-///
-/// `ext_widgets` must address [`kUILinegrid`] readable `bool`s.
-pub unsafe fn ui_add_cb(ns_id: u32, cb: LuaRef, ext_widgets: *mut bool) {
-    let mut ext_widgets: [bool; kUILinegrid as usize] =
-        unsafe { core::slice::from_raw_parts(ext_widgets, kUILinegrid as usize) }
-            .try_into()
-            .expect("slice is the array's length");
+/// Registers `cb` for `ns_id`, replacing any handler it already had;
+/// `ext_widgets` says which of the first [`kUILinegrid`] extensions it draws.
+pub fn ui_add_cb(ns_id: u32, cb: LuaRef, mut ext_widgets: [bool; kUILinegrid as usize]) {
     // `ext_messages` moves the whole cmdline out of the message area, so a
     // handler drawing messages has to draw the cmdline too.
     if ext_widgets[kUIMessages as usize] {
@@ -95,7 +88,7 @@ pub unsafe fn ui_add_cb(ns_id: u32, cb: LuaRef, ext_widgets: *mut bool) {
     registered.with_mut(
         |handlers| match handlers.iter_mut().find(|h| h.ns_id == ns_id) {
             Some(existing) => {
-                unsafe { api_free_luaref(existing.callback) };
+                release_luaref(existing.callback);
                 *existing = handler;
             }
             None => handlers.push(handler),
@@ -123,7 +116,7 @@ pub fn ui_remove_cb(ns_id: u32, checkerr: bool) {
     let Some(handler) = removed else {
         return;
     };
-    unsafe { api_free_luaref(handler.callback) };
+    release_luaref(handler.callback);
     update_ext();
     ui_refresh();
     if checkerr {
@@ -187,11 +180,7 @@ fn offer_to_handlers(name: &CStr, args: &Array) -> bool {
         };
         ui_event_ns_id.set(ns_id);
         let fast = is_fast(name, args);
-        let event = name.as_ptr().cast_mut();
-        // SAFETY: `name` is a static protocol name; the callee takes over
-        // the copy it is handed.
-        let res =
-            unsafe { nlua_call_ref_ctx(fast, callback, event, args.clone(), kRetNilBool, true) };
+        let res = nlua_call_ref_ctx(fast, callback, Some(name), args.clone(), kRetNilBool, true);
         ui_event_ns_id.set(0);
         match res {
             Ok(res) => {

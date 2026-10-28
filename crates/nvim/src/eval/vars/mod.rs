@@ -40,7 +40,7 @@ use crate::getchar::state::got_int;
 use crate::global_cell::{GlobalCell, state_record};
 use crate::guard::sandbox;
 use crate::hashtab::hash_reset;
-use crate::lua::executor::nlua_set_sctx_in;
+use crate::lua::executor::nlua_set_sctx;
 use crate::memory::XString;
 use crate::message::state::emsg_severe;
 use crate::message::{

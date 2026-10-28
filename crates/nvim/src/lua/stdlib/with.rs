@@ -6,9 +6,7 @@
 //! 2 is called through `lua_pcall`, and everything is put back in reverse —
 //! through the same `try_enter`/`try_leave` bracket the API uses.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `lua/` row in docs/perimeter.md.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -19,19 +17,16 @@
 
 use core::ffi::{CStr, c_int};
 
-use super::{TRY_STATE_INIT, nlua_push_errstr};
+use super::TRY_STATE_INIT;
 use crate::api::private::helpers::{try_enter, try_leave};
 use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};
 use crate::eval::window::{win_execute_after, win_execute_before};
 use crate::ex_docmd::CmdModScope;
 use crate::log::g_min_log_level;
-use crate::lua::ffi::{
-    LUA_MULTRET, LUA_TSTRING, lua_error, lua_gettop, lua_next, lua_pcall, lua_pushnil,
-    lua_pushvalue, lua_toboolean, lua_type, luaL_checkinteger,
-};
-use crate::lua::stack::{lua_istable, lua_pop, lua_tostring, luaL_argcheck};
+use crate::lua::ffi::LUA_MULTRET;
+use crate::lua::stack::{At, Kind, Raise, Stack};
 use crate::narrow::number_as_int;
-use crate::types::{AcoSave, CmdMod, CmdModFlags, Error, Pos, SwitchWin, WinExecute, lua_State};
+use crate::types::{AcoSave, CmdMod, CmdModFlags, Error, Pos, SwitchWin, WinExecute};
 use crate::window::win_find_tabpage;
 use crate::winlayer::{self, Buf, Win};
 
@@ -70,110 +65,106 @@ const WIN_EXECUTE_INIT: WinExecute = WinExecute {
     },
 };
 
-/// `vim._with_c(context, fn)`.
-///
-/// # Safety
-/// `lstate` must be a live Lua state with the context table at slot 1 and the
-/// callback at slot 2.
-pub(crate) unsafe extern "C-unwind" fn nlua_with(lstate: *mut lua_State) -> c_int {
-    unsafe {
-        let mut flags = CmdModFlags::NONE;
-        let mut buf: Option<Buf> = None;
-        let mut win: Option<Win> = None;
-        let mut log_level: c_int = -1;
+/// `luaL_checkinteger` of the value on top, narrowed as the C cast does.
+fn int_value(stack: &Stack) -> Result<c_int, Raise> {
+    let n = stack.check_integer(At::TOP)?;
+    Ok(number_as_int(i64::try_from(n).unwrap_or_default()))
+}
 
-        luaL_argcheck(
-            lstate,
-            lua_istable(lstate, 1),
-            1,
-            c"table expected".as_ptr(),
-        );
-        lua_pushnil(lstate); // [dict, ..., nil]
-        while lua_next(lstate, 1) != 0 {
-            // [dict, ..., key, value]
-            if lua_type(lstate, -2) == LUA_TSTRING {
-                let k = CStr::from_ptr(lua_tostring(lstate, -2));
-                if k == c"buf" {
-                    buf = winlayer::buffer(number_as_int(luaL_checkinteger(lstate, -1) as i64));
-                } else if k == c"win" {
-                    win = winlayer::window(number_as_int(luaL_checkinteger(lstate, -1) as i64));
-                } else if k == c"log_level" {
-                    log_level = number_as_int(luaL_checkinteger(lstate, -1) as i64);
-                } else if lua_toboolean(lstate, -1) != 0 {
-                    for (name, flag) in FLAG_KEYS {
-                        if k == name {
-                            flags |= flag;
-                        }
+/// `vim._with_c(context, fn)`: the context table at slot 1, the callback at
+/// slot 2.
+pub(crate) fn with(stack: &mut Stack) -> Result<c_int, Raise> {
+    let mut flags = CmdModFlags::NONE;
+    let mut buf: Option<Buf> = None;
+    let mut win: Option<Win> = None;
+    let mut log_level: c_int = -1;
+
+    if stack.kind(At::arg(1)) != Kind::Table {
+        return Err(Raise::argument(1, "table expected"));
+    }
+    stack.push_nil(); // [dict, ..., nil]
+    while stack.next(At::arg(1)) {
+        // [dict, ..., key, value]
+        if stack.kind(At::from_top(2)) == Kind::String {
+            let key: &CStr = stack.c_string(At::from_top(2)).unwrap_or_default();
+            if key == c"buf" {
+                buf = winlayer::buffer(int_value(stack)?);
+            } else if key == c"win" {
+                win = winlayer::window(int_value(stack)?);
+            } else if key == c"log_level" {
+                log_level = int_value(stack)?;
+            } else if stack.to_boolean(At::TOP) {
+                for (name, flag) in FLAG_KEYS {
+                    if key == name {
+                        flags |= flag;
                     }
                 }
             }
-            // Pop the value; lua_next will pop the key.
-            lua_pop(lstate, 1); // [dict, ..., key]
         }
-        let mut status: c_int = 0;
-        let mut rets: c_int = 0;
+        // Pop the value; the walk pops the key.
+        stack.pop(1); // [dict, ..., key]
+    }
+    let mut failed = false;
+    let mut rets: c_int = 0;
 
-        if flags.has(CmdModFlags::ERRSILENT) {
-            // CmdModFlags::ERRSILENT must imply CmdModFlags::SILENT, or apply_cmdmod() and
-            // undo_cmdmod() won't work properly.
-            flags |= CmdModFlags::SILENT;
-        }
+    if flags.has(CmdModFlags::ERRSILENT) {
+        // CmdModFlags::ERRSILENT must imply CmdModFlags::SILENT, or
+        // apply_cmdmod() and undo_cmdmod() won't work properly.
+        flags |= CmdModFlags::SILENT;
+    }
 
-        let save_min_log_level = g_min_log_level.get();
-        if log_level >= 0 {
-            g_min_log_level.set(log_level);
-        }
-        let mods = CmdModScope::enter(CmdMod {
-            cmod_flags: flags,
-            ..CmdMod::default()
-        });
+    let save_min_log_level = g_min_log_level.get();
+    if log_level >= 0 {
+        g_min_log_level.set(log_level);
+    }
+    let mods = CmdModScope::enter(CmdMod {
+        cmod_flags: flags,
+        ..CmdMod::default()
+    });
 
-        let mut err = Error::none();
-        let mut tstate = TRY_STATE_INIT;
-        try_enter(&mut tstate);
-        {
-            let mut aco = AcoSave::default();
-            let mut win_execute_args = WIN_EXECUTE_INIT;
+    let mut err = Error::none();
+    let mut tstate = TRY_STATE_INIT;
+    try_enter(&mut tstate);
+    {
+        let mut aco = AcoSave::default();
+        let mut win_execute_args = WIN_EXECUTE_INIT;
 
-            // A window that cannot be entered leaves everything below
-            // untouched: no call, no results, and nothing to restore.
-            let entered = if let Some(win) = win {
-                let tabpage = win_find_tabpage(win.id()).expect("a live window is on a tab page");
-                win_execute_before(&mut win_execute_args, win, tabpage)
-            } else {
-                if let Some(buf) = buf {
-                    aucmd_prepbuf(&mut aco, buf);
-                }
-                true
-            };
+        // A window that cannot be entered leaves everything below
+        // untouched: no call, no results, and nothing to restore.
+        let entered = if let Some(win) = win {
+            let tabpage = win_find_tabpage(win.id()).expect("a live window is on a tab page");
+            win_execute_before(&mut win_execute_args, win, tabpage)
+        } else {
+            if let Some(buf) = buf {
+                aucmd_prepbuf(&mut aco, buf);
+            }
+            true
+        };
 
-            if entered {
-                let s = lua_gettop(lstate);
-                lua_pushvalue(lstate, 2);
-                status = lua_pcall(lstate, 0, LUA_MULTRET, 0);
-                rets = lua_gettop(lstate) - s;
+        if entered {
+            let s = stack.top().index();
+            stack.push_value(At::arg(2));
+            failed = stack.pcall(0, LUA_MULTRET, None).is_err();
+            rets = stack.top().index() - s;
 
-                if win.is_some() {
-                    win_execute_after(&mut win_execute_args);
-                } else if buf.is_some() {
-                    aucmd_restbuf(&mut aco);
-                }
+            if win.is_some() {
+                win_execute_after(&mut win_execute_args);
+            } else if buf.is_some() {
+                aucmd_restbuf(&mut aco);
             }
         }
-        err.absorb(try_leave(&tstate));
-
-        drop(mods);
-        if log_level >= 0 {
-            g_min_log_level.set(save_min_log_level);
-        }
-
-        if status != 0 {
-            return lua_error(lstate);
-        } else if err.is_set() {
-            nlua_push_errstr(lstate, b"", err.message_or_empty());
-            err.clear();
-            return lua_error(lstate);
-        }
-        rets
     }
+    err.absorb(try_leave(&tstate));
+
+    drop(mods);
+    if log_level >= 0 {
+        g_min_log_level.set(save_min_log_level);
+    }
+
+    if failed {
+        return Err(Raise::top_value());
+    } else if err.is_set() {
+        return Err(Raise::message(err.message_or_empty().to_bytes()));
+    }
+    Ok(rets)
 }

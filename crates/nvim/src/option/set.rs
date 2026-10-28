@@ -34,7 +34,7 @@ use crate::eval::vars::{
 };
 use crate::global_cell::GlobalCell;
 use crate::guard::{sandbox, secure};
-use crate::lua::executor::nlua_set_sctx_in;
+use crate::lua::executor::nlua_set_sctx;
 use crate::memory::XString;
 use crate::message::emsg;
 use crate::message::{e_invarg, e_sandbox, e_secure, e_unsupportedoption};
@@ -84,7 +84,7 @@ pub(crate) fn set_option_sctx(
         // while anything can set an option.
         script_ctx.sc_lnum += crate::runtime::sourcing_lnum();
     }
-    nlua_set_sctx_in(&mut script_ctx);
+    nlua_set_sctx(&mut script_ctx);
 
     if both || opt_flags.has(OptionSetFlags::GLOBAL) || option_is_global_only(opt_idx) {
         set_option_last_set(opt_idx, script_ctx);

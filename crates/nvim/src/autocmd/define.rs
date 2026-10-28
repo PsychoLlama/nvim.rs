@@ -20,7 +20,7 @@
 use super::*;
 use crate::charset::skip;
 use crate::cstr;
-use crate::lua::executor::set_sctx_from_lua;
+use crate::lua::executor::nlua_set_sctx;
 use crate::memory::XString;
 use crate::message_fmt::msg_bytes;
 use crate::os::env::expand::expand_env_save_opt_of;
@@ -337,7 +337,7 @@ pub fn autocmd_register(
     let mut script_ctx = current_sctx.get();
     // `SOURCING_LNUM`: the line of the innermost execution-stack frame.
     script_ctx.sc_lnum += crate::runtime::sourcing_lnum();
-    set_sctx_from_lua(&mut script_ctx);
+    nlua_set_sctx(&mut script_ctx);
     let cmd = AutoCmd {
         pat: Some(pat_id),
         id,

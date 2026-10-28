@@ -11,10 +11,8 @@
 mod vim_patches;
 
 use crate::cstr;
-use crate::types::String_0;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_int};
-use core::ptr;
 use std::ffi::CString;
 
 use self::vim_patches::VIM_BASELINES;
@@ -283,9 +281,7 @@ pub(crate) fn list_in_columns(items: &[&CStr], current: c_int) {
 pub(crate) fn list_lua_version() {
     const CODE: &CStr = c"return ((jit and jit.version) and jit.version or _VERSION)";
 
-    let no_args = Array::EMPTY;
-    let (chunk, name) = (String_0::from_cstr(CODE), ptr::null());
-    let ret = unsafe { nlua_exec(&chunk, name, no_args, kRetObject) }
+    let ret = nlua_exec(CODE.to_bytes(), None, Array::EMPTY, kRetObject)
         .expect("a literal chunk cannot fail");
     let version = ret.as_string().expect("_VERSION is a string");
     msg_str(unsafe { cstr::at(version.data()) });

@@ -179,6 +179,53 @@ unsafe extern "C-unwind" {
     pub fn lua_typename(L: *mut lua_State, tp: ::core::ffi::c_int) -> *const ::core::ffi::c_char;
     pub fn luaopen_luv(L: *mut lua_State) -> ::core::ffi::c_int;
     pub fn luv_set_loop(L: *mut lua_State, loop_0: *mut uv_loop_t);
+    pub fn lua_getstack(
+        L: *mut lua_State,
+        level: ::core::ffi::c_int,
+        ar: *mut lua_Debug,
+    ) -> ::core::ffi::c_int;
+    pub fn lua_getinfo(
+        L: *mut lua_State,
+        what: *const ::core::ffi::c_char,
+        ar: *mut lua_Debug,
+    ) -> ::core::ffi::c_int;
+}
+
+/// What `lua_getinfo` fills in: `lua.h`'s `lua_Debug`, layout and all.
+#[repr(C)]
+pub struct lua_Debug {
+    pub event: ::core::ffi::c_int,
+    pub name: *const ::core::ffi::c_char,
+    pub namewhat: *const ::core::ffi::c_char,
+    pub what: *const ::core::ffi::c_char,
+    pub source: *const ::core::ffi::c_char,
+    pub currentline: ::core::ffi::c_int,
+    pub nups: ::core::ffi::c_int,
+    pub linedefined: ::core::ffi::c_int,
+    pub lastlinedefined: ::core::ffi::c_int,
+    /// `LUA_IDSIZE` bytes of the chunk name, for messages; nothing here
+    /// reads it.
+    pub short_src: [u8; 60],
+    pub i_ci: ::core::ffi::c_int,
+}
+
+impl Default for lua_Debug {
+    /// An all-zero record, which `lua_getstack`/`lua_getinfo` fill.
+    fn default() -> Self {
+        lua_Debug {
+            event: 0,
+            name: ::core::ptr::null(),
+            namewhat: ::core::ptr::null(),
+            what: ::core::ptr::null(),
+            source: ::core::ptr::null(),
+            currentline: 0,
+            nups: 0,
+            linedefined: 0,
+            lastlinedefined: 0,
+            short_src: [0; 60],
+            i_ci: 0,
+        }
+    }
 }
 
 /// A `luaL_Reg` method table, terminated the way `luaL_register` expects.

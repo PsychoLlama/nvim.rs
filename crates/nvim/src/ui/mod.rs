@@ -504,10 +504,14 @@ pub unsafe fn ui_set_ext_option(ui: *mut RemoteUI, ext: UIExtension, active: boo
     let name = ui_ext_names[ext as usize];
     // A leading underscore marks an option that is not part of the
     // documented protocol; those are only mentioned when turned on.
-    let private = unsafe { *name } == b'_' as core::ffi::c_char;
+    let private = name.to_bytes().first() == Some(&b'_');
     if !private || active {
         unsafe {
-            remote_ui_option_set(ui, cstr_to_string(name.cast_mut()), Object::boolean(active))
+            remote_ui_option_set(
+                ui,
+                cstr_to_string(name.as_ptr().cast_mut()),
+                Object::boolean(active),
+            )
         };
     }
     if ext == kUITermColors {
@@ -789,7 +793,7 @@ pub fn ui_array() -> Array {
 
 /// The protocol name of the `widget`th UI extension.
 fn ext_name(widget: usize) -> *const core::ffi::c_char {
-    ui_ext_names[widget]
+    ui_ext_names[widget].as_ptr()
 }
 
 /// Resizes the grid a UI asked about, for `nvim_ui_try_resize_grid`.

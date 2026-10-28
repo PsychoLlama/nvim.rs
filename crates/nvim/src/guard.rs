@@ -99,8 +99,9 @@
 //!   under a test that has just established `curwin` *is* what was saved.
 //!
 //! The one family where the shape had really leaked was the generated Lua
-//! bindings' `active_lstate`, 181 of them, each repeating the restore in
-//! its failed-call arm; `tools/apigen` emits a [`Restore`] instead.
+//! bindings' active state, 181 of them, each repeating the restore in its
+//! failed-call arm; `tools/apigen` emits a guard instead (now the executor's
+//! own `ActiveState`).
 
 #![forbid(unsafe_code)]
 #![deny(
@@ -234,14 +235,14 @@ pub(crate) type AutocmdBump = Bump<AutocmdField<c_int>>;
 /// what a reader needs told: `emsg_off += 1` and `msg_silent = 0` are both
 /// "one line of arithmetic on a global" until something says which way they
 /// point. A cell that holds a value rather than a level has no direction to
-/// document -- `Restore::of(&active_lstate, lstate)` already says what it
-/// does -- so this one is used directly, as [`Lock::held`] and
+/// document -- `Restore::of(&cell, value)` already says what it does -- so
+/// this one is used directly, as [`Lock::held`] and
 /// [`Suppress::counter`] are for a counter private to one module.
 ///
 /// The save/restore shape is the one where a missed exit is easiest to
 /// write: the value is put back on one line at the bottom of a body that
 /// may also `return` in the middle. Every generated Lua binding had exactly
-/// that shape around `active_lstate`, with the restore repeated in the
+/// that shape around the active Lua state, with the restore repeated in the
 /// failed-call arm.
 #[must_use = "the old value is restored as soon as the guard is dropped"]
 pub struct Restore<T: Copy + 'static> {

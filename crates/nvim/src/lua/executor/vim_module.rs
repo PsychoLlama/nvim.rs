@@ -1,143 +1,164 @@
 //! Building the `vim` table itself.
 //!
-//! [`nlua_common_vim_init`] is the shared half every state gets -- the
-//! reference table, the `vim.NIL` and `vim.empty_dict()` sentinels, luv --
-//! and [`nlua_init_packages`] runs `vim._init_packages` over the embedded Lua
-//! modules.  [`nlua_ui_attach`]/[`nlua_ui_detach`] are `vim.ui_attach()`,
-//! whose callbacks the compositor calls back into.
+//! [`VIM_FUNCTIONS`] is the half of `vim.*` the executor implements;
+//! [`add_common`] is the part every state gets -- `vim.is_thread` and the
+//! `vim.NIL` and `vim.empty_dict()` sentinels -- and [`init_packages`] runs
+//! `vim._init_packages` over the embedded Lua modules. [`ui_attach`] and
+//! [`ui_detach`] are `vim.ui_attach()`, whose callbacks the compositor calls
+//! back into, and [`thread_api`] the one api function a luv thread gets.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `lua/` row in docs/perimeter.md.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
+use std::io::Write;
 
 use super::{
-    BUILTIN_MODULES, luv_set_callback, luv_set_cthread, luv_set_thread, nlua_empty_dict_tostring,
-    nlua_fast_cfpcall, nlua_is_thread, nlua_luv_thread_cb_cfpcall, nlua_luv_thread_cfcpcall,
-    nlua_luv_thread_cfpcall, nlua_new_ref_state, nlua_nil_index, nlua_nil_tostring, nlua_pcall,
-    nlua_ref, nlua_ref_global,
+    BUILTIN_MODULES, call, in_fast_event, nlua_pcall, rpcnotify, rpcrequest, schedule, until_nul,
+    wait,
 };
 use crate::api::extmark::ns_initialized;
-use crate::lua::ffi::{
-    LUA_REGISTRYINDEX, LUA_TFUNCTION, LUA_TTABLE, lua_call, lua_error, lua_getfield,
-    lua_newuserdata, lua_next, lua_pushboolean, lua_pushcclosure, lua_pushinteger, lua_pushnil,
-    lua_pushstring, lua_pushvalue, lua_setfield, lua_setmetatable, lua_toboolean, lua_tointeger,
-    lua_tolstring, lua_type, luaL_checkinteger, luaL_error, luaL_loadbuffer, luaopen_luv,
-    luv_set_loop,
-};
-use crate::lua::stack::{
-    lua_getglobal, lua_newtable, lua_pop, lua_pushcfunction, lua_tostring, lua_upvalueindex,
-};
-use crate::lua::state::nlua_disable_preload;
-use crate::memory::strequal;
-use crate::os::cshim::stderr;
-use crate::startup::main_loop;
+use crate::lua::converter::{pop_array, push_array};
+use crate::lua::stack::{At, Function, Kind, Raise, Stack};
+use crate::lua::state::{MAIN_REFS, nlua_disable_preload};
+use crate::lua_functions;
+use crate::runtime::runtime_get_named_thread;
 use crate::types::ui::kUILinegrid;
-use crate::types::{LuaRef, lua_Integer, lua_State, size_t, uint32_t};
 use crate::ui::state::{ui_ext_names, ui_refresh_cmdheight};
 use crate::ui::{ui_add_cb, ui_remove_cb};
-use ::libc::fprintf;
 
-/// The registry key this state's reference bookkeeping is parked under.
-const REF_STATE_KEY: &CStr = c"nlua.ref_state";
+lua_functions! {
+    /// The `vim.*` functions the executor implements, in the order they are
+    /// set on the main state's `vim` table.
+    pub(crate) enum VimFunctions in VIM_FUNCTIONS {
+        0 => c"schedule": schedule,
+        1 => c"in_fast_event": in_fast_event,
+        2 => c"call": call,
+        3 => c"rpcrequest": rpcrequest,
+        4 => c"rpcnotify": rpcnotify,
+        5 => c"wait": wait,
+        6 => c"ui_attach": ui_attach,
+        7 => c"ui_detach": ui_detach,
+    }
+}
+
+lua_functions! {
+    /// What every state's `vim` table and sentinels carry.
+    enum Common in COMMON_FUNCTIONS {
+        0 => c"is_thread": is_thread,
+        1 => c"__tostring": nil_tostring,
+        2 => c"__index": nil_index,
+        3 => c"__tostring": empty_dict_tostring,
+        4 => c"preload": module_preloader,
+    }
+}
+
+lua_functions! {
+    /// A luv thread's `vim.api`.
+    enum ThreadApi in THREAD_API {
+        0 => c"nvim__get_runtime": thread_get_runtime,
+    }
+}
+
+/// A luv thread's `vim.api` functions.
+pub(crate) fn thread_api() -> &'static [Function] {
+    THREAD_API
+}
+
 /// The name the module whose preload the `--luamod-dev` flag stops at.
 const FIRST_DEV_MODULE: &CStr = c"vim.inspect";
 
+/// `vim.is_thread()`.
+fn is_thread(stack: &mut Stack) -> Result<c_int, Raise> {
+    stack.get_field(At::REGISTRY, c"nvim.thread");
+    Ok(1)
+}
+
+/// `vim.NIL`'s `__tostring`.
+fn nil_tostring(stack: &mut Stack) -> Result<c_int, Raise> {
+    stack.push_bytes(b"vim.NIL");
+    Ok(1)
+}
+
+/// `vim.NIL`'s `__index` and `__newindex`: indexing a JSON `null` names
+/// what was indexed, rather than Lua's "attempt to index a userdata value".
+fn nil_index(_: &mut Stack) -> Result<c_int, Raise> {
+    Err(Raise::message("attempt to index vim.NIL"))
+}
+
+/// `vim.empty_dict()`'s `__tostring`.
+fn empty_dict_tostring(stack: &mut Stack) -> Result<c_int, Raise> {
+    stack.push_bytes(b"vim.empty_dict()");
+    Ok(1)
+}
+
 /// The half of the `vim` table that a thread state gets as well as the main
-/// one: the reference table, the two identity sentinels, and luv.
+/// one: `vim.is_thread` and the two identity sentinels. On the main state
+/// the sentinels are references, which is how the converter pushes them.
 ///
 /// Expects the `vim` table on top; leaves it there.
-///
-/// # Safety
-/// `lstate` must be a live Lua state with the `vim` table on top.
-pub(crate) unsafe fn nlua_common_vim_init(
-    lstate: *mut lua_State,
-    is_thread: bool,
-    is_standalone: bool,
-) {
-    unsafe {
-        let ref_state = nlua_new_ref_state(lstate, is_thread);
-        lua_setfield(lstate, LUA_REGISTRYINDEX, REF_STATE_KEY.as_ptr());
+pub(crate) fn add_common(stack: &mut Stack, is_thread: bool) {
+    let [
+        is_thread_function,
+        nil_tostring,
+        nil_index,
+        empty_dict_tostring,
+        _,
+    ]: &[Function; 5] = COMMON_FUNCTIONS.try_into().expect("five functions");
 
-        lua_pushboolean(lstate, is_thread as c_int);
-        lua_setfield(lstate, LUA_REGISTRYINDEX, c"nvim.thread".as_ptr());
-        lua_pushcfunction(lstate, nlua_is_thread);
-        lua_setfield(lstate, -2, c"is_thread".as_ptr());
+    stack.push_boolean(is_thread);
+    stack.set_field(At::REGISTRY, c"nvim.thread");
+    stack.push_function(is_thread_function.entry());
+    stack.set_field(At::from_top(2), c"is_thread");
 
-        // vim.NIL: a zero-length userdatum, so it is unique and compares by
-        // identity, with a metatable that renders it.
-        lua_newuserdata(lstate, 0);
-        lua_newtable(lstate);
-        lua_pushcfunction(lstate, nlua_nil_tostring);
-        lua_setfield(lstate, -2, c"__tostring".as_ptr());
-        lua_pushcfunction(lstate, nlua_nil_index);
-        lua_setfield(lstate, -2, c"__index".as_ptr());
-        lua_pushcfunction(lstate, nlua_nil_index);
-        lua_setfield(lstate, -2, c"__newindex".as_ptr());
-        lua_setmetatable(lstate, -2);
-        (*ref_state).nil_ref = nlua_ref(lstate, ref_state, -1);
-        lua_pushvalue(lstate, -1);
-        lua_setfield(lstate, LUA_REGISTRYINDEX, c"mpack.NIL".as_ptr());
-        lua_setfield(lstate, -2, c"NIL".as_ptr());
-
-        // vim.empty_dict(): the *metatable* is the marker, so an empty table
-        // carrying it converts as a dictionary rather than a list.
-        lua_newtable(lstate);
-        lua_pushcfunction(lstate, nlua_empty_dict_tostring);
-        lua_setfield(lstate, -2, c"__tostring".as_ptr());
-        (*ref_state).empty_dict_ref = nlua_ref(lstate, ref_state, -1);
-        lua_pushvalue(lstate, -1);
-        lua_setfield(lstate, LUA_REGISTRYINDEX, c"mpack.empty_dict".as_ptr());
-        lua_setfield(lstate, -2, c"_empty_dict_mt".as_ptr());
-
-        if !is_standalone {
-            if is_thread {
-                luv_set_callback(lstate, Some(nlua_luv_thread_cb_cfpcall));
-                luv_set_thread(lstate, Some(nlua_luv_thread_cfpcall));
-                luv_set_cthread(lstate, Some(nlua_luv_thread_cfcpcall));
-            } else {
-                luv_set_loop(lstate, &raw mut (*main_loop.ptr()).uv);
-                luv_set_callback(lstate, Some(nlua_fast_cfpcall));
-            }
-        }
-
-        // vim.uv, vim.loop and package.loaded.luv are the same table.
-        luaopen_luv(lstate);
-        lua_pushvalue(lstate, -1);
-        lua_setfield(lstate, -3, c"uv".as_ptr());
-        lua_pushvalue(lstate, -1);
-        lua_setfield(lstate, -3, c"loop".as_ptr());
-
-        lua_getglobal(lstate, c"package".as_ptr());
-        lua_getfield(lstate, -1, c"loaded".as_ptr());
-        lua_pushvalue(lstate, -3);
-        lua_setfield(lstate, -2, c"luv".as_ptr());
-        lua_pop(lstate, 3);
+    // vim.NIL: a zero-length userdatum, so it is unique and compares by
+    // identity, with a metatable that renders it.
+    stack.new_empty_userdata();
+    stack.new_table(0, 0);
+    stack.push_function(nil_tostring.entry());
+    stack.set_field(At::from_top(2), c"__tostring");
+    stack.push_function(nil_index.entry());
+    stack.set_field(At::from_top(2), c"__index");
+    stack.push_function(nil_index.entry());
+    stack.set_field(At::from_top(2), c"__newindex");
+    stack.set_metatable(At::from_top(2));
+    if !is_thread {
+        let nil_ref = stack.reference(At::TOP);
+        MAIN_REFS.with_mut(|refs| refs.nil_ref = nil_ref);
     }
+    stack.push_value(At::TOP);
+    stack.set_field(At::REGISTRY, c"mpack.NIL");
+    stack.set_field(At::from_top(2), c"NIL");
+
+    // vim.empty_dict(): the *metatable* is the marker, so an empty table
+    // carrying it converts as a dictionary rather than a list.
+    stack.new_table(0, 0);
+    stack.push_function(empty_dict_tostring.entry());
+    stack.set_field(At::from_top(2), c"__tostring");
+    if !is_thread {
+        let empty_dict_ref = stack.reference(At::TOP);
+        MAIN_REFS.with_mut(|refs| refs.empty_dict_ref = empty_dict_ref);
+    }
+    stack.push_value(At::TOP);
+    stack.set_field(At::REGISTRY, c"mpack.empty_dict");
+    stack.set_field(At::from_top(2), c"_empty_dict_mt");
 }
 
 /// The `package.preload` entry for one embedded module: load its bytecode and
 /// run it. Its upvalue is the module's index in [`BUILTIN_MODULES`].
-///
-/// # Safety
-/// `lstate` must be a live Lua state and the upvalue a valid index.
-pub(crate) unsafe extern "C-unwind" fn nlua_module_preloader(lstate: *mut lua_State) -> c_int {
-    unsafe {
-        let i = lua_tointeger(lstate, lua_upvalueindex(1)) as size_t;
-        let chunk = BUILTIN_MODULES[i].chunk();
-        if luaL_loadbuffer(
-            lstate,
-            chunk.as_ptr().cast::<c_char>(),
-            chunk.len(),
-            ::core::ptr::null(),
-        ) != 0
-        {
-            return lua_error(lstate);
-        }
-        lua_call(lstate, 0, 1);
-        1
+fn module_preloader(stack: &mut Stack) -> Result<c_int, Raise> {
+    let index = usize::try_from(stack.to_integer(At::upvalue(1))).unwrap_or(usize::MAX);
+    let chunk = BUILTIN_MODULES[index].chunk();
+    if stack.load(chunk, None).is_err() {
+        return Err(Raise::top_value());
     }
+    Err(Raise::tail_call(0, 1))
 }
 
 /// Register every embedded module in `package.preload`, then `require`
@@ -146,102 +167,136 @@ pub(crate) unsafe extern "C-unwind" fn nlua_module_preloader(lstate: *mut lua_St
 /// `nlua_disable_preload` (`--luamod-dev`) stops the registration at
 /// `vim.inspect`, so everything after it is loaded from the runtime
 /// directory instead.
-///
-/// # Safety
-/// `lstate` must be a live Lua state.
-pub(crate) unsafe fn nlua_init_packages(lstate: *mut lua_State, is_standalone: bool) -> bool {
-    unsafe {
-        lua_getglobal(lstate, c"package".as_ptr());
-        lua_getfield(lstate, -1, c"preload".as_ptr());
-        for (i, def) in BUILTIN_MODULES.iter().enumerate() {
-            lua_pushinteger(lstate, i as lua_Integer);
-            lua_pushcclosure(lstate, Some(nlua_module_preloader), 1);
-            lua_setfield(lstate, -2, def.name.as_ptr());
-            if nlua_disable_preload.get() && !is_standalone && def.name == FIRST_DEV_MODULE {
-                break;
-            }
+pub(crate) fn init_packages(stack: &mut Stack, is_standalone: bool) -> bool {
+    let preloader = COMMON_FUNCTIONS[4].entry();
+    stack.get_global(c"package");
+    stack.get_field(At::TOP, c"preload");
+    for (index, def) in (0..).zip(BUILTIN_MODULES) {
+        stack.push_integer(index);
+        stack.push_closure(preloader, 1);
+        stack.set_field(At::from_top(2), def.name);
+        if nlua_disable_preload.get() && !is_standalone && def.name == FIRST_DEV_MODULE {
+            break;
         }
-        lua_pop(lstate, 2);
-
-        lua_getglobal(lstate, c"require".as_ptr());
-        lua_pushstring(lstate, c"vim._init_packages".as_ptr());
-        if nlua_pcall(lstate, 1, 0) != 0 {
-            fprintf(stderr, c"%s\n".as_ptr(), lua_tostring(lstate, -1));
-            return false;
-        }
-        true
     }
+    stack.pop(2);
+
+    stack.get_global(c"require");
+    stack.push_bytes(b"vim._init_packages");
+    if nlua_pcall(stack, 1, 0).is_err() {
+        // `fprintf(stderr, "%s\n", lua_tostring(L, -1))`.
+        let error = stack.to_bytes(At::TOP).map_or(&b"(null)"[..], until_nul);
+        let _ = std::io::stderr().write_all(&[error, b"\n"].concat());
+        return false;
+    }
+    true
 }
 
 /// `vim.ui_attach(ns_id, opts, callback)`.
 ///
 /// `opts` names the UI extensions the callback wants; at least one must be
 /// true, or the attach is refused.
-///
-/// # Safety
-/// `lstate` must be a live Lua state holding this function's arguments.
-pub(crate) unsafe extern "C-unwind" fn nlua_ui_attach(lstate: *mut lua_State) -> c_int {
-    unsafe {
-        let ns_id = luaL_checkinteger(lstate, 1) as uint32_t;
-        if !ns_initialized(ns_id) {
-            return luaL_error(lstate, c"invalid ns_id".as_ptr());
-        }
-        if lua_type(lstate, 2) != LUA_TTABLE {
-            return luaL_error(lstate, c"opts must be a table".as_ptr());
-        }
-        if lua_type(lstate, 3) != LUA_TFUNCTION {
-            return luaL_error(lstate, c"callback must be a Lua function".as_ptr());
-        }
+fn ui_attach(stack: &mut Stack) -> Result<c_int, Raise> {
+    let ns_id = ns_argument(stack)?;
+    if stack.kind(At::arg(2)) != Kind::Table {
+        return Err(Raise::message("opts must be a table"));
+    }
+    if stack.kind(At::arg(3)) != Kind::Function {
+        return Err(Raise::message("callback must be a Lua function"));
+    }
 
-        let mut ext_widgets = [false; 5];
-        let mut tbl_has_true_val = false;
-        lua_pushvalue(lstate, 2);
-        lua_pushnil(lstate);
-        while lua_next(lstate, -2) != 0 {
-            let mut len: size_t = 0;
-            let s = lua_tolstring(lstate, -2, &raw mut len);
-            let val = lua_toboolean(lstate, -1) != 0;
-            if strequal(s, c"set_cmdheight".as_ptr()) {
-                ui_refresh_cmdheight.set(val);
-            } else {
-                let found = (0..kUILinegrid as size_t).find(|&i| strequal(s, ui_ext_names[i]));
-                match found {
-                    Some(i) => {
-                        if val {
-                            tbl_has_true_val = true;
-                        }
-                        ext_widgets[i] = val;
+    let mut ext_widgets = [false; kUILinegrid as usize];
+    let mut tbl_has_true_val = false;
+    stack.push_value(At::arg(2));
+    stack.push_nil();
+    while stack.next(At::from_top(2)) {
+        let value = stack.to_boolean(At::TOP);
+        // `lua_tolstring` of the key: a number key is turned into its
+        // string in place, as upstream does, and the name is a C string.
+        let key = stack.to_bytes(At::from_top(2)).map(until_nul);
+        if key == Some(b"set_cmdheight".as_slice()) {
+            ui_refresh_cmdheight.set(value);
+        } else {
+            let found = key.and_then(|key| {
+                ui_ext_names[..kUILinegrid as usize]
+                    .iter()
+                    .position(|name| name.to_bytes() == key)
+            });
+            match found {
+                Some(i) => {
+                    if value {
+                        tbl_has_true_val = true;
                     }
-                    None => return luaL_error(lstate, c"Unexpected key: %s".as_ptr(), s),
+                    ext_widgets[i] = value;
+                }
+                None => {
+                    let key = key
+                        .map(<[u8]>::to_vec)
+                        .unwrap_or_else(|| b"(null)".to_vec());
+                    return Err(Raise::message(
+                        [b"Unexpected key: ".as_slice(), &key].concat(),
+                    ));
                 }
             }
-            lua_pop(lstate, 1);
         }
-        if !tbl_has_true_val {
-            return luaL_error(
-                lstate,
-                c"opts table must contain at least one 'true' ext_widget".as_ptr(),
-            );
-        }
-
-        let ui_event_cb: LuaRef = nlua_ref_global(lstate, 3);
-        ui_add_cb(ns_id, ui_event_cb, ext_widgets.as_mut_ptr());
-        ui_refresh_cmdheight.set(true);
-        0
+        stack.pop(1);
     }
+    if !tbl_has_true_val {
+        return Err(Raise::message(
+            "opts table must contain at least one 'true' ext_widget",
+        ));
+    }
+
+    let ui_event_cb = stack.reference(At::arg(3));
+    ui_add_cb(ns_id, ui_event_cb, ext_widgets);
+    ui_refresh_cmdheight.set(true);
+    Ok(0)
 }
 
 /// `vim.ui_detach(ns_id)`.
-///
-/// # Safety
-/// `lstate` must be a live Lua state holding this function's arguments.
-pub(crate) unsafe extern "C-unwind" fn nlua_ui_detach(lstate: *mut lua_State) -> c_int {
-    unsafe {
-        let ns_id = luaL_checkinteger(lstate, 1) as uint32_t;
-        if !ns_initialized(ns_id) {
-            return luaL_error(lstate, c"invalid ns_id".as_ptr());
-        }
-        ui_remove_cb(ns_id, false);
-        0
+fn ui_detach(stack: &mut Stack) -> Result<c_int, Raise> {
+    let ns_id = ns_argument(stack)?;
+    ui_remove_cb(ns_id, false);
+    Ok(0)
+}
+
+/// The namespace at slot 1, as `(uint32_t)luaL_checkinteger(L, 1)` reads it,
+/// refused unless it has been created.
+fn ns_argument(stack: &mut Stack) -> Result<u32, Raise> {
+    // The C cast keeps the low 32 bits.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let ns_id = stack.check_integer(At::arg(1))? as u32;
+    if !ns_initialized(ns_id) {
+        return Err(Raise::message("invalid ns_id"));
     }
+    Ok(ns_id)
+}
+
+/// `nvim__get_runtime()` as a thread state sees it: the one api function a
+/// luv thread is allowed, because it reads only the runtime path.
+fn thread_get_runtime(stack: &mut Stack) -> Result<c_int, Raise> {
+    if stack.top().index() != 3 {
+        return Err(Raise::message("Expected 3 arguments"));
+    }
+
+    stack.check_kind(At::TOP, Kind::Table)?;
+    stack.get_field(At::TOP, c"is_lua");
+    if stack.kind(At::TOP) != Kind::Boolean {
+        return Err(Raise::message("is_lua is not a boolean"));
+    }
+    let is_lua = stack.to_boolean(At::TOP);
+    stack.pop(2);
+
+    stack.check_kind(At::TOP, Kind::Boolean)?;
+    let all = stack.to_boolean(At::TOP);
+    stack.pop(1);
+
+    let pat = match pop_array(stack) {
+        Ok(pat) => pat,
+        Err(e) => return Err(Raise::message(e.message_or_empty().to_bytes())),
+    };
+
+    let ret = runtime_get_named_thread(is_lua, &pat, all);
+    push_array(stack, &ret, true);
+    Ok(1)
 }

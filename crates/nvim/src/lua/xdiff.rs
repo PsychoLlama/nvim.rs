@@ -1,43 +1,50 @@
-#![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `lua/` row in docs/perimeter.md.
-#![allow(unsafe_code)]
-
 //! `vim.diff()`: the Lua binding over the bundled xdiff.
 //!
-//! # Boundary
-//!
-//! `nlua_xdl_diff` is a Lua C function and the three emit callbacks are
-//! `xdl_diff`'s, so all four keep the C ABI and their raw `lua_State` /
-//! `void *` arguments. Everything the callbacks reach — the linematch
-//! refinement, the decision walk — is safe and lives elsewhere.
-//!
 //! The three shapes the binding can answer in are [`Mode`]: a unified-diff
-//! *string* (the default, assembled in a `luaL_Buffer`), *nothing* with an
-//! `on_hunk` callback run per hunk, or a *list* of `{start_a, count_a, //! start_b, count_b}` tuples (`result_type = 'indices'`).
+//! *string* (the default), *nothing* with an `on_hunk` callback run per hunk,
+//! or a *list* of `{start_a, count_a, start_b, count_b}` tuples
+//! (`result_type = 'indices'`). The engine runs over the two strings where
+//! they sit on the stack, through [`diff_with`]; a hunk callback is called
+//! once the walk is done, over the hunks it collected, which is the order
+//! and the stopping rule the engine's own callback had.
 
-use core::ffi::{c_char, c_int, c_long, c_void};
-use core::{ptr, slice};
+#![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
+use core::ffi::c_int;
+
+use crate::api_error;
 use crate::linematch::{block_from_lnum, linematch_nbuffers};
 use crate::lua::converter::pop_keydict;
-use crate::lua::executor::{api_free_luaref, nlua_pushref};
-use crate::lua::ffi::{
-    LUA_TFUNCTION, LUA_TSTRING, LUA_TTABLE, lua_concat, lua_createtable, lua_error, lua_gettop,
-    lua_isnumber, lua_objlen, lua_pcall, lua_pushinteger, lua_pushstring, lua_pushvalue,
-    lua_rawseti, lua_settop, lua_tolstring, lua_tonumber, lua_type, luaL_argerror, luaL_buffinit,
-    luaL_error, luaL_prepbuffer, luaL_pushresult, luaL_where,
-};
-use crate::lua::stack::Stack;
-use crate::types::{
-    Error, KeyDict_xdl_diff, LineNr, Object, int64_t, kErrorTypeException, lua_Integer, lua_State,
-    luaL_Buffer, mmbuffer_t, mmfile_t, size_t, xdemitcb_t, xdemitconf_t, xpparam_t,
-};
-use crate::xdiff::ffi::xdl_diff;
+use crate::lua::executor::{release_luaref, until_nul};
+use crate::lua::stack::{At, CFunction, Kind, Raise, Stack};
+use crate::lua_functions;
+use crate::message_fmt::msg_bytes_opt;
+use crate::types::{Error, KeyDict_xdl_diff, LineNr, Object, kErrorTypeException, lua_Integer};
+use crate::xdiff::ffi::{Emit, diff_with};
 use crate::xdiff::xtypes::{
     XDF_HISTOGRAM_DIFF, XDF_IGNORE_BLANK_LINES, XDF_IGNORE_CR_AT_EOL, XDF_IGNORE_WHITESPACE,
     XDF_IGNORE_WHITESPACE_AT_EOL, XDF_IGNORE_WHITESPACE_CHANGE, XDF_INDENT_HEURISTIC,
     XDF_NEED_MINIMAL, XDF_PATIENCE_DIFF,
 };
+
+lua_functions! {
+    /// `vim.diff`.
+    enum Diff in DIFF_FUNCTION {
+        0 => c"diff": xdl_diff,
+    }
+}
+
+/// `vim.diff`, for the state that registers it.
+pub(crate) fn diff_function() -> CFunction {
+    DIFF_FUNCTION[0].entry()
+}
 
 /// What `vim.diff` was asked to produce.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -96,69 +103,36 @@ impl Hunk {
 const COMPARED_BUFFER0: c_int = 1 << 0;
 const COMPARED_BUFFER1: c_int = 1 << 1;
 
-/// What the emit callbacks are handed as `cb_data`.
-///
-/// `ma`/`mb` are only set for [`Mode::Locations`], which needs the two
-/// documents again to refine a hunk; `err` only for [`Mode::OnHunk`], which
-/// is the only one that can fail inside the walk.
-struct HunkContext {
-    lstate: *mut lua_State,
-    err: *mut Error,
-    ma: *mut mmfile_t,
-    mb: *mut mmfile_t,
-    linematch: int64_t,
-    iwhite: bool,
+/// What the options table asked of the engine, beyond the [`Mode`].
+#[derive(Default)]
+struct Config {
+    /// The `XDF_*` bits.
+    flags: u64,
+    ctxlen: i64,
+    interhunkctxlen: i64,
+    linematch: i64,
 }
 
-use crate::api_error;
-use crate::message_fmt::c_str;
-
-/// Append one `{start_a, count_a, start_b, count_b}` tuple to the list on top
-/// of the stack. A zero count keeps its start where it is; a non-empty side
-/// is reported one-based.
-///
-/// # Safety
-/// `lstate` must be live with the result list on top and two free slots.
-unsafe fn lua_pushhunk(lstate: *mut lua_State, hunk: Hunk) {
-    // SAFETY: the caller's state; the tuple is built on top of the list and
-    // appended to it, so the stack ends level.
-    unsafe {
-        lua_createtable(lstate, 0, 0);
-        for (slot, value) in hunk.one_based().into_iter().enumerate() {
-            lua_pushinteger(lstate, value as lua_Integer);
-            lua_rawseti(lstate, -2, slot as c_int + 1);
-        }
-        let at = lua_objlen(lstate, -2) as c_int + 1;
-        lua_rawseti(lstate, -2, at);
-    }
+/// A hunk extent as the engine reports it, narrowed to the `int`s upstream's
+/// callback took.
+fn as_hunk(start_a: i64, count_a: i64, start_b: i64, count_b: i64) -> Hunk {
+    #[allow(clippy::cast_possible_truncation)]
+    let narrow = |n: i64| n as c_int;
+    Hunk::from_cb(
+        narrow(start_a),
+        narrow(count_a),
+        narrow(start_b),
+        narrow(count_b),
+    )
 }
 
-/// Split one hunk into the finer hunks `linematch` finds inside it, and push
-/// each. Runs only when `linematch` is on and the hunk is small enough.
-///
-/// # Safety
-/// As [`lua_pushhunk`]; `ma`/`mb` must point at the two live documents.
-unsafe fn get_linematch_results(
-    lstate: *mut lua_State,
-    ma: *mut mmfile_t,
-    mb: *mut mmfile_t,
-    hunk: Hunk,
-    iwhite: bool,
-) {
-    // The two blocks as bytes; `xdl_diff` only hands over non-empty ones.
-    // SAFETY: the caller's documents, which outlive this call.
-    let (bytes_a, bytes_b) = unsafe {
-        (
-            slice::from_raw_parts((*ma).ptr.cast::<u8>(), (*ma).size as usize),
-            slice::from_raw_parts((*mb).ptr.cast::<u8>(), (*mb).size as usize),
-        )
-    };
-    let block_a = block_from_lnum(bytes_a, hunk.start_a as LineNr + 1).unwrap_or_default();
-    let block_b = block_from_lnum(bytes_b, hunk.start_b as LineNr + 1).unwrap_or_default();
+/// The finer hunks `linematch` finds inside `hunk`, reported to `emit`. Runs
+/// only when `linematch` is on and the hunk is small enough.
+fn linematch_hunks(text_a: &[u8], text_b: &[u8], hunk: Hunk, iwhite: bool, emit: impl FnMut(Hunk)) {
+    let block_a = block_from_lnum(text_a, LineNr::from(hunk.start_a) + 1).unwrap_or_default();
+    let block_b = block_from_lnum(text_b, LineNr::from(hunk.start_b) + 1).unwrap_or_default();
     let decisions = linematch_nbuffers(&[block_a, block_b], &[hunk.count_a, hunk.count_b], iwhite);
-    // SAFETY: the caller's state, with the list still on top for each push.
-    let push = |finer: Hunk| unsafe { lua_pushhunk(lstate, finer) };
-    walk_decisions(hunk, &decisions, push);
+    walk_decisions(hunk, &decisions, emit);
 }
 
 /// The finer hunks a run of `linematch` decisions carves `hunk` into.
@@ -188,190 +162,30 @@ fn walk_decisions(hunk: Hunk, decisions: &[c_int], mut emit: impl FnMut(Hunk)) {
     emit(current);
 }
 
-/// `xdemitcb_t::out_line` for [`Mode::Unified`]: append the emitted text to
-/// the `luaL_Buffer` behind `cb_data`.
-///
-/// # Safety
-/// `cb_data` must be a live `luaL_Buffer *`, and `mb` must point at `nbuf`
-/// buffers whose `ptr` holds `size` bytes.
-unsafe extern "C" fn write_string(cb_data: *mut c_void, mb: *mut mmbuffer_t, nbuf: c_int) -> c_int {
-    // `luaL_Buffer`'s inline capacity, which is also how much
-    // `luaL_prepbuffer` guarantees. Upstream spells it `MIN(BUFSIZ, 16384)`
-    // and `BUFSIZ` is 8192. Function-local so it stays out of the FFI golden.
-    const LUAL_BUFFERSIZE: c_int = 8192;
-
-    let buf = cb_data.cast::<luaL_Buffer>();
-    for i in 0..nbuf {
-        // SAFETY: the caller promises `nbuf` buffers.
-        let (bytes, size) =
-            unsafe { ((*mb.offset(i as isize)).ptr, (*mb.offset(i as isize)).size) };
-        let mut total = 0;
-        while total < size {
-            // `MIN(size - total, LUAL_BUFFERSIZE)`; c2rust inlined the
-            // constant's own `BUFSIZ > 16384` arms into both sides.
-            let tocopy = (size - total).min(LUAL_BUFFERSIZE);
-            // SAFETY: `buf` is the live Lua buffer, and `luaL_prepbuffer`
-            // answers room for `LUAL_BUFFERSIZE` bytes -- at least `tocopy`.
-            unsafe {
-                let room = luaL_prepbuffer(buf);
-                if room.is_null() {
-                    return -1;
-                }
-                room.copy_from_nonoverlapping(bytes.offset(total as isize), tocopy as usize);
-                // `luaL_addsize`, which the header spells as a macro.
-                (*buf).p = (*buf).p.offset(tocopy as isize);
-            }
-            total += LUAL_BUFFERSIZE;
-        }
-    }
-    0
-}
-
-/// `xdemitconf_t::hunk_func` for [`Mode::Locations`].
-///
-/// # Safety
-/// `cb_data` must be a live `HunkContext *` whose `lstate` has the result
-/// list on top.
-unsafe extern "C" fn hunk_locations_cb(
-    start_a: c_int,
-    count_a: c_int,
-    start_b: c_int,
-    count_b: c_int,
-    cb_data: *mut c_void,
-) -> c_int {
-    let hunk = Hunk::from_cb(start_a, count_a, start_b, count_b);
-    // SAFETY: the caller's context, live for the whole `xdl_diff` call.
-    let ctx = unsafe { &*cb_data.cast::<HunkContext>() };
-    // A hunk wider than `linematch` is not worth refining.
-    if ctx.linematch > 0 && int64_t::from(count_a + count_b) <= ctx.linematch {
-        // SAFETY: as above; `ma`/`mb` are set for this mode.
-        unsafe { get_linematch_results(ctx.lstate, ctx.ma, ctx.mb, hunk, ctx.iwhite) };
-    } else {
-        // SAFETY: as above.
-        unsafe { lua_pushhunk(ctx.lstate, hunk) };
-    }
-    0
-}
-
-/// `xdemitconf_t::hunk_func` for [`Mode::OnHunk`]: call the user's function
-/// with the hunk's four coordinates. A number it answers stops the walk.
-///
-/// # Safety
-/// `cb_data` must be a live `HunkContext *` whose `lstate` has the callback
-/// on top and whose `err` is writable.
-unsafe extern "C" fn call_on_hunk_cb(
-    start_a: c_int,
-    count_a: c_int,
-    start_b: c_int,
-    count_b: c_int,
-    cb_data: *mut c_void,
-) -> c_int {
-    let coordinates = Hunk::from_cb(start_a, count_a, start_b, count_b).one_based();
-    // SAFETY: the caller's context, live for the whole `xdl_diff` call.
-    let (lstate, err) = unsafe {
-        let ctx = &*cb_data.cast::<HunkContext>();
-        (ctx.lstate, ctx.err)
-    };
-    // SAFETY: the callback is at the top of the stack, and `lua_pcall`
-    // consumes the copy plus its four arguments.
-    let (fidx, failed) = unsafe {
-        let fidx = lua_gettop(lstate);
-        lua_pushvalue(lstate, fidx);
-        for value in coordinates {
-            lua_pushinteger(lstate, value as lua_Integer);
-        }
-        (fidx, lua_pcall(lstate, 4, 1, 0) != 0)
-    };
-    if failed {
-        // SAFETY: the error message is on top, and `err` is the caller's
-        // slot -- the one the `HunkContext` above promised is live.
-        unsafe {
-            let why = c_str(lua_tolstring(lstate, -1, ptr::null_mut::<size_t>()));
-            *err = api_error!(kErrorTypeException, "on_hunk: {why}");
-        }
-        return -1;
-    }
-    // SAFETY: the result is on top and is dropped before returning.
-    unsafe {
-        let r = if lua_isnumber(lstate, -1) != 0 {
-            lua_tonumber(lstate, -1) as c_int
-        } else {
-            0
-        };
-        lua_settop(lstate, fidx);
-        r
-    }
-}
-
-/// One of the two document arguments, as a borrowed `mmfile_t`.
-///
-/// # Safety
-/// `lstate` must be a live Lua state.
-unsafe fn get_string_arg(lstate: *mut lua_State, idx: c_int) -> mmfile_t {
-    // SAFETY: the caller's state. `luaL_argerror` does not return, so past
-    // the two checks the argument is a string of at most `INT_MAX` bytes,
-    // and it stays on the stack for the whole call.
-    unsafe {
-        if lua_type(lstate, idx) != LUA_TSTRING {
-            luaL_argerror(lstate, idx, c"expected string".as_ptr());
-        }
-        let mut size: size_t = 0;
-        let ptr = lua_tolstring(lstate, idx, &raw mut size).cast_mut();
-        if size > c_int::MAX as size_t {
-            luaL_argerror(lstate, idx, c"string too long".as_ptr());
-        }
-        mmfile_t {
-            ptr,
-            size: size as c_int,
-        }
-    }
-}
-
-/// Read the options table at index 3 into `cfg`/`params`/`linematch`, and
-/// answer which shape the caller asked for, plus why a bad option stopped
-/// the read where it was.
-///
-/// # Safety
-/// `lstate` must be a live Lua state with a table at index 3.
-unsafe fn process_xdl_diff_opts(
-    lstate: *mut lua_State,
-    cfg: &mut xdemitconf_t,
-    params: &mut xpparam_t,
-    linematch: &mut int64_t,
-) -> (Mode, Option<Error>) {
+/// Read the options table at slot 3 into `config`, and answer which shape
+/// the caller asked for, plus why a bad option stopped the read where it
+/// was. An `on_hunk` callback is left on top of the stack.
+fn process_xdl_diff_opts(stack: &mut Stack, config: &mut Config) -> (Mode, Option<Error>) {
     let mut opts = KeyDict_xdl_diff::default();
     let mut blame = None;
-    // SAFETY: the caller's state, and this frame's only `Stack`. `opts` owns
-    // whatever the pop puts in it, which is freed at the end.
-    let mut stack = unsafe { Stack::from_raw(lstate) };
-    let popped = pop_keydict(&mut stack, &mut opts, &mut blame);
+    let popped = pop_keydict(stack, &mut opts, &mut blame);
 
-    // SAFETY: the keydict's two string fields are NUL-terminated or null.
     // A bad option outranks a failed pop, which is the order the two had
     // when both wrote through one slot.
-    let (mode, why) = unsafe { apply_opts(lstate, &opts, cfg, params, linematch) };
+    let (mode, why) = apply_opts(stack, &opts, config);
 
-    // SAFETY: the keydict owns these; `opts` is not read again.
-    for string in [opts.result_type, opts.algorithm].into_iter().flatten() {
-        drop(string);
-    }
     if let Some(on_hunk) = opts.on_hunk {
-        unsafe { api_free_luaref(on_hunk) };
+        release_luaref(on_hunk);
     }
     (mode, why.or(popped.err()))
 }
 
 /// The body of [`process_xdl_diff_opts`], split out so the keydict is freed
 /// on every path — upstream's `goto exit`.
-///
-/// # Safety
-/// `lstate` must be live; `opts` must be a populated keydict.
-unsafe fn apply_opts(
-    lstate: *mut lua_State,
+fn apply_opts(
+    stack: &mut Stack,
     opts: &KeyDict_xdl_diff,
-    cfg: &mut xdemitconf_t,
-    params: &mut xpparam_t,
-    linematch: &mut int64_t,
+    config: &mut Config,
 ) -> (Mode, Option<Error>) {
     let mut had_result_type_indices = false;
     if let Some(result_type) = opts.result_type.as_ref()
@@ -396,7 +210,7 @@ unsafe fn apply_opts(
         .into_iter()
         .find(|(name, _)| *name == named.as_cstr());
         match algorithm {
-            Some((_, flag)) => params.flags |= flag,
+            Some((_, flag)) => config.flags |= flag,
             None => {
                 let why = Error::validation(c"not a valid algorithm");
                 return (Mode::Unified, Some(why));
@@ -405,15 +219,15 @@ unsafe fn apply_opts(
     }
 
     if let Some(ctxlen) = opts.ctxlen {
-        cfg.ctxlen = ctxlen as c_long;
+        config.ctxlen = ctxlen;
     }
     if let Some(interhunkctxlen) = opts.interhunkctxlen {
-        cfg.interhunkctxlen = interhunkctxlen as c_long;
+        config.interhunkctxlen = interhunkctxlen;
     }
     if let Some(given) = opts.linematch.as_ref() {
         match given {
-            Object::Boolean(on) => *linematch = if *on { int64_t::MAX } else { 0 },
-            Object::Integer(n) => *linematch = *n,
+            Object::Boolean(on) => config.linematch = if *on { i64::MAX } else { 0 },
+            Object::Integer(n) => config.linematch = *n,
             _ => {
                 let why = Error::validation(c"linematch must be a boolean or integer");
                 return (Mode::Unified, Some(why));
@@ -433,17 +247,14 @@ unsafe fn apply_opts(
         (opts.indent_heuristic, XDF_INDENT_HEURISTIC),
     ] {
         if given.unwrap_or(false) {
-            params.flags |= flag;
+            config.flags |= flag;
         }
     }
 
     if let Some(on_hunk) = opts.on_hunk {
-        // SAFETY: `lstate` is live; the callback is left on the stack for
-        // `call_on_hunk_cb` to copy.
-        let is_function = unsafe {
-            nlua_pushref(lstate, on_hunk);
-            lua_type(lstate, -1) == LUA_TFUNCTION
-        };
+        // The callback is left on the stack for the hunk walk to copy.
+        stack.push_reference(on_hunk);
+        let is_function = stack.kind(At::TOP) == Kind::Function;
         let why = (!is_function).then(|| Error::validation(c"on_hunk is not a function"));
         return (Mode::OnHunk, why);
     }
@@ -453,129 +264,146 @@ unsafe fn apply_opts(
     (Mode::Unified, None)
 }
 
-/// `vim.diff(a, b[, opts])`.
-///
-/// # Safety
-/// Called by Lua with a live `lua_State`.
-pub unsafe extern "C-unwind" fn nlua_xdl_diff(lstate: *mut lua_State) -> c_int {
-    // SAFETY: Lua's own state.
-    if unsafe { lua_gettop(lstate) } < 2 {
-        // SAFETY: as above.
-        return unsafe { luaL_error(lstate, c"Expected at least 2 arguments".as_ptr()) };
+/// One of the two document arguments, checked: a string of at most
+/// `INT_MAX` bytes.
+fn check_document(stack: &Stack, at: c_int) -> Result<(), Raise> {
+    let Some(text) = stack.string(At::arg(at)) else {
+        return Err(Raise::argument(at, "expected string"));
+    };
+    if c_int::try_from(text.len()).is_err() {
+        return Err(Raise::argument(at, "string too long"));
     }
-    // SAFETY: as above; both stay on the stack for the whole call.
-    let (mut ma, mut mb) = unsafe { (get_string_arg(lstate, 1), get_string_arg(lstate, 2)) };
+    Ok(())
+}
+
+/// Call the `on_hunk` callback (on top of the stack) for each of `hunks`, in
+/// order. A number it answers below zero stops the walk, and so does a
+/// failing callback -- whose error is then the answer.
+fn call_on_hunk(stack: &mut Stack, hunks: &[Hunk]) -> Result<(), Option<Error>> {
+    let callback = stack.top();
+    for hunk in hunks {
+        stack.push_value(callback);
+        for value in hunk.one_based() {
+            stack.push_integer(value as lua_Integer);
+        }
+        if stack.pcall(4, 1, None).is_err() {
+            let why = stack.to_bytes(At::TOP).map(until_nul);
+            return Err(Some(api_error!(
+                kErrorTypeException,
+                "on_hunk: {}",
+                msg_bytes_opt(why)
+            )));
+        }
+        // `lua_tonumber(..)` as the C `int` it was cast to.
+        #[allow(clippy::cast_possible_truncation)]
+        let answer = if stack.is_number(At::TOP) {
+            stack.to_number(At::TOP) as c_int
+        } else {
+            0
+        };
+        stack.set_top(callback);
+        if answer < 0 {
+            return Err(None);
+        }
+    }
+    Ok(())
+}
+
+/// `vim.diff(a, b[, opts])`.
+fn xdl_diff(stack: &mut Stack) -> Result<c_int, Raise> {
+    if stack.top().index() < 2 {
+        return Err(Raise::message("Expected at least 2 arguments"));
+    }
+    // Both stay on the stack for the whole call.
+    check_document(stack, 1)?;
+    check_document(stack, 2)?;
 
     let mut err = Error::none();
-    let mut cfg = xdemitconf_t {
-        ctxlen: 0,
-        interhunkctxlen: 0,
-        flags: 0,
-        find_func: None,
-        find_func_priv: ptr::null_mut::<c_void>(),
-        hunk_func: None,
-    };
-    let mut params = xpparam_t {
-        flags: 0,
-        anchors: ptr::null_mut::<*mut c_char>(),
-        anchors_nr: 0,
-    };
-    let mut linematch: int64_t = 0;
+    let mut config = Config::default();
     let mut mode = Mode::Unified;
 
-    // SAFETY: as above.
-    if unsafe { lua_gettop(lstate) } == 3 {
-        // SAFETY: as above.
-        if unsafe { lua_type(lstate, 3) } != LUA_TTABLE {
-            // SAFETY: as above.
-            return unsafe { luaL_argerror(lstate, 3, c"expected table".as_ptr()) };
+    if stack.top().index() == 3 {
+        if stack.kind(At::arg(3)) != Kind::Table {
+            return Err(Raise::argument(3, "expected table"));
         }
         let why;
-        (mode, why) =
-            unsafe { process_xdl_diff_opts(lstate, &mut cfg, &mut params, &mut linematch) };
+        (mode, why) = process_xdl_diff_opts(stack, &mut config);
         if let Some(why) = why {
             err = why;
         }
     }
 
-    // Both of these are addressed by the callbacks through `ecb`, so they
-    // have to outlive the `xdl_diff` call below and nothing may move them.
-    let mut buf = luaL_Buffer {
-        p: ptr::null_mut::<c_char>(),
-        lvl: 0,
-        L: ptr::null_mut::<lua_State>(),
-        buffer: [0; 8192],
-    };
-    let mut ctx = HunkContext {
-        lstate,
-        err: &raw mut err,
-        ma: &raw mut ma,
-        mb: &raw mut mb,
-        linematch,
-        iwhite: params.flags & XDF_IGNORE_WHITESPACE > 0,
-    };
-    let mut ecb = xdemitcb_t {
-        priv_0: ptr::null_mut::<c_void>(),
-        out_hunk: None,
-        out_line: None,
-    };
-
+    // What the walk produced, pushed or called back once it is done.
+    let mut unified = Vec::new();
+    let mut hunks = Vec::new();
     if !err.is_set() {
-        match mode {
-            Mode::Unified => {
-                // SAFETY: `lstate` is live and `buf` outlives the walk.
-                unsafe { luaL_buffinit(lstate, &raw mut buf) };
-                ecb.priv_0 = (&raw mut buf).cast::<c_void>();
-                ecb.out_line = Some(write_string);
+        let text_a = stack.string(At::arg(1)).unwrap_or_default();
+        let text_b = stack.string(At::arg(2)).unwrap_or_default();
+        let iwhite = config.flags & XDF_IGNORE_WHITESPACE > 0;
+        let linematch = config.linematch;
+        let mut on_line = |parts: &[&[u8]]| {
+            for part in parts {
+                unified.extend_from_slice(part);
             }
-            Mode::OnHunk => {
-                cfg.hunk_func = Some(call_on_hunk_cb);
-                ecb.priv_0 = (&raw mut ctx).cast::<c_void>();
-            }
-            Mode::Locations => {
-                cfg.hunk_func = Some(hunk_locations_cb);
-                ecb.priv_0 = (&raw mut ctx).cast::<c_void>();
-                // The result list the callback appends to.
-                // SAFETY: `lstate` is live.
-                unsafe { lua_createtable(lstate, 0, 0) };
-            }
-        }
-
-        // SAFETY: the four structures are live for the call, and each mode
-        // wired up the callback that matches what `ecb.priv_0` points at.
-        let failed = unsafe {
-            xdl_diff(
-                &raw mut ma,
-                &raw mut mb,
-                &raw mut params,
-                &raw mut cfg,
-                &raw mut ecb,
-            ) == -1
+            Ok(())
         };
-        if failed && !err.is_set() {
+        let mut on_hunk = |start_a, count_a, start_b, count_b| {
+            let hunk = as_hunk(start_a, count_a, start_b, count_b);
+            // A hunk wider than `linematch` is not worth refining.
+            if mode == Mode::Locations
+                && linematch > 0
+                && i64::from(hunk.count_a + hunk.count_b) <= linematch
+            {
+                linematch_hunks(text_a, text_b, hunk, iwhite, |finer| hunks.push(finer));
+            } else {
+                hunks.push(hunk);
+            }
+            Ok(())
+        };
+        let mut emit = match mode {
+            Mode::Unified => Emit::Lines(&mut on_line),
+            Mode::OnHunk | Mode::Locations => Emit::Hunks(&mut on_hunk),
+        };
+        let walked = diff_with(
+            text_a,
+            text_b,
+            config.flags,
+            config.ctxlen,
+            config.interhunkctxlen,
+            &mut emit,
+        );
+        if walked.is_err() {
             err = Error::exception(c"diff operation failed");
         }
     }
+    if !err.is_set()
+        && mode == Mode::OnHunk
+        && let Err(why) = call_on_hunk(stack, &hunks)
+    {
+        err = why.unwrap_or_else(|| Error::exception(c"diff operation failed"));
+    }
 
     if err.is_set() {
-        // SAFETY: `lstate` is live; `luaL_where` and the message become one
-        // string, and `lua_error` raises it and does not return.
-        return unsafe {
-            luaL_where(lstate, 1);
-            lua_pushstring(lstate, err.message_or_empty().as_ptr());
-            err.clear();
-            lua_concat(lstate, 2);
-            lua_error(lstate)
-        };
+        return Err(Raise::message(err.message_or_empty().to_bytes()));
     }
     match mode {
-        // SAFETY: `luaL_buffinit` ran above, so the buffer is Lua's.
         Mode::Unified => {
-            unsafe { luaL_pushresult(&raw mut buf) };
-            1
+            stack.push_bytes(&unified);
+            Ok(1)
         }
-        Mode::Locations => 1,
-        Mode::OnHunk => 0,
+        Mode::Locations => {
+            stack.new_table(0, 0);
+            for (n, hunk) in (1..).zip(hunks) {
+                stack.new_table(0, 0);
+                for (slot, value) in (1..).zip(hunk.one_based()) {
+                    stack.push_integer(value as lua_Integer);
+                    stack.raw_set_index(At::from_top(2), slot);
+                }
+                stack.raw_set_index(At::from_top(2), n);
+            }
+            Ok(1)
+        }
+        Mode::OnHunk => Ok(0),
     }
 }
 

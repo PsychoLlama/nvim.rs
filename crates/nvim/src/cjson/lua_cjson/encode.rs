@@ -36,11 +36,10 @@ use super::{
     empty_array_key, fetch_config, push_registry, unreachable_after_raise,
 };
 use crate::cjson::fpconv::append_g_fmt;
-use crate::lua::executor::{nlua_get_empty_dict_ref, nlua_get_nil_ref, nlua_pushref};
 use crate::lua::ffi::{
-    LUA_TBOOLEAN, LUA_TLIGHTUSERDATA, LUA_TNIL, LUA_TNUMBER, LUA_TSTRING, LUA_TTABLE,
-    LUA_TUSERDATA, lua_call, lua_checkstack, lua_getfield, lua_getmetatable, lua_gettable,
-    lua_gettop, lua_next, lua_objlen, lua_pushinteger, lua_pushlstring, lua_pushnil,
+    LUA_REGISTRYINDEX, LUA_TBOOLEAN, LUA_TLIGHTUSERDATA, LUA_TNIL, LUA_TNUMBER, LUA_TSTRING,
+    LUA_TTABLE, LUA_TUSERDATA, lua_call, lua_checkstack, lua_getfield, lua_getmetatable,
+    lua_gettable, lua_gettop, lua_next, lua_objlen, lua_pushinteger, lua_pushlstring, lua_pushnil,
     lua_pushnumber, lua_pushvalue, lua_rawequal, lua_rawgeti, lua_settop, lua_toboolean,
     lua_tointeger, lua_tolstring, lua_tonumber, lua_touserdata, lua_type, lua_typename,
     luaL_checklstring, luaL_checktype, luaL_error, luaL_getmetafield,
@@ -475,7 +474,7 @@ impl Encoder {
             // SAFETY: as above, with the metatable at -1.
             unsafe {
                 // .., table, mt, empty_dict_mt
-                nlua_pushref(l, nlua_get_empty_dict_ref(l));
+                lua_getfield(l, LUA_REGISTRYINDEX, c"mpack.empty_dict".as_ptr());
                 if lua_rawequal(l, -2, -1) != 0 {
                     as_empty_dict = true;
                 } else {
@@ -584,9 +583,9 @@ impl Encoder {
                 }
             }
             LUA_TUSERDATA => {
-                // SAFETY: as above; `nlua_get_nil_ref`'s push is popped here.
+                // SAFETY: as above; the sentinel's push is popped here.
                 let is_nil = unsafe {
-                    nlua_pushref(l, nlua_get_nil_ref(l));
+                    lua_getfield(l, LUA_REGISTRYINDEX, c"mpack.NIL".as_ptr());
                     let is_nil = lua_rawequal(l, -2, -1) != 0;
                     lua_pop(l, 1);
                     is_nil

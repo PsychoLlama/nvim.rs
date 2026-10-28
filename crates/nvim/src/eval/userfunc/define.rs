@@ -18,7 +18,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::cstr;
-use crate::lua::executor::set_sctx_from_lua;
+use crate::lua::executor::nlua_set_sctx;
 use crate::memory::ThinCString;
 use crate::message_fmt::msg_bytes;
 use crate::runtime::{autoload_name_of, sourcing_name_bytes};
@@ -535,7 +535,7 @@ impl Definition<'_, '_> {
         func.calls.set(0);
         let mut sctx = current_sctx.get();
         sctx.sc_lnum += sourcing_lnum_top;
-        set_sctx_from_lua(&mut sctx);
+        nlua_set_sctx(&mut sctx);
         func.script_ctx.set(sctx);
     }
 }

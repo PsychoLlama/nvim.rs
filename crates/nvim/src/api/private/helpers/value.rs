@@ -25,7 +25,7 @@ use crate::api::private::metadata::PACKED_API_METADATA;
 use crate::api::private::validate::{err_bad_value, err_expected};
 use crate::global_cell::GlobalCell;
 use crate::highlight_group::{HLF_E, highlight_num_groups, syn_check_group};
-use crate::lua::executor::{api_free_luaref, api_new_luaref};
+use crate::lua::executor::{api_new_luaref, release_luaref};
 use crate::msgpack_rpc::unpacker::unpack;
 use crate::narrow::number_as_int;
 use crate::types::{
@@ -84,7 +84,7 @@ fn release(root: &mut Object) {
         // taking each payload out of it happens exactly once.
         match &mut *current {
             Object::String(str) => unsafe { ManuallyDrop::drop(str) },
-            Object::LuaRef(reference) => unsafe { api_free_luaref(*reference) },
+            Object::LuaRef(reference) => release_luaref(*reference),
             Object::Array(array) => {
                 let items = unsafe { ManuallyDrop::take(array) };
                 pending.extend(items);

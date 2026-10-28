@@ -5,36 +5,34 @@
 //! each line by what the function returns.  [`nlua_exec_file`] is what
 //! `:luafile` and the runtime loader both reach.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `lua/` row in docs/perimeter.md.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
-use crate::types::CmdIdx;
-use crate::winlayer::Buf;
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
+use core::ffi::CStr;
 
-use super::{get_global_lstate, nlua_error, nlua_pcall, nlua_typval_exec};
+use super::{main_stack, nlua_error, nlua_pcall, nlua_typval_exec, until_nul};
 use crate::change::inserted_bytes;
 use crate::cursor::check_cursor;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_curbuf_later};
 use crate::ex_getln::script_get;
 use crate::getchar::state::got_int;
-use crate::lua::ffi::{
-    LUA_TNIL, lua_isstring, lua_pushlstring, lua_pushnumber, lua_pushstring, lua_pushvalue,
-    lua_tolstring, lua_type, luaL_loadbuffer,
-};
-use crate::lua::stack::{lua_getglobal, lua_isnil, lua_pop};
+use crate::lua::stack::{At, Kind};
 use crate::memline::ml_replace_owned;
 use crate::memory::XString;
-use crate::memory::{strequal, xfree, xmalloc, xrealloc};
-use crate::message::e_argreq;
-use crate::message::emsg;
+use crate::message::{e_argreq, emsg};
+use crate::narrow::len_as_int;
 use crate::os::cshim::gettext;
-use crate::os::fileio::{file_close, file_open_stdin};
+use crate::os::fileio::ReadFile;
 use crate::runtime::cmd_source_buffer;
-use crate::types::{Buffer, ColNr, ExArg, FileDescriptor, IOSIZE, LineNr, lua_Number, size_t};
+use crate::types::{CmdIdx, ColNr, ExArg, LineNr, lua_Number};
 use crate::undo::u_save;
+use crate::winlayer::{Buf, Win};
 
 /// The wrapper `:luado`'s body is compiled inside, so each line is one call.
 const DOSTART: &CStr = c"return function(line, linenr) ";
@@ -61,35 +59,25 @@ fn print_wrapped(cmdidx: CmdIdx, code: XString) -> XString {
 }
 
 /// How much [`nlua_exec_file`] reads from stdin at a time.
-const STDIN_CHUNK: size_t = 64;
+const STDIN_CHUNK: usize = 64;
 
 /// `:lua {chunk}`, `:lua ={expr}` and `:={expr}`.
 pub fn ex_lua(excmd: &mut ExArg) {
-    unsafe {
-        if excmd.line.byte_at(excmd.line.arg) == 0 {
-            // `:{range}lua` with no body sources the range as Lua.
-            if excmd.addr_count > 0 {
-                cmd_source_buffer(excmd, true);
-            } else {
-                emsg(gettext(e_argreq));
-            }
-            return;
+    if excmd.line.byte_at(excmd.line.arg) == 0 {
+        // `:{range}lua` with no body sources the range as Lua.
+        if excmd.addr_count > 0 {
+            cmd_source_buffer(excmd, true);
+        } else {
+            emsg(gettext(e_argreq));
         }
-
-        let Some(code) = script_get(excmd).filter(|_| !excmd.skip) else {
-            return;
-        };
-        let code = print_wrapped(excmd.cmdidx, code);
-
-        nlua_typval_exec(
-            code.as_ptr(),
-            code.len(),
-            c":lua".as_ptr(),
-            &[],
-            false,
-            None,
-        );
+        return;
     }
+
+    let Some(code) = script_get(excmd).filter(|_| !excmd.skip) else {
+        return;
+    };
+    let code = print_wrapped(excmd.cmdidx, code);
+    nlua_typval_exec(&code, c":lua", &[], false, None);
 }
 
 /// `:luado {body}`: run `body` over each line of the range as
@@ -99,85 +87,56 @@ pub fn ex_lua(excmd: &mut ExArg) {
 /// is walking, which is the only protection against it editing under itself.
 /// A NUL in the result stands for a newline, as `:s` treats it.
 pub fn ex_luado(excmd: &mut ExArg) {
-    // Where the wrapped chunk is assembled when it fits; upstream shares
-    // `IObuff` for it, which the loop body may overwrite.
-    let mut chunk = [0 as c_char; IOSIZE as usize];
-    unsafe {
-        if u_save(excmd.line1 - 1, excmd.line2 + 1).is_err() {
-            emsg(gettext(c"cannot save undo information"));
-            return;
-        }
-        let cmd = excmd.line.arg().as_ptr();
-        let cmd_len = excmd.line.arg().len();
-        let lstate = get_global_lstate();
+    if u_save(excmd.line1 - 1, excmd.line2 + 1).is_err() {
+        emsg(gettext(c"cannot save undo information"));
+        return;
+    }
+    let chunk = [DOSTART.to_bytes(), excmd.line.arg(), DOEND.to_bytes()].concat();
+    let mut stack = main_stack();
+    if stack.load(&chunk, Some(c":luado")).is_err() {
+        nlua_error(&mut stack, c"E5109: Lua: %.*s");
+        return;
+    }
+    if nlua_pcall(&mut stack, 0, 1).is_err() {
+        nlua_error(&mut stack, c"E5110: Lua: %.*s");
+        return;
+    }
 
-        let head = DOSTART.count_bytes();
-        let tail = DOEND.count_bytes();
-        let lcmd_len = cmd_len + head + tail;
-        // Not `chunk_buffer`'s rule: this one allocates one byte more, which
-        // is upstream's own asymmetry.
-        let lcmd = if lcmd_len < IOSIZE as size_t {
-            chunk.as_mut_ptr()
-        } else {
-            xmalloc(lcmd_len + 1).cast::<c_char>()
-        };
-        lcmd.cast::<u8>()
-            .copy_from_nonoverlapping(DOSTART.as_ptr().cast(), head);
-        lcmd.add(head)
-            .cast::<u8>()
-            .copy_from_nonoverlapping(cmd.cast(), cmd_len);
-        (lcmd.add(head + cmd_len))
-            .cast::<u8>()
-            .copy_from_nonoverlapping(DOEND.as_ptr().cast(), tail);
-
-        let loaded = luaL_loadbuffer(lstate, lcmd, lcmd_len, c":luado".as_ptr());
-        if lcmd_len >= IOSIZE as size_t {
-            xfree(lcmd.cast::<c_void>());
+    let was_curbuf = Buf::current().handle();
+    let mut l: LineNr = excmd.line1;
+    while l <= excmd.line2 {
+        if l > Buf::current().b_ml.ml_line_count {
+            break;
         }
-        if loaded != 0 {
-            nlua_error(lstate, gettext(c"E5109: Lua: %.*s").as_ptr());
-            return;
-        }
-        if nlua_pcall(lstate, 0, 1) != 0 {
-            nlua_error(lstate, gettext(c"E5110: Lua: %.*s").as_ptr());
-            return;
-        }
-
-        let was_curbuf: *mut Buffer = Buf::current_raw();
-        let mut l: LineNr = excmd.line1;
-        while l <= excmd.line2 {
-            if l > Buf::current().b_ml.ml_line_count {
-                break;
-            }
-            lua_pushvalue(lstate, -1);
+        stack.push_value(At::TOP);
+        let old_line_len = {
             let mut lines = Buf::current().lines();
             let old_line = lines.line(l);
-            let old_line_len = old_line.len() as c_int;
             // A memline line holds no NUL (it stores one as an NL), so its
             // length is where `lua_pushstring` would have stopped.
-            lua_pushlstring(lstate, old_line.as_ptr().cast(), old_line.len());
-            lua_pushnumber(lstate, l as lua_Number);
-            if nlua_pcall(lstate, 2, 1) != 0 {
-                nlua_error(lstate, gettext(c"E5111: Lua: %.*s").as_ptr());
-                break;
-            }
-            if Buf::current_raw() != was_curbuf || l > Buf::current().b_ml.ml_line_count {
-                break;
-            }
-            if lua_isstring(lstate, -1) != 0 {
-                let mut new_line_len: size_t = 0;
-                let new_line = lua_tolstring(lstate, -1, &raw mut new_line_len);
-                let new_line = core::slice::from_raw_parts(new_line.cast::<u8>(), new_line_len);
-                let _ = ml_replace_owned(l, nul_to_nl(new_line));
-                inserted_bytes(l, 0 as ColNr, old_line_len, new_line_len as c_int);
-            }
-            lua_pop(lstate, 1);
-            l += 1;
+            stack.push_bytes(old_line);
+            len_as_int(old_line.len())
+        };
+        stack.push_number(lua_Number::from(l));
+        if nlua_pcall(&mut stack, 2, 1).is_err() {
+            nlua_error(&mut stack, c"E5111: Lua: %.*s");
+            break;
         }
-        lua_pop(lstate, 1);
-        check_cursor(Win::current());
-        redraw_curbuf_later(UPD_NOT_VALID);
+        if Buf::current().handle() != was_curbuf || l > Buf::current().b_ml.ml_line_count {
+            break;
+        }
+        if stack.is_string(At::TOP) {
+            let new_line = stack.to_bytes(At::TOP).unwrap_or_default();
+            let new_line_len = len_as_int(new_line.len());
+            let _ = ml_replace_owned(l, nul_to_nl(new_line));
+            inserted_bytes(l, 0 as ColNr, old_line_len, new_line_len);
+        }
+        stack.pop(1);
+        l += 1;
     }
+    stack.pop(1);
+    check_cursor(Win::current());
+    redraw_curbuf_later(UPD_NOT_VALID);
 }
 
 /// `line` as a buffer line: a NUL in it is stored as the NL the memline uses
@@ -195,174 +154,61 @@ pub fn ex_luafile(excmd: &mut ExArg) {
     nlua_exec_file(excmd.line.cstr_from(excmd.line.arg));
 }
 
-/// Read the whole of stdin, NUL-terminated. `None` on a read failure or an
-/// interrupt, with the buffer already freed.
-///
-/// # Safety
-/// Stdin must be openable; the answer is the caller's to free.
-unsafe fn read_stdin() -> Option<*mut c_char> {
-    let mut chunk = [0 as c_char; STDIN_CHUNK];
-    unsafe {
-        let mut stdin_dup = FILE_DESCRIPTOR_INIT;
-        if file_open_stdin(&raw mut stdin_dup) != 0 {
+/// Read the whole of stdin. `None` on a read failure or an interrupt.
+fn read_stdin() -> Option<Vec<u8>> {
+    let mut stdin = ReadFile::stdin().ok()?;
+    let mut text = Vec::with_capacity(STDIN_CHUNK);
+    let mut chunk = [0u8; STDIN_CHUNK];
+    loop {
+        if got_int.get() {
+            let _ = stdin.close();
             return None;
         }
-        let mut sb = StringBuf::with_capacity(STDIN_CHUNK);
-        loop {
-            if got_int.get() {
-                file_close(&raw mut stdin_dup, false);
-                sb.free();
-                return None;
-            }
-            let read_size = file_read(&raw mut stdin_dup, chunk.as_mut_ptr(), STDIN_CHUNK);
-            if read_size < 0 {
-                file_close(&raw mut stdin_dup, false);
-                sb.free();
-                return None;
-            }
-            if read_size > 0 {
-                sb.extend(chunk.as_ptr(), read_size as size_t);
-            }
-            if (read_size as size_t) < STDIN_CHUNK {
-                break;
-            }
+        let Ok(read_size) = usize::try_from(stdin.read(&mut chunk)) else {
+            let _ = stdin.close();
+            return None;
+        };
+        text.extend_from_slice(&chunk[..read_size]);
+        if read_size < STDIN_CHUNK {
+            break;
         }
-        sb.push(0);
-        file_close(&raw mut stdin_dup, false);
-        Some(sb.into_raw())
     }
+    let _ = stdin.close();
+    Some(text)
 }
 
 /// Run the Lua file at `path`, or stdin for `-`.
 pub fn nlua_exec_file(path: &CStr) -> bool {
-    let path = path.as_ptr();
-    // SAFETY: a NUL-terminated path, which `lua_pushstring` copies.
-    unsafe {
-        let lstate = get_global_lstate();
-        if !strequal(path, c"-".as_ptr()) {
-            lua_getglobal(lstate, c"loadfile".as_ptr());
-            lua_pushstring(lstate, path);
-        } else {
-            let Some(text) = read_stdin() else {
-                return false;
-            };
-            lua_getglobal(lstate, c"loadstring".as_ptr());
-            lua_pushstring(lstate, text);
-            xfree(text.cast::<c_void>());
-        }
-
-        // `loadfile`/`loadstring` answer either the chunk and nil, or nil and
-        // the syntax error.
-        if nlua_pcall(lstate, 1, 2) != 0 {
-            nlua_error(lstate, gettext(c"E5111: Lua: %.*s").as_ptr());
+    let mut stack = main_stack();
+    if path != c"-" {
+        stack.get_global(c"loadfile");
+        stack.push_bytes(path.to_bytes());
+    } else {
+        let Some(text) = read_stdin() else {
             return false;
-        }
-        if lua_type(lstate, -2) == LUA_TNIL {
-            nlua_error(lstate, gettext(c"E5112: Lua chunk: %.*s").as_ptr());
-            debug_assert!(lua_isnil(lstate, -1));
-            lua_pop(lstate, 1);
-            return false;
-        }
-        debug_assert!(lua_isnil(lstate, -1));
-        lua_pop(lstate, 1);
-        if nlua_pcall(lstate, 0, 0) != 0 {
-            nlua_error(lstate, gettext(c"E5113: Lua chunk: %.*s").as_ptr());
-            return false;
-        }
-        true
-    }
-}
-
-/// An unopened [`FileDescriptor`], which `file_open_stdin` fills.
-const FILE_DESCRIPTOR_INIT: FileDescriptor = FileDescriptor {
-    fd: 0,
-    buffer: ptr::null_mut(),
-    read_pos: ptr::null_mut(),
-    write_pos: ptr::null_mut(),
-    wr: false,
-    eof: false,
-    non_blocking: false,
-    bytes_read: 0,
-};
-
-/// klib's `StringBuilder` as the growing byte buffer it is.
-///
-/// Not a `Vec`: the buffer is handed to `xfree` and its `items` field is what
-/// upstream's `kv_*` macros expanded to, so the allocation has to be the
-/// editor's own.
-struct StringBuf(StringBuilder);
-
-impl StringBuf {
-    /// # Safety
-    /// Allocates; the caller must eventually [`Self::free`] or
-    /// [`Self::into_raw`].
-    unsafe fn with_capacity(capacity: size_t) -> Self {
-        unsafe {
-            Self(StringBuilder {
-                size: 0,
-                capacity,
-                items: xrealloc(ptr::null_mut(), capacity).cast::<c_char>(),
-            })
-        }
-    }
-
-    /// Append `len` bytes, growing to the next power of two that fits.
-    ///
-    /// # Safety
-    /// `src` must point at `len` readable bytes.
-    unsafe fn extend(&mut self, src: *const c_char, len: size_t) {
-        unsafe {
-            if len == 0 {
-                return;
-            }
-            let sb = &mut self.0;
-            if sb.capacity < sb.size + len {
-                sb.capacity = (sb.size + len).next_power_of_two();
-                sb.items = xrealloc(sb.items.cast::<c_void>(), sb.capacity).cast::<c_char>();
-            }
-            debug_assert!(!sb.items.is_null());
-            sb.items
-                .add(sb.size)
-                .cast::<u8>()
-                .copy_from_nonoverlapping(src.cast(), len);
-            sb.size += len;
-        }
-    }
-
-    /// Append one byte.
-    fn push(&mut self, byte: c_char) {
-        unsafe {
-            let sb = &mut self.0;
-            if sb.size == sb.capacity {
-                sb.capacity = if sb.capacity != 0 {
-                    sb.capacity << 1
-                } else {
-                    8
-                };
-                sb.items = xrealloc(sb.items.cast::<c_void>(), sb.capacity).cast::<c_char>();
-            }
-            *sb.items.add(sb.size) = byte;
-            sb.size += 1;
-        }
-    }
-
-    /// # Safety
-    /// The buffer must not be used again.
-    unsafe fn free(&mut self) {
-        unsafe { xfree(self.0.items.cast::<c_void>()) };
-        self.0 = StringBuilder {
-            size: 0,
-            capacity: 0,
-            items: ptr::null_mut(),
         };
+        stack.get_global(c"loadstring");
+        // `lua_pushstring` of the text: up to its first NUL.
+        stack.push_bytes(until_nul(&text));
     }
 
-    /// Hand the buffer to the caller, which frees it.
-    fn into_raw(self) -> *mut c_char {
-        self.0.items
+    // `loadfile`/`loadstring` answer either the chunk and nil, or nil and
+    // the syntax error.
+    if nlua_pcall(&mut stack, 1, 2).is_err() {
+        nlua_error(&mut stack, c"E5111: Lua: %.*s");
+        return false;
     }
+    if stack.kind(At::from_top(2)) == Kind::Nil {
+        nlua_error(&mut stack, c"E5112: Lua chunk: %.*s");
+        debug_assert!(stack.is_nil(At::TOP));
+        stack.pop(1);
+        return false;
+    }
+    debug_assert!(stack.is_nil(At::TOP));
+    stack.pop(1);
+    if nlua_pcall(&mut stack, 0, 0).is_err() {
+        nlua_error(&mut stack, c"E5113: Lua chunk: %.*s");
+        return false;
+    }
+    true
 }
-
-use crate::os::fileio::file_read;
-use crate::types::StringBuilder;
-use crate::winlayer::Win;

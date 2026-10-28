@@ -2390,13 +2390,9 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
         .collect();
     let call = format!("{name}({})", call_args.join(", "));
     // The API function may reach back into Lua; while it runs, this is the
-    // state it reaches into. The guard puts the previous one back on every
+    // state it came in on. The guard puts the previous one back on every
     // way out, including the failed call below.
-    writeln!(
-        out,
-        "    let _lstate = Restore::of(&active_lstate, stack.lua_state());"
-    )
-    .unwrap();
+    writeln!(out, "    let _active = ActiveState::enter(stack);").unwrap();
     // A result the push borrows mutably has to be a `mut` binding: a keyset
     // is read through its `KeySet` slots, which hand out `&mut`.
     let bind = if matches!(f.ret, RetType::KeyDict(_)) {
@@ -2649,7 +2645,7 @@ fn generate_lua(
             "push_string",
         ],
     );
-    use_from("lua::executor", &["LUA_INTERNAL_CALL", "active_lstate"]);
+    use_from("lua::executor", &["ActiveState", "LUA_INTERNAL_CALL"]);
     use_from("lua::stack", &["At", "Stack"]);
     let types: Vec<String> = referenced_names(&["Error"])
         .into_iter()

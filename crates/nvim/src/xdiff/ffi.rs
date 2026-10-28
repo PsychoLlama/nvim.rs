@@ -1,17 +1,12 @@
 //! The C boundary. Everything in `xdiff/` that is not safe Rust lives here.
 //!
-//! `xdiff/` is vendored upstream (git's diff engine by way of libxdiff), and
-//! the structs it exchanges with the rest of the tree — `mmfile_t`,
-//! `mmbuffer_t`, `xpparam_t`, `xdemitconf_t` and `xdemitcb_t` — keep their C
-//! layout because `diff.rs` and `lua/xdiff.rs` build them. This module reads
-//! them once, at [`xdl_diff`], and hands the engine the safe mirrors in
-//! [`super::xtypes`]; results go back out through [`Emit`]. [`diff_hunks`] is
-//! the same engine for a caller holding slices, with no C struct at all.
+//! `xdiff/` is vendored upstream (git's diff engine by way of libxdiff). Its
+//! callers hold their texts as slices and take the results through [`Emit`]:
+//! [`diff_hunks`] for the hunk extents `:diff` wants, [`diff_with`] for
+//! `vim.diff()`, which may want a unified diff's lines instead.
 //!
-//! There are exactly three reasons this module is not safe: turning an
-//! `mmfile_t` into a slice, calling a caller-supplied `extern "C"` callback,
-//! and [`is_space`], which is `isspace(3)` and therefore reads the C
-//! locale's table. That last one is kept rather than replaced with an ASCII
+//! There is one reason this module is not safe: [`is_space`], which is
+//! `isspace(3)` and therefore reads the C locale's table. That last one is kept rather than replaced with an ASCII
 //! test because `setlocale(LC_ALL, "")` at startup leaves `LC_CTYPE` under
 //! the user's control, so which bytes count as whitespace is observable
 //! through `'diffopt'`'s `iwhite` family.
@@ -25,13 +20,8 @@
 // Unsafe perimeter: the `xdiff/` row in docs/perimeter.md.
 #![allow(unsafe_code)]
 
-use core::ffi::{CStr, c_char, c_int, c_long};
-
 #[cfg(not(miri))]
 use crate::os::cshim::__ctype_b_loc;
-use crate::types::{
-    mmbuffer_t, mmfile_t, xdemitcb_t, xdemitconf_t, xdl_emit_hunk_consume_func_t, xpparam_t,
-};
 use crate::xdiff::xdiffi::diff;
 use crate::xdiff::xtypes::{Aborted, EmitConf, Params, XdResult};
 
@@ -58,35 +48,12 @@ pub(crate) fn is_space(byte: u8) -> bool {
     }
 }
 
-/// The `mmfile_t`'s bytes.
-///
-/// # Safety
-///
-/// `mf` must point at an initialised `mmfile_t` whose `ptr`/`size` describe a
-/// readable block that outlives `'a` and is not written during it.
-unsafe fn file_bytes<'a>(mf: *const mmfile_t) -> &'a [u8] {
-    unsafe {
-        if (*mf).ptr.is_null() || (*mf).size <= 0 {
-            return &[];
-        }
-        core::slice::from_raw_parts((*mf).ptr.cast::<u8>(), (*mf).size as usize)
-    }
-}
-
-/// Where the engine reports a result: a C caller's `xdemitcb_t` plus
-/// `xdemitconf_t.hunk_func`, or a Rust caller's hunk closure.
-///
-/// Holding the `xdemitcb_t` by shared reference is what keeps the function
-/// pointers out of this module's own types. It is sound because nothing
-/// writes the block during a diff — every C caller builds it on its stack and
-/// hands the callbacks a *separate* `priv` pointer to accumulate into.
+/// Where the engine reports a result: the lines of a unified diff, or each
+/// hunk's extent.
 pub(crate) enum Emit<'a> {
-    /// `xdl_diff`'s callbacks.
-    C {
-        cb: &'a xdemitcb_t,
-        hunk_func: xdl_emit_hunk_consume_func_t,
-    },
-    /// [`diff_hunks`]'s closure: hunk extents only, never a line.
+    /// A unified diff, a line at a time, each line in up to three parts.
+    Lines(&'a mut dyn FnMut(&[&[u8]]) -> XdResult),
+    /// Hunk extents only, never a line.
     Hunks(&'a mut dyn FnMut(i64, i64, i64, i64) -> XdResult),
 }
 
@@ -95,78 +62,18 @@ impl Emit<'_> {
     /// unified-diff writer and the hunk-extent walk, and `:diffupdate`,
     /// the inline refiner and `vim.diff{on_hunk=}` all take it.
     pub(crate) fn has_hunk_func(&self) -> bool {
-        match self {
-            Emit::C { hunk_func, .. } => hunk_func.is_some(),
-            Emit::Hunks(_) => true,
-        }
+        matches!(self, Emit::Hunks(_))
     }
 
-    /// Did the caller install `xdemitcb_t.out_hunk`? Nothing in nvim does,
-    /// but the field is public and a caller that sets it wants its headers.
-    pub(crate) fn has_out_hunk(&self) -> bool {
-        matches!(self, Emit::C { cb, .. } if cb.out_hunk.is_some())
-    }
-
-    /// `ecb->out_line`, with each part as one `mmbuffer_t`.
+    /// One line of a unified diff, in parts.
     pub(crate) fn line(&mut self, parts: &[&[u8]]) -> XdResult {
-        // Upstream calls through the pointer unconditionally; every caller
-        // that can reach an emit path installs it.
-        let Emit::C {
-            cb:
-                xdemitcb_t {
-                    out_line: Some(out_line),
-                    priv_0,
-                    ..
-                },
-            ..
-        } = self
-        else {
-            return Err(Aborted);
-        };
-        let mut bufs: [mmbuffer_t; 3] = core::array::from_fn(|_| mmbuffer_t {
-            ptr: core::ptr::null_mut(),
-            size: 0,
-        });
-        for (buf, part) in bufs.iter_mut().zip(parts) {
-            buf.ptr = part.as_ptr().cast::<c_char>().cast_mut();
-            buf.size = part.len() as c_int;
+        match self {
+            Emit::Lines(on_line) => on_line(parts),
+            Emit::Hunks(_) => Err(Aborted),
         }
-        let rc = unsafe { out_line(*priv_0, bufs.as_mut_ptr(), parts.len() as c_int) };
-        if rc < 0 { Err(Aborted) } else { Ok(()) }
     }
 
-    /// `ecb->out_hunk`. The function-name arguments are always empty: the
-    /// `XDL_EMIT_FUNCNAMES` machinery is `#if 0`-ed out of the vendored
-    /// source, so `xdl_emit_diff`'s `func_line.len` never leaves zero.
-    pub(crate) fn out_hunk(&mut self, s1: i64, c1: i64, s2: i64, c2: i64) -> XdResult {
-        let Emit::C {
-            cb:
-                xdemitcb_t {
-                    out_hunk: Some(out_hunk),
-                    priv_0,
-                    ..
-                },
-            ..
-        } = self
-        else {
-            return Err(Aborted);
-        };
-        let rc = unsafe {
-            out_hunk(
-                *priv_0,
-                s1 as c_long,
-                c1 as c_long,
-                s2 as c_long,
-                c2 as c_long,
-                core::ptr::null(),
-                0,
-            )
-        };
-        if rc < 0 { Err(Aborted) } else { Ok(()) }
-    }
-
-    /// `xecfg->hunk_func`, called with `ecb->priv` as upstream does, or the
-    /// closure.
+    /// One hunk's extent: zero-based starts and counts on either side.
     pub(crate) fn hunk(
         &mut self,
         start_a: i64,
@@ -174,91 +81,39 @@ impl Emit<'_> {
         start_b: i64,
         count_b: i64,
     ) -> XdResult {
-        let (hunk_func, priv_0) = match self {
-            Emit::Hunks(on_hunk) => return on_hunk(start_a, count_a, start_b, count_b),
-            Emit::C {
-                hunk_func: Some(hunk_func),
-                cb,
-            } => (*hunk_func, cb.priv_0),
-            Emit::C {
-                hunk_func: None, ..
-            } => return Err(Aborted),
-        };
-        let rc = unsafe {
-            hunk_func(
-                start_a as c_int,
-                count_a as c_int,
-                start_b as c_int,
-                count_b as c_int,
-                priv_0,
-            )
-        };
-        if rc < 0 { Err(Aborted) } else { Ok(()) }
+        match self {
+            Emit::Hunks(on_hunk) => on_hunk(start_a, count_a, start_b, count_b),
+            Emit::Lines(_) => Err(Aborted),
+        }
     }
 }
 
 /// Diff `text1` against `text2` with the `XDF_*` bits `flags` and no context,
 /// reporting each hunk's zero-based start and count on either side to
 /// `on_hunk`.
-///
-/// The safe front `xdl_diff`'s C interface sits in front of, for callers that
-/// hold the texts as slices and want the extents rather than a patch.
 pub(crate) fn diff_hunks(
     text1: &[u8],
     text2: &[u8],
     flags: u64,
     on_hunk: &mut dyn FnMut(i64, i64, i64, i64) -> XdResult,
 ) -> XdResult {
+    diff_with(text1, text2, flags, 0, 0, &mut Emit::Hunks(on_hunk))
+}
+
+/// Diff `text1` against `text2` with the `XDF_*` bits `flags`, reporting
+/// through `emit`: `ctxlen` unchanged lines either side of a hunk, and hunks
+/// joined when `interhunkctxlen` or fewer unchanged lines separate them.
+pub(crate) fn diff_with(
+    text1: &[u8],
+    text2: &[u8],
+    flags: u64,
+    ctxlen: i64,
+    interhunkctxlen: i64,
+    emit: &mut Emit<'_>,
+) -> XdResult {
     let params = Params {
         flags,
         anchors: Vec::new(),
-    };
-    let conf = EmitConf {
-        ctxlen: 0,
-        interhunkctxlen: 0,
-        flags: 0,
-    };
-    diff(text1, text2, &params, &conf, &mut Emit::Hunks(on_hunk))
-}
-
-/// `xdl_diff`: diff `mf1` against `mf2` and report through `ecb`.
-///
-/// Returns 0, or -1 if a callback refused or the histogram engine hit one of
-/// its hard limits — the only caller-visible failure.
-///
-/// # Safety
-///
-/// All five pointers must be non-null and point at initialised structs that
-/// stay valid, and unwritten by anything but the callbacks, for the call;
-/// `xpp->anchors` must hold `anchors_nr` NUL-terminated strings.
-pub(crate) unsafe fn xdl_diff(
-    mf1: *mut mmfile_t,
-    mf2: *mut mmfile_t,
-    xpp: *const xpparam_t,
-    xecfg: *const xdemitconf_t,
-    ecb: *mut xdemitcb_t,
-) -> c_int {
-    // One block for one obligation: the caller's five pointers are good.
-    let (text1, text2, xpp, xecfg, cb) = unsafe {
-        (
-            file_bytes(mf1),
-            file_bytes(mf2),
-            &*xpp,
-            &*xecfg,
-            &*ecb.cast_const(),
-        )
-    };
-
-    let mut anchors = Vec::with_capacity(xpp.anchors_nr);
-    for i in 0..xpp.anchors_nr {
-        // Each anchor is a `char *` the caller owns; `is_anchor` only wants
-        // the bytes, so read them here and leave the pointer behind.
-        anchors.push(unsafe { CStr::from_ptr(*xpp.anchors.add(i)) }.to_bytes());
-    }
-
-    let params = Params {
-        flags: xpp.flags,
-        anchors,
     };
     let conf = EmitConf {
         // A negative context length is not "less than none": it makes
@@ -267,20 +122,12 @@ pub(crate) unsafe fn xdl_diff(
         // loops simply do not run for a negative count while the header
         // arithmetic still applies it. Clamping here is what makes the two
         // agree; `vim.diff{ctxlen = -1}` is now `ctxlen = 0`. See O-B15-1.
-        ctxlen: xecfg.ctxlen.max(0),
+        ctxlen: ctxlen.max(0),
         // `interhunkctxlen` needs no clamp: it only shrinks the run of
         // unchanged lines two hunks may share, and a negative one is a
         // coherent (if pointless) request to never join two hunks.
-        interhunkctxlen: xecfg.interhunkctxlen,
-        flags: xecfg.flags,
+        interhunkctxlen,
+        flags: 0,
     };
-    let mut emit = Emit::C {
-        cb,
-        hunk_func: xecfg.hunk_func,
-    };
-
-    match diff(text1, text2, &params, &conf, &mut emit) {
-        Ok(()) => 0,
-        Err(Aborted) => -1,
-    }
+    diff(text1, text2, &params, &conf, emit)
 }

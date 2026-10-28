@@ -33,7 +33,7 @@ use crate::buffer::buf_get_changedtick;
 use crate::ex_getln::state::cmdpreview;
 use crate::guard::Lock;
 use crate::log::{LOGLVL_ERR, logmsg};
-use crate::lua::executor::{api_free_luaref, nlua_call_ref_quiet};
+use crate::lua::executor::{nlua_call_ref_quiet, release_luaref};
 use crate::memline::ml_flush_deleted_bytes;
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, xfree, xrealloc};
 use crate::msgpack_rpc::channel::rpc_send_event;
@@ -231,9 +231,8 @@ fn callbacks_free(cb: BufUpdateCallbacks) {
         cb.on_detach,
     ];
     for ref_0 in refs {
-        // SAFETY: a reference this value owns; the callee ignores
-        // `LUA_NOREF`.
-        unsafe { api_free_luaref(ref_0) };
+        // A reference this value owns; `LUA_NOREF` is ignored.
+        release_luaref(ref_0);
     }
 }
 

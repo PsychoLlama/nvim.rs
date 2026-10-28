@@ -1,6 +1,4 @@
-#![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `lua/` row in docs/perimeter.md.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -10,25 +8,11 @@
 )]
 
 //! `:trust`, the ex-command face of `vim.secure.trust`.
-//!
-//! # Boundary
-//!
-//! `ex_trust` is an ex-command handler, so it keeps the C ABI and the
-//! `ExArg *` the command table hands it. Below it everything runs on
-//! the Lua stack, which stays raw.
 
-use crate::lua::executor::{get_global_lstate, nlua_error, nlua_pcall};
-use crate::lua::ffi::{
-    lua_createtable, lua_getfield, lua_gettop, lua_pushnumber, lua_pushstring, lua_settable,
-    lua_settop, lua_toboolean, lua_tolstring,
-};
-use crate::os::cshim::gettext;
+use crate::lua::executor::{main_stack, nlua_error, nlua_pcall, until_nul};
+use crate::lua::stack::At;
 use crate::types::ExArg;
 use core::ffi::CStr;
-use core::ptr;
-
-/// Lua's pseudo-index for the globals table.
-pub const LUA_GLOBALSINDEX: ::core::ffi::c_int = -10002;
 
 /// What `:trust` asks `vim.secure.trust` to do with the path.
 #[derive(Clone, Copy)]
@@ -52,57 +36,42 @@ impl TrustAction {
 /// Call `vim.secure.trust{ action = ..., path|bufnr = ... }` and report
 /// what it says. `path` of `None` means the current buffer.
 fn nlua_trust(action: TrustAction, path: Option<&CStr>) -> bool {
-    // SAFETY: the caller promises an initialized editor, so the global
-    // state is live; `top` is what every path below unwinds the stack to.
-    let (lstate, top) = unsafe {
-        let lstate = get_global_lstate();
-        (lstate, lua_gettop(lstate))
-    };
+    let mut stack = main_stack();
+    // What every path below unwinds the stack to.
+    let top = stack.top();
 
-    // SAFETY: as above. This leaves `vim.secure.trust` and its one argument
-    // table on the stack, which is what `nlua_pcall` consumes.
-    unsafe {
-        lua_getfield(lstate, LUA_GLOBALSINDEX, c"vim".as_ptr());
-        lua_getfield(lstate, -1, c"secure".as_ptr());
-        lua_getfield(lstate, -1, c"trust".as_ptr());
+    // `vim.secure.trust` and its one argument table, which `nlua_pcall`
+    // consumes.
+    stack.get_global(c"vim");
+    stack.get_field(At::TOP, c"secure");
+    stack.get_field(At::TOP, c"trust");
 
-        lua_createtable(lstate, 0, 0);
-        lua_pushstring(lstate, c"action".as_ptr());
-        lua_pushstring(lstate, action.name().as_ptr());
-        lua_settable(lstate, -3);
-        match path {
-            Some(path) => {
-                lua_pushstring(lstate, c"path".as_ptr());
-                lua_pushstring(lstate, path.as_ptr());
-            }
-            None => {
-                lua_pushstring(lstate, c"bufnr".as_ptr());
-                lua_pushnumber(lstate, 0.0);
-            }
+    stack.new_table(0, 0);
+    stack.push_bytes(b"action");
+    stack.push_bytes(action.name().to_bytes());
+    stack.set_table(At::from_top(3));
+    match path {
+        Some(path) => {
+            stack.push_bytes(b"path");
+            stack.push_bytes(path.to_bytes());
         }
-        lua_settable(lstate, -3);
+        None => {
+            stack.push_bytes(b"bufnr");
+            stack.push_number(0.0);
+        }
     }
+    stack.set_table(At::from_top(3));
 
-    // SAFETY: as above; the failure path reports and unwinds.
-    if unsafe { nlua_pcall(lstate, 1, 2) } != 0 {
-        unsafe {
-            nlua_error(lstate, gettext(c"vim.secure.trust: %.*s").as_ptr());
-            lua_settop(lstate, top);
-        }
+    if nlua_pcall(&mut stack, 1, 2).is_err() {
+        nlua_error(&mut stack, c"vim.secure.trust: %.*s");
+        stack.set_top(top);
         return false;
     }
 
-    // SAFETY: as above -- two results, and the second is a string Lua keeps
-    // alive until the `settop` below.
-    let (success, msg) = unsafe {
-        let success = lua_toboolean(lstate, -2) != 0;
-        // The second result is the path it acted on, or why it could not.
-        let msg = lua_tolstring(lstate, -1, ptr::null_mut());
-        (success, msg)
-    };
-    if !msg.is_null() {
-        // SAFETY: `lua_tolstring` answered a NUL-terminated string.
-        let msg = unsafe { CStr::from_ptr(msg) }.to_string_lossy();
+    let success = stack.to_boolean(At::from_top(2));
+    // The second result is the path it acted on, or why it could not.
+    if let Some(msg) = stack.to_bytes(At::TOP) {
+        let msg = String::from_utf8_lossy(until_nul(msg));
         match (success, action) {
             (true, TrustAction::Allow) => {
                 crate::smsg!(0, "Allowed in trust database: \"{msg}\"");
@@ -119,8 +88,7 @@ fn nlua_trust(action: TrustAction, path: Option<&CStr>) -> bool {
         }
     }
 
-    // SAFETY: as above.
-    unsafe { lua_settop(lstate, top) };
+    stack.set_top(top);
     success
 }
 

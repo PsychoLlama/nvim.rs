@@ -18,7 +18,7 @@ use super::*;
 /// function, hand the result back.
 pub(super) fn convert_nvim_ui_send(stack: &mut Stack, blame: &mut Blame) -> Result<(), Error> {
     let arg_1 = pop_string(stack).inspect_err(|_| *blame = Some(c"content"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     nvim_ui_send(LUA_INTERNAL_CALL, arg_1);
     Ok(())
 }

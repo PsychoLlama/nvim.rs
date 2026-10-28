@@ -21,7 +21,7 @@
 
 use core::ffi::{c_char, c_double, c_int, c_void};
 
-use crate::lua::executor::api_free_luaref;
+use crate::lua::executor::release_luaref;
 use crate::memory::{xmalloc, xrealloc};
 use crate::types::{
     Array, Handle, Integer, KeyValuePair, LuaRef, Object, int8_t, int64_t, size_t, uint32_t,
@@ -404,8 +404,7 @@ pub unsafe fn mpack_object_inner(
                 Object::LuaRef(reference) => {
                     // A released luaref packs as nil, and the slot is
                     // overwritten so a second pass cannot free it twice.
-                    // SAFETY: a registry index, not a pointer.
-                    unsafe { api_free_luaref(*reference) };
+                    release_luaref(*reference);
                     *reference = LUA_NOREF as LuaRef;
                 }
                 Object::Nil => {}

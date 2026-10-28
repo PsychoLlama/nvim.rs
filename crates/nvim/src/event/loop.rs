@@ -238,6 +238,13 @@ pub(crate) fn main_loop_is_recursing() -> bool {
     unsafe { (*main_loop_raw()).recursive != 0 }
 }
 
+/// Whether the editor's loop is being taken down: nothing new may be
+/// scheduled onto it.
+pub(crate) fn main_loop_is_closing() -> bool {
+    // SAFETY: the static loop; reading one field of it.
+    unsafe { (*main_loop_raw()).closing }
+}
+
 /// Run what is already queued on the editor's loop, then poll it once
 /// without waiting -- the drain before the loop is taken down.
 pub(crate) fn main_loop_drain() {

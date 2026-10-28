@@ -1,75 +1,65 @@
 //! `vim.schedule()` and `vim.wait()`.
 //!
-//! [`nlua_schedule`] defers a Lua reference onto the main loop's event queue,
-//! which is how a fast callback reaches anything that is not fast.
-//! [`nlua_wait`] is the other direction: it pumps the loop until a condition
-//! callback returns true, a timeout expires or the user interrupts, and it
-//! is the one place a Lua function drives the event loop re-entrantly.
+//! [`schedule`] defers a Lua reference onto the main loop's event queue,
+//! which is how a fast callback reaches anything that is not fast. [`wait`]
+//! is the other direction: it pumps the loop until a condition callback
+//! returns true, a timeout expires or the user interrupts, and it is the one
+//! place a Lua function drives the event loop re-entrantly.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `lua/` row in docs/perimeter.md.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
-use core::ffi::{c_int, c_void};
-use core::ptr;
+use core::ffi::c_int;
 
-use super::{in_fast_callback, nlua_error, nlua_pcall, nlua_pushref, nlua_ref_global};
+use super::{fast_api_refusal, in_fast_callback, main_stack, nlua_error, nlua_pcall};
 use crate::eval::funcs::find_builtin;
-use crate::event::r#loop::{Drain, wait_on_main_loop};
-use crate::event::multiqueue::multiqueue_put_event;
+use crate::event::r#loop::{Drain, main_loop_is_closing, wait_on_main_loop};
+use crate::event::multiqueue::put_id_event_on_main_loop;
 use crate::event::time::ScopedTimer;
 use crate::getchar::state::got_int;
 use crate::getchar::vgetc;
 use crate::guard::Allow;
-use crate::lua::executor::nlua_unref_global;
-use crate::lua::ffi::{
-    LUA_MULTRET, LUA_TFUNCTION, LUA_TNIL, lua_error, lua_gettop, lua_insert, lua_pushboolean,
-    lua_pushinteger, lua_pushlstring, lua_pushnil, lua_pushvalue, lua_remove, lua_settop,
-    lua_toboolean, lua_type, luaL_checkinteger, luaL_checknumber, luaL_error, luaL_getmetafield,
-};
-use crate::lua::stack::lua_pop;
-use crate::message::e_fast_api_disabled;
-use crate::os::cshim::gettext;
-use crate::startup::main_loop;
-use crate::types::{
-    Event, LuaRef, int64_t, intptr_t, lua_Integer, lua_State, ptrdiff_t, uint32_t, uint64_t,
-};
+use crate::lua::ffi::LUA_MULTRET;
+use crate::lua::stack::{At, Kind, Raise, Stack};
+use crate::types::{LuaRef, lua_Integer};
 use crate::ui::state::ui_event_ns_id;
 use crate::ui::{ui_flush, ui_remove_cb};
 
 /// How often `vim.wait` wakes to re-test its condition, in milliseconds.
-const DEFAULT_INTERVAL: intptr_t = 200;
+const DEFAULT_INTERVAL: u64 = 200;
 
 /// `vim.wait`'s answer for "the user interrupted".
 const WAIT_INTERRUPTED: lua_Integer = -2;
 /// `vim.wait`'s answer for "the timeout expired".
 const WAIT_TIMED_OUT: lua_Integer = -1;
 
-/// Run the deferred callback, on the main loop.
+/// Run a deferred callback on the main loop: `callback` is the reference
+/// [`schedule`] took, `ns_id` the UI event namespace it was scheduled from.
 ///
 /// A callback scheduled from a UI event handler (`ns_id > 0`) is let out of
 /// the text and expression locks, because it is not running inside whatever
 /// held them; if it fails, that handler is detached.
-///
-/// # Safety
-/// `argv` must be the two-element array [`nlua_schedule`] queued.
-unsafe extern "C" fn nlua_schedule_event(argv: *mut *mut c_void) {
-    unsafe {
-        let cb = (*argv.add(0)).expose_provenance() as ptrdiff_t as LuaRef;
-        let ns_id = (*argv.add(1)).expose_provenance() as ptrdiff_t as uint32_t;
-        let lstate = super::get_global_lstate();
-        nlua_pushref(lstate, cb);
-        nlua_unref_global(lstate, cb);
+fn run_scheduled(callback: u64, ns_id: u64) {
+    let callback = LuaRef::try_from(callback).expect("a reference `schedule` took");
+    let ns_id = u32::try_from(ns_id).expect("a namespace `schedule` read");
+    let mut stack = main_stack();
+    stack.push_reference(callback);
+    stack.unreference(callback);
 
-        // A UI-event callback is arbitrary Lua and may legitimately want
-        // to move the cursor or set a variable, so the locks come off for
-        // it. They go back either way: the callback ran unsupervised.
-        let _unlocked_expr_map = Allow::expr_map_when(ns_id > 0);
-        let _unlocked_text = Allow::text_changes_when(ns_id > 0);
-        if nlua_pcall(lstate, 0, 0) != 0 {
-            nlua_error(lstate, gettext(c"vim.schedule callback: %.*s").as_ptr());
-            ui_remove_cb(ns_id, true);
-        }
+    // A UI-event callback is arbitrary Lua and may legitimately want to move
+    // the cursor or set a variable, so the locks come off for it. They go
+    // back either way: the callback ran unsupervised.
+    let _unlocked_expr_map = Allow::expr_map_when(ns_id > 0);
+    let _unlocked_text = Allow::text_changes_when(ns_id > 0);
+    if nlua_pcall(&mut stack, 0, 0).is_err() {
+        nlua_error(&mut stack, c"vim.schedule callback: %.*s");
+        ui_remove_cb(ns_id, true);
     }
 }
 
@@ -78,205 +68,164 @@ unsafe extern "C" fn nlua_schedule_event(argv: *mut *mut c_void) {
 /// Answers `nil, nil` on success and `nil, "main loop is closing"` when there
 /// is no queue left to defer onto — the second value is the reason, so a
 /// caller can tell the two apart.
-///
-/// # Safety
-/// `lstate` must be a live Lua state holding this function's arguments.
-pub(crate) unsafe extern "C-unwind" fn nlua_schedule(lstate: *mut lua_State) -> c_int {
-    unsafe {
-        if lua_type(lstate, 1) != LUA_TFUNCTION {
-            push_str(lstate, c"vim.schedule: expected function");
-            return lua_error(lstate);
-        }
-        lua_pushnil(lstate);
-        if (*main_loop.ptr()).closing {
-            push_str(lstate, c"main loop is closing");
-            return 2;
-        }
-
-        let cb: LuaRef = nlua_ref_global(lstate, 1);
-        multiqueue_put_event(
-            (*main_loop.ptr()).events,
-            Event::new(
-                Some(nlua_schedule_event),
-                [
-                    ptr::with_exposed_provenance_mut::<c_void>(cb as ptrdiff_t as usize),
-                    ptr::with_exposed_provenance_mut::<c_void>(
-                        ui_event_ns_id.get() as ptrdiff_t as usize
-                    ),
-                ],
-            ),
-        );
-        lua_pushnil(lstate);
-        2
+pub(crate) fn schedule(stack: &mut Stack) -> Result<c_int, Raise> {
+    if stack.kind(At::arg(1)) != Kind::Function {
+        stack.push_bytes(b"vim.schedule: expected function");
+        return Err(Raise::top_value());
     }
+    stack.push_nil();
+    if main_loop_is_closing() {
+        stack.push_bytes(b"main loop is closing");
+        return Ok(2);
+    }
+
+    let callback = stack.reference(At::arg(1));
+    let callback = u64::try_from(callback).expect("a function's reference is positive");
+    put_id_event_on_main_loop(run_scheduled, callback, u64::from(ui_event_ns_id.get()));
+    stack.push_nil();
+    Ok(2)
 }
 
-/// Push a literal, without its terminator.
-///
-/// # Safety
-/// `lstate` must be a live Lua state with room for one more value.
-unsafe fn push_str(lstate: *mut lua_State, s: &core::ffi::CStr) {
-    unsafe { lua_pushlstring(lstate, s.as_ptr(), s.count_bytes()) };
+/// How one call of `vim.wait`'s condition went.
+enum Condition {
+    /// Keep waiting: the condition answered nothing, or something falsy.
+    Unmet,
+    /// Stop: the condition answered something truthy, which is removed; the
+    /// `n` values it answered after it are left on top.
+    Met(c_int),
+    /// Stop: the condition raised, and its error is on top.
+    Raised,
 }
 
-/// Call `vim.wait`'s condition once.
-///
-/// `true` means stop waiting — either the call failed (`*status`) or it
-/// answered truthily, in which case the answer itself is removed and the
-/// `*nresults` values behind it are the caller's return values. A falsy
-/// answer leaves the stack as it was found.
-///
-/// # Safety
-/// `lstate` must be a live Lua state with the condition at slot 2, and every
-/// out-parameter writable.
-unsafe fn nlua_wait_condition(
-    lstate: *mut lua_State,
-    status: *mut c_int,
-    callback_result: *mut bool,
-    nresults: *mut c_int,
-) -> bool {
-    unsafe {
-        let top = lua_gettop(lstate);
-        lua_pushvalue(lstate, 2);
-        *status = nlua_pcall(lstate, 0, LUA_MULTRET);
-        if *status != 0 {
-            return true;
-        }
-        *nresults = lua_gettop(lstate) - top;
-        if *nresults == 0 {
-            *callback_result = false;
-            return false;
-        }
-        *callback_result = lua_toboolean(lstate, top + 1) != 0;
-        if !*callback_result {
-            lua_settop(lstate, top);
-            return false;
-        }
-        lua_remove(lstate, top + 1);
-        *nresults -= 1;
-        true
+/// Call `vim.wait`'s condition (slot 2) once. A falsy answer leaves the
+/// stack as it was found.
+fn wait_condition(stack: &mut Stack) -> Condition {
+    let top = stack.top();
+    stack.push_value(At::arg(2));
+    if nlua_pcall(stack, 0, LUA_MULTRET).is_err() {
+        return Condition::Raised;
     }
+    let nresults = stack.top().index() - top.index();
+    if nresults == 0 {
+        return Condition::Unmet;
+    }
+    let answer = top.above(1);
+    if !stack.to_boolean(answer) {
+        stack.set_top(top);
+        return Condition::Unmet;
+    }
+    stack.remove(answer);
+    Condition::Met(nresults - 1)
 }
 
 /// `vim.wait(timeout[, condition[, interval[, fast_only]]])`.
-///
-/// # Safety
-/// `lstate` must be a live Lua state holding this function's arguments.
-pub(crate) unsafe extern "C-unwind" fn nlua_wait(lstate: *mut lua_State) -> c_int {
-    unsafe {
-        if in_fast_callback.get() != 0 {
-            return luaL_error(lstate, e_fast_api_disabled.as_ptr(), c"vim.wait".as_ptr());
-        }
+pub(crate) fn wait(stack: &mut Stack) -> Result<c_int, Raise> {
+    if in_fast_callback.get() != 0 {
+        return Err(Raise::message(fast_api_refusal(b"vim.wait")));
+    }
 
-        let timeout_number = luaL_checknumber(lstate, 1);
-        if timeout_number < 0.0 {
-            return luaL_error(lstate, c"timeout must be >= 0".as_ptr());
+    let timeout_number = stack.check_number(At::arg(1))?;
+    if timeout_number < 0.0 {
+        return Err(Raise::message("timeout must be >= 0"));
+    }
+    // A NaN or anything past `i64` waits as long as it can; `as` saturates
+    // the rest the way the C cast did.
+    #[allow(clippy::cast_possible_truncation)]
+    let timeout: i64 = if timeout_number.is_nan() || timeout_number > i64::MAX as f64 {
+        i64::MAX
+    } else {
+        timeout_number as i64
+    };
+
+    let lua_top = stack.top().index();
+
+    // The condition may be a function or anything with a `__call`.
+    let mut is_function = false;
+    if lua_top >= 2 && stack.kind(At::arg(2)) != Kind::Nil {
+        is_function = stack.kind(At::arg(2)) == Kind::Function;
+        if !is_function && stack.get_metafield(At::arg(2), c"__call") {
+            is_function = stack.kind(At::TOP) == Kind::Function;
+            stack.pop(1);
         }
-        let timeout: int64_t = if timeout_number.is_nan() || timeout_number > int64_t::MAX as f64 {
-            int64_t::MAX
-        } else {
-            timeout_number as int64_t
+        if !is_function {
+            stack.push_bytes(b"vim.wait: callback must be callable");
+            return Err(Raise::top_value());
+        }
+    }
+
+    let mut interval = DEFAULT_INTERVAL;
+    if lua_top >= 3 && stack.kind(At::arg(3)) != Kind::Nil {
+        let given = stack.check_integer(At::arg(3))?;
+        let Ok(given) = u64::try_from(given) else {
+            return Err(Raise::message("interval must be >= 0"));
         };
+        interval = given;
+    }
 
-        let lua_top = lua_gettop(lstate);
+    let fast_only = lua_top >= 4 && stack.to_boolean(At::arg(4));
+    let drain = if fast_only {
+        Drain::FastOnly
+    } else {
+        Drain::Events
+    };
 
-        // The condition may be a function or anything with a `__call`.
-        let mut is_function = false;
-        if lua_top >= 2 && lua_type(lstate, 2) != LUA_TNIL {
-            is_function = lua_type(lstate, 2) == LUA_TFUNCTION;
-            if !is_function && luaL_getmetafield(lstate, 2, c"__call".as_ptr()) != 0 {
-                is_function = lua_type(lstate, -1) == LUA_TFUNCTION;
-                lua_pop(lstate, 1);
-            }
-            if !is_function {
-                push_str(lstate, c"vim.wait: callback must be callable");
-                return lua_error(lstate);
-            }
+    // The watcher is what makes the loop wake up on `interval`; it does
+    // nothing else. It is dropped before anything below can raise.
+    let waker = ScopedTimer::wake_every(interval);
+
+    let mut outcome = Condition::Unmet;
+    ui_flush();
+    wait_on_main_loop(drain, timeout, || {
+        if got_int.get() {
+            return true;
         }
-
-        let mut interval = DEFAULT_INTERVAL;
-        if lua_top >= 3 && lua_type(lstate, 3) != LUA_TNIL {
-            interval = luaL_checkinteger(lstate, 3) as intptr_t;
-            if interval < 0 {
-                return luaL_error(lstate, c"interval must be >= 0".as_ptr());
-            }
+        if !is_function {
+            return false;
         }
+        outcome = wait_condition(stack);
+        !matches!(outcome, Condition::Unmet)
+    });
 
-        let fast_only = lua_top >= 4 && lua_toboolean(lstate, 4) != 0;
-        let drain = if fast_only {
-            Drain::FastOnly
-        } else {
-            Drain::Events
-        };
+    drop(waker);
 
-        // The watcher is what makes the loop wake up on `interval`; it does
-        // nothing else. It is dropped before anything below can raise.
-        let waker = ScopedTimer::wake_every(interval as uint64_t);
-
-        let mut pcall_status: c_int = 0;
-        let mut callback_result = false;
-        let mut nresults: c_int = 0;
-
-        ui_flush();
-        wait_on_main_loop(drain, timeout, || {
-            got_int.get()
-                || is_function
-                    && nlua_wait_condition(
-                        lstate,
-                        &raw mut pcall_status,
-                        &raw mut callback_result,
-                        &raw mut nresults,
-                    )
-        });
-
-        drop(waker);
-
-        if pcall_status != 0 {
-            lua_error(lstate)
-        } else if callback_result {
-            lua_pushboolean(lstate, 1);
+    match outcome {
+        Condition::Raised => Err(Raise::top_value()),
+        Condition::Met(nresults) => {
+            stack.push_boolean(true);
             if nresults == 0 {
-                lua_pushnil(lstate);
-                nresults = 1;
+                stack.push_nil();
+                Ok(2)
             } else {
-                lua_insert(lstate, -1 - nresults);
+                stack.insert(At::from_top(1 + nresults));
+                Ok(nresults + 1)
             }
-            nresults + 1
-        } else if got_int.get() {
+        }
+        Condition::Unmet if got_int.get() => {
             // Swallow the interrupt: `vim.wait` reports it rather than
             // letting it escape into whatever called it.
             got_int.set(false);
             vgetc();
-            lua_pushboolean(lstate, 0);
-            lua_pushinteger(lstate, WAIT_INTERRUPTED);
-            2
-        } else {
-            lua_pushboolean(lstate, 0);
-            lua_pushinteger(lstate, WAIT_TIMED_OUT);
-            2
+            stack.push_boolean(false);
+            stack.push_integer(WAIT_INTERRUPTED);
+            Ok(2)
+        }
+        Condition::Unmet => {
+            stack.push_boolean(false);
+            stack.push_integer(WAIT_TIMED_OUT);
+            Ok(2)
         }
     }
 }
 
 /// `vim.in_fast_event()`.
-///
-/// # Safety
-/// `lstate` must be a live Lua state with room for one more value.
-pub unsafe extern "C-unwind" fn nlua_in_fast_event(lstate: *mut lua_State) -> c_int {
-    unsafe {
-        lua_pushboolean(lstate, (in_fast_callback.get() > 0) as c_int);
-        1
-    }
+pub(crate) fn in_fast_event(stack: &mut Stack) -> Result<c_int, Raise> {
+    stack.push_boolean(in_fast_callback.get() > 0);
+    Ok(1)
 }
 
 /// Whether the named Vimscript builtin is marked `fast`, i.e. callable from
 /// a fast callback.
-///
-/// # Safety
-/// `name` must be a NUL-terminated function name.
-pub(crate) unsafe fn viml_func_is_fast(name: *const core::ffi::c_char) -> bool {
-    // SAFETY: the caller's promise.
-    let name = unsafe { crate::cstr::bytes_at(name) };
+pub(crate) fn viml_func_is_fast(name: &[u8]) -> bool {
     find_builtin(name).is_some_and(|fdef| fdef.fast)
 }
 

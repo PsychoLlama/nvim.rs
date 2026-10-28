@@ -23,7 +23,7 @@ pub(super) fn convert_nvim_call_dict_function(
     let arg_3 = pop_array(stack).inspect_err(|_| *blame = Some(c"args"))?;
     let arg_2 = pop_string(stack).inspect_err(|_| *blame = Some(c"fn"))?;
     let arg_1 = pop_object(stack, true).inspect_err(|_| *blame = Some(c"dict"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_call_dict_function(arg_1, arg_2, arg_3)?;
     push_object(stack, &ret, PUSH_SPECIAL);
     Ok(())
@@ -37,7 +37,7 @@ pub(super) fn convert_nvim_call_function(
 ) -> Result<(), Error> {
     let arg_2 = pop_array(stack).inspect_err(|_| *blame = Some(c"args"))?;
     let arg_1 = pop_string(stack).inspect_err(|_| *blame = Some(c"fn"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_call_function(arg_1, arg_2)?;
     push_object(stack, &ret, PUSH_SPECIAL);
     Ok(())
@@ -47,7 +47,7 @@ pub(super) fn convert_nvim_call_function(
 /// function, hand the result back.
 pub(super) fn convert_nvim_command(stack: &mut Stack, blame: &mut Blame) -> Result<(), Error> {
     let arg_1 = pop_string(stack).inspect_err(|_| *blame = Some(c"cmd"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     nvim_command(arg_1)?;
     Ok(())
 }
@@ -56,7 +56,7 @@ pub(super) fn convert_nvim_command(stack: &mut Stack, blame: &mut Blame) -> Resu
 /// function, hand the result back.
 pub(super) fn convert_nvim_eval(stack: &mut Stack, blame: &mut Blame) -> Result<(), Error> {
     let arg_1 = pop_string(stack).inspect_err(|_| *blame = Some(c"expr"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_eval(arg_1)?;
     push_object(stack, &ret, PUSH_SPECIAL);
     Ok(())
@@ -68,7 +68,7 @@ pub(super) fn convert_nvim_exec2(stack: &mut Stack, blame: &mut Blame) -> Result
     let mut arg_2 = KeyDict_exec_opts::default();
     pop_keydict(stack, &mut arg_2, blame)?;
     let arg_1 = pop_string(stack).inspect_err(|_| *blame = Some(c"src"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_exec2(LUA_INTERNAL_CALL, arg_1, &mut arg_2)?;
     push_dict(stack, &ret, PUSH);
     Ok(())
@@ -83,7 +83,7 @@ pub(super) fn convert_nvim_parse_expression(
     let arg_3 = pop_boolean(stack).inspect_err(|_| *blame = Some(c"hl"))?;
     let arg_2 = pop_string(stack).inspect_err(|_| *blame = Some(c"flags"))?;
     let arg_1 = pop_string(stack).inspect_err(|_| *blame = Some(c"expr"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_parse_expression(arg_1, arg_2, arg_3)?;
     push_dict(stack, &ret, PUSH_SPECIAL);
     Ok(())

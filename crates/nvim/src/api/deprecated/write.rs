@@ -148,9 +148,5 @@ pub fn nvim_notify(msg_0: String_0, log_level: Integer, opts: ApiDict) -> Result
     args.push(Object::string(msg_0));
     args.push(Object::integer(log_level));
     args.push(Object::dict(opts));
-    let code = String_0::from_cstr(c"return vim.notify(...)");
-    let (args, no_name) = (args.array(), ::core::ptr::null());
-    // SAFETY: `code` and `args` are this frame's own, and there is no chunk
-    // name.
-    unsafe { nlua_exec(&code, no_name, args, kRetObject) }
+    nlua_exec(b"return vim.notify(...)", None, args.array(), kRetObject)
 }

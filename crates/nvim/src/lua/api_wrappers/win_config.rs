@@ -24,7 +24,7 @@ pub(super) fn convert_nvim_open_win(stack: &mut Stack, blame: &mut Blame) -> Res
     pop_keydict(stack, &mut arg_3, blame)?;
     let arg_2 = pop_boolean(stack).inspect_err(|_| *blame = Some(c"enter"))?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"buf"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let ret = nvim_open_win(arg_1, arg_2, &mut arg_3)?;
     push_handle(stack, ret);
     Ok(())
@@ -37,7 +37,7 @@ pub(super) fn convert_nvim_win_get_config(
     blame: &mut Blame,
 ) -> Result<(), Error> {
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"win"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     let mut ret = nvim_win_get_config(arg_1)?;
     push_keydict(stack, &mut ret);
     Ok(())
@@ -52,7 +52,7 @@ pub(super) fn convert_nvim_win_set_config(
     let mut arg_2 = KeyDict_win_config::default();
     pop_keydict(stack, &mut arg_2, blame)?;
     let arg_1 = pop_handle(stack).inspect_err(|_| *blame = Some(c"win"))?;
-    let _lstate = Restore::of(&active_lstate, stack.lua_state());
+    let _active = ActiveState::enter(stack);
     nvim_win_set_config(arg_1, &mut arg_2)?;
     Ok(())
 }

@@ -1,78 +1,86 @@
 //! Turning a Lua error into an editor error.
 //!
-//! [`nlua_get_error`] formats whatever is on the stack -- a string, or a
-//! table with a `__tostring` -- and [`nlua_error`] prints it through the
-//! multiline message path.  [`nlua_pcall`] is the protected call every entry
-//! point in this module funnels through, and [`nlua_luv_error_event`] is the
-//! same for an error raised on the event loop, where there is no caller to
+//! [`nlua_get_error`] reads whatever is on the stack -- a string, or a table
+//! with a `__tostring` -- and [`nlua_error`] prints it through the
+//! multiline message path. [`nlua_pcall`] is the protected call every entry
+//! point in this module funnels through, [`fast_pcall`] the one a libuv
+//! callback on the main loop runs through, and [`report_luv_error`] reports
+//! an error raised there, or on a luv thread, where there is no caller to
 //! return to.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `lua/` row in docs/perimeter.md.
-#![allow(unsafe_code)]
-// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
+#![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
-use crate::message_fmt::{c_str, c_str_len, report_emsg_multiline};
+use core::ffi::{CStr, c_int};
+use std::io::Write;
+
+use super::{LUA_ERRMEM, LUVF_CALLBACK_NOEXIT, in_fast_callback, in_script};
+use crate::event::multiqueue::put_job_on_main_loop;
+use crate::guard::Depth;
+use crate::lua::ffi::LUA_MULTRET;
+use crate::lua::stack::{At, Kind, LuaFailed, Stack};
+use crate::message::e_outofmem;
+use crate::message_fmt::{msg_bytes_opt, report_emsg_multiline};
+use crate::os::cshim::gettext;
+use crate::startup::preserve_exit;
 use crate::tr_c;
-use crate::tr_plural;
-use core::ffi::{CStr, c_char, c_int, c_void};
-
-use super::{in_script, kCallback, kThread, kThreadCallback, luv_err_t};
-use crate::lua::ffi::{
-    LUA_MULTRET, LUA_TFUNCTION, lua_getfield, lua_gettop, lua_insert, lua_pcall, lua_remove,
-    lua_replace, lua_tolstring, lua_type, luaL_callmeta, luaL_getmetafield,
-};
-use crate::lua::stack::{lua_getglobal, lua_pop};
-use crate::memory::xfree;
-use crate::os::cshim::{gettext_ptr, stderr};
-use crate::types::{intptr_t, lua_State, size_t};
-use ::libc::fprintf;
 
 /// The message kind every Lua error is reported under.
 const LUA_ERROR_KIND: &CStr = c"lua_error";
 /// The metamethod a Lua error object may render itself through.
 const TOSTRING: &CStr = c"__tostring";
 
-/// The error on top of the stack as text, leaving it there.
-///
-/// # Safety
-/// `lstate` must be a live Lua state with the error value on top.
-pub(crate) unsafe fn nlua_get_error(lstate: *mut lua_State, len: *mut size_t) -> *const c_char {
-    unsafe {
-        if luaL_getmetafield(lstate, -1, TOSTRING.as_ptr()) != 0 {
-            if lua_type(lstate, -1) == LUA_TFUNCTION
-                && luaL_callmeta(lstate, -2, TOSTRING.as_ptr()) != 0
-            {
-                lua_replace(lstate, -3);
-            }
-            lua_pop(lstate, 1);
-        }
-        lua_tolstring(lstate, -1, len)
-    }
+/// The bytes a C string's copy of `bytes` would keep: up to the first NUL.
+pub(crate) fn until_nul(bytes: &[u8]) -> &[u8] {
+    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
+    &bytes[..end]
 }
 
-/// Report the error on top of the stack, and pop it.  `msg` is a format with
-/// one `%.*s` for the error's own text.
+/// The error on top of the stack as text, leaving it there (rendered through
+/// its `__tostring` first when it has one). `None` for an error that is no
+/// string and renders as none.
+pub(crate) fn nlua_get_error(stack: &mut Stack) -> Option<&[u8]> {
+    if stack.get_metafield(At::TOP, TOSTRING) {
+        if stack.kind(At::TOP) == Kind::Function && stack.call_meta(At::from_top(2), TOSTRING) {
+            stack.replace(At::from_top(3));
+        }
+        stack.pop(1);
+    }
+    stack.to_bytes(At::TOP)
+}
+
+/// Report the error on top of the stack, and pop it. `template` is the
+/// message, with one `%.*s` for the error's own text.
 ///
 /// A `-l` script has no editor to show a message in, so its errors go to
 /// stderr.
-///
-/// # Safety
-/// As [`nlua_get_error`].
-pub unsafe fn nlua_error(lstate: *mut lua_State, msg: *const c_char) {
-    unsafe {
-        let mut len: size_t = 0;
-        let str = nlua_get_error(lstate, &raw mut len);
-        if in_script.get() {
-            fprintf(stderr, msg, len as c_int, str);
-            fprintf(stderr, c"\n".as_ptr());
-        } else {
-            let (fmt, text) = (gettext_ptr(msg), c_str_len(str, len));
-            report_emsg_multiline(LUA_ERROR_KIND, || tr_plural!(fmt, len as c_int, text));
-        }
-        lua_pop(lstate, 1);
+pub fn nlua_error(stack: &mut Stack, template: &'static CStr) {
+    let text = nlua_get_error(stack);
+    if in_script.get() {
+        // `fprintf(stderr, template, len, text)`: the bytes as they are,
+        // `%.*s` stopping at a NUL, and a null string printing as nothing
+        // at the zero precision it comes with.
+        let template = gettext(template).to_bytes();
+        let at = template
+            .windows(4)
+            .position(|w| w == b"%.*s")
+            .unwrap_or(template.len());
+        let rest = template.get(at + 4..).unwrap_or_default();
+        let text = text.map(until_nul).unwrap_or_default();
+        let line = [&template[..at], text, rest, b"\n"].concat();
+        let _ = std::io::stderr().write_all(&line);
+    } else {
+        let len = text.map_or(0, <[u8]>::len);
+        let len = c_int::try_from(len).unwrap_or(c_int::MAX);
+        report_emsg_multiline(LUA_ERROR_KIND, || tr_c!(template, len, msg_bytes_opt(text)));
     }
+    stack.pop(1);
 }
 
 /// `lua_pcall` with `debug.traceback` installed as the message handler, so a
@@ -80,54 +88,78 @@ pub unsafe fn nlua_error(lstate: *mut lua_State, msg: *const c_char) {
 ///
 /// The handler is inserted below the function and its arguments, and removed
 /// again whichever way the call went — so the stack effect is exactly
-/// `lua_pcall`'s.
-///
-/// # Safety
-/// `lstate` must be a live Lua state with a function and `nargs` arguments
-/// on top.
-pub unsafe fn nlua_pcall(lstate: *mut lua_State, nargs: c_int, mut nresults: c_int) -> c_int {
-    unsafe {
-        lua_getglobal(lstate, c"debug".as_ptr());
-        lua_getfield(lstate, -1, c"traceback".as_ptr());
-        lua_remove(lstate, -2);
-        lua_insert(lstate, -2 - nargs);
-        let pre_top = lua_gettop(lstate);
-        let status = lua_pcall(lstate, nargs, nresults, -2 - nargs);
-        if status != 0 {
-            lua_remove(lstate, -2);
-        } else {
-            if nresults == LUA_MULTRET {
-                nresults = lua_gettop(lstate) - (pre_top - nargs - 1);
-            }
-            lua_remove(lstate, -1 - nresults);
+/// `lua_pcall`'s. Expects a function and `nargs` arguments on top.
+pub fn nlua_pcall(stack: &mut Stack, nargs: c_int, mut nresults: c_int) -> Result<(), LuaFailed> {
+    stack.get_global(c"debug");
+    stack.get_field(At::TOP, c"traceback");
+    stack.remove(At::from_top(2));
+    stack.insert(At::from_top(2 + nargs));
+    let pre_top = stack.top().index();
+    let status = stack.pcall(nargs, nresults, Some(At::from_top(2 + nargs)));
+    if status.is_err() {
+        stack.remove(At::from_top(2));
+    } else {
+        if nresults == LUA_MULTRET {
+            nresults = stack.top().index() - (pre_top - nargs - 1);
         }
-        status
+        stack.remove(At::from_top(1 + nresults));
     }
+    status
+}
+
+/// Where an error [`report_luv_error`] reports was raised.
+#[derive(Clone, Copy)]
+pub(crate) enum LuvError {
+    /// A libuv callback on the main loop.
+    Callback,
+    /// A luv thread's own code.
+    Thread,
+    /// A callback on a luv thread.
+    ThreadCallback,
 }
 
 /// Report an error raised where no caller can see it: a luv callback, a luv
-/// thread, or a callback on one.
+/// thread, or a callback on one. `error` is its text (`None` for one that had
+/// none), already cut at its first NUL.
 ///
-/// Scheduled onto the main loop by whoever raised it; `argv[0]` is the
-/// message, which this frees, and `argv[1]` the [`luv_err_t`].
+/// Scheduled onto the main loop by whoever raised it.
+pub(crate) fn report_luv_error(kind: LuvError, error: Option<&[u8]>) {
+    let template = match kind {
+        LuvError::Callback => c"Lua callback:\n%s",
+        LuvError::Thread => c"Luv thread:\n%s",
+        LuvError::ThreadCallback => c"Luv callback, thread:\n%s",
+    };
+    report_emsg_multiline(LUA_ERROR_KIND, || tr_c!(template, msg_bytes_opt(error)));
+}
+
+/// Run a libuv callback on the main loop: [`nlua_pcall`] with
+/// `in_fast_callback` raised for its duration. Expects the callback and
+/// `nargs` arguments on top; answers how many results it left, or a failure's
+/// negated status.
 ///
-/// # Safety
-/// `argv` must be the two-element array the scheduler was handed.
-pub(crate) unsafe extern "C" fn nlua_luv_error_event(argv: *mut *mut c_void) {
-    unsafe {
-        let error = (*argv.add(0)).cast::<c_char>();
-        let type_0 = (*argv.add(1)).expose_provenance() as intptr_t as luv_err_t;
-        // An unknown kind reports nothing, exactly as upstream's `switch`
-        // with no `default` does — but the message is still freed.
-        let fmt = match type_0 {
-            kCallback => Some(c"Lua callback:\n%s"),
-            kThread => Some(c"Luv thread:\n%s"),
-            kThreadCallback => Some(c"Luv callback, thread:\n%s"),
-            _ => None,
-        };
-        if let Some(fmt) = fmt {
-            report_emsg_multiline(LUA_ERROR_KIND, || tr_c!(fmt, c_str(error)));
+/// A failure is *reported* rather than propagated — there is no caller to
+/// return an error to — so its text is copied and queued onto the main loop.
+pub(crate) fn fast_pcall(
+    stack: &mut Stack,
+    nargs: c_int,
+    mut nresult: c_int,
+    flags: c_int,
+) -> c_int {
+    let _fast = Depth::of(&in_fast_callback);
+    let top = stack.top().index();
+    if let Err(LuaFailed(status)) = nlua_pcall(stack, nargs, nresult) {
+        if status == LUA_ERRMEM && flags & LUVF_CALLBACK_NOEXIT == 0 {
+            preserve_exit(Some(e_outofmem));
         }
-        xfree(error.cast::<c_void>());
+        let error = nlua_get_error(stack).map(|text| until_nul(text).to_vec());
+        put_job_on_main_loop(Box::new(move || {
+            report_luv_error(LuvError::Callback, error.as_deref());
+        }));
+        stack.pop(1);
+        return -status;
     }
+    if nresult == LUA_MULTRET {
+        nresult = stack.top().index() - top + nargs + 1;
+    }
+    nresult
 }

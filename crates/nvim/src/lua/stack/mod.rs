@@ -28,8 +28,10 @@
 //! borrowed. Lua keeps a string alive while it sits in a stack slot, and every
 //! operation that could pop or overwrite that slot takes `&mut self`, so the
 //! borrow checker is what says "copy the bytes before you pop". The one
-//! assumption behind it is that a frame has only one `Stack` at a time — the
-//! contract both constructors carry. A nested call into Lua cannot break it:
+//! assumption behind it is that a second `Stack` over the same frame -- the
+//! editor's main-state `Stack`, reached from inside a C function on that
+//! state -- leaves the slots below its own first push alone: the contract
+//! both constructors carry. A nested call into Lua cannot break it:
 //! a C function called from there gets a frame of its own and cannot reach
 //! below its base.
 //!
@@ -84,28 +86,33 @@
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr::{self, NonNull};
 
-use crate::lua::executor::{nlua_ref_global, nlua_unref_global, release_luaref};
+use crate::lua::executor::release_luaref;
 use crate::lua::ffi::{
     LUA_GLOBALSINDEX, LUA_REGISTRYINDEX, LUA_TBOOLEAN, LUA_TFUNCTION, LUA_TLIGHTUSERDATA, LUA_TNIL,
-    LUA_TNONE, LUA_TNUMBER, LUA_TSTRING, LUA_TTABLE, LUA_TTHREAD, LUA_TUSERDATA, lua_checkstack,
-    lua_concat, lua_createtable, lua_error, lua_getfield, lua_getmetatable, lua_gettable,
-    lua_gettop, lua_insert, lua_isnumber, lua_newuserdata, lua_next, lua_objlen, lua_pcall,
-    lua_pushboolean, lua_pushcclosure, lua_pushinteger, lua_pushlightuserdata, lua_pushlstring,
-    lua_pushnil, lua_pushnumber, lua_pushvalue, lua_rawequal, lua_rawget, lua_rawgeti, lua_rawset,
-    lua_rawseti, lua_remove, lua_replace, lua_setfield, lua_setmetatable, lua_settable, lua_settop,
-    lua_toboolean, lua_tointeger, lua_tolstring, lua_tonumber, lua_topointer, lua_touserdata,
-    lua_type, lua_typename, luaL_argerror, luaL_checkinteger, luaL_checklstring, luaL_checknumber,
-    luaL_checktype, luaL_checkudata, luaL_loadbuffer, luaL_newmetatable, luaL_where,
+    LUA_TNONE, LUA_TNUMBER, LUA_TSTRING, LUA_TTABLE, LUA_TTHREAD, LUA_TUSERDATA, lua_call,
+    lua_checkstack, lua_concat, lua_createtable, lua_error, lua_getfield, lua_getmetatable,
+    lua_gettable, lua_gettop, lua_insert, lua_isnumber, lua_isstring, lua_next, lua_objlen,
+    lua_pcall, lua_pushboolean, lua_pushcclosure, lua_pushinteger, lua_pushlightuserdata,
+    lua_pushlstring, lua_pushnil, lua_pushnumber, lua_pushvalue, lua_rawequal, lua_rawget,
+    lua_rawgeti, lua_rawset, lua_rawseti, lua_remove, lua_replace, lua_setfield, lua_setmetatable,
+    lua_settable, lua_settop, lua_toboolean, lua_tointeger, lua_tolstring, lua_tonumber,
+    lua_topointer, lua_type, lua_typename, luaL_argerror, luaL_checkinteger, luaL_checklstring,
+    luaL_checknumber, luaL_checktype, luaL_checkudata, luaL_loadbuffer, luaL_newmetatable,
+    luaL_ref, luaL_unref, luaL_where,
 };
-use crate::lua::state::nlua_global_refs;
-use crate::types::{LuaRef, NluaRefState, lua_Integer, lua_Number, lua_State, size_t};
+use crate::lua::state::MAIN_REFS;
+use crate::types::{LuaRef, lua_Integer, lua_Number, lua_State, size_t};
 
+mod debug;
 mod dispatch;
 mod header;
+mod userdata;
 
-pub use self::dispatch::Dispatch;
+pub use self::debug::Frame;
 pub(crate) use self::dispatch::dispatch_entry;
+pub use self::dispatch::{Dispatch, Function};
 pub use self::header::*;
+pub use self::userdata::Userdata;
 
 /// A C function Lua can call: the `lua_CFunction` signature, unwrapped.
 ///
@@ -224,6 +231,8 @@ enum Thrown {
     Check { arg: c_int, check: Check },
     /// The value already on top of the stack, raised as it is.
     Value,
+    /// Not an error: `lua_call(L, args, results)` in tail position.
+    TailCall { args: c_int, results: c_int },
 }
 
 /// Which `luaL_check*` refused.
@@ -262,6 +271,17 @@ impl Raise {
         Raise(Thrown::Value)
     }
 
+    /// Not an error but the body's last step: call the function below the top
+    /// `args` values, unprotected, and answer its `results` values -- what
+    /// `return (lua_call(L, args, results), results)` was in C. The call runs
+    /// once the body's frame is gone, so an error in it unwinds as Lua raised
+    /// it (a message handler further out sees the frames where it happened)
+    /// and finds nothing of the body's to strand.
+    pub fn tail_call(args: c_int, results: c_int) -> Raise {
+        debug_assert!(results >= 0, "a tail call answers a fixed count");
+        Raise(Thrown::TailCall { args, results })
+    }
+
     fn check(arg: At, check: Check) -> Raise {
         Raise(Thrown::Check { arg: arg.0, check })
     }
@@ -292,23 +312,6 @@ impl Drop for OwnedLuaRef {
 pub struct LuaFailed(pub c_int);
 
 // ---------------------------------------------------------------------------
-// Userdata
-
-/// A Rust value Lua holds as full userdata, under a metatable of its own.
-///
-/// # Safety
-/// `METATABLE` names a registry metatable that only values of `Self` carry:
-/// every userdata with that metatable was made by [`Stack::new_userdata`] for
-/// this same type. That is what lets [`Stack::check_userdata`] hand the bytes
-/// back as a `Self`. `Self` must also be valid when its bytes are copied,
-/// because Lua moves nothing but never runs `Drop` either: a userdata whose
-/// type owns something needs a `__gc` that releases it.
-pub unsafe trait Userdata: Sized {
-    /// The name the metatable is registered under (`luaL_newmetatable`).
-    const METATABLE: &'static CStr;
-}
-
-// ---------------------------------------------------------------------------
 // The stack
 
 /// The running C function's frame of a Lua state.
@@ -325,8 +328,10 @@ impl Stack {
     /// # Safety
     /// `state` is a live Lua state set up by this editor's runtime (its
     /// reference bookkeeping installed), on the thread that runs it, and it
-    /// outlives the returned `Stack`. No other `Stack` over the same frame is
-    /// used while this one is.
+    /// outlives the returned `Stack`. Another `Stack` over the same frame
+    /// used while this one lives leaves the slots below its own first push
+    /// alone -- pops what it pushed, and calls only what it pushed -- so
+    /// what this one lends stays anchored.
     pub unsafe fn from_raw(state: *mut lua_State) -> Stack {
         debug_assert!(!state.is_null(), "a Stack over no Lua state");
         Stack {
@@ -357,6 +362,13 @@ impl Stack {
         };
         match outcome {
             Ok(results) => results,
+            Err(Raise(Thrown::TailCall { args, results })) => {
+                // SAFETY: the state Lua called this function on, with the
+                // callee and its arguments on top (the body's promise), and
+                // nothing of this frame's left to release.
+                unsafe { lua_call(state, args, results) };
+                results
+            }
             // SAFETY: the state Lua called this function on, with nothing of
             // this frame's left to release.
             Err(error) => unsafe { raise(state, error) },
@@ -443,6 +455,11 @@ impl Stack {
         unsafe { lua_isnumber(self.l(), at.0) != 0 }
     }
 
+    /// Whether `at` holds a string, or a number (which converts to one).
+    pub fn is_string(&self, at: At) -> bool {
+        unsafe { lua_isstring(self.l(), at.0) != 0 }
+    }
+
     /// The value's truthiness: false only for nil and `false`.
     pub fn to_boolean(&self, at: At) -> bool {
         unsafe { lua_toboolean(self.l(), at.0) != 0 }
@@ -483,6 +500,31 @@ impl Stack {
         // SAFETY: a Lua string is `len` readable bytes, alive while its slot
         // is, and the slot outlives the borrow of `self`.
         Some(unsafe { core::slice::from_raw_parts(bytes.cast::<u8>(), len) })
+    }
+
+    /// The string at `at` as the C string `lua_tostring` answers: cut at its
+    /// first NUL. `None` for any other kind, as [`Stack::string`].
+    pub fn c_string(&self, at: At) -> Option<&CStr> {
+        if self.kind(at) != Kind::String {
+            return None;
+        }
+        let bytes = unsafe { lua_tolstring(self.l(), at.0, ptr::null_mut()) };
+        // SAFETY: every Lua string is NUL-terminated, and alive while its
+        // slot is, which the borrow of `self` keeps.
+        Some(unsafe { CStr::from_ptr(bytes) })
+    }
+
+    /// [`Stack::string`] with the terminating NUL every Lua string carries
+    /// after its bytes, for a reader that walks it as C strings.
+    pub fn string_with_nul(&self, at: At) -> Option<&[u8]> {
+        if self.kind(at) != Kind::String {
+            return None;
+        }
+        let mut len: size_t = 0;
+        let bytes = unsafe { lua_tolstring(self.l(), at.0, &raw mut len) };
+        // SAFETY: a Lua string is `len` bytes and a NUL, alive while its slot
+        // is, which the borrow of `self` keeps.
+        Some(unsafe { core::slice::from_raw_parts(bytes.cast::<u8>(), len + 1) })
     }
 
     /// [`Stack::string`] for a slot already known to hold a string.
@@ -680,16 +722,24 @@ impl Stack {
     /// A new reference to the value at `at`, counted in the editor's
     /// reference bookkeeping. The caller owns it and gives it back with
     /// [`Stack::unreference`] (or by dropping the value that holds it).
+    ///
+    /// Only a *positive* reference counts: `LUA_REFNIL` and `LUA_NOREF` are
+    /// sentinels, not registry entries.
     pub fn reference(&mut self, at: At) -> LuaRef {
-        // SAFETY: a live state whose bookkeeping is installed (the
-        // constructor's contract).
-        unsafe { nlua_ref_global(self.l(), at.0) }
+        self.push_value(at);
+        let reference = unsafe { luaL_ref(self.l(), LUA_REGISTRYINDEX) };
+        if reference > 0 {
+            MAIN_REFS.with_mut(|refs| refs.ref_count += 1);
+        }
+        reference
     }
 
     /// Give `reference` back. A sentinel is a no-op.
     pub fn unreference(&mut self, reference: LuaRef) {
-        // SAFETY: as in `reference`.
-        unsafe { nlua_unref_global(self.l(), reference) };
+        if reference > 0 {
+            MAIN_REFS.with_mut(|refs| refs.ref_count -= 1);
+            unsafe { luaL_unref(self.l(), LUA_REGISTRYINDEX, reference) };
+        }
     }
 
     /// Pop the value on top as a reference the result owns: dropping it
@@ -702,22 +752,14 @@ impl Stack {
 
     /// Push `vim.NIL`, the userdata Lua code sees for a Vimscript or API nil.
     pub fn push_vim_nil(&mut self) {
-        let reference = self.refs().nil_ref;
+        let reference = MAIN_REFS.get_field(|refs| &refs.nil_ref);
         self.push_reference(reference);
     }
 
     /// Push the metatable `vim.empty_dict()` marks an empty dictionary with.
     pub fn push_empty_dict_metatable(&mut self) {
-        let reference = self.refs().empty_dict_ref;
+        let reference = MAIN_REFS.get_field(|refs| &refs.empty_dict_ref);
         self.push_reference(reference);
-    }
-
-    fn refs(&self) -> &NluaRefState {
-        let refs = nlua_global_refs.get();
-        debug_assert!(!refs.is_null(), "the Lua runtime is not set up");
-        // SAFETY: the constructor's contract — the editor's runtime is up, so
-        // its bookkeeping is installed and lives as long as the state.
-        unsafe { &*refs }
     }
 
     // -- calling ----------------------------------------------------------
@@ -741,9 +783,12 @@ impl Stack {
     }
 
     /// Compile `chunk` and push it as a function, or push the error message.
-    pub fn load(&mut self, chunk: &[u8], name: &CStr) -> Result<(), LuaFailed> {
+    /// `name` is the chunk name its messages carry; with none, LuaJIT names
+    /// it after the text (or a bytecode chunk keeps its own).
+    pub fn load(&mut self, chunk: &[u8], name: Option<&CStr>) -> Result<(), LuaFailed> {
         let text = chunk.as_ptr().cast::<c_char>();
-        match unsafe { luaL_loadbuffer(self.l(), text, chunk.len(), name.as_ptr()) } {
+        let name = name.map_or(ptr::null(), CStr::as_ptr);
+        match unsafe { luaL_loadbuffer(self.l(), text, chunk.len(), name) } {
             0 => Ok(()),
             status => Err(LuaFailed(status)),
         }
@@ -787,51 +832,6 @@ impl Stack {
             return Err(Raise::check(at, Check::Kind(kind)));
         }
         Ok(())
-    }
-
-    // -- userdata ---------------------------------------------------------
-
-    /// Push `value` as a full userdata carrying `T`'s metatable, which must
-    /// already be registered (see [`Stack::new_metatable`]).
-    pub fn new_userdata<T: Userdata>(&mut self, value: T) {
-        const {
-            // LuaJIT aligns a userdata's payload to 8 bytes.
-            assert!(align_of::<T>() <= 8, "LuaJIT cannot align this userdata");
-        }
-        let block = unsafe { lua_newuserdata(self.l(), size_of::<T>()) }.cast::<T>();
-        // SAFETY: a fresh block of `size_of::<T>()` bytes, aligned for `T`
-        // (checked above), that nothing else has seen.
-        unsafe { ptr::write(block, value) };
-        self.get_field(At::REGISTRY, T::METATABLE);
-        self.set_metatable(At::from_top(2));
-    }
-
-    /// The `T` at `at` when the slot holds one of `T`'s userdata.
-    pub fn to_userdata<T: Userdata>(&mut self, at: At) -> Option<&mut T> {
-        // A light userdata answers `lua_touserdata` too, but is not one of
-        // ours: `luaL_checkudata` asks for a full userdata first.
-        if self.kind(at) != Kind::Userdata {
-            return None;
-        }
-        let block = unsafe { lua_touserdata(self.l(), at.0) };
-        if block.is_null() || !self.get_metatable(at) {
-            return None;
-        }
-        self.get_field(At::REGISTRY, T::METATABLE);
-        let ours = self.raw_equal(At::from_top(1), At::from_top(2));
-        self.pop(2);
-        // SAFETY: the `Userdata` contract — only `new_userdata::<T>` makes a
-        // userdata with `T`'s metatable — so the block holds a `T`; the
-        // borrow of `self` keeps the slot, and so the block, alive.
-        ours.then(|| unsafe { &mut *block.cast::<T>() })
-    }
-
-    /// `luaL_checkudata`: the `T` at `at`, or the error LuaJIT raises for it.
-    pub fn check_userdata<T: Userdata>(&mut self, at: At) -> Result<&mut T, Raise> {
-        if self.to_userdata::<T>(at).is_none() {
-            return Err(Raise::check(at, Check::Userdata(T::METATABLE)));
-        }
-        Ok(self.to_userdata::<T>(at).expect("checked above"))
     }
 }
 
@@ -883,6 +883,7 @@ unsafe fn raise(state: *mut lua_State, error: Raise) -> ! {
                 std::process::abort();
             }
             Thrown::Value => {}
+            Thrown::TailCall { .. } => unreachable!("`entry` makes the call"),
         }
         lua_error(state);
     }

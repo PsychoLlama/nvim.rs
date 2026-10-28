@@ -129,7 +129,7 @@ use crate::api::window::{
 };
 use crate::ex_docmd::expr_map_locked;
 use crate::ex_getln::text_locked;
-use crate::guard::{Restore, textlock};
+use crate::guard::textlock;
 use crate::lua::converter::binding::{
     Binding, Blame, PUSH, PUSH_SPECIAL, expr_map_locked_error, text_locked_error,
 };
@@ -138,7 +138,7 @@ use crate::lua::converter::{
     pop_string, push_array, push_boolean, push_dict, push_float, push_handle, push_integer,
     push_keydict, push_object, push_string,
 };
-use crate::lua::executor::{LUA_INTERNAL_CALL, active_lstate};
+use crate::lua::executor::{ActiveState, LUA_INTERNAL_CALL};
 use crate::lua::stack::{At, Stack};
 use crate::types::{
     Error, KeyDict_buf_attach, KeyDict_buf_delete, KeyDict_clear_autocmds, KeyDict_cmd,
