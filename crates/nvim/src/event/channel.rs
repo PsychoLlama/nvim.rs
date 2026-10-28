@@ -385,6 +385,20 @@ pub(crate) fn accept_socket(
     if result == 0 { Ok(()) } else { Err(result) }
 }
 
+/// Channel `id`'s write and read streams' addresses, for the log line
+/// that names them; never dereferenced.
+pub(crate) fn stream_addresses(id: u64) -> (*mut c_void, *mut c_void) {
+    with(id, |channel| match &mut channel.stream {
+        ChannelStream::Job(job) => {
+            let proc = job.proc_mut();
+            ((&raw mut proc.in_0).cast(), (&raw mut proc.out).cast())
+        }
+        ChannelStream::Socket(socket) => ((&raw mut socket.s).cast(), (&raw mut *socket).cast()),
+        ChannelStream::Stdio(stdio) => ((&raw mut stdio.out).cast(), (&raw mut stdio.in_0).cast()),
+        _ => (ptr::null_mut(), ptr::null_mut()),
+    })
+}
+
 /// Socket channel `id`'s stream, at its fixed address.
 fn socket_stream(id: u64) -> *mut RStream {
     with(id, |channel| match &mut channel.stream {

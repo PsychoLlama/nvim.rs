@@ -27,7 +27,7 @@
 
 use crate::cstr;
 use crate::event::multiqueue::ChildQueue;
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, msg_addr};
 use crate::os::uv_error::UV_EPIPE;
 use crate::snprintf;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -40,7 +40,7 @@ use crate::channel::channels;
 use crate::channel::{
     channel_close, channel_decref, channel_incref, channel_info_changed, find_channel, with_channel,
 };
-use crate::event::channel::{Reads, start_reads, write_wbuffer};
+use crate::event::channel::{Reads, start_reads, stream_addresses, write_wbuffer};
 use crate::event::libuv::uv_strerror;
 use crate::event::r#loop::{one_arg_event, process_events_until};
 use crate::event::multiqueue::multiqueue_put_event;
@@ -207,7 +207,16 @@ pub fn rpc_start(id: uint64_t) {
     if chan.streamtype() == kChannelStreamInternal {
         return;
     }
-    logmsg!(LOGLVL_DBG, c"rpc_start", 93, "rpc ch {id}");
+    let (in_0, out) = stream_addresses(id);
+    logmsg!(
+        LOGLVL_DBG,
+        c"rpc_start",
+        93,
+        "rpc ch {} in-stream={} out-stream={}",
+        id,
+        msg_addr(in_0),
+        msg_addr(out)
+    );
     start_reads(id, Reads::Rpc);
 }
 
