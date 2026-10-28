@@ -77,17 +77,10 @@ pub struct TSQueryCursor {
     _data: [u8; 0],
     _marker: ::core::marker::PhantomData<(*mut u8, ::core::marker::PhantomPinned)>,
 }
-unsafe extern "C" {
-    fn ts_parser_new() -> *mut TSParser;
-    fn ts_parser_delete(self_0: *mut TSParser);
-    fn ts_parser_language(self_0: *const TSParser) -> *const TSLanguage;
-    fn ts_parser_set_language(self_0: *mut TSParser, language: *const TSLanguage) -> bool;
-    fn ts_parser_set_included_ranges(
-        self_0: *mut TSParser,
-        ranges: *const TSRange,
-        count: uint32_t,
-    ) -> bool;
-    fn ts_parser_included_ranges(self_0: *const TSParser, count: *mut uint32_t) -> *const TSRange;
+// The parse entry points run the parser's logger, and the logger calls back
+// into Lua (`logger_cb`): a Lua error raised there unwinds out through
+// tree-sitter's frames, so these three are declared as able to unwind.
+unsafe extern "C-unwind" {
     fn ts_parser_parse(
         self_0: *mut TSParser,
         old_tree: *const TSTree,
@@ -105,6 +98,18 @@ unsafe extern "C" {
         string: *const ::core::ffi::c_char,
         length: uint32_t,
     ) -> *mut TSTree;
+}
+unsafe extern "C" {
+    fn ts_parser_new() -> *mut TSParser;
+    fn ts_parser_delete(self_0: *mut TSParser);
+    fn ts_parser_language(self_0: *const TSParser) -> *const TSLanguage;
+    fn ts_parser_set_language(self_0: *mut TSParser, language: *const TSLanguage) -> bool;
+    fn ts_parser_set_included_ranges(
+        self_0: *mut TSParser,
+        ranges: *const TSRange,
+        count: uint32_t,
+    ) -> bool;
+    fn ts_parser_included_ranges(self_0: *const TSParser, count: *mut uint32_t) -> *const TSRange;
     fn ts_parser_reset(self_0: *mut TSParser);
     fn ts_parser_set_logger(self_0: *mut TSParser, logger: TSLogger);
     fn ts_parser_logger(self_0: *const TSParser) -> TSLogger;
@@ -284,7 +289,11 @@ pub const TSLogTypeParse: TSLogType = 0;
 pub struct TSLogger {
     pub payload: *mut ::core::ffi::c_void,
     pub log: Option<
-        unsafe extern "C" fn(*mut ::core::ffi::c_void, TSLogType, *const ::core::ffi::c_char) -> (),
+        unsafe extern "C-unwind" fn(
+            *mut ::core::ffi::c_void,
+            TSLogType,
+            *const ::core::ffi::c_char,
+        ) -> (),
     >,
 }
 #[repr(C)]

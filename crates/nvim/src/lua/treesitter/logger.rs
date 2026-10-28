@@ -36,7 +36,7 @@ pub(crate) unsafe fn logger_gc(logger: TSLogger) {
 /// `payload` must point at the `TSLuaLoggerOpts` this logger was installed
 /// with and `s` at a NUL-terminated message; tree-sitter's callback contract,
 /// which hands back exactly what it was given.
-unsafe extern "C" fn logger_cb(
+unsafe extern "C-unwind" fn logger_cb(
     payload: *mut ::core::ffi::c_void,
     logtype: TSLogType,
     s: *const ::core::ffi::c_char,
@@ -115,7 +115,7 @@ pub(crate) unsafe extern "C-unwind" fn parser_set_logger(L: *mut lua_State) -> :
             payload: opts as *mut ::core::ffi::c_void,
             log: Some(
                 logger_cb
-                    as unsafe extern "C" fn(
+                    as unsafe extern "C-unwind" fn(
                         *mut ::core::ffi::c_void,
                         TSLogType,
                         *const ::core::ffi::c_char,
