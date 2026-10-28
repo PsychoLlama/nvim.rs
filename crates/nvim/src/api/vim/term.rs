@@ -76,7 +76,7 @@ pub fn nvim_open_term(buf: BufferHandle, opts: &mut KeyDict_open_term) -> Result
     }
     drop(held);
     if !contents.is_empty()
-        && let Err(why) = channel_send(id, &contents)
+        && let Err(why) = channel_send(id, contents)
     {
         slot = Error::from_message(kErrorTypeValidation, why);
     }
@@ -135,7 +135,7 @@ pub fn nvim_chan_send(chan: Integer, data: String_0) -> Result<(), Error> {
     if data.is_empty() {
         return ().reported(slot);
     }
-    if let Err(why) = channel_send(chan as uint64_t, data.as_bytes()) {
+    if let Err(why) = channel_send(chan as uint64_t, data.as_bytes().to_vec()) {
         slot = Error::from_message(kErrorTypeValidation, why);
     }
     ().reported(slot)

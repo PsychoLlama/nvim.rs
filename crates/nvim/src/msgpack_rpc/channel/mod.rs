@@ -38,7 +38,7 @@ use crate::api::private::helpers::cstr_to_string;
 use crate::api::ui::remote_ui_disconnect;
 use crate::channel::channels;
 use crate::channel::{
-    channel_close, channel_decref, channel_incref, channel_info_changed, find_channel, with_channel,
+    channel_close, channel_incref, channel_info_changed, find_channel, with_channel,
 };
 use crate::event::channel::{Reads, start_reads, stream_addresses, write_wbuffer};
 use crate::event::libuv::uv_strerror;
@@ -124,6 +124,19 @@ impl Chan {
     /// The pointer back, for the C-shaped callees that still want one.
     fn as_ptr(self) -> *mut Channel {
         self.0
+    }
+
+    /// Take a reference to the channel, through the pointer this already
+    /// holds -- the per-message cost of a table lookup is the RPC path's.
+    fn retain(mut self) {
+        self.refcount.retain();
+    }
+
+    /// Drop a reference, queueing the free when it was the last.
+    fn release(mut self) {
+        if self.refcount.release() == 0 {
+            crate::channel::channel_free_later(self.id);
+        }
     }
 
     /// The channel's decoder.
@@ -248,7 +261,7 @@ unsafe extern "C" fn rpc_close_event(argv: *mut *mut c_void) {
     // SAFETY: `rpc_close` built this argument vector with one live channel.
     let chan = unsafe { Chan::new((*argv).cast::<Channel>()) };
     // SAFETY: as above.
-    channel_decref(chan.id);
+    chan.release();
     // Nothing reads the reason a closing channel's UI could not be found.
     drop(remote_ui_disconnect(chan.id, false));
 
@@ -399,7 +412,7 @@ pub unsafe fn rpc_send_call(
         return Err(api_error!(kErrorTypeException, "Invalid channel: {id}"));
     };
     // Dropped below.
-    channel_incref(chan.id);
+    chan.retain();
 
     let request_id = chan.rpc.next_request_id;
     chan.rpc.next_request_id = request_id.wrapping_add(1);
@@ -427,7 +440,7 @@ pub unsafe fn rpc_send_call(
     chan.rpc.call_stack.pop();
 
     if !frame.returned {
-        channel_decref(id);
+        chan.release();
         return Err(api_error!(kErrorTypeException, "Invalid channel: {id}"));
     }
     let mut refusal = None;
@@ -438,7 +451,7 @@ pub unsafe fn rpc_send_call(
         frame.result_mem = ptr::null_mut();
     }
     // The reference taken above.
-    channel_decref(id);
+    chan.release();
     // SAFETY: the caller's out-parameter.
     unsafe { *result_mem = frame.result_mem };
     match refusal {
@@ -535,7 +548,7 @@ unsafe fn channel_write(chan: Chan, buffer: *mut WBuffer) -> bool {
     if chan.streamtype() == kChannelStreamInternal {
         // The reference is dropped by `internal_read_event`, which also
         // releases the buffer.
-        channel_incref(chan.id);
+        chan.retain();
         let mut event = one_arg_event(Some(internal_read_event), chan.as_ptr().cast::<c_void>());
         event.argv[1] = buffer.cast::<c_void>();
         // SAFETY: the channel's own queue.
@@ -543,7 +556,7 @@ unsafe fn channel_write(chan: Chan, buffer: *mut WBuffer) -> bool {
     } else {
         // SAFETY: the caller's buffer, handed on; an RPC channel that is not
         // internal has an in-stream.
-        err = unsafe { write_wbuffer(chan.id, buffer) };
+        err = unsafe { write_wbuffer(chan.as_ptr(), buffer) };
     }
 
     if err != 0 {
@@ -596,7 +609,7 @@ unsafe extern "C" fn internal_read_event(argv: *mut *mut c_void) {
         unsafe { chan_close_on_err(chan, why, LOGLVL_ERR) };
     }
     // The reference and the buffer `channel_write` handed over.
-    channel_decref(chan.id);
+    chan.release();
     // SAFETY: as above.
     unsafe { wstream_release_wbuffer(buffer) };
 }

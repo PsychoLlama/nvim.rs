@@ -227,6 +227,23 @@ impl Stream {
         unsafe { stream_may_close(self) };
     }
 
+    /// Queue `bytes` for writing, handing their block to the write queue;
+    /// whether libuv took it.
+    pub(crate) fn write_owned(&mut self, bytes: Vec<u8>) -> bool {
+        if bytes.capacity() == 0 {
+            // No block to hand over (a dangling `Vec` pointer is not one).
+            return self.write_bytes(&bytes);
+        }
+        let len = bytes.len();
+        let block = core::mem::ManuallyDrop::new(bytes).as_mut_ptr();
+        // The global allocator is `malloc`, so the vector's block is one the
+        // buffer's `xfree` finalizer releases.
+        let buffer = wstream_new_buffer(block.cast::<c_char>(), len, 1, Some(xfree));
+        // SAFETY: a write stream this module initialised, and a buffer whose
+        // one reference the write takes over.
+        unsafe { wstream_write(self, buffer) == 0 }
+    }
+
     /// Queue a copy of `bytes` for writing; whether libuv took it.
     pub(crate) fn write_bytes(&mut self, bytes: &[u8]) -> bool {
         // SAFETY: the caller's readable bytes, copied into a block the
@@ -450,17 +467,25 @@ pub(crate) fn unopened_stdio() -> StdioPair {
     unsafe { core::mem::zeroed() }
 }
 
-/// Queue `buffer` on channel `id`'s write stream. 0, or the libuv error.
+/// Queue `buffer` on `channel`'s write stream. 0, or the libuv error.
+///
+/// By address rather than by id: the RPC layer, its one caller, holds the
+/// channel already, and a lookup per message is its hot path's cost.
 ///
 /// # Safety
-/// `buffer` is a reference the caller owns and gives up here.
-pub(crate) unsafe fn write_wbuffer(id: u64, buffer: *mut crate::types::WBuffer) -> c_int {
-    let stream = with(id, |channel| match &mut channel.stream {
+/// `channel` is a live channel with a write stream, and `buffer` is a
+/// reference the caller owns and gives up here.
+pub(crate) unsafe fn write_wbuffer(
+    channel: *mut Channel,
+    buffer: *mut crate::types::WBuffer,
+) -> c_int {
+    // SAFETY: the caller's live channel; the borrow ends with the match.
+    let stream = match unsafe { &mut (*channel).stream } {
         ChannelStream::Job(job) => &raw mut job.proc_mut().in_0,
         ChannelStream::Socket(socket) => &raw mut socket.s,
         ChannelStream::Stdio(stdio) => &raw mut stdio.out,
-        _ => unreachable!("channel {id} has no write stream"),
-    });
+        _ => unreachable!("the channel has no write stream"),
+    };
     // SAFETY: the channel's write stream, at its fixed address and
     // initialised, and the caller's reference to the buffer.
     unsafe { wstream_write(stream, buffer) }

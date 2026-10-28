@@ -123,7 +123,7 @@ pub fn f_chansend(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
 
     let id = args[0].number_or_zero() as uint64_t;
-    match channel_send(id, &input) {
+    match channel_send(id, input) {
         Ok(sent) => result.write_number(sent as VarNumber),
         Err(why) => {
             emsg(why);

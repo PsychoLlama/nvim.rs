@@ -244,12 +244,19 @@ pub fn channel_decref(id: uint64_t) {
     let last = with_channel(id, |channel| channel.refcount.release() == 0)
         .expect("a reference to a live channel");
     if last {
-        put_job_on_main_loop(Box::new(move || {
-            if let Some(channel) = channels.with_mut(|table| table.remove(&id)) {
-                channel_destroy(channel);
-            }
-        }));
+        channel_free_later(id);
     }
+}
+
+/// Queue the free of channel `id`, whose last reference has gone: for the
+/// holders that count references on the channel themselves
+/// (`msgpack_rpc/`'s `Chan`).
+pub(crate) fn channel_free_later(id: uint64_t) {
+    put_job_on_main_loop(Box::new(move || {
+        if let Some(channel) = channels.with_mut(|table| table.remove(&id)) {
+            channel_destroy(channel);
+        }
+    }));
 }
 
 /// Frees a channel and everything hanging off it. It is out of the table
@@ -448,17 +455,18 @@ fn close_internal(id: uint64_t) {
 // Writing
 // ---------------------------------------------------------------------------
 
-/// Writes `data` to channel `id`, answering how many bytes were accepted,
-/// or why none were (a translated message).
-pub fn channel_send(id: uint64_t, data: &[u8]) -> Result<usize, &'static CStr> {
+/// Writes `data` to channel `id`, which takes it over, answering how many
+/// bytes were accepted, or why none were (a translated message).
+pub fn channel_send(id: uint64_t, data: Vec<u8>) -> Result<usize, &'static CStr> {
     const CLOSED: &CStr = c"Can't send data to closed stream";
     const RAW_TO_RPC: &CStr = c"Can't send raw data to rpc channel";
 
     enum Route {
         Stderr,
         Terminal(crate::terminal::Term),
-        Written(bool),
+        Written(bool, usize),
     }
+    let mut data = data;
     let route = with_channel(id, |channel| {
         let is_rpc = channel.is_rpc;
         let term = channel.term;
@@ -491,7 +499,11 @@ pub fn channel_send(id: uint64_t, data: &[u8]) -> Result<usize, &'static CStr> {
                 } else if is_rpc {
                     Err(RAW_TO_RPC)
                 } else {
-                    Ok(Route::Written(out.write_bytes(data)))
+                    let len = data.len();
+                    Ok(Route::Written(
+                        out.write_owned(core::mem::take(&mut data)),
+                        len,
+                    ))
                 }
             }
         }
@@ -502,13 +514,13 @@ pub fn channel_send(id: uint64_t, data: &[u8]) -> Result<usize, &'static CStr> {
         // stderr is not on the event loop; it is written synchronously and
         // a short write is reported as such.
         Some(Ok(Route::Stderr)) => {
-            Ok(usize::try_from(write_bytes(STDERR_FILENO, data, false)).unwrap_or(0))
+            Ok(usize::try_from(write_bytes(STDERR_FILENO, &data, false)).unwrap_or(0))
         }
         Some(Ok(Route::Terminal(term))) => {
-            terminal_receive(term, data);
+            terminal_receive(term, &data);
             Ok(data.len())
         }
-        Some(Ok(Route::Written(queued))) => Ok(if queued { data.len() } else { 0 }),
+        Some(Ok(Route::Written(queued, len))) => Ok(if queued { len } else { 0 }),
     }
 }
 

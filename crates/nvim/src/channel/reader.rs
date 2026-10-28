@@ -29,7 +29,7 @@ use crate::semsg;
 use crate::terminal::terminal_receive;
 use crate::types::{Callback, CallbackReader, Channel, VarNumber, kListLenMayKnow, uint64_t};
 
-use super::{ChannelRef, channel_decref, with_channel};
+use super::{channel_decref, with_channel};
 
 /// Starts buffering a reader's output under `stream_name`, which names it in
 /// the callback and in the `self` dict.
@@ -59,31 +59,44 @@ fn reader_of(channel: &mut Channel, stderr: bool) -> &mut CallbackReader {
 /// channel's queue. `stderr` picks the job's stderr reader over its
 /// stdout/data one. Answers how much was consumed, which is all of it.
 pub(crate) fn on_channel_output(id: uint64_t, stderr: bool, bytes: &[u8], eof: bool) -> usize {
-    let Some(term) = with_channel(id, |channel| {
-        let term = channel.term;
+    // One step for the bytes and the scheduling, which run no user code.
+    // The terminal is told afterwards; scheduling first changes nothing it
+    // sees, since the event only runs from the channel's queue.
+    let term = with_channel(id, |channel| {
         let reader = reader_of(channel, stderr);
         if eof {
             reader.eof = true;
         }
-        let deliver = reader.is_set();
-        if deliver {
+        if reader.is_set() {
             reader.buffer.extend_from_slice(bytes);
+            schedule_in(channel);
         }
-        (term, deliver)
-    }) else {
-        return bytes.len();
-    };
-    let (term, deliver) = term;
-    // The terminal sees the bytes before the callbacks are scheduled, as
-    // upstream's order has it; it re-enters the channel (its replies to the
-    // child), so nothing of the channel is borrowed meanwhile.
-    if let Some(term) = term {
+        channel.term
+    });
+    // It re-enters the channel (its replies to the child), so nothing of the
+    // channel is borrowed meanwhile.
+    if let Some(Some(term)) = term {
         terminal_receive(term, bytes);
     }
-    if deliver {
-        schedule_channel_event(id);
-    }
     bytes.len()
+}
+
+/// [`schedule_channel_event`] on a channel already borrowed.
+fn schedule_in(channel: &mut Channel) {
+    if channel.callback_scheduled {
+        return;
+    }
+    channel.callback_scheduled = true;
+    if !channel.callback_busy {
+        queue_in(channel);
+    }
+}
+
+/// [`queue_channel_event`] on a channel already borrowed: the event takes
+/// a reference of its own.
+fn queue_in(channel: &mut Channel) {
+    channel.refcount.retain();
+    put_id_event(&channel.events, on_channel_event, channel.id, 0);
 }
 
 /// Asks for channel `id`'s callbacks to run.
@@ -92,31 +105,10 @@ pub(crate) fn on_channel_output(id: uint64_t, stderr: bool, bytes: &[u8], eof: b
 /// already running is deferred to the end of that run instead — otherwise a
 /// callback that writes to its own channel would recurse.
 pub(super) fn schedule_channel_event(id: uint64_t) {
-    let queue_now = with_channel(id, |channel| {
-        if channel.callback_scheduled {
-            return false;
-        }
-        channel.callback_scheduled = true;
-        !channel.callback_busy
-    });
-    if queue_now == Some(true) {
-        queue_channel_event(id);
-    }
+    with_channel(id, schedule_in);
 }
 
-/// Puts one callback-running event on channel `id`'s own queue, with the
-/// reference that event holds.
-fn queue_channel_event(id: uint64_t) {
-    let Some(held) = ChannelRef::new(id) else {
-        return;
-    };
-    let id = held.into_raw();
-    with_channel(id, |channel| {
-        put_id_event(&channel.events, on_channel_event, id, 0)
-    });
-}
-
-/// The channel's queue reached the event [`queue_channel_event`] put there:
+/// The channel's queue reached the event [`queue_in`] put there:
 /// run its callbacks, then drop the event's reference.
 fn on_channel_event(id: uint64_t, _: u64) {
     // Latched before the reader callbacks run: one of them may start
@@ -135,13 +127,12 @@ fn on_channel_event(id: uint64_t, _: u64) {
         with_channel(id, |channel| channel.exit_status = -1);
     }
 
-    let requeue = with_channel(id, |channel| {
+    with_channel(id, |channel| {
         channel.callback_busy = false;
-        channel.callback_scheduled
+        if channel.callback_scheduled {
+            queue_in(channel);
+        }
     });
-    if requeue == Some(true) {
-        queue_channel_event(id);
-    }
     channel_decref(id);
 }
 
@@ -151,10 +142,13 @@ fn on_channel_event(id: uint64_t, _: u64) {
 /// one, otherwise through the callback. An unbuffered reader delivers as it
 /// goes, and again with an empty list at EOF.
 pub fn channel_reader_callbacks(id: uint64_t, stderr: bool) {
-    let buffered = with_channel(id, |channel| reader_of(channel, stderr).buffered);
-    match buffered {
-        Some(true) => deliver_buffered(id, stderr),
-        Some(false) => deliver_streaming(id, stderr),
+    let state = with_channel(id, |channel| {
+        let reader = reader_of(channel, stderr);
+        (reader.buffered, reader.eof, !reader.buffer.is_empty())
+    });
+    match state {
+        Some((true, ..)) => deliver_buffered(id, stderr),
+        Some((false, is_eof, has_data)) => deliver_streaming(id, stderr, is_eof, has_data),
         None => {}
     }
 }
@@ -200,13 +194,7 @@ fn deliver_buffered(id: uint64_t, stderr: bool) {
 
 /// An unbuffered reader's delivery: whatever has arrived, plus an empty
 /// delivery to mark EOF.
-fn deliver_streaming(id: uint64_t, stderr: bool) {
-    let Some((is_eof, has_data)) = with_channel(id, |channel| {
-        let reader = reader_of(channel, stderr);
-        (reader.eof, !reader.buffer.is_empty())
-    }) else {
-        return;
-    };
+fn deliver_streaming(id: uint64_t, stderr: bool, is_eof: bool, has_data: bool) {
     if has_data {
         channel_callback_call(id, Some(stderr));
     }

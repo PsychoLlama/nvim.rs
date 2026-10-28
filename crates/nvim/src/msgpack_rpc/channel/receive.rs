@@ -24,7 +24,7 @@ use core::ffi::{c_char, c_void};
 use core::{mem, ptr};
 
 use crate::api::private::dispatch_wrappers::{handle_nvim_get_mode, handle_nvim_ui_try_resize};
-use crate::channel::{channel_decref, channel_incref, find_channel};
+use crate::channel::find_channel;
 use crate::event::r#loop::one_arg_event;
 use crate::event::multiqueue::{event_create_oneshot, multiqueue_put_event};
 use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_INF, logmsg};
@@ -65,9 +65,9 @@ pub(crate) unsafe fn receive_msgpack(
     // The channel this callback was registered with, by id; the reference
     // is dropped at the end.
     let id = data.addr() as uint64_t;
-    channel_incref(id);
-    // SAFETY: the channel just referenced.
+    // SAFETY: the channel the stream belongs to, live while it reads.
     let chan = unsafe { Chan::new(find_channel(id)) };
+    chan.retain();
     let from = stream.cast::<c_void>();
     logmsg!(
         LOGLVL_DBG,
@@ -100,7 +100,7 @@ pub(crate) unsafe fn receive_msgpack(
         unsafe { chan_close_on_err(chan, buf.as_mut_ptr(), LOGLVL_INF) };
     }
     // The reference taken above.
-    channel_decref(id);
+    chan.release();
     consumed
 }
 
@@ -249,7 +249,7 @@ fn handle_request(chan: Chan, p: &mut Unpacker, args: Array) {
             // frees it when it has run.
             used_mem: mem::replace(&mut p.arena, ARENA_EMPTY),
         });
-        channel_incref(chan.id);
+        chan.retain();
         evdata
     };
 
@@ -336,7 +336,7 @@ unsafe extern "C" fn request_event(argv: *mut *mut c_void) {
     }
     // SAFETY: the arena, the reference and the allocation this event owned.
     unsafe { arena_mem_free(arena_finish(&raw mut (*e).used_mem)) };
-    channel_decref(chan.id);
+    chan.release();
     unsafe { xfree(e.cast::<c_void>()) };
     error.clear();
 }
