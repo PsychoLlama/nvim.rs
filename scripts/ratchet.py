@@ -1081,10 +1081,15 @@ CELL_DECL = r"\bstatic\s+{}\s*:\s*(?:GlobalCell|SharedCell)\b"
 PERIMETER = {
     # -- Foreign ABIs. The unsafe is the call, and it retires when the
     # library does.
-    "crates/nvim/src/lua/": "LuaJIT's C API: a `lua_State`, its stack, and the "
-    "registry — plus luv and lpeg, which are C libraries of their own",
+    "crates/nvim/src/lua/ffi.rs": "LuaJIT's C API, declared: the functions, "
+    "`lua_Debug` and the `luaL_Reg` tables C reads",
     "crates/nvim/src/lua/stack/": "the typed `Stack`: the one module that "
     "pushes, pops and reads the `lua_State` stack",
+    "crates/nvim/src/lua/executor/luv.rs": "luv: the C hooks that run a libuv "
+    "callback against the right `lua_State`, and opening the library",
+    "crates/nvim/src/lua/executor/state.rs": "making and closing `lua_State`s "
+    "and opening the vendored C libraries (lpeg, libmpack, cjson, tree-sitter) "
+    "onto them",
     "crates/nvim/src/lua/treesitter/": "the tree-sitter C library: parsers, "
     "trees, queries and cursors are opaque C objects with C lifetimes",
     "crates/nvim/src/mpack/lmpack/": "libmpack-lua: a Lua C module, so every "
@@ -1100,8 +1105,8 @@ PERIMETER = {
     'side and libvterm\'s `extern "C"` callbacks on the other',
     "crates/nvim/src/tui/": "the terminal: libuv tty handles, termkey's "
     "parser, and the terminfo entry unibilium hands back",
-    "crates/nvim/src/xdiff/": "libxdiff, vendored: `mmfile_t` and the emit "
-    "callbacks keep their C layout because the engine's interface is C",
+    "crates/nvim/src/xdiff/": "libxdiff, vendored: which bytes are whitespace "
+    "is `isspace(3)`'s answer in the user's locale",
     # -- The primitives everything else stands on. Their whole job is to be
     # the one place a raw operation happens, so that callers need not.
     "crates/nvim/src/allocator.rs": "the global allocator: malloc/realloc/free",
@@ -4470,7 +4475,8 @@ SELF_TEST_RAW_ALIAS = [
 # (path, whether the perimeter claims it). A directory entry claims its
 # subtree and nothing else; an exact-path entry claims exactly itself.
 SELF_TEST_PERIMETER = [
-    ("crates/nvim/src/lua/executor/exec.rs", True),
+    ("crates/nvim/src/lua/executor/state.rs", True),
+    ("crates/nvim/src/lua/stack/mod.rs", True),
     ("crates/nvim/src/os/fs/mod.rs", True),
     ("crates/nvim/src/memfile/mod.rs", True),
     ("crates/nvim/src/memfile/swapfile.rs", True),
@@ -4479,6 +4485,9 @@ SELF_TEST_PERIMETER = [
     ("crates/nvim/src/memline/block0.rs", False),
     ("crates/nvim/src/marktree/node.rs", False),
     ("crates/nvim/src/eval/typval.rs", False),
+    # The Lua runtime's editor logic, beside the exact paths that stay.
+    ("crates/nvim/src/lua/executor/exec.rs", False),
+    ("crates/nvim/src/lua/stdlib/vars.rs", False),
     # A sibling whose name starts with a directory entry is not inside it.
     ("crates/nvim/src/luaref.rs", False),
     # ... and neither is a longer path built on an exact-path entry.
