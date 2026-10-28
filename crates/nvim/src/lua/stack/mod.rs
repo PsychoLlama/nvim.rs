@@ -14,6 +14,10 @@
 //!   if any, once the body has returned.
 //! - [`Stack::from_raw`] is the step for code that already holds a raw
 //!   `lua_State` and has not been ported onto `entry` yet.
+//! - A [`Dispatch`] needs neither: its entries are safe bodies over a
+//!   `Stack`, and [`Stack::push_dispatch`] hands Lua each one as a closure
+//!   over the one trampoline, which calls `entry` for them. `vim.api` is
+//!   built that way.
 //!
 //! Both are `unsafe` because the `Stack` cannot check that the pointer is a
 //! live state. Everything after them is safe.
@@ -80,7 +84,7 @@
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr::{self, NonNull};
 
-use crate::lua::executor::{nlua_ref_global, nlua_unref_global};
+use crate::lua::executor::{nlua_ref_global, nlua_unref_global, release_luaref};
 use crate::lua::ffi::{
     LUA_GLOBALSINDEX, LUA_REGISTRYINDEX, LUA_TBOOLEAN, LUA_TFUNCTION, LUA_TLIGHTUSERDATA, LUA_TNIL,
     LUA_TNONE, LUA_TNUMBER, LUA_TSTRING, LUA_TTABLE, LUA_TTHREAD, LUA_TUSERDATA, lua_checkstack,
@@ -96,8 +100,10 @@ use crate::lua::ffi::{
 use crate::lua::state::nlua_global_refs;
 use crate::types::{LuaRef, NluaRefState, lua_Integer, lua_Number, lua_State, size_t};
 
+mod dispatch;
 mod header;
 
+pub use self::dispatch::Dispatch;
 pub use self::header::*;
 
 /// A C function Lua can call: the `lua_CFunction` signature, unwrapped.
@@ -257,6 +263,25 @@ impl Raise {
 
     fn check(arg: At, check: Check) -> Raise {
         Raise(Thrown::Check { arg: arg.0, check })
+    }
+}
+
+/// A reference into the main state's registry that this value owns, made by
+/// [`Stack::take_reference`]. Dropping it gives the reference back, so every
+/// way out of the frame that took it releases it exactly once.
+#[derive(Debug)]
+pub struct OwnedLuaRef(LuaRef);
+
+impl OwnedLuaRef {
+    /// The reference, for a callee that copies what it keeps.
+    pub fn get(&self) -> LuaRef {
+        self.0
+    }
+}
+
+impl Drop for OwnedLuaRef {
+    fn drop(&mut self) {
+        release_luaref(self.0);
     }
 }
 
@@ -664,6 +689,14 @@ impl Stack {
     pub fn unreference(&mut self, reference: LuaRef) {
         // SAFETY: as in `reference`.
         unsafe { nlua_unref_global(self.l(), reference) };
+    }
+
+    /// Pop the value on top as a reference the result owns: dropping it
+    /// gives the reference back.
+    pub fn take_reference(&mut self) -> OwnedLuaRef {
+        let reference = self.reference(At::TOP);
+        self.pop(1);
+        OwnedLuaRef(reference)
     }
 
     /// Push `vim.NIL`, the userdata Lua code sees for a Vimscript or API nil.

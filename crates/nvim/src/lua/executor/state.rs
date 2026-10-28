@@ -27,7 +27,7 @@ use super::{
     nlua_ui_attach, nlua_ui_detach, nlua_unref, nlua_wait, require_ref,
 };
 use crate::event::libuv::{uv_thread_equal, uv_thread_self};
-use crate::lua::api_wrappers::nlua_add_api_functions;
+use crate::lua::converter::binding::add_api_functions;
 use crate::lua::converter::init_types;
 use crate::lua::ffi::{
     LUA_REGISTRYINDEX, lua_close, lua_getfield, lua_pushinteger, lua_pushstring, lua_rawseti,
@@ -89,7 +89,7 @@ unsafe fn nlua_state_init(lstate: *mut lua_State) -> bool {
 
         // The `vim` table, built on the stack and stored last.
         lua_newtable(lstate);
-        nlua_add_api_functions(lstate);
+        add_api_functions(&mut Stack::from_raw(lstate));
         init_types(&mut Stack::from_raw(lstate));
 
         let set = |name: &CStr, f: unsafe extern "C-unwind" fn(*mut lua_State) -> c_int| {

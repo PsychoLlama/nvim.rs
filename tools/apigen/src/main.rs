@@ -916,7 +916,7 @@ fn reader(ty: &ApiType, index: usize) -> String {
 ///
 /// The API's internal methods are spelled `nvim__something`, and every name
 /// derived from one inherits the double underscore: `handle_nvim__id`,
-/// `nlua_api_nvim__stats`, `key_dict__shada_mark_get_field`. That spelling is
+/// `convert_nvim__stats`, `key_dict__shada_mark_get_field`. That spelling is
 /// upstream's and it is the RPC surface's, so the generated wrapper cannot
 /// rename it and the crate cannot carry a blanket allow for it either. The
 /// allow goes on the item, where it says which item earned it.
@@ -1557,16 +1557,16 @@ fn split_items(text: &str) -> Vec<String> {
     // to: the wrappers carried no docs, and the first `# Safety` section the
     // generator emitted split off the `pub unsafe fn` it documented and left
     // rustfmt with "expected item after doc comment" at the end of a chunk.
-    // An indented `///` (the nested `convert` fn in a Lua binding) is inside an
-    // item already and is not held back.
+    // A plain `//` line -- the reason written above an item's `#[allow]` --
+    // is held back with them. An indented line is inside an item already.
     let mut pending = String::new();
     for line in text.lines() {
-        if line.starts_with("///") || line.starts_with("#[") {
+        if line.starts_with("//") || line.starts_with("#[") {
             pending.push_str(line);
             pending.push('\n');
             continue;
         }
-        if line.starts_with("pub ") || out.is_empty() {
+        if line.starts_with("pub ") || line.starts_with("pub(super) ") || out.is_empty() {
             out.push(std::mem::take(&mut pending));
         } else {
             out.last_mut()
@@ -2204,283 +2204,28 @@ const LUA_HEADER: &str = r#"//! The `vim.api` Lua binding.
 //! `crate::api` plus `tools/apigen/functions.txt`. Do not edit;
 //! run `just apigen` (`just apigen --check` fails on drift).
 //!
-//! One `lua_CFunction` per API function, plus [`nlua_add_api_functions`],
-//! which builds the table they hang off. A binding checks that it was handed
-//! exactly the arguments the API function declares, pops each one off the Lua
-//! stack and converts it, calls the function, and converts the result back.
+//! One safe `convert` per API function, plus [`BINDINGS`], the table that
+//! names them. `crate::lua::converter::binding` builds `vim.api` from that
+//! table -- one Lua function per entry, all through the `Stack`'s one
+//! trampoline -- and runs the half every call shares: the arity check, the
+//! fast-event refusal, and raising the error once the call's frame is gone.
+//! A `convert` pops each argument off the Lua stack and converts it, calls
+//! the API function, and converts the result back.
 //!
-//! Everything that fails — the wrong number of arguments, a value Lua cannot
-//! convert, the API function itself — leaves its reason in one `Error`, and
-//! the binding raises it as a Lua error on the way out. Getting there means
-//! releasing whatever was already converted, and only that: each converted
-//! argument arms a guard, so returning from a failed conversion drops the
-//! guards armed before it and no others, in declaration order. Upstream's
-//! generator wrote that order out by hand as a chain of `goto exit_N`
-//! (src/gen/gen_api_dispatch.lua at tag v0.12.4).
+//! Everything that fails -- a value Lua cannot convert, the API function
+//! itself -- answers one `Error`, and answering it releases whatever was
+//! already converted, and only that: an argument that owns something is a
+//! value dropped on the way out, so returning from a failed conversion drops
+//! the arguments converted before it and no others, in declaration order.
+//! Upstream's generator wrote that order out by hand as a chain of
+//! `goto exit_N` (src/gen/gen_api_dispatch.lua at tag v0.12.4).
 //!
-//! This module holds the shared support code and the imports; the bindings
-//! themselves live in one child module per API source file, re-exported here
-//! so callers see one flat namespace. A source file whose bindings would
-//! overflow the tree's 1,000-line file cap is split into numbered parts.
+//! This module holds the imports; the bindings themselves live in one child
+//! module per API source file. A source file whose bindings would overflow
+//! the tree's 1,000-line file cap is split into numbered parts.
 
-#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unsafe_code)]
 "#;
-
-/// The fixed part of the Lua binding support code.
-const LUA_SUPPORT: &str = r#"
-/// How a result goes back to Lua: `PUSH_SPECIAL` converts `nil` and the
-/// other special values the pre-0.11 way, which is what clients of methods
-/// older than API level 11 expect. Either way the push borrows the result,
-/// and the binding releases the Lua references it holds by dropping it.
-const PUSH: bool = false;
-const PUSH_SPECIAL: bool = true;
-
-/// What one binding carries from its first conversion to its last release.
-struct Call {
-    /// The scratch arena an API function that takes one allocates in.
-    /// Released once the result has been handed back.
-    arena: Arena,
-    /// The parameter a failed conversion blamed, named in the message.
-    err_param: *mut c_char,
-}
-
-impl Call {
-    const fn new() -> Self {
-        Call {
-            arena: ARENA_EMPTY,
-            err_param: ptr::null_mut(),
-        }
-    }
-}
-
-/// A binding's own half: pop each argument off the Lua stack, call the API
-/// function, hand the result back. Returning — off the end or out of a failed
-/// conversion — releases exactly the arguments that were converted, in
-/// declaration order, because each one's release is a guard dropped on the
-/// way out.
-type Convert = fn(&mut Stack, &mut Call) -> Result<(), Error>;
-
-// -- keysets ---------------------------------------------------------------
-
-/// A keyset argument. A keyset owns its fields, so this is a name for the
-/// decoder's target rather than a guard -- what a half-filled keyset took
-/// before it stopped is released by dropping it.
-struct KeyDictArg<K: KeySet + Default> {
-    dict: K,
-}
-
-impl<K: KeySet + Default> KeyDictArg<K> {
-    /// Every key absent, which is where a keyset argument starts out.
-    fn unset() -> Self {
-        KeyDictArg {
-            dict: K::default(),
-        }
-    }
-}
-
-/// Fill a keyset argument from the Lua value on top of the stack. On refusal
-/// `*err_param` names the key that failed.
-fn pop_keydict<K: KeySet + Default>(
-    stack: &mut Stack,
-    arg: &mut KeyDictArg<K>,
-    err_param: &mut *mut c_char,
-) -> Result<(), Error> {
-    converter::pop_keydict(stack, &mut arg.dict, err_param)
-}
-
-/// Hand a keyset result back as a Lua table.
-fn push_keydict(stack: &mut Stack, value: &mut dyn KeySet) {
-    converter::push_keydict(stack, value);
-}
-
-// -- argument guards -------------------------------------------------------
-
-/// A `LuaRef` argument, which puts the reference the conversion took out of
-/// the registry back when the binding leaves. An API value needs no such
-/// guard: it owns what it names.
-struct LuaRefArg {
-    value: LuaRef,
-}
-
-impl LuaRefArg {
-    /// # Safety
-    /// The binding owns the reference `value` names and nothing else
-    /// releases it.
-    unsafe fn new(value: LuaRef) -> Self {
-        LuaRefArg { value }
-    }
-}
-
-impl Drop for LuaRefArg {
-    fn drop(&mut self) {
-        // SAFETY: `new`'s contract.
-        unsafe { api_free_luaref(self.value) };
-    }
-}
-
-// -- refusals --------------------------------------------------------------
-
-/// Refuses a call that arrived with a different number of arguments than the
-/// API function declares.
-fn wrong_arity(argc: c_int) -> Error {
-    if argc == 1 {
-        api_error!(kErrorTypeValidation, "Expected {argc} argument")
-    } else {
-        api_error!(kErrorTypeValidation, "Expected {argc} arguments")
-    }
-}
-
-// -- the shared half of every binding --------------------------------------
-
-/// Everything a binding does around its own conversions: check that Lua
-/// handed it the arguments the API function declares, hand over to `convert`,
-/// release the request arena, and raise whatever error the call left behind.
-/// Answers the number of results `convert` left on the stack.
-///
-/// `deferred` names the binding when its API function is not `fast` and so
-/// may not run from a context where deferring is unsafe; it is `None` for one
-/// that may run anywhere.
-///
-/// The error is raised from here rather than from `convert`, because by the
-/// time `convert` has returned every argument guard has been dropped and the
-/// arena is gone — and `lua_error` does not come back.
-///
-/// # Safety
-/// `lstate` is the running Lua state with the binding's arguments on top;
-/// `deferred`, when set, outlives the call; `convert` reads `argc` arguments
-/// and leaves `nret` results.
-unsafe fn run(
-    lstate: *mut lua_State,
-    deferred: Option<&CStr>,
-    argc: c_int,
-    nret: c_int,
-    convert: Convert,
-) -> c_int {
-    let mut call = Call::new();
-    // SAFETY: the caller's stack.
-    let outcome = if unsafe { lua_gettop(lstate) } != argc {
-        Err(wrong_arity(argc))
-    } else {
-        let refused = deferred.filter(|_| !nlua_is_deferred_safe());
-        if let Some(name) = refused {
-            let (fmt, name) = (e_fast_api_disabled.as_ptr(), name.as_ptr());
-            // SAFETY: as above; both strings are static and NUL-terminated,
-            // and nothing is left to release.
-            return unsafe { luaL_error(lstate, fmt, name) };
-        }
-        // SAFETY: as above, and this is the frame's only `Stack`.
-        let mut stack = unsafe { Stack::from_raw(lstate) };
-        convert(&mut stack, &mut call)
-    };
-    // SAFETY: the arena is this frame's own, and every argument that borrowed
-    // from it has been released.
-    unsafe { arena_mem_free(arena_finish(&raw mut call.arena)) };
-    let Err(err) = outcome else {
-        return nret;
-    };
-    // SAFETY: as above; `err` carries a message.
-    unsafe { stage_error(lstate, &call, &err) };
-    // SAFETY: the message is on the stack, and `lua_error` does not return.
-    unsafe { lua_error(lstate) }
-}
-
-/// [`run`] for a binding whose API function is not `fast`.
-///
-/// # Safety
-/// As [`run`].
-unsafe fn dispatch(
-    lstate: *mut lua_State,
-    name: &CStr,
-    argc: c_int,
-    nret: c_int,
-    convert: Convert,
-) -> c_int {
-    // SAFETY: the caller's.
-    unsafe { run(lstate, Some(name), argc, nret, convert) }
-}
-
-/// [`run`] for a binding whose API function is `fast`, and so has no context
-/// to refuse.
-///
-/// # Safety
-/// As [`run`].
-unsafe fn dispatch_fast(
-    lstate: *mut lua_State,
-    argc: c_int,
-    nret: c_int,
-    convert: Convert,
-) -> c_int {
-    // SAFETY: the caller's.
-    unsafe { run(lstate, None, argc, nret, convert) }
-}
-
-/// Leave the failed call's message on the Lua stack as one string: the source
-/// position, the parameter a failed conversion blamed, and the message
-/// itself, ready for `lua_error` to raise.
-///
-/// # Safety
-/// `lstate` is the running Lua state, `call` is the binding's own and `err`
-/// the failure it answered with.
-unsafe fn stage_error(lstate: *mut lua_State, call: &Call, err: &Error) {
-    let message = err.message_or_empty().as_ptr();
-    // SAFETY: the caller's stack; `message` is the binding's own error text,
-    // live for this call, and `err_param`, when set, points at a static
-    // NUL-terminated name.
-    unsafe {
-        luaL_where(lstate, 1);
-        if !call.err_param.is_null() {
-            lua_pushstring(lstate, c"Invalid '".as_ptr());
-            lua_pushstring(lstate, call.err_param);
-            lua_pushstring(lstate, c"': ".as_ptr());
-            lua_pushstring(lstate, message);
-            lua_concat(lstate, 5);
-        } else {
-            lua_pushstring(lstate, message);
-            lua_concat(lstate, 2);
-        }
-    }
-}
-
-/// One entry of the `vim.api` table.
-///
-/// # Safety
-/// `lstate` has the table under construction on top of its stack.
-unsafe fn bind(
-    lstate: *mut lua_State,
-    f: unsafe extern "C-unwind" fn(*mut lua_State) -> c_int,
-    name: &CStr,
-) {
-    unsafe {
-        lua_pushcclosure(lstate, Some(f), 0);
-        lua_setfield(lstate, -2, name.as_ptr());
-    }
-}
-"#;
-
-/// Lua binding support code emitted only when a binding names it, keyed by
-/// that name. Same shape as the RPC wrappers' [`READERS`], and swept the same
-/// way.
-const LUA_READERS: &[(&str, &str)] = &[
-    (
-        "text_locked_error",
-        r#"
-/// Refuses a call made while the text is locked.
-fn text_locked_error() -> Error {
-    Error::from_message(kErrorTypeException, get_text_locked_msg())
-}
-"#,
-    ),
-    (
-        "expr_map_locked_error",
-        r#"
-/// Refuses a call made from an expression mapping, which the cmdline window
-/// alone would have allowed.
-fn expr_map_locked_error() -> Error {
-    Error::from_message(kErrorTypeException, e_textlock)
-}
-"#,
-    ),
-];
 
 /// The `pop_*` that turns the top of the Lua stack into a parameter, and
 /// whatever leading argument it takes beyond the stack.
@@ -2495,9 +2240,8 @@ fn popper(ty: &ApiType) -> (String, &'static str) {
         // value holds. Only a `DictOf(LuaRef)` parameter wants them.
         ApiType::Dict => ("pop_dict".into(), ", false"),
         ApiType::Object => ("pop_object".into(), ", true"),
-        ApiType::LuaRef => ("pop_luaref".into(), ""),
         ApiType::Handle(_) => ("pop_handle".into(), ""),
-        ApiType::KeyDict(_) => unreachable!("keysets are filled in place"),
+        ApiType::LuaRef | ApiType::KeyDict(_) => unreachable!("popped in place"),
     }
 }
 
@@ -2518,9 +2262,23 @@ fn pusher(ret: &RetType) -> (String, &'static str, bool) {
     }
 }
 
-/// One `lua_CFunction`.
+/// One binding's `convert`.
 fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
     let name = &f.name;
+    // The tree forbids unsafe code, so a binding can only call a safe API
+    // function, and it has no request arena to lend: nothing would release
+    // what an arena-allocated result points into.
+    if f.is_unsafe {
+        return Err(format!(
+            "{name}: a Lua binding calls only safe API functions \
+             (lua/api_wrappers/ forbids unsafe code)"
+        ));
+    }
+    if f.params.contains(&Param::Arena) {
+        return Err(format!(
+            "{name}: a Lua binding has no arena to lend; return an owned result"
+        ));
+    }
     let values: Vec<(usize, &ApiType, &str)> = f
         .params
         .iter()
@@ -2529,7 +2287,6 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
             _ => None,
         })
         .collect();
-    let argc = values.len();
     // Whether the API function has a Lua implementation of its own, which it
     // needs the state for.
     let has_lua_imp = f.params.contains(&Param::LuaState);
@@ -2548,143 +2305,76 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
         }
     }
 
-    // Slot (1-based) -> the guard that releases what the pop left behind, and
-    // how the call names the value through it. The rest own nothing: their
-    // arena memory goes back with the arena.
-    let guard = |ty: &ApiType| match ty {
-        ApiType::LuaRef => Some("LuaRefArg"),
-        _ => None,
-    };
-    // How the call to the API function names slot `n`.
+    // How the call to the API function names slot `n`. A `LuaRef` argument
+    // is an `OwnedLuaRef`, which puts the reference back when the binding
+    // leaves; an API value needs no such guard: it owns what it names.
     let value = |index: usize, ty: &ApiType| {
         let slot = index + 1;
         match ty {
-            ApiType::KeyDict(_) => format!("&mut arg_{slot}.dict"),
-            _ if guard(ty).is_some() => format!("arg_{slot}.value"),
+            ApiType::KeyDict(_) => format!("&mut arg_{slot}"),
+            ApiType::LuaRef => format!("arg_{slot}.get()"),
             _ => format!("arg_{slot}"),
         }
     };
+    // A conversion that can fail names the parameter it blamed; taking a
+    // reference cannot fail.
+    let blames = values
+        .iter()
+        .any(|(_, ty, _)| !matches!(ty, ApiType::LuaRef));
 
-    // Which of `Call`'s fields the body reads: a conversion names the
-    // parameter it blamed, and only an API function that takes the arena
-    // reads that.
-    let uses_arena = f.params.contains(&Param::Arena);
-    let fields: Vec<&str> = [("arena", uses_arena), ("err_param", argc > 0)]
-        .into_iter()
-        .filter_map(|(name, used)| used.then_some(name))
-        .collect();
-
-    // As with the dispatch wrappers: one contract, 182 bindings, and it can
-    // only live in the generator.
     writeln!(
         out,
-        "/// The Lua binding for `{name}`, as a `lua_CFunction`."
+        "/// The Lua binding for `{name}`: pop the arguments, call the API\n\
+         /// function, hand the result back."
     )
     .unwrap();
-    writeln!(out, "///").unwrap();
-    writeln!(out, "/// # Safety").unwrap();
+    write!(out, "{}", snake_case_allow(&format!("convert_{name}"))).unwrap();
     writeln!(
         out,
-        "/// LuaJIT's contract: `lstate` is the running Lua state, with this\n\
-         /// binding's arguments on top of its stack and nothing of this frame's\n\
-         /// below them. The ABI is `C-unwind` because a refused argument ends in\n\
-         /// `lua_error`, which unwinds through this frame rather than returning."
+        "pub(super) fn convert_{name}(stack: &mut Stack, {}: &mut Blame) -> Result<(), Error> {{",
+        if blames { "blame" } else { "_blame" }
     )
     .unwrap();
-    write!(out, "{}", snake_case_allow(&format!("nlua_api_{name}"))).unwrap();
-    writeln!(
-        out,
-        "pub unsafe extern \"C-unwind\" fn nlua_api_{name}(lstate: *mut lua_State) -> c_int {{"
-    )
-    .unwrap();
-    writeln!(
-        out,
-        "    /// Pop the arguments, call the API function, hand the result back."
-    )
-    .unwrap();
-    writeln!(
-        out,
-        "    /// Each argument that owns Lua references arms a guard, so every way"
-    )
-    .unwrap();
-    writeln!(
-        out,
-        "    /// out releases exactly what was converted, in declaration order."
-    )
-    .unwrap();
-    writeln!(
-        out,
-        "    fn convert(stack: &mut Stack, {}: &mut Call) -> Result<(), Error> {{",
-        if fields.is_empty() { "_call" } else { "call" }
-    )
-    .unwrap();
-    if !fields.is_empty() {
-        let rest = if fields.len() == 2 { "" } else { ", .." };
-        writeln!(
-            out,
-            "        let Call {{ {}{rest} }} = call;",
-            fields.join(", ")
-        )
-        .unwrap();
-    }
 
     if spec.textlock {
-        writeln!(out, "        if text_locked() {{").unwrap();
-        writeln!(out, "            return Err(text_locked_error());").unwrap();
-        writeln!(out, "        }}").unwrap();
+        writeln!(out, "    if text_locked() {{").unwrap();
+        writeln!(out, "        return Err(text_locked_error());").unwrap();
+        writeln!(out, "    }}").unwrap();
     } else if spec.textlock_allow_cmdwin {
-        writeln!(
-            out,
-            "        if textlock.get() != 0 || expr_map_locked() {{"
-        )
-        .unwrap();
-        writeln!(out, "            return Err(expr_map_locked_error());").unwrap();
-        writeln!(out, "        }}").unwrap();
+        writeln!(out, "    if textlock.get() != 0 || expr_map_locked() {{").unwrap();
+        writeln!(out, "        return Err(expr_map_locked_error());").unwrap();
+        writeln!(out, "    }}").unwrap();
     }
 
     // The Lua stack hands the arguments back last first. A keyset starts out
-    // with every key unset and is armed before its pop, which fills it field by field and may stop
-    // halfway; everything else arms only once its pop has succeeded, which
-    // is what leaves a failed conversion owning nothing. Both orders put the
-    // guards on the stack highest slot first, so they drop lowest slot first
-    // — the order upstream's `goto exit_N` chain released them in.
+    // with every key unset and is bound before its pop, which fills it field
+    // by field and may stop halfway; everything else is bound only once its
+    // pop has succeeded, which is what leaves a failed conversion owning
+    // nothing. Both orders bind the arguments highest slot first, so they
+    // drop lowest slot first -- the order upstream's `goto exit_N` chain
+    // released them in.
     for (index, ty, param) in values.iter().rev() {
         let slot = index + 1;
-        if let ApiType::KeyDict(keyset) = ty {
-            writeln!(
-                out,
-                "        let mut arg_{slot} = KeyDictArg::<KeyDict_{keyset}>::unset();"
-            )
-            .unwrap();
-            // The keyset pop names the offending key itself.
-            writeln!(
-                out,
-                "        pop_keydict(stack, &mut arg_{slot}, err_param)?;"
-            )
-            .unwrap();
-            continue;
-        }
-        let (pop, extra) = popper(ty);
-        // `inspect_err` names the parameter a failed conversion blamed, for
-        // the message `run` stages; the failure itself passes through.
-        writeln!(
-            out,
-            "        let arg_{slot} = {pop}(stack{extra})\n\
-             \x20           .inspect_err(|_| *err_param = c\"{param}\".as_ptr().cast_mut())?;"
-        )
-        .unwrap();
-        if let Some(guard) = guard(ty) {
-            writeln!(
-                out,
-                "        // SAFETY: the conversion took the references and nothing else"
-            )
-            .unwrap();
-            writeln!(out, "        // releases them.").unwrap();
-            writeln!(
-                out,
-                "        let arg_{slot} = unsafe {{ {guard}::new(arg_{slot}) }};"
-            )
-            .unwrap();
+        match ty {
+            ApiType::KeyDict(keyset) => {
+                writeln!(out, "    let mut arg_{slot} = KeyDict_{keyset}::default();").unwrap();
+                // The keyset pop names the offending key itself.
+                writeln!(out, "    pop_keydict(stack, &mut arg_{slot}, blame)?;").unwrap();
+            }
+            ApiType::LuaRef => {
+                writeln!(out, "    let arg_{slot} = stack.take_reference();").unwrap();
+            }
+            _ => {
+                let (pop, extra) = popper(ty);
+                // `inspect_err` names the parameter a failed conversion
+                // blamed, for the message; the failure itself passes through.
+                writeln!(
+                    out,
+                    "    let arg_{slot} = {pop}(stack{extra})\n\
+                     \x20       .inspect_err(|_| *blame = Some(c\"{param}\"))?;"
+                )
+                .unwrap();
+            }
         }
     }
 
@@ -2693,42 +2383,34 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
         .iter()
         .map(|p| match p {
             Param::ChannelId => "LUA_INTERNAL_CALL".into(),
-            Param::Arena => "arena".into(),
+            Param::Arena => unreachable!("refused above"),
             Param::LuaState => "Some(&mut *stack)".into(),
             Param::Value { index, ty, .. } => value(*index, ty),
         })
         .collect();
-    let args = call_args.join(", ");
-    let call = match f.is_unsafe {
-        true => format!("unsafe {{ {name}({args}) }}"),
-        false => format!("{name}({args})"),
-    };
+    let call = format!("{name}({})", call_args.join(", "));
     // The API function may reach back into Lua; while it runs, this is the
     // state it reaches into. The guard puts the previous one back on every
     // way out, including the failed call below.
     writeln!(
         out,
-        "        let _lstate = Restore::of(&active_lstate, stack.lua_state());"
+        "    let _lstate = Restore::of(&active_lstate, stack.lua_state());"
     )
     .unwrap();
     // A result the push borrows mutably has to be a `mut` binding: a keyset
     // is read through its `KeySet` slots, which hand out `&mut`.
-    let by_pointer = matches!(f.ret, RetType::KeyDict(_));
-    if f.is_unsafe {
-        writeln!(
-            out,
-            "        // SAFETY: as above; the arguments are this binding's own."
-        )
-        .unwrap();
-    }
-    let bind = if by_pointer { "mut ret" } else { "ret" };
+    let bind = if matches!(f.ret, RetType::KeyDict(_)) {
+        "mut ret"
+    } else {
+        "ret"
+    };
     // A failed call has no result to hand back and nothing left to release,
-    // so its failure travels out for `run` to raise; the guard above puts
-    // the Lua state back on the way.
+    // so its failure travels out to be raised; the guard above puts the Lua
+    // state back on the way.
     let query = if f.fallible { "?" } else { "" };
     match f.ret {
-        RetType::Void => writeln!(out, "        {call}{query};").unwrap(),
-        _ => writeln!(out, "        let {bind} = {call}{query};").unwrap(),
+        RetType::Void => writeln!(out, "    {call}{query};").unwrap(),
+        _ => writeln!(out, "    let {bind} = {call}{query};").unwrap(),
     }
     // A function with a Lua implementation converts its own result, so this
     // is only the fallback path, and upstream left it on the old conversion
@@ -2749,80 +2431,48 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
     // A function with a Lua implementation of its own may have pushed the
     // result already; only convert what it left behind.
     if !push.is_empty() && has_lua_imp {
-        writeln!(out, "        if stack.top() == At::arg(0) {{").unwrap();
-        writeln!(out, "            {push}").unwrap();
-        writeln!(out, "        }}").unwrap();
-    } else if !push.is_empty() {
+        writeln!(out, "    if stack.top() == At::arg(0) {{").unwrap();
         writeln!(out, "        {push}").unwrap();
+        writeln!(out, "    }}").unwrap();
+    } else if !push.is_empty() {
+        writeln!(out, "    {push}").unwrap();
     }
-    writeln!(out, "        Ok(())").unwrap();
-    writeln!(out, "    }}").unwrap();
-
-    let nret = if f.ret == RetType::Void { 0 } else { 1 };
-    writeln!(
-        out,
-        "    // SAFETY: `lstate` is the state Lua called this binding on."
-    )
-    .unwrap();
-    if spec.fast {
-        writeln!(
-            out,
-            "    unsafe {{ dispatch_fast(lstate, {argc}, {nret}, convert) }}"
-        )
-        .unwrap();
-    } else {
-        writeln!(
-            out,
-            "    unsafe {{ dispatch(lstate, c\"{name}\", {argc}, {nret}, convert) }}"
-        )
-        .unwrap();
-    }
+    writeln!(out, "    Ok(())").unwrap();
     writeln!(out, "}}").unwrap();
     Ok(())
 }
 
-/// The table `vim.api` is: one entry per binding.
-fn emit_lua_registration(out: &mut String, bound: &[&str]) {
-    writeln!(out, "/// Every binding, by the name it answers to.").unwrap();
+/// The table `vim.api` is built from: one entry per binding.
+fn emit_lua_registration(out: &mut String, bound: &[(&ApiFn, &Spec)]) {
     writeln!(
         out,
-        "static BINDINGS: [(&CStr, unsafe extern \"C-unwind\" fn(*mut lua_State) -> c_int); {}] = [",
+        "/// Every binding, by the name `vim.api` answers to. A binding is\n\
+         /// `fast` when its API function may run in a fast event, and\n\
+         /// `deferred` when it may not."
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "pub(crate) static BINDINGS: [Binding; {}] = [",
         bound.len()
     )
     .unwrap();
-    for name in bound {
-        writeln!(out, "    (c\"{name}\", nlua_api_{name}),").unwrap();
+    for (f, spec) in bound {
+        let name = &f.name;
+        let argc = f
+            .params
+            .iter()
+            .filter(|p| matches!(p, Param::Value { .. }))
+            .count();
+        let nret = if f.ret == RetType::Void { 0 } else { 1 };
+        let kind = if spec.fast { "fast" } else { "deferred" };
+        writeln!(
+            out,
+            "    Binding::{kind}(c\"{name}\", {argc}, {nret}, convert_{name}),"
+        )
+        .unwrap();
     }
     writeln!(out, "];").unwrap();
-    out.push('\n');
-    writeln!(
-        out,
-        "/// Build the `vim.api` table and set it on the table at the top of the stack."
-    )
-    .unwrap();
-    writeln!(out, "///").unwrap();
-    writeln!(out, "/// # Safety").unwrap();
-    writeln!(
-        out,
-        "/// `lstate` is the running Lua state, with a table on top."
-    )
-    .unwrap();
-    writeln!(
-        out,
-        "pub unsafe extern \"C-unwind\" fn nlua_add_api_functions(lstate: *mut lua_State) {{"
-    )
-    .unwrap();
-    writeln!(out, "    // SAFETY: the caller's stack.").unwrap();
-    writeln!(out, "    unsafe {{").unwrap();
-    // The size hint is `bound.len()` written out, not `BINDINGS.len() as
-    // c_int`: the generator knows the count and a literal needs no cast.
-    writeln!(out, "        lua_createtable(lstate, 0, {});", bound.len()).unwrap();
-    writeln!(out, "        for (name, binding) in BINDINGS {{").unwrap();
-    writeln!(out, "            bind(lstate, binding, name);").unwrap();
-    writeln!(out, "        }}").unwrap();
-    writeln!(out, "        lua_setfield(lstate, -2, c\"api\".as_ptr());").unwrap();
-    writeln!(out, "    }}").unwrap();
-    writeln!(out, "}}").unwrap();
 }
 
 /// Header for a child module of the Lua binding directory.
@@ -2833,7 +2483,7 @@ fn lua_child_header(what: &str) -> String {
          //! GENERATED by tools/apigen; see the parent module. Do not edit;\n\
          //! run `just apigen`.\n\
          \n\
-         #![deny(unsafe_op_in_unsafe_fn)]\n\
+         #![forbid(unsafe_code)]\n\
          \n\
          use super::*;\n\
          \n"
@@ -2917,10 +2567,10 @@ fn generate_lua(
         });
     }
 
-    let mut names: Vec<&str> = bound.iter().map(|(f, _)| f.name.as_str()).collect();
-    names.sort();
+    let mut sorted = bound.clone();
+    sorted.sort_by(|a, b| a.0.name.cmp(&b.0.name));
     let mut registration = String::new();
-    emit_lua_registration(&mut registration, &names);
+    emit_lua_registration(&mut registration, &sorted);
     let registration = rustfmt(config, &registration)?;
     body.push_str(&registration);
     files.push(Emitted {
@@ -2940,21 +2590,7 @@ fn generate_lua(
             .insert(f.name.as_str());
     }
 
-    // Support code only some bindings need, swept until nothing new turns up.
-    let mut extras = String::new();
-    loop {
-        let seen = idents(&format!("{LUA_SUPPORT}{extras}{body}"));
-        let Some((_, code)) = LUA_READERS
-            .iter()
-            .find(|(name, code)| seen.contains(*name) && !extras.contains(code))
-        else {
-            break;
-        };
-        extras.push_str(code);
-    }
-    let support = format!("{LUA_SUPPORT}{extras}\n");
-
-    let referenced = idents(&format!("{support}{body}"));
+    let referenced = idents(&body);
     let referenced_names = |names: &[&str]| -> Vec<String> {
         names
             .iter()
@@ -2963,97 +2599,58 @@ fn generate_lua(
             .collect()
     };
     let mut uses: Vec<String> = Vec::new();
-    uses.push("use core::ffi::{CStr, c_char, c_int};".into());
-    uses.push("use core::ptr;".into());
     for (module, names) in &api_imports {
         uses.push(format!(
             "use crate::api::{module}::{{{}}};",
             names.iter().copied().collect::<Vec<_>>().join(", ")
         ));
     }
-    if referenced.contains("KeySet") {
-        uses.push("use crate::api::private::keyset::KeySet;".into());
-    }
-    uses.push(format!(
-        "use crate::api::private::helpers::{{{}}};",
-        referenced_names(&["api_typename"]).join(", ")
-    ));
-    uses.push("use crate::api_error;".into());
-    if referenced.contains("expr_map_locked") {
-        uses.push("use crate::ex_docmd::expr_map_locked;".into());
-    }
-    if referenced.contains("text_locked") {
-        uses.push("use crate::ex_getln::{get_text_locked_msg, text_locked};".into());
-    }
-    // The keyset codec is reached by path: its support wrappers here take
-    // the same names.
-    uses.push("use crate::lua::converter;".into());
-    uses.push(format!(
-        "use crate::lua::converter::{{{}}};",
-        referenced_names(&[
+    let mut use_from = |path: &str, names: &[&str]| {
+        let names = referenced_names(names);
+        if !names.is_empty() {
+            uses.push(format!("use crate::{path}::{{{}}};", names.join(", ")));
+        }
+    };
+    use_from("ex_docmd", &["expr_map_locked"]);
+    use_from("ex_getln", &["text_locked"]);
+    use_from("guard", &["Restore", "textlock"]);
+    use_from(
+        "lua::converter::binding",
+        &[
+            "Binding",
+            "Blame",
+            "PUSH",
+            "PUSH_SPECIAL",
+            "expr_map_locked_error",
+            "text_locked_error",
+        ],
+    );
+    use_from(
+        "lua::converter",
+        &[
             "pop_array",
             "pop_boolean",
             "pop_dict",
             "pop_float",
+            "pop_handle",
             "pop_integer",
-            "pop_luaref",
+            "pop_keydict",
             "pop_object",
             "pop_string",
-            "pop_handle",
             "push_array",
             "push_boolean",
             "push_dict",
             "push_float",
+            "push_handle",
             "push_integer",
+            "push_keydict",
             "push_object",
             "push_string",
-            "push_handle",
-        ])
-        .join(", ")
-    ));
-    uses.push(format!(
-        "use crate::lua::executor::{{{}}};",
-        referenced_names(&[
-            "LUA_INTERNAL_CALL",
-            "active_lstate",
-            "api_free_luaref",
-            "nlua_is_deferred_safe",
-        ])
-        .join(", ")
-    ));
-    uses.push(format!(
-        "use crate::lua::ffi::{{{}}};",
-        referenced_names(&[
-            "lua_concat",
-            "lua_createtable",
-            "lua_error",
-            "lua_gettop",
-            "lua_pushcclosure",
-            "lua_pushstring",
-            "lua_setfield",
-            "luaL_error",
-            "luaL_where",
-        ])
-        .join(", ")
-    ));
-    for (module, names) in [
-        ("guard", referenced_names(&["textlock"])),
-        (
-            "message",
-            referenced_names(&["e_fast_api_disabled", "e_textlock"]),
-        ),
-    ] {
-        if !names.is_empty() {
-            uses.push(format!("use crate::{module}::{{{}}};", names.join(", ")));
-        }
-    }
-    uses.push("use crate::guard::Restore;".into());
-    uses.push(format!(
-        "use crate::lua::stack::{{{}}};",
-        referenced_names(&["At", "Stack"]).join(", ")
-    ));
-    uses.push("use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};".into());
-    let types: Vec<String> = referenced_names(&["Arena", "Error", "LuaRef", "Object", "lua_State"])
+        ],
+    );
+    use_from("lua::executor", &["LUA_INTERNAL_CALL", "active_lstate"]);
+    use_from("lua::stack", &["At", "Stack"]);
+    let types: Vec<String> = referenced_names(&["Error"])
         .into_iter()
         .chain(
             referenced
@@ -3070,33 +2667,21 @@ fn generate_lua(
         writeln!(out, "mod {};", file.name.strip_suffix(".rs").unwrap()).unwrap();
     }
     out.push('\n');
+    // The bindings reach each other's module only through the table, which
+    // `crate::lua::converter::binding` reads.
     for file in &files {
-        writeln!(
-            out,
-            "pub use self::{}::*;",
-            file.name.strip_suffix(".rs").unwrap()
-        )
-        .unwrap();
+        let module = file.name.strip_suffix(".rs").unwrap();
+        if module == "register" {
+            writeln!(out, "pub(crate) use self::register::BINDINGS;").unwrap();
+        } else {
+            writeln!(out, "use self::{module}::*;").unwrap();
+        }
     }
     out.push('\n');
     for line in uses {
         out.push_str(&line);
         out.push('\n');
     }
-    out.push_str(
-        r#"
-/// Values that belong to other modules; nested so they stay out of the flat
-/// namespace the unit-test header generator collects constants into.
-/// `pub(crate)`, not `pub`: `known` is private, so a `pub` item in it is
-/// unreachable from outside the crate and `unreachable_pub` says so.
-mod known {
-    pub(crate) use crate::types::{kErrorTypeException, kErrorTypeValidation};
-}
-
-use known::*;
-"#,
-    );
-    out.push_str(&support);
 
     files.insert(
         0,
@@ -3825,14 +3410,13 @@ fn run() -> Result<(), String> {
     let keysets = collect_keysets(&root)?;
     let sidecar = parse_sidecar(&metadata_spec)?;
     // Each tree carries the reason its files give for `#![allow(unsafe_code)]`
-    // (see `with_unsafe_code_allow`). Only the Lua binding is on the unsafe
-    // perimeter; the rest is ordinary generated crate source, and its unsafe
-    // is debt like any other module's.
+    // (see `with_unsafe_code_allow`). None of them is on the unsafe
+    // perimeter: generated crate source is ordinary source, and its unsafe is
+    // debt like any other module's. The Lua binding emits none.
     //
     // The last field is the cast deny (see `with_cast_deny`): every tree but
     // the msgpack-RPC wrappers comes out with no cast findings, and the
     // wrappers still decode 224 argument casts by hand.
-    const PERIMETER_LUA: &str = "// Unsafe perimeter: the `lua/` row in docs/perimeter.md.\n";
     let trees = [
         (
             out_dir,
@@ -3852,7 +3436,7 @@ fn run() -> Result<(), String> {
             lua_dir,
             generate_lua(&api, &specs, &config)?,
             "Lua binding",
-            PERIMETER_LUA,
+            "",
             true,
         ),
         (

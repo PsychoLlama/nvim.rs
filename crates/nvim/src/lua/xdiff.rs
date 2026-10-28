@@ -340,11 +340,11 @@ unsafe fn process_xdl_diff_opts(
     linematch: &mut int64_t,
 ) -> (Mode, Option<Error>) {
     let mut opts = KeyDict_xdl_diff::default();
-    let mut err_param: *mut c_char = ptr::null_mut::<c_char>();
+    let mut blame = None;
     // SAFETY: the caller's state, and this frame's only `Stack`. `opts` owns
     // whatever the pop puts in it, which is freed at the end.
     let mut stack = unsafe { Stack::from_raw(lstate) };
-    let popped = pop_keydict(&mut stack, &mut opts, &mut err_param);
+    let popped = pop_keydict(&mut stack, &mut opts, &mut blame);
 
     // SAFETY: the keydict's two string fields are NUL-terminated or null.
     // A bad option outranks a failed pop, which is the order the two had

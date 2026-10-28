@@ -31,6 +31,7 @@ use crate::types::{ObjectType, kObjectTypeNil, lua_Number, size_t};
 mod push;
 pub use self::push::push_typval;
 
+pub(crate) mod binding;
 mod keysets;
 mod pop;
 mod pop_object;

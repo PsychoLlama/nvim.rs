@@ -4,28 +4,27 @@
 //! `crate::api` plus `tools/apigen/functions.txt`. Do not edit;
 //! run `just apigen` (`just apigen --check` fails on drift).
 //!
-//! One `lua_CFunction` per API function, plus [`nlua_add_api_functions`],
-//! which builds the table they hang off. A binding checks that it was handed
-//! exactly the arguments the API function declares, pops each one off the Lua
-//! stack and converts it, calls the function, and converts the result back.
+//! One safe `convert` per API function, plus [`BINDINGS`], the table that
+//! names them. `crate::lua::converter::binding` builds `vim.api` from that
+//! table -- one Lua function per entry, all through the `Stack`'s one
+//! trampoline -- and runs the half every call shares: the arity check, the
+//! fast-event refusal, and raising the error once the call's frame is gone.
+//! A `convert` pops each argument off the Lua stack and converts it, calls
+//! the API function, and converts the result back.
 //!
-//! Everything that fails — the wrong number of arguments, a value Lua cannot
-//! convert, the API function itself — leaves its reason in one `Error`, and
-//! the binding raises it as a Lua error on the way out. Getting there means
-//! releasing whatever was already converted, and only that: each converted
-//! argument arms a guard, so returning from a failed conversion drops the
-//! guards armed before it and no others, in declaration order. Upstream's
-//! generator wrote that order out by hand as a chain of `goto exit_N`
-//! (src/gen/gen_api_dispatch.lua at tag v0.12.4).
+//! Everything that fails -- a value Lua cannot convert, the API function
+//! itself -- answers one `Error`, and answering it releases whatever was
+//! already converted, and only that: an argument that owns something is a
+//! value dropped on the way out, so returning from a failed conversion drops
+//! the arguments converted before it and no others, in declaration order.
+//! Upstream's generator wrote that order out by hand as a chain of
+//! `goto exit_N` (src/gen/gen_api_dispatch.lua at tag v0.12.4).
 //!
-//! This module holds the shared support code and the imports; the bindings
-//! themselves live in one child module per API source file, re-exported here
-//! so callers see one flat namespace. A source file whose bindings would
-//! overflow the tree's 1,000-line file cap is split into numbered parts.
+//! This module holds the imports; the bindings themselves live in one child
+//! module per API source file. A source file whose bindings would overflow
+//! the tree's 1,000-line file cap is split into numbered parts.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `lua/` row in docs/perimeter.md.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -44,25 +43,23 @@ mod register;
 mod tabpage;
 mod ui;
 mod vim;
-mod vim_2;
 mod vimscript;
 mod win_config;
 mod window;
 
-pub use self::autocmd::*;
-pub use self::buffer::*;
-pub use self::command::*;
-pub use self::deprecated::*;
-pub use self::extmark::*;
-pub use self::options::*;
-pub use self::register::*;
-pub use self::tabpage::*;
-pub use self::ui::*;
-pub use self::vim::*;
-pub use self::vim_2::*;
-pub use self::vimscript::*;
-pub use self::win_config::*;
-pub use self::window::*;
+use self::autocmd::*;
+use self::buffer::*;
+use self::command::*;
+use self::deprecated::*;
+use self::extmark::*;
+use self::options::*;
+pub(crate) use self::register::BINDINGS;
+use self::tabpage::*;
+use self::ui::*;
+use self::vim::*;
+use self::vimscript::*;
+use self::win_config::*;
+use self::window::*;
 
 use crate::api::autocmd::{
     nvim_clear_autocmds, nvim_create_augroup, nvim_create_autocmd, nvim_del_augroup_by_id,
@@ -95,7 +92,6 @@ use crate::api::extmark::{
 use crate::api::options::{
     nvim_get_all_options_info, nvim_get_option_info2, nvim_get_option_value, nvim_set_option_value,
 };
-use crate::api::private::keyset::KeySet;
 use crate::api::tabpage::{
     nvim_open_tabpage, nvim_tabpage_del_var, nvim_tabpage_get_number, nvim_tabpage_get_var,
     nvim_tabpage_get_win, nvim_tabpage_is_valid, nvim_tabpage_list_wins, nvim_tabpage_set_var,
@@ -131,29 +127,21 @@ use crate::api::window::{
     nvim_win_set_cursor, nvim_win_set_height, nvim_win_set_hl_ns, nvim_win_set_var,
     nvim_win_set_width, nvim_win_text_height,
 };
-use crate::api_error;
 use crate::ex_docmd::expr_map_locked;
-use crate::ex_getln::{get_text_locked_msg, text_locked};
-use crate::guard::Restore;
-use crate::guard::textlock;
-use crate::lua::converter;
+use crate::ex_getln::text_locked;
+use crate::guard::{Restore, textlock};
+use crate::lua::converter::binding::{
+    Binding, Blame, PUSH, PUSH_SPECIAL, expr_map_locked_error, text_locked_error,
+};
 use crate::lua::converter::{
-    pop_array, pop_boolean, pop_dict, pop_float, pop_handle, pop_integer, pop_luaref, pop_object,
+    pop_array, pop_boolean, pop_dict, pop_float, pop_handle, pop_integer, pop_keydict, pop_object,
     pop_string, push_array, push_boolean, push_dict, push_float, push_handle, push_integer,
-    push_object, push_string,
+    push_keydict, push_object, push_string,
 };
-use crate::lua::executor::{
-    LUA_INTERNAL_CALL, active_lstate, api_free_luaref, nlua_is_deferred_safe,
-};
-use crate::lua::ffi::{
-    lua_concat, lua_createtable, lua_error, lua_gettop, lua_pushcclosure, lua_pushstring,
-    lua_setfield, luaL_error, luaL_where,
-};
+use crate::lua::executor::{LUA_INTERNAL_CALL, active_lstate};
 use crate::lua::stack::{At, Stack};
-use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
-use crate::message::{e_fast_api_disabled, e_textlock};
 use crate::types::{
-    Arena, Error, KeyDict_buf_attach, KeyDict_buf_delete, KeyDict_clear_autocmds, KeyDict_cmd,
+    Error, KeyDict_buf_attach, KeyDict_buf_delete, KeyDict_clear_autocmds, KeyDict_cmd,
     KeyDict_cmd_opts, KeyDict_complete_set, KeyDict_context, KeyDict_create_augroup,
     KeyDict_create_autocmd, KeyDict_echo_opts, KeyDict_empty, KeyDict_eval_statusline,
     KeyDict_exec_autocmds, KeyDict_exec_opts, KeyDict_get_autocmds, KeyDict_get_commands,
@@ -161,254 +149,4 @@ use crate::types::{
     KeyDict_highlight, KeyDict_keymap, KeyDict_ns_opts, KeyDict_open_term, KeyDict_option,
     KeyDict_redraw, KeyDict_runtime, KeyDict_set_decoration_provider, KeyDict_set_extmark,
     KeyDict_tabpage_config, KeyDict_user_command, KeyDict_win_config, KeyDict_win_text_height,
-    LuaRef, lua_State,
 };
-use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
-
-/// Values that belong to other modules; nested so they stay out of the flat
-/// namespace the unit-test header generator collects constants into.
-/// `pub(crate)`, not `pub`: `known` is private, so a `pub` item in it is
-/// unreachable from outside the crate and `unreachable_pub` says so.
-mod known {
-    pub(crate) use crate::types::{kErrorTypeException, kErrorTypeValidation};
-}
-
-use known::*;
-
-/// How a result goes back to Lua: `PUSH_SPECIAL` converts `nil` and the
-/// other special values the pre-0.11 way, which is what clients of methods
-/// older than API level 11 expect. Either way the push borrows the result,
-/// and the binding releases the Lua references it holds by dropping it.
-const PUSH: bool = false;
-const PUSH_SPECIAL: bool = true;
-
-/// What one binding carries from its first conversion to its last release.
-struct Call {
-    /// The scratch arena an API function that takes one allocates in.
-    /// Released once the result has been handed back.
-    arena: Arena,
-    /// The parameter a failed conversion blamed, named in the message.
-    err_param: *mut c_char,
-}
-
-impl Call {
-    const fn new() -> Self {
-        Call {
-            arena: ARENA_EMPTY,
-            err_param: ptr::null_mut(),
-        }
-    }
-}
-
-/// A binding's own half: pop each argument off the Lua stack, call the API
-/// function, hand the result back. Returning — off the end or out of a failed
-/// conversion — releases exactly the arguments that were converted, in
-/// declaration order, because each one's release is a guard dropped on the
-/// way out.
-type Convert = fn(&mut Stack, &mut Call) -> Result<(), Error>;
-
-// -- keysets ---------------------------------------------------------------
-
-/// A keyset argument. A keyset owns its fields, so this is a name for the
-/// decoder's target rather than a guard -- what a half-filled keyset took
-/// before it stopped is released by dropping it.
-struct KeyDictArg<K: KeySet + Default> {
-    dict: K,
-}
-
-impl<K: KeySet + Default> KeyDictArg<K> {
-    /// Every key absent, which is where a keyset argument starts out.
-    fn unset() -> Self {
-        KeyDictArg { dict: K::default() }
-    }
-}
-
-/// Fill a keyset argument from the Lua value on top of the stack. On refusal
-/// `*err_param` names the key that failed.
-fn pop_keydict<K: KeySet + Default>(
-    stack: &mut Stack,
-    arg: &mut KeyDictArg<K>,
-    err_param: &mut *mut c_char,
-) -> Result<(), Error> {
-    converter::pop_keydict(stack, &mut arg.dict, err_param)
-}
-
-/// Hand a keyset result back as a Lua table.
-fn push_keydict(stack: &mut Stack, value: &mut dyn KeySet) {
-    converter::push_keydict(stack, value);
-}
-
-// -- argument guards -------------------------------------------------------
-
-/// A `LuaRef` argument, which puts the reference the conversion took out of
-/// the registry back when the binding leaves. An API value needs no such
-/// guard: it owns what it names.
-struct LuaRefArg {
-    value: LuaRef,
-}
-
-impl LuaRefArg {
-    /// # Safety
-    /// The binding owns the reference `value` names and nothing else
-    /// releases it.
-    unsafe fn new(value: LuaRef) -> Self {
-        LuaRefArg { value }
-    }
-}
-
-impl Drop for LuaRefArg {
-    fn drop(&mut self) {
-        // SAFETY: `new`'s contract.
-        unsafe { api_free_luaref(self.value) };
-    }
-}
-
-// -- refusals --------------------------------------------------------------
-
-/// Refuses a call that arrived with a different number of arguments than the
-/// API function declares.
-fn wrong_arity(argc: c_int) -> Error {
-    if argc == 1 {
-        api_error!(kErrorTypeValidation, "Expected {argc} argument")
-    } else {
-        api_error!(kErrorTypeValidation, "Expected {argc} arguments")
-    }
-}
-
-// -- the shared half of every binding --------------------------------------
-
-/// Everything a binding does around its own conversions: check that Lua
-/// handed it the arguments the API function declares, hand over to `convert`,
-/// release the request arena, and raise whatever error the call left behind.
-/// Answers the number of results `convert` left on the stack.
-///
-/// `deferred` names the binding when its API function is not `fast` and so
-/// may not run from a context where deferring is unsafe; it is `None` for one
-/// that may run anywhere.
-///
-/// The error is raised from here rather than from `convert`, because by the
-/// time `convert` has returned every argument guard has been dropped and the
-/// arena is gone — and `lua_error` does not come back.
-///
-/// # Safety
-/// `lstate` is the running Lua state with the binding's arguments on top;
-/// `deferred`, when set, outlives the call; `convert` reads `argc` arguments
-/// and leaves `nret` results.
-unsafe fn run(
-    lstate: *mut lua_State,
-    deferred: Option<&CStr>,
-    argc: c_int,
-    nret: c_int,
-    convert: Convert,
-) -> c_int {
-    let mut call = Call::new();
-    // SAFETY: the caller's stack.
-    let outcome = if unsafe { lua_gettop(lstate) } != argc {
-        Err(wrong_arity(argc))
-    } else {
-        let refused = deferred.filter(|_| !nlua_is_deferred_safe());
-        if let Some(name) = refused {
-            let (fmt, name) = (e_fast_api_disabled.as_ptr(), name.as_ptr());
-            // SAFETY: as above; both strings are static and NUL-terminated,
-            // and nothing is left to release.
-            return unsafe { luaL_error(lstate, fmt, name) };
-        }
-        // SAFETY: as above, and this is the frame's only `Stack`.
-        let mut stack = unsafe { Stack::from_raw(lstate) };
-        convert(&mut stack, &mut call)
-    };
-    // SAFETY: the arena is this frame's own, and every argument that borrowed
-    // from it has been released.
-    unsafe { arena_mem_free(arena_finish(&raw mut call.arena)) };
-    let Err(err) = outcome else {
-        return nret;
-    };
-    // SAFETY: as above; `err` carries a message.
-    unsafe { stage_error(lstate, &call, &err) };
-    // SAFETY: the message is on the stack, and `lua_error` does not return.
-    unsafe { lua_error(lstate) }
-}
-
-/// [`run`] for a binding whose API function is not `fast`.
-///
-/// # Safety
-/// As [`run`].
-unsafe fn dispatch(
-    lstate: *mut lua_State,
-    name: &CStr,
-    argc: c_int,
-    nret: c_int,
-    convert: Convert,
-) -> c_int {
-    // SAFETY: the caller's.
-    unsafe { run(lstate, Some(name), argc, nret, convert) }
-}
-
-/// [`run`] for a binding whose API function is `fast`, and so has no context
-/// to refuse.
-///
-/// # Safety
-/// As [`run`].
-unsafe fn dispatch_fast(
-    lstate: *mut lua_State,
-    argc: c_int,
-    nret: c_int,
-    convert: Convert,
-) -> c_int {
-    // SAFETY: the caller's.
-    unsafe { run(lstate, None, argc, nret, convert) }
-}
-
-/// Leave the failed call's message on the Lua stack as one string: the source
-/// position, the parameter a failed conversion blamed, and the message
-/// itself, ready for `lua_error` to raise.
-///
-/// # Safety
-/// `lstate` is the running Lua state, `call` is the binding's own and `err`
-/// the failure it answered with.
-unsafe fn stage_error(lstate: *mut lua_State, call: &Call, err: &Error) {
-    let message = err.message_or_empty().as_ptr();
-    // SAFETY: the caller's stack; `message` is the binding's own error text,
-    // live for this call, and `err_param`, when set, points at a static
-    // NUL-terminated name.
-    unsafe {
-        luaL_where(lstate, 1);
-        if !call.err_param.is_null() {
-            lua_pushstring(lstate, c"Invalid '".as_ptr());
-            lua_pushstring(lstate, call.err_param);
-            lua_pushstring(lstate, c"': ".as_ptr());
-            lua_pushstring(lstate, message);
-            lua_concat(lstate, 5);
-        } else {
-            lua_pushstring(lstate, message);
-            lua_concat(lstate, 2);
-        }
-    }
-}
-
-/// One entry of the `vim.api` table.
-///
-/// # Safety
-/// `lstate` has the table under construction on top of its stack.
-unsafe fn bind(
-    lstate: *mut lua_State,
-    f: unsafe extern "C-unwind" fn(*mut lua_State) -> c_int,
-    name: &CStr,
-) {
-    unsafe {
-        lua_pushcclosure(lstate, Some(f), 0);
-        lua_setfield(lstate, -2, name.as_ptr());
-    }
-}
-
-/// Refuses a call made while the text is locked.
-fn text_locked_error() -> Error {
-    Error::from_message(kErrorTypeException, get_text_locked_msg())
-}
-
-/// Refuses a call made from an expression mapping, which the cmdline window
-/// alone would have allowed.
-fn expr_map_locked_error() -> Error {
-    Error::from_message(kErrorTypeException, e_textlock)
-}

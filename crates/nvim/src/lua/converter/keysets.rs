@@ -7,7 +7,7 @@
 
 #![forbid(unsafe_code)]
 
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 
 use super::{
     pop_array, pop_boolean_strict, pop_dict, pop_float, pop_handle, pop_integer, pop_luaref,
@@ -59,12 +59,12 @@ pub fn init_types(stack: &mut Stack) {
 
 /// Fill the keyset `retval` from the Lua table on top.
 ///
-/// A key the keyset does not know is a refusal. On failure `*err_opt` names
+/// A key the keyset does not know is a refusal. On failure `*blame` names
 /// the field that failed, for the caller's message.
 pub(crate) fn pop_keydict(
     stack: &mut Stack,
     retval: &mut dyn KeySet,
-    err_opt: &mut *mut c_char,
+    blame: &mut Option<&'static CStr>,
 ) -> Result<(), Error> {
     let fields = retval.fields();
     if stack.kind(At::TOP) != Kind::Table {
@@ -124,7 +124,7 @@ pub(crate) fn pop_keydict(
         })();
 
         if let Err(e) = popped {
-            *err_opt = field.name.as_ptr().cast_mut();
+            *blame = Some(field.name);
             failed = Some(e);
             break;
         }
