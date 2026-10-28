@@ -2448,7 +2448,8 @@ fn emit_lua_registration(out: &mut String, bound: &[(&ApiFn, &Spec)]) {
         out,
         "/// Every binding, by the name `vim.api` answers to. A binding is\n\
          /// `fast` when its API function may run in a fast event, and\n\
-         /// `deferred` when it may not."
+         /// `deferred` when it may not; the number is its own slot, which\n\
+         /// picks the trampoline Lua calls for it."
     )
     .unwrap();
     writeln!(
@@ -2457,7 +2458,7 @@ fn emit_lua_registration(out: &mut String, bound: &[(&ApiFn, &Spec)]) {
         bound.len()
     )
     .unwrap();
-    for (f, spec) in bound {
+    for (index, (f, spec)) in bound.iter().enumerate() {
         let name = &f.name;
         let argc = f
             .params
@@ -2468,7 +2469,7 @@ fn emit_lua_registration(out: &mut String, bound: &[(&ApiFn, &Spec)]) {
         let kind = if spec.fast { "fast" } else { "deferred" };
         writeln!(
             out,
-            "    Binding::{kind}(c\"{name}\", {argc}, {nret}, convert_{name}),"
+            "    Binding::{kind}::<{index}>(c\"{name}\", {argc}, {nret}, convert_{name}),"
         )
         .unwrap();
     }

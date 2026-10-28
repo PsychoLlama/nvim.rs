@@ -15,9 +15,9 @@
 //! - [`Stack::from_raw`] is the step for code that already holds a raw
 //!   `lua_State` and has not been ported onto `entry` yet.
 //! - A [`Dispatch`] needs neither: its entries are safe bodies over a
-//!   `Stack`, and [`Stack::push_dispatch`] hands Lua each one as a closure
-//!   over the one trampoline, which calls `entry` for them. `vim.api` is
-//!   built that way.
+//!   `Stack`, and [`dispatch_entry`] is each one as a C function -- the one
+//!   trampoline, instantiated per entry, which calls `entry` for it.
+//!   `vim.api` is built that way.
 //!
 //! Both are `unsafe` because the `Stack` cannot check that the pointer is a
 //! live state. Everything after them is safe.
@@ -104,6 +104,7 @@ mod dispatch;
 mod header;
 
 pub use self::dispatch::Dispatch;
+pub(crate) use self::dispatch::dispatch_entry;
 pub use self::header::*;
 
 /// A C function Lua can call: the `lua_CFunction` signature, unwrapped.

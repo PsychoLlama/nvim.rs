@@ -5,10 +5,15 @@
 //! otherwise write that signature, and the one unsafe step that turns its
 //! pointer into a [`Stack`], once per function. A [`Dispatch`] is a set of
 //! such functions written as safe bodies over a `Stack` and told apart by an
-//! index: [`Stack::push_dispatch`] pushes entry `n` as a C closure over
-//! [`trampoline`] with `n` as its one upvalue, and the trampoline reads the
-//! index back and runs the entry inside [`Stack::entry`], so the entry's
-//! error is raised only after its frame is gone.
+//! index: [`dispatch_entry::<D, N>`](dispatch_entry) is entry `N` as a C
+//! function -- [`trampoline`] instantiated for that index -- which runs the
+//! entry inside [`Stack::entry`], so the entry's error is raised only after
+//! its frame is gone.
+//!
+//! The index is a const parameter rather than a closure upvalue: reading an
+//! upvalue back costs LuaJIT's pseudo-index walk on every call (about 37
+//! instructions, 1 % of a small `vim.api` call), and an upvalue is writable
+//! from Lua (`debug.setupvalue`).
 
 #![deny(unsafe_op_in_unsafe_fn)]
 // Unsafe perimeter: the `lua/stack/` row in docs/perimeter.md.
@@ -23,41 +28,35 @@
 
 use core::ffi::c_int;
 
-use super::{At, Raise, Stack};
-use crate::types::{lua_Integer, lua_State};
+use super::{CFunction, Raise, Stack};
+use crate::types::lua_State;
 
 /// A set of C functions written as safe bodies, numbered from 0.
 pub trait Dispatch: 'static {
     /// Run entry `index` over the frame Lua called it with, answering how
-    /// many results it left on top. An `index` that names no entry is the
-    /// implementation's to refuse: the upvalue that carries it is reachable
-    /// from Lua (`debug.setupvalue`).
+    /// many results it left on top.
     fn run(stack: &mut Stack, index: usize) -> Result<c_int, Raise>;
 }
 
-impl Stack {
-    /// Push entry `index` of `D` as a Lua function.
-    pub fn push_dispatch<D: Dispatch>(&mut self, index: usize) {
-        let index = lua_Integer::try_from(index).expect("a dispatch index fits a Lua integer");
-        self.push_integer(index);
-        self.push_closure(trampoline::<D>, 1);
-    }
+/// Entry `N` of `D`, as the C function Lua calls.
+pub(crate) const fn dispatch_entry<D: Dispatch, const N: usize>() -> CFunction {
+    trampoline::<D, N>
 }
 
-/// The one C function behind every [`Dispatch`] entry: which entry is the
-/// closure's upvalue.
+/// The one C function behind every [`Dispatch`] entry, instantiated per
+/// entry.
 ///
 /// # Safety
 /// LuaJIT's contract for a `lua_CFunction`: `state` is the running state,
 /// calling this function with its arguments on top of the stack.
-unsafe extern "C-unwind" fn trampoline<D: Dispatch>(state: *mut lua_State) -> c_int {
+unsafe extern "C-unwind" fn trampoline<D: Dispatch, const N: usize>(
+    state: *mut lua_State,
+) -> c_int {
     // SAFETY: the caller's state; the body owns its frame's only `Stack`.
-    unsafe { Stack::entry(state, run::<D>) }
+    unsafe { Stack::entry(state, run::<D, N>) }
 }
 
-/// Read the entry's index back from the closure and run it.
-fn run<D: Dispatch>(stack: &mut Stack) -> Result<c_int, Raise> {
-    let index = stack.to_integer(At::upvalue(1));
-    let index = usize::try_from(index).map_err(|_| Raise::message("no such function"))?;
-    D::run(stack, index)
+/// Entry `N`'s body.
+fn run<D: Dispatch, const N: usize>(stack: &mut Stack) -> Result<c_int, Raise> {
+    D::run(stack, N)
 }

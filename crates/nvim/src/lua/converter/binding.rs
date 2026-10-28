@@ -26,7 +26,7 @@ use crate::api_error;
 use crate::ex_getln::get_text_locked_msg;
 use crate::lua::api_wrappers::BINDINGS;
 use crate::lua::executor::nlua_is_deferred_safe;
-use crate::lua::stack::{At, Dispatch, Raise, Stack};
+use crate::lua::stack::{At, CFunction, Dispatch, Raise, Stack, dispatch_entry};
 use crate::message::{e_fast_api_disabled, e_textlock};
 use crate::types::{Error, kErrorTypeException, kErrorTypeValidation};
 
@@ -60,11 +60,16 @@ pub(crate) struct Binding {
     /// where deferring is unsafe.
     fast: bool,
     convert: Convert,
+    /// Where this entry sits in [`BINDINGS`], and the C function Lua calls
+    /// for it: the trampoline instantiated for that index.
+    index: usize,
+    entry: CFunction,
 }
 
 impl Binding {
-    /// An API function that may not run in a fast event.
-    pub(crate) const fn deferred(
+    /// An API function that may not run in a fast event, as entry `N` of
+    /// [`BINDINGS`].
+    pub(crate) const fn deferred<const N: usize>(
         name: &'static CStr,
         arity: c_int,
         results: c_int,
@@ -76,11 +81,13 @@ impl Binding {
             results,
             fast: false,
             convert,
+            index: N,
+            entry: dispatch_entry::<Api, N>(),
         }
     }
 
-    /// A `fast` API function, which has no context to refuse.
-    pub(crate) const fn fast(
+    /// A `fast` API function, which has no context to refuse, as entry `N`.
+    pub(crate) const fn fast<const N: usize>(
         name: &'static CStr,
         arity: c_int,
         results: c_int,
@@ -92,6 +99,8 @@ impl Binding {
             results,
             fast: true,
             convert,
+            index: N,
+            entry: dispatch_entry::<Api, N>(),
         }
     }
 }
@@ -103,6 +112,8 @@ impl Dispatch for Api {
     fn run(stack: &mut Stack, index: usize) -> Result<c_int, Raise> {
         match BINDINGS.get(index) {
             Some(binding) => call(stack, binding),
+            // Only `Binding`'s constructors name an index, and
+            // `add_api_functions` checks each against its slot.
             None => Err(Raise::message("vim.api: no such function")),
         }
     }
@@ -112,7 +123,12 @@ impl Dispatch for Api {
 pub(crate) fn add_api_functions(stack: &mut Stack) {
     stack.new_table(0, BINDINGS.len());
     for (index, binding) in BINDINGS.iter().enumerate() {
-        stack.push_dispatch::<Api>(index);
+        assert_eq!(
+            binding.index, index,
+            "{:?} is not where its entry says",
+            binding.name
+        );
+        stack.push_function(binding.entry);
         stack.set_field(At::from_top(2), binding.name);
     }
     stack.set_field(At::from_top(2), c"api");
