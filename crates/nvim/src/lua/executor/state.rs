@@ -30,9 +30,11 @@ use crate::event::libuv::{uv_thread_equal, uv_thread_self};
 use crate::lua::api_wrappers::nlua_add_api_functions;
 use crate::lua::converter::nlua_init_types;
 use crate::lua::ffi::{
-    LUA_REGISTRYINDEX, lua_close, lua_getfield, lua_getglobal, lua_newtable, lua_pop,
-    lua_pushcfunction, lua_pushinteger, lua_pushstring, lua_rawseti, lua_setfield, lua_setglobal,
-    lua_tostring, luaL_newstate, luaL_openlibs,
+    LUA_REGISTRYINDEX, lua_close, lua_getfield, lua_pushinteger, lua_pushstring, lua_rawseti,
+    lua_setfield, luaL_newstate, luaL_openlibs,
+};
+use crate::lua::stack::{
+    lua_getglobal, lua_newtable, lua_pop, lua_pushcfunction, lua_setglobal, lua_tostring,
 };
 use crate::lua::stdlib::nlua_state_add_stdlib;
 use crate::lua::treesitter::nlua_treesitter_init;

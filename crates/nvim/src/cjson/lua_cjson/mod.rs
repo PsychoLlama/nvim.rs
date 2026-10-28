@@ -42,11 +42,11 @@ pub mod encode;
 use core::ffi::{CStr, c_int, c_void};
 
 use crate::lua::ffi::{
-    LUA_REGISTRYINDEX, LUA_TNIL, lua_createtable, lua_getfield, lua_newtable, lua_newuserdata,
-    lua_pop, lua_pushcclosure, lua_pushcfunction, lua_pushlightuserdata, lua_pushlstring,
-    lua_pushvalue, lua_rawget, lua_rawset, lua_setfield, lua_setmetatable, lua_touserdata,
-    lua_type, lua_upvalueindex, luaL_checkstack,
+    LUA_REGISTRYINDEX, LUA_TNIL, lua_createtable, lua_getfield, lua_newuserdata, lua_pushcclosure,
+    lua_pushlightuserdata, lua_pushlstring, lua_pushvalue, lua_rawget, lua_rawset, lua_setfield,
+    lua_setmetatable, lua_touserdata, lua_type, luaL_checkstack,
 };
+use crate::lua::stack::{lua_newtable, lua_pop, lua_pushcfunction, lua_upvalueindex};
 use crate::types::{lua_CFunction, lua_State};
 
 /// Reported as `vim.json._NAME` / `._VERSION`.

@@ -21,9 +21,10 @@ use crate::api_error;
 use crate::lua::executor::{nlua_pushref, nlua_ref_global};
 use crate::lua::ffi::{
     LUA_TBOOLEAN, LUA_TNIL, LUA_TNUMBER, LUA_TSTRING, LUA_TTABLE, lua_checkstack, lua_getmetatable,
-    lua_gettop, lua_next, lua_pop, lua_pushnil, lua_pushvalue, lua_rawequal, lua_rawgeti,
-    lua_toboolean, lua_tolstring, lua_tonumber, lua_type,
+    lua_gettop, lua_next, lua_pushnil, lua_pushvalue, lua_rawequal, lua_rawgeti, lua_toboolean,
+    lua_tolstring, lua_tonumber, lua_type,
 };
+use crate::lua::stack::lua_pop;
 use crate::lua::state::nlua_global_refs;
 use crate::message_fmt::msg_cstr;
 use crate::types::{

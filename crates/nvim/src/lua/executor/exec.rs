@@ -25,9 +25,10 @@ use crate::lua::converter::{
     kNluaPushSpecial, nlua_pop_object, nlua_pop_typval, nlua_push_object, nlua_push_typval,
 };
 use crate::lua::ffi::{
-    LUA_GLOBALSINDEX, LUA_MULTRET, LUA_TNIL, lua_getfield, lua_gettop, lua_pop, lua_pushinteger,
+    LUA_GLOBALSINDEX, LUA_MULTRET, LUA_TNIL, lua_getfield, lua_gettop, lua_pushinteger,
     lua_pushnil, lua_pushstring, lua_toboolean, lua_tolstring, lua_type, luaL_loadbuffer,
 };
+use crate::lua::stack::lua_pop;
 use crate::memory::{xfree, xmalloc};
 use crate::message_fmt::c_str_len;
 use crate::os::cshim::gettext;

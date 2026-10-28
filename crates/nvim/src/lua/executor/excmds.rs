@@ -21,9 +21,10 @@ use crate::drawscreen::{UPD_NOT_VALID, redraw_curbuf_later};
 use crate::ex_getln::script_get;
 use crate::getchar::state::got_int;
 use crate::lua::ffi::{
-    LUA_TNIL, lua_getglobal, lua_isnil, lua_isstring, lua_pop, lua_pushlstring, lua_pushnumber,
-    lua_pushstring, lua_pushvalue, lua_tolstring, lua_type, luaL_loadbuffer,
+    LUA_TNIL, lua_isstring, lua_pushlstring, lua_pushnumber, lua_pushstring, lua_pushvalue,
+    lua_tolstring, lua_type, luaL_loadbuffer,
 };
+use crate::lua::stack::{lua_getglobal, lua_isnil, lua_pop};
 use crate::memline::ml_replace_owned;
 use crate::memory::XString;
 use crate::memory::{strequal, xfree, xmalloc, xrealloc};

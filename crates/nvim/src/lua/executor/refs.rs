@@ -23,10 +23,10 @@ use core::ffi::c_int;
 
 use super::get_global_lstate;
 use crate::lua::ffi::{
-    LUA_NOREF, LUA_REGISTRYINDEX, LUA_TFUNCTION, lua_getfield, lua_newuserdata, lua_pop,
-    lua_pushstring, lua_pushvalue, lua_rawgeti, lua_touserdata, lua_type, luaL_error, luaL_ref,
-    luaL_unref,
+    LUA_NOREF, LUA_REGISTRYINDEX, LUA_TFUNCTION, lua_getfield, lua_newuserdata, lua_pushstring,
+    lua_pushvalue, lua_rawgeti, lua_touserdata, lua_type, luaL_error, luaL_ref, luaL_unref,
 };
+use crate::lua::stack::lua_pop;
 use crate::lua::state::nlua_global_refs;
 use crate::types::{LuaRef, NluaRefState, lua_State};
 

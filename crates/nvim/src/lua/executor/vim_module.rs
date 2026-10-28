@@ -20,11 +20,14 @@ use super::{
 };
 use crate::api::extmark::ns_initialized;
 use crate::lua::ffi::{
-    LUA_REGISTRYINDEX, LUA_TFUNCTION, LUA_TTABLE, lua_call, lua_error, lua_getfield, lua_getglobal,
-    lua_newtable, lua_newuserdata, lua_next, lua_pop, lua_pushboolean, lua_pushcclosure,
-    lua_pushcfunction, lua_pushinteger, lua_pushnil, lua_pushstring, lua_pushvalue, lua_setfield,
-    lua_setmetatable, lua_toboolean, lua_tointeger, lua_tolstring, lua_tostring, lua_type,
-    lua_upvalueindex, luaL_checkinteger, luaL_error, luaL_loadbuffer, luaopen_luv, luv_set_loop,
+    LUA_REGISTRYINDEX, LUA_TFUNCTION, LUA_TTABLE, lua_call, lua_error, lua_getfield,
+    lua_newuserdata, lua_next, lua_pushboolean, lua_pushcclosure, lua_pushinteger, lua_pushnil,
+    lua_pushstring, lua_pushvalue, lua_setfield, lua_setmetatable, lua_toboolean, lua_tointeger,
+    lua_tolstring, lua_type, luaL_checkinteger, luaL_error, luaL_loadbuffer, luaopen_luv,
+    luv_set_loop,
+};
+use crate::lua::stack::{
+    lua_getglobal, lua_newtable, lua_pop, lua_pushcfunction, lua_tostring, lua_upvalueindex,
 };
 use crate::lua::state::nlua_disable_preload;
 use crate::memory::strequal;

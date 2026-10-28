@@ -26,10 +26,10 @@ use crate::eval::window::{win_execute_after, win_execute_before};
 use crate::ex_docmd::CmdModScope;
 use crate::log::g_min_log_level;
 use crate::lua::ffi::{
-    LUA_MULTRET, LUA_TSTRING, lua_error, lua_gettop, lua_istable, lua_next, lua_pcall, lua_pop,
-    lua_pushnil, lua_pushvalue, lua_toboolean, lua_tostring, lua_type, luaL_argcheck,
-    luaL_checkinteger,
+    LUA_MULTRET, LUA_TSTRING, lua_error, lua_gettop, lua_next, lua_pcall, lua_pushnil,
+    lua_pushvalue, lua_toboolean, lua_type, luaL_checkinteger,
 };
+use crate::lua::stack::{lua_istable, lua_pop, lua_tostring, luaL_argcheck};
 use crate::narrow::number_as_int;
 use crate::types::{AcoSave, CmdMod, CmdModFlags, Error, Pos, SwitchWin, WinExecute, lua_State};
 use crate::window::win_find_tabpage;

@@ -14,10 +14,11 @@ use core::ffi::{c_char, c_int, c_void};
 
 use crate::cstr;
 use crate::lua::ffi::{
-    LUA_TSTRING, lua_createtable, lua_gettop, lua_isnoneornil, lua_pop, lua_pushinteger,
-    lua_pushlstring, lua_pushnil, lua_pushnumber, lua_rawseti, lua_toboolean, lua_tolstring,
-    lua_tostring, lua_type, luaL_argerror, luaL_checkinteger, luaL_checklstring, luaL_error,
+    LUA_TSTRING, lua_createtable, lua_gettop, lua_pushinteger, lua_pushlstring, lua_pushnil,
+    lua_pushnumber, lua_rawseti, lua_toboolean, lua_tolstring, lua_type, luaL_argerror,
+    luaL_checkinteger, luaL_checklstring, luaL_error,
 };
+use crate::lua::stack::{lua_isnoneornil, lua_pop, lua_tostring};
 use crate::mbyte::{
     c_utf_index_to_byte, c_utf_lengths, canonize, cp_bounds, promised_char_len, skip_len,
 };

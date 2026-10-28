@@ -21,9 +21,10 @@ use crate::ex_docmd::cmdmod_report;
 use crate::ex_docmd::state::cmdmod;
 use crate::ex_getln::{cmdpreview_get_bufnr, cmdpreview_get_ns};
 use crate::lua::ffi::{
-    lua_isnumber, lua_newtable, lua_pop, lua_pushboolean, lua_pushinteger, lua_pushlstring,
-    lua_pushnil, lua_pushstring, lua_pushvalue, lua_rawseti, lua_setfield, lua_tointeger,
+    lua_isnumber, lua_pushboolean, lua_pushinteger, lua_pushlstring, lua_pushnil, lua_pushstring,
+    lua_pushvalue, lua_rawseti, lua_setfield, lua_tointeger,
 };
+use crate::lua::stack::{lua_newtable, lua_pop};
 use crate::memory::{xfree, xmalloc};
 use crate::option::vars::p_verbose;
 use crate::os::cshim::gettext;

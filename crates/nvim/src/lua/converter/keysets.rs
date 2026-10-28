@@ -21,10 +21,11 @@ use crate::api_error;
 use crate::highlight_group::syn_check_group;
 use crate::lua::executor::nlua_pushref;
 use crate::lua::ffi::{
-    LUA_TSTRING, LUA_TTABLE, lua_createtable, lua_next, lua_pop, lua_pushboolean, lua_pushinteger,
+    LUA_TSTRING, LUA_TTABLE, lua_createtable, lua_next, lua_pushboolean, lua_pushinteger,
     lua_pushlstring, lua_pushnil, lua_pushnumber, lua_pushstring, lua_rawset, lua_settop,
     lua_tolstring, lua_type,
 };
+use crate::lua::stack::lua_pop;
 use crate::message_fmt::c_str_len;
 use crate::types::{
     Error, Integer, kErrorTypeValidation, kObjectTypeArray, kObjectTypeDict, kObjectTypeFloat,

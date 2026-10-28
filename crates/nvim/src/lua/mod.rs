@@ -10,7 +10,7 @@ pub mod executor;
 pub mod ffi;
 pub mod secure;
 pub mod spell;
-pub(crate) mod stack;
+pub mod stack;
 pub(crate) mod state;
 pub mod stdlib;
 pub mod treesitter;

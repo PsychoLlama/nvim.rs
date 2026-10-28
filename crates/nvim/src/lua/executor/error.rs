@@ -20,9 +20,10 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 
 use super::{in_script, kCallback, kThread, kThreadCallback, luv_err_t};
 use crate::lua::ffi::{
-    LUA_MULTRET, LUA_TFUNCTION, lua_getfield, lua_getglobal, lua_gettop, lua_insert, lua_pcall,
-    lua_pop, lua_remove, lua_replace, lua_tolstring, lua_type, luaL_callmeta, luaL_getmetafield,
+    LUA_MULTRET, LUA_TFUNCTION, lua_getfield, lua_gettop, lua_insert, lua_pcall, lua_remove,
+    lua_replace, lua_tolstring, lua_type, luaL_callmeta, luaL_getmetafield,
 };
+use crate::lua::stack::{lua_getglobal, lua_pop};
 use crate::memory::xfree;
 use crate::os::cshim::{gettext_ptr, stderr};
 use crate::types::{intptr_t, lua_State, size_t};

@@ -7,9 +7,9 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 // Unsafe perimeter: the `lua/` row in docs/perimeter.md.
 #![allow(unsafe_code)]
-// LuaJIT's own symbol names: `L` for the state, and the `luaL_*` helpers
-// this file re-declares as safe wrappers over the macros the C header
-// defines. Renaming them would hide which C function each one is.
+// LuaJIT's own symbol names: `L` for the state and the `luaL_*` functions.
+// Renaming them would hide which C function each one is. The header's
+// macros (`lua_pop`, `lua_tostring`, ...) are written out in `lua/stack.rs`.
 #![allow(non_snake_case)]
 #![deny(
     clippy::cast_lossless,
@@ -141,11 +141,6 @@ unsafe extern "C-unwind" {
     ) -> ::core::ffi::c_int;
     pub fn lua_pushboolean(L: *mut lua_State, b: ::core::ffi::c_int);
     pub fn lua_pushcclosure(L: *mut lua_State, fn_0: lua_CFunction, n: ::core::ffi::c_int);
-    pub fn lua_pushfstring(
-        L: *mut lua_State,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> *const ::core::ffi::c_char;
     pub fn lua_pushinteger(L: *mut lua_State, n: lua_Integer);
     pub fn lua_pushlightuserdata(L: *mut lua_State, p: *mut ::core::ffi::c_void);
     pub fn lua_pushlstring(L: *mut lua_State, s: *const ::core::ffi::c_char, l: size_t);
@@ -153,11 +148,6 @@ unsafe extern "C-unwind" {
     pub fn lua_pushnumber(L: *mut lua_State, n: lua_Number);
     pub fn lua_pushstring(L: *mut lua_State, s: *const ::core::ffi::c_char);
     pub fn lua_pushvalue(L: *mut lua_State, idx: ::core::ffi::c_int);
-    pub fn lua_pushvfstring(
-        L: *mut lua_State,
-        fmt: *const ::core::ffi::c_char,
-        argp: ::core::ffi::VaList,
-    ) -> *const ::core::ffi::c_char;
     pub fn lua_rawequal(
         L: *mut lua_State,
         idx1: ::core::ffi::c_int,
@@ -189,131 +179,6 @@ unsafe extern "C-unwind" {
     pub fn lua_typename(L: *mut lua_State, tp: ::core::ffi::c_int) -> *const ::core::ffi::c_char;
     pub fn luaopen_luv(L: *mut lua_State) -> ::core::ffi::c_int;
     pub fn luv_set_loop(L: *mut lua_State, loop_0: *mut uv_loop_t);
-}
-
-// -- The header's macros ----------------------------------------------------
-//
-// `lua.h` and `lauxlib.h` spell about a third of the C API as macros over the
-// functions above, and c2rust expanded every use of them. They are written
-// out here once instead: each is the macro's definition verbatim, so a body
-// that reads like the C it was ported from means the same thing.
-
-/// Drop the top `n` values.
-///
-/// # Safety
-/// `L` must be a live Lua state with at least `n` values on its stack.
-pub unsafe fn lua_pop(L: *mut lua_State, n: ::core::ffi::c_int) {
-    unsafe { lua_settop(L, -n - 1) };
-}
-
-/// Push a fresh empty table.
-///
-/// # Safety
-/// `L` must be a live Lua state with room for one more value.
-pub unsafe fn lua_newtable(L: *mut lua_State) {
-    unsafe { lua_createtable(L, 0, 0) };
-}
-
-/// Push `f` as a Lua function taking no upvalues.
-///
-/// # Safety
-/// `L` must be a live Lua state with room for one more value.
-pub unsafe fn lua_pushcfunction(
-    L: *mut lua_State,
-    f: unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
-) {
-    unsafe { lua_pushcclosure(L, Some(f), 0) };
-}
-
-/// Push the global named `k`.
-///
-/// # Safety
-/// `L` must be a live Lua state and `k` a NUL-terminated name.
-pub unsafe fn lua_getglobal(L: *mut lua_State, k: *const ::core::ffi::c_char) {
-    unsafe { lua_getfield(L, LUA_GLOBALSINDEX, k) };
-}
-
-/// Store the value on top of the stack in the global named `k`.
-///
-/// # Safety
-/// `L` must be a live Lua state with a value on top, `k` a NUL-terminated name.
-pub unsafe fn lua_setglobal(L: *mut lua_State, k: *const ::core::ffi::c_char) {
-    unsafe { lua_setfield(L, LUA_GLOBALSINDEX, k) };
-}
-
-/// The value at `idx` as a NUL-terminated string, converting a number in
-/// place; null when it is neither.
-///
-/// # Safety
-/// `L` must be a live Lua state and `idx` a valid index.
-pub unsafe fn lua_tostring(
-    L: *mut lua_State,
-    idx: ::core::ffi::c_int,
-) -> *const ::core::ffi::c_char {
-    unsafe { lua_tolstring(L, idx, ::core::ptr::null_mut()) }
-}
-
-/// Is the value at `idx` nil?
-///
-/// # Safety
-/// `L` must be a live Lua state and `idx` a valid index.
-pub unsafe fn lua_isnil(L: *mut lua_State, idx: ::core::ffi::c_int) -> bool {
-    unsafe { lua_type(L, idx) == LUA_TNIL }
-}
-
-/// Is `idx` past the top of the stack, or nil?
-///
-/// # Safety
-/// `L` must be a live Lua state.
-pub unsafe fn lua_isnoneornil(L: *mut lua_State, idx: ::core::ffi::c_int) -> bool {
-    unsafe { lua_type(L, idx) <= 0 }
-}
-
-/// Is the value at `idx` a table?
-///
-/// # Safety
-/// `L` must be a live Lua state and `idx` a valid index.
-pub unsafe fn lua_istable(L: *mut lua_State, idx: ::core::ffi::c_int) -> bool {
-    unsafe { lua_type(L, idx) == LUA_TTABLE }
-}
-
-/// Is the value at `idx` a function — Lua or C?
-///
-/// # Safety
-/// `L` must be a live Lua state and `idx` a valid index.
-pub unsafe fn lua_isfunction(L: *mut lua_State, idx: ::core::ffi::c_int) -> bool {
-    unsafe { lua_type(L, idx) == LUA_TFUNCTION }
-}
-
-/// Check that argument `narg` is a string and answer it, or throw.
-///
-/// # Safety
-/// `L` must be a live Lua state; this longjmps when the argument is wrong.
-pub unsafe fn luaL_checkstring(
-    L: *mut lua_State,
-    narg: ::core::ffi::c_int,
-) -> *const ::core::ffi::c_char {
-    unsafe { luaL_checklstring(L, narg, ::core::ptr::null_mut()) }
-}
-
-/// Throw `luaL_argerror` unless `cond` holds.
-///
-/// # Safety
-/// `L` must be a live Lua state; this longjmps when `cond` is false.
-pub unsafe fn luaL_argcheck(
-    L: *mut lua_State,
-    cond: bool,
-    narg: ::core::ffi::c_int,
-    extramsg: *const ::core::ffi::c_char,
-) {
-    if !cond {
-        unsafe { luaL_argerror(L, narg, extramsg) };
-    }
-}
-
-/// Where upvalue `i` of the running C function sits.
-pub const fn lua_upvalueindex(i: ::core::ffi::c_int) -> ::core::ffi::c_int {
-    LUA_GLOBALSINDEX - i
 }
 
 /// A `luaL_Reg` method table, terminated the way `luaL_register` expects.

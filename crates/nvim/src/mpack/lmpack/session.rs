@@ -25,11 +25,11 @@ use super::{
     is_unpacker, reference, start_offset, unpack_into_registry, unreference,
 };
 use crate::lua::ffi::{
-    LUA_REGISTRYINDEX, lua_getfield, lua_gettop, lua_isnoneornil, lua_istable, lua_newtable,
-    lua_newuserdata, lua_pop, lua_pushinteger, lua_pushlstring, lua_pushnil, lua_pushnumber,
-    lua_pushstring, lua_setmetatable, lua_tonumber, luaL_argcheck, luaL_checklstring, luaL_error,
-    luaL_ref, luaL_unref,
+    LUA_REGISTRYINDEX, lua_getfield, lua_gettop, lua_newuserdata, lua_pushinteger, lua_pushlstring,
+    lua_pushnil, lua_pushnumber, lua_pushstring, lua_setmetatable, lua_tonumber, luaL_checklstring,
+    luaL_error, luaL_ref, luaL_unref,
 };
+use crate::lua::stack::{lua_isnoneornil, lua_istable, lua_newtable, lua_pop, luaL_argcheck};
 use crate::mpack::mpack_core::{MPACK_EOF, MPACK_OK};
 use crate::mpack::object::MPACK_NOMEM;
 use crate::mpack::rpc::{

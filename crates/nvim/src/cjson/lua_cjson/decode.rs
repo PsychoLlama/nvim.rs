@@ -34,11 +34,11 @@ use super::{Config, DECODE_MAX_DEPTH, fetch_config, unreachable_after_raise};
 use crate::cjson::fpconv::strtod;
 use crate::lua::executor::{nlua_get_empty_dict_ref, nlua_get_nil_ref, nlua_pushref};
 use crate::lua::ffi::{
-    LUA_TNIL, LUA_TTABLE, lua_checkstack, lua_getfield, lua_gettop, lua_newtable, lua_pop,
-    lua_pushboolean, lua_pushinteger, lua_pushlstring, lua_pushnil, lua_pushnumber, lua_rawset,
-    lua_rawseti, lua_setmetatable, lua_toboolean, lua_type, luaL_checklstring, luaL_checktype,
-    luaL_error,
+    LUA_TNIL, LUA_TTABLE, lua_checkstack, lua_getfield, lua_gettop, lua_pushboolean,
+    lua_pushinteger, lua_pushlstring, lua_pushnil, lua_pushnumber, lua_rawset, lua_rawseti,
+    lua_setmetatable, lua_toboolean, lua_type, luaL_checklstring, luaL_checktype, luaL_error,
 };
+use crate::lua::stack::{lua_newtable, lua_pop};
 use crate::narrow::number_as_int;
 use crate::types::{lua_Integer, lua_State, size_t};
 

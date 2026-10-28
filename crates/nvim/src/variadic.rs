@@ -75,7 +75,7 @@ pub const fn c_arg<T: CArg>(arg: T) -> T {
 /// by hand is the unchecked call the macros exist to replace.
 #[doc(hidden)]
 pub mod direct {
-    pub use crate::lua::ffi::{lua_pushfstring, luaL_error};
+    pub use crate::lua::ffi::luaL_error;
     pub use crate::os::cshim::snprintf;
     pub use ::libc::{fprintf, printf, sscanf};
 }
@@ -111,17 +111,6 @@ macro_rules! printf {
 macro_rules! sscanf {
     ($text:expr, $fmt:expr $(, $arg:expr)* $(,)?) => {
         $crate::variadic::direct::sscanf($text, $fmt $(, $crate::variadic::c_arg($arg))*)
-    };
-}
-
-/// LuaJIT's `lua_pushfstring(lstate, fmt, args...)`, each argument bound by
-/// [`CArg`].
-#[macro_export]
-macro_rules! lua_pushfstring {
-    ($lstate:expr, $fmt:expr $(, $arg:expr)* $(,)?) => {
-        $crate::variadic::direct::lua_pushfstring(
-            $lstate, $fmt $(, $crate::variadic::c_arg($arg))*
-        )
     };
 }
 

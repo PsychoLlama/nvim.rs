@@ -12,9 +12,8 @@
 use super::{get_global_lstate, nlua_error, nlua_pcall};
 use crate::global_cell::GlobalCell;
 use crate::lua::converter::{nlua_pop_array, nlua_pop_integer};
-use crate::lua::ffi::{
-    LUA_TFUNCTION, lua_getfield, lua_getglobal, lua_pushlstring, luaL_checktype,
-};
+use crate::lua::ffi::{LUA_TFUNCTION, lua_getfield, lua_pushlstring, luaL_checktype};
+use crate::lua::stack::lua_getglobal;
 use crate::memory::{ARENA_EMPTY, XString, arena_finish, arena_mem_free};
 use crate::os::cshim::gettext;
 use crate::types::{Arena, Expand, Failed};

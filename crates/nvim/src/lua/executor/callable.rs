@@ -28,10 +28,10 @@ use crate::global_cell::GlobalCell;
 use crate::keycodes::{special_key_bytes, unescape_ks_in};
 use crate::lua::executor::{nlua_pushref, nlua_ref_global};
 use crate::lua::ffi::{
-    LUA_NOREF, LUA_TBOOLEAN, LUA_TFUNCTION, lua_checkstack, lua_getfield, lua_getglobal,
-    lua_getmetatable, lua_gettop, lua_pcall, lua_pop, lua_pushlstring, lua_toboolean, lua_type,
-    luaL_checktype,
+    LUA_NOREF, LUA_TBOOLEAN, LUA_TFUNCTION, lua_checkstack, lua_getfield, lua_getmetatable,
+    lua_gettop, lua_pcall, lua_pushlstring, lua_toboolean, lua_type, luaL_checktype,
 };
+use crate::lua::stack::{lua_getglobal, lua_pop};
 use crate::memory::xfree;
 use crate::os::cshim::gettext;
 use crate::os::env::home_replace_save;

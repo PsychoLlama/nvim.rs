@@ -20,11 +20,11 @@ use crate::event::r#loop::loop_schedule_deferred;
 use crate::event::multiqueue::multiqueue_put_event;
 use crate::ex_getln::{get_user_input, ui_ext_cmdline_block_append, ui_ext_cmdline_block_leave};
 use crate::lua::ffi::{
-    LUA_GLOBALSINDEX, LUA_REGISTRYINDEX, lua_call, lua_error, lua_getfield, lua_getglobal,
-    lua_gettop, lua_insert, lua_iscfunction, lua_pcall, lua_pop, lua_pushlstring, lua_pushvalue,
-    lua_setfield, lua_settop, lua_toboolean, lua_tocfunction, lua_tolstring, luaL_checkstring,
-    luaL_loadbuffer,
+    LUA_GLOBALSINDEX, LUA_REGISTRYINDEX, lua_call, lua_error, lua_getfield, lua_gettop, lua_insert,
+    lua_iscfunction, lua_pcall, lua_pushlstring, lua_pushvalue, lua_setfield, lua_settop,
+    lua_toboolean, lua_tocfunction, lua_tolstring, luaL_loadbuffer,
 };
+use crate::lua::stack::{lua_getglobal, lua_pop, luaL_checkstring};
 use crate::memory::{ThinCString, xfree, xmalloc};
 use crate::message::{msg_multihl, msg_putchar};
 use crate::os::cshim::{gettext, snprintf};

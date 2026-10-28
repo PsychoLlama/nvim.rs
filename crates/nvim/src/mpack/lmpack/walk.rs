@@ -28,11 +28,12 @@ use super::{
 };
 use crate::lua::ffi::{
     LUA_TBOOLEAN, LUA_TFUNCTION, LUA_TNUMBER, LUA_TSTRING, LUA_TTABLE, LUA_TUSERDATA, lua_call,
-    lua_getmetatable, lua_gettable, lua_isnumber, lua_isstring, lua_newtable, lua_next, lua_pop,
-    lua_pushboolean, lua_pushinteger, lua_pushlstring, lua_pushnumber, lua_pushvalue, lua_rawequal,
-    lua_rawgeti, lua_remove, lua_replace, lua_setmetatable, lua_settable, lua_toboolean,
-    lua_tolstring, lua_tonumber, lua_type, luaL_error,
+    lua_getmetatable, lua_gettable, lua_isnumber, lua_isstring, lua_next, lua_pushboolean,
+    lua_pushinteger, lua_pushlstring, lua_pushnumber, lua_pushvalue, lua_rawequal, lua_rawgeti,
+    lua_remove, lua_replace, lua_setmetatable, lua_settable, lua_toboolean, lua_tolstring,
+    lua_tonumber, lua_type, luaL_error,
 };
+use crate::lua::stack::{lua_newtable, lua_pop};
 use crate::mpack::conv::{
     mpack_pack_array, mpack_pack_bin, mpack_pack_boolean, mpack_pack_chunk, mpack_pack_ext,
     mpack_pack_map, mpack_pack_nil, mpack_pack_number, mpack_pack_str, mpack_unpack_boolean,

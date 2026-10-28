@@ -25,11 +25,11 @@ use crate::getchar::vgetc;
 use crate::guard::Allow;
 use crate::lua::executor::nlua_unref_global;
 use crate::lua::ffi::{
-    LUA_MULTRET, LUA_TFUNCTION, LUA_TNIL, lua_error, lua_gettop, lua_insert, lua_pop,
-    lua_pushboolean, lua_pushinteger, lua_pushlstring, lua_pushnil, lua_pushvalue, lua_remove,
-    lua_settop, lua_toboolean, lua_type, luaL_checkinteger, luaL_checknumber, luaL_error,
-    luaL_getmetafield,
+    LUA_MULTRET, LUA_TFUNCTION, LUA_TNIL, lua_error, lua_gettop, lua_insert, lua_pushboolean,
+    lua_pushinteger, lua_pushlstring, lua_pushnil, lua_pushvalue, lua_remove, lua_settop,
+    lua_toboolean, lua_type, luaL_checkinteger, luaL_checknumber, luaL_error, luaL_getmetafield,
 };
+use crate::lua::stack::lua_pop;
 use crate::memory::{xfree, xmalloc};
 use crate::message::e_fast_api_disabled;
 use crate::os::cshim::gettext;

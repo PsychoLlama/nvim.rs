@@ -36,13 +36,14 @@ use core::ffi::{c_char, c_int, c_uint};
 use crate::global_cell::ConstTable;
 use crate::lua::ffi::{
     LUA_NOREF, LUA_REFNIL, LUA_REGISTRYINDEX, LUA_TFUNCTION, LUA_TNUMBER, LUA_TTABLE, lua_getfield,
-    lua_gettop, lua_insert, lua_isnil, lua_istable, lua_newtable, lua_newuserdata, lua_next,
-    lua_objlen, lua_pop, lua_pushcfunction, lua_pushfstring, lua_pushinteger, lua_pushnil,
+    lua_gettop, lua_insert, lua_newuserdata, lua_next, lua_objlen, lua_pushinteger, lua_pushnil,
     lua_pushstring, lua_pushvalue, lua_rawequal, lua_rawgeti, lua_remove, lua_replace,
-    lua_setfield, lua_setmetatable, lua_settable, lua_toboolean, lua_tonumber, lua_topointer,
-    lua_type, luaL_argcheck, luaL_buffinit, luaL_checklstring, luaL_checknumber, luaL_checkudata,
-    luaL_error, luaL_newmetatable, luaL_prepbuffer, luaL_pushresult, luaL_ref, luaL_register,
-    luaL_unref,
+    lua_setfield, lua_setmetatable, lua_settable, lua_toboolean, lua_tonumber, lua_type,
+    luaL_buffinit, luaL_checklstring, luaL_checknumber, luaL_checkudata, luaL_error,
+    luaL_newmetatable, luaL_prepbuffer, luaL_pushresult, luaL_ref, luaL_register, luaL_unref,
+};
+use crate::lua::stack::{
+    lua_isnil, lua_istable, lua_newtable, lua_pop, lua_pushcfunction, luaL_argcheck,
 };
 use crate::luaL_reg_table;
 use crate::mpack::mpack_core::MPACK_EOF;
@@ -822,7 +823,10 @@ unsafe extern "C-unwind" fn encode(state: *mut lua_State) -> c_int {
 /// `state` must be live.
 unsafe extern "C-unwind" fn nil_tostring(state: *mut lua_State) -> c_int {
     unsafe {
-        lua_pushfstring(state, NIL_NAME, lua_topointer(state, 1));
+        // Upstream passes `NIL_NAME` to `lua_pushfstring` as the format, with
+        // the userdata's address as an argument it never reads: no `%` in
+        // the name, so the string is the name itself.
+        lua_pushstring(state, NIL_NAME);
         1
     }
 }

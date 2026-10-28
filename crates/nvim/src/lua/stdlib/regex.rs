@@ -18,9 +18,9 @@ use crate::api::private::helpers::{try_enter, try_leave};
 use crate::global_cell::ConstTable;
 use crate::lua::ffi::{
     LUA_REGISTRYINDEX, lua_error, lua_getfield, lua_gettop, lua_newuserdata, lua_pushinteger,
-    lua_pushstring, lua_setmetatable, luaL_checkinteger, luaL_checkstring, luaL_checkudata,
-    luaL_error,
+    lua_pushstring, lua_setmetatable, luaL_checkinteger, luaL_checkudata, luaL_error,
 };
+use crate::lua::stack::luaL_checkstring;
 use crate::luaL_reg_table;
 use crate::regexp::{
     OwnedProg, RE_AUTO, RE_MAGIC, RE_NOBREAK, RE_STRICT, vim_regcomp, vim_regexec,

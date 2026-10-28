@@ -28,11 +28,11 @@ use crate::cjson::lua_cjson::lua_cjson_new;
 use crate::fold::fold_update;
 use crate::lua::base64::luaopen_base64;
 use crate::lua::ffi::{
-    lua_concat, lua_getfield, lua_getglobal, lua_pop, lua_pushcfunction, lua_pushlstring,
-    lua_pushvalue, lua_setfield, luaL_checkinteger, luaL_error, luaL_newmetatable, luaL_register,
-    luaL_where,
+    lua_concat, lua_getfield, lua_pushlstring, lua_pushvalue, lua_setfield, luaL_checkinteger,
+    luaL_error, luaL_newmetatable, luaL_register, luaL_where,
 };
 use crate::lua::spell::luaopen_spell;
+use crate::lua::stack::{lua_getglobal, lua_pop, lua_pushcfunction};
 use crate::lua::xdiff::nlua_xdl_diff;
 use crate::mpack::lmpack::luaopen_mpack;
 use crate::narrow::number_as_int;

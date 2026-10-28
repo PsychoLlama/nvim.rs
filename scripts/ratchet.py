@@ -1083,6 +1083,8 @@ PERIMETER = {
     # library does.
     "crates/nvim/src/lua/": "LuaJIT's C API: a `lua_State`, its stack, and the "
     "registry — plus luv and lpeg, which are C libraries of their own",
+    "crates/nvim/src/lua/stack.rs": "the typed `Stack`: the one module that "
+    "pushes, pops and reads the `lua_State` stack",
     "crates/nvim/src/lua/treesitter/": "the tree-sitter C library: parsers, "
     "trees, queries and cursors are opaque C objects with C lifetimes",
     "crates/nvim/src/mpack/lmpack/": "libmpack-lua: a Lua C module, so every "

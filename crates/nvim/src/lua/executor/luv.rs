@@ -31,9 +31,10 @@ use crate::guard::Depth;
 use crate::lua::converter::{kNluaPushSpecial, nlua_pop_array, nlua_push_array};
 use crate::lua::ffi::{
     LUA_MULTRET, LUA_REGISTRYINDEX, LUA_TBOOLEAN, LUA_TTABLE, lua_close, lua_concat, lua_error,
-    lua_getfield, lua_gettop, lua_pcall, lua_pop, lua_pushcclosure, lua_pushlightuserdata,
-    lua_pushstring, lua_toboolean, lua_tostring, lua_type, luaL_checktype, luaL_error, luaL_where,
+    lua_getfield, lua_gettop, lua_pcall, lua_pushcclosure, lua_pushlightuserdata, lua_pushstring,
+    lua_toboolean, lua_type, luaL_checktype, luaL_error, luaL_where,
 };
+use crate::lua::stack::{lua_pop, lua_tostring};
 use crate::memory::xstrdup;
 use crate::message::e_outofmem;
 use crate::os::cshim::stderr;
