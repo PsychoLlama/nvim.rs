@@ -125,7 +125,7 @@ count	callee	no_raw	defs	def
 3	.unpacker	1	1	crates/nvim/src/msgpack_rpc/channel/mod.rs
 3	IdSet::new	0	1	crates/nvim/src/marktree/intersect.rs
 3	Session::new	0	1	crates/nvim/src/terminal/mode.rs
-3	Stack::from_raw	0	1	crates/nvim/src/lua/stack.rs
+3	Stack::from_raw	0	1	crates/nvim/src/lua/stack/mod.rs
 3	WinCfg::new	0	26	
 3	accumulate	1	1	crates/nvim/src/terminal/termrequest.rs
 3	alloc_block	0	1	crates/nvim/src/memory/arena.rs
@@ -145,7 +145,7 @@ count	callee	no_raw	defs	def
 3	lseek	0	0	
 3	lua_getfield	0	0	
 3	lua_next	0	0	
-3	lua_pop	0	1	crates/nvim/src/lua/stack.rs
+3	lua_pop	0	1	crates/nvim/src/lua/stack/header.rs
 3	lua_tolstring	0	0	
 3	marktree_free_node	0	1	crates/nvim/src/marktree/node.rs
 3	mpack_raw	0	1	crates/nvim/src/msgpack_rpc/packer/mod.rs
@@ -250,7 +250,7 @@ count	callee	no_raw	defs	def
 2	luaL_argerror	0	0	
 2	luaL_checktype	0	0	
 2	lua_checkstack	0	0	
-2	lua_newtable	0	1	crates/nvim/src/lua/stack.rs
+2	lua_newtable	0	1	crates/nvim/src/lua/stack/header.rs
 2	lua_objlen	0	0	
 2	lua_pushboolean	0	0	
 2	lua_pushcclosure	0	0	
@@ -570,7 +570,7 @@ count	callee	no_raw	defs	def
 1	pty_proc_spawn	0	1	crates/nvim/src/os/pty_proc_unix/mod.rs
 1	pty_proc_teardown	0	1	crates/nvim/src/os/pty_proc_unix/mod.rs
 1	qsort	0	0	
-1	raise	0	1	crates/nvim/src/lua/stack.rs
+1	raise	0	1	crates/nvim/src/lua/stack/mod.rs
 1	raw_line_legacy	0	1	crates/nvim/src/api/ui/line.rs
 1	raw_line_linegrid	0	1	crates/nvim/src/api/ui/line.rs
 1	read_event	0	1	crates/nvim/src/event/rstream.rs

@@ -62,7 +62,7 @@
   "files_allowing_non_camel_case_types": 23,
   "files_allowing_non_snake_case": 5,
   "files_allowing_non_upper_case_globals": 263,
-  "files_allowing_unsafe_code": 254,
+  "files_allowing_unsafe_code": 255,
   "files": {
     "crates/mainthread/lib.rs": {"pub_items": 3},
     "crates/nvim/src/allocator.rs": {"unsafe_stmts": 20},
@@ -517,7 +517,8 @@
     "crates/nvim/src/lua/mod.rs": {"pub_items": 11},
     "crates/nvim/src/lua/secure.rs": {"pub_items": 2, "unsafe_stmts": 24},
     "crates/nvim/src/lua/spell.rs": {"extern_abi": 1, "pub_items": 1, "unsafe_stmts": 14},
-    "crates/nvim/src/lua/stack.rs": {"pub_items": 19, "unsafe_stmts": 85},
+    "crates/nvim/src/lua/stack/header.rs": {"pub_items": 12, "unsafe_stmts": 11},
+    "crates/nvim/src/lua/stack/mod.rs": {"pub_items": 8, "unsafe_stmts": 74},
     "crates/nvim/src/lua/stdlib/mod.rs": {"pub_items": 4},
     "crates/nvim/src/lua/stdlib/regex.rs": {"extern_abi": 5, "pub_items": 1, "unsafe_stmts": 55},
     "crates/nvim/src/lua/stdlib/register.rs": {"extern_abi": 1, "pub_items": 2, "unsafe_stmts": 52},

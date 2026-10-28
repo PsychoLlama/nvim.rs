@@ -756,7 +756,7 @@ plus these whole-tree metrics, which are not per-file:
                         open a block. Phase 34.
                       lua_raw_stack  `lua_push*`/`lua_pop`/`lua_to*`/
                         `lua_get*`/`lua_set*` outside LUA_STACK_HOME:
-                        `lua/stack.rs`, the typed `Stack`, and `lua/ffi.rs`,
+                        `lua/stack/`, the typed `Stack`, and `lua/ffi.rs`,
                         whose hits are declarations and macro shims rather
                         than call sites. Every other site moves into the
                         `Stack`.
@@ -1083,7 +1083,7 @@ PERIMETER = {
     # library does.
     "crates/nvim/src/lua/": "LuaJIT's C API: a `lua_State`, its stack, and the "
     "registry — plus luv and lpeg, which are C libraries of their own",
-    "crates/nvim/src/lua/stack.rs": "the typed `Stack`: the one module that "
+    "crates/nvim/src/lua/stack/": "the typed `Stack`: the one module that "
     "pushes, pops and reads the `lua_State` stack",
     "crates/nvim/src/lua/treesitter/": "the tree-sitter C library: parsers, "
     "trees, queries and cursors are opaque C objects with C lifetimes",
@@ -1768,10 +1768,10 @@ INSTRUMENTS = {
 # `lua_raw_stack` is "raw stack traffic outside the one module allowed to
 # have it" -- the same shape PERIMETER and WINLAYER use. `ffi.rs` is in the
 # home because its hits are the `extern` declarations and the inline shims
-# over LuaJIT's header macros, not call sites; `stack.rs` is where every call
+# over LuaJIT's header macros, not call sites; `stack/` is where every call
 # site outside it moves.
 LUA_STACK_HOME = {
-    "crates/nvim/src/lua/stack.rs": "the typed `Stack` over the `lua_State`",
+    "crates/nvim/src/lua/stack/": "the typed `Stack` over the `lua_State`",
     "crates/nvim/src/lua/ffi.rs": "LuaJIT's declarations and macro shims",
 }
 # The same, but only outside a home, the shape `curwin_raw` established.
@@ -4987,7 +4987,7 @@ SELF_TEST_INSTRUMENTS = [
             "crates/nvim/src/lua/executor/mod.rs": "fn f() {\n"
             "    lua_pushnil(l);\n    lua_pop(l, 1);\n    lua_tolstring(l, -1, &n);\n"
             "    luaL_error(l);\n}\n",
-            "crates/nvim/src/lua/stack.rs": "fn g() {\n    lua_pushnil(l);\n}\n",
+            "crates/nvim/src/lua/stack/mod.rs": "fn g() {\n    lua_pushnil(l);\n}\n",
             "crates/nvim/src/lua/ffi.rs": "fn lua_pop(l) {\n    lua_settop(l, -2);\n}\n",
         },
         {"types_files": 2, "lua_raw_stack": 3},
