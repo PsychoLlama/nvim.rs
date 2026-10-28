@@ -333,6 +333,7 @@ enum Step {
 /// where upstream's loop asks: an element is converted in the same turn that
 /// pushed it, so the depth at which a deep table is refused (and the refusal
 /// it gets) is upstream's.
+#[inline]
 fn reserve_turn(stack: &mut Stack) -> Option<()> {
     let need = stack.top().index() + TURN_SLOTS;
     if !stack.reserve(need) {

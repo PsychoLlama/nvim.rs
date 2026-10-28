@@ -12,6 +12,7 @@
 use super::*;
 use crate::api::private::helpers::Reported;
 use crate::lua::stack::{At, Stack};
+use crate::memory::memchr_in;
 use crate::normal::{visual_active, visual_anchor, with_visual_anchor};
 use crate::winlayer::{Buf, tab_windows};
 
@@ -357,10 +358,11 @@ impl<'a> LineSink<'a> {
     /// which is how a buffer line spells NUL -- turned back into a NUL when
     /// `replace_nl`.
     fn push(&mut self, bytes: &[u8], idx: ::core::ffi::c_int, replace_nl: bool) {
-        // The question is only whether the line holds a NL: `contains` answers
-        // it in one early-exiting `memchr` pass, and a line without one (860,000
-        // a run on the memline bench) is handed on as it is.
-        let restored = (replace_nl && bytes.contains(&b'\n')).then(|| -> Vec<u8> {
+        // The question is only whether the line holds a NL: the C library's
+        // vectorised `memchr` answers it in one early-exiting pass (core's
+        // costs several times as much), and a line without one (860,000 a run
+        // on the memline bench) is handed on as it is.
+        let restored = (replace_nl && memchr_in(bytes, b'\n').is_some()).then(|| -> Vec<u8> {
             bytes
                 .iter()
                 .map(|&b| if b == b'\n' { 0 } else { b })

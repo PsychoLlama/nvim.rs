@@ -235,8 +235,9 @@ enum Step {
 }
 
 /// Room for the next key and value, and for the `vim.NIL` a userdata leaf
-/// compares itself with. Asked before the first conversion and once per
-/// element, which is where upstream's loop asks.
+/// compares itself with. Asked once per element, which is where the pushes
+/// are; the value the walk starts on is already on the stack.
+#[inline]
 fn reserve_turn(stack: &mut Stack) -> Result<(), Error> {
     if !stack.reserve(stack.top().index() + TURN_SLOTS) {
         return Err(Error::exception(c"Lua failed to grow stack"));
@@ -248,7 +249,6 @@ fn reserve_turn(stack: &mut Stack) -> Result<(), Error> {
 ///
 /// Whatever the walk had built when it refused is released with `stack`.
 fn walk(stack: &mut Stack, as_ref: bool, open: &mut Vec<OpenValue>) -> Result<Object, Error> {
-    reserve_turn(stack)?;
     let mut step = Step::Convert;
     loop {
         step = match step {

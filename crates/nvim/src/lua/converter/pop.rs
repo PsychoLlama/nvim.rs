@@ -16,6 +16,7 @@ use super::{API_INTEGER_MAX, API_INTEGER_MIN, LuaTableProps, TYPE_IDX_VALUE, pop
 use crate::api::private::helpers::api_typename;
 use crate::api_error;
 use crate::lua::stack::{At, Kind, Stack};
+use crate::memory::memchr_in;
 use crate::message_fmt::msg_cstr;
 use crate::types::{
     ApiDict, Array, Boolean, DictKey, Error, Float, Handle, Integer, LuaRef, ObjectType, String_0,
@@ -55,7 +56,7 @@ pub(crate) fn classify_table(stack: &mut Stack) -> LuaTableProps {
     while stack.next(At::from_top(2)) {
         match stack.kind(KEY) {
             Kind::String => {
-                if stack.to_bytes(KEY).unwrap_or_default().contains(&0) {
+                if memchr_in(stack.to_bytes(KEY).unwrap_or_default(), 0).is_some() {
                     ret.has_string_with_nul = true;
                 }
                 ret.string_keys_num += 1;
