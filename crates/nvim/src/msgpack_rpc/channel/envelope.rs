@@ -19,7 +19,7 @@ use crate::api::ui::remote_ui_flush_incomplete;
 use crate::event::wstream::SharedBuffer;
 use crate::memory::{block_vec, recycle_block};
 use crate::msgpack_rpc::packer::{
-    mpack_array, mpack_integer, mpack_object, mpack_object_array, mpack_str, mpack_uint,
+    Addressees, mpack_array, mpack_integer, mpack_object, mpack_object_array, mpack_str, mpack_uint,
 };
 use crate::types::{
     ApiDispatchFn, Array, Error, Integer, MessageType, MsgpackRpcRequestHandler, Object,
@@ -31,8 +31,8 @@ use super::{channel_write, trace};
 
 /// Packs a request (with an id) or a notification (without one) and sends it
 /// to each of `chans`.
-pub fn serialize_request(
-    chans: Vec<uint64_t>,
+pub(crate) fn serialize_request(
+    chans: Addressees,
     request_id: uint32_t,
     method: &[u8],
     mut args: Array,
@@ -79,7 +79,7 @@ pub fn serialize_response(
         return;
     }
 
-    let mut packer = packer_buffer_init(vec![channel_id]);
+    let mut packer = packer_buffer_init(Addressees::One(channel_id));
     mpack_array(&mut packer, 4);
     packer.push_byte(kMessageTypeResponse.to_le_bytes()[0]);
     mpack_uint(&mut packer, response_id);
@@ -115,7 +115,7 @@ fn report_failed_notification(
         Object::Integer(Integer::from(err.kind())),
         Object::string(String_0::from_cstr(err.message_or_empty())),
     ]);
-    serialize_request(vec![channel_id], 0, b"nvim_error_event", args);
+    serialize_request(Addressees::One(channel_id), 0, b"nvim_error_event", args);
 }
 
 /// The msgpack encoding of nil, which is what the unused half of the
@@ -130,8 +130,8 @@ mod wire {
 /// Any UI on one of them is flushed first: its own event stream and this
 /// message share the channel, and a half-written UI event may not be
 /// interleaved with one.
-fn packer_buffer_init(chans: Vec<uint64_t>) -> PackerBuffer {
-    for &chan in &chans {
+fn packer_buffer_init(chans: Addressees) -> PackerBuffer {
+    for &chan in chans.as_slice() {
         remote_ui_flush_incomplete(chan);
     }
     let mut packer = PackerBuffer::new(block_vec(), Some(channel_flush_callback));
@@ -148,8 +148,13 @@ fn packer_buffer_finish(packer: &mut PackerBuffer) {
         return;
     }
     let buf = SharedBuffer::from_vec(block);
-    for &chan in &packer.channels {
-        channel_write(chan, buf.clone());
+    // Every addressee but the last takes a reference of its own; the last
+    // takes this one.
+    if let Some((&last, others)) = packer.channels.as_slice().split_last() {
+        for &chan in others {
+            channel_write(chan, buf.clone());
+        }
+        channel_write(last, buf);
     }
 }
 

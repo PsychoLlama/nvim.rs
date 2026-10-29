@@ -41,7 +41,7 @@ use crate::mpack::conv::{
     mpack_unpack_number,
 };
 use crate::mpack::object::{Decode, Encode};
-use crate::mpack::token::Kind;
+use crate::mpack::token::{Kind, Tok};
 use crate::types::{lua_Number, lua_State, size_t};
 use ::libc::{free, malloc};
 
@@ -75,9 +75,9 @@ pub struct LuaDecoder(pub *mut Unpacker);
 pub struct LuaEncoder(pub *mut Packer);
 
 impl Decode<NodeRefs> for LuaDecoder {
-    fn enter(&mut self, node: &mut Node, parents: &mut [Node], chunk: &[u8]) {
+    fn enter(&mut self, tok: Tok, parents: &mut [Node], chunk: &[u8]) -> NodeRefs {
         // SAFETY: the unpacker that started this walk, live for its length.
-        unsafe { parse_enter(self.0, node, parents, chunk) }
+        unsafe { parse_enter(self.0, tok, parents, chunk) }
     }
 
     fn exit(&mut self, node: Node, parents: &mut [Node]) {
@@ -107,11 +107,16 @@ impl Encode<NodeRefs> for LuaEncoder {
 ///
 /// # Safety
 /// `unpacker` must be the live instance walking.
-unsafe fn parse_enter(unpacker: *mut Unpacker, node: &mut Node, parents: &[Node], chunk: &[u8]) {
+unsafe fn parse_enter(
+    unpacker: *mut Unpacker,
+    tok: Tok,
+    parents: &[Node],
+    chunk: &[u8],
+) -> NodeRefs {
+    let mut refs = NodeRefs::default();
     unsafe {
         let state = (*unpacker).L;
-        let tok = node.tok;
-        match kind(node) {
+        match tok.kind.map_or(0, |kind| kind as u32) {
             MPACK_TOKEN_NIL => push_nil_sentinel(state),
             MPACK_TOKEN_BOOLEAN => {
                 lua_pushboolean(state, c_int::from(mpack_unpack_boolean(tok)));
@@ -143,11 +148,12 @@ unsafe fn parse_enter(unpacker: *mut Unpacker, node: &mut Node, parents: &[Node]
                 // The container has to outlive this call, so it goes into the
                 // private registry and the node keeps the reference.
                 lua_newtable(state);
-                node.data[0] = reference(state, (*unpacker).reg);
+                refs[0] = reference(state, (*unpacker).reg);
             }
             _ => {}
         }
     }
+    refs
 }
 
 /// A finished Lua value is added to whatever container it belongs to.

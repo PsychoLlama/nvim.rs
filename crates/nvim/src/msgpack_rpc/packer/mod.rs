@@ -42,7 +42,7 @@ pub type PackerBufferFlush = fn(&mut PackerBuffer);
 pub struct PackerBuffer {
     block: Vec<u8>,
     /// The channels an RPC packer's flush writes to.
-    pub channels: Vec<uint64_t>,
+    pub(crate) channels: Addressees,
     /// Whatever else the flush hook needs to find its owner: a `RemoteUI`,
     /// or nothing.
     pub anydata: *mut c_void,
@@ -58,7 +58,7 @@ impl PackerBuffer {
         debug_assert!(block.is_empty());
         Self {
             block,
-            channels: Vec::new(),
+            channels: Addressees::Nobody,
             anydata: ::core::ptr::null_mut(),
             anyint: 0,
             packer_flush,
@@ -70,7 +70,7 @@ impl PackerBuffer {
     pub const fn detached(anydata: *mut c_void, packer_flush: Option<PackerBufferFlush>) -> Self {
         Self {
             block: Vec::new(),
-            channels: Vec::new(),
+            channels: Addressees::Nobody,
             anydata,
             anyint: 0,
             packer_flush,
@@ -146,6 +146,27 @@ impl PackerBuffer {
     }
 }
 
+/// Who an RPC message goes to: almost always one channel, which needs no
+/// allocation; a broadcast names them all.
+#[derive(Default, Debug)]
+pub(crate) enum Addressees {
+    #[default]
+    Nobody,
+    One(uint64_t),
+    Many(Vec<uint64_t>),
+}
+
+impl Addressees {
+    /// The channel ids.
+    pub(crate) fn as_slice(&self) -> &[uint64_t] {
+        match self {
+            Addressees::Nobody => &[],
+            Addressees::One(id) => core::slice::from_ref(id),
+            Addressees::Many(ids) => ids,
+        }
+    }
+}
+
 pub const LUA_NOREF: c_int = -2;
 
 /// The most bytes one msgpack item's tag and inline payload can take.
@@ -168,43 +189,53 @@ fn flush(packer: &mut PackerBuffer) {
 }
 
 /// The low 16 bits of `value`, most significant byte first.
+#[inline]
 pub fn mpack_be16(packer: &mut PackerBuffer, value: uint32_t) {
     emit(packer, &value.to_be_bytes()[2..]);
 }
 
 /// All 32 bits of `value`, most significant byte first.
+#[inline]
 pub fn mpack_be32(packer: &mut PackerBuffer, value: uint32_t) {
     emit(packer, &value.to_be_bytes());
 }
 
+#[inline]
 pub fn mpack_uint(packer: &mut PackerBuffer, value: uint32_t) {
     emit(packer, format::uint(value).bytes());
 }
 
+#[inline]
 pub fn mpack_uint64(packer: &mut PackerBuffer, value: uint64_t) {
     emit(packer, format::uint64(value).bytes());
 }
 
+#[inline]
 pub fn mpack_integer(packer: &mut PackerBuffer, value: Integer) {
     emit(packer, format::integer(value).bytes());
 }
 
+#[inline]
 pub fn mpack_float8(packer: &mut PackerBuffer, value: c_double) {
     emit(packer, format::float8(value).bytes());
 }
 
+#[inline]
 pub fn mpack_bool(packer: &mut PackerBuffer, value: bool) {
     emit(packer, format::boolean(value).bytes());
 }
 
+#[inline]
 pub fn mpack_nil(packer: &mut PackerBuffer) {
     emit(packer, &[format::NIL]);
 }
 
+#[inline]
 pub fn mpack_array(packer: &mut PackerBuffer, len: uint32_t) {
     emit(packer, format::array_header(len).bytes());
 }
 
+#[inline]
 pub fn mpack_map(packer: &mut PackerBuffer, len: uint32_t) {
     emit(packer, format::map_header(len).bytes());
 }
@@ -229,12 +260,14 @@ pub fn mpack_array_dyn16(packer: &mut PackerBuffer) -> usize {
 /// Every caller passes a UI event or method name, all of which are well under
 /// the 31-byte limit, so the width choice the general [`mpack_str`] makes is
 /// an assertion here instead.
+#[inline]
 pub fn mpack_str_small(packer: &mut PackerBuffer, str: &[u8]) {
     emit(packer, format::fixstr_header(str.len()).bytes());
     emit(packer, str);
 }
 
 /// How much room is left before the buffer has to be flushed.
+#[inline]
 pub fn mpack_remaining(packer: &PackerBuffer) -> size_t {
     packer.remaining()
 }
@@ -243,6 +276,7 @@ pub fn mpack_remaining(packer: &PackerBuffer) -> size_t {
 ///
 /// Two rather than one because a dict entry writes its key and its value
 /// between checks.
+#[inline]
 pub fn mpack_check_buffer(packer: &mut PackerBuffer) {
     if mpack_remaining(packer) < 2 * MPACK_ITEM_SIZE as size_t {
         flush(packer);
@@ -276,7 +310,14 @@ pub fn mpack_bin(bytes: &[u8], packer: &mut PackerBuffer) {
 ///
 /// Leaves the buffer ready for another item, so callers that follow a payload
 /// with more structure do not need their own check.
+#[inline]
 pub fn mpack_raw(data: &[u8], packer: &mut PackerBuffer) {
+    // The common case: it fits.
+    if data.len() <= mpack_remaining(packer) {
+        packer.push(data);
+        mpack_check_buffer(packer);
+        return;
+    }
     let mut rest = data;
     while !rest.is_empty() {
         let (now, later) = rest.split_at(rest.len().min(mpack_remaining(packer)));
@@ -299,6 +340,7 @@ pub fn mpack_ext(bytes: &[u8], ext_type: int8_t, packer: &mut PackerBuffer) {
 /// A buffer, window or tabpage handle. `ext_type` is the msgpack extension
 /// type the wire gives that kind of handle: the variant's distance from
 /// [`Object::Buffer`], so the three are 0, 1 and 2.
+#[inline]
 pub fn mpack_handle(ext_type: int8_t, handle: Handle, packer: &mut PackerBuffer) {
     emit(packer, format::handle(ext_type, handle).bytes());
 }

@@ -34,7 +34,8 @@ use core::ffi::{CStr, c_int};
 use crate::api::ui::remote_ui_disconnect;
 use crate::channel::channels;
 use crate::channel::{
-    channel_close, channel_decref, channel_incref, channel_info_changed, with_channel,
+    channel_close, channel_decref, channel_free_later, channel_incref, channel_info_changed,
+    with_channel,
 };
 use crate::event::channel::{
     Reads, start_reads, stream_addresses, wait_on_channel_events, write_shared,
@@ -42,6 +43,7 @@ use crate::event::channel::{
 use crate::event::proc::exit_on_closed_chan;
 use crate::event::wstream::SharedBuffer;
 use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_INF, logmsg, logmsg_line};
+use crate::msgpack_rpc::packer::Addressees;
 use crate::msgpack_rpc::unpacker::Unpacker;
 use crate::startup::{ui_client_channel_id, ui_client_error_exit};
 use crate::types::{
@@ -233,7 +235,7 @@ pub fn rpc_send_event(id: uint64_t, name: &CStr, args: Array) -> bool {
     if id == 0 {
         broadcast_event(name, args);
     } else {
-        serialize_request(vec![id], 0, name.to_bytes(), args);
+        serialize_request(Addressees::One(id), 0, name.to_bytes(), args);
     }
     true
 }
@@ -268,7 +270,12 @@ fn rpc_send_call(id: uint64_t, method_name: &CStr, args: Array) -> Result<Object
     .flatten()
     .ok_or_else(invalid)?;
 
-    serialize_request(vec![id], request_id, method_name.to_bytes(), args);
+    serialize_request(
+        Addressees::One(id),
+        request_id,
+        method_name.to_bytes(),
+        args,
+    );
     trace::log_call(trace::SEND, id, Some(request_id), Some(method_name));
 
     let depth = with_channel(id, |chan| {
@@ -286,10 +293,16 @@ fn rpc_send_call(id: uint64_t, method_name: &CStr, args: Array) -> Result<Object
         })
         .unwrap_or(true)
     });
-    let frame = with_channel(id, |chan| chan.rpc.call_stack.pop())
-        .flatten()
-        .expect("the call's own frame");
-    channel_decref(id);
+    // The frame back, and the reference taken above given up, in one step.
+    let (frame, last) = with_channel(id, |chan| {
+        let frame = chan.rpc.call_stack.pop();
+        (frame, chan.refcount.release() == 0)
+    })
+    .expect("the call holds a reference");
+    if last {
+        channel_free_later(id);
+    }
+    let frame = frame.expect("the call's own frame");
 
     if !frame.returned {
         return Err(invalid());
@@ -342,7 +355,7 @@ fn broadcast_event(name: &CStr, args: Array) {
         rpc.map(|channel| channel.id).collect()
     });
     if !chans.is_empty() {
-        serialize_request(chans, 0, name.to_bytes(), args);
+        serialize_request(Addressees::Many(chans), 0, name.to_bytes(), args);
     }
 }
 

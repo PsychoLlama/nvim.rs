@@ -52,9 +52,10 @@ pub struct Node<D> {
 
 /// A walk that builds objects out of tokens.
 pub trait Decode<D> {
-    /// `node` was just opened for its token, with `parents` below it (the
-    /// parent last). For a chunk, `chunk` is its bytes; otherwise empty.
-    fn enter(&mut self, node: &mut Node<D>, parents: &mut [Node<D>], chunk: &[u8]);
+    /// A node is being opened for `tok`, with `parents` below it (the
+    /// parent last): answer its state. For a chunk, `chunk` is its bytes;
+    /// otherwise empty.
+    fn enter(&mut self, tok: Tok, parents: &mut [Node<D>], chunk: &[u8]) -> D;
     /// `node` is complete and has been popped; its parent (the last of
     /// `parents`) has already counted it.
     fn exit(&mut self, node: Node<D>, parents: &mut [Node<D>]);
@@ -130,7 +131,7 @@ impl<D: Default> Parser<D> {
         &mut self,
         walker: &mut W,
         exit: impl Fn(&mut W, Node<D>, &mut [Node<D>]),
-        enter: impl FnOnce(&mut W, &mut Node<D>, &mut [Node<D>]),
+        enter: impl FnOnce(&mut W, &mut [Node<D>]) -> Node<D>,
     ) -> c_int {
         if self.exiting {
             self.exiting = false;
@@ -145,9 +146,8 @@ impl<D: Default> Parser<D> {
         if self.nodes.len() == self.capacity {
             return MPACK_NOMEM;
         }
-        self.nodes.push(Node::default());
-        let (node, parents) = self.nodes.split_last_mut().expect("just pushed");
-        enter(walker, node, parents);
+        let node = enter(walker, &mut self.nodes);
+        self.nodes.push(node);
         self.exiting = true;
         PENDING
     }
@@ -183,9 +183,11 @@ impl<D: Default> Parser<D> {
     /// Feed one token (and, for a chunk, its bytes) to a decoding walk.
     #[inline]
     pub fn parse_tok<W: Decode<D>>(&mut self, tok: Tok, chunk: &[u8], walker: &mut W) -> c_int {
-        self.walk(walker, W::exit, |walker, node, parents| {
-            node.tok = tok;
-            walker.enter(node, parents, chunk);
+        self.walk(walker, W::exit, |walker, parents| Node {
+            tok,
+            pos: 0,
+            key_visited: false,
+            data: walker.enter(tok, parents, chunk),
         })
     }
 
@@ -234,9 +236,11 @@ impl<D: Default> Parser<D> {
             // A half-written token is resumed from the tokbuf, not re-asked
             // for: the walk has already moved past it.
             if !self.tokbuf.is_parked() {
-                self.unparse_status = self.walk(walker, W::exit, |walker, node, parents| {
-                    walker.enter(node, parents);
+                self.unparse_status = self.walk(walker, W::exit, |walker, parents| {
+                    let mut node = Node::default();
+                    walker.enter(&mut node, parents);
                     tok = node.tok;
+                    node
                 });
             }
             status = self.unparse_status;
@@ -282,9 +286,9 @@ mod tests {
     struct Trace(Vec<(usize, Option<Kind>, u32, Vec<u8>)>, Vec<usize>);
 
     impl Decode<()> for Trace {
-        fn enter(&mut self, node: &mut Node<()>, parents: &mut [Node<()>], chunk: &[u8]) {
+        fn enter(&mut self, tok: Tok, parents: &mut [Node<()>], chunk: &[u8]) {
             self.0
-                .push((parents.len(), node.tok.kind, node.tok.len, chunk.to_vec()));
+                .push((parents.len(), tok.kind, tok.len, chunk.to_vec()));
         }
         fn exit(&mut self, _node: Node<()>, parents: &mut [Node<()>]) {
             self.1.push(parents.len());

@@ -86,7 +86,17 @@ pub(super) fn parse_msgpack(id: uint64_t, bytes: &[u8]) -> usize {
 fn parse_msgpack_reporting(id: uint64_t, bytes: &[u8]) -> (usize, bool) {
     let mut input = bytes;
     loop {
-        let Some(step) = with_channel(id, |chan| next_message(chan, &mut input)) else {
+        // Messages that route without running anything -- a response, a
+        // queued request -- are drained inside the one borrow.
+        let step = with_channel(id, |chan| {
+            loop {
+                match next_message(chan, &mut input) {
+                    Step::Routed => {}
+                    step => break step,
+                }
+            }
+        });
+        let Some(step) = step else {
             return (input.len(), false);
         };
         match step {
@@ -99,7 +109,7 @@ fn parse_msgpack_reporting(id: uint64_t, bytes: &[u8]) -> (usize, bool) {
                 chan_close_on_err(id, &why, level);
                 return (input.len(), false);
             }
-            Step::Routed => {}
+            Step::Routed => unreachable!("drained above"),
             Step::Run(request) => request_event(request),
             Step::Refuse(request, error) => send_error(&request, &error),
             Step::Redraw(redraw) => dispatch_redraw(redraw),

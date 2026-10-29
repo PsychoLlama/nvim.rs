@@ -356,12 +356,12 @@ pub(super) fn scalar_object(tok: Tok) -> Option<Object> {
 
 /// What a node of the body walk is building.
 #[derive(Default, Debug)]
-pub enum Building {
-    /// A chunk, which writes into its parent rather than building anything.
+pub(crate) enum Building {
+    /// Nothing: a chunk, which writes into its parent, or a scalar, which
+    /// was handed to its parent the moment it was read.
     #[default]
-    Chunk,
-    /// A value: a scalar, a container being filled, or the string a `str`
-    /// or `bin` is collecting.
+    Nothing,
+    /// A container being filled.
     Value(Object),
     /// A `str` or `bin` that is a map's key, collected straight into one.
     Key(DictKey),
@@ -369,78 +369,44 @@ pub enum Building {
     Text(XString),
     /// An extension object: its payload so far, and the value it decodes
     /// to — nil until the last chunk lands, or for good once it overflows.
-    Ext {
-        payload: [u8; EXT_PAYLOAD_MAX],
-        value: Object,
-    },
+    /// Boxed: it is rare, and every node would otherwise carry its payload.
+    Ext(Box<ExtPayload>),
+}
+
+/// An extension object being assembled; see [`Building::Ext`].
+#[derive(Debug)]
+pub(crate) struct ExtPayload {
+    bytes: [u8; EXT_PAYLOAD_MAX],
+    value: Object,
 }
 
 /// The body walk: every node builds its object in its own `data` and hands
-/// it to its parent on the way out; the root's lands in `result`.
+/// it to its parent on the way out; the root's lands in `result`. A scalar
+/// is handed over on the way in, as it is complete the moment it is read.
 pub(crate) struct BodyWalk<'a> {
     result: &'a mut Object,
 }
 
-impl crate::mpack::object::Decode<Building> for BodyWalk<'_> {
+impl BodyWalk<'_> {
+    /// Hand a finished value to `parent`, or make it the result when there
+    /// is none. `is_key` says that the parent is a map expecting a key.
     #[inline]
-    fn enter(&mut self, node: &mut Node<Building>, parents: &mut [Node<Building>], chunk: &[u8]) {
-        let tok = node.tok;
-        if let Some(object) = scalar_object(tok) {
-            node.data = Building::Value(object);
-            return;
-        }
-        let len = tok.len as usize;
-        node.data = match token_type(&tok) {
-            TOKEN_BIN | TOKEN_STR => {
-                // A key goes straight into its slot's own storage; a value
-                // collects into a string the API will hand out terminated.
-                let is_key = parents.last().is_some_and(|parent| {
-                    token_type(&parent.tok) == TOKEN_MAP && !parent.key_visited
-                });
-                if is_key {
-                    Building::Key(DictKey::zeroed(len))
-                } else {
-                    Building::Text(XString::with_capacity(len))
-                }
-            }
-            TOKEN_EXT => Building::Ext {
-                payload: [0; EXT_PAYLOAD_MAX],
-                value: Object::Nil,
-            },
-            TOKEN_ARRAY => {
-                Building::Value(Object::array(Array::with_capacity(len.min(RESERVE_MAX))))
-            }
-            TOKEN_MAP => {
-                Building::Value(Object::dict(ApiDict::with_capacity(len.min(RESERVE_MAX))))
-            }
-            TOKEN_CHUNK => {
-                let parent = parents.last_mut().expect("a chunk always has a parent");
-                copy_chunk(parent, chunk);
-                Building::Chunk
-            }
-            _ => Building::Chunk,
-        };
-    }
-
-    #[inline]
-    fn exit(&mut self, node: Node<Building>, parents: &mut [Node<Building>]) {
-        let Some(parent) = parents.last_mut() else {
-            if let Some(value) = finished(node.data) {
+    fn store(&mut self, parent: Option<&mut Node<Building>>, value: Building, is_key: bool) {
+        let Some(parent) = parent else {
+            if let Some(value) = finished(value) {
                 *self.result = value;
             }
             return;
         };
         match &mut parent.data {
             Building::Value(Object::Array(items)) => {
-                items.push(finished(node.data).unwrap_or(Object::Nil));
+                items.push(finished(value).unwrap_or(Object::Nil));
             }
             Building::Value(Object::Dict(entries)) => {
-                // The pop has already flipped the phase: a parent that now
-                // expects a value has just been handed its key.
-                if parent.key_visited {
+                if is_key {
                     // Only a string can be a key; anything else leaves the
                     // entry's key empty, as it always has.
-                    let key = match node.data {
+                    let key = match value {
                         Building::Key(key) => key,
                         _ => DictKey::EMPTY,
                     };
@@ -449,7 +415,7 @@ impl crate::mpack::object::Decode<Building> for BodyWalk<'_> {
                         value: Object::Nil,
                     });
                 } else if let Some(entry) = entries.last_mut() {
-                    entry.value = finished(node.data).unwrap_or(Object::Nil);
+                    entry.value = finished(value).unwrap_or(Object::Nil);
                 }
             }
             // A blob's only children are its chunks, which wrote themselves
@@ -459,12 +425,64 @@ impl crate::mpack::object::Decode<Building> for BodyWalk<'_> {
     }
 }
 
+impl crate::mpack::object::Decode<Building> for BodyWalk<'_> {
+    #[inline]
+    fn enter(&mut self, tok: Tok, parents: &mut [Node<Building>], chunk: &[u8]) -> Building {
+        let parent = parents.last_mut();
+        // Whether the parent is a map that is about to be handed a key: on
+        // the way in, before the pop has flipped its phase.
+        let is_key = parent
+            .as_ref()
+            .is_some_and(|parent| token_type(&parent.tok) == TOKEN_MAP && !parent.key_visited);
+        if let Some(object) = scalar_object(tok) {
+            self.store(parent, Building::Value(object), is_key);
+            return Building::Nothing;
+        }
+        let len = tok.len as usize;
+        match token_type(&tok) {
+            // A key goes straight into its slot's own storage; a value
+            // collects into a string the API will hand out terminated.
+            TOKEN_BIN | TOKEN_STR if is_key => Building::Key(DictKey::zeroed(len)),
+            TOKEN_BIN | TOKEN_STR => Building::Text(XString::with_capacity(len)),
+            TOKEN_EXT => Building::Ext(Box::new(ExtPayload {
+                bytes: [0; EXT_PAYLOAD_MAX],
+                value: Object::Nil,
+            })),
+            TOKEN_ARRAY => {
+                Building::Value(Object::array(Array::with_capacity(len.min(RESERVE_MAX))))
+            }
+            TOKEN_MAP => {
+                Building::Value(Object::dict(ApiDict::with_capacity(len.min(RESERVE_MAX))))
+            }
+            TOKEN_CHUNK => {
+                copy_chunk(parent.expect("a chunk always has a parent"), chunk);
+                Building::Nothing
+            }
+            _ => Building::Nothing,
+        }
+    }
+
+    #[inline]
+    fn exit(&mut self, node: Node<Building>, parents: &mut [Node<Building>]) {
+        if matches!(node.data, Building::Nothing) {
+            return;
+        }
+        let parent = parents.last_mut();
+        // The pop has already flipped the phase: a map that now expects a
+        // value has just been handed its key.
+        let is_key = parent.as_ref().is_some_and(|parent| parent.key_visited);
+        self.store(parent, node.data, is_key);
+    }
+}
+
 /// The object a completed node built, if it built one.
+#[inline]
 fn finished(data: Building) -> Option<Object> {
     match data {
-        Building::Value(value) | Building::Ext { value, .. } => Some(value),
+        Building::Value(value) => Some(value),
+        Building::Ext(ext) => Some(ext.value),
         Building::Text(text) => Some(Object::string(String_0::from_xstring(text))),
-        Building::Key(_) | Building::Chunk => None,
+        Building::Key(_) | Building::Nothing => None,
     }
 }
 
@@ -481,14 +499,14 @@ fn copy_chunk(parent: &mut Node<Building>, chunk: &[u8]) {
     match &mut parent.data {
         Building::Text(text) => text.push_bytes(chunk),
         Building::Key(key) => key.bytes_mut()[pos..pos + chunk.len()].copy_from_slice(chunk),
-        Building::Ext { payload, value } => {
+        Building::Ext(ext) => {
             if pos + chunk.len() > EXT_PAYLOAD_MAX {
-                *value = Object::Nil;
+                ext.value = Object::Nil;
                 return;
             }
-            payload[pos..pos + chunk.len()].copy_from_slice(chunk);
+            ext.bytes[pos..pos + chunk.len()].copy_from_slice(chunk);
             if pos + chunk.len() >= total {
-                *value = ext_object(&payload[..total], ext_type);
+                ext.value = ext_object(&ext.bytes[..total], ext_type);
             }
         }
         _ => unreachable!("a chunk's parent is a string, a blob or an extension"),
