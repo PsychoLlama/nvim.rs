@@ -65,7 +65,9 @@ unsafe extern "C-unwind" fn trampoline<D: Dispatch, const N: usize>(
     unsafe { Stack::entry(state, run::<D, N>) }
 }
 
-/// Entry `N`'s body.
+/// Entry `N`'s body: inlined into its trampoline, so `D::run`'s match on
+/// the index folds to the one body it names.
+#[inline(always)]
 fn run<D: Dispatch, const N: usize>(stack: &mut Stack) -> Result<c_int, Raise> {
     D::run(stack, N)
 }
@@ -154,6 +156,7 @@ macro_rules! lua_functions {
         $vis enum $name {}
 
         impl $crate::lua::stack::Dispatch for $name {
+            #[inline(always)]
             fn run(
                 stack: &mut $crate::lua::stack::Stack,
                 index: usize,

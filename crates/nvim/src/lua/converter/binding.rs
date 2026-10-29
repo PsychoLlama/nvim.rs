@@ -109,6 +109,9 @@ impl Binding {
 struct Api;
 
 impl Dispatch for Api {
+    // Inlined into each trampoline, where the index is a constant: the
+    // lookup folds to the one binding.
+    #[inline(always)]
     fn run(stack: &mut Stack, index: usize) -> Result<c_int, Raise> {
         match BINDINGS.get(index) {
             Some(binding) => call(stack, binding),

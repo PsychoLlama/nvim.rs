@@ -15,11 +15,9 @@
     clippy::ptr_as_ptr
 )]
 
-use core::ffi::c_int;
+use core::ffi::{CStr, c_int};
 
-use super::{
-    LUA_INTERNAL_CALL, MAX_FUNC_ARGS, nlua_is_deferred_safe, until_nul, viml_func_is_fast,
-};
+use super::{LUA_INTERNAL_CALL, MAX_FUNC_ARGS, nlua_is_deferred_safe, viml_func_is_fast};
 use crate::api::private::helpers::{api_set_sctx, try_enter, try_leave};
 use crate::api_error;
 use crate::eval::typval::{CallFrame, TV_INITIAL_VALUE, tv_clear};
@@ -78,17 +76,19 @@ fn raise_error(stack: &mut Stack, err: &Error) -> Raise {
 /// Every argument is converted into a frame of typvals, and every one
 /// converted is cleared again, whichever way the call went.
 pub(crate) fn call(stack: &mut Stack) -> Result<c_int, Raise> {
-    let name = stack.check_bytes(At::arg(1))?;
-    let name_len = name.len();
+    // The name stays in slot 1, read once: the view the arguments are
+    // converted in owns only the slots above it.
+    let mut args = stack.above(At::arg(1));
+    let (name, name_len) = args.check_c_string_below(At::arg(1))?;
     if !nlua_is_deferred_safe() {
         // `%s` stops at a NUL, and so does the name the message quotes.
-        let name = until_nul(name);
+        let name = name.to_bytes();
         if !viml_func_is_fast(name) {
             return Err(Raise::message(fast_call_refusal(name)));
         }
     }
 
-    let nargs = usize::try_from(stack.top().index() - 1).unwrap_or(0);
+    let nargs = usize::try_from(args.top().index() - 1).unwrap_or(0);
     if nargs > MAX_FUNC_ARGS as usize {
         return Err(Raise::message("Function called with too many arguments"));
     }
@@ -97,18 +97,19 @@ pub(crate) fn call(stack: &mut Stack) -> Result<c_int, Raise> {
     // was given and no more, where an array's drop glue walks all
     // twenty-one on every call.
     let mut vim_args = CallFrame::<FRAME_SLOTS>::new();
-    match convert_and_call(stack, nargs, name_len, &mut vim_args) {
+    match convert_and_call(&mut args, nargs, (name, name_len), &mut vim_args) {
         Ok(()) => Ok(1),
-        Err(err) => Err(raise_error(stack, &err)),
+        Err(err) => Err(raise_error(&mut args, &err)),
     }
 }
 
 /// [`call`]'s body once the arguments are counted: convert them into
-/// `vim_args`, call the function named at slot 1, and push its answer.
+/// `vim_args`, call the function `name` (its C string and full length),
+/// and push its answer.
 fn convert_and_call(
     stack: &mut Stack,
     nargs: usize,
-    name_len: usize,
+    (name, name_len): (&CStr, usize),
     vim_args: &mut CallFrame<FRAME_SLOTS>,
 ) -> Result<(), Error> {
     for i in 0..nargs {
@@ -135,18 +136,13 @@ fn convert_and_call(
     let sctx = api_set_sctx(LUA_INTERNAL_CALL);
     let mut tstate = TRY_STATE_INIT;
     try_enter(&mut tstate);
-    {
-        // Slot 1 holds the name as a string since the check above, and
-        // anchors it for the call.
-        let name = stack.to_c_string(At::arg(1)).unwrap_or_default();
-        let _ = call_func_with(
-            name,
-            Some(name_len),
-            &mut rettv,
-            vim_args.args(),
-            CallWith::at_cursor(true),
-        );
-    }
+    let _ = call_func_with(
+        name,
+        Some(name_len),
+        &mut rettv,
+        vim_args.args(),
+        CallWith::at_cursor(true),
+    );
     err.absorb(try_leave(&tstate));
     drop(sctx);
 
@@ -177,46 +173,42 @@ fn rpc(stack: &mut Stack, request: bool) -> Result<c_int, Raise> {
     let chan_id = i64::try_from(stack.check_integer(At::arg(1))?)
         .unwrap_or_default()
         .cast_unsigned();
-    stack.check_bytes(At::arg(2))?;
-    let nargs = stack.top().index() - 2;
+    // The method name stays in slot 2, read once: the arguments are
+    // converted, and the answer pushed, in a view above it.
+    let mut args = stack.above(At::arg(2));
+    let (name, _) = args.check_c_string_below(At::arg(2))?;
+    let nargs = args.top().index() - 2;
 
     let mut err = Error::none();
-    let mut args = Array::with_capacity(usize::try_from(nargs).unwrap_or(0));
-    let mut converted = true;
+    let mut converted = Array::with_capacity(usize::try_from(nargs).unwrap_or(0));
+    let mut converts = true;
     for i in 0..nargs {
-        stack.push_value(At::arg(i + 3));
-        match pop_object(stack, false) {
-            Ok(value) => args.push(value),
+        args.push_value(At::arg(i + 3));
+        match pop_object(&mut args, false) {
+            Ok(value) => converted.push(value),
             Err(e) => {
                 err = e;
-                converted = false;
+                converts = false;
                 break;
             }
         }
     }
 
-    if converted {
+    if converts {
         if request {
-            // The method name as the C string it was: up to its first NUL.
-            // A copy, as the answer is pushed while the call holds it.
-            let name = stack.to_c_string(At::arg(2)).unwrap_or_default().to_owned();
-            let answered = rpc_call_with(chan_id, &name, args, |result| {
-                push_object(stack, &result, false);
+            let answered = rpc_call_with(chan_id, name, converted, |result| {
+                push_object(&mut args, &result, false);
             });
             if let Err(e) = answered {
                 err = e;
             }
-        } else if !rpc_send_event(
-            chan_id,
-            stack.to_c_string(At::arg(2)).unwrap_or_default(),
-            args,
-        ) {
+        } else if !rpc_send_event(chan_id, name, converted) {
             err = api_error!(kErrorTypeValidation, "Invalid channel: {chan_id}");
         }
     }
 
     if err.is_set() {
-        return Err(raise_error(stack, &err));
+        return Err(raise_error(&mut args, &err));
     }
     Ok(if request { 1 } else { 0 })
 }
