@@ -6,11 +6,10 @@
 //! take apart, `api_luarefs_free_*` to catch the references an arena knew
 //! nothing about) collapse into [`Object`]'s own `Drop` and `Clone`.
 //!
-//! Those two `impl`s live here rather than beside the type because `types/`
-//! forbids `unsafe` and both have to reach a `ManuallyDrop`.
+//! Both move payloads out of `ManuallyDrop` slots, by swapping in the empty
+//! value rather than by an unchecked take.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -34,7 +33,6 @@ use crate::types::{
     kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage,
     kObjectTypeWindow,
 };
-use ::libc::abort;
 use core::ffi::{CStr, c_int};
 use core::mem::ManuallyDrop;
 
@@ -72,6 +70,13 @@ impl Object {
     }
 }
 
+/// Move a payload out of its slot, leaving the empty value behind -- which
+/// owns nothing, so the husk needs no release of its own.
+#[inline(always)]
+fn take_payload<T: Default>(slot: &mut ManuallyDrop<T>) -> T {
+    ManuallyDrop::into_inner(core::mem::take(slot))
+}
+
 /// [`Object`]'s destructor, out of line so the drop shim stays a tail call.
 fn release(root: &mut Object) {
     // Nothing is allocated for a scalar or a string: a `Vec` that is never
@@ -79,18 +84,17 @@ fn release(root: &mut Object) {
     let mut pending: Vec<Object> = Vec::new();
     let mut current = ManuallyDrop::new(root.take());
     loop {
-        // SAFETY (every arm): `current` is a value this walk owns and
-        // will not look at again -- the next statement overwrites it -- so
-        // taking each payload out of it happens exactly once.
+        // Each payload is taken out of the husk (leaving an empty one, which
+        // owns nothing), and the husk itself is overwritten unreleased.
         match &mut *current {
-            Object::String(str) => unsafe { ManuallyDrop::drop(str) },
+            Object::String(str) => drop(take_payload(str)),
             Object::LuaRef(reference) => release_luaref(*reference),
             Object::Array(array) => {
-                let items = unsafe { ManuallyDrop::take(array) };
+                let items = take_payload(array);
                 pending.extend(items);
             }
             Object::Dict(dict) => {
-                let entries = unsafe { ManuallyDrop::take(dict) };
+                let entries = take_payload(dict);
                 pending.extend(entries.into_vec().into_iter().map(|pair| pair.value));
             }
             _ => {}
@@ -133,8 +137,7 @@ impl Object {
     pub fn into_string(self) -> Option<String_0> {
         let mut this = ManuallyDrop::new(self);
         match &mut *this {
-            // SAFETY: the husk is not looked at again.
-            Object::String(str) => Some(unsafe { ManuallyDrop::take(str) }),
+            Object::String(str) => Some(take_payload(str)),
             _ => {
                 ManuallyDrop::into_inner(this);
                 None
@@ -146,8 +149,7 @@ impl Object {
     pub fn into_array(self) -> Option<Array> {
         let mut this = ManuallyDrop::new(self);
         match &mut *this {
-            // SAFETY: the husk is not looked at again.
-            Object::Array(array) => Some(unsafe { ManuallyDrop::take(array) }),
+            Object::Array(array) => Some(take_payload(array)),
             _ => {
                 ManuallyDrop::into_inner(this);
                 None
@@ -159,8 +161,7 @@ impl Object {
     pub fn into_dict(self) -> Option<ApiDict> {
         let mut this = ManuallyDrop::new(self);
         match &mut *this {
-            // SAFETY: the husk is not looked at again.
-            Object::Dict(dict) => Some(unsafe { ManuallyDrop::take(dict) }),
+            Object::Dict(dict) => Some(take_payload(dict)),
             _ => {
                 ManuallyDrop::into_inner(this);
                 None
@@ -195,8 +196,7 @@ pub(crate) fn api_metadata() -> Object {
     if METADATA.with(Object::is_nil) {
         let unpacked = unpack(PACKED_API_METADATA);
         if !unpacked.as_ref().is_ok_and(|o| o.as_dict().is_some()) {
-            // SAFETY: `abort` takes nothing.
-            unsafe { abort() };
+            std::process::abort();
         }
         METADATA.set(unpacked.expect("the check above accepted a Dict"));
     }
@@ -255,7 +255,6 @@ pub(crate) fn object_to_hl_id(obj: &Object, what: &CStr) -> Result<c_int, Error>
         if str.is_empty() {
             return Ok(0);
         }
-        // SAFETY: `str` names its own bytes.
         return Ok(syn_check_group(str.as_bytes()));
     }
     if let Some(number) = obj.as_integer() {

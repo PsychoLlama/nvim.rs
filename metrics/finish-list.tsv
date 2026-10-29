@@ -1,7 +1,6 @@
 module	file	files	unsafe_stmts	unsafe_fns	wrappers	regions	raw_params	raw_returns	outside_callees
-api/	*	2	19	3	15	compound:1 deref:1	str:2	-	ManuallyDrop::take:5 from_raw_parts:2 CStr::from_ptr:1 abort:1 memchrsub:1 xfree:1 xmemdupz:1
+api/	*	1	12	3	8	compound:1 deref:1	str:2	-	from_raw_parts:2 CStr::from_ptr:1 memchrsub:1 xfree:1 xmemdupz:1
 api/	api/private/helpers/text.rs	1	12	3	8	compound:1 deref:1	str:2	-	from_raw_parts:2 CStr::from_ptr:1 memchrsub:1 xfree:1 xmemdupz:1
-api/	api/private/helpers/value.rs	1	7	0	7	-	-	-	ManuallyDrop::take:5 abort:1
 buffer_updates.rs	*	1	7	0	5	deref:1 expr:1	-	-	arena_mem_free:2 from_raw_parts:1 xfree:1 xrealloc:1
 buffer_updates.rs	buffer_updates.rs	1	7	0	5	deref:1 expr:1	-	-	arena_mem_free:2 from_raw_parts:1 xfree:1 xrealloc:1
 charset/	*	1	47	24	29	deref:9 expr:2 compound:1	str:23 other:6 pp_str:4	str:10	bytes_at:5 from_raw_parts_mut:3 prefix_at:3 from_raw_parts:2 slice_at:2

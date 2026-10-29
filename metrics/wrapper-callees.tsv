@@ -45,10 +45,8 @@ count	callee	no_raw	defs	def
 6	xmemdupz	0	1	crates/nvim/src/memory/mod.rs
 5	.next_arg::<::core::ffi::c_ulong>	0	0	
 5	Handle::new	0	1	crates/nvim/src/event/time.rs
-5	ManuallyDrop::take	0	0	
 5	Self::new	0	22	
 5	Signal::new	0	1	crates/nvim/src/event/signal.rs
-5	abort	0	0	
 5	close	0	0	
 5	handler	0	0	
 5	lua_pushnil	0	0	
@@ -58,6 +56,7 @@ count	callee	no_raw	defs	def
 4	.write	0	0	
 4	ThinCString::from_raw	0	1	crates/nvim/src/memory/thin_cstring.rs
 4	Uv::new	0	1	crates/nvim/src/event/libuv_proc.rs
+4	abort	0	0	
 4	lua_getfield	0	0	
 4	lua_settop	0	0	
 4	lua_touserdata	0	0	
@@ -251,7 +250,6 @@ count	callee	no_raw	defs	def
 1	CStr::from_bytes_with_nul_unchecked	0	0	
 1	DictRef::retained	0	1	crates/nvim/src/eval/typval/handle.rs
 1	ListRef::retained	0	1	crates/nvim/src/eval/typval/handle.rs
-1	ManuallyDrop::drop	0	0	
 1	ModeState::terminal	0	1	crates/nvim/src/state.rs
 1	Some	0	0	
 1	Win::new	0	1	crates/nvim/src/winlayer.rs
