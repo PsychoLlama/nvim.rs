@@ -9,7 +9,7 @@
 #![allow(unsafe_code)]
 // LuaJIT's own symbol names: `L` for the state and the `luaL_*` functions.
 // Renaming them would hide which C function each one is. The header's
-// macros (`lua_pop`, `lua_tostring`, ...) are written out in `lua/stack.rs`.
+// macros (`lua_pop`, `lua_upvalueindex`, ...) are `Stack` methods.
 #![allow(non_snake_case)]
 #![deny(
     clippy::cast_lossless,
@@ -30,8 +30,6 @@ pub const LUA_MULTRET: ::core::ffi::c_int = -1;
 
 /// The pseudo-index of the registry, where `luaL_ref` parks values.
 pub const LUA_REGISTRYINDEX: ::core::ffi::c_int = -10000;
-/// The pseudo-index of the running function's environment.
-pub const LUA_ENVIRONINDEX: ::core::ffi::c_int = -10001;
 /// The pseudo-index of the globals table.
 pub const LUA_GLOBALSINDEX: ::core::ffi::c_int = -10002;
 
@@ -58,7 +56,6 @@ unsafe extern "C-unwind" {
         numarg: ::core::ffi::c_int,
         extramsg: *const ::core::ffi::c_char,
     ) -> ::core::ffi::c_int;
-    pub fn luaL_buffinit(L: *mut lua_State, B: *mut luaL_Buffer);
     pub fn luaL_callmeta(
         L: *mut lua_State,
         obj: ::core::ffi::c_int,
@@ -71,22 +68,12 @@ unsafe extern "C-unwind" {
         l: *mut size_t,
     ) -> *const ::core::ffi::c_char;
     pub fn luaL_checknumber(L: *mut lua_State, numArg: ::core::ffi::c_int) -> lua_Number;
-    pub fn luaL_checkstack(
-        L: *mut lua_State,
-        sz: ::core::ffi::c_int,
-        msg: *const ::core::ffi::c_char,
-    );
     pub fn luaL_checktype(L: *mut lua_State, narg: ::core::ffi::c_int, t: ::core::ffi::c_int);
     pub fn luaL_checkudata(
         L: *mut lua_State,
         ud: ::core::ffi::c_int,
         tname: *const ::core::ffi::c_char,
     ) -> *mut ::core::ffi::c_void;
-    pub fn luaL_error(
-        L: *mut lua_State,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> ::core::ffi::c_int;
     pub fn luaL_getmetafield(
         L: *mut lua_State,
         obj: ::core::ffi::c_int,
@@ -104,14 +91,7 @@ unsafe extern "C-unwind" {
     ) -> ::core::ffi::c_int;
     pub fn luaL_newstate() -> *mut lua_State;
     pub fn luaL_openlibs(L: *mut lua_State);
-    pub fn luaL_prepbuffer(B: *mut luaL_Buffer) -> *mut ::core::ffi::c_char;
-    pub fn luaL_pushresult(B: *mut luaL_Buffer);
     pub fn luaL_ref(L: *mut lua_State, t: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    pub fn luaL_register(
-        L: *mut lua_State,
-        libname: *const ::core::ffi::c_char,
-        l: *const luaL_Reg,
-    );
     pub fn luaL_unref(L: *mut lua_State, t: ::core::ffi::c_int, ref_0: ::core::ffi::c_int);
     pub fn luaL_where(L: *mut lua_State, lvl: ::core::ffi::c_int);
     pub fn lua_call(L: *mut lua_State, nargs: ::core::ffi::c_int, nresults: ::core::ffi::c_int);
@@ -129,7 +109,6 @@ unsafe extern "C-unwind" {
     pub fn lua_iscfunction(L: *mut lua_State, idx: ::core::ffi::c_int) -> ::core::ffi::c_int;
     pub fn lua_isnumber(L: *mut lua_State, idx: ::core::ffi::c_int) -> ::core::ffi::c_int;
     pub fn lua_isstring(L: *mut lua_State, idx: ::core::ffi::c_int) -> ::core::ffi::c_int;
-    pub fn lua_isuserdata(L: *mut lua_State, idx: ::core::ffi::c_int) -> ::core::ffi::c_int;
     pub fn lua_newuserdata(L: *mut lua_State, sz: size_t) -> *mut ::core::ffi::c_void;
     pub fn lua_next(L: *mut lua_State, idx: ::core::ffi::c_int) -> ::core::ffi::c_int;
     pub fn lua_objlen(L: *mut lua_State, idx: ::core::ffi::c_int) -> size_t;
@@ -146,7 +125,6 @@ unsafe extern "C-unwind" {
     pub fn lua_pushlstring(L: *mut lua_State, s: *const ::core::ffi::c_char, l: size_t);
     pub fn lua_pushnil(L: *mut lua_State);
     pub fn lua_pushnumber(L: *mut lua_State, n: lua_Number);
-    pub fn lua_pushstring(L: *mut lua_State, s: *const ::core::ffi::c_char);
     pub fn lua_pushvalue(L: *mut lua_State, idx: ::core::ffi::c_int);
     pub fn lua_rawequal(
         L: *mut lua_State,
@@ -226,28 +204,4 @@ impl Default for lua_Debug {
             i_ci: 0,
         }
     }
-}
-
-/// A `luaL_Reg` method table, terminated the way `luaL_register` expects.
-///
-/// `luaL_Reg`'s `name` is a `*const c_char`, so the table cannot be a plain
-/// `static` and lives in a [`SharedCell`]; the terminating all-null row is
-/// what `luaL_register` scans for and is added here rather than at each
-/// table. A bare fn item coerces to `lua_CFunction`, so no cast is needed.
-///
-/// [`SharedCell`]: crate::global_cell::SharedCell
-#[macro_export]
-macro_rules! luaL_reg_table {
-    ($($name:expr => $func:expr),* $(,)?) => {
-        $crate::global_cell::ConstTable::new([
-            $($crate::types::luaL_Reg {
-                name: $name.as_ptr(),
-                func: Some($func),
-            },)*
-            $crate::types::luaL_Reg {
-                name: ::core::ptr::null(),
-                func: None,
-            },
-        ])
-    };
 }

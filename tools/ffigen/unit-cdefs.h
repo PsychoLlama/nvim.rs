@@ -165,8 +165,6 @@ typedef struct VTermStateFields VTermStateFields;
 typedef struct VTermStringFragment VTermStringFragment;
 typedef union VTermValue VTermValue;
 typedef struct addrinfo addrinfo;
-typedef struct luaL_Buffer luaL_Buffer;
-typedef struct luaL_Reg luaL_Reg;
 typedef union pthread_mutex_t pthread_mutex_t;
 typedef union pthread_rwlock_t pthread_rwlock_t;
 typedef struct sockaddr sockaddr;
@@ -1242,16 +1240,6 @@ struct addrinfo {
   sockaddr *ai_addr;
   char *ai_canonname;
   addrinfo *ai_next;
-};
-struct luaL_Buffer {
-  char *p;
-  int lvl;
-  lua_State *L;
-  char buffer[8192];
-};
-struct luaL_Reg {
-  const char *name;
-  lua_CFunction func;
 };
 union pthread_mutex_t {
   __pthread_mutex_s __data;
@@ -2713,7 +2701,6 @@ static const int LOOKFOR_UNTERM = 6;
 static const int LOWER_S = 115;
 static const int LOWEST_WIN_ID = 1000;
 static const int LSIZE = 512;
-static const int LUA_ENVIRONINDEX = -10001;
 static const int LUA_ERRMEM = 4;
 static const int LUA_GLOBALSINDEX = -10002;
 static const int LUA_MULTRET = -1;

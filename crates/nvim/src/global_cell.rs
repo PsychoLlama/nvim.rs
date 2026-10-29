@@ -604,12 +604,11 @@ impl<T> SharedCell<T> {
 /// A global the editor only ever reads: a table the compiler built.
 ///
 /// `GlobalCell` earns its checks because the editor *writes* its globals.
-/// A table like `cmdnames`, `nv_cmds` or a `luaL_Reg` metatable is finished
-/// the moment the compiler lays it out and no line of the editor writes to
-/// it again, so none of the cell's machinery applies — but a plain `static`
-/// demands `Sync`, and these tables hold raw pointers (a command's name, a
-/// Lua function's name), which are `!Sync` by convention rather than by
-/// anything about the data.
+/// A table like `cmdnames` or `nv_cmds` is finished the moment the compiler
+/// lays it out and no line of the editor writes to it again, so none of the
+/// cell's machinery applies — but a plain `static` demands `Sync`, and these
+/// tables hold raw pointers (a command's name), which are `!Sync` by
+/// convention rather than by anything about the data.
 ///
 /// So the promise is made once here, for the whole family, instead of a
 /// `GlobalCell` per table handing out a `*mut` at every read. `Deref` gives

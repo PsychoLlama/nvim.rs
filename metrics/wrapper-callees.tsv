@@ -29,7 +29,6 @@ count	callee	no_raw	defs	def
 8	Conn::new	0	1	crates/nvim/src/event/stream.rs
 8	at_opt	0	1	crates/nvim/src/cstr.rs
 8	copy_nonoverlapping	0	0	
-8	lua_tolstring	0	0	
 8	process_events_until	0	1	crates/nvim/src/event/loop.rs
 8	xmalloc	0	1	crates/nvim/src/memory/mod.rs
 7	.as_ref	0	0	
@@ -37,6 +36,7 @@ count	callee	no_raw	defs	def
 7	Watcher::new	0	1	crates/nvim/src/event/socket/mod.rs
 7	XString::from_raw	0	1	crates/nvim/src/memory/xstring.rs
 7	c_bytes	0	1	crates/nvim/src/lua/treesitter/mod.rs
+7	lua_tolstring	0	0	
 7	uv_close	0	0	
 7	xrealloc	0	1	crates/nvim/src/memory/mod.rs
 6	Stack::from_raw	0	1	crates/nvim/src/lua/stack/mod.rs
@@ -81,7 +81,6 @@ count	callee	no_raw	defs	def
 3	hash_add	0	1	crates/nvim/src/hashtab.rs
 3	hash_lookup	0	1	crates/nvim/src/hashtab.rs
 3	lseek	0	0	
-3	lua_settop	0	0	
 3	marktree_free_node	0	1	crates/nvim/src/marktree/node.rs
 3	multiqueue_free	0	1	crates/nvim/src/event/multiqueue.rs
 3	number_span	0	1	crates/nvim/src/charset/walk.rs
@@ -156,11 +155,8 @@ count	callee	no_raw	defs	def
 2	loop_poll_events	0	1	crates/nvim/src/event/loop.rs
 2	luaL_ref	0	0	
 2	luaL_unref	0	0	
-2	lua_createtable	0	0	
-2	lua_getfield	0	0	
 2	lua_newuserdata	0	0	
-2	lua_pushcclosure	0	0	
-2	lua_setfield	0	0	
+2	lua_settop	0	0	
 2	luv_set_thread_cb	0	0	
 2	map_put_ref	0	2	
 2	marktree_free_subtree	1	1	crates/nvim/src/marktree/mod.rs
@@ -287,19 +283,20 @@ count	callee	no_raw	defs	def
 1	loop_init	0	1	crates/nvim/src/event/loop.rs
 1	loop_schedule_deferred	0	1	crates/nvim/src/event/loop.rs
 1	loop_schedule_fast	0	1	crates/nvim/src/event/loop.rs
-1	luaL_argerror	0	0	
-1	luaL_checklstring	0	0	
 1	luaL_loadbuffer	0	0	
 1	lua_call	0	0	
 1	lua_close	0	0	
 1	lua_concat	0	0	
+1	lua_createtable	0	0	
 1	lua_getfenv	0	0	
+1	lua_getfield	0	0	
 1	lua_gettable	0	0	
 1	lua_gettop	0	0	
 1	lua_insert	0	0	
 1	lua_objlen	0	0	
 1	lua_pcall	0	0	
 1	lua_pushboolean	0	0	
+1	lua_pushcclosure	0	0	
 1	lua_pushinteger	0	0	
 1	lua_pushlightuserdata	0	0	
 1	lua_pushlstring	0	0	
@@ -312,6 +309,7 @@ count	callee	no_raw	defs	def
 1	lua_rawseti	0	0	
 1	lua_remove	0	0	
 1	lua_replace	0	0	
+1	lua_setfield	0	0	
 1	lua_setmetatable	0	0	
 1	lua_settable	0	0	
 1	lua_tointeger	0	0	

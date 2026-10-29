@@ -88,13 +88,6 @@
 //! C check on the same argument, which then throws its own message. A check's
 //! Rust half is written to fail exactly when the C half does.
 //!
-//! # The header's macros
-//!
-//! `lua.h` and `lauxlib.h` spell part of the C API as macros, which c2rust
-//! expanded at every use. The raw `unsafe fn` forms in [`header`] are those
-//! macros written out once, for the call sites that have not moved onto
-//! [`Stack`] yet; each is the macro's definition verbatim.
-
 #![deny(unsafe_op_in_unsafe_fn)]
 // Unsafe perimeter: the `lua/stack/` row in docs/perimeter.md.
 #![allow(unsafe_code)]
@@ -127,7 +120,6 @@ use crate::types::{LuaRef, lua_Integer, lua_Number, lua_State, size_t};
 
 mod debug;
 mod dispatch;
-mod header;
 mod table;
 mod userdata;
 
@@ -135,7 +127,6 @@ pub use self::debug::Frame;
 use self::dispatch::Check;
 pub(crate) use self::dispatch::dispatch_entry;
 pub use self::dispatch::{Dispatch, Function, Raise};
-pub use self::header::*;
 pub use self::userdata::Userdata;
 
 /// A C function Lua can call: the `lua_CFunction` signature, unwrapped.
@@ -174,9 +165,10 @@ impl At {
         At(n)
     }
 
-    /// Upvalue `n` of the running C closure, counting from 1.
+    /// Upvalue `n` of the running C closure, counting from 1:
+    /// `lua_upvalueindex(n)`.
     pub const fn upvalue(n: c_int) -> At {
-        At(lua_upvalueindex(n))
+        At(LUA_GLOBALSINDEX - n)
     }
 
     /// The slot `n` above this absolute one.
