@@ -69,6 +69,11 @@ unsafe extern "C-unwind" {
     ) -> *const ::core::ffi::c_char;
     pub fn luaL_checknumber(L: *mut lua_State, numArg: ::core::ffi::c_int) -> lua_Number;
     pub fn luaL_checktype(L: *mut lua_State, narg: ::core::ffi::c_int, t: ::core::ffi::c_int);
+    pub fn luaL_testudata(
+        L: *mut lua_State,
+        ud: ::core::ffi::c_int,
+        tname: *const ::core::ffi::c_char,
+    ) -> *mut ::core::ffi::c_void;
     pub fn luaL_checkudata(
         L: *mut lua_State,
         ud: ::core::ffi::c_int,

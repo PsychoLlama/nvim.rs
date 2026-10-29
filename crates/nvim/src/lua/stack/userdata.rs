@@ -34,9 +34,10 @@ use core::any::TypeId;
 use core::ffi::{CStr, c_int};
 use core::ptr;
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicPtr, Ordering};
 
-use super::{At, Check, Kind, Raise, Stack};
-use crate::lua::ffi::{lua_getfenv, lua_newuserdata, lua_setfenv, lua_touserdata};
+use super::{At, Check, Raise, Stack};
+use crate::lua::ffi::{lua_getfenv, lua_newuserdata, lua_setfenv, luaL_testudata};
 use crate::types::lua_State;
 
 /// A Rust value Lua holds as full userdata, under a metatable of its own.
@@ -53,29 +54,58 @@ pub trait Userdata: Default + 'static {
 /// `GlobalCell`: luv threads' states make and read userdata too.
 static CLAIMS: Mutex<Vec<(&'static CStr, TypeId)>> = Mutex::new(Vec::new());
 
+/// The types holding a claim, as an immutable list the read path scans
+/// without the lock: [`claimed_slow`] publishes a fresh copy each time a
+/// claim is staked. The copies it replaces are leaked on purpose -- a reader
+/// on another thread may still be scanning one -- and there is one per
+/// `Userdata` type ever staked, a dozen small lists for the process.
+static HELD: AtomicPtr<Vec<TypeId>> = AtomicPtr::new(ptr::null_mut());
+
 /// Whether `T` holds the claim on its metatable's name; with `stake`, claim
 /// it when nobody does.
 ///
 /// # Panics
 /// With `stake`, when another type holds the name.
+#[inline]
 fn claimed<T: Userdata>(stake: bool) -> bool {
-    claim(T::METATABLE, TypeId::of::<T>(), stake)
+    let ours = TypeId::of::<T>();
+    let held = HELD.load(Ordering::Acquire);
+    // SAFETY: null, or a list `claimed_slow` published (Release) and never
+    // frees or writes again.
+    if let Some(held) = unsafe { held.as_ref() }
+        && held.contains(&ours)
+    {
+        return true;
+    }
+    claimed_slow(T::METATABLE, ours, stake)
 }
 
-/// [`claimed`] for one name and type, kept out of line so the generic
-/// callers do not carry `CLAIMS` into another crate's code.
+/// [`claimed`]'s miss: ask the lock, and publish the claimants again when a
+/// claim was staked.
+#[cold]
 #[inline(never)]
-fn claim(name: &'static CStr, ours: TypeId, stake: bool) -> bool {
+fn claimed_slow(name: &'static CStr, ours: TypeId, stake: bool) -> bool {
     // A panic below leaves the list as it was; a poisoned lock is still good.
     let mut claims = CLAIMS
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    // The same `&'static CStr` is what every caller passes for a type, so
-    // the address usually answers before the bytes are compared.
-    let found = claims
-        .iter()
-        .find(|(claimed, _)| ptr::eq(*claimed, name) || *claimed == name);
-    match found {
+    let held = claim(&mut claims, name, ours, stake);
+    if held {
+        let claimants: Vec<TypeId> = claims.iter().map(|&(_, owner)| owner).collect();
+        HELD.store(Box::into_raw(Box::new(claimants)), Ordering::Release);
+    }
+    held
+}
+
+/// Whether `ours` holds the claim on `name` in `claims`; with `stake`,
+/// claim it when nobody does.
+fn claim(
+    claims: &mut Vec<(&'static CStr, TypeId)>,
+    name: &'static CStr,
+    ours: TypeId,
+    stake: bool,
+) -> bool {
+    match claims.iter().find(|(claimed, _)| *claimed == name) {
         Some(&(_, owner)) => {
             assert!(
                 !stake || owner == ours,
@@ -165,21 +195,15 @@ impl Stack {
     /// The block of the `T` at `at`, when the slot holds one of `T`'s
     /// userdata: `luaL_checkudata`'s test, after the claim.
     fn userdata_block<T: Userdata>(&mut self, at: At) -> Option<*mut T> {
-        // A light userdata answers `lua_touserdata` too, but is not one of
-        // ours: `luaL_checkudata` asks for a full userdata first.
-        if self.kind(at) != Kind::Userdata || !claimed::<T>(false) {
+        // A full userdata whose metatable is the registry's `T::METATABLE`
+        // (a light userdata has none of its own).
+        let block = unsafe { luaL_testudata(self.l(), at.0, T::METATABLE.as_ptr()) };
+        if block.is_null() || !claimed::<T>(false) {
             return None;
         }
-        let block = unsafe { lua_touserdata(self.l(), at.0) };
-        if block.is_null() || !self.get_metatable(at) {
-            return None;
-        }
-        self.get_field(At::REGISTRY, T::METATABLE);
-        let ours = self.raw_equal(At::from_top(1), At::from_top(2));
-        self.pop(2);
         // `T` holds the claim on its metatable, so only `new_userdata::<T>`
         // made a userdata carrying it, and the block holds a `T`.
-        ours.then(|| block.cast::<T>())
+        Some(block.cast::<T>())
     }
 }
 

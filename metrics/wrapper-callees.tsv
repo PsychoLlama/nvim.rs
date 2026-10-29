@@ -25,13 +25,13 @@ count	callee	no_raw	defs	def
 10	notify	0	0	
 10	state_of	0	1	crates/nvim/src/vterm/state/entry.rs
 9	Node::from_ptr	0	1	crates/nvim/src/marktree/node.rs
+8	.as_ref	0	0	
 8	Bytes::new	0	1	crates/nvim/src/charset/walk.rs
 8	Conn::new	0	1	crates/nvim/src/event/stream.rs
 8	at_opt	0	1	crates/nvim/src/cstr.rs
 8	copy_nonoverlapping	0	0	
 8	process_events_until	0	1	crates/nvim/src/event/loop.rs
 8	xmalloc	0	1	crates/nvim/src/memory/mod.rs
-7	.as_ref	0	0	
 7	.offset	0	0	
 7	Watcher::new	0	1	crates/nvim/src/event/socket/mod.rs
 7	XString::from_raw	0	1	crates/nvim/src/memory/xstring.rs
@@ -284,6 +284,7 @@ count	callee	no_raw	defs	def
 1	loop_schedule_deferred	0	1	crates/nvim/src/event/loop.rs
 1	loop_schedule_fast	0	1	crates/nvim/src/event/loop.rs
 1	luaL_loadbuffer	0	0	
+1	luaL_testudata	0	0	
 1	lua_call	0	0	
 1	lua_close	0	0	
 1	lua_concat	0	0	
@@ -315,7 +316,6 @@ count	callee	no_raw	defs	def
 1	lua_tointeger	0	0	
 1	lua_tonumber	0	0	
 1	lua_topointer	0	0	
-1	lua_touserdata	0	0	
 1	lua_type	0	0	
 1	luaopen_lpeg	0	0	
 1	malloc	0	0	
