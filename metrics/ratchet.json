@@ -9,7 +9,7 @@
   "ok_fail": 124,
   "error_out_params": 0,
   "semsg_c": 43,
-  "raw_cstr": 373,
+  "raw_cstr": 607,
   "libc_strings": 9,
   "const_c_int": 1063,
   "const_int_alias": 2163,

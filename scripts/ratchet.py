@@ -1470,6 +1470,13 @@ PTR_ARITH = PointerArith()
 # measures and, where the idiom and its replacement look alike, why the needle
 # is drawn where it is. Everything here is matched against the *masked*
 # source, so prose and string literals naming an idiom cost nothing.
+# Every spelling of `c_char` c2rust and the tree between them produce. The
+# needles below used the bare name alone, which made a *qualified* forwarder
+# invisible: rewriting `*mut c_char` as `*mut ::core::ffi::c_char` -- the
+# spelling every generated and every `unsafe extern` block uses -- lowered
+# `raw_cstr_params` without retiring anything, and the reverse rewrite raised
+# it. `c_int_returns` already spells the prefix this way; these now match it.
+C_CHAR = r"(?:(?:::)?(?:core|std)::ffi::|(?:::)?libc::)?c_char"
 VOCABULARY = {
     # `\s*` rather than a literal space: rustfmt wraps a long signature's
     # `-> c_int` onto its own line. `\b` so `c_int_ish` is not a match, and no
@@ -1488,7 +1495,10 @@ VOCABULARY = {
     # makes bringing one back visible. `tr_c!`/`tr_plural!` are the escape
     # hatch that replaced them: a message whose template arrives at runtime.
     "semsg_c": re.compile(r"\bsemsg_(?:multiline_)?c!|\btr_(?:c|plural)!"),
-    "raw_cstr": re.compile(r"\*(?:mut|const)\s+c_char\b"),
+    # Every spelling, as the parameter and return needles below: the bare
+    # name alone left 234 qualified ones (`*const ::core::ffi::c_char`,
+    # every `unsafe extern` block's) uncounted, so respelling one moved it.
+    "raw_cstr": re.compile(rf"\*(?:mut|const)\s+{C_CHAR}\b"),
     "libc_strings": re.compile(
         r"\b(?:str(?:len|cmp|ncmp|cpy|cat|chr|str)"
         r"|mem(?:cpy|move|set|cmp))\("
@@ -1798,13 +1808,7 @@ TYPES_HOME = {"crates/nvim/src/types/": "the transpiler's one type namespace"}
 # Counted inside a `fn`'s *parameter list* only -- not the return type, which
 # `INSTRUMENTS_RETURNS` counts separately so the two never double-book a
 # `-> *mut c_char`.
-# Every spelling of `c_char` c2rust and the tree between them produce. The
-# needles below used the bare name alone, which made a *qualified* forwarder
-# invisible: rewriting `*mut c_char` as `*mut ::core::ffi::c_char` -- the
-# spelling every generated and every `unsafe extern` block uses -- lowered
-# `raw_cstr_params` without retiring anything, and the reverse rewrite raised
-# it. `c_int_returns` already spells the prefix this way; these now match it.
-C_CHAR = r"(?:(?:::)?(?:core|std)::ffi::|(?:::)?libc::)?c_char"
+# `C_CHAR` (above) is every spelling of `c_char`.
 
 INSTRUMENTS_PARAMS = {
     # The roadmap's needle exactly: a parameter *directly* typed as a raw
