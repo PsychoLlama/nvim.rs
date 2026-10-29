@@ -200,8 +200,7 @@ fn main_state_init(stack: &mut Stack) -> bool {
         stack.set_global(c"require");
     }
 
-    // SAFETY: the main state, with the `vim` table on top.
-    unsafe { nlua_treesitter_init(stack.lua_state()) };
+    nlua_treesitter_init(stack);
     add_editor_stdlib(stack);
     add_vendored(stack);
     stack.set_global(c"vim");

@@ -1,347 +1,308 @@
 //! Compiling a query, and inspecting or disabling parts of it.
 //!
-//! `tslua_parse_query` compiles the query text against a loaded language and
-//! turns a `TSQueryError` into the pointed message `query_err_string`
-//! builds (offset, line, and the offending word).  `query_inspect` reports a
-//! compiled query's patterns, captures and predicates back to Lua.
+//! `vim._ts_parse_query(lang, source)` compiles the query text against a
+//! loaded language and turns a `TSQueryError` into the pointed message
+//! [`query_error_message`] builds (row and column, the offending word, and
+//! the line with a caret under it). `inspect` reports a compiled query's
+//! patterns, captures and predicates back to Lua.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 // Unsafe perimeter: the `lua/treesitter/` row in docs/perimeter.md.
 #![allow(unsafe_code)]
-// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
+use core::ffi::{CStr, c_char, c_int};
+use core::ptr::NonNull;
+
+use super::lang::check_language;
 use super::*;
-use crate::cstr;
-use crate::global_cell::ConstTable;
-use crate::luaL_reg_table;
-use crate::os::cshim::strchr;
+use crate::lua::stack::Raise;
+use crate::lua::state::tslua_query_parse_count;
+use crate::lua_functions;
 
-pub(crate) static query_meta: ConstTable<[luaL_Reg; 6]> = luaL_reg_table![
-    c"__gc" => query_gc,
-    c"__tostring" => query_tostring,
-    c"inspect" => query_inspect,
-    c"disable_capture" => query_disable_capture,
-    c"disable_pattern" => query_disable_pattern,
-];
+/// A compiled query, as its userdatum owns it. Empty once collected.
+#[derive(Default)]
+pub(crate) struct Query(Option<NonNull<TSQuery>>);
 
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-pub(crate) unsafe extern "C-unwind" fn tslua_parse_query(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        if lua_gettop(L) < 2 as ::core::ffi::c_int
-            || lua_isstring(L, 1 as ::core::ffi::c_int) == 0
-            || lua_isstring(L, 2 as ::core::ffi::c_int) == 0
-        {
-            return luaL_error(L, c"string expected".as_ptr());
+impl Drop for Query {
+    fn drop(&mut self) {
+        if let Some(query) = self.0.take() {
+            // SAFETY: the query this userdatum owns, deleted once.
+            unsafe { ts_query_delete(query.as_ptr()) };
         }
-        let lang: *mut TSLanguage = lang_check(L, 1 as ::core::ffi::c_int);
-        let mut len: size_t = 0;
-        let src: *const ::core::ffi::c_char =
-            lua_tolstring(L, 2 as ::core::ffi::c_int, &raw mut len);
-        tslua_query_parse_count.set(tslua_query_parse_count.get().wrapping_add(1));
-        let mut error_offset: uint32_t = 0;
-        let mut error_type: TSQueryError = TSQueryErrorNone;
-        let query: *mut TSQuery = ts_query_new(
-            lang,
-            src,
-            len as uint32_t,
+    }
+}
+
+impl Userdata for Query {
+    const METATABLE: &'static CStr = c"treesitter_query";
+}
+
+lua_functions! {
+    /// The methods of a query.
+    pub(crate) enum QueryMethods in QUERY_METHODS {
+        0 => c"__tostring": query_tostring,
+        1 => c"inspect": query_inspect,
+        2 => c"disable_capture": query_disable_capture,
+        3 => c"disable_pattern": query_disable_pattern,
+    }
+}
+
+/// `vim._ts_parse_query(lang, source)`.
+pub(crate) fn parse_query(stack: &mut Stack) -> Result<c_int, Raise> {
+    if stack.top().index() < 2 || !stack.is_string(At::arg(1)) || !stack.is_string(At::arg(2)) {
+        return Err(Raise::message("string expected"));
+    }
+    let language = check_language(stack, At::arg(1))?;
+    tslua_query_parse_count.set(tslua_query_parse_count.get().wrapping_add(1));
+    let source = stack.to_bytes(At::arg(2)).unwrap_or_default();
+    // `(uint32_t)len`: the low 32 bits.
+    let length = u32::try_from(source.len() & 0xFFFF_FFFF).expect("masked to 32 bits");
+    let mut error_offset: u32 = 0;
+    let mut error_type: TSQueryError = QUERY_ERROR_NONE;
+    // SAFETY: a loaded language and the bytes of the Lua string in slot 2.
+    let query = unsafe {
+        ts_query_new(
+            language.as_ptr(),
+            source.as_ptr().cast(),
+            length,
             &raw mut error_offset,
             &raw mut error_type,
-        );
-        if query.is_null() {
-            let mut err_msg: [::core::ffi::c_char; 1025] = [0; 1025];
-            query_err_string(
-                src,
-                error_offset as ::core::ffi::c_int,
-                error_type,
-                &raw mut err_msg as *mut ::core::ffi::c_char,
-                ::core::mem::size_of::<[::core::ffi::c_char; 1025]>(),
-            );
-            return luaL_error(
-                L,
-                c"%s".as_ptr(),
-                &raw mut err_msg as *mut ::core::ffi::c_char,
-            );
+        )
+    };
+    let Some(query) = NonNull::new(query) else {
+        let message = query_error_message(source, error_offset.cast_signed(), error_type);
+        return Err(Raise::message(message));
+    };
+    stack.new_userdata(Query(Some(query)));
+    Ok(1)
+}
+
+/// What each kind of query error is called.
+fn query_error_name(error_type: TSQueryError) -> &'static [u8] {
+    match error_type {
+        1 => b"Invalid syntax:\n",
+        2 => b"Invalid node type ",
+        3 => b"Invalid field name ",
+        4 => b"Invalid capture name ",
+        5 => b"Impossible pattern:\n",
+        _ => b"error",
+    }
+}
+
+/// The message for a query `source` that failed to compile at
+/// `error_offset`: upstream's `query_err_string`, which writes into 1,025
+/// bytes and so says at most 1,024.
+fn query_error_message(source: &[u8], error_offset: c_int, error_type: TSQueryError) -> Vec<u8> {
+    // The lines are found as the C found them: in the C string, up to the
+    // first NUL.
+    let text = until_nul(source);
+    let mut line_start: c_int = 0;
+    let mut row: c_int = 0;
+    let mut error_line = None;
+    loop {
+        let rest = text
+            .get(usize::try_from(line_start).unwrap_or(usize::MAX)..)
+            .unwrap_or_default();
+        let newline = rest.iter().position(|&byte| byte == b'\n');
+        let length = newline.unwrap_or(rest.len());
+        let line_end = line_start.saturating_add(c_int::try_from(length).unwrap_or(c_int::MAX));
+        if line_end > error_offset {
+            error_line = Some(&rest[..length]);
+            break;
         }
-        let ud: *mut *mut TSQuery =
-            lua_newuserdata(L, ::core::mem::size_of::<*mut TSQuery>()) as *mut *mut TSQuery;
-        *ud = query;
-        lua_getfield(L, LUA_REGISTRYINDEX, TS_META_QUERY.as_ptr());
-        lua_setmetatable(L, -2 as ::core::ffi::c_int);
-        1 as ::core::ffi::c_int
+        line_start = line_end + 1;
+        row += 1;
+        if newline.is_none() {
+            break;
+        }
     }
-}
+    let column = error_offset - line_start;
 
-fn query_err_to_string(error_type: TSQueryError) -> *const ::core::ffi::c_char {
-    match error_type as ::core::ffi::c_uint {
-        1 => c"Invalid syntax:\n".as_ptr(),
-        2 => c"Invalid node type ".as_ptr(),
-        3 => c"Invalid field name ".as_ptr(),
-        4 => c"Invalid capture name ".as_ptr(),
-        5 => c"Impossible pattern:\n".as_ptr(),
-        _ => c"error".as_ptr(),
-    }
-}
-
-/// # Safety
-///
-/// `src` must point at a NUL-terminated string. `mut err` must point at a
-/// NUL-terminated string, unaliased for the call.
-unsafe fn query_err_string(
-    src: *const ::core::ffi::c_char,
-    error_offset: ::core::ffi::c_int,
-    error_type: TSQueryError,
-    mut err: *mut ::core::ffi::c_char,
-    mut errlen: size_t,
-) {
-    unsafe {
-        let mut line_start: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut row: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut error_line: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-        let mut error_line_len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut end_str: *const ::core::ffi::c_char;
-        loop {
-            let src_tmp: *const ::core::ffi::c_char = src.add(line_start as usize);
-            end_str = strchr(src_tmp, '\n' as ::core::ffi::c_int);
-            let line_length: ::core::ffi::c_int = if !end_str.is_null() {
-                end_str.offset_from(src_tmp) as ::core::ffi::c_int
-            } else {
-                cstr::bytes_at(src_tmp).len() as ::core::ffi::c_int
-            };
-            let line_end: ::core::ffi::c_int = line_start + line_length;
-            if line_end > error_offset {
-                error_line = src_tmp;
-                error_line_len = line_length;
-                break;
-            } else {
-                line_start = line_end + 1 as ::core::ffi::c_int;
-                row += 1;
-                if end_str.is_null() {
+    let mut message = format!("Query error at {}:{}. ", row + 1, column + 1).into_bytes();
+    message.extend_from_slice(query_error_name(error_type));
+    if [
+        QUERY_ERROR_NODE_TYPE,
+        QUERY_ERROR_FIELD,
+        QUERY_ERROR_CAPTURE,
+    ]
+    .contains(&error_type)
+    {
+        let at = usize::try_from(error_offset).unwrap_or(usize::MAX);
+        let suffix = source.get(at..).unwrap_or_default();
+        let is_anonymous = error_type == QUERY_ERROR_NODE_TYPE
+            && at.checked_sub(1).and_then(|before| source.get(before)) == Some(&b'"');
+        let mut length = 0;
+        if is_anonymous {
+            // Up to an unescaped double quote.
+            let mut backslashes = 0;
+            while let Some(&byte) = suffix.get(length) {
+                if byte == b'"' && backslashes % 2 == 0 {
                     break;
                 }
+                backslashes = if byte == b'\\' { backslashes + 1 } else { 0 };
+                length += 1;
+            }
+        } else {
+            // Up to the end of the identifier.
+            while suffix
+                .get(length)
+                .is_some_and(|&byte| byte.is_ascii_alphanumeric() || b"_-.".contains(&byte))
+            {
+                length += 1;
             }
         }
-        let column: ::core::ffi::c_int = error_offset - line_start;
-        let type_msg: *const ::core::ffi::c_char = query_err_to_string(error_type);
-        snprintf(
-            err,
-            errlen,
-            c"Query error at %d:%d. %s".as_ptr(),
-            row + 1 as ::core::ffi::c_int,
-            column + 1 as ::core::ffi::c_int,
-            type_msg,
-        );
-        let mut offset: size_t = cstr::bytes_at(err).len();
-        errlen = errlen.wrapping_sub(offset);
-        err = err.add(offset);
-        if error_type as ::core::ffi::c_uint
-            == TSQueryErrorNodeType as ::core::ffi::c_int as ::core::ffi::c_uint
-            || error_type as ::core::ffi::c_uint
-                == TSQueryErrorField as ::core::ffi::c_int as ::core::ffi::c_uint
-            || error_type as ::core::ffi::c_uint
-                == TSQueryErrorCapture as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            let suffix: *const ::core::ffi::c_char = src.add(error_offset as usize);
-            let is_anonymous: bool = error_type as ::core::ffi::c_uint
-                == TSQueryErrorNodeType as ::core::ffi::c_int as ::core::ffi::c_uint
-                && *suffix.offset(-1 as ::core::ffi::c_int as isize) as ::core::ffi::c_int
-                    == '"' as ::core::ffi::c_int;
-            let mut suffix_len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-            let mut c: ::core::ffi::c_char = *suffix.add(suffix_len as usize);
-            if is_anonymous {
-                let mut backslashes: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-                while c as ::core::ffi::c_int != '"' as ::core::ffi::c_int
-                    || backslashes % 2 as ::core::ffi::c_int != 0 as ::core::ffi::c_int
-                {
-                    if c as ::core::ffi::c_int == '\\' as ::core::ffi::c_int {
-                        backslashes += 1 as ::core::ffi::c_int;
-                    } else {
-                        backslashes = 0 as ::core::ffi::c_int;
-                    }
-                    suffix_len += 1;
-                    c = *suffix.add(suffix_len as usize);
+        message.push(b'"');
+        message.extend_from_slice(until_nul(&suffix[..length]));
+        message.extend_from_slice(b"\":\n");
+    }
+    match error_line {
+        None => message.extend_from_slice(b"Unexpected EOF\n"),
+        Some(line) => {
+            message.extend_from_slice(line);
+            message.push(b'\n');
+            // `%*s` of "": the width's spaces, whichever its sign.
+            message.resize(message.len() + column.unsigned_abs() as usize, b' ');
+            message.extend_from_slice(b"^\n");
+        }
+    }
+    message.truncate(1024);
+    message
+}
+
+/// `luaL_checkudata` for a query: its `TSQuery *`, refusing a collected
+/// one.
+pub(crate) fn check_query(stack: &mut Stack, at: At) -> Result<*mut TSQuery, Raise> {
+    match stack.check_userdata::<Query>(at)?.0 {
+        Some(query) => Ok(query.as_ptr()),
+        None => Err(Raise::argument(at.index(), "TSQuery expected")),
+    }
+}
+
+fn query_tostring(stack: &mut Stack) -> Result<c_int, Raise> {
+    stack.push_bytes(b"<query>");
+    Ok(1)
+}
+
+/// The predicate steps of `pattern`, the query's own.
+///
+/// # Safety
+/// `query` is live for `'a`.
+unsafe fn predicate_steps<'a>(query: *const TSQuery, pattern: u32) -> &'a [TSQueryPredicateStep] {
+    let mut count: u32 = 0;
+    // SAFETY: the caller's live query; the array is its own.
+    unsafe {
+        let steps = ts_query_predicates_for_pattern(query, pattern, &raw mut count);
+        if steps.is_null() {
+            return &[];
+        }
+        core::slice::from_raw_parts(steps, count as usize)
+    }
+}
+
+/// A string the query interned (`which` answers it with its length).
+///
+/// # Safety
+/// `query` is live for `'a`, and `which` one of tree-sitter's lookups.
+unsafe fn query_string<'a>(
+    query: *const TSQuery,
+    id: u32,
+    which: unsafe extern "C" fn(*const TSQuery, u32, *mut u32) -> *const c_char,
+) -> &'a [u8] {
+    let mut length: u32 = 0;
+    // SAFETY: the caller's live query; the string is its own, `length`
+    // bytes long.
+    unsafe {
+        let text = which(query, id, &raw mut length);
+        core::slice::from_raw_parts(text.cast::<u8>(), length as usize)
+    }
+}
+
+/// `query:inspect()`: `{patterns = {[i] = predicates}, captures = names}`,
+/// each predicate a list of strings and capture ids.
+fn query_inspect(stack: &mut Stack) -> Result<c_int, Raise> {
+    let query = check_query(stack, At::arg(1))?;
+    stack.new_table(0, 2);
+    // SAFETY: the query the userdatum owns, throughout.
+    let pattern_count = unsafe { ts_query_pattern_count(query) };
+    stack.new_table(pattern_count as usize, 1);
+    for pattern in 0..pattern_count {
+        // SAFETY: as above.
+        let steps = unsafe { predicate_steps(query, pattern) };
+        if steps.is_empty() {
+            continue;
+        }
+        stack.new_table(steps.len() / 4, 1);
+        stack.new_table(3, 0);
+        let mut predicate = 1;
+        let mut item = 1;
+        for step in steps {
+            match step.type_0 {
+                STEP_TYPE_DONE => {
+                    stack.raw_set_index(At::from_top(2), predicate);
+                    predicate += 1;
+                    stack.new_table(3, 0);
+                    item = 1;
+                    continue;
                 }
-            } else {
-                while *(*__ctype_b_loc()).offset(c as ::core::ffi::c_int as isize)
-                    as ::core::ffi::c_int
-                    & _ISalnum as ::core::ffi::c_int as ::core::ffi::c_ushort as ::core::ffi::c_int
-                    != 0
-                    || c as ::core::ffi::c_int == '_' as ::core::ffi::c_int
-                    || c as ::core::ffi::c_int == '-' as ::core::ffi::c_int
-                    || c as ::core::ffi::c_int == '.' as ::core::ffi::c_int
-                {
-                    suffix_len += 1;
-                    c = *suffix.add(suffix_len as usize);
+                STEP_TYPE_STRING => {
+                    // SAFETY: as above.
+                    let text =
+                        unsafe { query_string(query, step.value_id, ts_query_string_value_for_id) };
+                    stack.push_bytes(text);
                 }
+                STEP_TYPE_CAPTURE => stack.push_integer(integer(step.value_id) + 1),
+                _ => std::process::abort(),
             }
-            snprintf(err, errlen, c"\"%.*s\":\n".as_ptr(), suffix_len, suffix);
-            offset = cstr::bytes_at(err).len();
-            errlen = errlen.wrapping_sub(offset);
-            err = err.add(offset);
+            stack.raw_set_index(At::from_top(2), item);
+            item += 1;
         }
-        if error_line.is_null() {
-            snprintf(err, errlen, c"Unexpected EOF\n".as_ptr());
-            return;
-        }
-        snprintf(
-            err,
-            errlen,
-            c"%.*s\n%*s^\n".as_ptr(),
-            error_line_len,
-            error_line,
-            column,
-            c"".as_ptr(),
-        );
+        stack.pop(1);
+        let slot = c_int::try_from(pattern)
+            .unwrap_or(c_int::MAX)
+            .saturating_add(1);
+        stack.raw_set_index(At::from_top(2), slot);
     }
+    stack.set_field(At::from_top(2), c"patterns");
+
+    // SAFETY: as above.
+    let capture_count = unsafe { ts_query_capture_count(query) };
+    stack.new_table(capture_count as usize, 0);
+    for capture in 0..capture_count {
+        // SAFETY: as above.
+        let name = unsafe { query_string(query, capture, ts_query_capture_name_for_id) };
+        stack.push_bytes(name);
+        let slot = c_int::try_from(capture)
+            .unwrap_or(c_int::MAX)
+            .saturating_add(1);
+        stack.raw_set_index(At::from_top(2), slot);
+    }
+    stack.set_field(At::from_top(2), c"captures");
+    Ok(1)
 }
 
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-pub(crate) unsafe fn query_check(L: *mut lua_State, index: ::core::ffi::c_int) -> *mut TSQuery {
-    unsafe {
-        let ud: *mut *mut TSQuery =
-            luaL_checkudata(L, index, TS_META_QUERY.as_ptr()) as *mut *mut TSQuery;
-        luaL_argcheck(L, !(*ud).is_null(), index, c"TSQuery expected".as_ptr());
-        *ud
-    }
+/// `query:disable_capture(name)`.
+fn query_disable_capture(stack: &mut Stack) -> Result<c_int, Raise> {
+    let query = check_query(stack, At::arg(1))?;
+    let name = stack.check_bytes(At::arg(2))?;
+    // `(uint32_t)len`: the low 32 bits.
+    let length = u32::try_from(name.len() & 0xFFFF_FFFF).expect("masked to 32 bits");
+    // SAFETY: the query the userdatum owns, and the bytes of the Lua string
+    // in slot 2.
+    unsafe { ts_query_disable_capture(query, name.as_ptr().cast(), length) };
+    Ok(0)
 }
 
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn query_gc(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let query: *mut TSQuery = query_check(L, 1 as ::core::ffi::c_int);
-        ts_query_delete(query);
-        0 as ::core::ffi::c_int
-    }
-}
-
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn query_tostring(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        lua_pushstring(L, c"<query>".as_ptr());
-        1 as ::core::ffi::c_int
-    }
-}
-
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn query_inspect(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let query: *mut TSQuery = query_check(L, 1 as ::core::ffi::c_int);
-        lua_createtable(L, 0 as ::core::ffi::c_int, 2 as ::core::ffi::c_int);
-        let n_pat: uint32_t = ts_query_pattern_count(query);
-        lua_createtable(L, n_pat as ::core::ffi::c_int, 1 as ::core::ffi::c_int);
-        let mut i: size_t = 0 as size_t;
-        while i < n_pat as size_t {
-            let mut len: uint32_t = 0;
-            let step: *const TSQueryPredicateStep =
-                ts_query_predicates_for_pattern(query, i as uint32_t, &raw mut len);
-            if len != 0 as uint32_t {
-                lua_createtable(
-                    L,
-                    len as ::core::ffi::c_int / 4 as ::core::ffi::c_int,
-                    1 as ::core::ffi::c_int,
-                );
-                lua_createtable(L, 3 as ::core::ffi::c_int, 0 as ::core::ffi::c_int);
-                let mut nextpred: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-                let mut nextitem: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-                let mut k: size_t = 0 as size_t;
-                while k < len as size_t {
-                    if (*step.add(k)).type_0 as ::core::ffi::c_uint
-                        == TSQueryPredicateStepTypeDone as ::core::ffi::c_int as ::core::ffi::c_uint
-                    {
-                        lua_rawseti(L, -2 as ::core::ffi::c_int, nextpred);
-                        nextpred += 1;
-                        lua_createtable(L, 3 as ::core::ffi::c_int, 0 as ::core::ffi::c_int);
-                        nextitem = 1 as ::core::ffi::c_int;
-                    } else {
-                        if (*step.add(k)).type_0 as ::core::ffi::c_uint
-                            == TSQueryPredicateStepTypeString as ::core::ffi::c_int
-                                as ::core::ffi::c_uint
-                        {
-                            let mut strlen_0: uint32_t = 0;
-                            let str: *const ::core::ffi::c_char = ts_query_string_value_for_id(
-                                query,
-                                (*step.add(k)).value_id,
-                                &raw mut strlen_0,
-                            );
-                            lua_pushlstring(L, str, strlen_0 as size_t);
-                        } else if (*step.add(k)).type_0 as ::core::ffi::c_uint
-                            == TSQueryPredicateStepTypeCapture as ::core::ffi::c_int
-                                as ::core::ffi::c_uint
-                        {
-                            lua_pushinteger(
-                                L,
-                                (*step.add(k)).value_id.wrapping_add(1 as uint32_t) as lua_Integer,
-                            );
-                        } else {
-                            abort();
-                        }
-                        lua_rawseti(L, -2 as ::core::ffi::c_int, nextitem);
-                        nextitem += 1;
-                    }
-                    k = k.wrapping_add(1);
-                }
-                lua_settop(L, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
-                lua_rawseti(
-                    L,
-                    -2 as ::core::ffi::c_int,
-                    i as ::core::ffi::c_int + 1 as ::core::ffi::c_int,
-                );
-            }
-            i = i.wrapping_add(1);
-        }
-        lua_setfield(L, -2 as ::core::ffi::c_int, c"patterns".as_ptr());
-        let n_captures: uint32_t = ts_query_capture_count(query);
-        lua_createtable(L, n_captures as ::core::ffi::c_int, 0 as ::core::ffi::c_int);
-        let mut i_0: size_t = 0 as size_t;
-        while i_0 < n_captures as size_t {
-            let mut strlen_1: uint32_t = 0;
-            let str_0: *const ::core::ffi::c_char =
-                ts_query_capture_name_for_id(query, i_0 as uint32_t, &raw mut strlen_1);
-            lua_pushlstring(L, str_0, strlen_1 as size_t);
-            lua_rawseti(
-                L,
-                -2 as ::core::ffi::c_int,
-                i_0 as ::core::ffi::c_int + 1 as ::core::ffi::c_int,
-            );
-            i_0 = i_0.wrapping_add(1);
-        }
-        lua_setfield(L, -2 as ::core::ffi::c_int, c"captures".as_ptr());
-        1 as ::core::ffi::c_int
-    }
-}
-
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn query_disable_capture(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let query: *mut TSQuery = query_check(L, 1 as ::core::ffi::c_int);
-        let mut name_len: size_t = 0;
-        let name: *const ::core::ffi::c_char =
-            luaL_checklstring(L, 2 as ::core::ffi::c_int, &raw mut name_len);
-        ts_query_disable_capture(query, name, name_len as uint32_t);
-        0 as ::core::ffi::c_int
-    }
-}
-
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn query_disable_pattern(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let query: *mut TSQuery = query_check(L, 1 as ::core::ffi::c_int);
-        let pattern_index: uint32_t = luaL_checkinteger(L, 2 as ::core::ffi::c_int) as uint32_t;
-        ts_query_disable_pattern(query, pattern_index.wrapping_sub(1 as uint32_t));
-        0 as ::core::ffi::c_int
-    }
+/// `query:disable_pattern(index)`, one-based.
+fn query_disable_pattern(stack: &mut Stack) -> Result<c_int, Raise> {
+    let query = check_query(stack, At::arg(1))?;
+    let pattern = wrap_u32(stack.check_integer(At::arg(2))?);
+    // SAFETY: the query the userdatum owns.
+    unsafe { ts_query_disable_pattern(query, pattern.wrapping_sub(1)) };
+    Ok(0)
 }

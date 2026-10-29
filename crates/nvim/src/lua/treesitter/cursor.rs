@@ -1,60 +1,132 @@
 //! The query cursor, and the match it hands back.
 //!
-//! `tslua_push_querycursor` creates a cursor over (query, node) with the
-//! byte/row limits and the match limit applied, and its `next_capture` /
-//! `next_match` methods drive it.  A match is pushed as its own userdatum
-//! ([`querymatch_meta`]) rather than copied, so the capture list is only
-//! materialised if Lua asks for it.
+//! `vim._create_ts_querycursor(node, query, opts)` makes a cursor over
+//! (query, node) with the point range, start depth and match limit applied,
+//! and its `next_capture` / `next_match` methods drive it. A match is
+//! pushed as its own userdatum ([`Match`]) rather than copied, so the
+//! capture list is only materialised if Lua asks for it.
+//!
+//! A cursor's environment is `{tree, query, cursor}`, and every node and
+//! match it answers shares it: the tree the nodes point into, the query the
+//! cursor walks and the cursor whose memory a match's captures live in all
+//! outlive whatever still reads them. (Upstream gave the cursor the node's
+//! environment, which keeps only the tree: a match read after its cursor
+//! was collected read freed memory.)
 
 #![deny(unsafe_op_in_unsafe_fn)]
 // Unsafe perimeter: the `lua/treesitter/` row in docs/perimeter.md.
 #![allow(unsafe_code)]
-// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
+use core::ffi::{CStr, c_int};
+use core::ptr::NonNull;
+
+use super::node::{check_node, push_node};
+use super::query::check_query;
 use super::*;
-use crate::global_cell::ConstTable;
-use crate::luaL_reg_table;
+use crate::lua::stack::{Kind, Raise};
+use crate::lua_functions;
 
-pub(crate) static querycursor_meta: ConstTable<[luaL_Reg; 5]> = luaL_reg_table![
-    c"remove_match" => querycursor_remove_match,
-    c"next_capture" => querycursor_next_capture,
-    c"next_match" => querycursor_next_match,
-    c"__gc" => querycursor_gc,
-];
+/// A query cursor, as its userdatum owns it. Empty once collected.
+#[derive(Default)]
+pub(crate) struct QueryCursor(Option<NonNull<TSQueryCursor>>);
 
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-pub(crate) unsafe extern "C-unwind" fn tslua_push_querycursor(
-    L: *mut lua_State,
-) -> ::core::ffi::c_int {
-    unsafe {
-        let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
-        let query: *mut TSQuery = query_check(L, 2 as ::core::ffi::c_int);
-        let cursor: *mut TSQueryCursor = ts_query_cursor_new();
-        if lua_gettop(L) >= 3 as ::core::ffi::c_int
-            && !(lua_type(L, 3 as ::core::ffi::c_int) == LUA_TNIL)
-        {
-            luaL_argcheck(
-                L,
-                lua_type(L, 3 as ::core::ffi::c_int) == 5 as ::core::ffi::c_int,
-                3 as ::core::ffi::c_int,
-                c"table expected".as_ptr(),
-            );
+impl Drop for QueryCursor {
+    fn drop(&mut self) {
+        if let Some(cursor) = self.0.take() {
+            // SAFETY: the cursor this userdatum owns, deleted once.
+            unsafe { ts_query_cursor_delete(cursor.as_ptr()) };
         }
-        lua_getfield(L, 3 as ::core::ffi::c_int, c"start_row".as_ptr());
-        let start_row: uint32_t = luaL_checkinteger(L, -1 as ::core::ffi::c_int) as uint32_t;
-        lua_settop(L, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
-        lua_getfield(L, 3 as ::core::ffi::c_int, c"start_col".as_ptr());
-        let start_col: uint32_t = luaL_checkinteger(L, -1 as ::core::ffi::c_int) as uint32_t;
-        lua_settop(L, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
-        lua_getfield(L, 3 as ::core::ffi::c_int, c"end_row".as_ptr());
-        let end_row: uint32_t = luaL_checkinteger(L, -1 as ::core::ffi::c_int) as uint32_t;
-        lua_settop(L, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
-        lua_getfield(L, 3 as ::core::ffi::c_int, c"end_col".as_ptr());
-        let end_col: uint32_t = luaL_checkinteger(L, -1 as ::core::ffi::c_int) as uint32_t;
-        lua_settop(L, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
+    }
+}
+
+impl Userdata for QueryCursor {
+    const METATABLE: &'static CStr = c"treesitter_querycursor";
+}
+
+/// A match, as its userdatum holds it: its captures are the cursor's.
+#[derive(Clone, Copy)]
+pub(crate) struct Match(TSQueryMatch);
+
+impl Default for Match {
+    fn default() -> Match {
+        Match(TSQueryMatch {
+            id: 0,
+            pattern_index: 0,
+            capture_count: 0,
+            captures: core::ptr::null(),
+        })
+    }
+}
+
+impl Userdata for Match {
+    const METATABLE: &'static CStr = c"treesitter_querymatch";
+}
+
+lua_functions! {
+    /// The methods of a query cursor.
+    pub(crate) enum QueryCursorMethods in QUERY_CURSOR_METHODS {
+        0 => c"remove_match": cursor_remove_match,
+        1 => c"next_capture": cursor_next_capture,
+        2 => c"next_match": cursor_next_match,
+    }
+}
+
+lua_functions! {
+    /// The methods of a match.
+    pub(crate) enum QueryMatchMethods in QUERY_MATCH_METHODS {
+        0 => c"info": match_info,
+        1 => c"captures": match_captures,
+    }
+}
+
+/// Field `name` of the options table in slot 3, as `luaL_checkinteger`
+/// reads it (the field numbered -1 in its error); `None` for a nil one when
+/// `optional`.
+fn option(stack: &mut Stack, name: &CStr, optional: bool) -> Result<Option<u32>, Raise> {
+    stack.get_field(At::arg(3), name);
+    if optional && stack.kind(At::TOP) == Kind::Nil {
+        stack.pop(1);
+        return Ok(None);
+    }
+    // A refusal leaves the field on top, where the check's error finds it.
+    let value = wrap_u32(stack.check_integer(At::TOP)?);
+    stack.pop(1);
+    Ok(Some(value))
+}
+
+/// `vim._create_ts_querycursor(node, query, opts)`.
+pub(crate) fn create_query_cursor(stack: &mut Stack) -> Result<c_int, Raise> {
+    let node = check_node(stack, At::arg(1))?;
+    let query = check_query(stack, At::arg(2))?;
+    if stack.top().index() >= 3
+        && stack.kind(At::arg(3)) != Kind::Nil
+        && stack.kind(At::arg(3)) != Kind::Table
+    {
+        return Err(Raise::argument(3, "table expected"));
+    }
+    let mut point = [0; 4];
+    for (field, name) in point
+        .iter_mut()
+        .zip([c"start_row", c"start_col", c"end_row", c"end_col"])
+    {
+        *field = option(stack, name, false)?.unwrap_or_default();
+    }
+    let max_start_depth = option(stack, c"max_start_depth", true)?;
+    let match_limit = option(stack, c"match_limit", true)?;
+
+    let [start_row, start_col, end_row, end_col] = point;
+    // SAFETY: a fresh cursor, run over the query and the node the userdata
+    // in slots 1 and 2 keep alive -- and the environment set below keeps
+    // them alive for as long as the cursor.
+    let cursor = unsafe {
+        let cursor = ts_query_cursor_new();
         ts_query_cursor_set_point_range(
             cursor,
             TSPoint {
@@ -66,188 +138,122 @@ pub(crate) unsafe extern "C-unwind" fn tslua_push_querycursor(
                 column: end_col,
             },
         );
-        lua_getfield(L, 3 as ::core::ffi::c_int, c"max_start_depth".as_ptr());
-        if !(lua_type(L, -1 as ::core::ffi::c_int) == LUA_TNIL) {
-            let max_start_depth: uint32_t =
-                luaL_checkinteger(L, -1 as ::core::ffi::c_int) as uint32_t;
-            ts_query_cursor_set_max_start_depth(cursor, max_start_depth);
+        if let Some(depth) = max_start_depth {
+            ts_query_cursor_set_max_start_depth(cursor, depth);
         }
-        lua_settop(L, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
-        lua_getfield(L, 3 as ::core::ffi::c_int, c"match_limit".as_ptr());
-        if !(lua_type(L, -1 as ::core::ffi::c_int) == LUA_TNIL) {
-            let match_limit: uint32_t = luaL_checkinteger(L, -1 as ::core::ffi::c_int) as uint32_t;
-            ts_query_cursor_set_match_limit(cursor, match_limit);
+        if let Some(limit) = match_limit {
+            ts_query_cursor_set_match_limit(cursor, limit);
         }
-        lua_settop(L, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
         ts_query_cursor_exec(cursor, query, node);
-        let ud: *mut *mut TSQueryCursor =
-            lua_newuserdata(L, ::core::mem::size_of::<*mut TSQueryCursor>())
-                as *mut *mut TSQueryCursor;
-        *ud = cursor;
-        lua_getfield(L, LUA_REGISTRYINDEX, TS_META_QUERYCURSOR.as_ptr());
-        lua_setmetatable(L, -2 as ::core::ffi::c_int);
-        lua_getfenv(L, 1 as ::core::ffi::c_int);
-        lua_setfenv(L, -2 as ::core::ffi::c_int);
-        1 as ::core::ffi::c_int
+        cursor
+    };
+    stack.new_userdata(QueryCursor(NonNull::new(cursor)));
+    // {tree, query, cursor}: the tree from the node's environment.
+    stack.new_table(3, 0);
+    stack.push_environment(At::arg(1));
+    stack.raw_get_index(At::TOP, 1);
+    stack.raw_set_index(At::from_top(3), 1);
+    stack.pop(1);
+    stack.push_value(At::arg(2));
+    stack.raw_set_index(At::from_top(2), 2);
+    stack.push_value(At::from_top(2));
+    stack.raw_set_index(At::from_top(2), 3);
+    stack.set_environment(At::from_top(2));
+    Ok(1)
+}
+
+/// `luaL_checkudata` for a cursor: its `TSQueryCursor *`, refusing a
+/// collected one.
+fn check_cursor(stack: &mut Stack, at: At) -> Result<*mut TSQueryCursor, Raise> {
+    match stack.check_userdata::<QueryCursor>(at)?.0 {
+        Some(cursor) => Ok(cursor.as_ptr()),
+        None => Err(Raise::argument(at.index(), "TSQueryCursor expected")),
     }
 }
 
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn querycursor_remove_match(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let cursor: *mut TSQueryCursor = querycursor_check(L, 1 as ::core::ffi::c_int);
-        let match_id: uint32_t = luaL_checkinteger(L, 2 as ::core::ffi::c_int) as uint32_t;
-        ts_query_cursor_remove_match(cursor, match_id);
-        0 as ::core::ffi::c_int
-    }
+fn cursor_remove_match(stack: &mut Stack) -> Result<c_int, Raise> {
+    let cursor = check_cursor(stack, At::arg(1))?;
+    let id = wrap_u32(stack.check_integer(At::arg(2))?);
+    // SAFETY: the cursor the userdatum owns.
+    unsafe { ts_query_cursor_remove_match(cursor, id) };
+    Ok(0)
 }
 
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn querycursor_next_capture(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let cursor: *mut TSQueryCursor = querycursor_check(L, 1 as ::core::ffi::c_int);
-        let mut match_0: TSQueryMatch = TSQueryMatch {
-            id: 0,
-            pattern_index: 0,
-            capture_count: 0,
-            captures: ::core::ptr::null::<TSQueryCapture>(),
-        };
-        let mut capture_index: uint32_t = 0;
-        if !ts_query_cursor_next_capture(cursor, &raw mut match_0, &raw mut capture_index) {
-            return 0 as ::core::ffi::c_int;
+/// Push `found` as a match userdatum sharing the environment of the
+/// userdatum at `owner`.
+fn push_match(stack: &mut Stack, found: TSQueryMatch, owner: At) {
+    stack.new_userdata(Match(found));
+    stack.push_environment(owner);
+    stack.set_environment(At::from_top(2));
+}
+
+/// `cursor:next_capture()`: the capture's one-based id, its node, and its
+/// match; nothing at the end.
+fn cursor_next_capture(stack: &mut Stack) -> Result<c_int, Raise> {
+    let cursor = check_cursor(stack, At::arg(1))?;
+    let mut found = Match::default().0;
+    let mut capture_index: u32 = 0;
+    // SAFETY: the cursor the userdatum owns; a match it answers points at
+    // `capture_count` captures in the cursor's memory, which the cursor's
+    // environment keeps alive for every userdatum that shares it.
+    let capture = unsafe {
+        if !ts_query_cursor_next_capture(cursor, &raw mut found, &raw mut capture_index) {
+            return Ok(0);
         }
-        let capture: TSQueryCapture = *match_0.captures.add(capture_index as usize);
-        lua_pushinteger(L, capture.index.wrapping_add(1 as uint32_t) as lua_Integer);
-        push_node(L, capture.node, 1 as ::core::ffi::c_int);
-        push_querymatch(L, &raw mut match_0, 1 as ::core::ffi::c_int);
-        3 as ::core::ffi::c_int
-    }
+        *found.captures.add(capture_index as usize)
+    };
+    stack.push_integer(integer(capture.index) + 1);
+    push_node(stack, capture.node, At::arg(1));
+    push_match(stack, found, At::arg(1));
+    Ok(3)
 }
 
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn querycursor_next_match(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let cursor: *mut TSQueryCursor = querycursor_check(L, 1 as ::core::ffi::c_int);
-        let mut match_0: TSQueryMatch = TSQueryMatch {
-            id: 0,
-            pattern_index: 0,
-            capture_count: 0,
-            captures: ::core::ptr::null::<TSQueryCapture>(),
-        };
-        if !ts_query_cursor_next_match(cursor, &raw mut match_0) {
-            return 0 as ::core::ffi::c_int;
+/// `cursor:next_match()`: the next match; nothing at the end.
+fn cursor_next_match(stack: &mut Stack) -> Result<c_int, Raise> {
+    let cursor = check_cursor(stack, At::arg(1))?;
+    let mut found = Match::default().0;
+    // SAFETY: the cursor the userdatum owns.
+    if !unsafe { ts_query_cursor_next_match(cursor, &raw mut found) } {
+        return Ok(0);
+    }
+    push_match(stack, found, At::arg(1));
+    Ok(1)
+}
+
+/// `match:info()`: its id and its one-based pattern index.
+fn match_info(stack: &mut Stack) -> Result<c_int, Raise> {
+    let found = stack.check_userdata::<Match>(At::arg(1))?.0;
+    stack.push_integer(integer(found.id));
+    stack.push_integer(integer(u32::from(found.pattern_index)) + 1);
+    Ok(2)
+}
+
+/// `match:captures()`: `{[capture id] = {node, ..}}`.
+fn match_captures(stack: &mut Stack) -> Result<c_int, Raise> {
+    let found = stack.check_userdata::<Match>(At::arg(1))?.0;
+    stack.new_table(0, 0);
+    let captures = if found.captures.is_null() {
+        &[][..]
+    } else {
+        // SAFETY: the match's captures, in the memory of the cursor its
+        // environment keeps alive.
+        unsafe { core::slice::from_raw_parts(found.captures, usize::from(found.capture_count)) }
+    };
+    for capture in captures {
+        let index = c_int::try_from(capture.index)
+            .unwrap_or(c_int::MAX)
+            .saturating_add(1);
+        stack.raw_get_index(At::TOP, index);
+        if stack.kind(At::TOP) == Kind::Nil {
+            stack.pop(1);
+            stack.new_table(0, 0);
         }
-        push_querymatch(L, &raw mut match_0, 1 as ::core::ffi::c_int);
-        1 as ::core::ffi::c_int
+        push_node(stack, capture.node, At::arg(1));
+        let next = c_int::try_from(stack.raw_len(At::from_top(2)))
+            .unwrap_or(c_int::MAX)
+            .saturating_add(1);
+        stack.raw_set_index(At::from_top(2), next);
+        stack.raw_set_index(At::from_top(2), index);
     }
-}
-
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe fn querycursor_check(L: *mut lua_State, index: ::core::ffi::c_int) -> *mut TSQueryCursor {
-    unsafe {
-        let ud: *mut *mut TSQueryCursor =
-            luaL_checkudata(L, index, TS_META_QUERYCURSOR.as_ptr()) as *mut *mut TSQueryCursor;
-        luaL_argcheck(
-            L,
-            !(*ud).is_null(),
-            index,
-            c"TSQueryCursor expected".as_ptr(),
-        );
-        *ud
-    }
-}
-
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn querycursor_gc(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let cursor: *mut TSQueryCursor = querycursor_check(L, 1 as ::core::ffi::c_int);
-        ts_query_cursor_delete(cursor);
-        0 as ::core::ffi::c_int
-    }
-}
-
-pub(crate) static querymatch_meta: ConstTable<[luaL_Reg; 3]> = luaL_reg_table![
-    c"info" => querymatch_info,
-    c"captures" => querymatch_captures,
-];
-
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-/// `match_0` must point at a live `TSQueryMatch`, unaliased for the call.
-unsafe fn push_querymatch(
-    L: *mut lua_State,
-    match_0: *mut TSQueryMatch,
-    uindex: ::core::ffi::c_int,
-) {
-    unsafe {
-        let ud: *mut TSQueryMatch =
-            lua_newuserdata(L, ::core::mem::size_of::<TSQueryMatch>()) as *mut TSQueryMatch;
-        *ud = *match_0;
-        lua_getfield(L, LUA_REGISTRYINDEX, TS_META_QUERYMATCH.as_ptr());
-        lua_setmetatable(L, -2 as ::core::ffi::c_int);
-        lua_getfenv(L, uindex);
-        lua_setfenv(L, -2 as ::core::ffi::c_int);
-    }
-}
-
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn querymatch_info(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let match_0: *mut TSQueryMatch =
-            luaL_checkudata(L, 1 as ::core::ffi::c_int, TS_META_QUERYMATCH.as_ptr())
-                as *mut TSQueryMatch;
-        lua_pushinteger(L, (*match_0).id as lua_Integer);
-        lua_pushinteger(
-            L,
-            ((*match_0).pattern_index as ::core::ffi::c_int + 1 as ::core::ffi::c_int)
-                as lua_Integer,
-        );
-        2 as ::core::ffi::c_int
-    }
-}
-
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn querymatch_captures(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let match_0: *mut TSQueryMatch =
-            luaL_checkudata(L, 1 as ::core::ffi::c_int, TS_META_QUERYMATCH.as_ptr())
-                as *mut TSQueryMatch;
-        lua_createtable(L, 0 as ::core::ffi::c_int, 0 as ::core::ffi::c_int);
-        let mut i: size_t = 0 as size_t;
-        while i < (*match_0).capture_count as size_t {
-            let capture: TSQueryCapture = *(*match_0).captures.add(i);
-            let index: ::core::ffi::c_int =
-                capture.index as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
-            lua_rawgeti(L, -1 as ::core::ffi::c_int, index);
-            if lua_type(L, -1 as ::core::ffi::c_int) == LUA_TNIL {
-                lua_settop(L, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
-                lua_createtable(L, 0 as ::core::ffi::c_int, 0 as ::core::ffi::c_int);
-            }
-            push_node(L, capture.node, 1 as ::core::ffi::c_int);
-            lua_rawseti(
-                L,
-                -2 as ::core::ffi::c_int,
-                lua_objlen(L, -2 as ::core::ffi::c_int) as ::core::ffi::c_int
-                    + 1 as ::core::ffi::c_int,
-            );
-            lua_rawseti(L, -2 as ::core::ffi::c_int, index);
-            i = i.wrapping_add(1);
-        }
-        1 as ::core::ffi::c_int
-    }
+    Ok(1)
 }

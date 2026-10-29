@@ -1003,7 +1003,6 @@ CELL_PTR_ALLOW_RE = re.compile(
 # see "the cell_ptr partition" in the doc block for why the cap is kept.
 CELL_PTR_KEEPERS = {
     "cell": "not one cell — a local bound from an option slot (S3) or a grid (S13)",
-    "buf": "F-P22-49: `TSInput.read`'s contract needs a buffer surviving the return",
     "CELL": "`GlobalCell`'s own tests of `ptr`/`as_raw`; they must call them",
 }
 # Every `.ptr()`/`.as_raw()` site with its receiver, for the partition. The
@@ -4279,7 +4278,7 @@ SELF_TEST_CELL_PTR_PARTITION = [
     (
         {
             "a.rs": "fn f() {\n    main_loop.ptr();\n    curwin.ptr();\n}\n",
-            "b.rs": "fn g() {\n    buf.ptr();\n    buf.ptr();\n"
+            "b.rs": "fn g() {\n    cell.ptr();\n    cell.ptr();\n"
             "    curbuf.ptr();\n    self.0.ptr();\n}\n",
         },
         {"cell_ptr_keepers": 2, "cell_ptr_accessors": 3},
@@ -4302,7 +4301,7 @@ SELF_TEST_CELL_PTR_CHECK = [
     # A listed name may hold as many as its ruling allows.
     ({"a.rs": "fn f() {\n    main_loop.ptr();\n    main_loop.ptr();\n}\n"}, False),
     (
-        {"a.rs": "fn f() {\n    buf.ptr();\n    buf.ptr();\n}\n"},
+        {"a.rs": "fn f() {\n    cell.ptr();\n    cell.ptr();\n}\n"},
         False,
     ),
 ]

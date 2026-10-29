@@ -1,334 +1,369 @@
 //! Loading a parser library and registering it under a language name.
 //!
-//! `add_language` is the one entry point: it `dlopen`s the library (or takes
-//! a wasm module), calls its `tree_sitter_<lang>` constructor, checks the
-//! ABI version against `TREE_SITTER_MIN_COMPATIBLE_LANGUAGE_VERSION` and
-//! stores the `TSLanguage *` in [`langs`].  `tslua_inspect_lang` renders a
+//! `vim._ts_add_language_from_object` is the one way in: it `dlopen`s the
+//! library, calls its `tree_sitter_<lang>` constructor, checks the ABI
+//! version against [`TREE_SITTER_MIN_COMPATIBLE_LANGUAGE_VERSION`] and
+//! stores the `TSLanguage *` in [`LANGUAGES`]. `inspect_language` renders a
 //! loaded language's symbols, fields and metadata back to Lua.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 // Unsafe perimeter: the `lua/treesitter/` row in docs/perimeter.md.
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
+
+use core::ffi::{CStr, c_int, c_void};
+use core::ptr::NonNull;
+use std::ffi::CString;
 
 use super::*;
+use crate::event::libuv::{uv_dlclose, uv_dlerror, uv_dlopen, uv_dlsym};
+use crate::lua::stack::{Kind, Raise};
+use crate::types::uv_lib_t;
+
+/// `luaL_checklstring` as the C string `luaL_checkstring` answers: up to
+/// the first NUL, copied out of the slot.
+pub(crate) fn checked_c_string(stack: &mut Stack, at: At) -> Result<CString, Raise> {
+    let bytes = until_nul(stack.check_bytes(at)?);
+    Ok(CString::new(bytes).expect("cut at the first NUL"))
+}
 
 /// The key a language is registered under: its name plus the terminator.
-///
-/// # Safety
-/// `name` must be NUL-terminated.
-unsafe fn lang_key<'a>(name: *const ::core::ffi::c_char) -> &'a [u8] {
-    // SAFETY: the caller's NUL-terminated name.
-    unsafe { ::core::ffi::CStr::from_ptr(name) }.to_bytes_with_nul()
+fn language_key(name: &CStr) -> &[u8] {
+    name.to_bytes_with_nul()
 }
 
-/// Whether a parser for `name` is loaded.
-///
-/// # Safety
-/// `name` must be NUL-terminated.
-unsafe fn lang_loaded(name: *const ::core::ffi::c_char) -> bool {
-    // SAFETY: the caller's NUL-terminated name.
-    langs.with(|loaded| loaded.contains_key(unsafe { lang_key(name) }))
-}
+/// A loaded language: what a parser library's constructor answered. The
+/// library is never closed once a language from it is registered, so the
+/// language is valid for the rest of the process, and its names with it.
+#[derive(Clone, Copy)]
+pub(crate) struct Language(NonNull<TSLanguage>);
 
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-pub(crate) unsafe extern "C-unwind" fn tslua_has_language(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let lang_name: *const ::core::ffi::c_char = luaL_checklstring(
-            L,
-            1 as ::core::ffi::c_int,
-            ::core::ptr::null_mut::<size_t>(),
-        );
-        lua_pushboolean(L, lang_loaded(lang_name) as ::core::ffi::c_int);
-        1 as ::core::ffi::c_int
+impl Language {
+    pub(crate) fn as_ptr(self) -> *const TSLanguage {
+        self.0.as_ptr().cast_const()
+    }
+
+    fn symbol_count(self) -> u32 {
+        // SAFETY: a live language, throughout.
+        unsafe { ts_language_symbol_count(self.as_ptr()) }
+    }
+
+    fn symbol_type(self, symbol: TSSymbol) -> TSSymbolType {
+        // SAFETY: as above.
+        unsafe { ts_language_symbol_type(self.as_ptr(), symbol) }
+    }
+
+    /// The name of `symbol`, the language's own.
+    fn symbol_name(self, symbol: TSSymbol) -> &'static [u8] {
+        // SAFETY: as above; a name is NUL-terminated, or null.
+        unsafe { c_bytes(ts_language_symbol_name(self.as_ptr(), symbol)) }
+    }
+
+    fn field_count(self) -> u32 {
+        // SAFETY: as above.
+        unsafe { ts_language_field_count(self.as_ptr()) }
+    }
+
+    /// The name of field `id`; `None` for an id the language has no name
+    /// for.
+    fn field_name(self, id: TSFieldId) -> Option<&'static [u8]> {
+        // SAFETY: as above; a name is NUL-terminated, or null.
+        unsafe {
+            let name = ts_language_field_name_for_id(self.as_ptr(), id);
+            (!name.is_null()).then(|| c_bytes(name))
+        }
+    }
+
+    fn is_wasm(self) -> bool {
+        // SAFETY: as above.
+        unsafe { ts_language_is_wasm(self.as_ptr()) }
+    }
+
+    pub(crate) fn abi_version(self) -> u32 {
+        // SAFETY: as above.
+        unsafe { ts_language_abi_version(self.as_ptr()) }
+    }
+
+    fn state_count(self) -> u32 {
+        // SAFETY: as above.
+        unsafe { ts_language_state_count(self.as_ptr()) }
+    }
+
+    /// The grammar's version triple, when it carries one.
+    fn metadata(self) -> Option<[u8; 3]> {
+        // SAFETY: as above; the metadata is the language's own, or null.
+        unsafe {
+            let metadata = ts_language_metadata(self.as_ptr()).as_ref()?;
+            Some([
+                metadata.major_version,
+                metadata.minor_version,
+                metadata.patch_version,
+            ])
+        }
+    }
+
+    /// The supertype symbols.
+    fn supertypes(self) -> &'static [TSSymbol] {
+        let mut count: u32 = 0;
+        // SAFETY: as above; the array is the language's own.
+        unsafe {
+            let supertypes = ts_language_supertypes(self.as_ptr(), &raw mut count);
+            if supertypes.is_null() {
+                return &[];
+            }
+            core::slice::from_raw_parts(supertypes, count as usize)
+        }
+    }
+
+    /// The subtypes of `supertype` as upstream lists them: `subtypes[1..=n]`
+    /// of the `n` the language has -- one past the first, and one past the
+    /// end. Kept as it is (filed upstream); the entry past the end is the
+    /// next one of the language's subtype map.
+    fn subtypes_as_listed(self, supertype: TSSymbol) -> Vec<TSSymbol> {
+        let mut count: u32 = 0;
+        // SAFETY: as above; the map is the language's own, and upstream
+        // reads its entry past the subtypes asked for.
+        unsafe {
+            let subtypes = ts_language_subtypes(self.as_ptr(), supertype, &raw mut count);
+            (1..=count as usize).map(|at| *subtypes.add(at)).collect()
+        }
     }
 }
 
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-pub(crate) unsafe extern "C-unwind" fn tslua_add_language_from_object(
-    L: *mut lua_State,
-) -> ::core::ffi::c_int {
-    unsafe { add_language(L, false) }
-}
-
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-/// `path` must point at a NUL-terminated string. `lang_name` must point at a
-/// NUL-terminated string. `symbol` must point at a NUL-terminated string.
-unsafe fn load_language_from_object(
-    L: *mut lua_State,
-    path: *const ::core::ffi::c_char,
-    lang_name: *const ::core::ffi::c_char,
-    symbol: *const ::core::ffi::c_char,
-) -> *const TSLanguage {
-    let mut dlerror = [0 as ::core::ffi::c_char; 1025];
-    unsafe {
-        let mut lib: uv_lib_t = uv_lib_t {
-            handle: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-            errmsg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        };
-        if uv_dlopen(path, &raw mut lib) != 0 {
-            xstrlcpy(
-                dlerror.as_mut_ptr(),
-                uv_dlerror(&raw mut lib),
-                dlerror.len(),
-            );
-            uv_dlclose(&raw mut lib);
-            luaL_error(
-                L,
-                c"Failed to load parser for language '%s': uv_dlopen: %s".as_ptr(),
-                lang_name,
-                dlerror.as_ptr(),
-            );
+/// The language named by the string at `at`, or the error that it is not
+/// loaded.
+pub(crate) fn check_language(stack: &mut Stack, at: At) -> Result<Language, Raise> {
+    let name = checked_c_string(stack, at)?;
+    let found = LANGUAGES.with(|loaded| loaded.get(language_key(&name)).copied());
+    match found.and_then(NonNull::new) {
+        Some(language) => Ok(Language(language)),
+        _ => {
+            let mut message = b"no such language: ".to_vec();
+            message.extend_from_slice(name.to_bytes());
+            Err(Raise::message(message))
         }
-        let mut symbol_buf: [::core::ffi::c_char; 128] = [0; 128];
-        snprintf(
-            &raw mut symbol_buf as *mut ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 128]>(),
-            c"tree_sitter_%s".as_ptr(),
-            symbol,
-        );
-        let mut lang_parser: Option<unsafe extern "C" fn() -> *mut TSLanguage> = None;
-        if uv_dlsym(
-            &raw mut lib,
-            &raw mut symbol_buf as *mut ::core::ffi::c_char,
-            &raw mut lang_parser as *mut *mut ::core::ffi::c_void,
-        ) != 0
-        {
-            xstrlcpy(
-                dlerror.as_mut_ptr(),
-                uv_dlerror(&raw mut lib),
-                dlerror.len(),
-            );
-            uv_dlclose(&raw mut lib);
-            luaL_error(
-                L,
-                c"Failed to load parser: uv_dlsym: %s".as_ptr(),
-                dlerror.as_ptr(),
-            );
-        }
-        let lang: *mut TSLanguage = lang_parser.expect("non-null function pointer")();
-        if lang.is_null() {
-            uv_dlclose(&raw mut lib);
-            luaL_error(
-                L,
-                c"Failed to load parser %s: internal error".as_ptr(),
-                path,
-            );
-        }
-        lang
     }
 }
 
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-/// `_path` and `_lang_name` must each point at a NUL-terminated string.
-unsafe fn load_language_from_wasm(
-    L: *mut lua_State,
-    mut _path: *const ::core::ffi::c_char,
-    mut _lang_name: *const ::core::ffi::c_char,
-) -> *const TSLanguage {
-    unsafe {
-        luaL_error(L, c"Not supported".as_ptr());
-        ::core::ptr::null::<TSLanguage>()
-    }
+/// `vim._ts_has_language(name)`.
+pub(crate) fn has_language(stack: &mut Stack) -> Result<c_int, Raise> {
+    let name = checked_c_string(stack, At::arg(1))?;
+    let loaded = LANGUAGES.with(|loaded| loaded.contains_key(language_key(&name)));
+    stack.push_boolean(loaded);
+    Ok(1)
 }
 
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe fn add_language(L: *mut lua_State, is_wasm: bool) -> ::core::ffi::c_int {
-    unsafe {
-        let path: *const ::core::ffi::c_char = luaL_checklstring(
-            L,
-            1 as ::core::ffi::c_int,
-            ::core::ptr::null_mut::<size_t>(),
+/// `vim._ts_remove_language(name)`: whether it was loaded.
+pub(crate) fn remove_language(stack: &mut Stack) -> Result<c_int, Raise> {
+    let name = checked_c_string(stack, At::arg(1))?;
+    // The name the table owns goes with the entry; the `TSLanguage` belongs
+    // to the library it was loaded from.
+    let present = LANGUAGES
+        .with_mut(|loaded| loaded.remove(language_key(&name)))
+        .is_some();
+    stack.push_boolean(present);
+    Ok(1)
+}
+
+/// The error text libuv has for `library`, cut where upstream's 1,025-byte
+/// copy (`xstrlcpy`) cuts it.
+fn dl_error(library: &uv_lib_t) -> Vec<u8> {
+    // SAFETY: a handle this module zeroed and libuv filled; `uv_dlerror`
+    // answers its message, or a static one when it has none, NUL-terminated
+    // and alive until the handle is closed, which is after the copy.
+    let text = unsafe { c_bytes(uv_dlerror(library)) };
+    text[..text.len().min(1024)].to_vec()
+}
+
+/// `dlopen` the parser library at `path` and call its constructor,
+/// `tree_sitter_<symbol>`.
+fn load_language_from_object(path: &CStr, name: &CStr, symbol: &CStr) -> Result<Language, Raise> {
+    let mut library = uv_lib_t {
+        handle: core::ptr::null_mut(),
+        errmsg: core::ptr::null_mut(),
+    };
+    // SAFETY: a NUL-terminated path, and a handle this frame owns.
+    if unsafe { uv_dlopen(path.as_ptr(), &raw mut library) } != 0 {
+        let error = dl_error(&library);
+        // SAFETY: the handle that just failed, closed after its message is
+        // copied out.
+        unsafe { uv_dlclose(&raw mut library) };
+        let mut message = b"Failed to load parser for language '".to_vec();
+        message.extend_from_slice(name.to_bytes());
+        message.extend_from_slice(b"': uv_dlopen: ");
+        message.extend_from_slice(&error);
+        return Err(Raise::message(message));
+    }
+    // `snprintf` into 128 bytes: at most 127 of them.
+    let mut constructor_name = b"tree_sitter_".to_vec();
+    constructor_name.extend_from_slice(symbol.to_bytes());
+    constructor_name.truncate(127);
+    let constructor_name = CString::new(constructor_name).expect("from C strings");
+    let mut constructor: *mut c_void = core::ptr::null_mut();
+    // SAFETY: the open library, a NUL-terminated name, and a slot for the
+    // address.
+    if unsafe {
+        uv_dlsym(
+            &raw mut library,
+            constructor_name.as_ptr(),
+            &raw mut constructor,
+        )
+    } != 0
+    {
+        let error = dl_error(&library);
+        // SAFETY: as above.
+        unsafe { uv_dlclose(&raw mut library) };
+        let mut message = b"Failed to load parser: uv_dlsym: ".to_vec();
+        message.extend_from_slice(&error);
+        return Err(Raise::message(message));
+    }
+    // SAFETY: `tree_sitter_<lang>` is a parser library's constructor, a C
+    // function of no arguments answering its language; the library stays
+    // loaded for as long as the language is used.
+    let language = unsafe {
+        let constructor: unsafe extern "C" fn() -> *const TSLanguage =
+            core::mem::transmute::<*mut c_void, _>(constructor);
+        constructor()
+    };
+    let Some(language) = NonNull::new(language.cast_mut()) else {
+        // SAFETY: the open library, which nothing of it outlives.
+        unsafe { uv_dlclose(&raw mut library) };
+        let mut message = b"Failed to load parser ".to_vec();
+        message.extend_from_slice(path.to_bytes());
+        message.extend_from_slice(b": internal error");
+        return Err(Raise::message(message));
+    };
+    // The library stays open: the language is its.
+    Ok(Language(language))
+}
+
+/// `vim._ts_add_language_from_object(path, lang[, symbol])`.
+pub(crate) fn add_language(stack: &mut Stack) -> Result<c_int, Raise> {
+    let path = checked_c_string(stack, At::arg(1))?;
+    let name = checked_c_string(stack, At::arg(2))?;
+    let symbol = if stack.top().index() >= 3 && stack.kind(At::arg(3)) != Kind::Nil {
+        checked_c_string(stack, At::arg(3))?
+    } else {
+        name.clone()
+    };
+    if LANGUAGES.with(|loaded| loaded.contains_key(language_key(&name))) {
+        stack.push_boolean(true);
+        return Ok(1);
+    }
+    let language = load_language_from_object(&path, &name, &symbol)?;
+    let version = language.abi_version();
+    if !(TREE_SITTER_MIN_COMPATIBLE_LANGUAGE_VERSION..=TREE_SITTER_LANGUAGE_VERSION)
+        .contains(&version)
+    {
+        let mut message = b"ABI version mismatch for ".to_vec();
+        message.extend_from_slice(path.to_bytes());
+        // `%d` of a `uint32_t`.
+        message.extend_from_slice(
+            format!(
+                ": supported between {TREE_SITTER_MIN_COMPATIBLE_LANGUAGE_VERSION} and \
+                 {TREE_SITTER_LANGUAGE_VERSION}, found {}",
+                version.cast_signed()
+            )
+            .as_bytes(),
         );
-        let lang_name: *const ::core::ffi::c_char = luaL_checklstring(
-            L,
-            2 as ::core::ffi::c_int,
-            ::core::ptr::null_mut::<size_t>(),
-        );
-        let mut symbol_name: *const ::core::ffi::c_char = lang_name;
-        if !is_wasm
-            && lua_gettop(L) >= 3 as ::core::ffi::c_int
-            && !(lua_type(L, 3 as ::core::ffi::c_int) == LUA_TNIL)
-        {
-            symbol_name = luaL_checklstring(
-                L,
-                3 as ::core::ffi::c_int,
-                ::core::ptr::null_mut::<size_t>(),
-            );
+        return Err(Raise::message(message));
+    }
+    let key: Box<[u8]> = language_key(&name).into();
+    LANGUAGES.with_mut(|loaded| loaded.insert(key, language.0.as_ptr()));
+    stack.push_boolean(true);
+    Ok(1)
+}
+
+/// Set `field` of the table on top to the value on top.
+fn set_field_bytes(stack: &mut Stack, field: &[u8]) {
+    let field = CString::new(until_nul(field)).expect("cut at the first NUL");
+    stack.set_field(At::from_top(2), &field);
+}
+
+/// `vim._ts_inspect_language(lang)`: its symbols, fields, ABI version,
+/// metadata, state count and supertypes.
+pub(crate) fn inspect_language(stack: &mut Stack) -> Result<c_int, Raise> {
+    let language = check_language(stack, At::arg(1))?;
+    stack.new_table(0, 2);
+
+    let symbol_count = language.symbol_count();
+    debug_assert!(symbol_count < u32::MAX >> 1, "nsymbols < INT_MAX");
+    stack.new_table(symbol_count.saturating_sub(1) as usize, 1);
+    for symbol in 0..symbol_count {
+        let symbol = TSSymbol::try_from(symbol).unwrap_or(TSSymbol::MAX);
+        let kind = language.symbol_type(symbol);
+        if kind == SYMBOL_TYPE_AUXILIARY {
+            continue;
         }
-        if lang_loaded(lang_name) {
-            lua_pushboolean(L, 1);
-            return 1 as ::core::ffi::c_int;
-        }
-        let lang: *const TSLanguage = if is_wasm as ::core::ffi::c_int != 0 {
-            load_language_from_wasm(L, path, lang_name)
+        let name = language.symbol_name(symbol);
+        let named = kind != SYMBOL_TYPE_ANONYMOUS;
+        stack.push_boolean(named);
+        if named {
+            set_field_bytes(stack, name);
         } else {
-            load_language_from_object(L, path, lang_name, symbol_name)
-        };
-        let lang_version: uint32_t = ts_language_abi_version(lang);
-        if lang_version < TREE_SITTER_MIN_COMPATIBLE_LANGUAGE_VERSION as uint32_t
-            || lang_version > TREE_SITTER_LANGUAGE_VERSION as uint32_t
+            // `"\"%s\""` into 256 bytes: at most 255 of them.
+            let mut quoted = Vec::with_capacity(name.len() + 2);
+            quoted.push(b'"');
+            quoted.extend_from_slice(name);
+            quoted.push(b'"');
+            quoted.truncate(255);
+            set_field_bytes(stack, &quoted);
+        }
+    }
+    stack.set_field(At::from_top(2), c"symbols");
+
+    let field_count = language.field_count();
+    stack.new_table(field_count as usize, 1);
+    for field in 1..=field_count {
+        match language.field_name(TSFieldId::try_from(field).unwrap_or(TSFieldId::MAX)) {
+            Some(name) => stack.push_bytes(name),
+            None => stack.push_nil(),
+        }
+        stack.raw_set_index(
+            At::from_top(2),
+            c_int::try_from(field).unwrap_or(c_int::MAX),
+        );
+    }
+    stack.set_field(At::from_top(2), c"fields");
+
+    stack.push_boolean(language.is_wasm());
+    stack.set_field(At::from_top(2), c"_wasm");
+    stack.push_integer(integer(language.abi_version()));
+    stack.set_field(At::from_top(2), c"abi_version");
+
+    if let Some(versions) = language.metadata() {
+        stack.new_table(0, 3);
+        for (value, field) in
+            versions
+                .into_iter()
+                .zip([c"major_version", c"minor_version", c"patch_version"])
         {
-            return luaL_error(
-                L,
-                c"ABI version mismatch for %s: supported between %d and %d, found %d".as_ptr(),
-                path,
-                TREE_SITTER_MIN_COMPATIBLE_LANGUAGE_VERSION,
-                TREE_SITTER_LANGUAGE_VERSION,
-                lang_version,
-            );
+            stack.push_integer(lua_Integer::from(value));
+            stack.set_field(At::from_top(2), field);
         }
-        let key: Box<[u8]> = lang_key(lang_name).into();
-        langs.with_mut(|loaded| loaded.insert(key, lang.cast_mut()));
-        lua_pushboolean(L, 1);
-        1 as ::core::ffi::c_int
+        stack.set_field(At::from_top(2), c"metadata");
     }
-}
 
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-pub(crate) unsafe extern "C-unwind" fn tslua_remove_lang(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let lang_name: *const ::core::ffi::c_char = luaL_checklstring(
-            L,
-            1 as ::core::ffi::c_int,
-            ::core::ptr::null_mut::<size_t>(),
-        );
-        // The name the table owns goes with the entry; the `TSLanguage`
-        // belongs to the library it was loaded from.
-        let present = langs
-            .with_mut(|loaded| loaded.remove(lang_key(lang_name)))
-            .is_some();
-        lua_pushboolean(L, present as ::core::ffi::c_int);
-        1 as ::core::ffi::c_int
-    }
-}
+    stack.push_integer(integer(language.state_count()));
+    stack.set_field(At::from_top(2), c"state_count");
 
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-pub(crate) unsafe fn lang_check(L: *mut lua_State, index: ::core::ffi::c_int) -> *mut TSLanguage {
-    unsafe {
-        let lang_name: *const ::core::ffi::c_char =
-            luaL_checklstring(L, index, ::core::ptr::null_mut::<size_t>());
-        let lang = langs
-            .with(|loaded| loaded.get(lang_key(lang_name)).copied())
-            .unwrap_or(::core::ptr::null_mut());
-        if lang.is_null() {
-            luaL_error(L, c"no such language: %s".as_ptr(), lang_name);
+    let supertypes = language.supertypes();
+    stack.new_table(0, supertypes.len());
+    for &supertype in supertypes {
+        let subtypes = language.subtypes_as_listed(supertype);
+        stack.new_table(subtypes.len(), 0);
+        for (slot, &subtype) in (1..).zip(&subtypes) {
+            stack.push_bytes(language.symbol_name(subtype));
+            stack.raw_set_index(At::from_top(2), slot);
         }
-        lang
+        set_field_bytes(stack, language.symbol_name(supertype));
     }
-}
-
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-pub(crate) unsafe extern "C-unwind" fn tslua_inspect_lang(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let lang: *mut TSLanguage = lang_check(L, 1 as ::core::ffi::c_int);
-        lua_createtable(L, 0 as ::core::ffi::c_int, 2 as ::core::ffi::c_int);
-        let nsymbols: uint32_t = ts_language_symbol_count(lang);
-        debug_assert!(nsymbols < 2147483647 as uint32_t, "nsymbols < INT_MAX");
-        lua_createtable(
-            L,
-            nsymbols.wrapping_sub(1 as uint32_t) as ::core::ffi::c_int,
-            1 as ::core::ffi::c_int,
-        );
-        let mut i: uint32_t = 0 as uint32_t;
-        while i < nsymbols {
-            let t: TSSymbolType = ts_language_symbol_type(lang, i as TSSymbol);
-            if t as ::core::ffi::c_uint
-                != TSSymbolTypeAuxiliary as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                let name: *const ::core::ffi::c_char = ts_language_symbol_name(lang, i as TSSymbol);
-                let named: bool = t as ::core::ffi::c_uint
-                    != TSSymbolTypeAnonymous as ::core::ffi::c_int as ::core::ffi::c_uint;
-                lua_pushboolean(L, named as ::core::ffi::c_int);
-                if !named {
-                    let mut buf: [::core::ffi::c_char; 256] = [0; 256];
-                    snprintf(
-                        &raw mut buf as *mut ::core::ffi::c_char,
-                        ::core::mem::size_of::<[::core::ffi::c_char; 256]>(),
-                        c"\"%s\"".as_ptr(),
-                        name,
-                    );
-                    lua_setfield(
-                        L,
-                        -2 as ::core::ffi::c_int,
-                        &raw mut buf as *mut ::core::ffi::c_char,
-                    );
-                } else {
-                    lua_setfield(L, -2 as ::core::ffi::c_int, name);
-                }
-            }
-            i = i.wrapping_add(1);
-        }
-        lua_setfield(L, -2 as ::core::ffi::c_int, c"symbols".as_ptr());
-        let nfields: uint32_t = ts_language_field_count(lang);
-        lua_createtable(L, nfields as ::core::ffi::c_int, 1 as ::core::ffi::c_int);
-        let mut i_0: uint32_t = 1 as uint32_t;
-        while i_0 <= nfields {
-            lua_pushstring(L, ts_language_field_name_for_id(lang, i_0 as TSFieldId));
-            lua_rawseti(L, -2 as ::core::ffi::c_int, i_0 as ::core::ffi::c_int);
-            i_0 = i_0.wrapping_add(1);
-        }
-        lua_setfield(L, -2 as ::core::ffi::c_int, c"fields".as_ptr());
-        lua_pushboolean(L, ts_language_is_wasm(lang) as ::core::ffi::c_int);
-        lua_setfield(L, -2 as ::core::ffi::c_int, c"_wasm".as_ptr());
-        lua_pushinteger(L, ts_language_abi_version(lang) as lua_Integer);
-        lua_setfield(L, -2 as ::core::ffi::c_int, c"abi_version".as_ptr());
-        let meta: *const TSLanguageMetadata = ts_language_metadata(lang);
-        if !meta.is_null() {
-            lua_createtable(L, 0 as ::core::ffi::c_int, 3 as ::core::ffi::c_int);
-            lua_pushinteger(L, (*meta).major_version as lua_Integer);
-            lua_setfield(L, -2 as ::core::ffi::c_int, c"major_version".as_ptr());
-            lua_pushinteger(L, (*meta).minor_version as lua_Integer);
-            lua_setfield(L, -2 as ::core::ffi::c_int, c"minor_version".as_ptr());
-            lua_pushinteger(L, (*meta).patch_version as lua_Integer);
-            lua_setfield(L, -2 as ::core::ffi::c_int, c"patch_version".as_ptr());
-            lua_setfield(L, -2 as ::core::ffi::c_int, c"metadata".as_ptr());
-        }
-        lua_pushinteger(L, ts_language_state_count(lang) as lua_Integer);
-        lua_setfield(L, -2 as ::core::ffi::c_int, c"state_count".as_ptr());
-        let mut nsupertypes: uint32_t = 0;
-        let supertypes: *const TSSymbol = ts_language_supertypes(lang, &raw mut nsupertypes);
-        lua_createtable(
-            L,
-            0 as ::core::ffi::c_int,
-            nsupertypes as ::core::ffi::c_int,
-        );
-        let mut i_1: uint32_t = 0 as uint32_t;
-        while i_1 < nsupertypes {
-            let supertype: TSSymbol = *supertypes.add(i_1 as usize);
-            let mut nsubtypes: uint32_t = 0;
-            let subtypes: *const TSSymbol =
-                ts_language_subtypes(lang, supertype, &raw mut nsubtypes);
-            lua_createtable(L, nsubtypes as ::core::ffi::c_int, 0 as ::core::ffi::c_int);
-            let mut j: uint32_t = 1 as uint32_t;
-            while j <= nsubtypes {
-                lua_pushstring(L, ts_language_symbol_name(lang, *subtypes.add(j as usize)));
-                lua_rawseti(L, -2 as ::core::ffi::c_int, j as ::core::ffi::c_int);
-                j = j.wrapping_add(1);
-            }
-            lua_setfield(
-                L,
-                -2 as ::core::ffi::c_int,
-                ts_language_symbol_name(lang, supertype),
-            );
-            i_1 = i_1.wrapping_add(1);
-        }
-        lua_setfield(L, -2 as ::core::ffi::c_int, c"supertypes".as_ptr());
-        1 as ::core::ffi::c_int
-    }
+    stack.set_field(At::from_top(2), c"supertypes");
+    Ok(1)
 }

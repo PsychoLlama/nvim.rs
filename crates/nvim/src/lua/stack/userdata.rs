@@ -5,7 +5,9 @@
 //! metatable [`Stack::new_userdata_metatable`] builds carries a `__gc` that
 //! takes the value out (leaving `T::default()` behind) and drops it: a
 //! userdata a finalizer resurrects after its own `__gc` has run still holds a
-//! valid `T`.
+//! valid `T`. A `T` with nothing to drop (a `Copy` handle onto a C object
+//! something else owns) gets no `__gc`, so the collector has no finalizer
+//! to queue for it.
 //!
 //! What makes reading one back sound is that a metatable name belongs to one
 //! Rust type: the first `new_userdata::<T>` claims `T::METATABLE` for `T`,
@@ -13,6 +15,9 @@
 //! [`Stack::to_userdata`] answers only for the type that holds the claim. So
 //! every userdata carrying the metatable `to_userdata::<T>` matches was
 //! written by `new_userdata::<T>`.
+//!
+//! The claims are process-wide, behind a lock: a luv thread's state builds
+//! `vim.mpack`'s userdata too.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 // Unsafe perimeter: the `lua/stack/` row in docs/perimeter.md.
@@ -28,10 +33,10 @@
 use core::any::TypeId;
 use core::ffi::{CStr, c_int};
 use core::ptr;
+use std::sync::Mutex;
 
 use super::{At, Check, Kind, Raise, Stack};
-use crate::global_cell::GlobalCell;
-use crate::lua::ffi::{lua_newuserdata, lua_touserdata};
+use crate::lua::ffi::{lua_getfenv, lua_newuserdata, lua_setfenv, lua_touserdata};
 use crate::types::lua_State;
 
 /// A Rust value Lua holds as full userdata, under a metatable of its own.
@@ -44,8 +49,9 @@ pub trait Userdata: Default + 'static {
     const METATABLE: &'static CStr;
 }
 
-/// Which Rust type each metatable name belongs to.
-static CLAIMS: GlobalCell<Vec<(&'static CStr, TypeId)>> = GlobalCell::new(Vec::new());
+/// Which Rust type each metatable name belongs to. A lock rather than a
+/// `GlobalCell`: luv threads' states make and read userdata too.
+static CLAIMS: Mutex<Vec<(&'static CStr, TypeId)>> = Mutex::new(Vec::new());
 
 /// Whether `T` holds the claim on its metatable's name; with `stake`, claim
 /// it when nobody does.
@@ -60,35 +66,57 @@ fn claimed<T: Userdata>(stake: bool) -> bool {
 /// callers do not carry `CLAIMS` into another crate's code.
 #[inline(never)]
 fn claim(name: &'static CStr, ours: TypeId, stake: bool) -> bool {
-    CLAIMS.with_mut(
-        |claims| match claims.iter().find(|(claimed, _)| *claimed == name) {
-            Some(&(_, owner)) => {
-                assert!(
-                    !stake || owner == ours,
-                    "two Rust types share the userdata metatable {name:?}"
-                );
-                owner == ours
-            }
-            None if stake => {
-                claims.push((name, ours));
-                true
-            }
-            None => false,
-        },
-    )
+    // A panic below leaves the list as it was; a poisoned lock is still good.
+    let mut claims = CLAIMS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    // The same `&'static CStr` is what every caller passes for a type, so
+    // the address usually answers before the bytes are compared.
+    let found = claims
+        .iter()
+        .find(|(claimed, _)| ptr::eq(*claimed, name) || *claimed == name);
+    match found {
+        Some(&(_, owner)) => {
+            assert!(
+                !stake || owner == ours,
+                "two Rust types share the userdata metatable {name:?}"
+            );
+            owner == ours
+        }
+        None if stake => {
+            claims.push((name, ours));
+            true
+        }
+        None => false,
+    }
 }
 
 impl Stack {
     /// Push `T`'s registry metatable, creating it -- with the `__gc` that
-    /// drops a collected `T` -- when it does not exist yet; `true` when it
-    /// was created. The caller adds the methods.
+    /// drops a collected `T`, when `T` has anything to drop -- when it does
+    /// not exist yet; `true` when it was created. The caller adds the
+    /// methods.
     pub fn new_userdata_metatable<T: Userdata>(&mut self) -> bool {
         let created = self.new_metatable(T::METATABLE);
-        if created {
+        if created && core::mem::needs_drop::<T>() {
             self.push_function(collect::<T>);
             self.set_field(At::from_top(2), c"__gc");
         }
         created
+    }
+
+    /// Push the environment table of the userdata (or function, or thread)
+    /// at `at`: `lua_getfenv`.
+    pub fn push_environment(&mut self, at: At) {
+        unsafe { lua_getfenv(self.l(), at.0) };
+    }
+
+    /// Pop the table on top and make it the environment of the userdata (or
+    /// function, or thread) at `at`: `lua_setfenv`. `false` when the value
+    /// there can have none (the table is popped all the same).
+    pub fn set_environment(&mut self, at: At) -> bool {
+        debug_assert!(self.depth() >= 1, "a view sets an environment it pushed");
+        unsafe { lua_setfenv(self.l(), at.0) != 0 }
     }
 
     /// Push a full userdata of no bytes and no metatable: a value that is
@@ -118,6 +146,25 @@ impl Stack {
 
     /// The `T` at `at` when the slot holds one of `T`'s userdata.
     pub fn to_userdata<T: Userdata>(&mut self, at: At) -> Option<&mut T> {
+        let block = self.userdata_block::<T>(at)?;
+        // SAFETY: `userdata_block` answers only a block `new_userdata::<T>`
+        // wrote; the borrow of `self` keeps the slot, and so the block,
+        // alive.
+        Some(unsafe { &mut *block })
+    }
+
+    /// `luaL_checkudata`: the `T` at `at`, or the error LuaJIT raises for it.
+    pub fn check_userdata<T: Userdata>(&mut self, at: At) -> Result<&mut T, Raise> {
+        match self.userdata_block::<T>(at) {
+            // SAFETY: as in `to_userdata`.
+            Some(block) => Ok(unsafe { &mut *block }),
+            None => Err(Raise::check(at, Check::Userdata(T::METATABLE))),
+        }
+    }
+
+    /// The block of the `T` at `at`, when the slot holds one of `T`'s
+    /// userdata: `luaL_checkudata`'s test, after the claim.
+    fn userdata_block<T: Userdata>(&mut self, at: At) -> Option<*mut T> {
         // A light userdata answers `lua_touserdata` too, but is not one of
         // ours: `luaL_checkudata` asks for a full userdata first.
         if self.kind(at) != Kind::Userdata || !claimed::<T>(false) {
@@ -130,19 +177,9 @@ impl Stack {
         self.get_field(At::REGISTRY, T::METATABLE);
         let ours = self.raw_equal(At::from_top(1), At::from_top(2));
         self.pop(2);
-        // SAFETY: `T` holds the claim on its metatable, so only
-        // `new_userdata::<T>` made a userdata carrying it, and the block
-        // holds a `T`; the borrow of `self` keeps the slot, and so the
-        // block, alive.
-        ours.then(|| unsafe { &mut *block.cast::<T>() })
-    }
-
-    /// `luaL_checkudata`: the `T` at `at`, or the error LuaJIT raises for it.
-    pub fn check_userdata<T: Userdata>(&mut self, at: At) -> Result<&mut T, Raise> {
-        if self.to_userdata::<T>(at).is_none() {
-            return Err(Raise::check(at, Check::Userdata(T::METATABLE)));
-        }
-        Ok(self.to_userdata::<T>(at).expect("checked above"))
+        // `T` holds the claim on its metatable, so only `new_userdata::<T>`
+        // made a userdata carrying it, and the block holds a `T`.
+        ours.then(|| block.cast::<T>())
     }
 }
 

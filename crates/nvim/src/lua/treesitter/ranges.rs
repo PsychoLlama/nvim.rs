@@ -1,207 +1,180 @@
 //! Included ranges: the sub-spans of a source a parser is restricted to.
 //!
 //! A range is a byte span plus its two [`TSPoint`]s, and it crosses the Lua
-//! boundary as either a 4- or a 6-element list; `range_from_lua` accepts
-//! both and `push_ranges` renders either shape back.  `parser_set_ranges`
-//! and `parser_get_ranges` are the parser methods over them.
+//! boundary as a 4- or a 6-element list: [`push_ranges`] renders either
+//! shape, `range_from_lua` reads the 6-element one (or a node's range).
+//! `set_included_ranges` and `included_ranges` are the parser methods over
+//! them.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 // Unsafe perimeter: the `lua/treesitter/` row in docs/perimeter.md.
 #![allow(unsafe_code)]
 
-use super::*;
+use core::ffi::{c_int, c_void};
 
-/// # Safety
+use super::node::check_node;
+use super::parser::check_parser;
+use super::*;
+use crate::lua::stack::{Kind, Raise};
+use crate::memory::xfree;
+
+/// Push `ranges` as a list of lists: `{start_row, start_col, end_row,
+/// end_col}`, with the two byte offsets after each point's pair when
+/// `include_bytes`.
+pub(crate) fn push_ranges(stack: &mut Stack, ranges: &[TSRange], include_bytes: bool) {
+    stack.new_table(ranges.len(), 0);
+    for (index, range) in (1..).zip(ranges) {
+        let fields: &[u32] = if include_bytes {
+            &[
+                range.start_point.row,
+                range.start_point.column,
+                range.start_byte,
+                range.end_point.row,
+                range.end_point.column,
+                range.end_byte,
+            ]
+        } else {
+            &[
+                range.start_point.row,
+                range.start_point.column,
+                range.end_point.row,
+                range.end_point.column,
+            ]
+        };
+        stack.new_table(fields.len(), 0);
+        for (slot, &field) in (1..).zip(fields) {
+            stack.push_number(f64::from(field));
+            stack.raw_set_index(At::from_top(2), slot);
+        }
+        stack.raw_set_index(At::from_top(2), index);
+    }
+}
+
+/// [`push_ranges`] over an array tree-sitter allocated for the caller, which
+/// is freed after.
 ///
-/// `L` must point at the Lua state this call runs on.
-/// `ranges` must point at a live `TSRange`.
-pub(crate) unsafe fn push_ranges(
-    L: *mut lua_State,
-    ranges: *const TSRange,
-    length: size_t,
+/// # Safety
+/// `ranges` points at `length` ranges allocated through the editor's
+/// allocator (`ts_set_allocator`) and handed over, or is null with no
+/// length.
+pub(crate) unsafe fn push_owned_ranges(
+    stack: &mut Stack,
+    ranges: *mut TSRange,
+    length: u32,
     include_bytes: bool,
 ) {
+    // SAFETY: the caller's array, read before it is freed.
     unsafe {
-        lua_createtable(L, length as ::core::ffi::c_int, 0 as ::core::ffi::c_int);
-        let mut i: size_t = 0 as size_t;
-        while i < length {
-            lua_createtable(
-                L,
-                if include_bytes as ::core::ffi::c_int != 0 {
-                    6 as ::core::ffi::c_int
-                } else {
-                    4 as ::core::ffi::c_int
-                },
-                0 as ::core::ffi::c_int,
-            );
-            let mut j: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-            lua_pushnumber(L, (*ranges.add(i)).start_point.row as lua_Number);
-            lua_rawseti(L, -2 as ::core::ffi::c_int, j);
-            j += 1;
-            lua_pushnumber(L, (*ranges.add(i)).start_point.column as lua_Number);
-            lua_rawseti(L, -2 as ::core::ffi::c_int, j);
-            j += 1;
-            if include_bytes {
-                lua_pushnumber(L, (*ranges.add(i)).start_byte as lua_Number);
-                lua_rawseti(L, -2 as ::core::ffi::c_int, j);
-                j += 1;
-            }
-            lua_pushnumber(L, (*ranges.add(i)).end_point.row as lua_Number);
-            lua_rawseti(L, -2 as ::core::ffi::c_int, j);
-            j += 1;
-            lua_pushnumber(L, (*ranges.add(i)).end_point.column as lua_Number);
-            lua_rawseti(L, -2 as ::core::ffi::c_int, j);
-            j += 1;
-            if include_bytes {
-                lua_pushnumber(L, (*ranges.add(i)).end_byte as lua_Number);
-                lua_rawseti(L, -2 as ::core::ffi::c_int, j);
-            }
-            lua_rawseti(
-                L,
-                -2 as ::core::ffi::c_int,
-                i.wrapping_add(1 as size_t) as ::core::ffi::c_int,
-            );
-            i = i.wrapping_add(1);
-        }
+        push_ranges(stack, range_slice(ranges, length), include_bytes);
+        xfree(ranges.cast::<c_void>());
     }
 }
 
-/// # Safety
+/// The `length` ranges at `ranges` as a slice; empty for null.
 ///
-/// `L` must point at the Lua state this call runs on.
-unsafe fn range_err(L: *mut lua_State) {
-    unsafe {
-        luaL_error(
-            L,
-            c"Ranges can only be made from 6 element long tables or nodes.".as_ptr(),
-        );
+/// # Safety
+/// `ranges` points at `length` live ranges for `'a`, or is null.
+pub(crate) unsafe fn range_slice<'a>(ranges: *const TSRange, length: u32) -> &'a [TSRange] {
+    if ranges.is_null() {
+        return &[];
     }
+    // SAFETY: the caller's array.
+    unsafe { core::slice::from_raw_parts(ranges, length as usize) }
 }
 
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe fn lua_checkuint32(L: *mut lua_State, index: ::core::ffi::c_int) -> uint32_t {
-    unsafe {
-        let value: lua_Number = luaL_checknumber(L, index);
-        let converted: uint32_t = value as uint32_t;
-        if value < 0 as ::core::ffi::c_int as lua_Number
-            || value > UINT32_MAX as lua_Number
-            || converted as lua_Number != value
-        {
-            luaL_error(L, c"Range value out of bounds".as_ptr());
-        }
-        converted
-    }
+/// The error for a range that is neither shape.
+fn range_error() -> Raise {
+    Raise::message("Ranges can only be made from 6 element long tables or nodes.")
 }
 
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-/// `range` must point at a live `TSRange`, unaliased for the call.
-unsafe fn range_from_lua(L: *mut lua_State, range: *mut TSRange) {
-    unsafe {
-        let mut node: TSNode = TSNode {
-            context: [0; 4],
-            id: ::core::ptr::null::<::core::ffi::c_void>(),
-            tree: ::core::ptr::null::<TSTree>(),
-        };
-        if lua_type(L, -1 as ::core::ffi::c_int) == LUA_TTABLE {
-            if lua_objlen(L, -1 as ::core::ffi::c_int) != 6 as size_t {
-                range_err(L);
-            }
-            lua_rawgeti(L, -1 as ::core::ffi::c_int, 1 as ::core::ffi::c_int);
-            let start_row: uint32_t = lua_checkuint32(L, -1 as ::core::ffi::c_int);
-            lua_settop(L, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
-            lua_rawgeti(L, -1 as ::core::ffi::c_int, 2 as ::core::ffi::c_int);
-            let start_col: uint32_t = lua_checkuint32(L, -1 as ::core::ffi::c_int);
-            lua_settop(L, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
-            lua_rawgeti(L, -1 as ::core::ffi::c_int, 3 as ::core::ffi::c_int);
-            let start_byte: uint32_t = lua_checkuint32(L, -1 as ::core::ffi::c_int);
-            lua_settop(L, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
-            lua_rawgeti(L, -1 as ::core::ffi::c_int, 4 as ::core::ffi::c_int);
-            let end_row: uint32_t = lua_checkuint32(L, -1 as ::core::ffi::c_int);
-            lua_settop(L, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
-            lua_rawgeti(L, -1 as ::core::ffi::c_int, 5 as ::core::ffi::c_int);
-            let end_col: uint32_t = lua_checkuint32(L, -1 as ::core::ffi::c_int);
-            lua_settop(L, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
-            lua_rawgeti(L, -1 as ::core::ffi::c_int, 6 as ::core::ffi::c_int);
-            let end_byte: uint32_t = lua_checkuint32(L, -1 as ::core::ffi::c_int);
-            lua_settop(L, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
-            *range = TSRange {
-                start_point: TSPoint {
-                    row: start_row,
-                    column: start_col,
-                },
-                end_point: TSPoint {
-                    row: end_row,
-                    column: end_col,
-                },
-                start_byte,
-                end_byte,
-            };
-        } else if node_check_opt(L, -1 as ::core::ffi::c_int, &raw mut node) {
-            *range = TSRange {
+/// The number on top as a `uint32_t`, refusing what does not fit.
+fn check_uint32(stack: &Stack) -> Result<u32, Raise> {
+    let value = stack.check_number(At::TOP)?;
+    // `(uint32_t)value`; checked against `value` below, so a value it does
+    // not hold is refused rather than used.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let converted = value as u32;
+    if value < 0.0 || value > f64::from(u32::MAX) || f64::from(converted) != value {
+        return Err(Raise::message("Range value out of bounds"));
+    }
+    Ok(converted)
+}
+
+/// The range the value on top stands for: a 6-element list, or a node.
+fn range_from_lua(stack: &mut Stack) -> Result<TSRange, Raise> {
+    if stack.kind(At::TOP) != Kind::Table {
+        // `luaL_checkudata` refuses anything but a node, numbering it -1.
+        let node = check_node(stack, At::TOP)?;
+        // SAFETY: a node of a tree its userdatum keeps alive.
+        return Ok(unsafe {
+            TSRange {
                 start_point: ts_node_start_point(node),
                 end_point: ts_node_end_point(node),
                 start_byte: ts_node_start_byte(node),
                 end_byte: ts_node_end_byte(node),
-            };
-        } else {
-            range_err(L);
-        };
+            }
+        });
     }
+    if stack.raw_len(At::TOP) != 6 {
+        return Err(range_error());
+    }
+    let mut fields = [0; 6];
+    for (index, field) in (1..).zip(&mut fields) {
+        stack.raw_get_index(At::TOP, index);
+        // A refusal leaves the element on top: the check's error names it.
+        *field = check_uint32(stack)?;
+        stack.pop(1);
+    }
+    let [start_row, start_col, start_byte, end_row, end_col, end_byte] = fields;
+    Ok(TSRange {
+        start_point: TSPoint {
+            row: start_row,
+            column: start_col,
+        },
+        end_point: TSPoint {
+            row: end_row,
+            column: end_col,
+        },
+        start_byte,
+        end_byte,
+    })
 }
 
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-pub(crate) unsafe extern "C-unwind" fn parser_set_ranges(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        if lua_gettop(L) < 2 as ::core::ffi::c_int {
-            return luaL_error(
-                L,
-                c"not enough args to parser:set_included_ranges()".as_ptr(),
-            );
-        }
-        let p: *mut TSParser = parser_check(L, 1 as ::core::ffi::c_int);
-        luaL_argcheck(
-            L,
-            lua_type(L, 2 as ::core::ffi::c_int) == 5 as ::core::ffi::c_int,
-            2 as ::core::ffi::c_int,
-            c"table expected.".as_ptr(),
-        );
-        let tbl_len: size_t = lua_objlen(L, 2 as ::core::ffi::c_int);
-        let ranges: *mut TSRange =
-            xmalloc(::core::mem::size_of::<TSRange>().wrapping_mul(tbl_len)) as *mut TSRange;
-        let mut index: size_t = 0 as size_t;
-        while index < tbl_len {
-            lua_rawgeti(
-                L,
-                2 as ::core::ffi::c_int,
-                index as ::core::ffi::c_int + 1 as ::core::ffi::c_int,
-            );
-            range_from_lua(L, ranges.add(index));
-            lua_settop(L, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
-            index = index.wrapping_add(1);
-        }
-        ts_parser_set_included_ranges(p, ranges, tbl_len as uint32_t);
-        xfree(ranges as *mut ::core::ffi::c_void);
-        0 as ::core::ffi::c_int
+/// `parser:set_included_ranges(ranges)`.
+pub(crate) fn parser_set_ranges(stack: &mut Stack) -> Result<c_int, Raise> {
+    if stack.top().index() < 2 {
+        return Err(Raise::message(
+            "not enough args to parser:set_included_ranges()",
+        ));
     }
+    let parser = check_parser(stack, At::arg(1))?;
+    if stack.kind(At::arg(2)) != Kind::Table {
+        return Err(Raise::argument(2, "table expected."));
+    }
+    let count = stack.raw_len(At::arg(2));
+    let mut ranges = Vec::with_capacity(count);
+    for index in 1..=c_int::try_from(count).unwrap_or(c_int::MAX) {
+        stack.raw_get_index(At::arg(2), index);
+        ranges.push(range_from_lua(stack)?);
+        stack.pop(1);
+    }
+    let count = u32::try_from(ranges.len()).unwrap_or(u32::MAX);
+    // SAFETY: the parser the userdatum in slot 1 owns, and `count` ranges
+    // it copies.
+    unsafe { ts_parser_set_included_ranges(parser, ranges.as_ptr(), count) };
+    Ok(0)
 }
 
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-pub(crate) unsafe extern "C-unwind" fn parser_get_ranges(L: *mut lua_State) -> ::core::ffi::c_int {
+/// `parser:included_ranges([include_bytes])`.
+pub(crate) fn parser_get_ranges(stack: &mut Stack) -> Result<c_int, Raise> {
+    let parser = check_parser(stack, At::arg(1))?;
+    let include_bytes = stack.top().index() >= 2 && stack.to_boolean(At::arg(2));
+    let mut length: u32 = 0;
+    // SAFETY: as above; the array is the parser's own, read before
+    // anything can change it.
     unsafe {
-        let p: *mut TSParser = parser_check(L, 1 as ::core::ffi::c_int);
-        let include_bytes: bool = lua_gettop(L) >= 2 as ::core::ffi::c_int
-            && lua_toboolean(L, 2 as ::core::ffi::c_int) != 0;
-        let mut len: uint32_t = 0;
-        let ranges: *const TSRange = ts_parser_included_ranges(p, &raw mut len);
-        push_ranges(L, ranges, len as size_t, include_bytes);
-        1 as ::core::ffi::c_int
+        let ranges = ts_parser_included_ranges(parser, &raw mut length);
+        push_ranges(stack, range_slice(ranges, length), include_bytes);
     }
+    Ok(1)
 }

@@ -1,648 +1,479 @@
 //! The node userdatum and its thirty-odd accessors.
 //!
-//! A node is not owned: it is a `TSNode` value plus a reference to the tree
-//! it belongs to, kept in the userdatum's environment so the tree outlives
-//! it.  [`node_meta`] is the method table; everything below it is one
-//! tree-sitter call apiece, and `push_node`/`node_check` are the two ends of
-//! the Lua boundary they all go through.
+//! A node is not owned: it is a `TSNode` value whose userdatum keeps the
+//! tree it points into alive through its environment table (the tree at
+//! index 1). [`NODE_METHODS`] is the method table; nearly every method is
+//! one tree-sitter call, and [`push_node`] and [`check_node`] are the two
+//! ends of the Lua boundary they all go through.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 // Unsafe perimeter: the `lua/treesitter/` row in docs/perimeter.md.
 #![allow(unsafe_code)]
-// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
+
+use core::ffi::{CStr, c_int, c_void};
 
 use super::*;
-use crate::cstr;
-use crate::global_cell::ConstTable;
-use crate::luaL_reg_table;
+use crate::lua::stack::{Kind, Raise};
+use crate::lua_functions;
+use crate::memory::xfree;
 
-pub(crate) static node_meta: ConstTable<[luaL_Reg; 36]> = luaL_reg_table![
-    c"__tostring" => node_tostring,
-    c"__eq" => node_eq,
-    c"__len" => node_child_count,
-    c"id" => node_id,
-    c"range" => node_range,
-    c"start" => node_start,
-    c"end_" => node_end,
-    c"type" => node_type,
-    c"symbol" => node_symbol,
-    c"field" => node_field,
-    c"named" => node_named,
-    c"missing" => node_missing,
-    c"extra" => node_extra,
-    c"has_changes" => node_has_changes,
-    c"has_error" => node_has_error,
-    c"sexpr" => node_sexpr,
-    c"child_count" => node_child_count,
-    c"named_child_count" => node_named_child_count,
-    c"child" => node_child,
-    c"named_child" => node_named_child,
-    c"descendant_for_range" => node_descendant_for_range,
-    c"named_descendant_for_range" => node_named_descendant_for_range,
-    c"parent" => node_parent,
-    c"__has_ancestor" => __has_ancestor,
-    c"child_with_descendant" => node_child_with_descendant,
-    c"iter_children" => node_iter_children,
-    c"next_sibling" => node_next_sibling,
-    c"prev_sibling" => node_prev_sibling,
-    c"next_named_sibling" => node_next_named_sibling,
-    c"prev_named_sibling" => node_prev_named_sibling,
-    c"named_children" => node_named_children,
-    c"root" => node_root,
-    c"tree" => node_tree,
-    c"byte_length" => node_byte_length,
-    c"equal" => node_equal,
-];
+/// A node, as its userdatum holds it.
+#[derive(Clone, Copy)]
+pub(crate) struct Node(pub TSNode);
 
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-pub(crate) unsafe fn push_node(L: *mut lua_State, node: TSNode, uindex: ::core::ffi::c_int) {
-    unsafe {
-        debug_assert!(
-            uindex > 0 as ::core::ffi::c_int || uindex < -20 as ::core::ffi::c_int,
-            "uindex > 0 || uindex < -LUA_MINSTACK"
-        );
-        if ts_node_is_null(node) {
-            lua_pushnil(L);
-            return;
+impl Default for Node {
+    /// The null node: what nothing points at.
+    fn default() -> Node {
+        Node(TSNode {
+            context: [0; 4],
+            id: core::ptr::null(),
+            tree: core::ptr::null(),
+        })
+    }
+}
+
+impl Userdata for Node {
+    const METATABLE: &'static CStr = c"treesitter_node";
+}
+
+lua_functions! {
+    /// The methods of a node.
+    pub(crate) enum NodeMethods in NODE_METHODS {
+        0 => c"__tostring": node_tostring,
+        1 => c"__eq": node_equal,
+        2 => c"__len": node_child_count,
+        3 => c"id": node_id,
+        4 => c"range": node_range,
+        5 => c"start": node_start,
+        6 => c"end_": node_end,
+        7 => c"type": node_type,
+        8 => c"symbol": node_symbol,
+        9 => c"field": node_field,
+        10 => c"named": node_named,
+        11 => c"missing": node_missing,
+        12 => c"extra": node_extra,
+        13 => c"has_changes": node_has_changes,
+        14 => c"has_error": node_has_error,
+        15 => c"sexpr": node_sexpr,
+        16 => c"child_count": node_child_count,
+        17 => c"named_child_count": node_named_child_count,
+        18 => c"child": node_child,
+        19 => c"named_child": node_named_child,
+        20 => c"descendant_for_range": node_descendant_for_range,
+        21 => c"named_descendant_for_range": node_named_descendant_for_range,
+        22 => c"parent": node_parent,
+        23 => c"__has_ancestor": node_has_ancestor,
+        24 => c"child_with_descendant": node_child_with_descendant,
+        25 => c"iter_children": node_iter_children,
+        26 => c"next_sibling": node_next_sibling,
+        27 => c"prev_sibling": node_prev_sibling,
+        28 => c"next_named_sibling": node_next_named_sibling,
+        29 => c"prev_named_sibling": node_prev_named_sibling,
+        30 => c"named_children": node_named_children,
+        31 => c"root": node_root,
+        32 => c"tree": node_tree,
+        33 => c"byte_length": node_byte_length,
+        34 => c"equal": node_equal,
+    }
+}
+
+lua_functions! {
+    /// The iterator `node:iter_children()` answers, a closure over the next
+    /// child's index (upvalue 1) and the node (upvalue 2).
+    enum NodeIterator in NODE_ITERATOR {
+        0 => c"next_child": node_next_child,
+    }
+}
+
+/// Push `node` as a userdatum sharing the environment of the userdatum at
+/// `owner` -- an absolute slot or an upvalue -- so it keeps the same tree
+/// alive; nil for the null node.
+pub(crate) fn push_node(stack: &mut Stack, node: TSNode, owner: At) {
+    debug_assert!(
+        owner.index() > 0 || owner.index() < -20,
+        "the owner's slot does not move as the node is pushed"
+    );
+    // SAFETY: a node value, which tree-sitter reads without dereferencing
+    // anything for the null test.
+    if unsafe { ts_node_is_null(node) } {
+        stack.push_nil();
+        return;
+    }
+    stack.new_userdata(Node(node));
+    stack.push_environment(owner);
+    stack.set_environment(At::from_top(2));
+}
+
+/// `luaL_checkudata` for a node: the node at `at`.
+pub(crate) fn check_node(stack: &mut Stack, at: At) -> Result<TSNode, Raise> {
+    Ok(stack.check_userdata::<Node>(at)?.0)
+}
+
+/// Push each of `values` as an integer; answers how many.
+fn push_integers(stack: &mut Stack, values: &[u32]) -> c_int {
+    for &value in values {
+        stack.push_integer(integer(value));
+    }
+    c_int::try_from(values.len()).expect("a handful of results")
+}
+
+/// Push the node `step` answers for the node at slot 1, in its tree.
+fn push_related(
+    stack: &mut Stack,
+    step: unsafe extern "C" fn(TSNode) -> TSNode,
+) -> Result<c_int, Raise> {
+    let node = check_node(stack, At::arg(1))?;
+    // SAFETY: a node of a tree its userdatum keeps alive.
+    let related = unsafe { step(node) };
+    push_node(stack, related, At::arg(1));
+    Ok(1)
+}
+
+/// Push what `test` answers for the node at slot 1.
+fn push_test(
+    stack: &mut Stack,
+    test: unsafe extern "C" fn(TSNode) -> bool,
+) -> Result<c_int, Raise> {
+    let node = check_node(stack, At::arg(1))?;
+    // SAFETY: as in `push_related`.
+    let answer = unsafe { test(node) };
+    stack.push_boolean(answer);
+    Ok(1)
+}
+
+fn node_tostring(stack: &mut Stack) -> Result<c_int, Raise> {
+    let node = check_node(stack, At::arg(1))?;
+    // SAFETY: a node of a live tree; its type name is the language's.
+    let kind = unsafe { c_bytes(ts_node_type(node)) };
+    let mut text = Vec::with_capacity(kind.len() + 7);
+    text.extend_from_slice(b"<node ");
+    text.extend_from_slice(kind);
+    text.push(b'>');
+    stack.push_bytes(&text);
+    Ok(1)
+}
+
+fn node_equal(stack: &mut Stack) -> Result<c_int, Raise> {
+    let node = check_node(stack, At::arg(1))?;
+    let other = check_node(stack, At::arg(2))?;
+    // SAFETY: two node values.
+    let equal = unsafe { ts_node_eq(node, other) };
+    stack.push_boolean(equal);
+    Ok(1)
+}
+
+/// The node's id, as the bytes of its address.
+fn node_id(stack: &mut Stack) -> Result<c_int, Raise> {
+    let node = check_node(stack, At::arg(1))?;
+    stack.push_bytes(&node.id.addr().to_ne_bytes());
+    Ok(1)
+}
+
+fn node_range(stack: &mut Stack) -> Result<c_int, Raise> {
+    let node = check_node(stack, At::arg(1))?;
+    let include_bytes = stack.top().index() >= 2 && stack.to_boolean(At::arg(2));
+    // SAFETY: a node of a tree its userdatum keeps alive, throughout.
+    let (start, end) = unsafe { (ts_node_start_point(node), ts_node_end_point(node)) };
+    if include_bytes {
+        // SAFETY: as above.
+        let (start_byte, end_byte) = unsafe { (ts_node_start_byte(node), ts_node_end_byte(node)) };
+        return Ok(push_integers(
+            stack,
+            &[
+                start.row,
+                start.column,
+                start_byte,
+                end.row,
+                end.column,
+                end_byte,
+            ],
+        ));
+    }
+    Ok(push_integers(
+        stack,
+        &[start.row, start.column, end.row, end.column],
+    ))
+}
+
+fn node_start(stack: &mut Stack) -> Result<c_int, Raise> {
+    let node = check_node(stack, At::arg(1))?;
+    // SAFETY: a node of a tree its userdatum keeps alive.
+    let (start, byte) = unsafe { (ts_node_start_point(node), ts_node_start_byte(node)) };
+    Ok(push_integers(stack, &[start.row, start.column, byte]))
+}
+
+fn node_end(stack: &mut Stack) -> Result<c_int, Raise> {
+    let node = check_node(stack, At::arg(1))?;
+    // SAFETY: as above.
+    let (end, byte) = unsafe { (ts_node_end_point(node), ts_node_end_byte(node)) };
+    Ok(push_integers(stack, &[end.row, end.column, byte]))
+}
+
+fn node_child_count(stack: &mut Stack) -> Result<c_int, Raise> {
+    let node = check_node(stack, At::arg(1))?;
+    // SAFETY: as above.
+    let count = unsafe { ts_node_child_count(node) };
+    Ok(push_integers(stack, &[count]))
+}
+
+fn node_named_child_count(stack: &mut Stack) -> Result<c_int, Raise> {
+    let node = check_node(stack, At::arg(1))?;
+    // SAFETY: as above.
+    let count = unsafe { ts_node_named_child_count(node) };
+    Ok(push_integers(stack, &[count]))
+}
+
+fn node_type(stack: &mut Stack) -> Result<c_int, Raise> {
+    let node = check_node(stack, At::arg(1))?;
+    // SAFETY: as above; the type name is the language's.
+    unsafe { push_c_string(stack, ts_node_type(node)) };
+    Ok(1)
+}
+
+fn node_symbol(stack: &mut Stack) -> Result<c_int, Raise> {
+    let node = check_node(stack, At::arg(1))?;
+    // SAFETY: as above.
+    let symbol = unsafe { ts_node_symbol(node) };
+    stack.push_integer(integer(u32::from(symbol)));
+    Ok(1)
+}
+
+/// The children whose field is the name in slot 2.
+fn node_field(stack: &mut Stack) -> Result<c_int, Raise> {
+    let node = check_node(stack, At::arg(1))?;
+    // SAFETY: as above.
+    let count = unsafe { ts_node_child_count(node) };
+    // `strequal` on the C string `luaL_checklstring` answers.
+    let wanted = until_nul(stack.check_bytes(At::arg(2))?).to_vec();
+    stack.new_table(0, 0);
+    let mut index = 0;
+    for child_index in 0..count {
+        // SAFETY: as above; a field name is the language's, or null.
+        let field = unsafe { ts_node_field_name_for_child(node, child_index) };
+        // SAFETY: as above.
+        if !field.is_null() && unsafe { c_bytes(field) } == wanted.as_slice() {
+            // SAFETY: as above.
+            let child = unsafe { ts_node_child(node, child_index) };
+            push_node(stack, child, At::arg(1));
+            index += 1;
+            stack.raw_set_index(At::from_top(2), index);
         }
-        let ud: *mut TSNode = lua_newuserdata(L, ::core::mem::size_of::<TSNode>()) as *mut TSNode;
-        *ud = node;
-        lua_getfield(L, LUA_REGISTRYINDEX, TS_META_NODE.as_ptr());
-        lua_setmetatable(L, -2 as ::core::ffi::c_int);
-        lua_getfenv(L, uindex);
-        lua_setfenv(L, -2 as ::core::ffi::c_int);
     }
+    Ok(1)
 }
 
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-/// `res` must point at a live `TSNode`, unaliased for the call.
-pub(crate) unsafe fn node_check_opt(
-    L: *mut lua_State,
-    index: ::core::ffi::c_int,
-    res: *mut TSNode,
-) -> bool {
-    unsafe {
-        let ud: *mut TSNode = luaL_checkudata(L, index, TS_META_NODE.as_ptr()) as *mut TSNode;
-        if !ud.is_null() {
-            *res = *ud;
-            return true;
-        }
-        false
-    }
+fn node_named(stack: &mut Stack) -> Result<c_int, Raise> {
+    push_test(stack, ts_node_is_named)
 }
 
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-pub(crate) unsafe fn node_check(L: *mut lua_State, index: ::core::ffi::c_int) -> TSNode {
+fn node_sexpr(stack: &mut Stack) -> Result<c_int, Raise> {
+    let node = check_node(stack, At::arg(1))?;
+    // SAFETY: as above; the string is allocated through the editor's
+    // allocator (`ts_set_allocator`) and ours to free, after the copy.
     unsafe {
-        let ud: *mut TSNode = luaL_checkudata(L, index, TS_META_NODE.as_ptr()) as *mut TSNode;
-        *ud
+        let text = ts_node_string(node);
+        push_c_string(stack, text);
+        xfree(text.cast::<c_void>());
     }
+    Ok(1)
 }
 
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn node_tostring(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
-        lua_pushstring(L, c"<node ".as_ptr());
-        lua_pushstring(L, ts_node_type(node));
-        lua_pushstring(L, c">".as_ptr());
-        lua_concat(L, 3 as ::core::ffi::c_int);
-        1 as ::core::ffi::c_int
-    }
+fn node_missing(stack: &mut Stack) -> Result<c_int, Raise> {
+    push_test(stack, ts_node_is_missing)
 }
 
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn node_eq(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
-        let node2: TSNode = node_check(L, 2 as ::core::ffi::c_int);
-        lua_pushboolean(L, ts_node_eq(node, node2) as ::core::ffi::c_int);
-        1 as ::core::ffi::c_int
-    }
+fn node_extra(stack: &mut Stack) -> Result<c_int, Raise> {
+    push_test(stack, ts_node_is_extra)
 }
 
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn node_id(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
-        lua_pushlstring(
-            L,
-            &raw mut node.id as *const ::core::ffi::c_char,
-            ::core::mem::size_of::<*const ::core::ffi::c_void>(),
-        );
-        1 as ::core::ffi::c_int
-    }
+fn node_has_changes(stack: &mut Stack) -> Result<c_int, Raise> {
+    push_test(stack, ts_node_has_changes)
 }
 
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn node_range(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
-        let include_bytes: bool = lua_gettop(L) >= 2 as ::core::ffi::c_int
-            && lua_toboolean(L, 2 as ::core::ffi::c_int) != 0;
-        let start: TSPoint = ts_node_start_point(node);
-        let end: TSPoint = ts_node_end_point(node);
-        if include_bytes {
-            lua_pushinteger(L, start.row as lua_Integer);
-            lua_pushinteger(L, start.column as lua_Integer);
-            lua_pushinteger(L, ts_node_start_byte(node) as lua_Integer);
-            lua_pushinteger(L, end.row as lua_Integer);
-            lua_pushinteger(L, end.column as lua_Integer);
-            lua_pushinteger(L, ts_node_end_byte(node) as lua_Integer);
-            return 6 as ::core::ffi::c_int;
-        }
-        lua_pushinteger(L, start.row as lua_Integer);
-        lua_pushinteger(L, start.column as lua_Integer);
-        lua_pushinteger(L, end.row as lua_Integer);
-        lua_pushinteger(L, end.column as lua_Integer);
-        4 as ::core::ffi::c_int
-    }
+fn node_has_error(stack: &mut Stack) -> Result<c_int, Raise> {
+    push_test(stack, ts_node_has_error)
 }
 
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn node_start(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
-        let start: TSPoint = ts_node_start_point(node);
-        let start_byte: uint32_t = ts_node_start_byte(node);
-        lua_pushinteger(L, start.row as lua_Integer);
-        lua_pushinteger(L, start.column as lua_Integer);
-        lua_pushinteger(L, start_byte as lua_Integer);
-        3 as ::core::ffi::c_int
-    }
+fn node_child(stack: &mut Stack) -> Result<c_int, Raise> {
+    let node = check_node(stack, At::arg(1))?;
+    let index = wrap_u32(stack.to_integer(At::arg(2)));
+    // SAFETY: as above.
+    let child = unsafe { ts_node_child(node, index) };
+    push_node(stack, child, At::arg(1));
+    Ok(1)
 }
 
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn node_end(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
-        let end: TSPoint = ts_node_end_point(node);
-        let end_byte: uint32_t = ts_node_end_byte(node);
-        lua_pushinteger(L, end.row as lua_Integer);
-        lua_pushinteger(L, end.column as lua_Integer);
-        lua_pushinteger(L, end_byte as lua_Integer);
-        3 as ::core::ffi::c_int
-    }
+fn node_named_child(stack: &mut Stack) -> Result<c_int, Raise> {
+    let node = check_node(stack, At::arg(1))?;
+    let index = wrap_u32(stack.to_integer(At::arg(2)));
+    // SAFETY: as above.
+    let child = unsafe { ts_node_named_child(node, index) };
+    push_node(stack, child, At::arg(1));
+    Ok(1)
 }
 
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn node_child_count(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
-        let count: uint32_t = ts_node_child_count(node);
-        lua_pushinteger(L, count as lua_Integer);
-        1 as ::core::ffi::c_int
-    }
+/// The two points in slots 2..=5, as `lua_tointeger` reads them.
+fn point_range(stack: &Stack) -> (TSPoint, TSPoint) {
+    let point = |row: c_int| TSPoint {
+        row: wrap_u32(stack.to_integer(At::arg(row))),
+        column: wrap_u32(stack.to_integer(At::arg(row + 1))),
+    };
+    (point(2), point(4))
 }
 
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn node_named_child_count(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
-        let count: uint32_t = ts_node_named_child_count(node);
-        lua_pushinteger(L, count as lua_Integer);
-        1 as ::core::ffi::c_int
-    }
+fn node_descendant_for_range(stack: &mut Stack) -> Result<c_int, Raise> {
+    let node = check_node(stack, At::arg(1))?;
+    let (start, end) = point_range(stack);
+    // SAFETY: as above.
+    let child = unsafe { ts_node_descendant_for_point_range(node, start, end) };
+    push_node(stack, child, At::arg(1));
+    Ok(1)
 }
 
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn node_type(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
-        lua_pushstring(L, ts_node_type(node));
-        1 as ::core::ffi::c_int
-    }
+fn node_named_descendant_for_range(stack: &mut Stack) -> Result<c_int, Raise> {
+    let node = check_node(stack, At::arg(1))?;
+    let (start, end) = point_range(stack);
+    // SAFETY: as above.
+    let child = unsafe { ts_node_named_descendant_for_point_range(node, start, end) };
+    push_node(stack, child, At::arg(1));
+    Ok(1)
 }
 
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn node_symbol(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
-        let symbol: TSSymbol = ts_node_symbol(node);
-        lua_pushinteger(L, symbol as lua_Integer);
-        1 as ::core::ffi::c_int
+/// One step of `iter_children`: the next child and its field name.
+fn node_next_child(stack: &mut Stack) -> Result<c_int, Raise> {
+    let index = wrap_u32(stack.to_integer(At::upvalue(1)));
+    let source = check_node(stack, At::upvalue(2))?;
+    // SAFETY: a node of a tree its userdatum (the upvalue) keeps alive.
+    if index >= unsafe { ts_node_child_count(source) } {
+        return Ok(0);
     }
+    // SAFETY: as above.
+    let child = unsafe { ts_node_child(source, index) };
+    push_node(stack, child, At::upvalue(2));
+    // SAFETY: as above; a field name is the language's, or null.
+    unsafe { push_c_string(stack, ts_node_field_name_for_child(source, index)) };
+    stack.push_integer(integer(index) + 1);
+    stack.replace(At::upvalue(1));
+    Ok(2)
 }
 
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn node_field(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
-        let count: uint32_t = ts_node_child_count(node);
-        let mut curr_index: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut name_len: size_t = 0;
-        let field_name: *const ::core::ffi::c_char =
-            luaL_checklstring(L, 2 as ::core::ffi::c_int, &raw mut name_len);
-        lua_createtable(L, 0 as ::core::ffi::c_int, 0 as ::core::ffi::c_int);
-        let mut i: uint32_t = 0 as uint32_t;
-        while i < count {
-            let child_field_name: *const ::core::ffi::c_char =
-                ts_node_field_name_for_child(node, i);
-            if strequal(field_name, child_field_name) {
-                let child: TSNode = ts_node_child(node, i);
-                push_node(L, child, 1 as ::core::ffi::c_int);
-                curr_index += 1;
-                lua_rawseti(L, -2 as ::core::ffi::c_int, curr_index);
+fn node_iter_children(stack: &mut Stack) -> Result<c_int, Raise> {
+    check_node(stack, At::arg(1))?;
+    stack.push_integer(0);
+    stack.push_value(At::arg(1));
+    stack.push_closure(NODE_ITERATOR[0].entry(), 2);
+    Ok(1)
+}
+
+fn node_parent(stack: &mut Stack) -> Result<c_int, Raise> {
+    push_related(stack, ts_node_parent)
+}
+
+/// Whether an ancestor of the node in slot 1 has one of the types listed
+/// from index 3 of the table in slot 2 (a `has-ancestor?` predicate).
+fn node_has_ancestor(stack: &mut Stack) -> Result<c_int, Raise> {
+    let descendant = check_node(stack, At::arg(1))?;
+    if stack.kind(At::arg(2)) != Kind::Table {
+        stack.push_boolean(false);
+        return Ok(1);
+    }
+    let predicate_len = c_int::try_from(stack.raw_len(At::arg(2))).unwrap_or(c_int::MAX);
+    // SAFETY: a node of a tree its userdatum keeps alive, and the nodes
+    // walked down to it in the same tree.
+    let mut node = unsafe { ts_tree_root_node(descendant.tree) };
+    // SAFETY: as above.
+    while node.id != descendant.id && !unsafe { ts_node_is_null(node) } {
+        // SAFETY: as above; the type name is the language's.
+        let kind = unsafe { c_bytes(ts_node_type(node)) };
+        for index in 3..=predicate_len {
+            stack.raw_get_index(At::arg(2), index);
+            let found = stack.kind(At::TOP) == Kind::String && stack.string(At::TOP) == Some(kind);
+            stack.pop(1);
+            if found {
+                stack.push_boolean(true);
+                return Ok(1);
             }
-            i = i.wrapping_add(1);
         }
-        1 as ::core::ffi::c_int
+        // SAFETY: as above.
+        node = unsafe { ts_node_child_with_descendant(node, descendant) };
     }
+    stack.push_boolean(false);
+    Ok(1)
 }
 
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn node_named(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
-        lua_pushboolean(L, ts_node_is_named(node) as ::core::ffi::c_int);
-        1 as ::core::ffi::c_int
-    }
+fn node_child_with_descendant(stack: &mut Stack) -> Result<c_int, Raise> {
+    let node = check_node(stack, At::arg(1))?;
+    let descendant = check_node(stack, At::arg(2))?;
+    // SAFETY: as above.
+    let child = unsafe { ts_node_child_with_descendant(node, descendant) };
+    push_node(stack, child, At::arg(1));
+    Ok(1)
 }
 
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn node_sexpr(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
-        let allocated: *mut ::core::ffi::c_char = ts_node_string(node);
-        lua_pushstring(L, allocated);
-        xfree(allocated as *mut ::core::ffi::c_void);
-        1 as ::core::ffi::c_int
-    }
+fn node_next_sibling(stack: &mut Stack) -> Result<c_int, Raise> {
+    push_related(stack, ts_node_next_sibling)
 }
 
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn node_missing(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
-        lua_pushboolean(L, ts_node_is_missing(node) as ::core::ffi::c_int);
-        1 as ::core::ffi::c_int
-    }
+fn node_prev_sibling(stack: &mut Stack) -> Result<c_int, Raise> {
+    push_related(stack, ts_node_prev_sibling)
 }
 
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn node_extra(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
-        lua_pushboolean(L, ts_node_is_extra(node) as ::core::ffi::c_int);
-        1 as ::core::ffi::c_int
-    }
+fn node_next_named_sibling(stack: &mut Stack) -> Result<c_int, Raise> {
+    push_related(stack, ts_node_next_named_sibling)
 }
 
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn node_has_changes(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
-        lua_pushboolean(L, ts_node_has_changes(node) as ::core::ffi::c_int);
-        1 as ::core::ffi::c_int
-    }
+fn node_prev_named_sibling(stack: &mut Stack) -> Result<c_int, Raise> {
+    push_related(stack, ts_node_prev_named_sibling)
 }
 
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn node_has_error(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
-        lua_pushboolean(L, ts_node_has_error(node) as ::core::ffi::c_int);
-        1 as ::core::ffi::c_int
-    }
-}
-
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn node_child(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
-        let num: uint32_t = lua_tointeger(L, 2 as ::core::ffi::c_int) as uint32_t;
-        let child: TSNode = ts_node_child(node, num);
-        push_node(L, child, 1 as ::core::ffi::c_int);
-        1 as ::core::ffi::c_int
-    }
-}
-
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn node_named_child(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
-        let num: uint32_t = lua_tointeger(L, 2 as ::core::ffi::c_int) as uint32_t;
-        let child: TSNode = ts_node_named_child(node, num);
-        push_node(L, child, 1 as ::core::ffi::c_int);
-        1 as ::core::ffi::c_int
-    }
-}
-
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn node_descendant_for_range(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
-        let start: TSPoint = TSPoint {
-            row: lua_tointeger(L, 2 as ::core::ffi::c_int) as uint32_t,
-            column: lua_tointeger(L, 3 as ::core::ffi::c_int) as uint32_t,
-        };
-        let end: TSPoint = TSPoint {
-            row: lua_tointeger(L, 4 as ::core::ffi::c_int) as uint32_t,
-            column: lua_tointeger(L, 5 as ::core::ffi::c_int) as uint32_t,
-        };
-        let child: TSNode = ts_node_descendant_for_point_range(node, start, end);
-        push_node(L, child, 1 as ::core::ffi::c_int);
-        1 as ::core::ffi::c_int
-    }
-}
-
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn node_named_descendant_for_range(
-    L: *mut lua_State,
-) -> ::core::ffi::c_int {
-    unsafe {
-        let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
-        let start: TSPoint = TSPoint {
-            row: lua_tointeger(L, 2 as ::core::ffi::c_int) as uint32_t,
-            column: lua_tointeger(L, 3 as ::core::ffi::c_int) as uint32_t,
-        };
-        let end: TSPoint = TSPoint {
-            row: lua_tointeger(L, 4 as ::core::ffi::c_int) as uint32_t,
-            column: lua_tointeger(L, 5 as ::core::ffi::c_int) as uint32_t,
-        };
-        let child: TSNode = ts_node_named_descendant_for_point_range(node, start, end);
-        push_node(L, child, 1 as ::core::ffi::c_int);
-        1 as ::core::ffi::c_int
-    }
-}
-
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn node_next_child(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let child_index: *mut uint32_t =
-            lua_touserdata(L, LUA_GLOBALSINDEX - 1 as ::core::ffi::c_int) as *mut uint32_t;
-        let source: TSNode = node_check(L, LUA_GLOBALSINDEX - 2 as ::core::ffi::c_int);
-        if *child_index >= ts_node_child_count(source) {
-            return 0 as ::core::ffi::c_int;
+fn node_named_children(stack: &mut Stack) -> Result<c_int, Raise> {
+    let source = check_node(stack, At::arg(1))?;
+    stack.new_table(0, 0);
+    let mut index = 0;
+    // SAFETY: as above.
+    let count = unsafe { ts_node_child_count(source) };
+    for child_index in 0..count {
+        // SAFETY: as above.
+        let child = unsafe { ts_node_child(source, child_index) };
+        // SAFETY: as above.
+        if unsafe { ts_node_is_named(child) } {
+            push_node(stack, child, At::arg(1));
+            index += 1;
+            stack.raw_set_index(At::from_top(2), index);
         }
-        let child: TSNode = ts_node_child(source, *child_index);
-        push_node(L, child, LUA_GLOBALSINDEX - 2 as ::core::ffi::c_int);
-        let field: *const ::core::ffi::c_char = ts_node_field_name_for_child(source, *child_index);
-        if !field.is_null() {
-            lua_pushstring(L, field);
-        } else {
-            lua_pushnil(L);
-        }
-        *child_index = (*child_index).wrapping_add(1);
-        2 as ::core::ffi::c_int
     }
+    Ok(1)
 }
 
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn node_iter_children(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        node_check(L, 1 as ::core::ffi::c_int);
-        let child_index: *mut uint32_t =
-            lua_newuserdata(L, ::core::mem::size_of::<uint32_t>()) as *mut uint32_t;
-        *child_index = 0 as uint32_t;
-        lua_pushvalue(L, 1 as ::core::ffi::c_int);
-        lua_pushcclosure(
-            L,
-            Some(
-                node_next_child
-                    as unsafe extern "C-unwind" fn(*mut lua_State) -> ::core::ffi::c_int,
-            ),
-            2 as ::core::ffi::c_int,
-        );
-        1 as ::core::ffi::c_int
-    }
+fn node_root(stack: &mut Stack) -> Result<c_int, Raise> {
+    let node = check_node(stack, At::arg(1))?;
+    // SAFETY: the node's tree, which its userdatum keeps alive.
+    let root = unsafe { ts_tree_root_node(node.tree) };
+    push_node(stack, root, At::arg(1));
+    Ok(1)
 }
 
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn node_parent(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
-        let parent: TSNode = ts_node_parent(node);
-        push_node(L, parent, 1 as ::core::ffi::c_int);
-        1 as ::core::ffi::c_int
-    }
+/// The tree the node belongs to: index 1 of its environment.
+fn node_tree(stack: &mut Stack) -> Result<c_int, Raise> {
+    check_node(stack, At::arg(1))?;
+    stack.push_environment(At::arg(1));
+    // Upstream reads slot 2, which is the environment only when the call
+    // had no extra arguments; the top is the environment always.
+    stack.raw_get_index(At::TOP, 1);
+    Ok(1)
 }
 
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn __has_ancestor(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let descendant: TSNode = node_check(L, 1 as ::core::ffi::c_int);
-        if lua_type(L, 2 as ::core::ffi::c_int) != LUA_TTABLE {
-            lua_pushboolean(L, 0);
-            return 1 as ::core::ffi::c_int;
-        }
-        let pred_len: ::core::ffi::c_int =
-            lua_objlen(L, 2 as ::core::ffi::c_int) as ::core::ffi::c_int;
-        let mut node: TSNode = ts_tree_root_node(descendant.tree);
-        while node.id != descendant.id && !ts_node_is_null(node) {
-            let node_type_0: *const ::core::ffi::c_char = ts_node_type(node);
-            let node_type_len: size_t = cstr::bytes_at(node_type_0).len();
-            let mut i: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
-            while i <= pred_len {
-                lua_rawgeti(L, 2 as ::core::ffi::c_int, i);
-                if lua_type(L, -1 as ::core::ffi::c_int) == LUA_TSTRING {
-                    let mut check_len: size_t = 0;
-                    let check_str: *const ::core::ffi::c_char =
-                        lua_tolstring(L, -1 as ::core::ffi::c_int, &raw mut check_len);
-                    if node_type_len == check_len
-                        && cstr::slice_at(node_type_0, check_len)
-                            == cstr::slice_at(check_str, check_len)
-                    {
-                        lua_pushboolean(L, 1);
-                        return 1 as ::core::ffi::c_int;
-                    }
-                }
-                lua_settop(L, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
-                i += 1;
-            }
-            node = ts_node_child_with_descendant(node, descendant);
-        }
-        lua_pushboolean(L, 0);
-        1 as ::core::ffi::c_int
-    }
-}
-
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn node_child_with_descendant(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
-        let descendant: TSNode = node_check(L, 2 as ::core::ffi::c_int);
-        let child: TSNode = ts_node_child_with_descendant(node, descendant);
-        push_node(L, child, 1 as ::core::ffi::c_int);
-        1 as ::core::ffi::c_int
-    }
-}
-
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn node_next_sibling(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
-        let sibling: TSNode = ts_node_next_sibling(node);
-        push_node(L, sibling, 1 as ::core::ffi::c_int);
-        1 as ::core::ffi::c_int
-    }
-}
-
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn node_prev_sibling(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
-        let sibling: TSNode = ts_node_prev_sibling(node);
-        push_node(L, sibling, 1 as ::core::ffi::c_int);
-        1 as ::core::ffi::c_int
-    }
-}
-
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn node_next_named_sibling(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
-        let sibling: TSNode = ts_node_next_named_sibling(node);
-        push_node(L, sibling, 1 as ::core::ffi::c_int);
-        1 as ::core::ffi::c_int
-    }
-}
-
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn node_prev_named_sibling(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
-        let sibling: TSNode = ts_node_prev_named_sibling(node);
-        push_node(L, sibling, 1 as ::core::ffi::c_int);
-        1 as ::core::ffi::c_int
-    }
-}
-
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn node_named_children(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let source: TSNode = node_check(L, 1 as ::core::ffi::c_int);
-        lua_createtable(L, 0 as ::core::ffi::c_int, 0 as ::core::ffi::c_int);
-        let mut curr_index: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let n: uint32_t = ts_node_child_count(source);
-        let mut i: uint32_t = 0 as uint32_t;
-        while i < n {
-            let child: TSNode = ts_node_child(source, i);
-            if ts_node_is_named(child) {
-                push_node(L, child, 1 as ::core::ffi::c_int);
-                curr_index += 1;
-                lua_rawseti(L, -2 as ::core::ffi::c_int, curr_index);
-            }
-            i = i.wrapping_add(1);
-        }
-        1 as ::core::ffi::c_int
-    }
-}
-
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn node_root(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
-        let root: TSNode = ts_tree_root_node(node.tree);
-        push_node(L, root, 1 as ::core::ffi::c_int);
-        1 as ::core::ffi::c_int
-    }
-}
-
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn node_tree(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        node_check(L, 1 as ::core::ffi::c_int);
-        lua_getfenv(L, 1 as ::core::ffi::c_int);
-        lua_rawgeti(L, 2 as ::core::ffi::c_int, 1 as ::core::ffi::c_int);
-        1 as ::core::ffi::c_int
-    }
-}
-
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn node_byte_length(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
-        let start_byte: uint32_t = ts_node_start_byte(node);
-        let end_byte: uint32_t = ts_node_end_byte(node);
-        lua_pushinteger(L, end_byte.wrapping_sub(start_byte) as lua_Integer);
-        1 as ::core::ffi::c_int
-    }
-}
-
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn node_equal(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let node1: TSNode = node_check(L, 1 as ::core::ffi::c_int);
-        let node2: TSNode = node_check(L, 2 as ::core::ffi::c_int);
-        lua_pushboolean(L, ts_node_eq(node1, node2) as ::core::ffi::c_int);
-        1 as ::core::ffi::c_int
-    }
+fn node_byte_length(stack: &mut Stack) -> Result<c_int, Raise> {
+    let node = check_node(stack, At::arg(1))?;
+    // SAFETY: as above.
+    let (start, end) = unsafe { (ts_node_start_byte(node), ts_node_end_byte(node)) };
+    stack.push_integer(integer(end.wrapping_sub(start)));
+    Ok(1)
 }

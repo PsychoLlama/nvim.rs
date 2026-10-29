@@ -1,145 +1,178 @@
 //! The parser's optional log callback.
 //!
-//! `parser_set_logger` installs a [`TSLogger`] whose payload is a Lua
-//! reference plus the [`TSLuaLoggerOpts`] flags saying which of lex/parse to
-//! report; `logger_cb` is what tree-sitter calls, and `logger_gc` releases
-//! the reference when the parser dies.
+//! `parser:_set_logger(lex, parse, fn)` installs a [`TSLogger`] whose
+//! payload is a [`Logger`]: which of lex/parse to report, and -- while a
+//! parse runs -- where the callback sits on that parse's stack. The
+//! callback itself is index 1 of the parser userdatum's environment table,
+//! so the collector owns it: nothing to release when the parser dies or a
+//! second logger replaces the first (upstream leaked the first's options
+//! and its registry reference).
+//!
+//! The callback runs protected. A failure is not raised from inside
+//! tree-sitter's frames, as upstream's `luaL_error` was: it is recorded,
+//! the rest of the parse logs nothing, and the parse raises once
+//! tree-sitter has returned ([`LogScope::finish`]).
 
 #![deny(unsafe_op_in_unsafe_fn)]
 // Unsafe perimeter: the `lua/treesitter/` row in docs/perimeter.md.
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
+use core::cell::Cell;
+use core::ffi::{c_char, c_int, c_void};
+use core::ptr::NonNull;
+use std::rc::Rc;
+
+use super::parser::{Parser, check_parser};
 use super::*;
+use crate::lua::stack::{Kind, Raise};
+use crate::types::lua_State;
 
-/// # Safety
-///
-/// `logger` must be a `TSLogger` this module installed: its `payload` is read
-/// as a `TSLuaLoggerOpts` and freed, so a logger from anywhere else -- or one
-/// already collected -- is a use-after-free.
-pub(crate) unsafe fn logger_gc(logger: TSLogger) {
-    unsafe {
-        if logger.log.is_none() {
-            return;
-        }
-        let opts: *mut TSLuaLoggerOpts = logger.payload as *mut TSLuaLoggerOpts;
-        luaL_unref(
-            (*opts).lstate,
-            LUA_REGISTRYINDEX,
-            (*opts).cb as ::core::ffi::c_int,
-        );
-        xfree(opts as *mut ::core::ffi::c_void);
-    }
+/// One installed logger: the payload tree-sitter hands back to
+/// [`logger_cb`].
+pub(crate) struct Logger {
+    lex: bool,
+    parse: bool,
+    /// While a parse runs: the state it runs on and the slot its callback
+    /// was pushed to.
+    call: Cell<Option<(NonNull<lua_State>, At)>>,
+    /// The callback failed during the running parse.
+    failed: Cell<bool>,
 }
 
-/// # Safety
+/// What `logger_cb` is told, as tree-sitter's C type.
+type LogFunction = unsafe extern "C-unwind" fn(*mut c_void, TSLogType, *const c_char);
+
+/// Tree-sitter's log callback: call the Lua callback with the kind and the
+/// message, unless the kind is filtered out, no parse of ours is running,
+/// or the callback already failed in this one.
 ///
-/// `payload` must point at the `TSLuaLoggerOpts` this logger was installed
-/// with and `s` at a NUL-terminated message; tree-sitter's callback contract,
-/// which hands back exactly what it was given.
+/// # Safety
+/// `payload` is the [`Logger`] this logger was installed with, kept alive
+/// by whoever installed it (see [`LogScope`]); `message` is NUL-terminated.
+/// Tree-sitter's callback contract, which hands back what it was given.
 unsafe extern "C-unwind" fn logger_cb(
-    payload: *mut ::core::ffi::c_void,
-    logtype: TSLogType,
-    s: *const ::core::ffi::c_char,
+    payload: *mut c_void,
+    kind: TSLogType,
+    message: *const c_char,
 ) {
-    unsafe {
-        let opts: *mut TSLuaLoggerOpts = payload as *mut TSLuaLoggerOpts;
-        if !(*opts).lex
-            && logtype as ::core::ffi::c_uint
-                == TSLogTypeLex as ::core::ffi::c_int as ::core::ffi::c_uint
-            || !(*opts).parse
-                && logtype as ::core::ffi::c_uint
-                    == TSLogTypeParse as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            return;
-        }
-        let lstate: *mut lua_State = (*opts).lstate;
-        lua_rawgeti(lstate, LUA_REGISTRYINDEX, (*opts).cb as ::core::ffi::c_int);
-        lua_pushstring(
-            lstate,
-            if logtype as ::core::ffi::c_uint
-                == TSLogTypeParse as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                c"parse".as_ptr()
-            } else {
-                c"lex".as_ptr()
-            },
-        );
-        lua_pushstring(lstate, s);
-        if lua_pcall(
-            lstate,
-            2 as ::core::ffi::c_int,
-            0 as ::core::ffi::c_int,
-            0 as ::core::ffi::c_int,
-        ) != 0
-        {
-            luaL_error(lstate, c"treesitter logger callback failed".as_ptr());
-        }
+    // SAFETY: the caller's live `Logger`, only ever read through shared
+    // references (its state is in `Cell`s).
+    let logger = unsafe { &*payload.cast_const().cast::<Logger>() };
+    let wanted = if kind == LOG_TYPE_LEX {
+        logger.lex
+    } else {
+        logger.parse
+    };
+    let Some((state, callback)) = logger.call.get() else {
+        return;
+    };
+    if !wanted || logger.failed.get() {
+        return;
+    }
+    // SAFETY: the state the running parse is on, inside the C function that
+    // started it; this view owns nothing below what it pushes, and the
+    // parse's own view is not used until tree-sitter returns.
+    let mut stack = unsafe { Stack::above_top(state.as_ptr()) };
+    stack.push_value(callback);
+    stack.push_bytes(if kind == LOG_TYPE_PARSE {
+        b"parse"
+    } else {
+        b"lex"
+    });
+    // SAFETY: the caller's NUL-terminated message.
+    stack.push_bytes(unsafe { c_bytes(message) });
+    if stack.pcall(2, 0, None).is_err() {
+        stack.set_top(stack.base());
+        logger.failed.set(true);
     }
 }
 
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-pub(crate) unsafe extern "C-unwind" fn parser_set_logger(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let p: *mut TSParser = parser_check(L, 1 as ::core::ffi::c_int);
-        luaL_argcheck(
-            L,
-            lua_type(L, 2 as ::core::ffi::c_int) == 1 as ::core::ffi::c_int,
-            2 as ::core::ffi::c_int,
-            c"boolean expected".as_ptr(),
-        );
-        luaL_argcheck(
-            L,
-            lua_type(L, 3 as ::core::ffi::c_int) == 1 as ::core::ffi::c_int,
-            3 as ::core::ffi::c_int,
-            c"boolean expected".as_ptr(),
-        );
-        luaL_argcheck(
-            L,
-            lua_type(L, 4 as ::core::ffi::c_int) == 6 as ::core::ffi::c_int,
-            4 as ::core::ffi::c_int,
-            c"function expected".as_ptr(),
-        );
-        let opts: *mut TSLuaLoggerOpts =
-            xmalloc(::core::mem::size_of::<TSLuaLoggerOpts>()) as *mut TSLuaLoggerOpts;
-        lua_pushvalue(L, 4 as ::core::ffi::c_int);
-        let ref_0: LuaRef = luaL_ref(L, LUA_REGISTRYINDEX);
-        *opts = TSLuaLoggerOpts {
-            cb: ref_0,
-            lstate: L,
-            lex: lua_toboolean(L, 2 as ::core::ffi::c_int) != 0,
-            parse: lua_toboolean(L, 3 as ::core::ffi::c_int) != 0,
-        };
-        let logger: TSLogger = TSLogger {
-            payload: opts as *mut ::core::ffi::c_void,
-            log: Some(
-                logger_cb
-                    as unsafe extern "C-unwind" fn(
-                        *mut ::core::ffi::c_void,
-                        TSLogType,
-                        *const ::core::ffi::c_char,
-                    ) -> (),
-            ),
-        };
-        ts_parser_set_logger(p, logger);
-        0 as ::core::ffi::c_int
+/// `parser:_set_logger(lex, parse, fn)`.
+pub(crate) fn parser_set_logger(stack: &mut Stack) -> Result<c_int, Raise> {
+    let parser = check_parser(stack, At::arg(1))?;
+    for slot in [2, 3] {
+        if stack.kind(At::arg(slot)) != Kind::Boolean {
+            return Err(Raise::argument(slot, "boolean expected"));
+        }
     }
+    if stack.kind(At::arg(4)) != Kind::Function {
+        return Err(Raise::argument(4, "function expected"));
+    }
+    let logger = Rc::new(Logger {
+        lex: stack.to_boolean(At::arg(2)),
+        parse: stack.to_boolean(At::arg(3)),
+        call: Cell::new(None),
+        failed: Cell::new(false),
+    });
+    stack.new_table(1, 0);
+    stack.push_value(At::arg(4));
+    stack.raw_set_index(At::from_top(2), 1);
+    stack.set_environment(At::arg(1));
+    let installed = TSLogger {
+        payload: Rc::as_ptr(&logger).cast_mut().cast::<c_void>(),
+        log: Some(logger_cb as LogFunction),
+    };
+    // SAFETY: the parser the userdatum owns; the payload is kept alive by
+    // the userdatum, which outlives the parser's use of it (the parser is
+    // deleted first), or by the parse running when it is replaced.
+    unsafe { ts_parser_set_logger(parser, installed) };
+    if let Some(userdatum) = stack.to_userdata::<Parser>(At::arg(1)) {
+        userdatum.logger = Some(logger);
+    }
+    Ok(0)
 }
 
-/// # Safety
-///
-/// `L` must point at the Lua state this call runs on.
-pub(crate) unsafe extern "C-unwind" fn parser_get_logger(L: *mut lua_State) -> ::core::ffi::c_int {
-    unsafe {
-        let p: *mut TSParser = parser_check(L, 1 as ::core::ffi::c_int);
-        let logger: TSLogger = ts_parser_logger(p);
-        if logger.log.is_some() {
-            let opts: *mut TSLuaLoggerOpts = logger.payload as *mut TSLuaLoggerOpts;
-            lua_rawgeti(L, LUA_REGISTRYINDEX, (*opts).cb as ::core::ffi::c_int);
-        } else {
-            lua_pushnil(L);
-        }
-        1 as ::core::ffi::c_int
+/// `parser:_logger()`: the callback, or nil when none is installed.
+pub(crate) fn parser_get_logger(stack: &mut Stack) -> Result<c_int, Raise> {
+    check_parser(stack, At::arg(1))?;
+    let installed = stack
+        .to_userdata::<Parser>(At::arg(1))
+        .is_some_and(|userdatum| userdatum.logger.is_some());
+    if installed {
+        stack.push_environment(At::arg(1));
+        stack.raw_get_index(At::TOP, 1);
+    } else {
+        stack.push_nil();
+    }
+    Ok(1)
+}
+
+/// The logger of one parse, armed for its length.
+pub(crate) struct LogScope {
+    logger: Rc<Logger>,
+    /// What an outer parse of the same parser had armed.
+    outer: (Option<(NonNull<lua_State>, At)>, bool),
+}
+
+impl LogScope {
+    /// Arm the logger of the parser userdatum at `parser`, if it has one:
+    /// push its callback and tell the logger where it is.
+    pub(crate) fn begin(stack: &mut Stack, parser: At) -> Option<LogScope> {
+        let logger = stack.to_userdata::<Parser>(parser)?.logger.clone()?;
+        stack.push_environment(parser);
+        stack.raw_get_index(At::TOP, 1);
+        let callback = stack.top();
+        let state = NonNull::new(stack.lua_state()).expect("a live state");
+        let outer = (
+            logger.call.replace(Some((state, callback))),
+            logger.failed.replace(false),
+        );
+        Some(LogScope { logger, outer })
+    }
+
+    /// Disarm the logger and drop the two slots `begin` pushed; `true` when
+    /// the callback failed during the parse.
+    pub(crate) fn finish(self, stack: &mut Stack) -> bool {
+        let (call, failed) = self.outer;
+        self.logger.call.set(call);
+        stack.pop(2);
+        self.logger.failed.replace(failed)
     }
 }

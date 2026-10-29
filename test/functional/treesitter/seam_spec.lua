@@ -472,6 +472,51 @@ describe('treesitter parser logger', function()
     assert_alive()
   end)
 
+  it('replaces a logger with a second one', function()
+    eq(
+      { true, 0, true, true },
+      exec_lua(function()
+        local parser = vim._create_ts_parser('c')
+        local first, second = 0, {}
+        local function cb2(kind)
+          second[kind] = true
+        end
+        parser:_set_logger(true, true, function()
+          first = first + 1
+        end)
+        parser:_set_logger(false, true, cb2)
+        local same = parser:_logger() == cb2
+        parser:parse(nil, 'int a;', true)
+        parser = nil
+        collectgarbage()
+        collectgarbage()
+        return { same, first, second.parse == true, second.lex == nil }
+      end)
+    )
+  end)
+
+  it('parses again after its callback failed', function()
+    eq(
+      {
+        false,
+        'treesitter logger callback failed',
+        '(translation_unit (declaration type: (primitive_type) declarator: (identifier)))',
+      },
+      exec_lua(function()
+        local parser = vim._create_ts_parser('c')
+        local calls = 0
+        parser:_set_logger(true, true, function()
+          calls = calls + 1
+          if calls == 3 then
+            error('boom')
+          end
+        end)
+        local ok, err = pcall(parser.parse, parser, nil, 'int a; int b;', true)
+        return { ok, err, parser:parse(nil, 'int c;', true):root():sexpr() }
+      end)
+    )
+  end)
+
   it('releases the callback with the parser', function()
     exec_lua(function()
       local parser = vim._create_ts_parser('c')
@@ -480,6 +525,54 @@ describe('treesitter parser logger', function()
       collectgarbage()
       collectgarbage()
     end)
+    assert_alive()
+  end)
+end)
+
+describe('treesitter query match', function()
+  it('keeps its captures readable after its cursor is collected', function()
+    eq(
+      { 'identifier', 'a' },
+      exec_lua(function()
+        local source = 'int a, b;'
+        local query = vim._ts_parse_query('c', '(identifier) @id')
+        local root = vim._create_ts_parser('c'):parse(nil, source):root()
+        local cursor = vim._create_ts_querycursor(
+          root,
+          query,
+          { start_row = 0, start_col = 0, end_row = 1, end_col = 0 }
+        )
+        local match = cursor:next_match()
+        cursor = nil
+        query = nil
+        collectgarbage()
+        collectgarbage()
+        local node = match:captures()[1][1]
+        return { node:type(), vim.treesitter.get_node_text(node, source) }
+      end)
+    )
+  end)
+
+  it('lets a query callback raise mid-iteration', function()
+    eq(
+      { false, 'stop', 2 },
+      exec_lua(function()
+        local source = 'int a, b, c;'
+        local query = vim.treesitter.query.parse('c', '(identifier) @id')
+        local root = vim.treesitter.get_string_parser(source, 'c'):parse()[1]:root()
+        local seen = 0
+        local ok, err = pcall(function()
+          for _, node in query:iter_captures(root, source) do
+            seen = seen + 1
+            if seen == 2 then
+              error('stop', 0)
+            end
+          end
+        end)
+        collectgarbage()
+        return { ok, err, seen }
+      end)
+    )
     assert_alive()
   end)
 end)
