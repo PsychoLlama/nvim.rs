@@ -89,25 +89,19 @@ pub fn tui_mouse_off(tui: &mut TUIData) {
 }
 
 /// The editor's `'guicursor'` was (re)parsed: take the cursor description
-/// for every mode.
-///
-/// # Safety
-/// `args` must be an array of mode dictionaries.
-pub unsafe fn tui_mode_info_set(tui: &mut TUIData, guicursor_enabled: bool, args: Array) {
+/// for every mode. `args` is an array of mode dictionaries.
+pub fn tui_mode_info_set(tui: &mut TUIData, guicursor_enabled: bool, args: Array) {
     cursor_style_enabled.set(guicursor_enabled);
     if !guicursor_enabled {
         cursor_reset_style(tui);
         return;
     }
     assert!(!args.is_empty(), "mode_info_set with no modes");
-    // SAFETY: the caller guarantees `args`.
-    unsafe {
-        for i in 0..args.len() {
-            let entry = (args[i])
-                .as_dict()
-                .expect("mode_info_set entry is not a dict");
-            tui.cursor_shapes[i] = decode_cursor_entry(entry);
-        }
+    for i in 0..args.len() {
+        let entry = (args[i])
+            .as_dict()
+            .expect("mode_info_set entry is not a dict");
+        tui.cursor_shapes[i] = decode_cursor_entry(entry);
     }
     let showing = tui.showing_mode;
     cursor_set_mode(tui, showing);
@@ -176,12 +170,9 @@ const VISUAL_BELL_MS: core::ffi::c_uint = 100;
 ///
 /// This is `ui_send`: whatever the editor wrote goes out as it stands,
 /// synchronously, without the TUI interpreting any of it.
-///
-/// # Safety
-/// `content` must be a valid API string.
-pub unsafe fn tui_ui_send(tui: &mut TUIData, content: String_0) {
-    // SAFETY: the caller guarantees `content`; `uv_write` fills in the
-    // request, which lives until the loop below has run it.
+pub fn tui_ui_send(tui: &mut TUIData, content: String_0) {
+    // SAFETY: an API string owns `len()` readable bytes; `uv_write` fills in
+    // the request, which lives until the loop below has run it.
     unsafe {
         let mut req: uv_write_t = core::mem::zeroed();
         let buf = uv_buf_t {
@@ -214,9 +205,7 @@ pub unsafe fn tui_ui_send(tui: &mut TUIData, content: String_0) {
 /// and restored when the editor asks for an empty one — which is what stops
 /// a terminal being left titled `nvim` after the editor exits.
 ///
-/// # Safety
-/// `title` must be a valid API string.
-pub unsafe fn tui_set_title(tui: &mut TUIData, title: String_0) {
+pub fn tui_set_title(tui: &mut TUIData, title: String_0) {
     if !tui.can_set_title {
         return;
     }
@@ -240,7 +229,7 @@ pub unsafe fn tui_set_title(tui: &mut TUIData, title: String_0) {
             flush(tui);
         }
         terminfo_out(tui, kTerm_to_status_line);
-        // SAFETY: the caller guarantees `title`.
+        // SAFETY: an API string owns `len()` readable bytes.
         unsafe { out_raw(tui, title.data(), title.len()) };
         terminfo_out(tui, kTerm_from_status_line);
     } else if tui.title_enabled {
@@ -256,15 +245,11 @@ pub fn tui_set_icon(_tui: &mut TUIData, _icon: String_0) {}
 
 /// An option the TUI acts on changed.
 ///
-/// # Safety
-/// `name` must be a valid API string and `value` must hold the type that
-/// option's name implies.
-pub unsafe fn tui_option_set(tui: &mut TUIData, name: String_0, value: Object) {
-    // SAFETY: the caller guarantees `name`.
+/// `value` should hold the type that option's name implies; a value that
+/// arrives as something else leaves the option alone rather than
+/// reinterpreting its bytes, which is what the transpiled union read did.
+pub fn tui_option_set(tui: &mut TUIData, name: String_0, value: Object) {
     let is = |option: &core::ffi::CStr| name.as_cstr() == option;
-    // The caller also promises the value's kind. A value that arrives as
-    // something else leaves the option alone rather than reinterpreting its
-    // bytes, which is what the transpiled union read did.
     let boolean = || value.as_boolean().unwrap_or_default();
     let integer = || value.as_integer().unwrap_or_default();
 
@@ -311,11 +296,10 @@ pub unsafe fn tui_option_set(tui: &mut TUIData, name: String_0, value: Object) {
 
 /// Follow the editor into its new working directory, so that relative paths
 /// in what the terminal is told mean the same thing.
-///
-/// # Safety
-/// `path` must be a valid API string.
-pub unsafe fn tui_chdir(_tui: &mut TUIData, path: String_0) {
-    // SAFETY: the caller guarantees `path`.
+pub fn tui_chdir(_tui: &mut TUIData, path: String_0) {
+    // SAFETY: an API string is NUL-terminated (null only for the null
+    // string, which `uv_chdir` refuses), and `uv_strerror` answers a static
+    // string.
     unsafe {
         let err = uv_chdir(path.data());
         if err != 0 {

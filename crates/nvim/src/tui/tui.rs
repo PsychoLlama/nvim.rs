@@ -76,7 +76,7 @@ use crate::types::{
 use crate::ui::state::t_colors;
 use crate::ui_client::{ui_client_attach, ui_client_detach, ui_client_set_size};
 use ::libc::{abort, kill, sscanf};
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_int, c_void};
 
 // --------------------------------------------------------------- the state
 
@@ -216,7 +216,7 @@ pub unsafe fn tui_wait_ready(tui: *mut TUIData) -> TuiStart {
         TuiStart {
             width: (*tui).width,
             height: (*tui).height,
-            term: (*tui).term,
+            term: crate::cstr::at_opt((*tui).term).map(std::ffi::CString::from),
             rgb: (*tui).rgb,
         }
     }
@@ -226,8 +226,9 @@ pub unsafe fn tui_wait_ready(tui: *mut TUIData) -> TuiStart {
 pub struct TuiStart {
     pub width: c_int,
     pub height: c_int,
-    /// The `TERM` the TUI resolved, owned by the [`TUIData`].
-    pub term: *mut c_char,
+    /// A copy of the `TERM` the TUI resolved: the [`TUIData`]'s own is freed
+    /// when the terminal stops.
+    pub term: Option<std::ffi::CString>,
     /// Whether the terminal was found to do 24-bit colour.
     pub rgb: bool,
 }
@@ -661,17 +662,12 @@ pub unsafe fn tui_is_stopped(tui: *mut TUIData) -> bool {
 /// The terminal is reset first, and — as in [`tui_stop`] — the actual stop
 /// waits for the terminal to answer, so the shell does not get the terminal
 /// mid-reset.
-///
-/// # Safety
-/// `tui` must point to a live [`TUIData`].
-pub unsafe fn tui_suspend(tui: *mut TUIData) {
-    // SAFETY: the caller guarantees `tui`.
-    unsafe {
-        ui_client_detach();
-        (*tui).mouse_enabled_save = (*tui).mouse_enabled;
-        (*tui).input.callbacks.primary_device_attr = Some(tui_suspend_cb);
-        terminfo_disable(tui);
-    }
+pub fn tui_suspend(tui: &mut TUIData) {
+    ui_client_detach();
+    tui.mouse_enabled_save = tui.mouse_enabled;
+    tui.input.callbacks.primary_device_attr = Some(tui_suspend_cb);
+    // SAFETY: the live TUI this borrow names.
+    unsafe { terminfo_disable(tui) };
 }
 
 /// Actually suspend, once the terminal has confirmed the reset.
@@ -692,7 +688,8 @@ unsafe fn tui_suspend_cb(tui: *mut TUIData) {
             tui_mouse_on(&mut *tui);
         }
         stream_set_blocking((*tui).input.in_fd, false);
-        ui_client_attach((*tui).width, (*tui).height, (*tui).term, (*tui).rgb);
+        let term = crate::cstr::at_opt((*tui).term);
+        ui_client_attach((*tui).width, (*tui).height, term, (*tui).rgb);
     }
 }
 

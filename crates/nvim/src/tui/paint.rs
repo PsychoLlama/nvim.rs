@@ -475,13 +475,10 @@ pub fn tui_grid_scroll(
 
 /// One row of the editor's screen changed.
 ///
-/// `chunk`/`attrs` describe `[startcol, endcol)`; everything from there to
-/// `clearcol` is blank in `clearattr`.
-///
-/// # Safety
-/// `chunk` and `attrs` must each hold `endcol - startcol` entries.
+/// `chunk`/`attrs` describe `[startcol, endcol)`, at least that many cells
+/// each; everything from there to `clearcol` is blank in `clearattr`.
 #[expect(clippy::too_many_arguments, reason = "the UI event's own shape")]
-pub unsafe fn tui_raw_line(
+pub fn tui_raw_line(
     tui: &mut TUIData,
     _grid: Integer,
     linerow: Integer,
@@ -490,22 +487,11 @@ pub unsafe fn tui_raw_line(
     clearcol: Integer,
     clearattr: Integer,
     flags: LineFlags,
-    chunk: *const ScreenChar,
-    attrs: *const ScreenAttr,
+    chunk: &[ScreenChar],
+    attrs: &[ScreenAttr],
 ) {
-    let len = (endcol - startcol) as usize;
-    // SAFETY: the caller guarantees the two arrays' length. An empty range
-    // says nothing about the pointers, which may be null.
-    let (chunk, attrs) = unsafe {
-        if len == 0 {
-            ([].as_slice(), [].as_slice())
-        } else {
-            (
-                core::slice::from_raw_parts(chunk, len),
-                core::slice::from_raw_parts(attrs, len),
-            )
-        }
-    };
+    let len = usize::try_from(endcol - startcol).unwrap_or(0);
+    let (chunk, attrs) = (&chunk[..len], &attrs[..len]);
     let row = linerow as c_int;
     for (i, (&data, &attr)) in chunk.iter().zip(attrs).enumerate() {
         assert!(
@@ -627,12 +613,9 @@ fn repaint_row(tui: &mut TUIData, row: c_int, left: c_int, right: c_int) {
 /// The whole grid is printed unconditionally with the write path pointed at
 /// the file, so the result is the sequences a terminal would have received,
 /// not a rendering of them.
-///
-/// # Safety
-/// `path` must be a valid API string.
-pub unsafe fn tui_screenshot(tui: &mut TUIData, path: String_0) {
-    // SAFETY: the caller guarantees `path`.
-    let file = unsafe { fopen(path.data(), c"w".as_ptr()) };
+pub fn tui_screenshot(tui: &mut TUIData, path: String_0) {
+    // SAFETY: two NUL-terminated strings.
+    let file = unsafe { fopen(path.as_cstr().as_ptr(), c"w".as_ptr()) };
     if file.is_null() {
         return;
     }

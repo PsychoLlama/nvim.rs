@@ -17,14 +17,14 @@ use crate::cursor_shape::{SHAPE_BLOCK, SHAPE_HOR, SHAPE_IDX_N, SHAPE_VER, shape_
 use crate::global_cell::GlobalCell;
 use crate::highlight::HlAttrFlags;
 use crate::log::{LOGLVL_WRN, logmsg};
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_cstr_opt;
 use crate::tui::output::{terminfo_out, terminfo_print_nums, terminfo_print_str};
 use crate::tui::terminfo::caps::{
     kTerm_reset_cursor_color, kTerm_reset_cursor_style, kTerm_set_cursor_color,
     kTerm_set_cursor_style,
 };
 use crate::types::{
-    ApiDict, CursorEntry, CursorShape, HlAttrs, Object, RgbValue, TUIData, int32_t,
+    ApiDict, CursorEntry, CursorShape, HlAttrs, Object, RgbValue, String_0, TUIData, int32_t,
 };
 use core::ffi::{CStr, c_int};
 
@@ -54,28 +54,19 @@ fn decscusr_code(entry: &CursorEntry) -> c_int {
 }
 
 /// The shape `'guicursor'` names, falling back to a block.
-///
-/// # Safety
-/// `shape_str` must be null or a NUL-terminated string.
-unsafe fn decode_shape(shape_str: *const core::ffi::c_char) -> CursorShape {
-    let name = if shape_str.is_null() {
-        b"".as_slice()
-    } else {
-        // SAFETY: the caller guarantees NUL termination.
-        unsafe { CStr::from_ptr(shape_str) }.to_bytes()
-    };
-    match name {
+fn decode_shape(shape: &String_0) -> CursorShape {
+    match shape.as_bytes() {
         b"block" => SHAPE_BLOCK,
         b"vertical" => SHAPE_VER,
         b"horizontal" => SHAPE_HOR,
         _ => {
-            // SAFETY: a NUL-terminated format and argument.
+            let shown = msg_cstr_opt((!shape.is_null()).then(|| shape.as_cstr()));
             logmsg!(
                 LOGLVL_WRN,
                 c"tui_cursor_decode_shape",
                 0,
                 "Unknown shape value '{}'",
-                unsafe { c_str(shape_str) }
+                shown
             );
             SHAPE_BLOCK
         }
@@ -86,29 +77,21 @@ unsafe fn decode_shape(shape_str: *const core::ffi::c_char) -> CursorShape {
 ///
 /// Unrecognised keys are ignored and missing ones keep the default the
 /// shape table starts every entry with.
-///
-/// # Safety
-/// `args` must be a valid `ApiDict` whose items outlive the call.
-pub unsafe fn decode_cursor_entry(args: &ApiDict) -> CursorEntry {
-    // SAFETY: the caller guarantees the dict and its items are valid.
-    unsafe {
-        let mut entry = shape_entry(SHAPE_IDX_N);
-        for i in 0..args.len() {
-            let item = &args[i];
-            let key = item.key.bytes();
-            // A value of the wrong kind keeps the default, the same as a
-            // key nobody recognised; the transpile read the union arm the
-            // *key* named and would have dereferenced whatever was there.
-            match (key, &item.value) {
-                (b"cursor_shape", Object::String(name)) => entry.shape = decode_shape(name.data()),
-                (b"blinkon", Object::Integer(ms)) => entry.blinkon = *ms as c_int,
-                (b"blinkoff", Object::Integer(ms)) => entry.blinkoff = *ms as c_int,
-                (b"attr_id", Object::Integer(id)) => entry.id = *id as c_int,
-                _ => {}
-            }
+pub fn decode_cursor_entry(args: &ApiDict) -> CursorEntry {
+    let mut entry = shape_entry(SHAPE_IDX_N);
+    for item in args {
+        // A value of the wrong kind keeps the default, the same as a
+        // key nobody recognised; the transpile read the union arm the
+        // *key* named and would have dereferenced whatever was there.
+        match (item.key.bytes(), &item.value) {
+            (b"cursor_shape", Object::String(name)) => entry.shape = decode_shape(name),
+            (b"blinkon", Object::Integer(ms)) => entry.blinkon = *ms as c_int,
+            (b"blinkoff", Object::Integer(ms)) => entry.blinkoff = *ms as c_int,
+            (b"attr_id", Object::Integer(id)) => entry.id = *id as c_int,
+            _ => {}
         }
-        entry
     }
+    entry
 }
 
 /// Put the cursor style back to the terminal's default.

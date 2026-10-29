@@ -21,29 +21,28 @@
 //! What is *not* here: anything about the terminal. This module knows only
 //! the protocol.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::api::private::helpers::{api_dict_to_keydict, api_metadata, cstr_to_string};
+use crate::api::private::helpers::{api_dict_to_keydict, api_metadata};
 use crate::channel::open::JobOptions;
 use crate::channel::{channel_connect, channel_job_start};
-use crate::event::r#loop::process_events;
-use crate::event::multiqueue::multiqueue_put_event;
+use crate::event::r#loop::{Drain, wait_on_main_loop};
+use crate::event::multiqueue::put_job_on_fast_events;
 use crate::event::socket::socket_address_is_tcp;
 use crate::global_cell::GlobalCell;
 use crate::highlight::{HLATTRS_INIT, dict2hlattrs};
 use crate::log::{LOGLVL_ERR, LOGLVL_INF, logmsg};
-use crate::memory::{xfree, xmemdupz};
-use crate::message_fmt::{c_str, msg_cstr};
+use crate::message_fmt::msg_cstr;
 use crate::msgpack_rpc::channel::rpc_send_event;
 use crate::os::env::{ENV_TEST_LOG, env_exists, os_get_pid};
+use crate::os::proc::os_dup2;
 use crate::os::shell::Argv;
 use crate::profile::{time_finish, time_msg_at};
 use crate::startup::{
-    main_loop, os_exit, stderr_isatty, stdin_isatty, stdout_isatty, ui_client_attached,
-    ui_client_channel_id, ui_client_error_exit, ui_client_exit_status, ui_client_forward_stdin,
+    os_exit, stderr_isatty, stdin_isatty, stdout_isatty, ui_client_attached, ui_client_channel_id,
+    ui_client_error_exit, ui_client_exit_status, ui_client_forward_stdin,
 };
 use crate::tui::attrs::{tui_add_url, tui_default_colors_set, tui_hl_attr_define};
 use crate::tui::events::{
@@ -61,13 +60,12 @@ use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::libc::{STDERR_FILENO, STDOUT_FILENO};
 use crate::types::ui::kLineFlagWrap;
 use crate::types::{
-    ApiDict, Arena, Array, CallbackReader, Error, Event, GridLineEvent, HlAttrs, Integer,
+    ApiDict, Arena, Array, CallbackReader, Error, GridLineEvent, HlAttrs, Integer,
     KeyDict_highlight, Object, ObjectType, String_0, TUIData, UIClientHandler, Unpacker,
     kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString,
 };
 use crate::ui::state::t_colors;
-use ::libc::{close, dup};
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
 /// The descriptor the client hands the server as `stdin_fd` when the user
@@ -143,29 +141,20 @@ pub(crate) fn ui_client_start_server(exepath: &CStr, argv: &[CString]) -> u64 {
         } else {
             STDOUT_FILENO
         };
-        // SAFETY: both are descriptors this process owns.
-        unsafe {
-            close(0);
-            dup(keep);
-        };
+        os_dup2(keep, 0);
     }
     channel
 }
 
 /// Attaches this client to the server as a UI, remembering the terminal
-/// description for a later [`ui_client_reattach`].
-///
-/// # Safety
-///
-/// `term` must be null or a valid C string, and a channel must be set.
-pub(crate) unsafe fn ui_client_attach(width: c_int, height: c_int, term: *mut c_char, rgb: bool) {
+/// description for a later [`ui_client_reattach`]. A channel must be set.
+pub(crate) fn ui_client_attach(width: c_int, height: c_int, term: Option<&CStr>, rgb: bool) {
     tui_width.set(width);
     tui_height.set(height);
     tui_rgb.set(rgb);
-    // A copy, not the pointer: `term` names the TUI's own arena, which
+    // A copy, not a borrow: `term` names the TUI's own arena, which
     // stopping the terminal frees, and a re-attach can run after that.
-    // SAFETY: the caller's promise.
-    tui_term.set(unsafe { cstr_to_string(term) });
+    tui_term.set(term.map_or(String_0::NULL, String_0::from_cstr));
     ui_client_reattach();
 }
 
@@ -267,8 +256,8 @@ pub(crate) fn ui_client_run() -> ! {
     // `tui_wait_ready` can reach `ui_client_stop`, which needs it.
     tui.set(Some(Tui::start()));
     let started = tui.with(|started| started.as_ref().expect("just set").wait_ready());
-    // SAFETY: the terminal reported all four, and the channel is set.
-    unsafe { ui_client_attach(started.width, started.height, started.term, started.rgb) };
+    let term = started.term.as_deref();
+    ui_client_attach(started.width, started.height, term, started.rgb);
 
     // The test harness waits for a line in the log before it starts
     // driving the terminal, so that it is not racing startup.
@@ -285,7 +274,7 @@ pub(crate) fn ui_client_run() -> ! {
     // Never returns: the client exits from a callback, either because
     // the server said so or because the channel closed.
     loop {
-        unsafe { process_events(main_loop.ptr(), (*main_loop.ptr()).events, -1) };
+        wait_on_main_loop(Drain::Events, -1, || false);
     }
 }
 
@@ -515,10 +504,7 @@ macro_rules! forward {
             // The last repetition's `index += 1` has no reader; this is it,
             // rather than an `unused_assignments` allow per wrapper.
             let _ = index;
-            // Some sinks are `unsafe fn`s (their payload is a C value), some
-            // are not; one spelling serves both.
-            #[allow(unused_unsafe)]
-            let () = tui_state(|t| unsafe { $sink(t $(, payload!($ty, $arg))*) });
+            let () = tui_state(|t| $sink(t $(, payload!($ty, $arg))*));
         }
     )*};
 }
@@ -607,27 +593,24 @@ pub(crate) fn ui_client_event_raw_line(g: &GridLineEvent) {
     let endcol = Integer::from(startcol + g.coloff);
     let clearcol = endcol + Integer::from(g.clear_width);
     let flags = if g.wrap { kLineFlagWrap } else { 0 };
-    let (chars, attrs, width) = Unpacker::grid_line_cells();
-    // The decoder only counts a cell it wrote, which bounds the run the TUI
-    // reads; an event that claims more is not drawn.
-    if usize::try_from(g.coloff).map_or(true, |cells| cells > width) {
-        return;
-    }
     let (grid, row, startcol) = (
         Integer::from(grid),
         Integer::from(row),
         Integer::from(startcol),
     );
-    // SAFETY: the decoder wrote the `coloff` cells the run spans, and the
-    // TUI is started.
-    unsafe {
-        let attr = Integer::from(g.cur_attr);
+    let attr = Integer::from(g.cur_attr);
+    Unpacker::with_grid_line_cells(|chars, attrs, width| {
+        // The decoder only counts a cell it wrote, which bounds the run the
+        // TUI reads; an event that claims more is not drawn.
+        if usize::try_from(g.coloff).map_or(true, |cells| cells > width) {
+            return;
+        }
         tui_state(|t| {
             tui_raw_line(
                 t, grid, row, startcol, endcol, clearcol, attr, flags, chars, attrs,
-            )
-        })
-    };
+            );
+        });
+    });
 }
 
 /// Announces a highlight attribute id, converting both dicts back into the
@@ -670,7 +653,8 @@ fn dict_to_hlattrs(d: &ApiDict, rgb: bool) -> HlAttrs {
     // A URL is not an attribute the terminal understands; the TUI
     // interns it and the entry keeps the index.
     if let Some(url) = &dict.url {
-        attrs.url = tui_state(|t| unsafe { tui_add_url(t, url.data()) });
+        let url = (!url.is_null()).then(|| url.as_cstr());
+        attrs.url = tui_state(|t| tui_add_url(t, url));
     }
     attrs
 }
@@ -695,26 +679,15 @@ pub(crate) fn ui_client_event_connect(mut args: Array) {
         return bad_event(c"connect", c"ui_client_event_connect");
     };
     let address = address.as_string().expect("`arg` checked the tag");
-    let server_addr = unsafe { xmemdupz(address.data().cast(), address.len()).cast::<c_char>() };
-    unsafe {
-        multiqueue_put_event(
-            (*main_loop.ptr()).fast_events,
-            Event::new(Some(channel_connect_event), [server_addr.cast::<c_void>()]),
-        )
-    };
+    let address = CString::from(address.as_cstr());
+    put_job_on_fast_events(Box::new(move || connect_and_reattach(&address)));
     // No channel until the queued connect runs; anything sent meanwhile
     // would go to the server that is going away.
     ui_client_channel_id.set(u64::MAX);
 }
 
 /// Connects to the address `ui_client_event_connect` queued, and re-attaches.
-///
-/// # Safety
-///
-/// `argv[0]` must be an owned C string.
-unsafe extern "C" fn channel_connect_event(argv: *mut *mut c_void) {
-    let server_addr = unsafe { *argv }.cast::<c_char>();
-    let address = unsafe { CStr::from_ptr(server_addr) };
+fn connect_and_reattach(address: &CStr) {
     let is_tcp = socket_address_is_tcp(address);
     let connected = channel_connect(
         is_tcp,
@@ -735,7 +708,6 @@ unsafe extern "C" fn channel_connect_event(argv: *mut *mut c_void) {
                 msg_cstr(address),
                 msg_cstr(err)
             );
-            unsafe { xfree(server_addr.cast()) };
             ui_client_exit_status.set(1);
             os_exit(1);
         }
@@ -748,10 +720,9 @@ unsafe extern "C" fn channel_connect_event(argv: *mut *mut c_void) {
         c"channel_connect_event",
         line,
         "Connected to server {} on channel {}",
-        unsafe { c_str(server_addr) },
+        msg_cstr(address),
         chan
     );
-    unsafe { xfree(server_addr.cast()) };
 }
 
 /// The copied `restart` event arguments, owned.
@@ -804,11 +775,10 @@ pub(crate) fn ui_client_attach_to_restarted_server() {
     match address {
         None => bad_event(c"restart", c"ui_client_attach_to_restarted_server"),
         Some(address) => {
-            let listen_addr = address
+            let address = address
                 .as_string()
                 .expect("`take_arg` checked the tag")
-                .data();
-            let address = unsafe { CStr::from_ptr(listen_addr) };
+                .as_cstr();
             let tcp = socket_address_is_tcp(address);
             let connected = channel_connect(
                 tcp,

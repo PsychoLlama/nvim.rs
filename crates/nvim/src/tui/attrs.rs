@@ -30,7 +30,7 @@ use crate::tui::terminfo::caps::{
 };
 use crate::tui::tui::DEFAULT_ATTRS;
 use crate::types::{Array, HlAttrs, Integer, MHPutStatus, Set_cstr_t, TUIData, cstr_t, int32_t};
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 
 /// The interned OSC 8 targets, by address: `mh_put_cstr_t` takes one, and the
 /// key it answers is an index into the set's own `keys` array.
@@ -63,13 +63,11 @@ static URLS: GlobalCell<Set_cstr_t> = GlobalCell::new(Set_cstr_t::EMPTY);
 const KEY_EXISTING: MHPutStatus = 0;
 
 /// Intern `url` and return the index highlights name it by, or -1 for none.
-///
-/// # Safety
-/// `url` must be null or NUL-terminated.
-pub unsafe fn tui_add_url(_tui: &mut TUIData, url: *const c_char) -> int32_t {
-    if url.is_null() {
+pub fn tui_add_url(_tui: &mut TUIData, url: Option<&CStr>) -> int32_t {
+    let Some(url) = url else {
         return -1;
-    }
+    };
+    let url = url.as_ptr();
     // SAFETY: `url` is NUL-terminated, and the set is only ever touched from
     // the TUI's thread.
     unsafe {

@@ -491,9 +491,8 @@ impl RawLine {
         self.attrs[col] = attr;
     }
 
-    /// The two arrays, for the `tui_raw_line` call that takes them by
-    /// pointer.
-    pub(crate) fn as_ptrs(&self) -> (*const ScreenChar, *const ScreenAttr) {
-        (self.chars.as_ptr(), self.attrs.as_ptr())
+    /// The two arrays, for the `tui_raw_line` call.
+    pub(crate) fn cells(&self) -> (&[ScreenChar], &[ScreenAttr]) {
+        (&self.chars, &self.attrs)
     }
 }

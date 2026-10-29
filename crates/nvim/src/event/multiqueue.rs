@@ -292,6 +292,19 @@ pub(crate) fn put_job_on_main_loop(job: Box<dyn FnOnce()>) {
     };
 }
 
+/// [`put_job_in`] the main loop's *fast* queue, which the loop drains while
+/// it polls.
+pub(crate) fn put_job_on_fast_events(job: Box<dyn FnOnce()>) {
+    // SAFETY: the main loop's fast queue, live from startup to exit;
+    // `run_job` takes back the job packed here, once.
+    unsafe {
+        multiqueue_put_event(
+            (*crate::event::r#loop::main_loop_raw()).fast_events,
+            job_event(job),
+        )
+    };
+}
+
 /// Queue `job` on `queue`, to run once when that queue is processed: the
 /// spelling [`put_job_in`] has for a queue the caller holds (a channel's).
 pub(crate) fn put_job(queue: &ChildQueue, job: Box<dyn FnOnce()>) {

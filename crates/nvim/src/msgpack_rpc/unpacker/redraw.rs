@@ -46,12 +46,14 @@ impl Unpacker {
         GRID_LINE_BUF.with_mut(|cells| cells.widen(width));
     }
 
-    /// The decoded cells, for the `tui_raw_line` call that takes them by
-    /// pointer. Nothing between here and that call can widen the buffer.
-    pub(crate) fn grid_line_cells() -> (*const ScreenChar, *const ScreenAttr, size_t) {
+    /// Lends the decoded cells to `paint` (the `tui_raw_line` call), with
+    /// the buffer's width. `paint` must not reach the buffer again.
+    pub(crate) fn with_grid_line_cells<R>(
+        paint: impl FnOnce(&[ScreenChar], &[ScreenAttr], size_t) -> R,
+    ) -> R {
         GRID_LINE_BUF.with(|cells| {
-            let (chars, attrs) = cells.as_ptrs();
-            (chars, attrs, cells.width())
+            let (chars, attrs) = cells.cells();
+            paint(chars, attrs, cells.width())
         })
     }
 }
