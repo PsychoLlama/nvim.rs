@@ -9,7 +9,7 @@
 
 //! `:trust`, the ex-command face of `vim.secure.trust`.
 
-use crate::lua::executor::{main_stack, nlua_error, nlua_pcall, until_nul};
+use crate::lua::executor::{nlua_error, nlua_pcall, until_nul, with_main_stack};
 use crate::lua::stack::At;
 use crate::types::ExArg;
 use core::ffi::CStr;
@@ -36,60 +36,61 @@ impl TrustAction {
 /// Call `vim.secure.trust{ action = ..., path|bufnr = ... }` and report
 /// what it says. `path` of `None` means the current buffer.
 fn nlua_trust(action: TrustAction, path: Option<&CStr>) -> bool {
-    let mut stack = main_stack();
-    // What every path below unwinds the stack to.
-    let top = stack.top();
+    with_main_stack(|stack| {
+        // What every path below unwinds the stack to.
+        let top = stack.top();
 
-    // `vim.secure.trust` and its one argument table, which `nlua_pcall`
-    // consumes.
-    stack.get_global(c"vim");
-    stack.get_field(At::TOP, c"secure");
-    stack.get_field(At::TOP, c"trust");
+        // `vim.secure.trust` and its one argument table, which `nlua_pcall`
+        // consumes.
+        stack.get_global(c"vim");
+        stack.get_field(At::TOP, c"secure");
+        stack.get_field(At::TOP, c"trust");
 
-    stack.new_table(0, 0);
-    stack.push_bytes(b"action");
-    stack.push_bytes(action.name().to_bytes());
-    stack.set_table(At::from_top(3));
-    match path {
-        Some(path) => {
-            stack.push_bytes(b"path");
-            stack.push_bytes(path.to_bytes());
+        stack.new_table(0, 0);
+        stack.push_bytes(b"action");
+        stack.push_bytes(action.name().to_bytes());
+        stack.set_table(At::from_top(3));
+        match path {
+            Some(path) => {
+                stack.push_bytes(b"path");
+                stack.push_bytes(path.to_bytes());
+            }
+            None => {
+                stack.push_bytes(b"bufnr");
+                stack.push_number(0.0);
+            }
         }
-        None => {
-            stack.push_bytes(b"bufnr");
-            stack.push_number(0.0);
-        }
-    }
-    stack.set_table(At::from_top(3));
+        stack.set_table(At::from_top(3));
 
-    if nlua_pcall(&mut stack, 1, 2).is_err() {
-        nlua_error(&mut stack, c"vim.secure.trust: %.*s");
+        if nlua_pcall(stack, 1, 2).is_err() {
+            nlua_error(stack, c"vim.secure.trust: %.*s");
+            stack.set_top(top);
+            return false;
+        }
+
+        let success = stack.to_boolean(At::from_top(2));
+        // The second result is the path it acted on, or why it could not.
+        if let Some(msg) = stack.to_bytes(At::TOP) {
+            let msg = String::from_utf8_lossy(until_nul(msg));
+            match (success, action) {
+                (true, TrustAction::Allow) => {
+                    crate::smsg!(0, "Allowed in trust database: \"{msg}\"");
+                }
+                (true, TrustAction::Deny) => {
+                    crate::smsg!(0, "Denied in trust database: \"{msg}\"");
+                }
+                (true, TrustAction::Remove) => {
+                    crate::smsg!(0, "Removed from trust database: \"{msg}\"");
+                }
+                (false, _) => {
+                    crate::semsg!("E5570: Cannot update trust file: {msg}");
+                }
+            }
+        }
+
         stack.set_top(top);
-        return false;
-    }
-
-    let success = stack.to_boolean(At::from_top(2));
-    // The second result is the path it acted on, or why it could not.
-    if let Some(msg) = stack.to_bytes(At::TOP) {
-        let msg = String::from_utf8_lossy(until_nul(msg));
-        match (success, action) {
-            (true, TrustAction::Allow) => {
-                crate::smsg!(0, "Allowed in trust database: \"{msg}\"");
-            }
-            (true, TrustAction::Deny) => {
-                crate::smsg!(0, "Denied in trust database: \"{msg}\"");
-            }
-            (true, TrustAction::Remove) => {
-                crate::smsg!(0, "Removed from trust database: \"{msg}\"");
-            }
-            (false, _) => {
-                crate::semsg!("E5570: Cannot update trust file: {msg}");
-            }
-        }
-    }
-
-    stack.set_top(top);
-    success
+        success
+    })
 }
 
 /// `:trust [++deny|++remove] [path]`. Without a path it acts on the

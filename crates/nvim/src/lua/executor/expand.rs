@@ -14,7 +14,7 @@
     clippy::ptr_as_ptr
 )]
 
-use super::{main_stack, nlua_error, nlua_pcall};
+use super::{nlua_error, nlua_pcall, with_main_stack};
 use crate::global_cell::GlobalCell;
 use crate::lua::converter::{pop_array, pop_integer};
 use crate::lua::stack::At;
@@ -49,45 +49,46 @@ pub fn nlua_expand_pat(expand: &mut Expand) {
     let mut matches = Vec::new();
     let mut prefix_len = None;
 
-    let mut stack = main_stack();
-    stack.get_global(c"vim");
-    // Upstream checks the type and raises outside any protected call, which
-    // takes the editor down; one that is not a function is reported by the
-    // call below instead.
-    stack.get_field(At::TOP, c"_expand_pat");
-    stack.push_bytes(&pattern);
+    with_main_stack(|stack| {
+        stack.get_global(c"vim");
+        // Upstream checks the type and raises outside any protected call, which
+        // takes the editor down; one that is not a function is reported by the
+        // call below instead.
+        stack.get_field(At::TOP, c"_expand_pat");
+        stack.push_bytes(&pattern);
 
-    if nlua_pcall(&mut stack, 1, 2).is_err() {
-        nlua_error(&mut stack, c"vim._expand_pat: %.*s");
-        return;
-    }
-
-    let prefix = pop_integer(&mut stack)
-        .ok()
-        .and_then(|n| usize::try_from(n).ok())
-        .filter(|&n| n <= patlen);
-    if let Some(prefix) = prefix
-        && let Ok(completions) = pop_array(&mut stack)
-    {
-        let strings: Option<Vec<XString>> = completions
-            .iter()
-            .map(|item| item.as_string().map(|s| XString::from_cstr(s.as_cstr())))
-            .collect();
-        if let Some(strings) = strings {
-            matches = strings;
-            prefix_len = Some(prefix);
+        if nlua_pcall(stack, 1, 2).is_err() {
+            nlua_error(stack, c"vim._expand_pat: %.*s");
+            return;
         }
-    }
 
-    // Whatever a previous run left undrained goes here; a failed run keeps
-    // nothing.
-    match prefix_len {
-        Some(prefix) => {
-            expand.pattern += prefix;
-            EXPAND_RESULTS.set(matches);
+        let prefix = pop_integer(stack)
+            .ok()
+            .and_then(|n| usize::try_from(n).ok())
+            .filter(|&n| n <= patlen);
+        if let Some(prefix) = prefix
+            && let Ok(completions) = pop_array(stack)
+        {
+            let strings: Option<Vec<XString>> = completions
+                .iter()
+                .map(|item| item.as_string().map(|s| XString::from_cstr(s.as_cstr())))
+                .collect();
+            if let Some(strings) = strings {
+                matches = strings;
+                prefix_len = Some(prefix);
+            }
         }
-        None => EXPAND_RESULTS.set(Vec::new()),
-    }
+
+        // Whatever a previous run left undrained goes here; a failed run keeps
+        // nothing.
+        match prefix_len {
+            Some(prefix) => {
+                expand.pattern += prefix;
+                EXPAND_RESULTS.set(matches);
+            }
+            None => EXPAND_RESULTS.set(Vec::new()),
+        }
+    })
 }
 
 /// Take the stashed matches. `Err` when there are none.

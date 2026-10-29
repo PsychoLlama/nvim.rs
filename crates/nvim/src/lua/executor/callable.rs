@@ -19,7 +19,7 @@
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
-use super::{kRetNilBool, main_stack, nlua_error, nlua_exec};
+use super::{kRetNilBool, nlua_error, nlua_exec, with_main_stack};
 use crate::eval::userfunc::register_luafunc;
 use crate::getchar::state::{got_int, mod_mask};
 use crate::global_cell::GlobalCell;
@@ -55,30 +55,31 @@ pub(crate) fn register_table_as_callable(arg: &TypVal) -> Option<ThinCString> {
         return None;
     }
 
-    let mut stack = main_stack();
-    let top = stack.top();
-    stack.push_reference(table_ref); // [table]
-    if !stack.get_metatable(At::TOP) {
+    with_main_stack(|stack| {
+        let top = stack.top();
+        stack.push_reference(table_ref); // [table]
+        if !stack.get_metatable(At::TOP) {
+            stack.pop(1);
+            debug_assert!(top == stack.top());
+            return None;
+        }
+        // [table, mt]
+        stack.get_field(At::TOP, c"__call"); // [table, mt, __call]
+        if stack.kind(At::TOP) != Kind::Function {
+            stack.pop(3);
+            debug_assert!(top == stack.top());
+            return None;
+        }
+        stack.pop(2); // [table]
+
+        // The reference is on the *table*, not on `__call`: calling the table is
+        // what runs the metamethod, with the table itself as the first argument.
+        let func = stack.reference(At::TOP);
+        let name = register_luafunc(func);
         stack.pop(1);
         debug_assert!(top == stack.top());
-        return None;
-    }
-    // [table, mt]
-    stack.get_field(At::TOP, c"__call"); // [table, mt, __call]
-    if stack.kind(At::TOP) != Kind::Function {
-        stack.pop(3);
-        debug_assert!(top == stack.top());
-        return None;
-    }
-    stack.pop(2); // [table]
-
-    // The reference is on the *table*, not on `__call`: calling the table is
-    // what runs the metamethod, with the table itself as the first argument.
-    let func = stack.reference(At::TOP);
-    let name = register_luafunc(func);
-    stack.pop(1);
-    debug_assert!(top == stack.top());
-    Some(name)
+        Some(name)
+    })
 }
 
 /// `vim.on_key()`: hand every consumed key to the Lua callbacks, and answer
@@ -105,62 +106,64 @@ pub fn nlua_execute_on_key(c: c_int, typed: &mut Vec<u8>) -> bool {
     typed.truncate(unescaped);
     let typed = &typed[..up_to_nul(typed)];
 
-    let mut stack = main_stack();
-    let top = stack.top();
-    stack.get_global(c"vim");
-    // Upstream checks the type and raises outside any protected call, which
-    // takes the editor down; a callback that is not one is reported by the
-    // call below instead.
-    stack.get_field(At::TOP, c"_on_key");
-    stack.push_bytes(key.as_bytes());
-    stack.push_bytes(typed);
+    with_main_stack(|stack| {
+        let top = stack.top();
+        stack.get_global(c"vim");
+        // Upstream checks the type and raises outside any protected call, which
+        // takes the editor down; a callback that is not one is reported by the
+        // call below instead.
+        stack.get_field(At::TOP, c"_on_key");
+        stack.push_bytes(key.as_bytes());
+        stack.push_bytes(typed);
 
-    let save_got_int = got_int.get();
-    got_int.set(false);
-    let mut discard = false;
-    if stack.pcall(2, 1, None).is_err() {
-        nlua_error(&mut stack, c"vim.on_key() callbacks: %.*s");
-    } else {
-        if stack.kind(At::TOP) == Kind::Boolean {
-            discard = stack.to_boolean(At::TOP);
+        let save_got_int = got_int.get();
+        got_int.set(false);
+        let mut discard = false;
+        if stack.pcall(2, 1, None).is_err() {
+            nlua_error(stack, c"vim.on_key() callbacks: %.*s");
+        } else {
+            if stack.kind(At::TOP) == Kind::Boolean {
+                discard = stack.to_boolean(At::TOP);
+            }
+            stack.pop(1);
         }
+        got_int.set(got_int.get() || save_got_int);
         stack.pop(1);
-    }
-    got_int.set(got_int.get() || save_got_int);
-    stack.pop(1);
-    debug_assert!(top == stack.top());
+        debug_assert!(top == stack.top());
 
-    RECURSIVE.set(false);
-    discard
+        RECURSIVE.set(false);
+        discard
+    })
 }
 
 /// How a `LuaRef` renders in a listing: `<Lua N: file:line>` when the
 /// reference is a function defined in a file, `<Lua N>` otherwise.
 pub(crate) fn funcref_description(reference: LuaRef) -> Option<ThinCString> {
-    let mut stack = main_stack();
-    if stack.reserve(1) {
-        stack.push_reference(reference);
-        if stack.kind(At::TOP) != Kind::Function {
-            stack.pop(1);
-        } else if let Some((source, line)) = stack.pop_function_source()
-            && let Some(path) = source.strip_prefix(b"@")
-            && line >= 0
-        {
-            // `>S` consumed the function; a source name is a C string.
-            let path = CString::new(path).expect("a chunk name holds no NUL");
-            let path = home_replace_in(None, &path, path.as_bytes().len() + 3, true);
-            let text = [
-                format!("<Lua {reference}: ").as_bytes(),
-                &path[..],
-                format!(":{line}>").as_bytes(),
-            ]
-            .concat();
-            return Some(ThinCString::from_bytes(&text));
+    with_main_stack(|stack| {
+        if stack.reserve(1) {
+            stack.push_reference(reference);
+            if stack.kind(At::TOP) != Kind::Function {
+                stack.pop(1);
+            } else if let Some((source, line)) = stack.pop_function_source()
+                && let Some(path) = source.strip_prefix(b"@")
+                && line >= 0
+            {
+                // `>S` consumed the function; a source name is a C string.
+                let path = CString::new(path).expect("a chunk name holds no NUL");
+                let path = home_replace_in(None, &path, path.as_bytes().len() + 3, true);
+                let text = [
+                    format!("<Lua {reference}: ").as_bytes(),
+                    &path[..],
+                    format!(":{line}>").as_bytes(),
+                ]
+                .concat();
+                return Some(ThinCString::from_bytes(&text));
+            }
         }
-    }
-    Some(ThinCString::from_bytes(
-        format!("<Lua {reference}>").as_bytes(),
-    ))
+        Some(ThinCString::from_bytes(
+            format!("<Lua {reference}>").as_bytes(),
+        ))
+    })
 }
 
 /// `exists('v:lua.f')`: whether the Lua expression names a function.

@@ -14,26 +14,49 @@
 //!   if any, once the body has returned.
 //! - [`Stack::from_raw`] is the step for code that already holds a raw
 //!   `lua_State` and has not been ported onto `entry` yet.
+//! - [`Stack::above_top`] is a view that owns nothing yet: what the editor's
+//!   `with_main_stack` lends, from inside a C function on the same frame or
+//!   from no C function at all.
+//! - [`Stack::above`] lends a view over the slots above one of this view's
+//!   own, keeping the ones at and below it readable for as long as the
+//!   lending view's borrow.
 //! - A [`Dispatch`] needs neither: its entries are safe bodies over a
 //!   `Stack`, and [`dispatch_entry`] is each one as a C function -- the one
 //!   trampoline, instantiated per entry, which calls `entry` for it.
 //!   `vim.api` is built that way.
 //!
-//! Both are `unsafe` because the `Stack` cannot check that the pointer is a
-//! live state. Everything after them is safe.
+//! The raw constructors are `unsafe` because the `Stack` cannot check that
+//! the pointer is a live state. Everything after them is safe.
+//!
+//! # Views and their base
+//!
+//! A `Stack` is a *view* of the frame rooted at a base slot: it owns the
+//! slots above its base and only those. Every operation that drops or moves
+//! a slot by index -- [`Stack::set_top`], [`Stack::pop`], [`Stack::insert`],
+//! [`Stack::remove`], [`Stack::replace`], the function and arguments a
+//! [`Stack::pcall`] consumes -- refuses (aborts) one at or below the base, so
+//! a view can never disturb a slot a view below it owns: the slot stays, and
+//! what the outer view lent from it stays anchored. An operation that
+//! consumes values off the top (`set_field`, `raw_set`, `next`, `concat`,
+//! ...) consumes what this view pushed; that is checked in debug builds.
+//! Reading a slot below the base is allowed: it disturbs nothing.
+//!
+//! An index stays LuaJIT's own: positive is absolute in the running C
+//! function's frame and negative counts down from the top, whichever view
+//! spells it, so a raw index handed to C means what it always did.
 //!
 //! # Borrowed strings
 //!
 //! [`Stack::string`] lends a Lua string's bytes for as long as the `Stack` is
 //! borrowed. Lua keeps a string alive while it sits in a stack slot, and every
 //! operation that could pop or overwrite that slot takes `&mut self`, so the
-//! borrow checker is what says "copy the bytes before you pop". The one
-//! assumption behind it is that a second `Stack` over the same frame -- the
-//! editor's main-state `Stack`, reached from inside a C function on that
-//! state -- leaves the slots below its own first push alone: the contract
-//! both constructors carry. A nested call into Lua cannot break it:
-//! a C function called from there gets a frame of its own and cannot reach
-//! below its base.
+//! borrow checker is what says "copy the bytes before you pop". A second
+//! view over the same frame -- the editor's main-state view, reached from
+//! inside a C function on that state -- has its base at the top it found, so
+//! it cannot pop what the first one lent. A nested call into Lua cannot
+//! either: a C function called from there gets a frame of its own.
+//! [`Above::check_c_string_below`] lends for longer: for the lending view's
+//! borrow, while the view above works.
 //!
 //! # Raising an error
 //!
@@ -84,21 +107,20 @@
 )]
 
 use core::ffi::{CStr, c_char, c_int, c_void};
+use core::marker::PhantomData;
 use core::ptr::{self, NonNull};
 
 use crate::lua::executor::release_luaref;
 use crate::lua::ffi::{
     LUA_GLOBALSINDEX, LUA_REGISTRYINDEX, LUA_TBOOLEAN, LUA_TFUNCTION, LUA_TLIGHTUSERDATA, LUA_TNIL,
-    LUA_TNONE, LUA_TNUMBER, LUA_TSTRING, LUA_TTABLE, LUA_TTHREAD, LUA_TUSERDATA, lua_call,
-    lua_checkstack, lua_concat, lua_createtable, lua_error, lua_getfield, lua_getmetatable,
-    lua_gettable, lua_gettop, lua_insert, lua_isnumber, lua_isstring, lua_next, lua_objlen,
-    lua_pcall, lua_pushboolean, lua_pushcclosure, lua_pushinteger, lua_pushlightuserdata,
-    lua_pushlstring, lua_pushnil, lua_pushnumber, lua_pushvalue, lua_rawequal, lua_rawget,
-    lua_rawgeti, lua_rawset, lua_rawseti, lua_remove, lua_replace, lua_setfield, lua_setmetatable,
-    lua_settable, lua_settop, lua_toboolean, lua_tointeger, lua_tolstring, lua_tonumber,
-    lua_topointer, lua_type, lua_typename, luaL_argerror, luaL_checkinteger, luaL_checklstring,
-    luaL_checknumber, luaL_checktype, luaL_checkudata, luaL_loadbuffer, luaL_newmetatable,
-    luaL_ref, luaL_unref, luaL_where,
+    LUA_TNONE, LUA_TNUMBER, LUA_TSTRING, LUA_TTABLE, LUA_TTHREAD, LUA_TUSERDATA, lua_checkstack,
+    lua_concat, lua_createtable, lua_getfield, lua_getmetatable, lua_gettable, lua_gettop,
+    lua_insert, lua_isnumber, lua_isstring, lua_next, lua_objlen, lua_pcall, lua_pushboolean,
+    lua_pushcclosure, lua_pushinteger, lua_pushlightuserdata, lua_pushlstring, lua_pushnil,
+    lua_pushnumber, lua_pushvalue, lua_rawequal, lua_rawget, lua_rawgeti, lua_rawset, lua_rawseti,
+    lua_remove, lua_replace, lua_setfield, lua_setmetatable, lua_settable, lua_settop,
+    lua_toboolean, lua_tointeger, lua_tolstring, lua_tonumber, lua_topointer, lua_type,
+    lua_typename, luaL_loadbuffer, luaL_newmetatable, luaL_ref, luaL_unref,
 };
 use crate::lua::state::MAIN_REFS;
 use crate::types::{LuaRef, lua_Integer, lua_Number, lua_State, size_t};
@@ -109,8 +131,9 @@ mod header;
 mod userdata;
 
 pub use self::debug::Frame;
+use self::dispatch::Check;
 pub(crate) use self::dispatch::dispatch_entry;
-pub use self::dispatch::{Dispatch, Function};
+pub use self::dispatch::{Dispatch, Function, Raise};
 pub use self::header::*;
 pub use self::userdata::Userdata;
 
@@ -209,84 +232,6 @@ impl Kind {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Errors
-
-/// A Lua error a C function's body answers instead of raising it.
-///
-/// [`Stack::entry`] raises it once the body has returned. Building one owns
-/// nothing Lua can strand: the message is copied onto the Lua stack and the
-/// `Raise` dropped before the jump.
-#[derive(Debug)]
-#[must_use]
-pub struct Raise(Thrown);
-
-#[derive(Debug)]
-enum Thrown {
-    /// `luaL_error`'s shape: where the running function is, then the message.
-    Message(Vec<u8>),
-    /// `luaL_argerror`'s: `bad argument #n to 'f' (message)`.
-    Argument { arg: c_int, message: Vec<u8> },
-    /// A `luaL_check*` that refused, raised by the C check itself.
-    Check { arg: c_int, check: Check },
-    /// The value already on top of the stack, raised as it is.
-    Value,
-    /// Not an error: `lua_call(L, args, results)` in tail position.
-    TailCall { args: c_int, results: c_int },
-}
-
-/// Which `luaL_check*` refused.
-#[derive(Debug, Clone, Copy)]
-enum Check {
-    Integer,
-    Number,
-    String,
-    Kind(Kind),
-    Userdata(&'static CStr),
-}
-
-impl Raise {
-    /// `luaL_error(L, "%s", message)`: the message, after the position of the
-    /// running function when it is a Lua one (a C function has none, so from
-    /// a binding this is the message alone).
-    ///
-    /// Unlike `luaL_error`'s `%s`, a NUL inside the message is kept.
-    pub fn message(message: impl Into<Vec<u8>>) -> Raise {
-        Raise(Thrown::Message(message.into()))
-    }
-
-    /// `luaL_argerror(L, arg, message)`: `bad argument #arg to 'f' (message)`.
-    ///
-    /// The message is cut at its first NUL, as `luaL_argerror`'s `%s` cuts it.
-    pub fn argument(arg: c_int, message: impl Into<Vec<u8>>) -> Raise {
-        Raise(Thrown::Argument {
-            arg,
-            message: message.into(),
-        })
-    }
-
-    /// Raise the value on top of the stack as the error, as `lua_error` does:
-    /// what a failed [`Stack::pcall`] leaves there, re-raised.
-    pub fn top_value() -> Raise {
-        Raise(Thrown::Value)
-    }
-
-    /// Not an error but the body's last step: call the function below the top
-    /// `args` values, unprotected, and answer its `results` values -- what
-    /// `return (lua_call(L, args, results), results)` was in C. The call runs
-    /// once the body's frame is gone, so an error in it unwinds as Lua raised
-    /// it (a message handler further out sees the frames where it happened)
-    /// and finds nothing of the body's to strand.
-    pub fn tail_call(args: c_int, results: c_int) -> Raise {
-        debug_assert!(results >= 0, "a tail call answers a fixed count");
-        Raise(Thrown::TailCall { args, results })
-    }
-
-    fn check(arg: At, check: Check) -> Raise {
-        Raise(Thrown::Check { arg: arg.0, check })
-    }
-}
-
 /// A reference into the main state's registry that this value owns, made by
 /// [`Stack::take_reference`]. Dropping it gives the reference back, so every
 /// way out of the frame that took it releases it exactly once.
@@ -320,59 +265,41 @@ pub struct LuaFailed(pub c_int);
 /// See the [module documentation](self) for what it guarantees.
 pub struct Stack {
     state: NonNull<lua_State>,
+    /// The absolute slot below this view's first own one: 0 for a view
+    /// that owns the whole frame.
+    base: c_int,
 }
 
 impl Stack {
-    /// A `Stack` over `state`'s current frame.
+    /// A `Stack` over the whole of `state`'s current frame.
     ///
     /// # Safety
     /// `state` is a live Lua state set up by this editor's runtime (its
     /// reference bookkeeping installed), on the thread that runs it, and it
-    /// outlives the returned `Stack`. Another `Stack` over the same frame
-    /// used while this one lives leaves the slots below its own first push
-    /// alone -- pops what it pushed, and calls only what it pushed -- so
-    /// what this one lends stays anchored.
+    /// outlives the returned `Stack`; no other view over the same frame is
+    /// in use while this one lives, but the ones it lends.
     pub unsafe fn from_raw(state: *mut lua_State) -> Stack {
         debug_assert!(!state.is_null(), "a Stack over no Lua state");
         Stack {
             // SAFETY: the caller's promise that `state` is live.
             state: unsafe { NonNull::new_unchecked(state) },
+            base: 0,
         }
     }
 
-    /// Run a C function's `body` over the frame Lua called it with, and raise
-    /// the error it answers once it has returned.
-    ///
-    /// This is the only way a `Stack` raises a Lua error, and why the error
-    /// never strands an owned value: by the time it is raised, every local of
-    /// `body` has been dropped. Call it as the C function's whole body, so its
-    /// own frame owns nothing either.
+    /// A `Stack` over `state`'s current frame that owns nothing yet: its
+    /// base is the top it finds, so it cannot pop a slot another view over
+    /// the frame already holds.
     ///
     /// # Safety
-    /// As [`Stack::from_raw`]: `state` is the state Lua called the C function
-    /// on, which is LuaJIT's contract for a `lua_CFunction`.
-    pub unsafe fn entry(
-        state: *mut lua_State,
-        body: impl FnOnce(&mut Stack) -> Result<c_int, Raise>,
-    ) -> c_int {
-        let outcome = {
-            // SAFETY: the caller's promise; this is the frame's only `Stack`.
-            let mut stack = unsafe { Stack::from_raw(state) };
-            body(&mut stack)
-        };
-        match outcome {
-            Ok(results) => results,
-            Err(Raise(Thrown::TailCall { args, results })) => {
-                // SAFETY: the state Lua called this function on, with the
-                // callee and its arguments on top (the body's promise), and
-                // nothing of this frame's left to release.
-                unsafe { lua_call(state, args, results) };
-                results
-            }
-            // SAFETY: the state Lua called this function on, with nothing of
-            // this frame's left to release.
-            Err(error) => unsafe { raise(state, error) },
-        }
+    /// As [`Stack::from_raw`], except that views over the same frame may be
+    /// live: none is used until this one is gone (a closure is how the
+    /// editor's main-state view keeps that order).
+    pub unsafe fn above_top(state: *mut lua_State) -> Stack {
+        // SAFETY: the caller's promise.
+        let mut stack = unsafe { Stack::from_raw(state) };
+        stack.base = stack.top().0;
+        stack
     }
 
     /// The raw state, for the callees that still take one.
@@ -382,6 +309,54 @@ impl Stack {
 
     fn l(&self) -> *mut lua_State {
         self.state.as_ptr()
+    }
+
+    // -- views ------------------------------------------------------------
+
+    /// The slot below this view's first own one, as an absolute index:
+    /// `At(0)` for a view over the whole frame. [`Stack::set_top`] to it
+    /// drops everything this view owns.
+    pub fn base(&self) -> At {
+        At(self.base)
+    }
+
+    /// A view over the slots above `at`, one of this view's own (or its
+    /// base): it can push, pop and convert above `at` as freely as this
+    /// one, but not drop or move `at` or anything below, and it lends the
+    /// strings there for as long as this view's borrow
+    /// ([`Above::check_c_string_below`]).
+    pub fn above(&mut self, at: At) -> Above<'_> {
+        let base = self.absolute(at).0;
+        if base < self.base {
+            below_base();
+        }
+        Above {
+            stack: Stack {
+                state: self.state,
+                base,
+            },
+            _lent_by: PhantomData,
+        }
+    }
+
+    /// Abort unless `at` is a slot this view may drop or move: one above
+    /// its base, or a pseudo-index. Answers its LuaJIT index.
+    #[inline]
+    fn own(&self, at: At) -> c_int {
+        if at.0 <= LUA_REGISTRYINDEX {
+            return at.0;
+        }
+        let at = self.absolute(at).0;
+        if at <= self.base {
+            below_base();
+        }
+        at
+    }
+
+    /// How many slots this view owns, for the debug checks that a value
+    /// consumed off the top is one of them.
+    fn depth(&self) -> c_int {
+        self.top().0 - self.base
     }
 
     // -- index and balance ------------------------------------------------
@@ -402,29 +377,40 @@ impl Stack {
         }
     }
 
-    /// Make `at` the top: drop what is above it, or pad with nils.
+    /// Make `at` the top: drop what is above it, or pad with nils. `at` is
+    /// this view's base or above it.
     pub fn set_top(&mut self, at: At) {
-        unsafe { lua_settop(self.l(), at.0) };
+        let at = self.absolute(at).0;
+        if at < self.base {
+            below_base();
+        }
+        unsafe { lua_settop(self.l(), at) };
     }
 
-    /// Drop the top `n` values.
+    /// Drop the top `n` values, all of them this view's own.
     pub fn pop(&mut self, n: c_int) {
+        if self.depth() < n {
+            below_base();
+        }
         unsafe { lua_settop(self.l(), -n - 1) };
     }
 
     /// Move the top value down to `at`, shifting what was there up.
     pub fn insert(&mut self, at: At) {
-        unsafe { lua_insert(self.l(), at.0) };
+        let at = self.own(at);
+        unsafe { lua_insert(self.l(), at) };
     }
 
     /// Remove the value at `at`, shifting what was above it down.
     pub fn remove(&mut self, at: At) {
-        unsafe { lua_remove(self.l(), at.0) };
+        let at = self.own(at);
+        unsafe { lua_remove(self.l(), at) };
     }
 
     /// Pop the top value into `at`.
     pub fn replace(&mut self, at: At) {
-        unsafe { lua_replace(self.l(), at.0) };
+        let at = self.own(at);
+        unsafe { lua_replace(self.l(), at) };
     }
 
     /// `lua_checkstack(L, slots)`: make sure `slots` more values fit above
@@ -632,6 +618,7 @@ impl Stack {
 
     /// Concatenate the top `n` values into one string, as `..` does.
     pub fn concat(&mut self, n: c_int) {
+        debug_assert!(self.depth() >= n, "consumes a slot below the base");
         unsafe { lua_concat(self.l(), n) };
     }
 
@@ -644,27 +631,32 @@ impl Stack {
 
     /// Pop a value into `table[key]` for the table at `at`.
     pub fn set_field(&mut self, at: At, key: &CStr) {
+        debug_assert!(self.depth() >= 1, "consumes a slot below the base");
         unsafe { lua_setfield(self.l(), at.0, key.as_ptr()) };
     }
 
     /// Pop a key and push `table[key]`, metamethods included.
     pub fn get_table(&mut self, at: At) {
+        debug_assert!(self.depth() >= 1, "consumes a slot below the base");
         unsafe { lua_gettable(self.l(), at.0) };
     }
 
     /// Pop a value and a key and set `table[key] = value`, metamethods
     /// included.
     pub fn set_table(&mut self, at: At) {
+        debug_assert!(self.depth() >= 2, "consumes a slot below the base");
         unsafe { lua_settable(self.l(), at.0) };
     }
 
     /// [`Stack::get_table`] without metamethods.
     pub fn raw_get(&mut self, at: At) {
+        debug_assert!(self.depth() >= 1, "consumes a slot below the base");
         unsafe { lua_rawget(self.l(), at.0) };
     }
 
     /// [`Stack::set_table`] without metamethods.
     pub fn raw_set(&mut self, at: At) {
+        debug_assert!(self.depth() >= 2, "consumes a slot below the base");
         unsafe { lua_rawset(self.l(), at.0) };
     }
 
@@ -675,6 +667,7 @@ impl Stack {
 
     /// Pop a value into `table[n]`, without metamethods.
     pub fn raw_set_index(&mut self, at: At, n: c_int) {
+        debug_assert!(self.depth() >= 1, "consumes a slot below the base");
         unsafe { lua_rawseti(self.l(), at.0, n) };
     }
 
@@ -686,6 +679,7 @@ impl Stack {
 
     /// Pop a table and make it the metatable of the value at `at`.
     pub fn set_metatable(&mut self, at: At) {
+        debug_assert!(self.depth() >= 1, "consumes a slot below the base");
         unsafe { lua_setmetatable(self.l(), at.0) };
     }
 
@@ -696,6 +690,7 @@ impl Stack {
     /// The key left below the value is what the next step pops, so it must
     /// not be converted in place in between — [`Stack::string`] never does.
     pub fn next(&mut self, at: At) -> bool {
+        debug_assert!(self.depth() >= 1, "consumes a slot below the base");
         unsafe { lua_next(self.l(), at.0) != 0 }
     }
 
@@ -788,6 +783,10 @@ impl Stack {
         handler: Option<At>,
     ) -> Result<(), LuaFailed> {
         let handler = handler.map_or(0, |at| self.absolute(at).0);
+        // The function and its arguments are this view's own.
+        if self.depth() <= args {
+            below_base();
+        }
         match unsafe { lua_pcall(self.l(), args, results, handler) } {
             0 => Ok(()),
             status => Err(LuaFailed(status)),
@@ -850,58 +849,66 @@ impl Stack {
     }
 }
 
+/// A view over the slots above one of another view's own, lent by
+/// [`Stack::above`]: a [`Stack`] whose base is that slot, for as long as the
+/// lending view's borrow.
+pub struct Above<'a> {
+    stack: Stack,
+    _lent_by: PhantomData<&'a mut Stack>,
+}
+
+impl<'a> Above<'a> {
+    /// `luaL_checklstring` on `at`, a slot at or below this view's base:
+    /// the string as the C string `lua_tostring` answers (cut at its first
+    /// NUL) and its full length, a number converted in place. Lent for as
+    /// long as the lending view's borrow, which no view above can end: the
+    /// slot is not theirs to drop.
+    pub fn check_c_string_below(&self, at: At) -> Result<(&'a CStr, usize), Raise> {
+        if at.0 <= 0 || at.0 > self.stack.base {
+            below_base();
+        }
+        let mut len: size_t = 0;
+        let bytes = unsafe { lua_tolstring(self.stack.l(), at.0, &raw mut len) };
+        if bytes.is_null() {
+            return Err(Raise::check(at, Check::String));
+        }
+        // SAFETY: every Lua string is NUL-terminated, and alive while its
+        // slot is; the slot is at or below the base, which no view above
+        // may drop, and the lending view is borrowed for `'a`.
+        Ok((unsafe { CStr::from_ptr(bytes) }, len))
+    }
+}
+
+impl core::ops::Deref for Above<'_> {
+    type Target = Stack;
+    fn deref(&self) -> &Stack {
+        &self.stack
+    }
+}
+
+impl core::ops::DerefMut for Above<'_> {
+    fn deref_mut(&mut self) -> &mut Stack {
+        &mut self.stack
+    }
+}
+
+/// A view tried to drop or move a slot at or below its base: one an outer
+/// view owns, and may have lent out. Nothing safe can follow.
+#[cold]
+#[inline(never)]
+#[track_caller]
+fn below_base() -> ! {
+    let caller = core::panic::Location::caller();
+    // The message is all an abort can leave behind.
+    let _ = std::io::Write::write_all(
+        &mut std::io::stderr(),
+        format!("{caller}: a Lua stack view reached below its base\n").as_bytes(),
+    );
+    std::process::abort()
+}
+
 /// A size as a `lua_createtable` hint, which is only a hint: past `c_int` it
 /// asks for the most it can.
 fn saturate(n: usize) -> c_int {
     c_int::try_from(n).unwrap_or(c_int::MAX)
-}
-
-/// Raise `error` on `state` and never come back.
-///
-/// Every owned part of `error` is copied onto the Lua stack and dropped
-/// before the jump.
-///
-/// # Safety
-/// `state` is the live state of the running C function.
-#[cold]
-#[inline(never)]
-unsafe fn raise(state: *mut lua_State, error: Raise) -> ! {
-    // SAFETY: the caller's state, throughout.
-    unsafe {
-        match error.0 {
-            Thrown::Message(message) => {
-                luaL_where(state, 1);
-                lua_pushlstring(state, message.as_ptr().cast::<c_char>(), message.len());
-                drop(message);
-                lua_concat(state, 2);
-            }
-            Thrown::Argument { arg, message } => {
-                // The copy on the stack is NUL-terminated (every Lua string
-                // is) and stays alive for `luaL_argerror` to format.
-                lua_pushlstring(state, message.as_ptr().cast::<c_char>(), message.len());
-                drop(message);
-                let message = lua_tolstring(state, -1, ptr::null_mut());
-                luaL_argerror(state, arg, message);
-            }
-            Thrown::Check { arg, check } => {
-                // The C check fails on the same argument the Rust half did,
-                // and throws LuaJIT's own message.
-                match check {
-                    Check::Integer => _ = luaL_checkinteger(state, arg),
-                    Check::Number => _ = luaL_checknumber(state, arg),
-                    Check::String => _ = luaL_checklstring(state, arg, ptr::null_mut()),
-                    Check::Kind(kind) => luaL_checktype(state, arg, kind.to_raw()),
-                    Check::Userdata(name) => _ = luaL_checkudata(state, arg, name.as_ptr()),
-                }
-                // A check that passes after its Rust half refused is a bug
-                // in that half; there is no message to raise.
-                std::process::abort();
-            }
-            Thrown::Value => {}
-            Thrown::TailCall { .. } => unreachable!("`entry` makes the call"),
-        }
-        lua_error(state);
-    }
-    // `lua_error` does not return.
-    std::process::abort()
 }

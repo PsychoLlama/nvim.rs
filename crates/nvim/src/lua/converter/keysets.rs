@@ -70,8 +70,9 @@ pub(crate) fn pop_keydict(
     if stack.kind(At::TOP) != Kind::Table {
         // Upstream writes `lua_pop(L, -1)` here, which expands to
         // `lua_settop(L, 0)` -- it clears the *whole* stack rather than
-        // popping the one value. Kept verbatim; see the divergence docket.
-        stack.set_top(At::arg(0));
+        // popping the one value. Kept: the whole of this view, which for a
+        // binding's own frame is upstream's; see the divergence docket.
+        stack.set_top(stack.base());
         return Err(Error::validation(c"Expected Lua table"));
     }
 

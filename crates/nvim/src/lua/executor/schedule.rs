@@ -17,7 +17,7 @@
 
 use core::ffi::c_int;
 
-use super::{fast_api_refusal, in_fast_callback, main_stack, nlua_error, nlua_pcall};
+use super::{fast_api_refusal, in_fast_callback, nlua_error, nlua_pcall, with_main_stack};
 use crate::eval::funcs::find_builtin;
 use crate::event::r#loop::{Drain, main_loop_is_closing, wait_on_main_loop};
 use crate::event::multiqueue::put_id_event_on_main_loop;
@@ -48,19 +48,20 @@ const WAIT_TIMED_OUT: lua_Integer = -1;
 fn run_scheduled(callback: u64, ns_id: u64) {
     let callback = LuaRef::try_from(callback).expect("a reference `schedule` took");
     let ns_id = u32::try_from(ns_id).expect("a namespace `schedule` read");
-    let mut stack = main_stack();
-    stack.push_reference(callback);
-    stack.unreference(callback);
+    with_main_stack(|stack| {
+        stack.push_reference(callback);
+        stack.unreference(callback);
 
-    // A UI-event callback is arbitrary Lua and may legitimately want to move
-    // the cursor or set a variable, so the locks come off for it. They go
-    // back either way: the callback ran unsupervised.
-    let _unlocked_expr_map = Allow::expr_map_when(ns_id > 0);
-    let _unlocked_text = Allow::text_changes_when(ns_id > 0);
-    if nlua_pcall(&mut stack, 0, 0).is_err() {
-        nlua_error(&mut stack, c"vim.schedule callback: %.*s");
-        ui_remove_cb(ns_id, true);
-    }
+        // A UI-event callback is arbitrary Lua and may legitimately want to move
+        // the cursor or set a variable, so the locks come off for it. They go
+        // back either way: the callback ran unsupervised.
+        let _unlocked_expr_map = Allow::expr_map_when(ns_id > 0);
+        let _unlocked_text = Allow::text_changes_when(ns_id > 0);
+        if nlua_pcall(stack, 0, 0).is_err() {
+            nlua_error(stack, c"vim.schedule callback: %.*s");
+            ui_remove_cb(ns_id, true);
+        }
+    })
 }
 
 /// `vim.schedule(fn)`.

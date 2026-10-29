@@ -16,7 +16,7 @@
 
 use core::ffi::CStr;
 
-use super::{main_stack, nlua_error, nlua_pcall, nlua_typval_exec, until_nul};
+use super::{nlua_error, nlua_pcall, nlua_typval_exec, until_nul, with_main_stack};
 use crate::change::inserted_bytes;
 use crate::cursor::check_cursor;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_curbuf_later};
@@ -92,51 +92,52 @@ pub fn ex_luado(excmd: &mut ExArg) {
         return;
     }
     let chunk = [DOSTART.to_bytes(), excmd.line.arg(), DOEND.to_bytes()].concat();
-    let mut stack = main_stack();
-    if stack.load(&chunk, Some(c":luado")).is_err() {
-        nlua_error(&mut stack, c"E5109: Lua: %.*s");
-        return;
-    }
-    if nlua_pcall(&mut stack, 0, 1).is_err() {
-        nlua_error(&mut stack, c"E5110: Lua: %.*s");
-        return;
-    }
+    with_main_stack(|stack| {
+        if stack.load(&chunk, Some(c":luado")).is_err() {
+            nlua_error(stack, c"E5109: Lua: %.*s");
+            return;
+        }
+        if nlua_pcall(stack, 0, 1).is_err() {
+            nlua_error(stack, c"E5110: Lua: %.*s");
+            return;
+        }
 
-    let was_curbuf = Buf::current().handle();
-    let mut l: LineNr = excmd.line1;
-    while l <= excmd.line2 {
-        if l > Buf::current().b_ml.ml_line_count {
-            break;
-        }
-        stack.push_value(At::TOP);
-        let old_line_len = {
-            let mut lines = Buf::current().lines();
-            let old_line = lines.line(l);
-            // A memline line holds no NUL (it stores one as an NL), so its
-            // length is where `lua_pushstring` would have stopped.
-            stack.push_bytes(old_line);
-            len_as_int(old_line.len())
-        };
-        stack.push_number(lua_Number::from(l));
-        if nlua_pcall(&mut stack, 2, 1).is_err() {
-            nlua_error(&mut stack, c"E5111: Lua: %.*s");
-            break;
-        }
-        if Buf::current().handle() != was_curbuf || l > Buf::current().b_ml.ml_line_count {
-            break;
-        }
-        if stack.is_string(At::TOP) {
-            let new_line = stack.to_bytes(At::TOP).unwrap_or_default();
-            let new_line_len = len_as_int(new_line.len());
-            let _ = ml_replace_owned(l, nul_to_nl(new_line));
-            inserted_bytes(l, 0 as ColNr, old_line_len, new_line_len);
+        let was_curbuf = Buf::current().handle();
+        let mut l: LineNr = excmd.line1;
+        while l <= excmd.line2 {
+            if l > Buf::current().b_ml.ml_line_count {
+                break;
+            }
+            stack.push_value(At::TOP);
+            let old_line_len = {
+                let mut lines = Buf::current().lines();
+                let old_line = lines.line(l);
+                // A memline line holds no NUL (it stores one as an NL), so its
+                // length is where `lua_pushstring` would have stopped.
+                stack.push_bytes(old_line);
+                len_as_int(old_line.len())
+            };
+            stack.push_number(lua_Number::from(l));
+            if nlua_pcall(stack, 2, 1).is_err() {
+                nlua_error(stack, c"E5111: Lua: %.*s");
+                break;
+            }
+            if Buf::current().handle() != was_curbuf || l > Buf::current().b_ml.ml_line_count {
+                break;
+            }
+            if stack.is_string(At::TOP) {
+                let new_line = stack.to_bytes(At::TOP).unwrap_or_default();
+                let new_line_len = len_as_int(new_line.len());
+                let _ = ml_replace_owned(l, nul_to_nl(new_line));
+                inserted_bytes(l, 0 as ColNr, old_line_len, new_line_len);
+            }
+            stack.pop(1);
+            l += 1;
         }
         stack.pop(1);
-        l += 1;
-    }
-    stack.pop(1);
-    check_cursor(Win::current());
-    redraw_curbuf_later(UPD_NOT_VALID);
+        check_cursor(Win::current());
+        redraw_curbuf_later(UPD_NOT_VALID);
+    })
 }
 
 /// `line` as a buffer line: a NUL in it is stored as the NL the memline uses
@@ -179,36 +180,37 @@ fn read_stdin() -> Option<Vec<u8>> {
 
 /// Run the Lua file at `path`, or stdin for `-`.
 pub fn nlua_exec_file(path: &CStr) -> bool {
-    let mut stack = main_stack();
-    if path != c"-" {
-        stack.get_global(c"loadfile");
-        stack.push_bytes(path.to_bytes());
-    } else {
-        let Some(text) = read_stdin() else {
-            return false;
-        };
-        stack.get_global(c"loadstring");
-        // `lua_pushstring` of the text: up to its first NUL.
-        stack.push_bytes(until_nul(&text));
-    }
+    with_main_stack(|stack| {
+        if path != c"-" {
+            stack.get_global(c"loadfile");
+            stack.push_bytes(path.to_bytes());
+        } else {
+            let Some(text) = read_stdin() else {
+                return false;
+            };
+            stack.get_global(c"loadstring");
+            // `lua_pushstring` of the text: up to its first NUL.
+            stack.push_bytes(until_nul(&text));
+        }
 
-    // `loadfile`/`loadstring` answer either the chunk and nil, or nil and
-    // the syntax error.
-    if nlua_pcall(&mut stack, 1, 2).is_err() {
-        nlua_error(&mut stack, c"E5111: Lua: %.*s");
-        return false;
-    }
-    if stack.kind(At::from_top(2)) == Kind::Nil {
-        nlua_error(&mut stack, c"E5112: Lua chunk: %.*s");
+        // `loadfile`/`loadstring` answer either the chunk and nil, or nil and
+        // the syntax error.
+        if nlua_pcall(stack, 1, 2).is_err() {
+            nlua_error(stack, c"E5111: Lua: %.*s");
+            return false;
+        }
+        if stack.kind(At::from_top(2)) == Kind::Nil {
+            nlua_error(stack, c"E5112: Lua chunk: %.*s");
+            debug_assert!(stack.is_nil(At::TOP));
+            stack.pop(1);
+            return false;
+        }
         debug_assert!(stack.is_nil(At::TOP));
         stack.pop(1);
-        return false;
-    }
-    debug_assert!(stack.is_nil(At::TOP));
-    stack.pop(1);
-    if nlua_pcall(&mut stack, 0, 0).is_err() {
-        nlua_error(&mut stack, c"E5113: Lua chunk: %.*s");
-        return false;
-    }
-    true
+        if nlua_pcall(stack, 0, 0).is_err() {
+            nlua_error(stack, c"E5113: Lua chunk: %.*s");
+            return false;
+        }
+        true
+    })
 }

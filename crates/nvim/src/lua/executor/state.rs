@@ -2,8 +2,8 @@
 //!
 //! The main state is built once by [`nlua_init`] (or [`nlua_run_script`] for
 //! `nvim -l`) and owned here for the life of the process. Editor code reaches
-//! it as a [`Stack`] through [`main_stack`]; the state an API call came in on
-//! (a coroutine's, say) is [`active_stack`], set around each call by
+//! it as a [`Stack`] view through [`with_main_stack`]; the state an API call came
+//! in on (a coroutine's, say) is [`with_active_stack`]'s, set around each call by
 //! [`ActiveState`]. A luv thread gets a state of its own from
 //! [`nlua_init_state`], which luv closes when the thread is done.
 //!
@@ -69,32 +69,33 @@ static ACTIVE_STATE: GlobalCell<Option<NonNull<lua_State>>> = GlobalCell::new(No
 /// runtime search path.
 static main_thread: SharedCell<uv_thread_t> = SharedCell::new(0);
 
-/// The main state, as a [`Stack`] over its running frame.
+/// Run `body` over a view of the main state's running frame that owns
+/// nothing yet.
 ///
 /// The frame is whatever runs on the main state right now: the editor's own
-/// level, or the C function a Lua caller is in -- whose own `Stack`, further
-/// up the Rust stack, is then this same frame. Both stay sound because every
-/// user of one leaves the slots below its first push alone (it pops what it
-/// pushed, and a call consumes only the function and arguments it pushed),
-/// so a string either one lends stays anchored.
+/// level, or the C function a Lua caller is in -- whose own view, further
+/// up the Rust stack, is then over this same frame. The view's base is the
+/// top it finds, so `body` cannot drop a slot the outer view holds (or has
+/// lent a string from); and it is lent to a closure so that views over the
+/// frame nest: none outside is used until `body` is done.
 ///
 /// # Panics
 /// Before [`nlua_init`] has made the state.
-pub fn main_stack() -> Stack {
+pub fn with_main_stack<R>(body: impl FnOnce(&mut Stack) -> R) -> R {
     let state = MAIN_STATE.get().expect("the Lua runtime is up");
     // SAFETY: the main state lives from `nlua_init` to the process's end,
-    // and is used on the main thread only; the frame sharing is as above.
-    unsafe { Stack::from_raw(state.as_ptr()) }
+    // and is used on the main thread only; the closure is the nesting.
+    body(&mut unsafe { Stack::above_top(state.as_ptr()) })
 }
 
-/// The state the running API call came in on, as a [`Stack`]; `None` when no
-/// state has been made yet.
-pub(crate) fn active_stack() -> Option<Stack> {
+/// [`with_main_stack`] over the state the running API call came in on;
+/// `None`, without running `body`, when no state has been made yet.
+pub(crate) fn with_active_stack<R>(body: impl FnOnce(&mut Stack) -> R) -> Option<R> {
     let state = ACTIVE_STATE.get()?;
     // SAFETY: the main state or one of its coroutines, which the API call
-    // that set it is running on (so it is live), on the main thread; frame
-    // sharing as for `main_stack`.
-    Some(unsafe { Stack::from_raw(state.as_ptr()) })
+    // that set it is running on (so it is live), on the main thread; the
+    // closure is the nesting, as for `with_main_stack`.
+    Some(body(&mut unsafe { Stack::above_top(state.as_ptr()) }))
 }
 
 /// Marks `stack`'s state as the one the running API call came in on, until
@@ -225,18 +226,19 @@ pub fn nlua_init(argv: &[CString], lua_arg0: c_int) {
         os_exit(1);
     };
     adopt_main(lstate);
-    let mut stack = main_stack();
-    if !main_state_init(&mut stack) {
-        to_stderr(gettext(c"E970: Failed to initialize builtin Lua modules\n").to_bytes());
-        os_exit(1);
-    }
-    // SAFETY: two functions of the right shape, for luv to call on a
-    // thread's behalf.
-    unsafe { luv_set_thread_cb(Some(nlua_thread_acquire_vm), Some(nlua_common_free_all_mem)) };
+    with_main_stack(|stack| {
+        if !main_state_init(stack) {
+            to_stderr(gettext(c"E970: Failed to initialize builtin Lua modules\n").to_bytes());
+            os_exit(1);
+        }
+        // SAFETY: two functions of the right shape, for luv to call on a
+        // thread's behalf.
+        unsafe { luv_set_thread_cb(Some(nlua_thread_acquire_vm), Some(nlua_common_free_all_mem)) };
 
-    // SAFETY: libuv's thread id of the caller, which needs nothing.
-    main_thread.set(unsafe { uv_thread_self() });
-    init_argv(&mut stack, argv, lua_arg0);
+        // SAFETY: libuv's thread id of the caller, which needs nothing.
+        main_thread.set(unsafe { uv_thread_self() });
+        init_argv(stack, argv, lua_arg0);
+    })
 }
 
 /// `nvim -ll script.lua`: run the script and leave, with no editor at all.
@@ -250,7 +252,7 @@ pub fn nlua_run_script(argv: &[CString], lua_arg0: c_int) -> ! {
     adopt_main(lstate);
     // SAFETY: as in `nlua_init`.
     unsafe { luv_set_thread_cb(Some(nlua_thread_acquire_vm), Some(nlua_common_free_all_mem)) };
-    init_argv(&mut main_stack(), argv, lua_arg0);
+    with_main_stack(|stack| init_argv(stack, argv, lua_arg0));
     let script = usize::try_from(lua_arg0 - 1).expect("the script follows `-ll`");
     let lua_ok = nlua_exec_file(&argv[script]);
     std::process::exit(if lua_ok { 0 } else { 1 });
@@ -322,14 +324,15 @@ unsafe extern "C-unwind" fn nlua_common_free_all_mem(lstate: *mut lua_State) {
 /// `require('vim._core.defaults')`, run once the editor is far enough along
 /// to have options and mappings.
 pub fn nlua_init_defaults() {
-    let mut stack = main_stack();
-    stack.get_global(c"require");
-    stack.push_bytes(b"vim._core.defaults");
-    if super::nlua_pcall(&mut stack, 1, 0).is_err() {
-        let error = stack.to_bytes(At::TOP).map(<[u8]>::to_vec);
-        let error = error.unwrap_or_else(|| b"(null)".to_vec());
-        to_stderr(&[&error[..until_nul(&error)], b"\n"].concat());
-    }
+    with_main_stack(|stack| {
+        stack.get_global(c"require");
+        stack.push_bytes(b"vim._core.defaults");
+        if super::nlua_pcall(stack, 1, 0).is_err() {
+            let error = stack.to_bytes(At::TOP).map(<[u8]>::to_vec);
+            let error = error.unwrap_or_else(|| b"(null)".to_vec());
+            to_stderr(&[&error[..until_nul(&error)], b"\n"].concat());
+        }
+    })
 }
 
 /// Where a C string's copy of `bytes` would end.

@@ -18,7 +18,7 @@
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
-use super::{active_stack, main_stack, nlua_error, nlua_pcall, until_nul};
+use super::{nlua_error, nlua_pcall, until_nul, with_active_stack, with_main_stack};
 use crate::ex_docmd::cmdmod_report;
 use crate::ex_docmd::state::cmdmod;
 use crate::ex_getln::{cmdpreview_get_bufnr, cmdpreview_get_ns};
@@ -57,20 +57,20 @@ pub fn nlua_set_sctx(current: &mut ScriptCtx) {
     if p_verbose() <= 0 as OptInt {
         return;
     }
-    let Some(mut stack) = active_stack() else {
-        return;
-    };
-    let mut level: c_int = 1;
-    let (source, line) = loop {
-        let Some(frame) = stack.frame(level) else {
-            return;
-        };
-        if !frame.is_c
-            && let Some(path) = frame.source.strip_prefix(b"@")
-        {
-            break (path.to_vec(), frame.current_line);
+    let found = with_active_stack(|stack| {
+        let mut level: c_int = 1;
+        loop {
+            let frame = stack.frame(level)?;
+            if !frame.is_c
+                && let Some(path) = frame.source.strip_prefix(b"@")
+            {
+                return Some((path.to_vec(), frame.current_line));
+            }
+            level += 1;
         }
-        level += 1;
+    });
+    let Some(Some((source, line))) = found else {
+        return;
     };
 
     let source = CString::new(source).expect("a chunk name holds no NUL");
@@ -99,157 +99,158 @@ fn set(stack: &mut Stack, name: &CStr) {
 /// `cmd` is what the run needs of the command, copied out of its table:
 /// the callback may redefine or delete the command while it runs.
 pub(crate) fn nlua_do_ucmd(cmd: &LuaCommand, excmd: &ExArg, preview: bool) -> c_int {
-    let mut stack = main_stack();
-    let stack = &mut stack;
-    stack.push_reference(cmd.luaref);
+    with_main_stack(|stack| {
+        stack.push_reference(cmd.luaref);
 
-    // The one argument is a table describing the invocation.
-    stack.new_table(0, 0);
+        // The one argument is a table describing the invocation.
+        stack.new_table(0, 0);
 
-    stack.push_bytes(cmd.name.to_bytes());
-    set(stack, c"name");
-    stack.push_boolean(excmd.forceit);
-    set(stack, c"bang");
-    stack.push_integer(excmd.line1 as lua_Integer);
-    set(stack, c"line1");
-    stack.push_integer(excmd.line2 as lua_Integer);
-    set(stack, c"line2");
+        stack.push_bytes(cmd.name.to_bytes());
+        set(stack, c"name");
+        stack.push_boolean(excmd.forceit);
+        set(stack, c"bang");
+        stack.push_integer(excmd.line1 as lua_Integer);
+        set(stack, c"line1");
+        stack.push_integer(excmd.line2 as lua_Integer);
+        set(stack, c"line2");
 
-    // `excmd` is the raw argument text; `fargs` the split one. The raw
-    // string is pushed once and stored twice.
-    stack.new_table(0, 0);
-    stack.push_bytes(excmd.line.cstr_from(excmd.line.arg).to_bytes());
-    stack.push_value(At::TOP);
-    stack.set_field(At::from_top(4), c"args");
-    if cmd.argt.has(ExArgt::NOSPC) {
-        // At most one argument: `fargs` is the whole of it, or empty.
-        if cmd.argt.has(ExArgt::NEEDARG) || !excmd.line.arg().is_empty() {
-            stack.raw_set_index(At::from_top(2), 1);
+        // `excmd` is the raw argument text; `fargs` the split one. The raw
+        // string is pushed once and stored twice.
+        stack.new_table(0, 0);
+        stack.push_bytes(excmd.line.cstr_from(excmd.line.arg).to_bytes());
+        stack.push_value(At::TOP);
+        stack.set_field(At::from_top(4), c"args");
+        if cmd.argt.has(ExArgt::NOSPC) {
+            // At most one argument: `fargs` is the whole of it, or empty.
+            if cmd.argt.has(ExArgt::NEEDARG) || !excmd.line.arg().is_empty() {
+                stack.raw_set_index(At::from_top(2), 1);
+            } else {
+                stack.pop(1);
+            }
+        } else if excmd.line.args.is_empty() {
+            stack.pop(1);
+            // Not pre-split (`:command` rather than `nvim_cmd`): split here,
+            // honouring backslash escapes.
+            let mut end = 0;
+            let mut i: c_int = 1;
+            let mut word = Vec::with_capacity(excmd.line.arg().len());
+            let mut done = false;
+            while !done {
+                done = uc_split_args_iter(excmd.line.arg(), &mut end, &mut word);
+                if !word.is_empty() {
+                    stack.push_bytes(&word);
+                    stack.raw_set_index(At::from_top(2), i);
+                    i += 1;
+                }
+            }
         } else {
             stack.pop(1);
-        }
-    } else if excmd.line.args.is_empty() {
-        stack.pop(1);
-        // Not pre-split (`:command` rather than `nvim_cmd`): split here,
-        // honouring backslash escapes.
-        let mut end = 0;
-        let mut i: c_int = 1;
-        let mut word = Vec::with_capacity(excmd.line.arg().len());
-        let mut done = false;
-        while !done {
-            done = uc_split_args_iter(excmd.line.arg(), &mut end, &mut word);
-            if !word.is_empty() {
-                stack.push_bytes(&word);
+            for (i, &(at, len)) in (1..).zip(excmd.line.args.iter()) {
+                stack.push_bytes(&excmd.line.tail(at)[..len]);
                 stack.raw_set_index(At::from_top(2), i);
-                i += 1;
             }
         }
-    } else {
-        stack.pop(1);
-        for (i, &(at, len)) in (1..).zip(excmd.line.args.iter()) {
-            stack.push_bytes(&excmd.line.tail(at)[..len]);
-            stack.raw_set_index(At::from_top(2), i);
-        }
-    }
-    set(stack, c"fargs");
+        set(stack, c"fargs");
 
-    // The register as a one-letter string; none is the empty string.
-    let reg = u8::try_from(excmd.regname).unwrap_or_default();
-    let reg = [reg];
-    stack.push_bytes(until_nul(&reg));
-    set(stack, c"reg");
-    stack.push_integer(excmd.addr_count as lua_Integer);
-    set(stack, c"range");
-    if excmd.addr_count > 0 {
-        stack.push_integer(excmd.line2 as lua_Integer);
-    } else {
-        stack.push_integer(lua_Integer::try_from(cmd.default_count).unwrap_or(lua_Integer::MAX));
-    }
-    set(stack, c"count");
-
-    // `nargs` as `:command -nargs=` spells it.
-    stack.push_bytes(&[nargs_char(cmd.argt)]);
-    set(stack, c"nargs");
-
-    let mods = cmdmod.with(|cmod| uc_mods(cmod, false));
-    stack.push_bytes(&mods);
-    set(stack, c"mods");
-
-    // `smods`: the same modifiers, parsed.
-    stack.new_table(0, 0);
-    let (tab, verbose, split, flags) = cmdmod_report();
-    stack.push_integer((tab - 1) as lua_Integer);
-    set(stack, c"tab");
-    stack.push_integer((verbose - 1) as lua_Integer);
-    set(stack, c"verbose");
-
-    let has = |flag: u32| split & c_int::try_from(flag).unwrap_or_default() != 0;
-    let split_name: &[u8] = if has(WSP_ABOVE) {
-        b"aboveleft"
-    } else if has(WSP_BELOW) {
-        b"belowright"
-    } else if has(WSP_TOP) {
-        b"topleft"
-    } else if has(WSP_BOT) {
-        b"botright"
-    } else {
-        b""
-    };
-    stack.push_bytes(split_name);
-    set(stack, c"split");
-
-    stack.push_boolean(has(WSP_VERT));
-    set(stack, c"vertical");
-    stack.push_boolean(has(WSP_HOR));
-    set(stack, c"horizontal");
-
-    stack.push_boolean(flags.has(CmdModFlags::SILENT));
-    set(stack, c"silent");
-    stack.push_boolean(flags.has(CmdModFlags::ERRSILENT));
-    set(stack, c"emsg_silent");
-    stack.push_boolean(flags.has(CmdModFlags::UNSILENT));
-    set(stack, c"unsilent");
-    stack.push_boolean(flags.has(CmdModFlags::SANDBOX));
-    set(stack, c"sandbox");
-    stack.push_boolean(flags.has(CmdModFlags::NOAUTOCMD));
-    set(stack, c"noautocmd");
-    for (flag, name) in MOD_FLAGS {
-        stack.push_boolean(flags.has(flag));
-        set(stack, name);
-    }
-    set(stack, c"smods");
-
-    if preview {
-        stack.push_integer(cmdpreview_get_ns() as lua_Integer);
-        let cmdpreview_bufnr: Handle = cmdpreview_get_bufnr();
-        if cmdpreview_bufnr != 0 {
-            stack.push_integer(cmdpreview_bufnr as lua_Integer);
+        // The register as a one-letter string; none is the empty string.
+        let reg = u8::try_from(excmd.regname).unwrap_or_default();
+        let reg = [reg];
+        stack.push_bytes(until_nul(&reg));
+        set(stack, c"reg");
+        stack.push_integer(excmd.addr_count as lua_Integer);
+        set(stack, c"range");
+        if excmd.addr_count > 0 {
+            stack.push_integer(excmd.line2 as lua_Integer);
         } else {
-            stack.push_nil();
+            stack
+                .push_integer(lua_Integer::try_from(cmd.default_count).unwrap_or(lua_Integer::MAX));
         }
-    }
+        set(stack, c"count");
 
-    let (nargs_in, nresults) = if preview { (3, 1) } else { (1, 0) };
-    if nlua_pcall(stack, nargs_in, nresults).is_err() {
-        nlua_error(stack, c"Lua :command callback: %.*s");
-        return 0;
-    }
+        // `nargs` as `:command -nargs=` spells it.
+        stack.push_bytes(&[nargs_char(cmd.argt)]);
+        set(stack, c"nargs");
 
-    if !preview {
-        return 0;
-    }
-    // Anything but a number from 0 to 2 is 0, and stays on the stack, as
-    // upstream leaves it.
-    let answer = stack
-        .is_number(At::TOP)
-        .then(|| narrow_preview(stack.to_integer(At::TOP)));
-    match answer {
-        Some(retv) if (0..=2).contains(&retv) => {
-            stack.pop(1);
-            retv
+        let mods = cmdmod.with(|cmod| uc_mods(cmod, false));
+        stack.push_bytes(&mods);
+        set(stack, c"mods");
+
+        // `smods`: the same modifiers, parsed.
+        stack.new_table(0, 0);
+        let (tab, verbose, split, flags) = cmdmod_report();
+        stack.push_integer((tab - 1) as lua_Integer);
+        set(stack, c"tab");
+        stack.push_integer((verbose - 1) as lua_Integer);
+        set(stack, c"verbose");
+
+        let has = |flag: u32| split & c_int::try_from(flag).unwrap_or_default() != 0;
+        let split_name: &[u8] = if has(WSP_ABOVE) {
+            b"aboveleft"
+        } else if has(WSP_BELOW) {
+            b"belowright"
+        } else if has(WSP_TOP) {
+            b"topleft"
+        } else if has(WSP_BOT) {
+            b"botright"
+        } else {
+            b""
+        };
+        stack.push_bytes(split_name);
+        set(stack, c"split");
+
+        stack.push_boolean(has(WSP_VERT));
+        set(stack, c"vertical");
+        stack.push_boolean(has(WSP_HOR));
+        set(stack, c"horizontal");
+
+        stack.push_boolean(flags.has(CmdModFlags::SILENT));
+        set(stack, c"silent");
+        stack.push_boolean(flags.has(CmdModFlags::ERRSILENT));
+        set(stack, c"emsg_silent");
+        stack.push_boolean(flags.has(CmdModFlags::UNSILENT));
+        set(stack, c"unsilent");
+        stack.push_boolean(flags.has(CmdModFlags::SANDBOX));
+        set(stack, c"sandbox");
+        stack.push_boolean(flags.has(CmdModFlags::NOAUTOCMD));
+        set(stack, c"noautocmd");
+        for (flag, name) in MOD_FLAGS {
+            stack.push_boolean(flags.has(flag));
+            set(stack, name);
         }
-        _ => 0,
-    }
+        set(stack, c"smods");
+
+        if preview {
+            stack.push_integer(cmdpreview_get_ns() as lua_Integer);
+            let cmdpreview_bufnr: Handle = cmdpreview_get_bufnr();
+            if cmdpreview_bufnr != 0 {
+                stack.push_integer(cmdpreview_bufnr as lua_Integer);
+            } else {
+                stack.push_nil();
+            }
+        }
+
+        let (nargs_in, nresults) = if preview { (3, 1) } else { (1, 0) };
+        if nlua_pcall(stack, nargs_in, nresults).is_err() {
+            nlua_error(stack, c"Lua :command callback: %.*s");
+            return 0;
+        }
+
+        if !preview {
+            return 0;
+        }
+        // Anything but a number from 0 to 2 is 0, and stays on the stack, as
+        // upstream leaves it.
+        let answer = stack
+            .is_number(At::TOP)
+            .then(|| narrow_preview(stack.to_integer(At::TOP)));
+        match answer {
+            Some(retv) if (0..=2).contains(&retv) => {
+                stack.pop(1);
+                retv
+            }
+            _ => 0,
+        }
+    })
 }
 
 /// A preview callback's answer as the `int` upstream cast it to.

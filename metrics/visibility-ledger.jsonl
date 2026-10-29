@@ -223,11 +223,11 @@
 {"path":"neovim::lua::converter::pop_object","kind":"mod","file":"crates/nvim/src/lua/converter/pop_object.rs","tests":["crates/nvim/tests/unit/api_converter.rs"]}
 {"path":"neovim::lua::converter::pop_typval","kind":"mod","file":"crates/nvim/src/lua/converter/pop_typval.rs","tests":["crates/nvim/tests/unit/api_converter.rs"]}
 {"path":"neovim::lua::converter::push_object","kind":"mod","file":"crates/nvim/src/lua/converter/push_object.rs","tests":["crates/nvim/tests/unit/api_converter.rs"]}
-{"path":"neovim::lua::executor::main_stack","kind":"fn","file":"crates/nvim/src/lua/executor/state.rs","tests":["crates/nvim/tests/unit/api_converter.rs"]}
 {"path":"neovim::lua::executor::nlua_init","kind":"fn","file":"crates/nvim/src/lua/executor/state.rs","tests":["crates/nvim/tests/unit/support.rs"]}
+{"path":"neovim::lua::executor::with_main_stack","kind":"fn","file":"crates/nvim/src/lua/executor/state.rs","tests":["crates/nvim/tests/unit/api_converter.rs"]}
 {"path":"neovim::lua::stack::At","kind":"struct","file":"crates/nvim/src/lua/stack/mod.rs","tests":["crates/nvim/tests/unit/api_converter.rs"]}
 {"path":"neovim::lua::stack::Kind","kind":"enum","file":"crates/nvim/src/lua/stack/mod.rs","tests":["crates/nvim/tests/unit/api_converter.rs"]}
-{"path":"neovim::lua::stack::Raise","kind":"struct","file":"crates/nvim/src/lua/stack/mod.rs","tests":["crates/nvim/tests/unit/api_converter.rs"]}
+{"path":"neovim::lua::stack::Raise","kind":"struct","file":"crates/nvim/src/lua/stack/dispatch.rs","tests":["crates/nvim/tests/unit/api_converter.rs"]}
 {"path":"neovim::lua::stack::Stack","kind":"struct","file":"crates/nvim/src/lua/stack/mod.rs","tests":["crates/nvim/tests/unit/api_converter.rs"]}
 {"path":"neovim::map::MH_TOMBSTONE","kind":"const","file":"crates/nvim/src/map/table.rs","tests":["crates/nvim/tests/unit/map.rs"]}
 {"path":"neovim::map::kMHExisting","kind":"const","file":"crates/nvim/src/map/table.rs","tests":["crates/nvim/tests/unit/map.rs"]}

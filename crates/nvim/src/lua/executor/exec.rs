@@ -22,7 +22,7 @@ use std::ffi::CString;
 
 use super::{
     FCERR_NONE, FCERR_OTHER, fast_pcall, kRetLuaref, kRetMulti, kRetNilBool, kRetObject,
-    main_stack, nlua_error, nlua_pcall,
+    nlua_error, nlua_pcall, with_main_stack,
 };
 use crate::ex_cmds::check_secure;
 use crate::lua::converter::{pop_object, pop_typval, push_object, push_typval};
@@ -73,18 +73,19 @@ pub fn nlua_call_user_expand_func(
     line: &CStr,
     col: c_int,
 ) -> TypVal {
-    let mut stack = main_stack();
-    stack.push_reference(luaref);
-    stack.push_bytes(pattern.to_bytes());
-    stack.push_bytes(line.to_bytes());
-    stack.push_integer(col.try_into().unwrap_or_default());
-    if nlua_pcall(&mut stack, 3, 1).is_err() {
-        nlua_error(&mut stack, c"E5108: Lua function: %.*s");
-        return TypVal::Number(0);
-    }
-    // A refusal has reported itself; the answer is then the zero
-    // upstream left in the caller's slot.
-    pop_typval(&mut stack).unwrap_or(TypVal::Number(0))
+    with_main_stack(|stack| {
+        stack.push_reference(luaref);
+        stack.push_bytes(pattern.to_bytes());
+        stack.push_bytes(line.to_bytes());
+        stack.push_integer(col.try_into().unwrap_or_default());
+        if nlua_pcall(stack, 3, 1).is_err() {
+            nlua_error(stack, c"E5108: Lua function: %.*s");
+            return TypVal::Number(0);
+        }
+        // A refusal has reported itself; the answer is then the zero
+        // upstream left in the caller's slot.
+        pop_typval(stack).unwrap_or(TypVal::Number(0))
+    })
 }
 
 /// `require(module)` in the editor's state, through [`nlua_pcall`] so that a
@@ -93,16 +94,17 @@ pub fn nlua_call_user_expand_func(
 /// Answers the error's text when it fails -- `None` for an error object that
 /// is not a string -- and leaves the error on the stack, as upstream does.
 pub(crate) fn nlua_require_module(module: &CStr) -> Result<(), Option<Vec<u8>>> {
-    let mut stack = main_stack();
-    stack.get_global(c"require");
-    stack.push_bytes(module.to_bytes());
-    if nlua_pcall(&mut stack, 1, 0).is_ok() {
-        return Ok(());
-    }
-    // `lua_tolstring`'s C string: up to its first NUL.
-    Err(stack
-        .to_bytes(At::TOP)
-        .map(|text| super::until_nul(text).to_vec()))
+    with_main_stack(|stack| {
+        stack.get_global(c"require");
+        stack.push_bytes(module.to_bytes());
+        if nlua_pcall(stack, 1, 0).is_ok() {
+            return Ok(());
+        }
+        // `lua_tolstring`'s C string: up to its first NUL.
+        Err(stack
+            .to_bytes(At::TOP)
+            .map(|text| super::until_nul(text).to_vec()))
+    })
 }
 
 /// Run the Lua chunk `code` with `args`, answering its value converted as
@@ -130,25 +132,20 @@ pub(crate) fn nlua_typval_exec(
         }
         return;
     }
-    let mut stack = main_stack();
-    if stack.load(chunk, Some(name)).is_err() {
-        nlua_error(&mut stack, c"E5107: Lua: %.*s");
-        return;
-    }
-    push_typval_args(&mut stack, args, special);
-    if nlua_pcall(
-        &mut stack,
-        len_as_int(args.len()),
-        c_int::from(ret_tv.is_some()),
-    )
-    .is_err()
-    {
-        nlua_error(&mut stack, c"E5108: Lua: %.*s");
-        return;
-    }
-    if let Some(ret_tv) = ret_tv {
-        ret_tv.overwrite(pop_typval(&mut stack).unwrap_or(TypVal::Number(0)));
-    }
+    with_main_stack(|stack| {
+        if stack.load(chunk, Some(name)).is_err() {
+            nlua_error(stack, c"E5107: Lua: %.*s");
+            return;
+        }
+        push_typval_args(stack, args, special);
+        if nlua_pcall(stack, len_as_int(args.len()), c_int::from(ret_tv.is_some())).is_err() {
+            nlua_error(stack, c"E5108: Lua: %.*s");
+            return;
+        }
+        if let Some(ret_tv) = ret_tv {
+            ret_tv.overwrite(pop_typval(stack).unwrap_or(TypVal::Number(0)));
+        }
+    })
 }
 
 /// Push the arguments, with `VAR_UNKNOWN` standing for `nil`.
@@ -176,15 +173,16 @@ pub fn nlua_exec_lines(lines: &[CString], name: &CStr) {
 
 /// Call a Lua function stored as a Vimscript Funcref.
 pub fn typval_exec_lua_callable(lua_cb: LuaRef, argvars: &[TypVal], rettv: &mut TypVal) -> c_int {
-    let mut stack = main_stack();
-    stack.push_reference(lua_cb);
-    push_typval_args(&mut stack, argvars, false);
-    if nlua_pcall(&mut stack, len_as_int(argvars.len()), 1).is_err() {
-        nlua_error(&mut stack, c"Lua callback: %.*s");
-        return FCERR_OTHER.cast_signed();
-    }
-    rettv.overwrite(pop_typval(&mut stack).unwrap_or(TypVal::Number(0)));
-    FCERR_NONE.cast_signed()
+    with_main_stack(|stack| {
+        stack.push_reference(lua_cb);
+        push_typval_args(stack, argvars, false);
+        if nlua_pcall(stack, len_as_int(argvars.len()), 1).is_err() {
+            nlua_error(stack, c"Lua callback: %.*s");
+            return FCERR_OTHER.cast_signed();
+        }
+        rettv.overwrite(pop_typval(stack).unwrap_or(TypVal::Number(0)));
+        FCERR_NONE.cast_signed()
+    })
 }
 
 /// Run a chunk with api values as its arguments and its answer as one. The
@@ -198,23 +196,24 @@ pub fn nlua_exec(
     args: Array,
     mode: LuaRetMode,
 ) -> Result<Object, Error> {
-    let mut stack = main_stack();
-    let top = stack.top();
-    let name = chunkname
-        .filter(|name| !name.is_empty())
-        .unwrap_or(c"<nvim>");
-    if stack.load(code, Some(name)).is_err() {
-        // The message stays on the stack, as upstream leaves it.
-        return Err(lua_error_of(kErrorTypeValidation, &mut stack));
-    }
-    let argc = len_as_int(args.len());
-    for item in args.iter() {
-        push_object(&mut stack, item, false);
-    }
-    if nlua_pcall(&mut stack, argc, 1).is_err() {
-        return Err(lua_error_of(kErrorTypeException, &mut stack));
-    }
-    nlua_call_pop_retval(&mut stack, mode, top)
+    with_main_stack(|stack| {
+        let top = stack.top();
+        let name = chunkname
+            .filter(|name| !name.is_empty())
+            .unwrap_or(c"<nvim>");
+        if stack.load(code, Some(name)).is_err() {
+            // The message stays on the stack, as upstream leaves it.
+            return Err(lua_error_of(kErrorTypeValidation, stack));
+        }
+        let argc = len_as_int(args.len());
+        for item in args.iter() {
+            push_object(stack, item, false);
+        }
+        if nlua_pcall(stack, argc, 1).is_err() {
+            return Err(lua_error_of(kErrorTypeException, stack));
+        }
+        nlua_call_pop_retval(stack, mode, top)
+    })
 }
 
 /// The Lua error on top of the stack, which stays there.
@@ -269,34 +268,35 @@ pub fn nlua_call_ref_ctx(
     mode: LuaRetMode,
     reports: bool,
 ) -> Result<Object, Error> {
-    let mut stack = main_stack();
-    let top = stack.top();
-    stack.push_reference(reference);
-    let mut nargs = len_as_int(args.len());
-    if let Some(name) = name {
-        stack.push_bytes(name.to_bytes());
-        nargs += 1;
-    }
-    for item in args.iter() {
-        push_object(&mut stack, item, false);
-    }
+    with_main_stack(|stack| {
+        let top = stack.top();
+        stack.push_reference(reference);
+        let mut nargs = len_as_int(args.len());
+        if let Some(name) = name {
+            stack.push_bytes(name.to_bytes());
+            nargs += 1;
+        }
+        for item in args.iter() {
+            push_object(stack, item, false);
+        }
 
-    if fast {
-        if fast_pcall(&mut stack, nargs, mode_ret(mode), -1) < 0 {
+        if fast {
+            if fast_pcall(stack, nargs, mode_ret(mode), -1) < 0 {
+                if !reports {
+                    return Ok(Object::Nil);
+                }
+                return Err(Error::exception(c"fast context failure"));
+            }
+        } else if nlua_pcall(stack, nargs, mode_ret(mode)).is_err() {
             if !reports {
+                // Nobody to report to: show it instead.
+                nlua_error(stack, c"Lua callback: %.*s");
                 return Ok(Object::Nil);
             }
-            return Err(Error::exception(c"fast context failure"));
+            return Err(lua_error_of(kErrorTypeException, stack));
         }
-    } else if nlua_pcall(&mut stack, nargs, mode_ret(mode)).is_err() {
-        if !reports {
-            // Nobody to report to: show it instead.
-            nlua_error(&mut stack, c"Lua callback: %.*s");
-            return Ok(Object::Nil);
-        }
-        return Err(lua_error_of(kErrorTypeException, &mut stack));
-    }
-    nlua_call_pop_retval(&mut stack, mode, top)
+        nlua_call_pop_retval(stack, mode, top)
+    })
 }
 
 /// Convert whatever the call left on the stack, and pop it.

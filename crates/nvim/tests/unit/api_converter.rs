@@ -228,17 +228,21 @@ mod lua {
     use neovim::lua::converter::{
         pop_dict, pop_integer, pop_object, pop_string, pop_typval, push_object, push_typval,
     };
-    use neovim::lua::executor::main_stack;
+    use neovim::lua::executor::with_main_stack;
     use neovim::lua::stack::{At, Kind, Raise, Stack};
     use neovim::types::{Object, lua_State};
 
     use crate::support::tv::{Obj, Tv, read, read_object};
     use crate::support::{Editor, check_emsg, editor_lock};
 
-    /// The editor's Lua stack. The token is the lock that makes this the
-    /// only `Stack` over the main state's frame.
+    /// The editor's Lua stack, as a view above the top it finds. The token
+    /// is the lock that makes this the only view in use over the main
+    /// state's frame.
     fn lua(_editor: &Editor) -> Stack {
-        main_stack()
+        let state = with_main_stack(|stack| stack.lua_state());
+        // SAFETY: the main state, live for the process; the lock keeps every
+        // other view out while this one is used.
+        unsafe { Stack::above_top(state) }
     }
 
     /// Run `chunk` and leave its one result on top.

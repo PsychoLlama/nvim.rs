@@ -17,7 +17,7 @@
 
 use core::ffi::c_int;
 
-use super::main_stack;
+use super::with_main_stack;
 use crate::lua::ffi::LUA_NOREF;
 use crate::lua::stack::{At, Kind};
 use crate::lua::state::MAIN_REFS;
@@ -33,7 +33,7 @@ pub(crate) fn nlua_get_global_ref_count() -> c_int {
 /// is a no-op.
 pub(crate) fn release_luaref(reference: LuaRef) {
     if reference > 0 {
-        main_stack().unreference(reference);
+        with_main_stack(|stack| stack.unreference(reference));
     }
 }
 
@@ -42,19 +42,21 @@ pub fn api_new_luaref(original_ref: LuaRef) -> LuaRef {
     if original_ref == LUA_NOREF {
         return LUA_NOREF;
     }
-    let mut stack = main_stack();
-    stack.push_reference(original_ref);
-    let new_ref = stack.reference(At::TOP);
-    stack.pop(1);
-    new_ref
+    with_main_stack(|stack| {
+        stack.push_reference(original_ref);
+        let new_ref = stack.reference(At::TOP);
+        stack.pop(1);
+        new_ref
+    })
 }
 
 /// Whether `reference` refers to something callable — the check an api
 /// argument that may be either a callback or a value needs.
 pub fn nlua_ref_is_function(reference: LuaRef) -> bool {
-    let mut stack = main_stack();
-    stack.push_reference(reference);
-    let is_function = stack.kind(At::TOP) == Kind::Function;
-    stack.pop(1);
-    is_function
+    with_main_stack(|stack| {
+        stack.push_reference(reference);
+        let is_function = stack.kind(At::TOP) == Kind::Function;
+        stack.pop(1);
+        is_function
+    })
 }
