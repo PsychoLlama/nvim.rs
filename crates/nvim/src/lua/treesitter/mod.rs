@@ -2,7 +2,8 @@
 //! and cursor userdata.
 //!
 //! The tree-sitter objects are C objects with C lifetimes, held by the
-//! userdata ([`Parser`], [`Tree`], [`Query`], [`QueryCursor`]) whose `__gc`
+//! userdata ([`Parser`](parser::Parser), [`Tree`](tree::Tree), [`Query`],
+//! [`QueryCursor`](cursor::QueryCursor)) whose `__gc`
 //! deletes them; a node or a match is a plain value whose userdatum keeps
 //! the tree it points into alive through its environment table. Every Lua
 //! stack operation goes through the [`Stack`]; the unsafe code left here is
