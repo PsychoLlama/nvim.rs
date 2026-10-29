@@ -30,6 +30,10 @@ use super::token::{Kind, Tok};
 /// The stack is full: the document nests deeper than `capacity`.
 pub const MPACK_NOMEM: c_int = MPACK_ERROR.cast_signed() + 1;
 
+/// The walker stopped the walk ([`Decode::stopped`], [`Encode::stopped`]):
+/// it failed, and has its own error to report.
+pub const MPACK_EXCEPTION: c_int = MPACK_NOMEM + 1;
+
 pub const MPACK_MAX_OBJECT_DEPTH: c_int = 32;
 
 const COMPLETE: c_int = MPACK_OK.cast_signed();
@@ -59,6 +63,12 @@ pub trait Decode<D> {
     /// `node` is complete and has been popped; its parent (the last of
     /// `parents`) has already counted it.
     fn exit(&mut self, node: Node<D>, parents: &mut [Node<D>]);
+    /// Whether the walker has failed and wants the walk to stop: asked after
+    /// each step, which then answers [`MPACK_EXCEPTION`]. The walk is left
+    /// where it stopped.
+    fn stopped(&self) -> bool {
+        false
+    }
 }
 
 /// A walk that turns objects into tokens.
@@ -70,6 +80,11 @@ pub trait Encode<D> {
     /// The body a chunk node at the top of the stack copies out of — the
     /// whole body, asked for again each time a write of it resumes.
     fn chunk(&mut self, node: &Node<D>, parents: &[Node<D>]) -> &[u8];
+    /// As [`Decode::stopped`]: asked after each step, before the token it
+    /// produced is written.
+    fn stopped(&self) -> bool {
+        false
+    }
 }
 
 /// A walk in progress, and the tokenizer feeding (or fed by) it.
@@ -214,6 +229,9 @@ impl<D: Default> Parser<D> {
             // Drive the walk until it stops wanting to pop.
             loop {
                 status = self.parse_tok(tok, chunk, walker);
+                if walker.stopped() {
+                    return MPACK_EXCEPTION;
+                }
                 if !self.exiting {
                     break;
                 }
@@ -242,6 +260,9 @@ impl<D: Default> Parser<D> {
                     tok = node.tok;
                     node
                 });
+            }
+            if walker.stopped() {
+                return (MPACK_EXCEPTION, written);
             }
             status = self.unparse_status;
             if status == MPACK_NOMEM {

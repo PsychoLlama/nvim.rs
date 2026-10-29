@@ -128,6 +128,7 @@ use crate::types::{LuaRef, lua_Integer, lua_Number, lua_State, size_t};
 mod debug;
 mod dispatch;
 mod header;
+mod table;
 mod userdata;
 
 pub use self::debug::Frame;
@@ -929,6 +930,17 @@ impl<'a> Above<'a> {
         // slot is; the slot is at or below the base, which no view above
         // may drop, and the lending view is borrowed for `'a`.
         Ok((unsafe { CStr::from_ptr(bytes) }, len))
+    }
+}
+
+impl<'a> Above<'a> {
+    /// `luaL_checklstring` on `at`, a slot at or below this view's base, as
+    /// bytes: [`Above::check_c_string_below`] without the cut at a NUL.
+    pub fn check_bytes_below(&self, at: At) -> Result<&'a [u8], Raise> {
+        let (string, len) = self.check_c_string_below(at)?;
+        // SAFETY: a Lua string's `len` bytes from its start, alive as long
+        // as the C string just lent is.
+        Ok(unsafe { core::slice::from_raw_parts(string.as_ptr().cast::<u8>(), len) })
     }
 }
 

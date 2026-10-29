@@ -1,5 +1,5 @@
 count	callee	no_raw	defs	def
-48	from_raw_parts	0	0	
+49	from_raw_parts	0	0	
 47	CStr::from_ptr	0	1	crates/nvim/src/marktree/node.rs
 33	xfree	0	1	crates/nvim/src/memory/mod.rs
 28	f	0	0	
@@ -22,7 +22,7 @@ count	callee	no_raw	defs	def
 10	Tk::of	0	1	crates/nvim/src/tui/termkey/termkey.rs
 10	bytes_at	0	1	crates/nvim/src/cstr.rs
 10	cbytes	0	2	
-10	notify	0	1	crates/nvim/src/mpack/lmpack/session.rs
+10	notify	0	0	
 10	state_of	0	1	crates/nvim/src/vterm/state/entry.rs
 9	Node::from_ptr	0	1	crates/nvim/src/marktree/node.rs
 8	Bytes::new	0	1	crates/nvim/src/charset/walk.rs
@@ -45,7 +45,7 @@ count	callee	no_raw	defs	def
 6	multiqueue_process_events	0	1	crates/nvim/src/event/multiqueue.rs
 5	.next_arg::<::core::ffi::c_ulong>	0	0	
 5	Handle::new	0	1	crates/nvim/src/event/time.rs
-5	Self::new	0	22	
+5	Self::new	0	21	
 5	Signal::new	0	1	crates/nvim/src/event/signal.rs
 5	close	0	0	
 5	handler	0	0	
@@ -57,7 +57,6 @@ count	callee	no_raw	defs	def
 4	ThinCString::from_raw	0	1	crates/nvim/src/memory/thin_cstring.rs
 4	Uv::new	0	1	crates/nvim/src/event/libuv_proc.rs
 4	abort	0	0	
-4	lua_getfield	0	0	
 4	lua_settop	0	0	
 4	lua_touserdata	0	0	
 4	lua_type	0	0	
@@ -88,6 +87,7 @@ count	callee	no_raw	defs	def
 3	hash_add	0	1	crates/nvim/src/hashtab.rs
 3	hash_lookup	0	1	crates/nvim/src/hashtab.rs
 3	lseek	0	0	
+3	lua_getfield	0	0	
 3	lua_gettop	0	0	
 3	lua_next	0	0	
 3	lua_pop	0	1	crates/nvim/src/lua/stack/header.rs
@@ -120,14 +120,14 @@ count	callee	no_raw	defs	def
 2	.copy_from_nonoverlapping	0	0	
 2	.next_arg::<::core::ffi::c_long>	0	0	
 2	.push_scratch	0	1	crates/nvim/src/cjson/lua_cjson/decode.rs
-2	Cc::new	0	22	
+2	Cc::new	0	21	
 2	DictRef::from_owned	1	1	crates/nvim/src/eval/typval/handle.rs
 2	DictRef::owning	0	1	crates/nvim/src/eval/typval/handle.rs
-2	Dt::new	0	22	
+2	Dt::new	0	21	
 2	File::from_raw_fd	0	0	
 2	KeyModes::read	0	0	
 2	ListRef::from_owned	1	1	crates/nvim/src/eval/typval/handle.rs
-2	Ls::new	0	22	
+2	Ls::new	0	21	
 2	NonNull::new_unchecked	0	0	
 2	NulTerminated::new	0	1	crates/nvim/src/mbyte/utf8/text.rs
 2	Parser::of	0	1	crates/nvim/src/vterm/parser.rs
@@ -168,6 +168,8 @@ count	callee	no_raw	defs	def
 2	listxattr	0	0	
 2	loop_poll_events	0	1	crates/nvim/src/event/loop.rs
 2	luaL_checktype	0	0	
+2	luaL_ref	0	0	
+2	luaL_unref	0	0	
 2	lua_checkstack	0	0	
 2	lua_createtable	0	0	
 2	lua_newtable	0	1	crates/nvim/src/lua/stack/header.rs
@@ -256,7 +258,7 @@ count	callee	no_raw	defs	def
 1	.parse_array	0	1	crates/nvim/src/cjson/lua_cjson/decode.rs
 1	.parse_object	0	1	crates/nvim/src/cjson/lua_cjson/decode.rs
 1	.push_value	0	1	crates/nvim/src/cjson/lua_cjson/decode.rs
-1	Box::new	0	22	
+1	Box::new	0	21	
 1	CStr::from_bytes_with_nul_unchecked	0	0	
 1	DictRef::retained	0	1	crates/nvim/src/eval/typval/handle.rs
 1	ListRef::retained	0	1	crates/nvim/src/eval/typval/handle.rs
@@ -271,13 +273,12 @@ count	callee	no_raw	defs	def
 1	boolean_field	0	1	crates/nvim/src/cjson/lua_cjson/decode.rs
 1	calloc	0	0	
 1	cb	0	0	
-1	chunk_bytes	0	1	crates/nvim/src/mpack/lmpack/walk.rs
 1	connection_event	0	1	crates/nvim/src/event/socket/mod.rs
 1	consume	0	0	
 1	convert_color_to_rgb	0	0	
 1	copy	0	0	
 1	damage	0	0	
-1	decode	0	2	
+1	decode	0	1	crates/nvim/src/cjson/lua_cjson/decode.rs
 1	digits_at	0	1	crates/nvim/src/cursor_shape.rs
 1	do_os_system	0	1	crates/nvim/src/os/shell/system.rs
 1	drop_in_place	0	0	
@@ -319,8 +320,6 @@ count	callee	no_raw	defs	def
 1	luaL_argerror	0	0	
 1	luaL_checklstring	0	0	
 1	luaL_loadbuffer	0	0	
-1	luaL_ref	0	0	
-1	luaL_unref	0	0	
 1	lua_call	0	0	
 1	lua_cjson_new	0	1	crates/nvim/src/cjson/lua_cjson/mod.rs
 1	lua_close	0	0	
@@ -344,7 +343,6 @@ count	callee	no_raw	defs	def
 1	lua_tointeger	0	0	
 1	lua_topointer	0	0	
 1	luaopen_lpeg	0	0	
-1	luaopen_mpack	0	1	crates/nvim/src/mpack/lmpack/mod.rs
 1	malloc	0	0	
 1	marktree_alloc_node	0	1	crates/nvim/src/marktree/node.rs
 1	marktree_clear	1	1	crates/nvim/src/marktree/mod.rs
@@ -388,8 +386,6 @@ count	callee	no_raw	defs	def
 1	outfunc	0	0	
 1	owned_name	0	1	crates/nvim/src/os/users.rs
 1	param_bytes	1	1	crates/nvim/src/tui/termkey/driver_csi.rs
-1	parse_enter	0	1	crates/nvim/src/mpack/lmpack/walk.rs
-1	parse_exit	0	1	crates/nvim/src/mpack/lmpack/walk.rs
 1	parse_parts	0	1	crates/nvim/src/cursor_shape.rs
 1	paste_marker	0	0	
 1	path_fnamecmp	0	0	
@@ -496,8 +492,6 @@ count	callee	no_raw	defs	def
 1	tui_terminal_after_startup	0	1	crates/nvim/src/tui/tui.rs
 1	tui_wait_ready	0	1	crates/nvim/src/tui/tui.rs
 1	tzset	0	0	
-1	unparse_enter	0	1	crates/nvim/src/mpack/lmpack/walk.rs
-1	unparse_exit	0	1	crates/nvim/src/mpack/lmpack/walk.rs
 1	utf_ptr2len	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 1	uv_accept	0	0	
 1	uv_chdir	0	0	

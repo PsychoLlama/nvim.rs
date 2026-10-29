@@ -6,7 +6,7 @@
 //! option — the [`Unpacker`] reads the two values that follow it (a method
 //! name and its arguments, or an error and a result). Either can run out of
 //! input mid-value, and everything in flight stays in the session's private
-//! registry until both have landed.
+//! table until both have landed.
 //!
 //! Nvim itself does not use this; `vim.mpack.Session` is exposed because
 //! upstream's vendored libmpack-lua exposes it.
@@ -14,78 +14,102 @@
 //! Ported from libmpack, Copyright (c) 2016 Thiago de Arruda, under the
 //! MIT license; the notice is reproduced in licenses/libmpack-LICENSE.txt.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `mpack/lmpack/` row in docs/perimeter.md.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use core::ffi::{c_char, c_int};
+use core::ffi::{CStr, c_int};
 
 use super::{
-    LUA_NOREF, LUA_REFNIL, Session, Unpacker, check_session, check_unpacker, geti, is_unpacker,
-    reference, start_offset, unpack_into_registry, unreference,
+    Unpacker, geti, new_private_table, reference, start_offset, unpack_into_registry, unreference,
 };
-use crate::lua::ffi::{
-    LUA_REGISTRYINDEX, lua_getfield, lua_gettop, lua_newuserdata, lua_pushinteger, lua_pushlstring,
-    lua_pushnil, lua_pushnumber, lua_pushstring, lua_setmetatable, lua_tonumber, luaL_checklstring,
-    luaL_error, luaL_ref, luaL_unref,
-};
-use crate::lua::stack::{lua_isnoneornil, lua_istable, lua_newtable, lua_pop, luaL_argcheck};
+use crate::lua::ffi::{LUA_NOREF, LUA_REFNIL};
+use crate::lua::stack::{At, Kind, Raise, Stack, Userdata};
+use crate::lua_functions;
 use crate::mpack::mpack_core::{MPACK_EOF, MPACK_OK};
 use crate::mpack::object::MPACK_NOMEM;
 use crate::mpack::rpc::{
     self, MPACK_RPC_NOTIFICATION, MPACK_RPC_REQUEST, MPACK_RPC_RESPONSE, RpcMessage,
 };
-use crate::types::{lua_Integer, lua_Number, lua_State, mpack_uint32_t, size_t};
+use crate::types::{lua_Integer, lua_Number, mpack_uint32_t};
 
 /// The scratch a whole envelope fits in: an array header, a one-byte type
 /// and a five-byte id at most.
 const ENVELOPE_MAX: usize = 16;
 
-/// `mpack.Session([{unpack = <Unpacker>}])`.
-///
-/// # Safety
-/// `state` must be a live Lua state holding this function's arguments.
-pub unsafe extern "C-unwind" fn new(state: *mut lua_State) -> c_int {
-    unsafe {
-        let session = lua_newuserdata(state, size_of::<Session>()).cast::<Session>();
-        (*session).session = Box::into_raw(Box::new(rpc::Session::new(0)));
-        (*session).unpacked.msg = RpcMessage::default();
-        (*session).L = state;
-        lua_getfield(state, LUA_REGISTRYINDEX, super::SESSION_META);
-        lua_setmetatable(state, -2);
-        lua_newtable(state);
-        (*session).reg = luaL_ref(state, LUA_REGISTRYINDEX);
-        (*session).unpacker = LUA_REFNIL;
-        (*session).unpacked.args_or_result = LUA_NOREF;
-        (*session).unpacked.method_or_error = LUA_NOREF;
-        (*session).unpacked.type_0 = MPACK_EOF as c_int;
+/// One `mpack.Session` instance. Its private table is its environment.
+pub struct Session {
+    session: Option<Box<rpc::Session>>,
+    unpacked: Unpacked,
+    /// The `unpack` option: an [`Unpacker`] to read message bodies with.
+    unpacker: c_int,
+}
 
-        if lua_istable(state, 1) {
-            lua_getfield(state, 1, c"unpack".as_ptr());
-            if !is_unpacker(state, -1) {
-                return luaL_error(
-                    state,
-                    c"\"unpack\" option must be a mpack.Unpacker instance".as_ptr(),
-                );
-            }
-            (*session).unpacker = reference(state, (*session).reg);
+impl Default for Session {
+    fn default() -> Session {
+        Session {
+            session: None,
+            unpacked: Unpacked {
+                type_0: MPACK_EOF as c_int,
+                msg: RpcMessage::default(),
+                method_or_error: LUA_NOREF,
+                args_or_result: LUA_NOREF,
+            },
+            unpacker: LUA_REFNIL,
         }
-        1
     }
 }
 
-/// `__gc`.
-///
-/// # Safety
-/// See [`new`].
-pub unsafe extern "C-unwind" fn delete(state: *mut lua_State) -> c_int {
-    unsafe {
-        let session = check_session(state, 1);
-        unreference(state, (*session).reg, (*session).unpacker);
-        luaL_unref(state, LUA_REGISTRYINDEX, (*session).reg);
-        drop(Box::from_raw((*session).session));
-        0
+impl Userdata for Session {
+    const METATABLE: &'static CStr = c"mpack.Session";
+}
+
+/// The message [`receive`] is part way through.
+pub struct Unpacked {
+    pub type_0: c_int,
+    pub msg: RpcMessage,
+    pub method_or_error: c_int,
+    pub args_or_result: c_int,
+}
+
+lua_functions! {
+    /// A session's methods.
+    pub(crate) enum SessionMethods in SESSION_METHODS {
+        0 => c"receive": receive,
+        1 => c"request": request,
+        2 => c"reply": reply,
+        3 => c"notify": notify,
     }
+}
+
+/// The session at slot 1, which every method has checked.
+fn session(stack: &mut Stack) -> &mut Session {
+    stack
+        .to_userdata::<Session>(At::arg(1))
+        .expect("checked on entry")
+}
+
+/// `mpack.Session([{unpack = <Unpacker>}])`.
+pub fn new(stack: &mut Stack) -> Result<c_int, Raise> {
+    stack.new_userdata(Session {
+        session: Some(Box::new(rpc::Session::new(0))),
+        ..Session::default()
+    });
+    let reg = new_private_table(stack);
+    let mut unpacker = LUA_REFNIL;
+    if stack.kind(At::arg(1)) == Kind::Table {
+        stack.get_field(At::arg(1), c"unpack");
+        if stack.to_userdata::<Unpacker>(At::TOP).is_none() {
+            return Err(Raise::message(
+                "\"unpack\" option must be a mpack.Unpacker instance",
+            ));
+        }
+        unpacker = reference(stack, reg);
+    }
+    stack.pop(1);
+    stack
+        .to_userdata::<Session>(At::TOP)
+        .expect("just made")
+        .unpacker = unpacker;
+    Ok(1)
 }
 
 /// `session:receive(str[, start])`.
@@ -94,219 +118,199 @@ pub unsafe extern "C-unwind" fn delete(state: *mut lua_State) -> c_int {
 /// two middle values only when the session has an unpacker; all of them nil
 /// until a whole message has arrived. `next_offset` is always last, so a
 /// caller can resume from a partial buffer.
-///
-/// # Safety
-/// See [`new`].
-pub unsafe extern "C-unwind" fn receive(state: *mut lua_State) -> c_int {
-    unsafe {
-        let argc = lua_gettop(state);
-        if !(2..=3).contains(&argc) {
-            return luaL_error(state, c"expecting between 2 and 3 arguments".as_ptr());
-        }
-        let session = check_session(state, 1);
-        let mut len: size_t = 0;
-        let start = luaL_checklstring(state, 2, &raw mut len);
-        let offset = start_offset(state, len);
-        let mut str = start.add(offset);
-        let mut left = len - offset;
-
-        // The unpacker, if any, is a separate userdatum reached through this
-        // session's registry; it needs the current `lua_State` too.
-        let mut unpacker: *mut Unpacker = core::ptr::null_mut();
-        let mut results = 3;
-        if (*session).unpacker != LUA_REFNIL {
-            geti(state, (*session).reg, (*session).unpacker);
-            unpacker = check_unpacker(state, -1);
-            (*unpacker).L = state;
-            results += 2;
-            lua_pop(state, 1);
-        }
-
-        read_message(state, session, unpacker, &raw mut str, &raw mut left);
-
-        // A message is only complete when its body is too, unless there is
-        // no unpacker to read a body with.
-        let complete = (*session).unpacked.type_0 != MPACK_EOF as c_int
-            && ((*session).unpacked.args_or_result != LUA_NOREF || unpacker.is_null());
-        if complete {
-            if push_message(state, session) != 0 {
-                return luaL_error(state, c"invalid msgpack-rpc string".as_ptr());
-            }
-            (*session).unpacked.type_0 = MPACK_EOF as c_int;
-            if !unpacker.is_null() {
-                push_body(state, session);
-            }
-        } else {
-            lua_pushnil(state);
-            lua_pushnil(state);
-            if !unpacker.is_null() {
-                lua_pushnil(state);
-                lua_pushnil(state);
-            }
-        }
-
-        // One-based, and always last: the caller resumes from here.
-        lua_pushinteger(state, str.offset_from(start) as lua_Integer + 1);
-        results
+pub fn receive(stack: &mut Stack) -> Result<c_int, Raise> {
+    let argc = stack.top();
+    if !(2..=3).contains(&argc.index()) {
+        return Err(Raise::message("expecting between 2 and 3 arguments"));
     }
+    stack.check_userdata::<Session>(At::arg(1))?;
+    let len = stack.check_bytes(At::arg(2))?.len();
+    let offset = start_offset(stack, len)?;
+
+    let mut view = stack.above(argc);
+    let whole = view.check_bytes_below(At::arg(2))?;
+    let mut input = &whole[offset..];
+    view.push_environment(At::arg(1));
+    let reg = view.top();
+
+    // The unpacker, if any, is a separate userdatum reached through this
+    // session's private table; it stays on the stack while it works.
+    let unpacker_ref = session(&mut view).unpacker;
+    let mut unpacker = None;
+    let mut results = 3;
+    if unpacker_ref != LUA_REFNIL {
+        geti(&mut view, reg, unpacker_ref);
+        view.check_userdata::<Unpacker>(At::TOP)?;
+        let at = view.top();
+        view.push_environment(at);
+        unpacker = Some((at, view.top()));
+        results += 2;
+    }
+
+    read_message(&mut view, reg, unpacker, &mut input)?;
+
+    // A message is only complete when its body is too, unless there is no
+    // unpacker to read a body with.
+    let unpacked = &session(&mut view).unpacked;
+    let complete = unpacked.type_0 != MPACK_EOF as c_int
+        && (unpacked.args_or_result != LUA_NOREF || unpacker.is_none());
+    if complete {
+        if !push_message(&mut view, reg) {
+            return Err(Raise::message("invalid msgpack-rpc string"));
+        }
+        session(&mut view).unpacked.type_0 = MPACK_EOF as c_int;
+        if unpacker.is_some() {
+            push_body(&mut view, reg);
+        }
+    } else {
+        for _ in 0..results - 1 {
+            view.push_nil();
+        }
+    }
+
+    // One-based, and always last: the caller resumes from here.
+    let consumed = whole.len() - input.len();
+    view.push_integer(lua_Integer::try_from(consumed).unwrap_or(lua_Integer::MAX) + 1);
+    Ok(results)
 }
 
-/// Read the envelope, and then as much of the body as the unpacker can.
-///
-/// # Safety
-/// `session` must be live; `str`/`left` must describe the remaining input.
-unsafe fn read_message(
-    state: *mut lua_State,
-    session: *mut Session,
-    unpacker: *mut Unpacker,
-    str: *mut *const c_char,
-    left: *mut size_t,
-) {
-    unsafe {
-        loop {
-            if (*session).unpacked.type_0 == MPACK_EOF as c_int {
-                let mut input = core::slice::from_raw_parts((*str).cast::<u8>(), *left);
-                (*session).unpacked.type_0 =
-                    (*(*session).session).receive(&mut input, &mut (*session).unpacked.msg);
-                *str = input.as_ptr().cast();
-                *left = input.len();
-                // With no unpacker the envelope *is* the message.
-                if unpacker.is_null() || (*session).unpacked.type_0 == MPACK_EOF as c_int {
-                    return;
-                }
+/// Read the envelope, and then as much of the body as the unpacker (its
+/// slot and its private table's) can.
+fn read_message(
+    stack: &mut Stack,
+    reg: At,
+    unpacker: Option<(At, At)>,
+    input: &mut &[u8],
+) -> Result<(), Raise> {
+    loop {
+        let current = session(stack);
+        if current.unpacked.type_0 == MPACK_EOF as c_int {
+            let framer = current.session.as_mut().expect("a live session");
+            current.unpacked.type_0 = framer.receive(input, &mut current.unpacked.msg);
+            // With no unpacker the envelope *is* the message.
+            if unpacker.is_none() || current.unpacked.type_0 == MPACK_EOF as c_int {
+                return Ok(());
             }
-            if unpack_into_registry(state, unpacker, str, left) == MPACK_EOF as c_int {
-                return;
-            }
-            // The first value is the method (or the error), the second the
-            // arguments (or the result); the second ends the message.
-            if (*session).unpacked.method_or_error == LUA_NOREF {
-                (*session).unpacked.method_or_error = reference(state, (*session).reg);
-            } else {
-                (*session).unpacked.args_or_result = reference(state, (*session).reg);
-                return;
-            }
+        }
+        let Some((unpacker, unpacker_reg)) = unpacker else {
+            return Ok(());
+        };
+        if unpack_into_registry(stack, unpacker, unpacker_reg, input)? == MPACK_EOF as c_int {
+            return Ok(());
+        }
+        // The first value is the method (or the error), the second the
+        // arguments (or the result); the second ends the message.
+        let handle = reference(stack, reg);
+        let unpacked = &mut session(stack).unpacked;
+        if unpacked.method_or_error == LUA_NOREF {
+            unpacked.method_or_error = handle;
+        } else {
+            unpacked.args_or_result = handle;
+            return Ok(());
         }
     }
 }
 
 /// Push the message kind and its id (or, for a response, the handle its
-/// request carried). Answers non-zero for an envelope kind that is not one
-/// of the three.
-///
-/// # Safety
-/// `session` must be live with a complete envelope.
-unsafe fn push_message(state: *mut lua_State, session: *mut Session) -> c_int {
-    unsafe {
-        match (*session).unpacked.type_0 {
-            MPACK_RPC_REQUEST => {
-                lua_pushstring(state, c"request".as_ptr());
-                lua_pushnumber(state, (*session).unpacked.msg.id as lua_Number);
-            }
-            MPACK_RPC_RESPONSE => {
-                lua_pushstring(state, c"response".as_ptr());
-                geti(state, (*session).reg, (*session).unpacked.msg.data as c_int);
-            }
-            MPACK_RPC_NOTIFICATION => {
-                lua_pushstring(state, c"notification".as_ptr());
-                lua_pushnil(state);
-            }
-            // Anything else is an `MPACK_RPC_E*`. Upstream reports them all
-            // the same way, on the grounds that the only sane response to
-            // invalid msgpack-rpc is to close the connection.
-            _ => return 1,
+/// request carried). Answers `false` for an envelope kind that is not one of
+/// the three.
+fn push_message(stack: &mut Stack, reg: At) -> bool {
+    let unpacked = &session(stack).unpacked;
+    let (kind, id, data) = (unpacked.type_0, unpacked.msg.id, unpacked.msg.data);
+    match kind {
+        MPACK_RPC_REQUEST => {
+            stack.push_bytes(b"request");
+            stack.push_number(id as lua_Number);
         }
-        0
+        MPACK_RPC_RESPONSE => {
+            stack.push_bytes(b"response");
+            geti(stack, reg, data as c_int);
+        }
+        MPACK_RPC_NOTIFICATION => {
+            stack.push_bytes(b"notification");
+            stack.push_nil();
+        }
+        // Anything else is an `MPACK_RPC_E*`. Upstream reports them all the
+        // same way, on the grounds that the only sane response to invalid
+        // msgpack-rpc is to close the connection.
+        _ => return false,
     }
+    true
 }
 
 /// Push the two decoded body values and release their references.
-///
-/// # Safety
-/// `session` must be live with both body values decoded.
-unsafe fn push_body(state: *mut lua_State, session: *mut Session) {
-    unsafe {
-        let reg = (*session).reg;
-        geti(state, reg, (*session).unpacked.method_or_error);
-        geti(state, reg, (*session).unpacked.args_or_result);
-        unreference(state, reg, (*session).unpacked.method_or_error);
-        unreference(state, reg, (*session).unpacked.args_or_result);
-        (*session).unpacked.method_or_error = LUA_NOREF;
-        (*session).unpacked.args_or_result = LUA_NOREF;
-    }
+fn push_body(stack: &mut Stack, reg: At) {
+    let unpacked = &session(stack).unpacked;
+    let (method_or_error, args_or_result) = (unpacked.method_or_error, unpacked.args_or_result);
+    geti(stack, reg, method_or_error);
+    geti(stack, reg, args_or_result);
+    unreference(stack, reg, method_or_error);
+    unreference(stack, reg, args_or_result);
+    let unpacked = &mut session(stack).unpacked;
+    unpacked.method_or_error = LUA_NOREF;
+    unpacked.args_or_result = LUA_NOREF;
 }
 
 /// `session:request([handle])`: the envelope of a fresh request, whose id is
 /// allocated here and whose `handle` comes back with the response.
-///
-/// # Safety
-/// See [`new`].
-pub unsafe extern "C-unwind" fn request(state: *mut lua_State) -> c_int {
-    unsafe {
-        if !(1..=2).contains(&lua_gettop(state)) {
-            return luaL_error(state, c"expecting 1 or 2 arguments".as_ptr());
-        }
-        let session = check_session(state, 1);
-        let handle = if lua_isnoneornil(state, 2) {
-            LUA_NOREF
-        } else {
-            reference(state, (*session).reg)
-        };
-        let mut buf = [0u8; ENVELOPE_MAX];
-        let used = loop {
-            let (result, used) = (*(*session).session).request(&mut buf, i64::from(handle));
-            if result != MPACK_NOMEM {
-                debug_assert_eq!(result, MPACK_OK as c_int);
-                break used;
-            }
-            // Every slot holds an outstanding request; double the table.
-            (*(*session).session).grow();
-        };
-        lua_pushlstring(state, buf.as_ptr().cast(), used);
-        1
+pub fn request(stack: &mut Stack) -> Result<c_int, Raise> {
+    if !(1..=2).contains(&stack.top().index()) {
+        return Err(Raise::message("expecting 1 or 2 arguments"));
     }
+    stack.check_userdata::<Session>(At::arg(1))?;
+    let handle = if stack.is_none_or_nil(At::arg(2)) {
+        LUA_NOREF
+    } else {
+        stack.push_environment(At::arg(1));
+        let reg = stack.top();
+        stack.push_value(At::arg(2));
+        let handle = reference(stack, reg);
+        stack.pop(1);
+        handle
+    };
+    let mut buf = [0u8; ENVELOPE_MAX];
+    let framer = session(stack).session.as_mut().expect("a live session");
+    let used = loop {
+        let (result, used) = framer.request(&mut buf, i64::from(handle));
+        if result != MPACK_NOMEM {
+            debug_assert_eq!(result, MPACK_OK as c_int);
+            break used;
+        }
+        // Every slot holds an outstanding request; double the table.
+        framer.grow();
+    };
+    stack.push_bytes(&buf[..used]);
+    Ok(1)
 }
 
 /// `session:reply(id)`.
-///
-/// # Safety
-/// See [`new`].
-pub unsafe extern "C-unwind" fn reply(state: *mut lua_State) -> c_int {
-    unsafe {
-        if lua_gettop(state) != 2 {
-            return luaL_error(state, c"expecting exactly 2 arguments".as_ptr());
-        }
-        let session = check_session(state, 1);
-        let id = lua_tonumber(state, 2);
-        luaL_argcheck(
-            state,
-            id.trunc() == id && (0.0..=4294967295.0).contains(&id),
-            2,
-            c"invalid request id".as_ptr(),
-        );
-
-        let mut buf = [0u8; ENVELOPE_MAX];
-        let (result, used) = (*(*session).session).reply(&mut buf, id as mpack_uint32_t);
-        debug_assert_eq!(result, MPACK_OK as c_int);
-        lua_pushlstring(state, buf.as_ptr().cast(), used);
-        1
+pub fn reply(stack: &mut Stack) -> Result<c_int, Raise> {
+    if stack.top().index() != 2 {
+        return Err(Raise::message("expecting exactly 2 arguments"));
     }
+    stack.check_userdata::<Session>(At::arg(1))?;
+    let id = stack.to_number(At::arg(2));
+    if !(id.trunc() == id && (0.0..=4294967295.0).contains(&id)) {
+        return Err(Raise::argument(2, "invalid request id"));
+    }
+    let mut buf = [0u8; ENVELOPE_MAX];
+    let framer = session(stack).session.as_mut().expect("a live session");
+    let (result, used) = framer.reply(&mut buf, id as mpack_uint32_t);
+    debug_assert_eq!(result, MPACK_OK as c_int);
+    stack.push_bytes(&buf[..used]);
+    Ok(1)
 }
 
 /// `session:notify()`.
-///
-/// # Safety
-/// See [`new`].
-pub unsafe extern "C-unwind" fn notify(state: *mut lua_State) -> c_int {
-    unsafe {
-        if lua_gettop(state) != 1 {
-            return luaL_error(state, c"expecting exactly 1 argument".as_ptr());
-        }
-        let session = check_session(state, 1);
-        let mut buf = [0u8; ENVELOPE_MAX];
-        let (result, used) = (*(*session).session).notify(&mut buf);
-        debug_assert_eq!(result, MPACK_OK as c_int);
-        lua_pushlstring(state, buf.as_ptr().cast(), used);
-        1
+pub fn notify(stack: &mut Stack) -> Result<c_int, Raise> {
+    if stack.top().index() != 1 {
+        return Err(Raise::message("expecting exactly 1 argument"));
     }
+    stack.check_userdata::<Session>(At::arg(1))?;
+    let mut buf = [0u8; ENVELOPE_MAX];
+    let framer = session(stack).session.as_mut().expect("a live session");
+    let (result, used) = framer.notify(&mut buf);
+    debug_assert_eq!(result, MPACK_OK as c_int);
+    stack.push_bytes(&buf[..used]);
+    Ok(1)
 }

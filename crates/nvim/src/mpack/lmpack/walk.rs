@@ -2,51 +2,44 @@
 //!
 //! [`crate::mpack::object`] drives a stack of nodes and calls in twice
 //! per node — once descending, once ascending. These callbacks are what make
-//! it mean something: [`parse_enter`]/[`parse_exit`] build Lua values from
-//! tokens, [`unparse_enter`]/[`unparse_exit`] read tokens out of Lua values.
+//! it mean something: [`LuaDecoder`] builds Lua values from tokens,
+//! [`LuaEncoder`] reads tokens out of Lua values.
 //!
 //! The Lua stack cannot be the walk's own stack, because the walk suspends
 //! between calls whenever the input runs out — so every value in flight
-//! lives in the instance's private registry table, referenced from
-//! `node.data[0]` (the object) and `node.data[1]` (a map's pending key):
-//! the walk's [`NodeRefs`].
-//! Getting that stack discipline right is the whole difficulty here, and the
-//! comments say what is *on* the stack at each step rather than what the
-//! call does.
+//! lives in the instance's private table, referenced from `node.data[0]`
+//! (the object) and `node.data[1]` (a map's pending key): the walk's
+//! [`NodeRefs`]. Getting that stack discipline right is the whole
+//! difficulty here, and the comments say what is *on* the stack at each
+//! step rather than what the call does.
+//!
+//! User code runs inside a walk -- the ext handlers and the `is_bin`
+//! predicate -- and runs protected: an error it raises, or a value the
+//! walk cannot encode, becomes the walker's [`Failure`], which stops the
+//! walk ([`Decode::stopped`]) for the binding to raise once the codec has
+//! returned.
 //!
 //! Ported from libmpack, Copyright (c) 2016 Thiago de Arruda, under the
 //! MIT license; the notice is reproduced in licenses/libmpack-LICENSE.txt.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `mpack/lmpack/` row in docs/perimeter.md.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
-use super::{
-    LUA_NOREF, LUA_REFNIL, Packer, Unpacker, geti, is_nil_sentinel, objlen, push_nil_sentinel,
-    reference, unreference,
-};
-use crate::lua::ffi::{
-    LUA_TBOOLEAN, LUA_TFUNCTION, LUA_TNUMBER, LUA_TSTRING, LUA_TTABLE, LUA_TUSERDATA, lua_call,
-    lua_getmetatable, lua_gettable, lua_isnumber, lua_isstring, lua_next, lua_pushboolean,
-    lua_pushinteger, lua_pushlstring, lua_pushnumber, lua_pushvalue, lua_rawequal, lua_rawgeti,
-    lua_remove, lua_replace, lua_setmetatable, lua_settable, lua_toboolean, lua_tolstring,
-    lua_tonumber, lua_type, luaL_error,
-};
-use crate::lua::stack::{lua_newtable, lua_pop};
+use super::{geti, is_nil_sentinel, objlen, push_nil_sentinel, reference, unreference};
+use crate::lua::ffi::{LUA_NOREF, LUA_REFNIL};
+use crate::lua::stack::{At, Kind, Raise, Stack};
 use crate::mpack::conv::{
     mpack_pack_array, mpack_pack_bin, mpack_pack_boolean, mpack_pack_chunk, mpack_pack_ext,
     mpack_pack_map, mpack_pack_nil, mpack_pack_number, mpack_pack_str, mpack_unpack_boolean,
     mpack_unpack_number,
 };
 use crate::mpack::object::{Decode, Encode};
-use crate::mpack::token::{Kind, Tok};
-use crate::types::{lua_Number, lua_State, size_t};
-use ::libc::{free, malloc};
+use crate::mpack::token::{Kind as TokenKind, Tok};
+use crate::types::lua_Number;
 
-/// The registry references a node holds: its object, and a map's pending
-/// key (or, encoding, the key `lua_next` resumes from).
+/// The references a node holds: its object, and a map's pending key (or,
+/// encoding, the key `lua_next` resumes from).
 pub type NodeRefs = [c_int; 2];
 
 type Node = crate::mpack::object::Node<NodeRefs>;
@@ -56,135 +49,146 @@ fn kind(node: &Node) -> u32 {
     node.tok.kind.map_or(0, |kind| kind as u32)
 }
 
-const MPACK_TOKEN_NIL: u32 = Kind::Nil as u32;
-const MPACK_TOKEN_BOOLEAN: u32 = Kind::Boolean as u32;
-const MPACK_TOKEN_UINT: u32 = Kind::Uint as u32;
-const MPACK_TOKEN_SINT: u32 = Kind::Sint as u32;
-const MPACK_TOKEN_FLOAT: u32 = Kind::Float as u32;
-const MPACK_TOKEN_CHUNK: u32 = Kind::Chunk as u32;
-const MPACK_TOKEN_ARRAY: u32 = Kind::Array as u32;
-const MPACK_TOKEN_MAP: u32 = Kind::Map as u32;
-const MPACK_TOKEN_BIN: u32 = Kind::Bin as u32;
-const MPACK_TOKEN_STR: u32 = Kind::Str as u32;
-const MPACK_TOKEN_EXT: u32 = Kind::Ext as u32;
+const MPACK_TOKEN_NIL: u32 = TokenKind::Nil as u32;
+const MPACK_TOKEN_BOOLEAN: u32 = TokenKind::Boolean as u32;
+const MPACK_TOKEN_UINT: u32 = TokenKind::Uint as u32;
+const MPACK_TOKEN_SINT: u32 = TokenKind::Sint as u32;
+const MPACK_TOKEN_FLOAT: u32 = TokenKind::Float as u32;
+const MPACK_TOKEN_CHUNK: u32 = TokenKind::Chunk as u32;
+const MPACK_TOKEN_ARRAY: u32 = TokenKind::Array as u32;
+const MPACK_TOKEN_MAP: u32 = TokenKind::Map as u32;
+const MPACK_TOKEN_BIN: u32 = TokenKind::Bin as u32;
+const MPACK_TOKEN_STR: u32 = TokenKind::Str as u32;
+const MPACK_TOKEN_EXT: u32 = TokenKind::Ext as u32;
 
-/// The decoding walk of one [`Unpacker`].
-pub struct LuaDecoder(pub *mut Unpacker);
-
-/// The encoding walk of one [`Packer`].
-pub struct LuaEncoder(pub *mut Packer);
-
-impl Decode<NodeRefs> for LuaDecoder {
-    fn enter(&mut self, tok: Tok, parents: &mut [Node], chunk: &[u8]) -> NodeRefs {
-        // SAFETY: the unpacker that started this walk, live for its length.
-        unsafe { parse_enter(self.0, tok, parents, chunk) }
-    }
-
-    fn exit(&mut self, node: Node, parents: &mut [Node]) {
-        // SAFETY: as above.
-        unsafe { parse_exit(self.0, &node, parents) }
-    }
+/// Why a walk stopped: what the binding raises once the codec returns.
+pub enum Failure {
+    /// `luaL_error`'s message.
+    Message(&'static str),
+    /// A Lua error value, parked in the registry by its reference.
+    Value(c_int),
 }
 
-impl Encode<NodeRefs> for LuaEncoder {
-    fn enter(&mut self, node: &mut Node, parents: &mut [Node]) {
-        // SAFETY: the packer that started this walk, live for its length.
-        unsafe { unparse_enter(self.0, node, parents) }
+impl Failure {
+    /// Park the error value on top of the stack (what a failed `pcall`
+    /// leaves) until the walk has returned.
+    fn from_top(stack: &mut Stack) -> Failure {
+        Failure::Value(stack.reference_in(At::REGISTRY))
     }
 
-    fn exit(&mut self, node: Node, _parents: &mut [Node]) {
-        // SAFETY: as above.
-        unsafe { unparse_exit(self.0, &node) }
-    }
-
-    fn chunk(&mut self, _node: &Node, parents: &[Node]) -> &[u8] {
-        // SAFETY: as above; a chunk's parent is the string it borrows.
-        unsafe { chunk_bytes(self.0, parents) }
-    }
-}
-
-/// A decoded token becomes a Lua value.
-///
-/// # Safety
-/// `unpacker` must be the live instance walking.
-unsafe fn parse_enter(
-    unpacker: *mut Unpacker,
-    tok: Tok,
-    parents: &[Node],
-    chunk: &[u8],
-) -> NodeRefs {
-    let mut refs = NodeRefs::default();
-    unsafe {
-        let state = (*unpacker).L;
-        match tok.kind.map_or(0, |kind| kind as u32) {
-            MPACK_TOKEN_NIL => push_nil_sentinel(state),
-            MPACK_TOKEN_BOOLEAN => {
-                lua_pushboolean(state, c_int::from(mpack_unpack_boolean(tok)));
+    /// The error to raise, its value (if any) pushed back on top.
+    pub fn raise(self, stack: &mut Stack) -> Raise {
+        match self {
+            Failure::Message(message) => Raise::message(message),
+            Failure::Value(handle) => {
+                stack.raw_get_index(At::REGISTRY, handle);
+                stack.unreference_in(At::REGISTRY, handle);
+                Raise::top_value()
             }
+        }
+    }
+}
+
+/// The decoding walk of one [`super::Unpacker`] (or of `mpack.decode`).
+pub struct LuaDecoder<'s> {
+    stack: &'s mut Stack,
+    /// The instance's private table.
+    reg: At,
+    /// The `ext` option's handler table, or `LUA_NOREF`.
+    ext: c_int,
+    mtdict: c_int,
+    /// The blob being assembled.
+    buffer: Vec<u8>,
+    failure: Option<Failure>,
+}
+
+impl<'s> LuaDecoder<'s> {
+    pub fn new(stack: &'s mut Stack, reg: At, ext: c_int, mtdict: c_int, buffer: Vec<u8>) -> Self {
+        LuaDecoder {
+            stack,
+            reg,
+            ext,
+            mtdict,
+            buffer,
+            failure: None,
+        }
+    }
+
+    /// The blob buffer to keep for the next call, and why the walk stopped.
+    pub fn finish(self) -> (Vec<u8>, Option<Failure>) {
+        (self.buffer, self.failure)
+    }
+}
+
+impl Decode<NodeRefs> for LuaDecoder<'_> {
+    /// A decoded token becomes a Lua value.
+    fn enter(&mut self, tok: Tok, parents: &mut [Node], chunk: &[u8]) -> NodeRefs {
+        let mut refs = NodeRefs::default();
+        let stack = &mut *self.stack;
+        match tok.kind.map_or(0, |kind| kind as u32) {
+            MPACK_TOKEN_NIL => push_nil_sentinel(stack),
+            MPACK_TOKEN_BOOLEAN => stack.push_boolean(mpack_unpack_boolean(tok)),
             MPACK_TOKEN_UINT | MPACK_TOKEN_SINT | MPACK_TOKEN_FLOAT => {
-                lua_pushnumber(state, mpack_unpack_number(tok));
+                stack.push_number(mpack_unpack_number(tok));
             }
             MPACK_TOKEN_CHUNK => {
                 // A blob's body arrives in pieces; the parent's `pos` is how
                 // much of it has landed. The buffer was sized by the header
                 // token, which is the frame below this one.
-                debug_assert!(!(*unpacker).string_buffer.is_null());
                 let offset = parents.last().expect("a chunk has a parent").pos;
-                (*unpacker)
-                    .string_buffer
-                    .add(offset)
-                    .cast::<u8>()
-                    .copy_from_nonoverlapping(chunk.as_ptr(), chunk.len());
+                debug_assert_eq!(offset, self.buffer.len(), "chunks arrive in order");
+                self.buffer.truncate(offset);
+                self.buffer.extend_from_slice(chunk);
             }
             MPACK_TOKEN_BIN | MPACK_TOKEN_STR | MPACK_TOKEN_EXT => {
-                // Only the header is known here; `parse_exit` pushes the
-                // string once every chunk has been copied in.
-                (*unpacker).string_buffer = malloc(tok.len as size_t).cast::<c_char>();
-                if (*unpacker).string_buffer.is_null() {
-                    luaL_error(state, c"Failed to allocate memory".as_ptr());
-                }
+                // Only the header is known here; `exit` pushes the string
+                // once every chunk has been copied in.
+                self.buffer.clear();
+                self.buffer.reserve(tok.len as usize);
             }
             MPACK_TOKEN_ARRAY | MPACK_TOKEN_MAP => {
                 // The container has to outlive this call, so it goes into the
-                // private registry and the node keeps the reference.
-                lua_newtable(state);
-                refs[0] = reference(state, (*unpacker).reg);
+                // private table and the node keeps the reference.
+                stack.new_table(0, 0);
+                refs[0] = reference(stack, self.reg);
             }
             _ => {}
         }
+        refs
     }
-    refs
-}
 
-/// A finished Lua value is added to whatever container it belongs to.
-///
-/// # Safety
-/// See [`parse_enter`].
-unsafe fn parse_exit(unpacker: *mut Unpacker, node: &Node, parents: &mut [Node]) {
-    unsafe {
-        let state = (*unpacker).L;
-        let reg = (*unpacker).reg;
+    /// A finished Lua value is added to whatever container it belongs to.
+    fn exit(&mut self, node: Node, parents: &mut [Node]) {
+        // After a failure the walk only unwinds what it had open; the
+        // instance is abandoned ("already working"), its table with it.
+        if self.failure.is_some() {
+            return;
+        }
+        let reg = self.reg;
         let tok = node.tok;
-        let parent = parents.last_mut();
-
-        match kind(node) {
+        match kind(&node) {
             MPACK_TOKEN_BIN | MPACK_TOKEN_STR | MPACK_TOKEN_EXT => {
-                lua_pushlstring(state, (*unpacker).string_buffer, tok.len as size_t);
-                free((*unpacker).string_buffer.cast());
-                (*unpacker).string_buffer = core::ptr::null_mut();
-                if kind(node) == MPACK_TOKEN_EXT && (*unpacker).ext != LUA_NOREF {
-                    apply_ext_handler(state, reg, (*unpacker).ext, tok.lo as c_int);
+                self.stack.push_bytes(&self.buffer);
+                self.buffer.clear();
+                if kind(&node) == MPACK_TOKEN_EXT
+                    && self.ext != LUA_NOREF
+                    && !self.apply_ext_handler(tok.lo as c_int)
+                {
+                    // The handler failed: the walk stops here, the string
+                    // goes, and the parent is left as it is.
+                    self.stack.pop(1);
+                    return;
                 }
             }
             MPACK_TOKEN_ARRAY | MPACK_TOKEN_MAP => {
-                // Take the container back out of the registry and release it.
-                geti(state, reg, node.data[0]);
-                unreference(state, reg, node.data[0]);
+                // Take the container back out of the private table.
+                geti(self.stack, reg, node.data[0]);
+                unreference(self.stack, reg, node.data[0]);
                 // A map that never saw a key is an *empty dict*, not an empty
                 // list; the `vim.empty_dict()` metatable is what says so.
-                if !node.key_visited && kind(node) == MPACK_TOKEN_MAP {
-                    geti(state, reg, (*unpacker).mtdict); // [table, mtdict]
-                    lua_setmetatable(state, -2); // [table]
+                if !node.key_visited && kind(&node) == MPACK_TOKEN_MAP {
+                    geti(self.stack, reg, self.mtdict); // [table, mtdict]
+                    self.stack.set_metatable(At::from_top(2)); // [table]
                 }
             }
             _ => {}
@@ -192,34 +196,43 @@ unsafe fn parse_exit(unpacker: *mut Unpacker, node: &Node, parents: &mut [Node])
 
         // Chunks are consumed by their blob and a blob's parent sees only the
         // finished string, so only a container adopts what is on top.
-        if let Some(parent) = parent
+        if let Some(parent) = parents.last_mut()
             && kind(parent) < MPACK_TOKEN_BIN
         {
-            store_in_parent(state, reg, parent);
+            store_in_parent(self.stack, reg, parent);
         }
+    }
+
+    fn stopped(&self) -> bool {
+        self.failure.is_some()
     }
 }
 
-/// Hand an `ext` string to the handler registered for its type code, and
-/// replace it with whatever comes back.
-///
-/// Stack in `[string]`, out `[string-or-handler-result]`.
-///
-/// # Safety
-/// `state` must be live and `handlers` a reference to a table in `reg`.
-unsafe fn apply_ext_handler(state: *mut lua_State, reg: c_int, handlers: c_int, ext_type: c_int) {
-    unsafe {
-        geti(state, reg, handlers); // [string, handlers]
-        lua_rawgeti(state, -1, ext_type); // [string, handlers, handler?]
-        if lua_type(state, -1) == LUA_TFUNCTION {
-            lua_pushinteger(state, ext_type as _); // [string, handlers, fn, type]
-            lua_pushvalue(state, -4); // [string, handlers, fn, type, string]
-            lua_call(state, 2, 1); // [string, handlers, result]
-            lua_replace(state, -3); // [result, handlers]
-        } else {
-            lua_pop(state, 1); // the nil `rawgeti` pushed
+impl LuaDecoder<'_> {
+    /// Hand an `ext` string to the handler registered for its type code, and
+    /// replace it with whatever comes back; `false` when the handler raised,
+    /// its error now the walk's failure.
+    ///
+    /// Stack in `[string]`, out `[string-or-handler-result]`.
+    fn apply_ext_handler(&mut self, ext_type: c_int) -> bool {
+        let stack = &mut *self.stack;
+        geti(stack, self.reg, self.ext); // [string, handlers]
+        stack.raw_get_index(At::TOP, ext_type); // [string, handlers, handler?]
+        if stack.kind(At::TOP) != Kind::Function {
+            stack.pop(2); // the nil `rawgeti` pushed, and the handler table
+            return true;
         }
-        lua_pop(state, 1); // the handler table
+        stack.push_integer(ext_type as _); // [string, handlers, fn, type]
+        stack.push_value(At::from_top(4)); // [string, handlers, fn, type, string]
+        if stack.pcall(2, 1, None).is_err() {
+            // [string, handlers, error]
+            self.failure = Some(Failure::from_top(stack));
+            stack.pop(1);
+            return false;
+        }
+        stack.replace(At::from_top(3)); // [result, handlers]
+        stack.pop(1); // the handler table
+        true
     }
 }
 
@@ -227,224 +240,217 @@ unsafe fn apply_ext_handler(state: *mut lua_State, reg: c_int, handlers: c_int, 
 /// position the parent's own bookkeeping says.
 ///
 /// Stack in `[value]`, out `[]`.
-///
-/// # Safety
-/// `state` must be live with the value on top, and `parent` an array or map
-/// whose container `reg` still holds.
-unsafe fn store_in_parent(state: *mut lua_State, reg: c_int, parent: &mut Node) {
-    unsafe {
-        geti(state, reg, parent.data[0]); // [value, container]
-        if kind(parent) == MPACK_TOKEN_ARRAY {
-            // `pos` was bumped past this element by the pop, so it is already
-            // the one-based index.
-            lua_pushnumber(state, parent.pos as lua_Number);
-            lua_pushvalue(state, -3);
-            lua_settable(state, -3);
+fn store_in_parent(stack: &mut Stack, reg: At, parent: &mut Node) {
+    geti(stack, reg, parent.data[0]); // [value, container]
+    if kind(parent) == MPACK_TOKEN_ARRAY {
+        // `pos` was bumped past this element by the pop, so it is already
+        // the one-based index.
+        stack.push_number(parent.pos as lua_Number);
+        stack.push_value(At::from_top(3));
+        stack.set_table(At::from_top(3));
+    } else {
+        debug_assert_eq!(kind(parent), MPACK_TOKEN_MAP);
+        if parent.key_visited {
+            // This value is a key; park it until its value arrives.
+            stack.push_value(At::from_top(2));
+            parent.data[1] = reference(stack, reg);
         } else {
-            debug_assert_eq!(kind(parent), MPACK_TOKEN_MAP);
-            if parent.key_visited {
-                // This value is a key; park it until its value arrives.
-                lua_pushvalue(state, -2);
-                parent.data[1] = reference(state, reg);
-            } else {
-                geti(state, reg, parent.data[1]); // [value, map, key]
-                unreference(state, reg, parent.data[1]);
-                lua_pushvalue(state, -3); // [value, map, key, value]
-                lua_settable(state, -3);
-            }
+            geti(stack, reg, parent.data[1]); // [value, map, key]
+            unreference(stack, reg, parent.data[1]);
+            stack.push_value(At::from_top(3)); // [value, map, key, value]
+            stack.set_table(At::from_top(3));
         }
-        lua_pop(state, 2); // the container and the value
+    }
+    stack.pop(2); // the container and the value
+}
+
+/// What a [`super::Packer`] was built with.
+pub struct PackOptions {
+    /// The `ext` option's handler table, or `LUA_NOREF`.
+    pub ext: c_int,
+    pub mtdict: c_int,
+    pub is_bin: bool,
+    /// `is_bin` as a predicate, or `LUA_NOREF`.
+    pub is_bin_fn: c_int,
+}
+
+/// The encoding walk of one [`super::Packer`] (or of `mpack.encode`).
+pub struct LuaEncoder<'s> {
+    stack: &'s mut Stack,
+    /// The instance's private table.
+    reg: At,
+    /// The value being encoded.
+    root: c_int,
+    options: PackOptions,
+    /// The body of the string being written.
+    chunk: Vec<u8>,
+    failure: Option<Failure>,
+}
+
+impl<'s> LuaEncoder<'s> {
+    pub fn new(stack: &'s mut Stack, reg: At, root: c_int, options: PackOptions) -> Self {
+        LuaEncoder {
+            stack,
+            reg,
+            root,
+            options,
+            chunk: Vec::new(),
+            failure: None,
+        }
+    }
+
+    /// Why the walk stopped, if it did.
+    pub fn finish(self) -> Option<Failure> {
+        self.failure
     }
 }
 
-/// A Lua value becomes the token that opens it.
-///
-/// Nothing is written here — the token goes into `node.tok` and the walk
-/// hands it to the writer. A container is opened and its elements are
-/// fetched on later calls, which is what makes encoding suspendable too.
-///
-/// # Safety
-/// `packer` must be the live instance walking.
-unsafe fn unparse_enter(packer: *mut Packer, node: &mut Node, parents: &mut [Node]) {
-    unsafe {
-        let state = (*packer).L;
-        let reg = (*packer).reg;
-
+impl Encode<NodeRefs> for LuaEncoder<'_> {
+    /// A Lua value becomes the token that opens it.
+    ///
+    /// Nothing is written here — the token goes into `node.tok` and the walk
+    /// hands it to the writer. A container is opened and its elements are
+    /// fetched on later calls, which is what makes encoding suspendable too.
+    fn enter(&mut self, node: &mut Node, parents: &mut [Node]) {
+        let reg = self.reg;
         if let Some(parent) = parents.last_mut() {
-            if !next_child(state, reg, parent, node) {
+            if !next_child(self.stack, reg, parent, node) {
                 // A chunk borrows the parent's string and takes no reference.
                 return;
             }
         } else {
-            geti(state, reg, (*packer).root);
+            geti(self.stack, reg, self.root);
         }
 
         // [value]
-        let value_type = lua_type(state, -1);
+        let value_type = self.stack.kind(At::TOP);
         match value_type {
-            LUA_TBOOLEAN => node.tok = mpack_pack_boolean(lua_toboolean(state, -1) as _),
-            LUA_TNUMBER => node.tok = mpack_pack_number(lua_tonumber(state, -1)),
-            LUA_TSTRING => {
-                let binary = is_binary(state, packer);
-                let len = objlen(state, None);
+            Kind::Boolean => {
+                node.tok = mpack_pack_boolean(u32::from(self.stack.to_boolean(At::TOP)))
+            }
+            Kind::Number => node.tok = mpack_pack_number(self.stack.to_number(At::TOP)),
+            Kind::String => {
+                let binary = self.is_binary();
+                let len = objlen(self.stack, None);
                 node.tok = if binary {
                     mpack_pack_bin(len)
                 } else {
                     mpack_pack_str(len)
                 };
             }
-            LUA_TTABLE => pack_table(state, packer, node, parents),
-            LUA_TUSERDATA if is_nil_sentinel(state, -1) => node.tok = mpack_pack_nil(),
-            _ => {
-                luaL_error(
-                    state,
-                    c"can't serialize object of type %d".as_ptr(),
-                    value_type,
-                );
+            Kind::Table => self.pack_table(node, parents),
+            Kind::Userdata if is_nil_sentinel(self.stack, At::TOP) => node.tok = mpack_pack_nil(),
+            _ => self.fail(Failure::Message(match value_type {
+                // `"can't serialize object of type %d"`, of `lua_type`.
+                Kind::None => "can't serialize object of type -1",
+                Kind::Nil => "can't serialize object of type 0",
+                Kind::LightUserdata => "can't serialize object of type 2",
+                Kind::Function => "can't serialize object of type 6",
+                Kind::Userdata => "can't serialize object of type 7",
+                _ => "can't serialize object of type 8",
+            })),
+        }
+        // The value has to survive until `exit`: a blob's body is read back
+        // out of it, and a map's iteration resumes from it.
+        node.data[0] = reference(self.stack, reg);
+    }
+
+    /// Release the references a finished node holds.
+    fn exit(&mut self, node: Node, _parents: &mut [Node]) {
+        // A chunk borrows its parent's string and never took a reference.
+        if kind(&node) != MPACK_TOKEN_CHUNK {
+            unreference(self.stack, self.reg, node.data[0]);
+            if kind(&node) == MPACK_TOKEN_MAP {
+                unreference(self.stack, self.reg, node.data[1]);
             }
         }
-        // The value has to survive until `unparse_exit`: a blob's body is read
-        // back out of it, and a map's iteration resumes from it.
-        node.data[0] = reference(state, reg);
+    }
+
+    /// The body of the string a chunk node at the top of the walk borrows,
+    /// copied out of the Lua string the parent's reference keeps (the slot
+    /// it is read from is popped before the bytes are written).
+    fn chunk(&mut self, _node: &Node, parents: &[Node]) -> &[u8] {
+        let parent = parents.last().expect("a chunk has a parent");
+        geti(self.stack, self.reg, parent.data[0]); // [string]
+        let bytes = self.stack.string(At::TOP).unwrap_or_default();
+        let len = bytes.len().min(parent.tok.len as usize);
+        self.chunk.clear();
+        self.chunk.extend_from_slice(&bytes[..len]);
+        self.stack.pop(1);
+        &self.chunk
+    }
+
+    fn stopped(&self) -> bool {
+        self.failure.is_some()
     }
 }
 
-/// Fetch the next element of `parent` onto the stack, or fill `node` with a
-/// chunk token when the parent is a blob rather than a container.
-///
-/// Answers false for the chunk case, where the node is already complete.
-///
-/// # Safety
-/// `parent`'s object must still be referenced in `reg`.
-unsafe fn next_child(
-    state: *mut lua_State,
-    reg: c_int,
-    parent: &mut Node,
-    node: &mut Node,
-) -> bool {
-    unsafe {
-        if kind(parent) > MPACK_TOKEN_MAP {
-            // A string is written as one chunk node borrowing the Lua
-            // string's own bytes, which stay alive because the parent's
-            // registry reference does; [`chunk_bytes`] reads them.
-            node.tok = mpack_pack_chunk(parent.tok.len);
-            return false;
-        }
-        geti(state, reg, parent.data[0]); // [parent]
-
-        if kind(parent) == MPACK_TOKEN_ARRAY {
-            lua_pushnumber(state, (parent.pos + 1) as lua_Number);
-            lua_gettable(state, -2); // [parent, element]
-        } else if kind(parent) == MPACK_TOKEN_MAP {
-            // `lua_next` resumes from the previous key, which is parked in the
-            // registry precisely because this call is not the last.
-            geti(state, reg, parent.data[1]); // [parent, prev key]
-            let more = lua_next(state, -2); // [parent, key, value]
-            debug_assert!(more != 0, "the map reported more pairs than it holds");
-            if parent.key_visited {
-                // The value's turn. Remember its key for the pair after this
-                // one, and leave the value where the key was.
-                unreference(state, reg, parent.data[1]);
-                lua_pushvalue(state, -2);
-                parent.data[1] = reference(state, reg);
-                lua_replace(state, -2); // [parent, value]
-            } else {
-                lua_pop(state, 1); // [parent, key] -- the key's turn
-            }
-        }
-        lua_remove(state, -2); // [element]
-        true
+impl LuaEncoder<'_> {
+    /// Record why the walk stops; the first failure is the one raised.
+    fn fail(&mut self, failure: Failure) {
+        self.failure.get_or_insert(failure);
     }
-}
 
-/// Whether a string should be encoded as `bin` rather than `str`, honouring
-/// the packer's `is_bin` option and its optional predicate.
-///
-/// # Safety
-/// `packer` must be live with its string on top of the stack.
-unsafe fn is_binary(state: *mut lua_State, packer: *mut Packer) -> bool {
-    unsafe {
-        if (*packer).is_bin == 0 {
+    /// Whether the string on top should be encoded as `bin` rather than
+    /// `str`, honouring the packer's `is_bin` option and its optional
+    /// predicate.
+    fn is_binary(&mut self) -> bool {
+        if !self.options.is_bin {
             return false;
         }
-        if (*packer).is_bin_fn == LUA_NOREF {
+        if self.options.is_bin_fn == LUA_NOREF {
             return true;
         }
-        geti(state, (*packer).reg, (*packer).is_bin_fn);
-        lua_pushvalue(state, -2);
-        lua_call(state, 1, 1);
-        let answer = lua_toboolean(state, -1) != 0;
-        lua_pop(state, 1);
+        geti(self.stack, self.reg, self.options.is_bin_fn);
+        self.stack.push_value(At::from_top(2));
+        if self.stack.pcall(1, 1, None).is_err() {
+            let failure = Failure::from_top(self.stack);
+            self.fail(failure);
+            return false;
+        }
+        let answer = self.stack.to_boolean(At::TOP);
+        self.stack.pop(1);
         answer
     }
-}
 
-/// The body of the string a chunk node at the top of the walk borrows.
-///
-/// # Safety
-/// `packer` must be live, and the last of `parents` the string node whose
-/// object `reg` still holds.
-unsafe fn chunk_bytes<'a>(packer: *mut Packer, parents: &[Node]) -> &'a [u8] {
-    unsafe {
-        let state = (*packer).L;
-        let parent = parents.last().expect("a chunk has a parent");
-        geti(state, (*packer).reg, parent.data[0]); // [string]
-        let mut len: size_t = 0;
-        let bytes = lua_tolstring(state, -1, &raw mut len);
-        lua_pop(state, 1);
-        // The parent's reference keeps the string, and so these bytes, alive
-        // until its node exits; the chunk is written before then.
-        core::slice::from_raw_parts(bytes.cast::<u8>(), len.min(parent.tok.len as size_t))
-    }
-}
-
-/// Classify a Lua table: an ext value, a cycle, an array or a map.
-///
-/// # Safety
-/// `packer` must be live with the table on top of the stack.
-unsafe fn pack_table(
-    state: *mut lua_State,
-    packer: *mut Packer,
-    node: &mut Node,
-    parents: &[Node],
-) {
-    unsafe {
-        let reg = (*packer).reg;
-        let has_meta = lua_getmetatable(state, -1) != 0; // [table, metatable?]
+    /// Classify the Lua table on top: an ext value, a cycle, an array or a
+    /// map.
+    fn pack_table(&mut self, node: &mut Node, parents: &[Node]) {
+        let reg = self.reg;
+        let has_meta = self.stack.get_metatable(At::TOP); // [table, metatable?]
         let mut is_empty_dict = false;
-        if has_meta && (*packer).mtdict != LUA_NOREF {
-            geti(state, reg, (*packer).mtdict); // [table, metatable, mtdict]
-            is_empty_dict = lua_rawequal(state, -1, -2) != 0;
-            lua_pop(state, 1); // [table, metatable]
+        if has_meta && self.options.mtdict != LUA_NOREF {
+            geti(self.stack, reg, self.options.mtdict); // [table, metatable, mtdict]
+            is_empty_dict = self.stack.raw_equal(At::TOP, At::from_top(2));
+            self.stack.pop(1); // [table, metatable]
         }
 
         // A metatable other than `vim.empty_dict()`'s can select an ext
         // handler, which replaces the table with the string it returns.
-        if (*packer).ext != LUA_NOREF && has_meta && !is_empty_dict && pack_ext(state, packer, node)
-        {
+        if self.options.ext != LUA_NOREF && has_meta && !is_empty_dict && self.pack_ext(node) {
             return;
         }
         if has_meta {
-            lua_pop(state, 1); // [table]
+            self.stack.pop(1); // [table]
         }
 
         // A table that is already open below is a cycle; msgpack has no way
         // to spell one, so it is encoded as nil.
         for ancestor in parents.iter().rev() {
-            geti(state, reg, ancestor.data[0]);
-            if lua_rawequal(state, -1, -2) != 0 {
+            geti(self.stack, reg, ancestor.data[0]);
+            if self.stack.raw_equal(At::TOP, At::from_top(2)) {
                 node.tok = mpack_pack_nil();
-                lua_pop(state, 2);
-                push_nil_sentinel(state);
+                self.stack.pop(2);
+                push_nil_sentinel(self.stack);
                 return;
             }
-            lua_pop(state, 1);
+            self.stack.pop(1);
         }
 
         // `objlen` decides array-or-map from the keys; an empty table is
         // whatever the metatable said it was.
         let mut is_array = !is_empty_dict;
-        let len = objlen(state, Some(&mut is_array));
+        let len = objlen(self.stack, Some(&mut is_array));
         if is_array {
             node.tok = mpack_pack_array(len);
         } else {
@@ -453,65 +459,94 @@ unsafe fn pack_table(
             node.data[1] = LUA_REFNIL;
         }
     }
-}
 
-/// Run the ext handler registered for this table's metatable, if there is
-/// one; answer whether it fired.
-///
-/// Stack in `[table, metatable]`. On a hit, out `[ext string]`; on a miss,
-/// unchanged — which takes **two** pops, not upstream's one. See O-B15-11.
-///
-/// # Safety
-/// `packer` must be live with a table and its metatable on top.
-unsafe fn pack_ext(state: *mut lua_State, packer: *mut Packer, node: &mut Node) -> bool {
-    unsafe {
-        geti(state, (*packer).reg, (*packer).ext); // [table, meta, handlers]
-        lua_pushvalue(state, -2); // [table, meta, handlers, meta]
-        lua_gettable(state, -2); // [table, meta, handlers, handler?]
-        if lua_type(state, -1) != LUA_TFUNCTION {
+    /// Run the ext handler registered for this table's metatable, if there
+    /// is one; answer whether it fired (or failed, which also ends the
+    /// node).
+    ///
+    /// Stack in `[table, metatable]`. On a hit (or a failure), out `[ext
+    /// string]` (or `[table]`); on a miss, unchanged — which takes **two**
+    /// pops, not upstream's one. See O-B15-11.
+    fn pack_ext(&mut self, node: &mut Node) -> bool {
+        let stack = &mut *self.stack;
+        geti(stack, self.reg, self.options.ext); // [table, meta, handlers]
+        stack.push_value(At::from_top(2)); // [table, meta, handlers, meta]
+        stack.get_table(At::from_top(2)); // [table, meta, handlers, handler?]
+        if stack.kind(At::TOP) != Kind::Function {
             // The handler table has to go as well: the caller's `if has_meta`
             // pop is for the metatable, and taking that off the top instead
             // leaves the metatable where the table should be.
-            lua_pop(state, 2); // [table, meta]
+            stack.pop(2); // [table, meta]
             return false;
         }
 
-        lua_pushvalue(state, -4); // [table, meta, handlers, fn, table]
-        lua_call(state, 1, 2); // [table, meta, handlers, type, string]
-        let ext = lua_tonumber(state, -2);
-        if lua_isnumber(state, -2) == 0 || !(0.0..=127.0).contains(&ext) || ext.trunc() != ext {
-            luaL_error(
-                state,
-                c"the first result from ext packer must be an integer between 0 and 127".as_ptr(),
-            );
+        stack.push_value(At::from_top(4)); // [table, meta, handlers, fn, table]
+        if stack.pcall(1, 2, None).is_err() {
+            // [table, meta, handlers, error]
+            let failure = Failure::from_top(stack);
+            stack.pop(2); // [table]
+            self.fail(failure);
+            return true;
         }
-        if lua_isstring(state, -1) == 0 {
-            luaL_error(
-                state,
-                c"the second result from ext packer must be a string".as_ptr(),
-            );
+        // [table, meta, handlers, type, string]
+        let ext = stack.to_number(At::from_top(2));
+        let refusal = if !stack.is_number(At::from_top(2))
+            || !(0.0..=127.0).contains(&ext)
+            || ext.trunc() != ext
+        {
+            Some("the first result from ext packer must be an integer between 0 and 127")
+        } else if !stack.is_string(At::TOP) {
+            Some("the second result from ext packer must be a string")
+        } else {
+            None
+        };
+        if let Some(message) = refusal {
+            stack.pop(4); // [table]
+            self.fail(Failure::Message(message));
+            return true;
         }
-        node.tok = mpack_pack_ext(ext as c_int, objlen(state, None));
+        node.tok = mpack_pack_ext(ext as c_int, objlen(stack, None));
         // Leave only the returned string, where the table was.
-        lua_replace(state, -5);
-        lua_pop(state, 3);
+        stack.replace(At::from_top(5));
+        stack.pop(3);
         true
     }
 }
 
-/// Release the registry references a finished node holds.
+/// Fetch the next element of `parent` onto the stack, or fill `node` with a
+/// chunk token when the parent is a blob rather than a container.
 ///
-/// # Safety
-/// See [`unparse_enter`].
-unsafe fn unparse_exit(packer: *mut Packer, node: &Node) {
-    unsafe {
-        let state = (*packer).L;
-        // A chunk borrows its parent's string and never took a reference.
-        if kind(node) != MPACK_TOKEN_CHUNK {
-            unreference(state, (*packer).reg, node.data[0]);
-            if kind(node) == MPACK_TOKEN_MAP {
-                unreference(state, (*packer).reg, node.data[1]);
-            }
+/// Answers false for the chunk case, where the node is already complete.
+fn next_child(stack: &mut Stack, reg: At, parent: &mut Node, node: &mut Node) -> bool {
+    if kind(parent) > MPACK_TOKEN_MAP {
+        // A string is written as one chunk node borrowing the Lua string's
+        // own bytes, which stay alive because the parent's reference does;
+        // `chunk` reads them.
+        node.tok = mpack_pack_chunk(parent.tok.len);
+        return false;
+    }
+    geti(stack, reg, parent.data[0]); // [parent]
+
+    if kind(parent) == MPACK_TOKEN_ARRAY {
+        stack.push_number((parent.pos + 1) as lua_Number);
+        stack.get_table(At::from_top(2)); // [parent, element]
+    } else if kind(parent) == MPACK_TOKEN_MAP {
+        // `lua_next` resumes from the previous key, which is parked in the
+        // private table precisely because this call is not the last.
+        geti(stack, reg, parent.data[1]); // [parent, prev key]
+        let more = stack.next(At::from_top(2)); // [parent, key, value]
+        debug_assert!(more, "the map reported more pairs than it holds");
+        if parent.key_visited {
+            // The value's turn. Remember its key for the pair after this
+            // one, and leave the value where the key was.
+            unreference(stack, reg, parent.data[1]);
+            stack.push_value(At::from_top(2));
+            parent.data[1] = reference(stack, reg);
+            stack.replace(At::from_top(2)); // [parent, value]
+        } else {
+            stack.pop(1); // [parent, key] -- the key's turn
         }
     }
+    stack.remove(At::from_top(2)); // [element]
+    true
 }

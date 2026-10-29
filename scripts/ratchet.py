@@ -1091,9 +1091,8 @@ PERIMETER = {
     "onto them",
     "crates/nvim/src/lua/treesitter/": "the tree-sitter C library: parsers, "
     "trees, queries and cursors are opaque C objects with C lifetimes",
-    "crates/nvim/src/mpack/lmpack/": "libmpack-lua: a Lua C module, so every "
+    "crates/nvim/src/cjson/lua_cjson/": "lua-cjson: a Lua C module, so every "
     "value it moves crosses the `lua_State` stack",
-    "crates/nvim/src/cjson/lua_cjson/": "lua-cjson: a Lua C module, same stack",
     "crates/nvim/src/event/": "libuv: the loop, streams, timers, signals and "
     "processes are C objects registered by address",
     "crates/nvim/src/os/": "the operating system: syscalls through libc and "

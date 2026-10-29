@@ -114,4 +114,97 @@ describe('lua vim.mpack', function()
       eq(expected_header, result:sub(2, 2), 'dict key length ' .. len .. ' should use fixstr')
     end
   end)
+  it('raises what an ext handler raises, and stays busy after', function()
+    eq(
+      {
+        { false, 'extboom' },
+        {
+          false,
+          'Unpacker instance already working. Use another Unpacker or mpack.decode() if you need to decode from the ext handler',
+        },
+        { false, 'binboom' },
+        { false, 'pboom' },
+        { false, 'the first result from ext packer must be an integer between 0 and 127' },
+        { false, 'the second result from ext packer must be a string' },
+        { false, "can't serialize object of type 6" },
+      },
+      exec_lua(function()
+        local function try(f, ...)
+          local ok, err = pcall(f, ...)
+          return { ok, (tostring(err):gsub('^[^:]*:%d+: ', '')) }
+        end
+        local ext = '\212\005\042' -- fixext 1, type 5
+        local unpacker = vim.mpack.Unpacker({
+          ext = {
+            [5] = function()
+              error('extboom')
+            end,
+          },
+        })
+        local mt = {}
+        local function packer(fn)
+          return vim.mpack.Packer({ ext = { [mt] = fn } })
+        end
+        return {
+          try(unpacker, ext),
+          try(unpacker, ext),
+          try(
+            vim.mpack.Packer({
+              is_bin = function()
+                error('binboom')
+              end,
+            }),
+            'abc'
+          ),
+          try(
+            packer(function()
+              error('pboom')
+            end),
+            setmetatable({}, mt)
+          ),
+          try(
+            packer(function()
+              return 300, 'x'
+            end),
+            setmetatable({}, mt)
+          ),
+          try(
+            packer(function()
+              return 3, {}
+            end),
+            setmetatable({}, mt)
+          ),
+          try(vim.mpack.encode, { print }),
+        }
+      end)
+    )
+  end)
+
+  it('reads an ext value as its bytes when the options have no ext table', function()
+    -- Upstream dereferenced the missing handler table (a crash).
+    eq(
+      { '*', 4 },
+      exec_lua(function()
+        return { vim.mpack.Unpacker({})('\212\005\042') }
+      end)
+    )
+  end)
+
+  it('streams a document one byte at a time', function()
+    eq(
+      true,
+      exec_lua(function()
+        local value = { 1, 'two', { three = 3.5 }, vim.NIL, string.rep('x', 300) }
+        local packed = vim.mpack.encode(value)
+        local unpacker = vim.mpack.Unpacker()
+        for i = 1, #packed do
+          local got = unpacker(packed:sub(i, i))
+          if got ~= nil then
+            return i == #packed and vim.deep_equal(got, value)
+          end
+        end
+        return false
+      end)
+    )
+  end)
 end)

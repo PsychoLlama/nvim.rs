@@ -154,8 +154,7 @@ fn to_stderr(message: &[u8]) {
 fn add_vendored(stack: &mut Stack) {
     let lstate = stack.lua_state();
     // vim.mpack -- shared, or luv is reinitialised by require'mpack'.
-    // SAFETY: the state `stack` is over, with room for the module's table.
-    unsafe { luaopen_mpack(lstate) };
+    luaopen_mpack(stack);
     share_module(stack, c"mpack", 2);
 
     // vim.lpeg

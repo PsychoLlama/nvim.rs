@@ -1,6 +1,6 @@
 //! The bundled `libmpack` MessagePack codec and its Lua binding.
 
-#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unsafe_code)]
 
 pub mod conv;
 pub mod lmpack;
