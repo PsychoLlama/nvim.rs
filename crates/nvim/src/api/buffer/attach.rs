@@ -6,12 +6,10 @@
 //! the duration of one callback -- and `api_buf_ensure_loaded` is the
 //! load-on-demand every accessor in the family funnels through.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::winlayer::Buf;
-use crate::winlayer::Live;
 
 pub(crate) fn api_buf_ensure_loaded(buffer: BufferHandle) -> Result<Option<Buf>, Error> {
     let Some(b) = find_buffer_by_handle(buffer)? else {
@@ -29,8 +27,6 @@ pub fn nvim_buf_attach(
     send_buffer: Boolean,
     opts: &mut KeyDict_buf_attach,
 ) -> Result<Boolean, Error> {
-    // SAFETY: the dispatcher's keyset outlives this call.
-    let mut opts = unsafe { Live::<KeyDict_buf_attach>::new(opts) };
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(false);
     };

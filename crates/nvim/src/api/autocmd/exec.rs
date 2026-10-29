@@ -4,31 +4,21 @@
 //! entry points do, then calls `apply_autocmds_group` once per event with
 //! the caller's `data` published as `v:event` for the duration.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::api::private::helpers::Reported;
 use crate::api::private::validate::{err_bad_number, err_bad_value, err_conflict, err_expected};
 use crate::types::OptionSetFlags;
 use crate::winlayer::Buf;
-use crate::winlayer::Live;
 
 pub fn nvim_exec_autocmds(event: Object, opts: &mut KeyDict_exec_autocmds) -> Result<(), Error> {
-    // SAFETY: the dispatcher's keyset outlives this call.
-    let opts = unsafe { Live::<KeyDict_exec_autocmds>::new(opts) };
     let mut error = Error::none();
     let mut au_group: ::core::ffi::c_int = AUGROUP_ALL as ::core::ffi::c_int;
     let mut buffer: Option<Buf> = Buf::current_or_none();
     // The event data is handed on by address; the keyset's own `Option` has
     // no `Object` to point at, so the value is copied into this frame first.
-    let event_array: Array = unsafe {
-        unpack_string_or_array(
-            Some(event),
-            c"event".as_ptr() as *mut ::core::ffi::c_char,
-            true,
-        )
-    }?;
+    let event_array: Array = unpack_string_or_array(Some(event), c"event", true)?;
     match opts.group.as_ref().unwrap_or(&Object::Nil) {
         Object::Nil => {}
         Object::String(group) => {
@@ -74,14 +64,8 @@ pub fn nvim_exec_autocmds(event: Object, opts: &mut KeyDict_exec_autocmds) -> Re
         }
         buffer = find_buffer_by_handle(buf)?;
     }
-    let patterns: Array = unsafe {
-        get_patterns_from_pattern_or_buf(
-            opts.pattern.as_ref(),
-            has_buf,
-            buf,
-            c"".as_ptr() as *mut ::core::ffi::c_char,
-        )
-    }?;
+    let patterns: Array =
+        get_patterns_from_pattern_or_buf(opts.pattern.as_ref(), has_buf, buf, Some(c""))?;
     let event_data: Option<Object> = opts.data.as_ref().cloned();
     let modeline: bool = opts.modeline.unwrap_or(true);
     let mut did_aucmd: bool = false;

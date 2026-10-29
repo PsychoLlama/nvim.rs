@@ -13,8 +13,7 @@
 //! insertion-ordered. The two `set_*` shims that remain are the ones for
 //! `w_ns_set`, a khash still embedded in `Window`.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -56,20 +55,17 @@ fn buffer_uses_ns(win: Win, ns_id: uint32_t) -> bool {
 
 /// Whether namespace `ns_id` is one of the ones `win` shows.
 fn window_shows_ns(win: Win, ns_id: uint32_t) -> bool {
-    // SAFETY: a live window, and the set is its own field.
-    unsafe { &(*win.raw()).w_ns_set }.contains(&ns_id)
+    win.w_ns_set.contains(&ns_id)
 }
 
 /// Show namespace `ns_id` in `win`.
-fn show_ns_in_window(win: Win, ns_id: uint32_t) {
-    // SAFETY: `w_ns_set` is the live window's own field.
-    unsafe { &mut (*win.raw()).w_ns_set }.insert(ns_id);
+fn show_ns_in_window(mut win: Win, ns_id: uint32_t) {
+    win.w_ns_set.insert(ns_id);
 }
 
 /// Stop showing namespace `ns_id` in `win`.
-fn hide_ns_in_window(win: Win, ns_id: uint32_t) {
-    // SAFETY: a live window, and the set is its own field.
-    unsafe { &mut (*win.raw()).w_ns_set }.remove(&ns_id);
+fn hide_ns_in_window(mut win: Win, ns_id: uint32_t) {
+    win.w_ns_set.remove(&ns_id);
 }
 
 pub fn nvim_create_namespace(name: String_0) -> Integer {
@@ -93,10 +89,10 @@ pub fn nvim_get_namespaces() -> ApiDict {
     namespace_ids.with(|ids| {
         let mut retval: ApiDict = ApiDict::with_capacity(ids.len() as size_t);
         for (name, id) in ids.entries() {
-            // SAFETY: `ns_key` terminated the key, and `bytes_at`
-            // re-measures it -- so a name with an interior NUL is answered
-            // truncated, as it was when the key was a `String_0`.
-            let key = unsafe { crate::cstr::bytes_at(name.as_ptr().cast::<::core::ffi::c_char>()) };
+            // `ns_key` terminated the key, and it is re-measured -- so a name
+            // with an interior NUL is answered truncated, as it was when the
+            // key was a `String_0`.
+            let key = crate::cstr::until_nul(name);
             let value = Object::integer(*id as Integer);
             retval.insert(key, value);
         }

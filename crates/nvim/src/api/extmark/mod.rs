@@ -22,14 +22,13 @@ use crate::marktree::key::{
 };
 use crate::marktree::mt_inspect;
 use crate::mbyte::c_cluster_schar;
-use crate::memory::xfree;
 use crate::r#move::changed_window_setting;
 use crate::pos::{MAXCOL, MAXLNUM};
 use crate::sign::init_sign_text;
 use crate::types::{
     ApiDict, Array, Boolean, BufferHandle, ColNr, DecorExt, DecorHighlightInline, DecorInline,
-    DecorPriority, DecorSignHighlight, DecorVirtText, DecorVirtText_data, Error, ExtmarkInfoArray,
-    ExtmarkType, Integer, KeyDict_get_extmark, KeyDict_get_extmarks, KeyDict_ns_opts,
+    DecorPriority, DecorSignHighlight, DecorVirtText, DecorVirtText_data, Error, ExtmarkType,
+    Integer, KeyDict_get_extmark, KeyDict_get_extmarks, KeyDict_ns_opts,
     KeyDict_set_decoration_provider, KeyDict_set_extmark, LineNr, LuaRef, MTKey, MTPair, NS,
     Object, String_0, VirtLine, VirtText, VirtTextChunk, Window, WindowHandle, int32_t,
     kObjectTypeArray, size_t, uint8_t, uint16_t, uint32_t,

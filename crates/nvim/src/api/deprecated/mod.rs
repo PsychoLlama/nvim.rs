@@ -1,11 +1,11 @@
-#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use crate::api::buffer::{nvim_buf_get_lines, nvim_buf_set_lines};
 use crate::api::extmark::{nvim_buf_clear_namespace, nvim_create_namespace, parse_virt_text};
 use crate::api::private::dispatch::msgpack_rpc_get_handler_for;
-use crate::api::private::helpers::{api_set_sctx, api_typename, cstr_to_string, dict_set_var};
+use crate::api::private::helpers::{api_set_sctx, api_typename, dict_set_var};
 use crate::decoration::{
     decor_find_virttext, decor_inline_hl, decor_put_vt, kHlModeUnknown, kVPosEndOfLine,
     with_decor_virt_mut,
@@ -17,7 +17,6 @@ use crate::global_cell::GlobalCell;
 use crate::highlight::hl_get_attr_by_id;
 use crate::highlight_group::{syn_check_group, syn_get_final_id, syn_id2attr, syn_name2id};
 use crate::lua::executor::nlua_exec;
-use crate::memory::xrealloc;
 use crate::message::msg_end;
 use crate::message::state::{msg_didout, msg_silent};
 use crate::option::{
@@ -26,13 +25,12 @@ use crate::option::{
 };
 use crate::options::kOptInvalid;
 use crate::pos::{MAXCOL, MAXLNUM};
-use crate::types::NL;
 use crate::types::{
     ApiDict, Arena, Array, Boolean, BufferHandle, ColNr, DecorExt, DecorInline, DecorPriority,
     DecorVirtText, DecorVirtText_data, Error, Integer, KeyDict_empty, KeyDict_exec_opts,
     LuaRetMode, MsgpackRpcRequestHandler, Object, OptIndex, OptScope, OptVal, String_0,
-    StringBuilder, TabpageHandle, VirtText, WindowHandle, int64_t, kObjectTypeArray,
-    kObjectTypeString, size_t, uint8_t, uint32_t, uint64_t,
+    TabpageHandle, VirtText, WindowHandle, int64_t, kObjectTypeArray, kObjectTypeString, size_t,
+    uint8_t, uint32_t, uint64_t,
 };
 
 // The carve of the transpiled module; see each child's docs.

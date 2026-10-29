@@ -4,8 +4,7 @@
 //! or fixed, the dictionary itself can be locked, and `v:` keys are typed
 //! and may run a hook when assigned.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -48,21 +47,15 @@ pub(crate) fn dict_get_value(dict: &DictRef, key: &String_0) -> Result<Object, E
     Ok(Object::from(&di.di_tv))
 }
 
-/// The item `key` names, or why it could not be assigned to (or, with `del`,
-/// removed).
-///
-/// `Ok(null)` does not mean failure: an absent key is fine for an assignment.
-/// The item is answered by address: the caller writes through it and then
-/// reaches `dict` again.
+/// Whether `key` is in `dict`, or why it could not be assigned to (or,
+/// with `del`, removed). An absent key is fine for an assignment.
 pub(crate) fn dict_check_writable(
     dict: &DictRef,
     key: &String_0,
     del: bool,
-) -> Result<*mut DictItem, Error> {
-    let di = dict.find_ptr(key.as_bytes());
-    if !di.is_null() {
-        // SAFETY: the lookup answered a live item.
-        let flags = c_int::from(unsafe { (*di).di_flags });
+) -> Result<bool, Error> {
+    if let Some(item) = dict.find(key.as_bytes()) {
+        let flags = c_int::from(item.di_flags);
         let refused = if flags & DI_FLAGS_RO != 0 {
             Some("read-only")
         } else if flags & DI_FLAGS_LOCK != 0 {
@@ -76,7 +69,7 @@ pub(crate) fn dict_check_writable(
             let key = key.as_cstr().to_string_lossy();
             return Err(api_error!(kErrorTypeException, "Key is {why}: {key}"));
         }
-        return Ok(di);
+        return Ok(true);
     }
     let refused = if dict.dv_lock.is_locked() {
         Some((kErrorTypeException, c"Dict is locked"))
@@ -89,12 +82,15 @@ pub(crate) fn dict_check_writable(
     };
     match refused {
         Some((kind, msg)) => Err(Error::from_message(kind, msg)),
-        None => Ok(di),
+        None => Ok(false),
     }
 }
 
 /// Set or remove `key` in `dict`. With `retval` the previous value comes
 /// back, otherwise nil. Fires the dictionary's watchers either way.
+///
+/// The item is found again by key after every step that can run user code
+/// (a watcher is Vimscript or Lua): nothing holds it across one.
 pub(crate) fn dict_set_var(
     dict: &DictRef,
     key: &String_0,
@@ -103,24 +99,31 @@ pub(crate) fn dict_set_var(
     retval: bool,
 ) -> Result<Object, Error> {
     let mut rv = Object::Nil;
-    let mut di = dict_check_writable(dict, key, del)?;
+    let exists = dict_check_writable(dict, key, del)?;
     let watched = dict_is_watched(Some(dict));
+    let current = |dict: &DictRef| {
+        dict.find(key.as_bytes())
+            .map(|item| Object::from(&item.di_tv))
+    };
 
     if del {
-        if di.is_null() {
+        if !exists {
             let key = key.as_cstr().to_string_lossy();
             return Err(api_error!(kErrorTypeValidation, "Key not found: {key}"));
         }
-        // SAFETY: `di` is the live item the lookup found. A raw pointer
-        // rather than a borrow, because a watcher runs Lua.
-        let old = unsafe { &raw mut (*di).di_tv };
         if watched {
-            // SAFETY: as above; a removal has no new value to show.
-            unsafe { dict_watcher_notify(dict, key.as_cstr(), None, Some(&*old)) };
+            // The watchers are shown a copy: they may do anything to the
+            // item, a removal has no new value to show.
+            let mut old = TV_INITIAL_VALUE;
+            if let Some(item) = dict.find(key.as_bytes()) {
+                tv_copy(&item.di_tv, &mut old);
+            }
+            dict_watcher_notify(dict, key.as_cstr(), None, Some(&old));
+            tv_clear(&mut old);
         }
         if retval {
-            // SAFETY: as above.
-            rv = Object::from(unsafe { &*old });
+            // What the item holds after its watchers ran, as upstream read it.
+            rv = current(dict).unwrap_or(Object::Nil);
         }
         tv_dict_item_remove(dict, key.as_bytes());
         return Ok(rv);
@@ -131,16 +134,12 @@ pub(crate) fn dict_set_var(
     // unset value for a key that did not.
     let mut oldtv = TV_INITIAL_VALUE;
 
-    if di.is_null() {
-        let _ = dict.edit().add_item(DictItem::boxed(key.as_bytes()));
-        di = dict.find_ptr(key.as_bytes());
-    } else {
+    if exists {
         if retval {
-            // SAFETY: `di` is the live item the lookup found.
-            rv = Object::from(unsafe { &(*di).di_tv });
+            rv = current(dict).unwrap_or(Object::Nil);
         }
         // `v:` keys are typed, and some of them run a hook on assignment.
-        let verdict = if dict.as_ptr() == vimvar_dict().as_ptr() {
+        let verdict = if dict.ptr_eq(&vimvar_dict()) {
             before_set_vvar(key.as_bytes(), &mut tv, true, watched)
         } else {
             VvarStore::Store
@@ -156,18 +155,25 @@ pub(crate) fn dict_set_var(
             }
             return Ok(rv);
         }
-        if watched {
-            // SAFETY: `di` is live and `oldtv` this frame's.
-            unsafe { tv_copy(&(*di).di_tv, &mut oldtv) };
-        }
-        // SAFETY: `di` is live.
-        unsafe { tv_clear(&mut (*di).di_tv) };
     }
-
-    // SAFETY: `di` is live and `tv` this frame's.
-    unsafe { tv_copy(&tv, &mut (*di).di_tv) };
+    match dict.edit().find_mut(key.as_bytes()) {
+        Some(item) => {
+            if watched {
+                tv_copy(&item.di_tv, &mut oldtv);
+            }
+            tv_clear(&mut item.di_tv);
+            tv_copy(&tv, &mut item.di_tv);
+        }
+        None => {
+            // Added empty and then filled, as upstream does: adding a Funcref
+            // under a lower-case name would be refused (E704).
+            let _ = dict.edit().add_item(DictItem::boxed(key.as_bytes()));
+            if let Some(item) = dict.edit().find_mut(key.as_bytes()) {
+                tv_copy(&tv, &mut item.di_tv);
+            }
+        }
+    }
     if watched {
-        // SAFETY: as above, and `oldtv` is this frame's.
         dict_watcher_notify(dict, key.as_cstr(), Some(&tv), Some(&oldtv));
         tv_clear(&mut oldtv);
     }

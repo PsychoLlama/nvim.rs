@@ -3,7 +3,6 @@
 //! Both are `nvim_get_hl` with the namespace fixed to the global one and the
 //! result rendered in the old `rgb`/`cterm` shape.
 
-#![deny(unsafe_op_in_unsafe_fn)]
 #![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,

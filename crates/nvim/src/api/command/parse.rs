@@ -6,8 +6,7 @@
 //! whole `cmod_*` modifier set.  [`parse_map_cmd`] is the `:map`-family special
 //! case, whose arguments the generic splitter would mangle.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::api::private::helpers::Reported;
@@ -15,10 +14,9 @@ use crate::api_error;
 use crate::charset::skip;
 use crate::message_fmt::msg_cstr;
 use crate::types::CmdIdx;
-use crate::types::{CmdLine, ExArgt, NUL};
+use crate::types::{CmdLine, ExArgt};
 use crate::winlayer::Buf;
-use core::ffi::{CStr, c_char, c_int};
-use core::slice;
+use core::ffi::{CStr, c_int};
 
 /// A `:map`-family right-hand side is one opaque string, however much
 /// whitespace it contains, so the arguments are exactly "lhs" and "rhs".
@@ -182,9 +180,7 @@ pub fn nvim_parse_cmd(str: String_0, _opts: &mut KeyDict_empty) -> Result<KeyDic
     let mut cmdinfo: CmdParseInfo = crate::ex_getln::CMD_PARSE_INFO_INIT;
 
     let mut errormsg = None;
-    // SAFETY: `str` names `len` readable bytes, copied into the line the
-    // parse takes over.
-    let line = CmdLine::from_bytes(unsafe { slice::from_raw_parts(str.data().cast(), str.len()) });
+    let line = CmdLine::from_bytes(str.as_bytes());
     let parsed = parse_cmdline(line, &mut excmd, &mut cmdinfo, &mut errormsg);
     if !parsed {
         match &errormsg {
@@ -243,9 +239,14 @@ pub fn nvim_parse_cmd(str: String_0, _opts: &mut KeyDict_empty) -> Result<KeyDic
     }
 
     if excmd.argt.has(ExArgt::REGSTR) {
-        let reg: [c_char; 2] = [excmd.regname as c_char, NUL as c_char];
-        // SAFETY: `reg` is NUL-terminated and alive for the copy.
-        result.reg = Some(unsafe { cstr_to_string(reg.as_ptr()) });
+        // `%c` of the low byte, read back as a C string: nothing for NUL.
+        let byte = excmd.regname as u8;
+        let reg = if byte == 0 {
+            &[][..]
+        } else {
+            core::slice::from_ref(&byte)
+        };
+        result.reg = Some(String_0::from_bytes(reg));
     }
 
     result.bang = Some(excmd.forceit);

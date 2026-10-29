@@ -24,8 +24,7 @@
 //! It does **not** read `{_TYPE, _VAL}` special dictionaries: an API client
 //! gets the two-key dictionary as it stands.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -366,10 +365,13 @@ fn object_to_vim(value: Object, take_luaref: bool) -> TypVal {
 pub(crate) fn call_handler_for_vimscript(row: usize, args: Array) -> Result<TypVal, Error> {
     let handler = crate::api::private::dispatch::method_handlers[row];
     let call = handler.fn_0.expect("non-null function pointer");
+    // Scratch the handler may allocate in. Nothing in the API does any more
+    // -- every answer owns its storage -- so it stays empty.
     let mut arena = crate::memory::ARENA_EMPTY;
     let answer = call(crate::eval::funcs::VIML_INTERNAL_CALL, args, &mut arena).map(TypVal::from);
-    // SAFETY: the arena is this call's own, and its answer has been converted
-    // out of it above; an error owns its message.
-    unsafe { crate::memory::arena_mem_free(crate::memory::arena_finish(&raw mut arena)) };
+    debug_assert!(
+        arena.cur_blk.is_null(),
+        "a handler allocated into its arena"
+    );
     answer
 }

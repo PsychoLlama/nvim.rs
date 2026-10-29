@@ -47,7 +47,7 @@
     clippy::ptr_as_ptr
 )]
 
-use core::ffi::{c_int, c_void};
+use core::ffi::c_int;
 
 use crate::buffer_updates::buf_updates_send_splice;
 use crate::decoration::{
@@ -62,12 +62,11 @@ use crate::marktree::{
     marktree_move_region, marktree_put, marktree_revise_meta, marktree_splice,
 };
 use crate::memline::ml_find_line_or_offset;
-use crate::memory::xrealloc;
 use crate::types::buffer::ExtmarkNs;
 use crate::types::{
-    BCount, ColNr, DecorInline, ExtmarkInfoArray, ExtmarkOp, ExtmarkSplice, ExtmarkType,
-    ExtmarkUndoObject, LineNr, MTKey, MTPair, MTPos, MarkTree, MarkTreeIter, UndoLink,
-    UndoObjectType, int32_t, size_t, uint16_t, uint32_t, uint64_t,
+    BCount, ColNr, DecorInline, ExtmarkOp, ExtmarkSplice, ExtmarkType, ExtmarkUndoObject, LineNr,
+    MTKey, MTPair, MTPos, MarkTree, MarkTreeIter, UndoLink, UndoObjectType, int32_t, uint16_t,
+    uint32_t, uint64_t,
 };
 use crate::undo::u_force_get_undo_header;
 use crate::winlayer::Buf;
@@ -93,11 +92,6 @@ pub const kExtmarkNoUndo: ExtmarkOp = 2;
 pub const kExtmarkUndo: ExtmarkOp = 1;
 pub const kExtmarkNOOP: ExtmarkOp = 0;
 pub const kExtmarkNone: ExtmarkType = 1;
-pub const KV_INITIAL_VALUE: ExtmarkInfoArray = ExtmarkInfoArray {
-    size: 0,
-    capacity: 0,
-    items: ::core::ptr::null_mut(),
-};
 // ---------------------------------------------------------------------------
 // The two containers hanging off a buffer
 
@@ -348,29 +342,6 @@ fn send_splice(buffer: Buf, start: Extent, old: Extent, new: Extent) {
         buffer, start.row, start.col, start.byte, old.row, old.col, old.byte, new.row, new.col,
         new.byte,
     );
-}
-
-// ---------------------------------------------------------------------------
-// klib's `kvec_t`
-
-/// `kv_push`, over a vector's three fields.
-///
-/// [`get`]'s answer array is the one the family still pushes to this way,
-/// and it does nothing else with it, so this is the whole of klib's growable
-/// vector that is needed here.
-fn kv_push<T>(size: &mut size_t, capacity: &mut size_t, items: &mut *mut T, value: T) {
-    if *size == *capacity {
-        *capacity = if *capacity != 0 { *capacity << 1 } else { 8 };
-        let bytes = size_of::<T>() * *capacity;
-        let old = items.cast::<c_void>();
-        // SAFETY: `items` is NULL or this vector's own allocation, and the
-        // new size counts the same element type.
-        *items = unsafe { xrealloc(old, bytes) }.cast::<T>();
-    }
-    let end = *size;
-    *size = end + 1;
-    // SAFETY: slot `end` is inside the allocation just made big enough.
-    unsafe { *items.add(end) = value };
 }
 
 /// The `ExtmarkSplice` of the list's last entry, if it has one and it is a

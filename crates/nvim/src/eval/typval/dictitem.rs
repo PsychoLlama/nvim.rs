@@ -172,16 +172,6 @@ pub(crate) fn tv_string2items(args: &[TypVal], result: &mut TypVal) {
 }
 
 impl Dict {
-    /// The item under `key` as a pointer, or null: the escape hatch for the
-    /// bodies that hold an item *while* they reach the dictionary again.
-    /// Safe to compute; it is the dereference that needs a promise.
-    #[inline]
-    pub(crate) fn find_ptr(&self, key: &[u8]) -> *mut DictItem {
-        self.slot_of(key).map_or(::core::ptr::null_mut(), |slot| {
-            tv_dict_hi2di(self.dv_hashtab.slot(slot))
-        })
-    }
-
     /// Take the item under `key` out of the table, answering what the table
     /// held -- `None` when there is no such key. Dropping the answer is the
     /// release; do it once the borrow of the dictionary has ended.

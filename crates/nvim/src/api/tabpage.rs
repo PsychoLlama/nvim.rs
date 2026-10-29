@@ -1,7 +1,6 @@
 //! `nvim_tabpage_*`: the tab page entry points.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -30,7 +29,6 @@ use crate::window::{
 };
 use crate::winlayer::graph::{cmdwin_buf, cmdwin_type};
 use crate::winlayer::{Win, windows_in_tab};
-use ::libc::abort;
 
 /// The windows of `tabpage`, oldest first.
 pub fn nvim_tabpage_list_wins(tabpage: TabpageHandle) -> Result<Array, Error> {
@@ -91,9 +89,7 @@ pub fn nvim_tabpage_get_win(tabpage: TabpageHandle) -> Result<WindowHandle, Erro
         // A tab page that is not current always has a `tp_curwin` in its own
         // window list; upstream aborts here rather than answer a handle it
         // cannot justify.
-        //
-        // SAFETY: `abort` returns nothing and touches nothing.
-        None => unsafe { abort() },
+        None => std::process::abort(),
     }
 }
 

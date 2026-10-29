@@ -7,8 +7,7 @@
 //! in whether they are buffer-local.  The two `get_commands` spellings
 //! render the table back.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::api::private::helpers::Reported;
@@ -19,15 +18,7 @@ use crate::api_error;
 use crate::cstr;
 use crate::message_fmt::msg_cstr;
 use crate::types::{ExArgt, ExpandContext};
-use crate::winlayer::Live;
 use crate::winlayer::graph::switch_buffer;
-
-/// The options keyset this family decodes, with checked field access.
-///
-/// Construction is the one unsafe step: the caller's `*mut
-/// KeyDict_user_command` outlives the call that was handed it, and every
-/// `opts.field` after the wrap is ordinary code.
-type UserCmdOpts = Live<KeyDict_user_command>;
 
 pub fn nvim_create_user_command(
     channel_id: uint64_t,
@@ -85,7 +76,6 @@ pub fn create_user_command(
     opts: &mut KeyDict_user_command,
     buffer_local: bool,
 ) -> Result<(), Error> {
-    let mut opts = unsafe { UserCmdOpts::new(opts) };
     let force: bool;
     let mut argt = ExArgt::NONE;
     let mut def: int64_t = -1;
@@ -131,15 +121,13 @@ pub fn create_user_command(
                 }
             }
         } else if let Some(nargs) = given_nargs.and_then(Object::as_string) {
-            let value = nargs.data();
             if nargs.len() > 1 {
                 failed = Some(err_bad_value(c"nargs", nargs.as_cstr()));
                 break '_err;
             }
-            // SAFETY: an API string is NUL-terminated, so byte 0 is readable
-            // even for the empty string -- where it is the terminator, and
-            // falls to the arm that rejects it.
-            match unsafe { *value } as u8 {
+            // The empty string has no byte 0, and falls to the arm that
+            // rejects it.
+            match nargs.as_bytes().first().copied().unwrap_or(0) {
                 b'*' => argt |= ExArgt::EXTRA,
                 b'?' => argt |= ExArgt::EXTRA | ExArgt::NOSPC,
                 b'+' => argt |= ExArgt::EXTRA | ExArgt::NEEDARG,
@@ -164,8 +152,7 @@ pub fn create_user_command(
                 addr_type_arg = CmdAddr::Lines;
             }
         } else if let Some(range) = given_range.and_then(Object::as_string) {
-            // SAFETY: an API string is NUL-terminated, so byte 0 is readable.
-            let percent = unsafe { *range.data() } as u8 == b'%';
+            let percent = range.as_bytes().first() == Some(&b'%');
             if !(percent && range.len() == 1) {
                 failed = Some(err_invalid(c"range", Bad::Unsaid));
                 break '_err;

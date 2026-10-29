@@ -7,14 +7,12 @@
 //! Dict.  `extmark_get_index_from_obj` decodes the `0`/`-1`/`[row, col]`
 //! spellings a range endpoint may take.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::api::private::helpers::Reported;
 use crate::api::private::validate::{err_bad_number, err_expected};
 use crate::winlayer::Buf;
-use crate::winlayer::Live;
 use core::ffi::CStr;
 
 /// How many keys a mark's `details` dictionary can grow to.
@@ -104,8 +102,6 @@ pub fn nvim_buf_get_extmark_by_id(
     id: Integer,
     opts: &mut KeyDict_get_extmark,
 ) -> Result<Array, Error> {
-    // SAFETY: the dispatcher's keyset outlives this call.
-    let opts = unsafe { Live::<KeyDict_get_extmark>::new(opts) };
     let mut error = Error::none();
     let rv: Array = Array::EMPTY;
     let Some(b) = find_buffer_by_handle(buf)? else {
@@ -131,8 +127,6 @@ pub fn nvim_buf_get_extmarks(
     end: Object,
     opts: &mut KeyDict_get_extmarks,
 ) -> Result<Array, Error> {
-    // SAFETY: the dispatcher's keyset outlives this call.
-    let opts = unsafe { Live::<KeyDict_get_extmarks>::new(opts) };
     let mut error = Error::none();
     let mut rv: Array = Array::EMPTY;
     let Some(b) = find_buffer_by_handle(buf)? else {
@@ -146,8 +140,7 @@ pub fn nvim_buf_get_extmarks(
     let hl_name: bool = opts.hl_name.unwrap_or(true);
     let mut type_0: ExtmarkType = kExtmarkNone;
     if let Some(named) = opts.type_0.as_ref() {
-        // SAFETY: the keyset's string names its own NUL-terminated bytes.
-        let name = unsafe { crate::cstr::at_opt(named.data()) };
+        let name = (!named.is_null()).then(|| named.as_cstr());
         type_0 = match name.map(CStr::to_bytes) {
             Some(b"sign") => kExtmarkSign,
             Some(b"virt_text") => kExtmarkVirtText,
@@ -175,7 +168,7 @@ pub fn nvim_buf_get_extmarks(
         ::core::mem::swap(&mut l_row, &mut u_row);
         ::core::mem::swap(&mut l_col, &mut u_col);
     }
-    let marks: ExtmarkInfoArray = extmark_get(
+    let found: Vec<MTPair> = extmark_get(
         b,
         ns_id as uint32_t,
         l_row,
@@ -186,18 +179,7 @@ pub fn nvim_buf_get_extmarks(
         type_0,
         opts.overlap.unwrap_or(false),
     );
-    rv = Array::with_capacity(if marks.size < rv_limit {
-        marks.size
-    } else {
-        rv_limit
-    });
-    // SAFETY: `extmark_get` answers `size` initialized marks -- or, when it
-    // found none, a vector that never allocated and whose `items` is null.
-    let found: &[MTPair] = if marks.items.is_null() {
-        &[]
-    } else {
-        unsafe { ::core::slice::from_raw_parts(marks.items, marks.size) }
-    };
+    rv = Array::with_capacity(found.len().min(rv_limit));
     if reverse {
         // A backwards range takes the *last* `limit` marks, so the walk goes
         // the other way and the limit is applied here rather than by the
@@ -208,14 +190,12 @@ pub fn nvim_buf_get_extmarks(
             )));
         }
     } else {
-        for mark in found {
+        for mark in &found {
             rv.push(Object::array(extmark_to_array(
                 *mark, true, details, hl_name,
             )));
         }
     }
-    // SAFETY: the block `extmark_get` handed this call.
-    unsafe { xfree(marks.items.cast::<::core::ffi::c_void>()) };
     rv.reported(error)
 }
 
@@ -272,8 +252,8 @@ pub fn nvim__buf_debug_extmarks(
     keys: Boolean,
     dot: Boolean,
 ) -> Result<String_0, Error> {
-    let Some(b) = find_buffer_by_handle(buf)? else {
+    let Some(mut b) = find_buffer_by_handle(buf)? else {
         return Ok(String_0::NULL);
     };
-    Ok(unsafe { mt_inspect(&mut (*b.raw()).b_marktree, keys, dot) })
+    Ok(mt_inspect(&mut b.b_marktree, keys, dot))
 }

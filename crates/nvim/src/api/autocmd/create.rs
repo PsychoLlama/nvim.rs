@@ -6,8 +6,7 @@
 //! parent's `next_autocmd_id`.  `nvim_clear_autocmds` is the same
 //! resolution driving `clear_autocmd` over every match instead.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -24,15 +23,12 @@ use crate::api::private::validate::{
 use crate::cstr;
 use crate::memory::ThinCString;
 use crate::types::Failed;
-use crate::winlayer::Live;
 
 pub fn nvim_create_autocmd(
     channel_id: uint64_t,
     event: Object,
     opts: &mut KeyDict_create_autocmd,
 ) -> Result<Integer, Error> {
-    // SAFETY: the dispatcher's keyset outlives this call.
-    let mut opts = unsafe { Live::<KeyDict_create_autocmd>::new(opts) };
     let mut error = Error::none();
     let au_group: ::core::ffi::c_int;
     let has_buf: bool;
@@ -42,13 +38,7 @@ pub fn nvim_create_autocmd(
     let mut desc: Option<&[u8]> = None;
     let mut handler_cmd: Option<&[u8]> = None;
     let mut handler_fn: Callback = Callback::None;
-    let event_array: Array = unsafe {
-        unpack_string_or_array(
-            Some(event),
-            c"event".as_ptr() as *mut ::core::ffi::c_char,
-            true,
-        )
-    }?;
+    let event_array: Array = unpack_string_or_array(Some(event), c"event", true)?;
     '_cleanup: {
         {
             if opts.callback.is_some() && opts.command.is_some() {
@@ -60,9 +50,7 @@ pub fn nvim_create_autocmd(
                             error = err_bad_value(c"callback", c"<no value>");
                             break '_cleanup;
                         } else if !nlua_ref_is_function(luaref) {
-                            let bad = c"<not a function>".as_ptr();
-                            // SAFETY: the value the keyset carried, live for this call.
-                            error = err_bad_value(c"callback", unsafe { cstr::at(bad) });
+                            error = err_bad_value(c"callback", c"<not a function>");
                             break '_cleanup;
                         } else {
                             handler_fn = Callback::Lua(luaref);
@@ -103,14 +91,12 @@ pub fn nvim_create_autocmd(
                     } else if opts.pattern.is_some() && has_buf {
                         error = err_conflict(c"pattern", c"buf");
                     } else {
-                        patterns = match unsafe {
-                            get_patterns_from_pattern_or_buf(
-                                opts.pattern.as_ref(),
-                                has_buf,
-                                buf,
-                                c"*".as_ptr() as *mut ::core::ffi::c_char,
-                            )
-                        } {
+                        patterns = match get_patterns_from_pattern_or_buf(
+                            opts.pattern.as_ref(),
+                            has_buf,
+                            buf,
+                            Some(c"*"),
+                        ) {
                             Ok(patterns) => patterns,
                             Err(e) => {
                                 error = e;
@@ -136,9 +122,7 @@ pub fn nvim_create_autocmd(
                                         .as_string()
                                         .expect("`unpack_string_or_array` answers Strings only");
                                     let Some(event_nr) = event_name2nr_str(event_str) else {
-                                        let bad = event_str.data();
-                                        // SAFETY: the value the keyset carried, live for this call.
-                                        error = err_bad_value(c"event", unsafe { cstr::at(bad) });
+                                        error = err_bad_value(c"event", event_str.as_cstr());
                                         break '_cleanup;
                                     };
                                     {
@@ -201,16 +185,8 @@ pub fn nvim_del_autocmd(id: Integer) -> Result<(), Error> {
 }
 
 pub fn nvim_clear_autocmds(opts: &mut KeyDict_clear_autocmds) -> Result<(), Error> {
-    // SAFETY: the dispatcher's keyset outlives this call.
-    let mut opts = unsafe { Live::<KeyDict_clear_autocmds>::new(opts) };
     let mut error = Error::none();
-    let event_array: Array = unsafe {
-        unpack_string_or_array(
-            opts.event.take(),
-            c"event".as_ptr() as *mut ::core::ffi::c_char,
-            false,
-        )
-    }?;
+    let event_array: Array = unpack_string_or_array(opts.event.take(), c"event", false)?;
     let has_buf: bool = opts.buf.is_some() || opts.buffer.is_some();
     let buf = opts.buf.or(opts.buffer).unwrap_or(0) as ::core::ffi::c_int;
     if opts.buf.is_some() && opts.buffer.is_some() {
@@ -222,14 +198,12 @@ pub fn nvim_clear_autocmds(opts: &mut KeyDict_clear_autocmds) -> Result<(), Erro
         return ().reported(error);
     }
     let au_group: ::core::ffi::c_int = get_augroup_from_object(opts.group.as_ref())?;
-    let patterns: Array = unsafe {
-        get_patterns_from_pattern_or_buf(
-            opts.pattern.as_ref(),
-            has_buf,
-            buf as BufferHandle,
-            c"".as_ptr() as *mut ::core::ffi::c_char,
-        )
-    }?;
+    let patterns: Array = get_patterns_from_pattern_or_buf(
+        opts.pattern.as_ref(),
+        has_buf,
+        buf as BufferHandle,
+        Some(c""),
+    )?;
     if event_array.len() == 0 as size_t {
         for event in AutoEvent::all() {
             let mut pat_object_index: size_t = 0 as size_t;

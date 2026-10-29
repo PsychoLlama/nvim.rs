@@ -6,8 +6,7 @@
 //! `nvim_exec_lua` made it unnecessary -- it dispatches an array of
 //! [method, args] pairs and stops at the first error.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -108,16 +107,11 @@ pub fn nvim_call_atomic(
         if nested_error.is_set() {
             let mut errval: Array = Array::with_capacity(3 as size_t);
             let failed_at = Integer::try_from(i).expect("a call index fits an Integer");
-            // SAFETY: `errval` was sized for these three, and the message is
-            // `nested_error`'s own NUL-terminated string.
-            unsafe {
-                errval.push(Object::integer(failed_at));
-                errval.push(Object::integer(nested_error.kind().into()));
-                let why = nested_error.message_or_empty().as_ptr();
-                let msg = cstr_to_string(why);
-                errval.push(Object::string(msg));
-                rv.push(Object::array(errval));
-            }
+            errval.push(Object::integer(failed_at));
+            errval.push(Object::integer(nested_error.kind().into()));
+            let msg = String_0::from_cstr(nested_error.message_or_empty());
+            errval.push(Object::string(msg));
+            rv.push(Object::array(errval));
         } else {
             rv.push(Object::Nil);
         }

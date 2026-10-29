@@ -4,8 +4,7 @@
 //! buffer owns; `nvim_buf_get_mark` also answers for the marks the *global*
 //! mark list holds against this buffer, which is why it is the long one.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -30,7 +29,8 @@ pub fn nvim_buf_del_mark(buf: BufferHandle, name: String_0) -> Result<Boolean, E
         error = err_bad_value(c"mark name (must be a single char)", name);
         return (res as Boolean).reported(error);
     }
-    let mark = ::core::ffi::c_int::from(unsafe { *name.data() });
+    // As C read it: a `char`, so a byte past ASCII is negative.
+    let mark = ::core::ffi::c_int::from(::core::ffi::c_char::from_ne_bytes([name.as_bytes()[0]]));
     let Some(fm) = mark_get(b, Win::current(), kMarkAllNoResolve, mark) else {
         error = err_bad_value(c"mark name", name.as_cstr());
         return (res as Boolean).reported(error);
@@ -80,7 +80,7 @@ pub fn nvim_buf_get_mark(buf: BufferHandle, name: String_0) -> Result<Array, Err
         col: 0,
         coladd: 0,
     };
-    let mark: ::core::ffi::c_char = unsafe { *name.data() };
+    let mark = ::core::ffi::c_char::from_ne_bytes([name.as_bytes()[0]]);
     let Some(fm) = mark_get(
         b,
         Win::current(),

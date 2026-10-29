@@ -6,13 +6,12 @@
 //! argument, recording where each one landed so `eap->args` can point into the
 //! finished buffer.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::ascii::ascii_iswhite;
 use crate::types::{CmdLine, ExArgt};
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 
 /// Nothing but spaces and tabs.
 ///
@@ -24,21 +23,7 @@ pub(crate) fn string_iswhite(str: &String_0) -> bool {
         .all(|&byte| ascii_iswhite(c_int::from(byte)))
 }
 
-/// Append `len` bytes: upstream's `kv_concat_len(cmdline, src, len)`, which
-/// c2rust expanded at all twenty-four of [`build_cmdline_str`]'s call sites,
-/// ~40 lines apiece.
-///
-/// # Safety
-/// `src` must point at `len` readable bytes.
-unsafe fn cmdline_concat(cmdline: &mut Vec<u8>, src: *const c_char, len: size_t) {
-    if len == 0 {
-        return;
-    }
-    // SAFETY: the caller's bytes, which are not part of `cmdline`.
-    cmdline.extend_from_slice(unsafe { core::slice::from_raw_parts(src.cast::<u8>(), len) });
-}
-
-/// [`cmdline_concat`] for a string literal: upstream's `kv_concat`.
+/// Append a string literal: upstream's `kv_concat`.
 fn cmdline_concat_str(cmdline: &mut Vec<u8>, s: &CStr) {
     cmdline.extend_from_slice(s.to_bytes());
 }
@@ -104,18 +89,11 @@ fn concat_cmdmods(cmdline: &mut Vec<u8>, cmdmod: &CmdMod) {
 ///
 /// Every argument is preceded by one space, which is what lets the offsets
 /// the argument vector records be recovered from the lengths alone.
-///
-/// # Safety
-///
-/// `cmdinfo` must point at the command's `CmdParseInfo`, live and unaliased
-/// for the call.
-pub(crate) unsafe fn build_cmdline_str(excmd: &mut ExArg, cmdinfo: *mut CmdParseInfo, args: Array) {
+pub(crate) fn build_cmdline_str(excmd: &mut ExArg, cmdinfo: &CmdParseInfo, args: Array) {
     let argc: size_t = args.len();
     // Upstream's `kv_resize(cmdline, 32)`: a size hint, nothing more.
     let mut cmdline: Vec<u8> = Vec::with_capacity(32);
-    // SAFETY: `cmdinfo` is the caller's, live for the call.
-    let cmdmod = unsafe { &(*cmdinfo).cmdmod };
-    concat_cmdmods(&mut cmdline, cmdmod);
+    concat_cmdmods(&mut cmdline, &cmdinfo.cmdmod);
 
     if excmd.argt.has(ExArgt::RANGE) {
         if excmd.addr_count == 1 {
@@ -147,8 +125,7 @@ pub(crate) unsafe fn build_cmdline_str(excmd: &mut ExArg, cmdinfo: *mut CmdParse
             .expect("collect_args puts only Strings in the array");
         cmdline.push(b' ');
         spans.push((cmdline.len(), s.len()));
-        // SAFETY: `s` names its own bytes.
-        unsafe { cmdline_concat(&mut cmdline, s.data(), s.len()) };
+        cmdline.extend_from_slice(s.as_bytes());
     }
     // The terminator is where `arg` points when there are no arguments.
     let end_idx = cmdline.len();

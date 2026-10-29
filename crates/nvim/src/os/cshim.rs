@@ -835,24 +835,6 @@ pub(crate) fn gettext_owned(msgid: &::core::ffi::CStr) -> ::std::ffi::CString {
     unsafe { ::core::ffi::CStr::from_ptr(answer) }.to_owned()
 }
 
-/// [`gettext`] for a message still held as a raw pointer.
-///
-/// Nothing is interned: the answer is either `msgid` itself or the
-/// catalogue's own text, and it is handed back with an unbounded lifetime,
-/// which is [`crate::cstr`]'s convention for exactly this shape. It is the
-/// form the transpiled call sites want -- they were holding a `*mut c_char`
-/// from `gettext` and are held to the same obligation they already had.
-///
-/// # Safety
-/// `msgid` must point at a live NUL-terminated string, and the answer must
-/// not be held past a `:language`: it is the catalogue's text, not a copy.
-/// Use [`gettext`] where the answer outlives the lookup.
-pub(crate) unsafe fn gettext_ptr<'a>(msgid: *const ::core::ffi::c_char) -> &'a ::core::ffi::CStr {
-    // SAFETY: the caller's contract, and `gettext` answers a NUL-terminated
-    // string of its own for one.
-    unsafe { ::core::ffi::CStr::from_ptr(gettext_raw(msgid)) }
-}
-
 /// The translation of a Rust-side message template -- [`gettext`] for a msgid
 /// held as a `&'static str`, which is what a `tr!` literal is.
 ///

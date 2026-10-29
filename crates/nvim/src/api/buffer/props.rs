@@ -5,8 +5,7 @@
 //! handle lookup plus a call into the layer that owns the property, so they
 //! share nothing but that shape.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -82,10 +81,10 @@ pub fn nvim_buf_del_var(buf: BufferHandle, name: String_0) -> Result<(), Error> 
 
 pub fn nvim_buf_get_name(buf: BufferHandle) -> Result<String_0, Error> {
     let rv: String_0 = String_0::NULL;
-    let Some(b) = find_buffer_by_handle(buf)?.filter(|b| !b.name.full().is_none()) else {
+    let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(rv);
     };
-    Ok(unsafe { cstr_to_string(b.name.full_ptr()) })
+    Ok(b.name.full().map_or(rv, String_0::from_cstr))
 }
 
 pub fn nvim_buf_set_name(buf: BufferHandle, name: String_0) -> Result<(), Error> {
@@ -103,8 +102,7 @@ pub fn nvim_buf_set_name(buf: BufferHandle, name: String_0) -> Result<(), Error>
     }
     let mut aco: AcoSave = AcoSave::default();
     aucmd_prepbuf(&mut aco, b);
-    // SAFETY: the API string is NUL-terminated and outlives the call.
-    let ren_ret = rename_buffer(unsafe { crate::cstr::at(name.data()) });
+    let ren_ret = rename_buffer(name.as_cstr());
     aucmd_restbuf(&mut aco);
     drop(redraw_off);
     if !is_curbuf {

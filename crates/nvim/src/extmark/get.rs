@@ -21,16 +21,14 @@
 use core::ffi::c_int;
 
 use super::{
-    Buf, KV_INITIAL_VALUE, free_decor, itr_current, itr_get, itr_get_ext, itr_get_overlap,
-    itr_next, itr_step_overlap, kExtmarkNone, kv_push, ns_destroy, tree_clear, tree_get_alt,
-    tree_lookup_ns, type_flags,
+    Buf, free_decor, itr_current, itr_get, itr_get_ext, itr_get_overlap, itr_next,
+    itr_step_overlap, kExtmarkNone, ns_destroy, tree_clear, tree_get_alt, tree_lookup_ns,
+    type_flags,
 };
 use crate::marktree::key::{
     MT_INVALID_KEY, mt_decor, mt_decor_any, mt_end, mt_paired, mtpair_from,
 };
-use crate::types::{
-    ColNr, ExtmarkInfoArray, ExtmarkType, MTPair, MTPos, MarkTreeIter, int64_t, uint32_t,
-};
+use crate::types::{ColNr, ExtmarkType, MTPair, MTPos, MarkTreeIter, int64_t, uint32_t};
 
 /// Every mark between two positions, the ones at either end included.
 ///
@@ -45,11 +43,11 @@ pub fn extmark_get(
     amount: int64_t,
     type_filter: ExtmarkType,
     overlap: bool,
-) -> ExtmarkInfoArray {
-    let mut array: ExtmarkInfoArray = KV_INITIAL_VALUE;
+) -> Vec<MTPair> {
+    let mut array: Vec<MTPair> = Vec::new();
     let mut itr = MarkTreeIter::default();
-    let under_limit = |array: &ExtmarkInfoArray| {
-        int64_t::try_from(array.size).expect("a mark answer never outgrows an i64") < amount
+    let under_limit = |array: &Vec<MTPair>| {
+        int64_t::try_from(array.len()).expect("a mark answer never outgrows an i64") < amount
     };
 
     if overlap {
@@ -95,12 +93,7 @@ pub fn extmark_get(
 
 /// Add `mark` to the answer, unless a namespace or decoration-type filter
 /// rules it out. `ns_id` is `UINT32_MAX` for "any namespace".
-fn push_mark(
-    array: &mut ExtmarkInfoArray,
-    ns_id: uint32_t,
-    type_filter: ExtmarkType,
-    mark: MTPair,
-) {
+fn push_mark(array: &mut Vec<MTPair>, ns_id: uint32_t, type_filter: ExtmarkType, mark: MTPair) {
     if !(ns_id == uint32_t::MAX || mark.start.ns == ns_id) {
         return;
     }
@@ -113,7 +106,7 @@ fn push_mark(
         }
     }
 
-    kv_push(&mut array.size, &mut array.capacity, &mut array.items, mark);
+    array.push(mark);
 }
 
 /// The extmark `id` of namespace `ns_id`, paired with its end position.

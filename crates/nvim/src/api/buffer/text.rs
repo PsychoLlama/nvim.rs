@@ -5,15 +5,14 @@
 //! `fix_pos_col` for a mark or cursor column inside the replaced span, and
 //! `fix_cursor_cols` for the columns of every window showing the buffer.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::api::private::validate::err_out_of_range;
 use crate::memline::Lines;
 use crate::r#move::WinValid;
 use crate::normal::{set_visual_anchor, visual_active, visual_anchor, visual_mode};
-use crate::winlayer::{Buf, PosRef, Win, tab_windows};
+use crate::winlayer::{Buf, Win, tab_windows};
 
 /// Replace the text from (`start_row`, `start_col`) to (`end_row`,
 /// `end_col`) of `buf` with `replacement`'s lines.
@@ -199,20 +198,17 @@ impl Replacement {
         );
         if visual_active() && b.raw() == Buf::current_raw() && !visual_mode().is_block() {
             let mut anchor = visual_anchor();
-            // SAFETY: `anchor` is this frame's own position.
-            unsafe {
-                fix_pos_col(
-                    b,
-                    &raw mut anchor,
-                    self.start_row as LineNr,
-                    self.start_col as ColNr,
-                    self.end_row as LineNr,
-                    self.end_col as ColNr,
-                    new_len as LineNr,
-                    self.last_len,
-                    1,
-                )
-            };
+            fix_pos_col(
+                b,
+                &mut anchor,
+                self.start_row as LineNr,
+                self.start_col as ColNr,
+                self.end_row as LineNr,
+                self.end_col as ColNr,
+                new_len as LineNr,
+                self.last_len,
+                1,
+            );
             set_visual_anchor(anchor);
             check_visual_pos();
         }
@@ -314,12 +310,11 @@ pub(crate) fn fix_cursor(mut win: Win, lo: LineNr, hi: LineNr, extra: LineNr) {
     };
 }
 
-/// # Safety
-///
-/// `pos` must point at an initialized position, unaliased for the call.
-unsafe fn fix_pos_col(
+/// Moves `pos` to where the text it was in went, after rows
+/// `start_row..=end_row` were replaced.
+fn fix_pos_col(
     buffer: Buf,
-    pos: *mut Pos,
+    pos: &mut Pos,
     start_row: LineNr,
     start_col: ColNr,
     end_row: LineNr,
@@ -328,9 +323,6 @@ unsafe fn fix_pos_col(
     new_cols_at_end_row: ColNr,
     mode_col_adj: ColNr,
 ) {
-    // SAFETY: the caller's promise -- `pos` is a live position, and nothing
-    // below can move it.
-    let mut pos = unsafe { PosRef::new(pos) };
     if pos.lnum < start_row {
         return;
     }
@@ -385,19 +377,19 @@ fn fix_cursor_cols(
     } else {
         1 as ColNr
     };
-    unsafe {
-        fix_pos_col(
-            win.buffer(),
-            &raw mut win.w_cursor,
-            start_row,
-            start_col,
-            end_row,
-            end_col,
-            new_rows,
-            new_cols_at_end_row,
-            mode_col_adj,
-        )
-    };
+    let mut cursor = win.w_cursor;
+    fix_pos_col(
+        win.buffer(),
+        &mut cursor,
+        start_row,
+        start_col,
+        end_row,
+        end_col,
+        new_rows,
+        new_cols_at_end_row,
+        mode_col_adj,
+    );
+    win.w_cursor = cursor;
     check_cursor_col(win);
     changed_cline_bef_curs(win);
     invalidate_botline_win(win);

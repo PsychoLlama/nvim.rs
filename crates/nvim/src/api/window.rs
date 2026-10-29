@@ -1,7 +1,6 @@
 //! `nvim_win_*`: the window entry points.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -27,7 +26,7 @@ use crate::message::emsg;
 use crate::message::{e_autocmd_close, e_cmdwin};
 use crate::r#move::{update_topline, validate_cursor};
 use crate::narrow::number_as_int;
-use crate::os::cshim::gettext_ptr;
+use crate::os::cshim::gettext;
 use crate::plines::{win_get_fill, win_text_height};
 use crate::pos::MAXCOL;
 use crate::types::{
@@ -226,13 +225,11 @@ pub fn nvim_win_hide(win: WindowHandle) -> Result<(), Error> {
         return Ok(());
     }
     let tabpage = tab_of(w);
-    let refused = e_autocmd_close.as_ptr();
     let is_aucmd = is_aucmd_win(w);
     let same_tab = tabpage.is_current();
     api_try(|| {
         if is_aucmd {
-            // SAFETY: `e_autocmd_close` is a static message.
-            unsafe { emsg(gettext_ptr(refused)) };
+            emsg(gettext(e_autocmd_close));
         } else if same_tab {
             win_close(w, false, false);
         } else {

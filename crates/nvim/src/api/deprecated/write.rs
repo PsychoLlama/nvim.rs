@@ -6,8 +6,7 @@
 //! `nvim_subscribe`/`nvim_unsubscribe` are empty: the broadcast events they
 //! filtered no longer exist.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -20,110 +19,57 @@
 
 use super::*;
 use crate::guard::Suppress;
-use crate::kvec::Kvec;
 use crate::message::{emsg, msg};
-use crate::types::NUL;
 use crate::types::builders::ArrayBuf;
+use core::ffi::CStr;
 
 pub fn nvim_subscribe(_channel_id: uint64_t, _event: String_0) {}
 
 pub fn nvim_unsubscribe(_channel_id: uint64_t, _event: String_0) {}
 
+/// The line `nvim_out_write` is accumulating, up to its newline.
+static OUT_LINE: GlobalCell<Vec<u8>> = GlobalCell::new(Vec::new());
+/// The same for the two `nvim_err_write` spellings.
+static ERR_LINE: GlobalCell<Vec<u8>> = GlobalCell::new(Vec::new());
+
 fn write_msg(message: String_0, to_err: bool, writeln: bool) {
-    static out_line_buf: GlobalCell<StringBuilder> = GlobalCell::new(StringBuilder {
-        size: 0 as size_t,
-        capacity: 0 as size_t,
-        items: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    });
-    static err_line_buf: GlobalCell<StringBuilder> = GlobalCell::new(StringBuilder {
-        size: 0 as size_t,
-        capacity: 0 as size_t,
-        items: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    });
-    let line_buf: *mut StringBuilder = if to_err {
-        err_line_buf.ptr()
-    } else {
-        out_line_buf.ptr()
-    };
-
-    // The buffer is reached through the pointer at each use rather than
-    // borrowed once for the body: `msg`/`emsg` below can re-enter this
-    // function, and a `&mut` held across them would promise otherwise.
-
-    // C's `kv_push`, whose growth step c2rust expanded at every use.
-    let push = |byte: ::core::ffi::c_char| {
-        // SAFETY: `line_buf` names one of the two statics above, whose
-        // vector is null with a zero capacity or one heap block.
-        unsafe {
-            Kvec::new(
-                &mut (*line_buf).size,
-                &mut (*line_buf).capacity,
-                &mut (*line_buf).items,
-            )
-            .push(byte);
-        }
-    };
-    // Give the buffer its minimum size, which is also what it shrinks back
-    // to after every line. One byte per element, so the byte count is the
-    // capacity.
-    let reserve = || {
-        // SAFETY: as `push`.
-        unsafe {
-            (*line_buf).capacity = LINE_BUFFER_MIN_SIZE as size_t;
-            (*line_buf).items = xrealloc((*line_buf).items.cast(), (*line_buf).capacity).cast();
-        }
-    };
-    // Publish the line the buffer holds and empty it.
+    let line_buf = if to_err { &ERR_LINE } else { &OUT_LINE };
+    let push = |byte: u8| line_buf.with_mut(|line| line.push(byte));
+    // Publish the line the buffer holds and empty it. The line is out of
+    // its cell while it is shown: `msg`/`emsg` can re-enter this function.
     let flush = || {
-        push(0);
-        // SAFETY: as `push`; the buffer is NUL-terminated by the push above.
-        unsafe {
-            if to_err {
-                emsg(crate::cstr::at((*line_buf).items));
-            } else {
-                msg(crate::cstr::at((*line_buf).items), 0 as ::core::ffi::c_int);
-            }
+        let mut line = line_buf.take();
+        line.push(0);
+        let text = CStr::from_bytes_until_nul(&line).expect("the line was just terminated");
+        if to_err {
+            emsg(text);
+        } else {
+            msg(text, 0);
         }
-        if msg_silent.get() == 0 as ::core::ffi::c_int {
+        if msg_silent.get() == 0 {
             msg_didout.set(true);
         }
-        // SAFETY: as `push`.
-        unsafe { (*line_buf).size = 0 as size_t };
-        reserve();
+        // Back to its minimum size; whatever a re-entered write left in the
+        // cell meanwhile is dropped, as upstream's `size = 0` dropped it.
+        line.clear();
+        line.shrink_to(LINE_BUFFER_MIN_SIZE as usize);
+        line_buf.set(line);
     };
 
     let no_prompt = Suppress::wait_return();
-    let mut i: size_t = 0;
-    while i < message.len() {
+    for &byte in message.as_bytes() {
         if got_int.get() {
             break;
         }
-        // SAFETY: as `push`.
-        if unsafe { (*line_buf).capacity } == 0 as size_t {
-            reserve();
-        }
-        // SAFETY: `i` is below the length, so the byte is in the message.
-        let byte = unsafe { *message.data().add(i) };
-        if ::core::ffi::c_int::from(byte) == NL {
-            flush();
-        } else if ::core::ffi::c_int::from(byte) == NUL {
+        match byte {
+            b'\n' => flush(),
             // A NUL in the text stands for a newline, as it does everywhere
             // a buffer line is passed as a C string.
-            push('\n' as ::core::ffi::c_char);
-        } else {
-            push(byte);
+            0 => push(b'\n'),
+            _ => push(byte),
         }
-        i += 1;
     }
     if writeln {
-        // SAFETY: as `push`.
-        if unsafe { (*line_buf).capacity } == 0 as size_t {
-            reserve();
-        }
-        // The C spelled the byte `NL`, which `kv_push`'s macro tested
-        // against `NUL` before pushing; c2rust kept both arms of a
-        // comparison of two constants that can never be equal, and this is
-        // the arm that runs.
         flush();
     }
     drop(no_prompt);

@@ -29,36 +29,50 @@
 //!   editor globals the `ex_docmd` entry points consult (`curbuf`, the
 //!   command table, the register table) are live for the whole call.
 //!
-//! What is left `unsafe fn` is what those two do not cover: `excmd.arg`
-//! pointing into a command line only the caller can vouch for.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::api::private::validate::{err_bad_value, err_expected, err_required};
 use crate::api_error;
-use crate::cstr;
 use crate::ex_docmd::is_user_cmd;
 use crate::guard::Suppress;
 use crate::message_fmt::{msg_bytes, msg_cstr};
-use crate::snprintf;
 use crate::types::CmdIdx;
 use crate::types::{CmdFilter, CmdLine, ExArgt, NUL};
 use crate::usercmd::user_command_name;
 use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
 
 const EMPTY_ARRAY: Array = Array::EMPTY;
 
-// Two locals over `api::private::validate`'s family: the ones whose argument
-// is still a pointer into the caller's own text rather than a literal.
-
-/// [`err_expected`] where what arrived is a pointer.
-fn err_expected_at(name: &CStr, expected: &CStr, actual: *const c_char) -> Error {
-    // SAFETY: `actual` is null or a NUL-terminated string of the caller's.
-    let actual = unsafe { cstr::at_opt(actual) };
-    err_expected(name, expected, actual)
+/// C's `strtol(text, &end, 10)` where the number has to be the whole of
+/// `text`: leading white space and a sign allowed, nothing after the
+/// digits, and saturating at the `long` range as glibc's does.
+fn whole_number(text: &[u8]) -> Option<int64_t> {
+    let blanks = text
+        .iter()
+        .take_while(|b| b" \t\n\x0b\x0c\r".contains(b))
+        .count();
+    let rest = &text[blanks..];
+    let (negative, digits) = match rest.first() {
+        Some(b'-') => (true, &rest[1..]),
+        Some(b'+') => (false, &rest[1..]),
+        _ => (false, rest),
+    };
+    if digits.is_empty() || !digits.iter().all(u8::is_ascii_digit) {
+        return None;
+    }
+    // Accumulated on the side of the sign, so that `i64::MIN` is reachable.
+    let number = digits.iter().fold(0i64, |n, &d| {
+        let d = i64::from(d - b'0');
+        let n = n.saturating_mul(10);
+        if negative {
+            n.saturating_sub(d)
+        } else {
+            n.saturating_add(d)
+        }
+    });
+    Some(number)
 }
 
 /// Decode one of `cmd`'s sub-keyset Dicts (`magic`, `mods`, `mods.filter`)
@@ -140,8 +154,7 @@ fn prepare_cmd(
 
     // Render the Dict back into a command line: `execute_cmd` and everything
     // under it read the line, not the Array.
-    // SAFETY: `excmd` is resolved and `args` holds only Strings.
-    unsafe { build_cmdline_str(excmd, cmdinfo, args) };
+    build_cmdline_str(excmd, cmdinfo, args);
     apply_argopt(excmd)?;
     if excmd.argt.has(ExArgt::CMDARG) && !excmd.usefilter {
         excmd.do_ecmd_cmd = getargcmd(excmd);
@@ -159,13 +172,15 @@ fn resolve_command(cmd: &KeyDict_cmd, excmd: &mut ExArg) -> Result<Option<bool>,
         return Err(err_required(c"cmd"));
     };
 
-    // SAFETY: the key is set, so `name` is a NUL-terminated keydict String.
-    let named = unsafe { *name.data() } as c_int != NUL;
+    let named = name
+        .as_bytes()
+        .first()
+        .is_some_and(|&b| c_int::from(b) != NUL);
     let has_range = cmd.range.as_ref().is_some_and(|range| !range.is_empty());
     let has_mods = cmd.mods.is_some();
 
     if !named && !has_range && !has_mods {
-        return Err(err_expected_at(c"cmd", c"non-empty String", ptr::null()));
+        return Err(err_expected(c"cmd", c"non-empty String", None));
     }
 
     // `find_ex_command` reads the command word, so the name is the whole of
@@ -257,15 +272,9 @@ fn collect_args(given: &Array, excmd: &mut ExArg, args: &mut Array) -> Result<bo
     if given.len() == 1 && excmd.argt.has(ExArgt::COUNT) && !excmd.argt.has(ExArgt::EXTRA) {
         let count = match &given[0] {
             Object::Integer(n) => Some(*n as int64_t),
-            Object::String(str) => {
-                let mut endptr: *mut c_char = ptr::null_mut();
-                // SAFETY: the argument is NUL-terminated and `endptr` is this
-                // frame's own.
-                let val = unsafe { strtol(str.data(), &raw mut endptr, 10) };
-                // The whole string has to be the number.
-                // SAFETY: `strtol` leaves `endptr` within the string it parsed.
-                (unsafe { *endptr } as c_int == NUL && !str.is_empty()).then_some(val as int64_t)
-            }
+            // The whole string has to be the number, as far as a C string
+            // reaches.
+            Object::String(str) if !str.is_empty() => whole_number(str.as_cstr().to_bytes()),
             _ => None,
         };
         if let Some(count) = count
@@ -289,24 +298,12 @@ fn collect_args(given: &Array, excmd: &mut ExArg, args: &mut Array) -> Result<bo
             }
             // A handle is its id, like any integer.
             Object::Buffer(n) | Object::Window(n) | Object::Tabpage(n) | Object::Integer(n) => {
-                let mut buf = [0 as c_char; NUMBUFLEN as usize];
-                // SAFETY: the buffer is `NUMBUFLEN` writable bytes and the
-                // verb matches the argument.
-                let rendered = unsafe {
-                    let (room, fmt) = (NUMBUFLEN as size_t, c"%ld".as_ptr());
-                    snprintf!(buf.as_mut_ptr(), room, fmt, *n);
-                    cstr::bytes_at(buf.as_ptr())
-                };
-                args.push(Object::string(String_0::from_bytes(rendered)));
+                args.push(Object::string(String_0::from(format!("{n}").as_str())));
             }
             Object::String(s) => {
                 // An all-whitespace argument would vanish into the separators.
                 if string_iswhite(s) {
-                    return Err(err_expected_at(
-                        c"command arg",
-                        c"non-whitespace",
-                        ptr::null(),
-                    ));
+                    return Err(err_expected(c"command arg", c"non-whitespace", None));
                 }
                 args.push(Object::string(String_0::clone(s)));
             }
@@ -339,17 +336,17 @@ fn apply_range(cmd: &KeyDict_cmd, excmd: &mut ExArg) -> Result<(), Error> {
             return Err(err_cannot_accept(c"range", cmd));
         }
         if range.len() > 2 {
-            return Err(err_expected_at(c"range", c"<=2 elements", ptr::null()));
+            return Err(err_expected(c"range", c"<=2 elements", None));
         }
 
         excmd.addr_count = range.len() as c_int;
         for i in 0..range.len() {
             let bound = &range[i];
             if bound.as_integer().is_none_or(|n| n < 0) {
-                return Err(err_expected_at(
+                return Err(err_expected(
                     c"range element",
                     c"non-negative Integer",
-                    ptr::null(),
+                    None,
                 ));
             }
         }
@@ -403,11 +400,7 @@ fn apply_count(
         return Err(err_cannot_accept(c"count", cmd));
     }
     if count < 0 as Integer {
-        return Err(err_expected_at(
-            c"count",
-            c"non-negative Integer",
-            ptr::null(),
-        ));
+        return Err(err_expected(c"count", c"non-negative Integer", None));
     }
     set_cmd_count(excmd, count as LineNr, true);
     Ok(())
@@ -422,11 +415,15 @@ fn apply_register(cmd: &KeyDict_cmd, excmd: &mut ExArg) -> Result<(), Error> {
         return Err(err_cannot_accept(c"register", cmd));
     }
     if reg.len() != 1 {
-        return Err(err_expected_at(c"reg", c"single character", reg.data()));
+        return Err(err_expected(
+            c"reg",
+            c"single character",
+            Some(reg.as_cstr()),
+        ));
     }
 
-    // SAFETY: the size is 1, so byte 0 is in bounds.
-    let regname = unsafe { *reg.data() };
+    // As C read it: a `char`, so a byte past ASCII is negative.
+    let regname = c_char::from_ne_bytes([reg.as_bytes()[0]]);
     if regname as c_int == '=' as c_int {
         return Err(Error::validation(c"Cannot use register \"="));
     }
@@ -525,8 +522,7 @@ fn apply_mods(cmd: &KeyDict_cmd, excmd: &ExArg, cmdinfo: &mut CmdParseInfo) -> R
         cmdinfo.cmdmod.cmod_split |= WSP_HOR as c_int;
     }
     if let Some(named) = mods.split.as_ref() {
-        // SAFETY: `mods.split` is a NUL-terminated keydict String.
-        let split = unsafe { CStr::from_ptr(named.data()) };
+        let split = named.as_cstr();
         match split_direction(split) {
             Some(Some(bit)) => cmdinfo.cmdmod.cmod_split |= bit,
             // The empty string is "no direction", not a bad one.

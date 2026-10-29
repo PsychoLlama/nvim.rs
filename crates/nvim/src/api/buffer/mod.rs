@@ -1,10 +1,10 @@
-#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use crate::api::private::helpers::{
-    buf_get_text, cstr_to_string, dict_get_value, dict_set_var, find_buffer_by_handle,
-    normalize_index, set_mark, try_enter, try_leave,
+    buf_get_text, dict_get_value, dict_set_var, find_buffer_by_handle, normalize_index, set_mark,
+    try_enter, try_leave,
 };
 use crate::api::private::validate::check_string_array;
 use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};

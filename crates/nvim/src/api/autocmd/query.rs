@@ -4,16 +4,14 @@
 //! which may be given as a string, an array or not at all, and then every
 //! matching command rendered into a Dict of its own.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::api::private::validate::{err_bad_number, err_bad_value, err_conflict, err_expected};
 use crate::api_error;
-use crate::winlayer::Live;
 
 /// The keyset this call was handed, with checked field access.
-type Opts = Live<KeyDict_get_autocmds>;
+type Opts = KeyDict_get_autocmds;
 
 /// How many patterns, or buffers, one call may filter on.
 const MAX_PATTERNS: usize = 256;
@@ -23,11 +21,9 @@ const EVENT_COUNT: usize = 145;
 const DICT_KEYS: size_t = 12;
 
 pub fn nvim_get_autocmds(opts: &mut KeyDict_get_autocmds) -> Result<Array, Error> {
-    // SAFETY: the dispatcher's keyset outlives this call.
-    let opts = unsafe { Live::<KeyDict_get_autocmds>::new(opts) };
-    let group = group_filter(&opts)?;
+    let group = group_filter(opts)?;
     let id = opts.id.map_or(-1, |id| id as ::core::ffi::c_int);
-    let events = event_filter(&opts)?;
+    let events = event_filter(opts)?;
 
     let has_buf = opts.buf.is_some() || opts.buffer.is_some();
     if opts.buf.is_some() && opts.buffer.is_some() {
@@ -37,8 +33,8 @@ pub fn nvim_get_autocmds(opts: &mut KeyDict_get_autocmds) -> Result<Array, Error
         return Err(err_conflict(c"pattern", c"buf"));
     }
     // The `<buffer=N>` strings the pattern filter below borrows from.
-    let buffers = buffer_patterns(&opts, has_buf)?;
-    let patterns = pattern_filters(&opts, &buffers)?;
+    let buffers = buffer_patterns(opts, has_buf)?;
+    let patterns = pattern_filters(opts, &buffers)?;
 
     let mut autocmd_list = Array::EMPTY;
     for event in AutoEvent::all() {

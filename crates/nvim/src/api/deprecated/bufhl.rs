@@ -6,13 +6,11 @@
 //! `extmark_set`.  `nvim_buf_get_number` is the handle-to-number accessor from
 //! before handles *were* numbers.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::api::private::helpers::{Reported, find_buffer_by_handle};
 use crate::api::private::validate::{Bad, err_invalid};
-use crate::cstr;
 use crate::marktree::key::MtFlags;
 use crate::winlayer::Buf;
 
@@ -76,15 +74,13 @@ pub fn nvim_buf_add_highlight(
     let Some(buf) = find_buffer_by_handle(buffer)? else {
         return Ok(0 as Integer);
     };
-    let out_of_range = c"out of range".as_ptr();
+    let out_of_range = c"out of range";
     if line < 0 as Integer || line >= MAXLNUM as Integer {
-        // SAFETY: `err` is this frame's slot and both strings are static.
-        error = err_invalid(c"line number", Bad::Bare(unsafe { cstr::at(out_of_range) }));
+        error = err_invalid(c"line number", Bad::Bare(out_of_range));
         return (0 as Integer).reported(error);
     }
     if col_start < 0 as Integer || col_start > MAXCOL as ::core::ffi::c_int as Integer {
-        // SAFETY: as above.
-        error = err_invalid(c"column", Bad::Bare(unsafe { cstr::at(out_of_range) }));
+        error = err_invalid(c"column", Bad::Bare(out_of_range));
         return (0 as Integer).reported(error);
     }
     if col_end < 0 as Integer || col_end > MAXCOL as ::core::ffi::c_int as Integer {

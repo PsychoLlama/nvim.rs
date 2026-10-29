@@ -79,7 +79,7 @@ pub(crate) fn setvar(stack: &mut Stack) -> Result<c_int, Raise> {
     let del = stack.top().index() < 4 || stack.is_nil(At::arg(4));
 
     let exists = match dict_check_writable(&dict, &key, del) {
-        Ok(item) => !item.is_null(),
+        Ok(exists) => exists,
         Err(e) => return Err(Raise::message(e.message_or_empty().to_bytes())),
     };
 

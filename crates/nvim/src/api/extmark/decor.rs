@@ -7,8 +7,7 @@
 //! `parse_virt_text` is shared with it -- the `[[text, hl], ..]` chunk array
 //! decoder every virtual-text entry point uses.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::api::private::helpers::Reported;

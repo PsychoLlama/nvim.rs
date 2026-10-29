@@ -210,15 +210,6 @@ pub type ErrorType = ::core::ffi::c_int;
 pub const kErrorTypeNone: ErrorType = -1;
 pub const kErrorTypeException: ErrorType = 0;
 pub const kErrorTypeValidation: ErrorType = 1;
-/// A kvec of extmark pairs.
-///
-/// Not `Copy`: `items` is the array's own allocation.
-#[derive(Clone)]
-pub struct ExtmarkInfoArray {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut MTPair,
-}
 pub type HLGroupID = Integer;
 /// A message made of chunks, each with its own highlight, each owning its
 /// text. Upstream's kvec of `HlMessageChunk`.

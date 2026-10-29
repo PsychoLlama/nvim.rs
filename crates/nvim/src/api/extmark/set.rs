@@ -7,20 +7,17 @@
 //! into a [`Decoration`], which then either goes to the redraw that asked
 //! for it (`ephemeral`) or is stored in the buffer as a mark.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::api::private::validate::{
     Bad, err_bad_number, err_bad_value, err_expected, err_invalid, err_out_of_range,
 };
 use crate::decoration::decor_drawing_window;
-use crate::winlayer::{Buf, Live};
+use crate::winlayer::Buf;
 
-/// The keyset this call was handed, with checked field access: the pointer the
-/// dispatcher passes stays live for the whole call, so one promise at the head
-/// buys every `opts.field` below.
-type Opts = Live<KeyDict_set_extmark>;
+/// The keyset this call was handed.
+type Opts = KeyDict_set_extmark;
 
 /// The largest `priority` and `_subpriority` a mark may carry.
 const MAX_PRIORITY: Integer = 65535;
@@ -111,8 +108,7 @@ impl Decoration {
         if let Some(conceal_lines) = opts.conceal_lines.as_ref() {
             self.hl.flags |= kSHConcealLines as uint16_t;
             self.has_hl = true;
-            // SAFETY: as above.
-            if !conceal_lines.is_empty() && unsafe { *conceal_lines.data() } != 0 {
+            if conceal_lines.as_bytes().first().is_some_and(|&b| b != 0) {
                 return Err(Error::validation(
                     c"conceal_lines has to be an empty string",
                 ));
@@ -460,8 +456,6 @@ pub fn nvim_buf_set_extmark(
     col: Integer,
     opts: &mut KeyDict_set_extmark,
 ) -> Result<Integer, Error> {
-    // SAFETY: the dispatcher's keyset outlives this call.
-    let mut opts = unsafe { Opts::new(opts) };
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(0);
     };
@@ -470,7 +464,7 @@ pub fn nvim_buf_set_extmark(
     }
     // A refusal drops the half-built decoration, which nothing took over.
     let mut decor = Decoration::new();
-    set_extmark(&mut decor, b, ns_id, line, col, &mut opts)
+    set_extmark(&mut decor, b, ns_id, line, col, opts)
 }
 
 /// Read every key into `decor`, clamp the positions, and place the mark.

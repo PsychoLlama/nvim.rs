@@ -460,19 +460,6 @@ pub fn dict_is_watched(d: Option<&Dict>) -> bool {
     d.is_some_and(|d| !d.watchers.is_empty())
 }
 
-/// The `DictItem` a dictionary hashtab slot names: upstream's
-/// `TV_DICT_HI2DI`.
-///
-/// Safe, where it used to subtract an offset from the slot's key pointer
-/// and hand back a wild pointer for an empty slot: the slot names the item.
-/// An empty or removed slot answers null or the table's own tombstone
-/// sentinel, neither of which may be dereferenced -- ask `hi.is_kept()`
-/// first, exactly as before.
-#[inline(always)]
-pub(crate) fn tv_dict_hi2di(hi: Slot<DictEntry>) -> *mut DictItem {
-    hi.hi_key.item()
-}
-
 /// Store `b` in `tv` as the return value: the slot takes the handle over.
 ///
 /// The old contents are overwritten, not cleared, as every

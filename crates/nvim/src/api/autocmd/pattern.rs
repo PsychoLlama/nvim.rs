@@ -6,8 +6,7 @@
 //! becomes a single `<buffer=N>` pattern.  `unpack_string_or_array` is the
 //! "one or many" decoder it and the event list share.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -18,20 +17,17 @@
 
 use super::*;
 use crate::api::private::validate::err_expected;
-use crate::printf_string;
+use core::ffi::CStr;
 
-/// # Safety
-///
-/// `k` must point at a NUL-terminated string, unaliased for the call.
-pub(crate) unsafe fn unpack_string_or_array(
+/// `v` as a list of strings: one string, or an array of them, under the
+/// option name `k`.
+pub(crate) fn unpack_string_or_array(
     v: Option<Object>,
-    k: *mut ::core::ffi::c_char,
+    k: &CStr,
     required: bool,
 ) -> Result<Array, Error> {
     let Some(v) = v.filter(|v| !v.is_nil()) else {
         if required {
-            // SAFETY: `k` is a NUL-terminated key.
-            let k = unsafe { core::ffi::CStr::from_ptr(k) };
             return Err(err_expected(k, c"Array or String", Some(c"nil")));
         }
         return Ok(Array::EMPTY);
@@ -42,27 +38,21 @@ pub(crate) unsafe fn unpack_string_or_array(
         return Ok(arr);
     }
     if matches!(v, Object::Array(_)) {
-        // SAFETY: `k` is a NUL-terminated key.
-        let key = unsafe { core::ffi::CStr::from_ptr(k) };
         let array = v.into_array().expect("the arm above matched an Array");
-        check_string_array(&array, key, true)?;
+        check_string_array(&array, k, true)?;
         return Ok(array);
     }
     let got = api_typename(v.kind());
-    // SAFETY: `k` is a NUL-terminated key.
-    let k = unsafe { core::ffi::CStr::from_ptr(k) };
     Err(err_expected(k, c"Array or String", Some(got)))
 }
 
-/// # Safety
-///
-/// `pattern` must be a well-formed API object the caller owns for the call.
-/// `fallback` must point at a NUL-terminated string, unaliased for the call.
-pub(crate) unsafe fn get_patterns_from_pattern_or_buf(
+/// The patterns the `pattern`/`buffer` options name, or `fallback` alone
+/// when they name none (`None` for no fallback).
+pub(crate) fn get_patterns_from_pattern_or_buf(
     pattern: Option<&Object>,
     has_buf: bool,
     buffer: BufferHandle,
-    fallback: *mut ::core::ffi::c_char,
+    fallback: Option<&CStr>,
 ) -> Result<Array, Error> {
     /// One pattern string per `,`-separated span of `text`, which is what
     /// `aucmd_span_pattern` walks.
@@ -95,14 +85,15 @@ pub(crate) unsafe fn get_patterns_from_pattern_or_buf(
         return Err(err_expected(c"pattern", want, Some(got)));
     } else if has_buf {
         let b = find_buffer_by_handle(buffer)?;
-        // SAFETY: the verb matches the argument.
-        patterns.push(Object::string(unsafe {
-            printf_string!(c"<buffer=%d>".as_ptr(), b.map_or(0, |b| b.handle))
-        }));
+        let number = b.map_or(0, |b| b.handle);
+        patterns.push(Object::string(String_0::from(
+            format!("<buffer={number}>").as_str(),
+        )));
     }
-    if patterns.is_empty() && !fallback.is_null() {
-        // SAFETY: the caller's NUL-terminated fallback pattern.
-        patterns.push(Object::string(unsafe { cstr_to_string(fallback) }));
+    if patterns.is_empty()
+        && let Some(fallback) = fallback
+    {
+        patterns.push(Object::string(String_0::from_cstr(fallback)));
     }
     Ok(patterns)
 }

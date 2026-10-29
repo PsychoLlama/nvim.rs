@@ -2,8 +2,7 @@
 //! round: an async error report, and the terminal's answer to a query the UI
 //! sent.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -17,21 +16,12 @@ use crate::api::private::validate::err_expected;
 use crate::autocmd::do_termresponse_autocmd;
 use crate::eval::vars::set_vim_var_string;
 use crate::log::{LOGLVL_ERR, logmsg};
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_cstr;
 use crate::types::{Error, Integer, Object, String_0, Vv, kObjectTypeString, uint64_t};
 
 /// Log the failure a client reported for a request it had sent us.
 pub fn nvim_error_event(channel_id: uint64_t, _type_0: Integer, msg: String_0) {
-    // `msg` is the caller's, per this function's contract, and it is
-    // NUL-terminated wherever it is not empty -- the RPC decoder terminates
-    // every string it builds.
-    let text = if msg.is_empty() {
-        c"".as_ptr()
-    } else {
-        msg.data().cast_const()
-    };
-    // SAFETY: `text` is the message this call was handed, NUL-terminated.
-    let text = unsafe { c_str(text) };
+    let text = msg_cstr(msg.as_cstr());
     logmsg!(
         LOGLVL_ERR,
         c"nvim_error_event",

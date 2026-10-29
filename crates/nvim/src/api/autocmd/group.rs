@@ -6,8 +6,7 @@
 //! `get_augroup_from_object` is the shared "id, name, or absent" decoder
 //! the create/clear/get paths all take their group from.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -20,15 +19,12 @@ use super::*;
 use crate::api::private::helpers::Reported;
 use crate::api::private::validate::{err_bad_number, err_bad_value, err_expected};
 use crate::narrow::number_as_int;
-use crate::winlayer::Live;
 
 pub fn nvim_create_augroup(
     channel_id: uint64_t,
     name: String_0,
     opts: &mut KeyDict_create_augroup,
 ) -> Result<Integer, Error> {
-    // SAFETY: the dispatcher's keyset outlives this call.
-    let opts = unsafe { Live::<KeyDict_create_augroup>::new(opts) };
     let mut error = Error::none();
     // An augroup the caller says nothing about is cleared.
     let clear_autocmds: bool = opts.clear.unwrap_or(true);

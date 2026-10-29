@@ -18,9 +18,7 @@
 //! did.
 
 #![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
 
-use crate::cstr;
 use core::ffi::{c_char, c_int};
 
 use crate::ex_eval::state::{
@@ -272,24 +270,21 @@ pub(crate) fn set_mark(
     line: Integer,
     col: Integer,
 ) -> Result<(), Error> {
-    let buffer = buffer.unwrap_or_else(Buf::current).raw();
+    let buffer = buffer.unwrap_or_else(Buf::current);
     let mut col = col;
     let mut deleting = false;
-    let out_of_range = c"out of range".as_ptr();
+    let out_of_range = c"out of range";
     if line == 0 {
         col = 0;
         deleting = true;
     } else {
         if col > MAXCOL as Integer {
-            // SAFETY: the names and values are NUL-terminated strings.
-            let why = Bad::Bare(unsafe { cstr::at(out_of_range) });
+            let why = Bad::Bare(out_of_range);
             return Err(err_invalid(c"column", why));
         }
-        // SAFETY: `buffer` is the caller's buffer, or the current one.
-        let line_count = unsafe { (*buffer).b_ml.ml_line_count } as Integer;
+        let line_count = Integer::from(buffer.b_ml.ml_line_count);
         if line < 1 || line > line_count {
-            // SAFETY: the names and values are NUL-terminated strings.
-            let why = Bad::Bare(unsafe { cstr::at(out_of_range) });
+            let why = Bad::Bare(out_of_range);
             return Err(err_invalid(c"line", why));
         }
     }
@@ -300,10 +295,11 @@ pub(crate) fn set_mark(
         col: col as ColNr,
         coladd: 0,
     };
-    // SAFETY: `name` names one character, per this function's contract.
-    let mark = unsafe { *name.data() } as c_int;
-    // SAFETY: `buffer` is live.
-    let handle = unsafe { (*buffer).handle };
+    // As C read it: a `char`, so a byte past ASCII is negative. A name that
+    // is not one character is the caller's check; an empty one reads NUL.
+    let first = name.as_bytes().first().copied().unwrap_or(0);
+    let mark = c_int::from(c_char::from_ne_bytes([first]));
+    let handle = buffer.handle;
     if setmark_at(mark, pos, handle).is_ok() {
         return Ok(());
     }

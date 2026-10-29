@@ -4,8 +4,7 @@
 //! where the modern `nvim_*_set_var`/`nvim_*_del_var` return nothing, so each
 //! reads the variable before writing it.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,

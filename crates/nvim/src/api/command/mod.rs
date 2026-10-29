@@ -1,10 +1,9 @@
-#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use crate::api::private::helpers::{
-    api_dict_to_keydict, api_set_sctx, api_typename, cstr_to_string, find_buffer_by_handle,
-    try_enter, try_leave,
+    api_dict_to_keydict, api_set_sctx, api_typename, find_buffer_by_handle, try_enter, try_leave,
 };
 use crate::autocmd::{apply_autocmds, has_event};
 use crate::ex_docmd::{
@@ -33,7 +32,6 @@ use crate::usercmd::{
     uc_del_named, uc_nargs_upper_bound, uc_split_args_iter, uc_validate_name,
 };
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT};
-use ::libc::strtol;
 
 // The carve of the transpiled module; see each child's docs.
 mod cmd;
