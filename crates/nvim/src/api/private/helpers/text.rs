@@ -13,7 +13,7 @@ use crate::api::private::validate::err_out_of_range;
 use crate::cstr;
 
 use crate::memory::XString;
-use crate::memory::{memchrsub, xfree, xmemdupz, xstrndup};
+use crate::memory::{memchrsub, xfree, xmemdupz};
 use crate::pos::MAXLNUM;
 use crate::types::{Array, Error, LineNr, NUL, Object, String_0, int64_t, size_t};
 use crate::winlayer::Buf;
@@ -216,12 +216,6 @@ pub(crate) unsafe fn cstrn_to_string(str: *const c_char, maxsize: size_t) -> Str
     let len = unsafe { strnlen(str, maxsize) };
     // SAFETY: as above; `len` is at most `maxsize`.
     unsafe { String_0::from_raw_bytes(str, len) }
-}
-
-/// A NUL-terminated copy of `str`'s bytes, owned by the caller.
-pub(crate) fn string_to_cstr(str: &String_0) -> *mut c_char {
-    // SAFETY: `str` names its own bytes, which are NUL-terminated.
-    unsafe { xstrndup(str.data(), str.len()) }
 }
 
 /// Split `input` into one array item per line, each line its own string.

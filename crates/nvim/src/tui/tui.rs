@@ -288,7 +288,7 @@ impl TUIData {
                 resize_events_enabled: false,
                 modes: core::mem::zeroed(),
                 screenshot: core::ptr::null_mut(),
-                cursor_shapes: core::mem::zeroed(),
+                cursor_shapes: crate::types::CursorEntry::BLANK_TABLE,
                 clear_attrs: core::mem::zeroed(),
                 attrs: vec![DEFAULT_ATTRS],
                 print_attr_id: 0,

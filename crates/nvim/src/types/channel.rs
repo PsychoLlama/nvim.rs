@@ -186,7 +186,6 @@ pub struct InternalState {
 pub struct RpcState {
     pub closed: bool,
     pub unpacker: Option<Box<Unpacker>>,
-    pub ui: *mut RemoteUI,
     pub next_request_id: uint32_t,
     /// Requests this editor has sent and is still waiting on.
     pub call_stack: CallStack,

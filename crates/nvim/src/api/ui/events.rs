@@ -15,8 +15,7 @@
 //! The legacy protocol has not been the default since 0.3 and exists for
 //! UIs too old to be rebuilt. It is kept exactly, not improved.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -26,13 +25,12 @@
 )]
 
 use super::packer::{push_call, ui_flush_buf};
-use crate::api::private::helpers::cstr_to_string;
 use crate::highlight::{HLATTRS_DICT_SIZE, hlattrs2dict, syn_attr2entry};
 use crate::option::vars::P_BG;
 use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::ui::{kUILinegrid, kUITermColors};
 use crate::types::{Array, Boolean, Integer, Object, RemoteUI, String_0, WindowHandle};
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 /// Queues `name(args...)` on `ui`'s buffer, with the argument array built
 /// on the stack.
@@ -40,7 +38,7 @@ macro_rules! send {
     ($ui:expr, $name:expr $(, $arg:expr)* $(,)?) => {{
         let mut args = ArrayBuf::<{ count!($($arg),*) }>::new();
         $( args.push($arg); )*
-        unsafe { push_call($ui, $name, args.array()) };
+        push_call($ui, $name, args.array());
     }};
 }
 
@@ -86,12 +84,7 @@ macro_rules! serialize {
         fn $name:ident($($arg:ident: $ty:ident),* $(,)?) => $event:expr;
     )*) => {$(
         $(#[$attr])*
-        ///
-        /// # Safety
-        ///
-        /// `ui` must be live, and any string or array argument must stay
-        /// valid until this returns.
-        pub unsafe fn $name(ui: *mut RemoteUI $(, $arg: $ty)*) {
+        pub fn $name(ui: &mut RemoteUI $(, $arg: $ty)*) {
             send!(ui, $event $(, wire!($ty, $arg))*);
         }
     )*};
@@ -162,30 +155,19 @@ serialize! {
     fn remote_ui_error_exit(status: Integer) => c"error_exit";
 }
 
-/// Nothing. A UI is stopped by closing its channel, not by an event.
-///
-/// # Safety
-///
-/// Trivially. It exists so that the sink table has something to name.
-pub unsafe fn remote_ui_stop(_ui: *mut RemoteUI) {}
+/// Nothing. A UI is stopped by closing its channel, not by an event; this
+/// exists so that the sink table has something to name.
+pub fn remote_ui_stop(_ui: &mut RemoteUI) {}
 
 /// Whether `ui` speaks the modern grid protocol.
-///
-/// # Safety
-///
-/// `ui` must be live.
-pub(super) unsafe fn linegrid(ui: *mut RemoteUI) -> bool {
-    unsafe { (*ui).ui_ext[kUILinegrid as usize] }
+pub(super) fn linegrid(ui: &RemoteUI) -> bool {
+    ui.ui_ext[kUILinegrid as usize]
 }
 
 /// Clears a grid.
-///
-/// # Safety
-///
-/// `ui` must be live.
-pub unsafe fn remote_ui_grid_clear(ui: *mut RemoteUI, grid: Integer) {
+pub fn remote_ui_grid_clear(ui: &mut RemoteUI, grid: Integer) {
     // The legacy protocol has one grid, so it takes no handle.
-    if unsafe { linegrid(ui) } {
+    if linegrid(ui) {
         send!(ui, c"grid_clear", Object::integer(grid));
     } else {
         send!(ui, c"clear");
@@ -193,17 +175,8 @@ pub unsafe fn remote_ui_grid_clear(ui: *mut RemoteUI, grid: Integer) {
 }
 
 /// Resizes a grid.
-///
-/// # Safety
-///
-/// `ui` must be live.
-pub unsafe fn remote_ui_grid_resize(
-    ui: *mut RemoteUI,
-    grid: Integer,
-    width: Integer,
-    height: Integer,
-) {
-    if unsafe { linegrid(ui) } {
+pub fn remote_ui_grid_resize(ui: &mut RemoteUI, grid: Integer, width: Integer, height: Integer) {
+    if linegrid(ui) {
         send!(
             ui,
             c"grid_resize",
@@ -215,7 +188,7 @@ pub unsafe fn remote_ui_grid_resize(
         // A legacy resize leaves the cursor somewhere the server cannot
         // predict, so the tracked column is invalidated rather than
         // guessed: the next `put` will move it explicitly.
-        unsafe { (*ui).client_col = -1 };
+        ui.client_col = -1;
         send!(
             ui,
             c"resize",
@@ -226,17 +199,8 @@ pub unsafe fn remote_ui_grid_resize(
 }
 
 /// Moves the cursor.
-///
-/// # Safety
-///
-/// `ui` must be live.
-pub unsafe fn remote_ui_grid_cursor_goto(
-    ui: *mut RemoteUI,
-    grid: Integer,
-    row: Integer,
-    col: Integer,
-) {
-    if unsafe { linegrid(ui) } {
+pub fn remote_ui_grid_cursor_goto(ui: &mut RemoteUI, grid: Integer, row: Integer, col: Integer) {
+    if linegrid(ui) {
         send!(
             ui,
             c"grid_cursor_goto",
@@ -249,26 +213,18 @@ pub unsafe fn remote_ui_grid_cursor_goto(
     // On the legacy protocol the cursor is where drawing happens, so the
     // intended position is remembered and re-sent at flush: putting a cell
     // moves it anyway, and a move now would only be undone.
-    unsafe {
-        (*ui).cursor_row = row;
-        (*ui).cursor_col = col;
-        remote_ui_cursor_goto(ui, row, col);
-    }
+    ui.cursor_row = row;
+    ui.cursor_col = col;
+    remote_ui_cursor_goto(ui, row, col);
 }
 
 /// Moves the legacy protocol's single cursor, if it is not already there.
-///
-/// # Safety
-///
-/// `ui` must be live.
-pub(super) unsafe fn remote_ui_cursor_goto(ui: *mut RemoteUI, row: Integer, col: Integer) {
-    unsafe {
-        if (*ui).client_row == row && (*ui).client_col == col {
-            return;
-        }
-        (*ui).client_row = row;
-        (*ui).client_col = col;
+pub(super) fn remote_ui_cursor_goto(ui: &mut RemoteUI, row: Integer, col: Integer) {
+    if ui.client_row == row && ui.client_col == col {
+        return;
     }
+    ui.client_row = row;
+    ui.client_col = col;
     send!(
         ui,
         c"cursor_goto",
@@ -278,46 +234,30 @@ pub(super) unsafe fn remote_ui_cursor_goto(ui: *mut RemoteUI, row: Integer, col:
 }
 
 /// Writes one cell at the legacy cursor, which then advances.
-///
-/// # Safety
-///
-/// `ui` must be live and `cell` a valid C string.
-pub(super) unsafe fn remote_ui_put(ui: *mut RemoteUI, cell: *const c_char) {
-    unsafe { (*ui).client_col += 1 };
-    send!(ui, c"put", Object::string(unsafe { cstr_to_string(cell) }));
+pub(super) fn remote_ui_put(ui: &mut RemoteUI, cell: &[u8]) {
+    ui.client_col += 1;
+    send!(ui, c"put", Object::string(String_0::from_bytes(cell)));
 }
 
 /// Sets the highlight subsequent [`remote_ui_put`]s draw with.
-///
-/// # Safety
-///
-/// `ui` must be live and `id` a resolved highlight attribute id.
-pub(super) unsafe fn remote_ui_highlight_set(ui: *mut RemoteUI, id: c_int) {
+pub(super) fn remote_ui_highlight_set(ui: &mut RemoteUI, id: c_int) {
     // The legacy protocol has no attribute table, so every change resends
     // the whole set; skipping the no-op is the only compression there is.
-    unsafe {
-        if (*ui).hl_id == id {
-            return;
-        }
-        (*ui).hl_id = id;
+    if ui.hl_id == id {
+        return;
     }
+    ui.hl_id = id;
 
     let mut buf = DictBuf::<HLATTRS_DICT_SIZE>::new();
     let mut dict = buf.dict();
-    unsafe {
-        hlattrs2dict(&mut dict, None, syn_attr2entry(id), (*ui).rgb, false);
-    }
+    hlattrs2dict(&mut dict, None, syn_attr2entry(id), ui.rgb, false);
     send!(ui, c"highlight_set", Object::dict(dict));
 }
 
 /// Scrolls a rectangle of a grid.
-///
-/// # Safety
-///
-/// `ui` must be live.
 #[expect(clippy::too_many_arguments, reason = "one parameter per wire field")]
-pub unsafe fn remote_ui_grid_scroll(
-    ui: *mut RemoteUI,
+pub fn remote_ui_grid_scroll(
+    ui: &mut RemoteUI,
     grid: Integer,
     top: Integer,
     bot: Integer,
@@ -326,7 +266,7 @@ pub unsafe fn remote_ui_grid_scroll(
     rows: Integer,
     cols: Integer,
 ) {
-    if unsafe { linegrid(ui) } {
+    if linegrid(ui) {
         send!(
             ui,
             c"grid_scroll",
@@ -353,7 +293,7 @@ pub unsafe fn remote_ui_grid_scroll(
         Object::integer(right - 1),
     );
     send!(ui, c"scroll", Object::integer(rows));
-    let (width, height) = unsafe { ((*ui).width, (*ui).height) };
+    let (width, height) = (ui.width, ui.height);
     send!(
         ui,
         c"set_scroll_region",
@@ -365,12 +305,8 @@ pub unsafe fn remote_ui_grid_scroll(
 }
 
 /// The colours `Normal` resolves to.
-///
-/// # Safety
-///
-/// `ui` must be live.
-pub unsafe fn remote_ui_default_colors_set(
-    ui: *mut RemoteUI,
+pub fn remote_ui_default_colors_set(
+    ui: &mut RemoteUI,
     mut rgb_fg: Integer,
     mut rgb_bg: Integer,
     mut rgb_sp: Integer,
@@ -380,7 +316,7 @@ pub unsafe fn remote_ui_default_colors_set(
     // A UI that did not ask for `ext_termcolors` has no colours of its own
     // to fall back on, so "unset" has to be resolved to something, and
     // 'background' is the only hint there is.
-    if !unsafe { (*ui).ui_ext[kUITermColors as usize] } {
+    if !ui.ui_ext[kUITermColors as usize] {
         let dark = P_BG.first_byte() == b'd';
         if rgb_fg == -1 {
             rgb_fg = if dark { 0xffffff } else { 0 };
@@ -406,8 +342,8 @@ pub unsafe fn remote_ui_default_colors_set(
     // as a terminal palette index — one below what the modern protocol
     // uses, which counts "unset" as zero. There is no cterm special colour,
     // so `update_sp` has nothing to fall back on.
-    if !unsafe { linegrid(ui) } {
-        let rgb = unsafe { (*ui).rgb };
+    if !linegrid(ui) {
+        let rgb = ui.rgb;
         for (name, value) in [
             (c"update_fg", if rgb { rgb_fg } else { cterm_fg - 1 }),
             (c"update_bg", if rgb { rgb_bg } else { cterm_bg - 1 }),
@@ -419,40 +355,24 @@ pub unsafe fn remote_ui_default_colors_set(
 }
 
 /// Ends a batch: the UI may now show everything since the last flush.
-///
-/// # Safety
-///
-/// `ui` must be live.
-pub unsafe fn remote_ui_flush(ui: *mut RemoteUI) {
-    // SAFETY: the caller's promise -- `ui` is live.
-    if unsafe { (*ui).nevents } == 0 && !unsafe { (*ui).flushed_events } {
+pub fn remote_ui_flush(ui: &mut RemoteUI) {
+    if ui.nevents == 0 && !ui.flushed_events {
         return;
     }
-    // SAFETY: as above.
-    if !unsafe { linegrid(ui) } {
+    if !linegrid(ui) {
         // The cursor move deferred by `remote_ui_grid_cursor_goto`.
-        // SAFETY: as above.
-        unsafe {
-            let (row, col) = ((*ui).cursor_row, (*ui).cursor_col);
-            remote_ui_cursor_goto(ui, row, col);
-        }
+        let (row, col) = (ui.cursor_row, ui.cursor_col);
+        remote_ui_cursor_goto(ui, row, col);
     }
     send!(ui, c"flush");
-    // SAFETY: as above.
-    unsafe {
-        ui_flush_buf(ui, false);
-        (*ui).flushed_events = false;
-    }
+    ui_flush_buf(ui);
+    ui.flushed_events = false;
 }
 
 /// Forwards a terminal control sequence the editor produced.
-///
-/// # Safety
-///
-/// `ui` must be live.
-pub unsafe fn remote_ui_ui_send(ui: *mut RemoteUI, content: String_0) {
+pub fn remote_ui_ui_send(ui: &mut RemoteUI, content: String_0) {
     // Only meaningful to a UI that owns a terminal to write it to.
-    if !unsafe { (*ui).stdout_tty } {
+    if !ui.stdout_tty {
         return;
     }
     send!(ui, c"ui_send", Object::string(content));

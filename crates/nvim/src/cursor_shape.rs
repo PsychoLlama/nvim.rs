@@ -27,7 +27,6 @@ use crate::types::ApiDict;
 use crate::types::String_0;
 use core::ffi::{CStr, c_char, c_int};
 
-use crate::api::private::helpers::cstr_to_string;
 use crate::charset::getdigits_int;
 use crate::ex_getln::{cmdline_at_end, cmdline_overstrike};
 use crate::global_cell::GlobalCell;
@@ -102,7 +101,7 @@ const DEFAULT_SHAPES: [(&CStr, &CStr, [c_int; 3], c_int); SHAPE_IDX_COUNT as usi
 const fn default_entry(idx: usize) -> CursorEntry {
     let (full_name, name, blink, used_for) = DEFAULT_SHAPES[idx];
     CursorEntry {
-        full_name: full_name.as_ptr().cast_mut(),
+        full_name,
         shape: SHAPE_BLOCK,
         mshape: 0,
         percentage: 0,
@@ -111,7 +110,7 @@ const fn default_entry(idx: usize) -> CursorEntry {
         blinkoff: blink[2],
         id: 0,
         id_lm: 0,
-        name: name.as_ptr().cast_mut(),
+        name,
         used_for: used_for as c_char,
     }
 }
@@ -174,11 +173,8 @@ pub(crate) fn mode_style_array() -> Array {
         // cursor-only entry ("sm", "t") leaves one slot unused.
         let mut dic = ApiDict::with_capacity(if for_cursor { 12 } else { 3 });
         let mut put = |key, value| dic.insert(key, value);
-        // SAFETY: both are static literals the table ships with; nothing
-        // ever writes either field.
-        let full_name = unsafe { cstr_to_string(cur.full_name) };
-        // SAFETY: as above.
-        let short_name = unsafe { cstr_to_string(cur.name) };
+        let full_name = String_0::from_cstr(cur.full_name);
+        let short_name = String_0::from_cstr(cur.name);
         put(c"name", Object::string(full_name));
         put(c"short_name", Object::string(short_name));
         if for_mouse {

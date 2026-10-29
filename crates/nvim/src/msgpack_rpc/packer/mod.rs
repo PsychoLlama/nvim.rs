@@ -20,12 +20,11 @@
 //! The encodings themselves live in [`mod@format`], which is pure and tested
 //! against fixed byte sequences.
 
-use core::ffi::{c_double, c_int, c_void};
+use core::ffi::{c_double, c_int};
 
 use crate::lua::executor::release_luaref;
 use crate::types::{
-    Array, Handle, Integer, KeyValuePair, LuaRef, Object, int8_t, int64_t, size_t, uint32_t,
-    uint64_t,
+    Array, Handle, Integer, KeyValuePair, LuaRef, Object, int8_t, size_t, uint32_t, uint64_t,
 };
 
 pub mod format;
@@ -43,11 +42,6 @@ pub struct PackerBuffer {
     block: Vec<u8>,
     /// The channels an RPC packer's flush writes to.
     pub(crate) channels: Addressees,
-    /// Whatever else the flush hook needs to find its owner: a `RemoteUI`,
-    /// or nothing.
-    pub anydata: *mut c_void,
-    /// A second word for the same hook: the status the last flush returned.
-    pub anyint: int64_t,
     pub packer_flush: Option<PackerBufferFlush>,
 }
 
@@ -59,20 +53,16 @@ impl PackerBuffer {
         Self {
             block,
             channels: Addressees::Nobody,
-            anydata: ::core::ptr::null_mut(),
-            anyint: 0,
             packer_flush,
         }
     }
 
     /// A packer holding no block at all, for an owner that allocates one
     /// lazily.
-    pub const fn detached(anydata: *mut c_void, packer_flush: Option<PackerBufferFlush>) -> Self {
+    pub const fn detached(packer_flush: Option<PackerBufferFlush>) -> Self {
         Self {
             block: Vec::new(),
             channels: Addressees::Nobody,
-            anydata,
-            anyint: 0,
             packer_flush,
         }
     }
@@ -123,6 +113,14 @@ impl PackerBuffer {
     #[inline(always)]
     pub fn push_byte(&mut self, byte: u8) {
         self.block.push(byte);
+    }
+
+    /// Double the window, keeping what was packed: the flush of an owner
+    /// that wants the bytes in one piece rather than streamed.
+    pub fn grow(&mut self) {
+        let grown = 2 * self.capacity();
+        let len = self.used();
+        self.block.reserve_exact(grown - len);
     }
 
     /// Overwrite the 16-bit placeholder at `at`, most significant byte
@@ -482,9 +480,7 @@ pub fn packer_string_buffer() -> PackerBuffer {
 
 /// Doubles a [`packer_string_buffer`]'s block, keeping what was packed.
 fn flush_string_buffer(buffer: &mut PackerBuffer) {
-    let grown = 2 * buffer.capacity();
-    let len = buffer.used();
-    buffer.block.reserve_exact(grown - len);
+    buffer.grow();
 }
 
 /// Pack with `pack` into a fresh [`packer_string_buffer`] and answer the

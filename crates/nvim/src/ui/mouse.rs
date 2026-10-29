@@ -6,8 +6,7 @@
 //! which reads [`wanted`] — because a `mouse_on` per keystroke would be a
 //! round trip per keystroke.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 #![deny(
@@ -18,10 +17,9 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::cstr;
 use crate::global_cell::GlobalCell;
 use crate::normal::visual_active;
-use crate::option::vars::{P_MOUSE, p_mouse};
+use crate::option::vars::p_mouse;
 use crate::state::mode::State;
 use crate::state::{
     MODE_ASKMORE, MODE_CMDLINE, MODE_EXTERNCMD, MODE_HITRETURN, MODE_INSERT, MODE_SETWSIZE,
@@ -75,23 +73,15 @@ pub fn ui_check_mouse() {
 
 /// Whether `'mouse'` enables the mouse for `mode`.
 pub fn ui_mouse_has(mode: c_int) -> bool {
-    // A copy: the cursor below walks past the end of a projection's borrow.
-    let mouse = P_MOUSE.get();
-    let mut p = mouse.as_ptr().cast_mut();
-    while unsafe { *p } != 0 {
-        let flag = c_int::from(unsafe { *p });
-        let matched = match flag {
-            // `a` is every mode but the hit-return prompt.
-            _ if flag == c_int::from(b'a') => {
-                has_char(unsafe { cstr::at(MOUSE_A.as_ptr().cast_mut()) }, mode)
+    p_mouse(|value| {
+        value.to_bytes().iter().any(|&flag| {
+            let flag = c_int::from(flag);
+            match flag {
+                // `a` is every mode but the hit-return prompt.
+                _ if flag == c_int::from(b'a') => has_char(MOUSE_A, mode),
+                MOUSE_HELP => mode != MOUSE_RETURN && Buf::current().b_help,
+                _ => mode == flag,
             }
-            MOUSE_HELP => mode != MOUSE_RETURN && Buf::current().b_help,
-            _ => mode == flag,
-        };
-        if matched {
-            return true;
-        }
-        p = unsafe { p.add(1) };
-    }
-    false
+        })
+    })
 }

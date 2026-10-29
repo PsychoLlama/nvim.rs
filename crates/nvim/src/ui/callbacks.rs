@@ -12,8 +12,7 @@
 //! [`sinks`](super::sinks) are split the way they are: the ones a Lua
 //! handler may intercept pay for an [`Object`] array, the rest do not.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -25,20 +24,20 @@
 #![allow(non_upper_case_globals)]
 
 use super::sinks::log_event;
-use super::{ui_at, ui_count, ui_refresh};
+use super::{Reach, each_ui_reached, ui_refresh};
 use crate::api::extmark::describe_ns;
 use crate::api::ui::remote_ui_event;
 use crate::global_cell::GlobalCell;
 use crate::guard::Allow;
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::lua::executor::{nlua_call_ref_ctx, release_luaref};
-use crate::message_fmt::{c_str, msg_bytes};
+use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::msg_schedule_semsg;
 use crate::msg_schedule_semsg_multiline;
 use crate::types::ui::{kUICmdline, kUILinegrid, kUIMessages};
 use crate::types::{Array, LuaRef, LuaRetMode};
 use crate::ui::state::ui_event_ns_id;
-use core::ffi::{CStr, c_char};
+use core::ffi::CStr;
 
 const kRetNilBool: LuaRetMode = 1;
 
@@ -142,13 +141,7 @@ fn update_ext() {
 pub fn ui_call_event(name: &'static CStr, args: Array) {
     let handled = offer_to_handlers(name, &args);
     if !handled {
-        let mut any_call = false;
-        let mut i = 0;
-        while i < ui_count() {
-            unsafe { remote_ui_event(ui_at(i), name, args.clone()) };
-            any_call = true;
-            i += 1;
-        }
+        let any_call = each_ui_reached(Reach::All, |ui| remote_ui_event(ui, name, args.clone()));
         if any_call {
             log_event(c"event");
         }
@@ -189,8 +182,7 @@ fn offer_to_handlers(name: &CStr, args: &Array) -> bool {
                 }
             }
             Err(e) => {
-                // SAFETY: the refusal owns its message.
-                unsafe { report_error(ns_id, name.as_ptr(), e.message_or_empty().as_ptr()) };
+                report_error(ns_id, name, e.message_or_empty());
                 ui_remove_cb(ns_id, true);
             }
         }
@@ -228,23 +220,18 @@ fn is_fast(name: &CStr, args: &Array) -> bool {
     // carries it as an empty string with no buffer behind it at all.
     let kind = args[0]
         .as_string()
-        .expect("`msg_show`'s first argument is its kind")
-        .data();
+        .expect("`msg_show`'s first argument is its kind");
     if kind.is_null() {
         return true;
     }
-    let kind = unsafe { CStr::from_ptr(kind) };
-    !SLOW_KINDS.contains(&kind)
+    !SLOW_KINDS.contains(&kind.as_cstr())
 }
 
-/// # Safety
-///
-/// `name` and `msg` must be valid C strings.
-unsafe fn report_error(ns_id: u32, name: *const c_char, msg: *const c_char) {
+/// Reports that `ns_id`'s handler for `name` raised `msg`.
+fn report_error(ns_id: u32, name: &CStr, msg: &CStr) {
     let ns = describe_ns(ns_id.cast_signed(), b"(UNKNOWN PLUGIN)");
     let shown_ns = msg_bytes(&ns);
-    // SAFETY: the caller's two strings.
-    let (shown_name, shown_msg) = unsafe { (c_str(name), c_str(msg)) };
+    let (shown_name, shown_msg) = (msg_cstr(name), msg_cstr(msg));
     logmsg!(
         LOGLVL_ERR,
         c"report_error",

@@ -28,9 +28,15 @@
 //! packed by [`push_call`] fits in the reserve, so packing never has to
 //! check for space mid-event. `grid_line` is the exception and checks for
 //! itself — see [`line`](super::line).
+//!
+//! An event whose arguments outgrow the block grows it instead of being cut:
+//! the packer's hook here only makes room, and [`push_call`] sends the
+//! whole batch once the event is complete. So no UI ever has half an event
+//! on its wire, and nothing that writes to the same channel has to flush
+//! the UI first. (Upstream cut the event and sent the first half, then had
+//! every RPC message on the channel flush the second half before itself.)
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -39,9 +45,8 @@
     clippy::ptr_as_ptr
 )]
 
-use super::Ui;
 use crate::event::wstream::SharedBuffer;
-use crate::memory::{ARENA_BLOCK_SIZE, block_vec, strequal};
+use crate::memory::{ARENA_BLOCK_SIZE, block_vec};
 use crate::msgpack_rpc::channel::rpc_write_raw;
 use crate::msgpack_rpc::packer::{
     mpack_array, mpack_array_dyn16, mpack_object_array, mpack_str_small, mpack_uint,
@@ -61,173 +66,102 @@ const EVENT_BUF_SIZE: usize = 256;
 /// starts drawing the top of the screen while the rest is still coming.
 pub(super) const MAX_CELLS_PENDING: usize = 500;
 
+/// A packer for a new UI: no block until the first event.
+pub(super) const fn ui_packer() -> PackerBuffer {
+    PackerBuffer::detached(Some(grow_block))
+}
+
 /// Closes the current event, filling in how many argument lists it got.
 ///
 /// The count is one more than the calls made, because the name occupies the
 /// first slot of the event's array.
-///
-/// # Safety
-///
-/// `ui` must be live.
-unsafe fn flush_event(ui: *mut RemoteUI) {
-    // SAFETY: the caller's promise -- `ui` is live.
-    let mut live = unsafe { Ui::new(ui) };
-    if live.cur_event.is_null() {
+fn flush_event(ui: &mut RemoteUI) {
+    if ui.cur_event.take().is_none() {
         return;
     }
-    let ncalls = 1 + live.ncalls;
+    let ncalls = 1 + ui.ncalls;
     // `ncalls_pos` is the placeholder this event's header left in the block,
     // which is still the one being packed into.
-    if let Some(at) = live.ncalls_pos.take() {
-        live.packer.patch_be16(at, ncalls);
+    if let Some(at) = ui.ncalls_pos.take() {
+        ui.packer.patch_be16(at, ncalls);
     }
-    live.cur_event = core::ptr::null();
-    live.ncalls = 0;
-}
-
-/// Gives `ui` a fresh empty block to pack into.
-///
-/// # Safety
-///
-/// `ui` must be live and hold no block.
-pub(super) unsafe fn ui_alloc_buf(ui: *mut RemoteUI) {
-    // SAFETY: the caller's promise -- `ui` is live.
-    let mut live = unsafe { Ui::new(ui) };
-    // The UI owns the block until `ui_flush_buf` gives it away.
-    live.packer.adopt(block_vec());
+    ui.ncalls = 0;
 }
 
 /// Makes room for one more call to `name`, opening a new event unless the
 /// last one was for the same name.
-///
-/// # Safety
-///
-/// `ui` must be live and `name` a valid C string that outlives the batch —
-/// it is stored on the UI and compared against on the next call.
-pub(super) unsafe fn prepare_call(ui: *mut RemoteUI, name: &'static CStr) {
-    // SAFETY: the caller's promise -- `ui` is live.
-    let mut live = unsafe { Ui::new(ui) };
-    if !live.packer.is_detached() {
-        let used = live.packer.used();
-        if used > UI_BUF_SIZE - EVENT_BUF_SIZE || live.ncells_pending >= MAX_CELLS_PENDING {
-            // SAFETY: as above.
-            unsafe { ui_flush_buf(ui, false) };
+pub(super) fn prepare_call(ui: &mut RemoteUI, name: &'static CStr) {
+    if !ui.packer.is_detached() {
+        let used = ui.packer.used();
+        if used > UI_BUF_SIZE - EVENT_BUF_SIZE || ui.ncells_pending >= MAX_CELLS_PENDING {
+            ui_flush_buf(ui);
         }
     }
-    if live.packer.is_detached() {
-        // SAFETY: as above -- there is no block, whether or not one was
-        // just handed away.
-        unsafe { ui_alloc_buf(ui) };
+    if ui.packer.is_detached() {
+        // The UI owns the block until `ui_flush_buf` gives it away.
+        ui.packer.adopt(block_vec());
     }
 
-    let cur_event = live.cur_event;
-    // SAFETY: `cur_event` is null or the static name the last call carried.
-    let same = !cur_event.is_null() && unsafe { strequal(cur_event, name.as_ptr()) };
-    if same {
-        live.ncalls += 1;
+    if ui.cur_event == Some(name) {
+        ui.ncalls += 1;
         return;
     }
 
-    if live.nevents_pos.is_none() {
+    if ui.nevents_pos.is_none() {
         // The notification header, once per batch. The block has room --
         // `EVENT_BUF_SIZE` bytes are kept free for exactly this.
-        mpack_array(&mut live.packer, 3);
-        mpack_uint(&mut live.packer, 2);
-        mpack_str_small(&mut live.packer, b"redraw");
-        let pos = mpack_array_dyn16(&mut live.packer);
-        live.nevents_pos = Some(pos);
-        debug_assert!(live.cur_event.is_null());
+        mpack_array(&mut ui.packer, 3);
+        mpack_uint(&mut ui.packer, 2);
+        mpack_str_small(&mut ui.packer, b"redraw");
+        let pos = mpack_array_dyn16(&mut ui.packer);
+        ui.nevents_pos = Some(pos);
+        debug_assert!(ui.cur_event.is_none());
     }
-    // SAFETY: as above.
-    unsafe { flush_event(ui) };
-    live.cur_event = name.as_ptr();
-    let pos = mpack_array_dyn16(&mut live.packer);
-    live.ncalls_pos = Some(pos);
-    mpack_str_small(&mut live.packer, name.to_bytes());
-    live.nevents += 1;
-    live.ncalls = 1;
+    flush_event(ui);
+    ui.cur_event = Some(name);
+    let pos = mpack_array_dyn16(&mut ui.packer);
+    ui.ncalls_pos = Some(pos);
+    mpack_str_small(&mut ui.packer, name.to_bytes());
+    ui.nevents += 1;
+    ui.ncalls = 1;
 }
 
 /// Queues `name(args...)` on `ui`'s buffer.
-///
-/// # Safety
-///
-/// `ui` must be live, `name` must outlive the batch (see [`prepare_call`]),
-/// and every value reachable from `args` must stay valid until this
-/// returns — the packer copies as it goes and keeps nothing.
-pub(super) unsafe fn push_call(ui: *mut RemoteUI, name: &'static CStr, mut args: Array) {
-    // SAFETY: the caller's promise.
-    unsafe { prepare_call(ui, name) };
-    // SAFETY: as above. The packer is the UI's own, and reaches back to it
-    // through `anydata` if it runs out of room mid-array.
-    unsafe { mpack_object_array(&mut args, &mut (*ui).packer) };
+pub(super) fn push_call(ui: &mut RemoteUI, name: &'static CStr, mut args: Array) {
+    prepare_call(ui, name);
+    mpack_object_array(&mut args, &mut ui.packer);
+    if ui.packer.capacity() > UI_BUF_SIZE {
+        // The arguments outgrew the block (see the module docs): the event
+        // is complete now, so the batch goes out whole.
+        ui_flush_buf(ui);
+    }
 }
 
-/// The packer's out-of-room callback: send what is packed and continue in a
-/// fresh block.
+/// The packer's out-of-room hook: double the block, keeping what was packed.
 ///
-/// It is reached from inside `mpack_object`, mid-event, which is why the
-/// flush is told the event is incomplete: the reader must not act on the
-/// batch until the rest arrives.
-///
-/// Only a [`RemoteUI`]'s own packer carries this hook, and `nvim_ui_attach`
-/// points that packer's `anydata` at the UI before anything is packed; the
-/// UI lives until it is detached, and a detached UI packs nothing.
-pub(super) fn ui_flush_callback(packer: &mut PackerBuffer) {
-    // The packer's `anydata` is the UI that owns it, set when the UI was
-    // created.
-    let ui = packer.anydata.cast::<RemoteUI>();
-    // SAFETY: as above.
-    unsafe { ui_flush_buf(ui, true) };
-    // SAFETY: the flush left no block.
-    unsafe { ui_alloc_buf(ui) };
+/// Only [`push_call`]'s argument walk reaches it -- every other write is
+/// covered by the reserve or checks for room itself -- and that caller sends
+/// the grown block as soon as the event is complete.
+fn grow_block(packer: &mut PackerBuffer) {
+    packer.grow();
 }
 
 /// Sends whatever is packed, handing the block to the write stream.
-///
-/// `incomplete_event` records that the batch was cut mid-event, which the
-/// channel checks before deciding a UI is caught up.
-///
-/// # Safety
-///
-/// `ui` must be live.
-pub(super) unsafe fn ui_flush_buf(ui: *mut RemoteUI, incomplete_event: bool) {
-    // SAFETY: the caller's promise -- `ui` is live.
-    let mut live = unsafe { Ui::new(ui) };
-    if live.packer.is_detached() || live.packer.used() == 0 {
+pub(super) fn ui_flush_buf(ui: &mut RemoteUI) {
+    if ui.packer.is_detached() || ui.packer.used() == 0 {
         return;
     }
-    live.incomplete_event = incomplete_event;
-    // SAFETY: as above.
-    unsafe { flush_event(ui) };
-    if let Some(at) = live.nevents_pos.take() {
-        let nevents = live.nevents;
+    flush_event(ui);
+    if let Some(at) = ui.nevents_pos.take() {
         // `at` is the placeholder the batch header left.
-        live.packer.patch_be16(at, nevents);
-        live.nevents = 0;
+        ui.packer.patch_be16(at, ui.nevents);
+        ui.nevents = 0;
     }
 
     // The block belongs to the write stream now; the next event will
     // allocate another.
-    let channel_id = live.channel_id;
-    let block = live.packer.take();
-    rpc_write_raw(channel_id, SharedBuffer::from_vec(block));
-    live.flushed_events = true;
-    live.ncells_pending = 0;
-}
-
-/// Sends what the UI on `channel_id` has packed, when its last batch was cut
-/// mid-event.
-///
-/// The channel calls this before it packs a message of its own, so that the
-/// two are not interleaved on the wire.
-pub fn remote_ui_flush_incomplete(channel_id: u64) {
-    let Some(ui) = super::find_ui(channel_id) else {
-        return;
-    };
-    // SAFETY: a UI in the attach table is live until it is removed.
-    if unsafe { (*ui).incomplete_event } {
-        // SAFETY: as above.
-        unsafe { ui_flush_buf(ui, false) };
-    }
+    let block = ui.packer.take();
+    rpc_write_raw(ui.channel_id, SharedBuffer::from_vec(block));
+    ui.flushed_events = true;
+    ui.ncells_pending = 0;
 }

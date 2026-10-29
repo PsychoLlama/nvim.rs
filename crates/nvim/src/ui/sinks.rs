@@ -28,10 +28,7 @@
 //! real grids and are fed directly from `ui_call_*`, which also passes the
 //! event to the compositor on the way past.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// The exports here are metrics/abi-ledger.jsonl rows (`ui_call_chdir`, `ui_call_set_title`), and
-// `#[unsafe(no_mangle)]` is itself an unsafe attribute.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 #![deny(
@@ -42,7 +39,7 @@
     clippy::ptr_as_ptr
 )]
 
-use super::{Reach, reaches, ui_at, ui_count};
+use super::{Reach, each_ui_reached};
 use crate::api::ui::{
     remote_ui_bell, remote_ui_busy_start, remote_ui_busy_stop, remote_ui_chdir,
     remote_ui_default_colors_set, remote_ui_error_exit, remote_ui_flush, remote_ui_grid_clear,
@@ -67,7 +64,6 @@ use crate::ui_compositor::{
     ui_comp_raw_line,
 };
 use core::ffi::{CStr, c_int};
-use core::mem::ManuallyDrop;
 
 use super::callbacks::ui_call_event;
 
@@ -155,7 +151,7 @@ macro_rules! broadcast {
         #[allow(clippy::too_many_arguments)]
         pub fn $sink($($arg: $ty),*) {
             $( $comp; )?
-            broadcast_to(Reach::$reach, $name, |ui| unsafe {
+            broadcast_to(Reach::$reach, $name, |ui| {
                 $serialize(ui, $(dup!($ty, $arg)),*)
             });
         }
@@ -203,20 +199,11 @@ pub(super) fn log_event(name: &'static CStr) {
 /// Hands every UI that `reach` selects to `send`, and logs `name` if there
 /// was at least one.
 ///
-/// The count is re-read every iteration because a serializer that cannot
-/// write can disconnect its own UI, which compacts the table underneath us.
-fn broadcast_to(reach: Reach, name: &'static CStr, mut send: impl FnMut(*mut RemoteUI)) {
-    let mut any_call = false;
-    let mut i = 0;
-    while i < ui_count() {
-        let ui = ui_at(i);
-        if reaches(ui, reach) {
-            send(ui);
-            any_call = true;
-        }
-        i += 1;
-    }
-    if any_call {
+/// The UIs are lent by the attach table for the whole pass: a serializer
+/// runs no user code, and a UI whose channel fails to write is closed by a
+/// queued event, not from inside the write.
+fn broadcast_to(reach: Reach, name: &'static CStr, send: impl FnMut(&mut RemoteUI)) {
+    if each_ui_reached(reach, send) {
         log_event(name);
     }
 }
@@ -343,8 +330,7 @@ broadcast! {
         zindex: Integer,
         compindex: Integer,
     ) => remote_ui_msg_set_pos, Uncomposed, c"msg_set_pos",
-        // SAFETY: the compositor reads `sep_char` and keeps nothing.
-        via unsafe { ui_comp_msg_set_pos(grid, row, scrolled, &sep_char, zindex, compindex) };
+        via ui_comp_msg_set_pos(grid, row, scrolled, &sep_char, zindex, compindex);
 }
 
 event! {
@@ -431,16 +417,12 @@ event! {
 
 /// A screen line, straight from the grid it was drawn into.
 ///
-/// The only sink taking pointers rather than API values, and so the only
-/// one the table above cannot hold: `chunk` and `attrs` are the grid's own
-/// arrays, passed by address to keep the hot path free of copies.
-///
-/// # Safety
-///
-/// `chunk` and `attrs` must each address at least `endcol - startcol`
-/// readable elements. The serializers read them without a length.
+/// The only sink taking slices rather than API values, and so the only one
+/// the table above cannot hold: `chunk` and `attrs` are the grid's own
+/// cells, at least `endcol - startcol` of each, lent to keep the hot path
+/// free of copies.
 #[expect(clippy::too_many_arguments, reason = "one parameter per wire field")]
-pub unsafe fn ui_call_raw_line(
+pub fn ui_call_raw_line(
     grid: Integer,
     row: Integer,
     startcol: Integer,
@@ -448,31 +430,22 @@ pub unsafe fn ui_call_raw_line(
     clearcol: Integer,
     clearattr: Integer,
     flags: LineFlags,
-    chunk: *const ScreenChar,
-    attrs: *const ScreenAttr,
+    chunk: &[ScreenChar],
+    attrs: &[ScreenAttr],
 ) {
-    unsafe {
-        ui_comp_raw_line(
-            grid, row, startcol, endcol, clearcol, clearattr, flags, chunk, attrs,
-        )
-    };
+    ui_comp_raw_line(
+        grid, row, startcol, endcol, clearcol, clearattr, flags, chunk, attrs,
+    );
     let to = Reach::Uncomposed;
-    // SAFETY: as above.
-    unsafe {
-        raw_line_to(
-            to, grid, row, startcol, endcol, clearcol, clearattr, flags, chunk, attrs,
-        )
-    };
+    raw_line_to(
+        to, grid, row, startcol, endcol, clearcol, clearattr, flags, chunk, attrs,
+    );
 }
 
 /// [`ui_call_raw_line`] for the UIs the compositor draws for, called by the
 /// compositor once it has flattened the line.
-///
-/// # Safety
-///
-/// As [`ui_call_raw_line`].
 #[expect(clippy::too_many_arguments, reason = "one parameter per wire field")]
-pub unsafe fn ui_composed_call_raw_line(
+pub fn ui_composed_call_raw_line(
     grid: Integer,
     row: Integer,
     startcol: Integer,
@@ -480,24 +453,17 @@ pub unsafe fn ui_composed_call_raw_line(
     clearcol: Integer,
     clearattr: Integer,
     flags: LineFlags,
-    chunk: *const ScreenChar,
-    attrs: *const ScreenAttr,
+    chunk: &[ScreenChar],
+    attrs: &[ScreenAttr],
 ) {
     let to = Reach::Composed;
-    // SAFETY: the caller's promise -- `chunk` and `attrs` hold
-    // `endcol - startcol` readable elements.
-    unsafe {
-        raw_line_to(
-            to, grid, row, startcol, endcol, clearcol, clearattr, flags, chunk, attrs,
-        )
-    }
+    raw_line_to(
+        to, grid, row, startcol, endcol, clearcol, clearattr, flags, chunk, attrs,
+    );
 }
 
-/// # Safety
-///
-/// As [`ui_call_raw_line`].
 #[expect(clippy::too_many_arguments, reason = "one parameter per wire field")]
-unsafe fn raw_line_to(
+fn raw_line_to(
     reach: Reach,
     grid: Integer,
     row: Integer,
@@ -506,39 +472,28 @@ unsafe fn raw_line_to(
     clearcol: Integer,
     clearattr: Integer,
     flags: LineFlags,
-    chunk: *const ScreenChar,
-    attrs: *const ScreenAttr,
+    chunk: &[ScreenChar],
+    attrs: &[ScreenAttr],
 ) {
-    broadcast_to(reach, c"raw_line", |ui| unsafe {
+    broadcast_to(reach, c"raw_line", |ui| {
         remote_ui_raw_line(
             ui, grid, row, startcol, endcol, clearcol, clearattr, flags, chunk, attrs,
-        )
+        );
     });
 }
 
-/// `set_title` is one of two sinks a test drives directly over the C ABI:
-/// the 64 KiB title in `tui_spec.lua` has no other way in.
-///
-/// **The argument is borrowed, not taken.** These two are the only sinks
-/// reached across the C ABI, and what reaches them is a `String` the caller
-/// built over its own buffer -- a LuaJIT array, in the spec that drives
-/// them. Releasing it would free memory this allocator never handed out, so
-/// the value is parked in a `ManuallyDrop` and each UI is sent a copy.
-#[unsafe(no_mangle)]
-pub extern "C" fn ui_call_set_title(title: String_0) {
-    let title = ManuallyDrop::new(title);
-    broadcast_to(Reach::All, c"set_title", |ui| unsafe {
-        remote_ui_set_title(ui, (*title).clone())
+/// The window title changed. `crate::harness` exports a front over this
+/// for `tui_spec.lua`.
+pub fn ui_call_set_title(title: String_0) {
+    broadcast_to(Reach::All, c"set_title", |ui| {
+        remote_ui_set_title(ui, title.clone());
     });
 }
 
-/// As [`ui_call_set_title`], borrowed argument included; `tui_spec.lua`
-/// drives this one to check that a relative path sent by the server is
-/// resolved against the server's cwd.
-#[unsafe(no_mangle)]
-pub extern "C" fn ui_call_chdir(path: String_0) {
-    let path = ManuallyDrop::new(path);
-    broadcast_to(Reach::All, c"chdir", |ui| unsafe {
-        remote_ui_chdir(ui, (*path).clone())
+/// The server's working directory changed. As [`ui_call_set_title`], the
+/// harness exports a front over it.
+pub fn ui_call_chdir(path: String_0) {
+    broadcast_to(Reach::All, c"chdir", |ui| {
+        remote_ui_chdir(ui, path.clone());
     });
 }

@@ -25,10 +25,8 @@
 //! highlight table, one cell per `put` at a cursor the server moves
 //! explicitly. See [`events`](super::events).
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use super::Ui;
 use super::events::{linegrid, remote_ui_cursor_goto, remote_ui_highlight_set, remote_ui_put};
 use super::packer::{MAX_CELLS_PENDING, UI_BUF_SIZE, prepare_call, push_call, ui_flush_buf};
 use crate::grid::{SCHAR_BUF_SIZE, SCharBuf, schar_copy, schar_get_adv};
@@ -55,15 +53,11 @@ const MAX_SCHAR_SIZE: usize = 32;
 const GRID_LINE: &core::ffi::CStr = c"grid_line";
 
 /// Sends cells `startcol..endcol` of `row`, plus the clearing that runs on
-/// to `clearcol`.
-///
-/// # Safety
-///
-/// `ui` must be live and `chunk`/`attrs` must each have at least
-/// `endcol - startcol` readable elements.
+/// to `clearcol`. `chunk` and `attrs` hold the drawn cells, at least
+/// `endcol - startcol` of each; anything past that is not read.
 #[expect(clippy::too_many_arguments, reason = "one parameter per wire field")]
-pub unsafe fn remote_ui_raw_line(
-    ui: *mut RemoteUI,
+pub fn remote_ui_raw_line(
+    ui: &mut RemoteUI,
     grid: Integer,
     row: Integer,
     startcol: Integer,
@@ -71,49 +65,37 @@ pub unsafe fn remote_ui_raw_line(
     clearcol: Integer,
     clearattr: Integer,
     flags: LineFlags,
-    chunk: *const ScreenChar,
-    attrs: *const ScreenAttr,
+    chunk: &[ScreenChar],
+    attrs: &[ScreenAttr],
 ) {
-    // SAFETY: the caller's promise, passed on unchanged.
-    if unsafe { linegrid(ui) } {
-        // SAFETY: as above.
-        unsafe {
-            raw_line_linegrid(
-                ui, grid, row, startcol, endcol, clearcol, clearattr, flags, chunk, attrs,
-            );
-        }
+    let ncells = usize::try_from(endcol - startcol).unwrap_or(0);
+    let cells = &chunk[..ncells];
+    let attrs = &attrs[..ncells];
+    if linegrid(ui) {
+        let span = (row, startcol, endcol, clearcol);
+        raw_line_linegrid(ui, grid, span, clearattr, flags, cells, attrs);
     } else {
-        // SAFETY: as above.
-        unsafe { raw_line_legacy(ui, row, startcol, endcol, clearcol, clearattr, chunk, attrs) };
+        raw_line_legacy(ui, row, startcol, endcol, clearcol, clearattr, cells, attrs);
     }
 }
 
-/// [`remote_ui_raw_line`] for a UI on the modern protocol.
-///
-/// # Safety
-///
-/// As [`remote_ui_raw_line`].
-#[expect(clippy::too_many_arguments, reason = "one parameter per wire field")]
-unsafe fn raw_line_linegrid(
-    ui: *mut RemoteUI,
+/// [`remote_ui_raw_line`] for a UI on the modern protocol. `span` is the
+/// row, the start and end columns and the clear column; `cells` and
+/// `attrs` are exactly the drawn cells.
+fn raw_line_linegrid(
+    ui: &mut RemoteUI,
     grid: Integer,
-    row: Integer,
-    startcol: Integer,
-    endcol: Integer,
-    clearcol: Integer,
+    span: (Integer, Integer, Integer, Integer),
     clearattr: Integer,
     flags: LineFlags,
-    chunk: *const ScreenChar,
-    attrs: *const ScreenAttr,
+    cells: &[ScreenChar],
+    attrs: &[ScreenAttr],
 ) {
-    // SAFETY: the caller's promise -- `ui` is live.
-    let mut live = unsafe { Ui::new(ui) };
-    // SAFETY: as above.
-    unsafe { prepare_call(ui, GRID_LINE) };
-    // SAFETY: `prepare_call` left a block with room for the header.
-    let mut lenpos = unsafe { open_line(ui, grid, row, startcol) };
+    let (row, startcol, endcol, clearcol) = span;
+    prepare_call(ui, GRID_LINE);
+    // `prepare_call` left a block with room for the header.
+    let mut lenpos = open_line(ui, grid, row, startcol);
 
-    let ncells = (endcol - startcol) as usize;
     // Cells since the last one emitted, i.e. the length of the run in
     // progress including the cell being looked at.
     let mut repeat: u32 = 0;
@@ -128,14 +110,12 @@ unsafe fn raw_line_linegrid(
     // the trailing clear can be merged into it.
     let mut was_space = false;
 
-    for i in 0..ncells {
+    let mut drawn = cells.iter().zip(attrs).enumerate().peekable();
+    while let Some((i, (&text, &hl))) = drawn.next() {
         repeat += 1;
-        // SAFETY: the caller's promise -- both arrays hold `ncells`.
-        let (hl, text) = unsafe { (*attrs.add(i), *chunk.add(i)) };
-        let last = i == ncells - 1;
-        // SAFETY: as above; `i + 1` is still one of them.
-        let run_continues =
-            !last && unsafe { *attrs.add(i + 1) == hl && *chunk.add(i + 1) == text };
+        let run_continues = drawn
+            .peek()
+            .is_some_and(|&(_, (&next_text, &next_hl))| next_hl == hl && next_text == text);
         if run_continues {
             continue;
         }
@@ -143,9 +123,9 @@ unsafe fn raw_line_linegrid(
         // Saturating because an overfull buffer must flush rather
         // than wrap to "plenty of room", which is what C's unsigned
         // subtraction would have done.
-        let used = live.packer.used();
+        let used = ui.packer.used();
         if UI_BUF_SIZE.saturating_sub(used) < 2 * MAX_CELL_SIZE + 1
-            || live.ncells_pending >= MAX_CELLS_PENDING
+            || ui.ncells_pending >= MAX_CELLS_PENDING
         {
             // Out of room mid-run. Close this `grid_line` and open
             // another at the column reached, so that the reader sees
@@ -155,21 +135,18 @@ unsafe fn raw_line_linegrid(
             // span two events.
             if was_space {
                 nelem += 1;
-                live.ncells_pending += 1;
-                // SAFETY: the reserve covers one more cell.
-                unsafe { push_clear(ui, clearattr, 0) };
+                ui.ncells_pending += 1;
+                // The reserve covers one more cell.
+                push_clear(ui, clearattr, 0);
             }
             // `lenpos` is this event's placeholder, in the block still
             // being packed into.
-            live.packer.patch_be16(lenpos, nelem);
-            mpack_bool(&mut live.packer, false);
-            // SAFETY: `ui` is live.
-            unsafe { ui_flush_buf(ui, false) };
-            // SAFETY: as above.
-            unsafe { prepare_call(ui, GRID_LINE) };
+            ui.packer.patch_be16(lenpos, nelem);
+            mpack_bool(&mut ui.packer, false);
+            ui_flush_buf(ui);
+            prepare_call(ui, GRID_LINE);
             let reached = startcol + (i - (repeat as usize - 1)) as Integer;
-            // SAFETY: `prepare_call` left a block with room for the header.
-            lenpos = unsafe { open_line(ui, grid, row, reached) };
+            lenpos = open_line(ui, grid, row, reached);
             nelem = 0;
             last_hl = -1;
         }
@@ -183,26 +160,24 @@ unsafe fn raw_line_linegrid(
         };
         nelem += 1;
         // The check above left room for a whole cell.
-        mpack_array(&mut live.packer, fields);
+        mpack_array(&mut ui.packer, fields);
         // The text's fixstr header carries its length, so the text is
         // copied out first and goes down after it.
         let mut glyph = [0u8; MAX_SCHAR_SIZE];
         let len = schar_get_adv(&mut &mut glyph[..], text);
-        live.packer.push_byte((0xa0 | len) as u8);
-        for &byte in &glyph[..len] {
-            live.packer.push_byte(byte);
-        }
+        ui.packer.push_byte((0xa0 | len) as u8);
+        ui.packer.push(&glyph[..len]);
         if fields >= 2 {
-            mpack_uint(&mut live.packer, hl as u32);
+            mpack_uint(&mut ui.packer, hl as u32);
             if fields >= 3 {
-                mpack_uint(&mut live.packer, repeat);
+                mpack_uint(&mut ui.packer, repeat);
             }
         }
 
         // A repeat counts as two cells however long it is: what the
         // budget is really measuring is how much the reader has to
         // draw before it can show something.
-        live.ncells_pending += repeat.min(2) as usize;
+        ui.ncells_pending += repeat.min(2) as usize;
         last_hl = hl as c_int;
         repeat = 0;
         was_space = text == b' ' as ScreenChar;
@@ -213,101 +188,75 @@ unsafe fn raw_line_linegrid(
         // space is folded into it so that the reader does not have to
         // decide whether the run continues.
         nelem += 1;
-        live.ncells_pending += 1;
-        // SAFETY: the reserve covers one more cell.
-        unsafe { push_clear(ui, clearattr, (clearcol - endcol) as u32) };
+        ui.ncells_pending += 1;
+        // The reserve covers one more cell.
+        push_clear(ui, clearattr, (clearcol - endcol) as u32);
     }
     // `lenpos` is the last event's placeholder, and the reserve covers the
     // closing byte.
-    live.packer.patch_be16(lenpos, nelem);
-    mpack_bool(&mut live.packer, flags & kLineFlagWrap != 0);
+    ui.packer.patch_be16(lenpos, nelem);
+    mpack_bool(&mut ui.packer, flags & kLineFlagWrap != 0);
 }
 
 /// Writes a `grid_line` argument list up to its cell array, returning where
-/// that array's length has to be patched in.
-///
-/// # Safety
-///
-/// `ui` must be live with a buffer that has room for the header.
-unsafe fn open_line(ui: *mut RemoteUI, grid: Integer, row: Integer, startcol: Integer) -> usize {
-    // SAFETY: the caller's promise -- `ui` is live with room for this.
-    let mut live = unsafe { Ui::new(ui) };
-    mpack_array(&mut live.packer, 5);
+/// that array's length has to be patched in. The block must have room for
+/// the header.
+fn open_line(ui: &mut RemoteUI, grid: Integer, row: Integer, startcol: Integer) -> usize {
+    mpack_array(&mut ui.packer, 5);
     for value in [grid, row, startcol] {
-        mpack_uint(&mut live.packer, value as u32);
+        mpack_uint(&mut ui.packer, value as u32);
     }
-    mpack_array_dyn16(&mut live.packer)
+    mpack_array_dyn16(&mut ui.packer)
 }
 
-/// Writes a cell that clears `repeat` columns with `attr`.
-///
-/// # Safety
-///
-/// `ui` must be live with a buffer that has room for the cell.
-unsafe fn push_clear(ui: *mut RemoteUI, attr: Integer, repeat: u32) {
-    // SAFETY: the caller's promise -- `ui` is live with room for this.
-    let mut live = unsafe { Ui::new(ui) };
-    mpack_array(&mut live.packer, 3);
-    mpack_str_small(&mut live.packer, b" ");
-    mpack_uint(&mut live.packer, attr as u32);
-    mpack_uint(&mut live.packer, repeat);
+/// Writes a cell that clears `repeat` columns with `attr`. The block must
+/// have room for it.
+fn push_clear(ui: &mut RemoteUI, attr: Integer, repeat: u32) {
+    mpack_array(&mut ui.packer, 3);
+    mpack_str_small(&mut ui.packer, b" ");
+    mpack_uint(&mut ui.packer, attr as u32);
+    mpack_uint(&mut ui.packer, repeat);
 }
 
 /// [`remote_ui_raw_line`] for a UI on the pre-`ext_linegrid` protocol.
-///
-/// # Safety
-///
-/// As [`remote_ui_raw_line`].
 #[expect(clippy::too_many_arguments, reason = "one parameter per wire field")]
-unsafe fn raw_line_legacy(
-    ui: *mut RemoteUI,
+fn raw_line_legacy(
+    ui: &mut RemoteUI,
     row: Integer,
     startcol: Integer,
     endcol: Integer,
     clearcol: Integer,
     clearattr: Integer,
-    chunk: *const ScreenChar,
-    attrs: *const ScreenAttr,
+    cells: &[ScreenChar],
+    attrs: &[ScreenAttr],
 ) {
-    // SAFETY: the caller's promise -- `ui` is live.
-    let mut live = unsafe { Ui::new(ui) };
-    for i in 0..(endcol - startcol) {
-        // SAFETY: the caller's promise -- both arrays hold this many.
-        let (hl, text) = unsafe { (*attrs.offset(i as isize), *chunk.offset(i as isize)) };
+    for (col, (&text, &hl)) in (startcol..).zip(cells.iter().zip(attrs)) {
         let mut cell: SCharBuf = [0; SCHAR_BUF_SIZE];
         let len = schar_copy(&mut cell, text);
-        // SAFETY: `ui` is live, and `cell` is NUL-terminated by the copy.
-        unsafe {
-            remote_ui_cursor_goto(ui, row, startcol + i);
-            remote_ui_highlight_set(ui, hl as c_int);
-            remote_ui_put(ui, cell.as_ptr().cast());
-        }
+        remote_ui_cursor_goto(ui, row, col);
+        remote_ui_highlight_set(ui, hl as c_int);
+        remote_ui_put(ui, &cell[..len]);
         if ambiguous_width_at(&cell[..len]) {
             // The UI and the server disagree about how wide that cell
             // was drawn, so the tracked column is no longer usable and
             // the next cell must move the cursor explicitly.
-            live.client_col = -1;
+            ui.client_col = -1;
         }
     }
     if endcol >= clearcol {
         return;
     }
-    // SAFETY: `ui` is live.
-    unsafe {
-        remote_ui_cursor_goto(ui, row, endcol);
-        remote_ui_highlight_set(ui, clearattr as c_int);
-    }
+    remote_ui_cursor_goto(ui, row, endcol);
+    remote_ui_highlight_set(ui, clearattr as c_int);
     if clearattr == 0 && clearcol == Integer::from(Columns.get()) {
         // Clearing the rest of the line with the default highlight has
         // its own call; anything else has to be spelled out cell by
         // cell, because the legacy protocol has no repeat count.
         let mut args = ArrayBuf::<0>::new();
-        // SAFETY: as above; the empty array borrows this frame's buffer.
-        unsafe { push_call(ui, c"eol_clear", args.array()) };
+        push_call(ui, c"eol_clear", args.array());
     } else {
         for _ in endcol..clearcol {
-            // SAFETY: as above.
-            unsafe { remote_ui_put(ui, c" ".as_ptr()) };
+            remote_ui_put(ui, b" ");
         }
     }
 }

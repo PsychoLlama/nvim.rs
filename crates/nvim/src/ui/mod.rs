@@ -24,8 +24,7 @@
 //! several grids into one for UIs that did not ask for `ext_multigrid` in
 //! [`ui_compositor`](crate::ui_compositor).
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -38,19 +37,15 @@ pub use callbacks::{ui_add_cb, ui_call_event, ui_cb_ext, ui_remove_cb};
 pub use mouse::{ui_check_mouse, ui_mouse_has};
 pub use sinks::*;
 
-use crate::api::private::helpers::cstr_to_string;
 use crate::api::ui::{remote_ui_hl_attr_define, remote_ui_hl_group_set, remote_ui_option_set};
 use crate::autocmd::do_autocmd_uienter;
 use crate::buffer::resettitle;
-use crate::cstr;
 use crate::cursor_shape::{
     SHAPE_IDX_N, SHAPE_IDX_R, cursor_get_mode_idx, mode_style_array, shape_entry,
 };
 use crate::drawscreen::state::updating_screen;
 use crate::drawscreen::{conceal_check_cursor_line, screen_resize};
-use crate::event::libuv::uv_cwd;
-use crate::event::multiqueue::multiqueue_put_event;
-use crate::event::multiqueue::queue_in;
+use crate::event::multiqueue::put_job_in;
 use crate::ex_getln::cmdline_ui_flush;
 use crate::getchar::state::expr_map_lock;
 use crate::global_cell::GlobalCell;
@@ -61,7 +56,6 @@ use crate::highlight::state::{
 };
 use crate::highlight::{highlight_use_hlstate, ui_send_all_hls};
 use crate::highlight_group::HLF_W;
-use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
 use crate::message::state::{emsg_silent, in_assert_fails};
 use crate::message::{msg, msg_ext_ui_flush, msg_scroll_flush, msg_source, msg_ui_refresh};
 use crate::option::vars::{
@@ -70,6 +64,7 @@ use crate::option::vars::{
 use crate::option::{set_option_value, ui_refresh_options};
 use crate::options::{kOptBoFlagAll, kOptCmdheight, kOptRdbFlagFlush, kOptRdbFlagLine};
 use crate::os::cshim::gettext;
+use crate::os::fs::current_dir;
 use crate::os::time::{os_hrtime, os_sleep};
 use crate::startup::{exiting, full_screen, starting, ui_client_channel_id};
 use crate::state::MODE_CMDLINE;
@@ -80,12 +75,13 @@ use crate::types::ui::{
     kUIMessages, kUIMultigrid, kUITermColors,
 };
 use crate::types::{
-    ApiDict, Arena, Array, Boolean, Error, Handle, Integer, LineFlags, Object, OptVal,
-    OptionSetFlags, RemoteUI, String_0, UIExtension,
+    ApiDict, Array, Boolean, Error, Handle, Integer, LineFlags, Object, OptVal, OptionSetFlags,
+    RemoteUI, String_0, UIExtension,
 };
 use crate::ui::state::{called_vim_beep, resize_events, ui_ext_names, ui_refresh_cmdheight};
 use crate::ui_compositor::{
     ui_comp_attach, ui_comp_detach, ui_comp_get_grid_at_coord, ui_comp_init, ui_comp_should_draw,
+    win_grid,
 };
 use crate::window::{win_set_inner_size, win_ui_flush};
 use crate::winfloat::win_config_float;
@@ -103,10 +99,13 @@ const DEFAULT_GRID_HANDLE: Handle = 1;
 /// not an allocation one.
 pub const MAX_UI_COUNT: usize = 16;
 
-/// The attached UIs, oldest first. Only the first [`ui_count`] are live.
-static uis: GlobalCell<[*mut RemoteUI; MAX_UI_COUNT]> =
-    GlobalCell::new([core::ptr::null_mut(); MAX_UI_COUNT]);
-static attached: GlobalCell<usize> = GlobalCell::new(0);
+/// The attached UIs, oldest first, found by their channel id.
+///
+/// The table owns them: nothing outside keeps a UI's address. A borrow of
+/// the table is a leaf -- nothing run under one may reach the table again
+/// or run user code -- so anything that does finds its UI again by id
+/// afterwards, and copes with it having gone.
+static uis: GlobalCell<Vec<RemoteUI>> = GlobalCell::new(Vec::new());
 
 /// The widgets every attached UI draws itself, plus whatever
 /// [`ui_cb_ext`] adds. Read through [`ui_has`].
@@ -146,26 +145,54 @@ pub enum Reach {
 
 /// The number of attached UIs.
 fn ui_count() -> usize {
-    attached.get()
+    uis.with(Vec::len)
 }
 
-/// The `index`th attached UI.
+/// Runs `f` on the UI attached to `channel_id`, if there is one.
 ///
-/// # Panics
-///
-/// Past [`ui_count`], where the entry is a stale pointer or null.
-fn ui_at(index: usize) -> *mut RemoteUI {
-    assert!(index < ui_count(), "UI index past the attached count");
-    uis.with(|table| table[index])
+/// A leaf: see [`uis`].
+pub(crate) fn with_ui<R>(channel_id: u64, f: impl FnOnce(&mut RemoteUI) -> R) -> Option<R> {
+    uis.with_mut(|table| {
+        let ui = table.iter_mut().find(|ui| ui.channel_id == channel_id)?;
+        Some(f(ui))
+    })
+}
+
+/// Whether a UI is attached to `channel_id`.
+pub(crate) fn ui_is_attached(channel_id: u64) -> bool {
+    uis.with(|table| table.iter().any(|ui| ui.channel_id == channel_id))
+}
+
+/// Whether any attached UI satisfies `test`.
+fn any_ui(test: impl FnMut(&RemoteUI) -> bool) -> bool {
+    uis.with(|table| table.iter().any(test))
+}
+
+/// Runs `send` on every attached UI that `reach` selects, in attach order,
+/// answering whether there was one. A leaf, as [`with_ui`].
+pub(crate) fn each_ui_reached(reach: Reach, mut send: impl FnMut(&mut RemoteUI)) -> bool {
+    uis.with_mut(|table| {
+        let mut any = false;
+        for ui in table.iter_mut().filter(|ui| reaches(ui, reach)) {
+            send(ui);
+            any = true;
+        }
+        any
+    })
+}
+
+/// The channel ids of the attached UIs, in attach order, for the callers
+/// that run user code between one UI and the next.
+fn ui_channels() -> Vec<u64> {
+    uis.with(|table| table.iter().map(|ui| ui.channel_id).collect())
 }
 
 /// Whether `reach` selects `ui`.
-fn reaches(ui: *mut RemoteUI, reach: Reach) -> bool {
+fn reaches(ui: &RemoteUI, reach: Reach) -> bool {
     match reach {
         Reach::All => true,
-        // Safe by the table's invariant: entries below `ui_count` are live.
-        Reach::Composed => unsafe { (*ui).composed },
-        Reach::Uncomposed => !unsafe { (*ui).composed },
+        Reach::Composed => ui.composed,
+        Reach::Uncomposed => !ui.composed,
     }
 }
 
@@ -181,18 +208,18 @@ pub fn ui_init() {
 /// asking for RGB: a terminal UI's `rgb` flag describes the terminal, which
 /// the TUI has already accounted for.
 pub fn ui_rgb_attached() -> bool {
-    p_tgc() || each_ui().any(|ui| !is_tui(ui) && unsafe { (*ui).rgb })
+    p_tgc() || any_ui(|ui| !is_tui(ui) && ui.rgb)
 }
 
 /// Whether any attached UI is something other than a terminal.
 pub fn ui_gui_attached() -> bool {
-    each_ui().any(|ui| !is_tui(ui))
+    any_ui(|ui| !is_tui(ui))
 }
 
 /// Whether any attached UI asked to be given every external widget whether
 /// or not the others want them. `nvim --embed`'s debugging escape hatch.
 pub fn ui_override() -> bool {
-    each_ui().any(|ui| unsafe { (*ui).override_0 })
+    any_ui(|ui| ui.override_0)
 }
 
 /// The number of attached UIs.
@@ -200,12 +227,8 @@ pub fn ui_active() -> usize {
     ui_count()
 }
 
-fn each_ui() -> impl Iterator<Item = *mut RemoteUI> {
-    (0..ui_count()).map(ui_at)
-}
-
-fn is_tui(ui: *mut RemoteUI) -> bool {
-    unsafe { (*ui).stdin_tty || (*ui).stdout_tty }
+fn is_tui(ui: &RemoteUI) -> bool {
+    ui.stdin_tty || ui.stdout_tty
 }
 
 /// Renegotiates what the attached UIs can do, and resizes to match.
@@ -226,14 +249,15 @@ pub fn ui_refresh() {
     // Start from all-true so the fold below is an intersection, but only if
     // there is something to intersect.
     let mut ext_widgets = [ui_active() != 0; kUIExtCount as usize];
-    for ui in each_ui() {
-        let ui = unsafe { &*ui };
-        width = width.min(ui.width);
-        height = height.min(ui.height);
-        for (widget, enabled) in ext_widgets[..kUIExtCount as usize].iter_mut().enumerate() {
-            *enabled &= ui.ui_ext[widget] || inclusive;
+    uis.with(|table| {
+        for ui in table {
+            width = width.min(ui.width);
+            height = height.min(ui.height);
+            for (widget, enabled) in ext_widgets[..kUIExtCount as usize].iter_mut().enumerate() {
+                *enabled &= ui.ui_ext[widget] || inclusive;
+            }
         }
-    }
+    });
 
     cursor_row.set(0);
     cursor_col.set(0);
@@ -247,11 +271,8 @@ pub fn ui_refresh() {
         // screen expressed rather than who draws what, and are not options
         // a UI can be told about.
         if widget < kUILinegrid as usize {
-            let name = ext_name(widget);
-            ui_call_option_set(
-                unsafe { cstr_to_string(name.cast_mut()) },
-                Object::boolean(enabled),
-            );
+            let name = String_0::from_cstr(ui_ext_names[widget]);
+            ui_call_option_set(name, Object::boolean(enabled));
         }
     }
 
@@ -297,38 +318,24 @@ pub fn ui_refresh() {
 /// The tallest popup menu every attached UI will draw, or zero if none of
 /// them asked for a limit.
 pub fn ui_pum_get_height() -> c_int {
-    each_ui()
-        .filter_map(|ui| Some(unsafe { (*ui).pum_nlines }).filter(|&n| n != 0))
-        .min()
-        .unwrap_or(0)
+    uis.with(|table| {
+        let limits = table.iter().map(|ui| ui.pum_nlines).filter(|&n| n != 0);
+        limits.min().unwrap_or(0)
+    })
 }
 
 /// The geometry of the externally drawn popup menu, if a UI reported one:
 /// width, height, row and column.
 pub fn ui_pum_get_pos() -> Option<[f64; 4]> {
-    let ui = each_ui().find(|&ui| unsafe { (*ui).pum_pos })?;
-    // SAFETY: `each_ui` yields the attached UIs, which stay attached for
-    // the call.
-    Some(unsafe {
-        [
-            (*ui).pum_width,
-            (*ui).pum_height,
-            (*ui).pum_row,
-            (*ui).pum_col,
-        ]
+    uis.with(|table| {
+        let ui = table.iter().find(|ui| ui.pum_pos)?;
+        Some([ui.pum_width, ui.pum_height, ui.pum_row, ui.pum_col])
     })
-}
-
-extern "C" fn ui_refresh_event(_argv: *mut *mut core::ffi::c_void) {
-    ui_refresh();
 }
 
 /// Queues [`ui_refresh`] for after the current redraw.
 pub fn ui_schedule_refresh() {
-    let queue = queue_in(&resize_events);
-    let event = crate::types::Event::new(Some(ui_refresh_event), []);
-    // SAFETY: the resize queue is the editor's own and outlives the event.
-    unsafe { multiqueue_put_event(queue, event) };
+    put_job_in(&resize_events, Box::new(ui_refresh));
 }
 
 /// Marks the default colours as needing to be re-sent.
@@ -404,8 +411,8 @@ pub fn vim_beep(val: core::ffi::c_uint) {
 /// Fires `UIEnter` once per attached UI. Startup's catch-up, for the UIs
 /// that attached before autocommands were running.
 pub fn do_autocmd_uienter_all() {
-    for ui in each_ui() {
-        do_autocmd_uienter(unsafe { (*ui).channel_id }, true);
+    for channel_id in ui_channels() {
+        do_autocmd_uienter(channel_id, true);
     }
 }
 
@@ -415,86 +422,80 @@ pub fn ui_can_attach_more() -> bool {
 }
 
 /// Adds `ui` to the attach table and brings it up to date.
-///
-/// # Safety
-///
-/// `ui` must be a live [`RemoteUI`] not already attached, and must outlive
-/// its [`ui_detach_impl`].
-pub unsafe fn ui_attach_impl(ui: *mut RemoteUI, chanid: u64) {
+pub fn ui_attach_impl(mut ui: RemoteUI) {
     assert!(ui_can_attach_more(), "attach table is full");
+    let chanid = ui.channel_id;
     // A UI that reads the real grids does not want the compositor's
     // flattened one. `_debug_float` is the same thing for debugging.
-    let multigrid = unsafe { (*ui).ui_ext[kUIMultigrid as usize] };
-    let float_debug = unsafe { (*ui).ui_ext[kUIFloatDebug as usize] };
+    let multigrid = ui.ui_ext[kUIMultigrid as usize];
+    let float_debug = ui.ui_ext[kUIFloatDebug as usize];
     if !multigrid && !float_debug && ui_client_channel_id.get() == 0 {
-        unsafe { ui_comp_attach(ui) };
+        ui_comp_attach(&mut ui);
     }
-    uis.with_mut(|table| table[attached.get()] = ui);
-    attached.set(attached.get() + 1);
+    uis.with_mut(|table| table.push(ui));
 
+    // Both of these can run user code (a 'titlestring' expression), which
+    // can detach the UI again: from here on it is found by id each time.
     ui_refresh_options();
     resettitle();
 
     // Tell it where the server is, so that a UI on another machine can
     // resolve the paths the server sends.
-    let mut cwd = [0; 4096];
-    let mut cwdlen = cwd.len();
-    if unsafe { uv_cwd(cwd.as_mut_ptr(), &raw mut cwdlen) } == 0 {
-        // SAFETY: `uv_cwd` filled `cwdlen` bytes of the buffer.
-        let cwd = unsafe { core::slice::from_raw_parts(cwd.as_ptr().cast::<u8>(), cwdlen) };
-        ui_call_chdir(String_0::from_bytes(cwd));
+    if let Some(cwd) = current_dir() {
+        ui_call_chdir(String_0::from_xstring(cwd));
     }
 
     for widget in kUILinegrid as usize..kUIExtCount as usize {
-        unsafe { ui_set_ext_option(ui, widget as UIExtension, (*ui).ui_ext[widget]) };
+        let Some(active) = with_ui(chanid, |ui| ui.ui_ext[widget]) else {
+            break;
+        };
+        ui_set_ext_option(chanid, widget as UIExtension, active);
     }
 
     // Highlights are sent as definitions plus ids, unless this is the
     // first UI to want that, in which case the whole table is rebuilt and
     // resent by `highlight_use_hlstate` itself.
-    let sent = unsafe { (*ui).ui_ext[kUIHlState as usize] } && highlight_use_hlstate();
+    let hl_state = with_ui(chanid, |ui| ui.ui_ext[kUIHlState as usize]).unwrap_or(false);
+    let sent = hl_state && highlight_use_hlstate();
     if !sent {
-        // SAFETY: `ui` is the live UI being attached, as above.
         ui_send_all_hls(
-            &mut |id, attr, info| unsafe { remote_ui_hl_attr_define(ui, id, attr, attr, info) },
-            &mut |name, attr| unsafe { remote_ui_hl_group_set(ui, name, attr) },
+            &mut |id, attr, info| {
+                with_ui(chanid, |ui| {
+                    remote_ui_hl_attr_define(ui, id, attr, attr, info)
+                });
+            },
+            &mut |name, attr| {
+                with_ui(chanid, |ui| remote_ui_hl_group_set(ui, name, attr));
+            },
         );
     }
     ui_refresh();
     do_autocmd_uienter(chanid, true);
 }
 
-/// Removes `ui` from the attach table.
-///
-/// # Safety
-///
-/// `ui` must currently be attached.
-pub unsafe fn ui_detach_impl(ui: *mut RemoteUI, chanid: u64) {
-    let index = each_ui()
-        .position(|candidate| candidate == ui)
-        .expect("detaching a UI that is not attached");
-    uis.with_mut(|table| table.copy_within(index + 1..attached.get(), index));
-    attached.set(attached.get() - 1);
+/// Removes the UI on `chanid` from the attach table, answering it.
+pub fn ui_detach_impl(chanid: u64) -> Option<RemoteUI> {
+    let mut ui = uis.with_mut(|table| {
+        let index = table.iter().position(|ui| ui.channel_id == chanid)?;
+        Some(table.remove(index))
+    })?;
 
     if ui_count() != 0 && !exiting.get() {
         // The screen size is the smallest attached UI's, so losing one can
         // make the screen bigger.
         ui_schedule_refresh();
     }
-    let multigrid = unsafe { (*ui).ui_ext[kUIMultigrid as usize] };
-    let float_debug = unsafe { (*ui).ui_ext[kUIFloatDebug as usize] };
+    let multigrid = ui.ui_ext[kUIMultigrid as usize];
+    let float_debug = ui.ui_ext[kUIFloatDebug as usize];
     if !multigrid && !float_debug {
-        unsafe { ui_comp_detach(ui) };
+        ui_comp_detach(&mut ui);
     }
     do_autocmd_uienter(chanid, false);
+    Some(ui)
 }
 
-/// Tells `ui` that `ext` changed.
-///
-/// # Safety
-///
-/// `ui` must be live.
-pub unsafe fn ui_set_ext_option(ui: *mut RemoteUI, ext: UIExtension, active: bool) {
+/// Tells the UI on `chanid` that `ext` changed.
+pub fn ui_set_ext_option(chanid: u64, ext: UIExtension, active: bool) {
     if ext < kUILinegrid {
         // An external widget changing changes the intersection, and every
         // UI has to be told the result rather than this one's request.
@@ -506,13 +507,9 @@ pub unsafe fn ui_set_ext_option(ui: *mut RemoteUI, ext: UIExtension, active: boo
     // documented protocol; those are only mentioned when turned on.
     let private = name.to_bytes().first() == Some(&b'_');
     if !private || active {
-        unsafe {
-            remote_ui_option_set(
-                ui,
-                cstr_to_string(name.as_ptr().cast_mut()),
-                Object::boolean(active),
-            )
-        };
+        with_ui(chanid, |ui| {
+            remote_ui_option_set(ui, String_0::from_cstr(name), Object::boolean(active));
+        });
     }
     if ext == kUITermColors {
         ui_default_colors_set();
@@ -546,14 +543,9 @@ pub fn ui_line(
     let (at_row, from) = (row as Integer, startcol as Integer);
     let (to, clear_from) = (endcol as Integer, clearcol as Integer);
     let clear_attr = clearattr as Integer;
-    let (cells, cell_attrs) = (chars.as_ptr(), attrs.as_ptr());
-    // SAFETY: both slices came from the grid above and hold
-    // `endcol - startcol` elements, which is what the serializers read.
-    unsafe {
-        ui_call_raw_line(
-            handle, at_row, from, to, clear_from, clear_attr, flags, cells, cell_attrs,
-        )
-    };
+    ui_call_raw_line(
+        handle, at_row, from, to, clear_from, clear_attr, flags, chars, attrs,
+    );
 
     // 'writedelay' with `redrawdebug=line`: park the cursor at the end of
     // the line just drawn and pause, so the draw order is watchable.
@@ -663,11 +655,9 @@ pub fn ui_flush() {
     }
 
     if pending_mode_info_update.get() {
-        let mut arena: Arena = ARENA_EMPTY;
         let style = mode_style_array();
         let enabled = P_GUICURSOR.first_byte() != 0;
         ui_call_mode_info_set(enabled as Boolean, style);
-        unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
         pending_mode_info_update.set(false);
     }
 
@@ -684,7 +674,7 @@ pub fn ui_flush() {
             ui_mode_idx.get()
         };
         let full_name = shape_entry(idx).full_name;
-        ui_call_mode_change(unsafe { cstr_to_string(full_name) }, idx as Integer);
+        ui_call_mode_change(String_0::from_cstr(full_name), idx as Integer);
         pending_mode_update.set(false);
         cursor_was_obscured.set(cursor_obscured);
     }
@@ -729,7 +719,7 @@ fn ui_cursor_is_behind_floatwin() -> bool {
     if State.get() & MODE_CMDLINE != 0 || !ui_comp_should_draw() {
         return false;
     }
-    let win = unsafe { &mut *Win::current_raw() };
+    let win = Win::current();
     let crow = win.w_winrow + win.w_winrow_off + win.w_wrow;
     let wcol = if win.w_onebuf_opt.wo_rl != 0 {
         win.w_view_width - win.w_wcol - 1
@@ -737,8 +727,8 @@ fn ui_cursor_is_behind_floatwin() -> bool {
         win.w_wcol
     };
     let ccol = win.w_wincol + win.w_wincol_off + wcol;
-    let top_grid = ui_comp_get_grid_at_coord(crow, ccol).raw();
-    top_grid != &raw mut win.w_grid_alloc && top_grid != default_grid_ref().raw()
+    let top_grid = ui_comp_get_grid_at_coord(crow, ccol);
+    !top_grid.same(win_grid(win)) && !top_grid.same(default_grid_ref())
 }
 
 /// Whether `ext` is drawn by the UIs rather than into the grid.
@@ -748,52 +738,44 @@ pub fn ui_has(ext: UIExtension) -> bool {
 
 /// Describes every attached UI, for `nvim_list_uis()`.
 pub fn ui_array() -> Array {
-    let mut all_uis = Array::with_capacity(ui_count());
-    for ui in each_ui() {
-        let ui = unsafe { &*ui };
-        let mut info = ApiDict::with_capacity(10 + kUIExtCount as usize);
-        let fixed: [(&'static str, Object); 9] = [
-            ("width", Object::integer(ui.width as Integer)),
-            ("height", Object::integer(ui.height as Integer)),
-            ("rgb", Object::boolean(ui.rgb)),
-            ("override", Object::boolean(ui.override_0)),
-            (
-                "term_name",
-                Object::string(unsafe { cstr_to_string(ui.term_name) }),
-            ),
-            // Reported empty rather than read back: the background a UI
-            // sent is only meaningful to whoever sent it.
-            ("term_background", Object::literal("")),
-            ("term_colors", Object::integer(ui.term_colors as Integer)),
-            ("stdin_tty", Object::boolean(ui.stdin_tty)),
-            ("stdout_tty", Object::boolean(ui.stdout_tty)),
-        ];
-        for (key, value) in fixed {
-            info.insert(key, value);
+    uis.with(|table| {
+        let mut all_uis = Array::with_capacity(table.len());
+        for ui in table {
+            all_uis.push(Object::dict(ui_info(ui)));
         }
-        for widget in 0..kUIExtCount as usize {
-            let name = ext_name(widget);
-            // A leading underscore marks an option outside the documented
-            // protocol; those are only listed when turned on.
-            let private = unsafe { *name } == b'_' as core::ffi::c_char;
-            if !private || ui.ui_ext[widget] {
-                let on = Object::boolean(ui.ui_ext[widget]);
-                // SAFETY: `name` is one of the static protocol names.
-                let key = unsafe { cstr::bytes_at(name) };
-                info.insert(key, on);
-            }
-        }
-        let id = Object::integer(ui.channel_id as Integer);
-        info.insert("chan", id);
-
-        all_uis.push(Object::dict(info));
-    }
-    all_uis
+        all_uis
+    })
 }
 
-/// The protocol name of the `widget`th UI extension.
-fn ext_name(widget: usize) -> *const core::ffi::c_char {
-    ui_ext_names[widget].as_ptr()
+/// One UI's entry in [`ui_array`].
+fn ui_info(ui: &RemoteUI) -> ApiDict {
+    let mut info = ApiDict::with_capacity(10 + kUIExtCount as usize);
+    let fixed: [(&'static str, Object); 9] = [
+        ("width", Object::integer(ui.width as Integer)),
+        ("height", Object::integer(ui.height as Integer)),
+        ("rgb", Object::boolean(ui.rgb)),
+        ("override", Object::boolean(ui.override_0)),
+        ("term_name", Object::string(ui.term_name.clone())),
+        // Reported empty rather than read back: the background a UI
+        // sent is only meaningful to whoever sent it.
+        ("term_background", Object::literal("")),
+        ("term_colors", Object::integer(ui.term_colors as Integer)),
+        ("stdin_tty", Object::boolean(ui.stdin_tty)),
+        ("stdout_tty", Object::boolean(ui.stdout_tty)),
+    ];
+    for (key, value) in fixed {
+        info.insert(key, value);
+    }
+    for (widget, name) in ui_ext_names.iter().enumerate().take(kUIExtCount as usize) {
+        // A leading underscore marks an option outside the documented
+        // protocol; those are only listed when turned on.
+        let private = name.to_bytes().first() == Some(&b'_');
+        if !private || ui.ui_ext[widget] {
+            info.insert(name.to_bytes(), Object::boolean(ui.ui_ext[widget]));
+        }
+    }
+    info.insert("chan", Object::integer(ui.channel_id as Integer));
+    info
 }
 
 /// Resizes the grid a UI asked about, for `nvim_ui_try_resize_grid`.

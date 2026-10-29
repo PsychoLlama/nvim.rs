@@ -15,7 +15,6 @@
 //! a series of writes rather than one big allocation.
 
 use crate::api::private::dispatch_wrappers::handle_nvim_paste;
-use crate::api::ui::remote_ui_flush_incomplete;
 use crate::event::wstream::SharedBuffer;
 use crate::memory::{block_vec, recycle_block};
 use crate::msgpack_rpc::packer::{
@@ -127,13 +126,9 @@ mod wire {
 
 /// Opens a packer whose flush hook writes to every channel in `chans`.
 ///
-/// Any UI on one of them is flushed first: its own event stream and this
-/// message share the channel, and a half-written UI event may not be
-/// interleaved with one.
+/// A UI on one of them never has half an event on the wire (its events go
+/// out whole), so this message cannot land inside one.
 fn packer_buffer_init(chans: Addressees) -> PackerBuffer {
-    for &chan in chans.as_slice() {
-        remote_ui_flush_incomplete(chan);
-    }
     let mut packer = PackerBuffer::new(block_vec(), Some(channel_flush_callback));
     packer.channels = chans;
     packer

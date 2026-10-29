@@ -17,6 +17,10 @@ pub type LineFlags = ::core::ffi::c_int;
 /// What a `grid_line` event says about the line it carries.
 pub const kLineFlagWrap: LineFlags = 1;
 pub const kLineFlagInvalid: LineFlags = 2;
+/// One attached UI: what it negotiated, and its outgoing batch.
+///
+/// Owned by the attach table in [`crate::ui`] and reached by its channel id;
+/// nothing keeps its address.
 pub struct RemoteUI {
     pub rgb: bool,
     pub override_0: bool,
@@ -30,13 +34,16 @@ pub struct RemoteUI {
     pub pum_col: ::core::ffi::c_double,
     pub pum_height: ::core::ffi::c_double,
     pub pum_width: ::core::ffi::c_double,
-    pub term_name: *mut ::core::ffi::c_char,
+    /// The `term_name` option, as `nvim_list_uis` reports it.
+    pub term_name: String_0,
     pub term_colors: ::core::ffi::c_int,
     pub stdin_tty: bool,
     pub stdout_tty: bool,
     pub channel_id: uint64_t,
     pub packer: PackerBuffer,
-    pub cur_event: *const ::core::ffi::c_char,
+    /// The event the batch is appending calls to, merged while the name
+    /// stays the same.
+    pub cur_event: Option<&'static ::core::ffi::CStr>,
     /// Where the batch's event count is to be patched in, once known.
     pub nevents_pos: Option<usize>,
     /// Where the current event's call count is to be patched in.
@@ -44,7 +51,6 @@ pub struct RemoteUI {
     pub nevents: uint32_t,
     pub ncalls: uint32_t,
     pub flushed_events: bool,
-    pub incomplete_event: bool,
     pub ncells_pending: size_t,
     pub hl_id: ::core::ffi::c_int,
     pub cursor_row: Integer,

@@ -153,23 +153,19 @@ fn syn_group(name: &'static CStr) -> c_int {
     syn_check_group(name.to_bytes())
 }
 
-/// # Safety
-/// `ui` must be a live UI.
-pub unsafe fn ui_comp_attach(ui: *mut RemoteUI) {
+/// Starts drawing for `ui` from the flattened grid.
+pub fn ui_comp_attach(ui: &mut RemoteUI) {
     composed_uis.set(composed_uis.get() + 1);
-    // SAFETY: the caller's obligation.
-    unsafe { (*ui).composed = true };
+    ui.composed = true;
 }
 
-/// # Safety
-/// As [`ui_comp_attach`].
-pub unsafe fn ui_comp_detach(ui: *mut RemoteUI) {
+/// Stops drawing for `ui`.
+pub fn ui_comp_detach(ui: &mut RemoteUI) {
     composed_uis.set(composed_uis.get() - 1);
     if composed_uis.get() == 0 {
         BUFS.with_mut(|bufs| *bufs = Bufs::EMPTY);
     }
-    // SAFETY: the caller's obligation.
-    unsafe { (*ui).composed = false };
+    ui.composed = false;
 }
 
 pub fn ui_comp_should_draw() -> bool {
@@ -447,15 +443,14 @@ fn compose_line(row: Integer, startcol: Integer, endcol: Integer, mut flags: Lin
         flags &= !kLineFlagWrap;
     }
 
-    let (chars, attrs) = BUFS.with(|bufs| (bufs.chars.as_ptr(), bufs.attrs.as_ptr()));
     let start = startcol + skipstart as Integer;
     let end = endcol - skipend as Integer;
-    // SAFETY: `compose_into` filled `endcol - startcol` cells of both
-    // buffers, and both skips are inside that range.
-    unsafe {
-        let (chars, attrs) = (chars.add(skipstart), attrs.add(skipstart));
+    // `compose_into` filled `endcol - startcol` cells of both buffers, and
+    // both skips are inside that range. Sending reaches no compositor state.
+    BUFS.with(|bufs| {
+        let (chars, attrs) = (&bufs.chars[skipstart..], &bufs.attrs[skipstart..]);
         ui_composed_call_raw_line(1, row, start, end, end, 0, flags, chars, attrs);
-    }
+    });
 }
 
 /// Flattens `[startcol, endcol)` of `row` into `bufs`, answering the topmost
@@ -585,14 +580,11 @@ fn compose_debug(rows: (Integer, Integer), cols: (Integer, Integer), syn_id: c_i
     if delay {
         debug_delay(endrow - startrow);
     }
-    let (chars, attrs) = BUFS.with(|bufs| (bufs.chars.as_ptr(), bufs.attrs.as_ptr()));
     for r in startrow as c_int..endrow as c_int {
         let row = Integer::from(r);
-        // SAFETY: the chunk is empty on the wire (`startcol` twice), so only
-        // the clear out to `endcol` reaches the UI.
-        unsafe {
-            ui_composed_call_raw_line(1, row, startcol, startcol, endcol, attr, 0, chars, attrs);
-        }
+        // The chunk is empty on the wire (`startcol` twice), so only the
+        // clear out to `endcol` reaches the UI.
+        ui_composed_call_raw_line(1, row, startcol, startcol, endcol, attr, 0, &[], &[]);
     }
     if delay {
         debug_delay(endrow - startrow);
@@ -655,12 +647,10 @@ fn dlog(line: c_int, what: &str, value: Integer, grid: Integer) {
 }
 
 /// One drawn line, straight from the grid the editor drew it into: either
-/// forwarded as it is, or recomposed when something covers it.
-///
-/// # Safety
-/// `chunk` and `attrs` must each address `endcol - startcol` readable cells.
+/// forwarded as it is, or recomposed when something covers it. `chunk` and
+/// `attrs` hold at least `endcol - startcol` cells each.
 #[expect(clippy::too_many_arguments, reason = "one parameter per wire field")]
-pub unsafe fn ui_comp_raw_line(
+pub fn ui_comp_raw_line(
     grid: Integer,
     row: Integer,
     startcol: Integer,
@@ -668,8 +658,8 @@ pub unsafe fn ui_comp_raw_line(
     clearcol: Integer,
     clearattr: Integer,
     mut flags: LineFlags,
-    chunk: *const ScreenChar,
-    attrs: *const ScreenAttr,
+    chunk: &[ScreenChar],
+    attrs: &[ScreenAttr],
 ) {
     if !ui_comp_should_draw() || !ui_comp_set_grid(grid as Handle) {
         return;
@@ -716,22 +706,10 @@ pub unsafe fn ui_comp_raw_line(
             endcol >= clearcol,
         );
         compose_debug((row, row + 1), (endcol, clearcol), clear, true);
-        #[cfg(debug_assertions)]
-        {
-            // The only `slice` use left in the module, and it is behind this
-            // cfg -- so the import is too, or a release build warns.
-            use core::slice;
-
-            let n = (endcol - startcol).max(0) as usize;
-            // SAFETY: the caller's obligation on `attrs`.
-            let drawn = unsafe { slice::from_raw_parts(attrs, n) };
-            debug_assert!(drawn.iter().all(|&attr| attr >= 0), "attrs[i] >= 0");
-        }
+        let n = (endcol - startcol).max(0) as usize;
+        debug_assert!(attrs[..n].iter().all(|&attr| attr >= 0), "attrs[i] >= 0");
         let (cc, ca) = (clearcol, clearattr);
-        // SAFETY: the caller's obligation on `chunk` and `attrs`.
-        unsafe {
-            ui_composed_call_raw_line(1, row, startcol, endcol, cc, ca, flags, chunk, attrs);
-        }
+        ui_composed_call_raw_line(1, row, startcol, endcol, cc, ca, flags, chunk, attrs);
     }
 }
 
@@ -746,9 +724,8 @@ pub fn ui_comp_set_screen_valid(valid: bool) -> bool {
     old_val
 }
 
-/// # Safety
-/// `sep_char` must be a valid string.
-pub unsafe fn ui_comp_msg_set_pos(
+/// Moves the message grid to `row`, recomposing what it uncovered.
+pub fn ui_comp_msg_set_pos(
     _grid: Integer,
     row: Integer,
     scrolled: Boolean,
