@@ -22,12 +22,14 @@
 //! `encode` on the same module table gets a fresh buffer instead of
 //! scribbling over its caller's — see [`Config::take_buffer`].
 //!
+//! Every Lua stack operation goes through the [`Stack`], and an error is a
+//! [`Raise`] the walk answers up to the binding, which raises it once its
+//! frame -- and the buffers in it -- are gone.
+//!
 //! Ported from Lua CJSON, Copyright (c) 2010-2012 Mark Pulford, under the
 //! MIT license; the notice is reproduced in licenses/lua-cjson-LICENSE.txt.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `cjson/lua_cjson/` row in docs/perimeter.md.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -41,13 +43,8 @@ pub mod encode;
 
 use core::ffi::{CStr, c_int, c_void};
 
-use crate::lua::ffi::{
-    LUA_REGISTRYINDEX, LUA_TNIL, lua_createtable, lua_getfield, lua_newuserdata, lua_pushcclosure,
-    lua_pushlightuserdata, lua_pushlstring, lua_pushvalue, lua_rawget, lua_rawset, lua_setfield,
-    lua_setmetatable, lua_touserdata, lua_type, luaL_checkstack,
-};
-use crate::lua::stack::{lua_newtable, lua_pop, lua_pushcfunction, lua_upvalueindex};
-use crate::types::{lua_CFunction, lua_State};
+use crate::lua::stack::{At, Kind, Raise, Stack, Userdata};
+use crate::lua_functions;
 
 /// Reported as `vim.json._NAME` / `._VERSION`.
 const MODULE_NAME: &CStr = c"cjson";
@@ -68,21 +65,26 @@ pub(crate) const NUMBER_PRECISION: u32 = 16;
 /// What the reused encode buffer starts at.
 const BUFFER_CAPACITY: usize = 1023;
 
-/// One module table's mutable state.
-///
-/// Lua owns the memory — it is the userdata every registered function
-/// carries as its first upvalue, and `__gc` drops it — which is the only
-/// reason the `Vec` inside is allowed to live here.
+/// One module table's mutable state: the userdatum every function in the
+/// table carries as its first upvalue.
+#[derive(Default)]
 pub(crate) struct Config {
     buffer: Vec<u8>,
+}
+
+impl Userdata for Config {
+    /// Upstream's config metatable is anonymous, holding only `__gc`; this
+    /// one is registered under a name, which is what lets the functions
+    /// check that their upvalue is one.
+    const METATABLE: &'static CStr = c"cjson.config";
 }
 
 impl Config {
     /// Hand the output buffer to one `encode` call, leaving the config with
     /// an empty one.
     ///
-    /// Borrowing it instead would be a `&mut` held live across `lua_call`
-    /// and `lua_gettable`, either of which can run a metamethod that calls
+    /// Borrowing it instead would hold the config across `lua_call` and
+    /// `lua_gettable`, either of which can run a metamethod that calls
     /// `encode` again on this very table. Upstream has exactly that hazard
     /// and answers interleaved garbage; moving the buffer out means the
     /// re-entrant call allocates its own and the outer one is untouched.
@@ -92,59 +94,25 @@ impl Config {
         buffer
     }
 
-    /// Put it back for the next call to reuse. Skipped when the call
-    /// raised, in which case the buffer is dropped and the next call
-    /// allocates a new one.
+    /// Put it back for the next call to reuse.
     fn restore_buffer(&mut self, buffer: Vec<u8>) {
         self.buffer = buffer;
     }
 }
 
-/// The module table's config userdata, upvalue 1 of every function in it.
-///
-/// # Safety
-/// Only callable from a function [`set_functions`] registered, and the
-/// pointer is only live until Lua collects the module table.
-pub(crate) unsafe fn fetch_config(l: *mut lua_State) -> *mut Config {
-    unsafe { lua_touserdata(l, lua_upvalueindex(1)) }.cast::<Config>()
+/// The module table's config, upvalue 1 of every function in it.
+pub(crate) fn fetch_config(stack: &mut Stack) -> Result<&mut Config, Raise> {
+    stack
+        .to_userdata::<Config>(At::upvalue(1))
+        .ok_or_else(|| Raise::message("BUG: Unable to fetch CJSON configuration"))
 }
 
-/// `__gc` for the config userdata.
-///
-/// # Safety
-///
-/// `l` must point at the Lua state this call runs on.
-unsafe extern "C-unwind" fn destroy_config(l: *mut lua_State) -> c_int {
-    let cfg = unsafe { lua_touserdata(l, 1) }.cast::<Config>();
-    if !cfg.is_null() {
-        // SAFETY: `__gc` runs once, on a userdatum this module built and
-        // initialised, and nothing reads it afterwards.
-        unsafe { core::ptr::drop_in_place(cfg) };
-    }
-    0
-}
-
-/// Push a fresh config userdatum, with its `__gc`, onto the stack.
-///
-/// # Safety
-///
-/// `l` must point at the Lua state this call runs on.
-unsafe fn create_config(l: *mut lua_State) {
-    // SAFETY: `lua_newuserdata` answers uninitialised memory of exactly the
-    // size asked for, aligned for any type, and raises rather than
-    // answering null. `write` initialises it before anything can observe
-    // it, and the metatable is installed after, so `__gc` cannot see a
-    // half-built value.
-    unsafe {
-        let cfg = lua_newuserdata(l, size_of::<Config>()).cast::<Config>();
-        cfg.write(Config {
-            buffer: Vec::with_capacity(BUFFER_CAPACITY),
-        });
-
-        lua_newtable(l);
-        lua_pushcfunction(l, destroy_config);
-        lua_setfield(l, -2, c"__gc".as_ptr());
-        lua_setmetatable(l, -2);
+lua_functions! {
+    /// The module table's functions, each closing over its config.
+    enum CjsonFunctions in CJSON_FUNCTIONS {
+        0 => c"encode": encode::encode,
+        1 => c"decode": decode::decode,
+        2 => c"new": new_module,
     }
 }
 
@@ -175,104 +143,66 @@ fn mask_key(address: *const u8) -> *mut c_void {
     core::ptr::with_exposed_provenance_mut(masked)
 }
 
-/// Fetch `REGISTRY[key]`, leaving it on the stack.
-///
-/// # Safety
-///
-/// `l` must be the Lua state this call runs on, with room for one more stack
-/// slot. `key` is only ever compared by address — it is pushed as light
-/// userdata — so it need not point at anything live.
-pub(crate) unsafe fn push_registry(l: *mut lua_State, key: *mut c_void) {
-    unsafe {
-        lua_pushlightuserdata(l, key);
-        lua_rawget(l, LUA_REGISTRYINDEX);
-    }
+/// Push `REGISTRY[key]`.
+pub(crate) fn push_registry(stack: &mut Stack, key: *mut c_void) {
+    stack.push_light_userdata(key);
+    stack.raw_get(At::REGISTRY);
 }
 
-/// Register `functions` into the table below the top of the stack, each
-/// closing over the config userdatum on top of it.
-///
-/// This is Lua 5.2's `luaL_setfuncs` with `nup = 1`, which LuaJIT does not
-/// have. On entry the stack is `.., table, config`; on exit, `.., table`.
-///
-/// # Safety
-///
-/// `l` must point at the Lua state this call runs on.
-unsafe fn set_functions(l: *mut lua_State, functions: &[(&CStr, lua_CFunction)]) {
-    unsafe {
-        luaL_checkstack(l, 1, c"too many upvalues".as_ptr());
-        for (name, function) in functions {
-            // .., table, config, config
-            lua_pushvalue(l, -1);
-            // .., table, config, closure
-            lua_pushcclosure(l, *function, 1);
-            lua_setfield(l, -3, name.as_ptr());
-        }
-        lua_pop(l, 1);
-    }
+/// `vim.json.new()`: another module table, with its own buffer.
+fn new_module(stack: &mut Stack) -> Result<c_int, Raise> {
+    lua_cjson_new(stack);
+    Ok(1)
 }
 
-/// Build a `cjson` module table: this is `vim.json`, and `vim.json.new()`.
-///
-/// # Safety
-/// `l` must be a live Lua state.
-#[allow(non_snake_case)]
-pub unsafe extern "C-unwind" fn lua_cjson_new(l: *mut lua_State) -> c_int {
-    unsafe {
-        // Upstream initialises its locale-dependent float conversions here,
-        // off the main thread only once. `cjson/fpconv.rs` has no locale
-        // state, so there is nothing to do — but the `nvim.thread` probe
-        // stays, because reading and popping it is the stack effect the
-        // surrounding code was written against.
-        lua_getfield(l, LUA_REGISTRYINDEX, c"nvim.thread".as_ptr());
-        lua_pop(l, 1);
+/// Push a `cjson` module table: this is `vim.json`, and `vim.json.new()`.
+pub fn lua_cjson_new(stack: &mut Stack) {
+    // Upstream initialises its locale-dependent float conversions here,
+    // off the main thread only once. `cjson/fpconv.rs` has no locale state,
+    // so there is nothing to do — but the `nvim.thread` probe stays, because
+    // reading and popping it is the stack effect the surrounding code was
+    // written against.
+    stack.get_field(At::REGISTRY, c"nvim.thread");
+    stack.pop(1);
 
-        // The array metatables are per-state, not per-module-table: a
-        // second `new()` must not replace the ones the first put in the
-        // registry, or a table tagged by one would stop being an array to
-        // the other.
-        push_registry(l, empty_array_key());
-        let missing = lua_type(l, -1) == LUA_TNIL;
-        lua_pop(l, 1);
-        if missing {
-            for key in [empty_array_key(), array_key()] {
-                lua_pushlightuserdata(l, key);
-                lua_createtable(l, 0, 0);
-                lua_rawset(l, LUA_REGISTRYINDEX);
-            }
-        }
-
-        // .., table
-        lua_createtable(l, 0, 0);
-        // .., table, config
-        create_config(l);
-        set_functions(
-            l,
-            &[
-                (c"encode", Some(encode::encode)),
-                (c"decode", Some(decode::decode)),
-                (c"new", Some(lua_cjson_new)),
-            ],
-        );
-
-        // Upstream also exposes `null`, `array_mt`, `empty_array_mt` and
-        // `empty_array` here; nvim publishes none of them, because `vim.NIL`
-        // and `vim.empty_dict()` are the spellings it wants used.
-        for (field, text) in [(c"_NAME", MODULE_NAME), (c"_VERSION", MODULE_VERSION)] {
-            lua_pushlstring(l, text.as_ptr(), text.count_bytes());
-            lua_setfield(l, -2, field.as_ptr());
+    // The array metatables are per-state, not per-module-table: a second
+    // `new()` must not replace the ones the first put in the registry, or a
+    // table tagged by one would stop being an array to the other.
+    push_registry(stack, empty_array_key());
+    let missing = stack.kind(At::TOP) == Kind::Nil;
+    stack.pop(1);
+    if missing {
+        for key in [empty_array_key(), array_key()] {
+            stack.push_light_userdata(key);
+            stack.new_table(0, 0);
+            stack.raw_set(At::REGISTRY);
         }
     }
-    1
-}
 
-/// Say that a `luaL_error` call cannot come back.
-///
-/// `luaL_error` longjmps (or unwinds) out of the calling C function, but its
-/// declared return type is `c_int`, so a caller whose own type is `!` needs
-/// somewhere to go. Nothing below this frame is unwound, so no Rust value
-/// that owns memory may be live at the call — every caller here drops its
-/// buffers first, exactly where the C calls `free`.
-pub(crate) fn unreachable_after_raise() -> ! {
-    unreachable!("luaL_error returned")
+    // .., table
+    stack.new_table(0, 0);
+    // .., table, config
+    stack.new_userdata_metatable::<Config>();
+    stack.pop(1);
+    stack.new_userdata(Config {
+        buffer: Vec::with_capacity(BUFFER_CAPACITY),
+    });
+    // Lua 5.2's `luaL_setfuncs` with `nup = 1`, which LuaJIT does not have.
+    for function in CJSON_FUNCTIONS {
+        // .., table, config, config
+        stack.push_value(At::TOP);
+        // .., table, config, closure
+        stack.push_closure(function.entry(), 1);
+        stack.set_field(At::from_top(3), function.name());
+    }
+    // .., table
+    stack.pop(1);
+
+    // Upstream also exposes `null`, `array_mt`, `empty_array_mt` and
+    // `empty_array` here; nvim publishes none of them, because `vim.NIL` and
+    // `vim.empty_dict()` are the spellings it wants used.
+    for (field, text) in [(c"_NAME", MODULE_NAME), (c"_VERSION", MODULE_VERSION)] {
+        stack.push_bytes(text.to_bytes());
+        stack.set_field(At::from_top(2), field);
+    }
 }

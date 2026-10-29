@@ -1,4 +1,4 @@
-#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unsafe_code)]
 
 //! The bundled `lua-cjson` JSON codec.
 

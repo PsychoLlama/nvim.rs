@@ -1,6 +1,4 @@
-#![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `cjson/lua_cjson/` row in docs/perimeter.md.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -13,8 +11,8 @@
 //!
 //! A hand-written recursive-descent parser over the document *as a slice*.
 //! Upstream walks it as a `const char *` and leans on the NUL Lua puts past
-//! every string, so the slice here is `len + 1` bytes long and that NUL is
-//! part of it: it is the `T_END` token, and it is what stops the string and
+//! every string; here [`Parser::byte`] answers that NUL past the end of the
+//! slice: it is the `T_END` token, and it is what stops the string and
 //! number scanners.
 //!
 //! Two upstream settings are hard here. `decode_invalid_numbers` is 1,
@@ -28,19 +26,13 @@
 //! Ported from Lua CJSON, Copyright (c) 2010-2012 Mark Pulford, under the
 //! MIT license; the notice is reproduced in licenses/lua-cjson-LICENSE.txt.
 
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 
-use super::{Config, DECODE_MAX_DEPTH, fetch_config, unreachable_after_raise};
+use super::{DECODE_MAX_DEPTH, fetch_config};
 use crate::cjson::fpconv::strtod;
-use crate::lua::ffi::{
-    LUA_REGISTRYINDEX, LUA_TNIL, LUA_TTABLE, lua_checkstack, lua_getfield, lua_gettop,
-    lua_pushboolean, lua_pushinteger, lua_pushlstring, lua_pushnil, lua_pushnumber, lua_rawset,
-    lua_rawseti, lua_setmetatable, lua_toboolean, lua_type, luaL_checklstring, luaL_checktype,
-    luaL_error,
-};
-use crate::lua::stack::{lua_newtable, lua_pop};
+use crate::lua::stack::{At, Kind, Raise, Stack};
 use crate::narrow::number_as_int;
-use crate::types::{lua_Integer, lua_State, size_t};
+use crate::types::lua_Integer;
 
 /// A byte offset as an error message reports it. Upstream hands the
 /// `ptrdiff_t` difference of two pointers to a `%d`, i.e. narrows it by
@@ -145,7 +137,7 @@ impl Token {
 }
 
 struct Parser<'a> {
-    /// The document plus the NUL Lua keeps past it.
+    /// The document; [`Parser::byte`] answers a NUL past its end.
     data: &'a [u8],
     at: usize,
     /// Where the token being reported started, for the error message.
@@ -171,25 +163,14 @@ impl<'a> Parser<'a> {
         Token::Error(reason)
     }
 
-    /// `json_throw_parse_error`. Drops the scratch buffer first, because
-    /// `luaL_error` does not unwind this frame — which is exactly why
-    /// upstream's comment there says not to call it with dynamic memory
-    /// allocated.
-    fn throw(&mut self, l: *mut lua_State, expected: &CStr, token: &Token) -> ! {
-        let found = token.name();
-        let at = offset_as_int(self.index) + 1;
-        drop(core::mem::take(&mut self.scratch));
-        // SAFETY: `l` is live and both strings outlive the call.
-        unsafe {
-            luaL_error(
-                l,
-                c"Expected %s but found %s at character %d".as_ptr(),
-                expected.as_ptr(),
-                found.as_ptr(),
-                at,
-            );
-        }
-        unreachable_after_raise()
+    /// `json_throw_parse_error`.
+    fn throw(&self, expected: &str, token: &Token) -> Raise {
+        let mut message = format!("Expected {expected} but found ").into_bytes();
+        message.extend_from_slice(token.name().to_bytes());
+        message.extend_from_slice(
+            format!(" at character {}", offset_as_int(self.index) + 1).as_bytes(),
+        );
+        Raise::message(message)
     }
 
     /// `\uXXXX`, possibly a surrogate pair, appended to the scratch as
@@ -433,136 +414,108 @@ impl<'a> Parser<'a> {
 
     /// One more level of nesting, plus the `slots` stack slots the level
     /// needs.
-    fn descend(&mut self, l: *mut lua_State, slots: c_int) {
+    fn descend(&mut self, stack: &mut Stack, slots: c_int) -> Result<(), Raise> {
         self.depth += 1;
-        // SAFETY: `l` is live.
-        if self.depth <= DECODE_MAX_DEPTH && unsafe { lua_checkstack(l, slots) } != 0 {
-            return;
+        if self.depth <= DECODE_MAX_DEPTH && stack.reserve(slots) {
+            return Ok(());
         }
-        let (depth, at) = (self.depth, offset_as_int(self.at));
-        drop(core::mem::take(&mut self.scratch));
-        // SAFETY: `l` is live, and the scratch is gone.
-        unsafe {
-            luaL_error(
-                l,
-                c"Found too many nested data structures (%d) at character %d".as_ptr(),
-                depth,
-                at,
-            );
-        }
-        unreachable_after_raise()
+        Err(Raise::message(format!(
+            "Found too many nested data structures ({}) at character {}",
+            self.depth,
+            offset_as_int(self.at)
+        )))
     }
 
-    /// Push the decoded string in the scratch.
-    ///
-    /// # Safety
-    /// `l` must be a live Lua state with a free slot.
-    unsafe fn push_scratch(&self, l: *mut lua_State) {
-        let (bytes, length) = (self.scratch.as_ptr().cast::<c_char>(), self.scratch.len());
-        // SAFETY: the caller's state; the scratch outlives the copy Lua makes.
-        unsafe { lua_pushlstring(l, bytes, length) };
-    }
-
-    /// # Safety
-    /// `l` must be a live Lua state; leaves one value on the stack.
-    unsafe fn parse_object(&mut self, l: *mut lua_State) {
+    /// Leaves one value on the stack.
+    fn parse_object(&mut self, stack: &mut Stack) -> Result<(), Raise> {
         // .., table, key, value
-        self.descend(l, 3);
-        // SAFETY: `l` is live and `descend` reserved the three slots.
-        unsafe { lua_newtable(l) };
+        self.descend(stack, 3)?;
+        stack.new_table(0, 0);
         let mut token = self.next_token();
         if matches!(token, Token::ObjEnd) {
             // An object that decodes to `{}` has to stay one on the way
             // back out, which is what `vim.empty_dict()`'s metatable is.
-            // SAFETY: as above; the table is on top.
-            unsafe {
-                lua_getfield(l, LUA_REGISTRYINDEX, c"mpack.empty_dict".as_ptr());
-                lua_setmetatable(l, -2);
-            }
+            stack.get_field(At::REGISTRY, c"mpack.empty_dict");
+            stack.set_metatable(At::from_top(2));
             self.depth -= 1;
-            return;
+            return Ok(());
         }
         loop {
             if !matches!(token, Token::Str) {
-                self.throw(l, c"object key string", &token);
+                return Err(self.throw("object key string", &token));
             }
-            // SAFETY: as above; the key's bytes are in the scratch.
-            unsafe { self.push_scratch(l) };
+            stack.push_bytes(&self.scratch);
 
             token = self.next_token();
             if !matches!(token, Token::Colon) {
-                self.throw(l, c"colon", &token);
+                return Err(self.throw("colon", &token));
             }
 
             token = self.next_token();
             let luanil = self.luanil_object;
-            // SAFETY: as above; `push_value` then `rawset` leaves the table.
-            unsafe {
-                self.push_value(l, &token, luanil);
-                lua_rawset(l, -3);
-            }
+            self.push_value(stack, &token, luanil)?;
+            stack.raw_set(At::from_top(3));
 
             token = self.next_token();
             if matches!(token, Token::ObjEnd) {
                 self.depth -= 1;
-                return;
+                return Ok(());
             }
             if !matches!(token, Token::Comma) {
-                self.throw(l, c"comma or object end", &token);
+                return Err(self.throw("comma or object end", &token));
             }
             token = self.next_token();
         }
     }
 
-    /// # Safety
-    /// `l` must be a live Lua state; leaves one value on the stack.
-    unsafe fn parse_array(&mut self, l: *mut lua_State) {
+    /// Leaves one value on the stack.
+    fn parse_array(&mut self, stack: &mut Stack) -> Result<(), Raise> {
         // .., table, value
-        self.descend(l, 2);
+        self.descend(stack, 2)?;
         // `decode_array_with_array_mt` is 0, so no metatable here.
-        // SAFETY: `l` is live and `descend` reserved the two slots.
-        unsafe { lua_newtable(l) };
+        stack.new_table(0, 0);
         let mut token = self.next_token();
         if matches!(token, Token::ArrEnd) {
             self.depth -= 1;
-            return;
+            return Ok(());
         }
         let luanil = self.luanil_array;
         for index in 1.. {
-            // SAFETY: as above; `push_value` then `rawseti` leaves the table.
-            unsafe {
-                self.push_value(l, &token, luanil);
-                lua_rawseti(l, -2, index);
-            }
+            self.push_value(stack, &token, luanil)?;
+            stack.raw_set_index(At::from_top(2), index);
 
             token = self.next_token();
             if matches!(token, Token::ArrEnd) {
                 self.depth -= 1;
-                return;
+                return Ok(());
             }
             if !matches!(token, Token::Comma) {
-                self.throw(l, c"comma or array end", &token);
+                return Err(self.throw("comma or array end", &token));
             }
             token = self.next_token();
         }
+        unreachable!("an array of more than `c_int::MAX` elements")
     }
 
-    /// # Safety
-    /// `l` must be a live Lua state; leaves one value on the stack.
-    unsafe fn push_value(&mut self, l: *mut lua_State, token: &Token, use_luanil: bool) {
-        // SAFETY: `l` is live and has the slot `descend` reserved; every
-        // arm below pushes exactly one value.
+    /// Leaves one value on the stack.
+    fn push_value(
+        &mut self,
+        stack: &mut Stack,
+        token: &Token,
+        use_luanil: bool,
+    ) -> Result<(), Raise> {
         match *token {
-            Token::Str => unsafe { self.push_scratch(l) },
-            Token::Number(number) => unsafe { lua_pushnumber(l, number) },
-            Token::Integer(number) => unsafe { lua_pushinteger(l, number) },
-            Token::Boolean(value) => unsafe { lua_pushboolean(l, c_int::from(value)) },
-            Token::ObjBegin => unsafe { self.parse_object(l) },
-            Token::ArrBegin => unsafe { self.parse_array(l) },
-            Token::Null if use_luanil => unsafe { lua_pushnil(l) },
-            Token::Null => unsafe { lua_getfield(l, LUA_REGISTRYINDEX, c"mpack.NIL".as_ptr()) },
-            _ => self.throw(l, c"value", token),
+            Token::Str => stack.push_bytes(&self.scratch),
+            Token::Number(number) => stack.push_number(number),
+            Token::Integer(number) => stack.push_integer(number),
+            Token::Boolean(value) => stack.push_boolean(value),
+            Token::ObjBegin => self.parse_object(stack)?,
+            Token::ArrBegin => self.parse_array(stack)?,
+            Token::Null if use_luanil => stack.push_nil(),
+            Token::Null => stack.get_field(At::REGISTRY, c"mpack.NIL"),
+            _ => return Err(self.throw("value", token)),
         }
+        Ok(())
     }
 }
 
@@ -614,101 +567,65 @@ struct Options {
     skip_comments: bool,
 }
 
-/// The boolean at `field` of the table at `lindex`, leaving the stack as it
+/// The boolean at `field` of the table at `at`, leaving the stack as it
 /// was found.
-///
-/// # Safety
-/// `l` must be a live Lua state with a table at `lindex` and a free slot.
-unsafe fn boolean_field(l: *mut lua_State, lindex: c_int, field: &CStr) -> bool {
-    // SAFETY: the caller's state and table; the push is popped here.
-    unsafe {
-        lua_getfield(l, lindex, field.as_ptr());
-        let value = lua_toboolean(l, -1) != 0;
-        lua_pop(l, 1);
-        value
-    }
+fn boolean_field(stack: &mut Stack, at: At, field: &CStr) -> bool {
+    stack.get_field(at, field);
+    let value = stack.to_boolean(At::TOP);
+    stack.pop(1);
+    value
 }
 
 /// Read the optional second argument.
-///
-/// # Safety
-/// `l` must be a live Lua state.
-unsafe fn read_options(l: *mut lua_State) -> Options {
+fn read_options(stack: &mut Stack) -> Result<Options, Raise> {
     let mut options = Options::default();
-    // SAFETY: `l` is live.
-    match unsafe { lua_gettop(l) } {
-        1 => return options,
+    match stack.top().index() {
+        1 => return Ok(options),
         2 => {}
-        _ => {
-            // SAFETY: as above.
-            unsafe { luaL_error(l, c"expected 1 or 2 arguments".as_ptr()) };
-            unreachable_after_raise()
-        }
+        _ => return Err(Raise::message("expected 1 or 2 arguments")),
     }
-    // SAFETY: as above; argument 2 is a table from here on.
-    unsafe { luaL_checktype(l, 2, LUA_TTABLE) };
-    // SAFETY: as above.
-    options.skip_comments = unsafe { boolean_field(l, 2, c"skip_comments") };
+    stack.check_kind(At::arg(2), Kind::Table)?;
+    options.skip_comments = boolean_field(stack, At::arg(2), c"skip_comments");
 
     // `luanil` is the only option that is itself a table, and an absent one
     // ends the read: the two flags inside stay false.
-    // SAFETY: as above; the pushed value is popped on both paths out.
-    unsafe {
-        lua_getfield(l, 2, c"luanil".as_ptr());
-        if lua_type(l, -1) == LUA_TNIL {
-            lua_pop(l, 1);
-            return options;
-        }
-        luaL_checktype(l, -1, LUA_TTABLE);
+    stack.get_field(At::arg(2), c"luanil");
+    if stack.kind(At::TOP) == Kind::Nil {
+        stack.pop(1);
+        return Ok(options);
     }
-    // SAFETY: as above, with the `luanil` table on top.
-    unsafe {
-        options.luanil_object = boolean_field(l, -1, c"object");
-        options.luanil_array = boolean_field(l, -1, c"array");
-        // The `luanil` table goes too.
-        lua_pop(l, 1);
-    }
-    options
+    stack.check_kind(At::TOP, Kind::Table)?;
+    let luanil = stack.top();
+    options.luanil_object = boolean_field(stack, luanil, c"object");
+    options.luanil_array = boolean_field(stack, luanil, c"array");
+    // The `luanil` table goes too.
+    stack.pop(1);
+    Ok(options)
 }
 
 /// `vim.json.decode(text[, options])`.
-///
-/// # Safety
-/// `l` must be a live Lua state with this module's config as upvalue 1.
-pub unsafe extern "C-unwind" fn decode(l: *mut lua_State) -> c_int {
+pub(super) fn decode(stack: &mut Stack) -> Result<c_int, Raise> {
     // The config carries nothing the decoder reads any more — every
     // `decode_*` setting is fixed — but fetching it is still what proves
     // this was entered through the module table.
-    // SAFETY: `l` is live and was entered through a closure `set_functions`
-    // built.
-    let cfg: *mut Config = unsafe { fetch_config(l) };
-    if cfg.is_null() {
-        // SAFETY: as above.
-        unsafe { luaL_error(l, c"BUG: Unable to fetch CJSON configuration".as_ptr()) };
-        unreachable_after_raise()
-    }
+    fetch_config(stack)?;
 
     // The options are read *before* argument 1 is checked, because upstream
     // does: `vim.json.decode({}, 'x')` complains about argument 2, not 1.
-    // SAFETY: `l` is live.
-    let options = unsafe { read_options(l) };
+    let options = read_options(stack)?;
 
-    let mut length: size_t = 0;
-    // SAFETY: `l` is live. `luaL_checklstring` answers `length` bytes plus
-    // the NUL Lua keeps past every string, and the value stays on the stack
-    // — and so alive — for the whole call, so the slice outlives the parse.
-    let data = unsafe {
-        let text = luaL_checklstring(l, 1, &raw mut length);
-        core::slice::from_raw_parts(text.cast::<u8>(), length + 1)
-    };
+    stack.check_bytes(At::arg(1))?;
+    let top = stack.top();
+    let mut view = stack.above(top);
+    let data = view.check_bytes_below(At::arg(1))?;
 
     // RFC 4627 section 3: only the first character of a JSON document is
     // guaranteed to be ASCII, but that is enough to spot UTF-16 or UTF-32,
     // whose first or second byte is a NUL.
-    if length >= 2 && (data[0] == 0 || data[1] == 0) {
-        // SAFETY: `l` is live and nothing owns memory here yet.
-        unsafe { luaL_error(l, c"JSON parser does not support UTF-16 or UTF-32".as_ptr()) };
-        unreachable_after_raise()
+    if data.len() >= 2 && (data[0] == 0 || data[1] == 0) {
+        return Err(Raise::message(
+            "JSON parser does not support UTF-16 or UTF-32",
+        ));
     }
 
     let mut parser = Parser {
@@ -716,8 +633,8 @@ pub unsafe extern "C-unwind" fn decode(l: *mut lua_State) -> c_int {
         at: 0,
         index: 0,
         // Sized from the whole document, so appending a decoded string
-        // never has to check: it cannot be longer than its own text.
-        scratch: Vec::with_capacity(length),
+        // never has to grow: it cannot be longer than its own text.
+        scratch: Vec::with_capacity(data.len()),
         depth: 0,
         luanil_object: options.luanil_object,
         luanil_array: options.luanil_array,
@@ -726,15 +643,13 @@ pub unsafe extern "C-unwind" fn decode(l: *mut lua_State) -> c_int {
 
     let token = parser.next_token();
     let luanil = parser.luanil_object;
-    // SAFETY: `l` is live for the whole parse, and `decode` answers the one
-    // value this leaves on the stack.
-    unsafe { parser.push_value(l, &token, luanil) };
+    parser.push_value(&mut view, &token, luanil)?;
 
     let token = parser.next_token();
     if !matches!(token, Token::End) {
-        parser.throw(l, c"the end", &token);
+        return Err(parser.throw("the end", &token));
     }
-    1
+    Ok(1)
 }
 
 #[cfg(test)]

@@ -1,6 +1,4 @@
-#![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `cjson/lua_cjson/` row in docs/perimeter.md.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -15,7 +13,9 @@
 //! top, tables are traversed with `lua_next` / `lua_rawgeti`, and the
 //! recursion depth is bounded by [`ENCODE_MAX_DEPTH`] *and* by
 //! `lua_checkstack`, because a metamethod could need slots this walk has
-//! already spent.
+//! already spent. A refusal is a [`Raise`] answered back up the walk, with
+//! nothing popped on the way: an error a `__len` metamethod raised is still
+//! on top when the binding raises it.
 //!
 //! Two things upstream leaves as settings are hard here: NaN and infinity
 //! always raise (`encode_invalid_numbers` is 0, so its "NaN"/"Infinity" and
@@ -27,25 +27,15 @@
 //! Ported from Lua CJSON, Copyright (c) 2010-2012 Mark Pulford, under the
 //! MIT license; the notice is reproduced in licenses/lua-cjson-LICENSE.txt.
 
-use core::ffi::{CStr, c_char, c_int};
-
-use crate::narrow::len_as_int;
+use core::ffi::{CStr, c_int};
 
 use super::{
-    Config, ENCODE_MAX_DEPTH, NUMBER_PRECISION, SPARSE_RATIO, SPARSE_SAFE, array_key,
-    empty_array_key, fetch_config, push_registry, unreachable_after_raise,
+    ENCODE_MAX_DEPTH, NUMBER_PRECISION, SPARSE_RATIO, SPARSE_SAFE, array_key, empty_array_key,
+    fetch_config, push_registry,
 };
 use crate::cjson::fpconv::append_g_fmt;
-use crate::lua::ffi::{
-    LUA_REGISTRYINDEX, LUA_TBOOLEAN, LUA_TLIGHTUSERDATA, LUA_TNIL, LUA_TNUMBER, LUA_TSTRING,
-    LUA_TTABLE, LUA_TUSERDATA, lua_call, lua_checkstack, lua_getfield, lua_getmetatable,
-    lua_gettable, lua_gettop, lua_next, lua_objlen, lua_pushinteger, lua_pushlstring, lua_pushnil,
-    lua_pushnumber, lua_pushvalue, lua_rawequal, lua_rawgeti, lua_settop, lua_toboolean,
-    lua_tointeger, lua_tolstring, lua_tonumber, lua_touserdata, lua_type, lua_typename,
-    luaL_checklstring, luaL_checktype, luaL_error, luaL_getmetafield,
-};
-use crate::lua::stack::lua_pop;
-use crate::types::{lua_State, size_t};
+use crate::lua::stack::{At, Kind, Raise, Stack};
+use crate::narrow::len_as_int;
 
 /// The JSON escape for `byte`, or `None` to emit it unchanged.
 ///
@@ -114,9 +104,6 @@ enum RawKey {
 }
 
 struct Encoder {
-    /// The module table this call belongs to, so the reusable buffer can be
-    /// handed back before raising.
-    cfg: *mut Config,
     out: Vec<u8>,
     keys: Vec<u8>,
     /// The `indent` option, owned rather than borrowed: upstream keeps the
@@ -128,6 +115,17 @@ struct Encoder {
     sort_keys: bool,
 }
 
+/// `json_encode_exception`: `Cannot serialise <type of the value at at>:
+/// <reason>`.
+fn refusal(stack: &Stack, at: At, reason: &str) -> Raise {
+    let name = stack.kind_name(stack.kind(at)).to_bytes();
+    let mut message = b"Cannot serialise ".to_vec();
+    message.extend_from_slice(name);
+    message.extend_from_slice(b": ");
+    message.extend_from_slice(reason.as_bytes());
+    Raise::message(message)
+}
+
 impl Encoder {
     fn sink(&mut self, which: Sink) -> &mut Vec<u8> {
         match which {
@@ -136,53 +134,18 @@ impl Encoder {
         }
     }
 
-    /// `json_encode_exception`: hand the reusable buffer back to the module
-    /// table, then raise.
-    ///
-    /// The hand-back is why this is a method. `luaL_error` does not unwind
-    /// this frame, so a buffer still owned here would be lost — which is
-    /// exactly what happens to upstream's key array on the *other* error
-    /// path, the one where a `__len` or `__index` metamethod raises from
-    /// under us. Nothing can be done about that one from here.
-    fn raise(&mut self, l: *mut lua_State, lindex: c_int, reason: &CStr) -> ! {
-        // SAFETY: `cfg` is the live upvalue userdatum.
-        unsafe { (*self.cfg).restore_buffer(core::mem::take(&mut self.out)) };
-        drop(core::mem::take(&mut self.keys));
-        // SAFETY: `l` is live, `lua_typename` takes the tag `lua_type` just
-        // answered, and neither buffer is owned here any more.
-        unsafe {
-            let name = lua_typename(l, lua_type(l, lindex));
-            luaL_error(
-                l,
-                c"Cannot serialise %s: %s".as_ptr(),
-                name,
-                reason.as_ptr(),
-            );
-        }
-        unreachable_after_raise()
-    }
-
-    /// Append the string at `lindex` with its contents escaped, no quotes.
-    ///
-    /// # Safety
-    /// `lindex` must hold a string.
-    unsafe fn append_string_contents(&mut self, l: *mut lua_State, lindex: c_int, into: Sink) {
-        let mut length: size_t = 0;
-        // SAFETY: the caller has checked the type, so this reads the string
-        // rather than converting the slot (which would break `lua_next`),
-        // and answers `length` bytes that stay put while the value is on
-        // the stack.
-        let bytes = unsafe {
-            let text = lua_tolstring(l, lindex, &raw mut length);
-            core::slice::from_raw_parts(text.cast::<u8>(), length)
-        };
+    /// Append the string at `at` with its contents escaped, no quotes. The
+    /// slot holds a string (not a number to convert, which would break
+    /// `lua_next`).
+    fn append_string_contents(&mut self, stack: &Stack, at: At, into: Sink) {
+        let bytes = stack.string(at).unwrap_or_default();
         let escape_slash = self.escape_slash;
         let out = self.sink(into);
         // Upstream reserves `length * 6`, the all-escapes worst case, and
         // then appends without checking. A `Vec` grows geometrically, so
         // the exact-fit reservation is the useful one and the `SIZE_MAX / 6`
         // overflow guard that came with the worst case is not needed.
-        out.reserve(length);
+        out.reserve(bytes.len());
         for &byte in bytes {
             match escape(byte, escape_slash) {
                 Some(text) => out.extend_from_slice(text),
@@ -191,25 +154,22 @@ impl Encoder {
         }
     }
 
-    /// # Safety
-    /// `lindex` must hold a string.
-    unsafe fn append_string(&mut self, l: *mut lua_State, lindex: c_int) {
+    fn append_string(&mut self, stack: &Stack, at: At) {
         self.out.push(b'"');
-        unsafe { self.append_string_contents(l, lindex, Sink::Document) };
+        self.append_string_contents(stack, at, Sink::Document);
         self.out.push(b'"');
     }
 
-    /// # Safety
-    /// `lindex` must hold a number.
-    unsafe fn append_number(&mut self, l: *mut lua_State, lindex: c_int, into: Sink) {
-        // SAFETY: the caller has checked the type.
-        let number = unsafe { lua_tonumber(l, lindex) };
+    /// Append the number at `at`.
+    fn append_number(&mut self, stack: &Stack, at: At, into: Sink) -> Result<(), Raise> {
+        let number = stack.to_number(at);
         if !number.is_finite() {
             // `encode_invalid_numbers` is 0. Upstream's other two settings
             // would spell these "NaN"/"Infinity" or "null".
-            self.raise(l, lindex, c"must not be NaN or Infinity");
+            return Err(refusal(stack, at, "must not be NaN or Infinity"));
         }
         append_g_fmt(self.sink(into), number, NUMBER_PRECISION);
+        Ok(())
     }
 
     fn append_newline_and_indent(&mut self, depth: c_int) {
@@ -225,28 +185,23 @@ impl Encoder {
     /// `json_check_encode_depth`: three free slots, because a container
     /// needs a key, a value and room for the error message that says it
     /// could not get them.
-    fn check_depth(&mut self, l: *mut lua_State, depth: c_int) {
-        // SAFETY: `l` is live.
-        if depth <= ENCODE_MAX_DEPTH && unsafe { lua_checkstack(l, 3) } != 0 {
-            return;
+    fn check_depth(stack: &mut Stack, depth: c_int) -> Result<(), Raise> {
+        if depth <= ENCODE_MAX_DEPTH && stack.reserve(3) {
+            return Ok(());
         }
-        // SAFETY: as `raise`, but the message is this one's own.
-        unsafe { (*self.cfg).restore_buffer(core::mem::take(&mut self.out)) };
-        drop(core::mem::take(&mut self.keys));
-        // SAFETY: `l` is live and neither buffer is owned here any more.
-        unsafe {
-            luaL_error(
-                l,
-                c"Cannot serialise, excessive nesting (%d)".as_ptr(),
-                depth,
-            )
-        };
-        unreachable_after_raise()
+        Err(Raise::message(format!(
+            "Cannot serialise, excessive nesting ({depth})"
+        )))
     }
 
-    /// # Safety
-    /// The table must be on top of the stack.
-    unsafe fn append_array(&mut self, l: *mut lua_State, depth: c_int, length: i64, raw: bool) {
+    /// The table is on top.
+    fn append_array(
+        &mut self,
+        stack: &mut Stack,
+        depth: c_int,
+        length: i64,
+        raw: bool,
+    ) -> Result<(), Raise> {
         // Function-local: a module-level const lands in ffigen's flat C
         // namespace (`unit-cdefs.h`).
         const BOUNDED_BY_LENGTH: &str = "an array index is bounded by the table's length";
@@ -256,42 +211,36 @@ impl Encoder {
                 self.out.push(b',');
             }
             self.append_newline_and_indent(depth);
-            // SAFETY: the table is on top; `raw` says whether `__index` is
-            // allowed to answer, which is how a table that became an array
-            // through `__len` gets read. The element is popped here.
-            unsafe {
-                if raw {
-                    // Upstream's loop counter is an `int`, which is what
-                    // `lua_rawgeti` takes; `length` is a table's element
-                    // count (`lua_objlen`'s, already narrowed to an `int`,
-                    // or `array_length`'s, which raises on a sparse array),
-                    // so neither narrowing here can fail.
-                    lua_rawgeti(l, -1, c_int::try_from(index).expect(BOUNDED_BY_LENGTH));
-                } else {
-                    // Lua's own integer type is `ptrdiff_t`.
-                    lua_pushinteger(l, isize::try_from(index).expect(BOUNDED_BY_LENGTH));
-                    lua_gettable(l, -2);
-                }
-                self.append_value(l, depth);
-                lua_pop(l, 1);
+            // `raw` says whether `__index` is allowed to answer, which is
+            // how a table that became an array through `__len` gets read.
+            if raw {
+                // Upstream's loop counter is an `int`, which is what
+                // `lua_rawgeti` takes; `length` is a table's element count
+                // (`lua_objlen`'s, already narrowed to an `int`, or
+                // `array_length`'s, which raises on a sparse array), so
+                // neither narrowing here can fail.
+                stack.raw_get_index(At::TOP, c_int::try_from(index).expect(BOUNDED_BY_LENGTH));
+            } else {
+                // Lua's own integer type is `ptrdiff_t`.
+                stack.push_integer(isize::try_from(index).expect(BOUNDED_BY_LENGTH));
+                stack.get_table(At::from_top(2));
             }
+            self.append_value(stack, depth)?;
+            stack.pop(1);
         }
         if length > 0 {
             self.append_newline_and_indent(depth - 1);
         }
         self.out.push(b']');
+        Ok(())
     }
 
-    /// # Safety
-    /// The table must be on top of the stack.
-    unsafe fn append_object(&mut self, l: *mut lua_State, depth: c_int) {
+    /// The table is on top.
+    fn append_object(&mut self, stack: &mut Stack, depth: c_int) -> Result<(), Raise> {
         self.out.push(b'{');
         let mut written = 0;
-        // SAFETY: the table is on top, and the key/value pair `lua_next`
-        // leaves is popped on every path out of the loop.
-        unsafe { lua_pushnil(l) };
-        // SAFETY: as above.
-        while unsafe { lua_next(l, -2) } != 0 {
+        stack.push_nil();
+        while stack.next(At::from_top(2)) {
             if written > 0 {
                 self.out.push(b',');
             }
@@ -299,32 +248,30 @@ impl Encoder {
             self.append_newline_and_indent(depth);
 
             // .., table, key, value
-            // SAFETY: as above; the key is at -2 for the whole arm.
-            match unsafe { lua_type(l, -2) } {
-                LUA_TNUMBER => {
+            let key = At::from_top(2);
+            match stack.kind(key) {
+                Kind::Number => {
                     self.out.push(b'"');
-                    unsafe { self.append_number(l, -2, Sink::Document) };
+                    self.append_number(stack, key, Sink::Document)?;
                     self.out.extend_from_slice(b"\":");
                 }
-                LUA_TSTRING => {
-                    unsafe { self.append_string(l, -2) };
+                Kind::String => {
+                    self.append_string(stack, key);
                     self.out.push(b':');
                 }
-                _ => self.raise(l, -2, c"table key must be a number or string"),
+                _ => return Err(refusal(stack, key, "table key must be a number or string")),
             }
             if self.indent.is_some() {
                 self.out.push(b' ');
             }
-            // SAFETY: as above; the value is on top and popped here.
-            unsafe {
-                self.append_value(l, depth);
-                lua_pop(l, 1);
-            }
+            self.append_value(stack, depth)?;
+            stack.pop(1);
         }
         if written > 0 {
             self.append_newline_and_indent(depth - 1);
         }
         self.out.push(b'}');
+        Ok(())
     }
 
     /// The `sort_keys` object: lay every key's *encoded* text out in
@@ -336,44 +283,36 @@ impl Encoder {
     /// order, which is what it sorts, is a function of the interpreter's
     /// hash seed anyway.
     ///
-    /// # Safety
-    /// The table must be on top of the stack.
-    unsafe fn append_object_sorted(&mut self, l: *mut lua_State, depth: c_int) {
+    /// The table is on top.
+    fn append_object_sorted(&mut self, stack: &mut Stack, depth: c_int) -> Result<(), Raise> {
         // Nested sorted objects share the scratch, so each level takes back
         // only what it added.
         self.out.push(b'{');
         let base = self.keys.len();
         let mut keys: Vec<Key> = Vec::new();
 
-        // SAFETY: the table is on top for both loops; every pushed value is
-        // popped before the next iteration.
-        unsafe { lua_pushnil(l) };
-        // SAFETY: as above.
-        while unsafe { lua_next(l, -2) } != 0 {
+        stack.push_nil();
+        while stack.next(At::from_top(2)) {
             let offset = self.keys.len();
-            // SAFETY: as above; the key is at -2 for the whole arm, and a
-            // Lua string stays put while the table holding it is on the
-            // stack, which is long enough to copy it.
-            let raw = match unsafe { lua_type(l, -2) } {
-                LUA_TSTRING => unsafe {
-                    self.append_string_contents(l, -2, Sink::Keys);
-                    let mut length: size_t = 0;
-                    let text = lua_tolstring(l, -2, &raw mut length);
-                    RawKey::Text(core::slice::from_raw_parts(text.cast::<u8>(), length).into())
-                },
-                LUA_TNUMBER => unsafe {
-                    self.append_number(l, -2, Sink::Keys);
-                    RawKey::Number(lua_tointeger(l, -2))
-                },
-                _ => self.raise(l, -2, c"table key must be number or string"),
+            let key = At::from_top(2);
+            let raw = match stack.kind(key) {
+                Kind::String => {
+                    self.append_string_contents(stack, key, Sink::Keys);
+                    RawKey::Text(stack.string(key).unwrap_or_default().to_vec())
+                }
+                Kind::Number => {
+                    self.append_number(stack, key, Sink::Keys)?;
+                    RawKey::Number(stack.to_integer(key))
+                }
+                _ => return Err(refusal(stack, key, "table key must be number or string")),
             };
             keys.push(Key {
                 offset,
                 length: self.keys.len() - offset,
                 raw,
             });
-            // SAFETY: as above; this drops the value `lua_next` left.
-            unsafe { lua_pop(l, 1) };
+            // This drops the value `lua_next` left.
+            stack.pop(1);
         }
 
         let text = |key: &Key| &self.keys[key.offset..key.offset + key.length];
@@ -392,19 +331,15 @@ impl Encoder {
                 self.out.push(b' ');
             }
 
-            // SAFETY: as above; the key is re-pushed, exchanged for its
-            // value by `lua_gettable`, and the value popped again.
-            unsafe {
-                match &key.raw {
-                    RawKey::Text(bytes) => {
-                        lua_pushlstring(l, bytes.as_ptr().cast::<c_char>(), bytes.len());
-                    }
-                    RawKey::Number(number) => lua_pushnumber(l, *number as f64),
-                }
-                lua_gettable(l, -2);
-                self.append_value(l, depth);
-                lua_pop(l, 1);
+            // The key is re-pushed, exchanged for its value by
+            // `lua_gettable`, and the value popped again.
+            match &key.raw {
+                RawKey::Text(bytes) => stack.push_bytes(bytes),
+                RawKey::Number(number) => stack.push_number(*number as f64),
             }
+            stack.get_table(At::from_top(2));
+            self.append_value(stack, depth)?;
+            stack.pop(1);
         }
 
         if !keys.is_empty() {
@@ -412,37 +347,32 @@ impl Encoder {
         }
         self.out.push(b'}');
         self.keys.truncate(base);
+        Ok(())
     }
 
     /// How long the array on top of the stack is, or `-1` if its keys make
     /// it an object.
-    ///
-    /// # Safety
-    /// The table must be on top of the stack.
-    unsafe fn array_length(&mut self, l: *mut lua_State) -> i64 {
+    fn array_length(stack: &mut Stack) -> Result<i64, Raise> {
         let mut max: i64 = 0;
         let mut items: i64 = 0;
-        // SAFETY: the table is on top, and both exits pop what `lua_next`
-        // left.
-        unsafe { lua_pushnil(l) };
-        // SAFETY: as above.
-        while unsafe { lua_next(l, -2) } != 0 {
-            // SAFETY: as above; the key is at -2.
-            let key = unsafe { (lua_type(l, -2) == LUA_TNUMBER).then(|| lua_tonumber(l, -2)) };
-            // A key of 0 is not an index — and upstream tests the
-            // *number* for truth, which is what makes 0 fall through
-            // here rather than failing the `>= 1` below.
+        stack.push_nil();
+        while stack.next(At::from_top(2)) {
+            let key = At::from_top(2);
+            let key = (stack.kind(key) == Kind::Number).then(|| stack.to_number(key));
+            // A key of 0 is not an index — and upstream tests the *number*
+            // for truth, which is what makes 0 fall through here rather
+            // than failing the `>= 1` below.
             match key {
                 Some(key) if key != 0.0 && key.floor() == key && key >= 1.0 => {
                     max = max.max(crate::narrow::float_as_i64(key));
                     items += 1;
-                    // SAFETY: as above; the value goes, the key stays.
-                    unsafe { lua_pop(l, 1) };
+                    // The value goes, the key stays.
+                    stack.pop(1);
                 }
                 _ => {
-                    // SAFETY: as above; the walk ends, so both go.
-                    unsafe { lua_pop(l, 2) };
-                    return -1;
+                    // The walk ends, so both go.
+                    stack.pop(2);
+                    return Ok(-1);
                 }
             }
         }
@@ -450,256 +380,197 @@ impl Encoder {
         if max > items * SPARSE_RATIO && max > SPARSE_SAFE {
             // `encode_sparse_convert` is 0, so there is no "encode it as an
             // object instead" arm.
-            self.raise(l, -1, c"excessively sparse array");
+            return Err(refusal(stack, At::TOP, "excessively sparse array"));
         }
-        max
+        Ok(max)
     }
 
-    /// # Safety
-    /// The table must be on top of the stack, and `depth` must already
-    /// count it.
-    unsafe fn append_table(&mut self, l: *mut lua_State, depth: c_int) {
-        self.check_depth(l, depth);
+    /// The table is on top, and `depth` already counts it.
+    fn append_table(&mut self, stack: &mut Stack, depth: c_int) -> Result<(), Raise> {
+        Self::check_depth(stack, depth)?;
 
         let mut as_array = false;
         let mut as_empty_dict = false;
         // Whether the array read may go through `__index`.
         let mut raw = true;
 
-        // SAFETY: the table is on top; each branch below pops exactly what
-        // it pushed, which the stack comments track. `lua_call` on `__len`
-        // may raise, which is upstream's behaviour too.
-        let has_metatable = unsafe { lua_getmetatable(l, -1) } != 0;
+        // Each branch below pops exactly what it pushed, which the stack
+        // comments track.
+        let has_metatable = stack.get_metatable(At::TOP);
         if has_metatable {
-            // SAFETY: as above, with the metatable at -1.
-            unsafe {
-                // .., table, mt, empty_dict_mt
-                lua_getfield(l, LUA_REGISTRYINDEX, c"mpack.empty_dict".as_ptr());
-                if lua_rawequal(l, -2, -1) != 0 {
-                    as_empty_dict = true;
-                } else {
-                    // .., table, mt, array_mt
-                    lua_pop(l, 1);
-                    push_registry(l, array_key());
-                    as_array = lua_rawequal(l, -1, -2) != 0;
-                }
-                lua_pop(l, 2);
+            // .., table, mt, empty_dict_mt
+            stack.get_field(At::REGISTRY, c"mpack.empty_dict");
+            if stack.raw_equal(At::from_top(2), At::TOP) {
+                as_empty_dict = true;
+            } else {
+                // .., table, mt, array_mt
+                stack.pop(1);
+                push_registry(stack, array_key());
+                as_array = stack.raw_equal(At::TOP, At::from_top(2));
             }
+            stack.pop(2);
 
             if !as_array {
                 raw = false;
                 // Upstream reads `__len`'s result here and then throws it
                 // away — see `lua_objlen` below. Calling it is still what
                 // decides the table is an array, and the call can raise, so
-                // it has to happen.
-                // SAFETY: as above; the metafield and its result are popped.
-                as_array = unsafe {
-                    let has_len = luaL_getmetafield(l, -1, c"__len".as_ptr()) != 0;
-                    if has_len {
-                        lua_pushvalue(l, -2);
-                        lua_call(l, 1, 1);
-                        lua_pop(l, 1);
+                // it has to happen; an error it raises is left on top for
+                // the binding to raise.
+                as_array = stack.get_metafield(At::TOP, c"__len");
+                if as_array {
+                    stack.push_value(At::from_top(2));
+                    if stack.pcall(1, 1, None).is_err() {
+                        return Err(Raise::top_value());
                     }
-                    has_len
-                };
+                    stack.pop(1);
+                }
             }
         }
 
         if as_array {
-            // SAFETY: the table is on top.
             // Upstream writes `int len = lua_objlen(l, -1);` — a length
             // narrowed to an `int`, so the port narrows it the same way.
-            let length = i64::from(len_as_int(unsafe { lua_objlen(l, -1) }));
-            unsafe { self.append_array(l, depth, length, raw) };
-            return;
+            let length = i64::from(len_as_int(stack.raw_len(At::TOP)));
+            return self.append_array(stack, depth, length, raw);
         }
 
-        // SAFETY: as above.
-        let length = unsafe { self.array_length(l) };
-        // `encode_empty_table_as_object` is 0, so an empty plain table
-        // is `[]` — unless it carries `vim.empty_dict()`'s metatable.
+        let length = Self::array_length(stack)?;
+        // `encode_empty_table_as_object` is 0, so an empty plain table is
+        // `[]` — unless it carries `vim.empty_dict()`'s metatable.
         if length > 0 || (length == 0 && !as_empty_dict) {
-            // SAFETY: as above.
-            unsafe { self.append_array(l, depth, length, raw) };
-            return;
+            return self.append_array(stack, depth, length, raw);
         }
 
         if has_metatable {
             // .., table, mt, empty_array_mt
-            // SAFETY: as above; both pushes are popped here.
-            let empty_array = unsafe {
-                lua_getmetatable(l, -1);
-                push_registry(l, empty_array_key());
-                let equal = lua_rawequal(l, -1, -2) != 0;
-                lua_pop(l, 2);
-                equal
-            };
+            stack.get_metatable(At::TOP);
+            push_registry(stack, empty_array_key());
+            let empty_array = stack.raw_equal(At::TOP, At::from_top(2));
+            stack.pop(2);
             if empty_array {
-                // SAFETY: as above.
-                unsafe {
-                    // As above.
-                    let length = i64::from(len_as_int(lua_objlen(l, -1)));
-                    self.append_array(l, depth, length, true);
-                }
-                return;
+                let length = i64::from(len_as_int(stack.raw_len(At::TOP)));
+                return self.append_array(stack, depth, length, true);
             }
         }
 
-        // SAFETY: as above.
-        unsafe {
-            if self.sort_keys {
-                self.append_object_sorted(l, depth);
-            } else {
-                self.append_object(l, depth);
-            }
+        if self.sort_keys {
+            self.append_object_sorted(stack, depth)
+        } else {
+            self.append_object(stack, depth)
         }
     }
 
-    /// # Safety
-    /// The value must be on top of the stack.
-    unsafe fn append_value(&mut self, l: *mut lua_State, depth: c_int) {
-        // SAFETY: the value is on top and every branch leaves the stack as
-        // it found it.
-        match unsafe { lua_type(l, -1) } {
-            LUA_TSTRING => unsafe { self.append_string(l, -1) },
-            LUA_TNUMBER => unsafe { self.append_number(l, -1, Sink::Document) },
-            LUA_TBOOLEAN => {
-                let text: &[u8] = if unsafe { lua_toboolean(l, -1) } != 0 {
+    /// The value is on top; every branch leaves the stack as it found it.
+    fn append_value(&mut self, stack: &mut Stack, depth: c_int) -> Result<(), Raise> {
+        match stack.kind(At::TOP) {
+            Kind::String => self.append_string(stack, At::TOP),
+            Kind::Number => self.append_number(stack, At::TOP, Sink::Document)?,
+            Kind::Boolean => {
+                let text: &[u8] = if stack.to_boolean(At::TOP) {
                     b"true"
                 } else {
                     b"false"
                 };
                 self.out.extend_from_slice(text);
             }
-            LUA_TTABLE => unsafe { self.append_table(l, depth + 1) },
-            LUA_TNIL => self.out.extend_from_slice(b"null"),
-            LUA_TLIGHTUSERDATA => {
+            Kind::Table => self.append_table(stack, depth + 1)?,
+            Kind::Nil => self.out.extend_from_slice(b"null"),
+            Kind::LightUserdata => {
                 // Upstream's `empty_array` sentinel. nvim never publishes
                 // it, so nothing can hand it back; and upstream emits
-                // *nothing at all* for any other light userdatum, which
-                // is kept for the same reason.
-                if core::ptr::eq(unsafe { lua_touserdata(l, -1) }, array_key()) {
-                    unsafe { self.append_array(l, depth, 0, true) };
+                // *nothing at all* for any other light userdatum, which is
+                // kept for the same reason.
+                if core::ptr::eq(stack.identity(At::TOP), array_key()) {
+                    self.append_array(stack, depth, 0, true)?;
                 }
             }
-            LUA_TUSERDATA => {
-                // SAFETY: as above; the sentinel's push is popped here.
-                let is_nil = unsafe {
-                    lua_getfield(l, LUA_REGISTRYINDEX, c"mpack.NIL".as_ptr());
-                    let is_nil = lua_rawequal(l, -2, -1) != 0;
-                    lua_pop(l, 1);
-                    is_nil
-                };
-                if is_nil {
-                    self.out.extend_from_slice(b"null");
-                } else {
-                    self.raise(l, -1, c"type not supported");
+            Kind::Userdata => {
+                stack.get_field(At::REGISTRY, c"mpack.NIL");
+                let is_nil = stack.raw_equal(At::from_top(2), At::TOP);
+                stack.pop(1);
+                if !is_nil {
+                    return Err(refusal(stack, At::TOP, "type not supported"));
                 }
+                self.out.extend_from_slice(b"null");
             }
-            _ => self.raise(l, -1, c"type not supported"),
+            _ => return Err(refusal(stack, At::TOP, "type not supported")),
         }
+        Ok(())
     }
 }
 
 /// Read the optional second argument, and leave the value to encode on top
 /// of the stack.
-///
-/// # Safety
-/// `l` must be a live Lua state.
-unsafe fn read_options(l: *mut lua_State, encoder: &mut Encoder) {
-    // SAFETY: `l` is live.
-    match unsafe { lua_gettop(l) } {
-        1 => return,
+fn read_options(stack: &mut Stack, encoder: &mut Encoder) -> Result<(), Raise> {
+    match stack.top().index() {
+        1 => return Ok(()),
         2 => {}
-        _ => {
-            // SAFETY: as above.
-            unsafe { luaL_error(l, c"expected 1 or 2 arguments".as_ptr()) };
-            unreachable_after_raise()
-        }
+        _ => return Err(Raise::message("expected 1 or 2 arguments")),
     }
-    // SAFETY: as above; argument 2 is a table from here on.
-    unsafe { luaL_checktype(l, 2, LUA_TTABLE) };
+    stack.check_kind(At::arg(2), Kind::Table)?;
 
     // In upstream's order, because `lua_getfield` runs `__index` and a table
     // that has one can tell how many times, and in which order, it was
     // asked. Each read below pushes one value and pops it again.
-    // SAFETY: as above.
-    if let Some(set) = unsafe { read_field(l, c"escape_slash") } {
+    if let Some(set) = read_field(stack, c"escape_slash")? {
         encoder.escape_slash = set;
     }
-    // SAFETY: as above. `luaL_checkstring` also accepts a *number*,
-    // converting it in place: `indent = 2` indents with the character `2`.
-    unsafe {
-        lua_getfield(l, 2, c"indent".as_ptr());
-        if lua_type(l, -1) != LUA_TNIL {
-            let text = CStr::from_ptr(luaL_checklstring(l, -1, core::ptr::null_mut())).to_bytes();
-            if !text.is_empty() {
-                encoder.indent = Some(text.into());
-            }
+    // `luaL_checkstring` also accepts a *number*, converting it in place:
+    // `indent = 2` indents with the character `2`.
+    stack.get_field(At::arg(2), c"indent");
+    if stack.kind(At::TOP) != Kind::Nil {
+        let text = stack.check_bytes(At::TOP)?;
+        // The C string `luaL_checkstring` answers: up to the first NUL.
+        let text = text.split(|&byte| byte == 0).next().unwrap_or_default();
+        if !text.is_empty() {
+            encoder.indent = Some(text.into());
         }
-        lua_pop(l, 1);
     }
-    // SAFETY: as above.
-    if let Some(set) = unsafe { read_field(l, c"sort_keys") } {
+    stack.pop(1);
+    if let Some(set) = read_field(stack, c"sort_keys")? {
         encoder.sort_keys = set;
     }
 
     // Drop the options table too, so the value is on top.
-    // SAFETY: as above.
-    unsafe { lua_settop(l, 1) };
+    stack.set_top(At::arg(1));
+    Ok(())
 }
 
 /// One of the two boolean options: `None` when it is absent, and a type
 /// error when it is present and not a boolean.
-///
-/// # Safety
-/// `l` must be a live Lua state with the options table at index 2.
-unsafe fn read_field(l: *mut lua_State, field: &CStr) -> Option<bool> {
-    // SAFETY: the caller's state and table; the push is popped here.
-    unsafe {
-        lua_getfield(l, 2, field.as_ptr());
-        let set = (lua_type(l, -1) != LUA_TNIL).then(|| {
-            luaL_checktype(l, -1, LUA_TBOOLEAN);
-            lua_toboolean(l, -1) != 0
-        });
-        lua_pop(l, 1);
-        set
-    }
+fn read_field(stack: &mut Stack, field: &CStr) -> Result<Option<bool>, Raise> {
+    stack.get_field(At::arg(2), field);
+    let set = if stack.kind(At::TOP) == Kind::Nil {
+        None
+    } else {
+        stack.check_kind(At::TOP, Kind::Boolean)?;
+        Some(stack.to_boolean(At::TOP))
+    };
+    stack.pop(1);
+    Ok(set)
 }
 
 /// `vim.json.encode(value[, options])`.
-///
-/// # Safety
-/// `l` must be a live Lua state with this module's config as upvalue 1.
-pub unsafe extern "C-unwind" fn encode(l: *mut lua_State) -> c_int {
-    // SAFETY: `l` is live and was entered through a closure `set_functions`
-    // built, so upvalue 1 is the config userdatum.
-    let cfg = unsafe { fetch_config(l) };
-    if cfg.is_null() {
-        // SAFETY: as above.
-        unsafe { luaL_error(l, c"BUG: Unable to fetch CJSON configuration".as_ptr()) };
-        unreachable_after_raise()
-    }
-
+pub(super) fn encode(stack: &mut Stack) -> Result<c_int, Raise> {
+    let buffer = fetch_config(stack)?.take_buffer();
     let mut encoder = Encoder {
-        cfg,
-        // SAFETY: `cfg` points at a live, initialised `Config`.
-        out: unsafe { (*cfg).take_buffer() },
+        out: buffer,
         keys: Vec::new(),
         indent: None,
         escape_slash: false,
         sort_keys: false,
     };
-    // SAFETY: `l` is live throughout; `read_options` leaves the value on
-    // top, which is what `append_value` requires. The document is copied
-    // into Lua's own string before the buffer goes back to the config.
-    unsafe {
-        read_options(l, &mut encoder);
-        encoder.append_value(l, 0);
-        lua_pushlstring(l, encoder.out.as_ptr().cast::<c_char>(), encoder.out.len());
-        (*cfg).restore_buffer(core::mem::take(&mut encoder.out));
+    let walked = read_options(stack, &mut encoder).and_then(|()| encoder.append_value(stack, 0));
+    if walked.is_ok() {
+        // The document is copied into Lua's own string before the buffer
+        // goes back to the config.
+        stack.push_bytes(&encoder.out);
     }
-    1
+    if let Ok(config) = fetch_config(stack) {
+        config.restore_buffer(encoder.out);
+    }
+    walked.map(|()| 1)
 }
 
 #[cfg(test)]

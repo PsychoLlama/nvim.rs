@@ -343,4 +343,49 @@ describe('vim.json.encode()', function()
   it('dumps vim.NIL', function()
     eq('null', exec_lua([[return vim.json.encode(vim.NIL)]]))
   end)
+  it('raises what a __len metamethod raises, and its own refusals', function()
+    eq(
+      {
+        { false, 'lenboom' },
+        { false, 'Cannot serialise function: type not supported' },
+        { false, 'Cannot serialise function: table key must be a number or string' },
+        { false, 'Cannot serialise number: must not be NaN or Infinity' },
+        { false, 'Cannot serialise table: excessively sparse array' },
+        { false, 'Cannot serialise, excessive nesting (1001)' },
+        '[]',
+      },
+      exec_lua(function()
+        local function try(...)
+          local ok, err = pcall(vim.json.encode, ...)
+          return { ok, (tostring(err):gsub('^[^:]*:%d+: ', '')) }
+        end
+        local deep = {}
+        local cur = deep
+        for _ = 1, 1000 do
+          cur[1] = {}
+          cur = cur[1]
+        end
+        return {
+          try(setmetatable({}, {
+            __len = function()
+              error('lenboom', 0)
+            end,
+          })),
+          try({ print }),
+          try({ [print] = 1 }),
+          try(0 / 0),
+          try({ [1] = 1, [100] = 2 }),
+          try(deep),
+          vim.json.encode(setmetatable({}, {
+            __len = function()
+              return 2
+            end,
+            __index = function(_, k)
+              return k * 30
+            end,
+          })),
+        }
+      end)
+    )
+  end)
 end)

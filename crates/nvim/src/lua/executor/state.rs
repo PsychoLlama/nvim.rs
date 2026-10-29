@@ -152,14 +152,13 @@ fn to_stderr(message: &[u8]) {
 /// The vendored C libraries every state gets: libmpack, lpeg, `vim.diff` and
 /// cjson, on the `vim` table on top of `stack`'s state.
 fn add_vendored(stack: &mut Stack) {
-    let lstate = stack.lua_state();
     // vim.mpack -- shared, or luv is reinitialised by require'mpack'.
     luaopen_mpack(stack);
     share_module(stack, c"mpack", 2);
 
     // vim.lpeg
-    // SAFETY: as above.
-    unsafe { luaopen_lpeg(lstate) };
+    // SAFETY: the state `stack` is over, with room for the module's table.
+    unsafe { luaopen_lpeg(stack.lua_state()) };
     share_module(stack, c"lpeg", 3);
 
     // vim.text.diff
@@ -168,8 +167,7 @@ fn add_vendored(stack: &mut Stack) {
     stack.set_field(At::from_top(2), c"diff");
 
     // vim.json
-    // SAFETY: as above.
-    unsafe { crate::cjson::lua_cjson::lua_cjson_new(lstate) };
+    crate::cjson::lua_cjson::lua_cjson_new(stack);
     stack.set_field(At::from_top(2), c"json");
 }
 
