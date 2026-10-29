@@ -46,7 +46,7 @@ pub type MTNode = mtnode_s;
 /// `Copy`: a static name and a function pointer.
 #[derive(Copy, Clone)]
 pub struct MsgpackRpcRequestHandler {
-    pub name: *const ::core::ffi::c_char,
+    pub name: Option<&'static ::core::ffi::CStr>,
     pub fn_0: Option<ApiDispatchFn>,
     pub fast: bool,
 }

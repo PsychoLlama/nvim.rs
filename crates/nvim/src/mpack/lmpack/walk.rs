@@ -8,7 +8,8 @@
 //! The Lua stack cannot be the walk's own stack, because the walk suspends
 //! between calls whenever the input runs out — so every value in flight
 //! lives in the instance's private registry table, referenced from
-//! `node.data[0]` (the object) and `node.data[1]` (a map's pending key).
+//! `node.data[0]` (the object) and `node.data[1]` (a map's pending key):
+//! the walk's [`NodeRefs`].
 //! Getting that stack discipline right is the whole difficulty here, and the
 //! comments say what is *on* the stack at each step rather than what the
 //! call does.
@@ -39,25 +40,78 @@ use crate::mpack::conv::{
     mpack_pack_map, mpack_pack_nil, mpack_pack_number, mpack_pack_str, mpack_unpack_boolean,
     mpack_unpack_number,
 };
-use crate::mpack::mpack_core::{
-    MPACK_TOKEN_ARRAY, MPACK_TOKEN_BIN, MPACK_TOKEN_BOOLEAN, MPACK_TOKEN_CHUNK, MPACK_TOKEN_EXT,
-    MPACK_TOKEN_FLOAT, MPACK_TOKEN_MAP, MPACK_TOKEN_NIL, MPACK_TOKEN_SINT, MPACK_TOKEN_STR,
-    MPACK_TOKEN_UINT, to_tok,
-};
-use crate::mpack::object::parent_of;
-use crate::types::{lua_Number, lua_State, mpack_node_t, mpack_parser_t, size_t};
+use crate::mpack::object::{Decode, Encode};
+use crate::mpack::token::Kind;
+use crate::types::{lua_Number, lua_State, size_t};
 use ::libc::{free, malloc};
+
+/// The registry references a node holds: its object, and a map's pending
+/// key (or, encoding, the key `lua_next` resumes from).
+pub type NodeRefs = [c_int; 2];
+
+type Node = crate::mpack::object::Node<NodeRefs>;
+
+/// A node's token type, as the C compared it.
+fn kind(node: &Node) -> u32 {
+    node.tok.kind.map_or(0, |kind| kind as u32)
+}
+
+const MPACK_TOKEN_NIL: u32 = Kind::Nil as u32;
+const MPACK_TOKEN_BOOLEAN: u32 = Kind::Boolean as u32;
+const MPACK_TOKEN_UINT: u32 = Kind::Uint as u32;
+const MPACK_TOKEN_SINT: u32 = Kind::Sint as u32;
+const MPACK_TOKEN_FLOAT: u32 = Kind::Float as u32;
+const MPACK_TOKEN_CHUNK: u32 = Kind::Chunk as u32;
+const MPACK_TOKEN_ARRAY: u32 = Kind::Array as u32;
+const MPACK_TOKEN_MAP: u32 = Kind::Map as u32;
+const MPACK_TOKEN_BIN: u32 = Kind::Bin as u32;
+const MPACK_TOKEN_STR: u32 = Kind::Str as u32;
+const MPACK_TOKEN_EXT: u32 = Kind::Ext as u32;
+
+/// The decoding walk of one [`Unpacker`].
+pub struct LuaDecoder(pub *mut Unpacker);
+
+/// The encoding walk of one [`Packer`].
+pub struct LuaEncoder(pub *mut Packer);
+
+impl Decode<NodeRefs> for LuaDecoder {
+    fn enter(&mut self, node: &mut Node, parents: &mut [Node], chunk: &[u8]) {
+        // SAFETY: the unpacker that started this walk, live for its length.
+        unsafe { parse_enter(self.0, node, parents, chunk) }
+    }
+
+    fn exit(&mut self, node: Node, parents: &mut [Node]) {
+        // SAFETY: as above.
+        unsafe { parse_exit(self.0, &node, parents) }
+    }
+}
+
+impl Encode<NodeRefs> for LuaEncoder {
+    fn enter(&mut self, node: &mut Node, parents: &mut [Node]) {
+        // SAFETY: the packer that started this walk, live for its length.
+        unsafe { unparse_enter(self.0, node, parents) }
+    }
+
+    fn exit(&mut self, node: Node, _parents: &mut [Node]) {
+        // SAFETY: as above.
+        unsafe { unparse_exit(self.0, &node) }
+    }
+
+    fn chunk(&mut self, _node: &Node, parents: &[Node]) -> &[u8] {
+        // SAFETY: as above; a chunk's parent is the string it borrows.
+        unsafe { chunk_bytes(self.0, parents) }
+    }
+}
 
 /// A decoded token becomes a Lua value.
 ///
 /// # Safety
-/// `parser` must be an [`Unpacker`]'s, and `node` one of its live frames.
-pub unsafe extern "C-unwind" fn parse_enter(parser: *mut mpack_parser_t, node: *mut mpack_node_t) {
+/// `unpacker` must be the live instance walking.
+unsafe fn parse_enter(unpacker: *mut Unpacker, node: &mut Node, parents: &[Node], chunk: &[u8]) {
     unsafe {
-        let unpacker = (*parser).data.p.cast::<Unpacker>();
         let state = (*unpacker).L;
-        let tok = (*node).tok;
-        match tok.type_0 {
+        let tok = node.tok;
+        match kind(node) {
             MPACK_TOKEN_NIL => push_nil_sentinel(state),
             MPACK_TOKEN_BOOLEAN => {
                 lua_pushboolean(state, c_int::from(mpack_unpack_boolean(tok)));
@@ -70,17 +124,17 @@ pub unsafe extern "C-unwind" fn parse_enter(parser: *mut mpack_parser_t, node: *
                 // much of it has landed. The buffer was sized by the header
                 // token, which is the frame below this one.
                 debug_assert!(!(*unpacker).string_buffer.is_null());
-                let offset = (*parent_of(node)).pos;
+                let offset = parents.last().expect("a chunk has a parent").pos;
                 (*unpacker)
                     .string_buffer
                     .add(offset)
                     .cast::<u8>()
-                    .copy_from_nonoverlapping(tok.data.chunk_ptr.cast(), tok.length as size_t);
+                    .copy_from_nonoverlapping(chunk.as_ptr(), chunk.len());
             }
             MPACK_TOKEN_BIN | MPACK_TOKEN_STR | MPACK_TOKEN_EXT => {
                 // Only the header is known here; `parse_exit` pushes the
                 // string once every chunk has been copied in.
-                (*unpacker).string_buffer = malloc(tok.length as size_t).cast::<c_char>();
+                (*unpacker).string_buffer = malloc(tok.len as size_t).cast::<c_char>();
                 if (*unpacker).string_buffer.is_null() {
                     luaL_error(state, c"Failed to allocate memory".as_ptr());
                 }
@@ -89,7 +143,7 @@ pub unsafe extern "C-unwind" fn parse_enter(parser: *mut mpack_parser_t, node: *
                 // The container has to outlive this call, so it goes into the
                 // private registry and the node keeps the reference.
                 lua_newtable(state);
-                (*node).data[0].i = reference(state, (*unpacker).reg) as i64;
+                node.data[0] = reference(state, (*unpacker).reg);
             }
             _ => {}
         }
@@ -100,30 +154,29 @@ pub unsafe extern "C-unwind" fn parse_enter(parser: *mut mpack_parser_t, node: *
 ///
 /// # Safety
 /// See [`parse_enter`].
-pub unsafe extern "C-unwind" fn parse_exit(parser: *mut mpack_parser_t, node: *mut mpack_node_t) {
+unsafe fn parse_exit(unpacker: *mut Unpacker, node: &Node, parents: &mut [Node]) {
     unsafe {
-        let unpacker = (*parser).data.p.cast::<Unpacker>();
         let state = (*unpacker).L;
         let reg = (*unpacker).reg;
-        let tok = (*node).tok;
-        let parent = parent_of(node);
+        let tok = node.tok;
+        let parent = parents.last_mut();
 
-        match tok.type_0 {
+        match kind(node) {
             MPACK_TOKEN_BIN | MPACK_TOKEN_STR | MPACK_TOKEN_EXT => {
-                lua_pushlstring(state, (*unpacker).string_buffer, tok.length as size_t);
+                lua_pushlstring(state, (*unpacker).string_buffer, tok.len as size_t);
                 free((*unpacker).string_buffer.cast());
                 (*unpacker).string_buffer = core::ptr::null_mut();
-                if tok.type_0 == MPACK_TOKEN_EXT && (*unpacker).ext != LUA_NOREF {
-                    apply_ext_handler(state, reg, (*unpacker).ext, to_tok(&tok).lo as c_int);
+                if kind(node) == MPACK_TOKEN_EXT && (*unpacker).ext != LUA_NOREF {
+                    apply_ext_handler(state, reg, (*unpacker).ext, tok.lo as c_int);
                 }
             }
             MPACK_TOKEN_ARRAY | MPACK_TOKEN_MAP => {
                 // Take the container back out of the registry and release it.
-                geti(state, reg, (*node).data[0].i as c_int);
-                unreference(state, reg, (*node).data[0].i as c_int);
+                geti(state, reg, node.data[0]);
+                unreference(state, reg, node.data[0]);
                 // A map that never saw a key is an *empty dict*, not an empty
                 // list; the `vim.empty_dict()` metatable is what says so.
-                if (*node).key_visited == 0 && tok.type_0 == MPACK_TOKEN_MAP {
+                if !node.key_visited && kind(node) == MPACK_TOKEN_MAP {
                     geti(state, reg, (*unpacker).mtdict); // [table, mtdict]
                     lua_setmetatable(state, -2); // [table]
                 }
@@ -133,7 +186,9 @@ pub unsafe extern "C-unwind" fn parse_exit(parser: *mut mpack_parser_t, node: *m
 
         // Chunks are consumed by their blob and a blob's parent sees only the
         // finished string, so only a container adopts what is on top.
-        if !parent.is_null() && (*parent).tok.type_0 < MPACK_TOKEN_BIN {
+        if let Some(parent) = parent
+            && kind(parent) < MPACK_TOKEN_BIN
+        {
             store_in_parent(state, reg, parent);
         }
     }
@@ -168,25 +223,26 @@ unsafe fn apply_ext_handler(state: *mut lua_State, reg: c_int, handlers: c_int, 
 /// Stack in `[value]`, out `[]`.
 ///
 /// # Safety
-/// `parent` must be a live array or map frame.
-unsafe fn store_in_parent(state: *mut lua_State, reg: c_int, parent: *mut mpack_node_t) {
+/// `state` must be live with the value on top, and `parent` an array or map
+/// whose container `reg` still holds.
+unsafe fn store_in_parent(state: *mut lua_State, reg: c_int, parent: &mut Node) {
     unsafe {
-        geti(state, reg, (*parent).data[0].i as c_int); // [value, container]
-        if (*parent).tok.type_0 == MPACK_TOKEN_ARRAY {
+        geti(state, reg, parent.data[0]); // [value, container]
+        if kind(parent) == MPACK_TOKEN_ARRAY {
             // `pos` was bumped past this element by the pop, so it is already
             // the one-based index.
-            lua_pushnumber(state, (*parent).pos as lua_Number);
+            lua_pushnumber(state, parent.pos as lua_Number);
             lua_pushvalue(state, -3);
             lua_settable(state, -3);
         } else {
-            debug_assert_eq!((*parent).tok.type_0, MPACK_TOKEN_MAP);
-            if (*parent).key_visited != 0 {
+            debug_assert_eq!(kind(parent), MPACK_TOKEN_MAP);
+            if parent.key_visited {
                 // This value is a key; park it until its value arrives.
                 lua_pushvalue(state, -2);
-                (*parent).data[1].i = reference(state, reg) as i64;
+                parent.data[1] = reference(state, reg);
             } else {
-                geti(state, reg, (*parent).data[1].i as c_int); // [value, map, key]
-                unreference(state, reg, (*parent).data[1].i as c_int);
+                geti(state, reg, parent.data[1]); // [value, map, key]
+                unreference(state, reg, parent.data[1]);
                 lua_pushvalue(state, -3); // [value, map, key, value]
                 lua_settable(state, -3);
             }
@@ -198,44 +254,41 @@ unsafe fn store_in_parent(state: *mut lua_State, reg: c_int, parent: *mut mpack_
 /// A Lua value becomes the token that opens it.
 ///
 /// Nothing is written here — the token goes into `node.tok` and the walk
-/// hands it to `mpack_write`. A container is opened and its elements are
+/// hands it to the writer. A container is opened and its elements are
 /// fetched on later calls, which is what makes encoding suspendable too.
 ///
 /// # Safety
-/// `parser` must be a [`Packer`]'s, and `node` one of its live frames.
-pub unsafe extern "C-unwind" fn unparse_enter(
-    parser: *mut mpack_parser_t,
-    node: *mut mpack_node_t,
-) {
+/// `packer` must be the live instance walking.
+unsafe fn unparse_enter(packer: *mut Packer, node: &mut Node, parents: &mut [Node]) {
     unsafe {
-        let packer = (*parser).data.p.cast::<Packer>();
         let state = (*packer).L;
         let reg = (*packer).reg;
-        let parent = parent_of(node);
 
-        if parent.is_null() {
+        if let Some(parent) = parents.last_mut() {
+            if !next_child(state, reg, parent, node) {
+                // A chunk borrows the parent's string and takes no reference.
+                return;
+            }
+        } else {
             geti(state, reg, (*packer).root);
-        } else if !next_child(state, reg, parent, node) {
-            // A chunk borrows the parent's string and takes no reference.
-            return;
         }
 
         // [value]
         let value_type = lua_type(state, -1);
         match value_type {
-            LUA_TBOOLEAN => (*node).tok = mpack_pack_boolean(lua_toboolean(state, -1) as _),
-            LUA_TNUMBER => (*node).tok = mpack_pack_number(lua_tonumber(state, -1)),
+            LUA_TBOOLEAN => node.tok = mpack_pack_boolean(lua_toboolean(state, -1) as _),
+            LUA_TNUMBER => node.tok = mpack_pack_number(lua_tonumber(state, -1)),
             LUA_TSTRING => {
                 let binary = is_binary(state, packer);
                 let len = objlen(state, None);
-                (*node).tok = if binary {
+                node.tok = if binary {
                     mpack_pack_bin(len)
                 } else {
                     mpack_pack_str(len)
                 };
             }
-            LUA_TTABLE => pack_table(state, packer, node),
-            LUA_TUSERDATA if is_nil_sentinel(state, -1) => (*node).tok = mpack_pack_nil(),
+            LUA_TTABLE => pack_table(state, packer, node, parents),
+            LUA_TUSERDATA if is_nil_sentinel(state, -1) => node.tok = mpack_pack_nil(),
             _ => {
                 luaL_error(
                     state,
@@ -246,7 +299,7 @@ pub unsafe extern "C-unwind" fn unparse_enter(
         }
         // The value has to survive until `unparse_exit`: a blob's body is read
         // back out of it, and a map's iteration resumes from it.
-        (*node).data[0].i = reference(state, reg) as i64;
+        node.data[0] = reference(state, reg);
     }
 }
 
@@ -256,40 +309,38 @@ pub unsafe extern "C-unwind" fn unparse_enter(
 /// Answers false for the chunk case, where the node is already complete.
 ///
 /// # Safety
-/// `parent` must be a live frame whose object is still referenced.
+/// `parent`'s object must still be referenced in `reg`.
 unsafe fn next_child(
     state: *mut lua_State,
     reg: c_int,
-    parent: *mut mpack_node_t,
-    node: *mut mpack_node_t,
+    parent: &mut Node,
+    node: &mut Node,
 ) -> bool {
     unsafe {
-        geti(state, reg, (*parent).data[0].i as c_int); // [parent]
-        if (*parent).tok.type_0 > MPACK_TOKEN_MAP {
+        if kind(parent) > MPACK_TOKEN_MAP {
             // A string is written as one chunk node borrowing the Lua
             // string's own bytes, which stay alive because the parent's
-            // registry reference does.
-            let bytes = lua_tolstring(state, -1, core::ptr::null_mut());
-            (*node).tok = mpack_pack_chunk(bytes, (*parent).tok.length);
-            lua_pop(state, 1);
+            // registry reference does; [`chunk_bytes`] reads them.
+            node.tok = mpack_pack_chunk(parent.tok.len);
             return false;
         }
+        geti(state, reg, parent.data[0]); // [parent]
 
-        if (*parent).tok.type_0 == MPACK_TOKEN_ARRAY {
-            lua_pushnumber(state, ((*parent).pos + 1) as lua_Number);
+        if kind(parent) == MPACK_TOKEN_ARRAY {
+            lua_pushnumber(state, (parent.pos + 1) as lua_Number);
             lua_gettable(state, -2); // [parent, element]
-        } else if (*parent).tok.type_0 == MPACK_TOKEN_MAP {
+        } else if kind(parent) == MPACK_TOKEN_MAP {
             // `lua_next` resumes from the previous key, which is parked in the
             // registry precisely because this call is not the last.
-            geti(state, reg, (*parent).data[1].i as c_int); // [parent, prev key]
+            geti(state, reg, parent.data[1]); // [parent, prev key]
             let more = lua_next(state, -2); // [parent, key, value]
             debug_assert!(more != 0, "the map reported more pairs than it holds");
-            if (*parent).key_visited != 0 {
+            if parent.key_visited {
                 // The value's turn. Remember its key for the pair after this
                 // one, and leave the value where the key was.
-                unreference(state, reg, (*parent).data[1].i as c_int);
+                unreference(state, reg, parent.data[1]);
                 lua_pushvalue(state, -2);
-                (*parent).data[1].i = reference(state, reg) as i64;
+                parent.data[1] = reference(state, reg);
                 lua_replace(state, -2); // [parent, value]
             } else {
                 lua_pop(state, 1); // [parent, key] -- the key's turn
@@ -322,11 +373,35 @@ unsafe fn is_binary(state: *mut lua_State, packer: *mut Packer) -> bool {
     }
 }
 
+/// The body of the string a chunk node at the top of the walk borrows.
+///
+/// # Safety
+/// `packer` must be live, and the last of `parents` the string node whose
+/// object `reg` still holds.
+unsafe fn chunk_bytes<'a>(packer: *mut Packer, parents: &[Node]) -> &'a [u8] {
+    unsafe {
+        let state = (*packer).L;
+        let parent = parents.last().expect("a chunk has a parent");
+        geti(state, (*packer).reg, parent.data[0]); // [string]
+        let mut len: size_t = 0;
+        let bytes = lua_tolstring(state, -1, &raw mut len);
+        lua_pop(state, 1);
+        // The parent's reference keeps the string, and so these bytes, alive
+        // until its node exits; the chunk is written before then.
+        core::slice::from_raw_parts(bytes.cast::<u8>(), len.min(parent.tok.len as size_t))
+    }
+}
+
 /// Classify a Lua table: an ext value, a cycle, an array or a map.
 ///
 /// # Safety
 /// `packer` must be live with the table on top of the stack.
-unsafe fn pack_table(state: *mut lua_State, packer: *mut Packer, node: *mut mpack_node_t) {
+unsafe fn pack_table(
+    state: *mut lua_State,
+    packer: *mut Packer,
+    node: &mut Node,
+    parents: &[Node],
+) {
     unsafe {
         let reg = (*packer).reg;
         let has_meta = lua_getmetatable(state, -1) != 0; // [table, metatable?]
@@ -349,15 +424,10 @@ unsafe fn pack_table(state: *mut lua_State, packer: *mut Packer, node: *mut mpac
 
         // A table that is already open below is a cycle; msgpack has no way
         // to spell one, so it is encoded as nil.
-        let mut ancestor = node;
-        loop {
-            ancestor = parent_of(ancestor);
-            if ancestor.is_null() {
-                break;
-            }
-            geti(state, reg, (*ancestor).data[0].i as c_int);
+        for ancestor in parents.iter().rev() {
+            geti(state, reg, ancestor.data[0]);
             if lua_rawequal(state, -1, -2) != 0 {
-                (*node).tok = mpack_pack_nil();
+                node.tok = mpack_pack_nil();
                 lua_pop(state, 2);
                 push_nil_sentinel(state);
                 return;
@@ -370,11 +440,11 @@ unsafe fn pack_table(state: *mut lua_State, packer: *mut Packer, node: *mut mpac
         let mut is_array = !is_empty_dict;
         let len = objlen(state, Some(&mut is_array));
         if is_array {
-            (*node).tok = mpack_pack_array(len);
+            node.tok = mpack_pack_array(len);
         } else {
-            (*node).tok = mpack_pack_map(len);
+            node.tok = mpack_pack_map(len);
             // `lua_next` starts from nil.
-            (*node).data[1].i = LUA_REFNIL as i64;
+            node.data[1] = LUA_REFNIL;
         }
     }
 }
@@ -387,7 +457,7 @@ unsafe fn pack_table(state: *mut lua_State, packer: *mut Packer, node: *mut mpac
 ///
 /// # Safety
 /// `packer` must be live with a table and its metatable on top.
-unsafe fn pack_ext(state: *mut lua_State, packer: *mut Packer, node: *mut mpack_node_t) -> bool {
+unsafe fn pack_ext(state: *mut lua_State, packer: *mut Packer, node: &mut Node) -> bool {
     unsafe {
         geti(state, (*packer).reg, (*packer).ext); // [table, meta, handlers]
         lua_pushvalue(state, -2); // [table, meta, handlers, meta]
@@ -415,7 +485,7 @@ unsafe fn pack_ext(state: *mut lua_State, packer: *mut Packer, node: *mut mpack_
                 c"the second result from ext packer must be a string".as_ptr(),
             );
         }
-        (*node).tok = mpack_pack_ext(ext as c_int, objlen(state, None));
+        node.tok = mpack_pack_ext(ext as c_int, objlen(state, None));
         // Leave only the returned string, where the table was.
         lua_replace(state, -5);
         lua_pop(state, 3);
@@ -427,15 +497,14 @@ unsafe fn pack_ext(state: *mut lua_State, packer: *mut Packer, node: *mut mpack_
 ///
 /// # Safety
 /// See [`unparse_enter`].
-pub unsafe extern "C-unwind" fn unparse_exit(parser: *mut mpack_parser_t, node: *mut mpack_node_t) {
+unsafe fn unparse_exit(packer: *mut Packer, node: &Node) {
     unsafe {
-        let packer = (*parser).data.p.cast::<Packer>();
         let state = (*packer).L;
         // A chunk borrows its parent's string and never took a reference.
-        if (*node).tok.type_0 != MPACK_TOKEN_CHUNK {
-            unreference(state, (*packer).reg, (*node).data[0].i as c_int);
-            if (*node).tok.type_0 == MPACK_TOKEN_MAP {
-                unreference(state, (*packer).reg, (*node).data[1].i as c_int);
+        if kind(node) != MPACK_TOKEN_CHUNK {
+            unreference(state, (*packer).reg, node.data[0]);
+            if kind(node) == MPACK_TOKEN_MAP {
+                unreference(state, (*packer).reg, node.data[1]);
             }
         }
     }

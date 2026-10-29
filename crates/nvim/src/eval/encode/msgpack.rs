@@ -48,23 +48,23 @@ impl TypvalSink for MsgpackSink<'_> {
     }
 
     fn conv_nil(&mut self) {
-        mpack_nil(self.packer.cursor_mut());
+        mpack_nil(self.packer);
     }
 
     fn conv_bool(&mut self, num: bool) {
-        mpack_bool(self.packer.cursor_mut(), num);
+        mpack_bool(self.packer, num);
     }
 
     fn conv_number(&mut self, num: i64) {
-        mpack_integer(self.packer.cursor_mut(), num);
+        mpack_integer(self.packer, num);
     }
 
     fn conv_unsigned_number(&mut self, num: u64) {
-        mpack_uint64(self.packer.cursor_mut(), num);
+        mpack_uint64(self.packer, num);
     }
 
     fn conv_float(&mut self, flt: Float) -> Flow {
-        mpack_float8(self.packer.cursor_mut(), flt);
+        mpack_float8(self.packer, flt);
         Flow::Go
     }
 
@@ -100,22 +100,22 @@ impl TypvalSink for MsgpackSink<'_> {
     }
 
     fn conv_empty_list(&mut self) {
-        mpack_array(self.packer.cursor_mut(), 0);
+        mpack_array(self.packer, 0);
     }
 
     fn conv_empty_dict(&mut self) {
-        mpack_map(self.packer.cursor_mut(), 0);
+        mpack_map(self.packer, 0);
     }
 
     fn conv_list_start(&mut self, len: c_int) -> Flow {
         let len = u32::try_from(len).expect("a list length is never negative");
-        mpack_array(self.packer.cursor_mut(), len);
+        mpack_array(self.packer, len);
         Flow::Go
     }
 
     fn conv_dict_start(&mut self, len: usize) -> Flow {
         let len = u32::try_from(len).expect("a dict never holds four billion keys");
-        mpack_map(self.packer.cursor_mut(), len);
+        mpack_map(self.packer, len);
         Flow::Go
     }
 

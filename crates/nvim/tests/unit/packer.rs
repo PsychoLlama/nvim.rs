@@ -194,7 +194,7 @@ fn a_large_negative_handle_is_rejected() {
 /// Packs one object through a heap-backed buffer and returns the bytes.
 fn pack(object: &mut Object) -> Vec<u8> {
     // SAFETY: the object is the caller's, live for the call.
-    pack_to_bytes(|buffer| unsafe { mpack_object(object, buffer) })
+    pack_to_bytes(|buffer| mpack_object(object, buffer))
 }
 
 fn string(text: &[u8]) -> Object {

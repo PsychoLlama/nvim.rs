@@ -1809,7 +1809,7 @@ const TABLES_HEADER: &str = r#"//! The msgpack-RPC dispatch tables.
 //! `tools/apigen`'s `table_order` reproduces the layout upstream's hash
 //! implied.
 
-#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unsafe_code)]
 "#;
 
 /// Header for a child module of the tables directory. A chunk that came out
@@ -1838,22 +1838,8 @@ fn tables_child_header(what: &str, body: &str) -> String {
     )
 }
 
-/// Shared support for the tables. `key_bytes` is how the method lookup gets
-/// at the bytes it was handed.
+/// Shared support for the tables: the row constructor and the method lookup.
 const TABLES_SUPPORT: &str = r#"
-/// The key bytes a lookup was handed. An empty key carries no pointer worth
-/// dereferencing — and may carry a null one — so length zero short-circuits.
-///
-/// # Safety
-/// `str` points at `len` readable bytes.
-unsafe fn key_bytes<'a>(str: *const c_char, len: size_t) -> &'a [u8] {
-    if len == 0 {
-        return &[];
-    }
-    // SAFETY: the caller promises `len` readable bytes at `str`.
-    unsafe { slice::from_raw_parts(str.cast::<u8>(), len) }
-}
-
 /// One row of [`method_handlers`]: the name a client calls the method by, the
 /// wrapper that serves it, whether it may run straight from the RPC read
 /// callback instead of being deferred to the main loop, and whether its result
@@ -1863,43 +1849,33 @@ const fn handler(
     fast: bool,
 ) -> MsgpackRpcRequestHandler {
     MsgpackRpcRequestHandler {
-        name: name.as_ptr(),
+        name: Some(name),
         fn_0: Some(f),
         fast,
     }
 }
 
 /// The row a caller holds when no method has been resolved yet, or when the
-/// lookup refused: a null name and no wrapper.
+/// lookup refused: no name and no wrapper.
 pub(crate) const NO_HANDLER: MsgpackRpcRequestHandler = MsgpackRpcRequestHandler {
-    name: ptr::null(),
+    name: None,
     fn_0: None,
     fast: false,
 };
 
 /// Look a method up by name.
-///
-/// # Safety
-/// `name` points at `name_len` readable bytes.
-pub unsafe fn msgpack_rpc_get_handler_for(
-    name: *const c_char,
-    name_len: size_t,
-) -> Result<MsgpackRpcRequestHandler, Error> {
-    // SAFETY: the caller passes a method name of `name_len` bytes.
-    if let Some(index) = handler_index(unsafe { key_bytes(name, name_len) }) {
+pub fn msgpack_rpc_get_handler_for(name: &[u8]) -> Result<MsgpackRpcRequestHandler, Error> {
+    if let Some(index) = handler_index(name) {
         return Ok(method_handlers[index]);
     }
-    // The name is not NUL-terminated, so its length goes along. The stand-in
-    // for an empty one is, and upstream measured it with `sizeof`, terminator
-    // included -- so the rendered name keeps that trailing NUL.
-    let (len, text) = if name_len > 0 {
-        (name_len, name)
+    // The stand-in for an empty name is rendered as upstream measured it,
+    // with `sizeof`: terminator included, so the message keeps that NUL.
+    let text = if name.is_empty() {
+        c"<empty>".to_bytes_with_nul()
     } else {
-        let empty = c"<empty>";
-        (empty.to_bytes_with_nul().len(), empty.as_ptr())
+        name
     };
-    // SAFETY: the caller vouches for `name_len` bytes at `name`.
-    let text = unsafe { c_str_len(text, len) };
+    let text = msg_bytes(text);
     Err(api_error!(kErrorTypeException, "Invalid method: {text}"))
 }
 "#;
@@ -2123,13 +2099,12 @@ fn generate_tables(
         .unwrap();
     }
     out.push('\n');
-    out.push_str("use core::ffi::{CStr, c_char};\n");
-    out.push_str("use core::{ptr, slice};\n");
+    out.push_str("use core::ffi::CStr;\n");
     out.push('\n');
     out.push_str("// Every generated wrapper; the handler table names most of them.\n");
     out.push_str("use crate::api::private::dispatch_wrappers::*;\n");
     out.push_str("use crate::api_error;\n");
-    out.push_str("use crate::message_fmt::c_str_len;\n");
+    out.push_str("use crate::message_fmt::msg_bytes;\n");
     out.push_str("use crate::global_cell::ConstTable;\n");
     out.push_str("use crate::api::private::keyset::{FieldKind, KeyField, KeySet, Slot};\n");
     // Handlers the spec names outright, which live outside the generated
@@ -2143,16 +2118,11 @@ fn generate_tables(
     for path in &externs {
         writeln!(out, "use {path};").unwrap();
     }
-    let mut types: Vec<String> = [
-        "ApiDispatchFn",
-        "Error",
-        "MsgpackRpcRequestHandler",
-        "size_t",
-    ]
-    .iter()
-    .map(|s| (*s).to_string())
-    .chain(keysets.iter().map(|k| format!("KeyDict_{}", k.name)))
-    .collect();
+    let mut types: Vec<String> = ["ApiDispatchFn", "Error", "MsgpackRpcRequestHandler"]
+        .iter()
+        .map(|s| (*s).to_string())
+        .chain(keysets.iter().map(|k| format!("KeyDict_{}", k.name)))
+        .collect();
     types.sort();
     writeln!(out, "use crate::types::{{{}}};", types.join(", ")).unwrap();
     write!(

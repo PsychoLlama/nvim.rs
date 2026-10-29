@@ -15,24 +15,21 @@
 //!   owed. While it is non-zero every read answers a `MPACK_TOKEN_CHUNK`
 //!   borrowing the caller's own buffer, so bodies are never copied.
 //!
-//! The exported functions keep the C signatures: `nvim/msgpack_rpc/unpacker`
-//! and `nvim/eval/decode/msgpack` drive them from raw pointers they own, and
-//! `test/unit/msgpack_spec.lua` sizes `Unpacker` (which embeds a tokbuf)
-//! through the FFI. Each is a thin shim over a safe core below.
+//! Everything here is over slices: [`TokBuf::read`] advances a `&[u8]`
+//! cursor and hands a chunk back as a borrow of it, [`TokBuf::write`] fills
+//! a `&mut [u8]`. A chunk being *written* is the one token whose bytes live
+//! elsewhere, so the writer is handed them beside the token, again on every
+//! call that resumes it.
 //!
 //! Ported from libmpack, Copyright (c) 2016 Thiago de Arruda, under the
 //! MIT license; the notice is reproduced in licenses/libmpack-LICENSE.txt.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use core::ffi::{c_char, c_int, c_uint};
+use core::ffi::{c_int, c_uint};
 
 use super::token::{self, Kind, MAX_TOKEN_LEN, Read, Tok};
-use crate::types::{
-    mpack_tokbuf_t, mpack_token_s_data, mpack_token_t, mpack_token_type_t, mpack_uint32_t,
-    mpack_value_t, size_t,
-};
+use crate::types::mpack_token_type_t;
 
 /// `mpack_read`/`mpack_write` status codes.
 pub const MPACK_OK: c_uint = 0;
@@ -54,103 +51,130 @@ pub const MPACK_TOKEN_EXT: mpack_token_type_t = Kind::Ext as mpack_token_type_t;
 pub const MPACK_MAX_TOKEN_LEN: c_int = MAX_TOKEN_LEN as c_int;
 
 // ---------------------------------------------------------------------------
-// The C token, and the bridge to the safe one
+// The streaming state
 // ---------------------------------------------------------------------------
 
-/// A `mpack_token_t` payload built from the whole 64-bit value.
-///
-/// Writing both halves matters: the C's `mpack_blob` sets only `ext_type`,
-/// which leaves four bytes of the union uninitialised in every `map`,
-/// `array`, `str` and `bin` token it makes. `ext_type` is `lo`'s four bytes,
-/// so filling `hi` as well costs nothing and makes the token a value the
-/// whole tree can copy.
-pub const fn value_data(lo: mpack_uint32_t, hi: mpack_uint32_t) -> mpack_token_s_data {
-    mpack_token_s_data {
-        value: mpack_value_t { lo, hi },
+/// `mpack_tokbuf_t`: a partial token, or the count of body bytes still owed.
+/// See the module docs for which field means what in which direction.
+#[derive(Clone, Copy, Debug)]
+pub struct TokBuf {
+    pending: [u8; MAX_TOKEN_LEN],
+    pending_tok: Tok,
+    ppos: usize,
+    plen: usize,
+    passthrough: u32,
+}
+
+impl Default for TokBuf {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
-/// A zeroed token, for a caller that needs one before it has one.
-pub const fn empty_token() -> mpack_token_t {
-    mpack_token_t {
-        type_0: 0,
-        length: 0,
-        data: value_data(0, 0),
-    }
-}
-
-/// The C token as a [`Tok`].
-///
-/// A `MPACK_TOKEN_CHUNK` has a pointer in that union, not a value, so it
-/// answers a payload-less token rather than reading the pointer as integers.
-/// No caller of this needs a chunk's payload: both directions handle chunks
-/// before they reach the codec.
-pub fn to_tok(c: &mpack_token_t) -> Tok {
-    let kind = Kind::from_raw(c.type_0);
-    let (lo, hi) = match kind {
-        Some(Kind::Chunk) => (0, 0),
-        // SAFETY: every non-chunk token in this tree is built through
-        // `value_data`, so the union's value arm is fully initialised.
-        _ => unsafe { (c.data.value.lo, c.data.value.hi) },
-    };
-    Tok {
-        kind,
-        len: c.length,
-        lo,
-        hi,
-    }
-}
-
-/// The safe token as the C one.
-pub const fn from_tok(t: &Tok) -> mpack_token_t {
-    let type_0 = match t.kind {
-        Some(kind) => kind as mpack_token_type_t,
-        None => 0,
-    };
-    mpack_token_t {
-        type_0,
-        length: t.len,
-        data: value_data(t.lo, t.hi),
-    }
-}
-
-// ---------------------------------------------------------------------------
-// The safe streaming core
-// ---------------------------------------------------------------------------
-
-/// What one [`read_step`] produced.
+/// What [`read_step`] produced.
 pub(crate) enum Step {
     /// A complete token.
     Token(Tok),
-    /// The next `len` bytes of the input are a `str`/`bin`/`ext` body.
-    Chunk(u32),
+    /// The bytes consumed are a slice of a `str`/`bin`/`ext` body.
+    Chunk,
     /// Not enough input; what there was has been buffered.
     Eof,
     /// The input is not msgpack.
     Error,
 }
 
-/// A tokbuf's pending bytes. `pending` is a `[c_char; 9]`, which is signed
-/// on every platform this builds for; nine bytes is cheap enough to copy
-/// rather than reach for a cast.
-fn pending_bytes(tb: &mpack_tokbuf_t) -> [u8; MAX_TOKEN_LEN] {
-    let mut out = [0u8; MAX_TOKEN_LEN];
-    for (slot, &byte) in out.iter_mut().zip(&tb.pending) {
-        *slot = byte as u8;
+/// What [`TokBuf::read`] produced.
+#[derive(Clone, Copy, Debug)]
+pub enum Next<'a> {
+    /// A complete token.
+    Token(Tok),
+    /// A slice of a `str`/`bin`/`ext` body, borrowed from the input.
+    Chunk(&'a [u8]),
+    /// Not enough input; what there was has been buffered.
+    Eof,
+    /// The input is not msgpack; nothing was consumed.
+    Error,
+}
+
+impl TokBuf {
+    /// A tokbuf with no partial token and no body outstanding.
+    pub const fn new() -> Self {
+        Self {
+            pending: [0; MAX_TOKEN_LEN],
+            pending_tok: Tok {
+                kind: None,
+                len: 0,
+                lo: 0,
+                hi: 0,
+            },
+            ppos: 0,
+            plen: 0,
+            passthrough: 0,
+        }
     }
-    out
+
+    /// Whether a token is parked half-written, so the next [`write`] resumes
+    /// it whatever it is handed.
+    ///
+    /// [`write`]: Self::write
+    pub fn is_parked(&self) -> bool {
+        self.plen != 0
+    }
+
+    /// Read one token off the front of `input`, advancing it past what was
+    /// consumed (`mpack_read`).
+    ///
+    /// [`Next::Eof`] means the input ran out mid-token: the remainder is
+    /// buffered, so the next call resumes. [`Next::Error`] consumes nothing.
+    #[inline]
+    pub fn read<'a>(&mut self, input: &mut &'a [u8]) -> Next<'a> {
+        let (step, consumed) = read_step(self, input);
+        let (taken, rest) = input.split_at(consumed);
+        *input = rest;
+        match step {
+            Step::Token(tok) => Next::Token(tok),
+            Step::Chunk => Next::Chunk(taken),
+            Step::Eof => Next::Eof,
+            Step::Error => Next::Error,
+        }
+    }
+
+    /// Write one token into `out` (`mpack_write`): answers the status and how
+    /// many bytes went.
+    ///
+    /// `MPACK_EOF` means `out` filled first; the caller drains it and calls
+    /// again, and the parked token wins over whatever it passes. A chunk
+    /// token's body is `chunk`, which a resuming caller hands over again.
+    pub fn write(&mut self, out: &mut [u8], tok: &Tok, chunk: &[u8]) -> (c_uint, usize) {
+        debug_assert!(!out.is_empty());
+        let tok = if self.plen != 0 {
+            self.pending_tok
+        } else {
+            *tok
+        };
+        if tok.kind == Some(Kind::Chunk) {
+            write_chunk(self, &tok, chunk, out)
+        } else if self.plen != 0 {
+            drain_pending(self, out)
+        } else {
+            write_step(self, &tok, out)
+        }
+    }
+}
+
+/// A tokbuf's pending bytes.
+fn pending_bytes(tb: &TokBuf) -> [u8; MAX_TOKEN_LEN] {
+    tb.pending
 }
 
 /// Copy as much of `input` into `pending` as the partial token still needs
 /// (`mpack_rpending`). Answers how many bytes were taken, and whether the
 /// token is now whole.
-fn fill_pending(tb: &mut mpack_tokbuf_t, input: &[u8]) -> (usize, bool) {
+fn fill_pending(tb: &mut TokBuf, input: &[u8]) -> (usize, bool) {
     debug_assert!(tb.ppos < tb.plen, "nothing pending");
     let want = tb.plen.min(MAX_TOKEN_LEN) - tb.ppos;
     let count = want.min(input.len());
-    for (slot, &byte) in tb.pending[tb.ppos..].iter_mut().zip(&input[..count]) {
-        *slot = byte as c_char;
-    }
+    tb.pending[tb.ppos..tb.ppos + count].copy_from_slice(&input[..count]);
     tb.ppos += count;
     (count, tb.ppos >= tb.plen)
 }
@@ -159,16 +183,19 @@ fn fill_pending(tb: &mut mpack_tokbuf_t, input: &[u8]) -> (usize, bool) {
 ///
 /// Answers the step and how many bytes of `input` it consumed. The C bumps
 /// the caller's pointer in three different places for this; here every path
-/// reports a count and the shim does it once.
-pub(crate) fn read_step(tb: &mut mpack_tokbuf_t, input: &[u8]) -> (Step, usize) {
+/// reports a count and [`TokBuf::read`] does it once.
+#[inline]
+pub(crate) fn read_step(tb: &mut TokBuf, input: &[u8]) -> (Step, usize) {
     if input.is_empty() {
         return (Step::Eof, 0);
     }
 
     if tb.passthrough != 0 {
-        let len = (tb.passthrough as usize).min(input.len()) as mpack_uint32_t;
+        let len = tb
+            .passthrough
+            .min(u32::try_from(input.len()).unwrap_or(u32::MAX));
         tb.passthrough -= len;
-        return (Step::Chunk(len), len as usize);
+        return (Step::Chunk, len as usize);
     }
 
     // A token already half-buffered is completed from `pending`; a fresh one
@@ -215,15 +242,13 @@ pub(crate) fn read_step(tb: &mut mpack_tokbuf_t, input: &[u8]) -> (Step, usize) 
 /// much of it as fits.
 ///
 /// Answers `(status, written)`. On a short buffer the whole encoding is
-/// parked in `pending` and `mpack_wpending` hands over the rest.
-fn write_step(tb: &mut mpack_tokbuf_t, tok: &Tok, out: &mut [u8]) -> (c_uint, usize) {
+/// parked in `pending` and [`drain_pending`] hands over the rest.
+fn write_step(tb: &mut TokBuf, tok: &Tok, out: &mut [u8]) -> (c_uint, usize) {
     let Some(encoded) = token::encode_token(tok) else {
         return (MPACK_ERROR, 0);
     };
     let bytes = encoded.as_bytes();
-    for (slot, &byte) in tb.pending.iter_mut().zip(bytes) {
-        *slot = byte as c_char;
-    }
+    tb.pending[..bytes.len()].copy_from_slice(bytes);
     let count = bytes.len().min(out.len());
     out[..count].copy_from_slice(&bytes[..count]);
     if count == bytes.len() {
@@ -231,16 +256,16 @@ fn write_step(tb: &mut mpack_tokbuf_t, tok: &Tok, out: &mut [u8]) -> (c_uint, us
     } else {
         tb.plen = bytes.len();
         tb.ppos = count;
-        tb.pending_tok = from_tok(tok);
+        tb.pending_tok = *tok;
         (MPACK_EOF, count)
     }
 }
 
 /// Hand over the rest of a parked encoding (`mpack_wpending`).
-fn drain_pending(tb: &mut mpack_tokbuf_t, out: &mut [u8]) -> (c_uint, usize) {
+fn drain_pending(tb: &mut TokBuf, out: &mut [u8]) -> (c_uint, usize) {
     debug_assert!(tb.ppos < tb.plen, "nothing pending");
     let count = (tb.plen - tb.ppos).min(out.len());
-    out[..count].copy_from_slice(&pending_bytes(tb)[tb.ppos..tb.ppos + count]);
+    out[..count].copy_from_slice(&tb.pending[tb.ppos..tb.ppos + count]);
     tb.ppos += count;
     if tb.ppos == tb.plen {
         tb.plen = 0;
@@ -250,183 +275,51 @@ fn drain_pending(tb: &mut mpack_tokbuf_t, out: &mut [u8]) -> (c_uint, usize) {
     }
 }
 
-// ---------------------------------------------------------------------------
-// The C entry points
-// ---------------------------------------------------------------------------
-
-/// A tokbuf with no partial token and no body outstanding.
-pub(crate) const fn empty_tokbuf() -> mpack_tokbuf_t {
-    // The C leaves `pending`/`pending_tok` alone, on the grounds that
-    // `ppos`/`plen` say nothing in them is meaningful yet. That makes the
-    // struct un-copyable without reading uninitialised bytes — which
-    // `mpack_parser_copy` and `mpack_rpc_session_copy` both do — so it is
-    // written out here instead. Twenty-five bytes, once per session.
-    mpack_tokbuf_t {
-        pending: [0; MAX_TOKEN_LEN],
-        pending_tok: empty_token(),
-        ppos: 0,
-        plen: 0,
-        passthrough: 0,
-    }
-}
-
-/// Reset a tokbuf to "no partial token, no body outstanding".
-///
-/// # Safety
-/// `tokbuf` must point at a writable `mpack_tokbuf_t`.
-pub unsafe fn mpack_tokbuf_init(tokbuf: *mut mpack_tokbuf_t) {
-    unsafe { tokbuf.write(empty_tokbuf()) };
-}
-
-/// Read one token out of `*buf`, advancing it past what was consumed.
-///
-/// Answers `MPACK_OK` with `*tok` filled, `MPACK_EOF` if the input ran out
-/// mid-token (the remainder is buffered, so the next call resumes), or
-/// `MPACK_ERROR` for a byte that is not msgpack.
-///
-/// # Safety
-/// `buf`/`buflen` must describe a readable slice, and `tokbuf`/`tok` must
-/// point at writable objects.
-pub unsafe fn mpack_read(
-    tokbuf: *mut mpack_tokbuf_t,
-    buf: *mut *const c_char,
-    buflen: *mut size_t,
-    tok: *mut mpack_token_t,
-) -> c_int {
-    let tokbuf = unsafe { &mut *tokbuf };
-    let start = unsafe { *buf };
-    let input = unsafe { core::slice::from_raw_parts(start.cast::<u8>(), *buflen) };
-    debug_assert!(!start.is_null());
-
-    let (step, consumed) = read_step(tokbuf, input);
-    unsafe { *buf = start.add(consumed) };
-    unsafe { *buflen -= consumed };
-    match step {
-        Step::Token(parsed) => {
-            unsafe { *tok = from_tok(&parsed) };
-            MPACK_OK as c_int
-        }
-        Step::Chunk(len) => {
-            let chunk = mpack_token_t {
-                type_0: MPACK_TOKEN_CHUNK,
-                length: len,
-                data: mpack_token_s_data { chunk_ptr: start },
-            };
-            unsafe { *tok = chunk };
-            MPACK_OK as c_int
-        }
-        Step::Eof => MPACK_EOF as c_int,
-        Step::Error => MPACK_ERROR as c_int,
-    }
-}
-
-/// Write one token into `*buf`, advancing it past what was written.
-///
-/// Answers `MPACK_EOF` when the buffer filled first; the caller drains and
-/// calls again with the same token, which the tokbuf remembers.
-///
-/// # Safety
-/// `buf`/`buflen` must describe a writable slice, `tokbuf` a writable
-/// tokbuf, and `t` a readable token whose chunk pointer (if it is a chunk)
-/// spans `t->length` bytes.
-pub unsafe fn mpack_write(
-    tokbuf: *mut mpack_tokbuf_t,
-    buf: *mut *mut c_char,
-    buflen: *mut size_t,
-    t: *const mpack_token_t,
-) -> c_int {
-    let tokbuf = unsafe { &mut *tokbuf };
-    let start = unsafe { *buf };
-    debug_assert!(!start.is_null() && unsafe { *buflen } != 0);
-    let out = unsafe { core::slice::from_raw_parts_mut(start.cast::<u8>(), *buflen) };
-
-    // A parked token wins over the argument: the caller is resuming.
-    let c_tok = if tokbuf.plen != 0 {
-        tokbuf.pending_tok
-    } else {
-        unsafe { *t }
-    };
-    let (status, written) = if c_tok.type_0 == MPACK_TOKEN_CHUNK {
-        unsafe { write_chunk(tokbuf, &c_tok, out) }
-    } else if tokbuf.plen != 0 {
-        drain_pending(tokbuf, out)
-    } else {
-        write_step(tokbuf, &to_tok(&c_tok), out)
-    };
-
-    unsafe { *buf = start.add(written) };
-    unsafe { *buflen -= written };
-    status as c_int
-}
-
-/// Copy the next slice of a `str`/`bin`/`ext` body out of the caller's own
-/// storage. `ppos` counts how much of *this* chunk has gone, and `plen`
-/// holds the chunk's length while it is unfinished.
-///
-/// # Safety
-/// `tok` must be a chunk token whose `chunk_ptr` spans `tok->length` bytes.
-unsafe fn write_chunk(
-    tb: &mut mpack_tokbuf_t,
-    tok: &mpack_token_t,
-    out: &mut [u8],
-) -> (c_uint, usize) {
+/// Copy the next slice of a `str`/`bin`/`ext` body out of `body`, which is
+/// the whole of it. `ppos` counts how much of *this* chunk has gone, and
+/// `plen` holds the chunk's length while it is unfinished.
+fn write_chunk(tb: &mut TokBuf, tok: &Tok, body: &[u8], out: &mut [u8]) -> (c_uint, usize) {
     if tb.plen == 0 {
         tb.ppos = 0;
     }
     let written = tb.ppos;
-    let outstanding = tok.length as usize - written;
+    let outstanding = tok.len as usize - written;
     let count = outstanding.min(out.len());
-    // SAFETY: the caller promises `chunk_ptr` spans the token's length.
-    let body = unsafe {
-        core::slice::from_raw_parts(tok.data.chunk_ptr.cast::<u8>(), tok.length as usize)
-    };
     out[..count].copy_from_slice(&body[written..written + count]);
     tb.ppos += count;
     if count == outstanding {
         tb.plen = 0;
         (MPACK_OK, count)
     } else {
-        tb.plen = tok.length as usize;
+        tb.plen = tok.len as usize;
         tb.pending_tok = *tok;
         (MPACK_EOF, count)
     }
 }
 
-/// Decode a single token with no buffering: the whole token must be present.
+/// Decode a single token with no buffering (`mpack_rtoken`): the whole token
+/// must be present. Advances `input` past what was used and answers the
+/// status beside the token.
 ///
-/// `nvim/msgpack_rpc/unpacker` uses this to peek at a message's header
-/// fields, where the input is a complete buffer by construction.
-///
-/// # Safety
-/// `buf`/`buflen` must describe a readable slice and `tok` a writable token.
-pub unsafe fn mpack_rtoken(
-    buf: *mut *const c_char,
-    buflen: *mut size_t,
-    tok: *mut mpack_token_t,
-) -> c_int {
-    let start = unsafe { *buf };
-    let input = unsafe { core::slice::from_raw_parts(start.cast::<u8>(), *buflen) };
+/// The RPC framer uses this to peek at a redraw batch and an extension's
+/// payload, where the input is a complete buffer by construction. A short
+/// token answers `MPACK_EOF` with its type code consumed, as the C did; an
+/// invalid byte answers `MPACK_ERROR`, consumed too.
+#[inline]
+pub fn read_token(input: &mut &[u8]) -> (c_uint, Tok) {
     match token::decode_token(input) {
-        Read::Done { tok: parsed, used } => {
-            unsafe { *tok = from_tok(&parsed) };
-            unsafe { *buf = start.add(used) };
-            unsafe { *buflen -= used };
-            MPACK_OK as c_int
+        Read::Done { tok, used } => {
+            *input = &input[used..];
+            (MPACK_OK, tok)
         }
-        Read::Partial { need } => {
-            // The C leaves the type code consumed and reports the shortfall
-            // through `tok->length`; `mpack_read` is the only caller that
-            // reads it back.
-            unsafe { (*tok).length = need };
-            unsafe { *buf = start.add(1) };
-            unsafe { *buflen -= 1 };
-            MPACK_EOF as c_int
+        Read::Partial { .. } => {
+            *input = &input[1..];
+            (MPACK_EOF, Tok::default())
         }
-        Read::Empty => MPACK_EOF as c_int,
+        Read::Empty => (MPACK_EOF, Tok::default()),
         Read::Invalid => {
-            unsafe { *buf = start.add(1) };
-            unsafe { *buflen -= 1 };
-            MPACK_ERROR as c_int
+            *input = &input[1..];
+            (MPACK_ERROR, Tok::default())
         }
     }
 }
@@ -435,14 +328,8 @@ pub unsafe fn mpack_rtoken(
 mod tests {
     use super::*;
 
-    fn tokbuf() -> mpack_tokbuf_t {
-        mpack_tokbuf_t {
-            pending: [0; MAX_TOKEN_LEN],
-            pending_tok: empty_token(),
-            ppos: 0,
-            plen: 0,
-            passthrough: 0,
-        }
+    fn tokbuf() -> TokBuf {
+        TokBuf::new()
     }
 
     /// Feed `input` a byte at a time and collect every token that emerges,
@@ -457,7 +344,7 @@ mod tests {
                 rest = &rest[used..];
                 match step {
                     Step::Token(tok) => out.push(tok),
-                    Step::Chunk(len) => out.push(Tok::new(Kind::Chunk, len, 0, 0)),
+                    Step::Chunk => out.push(Tok::new(Kind::Chunk, used as u32, 0, 0)),
                     Step::Eof => break,
                     Step::Error => panic!("unexpected error"),
                 }
@@ -479,7 +366,7 @@ mod tests {
                 rest = &rest[used..];
                 match step {
                     Step::Token(tok) => out.push(tok),
-                    Step::Chunk(len) => out.push(Tok::new(Kind::Chunk, len, 0, 0)),
+                    Step::Chunk => out.push(Tok::new(Kind::Chunk, used as u32, 0, 0)),
                     _ => panic!("unexpected"),
                 }
             }
@@ -505,10 +392,10 @@ mod tests {
         assert!(matches!(step, Step::Token(t) if t == Tok::new(Kind::Str, 5, 0, 0)));
         assert_eq!((used, tb.passthrough), (1, 5));
         let (step, used) = read_step(&mut tb, b"hel");
-        assert!(matches!(step, Step::Chunk(3)));
+        assert!(matches!(step, Step::Chunk));
         assert_eq!((used, tb.passthrough), (3, 2));
         let (step, used) = read_step(&mut tb, b"lo");
-        assert!(matches!(step, Step::Chunk(2)));
+        assert!(matches!(step, Step::Chunk));
         assert_eq!((used, tb.passthrough), (2, 0));
     }
 
@@ -538,18 +425,41 @@ mod tests {
     }
 
     #[test]
-    fn the_c_token_and_the_safe_one_agree() {
-        for tok in [
-            Tok::new(Kind::Nil, 0, 0, 0),
-            Tok::new(Kind::Ext, 16, 42, 0),
-            token::pack_sint(i64::MIN),
-            token::pack_float(0.1),
-        ] {
-            assert_eq!(to_tok(&from_tok(&tok)), tok);
-        }
-        // An ext token's type code shares its four bytes with `lo`, which is
-        // what lets `lmpack` read `data.ext_type` off a token this built.
-        let c = from_tok(&Tok::new(Kind::Ext, 1, 42, 0));
-        assert_eq!(unsafe { c.data.ext_type }, 42);
+    fn a_chunk_is_written_from_the_body_it_is_handed_again() {
+        let mut tb = tokbuf();
+        let body = b"hello";
+        let tok = Tok::new(Kind::Chunk, 5, 0, 0);
+        let mut out = [0u8; 3];
+        assert_eq!(tb.write(&mut out, &tok, body), (MPACK_EOF, 3));
+        assert!(tb.is_parked());
+        // The parked token wins over the argument.
+        let mut rest = [0u8; 8];
+        assert_eq!(tb.write(&mut rest, &Tok::default(), body), (MPACK_OK, 2));
+        assert_eq!((&out[..], &rest[..2]), (&b"hel"[..], &b"lo"[..]));
+        assert!(!tb.is_parked());
+    }
+
+    #[test]
+    fn read_hands_a_body_back_as_a_borrow_of_the_input() {
+        let mut tb = tokbuf();
+        let mut input: &[u8] = b"\xa3abc\x01";
+        assert!(matches!(tb.read(&mut input), Next::Token(t) if t.kind == Some(Kind::Str)));
+        assert!(matches!(tb.read(&mut input), Next::Chunk(b"abc")));
+        assert!(matches!(tb.read(&mut input), Next::Token(t) if t.lo == 1));
+        assert!(input.is_empty());
+        assert!(matches!(tb.read(&mut input), Next::Eof));
+        let mut bad: &[u8] = b"\xc1";
+        assert!(matches!(tb.read(&mut bad), Next::Error));
+        assert_eq!(bad.len(), 1);
+    }
+
+    #[test]
+    fn read_token_consumes_the_type_code_of_a_short_token() {
+        let mut input: &[u8] = b"\xcf\x00";
+        assert_eq!(read_token(&mut input).0, MPACK_EOF);
+        assert_eq!(input, b"\x00");
+        let mut input: &[u8] = b"\x07\x08";
+        let (status, tok) = read_token(&mut input);
+        assert_eq!((status, tok.lo, input), (MPACK_OK, 7, &b"\x08"[..]));
     }
 }

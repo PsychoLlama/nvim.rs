@@ -1,343 +1,376 @@
 //! `object.c`: the depth-first walk that turns a token stream into objects.
 //!
-//! The parser is an explicit stack of [`mpack_node_t`], one frame per
-//! container being built, so a document nests as deep as `capacity` without
-//! recursing and without ever unwinding through C. Every frame is visited
-//! twice — `enter_cb` on the way down, `exit_cb` on the way back up — and
-//! the callback owns whatever the object actually becomes (a `TypVal` in
-//! `eval/decode/msgpack`, an `Object` in `msgpack_rpc/unpacker`, a Lua value
-//! in `lmpack`).
+//! The parser is an explicit stack of [`Node`]s, one per object being built,
+//! so a document nests as deep as `capacity` without recursing. Every node is
+//! visited twice — [`Decode::enter`] on the way down, [`Decode::exit`] on the
+//! way back up — and the walker owns whatever the object actually becomes
+//! (an `Object` in `msgpack_rpc/unpacker`, a Lua value in `lmpack`). A
+//! node's `data` is the walker's to use: the RPC decoder keeps the object
+//! being built there, `lmpack` its registry references.
 //!
-//! `exiting` is what makes that reentrant: a walk step either pushes a frame
+//! `exiting` is what makes that reentrant: a walk step either pushes a node
 //! and returns, or pops as many as it can and returns, so the caller can
-//! suspend between any two callbacks. `status` carries an exception raised
-//! *by* a callback (`lmpack` longjmps out of Lua errors), and every entry
-//! point checks it first so a poisoned parser stays poisoned.
+//! suspend between any two callbacks — and does, whenever the input runs
+//! out mid-document.
 //!
-//! The stack is a C flexible array member — `mpack_parser_t` declares 33
-//! slots but `lmpack_grow_parser` reallocates for more — so the frames are
-//! reached by offset from `items`, not by indexing the declared array. Every
-//! function here keeps the parser as a raw pointer for that reason, and
-//! because the callbacks are handed the same pointer and write through it.
+//! The stack is indexed, not pointed into: a walker is handed the node it is
+//! visiting and the slice of its ancestors below it (the parent is the
+//! last), which is all the C reached through `node - 1`.
 //!
 //! Ported from libmpack, Copyright (c) 2016 Thiago de Arruda, under the
 //! MIT license; the notice is reproduced in licenses/libmpack-LICENSE.txt.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use core::ffi::{c_char, c_int};
-use core::mem::offset_of;
+use core::ffi::c_int;
 
-use super::mpack_core::{MPACK_EOF, MPACK_ERROR, MPACK_OK, empty_token, mpack_read, mpack_write};
-use crate::types::{
-    mpack_node_t, mpack_parser_t, mpack_token_t, mpack_token_type_t, mpack_uint32_t, mpack_walk_cb,
-    size_t,
-};
+use super::mpack_core::{MPACK_EOF, MPACK_ERROR, MPACK_OK, Next, TokBuf};
+use super::token::{Kind, Tok};
 
-/// A callback raised an error; the parser is unusable until it is reset.
-pub const MPACK_EXCEPTION: c_int = -1;
 /// The stack is full: the document nests deeper than `capacity`.
-pub const MPACK_NOMEM: c_int = MPACK_ERROR as c_int + 1;
+pub const MPACK_NOMEM: c_int = MPACK_ERROR.cast_signed() + 1;
 
 pub const MPACK_MAX_OBJECT_DEPTH: c_int = 32;
 
-const MPACK_TOKEN_CHUNK: mpack_token_type_t = super::mpack_core::MPACK_TOKEN_CHUNK;
-const MPACK_TOKEN_MAP: mpack_token_type_t = super::mpack_core::MPACK_TOKEN_MAP;
+const COMPLETE: c_int = MPACK_OK.cast_signed();
+const PENDING: c_int = MPACK_EOF.cast_signed();
 
-/// The sentinel `items[0].pos` carries so that frame 1 has no parent.
-const NO_PARENT: size_t = size_t::MAX;
-
-/// Frame `i` of a parser's stack, counting the unused sentinel at 0.
+/// One object in the walk: its token, how many of its children have been
+/// seen, and the walker's own state for it.
 ///
-/// Address arithmetic only — the offset is computed rather than projected
-/// through the pointer, so nothing is read until a caller dereferences the
-/// answer. `i` is meaningful up to the parser's own `capacity`, which may
-/// exceed the 33 slots the struct declares.
-pub fn frame(parser: *mut mpack_parser_t, i: mpack_uint32_t) -> *mut mpack_node_t {
-    parser
-        .cast::<u8>()
-        .wrapping_add(offset_of!(mpack_parser_t, items))
-        .cast::<mpack_node_t>()
-        .wrapping_add(i as usize)
+/// `pos` counts items for an array, pairs for a map, and bytes for a
+/// `str`/`bin`/`ext` (whose children are chunks). A map's key/value phase
+/// rides in `key_visited`, because a map may hold `2^32 - 1` pairs and its
+/// children would not fit a 32-bit count.
+#[derive(Clone, Debug, Default)]
+pub struct Node<D> {
+    pub tok: Tok,
+    pub pos: usize,
+    pub key_visited: bool,
+    pub data: D,
 }
 
-/// The frame below `node`, or null when `node` is the root.
-///
-/// The walk callbacks are handed a bare node pointer with no index, so this
-/// is how they find the container they are an element of.
-///
-/// # Safety
-/// `node` must be a live frame of a parser stack.
-pub unsafe fn parent_of(node: *mut mpack_node_t) -> *mut mpack_node_t {
-    let below = unsafe { node.sub(1) };
-    if unsafe { (*below).pos } == NO_PARENT {
-        core::ptr::null_mut()
-    } else {
-        below
-    }
+/// A walk that builds objects out of tokens.
+pub trait Decode<D> {
+    /// `node` was just opened for its token, with `parents` below it (the
+    /// parent last). For a chunk, `chunk` is its bytes; otherwise empty.
+    fn enter(&mut self, node: &mut Node<D>, parents: &mut [Node<D>], chunk: &[u8]);
+    /// `node` is complete and has been popped; its parent (the last of
+    /// `parents`) has already counted it.
+    fn exit(&mut self, node: Node<D>, parents: &mut [Node<D>]);
 }
 
-/// Reset a parser to an empty stack `capacity` frames deep.
-///
-/// # Safety
-/// `parser` must point at storage with room for `capacity + 1` frames —
-/// `mpack_parser_t` for the default 32, or `lmpack_grow_parser`'s larger
-/// allocation.
-pub unsafe fn mpack_parser_init(parser: *mut mpack_parser_t, capacity: mpack_uint32_t) {
-    let capacity = if capacity != 0 {
-        capacity
-    } else {
-        MPACK_MAX_OBJECT_DEPTH as mpack_uint32_t
-    };
-    unsafe { super::mpack_core::mpack_tokbuf_init(&raw mut (*parser).tokbuf) };
-    unsafe { (*parser).data.p = core::ptr::null_mut() };
-    unsafe { (*parser).capacity = capacity };
-    unsafe { (*parser).size = 0 };
-    unsafe { (*parser).exiting = 0 };
-    unsafe { (*parser).status = 0 };
-    for i in 0..=capacity {
-        unsafe { frame(parser, i).write(core::mem::zeroed()) };
-    }
-    // Frame 0 is never pushed; its `pos` is the sentinel that stops
-    // `parent_of` at the root.
-    unsafe { (*frame(parser, 0)).pos = NO_PARENT };
+/// A walk that turns objects into tokens.
+pub trait Encode<D> {
+    /// Fill in `node.tok` for the next object, `parents` below it.
+    fn enter(&mut self, node: &mut Node<D>, parents: &mut [Node<D>]);
+    /// As [`Decode::exit`].
+    fn exit(&mut self, node: Node<D>, parents: &mut [Node<D>]);
+    /// The body a chunk node at the top of the stack copies out of — the
+    /// whole body, asked for again each time a write of it resumes.
+    fn chunk(&mut self, node: &Node<D>, parents: &[Node<D>]) -> &[u8];
 }
 
-/// One step of the walk, shared by both directions.
-///
-/// Descending, a fresh frame is opened and the caller's `enter` runs on it;
-/// ascending, every frame that has consumed all its children is popped and
-/// handed to `exit_cb`. Either way the answer is `MPACK_EOF` for "call me
-/// again" and `MPACK_OK` for "the root is complete".
-///
-/// # Safety
-/// `parser` must be initialised, and the callbacks must be the pair the
-/// caller's node data was built for.
-unsafe fn walk(
-    parser: *mut mpack_parser_t,
-    exit_cb: mpack_walk_cb,
-    enter: impl FnOnce(*mut mpack_node_t),
-) -> c_int {
-    if unsafe { (*parser).status } == MPACK_EXCEPTION {
-        return MPACK_EXCEPTION;
+/// A walk in progress, and the tokenizer feeding (or fed by) it.
+#[derive(Clone, Debug)]
+pub struct Parser<D> {
+    pub tokbuf: TokBuf,
+    nodes: Vec<Node<D>>,
+    capacity: usize,
+    exiting: bool,
+    /// What the last encoding step answered, which a resumed write reports
+    /// again (the C kept it in `status`).
+    unparse_status: c_int,
+}
+
+impl<D: Default> Parser<D> {
+    /// An empty walk `capacity` nodes deep, or 32 for 0.
+    pub fn new(capacity: u32) -> Self {
+        let capacity = if capacity != 0 {
+            capacity as usize
+        } else {
+            MPACK_MAX_OBJECT_DEPTH.cast_unsigned() as usize
+        };
+        Parser {
+            tokbuf: TokBuf::new(),
+            nodes: Vec::with_capacity(capacity),
+            capacity,
+            exiting: false,
+            unparse_status: 0,
+        }
     }
-    if unsafe { (*parser).exiting } != 0 {
-        unsafe { (*parser).exiting = 0 };
-        while let Some(node) = unsafe { pop(parser) } {
-            unsafe { exit_cb.expect("non-null exit callback")(parser, node) };
-            if unsafe { (*parser).status } == MPACK_EXCEPTION {
-                return MPACK_EXCEPTION;
+
+    /// How deep the walk may nest.
+    pub fn capacity(&self) -> usize {
+        self.capacity
+    }
+
+    /// Twice as deep, keeping the walk in progress (`lmpack_grow_parser`).
+    pub fn grow(&mut self) {
+        self.capacity *= 2;
+        self.nodes.reserve(self.capacity - self.nodes.len());
+    }
+
+    /// Forget the walk in progress; the tokenizer too.
+    pub fn reset(&mut self) {
+        self.nodes.clear();
+        self.tokbuf = TokBuf::new();
+        self.exiting = false;
+        self.unparse_status = 0;
+    }
+
+    /// One step of the walk, shared by both directions.
+    ///
+    /// Descending, a fresh node is opened and `enter` runs on it; ascending,
+    /// every node that has consumed all its children is popped and handed to
+    /// `exit`. Either way the answer is `MPACK_EOF` for "call me again" and
+    /// `MPACK_OK` for "the root is complete".
+    #[inline(always)]
+    fn walk<W>(
+        &mut self,
+        walker: &mut W,
+        exit: impl Fn(&mut W, Node<D>, &mut [Node<D>]),
+        enter: impl FnOnce(&mut W, &mut Node<D>, &mut [Node<D>]),
+    ) -> c_int {
+        if self.exiting {
+            self.exiting = false;
+            while let Some(node) = self.pop() {
+                exit(walker, node, &mut self.nodes);
+                if self.nodes.is_empty() {
+                    return COMPLETE;
+                }
             }
-            if unsafe { (*parser).size } == 0 {
-                return MPACK_OK as c_int;
+            return PENDING;
+        }
+        if self.nodes.len() == self.capacity {
+            return MPACK_NOMEM;
+        }
+        self.nodes.push(Node::default());
+        let (node, parents) = self.nodes.split_last_mut().expect("just pushed");
+        enter(walker, node, parents);
+        self.exiting = true;
+        PENDING
+    }
+
+    /// Close the top node if it is finished, and tell its parent so.
+    ///
+    /// Answers `None` while the top node still has children outstanding,
+    /// which is what suspends the ascent and sends the walk back down.
+    fn pop(&mut self) -> Option<Node<D>> {
+        let (top, parents) = self.nodes.split_last_mut().expect("a node to pop");
+        let tok = top.tok;
+        // Containers and blobs count their children in `pos`.
+        if tok.kind > Some(Kind::Chunk) && top.pos < tok.len as usize {
+            return None;
+        }
+        // The root has no parent to report to.
+        if let Some(parent) = parents.last_mut() {
+            if tok.kind == Some(Kind::Chunk) {
+                // A blob's children are bytes, not items.
+                parent.pos += tok.len as usize;
+            } else if parent.tok.kind == Some(Kind::Map) {
+                if parent.key_visited {
+                    parent.pos += 1;
+                }
+                parent.key_visited = !parent.key_visited;
+            } else {
+                parent.pos += 1;
             }
         }
-        return MPACK_EOF as c_int;
-    }
-    if unsafe { (*parser).size } == unsafe { (*parser).capacity } {
-        return MPACK_NOMEM;
+        self.nodes.pop()
     }
 
-    // Open a frame for the new object. Its `data` is the callback's to
-    // use; `pos` and `key_visited` count the children seen so far.
-    unsafe { (*parser).size += 1 };
-    let top = frame(parser, unsafe { (*parser).size });
-    unsafe { (*top).data[0].p = core::ptr::null_mut() };
-    unsafe { (*top).data[1].p = core::ptr::null_mut() };
-    unsafe { (*top).pos = 0 };
-    unsafe { (*top).key_visited = 0 };
-
-    enter(top);
-    if unsafe { (*parser).status } == MPACK_EXCEPTION {
-        return MPACK_EXCEPTION;
-    }
-    unsafe { (*parser).exiting = 1 };
-    MPACK_EOF as c_int
-}
-
-/// Feed one token to a decoding walk.
-///
-/// # Safety
-/// See [`walk`].
-pub unsafe fn mpack_parse_tok(
-    parser: *mut mpack_parser_t,
-    tok: mpack_token_t,
-    enter_cb: mpack_walk_cb,
-    exit_cb: mpack_walk_cb,
-) -> c_int {
-    unsafe {
-        walk(parser, exit_cb, |node| {
-            (*node).tok = tok;
-            enter_cb.expect("non-null enter callback")(parser, node);
+    /// Feed one token (and, for a chunk, its bytes) to a decoding walk.
+    #[inline]
+    pub fn parse_tok<W: Decode<D>>(&mut self, tok: Tok, chunk: &[u8], walker: &mut W) -> c_int {
+        self.walk(walker, W::exit, |walker, node, parents| {
+            node.tok = tok;
+            walker.enter(node, parents, chunk);
         })
     }
-}
 
-/// Take one token out of an encoding walk.
-///
-/// # Safety
-/// See [`walk`]; `tok` must be writable.
-pub unsafe fn mpack_unparse_tok(
-    parser: *mut mpack_parser_t,
-    tok: *mut mpack_token_t,
-    enter_cb: mpack_walk_cb,
-    exit_cb: mpack_walk_cb,
-) -> c_int {
-    unsafe {
-        walk(parser, exit_cb, |node| {
-            enter_cb.expect("non-null enter callback")(parser, node);
-            *tok = (*node).tok;
-        })
-    }
-}
-
-/// Decode as much of `*buf` as makes progress, advancing it.
-///
-/// A token that would overflow the stack rolls the buffer back to where that
-/// token started, so the caller can grow the parser and retry from exactly
-/// the same place.
-///
-/// # Safety
-/// `buf`/`buflen` must describe a readable slice; see [`walk`] for the rest.
-pub unsafe fn mpack_parse(
-    parser: *mut mpack_parser_t,
-    buf: *mut *const c_char,
-    buflen: *mut size_t,
-    enter_cb: mpack_walk_cb,
-    exit_cb: mpack_walk_cb,
-) -> c_int {
-    let mut status = MPACK_EOF as c_int;
-    if unsafe { (*parser).status } == MPACK_EXCEPTION {
-        return MPACK_EXCEPTION;
-    }
-    while unsafe { *buflen } != 0 && status != MPACK_OK as c_int {
-        let mut tok = empty_token();
-        let (buf_save, buflen_save) = (unsafe { *buf }, unsafe { *buflen });
-
-        status = unsafe { mpack_read(&raw mut (*parser).tokbuf, buf, buflen, &raw mut tok) };
-        if status == MPACK_EOF as c_int {
-            continue;
-        }
-        if status != MPACK_ERROR as c_int {
+    /// Decode as much of `input` as makes progress, advancing it.
+    ///
+    /// A token that would overflow the stack, or that is not msgpack, rolls
+    /// the input back to where that token started, so the caller can grow
+    /// the parser and retry from exactly the same place.
+    #[inline]
+    pub fn parse<W: Decode<D>>(&mut self, input: &mut &[u8], walker: &mut W) -> c_int {
+        let mut status = PENDING;
+        while !input.is_empty() && status != COMPLETE {
+            let save = *input;
+            let (tok, chunk) = match self.tokbuf.read(input) {
+                Next::Eof => continue,
+                Next::Error => {
+                    status = MPACK_ERROR.cast_signed();
+                    *input = save;
+                    break;
+                }
+                Next::Token(tok) => (tok, &[][..]),
+                Next::Chunk(bytes) => (chunk_token(bytes), bytes),
+            };
             // Drive the walk until it stops wanting to pop.
             loop {
-                status = unsafe { mpack_parse_tok(parser, tok, enter_cb, exit_cb) };
-                if unsafe { (*parser).status } == MPACK_EXCEPTION {
-                    return MPACK_EXCEPTION;
-                }
-                if unsafe { (*parser).exiting } == 0 {
+                status = self.parse_tok(tok, chunk, walker);
+                if !self.exiting {
                     break;
                 }
             }
-            if status != MPACK_NOMEM {
-                continue;
+            if status == MPACK_NOMEM {
+                *input = save;
+                break;
             }
         }
-        unsafe { *buf = buf_save };
-        unsafe { *buflen = buflen_save };
-        break;
+        status
     }
-    status
+
+    /// Encode into `out` until it fills or the root object is finished.
+    /// Answers the status and how many bytes were written.
+    pub fn unparse<W: Encode<D>>(&mut self, out: &mut [u8], walker: &mut W) -> (c_int, usize) {
+        let mut status = PENDING;
+        let mut written = 0;
+        while written < out.len() && status != COMPLETE {
+            let mut tok = Tok::default();
+            // A half-written token is resumed from the tokbuf, not re-asked
+            // for: the walk has already moved past it.
+            if !self.tokbuf.is_parked() {
+                self.unparse_status = self.walk(walker, W::exit, |walker, node, parents| {
+                    walker.enter(node, parents);
+                    tok = node.tok;
+                });
+            }
+            status = self.unparse_status;
+            if status == MPACK_NOMEM {
+                break;
+            }
+            if self.exiting {
+                // What is being written is always the node on top: just
+                // entered, or parked half-written.
+                let (top, parents) = self.nodes.split_last().expect("an entered node");
+                let chunk = if top.tok.kind == Some(Kind::Chunk) {
+                    walker.chunk(top, parents)
+                } else {
+                    &[]
+                };
+                let (write_status, count) = self.tokbuf.write(&mut out[written..], &tok, chunk);
+                written += count;
+                if write_status != MPACK_OK {
+                    status = c_int::try_from(write_status).expect("a status fits an int");
+                }
+            }
+        }
+        (status, written)
+    }
 }
 
-/// Encode into `*buf` until it fills or the root object is finished.
-///
-/// # Safety
-/// `buf`/`buflen` must describe a writable slice; see [`walk`] for the rest.
-pub unsafe fn mpack_unparse(
-    parser: *mut mpack_parser_t,
-    buf: *mut *mut c_char,
-    buflen: *mut size_t,
-    enter_cb: mpack_walk_cb,
-    exit_cb: mpack_walk_cb,
-) -> c_int {
-    let mut status = MPACK_EOF as c_int;
-    if unsafe { (*parser).status } == MPACK_EXCEPTION {
-        return MPACK_EXCEPTION;
+/// The chunk token a body slice stands for.
+fn chunk_token(bytes: &[u8]) -> Tok {
+    Tok::new(
+        Kind::Chunk,
+        u32::try_from(bytes.len()).expect("a chunk is at most a token's length"),
+        0,
+        0,
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Counts tokens into a flat list: `(depth, kind, len, chunk)`.
+    #[derive(Default)]
+    struct Trace(Vec<(usize, Option<Kind>, u32, Vec<u8>)>, Vec<usize>);
+
+    impl Decode<()> for Trace {
+        fn enter(&mut self, node: &mut Node<()>, parents: &mut [Node<()>], chunk: &[u8]) {
+            self.0
+                .push((parents.len(), node.tok.kind, node.tok.len, chunk.to_vec()));
+        }
+        fn exit(&mut self, _node: Node<()>, parents: &mut [Node<()>]) {
+            self.1.push(parents.len());
+        }
     }
-    while unsafe { *buflen } != 0 && status != MPACK_OK as c_int {
-        let mut tok = empty_token();
-        let tb = unsafe { &raw mut (*parser).tokbuf };
-        // A half-written token is resumed from the tokbuf, not re-asked
-        // for: the walk has already moved past it.
-        if unsafe { (*tb).plen } == 0 {
-            unsafe {
-                (*parser).status = mpack_unparse_tok(parser, &raw mut tok, enter_cb, exit_cb)
+
+    #[test]
+    fn a_document_is_walked_down_and_back_up() {
+        // [1, {"a": "bc"}]
+        let doc = b"\x92\x01\x81\xa1a\xa2bc";
+        let mut parser = Parser::<()>::new(0);
+        let mut trace = Trace::default();
+        let mut input = &doc[..];
+        assert_eq!(parser.parse(&mut input, &mut trace), COMPLETE);
+        assert!(input.is_empty());
+        let kinds: Vec<_> = trace.0.iter().map(|e| (e.0, e.1)).collect();
+        assert_eq!(
+            kinds,
+            [
+                (0, Some(Kind::Array)),
+                (1, Some(Kind::Uint)),
+                (1, Some(Kind::Map)),
+                (2, Some(Kind::Str)),
+                (3, Some(Kind::Chunk)),
+                (2, Some(Kind::Str)),
+                (3, Some(Kind::Chunk)),
+            ]
+        );
+        assert_eq!(trace.0[6].3, b"bc");
+        // Exits: the uint, the key's chunk and key, the value's chunk and
+        // value, the map, the array.
+        assert_eq!(trace.1, [1, 3, 2, 3, 2, 1, 0]);
+    }
+
+    #[test]
+    fn a_split_document_resumes_and_a_deep_one_rolls_back() {
+        let doc = b"\x92\x01\x02";
+        let mut parser = Parser::<()>::new(0);
+        let mut trace = Trace::default();
+        let mut first = &doc[..2];
+        assert_eq!(parser.parse(&mut first, &mut trace), PENDING);
+        let mut rest = &doc[2..];
+        assert_eq!(parser.parse(&mut rest, &mut trace), COMPLETE);
+
+        let deep = [0x91u8; 3];
+        let mut parser = Parser::<()>::new(2);
+        let mut input = &deep[..];
+        assert_eq!(parser.parse(&mut input, &mut Trace::default()), MPACK_NOMEM);
+        assert_eq!(input.len(), 1, "the token that did not fit is left unread");
+        parser.grow();
+        assert_eq!(parser.capacity(), 4);
+        assert_eq!(parser.parse(&mut input, &mut Trace::default()), PENDING);
+    }
+
+    /// Encodes `[n, "xyz"]` for each `n` given.
+    struct Emit(u32);
+
+    impl Encode<u8> for Emit {
+        fn enter(&mut self, node: &mut Node<u8>, parents: &mut [Node<u8>]) {
+            node.tok = match parents.last() {
+                None => Tok::new(Kind::Array, 2, 0, 0),
+                Some(p) if p.tok.kind == Some(Kind::Str) => Tok::new(Kind::Chunk, 3, 0, 0),
+                Some(p) if p.pos == 0 => Tok::new(Kind::Uint, 1, self.0, 0),
+                Some(_) => Tok::new(Kind::Str, 3, 0, 0),
             };
         }
-        if unsafe { (*parser).status } == MPACK_EXCEPTION {
-            return MPACK_EXCEPTION;
+        fn exit(&mut self, _node: Node<u8>, _parents: &mut [Node<u8>]) {}
+        fn chunk(&mut self, _node: &Node<u8>, _parents: &[Node<u8>]) -> &[u8] {
+            b"xyz"
         }
-        status = unsafe { (*parser).status };
-        if status == MPACK_NOMEM {
-            break;
-        }
-        if unsafe { (*parser).exiting } != 0 {
-            let write_status = unsafe { mpack_write(tb, buf, buflen, &raw mut tok) };
-            if write_status != MPACK_OK as c_int {
-                status = write_status;
+    }
+
+    #[test]
+    fn an_encoding_walk_resumes_a_token_cut_by_a_full_buffer() {
+        let mut parser = Parser::<u8>::new(0);
+        let mut out = Vec::new();
+        let mut walker = Emit(7);
+        loop {
+            let mut room = [0u8; 2];
+            let (status, n) = parser.unparse(&mut room, &mut walker);
+            out.extend_from_slice(&room[..n]);
+            if status == COMPLETE {
+                break;
             }
+            assert_eq!(status, PENDING);
         }
+        assert_eq!(out, b"\x92\x07\xa3xyz");
     }
-    status
-}
-
-/// Move a walk in progress onto a bigger stack, keeping `d`'s capacity.
-///
-/// # Safety
-/// Both parsers must be initialised and `d` must be at least as deep as `s`.
-pub unsafe fn mpack_parser_copy(d: *mut mpack_parser_t, s: *mut mpack_parser_t) {
-    debug_assert!(unsafe { (*s).capacity } <= unsafe { (*d).capacity });
-    // Every field but `capacity`, which describes the destination's own
-    // allocation. The C memcpy's the struct header for this.
-    unsafe { (*d).data = (*s).data };
-    unsafe { (*d).size = (*s).size };
-    unsafe { (*d).status = (*s).status };
-    unsafe { (*d).exiting = (*s).exiting };
-    unsafe { (*d).tokbuf = (*s).tokbuf };
-    for i in 0..=unsafe { (*s).capacity } {
-        unsafe { frame(d, i).write(frame(s, i).read()) };
-    }
-}
-
-/// Close the top frame if it is finished, and tell its parent so.
-///
-/// Answers `None` while the top frame still has children outstanding, which
-/// is what suspends the ascent and sends the walk back down.
-///
-/// # Safety
-/// The stack must not be empty.
-unsafe fn pop(p: *mut mpack_parser_t) -> Option<*mut mpack_node_t> {
-    debug_assert!(unsafe { (*p).size } != 0);
-    let size = unsafe { (*p).size };
-    let top = frame(p, size);
-    let tok = unsafe { (*top).tok };
-    // Containers and blobs count their children in `pos`.
-    if tok.type_0 > MPACK_TOKEN_CHUNK && unsafe { (*top).pos } < tok.length as size_t {
-        return None;
-    }
-
-    // Frame 1's neighbour below is the sentinel, so a root object has no
-    // parent to report to.
-    if size > 1 {
-        let parent = frame(p, size - 1);
-        if tok.type_0 == MPACK_TOKEN_CHUNK {
-            // A blob's children are bytes, not items.
-            unsafe { (*parent).pos += tok.length as size_t };
-        } else if unsafe { (*parent).tok.type_0 } == MPACK_TOKEN_MAP {
-            // A map may hold up to 2^32 - 1 pairs, which will not fit a
-            // 32-bit count of *visited children*; the key/value phase
-            // rides alongside `pos` in its own flag instead.
-            if unsafe { (*parent).key_visited } != 0 {
-                unsafe { (*parent).pos += 1 };
-            }
-            unsafe { (*parent).key_visited = c_int::from((*parent).key_visited == 0) };
-        } else {
-            unsafe { (*parent).pos += 1 };
-        }
-    }
-
-    unsafe { (*p).size -= 1 };
-    Some(top)
 }

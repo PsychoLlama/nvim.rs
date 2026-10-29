@@ -1,5 +1,4 @@
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -16,53 +15,43 @@
 //! a series of writes rather than one big allocation.
 
 use crate::api::private::dispatch_wrappers::handle_nvim_paste;
-use crate::api::ui::remote_ui_flush_pending_data;
-use crate::cstr;
-use crate::event::wstream::wstream_new_buffer;
-use crate::types::String_0;
-use core::ffi::{c_char, c_void};
-use core::{ptr, slice};
-
-use crate::memory::{alloc_block, free_block};
+use crate::api::ui::remote_ui_flush_incomplete;
+use crate::event::wstream::SharedBuffer;
+use crate::memory::{block_vec, recycle_block};
 use crate::msgpack_rpc::packer::{
     mpack_array, mpack_integer, mpack_object, mpack_object_array, mpack_str, mpack_uint,
 };
 use crate::types::{
-    ApiDispatchFn, Array, Channel, Error, Integer, MessageType, MsgpackRpcRequestHandler, Object,
-    PackerBuffer, kErrorTypeNone, uint32_t,
+    ApiDispatchFn, Array, Error, Integer, MessageType, MsgpackRpcRequestHandler, Object,
+    PackerBuffer, String_0, kErrorTypeNone, uint32_t, uint64_t,
 };
 
 use super::known::*;
-use super::{Chan, channel_write, trace};
+use super::{channel_write, trace};
 
 /// Packs a request (with an id) or a notification (without one) and sends it
 /// to each of `chans`.
-///
-/// # Safety
-/// Every channel in `chans` is live and `method` is a NUL-terminated string.
-pub unsafe fn serialize_request(
-    chans: &mut [*mut Channel],
+pub fn serialize_request(
+    chans: Vec<uint64_t>,
     request_id: uint32_t,
-    method: *const c_char,
+    method: &[u8],
     mut args: Array,
 ) {
-    // SAFETY: the caller's channels, method name and argument array.
-    let mut packer = unsafe { packer_buffer_init(chans) };
+    let mut packer = packer_buffer_init(chans);
     let is_request = request_id != 0;
-    mpack_array(packer.cursor_mut(), if is_request { 4 } else { 3 });
+    mpack_array(&mut packer, if is_request { 4 } else { 3 });
     let kind = if is_request {
         kMessageTypeRequest
     } else {
         kMessageTypeNotification
     };
-    unsafe { put_byte(&mut packer, kind.to_le_bytes()[0].cast_signed()) };
+    packer.push_byte(kind.to_le_bytes()[0]);
     if is_request {
-        mpack_uint(packer.cursor_mut(), request_id);
+        mpack_uint(&mut packer, request_id);
     }
-    // SAFETY: the caller's NUL-terminated method name.
-    mpack_str(unsafe { cstr::bytes_at(method) }, &mut packer);
+    mpack_str(method, &mut packer);
     mpack_object_array(&mut args, &mut packer);
-    unsafe { packer_buffer_finish(&mut packer) };
+    packer_buffer_finish(&mut packer);
 }
 
 /// Answers a request, or reports a failed notification.
@@ -74,59 +63,48 @@ pub unsafe fn serialize_request(
 ///
 /// The error is *rendered*, not reported: this reads the failure the caller
 /// already has rather than answering with one of its own.
-///
-/// # Safety
-/// `channel` is live and `arg` points at a live `Object`.
-pub unsafe fn serialize_response(
-    channel: *mut Channel,
+pub fn serialize_response(
+    channel_id: uint64_t,
     handler: MsgpackRpcRequestHandler,
     type_0: MessageType,
     response_id: uint32_t,
     err: &Error,
-    arg: *mut Object,
+    arg: &mut Object,
 ) {
     let err_type = err.kind();
     let errored = err_type != kErrorTypeNone;
 
     if errored && type_0 == kMessageTypeNotification {
-        // SAFETY: the caller's error and channel.
-        unsafe { report_failed_notification(channel, handler, err) };
+        report_failed_notification(channel_id, handler, err);
         return;
     }
 
-    let mut chan = channel;
-    // SAFETY: the caller's channel, error message and result object; the
-    // packer writes into a block it owns.
-    let mut packer = unsafe { packer_buffer_init(slice::from_mut(&mut chan)) };
-    mpack_array(packer.cursor_mut(), 4);
-    let kind = kMessageTypeResponse.to_le_bytes()[0].cast_signed();
-    unsafe { put_byte(&mut packer, kind) };
-    mpack_uint(packer.cursor_mut(), response_id);
+    let mut packer = packer_buffer_init(vec![channel_id]);
+    mpack_array(&mut packer, 4);
+    packer.push_byte(kMessageTypeResponse.to_le_bytes()[0]);
+    mpack_uint(&mut packer, response_id);
     if errored {
-        mpack_array(packer.cursor_mut(), 2);
-        mpack_integer(packer.cursor_mut(), Integer::from(err_type));
+        mpack_array(&mut packer, 2);
+        mpack_integer(&mut packer, Integer::from(err_type));
         mpack_str(err.message_or_empty().to_bytes(), &mut packer);
-        unsafe { put_byte(&mut packer, wire::NIL) };
+        packer.push_byte(wire::NIL);
     } else {
-        unsafe { put_byte(&mut packer, wire::NIL) };
-        unsafe { mpack_object(arg, &mut packer) };
+        packer.push_byte(wire::NIL);
+        mpack_object(arg, &mut packer);
     }
-    unsafe { packer_buffer_finish(&mut packer) };
-    trace::log_response(trace::SEND, unsafe { (*channel).id }, errored, response_id);
+    packer_buffer_finish(&mut packer);
+    trace::log_response(trace::SEND, channel_id, errored, response_id);
 }
 
 /// Reports a notification that failed, which has no response to fail in.
-///
-/// # Safety
-/// [`serialize_response`]'s contract.
-unsafe fn report_failed_notification(
-    channel: *mut Channel,
+fn report_failed_notification(
+    channel_id: uint64_t,
     handler: MsgpackRpcRequestHandler,
     err: &Error,
 ) {
     let is_paste = handler
         .fn_0
-        .is_some_and(|f| ptr::fn_addr_eq(f, handle_nvim_paste as ApiDispatchFn));
+        .is_some_and(|f| core::ptr::fn_addr_eq(f, handle_nvim_paste as ApiDispatchFn));
     if is_paste {
         let msg = err.message_or_empty().to_string_lossy();
         crate::semsg!("paste: {msg}");
@@ -137,108 +115,47 @@ unsafe fn report_failed_notification(
         Object::Integer(Integer::from(err.kind())),
         Object::string(String_0::from_cstr(err.message_or_empty())),
     ]);
-    let mut chan = channel;
-    let to = slice::from_mut(&mut chan);
-    unsafe { serialize_request(to, 0, c"nvim_error_event".as_ptr(), args) };
+    serialize_request(vec![channel_id], 0, b"nvim_error_event", args);
 }
 
 /// The msgpack encoding of nil, which is what the unused half of the
 /// `[type, id, error, result]` envelope carries. Nested so it stays out of
 /// the flat namespace the unit-test header generator collects constants into.
 mod wire {
-    use core::ffi::c_char;
-
-    pub(super) const NIL: c_char = 0xc0u8.cast_signed();
+    pub(super) const NIL: u8 = 0xc0;
 }
 
-/// Writes one raw byte through the packer's cursor.
-///
-/// Both call sites spend it on a value the packer has no encoder for: the
-/// message type, which is a bare fixint, and the nil half of the envelope.
-///
-/// # Safety
-/// The packer's cursor has room for one more byte, which
-/// [`mpack_check_buffer`](crate::msgpack_rpc::packer::mpack_check_buffer)
-/// guarantees.
-unsafe fn put_byte(packer: &mut PackerBuffer, byte: c_char) {
-    // SAFETY: the caller's guarantee of room.
-    unsafe { *packer.cursor() = byte };
-    packer.set_cursor(unsafe { packer.cursor().add(1) });
-}
-
-/// Opens a packer buffer whose flush hook writes to every channel in `chans`.
+/// Opens a packer whose flush hook writes to every channel in `chans`.
 ///
 /// Any UI on one of them is flushed first: its own event stream and this
 /// message share the channel, and a half-written UI event may not be
 /// interleaved with one.
-///
-/// # Safety
-/// Every channel in `chans` is live, and `chans` itself outlives the packer:
-/// the flush hook reads it back out of `anydata`.
-unsafe fn packer_buffer_init(chans: &mut [*mut Channel]) -> PackerBuffer {
-    for &chan in chans.iter() {
-        // SAFETY: the caller's channels.
-        let ui = unsafe { (*chan).rpc.ui };
-        if !ui.is_null() && unsafe { (*ui).incomplete_event } {
-            unsafe { remote_ui_flush_pending_data(ui) };
-        }
+fn packer_buffer_init(chans: Vec<uint64_t>) -> PackerBuffer {
+    for &chan in &chans {
+        remote_ui_flush_incomplete(chan);
     }
-    // SAFETY: the block allocator takes no arguments and hands back a fresh
-    // `ARENA_BLOCK_SIZE` block.
-    let startptr = unsafe { alloc_block() }.cast::<c_char>();
-    // SAFETY: the block is `ARENA_BLOCK_SIZE` bytes nothing else names, and
-    // the caller's promise keeps `chans` alive for the packer's lifetime.
-    let mut packer =
-        unsafe { PackerBuffer::new(startptr, ARENA_BLOCK_SIZE, Some(channel_flush_callback)) };
-    packer.anydata = chans.as_mut_ptr().cast::<c_void>();
-    packer.anyint = i64::try_from(chans.len()).expect("addressee count fits an i64");
+    let mut packer = PackerBuffer::new(block_vec(), Some(channel_flush_callback));
+    packer.channels = chans;
     packer
 }
 
-/// The channels a packer was opened for, as [`packer_buffer_init`] stashed
-/// them.
-///
-/// # Safety
-/// `packer` was opened by [`packer_buffer_init`] and the slice it was given is
-/// still alive.
-unsafe fn packer_channels<'a>(packer: &PackerBuffer) -> &'a mut [*mut Channel] {
-    // SAFETY: the caller's guarantee that the slice outlives the packer.
-    let base = packer.anydata.cast::<*mut Channel>();
-    let n = usize::try_from(packer.anyint).expect("`packer_buffer_init` stored a count here");
-    unsafe { slice::from_raw_parts_mut(base, n) }
-}
-
-/// Sends whatever the packer has accumulated, once per channel.
-///
-/// The buffer is created with the channel count as its reference count, so the
-/// block is freed when the last write completes.
-///
-/// # Safety
-/// [`packer_channels`]'s contract.
-unsafe fn packer_buffer_finish(packer: &mut PackerBuffer) {
-    let len = packer.used();
-    if len == 0 {
-        // SAFETY: the block `packer_buffer_init` allocated, never written to.
-        unsafe { free_block(packer.start().cast::<c_void>()) };
+/// Sends whatever the packer has accumulated, once per channel: one buffer,
+/// a reference per addressee, freed when the last write completes.
+fn packer_buffer_finish(packer: &mut PackerBuffer) {
+    let block = packer.take();
+    if block.is_empty() {
+        recycle_block(block);
         return;
     }
-    // SAFETY: `startptr..ptr` is the block this packer filled, and the write
-    // buffer takes one reference per addressee.
-    let chans = unsafe { packer_channels(packer) };
-    let buf = wstream_new_buffer(packer.start(), len, chans.len(), Some(free_block));
-    for &chan in chans.iter() {
-        unsafe { channel_write(Chan::new(chan), buf) };
+    let buf = SharedBuffer::from_vec(block);
+    for &chan in &packer.channels {
+        channel_write(chan, buf.clone());
     }
 }
 
 /// The packer ran out of room: send what there is and start a fresh block.
-///
-/// # Safety
-/// [`packer_channels`]'s contract, and `packer` points at a live buffer.
-unsafe fn channel_flush_callback(packer: *mut PackerBuffer) {
-    // SAFETY: the caller's packer, which libmpack's writer owns for the
-    // duration of this call.
-    let packer = unsafe { &mut *packer };
-    unsafe { packer_buffer_finish(packer) };
-    *packer = unsafe { packer_buffer_init(packer_channels(packer)) };
+fn channel_flush_callback(packer: &mut PackerBuffer) {
+    packer_buffer_finish(packer);
+    let chans = core::mem::take(&mut packer.channels);
+    *packer = packer_buffer_init(chans);
 }

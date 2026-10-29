@@ -47,17 +47,13 @@ use crate::lua::stack::{
 };
 use crate::luaL_reg_table;
 use crate::mpack::mpack_core::MPACK_EOF;
-use crate::mpack::object::{
-    MPACK_MAX_OBJECT_DEPTH, MPACK_NOMEM, mpack_parse, mpack_parser_copy, mpack_parser_init,
-    mpack_unparse,
-};
-use crate::mpack::rpc::{MPACK_RPC_MAX_REQUESTS, mpack_rpc_session_copy, mpack_rpc_session_init};
-use crate::types::{
-    lua_Number, lua_State, luaL_Buffer, luaL_Reg, mpack_data_t, mpack_node_t, mpack_one_parser_t,
-    mpack_parser_t, mpack_rpc_message_t, mpack_rpc_one_session_t, mpack_rpc_session_t,
-    mpack_rpc_slot_s, mpack_uint32_t, size_t,
-};
-use ::libc::{free, malloc};
+use crate::mpack::object::{MPACK_MAX_OBJECT_DEPTH, MPACK_NOMEM, Parser};
+use crate::mpack::rpc::{self, MPACK_RPC_MAX_REQUESTS, RpcMessage};
+use crate::types::{lua_Number, lua_State, luaL_Buffer, luaL_Reg, mpack_uint32_t, size_t};
+
+/// The walk every instance drives: a node holds the registry references of
+/// the value it stands for.
+pub(crate) type LuaParser = Parser<walk::NodeRefs>;
 
 /// The metatable names, which double as the registry keys they are stored
 /// under.
@@ -83,7 +79,9 @@ const BUFFER_SIZE: size_t = 8192;
 #[derive(Clone)]
 pub struct Unpacker {
     pub L: *mut lua_State,
-    pub parser: *mut mpack_parser_t,
+    /// A `Box` given up with `Box::into_raw` -- the userdata block is
+    /// Lua's, so nothing drops its fields -- or one on a shorthand's stack.
+    pub parser: *mut LuaParser,
     /// This instance's private registry table.
     pub reg: c_int,
     /// The `ext` option: a table of decoders keyed by ext type code.
@@ -98,7 +96,8 @@ pub struct Unpacker {
 
 pub struct Packer {
     pub L: *mut lua_State,
-    pub parser: *mut mpack_parser_t,
+    /// As [`Unpacker::parser`].
+    pub parser: *mut LuaParser,
     pub reg: c_int,
     /// The `ext` option: a table of encoders keyed by *metatable*.
     pub ext: c_int,
@@ -115,7 +114,8 @@ pub struct Packer {
 pub struct Session {
     pub L: *mut lua_State,
     pub reg: c_int,
-    pub session: *mut mpack_rpc_session_t,
+    /// As [`Unpacker::parser`].
+    pub session: *mut rpc::Session,
     pub unpacked: Unpacked,
     /// The `unpack` option: an [`Unpacker`] to read message bodies with.
     pub unpacker: c_int,
@@ -124,7 +124,7 @@ pub struct Session {
 /// The message [`session::receive`] is part way through.
 pub struct Unpacked {
     pub type_0: c_int,
-    pub msg: mpack_rpc_message_t,
+    pub msg: RpcMessage,
     pub method_or_error: c_int,
     pub args_or_result: c_int,
 }
@@ -186,50 +186,6 @@ unsafe fn shallow_copy(state: *mut lua_State) {
             lua_settable(state, -4);
         }
         lua_remove(state, -2);
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Growing the C-side stacks
-// ---------------------------------------------------------------------------
-
-/// Reallocate a parser twice as deep, keeping the walk in progress. Answers
-/// null when the allocation fails, in which case `parser` is still valid.
-///
-/// # Safety
-/// `parser` must be a live `malloc`ed parser.
-unsafe fn grow_parser(parser: *mut mpack_parser_t) -> *mut mpack_parser_t {
-    unsafe {
-        let capacity = (*parser).capacity * 2;
-        // A parser's frames are a C flexible array member: the struct
-        // declares one and the rest are bought here.
-        let bytes = size_of::<mpack_one_parser_t>() + size_of::<mpack_node_t>() * capacity as usize;
-        let bigger = malloc(bytes).cast::<mpack_parser_t>();
-        if !bigger.is_null() {
-            mpack_parser_init(bigger, capacity);
-            mpack_parser_copy(bigger, parser);
-            free(parser.cast());
-        }
-        bigger
-    }
-}
-
-/// The same for an RPC session's slot table.
-///
-/// # Safety
-/// `session` must be a live `malloc`ed session.
-unsafe fn grow_session(session: *mut mpack_rpc_session_t) -> *mut mpack_rpc_session_t {
-    unsafe {
-        let capacity = (*session).capacity * 2;
-        let bytes = size_of::<mpack_rpc_one_session_t>()
-            + size_of::<mpack_rpc_slot_s>() * (capacity - 1) as usize;
-        let bigger = malloc(bytes).cast::<mpack_rpc_session_t>();
-        if !bigger.is_null() {
-            mpack_rpc_session_init(bigger, capacity);
-            mpack_rpc_session_copy(bigger, session);
-            free(session.cast());
-        }
-        bigger
     }
 }
 
@@ -397,12 +353,7 @@ unsafe extern "C-unwind" fn unpacker_new(state: *mut lua_State) -> c_int {
             return luaL_error(state, c"expecting at most 1 table argument".as_ptr());
         }
         let unpacker = lua_newuserdata(state, size_of::<Unpacker>()).cast::<Unpacker>();
-        (*unpacker).parser = malloc(size_of::<mpack_parser_t>()).cast::<mpack_parser_t>();
-        if (*unpacker).parser.is_null() {
-            return luaL_error(state, c"Failed to allocate memory".as_ptr());
-        }
-        mpack_parser_init((*unpacker).parser, 0);
-        (*(*unpacker).parser).data.p = unpacker.cast();
+        (*unpacker).parser = Box::into_raw(Box::new(LuaParser::new(0)));
         (*unpacker).string_buffer = core::ptr::null_mut();
         (*unpacker).L = state;
         (*unpacker).unpacking = 0;
@@ -439,7 +390,7 @@ unsafe extern "C-unwind" fn unpacker_delete(state: *mut lua_State) -> c_int {
             unreference(state, (*unpacker).reg, (*unpacker).ext);
         }
         luaL_unref(state, LUA_REGISTRYINDEX, (*unpacker).reg);
-        free((*unpacker).parser.cast());
+        drop(Box::from_raw((*unpacker).parser));
         0
     }
 }
@@ -467,25 +418,20 @@ pub unsafe fn unpack_into_registry(
                     .as_ptr(),
             );
         }
+        let mut input = core::slice::from_raw_parts((*str).cast::<u8>(), *left);
         let mut status;
         loop {
             (*unpacker).unpacking = 1;
-            status = mpack_parse(
-                (*unpacker).parser,
-                str,
-                left,
-                Some(walk::parse_enter),
-                Some(walk::parse_exit),
-            );
+            status = (*(*unpacker).parser).parse(&mut input, &mut walk::LuaDecoder(unpacker));
             (*unpacker).unpacking = 0;
             if status != MPACK_NOMEM {
                 break;
             }
-            (*unpacker).parser = grow_parser((*unpacker).parser);
-            if (*unpacker).parser.is_null() {
-                return luaL_error(state, c"failed to grow Unpacker capacity".as_ptr());
-            }
+            // `parse` rolled the input back to the token that would not fit.
+            (*(*unpacker).parser).grow();
         }
+        *str = input.as_ptr().cast();
+        *left = input.len();
         if status == crate::mpack::mpack_core::MPACK_ERROR as c_int {
             return luaL_error(state, c"invalid msgpack string".as_ptr());
         }
@@ -540,12 +486,7 @@ unsafe extern "C-unwind" fn packer_new(state: *mut lua_State) -> c_int {
             return luaL_error(state, c"expecting at most 1 table argument".as_ptr());
         }
         let packer = lua_newuserdata(state, size_of::<Packer>()).cast::<Packer>();
-        (*packer).parser = malloc(size_of::<mpack_parser_t>()).cast::<mpack_parser_t>();
-        if (*packer).parser.is_null() {
-            return luaL_error(state, c"failed to allocate parser memory".as_ptr());
-        }
-        mpack_parser_init((*packer).parser, 0);
-        (*(*packer).parser).data.p = packer.cast();
+        (*packer).parser = Box::into_raw(Box::new(LuaParser::new(0)));
         (*packer).L = state;
         (*packer).packing = 0;
         (*packer).is_bin = 0;
@@ -602,7 +543,7 @@ unsafe extern "C-unwind" fn packer_delete(state: *mut lua_State) -> c_int {
             unreference(state, (*packer).reg, (*packer).ext);
         }
         luaL_unref(state, LUA_REGISTRYINDEX, (*packer).reg);
-        free((*packer).parser.cast());
+        drop(Box::from_raw((*packer).parser));
         0
     }
 }
@@ -620,42 +561,38 @@ fn empty_buffer() -> luaL_Buffer {
 
 /// Run an encoding walk to completion, appending to `buffer`.
 ///
-/// `mpack_unparse` fills whatever the buffer hands it and answers
-/// `MPACK_EOF` when it wants more room, or `MPACK_NOMEM` when the *parser*
-/// stack is too shallow. `grow` is asked to fix that and answers null when
-/// it will not — either because the allocation failed, or because the caller
-/// has nowhere to put a reallocated parser — at which point `on_nomem`
-/// raises the Lua error and does not return.
+/// `unparse` fills whatever the buffer hands it and answers `MPACK_EOF`
+/// when it wants more room, or `MPACK_NOMEM` when the *parser* stack is too
+/// shallow. `grow` is told whether it may fix that, which a shorthand's
+/// fixed-depth parser may not -- at which point `on_nomem` raises the Lua
+/// error and does not return.
 ///
 /// # Safety
-/// `parser` must be a live parser whose walk callbacks are `unparse_*`.
+/// `parser` must be a live parser, and `packer` the instance walking it.
 unsafe fn unparse_all(
     state: *mut lua_State,
     buffer: &mut luaL_Buffer,
-    parser: &mut *mut mpack_parser_t,
-    mut grow: impl FnMut(*mut mpack_parser_t) -> *mut mpack_parser_t,
+    parser: *mut LuaParser,
+    packer: *mut Packer,
+    may_grow: bool,
     on_nomem: impl Fn(*mut lua_State) -> c_int,
 ) -> c_int {
     unsafe {
         let mut out = luaL_prepbuffer(buffer);
         let mut room = BUFFER_SIZE;
         loop {
-            let before = room;
-            let status = mpack_unparse(
-                *parser,
-                &raw mut out,
-                &raw mut room,
-                Some(walk::unparse_enter),
-                Some(walk::unparse_exit),
-            );
+            let window = core::slice::from_raw_parts_mut(out.cast::<u8>(), room);
+            let (status, written) = (*parser).unparse(window, &mut walk::LuaEncoder(packer));
+            out = out.add(written);
+            room -= written;
             if status == MPACK_NOMEM {
-                *parser = grow(*parser);
-                if parser.is_null() {
+                if !may_grow {
                     return on_nomem(state);
                 }
+                (*parser).grow();
             }
             // `luaL_addsize`: the buffer's cursor moves by what was written.
-            buffer.p = buffer.p.add(before - room);
+            buffer.p = buffer.p.add(written);
             if room == 0 {
                 out = luaL_prepbuffer(buffer);
                 room = BUFFER_SIZE;
@@ -691,15 +628,16 @@ unsafe extern "C-unwind" fn packer_pack(state: *mut lua_State) -> c_int {
         }
 
         (*packer).packing = 1;
-        let mut parser = (*packer).parser;
+        // A packer's own parser grows on demand, so `on_nomem` is never
+        // reached; Rust's allocator aborts rather than failing a growth.
         unparse_all(
             state,
             &mut buffer,
-            &mut parser,
-            |p| grow_parser(p),
+            (*packer).parser,
+            packer,
+            true,
             |state| luaL_error(state, c"Failed to grow Packer capacity".as_ptr()),
         );
-        (*packer).parser = parser;
         (*packer).packing = 0;
 
         unreference(state, (*packer).reg, (*packer).root);
@@ -726,28 +664,22 @@ unsafe extern "C-unwind" fn decode(state: *mut lua_State) -> c_int {
             return luaL_error(state, c"expecting exactly 1 argument".as_ptr());
         }
         let mut len: size_t = 0;
-        let mut str = luaL_checklstring(state, 1, &raw mut len);
+        let str = luaL_checklstring(state, 1, &raw mut len);
+        let mut input = core::slice::from_raw_parts(str.cast::<u8>(), len);
 
-        let mut parser: mpack_parser_t = core::mem::zeroed();
+        let mut parser = LuaParser::new(0);
         let mut unpacker: Unpacker = core::mem::zeroed();
         lua_newtable(state);
         unpacker.reg = luaL_ref(state, LUA_REGISTRYINDEX);
         unpacker.ext = LUA_NOREF;
         unpacker.parser = &raw mut parser;
-        mpack_parser_init(unpacker.parser, 0);
-        parser.data.p = (&raw mut unpacker).cast();
         unpacker.string_buffer = core::ptr::null_mut();
         unpacker.L = state;
         lua_getfield(state, LUA_REGISTRYINDEX, EMPTY_DICT_NAME);
         unpacker.mtdict = reference(state, unpacker.reg);
 
-        let status = mpack_parse(
-            &raw mut parser,
-            &raw mut str,
-            &raw mut len,
-            Some(walk::parse_enter),
-            Some(walk::parse_exit),
-        );
+        let status = parser.parse(&mut input, &mut walk::LuaDecoder(&raw mut unpacker));
+        let len = input.len();
         luaL_unref(state, LUA_REGISTRYINDEX, unpacker.reg);
 
         // The depth is fixed here: `decode` has nowhere to put a grown
@@ -773,19 +705,13 @@ unsafe extern "C-unwind" fn encode(state: *mut lua_State) -> c_int {
         if lua_gettop(state) != 1 {
             return luaL_error(state, c"expecting exactly 1 argument".as_ptr());
         }
-        let mut parser: mpack_parser_t = core::mem::zeroed();
+        let mut parser = LuaParser::new(0);
         let mut packer: Packer = core::mem::zeroed();
         lua_newtable(state);
         packer.reg = luaL_ref(state, LUA_REGISTRYINDEX);
         packer.ext = LUA_NOREF;
         packer.is_bin_fn = LUA_NOREF;
         packer.parser = &raw mut parser;
-        mpack_parser_init(packer.parser, 0);
-        // Written through `packer.parser` rather than through `parser`: the
-        // callbacks read it back out that way, and rustc's liveness — which
-        // stops at a local's last direct use — would call the direct write
-        // dead.
-        (*packer.parser).data.p = (&raw mut packer).cast();
         packer.is_bin = 0;
         packer.L = state;
         packer.root = reference(state, packer.reg);
@@ -794,15 +720,15 @@ unsafe extern "C-unwind" fn encode(state: *mut lua_State) -> c_int {
 
         let mut buffer = empty_buffer();
         luaL_buffinit(state, &raw mut buffer);
-        let mut live = packer.parser;
+        let packer_ptr = &raw mut packer;
         unparse_all(
             state,
             &mut buffer,
-            &mut live,
-            // `decode`/`encode` build their parser on the stack, so there is
-            // nowhere to put a bigger one: too deep is an error here, not a
-            // reallocation.
-            |_| core::ptr::null_mut(),
+            packer.parser,
+            packer_ptr,
+            // `decode`/`encode` keep the default depth: too deep is an error
+            // here, not a reallocation.
+            false,
             |state| {
                 unreference(state, packer.reg, packer.root);
                 luaL_unref(state, LUA_REGISTRYINDEX, packer.reg);
@@ -918,6 +844,3 @@ const _: () = {
 
 const _: c_uint = MPACK_EOF;
 const _: c_int = LUA_REFNIL;
-const _: mpack_data_t = mpack_data_t {
-    p: core::ptr::null_mut(),
-};

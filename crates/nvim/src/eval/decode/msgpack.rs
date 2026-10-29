@@ -30,11 +30,10 @@ use super::{
 };
 use crate::eval::encode::encode_list_write;
 use crate::eval::typval::{ListRef, tv_dict_alloc, tv_list_alloc};
-use crate::mpack::mpack_core::{MPACK_EOF, MPACK_ERROR, MPACK_OK, Step, empty_tokbuf, read_step};
+use crate::mpack::mpack_core::{MPACK_EOF, MPACK_ERROR, MPACK_OK, Step, TokBuf, read_step};
 use crate::mpack::token::{Kind, Tok, unpack_boolean, unpack_float, unpack_sint, unpack_uint};
 use crate::types::{
     DictItem, TypVal, VarNumber, kBoolVarFalse, kBoolVarTrue, kListLenMayKnow, kSpecialVarNull,
-    mpack_tokbuf_t,
 };
 
 /// How deep a value may nest, counting each string's bytes as one more
@@ -174,14 +173,14 @@ fn map_value(mut pairs: Vec<TypVal>) -> TypVal {
 /// A streaming msgpack-to-typval decoder: one object at a time, fed as many
 /// slices as it takes.
 pub(crate) struct MsgpackDecoder {
-    tokbuf: mpack_tokbuf_t,
+    tokbuf: TokBuf,
     stack: Vec<Node>,
 }
 
 impl MsgpackDecoder {
     pub(crate) fn new() -> Self {
         MsgpackDecoder {
-            tokbuf: empty_tokbuf(),
+            tokbuf: TokBuf::new(),
             stack: Vec::new(),
         }
     }
@@ -303,7 +302,7 @@ impl MsgpackDecoder {
                 Step::Eof => None,
                 Step::Error => return Err(MPACK_ERROR.cast_signed()),
                 Step::Token(tok) => self.token(tok)?,
-                Step::Chunk(_) => self.chunk(taken)?,
+                Step::Chunk => self.chunk(taken)?,
             };
             *data = rest;
             if done.is_some() {

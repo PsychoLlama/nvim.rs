@@ -531,6 +531,72 @@ pub unsafe fn socket_watcher_close(watcher: *mut SocketWatcher, cb: socket_close
     unsafe { uv_close(stream.cast(), Some(close_cb)) };
 }
 
+/// A socket this process listens on: the watcher, boxed at the address
+/// libuv's handle points back to, from [`Listener::new`] until
+/// [`Listener::close`] hands it to libuv's close callback, which frees it.
+pub(crate) struct Listener(ptr::NonNull<SocketWatcher>);
+
+impl Listener {
+    /// A watcher for `endpoint`, resolved if it is TCP but not yet bound;
+    /// the libuv error otherwise.
+    pub(crate) fn new(endpoint: &CStr) -> Result<Self, c_int> {
+        let mut storage = Box::<SocketWatcher>::new_uninit();
+        // SAFETY: the main loop, live from startup to exit, writable storage
+        // the size of a watcher for `socket_watcher_init` to fill, and the
+        // caller's NUL-terminated endpoint.
+        let uv_loop = crate::event::r#loop::main_loop_raw();
+        let result =
+            unsafe { socket_watcher_init(uv_loop, storage.as_mut_ptr(), endpoint.as_ptr()) };
+        if result < 0 {
+            return Err(result);
+        }
+        // SAFETY: `socket_watcher_init` succeeded, so every field is set.
+        let watcher = unsafe { storage.assume_init() };
+        Ok(Self(ptr::NonNull::from(Box::leak(watcher))))
+    }
+
+    /// The address it listens on: the endpoint as resolved, with the port
+    /// the kernel picked once it is bound.
+    pub(crate) fn address(&self) -> &CStr {
+        // SAFETY: the watcher this value owns, live until `close`.
+        cstr::in_chars(unsafe { &(*self.0.as_ptr()).addr })
+    }
+
+    /// Bind and listen, reporting each connection to `cb`; the libuv error
+    /// otherwise.
+    pub(crate) fn start(&mut self, backlog: c_int, cb: fn(&mut SocketWatcher, c_int)) -> c_int {
+        // SAFETY: a watcher `socket_watcher_init` set up and nothing closed.
+        unsafe { socket_watcher_start(self.0.as_ptr(), backlog, Some(cb)) }
+    }
+
+    /// Stop listening; the watcher is freed once libuv is done with it.
+    pub(crate) fn close(self) {
+        // SAFETY: the watcher stays allocated until `free_listener` runs.
+        unsafe { socket_watcher_close(self.0.as_ptr(), Some(free_listener)) };
+    }
+
+    /// Close a watcher that was never started, releasing the host lookup a
+    /// TCP one still holds.
+    pub(crate) fn discard(self) {
+        let watcher = Watcher(self.0.as_ptr());
+        if watcher.is_tcp() {
+            // SAFETY: the lookup `socket_watcher_init` made for this watcher,
+            // which only `socket_watcher_start` would otherwise free.
+            unsafe { uv_freeaddrinfo(watcher.addrinfo()) };
+        }
+        self.close();
+    }
+}
+
+/// libuv is done with a [`Listener`]'s watcher: free it.
+///
+/// # Safety
+/// `watcher` is the box [`Listener::new`] leaked, and nothing uses it again.
+unsafe fn free_listener(watcher: *mut SocketWatcher, _data: *mut c_void) {
+    // SAFETY: the caller's promise.
+    drop(unsafe { Box::from_raw(watcher) });
+}
+
 // ---------------------------------------------------------------------------
 // Connecting
 // ---------------------------------------------------------------------------
@@ -700,8 +766,9 @@ unsafe extern "C" fn connection_event(argv: *mut *mut c_void) {
     // SAFETY: as above.
     let status = unpack_int(unsafe { *argv.add(1) });
     let notify = watcher.cb.expect("a started watcher has a callback");
-    // SAFETY: the watcher's own callback, given the watcher.
-    unsafe { notify(watcher.as_ptr(), status, watcher.data) };
+    // SAFETY: the watcher is live while it listens, and nothing else
+    // borrows it while its callback runs.
+    notify(unsafe { &mut *watcher.as_ptr() }, status);
 }
 
 /// libuv: the listening handle is closed.

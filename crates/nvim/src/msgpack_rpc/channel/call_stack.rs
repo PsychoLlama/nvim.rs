@@ -9,20 +9,11 @@
 
 //! The requests this editor has sent over a channel and is still waiting on.
 //!
-//! A frame lives on the stack of the `rpc_send_call` that pushed it, so the
-//! stack stores raw pointers. The request id is copied in alongside, which is
-//! what lets the whole matching policy be decided here without reading through
-//! any of them.
+//! The channel owns the frames: `rpc_send_call` pushes one, waits until the
+//! decoder has filled it in (or the channel has closed), and pops it again.
+//! The whole matching policy is decided here, by request id.
 
 use crate::types::{ChannelCallFrame, uint32_t};
-
-/// One outstanding request.
-struct Entry {
-    /// The id sent on the wire. Fixed for the frame's life, so it can be
-    /// compared without touching the frame.
-    request_id: uint32_t,
-    frame: *mut ChannelCallFrame,
-}
 
 /// Outstanding requests, oldest first.
 ///
@@ -31,26 +22,33 @@ struct Entry {
 /// though a well-behaved msgpack-rpc peer is allowed to answer out of order.
 #[derive(Default)]
 pub struct CallStack {
-    entries: Vec<Entry>,
+    frames: Vec<ChannelCallFrame>,
 }
 
 impl CallStack {
     pub const fn new() -> Self {
-        CallStack {
-            entries: Vec::new(),
-        }
+        CallStack { frames: Vec::new() }
     }
 
-    pub fn push(&mut self, request_id: uint32_t, frame: *mut ChannelCallFrame) {
-        self.entries.push(Entry { request_id, frame });
+    /// Pushes a frame for a request just sent; answers its depth, which is
+    /// how the waiting call finds it again.
+    pub fn push(&mut self, frame: ChannelCallFrame) -> usize {
+        self.frames.push(frame);
+        self.frames.len() - 1
     }
 
-    /// Drops the most recent frame.
+    /// Takes the most recent frame back.
     ///
     /// Unconditional, like the `kv_size(..)--` it replaces: `rpc_send_call`
-    /// pops after its wait whatever else happened in the meantime.
-    pub fn pop(&mut self) {
-        self.entries.pop();
+    /// pops after its wait whatever else happened in the meantime, and every
+    /// call nested inside it has popped its own by then.
+    pub fn pop(&mut self) -> Option<ChannelCallFrame> {
+        self.frames.pop()
+    }
+
+    /// The frame `depth` down from the bottom.
+    pub fn frame(&self, depth: usize) -> &ChannelCallFrame {
+        &self.frames[depth]
     }
 
     /// The most recent frame, if the id matches.
@@ -64,11 +62,10 @@ impl CallStack {
     /// *before* the (possibly null) item array. Answering `None` for an empty
     /// stack is what that null check was written to catch, and it is reachable
     /// from any peer that sends an unsolicited response.
-    pub fn top_matching(&self, request_id: uint32_t) -> Option<*mut ChannelCallFrame> {
-        self.entries
-            .last()
-            .filter(|e| e.request_id == request_id)
-            .map(|e| e.frame)
+    pub fn top_matching(&mut self, request_id: uint32_t) -> Option<&mut ChannelCallFrame> {
+        self.frames
+            .last_mut()
+            .filter(|frame| frame.request_id == request_id)
     }
 
     /// The newest frame waiting on `request_id`.
@@ -77,87 +74,96 @@ impl CallStack {
     /// so a reply may belong to a call further down the stack. Searching from
     /// the top means the most recent of two frames sharing an id wins, which
     /// is what a wrapped `next_request_id` produces.
-    pub fn find(&self, request_id: uint32_t) -> Option<*mut ChannelCallFrame> {
-        self.entries
-            .iter()
+    pub fn find(&mut self, request_id: uint32_t) -> Option<&mut ChannelCallFrame> {
+        self.frames
+            .iter_mut()
             .rev()
-            .find(|e| e.request_id == request_id)
-            .map(|e| e.frame)
+            .find(|frame| frame.request_id == request_id)
     }
 
     /// Every outstanding frame, oldest first.
     ///
     /// The order matters to `chan_close_on_err`, which fills each unanswered
     /// frame with the same error message.
-    pub fn frames(&self) -> impl Iterator<Item = *mut ChannelCallFrame> + '_ {
-        self.entries.iter().map(|e| e.frame)
+    pub fn frames_mut(&mut self) -> impl Iterator<Item = &mut ChannelCallFrame> + '_ {
+        self.frames.iter_mut()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use core::ptr;
+    use crate::types::Object;
 
-    fn frame(n: usize) -> *mut ChannelCallFrame {
-        ptr::without_provenance_mut(n * 16 + 16)
+    fn frame(request_id: uint32_t, tag: i64) -> ChannelCallFrame {
+        ChannelCallFrame {
+            request_id,
+            returned: false,
+            errored: false,
+            result: Object::Integer(tag),
+        }
+    }
+
+    fn tag(frame: Option<&mut ChannelCallFrame>) -> Option<i64> {
+        frame.and_then(|f| f.result.as_integer())
     }
 
     #[test]
     fn an_empty_stack_matches_nothing() {
-        let stack = CallStack::new();
+        let mut stack = CallStack::new();
         assert!(stack.top_matching(0).is_none());
         assert!(stack.top_matching(7).is_none());
         assert!(stack.find(7).is_none());
-        assert_eq!(stack.frames().count(), 0);
+        assert_eq!(stack.frames_mut().count(), 0);
     }
 
     #[test]
     fn the_top_only_answers_to_its_own_id() {
         let mut stack = CallStack::new();
-        stack.push(3, frame(0));
-        stack.push(4, frame(1));
-        assert_eq!(stack.top_matching(4), Some(frame(1)));
+        stack.push(frame(3, 0));
+        stack.push(frame(4, 1));
+        assert_eq!(tag(stack.top_matching(4)), Some(1));
         assert!(stack.top_matching(3).is_none());
     }
 
     #[test]
     fn find_reaches_below_the_top() {
         let mut stack = CallStack::new();
-        stack.push(3, frame(0));
-        stack.push(4, frame(1));
-        assert_eq!(stack.find(3), Some(frame(0)));
-        assert_eq!(stack.find(4), Some(frame(1)));
+        stack.push(frame(3, 0));
+        stack.push(frame(4, 1));
+        assert_eq!(tag(stack.find(3)), Some(0));
+        assert_eq!(tag(stack.find(4)), Some(1));
         assert!(stack.find(5).is_none());
     }
 
     #[test]
     fn find_prefers_the_newer_of_two_frames_sharing_an_id() {
         let mut stack = CallStack::new();
-        stack.push(9, frame(0));
-        stack.push(9, frame(1));
-        assert_eq!(stack.find(9), Some(frame(1)));
+        stack.push(frame(9, 0));
+        stack.push(frame(9, 1));
+        assert_eq!(tag(stack.find(9)), Some(1));
     }
 
     #[test]
-    fn pop_restores_the_previous_top() {
+    fn pop_restores_the_previous_top_and_depth_finds_a_frame() {
         let mut stack = CallStack::new();
-        stack.push(1, frame(0));
-        stack.push(2, frame(1));
-        stack.pop();
-        assert_eq!(stack.top_matching(1), Some(frame(0)));
-        stack.pop();
+        assert_eq!(stack.push(frame(1, 0)), 0);
+        assert_eq!(stack.push(frame(2, 1)), 1);
+        assert_eq!(stack.frame(0).request_id, 1);
+        assert_eq!(stack.pop().map(|f| f.request_id), Some(2));
+        assert_eq!(tag(stack.top_matching(1)), Some(0));
+        assert!(stack.pop().is_some());
         assert!(stack.top_matching(1).is_none());
-        stack.pop();
+        assert!(stack.pop().is_none());
     }
 
     #[test]
     fn frames_are_visited_oldest_first() {
         let mut stack = CallStack::new();
-        stack.push(1, frame(0));
-        stack.push(2, frame(1));
-        stack.push(3, frame(2));
-        let seen: Vec<_> = stack.frames().collect();
-        assert_eq!(seen, vec![frame(0), frame(1), frame(2)]);
+        stack.push(frame(1, 0));
+        stack.push(frame(2, 1));
+        stack.push(frame(3, 2));
+        let seen: Vec<_> = stack.frames_mut().map(|f| f.request_id).collect();
+        assert_eq!(seen, vec![1, 2, 3]);
     }
 }

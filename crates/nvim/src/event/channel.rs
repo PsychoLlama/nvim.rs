@@ -47,7 +47,9 @@ use crate::event::rstream::{
 };
 use crate::event::socket::{socket_connect, socket_watcher_accept};
 use crate::event::stream::stream_may_close;
-use crate::event::wstream::{wstream_init, wstream_init_fd, wstream_new_buffer, wstream_write};
+use crate::event::wstream::{
+    SharedBuffer, wstream_init, wstream_init_fd, wstream_new_buffer, wstream_write,
+};
 use crate::memory::{xfree, xmemdup};
 use crate::os::pty_proc_unix::{
     pty_proc_close_master, pty_proc_resize, pty_proc_resume, pty_proc_tty_name,
@@ -353,7 +355,7 @@ pub(crate) fn start_reads(id: u64, reads: Reads) {
         match reads {
             Reads::Output => output_shim,
             Reads::Stderr => stderr_shim,
-            Reads::Rpc => crate::msgpack_rpc::channel::receive::receive_msgpack,
+            Reads::Rpc => rpc_shim,
         };
     if init {
         // SAFETY: the job's stderr, at its fixed address, connected by the
@@ -469,26 +471,20 @@ pub(crate) fn unopened_stdio() -> StdioPair {
 
 /// Queue `buffer` on `channel`'s write stream. 0, or the libuv error.
 ///
-/// By address rather than by id: the RPC layer, its one caller, holds the
-/// channel already, and a lookup per message is its hot path's cost.
-///
-/// # Safety
-/// `channel` is a live channel with a write stream, and `buffer` is a
-/// reference the caller owns and gives up here.
-pub(crate) unsafe fn write_wbuffer(
-    channel: *mut Channel,
-    buffer: *mut crate::types::WBuffer,
-) -> c_int {
-    // SAFETY: the caller's live channel; the borrow ends with the match.
-    let stream = match unsafe { &mut (*channel).stream } {
+/// On a borrowed channel rather than by id: the RPC layer, its one caller,
+/// borrows the channel for the step anyway, and a lookup per message is its
+/// hot path's cost. libuv runs no callback from inside the write.
+pub(crate) fn write_shared(channel: &mut Channel, buffer: SharedBuffer) -> c_int {
+    let stream = match &mut channel.stream {
         ChannelStream::Job(job) => &raw mut job.proc_mut().in_0,
         ChannelStream::Socket(socket) => &raw mut socket.s,
         ChannelStream::Stdio(stdio) => &raw mut stdio.out,
         _ => unreachable!("the channel has no write stream"),
     };
-    // SAFETY: the channel's write stream, at its fixed address and
-    // initialised, and the caller's reference to the buffer.
-    unsafe { wstream_write(stream, buffer) }
+    // SAFETY: the channel's write stream, at its fixed address in the boxed
+    // channel and initialised, and a reference to the buffer the write
+    // takes over.
+    unsafe { wstream_write(stream, buffer.into_raw()) }
 }
 
 // ---------------------------------------------------------------------------
@@ -510,6 +506,17 @@ pub(crate) fn wait_job(id: u64, ms: c_int, drain: Option<&ParkingQueue>) -> c_in
 }
 
 /// Run whatever channel `id` has queued.
+/// Run the loop, draining channel `id`'s own queue, until `done`: how an
+/// RPC call waits for its answer. The caller holds a reference to the
+/// channel, which keeps the queue alive for the wait.
+pub(crate) fn wait_on_channel_events(id: u64, done: impl FnMut() -> bool) {
+    let events = with(id, |channel| channel.events.as_ptr());
+    // SAFETY: the editor's loop, live from startup to exit, and the
+    // channel's own queue, which the caller's reference keeps alive; nothing
+    // of the channel is borrowed while the events run.
+    unsafe { crate::event::r#loop::process_events_until(main_loop_raw(), events, -1, done) };
+}
+
 pub(crate) fn process_channel_events(id: u64) {
     let events = with(id, |channel| channel.events.as_ptr());
     // SAFETY: the channel's own queue, which lives as long as the channel;
@@ -545,6 +552,23 @@ unsafe fn output_shim(
     // SAFETY: the caller's readable span, borrowed for the call.
     let bytes = unsafe { core::slice::from_raw_parts(buf.cast::<u8>(), count) };
     crate::channel::reader::on_channel_output(owner_id(data), false, bytes, eof)
+}
+
+/// An RPC channel's bytes arrived.
+///
+/// # Safety
+/// As [`output_shim`].
+unsafe fn rpc_shim(
+    stream: *mut RStream,
+    buf: *const c_char,
+    count: size_t,
+    data: *mut c_void,
+    eof: bool,
+) -> size_t {
+    // SAFETY: as above.
+    let bytes = unsafe { core::slice::from_raw_parts(buf.cast::<u8>(), count) };
+    let from = stream.cast_const().cast::<c_void>();
+    crate::msgpack_rpc::channel::receive::receive_msgpack(owner_id(data), from, bytes, eof)
 }
 
 /// A job's stderr arrived.

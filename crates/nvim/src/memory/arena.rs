@@ -125,6 +125,26 @@ pub unsafe fn alloc_block() -> *mut c_void {
     }
 }
 
+/// A fresh [`ARENA_BLOCK_SIZE`] block as an empty vector, from the reuse
+/// list when it has one: the window a packer writes a message into.
+pub(crate) fn block_vec() -> Vec<u8> {
+    // SAFETY: `alloc_block` answers a live `ARENA_BLOCK_SIZE` block that
+    // nothing else names, from `malloc` -- the global allocator -- so a
+    // vector may own it with that capacity and nothing initialised.
+    unsafe { Vec::from_raw_parts(alloc_block().cast::<u8>(), 0, ARENA_BLOCK_SIZE) }
+}
+
+/// Give a vector's block back: onto the reuse list when it is a block's
+/// size, to the allocator otherwise.
+pub(crate) fn recycle_block(block: Vec<u8>) {
+    if block.capacity() == ARENA_BLOCK_SIZE {
+        let mut block = core::mem::ManuallyDrop::new(block);
+        // SAFETY: a `malloc` block of exactly `ARENA_BLOCK_SIZE` bytes that
+        // the vector gave up, so nothing else points into it.
+        unsafe { free_block(block.as_mut_ptr().cast::<c_void>()) };
+    }
+}
+
 /// Start a new block, chaining the one it replaces behind it.
 ///
 /// # Safety

@@ -292,6 +292,48 @@ pub(crate) fn put_job_on_main_loop(job: Box<dyn FnOnce()>) {
     };
 }
 
+/// Queue `job` on `queue`, to run once when that queue is processed: the
+/// spelling [`put_job_in`] has for a queue the caller holds (a channel's).
+pub(crate) fn put_job(queue: &ChildQueue, job: Box<dyn FnOnce()>) {
+    // SAFETY: the caller's live queue; `run_job` takes back the job packed
+    // here, once.
+    unsafe { multiqueue_put_event(queue.as_ptr(), job_event(job)) };
+}
+
+/// Queue `job` on `first` and on the queue `second` holds; it runs once, on
+/// whichever of the two is processed first.
+///
+/// # Panics
+/// If `second` holds no queue yet.
+pub(crate) fn put_job_on_either(
+    first: &ChildQueue,
+    second: &GlobalCell<Option<ChildQueue>>,
+    job: Box<dyn FnOnce()>,
+) {
+    let other = queue_in(second);
+    assert!(!other.is_null(), "a job is queued after its queue is made");
+    let event = event_create_oneshot(job_event(job), 2);
+    // SAFETY: both live queues; the one-shot wrapper runs the job once and
+    // is released once both queues have reached it.
+    unsafe {
+        multiqueue_put_event(first.as_ptr(), event.clone());
+        multiqueue_put_event(other, event);
+    }
+}
+
+/// Queue `handler(a, b)` on the main loop's *fast* queue, which the loop
+/// drains while it polls: [`put_id_event`] for work that must not wait for
+/// the editor to be idle.
+pub(crate) fn put_id_event_on_fast_events(handler: fn(u64, u64), a: u64, b: u64) {
+    // SAFETY: the main loop's fast queue, live from startup to exit.
+    unsafe {
+        multiqueue_put_event(
+            (*crate::event::r#loop::main_loop_raw()).fast_events,
+            id_event(handler, a, b),
+        )
+    };
+}
+
 /// Queue `handler(a, b)` on `queue`, to run once when that queue is
 /// processed: the allocation-free spelling of a job whose state is two ids
 /// (a channel's id and what to do with it). The handler finds its record

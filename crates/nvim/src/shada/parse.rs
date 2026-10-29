@@ -11,7 +11,7 @@
 use crate::eval::decode::decode_string;
 use crate::memory::XString;
 use crate::message_fmt::{emsg_text, msg_cstr_opt};
-use crate::msgpack_rpc::unpacker::MPACK_OK;
+use crate::mpack::mpack_core::MPACK_OK;
 use crate::tr_c;
 use crate::types::{
     ApiDict, ColNr, Integer, KeyDict__shada_buflist_item, KeyDict__shada_mark,
@@ -277,7 +277,7 @@ fn parse_variable(pos: u64, cursor: &mut Cursor) -> Parsed2 {
         decode_string(binval, is_blob)
     } else {
         let mut value = TV_INITIAL_VALUE;
-        if cursor.typval(&mut value) != MPACK_OK {
+        if cursor.typval(&mut value) != MPACK_OK.cast_signed() {
             malformed_entry(c"E575: Error while reading ShaDa file: variable entry at position %lu has value that cannot be converted to the Vimscript value", pos);
             return Err(Malformed);
         }

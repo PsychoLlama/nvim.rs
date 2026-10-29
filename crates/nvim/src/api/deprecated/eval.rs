@@ -84,9 +84,8 @@ pub fn nvim_call_atomic(
 
             // A call that *fails*, on the other hand, stops the batch and is
             // reported alongside the results that did come back.
-            // SAFETY: `name` names its own bytes.
             let handler: MsgpackRpcRequestHandler =
-                match unsafe { msgpack_rpc_get_handler_for(name.data(), name.len()) } {
+                match msgpack_rpc_get_handler_for(name.as_bytes()) {
                     Ok(handler) => handler,
                     Err(e) => {
                         nested_error = e;

@@ -37,8 +37,10 @@ pub struct RemoteUI {
     pub channel_id: uint64_t,
     pub packer: PackerBuffer,
     pub cur_event: *const ::core::ffi::c_char,
-    pub nevents_pos: *mut ::core::ffi::c_char,
-    pub ncalls_pos: *mut ::core::ffi::c_char,
+    /// Where the batch's event count is to be patched in, once known.
+    pub nevents_pos: Option<usize>,
+    /// Where the current event's call count is to be patched in.
+    pub ncalls_pos: Option<usize>,
     pub nevents: uint32_t,
     pub ncalls: uint32_t,
     pub flushed_events: bool,
@@ -57,7 +59,7 @@ pub struct RemoteUI {
 #[derive(Copy, Clone)]
 pub struct UIClientHandler {
     pub name: *const ::core::ffi::c_char,
-    pub fn_0: Option<unsafe fn(Array) -> ()>,
+    pub fn_0: Option<fn(Array)>,
 }
 pub type UIExtension = ::core::ffi::c_uint;
 /// The `ext_*` UI capabilities, indexing `ui_ext` and the `ui_options`

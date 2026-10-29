@@ -14,7 +14,7 @@ use super::*;
 /// The `grid_line` message being decoded, mid-flight.
 ///
 /// `Copy`: counters and offsets.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 pub struct GridLineEvent {
     pub args: [::core::ffi::c_int; 3],
     pub icell: ::core::ffi::c_int,

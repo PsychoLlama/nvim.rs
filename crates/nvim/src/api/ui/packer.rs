@@ -40,14 +40,14 @@
 )]
 
 use super::Ui;
-use crate::event::wstream::wstream_new_buffer;
-use crate::memory::{ARENA_BLOCK_SIZE, alloc_block, free_block, strequal};
+use crate::event::wstream::SharedBuffer;
+use crate::memory::{ARENA_BLOCK_SIZE, block_vec, strequal};
 use crate::msgpack_rpc::channel::rpc_write_raw;
 use crate::msgpack_rpc::packer::{
-    mpack_array, mpack_array_dyn16, mpack_be16, mpack_object_array, mpack_str_small, mpack_uint,
+    mpack_array, mpack_array_dyn16, mpack_object_array, mpack_str_small, mpack_uint,
 };
 use crate::types::{Array, PackerBuffer, RemoteUI};
-use core::ffi::{CStr, c_char};
+use core::ffi::CStr;
 
 /// The whole buffer for one batch. One arena block, so that the allocator
 /// hands out and takes back a size it already keeps a free list for.
@@ -78,9 +78,10 @@ unsafe fn flush_event(ui: *mut RemoteUI) {
     let ncalls = 1 + live.ncalls;
     // `ncalls_pos` is the placeholder this event's header left in the block,
     // which is still the one being packed into.
-    mpack_be16(&mut live.ncalls_pos, ncalls);
+    if let Some(at) = live.ncalls_pos.take() {
+        live.packer.patch_be16(at, ncalls);
+    }
     live.cur_event = core::ptr::null();
-    live.ncalls_pos = core::ptr::null_mut();
     live.ncalls = 0;
 }
 
@@ -92,12 +93,8 @@ unsafe fn flush_event(ui: *mut RemoteUI) {
 pub(super) unsafe fn ui_alloc_buf(ui: *mut RemoteUI) {
     // SAFETY: the caller's promise -- `ui` is live.
     let mut live = unsafe { Ui::new(ui) };
-    // SAFETY: the allocator hands out a `UI_BUF_SIZE` block nothing else
-    // names, and the UI owns it until `ui_flush_buf` gives it away.
-    unsafe {
-        live.packer
-            .adopt(alloc_block().cast::<c_char>(), UI_BUF_SIZE)
-    };
+    // The UI owns the block until `ui_flush_buf` gives it away.
+    live.packer.adopt(block_vec());
 }
 
 /// Makes room for one more call to `name`, opening a new event unless the
@@ -131,22 +128,22 @@ pub(super) unsafe fn prepare_call(ui: *mut RemoteUI, name: &'static CStr) {
         return;
     }
 
-    if live.nevents_pos.is_null() {
+    if live.nevents_pos.is_none() {
         // The notification header, once per batch. The block has room --
         // `EVENT_BUF_SIZE` bytes are kept free for exactly this.
-        mpack_array(live.packer.cursor_mut(), 3);
-        mpack_uint(live.packer.cursor_mut(), 2);
-        mpack_str_small(live.packer.cursor_mut(), b"redraw");
-        let pos = mpack_array_dyn16(live.packer.cursor_mut());
-        live.nevents_pos = pos;
+        mpack_array(&mut live.packer, 3);
+        mpack_uint(&mut live.packer, 2);
+        mpack_str_small(&mut live.packer, b"redraw");
+        let pos = mpack_array_dyn16(&mut live.packer);
+        live.nevents_pos = Some(pos);
         debug_assert!(live.cur_event.is_null());
     }
     // SAFETY: as above.
     unsafe { flush_event(ui) };
     live.cur_event = name.as_ptr();
-    let pos = mpack_array_dyn16(live.packer.cursor_mut());
-    live.ncalls_pos = pos;
-    mpack_str_small(live.packer.cursor_mut(), name.to_bytes());
+    let pos = mpack_array_dyn16(&mut live.packer);
+    live.ncalls_pos = Some(pos);
+    mpack_str_small(&mut live.packer, name.to_bytes());
     live.nevents += 1;
     live.ncalls = 1;
 }
@@ -173,13 +170,13 @@ pub(super) unsafe fn push_call(ui: *mut RemoteUI, name: &'static CStr, mut args:
 /// flush is told the event is incomplete: the reader must not act on the
 /// batch until the rest arrives.
 ///
-/// # Safety
-///
-/// Called by the packer with `packer` belonging to a live [`RemoteUI`].
-pub(super) unsafe fn ui_flush_callback(packer: *mut PackerBuffer) {
-    // SAFETY: the caller's promise -- the packer's `anydata` is the UI that
-    // owns it, set when the UI was created.
-    let ui = unsafe { (*packer).anydata }.cast::<RemoteUI>();
+/// Only a [`RemoteUI`]'s own packer carries this hook, and `nvim_ui_attach`
+/// points that packer's `anydata` at the UI before anything is packed; the
+/// UI lives until it is detached, and a detached UI packs nothing.
+pub(super) fn ui_flush_callback(packer: &mut PackerBuffer) {
+    // The packer's `anydata` is the UI that owns it, set when the UI was
+    // created.
+    let ui = packer.anydata.cast::<RemoteUI>();
     // SAFETY: as above.
     unsafe { ui_flush_buf(ui, true) };
     // SAFETY: the flush left no block.
@@ -203,39 +200,34 @@ pub(super) unsafe fn ui_flush_buf(ui: *mut RemoteUI, incomplete_event: bool) {
     live.incomplete_event = incomplete_event;
     // SAFETY: as above.
     unsafe { flush_event(ui) };
-    if !live.nevents_pos.is_null() {
+    if let Some(at) = live.nevents_pos.take() {
         let nevents = live.nevents;
-        // `nevents_pos` is the placeholder the batch header left.
-        mpack_be16(&mut live.nevents_pos, nevents);
+        // `at` is the placeholder the batch header left.
+        live.packer.patch_be16(at, nevents);
         live.nevents = 0;
-        live.nevents_pos = core::ptr::null_mut();
     }
-
-    let start = live.packer.start();
-    let size = live.packer.used();
-    let channel_id = live.channel_id;
-    // `start` is the block, whose first `size` bytes are packed; the write
-    // stream owns it from here and frees it with `free_block`.
-    let buf = wstream_new_buffer(start, size, 1, Some(free_block));
-    // SAFETY: `buf` is that buffer, and `channel_id` this UI's channel.
-    unsafe { rpc_write_raw(channel_id, buf) };
 
     // The block belongs to the write stream now; the next event will
     // allocate another.
-    live.packer.release();
+    let channel_id = live.channel_id;
+    let block = live.packer.take();
+    rpc_write_raw(channel_id, SharedBuffer::from_vec(block));
     live.flushed_events = true;
     live.ncells_pending = 0;
 }
 
-/// Sends anything packed but not yet flushed.
+/// Sends what the UI on `channel_id` has packed, when its last batch was cut
+/// mid-event.
 ///
-/// The channel calls this when it has drained its input, so that a UI does
-/// not sit on a partial batch waiting for an event that is not coming.
-///
-/// # Safety
-///
-/// `ui` must be live.
-pub unsafe fn remote_ui_flush_pending_data(ui: *mut RemoteUI) {
-    // SAFETY: the caller's promise.
-    unsafe { ui_flush_buf(ui, false) };
+/// The channel calls this before it packs a message of its own, so that the
+/// two are not interleaved on the wire.
+pub fn remote_ui_flush_incomplete(channel_id: u64) {
+    let Some(ui) = super::find_ui(channel_id) else {
+        return;
+    };
+    // SAFETY: a UI in the attach table is live until it is removed.
+    if unsafe { (*ui).incomplete_event } {
+        // SAFETY: as above.
+        unsafe { ui_flush_buf(ui, false) };
+    }
 }

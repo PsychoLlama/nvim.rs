@@ -181,20 +181,6 @@ pub(crate) unsafe fn c_str<'a>(p: impl CPtr) -> CDisplay<'a> {
     CDisplay(unsafe { crate::cstr::at_opt(p.c_ptr()) })
 }
 
-/// A `%.*s` argument: at most `len` bytes of the string at `p`, cut back to a
-/// character boundary rather than through one.
-///
-/// # Safety
-/// `p` points at `len` readable bytes.
-pub(crate) unsafe fn c_str_len<'a>(p: *const c_char, len: usize) -> BytesDisplay<'a> {
-    if p.is_null() {
-        return BytesDisplay(None);
-    }
-    let bytes = p.cast::<u8>();
-    // SAFETY: the caller's contract; `c_char` and `u8` share a layout.
-    BytesDisplay(Some(unsafe { core::slice::from_raw_parts(bytes, len) }))
-}
-
 /// Bytes as a message argument, rendered like [`CDisplay`]. `None` is a null
 /// pointer, which vim's printf writes as `[NULL]` whatever the precision.
 pub(crate) struct BytesDisplay<'a>(Option<&'a [u8]>);

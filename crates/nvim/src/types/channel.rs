@@ -11,43 +11,14 @@
 
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::CStr;
 
 pub use crate::msgpack_rpc::channel::call_stack::CallStack;
 
 use super::*;
 use crate::eval::typval::DictRef;
 
-/// A channel's decoder. Zero-initialised by its owner, so every field has to
-/// mean something sensible as all-zero bytes.
-///
-/// Not `Copy`, and it must not be moved either once `unpacker_init` has run:
-/// the parser writes the unpacker's *own address* into `parser.data.p` and
-/// reads back through it. It owns an arena, two `Object`s and an `Error`
-/// besides.
-#[derive(Clone)]
-pub struct Unpacker {
-    pub parser: mpack_parser_t,
-    pub reader: mpack_tokbuf_t,
-    pub read_ptr: *const c_char,
-    pub read_size: size_t,
-    /// Accumulates an extension object's payload, which arrives in chunks.
-    pub ext_buf: [c_char; 9],
-    pub state: c_int,
-    pub type_0: MessageType,
-    pub request_id: uint32_t,
-    pub method_name_len: size_t,
-    pub handler: MsgpackRpcRequestHandler,
-    pub error: Object,
-    pub result: Object,
-    pub unpack_error: Error,
-    pub arena: Arena,
-    pub nevents: c_int,
-    pub ncalls: c_int,
-    pub ui_handler: UIClientHandler,
-    pub grid_line_event: GridLineEvent,
-    pub has_grid_line_event: bool,
-}
+pub use crate::msgpack_rpc::unpacker::Unpacker;
 
 /// Where a channel's `on_stdout`/`on_stderr`/`on_data` output goes.
 pub struct CallbackReader {
@@ -198,7 +169,6 @@ pub struct ChannelCallFrame {
     pub returned: bool,
     pub errored: bool,
     pub result: Object,
-    pub result_mem: ArenaMem,
 }
 pub type ChannelPart = ::core::ffi::c_uint;
 pub type ChannelStdinMode = ::core::ffi::c_uint;
@@ -215,7 +185,7 @@ pub struct InternalState {
 }
 pub struct RpcState {
     pub closed: bool,
-    pub unpacker: *mut Unpacker,
+    pub unpacker: Option<Box<Unpacker>>,
     pub ui: *mut RemoteUI,
     pub next_request_id: uint32_t,
     /// Requests this editor has sent and is still waiting on.

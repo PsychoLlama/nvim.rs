@@ -172,7 +172,7 @@ pub(crate) fn alloc_channel(
         detach: false,
         rpc: RpcState {
             closed: false,
-            unpacker: core::ptr::null_mut(),
+            unpacker: None,
             ui: core::ptr::null_mut(),
             next_request_id: 0,
             call_stack: crate::msgpack_rpc::channel::call_stack::CallStack::new(),

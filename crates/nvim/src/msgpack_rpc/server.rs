@@ -1,5 +1,4 @@
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -12,25 +11,20 @@
 //! `serverstart()` and `$NVIM_LISTEN_ADDRESS` open, and the channels that
 //! come out of them.
 
-use crate::cstr;
-use crate::snprintf;
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_int};
 
 use crate::channel::channel_from_connection;
 use crate::eval::vars::{set_vim_var_string, with_vim_var_str};
-use crate::event::libuv::{uv_freeaddrinfo, uv_strerror};
+use crate::event::socket::Listener;
 use crate::event::socket::address::is_bare_server_name;
-use crate::event::socket::{socket_watcher_close, socket_watcher_init, socket_watcher_start};
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_ERR, LOGLVL_WRN, logmsg};
 use crate::memory::XString;
-use crate::memory::{strequal, xfree, xmalloc, xstrdup};
-use crate::message_fmt::{c_str, msg_bytes};
+use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::os::env::{ENV_TEST_LOG, env_exists, env_unset, getenv_owned, os_get_pid};
 use crate::os::fs::os_strerror;
-use crate::os::stdpaths::{get_appname, stdpaths_get_xdg_var};
+use crate::os::stdpaths::{get_appname, xdg_var};
 use crate::path::fix_fname;
-use crate::startup::main_loop;
 use crate::types::{IOSIZE, SocketWatcher, Vv, uint32_t};
 use std::ffi::CString;
 
@@ -39,12 +33,10 @@ use crate::event::socket::address::SOCKET_ADDR_LEN;
 /// Values these belong to other modules; nested so they stay out of the flat
 /// namespace the unit-test header generator collects constants into.
 mod known {
-    use core::ffi::{c_int, c_uint};
+    use core::ffi::c_int;
 
     /// `XDGVarType` of the runtime directory generated addresses live in.
     pub(super) const XDG_RUNTIME_DIR: c_int = 4;
-    /// libuv's handle type for a TCP socket.
-    pub(super) const UV_TCP: c_uint = 12;
     /// How many connections the kernel may queue behind a listening socket.
     pub(super) const MAX_CONNECTIONS: c_int = 32;
 }
@@ -55,7 +47,7 @@ const ENV_LISTEN: &CStr = c"NVIM_LISTEN_ADDRESS";
 
 /// Every socket this instance is listening on. The first one is what
 /// `v:servername` reports.
-static WATCHERS: GlobalCell<Vec<*mut SocketWatcher>> = GlobalCell::new(Vec::new());
+static WATCHERS: GlobalCell<Vec<Listener>> = GlobalCell::new(Vec::new());
 
 /// Where the start-up listening address came from.
 ///
@@ -126,92 +118,53 @@ pub fn server_init(listen_addr: Option<&CStr>) -> Result<(), CString> {
     result
 }
 
-/// A watcher's address, as the NUL-terminated string it stores.
-///
-/// # Safety
-/// `watcher` points at a live `SocketWatcher`.
-unsafe fn watcher_addr(watcher: *mut SocketWatcher) -> *mut c_char {
-    // SAFETY: the caller's watcher; `addr` is a fixed-size array inside it.
-    unsafe { (&raw mut (*watcher).addr).cast::<c_char>() }
-}
-
 /// Points `v:servername` at whatever is now the first listening socket, or
 /// clears it when there is none.
 fn set_vservername() {
-    let default_server = WATCHERS.with(|watchers| match watchers.first() {
-        // SAFETY: every watcher in the list is live until `server_stop` or
-        // `server_teardown` removes it.
-        Some(&watcher) => unsafe { watcher_addr(watcher) },
-        None => core::ptr::null_mut(),
-    });
-    // SAFETY: the address is either null or the watcher's own string.
-    let default_server = unsafe { cstr::at_opt(default_server) };
-    set_vim_var_string(Vv::Servername, default_server.map(CStr::to_bytes));
+    let default_server =
+        WATCHERS.with(|watchers| watchers.first().map(|first| first.address().to_owned()));
+    set_vim_var_string(
+        Vv::Servername,
+        default_server.as_deref().map(CStr::to_bytes),
+    );
 }
 
 pub fn server_teardown() {
     let listening = WATCHERS.with_mut(core::mem::take);
     for watcher in listening {
-        // SAFETY: the list owned each watcher, and `free_server` releases it
-        // once libuv is done with it.
-        unsafe { socket_watcher_close(watcher, Some(free_server)) };
+        watcher.close();
     }
 }
 
 /// [`server_address_new`] under the editor's own name.
 pub fn server_address_generated() -> XString {
-    // SAFETY: a null name means "use the editor's own"; the answer is a
-    // fresh allocation, taken over here.
-    unsafe { XString::from_raw(server_address_new(core::ptr::null())) }
+    server_address_new(None)
 }
 
 /// Generates an address in the runtime directory, unique to this process.
 ///
-/// `name` names the socket; without one the editor's own name is used.
-///
-/// # Safety
-/// `name` is either null or a NUL-terminated string.
-pub unsafe fn server_address_new(name: *const c_char) -> *mut c_char {
+/// `name` names the socket; without one the editor's own name is used. The
+/// answer is cut to what a socket address holds, as upstream's
+/// `snprintf` into a `SOCKET_ADDR_LEN` buffer cut it.
+pub fn server_address_new(name: Option<&CStr>) -> XString {
     static SEQUENCE: GlobalCell<uint32_t> = GlobalCell::new(0);
 
-    let mut address = [0 as c_char; SOCKET_ADDR_LEN];
     let sequence = SEQUENCE.get();
     SEQUENCE.set(sequence.wrapping_add(1));
 
     let appname = get_appname(true);
-    // SAFETY: `stdpaths_get_xdg_var` answers an owned string, `appname` is
-    // this frame's, the caller's `name` is the other candidate, and
-    // `address` is `SOCKET_ADDR_LEN` writable bytes.
-    let written = unsafe {
-        let dir = stdpaths_get_xdg_var(XDG_RUNTIME_DIR);
-        let base = if name.is_null() {
-            appname.as_ptr()
-        } else {
-            name
-        };
-        let written = snprintf!(
-            address.as_mut_ptr(),
-            SOCKET_ADDR_LEN,
-            c"%s/%s.%lu.%u".as_ptr(),
-            dir,
-            base,
-            os_get_pid(),
-            sequence,
-        );
-        xfree(dir.cast::<c_void>());
-        written
-    };
-    // `snprintf` answers how many bytes it *wanted*, or a negative on an
-    // output error; upstream's bare `(size_t)` cast made the latter a huge
-    // number, which takes this branch, and so does this.
-    let truncated = usize::try_from(written)
-        .ok()
-        .is_none_or(|w| w >= SOCKET_ADDR_LEN);
-    if truncated {
-        // SAFETY: `address` is this frame's NUL-terminated buffer; `%.40s`
-        // printed at most its first 40 bytes, which is what the slice is.
-        let head = unsafe { cstr::bytes_at(address.as_ptr()) };
-        let head = msg_bytes(&head[..head.len().min(40)]);
+    let dir = xdg_var(XDG_RUNTIME_DIR);
+    let base = name.unwrap_or(&appname);
+    let pid = os_get_pid();
+    let mut address = Vec::with_capacity(SOCKET_ADDR_LEN);
+    address.extend_from_slice(dir.as_ref().map_or(&b"(null)"[..], |dir| dir.to_bytes()));
+    address.push(b'/');
+    address.extend_from_slice(base.to_bytes());
+    address.extend_from_slice(format!(".{pid}.{sequence}").as_bytes());
+
+    if address.len() >= SOCKET_ADDR_LEN {
+        address.truncate(SOCKET_ADDR_LEN - 1);
+        let head = msg_bytes(&address[..address.len().min(40)]);
         logmsg!(
             LOGLVL_ERR,
             c"server_address_new",
@@ -219,8 +172,7 @@ pub unsafe fn server_address_new(name: *const c_char) -> *mut c_char {
             "truncated server address: {head}..."
         );
     }
-    // SAFETY: `address` is NUL-terminated.
-    unsafe { xstrdup(address.as_ptr()) }
+    XString::from_vec(address)
 }
 
 /// Whether one of this instance's sockets is the file at `address`.
@@ -230,11 +182,9 @@ pub unsafe fn server_address_new(name: *const c_char) -> *mut c_char {
 pub fn server_owns_pipe_address(address: &CStr) -> bool {
     let path = fix_fname(address);
     WATCHERS.with(|watchers| {
-        watchers.iter().any(|&watcher| {
-            // SAFETY: a live watcher's NUL-terminated address.
-            let addr = fix_fname(unsafe { cstr::at(watcher_addr(watcher)) });
-            path == addr
-        })
+        watchers
+            .iter()
+            .any(|watcher| fix_fname(watcher.address()) == path)
     })
 }
 
@@ -243,82 +193,51 @@ pub fn server_owns_pipe_address(address: &CStr) -> bool {
 /// Returns 0 on success, 1 for an empty address, 2 when this instance is
 /// already listening there, and a negative libuv error otherwise.
 pub fn server_start(addr: Option<&CStr>) -> c_int {
-    let addr = addr.map_or(core::ptr::null(), CStr::as_ptr);
-    // SAFETY: the caller's address.
-    if addr.is_null() || unsafe { *addr == 0 } {
+    let Some(addr) = addr.filter(|addr| !addr.is_empty()) else {
         logmsg!(LOGLVL_WRN, c"server_start", 169, "Empty or NULL address");
         return 1;
-    }
+    };
 
     // A bare name is not an address: it names a socket to create in the
     // runtime directory.
-    // SAFETY: the caller's address, which is NUL-terminated and non-empty.
-    let generated = unsafe {
-        if is_bare_server_name(CStr::from_ptr(addr).to_bytes()) {
-            server_address_new(addr)
-        } else {
-            core::ptr::null_mut()
-        }
+    let generated = is_bare_server_name(addr.to_bytes()).then(|| server_address_new(Some(addr)));
+    let endpoint = generated.as_ref().map_or(addr, XString::as_cstr);
+    let mut watcher = match Listener::new(endpoint) {
+        Ok(watcher) => watcher,
+        Err(result) => return result,
     };
-    // SAFETY: `xmalloc` hands back `size_of::<SocketWatcher>()` writable
-    // bytes, which `socket_watcher_init` fills in.
-    let (watcher, result) = unsafe {
-        let watcher = xmalloc(size_of::<SocketWatcher>()).cast::<SocketWatcher>();
-        let result = socket_watcher_init(
-            main_loop.ptr(),
-            watcher,
-            if generated.is_null() { addr } else { generated },
-        );
-        xfree(generated.cast::<c_void>());
-        (watcher, result)
-    };
-    if result < 0 {
-        // SAFETY: nothing took the allocation.
-        unsafe { xfree(watcher.cast::<c_void>()) };
-        return result;
-    }
 
-    // `socket_watcher_init` resolves the address, so duplicates are only
+    // `Listener::new` resolves the address, so duplicates are only
     // detectable now — after a generated name has become a path and a TCP
     // endpoint has picked up its port.
     let already_listening = WATCHERS.with(|watchers| {
-        watchers.iter().any(|&other| {
-            // SAFETY: both watchers are live and hold NUL-terminated
-            // addresses.
-            unsafe { strequal(watcher_addr(watcher), watcher_addr(other)) }
-        })
+        watchers
+            .iter()
+            .any(|other| other.address() == watcher.address())
     });
     if already_listening {
-        // SAFETY: the watcher is live and its address is NUL-terminated; a
-        // TCP watcher owns the addrinfo `socket_watcher_init` resolved.
         logmsg!(
             LOGLVL_ERR,
             c"server_start",
             186,
             "Already listening on {}",
-            unsafe { c_str(watcher_addr(watcher)) }
+            msg_cstr(watcher.address())
         );
-        if unsafe { (*(*watcher).stream).type_0 } == UV_TCP {
-            unsafe { uv_freeaddrinfo((*watcher).uv.tcp.addrinfo) };
-        }
-        unsafe { socket_watcher_close(watcher, Some(free_server)) };
+        watcher.discard();
         return 2;
     }
 
-    // SAFETY: the watcher is live and `connection_cb` is handed it back.
-    let result = unsafe { socket_watcher_start(watcher, MAX_CONNECTIONS, Some(connection_cb)) };
+    let result = watcher.start(MAX_CONNECTIONS, connection_cb);
     if result < 0 {
-        // SAFETY: the watcher is still live, and `free_server` releases it
-        // once libuv is done.
         logmsg!(
             LOGLVL_WRN,
             c"server_start",
             197,
             "Failed to start server: {}: {}",
-            unsafe { c_str(uv_strerror(result)) },
-            unsafe { c_str(watcher_addr(watcher)) }
+            msg_cstr(os_strerror(result)),
+            msg_cstr(watcher.address())
         );
-        unsafe { socket_watcher_close(watcher, Some(free_server)) };
+        watcher.close();
         return result;
     }
 
@@ -334,26 +253,15 @@ pub fn server_start(addr: Option<&CStr>) -> c_int {
 /// `keep_vservername` is for the restart `:detach` performs, where the name
 /// is about to be reused.
 pub fn server_stop(endpoint: &CStr, keep_vservername: bool) -> bool {
-    let endpoint = endpoint.as_ptr();
     // Truncated the same way a watcher's own address is, so an over-long
     // endpoint still matches the socket it opened.
-    let mut addr = [0 as c_char; SOCKET_ADDR_LEN];
-    // SAFETY: the caller's endpoint, copied into a buffer that is one byte
-    // longer than the copy so the terminator the zero-fill left survives.
-    let endpoint_len = unsafe { CStr::from_ptr(endpoint) }
-        .to_bytes()
-        .len()
-        .min(SOCKET_ADDR_LEN - 1);
-    unsafe {
-        addr.as_mut_ptr()
-            .copy_from_nonoverlapping(endpoint, endpoint_len)
-    };
+    let addr = endpoint.to_bytes();
+    let addr = &addr[..addr.len().min(SOCKET_ADDR_LEN - 1)];
 
     let found = WATCHERS.with_mut(|watchers| {
-        let index = watchers.iter().position(|&watcher| {
-            // SAFETY: a live watcher, and a NUL-terminated local buffer.
-            unsafe { strequal(addr.as_ptr().cast_mut(), watcher_addr(watcher)) }
-        })?;
+        let index = watchers
+            .iter()
+            .position(|watcher| watcher.address().to_bytes() == addr)?;
         // Order beyond the first entry does not matter, and the first is only
         // reachable here when it is the one being removed.
         Some(watchers.swap_remove(index))
@@ -364,15 +272,14 @@ pub fn server_stop(endpoint: &CStr, keep_vservername: bool) -> bool {
             c"server_stop",
             236,
             "Not listening on {}",
-            unsafe { c_str(addr.as_mut_ptr()) }
+            msg_bytes(addr)
         );
         return false;
     };
 
-    // SAFETY: the list owned the watcher and `free_server` releases it.
-    unsafe { socket_watcher_close(watcher, Some(free_server)) };
+    watcher.close();
     let renamed =
-        !keep_vservername && with_vim_var_str(Vv::Servername, |name| name == cstr::in_chars(&addr));
+        !keep_vservername && with_vim_var_str(Vv::Servername, |name| name.to_bytes() == addr);
     if renamed {
         set_vservername();
     }
@@ -382,38 +289,24 @@ pub fn server_stop(endpoint: &CStr, keep_vservername: bool) -> bool {
 /// Every address this instance is listening on, for `serverlist()`.
 pub fn server_addresses() -> Vec<CString> {
     WATCHERS.with(|watchers| {
-        let address = |&watcher| {
-            // SAFETY: every listening watcher's address is NUL-terminated.
-            unsafe { CStr::from_ptr(watcher_addr(watcher)) }.to_owned()
-        };
-        watchers.iter().map(address).collect()
+        watchers
+            .iter()
+            .map(|watcher| watcher.address().to_owned())
+            .collect()
     })
 }
 
 /// libuv accepted (or failed to accept) a connection on one of our sockets.
-///
-/// # Safety
-/// `watcher` is the live watcher the connection arrived on.
-unsafe fn connection_cb(watcher: *mut SocketWatcher, result: c_int, _data: *mut c_void) {
+fn connection_cb(watcher: &mut SocketWatcher, result: c_int) {
     if result != 0 {
         logmsg!(
             LOGLVL_ERR,
             c"connection_cb",
             276,
             "Failed to accept connection: {}",
-            unsafe { c_str(uv_strerror(result)) }
+            msg_cstr(os_strerror(result))
         );
         return;
     }
-    // SAFETY: the caller's watcher, which has a pending connection.
-    channel_from_connection(unsafe { &mut *watcher });
-}
-
-/// Releases a watcher once libuv has finished closing it.
-///
-/// # Safety
-/// `watcher` was allocated by [`server_start`] and libuv is done with it.
-unsafe fn free_server(watcher: *mut SocketWatcher, _data: *mut c_void) {
-    // SAFETY: the caller's guarantee that nothing else holds it.
-    unsafe { xfree(watcher.cast::<c_void>()) };
+    channel_from_connection(watcher);
 }

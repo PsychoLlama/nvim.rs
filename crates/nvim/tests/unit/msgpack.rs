@@ -6,7 +6,7 @@
 //! in the middle of one.
 //!
 //! **Not runnable under Miri**, and the reason is worth knowing: the redraw
-//! fast path is entered only when `unpacker_advance` recognises the `redraw`
+//! fast path is entered only when `Unpacker::advance` recognises the `redraw`
 //! handler, which it does with `ptr::fn_addr_eq`. Miri does not give a
 //! function one address across separate reifications, so the comparison is
 //! false there and every message here decodes down the ordinary body path
@@ -20,75 +20,63 @@
 
 #![cfg(not(miri))]
 
-use std::ffi::{c_char, c_int};
+use std::ffi::c_int;
 
-use neovim::memory::{xcalloc, xfree};
-use neovim::msgpack_rpc::unpacker::{unpacker_advance, unpacker_init, unpacker_teardown};
 use neovim::types::{GridLineEvent, Unpacker};
 
-/// An unpacker that tears itself down, so a case can return without a
-/// cleanup dance.
-///
-/// The storage is `xcalloc`'d and held as a raw pointer, exactly as the Lua
-/// spec's `ffi.gc(ffi.cast('Unpacker*', lib.xcalloc(...)))` was and as a
-/// `Channel` is in production — **not** a `Box`. An `Unpacker` is
-/// self-referential: `unpacker_init` writes the unpacker's own address into
-/// `parser.data.p`, and the tree parser reaches back through it. A `Box`
-/// claims unique access to the whole allocation, so the first write through
-/// that stored pointer invalidates the box's tag and Miri stops the test.
-struct Stream(*mut Unpacker);
+/// An unpacker and the bytes it is being fed, of which only a prefix has
+/// "arrived".
+struct Stream {
+    unpacker: Unpacker,
+    bytes: Vec<u8>,
+    /// How much of `bytes` the unpacker has consumed.
+    read: usize,
+    /// How much of `bytes` has arrived.
+    arrived: usize,
+}
 
 impl Stream {
     fn new() -> Stream {
-        // SAFETY: `Unpacker` is plain data — parser state, byte buffers,
-        // handles and two `Object`s, all of which read as their zero — so a
-        // zeroed allocation of the right size is a valid uninitialised one.
-        let p = unsafe { xcalloc(1, size_of::<Unpacker>()) }.cast::<Unpacker>();
-        unsafe { unpacker_init(p) };
-        Stream(p)
+        Stream {
+            unpacker: Unpacker::new(),
+            bytes: Vec::new(),
+            read: 0,
+            arrived: 0,
+        }
     }
 
-    /// Point the unpacker at `bytes`, pretending only `size` of them have
-    /// arrived. The buffer stays borrowed until the next `feed`.
+    /// Hand the unpacker `bytes`, pretending only `size` of them have
+    /// arrived.
     fn feed(&mut self, bytes: &[u8], size: usize) {
         assert!(size <= bytes.len());
-        unsafe {
-            (*self.0).read_ptr = bytes.as_ptr().cast::<c_char>();
-            (*self.0).read_size = size;
-        }
+        self.bytes = bytes.to_vec();
+        self.read = 0;
+        self.arrived = size;
     }
 
     /// One more byte has arrived.
     fn one_more_byte(&mut self) {
-        unsafe { (*self.0).read_size += 1 };
+        self.arrived += 1;
     }
 
     fn advance(&mut self) -> bool {
-        unsafe { unpacker_advance(self.0) }
+        let mut input = &self.bytes[self.read..self.arrived];
+        let done = self.unpacker.advance(&mut input);
+        self.read = self.arrived - input.len();
+        done
     }
 
     /// The parse stage the unpacker stopped at; negative means the stream is
     /// finished and the channel would be closed.
     fn state(&self) -> c_int {
-        unsafe { (*self.0).state }
+        self.unpacker.state
     }
 
     /// The `grid_line` event the last `advance` completed, if it did.
     fn event(&self) -> Option<GridLineEvent> {
-        unsafe {
-            (*self.0)
-                .has_grid_line_event
-                .then(|| (*self.0).grid_line_event)
-        }
-    }
-}
-
-impl Drop for Stream {
-    fn drop(&mut self) {
-        unsafe {
-            unpacker_teardown(self.0);
-            xfree(self.0.cast());
-        }
+        self.unpacker
+            .has_grid_line_event
+            .then_some(self.unpacker.grid_line_event)
     }
 }
 

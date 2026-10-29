@@ -1,5 +1,4 @@
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -13,24 +12,19 @@
 //! A UI server's `redraw` notification is the one message body the tree
 //! parser never sees: a `grid_line` event would allocate an `Object` per
 //! screen cell, so it is decoded a token at a time straight into the shared
-//! line buffers. Everything here reads through a [`Cursor`], whose
-//! *construction* is the unsafe step, which is what leaves the state machine
-//! itself ordinary Rust.
-
-use core::ffi::c_char;
+//! line buffers. Everything here reads through a [`Cursor`] over the bytes
+//! that have arrived, committed back to the caller's input at every stage
+//! boundary.
 
 use crate::grid::schar_from_buf;
 
 use crate::global_cell::GlobalCell;
-use crate::memory::ARENA_EMPTY;
-use crate::mpack::conv::mpack_unpack_boolean;
-use crate::mpack::mpack_core::mpack_rtoken;
+use crate::mpack::mpack_core::{MPACK_EOF, MPACK_OK, read_token};
+use crate::mpack::token::{self, Tok};
 use crate::types::{
-    Array, GridLineEvent, RawLine, ScreenAttr, ScreenChar, Unpacker, mpack_token_t,
-    mpack_token_type_t, size_t,
+    Array, GridLineEvent, RawLine, ScreenAttr, ScreenChar, Unpacker, mpack_token_type_t, size_t,
 };
 use crate::ui_client::{ui_client_event_grid_line, ui_client_get_redraw_handler};
-use ::libc::abort;
 
 use super::protocol;
 
@@ -42,36 +36,6 @@ use super::protocol;
 /// [`ui_client_event_raw_line`]: crate::ui_client::ui_client_event_raw_line
 static GRID_LINE_BUF: GlobalCell<RawLine> = GlobalCell::new(RawLine::empty());
 
-/// The decode buffer, as a handle.
-///
-/// Named rather than borrowed, for the reason every handle in this tree is:
-/// the cells outlive the decode -- `ui_client_event_raw_line` reads them
-/// after the unpacker has returned -- so no `&mut` spans their life. Every
-/// borrow lasts one accessor call.
-#[derive(Clone, Copy)]
-struct RawLineRef(*mut RawLine);
-
-impl ::core::ops::Deref for RawLineRef {
-    type Target = RawLine;
-
-    fn deref(&self) -> &RawLine {
-        // SAFETY: the only constructor names a `static`.
-        unsafe { &*self.0 }
-    }
-}
-
-impl ::core::ops::DerefMut for RawLineRef {
-    fn deref_mut(&mut self) -> &mut RawLine {
-        // SAFETY: the only constructor names a `static`.
-        unsafe { &mut *self.0 }
-    }
-}
-
-/// The one `grid_line` decode buffer.
-fn grid_line_buf() -> RawLineRef {
-    RawLineRef(GRID_LINE_BUF.ptr())
-}
-
 impl Unpacker {
     /// Widen the shared `grid_line` decode buffer to `width` cells.
     ///
@@ -79,16 +43,19 @@ impl Unpacker {
     /// buffer only has to hold the widest one: `ui_client_event_grid_resize`
     /// calls this, and a column past the width is a protocol error.
     pub fn widen_grid_line_buf(width: size_t) {
-        grid_line_buf().widen(width);
+        GRID_LINE_BUF.with_mut(|cells| cells.widen(width));
     }
 
     /// The decoded cells, for the `tui_raw_line` call that takes them by
     /// pointer. Nothing between here and that call can widen the buffer.
-    pub(crate) fn grid_line_cells() -> (*const ScreenChar, *const ScreenAttr) {
-        grid_line_buf().as_ptrs()
+    pub(crate) fn grid_line_cells() -> (*const ScreenChar, *const ScreenAttr, size_t) {
+        GRID_LINE_BUF.with(|cells| {
+            let (chars, attrs) = cells.as_ptrs();
+            (chars, attrs, cells.width())
+        })
     }
 }
-use super::{MPACK_EOF, TOKEN_ARRAY, TOKEN_BOOLEAN, TOKEN_SINT, TOKEN_STR, TOKEN_UINT};
+use super::{TOKEN_ARRAY, TOKEN_BOOLEAN, TOKEN_SINT, TOKEN_STR, TOKEN_UINT, token_type};
 
 /// Why a redraw parse stopped short.
 #[derive(Debug)]
@@ -101,61 +68,44 @@ enum Halt {
 }
 
 /// The bytes still to be read, as libmpack's token reader wants them.
-///
-/// Constructing one is the unsafe step — it is the promise that `data` is
-/// `size` readable bytes — so every read through it afterwards is ordinary
-/// Rust.
-struct Cursor {
-    data: *const c_char,
-    size: size_t,
+struct Cursor<'a> {
+    data: &'a [u8],
 }
 
-impl Cursor {
-    /// # Safety
-    /// `data` points at `size` readable bytes that stay live and unwritten
-    /// for the cursor's life.
-    unsafe fn new(data: *const c_char, size: size_t) -> Self {
-        Cursor { data, size }
+impl<'a> Cursor<'a> {
+    fn new(data: &'a [u8]) -> Self {
+        Cursor { data }
     }
 
     /// Reads one token and checks it is the kind this position calls for.
-    fn next(&mut self, expected: mpack_token_type_t) -> Result<mpack_token_t, Halt> {
-        // SAFETY: the promise made at construction. `mpack_rtoken` reads
-        // within `size` and advances both fields by what it consumed.
-        let (result, tok) = unsafe {
-            let mut tok: mpack_token_t = core::mem::zeroed();
-            let result = mpack_rtoken(&raw mut self.data, &raw mut self.size, &raw mut tok);
-            (result, tok)
-        };
+    fn next(&mut self, expected: mpack_token_type_t) -> Result<Tok, Halt> {
+        let (result, tok) = read_token(&mut self.data);
         if result == MPACK_EOF {
             return Err(Halt::Incomplete);
         }
-        if result != 0 || !protocol::token_matches(expected, tok.type_0) {
+        if result != MPACK_OK || !protocol::token_matches(expected, token_type(&tok)) {
             return Err(Halt::Invalid);
         }
         Ok(tok)
     }
 
-    /// Consumes `len` bytes of payload, handing back where they started.
-    fn take(&mut self, len: size_t) -> *const c_char {
-        let taken = self.data;
-        self.data = self.data.wrapping_add(len);
-        self.size -= len;
-        taken
+    /// Consumes `len` bytes of payload and hands them back, or answers that
+    /// they have not all arrived.
+    fn take(&mut self, len: size_t) -> Result<&'a [u8], Halt> {
+        if len > self.data.len() {
+            return Err(Halt::Incomplete);
+        }
+        let (taken, rest) = self.data.split_at(len);
+        self.data = rest;
+        Ok(taken)
     }
 }
 
-/// # Safety
-/// [`unpacker_advance`]'s contract.
-pub(super) unsafe fn unpacker_parse_redraw(p: *mut Unpacker) -> bool {
-    // SAFETY: the caller's unpacker; nothing in the redraw decoder re-enters
-    // it, and `read_ptr`/`read_size` are the bytes that have arrived.
-    let (u, mut cursor) = unsafe {
-        let u = &mut *p;
-        let cursor = Cursor::new(u.read_ptr, u.read_size);
-        (u, cursor)
-    };
-    match parse_redraw(u, &mut cursor) {
+/// Decodes as much of a redraw batch as `input` holds, committing it past
+/// every stage that finished.
+pub(super) fn unpacker_parse_redraw(u: &mut Unpacker, input: &mut &[u8]) -> bool {
+    let mut cursor = Cursor::new(input);
+    match parse_redraw(u, &mut cursor, input) {
         Ok(done) => done,
         Err(Halt::Incomplete) => false,
         Err(Halt::Invalid) => {
@@ -170,16 +120,17 @@ pub(super) unsafe fn unpacker_parse_redraw(p: *mut Unpacker) -> bool {
 /// Each stage falls through into the next, and the read cursor is committed
 /// wherever a stage boundary is crossed — so an event that arrives in pieces
 /// resumes at the last boundary rather than at the start of the batch.
-fn parse_redraw(u: &mut Unpacker, cursor: &mut Cursor) -> Result<bool, Halt> {
+fn parse_redraw<'a>(
+    u: &mut Unpacker,
+    cursor: &mut Cursor<'a>,
+    input: &mut &'a [u8],
+) -> Result<bool, Halt> {
     let Unpacker {
         grid_line_event: g,
         state,
         nevents,
         ncalls,
         ui_handler,
-        read_ptr,
-        read_size,
-        arena,
         ..
     } = u;
     let mut stage = *state;
@@ -190,18 +141,18 @@ fn parse_redraw(u: &mut Unpacker, cursor: &mut Cursor) -> Result<bool, Halt> {
     // `REDRAW_ARGS_DONE` belongs to the tree parser, not to this one, and its
     // caller filters it out; anything else means the machine lost track.
     let known = protocol::REDRAW_EVENTS..=protocol::GRID_LINE_WRAP;
-    if stage == protocol::REDRAW_ARGS_DONE || !known.contains(&stage) {
-        // SAFETY: `abort` takes no arguments and does not return.
-        unsafe { abort() };
-    }
+    assert!(
+        stage != protocol::REDRAW_ARGS_DONE && known.contains(&stage),
+        "the redraw decoder lost track of its stage"
+    );
 
     if stage == protocol::REDRAW_EVENTS {
-        *nevents = cursor.next(TOKEN_ARRAY)?.length.cast_signed();
+        *nevents = cursor.next(TOKEN_ARRAY)?.len.cast_signed();
         stage = protocol::REDRAW_CALL;
     }
 
     if stage == protocol::REDRAW_CALL {
-        *ncalls = cursor.next(TOKEN_ARRAY)?.length.cast_signed();
+        *ncalls = cursor.next(TOKEN_ARRAY)?.len.cast_signed();
         let had_calls = *ncalls;
         *ncalls -= 1;
         if had_calls == 0 {
@@ -209,47 +160,36 @@ fn parse_redraw(u: &mut Unpacker, cursor: &mut Cursor) -> Result<bool, Halt> {
         }
 
         let tok = cursor.next(TOKEN_STR)?;
-        if tok.length as size_t > cursor.size {
-            return Err(Halt::Incomplete);
-        }
-        let len = tok.length as size_t;
-        // SAFETY: the name is `len` readable bytes of the cursor's buffer,
-        // which the check above bounds.
-        *ui_handler = unsafe { ui_client_get_redraw_handler(cursor.data, len) };
-        cursor.take(tok.length as size_t);
+        let name = cursor.take(tok.len as size_t)?;
+        *ui_handler = ui_client_get_redraw_handler(name);
 
         *nevents -= 1;
-        *read_ptr = cursor.data;
-        *read_size = cursor.size;
+        *input = cursor.data;
 
-        let is_grid_line = ui_handler.fn_0.is_some_and(|f| {
-            core::ptr::fn_addr_eq(f, ui_client_event_grid_line as unsafe fn(Array))
-        });
+        let is_grid_line = ui_handler
+            .fn_0
+            .is_some_and(|f| core::ptr::fn_addr_eq(f, ui_client_event_grid_line as fn(Array)));
         if !is_grid_line {
             *state = protocol::REDRAW_ARGS;
             return Ok(true);
         }
         *state = protocol::GRID_LINE_EVENT;
-        *arena = ARENA_EMPTY;
         stage = protocol::GRID_LINE_EVENT;
     }
 
     if stage == protocol::GRID_LINE_EVENT {
         // [grid, row, startcol, [cells], wrap]
-        if cursor.next(TOKEN_ARRAY)?.length != 5 {
+        if cursor.next(TOKEN_ARRAY)?.len != 5 {
             return Err(Halt::Invalid);
         }
         for slot in 0..3 {
-            // SAFETY: a uint token carries its value in the `value` arm.
-            let lo = unsafe { cursor.next(TOKEN_UINT)?.data.value.lo };
-            g.args[slot] = lo.cast_signed();
+            g.args[slot] = cursor.next(TOKEN_UINT)?.lo.cast_signed();
         }
-        g.ncells = cursor.next(TOKEN_ARRAY)?.length.cast_signed();
+        g.ncells = cursor.next(TOKEN_ARRAY)?.len.cast_signed();
         g.icell = 0;
         g.coloff = 0;
         g.cur_attr = -1;
-        *read_ptr = cursor.data;
-        *read_size = cursor.size;
+        *input = cursor.data;
         *state = protocol::GRID_LINE_CELLS;
         stage = protocol::GRID_LINE_CELLS;
     }
@@ -257,16 +197,14 @@ fn parse_redraw(u: &mut Unpacker, cursor: &mut Cursor) -> Result<bool, Halt> {
     if stage == protocol::GRID_LINE_CELLS {
         while g.icell != g.ncells {
             parse_grid_line_cell(g, cursor)?;
-            *read_ptr = cursor.data;
-            *read_size = cursor.size;
+            *input = cursor.data;
             g.icell += 1;
         }
         *state = protocol::GRID_LINE_WRAP;
     }
 
-    g.wrap = mpack_unpack_boolean(cursor.next(TOKEN_BOOLEAN)?);
-    *read_ptr = cursor.data;
-    *read_size = cursor.size;
+    g.wrap = token::unpack_boolean(&cursor.next(TOKEN_BOOLEAN)?);
+    *input = cursor.data;
     Ok(true)
 }
 
@@ -276,34 +214,24 @@ fn parse_redraw(u: &mut Unpacker, cursor: &mut Cursor) -> Result<bool, Halt> {
 /// form compact. A run of spaces at the end of the line is not written at
 /// all: it becomes the event's `clear_width`.
 fn parse_grid_line_cell(g: &mut GridLineEvent, cursor: &mut Cursor) -> Result<(), Halt> {
-    let arity = cursor.next(TOKEN_ARRAY)?.length.cast_signed();
+    let arity = cursor.next(TOKEN_ARRAY)?.len.cast_signed();
     if !(1..=3).contains(&arity) {
         return Err(Halt::Invalid);
     }
 
     let tok = cursor.next(TOKEN_STR)?;
-    if tok.length as size_t > cursor.size {
-        return Err(Halt::Incomplete);
-    }
-    let cell_len = tok.length as size_t;
-    let cell = cursor.take(cell_len);
+    let cell_bytes = cursor.take(tok.len as size_t)?;
 
     if arity >= 2 {
-        // SAFETY: a sint token carries its value in the `value` arm.
-        let lo = unsafe { cursor.next(TOKEN_SINT)?.data.value.lo };
-        g.cur_attr = lo.cast_signed();
+        g.cur_attr = cursor.next(TOKEN_SINT)?.lo.cast_signed();
     }
     let repeat = if arity >= 3 {
-        // SAFETY: as above, for a uint token.
-        let lo = unsafe { cursor.next(TOKEN_UINT)?.data.value.lo };
-        lo.cast_signed()
+        cursor.next(TOKEN_UINT)?.lo.cast_signed()
     } else {
         1
     };
 
     g.clear_width = 0;
-    // SAFETY: `cell` is `cell_len` bytes the cursor just handed over.
-    let cell_bytes: &[u8] = unsafe { core::slice::from_raw_parts(cell.cast::<u8>(), cell_len) };
     let sc = schar_from_buf(cell_bytes);
     if protocol::is_clear_run(g.icell == g.ncells - 1, cell_bytes, repeat) {
         g.clear_width = repeat;
@@ -317,11 +245,16 @@ fn parse_grid_line_cell(g: &mut GridLineEvent, cursor: &mut Cursor) -> Result<()
         let Ok(coloff) = usize::try_from(g.coloff) else {
             return Err(Halt::Invalid);
         };
-        let mut cells = grid_line_buf();
-        if coloff >= cells.width() {
+        let fits = GRID_LINE_BUF.with_mut(|cells| {
+            let fits = coloff < cells.width();
+            if fits {
+                cells.put(coloff, sc, g.cur_attr as _);
+            }
+            fits
+        });
+        if !fits {
             return Err(Halt::Invalid);
         }
-        cells.put(coloff, sc, g.cur_attr as _);
         g.coloff += 1;
     }
     Ok(())
@@ -335,11 +268,8 @@ mod tests {
     };
     use crate::types::{Integer, Object};
 
-    /// A cursor over `bytes`. Every caller keeps the slice alive for the whole
-    /// test, which is the promise `Cursor::new` asks for.
-    fn cursor(bytes: &[u8]) -> Cursor {
-        // SAFETY: the caller's slice outlives the cursor.
-        unsafe { Cursor::new(bytes.as_ptr().cast::<c_char>(), bytes.len()) }
+    fn cursor(bytes: &[u8]) -> Cursor<'_> {
+        Cursor::new(bytes)
     }
 
     /// The integer a scalar token decoded to, or `None` if it did not decode
@@ -353,8 +283,8 @@ mod tests {
         // [1, 2] then a bare 3, as three separate reads.
         let bytes = [0x92u8, 0x01, 0x02, 0x03];
         let mut c = cursor(&bytes);
-        assert_eq!(c.next(TOKEN_ARRAY).ok().map(|t| t.length), Some(2));
-        assert_eq!(c.size, 3);
+        assert_eq!(c.next(TOKEN_ARRAY).ok().map(|t| t.len), Some(2));
+        assert_eq!(c.data.len(), 3);
         assert_eq!(
             integer_of(scalar_object(c.next(TOKEN_UINT).unwrap()).unwrap()),
             Some(1)
@@ -367,7 +297,7 @@ mod tests {
             integer_of(scalar_object(c.next(TOKEN_UINT).unwrap()).unwrap()),
             Some(3)
         );
-        assert_eq!(c.size, 0);
+        assert_eq!(c.data.len(), 0);
         assert!(matches!(c.next(TOKEN_UINT), Err(Halt::Incomplete)));
     }
 
@@ -419,12 +349,14 @@ mod tests {
     fn take_hands_back_the_payload_and_advances() {
         let bytes = [0xa3u8, b'a', b'b', b'c'];
         let mut c = cursor(&bytes);
-        let len = c.next(TOKEN_STR).unwrap().length as usize;
+        let len = c.next(TOKEN_STR).unwrap().len as usize;
         assert_eq!(len, 3);
-        let start = c.take(len);
-        assert_eq!(c.size, 0);
-        // SAFETY: `start` is the three payload bytes the cursor just left.
-        let payload = unsafe { core::slice::from_raw_parts(start.cast::<u8>(), len) };
+        assert!(matches!(
+            Cursor::new(c.data).take(len + 1),
+            Err(Halt::Incomplete)
+        ));
+        let payload = c.take(len).unwrap();
+        assert_eq!(c.data.len(), 0);
         assert_eq!(payload, b"abc");
     }
 

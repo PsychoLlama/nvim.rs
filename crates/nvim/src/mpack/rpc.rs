@@ -8,37 +8,24 @@
 //!
 //! Outstanding requests live in `slots`, an open-addressed table keyed on the
 //! message id and probed *downwards*, so a response can be matched to the
-//! `mpack_data_t` its request carried. `capacity` is a power of nothing in
-//! particular: the hash is `id % capacity`, and `lmpack_grow_session` doubles
-//! it when the table fills.
+//! handle its request carried. The capacity is a power of nothing in
+//! particular: the hash is `id % capacity`, and [`Session::grow`] doubles it
+//! when the table fills.
 //!
 //! Nvim's own RPC does not come through here — `nvim/msgpack_rpc/` has its
 //! own framer over [`super::mpack_core`]. This is the framer behind
 //! `vim.mpack.Session`.
 //!
-//! The session is a C flexible array member, so the table is reached by
-//! offset from `slots`; every entry point turns it into a slice once and the
-//! insert/lookup half below is ordinary safe code over that slice.
-//!
 //! Ported from libmpack, Copyright (c) 2016 Thiago de Arruda, under the
 //! MIT license; the notice is reproduced in licenses/libmpack-LICENSE.txt.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use core::ffi::{c_char, c_int};
-use core::mem::offset_of;
+use core::ffi::c_int;
 
-use super::mpack_core::{
-    MPACK_EOF, MPACK_OK, MPACK_TOKEN_ARRAY, MPACK_TOKEN_UINT, empty_token, from_tok, mpack_read,
-    mpack_tokbuf_init, mpack_write, to_tok, value_data,
-};
+use super::mpack_core::{MPACK_EOF, MPACK_OK, Next, TokBuf};
 use super::object::MPACK_NOMEM;
 use super::token::{Kind, Tok};
-use crate::types::{
-    mpack_data_t, mpack_rpc_header_t, mpack_rpc_message_t, mpack_rpc_session_t, mpack_rpc_slot_s,
-    mpack_token_t, mpack_uint32_t, size_t,
-};
 
 /// Message kinds, continuing the `MPACK_*` status numbering so that one
 /// `int` can carry either.
@@ -55,115 +42,259 @@ pub const MPACK_RPC_ERESPID: c_int = 11;
 
 pub const MPACK_RPC_MAX_REQUESTS: c_int = 32;
 
+const COMPLETE: c_int = MPACK_OK.cast_signed();
+const PENDING: c_int = MPACK_EOF.cast_signed();
+
 /// The envelope's `type` field. Adding [`MPACK_RPC_REQUEST`] to it gives the
 /// kind this module reports.
-const TYPE_REQUEST: mpack_uint32_t = 0;
-const TYPE_RESPONSE: mpack_uint32_t = 1;
-const TYPE_NOTIFICATION: mpack_uint32_t = 2;
+const TYPE_REQUEST: u32 = 0;
+const TYPE_RESPONSE: u32 = 1;
+const TYPE_NOTIFICATION: u32 = 2;
 
-/// The slot table as a slice. Address arithmetic only, so nothing is read
-/// until the caller uses the answer.
-///
-/// # Safety
-/// `session` must be initialised and its allocation must hold `capacity`
-/// slots; the slice must not outlive a reallocation of the session.
-unsafe fn table<'a>(session: *mut mpack_rpc_session_t) -> &'a mut [mpack_rpc_slot_s] {
-    let base = session
-        .cast::<u8>()
-        .wrapping_add(offset_of!(mpack_rpc_session_t, slots))
-        .cast::<mpack_rpc_slot_s>();
-    unsafe { core::slice::from_raw_parts_mut(base, (*session).capacity as usize) }
+/// A message's id, and the caller's handle for the request it answers.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct RpcMessage {
+    pub id: u32,
+    pub data: i64,
 }
 
-/// Reset a session: no partial message either way, no request outstanding.
-///
-/// # Safety
-/// `session` must point at storage with room for `capacity` slots.
-pub unsafe fn mpack_rpc_session_init(session: *mut mpack_rpc_session_t, capacity: mpack_uint32_t) {
-    let capacity = if capacity != 0 {
-        capacity
-    } else {
-        MPACK_RPC_MAX_REQUESTS as mpack_uint32_t
-    };
-    unsafe { (*session).capacity = capacity };
-    unsafe { (*session).request_id = 0 };
-    unsafe { mpack_tokbuf_init(&raw mut (*session).reader) };
-    unsafe { mpack_tokbuf_init(&raw mut (*session).writer) };
-    // The C only resets `index` and leaves the headers' tokens whatever
-    // the allocation held; writing them makes the whole session a value
-    // `mpack_rpc_session_copy` can copy without reading uninitialised
-    // bytes.
-    unsafe { (*session).receive = empty_header() };
-    unsafe { (*session).send = empty_header() };
-    unsafe { table(session) }.fill(empty_slot());
+#[derive(Clone, Copy, Debug, Default)]
+struct Slot {
+    used: bool,
+    msg: RpcMessage,
 }
 
-/// Feed one token of an incoming envelope.
-///
-/// Answers `MPACK_EOF` while the envelope is incomplete, one of the three
-/// message kinds when it closes (at which point `msg` is filled and the
-/// caller reads the body), or an `MPACK_RPC_E*` for a malformed one.
-///
-/// # Safety
-/// `session` must be initialised and `msg` writable.
-pub unsafe fn mpack_rpc_receive_tok(
-    session: *mut mpack_rpc_session_t,
-    tok: mpack_token_t,
-    msg: *mut mpack_rpc_message_t,
-) -> c_int {
-    let hdr = unsafe { &mut (*session).receive };
-    let kind = match hdr.index {
-        0 => return receive_array(hdr, tok),
-        1 => match receive_type(hdr, tok) {
-            Ok(Some(kind)) => kind,
-            Ok(None) => return MPACK_EOF as c_int,
-            Err(code) => return code,
-        },
-        _ => {
-            debug_assert_eq!(hdr.index, 2);
-            // The id: a request or a response, never a notification.
-            if tok.type_0 != MPACK_TOKEN_UINT || tok.length > 4 {
-                return MPACK_RPC_EMSGID;
-            }
-            unsafe { (*msg).id = to_tok(&tok).lo };
-            unsafe { (*msg).data.p = core::ptr::null_mut() };
-            let kind = to_tok(&hdr.toks[1]).lo as c_int + MPACK_RPC_REQUEST;
-            // A response has to name a request that is still open; its
-            // slot is what carries the caller's own handle back.
-            if kind == MPACK_RPC_RESPONSE && !pop(unsafe { table(session) }, unsafe { &mut *msg }) {
-                return MPACK_RPC_ERESPID;
-            }
-            kind
+/// The envelope tokens seen (or still to send), and how far along they are.
+#[derive(Clone, Copy, Debug, Default)]
+struct Header {
+    toks: [Tok; 3],
+    index: usize,
+}
+
+/// `mpack_rpc_session_t`: one connection's envelope state both ways, and
+/// its outstanding requests.
+#[derive(Clone, Debug)]
+pub struct Session {
+    reader: TokBuf,
+    writer: TokBuf,
+    receive: Header,
+    send: Header,
+    request_id: u32,
+    slots: Vec<Slot>,
+}
+
+impl Session {
+    /// No partial message either way, no request outstanding; `capacity`
+    /// slots, or 32 for 0.
+    pub fn new(capacity: u32) -> Self {
+        let capacity = if capacity != 0 {
+            capacity
+        } else {
+            MPACK_RPC_MAX_REQUESTS.cast_unsigned()
+        };
+        Session {
+            reader: TokBuf::new(),
+            writer: TokBuf::new(),
+            receive: Header::default(),
+            send: Header::default(),
+            request_id: 0,
+            slots: vec![Slot::default(); capacity as usize],
         }
-    };
-    unsafe { (*session).receive.index = 0 };
-    kind
+    }
+
+    /// Twice the slots, keeping every outstanding request.
+    ///
+    /// They are *reinserted* rather than copied: their hash is taken modulo
+    /// the capacity, which this changes.
+    pub fn grow(&mut self) {
+        let old = core::mem::take(&mut self.slots);
+        self.slots = vec![Slot::default(); old.len() * 2];
+        for slot in old.iter().filter(|slot| slot.used) {
+            put(&mut self.slots, slot.msg);
+        }
+    }
+
+    /// Feed one token of an incoming envelope.
+    ///
+    /// Answers `MPACK_EOF` while the envelope is incomplete, one of the three
+    /// message kinds when it closes (at which point `msg` is filled and the
+    /// caller reads the body), or an `MPACK_RPC_E*` for a malformed one.
+    pub fn receive_tok(&mut self, tok: Tok, msg: &mut RpcMessage) -> c_int {
+        let hdr = &mut self.receive;
+        let kind = match hdr.index {
+            0 => return receive_array(hdr, tok),
+            1 => match receive_type(hdr, tok) {
+                Ok(Some(kind)) => kind,
+                Ok(None) => return PENDING,
+                Err(code) => return code,
+            },
+            _ => {
+                debug_assert_eq!(hdr.index, 2);
+                // The id: a request or a response, never a notification.
+                if tok.kind != Some(Kind::Uint) || tok.len > 4 {
+                    return MPACK_RPC_EMSGID;
+                }
+                msg.id = tok.lo;
+                msg.data = 0;
+                let kind = hdr.toks[1].lo.cast_signed() + MPACK_RPC_REQUEST;
+                // A response has to name a request that is still open; its
+                // slot is what carries the caller's own handle back.
+                if kind == MPACK_RPC_RESPONSE && !pop(&mut self.slots, msg) {
+                    return MPACK_RPC_ERESPID;
+                }
+                kind
+            }
+        };
+        self.receive.index = 0;
+        kind
+    }
+
+    /// Take the next token of an outgoing request envelope, allocating the
+    /// message id on the first one.
+    fn request_tok(&mut self, tok: &mut Tok, data: i64) -> c_int {
+        if self.send.index != 0 {
+            return send_rest(&mut self.send, tok);
+        }
+        // Try ids until one lands in a free slot: `put` answers `Kept` for an
+        // id that is still outstanding, so the loop skips over it.
+        loop {
+            let msg = RpcMessage {
+                id: self.request_id,
+                data,
+            };
+            self.send = header(TYPE_REQUEST, 4, Some(msg.id));
+            *tok = self.send.toks[0];
+            let outcome = put(&mut self.slots, msg);
+            if outcome == Put::Full {
+                return MPACK_NOMEM;
+            }
+            // `% 0xffffffff` (not `+ 1`) is upstream's: id 0xffffffff never
+            // appears, which costs one id out of four billion.
+            self.request_id = self.request_id.wrapping_add(1) % 0xffff_ffff;
+            if outcome == Put::Inserted {
+                break;
+            }
+        }
+        self.send.index += 1;
+        PENDING
+    }
+
+    /// Take the next token of an outgoing response envelope.
+    fn reply_tok(&mut self, tok: &mut Tok, id: u32) -> c_int {
+        let send = &mut self.send;
+        if send.index != 0 {
+            return send_rest(send, tok);
+        }
+        *send = header(TYPE_RESPONSE, 4, Some(id));
+        *tok = send.toks[0];
+        send.index += 1;
+        PENDING
+    }
+
+    /// Take the next token of an outgoing notification envelope, which is
+    /// two tokens rather than three.
+    fn notify_tok(&mut self, tok: &mut Tok) -> c_int {
+        let send = &mut self.send;
+        if send.index != 0 {
+            debug_assert_eq!(send.index, 1);
+            *tok = send.toks[1];
+            send.index = 0;
+            return COMPLETE;
+        }
+        *send = header(TYPE_NOTIFICATION, 3, None);
+        *tok = send.toks[0];
+        send.index += 1;
+        PENDING
+    }
+
+    /// Read whole messages out of `input` until one closes or it empties.
+    pub fn receive(&mut self, input: &mut &[u8], msg: &mut RpcMessage) -> c_int {
+        loop {
+            let tok = match self.reader.read(input) {
+                Next::Token(tok) => tok,
+                Next::Chunk(bytes) => Tok::new(
+                    Kind::Chunk,
+                    u32::try_from(bytes.len()).expect("a chunk is at most a token's length"),
+                    0,
+                    0,
+                ),
+                Next::Eof => return PENDING,
+                Next::Error => return super::mpack_core::MPACK_ERROR.cast_signed(),
+            };
+            let status = self.receive_tok(tok, msg);
+            if status >= MPACK_RPC_REQUEST || input.is_empty() {
+                return status;
+            }
+        }
+    }
+
+    /// Write an envelope into `out`, resuming a half-written token from the
+    /// writer tokbuf rather than asking `next` for it again. Answers the
+    /// status and how many bytes went.
+    fn send(
+        &mut self,
+        out: &mut [u8],
+        mut next: impl FnMut(&mut Self, &mut Tok) -> c_int,
+    ) -> (c_int, usize) {
+        let mut status = PENDING;
+        let mut written = 0;
+        while status != COMPLETE && written < out.len() {
+            let mut tok = Tok::default();
+            if !self.writer.is_parked() {
+                status = next(self, &mut tok);
+            }
+            if status == MPACK_NOMEM {
+                break;
+            }
+            let (write_status, count) = self.writer.write(&mut out[written..], &tok, &[]);
+            written += count;
+            if write_status != MPACK_OK {
+                status = write_status.cast_signed();
+            }
+        }
+        (status, written)
+    }
+
+    /// A request's envelope, carrying `data` back with its response.
+    pub fn request(&mut self, out: &mut [u8], data: i64) -> (c_int, usize) {
+        self.send(out, |session, tok| session.request_tok(tok, data))
+    }
+
+    /// A response's envelope.
+    pub fn reply(&mut self, out: &mut [u8], id: u32) -> (c_int, usize) {
+        self.send(out, |session, tok| session.reply_tok(tok, id))
+    }
+
+    /// A notification's envelope.
+    pub fn notify(&mut self, out: &mut [u8]) -> (c_int, usize) {
+        self.send(out, Self::notify_tok)
+    }
 }
 
 /// The envelope's opening array: three items or four, nothing else.
-fn receive_array(hdr: &mut mpack_rpc_header_t, tok: mpack_token_t) -> c_int {
-    if tok.type_0 != MPACK_TOKEN_ARRAY {
+fn receive_array(hdr: &mut Header, tok: Tok) -> c_int {
+    if tok.kind != Some(Kind::Array) {
         return MPACK_RPC_EARRAY;
     }
-    if !(3..=4).contains(&tok.length) {
+    if !(3..=4).contains(&tok.len) {
         return MPACK_RPC_EARRAYL;
     }
     hdr.toks[0] = tok;
     hdr.index += 1;
-    MPACK_EOF as c_int
+    PENDING
 }
 
 /// The envelope's message type, which also fixes the array's length.
 ///
 /// Answers the message kind for a notification (which has no id and so ends
 /// here), `None` when an id is still to come, or the error code.
-fn receive_type(hdr: &mut mpack_rpc_header_t, tok: mpack_token_t) -> Result<Option<c_int>, c_int> {
-    let value = to_tok(&tok).lo;
-    if tok.type_0 != MPACK_TOKEN_UINT || tok.length > 1 || value > TYPE_NOTIFICATION {
+fn receive_type(hdr: &mut Header, tok: Tok) -> Result<Option<c_int>, c_int> {
+    let value = tok.lo;
+    if tok.kind != Some(Kind::Uint) || tok.len > 1 || value > TYPE_NOTIFICATION {
         return Err(MPACK_RPC_ETYPE);
     }
     let expected = if value == TYPE_NOTIFICATION { 3 } else { 4 };
-    if hdr.toks[0].length != expected {
+    if hdr.toks[0].len != expected {
         return Err(MPACK_RPC_EARRAYL);
     }
     hdr.toks[1] = tok;
@@ -171,252 +302,28 @@ fn receive_type(hdr: &mut mpack_rpc_header_t, tok: mpack_token_t) -> Result<Opti
     Ok((value == TYPE_NOTIFICATION).then_some(MPACK_RPC_NOTIFICATION))
 }
 
-/// Take the next token of an outgoing request envelope, allocating the
-/// message id on the first one.
-///
-/// # Safety
-/// `session` must be initialised and `tok` writable.
-pub unsafe fn mpack_rpc_request_tok(
-    session: *mut mpack_rpc_session_t,
-    tok: *mut mpack_token_t,
-    data: mpack_data_t,
-) -> c_int {
-    if unsafe { (*session).send.index } != 0 {
-        return send_rest(unsafe { &mut (*session).send }, unsafe { &mut *tok });
-    }
-    // Try ids until one lands in a free slot: `put` answers `Kept` for an
-    // id that is still outstanding, so the loop skips over it.
-    loop {
-        let msg = mpack_rpc_message_t {
-            id: unsafe { (*session).request_id },
-            data,
-        };
-        unsafe { (*session).send = header(TYPE_REQUEST, 4, Some(msg.id)) };
-        unsafe { *tok = (*session).send.toks[0] };
-        let outcome = put(unsafe { table(session) }, msg);
-        if outcome == Put::Full {
-            return MPACK_NOMEM;
-        }
-        // `% 0xffffffff` (not `+ 1`) is upstream's: id 0xffffffff never
-        // appears, which costs one id out of four billion.
-        unsafe { (*session).request_id = ((*session).request_id + 1) % 0xffff_ffff };
-        if outcome == Put::Inserted {
-            break;
-        }
-    }
-    unsafe { (*session).send.index += 1 };
-    MPACK_EOF as c_int
-}
-
-/// Take the next token of an outgoing response envelope.
-///
-/// # Safety
-/// See [`mpack_rpc_request_tok`].
-pub unsafe fn mpack_rpc_reply_tok(
-    session: *mut mpack_rpc_session_t,
-    tok: *mut mpack_token_t,
-    id: mpack_uint32_t,
-) -> c_int {
-    let send = unsafe { &mut (*session).send };
-    if send.index != 0 {
-        return send_rest(send, unsafe { &mut *tok });
-    }
-    *send = header(TYPE_RESPONSE, 4, Some(id));
-    unsafe { *tok = send.toks[0] };
-    send.index += 1;
-    MPACK_EOF as c_int
-}
-
-/// Take the next token of an outgoing notification envelope, which is two
-/// tokens rather than three.
-///
-/// # Safety
-/// See [`mpack_rpc_request_tok`].
-pub unsafe fn mpack_rpc_notify_tok(
-    session: *mut mpack_rpc_session_t,
-    tok: *mut mpack_token_t,
-) -> c_int {
-    let send = unsafe { &mut (*session).send };
-    if send.index != 0 {
-        debug_assert_eq!(send.index, 1);
-        unsafe { *tok = send.toks[1] };
-        send.index = 0;
-        return MPACK_OK as c_int;
-    }
-    *send = header(TYPE_NOTIFICATION, 3, None);
-    unsafe { *tok = send.toks[0] };
-    send.index += 1;
-    MPACK_EOF as c_int
-}
-
 /// The second and third tokens of a request or response envelope. The third
 /// closes it, which is what `MPACK_OK` tells the caller.
-fn send_rest(send: &mut mpack_rpc_header_t, tok: &mut mpack_token_t) -> c_int {
-    *tok = send.toks[send.index as usize];
+fn send_rest(send: &mut Header, tok: &mut Tok) -> c_int {
+    *tok = send.toks[send.index];
     if send.index == 1 {
         send.index += 1;
-        return MPACK_EOF as c_int;
+        return PENDING;
     }
     debug_assert_eq!(send.index, 2);
     send.index = 0;
-    MPACK_OK as c_int
-}
-
-/// Read whole messages out of `*buf` until one closes or the buffer empties.
-///
-/// # Safety
-/// `buf`/`buflen` must describe a readable slice; `session` and `msg` must be
-/// writable.
-pub unsafe fn mpack_rpc_receive(
-    session: *mut mpack_rpc_session_t,
-    buf: *mut *const c_char,
-    buflen: *mut size_t,
-    msg: *mut mpack_rpc_message_t,
-) -> c_int {
-    let mut status;
-    loop {
-        let mut tok = empty_token();
-        status = unsafe { mpack_read(&raw mut (*session).reader, buf, buflen, &raw mut tok) };
-        if status != MPACK_OK as c_int {
-            break;
-        }
-        status = unsafe { mpack_rpc_receive_tok(session, tok, msg) };
-        if status >= MPACK_RPC_REQUEST || unsafe { *buflen } == 0 {
-            break;
-        }
-    }
-    status
-}
-
-/// Write an envelope into `*buf`, resuming a half-written token from the
-/// session's writer tokbuf rather than asking `next` for it again.
-///
-/// # Safety
-/// `buf`/`buflen` must describe a writable slice; `next` must be one of the
-/// `*_tok` functions above, bound to `session`.
-unsafe fn send(
-    session: *mut mpack_rpc_session_t,
-    buf: *mut *mut c_char,
-    buflen: *mut size_t,
-    mut next: impl FnMut(*mut mpack_token_t) -> c_int,
-) -> c_int {
-    let mut status = MPACK_EOF as c_int;
-    while status != MPACK_OK as c_int && unsafe { *buflen } != 0 {
-        let mut tok = empty_token();
-        if unsafe { (*session).writer.plen } == 0 {
-            status = next(&raw mut tok);
-        }
-        if status == MPACK_NOMEM {
-            break;
-        }
-        let write_status = unsafe { mpack_write(&raw mut (*session).writer, buf, buflen, &tok) };
-        if write_status != MPACK_OK as c_int {
-            status = write_status;
-        }
-    }
-    status
-}
-
-/// # Safety
-/// See [`send`].
-pub unsafe fn mpack_rpc_request(
-    session: *mut mpack_rpc_session_t,
-    buf: *mut *mut c_char,
-    buflen: *mut size_t,
-    data: mpack_data_t,
-) -> c_int {
-    unsafe {
-        send(session, buf, buflen, |tok| {
-            mpack_rpc_request_tok(session, tok, data)
-        })
-    }
-}
-
-/// # Safety
-/// See [`send`].
-pub unsafe fn mpack_rpc_reply(
-    session: *mut mpack_rpc_session_t,
-    buf: *mut *mut c_char,
-    buflen: *mut size_t,
-    id: mpack_uint32_t,
-) -> c_int {
-    unsafe {
-        send(session, buf, buflen, |tok| {
-            mpack_rpc_reply_tok(session, tok, id)
-        })
-    }
-}
-
-/// # Safety
-/// See [`send`].
-pub unsafe fn mpack_rpc_notify(
-    session: *mut mpack_rpc_session_t,
-    buf: *mut *mut c_char,
-    buflen: *mut size_t,
-) -> c_int {
-    unsafe {
-        send(session, buf, buflen, |tok| {
-            mpack_rpc_notify_tok(session, tok)
-        })
-    }
-}
-
-/// Move a session onto a bigger slot table, keeping `dst`'s capacity.
-///
-/// The outstanding requests are *reinserted* rather than copied: their hash
-/// is taken modulo the capacity, which the move changes.
-///
-/// # Safety
-/// Both sessions must be initialised and `dst` at least as large as `src`.
-pub unsafe fn mpack_rpc_session_copy(dst: *mut mpack_rpc_session_t, src: *mut mpack_rpc_session_t) {
-    debug_assert!(unsafe { (*src).capacity } <= unsafe { (*dst).capacity });
-    unsafe { (*dst).reader = (*src).reader };
-    unsafe { (*dst).writer = (*src).writer };
-    unsafe { (*dst).receive = (*src).receive };
-    unsafe { (*dst).send = (*src).send };
-    unsafe { (*dst).request_id = (*src).request_id };
-    let (to, from) = (unsafe { table(dst) }, unsafe { table(src) });
-    to.fill(empty_slot());
-    for slot in from.iter().filter(|slot| slot.used != 0) {
-        put(to, slot.msg);
-    }
-}
-
-/// An unused slot.
-fn empty_slot() -> mpack_rpc_slot_s {
-    mpack_rpc_slot_s {
-        msg: mpack_rpc_message_t {
-            id: 0,
-            data: mpack_data_t {
-                p: core::ptr::null_mut(),
-            },
-        },
-        used: 0,
-    }
-}
-
-/// A zeroed envelope header.
-fn empty_header() -> mpack_rpc_header_t {
-    mpack_rpc_header_t {
-        toks: [empty_token(); 3],
-        index: 0,
-    }
+    COMPLETE
 }
 
 /// The tokens of an outgoing envelope: the array, the message type, and (for
-/// everything but a notification) the id.
-fn header(
-    msg_type: mpack_uint32_t,
-    len: mpack_uint32_t,
-    id: Option<mpack_uint32_t>,
-) -> mpack_rpc_header_t {
-    let mut hdr = empty_header();
-    hdr.toks[0] = from_tok(&Tok::new(Kind::Array, len, 0, 0));
-    hdr.toks[1].type_0 = MPACK_TOKEN_UINT;
-    hdr.toks[1].data = value_data(msg_type, 0);
+/// everything but a notification) the id. The two integers carry no width,
+/// as the C's did not: the encoder picks it from the value.
+fn header(msg_type: u32, len: u32, id: Option<u32>) -> Header {
+    let mut hdr = Header::default();
+    hdr.toks[0] = Tok::new(Kind::Array, len, 0, 0);
+    hdr.toks[1] = Tok::new(Kind::Uint, 0, msg_type, 0);
     if let Some(id) = id {
-        hdr.toks[2].type_0 = MPACK_TOKEN_UINT;
-        hdr.toks[2].data = value_data(id, 0);
+        hdr.toks[2] = Tok::new(Kind::Uint, 0, id, 0);
     }
     hdr
 }
@@ -432,35 +339,31 @@ enum Put {
 }
 
 /// Record an outstanding request.
-fn put(slots: &mut [mpack_rpc_slot_s], msg: mpack_rpc_message_t) -> Put {
-    let Some(found) = probe(slots, msg.id, |s| s.used == 0 || s.msg.id == msg.id) else {
+fn put(slots: &mut [Slot], msg: RpcMessage) -> Put {
+    let Some(found) = probe(slots, msg.id, |s| !s.used || s.msg.id == msg.id) else {
         return Put::Full;
     };
-    if slots[found].used != 0 && slots[found].msg.id == msg.id {
+    if slots[found].used && slots[found].msg.id == msg.id {
         return Put::Kept;
     }
-    slots[found] = mpack_rpc_slot_s { msg, used: 1 };
+    slots[found] = Slot { msg, used: true };
     Put::Inserted
 }
 
 /// Take an outstanding request back out, filling `msg` with what it carried.
-fn pop(slots: &mut [mpack_rpc_slot_s], msg: &mut mpack_rpc_message_t) -> bool {
+fn pop(slots: &mut [Slot], msg: &mut RpcMessage) -> bool {
     let id = msg.id;
-    let Some(found) = probe(slots, id, |s| s.used != 0 && s.msg.id == id) else {
+    let Some(found) = probe(slots, id, |s| s.used && s.msg.id == id) else {
         return false;
     };
     *msg = slots[found].msg;
-    slots[found].used = 0;
+    slots[found].used = false;
     true
 }
 
 /// Walk the table from `id`'s hash *downwards*, wrapping, until `wanted`
 /// accepts a slot or every slot has been tried.
-fn probe(
-    slots: &[mpack_rpc_slot_s],
-    id: mpack_uint32_t,
-    wanted: impl Fn(&mpack_rpc_slot_s) -> bool,
-) -> Option<usize> {
+fn probe(slots: &[Slot], id: u32, wanted: impl Fn(&Slot) -> bool) -> Option<usize> {
     let capacity = slots.len();
     let mut hash = id as usize % capacity;
     for _ in 0..capacity {
@@ -476,23 +379,23 @@ fn probe(
 mod tests {
     use super::*;
 
-    fn slots(n: usize) -> Vec<mpack_rpc_slot_s> {
-        vec![empty_slot(); n]
+    fn slots(n: usize) -> Vec<Slot> {
+        vec![Slot::default(); n]
     }
 
-    fn msg(id: mpack_uint32_t) -> mpack_rpc_message_t {
-        mpack_rpc_message_t {
+    fn msg(id: u32) -> RpcMessage {
+        RpcMessage {
             id,
-            data: mpack_data_t { u: id as u64 * 10 },
+            data: i64::from(id) * 10,
         }
     }
 
-    fn uint(v: mpack_uint32_t) -> mpack_token_t {
-        from_tok(&Tok::new(Kind::Uint, 1, v, 0))
+    fn uint(v: u32) -> Tok {
+        Tok::new(Kind::Uint, 1, v, 0)
     }
 
-    fn array(len: mpack_uint32_t) -> mpack_token_t {
-        from_tok(&Tok::new(Kind::Array, len, 0, 0))
+    fn array(len: u32) -> Tok {
+        Tok::new(Kind::Array, len, 0, 0)
     }
 
     #[test]
@@ -500,12 +403,9 @@ mod tests {
         let mut table = slots(4);
         assert_eq!(put(&mut table, msg(7)), Put::Inserted);
         assert_eq!(put(&mut table, msg(7)), Put::Kept, "already outstanding");
-        let mut answer = mpack_rpc_message_t {
-            id: 7,
-            data: mpack_data_t { u: 0 },
-        };
+        let mut answer = RpcMessage { id: 7, data: 0 };
         assert!(pop(&mut table, &mut answer));
-        assert_eq!(unsafe { answer.data.u }, 70);
+        assert_eq!(answer.data, 70);
         assert!(
             !pop(&mut table, &mut answer),
             "a slot is freed by popping it"
@@ -523,32 +423,34 @@ mod tests {
         assert_eq!(table[2].msg.id, 7);
         assert_eq!(table[1].msg.id, 11);
         for id in [3, 7, 11] {
-            let mut answer = mpack_rpc_message_t {
-                id,
-                data: mpack_data_t { u: 0 },
-            };
+            let mut answer = RpcMessage { id, data: 0 };
             assert!(pop(&mut table, &mut answer), "{id}");
-            assert_eq!(unsafe { answer.data.u }, id as u64 * 10);
+            assert_eq!(answer.data, i64::from(id) * 10);
         }
     }
 
     #[test]
-    fn a_full_table_refuses_the_next_request() {
-        let mut table = slots(2);
-        assert_eq!(put(&mut table, msg(0)), Put::Inserted);
-        assert_eq!(put(&mut table, msg(1)), Put::Inserted);
-        assert_eq!(put(&mut table, msg(2)), Put::Full);
+    fn a_full_table_refuses_the_next_request_until_it_grows() {
+        let mut session = Session::new(2);
+        let mut out = [0u8; 16];
+        assert_eq!(session.request(&mut out, 1).0, COMPLETE);
+        assert_eq!(session.request(&mut out, 2).0, COMPLETE);
+        assert_eq!(session.request(&mut out, 3).0, MPACK_NOMEM);
+        session.grow();
+        assert_eq!(session.slots.len(), 4);
+        let (status, n) = session.request(&mut out, 3);
+        assert_eq!((status, &out[..n]), (COMPLETE, &b"\x94\x00\x02"[..]));
     }
 
     #[test]
     fn an_envelope_is_rejected_before_its_body_is_read() {
-        let mut hdr = empty_header();
+        let mut hdr = Header::default();
         assert_eq!(receive_array(&mut hdr, uint(3)), MPACK_RPC_EARRAY);
         assert_eq!(receive_array(&mut hdr, array(2)), MPACK_RPC_EARRAYL);
         assert_eq!(receive_array(&mut hdr, array(5)), MPACK_RPC_EARRAYL);
 
         // A four-item array is a request or a response, not a notification.
-        assert_eq!(receive_array(&mut hdr, array(4)), MPACK_EOF as c_int);
+        assert_eq!(receive_array(&mut hdr, array(4)), PENDING);
         assert_eq!(receive_type(&mut hdr, uint(3)), Err(MPACK_RPC_ETYPE));
         assert_eq!(
             receive_type(&mut hdr, uint(TYPE_NOTIFICATION)),
@@ -559,11 +461,25 @@ mod tests {
 
     #[test]
     fn a_notification_envelope_ends_at_the_type() {
-        let mut hdr = empty_header();
-        assert_eq!(receive_array(&mut hdr, array(3)), MPACK_EOF as c_int);
+        let mut hdr = Header::default();
+        assert_eq!(receive_array(&mut hdr, array(3)), PENDING);
         assert_eq!(
             receive_type(&mut hdr, uint(TYPE_NOTIFICATION)),
             Ok(Some(MPACK_RPC_NOTIFICATION))
         );
+    }
+
+    #[test]
+    fn a_response_comes_back_with_its_request_s_handle() {
+        let mut session = Session::new(0);
+        let mut out = [0u8; 16];
+        let (_, n) = session.request(&mut out, 42);
+        assert_eq!(&out[..n], b"\x94\x00\x00");
+        let mut msg = RpcMessage::default();
+        let mut input: &[u8] = b"\x94\x01\x00";
+        assert_eq!(session.receive(&mut input, &mut msg), MPACK_RPC_RESPONSE);
+        assert_eq!(msg, RpcMessage { id: 0, data: 42 });
+        let mut input: &[u8] = b"\x94\x01\x00";
+        assert_eq!(session.receive(&mut input, &mut msg), MPACK_RPC_ERESPID);
     }
 }

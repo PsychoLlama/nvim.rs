@@ -130,8 +130,9 @@ pub struct signal_watcher {
     pub close_cb: signal_close_cb,
     pub events: *mut MultiQueue,
 }
-pub type socket_cb =
-    Option<unsafe fn(*mut SocketWatcher, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> ()>;
+/// A listening socket's connection callback: the watcher, and libuv's
+/// status for the connection.
+pub type socket_cb = Option<fn(&mut SocketWatcher, ::core::ffi::c_int)>;
 pub type socket_close_cb = Option<unsafe fn(*mut SocketWatcher, *mut ::core::ffi::c_void) -> ()>;
 pub struct socket_watcher {
     pub addr: [::core::ffi::c_char; 256],

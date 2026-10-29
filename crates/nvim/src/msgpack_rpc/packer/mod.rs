@@ -1,5 +1,4 @@
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -10,19 +9,20 @@
 
 //! Serialisation of API objects to msgpack.
 //!
-//! The packer writes into a [`PackerBuffer`] — a window of memory with a `flush`
-//! hook the owner supplies (a socket write for RPC, a `realloc` for the string
-//! buffer below). Buffer space is not checked per byte: [`mpack_check_buffer`]
-//! guarantees room for two whole items, and the header/scalar writers spend at
-//! most one of those, so a caller only has to call it once per item.
+//! The packer writes into a [`PackerBuffer`] — an owned block with a `flush`
+//! hook the owner supplies (a socket write for RPC, growth for the string
+//! buffer below). Room is not checked per byte: [`mpack_check_buffer`]
+//! guarantees room for two whole items, and the header/scalar writers spend
+//! at most one of those, so a caller only has to call it once per item. A
+//! write past the block's end grows the block rather than overrunning it,
+//! so a caller that miscounts costs an allocation, not memory safety.
 //!
 //! The encodings themselves live in [`mod@format`], which is pure and tested
 //! against fixed byte sequences.
 
-use core::ffi::{c_char, c_double, c_int, c_void};
+use core::ffi::{c_double, c_int, c_void};
 
 use crate::lua::executor::release_luaref;
-use crate::memory::{xmalloc, xrealloc};
 use crate::types::{
     Array, Handle, Integer, KeyValuePair, LuaRef, Object, int8_t, int64_t, size_t, uint32_t,
     uint64_t,
@@ -30,147 +30,119 @@ use crate::types::{
 
 pub mod format;
 
-pub type PackerBufferFlush = Option<unsafe fn(*mut PackerBuffer) -> ()>;
+pub type PackerBufferFlush = fn(&mut PackerBuffer);
 
-/// A window of memory the msgpack packer writes into, and the hook that
-/// widens it again when the cursor reaches the end.
+/// A block the msgpack packer writes into, and the hook that makes room again
+/// when it is nearly full.
 ///
-/// The three pointers are the invariant, and they are private because of it:
-/// `start <= cursor <= end`, all three into one live allocation the owner
-/// keeps alive for as long as the packer exists. Every write helper in
-/// `msgpack_rpc::packer` is a *safe* `fn` that trusts that triple without
-/// checking it, so a `PackerBuffer` assembled out of unrelated pointers would
-/// make safe code write through them. Assembling one is therefore the unsafe
-/// step ([`PackerBuffer::new`]); moving the cursor inside a window that is
-/// already established is not.
+/// The block is a `Vec<u8>` whose capacity is the window: `len` is how much
+/// has been packed, `capacity - len` how much room is left. A detached
+/// packer holds no block (capacity 0) until its owner [`adopt`](Self::adopt)s
+/// one.
 pub struct PackerBuffer {
-    start: *mut ::core::ffi::c_char,
-    cursor: *mut ::core::ffi::c_char,
-    end: *mut ::core::ffi::c_char,
-    /// Whatever the flush hook needs to find its owner: a channel list, a
-    /// `FileDescriptor`, a `RemoteUI`, or nothing.
-    pub anydata: *mut ::core::ffi::c_void,
-    /// A second word for the same hook -- an addressee count, or the status
-    /// the last flush returned.
+    block: Vec<u8>,
+    /// The channels an RPC packer's flush writes to.
+    pub channels: Vec<uint64_t>,
+    /// Whatever else the flush hook needs to find its owner: a `RemoteUI`,
+    /// or nothing.
+    pub anydata: *mut c_void,
+    /// A second word for the same hook: the status the last flush returned.
     pub anyint: int64_t,
-    pub packer_flush: PackerBufferFlush,
+    pub packer_flush: Option<PackerBufferFlush>,
 }
 
 impl PackerBuffer {
-    /// A packer over the `capacity` bytes at `start`.
-    ///
-    /// # Safety
-    ///
-    /// `start` must point at `capacity` writable bytes the caller owns, and
-    /// they must stay alive and unaliased until the packer is dropped or
-    /// [`release`](Self::release)d. Nothing here checks the window: it is the
-    /// bound every safe write below is measured against.
-    pub unsafe fn new(
-        start: *mut ::core::ffi::c_char,
-        capacity: usize,
-        packer_flush: PackerBufferFlush,
-    ) -> Self {
+    /// A packer over `block`, which is empty and whose capacity is the
+    /// window.
+    pub fn new(block: Vec<u8>, packer_flush: Option<PackerBufferFlush>) -> Self {
+        debug_assert!(block.is_empty());
         Self {
-            start,
-            cursor: start,
-            end: start.wrapping_add(capacity),
+            block,
+            channels: Vec::new(),
             anydata: ::core::ptr::null_mut(),
             anyint: 0,
             packer_flush,
         }
     }
 
-    /// A packer holding no window at all, for an owner that allocates its
-    /// block lazily. Safe because the empty window bounds nothing: every
-    /// write below refuses to run until [`adopt`](Self::adopt) gives it one.
-    pub const fn detached(
-        anydata: *mut ::core::ffi::c_void,
-        packer_flush: PackerBufferFlush,
-    ) -> Self {
+    /// A packer holding no block at all, for an owner that allocates one
+    /// lazily.
+    pub const fn detached(anydata: *mut c_void, packer_flush: Option<PackerBufferFlush>) -> Self {
         Self {
-            start: ::core::ptr::null_mut(),
-            cursor: ::core::ptr::null_mut(),
-            end: ::core::ptr::null_mut(),
+            block: Vec::new(),
+            channels: Vec::new(),
             anydata,
             anyint: 0,
             packer_flush,
         }
     }
 
-    /// Whether the packer holds a window at all.
+    /// Whether the packer holds a block at all.
     pub fn is_detached(&self) -> bool {
-        self.start.is_null()
+        self.block.capacity() == 0
     }
 
-    /// Take the `capacity` bytes at `start` as the new window, discarding
-    /// whatever the packer pointed at before.
-    ///
-    /// # Safety
-    ///
-    /// As [`new`](Self::new): the caller owns those bytes and keeps them
-    /// alive, and anything the packer held before has been dealt with.
-    pub unsafe fn adopt(&mut self, start: *mut ::core::ffi::c_char, capacity: usize) {
-        self.start = start;
-        self.cursor = start;
-        self.end = start.wrapping_add(capacity);
+    /// Take `block` as the new window, discarding whatever the packer held.
+    pub fn adopt(&mut self, block: Vec<u8>) {
+        debug_assert!(block.is_empty());
+        self.block = block;
     }
 
-    /// Give up the window without touching it -- for an owner that has just
-    /// handed the block to someone else, or freed it.
-    pub fn release(&mut self) {
-        self.start = ::core::ptr::null_mut();
-        self.cursor = ::core::ptr::null_mut();
-        self.end = ::core::ptr::null_mut();
+    /// Give the block up, packed bytes and all, leaving the packer detached.
+    pub fn take(&mut self) -> Vec<u8> {
+        core::mem::take(&mut self.block)
     }
 
-    /// Re-point the window after the owner's flush hook has reallocated it.
-    ///
-    /// # Safety
-    ///
-    /// As [`new`](Self::new), with the extra promise that the first
-    /// [`used`](Self::used) bytes of the new window carry what was packed so
-    /// far: the cursor is kept at that offset.
-    pub unsafe fn moved_to(&mut self, start: *mut ::core::ffi::c_char, capacity: usize) {
-        let used = self.used();
-        self.start = start;
-        self.cursor = start.wrapping_add(used);
-        self.end = start.wrapping_add(capacity);
+    /// The bytes packed so far.
+    pub fn bytes(&self) -> &[u8] {
+        &self.block
     }
 
-    /// The first byte of the window. Null when detached.
-    pub fn start(&self) -> *mut ::core::ffi::c_char {
-        self.start
-    }
-
-    /// Where the next byte goes.
-    pub fn cursor(&self) -> *mut ::core::ffi::c_char {
-        self.cursor
-    }
-
-    /// The cursor, for the write helpers that advance it as they emit.
-    pub fn cursor_mut(&mut self) -> &mut *mut ::core::ffi::c_char {
-        &mut self.cursor
-    }
-
-    /// Put the cursor at `at`, which must be inside the window.
-    pub fn set_cursor(&mut self, at: *mut ::core::ffi::c_char) {
-        debug_assert!(self.start.addr() <= at.addr() && at.addr() <= self.end.addr());
-        self.cursor = at;
-    }
-
-    /// How many bytes have been packed into the window.
+    /// How many bytes have been packed into the block.
     pub fn used(&self) -> usize {
-        self.cursor.addr() - self.start.addr()
+        self.block.len()
     }
 
-    /// How much room is left before the window has to be flushed.
+    /// How much room is left before the block has to be flushed.
     pub fn remaining(&self) -> usize {
-        self.end.addr() - self.cursor.addr()
+        self.block.capacity() - self.block.len()
     }
 
-    /// The whole window, packed or not.
+    /// The whole block, packed or not.
     pub fn capacity(&self) -> usize {
-        self.end.addr() - self.start.addr()
+        self.block.capacity()
+    }
+
+    /// Append `bytes`.
+    #[inline(always)]
+    pub fn push(&mut self, bytes: &[u8]) {
+        self.block.extend_from_slice(bytes);
+    }
+
+    /// Append one byte.
+    #[inline(always)]
+    pub fn push_byte(&mut self, byte: u8) {
+        self.block.push(byte);
+    }
+
+    /// Overwrite the 16-bit placeholder at `at`, most significant byte
+    /// first: a header written before its length was known.
+    pub fn patch_be16(&mut self, at: usize, value: uint32_t) {
+        self.block[at..at + 2].copy_from_slice(&value.to_be_bytes()[2..]);
+    }
+
+    /// Overwrite the byte at `at`.
+    pub fn patch_byte(&mut self, at: usize, byte: u8) {
+        self.block[at] = byte;
+    }
+
+    /// Append `room` bytes for a caller to fill in, then shorten them to
+    /// what [`fill`] answers it wrote.
+    pub fn fill_with(&mut self, room: usize, fill: impl FnOnce(&mut [u8]) -> usize) {
+        let start = self.block.len();
+        self.block.resize(start + room, 0);
+        let written = fill(&mut self.block[start..]);
+        self.block.truncate(start + written.min(room));
     }
 }
 
@@ -179,76 +151,76 @@ pub const LUA_NOREF: c_int = -2;
 /// The most bytes one msgpack item's tag and inline payload can take.
 pub const MPACK_ITEM_SIZE: c_int = 9;
 
-/// Copies an encoded item through the caller's write cursor.
+/// Appends an encoded item.
 ///
-/// The cursor must have [`MPACK_ITEM_SIZE`] bytes of room, which is what
+/// The block must have [`MPACK_ITEM_SIZE`] bytes of room, which is what
 /// [`mpack_check_buffer`] leaves behind.
-fn emit(cursor: &mut *mut c_char, bytes: &[u8]) {
-    unsafe { cursor.copy_from_nonoverlapping(bytes.as_ptr().cast::<c_char>(), bytes.len()) };
-    *cursor = unsafe { cursor.add(bytes.len()) };
+#[inline(always)]
+fn emit(packer: &mut PackerBuffer, bytes: &[u8]) {
+    packer.push(bytes);
 }
 
-/// Hands the buffer back to its owner to make room, then resumes at whatever
-/// window the owner set up.
+/// Hands the buffer back to its owner to make room, then resumes in
+/// whatever block the owner set up.
 fn flush(packer: &mut PackerBuffer) {
     let hook = packer.packer_flush.expect("packer has no flush hook");
-    unsafe { hook(packer) };
+    hook(packer);
 }
 
 /// The low 16 bits of `value`, most significant byte first.
-pub fn mpack_be16(cursor: &mut *mut c_char, value: uint32_t) {
-    emit(cursor, &value.to_be_bytes()[2..]);
+pub fn mpack_be16(packer: &mut PackerBuffer, value: uint32_t) {
+    emit(packer, &value.to_be_bytes()[2..]);
 }
 
 /// All 32 bits of `value`, most significant byte first.
-pub fn mpack_be32(cursor: &mut *mut c_char, value: uint32_t) {
-    emit(cursor, &value.to_be_bytes());
+pub fn mpack_be32(packer: &mut PackerBuffer, value: uint32_t) {
+    emit(packer, &value.to_be_bytes());
 }
 
-pub fn mpack_uint(cursor: &mut *mut c_char, value: uint32_t) {
-    emit(cursor, format::uint(value).bytes());
+pub fn mpack_uint(packer: &mut PackerBuffer, value: uint32_t) {
+    emit(packer, format::uint(value).bytes());
 }
 
-pub fn mpack_uint64(cursor: &mut *mut c_char, value: uint64_t) {
-    emit(cursor, format::uint64(value).bytes());
+pub fn mpack_uint64(packer: &mut PackerBuffer, value: uint64_t) {
+    emit(packer, format::uint64(value).bytes());
 }
 
-pub fn mpack_integer(cursor: &mut *mut c_char, value: Integer) {
-    emit(cursor, format::integer(value).bytes());
+pub fn mpack_integer(packer: &mut PackerBuffer, value: Integer) {
+    emit(packer, format::integer(value).bytes());
 }
 
-pub fn mpack_float8(cursor: &mut *mut c_char, value: c_double) {
-    emit(cursor, format::float8(value).bytes());
+pub fn mpack_float8(packer: &mut PackerBuffer, value: c_double) {
+    emit(packer, format::float8(value).bytes());
 }
 
-pub fn mpack_bool(cursor: &mut *mut c_char, value: bool) {
-    emit(cursor, format::boolean(value).bytes());
+pub fn mpack_bool(packer: &mut PackerBuffer, value: bool) {
+    emit(packer, format::boolean(value).bytes());
 }
 
-pub fn mpack_nil(cursor: &mut *mut c_char) {
-    emit(cursor, &[format::NIL]);
+pub fn mpack_nil(packer: &mut PackerBuffer) {
+    emit(packer, &[format::NIL]);
 }
 
-pub fn mpack_array(cursor: &mut *mut c_char, len: uint32_t) {
-    emit(cursor, format::array_header(len).bytes());
+pub fn mpack_array(packer: &mut PackerBuffer, len: uint32_t) {
+    emit(packer, format::array_header(len).bytes());
 }
 
-pub fn mpack_map(cursor: &mut *mut c_char, len: uint32_t) {
-    emit(cursor, format::map_header(len).bytes());
+pub fn mpack_map(packer: &mut PackerBuffer, len: uint32_t) {
+    emit(packer, format::map_header(len).bytes());
 }
 
 /// Writes a 16-bit array header whose length is filled in later, and returns
-/// where to fill it in.
+/// the offset to fill it in at.
 ///
 /// The UI event stream is built by appending to an array whose size is not
 /// known until it is flushed, so the header goes out with a placeholder and is
-/// overwritten in place with [`mpack_be16`].
-pub fn mpack_array_dyn16(cursor: &mut *mut c_char) -> *mut c_char {
-    emit(cursor, &[format::ARRAY16]);
-    let pos = *cursor;
+/// overwritten in place with [`PackerBuffer::patch_be16`].
+pub fn mpack_array_dyn16(packer: &mut PackerBuffer) -> usize {
+    emit(packer, &[format::ARRAY16]);
+    let pos = packer.used();
     // A recognisable placeholder rather than zero: a header left unpatched
     // shows up as a decoder error rather than as a silently empty array.
-    mpack_be16(cursor, 0xffef);
+    mpack_be16(packer, 0xffef);
     pos
 }
 
@@ -256,12 +228,10 @@ pub fn mpack_array_dyn16(cursor: &mut *mut c_char) -> *mut c_char {
 ///
 /// Every caller passes a UI event or method name, all of which are well under
 /// the 31-byte limit, so the width choice the general [`mpack_str`] makes is
-/// an assertion here instead. Taking the bytes as a slice keeps this a safe
-/// `fn`; the callers hold their names as `(pointer, length)` inside an unsafe
-/// body, where making the slice costs nothing.
-pub fn mpack_str_small(cursor: &mut *mut c_char, str: &[u8]) {
-    emit(cursor, format::fixstr_header(str.len()).bytes());
-    emit(cursor, str);
+/// an assertion here instead.
+pub fn mpack_str_small(packer: &mut PackerBuffer, str: &[u8]) {
+    emit(packer, format::fixstr_header(str.len()).bytes());
+    emit(packer, str);
 }
 
 /// How much room is left before the buffer has to be flushed.
@@ -291,40 +261,28 @@ fn container_len(size: size_t) -> uint32_t {
 /// Packs `bytes` as a msgpack string.
 pub fn mpack_str(bytes: &[u8], packer: &mut PackerBuffer) {
     let header = format::str_header(bytes.len()).expect("string too long for msgpack");
-    emit(packer.cursor_mut(), header.bytes());
-    // SAFETY: the slice's own bytes.
-    unsafe { mpack_raw(bytes.as_ptr().cast(), bytes.len(), packer) };
+    emit(packer, header.bytes());
+    mpack_raw(bytes, packer);
 }
 
 /// Packs `bytes` as a msgpack binary.
 pub fn mpack_bin(bytes: &[u8], packer: &mut PackerBuffer) {
     let header = format::bin_header(bytes.len()).expect("blob too long for msgpack");
-    emit(packer.cursor_mut(), header.bytes());
-    // SAFETY: the slice's own bytes.
-    unsafe { mpack_raw(bytes.as_ptr().cast(), bytes.len(), packer) };
+    emit(packer, header.bytes());
+    mpack_raw(bytes, packer);
 }
 
-/// Copies `len` opaque bytes, flushing as often as it takes.
+/// Copies opaque bytes, flushing as often as it takes.
 ///
 /// Leaves the buffer ready for another item, so callers that follow a payload
 /// with more structure do not need their own check.
-///
-/// # Safety
-/// `data` must point at `len` readable bytes.
-pub unsafe fn mpack_raw(data: *const c_char, len: size_t, packer: &mut PackerBuffer) {
-    let mut pos: size_t = 0;
-    while pos < len {
-        let to_copy = (len - pos).min(mpack_remaining(packer));
-        // SAFETY: `to_copy` is bounded by both what the caller still owes and
-        // what the buffer window holds.
-        unsafe {
-            packer
-                .cursor()
-                .copy_from_nonoverlapping(data.add(pos), to_copy)
-        };
-        packer.set_cursor(unsafe { packer.cursor().add(to_copy) });
-        pos += to_copy;
-        if pos < len {
+pub fn mpack_raw(data: &[u8], packer: &mut PackerBuffer) {
+    let mut rest = data;
+    while !rest.is_empty() {
+        let (now, later) = rest.split_at(rest.len().min(mpack_remaining(packer)));
+        packer.push(now);
+        rest = later;
+        if !rest.is_empty() {
             flush(packer);
         }
     }
@@ -334,19 +292,15 @@ pub unsafe fn mpack_raw(data: *const c_char, len: size_t, packer: &mut PackerBuf
 /// An extension object: the header, the type byte, then the raw bytes.
 pub fn mpack_ext(bytes: &[u8], ext_type: int8_t, packer: &mut PackerBuffer) {
     let header = format::ext_header(bytes.len(), ext_type).expect("extension too long for msgpack");
-    emit(packer.cursor_mut(), header.bytes());
-    // SAFETY: the slice's own bytes.
-    unsafe { mpack_raw(bytes.as_ptr().cast(), bytes.len(), packer) };
+    emit(packer, header.bytes());
+    mpack_raw(bytes, packer);
 }
 
 /// A buffer, window or tabpage handle. `ext_type` is the msgpack extension
 /// type the wire gives that kind of handle: the variant's distance from
 /// [`Object::Buffer`], so the three are 0, 1 and 2.
 pub fn mpack_handle(ext_type: int8_t, handle: Handle, packer: &mut PackerBuffer) {
-    emit(
-        packer.cursor_mut(),
-        format::handle(ext_type, handle).bytes(),
-    );
+    emit(packer, format::handle(ext_type, handle).bytes());
 }
 
 /// The three extension types, spelled once so the packer's arms and the
@@ -355,195 +309,160 @@ pub(crate) const EXT_BUFFER: int8_t = 0;
 pub(crate) const EXT_WINDOW: int8_t = 1;
 pub(crate) const EXT_TABPAGE: int8_t = 2;
 
-/// # Safety
-/// `obj` must point at a live object; its contents are traversed.
-pub unsafe fn mpack_object(obj: *mut Object, packer: &mut PackerBuffer) {
-    // SAFETY: the caller's object.
-    unsafe { mpack_object_inner(obj, core::ptr::null_mut(), 0, packer) };
+/// Packs `obj`. A luaref inside it is released and packs as nil.
+pub fn mpack_object(obj: &mut Object, packer: &mut PackerBuffer) {
+    mpack_object_inner(obj, packer);
 }
 
 /// Packs an array's elements without wrapping them in another object.
-///
-/// The walk below is iterative for what is *under* an element; the elements
-/// themselves are one loop here, because each is a complete value.
 pub fn mpack_object_array(arr: &mut Array, packer: &mut PackerBuffer) {
-    mpack_array(packer.cursor_mut(), container_len(arr.len()));
+    mpack_array(packer, container_len(arr.len()));
     for item in arr.iter_mut() {
-        // SAFETY: the element is the caller's, live for the walk.
-        unsafe { mpack_object_inner(item, core::ptr::null_mut(), 0, packer) };
+        mpack_object_inner(item, packer);
     }
 }
 
-/// Walks `current` and everything below it, iteratively.
+/// A container whose remaining elements the walk will come back for.
+enum Resume<'a> {
+    Array(core::slice::IterMut<'a, Object>),
+    Dict(core::slice::IterMut<'a, KeyValuePair>),
+}
+
+impl Resume<'_> {
+    fn is_exhausted(&self) -> bool {
+        match self {
+            Resume::Array(items) => items.len() == 0,
+            Resume::Dict(entries) => entries.len() == 0,
+        }
+    }
+}
+
+/// Walks `root` and everything below it, iteratively.
 ///
-/// `container`/`container_idx` name where to resume once `current` is done;
-/// deeper containers are remembered on a stack that stays off the heap for the
-/// first two levels. A single-element array is entered without touching the
-/// stack at all, which is what keeps deeply nested one-element arrays from
-/// growing it.
-///
-/// # Safety
-/// `current` and `container` must point at live objects.
-pub unsafe fn mpack_object_inner(
-    mut current: *mut Object,
-    mut container: *mut Object,
-    mut container_idx: size_t,
-    packer: &mut PackerBuffer,
-) {
-    let mut stack: format::SmallStack<(*mut Object, size_t)> = format::SmallStack::default();
-    'walk: loop {
+/// `container` is where to resume once the current object is done; deeper
+/// containers are remembered on a stack that stays off the heap for the
+/// first two levels. A container whose last element is being walked is not
+/// remembered at all, which is what keeps deeply nested one-element arrays
+/// from growing the stack.
+fn mpack_object_inner(root: &mut Object, packer: &mut PackerBuffer) {
+    let mut stack: format::SmallStack<Resume<'_>> = format::SmallStack::default();
+    let mut container: Option<Resume<'_>> = None;
+    let mut current = root;
+    loop {
         mpack_check_buffer(packer);
-        // SAFETY: `current` points at a live object for the whole walk, and
-        // nothing else holds a reference to it while this borrow lasts.
-        let obj = unsafe { &mut *current };
         // Everything that is not a container writes itself here and moves on;
-        // nil, and a luaref once it has been released, fall through to the
-        // nil byte below.
-        'packed: {
-            match obj {
-                Object::LuaRef(reference) => {
-                    // A released luaref packs as nil, and the slot is
-                    // overwritten so a second pass cannot free it twice.
-                    release_luaref(*reference);
-                    *reference = LUA_NOREF as LuaRef;
-                }
-                Object::Nil => {}
-                Object::Boolean(value) => {
-                    mpack_bool(packer.cursor_mut(), *value);
-                    break 'packed;
-                }
-                Object::Integer(value) => {
-                    mpack_integer(packer.cursor_mut(), *value);
-                    break 'packed;
-                }
-                Object::Float(value) => {
-                    mpack_float8(packer.cursor_mut(), *value);
-                    break 'packed;
-                }
-                Object::String(value) => {
-                    mpack_str(value.as_bytes(), packer);
-                    break 'packed;
-                }
-                Object::Buffer(handle) => {
-                    mpack_handle(EXT_BUFFER, crate::narrow::number_as_int(*handle), packer);
-                    break 'packed;
-                }
-                Object::Window(handle) => {
-                    mpack_handle(EXT_WINDOW, crate::narrow::number_as_int(*handle), packer);
-                    break 'packed;
-                }
-                Object::Tabpage(handle) => {
-                    mpack_handle(EXT_TABPAGE, crate::narrow::number_as_int(*handle), packer);
-                    break 'packed;
-                }
-                Object::Array(array) => {
-                    let (size, items) = (array.len(), array.as_mut_ptr());
-                    mpack_array(packer.cursor_mut(), container_len(size));
-                    if size == 0 {
-                        break 'packed;
-                    }
-                    if size == 1 {
-                        // A one-element array is entered without touching the
-                        // stack.
-                        current = items;
-                        continue 'walk;
-                    }
-                    if !container.is_null() {
-                        stack.push((container, container_idx));
-                    }
-                    container = current;
-                    container_idx = 0;
-                    break 'packed;
-                }
-                Object::Dict(dict) => {
-                    let size = dict.len();
-                    mpack_map(packer.cursor_mut(), container_len(size));
-                    if size == 0 {
-                        break 'packed;
-                    }
-                    if !container.is_null() {
-                        stack.push((container, container_idx));
-                    }
-                    container = current;
-                    container_idx = 0;
-                    break 'packed;
-                }
+        // nil, and a luaref once it has been released, write the nil byte.
+        let opened = match current {
+            Object::LuaRef(reference) => {
+                // A released luaref packs as nil, and the slot is overwritten
+                // so a second pass cannot free it twice.
+                release_luaref(*reference);
+                *reference = LUA_NOREF as LuaRef;
+                mpack_nil(packer);
+                None
             }
-            mpack_nil(packer.cursor_mut());
-        }
-
-        if container.is_null() {
-            match stack.pop() {
-                Some((resume, idx)) => {
-                    container = resume;
-                    container_idx = idx;
-                }
-                None => break,
+            Object::Nil => {
+                mpack_nil(packer);
+                None
             }
-        }
-
-        // SAFETY: `container` is a live array or dict, and `container_idx` is
-        // below its size -- the two assignments below restore that.
-        match unsafe { &mut *container } {
-            Object::Array(arr) => {
-                let len = arr.len();
-                current = unsafe { arr.as_mut_ptr().add(container_idx) };
-                container_idx += 1;
-                if container_idx >= len {
-                    container = core::ptr::null_mut();
-                }
+            Object::Boolean(value) => {
+                mpack_bool(packer, *value);
+                None
+            }
+            Object::Integer(value) => {
+                mpack_integer(packer, *value);
+                None
+            }
+            Object::Float(value) => {
+                mpack_float8(packer, *value);
+                None
+            }
+            Object::String(value) => {
+                mpack_str(value.as_bytes(), packer);
+                None
+            }
+            Object::Buffer(handle) => {
+                mpack_handle(EXT_BUFFER, crate::narrow::number_as_int(*handle), packer);
+                None
+            }
+            Object::Window(handle) => {
+                mpack_handle(EXT_WINDOW, crate::narrow::number_as_int(*handle), packer);
+                None
+            }
+            Object::Tabpage(handle) => {
+                mpack_handle(EXT_TABPAGE, crate::narrow::number_as_int(*handle), packer);
+                None
+            }
+            Object::Array(array) => {
+                mpack_array(packer, container_len(array.len()));
+                (!array.is_empty()).then(|| Resume::Array(array.iter_mut()))
             }
             Object::Dict(dict) => {
-                let len = dict.len();
-                let entry: *mut KeyValuePair = unsafe { dict.as_mut_ptr().add(container_idx) };
-                container_idx += 1;
-                mpack_check_buffer(packer);
-                // SAFETY: `entry` is that live entry of the dictionary.
-                unsafe {
-                    mpack_str((*entry).key.bytes(), packer);
-                    current = &raw mut (*entry).value;
-                }
-                if container_idx >= len {
-                    container = core::ptr::null_mut();
-                }
+                mpack_map(packer, container_len(dict.len()));
+                (!dict.is_empty()).then(|| Resume::Dict(dict.iter_mut()))
             }
-            _ => unreachable!("only an array or a dict is left to resume"),
+        };
+        if let Some(opened) = opened {
+            if let Some(parent) = container.take()
+                && !parent.is_exhausted()
+            {
+                stack.push(parent);
+            }
+            container = Some(opened);
         }
+
+        // The next element of the innermost unfinished container.
+        current = loop {
+            let Some(resume) = container.as_mut() else {
+                match stack.pop() {
+                    Some(parent) => {
+                        container = Some(parent);
+                        continue;
+                    }
+                    None => return,
+                }
+            };
+            match resume {
+                Resume::Array(items) => match items.next() {
+                    Some(item) => break item,
+                    None => container = None,
+                },
+                Resume::Dict(entries) => match entries.next() {
+                    Some(entry) => {
+                        mpack_check_buffer(packer);
+                        mpack_str(entry.key.bytes(), packer);
+                        break &mut entry.value;
+                    }
+                    None => container = None,
+                },
+            }
+        };
     }
 }
+
+/// The initial window of a [`packer_string_buffer`].
+const STRING_BUFFER_INITIAL: size_t = 64;
 
 /// A buffer that grows on the heap instead of flushing anywhere, for callers
 /// that want the packed bytes rather than a stream.
 pub fn packer_string_buffer() -> PackerBuffer {
-    const INITIAL_SIZE: size_t = 64;
-    let alloc = unsafe { xmalloc(INITIAL_SIZE) }.cast::<c_char>();
-    // SAFETY: `xmalloc` never returns null and hands back `INITIAL_SIZE`
-    // bytes nothing else names; `flush_string_buffer` owns them from here
-    // and `pack_to_bytes` gives them away.
-    unsafe { PackerBuffer::new(alloc, INITIAL_SIZE, Some(flush_string_buffer)) }
+    PackerBuffer::new(
+        Vec::with_capacity(STRING_BUFFER_INITIAL),
+        Some(flush_string_buffer),
+    )
 }
 
-/// # Safety
-/// `buffer` points at a live buffer opened by [`packer_string_buffer`], whose
-/// allocation this reallocates.
-unsafe fn flush_string_buffer(buffer: *mut PackerBuffer) {
-    // SAFETY: the caller's buffer, and an allocation only this hook resizes.
-    let buffer = unsafe { &mut *buffer };
-    let new_capacity = 2 * buffer.capacity();
-    let grown = unsafe { xrealloc(buffer.start().cast::<c_void>(), new_capacity) }.cast::<c_char>();
-    // SAFETY: `xrealloc` moved the packed bytes into a block of
-    // `new_capacity`, which the same hook goes on owning.
-    unsafe { buffer.moved_to(grown, new_capacity) };
+/// Doubles a [`packer_string_buffer`]'s block, keeping what was packed.
+fn flush_string_buffer(buffer: &mut PackerBuffer) {
+    let grown = 2 * buffer.capacity();
+    let len = buffer.used();
+    buffer.block.reserve_exact(grown - len);
 }
 
 /// Pack with `pack` into a fresh [`packer_string_buffer`] and answer the
-/// bytes, which adopt the buffer's own allocation rather than copying it.
+/// bytes, which keep the buffer's own allocation.
 pub fn pack_to_bytes(pack: impl FnOnce(&mut PackerBuffer)) -> Vec<u8> {
     let mut packer = packer_string_buffer();
     pack(&mut packer);
-    let (used, capacity) = (packer.used(), packer.capacity());
-    // SAFETY: the buffer this made, an `xmalloc` block of `capacity` bytes
-    // holding `used` packed ones that nothing else names once `packer` goes;
-    // the global allocator is libc's, so a `Vec` may adopt it.
-    unsafe { Vec::from_raw_parts(packer.start().cast::<u8>(), used, capacity) }
+    packer.take()
 }

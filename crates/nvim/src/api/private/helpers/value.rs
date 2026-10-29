@@ -35,7 +35,7 @@ use crate::types::{
     kObjectTypeWindow,
 };
 use ::libc::abort;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 use core::mem::ManuallyDrop;
 
 // -- Ownership -------------------------------------------------------------
@@ -193,10 +193,7 @@ impl Object {
 pub(crate) fn api_metadata() -> Object {
     static METADATA: GlobalCell<Object> = GlobalCell::new(Object::Nil);
     if METADATA.with(Object::is_nil) {
-        let blob = PACKED_API_METADATA.as_ptr() as *mut c_char;
-        // SAFETY: the blob is a compile-time constant of `len` bytes and a
-        // valid msgpack map.
-        let unpacked = unsafe { unpack(blob, PACKED_API_METADATA.len()) };
+        let unpacked = unpack(PACKED_API_METADATA);
         if !unpacked.as_ref().is_ok_and(|o| o.as_dict().is_some()) {
             // SAFETY: `abort` takes nothing.
             unsafe { abort() };

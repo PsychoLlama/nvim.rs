@@ -235,3 +235,63 @@ pub unsafe fn wstream_release_wbuffer(buffer: *mut WBuffer) {
         }
     }
 }
+
+/// One reference to a write buffer: what a block of packed bytes travels
+/// as once it leaves its packer, so one block can go to several writers
+/// (an RPC broadcast) and be released when the last is done with it.
+///
+/// Cloning takes a reference and dropping gives one up; the last frees the
+/// bytes, back onto the arena's reuse list when they are a block's size.
+pub(crate) struct SharedBuffer(ptr::NonNull<WBuffer>);
+
+impl SharedBuffer {
+    /// `bytes` as a buffer, one reference held.
+    pub(crate) fn from_vec(bytes: Vec<u8>) -> Self {
+        let size = bytes.len();
+        let finalizer: wbuffer_data_finalizer = if bytes.capacity() == 0 {
+            // A dangling vector pointer is not a block.
+            None
+        } else if bytes.capacity() == crate::memory::ARENA_BLOCK_SIZE {
+            Some(crate::memory::free_block)
+        } else {
+            Some(crate::memory::xfree)
+        };
+        let data = core::mem::ManuallyDrop::new(bytes).as_mut_ptr();
+        let buffer = wstream_new_buffer(data.cast::<c_char>(), size, 1, finalizer);
+        Self(ptr::NonNull::new(buffer).expect("a boxed buffer is not null"))
+    }
+
+    /// The bytes.
+    pub(crate) fn bytes(&self) -> &[u8] {
+        // SAFETY: the buffer this reference keeps alive, whose `data` is
+        // `size` initialised bytes (or dangling, with `size` 0).
+        unsafe {
+            let buffer = self.0.as_ptr();
+            if (*buffer).size == 0 {
+                return &[];
+            }
+            core::slice::from_raw_parts((*buffer).data.cast::<u8>(), (*buffer).size)
+        }
+    }
+
+    /// Give the reference up to a writer that releases it with
+    /// [`wstream_release_wbuffer`].
+    pub(crate) fn into_raw(self) -> *mut WBuffer {
+        core::mem::ManuallyDrop::new(self).0.as_ptr()
+    }
+}
+
+impl Clone for SharedBuffer {
+    fn clone(&self) -> Self {
+        // SAFETY: the buffer this reference keeps alive.
+        unsafe { (*self.0.as_ptr()).refcount.retain() };
+        Self(self.0)
+    }
+}
+
+impl Drop for SharedBuffer {
+    fn drop(&mut self) {
+        // SAFETY: the reference this value held.
+        unsafe { wstream_release_wbuffer(self.0.as_ptr()) };
+    }
+}

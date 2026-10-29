@@ -323,15 +323,7 @@ pub(crate) fn ui_client_set_size(width: c_int, height: c_int) {
 /// Called by the msgpack decoder for every event in a batch, so the lookup
 /// is on the hot path; a `match` on the bytes compiles to the same
 /// length-then-prefix dispatch the generated perfect hash did.
-///
-/// # Safety
-///
-/// `name` must have `name_len` readable bytes.
-pub(crate) unsafe fn ui_client_get_redraw_handler(
-    name: *const c_char,
-    name_len: usize,
-) -> UIClientHandler {
-    let name = unsafe { core::slice::from_raw_parts(name.cast::<u8>(), name_len) };
+pub(crate) fn ui_client_get_redraw_handler(name: &[u8]) -> UIClientHandler {
     EVENT_HANDLERS
         .iter()
         .find(|handler| handler.event.to_bytes() == name)
@@ -363,7 +355,7 @@ pub(crate) fn handle_ui_client_redraw(
 /// One event's name and the wrapper that decodes it.
 struct Handler {
     event: &'static CStr,
-    wrapper: unsafe fn(Array),
+    wrapper: fn(Array),
 }
 
 /// Every `redraw` event this client understands.
@@ -415,11 +407,7 @@ static EVENT_HANDLERS: [Handler; 27] = {
 ///
 /// The value is **taken** out of the array: an event's arguments are handed
 /// on to the sink, which owns what it is given.
-///
-/// # Safety
-///
-/// `args` must be the array the decoder produced for this event.
-unsafe fn take_arg(args: &mut Array, index: usize, want: Option<ObjectType>) -> Option<Object> {
+fn take_arg(args: &mut Array, index: usize, want: Option<ObjectType>) -> Option<Object> {
     let value = args.get_mut(index)?;
     match want {
         Some(ty) if value.kind() != ty => None,
@@ -509,21 +497,17 @@ macro_rules! forward {
         fn $wrapper:ident($($arg:ident: $ty:ident),* $(,)?) => $sink:ident, $event:expr;
     )*) => {$(
         $(#[$attr])*
-        ///
-        /// # Safety
-        ///
-        /// `args` must be the array the decoder produced for this event.
         // `pub(crate)`, not `pub`: the module is not reachable from outside
         // the crate, so a `pub` here is `unreachable_pub` at the macro's own
         // line, once for all of its expansions.
-        pub(crate) unsafe fn $wrapper(mut args: Array) {
+        pub(crate) fn $wrapper(mut args: Array) {
             // An event may take no arguments, in which case neither of
             // these is read; borrowing them keeps that case warning-free
             // without an allow on every wrapper.
             let mut index = 0usize;
             let _ = (&mut args, &mut index);
             $(
-                let Some($arg) = (unsafe { take_arg(&mut args, index, tag!($ty)) }) else {
+                let Some($arg) = take_arg(&mut args, index, tag!($ty)) else {
                     return bad_event($event, cstr!(stringify!($wrapper)));
                 };
                 index += 1;
@@ -589,15 +573,11 @@ forward! {
 }
 
 /// Resizes a grid, and the buffers a `grid_line` is decoded into.
-///
-/// # Safety
-///
-/// `args` must be the array the decoder produced for this event.
-pub(crate) unsafe fn ui_client_event_grid_resize(mut args: Array) {
+pub(crate) fn ui_client_event_grid_resize(mut args: Array) {
     let (Some(grid), Some(width), Some(height)) = (
-        unsafe { take_arg(&mut args, 0, Some(kObjectTypeInteger)) },
-        unsafe { take_arg(&mut args, 1, Some(kObjectTypeInteger)) },
-        unsafe { take_arg(&mut args, 2, Some(kObjectTypeInteger)) },
+        take_arg(&mut args, 0, Some(kObjectTypeInteger)),
+        take_arg(&mut args, 1, Some(kObjectTypeInteger)),
+        take_arg(&mut args, 2, Some(kObjectTypeInteger)),
     ) else {
         return bad_event(c"grid_resize", c"ui_client_event_grid_resize");
     };
@@ -622,29 +602,26 @@ pub(crate) fn ui_client_event_grid_line(_args: Array) {
 }
 
 /// Paints the cells the decoder wrote into the shared buffers.
-///
-/// # Safety
-///
-/// `g` must be the decoder's event, and the shared buffers must hold the
-/// cells it counted.
-pub(crate) unsafe fn ui_client_event_raw_line(g: *mut GridLineEvent) {
-    let [grid, row, startcol] = unsafe { (*g).args };
-    let endcol = Integer::from(startcol + unsafe { (*g).coloff });
-    let clearcol = endcol + Integer::from(unsafe { (*g).clear_width });
-    let flags = if unsafe { (*g).wrap } {
-        kLineFlagWrap
-    } else {
-        0
-    };
-    let (chars, attrs) = Unpacker::grid_line_cells();
+pub(crate) fn ui_client_event_raw_line(g: &GridLineEvent) {
+    let [grid, row, startcol] = g.args;
+    let endcol = Integer::from(startcol + g.coloff);
+    let clearcol = endcol + Integer::from(g.clear_width);
+    let flags = if g.wrap { kLineFlagWrap } else { 0 };
+    let (chars, attrs, width) = Unpacker::grid_line_cells();
+    // The decoder only counts a cell it wrote, which bounds the run the TUI
+    // reads; an event that claims more is not drawn.
+    if usize::try_from(g.coloff).map_or(true, |cells| cells > width) {
+        return;
+    }
     let (grid, row, startcol) = (
         Integer::from(grid),
         Integer::from(row),
         Integer::from(startcol),
     );
-    // SAFETY: the decoder filled `g` for this event, and the TUI is started.
+    // SAFETY: the decoder wrote the `coloff` cells the run spans, and the
+    // TUI is started.
     unsafe {
-        let attr = Integer::from((*g).cur_attr);
+        let attr = Integer::from(g.cur_attr);
         tui_state(|t| {
             tui_raw_line(
                 t, grid, row, startcol, endcol, clearcol, attr, flags, chars, attrs,
@@ -655,16 +632,12 @@ pub(crate) unsafe fn ui_client_event_raw_line(g: *mut GridLineEvent) {
 
 /// Announces a highlight attribute id, converting both dicts back into the
 /// attribute entry the TUI keeps.
-///
-/// # Safety
-///
-/// `args` must be the array the decoder produced for this event.
-pub(crate) unsafe fn ui_client_event_hl_attr_define(mut args: Array) {
+pub(crate) fn ui_client_event_hl_attr_define(mut args: Array) {
     let (Some(id), Some(rgb), Some(cterm), Some(info)) = (
-        unsafe { take_arg(&mut args, 0, Some(kObjectTypeInteger)) },
-        unsafe { take_arg(&mut args, 1, Some(kObjectTypeDict)) },
-        unsafe { take_arg(&mut args, 2, Some(kObjectTypeDict)) },
-        unsafe { take_arg(&mut args, 3, Some(kObjectTypeArray)) },
+        take_arg(&mut args, 0, Some(kObjectTypeInteger)),
+        take_arg(&mut args, 1, Some(kObjectTypeDict)),
+        take_arg(&mut args, 2, Some(kObjectTypeDict)),
+        take_arg(&mut args, 3, Some(kObjectTypeArray)),
     ) else {
         return bad_event(c"hl_attr_define", c"ui_client_event_hl_attr_define");
     };
@@ -677,17 +650,13 @@ pub(crate) unsafe fn ui_client_event_hl_attr_define(mut args: Array) {
     );
     // Both conversions intern URLs in the TUI, so they run before the
     // state is lent to the definition.
-    let (rgb, cterm) = unsafe { (dict_to_hlattrs(&rgb, true), dict_to_hlattrs(&cterm, false)) };
+    let (rgb, cterm) = (dict_to_hlattrs(&rgb, true), dict_to_hlattrs(&cterm, false));
     tui_state(|t| tui_hl_attr_define(t, id, rgb, cterm, info));
 }
 
 /// The attribute entry `d` describes, as the server's `hl_attr_define`
 /// spelled it.
-///
-/// # Safety
-///
-/// `d` must be a valid dict.
-unsafe fn dict_to_hlattrs(d: &ApiDict, rgb: bool) -> HlAttrs {
+fn dict_to_hlattrs(d: &ApiDict, rgb: bool) -> HlAttrs {
     // Every key unset, which is the state `api_dict_to_keydict` fills in
     // over -- and the only one that lets `dict2hlattrs` tell "the UI said
     // `bold = false`" from "the UI said nothing about `bold`".
@@ -708,12 +677,8 @@ unsafe fn dict_to_hlattrs(d: &ApiDict, rgb: bool) -> HlAttrs {
 
 /// Records the exit status the server asked for; the client exits when the
 /// channel closes.
-///
-/// # Safety
-///
-/// `args` must be the array the decoder produced for this event.
-pub(crate) unsafe fn ui_client_event_error_exit(mut args: Array) {
-    let Some(status) = (unsafe { take_arg(&mut args, 0, Some(kObjectTypeInteger)) }) else {
+pub(crate) fn ui_client_event_error_exit(mut args: Array) {
+    let Some(status) = take_arg(&mut args, 0, Some(kObjectTypeInteger)) else {
         return bad_event(c"error_exit", c"ui_client_event_error_exit");
     };
     let status = status.as_integer().expect("`arg` checked the tag");
@@ -725,12 +690,8 @@ pub(crate) unsafe fn ui_client_event_error_exit(mut args: Array) {
 /// Sent by `:restart`, whose new server is a different process; the
 /// connect is queued rather than done here because this runs from inside
 /// the decode of the old server's stream.
-///
-/// # Safety
-///
-/// `args` must be the array the decoder produced for this event.
-pub(crate) unsafe fn ui_client_event_connect(mut args: Array) {
-    let Some(address) = (unsafe { take_arg(&mut args, 0, Some(kObjectTypeString)) }) else {
+pub(crate) fn ui_client_event_connect(mut args: Array) {
+    let Some(address) = take_arg(&mut args, 0, Some(kObjectTypeString)) else {
         return bad_event(c"connect", c"ui_client_event_connect");
     };
     let address = address.as_string().expect("`arg` checked the tag");
@@ -820,11 +781,7 @@ static restart_pending: GlobalCell<bool> = GlobalCell::new(false);
 ///
 /// The arguments are copied because they live in the decoder's arena,
 /// which is reused as soon as this returns.
-///
-/// # Safety
-///
-/// `args` must be the array the decoder produced for this event.
-pub(crate) unsafe fn ui_client_event_restart(args: Array) {
+pub(crate) fn ui_client_event_restart(args: Array) {
     // `set` drops what the cell held, which frees the previous copy.
     let copied = args.clone();
     restart_args.set(RestartArgs(copied));
@@ -843,7 +800,7 @@ pub(crate) fn ui_client_attach_to_restarted_server() {
     // The arguments move out here, so the cell has nothing left to free and
     // dropping `args` at the end of the scope is the only free.
     let mut args = restart_args.take();
-    let address = unsafe { take_arg(&mut args.0, 0, Some(kObjectTypeString)) };
+    let address = take_arg(&mut args.0, 0, Some(kObjectTypeString));
     match address {
         None => bad_event(c"restart", c"ui_client_attach_to_restarted_server"),
         Some(address) => {

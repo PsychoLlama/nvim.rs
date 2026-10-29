@@ -32,7 +32,7 @@ mod redraw;
 
 pub use events::*;
 pub use line::remote_ui_raw_line;
-pub use packer::remote_ui_flush_pending_data;
+pub use packer::remote_ui_flush_incomplete;
 pub use redraw::{remote_ui_event, remote_ui_hl_attr_define};
 
 use crate::api::private::helpers::{api_typename, string_to_cstr};
@@ -114,11 +114,10 @@ unsafe fn remote_ui_destroy(ui: *mut RemoteUI) {
     // SAFETY: the caller's promise -- `ui` is the `Box::into_raw` pointer
     // `nvim_ui_attach` made, and nothing else names it any more.
     let ui = unsafe { Box::from_raw(ui) };
-    // The pending block, if the UI went away mid-batch, and the terminal
-    // name an option set: the two allocations the struct itself owns.
-    // SAFETY: both are this UI's own, and it is about to be dropped.
-    unsafe { xfree(ui.packer.start().cast()) };
-    // SAFETY: as above.
+    // The terminal name an option set: the allocation the struct owns that
+    // it does not drop itself. The pending block, if the UI went away
+    // mid-batch, goes with the packer.
+    // SAFETY: the UI's own, and it is about to be dropped.
     unsafe { xfree(ui.term_name.cast()) };
 }
 
@@ -264,8 +263,8 @@ impl RemoteUI {
             channel_id,
             packer: PackerBuffer::detached(core::ptr::null_mut(), Some(packer::ui_flush_callback)),
             cur_event: core::ptr::null(),
-            nevents_pos: core::ptr::null_mut(),
-            ncalls_pos: core::ptr::null_mut(),
+            nevents_pos: None,
+            ncalls_pos: None,
             nevents: 0,
             ncalls: 0,
             flushed_events: false,

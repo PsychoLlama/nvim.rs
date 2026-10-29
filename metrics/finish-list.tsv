@@ -1,5 +1,5 @@
 module	file	files	unsafe_stmts	unsafe_fns	wrappers	regions	raw_params	raw_returns	outside_callees
-api/	*	55	317	52	199	deref:42 compound:17 expr:16 ref:1	other:41 str:13	other:3 str:3 value:1	at:16 CStr::from_ptr:9 from_raw_parts:6 ManuallyDrop::take:5 xfree:4 c_str:3 Box::from_raw:2 abort:2
+api/	*	54	305	48	190	deref:42 compound:16 expr:15 ref:1	other:39 str:11	other:3 str:2 value:1	at:16 CStr::from_ptr:9 ManuallyDrop::take:5 from_raw_parts:5 c_str:3 xfree:3 Box::from_raw:2 abort:2
 api/	api/autocmd/create.rs	1	8	0	8	-	-	-	at:2
 api/	api/autocmd/exec.rs	1	3	0	3	-	-	-	-
 api/	api/autocmd/group.rs	1	1	0	1	-	-	-	-
@@ -14,7 +14,7 @@ api/	api/command/cmdline.rs	1	3	2	2	expr:1	other:1 str:1	-	from_raw_parts:1
 api/	api/command/parse.rs	1	2	0	2	-	-	-	from_raw_parts:1
 api/	api/command/user.rs	1	3	0	1	deref:2	-	-	-
 api/	api/deprecated/bufhl.rs	1	2	0	2	-	-	-	at:2
-api/	api/deprecated/eval.rs	1	7	0	1	compound:1	-	-	-
+api/	api/deprecated/eval.rs	1	6	0	0	compound:1	-	-	-
 api/	api/deprecated/vars.rs	1	0	0	0	-	-	-	-
 api/	api/deprecated/write.rs	1	10	0	0	deref:5 compound:1 expr:1	-	-	-
 api/	api/events.rs	1	1	0	1	-	-	-	c_str:1
@@ -24,17 +24,16 @@ api/	api/extmark/query.rs	1	6	0	5	expr:1	-	-	at_opt:1 mt_inspect:1 xfree:1
 api/	api/extmark/set.rs	1	2	0	1	deref:1	-	-	-
 api/	api/options.rs	1	9	2	9	-	str:2	-	CStr::from_ptr:2 c_str:2 at:1
 api/	api/private/converter.rs	1	1	0	1	-	-	-	arena_mem_free:1
-api/	api/private/dispatch/mod.rs	1	3	2	3	-	str:2	-	c_str_len:1 from_raw_parts:1
 api/	api/private/dispatch_wrappers/ui.rs	1	2	0	2	-	-	-	-
 api/	api/private/helpers/mod.rs	1	5	0	2	deref:3	-	str:1	at:2
 api/	api/private/helpers/text.rs	1	16	5	12	compound:1 deref:1	str:4	str:1	from_raw_parts:2 CStr::from_ptr:1 bytes_at:1 memchrsub:1 strnlen:1 xfree:1 xmemdupz:1 xstrndup:1
-api/	api/private/helpers/value.rs	1	8	0	8	-	-	-	ManuallyDrop::take:5 abort:1 unpack:1
+api/	api/private/helpers/value.rs	1	7	0	7	-	-	-	ManuallyDrop::take:5 abort:1
 api/	api/private/helpers/vimdict.rs	1	8	0	4	expr:2 deref:1 ref:1	-	value:1	tv_copy:2 dict_watcher_notify:1 tv_clear:1
 api/	api/tabpage.rs	1	1	0	1	-	-	-	abort:1
 api/	api/ui/events.rs	1	30	13	9	deref:9 compound:4 expr:1	other:12 str:1	-	hlattrs2dict:1
-api/	api/ui/line.rs	1	27	5	17	compound:3 deref:3	other:11	str:1	from_raw_parts_mut:1
-api/	api/ui/mod.rs	1	25	4	18	deref:5 compound:1	other:2	other:2	Box::from_raw:2 xfree:2 process_events_until:1 ui_attach_impl:1 ui_detach_impl:1 ui_set_ext_option:1
-api/	api/ui/packer.rs	1	17	7	15	deref:1 expr:1	other:7	-	mpack_object_array:1 rpc_write_raw:1 strequal:1
+api/	api/ui/line.rs	1	24	5	16	deref:3 compound:2	other:11	-	-
+api/	api/ui/mod.rs	1	24	4	17	deref:5 compound:1	other:2	other:2	Box::from_raw:2 process_events_until:1 ui_attach_impl:1 ui_detach_impl:1 ui_set_ext_option:1 xfree:1
+api/	api/ui/packer.rs	1	15	5	14	deref:1	other:5	-	mpack_object_array:1 strequal:1
 api/	api/ui/redraw.rs	1	17	5	15	compound:1	other:5	-	arena_mem_free:1
 api/	api/vim/client.rs	1	0	0	0	-	-	-	-
 api/	api/vim/context.rs	1	2	0	1	expr:1	-	-	at:1
@@ -42,7 +41,7 @@ api/	api/vim/echo.rs	1	16	0	1	compound:1	-	-	-
 api/	api/vim/handles.rs	1	0	0	0	-	-	-	-
 api/	api/vim/highlight.rs	1	1	0	0	expr:1	-	-	-
 api/	api/vim/input.rs	1	4	0	1	deref:2 expr:1	-	-	slice_at:1
-api/	api/vim/inspect.rs	1	6	0	5	deref:1	-	-	at:3 unpack:1
+api/	api/vim/inspect.rs	1	5	0	4	deref:1	-	-	at:3
 api/	api/vim/marks.rs	1	3	0	2	deref:1	-	-	at:2
 api/	api/vim/paste.rs	1	3	0	3	-	-	other:1	terminal_set_streamed_paste:2 at:1
 api/	api/vim/redraw.rs	1	3	0	1	compound:1	-	-	-
@@ -102,22 +101,8 @@ mbyte/	*	3	11	4	5	deref:3 compound:1	str:4	-	-
 mbyte/	mbyte/utf8/mod.rs	1	10	3	5	deref:2 compound:1	str:3	-	-
 mbyte/	mbyte/utf8/tables.rs	1	0	0	0	-	-	-	-
 mbyte/	mbyte/utf8/text.rs	1	1	1	0	deref:1	str:1	-	-
-message_fmt/	*	1	2	2	2	-	other:1 str:1	str:3	at_opt:1 from_raw_parts:1
-message_fmt/	message_fmt/mod.rs	1	2	2	2	-	other:1 str:1	str:3	at_opt:1 from_raw_parts:1
-mpack/	*	4	158	26	28	deref:101 expr:17 ref:5	other:48 pp_str:10 str:1	other:3	from_raw_parts:3 from_raw_parts_mut:2 .sub:1 .write:1
-mpack/	mpack/conv.rs	1	5	0	0	expr:5	str:1	-	-
-mpack/	mpack/mpack_core.rs	1	29	5	6	deref:19 expr:2 ref:2	other:9 pp_str:3	-	from_raw_parts:3 .write:1 from_raw_parts_mut:1
-mpack/	mpack/object.rs	1	72	9	8	deref:56 expr:4	other:15 pp_str:2	other:3	.sub:1
-mpack/	mpack/rpc.rs	1	52	12	14	deref:26 expr:6 ref:3	other:24 pp_str:5	-	from_raw_parts_mut:1
-msgpack_rpc/	*	8	303	45	144	deref:68 expr:25 ref:13 compound:11	other:29 str:25 value:4 pp:3 void:3	str:5 other:4	c_str:7 arena_mem_free:6 multiqueue_put_event:6 socket_watcher_close:4 xfree:4 .add:3 CStr::from_ptr:3 abort:3
-msgpack_rpc/	msgpack_rpc/channel/envelope.rs	1	27	8	21	deref:4 expr:1 ref:1	other:5 str:1 value:1	other:1	alloc_block:1 bytes_at:1 free_block:1 from_raw_parts_mut:1 remote_ui_flush_pending_data:1
-msgpack_rpc/	msgpack_rpc/channel/mod.rs	1	55	10	36	deref:9 ref:3 expr:2 compound:1	other:5 str:4 pp:2	other:1 str:1	wstream_release_wbuffer:3 arena_mem_free:2 multiqueue_put_event:2 CStr::from_ptr:1 arena_finish:1 at_opt:1 c_str:1 cstr_to_string:1
-msgpack_rpc/	msgpack_rpc/channel/receive.rs	1	42	3	27	deref:5 compound:2 expr:2	str:2 other:1 pp:1 void:1	-	multiqueue_put_event:4 arena_mem_free:3 snprintf:2 at:1 c_str_len:1 handler:1 ui_client_event_raw_line:1 xfree:1
-msgpack_rpc/	msgpack_rpc/channel/trace.rs	1	1	1	1	-	str:1	-	c_str:1
-msgpack_rpc/	msgpack_rpc/packer/mod.rs	1	22	7	13	expr:4 ref:3 compound:1	str:14 value:3 other:1	str:1	.add:1 .copy_from_nonoverlapping:1 Vec::from_raw_parts:1 hook:1 xmalloc:1 xrealloc:1
-msgpack_rpc/	msgpack_rpc/server.rs	1	44	4	23	expr:3 compound:2 deref:2 ref:1	other:3 void:2 str:1	str:2	c_str:5 socket_watcher_close:4 CStr::from_ptr:2 strequal:2 xfree:2 XString::from_raw:1 at:1 at_opt:1
-msgpack_rpc/	msgpack_rpc/unpacker/mod.rs	1	96	10	18	deref:48 expr:10 compound:3 ref:3	other:13 str:1	-	.add:2 abort:2 mpack_tokbuf_init:2 String_0::from_owned_parts:1 arena_mem_free:1 mpack_parse:1 mpack_parser_init:1 mpack_read:1
-msgpack_rpc/	msgpack_rpc/unpacker/redraw.rs	1	16	2	5	expr:3 compound:2 ref:2	other:1 str:1	other:2 str:1	from_raw_parts:2 abort:1 ui_client_get_redraw_handler:1
+message_fmt/	*	1	1	1	1	-	other:1	str:3	at_opt:1
+message_fmt/	message_fmt/mod.rs	1	1	1	1	-	other:1	str:3	at_opt:1
 startup/	*	2	0	0	0	-	-	-	-
 startup/	startup/entry.rs	1	0	0	0	-	-	-	-
 startup/	startup/mod.rs	1	0	0	0	-	-	-	-
@@ -130,8 +115,8 @@ ui/	ui/callbacks.rs	1	4	1	3	expr:1	str:2	-	CStr::from_ptr:1 remote_ui_event:1
 ui/	ui/mod.rs	1	33	3	15	deref:14 ref:3 expr:1	other:5 pp:1	other:2 str:1	cstr_to_string:3 arena_mem_free:1 bytes_at:1 from_raw_parts:1 multiqueue_put_event:1 remote_ui_hl_attr_define:1 remote_ui_hl_group_set:1 remote_ui_option_set:1
 ui/	ui/mouse.rs	1	4	0	2	deref:2	-	-	.add:1 at:1
 ui/	ui/sinks.rs	1	8	3	7	expr:1	other:7	-	remote_ui_chdir:1 remote_ui_raw_line:1 remote_ui_set_title:1 ui_comp_msg_set_pos:1 ui_comp_raw_line:1
-ui_client.rs	*	1	35	12	22	deref:5 expr:3 compound:2	str:2 other:1 pp:1	-	CStr::from_ptr:2 xfree:2 c_str:1 cstr_to_string:1 from_raw_parts:1 multiqueue_put_event:1 process_events:1 tui_add_url:1
-ui_client.rs	ui_client.rs	1	35	12	22	deref:5 expr:3 compound:2	str:2 other:1 pp:1	-	CStr::from_ptr:2 xfree:2 c_str:1 cstr_to_string:1 from_raw_parts:1 multiqueue_put_event:1 process_events:1 tui_add_url:1
+ui_client.rs	*	1	18	2	10	compound:2 expr:2 deref:1	pp:1 str:1	-	CStr::from_ptr:2 xfree:2 c_str:1 cstr_to_string:1 multiqueue_put_event:1 process_events:1 tui_add_url:1
+ui_client.rs	ui_client.rs	1	18	2	10	compound:2 expr:2 deref:1	pp:1 str:1	-	CStr::from_ptr:2 xfree:2 c_str:1 cstr_to_string:1 multiqueue_put_event:1 process_events:1 tui_add_url:1
 ui_compositor/	*	1	9	5	5	deref:2 compound:1	other:5	-	GridRef::new:2 ui_composed_call_raw_line:2 from_raw_parts:1
 ui_compositor/	ui_compositor/mod.rs	1	9	5	5	deref:2 compound:1	other:5	-	GridRef::new:2 ui_composed_call_raw_line:2 from_raw_parts:1
 version/	*	1	3	0	2	deref:1	-	-	at:1

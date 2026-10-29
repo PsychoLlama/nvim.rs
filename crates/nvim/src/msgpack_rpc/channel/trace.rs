@@ -1,5 +1,4 @@
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -14,9 +13,9 @@
 //! is left to `logmsg` rather than done at the call sites.
 
 use crate::log::logmsg_tagged;
-use core::ffi::{CStr, c_char};
+use core::ffi::CStr;
 
-use crate::message_fmt::{c_str, msg_cstr};
+use crate::message_fmt::{msg_cstr, msg_cstr_opt};
 use crate::types::{uint32_t, uint64_t};
 
 /// Fixed-width columns, so consecutive lines align. The trailing spaces are
@@ -49,19 +48,12 @@ pub use column::{RECV, SEND};
 /// `req_id` is `None` for a notification, which carries no id and is logged in
 /// the `[notify]` column instead.
 ///
-/// # Safety
-/// `name` is a NUL-terminated string, or null — an unresolved handler leaves
-/// null behind, and `c_str` prints it as `[NULL]`. glibc's `%s` wrote
-/// `(null)` there; the text of one debug line moves, nothing else.
-pub unsafe fn log_call(
-    dir: &CStr,
-    channel_id: uint64_t,
-    req_id: Option<uint32_t>,
-    name: *const c_char,
-) {
+/// An unresolved handler has no `name`, which prints as `[NULL]`. glibc's
+/// `%s` wrote `(null)` there; the text of one debug line moves, nothing
+/// else.
+pub fn log_call(dir: &CStr, channel_id: uint64_t, req_id: Option<uint32_t>, name: Option<&CStr>) {
     let dir = msg_cstr(dir);
-    // SAFETY: the caller's promise -- `name` is NUL-terminated or null.
-    let name = unsafe { c_str(name) };
+    let name = msg_cstr_opt(name);
     // A traced line is always `<direction> <channel>: <column>` and then
     // whatever the kind adds. The closure runs only when a debug log is
     // open, so an editor that is not tracing pays nothing to build it.

@@ -211,6 +211,5 @@ pub fn nvim__invalidate_glyph_cache() {
 // `nvim__unpack` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
 pub fn nvim__unpack(str: String_0) -> Result<Object, Error> {
-    // SAFETY: the caller's string names its own bytes.
-    unsafe { unpack(str.data(), str.len()) }
+    unpack(str.as_bytes())
 }

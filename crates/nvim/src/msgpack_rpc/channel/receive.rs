@@ -1,5 +1,4 @@
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -16,345 +15,322 @@
 //! Split out of [`super`] because the two halves of the channel barely touch:
 //! everything here starts at bytes the transport handed over and ends at a
 //! handler, a waiting call frame or a closed channel.
+//!
+//! Each message is decoded, and routed as far as routing runs no user code,
+//! inside one borrow of the channel ([`next_message`]); what is left — a
+//! handler run on the spot, a refusal sent back, a redraw applied — runs
+//! after the borrow ends, so it may reach the channel table itself.
 
-use crate::cstr;
-use crate::event::multiqueue::queue_in;
-use crate::snprintf;
-use core::ffi::{c_char, c_void};
-use core::{mem, ptr};
+use core::ffi::{CStr, c_int, c_void};
 
 use crate::api::private::dispatch_wrappers::{handle_nvim_get_mode, handle_nvim_ui_try_resize};
-use crate::channel::find_channel;
-use crate::event::r#loop::one_arg_event;
-use crate::event::multiqueue::{event_create_oneshot, multiqueue_put_event};
+use crate::channel::{channel_decref, with_channel};
+use crate::event::multiqueue::{put_job, put_job_in, put_job_on_either};
 use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_INF, logmsg};
-use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, xfree, xmalloc};
-use crate::message_fmt::{c_str_len, msg_addr};
+use crate::memory::ARENA_EMPTY;
+use crate::message_fmt::{msg_addr, msg_bytes};
 use crate::msgpack_rpc::channel::ch_before_blocking_events;
-use crate::msgpack_rpc::unpacker::unpacker_advance;
 use crate::os::input::input_blocking;
 use crate::startup::ui_client_attached;
 use crate::types::{
-    ApiDispatchFn, Array, Error, MessageType, MsgpackRpcRequestHandler, Object, RStream, Unpacker,
-    kErrorTypeException, size_t, uint32_t, uint64_t,
+    ApiDispatchFn, Array, Channel, Error, GridLineEvent, MessageType, MsgpackRpcRequestHandler,
+    Object, RpcState, kErrorTypeException, uint32_t, uint64_t,
 };
 use crate::ui::state::resize_events;
 use crate::ui_client::ui_client_event_raw_line;
 
 use super::envelope::serialize_response;
 use super::known::*;
-use super::{Chan, RequestEvent, chan_close_on_err, trace};
+use super::{chan_close_on_err, close_message, trace};
 
 // ---------------------------------------------------------------------------
 // Receiving
 // ---------------------------------------------------------------------------
 
-/// The channel's read callback: decodes as much as the buffer holds and
-/// reports how many bytes were consumed.
-///
-/// # Safety
-/// libuv's contract: `rbuf` is `c` readable bytes and `data` is the channel
-/// [`rpc_start`] registered.
-pub(crate) unsafe fn receive_msgpack(
-    stream: *mut RStream,
-    rbuf: *const c_char,
-    c: size_t,
-    data: *mut c_void,
-    eof: bool,
-) -> size_t {
-    // The channel this callback was registered with, by id; the reference
-    // is dropped at the end.
-    let id = data.addr() as uint64_t;
-    // SAFETY: the channel the stream belongs to, live while it reads.
-    let chan = unsafe { Chan::new(find_channel(id)) };
-    chan.retain();
-    let from = stream.cast::<c_void>();
+/// The channel's read callback: decodes as much of `bytes` as it can and
+/// reports how many were consumed. `from` is the stream, for the log.
+pub(crate) fn receive_msgpack(id: uint64_t, from: *const c_void, bytes: &[u8], eof: bool) -> usize {
     logmsg!(
         LOGLVL_DBG,
         c"receive_msgpack",
         211,
         "ch {}: parsing {} bytes from msgpack Stream: {}",
         id,
-        c,
+        bytes.len(),
         msg_addr(from)
     );
 
     let mut consumed = 0;
-    if c > 0 {
-        // SAFETY: the caller's buffer, which stays readable for this call.
-        let p = unsafe { chan.unpacker() };
-        p.read_ptr = rbuf;
-        p.read_size = c;
-        parse_msgpack(chan);
-        // A rejected message leaves `read_size` meaningless; consuming
+    if !bytes.is_empty() {
+        let (left, rejected) = parse_msgpack_reporting(id, bytes);
+        // A rejected message leaves the position meaningless; consuming
         // nothing keeps the buffer for the close path to report on.
-        if p.state >= 0 {
-            consumed = c - p.read_size;
+        if !rejected {
+            consumed = bytes.len() - left;
         }
     }
     if eof {
-        let mut buf = [0 as c_char; CLOSE_MSG_MAX];
-        let (into, cap) = (buf.as_mut_ptr(), buf.len());
-        let fmt = c"ch %lu was closed by the peer".as_ptr();
-        unsafe { snprintf!(into, cap, fmt, id) };
-        unsafe { chan_close_on_err(chan, buf.as_mut_ptr(), LOGLVL_INF) };
+        let msg = close_message(c"ch %lu was closed by the peer", &[id.into()]);
+        chan_close_on_err(id, &msg, LOGLVL_INF);
     }
-    // The reference taken above.
-    chan.release();
     consumed
 }
 
-/// Drains whole messages out of the unpacker and routes each one.
-pub(super) fn parse_msgpack(chan: Chan) {
-    // SAFETY: the caller's channel and its decoder.
-    let p = unsafe { chan.unpacker() };
-    while unsafe { unpacker_advance(p) } {
-        match p.type_0 {
-            kMessageTypeRedrawEvent => {
-                dispatch_redraw(p);
-                unsafe { arena_mem_free(arena_finish(&raw mut p.arena)) };
+/// Drains whole messages out of `bytes` and routes each one; answers how
+/// many bytes are left over.
+pub(super) fn parse_msgpack(id: uint64_t, bytes: &[u8]) -> usize {
+    parse_msgpack_reporting(id, bytes).0
+}
+
+/// [`parse_msgpack`], and whether the decoder rejected the stream.
+fn parse_msgpack_reporting(id: uint64_t, bytes: &[u8]) -> (usize, bool) {
+    let mut input = bytes;
+    loop {
+        let Some(step) = with_channel(id, |chan| next_message(chan, &mut input)) else {
+            return (input.len(), false);
+        };
+        match step {
+            Step::Wait => return (input.len(), false),
+            Step::Rejected(why) => {
+                chan_close_on_err(id, why.to_bytes(), LOGLVL_INF);
+                return (input.len(), true);
             }
-            kMessageTypeResponse => {
-                if !complete_call(chan, p) {
-                    return;
-                }
+            Step::Close(why, level) => {
+                chan_close_on_err(id, &why, level);
+                return (input.len(), false);
             }
-            _ => {
-                if !dispatch_incoming(chan, p) {
-                    return;
-                }
-            }
+            Step::Routed => {}
+            Step::Run(request) => request_event(request),
+            Step::Refuse(request, error) => send_error(&request, &error),
+            Step::Redraw(redraw) => dispatch_redraw(redraw),
         }
     }
-    if p.state < 0 {
-        let why = p.unpack_error.message_or_empty().as_ptr().cast_mut();
-        // SAFETY: the channel is live and the message is the decoder's own.
-        unsafe { chan_close_on_err(chan, why, LOGLVL_INF) };
-        p.unpack_error.clear();
-    }
 }
 
-/// Applies a `redraw` batch from the server this UI client is attached to.
-///
-/// `grid_line` is decoded straight into an event by the unpacker (it is by far
-/// the most frequent one), so it is offered first and separately.
-fn dispatch_redraw(p: &mut Unpacker) {
-    if !ui_client_attached.get() {
-        return;
-    }
-    if p.has_grid_line_event {
-        // SAFETY: the event the unpacker just filled in.
-        unsafe { ui_client_event_raw_line(&raw mut p.grid_line_event) };
-        p.has_grid_line_event = false;
-    } else if let Some(handler) = p.ui_handler.fn_0
-        && let Some(args) = p.result.take().into_array()
-    {
-        // SAFETY: the handler was resolved from the event name by the
-        // unpacker, and takes the argument array over.
-        unsafe { handler(args) };
-    }
+/// What the decoder made of the next message, once it has been routed as
+/// far as can be done with the channel borrowed.
+enum Step {
+    /// No whole message yet.
+    Wait,
+    /// The stream is not msgpack-rpc, and why.
+    Rejected(std::ffi::CString),
+    /// The message breaks the protocol: close the channel with this message.
+    Close(Vec<u8>, c_int),
+    /// Answered a call, or queued a request: nothing left to do.
+    Routed,
+    /// A fast request, to run right here.
+    Run(Request),
+    /// A request whose method did not resolve, and why.
+    Refuse(Request, Error),
+    /// A `redraw` event for this UI client.
+    Redraw(Redraw),
 }
 
-/// Hands a response to the call that is waiting for it.
-///
-/// Returns false when the response could not be placed, in which case the
-/// channel has been closed and decoding must stop.
-fn complete_call(chan: Chan, p: &mut Unpacker) -> bool {
-    let stack = &chan.rpc.call_stack;
-    let frame = if chan.rpc.client_type == kClientTypeMsgpackRpc {
-        stack.find(p.request_id)
-    } else {
-        stack.top_matching(p.request_id)
-    };
-    let Some(frame) = frame else {
-        let mut buf = [0 as c_char; CLOSE_MSG_MAX];
-        let (into, cap) = (buf.as_mut_ptr(), buf.len());
-        let fmt = c"ch %lu (type=%u) returned a response with an unknown request id %u. Ensure the client is properly synchronized"
-            .as_ptr();
-        let kind = chan.rpc.client_type.cast_unsigned();
-        let want = p.request_id;
-        unsafe { snprintf!(into, cap, fmt, chan.id, kind, want) };
-        unsafe { chan_close_on_err(chan, buf.as_mut_ptr(), LOGLVL_ERR) };
-        return false;
-    };
+/// One `redraw` event, decoded.
+enum Redraw {
+    /// A `grid_line`, decoded straight into the shared line buffers.
+    Line(GridLineEvent),
+    /// Any other event, with its arguments.
+    Event(Option<fn(Array)>, Object),
+}
 
-    // SAFETY: the frame is a `rpc_send_call` stack frame that is still on the
-    // call stack, so it outlives this write.
-    unsafe { (*frame).returned = true };
-    unsafe { (*frame).errored = !p.error.is_nil() };
-    unsafe {
-        (*frame).result = if (*frame).errored {
-            p.error.take()
+/// A request or notification on its way to its handler. It holds a
+/// reference to its channel, which [`request_event`] drops.
+struct Request {
+    channel: uint64_t,
+    type_0: MessageType,
+    handler: MsgpackRpcRequestHandler,
+    args: Array,
+    request_id: uint32_t,
+}
+
+/// Decode the next message out of `input` and route it.
+fn next_message(chan: &mut Channel, input: &mut &[u8]) -> Step {
+    let id = chan.id;
+    let RpcState {
+        unpacker,
+        call_stack,
+        client_type,
+        ..
+    } = &mut chan.rpc;
+    let Some(p) = unpacker.as_deref_mut() else {
+        return Step::Wait;
+    };
+    if !p.advance(input) {
+        if p.state < 0 {
+            let why = p.unpack_error.message_or_empty().to_owned();
+            p.unpack_error.clear();
+            return Step::Rejected(why);
+        }
+        return Step::Wait;
+    }
+    match p.type_0 {
+        kMessageTypeRedrawEvent => Step::Redraw(if p.has_grid_line_event {
+            p.has_grid_line_event = false;
+            Redraw::Line(p.grid_line_event)
         } else {
-            p.result.take()
-        };
-    };
-    unsafe { (*frame).result_mem = arena_finish(&raw mut p.arena) };
-    trace::log_response(
-        trace::RECV,
-        chan.id,
-        unsafe { (*frame).errored },
-        p.request_id,
+            Redraw::Event(p.ui_handler.fn_0, p.result.take())
+        }),
+        kMessageTypeResponse => {
+            // Hand the response to the call that is waiting for it.
+            let frame = if *client_type == kClientTypeMsgpackRpc {
+                call_stack.find(p.request_id)
+            } else {
+                call_stack.top_matching(p.request_id)
+            };
+            let Some(frame) = frame else {
+                let msg = close_message(
+                    c"ch %lu (type=%u) returned a response with an unknown request id %u. Ensure the client is properly synchronized",
+                    &[id.into(), client_type.cast_unsigned().into(), p.request_id.into()],
+                );
+                return Step::Close(msg, LOGLVL_ERR);
+            };
+            frame.returned = true;
+            frame.errored = !p.error.is_nil();
+            frame.result = if frame.errored {
+                p.error.take()
+            } else {
+                p.result.take()
+            };
+            trace::log_response(trace::RECV, id, frame.errored, p.request_id);
+            Step::Routed
+        }
+        _ => {
+            let req_id = (p.type_0 != kMessageTypeNotification).then_some(p.request_id);
+            trace::log_call(trace::RECV, id, req_id, p.handler.name);
+            let Some(args) = p.result.take().into_array() else {
+                let why = b"msgpack-rpc request args must be an array".to_vec();
+                return Step::Close(why, LOGLVL_ERR);
+            };
+            let request = Request {
+                channel: id,
+                type_0: p.type_0,
+                handler: p.handler,
+                args,
+                request_id: p.request_id,
+            };
+            // The decoder could not resolve a handler, so `unpack_error` says
+            // why.
+            if request.handler.fn_0.is_none() {
+                let why = core::mem::take(&mut p.unpack_error);
+                return Step::Refuse(request, why);
+            }
+            let method_name_len = p.method_name_len;
+            schedule(chan, request, method_name_len)
+        }
+    }
+}
+
+/// Decides where a request runs: here, on the channel's queue, or on the
+/// queue that is drained just before the editor blocks for input. The
+/// request takes a reference to the channel, whichever it is.
+fn schedule(chan: &mut Channel, request: Request, method_name_len: usize) -> Step {
+    debug_assert!(
+        request.type_0 == kMessageTypeRequest || request.type_0 == kMessageTypeNotification
     );
-    true
-}
-
-/// Routes a request or notification to its handler.
-///
-/// Returns false when the message was malformed and the channel was closed.
-fn dispatch_incoming(chan: Chan, p: &mut Unpacker) -> bool {
-    let req_id = (p.type_0 != kMessageTypeNotification).then_some(p.request_id);
-    // SAFETY: the handler name is either null or a static string.
-    unsafe { trace::log_call(trace::RECV, chan.id, req_id, p.handler.name) };
-
-    let Some(args) = p.result.take().into_array() else {
-        // SAFETY: a static string, and the channel is live.
-        let why = c"msgpack-rpc request args must be an array"
-            .as_ptr()
-            .cast_mut();
-        unsafe { chan_close_on_err(chan, why, LOGLVL_ERR) };
-        return false;
-    };
-    handle_request(chan, p, args);
-    true
-}
-
-/// Decides where a request runs: here, on the channel's queue, or on the queue
-/// that is drained just before the editor blocks for input.
-fn handle_request(chan: Chan, p: &mut Unpacker, args: Array) {
-    debug_assert!(p.type_0 == kMessageTypeRequest || p.type_0 == kMessageTypeNotification);
-
-    // The decoder could not resolve a handler, so `unpack_error` says why.
-    let Some(handler_fn) = p.handler.fn_0 else {
-        let why = p.unpack_error.message_or_empty().as_ptr().cast_mut();
-        let (handler, kind, id) = (p.handler, p.type_0, p.request_id);
-        // SAFETY: the channel is live and the message is the decoder's own.
-        unsafe { send_error(chan, handler, kind, id, why) };
-        p.unpack_error.clear();
-        unsafe { arena_mem_free(arena_finish(&raw mut p.arena)) };
-        return;
-    };
-
-    // SAFETY: `xmalloc` hands back `size_of::<RequestEvent>()` writable bytes,
-    // and the reference taken here is dropped by `request_event`.
-    let evdata = unsafe {
-        let evdata = xmalloc(size_of::<RequestEvent>()).cast::<RequestEvent>();
-        evdata.write(RequestEvent {
-            type_0: p.type_0,
-            channel: chan.as_ptr(),
-            handler: p.handler,
-            args,
-            request_id: p.request_id,
-            // The event takes the arena the request was unpacked into and
-            // frees it when it has run.
-            used_mem: mem::replace(&mut p.arena, ARENA_EMPTY),
-        });
-        chan.retain();
-        evdata
-    };
-
-    // The event owns `evdata` from here on.
-    let event = one_arg_event(Some(request_event), evdata.cast::<c_void>());
-    if p.handler.fast {
+    let handler = request.handler;
+    let handler_fn = handler.fn_0.expect("a resolved handler");
+    chan.refcount.retain();
+    if handler.fast {
         // A "fast" handler may run from the read callback — except
         // `nvim_get_mode`, whose answer is only meaningful once the editor is
         // about to wait for input.
-        let is_get_mode = ptr::fn_addr_eq(handler_fn, handle_nvim_get_mode as ApiDispatchFn);
-        // SAFETY: either queue is live, and running the event here consumes
-        // `evdata` exactly once.
+        let is_get_mode = core::ptr::fn_addr_eq(handler_fn, handle_nvim_get_mode as ApiDispatchFn);
         if is_get_mode && !input_blocking() {
-            unsafe { multiqueue_put_event(queue_in(&ch_before_blocking_events), event) };
-        } else {
-            let mut argv = [evdata.cast::<c_void>()];
-            unsafe { request_event(argv.as_mut_ptr()) };
+            put_job_in(&ch_before_blocking_events, job(request));
+            return Step::Routed;
         }
-        return;
+        return Step::Run(request);
     }
 
     // A resize has to be seen by whichever of the two queues is drained
-    // first, and run only once; a one-shot event does exactly that.
-    let is_resize = ptr::fn_addr_eq(handler_fn, handle_nvim_ui_try_resize as ApiDispatchFn);
+    // first, and run only once.
+    let is_resize = core::ptr::fn_addr_eq(handler_fn, handle_nvim_ui_try_resize as ApiDispatchFn);
     if is_resize {
-        let ev = event_create_oneshot(event, 2);
-        unsafe { multiqueue_put_event(chan.events.as_ptr(), ev.clone()) };
-        unsafe { multiqueue_put_event(queue_in(&resize_events), ev) };
-        return;
+        put_job_on_either(&chan.events, &resize_events, job(request));
+        return Step::Routed;
     }
-    // SAFETY: the channel's queue is live.
-    unsafe { multiqueue_put_event(chan.events.as_ptr(), event) };
-    // SAFETY: the handler name is a static string of at least
-    // `method_name_len` bytes -- the parser measured it there.
-    let name = unsafe { c_str_len(p.handler.name, p.method_name_len) };
+    put_job(&chan.events, job(request));
+    // The handler's name is the method's, of which the wire carried
+    // `method_name_len` bytes.
+    let name = handler.name.map_or(&b""[..], CStr::to_bytes);
+    let name = msg_bytes(&name[..method_name_len.min(name.len())]);
     logmsg!(LOGLVL_DBG, c"handle_request", 347, "RPC: scheduled {name}");
+    Step::Routed
 }
 
-/// Runs one dispatched request and answers it.
-///
-/// # Safety
-/// `argv[0]` is the `RequestEvent` [`handle_request`] allocated, which this
-/// call takes ownership of along with the channel reference it holds.
-unsafe extern "C" fn request_event(argv: *mut *mut c_void) {
-    // SAFETY: `handle_request` built this argument vector around one
-    // `xmalloc`ed `RequestEvent`, whose channel it holds a reference to.
-    let (e, chan) = unsafe {
-        let e = (*argv).cast::<RequestEvent>();
-        (e, Chan::new((*e).channel))
-    };
-    // SAFETY: as above.
-    let (handler, type_0, request_id, args) = unsafe {
-        (
-            (*e).handler,
-            (*e).type_0,
-            (*e).request_id,
-            mem::take(&mut (*e).args),
-        )
-    };
+/// The queued form of a request.
+fn job(request: Request) -> Box<dyn FnOnce()> {
+    Box::new(move || request_event(request))
+}
+
+/// Applies a `redraw` event from the server this UI client is attached to.
+fn dispatch_redraw(redraw: Redraw) {
+    if !ui_client_attached.get() {
+        return;
+    }
+    match redraw {
+        Redraw::Line(event) => ui_client_event_raw_line(&event),
+        Redraw::Event(Some(handler), args) => {
+            if let Some(args) = args.into_array() {
+                handler(args);
+            }
+        }
+        Redraw::Event(None, _) => {}
+    }
+}
+
+/// Runs one dispatched request and answers it, then drops the reference to
+/// the channel the request held.
+fn request_event(request: Request) {
+    let Request {
+        channel: id,
+        type_0,
+        handler,
+        args,
+        request_id,
+    } = request;
     let mut error = Error::none();
 
     // A channel closed while the request sat on a queue is simply dropped —
     // there is nowhere left to send the answer.
-    if !chan.rpc.closed {
-        // SAFETY: the event's own arena, which nothing else reaches while
-        // the handler runs.
-        let mem = unsafe { &mut (*e).used_mem };
+    if with_channel(id, |chan| !chan.rpc.closed) == Some(true) {
+        // Scratch the handler may allocate in. Nothing in the API does any
+        // more -- every answer owns its storage -- so it stays empty.
+        let mut arena = ARENA_EMPTY;
         // A refused call answers nil, as every wrapper's own refusal paths
         // did, and the failure travels in `error` for the response below.
-        let mut answer = match handler.fn_0.expect("dispatched with a handler")(chan.id, args, mem)
-        {
+        let dispatch = handler.fn_0.expect("dispatched with a handler");
+        let mut answer = match dispatch(id, args, &mut arena) {
             Ok(rv) => rv,
             Err(e) => {
                 error = e;
                 Object::Nil
             }
         };
+        debug_assert!(
+            arena.cur_blk.is_null(),
+            "a handler allocated into its arena"
+        );
         // A notification is only answered when it failed, and then with
         // `nvim_error_event` rather than a response.
         if type_0 == kMessageTypeRequest || error.is_set() {
-            let (to, out) = (chan.as_ptr(), &raw mut answer);
-            unsafe { serialize_response(to, handler, type_0, request_id, &error, out) };
+            serialize_response(id, handler, type_0, request_id, &error, &mut answer);
         }
     }
-    // SAFETY: the arena, the reference and the allocation this event owned.
-    unsafe { arena_mem_free(arena_finish(&raw mut (*e).used_mem)) };
-    chan.release();
-    unsafe { xfree(e.cast::<c_void>()) };
-    error.clear();
+    channel_decref(id);
 }
 
 /// Answers a request that never reached a handler.
-///
-/// # Safety
-/// `chan` is live and `err` is a NUL-terminated string.
-unsafe fn send_error(
-    chan: Chan,
-    handler: MsgpackRpcRequestHandler,
-    type_0: MessageType,
-    id: uint32_t,
-    err: *mut c_char,
-) {
+fn send_error(request: &Request, why: &Error) {
     let mut answer = Object::Nil;
-    // SAFETY: the message the caller handed over, live for this call.
-    let e = Error::from_message(kErrorTypeException, unsafe { cstr::at(err) });
-    let (to, out) = (chan.as_ptr(), &raw mut answer);
-    unsafe { serialize_response(to, handler, type_0, id, &e, out) };
+    let e = Error::from_message(kErrorTypeException, why.message_or_empty());
+    serialize_response(
+        request.channel,
+        request.handler,
+        request.type_0,
+        request.request_id,
+        &e,
+        &mut answer,
+    );
 }

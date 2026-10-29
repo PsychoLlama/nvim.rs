@@ -5,19 +5,12 @@
 //! takes msgpack goes through, with an emphasis on inputs that are not valid
 //! msgpack at all.
 
-use std::ffi::c_char;
-
-use neovim::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
 use neovim::msgpack_rpc::unpacker::unpack;
-use neovim::types::{Arena, Error, Object};
+use neovim::types::{Error, Object};
 
 /// What one decode produced: the object plus whatever error was reported.
-///
-/// The error owns its message and releases it when the `Decoded` drops, so
-/// the only thing this has to free by hand is the arena.
 struct Decoded {
     object: Object,
-    arena: Arena,
     error: Error,
 }
 
@@ -34,26 +27,12 @@ impl Decoded {
     }
 }
 
-impl Drop for Decoded {
-    fn drop(&mut self) {
-        unsafe {
-            arena_mem_free(arena_finish(&raw mut self.arena));
-        }
-    }
-}
-
 fn decode(bytes: &[u8]) -> Decoded {
-    let arena: Arena = ARENA_EMPTY;
-    let decoded = unsafe { unpack(bytes.as_ptr().cast::<c_char>(), bytes.len()) };
-    let (object, error) = match decoded {
+    let (object, error) = match unpack(bytes) {
         Ok(object) => (object, Error::default()),
         Err(error) => (Object::Nil, error),
     };
-    Decoded {
-        object,
-        arena,
-        error,
-    }
+    Decoded { object, error }
 }
 
 fn text(object: &Object) -> Vec<u8> {

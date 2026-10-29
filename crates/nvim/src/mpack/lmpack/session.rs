@@ -21,8 +21,8 @@
 use core::ffi::{c_char, c_int};
 
 use super::{
-    LUA_NOREF, LUA_REFNIL, Session, Unpacker, check_session, check_unpacker, geti, grow_session,
-    is_unpacker, reference, start_offset, unpack_into_registry, unreference,
+    LUA_NOREF, LUA_REFNIL, Session, Unpacker, check_session, check_unpacker, geti, is_unpacker,
+    reference, start_offset, unpack_into_registry, unreference,
 };
 use crate::lua::ffi::{
     LUA_REGISTRYINDEX, lua_getfield, lua_gettop, lua_newuserdata, lua_pushinteger, lua_pushlstring,
@@ -33,13 +33,9 @@ use crate::lua::stack::{lua_isnoneornil, lua_istable, lua_newtable, lua_pop, lua
 use crate::mpack::mpack_core::{MPACK_EOF, MPACK_OK};
 use crate::mpack::object::MPACK_NOMEM;
 use crate::mpack::rpc::{
-    MPACK_RPC_NOTIFICATION, MPACK_RPC_REQUEST, MPACK_RPC_RESPONSE, mpack_rpc_notify,
-    mpack_rpc_receive, mpack_rpc_reply, mpack_rpc_request, mpack_rpc_session_init,
+    self, MPACK_RPC_NOTIFICATION, MPACK_RPC_REQUEST, MPACK_RPC_RESPONSE, RpcMessage,
 };
-use crate::types::{
-    lua_Integer, lua_Number, lua_State, mpack_data_t, mpack_rpc_session_t, mpack_uint32_t, size_t,
-};
-use ::libc::{free, malloc};
+use crate::types::{lua_Integer, lua_Number, lua_State, mpack_uint32_t, size_t};
 
 /// The scratch a whole envelope fits in: an array header, a one-byte type
 /// and a five-byte id at most.
@@ -52,11 +48,8 @@ const ENVELOPE_MAX: usize = 16;
 pub unsafe extern "C-unwind" fn new(state: *mut lua_State) -> c_int {
     unsafe {
         let session = lua_newuserdata(state, size_of::<Session>()).cast::<Session>();
-        (*session).session = malloc(size_of::<mpack_rpc_session_t>()).cast::<mpack_rpc_session_t>();
-        if (*session).session.is_null() {
-            return luaL_error(state, c"Failed to allocate memory".as_ptr());
-        }
-        mpack_rpc_session_init((*session).session, 0);
+        (*session).session = Box::into_raw(Box::new(rpc::Session::new(0)));
+        (*session).unpacked.msg = RpcMessage::default();
         (*session).L = state;
         lua_getfield(state, LUA_REGISTRYINDEX, super::SESSION_META);
         lua_setmetatable(state, -2);
@@ -90,7 +83,7 @@ pub unsafe extern "C-unwind" fn delete(state: *mut lua_State) -> c_int {
         let session = check_session(state, 1);
         unreference(state, (*session).reg, (*session).unpacker);
         luaL_unref(state, LUA_REGISTRYINDEX, (*session).reg);
-        free((*session).session.cast());
+        drop(Box::from_raw((*session).session));
         0
     }
 }
@@ -172,12 +165,11 @@ unsafe fn read_message(
     unsafe {
         loop {
             if (*session).unpacked.type_0 == MPACK_EOF as c_int {
-                (*session).unpacked.type_0 = mpack_rpc_receive(
-                    (*session).session,
-                    str,
-                    left,
-                    &raw mut (*session).unpacked.msg,
-                );
+                let mut input = core::slice::from_raw_parts((*str).cast::<u8>(), *left);
+                (*session).unpacked.type_0 =
+                    (*(*session).session).receive(&mut input, &mut (*session).unpacked.msg);
+                *str = input.as_ptr().cast();
+                *left = input.len();
                 // With no unpacker the envelope *is* the message.
                 if unpacker.is_null() || (*session).unpacked.type_0 == MPACK_EOF as c_int {
                     return;
@@ -213,11 +205,7 @@ unsafe fn push_message(state: *mut lua_State, session: *mut Session) -> c_int {
             }
             MPACK_RPC_RESPONSE => {
                 lua_pushstring(state, c"response".as_ptr());
-                geti(
-                    state,
-                    (*session).reg,
-                    (*session).unpacked.msg.data.i as c_int,
-                );
+                geti(state, (*session).reg, (*session).unpacked.msg.data as c_int);
             }
             MPACK_RPC_NOTIFICATION => {
                 lua_pushstring(state, c"notification".as_ptr());
@@ -264,24 +252,17 @@ pub unsafe extern "C-unwind" fn request(state: *mut lua_State) -> c_int {
         } else {
             reference(state, (*session).reg)
         };
-        let data = mpack_data_t { i: handle as i64 };
-
-        let mut buf = [0 as c_char; ENVELOPE_MAX];
-        let mut ptr = buf.as_mut_ptr();
-        let mut left = ENVELOPE_MAX;
-        loop {
-            let result = mpack_rpc_request((*session).session, &raw mut ptr, &raw mut left, data);
+        let mut buf = [0u8; ENVELOPE_MAX];
+        let used = loop {
+            let (result, used) = (*(*session).session).request(&mut buf, i64::from(handle));
             if result != MPACK_NOMEM {
                 debug_assert_eq!(result, MPACK_OK as c_int);
-                break;
+                break used;
             }
             // Every slot holds an outstanding request; double the table.
-            (*session).session = grow_session((*session).session);
-            if (*session).session.is_null() {
-                return luaL_error(state, c"Failed to grow Session capacity".as_ptr());
-            }
-        }
-        lua_pushlstring(state, buf.as_ptr(), ENVELOPE_MAX - left);
+            (*(*session).session).grow();
+        };
+        lua_pushlstring(state, buf.as_ptr().cast(), used);
         1
     }
 }
@@ -304,17 +285,10 @@ pub unsafe extern "C-unwind" fn reply(state: *mut lua_State) -> c_int {
             c"invalid request id".as_ptr(),
         );
 
-        let mut buf = [0 as c_char; ENVELOPE_MAX];
-        let mut ptr = buf.as_mut_ptr();
-        let mut left = ENVELOPE_MAX;
-        let result = mpack_rpc_reply(
-            (*session).session,
-            &raw mut ptr,
-            &raw mut left,
-            id as mpack_uint32_t,
-        );
+        let mut buf = [0u8; ENVELOPE_MAX];
+        let (result, used) = (*(*session).session).reply(&mut buf, id as mpack_uint32_t);
         debug_assert_eq!(result, MPACK_OK as c_int);
-        lua_pushlstring(state, buf.as_ptr(), ENVELOPE_MAX - left);
+        lua_pushlstring(state, buf.as_ptr().cast(), used);
         1
     }
 }
@@ -329,12 +303,10 @@ pub unsafe extern "C-unwind" fn notify(state: *mut lua_State) -> c_int {
             return luaL_error(state, c"expecting exactly 1 argument".as_ptr());
         }
         let session = check_session(state, 1);
-        let mut buf = [0 as c_char; ENVELOPE_MAX];
-        let mut ptr = buf.as_mut_ptr();
-        let mut left = ENVELOPE_MAX;
-        let result = mpack_rpc_notify((*session).session, &raw mut ptr, &raw mut left);
+        let mut buf = [0u8; ENVELOPE_MAX];
+        let (result, used) = (*(*session).session).notify(&mut buf);
         debug_assert_eq!(result, MPACK_OK as c_int);
-        lua_pushlstring(state, buf.as_ptr(), ENVELOPE_MAX - left);
+        lua_pushlstring(state, buf.as_ptr().cast(), used);
         1
     }
 }
