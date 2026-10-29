@@ -13,9 +13,7 @@
 //! | [`report`] | what `:profile dump` writes |
 //! | [`startuptime`] | the `--startuptime` log |
 
-// No `forbid(unsafe_code)` here: it would reach `startuptime`, whose log
-// still writes through the C stdio it shares with the rest of startup.
-#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
