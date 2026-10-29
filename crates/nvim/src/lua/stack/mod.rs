@@ -514,6 +514,18 @@ impl Stack {
         Some(unsafe { CStr::from_ptr(bytes) })
     }
 
+    /// [`Stack::to_bytes`] as the C string `lua_tostring` answers: cut at its
+    /// first NUL, a number converted in place. `None` for any other kind.
+    pub fn to_c_string(&mut self, at: At) -> Option<&CStr> {
+        let bytes = unsafe { lua_tolstring(self.l(), at.0, ptr::null_mut()) };
+        if bytes.is_null() {
+            return None;
+        }
+        // SAFETY: every Lua string is NUL-terminated, and alive while its
+        // slot is, which the borrow of `self` keeps.
+        Some(unsafe { CStr::from_ptr(bytes) })
+    }
+
     /// [`Stack::string`] with the terminating NUL every Lua string carries
     /// after its bytes, for a reader that walks it as C strings.
     pub fn string_with_nul(&self, at: At) -> Option<&[u8]> {
@@ -819,11 +831,14 @@ impl Stack {
     /// `luaL_checklstring`: the argument's bytes, converting a number in
     /// place as LuaJIT does.
     pub fn check_bytes(&mut self, at: At) -> Result<&[u8], Raise> {
-        // Two steps, so that the refusal does not hold the borrow.
-        if self.to_bytes(at).is_none() {
+        let mut len: size_t = 0;
+        let bytes = unsafe { lua_tolstring(self.l(), at.0, &raw mut len) };
+        if bytes.is_null() {
             return Err(Raise::check(at, Check::String));
         }
-        Ok(self.to_bytes(at).unwrap_or_default())
+        // SAFETY: as in `to_bytes`; one call, where asking twice (to keep
+        // the refusal clear of the borrow) cost a vim.fn call measurably.
+        Ok(unsafe { core::slice::from_raw_parts(bytes.cast::<u8>(), len) })
     }
 
     /// `luaL_checktype`.

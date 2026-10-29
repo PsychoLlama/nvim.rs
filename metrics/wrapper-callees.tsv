@@ -1,6 +1,6 @@
 count	callee	no_raw	defs	def
-60	CStr::from_ptr	0	1	crates/nvim/src/marktree/node.rs
-58	from_raw_parts	0	0	
+61	CStr::from_ptr	0	1	crates/nvim/src/marktree/node.rs
+59	from_raw_parts	0	0	
 43	xfree	0	1	crates/nvim/src/memory/mod.rs
 31	from_raw_parts_mut	0	0	
 28	f	0	0	
@@ -48,6 +48,7 @@ count	callee	no_raw	defs	def
 7	.as_ref	0	0	
 7	.offset	0	0	
 7	Watcher::new	0	1	crates/nvim/src/event/socket/mod.rs
+7	lua_tolstring	0	0	
 7	uv_close	0	0	
 6	Chan::new	0	1	crates/nvim/src/msgpack_rpc/channel/mod.rs
 6	chan_close_on_err	0	1	crates/nvim/src/msgpack_rpc/channel/mod.rs
@@ -62,7 +63,6 @@ count	callee	no_raw	defs	def
 5	Signal::new	0	1	crates/nvim/src/event/signal.rs
 5	close	0	0	
 5	lua_pushnil	0	0	
-5	lua_tolstring	0	0	
 5	mpack_tokbuf_init	0	1	crates/nvim/src/mpack/mpack_core.rs
 5	table	0	1	crates/nvim/src/mpack/rpc.rs
 5	vim_snprintf	0	1	crates/nvim/src/strings/raw.rs

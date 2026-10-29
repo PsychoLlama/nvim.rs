@@ -16,7 +16,6 @@
 )]
 
 use core::ffi::c_int;
-use std::ffi::CString;
 
 use super::{
     LUA_INTERNAL_CALL, MAX_FUNC_ARGS, nlua_is_deferred_safe, until_nul, viml_func_is_fast,
@@ -79,10 +78,11 @@ fn raise_error(stack: &mut Stack, err: &Error) -> Raise {
 /// Every argument is converted into a frame of typvals, and every one
 /// converted is cleared again, whichever way the call went.
 pub(crate) fn call(stack: &mut Stack) -> Result<c_int, Raise> {
-    stack.check_bytes(At::arg(1))?;
+    let name = stack.check_bytes(At::arg(1))?;
+    let name_len = name.len();
     if !nlua_is_deferred_safe() {
         // `%s` stops at a NUL, and so does the name the message quotes.
-        let name = until_nul(stack.string(At::arg(1)).unwrap_or_default());
+        let name = until_nul(name);
         if !viml_func_is_fast(name) {
             return Err(Raise::message(fast_call_refusal(name)));
         }
@@ -97,7 +97,7 @@ pub(crate) fn call(stack: &mut Stack) -> Result<c_int, Raise> {
     // was given and no more, where an array's drop glue walks all
     // twenty-one on every call.
     let mut vim_args = CallFrame::<FRAME_SLOTS>::new();
-    match convert_and_call(stack, nargs, &mut vim_args) {
+    match convert_and_call(stack, nargs, name_len, &mut vim_args) {
         Ok(()) => Ok(1),
         Err(err) => Err(raise_error(stack, &err)),
     }
@@ -108,6 +108,7 @@ pub(crate) fn call(stack: &mut Stack) -> Result<c_int, Raise> {
 fn convert_and_call(
     stack: &mut Stack,
     nargs: usize,
+    name_len: usize,
     vim_args: &mut CallFrame<FRAME_SLOTS>,
 ) -> Result<(), Error> {
     for i in 0..nargs {
@@ -137,8 +138,7 @@ fn convert_and_call(
     {
         // Slot 1 holds the name as a string since the check above, and
         // anchors it for the call.
-        let name = stack.c_string(At::arg(1)).unwrap_or_default();
-        let name_len = stack.string(At::arg(1)).map_or(0, <[u8]>::len);
+        let name = stack.to_c_string(At::arg(1)).unwrap_or_default();
         let _ = call_func_with(
             name,
             Some(name_len),
@@ -177,9 +177,7 @@ fn rpc(stack: &mut Stack, request: bool) -> Result<c_int, Raise> {
     let chan_id = i64::try_from(stack.check_integer(At::arg(1))?)
         .unwrap_or_default()
         .cast_unsigned();
-    // The method name as the C string it was: up to its first NUL.
-    let name = until_nul(stack.check_bytes(At::arg(2))?).to_vec();
-    let name = CString::new(name).expect("cut at the first NUL");
+    stack.check_bytes(At::arg(2))?;
     let nargs = stack.top().index() - 2;
 
     let mut err = Error::none();
@@ -199,13 +197,20 @@ fn rpc(stack: &mut Stack, request: bool) -> Result<c_int, Raise> {
 
     if converted {
         if request {
+            // The method name as the C string it was: up to its first NUL.
+            // A copy, as the answer is pushed while the call holds it.
+            let name = stack.to_c_string(At::arg(2)).unwrap_or_default().to_owned();
             let answered = rpc_call_with(chan_id, &name, args, |result| {
                 push_object(stack, &result, false);
             });
             if let Err(e) = answered {
                 err = e;
             }
-        } else if !rpc_send_event(chan_id, &name, args) {
+        } else if !rpc_send_event(
+            chan_id,
+            stack.to_c_string(At::arg(2)).unwrap_or_default(),
+            args,
+        ) {
             err = api_error!(kErrorTypeValidation, "Invalid channel: {chan_id}");
         }
     }
